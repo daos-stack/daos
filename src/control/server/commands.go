@@ -35,6 +35,8 @@ import (
 
 // cliOptions struct defined flags that can be used when invoking daos_server.
 type cliOptions struct {
+	Debug       bool    `short:"b" long:"debug" description:"Enable debug output"`
+	JSON        bool    `short:"j" long:"json" description:"Enable JSON output"`
 	Port        uint16  `short:"p" long:"port" description:"Port for the gRPC management interfect to listen on"`
 	MountPath   string  `short:"s" long:"storage" description:"Storage path"`
 	ConfigPath  string  `short:"o" long:"config_path" description:"Server config file path"`

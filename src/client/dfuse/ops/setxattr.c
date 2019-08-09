@@ -38,5 +38,5 @@ dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 	if (rc == 0)
 		DFUSE_REPLY_ZERO(req);
 	else
-		DFUSE_REPLY_ERR_RAW(inode, req, -rc);
+		DFUSE_REPLY_ERR_RAW(inode, req, rc);
 }

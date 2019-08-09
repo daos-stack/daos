@@ -28,7 +28,6 @@ import (
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/log"
 )
 
 // TestParseTopology uses XML topology data to simulate real systems.
@@ -64,14 +63,14 @@ func TestParseTopology(t *testing.T) {
 		{[]string{"ib0", "eth0", "eth1"}, "testdata/wolf-133.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
 		{[]string{"ib0", "eth0", "ib1", "eth1"}, "testdata/wolf-133.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "ib1:0xffffff00,0x0000ffff,0xff000000:0x00000002"}},
 	}
-	log.NewDefaultLogger(log.Debug, "", os.Stderr)
+
 	for _, tt := range tests {
 		_, err := os.Stat(tt.topology)
 		AssertEqual(t, err, nil, "unable to load xmlTopology")
 		os.Setenv("HWLOC_XMLFILE", tt.topology)
 		netAdapterAffinity, err := GetAffinityForNetworkDevices(tt.netDevsList)
 		if err != nil {
-			log.Debugf("error from GetAffinityForNetworkDevices() %v", err)
+			t.Fatal(err)
 		}
 		os.Unsetenv("HWLOC_XMLFILE")
 		AssertEqual(t, len(netAdapterAffinity), len(tt.expected), "number of devices expected vs found does not match")

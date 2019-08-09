@@ -115,7 +115,7 @@ setup_listener_ctx(struct drpc_progress_context **new_ctx)
 	listener = drpc_listen(sockpath, drpc_hdlr_process_msg);
 	if (listener == NULL) {
 		D_ERROR("Failed to create listener socket at '%s'\n",
-				sockpath);
+			sockpath);
 		return -DER_UNKNOWN;
 	}
 
@@ -123,10 +123,10 @@ setup_listener_ctx(struct drpc_progress_context **new_ctx)
 	if (*new_ctx == NULL) {
 		D_ERROR("Failed to create drpc_progress_context\n");
 		drpc_close(listener);
-		return -DER_UNKNOWN;
+		return -DER_NOMEM;
 	}
 
-	return DER_SUCCESS;
+	return 0;
 }
 
 /*
@@ -153,7 +153,7 @@ drpc_listener_start_ult(ABT_thread *thread)
 		return rc;
 	}
 
-	return DER_SUCCESS;
+	return 0;
 }
 
 static int
@@ -168,7 +168,7 @@ generate_socket_path(void)
 		return -DER_NOMEM;
 	}
 
-	return DER_SUCCESS;
+	return 0;
 }
 
 int
@@ -177,9 +177,8 @@ drpc_listener_init(void)
 	int rc;
 
 	rc = generate_socket_path();
-	if (rc != DER_SUCCESS) {
+	if (rc != 0)
 		return rc;
-	}
 
 	memset(&status, 0, sizeof(status));
 	rc = ABT_mutex_create(&status.running_mutex);
@@ -207,7 +206,7 @@ drpc_listener_stop(void)
 		return dss_abterr2der(rc);
 	}
 
-	return DER_SUCCESS;
+	return 0;
 }
 
 int
