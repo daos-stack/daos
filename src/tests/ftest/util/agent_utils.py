@@ -87,7 +87,7 @@ def run_agent(basepath, server_list, client_list=None):
 
     for client in client_list:
         sessions[client] = subprocess.Popen(
-            ["ssh", client, daos_agent_bin, "-i"],
+            ["ssh", client, "{} -i".format(daos_agent_bin)],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE
         )
@@ -96,7 +96,7 @@ def run_agent(basepath, server_list, client_list=None):
     timeout = 5
     started_clients = []
     for client in client_list:
-        file_desc = sessions[client].stderr.fileno()
+        file_desc = sessions[client].stdout.fileno()
         flags = fcntl.fcntl(file_desc, fcntl.F_GETFL)
         fcntl.fcntl(file_desc, fcntl.F_SETFL, flags | os.O_NONBLOCK)
         start_time = time.time()
@@ -110,7 +110,7 @@ def run_agent(basepath, server_list, client_list=None):
                                   "start".format(expected_data))
             output = ""
             try:
-                output = sessions[client].stderr.read()
+                output = sessions[client].stdout.read()
             except IOError as excpn:
                 if excpn.errno != errno.EAGAIN:
                     raise AgentFailed(

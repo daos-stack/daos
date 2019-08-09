@@ -30,7 +30,7 @@ import (
 	"path/filepath"
 	"text/template"
 
-	"github.com/daos-stack/daos/src/control/log"
+	log "github.com/daos-stack/daos/src/control/logging"
 )
 
 const (
