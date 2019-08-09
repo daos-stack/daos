@@ -35,7 +35,7 @@ import (
 	yaml "gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/log"
+	log "github.com/daos-stack/daos/src/control/logging"
 )
 
 const (
@@ -338,15 +338,15 @@ func (c *configuration) populateEnv(i int, envs *[]string) {
 	}
 }
 
-func (c *configuration) setLogging(name string) (*os.File, error) {
+func (c *configuration) setLogging(name string, useJSON bool) (*os.File, error) {
 	// Set log level mask for default logger from config.
 	switch c.ControlLogMask {
 	case cLogDebug:
+		log.SetLevel(log.LogLevelDebug)
 		log.Debugf("Switching control log level to DEBUG")
-		log.SetLevel(log.Debug)
 	case cLogError:
 		log.Debugf("Switching control log level to ERROR")
-		log.SetLevel(log.Error)
+		log.SetLevel(log.LogLevelError)
 	}
 
 	// Set log file for default logger if specified in config.
@@ -357,20 +357,25 @@ func (c *configuration) setLogging(name string) (*os.File, error) {
 				err, "create log file")
 		}
 
-		log.Debugf(
-			"%s logging to file %s",
-			os.Args[0], c.ControlLogFile)
-
-		log.SetOutput(f)
+		log.Infof("%s logging to file %s", os.Args[0], c.ControlLogFile)
+		newLogger := log.NewCombinedLogger(name, f)
+		if useJSON {
+			newLogger = newLogger.WithJSONOutput()
+		}
+		log.SetLogger(newLogger)
 
 		return f, nil
 	}
 
-	log.Errorf("no control log file specified")
+	log.Info("no control log file specified; logging to stdout")
 
 	// if no logfile specified, output from multiple hosts
 	// may get aggregated, prefix entries with hostname
-	log.NewDefaultLogger(log.Debug, name+" ", os.Stderr)
+	newLogger := log.NewStdoutLogger(name)
+	if useJSON {
+		newLogger = newLogger.WithJSONOutput()
+	}
+	log.SetLogger(newLogger)
 
 	for i, srv := range c.Servers {
 		if srv.LogFile == "" {
