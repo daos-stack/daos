@@ -84,8 +84,6 @@ func TestSyslogOutput(t *testing.T) {
 	}
 
 	jrnlOut := func(t *testing.T, prio int) string {
-		t.Helper()
-
 		time.Sleep(10 * time.Millisecond) // Give it time to settle
 		cmd := exec.Command(journalctl,
 			fmt.Sprintf("_PID=%d", os.Getpid()),
@@ -93,7 +91,11 @@ func TestSyslogOutput(t *testing.T) {
 		)
 		out, err := cmd.Output()
 		if err != nil {
-			t.Fatal(err)
+			var stderr string
+			if ee, ok := err.(*exec.ExitError); ok {
+				stderr = string(ee.Stderr)
+			}
+			t.Fatalf("error: %s\nSTDOUT: %s\nSTDERR: %s", err, out, stderr)
 		}
 		return string(out)
 	}
