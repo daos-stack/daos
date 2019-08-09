@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package auth_test
+package auth
 
 import (
 	"errors"
@@ -34,7 +34,6 @@ import (
 
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/security"
-	"github.com/daos-stack/daos/src/control/security/auth"
 )
 
 // Mocks
@@ -55,7 +54,7 @@ func (u *mockUser) GroupIDs() ([]uint32, error) {
 
 type mockExt struct {
 	lookupUserIDUid        uint32
-	lookupUserIDResult     auth.User
+	lookupUserIDResult     User
 	lookupUserIDErr        error
 	lookupGroupIDGid       uint32
 	lookupGroupIDResults   []*user.Group
@@ -63,7 +62,7 @@ type mockExt struct {
 	lookupGroupIDErr       error
 }
 
-func (e *mockExt) LookupUserID(uid uint32) (auth.User, error) {
+func (e *mockExt) LookupUserID(uid uint32) (User, error) {
 	e.lookupUserIDUid = uid
 	return e.lookupUserIDResult, e.lookupUserIDErr
 }
@@ -80,9 +79,9 @@ func (e *mockExt) LookupGroupID(gid uint32) (*user.Group, error) {
 
 // Helpers for the unit tests below
 
-func expectAuthSysErrorForToken(t *testing.T, badToken *auth.Token, expectedErrorMessage string) {
+func expectAuthSysErrorForToken(t *testing.T, badToken *Token, expectedErrorMessage string) {
 	t.Helper()
-	authSys, err := auth.AuthSysFromAuthToken(badToken)
+	authSys, err := AuthSysFromAuthToken(badToken)
 
 	if authSys != nil {
 		t.Error("Expected a nil AuthSys")
@@ -98,21 +97,21 @@ func TestAuthSysFromAuthToken_ErrorsWithNilAuthToken(t *testing.T) {
 }
 
 func TestAuthSysFromAuthToken_ErrorsWithWrongAuthTokenFlavor(t *testing.T) {
-	badFlavorToken := auth.Token{Flavor: auth.Flavor_AUTH_NONE}
+	badFlavorToken := Token{Flavor: Flavor_AUTH_NONE}
 	expectAuthSysErrorForToken(t, &badFlavorToken,
 		"Attempting to convert an invalid AuthSys Token")
 }
 
 func TestAuthSysFromAuthToken_ErrorsIfTokenCannotBeUnmarshaled(t *testing.T) {
 	zeroArray := make([]byte, 16)
-	badToken := auth.Token{Flavor: auth.Flavor_AUTH_SYS,
+	badToken := Token{Flavor: Flavor_AUTH_SYS,
 		Data: zeroArray}
 	expectAuthSysErrorForToken(t, &badToken,
 		"unmarshaling AUTH_SYS: proto: auth.Sys: illegal tag 0 (wire type 0)")
 }
 
 func TestAuthSysFromAuthToken_SucceedsWithGoodToken(t *testing.T) {
-	originalAuthSys := auth.Sys{
+	originalAuthSys := Sys{
 		Stamp:       0,
 		Machinename: "something",
 		User:        "niceuser",
@@ -126,12 +125,12 @@ func TestAuthSysFromAuthToken_SucceedsWithGoodToken(t *testing.T) {
 		t.Fatalf("Couldn't marshal during setup: %s", err)
 	}
 
-	goodToken := auth.Token{
-		Flavor: auth.Flavor_AUTH_SYS,
+	goodToken := Token{
+		Flavor: Flavor_AUTH_SYS,
 		Data:   marshaledToken,
 	}
 
-	authSys, err := auth.AuthSysFromAuthToken(&goodToken)
+	authSys, err := AuthSysFromAuthToken(&goodToken)
 
 	if err != nil {
 		t.Fatalf("Expected no error, got: %s", err)
@@ -158,7 +157,7 @@ func TestAuthSysFromAuthToken_SucceedsWithGoodToken(t *testing.T) {
 // AuthSysRequestFromCreds tests
 
 func TestAuthSysRequestFromCreds_failsIfDomainInfoNil(t *testing.T) {
-	result, err := auth.AuthSysRequestFromCreds(&mockExt{}, nil, nil)
+	result, err := AuthSysRequestFromCreds(&mockExt{}, nil, nil)
 
 	if result != nil {
 		t.Error("Expected a nil request")
@@ -202,7 +201,7 @@ func TestAuthSysRequestFromCreds_returnsAuthSys(t *testing.T) {
 			})
 	}
 
-	result, err := auth.AuthSysRequestFromCreds(ext, creds, nil)
+	result, err := AuthSysRequestFromCreds(ext, creds, nil)
 
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -217,11 +216,11 @@ func TestAuthSysRequestFromCreds_returnsAuthSys(t *testing.T) {
 		t.Fatal("Token was nil")
 	}
 
-	if token.GetFlavor() != auth.Flavor_AUTH_SYS {
+	if token.GetFlavor() != Flavor_AUTH_SYS {
 		t.Fatalf("Bad auth flavor: %v", token.GetFlavor())
 	}
 
-	authsys := &auth.Sys{}
+	authsys := &Sys{}
 	err = proto.Unmarshal(token.GetData(), authsys)
 	if err != nil {
 		t.Fatal("Failed to unmarshal token data")
@@ -251,7 +250,7 @@ func TestAuthSysRequestFromCreds_UidLookupFails(t *testing.T) {
 	expectedErr := fmt.Errorf("Failed to lookup uid %v: %v", uid,
 		ext.lookupUserIDErr)
 
-	result, err := auth.AuthSysRequestFromCreds(ext, creds, nil)
+	result, err := AuthSysRequestFromCreds(ext, creds, nil)
 
 	if result != nil {
 		t.Error("Expected a nil result")
@@ -280,7 +279,7 @@ func TestAuthSysRequestFromCreds_GidLookupFails(t *testing.T) {
 	expectedErr := fmt.Errorf("Failed to lookup gid %v: %v", gid,
 		ext.lookupGroupIDErr)
 
-	result, err := auth.AuthSysRequestFromCreds(ext, creds, nil)
+	result, err := AuthSysRequestFromCreds(ext, creds, nil)
 
 	if result != nil {
 		t.Error("Expected a nil result")
@@ -316,7 +315,7 @@ func TestAuthSysRequestFromCreds_GroupIDListFails(t *testing.T) {
 		testUser.username,
 		testUser.groupIDErr)
 
-	result, err := auth.AuthSysRequestFromCreds(ext, creds, nil)
+	result, err := AuthSysRequestFromCreds(ext, creds, nil)
 
 	if result != nil {
 		t.Error("Expected a nil result")
