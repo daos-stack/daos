@@ -3,10 +3,10 @@
 
 hosts:
   test_servers:
-    - boro-61
-    - boro-64
+    - boro-A
+    - boro-B
   test_clients:
-    - boro-61
+    - boro-C
 timeout: 1800
 server_config:
    name: daos_server
