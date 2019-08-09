@@ -61,10 +61,8 @@ drpc_progress_context_create(struct drpc *listener)
 	}
 
 	D_ALLOC_PTR(result);
-	if (result == NULL) {
-		D_ERROR("Unable to allocate drpc_progress_context\n");
+	if (result == NULL)
 		return NULL;
-	}
 
 	result->listener_ctx = listener;
 	D_INIT_LIST_HEAD(&result->session_ctx_list);
@@ -186,10 +184,8 @@ drpc_progress_context_to_unixcomms(struct drpc_progress_context *ctx,
 	num_comms += 1;
 
 	D_ALLOC_ARRAY(new_comms, num_comms);
-	if (new_comms == NULL) {
-		D_ERROR("Could not allocate unixcomm_poll structures\n");
+	if (new_comms == NULL)
 		return -DER_NOMEM;
-	}
 
 	i = 0;
 	d_list_for_each_entry(current, &ctx->session_ctx_list, link) {
@@ -227,7 +223,6 @@ drpc_progress_context_accept(struct drpc_progress_context *ctx)
 
 	D_ALLOC_PTR(session_node);
 	if (session_node == NULL) {
-		D_ERROR("Could not allocate new session node\n");
 		D_FREE(session);
 		return -DER_NOMEM;
 	}

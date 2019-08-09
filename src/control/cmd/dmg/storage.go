@@ -24,10 +24,9 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/daos-stack/daos/src/control/client"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	log "github.com/daos-stack/daos/src/control/logging"
 )
 
 // StorCmd is the struct representing the top-level storage subcommand.
@@ -46,8 +45,8 @@ type ScanStorCmd struct {
 // run NVMe and SCM storage query on all connected servers
 func scanStor(conns client.Connect) {
 	cCtrlrs, cModules := conns.ScanStorage()
-	fmt.Printf("NVMe SSD controller and constituent namespaces:\n%s", cCtrlrs)
-	fmt.Printf("SCM modules:\n%s", cModules)
+	log.Infof("NVMe SSD controller and constituent namespaces:\n%s", cCtrlrs)
+	log.Infof("SCM modules:\n%s", cModules)
 }
 
 // Execute is run when ScanStorCmd activates
@@ -65,16 +64,16 @@ type FormatStorCmd struct {
 
 // run NVMe and SCM storage format on all connected servers
 func formatStor(conns client.Connect, force bool) {
-	fmt.Println(
+	log.Info(
 		"This is a destructive operation and storage devices " +
 			"specified in the server config file will be erased.\n" +
 			"Please be patient as it may take several minutes.\n")
 
 	if force || getConsent() {
-		fmt.Println("")
+		log.Info("")
 		cCtrlrResults, cMountResults := conns.FormatStorage()
-		fmt.Printf("NVMe storage format results:\n%s", cCtrlrResults)
-		fmt.Printf("SCM storage format results:\n%s", cMountResults)
+		log.Infof("NVMe storage format results:\n%s", cCtrlrResults)
+		log.Infof("SCM storage format results:\n%s", cMountResults)
 	}
 }
 
@@ -97,17 +96,17 @@ type UpdateStorCmd struct {
 
 // run NVMe and SCM storage update on all connected servers
 func updateStor(conns client.Connect, req *pb.UpdateStorageReq, force bool) {
-	fmt.Println(
+	log.Info(
 		"This could be a destructive operation and storage devices " +
 			"specified in the server config file will have firmware " +
 			"updated. Please check this is a supported upgrade path " +
 			"and be patient as it may take several minutes.\n")
 
 	if force || getConsent() {
-		fmt.Println("")
+		log.Info("")
 		cCtrlrResults, cModuleResults := conns.UpdateStorage(req)
-		fmt.Printf("NVMe storage update results:\n%s", cCtrlrResults)
-		fmt.Printf("SCM storage update results:\n%s", cModuleResults)
+		log.Infof("NVMe storage update results:\n%s", cCtrlrResults)
+		log.Infof("SCM storage update results:\n%s", cModuleResults)
 	}
 }
 

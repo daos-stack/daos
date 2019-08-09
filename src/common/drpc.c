@@ -58,10 +58,8 @@ drpc_call_create(struct drpc *ctx, int32_t module, int32_t method)
 	}
 
 	D_ALLOC_PTR(call);
-	if (call == NULL) {
-		D_ERROR("Could not allocate new drpc call\n");
+	if (call == NULL)
 		return NULL;
-	}
 
 	drpc__call__init(call);
 	call->sequence = ctx->sequence;
@@ -101,10 +99,8 @@ drpc_response_create(Drpc__Call *call)
 	}
 
 	D_ALLOC_PTR(resp);
-	if (resp == NULL) {
-		D_ERROR("Could not allocate new drpc response\n");
+	if (resp == NULL)
 		return NULL;
-	}
 
 	drpc__response__init(resp);
 	resp->sequence = call->sequence;
@@ -129,10 +125,8 @@ new_unixcomm_socket(int flags)
 	struct unixcomm	*comm;
 
 	D_ALLOC_PTR(comm);
-	if (comm == NULL) {
-		D_ERROR("Failed to allocate unixcomm\n");
+	if (comm == NULL)
 		return NULL;
-	}
 
 	comm->fd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
 	if (comm->fd < 0) {
@@ -221,10 +215,8 @@ unixcomm_accept(struct unixcomm *listener)
 	struct unixcomm *comm;
 
 	D_ALLOC_PTR(comm);
-	if (comm == NULL) {
-		D_ERROR("Failed to allocate new unixcomm\n");
+	if (comm == NULL)
 		return NULL;
-	}
 
 	comm->fd = accept(listener->fd, NULL, NULL);
 	if (comm->fd < 0) {
@@ -241,16 +233,18 @@ static int
 unixcomm_close(struct unixcomm *handle)
 {
 	int ret;
+	int fd;
 
 	if (!handle)
 		return 0;
 
-	ret = close(handle->fd);
+	fd = handle->fd;
+	ret = close(fd);
 	D_FREE(handle);
 
 	if (ret < 0) {
 		D_ERROR("Failed to close socket fd %d, errno=%d\n",
-			handle->fd, errno);
+			fd, errno);
 		return daos_errno2der(errno);
 	}
 
@@ -329,10 +323,8 @@ drpc_marshal_call(Drpc__Call *msg, uint8_t **bytes)
 	buf_len = drpc__call__get_packed_size(msg);
 
 	D_ALLOC(buf, buf_len);
-	if (!buf) {
-		D_ERROR("Failed to allocate buffer of size %d\n", buf_len);
+	if (!buf)
 		return -DER_NOMEM;
-	}
 
 	drpc__call__pack(msg, buf);
 
@@ -390,10 +382,8 @@ drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg,
 	}
 
 	D_ALLOC(responseBuf, UNIXCOMM_MAXMSGSIZE);
-	if (!responseBuf) {
-		D_ERROR("Failed to allocate response buffer\n");
+	if (!responseBuf)
 		return -DER_NOMEM;
-	}
 
 	ret = unixcomm_recv(ctx->comm, responseBuf, UNIXCOMM_MAXMSGSIZE, &recv);
 	if (ret < 0) {
@@ -421,10 +411,8 @@ drpc_connect(char *sockaddr)
 	struct unixcomm	*comms;
 
 	D_ALLOC_PTR(ctx);
-	if (!ctx) {
-		D_ERROR("Failed to allocate drpc context\n");
+	if (!ctx)
 		return NULL;
-	}
 
 	comms = unixcomm_connect(sockaddr, 0);
 	if (!comms) {
@@ -461,10 +449,8 @@ drpc_listen(char *sockaddr, drpc_handler_t handler)
 	}
 
 	D_ALLOC_PTR(ctx);
-	if (ctx == NULL) {
-		D_ERROR("Failed to allocate drpc context\n");
+	if (ctx == NULL)
 		return NULL;
-	}
 
 	ctx->comm = unixcomm_listen(sockaddr, O_NONBLOCK);
 	if (ctx->comm == NULL) {
@@ -513,10 +499,8 @@ drpc_accept(struct drpc *listener_ctx)
 	}
 
 	D_ALLOC_PTR(session_ctx);
-	if (session_ctx == NULL) {
-		D_ERROR("Failed to allocate a session context\n");
+	if (session_ctx == NULL)
 		return NULL;
-	}
 
 	session_ctx->comm = unixcomm_accept(listener_ctx->comm);
 	if (session_ctx->comm == NULL) {
@@ -539,10 +523,8 @@ send_response(struct drpc *ctx, Drpc__Response *response)
 	buffer_len = drpc__response__get_packed_size(response);
 
 	D_ALLOC(buffer, buffer_len);
-	if (buffer == NULL) {
-		D_ERROR("Failed to allocate buffer of size %lu\n", buffer_len);
+	if (buffer == NULL)
 		return -DER_NOMEM;
-	}
 
 	drpc__response__pack(response, buffer);
 	rc = unixcomm_send(ctx->comm, buffer, buffer_len, NULL);
@@ -561,10 +543,8 @@ handle_incoming_message(struct drpc *ctx, Drpc__Response **response)
 	Drpc__Call	*request;
 
 	D_ALLOC(buffer, buffer_size);
-	if (buffer == NULL) {
-		D_ERROR("Failed to allocate buffer of size %lu\n", buffer_size);
+	if (buffer == NULL)
 		return -DER_NOMEM;
-	}
 
 	rc = unixcomm_recv(ctx->comm, buffer, buffer_size,
 				&message_len);
