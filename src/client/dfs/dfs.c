@@ -2361,8 +2361,9 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	d_sg_list_t		sgls[3];
 	d_iov_t			sg_iovs[3];
 	daos_iod_t		iods[3];
-	int i = 0;
-	int akeys_nr;
+	bool			set_size = false;
+	int			i = 0;
+	int			akeys_nr;
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
@@ -2379,7 +2380,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	/** Open parent object and fetch entry of obj from it */
 	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RO, &oh, NULL);
 	if (rc)
-		return -daos_der2errno(rc);
+		return daos_der2errno(rc);
 
 	/** set dkey as the entry name */
 	d_iov_set(&dkey, (void *)obj->name, strlen(obj->name));
@@ -2408,12 +2409,25 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		flags &= ~DFS_SET_ATTR_MTIME;
 		i++;
 	}
+	if (flags & DFS_SET_ATTR_SIZE) {
+		set_size = true;
+		flags &= ~DFS_SET_ATTR_SIZE;
+	}
 
 	if (flags) {
-		D_GOTO(out, rc = EINVAL);
+		D_GOTO(err, rc = EINVAL);
+	}
+
+	if (set_size) {
+		rc = daos_array_set_size(obj->oh, th, stbuf->st_size, NULL);
+		if (rc)
+			D_GOTO(err, rc = daos_der2errno(rc));
 	}
 
 	akeys_nr = i;
+
+	if (akeys_nr == 0)
+		D_GOTO(out, 0);
 
 	for (i = 0; i < akeys_nr; i++) {
 		sgls[i].sg_nr		= 1;
@@ -2431,14 +2445,16 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	rc = daos_obj_update(oh, th, &dkey, akeys_nr, iods, sgls, NULL);
 	if (rc) {
 		D_ERROR("Failed to update attr (rc = %d)\n", rc);
-		D_GOTO(out, rc = -daos_der2errno(rc));
+		D_GOTO(err, rc = daos_der2errno(rc));
 	}
+
+out:
 
 	rc = entry_stat(dfs, th, oh, obj->name, stbuf);
 	if (rc)
-		D_GOTO(out, rc);
+		D_GOTO(err, rc);
 
-out:
+err:
 	daos_obj_close(oh, NULL);
 	return rc;
 

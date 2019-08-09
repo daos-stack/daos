@@ -55,6 +55,13 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 		dfs_flags |= DFS_SET_ATTR_MTIME;
 	}
 
+	if (to_set & FUSE_SET_ATTR_SIZE) {
+		DFUSE_TRA_DEBUG(ie, "size %#lx",
+				attr->st_size);
+		to_set &= ~(FUSE_SET_ATTR_SIZE);
+		dfs_flags |= DFS_SET_ATTR_SIZE;
+	}
+
 	if (to_set) {
 		DFUSE_TRA_WARNING(ie, "Unknown flags %#x", to_set);
 		DFUSE_REPLY_ERR_RAW(ie, req, ENOTSUP);

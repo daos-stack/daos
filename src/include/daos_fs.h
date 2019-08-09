@@ -446,6 +446,8 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf);
 #define DFS_SET_ATTR_MODE	(1 << 0)
 #define DFS_SET_ATTR_ATIME	(1 << 1)
 #define DFS_SET_ATTR_MTIME	(1 << 2)
+#define DFS_SET_ATTR_SIZE	(1 << 3)
+
 /**
  * set stat attributes for a file and fetch new values.  If the object is a
  * symlink the link itself is modified.  See dfs_stat() for which entries
