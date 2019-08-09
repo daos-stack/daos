@@ -207,15 +207,15 @@ dss_tgt_nr_get(int ncores, int nr)
 	if (nr_default == 0)
 		nr_default = 1;
 
-        /* accept the user required number even if it's more than the default
-         * available number calculated above, but inform the user that creating
-         * more threads than #cores may have performance impact.
-         */
+	/* accept the user required number even if it's more than the default
+	 * available number calculated above, but inform the user that creating
+	 * more threads than #cores may have performance impact.
+	 */
 	if (nr_default < nr)
 		D_PRINT("%d target XS(xstream) requested exceeded the available "
-                        "XS (%d) of %d cores, Will accept the requested %d target "
-                        "XS with potential performance impact\n",
-                        nr, nr_default, ncores, nr);
+			"XS (%d) of %d cores, Will accept the requested %d target "
+			"XS with potential performance impact\n",
+			nr, nr_default, ncores, nr);
 	if (nr >= 1)
 		nr_default = nr;
 
