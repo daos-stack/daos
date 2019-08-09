@@ -258,7 +258,7 @@ process_startms_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			       false /* !bootstrap */, NULL /* uuid */,
 			       NULL /* addr */);
 	if (rc == -DER_ALREADY) {
-		D_INFO("MS already started\n");
+		D_DEBUG(DB_MGMT, "MS already started\n");
 	} else if (rc != 0) {
 		D_ERROR("Failed to start MS: %d\n", rc);
 		resp->status = rc;
