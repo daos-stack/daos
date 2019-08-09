@@ -57,33 +57,38 @@ func (ll *LeveledLogger) WithSyslogOutput() *LeveledLogger {
 	ll.Lock()
 	defer ll.Unlock()
 
-	newLogger := &LeveledLogger{
-		level: ll.level,
-	}
+	var debugLoggers []DebugLogger
+	var infoLoggers []InfoLogger
+	var errorLoggers []ErrorLogger
 
 	for _, l := range ll.debugLoggers {
 		if syslogger, ok := l.(syslogDebug); ok {
 			if dl, ok := syslogger.WithSyslogOutput().(DebugLogger); ok {
-				newLogger.AddDebugLogger(dl)
+				debugLoggers = append(debugLoggers, dl)
 			}
 		}
 	}
+	ll.debugLoggers = debugLoggers
+
 	for _, l := range ll.infoLoggers {
 		if syslogger, ok := l.(syslogInfo); ok {
 			if il, ok := syslogger.WithSyslogOutput().(InfoLogger); ok {
-				newLogger.AddInfoLogger(il)
+				infoLoggers = append(infoLoggers, il)
 			}
 		}
 	}
+	ll.infoLoggers = infoLoggers
+
 	for _, l := range ll.errorLoggers {
 		if syslogger, ok := l.(syslogError); ok {
 			if el, ok := syslogger.WithSyslogOutput().(ErrorLogger); ok {
-				newLogger.AddErrorLogger(el)
+				errorLoggers = append(errorLoggers, el)
 			}
 		}
 	}
+	ll.errorLoggers = errorLoggers
 
-	return newLogger
+	return ll
 }
 
 // WithSyslogOutput switches the logger's output to emit messages
