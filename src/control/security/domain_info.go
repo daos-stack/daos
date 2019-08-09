@@ -30,13 +30,28 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 
-	"github.com/daos-stack/daos/src/control/log"
+	log "github.com/daos-stack/daos/src/control/logging"
 )
 
 // DomainInfo holds our socket credentials to be used by the DomainSocketServer
 type DomainInfo struct {
 	creds *syscall.Ucred
 	ctx   string
+}
+
+// Uid returns the UID obtained from the domain socket
+func (d *DomainInfo) Uid() uint32 {
+	return d.creds.Uid
+}
+
+// Gid returns the GID obtained from the domain socket
+func (d *DomainInfo) Gid() uint32 {
+	return d.creds.Gid
+}
+
+// Ctx returns the additional security information obtained from the domain socket
+func (d *DomainInfo) Ctx() string {
+	return d.ctx
 }
 
 // InitDomainInfo returns an initialized DomainInfo structure

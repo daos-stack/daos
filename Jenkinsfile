@@ -43,23 +43,17 @@
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
-def rpm_test_pre = '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
+def daos_repos = "openpa libfabric pmix ompi mercury spdk isa-l fio dpdk protobuf-c fuse pmdk argobots raft cart@daos_devel1 daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
+def ior_repos = "mpich@daos_adio-rpm ior-hpc@daos"
+
+def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
+                          exit 0
+                      fi
+                      export PDSH_SSH_ARGS_APPEND="-i ci_key"
                       nodelist=(${NODELIST//,/ })
                       scp -i ci_key src/tests/ftest/data/daos_server_baseline.yaml \
-				    jenkins@${nodelist[0]}:/tmp
-                      ssh -i ci_key jenkins@${nodelist[0]} "set -ex
-                      repo_file_base=\"*_job_\${JOB_NAME%%/*}_job_\"
-                      for repo in openpa libfabric pmix   \
-                                  ompi mercury spdk isa-l \
-                                  fio dpdk protobuf-c     \
-                                  fuse pmdk argobots raft \
-                                  cart@daos_devel1; do     \
-                          if [[ \\\$repo = *@* ]]; then
-                              branch=\"\\\${repo#*@}\"
-                              repo=\"\\\${repo%@*}\"
-                          else
-                              branch=\"master\"
-                          fi\n'''
+                                    jenkins@${nodelist[0]}:/tmp
+                      ssh -i ci_key jenkins@${nodelist[0]} "set -ex\n'''
 
 def rpm_test_daos_test = '''me=\\\$(whoami)
                             for dir in server agent; do
@@ -104,7 +98,10 @@ pipeline {
         BAHTTPS_PROXY = "${env.HTTP_PROXY ? '--build-arg HTTP_PROXY="' + env.HTTP_PROXY + '" --build-arg http_proxy="' + env.HTTP_PROXY + '"' : ''}"
         BAHTTP_PROXY = "${env.HTTP_PROXY ? '--build-arg HTTPS_PROXY="' + env.HTTPS_PROXY + '" --build-arg https_proxy="' + env.HTTPS_PROXY + '"' : ''}"
         UID=sh(script: "id -u", returnStdout: true)
-        BUILDARGS = "--build-arg NOBUILD=1 --build-arg UID=$env.UID $env.BAHTTP_PROXY $env.BAHTTPS_PROXY"
+        BUILDARGS = "$env.BAHTTP_PROXY $env.BAHTTPS_PROXY "                   +
+                    "--build-arg NOBUILD=1 --build-arg UID=$env.UID "         +
+                    "--build-arg JENKINS_URL=$env.JENKINS_URL "               +
+                    "--build-arg CACHEBUST=${currentBuild.startTimeInMillis}"
     }
 
     options {
@@ -175,6 +172,14 @@ pipeline {
 	     * do want complete results in the case of partial failure
 	     */
             //failFast true
+            when {
+                beforeAgent true
+                // expression { skipTest != true }
+                expression {
+                    sh script: 'git show -s --format=%B | grep "^Skip-build: true"',
+                       returnStatus: true
+                }
+            }
             parallel {
                 stage('Build RPM on CentOS 7') {
                     agent {
@@ -193,24 +198,29 @@ pipeline {
                                       context: "build" + "/" + env.STAGE_NAME,
                                       status: "PENDING"
                         checkoutScm withSubmodules: true
-                        sh label: env.STAGE_NAME,
-                           script: '''rm -rf artifacts/centos7/
-                                      mkdir -p artifacts/centos7/
-                              if make -C utils/rpms srpm; then
-                                  if make -C utils/rpms mockbuild; then
-                                      (cd /var/lib/mock/epel-7-x86_64/result/ &&
-                                       cp -r . $OLDPWD/artifacts/centos7/)
-                                      createrepo artifacts/centos7/
-                                  else
-                                      rc=\${PIPESTATUS[0]}
-                                      (cd /var/lib/mock/epel-7-x86_64/result/ &&
-                                       cp -r . $OLDPWD/artifacts/centos7/)
-                                      cp -af utils/rpms/_topdir/SRPMS artifacts/centos7/
-                                      exit \$rc
-                                  fi
-                              else
-                                  exit \${PIPESTATUS[0]}
-                              fi'''
+                        catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
+                            sh label: env.STAGE_NAME,
+                               script: '''rm -rf artifacts/centos7/
+                                          mkdir -p artifacts/centos7/
+                                          if git show -s --format=%B | grep "^Skip-build: true"; then
+                                              exit 0
+                                          fi
+                                          if make -C utils/rpms srpm; then
+                                              if make -C utils/rpms mockbuild; then
+                                                  (cd /var/lib/mock/epel-7-x86_64/result/ &&
+                                                   cp -r . $OLDPWD/artifacts/centos7/)
+                                                  createrepo artifacts/centos7/
+                                              else
+                                                  rc=\${PIPESTATUS[0]}
+                                                  (cd /var/lib/mock/epel-7-x86_64/result/ &&
+                                                   cp -r . $OLDPWD/artifacts/centos7/)
+                                                  cp -af utils/rpms/_topdir/SRPMS artifacts/centos7/
+                                                  exit \$rc
+                                              fi
+                                          else
+                                              exit \${PIPESTATUS[0]}
+                                          fi'''
+                        }
                     }
                     post {
                         always {
@@ -222,11 +232,11 @@ pipeline {
                         }
                         unstable {
                             stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "UNSTABLE"
+                                       result: "UNSTABLE", ignore_failure: true
                         }
                         failure {
                             stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "FAILURE"
+                                       result: "FAILURE", ignore_failure: true
                         }
                     }
                 }
@@ -247,21 +257,26 @@ pipeline {
                                       context: "build" + "/" + env.STAGE_NAME,
                                       status: "PENDING"
                         checkoutScm withSubmodules: true
-                        sh label: env.STAGE_NAME,
-                           script: '''rm -rf artifacts/sles12.3/
-                              mkdir -p artifacts/sles12.3/
-                              rm -rf utils/rpms/_topdir/SRPMS
-                              if make -C utils/rpms srpm; then
-                                  rm -rf utils/rpms/_topdir/RPMS
-                                  if make -C utils/rpms rpms; then
-                                      ln utils/rpms/_topdir/{RPMS/*,SRPMS}/*  artifacts/sles12.3/
-                                      createrepo artifacts/sles12.3/
-                                  else
-                                      exit \${PIPESTATUS[0]}
-                                  fi
-                              else
-                                  exit \${PIPESTATUS[0]}
-                              fi'''
+                        catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
+                            sh label: env.STAGE_NAME,
+                               script: '''rm -rf artifacts/sles12.3/
+                                          mkdir -p artifacts/sles12.3/
+                                          if git show -s --format=%B | grep "^Skip-build: true"; then
+                                              exit 0
+                                          fi
+                                          rm -rf utils/rpms/_topdir/SRPMS
+                                          if make -C utils/rpms srpm; then
+                                              rm -rf utils/rpms/_topdir/RPMS
+                                              if make -C utils/rpms rpms; then
+                                                  ln utils/rpms/_topdir/{RPMS/*,SRPMS}/*  artifacts/sles12.3/
+                                                  createrepo artifacts/sles12.3/
+                                              else
+                                                  exit \${PIPESTATUS[0]}
+                                              fi
+                                          else
+                                              exit \${PIPESTATUS[0]}
+                                          fi'''
+                        }
                     }
                     post {
                         always {
@@ -273,11 +288,11 @@ pipeline {
                         }
                         unstable {
                             stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "UNSTABLE"
+                                       result: "UNSTABLE", ignore_failure: true
                         }
                         failure {
                             stepResult name: env.STAGE_NAME, context: "build",
-                                       result: "FAILURE"
+                                       result: "FAILURE", ignore_failure: true
                         }
                     }
                 }
@@ -350,8 +365,11 @@ pipeline {
                             */
                         }
                         unstable {
-                            sh 'mv config.log config.log-centos7-gcc'
-                            archiveArtifacts artifacts: 'config.log-centos7-gcc'
+                            sh '''if [ -f config.log ]; then
+                                      mv config.log config.log-centos7-gcc
+                                  fi'''
+                            archiveArtifacts artifacts: 'config.log-centos7-gcc',
+                                             allowEmptyArchive: true
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
@@ -360,8 +378,11 @@ pipeline {
                             */
                         }
                         failure {
-                            sh 'mv config.log config.log-centos7-gcc'
-                            archiveArtifacts artifacts: 'config.log-centos7-gcc'
+                            sh '''if [ -f config.log ]; then
+                                      mv config.log config.log-centos7-gcc
+                                  fi'''
+                            archiveArtifacts artifacts: 'config.log-centos7-gcc',
+                                             allowEmptyArchive: true
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
@@ -413,8 +434,11 @@ pipeline {
                             sh "rm -rf _build.external${arch}"
                         }
                         unstable {
-                            sh 'mv config.log config.log-centos7-clang'
-                            archiveArtifacts artifacts: 'config.log-centos7-clang'
+                            sh '''if [ -f config.log ]; then
+                                      mv config.log config.log-centos7-clang
+                                  fi'''
+                            archiveArtifacts artifacts: 'config.log-centos7-clang',
+                                             allowEmptyArchive: true
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
@@ -423,8 +447,11 @@ pipeline {
                             */
                         }
                         failure {
-                            sh 'mv config.log config.log-centos7-clang'
-                            archiveArtifacts artifacts: 'config.log-centos7-clang'
+                            sh '''if [ -f config.log ]; then
+                                      mv config.log config.log-centos7-clang
+                                  fi'''
+                            archiveArtifacts artifacts: 'config.log-centos7-clang',
+                                             allowEmptyArchive: true
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
@@ -476,8 +503,11 @@ pipeline {
                             sh "rm -rf _build.external${arch}"
                         }
                         unstable {
-                            sh 'mv config.log config.log-ubuntu18.04-gcc'
-                            archiveArtifacts artifacts: 'config.log-ubuntu18.04-gcc'
+                            sh '''if [ -f config.log ]; then
+                                      mv config.log config.log-ubuntu18.04-gcc
+                                  fi'''
+                            archiveArtifacts artifacts: 'config.log-ubuntu18.04-gcc',
+                                             allowEmptyArchive: true
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
@@ -486,8 +516,11 @@ pipeline {
                             */
                         }
                         failure {
-                            sh 'mv config.log config.log-ubuntu18.04-gcc'
-                            archiveArtifacts artifacts: 'config.log-ubuntu18.04-gcc'
+                            sh '''if [ -f config.log ]; then
+                                      mv config.log config.log-ubuntu18.04-gcc
+                                  fi'''
+                            archiveArtifacts artifacts: 'config.log-ubuntu18.04-gcc',
+                                             allowEmptyArchive: true
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
@@ -537,8 +570,11 @@ pipeline {
                             sh "rm -rf _build.external${arch}"
                         }
                         unstable {
-                            sh 'mv config.log config.log-ubuntu18.04-clang'
-                            archiveArtifacts artifacts: 'config.log-ubuntu18.04-clang'
+                            sh '''if [ -f config.log ]; then
+                                      mv config.log config.log-ubuntu18.04-clang
+                                  fi'''
+                            archiveArtifacts artifacts: 'config.log-ubuntu18.04-clang',
+                                             allowEmptyArchive: true
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
@@ -547,8 +583,11 @@ pipeline {
                             */
                         }
                         failure {
-                            sh 'mv config.log config.log-ubuntu18.04-clang'
-                            archiveArtifacts artifacts: 'config.log-ubuntu18.04-clang'
+                            sh '''if [ -f config.log ]; then
+                                      mv config.log config.log-ubuntu18.04-clang
+                                  fi'''
+                            archiveArtifacts artifacts: 'config.log-ubuntu18.04-clang',
+                                             allowEmptyArchive: true
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
@@ -602,8 +641,11 @@ pipeline {
                             sh "rm -rf _build.external${arch}"
                         }
                         unstable {
-                            sh 'mv config.log config.log-sles12.3-gcc'
-                            archiveArtifacts artifacts: 'config.log-sles12.3-gcc'
+                            sh '''if [ -f config.log ]; then
+                                      mv config.log config.log-sles12.3-gcc
+                                  fi'''
+                            archiveArtifacts artifacts: 'config.log-sles12.3-gcc',
+                                             allowEmptyArchive: true
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
@@ -612,8 +654,11 @@ pipeline {
                             */
                         }
                         failure {
-                            sh 'mv config.log config.log-sles12.3-gcc'
-                            archiveArtifacts artifacts: 'config.log-sles12.3-gcc'
+                            sh '''if [ -f config.log ]; then
+                                      mv config.log config.log-sles12.3-gcc
+                                  fi'''
+                            archiveArtifacts artifacts: 'config.log-sles12.3-gcc',
+                                             allowEmptyArchive: true
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
@@ -667,8 +712,11 @@ pipeline {
                             sh "rm -rf _build.external${arch}"
                         }
                         unstable {
-                            sh 'mv config.log config.log-leap42.3-gcc'
-                            archiveArtifacts artifacts: 'config.log-leap42.3-gcc'
+                            sh '''if [ -f config.log ]; then
+                                      mv config.log config.log-leap42.3-gcc
+                                  fi'''
+                            archiveArtifacts artifacts: 'config.log-leap42.3-gcc',
+                                             allowEmptyArchive: true
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
@@ -677,8 +725,11 @@ pipeline {
                             */
                         }
                         failure {
-                            sh 'mv config.log config.log-leap42.3-gcc'
-                            archiveArtifacts artifacts: 'config.log-leap42.3-gcc'
+                            sh '''if [ -f config.log ]; then
+                                      mv config.log config.log-leap42.3-gcc
+                                  fi'''
+                            archiveArtifacts artifacts: 'config.log-leap42.3-gcc',
+                                             allowEmptyArchive: true
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
@@ -730,8 +781,11 @@ pipeline {
                             sh "rm -rf _build.external${arch}"
                         }
                         unstable {
-                            sh 'mv config.log config.log-leap15-gcc'
-                            archiveArtifacts artifacts: 'config.log-leap15-gcc'
+                            sh '''if [ -f config.log ]; then
+                                      mv config.log config.log-leap15-gcc
+                                  fi'''
+                            archiveArtifacts artifacts: 'config.log-leap15-gcc',
+                                             allowEmptyArchive: true
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
@@ -740,8 +794,11 @@ pipeline {
                             */
                         }
                         failure {
-                            sh 'mv config.log config.log-leap15-gcc'
-                            archiveArtifacts artifacts: 'config.log-leap15-gcc'
+                            sh '''if [ -f config.log ]; then
+                                      mv config.log config.log-leap15-gcc
+                                  fi'''
+                            archiveArtifacts artifacts: 'config.log-leap15-gcc',
+                                             allowEmptyArchive: true
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
@@ -793,8 +850,11 @@ pipeline {
                             sh "rm -rf _build.external${arch}"
                         }
                         unstable {
-                            sh 'mv config.log config.log-leap15-clang'
-                            archiveArtifacts artifacts: 'config.log-leap15-clang'
+                            sh '''if [ -f config.log ]; then
+                                      mv config.log config.log-leap15-clang
+                                  fi'''
+                            archiveArtifacts artifacts: 'config.log-leap15-clang',
+                                             allowEmptyArchive: true
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
@@ -803,8 +863,11 @@ pipeline {
                             */
                         }
                         failure {
-                            sh 'mv config.log config.log-leap15-clang'
-                            archiveArtifacts artifacts: 'config.log-leap15-clang'
+                            sh '''if [ -f config.log ]; then
+                                      mv config.log config.log-leap15-clang
+                                  fi'''
+                            archiveArtifacts artifacts: 'config.log-leap15-clang',
+                                             allowEmptyArchive: true
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
@@ -855,8 +918,11 @@ pipeline {
                             sh "rm -rf _build.external${arch}"
                         }
                         unstable {
-                            sh 'mv config.log config.log-leap15-intelc'
-                            archiveArtifacts artifacts: 'config.log-leap15-intelc'
+                            sh '''if [ -f config.log ]; then
+                                      mv config.log config.log-leap15-intelc
+                                  fi'''
+                            archiveArtifacts artifacts: 'config.log-leap15-intelc',
+                                             allowEmptyArchive: true
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
@@ -865,8 +931,11 @@ pipeline {
                             */
                         }
                         failure {
-                            sh 'mv config.log config.log-leap15-intelc'
-                            archiveArtifacts artifacts: 'config.log-leap15-intelc'
+                            sh '''if [ -f config.log ]; then
+                                      mv config.log config.log-leap15-intelc
+                                  fi'''
+                            archiveArtifacts artifacts: 'config.log-leap15-intelc',
+                                             allowEmptyArchive: true
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
                                          description: env.STAGE_NAME,
@@ -879,6 +948,14 @@ pipeline {
             }
         }
         stage('Unit Test') {
+            when {
+                beforeAgent true
+                // expression { skipTest != true }
+                expression {
+                    sh script: 'git show -s --format=%B | grep "^Skip-test: true"',
+                       returnStatus: true
+                }
+            }
             parallel {
                 stage('run_test.sh') {
                     agent {
@@ -971,6 +1048,14 @@ pipeline {
             }
         }
         stage('Test') {
+            when {
+                beforeAgent true
+                // expression { skipTest != true }
+                expression {
+                    sh script: 'git show -s --format=%B | grep "^Skip-test: true"',
+                       returnStatus: true
+                }
+            }
             parallel {
                 stage('Functional') {
                     agent {
@@ -979,7 +1064,9 @@ pipeline {
                     steps {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
-                                       snapshot: true
+                                       snapshot: true,
+                                       inst_repos: daos_repos + ' ' + ior_repos,
+                                       inst_rpms: "ior-hpc mpich-autoload"
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''export SSH_KEY_ARGS="-i ci_key"
                                            export PDSH_SSH_ARGS_APPEND="$SSH_KEY_ARGS"
@@ -1038,11 +1125,15 @@ pipeline {
                         // First snapshot provision the VM at beginning of list
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 1,
-                                       snapshot: true
+                                       snapshot: true,
+                                       inst_repos: daos_repos + ' ' + ior_repos,
+                                       inst_rpms: "ior-hpc mpich-autoload"
                         // Then just reboot the physical nodes
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
-                                       power_only: true
+                                       power_only: true,
+                                       inst_repos: daos_repos + ' ' + ior_repos,
+                                       inst_rpms: "ior-hpc mpich-autoload"
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''export SSH_KEY_ARGS="-i ci_key"
                                            export PDSH_SSH_ARGS_APPEND="$SSH_KEY_ARGS"
@@ -1101,23 +1192,19 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        distro: 'el7.6',
                                        node_count: 1,
-                                       snapshot: true
-                        runTest script: "${rpm_test_pre}" +
-                                    '''     sudo yum-config-manager --add-repo=\${JENKINS_URL}job/\${JOB_NAME%%/*}/job/\\\${repo}/job/\\\${branch}/lastSuccessfulBuild/artifact/artifacts/centos7/
-                                            sudo bash -c \\\"echo \\\\\\"gpgcheck = False\\\\\\" >> /etc/yum.repos.d/\\\${repo_file_base}\\\${repo}_job_\\\${branch}_lastSuccessfulBuild_artifact_artifacts_centos7_.repo\\\"
-
-                                        done
-                                        sudo yum-config-manager --add-repo=\${BUILD_URL}artifact/artifacts/centos7/
-                                        sudo bash -c \\\"echo \\\\\\"gpgcheck = False\\\\\\" >> /etc/yum.repos.d/\\\${repo_file_base}daos_job_\${JOB_BASE_NAME}_\${BUILD_ID}_artifact_artifacts_centos7_.repo\\\"
-                                        # work around openmpi -> ompi
-                                        sudo yum -y erase metabench mdtest simul IOR
-                                        sudo yum -y install daos-client
-                                        sudo yum -y history rollback last-1
-                                        sudo yum -y install daos-server
-                                        sudo yum -y install daos-tests\n''' +
-                                        "${rpm_test_daos_test}" + '"',
-                                junit_files: null,
-                                failure_artifacts: env.STAGE_NAME
+                                       snapshot: true,
+                                       inst_repos: daos_repos + ' ' + ior_repos,
+                                       inst_rpms: "ior-hpc mpich-autoload"
+                        catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
+                            runTest script: "${rpm_test_pre}" +
+                                         '''sudo yum -y install daos-client
+                                            sudo yum -y history rollback last-1
+                                            sudo yum -y install daos-server
+                                            sudo yum -y install daos-tests\n''' +
+                                            "${rpm_test_daos_test}" + '"',
+                                    junit_files: null,
+                                    failure_artifacts: env.STAGE_NAME, ignore_failure: true
+                        }
                     }
                 }
                 stage('Test SLES12.3 RPMs') {
@@ -1128,23 +1215,23 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        distro: 'sles12sp3',
                                        node_count: 1,
-                                       snapshot: true
-                        runTest script: "${rpm_test_pre}" +
-                                     '''    sudo zypper --non-interactive ar --gpgcheck-allow-unsigned -f \${JENKINS_URL}job/\${JOB_NAME%%/*}/job/\\\${repo}/job/\\\${branch}/lastSuccessfulBuild/artifact/artifacts/sles12.3/ \\\$repo
-                                        done
-                                        sudo zypper --non-interactive ar --gpgcheck-allow-unsigned -f \${JENKINS_URL}job/\${JOB_NAME%%/*}/job/python-pathlib/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ python-pathlib
-                                        sudo zypper --non-interactive ar --gpgcheck-allow-unsigned -f \${BUILD_URL}artifact/artifacts/sles12.3/ daos
-                                        sudo zypper --non-interactive ar -f https://download.opensuse.org/repositories/science:/HPC:/SLE12SP3_Missing/SLE_12_SP3/ hwloc
-                                        sudo zypper --non-interactive ar https://download.opensuse.org/repositories/home:/jhli/SLE_15/home:jhli.repo
-                                        sudo zypper --non-interactive ar https://download.opensuse.org/repositories/devel:libraries:c_c++/SLE_12_SP3/devel:libraries:c_c++.repo
-                                        sudo zypper --non-interactive --gpg-auto-import-keys ref
-                                        sudo zypper --non-interactive rm openmpi libfabric1
-                                        sudo zypper --non-interactive in daos-client
-                                        sudo zypper --non-interactive in daos-server
-                                        sudo zypper --non-interactive in daos-tests\n''' +
-                                        "${rpm_test_daos_test}" + '"',
-                                junit_files: null,
-                                failure_artifacts: env.STAGE_NAME
+                                       snapshot: true,
+                                       inst_repos: daos_repos + " python-pathlib"
+                        catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
+                            runTest script: "${rpm_test_pre}" +
+                                         '''sudo zypper --non-interactive ar -f https://download.opensuse.org/repositories/science:/HPC:/SLE12SP3_Missing/SLE_12_SP3/ hwloc
+                                            # for libcmocka
+                                            sudo zypper --non-interactive ar https://download.opensuse.org/repositories/home:/jhli/SLE_15/home:jhli.repo
+                                            sudo zypper --non-interactive ar https://download.opensuse.org/repositories/devel:libraries:c_c++/SLE_12_SP3/devel:libraries:c_c++.repo
+                                            sudo zypper --non-interactive --gpg-auto-import-keys ref
+                                            sudo zypper --non-interactive rm openmpi libfabric1
+                                            sudo zypper --non-interactive in daos-client
+                                            sudo zypper --non-interactive in daos-server
+                                            sudo zypper --non-interactive in daos-tests\n''' +
+                                            "${rpm_test_daos_test}" + '"',
+                                    junit_files: null,
+                                    failure_artifacts: env.STAGE_NAME, ignore_failure: true
+                        }
                     }
                 }
             }

@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package security
+package auth
 
 import (
 	"errors"
@@ -33,7 +33,6 @@ import (
 	"github.com/golang/protobuf/proto"
 
 	. "github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/security/auth"
 )
 
 // Mocks
@@ -79,7 +78,7 @@ func (e *mockExt) LookupGroupID(gid uint32) (*user.Group, error) {
 
 // Helpers for the unit tests below
 
-func expectAuthSysErrorForToken(t *testing.T, badToken *auth.Token, expectedErrorMessage string) {
+func expectAuthSysErrorForToken(t *testing.T, badToken *Token, expectedErrorMessage string) {
 	authSys, err := AuthSysFromAuthToken(badToken)
 
 	if authSys != nil {
@@ -96,21 +95,21 @@ func TestAuthSysFromAuthToken_ErrorsWithNilAuthToken(t *testing.T) {
 }
 
 func TestAuthSysFromAuthToken_ErrorsWithWrongAuthTokenFlavor(t *testing.T) {
-	badFlavorToken := auth.Token{Flavor: auth.Flavor_AUTH_NONE}
+	badFlavorToken := Token{Flavor: Flavor_AUTH_NONE}
 	expectAuthSysErrorForToken(t, &badFlavorToken,
 		"Attempting to convert an invalid AuthSys Token")
 }
 
 func TestAuthSysFromAuthToken_ErrorsIfTokenCannotBeUnmarshaled(t *testing.T) {
 	zeroArray := make([]byte, 16)
-	badToken := auth.Token{Flavor: auth.Flavor_AUTH_SYS,
+	badToken := Token{Flavor: Flavor_AUTH_SYS,
 		Data: zeroArray}
 	expectAuthSysErrorForToken(t, &badToken,
-		"unmarshaling AUTH_SYS: proto: auth.Sys: illegal tag 0 (wire type 0)")
+		"unmarshaling AUTH_SYS: proto: Sys: illegal tag 0 (wire type 0)")
 }
 
 func TestAuthSysFromAuthToken_SucceedsWithGoodToken(t *testing.T) {
-	originalAuthSys := auth.Sys{
+	originalAuthSys := Sys{
 		Stamp:       0,
 		Machinename: "something",
 		User:        "niceuser",
@@ -124,8 +123,8 @@ func TestAuthSysFromAuthToken_SucceedsWithGoodToken(t *testing.T) {
 		t.Fatalf("Couldn't marshal during setup: %s", err)
 	}
 
-	goodToken := auth.Token{
-		Flavor: auth.Flavor_AUTH_SYS,
+	goodToken := Token{
+		Flavor: Flavor_AUTH_SYS,
 		Data:   marshaledToken,
 	}
 
@@ -216,11 +215,11 @@ func TestAuthSysRequestFromCreds_returnsAuthSys(t *testing.T) {
 		t.Fatal("Token was nil")
 	}
 
-	if token.GetFlavor() != auth.Flavor_AUTH_SYS {
+	if token.GetFlavor() != Flavor_AUTH_SYS {
 		t.Fatalf("Bad auth flavor: %v", token.GetFlavor())
 	}
 
-	authsys := &auth.Sys{}
+	authsys := &Sys{}
 	err = proto.Unmarshal(token.GetData(), authsys)
 	if err != nil {
 		t.Fatal("Failed to unmarshal token data")

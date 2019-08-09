@@ -183,37 +183,7 @@ rm -rf \"${TEST_TAG_DIR:?}/\"
 mkdir -p \"$TEST_TAG_DIR/\"
 if [ -z \"\$JENKINS_URL\" ]; then
     exit 0
-fi
-sudo bash -c 'set -ex
-yum -y install yum-utils
-repo_file_base=\"*_job_${JOB_NAME%%/*}_job_\"
-# pkgs are of the format pkgname[:branch]
-pkgs=\"ior-hpc:daos\"
-install_pkgs=\"\"
-for ext in \$pkgs; do
-    IFS=':' read -ra ext <<< \"\$ext\"
-    ext=\"\${ext[0]}\"
-    if [ -n \"\${ext[1]}\" ]; then
-        branch=\"\${ext[1]}\"
-    else
-        branch=\"master\"
-    fi
-    install_pkgs+=\" \$ext\"
-    rm -f /etc/yum.repos.d/\${repo_file_base}\${ext}_job_*.repo
-    yum-config-manager --add-repo=${JENKINS_URL}job/${JOB_NAME%%/*}/job/\${ext}/job/\${branch}/lastSuccessfulBuild/artifact/artifacts/
-    echo \"gpgcheck = False\" >> /etc/yum.repos.d/\${repo_file_base}\${ext}_job_\${branch}_lastSuccessfulBuild_artifact_artifacts_.repo
-done
-# for testing with a PR for a dependency:
-depname=     # i.e. depname=mercury
-pr_num=      # set to which PR number your PR is
-if [ -n \"\$depname\" ]; then
-    rm -f /etc/yum.repos.d/\${repo_file_base}\${depname}_job_PR-\${pr_num}_lastSuccessfulBuild_artifact_artifacts_.repo
-    yum-config-manager --add-repo=${JENKINS_URL}job/${JOB_NAME%%/*}/job/\${depname}/job/PR-\${pr_num}/lastSuccessfulBuild/artifact/artifacts/
-    echo \"gpgcheck = False\" >> /etc/yum.repos.d/\${repo_file_base}\${depname}_job_PR-\${pr_num}_lastSuccessfulBuild_artifact_artifacts_.repo
-    install_pkgs+=\" \${depname}\"
-fi
-yum -y erase \$install_pkgs
-yum -y install \$install_pkgs'" 2>&1 | dshbak -c; then
+fi" 2>&1 | dshbak -c; then
     echo "Cluster setup (i.e. provisioning) failed"
     exit 1
 fi
@@ -232,8 +202,9 @@ cd $DAOS_BASE
 export CRT_PHY_ADDR_STR=ofi+sockets
 export OFI_INTERFACE=eth0
 # At Oct2018 Longmond F2F it was decided that per-server logs are preferred
-# But now we need to collect them!
-export D_LOG_FILE=\"$TEST_TAG_DIR/client_daos.log\"
+# But now we need to collect them!  Avoid using 'client_daos.log' due to
+# conflicts with the daos_test log renaming.
+export D_LOG_FILE=\"$TEST_TAG_DIR/daos.log\"
 
 mkdir -p ~/.config/avocado/
 cat <<EOF > ~/.config/avocado/avocado.conf

@@ -55,7 +55,8 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *_udata)
 	 * mode.
 	 */
 
-	rc = dfs_lookup_rel(dfs, dir, name, O_RDONLY, &obj, &stbuf.st_mode);
+	rc = dfs_lookup_rel(dfs, dir, name, O_RDONLY, &obj, &stbuf.st_mode,
+			    NULL);
 	if (rc)
 		return rc;
 
@@ -204,7 +205,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 					 &oh->doh_anchor, &num, buf_size,
 					 NULL, NULL);
 			if (rc)
-				D_GOTO(err, rc = -rc);
+				D_GOTO(err, rc);
 
 			if (daos_anchor_is_eof(&oh->doh_anchor))
 				return;
@@ -279,11 +280,11 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_inode_entry *inode,
 				 buf_size - udata.b_off, filler_cb, &udata);
 
 		/** if entry does not fit in buffer, just return */
-		if (rc == -E2BIG)
+		if (rc == E2BIG)
 			break;
 		/** otherwise a different error occured */
 		if (rc)
-			D_GOTO(err, rc = -rc);
+			D_GOTO(err, rc);
 
 		/** if the fuse buffer is full, break enumeration */
 		if (udata.stop)
