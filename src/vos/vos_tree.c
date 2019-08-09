@@ -390,6 +390,7 @@ ktr_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 static int
 ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
+	struct vos_pool	   *pool = tins->ti_priv;
 	struct vos_krec_df *krec;
 	struct umem_attr    uma;
 	daos_handle_t	    toh;
@@ -410,12 +411,15 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	}
 
 	/* has subtree? */
+	D_ASSERT(pool != NULL);
 	if (krec->kr_bmap & KREC_BF_EVT) {
+		struct evt_desc_cbs cbs;
+
 		if (krec->kr_evt.tr_order == 0)
 			goto exit; /* No subtree */
 
-		rc = evt_open(&krec->kr_evt, &uma, tins->ti_coh,
-			      tins->ti_blks_info, &toh);
+		vos_evt_desc_cbs_init(&cbs, pool, tins->ti_coh);
+		rc = evt_open(&krec->kr_evt, &uma, &cbs, &toh);
 		if (rc != 0)
 			D_ERROR("Failed to open evtree: %d\n", rc);
 		else
@@ -425,11 +429,11 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		if (krec->kr_btr.tr_order == 0)
 			goto exit; /* No subtree */
 		rc = dbtree_open_inplace_ex(&krec->kr_btr, &uma, tins->ti_coh,
-					    tins->ti_blks_info, &toh);
+					    pool, &toh);
 		if (rc != 0)
 			D_ERROR("Failed to open btree: %d\n", rc);
 		else
-			dbtree_destroy(toh, NULL);
+			dbtree_destroy(toh, args);
 	} /* It's possible that neither tree is created in case of punch only */
 exit:
 	umem_free(&tins->ti_umm, rec->rec_off);
@@ -669,39 +673,24 @@ svt_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 }
 
 static int
-svt_rec_free(struct btr_instance *tins, struct btr_record *rec,
-	      void *args)
+svt_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
 	struct vos_irec_df *irec = vos_rec2irec(tins, rec);
-	bio_addr_t *addr = &irec->ir_ex_addr;
+	bio_addr_t	   *addr = &irec->ir_ex_addr;
 
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return 0;
 
 	vos_dtx_deregister_record(&tins->ti_umm, irec->ir_dtx, rec->rec_off,
 				  DTX_RT_SVT);
-	if (args != NULL) {
-		*(umem_off_t *)args = rec->rec_off;
-		rec->rec_off = UMOFF_NULL; /** taken over by user */
-		return 0;
+
+	/* SCM value is stored together with vos_irec_df */
+	if (addr->ba_type == DAOS_MEDIA_NVME) {
+		struct vos_pool *pool = tins->ti_priv;
+
+		D_ASSERT(pool != NULL);
+		vos_bio_addr_free(pool, addr, irec->ir_size);
 	}
-
-	if (addr->ba_type == DAOS_MEDIA_NVME && !bio_addr_is_hole(addr)) {
-		struct vea_space_info *vsi = tins->ti_blks_info;
-		uint64_t blk_off;
-		uint32_t blk_cnt;
-		int rc;
-
-		D_ASSERT(vsi != NULL);
-
-		blk_off = vos_byte2blkoff(addr->ba_off);
-		blk_cnt = vos_byte2blkcnt(irec->ir_size);
-
-		rc = vea_free(vsi, blk_off, blk_cnt);
-		if (rc)
-			D_ERROR("Error on block free. %d\n", rc);
-	}
-
 	umem_free(&tins->ti_umm, rec->rec_off);
 	return 0;
 }
@@ -810,12 +799,63 @@ static struct vos_btr_attr vos_btr_attrs[] = {
 };
 
 static int
+evt_dop_bio_free(struct umem_instance *umm, struct evt_desc *desc,
+		 daos_size_t nob, void *args)
+{
+	struct vos_pool *pool = (struct vos_pool *)args;
+
+	return vos_bio_addr_free(pool, &desc->dc_ex_addr, nob);
+}
+
+static int
+evt_dop_log_check(struct umem_instance *umm, struct evt_desc *desc,
+	      int intent, void *args)
+{
+	daos_handle_t coh;
+
+	coh.cookie = (unsigned long)args;
+	return vos_dtx_check_availability(umm, coh, desc->dc_dtx,
+					  UMOFF_NULL, intent, DTX_RT_EVT);
+}
+
+int
+evt_dop_log_add(struct umem_instance *umm, struct evt_desc *desc, void *args)
+{
+	return vos_dtx_register_record(umm, umem_ptr2off(umm, desc),
+				       DTX_RT_EVT, 0);
+}
+
+int
+evt_dop_log_del(struct umem_instance *umm, struct evt_desc *desc, void *args)
+{
+	vos_dtx_deregister_record(umm, desc->dc_dtx,
+				  umem_ptr2off(umm, desc), DTX_RT_EVT);
+	return 0;
+}
+
+void
+vos_evt_desc_cbs_init(struct evt_desc_cbs *cbs, struct vos_pool *pool,
+		      daos_handle_t coh)
+{
+	/* NB: coh is not required for destroy */
+	cbs->dc_bio_free_cb	= evt_dop_bio_free;
+	cbs->dc_bio_free_args	= (void *)pool;
+	cbs->dc_log_status_cb	= evt_dop_log_check;
+	cbs->dc_log_status_args	= (void *)(unsigned long)coh.cookie;
+	cbs->dc_log_add_cb	= evt_dop_log_add;
+	cbs->dc_log_add_args	= NULL;
+	cbs->dc_log_del_cb	= evt_dop_log_del;
+	cbs->dc_log_del_args	= NULL;
+}
+
+static int
 tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 		 struct vos_krec_df *krec, daos_handle_t *sub_toh)
 {
-	struct umem_attr	*uma = vos_obj2uma(obj);
-	struct vea_space_info	*info = obj->obj_cont->vc_pool->vp_vea_info;
+	struct umem_attr        *uma = vos_obj2uma(obj);
+	struct vos_pool		*pool = vos_obj2pool(obj);
 	daos_handle_t		 coh = vos_cont2hdl(obj->obj_cont);
+	struct evt_desc_cbs	 cbs;
 	int			 expected_flag;
 	int			 unexpected_flag;
 	int			 rc = 0;
@@ -839,12 +879,13 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 		goto out;
 	}
 
+	vos_evt_desc_cbs_init(&cbs, pool, coh);
 	if (krec->kr_bmap & expected_flag) {
 		if (flags & SUBTR_EVT) {
-			rc = evt_open(&krec->kr_evt, uma, coh, info, sub_toh);
+			rc = evt_open(&krec->kr_evt, uma, &cbs, sub_toh);
 		} else {
 			rc = dbtree_open_inplace_ex(&krec->kr_btr, uma, coh,
-						    info, sub_toh);
+						    pool, sub_toh);
 		}
 		if (rc != 0)
 			D_ERROR("Failed to open tree: %d\n", rc);
@@ -855,8 +896,8 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 	D_ASSERT(flags & SUBTR_CREATE);
 
 	if (flags & SUBTR_EVT) {
-		rc = evt_create(vos_evt_feats, VOS_EVT_ORDER, uma,
-				&krec->kr_evt, coh, sub_toh);
+		rc = evt_create(&krec->kr_evt, vos_evt_feats, VOS_EVT_ORDER,
+				uma, &cbs, sub_toh);
 		if (rc != 0) {
 			D_ERROR("Failed to create evtree: %d\n", rc);
 			goto out;
@@ -886,7 +927,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 
 		rc = dbtree_create_inplace_ex(ta->ta_class, tree_feats,
 					      ta->ta_order, uma, &krec->kr_btr,
-					      coh, sub_toh);
+					      coh, pool, sub_toh);
 		if (rc != 0) {
 			D_ERROR("Failed to create btree: %d\n", rc);
 			goto out;
@@ -1068,7 +1109,7 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov,
 		struct umem_instance	*umm = vos_obj2umm(obj);
 		struct vos_krec_df	*krec2;
 		struct vos_key_bundle	 kbund2;
-		d_iov_t	         tmp;
+		d_iov_t			 tmp;
 
 		krec2 = rbund->rb_krec;
 		if (krec->kr_bmap & KREC_BF_BTR) {
@@ -1091,7 +1132,7 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov,
 		kbund2.kb_key	= kbund->kb_key;
 		kbund2.kb_epoch	= DAOS_EPOCH_MAX;
 
-		rc = dbtree_delete(toh, BTR_PROBE_EQ, &tmp, NULL);
+		rc = dbtree_delete(toh, BTR_PROBE_EQ, &tmp, vos_obj2pool(obj));
 		if (rc)
 			D_ERROR("Failed to delete: %d\n", rc);
 	} else {
@@ -1106,7 +1147,7 @@ int
 obj_tree_init(struct vos_object *obj)
 {
 	struct vos_btr_attr *ta	= &vos_btr_attrs[0];
-	int			rc;
+	int		     rc;
 
 	if (!daos_handle_is_inval(obj->obj_toh))
 		return 0;
@@ -1130,13 +1171,14 @@ obj_tree_init(struct vos_object *obj)
 					      ta->ta_order, vos_obj2uma(obj),
 					      &obj->obj_df->vo_tree,
 					      vos_cont2hdl(obj->obj_cont),
+					      vos_obj2pool(obj),
 					      &obj->obj_toh);
 	} else {
 		D_DEBUG(DB_DF, "Open btree for object\n");
 		rc = dbtree_open_inplace_ex(&obj->obj_df->vo_tree,
 					    vos_obj2uma(obj),
 					    vos_cont2hdl(obj->obj_cont),
-					    NULL, &obj->obj_toh);
+					    vos_obj2pool(obj), &obj->obj_toh);
 	}
 	return rc;
 }
