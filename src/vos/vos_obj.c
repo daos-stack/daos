@@ -1083,7 +1083,9 @@ int
 vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 			 struct vos_iterator **iter_pp)
 {
+	struct vos_object	*obj = info->ii_obj;
 	struct vos_obj_iter	*oiter;
+	struct evt_desc_cbs	 cbs;
 	struct evt_filter	 filter;
 	daos_handle_t		 toh;
 	int			 rc = 0;
@@ -1097,7 +1099,7 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 	oiter->it_epc_expr = info->ii_epc_expr;
 	oiter->it_flags = info->ii_flags;
 	if (type != VOS_ITER_DKEY)
-		oiter->it_obj = info->ii_obj;
+		oiter->it_obj = obj;
 	if (info->ii_flags & VOS_IT_FOR_PURGE)
 		oiter->it_iter.it_for_purge = 1;
 	if (info->ii_flags & VOS_IT_FOR_REBUILD)
@@ -1117,8 +1119,8 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 	case VOS_ITER_SINGLE:
 	case VOS_ITER_AKEY:
 		rc = dbtree_open_inplace_ex(info->ii_btr, info->ii_uma,
-					vos_cont2hdl(info->ii_obj->obj_cont),
-					info->ii_vea_info, &toh);
+					vos_cont2hdl(obj->obj_cont),
+					vos_obj2pool(obj), &toh);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to open tree for iterator:"
 				" rc = %d\n", rc);
@@ -1129,9 +1131,9 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		break;
 
 	case VOS_ITER_RECX:
-		rc = evt_open(info->ii_evt, info->ii_uma,
-			      vos_cont2hdl(info->ii_obj->obj_cont),
-			      info->ii_vea_info, &toh);
+		vos_evt_desc_cbs_init(&cbs, vos_obj2pool(obj),
+				      vos_cont2hdl(obj->obj_cont));
+		rc = evt_open(info->ii_evt, info->ii_uma, &cbs, &toh);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to open tree for iterator:"
 				" rc = %d\n", rc);
@@ -1322,7 +1324,7 @@ vos_obj_iter_delete(struct vos_iterator *iter, void *args)
 		return obj_iter_delete(oiter, args);
 
 	case VOS_ITER_RECX:
-		return evt_iter_delete(oiter->it_hdl, args);
+		return evt_iter_delete(oiter->it_hdl, NULL);
 	}
 }
 
