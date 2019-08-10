@@ -615,6 +615,8 @@ process_setup_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__DaosResp	*resp = NULL;
 
+	D_INFO("Received request to setup server\n");
+
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
