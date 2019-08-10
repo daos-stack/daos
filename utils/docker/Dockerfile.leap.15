@@ -25,7 +25,8 @@ RUN zypper --non-interactive update; \
            libltdl7 libnuma-devel libopenssl-devel libtool            \
            libuuid-devel libyaml-devel                                \
            make man meson nasm ninja pandoc patch python2-pip         \
-           readline-devel sg3_utils which yasm
+           readline-devel sg3_utils which yasm patterns-devel-python  \
+	   patterns-devel-python-devel_python3
 
 RUN pip install --upgrade pip; \
     pip install -U setuptools; \
