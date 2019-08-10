@@ -58,10 +58,10 @@ RUN yum -y install epel-release; \
         libaio-devel libcmocka-devel libevent-devel libiscsi-devel     \
         libtool libtool-ltdl-devel libuuid-devel libyaml-devel         \
         make meson nasm ninja-build numactl-devel openssl-devel        \
-        pandoc patch                                                   \
-        pylint python python-pep8 python-requests python2-pygithub     \
-        python-devel python36-devel readline-devel scons sg3_utils      \
-        ShellCheck yasm
+        pandoc patch pylint python-srpm-macros python2-rpm-macros      \
+	python-rpm-macros python python-pep8 python-requests           \
+	python2-pygithub python-devel python36-devel readline-devel    \
+	scons sg3_utils ShellCheck yasm
 
 # DAOS specific
 RUN yum -y install \
