@@ -39,7 +39,7 @@ func (x Flavor) String() string {
 	return proto.EnumName(Flavor_name, int32(x))
 }
 func (Flavor) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_auth_4c34f149613292ae, []int{0}
+	return fileDescriptor_auth_5b74f72543a36804, []int{0}
 }
 
 type Token struct {
@@ -54,7 +54,7 @@ func (m *Token) Reset()         { *m = Token{} }
 func (m *Token) String() string { return proto.CompactTextString(m) }
 func (*Token) ProtoMessage()    {}
 func (*Token) Descriptor() ([]byte, []int) {
-	return fileDescriptor_auth_4c34f149613292ae, []int{0}
+	return fileDescriptor_auth_5b74f72543a36804, []int{0}
 }
 func (m *Token) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Token.Unmarshal(m, b)
@@ -105,7 +105,7 @@ func (m *Sys) Reset()         { *m = Sys{} }
 func (m *Sys) String() string { return proto.CompactTextString(m) }
 func (*Sys) ProtoMessage()    {}
 func (*Sys) Descriptor() ([]byte, []int) {
-	return fileDescriptor_auth_4c34f149613292ae, []int{1}
+	return fileDescriptor_auth_5b74f72543a36804, []int{1}
 }
 func (m *Sys) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Sys.Unmarshal(m, b)
@@ -178,7 +178,7 @@ func (m *SysVerifier) Reset()         { *m = SysVerifier{} }
 func (m *SysVerifier) String() string { return proto.CompactTextString(m) }
 func (*SysVerifier) ProtoMessage()    {}
 func (*SysVerifier) Descriptor() ([]byte, []int) {
-	return fileDescriptor_auth_4c34f149613292ae, []int{2}
+	return fileDescriptor_auth_5b74f72543a36804, []int{2}
 }
 func (m *SysVerifier) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SysVerifier.Unmarshal(m, b)
@@ -221,7 +221,7 @@ func (m *Credential) Reset()         { *m = Credential{} }
 func (m *Credential) String() string { return proto.CompactTextString(m) }
 func (*Credential) ProtoMessage()    {}
 func (*Credential) Descriptor() ([]byte, []int) {
-	return fileDescriptor_auth_4c34f149613292ae, []int{3}
+	return fileDescriptor_auth_5b74f72543a36804, []int{3}
 }
 func (m *Credential) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Credential.Unmarshal(m, b)
@@ -270,9 +270,9 @@ func init() {
 	proto.RegisterEnum("auth.Flavor", Flavor_name, Flavor_value)
 }
 
-func init() { proto.RegisterFile("auth.proto", fileDescriptor_auth_4c34f149613292ae) }
+func init() { proto.RegisterFile("auth.proto", fileDescriptor_auth_5b74f72543a36804) }
 
-var fileDescriptor_auth_4c34f149613292ae = []byte{
+var fileDescriptor_auth_5b74f72543a36804 = []byte{
 	// 300 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x5c, 0x51, 0xdd, 0x4a, 0xc3, 0x30,
 	0x14, 0xb6, 0xae, 0x2d, 0xeb, 0x69, 0x95, 0x71, 0x10, 0xe9, 0x85, 0x17, 0xb5, 0x28, 0x0e, 0x85,

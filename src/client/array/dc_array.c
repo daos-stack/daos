@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -632,16 +632,12 @@ open_handle_cb(tse_task_t *task, void *data)
 		params = daos_task_get_priv(task);
 		D_ASSERT(params != NULL);
 		md_vals = params->md_vals;
-		if (md_vals[0] != AKEY_MAGIC_V) {
-			D_ERROR("DAOS Object is not an array object\n");
+		if (md_vals[0] != AKEY_MAGIC_V)
 			D_GOTO(err_obj, rc = -DER_NO_PERM);
-		}
 
 		/** If no cell and chunk size, this isn't an array obj. */
-		if (md_vals[1] == 0 || md_vals[2] == 0) {
-			D_ERROR("Failed to retrieve array metadata\n");
+		if (md_vals[1] == 0 || md_vals[2] == 0)
 			D_GOTO(err_obj, rc = -DER_NO_PERM);
-		}
 
 		/** Set array open OUT params */
 		*args->cell_size	= md_vals[1];

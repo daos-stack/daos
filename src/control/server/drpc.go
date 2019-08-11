@@ -31,6 +31,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/security"
 )
 
 const sockFileName = "daos_server.sock"
@@ -60,14 +61,14 @@ func checkSocketDir(sockDir string) error {
 		return errors.WithMessagef(err, "%s socket directory %s", msg, sockDir)
 	}
 	if !f.IsDir() {
-		return errors.Errorf("path not a dir (socket directory %s", sockDir)
+		return errors.Errorf("path %s not a directory", sockDir)
 	}
 
 	return nil
 }
 
 // drpcSetup checks socket directory exists, specifies socket path and starts drpc server.
-func drpcSetup(sockDir string, iosrv *iosrv) error {
+func drpcSetup(sockDir string, iosrv *iosrv, tc *security.TransportConfig) error {
 	if err := checkSocketDir(sockDir); err != nil {
 		return err
 	}
@@ -79,7 +80,7 @@ func drpcSetup(sockDir string, iosrv *iosrv) error {
 	}
 
 	// Create and add our modules
-	drpcServer.RegisterRPCModule(&SecurityModule{})
+	drpcServer.RegisterRPCModule(NewSecurityModule(tc))
 	drpcServer.RegisterRPCModule(&mgmtModule{})
 	drpcServer.RegisterRPCModule(&srvModule{iosrv})
 
