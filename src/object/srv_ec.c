@@ -150,7 +150,7 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 					 * so we need to remove the recx
 					 */
 					ec_del_recx(iod, idx);
-				ec_bulk_spec_set(this_recx->rx_nr *
+					ec_bulk_spec_set(this_recx->rx_nr *
 						 iod->iod_size, true, sl_idx++,
 						 &skip_list[i]);
 					continue;
@@ -173,7 +173,7 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 					this_recx->rx_nr = (recx_size -
 						cell_start) / iod->iod_size;
 					ec_bulk_spec_set(recx_size - cell_start,
-							 true, sl_idx++,
+							 false, sl_idx++,
 							 &skip_list[i]);
 				}
 			}
