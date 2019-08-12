@@ -222,20 +222,20 @@ struct ec_bulk_spec {
 
 static inline void
 ec_bulk_spec_set(uint64_t len, bool skip, int index,
-			       struct ec_bulk_spec **skip_list) 
+		 struct ec_bulk_spec **skip_list)
 {
 	(*skip_list)[index].is_skip = skip;
 	(*skip_list)[index].len = len;
 }
 
 static inline uint64_t
-ec_bulk_spec_get_len(int index, struct ec_bulk_spec *skip_list) 
+ec_bulk_spec_get_len(int index, struct ec_bulk_spec *skip_list)
 {
 	return skip_list[index].len;
 }
 
 static inline bool
-ec_bulk_spec_get_skip(int index, struct ec_bulk_spec *skip_list) 
+ec_bulk_spec_get_skip(int index, struct ec_bulk_spec *skip_list)
 {
 	return skip_list[index].is_skip;
 }
