@@ -127,7 +127,7 @@ def write_slurm_script(path, name, output, nodecount, cmds, sbatch=None):
         script_file.write("echo \"nodes: \" $SLURM_JOB_NODELIST \n")
         script_file.write("echo \"node count: \" $SLURM_JOB_NUM_NODES \n")
         script_file.write("echo \"job name: \" $SLURM_JOB_NAME \n")
-        for cmd in (cmds):
+        for cmd in list(cmds):
             script_file.write(cmd + "\n")
     return scriptfile
 

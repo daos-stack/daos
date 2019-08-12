@@ -41,7 +41,7 @@ smoke:
     test_timeout: 1200
     # job runs on all node
     nodesperjob: -1
-    poollist: 
+    poollist:
       - pool1
     joblist:
       - jobsmoke
@@ -52,18 +52,18 @@ soak_ior_daos:
     name: soak_ior_daos
     test_timeout: 1800
     nodesperjob: 1
-    poollist: 
+    poollist:
       - pool1
     joblist:
       - job_ior_daos
 # IOR MPIIO stress test case
-# Test will run for 30 minutes; 
+# Test will run for 30 minutes;
 # One job per node with 1, 16 and 32 tasks.proccesses per node
 soak_ior_mpiio:
     name: soak_ior_mpiio
     test_timeout: 1800
     nodesperjob: 1
-    poollist: 
+    poollist:
       - pool1
     joblist:
       - job_ior_mpiio
@@ -96,7 +96,7 @@ jobsmoke:
         - smoke_ior_daos
         - smoke_ior_mpiio
         # - dmg_create_destroy
-# IOR daos job params; multiple jobs, one job per node; 
+# IOR daos job params; multiple jobs, one job per node;
 # 1, 16 and 32 tasks per node
 job_ior_daos:
     name: job_ior_daos
@@ -112,7 +112,7 @@ job_ior_daos:
 job_ior_mpiio:
     name: job_ior_mpiio
     time: 10
-    tasks: 
+    tasks:
         - 1
         - 16
         - 32
@@ -131,33 +131,33 @@ smoke_ior_daos:
     api: DAOS
     test_file: daos:testFile
     flags: -v -w -W -r -R
-    block_size: 
+    block_size:
         - '64M'
     repetition: 1
     transfer_size:
         - '4k'
         - '128k'
         - '1m'
-    daos_oclass: 
+    daos_oclass:
         - 'SX'
 smoke_ior_mpiio:
     api: MPIIO
     test_file: daos:testFile
     flags: -v -w -W -r -R
-    block_size: 
+    block_size:
         - '64M'
     repetition: 1
     transfer_size:
         - '4k'
         - '128k'
         - '1m'
-    daos_oclass: 
+    daos_oclass:
         - 'SX'
 ior_daos:
     api: DAOS
     test_file: daos:testFile
     flags: -v -w -W -r -R
-    block_size: 
+    block_size:
         - '64M'
     repetition: 5
     transfer_size:
@@ -165,14 +165,14 @@ ior_daos:
         - '4k'
         - '128k'
         - '1m'
-    daos_oclass: 
+    daos_oclass:
         - 'SX'
         #- 'RP_G3X'
 ior_mpiio:
     api: MPIIO
     test_file: daos:testFile
     flags: -v -w -W -r -R
-    block_size: 
+    block_size:
         - '64M'
     repetition: 5
     transfer_size:
@@ -180,7 +180,7 @@ ior_mpiio:
         - '4k'
         - '128k'
         - '1m'
-    daos_oclass: 
+    daos_oclass:
         - 'SX'
         #- 'RP_G3X'
 # dmg cmdline params - TBD
