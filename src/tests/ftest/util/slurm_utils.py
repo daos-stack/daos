@@ -28,7 +28,7 @@ import random
 import time
 import subprocess
 import threading
-import pyslurm  # pylint: disable=import-error
+import re
 from avocado.utils import process
 
 W_LOCK = threading.Lock()
@@ -127,22 +127,22 @@ def write_slurm_script(path, name, output, nodecount, cmds, sbatch=None):
         script_file.write("echo \"nodes: \" $SLURM_JOB_NODELIST \n")
         script_file.write("echo \"node count: \" $SLURM_JOB_NUM_NODES \n")
         script_file.write("echo \"job name: \" $SLURM_JOB_NAME \n")
-        for cmd in list(cmds):
+        for cmd in (cmds):
             script_file.write(cmd + "\n")
     return scriptfile
 
+# This method is not used anywhere; commented to remove pyslurm dependency
+# def run_slurm_cmd(cmd, name):
+#     """Run a simple shell command via slurm.
 
-def run_slurm_cmd(cmd, name):
-    """Run a simple shell command via slurm.
+#     cmd  --command that can be run from a shell
+#     name --job name
 
-    cmd  --command that can be run from a shell
-    name --job name
-
-    returns --the job ID, which is used as a handle for other functions
-    """
-    daos_test_job = {"wrap": cmd, "job_name": name}
-    jobid = pyslurm.job().submit_batch_job(daos_test_job)
-    return jobid
+#     returns --the job ID, which is used as a handle for other functions
+#     """
+#     daos_test_job = {"wrap": cmd, "job_name": name}
+#     jobid = pyslurm.job().submit_batch_job(daos_test_job)
+#     return jobid
 
 
 def run_slurm_script(script, logfile=None):
@@ -155,14 +155,18 @@ def run_slurm_script(script, logfile=None):
     if logfile is not None:
         script = " -o " + logfile + " " + script
     cmd = "sbatch " + script
-    output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
-    print(output)
-    if 'Submitted batch job' in str(output):
-        output_list = output.split()
-        if len(output_list) >= 4:
-            return output_list[3]
-
-    raise SlurmFailed("Batch job failed to start: {}".format(output))
+    try:
+        result = process.run(cmd, shell=True, timeout=10)
+    except process.CmdError as error:
+        result = None
+        raise SlurmFailed("job failed : {}".format(error))
+    if result:
+        output = result.stdout
+        match = re.search(r"Submitted\s+batch\s+job\s+(\d+)", str(output))
+        if match is not None:
+            return match.group(1)
+    else:
+        return None
 
 
 def check_slurm_job(handle):
@@ -174,9 +178,11 @@ def check_slurm_job(handle):
                 one extra UNKNOWN if the handle doesn't match a known
                 slurm job.
     """
-    job_attributes = pyslurm.job().find_id(handle)
-    if job_attributes and len(job_attributes) > 0:
-        state = job_attributes[0]["job_state"]
+    cmd = "scontrol show job {}".format(handle)
+    output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
+    match = re.search(r"JobState=([a-zA-Z]+)", str(output))
+    if match is not None:
+        state = match.group(1)
     else:
         state = "UNKNOWN"
     return state
