@@ -940,7 +940,7 @@ dfuse_getxattr(const char *path, const char *name, char *val, size_t size)
 	rc = (int)size;
 out:
 	dfs_release(obj);
-	return -rc;
+	return rc;
 }
 
 static int
