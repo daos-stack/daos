@@ -230,6 +230,9 @@ pipeline {
                             stepResult name: env.STAGE_NAME, context: "build",
                                        result: "SUCCESS"
                         }
+                        unsuccessful {
+                            sh 'cat /etc/mock/default.cfg"
+                        }
                         unstable {
                             stepResult name: env.STAGE_NAME, context: "build",
                                        result: "UNSTABLE", ignore_failure: true
