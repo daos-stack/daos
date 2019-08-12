@@ -102,13 +102,13 @@ class FormattedParameter(BasicParameter):
 class ObjectWithParameters(object):
     """A class for an object with parameters."""
 
-    def get_param_names(self, param_type=BasicParameter):
-        """Get a sorted list of the names of the BasicParameter attributes.
+    def get_attributes(self, attr_type=None):
+        """Get a sorted list of the names of the attr_type attributes.
 
         Args:
-            param_type (object, optional): A single object type or tuple of
+            attr_type(object, optional): A single object type or tuple of
                 object types used to match class attributes types which define
-                parameters . Defaults to BasicParameter.
+                parameters . Defaults to None.
 
         Returns:
             list: a list of class attribute names used to define parameters
@@ -116,7 +116,16 @@ class ObjectWithParameters(object):
         """
         return [
             name for name in sorted(self.__dict__.keys())
-            if isinstance(getattr(self, name), param_type)]
+            if attr_type is None or isinstance(getattr(self, name), attr_type)]
+
+    def get_param_names(self):
+        """Get a sorted list of the names of the BasicParameter attributes.
+
+        Returns:
+            list: a list of class attribute names used to define parameters
+
+        """
+        return self.get_attributes(BasicParameter)
 
     def get_params(self, test, path):
         """Get values for all of the command params from the yaml file.

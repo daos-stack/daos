@@ -56,12 +56,14 @@ class ServerFailed(Exception):
 class ServerCommand(CommandWithParameters):
     """Defines a object representing a server command."""
 
-    def __init__(self, hosts=["localhost"]):
+    def __init__(self, hosts):
         """Create a server Command object"""
         super(ServerCommand, self).__init__(
             "daos_server", shell=True, sudo=True)
+
         self.hosts = hosts
         self.process = None
+        self.hostfile = None
 
         self.request = BasicParameter("{}")
         self.action = BasicParameter("{}")
@@ -94,7 +96,7 @@ class ServerCommand(CommandWithParameters):
         clean_server(self.hosts)
 
         # Ensure the environment for the daos server on each host
-        okay, failed, file = node_setup_okay(self.hosts, NodeListType.SERVER)
+        okay, failed, path = node_setup_okay(self.hosts, NodeListType.SERVER)
         if not okay:
             raise ServerFailed(
                 "Server node {} does not have directory {} set up correctly "
@@ -113,7 +115,7 @@ class ServerCommand(CommandWithParameters):
 
     def get_param_names(self):
         """Get a sorted list of daos_server command parameter names."""
-        names = super(ServerCommand, self).get_param_names(FormattedParameter)
+        names = super(ServerCommand, self).get_attributes(FormattedParameter)
         names.extend(["request", "action"])
         return names
 
@@ -206,9 +208,9 @@ class ServerCommand(CommandWithParameters):
         if self.process is not None:
             signal_list = [9, None, None, None, None, 15]
             while self.process.poll() is None and signal_list:
-                signal = signal_list.pop(0)
-                if signal is not None:
-                    self.process.send_signal(signal)
+                sig = signal_list.pop(0)
+                if sig is not None:
+                    self.process.send_signal(sig)
                 if signal_list:
                     time.sleep(1)
             if not signal_list:
@@ -510,7 +512,7 @@ def clean_server(hosts):
     Args:
         hosts (list): list of host names where servers are running
     """
-    cleanup_cmds = ["if [ -e {} ]; then umount {}; fi".format("/mnt/daos"),
+    cleanup_cmds = ["if [ -e {0} ]; then umount {0}; fi".format("/mnt/daos"),
                     "rm -rf /mnt/daos",
                     "rm -rf /tmp/daos_sockets/",
                     "rm -rf /tmp/*.log"]

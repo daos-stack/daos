@@ -61,7 +61,7 @@ class DmgCommand(CommandWithParameters):
 
     def get_param_names(self):
         """Get a sorted list of daos_server command parameter names."""
-        names = super(ServerCommand, self).get_param_names(FormattedParameter)
+        names = super(DmgCommand, self).get_attributes(FormattedParameter)
         names.extend(["request", "action"])
         return names
 
