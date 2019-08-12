@@ -2410,24 +2410,32 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		i++;
 	}
 	if (flags & DFS_SET_ATTR_SIZE) {
+
+		/* It shouldn't be possible to set the size of something which
+		 * isn't a file but check here anyway, as entries which aren't
+		 * files won't have array objects so check and return error here
+		 */
+		if (!S_ISREG(obj->mode))
+			D_GOTO(out_obj, rc = EIO);
+
 		set_size = true;
 		flags &= ~DFS_SET_ATTR_SIZE;
 	}
 
 	if (flags) {
-		D_GOTO(err, rc = EINVAL);
+		D_GOTO(out_obj, rc = EINVAL);
 	}
 
 	if (set_size) {
 		rc = daos_array_set_size(obj->oh, th, stbuf->st_size, NULL);
 		if (rc)
-			D_GOTO(err, rc = daos_der2errno(rc));
+			D_GOTO(out_obj, rc = daos_der2errno(rc));
 	}
 
 	akeys_nr = i;
 
 	if (akeys_nr == 0)
-		D_GOTO(out, 0);
+		D_GOTO(out_stat, 0);
 
 	for (i = 0; i < akeys_nr; i++) {
 		sgls[i].sg_nr		= 1;
@@ -2445,16 +2453,13 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	rc = daos_obj_update(oh, th, &dkey, akeys_nr, iods, sgls, NULL);
 	if (rc) {
 		D_ERROR("Failed to update attr (rc = %d)\n", rc);
-		D_GOTO(err, rc = daos_der2errno(rc));
+		D_GOTO(out_obj, rc = daos_der2errno(rc));
 	}
 
-out:
-
+out_stat:
 	rc = entry_stat(dfs, th, oh, obj->name, stbuf);
-	if (rc)
-		D_GOTO(err, rc);
 
-err:
+out_obj:
 	daos_obj_close(oh, NULL);
 	return rc;
 
