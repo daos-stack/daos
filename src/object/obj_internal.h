@@ -215,6 +215,31 @@ struct shard_list_args {
 	daos_obj_list_t		*la_api_args;
 };
 
+struct ec_bulk_spec {
+	uint64_t is_skip:	1,
+	len:		       63;
+};
+
+static inline void
+ec_bulk_spec_set(uint64_t len, bool skip, int index,
+			       struct ec_bulk_spec **skip_list) 
+{
+	(*skip_list)[index].is_skip = skip;
+	(*skip_list)[index].len = len;
+}
+
+static inline uint64_t
+ec_bulk_spec_get_len(int index, struct ec_bulk_spec *skip_list) 
+{
+	return skip_list[index].len;
+}
+
+static inline bool
+ec_bulk_spec_get_skip(int index, struct ec_bulk_spec *skip_list) 
+{
+	return skip_list[index].is_skip;
+}
+
 int dc_obj_shard_open(struct dc_object *obj, daos_unit_oid_t id,
 		      unsigned int mode, struct dc_obj_shard *shard);
 void dc_obj_shard_close(struct dc_obj_shard *shard);
@@ -303,14 +328,15 @@ ec_mult_data_targets(uint32_t fw_cnt, daos_obj_id_t oid);
 
 int
 ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
-	       struct daos_oclass_attr *oca, long **skip_list);
+	       struct daos_oclass_attr *oca, struct ec_bulk_spec **skip_list);
 
 int
 ec_parity_target(unsigned int ptgt_idx, unsigned int nr, daos_iod_t *iods,
-		 struct daos_oclass_attr *oca, long **skip_list);
+		 struct daos_oclass_attr *oca, struct ec_bulk_spec **skip_list);
+
 
 int
-ec_copy_iods(daos_iod_t **out, daos_iod_t *in, int nr);
+ec_copy_iods(daos_iod_t *in, int nr, daos_iod_t **out);
 
 void
 ec_free_iods(daos_iod_t *iods, int nr);

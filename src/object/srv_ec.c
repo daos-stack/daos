@@ -87,7 +87,7 @@ ec_del_recx(daos_iod_t *iod, unsigned int idx)
  */
 int
 ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
-	       struct daos_oclass_attr *oca, long **skip_list)
+	       struct daos_oclass_attr *oca, struct ec_bulk_spec **skip_list)
 {
 	unsigned long	ss = oca->u.ec.e_len * oca->u.ec.e_k;
 	unsigned int	i, j, idx;
@@ -110,15 +110,16 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 			D_GOTO(out, rc = -DER_NOMEM);
 		for (idx = 0, j = 0; j < loop_bound; j++) {
 			daos_recx_t	*this_recx = &iod->iod_recxs[idx];
-			unsigned long	so =
+			uint64_t	so =
 				(this_recx->rx_idx * iod->iod_size) % ss;
 			unsigned int	cell = so / oca->u.ec.e_len;
-			unsigned long	recx_size = iod->iod_size *
+			uint64_t	recx_size = iod->iod_size *
 						 this_recx->rx_nr;
 
 
 			if (iod->iod_recxs[idx].rx_idx & PARITY_INDICATOR) {
-				skip_list[i][sl_idx++] = -(long)oca->u.ec.e_len;
+				ec_bulk_spec_set(oca->u.ec.e_len, true,
+						 sl_idx++, &skip_list[i]);
 				ec_del_recx(iod, idx);
 				continue;
 			}
@@ -127,17 +128,18 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 							oca->u.ec.e_len - so;
 
 				this_recx->rx_nr = new_len / iod->iod_size;
-				skip_list[i][sl_idx++] = new_len;
-				skip_list[i][sl_idx++] =
-					-(long)(recx_size - new_len);
+				ec_bulk_spec_set(new_len, false,
+						 sl_idx++, &skip_list[i]);
+				ec_bulk_spec_set(recx_size - new_len, true,
+						 sl_idx++, skip_list);
 			} else if ((dtgt_idx + 1) * oca->u.ec.e_len <= so) {
 				/* this recx doesn't map to this target
 				 * so we need to remove the recx
 				 */
 				ec_del_recx(iod, idx);
-				skip_list[i][sl_idx++] =
-					-(long)(this_recx->rx_nr *
-						iod->iod_size);
+				ec_bulk_spec_set(this_recx->rx_nr *
+						 iod->iod_size, true, sl_idx++,
+						 &skip_list[i]);
 				continue;
 			} else {
 				int cell_start = dtgt_idx *
@@ -148,25 +150,31 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 					 * so we need to remove the recx
 					 */
 					ec_del_recx(iod, idx);
-					skip_list[i][sl_idx++] =
-					      -(this_recx->rx_nr *
-						iod->iod_size);
+				ec_bulk_spec_set(this_recx->rx_nr *
+						 iod->iod_size, true, sl_idx++,
+						 &skip_list[i]);
 					continue;
 				}
-				skip_list[i][sl_idx++] = -cell_start;
+				ec_bulk_spec_set(cell_start, true, sl_idx++,
+						 &skip_list[i]);
 				this_recx->rx_idx += cell_start / iod->iod_size;
 				if (cell_start + oca->u.ec.e_len < recx_size) {
 					this_recx->rx_nr =
 						oca->u.ec.e_len / iod->iod_size;
-					skip_list[i][sl_idx++] =
-						oca->u.ec.e_len;
-					skip_list[i][sl_idx++] = -(recx_size -
-						(cell_start + oca->u.ec.e_len));
+					ec_bulk_spec_set(oca->u.ec.e_len, false,
+							 sl_idx++,
+							 &skip_list[i]);
+					ec_bulk_spec_set(recx_size -
+							 (cell_start +
+							  oca->u.ec.e_len),
+							 true, sl_idx++,
+							 &skip_list[i]);
 				} else {
 					this_recx->rx_nr = (recx_size -
 						cell_start) / iod->iod_size;
-					skip_list[i][sl_idx++] = recx_size -
-								 cell_start;
+					ec_bulk_spec_set(recx_size - cell_start,
+							 true, sl_idx++,
+							 &skip_list[i]);
 				}
 			}
 			idx++;
@@ -202,7 +210,7 @@ ec_has_parity_srv(daos_recx_t *recxs, uint64_t stripe, uint32_t pss,
  */
 int
 ec_parity_target(unsigned int ptgt_idx, unsigned int nr, daos_iod_t *iods,
-		 struct daos_oclass_attr *oca, long **skip_list)
+		 struct daos_oclass_attr *oca, struct ec_bulk_spec **skip_list)
 {
 	unsigned long	ss = oca->u.ec.e_len * oca->u.ec.e_k;
 	uint32_t	pss = oca->u.ec.e_len * oca->u.ec.e_p;
@@ -229,12 +237,14 @@ ec_parity_target(unsigned int ptgt_idx, unsigned int nr, daos_iod_t *iods,
 				unsigned int	pcell = so / oca->u.ec.e_len;
 
 				if (pcell == ptgt_idx) {
-					skip_list[i][sl_idx++] =
-						oca->u.ec.e_len;
+					ec_bulk_spec_set(oca->u.ec.e_len, false,
+							 sl_idx++,
+							 &skip_list[i]);
 				} else {
 					ec_del_recx(iod, idx);
-					skip_list[i][sl_idx++] =
-						-(long)oca->u.ec.e_len;
+					ec_bulk_spec_set(oca->u.ec.e_len, true,
+							 sl_idx++,
+							 &skip_list[i]);
 					continue;
 				}
 			} else {
@@ -244,13 +254,15 @@ ec_parity_target(unsigned int ptgt_idx, unsigned int nr, daos_iod_t *iods,
 				if (ec_has_parity_srv(iod->iod_recxs, stripe,
 						      pss, iod->iod_size)) {
 					ec_del_recx(iod, idx);
-					skip_list[i][sl_idx++] =
-						-(this_recx->rx_nr *
-						  iod->iod_size);
+					ec_bulk_spec_set(this_recx->rx_nr *
+							 iod->iod_size, true,
+							 sl_idx++,
+							 &skip_list[i]);
 				} else {
-					skip_list[i][sl_idx++] =
-						(this_recx->rx_nr *
-						 iod->iod_size);
+					ec_bulk_spec_set(this_recx->rx_nr *
+							 iod->iod_size, false,
+							 sl_idx++,
+							 &skip_list[i]);
 				}
 			}
 			idx++;
@@ -260,7 +272,9 @@ out:
 	return rc;
 }
 
-/* Free the memory allocated on the leader for the copy of the IOD array
+
+
+/* Free the memory allocated for copy of the IOD array
  */
 void
 ec_free_iods(daos_iod_t *iods, int nr)
@@ -272,11 +286,10 @@ ec_free_iods(daos_iod_t *iods, int nr)
 	D_FREE(iods);
 }
 
-/* Make a copy of the iod array submitted in the RPC. Needed on the leader,
- * since the original IOD contents must be forwarded to the slave targets.
+/* Make a copy of an iod array.
  */
 int
-ec_copy_iods(daos_iod_t **out_iod, daos_iod_t *in_iod, int nr)
+ec_copy_iods(daos_iod_t *in_iod, int nr, daos_iod_t **out_iod)
 {
 	int i, rc = 0;
 

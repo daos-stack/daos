@@ -234,21 +234,23 @@ ec_array_encode(struct ec_params *params, daos_obj_id_t oid, daos_iod_t *iod,
  */
 static int
 ec_update_params(struct ec_params *params, daos_iod_t *iod, d_sg_list_t *sgl,
-		 unsigned int len, unsigned int k)
+		 struct daos_ec_attr ec_attr)
 {
-	daos_recx_t	*nrecx;
+	daos_recx_t	*nrecx;			/*new recx */
+	daos_iod_t	*niod = &params->niod;	/* new iod  */
+	unsigned int	 len = ec_attr.e_len;
+	unsigned short	 k = ec_attr.e_k;
 	unsigned int	 i;
 	int		 rc = 0;
 
-	D_REALLOC_ARRAY(nrecx, (params->niod.iod_recxs),
-			(params->niod.iod_nr + iod->iod_nr));
+	D_REALLOC_ARRAY(nrecx, (niod->iod_recxs), (niod->iod_nr + iod->iod_nr));
 	if (nrecx == NULL)
 		return -DER_NOMEM;
-	params->niod.iod_recxs = nrecx;
+	niod->iod_recxs = nrecx;
 	for (i = 0; i < iod->iod_nr; i++) {
 		uint64_t rem = iod->iod_recxs[i].rx_nr * iod->iod_size;
 		uint64_t start = iod->iod_recxs[i].rx_idx;
-		uint32_t stripe_cnt = rem / (len*k);
+		uint32_t stripe_cnt = rem / (len * k);
 
 		if (rem % (len*k)) {
 			stripe_cnt++;
@@ -256,32 +258,28 @@ ec_update_params(struct ec_params *params, daos_iod_t *iod, d_sg_list_t *sgl,
 		/* can't have more than one stripe in a recx entry */
 		if (stripe_cnt > 1) {
 			D_REALLOC_ARRAY(nrecx,
-					(params->niod.iod_recxs),
-					(params->niod.iod_nr +
+					(niod->iod_recxs),
+					(niod->iod_nr +
 					 iod->iod_nr + stripe_cnt - 1));
 			if (nrecx == NULL) {
-				D_FREE(params->niod.iod_recxs);
+				D_FREE(niod->iod_recxs);
 				return -DER_NOMEM;
 			}
-			params->niod.iod_recxs = nrecx;
+			niod->iod_recxs = nrecx;
 		}
 		while (rem) {
 			uint32_t stripe_len = (len * k) / iod->iod_size;
 
 			if (rem <= len * k) {
-				params->
-				niod.iod_recxs[params->niod.iod_nr].
+				niod->iod_recxs[params->niod.iod_nr].
 				rx_nr = rem/iod->iod_size;
-				params->
-				niod.iod_recxs[params->niod.iod_nr++].
+				niod->iod_recxs[params->niod.iod_nr++].
 				rx_idx = start;
 				rem = 0;
 			} else {
-				params->
-				niod.iod_recxs[params->niod.iod_nr].
+				niod->iod_recxs[params->niod.iod_nr].
 				rx_nr = (len * k) / iod->iod_size;
-				params->
-				niod.iod_recxs[params->niod.iod_nr++].
+				niod->iod_recxs[params->niod.iod_nr++].
 				rx_idx = start;
 				start += stripe_len;
 				rem -= len * k;
@@ -444,8 +442,7 @@ ec_obj_update_encode(tse_task_t *task, daos_obj_id_t oid,
 						break;
 				}
 				rc = ec_update_params(params, iod, sgl,
-						      oca->u.ec.e_len,
-						      oca->u.ec.e_k);
+						      oca->u.ec);
 				head->iods[i] = params->niod;
 				head->sgls[i] = params->nsgl;
 				D_ASSERT(head->nr == i);
