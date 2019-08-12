@@ -643,6 +643,7 @@ bio_blob_unmap(struct bio_io_context *ioctxt, uint64_t off, uint64_t len)
 	struct blob_msg_arg	 bma = { 0 };
 	struct blob_cp_arg	*ba = &bma.bma_cp_arg;
 	struct spdk_io_channel	*channel;
+	struct media_error_msg	*mem;
 	uint64_t		 pg_off;
 	uint64_t		 pg_cnt;
 	int			 rc;
@@ -679,7 +680,7 @@ bio_blob_unmap(struct bio_io_context *ioctxt, uint64_t off, uint64_t len)
 	}
 
 	rc = blob_cp_arg_init(ba);
-	if (rc != 0)
+	if (rc)
 		return rc;
 
 	D_DEBUG(DB_MGMT, "Unmapping blob %p pgoff:"DF_U64" pgcnt:"DF_U64"\n",
@@ -695,14 +696,24 @@ bio_blob_unmap(struct bio_io_context *ioctxt, uint64_t off, uint64_t len)
 	rc = ba->bca_rc;
 	ioctxt->bic_inflight_dmas--;
 
-	if (rc != 0)
+	if (rc) {
 		D_ERROR("Unmap blob %p failed for xs: %p rc:%d\n",
 			ioctxt->bic_blob, ioctxt->bic_xs_ctxt, rc);
-	else
+		D_ALLOC_PTR(mem);
+		if (mem == NULL)
+			goto skip_media_error;
+		mem->mem_unmap = true;
+		mem->mem_bs = ioctxt->bic_xs_ctxt->bxc_blobstore;
+		mem->mem_tgt_id = ioctxt->bic_xs_ctxt->bxc_xs_id;
+		spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error,
+				     mem);
+	} else
 		D_DEBUG(DB_MGMT, "Successfully unmapped blob %p for xs:%p\n",
 			ioctxt->bic_blob, ioctxt->bic_xs_ctxt);
 
+skip_media_error:
 	blob_cp_arg_fini(ba);
+
 	return rc;
 }
 

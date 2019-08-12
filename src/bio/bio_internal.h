@@ -212,6 +212,13 @@ enum {
 	BDEV_CLASS_UNKNOWN
 };
 
+struct media_error_msg {
+	struct bio_blobstore	*mem_bs;
+	bool			 mem_update; /* read or write error */
+	bool			 mem_unmap; /* unmap error */
+	int			 mem_tgt_id;
+};
+
 /* bio_xstream.c */
 extern unsigned int	bio_chk_sz;
 extern unsigned int	bio_chk_cnt_max;
@@ -231,6 +238,7 @@ int bio_init_health_monitoring(struct bio_blobstore *bb,
 void bio_fini_health_monitoring(struct bio_blobstore *bb);
 void bio_xs_io_stat(struct bio_xs_context *ctxt, uint64_t now);
 void bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now);
+void bio_media_error(void *msg_arg);
 
 /* bio_context.c */
 int bio_blob_close(struct bio_io_context *ctxt, bool async);

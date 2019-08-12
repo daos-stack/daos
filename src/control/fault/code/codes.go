@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package faults
+package code
 
 // Code represents a stable fault code.
 //
@@ -31,14 +31,14 @@ type Code int
 
 const (
 	// general fault codes
-	CodeUnknown Code = iota
+	Unknown Code = iota
 
 	// storage fault codes
-	CodeStorageUnknown Code = iota + 100
-	CodeStorageAlreadyFormatted
-	CodeStorageFilesystemMounted
-	CodeStorageFormatCheckFailed
+	StorageUnknown Code = iota + 100
+	StorageAlreadyFormatted
+	StorageFilesystemMounted
+	StorageFormatCheckFailed
 
 	// security fault codes
-	CodeSecurityUnknown Code = iota + 200
+	SecurityUnknown Code = iota + 200
 )

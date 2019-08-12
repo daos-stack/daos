@@ -49,7 +49,7 @@ struct dc_pool {
 	pthread_rwlock_t	dp_co_list_lock;
 	/* pool uuid */
 	uuid_t			dp_pool;
-	crt_group_t	       *dp_group;
+	struct dc_mgmt_sys     *dp_sys;
 	pthread_mutex_t		dp_client_lock;
 	struct rsvc_client	dp_client;
 	uuid_t			dp_pool_hdl;

@@ -456,14 +456,18 @@ def get_log_files(config_yaml, daos_files=None):
     """
     # List of default DAOS files
     if daos_files is None:
-        env_log = os.getenv("D_LOG_FILE", "/tmp/daos.log")
+        daos_core_test_dir, daos_core_test_log = os.path.split(
+            os.getenv("D_LOG_FILE", "/tmp/server.log"))
         daos_files = {
             "log_file": "/tmp/server.log",
             "agent_log_file": "/tmp/daos_agent.log",
             "control_log_file": "/tmp/daos_control.log",
             "socket_dir": "/tmp/daos_sockets",
-            "daos_log_file": env_log,
-            "daos_core_test_logs": "{}/*_{}".format(*os.path.split(env_log))
+            "debug_log_default": os.getenv("D_LOG_FILE", "/tmp/daos.log"),
+            "daos_core_test_client_logs":
+                "{}/*_client_daos.log".format(daos_core_test_dir),
+            "daos_core_test_server_logs":
+                "{}/*_{}".format(daos_core_test_dir, daos_core_test_log),
         }
 
     # Determine the log file locations defined by the last run test
