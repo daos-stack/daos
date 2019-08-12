@@ -310,14 +310,16 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode);
  * \param[in]	parent	Opened parent directory object. If NULL, use root obj.
  * \param[in]	name	Name of object to remove in parent dir.
  * \param[in]	force	If true, remove dir even if non-empty.
+ * \param[in]	oid	Optionally return the DAOS Object ID of the removed obj.
  *
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force);
+dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force,
+	   daos_obj_id_t *oid);
 
 /**
- * Move an object possible between different dirs with a new link name.
+ * Move/rename an object.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	parent	Source parent directory object. If NULL, use root obj.
@@ -325,15 +327,17 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force);
  * \param[in]	new_parent
  *			Target parent directory object. If NULL, use root obj.
  * \param[in]	name	New link name of object.
+ * \param[in]	oid	Optionally return the DAOS Object ID of a removed obj
+ *			as a result of a rename.
  *
  * \return		0 on success, errno code on failure.
  */
 int
 dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
-	 char *new_name);
+	 char *new_name, daos_obj_id_t *oid);
 
 /**
- * Exchange an object possible between different dirs with a new link name
+ * Exchange two objects.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	parent1	Parent directory object of name1. If NULL, use root obj.

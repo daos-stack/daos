@@ -20,7 +20,7 @@ pool:
   createmode:
     mode: 146
   createset:
-    setname: daos_server
+    group: daos_server
   createsize:
     scm_size: 30000000000
   createsvc:
@@ -31,7 +31,7 @@ ior:
             np: 8
     repetitions: 1
     api: MPIIO
-    mpiio_oclass: 234
+    daos_oclass: "RP_2GX"
     iorflags:
         write:
           F: "-w -W -k -G 1"

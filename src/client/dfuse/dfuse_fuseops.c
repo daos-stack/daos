@@ -676,10 +676,6 @@ struct fuse_lowlevel_ops
 	 * creation of files, so it should be the only place to see file
 	 * operations.
 	 *
-	 * TODO: Implement open/release callbacks, to allow setting of fi.fh
-	 * in open, which would avoid a hashtable lookup per read/write.
-	 *
-	 * TODO: read_buf and write_buf support.
 	 */
 	fuse_ops->open		= dfuse_cb_open;
 	fuse_ops->release	= dfuse_cb_release;

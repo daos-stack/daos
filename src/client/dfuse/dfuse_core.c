@@ -171,6 +171,12 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 
 	fs_handle->dpi_info = dfuse_info;
 
+	/* Max read and max write are handled differently because of the way
+	 * the interception library handles reads vs writes
+	 */
+	fs_handle->dpi_max_read = 1024*1024*4;
+	fs_handle->dpi_proj.max_write = 1024*1024*4;
+
 	rc = d_hash_table_create_inplace(D_HASH_FT_RWLOCK | D_HASH_FT_EPHEMERAL,
 					 3, fs_handle, &ie_hops,
 					 &fs_handle->dpi_iet);

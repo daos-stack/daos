@@ -30,7 +30,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/log"
+	log "github.com/daos-stack/daos/src/control/logging"
 )
 
 // AssertTrue asserts b is true
@@ -125,7 +125,7 @@ func ShowLogOnFailure(t *testing.T) func() {
 	t.Helper()
 
 	var buf strings.Builder
-	log.NewDefaultLogger(log.Error, t.Name(), &buf)
+	log.SetLogger(log.NewCombinedLogger(t.Name(), &buf))
 
 	return func() {
 		if t.Failed() {

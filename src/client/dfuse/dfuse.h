@@ -273,7 +273,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 #define DFUSE_REPLY_ATTR(req, attr)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(req, "Returning attr mode %x dir:%d",	\
+		DFUSE_TRA_DEBUG(req, "Returning attr mode %#x dir:%d",	\
 				(attr)->st_mode,			\
 				S_ISDIR(((attr)->st_mode)));		\
 		__rc = fuse_reply_attr(req, attr, 0);			\
@@ -295,10 +295,23 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 		DFUSE_TRA_DOWN(req);					\
 	} while (0)
 
+#define DFUSE_REPLY_BUF(handle, req, buf, size)				\
+	do {								\
+		int __rc;						\
+		DFUSE_TRA_DEBUG(handle, "Returning buffer(%p %#zx)",	\
+				buf, size);				\
+		__rc = fuse_reply_buf(req, buf, size);			\
+		if (__rc != 0)						\
+			DFUSE_TRA_ERROR(handle,				\
+					"fuse_reply_buf returned %d:%s", \
+					__rc, strerror(-__rc));		\
+	} while (0)
+
+
 #define DFUSE_REPLY_WRITE(handle, req, bytes)				\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(handle, "Returning write(%zi)", bytes); \
+		DFUSE_TRA_DEBUG(handle, "Returning write(%#zx)", bytes); \
 		__rc = fuse_reply_write(req, bytes);			\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(handle,				\
@@ -331,7 +344,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 #define DFUSE_REPLY_ENTRY(req, entry)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(req, "Returning entry mode %x dir:%d",	\
+		DFUSE_TRA_DEBUG(req, "Returning entry mode %#x dir:%d",	\
 				(entry).attr.st_mode,			\
 				S_ISDIR((entry).attr.st_mode));		\
 		__rc = fuse_reply_entry(req, &entry);			\

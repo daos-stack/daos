@@ -156,7 +156,7 @@ struct btr_context {
 static int btr_class_init(umem_off_t root_off,
 			  struct btr_root *root, unsigned int tree_class,
 			  uint64_t *tree_feats, struct umem_attr *uma,
-			  daos_handle_t coh, void *info,
+			  daos_handle_t coh, void *priv,
 			  struct btr_instance *tins);
 static struct btr_record *btr_node_rec_at(struct btr_context *tcx,
 					  umem_off_t nd_off,
@@ -280,14 +280,14 @@ btr_ops(struct btr_context *tcx)
  * \param tree_order	Tree order.
  * \param uma		Memory class attributes.
  * \param coh		The container open handle.
- * \param info		NVMe free space information
+ * \param priv		Private information from user
  * \param tcxp		Returned context.
  */
 static int
 btr_context_create(umem_off_t root_off, struct btr_root *root,
 		   unsigned int tree_class, uint64_t tree_feats,
 		   unsigned int tree_order, struct umem_attr *uma,
-		   daos_handle_t coh, void *info, struct btr_context **tcxp)
+		   daos_handle_t coh, void *priv, struct btr_context **tcxp)
 {
 	struct btr_context	*tcx;
 	unsigned int		 depth;
@@ -299,7 +299,7 @@ btr_context_create(umem_off_t root_off, struct btr_root *root,
 
 	tcx->tc_ref = 1; /* for the caller */
 	rc = btr_class_init(root_off, root, tree_class, &tree_feats, uma,
-			    coh, info, &tcx->tc_tins);
+			    coh, priv, &tcx->tc_tins);
 	if (rc != 0) {
 		D_ERROR("Failed to setup mem class %d: %d\n", uma->uma_id, rc);
 		D_GOTO(failed, rc);
@@ -342,7 +342,7 @@ btr_context_clone(struct btr_context *tcx, struct btr_context **tcx_p)
 	rc = btr_context_create(tcx->tc_tins.ti_root_off,
 				tcx->tc_tins.ti_root, -1, -1, -1, &uma,
 				tcx->tc_tins.ti_coh,
-				tcx->tc_tins.ti_blks_info, tcx_p);
+				tcx->tc_tins.ti_priv, tcx_p);
 	return rc;
 }
 
@@ -2943,14 +2943,14 @@ dbtree_create_inplace(unsigned int tree_class, uint64_t tree_feats,
 		      struct btr_root *root, daos_handle_t *toh)
 {
 	return dbtree_create_inplace_ex(tree_class, tree_feats, tree_order,
-					uma, root, DAOS_HDL_INVAL, toh);
+					uma, root, DAOS_HDL_INVAL, NULL, toh);
 }
 
 int
 dbtree_create_inplace_ex(unsigned int tree_class, uint64_t tree_feats,
 			 unsigned int tree_order, struct umem_attr *uma,
 			 struct btr_root *root, daos_handle_t coh,
-			 daos_handle_t *toh)
+			 void *priv, daos_handle_t *toh)
 {
 	struct btr_context *tcx;
 	int		    rc;
@@ -2970,7 +2970,7 @@ dbtree_create_inplace_ex(unsigned int tree_class, uint64_t tree_feats,
 	}
 
 	rc = btr_context_create(BTR_ROOT_NULL, root, tree_class, tree_feats,
-				tree_order, uma, coh, NULL, &tcx);
+				tree_order, uma, coh, priv, &tcx);
 	if (rc != 0)
 		return rc;
 
@@ -3015,12 +3015,12 @@ dbtree_open(umem_off_t root_off, struct umem_attr *uma,
  * \param root		[IN]	Address of the tree root.
  * \param uma		[IN]	Memory class attributes.
  * \param coh		[IN]	The container open handle.
- * \param info		[IN]	NVMe free space information.
+ * \param priv		[IN]	Private data for tree opener
  * \param toh		[OUT]	Returned tree open handle.
  */
 int
 dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
-		       daos_handle_t coh, void *info, daos_handle_t *toh)
+		       daos_handle_t coh, void *priv, daos_handle_t *toh)
 {
 	struct btr_context *tcx;
 	int		    rc;
@@ -3031,7 +3031,7 @@ dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
 	}
 
 	rc = btr_context_create(BTR_ROOT_NULL, root, -1, -1, -1, uma,
-				coh, info, &tcx);
+				coh, priv, &tcx);
 	if (rc != 0)
 		return rc;
 
@@ -3110,7 +3110,7 @@ btr_node_destroy(struct btr_context *tcx, umem_off_t nd_off,
 			umem_off_t	child_off;
 
 			child_off = btr_node_child_at(tcx, nd_off, i);
-			btr_node_destroy(tcx, child_off, NULL, &empty);
+			btr_node_destroy(tcx, child_off, args, &empty);
 			if (!tcx->tc_creds_on || tcx->tc_creds > 0) {
 				D_ASSERT(empty);
 				continue;
@@ -3701,7 +3701,7 @@ static struct btr_class btr_class_registered[BTR_TYPE_MAX];
 static int
 btr_class_init(umem_off_t root_off, struct btr_root *root,
 	       unsigned int tree_class, uint64_t *tree_feats,
-	       struct umem_attr *uma, daos_handle_t coh, void *info,
+	       struct umem_attr *uma, daos_handle_t coh, void *priv,
 	       struct btr_instance *tins)
 {
 	struct btr_class	*tc;
@@ -3713,7 +3713,7 @@ btr_class_init(umem_off_t root_off, struct btr_root *root,
 	if (rc != 0)
 		return rc;
 
-	tins->ti_blks_info = info;
+	tins->ti_priv = priv;
 	tins->ti_coh = coh;
 	tins->ti_root_off = UMOFF_NULL;
 
