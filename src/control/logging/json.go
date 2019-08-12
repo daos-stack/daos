@@ -129,33 +129,38 @@ func (ll *LeveledLogger) WithJSONOutput() *LeveledLogger {
 	ll.Lock()
 	defer ll.Unlock()
 
-	newLogger := &LeveledLogger{
-		level: ll.level,
-	}
+	var debugLoggers []DebugLogger
+	var infoLoggers []InfoLogger
+	var errorLoggers []ErrorLogger
 
 	for _, l := range ll.debugLoggers {
 		if jsonLogger, ok := l.(jsonDebug); ok {
 			if dl, ok := jsonLogger.WithJSONOutput().(DebugLogger); ok {
-				newLogger.AddDebugLogger(dl)
+				debugLoggers = append(debugLoggers, dl)
 			}
 		}
 	}
+	ll.debugLoggers = debugLoggers
+
 	for _, l := range ll.infoLoggers {
 		if jsonLogger, ok := l.(jsonInfo); ok {
 			if il, ok := jsonLogger.WithJSONOutput().(InfoLogger); ok {
-				newLogger.AddInfoLogger(il)
+				infoLoggers = append(infoLoggers, il)
 			}
 		}
 	}
+	ll.infoLoggers = infoLoggers
+
 	for _, l := range ll.errorLoggers {
 		if jsonLogger, ok := l.(jsonError); ok {
 			if el, ok := jsonLogger.WithJSONOutput().(ErrorLogger); ok {
-				newLogger.AddErrorLogger(el)
+				errorLoggers = append(errorLoggers, el)
 			}
 		}
 	}
+	ll.errorLoggers = errorLoggers
 
-	return newLogger
+	return ll
 }
 
 // WithJSONOutput switches the logger's output to use structured

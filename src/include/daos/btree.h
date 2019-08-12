@@ -427,11 +427,8 @@ typedef struct {
 struct btr_instance {
 	/** instance of memory class for the tree */
 	struct umem_instance		 ti_umm;
-	/**
-	 * NVMe free space tracking information used for NVMe record
-	 * alloc & free.
-	 */
-	void				*ti_blks_info;
+	/** Private data for opener */
+	void				*ti_priv;
 	/**
 	 * The container open handle.
 	 */
@@ -489,13 +486,13 @@ int  dbtree_create_inplace(unsigned int tree_class, uint64_t tree_feats,
 int  dbtree_create_inplace_ex(unsigned int tree_class, uint64_t tree_feats,
 			      unsigned int tree_order, struct umem_attr *uma,
 			      struct btr_root *root, daos_handle_t coh,
-			      daos_handle_t *toh);
+			      void *priv, daos_handle_t *toh);
 int  dbtree_open(umem_off_t root_off, struct umem_attr *uma,
 		 daos_handle_t *toh);
 int  dbtree_open_inplace(struct btr_root *root, struct umem_attr *uma,
 			 daos_handle_t *toh);
 int  dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
-			    daos_handle_t coh, void *info, daos_handle_t *toh);
+			    daos_handle_t coh, void *priv, daos_handle_t *toh);
 int  dbtree_close(daos_handle_t toh);
 int  dbtree_destroy(daos_handle_t toh, void *args);
 int  dbtree_drain(daos_handle_t toh, int *credits, void *args, bool *destroyed);
