@@ -107,23 +107,18 @@ dss_tls_get()
 		pthread_getspecific(dss_tls_key);
 }
 
-#define D_TIME_START(sp, op)			\
+#define D_TIME_START(sp, start, op)		\
 do {						\
 	if ((sp) == NULL)			\
 		break;				\
-	D_ASSERT(op < MAX_PROFILE_OP);		\
-	D_ASSERT(sp->sp_time[op] == 0);		\
-	sp->sp_time[op] = daos_get_ntime();	\
+	start = daos_get_ntime();		\
 } while (0)
 
-#define D_TIME_END(sp, op)			\
+#define D_TIME_END(sp, start, op)		\
 do {						\
-	if ((sp) == NULL)			\
+	if ((sp) == NULL || start == 0)		\
 		break;				\
-	D_ASSERT(op < MAX_PROFILE_OP);		\
-	D_ASSERT(sp->sp_time[op] != 0);		\
-	srv_profile_count(sp, op, (int)(daos_get_ntime() - sp->sp_time[op])); \
-	sp->sp_time[op] = 0;			\
+	srv_profile_count(sp, op, (int)(daos_get_ntime() - start)); \
 } while (0)
 
 /**
@@ -261,11 +256,9 @@ struct srv_profile_chunk {
 	int		      spc_chunk_size;
 };
 
-#define MAX_PROFILE_OP	64
 /* Holding the total trunk list for a specific profiling module */
 struct srv_profile {
 	struct srv_profile_chunk *sp_current_chunk;
-	uint64_t	sp_time[MAX_PROFILE_OP];
 	d_list_t	sp_list;	/* active list for profile chunk */
 	d_list_t	sp_idle_list;	/* idle list for profile chunk */
 	/* Count in idle list & list */

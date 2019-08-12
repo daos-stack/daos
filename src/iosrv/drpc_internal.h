@@ -66,8 +66,8 @@ struct drpc_list {
  *
  * \return	Newly allocated drpc_progress_context, or NULL if none created
  */
-struct drpc_progress_context *drpc_progress_context_create(
-		struct drpc *listener);
+struct drpc_progress_context *
+drpc_progress_context_create(struct drpc *listener);
 
 /**
  * Close all open drpc contexts in the drpc_progress_context, including the
@@ -90,7 +90,7 @@ void drpc_progress_context_close(struct drpc_progress_context *ctx);
  * \param[in]		timeout_ms	Timeout in milliseconds. Negative value
  *						blocks forever.
  *
- * \return	DER_SUCCESS		Successfully processed activity
+ * \return	0			Successfully processed activity
  *		-DER_INVAL		Invalid ctx
  *		-DER_TIMEDOUT		No activity
  *		-DER_AGAIN		Couldn't process activity, try again
@@ -102,8 +102,9 @@ int drpc_progress(struct drpc_progress_context *ctx, int timeout);
 /**
  * Start up the dRPC listener thread.
  *
- * \return	0	Success
- *		Error code if failed to start ULT
+ * \return	0		Success
+ *		-DER_NOMEM	Out of memory
+ *		-DER_INVAL	Invalid internal state
  */
 int drpc_listener_init(void);
 

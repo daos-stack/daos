@@ -21,9 +21,9 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 #define D_LOGFAC	DD_FAC(bio)
-
 #include <spdk/env.h>
 #include <spdk/blob.h>
+#include <spdk/thread.h>
 #include "bio_internal.h"
 
 static void
@@ -629,18 +629,29 @@ add_region:
 static void
 rw_completion(void *cb_arg, int err)
 {
-	struct bio_desc *biod = cb_arg;
+	struct bio_desc		*biod = cb_arg;
+	struct media_error_msg	*mem = NULL;
 
 	ABT_mutex_lock(biod->bd_mutex);
 
 	D_ASSERT(biod->bd_inflights > 0);
 	biod->bd_inflights--;
-	if (biod->bd_result == 0 && err != 0)
-		biod->bd_result = daos_errno2der(-err);
 
+	if (biod->bd_result == 0 && err != 0) {
+		biod->bd_result = daos_errno2der(-err);
+		D_ALLOC_PTR(mem);
+		if (mem == NULL)
+			goto skip_media_error;
+		mem->mem_update = biod->bd_update;
+		mem->mem_bs = biod->bd_ctxt->bic_xs_ctxt->bxc_blobstore;
+		mem->mem_tgt_id = biod->bd_ctxt->bic_xs_ctxt->bxc_xs_id;
+		spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error,
+				     mem);
+	}
+
+skip_media_error:
 	if (biod->bd_inflights == 0 && biod->bd_dma_issued)
 		ABT_cond_broadcast(biod->bd_dma_done);
-
 	ABT_mutex_unlock(biod->bd_mutex);
 }
 
