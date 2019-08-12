@@ -25,16 +25,15 @@ from __future__ import print_function
 
 from command_utils import CommandWithParameters
 from command_utils import BasicParameter, FormattedParameter
+from avocado.utils import process
+
 
 class DmgCommand(CommandWithParameters):
     """Defines a object representing a dmg (or daos_shell) command."""
 
-    def __init__(self, command="dmg"):
-        """Create a dmg Command object
-        Args:
-            command (str): command to execute, default=dmg
-        """
-        super(DmgCommand, self).__init__(command, shell=True)
+    def __init__(self):
+        """Create a dmg Command object."""
+        super(DmgCommand, self).__init__("daos_shell")
 
         self.request = BasicParameter("{}")
         self.action = BasicParameter("{}")
@@ -43,7 +42,6 @@ class DmgCommand(CommandWithParameters):
         self.hostlist = FormattedParameter("-l {}")
         self.hostfile = FormattedParameter("-f {}")
         self.configpath = FormattedParameter("-o {}")
-        self.port = BasicParameter("{}")
 
         # dmg options
         self.gid = FormattedParameter("--gid={}")
@@ -61,19 +59,32 @@ class DmgCommand(CommandWithParameters):
         self.cont = FormattedParameter("--cont={}")
         self.oid = FormattedParameter("--oid={}")
 
-    def __str__(self):
-        """Return the command with all of its defined parameters as a string.
-        The dmg command (or daos_shell) use the following command structure:
-        dmg(daos_shell) <request> <action> <parameters>
+    def get_param_names(self):
+        """Get a sorted list of daos_server command parameter names."""
+        names = super(ServerCommand, self).get_param_names(FormattedParameter)
+        names.extend(["request", "action"])
+        return names
+
+    def run(self, timeout=None, verbose=True, env=None, shell=False,
+            sudo=False):
+        """ Run the dmg command.
+
+        Args:
+            timeout (int, optional): timeout in seconds. Defaults to None.
+            verbose (bool, optional): display command output. Defaults to True.
+            env (dict, optional): env for the command. Defaults to None.
+            sudo (bool, optional): sudo will be prepended to the command.
+                Defaults to False.
+            subshell (bool, optional): Whether to run cmd on a subshell.
+                Defaults to False.
+
+        Raises:
+            process.CmdError: Avocado command exception
+
         Returns:
-            str: the command with all the defined parameters.
+            process.CmdResult: CmdResult object containing the results from
+            the command.
+
         """
-        params = []
-        for name in self.get_param_names():
-            value = str(getattr(self, name))
-            if (value != "" and name != "request" and name != "action" and
-                    name != "port"):
-                params.append(value)
-        return " ".join([self._command] + params +
-                        [str(getattr(self, "request"))] +
-                        [str(getattr(self, "action"))])
+        return process.run(self.__str__(), timeout, verbose, env=env,
+                           shell=shell, sudo=sudo)

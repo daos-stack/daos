@@ -22,13 +22,14 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from __future__ import print_function
-from avocado.utils import process
+
 
 class BasicParameter(object):
     """A class for parameters whose values are read from a yaml file."""
 
     def __init__(self, value, default=None):
         """Create a BasicParameter object.
+
         Args:
             value (object): intial value for the parameter
             default (object, optional): default value. Defaults to None.
@@ -38,6 +39,7 @@ class BasicParameter(object):
 
     def __str__(self):
         """Convert this BasicParameter into a string.
+
         Returns:
             str: the string version of the parameter's value
 
@@ -46,6 +48,7 @@ class BasicParameter(object):
 
     def get_yaml_value(self, name, test, path):
         """Get the value for the parameter from the test case's yaml file.
+
         Args:
             name (str): name of the value in the yaml file
             test (Test): avocado Test object to use to read the yaml file
@@ -55,6 +58,7 @@ class BasicParameter(object):
 
     def update(self, value, name=None):
         """Update the value of the parameter.
+
         Args:
             value (object): value to assign
             name (str, optional): name of the parameter which, if provided, is
@@ -64,12 +68,14 @@ class BasicParameter(object):
         if name is not None:
             print("Updated param {} => {}".format(name, self.value))
 
+
 class FormattedParameter(BasicParameter):
     # pylint: disable=too-few-public-methods
     """A class for test parameters whose values are read from a yaml file."""
 
     def __init__(self, str_format, default=None):
         """Create a param object.
+
         Args:
             str_format (str): format string used to convert the value into an
                 command line argument string
@@ -80,8 +86,10 @@ class FormattedParameter(BasicParameter):
 
     def __str__(self):
         """Return a FormattedParameter object as a string.
+
         Returns:
             str: if defined, the parameter, otherwise an empty string
+
         """
         if isinstance(self._default, bool) and self.value:
             return self._str_format
@@ -90,23 +98,37 @@ class FormattedParameter(BasicParameter):
         else:
             return ""
 
+
 class ObjectWithParameters(object):
     """A class for an object with parameters."""
 
-    def get_param_names(self):
-        """Get a sorted list of the names of the BasicParameter attributes."""
+    def get_param_names(self, param_type=BasicParameter):
+        """Get a sorted list of the names of the BasicParameter attributes.
+
+        Args:
+            param_type (object, optional): A single object type or tuple of
+                object types used to match class attributes types which define
+                parameters . Defaults to BasicParameter.
+
+        Returns:
+            list: a list of class attribute names used to define parameters
+
+        """
         return [
             name for name in sorted(self.__dict__.keys())
-            if isinstance(getattr(self, name), BasicParameter)]
+            if isinstance(getattr(self, name), param_type)]
 
     def get_params(self, test, path):
         """Get values for all of the command params from the yaml file.
+
         Sets each BasicParameter object's value to the yaml key that matches
         the assigned name of the BasicParameter object in this class. For
         example, the self.block_size.value will be set to the value in the yaml
         file with the key 'block_size'.
+
         If no key matches are found in the yaml file the BasicParameter object
         will be set to its default value.
+
         Args:
             test (Test): avocado Test object
             path (str): yaml namespace.
@@ -114,29 +136,26 @@ class ObjectWithParameters(object):
         for name in self.get_param_names():
             getattr(self, name).get_yaml_value(name, test, path)
 
+
 class CommandWithParameters(ObjectWithParameters):
     """A class for command with paramaters."""
 
-    def __init__(self, command, shell=False, sudo=False):
+    def __init__(self, command):
         """Create a CommandWithParameters object.
+
         Uses Avocado's utils.process module to run a command str provided.
+
         Args:
             command (str): string of the command to be executed.
-            subshell (bool, optional): Whether to run cmd on a subshell.
-                Defaults to False.
-            sudo (bool, optional): sudo will be prepended to the command.
-                Defaults to False.
-            verbose (bool, optional): Log cmd run and stdout/stderr.
-                Defaults to True.
         """
         self._command = command
-        self.shell = shell
-        self.sudo = sudo
 
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
+
         Returns:
             str: the command with all the defined parameters
+
         """
         # Join all the parameters that have been assigned a value with the
         # command to create the command string
@@ -146,29 +165,3 @@ class CommandWithParameters(ObjectWithParameters):
             if value != "":
                 params.append(value)
         return " ".join([self._command] + params)
-
-    def run(self, timeout=None, verbose=True, env=None):
-        """ Run the command.
-        Args:
-            timeout (int, optional): timeout in seconds. Defaults to None.
-            verbose (bool, optional): display command output. Defaults to True.
-            env (dict, optional): env for the command. Defaults to None.
-        Raises:
-            process.CmdError: Avocado command exception
-        Returns:
-            process.CmdResult: CmdResult object containing the results from
-            the command.
-        """
-        return process.run(self.__str__(), timeout, verbose,
-                           shell=self.shell, env=env, sudo=self.sudo)
-
-    def subproc(self, verbose=True, env=None):
-        """ Create a subprocess object to run in the background.
-        Args:
-            verbose (bool, optional): display command output. Defaults to True.
-            env (dict, optional): env for the command. Defaults to None.
-        Return:
-            process.SubProcess: SubProcess object to run/start/kill a command.
-        """
-        return process.SubProcess(self.__str__(), verbose,
-                                  shell=self.shell, env=env, sudo=self.sudo)

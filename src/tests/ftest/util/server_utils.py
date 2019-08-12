@@ -1,5 +1,5 @@
 #!/usr/bin/python
-'''
+"""
   (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +20,7 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
+"""
 from __future__ import print_function
 
 import traceback
@@ -35,26 +35,33 @@ import signal
 import fcntl
 import errno
 import yaml
+import getpass
 
+from agent_utils import node_setup_okay, NodeListType
 from command_utils import CommandWithParameters
 from command_utils import BasicParameter, FormattedParameter
-from avocado.utils import genio
+from avocado.utils import genio, process
+from write_host_file import write_host_file
 
 SESSIONS = {}
 
 DEFAULT_FILE = "src/tests/ftest/data/daos_server_baseline.yaml"
 AVOCADO_FILE = "src/tests/ftest/data/daos_avocado_test.yaml"
 
+
 class ServerFailed(Exception):
     """Server didn't start/stop properly."""
+
 
 class ServerCommand(CommandWithParameters):
     """Defines a object representing a server command."""
 
-    def __init__(self, command="daos_server"):
+    def __init__(self, hosts=["localhost"]):
         """Create a server Command object"""
-
-        super(ServerCommand, self).__init__(command, shell=True, sudo=True)
+        super(ServerCommand, self).__init__(
+            "daos_server", shell=True, sudo=True)
+        self.hosts = hosts
+        self.process = None
 
         self.request = BasicParameter("{}")
         self.action = BasicParameter("{}")
@@ -68,22 +75,146 @@ class ServerCommand(CommandWithParameters):
         self.group = FormattedParameter("-g {}")
         self.attach = FormattedParameter("-a {}")
         self.sock_dir = FormattedParameter("-d {}")
-    def __str__(self):
-        """Return the command with all of its defined parameters as a string.
-        The daos_server command use the following command structure:
-        daos_server <request> <action> <parameters>
-        Returns:
-            str: the command with all the defined parameters.
+
+    def prepare(self, path, slots):
+        """Prepare the hosts before starting daos server.
+
+        Args:
+            path (str): location to write the hostfile
+            slots (int): slots per host to use in the hostfile
+
+        Raises:
+            ServerFailed: if there is any errors preparing the hosts
+
         """
-        params = []
-        for name in self.get_param_names():
-            value = str(getattr(self, name))
-            if (value != "" and name != "request" and name != "action" and
-                    name != "port"):
-                params.append(value)
-        return " ".join([self._command] + params +
-                        [str(getattr(self, "request"))] +
-                        [str(getattr(self, "action"))])
+        # Kill any doas servers running on the hosts
+        kill_server(self.hosts)
+
+        # Clean up any files that exist on the hosts
+        clean_server(self.hosts)
+
+        # Ensure the environment for the daos server on each host
+        okay, failed, file = node_setup_okay(self.hosts, NodeListType.SERVER)
+        if not okay:
+            raise ServerFailed(
+                "Server node {} does not have directory {} set up correctly "
+                "for user {}.".format(failed, file, getpass.getuser()))
+
+        # Create the hostfile
+        self.hostfile = write_host_file(self.hosts, path, slots)
+
+    def update_configuration(self, basepath):
+        """Update the config parameter with a yaml file.
+
+        Args:
+            basepath (str): DAOS install basepath
+        """
+        self.config.update(create_server_yaml(basepath), "server.config")
+
+    def get_param_names(self):
+        """Get a sorted list of daos_server command parameter names."""
+        names = super(ServerCommand, self).get_param_names(FormattedParameter)
+        names.extend(["request", "action"])
+        return names
+
+    def get_launch_command(self, manager, uri=None, env=None):
+        """Get the process launch command used to run daos_server.
+
+        Args:
+            manager (str): mpi job manager command
+            uri (str, optional): path to uri file. Defaults to None.
+            env (dict, optional): dictionary on env variable names and values.
+                Defaults to None.
+
+        Raises:
+            ServerFailed: if the specified job manager is unsupported.
+
+        Returns:
+            str: daos_sever launch command
+
+        """
+        if manager is None:
+            # Run locally
+            return self.__str__()
+
+        elif manager.endswith("orterun"):
+            assign_env = ["{}={}".format(key, val) for key, val in env.items()]
+            args = [
+                "-np {}".format(len(self.hosts)),
+                "-hostfile {}".format(self.hostfile),
+                "--enable-recovery",
+            ]
+            args.extend(["-x {}".format(assign) for assign in assign_env])
+            if uri is not None:
+                args.append("--report-uri {}".format(uri))
+
+        else:
+            raise ServerFailed("Unsupported job manager: {}".format(manager))
+
+        return "{} {} {}".format(manager, " ".join(args), self.__str__())
+
+    def start(self, manager, verbose=True, env=None, timeout=600):
+        """Start the daos server on each specified host.
+
+        Args:
+            manager (str): mpi job manager command
+            verbose (bool, optional): [description]. Defaults to True.
+            env ([type], optional): [description]. Defaults to None.
+            timeout (int, optional): [description]. Defaults to 600.
+
+        Raises:
+            ServerFailed: if there are issues starting the servers
+
+        """
+        if self.process is None:
+            # Start the daos server as a subprocess
+            kwargs = {
+                "cmd": self.get_launch_command(manager),
+                "verbose": verbose,
+                "allow_output_check": "combined",
+                "shell": True,
+                "env": env,
+                "sudo": True,
+            }
+            self.process = process.SubProcess(**kwargs)
+            self.process.start()
+
+            # Wait for 'DAOS I/O server' messages to appear in the daos_server
+            # output indicating that the servers have started
+            start_time = time.time()
+            start_msgs = 0
+            timed_out = False
+            while start_msgs != len(self.hosts) and not timed_out:
+                output = self.process.get_stdout()
+                start_msgs = len(re.findall("DAOS I/O server", output))
+                timed_out = time.time() - start_time > timeout
+
+            if start_msgs != len(self.hosts):
+                err_msg = "{} detected starting {}/{} servers".format(
+                    "Timed out" if timed_out else "Error",
+                    start_msgs, len(self.hosts))
+                print("{}:\n{}".format(err_msg, self.process.get_stdout()))
+                raise ServerFailed(err_msg)
+
+    def stop(self):
+        """Stop the process running the daos servers.
+
+        Raises:
+            ServerFailed: if there are errors stopping the servers
+
+        """
+        if self.process is not None:
+            signal_list = [9, None, None, None, None, 15]
+            while self.process.poll() is None and signal_list:
+                signal = signal_list.pop(0)
+                if signal is not None:
+                    self.process.send_signal(signal)
+                if signal_list:
+                    time.sleep(1)
+            if not signal_list:
+                raise ServerFailed("Error stopping {}".format(self._command))
+            self.process = None
+
 
 def set_nvme_mode(default_value_set, bdev, enabled=False):
     """Enable/Disable NVMe Mode.
@@ -112,6 +243,8 @@ def create_server_yaml(basepath):
     Raises:
         ServerFailed: if there is an reading/writing yaml files
 
+    Returns:
+        (str): Absolute path of create server yaml file
     """
     # Read the baseline conf file data/daos_server_baseline.yml
     try:
@@ -166,6 +299,8 @@ def create_server_yaml(basepath):
         traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
         raise ServerFailed("Failed to Write {}/{}".format(basepath,
                                                           AVOCADO_FILE))
+
+    return os.path.join(basepath, AVOCADO_FILE)
 
 
 def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
@@ -367,3 +502,18 @@ def kill_server(hosts):
     for host in hosts:
         subprocess.call(
             "ssh {0} \"{1}\"".format(host, '; '.join(kill_cmds)), shell=True)
+
+
+def clean_server(hosts):
+    """Clean the /mnt/daos dir and /tmp dir on the servers.
+
+    Args:
+        hosts (list): list of host names where servers are running
+    """
+    cleanup_cmds = ["if [ -e {} ]; then umount {}; fi".format("/mnt/daos"),
+                    "rm -rf /mnt/daos",
+                    "rm -rf /tmp/daos_sockets/",
+                    "rm -rf /tmp/*.log"]
+    for host in hosts:
+        subprocess.call("ssh {0} \"{1}\"".format(host, '; '.join(cleanup_cmds)),
+                        shell=True)
