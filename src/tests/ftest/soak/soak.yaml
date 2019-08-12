@@ -46,7 +46,7 @@ smoke:
     joblist:
       - jobsmoke
 # IOR DAOS stress test case
-# Test will run for 30 minutes; 
+# Test will run for 30 minutes;
 # One job per node with 1, 16 and 32 tasks.proccesses per node
 soak_ior_daos:
     name: soak_ior_daos
@@ -68,13 +68,13 @@ soak_ior_mpiio:
     joblist:
       - job_ior_mpiio
 # SOAK stress test case
-# Test will run for 60 minutes; 
+# Test will run for 60 minutes;
 # One job per node with 1, 16 and 32 tasks.proccesses per node
 soak_stress:
     name: soak_stress
     test_timeout: 3600
     nodesperjob: 1
-    poollist: 
+    poollist:
       - pool1
     joblist:
       - job_ior_mpiio
@@ -82,7 +82,7 @@ soak_stress:
       # - job_dmg_create_destroy
 
 # job_params  - defines the job specifications for each cmdline listed
-#               name:                The name of the Avocado testcase
+#               name:                The name of the job
 #               time:                The IOR cmdline timeout; passed to slurm
 #               tasks:               slurm --ntaskspernode param
 #               jobspec:             list of cmdline specifications to run
@@ -101,13 +101,13 @@ jobsmoke:
 job_ior_daos:
     name: job_ior_daos
     time: 10
-    tasks: 
+    tasks:
         - 1
         - 16
         - 32
     jobspec:
         - ior_daos
-# IOR MPIIO job params; multiple jobs, one job per node; 
+# IOR MPIIO job params; multiple jobs, one job per node;
 # 1, 16 and 32 tasks per node
 job_ior_mpiio:
     name: job_ior_mpiio
@@ -118,12 +118,13 @@ job_ior_mpiio:
         - 32
     jobspec:
         - ior_mpiio
-# TBD test case for DMG
+# TBD job params for DMG
 job_dmg_create_destroy:
     name: job_dmg_create_destroy
     time: 600
     jobspec:
         - dmg_create_destroy
+# Commandline parmeters
 # Benchmark and application params
 # IOR params -a DAOS and -a MPIIO
 # sequential
