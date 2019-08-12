@@ -1,5 +1,5 @@
-/**
- * (C) Copyright 2016-2018 Intel Corporation.
+/*
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,15 +21,19 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
+ * \file
+ *
  * dc_pool: Pool Client
  *
  * This module is part of libdaos. It implements the pool methods of DAOS API
  * as well as daos/pool.h.
  */
+
 #define D_LOGFAC	DD_FAC(pool)
 
 #include <daos/common.h>
 #include <daos/event.h>
+#include <daos/mgmt.h>
 #include <daos/placement.h>
 #include <daos/pool.h>
 #include <daos/security.h>
@@ -40,7 +44,7 @@
 /** Replicated Service client state (used by Management API) */
 struct rsvc_client_state {
 	struct rsvc_client  scs_client;
-	crt_group_t	   *scs_group;
+	struct dc_mgmt_sys *scs_sys;
 };
 
 static uint64_t
@@ -87,8 +91,8 @@ pool_free(struct d_hlink *hlink)
 		pool_map_decref(pool->dp_map);
 
 	rsvc_client_fini(&pool->dp_client);
-	if (pool->dp_group != NULL)
-		daos_group_detach(pool->dp_group);
+	if (pool->dp_sys != NULL)
+		dc_mgmt_sys_detach(pool->dp_sys);
 
 	D_FREE(pool);
 }
@@ -474,7 +478,7 @@ dc_pool_local_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 	pool->dp_capas = flags;
 
 	/** attach to the server group and initialize rsvc_client */
-	rc = daos_group_attach(NULL, &pool->dp_group);
+	rc = dc_mgmt_sys_attach(NULL, &pool->dp_sys);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -552,7 +556,7 @@ dc_pool_connect(tse_task_t *task)
 		pool->dp_capas = args->flags;
 
 		/** attach to the server group and initialize rsvc_client */
-		rc = daos_group_attach(args->grp, &pool->dp_group);
+		rc = dc_mgmt_sys_attach(args->grp, &pool->dp_sys);
 		if (rc != 0)
 			D_GOTO(out_pool, rc);
 		rc = rsvc_client_init(&pool->dp_client, args->svc);
@@ -566,7 +570,7 @@ dc_pool_connect(tse_task_t *task)
 	}
 
 	/** Choose an endpoint and create an RPC. */
-	ep.ep_grp = pool->dp_group;
+	ep.ep_grp = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
@@ -722,7 +726,7 @@ dc_pool_disconnect(tse_task_t *task)
 		D_GOTO(out_pool, rc);
 	}
 
-	ep.ep_grp = pool->dp_group;
+	ep.ep_grp = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
@@ -773,8 +777,7 @@ struct dc_pool_glob {
 	/* magic number, DC_POOL_GLOB_MAGIC */
 	uint32_t	dpg_magic;
 	uint32_t	dpg_padding;
-	/* pool group_id, uuid, and capas */
-	char		dpg_group_id[CRT_GROUP_ID_MAX_LEN];
+	/* pool UUID, pool handle UUID, and capas */
 	uuid_t		dpg_pool;
 	uuid_t		dpg_pool_hdl;
 	uint64_t	dpg_capas;
@@ -784,13 +787,14 @@ struct dc_pool_glob {
 	uint32_t	dpg_map_pb_nr;
 	struct pool_buf	dpg_map_buf[0];
 	/* rsvc_client */
+	/* dc_mgmt_sys */
 };
 
 static inline daos_size_t
-dc_pool_glob_buf_size(unsigned int pb_nr, size_t client_len)
+dc_pool_glob_buf_size(unsigned int pb_nr, size_t client_len, size_t sys_len)
 {
 	return offsetof(struct dc_pool_glob, dpg_map_buf) +
-	       pool_buf_size(pb_nr) + client_len;
+	       pool_buf_size(pb_nr) + client_len + sys_len;
 }
 
 static inline void
@@ -826,7 +830,6 @@ swap_pool_glob(struct dc_pool_glob *pool_glob)
 
 	D_SWAP32S(&pool_glob->dpg_magic);
 	/* skip pool_glob->dpg_padding */
-	/* skip pool_glob->dpg_group_id[] */
 	/* skip pool_glob->dpg_pool (uuid_t) */
 	/* skip pool_glob->dpg_pool_hdl (uuid_t) */
 	D_SWAP64S(&pool_glob->dpg_capas);
@@ -846,6 +849,8 @@ dc_pool_l2g(daos_handle_t poh, d_iov_t *glob)
 	uint32_t		 pb_nr;
 	void			*client_buf;
 	size_t			 client_len;
+	size_t			 sys_len;
+	void			*p;
 	int			 rc = 0;
 
 	D_ASSERT(glob != NULL);
@@ -871,8 +876,10 @@ dc_pool_l2g(daos_handle_t poh, d_iov_t *glob)
 	rsvc_client_encode(&pool->dp_client, client_buf);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
 
+	sys_len = dc_mgmt_sys_encode(pool->dp_sys, NULL /* buf */, 0 /* cap */);
+
 	pb_nr = map_buf->pb_nr;
-	glob_buf_size = dc_pool_glob_buf_size(pb_nr, client_len);
+	glob_buf_size = dc_pool_glob_buf_size(pb_nr, client_len, sys_len);
 	if (glob->iov_buf == NULL) {
 		glob->iov_buf_len = glob_buf_size;
 		D_GOTO(out_client_buf, rc = 0);
@@ -889,17 +896,21 @@ dc_pool_l2g(daos_handle_t poh, d_iov_t *glob)
 	/* init pool global handle */
 	pool_glob = (struct dc_pool_glob *)glob->iov_buf;
 	pool_glob->dpg_magic = DC_POOL_GLOB_MAGIC;
-	strncpy(pool_glob->dpg_group_id, pool->dp_group->cg_grpid,
-		sizeof(pool_glob->dpg_group_id) - 1);
-	pool_glob->dpg_group_id[sizeof(pool_glob->dpg_group_id) - 1] = '\0';
 	uuid_copy(pool_glob->dpg_pool, pool->dp_pool);
 	uuid_copy(pool_glob->dpg_pool_hdl, pool->dp_pool_hdl);
 	pool_glob->dpg_capas = pool->dp_capas;
 	pool_glob->dpg_map_version = map_version;
 	pool_glob->dpg_map_pb_nr = pb_nr;
 	memcpy(pool_glob->dpg_map_buf, map_buf, pool_buf_size(pb_nr));
-	memcpy((unsigned char *)pool_glob->dpg_map_buf + pool_buf_size(pb_nr),
-	       client_buf, client_len);
+	/* rsvc_client */
+	p = (void *)pool_glob->dpg_map_buf + pool_buf_size(pb_nr);
+	memcpy(p, client_buf, client_len);
+	/* dc_mgmt_sys */
+	p += client_len;
+	rc = dc_mgmt_sys_encode(pool->dp_sys, p,
+				glob_buf_size - (p - (void *)pool_glob));
+	D_ASSERTF(rc == sys_len, "%d == %zu\n", rc, sys_len);
+	rc = 0;
 
 out_client_buf:
 	D_FREE(client_buf);
@@ -941,17 +952,13 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 {
 	struct dc_pool		*pool;
 	struct pool_buf		*map_buf;
-	void			*client_buf;
-	size_t			 client_len;
+	void			*p;
 	int			 rc = 0;
 
 	D_ASSERT(pool_glob != NULL);
 	D_ASSERT(poh != NULL);
 	map_buf = pool_glob->dpg_map_buf;
 	D_ASSERT(map_buf != NULL);
-	client_len = len - sizeof(*pool_glob) - pool_buf_size(map_buf->pb_nr);
-	client_buf = (unsigned char *)pool_glob + sizeof(*pool_glob) +
-		     pool_buf_size(map_buf->pb_nr);
 
 	/** allocate and fill in pool connection */
 	pool = pool_alloc();
@@ -964,13 +971,17 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 	/* set slave flag to avoid export it again */
 	pool->dp_slave = 1;
 
-	rc = daos_group_attach(pool_glob->dpg_group_id, &pool->dp_group);
-	if (rc != 0)
-		D_GOTO(out, rc);
-	rc = rsvc_client_decode(client_buf, client_len, &pool->dp_client);
+	p = (void *)map_buf + pool_buf_size(map_buf->pb_nr);
+	rc = rsvc_client_decode(p, len - (p - (void *)pool_glob),
+				&pool->dp_client);
 	if (rc < 0)
-		D_GOTO(out, rc);
-	D_ASSERTF(rc == client_len, "%d == %zu\n", rc, client_len);
+		goto out;
+
+	p += rc;
+	rc = dc_mgmt_sys_decode(p, len - (p - (void *)pool_glob),
+				&pool->dp_sys);
+	if (rc < 0)
+		goto out;
 
 	rc = pool_map_create(map_buf, pool_glob->dpg_map_version,
 			     &pool->dp_map);
@@ -1036,7 +1047,7 @@ out:
 
 struct pool_update_state {
 	struct rsvc_client	client;
-	crt_group_t	       *group;
+	struct dc_mgmt_sys     *sys;
 };
 
 static int
@@ -1090,7 +1101,7 @@ out:
 	crt_req_decref(rpc);
 	if (free_state) {
 		rsvc_client_fini(&state->client);
-		daos_group_detach(state->group);
+		dc_mgmt_sys_detach(state->sys);
 		D_FREE(state);
 	}
 	return rc;
@@ -1131,7 +1142,7 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 			D_GOTO(out_task, rc = -DER_NOMEM);
 		}
 
-		rc = daos_group_attach(args->grp, &state->group);
+		rc = dc_mgmt_sys_attach(args->grp, &state->sys);
 		if (rc != 0)
 			D_GOTO(out_state, rc);
 		rc = rsvc_client_init(&state->client, args->svc);
@@ -1141,7 +1152,7 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 		daos_task_set_priv(task, state);
 	}
 
-	ep.ep_grp = state->group;
+	ep.ep_grp = state->sys->sy_group;
 	rsvc_client_choose(&state->client, &ep);
 	rc = pool_req_create(daos_task2ctx(task), &ep, opc, &rpc);
 	if (rc != 0) {
@@ -1188,7 +1199,7 @@ out_rpc:
 out_client:
 	rsvc_client_fini(&state->client);
 out_group:
-	daos_group_detach(state->group);
+	dc_mgmt_sys_detach(state->sys);
 out_state:
 	D_FREE(state);
 out_task:
@@ -1386,7 +1397,7 @@ dc_pool_query(tse_task_t *task)
 		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl),
 		args->tgts, args->info);
 
-	ep.ep_grp = pool->dp_group;
+	ep.ep_grp = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
@@ -1442,7 +1453,7 @@ out_task:
 
 struct pool_evict_state {
 	struct rsvc_client	client;
-	crt_group_t	       *group;
+	struct dc_mgmt_sys     *sys;
 };
 
 static int
@@ -1484,7 +1495,7 @@ out:
 	crt_req_decref(rpc);
 	if (free_state) {
 		rsvc_client_fini(&state->client);
-		daos_group_detach(state->group);
+		dc_mgmt_sys_detach(state->sys);
 		D_FREE(state);
 	}
 	return rc;
@@ -1517,7 +1528,7 @@ dc_pool_evict(tse_task_t *task)
 			D_GOTO(out_task, rc = -DER_NOMEM);
 		}
 
-		rc = daos_group_attach(args->grp, &state->group);
+		rc = dc_mgmt_sys_attach(args->grp, &state->sys);
 		if (rc != 0)
 			D_GOTO(out_state, rc);
 		rc = rsvc_client_init(&state->client, args->svc);
@@ -1527,7 +1538,7 @@ dc_pool_evict(tse_task_t *task)
 		daos_task_set_priv(task, state);
 	}
 
-	ep.ep_grp = state->group;
+	ep.ep_grp = state->sys->sy_group;
 	rsvc_client_choose(&state->client, &ep);
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_EVICT, &rpc);
 	if (rc != 0) {
@@ -1557,7 +1568,7 @@ out_rpc:
 out_client:
 	rsvc_client_fini(&state->client);
 out_group:
-	daos_group_detach(state->group);
+	dc_mgmt_sys_detach(state->sys);
 out_state:
 	D_FREE(state);
 out_task:
@@ -1686,7 +1697,7 @@ pool_req_prepare(daos_handle_t poh, enum pool_operation opcode,
 	if (args->pra_pool == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
-	ep.ep_grp  = args->pra_pool->dp_group;
+	ep.ep_grp  = args->pra_pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&args->pra_pool->dp_client_lock);
 	rsvc_client_choose(&args->pra_pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&args->pra_pool->dp_client_lock);
@@ -2034,7 +2045,7 @@ dc_pool_stop_svc(tse_task_t *task)
 	D_DEBUG(DF_DSMC, DF_UUID": stopping svc: hdl="DF_UUID"\n",
 		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl));
 
-	ep.ep_grp = pool->dp_group;
+	ep.ep_grp = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
@@ -2087,7 +2098,7 @@ rsvc_client_state_cleanup(int stage, struct rsvc_client_state *state)
 	case CCS_CU_CLI:
 		rsvc_client_fini(&state->scs_client);
 	case CCS_CU_GRP:
-		daos_group_detach(state->scs_group);
+		dc_mgmt_sys_detach(state->scs_sys);
 	case CCS_CU_MEM:
 		D_FREE_PTR(state);
 	}
@@ -2108,7 +2119,7 @@ rsvc_client_state_create(tse_task_t *task, d_rank_list_t *targets,
 			D_ERROR("Failed to allocate state\n");
 			return -DER_NOMEM;
 		}
-		rc = daos_group_attach(group, &state->scs_group);
+		rc = dc_mgmt_sys_attach(group, &state->scs_sys);
 		if (rc != 0) {
 			rsvc_client_state_cleanup(CCS_CU_MEM, state);
 			return rc;
@@ -2121,7 +2132,7 @@ rsvc_client_state_create(tse_task_t *task, d_rank_list_t *targets,
 		daos_task_set_priv(task, state);
 	}
 
-	ep.ep_grp = state->scs_group;
+	ep.ep_grp = state->scs_sys->sy_group;
 	rsvc_client_choose(&state->scs_client, &ep);
 	rc = pool_req_create(daos_task2ctx(task), &ep, opc, rpcp);
 	if (rc != 0) {

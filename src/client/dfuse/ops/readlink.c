@@ -44,7 +44,7 @@ dfuse_cb_readlink(fuse_req_t req, fuse_ino_t ino)
 
 	rc = dfs_get_symlink_value(inode->ie_obj, NULL, &size);
 	if (rc)
-		D_GOTO(release, rc = -rc);
+		D_GOTO(release, rc);
 
 	D_ALLOC(buf, size);
 	if (!buf)
@@ -52,7 +52,7 @@ dfuse_cb_readlink(fuse_req_t req, fuse_ino_t ino)
 
 	rc = dfs_get_symlink_value(inode->ie_obj, buf, &size);
 	if (rc)
-		D_GOTO(release, rc = -rc);
+		D_GOTO(release, rc);
 
 	DFUSE_REPLY_READLINK(req, buf);
 

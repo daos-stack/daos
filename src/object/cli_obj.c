@@ -988,6 +988,7 @@ struct obj_auxi_args {
 	uint32_t			 map_ver_req;
 	uint32_t			 map_ver_reply;
 	uint32_t			 io_retry:1,
+					 args_initialized:1,
 					 shard_task_scheded:1,
 					 retry_with_leader:1;
 	/* request flags, now only with ORF_RESEND */
@@ -1688,7 +1689,7 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 		  req_tgts->ort_grp_nr * req_tgts->ort_grp_size;
 
 	/* for retried obj IO, reuse the previous shard tasks and resched it */
-	if (obj_auxi->io_retry) {
+	if (obj_auxi->io_retry && obj_auxi->args_initialized) {
 		/* We mark the RPC as RESEND although @io_retry does not
 		 * guarantee that the RPC has ever been sent. It may cause
 		 * some overhead on server side, but no correctness issues.
@@ -1742,10 +1743,14 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 		if (rc)
 			goto out_task;
 
+		obj_auxi->args_initialized = 1;
+
 		/* for fail case the obj_task will be completed in shard_io() */
 		rc = shard_io(obj_task, shard_auxi);
 		return rc;
 	}
+
+	D_ASSERT(d_list_empty(task_list));
 
 	/* for multi-targets, schedule it by tse sub-shard-tasks */
 	for (i = 0; i < tgts_nr; i++) {
@@ -1784,15 +1789,20 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 			tgt++;
 	}
 
+	obj_auxi->args_initialized = 1;
+
 task_sched:
 	obj_shard_task_sched(obj_auxi, epoch);
 	return 0;
 
 out_task:
-	if (d_list_empty(task_list))
+	if (d_list_empty(task_list)) {
 		tse_task_complete(obj_task, rc);
-	else
+	} else {
+		D_ASSERTF(!obj_retry_error(rc), "unexpected ret %d\n", rc);
+
 		tse_task_list_traverse(task_list, shard_task_abort, &rc);
+	}
 	return rc;
 }
 
@@ -2608,7 +2618,7 @@ dc_obj_query_key(tse_task_t *api_task)
 	head = &obj_auxi->shard_task_head;
 
 	/* for retried obj IO, reuse the previous shard tasks and resched it */
-	if (obj_auxi->io_retry) {
+	if (obj_auxi->io_retry && obj_auxi->args_initialized) {
 		/* The RPC may need to be resent to (new) leader. */
 		if (srv_io_mode != DIM_CLIENT_DISPATCH) {
 			struct shard_task_reset_query_target_args	arg;
@@ -2623,6 +2633,8 @@ dc_obj_query_key(tse_task_t *api_task)
 
 		goto task_sched;
 	}
+
+	D_ASSERT(d_list_empty(head));
 
 	/* In each redundancy group, the QUERY RPC only needs to be sent
 	 * to one replica: i += replicas
@@ -2667,15 +2679,20 @@ dc_obj_query_key(tse_task_t *api_task)
 		tse_task_list_add(task, head);
 	}
 
+	obj_auxi->args_initialized = 1;
+
 task_sched:
 	obj_shard_task_sched(obj_auxi, epoch);
 	return rc;
 
 out_task:
-	if (head == NULL || d_list_empty(head)) /* nothing has been started */
+	if (head == NULL || d_list_empty(head)) {/* nothing has been started */
 		tse_task_complete(api_task, rc);
-	else
+	} else {
+		D_ASSERTF(!obj_retry_error(rc), "unexpected ret %d\n", rc);
+
 		tse_task_list_traverse(head, shard_task_abort, &rc);
+	}
 
 	return rc;
 }

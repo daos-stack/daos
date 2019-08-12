@@ -200,7 +200,7 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		rc = crt_group_rank(NULL, &rank);
 		if (dst_iv->riv_global_done && rc == 0 &&
 		    d_rank_in_rank_list(rpt->rt_svc_list, rank)) {
-			struct daos_rebuild_status rs;
+			struct daos_rebuild_status rs = { 0 };
 
 			rs.rs_version	= src_iv->riv_ver;
 			rs.rs_errno	= src_iv->riv_status;

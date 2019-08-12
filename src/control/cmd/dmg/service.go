@@ -24,9 +24,8 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/daos-stack/daos/src/control/client"
+	log "github.com/daos-stack/daos/src/control/logging"
 )
 
 // SvcCmd is the struct representing the top-level service subcommand.
@@ -44,7 +43,7 @@ type KillRankSvcCmd struct {
 
 // run kill rank command with specified parameters on all connected servers
 func killRankSvc(conns client.Connect, uuid string, rank uint32) {
-	fmt.Printf("Kill Rank command results:\n%s", conns.KillRank(uuid, rank))
+	log.Infof("Kill Rank command results:\n%s", conns.KillRank(uuid, rank))
 }
 
 // Execute is run when KillRankSvcCmd activates
