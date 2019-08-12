@@ -216,9 +216,10 @@ struct shard_list_args {
 };
 
 struct ec_bulk_spec {
-	uint64_t is_skip:	1,
-	len:		       63;
+	uint64_t is_skip:	1;
+	uint64_t len:		63;
 };
+D_CASSERT(sizeof(struct ec_bulk_spec) == sizeof(uint64_t));
 
 static inline void
 ec_bulk_spec_set(uint64_t len, bool skip, int index,
