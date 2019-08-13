@@ -25,7 +25,6 @@ from __future__ import print_function
 
 import re
 import uuid
-import daos_api
 
 from avocado.utils.process import run, CmdError
 from command_utils import FormattedParameter, CommandWithParameters
