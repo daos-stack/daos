@@ -28,7 +28,7 @@
 #define D_LOGFAC	DD_FAC(vos)
 
 #include <daos/common.h>
-#include <daos/daos_checksum.h>
+#include <daos/checksum.h>
 #include <daos/btree.h>
 #include <daos_types.h>
 #include <daos_srv/vos.h>

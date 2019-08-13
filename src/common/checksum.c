@@ -31,7 +31,7 @@
 #include <gurt/types.h>
 #include <daos.h>
 #include <daos/common.h>
-#include <daos/daos_checksum.h>
+#include <daos/checksum.h>
 
 
 /** File function signatures */
@@ -106,7 +106,7 @@ daos_contprop2csumtype(int contprop_csum_val)
  */
 
 /** CSUM_TYPE_ISAL_CRC16_T10DIF*/
-int
+static int
 crc16_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 {
 	uint16_t *crc16 = (uint16_t *) obj->dcs_csum_buf;
@@ -121,7 +121,7 @@ struct csum_ft crc16_algo = {
 };
 
 /** CSUM_TYPE_ISAL_CRC32_ISCSI */
-int
+static int
 crc32_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 {
 	uint32_t *crc32 = (uint32_t *) obj->dcs_csum_buf;
@@ -136,7 +136,7 @@ struct csum_ft crc32_algo = {
 	};
 
 /** CSUM_TYPE_ISAL_CRC64_REFL */
-int
+static int
 crc64_update(struct daos_csummer *obj,
 		 uint8_t *buf, size_t buf_len)
 {
@@ -153,7 +153,7 @@ struct csum_ft crc64_algo = {
 	};
 
 /** CSUM_TYPE_ISAL_SHA1 */
-int
+static int
 sha1_init(struct daos_csummer *obj)
 {
 	struct mh_sha1_ctx *ctx;
@@ -164,13 +164,13 @@ sha1_init(struct daos_csummer *obj)
 	return mh_sha1_init(ctx);
 }
 
-void
+static void
 sha1_destroy(struct daos_csummer *obj)
 {
 	D_FREE(obj->dcs_ctx);
 }
 
-int
+static int
 sha1_update(struct daos_csummer *obj,
 		 uint8_t *buf, size_t buf_len)
 {
@@ -179,7 +179,7 @@ sha1_update(struct daos_csummer *obj,
 	return mh_sha1_update(ctx, buf, buf_len);
 }
 
-int
+static int
 sha1_finish(struct daos_csummer *obj)
 {
 	struct mh_sha1_ctx *ctx = obj->dcs_ctx;

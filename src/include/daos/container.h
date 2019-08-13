@@ -31,7 +31,7 @@
 #include <daos/pool_map.h>
 #include <daos/tse.h>
 #include <daos_types.h>
-#include "daos_checksum.h"
+#include "checksum.h"
 
 int dc_cont_init(void);
 void dc_cont_fini(void);

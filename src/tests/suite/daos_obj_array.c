@@ -26,7 +26,6 @@
  * tests/suite/daos_obj_array.c
  */
 
-#include <daos/daos_checksum.h>
 #include "daos_test.h"
 
 #define STACK_BUF_LEN	24

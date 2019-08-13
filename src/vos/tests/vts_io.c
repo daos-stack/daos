@@ -32,7 +32,7 @@
 #include "vts_io.h"
 #include "csum_extent_tests.h"
 #include <daos_api.h>
-#include <daos/daos_checksum.h>
+#include <daos/checksum.h>
 
 #define NO_FLAGS	    (0)
 

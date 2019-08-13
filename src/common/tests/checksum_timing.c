@@ -31,7 +31,7 @@
 #include <inttypes.h>
 
 #include <getopt.h>
-#include <daos/daos_checksum.h>
+#include <daos/checksum.h>
 #include <mchecksum.h>
 #include <mchecksum_error.h>
 

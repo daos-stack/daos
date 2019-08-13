@@ -22,7 +22,7 @@
  */
 #define D_LOGFAC	DD_FAC(vos)
 
-#include <daos/daos_checksum.h>
+#include <daos/checksum.h>
 #include "evt_priv.h"
 #include "vos_internal.h"
 

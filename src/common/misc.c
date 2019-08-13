@@ -30,7 +30,6 @@
 #include <daos_types.h>
 #include <daos/dtx.h>
 #include <daos_security.h>
-#include <daos/daos_checksum.h>
 
 /**
  * Initialise a scatter/gather list, create an array to store @nr iovecs.

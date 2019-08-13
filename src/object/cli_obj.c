@@ -32,7 +32,6 @@
 #include <daos/pool.h>
 #include <daos_task.h>
 #include <daos_types.h>
-#include <daos.h>
 #include "obj_rpc.h"
 #include "obj_internal.h"
 

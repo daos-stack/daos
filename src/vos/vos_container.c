@@ -37,7 +37,7 @@
 #include <daos_types.h>
 #include <vos_internal.h>
 #include <vos_obj.h>
-#include <daos/daos_checksum.h>
+#include <daos/checksum.h>
 
 /**
  * Parameters for vos_cont_df btree

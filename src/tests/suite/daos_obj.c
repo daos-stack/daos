@@ -28,7 +28,6 @@
 #define D_LOGFAC	DD_FAC(tests)
 #include "daos_iotest.h"
 #include <daos_types.h>
-#include <daos/daos_checksum.h>
 
 #define IO_SIZE_NVME	(5ULL << 10) /* all records  >= 4K */
 #define	IO_SIZE_SCM	64

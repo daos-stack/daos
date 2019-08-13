@@ -22,7 +22,7 @@
  */
 #define D_LOGFAC        DD_FAC(tests)
 
-#include <daos/daos_checksum.h>
+#include <daos/checksum.h>
 #include <daos.h>
 
 #include <string.h>

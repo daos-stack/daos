@@ -34,7 +34,6 @@
 #include <daos/pool.h>
 #include <daos/rsvc.h>
 #include <daos_types.h>
-#include <daos.h>
 #include "cli_internal.h"
 #include "rpc.h"
 

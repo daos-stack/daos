@@ -78,6 +78,23 @@ typedef struct {
 	uint32_t	 cs_chunksize;
 } daos_csum_buf_t;
 
+
+/** Setup the \a daos_csum_buf_t with the checksum buffer,
+ * buffer size, csum size, number of checksums, and the chunksize the
+ * checksum represents
+ */
+void
+dcb_set(daos_csum_buf_t *csum_buf, void *buf,
+	uint32_t csum_buf_size,
+	uint16_t csum_size,
+	uint32_t csum_count,
+	uint32_t chunksize);
+
+/** Set the csum buf to a NULL value */
+void
+dcb_set_null(daos_csum_buf_t *csum_buf);
+
+
 enum daos_anchor_flags {
 	/* The RPC will be sent to leader replica. */
 	DAOS_ANCHOR_FLAGS_TO_LEADER	= 1,

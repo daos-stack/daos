@@ -79,8 +79,8 @@ struct daos_tree_overhead {
 
 /** Points to a byte in an iov, in an sgl */
 struct daos_sgl_idx {
-	int	iov_idx;
-	size_t	iov_offset;
+	uint32_t	iov_idx;
+	daos_off_t	iov_offset;
 };
 
 /*

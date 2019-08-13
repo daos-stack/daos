@@ -21,10 +21,10 @@ def scons():
                     LIBS=['daos_common', 'gurt', 'pmemobj', 'cmocka'])
     daos_build.test(denv, 'other', 'other.c',
                     LIBS=['daos_common', 'gurt', 'cart'])
-    daos_build.test(denv, 'common_test_runner',
-    			['common_test_runner.c', 'daos_checksum_tests.c',
-    			'misc_tests.c'],
-                    LIBS=['daos_common', 'gurt', 'cart', 'cmocka'])
+    daos_build.testq(denv, 'common_test_runner',
+                     ['common_test_runner.c', 'daos_checksum_tests.c',
+                      'misc_tests.c'],
+                     LIBS=['daos_common', 'gurt', 'cart', 'cmocka'])
     daos_build.test(denv, 'checksum_timing', 'checksum_timing.c',
                     LIBS=['daos_common', 'mchecksum'])
     daos_build.test(denv, 'lru', 'lru.c',
