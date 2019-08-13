@@ -140,30 +140,8 @@ class TestWithoutServers(Test):
         if self.fault_file:
             os.remove(self.fault_file)
 
-
-class TestWithServers(TestWithoutServers):
-    """Run tests with DAOS servers and at least one client.
-
-    Optionally run DAOS clients on specified hosts.  By default run a single
-    DAOS client on the host executing the test.
-
-    :avocado: recursive
-    """
-
-    def __init__(self, *args, **kwargs):
-        """Initialize a TestWithServers object."""
-        super(TestWithServers, self).__init__(*args, **kwargs)
-
-        self.agent_sessions = None
-        self.setup_start_servers = True
-
-    def setUp(self):
-        """Set up each test case."""
-        super(TestWithServers, self).setUp()
-
-        self.server_group = self.params.get(
-            "name", "/server_config/", "daos_server")
-
+    def get_test_attributes(self):
+        """Get test attributes from test yaml file."""
         # Determine which hosts to use as servers and optionally clients.
         # Support the use of a host type count to test with subsets of the
         # specified hosts lists
@@ -202,7 +180,32 @@ class TestWithServers(TestWithoutServers):
                     "Test requires {} {}; {} specified".format(
                         expected_count, host_type, actual_count))
 
-        # Start the servers and clients
+
+class TestWithServers(TestWithoutServers):
+    """Run tests with DAOS servers and at least one client.
+
+    Optionally run DAOS clients on specified hosts.  By default run a single
+    DAOS client on the host executing the test.
+
+    :avocado: recursive
+    """
+
+    def __init__(self, *args, **kwargs):
+        """Initialize a TestWithServers object."""
+        super(TestWithServers, self).__init__(*args, **kwargs)
+
+        self.agent_sessions = None
+        self.setup_start_servers = True
+
+    def setUp(self):
+        """Set up each test case."""
+        super(TestWithServers, self).setUp()
+
+        self.server_group = self.params.get(
+            "name", "/server_config/", "daos_server")
+
+        # Set attributes with yaml file
+        self.get_test_attributes()
 
         # Create host files
         self.hostfile_servers = write_host_file.write_host_file(
@@ -212,6 +215,7 @@ class TestWithServers(TestWithoutServers):
                 self.hostlist_clients, self.workdir,
                 self.hostfile_clients_slots)
 
+        # Start agent and server
         self.agent_sessions = agent_utils.run_agent(
             self.basepath, self.hostlist_servers, self.hostlist_clients)
 
