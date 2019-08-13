@@ -358,7 +358,7 @@ punch_dkey(const char *dkey, daos_handle_t th, struct ioreq *req)
 	ioreq_dkey_set(req, dkey);
 
 	rc = daos_obj_punch_dkeys(req->oh, th, 1, &req->dkey, NULL);
-	assert_int_equal(rc, 0);
+	assert_int_equal(rc, req->arg->expect_result);
 }
 
 void
@@ -376,7 +376,7 @@ punch_akey(const char *dkey, const char *akey, daos_handle_t th,
 
 	rc = daos_obj_punch_akeys(req->oh, th, &req->dkey, 1, &daos_akey,
 				  NULL);
-	assert_int_equal(rc, 0);
+	assert_int_equal(rc, req->arg->expect_result);
 }
 
 void
@@ -416,7 +416,9 @@ lookup_internal(daos_key_t *dkey, int nr, d_sg_list_t *sgls,
 	rc = daos_obj_fetch(req->oh, th, dkey, nr, iods, sgls,
 			    NULL, req->arg->async ? &req->ev : NULL);
 	if (!req->arg->async) {
-		assert_int_equal(rc, req->arg->expect_result);
+		req->result = rc;
+		if (rc != -DER_INPROGRESS)
+			assert_int_equal(rc, req->arg->expect_result);
 		return;
 	}
 
@@ -424,7 +426,9 @@ lookup_internal(daos_key_t *dkey, int nr, d_sg_list_t *sgls,
 	rc = daos_event_test(&req->ev, DAOS_EQ_WAIT, &ev_flag);
 	assert_int_equal(rc, 0);
 	assert_int_equal(ev_flag, true);
-	assert_int_equal(req->ev.ev_error, req->arg->expect_result);
+	req->result = req->ev.ev_error;
+	if (req->ev.ev_error != -DER_INPROGRESS)
+		assert_int_equal(req->ev.ev_error, req->arg->expect_result);
 }
 
 void
@@ -482,6 +486,7 @@ lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
 	/* set iod */
 	ioreq_iod_simple_set(req, iod_size, true, idx, nr, rx_nr);
 
+	req->result = -1;
 	lookup_internal(&req->dkey, nr, req->sgl, req->iod, th, req, empty);
 }
 
@@ -2204,7 +2209,7 @@ io_simple_update_crt_req_error(void **state)
 			   "test_update_err_req akey");
 }
 
-static void
+void
 close_reopen_coh_oh(test_arg_t *arg, struct ioreq *req, daos_obj_id_t oid)
 {
 	int rc;
