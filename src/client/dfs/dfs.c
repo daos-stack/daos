@@ -1520,7 +1520,7 @@ dfs_lookup_loop:
 
 		if (!S_ISDIR(entry.mode)) {
 			D_ERROR("Invalid entry type in path.\n");
-			D_GOTO(err_obj, rc = -EINVAL);
+			D_GOTO(err_obj, rc = EINVAL);
 		}
 
 		/* open the directory object */
@@ -1808,7 +1808,7 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 			stbuf->st_size = sizeof(entry);
 	} else {
 		D_ERROR("Invalid entry type (not a dir, file, symlink).\n");
-		D_GOTO(err_obj, rc = -EINVAL);
+		D_GOTO(err_obj, rc = EINVAL);
 	}
 
 	if (mode)
@@ -2358,6 +2358,121 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 
 out:
 	return rc;
+}
+
+int
+dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
+{
+	daos_handle_t		th = DAOS_TX_NONE;
+	uid_t			euid;
+	daos_key_t		dkey;
+	daos_handle_t           oh;
+	int			rc;
+	d_sg_list_t		sgls[3];
+	d_iov_t			sg_iovs[3];
+	daos_iod_t		iods[3];
+	bool			set_size = false;
+	int			i = 0;
+	int			akeys_nr;
+
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (obj == NULL)
+		return EINVAL;
+	if (dfs->amode != O_RDWR)
+		return EPERM;
+
+	euid = geteuid();
+	/** only root or owner can change mode */
+	if (euid != 0 && dfs->uid != euid)
+		return EPERM;
+
+	/** Open parent object and fetch entry of obj from it */
+	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RO, &oh, NULL);
+	if (rc)
+		return daos_der2errno(rc);
+
+	/** set dkey as the entry name */
+	d_iov_set(&dkey, (void *)obj->name, strlen(obj->name));
+
+	if (flags & DFS_SET_ATTR_MODE) {
+		/** set akey as the mode attr name */
+		d_iov_set(&sg_iovs[i], &stbuf->st_mode, sizeof(mode_t));
+		d_iov_set(&iods[i].iod_name, MODE_NAME, strlen(MODE_NAME));
+		iods[i].iod_size = sizeof(mode_t);
+		i++;
+		flags &= ~DFS_SET_ATTR_MODE;
+	}
+	if (flags & DFS_SET_ATTR_ATIME) {
+		d_iov_set(&sg_iovs[i], &stbuf->st_atim, sizeof(time_t));
+		d_iov_set(&iods[i].iod_name, ATIME_NAME, strlen(ATIME_NAME));
+		iods[i].iod_size = sizeof(time_t);
+
+		flags &= ~DFS_SET_ATTR_ATIME;
+		i++;
+	}
+	if (flags & DFS_SET_ATTR_MTIME) {
+		d_iov_set(&sg_iovs[i], &stbuf->st_mtim, sizeof(time_t));
+		d_iov_set(&iods[i].iod_name, MTIME_NAME, strlen(MTIME_NAME));
+		iods[i].iod_size = sizeof(time_t);
+
+		flags &= ~DFS_SET_ATTR_MTIME;
+		i++;
+	}
+	if (flags & DFS_SET_ATTR_SIZE) {
+
+		/* It shouldn't be possible to set the size of something which
+		 * isn't a file but check here anyway, as entries which aren't
+		 * files won't have array objects so check and return error here
+		 */
+		if (!S_ISREG(obj->mode))
+			D_GOTO(out_obj, rc = EIO);
+
+		set_size = true;
+		flags &= ~DFS_SET_ATTR_SIZE;
+	}
+
+	if (flags) {
+		D_GOTO(out_obj, rc = EINVAL);
+	}
+
+	if (set_size) {
+		rc = daos_array_set_size(obj->oh, th, stbuf->st_size, NULL);
+		if (rc)
+			D_GOTO(out_obj, rc = daos_der2errno(rc));
+	}
+
+	akeys_nr = i;
+
+	if (akeys_nr == 0)
+		D_GOTO(out_stat, 0);
+
+	for (i = 0; i < akeys_nr; i++) {
+		sgls[i].sg_nr		= 1;
+		sgls[i].sg_nr_out	= 0;
+		sgls[i].sg_iovs		= &sg_iovs[i];
+
+		daos_csum_set(&iods[i].iod_kcsum, NULL, 0);
+		iods[i].iod_nr		= 1;
+		iods[i].iod_recxs	= NULL;
+		iods[i].iod_eprs	= NULL;
+		iods[i].iod_csums	= NULL;
+		iods[i].iod_type	= DAOS_IOD_SINGLE;
+	}
+
+	rc = daos_obj_update(oh, th, &dkey, akeys_nr, iods, sgls, NULL);
+	if (rc) {
+		D_ERROR("Failed to update attr (rc = %d)\n", rc);
+		D_GOTO(out_obj, rc = daos_der2errno(rc));
+	}
+
+out_stat:
+	rc = entry_stat(dfs, th, oh, obj->name, stbuf);
+
+out_obj:
+	daos_obj_close(oh, NULL);
+	return rc;
+
 }
 
 int
@@ -2913,8 +3028,8 @@ close:
 	daos_obj_close(oh, NULL);
 out:
 	D_FREE(xname);
-	if (rc == -ENOENT)
-		rc = -ENODATA;
+	if (rc == ENOENT)
+		rc = ENODATA;
 	return rc;
 }
 
