@@ -23,11 +23,8 @@
 """
 from __future__ import print_function
 
-import os
-import time
-
 from dmg_utils import DmgCommand
-from server_utils import ServerCommand, clean_server
+from server_utils import ServerCommand
 from apricot import TestWithoutServers
 from avocado.utils import process
 
@@ -50,16 +47,21 @@ class DmgNvmeScanTest(TestWithoutServers):
 
         # Update config and start server
         server.update_configuration(self.basepath)
-        server.start()
+        server.prepare(self.workdir, self.hostfile_servers_slots)
+        server.start(self.orterun)
 
         # Create daos_shell command
-        dmg = DmgCommand("daos_shell")
+        dmg = DmgCommand()
         dmg.get_params(self, "/run/dmg/*")
 
         # Update hostlist value for dmg command
-        port = self.params.get("port", "/run/hosts/*")
-        servers_with_ports = [
-            "{}:{}".format(host, port) for host in self.hostlist_servers]
+        ports = self.params.get("ports", "/run/hosts/*")
+
+        # Check that hosts and ports are same length
+        self.assertEqual(ports, self.hostlist_servers)
+
+        servers_with_ports = ["{}:{}".format(host, port[i])
+                              for i, host in enumerate(self.hostlist_servers)]
         dmg.hostlist.update(",".join(servers_with_ports), "dmg.hostlist")
 
         try:

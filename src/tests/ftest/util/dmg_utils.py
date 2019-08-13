@@ -61,12 +61,11 @@ class DmgCommand(CommandWithParameters):
 
     def get_param_names(self):
         """Get a sorted list of daos_server command parameter names."""
-        names = super(DmgCommand, self).get_attributes(FormattedParameter)
+        names = self.get_attribute_names(FormattedParameter)
         names.extend(["request", "action"])
         return names
 
-    def run(self, timeout=None, verbose=True, env=None, shell=False,
-            sudo=False):
+    def run(self, timeout=None, verbose=True, env=None, sudo=False):
         """ Run the dmg command.
 
         Args:
@@ -74,8 +73,6 @@ class DmgCommand(CommandWithParameters):
             verbose (bool, optional): display command output. Defaults to True.
             env (dict, optional): env for the command. Defaults to None.
             sudo (bool, optional): sudo will be prepended to the command.
-                Defaults to False.
-            subshell (bool, optional): Whether to run cmd on a subshell.
                 Defaults to False.
 
         Raises:
@@ -87,4 +84,4 @@ class DmgCommand(CommandWithParameters):
 
         """
         return process.run(self.__str__(), timeout, verbose, env=env,
-                           shell=shell, sudo=sudo)
+                           shell=True, sudo=sudo)

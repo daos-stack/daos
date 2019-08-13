@@ -3,7 +3,7 @@
 hosts:
   test_machines:
     - boro-A
-  port:
+  ports:
     - 10001
 server_config:
   name: daos_server

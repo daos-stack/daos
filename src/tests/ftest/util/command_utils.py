@@ -74,7 +74,7 @@ class FormattedParameter(BasicParameter):
     """A class for test parameters whose values are read from a yaml file."""
 
     def __init__(self, str_format, default=None):
-        """Create a param object.
+        """Create a FormattedParameter  object.
 
         Args:
             str_format (str): format string used to convert the value into an
@@ -102,13 +102,13 @@ class FormattedParameter(BasicParameter):
 class ObjectWithParameters(object):
     """A class for an object with parameters."""
 
-    def get_attributes(self, attr_type=None):
+    def get_attribute_names(self, attr_type=None):
         """Get a sorted list of the names of the attr_type attributes.
 
         Args:
             attr_type(object, optional): A single object type or tuple of
-                object types used to match class attributes types which define
-                parameters . Defaults to None.
+                object types used to filter class attributes by their type.
+                Defaults to None.
 
         Returns:
             list: a list of class attribute names used to define parameters
@@ -125,7 +125,7 @@ class ObjectWithParameters(object):
             list: a list of class attribute names used to define parameters
 
         """
-        return self.get_attributes(BasicParameter)
+        return self.get_attribute_names(BasicParameter)
 
     def get_params(self, test, path):
         """Get values for all of the command params from the yaml file.

@@ -58,8 +58,7 @@ class ServerCommand(CommandWithParameters):
 
     def __init__(self, hosts):
         """Create a server Command object"""
-        super(ServerCommand, self).__init__(
-            "daos_server", shell=True, sudo=True)
+        super(ServerCommand, self).__init__("daos_server")
 
         self.hosts = hosts
         self.process = None
@@ -115,7 +114,7 @@ class ServerCommand(CommandWithParameters):
 
     def get_param_names(self):
         """Get a sorted list of daos_server command parameter names."""
-        names = super(ServerCommand, self).get_attributes(FormattedParameter)
+        names = self.get_attribute_names(FormattedParameter)
         names.extend(["request", "action"])
         return names
 
