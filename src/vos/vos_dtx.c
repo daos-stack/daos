@@ -1115,8 +1115,10 @@ vos_dtx_share_key(struct umem_instance *umm, struct dtx_handle *dth,
 }
 
 static int
-vos_dtx_check_shares(struct dtx_handle *dth, struct vos_dtx_entry_df *dtx,
-		     umem_off_t record, uint32_t intent, uint32_t type)
+vos_dtx_check_shares(struct umem_instance *umm, daos_handle_t coh,
+		     struct dtx_handle *dth, struct vos_dtx_entry_df *dtx,
+		     umem_off_t record, uint32_t intent, uint32_t type,
+		     umem_off_t *addr)
 {
 	struct dtx_share	*dts;
 
@@ -1146,8 +1148,35 @@ vos_dtx_check_shares(struct dtx_handle *dth, struct vos_dtx_entry_df *dtx,
 		return dtx_inprogress(dtx, 5);
 	}
 
-	if (dth == NULL)
-		return dtx_inprogress(dtx, 6);
+	/* Here, if the obj/key has 'prepared' DTX, but current @dth is NULL,
+	 * then it is the race case between normal IO and rebuild: the normal
+	 * IO creates the obj/key before the rebuild request being handled.
+	 *
+	 * Under such case, we should (partially) commit the normal DTX with
+	 * the shared target (obj/key) to guarantee the rebuild can go ahead.
+	 */
+	if (dth == NULL) {
+		struct vos_container	*cont = vos_hdl2cont(coh);
+		int			 rc;
+
+		D_ASSERT(addr != NULL);
+
+		rc = vos_tx_begin(cont->vc_pool);
+		if (rc != 0)
+			return rc;
+
+		umem_tx_add_ptr(umm, addr, sizeof(*addr));
+		if (dtx != NULL)
+			vos_dtx_deregister_record(umm, umem_ptr2off(umm, dtx),
+						  record, type);
+		*addr = UMOFF_NULL;
+
+		rc = vos_tx_end(cont->vc_pool, 0);
+		if (rc != 0)
+			return rc;
+
+		return ALB_AVAILABLE_CLEAN;
+	}
 
 	D_ALLOC_PTR(dts);
 	if (dts == NULL)
@@ -1167,6 +1196,7 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 {
 	struct dtx_handle		*dth = vos_dth_get();
 	struct vos_dtx_entry_df		*dtx = NULL;
+	umem_off_t			*addr = NULL;
 	bool				 hidden = false;
 
 	switch (type) {
@@ -1188,6 +1218,7 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 			return ALB_UNAVAILABLE;
 		}
 
+		addr = &obj->vo_dtx;
 		if (obj->vo_oi_attr & VOS_OI_REMOVED)
 			hidden = true;
 		break;
@@ -1196,6 +1227,7 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 		struct vos_krec_df	*key;
 
 		key = umem_off2ptr(umm, record);
+		addr = &key->kr_dtx;
 		if (key->kr_bmap & KREC_BF_REMOVED)
 			hidden = true;
 		break;
@@ -1253,7 +1285,8 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 		    intent == DAOS_INTENT_REBUILD)
 			return hidden ? ALB_AVAILABLE_CLEAN : ALB_UNAVAILABLE;
 
-		return vos_dtx_check_shares(dth, NULL, record, intent, type);
+		return vos_dtx_check_shares(umm, coh, dth, NULL, record, intent,
+					    type, addr);
 	}
 
 	/* The DTX owner can always see the DTX. */
@@ -1332,7 +1365,8 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 			return -DER_INVAL;
 		}
 
-		return vos_dtx_check_shares(dth, dtx, record, intent, type);
+		return vos_dtx_check_shares(umm, coh, dth, dtx, record, intent,
+					    type, addr);
 	}
 	default:
 		D_ERROR("Unexpected DTX state %u\n", dtx->te_state);
