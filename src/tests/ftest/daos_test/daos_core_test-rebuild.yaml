@@ -40,8 +40,9 @@ daos_tests:
       daos_test: r
       test_name: rebuild tests 28
       args: -s3 -u subtests="28"
-    test_r_31:
-      daos_test: r
-      test_name: rebuild tests 31
-      args: -s3 -u subtests="31"
-      test_timeout: 1500
+# disable REBUILD32 because of DAOS-2915
+#    test_r_31:
+#      daos_test: r
+#      test_name: rebuild tests 31
+#      args: -s3 -u subtests="31"
+#      test_timeout: 1500

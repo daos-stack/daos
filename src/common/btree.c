@@ -2719,6 +2719,9 @@ dbtree_delete(daos_handle_t toh, dbtree_probe_opc_t opc, d_iov_t *key,
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
+	if (opc == BTR_PROBE_BYPASS)
+		goto delete;
+
 	rc = btr_probe_key(tcx, opc, DAOS_INTENT_PUNCH, key);
 	if (rc == PROBE_RC_INPROGRESS) {
 		D_DEBUG(DB_TRACE, "Target is in some uncommitted DTX.\n");
@@ -2730,6 +2733,7 @@ dbtree_delete(daos_handle_t toh, dbtree_probe_opc_t opc, d_iov_t *key,
 		return -DER_NONEXIST;
 	}
 
+delete:
 	rc = btr_tx_delete(tcx, args);
 
 	tcx->tc_probe_rc = PROBE_RC_UNKNOWN;
