@@ -2,6 +2,9 @@
 import sys
 import os
 import platform
+import subprocess
+import locale
+import time
 from SCons.Script import BUILD_TARGETS
 
 sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils'))
@@ -16,7 +19,63 @@ DESIRED_FLAGS = ['-Wno-gnu-designator',
 PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
                  '-Wno-unused-function']
 
-DAOS_VERSION = "0.6.0"
+def get_version():
+
+    def read_from_file():
+        with open("VERSION", "r") as version_file:
+            return version_file.read()
+
+    try:
+        import pygit2
+    except ImportError:
+        version = read_from_file()
+        print "Building verison {} (version info from file)".format(
+            version.rstrip())
+        return version
+
+    try:
+        repo = pygit2.Repository('.git')
+        # TODO: when newer annotated tags get created, remove the
+        # describe_strategy below
+        tag = repo.describe(describe_strategy=pygit2.GIT_DESCRIBE_TAGS).split('-')[0]
+        version = tag[1:].split('.')
+        while len(version) < 3:
+            version.append(u'0')
+        version = '.'.join(version)
+        print "Building verison {} (version info from git)".format(version)
+        return version
+    except pygit2.GitError:
+        return read_from_file()
+
+DAOS_VERSION = get_version()
+
+def update_rpm_version(version):
+    spec = open("utils/rpms/daos.spec", "r").readlines()
+    for line_num, line in enumerate(spec):
+        if line.startswith("Version:"):
+            spec[line_num] = "Version:       {}\n".format(version)
+        if line.startswith("Release:"):
+            spec[line_num] = "Release:       1%{?relval}%{?dist}\n"
+        if line == "%changelog\n":
+            try:
+                packager = subprocess.Popen(
+                    'rpmdev-packager', stdout=subprocess.PIPE).communicate(
+                    )[0].strip()
+            except OSError:
+                packager = "John Doe <john@doe.com>"
+                print "Package rpmdevtools is missing, using default " \
+                      "name: {0}.".format(packager)
+            date_str = time.strftime('%a %b %d %Y', time.gmtime())
+            encoding = locale.getpreferredencoding()
+            spec.insert(line_num + 1, "\n")
+            spec.insert(line_num + 1,
+                        "- Version bump up to {}\n".format(version))
+            spec.insert(line_num + 1,
+                        u'* {} {} - {}-1\n'.format(date_str,
+                                                   packager,
+                                                   version))
+            break
+    open("utils/rpms/daos.spec", "w").writelines(spec)
 
 def is_platform_arm():
     """Detect if platform is ARM"""
@@ -54,6 +113,40 @@ def preload_prereqs(prereqs):
     prereqs.load_definitions(prebuild=reqs)
 
 def scons():
+    if COMMAND_LINE_TARGETS == ['release']:
+        import pygit2
+        vars = Variables()
+        vars.Add('RELEASE', 'Set to the release version to make', None)
+        env = Environment(variables = vars)
+        try:
+            version = env['RELEASE']
+        except KeyError:
+            print "Usage: scons RELEASE=x.y.z release"
+            exit(1)
+
+        with open("VERSION", "w") as version_file:
+            version_file.write(version + '\n')
+
+        update_rpm_version(version)
+
+        repo = pygit2.Repository('.git')
+        index = repo.index
+        index.read()
+        author = repo.default_signature
+        committer = repo.default_signature
+        message = "DAOS-2172 version: bump version to v{}\n".format(version)
+        index.add("utils/rpms/daos.spec")
+        index.add("VERSION")
+        index.write()
+        tree = index.write_tree()
+        repo.create_commit('HEAD', author, committer, message, tree,
+                           [repo.head.target])
+        repo.create_tag("v{}".format(version),
+                        repo.revparse_single('HEAD').oid.hex,
+                        pygit2.GIT_OBJ_COMMIT, author,
+                        message)
+        exit(0)
+
     """Execute build"""
     if os.path.exists('scons_local'):
         try:
@@ -98,6 +191,7 @@ def scons():
     buildinfo.save('.build_vars.json')
     env.InstallAs("$PREFIX/TESTING/.build_vars.sh", ".build_vars.sh")
     env.InstallAs("$PREFIX/TESTING/.build_vars.json", ".build_vars.json")
+    env.InstallAs("$PREFIX/lib/daos/VERSION", "VERSION")
 
     # install the configuration files
     SConscript('utils/config/SConscript')
