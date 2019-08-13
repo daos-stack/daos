@@ -881,8 +881,8 @@ test_drpc_dup_null(void **state)
 static void
 test_drpc_dup_success(void **state)
 {
-	struct drpc* expected_ctx = new_drpc_with_fd(101);
-	struct drpc* ctx;
+	struct drpc *expected_ctx = new_drpc_with_fd(101);
+	struct drpc *ctx;
 
 	ctx = drpc_dup(expected_ctx);
 
