@@ -35,15 +35,8 @@
 /** num of mem segments for strided access - Must evenly divide NUM_ELEMS */
 #define NUM_SEGS	4
 
-static daos_size_t chunk_size = 16;
 static daos_ofeat_t feat = DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT |
 	DAOS_OF_ARRAY;
-
-static void simple_array_mgmt(void **state);
-static void contig_mem_contig_arr_io(void **state);
-static void contig_mem_str_arr_io(void **state);
-static void str_mem_str_arr_io(void **state);
-static void read_empty_records(void **state);
 
 static void
 array_oh_share(daos_handle_t coh, int rank, daos_handle_t *oh)
@@ -85,7 +78,7 @@ array_oh_share(daos_handle_t coh, int rank, daos_handle_t *oh)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 }
-
+#if 0
 static void
 simple_array_mgmt(void **state)
 {
@@ -1005,6 +998,7 @@ strided_array(void **state)
 	assert_int_equal(nerrors, 0);
 	MPI_Barrier(MPI_COMM_WORLD);
 } /* End str_mem_str_arr_io */
+#endif
 
 #define NUM_RECS 1048576
 
@@ -1063,7 +1057,7 @@ large_io(void **state) {
 		/** set array location */
 		iod.arr_nr = 1;
 		rg.rg_len = NUM_RECS;
-		rg.rg_idx = (uint64_t)arg->myrank * NUM_RECS + 
+		rg.rg_idx = (uint64_t)arg->myrank * NUM_RECS +
 			(uint64_t)i * NUM_RECS * arg->rank_size;
 		iod.arr_rgs = &rg;
 
@@ -1092,28 +1086,29 @@ large_io(void **state) {
 	rc = daos_cont_close(coh, NULL);
 	assert_int_equal(rc, 0);
 
+	/** Barrier to make sure everyone is done and closed coh */
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	if (arg->myrank == 0) {
 		rc = daos_cont_destroy(arg->pool.poh, uuid, 1, NULL);
 		if (rc != 0)
-			print_error("FAILED DAOS CONT destroy (%d)\n", rc);
+			printf("FAILED DAOS CONT destroy (%d)\n", rc);
 	}
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	if (rc)
 		MPI_Abort(MPI_COMM_WORLD, 1);
 	assert_int_equal(rc, 0);
-	MPI_Barrier(MPI_COMM_WORLD);
 
-	if (arg->myrank == 0)
-		printf("Test completed.. exiting to stop from running other tests");
 	MPI_Barrier(MPI_COMM_WORLD);
-	MPI_Abort(MPI_COMM_WORLD, 1);
+	if (arg->myrank == 0)
+		printf("IOR replicator passed.");
+	MPI_Barrier(MPI_COMM_WORLD);
 }
 
 static const struct CMUnitTest array_api_tests[] = {
 	{"Array I/O: Large IO",
 	 large_io, async_disable, NULL},
+#if 0
 	{"Array API: create/open/close (blocking)",
 	 simple_array_mgmt, async_disable, NULL},
 	{"Array API: small/simple array IO (blocking)",
@@ -1134,6 +1129,7 @@ static const struct CMUnitTest array_api_tests[] = {
 	 read_empty_records, async_disable, NULL},
 	{"Array API: strided_array (blocking)",
 	 strided_array, async_disable, NULL},
+#endif
 };
 
 static int
