@@ -215,6 +215,7 @@ evt_iter_intent(struct evt_iterator *iter)
 static int
 evt_iter_move(struct evt_context *tcx, struct evt_iterator *iter)
 {
+	struct evt_desc		*desc;
 	uint32_t		 intent;
 	int			 rc = 0;
 	int			 rc1;
@@ -235,8 +236,8 @@ evt_iter_move(struct evt_context *tcx, struct evt_iterator *iter)
 
 			entry = evt_ent_array_get(&iter->it_entries,
 						  iter->it_index);
-			rc1 = evt_dtx_check_availability(tcx, entry->en_dtx,
-							 intent);
+			desc = evt_off2desc(tcx, entry->en_desc);
+			rc1 = evt_desc_log_status(tcx, desc, intent);
 			if (rc1 < 0)
 				return rc1;
 
@@ -260,11 +261,8 @@ evt_iter_move(struct evt_context *tcx, struct evt_iterator *iter)
 		trace = &tcx->tc_trace[tcx->tc_depth - 1];
 		nd = evt_off2node(tcx, trace->tr_node);
 		if (evt_node_is_leaf(tcx, nd)) {
-			struct evt_desc		*desc;
-
 			desc = evt_node_desc_at(tcx, nd, trace->tr_at);
-			rc1 = evt_dtx_check_availability(tcx, desc->dc_dtx,
-							 intent);
+			rc1 = evt_desc_log_status(tcx, desc, intent);
 			if (rc1 < 0)
 				return rc1;
 
@@ -480,16 +478,14 @@ evt_iter_empty(daos_handle_t ih)
 	return tcx->tc_depth == 0;
 }
 
-int evt_iter_delete(daos_handle_t ih, void *value_out)
+int evt_iter_delete(daos_handle_t ih, struct evt_entry *ent)
 {
 	struct evt_context	*tcx;
 	struct evt_iterator	*iter;
-	struct evt_entry	 entry;
 	struct evt_rect		*rect;
 	struct evt_trace	*trace;
 	int			 rc;
 	int			 i;
-	unsigned int		 inob;
 	bool			 reset = false;
 
 	tcx = evt_hdl2tcx(ih);
@@ -505,10 +501,14 @@ int evt_iter_delete(daos_handle_t ih, void *value_out)
 	if (rc != 0)
 		return rc;
 
-	rc = evt_iter_fetch(ih, &inob, &entry, NULL);
 
-	if (value_out != NULL)
-		*(bio_addr_t *)value_out = entry.en_addr;
+	if (ent != NULL) {
+		unsigned int inob;
+
+		rc = evt_iter_fetch(ih, &inob, ent, NULL);
+		if (rc)
+			return rc;
+	}
 
 	trace = &tcx->tc_trace[tcx->tc_depth - 1];
 	for (i = 0; i < tcx->tc_depth; i++) {
@@ -520,8 +520,7 @@ int evt_iter_delete(daos_handle_t ih, void *value_out)
 	if (rc != 0)
 		return rc;
 
-	rc = evt_node_delete(tcx, value_out == NULL);
-
+	rc = evt_node_delete(tcx);
 	if (rc == -DER_NONEXIST) {
 		rc = 0;
 		reset = true;

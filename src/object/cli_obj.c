@@ -1725,6 +1725,8 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 		}
 	}
 
+	D_ASSERT(!obj_auxi->args_initialized);
+
 	/* if with only one target, need not to create separate shard task */
 	if (tgts_nr == 1) {
 		shard_auxi = obj_embedded_shard_arg(obj_auxi);
@@ -2000,6 +2002,10 @@ obj_comp_cb(tse_task_t *task, void *data)
 			D_ASSERT(d_list_empty(head));
 		}
 		obj_bulk_fini(obj_auxi);
+		/* zero it as user might reuse/resched the task, for example
+		 * the usage in dac_array_set_size().
+		 */
+		memset(obj_auxi, 0, sizeof(*obj_auxi));
 	}
 
 	obj_decref(obj);
@@ -2684,6 +2690,7 @@ dc_obj_query_key(tse_task_t *api_task)
 		goto task_sched;
 	}
 
+	D_ASSERT(!obj_auxi->args_initialized);
 	D_ASSERT(d_list_empty(head));
 
 	/* In each redundancy group, the QUERY RPC only needs to be sent
