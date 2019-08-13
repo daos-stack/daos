@@ -56,14 +56,10 @@ struct unixcomm_poll {
  * Context for an individual dRPC call.
  */
 struct drpc_call_ctx {
-	struct drpc	*ctx;
+	struct drpc	*session;
 	Drpc__Call	*call;
 	Drpc__Response	*resp;
-	d_list_t	link; /* linked list metadata */
 };
-
-ABT_mutex drpc_pending_resp_mutex;
-d_list_t drpc_pending_resp_list;
 
 struct drpc_progress_context *
 drpc_progress_context_create(struct drpc *listener)
@@ -288,22 +284,61 @@ destroy_session_node(struct drpc_list *session_node)
 }
 
 /**
- * ULT to execute the dRPC handler
+ * ULT to execute the dRPC handler and send the response back
  */
 static int
 drpc_handler_ult(void *call_ctx)
 {
-	struct drpc_call_ctx *ctx = (struct drpc_call_ctx *)call_ctx;
+	int			rc;
+	struct drpc_call_ctx	*ctx = (struct drpc_call_ctx *)call_ctx;
 
 	D_INFO("dRPC handler ULT for module=%u method=%u\n",
 	       ctx->call->module, ctx->call->method);
-	ctx->ctx->handler(ctx->call, ctx->resp);
 
-	ABT_mutex_lock(drpc_pending_resp_mutex);
-	d_list_add_tail(&ctx->link, &drpc_pending_resp_list);
-	ABT_mutex_unlock(drpc_pending_resp_mutex);
+	ctx->session->handler(ctx->call, ctx->resp);
 
-	return 0;
+	rc = drpc_send_response(ctx->session, ctx->resp);
+	if (rc != 0)
+		D_ERROR("Failed to send dRPC response (module=%u method=%u)\n",
+			ctx->call->module, ctx->call->method);
+
+	/*
+	 * We are responsible for cleaning up the call ctx.
+	 * Session is a copy - we can free it, but not close it. The main loop
+	 * still manages the sessions.
+	 */
+	drpc_free(ctx->session);
+	drpc_call_free(ctx->call);
+	drpc_response_free(ctx->resp);
+	D_FREE(ctx);
+
+	return rc;
+}
+
+static struct drpc_call_ctx *
+create_call_ctx(struct drpc *session_ctx, Drpc__Call *call,
+		Drpc__Response *resp)
+{
+	struct drpc_call_ctx *call_ctx;
+
+	D_ALLOC_PTR(call_ctx);
+	if (call_ctx == NULL)
+		return NULL;
+
+	/*
+	 * Need to copy the session context to avoid the main loop potentially
+	 * freeing that memory out from under our thread.
+	 */
+	call_ctx->session = drpc_dup(session_ctx);
+	if (call_ctx->session == NULL) {
+		D_FREE(call_ctx);
+		return NULL;
+	}
+
+	call_ctx->call = call;
+	call_ctx->resp = resp;
+
+	return call_ctx;
 }
 
 static int
@@ -325,22 +360,20 @@ handle_incoming_call(struct drpc *session_ctx)
 		return -DER_NOMEM;
 	}
 
-	D_ALLOC_PTR(call_ctx);
+	/*
+	 * Call and response become part of the call context - freeing will
+	 * be handled by the ULT.
+	 */
+	call_ctx = create_call_ctx(session_ctx, call, resp);
 	if (call_ctx == NULL) {
-		D_ERROR("Could not allocate call context\n");
 		drpc_call_free(call);
 		drpc_response_free(resp);
 		return -DER_NOMEM;
 	}
 
 	/*
-	 * Ownership of the call context is passed on to the handler thread.
+	 * Ownership of the call context is passed on to the handler ULT.
 	 */
-	call_ctx->ctx = session_ctx;
-	call_ctx->call = call;
-	call_ctx->resp = resp;
-	D_INIT_LIST_HEAD(&call_ctx->link);
-
 	rc = dss_ult_create_execute(drpc_handler_ult, (void *)call_ctx,
 				    NULL, NULL,
 				    DSS_ULT_DRPC_HANDLER, 0, 0);
@@ -435,8 +468,8 @@ process_activity(struct drpc_progress_context *ctx,
 	return rc;
 }
 
-static int
-progress_poll(struct drpc_progress_context *ctx, int timeout_ms)
+int
+drpc_progress(struct drpc_progress_context *ctx, int timeout_ms)
 {
 	size_t			num_comms;
 	struct unixcomm_poll	*comms;
@@ -462,88 +495,4 @@ progress_poll(struct drpc_progress_context *ctx, int timeout_ms)
 
 	D_FREE(comms);
 	return rc;
-}
-
-static int
-send_queued_responses(void)
-{
-	int			rc = 0;
-	int			tmp_rc;
-	struct drpc_call_ctx	*current;
-	struct drpc_call_ctx	*next;
-
-	ABT_mutex_lock(drpc_pending_resp_mutex);
-	d_list_for_each_entry_safe(current, next,
-				   &drpc_pending_resp_list, link) {
-		tmp_rc = drpc_send_response(current->ctx, current->resp);
-		/*
-		 * -DER_AGAIN implies a retry might succeed. In that case
-		 * we won't clean up this item just yet.
-		 */
-		if (tmp_rc == -DER_AGAIN)
-			continue;
-
-		/* Only preserve the first error */
-		if (rc == 0)
-			rc = tmp_rc;
-
-		/*
-		 * Losing the ref to the call ctx, so it's time to clean it up.
-		 * The drpc session is managed by the drpc_progress_context, but
-		 * all other members need to be freed now.
-		 */
-		d_list_del(&current->link);
-		drpc_call_free(current->call);
-		drpc_response_free(current->resp);
-		D_FREE(current);
-	}
-	ABT_mutex_unlock(drpc_pending_resp_mutex);
-
-	return rc;
-}
-
-int
-drpc_progress(struct drpc_progress_context *ctx, int timeout_ms)
-{
-	int rc;
-	int tmp_rc;
-
-	rc = progress_poll(ctx, timeout_ms);
-	tmp_rc = send_queued_responses();
-	if (rc == 0)
-		rc = tmp_rc;
-
-	return rc;
-}
-
-int
-drpc_progress_init(void)
-{
-	int rc;
-
-	D_INIT_LIST_HEAD(&drpc_pending_resp_list);
-
-	rc = ABT_mutex_create(&drpc_pending_resp_mutex);
-	if (rc != ABT_SUCCESS) {
-		D_ERROR("Failed to create mutex\n");
-		return dss_abterr2der(rc);
-	}
-
-	return 0;
-}
-
-int
-drpc_progress_fini(void)
-{
-	int rc;
-
-	/* TODO: clean up queue if there's anything left in it */
-
-	rc = ABT_mutex_free(&drpc_pending_resp_mutex);
-	if (rc != ABT_SUCCESS) {
-		D_ERROR("ABT error freeing mutex: %d\n", rc);
-		return dss_abterr2der(rc);
-	}
-
-	return 0;
 }

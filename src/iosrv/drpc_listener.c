@@ -45,7 +45,6 @@ static struct drpc_listener_status {
 	ABT_thread	thread;		/* so we can cleanup when we're done */
 } status;
 
-static const int	SLEEP_TIME_MS = 1000; /* time to yield between cycles */
 /* TODO: Make unique sock name from pid when 2+ io server instances */
 static const char	*listener_socket_name = "daos_io_server.sock";
 
@@ -87,13 +86,10 @@ drpc_listener_run(void *arg)
 	while (is_listener_running()) {
 		int rc;
 
-		/* instant timeout - don't hog the xstream */
-		rc = drpc_progress(ctx, 0);
+		rc = drpc_progress(ctx, -1 /* indefinite */);
 		if (rc != DER_SUCCESS && rc != -DER_TIMEDOUT) {
 			D_ERROR("dRPC listener progress error: %d\n", rc);
 		}
-
-		dss_sleep(SLEEP_TIME_MS); /* yield for a bit */
 	}
 
 	D_INFO("Closing down dRPC listener\n");
@@ -187,10 +183,6 @@ drpc_listener_init(void)
 		return dss_abterr2der(rc);
 	}
 
-	rc = drpc_progress_init();
-	if (rc != 0)
-		return rc;
-
 	return drpc_listener_start_ult(&status.thread);
 }
 
@@ -220,10 +212,6 @@ drpc_listener_fini(void)
 	int	tmp_rc;
 
 	rc = drpc_listener_stop();
-
-	tmp_rc = drpc_progress_fini();
-	if (tmp_rc != 0)
-		rc = tmp_rc;
 
 	tmp_rc = ABT_thread_free(&status.thread);
 	if (tmp_rc != ABT_SUCCESS) {

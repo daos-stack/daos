@@ -57,8 +57,6 @@ drpc_progress_test_setup(void **state)
 	mock_drpc_handler_setup();
 	mock_close_setup();
 
-	drpc_progress_init();
-
 	return 0;
 }
 
@@ -67,8 +65,6 @@ drpc_progress_test_teardown(void **state)
 {
 	mock_poll_teardown();
 	mock_drpc_handler_teardown();
-
-	drpc_progress_fini();
 
 	return 0;
 }
@@ -103,7 +99,7 @@ cleanup_drpc_list(d_list_t *list)
 
 	d_list_for_each_entry_safe(current, next, list, link) {
 		d_list_del(&current->link);
-		free_drpc(current->ctx);
+		drpc_free(current->ctx);
 		D_FREE(current);
 	}
 }
@@ -111,7 +107,7 @@ cleanup_drpc_list(d_list_t *list)
 void
 cleanup_drpc_progress_context(struct drpc_progress_context *ctx)
 {
-	free_drpc(ctx->listener_ctx);
+	drpc_free(ctx->listener_ctx);
 	cleanup_drpc_list(&ctx->session_ctx_list);
 }
 

@@ -37,19 +37,12 @@ new_drpc_with_fd(int fd)
 	D_ALLOC_PTR(ctx->comm);
 
 	ctx->comm->fd = fd;
+	ctx->comm->flags = R_SYNC;
 
+	ctx->sequence = 1;
 	ctx->handler = mock_drpc_handler;
 
 	return ctx;
-}
-
-void
-free_drpc(struct drpc *ctx)
-{
-	if (ctx) {
-		D_FREE(ctx->comm);
-		D_FREE(ctx);
-	}
 }
 
 Drpc__Call*

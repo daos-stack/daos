@@ -102,7 +102,7 @@ mock_drpc_progress_context_create_teardown()
 	D_FREE(drpc_progress_context_create_return);
 
 	/* if non-null, listener was allocated by drpc_listen */
-	free_drpc(drpc_progress_context_create_listener_ptr);
+	drpc_free(drpc_progress_context_create_listener_ptr);
 	drpc_progress_context_create_listener_ptr = NULL;
 }
 
@@ -116,21 +116,6 @@ drpc_progress_context_close(struct drpc_progress_context *ctx)
 /*
  * Stubs - just needed to make it build
  */
-void
-dss_sleep(int ms)
-{
-}
-
-int
-drpc_progress_init(void)
-{
-	return 0;
-}
-
-int drpc_progress_fini(void)
-{
-	return 0;
-}
 
 int
 drpc_progress(struct drpc_progress_context *ctx, int timeout_ms)
