@@ -249,8 +249,7 @@ sched_pop_nvme_poll(struct sched_data *data, ABT_pool pool)
 	if (cycle->sc_ults_tot == 0)
 		cycle->sc_cycle_started = 0;
 
-	/* Only main xstream (VOS xstream) has NVMe poll ULT */
-	if (!dx->dx_main_xs)
+	if (!dx->dx_nvme)
 		return ABT_UNIT_NULL;
 
 	ret = ABT_pool_pop(pool, &unit);

@@ -319,7 +319,7 @@ dss_nvme_poll_ult(void *args)
 	struct dss_module_info	*dmi = dss_get_module_info();
 	struct dss_xstream	*dx = dss_current_xstream();
 
-	D_ASSERT(dx->dx_main_xs);
+	D_ASSERT(dx->dx_nvme);
 	while (!dss_xstream_exiting(dx)) {
 		bio_nvme_poll(dmi->dmi_nvme_ctxt);
 		ABT_thread_yield();
@@ -444,7 +444,7 @@ dss_srv_handler(void *arg)
 		goto crt_destroy;
 	}
 
-	if (dx->dx_main_xs) {
+	if (dx->dx_nvme) {
 		/* Initialize NVMe context for main XS which accesses NVME */
 		rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, dmi->dmi_tgt_id);
 		if (rc != 0) {
@@ -514,7 +514,7 @@ dss_srv_handler(void *arg)
 
 	wait_all_exited(dx);
 nvme_fini:
-	if (dx->dx_main_xs)
+	if (dx->dx_nvme)
 		bio_xsctxt_free(dmi->dmi_nvme_ctxt);
 tse_fini:
 	tse_sched_fini(&dx->dx_sched_dsc);
@@ -599,6 +599,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	ABT_thread_attr		attr = ABT_THREAD_ATTR_NULL;
 	int			rc = 0;
 	bool			comm; /* true to create cart ctx for RPC */
+	bool			nvme;
 	int			xs_offset;
 
 	/** allocate & init xstream configuration data */
@@ -613,6 +614,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	 */
 	xs_offset = xs_id < dss_sys_xs_nr ? -1 : DSS_XS_OFFSET_IN_TGT(xs_id);
 	comm = (xs_id == 0) || xs_offset == 0 || xs_offset == 1;
+	nvme = (xs_offset == 0 || xs_offset == 1);
 	dx->dx_tgt_id	= dss_xs2tgt(xs_id);
 	if (xs_id < dss_sys_xs_nr) {
 		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_SYS_XS_NAME_FMT,
@@ -624,6 +626,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	dx->dx_xs_id	= xs_id;
 	dx->dx_ctx_id	= -1;
 	dx->dx_comm	= comm;
+	dx->dx_nvme	= nvme;
 	dx->dx_main_xs	= xs_id >= dss_sys_xs_nr && xs_offset == 0;
 	dx->dx_dsc_started = false;
 	D_INIT_LIST_HEAD(&dx->dx_sleep_ult_list);

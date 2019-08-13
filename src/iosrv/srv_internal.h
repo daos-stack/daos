@@ -68,6 +68,7 @@ struct dss_xstream {
 	int			dx_ctx_id;
 	bool			dx_main_xs;	/* true for main XS */
 	bool			dx_comm;	/* true with cart context */
+	bool			dx_nvme;	/* true with NVMe context */
 	bool			dx_dsc_started;	/* DSC progress ULT started */
 };
 

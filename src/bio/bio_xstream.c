@@ -51,6 +51,8 @@ void spdk_set_thread(struct spdk_thread *thread);
 #define DAOS_DMA_CHUNK_CNT_INIT	2		/* Per-xstream init chunks */
 #define DAOS_DMA_CHUNK_CNT_MAX	32		/* Per-xstream max chunks */
 
+struct bio_io_channel	channel_table[BIO_XS_CNT_MAX];
+
 /* Chunk size of DMA buffer in pages */
 unsigned int bio_chk_sz;
 /* Per-xstream maximum DMA buffer size (in chunk count) */
@@ -764,6 +766,7 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id)
 		D_ERROR("Failed to create io channel\n");
 		return -DER_NOMEM;
 	}
+	bio_set_io_channel(ctxt, tgt_id);
 
 	return 0;
 }
