@@ -34,6 +34,11 @@ class DmgNvmeScanTest(TestWithoutServers):
     :avocado: recursive
     """
 
+    def setUp(self):
+        """Set up attributes before each DmgNvmeScanTest test."""
+        super(DmgNvmeScanTest, self).setUp()
+        self.get_test_attributes()
+
     def test_dmg_nvme_scan_basic(self):
         """
         JIRA ID: DAOS-2485

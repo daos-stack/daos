@@ -205,7 +205,7 @@ class ServerCommand(CommandWithParameters):
 
         """
         if self.process is not None:
-            signal_list = [9, None, None, None, None, 15]
+            signal_list = [2, None, None, None, 15, None, None, 3, None, 9]
             while self.process.poll() is None and signal_list:
                 sig = signal_list.pop(0)
                 if sig is not None:
