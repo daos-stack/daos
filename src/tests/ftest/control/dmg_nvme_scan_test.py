@@ -60,7 +60,7 @@ class DmgNvmeScanTest(TestWithoutServers):
         # Check that hosts and ports are same length
         self.assertEqual(ports, self.hostlist_servers)
 
-        servers_with_ports = ["{}:{}".format(host, port[i])
+        servers_with_ports = ["{}:{}".format(host, ports[i])
                               for i, host in enumerate(self.hostlist_servers)]
         dmg.hostlist.update(",".join(servers_with_ports), "dmg.hostlist")
 

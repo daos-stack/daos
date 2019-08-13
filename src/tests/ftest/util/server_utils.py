@@ -99,7 +99,7 @@ class ServerCommand(CommandWithParameters):
         if not okay:
             raise ServerFailed(
                 "Server node {} does not have directory {} set up correctly "
-                "for user {}.".format(failed, file, getpass.getuser()))
+                "for user {}.".format(failed, path, getpass.getuser()))
 
         # Create the hostfile
         self.hostfile = write_host_file(self.hosts, path, slots)
