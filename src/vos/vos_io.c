@@ -758,7 +758,7 @@ akey_update_recx(daos_handle_t toh, daos_epoch_t epoch, uint32_t pm_ver,
 		 daos_size_t rsize,
 		 struct vos_io_context *ioc)
 {
-	struct evt_entry_in ent;
+	struct evt_entry_in ent = {0};
 	struct bio_iov *biov;
 	int rc;
 
