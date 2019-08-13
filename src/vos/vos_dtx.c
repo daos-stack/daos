@@ -31,10 +31,10 @@
 #include "vos_layout.h"
 #include "vos_internal.h"
 
-/* Dummy offset for an aborted DTX address. */
+/* Dummy offset for an aborted DTX entry address. */
 #define DTX_UMOFF_ABORTED		1
 
-/* Dummy offset for some unknown DTX address. */
+/* Dummy offset for some unknown DTX entry address. */
 #define DTX_UMOFF_UNKNOWN		2
 
 static inline bool
