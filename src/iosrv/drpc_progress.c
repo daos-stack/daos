@@ -29,7 +29,6 @@
  * as functions related to its supporting data structures.
  */
 
-#include <abt.h>
 #include <stdlib.h>
 #include <poll.h>
 #include <errno.h>
