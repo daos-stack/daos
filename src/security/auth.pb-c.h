@@ -53,10 +53,10 @@ struct  _Auth__Sys
   ProtobufCMessage base;
   uint64_t stamp;
   char *machinename;
-  uint32_t uid;
-  uint32_t gid;
-  size_t n_gids;
-  uint32_t *gids;
+  char *user;
+  char *group;
+  size_t n_groups;
+  char **groups;
   /*
    * Additional field for MAC label
    */
@@ -64,7 +64,7 @@ struct  _Auth__Sys
 };
 #define AUTH__SYS__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&auth__sys__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, 0, 0, 0,NULL, (char *)protobuf_c_empty_string }
+    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, (char *)protobuf_c_empty_string }
 
 
 struct  _Auth__SysVerifier
@@ -87,10 +87,11 @@ struct  _Auth__Credential
   ProtobufCMessage base;
   Auth__Token *token;
   Auth__Token *verifier;
+  char *origin;
 };
 #define AUTH__CREDENTIAL__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&auth__credential__descriptor) \
-    , NULL, NULL }
+    , NULL, NULL, (char *)protobuf_c_empty_string }
 
 
 /* Auth__Token methods */

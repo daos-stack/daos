@@ -273,7 +273,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	if (rc != 0)
 		goto close;
 
-	rc = pmemobj_tx_add_range_direct(pool_df, sizeof(*pool_df));
+	rc = umem_tx_add_ptr(&umem, pool_df, sizeof(*pool_df));
 	if (rc != 0)
 		goto end;
 	memset(pool_df, 0, sizeof(*pool_df));

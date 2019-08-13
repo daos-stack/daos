@@ -31,8 +31,8 @@ int test_checksum_simple(char *cs_name, daos_csum_t *csum,
 			 daos_csum_buf_t *csum_buf)
 {
 	int		rc = 0;
-	daos_iov_t	test_iov;
-	daos_sg_list_t	sgl;
+	d_iov_t	test_iov;
+	d_sg_list_t	sgl;
 	char		test_buf[20];
 
 	rc = daos_csum_init(cs_name, csum);
@@ -45,7 +45,7 @@ int test_checksum_simple(char *cs_name, daos_csum_t *csum,
 
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 1;
-	daos_iov_set(&test_iov, test_buf, strlen(cs_name));
+	d_iov_set(&test_iov, test_buf, strlen(cs_name));
 	sgl.sg_iovs = &test_iov;
 
 	rc = daos_csum_compute(csum, &sgl);

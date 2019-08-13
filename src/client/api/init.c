@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,8 @@
 #include <daos/container.h>
 #include <daos/object.h>
 #include <daos/task.h>
-#include <daos/addons.h>
+#include <daos/array.h>
+#include <daos/kv.h>
 #include <daos/btree.h>
 #include <daos/btree_class.h>
 #include "task_internal.h"
@@ -67,6 +68,7 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_cont_close, sizeof(daos_cont_close_t)},
 	{dc_cont_destroy, sizeof(daos_cont_destroy_t)},
 	{dc_cont_query, sizeof(daos_cont_query_t)},
+	{dc_cont_aggregate, sizeof(daos_cont_aggregate_t)},
 	{dc_cont_rollback, sizeof(daos_cont_rollback_t)},
 	{dc_cont_subscribe, sizeof(daos_cont_subscribe_t)},
 	{dc_cont_list_attr, sizeof(daos_cont_list_attr_t)},
@@ -96,19 +98,17 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_obj_list_dkey, sizeof(daos_obj_list_dkey_t)},
 	{dc_obj_list_akey, sizeof(daos_obj_list_akey_t)},
 	{dc_obj_list_rec, sizeof(daos_obj_list_recx_t)},
-	{dac_array_create, sizeof(daos_array_create_t)},
-	{dac_array_open, sizeof(daos_array_open_t)},
-	{dac_array_close, sizeof(daos_array_close_t)},
-	{dac_array_read, sizeof(daos_array_io_t)},
-	{dac_array_write, sizeof(daos_array_io_t)},
-	{dac_array_get_size, sizeof(daos_array_get_size_t)},
-	{dac_array_set_size, sizeof(daos_array_set_size_t)},
-	{dac_kv_get, sizeof(daos_kv_get_t)},
-	{dac_kv_put, sizeof(daos_kv_put_t)},
-	{dac_kv_remove, sizeof(daos_kv_remove_t)},
-	{dac_kv_list, sizeof(daos_kv_list_t)},
-	{dac_obj_fetch_multi, sizeof(daos_obj_multi_io_t)},
-	{dac_obj_update_multi, sizeof(daos_obj_multi_io_t)},
+	{dc_array_create, sizeof(daos_array_create_t)},
+	{dc_array_open, sizeof(daos_array_open_t)},
+	{dc_array_close, sizeof(daos_array_close_t)},
+	{dc_array_read, sizeof(daos_array_io_t)},
+	{dc_array_write, sizeof(daos_array_io_t)},
+	{dc_array_get_size, sizeof(daos_array_get_size_t)},
+	{dc_array_set_size, sizeof(daos_array_set_size_t)},
+	{dc_kv_get, sizeof(daos_kv_get_t)},
+	{dc_kv_put, sizeof(daos_kv_put_t)},
+	{dc_kv_remove, sizeof(daos_kv_remove_t)},
+	{dc_kv_list, sizeof(daos_kv_list_t)},
 };
 
 /**
@@ -126,13 +126,6 @@ daos_init(void)
 	rc = daos_debug_init(NULL);
 	if (rc != 0)
 		D_GOTO(unlock, rc);
-
-	rc = dbtree_class_register(DBTREE_CLASS_RECX, BTR_FEAT_DIRECT_KEY,
-				   &dbtree_recx_ops);
-	if (rc != 0 && rc != -DER_EXIST) {
-		D_ERROR("failed to register DBTREE_CLASS_RECX: %d\n", rc);
-		D_GOTO(out_debug, rc);
-	}
 
 	/** set up handle hash-table */
 	rc = daos_hhash_init();

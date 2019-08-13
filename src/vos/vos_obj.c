@@ -52,8 +52,8 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 	struct vos_key_bundle	kbund;
 	struct vos_rec_bundle	rbund;
 	daos_csum_buf_t		csum;
-	daos_iov_t		kiov;
-	daos_iov_t		riov;
+	d_iov_t		kiov;
+	d_iov_t		riov;
 	int			rc;
 
 	rc = obj_tree_init(obj);
@@ -156,8 +156,8 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	}
 
 	/* NB: punch always generate a new incarnation of the object */
-	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch,
-			  false, DAOS_INTENT_PUNCH, &obj);
+	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), oid,
+			  epoch, false, DAOS_INTENT_PUNCH, &obj);
 	if (rc == 0) {
 		if (dkey) /* key punch */
 			rc = key_punch(obj, epoch, pm_ver, dkey,
@@ -192,12 +192,12 @@ reset:
  */
 static int
 key_iter_fetch_helper(struct vos_obj_iter *oiter, struct vos_key_bundle *kbund,
-		      struct vos_rec_bundle *rbund, daos_iov_t *keybuf,
+		      struct vos_rec_bundle *rbund, d_iov_t *keybuf,
 		      daos_anchor_t *anchor)
 {
-	daos_iov_t		kiov;
-	daos_iov_t		kbund_kiov;
-	daos_iov_t		riov;
+	d_iov_t		kiov;
+	d_iov_t		kbund_kiov;
+	d_iov_t		riov;
 	daos_csum_buf_t		csum;
 
 	tree_key_bundle2iov(kbund, &kiov);
@@ -207,7 +207,7 @@ key_iter_fetch_helper(struct vos_obj_iter *oiter, struct vos_key_bundle *kbund,
 	rbund->rb_iov	= keybuf;
 	rbund->rb_csum	= &csum;
 
-	daos_iov_set(rbund->rb_iov, NULL, 0); /* no copy */
+	d_iov_set(rbund->rb_iov, NULL, 0); /* no copy */
 	daos_csum_set(rbund->rb_csum, NULL, 0);
 
 	return dbtree_iter_fetch(oiter->it_hdl, &kiov, &riov, anchor);
@@ -233,9 +233,10 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 		if (oiter->it_iter.it_type == VOS_ITER_AKEY) {
 			if (rbund.rb_krec->kr_bmap & KREC_BF_EVT) {
 				ent->ie_child_type = VOS_ITER_RECX;
-			} else {
-				D_ASSERT(rbund.rb_krec->kr_bmap & KREC_BF_BTR);
+			} else if (rbund.rb_krec->kr_bmap & KREC_BF_BTR) {
 				ent->ie_child_type = VOS_ITER_SINGLE;
+			} else {
+				ent->ie_child_type = VOS_ITER_NONE;
 			}
 		} else {
 			ent->ie_child_type = VOS_ITER_AKEY;
@@ -252,7 +253,7 @@ key_iter_fetch_root(struct vos_obj_iter *oiter, vos_iter_type_t type,
 	struct vos_krec_df	*krec;
 	struct vos_key_bundle	 kbund;
 	struct vos_rec_bundle	 rbund;
-	daos_iov_t		 keybuf;
+	d_iov_t		 keybuf;
 	int			 rc;
 
 	rc = key_iter_fetch_helper(oiter, &kbund, &rbund, &keybuf, NULL);
@@ -285,7 +286,7 @@ key_iter_fetch_root(struct vos_obj_iter *oiter, vos_iter_type_t type,
 
 static int
 key_iter_copy(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
-	      daos_iov_t *iov_out)
+	      d_iov_t *iov_out)
 {
 	if (ent->ie_key.iov_len > iov_out->iov_buf_len)
 		return -DER_OVERFLOW;
@@ -312,14 +313,18 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent, int *probe_p)
 	struct vos_key_bundle	 kbund;
 	struct vos_rec_bundle	 rbund;
 	daos_handle_t		 toh;
-	daos_iov_t		 kiov;
-	daos_iov_t		 riov;
+	d_iov_t		 kiov;
+	d_iov_t		 riov;
 	int			 probe;
 	int			 rc;
 
 	rc = key_iter_fetch(oiter, ent, NULL);
 	if (rc) {
-		D_ERROR("Failed to fetch the entry: %d\n", rc);
+		if (rc == -DER_INPROGRESS)
+			D_DEBUG(DB_TRACE, "Cannot fetch the entry because of "
+				"conflict modification: %d\n", rc);
+		else
+			D_ERROR("Failed to fetch the entry: %d\n", rc);
 		return rc;
 	}
 
@@ -392,7 +397,7 @@ key_iter_match_probe(struct vos_obj_iter *oiter)
 	while (1) {
 		vos_iter_entry_t	entry;
 		struct vos_key_bundle	kbund;
-		daos_iov_t		kiov;
+		d_iov_t		kiov;
 		int			opc = 0;
 
 		rc = key_iter_match(oiter, &entry, &opc);
@@ -494,7 +499,11 @@ akey_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey)
 			      VOS_BTR_DKEY, dkey, 0,
 			      vos_iter_intent(&oiter->it_iter), NULL, &toh);
 	if (rc != 0) {
-		D_ERROR("Cannot load the akey tree: %d\n", rc);
+		if (rc == -DER_INPROGRESS)
+			D_DEBUG(DB_TRACE, "Cannot load the akey tree because "
+				"of some conflict modification: %d\n", rc);
+		else
+			D_ERROR("Cannot load the akey tree: %d\n", rc);
 		return rc;
 	}
 
@@ -565,7 +574,7 @@ singv_iter_probe_fetch(struct vos_obj_iter *oiter, dbtree_probe_opc_t opc,
 		       vos_iter_entry_t *entry)
 {
 	struct vos_key_bundle	kbund;
-	daos_iov_t		kiov;
+	d_iov_t		kiov;
 	int			rc;
 
 	tree_key_bundle2iov(&kbund, &kiov);
@@ -698,8 +707,8 @@ singv_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 {
 	struct vos_key_bundle	kbund;
 	struct vos_rec_bundle	rbund;
-	daos_iov_t		kiov;
-	daos_iov_t		riov;
+	d_iov_t		kiov;
+	d_iov_t		riov;
 	int			rc;
 
 	tree_key_bundle2iov(&kbund, &kiov);
@@ -875,7 +884,7 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 
 static int
 recx_iter_copy(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
-	       daos_iov_t *iov_out)
+	       d_iov_t *iov_out)
 {
 	struct bio_io_context	*bioc;
 	struct bio_iov		*biov = &it_entry->ie_biov;
@@ -929,6 +938,7 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	if (oiter == NULL)
 		return -DER_NOMEM;
 
+	oiter->it_iter.it_type = type;
 	oiter->it_epr = param->ip_epr;
 	oiter->it_epc_expr = param->ip_epc_expr;
 	oiter->it_flags = param->ip_flags;
@@ -941,7 +951,7 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	 * the object/key if it's punched more than once. However, rebuild
 	 * system should guarantee this will never happen.
 	 */
-	rc = vos_obj_hold(vos_obj_cache_current(), param->ip_hdl,
+	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(param->ip_hdl),
 			  param->ip_oid, param->ip_epr.epr_hi, true,
 			  vos_iter_intent(&oiter->it_iter), &oiter->it_obj);
 	if (rc != 0)
@@ -1042,7 +1052,7 @@ nested_dkey_iter_init(struct vos_obj_iter *oiter, struct vos_iter_info *info)
 	 * the object/key if it's punched more than once. However, rebuild
 	 * system should guarantee this will never happen.
 	 */
-	rc = vos_obj_hold(vos_obj_cache_current(), info->ii_hdl,
+	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(info->ii_hdl),
 			  info->ii_oid, info->ii_epr.epr_hi, true,
 			  vos_iter_intent(&oiter->it_iter), &oiter->it_obj);
 	if (rc != 0)
@@ -1074,7 +1084,9 @@ int
 vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 			 struct vos_iterator **iter_pp)
 {
+	struct vos_object	*obj = info->ii_obj;
 	struct vos_obj_iter	*oiter;
+	struct evt_desc_cbs	 cbs;
 	struct evt_filter	 filter;
 	daos_handle_t		 toh;
 	int			 rc = 0;
@@ -1088,7 +1100,7 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 	oiter->it_epc_expr = info->ii_epc_expr;
 	oiter->it_flags = info->ii_flags;
 	if (type != VOS_ITER_DKEY)
-		oiter->it_obj = info->ii_obj;
+		oiter->it_obj = obj;
 	if (info->ii_flags & VOS_IT_FOR_PURGE)
 		oiter->it_iter.it_for_purge = 1;
 	if (info->ii_flags & VOS_IT_FOR_REBUILD)
@@ -1108,8 +1120,8 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 	case VOS_ITER_SINGLE:
 	case VOS_ITER_AKEY:
 		rc = dbtree_open_inplace_ex(info->ii_btr, info->ii_uma,
-					vos_cont2hdl(info->ii_obj->obj_cont),
-					info->ii_vea_info, &toh);
+					vos_cont2hdl(obj->obj_cont),
+					vos_obj2pool(obj), &toh);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to open tree for iterator:"
 				" rc = %d\n", rc);
@@ -1120,9 +1132,9 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		break;
 
 	case VOS_ITER_RECX:
-		rc = evt_open(info->ii_evt, info->ii_uma,
-			      vos_cont2hdl(info->ii_obj->obj_cont),
-			      info->ii_vea_info, &toh);
+		vos_evt_desc_cbs_init(&cbs, vos_obj2pool(obj),
+				      vos_cont2hdl(obj->obj_cont));
+		rc = evt_open(info->ii_evt, info->ii_uma, &cbs, &toh);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to open tree for iterator:"
 				" rc = %d\n", rc);
@@ -1258,7 +1270,7 @@ vos_obj_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 
 static int
 vos_obj_iter_copy(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
-		  daos_iov_t *iov_out)
+		  d_iov_t *iov_out)
 {
 	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
 
@@ -1313,7 +1325,7 @@ vos_obj_iter_delete(struct vos_iterator *iter, void *args)
 		return obj_iter_delete(oiter, args);
 
 	case VOS_ITER_RECX:
-		return evt_iter_delete(oiter->it_hdl, args);
+		return evt_iter_delete(oiter->it_hdl, NULL);
 	}
 }
 
@@ -1359,19 +1371,21 @@ vos_oi_set_attr_helper(daos_handle_t coh, daos_unit_oid_t oid,
 		       daos_epoch_t epoch, uint64_t attr, bool set)
 {
 	struct vos_pool		*vpool;
-	struct vos_object	*obj;
+	struct vos_object	*obj = NULL;
+	struct vos_container	*cont;
 	daos_epoch_range_t	 epr = {epoch, epoch};
 	int			 rc;
 
-	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch, false,
-			  DAOS_INTENT_UPDATE, &obj);
-	if (rc != 0)
-		return rc;
-
-	vpool = vos_obj2pool(obj);
+	cont = vos_hdl2cont(coh);
+	vpool = vos_cont2pool(cont);
 	rc = vos_tx_begin(vpool);
 	if (rc != 0)
 		goto exit;
+
+	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), oid,
+			  epoch, false, DAOS_INTENT_UPDATE, &obj);
+	if (rc != 0)
+		goto end;
 
 	rc = umem_tx_add_ptr(vos_obj2umm(obj), &obj->obj_df->vo_oi_attr,
 			     sizeof(obj->obj_df->vo_oi_attr));
@@ -1454,8 +1468,8 @@ vos_oi_get_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	}
 
 	vos_dth_set(dth);
-	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch, true,
-			  DAOS_INTENT_DEFAULT, &obj);
+	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), oid,
+			  epoch, true, DAOS_INTENT_DEFAULT, &obj);
 	vos_dth_set(NULL);
 	if (rc != 0)
 		return rc;

@@ -1,6 +1,5 @@
-''' apricot __init__ '''
-__all__ = ['Test', 'TestWithServers', 'TestWithoutServers', 'TestWithClients',
-           'skipForTicket']
+"""apricot __init__."""
+__all__ = ['Test', 'TestWithServers', 'TestWithoutServers', 'skipForTicket']
 
 from apricot.test import Test, TestWithServers, TestWithoutServers
-from apricot.test import TestWithClients, skipForTicket
+from apricot.test import skipForTicket

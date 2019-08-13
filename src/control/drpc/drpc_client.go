@@ -24,7 +24,6 @@
 package drpc
 
 import (
-	"fmt"
 	"net"
 
 	"github.com/golang/protobuf/proto"
@@ -75,7 +74,7 @@ func (c *ClientConnection) Connect() error {
 
 	conn, err := c.dialer.dial(c.socketPath)
 	if err != nil {
-		return fmt.Errorf("dRPC connect: %v", err)
+		return errors.Wrap(err, "dRPC connect")
 	}
 
 	c.conn = conn
@@ -92,7 +91,7 @@ func (c *ClientConnection) Close() error {
 
 	err := c.conn.Close()
 	if err != nil {
-		return fmt.Errorf("dRPC close: %v", err)
+		return errors.Wrap(err, "dRPC close")
 	}
 
 	c.conn = nil
@@ -106,7 +105,7 @@ func (c *ClientConnection) sendCall(msg *Call) error {
 
 	callBytes, err := proto.Marshal(msg)
 	if err != nil {
-		return fmt.Errorf("failed to marshall dRPC call: %v", err)
+		return errors.Wrap(err, "failed to marshal dRPC request")
 	}
 
 	_, _, err = c.conn.WriteMsgUnix(callBytes, nil, nil)
@@ -127,8 +126,7 @@ func (c *ClientConnection) recvResponse() (*Response, error) {
 	resp := &Response{}
 	err = proto.Unmarshal(respBytes[:numBytes], resp)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal dRPC response: %v",
-			err)
+		return nil, errors.Wrap(err, "failed to unmarshal dRPC response")
 	}
 
 	return resp, nil
@@ -138,11 +136,11 @@ func (c *ClientConnection) recvResponse() (*Response, error) {
 // response to the caller.
 func (c *ClientConnection) SendMsg(msg *Call) (*Response, error) {
 	if !c.IsConnected() {
-		return nil, fmt.Errorf("dRPC not connected")
+		return nil, errors.Errorf("dRPC not connected")
 	}
 
 	if msg == nil {
-		return nil, fmt.Errorf("invalid dRPC call")
+		return nil, errors.Errorf("invalid dRPC call")
 	}
 
 	err := c.sendCall(msg)

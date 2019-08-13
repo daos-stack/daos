@@ -25,7 +25,9 @@
 #include "dfuse.h"
 #include "daos_api.h"
 
-/* Lookup a unique inode for the specific dfs/oid combination */
+/* Lookup a the union inode number for the specific dfs/oid combination
+ * allocating a new one if necessary.
+ */
 int
 dfuse_lookup_inode(struct dfuse_projection_info *fs_handle,
 		   struct dfuse_dfs *dfs,
@@ -34,22 +36,21 @@ dfuse_lookup_inode(struct dfuse_projection_info *fs_handle,
 {
 	struct dfuse_inode_record	*dfir;
 	d_list_t			*rlink;
-	int				rc = -DER_SUCCESS;
+	int				rc = 0;
 
 	D_ALLOC_PTR(dfir);
-	if (!dfir) {
-		D_GOTO(out, rc = -DER_NOMEM);
-	}
+	if (!dfir)
+		D_GOTO(out, rc = ENOMEM);
 
 	if (oid) {
 		dfir->ir_id.irid_oid.lo = oid->lo;
 		dfir->ir_id.irid_oid.hi = oid->hi;
 	}
 
-	dfir->ir_ino = atomic_fetch_add(&fs_handle->dfpi_ino_next, 1);
+	dfir->ir_ino = atomic_fetch_add(&fs_handle->dpi_ino_next, 1);
 	dfir->ir_id.irid_dfs = dfs;
 
-	rlink = d_hash_rec_find_insert(&fs_handle->dfpi_irt,
+	rlink = d_hash_rec_find_insert(&fs_handle->dpi_irt,
 				       &dfir->ir_id,
 				       sizeof(dfir->ir_id),
 				       &dfir->ir_htl);
@@ -60,42 +61,67 @@ dfuse_lookup_inode(struct dfuse_projection_info *fs_handle,
 	}
 
 	*_ino = dfir->ir_ino;
-
 out:
 	return rc;
 };
 
+/* Check a DFS to see if an inode is already in place for it.  This is used
+ * for looking up pools and containers to see if a record already exists to
+ * allow reuse of already open handles.
+ *
+ * Does not store the DFS, but simply checks for matching copies, and extracts
+ * the inode information from them.
+ *
+ * Return a inode_entry pointer, with reference held.
+ */
 int
-find_inode(struct dfuse_request *request)
+dfuse_check_for_inode(struct dfuse_projection_info *fs_handle,
+		      struct dfuse_dfs *dfs,
+		      struct dfuse_inode_entry **_entry)
 {
-	struct dfuse_projection_info *fs_handle = request->fsh;
-	struct dfuse_inode_entry *ie;
-	d_list_t *rlink;
+	struct dfuse_inode_record	*dfir;
+	struct dfuse_inode_record_id	ir_id = {0};
+	d_list_t			*rlink;
+	struct dfuse_inode_entry	*entry;
 
-	rlink = d_hash_rec_find(&fs_handle->dfpi_iet,
-				&request->ir_inode_num,
-				sizeof(request->ir_inode_num));
-	if (!rlink)
-		return ENOENT;
+	ir_id.irid_dfs = dfs;
 
-	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+	rlink = d_hash_rec_find(&fs_handle->dpi_irt,
+				&ir_id,
+				sizeof(ir_id));
 
-	request->ir_inode = ie;
-	return 0;
-}
+	if (!rlink) {
+		return -DER_NONEXIST;
+	}
+
+	dfir = container_of(rlink, struct dfuse_inode_record, ir_htl);
+
+	rlink = d_hash_rec_find(&fs_handle->dpi_iet,
+				&dfir->ir_ino,
+				sizeof(dfir->ir_ino));
+	if (!rlink) {
+		return -DER_NONEXIST;
+	}
+
+	entry = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+	*_entry = entry;
+
+	return -DER_SUCCESS;
+};
 
 static void
 drop_ino_ref(struct dfuse_projection_info *fs_handle, ino_t ino)
 {
 	d_list_t *rlink;
 
-	rlink = d_hash_rec_find(&fs_handle->dfpi_iet, &ino, sizeof(ino));
+	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 
 	if (!rlink) {
 		DFUSE_TRA_ERROR(fs_handle, "Could not find entry %lu", ino);
 		return;
 	}
-	d_hash_rec_ndecref(&fs_handle->dfpi_iet, 2, rlink);
+	d_hash_rec_ndecref(&fs_handle->dpi_iet, 2, rlink);
 }
 
 void
@@ -115,26 +141,27 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 
 	if (ie->ie_obj) {
 		rc = dfs_release(ie->ie_obj);
-		if (rc != -DER_SUCCESS) {
-			DFUSE_TRA_ERROR(ie, "dfs_release() failed: (%d)", rc);
+		if (rc) {
+			DFUSE_TRA_ERROR(ie, "dfs_release() failed: (%s)",
+					strerror(rc));
 		}
 	}
 
-	if (ie->ie_stat.st_ino == ie->ie_dfs->dffs_root) {
+	if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_root) {
 		DFUSE_TRA_INFO(ie, "Closing dfs_root %d %d",
-			       !daos_handle_is_inval(ie->ie_dfs->dffs_poh),
-			       !daos_handle_is_inval(ie->ie_dfs->dffs_coh));
+			       !daos_handle_is_inval(ie->ie_dfs->dfs_poh),
+			       !daos_handle_is_inval(ie->ie_dfs->dfs_coh));
 
-		if (!daos_handle_is_inval(ie->ie_dfs->dffs_coh)) {
-			rc = daos_cont_close(ie->ie_dfs->dffs_coh, NULL);
+		if (!daos_handle_is_inval(ie->ie_dfs->dfs_coh)) {
+			rc = daos_cont_close(ie->ie_dfs->dfs_coh, NULL);
 			if (rc != -DER_SUCCESS) {
 				DFUSE_TRA_ERROR(ie,
 						"daos_cont_close() failed: (%d)",
 						rc);
 			}
 
-		} else if (!daos_handle_is_inval(ie->ie_dfs->dffs_poh)) {
-			rc = daos_pool_disconnect(ie->ie_dfs->dffs_poh, NULL);
+		} else if (!daos_handle_is_inval(ie->ie_dfs->dfs_poh)) {
+			rc = daos_pool_disconnect(ie->ie_dfs->dfs_poh, NULL);
 			if (rc != -DER_SUCCESS) {
 				DFUSE_TRA_ERROR(ie,
 						"daos_pool_disconnect() failed: (%d)",

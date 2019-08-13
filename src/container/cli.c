@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@
 
 #include <daos/container.h>
 #include <daos/event.h>
+#include <daos/mgmt.h>
 #include <daos/pool.h>
 #include <daos/rsvc.h>
 #include <daos_types.h>
@@ -153,7 +154,7 @@ dc_cont_create(tse_task_t *task)
 	D_DEBUG(DF_DSMC, DF_UUID": creating "DF_UUIDF"\n",
 		DP_UUID(pool->dp_pool), DP_UUID(args->uuid));
 
-	ep.ep_grp = pool->dp_group;
+	ep.ep_grp = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
@@ -252,7 +253,7 @@ dc_cont_destroy(tse_task_t *task)
 	D_DEBUG(DF_DSMC, DF_UUID": destroying "DF_UUID": force=%d\n",
 		DP_UUID(pool->dp_pool), DP_UUID(args->uuid), args->force);
 
-	ep.ep_grp = pool->dp_group;
+	ep.ep_grp = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
@@ -536,7 +537,7 @@ dc_cont_open(tse_task_t *task)
 		DP_CONT(pool->dp_pool, args->uuid), DP_UUID(cont->dc_cont_hdl),
 		args->flags);
 
-	ep.ep_grp = pool->dp_group;
+	ep.ep_grp = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
@@ -697,7 +698,7 @@ dc_cont_close(tse_task_t *task)
 		return 0;
 	}
 
-	ep.ep_grp = pool->dp_group;
+	ep.ep_grp = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
@@ -844,6 +845,9 @@ cont_query_bits(daos_prop_t *prop)
 		case DAOS_PROP_CO_ENCRYPT:
 			bits |= DAOS_CO_QUERY_PROP_ENCRYPT;
 			break;
+		case DAOS_PROP_CO_ACL:
+			bits |= DAOS_CO_QUERY_PROP_ACL;
+			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
 			break;
@@ -878,7 +882,7 @@ dc_cont_query(tse_task_t *task)
 		DP_CONT(pool->dp_pool_hdl, cont->dc_uuid),
 		DP_UUID(cont->dc_cont_hdl));
 
-	ep.ep_grp  = pool->dp_group;
+	ep.ep_grp  = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
@@ -1024,7 +1028,7 @@ get_tgt_rank(struct dc_pool *pool, unsigned int *rank)
 	unsigned int		tgt_cnt;
 	int			rc;
 
-	rc = pool_map_find_up_tgts(pool->dp_map, &tgts, &tgt_cnt);
+	rc = pool_map_find_upin_tgts(pool->dp_map, &tgts, &tgt_cnt);
 	if (rc)
 		return rc;
 
@@ -1068,7 +1072,7 @@ dc_cont_alloc_oids(tse_task_t *task)
 		DP_UUID(cont->dc_cont_hdl));
 
 	/** randomly select a rank from the pool map */
-	ep.ep_grp = pool->dp_group;
+	ep.ep_grp = pool->dp_sys->sy_group;
 	ep.ep_tag = 0;
 	rc = get_tgt_rank(pool, &ep.ep_rank);
 	if (rc != 0)
@@ -1148,7 +1152,7 @@ swap_co_glob(struct dc_cont_glob *cont_glob)
 }
 
 static int
-dc_cont_l2g(daos_handle_t coh, daos_iov_t *glob)
+dc_cont_l2g(daos_handle_t coh, d_iov_t *glob)
 {
 	struct dc_pool		*pool;
 	struct dc_cont		*cont;
@@ -1198,7 +1202,7 @@ out:
 }
 
 int
-dc_cont_local2global(daos_handle_t coh, daos_iov_t *glob)
+dc_cont_local2global(daos_handle_t coh, d_iov_t *glob)
 {
 	int	rc = 0;
 
@@ -1282,7 +1286,7 @@ out:
 }
 
 int
-dc_cont_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh)
+dc_cont_global2local(daos_handle_t poh, d_iov_t glob, daos_handle_t *coh)
 {
 	struct dc_cont_glob	*cont_glob;
 	int			 rc = 0;
@@ -1413,7 +1417,7 @@ cont_req_prepare(daos_handle_t coh, enum cont_operation opcode,
 	args->cra_pool = dc_hdl2pool(args->cra_cont->dc_pool_hdl);
 	D_ASSERT(args->cra_pool != NULL);
 
-	ep.ep_grp  = args->cra_pool->dp_group;
+	ep.ep_grp  = args->cra_pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&args->cra_pool->dp_client_lock);
 	rsvc_client_choose(&args->cra_pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&args->cra_pool->dp_client_lock);
@@ -1473,17 +1477,17 @@ dc_cont_list_attr(tse_task_t *task)
 
 	in = crt_req_get(cb_args.cra_rpc);
 	if (*args->size > 0) {
-		daos_iov_t iov = {
+		d_iov_t iov = {
 			.iov_buf     = args->buf,
 			.iov_buf_len = *args->size,
 			.iov_len     = 0
 		};
-		daos_sg_list_t sgl = {
+		d_sg_list_t sgl = {
 			.sg_nr_out = 0,
 			.sg_nr	   = 1,
 			.sg_iovs   = &iov
 		};
-		rc = crt_bulk_create(daos_task2ctx(task), daos2crt_sg(&sgl),
+		rc = crt_bulk_create(daos_task2ctx(task), &sgl,
 				     CRT_BULK_RW, &in->cali_bulk);
 		if (rc != 0) {
 			cont_req_cleanup(CLEANUP_RPC, &cb_args);
@@ -1521,7 +1525,7 @@ attr_bulk_create(int n, char *names[], void *values[], size_t sizes[],
 	int		rc;
 	int		i;
 	int		j;
-	daos_sg_list_t	sgl;
+	d_sg_list_t	sgl;
 
 	/* Buffers = 'n' names + non-null values + 1 sizes */
 	sgl.sg_nr_out	= 0;
@@ -1536,20 +1540,20 @@ attr_bulk_create(int n, char *names[], void *values[], size_t sizes[],
 
 	/* names */
 	for (j = 0, i = 0; j < n; ++j)
-		daos_iov_set(&sgl.sg_iovs[i++], (void *)(names[j]),
+		d_iov_set(&sgl.sg_iovs[i++], (void *)(names[j]),
 			     strlen(names[j]) + 1 /* trailing '\0' */);
 
 	/* TODO: Add packing/unpacking of non-byte-arrays to rpc.[hc] ? */
 	/* sizes */
-	daos_iov_set(&sgl.sg_iovs[i++], (void *)sizes, n * sizeof(*sizes));
+	d_iov_set(&sgl.sg_iovs[i++], (void *)sizes, n * sizeof(*sizes));
 
 	/* values */
 	for (j = 0; j < n; ++j)
 		if (sizes[j] > 0)
-			daos_iov_set(&sgl.sg_iovs[i++],
+			d_iov_set(&sgl.sg_iovs[i++],
 				     values[j], sizes[j]);
 
-	rc = crt_bulk_create(crt_ctx, daos2crt_sg(&sgl), perm, bulk);
+	rc = crt_bulk_create(crt_ctx, &sgl, perm, bulk);
 	D_FREE(sgl.sg_iovs);
 out:
 	return rc;
@@ -1772,6 +1776,23 @@ out:
 }
 
 int
+dc_cont_aggregate(tse_task_t *task)
+{
+	daos_cont_aggregate_t	*args;
+
+	args = dc_task_get_args(task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	if (args->epoch == DAOS_EPOCH_MAX) {
+		D_ERROR("Invalid epoch: "DF_U64"\n", args->epoch);
+		tse_task_complete(task, -DER_INVAL);
+		return -DER_INVAL;
+	}
+
+	return dc_epoch_op(args->coh, CONT_EPOCH_AGGREGATE, &args->epoch, task);
+}
+
+int
 dc_cont_rollback(tse_task_t *task)
 {
 	D_ERROR("Unsupported API\n");
@@ -1880,17 +1901,17 @@ dc_cont_list_snap(tse_task_t *task)
 
 	in = crt_req_get(cb_args.cra_rpc);
 	if (*args->nr > 0) {
-		daos_iov_t iov = {
+		d_iov_t iov = {
 			.iov_buf     = args->epochs,
 			.iov_buf_len = *args->nr * sizeof(*args->epochs),
 			.iov_len     = 0
 		};
-		daos_sg_list_t sgl = {
+		d_sg_list_t sgl = {
 			.sg_nr_out = 0,
 			.sg_nr	   = 1,
 			.sg_iovs   = &iov
 		};
-		rc = crt_bulk_create(daos_task2ctx(task), daos2crt_sg(&sgl),
+		rc = crt_bulk_create(daos_task2ctx(task), &sgl,
 				     CRT_BULK_RW, &in->sli_bulk);
 		if (rc != 0) {
 			cont_req_cleanup(CLEANUP_RPC, &cb_args);

@@ -21,13 +21,11 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
 	"fmt"
 	"os/user"
-
-	"github.com/pkg/errors"
 )
 
 // mockExt implements the External interface.
@@ -35,12 +33,20 @@ type mockExt struct {
 	// return error if cmd in shell fails
 	cmdRet error
 	// return true if file already exists
-	existsRet  bool
-	mountRet   error
-	unmountRet error
-	mkdirRet   error
-	removeRet  error
-	history    []string
+	existsRet       bool
+	mountRet        error
+	isMountPointRet bool
+	unmountRet      error
+	mkdirRet        error
+	removeRet       error
+	lUsrRet         *user.User  // lookup user
+	lGrpRet         *user.Group // lookup group
+	lUsrErr         error       // lookup user error
+	lGrpErr         error       // lookup group error
+	listGrpsErr     error       // list groups error
+	listGrpsRet     []string    // list of user's groups
+	chownRErr       error
+	history         []string
 }
 
 func (m *mockExt) getHistory() []string {
@@ -78,6 +84,12 @@ func (m *mockExt) mount(
 	return m.mountRet
 }
 
+func (m *mockExt) isMountPoint(path string) (bool, error) {
+	m.history = append(m.history, fmt.Sprintf(msgIsMountPoint, path))
+
+	return m.isMountPointRet, nil
+}
+
 func (m *mockExt) unmount(path string) error {
 	m.history = append(m.history, fmt.Sprintf(msgUnmount, path))
 
@@ -105,36 +117,34 @@ func (m *mockExt) getAbsInstallPath(path string) (string, error) {
 }
 
 func (m *mockExt) lookupUser(name string) (*user.User, error) {
-	return &user.User{}, nil
+	return m.lUsrRet, m.lUsrErr
 }
 
 func (m *mockExt) lookupGroup(name string) (*user.Group, error) {
-	return &user.Group{}, nil
+	return m.lGrpRet, m.lGrpErr
 }
 
-func (m *mockExt) setUid(uid int64) error {
-	return nil
+func (m *mockExt) listGroups(usr *user.User) ([]string, error) {
+	return m.listGrpsRet, m.listGrpsErr
 }
 
-func (m *mockExt) setGid(gid int64) error {
-	return nil
+func (m *mockExt) chownR(root string, uid int, gid int) error {
+	m.history = append(m.history, fmt.Sprintf(msgChownR, root, uid, gid))
+
+	return m.chownRErr
 }
 
 func newMockExt(
-	cmdRet error, existsRet bool, mountRet error,
-	unmountRet error, mkdirRet error, removeRet error) External {
+	cmdRet error, existsRet bool, mountRet error, isMountPointRet bool,
+	unmountRet error, mkdirRet error, removeRet error,
+) External {
 
 	return &mockExt{
-		cmdRet, existsRet, mountRet, unmountRet,
-		mkdirRet, removeRet, []string{},
+		cmdRet, existsRet, mountRet, isMountPointRet, unmountRet, mkdirRet,
+		removeRet, nil, nil, nil, nil, nil, []string{}, nil, []string{},
 	}
 }
 
 func defaultMockExt() External {
-	return newMockExt(nil, false, nil, nil, nil, nil)
-}
-
-func cmdFailMockExt() External {
-	return newMockExt(
-		errors.New("exit status 1"), false, nil, nil, nil, nil)
+	return &mockExt{}
 }

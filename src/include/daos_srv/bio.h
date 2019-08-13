@@ -86,6 +86,27 @@ struct bio_blob_hdr {
 	uuid_t		bbh_pool;
 };
 
+/*
+ * Current device health state (health statistics). Periodically updated in
+ * bio_bs_monitor(). Used to determine faulty device status.
+ */
+struct bio_dev_state {
+	uint64_t	 bds_timestamp;
+	uint64_t	*bds_media_errors; /* supports 128-bit values */
+	uint64_t	 bds_error_count; /* error log page */
+	/* I/O error counters */
+	uint32_t	 bds_bio_read_errs;
+	uint32_t	 bds_bio_write_errs;
+	uint32_t	 bds_bio_unmap_errs;
+	uint16_t	 bds_temperature; /* in Kelvin */
+	/* Critical warnings */
+	uint8_t		 bds_temp_warning	: 1;
+	uint8_t		 bds_avail_spare_warning	: 1;
+	uint8_t		 bds_dev_reliabilty_warning : 1;
+	uint8_t		 bds_read_only_warning	: 1;
+	uint8_t		 bds_volatile_mem_warning: 1; /*volatile memory backup*/
+};
+
 static inline void
 bio_addr_set(bio_addr_t *addr, uint16_t type, uint64_t off)
 {
@@ -132,11 +153,11 @@ bio_sgl_fini(struct bio_sglist *sgl)
 }
 
 /*
- * Convert bio_sglist into daos_sg_list_t, caller is responsible to
+ * Convert bio_sglist into d_sg_list_t, caller is responsible to
  * call daos_sgl_fini(sgl, false) to free iovs.
  */
 static inline int
-bio_sgl_convert(struct bio_sglist *bsgl, daos_sg_list_t *sgl)
+bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl)
 {
 	int i, rc;
 
@@ -151,7 +172,7 @@ bio_sgl_convert(struct bio_sglist *bsgl, daos_sg_list_t *sgl)
 
 	for (i = 0; i < sgl->sg_nr_out; i++) {
 		struct bio_iov	*biov = &bsgl->bs_iovs[i];
-		daos_iov_t	*iov = &sgl->sg_iovs[i];
+		d_iov_t	*iov = &sgl->sg_iovs[i];
 
 		iov->iov_buf = biov->bi_buf;
 		iov->iov_len = biov->bi_data_len;
@@ -162,15 +183,32 @@ bio_sgl_convert(struct bio_sglist *bsgl, daos_sg_list_t *sgl)
 }
 
 /**
+ * Callbacks called on NVMe device state transition
+ *
+ * \param tgt_ids[IN]	Affected target IDs
+ * \param tgt_cnt[IN]	Target count
+ *
+ * \return		0: Reaction finished;
+ *			1: Reaction is in progress;
+ *			-ve: Error happened;
+ */
+struct bio_reaction_ops {
+	int (*faulty_reaction)(int *tgt_ids, int tgt_cnt);
+	int (*reint_reaction)(int *tgt_ids, int tgt_cnt);
+};
+
+/**
  * Global NVMe initialization.
  *
  * \param[IN] storage_path	daos storage directory path
  * \param[IN] nvme_conf		NVMe config file
  * \param[IN] shm_id		shm id to enable multiprocess mode in SPDK
+ * \param[IN] ops		Reaction callback functions
  *
  * \return		Zero on success, negative value on error
  */
-int bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id);
+int bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
+		  struct bio_reaction_ops *ops);
 
 /**
  * Global NVMe finilization.
@@ -272,7 +310,7 @@ int bio_blob_unmap(struct bio_io_context *ctxt, uint64_t off, uint64_t len);
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_write(struct bio_io_context *ctxt, bio_addr_t addr, daos_iov_t *iov);
+int bio_write(struct bio_io_context *ctxt, bio_addr_t addr, d_iov_t *iov);
 
 /**
  * Read from per VOS instance blob.
@@ -283,7 +321,7 @@ int bio_write(struct bio_io_context *ctxt, bio_addr_t addr, daos_iov_t *iov);
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_read(struct bio_io_context *ctxt, bio_addr_t addr, daos_iov_t *iov);
+int bio_read(struct bio_io_context *ctxt, bio_addr_t addr, d_iov_t *iov);
 
 /**
  * Write SGL to per VOS instance blob.
@@ -295,7 +333,7 @@ int bio_read(struct bio_io_context *ctxt, bio_addr_t addr, daos_iov_t *iov);
  * \returns		Zero on success, negative value on error
  */
 int bio_writev(struct bio_io_context *ioctxt, struct bio_sglist *bsgl,
-	       daos_sg_list_t *sgl);
+	       d_sg_list_t *sgl);
 
 /**
  * Read SGL from per VOS instance blob.
@@ -307,7 +345,7 @@ int bio_writev(struct bio_io_context *ioctxt, struct bio_sglist *bsgl,
  * \returns		Zero on success, negative value on error
  */
 int bio_readv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl,
-	      daos_sg_list_t *sgl);
+	      d_sg_list_t *sgl);
 
 /*
  * Finish setting up blob header and write info to blob offset 0.

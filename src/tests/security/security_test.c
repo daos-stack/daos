@@ -24,9 +24,10 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-#include <daos/security.h>
 #include <daos_types.h>
 #include <daos_errno.h>
+#include <daos_security.h>
+#include <daos/security.h>
 #include <daos/common.h>
 #include "../../security/srv_internal.h"
 #include "../../security/auth.pb-c.h"
@@ -58,30 +59,43 @@ compare_auth_sys(Auth__Sys *auth1, Auth__Sys *auth2)
 		return -1;
 	}
 
-	if (auth1->uid != auth2->uid) {
-		printf("Tokens do not have a matching uid\n");
+	if (auth1->user == NULL || auth2->user == NULL) {
+		printf("An AuthSys is missing a user\n");
 		return -1;
 	}
 
-	if (auth1->gid != auth2->gid) {
-		printf("Tokens do not have a matching gid\n");
+	if (strncmp(auth1->user, auth2->user, DAOS_ACL_MAX_PRINCIPAL_LEN) !=
+	    0) {
+		printf("Tokens do not have a matching user\n");
+		return -1;
+	}
+
+	if (auth1->group == NULL || auth2->group == NULL) {
+		printf("An AuthSys is missing a group\n");
+		return -1;
+	}
+
+	if (strncmp(auth1->group, auth2->group, DAOS_ACL_MAX_PRINCIPAL_LEN) !=
+	    0) {
+		printf("Tokens do not have a matching group\n");
 		return -1;
 	}
 
 	/* Check to make sure that both or neither are set */
-	if (check_valid_pointers(auth1->gids, auth2->gids)) {
-		printf("An AuthSys is missing a gids list\n");
+	if (check_valid_pointers(auth1->groups, auth2->groups)) {
+		printf("An AuthSys is missing a group list\n");
 		return  -1;
 	}
 
-	if (auth1->n_gids != auth2->n_gids) {
-		printf("Gids lists are not of equal length\n");
+	if (auth1->n_groups != auth2->n_groups) {
+		printf("Group lists are not of equal length\n");
 		return -1;
 	}
 
-	for (int i = 0; i < auth1->n_gids; i++) {
-		if (auth1->gids[i] != auth2->gids[i]) {
-			printf("Gid lists do not match\n");
+	for (int i = 0; i < auth1->n_groups; i++) {
+		if (strncmp(auth1->groups[i], auth2->groups[i],
+			    DAOS_ACL_MAX_PRINCIPAL_LEN) != 0) {
+			printf("Group lists do not match\n");
 			return -1;
 		}
 	}
@@ -124,14 +138,14 @@ print_auth_sys(Auth__Sys *auth)
 		return;
 
 	printf("AuthSys Token:\n");
-	printf("uid: %u\n", auth->uid);
-	printf("gid: %u\n", auth->gid);
-	if (auth->gids) {
+	printf("user: %s\n", auth->user);
+	printf("group: %s\n", auth->group);
+	if (auth->groups) {
 		int i;
 
-		printf("gids: ");
-		for (i = 0; i < auth->n_gids; i++) {
-			printf("%u ", auth->gids[i]);
+		printf("groups: ");
+		for (i = 0; i < auth->n_groups; i++) {
+			printf("%s ", auth->groups[i]);
 		}
 		printf("\n");
 	}
@@ -165,13 +179,13 @@ int
 main(int argc, char **argv)
 {
 	int			ret;
-	daos_iov_t		creds;
+	d_iov_t		creds;
 	Auth__Credential	*response = NULL;
 	Auth__Sys		*credentials = NULL;
 	Auth__Token		*validated_token = NULL;
 	Auth__Sys		*validated_credentials = NULL;
 
-	memset(&creds, 0, sizeof(daos_iov_t));
+	memset(&creds, 0, sizeof(d_iov_t));
 
 	ret = dc_sec_request_creds(&creds);
 

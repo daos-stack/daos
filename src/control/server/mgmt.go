@@ -21,23 +21,26 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
-	"sync"
+	"os"
+
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/log"
-	"github.com/pkg/errors"
+	log "github.com/daos-stack/daos/src/control/logging"
 )
 
-var jsonDBRelPath = "share/control/mgmtinit_db.json"
+var jsonDBRelPath = "share/daos/control/mgmtinit_db.json"
 
-// controlService type is the data container for the service.
+// controlService implements the control plane control service, satisfying
+// pb.MgmtCtlServer, and is the data container for the service.
 type controlService struct {
 	nvme              *nvmeStorage
 	scm               *scmStorage
@@ -50,10 +53,7 @@ type controlService struct {
 func (c *controlService) Setup() {
 	// init sync primitive for storage formatting on each server
 	for idx := range c.config.Servers {
-		wg := new(sync.WaitGroup)
-		wg.Add(1)
-
-		c.config.Servers[idx].storWaitGroup = wg
+		c.config.Servers[idx].formatted = make(chan struct{})
 	}
 
 	if err := c.nvme.Setup(); err != nil {
@@ -78,11 +78,52 @@ func (c *controlService) Teardown() {
 		log.Debugf(
 			"%s\n", errors.Wrap(err, "Warning, SCM Teardown"))
 	}
+}
 
-	// decrement counter to release blocked goroutines
-	for idx := range c.config.Servers {
-		c.config.Servers[idx].storWaitGroup.Done()
+// awaitStorageFormat checks if running as root and server superblocks exist,
+// if both conditions are true, wait until storage is formatted through client
+// API calls from management tool. Then drop privileges of running process.
+func awaitStorageFormat(config *configuration) error {
+	msgFormat := "storage format on server %d"
+	msgSkip := "skipping " + msgFormat
+	msgWait := "waiting for " + msgFormat + "\n"
+
+	for i, srv := range config.Servers {
+		isMount, err := config.ext.isMountPoint(srv.ScmMount)
+		if err == nil && !isMount {
+			log.Debugf("attempting to mount existing SCM dir %s\n", srv.ScmMount)
+
+			mntType, devPath, mntOpts, err := getMntParams(&srv)
+			if err != nil {
+				return errors.WithMessage(err, "getting scm mount params")
+			}
+
+			log.Debugf("mounting scm %s at %s (%s)...", devPath, srv.ScmMount, mntType)
+
+			err = config.ext.mount(devPath, srv.ScmMount, mntType, uintptr(0), mntOpts)
+			if err != nil {
+				return errors.WithMessage(err, "mounting existing scm dir")
+			}
+		} else if !os.IsNotExist(err) {
+			return errors.WithMessage(err, "checking scm mounted")
+		}
+
+		if ok, err := config.ext.exists(iosrvSuperPath(srv.ScmMount)); err != nil {
+			return errors.WithMessage(err, "checking superblock exists")
+		} else if ok {
+			log.Debugf(msgSkip+" (server already formatted)\n", i)
+			continue
+		}
+
+		// want this to be visible on stdout and log
+		fmt.Printf(msgWait, i)
+		log.Debugf(msgWait, i)
+
+		// wait on storage format client API call
+		<-srv.formatted
 	}
+
+	return nil
 }
 
 // loadInitData retrieves initial data from relative file path.

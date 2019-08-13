@@ -21,18 +21,20 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/pkg/errors"
-	"gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v2"
+
+	"github.com/daos-stack/daos/src/control/security"
 )
 
 const (
@@ -152,10 +154,11 @@ func (b *BdevClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 // TODO: implement UnMarshal for LogMask discriminated union
 
-// server defines configuration options for DAOS IO Server instances
+// server defines configuration options for DAOS IO Server instances.
+// See utils/config/daos_server.yml for parameter descriptions.
 type server struct {
 	Rank            *rank     `yaml:"rank"`
-	Targets         []string  `yaml:"targets"` // cpus to run xstreams
+	Targets         int       `yaml:"targets"`
 	NrXsHelpers     int       `yaml:"nr_xs_helpers"`
 	FirstCore       int       `yaml:"first_core"`
 	FabricIface     string    `yaml:"fabric_iface"`
@@ -173,15 +176,20 @@ type server struct {
 	BdevSize        int       `yaml:"bdev_size"`
 	// ioParams represents commandline options and environment variables
 	// to be passed on I/O server invocation.
-	CliOpts       []string        // tuples (short option, value) e.g. ["-p", "10000"...]
-	storWaitGroup *sync.WaitGroup // sync primitive for storage formatting events
+	CliOpts   []string      // tuples (short option, value) e.g. ["-p", "10000"...]
+	Hostname  string        // used when generating templates
+	formatted chan struct{} // closed when server is formatted
 }
 
 // newDefaultServer creates a new instance of server struct with default values.
 func newDefaultServer() server {
+	// TODO: fix by only ever creating server in one place
+	host, _ := os.Hostname()
+
 	return server{
 		ScmClass:    scmDCPM,
 		BdevClass:   bdNVMe,
+		Hostname:    host,
 		NrXsHelpers: 2,
 	}
 }
@@ -206,28 +214,28 @@ func (s *server) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
+// configuration describes options for DAOS control plane.
+// See utils/config/daos_server.yml for parameter descriptions.
 type configuration struct {
-	SystemName     string          `yaml:"name"`
-	Servers        []server        `yaml:"servers"`
-	Provider       string          `yaml:"provider"`
-	SocketDir      string          `yaml:"socket_dir"`
-	AccessPoints   []string        `yaml:"access_points"`
-	Port           int             `yaml:"port"`
-	CaCert         string          `yaml:"ca_cert"`
-	Cert           string          `yaml:"cert"`
-	Key            string          `yaml:"key"`
-	FaultPath      string          `yaml:"fault_path"`
-	FaultCb        string          `yaml:"fault_cb"`
-	FabricIfaces   []string        `yaml:"fabric_ifaces"`
-	ScmMountPath   string          `yaml:"scm_mount_path"`
-	BdevInclude    []string        `yaml:"bdev_include"`
-	BdevExclude    []string        `yaml:"bdev_exclude"`
-	Hyperthreads   bool            `yaml:"hyperthreads"`
-	NrHugepages    int             `yaml:"nr_hugepages"`
-	ControlLogMask ControlLogLevel `yaml:"control_log_mask"`
-	ControlLogFile string          `yaml:"control_log_file"`
-	UserName       string          `yaml:"user_name"`
-	GroupName      string          `yaml:"group_name"`
+	SystemName      string                    `yaml:"name"`
+	Servers         []server                  `yaml:"servers"`
+	Provider        string                    `yaml:"provider"`
+	SocketDir       string                    `yaml:"socket_dir"`
+	AccessPoints    []string                  `yaml:"access_points"`
+	Port            int                       `yaml:"port"`
+	TransportConfig *security.TransportConfig `yaml:"transport_config"`
+	FaultPath       string                    `yaml:"fault_path"`
+	FaultCb         string                    `yaml:"fault_cb"`
+	FabricIfaces    []string                  `yaml:"fabric_ifaces"`
+	ScmMountPath    string                    `yaml:"scm_mount_path"`
+	BdevInclude     []string                  `yaml:"bdev_include"`
+	BdevExclude     []string                  `yaml:"bdev_exclude"`
+	Hyperthreads    bool                      `yaml:"hyperthreads"`
+	NrHugepages     int                       `yaml:"nr_hugepages"`
+	ControlLogMask  ControlLogLevel           `yaml:"control_log_mask"`
+	ControlLogFile  string                    `yaml:"control_log_file"`
+	UserName        string                    `yaml:"user_name"`
+	GroupName       string                    `yaml:"group_name"`
 	// development (subject to change) config fields
 	Modules   string
 	Attach    string
@@ -265,19 +273,18 @@ func (c *configuration) checkMount(path string) error {
 // populated with defaults.
 func newDefaultConfiguration(ext External) configuration {
 	return configuration{
-		SystemName:     "daos_server",
-		SocketDir:      "/var/run/daos_server",
-		AccessPoints:   []string{"localhost"},
-		Port:           10000,
-		Cert:           "./.daos/daos_server.crt",
-		Key:            "./.daos/daos_server.key",
-		ScmMountPath:   "/mnt/daos",
-		Hyperthreads:   false,
-		NrHugepages:    1024,
-		Path:           "etc/daos_server.yml",
-		NvmeShmID:      0,
-		ControlLogMask: cLogDebug,
-		ext:            ext,
+		SystemName:      "daos_server",
+		SocketDir:       "/var/run/daos_server",
+		AccessPoints:    []string{"localhost"},
+		Port:            10000,
+		TransportConfig: security.DefaultServerTransportConfig(),
+		ScmMountPath:    "/mnt/daos",
+		Hyperthreads:    false,
+		NrHugepages:     1024,
+		Path:            "etc/daos_server.yml",
+		NvmeShmID:       0,
+		ControlLogMask:  cLogDebug,
+		ext:             ext,
 	}
 }
 

@@ -86,6 +86,21 @@ struct umem_tx_stage_item {
 static int
 pmem_tx_free(struct umem_instance *umm, umem_off_t umoff)
 {
+	/*
+	 * This free call could be on error cleanup code path where
+	 * the transaction is already aborted due to previous failed
+	 * pmemobj_tx call. Let's just skip it in this case.
+	 *
+	 * The reason we don't fix caller to avoid calling tx_free()
+	 * in an aborted transaction is that the caller code could be
+	 * shared by both transactional and non-transactional (where
+	 * UMEM_CLASS_VMEM is used, see btree code) interfaces, and
+	 * the explicit umem_free() on error cleanup is necessary for
+	 * non-transactional case.
+	 */
+	if (pmemobj_tx_stage() == TX_STAGE_ONABORT)
+		return 0;
+
 	if (!UMOFF_IS_NULL(umoff))
 		return pmemobj_tx_free(umem_off2id(umm, umoff));
 	return 0;
@@ -333,11 +348,8 @@ static umem_ops_t	pmem_ops = {
 int
 umem_tx_errno(int err)
 {
-	if (err == 0) {
+	if (err == 0)
 		err = pmemobj_tx_errno();
-		if (err == ENOMEM) /* pmdk returns ENOMEM for out of space */
-			err = ENOSPC;
-	}
 
 	if (err == 0) {
 		D_ERROR("Transaction aborted for unknown reason\n");
@@ -351,6 +363,10 @@ umem_tx_errno(int err)
 		D_ERROR("pmdk returned negative errno %d\n", err);
 		err = -err;
 	}
+
+	if (err == ENOMEM) /* pmdk returns ENOMEM for out of space */
+		err = ENOSPC;
+
 	return daos_errno2der(err);
 }
 
@@ -510,10 +526,12 @@ umem_class_init(struct umem_attr *uma, struct umem_instance *umm)
 	D_DEBUG(DB_MEM, "Instantiate memory class %s\n", umc->umc_name);
 
 	memset(umm, 0, sizeof(*umm));
-	umm->umm_id	= umc->umc_id;
-	umm->umm_ops	= umc->umc_ops;
-	umm->umm_name	= umc->umc_name;
-	umm->umm_pool	= uma->uma_pool;
+	umm->umm_id		= umc->umc_id;
+	umm->umm_ops		= umc->umc_ops;
+	umm->umm_name		= umc->umc_name;
+	umm->umm_pool		= uma->uma_pool;
+	umm->umm_nospc_rc	= umc->umc_id == UMEM_CLASS_VMEM ?
+		-DER_NOMEM : -DER_NOSPACE;
 
 	set_offsets(umm);
 	return 0;

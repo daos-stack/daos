@@ -68,7 +68,7 @@ rsvc_client_init(struct rsvc_client *client, const d_rank_list_t *ranks)
 void
 rsvc_client_fini(struct rsvc_client *client)
 {
-	daos_rank_list_free(client->sc_ranks);
+	d_rank_list_free(client->sc_ranks);
 }
 
 /**

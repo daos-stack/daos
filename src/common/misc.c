@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #define D_LOGFAC	DD_FAC(common)
 
 #include <daos/common.h>
+#include <daos/dtx.h>
 #include <daos_security.h>
 
 /**
@@ -83,10 +84,12 @@ daos_sgls_copy_internal(d_sg_list_t *dst_sgl, uint32_t dst_nr,
 	for (i = 0; i < src_nr; i++) {
 		int num;
 
-		if (by_out)
+		if (by_out) {
 			num = src_sgl[i].sg_nr_out;
-		else
+			dst_sgl[i].sg_nr_out = num;
+		} else {
 			num = src_sgl[i].sg_nr;
+		}
 
 		if (num == 0)
 			continue;
@@ -99,9 +102,6 @@ daos_sgls_copy_internal(d_sg_list_t *dst_sgl, uint32_t dst_nr,
 				src_sgl[i].sg_nr, dst_sgl[i].sg_nr);
 			return -DER_INVAL;
 		}
-
-		if (by_out)
-			dst_sgl[i].sg_nr_out = num;
 
 		if (copy_data) {
 			int j;
@@ -202,7 +202,7 @@ daos_sgl_buf_size(d_sg_list_t *sgl)
 }
 
 daos_size_t
-daos_sgls_buf_size(daos_sg_list_t *sgls, int nr)
+daos_sgls_buf_size(d_sg_list_t *sgls, int nr)
 {
 	daos_size_t size = 0;
 	int	    i;
@@ -221,7 +221,7 @@ daos_sgls_buf_size(daos_sg_list_t *sgls, int nr)
  * value as buffer size as well.
  */
 daos_size_t
-daos_sgls_packed_size(daos_sg_list_t *sgls, int nr, daos_size_t *buf_size)
+daos_sgls_packed_size(d_sg_list_t *sgls, int nr, daos_size_t *buf_size)
 {
 	daos_size_t size = 0;
 	int i;
@@ -243,89 +243,6 @@ daos_sgls_packed_size(daos_sg_list_t *sgls, int nr, daos_size_t *buf_size)
 	}
 
 	return size;
-}
-
-static daos_size_t
-daos_iod_len(daos_iod_t *iod)
-{
-	daos_size_t	len;
-	int		i;
-
-	if (iod->iod_size == DAOS_REC_ANY)
-		return -1; /* unknown size */
-
-	len = 0;
-
-	if (iod->iod_type == DAOS_IOD_SINGLE) {
-		len += iod->iod_size;
-	} else {
-		if (iod->iod_recxs == NULL)
-			return 0;
-
-		for (i = 0, len = 0; i < iod->iod_nr; i++)
-			len += iod->iod_size * iod->iod_recxs[i].rx_nr;
-	}
-
-	return len;
-}
-
-daos_size_t
-daos_iods_len(daos_iod_t *iods, int nr)
-{
-	daos_size_t iod_length = 0;
-	int	    i;
-
-	for (i = 0; i < nr; i++) {
-		daos_size_t len = daos_iod_len(&iods[i]);
-
-		if (len == (daos_size_t)-1) /* unknown */
-			return -1;
-
-		iod_length += len;
-	}
-	return iod_length;
-}
-
-int
-daos_iod_copy(daos_iod_t *dst, daos_iod_t *src)
-{
-	int rc;
-
-	rc = daos_iov_copy(&dst->iod_name, &src->iod_name);
-	if (rc)
-		return rc;
-
-	dst->iod_kcsum = src->iod_kcsum;
-	dst->iod_type = src->iod_type;
-	dst->iod_size = src->iod_size;
-	dst->iod_nr = src->iod_nr;
-	dst->iod_recxs = src->iod_recxs;
-	dst->iod_csums = src->iod_csums;
-	dst->iod_eprs = src->iod_eprs;
-
-	return 0;
-}
-
-void
-daos_iods_free(daos_iod_t *iods, int nr, bool need_free)
-{
-	int i;
-
-	for (i = 0; i < nr; i++) {
-		daos_iov_free(&iods[i].iod_name);
-
-		if (iods[i].iod_recxs)
-			D_FREE(iods[i].iod_recxs);
-
-		if (iods[i].iod_eprs)
-			D_FREE(iods[i].iod_eprs);
-
-		if (iods[i].iod_csums)
-			D_FREE(iods[i].iod_csums);
-	}
-
-	if (need_free)
-		D_FREE(iods);
 }
 
 /**
@@ -351,7 +268,7 @@ daos_str_trimwhite(char *str)
 }
 
 int
-daos_iov_copy(daos_iov_t *dst, daos_iov_t *src)
+daos_iov_copy(d_iov_t *dst, d_iov_t *src)
 {
 	D_ALLOC(dst->iov_buf, src->iov_buf_len);
 	if (dst->iov_buf == NULL)
@@ -364,7 +281,7 @@ daos_iov_copy(daos_iov_t *dst, daos_iov_t *src)
 }
 
 void
-daos_iov_free(daos_iov_t *iov)
+daos_iov_free(d_iov_t *iov)
 {
 	if (iov->iov_buf == NULL)
 		return;
@@ -377,19 +294,17 @@ daos_iov_free(daos_iov_t *iov)
 }
 
 bool
-daos_key_match(daos_key_t *key1, daos_key_t *key2)
+daos_iov_cmp(d_iov_t *iov1, d_iov_t *iov2)
 {
-	D_ASSERT(key1 != NULL);
-	D_ASSERT(key2 != NULL);
-	D_ASSERT(key1->iov_buf != NULL);
-	D_ASSERT(key2->iov_buf != NULL);
-	if (key1->iov_len != key2->iov_len)
+	D_ASSERT(iov1 != NULL);
+	D_ASSERT(iov2 != NULL);
+	D_ASSERT(iov1->iov_buf != NULL);
+	D_ASSERT(iov2->iov_buf != NULL);
+
+	if (iov1->iov_len != iov2->iov_len)
 		return false;
 
-	if (memcmp(key1->iov_buf, key2->iov_buf, key1->iov_len))
-		return false;
-
-	return true;
+	return !memcmp(iov1->iov_buf, iov2->iov_buf, iov1->iov_len);
 }
 
 d_rank_list_t *
@@ -997,12 +912,11 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 		entries_alloc = true;
 	}
 
-	for (i = 0; i < prop_req->dpp_nr; i++) {
+	for (i = 0; i < prop_req->dpp_nr && i < prop_reply->dpp_nr; i++) {
 		entry_req = &prop_req->dpp_entries[i];
 		type = entry_req->dpe_type;
 		if (type == 0) {
-			/* this is the case that dpp_entries allocated above */
-			D_ASSERT(prop_req->dpp_nr == prop_reply->dpp_nr);
+			/* req doesn't have any entry type populated yet */
 			type = prop_reply->dpp_entries[i].dpe_type;
 			entry_req->dpe_type = type;
 		}
@@ -1071,4 +985,20 @@ out:
 		}
 	}
 	return rc;
+}
+
+void
+daos_dti_gen(struct dtx_id *dti, bool zero)
+{
+	static __thread uuid_t uuid;
+
+	if (zero) {
+		memset(dti, 0, sizeof(*dti));
+	} else {
+		if (uuid_is_null(uuid))
+			uuid_generate(uuid);
+
+		uuid_copy(dti->dti_uuid, uuid);
+		dti->dti_hlc = crt_hlc_get();
+	}
 }

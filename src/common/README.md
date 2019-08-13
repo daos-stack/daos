@@ -25,7 +25,7 @@ uses the TSE internally to track and progress all API tasks that are associated
 with the API event and, in some cases, to schedule several inflight "child"
 tasks corresponding to a single API task and add a dependency on that task to
 track all those inflight "child" tasks. An example of that would be the Array
-API in the DAOS addons library and the object update with multiple replicas.
+API in the DAOS library and the object update with multiple replicas.
 
 ### Scheduler API
 
@@ -78,7 +78,7 @@ code [here](/src/include/daos/tse.h).
 
 ## dRPC C API
 
-For a general overview of dRPC concepts and the corresponding Golang API, see [here](/src/control/drpc/README.md).
+For a general overview of dRPC concepts and the corresponding Go API, see [here](/src/control/drpc/README.md).
 
 In the C API, an active dRPC connection is represented by a pointer to a context object (`struct drpc`). The context supplies all the state information required to communicate over the Unix Domain Socket. When finished with a context, the object should be freed by using `drpc_close()`.
 

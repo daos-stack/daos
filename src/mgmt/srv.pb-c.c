@@ -52,49 +52,49 @@ void   mgmt__daos_rank__free_unpacked
   assert(message->base.descriptor == &mgmt__daos_rank__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-void   mgmt__daos_response__init
-                     (Mgmt__DaosResponse         *message)
+void   mgmt__daos_resp__init
+                     (Mgmt__DaosResp         *message)
 {
-  static const Mgmt__DaosResponse init_value = MGMT__DAOS_RESPONSE__INIT;
+  static const Mgmt__DaosResp init_value = MGMT__DAOS_RESP__INIT;
   *message = init_value;
 }
-size_t mgmt__daos_response__get_packed_size
-                     (const Mgmt__DaosResponse *message)
+size_t mgmt__daos_resp__get_packed_size
+                     (const Mgmt__DaosResp *message)
 {
-  assert(message->base.descriptor == &mgmt__daos_response__descriptor);
+  assert(message->base.descriptor == &mgmt__daos_resp__descriptor);
   return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
 }
-size_t mgmt__daos_response__pack
-                     (const Mgmt__DaosResponse *message,
+size_t mgmt__daos_resp__pack
+                     (const Mgmt__DaosResp *message,
                       uint8_t       *out)
 {
-  assert(message->base.descriptor == &mgmt__daos_response__descriptor);
+  assert(message->base.descriptor == &mgmt__daos_resp__descriptor);
   return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
 }
-size_t mgmt__daos_response__pack_to_buffer
-                     (const Mgmt__DaosResponse *message,
+size_t mgmt__daos_resp__pack_to_buffer
+                     (const Mgmt__DaosResp *message,
                       ProtobufCBuffer *buffer)
 {
-  assert(message->base.descriptor == &mgmt__daos_response__descriptor);
+  assert(message->base.descriptor == &mgmt__daos_resp__descriptor);
   return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
 }
-Mgmt__DaosResponse *
-       mgmt__daos_response__unpack
+Mgmt__DaosResp *
+       mgmt__daos_resp__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data)
 {
-  return (Mgmt__DaosResponse *)
-     protobuf_c_message_unpack (&mgmt__daos_response__descriptor,
+  return (Mgmt__DaosResp *)
+     protobuf_c_message_unpack (&mgmt__daos_resp__descriptor,
                                 allocator, len, data);
 }
-void   mgmt__daos_response__free_unpacked
-                     (Mgmt__DaosResponse *message,
+void   mgmt__daos_resp__free_unpacked
+                     (Mgmt__DaosResp *message,
                       ProtobufCAllocator *allocator)
 {
   if(!message)
     return;
-  assert(message->base.descriptor == &mgmt__daos_response__descriptor);
+  assert(message->base.descriptor == &mgmt__daos_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
 void   mgmt__set_rank_req__init
@@ -238,42 +238,42 @@ const ProtobufCMessageDescriptor mgmt__daos_rank__descriptor =
   (ProtobufCMessageInit) mgmt__daos_rank__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__daos_response__field_descriptors[1] =
+static const ProtobufCFieldDescriptor mgmt__daos_resp__field_descriptors[1] =
 {
   {
     "status",
     1,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_ENUM,
+    PROTOBUF_C_TYPE_INT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__DaosResponse, status),
-    &mgmt__daos_request_status__descriptor,
+    offsetof(Mgmt__DaosResp, status),
+    NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
-static const unsigned mgmt__daos_response__field_indices_by_name[] = {
+static const unsigned mgmt__daos_resp__field_indices_by_name[] = {
   0,   /* field[0] = status */
 };
-static const ProtobufCIntRange mgmt__daos_response__number_ranges[1 + 1] =
+static const ProtobufCIntRange mgmt__daos_resp__number_ranges[1 + 1] =
 {
   { 1, 0 },
   { 0, 1 }
 };
-const ProtobufCMessageDescriptor mgmt__daos_response__descriptor =
+const ProtobufCMessageDescriptor mgmt__daos_resp__descriptor =
 {
   PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "mgmt.DaosResponse",
-  "DaosResponse",
-  "Mgmt__DaosResponse",
+  "mgmt.DaosResp",
+  "DaosResp",
+  "Mgmt__DaosResp",
   "mgmt",
-  sizeof(Mgmt__DaosResponse),
+  sizeof(Mgmt__DaosResp),
   1,
-  mgmt__daos_response__field_descriptors,
-  mgmt__daos_response__field_indices_by_name,
-  1,  mgmt__daos_response__number_ranges,
-  (ProtobufCMessageInit) mgmt__daos_response__init,
+  mgmt__daos_resp__field_descriptors,
+  mgmt__daos_resp__field_indices_by_name,
+  1,  mgmt__daos_resp__number_ranges,
+  (ProtobufCMessageInit) mgmt__daos_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor mgmt__set_rank_req__field_descriptors[1] =
@@ -377,36 +377,4 @@ const ProtobufCMessageDescriptor mgmt__create_ms_req__descriptor =
   1,  mgmt__create_ms_req__number_ranges,
   (ProtobufCMessageInit) mgmt__create_ms_req__init,
   NULL,NULL,NULL    /* reserved[123] */
-};
-static const ProtobufCEnumValue mgmt__daos_request_status__enum_values_by_number[4] =
-{
-  { "ERR_INVALID_UUID", "MGMT__DAOS_REQUEST_STATUS__ERR_INVALID_UUID", -3 },
-  { "ERR_INVALID_RANK", "MGMT__DAOS_REQUEST_STATUS__ERR_INVALID_RANK", -2 },
-  { "ERR_UNKNOWN", "MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN", -1 },
-  { "SUCCESS", "MGMT__DAOS_REQUEST_STATUS__SUCCESS", 0 },
-};
-static const ProtobufCIntRange mgmt__daos_request_status__value_ranges[] = {
-{-3, 0},{0, 4}
-};
-static const ProtobufCEnumValueIndex mgmt__daos_request_status__enum_values_by_name[4] =
-{
-  { "ERR_INVALID_RANK", 1 },
-  { "ERR_INVALID_UUID", 0 },
-  { "ERR_UNKNOWN", 2 },
-  { "SUCCESS", 3 },
-};
-const ProtobufCEnumDescriptor mgmt__daos_request_status__descriptor =
-{
-  PROTOBUF_C__ENUM_DESCRIPTOR_MAGIC,
-  "mgmt.DaosRequestStatus",
-  "DaosRequestStatus",
-  "Mgmt__DaosRequestStatus",
-  "mgmt",
-  4,
-  mgmt__daos_request_status__enum_values_by_number,
-  4,
-  mgmt__daos_request_status__enum_values_by_name,
-  1,
-  mgmt__daos_request_status__value_ranges,
-  NULL,NULL,NULL,NULL   /* reserved[1234] */
 };

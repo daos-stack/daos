@@ -51,6 +51,17 @@ extern "C" {
 #define DAOS_ACL_MAX_PRINCIPAL_BUF_LEN	(DAOS_ACL_MAX_PRINCIPAL_LEN + 1)
 
 /**
+ * Maximum length of daos_acl::dal_ace (dal_len's value).
+ */
+#define DAOS_ACL_MAX_ACE_LEN		(8192)
+
+/**
+ * Maximum length of an ACE provided in string format:
+ *	<access>:<flags>:<principal>:<perms>
+ */
+#define DAOS_ACL_MAX_ACE_STR_LEN	(DAOS_ACL_MAX_PRINCIPAL_LEN + 64)
+
+/**
  * Header for the Access Control List, followed by the table of variable-length
  * Access Control Entries.
  * The entry list may be walked by inspecting the principal length and
@@ -326,7 +337,7 @@ daos_ace_get_size(struct daos_ace *ace);
  * \param	tabs	Number of tabs to indent at top level
  */
 void
-daos_ace_dump(struct daos_ace *ace, uint tabs);
+daos_ace_dump(struct daos_ace *ace, uint32_t tabs);
 
 /**
  * Sanity check the Access Control Entry structure for valid values and internal
@@ -416,6 +427,37 @@ daos_acl_principal_to_uid(const char *principal, uid_t *uid);
  */
 int
 daos_acl_principal_to_gid(const char *principal, gid_t *gid);
+
+/**
+ * Convert an Access Control Entry formatted as a string to a daos_ace
+ * structure.
+ *
+ * \param[in]	str	String defining an ACE
+ * \param[out]	ace	Newly allocated ACE structure
+ *
+ * @return	0		Success
+ *		-DER_INVAL	Invalid input
+ *		-DER_NOMEM	Could not allocate memory
+ */
+int
+daos_ace_from_str(const char *str, struct daos_ace **ace);
+
+/**
+ * Convert an Access Control Entry in the form of a daos_ace structure to a
+ * compact string.
+ *
+ * Limitation: A valid ACE with different permissions for different access types
+ * cannot be formatted as a single string, and will be rejected as invalid.
+ *
+ * \param[in]	ace		ACE structure
+ * \param[out]	buf		Buffer to write the string
+ * \param[out]	buf_len		Size of buffer
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ */
+int
+daos_ace_to_str(struct daos_ace *ace, char *buf, size_t buf_len);
 
 #if defined(__cplusplus)
 }

@@ -1,5 +1,5 @@
-#
-# Copyright 2018-2019, Intel Corporation
+# Copyright (C) 2018-2019 Intel Corporation
+# All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted for any purpose (including commercial purposes)
@@ -64,11 +64,12 @@ RUN yum -y install epel-release; \
 
 # DAOS specific
 RUN yum -y install \
-        python2-avocado python2-avocado-plugins-output-html            \
-        python2-avocado-plugins-varianter-yaml-to-mux                  \
-        yum-plugin-copr; \
-    yum -y copr enable jhli/ipmctl; \
-    yum -y copr enable jhli/safeclib; \
+           python2-avocado python2-avocado-plugins-output-html \
+           python2-avocado-plugins-varianter-yaml-to-mux       \
+           yum-plugin-copr python-pathlib                      \
+           python2-clustershell;                               \
+    yum -y copr enable jhli/ipmctl;                            \
+    yum -y copr enable jhli/safeclib;                          \
     yum -y install libipmctl-devel
 
 # Dependencies
@@ -98,7 +99,7 @@ WORKDIR /home/$USER/daos
 
 # Build DAOS & dependencies
 RUN if [ "x$NOBUILD" = "x" ] ; then git submodule init && git submodule update; fi
-RUN if [ "x$NOBUILD" = "x" ] ; then scons --build-deps=yes USE_INSTALLED=all install; fi
+RUN if [ "x$NOBUILD" = "x" ] ; then scons --build-deps=yes install; fi
 
 # Set environment variables
 ENV PATH=/home/daos/daos/install/bin:$PATH

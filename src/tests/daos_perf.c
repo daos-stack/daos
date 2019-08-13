@@ -42,7 +42,7 @@
 #include "dts_common.h"
 
 /* unused object class to identify VOS (storage only) test mode */
-#define DAOS_OC_RAW	(0xBEEF)
+#define DAOS_OC_RAW	(0xBEE)
 #define RANK_ZERO	(0)
 #define TEST_VAL_SIZE	(3)
 
@@ -74,6 +74,8 @@ bool			 ts_overwrite;
 bool			 ts_zero_copy;
 /* verify the output of fetch */
 bool			 ts_verify_fetch;
+/* shuffle the offsets of the array */
+bool			 ts_shuffle	= false;
 
 daos_handle_t		*ts_ohs;		/* all opened objects */
 daos_obj_id_t		 ts_oid;		/* object ID */
@@ -181,7 +183,7 @@ akey_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type,
 {
 	struct dts_io_credit *cred;
 	daos_iod_t	     *iod;
-	daos_sg_list_t	     *sgl;
+	d_sg_list_t	     *sgl;
 	daos_recx_t	     *recx;
 	int		      vsize = ts_ctx.tsc_cred_vsize;
 	int		      rc = 0;
@@ -203,12 +205,12 @@ akey_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type,
 
 	/* setup dkey */
 	memcpy(cred->tc_dbuf, dkey, DTS_KEY_LEN);
-	daos_iov_set(&cred->tc_dkey, cred->tc_dbuf,
+	d_iov_set(&cred->tc_dkey, cred->tc_dbuf,
 			strlen(cred->tc_dbuf));
 
 	/* setup I/O descriptor */
 	memcpy(cred->tc_abuf, akey, DTS_KEY_LEN);
-	daos_iov_set(&iod->iod_name, cred->tc_abuf,
+	d_iov_set(&iod->iod_name, cred->tc_abuf,
 			strlen(cred->tc_abuf));
 	iod->iod_size = vsize;
 	recx->rx_nr  = 1;
@@ -232,7 +234,7 @@ akey_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type,
 		memset(cred->tc_vbuf, 0, vsize);
 	}
 
-	daos_iov_set(&cred->tc_val, cred->tc_vbuf, vsize);
+	d_iov_set(&cred->tc_val, cred->tc_vbuf, vsize);
 	sgl->sg_iovs = &cred->tc_val;
 	sgl->sg_nr = 1;
 
@@ -270,7 +272,7 @@ dkey_update_or_fetch(daos_handle_t oh, enum ts_op_type op_type, char *dkey,
 	int		 j;
 	int		 rc = 0;
 
-	indices = dts_rand_iarr_alloc(ts_recx_p_akey, 0);
+	indices = dts_rand_iarr_alloc(ts_recx_p_akey, 0, ts_shuffle);
 	D_ASSERT(indices != NULL);
 
 	for (i = 0; i < ts_akey_p_dkey; i++) {
@@ -343,7 +345,7 @@ dkey_verify(daos_handle_t oh, char *dkey, daos_epoch_t *epoch)
 	char	 akey[DTS_KEY_LEN];
 	int	 rc = 0;
 
-	indices = dts_rand_iarr_alloc(ts_recx_p_akey, 0);
+	indices = dts_rand_iarr_alloc(ts_recx_p_akey, 0, ts_shuffle);
 	D_ASSERT(indices != NULL);
 	dts_key_gen(akey, DTS_KEY_LEN, "walker");
 
@@ -739,15 +741,15 @@ ts_class_name(void)
 		return "ECHO R3S (network only, 3-replica)";
 	case DAOS_OC_ECHO_R4S_RW:
 		return "ECHO R4S (network only, 4-replica)";
-	case DAOS_OC_TINY_RW:
+	case OC_S1:
 		return "DAOS TINY (full stack, non-replica)";
-	case DAOS_OC_LARGE_RW:
+	case OC_SX:
 		return "DAOS LARGE (full stack, non-replica)";
-	case DAOS_OC_R2S_RW:
+	case OC_RP_2G1:
 		return "DAOS R2S (full stack, 2 replica)";
-	case DAOS_OC_R3S_RW:
+	case OC_RP_3G1:
 		return "DAOS R3S (full stack, 3 replica)";
-	case DAOS_OC_R4S_RW:
+	case OC_RP_4G1:
 		return "DAOS R4S (full stack, 4 replics)";
 	}
 }
@@ -968,20 +970,18 @@ main(int argc, char **argv)
 	d_rank_t	svc_rank  = 0;	/* pool service rank */
 	double		then;
 	double		now;
-	int		rc;
 	int		i;
 	bool		pause = false;
+	unsigned	seed = 0;
+	int		rc;
 
 	MPI_Init(&argc, &argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_size);
 
-	gettimeofday(&tv, NULL);
-	srand(tv.tv_usec);
-
 	memset(ts_pmem_file, 0, sizeof(ts_pmem_file));
 	while ((rc = getopt_long(argc, argv,
-				 "P:N:T:C:c:o:d:a:r:nAs:ztf:hUFRBvIiuw",
+				 "P:N:T:C:c:o:d:a:r:nASG:s:ztf:hUFRBvIiuw",
 				 ts_ops, NULL)) != -1) {
 		char	*endp;
 
@@ -1016,7 +1016,7 @@ main(int argc, char **argv)
 					ts_class = DAOS_OC_RAW;
 			} else { /* no RAW for other modes */
 				if (ts_class == DAOS_OC_RAW)
-					ts_class = DAOS_OC_LARGE_RW;
+					ts_class = OC_SX;
 			}
 			break;
 		case 'C':
@@ -1024,15 +1024,15 @@ main(int argc, char **argv)
 			break;
 		case 'c':
 			if (!strcasecmp(optarg, "R4S")) {
-				ts_class = DAOS_OC_R4S_RW;
+				ts_class = OC_RP_4G1;
 			} else if (!strcasecmp(optarg, "R3S")) {
-				ts_class = DAOS_OC_R3S_RW;
+				ts_class = OC_RP_3G1;
 			} else if (!strcasecmp(optarg, "R2S")) {
-				ts_class = DAOS_OC_R2S_RW;
+				ts_class = OC_RP_2G1;
 			} else if (!strcasecmp(optarg, "TINY")) {
-				ts_class = DAOS_OC_TINY_RW;
+				ts_class = OC_S1;
 			} else if (!strcasecmp(optarg, "LARGE")) {
-				ts_class = DAOS_OC_LARGE_RW;
+				ts_class = OC_SX;
 			} else {
 				if (ts_ctx.tsc_mpi_rank == 0)
 					ts_print_usage();
@@ -1065,6 +1065,12 @@ main(int argc, char **argv)
 			break;
 		case 'A':
 			ts_single = false;
+			break;
+		case 'S':
+			ts_shuffle = true;
+			break;
+		case 'G':
+			seed = atoi(optarg);
 			break;
 		case 's':
 			vsize = strtoul(optarg, &endp, 0);
@@ -1117,16 +1123,21 @@ main(int argc, char **argv)
 		}
 	}
 
+	if (seed == 0) {
+		gettimeofday(&tv, NULL);
+		seed = tv.tv_usec;
+	}
+
 	/* Convert object classes for echo mode.
 	 * NB: we can also run in echo mode for arbitrary object class by
 	 * setting DAOS_IO_BYPASS="target" while starting server.
 	 */
 	if (ts_mode == TS_MODE_ECHO) {
-		if (ts_class == DAOS_OC_R4S_RW)
+		if (ts_class == OC_RP_4G1)
 			ts_class = DAOS_OC_ECHO_R4S_RW;
-		else if (ts_class == DAOS_OC_R3S_RW)
+		else if (ts_class == OC_RP_3G1)
 			ts_class = DAOS_OC_ECHO_R3S_RW;
-		else if (ts_class == DAOS_OC_R2S_RW)
+		else if (ts_class == OC_RP_2G1)
 			ts_class = DAOS_OC_ECHO_R2S_RW;
 		else
 			ts_class = DAOS_OC_ECHO_TINY_RW;
@@ -1147,7 +1158,7 @@ main(int argc, char **argv)
 		return -1;
 	}
 
-	if (perf_tests[REBUILD_TEST] && ts_class != DAOS_OC_TINY_RW) {
+	if (perf_tests[REBUILD_TEST] && ts_class != OC_S1) {
 		fprintf(stderr, "rebuild can only run with -T \"daos\"\n");
 		if (ts_ctx.tsc_mpi_rank == 0)
 			ts_print_usage();
@@ -1253,6 +1264,8 @@ main(int argc, char **argv)
 	for (i = 0; i < TEST_SIZE; i++) {
 		if (perf_tests[i] == NULL)
 			continue;
+
+		srand(seed);
 
 		rc = perf_tests[i](&then, &now);
 		if (ts_ctx.tsc_mpi_size > 1) {

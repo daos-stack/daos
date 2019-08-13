@@ -40,14 +40,20 @@ extern int dts_obj_replica_cnt;
 #define IOREQ_SG_NR	5
 #define IOREQ_SG_IOD_NR	5
 
+#define DTS_MAX_EXT_NUM		5
+#define DTS_MAX_DISTANCE	10
+#define DTS_MAX_EXTENT_SIZE	50
+#define DTS_MAX_OFFSET		1048576
+#define DTS_MAX_EPOCH_TIMES	20
+
 struct ioreq {
 	daos_handle_t		oh;
 	test_arg_t		*arg;
 	daos_event_t		ev;
 	daos_key_t		dkey;
 	daos_key_t		akey;
-	daos_iov_t		val_iov[IOREQ_SG_IOD_NR][IOREQ_SG_NR];
-	daos_sg_list_t		sgl[IOREQ_SG_IOD_NR];
+	d_iov_t		val_iov[IOREQ_SG_IOD_NR][IOREQ_SG_NR];
+	d_sg_list_t		sgl[IOREQ_SG_IOD_NR];
 	daos_csum_buf_t		csum;
 	char			csum_buf[UPDATE_CSUM_SIZE];
 	daos_recx_t		rex[IOREQ_SG_IOD_NR][IOREQ_IOD_NR];
@@ -200,10 +206,11 @@ struct test_key_record {
 struct test_update_fetch_arg {
 	daos_recx_t		*ua_recxs;
 	int			*ua_values;
-	int			 ua_recx_num;
-	int			 ua_single_value;
-	int			 ua_array:1, /* false for single */
-				 ua_verify:1;
+	int			ua_recx_num;
+	int			ua_single_value;
+	int			ua_array:1, /* false for single */
+				ua_verify:1;
+	bool			snap;
 };
 
 struct test_add_exclude_arg {
@@ -219,10 +226,11 @@ struct test_punch_arg {
 /* one OP record per cmd line in the ioconf file */
 struct test_op_record {
 	/* link to test_key_record::or_queue */
-	d_list_t		 or_queue_link;
+	d_list_t		or_queue_link;
 	struct test_key_record	*or_key_rec; /* back pointer */
-	daos_epoch_t		 or_epoch;
-	enum test_op_type	 or_op;
+	int			tx;
+	daos_epoch_t		*snap_epoch;
+	enum test_op_type	or_op;
 	union {
 		struct test_update_fetch_arg	uf_arg;
 		struct test_punch_arg		pu_arg;

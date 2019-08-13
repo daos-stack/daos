@@ -212,7 +212,7 @@ daos_csum_update(daos_csum_t *csum, const void *buf,
 }
 
 int
-daos_csum_compute(daos_csum_t *csum, daos_sg_list_t *sgl)
+daos_csum_compute(daos_csum_t *csum, d_sg_list_t *sgl)
 {
 	int	i;
 	int	rc = 0;

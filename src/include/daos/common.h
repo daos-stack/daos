@@ -46,6 +46,7 @@
 #include <gurt/common.h>
 #include <cart/api.h>
 #include <daos_types.h>
+#include <daos_prop.h>
 #include <daos/checksum.h>
 
 #define DF_OID		DF_U64"."DF_U64
@@ -54,16 +55,27 @@
 #define DF_UOID		DF_OID".%u"
 #define DP_UOID(uo)	DP_OID((uo).id_pub), (uo).id_shard
 
+#define MAX_TREE_ORDER_INC	7
+
+struct daos_node_overhead {
+	/** Node size in bytes for tree with only */
+	int	no_size;
+	/** Order of node */
+	int	no_order;
+};
+
 /** Overheads for a tree */
 struct daos_tree_overhead {
-	/** Static size of an allocated tree node */
-	int			to_node_size;
+	/** Overhead for full size tree node */
+	struct daos_node_overhead	to_node_overhead;
+	/** Overhead for dynamic tree nodes */
+	struct daos_node_overhead	to_dyn_overhead[MAX_TREE_ORDER_INC];
+	/** Number of dynamic tree node sizes */
+	int				to_dyn_count;
+	/** Inline metadata size for each record */
+	int				to_node_rec_msize;
 	/** Dynamic metadata size of an allocated record. */
-	int			to_record_msize;
-	/** Size of first insertion.  Full node allocated on second key */
-	int			to_single_size;
-	/** Tree order */
-	int			to_order;
+	int				to_record_msize;
 };
 
 /*
@@ -163,16 +175,15 @@ int daos_sgl_alloc_copy_data(d_sg_list_t *dst, d_sg_list_t *src);
 daos_size_t daos_sgl_data_len(d_sg_list_t *sgl);
 daos_size_t daos_sgl_buf_size(d_sg_list_t *sgl);
 daos_size_t daos_sgls_buf_size(d_sg_list_t *sgls, int nr);
-daos_size_t daos_sgls_packed_size(daos_sg_list_t *sgls, int nr,
+daos_size_t daos_sgls_packed_size(d_sg_list_t *sgls, int nr,
 				  daos_size_t *buf_size);
-daos_size_t daos_iods_len(daos_iod_t *iods, int nr);
-int daos_iod_copy(daos_iod_t *dst, daos_iod_t *src);
-void daos_iods_free(daos_iod_t *iods, int nr, bool free);
 
 char *daos_str_trimwhite(char *str);
-int daos_iov_copy(daos_iov_t *dst, daos_iov_t *src);
-void daos_iov_free(daos_iov_t *iov);
-bool daos_key_match(daos_key_t *key1, daos_key_t *key2);
+int daos_iov_copy(d_iov_t *dst, d_iov_t *src);
+void daos_iov_free(d_iov_t *iov);
+bool daos_iov_cmp(d_iov_t *iov1, d_iov_t *iov2);
+
+#define daos_key_match(key1, key2)	daos_iov_cmp(key1, key2)
 
 /* The DAOS BITS is composed by uint32_t[x] */
 #define DAOS_BITS_SIZE  (sizeof(uint32_t) * NBBY)
@@ -287,9 +298,9 @@ daos_der2errno(int err)
 	case -DER_NOTYPE:
 	case -DER_NOSCHEMA:
 	case -DER_NOLOCAL:
-	case -DER_KEY2BIG:
-	case -DER_REC2BIG:
 	case -DER_IO_INVAL:	return EINVAL;
+	case -DER_KEY2BIG:
+	case -DER_REC2BIG:	return E2BIG;
 	case -DER_EXIST:	return EEXIST;
 	case -DER_UNREACH:	return EHOSTUNREACH;
 	case -DER_NOSPACE:	return ENOSPC;
@@ -321,6 +332,7 @@ daos_crt_network_error(int err)
 
 #define daos_rank_list_dup		d_rank_list_dup
 #define daos_rank_list_dup_sort_uniq	d_rank_list_dup_sort_uniq
+#define daos_rank_list_filter		d_rank_list_filter
 #define daos_rank_list_alloc		d_rank_list_alloc
 #define daos_rank_list_copy		d_rank_list_copy
 #define daos_rank_list_sort		d_rank_list_sort
@@ -342,6 +354,8 @@ enum {
 
 void
 daos_fail_loc_set(uint64_t id);
+void
+daos_fail_loc_reset(void);
 void
 daos_fail_value_set(uint64_t val);
 void
@@ -417,10 +431,17 @@ enum {
 #define DAOS_REBUILD_TGT_NOSPACE (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x18)
 
 #define DAOS_RDB_SKIP_APPENDENTRIES_FAIL (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x19)
-#define DAOS_FORCE_REFRESH_POOL_MAP	  (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x20)
+#define DAOS_FORCE_REFRESH_POOL_MAP	  (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1a)
 
-#define DAOS_VOS_AGG_RANDOM_YIELD	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1a)
-#define DAOS_VOS_AGG_MW_THRESH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1b)
+#define DAOS_VOS_AGG_RANDOM_YIELD	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1b)
+#define DAOS_VOS_AGG_MW_THRESH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1c)
+#define DAOS_VOS_NON_LEADER		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1d)
+
+#define DAOS_FORCE_CAPA_FETCH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1e)
+#define DAOS_FORCE_PROP_VERIFY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1f)
+
+#define DAOS_CHECKSUM_UPDATE_FAIL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x20)
+#define DAOS_CHECKSUM_FETCH_FAIL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x21)
 
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
 
@@ -473,53 +494,6 @@ struct daos_prop_entry *daos_prop_entry_get(daos_prop_t *prop, uint32_t type);
 int daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply);
 
 static inline void
-daos_parse_oclass(const char *string, daos_oclass_id_t *objectClass)
-{
-	if (strcasecmp(string, "tiny") == 0)
-		*objectClass = DAOS_OC_TINY_RW;
-	else if (strcasecmp(string, "small") == 0)
-		*objectClass = DAOS_OC_SMALL_RW;
-	else if (strcasecmp(string, "large") == 0)
-		*objectClass = DAOS_OC_LARGE_RW;
-	else if (strcasecmp(string, "R2") == 0)
-		*objectClass = DAOS_OC_R2_RW;
-	else if (strcasecmp(string, "R2S") == 0)
-		*objectClass = DAOS_OC_R2S_RW;
-	else if (strcasecmp(string, "repl_max") == 0)
-		*objectClass = DAOS_OC_REPL_MAX_RW;
-	else
-		*objectClass = DAOS_OC_UNKNOWN;
-}
-
-static inline void
-daos_unparse_oclass(daos_oclass_id_t objectClass, char *string)
-{
-	switch (objectClass) {
-	case DAOS_OC_TINY_RW:
-		strcpy(string, "tiny");
-		break;
-	case DAOS_OC_SMALL_RW:
-		strcpy(string, "small");
-		break;
-	case DAOS_OC_LARGE_RW:
-		strcpy(string, "large");
-		break;
-	case DAOS_OC_R2_RW:
-		strcpy(string, "R2");
-		break;
-	case DAOS_OC_R2S_RW:
-	       strcpy(string, "R2S");
-	       break;
-	case DAOS_OC_REPL_MAX_RW:
-	       strcpy(string, "repl_max");
-	       break;
-	default:
-		strcpy(string, "unknown");
-		break;
-	}
-}
-
-static inline void
 daos_parse_ctype(const char *string, daos_cont_layout_t *type)
 {
 	if (strcasecmp(string, "HDF5") == 0)
@@ -541,8 +515,21 @@ daos_unparse_ctype(daos_cont_layout_t ctype, char *string)
 		strcpy(string, "HDF5");
 		break;
 	default:
-		D_ASSERT(0);
+		strcpy(string, "unknown");
+		break;
 	}
+}
+
+static inline int daos_gettime_coarse(uint64_t *time)
+{
+	struct timespec	now;
+	int		rc;
+
+	rc = clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
+	if (rc == 0)
+		*time = now.tv_sec;
+
+	return rc;
 }
 
 #endif /* __DAOS_COMMON_H__ */

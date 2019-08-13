@@ -35,9 +35,9 @@ struct dts_io_credit {
 	char			 tc_dbuf[DTS_KEY_LEN];	/**< dkey buffer */
 	char			 tc_abuf[DTS_KEY_LEN];	/**< akey buffer */
 	daos_key_t		 tc_dkey;		/**< dkey iov */
-	daos_iov_t		 tc_val;		/**< value iov */
+	d_iov_t		 tc_val;		/**< value iov */
 	/** sgl for the value iov */
-	daos_sg_list_t		 tc_sgl;
+	d_sg_list_t		 tc_sgl;
 	/** I/O descriptor for input akey */
 	daos_iod_t		 tc_iod;
 	/** recx for the I/O, there is only one recx in \a tc_iod */

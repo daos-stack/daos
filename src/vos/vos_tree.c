@@ -29,9 +29,11 @@
 
 #include <daos/btree.h>
 #include <daos/mem.h>
+#include <daos/object.h>
 #include <daos_srv/vos.h>
-#include <daos_api.h> /* For ofeat bits */
 #include "vos_internal.h"
+
+int vos_evt_feats = EVT_FEAT_SORT_DIST;
 
 /**
  * VOS Btree attributes, for tree registration and tree creation.
@@ -52,14 +54,14 @@ struct vos_btr_attr {
 static struct vos_btr_attr *obj_tree_find_attr(unsigned tree_class);
 
 static struct vos_key_bundle *
-iov2key_bundle(daos_iov_t *key_iov)
+iov2key_bundle(d_iov_t *key_iov)
 {
 	D_ASSERT(key_iov->iov_len == sizeof(struct vos_key_bundle));
 	return (struct vos_key_bundle *)key_iov->iov_buf;
 }
 
 static struct vos_rec_bundle *
-iov2rec_bundle(daos_iov_t *val_iov)
+iov2rec_bundle(d_iov_t *val_iov)
 {
 	D_ASSERT(val_iov->iov_len == sizeof(struct vos_rec_bundle));
 	return (struct vos_rec_bundle *)val_iov->iov_buf;
@@ -90,7 +92,7 @@ ktr_rec_store(struct btr_instance *tins, struct btr_record *rec,
 	      struct vos_key_bundle *kbund, struct vos_rec_bundle *rbund)
 {
 	struct vos_krec_df *krec = vos_rec2krec(tins, rec);
-	daos_iov_t	   *iov	 = rbund->rb_iov;
+	d_iov_t	   *iov	 = rbund->rb_iov;
 	daos_csum_buf_t	   *csum = rbund->rb_csum;
 	char		   *kbuf;
 
@@ -122,7 +124,7 @@ ktr_rec_load(struct btr_instance *tins, struct btr_record *rec,
 	     struct vos_key_bundle *kbund, struct vos_rec_bundle *rbund)
 {
 	struct vos_krec_df *krec = vos_rec2krec(tins, rec);
-	daos_iov_t	   *iov	 = rbund->rb_iov;
+	d_iov_t	   *iov	 = rbund->rb_iov;
 	daos_csum_buf_t	   *csum = rbund->rb_csum;
 	char		   *kbuf;
 
@@ -131,7 +133,7 @@ ktr_rec_load(struct btr_instance *tins, struct btr_record *rec,
 
 	if (kbund != NULL) {
 		if (kbund->kb_key != NULL) {
-			daos_iov_set(kbund->kb_key, kbuf, krec->kr_size);
+			d_iov_set(kbund->kb_key, kbuf, krec->kr_size);
 		} else {
 			kbund->kb_key = iov;
 		}
@@ -179,7 +181,7 @@ ktr_rec_msize(int alloc_overhead)
 
 /** generate hkey */
 static void
-ktr_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
+ktr_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 {
 	struct ktr_hkey		*kkey  = (struct ktr_hkey *)hkey;
 	struct vos_key_bundle	*kbund = iov2key_bundle(key_iov);
@@ -220,7 +222,7 @@ ktr_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 }
 
 static int
-ktr_key_cmp_lexical(struct vos_krec_df *krec, daos_iov_t *kiov)
+ktr_key_cmp_lexical(struct vos_krec_df *krec, d_iov_t *kiov)
 {
 	int cmp;
 
@@ -240,7 +242,7 @@ ktr_key_cmp_lexical(struct vos_krec_df *krec, daos_iov_t *kiov)
 }
 
 static int
-ktr_key_cmp_uint64(struct vos_krec_df *krec, daos_iov_t *kiov)
+ktr_key_cmp_uint64(struct vos_krec_df *krec, d_iov_t *kiov)
 {
 	uint64_t k1, k2;
 
@@ -258,7 +260,7 @@ ktr_key_cmp_uint64(struct vos_krec_df *krec, daos_iov_t *kiov)
 }
 
 static int
-ktr_key_cmp_default(struct vos_krec_df *krec, daos_iov_t *kiov)
+ktr_key_cmp_default(struct vos_krec_df *krec, d_iov_t *kiov)
 {
 	/* This only gets called if hash comparison matches. */
 	if (krec->kr_size > kiov->iov_len)
@@ -274,9 +276,9 @@ ktr_key_cmp_default(struct vos_krec_df *krec, daos_iov_t *kiov)
 /** compare the real key */
 static int
 ktr_key_cmp(struct btr_instance *tins, struct btr_record *rec,
-	    daos_iov_t *key_iov)
+	    d_iov_t *key_iov)
 {
-	daos_iov_t		*kiov;
+	d_iov_t		*kiov;
 	struct vos_krec_df	*krec;
 	struct vos_key_bundle	*kbund;
 	uint64_t		 feats = tins->ti_root->tr_feats;
@@ -309,7 +311,7 @@ ktr_key_cmp(struct btr_instance *tins, struct btr_record *rec,
 }
 
 static void
-ktr_key_encode(struct btr_instance *tins, daos_iov_t *key,
+ktr_key_encode(struct btr_instance *tins, d_iov_t *key,
 	       daos_anchor_t *anchor)
 {
 	struct vos_key_bundle *kbund = iov2key_bundle(key);
@@ -329,7 +331,7 @@ ktr_key_encode(struct btr_instance *tins, daos_iov_t *key,
 }
 
 static void
-ktr_key_decode(struct btr_instance *tins, daos_iov_t *key,
+ktr_key_decode(struct btr_instance *tins, d_iov_t *key,
 	       daos_anchor_t *anchor)
 {
 	struct vos_embedded_key *embedded =
@@ -344,8 +346,8 @@ ktr_key_decode(struct btr_instance *tins, daos_iov_t *key,
 
 /** create a new key-record, or install an externally allocated key-record */
 static int
-ktr_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
-	      daos_iov_t *val_iov, struct btr_record *rec)
+ktr_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
+	      d_iov_t *val_iov, struct btr_record *rec)
 {
 	struct vos_key_bundle	*kbund;
 	struct vos_rec_bundle	*rbund;
@@ -357,7 +359,7 @@ ktr_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 
 	rec->rec_off = umem_zalloc(&tins->ti_umm, vos_krec_size(rbund));
 	if (UMOFF_IS_NULL(rec->rec_off))
-		return -DER_NOMEM;
+		return -DER_NOSPACE;
 
 	krec = vos_rec2krec(tins, rec);
 	if (kbund->kb_epoch == DAOS_EPOCH_MAX) {
@@ -388,6 +390,7 @@ ktr_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 static int
 ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
+	struct vos_pool	   *pool = tins->ti_priv;
 	struct vos_krec_df *krec;
 	struct umem_attr    uma;
 	daos_handle_t	    toh;
@@ -408,12 +411,15 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	}
 
 	/* has subtree? */
+	D_ASSERT(pool != NULL);
 	if (krec->kr_bmap & KREC_BF_EVT) {
+		struct evt_desc_cbs cbs;
+
 		if (krec->kr_evt.tr_order == 0)
 			goto exit; /* No subtree */
 
-		rc = evt_open(&krec->kr_evt, &uma, tins->ti_coh,
-			      tins->ti_blks_info, &toh);
+		vos_evt_desc_cbs_init(&cbs, pool, tins->ti_coh);
+		rc = evt_open(&krec->kr_evt, &uma, &cbs, &toh);
 		if (rc != 0)
 			D_ERROR("Failed to open evtree: %d\n", rc);
 		else
@@ -423,11 +429,11 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		if (krec->kr_btr.tr_order == 0)
 			goto exit; /* No subtree */
 		rc = dbtree_open_inplace_ex(&krec->kr_btr, &uma, tins->ti_coh,
-					    tins->ti_blks_info, &toh);
+					    pool, &toh);
 		if (rc != 0)
 			D_ERROR("Failed to open btree: %d\n", rc);
 		else
-			dbtree_destroy(toh);
+			dbtree_destroy(toh, args);
 	} /* It's possible that neither tree is created in case of punch only */
 exit:
 	umem_free(&tins->ti_umm, rec->rec_off);
@@ -436,7 +442,7 @@ exit:
 
 static int
 ktr_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-	      daos_iov_t *key_iov, daos_iov_t *val_iov)
+	      d_iov_t *key_iov, d_iov_t *val_iov)
 {
 	struct vos_krec_df	*krec = vos_rec2krec(tins, rec);
 	struct vos_rec_bundle	*rbund = iov2rec_bundle(val_iov);
@@ -461,7 +467,7 @@ ktr_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 ktr_rec_update(struct btr_instance *tins, struct btr_record *rec,
-	       daos_iov_t *key_iov, daos_iov_t *val_iov)
+	       d_iov_t *key_iov, d_iov_t *val_iov)
 {
 	struct vos_rec_bundle	*rbund = iov2rec_bundle(val_iov);
 
@@ -605,7 +611,7 @@ svt_rec_msize(int alloc_overhead)
 
 /** generate hkey */
 static void
-svt_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
+svt_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 {
 	struct svt_hkey		*skey = (struct svt_hkey *)hkey;
 	struct vos_key_bundle	*kbund;
@@ -632,8 +638,8 @@ svt_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 
 /** allocate a new record and fetch data */
 static int
-svt_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
-	       daos_iov_t *val_iov, struct btr_record *rec)
+svt_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
+	       d_iov_t *val_iov, struct btr_record *rec)
 {
 	struct vos_rec_bundle	*rbund;
 	struct vos_key_bundle	*kbund;
@@ -646,7 +652,7 @@ svt_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 		rec->rec_off = umem_alloc(&tins->ti_umm,
 					   vos_irec_size(rbund));
 		if (UMOFF_IS_NULL(rec->rec_off))
-			return -DER_NOMEM;
+			return -DER_NOSPACE;
 	} else {
 		umem_tx_add(&tins->ti_umm, rbund->rb_off,
 			    vos_irec_msize(rbund));
@@ -667,46 +673,31 @@ svt_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 }
 
 static int
-svt_rec_free(struct btr_instance *tins, struct btr_record *rec,
-	      void *args)
+svt_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
 	struct vos_irec_df *irec = vos_rec2irec(tins, rec);
-	bio_addr_t *addr = &irec->ir_ex_addr;
+	bio_addr_t	   *addr = &irec->ir_ex_addr;
 
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return 0;
 
 	vos_dtx_deregister_record(&tins->ti_umm, irec->ir_dtx, rec->rec_off,
 				  DTX_RT_SVT);
-	if (args != NULL) {
-		*(umem_off_t *)args = rec->rec_off;
-		rec->rec_off = UMOFF_NULL; /** taken over by user */
-		return 0;
+
+	/* SCM value is stored together with vos_irec_df */
+	if (addr->ba_type == DAOS_MEDIA_NVME) {
+		struct vos_pool *pool = tins->ti_priv;
+
+		D_ASSERT(pool != NULL);
+		vos_bio_addr_free(pool, addr, irec->ir_size);
 	}
-
-	if (addr->ba_type == DAOS_MEDIA_NVME && !bio_addr_is_hole(addr)) {
-		struct vea_space_info *vsi = tins->ti_blks_info;
-		uint64_t blk_off;
-		uint32_t blk_cnt;
-		int rc;
-
-		D_ASSERT(vsi != NULL);
-
-		blk_off = vos_byte2blkoff(addr->ba_off);
-		blk_cnt = vos_byte2blkcnt(irec->ir_size);
-
-		rc = vea_free(vsi, blk_off, blk_cnt);
-		if (rc)
-			D_ERROR("Error on block free. %d\n", rc);
-	}
-
 	umem_free(&tins->ti_umm, rec->rec_off);
 	return 0;
 }
 
 static int
 svt_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-	       daos_iov_t *key_iov, daos_iov_t *val_iov)
+	       d_iov_t *key_iov, d_iov_t *val_iov)
 {
 	struct vos_key_bundle	*kbund = NULL;
 	struct vos_rec_bundle	*rbund;
@@ -721,7 +712,7 @@ svt_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 svt_rec_update(struct btr_instance *tins, struct btr_record *rec,
-		daos_iov_t *key_iov, daos_iov_t *val_iov)
+		d_iov_t *key_iov, d_iov_t *val_iov)
 {
 	struct svt_hkey		*skey;
 	struct vos_key_bundle	*kbund;
@@ -781,21 +772,23 @@ static struct vos_btr_attr vos_btr_attrs[] = {
 	{
 		.ta_class	= VOS_BTR_DKEY,
 		.ta_order	= VOS_KTR_ORDER,
-		.ta_feats	= VOS_OFEAT_BITS | BTR_FEAT_DIRECT_KEY,
+		.ta_feats	= VOS_OFEAT_BITS | BTR_FEAT_DIRECT_KEY |
+				  BTR_FEAT_DYNAMIC_ROOT,
 		.ta_name	= "vos_dkey",
 		.ta_ops		= &key_btr_ops,
 	},
 	{
 		.ta_class	= VOS_BTR_AKEY,
 		.ta_order	= VOS_KTR_ORDER,
-		.ta_feats	= VOS_OFEAT_BITS | BTR_FEAT_DIRECT_KEY,
+		.ta_feats	= VOS_OFEAT_BITS | BTR_FEAT_DIRECT_KEY |
+				  BTR_FEAT_DYNAMIC_ROOT,
 		.ta_name	= "vos_akey",
 		.ta_ops		= &key_btr_ops,
 	},
 	{
 		.ta_class	= VOS_BTR_SINGV,
 		.ta_order	= VOS_SVT_ORDER,
-		.ta_feats	= 0,
+		.ta_feats	= BTR_FEAT_DYNAMIC_ROOT,
 		.ta_name	= "singv",
 		.ta_ops		= &singv_btr_ops,
 	},
@@ -806,12 +799,63 @@ static struct vos_btr_attr vos_btr_attrs[] = {
 };
 
 static int
+evt_dop_bio_free(struct umem_instance *umm, struct evt_desc *desc,
+		 daos_size_t nob, void *args)
+{
+	struct vos_pool *pool = (struct vos_pool *)args;
+
+	return vos_bio_addr_free(pool, &desc->dc_ex_addr, nob);
+}
+
+static int
+evt_dop_log_check(struct umem_instance *umm, struct evt_desc *desc,
+	      int intent, void *args)
+{
+	daos_handle_t coh;
+
+	coh.cookie = (unsigned long)args;
+	return vos_dtx_check_availability(umm, coh, desc->dc_dtx,
+					  UMOFF_NULL, intent, DTX_RT_EVT);
+}
+
+int
+evt_dop_log_add(struct umem_instance *umm, struct evt_desc *desc, void *args)
+{
+	return vos_dtx_register_record(umm, umem_ptr2off(umm, desc),
+				       DTX_RT_EVT, 0);
+}
+
+int
+evt_dop_log_del(struct umem_instance *umm, struct evt_desc *desc, void *args)
+{
+	vos_dtx_deregister_record(umm, desc->dc_dtx,
+				  umem_ptr2off(umm, desc), DTX_RT_EVT);
+	return 0;
+}
+
+void
+vos_evt_desc_cbs_init(struct evt_desc_cbs *cbs, struct vos_pool *pool,
+		      daos_handle_t coh)
+{
+	/* NB: coh is not required for destroy */
+	cbs->dc_bio_free_cb	= evt_dop_bio_free;
+	cbs->dc_bio_free_args	= (void *)pool;
+	cbs->dc_log_status_cb	= evt_dop_log_check;
+	cbs->dc_log_status_args	= (void *)(unsigned long)coh.cookie;
+	cbs->dc_log_add_cb	= evt_dop_log_add;
+	cbs->dc_log_add_args	= NULL;
+	cbs->dc_log_del_cb	= evt_dop_log_del;
+	cbs->dc_log_del_args	= NULL;
+}
+
+static int
 tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 		 struct vos_krec_df *krec, daos_handle_t *sub_toh)
 {
-	struct umem_attr	*uma = vos_obj2uma(obj);
-	struct vea_space_info	*info = obj->obj_cont->vc_pool->vp_vea_info;
+	struct umem_attr        *uma = vos_obj2uma(obj);
+	struct vos_pool		*pool = vos_obj2pool(obj);
 	daos_handle_t		 coh = vos_cont2hdl(obj->obj_cont);
+	struct evt_desc_cbs	 cbs;
 	int			 expected_flag;
 	int			 unexpected_flag;
 	int			 rc = 0;
@@ -835,12 +879,13 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 		goto out;
 	}
 
+	vos_evt_desc_cbs_init(&cbs, pool, coh);
 	if (krec->kr_bmap & expected_flag) {
 		if (flags & SUBTR_EVT) {
-			rc = evt_open(&krec->kr_evt, uma, coh, info, sub_toh);
+			rc = evt_open(&krec->kr_evt, uma, &cbs, sub_toh);
 		} else {
 			rc = dbtree_open_inplace_ex(&krec->kr_btr, uma, coh,
-						    info, sub_toh);
+						    pool, sub_toh);
 		}
 		if (rc != 0)
 			D_ERROR("Failed to open tree: %d\n", rc);
@@ -851,8 +896,8 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 	D_ASSERT(flags & SUBTR_CREATE);
 
 	if (flags & SUBTR_EVT) {
-		rc = evt_create(EVT_FEAT_DEFAULT, VOS_EVT_ORDER, uma,
-				&krec->kr_evt, coh, sub_toh);
+		rc = evt_create(&krec->kr_evt, vos_evt_feats, VOS_EVT_ORDER,
+				uma, &cbs, sub_toh);
 		if (rc != 0) {
 			D_ERROR("Failed to create evtree: %d\n", rc);
 			goto out;
@@ -882,7 +927,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 
 		rc = dbtree_create_inplace_ex(ta->ta_class, tree_feats,
 					      ta->ta_order, uma, &krec->kr_btr,
-					      coh, sub_toh);
+					      coh, pool, sub_toh);
 		if (rc != 0) {
 			D_ERROR("Failed to create btree: %d\n", rc);
 			goto out;
@@ -915,8 +960,8 @@ key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
 	daos_csum_buf_t		 csum;
 	struct vos_key_bundle	 kbund;
 	struct vos_rec_bundle	 rbund;
-	daos_iov_t		 kiov;
-	daos_iov_t		 riov;
+	d_iov_t		 kiov;
+	d_iov_t		 riov;
 	int			 rc;
 
 	if (krecp != NULL)
@@ -952,6 +997,11 @@ key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
 		D_ERROR("fetch failed: %d\n", rc);
 		goto out;
 
+	case -DER_INPROGRESS:
+		/* Log for -DER_INPROGRESS has already been handled by
+		 * dtx_inprogress().
+		 */
+		goto out;
 	case -DER_NONEXIST:
 		if (!(flags & SUBTR_CREATE))
 			goto out;
@@ -1004,8 +1054,8 @@ key_tree_release(daos_handle_t toh, bool is_array)
  * Punch a key in its parent tree.
  */
 int
-key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_iov_t *key_iov,
-	       daos_iov_t *val_iov, int flags)
+key_tree_punch(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov,
+	       d_iov_t *val_iov, int flags)
 {
 	struct vos_key_bundle	*kbund;
 	struct vos_rec_bundle	*rbund;
@@ -1059,7 +1109,7 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_iov_t *key_iov,
 		struct umem_instance	*umm = vos_obj2umm(obj);
 		struct vos_krec_df	*krec2;
 		struct vos_key_bundle	 kbund2;
-		daos_iov_t	         tmp;
+		d_iov_t			 tmp;
 
 		krec2 = rbund->rb_krec;
 		if (krec->kr_bmap & KREC_BF_BTR) {
@@ -1082,7 +1132,7 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_iov_t *key_iov,
 		kbund2.kb_key	= kbund->kb_key;
 		kbund2.kb_epoch	= DAOS_EPOCH_MAX;
 
-		rc = dbtree_delete(toh, &tmp, NULL);
+		rc = dbtree_delete(toh, BTR_PROBE_EQ, &tmp, vos_obj2pool(obj));
 		if (rc)
 			D_ERROR("Failed to delete: %d\n", rc);
 	} else {
@@ -1097,7 +1147,7 @@ int
 obj_tree_init(struct vos_object *obj)
 {
 	struct vos_btr_attr *ta	= &vos_btr_attrs[0];
-	int			rc;
+	int		     rc;
 
 	if (!daos_handle_is_inval(obj->obj_toh))
 		return 0;
@@ -1121,13 +1171,14 @@ obj_tree_init(struct vos_object *obj)
 					      ta->ta_order, vos_obj2uma(obj),
 					      &obj->obj_df->vo_tree,
 					      vos_cont2hdl(obj->obj_cont),
+					      vos_obj2pool(obj),
 					      &obj->obj_toh);
 	} else {
 		D_DEBUG(DB_DF, "Open btree for object\n");
 		rc = dbtree_open_inplace_ex(&obj->obj_df->vo_tree,
 					    vos_obj2uma(obj),
 					    vos_cont2hdl(obj->obj_cont),
-					    NULL, &obj->obj_toh);
+					    vos_obj2pool(obj), &obj->obj_toh);
 	}
 	return rc;
 }

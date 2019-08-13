@@ -516,7 +516,7 @@ aggregate_pool_space(struct daos_pool_space *agg_ps,
 	D_ASSERT(agg_ps && ps);
 
 	if (ps->ps_ntargets == 0) {
-		D_ERROR("Skip emtpy space info\n");
+		D_DEBUG(DB_TRACE, "Skip emtpy space info\n");
 		return;
 	}
 
@@ -704,17 +704,15 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 
-	if (pool->sp_iv_ns == NULL) {
-		rc = ds_pool_iv_ns_update(pool, in->tci_master_rank,
-					  &in->tci_iv_ctxt,
-					  in->tci_iv_ns_id);
-		if (rc) {
-			D_ERROR("attach iv ns failed rc %d\n", rc);
-			D_GOTO(out, rc);
-		}
+	rc = ds_pool_iv_ns_update(pool, in->tci_master_rank, &in->tci_iv_ctxt,
+				  in->tci_iv_ns_id);
+	if (rc) {
+		D_ERROR("attach iv ns failed rc %d\n", rc);
+		D_GOTO(out, rc);
 	}
 
-	rc = pool_tgt_query(pool, &out->tco_space);
+	if (in->tci_query_bits & DAOS_PO_QUERY_SPACE)
+		rc = pool_tgt_query(pool, &out->tco_space);
 out:
 	if (rc != 0 && map != NULL)
 		pool_map_decref(map);
@@ -906,14 +904,14 @@ ds_pool_tgt_update_map_handler(crt_rpc_t *rpc)
 	}
 
 	if (rpc->cr_co_bulk_hdl != NULL) {
-		daos_iov_t	iov;
-		daos_sg_list_t	sgl;
+		d_iov_t	iov;
+		d_sg_list_t	sgl;
 
 		memset(&iov, 0, sizeof(iov));
 		sgl.sg_nr = 1;
 		sgl.sg_nr_out = 1;
 		sgl.sg_iovs = &iov;
-		rc = crt_bulk_access(rpc->cr_co_bulk_hdl, daos2crt_sg(&sgl));
+		rc = crt_bulk_access(rpc->cr_co_bulk_hdl, &sgl);
 		if (rc != 0)
 			D_GOTO(out_pool, rc);
 		buf = iov.iov_buf;

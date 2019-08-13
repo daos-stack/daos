@@ -28,12 +28,7 @@ import json
 import ctypes
 import time
 import avocado
-
-sys.path.append('./util')
-sys.path.append('../util')
-sys.path.append('../../../utils/py')
-sys.path.append('./../../utils/py')
-
+import random
 import agent_utils
 import server_utils
 import write_host_file
@@ -111,7 +106,7 @@ class ObjectDataValidation(avocado.Test):
                 self.pool.destroy(1)
         finally:
             if self.agent_sessions:
-                agent_utils.stop_agent(self.hostlist, self.agent_sessions)
+                agent_utils.stop_agent(self.agent_sessions)
             server_utils.stop_server(hosts=self.hostlist)
 
     def reconnect(self):
@@ -132,6 +127,71 @@ class ObjectDataValidation(avocado.Test):
                                self.container,
                                self.obj,
                                objtype=4)
+
+    @avocado.fail_on(DaosApiError)
+    def test_invalid_tx_commit_close(self):
+        """
+        Test ID:
+            (1)DAOS-1346: Verify commit tx bad parameter behavior.
+            (2)DAOS-1343: Verify tx_close bad parameter behavior.
+            (3)DAOS-1342: Verify tx_close through daos_api.
+        Test Description:
+            Write Avocado Test to verify commit tx and close tx
+                          bad parameter behavior.
+        :avocado: tags=all,pr,small,negative_test,neg_tx_commit,medium,vm
+        """
+        self.d_log.info("==Writing the Single Dataset for negative test...")
+        record_index = 0
+        expected_error = "RC: -1002"
+        dkey = 0
+        akey = 0
+        indata = ("{0}".format(str(akey)[0])
+                  * self.record_length[record_index])
+        c_dkey = ctypes.create_string_buffer("dkey {0}".format(dkey))
+        c_akey = ctypes.create_string_buffer("akey {0}".format(akey))
+        c_value = ctypes.create_string_buffer(indata)
+        c_size = ctypes.c_size_t(ctypes.sizeof(c_value))
+        try:
+            new_transaction = self.container.get_new_tx()
+        except DaosApiError as excep:
+            #initial container get_new_tx failed, skip rest of the test
+            self.fail("##container get_new_tx failed: {}".format(excep))
+        invalid_transaction = new_transaction + random.randint(1000, 383838)
+        self.log.info("==new_transaction=     %s", new_transaction)
+        self.log.info("==invalid_transaction= %s", invalid_transaction)
+        self.ioreq.single_insert(c_dkey, c_akey, c_value, c_size,
+                                 new_transaction)
+        try:
+            self.container.commit_tx(invalid_transaction)
+            self.fail(
+                "##(1.1)Container.commit_tx passing with invalid handle")
+        except DaosApiError as excep:
+            self.log.info(str(excep))
+            self.log.info(
+                "==(1)Expecting failure: invalid Container.commit_tx.")
+            if expected_error not in str(excep):
+                self.fail(
+                    "##(1.2)Expecting error RC: -1002, but got {}."
+                    .format(str(excep)))
+        try:
+            self.container.close_tx(invalid_transaction)
+            self.fail(
+                "##(2.1)Container.close_tx passing with invalid handle")
+        except DaosApiError as excep:
+            self.log.info(str(excep))
+            self.log.info(
+                "==(2)Expecting failure: invalid Container.commit_tx.")
+            if expected_error not in str(excep):
+                self.fail(
+                    "##(2.2)Expecting error RC: -1002, but got {}."
+                    .format(str(excep)))
+        try:
+            self.container.close_tx(new_transaction)
+            self.log.info("==(3)container.close_tx test passed.")
+        except DaosApiError as excep:
+            self.log.info(str(excep))
+            self.fail("##(3)Failed on close_tx.")
+
 
     @avocado.fail_on(DaosApiError)
     def test_single_object_validation(self):

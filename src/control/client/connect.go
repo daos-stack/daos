@@ -24,9 +24,19 @@
 package client
 
 import (
+	"bytes"
 	"fmt"
+	"sort"
+	"time"
 
 	"github.com/daos-stack/daos/src/control/common"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/security"
+)
+
+const (
+	msgBadType      = "type assertion failed, wanted %+v got %+v"
+	msgConnInactive = "socket connection is not active (%s)"
 )
 
 // Addresses is an alias for a slice of <ipv4/hostname>:<port> addresses.
@@ -39,48 +49,85 @@ type ClientResult struct {
 	Err     error
 }
 
+func (cr ClientResult) String() string {
+	if cr.Err != nil {
+		return fmt.Sprintf("error: " + cr.Err.Error())
+	}
+	return fmt.Sprintf("%+v", cr.Value)
+}
+
 // ResultMap map client addresses to method call ClientResults
 type ResultMap map[string]ClientResult
 
+func (rm ResultMap) String() string {
+	var buf bytes.Buffer
+	servers := make([]string, 0, len(rm))
+
+	for server := range rm {
+		servers = append(servers, server)
+	}
+	sort.Strings(servers)
+
+	for _, server := range servers {
+		fmt.Fprintf(&buf, "%s:\n\t%s\n", server, rm[server])
+	}
+
+	return buf.String()
+}
+
+// ScmModules is an alias for protobuf ScmModule message slice representing
+// a number of SCM modules installed on a storage node.
+
 // ControllerFactory is an interface providing capability to connect clients.
 type ControllerFactory interface {
-	create(string) (Control, error)
+	create(string, *security.TransportConfig) (Control, error)
 }
 
 // controllerFactory as an implementation of ControllerFactory.
 type controllerFactory struct{}
 
 // create instantiates and connects a client to server at given address.
-func (c *controllerFactory) create(address string) (Control, error) {
+func (c *controllerFactory) create(address string, cfg *security.TransportConfig) (Control, error) {
 	controller := &control{}
 
-	err := controller.connect(address)
+	err := controller.connect(address, cfg)
 
 	return controller, err
 }
 
-// Connect is an interface providing functionality across multiple
+// Connect is an external interface providing functionality across multiple
 // connected clients (controllers).
 type Connect interface {
+	// SetTransportConfig sets the gRPC transport confguration
+	SetTransportConfig(*security.TransportConfig)
 	// ConnectClients attempts to connect a list of addresses
 	ConnectClients(Addresses) ResultMap
 	// GetActiveConns verifies states and removes inactive conns
 	GetActiveConns(ResultMap) ResultMap
 	ClearConns() ResultMap
-	ScanStorage() (ClientNvmeMap, ClientScmMap)
-	FormatStorage() (ClientNvmeMap, ClientMountMap)
-	// TODO: implement Update and Burnin client features
-	//UpdateStorage() (ClientNvmeMap, ClientScmMap)
-	//BurninStorage() (ClientNvmeMap, ClientScmMap)
+	ScanStorage() (ClientCtrlrMap, ClientModuleMap)
+	FormatStorage() (ClientCtrlrMap, ClientMountMap)
+	UpdateStorage(*pb.UpdateStorageReq) (ClientCtrlrMap, ClientModuleMap)
+	// TODO: implement Burnin client features
+	//BurninStorage() (ClientCtrlrMap, ClientModuleMap)
 	ListFeatures() ClientFeatureMap
 	KillRank(uuid string, rank uint32) ResultMap
+	CreatePool(*pb.CreatePoolReq) ResultMap
+	DestroyPool(*pb.DestroyPoolReq) ResultMap
 }
 
 // connList is an implementation of Connect and stores controllers
-// (connections to clients, one per target server).
+// (connections to clients, one per DAOS server).
 type connList struct {
-	factory     ControllerFactory
-	controllers []Control
+	transportConfig *security.TransportConfig
+	factory         ControllerFactory
+	controllers     []Control
+}
+
+// SetTransportConfig sets the internal transport credentials to be passed
+// to subsequent connect calls as the gRPC dial credentials.
+func (c *connList) SetTransportConfig(cfg *security.TransportConfig) {
+	c.transportConfig = cfg
 }
 
 // ConnectClients populates collection of client-server controllers.
@@ -93,7 +140,7 @@ func (c *connList) ConnectClients(addresses Addresses) ResultMap {
 
 	for _, address := range addresses {
 		go func(f ControllerFactory, addr string, ch chan ClientResult) {
-			c, err := f.create(addr)
+			c, err := f.create(addr, c.transportConfig)
 			ch <- ClientResult{addr, c, err}
 		}(c.factory, address, ch)
 	}
@@ -108,10 +155,7 @@ func (c *connList) ConnectClients(addresses Addresses) ResultMap {
 
 		controller, ok := res.Value.(Control)
 		if !ok {
-			res.Err = fmt.Errorf(
-				"type assertion failed, wanted %+v got %+v",
-				control{}, res.Value)
-
+			res.Err = fmt.Errorf(msgBadType, control{}, res.Value)
 			results[res.Address] = res
 			continue
 		}
@@ -119,6 +163,7 @@ func (c *connList) ConnectClients(addresses Addresses) ResultMap {
 		c.controllers = append(c.controllers, controller)
 	}
 
+	time.Sleep(100 * time.Millisecond)
 	return c.GetActiveConns(results)
 }
 
@@ -126,6 +171,9 @@ func (c *connList) ConnectClients(addresses Addresses) ResultMap {
 //
 // TODO: resolve hostname and compare destination IPs for duplicates.
 func (c *connList) GetActiveConns(results ResultMap) ResultMap {
+	if results == nil {
+		results = make(ResultMap)
+	}
 	addresses := []string{}
 
 	controllers := c.controllers[:0]
@@ -142,8 +190,7 @@ func (c *connList) GetActiveConns(results ResultMap) ResultMap {
 			addresses = append(addresses, address)
 			controllers = append(controllers, mc)
 		} else {
-			err = fmt.Errorf(
-				"socket connection is not active (%s)", state)
+			err = fmt.Errorf(msgConnInactive, state)
 		}
 
 		results[address] = ClientResult{address, state, err}
@@ -178,7 +225,8 @@ func (c *connList) ClearConns() ResultMap {
 // makeRequests performs supplied method over each controller in connList and
 // stores generic result object for each in map keyed on address.
 func (c *connList) makeRequests(
-	requestFn func(Control, chan ClientResult)) ResultMap {
+	req interface{},
+	requestFn func(Control, interface{}, chan ClientResult)) ResultMap {
 
 	cMap := make(ResultMap) // mapping of server host addresses to results
 	ch := make(chan ClientResult)
@@ -186,7 +234,7 @@ func (c *connList) makeRequests(
 	addrs := []string{}
 	for _, mc := range c.controllers {
 		addrs = append(addrs, mc.getAddress())
-		go requestFn(mc, ch)
+		go requestFn(mc, req, ch)
 	}
 
 	for {
@@ -213,7 +261,8 @@ func (c *connList) makeRequests(
 // multiple clients.
 func NewConnect() Connect {
 	return &connList{
-		factory:     &controllerFactory{},
-		controllers: []Control{},
+		transportConfig: nil,
+		factory:         &controllerFactory{},
+		controllers:     []Control{},
 	}
 }

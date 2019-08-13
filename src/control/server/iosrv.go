@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
 	"fmt"
@@ -30,23 +30,48 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/log"
-	"github.com/golang/protobuf/proto"
+	log "github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/security"
 )
+
+const ioServerBin = "daos_io_server"
+
+func findBinary(binName string) (string, error) {
+	// Try the direct route first
+	binPath, err := exec.LookPath(binName)
+	if err == nil {
+		return binPath, nil
+	}
+
+	// If that fails, look to see if it's adjacent to
+	// this binary
+	selfPath, err := os.Readlink("/proc/self/exe")
+	if err != nil {
+		return "", errors.Wrap(err, "unable to determine path to self")
+	}
+	binPath = path.Join(path.Dir(selfPath), binName)
+	if _, err := os.Stat(binPath); err != nil {
+		return "", errors.Errorf("unable to locate %s", binName)
+	}
+	return binPath, nil
+}
 
 func formatIosrvs(config *configuration, reformat bool) error {
 	// Determine if an I/O server needs to createMS or bootstrapMS.
@@ -57,6 +82,18 @@ func formatIosrvs(config *configuration, reformat bool) error {
 	createMS, bootstrapMS, err := checkMgmtSvcReplica(addr, config.AccessPoints)
 	if err != nil {
 		return err
+	}
+	// A temporary workaround to create and start MS before we fully
+	// migrate to PMIx-less mode.
+	if !pmixless() {
+		rank, err := pmixRank()
+		if err != nil {
+			return err
+		}
+		if rank == 0 {
+			createMS = true
+			bootstrapMS = true
+		}
 	}
 
 	for i := range config.Servers {
@@ -72,6 +109,31 @@ func formatIosrvs(config *configuration, reformat bool) error {
 	}
 
 	return nil
+}
+
+// pmixless returns if we are in PMIx-less or PMIx mode.
+func pmixless() bool {
+	if _, ok := os.LookupEnv("PMIX_RANK"); !ok {
+		return true
+	}
+	if _, ok := os.LookupEnv("DAOS_PMIXLESS"); ok {
+		return true
+	}
+	return false
+}
+
+// pmixRank returns the PMIx rank. If PMIx-less or PMIX_RANK has an unexpected
+// value, it returns an error.
+func pmixRank() (rank, error) {
+	s, ok := os.LookupEnv("PMIX_RANK")
+	if !ok {
+		return nilRank, errors.New("not in PMIx mode")
+	}
+	r, err := strconv.ParseUint(s, 0, 32)
+	if err != nil {
+		return nilRank, errors.Wrap(err, "PMIX_RANK="+s)
+	}
+	return rank(r), nil
 }
 
 // formatIosrv will prepare DAOS IO servers and store relevant metadata.
@@ -107,28 +169,12 @@ func formatIosrv(
 		return nil
 	}
 
-	msg := "continuing without storage format on server %d "
-	if syscall.Getuid() == 0 {
-		if config.UserName != "" {
-			log.Debugf("waiting for storage format on server %d\n", i)
-
-			// wait on format storage grpc call before creating superblock
-			srv.storWaitGroup.Wait()
-		} else {
-			log.Debugf(
-				msg+"(username not specified in server config)\n",
-				i)
-		}
-	} else {
-		log.Debugf(msg+"(%s running as non-root user)\n", i, os.Args[0])
-	}
-
 	// check scm has been mounted before proceeding to write to it
 	if err := config.checkMount(srv.ScmMount); err != nil {
 		return errors.WithMessage(
 			err,
 			fmt.Sprintf(
-				"server%d scm mount path (%s) not mounted",
+				"server %d scm mount path (%s) not mounted",
 				i, srv.ScmMount))
 	}
 
@@ -256,7 +302,7 @@ func (srv *iosrv) start() (err error) {
 	}
 	defer func() {
 		if err != nil {
-			srv.stopCmd()
+			_ = srv.stopCmd()
 		}
 	}()
 
@@ -270,16 +316,10 @@ func (srv *iosrv) start() (err error) {
 		return errors.New("received SIGCHLD")
 	}
 
-	// If we are launched using orterun and DAOS_PMIXLESS isn't set, use
-	// the old bootstrapping method.
-	if _, ok := os.LookupEnv("PMIX_RANK"); ok {
-		if _, ok := os.LookupEnv("DAOS_PMIXLESS"); !ok {
+	if pmixless() {
+		if err = srv.setRank(ready); err != nil {
 			return
 		}
-	}
-
-	if err = srv.setRank(ready); err != nil {
-		return
 	}
 
 	if srv.super.CreateMS {
@@ -295,10 +335,13 @@ func (srv *iosrv) start() (err error) {
 	}
 
 	if srv.super.MS {
-		err = srv.callStartMS()
+		if err = srv.callStartMS(); err != nil {
+			return
+		}
 	}
 
-	return
+	// Notify the I/O server that it may set up its server modules now.
+	return srv.callSetUp()
 }
 
 func (srv *iosrv) wait() error {
@@ -310,7 +353,12 @@ func (srv *iosrv) wait() error {
 
 func (srv *iosrv) startCmd() error {
 	// Exec io_server with generated cli opts from config context.
-	srv.cmd = exec.Command("daos_io_server", srv.config.Servers[srv.index].CliOpts...)
+	binPath, err := findBinary(ioServerBin)
+	if err != nil {
+		return errors.Wrapf(err, "can't start %s", ioServerBin)
+	}
+
+	srv.cmd = exec.Command(binPath, srv.config.Servers[srv.index].CliOpts...)
 	srv.cmd.Stdout = os.Stdout
 	srv.cmd.Stderr = os.Stderr
 	srv.cmd.Env = os.Environ()
@@ -326,7 +374,7 @@ func (srv *iosrv) startCmd() error {
 	signal.Notify(srv.sigchld, syscall.SIGCHLD)
 
 	// Start the DAOS I/O server.
-	err := srv.cmd.Start()
+	err = srv.cmd.Start()
 	if err != nil {
 		return errors.WithStack(err)
 	}
@@ -336,7 +384,7 @@ func (srv *iosrv) startCmd() error {
 
 func (srv *iosrv) stopCmd() error {
 	// Ignore potential errors, as the I/O server may have already died.
-	srv.cmd.Process.Kill()
+	_ = srv.cmd.Process.Kill()
 
 	if err := srv.cmd.Wait(); err != nil {
 		return errors.WithStack(err)
@@ -353,13 +401,15 @@ func (srv *iosrv) setRank(ready *srvpb.NotifyReadyReq) error {
 	}
 
 	if !srv.super.ValidRank || !srv.super.MS {
-		resp, err := mgmtJoin(srv.config.AccessPoints[0], &mgmtpb.JoinReq{
-			Uuid:  srv.super.UUID,
-			Rank:  uint32(r),
-			Uri:   ready.Uri,
-			Nctxs: ready.Nctxs,
-			Addr:  fmt.Sprintf("0.0.0.0:%d", srv.config.Port),
-		})
+		resp, err := mgmtJoin(context.Background(), srv.config.AccessPoints[0],
+			srv.config.TransportConfig,
+			&mgmtpb.JoinReq{
+				Uuid:  srv.super.UUID,
+				Rank:  uint32(r),
+				Uri:   ready.Uri,
+				Nctxs: ready.Nctxs,
+				Addr:  fmt.Sprintf("0.0.0.0:%d", srv.config.Port),
+			})
 		if err != nil {
 			return err
 		} else if resp.State == mgmtpb.JoinResp_OUT {
@@ -397,11 +447,11 @@ func (srv *iosrv) callCreateMS() error {
 		return err
 	}
 
-	resp := &mgmtpb.DaosResponse{}
+	resp := &mgmtpb.DaosResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return errors.Wrap(err, "unmarshal CreateMS response")
 	}
-	if resp.Status != mgmtpb.DaosRequestStatus_SUCCESS {
+	if resp.Status != 0 {
 		return errors.Errorf("CreateMS: %d\n", resp.Status)
 	}
 
@@ -414,11 +464,11 @@ func (srv *iosrv) callStartMS() error {
 		return err
 	}
 
-	resp := &mgmtpb.DaosResponse{}
+	resp := &mgmtpb.DaosResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return errors.Wrap(err, "unmarshal StartMS response")
 	}
-	if resp.Status != mgmtpb.DaosRequestStatus_SUCCESS {
+	if resp.Status != 0 {
 		return errors.Errorf("StartMS: %d\n", resp.Status)
 	}
 
@@ -431,12 +481,29 @@ func (srv *iosrv) callSetRank(rank rank) error {
 		return err
 	}
 
-	resp := &mgmtpb.DaosResponse{}
+	resp := &mgmtpb.DaosResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return errors.Wrap(err, "unmarshall SetRank response")
 	}
-	if resp.Status != mgmtpb.DaosRequestStatus_SUCCESS {
+	if resp.Status != 0 {
 		return errors.Errorf("SetRank: %d\n", resp.Status)
+	}
+
+	return nil
+}
+
+func (srv *iosrv) callSetUp() error {
+	dresp, err := makeDrpcCall(srv.conn, mgmtModuleID, setUp, nil)
+	if err != nil {
+		return err
+	}
+
+	resp := &mgmtpb.DaosResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return errors.Wrap(err, "unmarshall SetUp response")
+	}
+	if resp.Status != 0 {
+		return errors.Errorf("SetUp: %d\n", resp.Status)
 	}
 
 	return nil
@@ -446,14 +513,24 @@ func (srv *iosrv) writeSuper() error {
 	return writeIosrvSuper(iosrvSuperPath(srv.config.Servers[srv.index].ScmMount), srv.super)
 }
 
-// mgmtJoin sends the Join request to MS, retrying indefinitely until MS
-// responses.
-func mgmtJoin(ap string, req *mgmtpb.JoinReq) (*mgmtpb.JoinResp, error) {
-	log.Debugf("join(%s, %+v)", ap, *req)
+// mgmtJoin sends Join request(s) to MS.
+func mgmtJoin(ctx context.Context, ap string, tc *security.TransportConfig, req *mgmtpb.JoinReq) (*mgmtpb.JoinResp, error) {
+	prefix := fmt.Sprintf("join(%s, %+v)", ap, *req)
+	log.Debugf(prefix + " begin")
+	defer log.Debugf(prefix + " end")
 
-	conn, err := grpc.Dial(ap, grpc.WithInsecure(), grpc.WithBlock(),
-		grpc.WithBackoffMaxDelay(5*time.Second),
-		grpc.WithDefaultCallOptions(grpc.FailFast(false)))
+	const delay = 3 * time.Second
+
+	var opts []grpc.DialOption
+	authDialOption, err := security.DialOptionForTransportConfig(tc)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to determine dial option from TransportConfig")
+	}
+
+	// Setup Dial Options that will always be included.
+	opts = append(opts, grpc.WithBlock(), grpc.WithBackoffMaxDelay(delay),
+		grpc.WithDefaultCallOptions(grpc.FailFast(false)), authDialOption)
+	conn, err := grpc.DialContext(ctx, ap, opts...)
 	if err != nil {
 		return nil, errors.Wrapf(err, "dial %s", ap)
 	}
@@ -461,10 +538,31 @@ func mgmtJoin(ap string, req *mgmtpb.JoinReq) (*mgmtpb.JoinResp, error) {
 
 	client := mgmtpb.NewMgmtSvcClient(conn)
 
-	resp, err := client.Join(context.Background(), req)
-	if err != nil {
-		return nil, errors.Wrapf(err, "join %s %v", ap, *req)
-	}
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, errors.Wrap(ctx.Err(), prefix)
+		default:
+		}
 
-	return resp, nil
+		resp, err := client.Join(ctx, req)
+		if err != nil {
+			log.Debugf(prefix+": %v", err)
+		} else {
+			// TODO: Stop retrying upon certain errors (e.g., "not
+			// MS", "rank unavailable", and "excluded").
+			if resp.Status != 0 {
+				log.Debugf(prefix+": %d", resp.Status)
+			} else {
+				return resp, nil
+			}
+		}
+
+		// Delay next retry.
+		delayCtx, cancelDelayCtx := context.WithTimeout(ctx, delay)
+		select {
+		case <-delayCtx.Done():
+		}
+		cancelDelayCtx()
+	}
 }

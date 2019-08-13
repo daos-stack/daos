@@ -107,23 +107,18 @@ dss_tls_get()
 		pthread_getspecific(dss_tls_key);
 }
 
-#define D_TIME_START(sp, op)			\
+#define D_TIME_START(sp, start, op)		\
 do {						\
 	if ((sp) == NULL)			\
 		break;				\
-	D_ASSERT(op < MAX_PROFILE_OP);		\
-	D_ASSERT(sp->sp_time[op] == 0);		\
-	sp->sp_time[op] = daos_get_ntime();	\
+	start = daos_get_ntime();		\
 } while (0)
 
-#define D_TIME_END(sp, op)			\
+#define D_TIME_END(sp, start, op)		\
 do {						\
-	if ((sp) == NULL)			\
+	if ((sp) == NULL || start == 0)		\
 		break;				\
-	D_ASSERT(op < MAX_PROFILE_OP);		\
-	D_ASSERT(sp->sp_time[op] != 0);		\
-	srv_profile_count(sp, op, (int)(daos_get_ntime() - sp->sp_time[op])); \
-	sp->sp_time[op] = 0;			\
+	srv_profile_count(sp, op, (int)(daos_get_ntime() - start)); \
 } while (0)
 
 /**
@@ -261,11 +256,9 @@ struct srv_profile_chunk {
 	int		      spc_chunk_size;
 };
 
-#define MAX_PROFILE_OP	64
 /* Holding the total trunk list for a specific profiling module */
 struct srv_profile {
 	struct srv_profile_chunk *sp_current_chunk;
-	uint64_t	sp_time[MAX_PROFILE_OP];
 	d_list_t	sp_list;	/* active list for profile chunk */
 	d_list_t	sp_idle_list;	/* idle list for profile chunk */
 	/* Count in idle list & list */
@@ -528,12 +521,12 @@ int ds_obj_close(daos_handle_t obj_hl);
 
 int ds_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch,
 		 daos_key_t *dkey, uint32_t *nr,
-		 daos_key_desc_t *kds, daos_sg_list_t *sgl,
+		 daos_key_desc_t *kds, d_sg_list_t *sgl,
 		 daos_anchor_t *anchor);
 
 int ds_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
 		 daos_key_t *dkey, unsigned int nr,
-		 daos_iod_t *iods, daos_sg_list_t *sgls,
+		 daos_iod_t *iods, d_sg_list_t *sgls,
 		 daos_iom_t *maps);
 int ds_obj_list_obj(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		daos_key_t *akey, daos_size_t *size, uint32_t *nr,
@@ -555,7 +548,7 @@ struct dss_enum_arg {
 			daos_key_desc_t	       *kds;
 			int			kds_cap;
 			int			kds_len;
-			daos_sg_list_t	       *sgl;
+			d_sg_list_t	       *sgl;
 			int			sgl_idx;
 		};
 		struct {	/* fill_recxs && type == S||R */
@@ -601,7 +594,7 @@ struct dss_enum_unpack_io {
 	int	       *ui_recxs_caps;
 	daos_epoch_t	ui_dkey_eph;
 	daos_epoch_t   *ui_akey_ephs;
-	daos_sg_list_t *ui_sgls;	/**< optional */
+	d_sg_list_t *ui_sgls;	/**< optional */
 	uint32_t	ui_version;
 };
 
@@ -614,6 +607,15 @@ d_rank_t dss_self_rank(void);
 
 unsigned int dss_ctx_nr_get(void);
 
-void dss_notify_rank_set(void);
+/** Server init state (see server_init) */
+enum dss_init_state {
+	DSS_INIT_STATE_INIT,		/**< initial state */
+	DSS_INIT_STATE_RANK_SET,	/**< rank has been set */
+	DSS_INIT_STATE_SET_UP		/**< ready to set up modules */
+};
+
+void dss_init_state_set(enum dss_init_state state);
+
+bool dss_pmixless(void);
 
 #endif /* __DSS_API_H__ */

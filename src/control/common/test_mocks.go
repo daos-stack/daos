@@ -23,9 +23,7 @@
 
 package common
 
-import (
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-)
+import pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 
 // MockFeaturePB is a mock protobuf Feature message used in tests for multiple
 // packages.
@@ -58,7 +56,20 @@ func MockControllerPB(fwRev string) *pb.NvmeController {
 	}
 }
 
-// MockModulePB is a mock protobuf Module message used in tests for
+// NewMockControllerPB generates specific protobuf controller message
+func NewMockControllerPB(
+	pciAddr string, fwRev string, model string, serial string,
+	nss []*pb.NvmeController_Namespace) *pb.NvmeController {
+
+	return &pb.NvmeController{
+		Model:      model,
+		Serial:     serial,
+		Pciaddr:    pciAddr,
+		Fwrev:      fwRev,
+		Namespaces: nss,
+	}
+}
+
 // multiple packages.
 func MockModulePB() *pb.ScmModule {
 	return &pb.ScmModule{
@@ -71,6 +82,13 @@ func MockModulePB() *pb.ScmModule {
 			Socket:     uint32(4),
 		},
 	}
+}
+
+// MockMountPB is a mock protobuf Mount message used in tests for
+// multiple packages.
+func MockMountPB() *pb.ScmMount {
+	// MockModulePB is a mock protobuf Module message used in tests for
+	return &pb.ScmMount{Mntpoint: "/mnt/daos"}
 }
 
 // MockCheckMountOk mocks CheckMount and always returns nil error.

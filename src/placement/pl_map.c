@@ -537,7 +537,7 @@ pl_map_version(struct pl_map *map)
  *
  * \param [IN]	oid		The object identifier.
  * \param [IN]	shard_idx	The shard index.
- * \param [IN]	shards_ns	Total count of the object's shards.
+ * \param [IN]	grp_size	Group size of obj layout.
  * \param [IN]	for_tgt_id	Require leader target id or leader shard index.
  * \param [IN]	pl_get_shard	The callback function to parse out pl_obj_shard
  *				from the given @data.
@@ -547,7 +547,7 @@ pl_map_version(struct pl_map *map)
  *				shard index. Negative value if error.
  */
 int
-pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, int shards_nr,
+pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
 		 bool for_tgt_id, pl_get_shard_t pl_get_shard, void *data)
 {
 	struct pl_obj_shard		*shard;
@@ -558,10 +558,8 @@ pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, int shards_nr,
 	int				 start;
 	int				 pos;
 	int				 off;
+	int				 replica_idx;
 	int				 i;
-
-	if (shards_nr <= shard_idx)
-		return -DER_INVAL;
 
 	oc_attr = daos_oclass_attr_find(oid);
 	if (oc_attr->ca_resil != DAOS_RES_REPL) {
@@ -573,9 +571,9 @@ pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, int shards_nr,
 		return shard->po_shard;
 	}
 
-	replicas = oc_attr->u.repl.r_num;
+	replicas = oc_attr->u.rp.r_num;
 	if (replicas == DAOS_OBJ_REPL_MAX)
-		replicas = shards_nr;
+		replicas = grp_size;
 
 	if (replicas < 1)
 		return -DER_INVAL;
@@ -605,9 +603,11 @@ pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, int shards_nr,
 	 */
 	rdg_idx = shard_idx / replicas;
 	start = rdg_idx * replicas;
-	preferred = start + (oid.lo + rdg_idx) % replicas;
+	replica_idx = (oid.lo + rdg_idx) % replicas;
+	preferred = start + replica_idx;
 	for (i = 0, off = preferred, pos = -1; i < replicas;
-	     i++, off = (off + 1) % replicas + start) {
+	     i++, replica_idx = (replica_idx + 1) % replicas,
+	     off = start + replica_idx) {
 		shard = pl_get_shard(data, off);
 		if (shard->po_target == -1 || shard->po_rebuilding)
 			continue;

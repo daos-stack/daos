@@ -21,10 +21,9 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
-	"fmt"
 	"hash/fnv"
 	"io/ioutil"
 	"os"
@@ -32,10 +31,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/log"
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
+
+	"github.com/daos-stack/daos/src/control/common"
+	log "github.com/daos-stack/daos/src/control/logging"
 )
 
 const (
@@ -55,11 +55,12 @@ func (c *configuration) loadConfig() error {
 
 	bytes, err := ioutil.ReadFile(c.Path)
 	if err != nil {
-		return err
+		return errors.WithMessage(err, "reading file")
 	}
 
 	if err = c.parse(bytes); err != nil {
-		return err
+		return errors.WithMessage(err, "parse failed; config contains invalid "+
+			"parameters and may be out of date, see server config examples")
 	}
 
 	return nil
@@ -93,33 +94,40 @@ func (c *configuration) setPath(path string) error {
 
 // loadConfigOpts derives file location and parses configuration options
 // from both config file and commandline flags.
-func loadConfigOpts(cliOpts *cliOptions, host string) (
-	config configuration, err error) {
-
-	config = newConfiguration()
+func loadConfigOpts(cliOpts *cliOptions, host string) (*configuration, error) {
+	config := newConfiguration()
 
 	if err := config.setPath(cliOpts.ConfigPath); err != nil {
-		return config, errors.WithMessage(err, "set path")
+		return nil, errors.WithMessage(err, "set path")
 	}
 
 	if err := config.loadConfig(); err != nil {
-		return config, errors.Wrap(err, "read config file")
+		return nil, errors.WithMessagef(err, "loading %s", config.Path)
 	}
 	log.Debugf("DAOS config read from %s", config.Path)
+
+	// Override certificate support if specified in cliOpts
+	if cliOpts.Insecure {
+		config.TransportConfig.AllowInsecure = true
+	}
 
 	// get unique identifier to activate SPDK multiprocess mode
 	config.NvmeShmID = hash(host + strconv.Itoa(os.Getpid()))
 
-	if err = config.getIOParams(cliOpts); err != nil {
-		return config, errors.Wrap(
+	if err := config.getIOParams(cliOpts); err != nil {
+		return nil, errors.Wrap(
 			err, "failed to retrieve I/O service params")
 	}
 
 	if len(config.Servers) == 0 {
-		return config, errors.New("missing I/O service params")
+		return nil, errors.New("missing I/O service params")
 	}
 
-	return config, nil
+	for idx := range config.Servers {
+		config.Servers[idx].Hostname = host
+	}
+
+	return &config, nil
 }
 
 // saveActiveConfig saves read-only active config, tries config dir then /tmp/
@@ -144,59 +152,11 @@ func saveActiveConfig(config *configuration) {
 // hash produces unique int from string, mask MSB on conversion to signed int
 func hash(s string) int {
 	h := fnv.New32a()
-	h.Write([]byte(s))
-	// mask MSB of uint32 as this will be sign bit
-	return int(h.Sum32() & 0x7FFFFFFF)
-}
+	if _, err := h.Write([]byte(s)); err != nil {
+		panic(err) // should never happen
+	}
 
-// setNumCores takes number of cores and converts to list of ranges
-func setNumCores(num int) (rs []string, err error) {
-	if num < 1 {
-		return rs, errors.Errorf(
-			"invalid number of cpus (cores) specified: %d", num)
-	}
-	if num == 1 {
-		return append(rs, "0"), err
-	}
-	return append(rs, "0-"+strconv.Itoa(num-1)), err
-}
-
-// getNumCores takes list of ranges specified by strings and returns number of
-// contiguous cores represented
-func getNumCores(rs []string) (num int, err error) {
-	// check list is nil or empty as in that case we want to pass 0 to maintain
-	// functional parity if core/cpu count is unspecified on cli and config
-	if (rs == nil) || (len(rs) == 0) {
-		return
-	}
-	var lower, upper int
-	for _, s := range rs {
-		limits := strings.Split(s, "-")
-		if len(limits) == 1 {
-			if _, err = strconv.Atoi(limits[0]); err != nil {
-				return
-			}
-			num++
-			continue
-		}
-		if len(limits) == 2 {
-			lower, err = strconv.Atoi(limits[0])
-			if err != nil {
-				return
-			}
-			upper, err = strconv.Atoi(limits[1])
-			if err != nil {
-				return
-			}
-			if upper > lower {
-				num += (upper - lower) + 1
-				continue
-			}
-		}
-		return num, errors.Errorf(
-			"unsupported range format %s, need <int>-<int> e.g. 1-10", s)
-	}
-	return
+	return int(h.Sum32() & 0x7FFFFFFF) // mask MSB of uint32 as this will be sign bit
 }
 
 // populateCliOpts populates options string slice for single I/O service
@@ -205,16 +165,9 @@ func (c *configuration) populateCliOpts(i int) error {
 	// config/parent object
 	srv := &c.Servers[i]
 
-	// calculate number of cores to use from supplied target ranges
-	var numCores int
-	numCores, err := getNumCores(srv.Targets)
-	if err != nil {
-		return errors.Errorf("service%d targets invalid: %s", i, err)
-	}
-
 	srv.CliOpts = append(
 		srv.CliOpts,
-		"-t", strconv.Itoa(numCores),
+		"-t", strconv.Itoa(srv.Targets),
 		"-g", c.SystemName,
 		"-s", srv.ScmMount)
 
@@ -237,13 +190,6 @@ func (c *configuration) populateCliOpts(i int) error {
 		srv.CliOpts = append(
 			srv.CliOpts, "-f", strconv.Itoa(srv.FirstCore))
 	}
-	if c.SystemMap != "" {
-		srv.CliOpts = append(srv.CliOpts, "-y", c.SystemMap)
-	}
-	if srv.Rank != nil {
-		srv.CliOpts = append(
-			srv.CliOpts, "-r", srv.Rank.String())
-	}
 	if c.SocketDir != "" {
 		srv.CliOpts = append(srv.CliOpts, "-d", c.SocketDir)
 	}
@@ -262,7 +208,7 @@ func (c *configuration) populateCliOpts(i int) error {
 // options overriding those loaded from configuration file.
 //
 // Current cli opts for daos_server also specified in config:
-//   port, mount path, cores, group, rank, socket dir
+//   port, mount path, targets, group, rank, socket dir
 // Current cli opts to be passed to be stored by daos_server:
 //   modules, attach, map
 func (c *configuration) cmdlineOverride(opts *cliOptions) {
@@ -270,11 +216,9 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 	if opts.Port > 0 {
 		c.Port = int(opts.Port)
 	}
-	if opts.Rank != nil {
-		// global rank parameter should only apply to first I/O service
-		c.Servers[0].Rank = opts.Rank
+	if opts.Insecure {
+		c.TransportConfig.AllowInsecure = true
 	}
-
 	// override each per-server config
 	for i := range c.Servers {
 		srv := &c.Servers[i]
@@ -288,13 +232,13 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 			srv.ScmMount = c.ScmMountPath
 		}
 		if opts.Cores > 0 {
-			fmt.Println("-c option deprecated, please use -t instead")
-			srv.Targets, _ = setNumCores(int(opts.Cores))
+			log.Debugf("-c option deprecated, please use -t instead")
+			srv.Targets = int(opts.Cores)
 		}
 		// Targets should override Cores if specified in cmdline or
 		// config file.
 		if opts.Targets > 0 {
-			srv.Targets, _ = setNumCores(int(opts.Targets))
+			srv.Targets = int(opts.Targets)
 		}
 		if opts.NrXsHelpers != nil {
 			srv.NrXsHelpers = int(*opts.NrXsHelpers)
@@ -316,11 +260,6 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 	if opts.Attach != nil {
 		c.Attach = *opts.Attach
 	}
-	if opts.Map != nil {
-		c.SystemMap = *opts.Map
-	}
-
-	return
 }
 
 // validateConfig asserts that config meets minimum requirements
@@ -369,9 +308,15 @@ func (c *configuration) getIOParams(cliOpts *cliOptions) error {
 			srv.EnvVars,
 			"CRT_PHY_ADDR_STR="+c.Provider,
 			"OFI_INTERFACE="+srv.FabricIface,
-			"OFI_PORT="+strconv.Itoa(srv.FabricIfacePort),
 			"D_LOG_MASK="+srv.LogMask,
 			"D_LOG_FILE="+srv.LogFile)
+
+		// populate only if non-zero
+		if srv.FabricIfacePort != 0 {
+			srv.EnvVars = append(
+				srv.EnvVars,
+				"OFI_PORT="+strconv.Itoa(srv.FabricIfacePort))
+		}
 	}
 
 	return nil
@@ -393,15 +338,15 @@ func (c *configuration) populateEnv(i int, envs *[]string) {
 	}
 }
 
-func (c *configuration) setLogging(name string) (*os.File, error) {
+func (c *configuration) setLogging(name string, useJSON bool) (*os.File, error) {
 	// Set log level mask for default logger from config.
 	switch c.ControlLogMask {
 	case cLogDebug:
+		log.SetLevel(log.LogLevelDebug)
 		log.Debugf("Switching control log level to DEBUG")
-		log.SetLevel(log.Debug)
 	case cLogError:
 		log.Debugf("Switching control log level to ERROR")
-		log.SetLevel(log.Error)
+		log.SetLevel(log.LogLevelError)
 	}
 
 	// Set log file for default logger if specified in config.
@@ -412,18 +357,31 @@ func (c *configuration) setLogging(name string) (*os.File, error) {
 				err, "create log file")
 		}
 
-		log.Debugf(
-			"%s logging to file %s",
-			os.Args[0], c.ControlLogFile)
-
-		log.SetOutput(f)
+		log.Infof("%s logging to file %s", os.Args[0], c.ControlLogFile)
+		newLogger := log.NewCombinedLogger(name, f)
+		if useJSON {
+			newLogger = newLogger.WithJSONOutput()
+		}
+		log.SetLogger(newLogger)
 
 		return f, nil
 	}
 
+	log.Info("no control log file specified; logging to stdout")
+
 	// if no logfile specified, output from multiple hosts
 	// may get aggregated, prefix entries with hostname
-	log.NewDefaultLogger(log.Debug, name+" ", os.Stderr)
+	newLogger := log.NewStdoutLogger(name)
+	if useJSON {
+		newLogger = newLogger.WithJSONOutput()
+	}
+	log.SetLogger(newLogger)
+
+	for i, srv := range c.Servers {
+		if srv.LogFile == "" {
+			log.Errorf("no daos log file specified for server %d", i)
+		}
+	}
 
 	return nil, nil
 }
