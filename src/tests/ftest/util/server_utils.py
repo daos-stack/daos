@@ -118,6 +118,22 @@ class ServerCommand(CommandWithParameters):
         names.extend(["request", "action"])
         return names
 
+    def get_params(self, test, path="/run/daos_server/*"):
+        """Get values for all of the server command params using a yaml file.
+
+        Sets each BasicParameter object's value to the yaml key that matches
+        the assigned name of the BasicParameter object in this class. For
+        example, the self.block_size.value will be set to the value in the yaml
+        file with the key 'block_size'.
+
+        Args:
+            test (Test): avocado Test object
+            path (str, optional): yaml namespace.
+                Defaults to "/run/daos_server/*".
+
+        """
+        super(ServerCommand, self).get_params(test, path)
+
     def get_launch_command(self, manager, uri=None, env=None):
         """Get the process launch command used to run daos_server.
 
@@ -338,14 +354,6 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
         # First make sure there are no existing servers running
         kill_server(servers)
 
-        # Clean the tmpfs on the servers
-        if clean:
-            for server in servers:
-                subprocess.check_call(
-                    ['ssh', server,
-                     ("find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | xargs "
-                      "-0r rm -rf")])
-
         # Pile of build time variables
         with open(os.path.join(basepath, ".build_vars.json")) as json_vars:
             build_vars = json.load(json_vars)
@@ -506,19 +514,18 @@ def kill_server(hosts):
                  "pkill '(daos_server|daos_io_server)' --signal KILL"]
     for host in hosts:
         subprocess.call(
-            "ssh {0} \"{1}\"".format(host, '; '.join(kill_cmds)), shell=True)
+            "ssh {0} '{1}'".format(host, '; '.join(kill_cmds)), shell=True)
 
 
 def clean_server(hosts):
-    """Clean the /mnt/daos dir and /tmp dir on the servers.
+    """Clean the tmpfs  on the servers.
 
     Args:
         hosts (list): list of host names where servers are running
     """
-    cleanup_cmds = ["if [ -e {0} ]; then umount {0}; fi".format("/mnt/daos"),
-                    "rm -rf /mnt/daos",
-                    "rm -rf /tmp/daos_sockets/",
-                    "rm -rf /tmp/*.log"]
+    cleanup_cmds = [("find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | xargs "
+                    "-0r rm -rf")]
+
     for host in hosts:
-        subprocess.call("ssh {0} \"{1}\"".format(host, '; '.join(cleanup_cmds)),
+        subprocess.call("ssh {0} '{1}'".format(host, '; '.join(cleanup_cmds)),
                         shell=True)

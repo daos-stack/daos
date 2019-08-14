@@ -45,11 +45,11 @@ class DmgNvmeScanTest(TestWithServers):
         JIRA ID: DAOS-2485
         Test Description: Test basic dmg functionality to scan nvme the storage
         on system.
-        :avocado: tags=all,hw,dmg,control
+        :avocado: tags=all,tiny,pr,dmg,nvme_scan,basic
         """
         # Create daos_server command
         server = ServerCommand(self.hostlist_servers)
-        server.get_params(self, "/run/daos_server/*")
+        server.get_params(self)
 
         # Update config and start server
         server.update_configuration(self.basepath)
@@ -58,16 +58,12 @@ class DmgNvmeScanTest(TestWithServers):
 
         # Create daos_shell command
         dmg = DmgCommand()
-        dmg.get_params(self, "/run/dmg/*")
+        dmg.get_params(self)
 
         # Update hostlist value for dmg command
-        ports = self.params.get("ports", "/run/hosts/*")
-
-        # Check that hosts and ports are same length
-        self.assertEqual(ports, self.hostlist_servers)
-
-        servers_with_ports = ["{}:{}".format(host, ports[i])
-                              for i, host in enumerate(self.hostlist_servers)]
+        port = self.params.get("port", "/run/hosts/*")
+        servers_with_ports = [
+            "{}:{}".format(host, port) for host in self.hostlist_servers]
         dmg.hostlist.update(",".join(servers_with_ports), "dmg.hostlist")
 
         try:

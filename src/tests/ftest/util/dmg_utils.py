@@ -65,6 +65,21 @@ class DmgCommand(CommandWithParameters):
         names.extend(["request", "action"])
         return names
 
+    def get_params(self, test, path="/run/dmg/*"):
+        """Get values for all of the dmg command params using a yaml file.
+
+        Sets each BasicParameter object's value to the yaml key that matches
+        the assigned name of the BasicParameter object in this class. For
+        example, the self.block_size.value will be set to the value in the yaml
+        file with the key 'block_size'.
+
+        Args:
+            test (Test): avocado Test object
+            path (str, optional): yaml namespace. Defaults to "/run/dmg/*".
+
+        """
+        super(DmgCommand, self).get_params(test, path)
+
     def run(self, timeout=None, verbose=True, env=None, sudo=False):
         """ Run the dmg command.
 
