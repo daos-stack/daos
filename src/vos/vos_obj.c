@@ -233,9 +233,10 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 		if (oiter->it_iter.it_type == VOS_ITER_AKEY) {
 			if (rbund.rb_krec->kr_bmap & KREC_BF_EVT) {
 				ent->ie_child_type = VOS_ITER_RECX;
-			} else {
-				D_ASSERT(rbund.rb_krec->kr_bmap & KREC_BF_BTR);
+			} else if (rbund.rb_krec->kr_bmap & KREC_BF_BTR) {
 				ent->ie_child_type = VOS_ITER_SINGLE;
+			} else {
+				ent->ie_child_type = VOS_ITER_NONE;
 			}
 		} else {
 			ent->ie_child_type = VOS_ITER_AKEY;
