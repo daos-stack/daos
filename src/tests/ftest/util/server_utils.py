@@ -76,6 +76,7 @@ class ServerCommand(CommandWithParameters):
         self.group = FormattedParameter("-g {}")
         self.attach = FormattedParameter("-a {}")
         self.sock_dir = FormattedParameter("-d {}")
+        self.insecure = FormattedParameter("-i", None)
 
     def prepare(self, path, slots):
         """Prepare the hosts before starting daos server.
@@ -354,6 +355,14 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
         # First make sure there are no existing servers running
         kill_server(servers)
 
+        # Clean the tmpfs on the servers
+        if clean:
+            for server in servers:
+                subprocess.check_call(
+                    ['ssh', server,
+                     ("find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | xargs "
+                      "-0r rm -rf")])
+
         # Pile of build time variables
         with open(os.path.join(basepath, ".build_vars.json")) as json_vars:
             build_vars = json.load(json_vars)
@@ -509,9 +518,10 @@ def kill_server(hosts):
     Args:
         hosts (list): list of host names where servers are running
     """
-    kill_cmds = ["pkill '(daos_server|daos_io_server)' --signal INT",
-                 "sleep 5",
-                 "pkill '(daos_server|daos_io_server)' --signal KILL"]
+    kill_cmds = [
+        "pkill '(daos_server|daos_io_server)' --signal INT",
+        "sleep 5",
+        "pkill '(daos_server|daos_io_server)' --signal KILL"]
     for host in hosts:
         subprocess.call(
             "ssh {0} '{1}'".format(host, '; '.join(kill_cmds)), shell=True)
@@ -523,9 +533,9 @@ def clean_server(hosts):
     Args:
         hosts (list): list of host names where servers are running
     """
-    cleanup_cmds = [("find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | xargs "
-                    "-0r rm -rf")]
+    cleanup_cmds = [
+        "find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | xargs -0r rm -rf"]
 
     for host in hosts:
-        subprocess.call("ssh {0} '{1}'".format(host, '; '.join(cleanup_cmds)),
-                        shell=True)
+        subprocess.call(
+            "ssh {0} '{1}'".format(host, '; '.join(cleanup_cmds)), shell=True)

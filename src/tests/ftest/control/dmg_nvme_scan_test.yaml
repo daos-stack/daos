@@ -11,4 +11,3 @@ dmg:
   action: scan
 daos_server:
   targets: 1
-  config: utils/config/examples/daos_server_sockets.yml

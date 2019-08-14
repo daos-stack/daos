@@ -61,7 +61,7 @@ class DmgNvmeScanTest(TestWithServers):
         dmg.get_params(self)
 
         # Update hostlist value for dmg command
-        port = self.params.get("port", "/run/hosts/*")
+        port = self.params.get("port", "/run/server_config/*")
         servers_with_ports = [
             "{}:{}".format(host, port) for host in self.hostlist_servers]
         dmg.hostlist.update(",".join(servers_with_ports), "dmg.hostlist")
