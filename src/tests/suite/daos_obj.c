@@ -28,6 +28,7 @@
 #define D_LOGFAC	DD_FAC(tests)
 #include "daos_iotest.h"
 #include <daos_types.h>
+#include <daos/checksum.h>
 
 #define IO_SIZE_NVME	(5ULL << 10) /* all records  >= 4K */
 #define	IO_SIZE_SCM	64
@@ -63,7 +64,6 @@ ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
 		req->sgl[i].sg_iovs = req->val_iov[i];
 	}
 
-	/* [todo-ryon]:  */
 	/* init csum */
 	dcb_set(&req->csum, &req->csum_buf[0], UPDATE_CSUM_SIZE,
 		UPDATE_CSUM_SIZE, 1, 0);
@@ -88,11 +88,8 @@ ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
 		/* epoch descriptor */
 		req->iod[i].iod_eprs = req->erange[i];
 
-/* [todo-ryon]: ?? */
 		req->iod[i].iod_csums = NULL;
-		req->iod[i].iod_kcsum.cs_csum = NULL;
-		req->iod[i].iod_kcsum.cs_buf_len = 0;
-		req->iod[i].iod_kcsum.cs_len = 0;
+		dcb_set_null(&req->iod[i].iod_kcsum);
 		req->iod[i].iod_type = iod_type;
 
 	}

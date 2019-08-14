@@ -218,6 +218,21 @@ daos_csummer_destroy_csum_buf(struct daos_csummer *obj,
  * -----------------------------------------------------------------------------
  */
 
+/** Setup the \a daos_csum_buf_t with the checksum buffer,
+ * buffer size, csum size, number of checksums, and the chunksize the
+ * checksum represents
+ */
+void
+dcb_set(daos_csum_buf_t *csum_buf, void *buf,
+	uint32_t csum_buf_size,
+	uint16_t csum_size,
+	uint32_t csum_count,
+	uint32_t chunksize);
+
+/** Set the csum buf to a NULL value */
+void
+dcb_set_null(daos_csum_buf_t *csum_buf);
+
 /** Is the \a daos_csum_buf_t setup appropriately to be used */
 bool
 dcb_is_valid(const daos_csum_buf_t *csum);

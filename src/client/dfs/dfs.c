@@ -26,6 +26,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/xattr.h>
+#include <daos/checksum.h>
 #include <daos/common.h>
 
 #include "daos.h"
@@ -2452,7 +2453,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		sgls[i].sg_nr_out	= 0;
 		sgls[i].sg_iovs		= &sg_iovs[i];
 
-		daos_csum_set(&iods[i].iod_kcsum, NULL, 0);
+		dcb_set_null(&iods[i].iod_kcsum);
 		iods[i].iod_nr		= 1;
 		iods[i].iod_recxs	= NULL;
 		iods[i].iod_eprs	= NULL;

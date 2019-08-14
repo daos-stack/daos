@@ -44,6 +44,7 @@
 #include <tests_lib.h>
 #include <daos_mgmt.h>
 #include <daos/common.h>
+#include <daos/checksum.h>
 
 #include "common_utils.h"
 

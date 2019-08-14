@@ -27,9 +27,11 @@
 #define D_LOGFAC	DD_FAC(common)
 
 #include <daos/common.h>
-#include <daos_types.h>
+#include <daos/checksum.h>
 #include <daos/dtx.h>
+
 #include <daos_security.h>
+#include <daos_types.h>
 
 /**
  * Initialise a scatter/gather list, create an array to store @nr iovecs.
