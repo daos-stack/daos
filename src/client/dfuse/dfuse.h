@@ -530,6 +530,10 @@ dfuse_cb_removexattr(fuse_req_t, struct dfuse_inode_entry *, const char *);
 void
 dfuse_cb_setattr(fuse_req_t, struct dfuse_inode_entry *, struct stat *, int);
 
+void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
+		    struct fuse_file_info *fi, unsigned int flags,
+		    const void *in_buf, size_t in_bufsz, size_t out_bufsz);
+
 /* Return inode information to fuse
  *
  * Adds inode to the hash table and calls fuse_reply_entry()

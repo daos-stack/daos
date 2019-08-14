@@ -25,6 +25,8 @@
 
 #include <asm/ioctl.h>
 #include "dfuse_gah.h"
+#include "daos.h"
+#include "daos_array.h"
 
 #define DFUSE_IOCTL_TYPE 0xA3       /* Arbitrary "unique" type of the IOCTL */
 #define DFUSE_IOCTL_GAH_NUMBER 0xC1 /* Number of the GAH IOCTL.  Also arbitrary */
@@ -32,9 +34,9 @@
 
 struct dfuse_gah_info {
 	int version;
-	struct ios_gah gah;
-	int dfuse_id;
-	int cli_fs_id;
+	daos_obj_id_t	oid;
+	const unsigned char pool[NAME_MAX];
+	const unsigned char cont[NAME_MAX];
 };
 
 /* Defines the IOCTL command to get the gah for a IOF file */

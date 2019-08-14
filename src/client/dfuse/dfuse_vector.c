@@ -184,7 +184,7 @@ vector_init(vector_t *vector, int sizeof_entry, int max_entries)
 	rc = obj_da_initialize(&realv->da,
 			       sizeof(struct entry) + sizeof_entry);
 	if (rc != -DER_SUCCESS)
-		return -DER_NOMEM;
+		return rc;
 	rc = expand_vector(realv, 0);
 
 	if (rc != -DER_SUCCESS)

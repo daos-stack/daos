@@ -43,6 +43,8 @@
 #include "dfuse_vector.h"
 #include "dfuse_common.h"
 
+#include "daos.h"
+
 FOREACH_INTERCEPT(IOIL_FORWARD_DECL)
 
 static bool ioil_initialized;
@@ -76,6 +78,10 @@ static const char * const bypass_status[] = {
 
 struct fd_entry {
 	struct dfuse_file_common common;
+	daos_handle_t		poh;
+	daos_pool_info_t	pool_info;
+	daos_handle_t		coh;
+	daos_cont_info_t	cont_info;
 	off_t pos;
 	int flags;
 	int status;
@@ -168,6 +174,10 @@ ioil_init(void)
 	struct rlimit rlimit;
 	int rc;
 
+	printf("Trying\n");
+
+	rc = daos_init();
+
 	pthread_once(&init_links_flag, init_links);
 
 	/* Get maximum number of file descriptors */
@@ -175,13 +185,15 @@ ioil_init(void)
 	if (rc != 0) {
 		DFUSE_LOG_ERROR("Could not get process file descriptor limit"
 				", disabling kernel bypass");
+		printf("Failed\n");
 		return;
 	}
 
-	rc = ioil_initialize_fd_table(rlimit.rlim_max);
+	rc = ioil_initialize_fd_table(rlimit.rlim_max/2);
 	if (rc != 0) {
 		DFUSE_LOG_ERROR("Could not create fd_table, rc = %d,"
 				", disabling kernel bypass", rc);
+		printf("Failed.\n");
 		return;
 	}
 
@@ -190,6 +202,7 @@ ioil_init(void)
 
 	__sync_synchronize();
 
+	printf("That worked %d\n", rc);
 	ioil_initialized = true;
 }
 
@@ -216,35 +229,52 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 		return false;
 
 	rc = ioctl(fd, DFUSE_IOCTL_GAH, &gah_info);
-	if (rc != 0)
+	if (rc != 0) {
+		DFUSE_LOG_INFO("ioctl call failed %d", rc);
 		return false;
+	}
 
 	if (gah_info.version != DFUSE_IOCTL_VERSION) {
-		DFUSE_LOG_INFO("IOF ioctl version mismatch (fd=%d): expected "
+		DFUSE_LOG_INFO("ioctl version mismatch (fd=%d): expected "
 			       "%d got %d", fd, DFUSE_IOCTL_VERSION,
 			       gah_info.version);
 		return false;
 	}
 
-	if (gah_info.dfuse_id != dfuse_id) {
-		DFUSE_LOG_INFO("IOF ioctl (fd=%d) received from another CNSS: "
-			     "expected %d got %d", fd, dfuse_id,
-			     gah_info.dfuse_id);
-		return false;
-	}
-
-	entry->common.projection = &projections[gah_info.cli_fs_id];
 	entry->pos = 0;
 	entry->flags = flags;
 	entry->status = DFUSE_IO_BYPASS;
 	rc = vector_set(&fd_table, fd, entry);
 	if (rc != 0) {
-		DFUSE_LOG_INFO("Failed to track IOF file fd=%d." GAH_PRINT_STR
-			     ", disabling kernel bypass",
-			     rc, GAH_PRINT_VAL(gah_info.gah));
+		DFUSE_LOG_INFO("Failed to track IOF file fd=%d., disabling kernel bypass",
+			       rc);
 		/* Disable kernel bypass */
 		entry->status = DFUSE_IO_DIS_RSRC;
 	}
+
+	printf("Using interception: %s %s %#lx %#lx\n",
+		gah_info.pool,
+		gah_info.cont,
+		gah_info.oid.hi,
+		gah_info.oid.lo);
+
+	rc = daos_pool_connect(&gah_info.pool[0], 0, 0, DAOS_PC_RW,
+			       &entry->poh, &entry->pool_info,
+			       NULL);
+	if (rc)
+		return false;
+
+	rc = daos_cont_open(entry->poh, &gah_info.cont[0],
+			DAOS_COO_RW, &entry->coh, &entry->cont_info,
+			NULL);
+	if (rc)
+		return false;
+
+	rc = daos_obj_open(entry->coh, gah_info.oid, DAOS_OO_RW,
+			   &entry->common.oh, NULL);
+	if (rc)
+		return false;
+
 	return true;
 }
 

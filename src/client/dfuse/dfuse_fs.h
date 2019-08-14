@@ -54,59 +54,9 @@ struct dfuse_projection {
 
 /* Common data stored on open file handles */
 struct dfuse_file_common {
+	daos_handle_t		oh;
 	struct dfuse_projection	*projection;
 	struct ios_gah		gah;
 };
-
-/* Tracks remaining events for completion */
-struct dfuse_tracker {
-	ATOMIC int remaining;
-};
-
-/* Initialize number of events to track */
-static inline void dfuse_tracker_init(struct dfuse_tracker *tracker,
-				      int expected_count)
-{
-	atomic_store_release(&tracker->remaining, expected_count);
-}
-
-/* Signal an event */
-static inline void dfuse_tracker_signal(struct dfuse_tracker *tracker)
-{
-	atomic_dec_release(&tracker->remaining);
-}
-
-/* Test if all events have signaled */
-static inline bool dfuse_tracker_test(struct dfuse_tracker *tracker)
-{
-	if (atomic_load_consume(&tracker->remaining) == 0)
-		return true;
-
-	return false;
-}
-
-static inline void dfuse_tracker_wait(struct dfuse_tracker *tracker)
-{
-	while (!dfuse_tracker_test(tracker))
-		sched_yield();
-}
-
-/* Progress until all events have signaled */
-void dfuse_wait(void *, struct dfuse_tracker *);
-
-/* Progress until all events have signaled */
-static inline void dfuse_fs_wait(struct dfuse_projection *dfuse_state,
-				 struct dfuse_tracker *tracker)
-{
-	/* If there is no progress thread then call progress from within
-	 * this function, else just wait
-	 */
-	if (!dfuse_state->progress_thread) {
-		dfuse_wait(NULL, tracker);
-		return;
-	}
-
-	dfuse_tracker_wait(tracker);
-}
 
 #endif /* __DFUSE_FS_H__ */

@@ -25,14 +25,35 @@
 #include "dfuse_common.h"
 #include "dfuse_gah.h"
 #include "intercept.h"
+#include "daos.h"
+#include "daos_array.h"
 
 static ssize_t
 read_bulk(char *buff, size_t len, off_t position,
 	  struct dfuse_file_common *f_info, int *errcode)
 {
-	ssize_t				read_len = 0;
+	daos_array_iod_t	iod;
+	daos_range_t		rg;
+	ssize_t			read_len = 0;
+	d_iov_t			iov = {};
+	d_sg_list_t		sgl = {};
+	int rc;
+
+	sgl.sg_nr = 1;
+	d_iov_set(&iov, (void *)buff, len);
+	sgl.sg_iovs = &iov;
 
 	DFUSE_LOG_INFO("Read complete %#zx", read_len);
+
+	iod.arr_nr = 1;
+	rg.rg_len = len;
+	rg.rg_idx = position;
+	iod.arr_rgs = &rg;
+
+	rc = daos_array_read(f_info->oh, DAOS_TX_NONE, &iod, &sgl, NULL,
+			NULL);
+	if (rc)
+		read_len = -daos_der2errno(rc);
 
 	return read_len;
 }

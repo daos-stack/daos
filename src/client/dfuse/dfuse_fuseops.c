@@ -682,6 +682,7 @@ struct fuse_lowlevel_ops
 	fuse_ops->write		= dfuse_cb_write;
 	fuse_ops->read		= dfuse_cb_read;
 	fuse_ops->readlink	= dfuse_cb_readlink;
+	fuse_ops->ioctl		= dfuse_cb_ioctl;
 
 	return fuse_ops;
 }
