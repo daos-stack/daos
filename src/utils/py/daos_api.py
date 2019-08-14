@@ -40,7 +40,7 @@ DAOS_MAGIC = 0x7A89
 if sys.version_info < (3, 0):
     import pydaos_shim_27 as pydaos_shim
 else:
-    import pydaos_shim_36 as pydaos_shim
+    import pydaos_shim_3 as pydaos_shim
 # pylint: enable=import-error
 
 class DaosPool(object):

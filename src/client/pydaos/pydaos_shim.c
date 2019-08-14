@@ -20,19 +20,15 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-
 #ifdef __USE_PYTHON3__
-#include <python3.6m/Python.h>
-
 /* Those are gone from python3, replaced with new functions */
 #define PyInt_FromLong		PyLong_FromLong
 #define PyInt_AsLong		PyLong_AsLong
 #define PyString_FromString	PyUnicode_FromString
 #define PyString_AsString	PyBytes_AsString
-#else
-#include <Python.h>
 #endif
 
+#include <Python.h>
 #include "daos_types.h"
 #include "daos.h"
 #include "daos_obj_class.h"

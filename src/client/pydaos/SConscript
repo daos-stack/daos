@@ -11,10 +11,12 @@ def build_shim_module(py_env, svars, lib_prefix, version):
     if version == "2.7":
         tgt_name = 'pydaos_shim_27'
         base_name = 'pydaos_shim_27'
+	new_env.ParseConfig("pkg-config --cflags --libs python2")
     elif version == "3":
         tgt_name = 'pydaos_shim_3'
         base_name = 'pydaos_shim_3'
-        extra_flags = ' -D__USE_PYTHON3__==1'
+	extra_flags = " -D__USE_PYTHON3__==1"
+	new_env.ParseConfig("pkg-config --cflags --libs python3")
     else:
         print("Unsupported python version %s" % version)
         return
@@ -26,8 +28,6 @@ def build_shim_module(py_env, svars, lib_prefix, version):
                                SHLINKFLAGS=[],
                                SHLIBPREFIX="",
                                SHLIBSUFFIX=svars["SO"],
-                               CPPPATH=["$CPPPATH",
-                                        distutils.sysconfig.get_python_inc()],
                                CPPFLAGS=svars["BASECFLAGS"] + " " + \
                                svars["OPT"] + " " + extra_flags)
     base = daos_build.library(new_env, target=base_name, source=[obj],
@@ -37,8 +37,6 @@ def build_shim_module(py_env, svars, lib_prefix, version):
                               SHLINKFLAGS=[],
                               SHLIBPREFIX="",
                               SHLIBSUFFIX=svars["SO"],
-                              CPPPATH=["$CPPPATH",
-                                       distutils.sysconfig.get_python_inc()],
                               CPPFLAGS=svars["BASECFLAGS"] + " " + \
                               svars["OPT"] + " " + extra_flags)
     install_path = lib_prefix + "/python" + version + "/site-packages"
