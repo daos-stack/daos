@@ -50,10 +50,15 @@ read_bulk(char *buff, size_t len, off_t position,
 	rg.rg_idx = position;
 	iod.arr_rgs = &rg;
 
+	printf("cookie is %#lx\n", f_info->oh.cookie);
+
 	rc = daos_array_read(f_info->oh, DAOS_TX_NONE, &iod, &sgl, NULL,
 			NULL);
-	if (rc)
-		read_len = -daos_der2errno(rc);
+	if (rc) {
+		printf("It failed with %d", rc);
+		*errcode = daos_der2errno(rc);
+		return -1;
+	}
 
 	return read_len;
 }
