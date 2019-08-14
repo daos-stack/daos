@@ -65,16 +65,9 @@ SERVER_KEYS = (
     "test_machines",
     "test_servers",
     "daos_servers",
-    "servers",
-    "test_machines1",
-    "test_machines2",
-    "test_machines2a",
-    "test_machines3",
-    "test_machines6",
     )
 CLIENT_KEYS = (
     "test_clients",
-    "clients",
     )
 
 
@@ -344,6 +337,12 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
             elif args.discard:
                 # Discard any host entries without a replacement value
                 file_str = re.sub(r"\s+- {}".format(placeholder), "", file_str)
+            else:
+                # Report an error for a placeholder w/o a replacement
+                print(
+                    "Error: No replacement specified for the {} placeholder: "
+                    "{}".format(placeholder, yaml_file))
+                exit(1)
 
         # Write the modified yaml file into a temporary file
         yaml_name = os.path.basename(os.path.splitext(yaml_file)[0])
