@@ -13,7 +13,7 @@ hosts:
 timeout: 500
 server_config:
     name: daos_server
-     log_mask: ERR
+    log_mask: ERROR
 pool:
     createmode:
         mode_RW:
