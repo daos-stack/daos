@@ -25,19 +25,25 @@ from __future__ import print_function
 
 from dmg_utils import DmgCommand
 from server_utils import ServerCommand
-from apricot import TestWithoutServers
+from apricot import TestWithServers
 from avocado.utils import process
 
-class DmgNvmeScanTest(TestWithoutServers):
+class DmgNvmeScanTest(TestWithServers):
     """Test Class Description:
     Simple test to verify the scan function of the dmg tool.
     :avocado: recursive
     """
 
+    def __init__(self):
+        """Initialize a DmgNvmeScanTest object."""
+        super(DmgNvmeScanTest , self).__init__(*args, **kwargs)
+        self.setup_start_servers = False
+        self.setup_start_agents = False
+
     def setUp(self):
         """Set up attributes before each DmgNvmeScanTest test."""
         super(DmgNvmeScanTest, self).setUp()
-        self.get_test_attributes()
+        self.get_hosts_attributes()
 
     def test_dmg_nvme_scan_basic(self):
         """
