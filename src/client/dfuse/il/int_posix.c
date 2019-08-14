@@ -223,10 +223,12 @@ static bool
 check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 {
 	struct dfuse_gah_info gah_info;
-	daos_size_t cell_size;
-	daos_size_t chunk_size;
+	daos_size_t cell_size = 1;
+	daos_size_t chunk_size = 1024*1024;
 	int rc;
 	d_rank_list_t *svcl;
+	uuid_t p;
+	uuid_t c;
 
 	if (fd == -1)
 		return false;
@@ -246,13 +248,7 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 
 	entry->pos = 0;
 	entry->flags = flags;
-	rc = vector_set(&fd_table, fd, entry);
-	if (rc != 0) {
-		DFUSE_LOG_INFO("Failed to track IOF file fd=%d., disabling kernel bypass",
-			       rc);
-		/* Disable kernel bypass */
-		entry->status = DFUSE_IO_DIS_RSRC;
-	}
+	entry->status = DFUSE_IO_BYPASS;
 
 	printf("Using interception: %s %s %#lx %#lx\n",
 		gah_info.pool,
@@ -262,7 +258,15 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 
 	svcl = daos_rank_list_parse("0", ":");
 
-	rc = daos_pool_connect(&gah_info.pool[0], NULL, svcl, DAOS_PC_RW,
+	if (uuid_parse(&gah_info.pool[0], p) < 0) {
+		return false;
+	}
+
+	if (uuid_parse(&gah_info.cont[0], c) < 0) {
+		return false;
+	}
+
+	rc = daos_pool_connect(p, NULL, svcl, DAOS_PC_RW,
 			       &entry->poh, &entry->pool_info,
 			       NULL);
 	if (rc) {
@@ -270,7 +274,7 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 		return false;
 	}
 
-	rc = daos_cont_open(entry->poh, &gah_info.cont[0],
+	rc = daos_cont_open(entry->poh, c,
 			DAOS_COO_RW, &entry->coh, &entry->cont_info,
 			NULL);
 	if (rc) {
@@ -278,15 +282,22 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 		return false;
 	}
 
-	rc = daos_array_open(entry->coh, gah_info.oid, DAOS_TX_NONE,
-			DAOS_OO_RW, &cell_size, &chunk_size, &entry->common.oh, NULL);
+	rc = daos_array_open_with_attr(entry->coh, gah_info.oid, DAOS_TX_NONE,
+			DAOS_OO_RW, cell_size, chunk_size, &entry->common.oh, NULL);
 	if (rc) {
 		printf("array_open() failed %d\n", rc);
 		return false;
 	}
 
+	rc = vector_set(&fd_table, fd, entry);
+	if (rc != 0) {
+		DFUSE_LOG_INFO("Failed to track IOF file fd=%d., disabling kernel bypass",
+			       rc);
+		/* Disable kernel bypass */
+		entry->status = DFUSE_IO_DIS_RSRC;
+	}
+
 	printf("cookie is %#lx\n", entry->common.oh.cookie);
-	entry->status = DFUSE_IO_BYPASS;
 
 	return true;
 }
@@ -333,10 +344,8 @@ dfuse_open(const char *pathname, int flags, ...)
 	if ((flags & (O_PATH | O_APPEND)) != 0)
 		status = DFUSE_IO_DIS_FLAG;
 
-	if (!check_ioctl_on_open(fd, &entry, flags, status)) {
-		status = DFUSE_IO_DIS_FLAG;
+	if (!check_ioctl_on_open(fd, &entry, flags, status))
 		goto finish;
-	}
 
 	if (flags & O_CREAT)
 		DFUSE_LOG_INFO("open(pathname=%s, flags=0%o, mode=0%o) = "

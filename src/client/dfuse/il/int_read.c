@@ -50,7 +50,7 @@ read_bulk(char *buff, size_t len, off_t position,
 	rg.rg_idx = position;
 	iod.arr_rgs = &rg;
 
-	printf("cookie is %#lx\n", f_info->oh.cookie);
+	printf("cookie2 is %#lx\n", f_info->oh.cookie);
 
 	rc = daos_array_read(f_info->oh, DAOS_TX_NONE, &iod, &sgl, NULL,
 			NULL);
@@ -60,7 +60,7 @@ read_bulk(char *buff, size_t len, off_t position,
 		return -1;
 	}
 
-	return read_len;
+	return len;
 }
 
 ssize_t ioil_do_pread(char *buff, size_t len, off_t position,

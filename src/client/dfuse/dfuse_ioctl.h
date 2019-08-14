@@ -35,8 +35,8 @@
 struct dfuse_gah_info {
 	int version;
 	daos_obj_id_t	oid;
-	const unsigned char pool[NAME_MAX];
-	const unsigned char cont[NAME_MAX];
+	const char pool[NAME_MAX];
+	const char cont[NAME_MAX];
 };
 
 /* Defines the IOCTL command to get the gah for a IOF file */
