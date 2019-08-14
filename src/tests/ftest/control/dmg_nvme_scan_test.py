@@ -40,11 +40,6 @@ class DmgNvmeScanTest(TestWithServers):
         self.setup_start_servers = False
         self.setup_start_agents = False
 
-    def setUp(self):
-        """Set up attributes before each DmgNvmeScanTest test."""
-        super(DmgNvmeScanTest, self).setUp()
-        self.get_hosts_attributes()
-
     def test_dmg_nvme_scan_basic(self):
         """
         JIRA ID: DAOS-2485

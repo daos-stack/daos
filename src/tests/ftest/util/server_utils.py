@@ -208,7 +208,8 @@ class ServerCommand(CommandWithParameters):
             signal_list = [
                 signal.SIGINT, None, None, None,
                 signal.SIGTERM, None, None,
-                signal.SIGQUIT, None, 9]
+                signal.SIGQUIT, None,
+                signal.SIGKILL]
             while self.process.poll() is None and signal_list:
                 sig = signal_list.pop(0)
                 if sig is not None:

@@ -165,8 +165,43 @@ class TestWithServers(TestWithoutServers):
         self.server_group = self.params.get(
             "name", "/server_config/", "daos_server")
 
-        # Set attributes with yaml file values
-        self.get_hosts_attributes()
+        # Determine which hosts to use as servers and optionally clients.
+        # Support the use of a host type count to test with subsets of the
+        # specified hosts lists
+        test_machines = self.params.get("test_machines", "/run/hosts/*")
+        test_servers = self.params.get("test_servers", "/run/hosts/*")
+        test_clients = self.params.get("test_clients", "/run/hosts/*")
+        server_count = self.params.get("server_count", "/run/hosts/*")
+        client_count = self.params.get("client_count", "/run/hosts/*")
+
+        # Supported combinations of yaml hosts arguments:
+        #   - test_machines [+ server_count]
+        #   - test_servers [+ server_count]
+        #   - test_servers [+ server_count] + test_clients [+ client_count]
+        if test_machines:
+            self.hostlist_servers = test_machines[:server_count]
+        elif test_servers and test_clients:
+            self.hostlist_servers = test_servers[:server_count]
+            self.hostlist_clients = test_clients[:client_count]
+        elif test_servers:
+            self.hostlist_servers = test_servers[:server_count]
+        self.log.info("hostlist_servers:  %s", self.hostlist_servers)
+        self.log.info("hostlist_clients:  %s", self.hostlist_clients)
+
+        # If a specific count is specified, verify enough servers/clients are
+        # specified to satisy the count
+        host_count_checks = (
+            ("server", server_count,
+             len(self.hostlist_servers) if self.hostlist_servers else 0),
+            ("client", client_count,
+             len(self.hostlist_clients) if self.hostlist_clients else 0)
+        )
+        for host_type, expected_count, actual_count in host_count_checks:
+            if expected_count:
+                self.assertEqual(
+                    expected_count, actual_count,
+                    "Test requires {} {}; {} specified".format(
+                        expected_count, host_type, actual_count))
 
         # Create host files
         self.hostfile_servers = write_host_file.write_host_file(
@@ -215,43 +250,3 @@ class TestWithServers(TestWithoutServers):
         else:
             server_utils.run_server(
                 self.hostfile_servers, self.server_group, self.basepath)
-
-    def get_hosts_attributes(self):
-        """Get test attributes from test yaml file."""
-        # Determine which hosts to use as servers and optionally clients.
-        # Support the use of a host type count to test with subsets of the
-        # specified hosts lists
-        test_machines = self.params.get("test_machines", "/run/hosts/*")
-        test_servers = self.params.get("test_servers", "/run/hosts/*")
-        test_clients = self.params.get("test_clients", "/run/hosts/*")
-        server_count = self.params.get("server_count", "/run/hosts/*")
-        client_count = self.params.get("client_count", "/run/hosts/*")
-
-        # Supported combinations of yaml hosts arguments:
-        #   - test_machines [+ server_count]
-        #   - test_servers [+ server_count]
-        #   - test_servers [+ server_count] + test_clients [+ client_count]
-        if test_machines:
-            self.hostlist_servers = test_machines[:server_count]
-        elif test_servers and test_clients:
-            self.hostlist_servers = test_servers[:server_count]
-            self.hostlist_clients = test_clients[:client_count]
-        elif test_servers:
-            self.hostlist_servers = test_servers[:server_count]
-        self.log.info("hostlist_servers:  %s", self.hostlist_servers)
-        self.log.info("hostlist_clients:  %s", self.hostlist_clients)
-
-        # If a specific count is specified, verify enough servers/clients are
-        # specified to satisy the count
-        host_count_checks = (
-            ("server", server_count,
-             len(self.hostlist_servers) if self.hostlist_servers else 0),
-            ("client", client_count,
-             len(self.hostlist_clients) if self.hostlist_clients else 0)
-        )
-        for host_type, expected_count, actual_count in host_count_checks:
-            if expected_count:
-                self.assertEqual(
-                    expected_count, actual_count,
-                    "Test requires {} {}; {} specified".format(
-                        expected_count, host_type, actual_count))
