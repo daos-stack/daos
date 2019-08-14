@@ -313,8 +313,8 @@ fi
 
 # now run it!
 export PYTHONPATH=./util:../../utils/py/:./util/apricot:\
-                  ../../../install/lib/python2.7/site-packages:\
-                  ../../../install/lib/python3/site-packages
+../../../install/lib/python2.7/site-packages:\
+../../../install/lib/python3/site-packages
 
 if ! ./launch.py -c -a -r -s ${TEST_TAG_ARR[*]}; then
     rc=\${PIPESTATUS[0]}
