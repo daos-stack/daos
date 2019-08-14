@@ -18,7 +18,7 @@ ARG UID=1000
 # zypper install command so that the database is updated if/when the
 # installed packages list below is updated
 RUN zypper --non-interactive --no-gpg-checks refresh; \
-    zypper --non-interactive update; \
+    zypper --non-interactive update
 RUN zypper --non-interactive install                                   \
            boost-devel ca-certificates-mozilla cmake cunit-devel curl  \
            doxygen flex gcc gcc-c++ git go graphviz                    \
