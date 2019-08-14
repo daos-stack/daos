@@ -177,11 +177,11 @@ class TestWithServers(TestWithoutServers):
                 self.hostfile_clients_slots)
 
         # Start agent and server
-        if self.setup_start_agents == True:
+        if self.setup_start_agents:
             self.agent_sessions = agent_utils.run_agent(
                 self.basepath, self.hostlist_servers, self.hostlist_clients)
 
-        if self.setup_start_servers == True:
+        if self.setup_start_servers:
             self.start_servers()
 
     def tearDown(self):
@@ -245,9 +245,9 @@ class TestWithServers(TestWithoutServers):
         # specified to satisy the count
         host_count_checks = (
             ("server", server_count,
-                len(self.hostlist_servers) if self.hostlist_servers else 0),
+             len(self.hostlist_servers) if self.hostlist_servers else 0),
             ("client", client_count,
-                len(self.hostlist_clients) if self.hostlist_clients else 0)
+             len(self.hostlist_clients) if self.hostlist_clients else 0)
         )
         for host_type, expected_count, actual_count in host_count_checks:
             if expected_count:
