@@ -36,7 +36,7 @@ class DmgNvmeScanTest(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a DmgNvmeScanTest object."""
-        super(DmgNvmeScanTest , self).__init__(*args, **kwargs)
+        super(DmgNvmeScanTest, self).__init__(*args, **kwargs)
         self.setup_start_servers = False
         self.setup_start_agents = False
 
