@@ -373,6 +373,8 @@ func (srv *iosrv) startCmd() error {
 
 	signal.Notify(srv.sigchld, syscall.SIGCHLD)
 
+	log.Debugf("args: %+v", srv.cmd.Args)
+	log.Debugf("env: %+v", srv.cmd.Env)
 	// Start the DAOS I/O server.
 	err = srv.cmd.Start()
 	if err != nil {

@@ -94,6 +94,11 @@ func Main() error {
 		defer ctlLogFile.Close()
 	}
 
+	log.Debugf("cfg: %+v", config)
+	for _, srv := range config.Servers {
+		log.Debugf("ioSrv: %+v", srv)
+	}
+
 	// Create and setup control service.
 	mgmtCtlSvc, err := newControlService(
 		config, getDrpcClientConnection(config.SocketDir))
