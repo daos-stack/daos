@@ -579,9 +579,9 @@ array_dkey_punch_enumerate(void **state)
 	print_message("DONE DKEY Enumeration (%d extents) -------\n", total_nr);
 	assert_int_equal(total_nr, 100);
 
-	/** punch first 10 records */
+	/** punch last 10 dkeys, and another 10 non-existent dkeys */
 	print_message("Punching 10 dkeys...\n");
-	for (i = 0; i < 10; i++) {
+	for (i = 90; i < 110; i++) {
 		char dkey_str[10];
 
 		/** init dkey */
@@ -663,9 +663,9 @@ array_akey_punch_enumerate(void **state)
 	print_message("DONE AKEY Enumeration (%d extents) -------\n", total_nr);
 	assert_int_equal(total_nr, 100);
 
-	/** punch first 10 akeys */
+	/** punch last 10 akeys, and another 10 non-existent akeys */
 	print_message("Punching 10 akeys...\n");
-	for (i = 0; i < 10; i++) {
+	for (i = 90; i < 110; i++) {
 		char akey_str[10];
 		daos_key_t akey;
 
@@ -693,7 +693,7 @@ array_akey_punch_enumerate(void **state)
 		rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod,
 				    NULL, NULL, NULL);
 		assert_int_equal(rc, 0);
-		if (i < 10)
+		if (i >= 90)
 			assert_int_equal(iod.iod_size, 0);
 		else
 			assert_int_equal(iod.iod_size, 1);
