@@ -43,6 +43,11 @@ else:
     import pydaos_shim_3 as pydaos_shim
 # pylint: enable=import-error
 
+DaosObjClass = enum.Enum(
+    "DaosObjClass",
+    {key: value for key, value in pydaos_shim.__dict__.items()
+    if key.startswith("OC_")})
+
 class DaosPool(object):
     """ A python object representing a DAOS pool."""
 
@@ -625,19 +630,19 @@ class DaosObjClassOld(enum.IntEnum):
     DAOS_OC_EC_K8P2_L1M   = 24
 
 ConvertObjClass = {
-    DaosObjClassOld.DAOS_OC_TINY_RW     : pydaos_shim.OC_S1,
-    DaosObjClassOld.DAOS_OC_SMALL_RW    : pydaos_shim.OC_S4,
-    DaosObjClassOld.DAOS_OC_LARGE_RW    : pydaos_shim.OC_SX,
-    DaosObjClassOld.DAOS_OC_R2S_RW      : pydaos_shim.OC_RP_2G1,
-    DaosObjClassOld.DAOS_OC_R2_RW       : pydaos_shim.OC_RP_2G2,
-    DaosObjClassOld.DAOS_OC_R2_MAX_RW   : pydaos_shim.OC_RP_2GX,
-    DaosObjClassOld.DAOS_OC_R3S_RW      : pydaos_shim.OC_RP_3G1,
-    DaosObjClassOld.DAOS_OC_R3_RW       : pydaos_shim.OC_RP_3G2,
-    DaosObjClassOld.DAOS_OC_R3_MAX_RW   : pydaos_shim.OC_RP_3GX,
-    DaosObjClassOld.DAOS_OC_R4S_RW      : pydaos_shim.OC_RP_4G1,
-    DaosObjClassOld.DAOS_OC_R4_RW       : pydaos_shim.OC_RP_4G2,
-    DaosObjClassOld.DAOS_OC_R4_MAX_RW   : pydaos_shim.OC_RP_4GX,
-    DaosObjClassOld.DAOS_OC_REPL_MAX_RW : pydaos_shim.OC_RP_XSF
+    DaosObjClassOld.DAOS_OC_TINY_RW     : DaosObjClass.OC_S1,
+    DaosObjClassOld.DAOS_OC_SMALL_RW    : DaosObjClass.OC_S4,
+    DaosObjClassOld.DAOS_OC_LARGE_RW    : DaosObjClass.OC_SX,
+    DaosObjClassOld.DAOS_OC_R2S_RW      : DaosObjClass.OC_RP_2G1,
+    DaosObjClassOld.DAOS_OC_R2_RW       : DaosObjClass.OC_RP_2G2,
+    DaosObjClassOld.DAOS_OC_R2_MAX_RW   : DaosObjClass.OC_RP_2GX,
+    DaosObjClassOld.DAOS_OC_R3S_RW      : DaosObjClass.OC_RP_3G1,
+    DaosObjClassOld.DAOS_OC_R3_RW       : DaosObjClass.OC_RP_3G2,
+    DaosObjClassOld.DAOS_OC_R3_MAX_RW   : DaosObjClass.OC_RP_3GX,
+    DaosObjClassOld.DAOS_OC_R4S_RW      : DaosObjClass.OC_RP_4G1,
+    DaosObjClassOld.DAOS_OC_R4_RW       : DaosObjClass.OC_RP_4G2,
+    DaosObjClassOld.DAOS_OC_R4_MAX_RW   : DaosObjClass.OC_RP_4GX,
+    DaosObjClassOld.DAOS_OC_REPL_MAX_RW : DaosObjClass.OC_RP_XSF
 }
 
 

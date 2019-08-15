@@ -312,9 +312,12 @@ if ${SETUP_ONLY:-false}; then
 fi
 
 # now run it!
+launch_py=\$(sed -ne '1s/^#!//'p launch.py)
+launch_py_vers=\$(\$launch_py -c 'import sys; \
+print(\"{}.{}\".format(sys.version_info[0], sys.version_info[1]))')
+
 export PYTHONPATH=./util:../../utils/py/:./util/apricot:\
-../../../install/lib/python2.7/site-packages:\
-../../../install/lib/python3/site-packages
+../../../install/lib/python\$launch_py_vers/site-packages
 
 if ! ./launch.py -c -a -r -s ${TEST_TAG_ARR[*]}; then
     rc=\${PIPESTATUS[0]}
