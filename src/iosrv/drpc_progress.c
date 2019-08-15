@@ -76,6 +76,7 @@ drpc_progress_context_create(struct drpc *listener)
 
 	result->listener_ctx = listener;
 	D_INIT_LIST_HEAD(&result->session_ctx_list);
+	D_INIT_LIST_HEAD(&result->hdlr_ult_list);
 
 	return result;
 }
@@ -83,19 +84,30 @@ drpc_progress_context_create(struct drpc *listener)
 void
 drpc_progress_context_close(struct drpc_progress_context *ctx)
 {
-	struct drpc_list	*current;
-	struct drpc_list	*next;
+	struct drpc_list	*current_drpc;
+	struct drpc_list	*next_drpc;
+	struct abt_ult_list	*current_ult;
+	struct abt_ult_list	*next_ult;
 
 	if (ctx == NULL) {
 		D_ERROR("NULL drpc_progress_context passed\n");
 		return;
 	}
 
-	d_list_for_each_entry_safe(current, next, &ctx->session_ctx_list,
-			link) {
-		d_list_del(&current->link);
-		drpc_close(current->ctx);
-		D_FREE(current);
+	d_list_for_each_entry_safe(current_ult, next_ult, &ctx->hdlr_ult_list,
+				   link) {
+		d_list_del(&current_ult->link);
+		ABT_thread_cancel(current_ult->thread);
+		ABT_thread_free(current_ult->thread);
+		D_FREE(current_ult);
+	}
+
+	d_list_for_each_entry_safe(current_drpc, next_drpc,
+				   &ctx->session_ctx_list,
+				   link) {
+		d_list_del(&current_drpc->link);
+		drpc_close(current_drpc->ctx);
+		D_FREE(current_drpc);
 	}
 
 	drpc_close(ctx->listener_ctx);
@@ -285,7 +297,7 @@ destroy_session_node(struct drpc_list *session_node)
 /**
  * ULT to execute the dRPC handler and send the response back
  */
-static int
+static void
 drpc_handler_ult(void *call_ctx)
 {
 	int			rc;
@@ -310,8 +322,6 @@ drpc_handler_ult(void *call_ctx)
 	drpc_call_free(ctx->call);
 	drpc_response_free(ctx->resp);
 	D_FREE(ctx);
-
-	return rc;
 }
 
 static struct drpc_call_ctx *
@@ -341,7 +351,7 @@ create_call_ctx(struct drpc *session_ctx, Drpc__Call *call,
 }
 
 static int
-handle_incoming_call(struct drpc *session_ctx)
+handle_incoming_call(struct drpc *session_ctx, ABT_thread *thread)
 {
 	int			rc;
 	Drpc__Call		*call = NULL;
@@ -373,9 +383,8 @@ handle_incoming_call(struct drpc *session_ctx)
 	/*
 	 * Ownership of the call context is passed on to the handler ULT.
 	 */
-	rc = dss_ult_create_execute(drpc_handler_ult, (void *)call_ctx,
-				    NULL, NULL,
-				    DSS_ULT_DRPC_HANDLER, 0, 0);
+	rc = dss_ult_create(drpc_handler_ult, (void *)call_ctx,
+			    DSS_ULT_DRPC_HANDLER, 0, 0, thread);
 	if (rc != 0) {
 		D_ERROR("Failed to create drpc handler ULT: %d\n", rc);
 		drpc_call_free(call);
@@ -389,16 +398,28 @@ handle_incoming_call(struct drpc *session_ctx)
 
 static int
 process_session_activity(struct drpc_list *session_node,
-		struct unixcomm_poll *session_comm)
+		struct unixcomm_poll *session_comm,
+		d_list_t *ult_list_head)
 {
-	int rc = 0;
+	int			rc = 0;
+	ABT_thread		ult;
+	struct abt_ult_list	*ult_node;
 
 	D_ASSERT(session_comm->comm->fd == session_node->ctx->comm->fd);
 
 	switch (session_comm->activity) {
 	case UNIXCOMM_ACTIVITY_DATA_IN:
-		rc = handle_incoming_call(session_node->ctx);
-		if (rc != 0 && rc != -DER_AGAIN) {
+		rc = handle_incoming_call(session_node->ctx, &ult);
+		if (rc == 0) {
+			D_ALLOC_PTR(ult_node);
+			if (ult_node == NULL)
+				return -DER_NOMEM;
+
+			/* Hold onto the thread so it can be freed later */
+			ult_node->thread = ult;
+			D_INIT_LIST_HEAD(&ult_node->link);
+			d_list_add(&ult_node->link, ult_list_head);
+		} else if (rc != -DER_AGAIN) {
 			D_ERROR("Error processing incoming session %u data\n",
 				session_comm->comm->fd);
 			destroy_session_node(session_node);
@@ -424,7 +445,7 @@ process_session_activity(struct drpc_list *session_node,
 
 static int
 process_all_session_activities(struct drpc_progress_context *ctx,
-		struct unixcomm_poll *comms, size_t num_comms)
+			struct unixcomm_poll *comms, size_t num_comms)
 {
 	int			rc = 0;
 	struct drpc_list	*current;
@@ -435,7 +456,8 @@ process_all_session_activities(struct drpc_progress_context *ctx,
 			&ctx->session_ctx_list, link) {
 		int session_rc;
 
-		session_rc = process_session_activity(current, &(comms[i]));
+		session_rc = process_session_activity(current, &(comms[i]),
+						      &ctx->hdlr_ult_list);
 
 		/*
 		 * Only overwrite with first error.

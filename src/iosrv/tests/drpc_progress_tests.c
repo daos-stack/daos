@@ -31,15 +31,22 @@
 #include <cmocka.h>
 #include <daos/test_mocks.h>
 #include <daos/test_utils.h>
+#include <abt.h>
 #include "../drpc_internal.h"
 
 /*
  * Mocks
  */
+
 int
-dss_ult_create_execute(int (*func)(void *), void *arg, void (*user_cb)(void *),
-		       void *cb_args, int ult_type, int tgt_id,
-		       size_t stack_size)
+ABT_thread_cancel(ABT_thread thread)
+{
+	return 0;
+}
+
+int
+dss_ult_create(void (*func)(void *), void *arg, int ult_type, int tgt_idx,
+	       size_t stack_size, ABT_thread *ult)
 {
 	return 0;
 }
