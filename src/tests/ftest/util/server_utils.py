@@ -159,12 +159,12 @@ class ServerCommand(CommandWithParameters):
             if env:
                 assign_env = [
                     "{}={}".format(key, val) for key, val in env.items()]
-            args = [
-                "-np {}".format(len(self.hosts)),
-                "-hostfile {}".format(self.hostfile),
-                "--enable-recovery",
-            ]
-            args.extend(["-x {}".format(assign) for assign in assign_env])
+                args = [
+                    "-np {}".format(len(self.hosts)),
+                    "-hostfile {}".format(self.hostfile),
+                    "--enable-recovery",
+                ]
+                args.extend(["-x {}".format(assign) for assign in assign_env])
             if uri is not None:
                 args.append("--report-uri {}".format(uri))
 
