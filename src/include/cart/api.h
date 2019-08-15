@@ -182,10 +182,10 @@ crt_context_ep_empty(crt_context_t crt_ctx);
  * Flush pending RPCs associated with the specified context.
  *
  * \param[in] crt_ctx           CRT transport context to flush
- * \param[in] timeout           max time duration (in micro seconds) to try to
- *                              flush. 0 means infinite timeout. After
- *                              \a timeout amount of time, this function will
- *                              return even if there are still RPCs pending.
+ * \param[in] timeout           max time duration (in seconds) to try to flush.
+ *                              0 means infinite timeout. After \a timeout
+ *                              amount of time, this function will return even
+ *                              if there are still RPCs pending.
  *
  * \return                      DER_SUCCESS if there are no more pending RPCs,
  *                              -DER_TIMEDOUT if time out is reached before all

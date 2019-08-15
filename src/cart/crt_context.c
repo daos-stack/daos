@@ -530,7 +530,7 @@ crt_context_flush(crt_context_t crt_ctx, uint64_t timeout)
 		if (timeout == 0)
 			continue;
 		ts_now = d_timeus_secdiff(0);
-	} while (ts_now >= ts_deadline);
+	} while (ts_now <= ts_deadline);
 
 	if (timeout > 0 && ts_now >= ts_deadline)
 		rc = -DER_TIMEDOUT;
