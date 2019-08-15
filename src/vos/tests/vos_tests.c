@@ -87,7 +87,7 @@ run_all_tests(int keys, bool nest_iterators)
 	}
 	failed += run_discard_tests();
 	failed += run_aggregate_tests(false);
-	failed += run_dtx_tests();
+	//failed += run_dtx_tests();
 	return failed;
 }
 
