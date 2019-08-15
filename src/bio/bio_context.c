@@ -189,7 +189,7 @@ static void
 blob_wait_completion(struct bio_xs_context *xs_ctxt, struct blob_cp_arg *ba)
 {
 	D_ASSERT(xs_ctxt != NULL);
-	if (xs_ctxt->bxc_xs_id == -1) {
+	if (xs_ctxt->bxc_tgt_id == -1) {
 		D_DEBUG(DB_IO, "Self poll xs_ctxt:%p\n", xs_ctxt);
 		xs_poll_completion(xs_ctxt, &ba->bca_inflights);
 	} else {
@@ -283,15 +283,14 @@ bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt)
 	struct blob_msg_arg		 bma = { 0 };
 	struct blob_cp_arg		*ba = &bma.bma_cp_arg;
 	struct bio_blobstore		*bbs;
-	struct smd_nvme_pool_info	 smd_pool;
 	spdk_blob_id			 blob_id;
 	int				 rc;
 
 	D_ASSERT(xs_ctxt != NULL);
 	/**
-	 * Query per-server metadata to get blobID for this pool:xstream
+	 * Query per-server metadata to get blobID for this pool:target
 	 */
-	rc = smd_nvme_get_pool(uuid, xs_ctxt->bxc_xs_id, &smd_pool);
+	rc = smd_pool_get_blob(uuid, xs_ctxt->bxc_tgt_id, &blob_id);
 	if (rc != 0) {
 		D_WARN("Blob for xs:%p, pool:"DF_UUID" doesn't exist\n",
 		       xs_ctxt, DP_UUID(uuid));
@@ -307,7 +306,6 @@ bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt)
 		 */
 		return 0;
 	}
-	blob_id = smd_pool.npi_blob_id;
 
 	rc = blob_cp_arg_init(ba);
 	if (rc != 0)
@@ -332,14 +330,19 @@ bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt)
 	blob_wait_completion(xs_ctxt, ba);
 	rc = ba->bca_rc;
 
-	if (rc != 0)
+	if (rc != 0) {
 		D_ERROR("Delete blobID "DF_U64" failed for pool:"DF_UUID" "
-			"xs:%p rc:%d\n",
-			blob_id, DP_UUID(uuid), xs_ctxt, rc);
-	else
+			"xs:%p rc:%d\n", blob_id, DP_UUID(uuid), xs_ctxt, rc);
+	} else {
 		D_DEBUG(DB_MGMT, "Successfully deleted blobID "DF_U64" for "
-			"pool:"DF_UUID" xs:%p\n",
-			blob_id, DP_UUID(uuid), xs_ctxt);
+			"pool:"DF_UUID" xs:%p\n", blob_id, DP_UUID(uuid),
+			xs_ctxt);
+		rc = smd_pool_unassign(uuid, xs_ctxt->bxc_tgt_id);
+		if (rc)
+			D_ERROR("Failed to unassign blob:"DF_U64" from pool: "
+				""DF_UUID":%d. %d\n", blob_id, DP_UUID(uuid),
+				xs_ctxt->bxc_tgt_id, rc);
+	}
 
 	bio_bs_unhold(bbs);
 	blob_cp_arg_fini(ba);
@@ -352,8 +355,8 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz)
 	struct blob_msg_arg		 bma = { 0 };
 	struct blob_cp_arg		*ba = &bma.bma_cp_arg;
 	struct bio_blobstore		*bbs;
-	struct smd_nvme_pool_info	 smd_pool;
 	uint64_t			 cluster_sz;
+	spdk_blob_id			 blob_id;
 	int				 rc;
 
 	D_ASSERT(xs_ctxt != NULL);
@@ -377,10 +380,10 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz)
 	bma.bma_opts.num_clusters = (blob_sz + cluster_sz - 1) / cluster_sz;
 
 	/**
-	 * Query per-server metadata to make sure the blob for this pool:xstream
+	 * Query per-server metadata to make sure the blob for this pool:target
 	 * hasn't been created yet.
 	 */
-	rc = smd_nvme_get_pool(uuid, xs_ctxt->bxc_xs_id, &smd_pool);
+	rc = smd_pool_get_blob(uuid, xs_ctxt->bxc_tgt_id, &blob_id);
 	if (rc == 0) {
 		D_ERROR("Duplicated blob for xs:%p pool:"DF_UUID"\n",
 			xs_ctxt, DP_UUID(uuid));
@@ -415,22 +418,20 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz)
 			ba->bca_id, xs_ctxt, DP_UUID(uuid),
 			bma.bma_opts.num_clusters);
 
-		/* Update per-server metadata */
-		smd_nvme_set_pool_info(uuid, xs_ctxt->bxc_xs_id, ba->bca_id,
-				       &smd_pool);
-		rc = smd_nvme_add_pool(&smd_pool);
+		rc = smd_pool_assign(uuid, xs_ctxt->bxc_tgt_id, ba->bca_id);
 		if (rc != 0) {
+			D_ERROR("Failed to assign pool blob:"DF_U64" to pool: "
+				""DF_UUID":%d. %d\n", ba->bca_id, DP_UUID(uuid),
+				xs_ctxt->bxc_tgt_id, rc);
 			/* Delete newly created blob */
-			D_ERROR("Failure adding SMD pool table entry\n");
 			if (bio_blob_delete(uuid, xs_ctxt))
 				D_ERROR("Unable to delete newly created blobID "
 					""DF_U64" for xs:%p pool:"DF_UUID"\n",
 					ba->bca_id, xs_ctxt, DP_UUID(uuid));
 		} else {
-			D_DEBUG(DB_MGMT, "Successfully added entry to SMD pool "
-				"table, pool:"DF_UUID", xs_id:%d, "
-				"blobID:"DF_U64"\n", DP_UUID(uuid),
-				xs_ctxt->bxc_xs_id, ba->bca_id);
+			D_DEBUG(DB_MGMT, "Successfully assgin blob:"DF_U64" "
+				"to pool:"DF_UUID":%d\n", ba->bca_id,
+				DP_UUID(uuid), xs_ctxt->bxc_tgt_id);
 		}
 	}
 
@@ -443,7 +444,6 @@ static int
 bio_blob_open(struct bio_io_context *ctxt, uuid_t uuid, bool async)
 {
 	struct bio_xs_context		*xs_ctxt = ctxt->bic_xs_ctxt;
-	struct smd_nvme_pool_info	 smd_pool;
 	spdk_blob_id			 blob_id;
 	struct blob_msg_arg		*bma;
 	struct blob_cp_arg		*ba;
@@ -462,15 +462,14 @@ bio_blob_open(struct bio_io_context *ctxt, uuid_t uuid, bool async)
 	D_ASSERT(xs_ctxt != NULL);
 	bbs = ctxt->bic_xs_ctxt->bxc_blobstore;
 	/*
-	 * Query per-server metadata to get blobID for this pool:xstream.
+	 * Query per-server metadata to get blobID for this pool:target
 	 */
-	rc = smd_nvme_get_pool(uuid, xs_ctxt->bxc_xs_id, &smd_pool);
+	rc = smd_pool_get_blob(uuid, xs_ctxt->bxc_tgt_id, &blob_id);
 	if (rc != 0) {
 		D_ERROR("Failed to find blobID for xs:%p, pool:"DF_UUID"\n",
 			xs_ctxt, DP_UUID(uuid));
 		return -DER_NONEXIST;
 	}
-	blob_id = smd_pool.npi_blob_id;
 
 	bma = blob_msg_arg_alloc();
 	if (bma == NULL)
@@ -720,13 +719,13 @@ skip_media_error:
 int
 bio_write_blob_hdr(struct bio_io_context *ioctxt, struct bio_blob_hdr *bio_bh)
 {
-	struct smd_nvme_pool_info	smd_pool;
-	struct smd_nvme_stream_bond	smd_xs_mapping;
-	d_iov_t			iov;
-	bio_addr_t			addr;
-	uint64_t			off = 0; /* byte offset in SPDK blob */
-	uint16_t			dev_type = DAOS_MEDIA_NVME;
-	int				rc = 0;
+	struct smd_dev_info	*dev_info;
+	spdk_blob_id		 blob_id;
+	d_iov_t			 iov;
+	bio_addr_t		 addr;
+	uint64_t		 off = 0; /* byte offset in SPDK blob */
+	uint16_t		 dev_type = DAOS_MEDIA_NVME;
+	int			 rc = 0;
 
 	D_DEBUG(DB_MGMT, "Writing header blob:%p, xs:%p\n",
 		ioctxt->bic_blob, ioctxt->bic_xs_ctxt);
@@ -742,26 +741,27 @@ bio_write_blob_hdr(struct bio_io_context *ioctxt, struct bio_blob_hdr *bio_bh)
 	 * Set all BIO-related members of blob header.
 	 */
 	bio_bh->bbh_magic = BIO_BLOB_HDR_MAGIC;
-	bio_bh->bbh_vos_id = (uint32_t)ioctxt->bic_xs_ctxt->bxc_xs_id;
-	/* Query per-server metadata to get blobID for this pool:xstream */
-	rc = smd_nvme_get_pool(bio_bh->bbh_pool, bio_bh->bbh_vos_id, &smd_pool);
+	bio_bh->bbh_vos_id = (uint32_t)ioctxt->bic_xs_ctxt->bxc_tgt_id;
+	/* Query per-server metadata to get blobID for this pool:target */
+	rc = smd_pool_get_blob(bio_bh->bbh_pool, bio_bh->bbh_vos_id, &blob_id);
 	if (rc) {
 		D_ERROR("Failed to find blobID for xs:%p, pool:"DF_UUID"\n",
 			ioctxt->bic_xs_ctxt, DP_UUID(bio_bh->bbh_pool));
 		return rc;
 	}
 
-	bio_bh->bbh_blob_id = smd_pool.npi_blob_id;
+	bio_bh->bbh_blob_id = blob_id;
 
 	/* Query per-server metadata to get device id for xs */
-	rc = smd_nvme_get_stream_bond(bio_bh->bbh_vos_id, &smd_xs_mapping);
+	rc = smd_dev_get_by_tgt(bio_bh->bbh_vos_id, &dev_info);
 	if (rc) {
-		D_ERROR("Not able to find device id/blobstore for xs_id:%d\n",
+		D_ERROR("Not able to find device id/blobstore for tgt %d\n",
 			bio_bh->bbh_vos_id);
 		return rc;
 	}
 
-	uuid_copy(bio_bh->bbh_blobstore, smd_xs_mapping.nsm_dev_id);
+	uuid_copy(bio_bh->bbh_blobstore, dev_info->sdi_id);
+	smd_free_dev_info(dev_info);
 
 	/* Create an iov to store blob header structure */
 	d_iov_set(&iov, (void *)bio_bh, sizeof(*bio_bh));
