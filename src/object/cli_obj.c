@@ -1885,7 +1885,7 @@ void obj_update_csum_destroy(const struct dc_object *obj,
 	int i;
 	struct daos_csummer *csummer = dc_cont_hdl2csummer(obj->cob_coh);
 
-	if (!daos_csummer_get_is_set(csummer))
+	if (!daos_csummer_initialized(csummer))
 		return;
 
 	for (i = 0; i < args->nr; i++) {
@@ -2051,7 +2051,7 @@ void
 obj_update_csums(const struct dc_object *obj, const daos_obj_update_t *args) {
 	struct daos_csummer *csummer = dc_cont_hdl2csummer(obj->cob_coh);
 
-	if (!daos_csummer_get_is_set(csummer)) /** Not configured */
+	if (!daos_csummer_initialized(csummer)) /** Not configured */
 		return;
 
 	int i;

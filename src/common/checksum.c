@@ -275,7 +275,7 @@ daos_csummer_get_size(struct daos_csummer *obj)
 }
 
 bool
-daos_csummer_get_is_set(struct daos_csummer *obj)
+daos_csummer_initialized(struct daos_csummer *obj)
 {
 	return obj != NULL && obj->dcs_algo != NULL;
 }
@@ -345,7 +345,7 @@ int
 daos_csummer_prep_csum_buf(struct daos_csummer *obj, size_t rec_len, size_t nr,
 			   daos_recx_t *recxs, daos_csum_buf_t **pcsum_bufs)
 {
-	if (!(daos_csummer_get_is_set(obj) && recxs))
+	if (!(daos_csummer_initialized(obj) && recxs))
 		return 0;
 
 	daos_csum_buf_t	*csums;
@@ -378,7 +378,7 @@ daos_csummer_calc_csum(struct daos_csummer *obj, d_sg_list_t *sgl,
 		       size_t rec_len, daos_recx_t *recxs, size_t nr,
 		       daos_csum_buf_t **pcsum_bufs)
 {
-	if (!(daos_csummer_get_is_set(obj) && recxs && sgl))
+	if (!(daos_csummer_initialized(obj) && recxs && sgl))
 		return 0;
 
 	int rc = daos_csummer_prep_csum_buf(obj, rec_len, nr,
@@ -424,7 +424,7 @@ void
 daos_csummer_destroy_csum_buf(struct daos_csummer *obj,
 			      daos_csum_buf_t **pcsum_buf)
 {
-	if (!(daos_csummer_get_is_set(obj) && *pcsum_buf))
+	if (!(daos_csummer_initialized(obj) && *pcsum_buf))
 		return;
 	D_FREE((*pcsum_buf)->cs_csum);
 	D_FREE((*pcsum_buf));

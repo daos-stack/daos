@@ -21,8 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#ifndef __DAOS_CHECKSUMMER_H
-#define __DAOS_CHECKSUMMER_H
+#ifndef __DAOS_CHECKSUM_H
+#define __DAOS_CHECKSUM_H
 
 #include <daos_types.h>
 #include <daos_obj.h>
@@ -131,7 +131,7 @@ daos_csummer_get_size(struct daos_csummer *obj);
 
 /** Determine if the checksums is configured. */
 bool
-daos_csummer_get_is_set(struct daos_csummer *obj);
+daos_csummer_initialized(struct daos_csummer *obj);
 
 /** Get an integer representing the csum type the csummer is configured with */
 uint16_t

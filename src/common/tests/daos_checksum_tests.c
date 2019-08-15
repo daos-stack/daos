@@ -117,7 +117,7 @@ static void test_init_and_destroy(void **state)
 	fake_algo.get_size = fake_get_size;
 	fake_get_size_result = 5;
 	assert_int_equal(5, daos_csummer_get_size(csummer));
-	assert_true(daos_csummer_get_is_set(csummer));
+	assert_true(daos_csummer_initialized(csummer));
 	assert_string_equal("fake", daos_csummer_get_name(csummer));
 
 	daos_csummer_destroy(&csummer);
