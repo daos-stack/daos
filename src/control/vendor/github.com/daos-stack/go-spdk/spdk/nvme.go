@@ -65,10 +65,11 @@ type Nvme struct{}
 // TODO: populate implicitly using inner member:
 // +inner C.struct_ctrlr_t
 type Controller struct {
-	Model   string
-	Serial  string
-	PCIAddr string
-	FWRev   string
+	Model    string
+	Serial   string
+	PCIAddr  string
+	FWRev    string
+	SocketID int
 }
 
 // Namespace struct mirrors C.struct_ns_t and
@@ -142,10 +143,11 @@ func (n *Nvme) Cleanup() {
 // c2GoController is a private translation function
 func c2GoController(ctrlr *C.struct_ctrlr_t) Controller {
 	return Controller{
-		Model:   C.GoString(&ctrlr.model[0]),
-		Serial:  C.GoString(&ctrlr.serial[0]),
-		PCIAddr: C.GoString(&ctrlr.pci_addr[0]),
-		FWRev:   C.GoString(&ctrlr.fw_rev[0]),
+		Model:    C.GoString(&ctrlr.model[0]),
+		Serial:   C.GoString(&ctrlr.serial[0]),
+		PCIAddr:  C.GoString(&ctrlr.pci_addr[0]),
+		FWRev:    C.GoString(&ctrlr.fw_rev[0]),
+		SocketID: int(ctrlr.socket_id),
 	}
 }
 
