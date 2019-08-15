@@ -174,8 +174,6 @@ ioil_init(void)
 	struct rlimit rlimit;
 	int rc;
 
-	printf("Trying\n");
-
 	rc = daos_init();
 
 	pthread_once(&init_links_flag, init_links);
@@ -189,7 +187,7 @@ ioil_init(void)
 		return;
 	}
 
-	rc = ioil_initialize_fd_table(rlimit.rlim_max/2);
+	rc = ioil_initialize_fd_table(rlimit.rlim_max / 2);
 	if (rc != 0) {
 		DFUSE_LOG_ERROR("Could not create fd_table, rc = %d,"
 				", disabling kernel bypass", rc);
@@ -202,7 +200,6 @@ ioil_init(void)
 
 	__sync_synchronize();
 
-	printf("That worked %d\n", rc);
 	ioil_initialized = true;
 }
 
@@ -224,7 +221,7 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 {
 	struct dfuse_gah_info gah_info;
 	daos_size_t cell_size = 1;
-	daos_size_t chunk_size = 1024*1024;
+	daos_size_t chunk_size = 1024 * 1024;
 	int rc;
 	d_rank_list_t *svcl;
 	uuid_t p;
@@ -235,7 +232,7 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 
 	rc = ioctl(fd, DFUSE_IOCTL_GAH, &gah_info);
 	if (rc != 0) {
-		DFUSE_LOG_INFO("ioctl call failed %d", rc);
+		DFUSE_LOG_INFO("ioctl call on %d failed %d", fd, rc);
 		return false;
 	}
 
@@ -250,12 +247,6 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 	entry->flags = flags;
 	entry->status = DFUSE_IO_BYPASS;
 
-	printf("Using interception: %s %s %#lx %#lx\n",
-		gah_info.pool,
-		gah_info.cont,
-		gah_info.oid.hi,
-		gah_info.oid.lo);
-
 	svcl = daos_rank_list_parse("0", ":");
 
 	if (uuid_parse(&gah_info.pool[0], p) < 0) {
@@ -269,25 +260,19 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 	rc = daos_pool_connect(p, NULL, svcl, DAOS_PC_RW,
 			       &entry->poh, &entry->pool_info,
 			       NULL);
-	if (rc) {
-		printf("pool_connect() failed %d\n", rc);
+	if (rc)
 		return false;
-	}
 
-	rc = daos_cont_open(entry->poh, c,
-			DAOS_COO_RW, &entry->coh, &entry->cont_info,
-			NULL);
-	if (rc) {
-		printf("cont_open() failed %d\n", rc);
+	rc = daos_cont_open(entry->poh, c, DAOS_COO_RW, &entry->coh,
+			    &entry->cont_info, NULL);
+	if (rc)
 		return false;
-	}
 
 	rc = daos_array_open_with_attr(entry->coh, gah_info.oid, DAOS_TX_NONE,
-			DAOS_OO_RW, cell_size, chunk_size, &entry->common.oh, NULL);
-	if (rc) {
-		printf("array_open() failed %d\n", rc);
+				       DAOS_OO_RW, cell_size, chunk_size,
+				       &entry->common.oh, NULL);
+	if (rc)
 		return false;
-	}
 
 	rc = vector_set(&fd_table, fd, entry);
 	if (rc != 0) {
@@ -297,7 +282,11 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 		entry->status = DFUSE_IO_DIS_RSRC;
 	}
 
-	printf("cookie is %#lx\n", entry->common.oh.cookie);
+	printf("Using interception: %s %s %#lx %#lx\n",
+		gah_info.pool,
+		gah_info.cont,
+		gah_info.oid.hi,
+		gah_info.oid.lo);
 
 	return true;
 }

@@ -33,32 +33,45 @@ read_bulk(char *buff, size_t len, off_t position,
 	  struct dfuse_file_common *f_info, int *errcode)
 {
 	daos_array_iod_t	iod;
+	daos_size_t array_size;
+	daos_size_t max_read;
 	daos_range_t		rg;
-	ssize_t			read_len = 0;
 	d_iov_t			iov = {};
 	d_sg_list_t		sgl = {};
 	int rc;
 
+	rc = daos_array_get_size(f_info->oh, DAOS_TX_NONE, &array_size, NULL);
+	if (rc) {
+		D_ERROR("daos_array_get_size() failed (%d)\n", rc);
+		*errcode = daos_der2errno(rc);
+		return -1;
+	}
+
+	if (position >= array_size)
+		return 0;
+
+	max_read = array_size - position;
+
+	if (max_read < len)
+		len = max_read;
+
 	sgl.sg_nr = 1;
 	d_iov_set(&iov, (void *)buff, len);
 	sgl.sg_iovs = &iov;
-
-	DFUSE_LOG_INFO("Read complete %#zx", read_len);
 
 	iod.arr_nr = 1;
 	rg.rg_len = len;
 	rg.rg_idx = position;
 	iod.arr_rgs = &rg;
 
-	printf("cookie2 is %#lx\n", f_info->oh.cookie);
-
-	rc = daos_array_read(f_info->oh, DAOS_TX_NONE, &iod, &sgl, NULL,
-			NULL);
+	rc = daos_array_read(f_info->oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
 	if (rc) {
 		printf("It failed with %d", rc);
 		*errcode = daos_der2errno(rc);
 		return -1;
 	}
+
+	DFUSE_LOG_INFO("Read complete %#zx", len);
 
 	return len;
 }
