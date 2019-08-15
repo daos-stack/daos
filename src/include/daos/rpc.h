@@ -105,7 +105,7 @@ enum daos_rpc_type {
 };
 
 /** DAOS_TGT0_OFFSET is target 0's cart context offset */
-#define DAOS_TGT0_OFFSET		(2)
+#define DAOS_TGT0_OFFSET		(1)
 /** The cart context index of target index */
 #define DAOS_IO_CTX_ID(tgt_idx)		((tgt_idx) + DAOS_TGT0_OFFSET)
 

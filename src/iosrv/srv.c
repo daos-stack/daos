@@ -83,12 +83,14 @@
  * 2) dss_ult_xs() to query the XS id of the xstream for specific ULT task.
  */
 
+/** Number of dRPC xstreams */
+#define	DRPC_XS_NR	(1)
 /** Number of offload XS per target [0, 2] */
 unsigned int	dss_tgt_offload_xs_nr = 2;
 /** number of target (XS set) per server */
 unsigned int	dss_tgt_nr;
 /** number of system XS */
-unsigned int	dss_sys_xs_nr = DAOS_TGT0_OFFSET;
+unsigned int	dss_sys_xs_nr = DAOS_TGT0_OFFSET + DRPC_XS_NR;
 
 unsigned int
 dss_ctx_nr_get(void)
