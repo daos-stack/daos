@@ -1088,7 +1088,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 
 	array = array_hdl2ptr(array_oh);
 	if (array == NULL)
-		return -DER_NO_HDL;
+		D_GOTO(err_task, rc = -DER_NO_HDL);
 
 	if (op_type == DAOS_OPC_ARRAY_PUNCH) {
 		D_ASSERT(user_sgl == NULL);
