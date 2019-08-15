@@ -181,6 +181,12 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
             for key, value in env_dict.items():
                 os.environ[key] = value
                 env_args.extend(["-x", "{}={}".format(key, value)])
+        # the remote orte needs to know where to find daos, in the
+        # case that it's not in the system prefix
+        # but it should already be in our PATH, so just pass our
+        # PATH along to the remote
+        if build_vars["PREFIX"] != "/usr":
+            env_args.extend(["-x", "PATH"])
 
         server_cmd = [orterun_bin, "--np", str(server_count)]
         if uri_path is not None:
