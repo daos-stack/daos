@@ -27,7 +27,6 @@
  */
 
 #include <daos.h>
-#include <daos_array.h>
 #include "daos_test.h"
 
 /** number of elements to write to array */
@@ -229,7 +228,7 @@ small_io(void **state)
 	daos_array_iod_t iod;
 	d_sg_list_t	sgl;
 	daos_range_t	rg;
-	d_iov_t	iov;
+	d_iov_t		iov;
 	char		buf[BUFLEN], rbuf[BUFLEN];
 	daos_size_t	array_size;
 	int		rc;
