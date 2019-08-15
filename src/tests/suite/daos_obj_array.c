@@ -532,9 +532,9 @@ array_dkey_punch_enumerate(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
-	d_iov_t	 	dkey;
+	d_iov_t		dkey;
 	d_sg_list_t	sgl;
-	d_iov_t	 	sg_iov;
+	d_iov_t		sg_iov;
 	daos_iod_t	iod;
 	daos_recx_t	recx;
 	char		buf[SM_BUF_LEN];
@@ -616,9 +616,9 @@ array_akey_punch_enumerate(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
-	d_iov_t	 	dkey;
+	d_iov_t		dkey;
 	d_sg_list_t	sgl;
-	d_iov_t	 	sg_iov;
+	d_iov_t		sg_iov;
 	daos_iod_t	iod;
 	daos_recx_t	recx;
 	char		buf[SM_BUF_LEN];
@@ -717,18 +717,18 @@ static void
 array_recx_punch_enumerate(void **state)
 {
 	test_arg_t	*arg = *state;
-	daos_obj_id_t	 oid;
-	daos_handle_t	 oh;
-	d_iov_t	 dkey;
-	d_sg_list_t	 sgl;
-	d_iov_t	 sg_iov;
-	daos_iod_t	 iod;
-	daos_recx_t	 recx;
-	char		 buf[SM_BUF_LEN];
-	daos_anchor_t	 anchor;
-	int		 total_nr = 0;
-	int		 i;
-	int		 rc;
+	daos_obj_id_t	oid;
+	daos_handle_t	oh;
+	d_iov_t		dkey;
+	d_sg_list_t	sgl;
+	d_iov_t		sg_iov;
+	daos_iod_t	iod;
+	daos_recx_t	recx;
+	char		buf[SM_BUF_LEN];
+	daos_anchor_t	anchor;
+	int		total_nr = 0;
+	int		i;
+	int		rc;
 
 	dts_buf_render(buf, SM_BUF_LEN);
 
