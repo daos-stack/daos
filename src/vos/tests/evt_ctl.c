@@ -1708,6 +1708,10 @@ test_evt_node_size_internal(void **state)
 	}
 }
 
+/* Args : Input : string_val pointer
+*                 num: number of time to repeat string val
+*         Output: ret_string: Returns concatenated string.
+*/
 void repeat_string(char *ret_string, char *string_val, int num)
 {
 	int	counter;
