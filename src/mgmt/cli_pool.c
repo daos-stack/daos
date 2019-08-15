@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,8 +32,9 @@
 #include "rpc.h"
 
 struct pool_create_arg {
-	crt_rpc_t	*rpc;
-	d_rank_list_t	*svc;
+	struct dc_mgmt_sys	*sys;
+	crt_rpc_t		*rpc;
+	d_rank_list_t		*svc;
 };
 
 static int
@@ -80,7 +81,7 @@ out:
 	D_ASSERT(pc_in != NULL);
 	daos_prop_free(pc_in->pc_prop);
 
-	daos_group_detach(arg->rpc->cr_ep.ep_grp);
+	dc_mgmt_sys_detach(arg->sys);
 	crt_req_decref(arg->rpc);
 	return rc;
 }
@@ -197,10 +198,11 @@ dc_pool_create(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = daos_group_attach(args->grp, &svr_ep.ep_grp);
+	rc = dc_mgmt_sys_attach(args->grp, &create_args.sys);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
+	svr_ep.ep_grp = create_args.sys->sy_group;
 	svr_ep.ep_rank = 0;
 	svr_ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
 	opc = DAOS_RPC_OPCODE(MGMT_POOL_CREATE, DAOS_MGMT_MODULE,
@@ -244,17 +246,22 @@ out_put_req:
 	crt_req_decref(rpc_req);
 	crt_req_decref(rpc_req);
 out_grp:
-	daos_group_detach(svr_ep.ep_grp);
+	dc_mgmt_sys_detach(create_args.sys);
 out:
 	daos_prop_free(final_prop);
 	tse_task_complete(task, rc);
 	return rc;
 }
 
+struct pool_destroy_arg {
+	struct dc_mgmt_sys	*sys;
+	crt_rpc_t		*rpc;
+};
+
 static int
 pool_destroy_cp(tse_task_t *task, void *data)
 {
-	crt_rpc_t			*rpc = *((crt_rpc_t **)data);
+	struct pool_destroy_arg		*arg = data;
 	struct mgmt_pool_destroy_out	*pd_out;
 	int				 rc = task->dt_result;
 
@@ -263,7 +270,7 @@ pool_destroy_cp(tse_task_t *task, void *data)
 		D_GOTO(out, rc);
 	}
 
-	pd_out = crt_reply_get(rpc);
+	pd_out = crt_reply_get(arg->rpc);
 	rc = pd_out->pd_rc;
 	if (rc) {
 		D_ERROR("MGMT_POOL_DESTROY replied failed, rc: %d\n", rc);
@@ -271,8 +278,8 @@ pool_destroy_cp(tse_task_t *task, void *data)
 	}
 
 out:
-	daos_group_detach(rpc->cr_ep.ep_grp);
-	crt_req_decref(rpc);
+	dc_mgmt_sys_detach(arg->sys);
+	crt_req_decref(arg->rpc);
 	return rc;
 }
 
@@ -283,6 +290,7 @@ dc_pool_destroy(tse_task_t *task)
 	crt_endpoint_t			 svr_ep;
 	crt_rpc_t			*rpc_req = NULL;
 	crt_opcode_t			 opc;
+	struct pool_destroy_arg		 destroy_arg;
 	struct mgmt_pool_destroy_in	*pd_in;
 	int				 rc = 0;
 
@@ -292,10 +300,11 @@ dc_pool_destroy(tse_task_t *task)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = daos_group_attach(args->grp, &svr_ep.ep_grp);
+	rc = dc_mgmt_sys_attach(args->grp, &destroy_arg.sys);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
+	svr_ep.ep_grp = destroy_arg.sys->sy_group;
 	svr_ep.ep_rank = 0;
 	svr_ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
 	opc = DAOS_RPC_OPCODE(MGMT_POOL_DESTROY, DAOS_MGMT_MODULE,
@@ -317,8 +326,10 @@ dc_pool_destroy(tse_task_t *task)
 	pd_in->pd_force = (args->force == 0) ? false : true;
 
 	crt_req_addref(rpc_req);
-	rc = tse_task_register_comp_cb(task, pool_destroy_cp, &rpc_req,
-				       sizeof(rpc_req));
+	destroy_arg.rpc = rpc_req;
+
+	rc = tse_task_register_comp_cb(task, pool_destroy_cp, &destroy_arg,
+				       sizeof(destroy_arg));
 	if (rc != 0)
 		D_GOTO(out_put_req, rc);
 
@@ -333,7 +344,7 @@ out_put_req:
 	/** dec ref taken for crt_req_create */
 	crt_req_decref(rpc_req);
 out_group:
-	daos_group_detach(svr_ep.ep_grp);
+	dc_mgmt_sys_detach(destroy_arg.sys);
 out:
 	tse_task_complete(task, rc);
 	return rc;

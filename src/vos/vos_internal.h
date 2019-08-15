@@ -1026,6 +1026,13 @@ enum {
 	SUBTR_EVT	= (1 << 1),	/**< subtree is evtree */
 };
 
+int
+vos_bio_addr_free(struct vos_pool *pool, bio_addr_t *addr, daos_size_t nob);
+
+void
+vos_evt_desc_cbs_init(struct evt_desc_cbs *cbs, struct vos_pool *pool,
+		      daos_handle_t coh);
+
 /* vos_obj.c */
 int
 key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,

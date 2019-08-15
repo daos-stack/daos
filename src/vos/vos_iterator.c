@@ -598,7 +598,8 @@ probe:
 			goto probe;
 		}
 
-		if (recursive && !is_last_level(type) && !skipped) {
+		if (recursive && !is_last_level(type) && !skipped &&
+		    iter_ent.ie_child_type != VOS_ITER_NONE) {
 			vos_iter_param_t	child_param = *param;
 
 			child_param.ip_ih = ih;

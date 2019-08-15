@@ -76,6 +76,8 @@ struct drpc *drpc_listen(char *sockaddr, drpc_handler_t handler);
 bool drpc_is_valid_listener(struct drpc *ctx);
 struct drpc *drpc_accept(struct drpc *listener_ctx);
 int drpc_recv(struct drpc *ctx);
+int drpc_recv_call(struct drpc *ctx, Drpc__Call **call);
+int drpc_send_response(struct drpc *ctx, Drpc__Response *resp);
 int drpc_close(struct drpc *ctx);
 
 #endif /* __DAOS_DRPC_H__ */

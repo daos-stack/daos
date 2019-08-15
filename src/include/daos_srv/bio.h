@@ -94,7 +94,10 @@ struct bio_dev_state {
 	uint64_t	 bds_timestamp;
 	uint64_t	*bds_media_errors; /* supports 128-bit values */
 	uint64_t	 bds_error_count; /* error log page */
-	uint32_t	 bds_bio_err;
+	/* I/O error counters */
+	uint32_t	 bds_bio_read_errs;
+	uint32_t	 bds_bio_write_errs;
+	uint32_t	 bds_bio_unmap_errs;
 	uint16_t	 bds_temperature; /* in Kelvin */
 	/* Critical warnings */
 	uint8_t		 bds_temp_warning	: 1;
@@ -218,11 +221,11 @@ void bio_nvme_fini(void);
  * Initialize SPDK env and per-xstream NVMe context.
  *
  * \param[OUT] pctxt	Per-xstream NVMe context to be returned
- * \param[IN] xs_id	xstream ID
+ * \param[IN] tgt_id	Target ID (mapped to a VOS xstream)
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_xsctxt_alloc(struct bio_xs_context **pctxt, int xs_id);
+int bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id);
 
 /*
  * Finalize per-xstream NVMe context and SPDK env.

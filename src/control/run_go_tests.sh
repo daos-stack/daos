@@ -1,6 +1,6 @@
 #!/bin/bash
 ## Run linters across control plane code and execute Go tests
-set -e
+set -eu
 
 function find_build_source()
 {
@@ -56,22 +56,20 @@ if [ "$check" == "false" ]; then
 	setup_environment
 fi
 
-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd )"
+DIR="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")"
 
-oldGP=$GOPATH
-export GOPATH=$DIR/../../build/src/control
-echo "GOPATH $GOPATH"
+GOPATH="$(readlink -f "$DIR/../../build/src/control")"
+echo "GOPATH: $GOPATH"
 
 repopath=github.com/daos-stack/daos
+controldir="$GOPATH/src/$repopath/src/control"
 
-# Lint source then run Go tests for each package
-for d in client security server cmd/dmg drpc lib/netdetect; do
-    echo "testing $d"
-    pushd "$GOPATH/src/$repopath/src/control/$d"
-    # todo: provide a sensible way of linting and returning review comments
-    # gofmt -l -s -w . && go tool vet -all . && golint && goimports -w .
-    go test -v
-    popd
-done
+echo "Running all tests under $controldir..."
+pushd "$controldir" >/dev/null
+set +e
+GOPATH="$GOPATH" go test -race -cover -v ./...
+testrc=$?
+popd >/dev/null
 
-export GOPATH=$oldGP
+echo "Tests completed with rc: $testrc"
+exit $testrc

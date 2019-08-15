@@ -1,6 +1,30 @@
+//
+// (C) Copyright 2019 Intel Corporation.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+// The Government's rights to use, modify, reproduce, release, perform, display,
+// or disclose this software are subject to the terms of the Apache License as
+// provided in Contract No. 8F-30005.
+// Any reproduction of computer software, computer software documentation, or
+// portions thereof marked with this legend must also reproduce the markings.
+//
+
 package security
 
 import (
+	"crypto"
 	"crypto/tls"
 	"crypto/x509"
 
@@ -8,13 +32,14 @@ import (
 )
 
 const (
-	defaultCACert     = ".daos/daosCA.crt"
-	defaultServerCert = ".daos/daos_server.crt"
-	defaultServerKey  = ".daos/daos_server.key"
-	defaultClientCert = ".daos/client.crt"
-	defaultClientKey  = ".daos/client.key"
-	defaultServer     = "server"
-	defaultInsecure   = false
+	defaultCACert        = ".daos/daosCA.crt"
+	defaultServerCert    = ".daos/daos_server.crt"
+	defaultServerKey     = ".daos/daos_server.key"
+	defaultClientCert    = ".daos/client.crt"
+	defaultClientKey     = ".daos/client.key"
+	defaultServer        = "server"
+	defaultClientCertDir = ".daos/clients"
+	defaultInsecure      = false
 )
 
 //TransportConfig contains all the information on whether or not to use
@@ -29,11 +54,12 @@ type TransportConfig struct {
 //transport credential for a gRPC tls client.
 type CertificateConfig struct {
 	ServerName      string           `yaml:"server_name,omitempty"`
+	ClientCertDir   string           `yaml:"client_cert_dir,omitempty"`
 	CARootPath      string           `yaml:"ca_cert"`
 	CertificatePath string           `yaml:"cert"`
 	PrivateKeyPath  string           `yaml:"key"`
-	TLSKeypair      *tls.Certificate `yaml:"-"`
-	CAPool          *x509.CertPool   `yaml:"-"`
+	tlsKeypair      *tls.Certificate `yaml:"-"`
+	caPool          *x509.CertPool   `yaml:"-"`
 }
 
 //DefaultClientTransportConfig provides a default transport config disabling
@@ -45,11 +71,12 @@ func DefaultClientTransportConfig() *TransportConfig {
 		AllowInsecure: defaultInsecure,
 		CertificateConfig: CertificateConfig{
 			ServerName:      defaultServer,
+			ClientCertDir:   "",
 			CARootPath:      defaultCACert,
 			CertificatePath: defaultClientCert,
 			PrivateKeyPath:  defaultClientKey,
-			TLSKeypair:      nil,
-			CAPool:          nil,
+			tlsKeypair:      nil,
+			caPool:          nil,
 		},
 	}
 }
@@ -61,10 +88,11 @@ func DefaultServerTransportConfig() *TransportConfig {
 		AllowInsecure: defaultInsecure,
 		CertificateConfig: CertificateConfig{
 			CARootPath:      defaultCACert,
+			ClientCertDir:   defaultClientCertDir,
 			CertificatePath: defaultServerCert,
 			PrivateKeyPath:  defaultServerKey,
-			TLSKeypair:      nil,
-			CAPool:          nil,
+			tlsKeypair:      nil,
+			caPool:          nil,
 		},
 	}
 }
@@ -76,7 +104,7 @@ func (cfg *TransportConfig) PreLoadCertData() error {
 	if cfg == nil {
 		return errors.New("nil TransportConfig")
 	}
-	if cfg.TLSKeypair != nil && cfg.CAPool != nil || cfg.AllowInsecure == true {
+	if cfg.tlsKeypair != nil && cfg.caPool != nil || cfg.AllowInsecure == true {
 		// In this case the data is already preloaded.
 		// In order to reload data use ReloadCertDatA
 		return nil
@@ -86,8 +114,8 @@ func (cfg *TransportConfig) PreLoadCertData() error {
 		return err
 	}
 
-	cfg.TLSKeypair = certificate
-	cfg.CAPool = certPool
+	cfg.tlsKeypair = certificate
+	cfg.caPool = certPool
 
 	return nil
 }
@@ -95,7 +123,37 @@ func (cfg *TransportConfig) PreLoadCertData() error {
 //ReloadCertData reloads and stores the certificate data in the case when
 //certificate data has changed since initial loading.
 func (cfg *TransportConfig) ReloadCertData() error {
-	cfg.TLSKeypair = nil
-	cfg.CAPool = nil
+	cfg.tlsKeypair = nil
+	cfg.caPool = nil
 	return cfg.PreLoadCertData()
+}
+
+//PrivateKey returns the private key stored in the certificates loaded into the TransportConfig
+func (cfg *TransportConfig) PrivateKey() (crypto.PrivateKey, error) {
+	if cfg.AllowInsecure == true {
+		return nil, nil
+	}
+	// If we don't have our keys loaded attempt to load them.
+	if cfg.tlsKeypair == nil || cfg.caPool == nil {
+		err := cfg.ReloadCertData()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return cfg.tlsKeypair.PrivateKey, nil
+}
+
+//PublicKey returns the private key stored in the certificates loaded into the TransportConfig
+func (cfg *TransportConfig) PublicKey() (crypto.PublicKey, error) {
+	if cfg.AllowInsecure == true {
+		return nil, nil
+	}
+	// If we don't have our keys loaded attempt to load them.
+	if cfg.tlsKeypair == nil || cfg.caPool == nil {
+		err := cfg.ReloadCertData()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return cfg.tlsKeypair.Leaf.PublicKey, nil
 }

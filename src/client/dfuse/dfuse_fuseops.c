@@ -139,16 +139,16 @@ void
 df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_file_handle	*handle = NULL;
+	struct dfuse_obj_hdl		*handle = NULL;
 	struct dfuse_inode_entry	*inode = NULL;
-	d_list_t			*rlink;
+	d_list_t			*rlink = NULL;
 	int rc;
 
 	if (fi)
 		handle = (void *)fi->fh;
 
 	if (handle) {
-		D_GOTO(err, rc = ENOTSUP);
+		inode = handle->doh_ie;
 	} else {
 		rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino,
 					sizeof(ino));
@@ -158,16 +158,59 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 			D_GOTO(err, rc = ENOENT);
 		}
 		inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
-
-		if (inode->ie_dfs->dfs_ops->getattr) {
-			inode->ie_dfs->dfs_ops->getattr(req, inode);
-		} else {
-			DFUSE_REPLY_ATTR(req, &inode->ie_stat);
-		}
-		d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	}
+
+	if (inode->ie_dfs->dfs_ops->getattr)
+		inode->ie_dfs->dfs_ops->getattr(req, inode);
+	else
+		DFUSE_REPLY_ATTR(req, &inode->ie_stat);
+
+	if (rlink)
+		d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+
 	return;
 err:
+	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+}
+
+void
+df_ll_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
+	      int to_set, struct fuse_file_info *fi)
+{
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_obj_hdl		*handle = NULL;
+	struct dfuse_inode_entry	*inode = NULL;
+	d_list_t			*rlink = NULL;
+	int rc;
+
+	if (fi)
+		handle = (void *)fi->fh;
+
+	if (handle) {
+		inode = handle->doh_ie;
+	} else {
+		rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
+		if (!rlink) {
+			DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %lu",
+					ino);
+			D_GOTO(out, rc = ENOENT);
+		}
+
+		inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+	}
+
+	if (inode->ie_dfs->dfs_ops->setattr)
+		inode->ie_dfs->dfs_ops->setattr(req, inode, attr, to_set);
+	else
+		D_GOTO(out, rc = ENOTSUP);
+
+	if (rlink)
+		d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+
+	return;
+out:
+	if (rlink)
+		d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
 
@@ -581,6 +624,7 @@ struct dfuse_inode_ops dfuse_dfs_ops = {
 	.getxattr	= dfuse_cb_getxattr,
 	.listxattr	= dfuse_cb_listxattr,
 	.removexattr	= dfuse_cb_removexattr,
+	.setattr	= dfuse_cb_setattr,
 };
 
 struct dfuse_inode_ops dfuse_cont_ops = {
@@ -618,6 +662,7 @@ struct fuse_lowlevel_ops
 	fuse_ops->getxattr	= df_ll_getxattr;
 	fuse_ops->listxattr	= df_ll_listxattr;
 	fuse_ops->removexattr	= df_ll_removexattr;
+	fuse_ops->setattr	= df_ll_setattr;
 
 	/* Ops that do not need to support per-inode indirection */
 	fuse_ops->init = dfuse_fuse_init;
@@ -631,10 +676,6 @@ struct fuse_lowlevel_ops
 	 * creation of files, so it should be the only place to see file
 	 * operations.
 	 *
-	 * TODO: Implement open/release callbacks, to allow setting of fi.fh
-	 * in open, which would avoid a hashtable lookup per read/write.
-	 *
-	 * TODO: read_buf and write_buf support.
 	 */
 	fuse_ops->open		= dfuse_cb_open;
 	fuse_ops->release	= dfuse_cb_release;
