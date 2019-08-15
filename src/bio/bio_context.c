@@ -703,7 +703,7 @@ bio_blob_unmap(struct bio_io_context *ioctxt, uint64_t off, uint64_t len)
 			goto skip_media_error;
 		mem->mem_unmap = true;
 		mem->mem_bs = ioctxt->bic_xs_ctxt->bxc_blobstore;
-		mem->mem_tgt_id = ioctxt->bic_xs_ctxt->bxc_xs_id;
+		mem->mem_tgt_id = ioctxt->bic_xs_ctxt->bxc_tgt_id;
 		spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error,
 				     mem);
 	} else
