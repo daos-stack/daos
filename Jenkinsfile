@@ -343,6 +343,7 @@ pipeline {
                     steps {
                         sconsBuild clean: "_build.external${arch}",
                                    failure_artifacts: 'config.log-centos7-gcc'
+                        sh 'ls -l install/lib/'
                         stash name: 'CentOS-install', includes: 'install/**'
                         stash name: 'CentOS-build-vars', includes: ".build_vars${arch}.*"
                         stash name: 'CentOS-tests',
@@ -1166,7 +1167,8 @@ pipeline {
                                                    ' daos',
                                        inst_rpms: "ior-hpc mpich-autoload"
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
+                                script: '''ls -l install/lib/
+                                           test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
                                                test_tag=pr,-hw
                                            fi
