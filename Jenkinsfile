@@ -1144,15 +1144,18 @@ pipeline {
                                   if [ -n "$STAGE_NAME" ]; then
                                       rm -rf "$STAGE_NAME/"
                                       mkdir "$STAGE_NAME/"
-                                      ls *daos{,_agent}.log* >/dev/null && mv *daos{,_agent}.log* "$STAGE_NAME/"
-                                      mv src/tests/ftest/avocado/* \
-                                         $(ls src/tests/ftest/*.stacktrace || true) "$STAGE_NAME/"
+                                      arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
+                                      arts="$arts$(ls -d src/tests/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
+                                      arts="$arts$(ls src/tests/ftest/*.stacktrace 2>/dev/null || true)"
+                                      if [ -n "$arts" ]; then
+                                          mv $(echo $arts | tr '\n' ' ') "$STAGE_NAME/"
+                                      fi
                                   else
                                       echo "The STAGE_NAME environment variable is missing!"
                                       false
                                   fi'''
                             archiveArtifacts artifacts: env.STAGE_NAME + '/**'
-                            junit env.STAGE_NAME + '/*/*/results.xml, src/tests/ftest/*_results.xml'
+                            junit env.STAGE_NAME + '/*/results.xml, src/tests/ftest/*_results.xml'
                         }
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
                         success {
@@ -1213,15 +1216,18 @@ pipeline {
                                   if [ -n "$STAGE_NAME" ]; then
                                       rm -rf "$STAGE_NAME/"
                                       mkdir "$STAGE_NAME/"
-                                      ls *daos{,_agent}.log* >/dev/null && mv *daos{,_agent}.log* "$STAGE_NAME/"
-                                      mv src/tests/ftest/avocado/* \
-                                         $(ls src/tests/ftest/*.stacktrace || true) "$STAGE_NAME/"
+                                      arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
+                                      arts="$arts$(ls -d src/tests/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
+                                      arts="$arts$(ls src/tests/ftest/*.stacktrace 2>/dev/null || true)"
+                                      if [ -n "$arts" ]; then
+                                          mv $(echo $arts | tr '\n' ' ') "$STAGE_NAME/"
+                                      fi
                                   else
                                       echo "The STAGE_NAME environment variable is missing!"
                                       false
                                   fi'''
                             archiveArtifacts artifacts: env.STAGE_NAME + '/**'
-                            junit env.STAGE_NAME + '/*/*/results.xml, src/tests/ftest/*_results.xml'
+                            junit env.STAGE_NAME + '/*/results.xml, src/tests/ftest/*_results.xml'
                         }
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
                         success {
