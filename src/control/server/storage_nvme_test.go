@@ -41,10 +41,11 @@ var nvmeFormatCalls []string // record calls to nvme.Format()
 func MockController(fwrev string) Controller {
 	c := MockControllerPB(fwrev)
 	return Controller{
-		Model:   c.Model,
-		Serial:  c.Serial,
-		PCIAddr: c.Pciaddr,
-		FWRev:   fwrev,
+		Model:    c.Model,
+		Serial:   c.Serial,
+		PCIAddr:  c.Pciaddr,
+		FWRev:    fwrev,
+		NUMANode: c.Numanode,
 	}
 }
 
@@ -53,10 +54,11 @@ func NewMockController(
 	pciaddr string, fwrev string, model string, serial string) Controller {
 
 	return Controller{
-		Model:   model,
-		Serial:  serial,
-		PCIAddr: pciaddr,
-		FWRev:   fwrev,
+		Model:    model,
+		Serial:   serial,
+		PCIAddr:  pciaddr,
+		FWRev:    fwrev,
+		NUMANode: 0,
 	}
 }
 
@@ -239,8 +241,8 @@ func TestDiscoverNvmeMulti(t *testing.T) {
 	}{
 		{
 			[]Controller{
-				{"", "", "1.2.3.4.5", "1.0.0"},
-				{"", "", "1.2.3.4.6", "1.0.0"},
+				{"", "", "1.2.3.4.5", "1.0.0", 0},
+				{"", "", "1.2.3.4.6", "1.0.0", 0},
 			},
 			[]Namespace{
 				{0, 100, "1.2.3.4.5"},
@@ -249,15 +251,15 @@ func TestDiscoverNvmeMulti(t *testing.T) {
 		},
 		{
 			[]Controller{
-				{"", "", "1.2.3.4.5", "1.0.0"},
-				{"", "", "1.2.3.4.6", "1.0.0"},
+				{"", "", "1.2.3.4.5", "1.0.0", 0},
+				{"", "", "1.2.3.4.6", "1.0.0", 0},
 			},
 			[]Namespace{},
 		},
 		{
 			[]Controller{
-				{"", "", "1.2.3.4.5", "1.0.0"},
-				{"", "", "1.2.3.4.6", "1.0.0"},
+				{"", "", "1.2.3.4.5", "1.0.0", 0},
+				{"", "", "1.2.3.4.6", "1.0.0", 0},
 			},
 			[]Namespace{
 				{0, 100, "1.2.3.4.5"},

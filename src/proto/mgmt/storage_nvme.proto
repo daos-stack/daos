@@ -41,7 +41,8 @@ message NvmeController {
 	string serial = 2;	// serial number
 	string pciaddr = 3;	// pci address
 	string fwrev = 4;	// firmware revision
-	repeated Namespace namespaces = 5;	// controller's namespaces
+	int32 numanode = 5;	// NUMA node
+	repeated Namespace namespaces = 6;	// controller's namespaces
 }
 
 // NvmeControllerResult represents state of operation performed on controller.
