@@ -1769,10 +1769,10 @@ test_evt_overlap_split_internal(void **state)
 
 	D_ALLOC_ARRAY(expected_data, NUM_EPOCHS * record_size);
 	if (expected_data == NULL)
-		goto end1;
+		goto finish1;
 	D_ALLOC_ARRAY(actual_data, NUM_EPOCHS * record_size);
 	if (actual_data == NULL)
-		goto end2;
+		goto finish2;
 
 	for (epoch = 1; epoch < NUM_EPOCHS; epoch++) {
 	/* Write a big extent at epoch 1.
@@ -1892,8 +1892,6 @@ test_evt_overlap_split_internal(void **state)
 
 
 finish:
-	rc = evt_destroy(toh);
-	assert_int_equal(rc, 0);
 	if (tree_depth_fail)
 		fail_msg("Node not splitted\n");
 	if (mem_cmp_fail) {
@@ -1910,11 +1908,12 @@ finish:
 		fail_msg("Actual/Expected Data MisMatch\n");
 	}
 	D_FREE(actual_data);
-end1:
+finish1:
 	D_FREE(data);
-end2:
+finish2:
 	D_FREE(expected_data);
-
+	rc = evt_destroy(toh);
+	assert_int_equal(rc, 0);
 }
 
 static inline int
