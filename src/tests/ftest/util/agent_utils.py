@@ -35,6 +35,8 @@ import re
 
 from general_utils import pcmd, check_file_exists
 
+SOCKET_DIR = "/var/run/daos_agent"
+
 
 class AgentFailed(Exception):
     """Agent didn't start/stop properly."""
@@ -69,12 +71,13 @@ def run_agent(basepath, server_list, client_list=None):
     if client_list is None:
         client_list = [socket.gethostname().split('.', 1)[0]]
 
+    # Verify the domain socket directory is present and owned by this user
     file_checks = (
         ("Server", server_list, "/var/run/daos_server"),
         ("Client", client_list, "/var/run/daos_agent"),
     )
     for host_type, host_list, directory in file_checks:
-        status, nodeset = check_file_exists(host_list, directory)
+        status, nodeset = check_file_exists(host_list, directory, user)
         if not status:
             raise AgentFailed(
                 "{}: {} missing directory {} for user {}.".format(
@@ -120,7 +123,7 @@ def run_agent(basepath, server_list, client_list=None):
             expected_data += output
 
             match = re.findall(pattern, output)
-            if len(match) > 0:
+            if match:
                 print(
                     "<AGENT> agent started on node {} in {} seconds".format(
                         client, time.time() - start_time))
