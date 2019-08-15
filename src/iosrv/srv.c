@@ -83,14 +83,12 @@
  * 2) dss_ult_xs() to query the XS id of the xstream for specific ULT task.
  */
 
-/** Number of dRPC xstreams */
-#define	DRPC_XS_NR	(1)
 /** Number of offload XS per target [0, 2] */
 unsigned int	dss_tgt_offload_xs_nr = 2;
 /** number of target (XS set) per server */
 unsigned int	dss_tgt_nr;
 /** number of system XS */
-unsigned int	dss_sys_xs_nr = DAOS_TGT0_OFFSET + DRPC_XS_NR;
+unsigned int	dss_sys_xs_nr = DAOS_TGT0_OFFSET;
 
 unsigned int
 dss_ctx_nr_get(void)
@@ -600,9 +598,10 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	 * as it is only for EC/checksum/compress offloading.
 	 */
 	xs_offset = xs_id < dss_sys_xs_nr ? -1 : DSS_XS_OFFSET_IN_TGT(xs_id);
-	comm = (xs_id < dss_sys_xs_nr) || xs_offset == 0 || xs_offset == 1;
+	comm = ((xs_id < dss_sys_xs_nr) || xs_offset == 0 || xs_offset == 1) &&
+	       (xs_id != DRPC_XS_ID);
 	dx->dx_tgt_id	= dss_xs2tgt(xs_id);
-	if (xs_id < dss_sys_xs_nr) {
+	if (xs_id < dss_sys_xs_nr || xs_id == DRPC_XS_ID) {
 		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_SYS_XS_NAME_FMT,
 			 xs_id);
 	} else {
@@ -828,6 +827,12 @@ dss_xstreams_init()
 				D_GOTO(out, rc);
 		}
 	}
+
+	/* start dRPC XS */
+	printf("DRPC xstream ID %d\n", DRPC_XS_ID);
+	rc = dss_start_xs_id(DRPC_XS_ID);
+	if (rc)
+		D_GOTO(out, rc);
 
 	D_DEBUG(DB_TRACE, "%d execution streams successfully started "
 		"(first core %d)\n", dss_tgt_nr, dss_core_offset);

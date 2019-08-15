@@ -65,9 +65,13 @@ void ds_iv_fini(void);
 #define DSS_XS_SELF		(-1)
 /** Number of XS for each VOS target (main XS and its offload XS) */
 #define DSS_XS_NR_PER_TGT	(dss_tgt_offload_xs_nr + 1)
+/** Number of dRPC xstreams */
+#define DRPC_XS_NR		(1)
+/** dRPC xstream ID */
+#define DRPC_XS_ID		(dss_tgt_nr * DSS_XS_NR_PER_TGT + dss_sys_xs_nr)
 /** Total number of XS */
 #define DSS_XS_NR_TOTAL						\
-	(dss_tgt_nr * DSS_XS_NR_PER_TGT + dss_sys_xs_nr)
+	(dss_tgt_nr * DSS_XS_NR_PER_TGT + dss_sys_xs_nr + DRPC_XS_NR)
 /** Number of cart contexts for each VOS target */
 #define DSS_CTX_NR_PER_TGT	(dss_tgt_offload_xs_nr == 0 ? 1 : 2)
 /** Total number of cart contexts created */
@@ -112,7 +116,7 @@ dss_ult_xs(int ult_type, int tgt_id)
 	case DSS_ULT_DRPC_HANDLER:
 		return 0;
 	case DSS_ULT_DRPC:
-		return 1;
+		return DRPC_XS_ID;
 	case DSS_ULT_REBUILD:
 	case DSS_ULT_AGGREGATE:
 		return DSS_MAIN_XS_ID(tgt_id);
