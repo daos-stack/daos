@@ -35,8 +35,6 @@ import re
 
 from general_utils import pcmd, check_file_exists
 
-SOCKET_DIR = "/var/run/daos_agent"
-
 
 class AgentFailed(Exception):
     """Agent didn't start/stop properly."""
