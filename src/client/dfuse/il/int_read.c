@@ -33,8 +33,8 @@ read_bulk(char *buff, size_t len, off_t position,
 	  struct dfuse_file_common *f_info, int *errcode)
 {
 	daos_array_iod_t	iod;
-	daos_size_t array_size;
-	daos_size_t max_read;
+	daos_size_t		array_size;
+	daos_size_t		max_read;
 	daos_range_t		rg;
 	d_iov_t			iov = {};
 	d_sg_list_t		sgl = {};
@@ -66,12 +66,11 @@ read_bulk(char *buff, size_t len, off_t position,
 
 	rc = daos_array_read(f_info->oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
 	if (rc) {
-		printf("It failed with %d", rc);
 		*errcode = daos_der2errno(rc);
 		return -1;
 	}
 
-	DFUSE_LOG_INFO("Read complete %#zx", len);
+	DFUSE_LOG_INFO("%#zx-%#zx ", position, position + len - 1);
 
 	return len;
 }
