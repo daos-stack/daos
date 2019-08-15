@@ -71,6 +71,9 @@ static int			 ts_feats = EVT_FEAT_DEFAULT;
 #define ORDER_DEF		16
 #define	ORDER_TEST_SIZE		200
 
+#define EVT_MIN_ORDER	4
+#define EVT_MAX_ORDER	128
+
 static int			ts_order = ORDER_DEF;
 
 static struct evt_root		*ts_root;
@@ -1695,7 +1698,8 @@ test_evt_node_size_internal(void **state)
 		evt_created = false;
 		rc = evt_create(arg->ta_root, ts_feats, order_size,
 				arg->ta_uma, &ts_evt_desc_cbs, &toh);
-		if ((order_size >= 4) && (order_size <= 128)) {
+		if ((order_size >= EVT_MIN_ORDER) &&
+		(order_size <= EVT_MAX_ORDER)) {
 			assert_int_equal(rc, 0);
 			evt_created = true;
 		} else {
@@ -1735,9 +1739,9 @@ test_evt_overlap_split_internal(void **state)
 	int			epoch;
 	int			record_size, data_size;
 	char			*data;
-	char			*expected_data;
-	char			*actual_data;
-	char			*read_data;
+	char			*expected_data = NULL;
+	char			*actual_data = NULL;
+	char			*read_data = NULL;
 	uint32_t		 inob;
 	int			data_len = 9;
 	int			tree_depth_fail = 0;
@@ -1753,15 +1757,22 @@ test_evt_overlap_split_internal(void **state)
 	* overlap value2: Rainydays
 	*/
 	record_size = ((data_len * NUM_EPOCHS) + 1);
+	/* First data malloc is for record_size.
+	* Other data malloc is only for 9 bytes.
+	* for loop frees the data every time.
+	*/
 	D_ALLOC_ARRAY(data, record_size);
-	assert_non_null(data);
-	D_ALLOC_ARRAY(expected_data, record_size + data_len);
-	assert_non_null(expected_data);
+	if (data == NULL)
+		goto finish;
 	repeat_string(data, "September", NUM_EPOCHS);
 	data_size = record_size;
 
 	D_ALLOC_ARRAY(expected_data, NUM_EPOCHS * record_size);
+	if (expected_data == NULL)
+		goto end1;
 	D_ALLOC_ARRAY(actual_data, NUM_EPOCHS * record_size);
+	if (actual_data == NULL)
+		goto end2;
 
 	for (epoch = 1; epoch < NUM_EPOCHS; epoch++) {
 	/* Write a big extent at epoch 1.
@@ -1770,7 +1781,9 @@ test_evt_overlap_split_internal(void **state)
 	* is visible.
 	*/
 		if (epoch > 1) {
-			/* All value array data size is same.
+			/* For epoch=1, the data size is different.
+			* All other epoch, data size is same.
+			* The data is freed on each loop.
 			*/
 			data_size = 9;
 			D_ALLOC_ARRAY(data, data_size);
@@ -1877,6 +1890,7 @@ test_evt_overlap_split_internal(void **state)
 	if (arg->ta_root->tr_depth < 2)
 		tree_depth_fail = 1;
 
+
 finish:
 	rc = evt_destroy(toh);
 	assert_int_equal(rc, 0);
@@ -1895,6 +1909,12 @@ finish:
 		D_PRINT("\n");
 		fail_msg("Actual/Expected Data MisMatch\n");
 	}
+	D_FREE(actual_data);
+end1:
+	D_FREE(data);
+end2:
+	D_FREE(expected_data);
+
 }
 
 static inline int
