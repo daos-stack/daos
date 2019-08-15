@@ -169,11 +169,11 @@ groups as needed in SPDK operations. If the target-user is unspecified
 (or root if not using sudo). The specification of hugepages (-p short
 option) defines the number of huge pages to allocate for use by SPDK.
 
-`sudo daos_server storage prep-nvme ...` command wraps the SPDK setup script
-to unbind the devices from original kernel drivers and then bind the devices
-to a generic driver through which SPDK can communicate. The devices can then
-be bound back to the original drivers with the command
-`sudo daos_server storage prep-nvme --reset`.
+`sudo daos_server storage prep-nvme [<opts>]` command wraps the SPDK
+setup script to unbind the devices from original kernel drivers and
+then bind the devices to a generic driver through which SPDK can
+communicate. The devices can then be bound back to the original
+drivers with the command `sudo daos_server storage prep-nvme --reset`.
 
 ### Storage Detection & Selection
 

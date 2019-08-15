@@ -56,7 +56,6 @@ const (
 
 	msgScmRebootRequired   = "A reboot is required to process new memory allocation goals."
 	msgScmNoModules        = "no scm modules to prepare"
-	msgScmPrepared         = "scm has been prepared"
 	msgScmNotInited        = "scm storage could not be accessed"
 	msgScmAlreadyFormatted = "scm storage has already been formatted and " +
 		"reformat not implemented"
@@ -119,7 +118,6 @@ type scmStorage struct {
 	config      *configuration // server configuration structure
 	runCmd      runCmdFn
 	modules     common.ScmModules
-	pmemDevs    []pmemDev
 	state       scmState
 	initialized bool
 	formatted   bool
@@ -282,25 +280,44 @@ func hasFreeCapacity(text string) (hasCapacity bool, err error) {
 	return
 }
 
-func parsePmemDevs(jsonData string) (devs []pmemDev) {
+// createRegions sets DCPM modules into regions in interleaved AppDirect mode.
+//
+// External tool command output will indicate whether a subsequent reboot is needed.
+func (s *scmStorage) createRegions() (bool, error) {
+	out, err := s.runCmd(cmdScmCreateRegions)
+	if err != nil {
+		return false, err
+	}
+
+	return strings.Contains(out, msgScmRebootRequired), nil
+}
+
+func parsePmemDevs(jsonData string) (devs []pmemDev, err error) {
 	// turn single entries into arrays
 	if !strings.HasPrefix(jsonData, "[") {
 		jsonData = "[" + jsonData + "]"
 	}
 
-	json.Unmarshal([]byte(jsonData), &devs)
+	err = json.Unmarshal([]byte(jsonData), &devs)
 
 	return
 }
 
 // createNamespaces runs create until no free capacity.
-func (s *scmStorage) createNamespaces() (devs []pmemDev, err error) {
+func (s *scmStorage) createNamespaces() ([]pmemDev, error) {
+	devs := make([]pmemDev, 0)
+
 	for {
 		out, err := s.runCmd(cmdScmCreateNamespace)
 		if err != nil {
 			return nil, err
 		}
-		devs = append(devs, parsePmemDevs(out)...)
+
+		newDevs, err := parsePmemDevs(out)
+		if err != nil {
+			return nil, err
+		}
+		devs = append(devs, newDevs...)
 
 		if err := s.getState(); err != nil {
 			return nil, err
@@ -322,7 +339,7 @@ func (s *scmStorage) getNamespaces() (devs []pmemDev, err error) {
 		return nil, err
 	}
 
-	return parsePmemDevs(out), nil
+	return parsePmemDevs(out)
 }
 
 // Setup implementation for scmStorage providing initial device discovery
