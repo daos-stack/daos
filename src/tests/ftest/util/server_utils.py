@@ -168,10 +168,9 @@ class ServerCommand(CommandWithParameters):
             if uri is not None:
                 args.append("--report-uri {}".format(uri))
 
+            return "{} {} {}".format(manager, " ".join(args), self.__str__())
         else:
             raise ServerFailed("Unsupported job manager: {}".format(manager))
-
-        return "{} {} {}".format(manager, " ".join(args), self.__str__())
 
     def start(self, manager, verbose=True, env=None, timeout=600):
         """Start the daos server on each specified host.
