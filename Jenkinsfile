@@ -43,7 +43,9 @@
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
-def daos_repos = "openpa libfabric pmix ompi mercury spdk isa-l fio dpdk protobuf-c fuse pmdk argobots raft cart@daos_devel1 daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
+def component_repos = "openpa libfabric pmix ompi mercury spdk isa-l fio dpdk protobuf-c fuse pmdk argobots raft cart@daos_devel1"
+def daos_repo = "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
+def daos_repos = component_repos + ' ' + daos_repo
 def ior_repos = "mpich@daos_adio-rpm ior-hpc@daos"
 
 def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
@@ -97,11 +99,13 @@ pipeline {
         GITHUB_USER = credentials('daos-jenkins-review-posting')
         BAHTTPS_PROXY = "${env.HTTP_PROXY ? '--build-arg HTTP_PROXY="' + env.HTTP_PROXY + '" --build-arg http_proxy="' + env.HTTP_PROXY + '"' : ''}"
         BAHTTP_PROXY = "${env.HTTP_PROXY ? '--build-arg HTTPS_PROXY="' + env.HTTPS_PROXY + '" --build-arg https_proxy="' + env.HTTPS_PROXY + '"' : ''}"
-        UID=sh(script: "id -u", returnStdout: true)
+        UID = sh(script: "id -u", returnStdout: true)
         BUILDARGS = "$env.BAHTTP_PROXY $env.BAHTTPS_PROXY "                   +
                     "--build-arg NOBUILD=1 --build-arg UID=$env.UID "         +
                     "--build-arg JENKINS_URL=$env.JENKINS_URL "               +
                     "--build-arg CACHEBUST=${currentBuild.startTimeInMillis}"
+        QUICKBUILD = sh(script: "git show -s --format=%B | grep \"^Quick-build: true\"",
+                        returnStatus: true)
     }
 
     options {
@@ -117,6 +121,10 @@ pipeline {
             }
         }
         stage('Pre-build') {
+            when {
+                beforeAgent true
+                expression { return env.QUICKBUILD == '1' }
+            }
             parallel {
                 stage('checkpatch') {
                     agent {
@@ -182,6 +190,10 @@ pipeline {
             }
             parallel {
                 stage('Build RPM on CentOS 7') {
+                    when {
+                        beforeAgent true
+                        expression { return env.QUICKBUILD == '1' }
+                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile-mockbuild.centos.7'
@@ -241,6 +253,10 @@ pipeline {
                     }
                 }
                 stage('Build RPM on SLES 12.3') {
+                    when {
+                        beforeAgent true
+                        expression { return env.QUICKBUILD == '1' }
+                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile-rpmbuild.sles.12.3'
@@ -302,7 +318,9 @@ pipeline {
                             filename 'Dockerfile.centos.7'
                             dir 'utils/docker'
                             label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " + '$BUILDARGS'
+                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
+                                                '$BUILDARGS ' +
+                                                "--build-arg QUICKBUILD=" + env.QUICKBUILD
                         }
                     }
                     steps {
@@ -393,8 +411,13 @@ pipeline {
                     }
                 }
                 stage('Build on CentOS 7 with Clang') {
-                    when { beforeAgent true
-                           branch 'master' }
+                    when {
+                        beforeAgent true
+                        allOf {
+                            branch 'master'
+                            expression { return env.QUICKBUILD == '1' }
+                        }
+                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.centos.7'
@@ -462,8 +485,13 @@ pipeline {
                     }
                 }
                 stage('Build on Ubuntu 18.04') {
-                    when { beforeAgent true
-                           branch 'master' }
+                    when {
+                        beforeAgent true
+                        allOf {
+                            branch 'master'
+                            expression { return env.QUICKBUILD == '1' }
+                        }
+                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.ubuntu.18.04'
@@ -531,6 +559,10 @@ pipeline {
                     }
                 }
                 stage('Build on Ubuntu 18.04 with Clang') {
+                    when {
+                        beforeAgent true
+                        expression { return env.QUICKBUILD == '1' }
+                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.ubuntu.18.04'
@@ -598,8 +630,13 @@ pipeline {
                     }
                 }
                 stage('Build on SLES 12.3') {
-                    when { beforeAgent true
-                           environment name: 'SLES12_3_DOCKER', value: 'true' }
+                    when {
+                        beforeAgent true
+                        allOf {
+                            environment name: 'SLES12_3_DOCKER', value: 'true'
+                            expression { return env.QUICKBUILD == '1' }
+                        }
+                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.sles.12.3'
@@ -669,8 +706,13 @@ pipeline {
                     }
                 }
                 stage('Build on Leap 42.3') {
-                    when { beforeAgent true
-                           environment name: 'LEAP42_3_DOCKER', value: 'true' }
+                    when {
+                        beforeAgent true
+                        allOf {
+                            environment name: 'LEAP42_3_DOCKER', value: 'true'
+                            expression { return env.QUICKBUILD == '1' }
+                        }
+                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.leap.42.3'
@@ -740,8 +782,13 @@ pipeline {
                     }
                 }
                 stage('Build on Leap 15') {
-                    when { beforeAgent true
-                           branch 'master' }
+                    when {
+                        beforeAgent true
+                        allOf {
+                            branch 'master'
+                            expression { return env.QUICKBUILD == '1' }
+                        }
+                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.leap.15'
@@ -809,8 +856,13 @@ pipeline {
                     }
                 }
                 stage('Build on Leap 15 with Clang') {
-                    when { beforeAgent true
-                           branch 'master' }
+                    when {
+                        beforeAgent true
+                        allOf {
+                            branch 'master'
+                            expression { return env.QUICKBUILD == '1' }
+                        }
+                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.leap.15'
@@ -878,6 +930,10 @@ pipeline {
                     }
                 }
                 stage('Build on Leap 15 with Intel-C') {
+                    when {
+                        beforeAgent true
+                        expression { return env.QUICKBUILD == '1' }
+                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile.leap.15'
@@ -964,7 +1020,9 @@ pipeline {
                     steps {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 1,
-                                       snapshot: true
+                                       snapshot: true,
+                                       inst_repos: component_repos,
+                                       inst_rpms: "argobots cart fuse3-libs hwloc-devel libisa-l libpmem libpmemobj protobuf-c spdk-devel"
                         runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''export SSH_KEY_ARGS="-i ci_key"
                                            export PDSH_SSH_ARGS_APPEND="$SSH_KEY_ARGS"
@@ -1065,11 +1123,12 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
                                        snapshot: true,
-                                       inst_repos: daos_repos + ' ' + ior_repos,
+                                       inst_repos: component_repos + ' ' + ior_repos +
+                                                   ' daos',
                                        inst_rpms: "ior-hpc mpich-autoload"
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''export SSH_KEY_ARGS="-i ci_key"
-                                           export PDSH_SSH_ARGS_APPEND="$SSH_KEY_ARGS"
+                                script: '''export SSH_KEY_ARGS="-ici_key"
+                                           export CLUSH_ARGS="-o$SSH_KEY_ARGS"
                                            test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
                                                test_tag=regression,vm
@@ -1085,15 +1144,18 @@ pipeline {
                                   if [ -n "$STAGE_NAME" ]; then
                                       rm -rf "$STAGE_NAME/"
                                       mkdir "$STAGE_NAME/"
-                                      ls *daos{,_agent}.log* >/dev/null && mv *daos{,_agent}.log* "$STAGE_NAME/"
-                                      mv src/tests/ftest/avocado/* \
-                                         $(ls src/tests/ftest/*.stacktrace || true) "$STAGE_NAME/"
+                                      arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
+                                      arts="$arts$(ls -d src/tests/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
+                                      arts="$arts$(ls src/tests/ftest/*.stacktrace 2>/dev/null || true)"
+                                      if [ -n "$arts" ]; then
+                                          mv $(echo $arts | tr '\n' ' ') "$STAGE_NAME/"
+                                      fi
                                   else
                                       echo "The STAGE_NAME environment variable is missing!"
                                       false
                                   fi'''
-                            junit env.STAGE_NAME + '/*/*/results.xml, src/tests/ftest/*_results.xml'
                             archiveArtifacts artifacts: env.STAGE_NAME + '/**'
+                            junit env.STAGE_NAME + '/*/results.xml, src/tests/ftest/*_results.xml'
                         }
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
                         success {
@@ -1126,17 +1188,19 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 1,
                                        snapshot: true,
-                                       inst_repos: daos_repos + ' ' + ior_repos,
+                                       inst_repos: component_repos + ' ' + ior_repos +
+                                                   ' daos',
                                        inst_rpms: "ior-hpc mpich-autoload"
                         // Then just reboot the physical nodes
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
                                        power_only: true,
-                                       inst_repos: daos_repos + ' ' + ior_repos,
+                                       inst_repos: component_repos + ' ' + ior_repos +
+                                                   ' daos',
                                        inst_rpms: "ior-hpc mpich-autoload"
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''export SSH_KEY_ARGS="-i ci_key"
-                                           export PDSH_SSH_ARGS_APPEND="$SSH_KEY_ARGS"
+                                script: '''export SSH_KEY_ARGS="-ici_key"
+                                           export CLUSH_ARGS="-o$SSH_KEY_ARGS"
                                            test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
                                                test_tag=pr,hw
@@ -1152,15 +1216,18 @@ pipeline {
                                   if [ -n "$STAGE_NAME" ]; then
                                       rm -rf "$STAGE_NAME/"
                                       mkdir "$STAGE_NAME/"
-                                      ls *daos{,_agent}.log* >/dev/null && mv *daos{,_agent}.log* "$STAGE_NAME/"
-                                      mv src/tests/ftest/avocado/* \
-                                         $(ls src/tests/ftest/*.stacktrace || true) "$STAGE_NAME/"
+                                      arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
+                                      arts="$arts$(ls -d src/tests/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
+                                      arts="$arts$(ls src/tests/ftest/*.stacktrace 2>/dev/null || true)"
+                                      if [ -n "$arts" ]; then
+                                          mv $(echo $arts | tr '\n' ' ') "$STAGE_NAME/"
+                                      fi
                                   else
                                       echo "The STAGE_NAME environment variable is missing!"
                                       false
                                   fi'''
-                            junit env.STAGE_NAME + '/*/*/results.xml, src/tests/ftest/*_results.xml'
                             archiveArtifacts artifacts: env.STAGE_NAME + '/**'
+                            junit env.STAGE_NAME + '/*/results.xml, src/tests/ftest/*_results.xml'
                         }
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
                         success {
@@ -1185,6 +1252,10 @@ pipeline {
                     }
                 }
                 stage('Test CentOS 7 RPMs') {
+                    when {
+                        beforeAgent true
+                        expression { return env.QUICKBUILD == '1' }
+                    }
                     agent {
                         label 'ci_vm1'
                     }
@@ -1208,6 +1279,10 @@ pipeline {
                     }
                 }
                 stage('Test SLES12.3 RPMs') {
+                    when {
+                        beforeAgent true
+                        expression { return env.QUICKBUILD == '1' }
+                    }
                     agent {
                         label 'ci_vm1'
                     }
