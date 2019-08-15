@@ -272,7 +272,9 @@ def get_test_files(test_list, args, tmp_dir):
             write modified yaml files
 
     Returns:
-        list: a list of dictionaries of each test script and yaml file
+        list: a list of dictionaries of each test script and yaml file; If
+            there was an issue replacing a yaml host placeholder the yaml
+            dictionary entry will be set to None.
 
     """
     test_files = [{"py": test, "yaml": None} for test in test_list]
@@ -299,7 +301,8 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
             write modified yaml files
 
     Returns:
-        str: the test yaml file
+        str: the test yaml file; None if the yaml file contains placeholders
+            w/o replacements
 
     """
     if args.test_servers:
@@ -329,6 +332,7 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
             file_str = yaml_buffer.read()
 
         # Apply the placeholder replacements
+        missing_replacements = []
         for placeholder, host in mapping.items():
             if host:
                 # Replace the host entries with their mapped values
@@ -338,11 +342,15 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
                 # Discard any host entries without a replacement value
                 file_str = re.sub(r"\s+- {}".format(placeholder), "", file_str)
             else:
-                # Report an error for a placeholder w/o a replacement
-                print(
-                    "Error: No replacement specified for the {} placeholder: "
-                    "{}".format(placeholder, yaml_file))
-                exit(1)
+                # Keep track of any placeholders without a replacement value
+                missing_replacements.append(placeholder)
+
+        if missing_replacements:
+            # Report an error for a placeholder w/o a replacement
+            print(
+                "Error: Placeholders missing replacements in {}:\n  {}".format(
+                    yaml_file, ", ".join(missing_replacements)))
+            return None
 
         # Write the modified yaml file into a temporary file
         yaml_name = os.path.basename(os.path.splitext(yaml_file)[0])
@@ -411,6 +419,10 @@ def run_tests(test_files, tag_filter, args):
             # Optionally rename the test results directory for this test
             if args.rename:
                 rename_logs(avocado_logs_dir, test_file["py"])
+        else:
+            # The test was not run due to an error replacing host placeholders
+            # in the yaml file.  Treat this like a failed avocado command.
+            return_code |= 4
 
     return return_code
 
