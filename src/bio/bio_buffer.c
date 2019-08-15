@@ -644,7 +644,7 @@ rw_completion(void *cb_arg, int err)
 			goto skip_media_error;
 		mem->mem_update = biod->bd_update;
 		mem->mem_bs = biod->bd_ctxt->bic_xs_ctxt->bxc_blobstore;
-		mem->mem_tgt_id = biod->bd_ctxt->bic_xs_ctxt->bxc_xs_id;
+		mem->mem_tgt_id = biod->bd_ctxt->bic_xs_ctxt->bxc_tgt_id;
 		spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error,
 				     mem);
 	}
