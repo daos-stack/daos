@@ -85,7 +85,8 @@ func (s *ScanStorCmd) Execute(args []string) (errs error) {
 		fmt.Fprintln(os.Stderr, "nvme scan: "+resp.Nvmestate.Error)
 		isErrored = true
 	} else {
-		common.PrintStructs("NVMe", srv.nvme.controllers)
+		fmt.Printf("NVMe SSD controller and constituent namespaces:\n%s",
+			srv.nvme.controllers)
 	}
 	if resp.Scmstate.Status != pb.ResponseStatus_CTRL_SUCCESS {
 		fmt.Fprintln(os.Stderr, "scm scan: "+resp.Scmstate.Error)

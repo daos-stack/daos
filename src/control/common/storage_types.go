@@ -39,13 +39,12 @@ func (nc NvmeControllers) String() string {
 
 	for _, ctrlr := range nc {
 		fmt.Fprintf(&buf,
-			"\tPCI Address:%s Serial:%s\n\tModel:%s Fwrev:%s\n\tSocket: %d\n",
+			"\tPCI Address:%s Serial:%s Model:%s Fwrev:%s Socket: %d\n",
 			ctrlr.Pciaddr, ctrlr.Serial, ctrlr.Model, ctrlr.Fwrev,
 			ctrlr.Socketid)
 
 		for _, ns := range ctrlr.Namespaces {
-			fmt.Fprintf(
-				&buf, "\t\tNamespace: %+v\n", ns)
+			fmt.Fprintf(&buf, "\t\tNamespace: %+v\n", ns)
 		}
 	}
 
