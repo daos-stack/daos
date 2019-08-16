@@ -149,6 +149,14 @@ crt_proc_daos_csum_buf_t(crt_proc_t proc, daos_csum_buf_t *csum)
 	if (rc != 0)
 		return -DER_HG;
 
+	rc = crt_proc_uint32_t(proc, &csum->cs_nr);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint32_t(proc, &csum->cs_chunksize);
+	if (rc != 0)
+		return -DER_HG;
+
 	rc = crt_proc_uint16_t(proc, &csum->cs_type);
 	if (rc != 0)
 		return -DER_HG;

@@ -60,6 +60,15 @@ def preload_prereqs(prereqs):
                    libs=['mchecksum'],
                    out_of_src_build=True)
 
+    # TODO: Remove when able to rev scons_local submodule
+    prereqs.define('isal_crypto',
+                retriever=GitRepoRetriever("https://github.com/intel/"
+                                           "isa-l_crypto"),
+                commands=['./autogen.sh ',
+                          './configure --prefix=$ISAL_CRYPTO_PREFIX '
+                          '--libdir=$ISAL_CRYPTO_PREFIX/lib',
+                          'make $JOBS_OPT', 'make install'],
+                libs=['isal_crypto'])
 
     prereqs.define('cmocka', libs=['cmocka'], package='libcmocka-devel')
     prereqs.define('readline', libs=['readline', 'history'],
