@@ -23,6 +23,7 @@
 """
 from __future__ import print_function
 
+import os
 
 class BasicParameter(object):
     """A class for parameters whose values are read from a yaml file."""
@@ -149,14 +150,16 @@ class ObjectWithParameters(object):
 class CommandWithParameters(ObjectWithParameters):
     """A class for command with paramaters."""
 
-    def __init__(self, command):
+    def __init__(self, path, command):
         """Create a CommandWithParameters object.
 
         Uses Avocado's utils.process module to run a command str provided.
 
         Args:
+            path (str): path to location of command binary file
             command (str): string of the command to be executed.
         """
+        self._path = path
         self._command = command
 
     def __str__(self):
@@ -173,4 +176,4 @@ class CommandWithParameters(ObjectWithParameters):
             value = str(getattr(self, name))
             if value != "":
                 params.append(value)
-        return " ".join([self._command] + params)
+        return " ".join([os.path.join(self._path, self._command)] + params)

@@ -31,9 +31,9 @@ from avocado.utils import process
 class DmgCommand(CommandWithParameters):
     """Defines a object representing a dmg (or daos_shell) command."""
 
-    def __init__(self):
+    def __init__(self, path):
         """Create a dmg Command object."""
-        super(DmgCommand, self).__init__("daos_shell")
+        super(DmgCommand, self).__init__(path, "daos_shell")
 
         self.request = BasicParameter("{}")
         self.action = BasicParameter("{}")

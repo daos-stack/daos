@@ -56,9 +56,9 @@ class ServerFailed(Exception):
 class ServerCommand(CommandWithParameters):
     """Defines a object representing a server command."""
 
-    def __init__(self, hosts):
+    def __init__(self, hosts, path):
         """Create a server Command object"""
-        super(ServerCommand, self).__init__("daos_server")
+        super(ServerCommand, self).__init__(path, "daos_server")
 
         self.hosts = hosts
         self.process = None
@@ -173,7 +173,7 @@ class ServerCommand(CommandWithParameters):
         else:
             raise ServerFailed("Unsupported job manager: {}".format(manager))
 
-    def start(self, manager, verbose=True, env=None, timeout=600):
+    def start(self, manager, verbose=True, env=None, sudo=None, timeout=600):
         """Start the daos server on each specified host.
 
         Args:
@@ -194,7 +194,7 @@ class ServerCommand(CommandWithParameters):
                 "allow_output_check": "combined",
                 "shell": True,
                 "env": env,
-                "sudo": True,
+                "sudo": sudo,
             }
             self.process = process.SubProcess(**kwargs)
             self.process.start()

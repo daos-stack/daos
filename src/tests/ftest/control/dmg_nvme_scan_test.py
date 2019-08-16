@@ -23,6 +23,8 @@
 """
 from __future__ import print_function
 
+import os
+
 from dmg_utils import DmgCommand
 from server_utils import ServerCommand
 from apricot import TestWithServers
@@ -48,7 +50,8 @@ class DmgNvmeScanTest(TestWithServers):
         :avocado: tags=all,tiny,pr,dmg,nvme_scan,basic
         """
         # Create daos_server command
-        server = ServerCommand(self.hostlist_servers)
+        server = ServerCommand(
+            self.hostlist_servers, os.path.join(self.prefix, "bin"))
         server.get_params(self)
 
         # Update config and start server
@@ -57,7 +60,7 @@ class DmgNvmeScanTest(TestWithServers):
         server.start(None)
 
         # Create daos_shell command
-        dmg = DmgCommand()
+        dmg = DmgCommand(os.path.join(self.prefix, "bin"))
         dmg.get_params(self)
 
         # Update hostlist value for dmg command
