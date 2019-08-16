@@ -239,6 +239,27 @@ vos_agg_obj(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	if (agg_param->ap_discard) {
+		if (agg_param->ap_sub_tree_empty) {
+			struct obj_lru_key	 lkey;
+			struct daos_lru_cache	*occ = vos_obj_cache_current();
+			struct daos_llink	*lret;
+			struct vos_object	*obj;
+
+			lkey.olk_cont = vos_hdl2cont(agg_param->ap_coh);
+			lkey.olk_oid = entry->ie_oid;
+
+			rc = daos_lru_ref_hold(occ, &lkey, sizeof(lkey), NULL,
+					       &lret);
+			if (rc == 0) {
+				obj = container_of(lret, struct vos_object,
+						   obj_llink);
+				vos_obj_evict(obj);
+				vos_obj_release(occ, obj);
+			} else if (rc != -DER_NONEXIST) {
+				return rc;
+			}
+		}
+
 		rc = agg_discard_parent(ih, entry, agg_param, acts);
 		agg_param->ap_sub_tree_empty = 0;
 		return rc;

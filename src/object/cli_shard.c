@@ -1002,3 +1002,127 @@ out:
 	tse_task_complete(task, rc);
 	return rc;
 }
+
+struct obj_shard_sync_cb_args {
+	crt_rpc_t	*rpc;
+	daos_epoch_t	*epoch;
+	uint32_t	*map_ver;
+};
+
+static int
+obj_shard_sync_cb(tse_task_t *task, void *data)
+{
+	struct obj_shard_sync_cb_args	*cb_args;
+	struct obj_sync_out		*oso;
+	int				 ret = task->dt_result;
+	int				 rc = 0;
+	crt_rpc_t			*rpc;
+
+	cb_args = (struct obj_shard_sync_cb_args *)data;
+	rpc = cb_args->rpc;
+
+	if (ret != 0) {
+		D_ERROR("OBJ_SYNC RPC failed: rc = %d\n", ret);
+		D_GOTO(out, rc = ret);
+	}
+
+	oso = crt_reply_get(rpc);
+	rc = oso->oso_ret;
+	if (rc == -DER_NONEXIST)
+		D_GOTO(out, rc = 0);
+
+	if (rc == -DER_INPROGRESS) {
+		D_DEBUG(DB_TRACE,
+			"rpc %p OBJ_SYNC_RPC may need retry: rc = %d\n",
+			rpc, rc);
+		D_GOTO(out, rc);
+	}
+
+	if (rc != 0) {
+		D_ERROR("rpc %p OBJ_SYNC_RPC failed: rc = %d\n", rpc, rc);
+		D_GOTO(out, rc);
+	}
+
+	*cb_args->epoch = oso->oso_epoch;
+	*cb_args->map_ver = oso->oso_map_version;
+
+out:
+	crt_req_decref(rpc);
+	return rc;
+}
+
+int
+dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
+		  void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
+		  uint32_t fw_cnt, tse_task_t *task)
+{
+	struct shard_sync_args		*args = shard_args;
+	struct dc_pool			*pool = NULL;
+	uuid_t				 cont_hdl_uuid;
+	uuid_t				 cont_uuid;
+	struct obj_sync_in		*osi;
+	crt_rpc_t			*req;
+	struct obj_shard_sync_cb_args	 cb_args;
+	crt_endpoint_t			 tgt_ep;
+	int				 rc;
+
+	pool = obj_shard_ptr2pool(shard);
+	if (pool == NULL)
+		D_GOTO(out, rc = -DER_NO_HDL);
+
+	rc = dc_cont_hdl2uuid(shard->do_co_hdl, &cont_hdl_uuid, &cont_uuid);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	tgt_ep.ep_grp	= pool->dp_sys->sy_group;
+	tgt_ep.ep_tag	= shard->do_target_idx;
+	tgt_ep.ep_rank	= shard->do_target_rank;
+	if ((int)tgt_ep.ep_rank < 0)
+		D_GOTO(out, rc = (int)tgt_ep.ep_rank);
+
+	D_DEBUG(DB_IO, "OBJ_SYNC_RPC, rank=%d tag=%d.\n",
+		tgt_ep.ep_rank, tgt_ep.ep_tag);
+
+	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	crt_req_addref(req);
+	cb_args.rpc	= req;
+	cb_args.epoch	= args->sa_epoch;
+	cb_args.map_ver = &args->sa_auxi.map_ver;
+
+	rc = tse_task_register_comp_cb(task, obj_shard_sync_cb, &cb_args,
+				       sizeof(cb_args));
+	if (rc != 0)
+		D_GOTO(out_req, rc);
+
+	osi = crt_req_get(req);
+	D_ASSERT(osi != NULL);
+
+	uuid_copy(osi->osi_co_hdl, cont_hdl_uuid);
+	uuid_copy(osi->osi_pool_uuid, pool->dp_pool);
+	uuid_copy(osi->osi_co_uuid, cont_uuid);
+	osi->osi_oid		= shard->do_id;
+	osi->osi_epoch		= args->sa_auxi.epoch;
+	osi->osi_map_ver	= args->sa_auxi.map_ver;
+
+	rc = daos_rpc_send(req, task);
+	if (rc != 0) {
+		D_ERROR("OBJ_SYNC_RPC failed: rc = %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	dc_pool_put(pool);
+	return 0;
+
+out_req:
+	crt_req_decref(req);
+
+out:
+	if (pool != NULL)
+		dc_pool_put(pool);
+
+	tse_task_complete(task, rc);
+	return rc;
+}

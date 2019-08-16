@@ -351,6 +351,7 @@ int dc_obj_punch_dkeys(tse_task_t *task);
 int dc_obj_punch_akeys(tse_task_t *task);
 int dc_obj_query(tse_task_t *task);
 int dc_obj_query_key(tse_task_t *task);
+int dc_obj_sync(tse_task_t *task);
 int dc_obj_fetch_shard(tse_task_t *task);
 int dc_obj_fetch(tse_task_t *task);
 int dc_obj_update(tse_task_t *task);

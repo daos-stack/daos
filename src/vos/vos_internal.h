@@ -201,6 +201,8 @@ struct vos_object {
 	daos_handle_t			obj_ih;
 	/** epoch when the object(cache) is initialized */
 	daos_epoch_t			obj_epoch;
+	/** The latest sync epoch */
+	daos_epoch_t			obj_sync_epoch;
 	/** cached vos_obj_df::vo_incarnation, for revalidation. */
 	uint32_t			obj_incarnation;
 	/** Persistent memory address of the object */
@@ -980,6 +982,18 @@ struct vos_obj_iter {
 	daos_key_t		 it_akey;
 	/* reference on the object */
 	struct vos_object	*it_obj;
+};
+
+/**
+ * Local type for VOS LRU key
+ * VOS LRU key must consist of
+ * Object ID and container UUID
+ */
+struct obj_lru_key {
+	/* container the object belongs to */
+	struct vos_container	*olk_cont;
+	/* Object ID */
+	daos_unit_oid_t		 olk_oid;
 };
 
 static inline struct vos_obj_iter *

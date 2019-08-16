@@ -163,6 +163,45 @@ daos_obj_query_key(daos_handle_t oh, daos_handle_t th, uint32_t flags,
 }
 
 int
+daos_obj_sync(daos_handle_t oh, daos_epoch_t *epoch)
+{
+	tse_task_t	*task;
+	daos_epoch_t	*epoch_p = NULL;
+	int		 epoch_nr = 0;
+	int		 rc;
+
+	rc = dc_obj_sync_task_create(oh, DAOS_TX_NONE, &epoch_p, &epoch_nr,
+				     NULL, NULL, &task);
+	if (rc == 0)
+		rc = dc_task_schedule(task, true);
+
+	if (rc != 0)
+		goto out;
+
+	if (epoch != NULL) {
+		int	i;
+
+		if (epoch_p == NULL) {
+			*epoch = 0;
+			goto out;
+		}
+
+		*epoch = DAOS_EPOCH_MAX;
+		for (i = 0; i < epoch_nr; i++) {
+			if (epoch_p[i] != 0 && epoch_p[i] < *epoch)
+				*epoch = epoch_p[i];
+		}
+
+		if (*epoch == DAOS_EPOCH_MAX)
+			rc = -DER_NONEXIST;
+	}
+
+out:
+	D_FREE(epoch_p);
+	return rc;
+}
+
+int
 daos_obj_fetch(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
 	       unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
 	       daos_iom_t *maps, daos_event_t *ev)
