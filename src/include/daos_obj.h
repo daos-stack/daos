@@ -795,6 +795,31 @@ daos_obj_query_key(daos_handle_t oh, daos_handle_t th, uint32_t flags,
 		   daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
 		   daos_event_t *ev);
 
+/**
+ * Sync data for the given object, such as flush committable DTX on leader.
+ *
+ * The API will trigger the DAOS_OBJ_RPC_SYNC RPC to related (leader) server(s).
+ * On the server side, related RPC handler will commit the DTXs that modify the
+ * specified object. For the DTX not ready for commit, it will be aborted, then
+ * related IO RPC handler will reply to the client -DER_INPROGRESS, such error#
+ * will cause client to retry the modification with newer epoch sometime later.
+ *
+ * \param[in]	oh	Object open handle.
+ * \param[out]	epoch	It contains current highest epoch on the (leader) server
+ *			that has been synced. If the object resides on multiple
+ *			redundancy groups, then the lowest epoch that have been
+ *			synced among these RDGs  will be returned.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ */
+int
+daos_obj_sync(daos_handle_t oh, daos_epoch_t *epoch);
+
 #if defined(__cplusplus)
 }
 #endif
