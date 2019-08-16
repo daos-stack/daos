@@ -716,7 +716,7 @@ class DaosObj(object):
             rank (int, optional): server rank. Defaults to None.
             objcls (object, optional): the DAOS class for this object specified
                 as either one of the DAOS object class enumerations or an
-                enumeration name or value. Defaults to OC_RP_XSF.
+                enumeration name or value. Defaults to DaosObjClass.OC_RP_XSF.
 
         Raises:
             DaosApiError: if the object class is invalid
@@ -725,7 +725,7 @@ class DaosObj(object):
 
         # Convert the object class into an valid object class enumeration value
         if objcls is None:
-            obj_cls_int = OC_RP_XSF.value
+            obj_cls_int = DaosObjClass.OC_RP_XSF.value
         else:
             obj_cls_int = get_object_class(objcls).value
 
