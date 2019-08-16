@@ -169,7 +169,11 @@ func (sm ScmModules) String() string {
 	var buf bytes.Buffer
 
 	for _, module := range sm {
-		fmt.Fprintf(&buf, "\t%+v\n", module)
+		fmt.Fprintf(&buf,
+			"\tPhysical ID: %d Capacity: %d Location: (socket %d "+
+				"memctrlr %d chan %d pos %d)\n",
+			module.Physicalid, module.Capacity, module.Loc.Socket,
+			module.Loc.Memctrlr, module.Loc.Channel, module.Loc.Channelpos)
 	}
 
 	return buf.String()
