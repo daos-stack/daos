@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -409,10 +409,10 @@ crt_proc_corpc_hdr(crt_proc_t proc, struct crt_corpc_hdr *hdr)
 		D_GOTO(out, rc = -DER_INVAL);
 
 	hg_proc = proc;
-	hg_ret = hg_proc_hg_uint64_t(hg_proc, &hdr->coh_int_grpid);
-	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
-		D_GOTO(out, rc = -DER_HG);
+	rc = crt_proc_crt_group_id_t(hg_proc, &hdr->coh_grpid);
+	if (rc != 0) {
+		D_ERROR("crt proc error, rc: %d.\n", rc);
+		D_GOTO(out, rc);
 	}
 	rc = crt_proc_crt_bulk_t(hg_proc, &hdr->coh_bulk_hdl);
 	if (rc != 0) {

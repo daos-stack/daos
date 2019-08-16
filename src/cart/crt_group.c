@@ -1040,6 +1040,31 @@ exit:
 	return grp_priv;
 }
 
+/* lookup by string subgrp id */
+struct crt_grp_priv *
+crt_grp_lookup_grpid(crt_group_id_t grp_id)
+{
+	struct crt_grp_priv	*grp_priv;
+	bool			found = false;
+
+	D_RWLOCK_RDLOCK(&crt_grp_list_rwlock);
+	d_list_for_each_entry(grp_priv, &crt_grp_list, gp_link) {
+		if (crt_grp_id_identical(grp_priv->gp_pub.cg_grpid,
+					 grp_id)) {
+			found = true;
+			break;
+		}
+	}
+
+	if (found == true)
+		crt_grp_priv_addref(grp_priv);
+	else
+		grp_priv = NULL;
+	D_RWLOCK_UNLOCK(&crt_grp_list_rwlock);
+
+	return grp_priv;
+}
+
 static inline void
 crt_grp_insert_locked(struct crt_grp_priv *grp_priv)
 {
