@@ -30,12 +30,6 @@
 #include "ioil_io.h"
 #include "ioil_api.h"
 
-/* Common data stored on open file handles */
-struct dfuse_file_common {
-	daos_handle_t		oh;
-	bool gah;
-};
-
 /* Low level I/O functions we intercept
  *
  * We purposefully skip the following:
@@ -124,17 +118,27 @@ struct dfuse_file_common {
 
 #endif /* IOIL_PRELOAD */
 
+struct fd_entry {
+
+	daos_handle_t		aoh;
+	daos_handle_t		poh;
+	daos_handle_t		coh;
+	off_t pos;
+	int flags;
+	int status;
+};
+
 ssize_t
 ioil_do_pread(char *buff, size_t len, off_t position,
-	      struct dfuse_file_common *f_info, int *errcode);
+	      struct fd_entry *entry, int *errcode);
 ssize_t
 ioil_do_preadv(const struct iovec *iov, int count, off_t position,
-	       struct dfuse_file_common *f_info, int *errcode);
+	       struct fd_entry *entry, int *errcode);
 ssize_t
 ioil_do_writex(const char *buff, size_t len, off_t position,
-	       struct dfuse_file_common *f_info, int *errcode);
+	       struct fd_entry *entry, int *errcode);
 ssize_t
 ioil_do_pwritev(const struct iovec *iov, int count, off_t position,
-		struct dfuse_file_common *f_info, int *errcode);
+		struct fd_entry *entry, int *errcode);
 
 #endif /* __INTERCEPT_H__ */

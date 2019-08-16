@@ -29,7 +29,7 @@
 
 ssize_t
 ioil_do_writex(const char *buff, size_t len, off_t position,
-	       struct dfuse_file_common *f_info, int *errcode)
+	       struct fd_entry *entry, int *errcode)
 {
 	daos_array_iod_t	iod;
 	daos_range_t		rg;
@@ -48,7 +48,7 @@ ioil_do_writex(const char *buff, size_t len, off_t position,
 	rg.rg_idx = position;
 	iod.arr_rgs = &rg;
 
-	rc = daos_array_write(f_info->oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
+	rc = daos_array_write(entry->aoh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
 	if (rc) {
 		*errcode = daos_der2errno(rc);
 		return -1;
@@ -59,7 +59,7 @@ ioil_do_writex(const char *buff, size_t len, off_t position,
 
 ssize_t
 ioil_do_pwritev(const struct iovec *iov, int count, off_t position,
-		struct dfuse_file_common *f_info, int *errcode)
+		struct fd_entry *entry, int *errcode)
 {
 	ssize_t bytes_written;
 	ssize_t total_write = 0;
@@ -67,7 +67,7 @@ ioil_do_pwritev(const struct iovec *iov, int count, off_t position,
 
 	for (i = 0; i < count; i++) {
 		bytes_written = ioil_do_writex(iov[i].iov_base, iov[i].iov_len,
-					       position, f_info, errcode);
+					       position, entry, errcode);
 
 		if (bytes_written == -1)
 			return (ssize_t)-1;

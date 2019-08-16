@@ -29,7 +29,7 @@
 
 static ssize_t
 read_bulk(char *buff, size_t len, off_t position,
-	  struct dfuse_file_common *f_info, int *errcode)
+	  struct fd_entry *entry, int *errcode)
 {
 	daos_array_iod_t	iod;
 	daos_size_t		array_size;
@@ -39,7 +39,7 @@ read_bulk(char *buff, size_t len, off_t position,
 	d_sg_list_t		sgl = {};
 	int rc;
 
-	rc = daos_array_get_size(f_info->oh, DAOS_TX_NONE, &array_size, NULL);
+	rc = daos_array_get_size(entry->aoh, DAOS_TX_NONE, &array_size, NULL);
 	if (rc) {
 		D_ERROR("daos_array_get_size() failed (%d)\n", rc);
 		*errcode = daos_der2errno(rc);
@@ -63,7 +63,7 @@ read_bulk(char *buff, size_t len, off_t position,
 	rg.rg_idx = position;
 	iod.arr_rgs = &rg;
 
-	rc = daos_array_read(f_info->oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
+	rc = daos_array_read(entry->aoh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
 	if (rc) {
 		*errcode = daos_der2errno(rc);
 		return -1;
@@ -75,14 +75,14 @@ read_bulk(char *buff, size_t len, off_t position,
 }
 
 ssize_t ioil_do_pread(char *buff, size_t len, off_t position,
-		      struct dfuse_file_common *f_info, int *errcode)
+		      struct fd_entry *entry, int *errcode)
 {
-	return read_bulk(buff, len, position, f_info, errcode);
+	return read_bulk(buff, len, position, entry, errcode);
 }
 
 ssize_t
 ioil_do_preadv(const struct iovec *iov, int count, off_t position,
-	       struct dfuse_file_common *f_info, int *errcode)
+	       struct fd_entry *entry, int *errcode)
 {
 	ssize_t bytes_read;
 	ssize_t total_read = 0;
@@ -90,7 +90,7 @@ ioil_do_preadv(const struct iovec *iov, int count, off_t position,
 
 	for (i = 0; i < count; i++) {
 		bytes_read = read_bulk(iov[i].iov_base, iov[i].iov_len,
-				       position, f_info, errcode);
+				       position, entry, errcode);
 
 		if (bytes_read == -1)
 			return (ssize_t)-1;
