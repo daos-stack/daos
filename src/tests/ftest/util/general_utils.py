@@ -142,8 +142,7 @@ def check_file_exists(hosts, filename, user=None):
 
     """
     missing_file = NodeSet()
-    command = "test -e '{}{}'".format(
-        filename, " && test -O {}".format(user) if user is not None else "")
+    command = "test {} '{}'".format("-e" if user is None else "-O", filename)
     task = run_task(hosts, command)
     for ret_code, node_list in task.iter_retcodes():
         if ret_code != 0:
