@@ -27,7 +27,7 @@
 #include <gurt/errno.h>
 
 /* This data structure is intended for small objects */
-#define MAX_POOL_OBJ_SIZE 1024
+#define MAX_POOL_OBJ_SIZE 256
 
 typedef struct {
 	char data[128];
