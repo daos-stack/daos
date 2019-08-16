@@ -715,9 +715,9 @@ out:
 static int
 ds_pre_check(daos_unit_oid_t oid, uint32_t rpc_map_ver, uuid_t pool_uuid,
 	     uuid_t hdl_uuid, uuid_t co_uuid, uint32_t opc,
-	     struct ds_cont_hdl **hdlp, struct ds_cont_child **contp)
+	     struct ds_cont_hdl **hdlp, struct ds_cont_child **contp,
+	     uint32_t *map_ver)
 {
-	uint32_t	map_ver;
 	int		rc;
 
 	*hdlp = NULL;
@@ -727,9 +727,9 @@ ds_pre_check(daos_unit_oid_t oid, uint32_t rpc_map_ver, uuid_t pool_uuid,
 		return rc;
 
 	D_ASSERT((*hdlp)->sch_pool != NULL);
-	map_ver = (*hdlp)->sch_pool->spc_map_version;
+	*map_ver = (*hdlp)->sch_pool->spc_map_version;
 
-	if (rpc_map_ver > map_ver ||
+	if (rpc_map_ver > *map_ver ||
 	   (*hdlp)->sch_pool->spc_pool->sp_map == NULL ||
 	   DAOS_FAIL_CHECK(DAOS_FORCE_REFRESH_POOL_MAP)) {
 		/* XXX: Client (or leader replica) has newer pool map than
@@ -758,12 +758,17 @@ ds_pre_check(daos_unit_oid_t oid, uint32_t rpc_map_ver, uuid_t pool_uuid,
 		 * pool map to avoid any possible issue
 		 */
 		D_DEBUG(DB_IO, "stale server map_version %d req %d\n",
-			map_ver, rpc_map_ver);
+			*map_ver, rpc_map_ver);
 		rc = ds_pool_child_map_refresh_async((*hdlp)->sch_pool);
-		D_GOTO(out_put, rc = rc ? : -DER_STALE);
-	} else if (rpc_map_ver < map_ver) {
+		if (rc == 0) {
+			*map_ver = (*hdlp)->sch_pool->spc_map_version;
+			rc = -DER_STALE;
+		}
+
+		D_GOTO(out_put, rc);
+	} else if (rpc_map_ver < *map_ver) {
 		D_DEBUG(DB_IO, "stale version req %d map_version %d\n",
-			rpc_map_ver, map_ver);
+			rpc_map_ver, *map_ver);
 		if (obj_is_modification_opc(opc))
 			D_GOTO(out_put, rc = -DER_STALE);
 		/* It is harmless if fetch with old pool map version. */
@@ -803,12 +808,11 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 
 	rc = ds_pre_check(orw->orw_oid, orw->orw_map_ver, orw->orw_pool_uuid,
 			  orw->orw_co_hdl, orw->orw_co_uuid,
-			  opc_get(rpc->cr_opc), &cont_hdl, &cont);
+			  opc_get(rpc->cr_opc), &cont_hdl, &cont, &map_ver);
 	if (rc)
 		goto out;
 
 	D_ASSERT(cont_hdl->sch_pool != NULL);
-	map_ver = cont_hdl->sch_pool->spc_map_version;
 
 	D_DEBUG(DB_TRACE, "rpc %p opc %d "DF_UOID" dkey %d %s tag/xs %d/%d eph "
 		DF_U64", pool ver %u/%u with "DF_DTI".\n",
@@ -920,12 +924,11 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	rc = ds_pre_check(orw->orw_oid, orw->orw_map_ver, orw->orw_pool_uuid,
 			  orw->orw_co_hdl, orw->orw_co_uuid,
-			  opc_get(rpc->cr_opc), &cont_hdl, &cont);
+			  opc_get(rpc->cr_opc), &cont_hdl, &cont, &map_ver);
 	if (rc)
 		goto out;
 
 	D_ASSERT(cont_hdl->sch_pool != NULL);
-	map_ver = cont_hdl->sch_pool->spc_map_version;
 
 	D_DEBUG(DB_TRACE, "rpc %p opc %d "DF_UOID" dkey %d %s tag/xs %d/%d eph "
 		DF_U64", pool ver %u/%u with "DF_DTI".\n",
@@ -1080,12 +1083,11 @@ ds_iter_vos(crt_rpc_t *rpc, struct vos_iter_anchors *anchors,
 
 	rc = ds_pre_check(oei->oei_oid, oei->oei_map_ver, oei->oei_pool_uuid,
 			  oei->oei_co_hdl, oei->oei_co_uuid, opc, &cont_hdl,
-			  &cont);
+			  &cont, map_version);
 	if (rc)
 		D_GOTO(out, rc);
 
 	D_ASSERT(cont_hdl->sch_pool != NULL);
-	*map_version = cont_hdl->sch_pool->spc_map_version;
 
 	/* prepare enumeration parameters */
 	param.ip_hdl = cont->sc_hdl;
@@ -1405,7 +1407,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	D_ASSERT(opi != NULL);
 	rc = ds_pre_check(opi->opi_oid, opi->opi_map_ver, opi->opi_pool_uuid,
 			  opi->opi_co_hdl, opi->opi_co_uuid,
-			  opc_get(rpc->cr_opc), &cont_hdl, &cont);
+			  opc_get(rpc->cr_opc), &cont_hdl, &cont, &map_version);
 	if (rc)
 		goto out;
 
@@ -1509,7 +1511,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	D_ASSERT(opi != NULL);
 	rc = ds_pre_check(opi->opi_oid, opi->opi_map_ver, opi->opi_pool_uuid,
 			  opi->opi_co_hdl, opi->opi_co_uuid,
-			  opc_get(rpc->cr_opc), &cont_hdl, &cont);
+			  opc_get(rpc->cr_opc), &cont_hdl, &cont, &map_version);
 	if (rc)
 		goto out;
 
@@ -1669,6 +1671,58 @@ out:
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed: %d\n", rc);
+}
+
+void
+ds_obj_sync_handler(crt_rpc_t *rpc)
+{
+	struct obj_sync_in	*osi;
+	struct obj_sync_out	*oso;
+	struct ds_cont_hdl	*cont_hdl = NULL;
+	struct ds_cont_child	*cont = NULL;
+	daos_epoch_t		 epoch = daos_ts2epoch();
+	uint32_t		 map_ver = 0;
+	int			 rc;
+
+	osi = crt_req_get(rpc);
+	D_ASSERT(osi != NULL);
+
+	oso = crt_reply_get(rpc);
+	D_ASSERT(oso != NULL);
+
+	if (osi->osi_epoch == 0)
+		oso->oso_epoch = epoch;
+	else
+		oso->oso_epoch = min(epoch, osi->osi_epoch);
+
+	D_DEBUG(DB_IO, "ds_obj_sync_handler start: "DF_UOID", eph "DF_U64"\n",
+		DP_UOID(osi->osi_oid), oso->oso_epoch);
+
+	rc = ds_pre_check(osi->osi_oid, osi->osi_map_ver, osi->osi_pool_uuid,
+			  osi->osi_co_hdl, osi->osi_co_uuid,
+			  opc_get(rpc->cr_opc), &cont_hdl, &cont, &map_ver);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = dtx_obj_sync(osi->osi_pool_uuid, osi->osi_co_uuid, cont->sc_hdl,
+			  osi->osi_oid, oso->oso_epoch, map_ver);
+
+out:
+	if (cont_hdl != NULL)
+		ds_cont_hdl_put(cont_hdl);
+	if (cont != NULL)
+		ds_cont_child_put(cont);
+
+	obj_reply_set_status(rpc, rc);
+	obj_reply_map_version_set(rpc, map_ver);
+
+	D_DEBUG(DB_IO, "ds_obj_sync_handler stop: "
+		DF_UOID", eph "DF_U64", rd = %d\n",
+		DP_UOID(osi->osi_oid), oso->oso_epoch, rc);
+
+	rc = crt_reply_send(rpc);
+	if (rc != 0)
+		D_ERROR("ds_obj_sync_handler: send reply failed: %d\n", rc);
 }
 
 /**

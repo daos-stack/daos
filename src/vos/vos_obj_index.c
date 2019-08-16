@@ -138,6 +138,7 @@ oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	key = key_iov->iov_buf;
 	hkey = &key->oi_hkey;
 
+	obj->vo_sync	= 0;
 	obj->vo_id	= hkey->oi_oid;
 	obj->vo_earliest = key->oi_epc_lo;
 	if (hkey->oi_epc == DAOS_EPOCH_MAX) {

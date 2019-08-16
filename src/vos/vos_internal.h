@@ -201,6 +201,8 @@ struct vos_object {
 	daos_handle_t			obj_ih;
 	/** epoch when the object(cache) is initialized */
 	daos_epoch_t			obj_epoch;
+	/** The latest sync epoch */
+	daos_epoch_t			obj_sync_epoch;
 	/** cached vos_obj_df::vo_incarnation, for revalidation. */
 	uint32_t			obj_incarnation;
 	/** Persistent memory address of the object */

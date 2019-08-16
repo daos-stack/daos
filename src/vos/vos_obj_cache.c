@@ -198,7 +198,6 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	     daos_unit_oid_t oid, daos_epoch_t epoch,
 	     bool no_create, uint32_t intent, struct vos_object **obj_p)
 {
-
 	struct vos_object	*obj;
 	struct obj_lru_key	 lkey;
 	int			 rc;
@@ -269,7 +268,10 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 		if (rc == -DER_NONEXIST) {
 			D_DEBUG(DB_TRACE, "non exist oid "DF_UOID"\n",
 				DP_UOID(oid));
+			obj->obj_sync_epoch = 0;
 			rc = 0;
+		} else if (rc == 0) {
+			obj->obj_sync_epoch = obj->obj_df->vo_sync;
 		}
 	} else {
 		rc = vos_oi_find_alloc(cont, oid, epoch, intent, &obj->obj_df);
@@ -294,6 +296,26 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 
 	obj->obj_incarnation = obj->obj_df->vo_incarnation;
 out:
+	if ((intent == DAOS_INTENT_PUNCH || intent == DAOS_INTENT_UPDATE) &&
+	    obj->obj_df != NULL && epoch <= obj->obj_sync_epoch &&
+	    vos_dth_get() != NULL) {
+		/* If someone has synced the object against the
+		 * obj->obj_sync_epoch, then we do not allow to modify the
+		 * object with old epoch. Let's ask the caller to retry with
+		 * newer epoch.
+		 *
+		 * Fot rebuild case, the @dth will be NULL.
+		 */
+		D_ASSERT(obj->obj_sync_epoch > 0);
+
+		D_INFO("Refuse %s obj "DF_UOID" because of the epoch "DF_U64
+		       " is not newer than the sync epoch "DF_U64"\n",
+		       intent == DAOS_INTENT_PUNCH ? "punch" : "update",
+		       DP_UOID(oid), epoch, obj->obj_sync_epoch);
+		vos_obj_release(occ, obj);
+		D_GOTO(failed, rc = -DER_INPROGRESS);
+	}
+
 	*obj_p = obj;
 	return 0;
 failed:
@@ -305,29 +327,4 @@ void
 vos_obj_evict(struct vos_object *obj)
 {
 	daos_lru_ref_evict(&obj->obj_llink);
-}
-
-bool
-vos_obj_evicted(struct vos_object *obj)
-{
-	return daos_lru_ref_evicted(&obj->obj_llink);
-}
-
-int
-vos_obj_revalidate(struct daos_lru_cache *occ, daos_epoch_t epoch,
-		   struct vos_object **obj_p)
-{
-	struct vos_object *obj = *obj_p;
-	int		   rc;
-
-	if (!vos_obj_evicted(obj))
-		return 0;
-
-	rc = vos_obj_hold(occ, obj->obj_cont, obj->obj_id,
-			  epoch, !obj->obj_df, DAOS_INTENT_UPDATE, obj_p);
-	if (rc == 0) {
-		D_ASSERT(*obj_p != obj);
-		vos_obj_release(occ, obj);
-	}
-	return rc;
 }

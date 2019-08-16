@@ -333,6 +333,8 @@ struct vos_irec_df {
  */
 struct vos_obj_df {
 	daos_unit_oid_t			vo_id;
+	/** The latest sync epoch */
+	daos_epoch_t			vo_sync;
 	/** Attributes of object.  See vos_oi_attr */
 	uint64_t			vo_oi_attr;
 	/** Latest known update timestamp or punched timestamp */
