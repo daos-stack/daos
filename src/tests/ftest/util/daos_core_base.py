@@ -27,66 +27,69 @@ import subprocess
 from avocado.utils import process
 from apricot import TestWithServers
 
+SERVER_LOG = "/tmp/server.log"
 CLIENT_LOG = "client_daos.log"
 
+
 class DaosCoreBase(TestWithServers):
-    """
-    Runs the daos_test subtests with multiple servers.
+    """Runs the daos_test subtests with multiple servers.
+
     :avocado: recursive
     """
+
     def __init__(self, *args, **kwargs):
+        """Initialize the DaosCoreBase object."""
         super(DaosCoreBase, self).__init__(*args, **kwargs)
         self.subtest_name = None
 
+        test_timeout = self.params.get("test_timeout",
+                                       '/run/daos_tests/Tests/*')
+        if test_timeout:
+            self.timeout = test_timeout
+
     def setUp(self):
+        """Set up before each test."""
         super(DaosCoreBase, self).setUp()
         self.subtest_name = self.params.get("test_name",
                                             '/run/daos_tests/Tests/*')
         self.subtest_name = self.subtest_name.replace(" ", "_")
-        logfile_env = os.environ['D_LOG_FILE']
-        self.log_dir, self.server_log = os.path.split(logfile_env)
+
+        # Determine the path and name of the daos server log using the
+        # D_LOG_FILE env or, if not set, the value used in the doas server yaml
+        self.log_dir, self.server_log = os.path.split(
+            os.getenv("D_LOG_FILE", SERVER_LOG))
         self.client_log = os.path.join(self.log_dir,
                                        self.subtest_name + "_" + CLIENT_LOG)
         # To generate the seperate client log file
         self.orterun_env = '-x D_LOG_FILE={}'.format(self.client_log)
 
     def tearDown(self):
+        """Tear down after each test."""
         super(DaosCoreBase, self).tearDown()
 
         # collect up a debug log so that we have a separate one for each
         # subtest
         if self.subtest_name:
             try:
-                new_logfile = os.path.join(self.log_dir,
-                                           self.subtest_name + "_" + \
-                                           self.server_log)
+                new_logfile = os.path.join(
+                    self.log_dir, self.subtest_name + "_" + self.server_log)
                 # rename on each of the servers
                 for host in self.hostlist_servers:
-                    subprocess.check_call(['ssh', host,
-                                           '[ -f \"{0}\" ] && '
-                                           ' mv \"{0}\" '
-                                           ' \"{1}\"'.format("/tmp/server.log",
-                                                             new_logfile)])
+                    subprocess.check_call(
+                        ['ssh', host,
+                         '[ -f \"{0}\" ] && mv \"{0}\" \"{1}\"'.format(
+                             SERVER_LOG, new_logfile)])
             except KeyError:
                 pass
 
     def run_subtest(self):
-        """
-        Test ID: DAOS-1568
-
-        Test Description: Run daos_test with a subtest argument
-
-        Use Cases: core tests for daos_test
-        """
-
+        """Run daos_test with a subtest argument."""
         subtest = self.params.get("daos_test", '/run/daos_tests/Tests/*')
         num_clients = self.params.get("num_clients",
                                       '/run/daos_tests/num_clients/*')
         num_replicas = self.params.get("num_replicas",
                                        '/run/daos_tests/num_replicas/*')
-        args = self.params.get("args", '/run/daos_tests/Tests/*')
-        if not args:
-            args = ""
+        args = self.params.get("args", '/run/daos_tests/Tests/*', "")
 
         cmd = "{} -n {} {} {} -s {} -{} {}".format(self.orterun, num_clients,
                                                    self.orterun_env,

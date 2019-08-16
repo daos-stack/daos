@@ -24,14 +24,16 @@
 package main
 
 import (
-	"fmt"
+	"os/user"
 	"strings"
+
+	"github.com/inhies/go-bytesize"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/inhies/go-bytesize"
-	"github.com/pkg/errors"
+	log "github.com/daos-stack/daos/src/control/logging"
 )
 
 const (
@@ -49,8 +51,8 @@ type PoolCmd struct {
 // CreatePoolCmd is the struct representing the command to create a DAOS pool.
 type CreatePoolCmd struct {
 	connectedCmd
-	GroupName  string `short:"g" long:"group" description:"DAOS pool to be owned by given group"`
-	UserName   string `short:"u" long:"user" description:"DAOS pool to be owned by given user"`
+	GroupName  string `short:"g" long:"group" description:"DAOS pool to be owned by given group, format name@domain"`
+	UserName   string `short:"u" long:"user" description:"DAOS pool to be owned by given user, format name@domain"`
 	ACLFile    string `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
 	ScmSize    string `short:"s" long:"scm-size" required:"1" description:"Size of SCM component of DAOS pool"`
 	NVMeSize   string `short:"n" long:"nvme-size" description:"Size of NVMe component of DAOS pool"`
@@ -127,11 +129,11 @@ func calcStorage(scmSize string, nvmeSize string) (
 	}
 
 	if ratio < 0.01 {
-		fmt.Printf(
+		log.Infof(
 			"SCM:NVMe ratio is less than 1%%, DAOS performance " +
 				"will suffer!\n")
 	}
-	fmt.Printf(
+	log.Infof(
 		"Creating DAOS pool with %s SCM and %s NvMe storage "+
 			"(%.3f ratio)\n",
 		scmBytes.Format("%.0f", "", false),
@@ -141,11 +143,38 @@ func calcStorage(scmSize string, nvmeSize string) (
 	return scmBytes, nvmeBytes, nil
 }
 
+// formatNameGroup converts system names to principal and if both user and group
+// are unspecified, takes effective user name and that user's primary group.
+func formatNameGroup(usr string, grp string) (string, string, error) {
+	if usr == "" && grp == "" {
+		eUsr, err := user.Current()
+		if err != nil {
+			return "", "", err
+		}
+
+		eGrp, err := user.LookupGroupId(eUsr.Gid)
+		if err != nil {
+			return "", "", err
+		}
+
+		usr, grp = eUsr.Username, eGrp.Name
+	}
+
+	if usr != "" && !strings.Contains(usr, "@") {
+		usr += "@"
+	}
+
+	if grp != "" && !strings.Contains(grp, "@") {
+		grp += "@"
+	}
+
+	return usr, grp, nil
+}
+
 // createPool with specified parameters.
-func createPool(conns client.Connect,
-	scmSize string, nvmeSize string, rankList string, numSvcReps uint32,
-	groupName string, userName string, sys string,
-	aclFile string) error {
+func createPool(conns client.Connect, scmSize string, nvmeSize string,
+	rankList string, numSvcReps uint32, groupName string,
+	userName string, sys string, aclFile string) error {
 
 	scmBytes, nvmeBytes, err := calcStorage(scmSize, nvmeSize)
 	if err != nil {
@@ -162,16 +191,20 @@ func createPool(conns client.Connect,
 			maxNumSvcReps, numSvcReps)
 	}
 
-	req := &pb.CreatePoolReq{
-		Scmbytes: uint64(scmBytes), Nvmebytes: uint64(nvmeBytes),
-		Ranks: rankList, Numsvcreps: numSvcReps,
-		// TODO: format and populate user/group
-		Sys: sys,
+	usr, grp, err := formatNameGroup(userName, groupName)
+	if err != nil {
+		return errors.WithMessage(err, "formatting user/group strings")
 	}
 
-	fmt.Printf("Creating DAOS pool: %+v\n", req)
+	req := &pb.CreatePoolReq{
+		Scmbytes: uint64(scmBytes), Nvmebytes: uint64(nvmeBytes),
+		Ranks: rankList, Numsvcreps: numSvcReps, Sys: sys,
+		User: usr, Usergroup: grp,
+	}
 
-	fmt.Printf("pool create command results:\n%s\n", conns.CreatePool(req))
+	log.Infof("Creating DAOS pool: %+v\n", req)
+
+	log.Infof("pool create command results:\n%s\n", conns.CreatePool(req))
 
 	return nil
 }
@@ -180,9 +213,9 @@ func createPool(conns client.Connect,
 func destroyPool(conns client.Connect, uuid string, force bool) error {
 	req := &pb.DestroyPoolReq{Uuid: uuid, Force: force}
 
-	fmt.Printf("Destroying DAOS pool: %+v\n", req)
+	log.Infof("Destroying DAOS pool: %+v\n", req)
 
-	fmt.Printf("pool destroy command results:\n%s\n", conns.DestroyPool(req))
+	log.Infof("pool destroy command results:\n%s\n", conns.DestroyPool(req))
 
 	return nil
 }

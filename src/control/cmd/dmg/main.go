@@ -24,7 +24,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"path"
 	"strings"
@@ -33,7 +32,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/client"
-	"github.com/daos-stack/daos/src/control/log"
+	log "github.com/daos-stack/daos/src/control/logging"
 )
 
 type dmgErr string
@@ -45,7 +44,7 @@ func (de dmgErr) Error() string {
 const (
 	// use this error type to signal that a
 	// subcommand completed without error
-	cmdSuccess dmgErr = "completed successfully"
+	cmdSuccess dmgErr = "command execution completed"
 )
 
 type (
@@ -83,6 +82,8 @@ func (cmd *connectedCmd) setConns(conns client.Connect) {
 type cliOptions struct {
 	HostList string `short:"l" long:"host-list" description:"comma separated list of addresses <ipv4addr/hostname:port>"`
 	Insecure bool   `short:"i" long:"insecure" description:"have dmg attempt to connect without certificates"`
+	Debug    bool   `short:"d" long:"debug" description:"enable debug output"`
+	JSON     bool   `short:"j" long:"json" description:"Enable JSON output"`
 	// TODO: implement host file parsing
 	HostFile   string  `short:"f" long:"host-file" description:"path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList"`
 	ConfigPath string  `short:"o" long:"config-path" description:"Client config file path"`
@@ -94,6 +95,14 @@ type cliOptions struct {
 
 // appSetup loads config file, processes cli overrides and connects clients.
 func appSetup(broadcast bool, opts *cliOptions, conns client.Connect) error {
+	if opts.Debug {
+		log.SetLevel(log.LogLevelDebug)
+		log.Debug("debug output enabled")
+	}
+	if opts.JSON {
+		log.SetJSONOutput()
+	}
+
 	config, err := client.GetConfig(opts.ConfigPath)
 	if err != nil {
 		return errors.WithMessage(err, "processing config file")
@@ -129,13 +138,13 @@ func appSetup(broadcast bool, opts *cliOptions, conns client.Connect) error {
 		return errors.New(out) // no active connections
 	}
 
-	fmt.Println(out)
+	log.Info(out)
 
 	return nil
 }
 
 func exitWithError(err error) {
-	log.Errorf("%s exiting with error: %v", path.Base(os.Args[0]), err)
+	log.Errorf("%s: %v", path.Base(os.Args[0]), err)
 	os.Exit(1)
 }
 
@@ -143,7 +152,7 @@ func parseOpts(args []string, conns client.Connect) (*cliOptions, error) {
 	opts := new(cliOptions)
 
 	p := flags.NewParser(opts, flags.Default)
-	p.SubcommandsOptional = true
+	p.Options ^= flags.PrintErrors // Don't allow the library to print errors
 	p.CommandHandler = func(cmd flags.Commander, args []string) error {
 		if cmd == nil {
 			return nil
@@ -175,29 +184,13 @@ func parseOpts(args []string, conns client.Connect) (*cliOptions, error) {
 }
 
 func main() {
-	// Set default global logger for application.
-	// TODO: Configure level/destination via CLI opts
-	log.NewDefaultLogger(log.Debug, "", os.Stderr)
-
 	conns := client.NewConnect()
 
-	opts, err := parseOpts(os.Args[1:], conns)
+	_, err := parseOpts(os.Args[1:], conns)
 	if err != nil {
 		if err == cmdSuccess {
 			os.Exit(0)
 		}
 		exitWithError(err)
 	}
-
-	// If no subcommand has been specified, interactive shell is started
-	// with expected functionality (tab expansion and utility commands)
-	// after parsing config/opts and setting up connections.
-	if err := appSetup(true, opts, conns); err != nil {
-		fmt.Println(err.Error()) // notify of app setup errors
-		fmt.Println("")
-	}
-
-	shell := setupShell(conns)
-	shell.Println("DAOS Management Shell")
-	shell.Run()
 }

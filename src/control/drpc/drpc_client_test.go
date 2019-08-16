@@ -26,21 +26,16 @@ package drpc
 import (
 	"fmt"
 	"net"
-	"os"
 	"testing"
 
-	. "github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/log"
 	"github.com/golang/protobuf/proto"
+
+	. "github.com/daos-stack/daos/src/control/common"
 )
 
 // testSockPath is an arbitrary path string to use for testing. These tests
 // don't touch the real filesystem.
 const testSockPath string = "/my/test/socket.sock"
-
-func init() {
-	log.NewDefaultLogger(log.Error, "drpc_client_test: ", os.Stderr)
-}
 
 // mockConn is a mock of the net.Conn interface, for testing
 type mockConn struct {

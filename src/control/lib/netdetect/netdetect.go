@@ -24,6 +24,7 @@
 //
 
 package netdetect
+
 /*
 #cgo CFLAGS: -I${SRCDIR}/../../include
 #cgo LDFLAGS: -lhwloc
@@ -32,21 +33,21 @@ package netdetect
 #include <stdio.h>
 */
 import "C"
-import "unsafe"
 
 import (
 	"fmt"
 	"net"
+	"unsafe"
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/log"
+	log "github.com/daos-stack/daos/src/control/logging"
 )
 
 type DeviceAffinity struct {
-	DeviceName	string
-	CPUSet	string
-	NodeSet	string
+	DeviceName string
+	CPUSet     string
+	NodeSet    string
 }
 
 func (da *DeviceAffinity) String() string {
@@ -108,7 +109,7 @@ func GetAffinityForNetworkDevices(deviceNames []string) ([]DeviceAffinity, error
 	var nodeset *C.char
 
 	topology, err := initLib()
-	if (err != nil) {
+	if err != nil {
 		log.Debugf("Error from initLib %v", err)
 		return nil,
 			errors.New("unable to initialize hwloc library")
@@ -147,9 +148,9 @@ func GetAffinityForNetworkDevices(deviceNames []string) ([]DeviceAffinity, error
 			ancestorNode.nodeset)
 		if cpusetLen > 0 && nodesetLen > 0 {
 			deviceNode := DeviceAffinity{
-				DeviceName : C.GoString(node.name),
-				CPUSet : C.GoString(cpuset),
-				NodeSet : C.GoString(nodeset),
+				DeviceName: C.GoString(node.name),
+				CPUSet:     C.GoString(cpuset),
+				NodeSet:    C.GoString(nodeset),
 			}
 			affinity = append(affinity, deviceNode)
 		}

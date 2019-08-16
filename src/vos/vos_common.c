@@ -82,6 +82,32 @@ vos_csum_compute(d_sg_list_t *sgl, daos_csum_buf_t *csum)
 	return rc;
 }
 
+int
+vos_bio_addr_free(struct vos_pool *pool, bio_addr_t *addr, daos_size_t nob)
+{
+	int	rc;
+
+	if (bio_addr_is_hole(addr))
+		return 0;
+
+	if (addr->ba_type == DAOS_MEDIA_SCM) {
+		rc = umem_free(&pool->vp_umm, addr->ba_off);
+	} else {
+		uint64_t blk_off;
+		uint32_t blk_cnt;
+
+		D_ASSERT(addr->ba_type == DAOS_MEDIA_NVME);
+		blk_off = vos_byte2blkoff(addr->ba_off);
+		blk_cnt = vos_byte2blkcnt(nob);
+
+		rc = vea_free(pool->vp_vea_info, blk_off, blk_cnt);
+		if (rc)
+			D_ERROR("Error on block ["DF_U64", %u] free. %d\n",
+				blk_off, blk_cnt, rc);
+	}
+	return rc;
+}
+
 /**
  * VOS in-memory structure creation.
  * Handle-hash:
@@ -288,7 +314,8 @@ vos_nvme_init(void)
 	if (rc != 0 && rc != -DER_EXIST)
 		return rc;
 
-	rc = bio_nvme_init(VOS_STORAGE_PATH, VOS_NVME_CONF, VOS_NVME_SHM_ID);
+	rc = bio_nvme_init(VOS_STORAGE_PATH, VOS_NVME_CONF, VOS_NVME_SHM_ID,
+			   NULL);
 	if (rc)
 		return rc;
 	vsa_nvme_init = true;

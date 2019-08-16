@@ -123,9 +123,16 @@ struct btr_context {
 	/** embedded iterator */
 	struct btr_iterator		 tc_itr;
 	/** cached configured tree order */
-	uint16_t				 tc_order;
+	uint16_t			 tc_order;
 	/** cached tree depth, avoid loading from slow memory */
-	uint16_t				 tc_depth;
+	uint16_t			 tc_depth;
+	/** credits for drain, see dbtree_drain */
+	int				 tc_creds:30;
+	/**
+	 * credits is turned on, \a tcx::tc_creds should be checked
+	 * while draining the tree
+	 */
+	int				 tc_creds_on:1;
 	/**
 	 * returned value of the probe, it should be reset after upsert
 	 * or delete because the probe path could have been changed.
@@ -149,7 +156,7 @@ struct btr_context {
 static int btr_class_init(umem_off_t root_off,
 			  struct btr_root *root, unsigned int tree_class,
 			  uint64_t *tree_feats, struct umem_attr *uma,
-			  daos_handle_t coh, void *info,
+			  daos_handle_t coh, void *priv,
 			  struct btr_instance *tins);
 static struct btr_record *btr_node_rec_at(struct btr_context *tcx,
 					  umem_off_t nd_off,
@@ -157,9 +164,8 @@ static struct btr_record *btr_node_rec_at(struct btr_context *tcx,
 static int btr_node_insert_rec(struct btr_context *tcx,
 			       struct btr_trace *trace,
 			       struct btr_record *rec);
-static void btr_node_destroy(struct btr_context *tcx,
-			     umem_off_t nd_off,
-			     void *args);
+static void btr_node_destroy(struct btr_context *tcx, umem_off_t nd_off,
+			     void *args, bool *empty_rc);
 static int btr_root_tx_add(struct btr_context *tcx);
 static bool btr_probe_prev(struct btr_context *tcx);
 static bool btr_probe_next(struct btr_context *tcx);
@@ -274,14 +280,14 @@ btr_ops(struct btr_context *tcx)
  * \param tree_order	Tree order.
  * \param uma		Memory class attributes.
  * \param coh		The container open handle.
- * \param info		NVMe free space information
+ * \param priv		Private information from user
  * \param tcxp		Returned context.
  */
 static int
 btr_context_create(umem_off_t root_off, struct btr_root *root,
 		   unsigned int tree_class, uint64_t tree_feats,
 		   unsigned int tree_order, struct umem_attr *uma,
-		   daos_handle_t coh, void *info, struct btr_context **tcxp)
+		   daos_handle_t coh, void *priv, struct btr_context **tcxp)
 {
 	struct btr_context	*tcx;
 	unsigned int		 depth;
@@ -293,7 +299,7 @@ btr_context_create(umem_off_t root_off, struct btr_root *root,
 
 	tcx->tc_ref = 1; /* for the caller */
 	rc = btr_class_init(root_off, root, tree_class, &tree_feats, uma,
-			    coh, info, &tcx->tc_tins);
+			    coh, priv, &tcx->tc_tins);
 	if (rc != 0) {
 		D_ERROR("Failed to setup mem class %d: %d\n", uma->uma_id, rc);
 		D_GOTO(failed, rc);
@@ -336,7 +342,7 @@ btr_context_clone(struct btr_context *tcx, struct btr_context **tcx_p)
 	rc = btr_context_create(tcx->tc_tins.ti_root_off,
 				tcx->tc_tins.ti_root, -1, -1, -1, &uma,
 				tcx->tc_tins.ti_coh,
-				tcx->tc_tins.ti_blks_info, tcx_p);
+				tcx->tc_tins.ti_priv, tcx_p);
 	return rc;
 }
 
@@ -964,7 +970,6 @@ btr_node_insert_rec_only(struct btr_context *tcx, struct btr_trace *trace,
 			 struct btr_record *rec)
 {
 	struct btr_record *rec_a;
-	struct btr_record *rec_b;
 	struct btr_node   *nd;
 	bool		   leaf;
 	bool		   reuse = false;
@@ -978,28 +983,41 @@ btr_node_insert_rec_only(struct btr_context *tcx, struct btr_trace *trace,
 			btr_rec_string(tcx, rec, leaf, sbuf, BTR_PRINT_BUF),
 			btr_rec_size(tcx));
 
-	rec_a = btr_node_rec_at(tcx, trace->tr_node, trace->tr_at);
-	rec_b = btr_node_rec_at(tcx, trace->tr_node, trace->tr_at + 1);
-
 	nd = btr_off2ptr(tcx, trace->tr_node);
-	if (trace->tr_at != nd->tn_keyn) {
+	if (nd->tn_keyn > 0) {
 		struct btr_check_alb	alb;
 		int			rc;
 
+		if (trace->tr_at != nd->tn_keyn)
+			alb.at = trace->tr_at;
+		else
+			alb.at = trace->tr_at - 1;
+
 		alb.nd_off = trace->tr_node;
-		alb.at = trace->tr_at;
 		alb.intent = DAOS_INTENT_CHECK;
 		rc = btr_check_availability(tcx, &alb);
-		if (rc == PROBE_RC_UNAVAILABLE)
+		if (rc == PROBE_RC_UNAVAILABLE) {
 			reuse = true;
+			btr_trace_debug(tcx, trace, "reuse at %d for insert\n",
+					alb.at);
+			if (trace->tr_at == nd->tn_keyn)
+				trace->tr_at -= 1;
+		}
 	}
+
+	rec_a = btr_node_rec_at(tcx, trace->tr_node, trace->tr_at);
 
 	if (reuse) {
 		btr_rec_free(tcx, rec_a, NULL);
 	} else {
-		if (trace->tr_at != nd->tn_keyn)
+		if (trace->tr_at != nd->tn_keyn) {
+			struct btr_record *rec_b;
+
+			rec_b = btr_node_rec_at(tcx, trace->tr_node,
+						trace->tr_at + 1);
 			btr_rec_move(tcx, rec_b, rec_a,
 				     nd->tn_keyn - trace->tr_at);
+		}
 		nd->tn_keyn++;
 	}
 
@@ -1312,7 +1330,7 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	struct btr_check_alb	 alb;
 	struct btr_trace	 traces[BTR_TRACE_MAX];
 	struct btr_trace	*trace = NULL;
-	umem_off_t	 nd_off;
+	umem_off_t		 nd_off;
 
 	if (!btr_probe_valid(probe_opc)) {
 		rc = PROBE_RC_ERR;
@@ -1446,8 +1464,8 @@ again:
 			if (rc != PROBE_RC_UNAVAILABLE)
 				goto out;
 
-			/* Current pos is unavailable, it can be used for the
-			 * follow-on insert if applicable.
+			/* The record for current pos is unavailable, can be
+			 * reused for the follow-on insert if applicable.
 			 */
 		} else {
 			/* Point at the first key which is larger than the
@@ -1467,8 +1485,8 @@ again:
 			if (rc != PROBE_RC_UNAVAILABLE)
 				goto out;
 
-			/* Current pos is unavailable, it can be used for the
-			 * follow-on insert if applicable.
+			/* The record for current pos is unavailable, can be
+			 * reused for the follow-on insert if applicable.
 			 */
 			if (saved == -1)
 				saved = at;
@@ -1476,6 +1494,15 @@ again:
 		/* fall through */
 	case BTR_PROBE_GT:
 		if (cmp & BTR_CMP_GT) {
+			if ((intent == DAOS_INTENT_UPDATE ||
+			     intent == DAOS_INTENT_PUNCH ||
+			     probe_opc & BTR_PROBE_MATCHED) &&
+			    !(cmp & BTR_CMP_MATCHED))
+				break;
+
+			/* Check availability if the target matched or it is
+			 * for non-modification related operation.
+			 */
 			rc = btr_check_availability(tcx, &alb);
 			if (rc != PROBE_RC_UNAVAILABLE) {
 				if (rc == PROBE_RC_OK)
@@ -1484,8 +1511,8 @@ again:
 				goto out;
 			}
 
-			/* Current pos is unavailable, it can be used for the
-			 * follow-on insert if applicable.
+			/* The record for current pos is unavailable, can be
+			 * reused for the follow-on insert if applicable.
 			 */
 			if (saved == -1)
 				saved = at;
@@ -1501,11 +1528,13 @@ again:
 		if (trace == NULL)
 			memcpy(traces, tcx->tc_trace,
 			       sizeof(*trace) * tcx->tc_depth);
+
 		if (btr_probe_next(tcx)) {
 			trace = traces;
 			cmp = BTR_CMP_UNKNOWN;
 			break;
 		}
+
 		btr_trace_set(tcx, level, nd_off, saved);
 		rc = PROBE_RC_NONE;
 		goto out;
@@ -1519,6 +1548,15 @@ again:
 		/* fall through */
 	case BTR_PROBE_LT:
 		if (cmp & BTR_CMP_LT) {
+			if ((intent == DAOS_INTENT_UPDATE ||
+			     intent == DAOS_INTENT_PUNCH ||
+			     probe_opc & BTR_PROBE_MATCHED) &&
+			    !(cmp & BTR_CMP_MATCHED))
+				break;
+
+			/* Check availability if the target matched or it is
+			 * for non-modification related operation.
+			 */
 			rc = btr_check_availability(tcx, &alb);
 			if (rc != PROBE_RC_UNAVAILABLE) {
 				if (rc == PROBE_RC_OK)
@@ -1532,6 +1570,7 @@ again:
 			cmp = BTR_CMP_UNKNOWN;
 			break;
 		}
+
 		rc = PROBE_RC_NONE;
 		goto out;
 	}
@@ -2585,7 +2624,7 @@ btr_root_del_rec(struct btr_context *tcx, struct btr_trace *trace, void *args)
 			btr_node_del_leaf_only(tcx, trace, true, args);
 		} else {
 
-			btr_node_destroy(tcx, trace->tr_node, args);
+			btr_node_destroy(tcx, trace->tr_node, args, NULL);
 			if (btr_has_tx(tcx))
 				btr_root_tx_add(tcx);
 
@@ -2672,7 +2711,7 @@ btr_tx_delete(struct btr_context *tcx, void *args)
  *				args to handle special cases(if any)
  */
 int
-dbtree_delete(daos_handle_t toh, d_iov_t *key,
+dbtree_delete(daos_handle_t toh, dbtree_probe_opc_t opc, d_iov_t *key,
 	      void *args)
 {
 	struct btr_context *tcx;
@@ -2682,7 +2721,10 @@ dbtree_delete(daos_handle_t toh, d_iov_t *key,
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	rc = btr_probe_key(tcx, BTR_PROBE_EQ, DAOS_INTENT_PUNCH, key);
+	if (opc == BTR_PROBE_BYPASS)
+		goto delete;
+
+	rc = btr_probe_key(tcx, opc, DAOS_INTENT_PUNCH, key);
 	if (rc == PROBE_RC_INPROGRESS) {
 		D_DEBUG(DB_TRACE, "Target is in some uncommitted DTX.\n");
 		return -DER_INPROGRESS;
@@ -2693,6 +2735,7 @@ dbtree_delete(daos_handle_t toh, d_iov_t *key,
 		return -DER_NONEXIST;
 	}
 
+delete:
 	rc = btr_tx_delete(tcx, args);
 
 	tcx->tc_probe_rc = PROBE_RC_UNKNOWN;
@@ -2906,14 +2949,14 @@ dbtree_create_inplace(unsigned int tree_class, uint64_t tree_feats,
 		      struct btr_root *root, daos_handle_t *toh)
 {
 	return dbtree_create_inplace_ex(tree_class, tree_feats, tree_order,
-					uma, root, DAOS_HDL_INVAL, toh);
+					uma, root, DAOS_HDL_INVAL, NULL, toh);
 }
 
 int
 dbtree_create_inplace_ex(unsigned int tree_class, uint64_t tree_feats,
 			 unsigned int tree_order, struct umem_attr *uma,
 			 struct btr_root *root, daos_handle_t coh,
-			 daos_handle_t *toh)
+			 void *priv, daos_handle_t *toh)
 {
 	struct btr_context *tcx;
 	int		    rc;
@@ -2933,7 +2976,7 @@ dbtree_create_inplace_ex(unsigned int tree_class, uint64_t tree_feats,
 	}
 
 	rc = btr_context_create(BTR_ROOT_NULL, root, tree_class, tree_feats,
-				tree_order, uma, coh, NULL, &tcx);
+				tree_order, uma, coh, priv, &tcx);
 	if (rc != 0)
 		return rc;
 
@@ -2978,12 +3021,12 @@ dbtree_open(umem_off_t root_off, struct umem_attr *uma,
  * \param root		[IN]	Address of the tree root.
  * \param uma		[IN]	Memory class attributes.
  * \param coh		[IN]	The container open handle.
- * \param info		[IN]	NVMe free space information.
+ * \param priv		[IN]	Private data for tree opener
  * \param toh		[OUT]	Returned tree open handle.
  */
 int
 dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
-		       daos_handle_t coh, void *info, daos_handle_t *toh)
+		       daos_handle_t coh, void *priv, daos_handle_t *toh)
 {
 	struct btr_context *tcx;
 	int		    rc;
@@ -2994,7 +3037,7 @@ dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
 	}
 
 	rc = btr_context_create(BTR_ROOT_NULL, root, -1, -1, -1, uma,
-				coh, info, &tcx);
+				coh, priv, &tcx);
 	if (rc != 0)
 		return rc;
 
@@ -3037,10 +3080,11 @@ dbtree_close(daos_handle_t toh)
 /** Destroy a tree node and all its children recursively. */
 static void
 btr_node_destroy(struct btr_context *tcx, umem_off_t nd_off,
-		 void *args)
+		 void *args, bool *empty_rc)
 {
 	struct btr_node *nd	= btr_off2ptr(tcx, nd_off);
 	bool		 leaf	= btr_node_is_leaf(tcx, nd_off);
+	bool		 empty	= true;
 	int		 i;
 
 	/* NB: don't need to call TX_ADD_RANGE(nd_off, ...) because I never
@@ -3051,52 +3095,88 @@ btr_node_destroy(struct btr_context *tcx, umem_off_t nd_off,
 		leaf ? "leaf" : "node", nd_off, nd->tn_keyn);
 
 	if (leaf) {
-		for (i = 0; i < nd->tn_keyn; i++) {
+		for (i = nd->tn_keyn - 1; i >= 0; i--) {
 			struct btr_record *rec;
 
 			rec = btr_node_rec_at(tcx, nd_off, i);
 			btr_rec_free(tcx, rec, args);
+			if (!tcx->tc_creds_on)
+				continue;
+
+			/* NB: only leaf record consumes user credits */
+			D_ASSERT(tcx->tc_creds > 0);
+			tcx->tc_creds--;
+			if (tcx->tc_creds == 0) {
+				empty = (i == 0);
+				break;
+			}
 		}
-		return;
+	} else { /* non-leaf */
+		for (i = nd->tn_keyn; i >= 0; i--) {
+			umem_off_t	child_off;
+
+			child_off = btr_node_child_at(tcx, nd_off, i);
+			btr_node_destroy(tcx, child_off, args, &empty);
+			if (!tcx->tc_creds_on || tcx->tc_creds > 0) {
+				D_ASSERT(empty);
+				continue;
+			}
+			D_ASSERT(tcx->tc_creds == 0);
+
+			/* current child is empty, other children are not */
+			if (empty && i > 0) {
+				empty = false;
+				i--;
+			}
+			break;
+		}
 	}
 
-	for (i = 0; i <= nd->tn_keyn; i++) {
-		umem_off_t	child_off;
-
-		child_off = btr_node_child_at(tcx, nd_off, i);
-		btr_node_destroy(tcx, child_off, NULL);
+	if (empty) {
+		btr_node_free(tcx, nd_off);
+	} else {
+		if (btr_has_tx(tcx))
+			btr_node_tx_add(tcx, nd_off);
+		/* NB: i can be zero for non-leaf node */
+		D_ASSERT(i >= 0);
+		nd->tn_keyn = i;
 	}
-	btr_node_free(tcx, nd_off);
+
+	if (empty_rc)
+		*empty_rc = empty;
 }
 
 /** destroy all tree nodes and records, then release the root */
 static int
-btr_tree_destroy(struct btr_context *tcx)
+btr_tree_destroy(struct btr_context *tcx, void *args, bool *destroyed)
 {
 	struct btr_root *root;
+	bool		 empty = true;
 
 	D_DEBUG(DB_TRACE, "Destroy "DF_X64", order %d\n",
 		tcx->tc_tins.ti_root_off, tcx->tc_order);
 
 	root = tcx->tc_tins.ti_root;
-	if (!UMOFF_IS_NULL(root->tr_node)) {
+	if (root && !UMOFF_IS_NULL(root->tr_node)) {
 		/* destroy the root and all descendants */
-		btr_node_destroy(tcx, root->tr_node, NULL);
+		btr_node_destroy(tcx, root->tr_node, args, &empty);
 	}
+	*destroyed = empty;
+	if (empty)
+		btr_root_free(tcx);
 
-	btr_root_free(tcx);
 	return 0;
 }
 
 static int
-btr_tx_tree_destroy(struct btr_context *tcx)
+btr_tx_tree_destroy(struct btr_context *tcx, void *args, bool *destroyed)
 {
-	int		      rc = 0;
+	int      rc = 0;
 
 	rc = btr_tx_begin(tcx);
 	if (rc != 0)
 		return rc;
-	rc = btr_tree_destroy(tcx);
+	rc = btr_tree_destroy(tcx, args, destroyed);
 
 	return btr_tx_end(tcx, rc);
 }
@@ -3106,9 +3186,40 @@ btr_tx_tree_destroy(struct btr_context *tcx)
  * The tree open handle is invalid after the destroy.
  *
  * \param toh	[IN]	Tree open handle.
+ * \param args	[IN]	user parameter for btr_ops_t::to_rec_free
  */
 int
-dbtree_destroy(daos_handle_t toh)
+dbtree_destroy(daos_handle_t toh, void *args)
+{
+	struct btr_context *tcx;
+	bool		    destroyed;
+	int		    rc;
+
+	tcx = btr_hdl2tcx(toh);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
+
+	D_ASSERT(!tcx->tc_creds_on);
+	rc = btr_tx_tree_destroy(tcx, args, &destroyed);
+	D_ASSERT(rc || destroyed);
+
+	btr_context_decref(tcx);
+	return rc;
+}
+
+/**
+ * This function drains key/values from the tree, each time it deletes a KV
+ * pair, it consumes a @credits, which is input paramter of this function.
+ * It returns if all input credits are consumed, or the tree is empty, in
+ * the later case, it also destroys the btree.
+ *
+ * \param toh		[IN]	 Tree open handle.
+ * \param credis	[IN/OUT] Input and returned drain credits
+ * \param args		[IN]	 user parameter for btr_ops_t::to_rec_free
+ * \param destroy	[OUT]	 Tree is empty and destroyed
+ */
+int
+dbtree_drain(daos_handle_t toh, int *credits, void *args, bool *destroyed)
 {
 	struct btr_context *tcx;
 	int		    rc;
@@ -3117,9 +3228,25 @@ dbtree_destroy(daos_handle_t toh)
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	rc = btr_tx_tree_destroy(tcx);
+	D_ASSERT(!tcx->tc_creds_on);
+	if (credits) {
+		if (*credits <= 0) {
+			rc = -DER_INVAL;
+			goto failed;
+		}
+		tcx->tc_creds = *credits;
+		tcx->tc_creds_on = 1;
+	}
 
-	btr_context_decref(tcx);
+	rc = btr_tx_tree_destroy(tcx, args, destroyed);
+	if (rc)
+		goto failed;
+
+	if (tcx->tc_creds_on)
+		*credits = tcx->tc_creds;
+failed:
+	tcx->tc_creds_on = 0;
+	tcx->tc_creds = 0;
 	return rc;
 }
 
@@ -3580,7 +3707,7 @@ static struct btr_class btr_class_registered[BTR_TYPE_MAX];
 static int
 btr_class_init(umem_off_t root_off, struct btr_root *root,
 	       unsigned int tree_class, uint64_t *tree_feats,
-	       struct umem_attr *uma, daos_handle_t coh, void *info,
+	       struct umem_attr *uma, daos_handle_t coh, void *priv,
 	       struct btr_instance *tins)
 {
 	struct btr_class	*tc;
@@ -3592,7 +3719,7 @@ btr_class_init(umem_off_t root_off, struct btr_root *root,
 	if (rc != 0)
 		return rc;
 
-	tins->ti_blks_info = info;
+	tins->ti_priv = priv;
 	tins->ti_coh = coh;
 	tins->ti_root_off = UMOFF_NULL;
 

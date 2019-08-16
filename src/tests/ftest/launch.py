@@ -157,10 +157,15 @@ def spawn_commands(host_list, command, timeout=120):
         elapsed += int(time.time()) - start_time
 
     # Terminate any processes that may still be running after timeout
+    return_value = True
     for job in jobs:
         if job.is_alive():
             print("Terminating job {}".format(job.pid))
             job.terminate()
+        if job.exitcode != 0:
+            return_value = False
+
+    return return_value
 
 
 def find_values(obj, keys, key=None, val_type=list):
@@ -277,7 +282,8 @@ def run_tests(test_files, tag_filter, args):
             # Optionally clean the log files before running this test on the
             # servers and clients specified for this test
             if args.clean:
-                clean_logs(test_file["yaml"])
+                if not clean_logs(test_file["yaml"]):
+                    return 128
 
             # Execute this test
             test_command_list = list(command_list)
@@ -338,14 +344,18 @@ def get_log_files(config_yaml, daos_files=None):
     """
     # List of default DAOS files
     if daos_files is None:
-        env_log = os.getenv("D_LOG_FILE", "/tmp/daos.log")
+        daos_core_test_dir, daos_core_test_log = os.path.split(
+            os.getenv("D_LOG_FILE", "/tmp/server.log"))
         daos_files = {
             "log_file": "/tmp/server.log",
             "agent_log_file": "/tmp/daos_agent.log",
             "control_log_file": "/tmp/daos_control.log",
             "socket_dir": "/tmp/daos_sockets",
-            "daos_log_file": env_log,
-            "daos_core_test_logs": "{}/*_{}".format(*os.path.split(env_log))
+            "debug_log_default": os.getenv("D_LOG_FILE", "/tmp/daos.log"),
+            "daos_core_test_client_logs":
+                "{}/*_client_daos.log".format(daos_core_test_dir),
+            "daos_core_test_server_logs":
+                "{}/*_{}".format(daos_core_test_dir, daos_core_test_log),
         }
 
     # Determine the log file locations defined by the last run test
@@ -420,8 +430,11 @@ def clean_logs(test_yaml):
     host_list = get_hosts_from_yaml(test_yaml)
     command = "ssh {{host}} \"rm -fr {}\"".format(" ".join(log_files.values()))
     print("Cleaning logs on {}".format(host_list))
-    spawn_commands(host_list, command)
+    if not spawn_commands(host_list, command):
+        print("Error cleaning logs, aborting")
+        return False
 
+    return True
 
 def archive_logs(avocado_logs_dir, test_yaml):
     """Copy all of the host test log files to the avocado results directory.
@@ -581,6 +594,9 @@ def main():
             ret_code = 1
         if status & 4 == 4:
             print("ERROR: Detected one or more failed avocado commands!")
+            ret_code = 1
+        if status & 128 == 128:
+            print("ERROR: Failed to clean logs in preparation for test run!")
             ret_code = 1
     exit(ret_code)
 

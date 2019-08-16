@@ -25,12 +25,14 @@ package main
 
 import (
 	"fmt"
+	"os/user"
 	"strings"
 	"testing"
 
+	. "github.com/inhies/go-bytesize"
+
 	. "github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	. "github.com/inhies/go-bytesize"
 )
 
 // TestGetSize verifies the correct number of bytes are returned from input
@@ -116,6 +118,14 @@ func TestPoolCommands(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	eUsr, err := user.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	eGrp, err := user.LookupGroupId(eUsr.Gid)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	runCmdTests(t, []cmdTest{
 		{
@@ -134,6 +144,8 @@ func TestPoolCommands(t *testing.T) {
 					Scmbytes:   uint64(testSize),
 					Numsvcreps: 3,
 					Sys:        "daos_server", // FIXME: This should be a constant
+					User:       eUsr.Username + "@",
+					Usergroup:  eGrp.Name + "@",
 				}),
 			}, " "),
 			nil,
@@ -150,41 +162,54 @@ func TestPoolCommands(t *testing.T) {
 					Nvmebytes:  uint64(testSize),
 					Numsvcreps: 3,
 					Sys:        "fnord",
+					User:       "foo@",
+					Usergroup:  "bar@",
 				}),
 			}, " "),
 			nil,
 			cmdSuccess,
 		},
 		{
-			"Create pool with too many replicas",
-			fmt.Sprintf("pool create --scm-size %s --nsvc %d", testSizeStr, maxNumSvcReps+1),
-			"ConnectClients",
-			nil,
-			fmt.Errorf("max number of service replicas"),
-		},
-		{
-			"Create pool with wacky size",
-			"pool create --scm-size a",
-			"ConnectClients",
-			nil,
-			fmt.Errorf("illegal scm size"),
-		},
-		{
-			"Destroy pool with missing arguments",
-			"pool destroy",
-			"",
-			nil,
-			errMissingFlag,
-		},
-		{
-			"Destroy pool without force",
-			"pool destroy --uuid 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-			// FIXME: Shouldn't force be checked locally, and therefore
-			// skip sending this?
+			"Create pool with user and group domains",
+			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo@home --group bar@home", testSizeStr),
 			strings.Join([]string{
 				"ConnectClients",
-				fmt.Sprintf("DestroyPool-%s", &pb.DestroyPoolReq{
-					Uuid: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				fmt.Sprintf("CreatePool-%s", &pb.CreatePoolReq{
+					Scmbytes:   uint64(testSize),
+					Numsvcreps: 3,
+					Sys:        "daos_server",
+					User:       "foo@home",
+					Usergroup:  "bar@home",
+				}),
+			}, " "),
+			nil,
+			cmdSuccess,
+		},
+		{
+			"Create pool with user but no group",
+			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo", testSizeStr),
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("CreatePool-%s", &pb.CreatePoolReq{
+					Scmbytes:   uint64(testSize),
+					Numsvcreps: 3,
+					Sys:        "daos_server",
+					User:       "foo@",
+				}),
+			}, " "),
+			nil,
+			cmdSuccess,
+		},
+		{
+			"Create pool with group but no user",
+			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --group foo", testSizeStr),
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("CreatePool-%s", &pb.CreatePoolReq{
+					Scmbytes:   uint64(testSize),
+					Numsvcreps: 3,
+					Sys:        "daos_server",
+					Usergroup:  "foo@",
 				}),
 			}, " "),
 			nil,

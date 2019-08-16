@@ -23,22 +23,23 @@
 
 package server
 
+//#include <unistd.h>
+//#include <errno.h>
+import "C"
+
 import (
 	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
+	"strings"
 	"syscall"
 
-	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/log"
 	"github.com/pkg/errors"
 
-	//#include <unistd.h>
-	//#include <errno.h>
-	"C"
+	"github.com/daos-stack/daos/src/control/common"
+	log "github.com/daos-stack/daos/src/control/logging"
 )
-import "strings"
 
 const (
 	msgUnmount      = "syscall: calling unmount with %s, MNT_DETACH"
@@ -48,9 +49,7 @@ const (
 	msgMkdir        = "os: mkdirall %s, 0777"
 	msgRemove       = "os: removeall %s"
 	msgCmd          = "cmd: %s"
-	msgSetUID       = "C: setuid %d"
-	msgSetGID       = "C: setgid %d"
-	msgChown        = "os: chown %s %d %d"
+	msgChownR       = "os: walk %s chown %d %d"
 )
 
 // External interface provides methods to support various os operations.
@@ -68,9 +67,7 @@ type External interface {
 	lookupUser(string) (*user.User, error)
 	lookupGroup(string) (*user.Group, error)
 	listGroups(*user.User) ([]string, error)
-	setUID(int64) error
-	setGID(int64) error
-	chown(string, int, int) error
+	chownR(string, int, int) error
 	getHistory() []string
 }
 
@@ -257,29 +254,17 @@ func (e *ext) listGroups(usr *user.User) ([]string, error) {
 	return usr.GroupIds()
 }
 
-func (e *ext) setUID(uid int64) error {
-	log.Debugf(msgSetUID, uid)
-	e.history = append(e.history, fmt.Sprintf(msgSetUID, uid))
+func (e *ext) chownR(root string, uid int, gid int) error {
+	op := fmt.Sprintf(msgChownR, root, uid, gid)
 
-	if cerr, errno := C.setuid(C.__uid_t(uid)); cerr != 0 {
-		return errors.Errorf("C.setuid rc: %d, errno: %d", cerr, errno)
-	}
-	return nil
-}
+	log.Debugf(op)
+	e.history = append(e.history, op)
 
-func (e *ext) setGID(gid int64) error {
-	log.Debugf(msgSetGID, gid)
-	e.history = append(e.history, fmt.Sprintf(msgSetGID, gid))
+	return filepath.Walk(root, func(name string, info os.FileInfo, err error) error {
+		if err != nil {
+			return errors.Wrapf(err, "accessing path %s", name)
+		}
 
-	if cerr, errno := C.setgid(C.__gid_t(gid)); cerr != 0 {
-		return errors.Errorf("C.setgid rc: %d, errno: %d", cerr, errno)
-	}
-	return nil
-}
-
-func (e *ext) chown(path string, uid int, gid int) error {
-	log.Debugf(msgChown, path, uid, gid)
-	e.history = append(e.history, fmt.Sprintf(msgChown, path, uid, gid))
-
-	return os.Chown(path, uid, gid)
+		return os.Chown(name, uid, gid)
+	})
 }

@@ -281,6 +281,21 @@ daos_oclass_st_set_tgt(daos_obj_id_t oid, int tgt)
 	return oid;
 }
 
+/* check if an oid is EC obj class, and return its daos_oclass_attr */
+static inline bool
+daos_oclass_is_ec(daos_obj_id_t oid, struct daos_oclass_attr **attr)
+{
+	struct daos_oclass_attr	*oca;
+
+	oca = daos_oclass_attr_find(oid);
+	if (attr != NULL)
+		*attr = oca;
+	if (oca == NULL)
+		return false;
+
+	return (oca->ca_resil == DAOS_RES_EC);
+}
+
 static inline bool
 daos_unit_oid_is_null(daos_unit_oid_t oid)
 {
@@ -336,6 +351,7 @@ int dc_obj_punch_dkeys(tse_task_t *task);
 int dc_obj_punch_akeys(tse_task_t *task);
 int dc_obj_query(tse_task_t *task);
 int dc_obj_query_key(tse_task_t *task);
+int dc_obj_fetch_shard(tse_task_t *task);
 int dc_obj_fetch(tse_task_t *task);
 int dc_obj_update(tse_task_t *task);
 int dc_obj_list_dkey(tse_task_t *task);
@@ -360,5 +376,12 @@ dc_obj_shard2anchor(daos_anchor_t *anchor, uint32_t shard)
 {
 	anchor->da_shard = shard;
 }
+
+enum daos_io_flags {
+	/* The RPC will be sent to leader replica. */
+	DIOF_TO_LEADER		= 0x1,
+	/* The RPC will be sent to specified replica. */
+	DIOF_TO_SPEC_SHARD	= 0x2,
+};
 
 #endif /* __DD_OBJ_H__ */

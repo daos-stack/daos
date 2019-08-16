@@ -32,9 +32,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -322,10 +323,8 @@ func TestProvidedConfigs(t *testing.T) {
 func TestCmdlineOverride(t *testing.T) {
 	defer common.ShowLogOnFailure(t)()
 
-	r := rank(9)
 	m := "moduleA moduleB"
 	a := "/some/file"
-	y := "/another/different/file"
 
 	// test-local function to generate configuration
 	// (mock with default behaviours populated with uncommented daos_server.yml)
@@ -349,7 +348,6 @@ func TestCmdlineOverride(t *testing.T) {
 					"-s", "/mnt/daos/1",
 					"-x", "0",
 					"-f", "1",
-					"-r", "0",
 					"-d", "./.daos/daos_server",
 				},
 				{
@@ -358,7 +356,6 @@ func TestCmdlineOverride(t *testing.T) {
 					"-s", "/mnt/daos/2",
 					"-x", "1",
 					"-f", "22",
-					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
 			},
@@ -374,7 +371,6 @@ func TestCmdlineOverride(t *testing.T) {
 					"-s", "/foo/bar",
 					"-x", "0",
 					"-f", "1",
-					"-r", "0",
 					"-d", "./.daos/daos_server",
 				},
 				{
@@ -383,7 +379,6 @@ func TestCmdlineOverride(t *testing.T) {
 					"-s", "/foo/bar",
 					"-x", "1",
 					"-f", "22",
-					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
 			},
@@ -399,7 +394,6 @@ func TestCmdlineOverride(t *testing.T) {
 					"-s", "/mnt/daos/1",
 					"-x", "0",
 					"-f", "1",
-					"-r", "0",
 					"-d", "./.daos/daos_server",
 				},
 				{
@@ -408,7 +402,6 @@ func TestCmdlineOverride(t *testing.T) {
 					"-s", "/mnt/daos/2",
 					"-x", "1",
 					"-f", "22",
-					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
 			},
@@ -424,7 +417,6 @@ func TestCmdlineOverride(t *testing.T) {
 					"-s", "/mnt/daos/1",
 					"-x", "0",
 					"-f", "1",
-					"-r", "0",
 					"-d", "./.daos/daos_server",
 				},
 				{
@@ -433,7 +425,6 @@ func TestCmdlineOverride(t *testing.T) {
 					"-s", "/mnt/daos/2",
 					"-x", "1",
 					"-f", "22",
-					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
 			},
@@ -449,7 +440,6 @@ func TestCmdlineOverride(t *testing.T) {
 					"-s", "/mnt/daos/1",
 					"-x", "0",
 					"-f", "1",
-					"-r", "0",
 					"-d", "./.daos/daos_server",
 				},
 				{
@@ -458,36 +448,10 @@ func TestCmdlineOverride(t *testing.T) {
 					"-s", "/mnt/daos/2",
 					"-x", "1",
 					"-f", "22",
-					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
 			},
 			desc: "Override Targets set in config file",
-		},
-		{
-			inCliOpts: cliOptions{Rank: &r},
-			inConfig:  newC(t),
-			outCliOpts: [][]string{
-				{
-					"-t", "20",
-					"-g", "daos",
-					"-s", "/mnt/daos/1",
-					"-x", "0",
-					"-f", "1",
-					"-r", "9",
-					"-d", "./.daos/daos_server",
-				},
-				{
-					"-t", "20",
-					"-g", "daos",
-					"-s", "/mnt/daos/2",
-					"-x", "1",
-					"-f", "22",
-					"-r", "1",
-					"-d", "./.daos/daos_server",
-				},
-			},
-			desc: "Rank",
 		},
 		{
 			// currently not provided as config or cli option, set
@@ -504,7 +468,6 @@ func TestCmdlineOverride(t *testing.T) {
 					"-s", "/mnt/daos/1",
 					"-x", "0",
 					"-f", "1",
-					"-r", "0",
 					"-d", "./.daos/daos_server",
 					"-i", "1",
 				},
@@ -514,7 +477,6 @@ func TestCmdlineOverride(t *testing.T) {
 					"-s", "/mnt/daos/2",
 					"-x", "1",
 					"-f", "22",
-					"-r", "1",
 					"-d", "./.daos/daos_server",
 					"-i", "1",
 				},
@@ -522,7 +484,7 @@ func TestCmdlineOverride(t *testing.T) {
 			desc: "NvmeShmID",
 		},
 		{
-			inCliOpts: cliOptions{SocketDir: "/tmp/Jeremy", Modules: &m, Attach: &a, Map: &y},
+			inCliOpts: cliOptions{SocketDir: "/tmp/Jeremy", Modules: &m, Attach: &a},
 			inConfig:  newC(t),
 			outCliOpts: [][]string{
 				{
@@ -533,8 +495,6 @@ func TestCmdlineOverride(t *testing.T) {
 					"-a", "/some/file",
 					"-x", "0",
 					"-f", "1",
-					"-y", "/another/different/file",
-					"-r", "0",
 					"-d", "/tmp/Jeremy",
 				},
 				{
@@ -545,8 +505,6 @@ func TestCmdlineOverride(t *testing.T) {
 					"-a", "/some/file",
 					"-x", "1",
 					"-f", "22",
-					"-y", "/another/different/file",
-					"-r", "1",
 					"-d", "/tmp/Jeremy",
 				},
 			},
@@ -562,7 +520,6 @@ func TestCmdlineOverride(t *testing.T) {
 					"-s", "/mnt/daos/1",
 					"-x", "0",
 					"-f", "1",
-					"-r", "0",
 					"-d", "./.daos/daos_server",
 				},
 				{
@@ -571,7 +528,6 @@ func TestCmdlineOverride(t *testing.T) {
 					"-s", "/mnt/daos/2",
 					"-x", "1",
 					"-f", "22",
-					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
 			},
@@ -591,7 +547,6 @@ func TestCmdlineOverride(t *testing.T) {
 					"-g", "daos",
 					"-s", "/mnt/daos/1",
 					"-f", "1",
-					"-r", "0",
 					"-d", "./.daos/daos_server",
 				},
 				{
@@ -599,7 +554,6 @@ func TestCmdlineOverride(t *testing.T) {
 					"-g", "daos",
 					"-s", "/mnt/daos/2",
 					"-f", "22",
-					"-r", "1",
 					"-d", "./.daos/daos_server",
 				},
 			},
@@ -608,7 +562,7 @@ func TestCmdlineOverride(t *testing.T) {
 		{
 			inCliOpts: cliOptions{
 				Cores: 2, Group: "bob", MountPath: "/foo/bar",
-				SocketDir: "/tmp/Jeremy", Modules: &m, Attach: &a, Map: &y},
+				SocketDir: "/tmp/Jeremy", Modules: &m, Attach: &a},
 			inConfig: mockConfigFromFile(t, defaultMockExt(), defaultConfig),
 			desc:     "override defaults, empty config file",
 			errMsg:   msgBadConfig + relConfExamplesPath + ": " + msgConfigNoProvider,

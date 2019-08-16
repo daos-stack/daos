@@ -24,13 +24,17 @@
 package server
 
 import (
-	"bytes"
+	"crypto"
+	"encoding/hex"
+	"fmt"
+	"path/filepath"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/security/auth"
-	"github.com/golang/protobuf/proto"
-	"github.com/pkg/errors"
 )
 
 // Module id for the Server security module
@@ -42,19 +46,41 @@ const (
 
 // SecurityModule is the security drpc module struct
 type SecurityModule struct {
+	config *security.TransportConfig
 }
 
-func processValidateCredentials(body []byte) ([]byte, error) {
+// NewSecurityModule creates a new security module with a transport config
+func NewSecurityModule(tc *security.TransportConfig) *SecurityModule {
+	mod := &SecurityModule{
+		config: tc,
+	}
+	return mod
+}
+
+func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error) {
+	var key crypto.PublicKey
 	credential := &auth.Credential{}
 	err := proto.Unmarshal(body, credential)
 	if err != nil {
 		return nil, err
 	}
 
+	if m.config.AllowInsecure == true {
+		key = nil
+	} else {
+		certName := fmt.Sprintf("%s.%s", credential.Origin, "crt")
+		certPath := filepath.Join(m.config.ClientCertDir, certName)
+		cert, err := security.LoadCertificate(certPath)
+		if err != nil {
+			return nil, errors.Wrapf(err, "loading certificate %s failed:", certPath)
+		}
+		key = cert.PublicKey
+	}
+
 	// Check our verifier
-	hash, _ := security.HashFromToken(credential.Token)
-	if !bytes.Equal(hash, credential.Verifier.Data) {
-		return nil, errors.Errorf("Verifier does not match token")
+	err = auth.VerifyToken(key, credential.GetToken(), credential.GetVerifier().GetData())
+	if err != nil {
+		return nil, errors.Wrapf(err, "credential verification failed for verifier %s", hex.Dump(credential.GetVerifier().GetData()))
 	}
 
 	responseBytes, err := proto.Marshal(credential.Token)
@@ -70,7 +96,7 @@ func (m *SecurityModule) HandleCall(client *drpc.Client, method int32, body []by
 		return nil, errors.Errorf("Attempt to call unregistered function")
 	}
 
-	responseBytes, err := processValidateCredentials(body)
+	responseBytes, err := m.processValidateCredentials(body)
 	return responseBytes, err
 }
 

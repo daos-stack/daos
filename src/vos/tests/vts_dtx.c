@@ -498,7 +498,7 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	vts_dtx_end(dth);
 
 	/* Aborted the update DTX. */
-	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, 1, false);
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, epoch, &xid, 1, false);
 	assert_int_equal(rc, 0);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
@@ -532,7 +532,7 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	vts_dtx_end(dth);
 
 	/* Aborted the punch DTX. */
-	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, 1, false);
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, epoch, &xid, 1, false);
 	assert_int_equal(rc, 0);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
@@ -635,7 +635,7 @@ dtx_14(void **state)
 	 * But we cannot check "assert_int_not_equal(rc, 0)" that depends
 	 * on the umem_tx_abort() which may return 0 for vmem based case.
 	 */
-	vos_dtx_abort(args->ctx.tc_co_hdl, &xid, 1, false);
+	vos_dtx_abort(args->ctx.tc_co_hdl, epoch, &xid, 1, false);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
@@ -697,11 +697,11 @@ dtx_15(void **state)
 	vts_dtx_end(dth);
 
 	/* Aborted the update DTX. */
-	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, 1, false);
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, epoch, &xid, 1, false);
 	assert_int_equal(rc, 0);
 
 	/* Double aborted the DTX is harmless. */
-	vos_dtx_abort(args->ctx.tc_co_hdl, &xid, 1, false);
+	vos_dtx_abort(args->ctx.tc_co_hdl, epoch, &xid, 1, false);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
@@ -980,8 +980,7 @@ dtx_18(void **state)
 
 	/* Aggregate the first 4 DTXs. */
 	for (i = 0; i < 10; i++) {
-		rc = vos_dtx_check_committable(args->ctx.tc_co_hdl, NULL,
-					       &xid[i], 0, false);
+		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i]);
 		assert_int_equal(rc, DTX_ST_COMMITTED);
 	}
 
@@ -990,14 +989,12 @@ dtx_18(void **state)
 	assert_int_equal(rc, 0);
 
 	for (i = 0; i < 4; i++) {
-		rc = vos_dtx_check_committable(args->ctx.tc_co_hdl, NULL,
-					       &xid[i], 0, false);
+		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i]);
 		assert_int_equal(rc, -DER_NONEXIST);
 	}
 
 	for (; i < 10; i++) {
-		rc = vos_dtx_check_committable(args->ctx.tc_co_hdl, NULL,
-					       &xid[i], 0, false);
+		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i]);
 		assert_int_equal(rc, DTX_ST_COMMITTED);
 	}
 
@@ -1006,8 +1003,7 @@ dtx_18(void **state)
 	assert_int_equal(rc, 1);
 
 	for (i = 4; i < 10; i++) {
-		rc = vos_dtx_check_committable(args->ctx.tc_co_hdl, NULL,
-					       &xid[i], 0, false);
+		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i]);
 		assert_int_equal(rc, -DER_NONEXIST);
 	}
 
@@ -1126,12 +1122,14 @@ vts_dtx_shares(struct io_test_args *args, int *commit_list, int commit_count,
 
 		for (i = 0; i < abort_count; i++) {
 			rc = vos_dtx_abort(args->ctx.tc_co_hdl,
+					   epoch[abort_list[i]],
 					   &xid[abort_list[i]], 1, false);
 			assert_int_equal(rc, 0);
 		}
 	} else {
 		for (i = 0; i < abort_count; i++) {
 			rc = vos_dtx_abort(args->ctx.tc_co_hdl,
+					   epoch[abort_list[i]],
 					   &xid[abort_list[i]], 1, false);
 			assert_int_equal(rc, 0);
 		}
@@ -1397,13 +1395,14 @@ vts_dtx_shares_with_punch(struct io_test_args *args, bool punch_obj, bool abort)
 
 	/* Abort or commit the punch DTX. */
 	if (abort)
-		rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid[3], 1, false);
+		rc = vos_dtx_abort(args->ctx.tc_co_hdl, epoch[3], &xid[3], 1,
+				   false);
 	else
 		rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid[3], 1);
 	assert_int_equal(rc, 0);
 
 	/* Abort the first update DTX. */
-	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid[0], 1, false);
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, epoch[0], &xid[0], 1, false);
 	assert_int_equal(rc, 0);
 
 	/* Commit the third update DTX. */

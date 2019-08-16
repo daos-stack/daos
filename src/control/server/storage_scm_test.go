@@ -25,12 +25,14 @@ package server
 
 import (
 	"fmt"
+	"strings"
 	"testing"
+
+	"github.com/pkg/errors"
 
 	. "github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	. "github.com/daos-stack/go-ipmctl/ipmctl"
-	"github.com/pkg/errors"
 )
 
 // MockModule returns a mock SCM module of type exported from go-ipmctl.
@@ -75,6 +77,134 @@ func defaultMockScmStorage(config *configuration) *scmStorage {
 		nil, []DeviceDiscovery{m}, false, config)
 }
 
+func TestGetState(t *testing.T) {
+	defer ShowLogOnFailure(t)()
+
+	var regionsOut string  // variable cmd output
+	commands := []string{} // external commands issued
+	// ndctl create-namespace command return json format
+	pmemOut := `{
+   "dev":"namespace%d.0",
+   "mode":"fsdax",
+   "map":"dev",
+   "size":"2964.94 GiB (3183.58 GB)",
+   "uuid":"842fc847-28e0-4bb6-8dfc-d24afdba1528",
+   "raw_uuid":"dedb4b28-dc4b-4ccd-b7d1-9bd475c91264",
+   "sector_size":512,
+   "blockdev":"pmem%d",
+   "numa_node":%d
+}
+`
+	onePmemJson := fmt.Sprintf(pmemOut, 1, 1, 0)
+	twoPmemsJson := "[" + fmt.Sprintf(pmemOut, 1, 1, 0) + "," + fmt.Sprintf(pmemOut, 2, 2, 1) + "]"
+	createRegionsOut := msgScmRebootRequired + "\n"
+	pmemId := 1
+
+	mockRun := func(in string) (string, error) {
+		retString := in
+
+		switch in {
+		case cmdScmCreateRegions:
+			retString = createRegionsOut // example successful output
+		case cmdScmShowRegions:
+			retString = regionsOut
+		case cmdScmCreateNamespace:
+			// stimulate free capacity of region being used
+			regionsOut = strings.Replace(regionsOut, "3012.0", "0.0", 1)
+			retString = fmt.Sprintf(pmemOut, pmemId, pmemId, pmemId-1)
+			pmemId += 1
+		case cmdScmListNamespaces:
+			retString = twoPmemsJson
+		}
+
+		commands = append(commands, in)
+		return retString, nil
+	}
+
+	tests := []struct {
+		desc              string
+		errMsg            string
+		showRegionOut     string
+		createRegionOut   string
+		expRebootRequired bool
+		expPmemDevs       []pmemDev
+		expCommands       []string
+	}{
+		{
+			desc:              "modules but no regions",
+			showRegionOut:     outScmNoRegions,
+			expRebootRequired: true,
+			expCommands:       []string{cmdScmShowRegions, cmdScmCreateRegions},
+		},
+		{
+			desc: "single region with free capacity",
+			showRegionOut: "\n" +
+				"---ISetID=0x2aba7f4828ef2ccc---\n" +
+				"   PersistentMemoryType=AppDirect\n" +
+				"   FreeCapacity=0.0 GiB\n" +
+				"---ISetID=0x81187f4881f02ccc---\n" +
+				"   PersistentMemoryType=AppDirect\n" +
+				"   FreeCapacity=3012.0 GiB\n" +
+				"\n",
+			expCommands: []string{cmdScmShowRegions, cmdScmCreateNamespace, cmdScmShowRegions},
+			expPmemDevs: parsePmemDevs(onePmemJson),
+		},
+		{
+			desc: "regions with free capacity",
+			showRegionOut: "\n" +
+				"---ISetID=0x2aba7f4828ef2ccc---\n" +
+				"   PersistentMemoryType=AppDirect\n" +
+				"   FreeCapacity=3012.0 GiB\n" +
+				"---ISetID=0x81187f4881f02ccc---\n" +
+				"   PersistentMemoryType=AppDirect\n" +
+				"   FreeCapacity=3012.0 GiB\n" +
+				"\n",
+			expCommands: []string{
+				cmdScmShowRegions, cmdScmCreateNamespace, cmdScmShowRegions,
+				cmdScmCreateNamespace, cmdScmShowRegions,
+			},
+			expPmemDevs: parsePmemDevs(twoPmemsJson),
+		},
+		{
+			desc: "regions with no capacity",
+			showRegionOut: "\n" +
+				"---ISetID=0x2aba7f4828ef2ccc---\n" +
+				"   PersistentMemoryType=AppDirect\n" +
+				"   FreeCapacity=0.0 GiB\n" +
+				"---ISetID=0x81187f4881f02ccb---\n" +
+				"   PersistentMemoryType=AppDirect\n" +
+				"   FreeCapacity=0.0 GiB\n" +
+				"\n",
+			expCommands: []string{cmdScmShowRegions, cmdScmListNamespaces},
+			expPmemDevs: parsePmemDevs(twoPmemsJson),
+		},
+	}
+
+	for _, tt := range tests {
+		config := defaultMockConfig(t)
+		ss := defaultMockScmStorage(&config).withRunCmd(mockRun)
+		ss.Discover(new(pb.ScanStorageResp)) // not concerned with response
+
+		// reset to initial values between tests
+		regionsOut = tt.showRegionOut
+		pmemId = 1
+		commands = nil
+
+		needsReboot, pmemDevs, err := ss.Prep()
+		if tt.errMsg != "" {
+			ExpectError(t, err, tt.errMsg, tt.desc)
+			continue
+		}
+		if err != nil {
+			t.Fatal(tt.desc + ": " + err.Error())
+		}
+
+		AssertEqual(t, commands, tt.expCommands, tt.desc+": unexpected list of commands run")
+		AssertEqual(t, needsReboot, tt.expRebootRequired, tt.desc+": unexpected value for is reboot required")
+		AssertEqual(t, pmemDevs, tt.expPmemDevs, tt.desc+": unexpected list of pmem kernel device names")
+	}
+}
+
 func TestDiscoverScm(t *testing.T) {
 	mPB := MockModulePB()
 	m := MockModule()
@@ -84,25 +214,25 @@ func TestDiscoverScm(t *testing.T) {
 		inited            bool
 		ipmctlDiscoverRet error
 		errMsg            string
-		expModules        []*pb.ScmModule
+		expModules        ScmModules
 	}{
 		{
 			true,
 			nil,
 			"",
-			[]*pb.ScmModule(nil),
+			ScmModules(nil),
 		},
 		{
 			false,
 			nil,
 			"",
-			[]*pb.ScmModule{mPB},
+			ScmModules{mPB},
 		},
 		{
 			false,
 			errors.New("ipmctl example failure"),
 			msgIpmctlDiscoverFail + ": ipmctl example failure",
-			[]*pb.ScmModule{mPB},
+			ScmModules{mPB},
 		},
 	}
 
@@ -142,13 +272,13 @@ func TestFormatScm(t *testing.T) {
 		devs       []string
 		size       int
 		expCmds    []string // expected arguments in syscall methods
-		expResults []*pb.ScmMountResult
+		expResults ScmMountResults
 		desc       string
 	}{
 		{
 			inited: false,
 			mount:  "/mnt/daos",
-			expResults: []*pb.ScmMountResult{
+			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
 					State: &pb.ResponseState{
@@ -163,7 +293,7 @@ func TestFormatScm(t *testing.T) {
 			inited:    true,
 			mount:     "/mnt/daos",
 			formatted: true,
-			expResults: []*pb.ScmMountResult{
+			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
 					State: &pb.ResponseState{
@@ -176,7 +306,7 @@ func TestFormatScm(t *testing.T) {
 		},
 		{
 			inited: true,
-			expResults: []*pb.ScmMountResult{
+			expResults: ScmMountResults{
 				{
 					Mntpoint: "",
 					State: &pb.ResponseState{
@@ -190,7 +320,7 @@ func TestFormatScm(t *testing.T) {
 		{
 			inited: true,
 			mount:  "/mnt/daos",
-			expResults: []*pb.ScmMountResult{
+			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
 					State: &pb.ResponseState{
@@ -206,7 +336,7 @@ func TestFormatScm(t *testing.T) {
 			mount:  "/mnt/daos",
 			class:  scmRAM,
 			size:   6,
-			expResults: []*pb.ScmMountResult{
+			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
 					State:    &pb.ResponseState{},
@@ -225,7 +355,7 @@ func TestFormatScm(t *testing.T) {
 			mount:  "/mnt/daos",
 			class:  scmDCPM,
 			devs:   []string{"/dev/pmem0"},
-			expResults: []*pb.ScmMountResult{
+			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
 					State:    &pb.ResponseState{},
@@ -246,7 +376,7 @@ func TestFormatScm(t *testing.T) {
 			mount:  "/mnt/daos",
 			class:  scmDCPM,
 			devs:   []string{},
-			expResults: []*pb.ScmMountResult{
+			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
 					State: &pb.ResponseState{
@@ -262,7 +392,7 @@ func TestFormatScm(t *testing.T) {
 			mount:  "/mnt/daos",
 			class:  scmDCPM,
 			devs:   []string(nil),
-			expResults: []*pb.ScmMountResult{
+			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
 					State: &pb.ResponseState{
@@ -278,7 +408,7 @@ func TestFormatScm(t *testing.T) {
 			mount:  "/mnt/daos",
 			class:  scmDCPM,
 			devs:   []string{""},
-			expResults: []*pb.ScmMountResult{
+			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
 					State: &pb.ResponseState{
@@ -302,7 +432,7 @@ func TestFormatScm(t *testing.T) {
 			nil, []DeviceDiscovery{}, false, config)
 		ss.formatted = tt.formatted
 
-		results := []*pb.ScmMountResult{}
+		results := ScmMountResults{}
 
 		if tt.inited {
 			// not concerned with response
@@ -349,11 +479,11 @@ func TestFormatScm(t *testing.T) {
 // implemented state in result.
 func TestUpdateScm(t *testing.T) {
 	tests := []struct {
-		expResults []*pb.ScmModuleResult
+		expResults ScmModuleResults
 		desc       string
 	}{
 		{
-			expResults: []*pb.ScmModuleResult{
+			expResults: ScmModuleResults{
 				{
 					Loc: &pb.ScmModule_Location{},
 					State: &pb.ResponseState{
@@ -373,7 +503,7 @@ func TestUpdateScm(t *testing.T) {
 		ss := newMockScmStorage(
 			nil, []DeviceDiscovery{}, false, &config)
 
-		results := []*pb.ScmModuleResult{}
+		results := ScmModuleResults{}
 
 		req := &pb.UpdateScmReq{}
 		ss.Update(srvIdx, req, &results)

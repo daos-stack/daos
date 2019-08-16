@@ -113,17 +113,6 @@ help output (use “ipmctl help” to display it).
 
 The list of NVDIMMs can be displayed as follows:
 
-\$ ipmctl show -dimm
-
-|DimmID | Capacity | HealthState | ActionRequired | LockState | FWVersion
-|-----|-----|-----|----|----|----|
-|0x0001 | 502.5 GiB | Healthy | 0 | Disabled | 01.00.00.5127
-|0x0101 | 502.5 GiB | Healthy | 0 | Disabled | 01.00.00.5127
-|0x1001 | 502.5 GiB | Healthy | 0 | Disabled | 01.00.00.5127
-|0x1101 | 502.5 GiB | Healthy | 0 | Disabled | 01.00.00.5127
-
-As for affinity to CPU, use the following command:
-
 \# ipmctl show -dimm
 
 |DimmID | Capacity | HealthState | ActionRequired | LockState | FWVersion|
@@ -145,23 +134,22 @@ This can be done manually via the following commands:
 
 \# to verify there is non-volatile memory type
 
-\$ ipmctl show -a -topology | egrep 'Capac|MemoryType'
+\# ipmctl show -a -topology | egrep 'Capac|MemoryType'
 
-  MemoryType=DCPM
+MemoryType=Logical Non-Volatile Device
 
-  Capacity=502.5 GiB
+Capacity=502.6 GiB
 
-  MemoryType=DCPM
+MemoryType=Logical Non-Volatile Device
 
-  Capacity=502.5 GiB
+Capacity=502.6 GiB
 
-  MemoryType=DCPM
+MemoryType=Logical Non-Volatile Device
 
-  Capacity=502.5 GiB
+Capacity=502.6 GiB
+\[…\]
 
-  \[…\]
-
-\$ ipmctl create -goal PersistentMemoryType=AppDirect
+\# ipmctl create -goal PersistentMemoryType=AppDirect
 
 A reboot is required after those changes.
 
@@ -330,7 +318,10 @@ nodes before starting it.
 
 The DAOS security framework relies on certificates to authenticate
 administrators. The security infrastructure is currently under
-development and will be delivered in DAOS v1.0.
+development and will be delivered in DAOS v1.0. Initial support for certificates
+has been added to DAOS and can be disabled either via the command line or in the
+DAOS server configuration file. Currently the easiest way to disable certificate
+support is to pass the -i flag to daos\_server.
 
 ### Server Configuration File
 
@@ -395,22 +386,32 @@ default: 10000
 
 port: 10001
 
-**Path to CA certificate**
+**Transport Certificate Credentials**
 
-If not specified, DAOS will start in insecure way which means that
-anybody can administrate the DAOS installation and access data.
+Certificate support for securing the administrative channel for the DAOS
+components is specified in a key called transport_config: It contains the
+following keys with these default values
 
-ca\_cert: ./.daos/ca.crt
 
-**Path to server certificate and key file**
+***Allow Insecure Communications***
 
-Discarded if no CA certificate is passed.
+default: false
+
+allow_insecure: false
+
+***Path to Root Certificate***
+
+default: ./.daos/daosCA.crt
+
+ca\_cert: ./.daos/daosCA.crt
+
+***Path to server certificate and key file***
 
 default: ./.daos/daos\_server.{crt,key}
 
-cert: ./.daosa/daos\_server.crt
+cert: ./.daos/daos\_server.crt
 
-key: ./.daosa/daos\_server.key
+key: ./.daos/daos\_server.key
 
 **Fault domain path**
 
@@ -810,7 +811,7 @@ man page for additional options.
 To start the DAOS server, run:
 
 orterun -np &lt;num\_servers&gt; --hostfile \${hostfile}
---enable-recovery --report-uri \${urifile} daos\_server
+--enable-recovery --report-uri \${urifile} daos\_server -i
 
 The --enable-recovery is required for fault tolerance to guarantee that
 the fault of one server does not cause the others to be stopped.
@@ -912,9 +913,20 @@ Typically an administrator will perform the following tasks:
 3. Add device identifiers to Server config file
     - `vim <daos>/utils/config/examples/daos_server_sockets.yml`
     [details](#-server-configuration)
+    - For DCPM SCM, these fields need to be specified:
+
+	\# When scm_class is set to dcpm, scm_list is the list of device paths for
+
+	\# AppDirect pmem namespaces (currently only one per server supported).
+
+scm_mount: /mnt/pmem1
+
+scm_class: dcpm
+
+scm_list: [/dev/pmem1]
 
 4. Start DAOS control plane
-    - `orterun -np 2 -H boro-44,boro-45 --report-uri /tmp/urifile --enable-recovery daos_server -t 1 -o <daos>/utils/config/examples/daos_server_sockets.yml`
+    - `orterun -np 2 -H boro-44,boro-45 --report-uri /tmp/urifile --enable-recovery daos_server -t 1 -i -o <daos>/utils/config/examples/daos_server_sockets.yml`
     [details](#-parallel-launcher)
 
 5. Provision Storage
@@ -927,7 +939,7 @@ Typically an administrator will perform the following tasks:
     [details](#-server-configuration)
 
 7. Format Storage (from any node)
-    - `daos_shell -l <host:port>,... storage format -f`
+    - `daos_shell -i -l <host:port>,... storage format -f`
     [management tool details](/src/control/cmd/dmg/README.md#-storage-format)
     - [SCM specific details](/src/control/server/README.md#-scm-format)
     - [NVMe specific details](/src/control/server/README.md#-nvme-format)
@@ -1048,13 +1060,11 @@ DAOS Formatting
 Distributed formatting through the DAOS servers for both SCM and SSDs is
 under development and will be documented there once available.
 
-Meanwhile, SCM should be formatted manually as an ext4 filesystem and
-mounted with the dax option prior to start the DAOS servers on each
-storage node:
+Meanwhile, we need to create namespace for SCM:
 
-\# Create a /dev/pmem\* device for one NUMA node
+\# Create a /dev/pmem\* device for one NUMA node, use ndctl as root user
 
-\$ ndctl create-namespace
+\# ndctl create-namespace
 
 {
 
@@ -1080,42 +1090,170 @@ storage node:
 
 \# Show regions with 0 free space after namespace created
 
-\$ ipmctl show -a -region
+\# ipmctl show -region
 
 SocketID | ISetID | PersistentMemoryType | Capacity | FreeCapacity |
 HealthState
 
-================================================================================================
+================================================================================
 
 0x0000 | 0xb1887f48651e2ccc | AppDirect | 3012.0 GiB | 3012.0 GiB |
 Healthy
 
 0x0001 | 0xf77a7f481e352ccc | AppDirect | 3012.0 GiB | 0.0 GiB | Healthy
 
-\$ mkfs.ext4 /dev/pmem1
+For the first time DAOS installation, the [SCM format](/src/control/server/README.md#-scm-format
+) will be handled by DAOS. Otherwise, it should be formatted manually as an ext4 filesystem and mounted
+with the dax option prior to start the DAOS servers on each storage node:
+
+\# mkfs.ext4 /dev/pmem1
 
 \[…\]
 
-\$ mount -o dax /dev/pmem1 /mnt/daos
+\# mount -o dax /dev/pmem1 /mnt/daos
 
 If SCM is emulated with DRAM, then a tmpfs filesystem should be mounted:
 
-\$ mount –t tmpfs –o size=16G tmpfs /mnt/daos
+\# mount –t tmpfs –o size=16G tmpfs /mnt/daos
 
 Replace 16G with the desired tmpfs size.
 
 Agent Configuration
 -------------------
+This section addresses how to configure the DAOS agents on the storage
+nodes before starting it.
 
-The DAOS Agent is not required in DAOS v0.4 since authentication support
-is not fully landed yet. Instructions on how to setup and start the
-agent will be provided in the next revision of this document.
+### Certificate Generation
+
+The DAOS security framework relies on certificates to authenticate
+administrators. The security infrastructure is currently under
+development and will be delivered in DAOS v1.0. Initial support for certificates
+has been added to DAOS and can be disabled either via the command line or in the
+DAOS Agent configuration file. Currently the easiest way to disable certificate
+support is to pass the -i flag to daos\_agent.
+
+### Agent Configuration File
+
+The `daos_agent` configuration file is parsed when starting the
+`daos_agent` process. The configuration file location can be specified
+on the command line (`daos_agent -h` for usage) or default location
+(`install/etc/daos_agent.yml`).
+
+Parameter descriptions are specified in [daos_agent.yml](/utils/config/daos_agent.yml).
+
+Any option supplied to `daos_agent` as a commandline option or flag will
+take precedence over equivalent configuration file parameter.
+
+For convenience, active parsed config values are written to a temporary
+file for reference, location will be written to the log.
+
+The following section lists the format, options, defaults and
+descriptions available in the configuration file.
+
+#### Configuration File Options
+
+This section lists the default empty configuration listing all the
+options (living documentation of the config file). Live examples are
+available at
+<https://github.com/daos-stack/daos/tree/master/utils/config>
+
+The Location of this configuration file is determined by first checking
+for the path specified through the -o option of the daos\_agent command
+line. Otherwise, /etc/daos\_agent.conf is used.
+
+**Name associated with the DAOS system**
+
+Immutable after reformat.
+
+name: daos
+
+**Access points**
+
+To operate, DAOS will need a quorum of access point nodes to be
+available.
+
+Immutable after reformat.
+
+Hosts can be specified with or without port, default port below assumed
+if not specified.
+
+default: hostname of this node at port 10000 for local testing
+
+access\_points:
+\['hostname1:10001','hostname2:10001','hostname3:10001'\]
+
+access\_points: \[hostname1,hostname2,hostname3\]
+
+**Force default port**
+
+Force different port number to connect to access points.
+
+default: 10000
+
+port: 10001
+
+**Transport Certificate Credentials**
+
+Certificate support for securing the administrative channel for the DAOS
+components is specified in a key called transport_config: It contains the
+following keys with these default values.
+
+
+***Allow Insecure Communications***
+
+default: false
+
+allow_insecure: false
+
+***Path to Root Certificate***
+
+default: ./.daos/daosCA.crt
+
+ca\_cert: ./.daos/daosCA.crt
+
+***Path to server certificate and key file***
+
+default: ./.daos/daos\_agent.{crt,key}
+
+cert: ./.daos/daos\_agent.crt
+
+key: ./.daos/daos\_agent.key
+
+**Use the given directory for creating unix domain sockets**
+
+DAOS Agent uses unix domain sockets for communication with other system
+components. This setting is the base location to place the sockets in.
+
+default: /var/run/daos\_agent
+
+runtime\_dir: ./.daos/daos\_agent
+
+**Force specific path for DAOS Agent debug logs.**
+
+default: /tmp/daos_agent.log
+
+log\_file: /tmp/daos\_agent2.log
+
+## Agent Startup
+--------------
+
+DAOS Agent is a standalone application to be run on each compute node.
+It can be configured to use secure communications (default) or can be allowed
+to communicate with the control plane over unencrypted channels. The following
+example shows daos_agent being configured to operate in insecure mode due to
+incomplete integration of certificate support as of the 0.6 release.
+
+To start the DAOS Agent, run:
+```
+daos_agent -i
+```
 
 System Validation
 -----------------
 
 To validate that the DAOS system is properly installed, the daos\_test
-suite can be executed:
+suite can be executed. Ensure the DAOS Agent is configured and running before
+running daos\_test:
 
 [[]{#_Toc4574315 .anchor}]{#_Toc4572376 .anchor}orterun -np
 &lt;num\_clients&gt; --hostfile \${hostfile} --ompi-server

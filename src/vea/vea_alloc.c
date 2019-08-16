@@ -64,7 +64,7 @@ compound_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe,
 	free_class_remove(&vsi->vsi_class, entry);
 
 	d_iov_set(&key, &remain.vfe_blk_off, sizeof(remain.vfe_blk_off));
-	rc = dbtree_delete(vsi->vsi_free_btr, &key, NULL);
+	rc = dbtree_delete(vsi->vsi_free_btr, BTR_PROBE_EQ, &key, NULL);
 	if (rc)
 		return rc;
 
@@ -410,7 +410,7 @@ persistent_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 	}
 
 	/* Remove the original free extent from persistent tree */
-	rc = dbtree_delete(btr_hdl, &key_out, NULL);
+	rc = dbtree_delete(btr_hdl, BTR_PROBE_EQ, &key_out, NULL);
 	if (rc)
 		return rc;
 
@@ -431,7 +431,7 @@ persistent_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 	if (found_end > vfe_end) {
 		frag.vfe_blk_off = vfe->vfe_blk_off + vfe->vfe_blk_cnt;
 		frag.vfe_blk_cnt = found_end - vfe_end;
-		rc = get_current_age(&frag.vfe_age);
+		rc = daos_gettime_coarse(&frag.vfe_age);
 		if (rc)
 			return rc;
 

@@ -796,8 +796,7 @@ rebuild_obj_ult(void *data)
 	memset(&dkey_anchor, 0, sizeof(dkey_anchor));
 	memset(&akey_anchor, 0, sizeof(akey_anchor));
 	dc_obj_shard2anchor(&dkey_anchor, arg->shard);
-	daos_anchor_set_flags(&dkey_anchor,
-			      DAOS_ANCHOR_FLAGS_TO_LEADER);
+	daos_anchor_set_flags(&dkey_anchor, DIOF_TO_LEADER);
 
 	/* Initialize enum_arg for VOS_ITER_DKEY. */
 	memset(&enum_arg, 0, sizeof(enum_arg));
@@ -1111,7 +1110,7 @@ rebuilt_btr_destory_cb(daos_handle_t ih, d_iov_t *key_iov,
 	struct rebuild_root		*root = val_iov->iov_buf;
 	int				rc;
 
-	rc = dbtree_destroy(root->root_hdl);
+	rc = dbtree_destroy(root->root_hdl, NULL);
 	if (rc)
 		D_ERROR("dbtree_destroy, cont "DF_UUID" failed, rc %d.\n",
 			DP_UUID(*(uuid_t *)key_iov->iov_buf), rc);
@@ -1131,7 +1130,7 @@ rebuilt_btr_destroy(daos_handle_t btr_hdl)
 		goto out;
 	}
 
-	rc = dbtree_destroy(btr_hdl);
+	rc = dbtree_destroy(btr_hdl, NULL);
 
 out:
 	return rc;
@@ -1237,7 +1236,7 @@ rebuild_scheduled_obj_insert_cb(struct rebuild_root *cont_root, uuid_t co_uuid,
 		/* possible get more req due to reply lost */
 		if (roid->ro_req_recv >= roid_tmp.ro_req_expect ||
 		    roid->ro_req_recv == 0) {
-			rc = dbtree_delete(cont_root->root_hdl,
+			rc = dbtree_delete(cont_root->root_hdl, BTR_PROBE_EQ,
 					   &key_iov, NULL);
 			if (rc == 0) {
 				*cnt -= 1;

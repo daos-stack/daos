@@ -31,10 +31,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/log"
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
+
+	"github.com/daos-stack/daos/src/control/common"
+	log "github.com/daos-stack/daos/src/control/logging"
 )
 
 const (
@@ -93,17 +94,15 @@ func (c *configuration) setPath(path string) error {
 
 // loadConfigOpts derives file location and parses configuration options
 // from both config file and commandline flags.
-func loadConfigOpts(cliOpts *cliOptions, host string) (
-	config configuration, err error) {
-
-	config = newConfiguration()
+func loadConfigOpts(cliOpts *cliOptions, host string) (*configuration, error) {
+	config := newConfiguration()
 
 	if err := config.setPath(cliOpts.ConfigPath); err != nil {
-		return config, errors.WithMessage(err, "set path")
+		return nil, errors.WithMessage(err, "set path")
 	}
 
 	if err := config.loadConfig(); err != nil {
-		return config, errors.WithMessagef(err, "loading %s", config.Path)
+		return nil, errors.WithMessagef(err, "loading %s", config.Path)
 	}
 	log.Debugf("DAOS config read from %s", config.Path)
 
@@ -115,20 +114,20 @@ func loadConfigOpts(cliOpts *cliOptions, host string) (
 	// get unique identifier to activate SPDK multiprocess mode
 	config.NvmeShmID = hash(host + strconv.Itoa(os.Getpid()))
 
-	if err = config.getIOParams(cliOpts); err != nil {
-		return config, errors.Wrap(
+	if err := config.getIOParams(cliOpts); err != nil {
+		return nil, errors.Wrap(
 			err, "failed to retrieve I/O service params")
 	}
 
 	if len(config.Servers) == 0 {
-		return config, errors.New("missing I/O service params")
+		return nil, errors.New("missing I/O service params")
 	}
 
 	for idx := range config.Servers {
 		config.Servers[idx].Hostname = host
 	}
 
-	return config, nil
+	return &config, nil
 }
 
 // saveActiveConfig saves read-only active config, tries config dir then /tmp/
@@ -191,13 +190,6 @@ func (c *configuration) populateCliOpts(i int) error {
 		srv.CliOpts = append(
 			srv.CliOpts, "-f", strconv.Itoa(srv.FirstCore))
 	}
-	if c.SystemMap != "" {
-		srv.CliOpts = append(srv.CliOpts, "-y", c.SystemMap)
-	}
-	if srv.Rank != nil {
-		srv.CliOpts = append(
-			srv.CliOpts, "-r", srv.Rank.String())
-	}
 	if c.SocketDir != "" {
 		srv.CliOpts = append(srv.CliOpts, "-d", c.SocketDir)
 	}
@@ -223,10 +215,6 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 	// Populate options that can be provided on both the commandline and config.
 	if opts.Port > 0 {
 		c.Port = int(opts.Port)
-	}
-	if opts.Rank != nil {
-		// global rank parameter should only apply to first I/O service
-		c.Servers[0].Rank = opts.Rank
 	}
 	if opts.Insecure {
 		c.TransportConfig.AllowInsecure = true
@@ -271,9 +259,6 @@ func (c *configuration) cmdlineOverride(opts *cliOptions) {
 	}
 	if opts.Attach != nil {
 		c.Attach = *opts.Attach
-	}
-	if opts.Map != nil {
-		c.SystemMap = *opts.Map
 	}
 }
 
@@ -353,15 +338,15 @@ func (c *configuration) populateEnv(i int, envs *[]string) {
 	}
 }
 
-func (c *configuration) setLogging(name string) (*os.File, error) {
+func (c *configuration) setLogging(name string, useJSON bool) (*os.File, error) {
 	// Set log level mask for default logger from config.
 	switch c.ControlLogMask {
 	case cLogDebug:
+		log.SetLevel(log.LogLevelDebug)
 		log.Debugf("Switching control log level to DEBUG")
-		log.SetLevel(log.Debug)
 	case cLogError:
 		log.Debugf("Switching control log level to ERROR")
-		log.SetLevel(log.Error)
+		log.SetLevel(log.LogLevelError)
 	}
 
 	// Set log file for default logger if specified in config.
@@ -372,18 +357,31 @@ func (c *configuration) setLogging(name string) (*os.File, error) {
 				err, "create log file")
 		}
 
-		log.Debugf(
-			"%s logging to file %s",
-			os.Args[0], c.ControlLogFile)
-
-		log.SetOutput(f)
+		log.Infof("%s logging to file %s", os.Args[0], c.ControlLogFile)
+		newLogger := log.NewCombinedLogger(name, f)
+		if useJSON {
+			newLogger = newLogger.WithJSONOutput()
+		}
+		log.SetLogger(newLogger)
 
 		return f, nil
 	}
 
+	log.Info("no control log file specified; logging to stdout")
+
 	// if no logfile specified, output from multiple hosts
 	// may get aggregated, prefix entries with hostname
-	log.NewDefaultLogger(log.Debug, name+" ", os.Stderr)
+	newLogger := log.NewStdoutLogger(name)
+	if useJSON {
+		newLogger = newLogger.WithJSONOutput()
+	}
+	log.SetLogger(newLogger)
+
+	for i, srv := range c.Servers {
+		if srv.LogFile == "" {
+			log.Errorf("no daos log file specified for server %d", i)
+		}
+	}
 
 	return nil, nil
 }

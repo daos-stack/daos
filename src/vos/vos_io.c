@@ -263,7 +263,7 @@ iod_fetch(struct vos_io_context *ioc, struct bio_iov *biov)
 
 /** Fetch the single value within the specified epoch range of an key */
 static int
-akey_fetch_single(daos_handle_t toh, daos_epoch_t epoch,
+akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 		  daos_size_t *rsize, struct vos_io_context *ioc)
 {
 	struct vos_key_bundle	 kbund;
@@ -275,12 +275,12 @@ akey_fetch_single(daos_handle_t toh, daos_epoch_t epoch,
 	daos_iod_t		*iod = &ioc->ic_iods[ioc->ic_sgl_at];
 
 	tree_key_bundle2iov(&kbund, &kiov);
-	kbund.kb_epoch	= epoch;
+	kbund.kb_epoch	= epr->epr_hi;
 
 	tree_rec_bundle2iov(&rbund, &riov);
+	memset(&biov, 0, sizeof(biov));
 	rbund.rb_biov	= &biov;
 	rbund.rb_csum	= &iod->iod_csums[0];
-	memset(&biov, 0, sizeof(biov));
 
 	rc = dbtree_fetch(toh, BTR_PROBE_LE, DAOS_INTENT_DEFAULT, &kiov, &kiov,
 			  &riov);
@@ -290,7 +290,19 @@ akey_fetch_single(daos_handle_t toh, daos_epoch_t epoch,
 		rc = 0;
 	} else if (rc != 0) {
 		goto out;
+	} else if (kbund.kb_epoch < epr->epr_lo) {
+		/* The single value is before the valid epoch range (after a
+		 * punch when incarnation log is available
+		 */
+		rc = 0;
+		rbund.rb_rsize = 0;
+		bio_addr_set_hole(&biov.bi_addr, 1);
 	}
+	/* Get the iod_csum pointer and manipulate the checksum value
+	 * for fault injection.
+	 */
+	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_FAIL))
+		rbund.rb_csum->cs_csum[0] += 2;
 
 	rc = iod_fetch(ioc, &biov);
 	if (rc != 0)
@@ -311,8 +323,8 @@ biov_set_hole(struct bio_iov *biov, ssize_t len)
 
 /** Fetch an extent from an akey */
 static int
-akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
-		daos_csum_buf_t *csum, daos_size_t *rsize_p,
+akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
+		daos_recx_t *recx, daos_csum_buf_t *csum, daos_size_t *rsize_p,
 		struct vos_io_context *ioc)
 {
 	struct evt_entry	*ent;
@@ -320,29 +332,29 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 	 * sorting and clipping of rectangles
 	 */
 	struct evt_entry_array	 ent_array = { 0 };
-	struct evt_rect		 rect;
+	struct evt_extent	 extent;
 	struct bio_iov		 biov = {0};
 	daos_size_t		 holes; /* hole width */
 	daos_size_t		 rsize;
 	daos_off_t		 index;
 	daos_off_t		 end;
 	int			 rc;
+	int			 csum_copied;
 
 	index = recx->rx_idx;
 	end   = recx->rx_idx + recx->rx_nr;
 
-	rect.rc_ex.ex_lo = index;
-	rect.rc_ex.ex_hi = end - 1;
-	rect.rc_epc = epoch;
+	extent.ex_lo = index;
+	extent.ex_hi = end - 1;
 
 	evt_ent_array_init(&ent_array);
-	rc = evt_find(toh, &rect, &ent_array);
+	rc = evt_find(toh, epr, &extent, &ent_array);
 	if (rc != 0)
 		goto failed;
 
 	holes = 0;
-	uint32_t csum_copied = 0;
 	rsize = 0;
+	csum_copied = 0;
 	evt_ent_array_for_each(ent, &ent_array) {
 		daos_off_t	 lo = ent->en_sel_ext.ex_lo;
 		daos_off_t	 hi = ent->en_sel_ext.ex_hi;
@@ -353,8 +365,8 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 
 		if (lo != index) {
 			D_ASSERTF(lo > index,
-				  DF_U64"/"DF_U64", "DF_RECT", "DF_ENT"\n",
-				  lo, index, DP_RECT(&rect),
+				  DF_U64"/"DF_U64", "DF_EXT", "DF_ENT"\n",
+				  lo, index, DP_EXT(&extent),
 				  DP_ENT(ent));
 			holes += lo - index;
 		}
@@ -380,18 +392,21 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 
 		if (csum && csum_copied < csum->cs_buf_len &&
 		    csum->cs_chunksize > 0) {
-			D_ASSERT(lo >= recx->rx_idx);
-			daos_size_t csum_nr = csum_chunk_count(
-				csum->cs_chunksize,
-				lo, hi, rsize);
+			uint8_t	    *csum_ptr;
+			daos_size_t  csum_nr;
 
-			void *csum_ptr = daos_csum_from_offset(csum,
-				(uint32_t) ((lo - recx->rx_idx) * rsize));
+			D_ASSERT(lo >= recx->rx_idx);
+			csum_ptr = daos_csum_from_offset(csum,
+						((lo - recx->rx_idx) * rsize));
+			csum_nr = csum_chunk_count(csum->cs_chunksize,
+						   lo, hi, rsize);
 
 			memcpy(csum_ptr, ent->en_csum.cs_csum,
 			       csum_nr * ent->en_csum.cs_len);
-			csum_copied += csum_nr * ent->en_csum.cs_len;
+			if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_FAIL))
+				csum_ptr[0] += 2; /* poison the checksum */
 
+			csum_copied += csum_nr * ent->en_csum.cs_len;
 			csum->cs_nr += csum_nr;
 
 			/** These should all be the same for each entry,
@@ -401,8 +416,6 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_t epoch, daos_recx_t *recx,
 			csum->cs_len = ent->en_csum.cs_len;
 			csum->cs_type = ent->en_csum.cs_type;
 		}
-
-
 
 		biov.bi_data_len = nr * ent_array.ea_inob;
 		biov.bi_addr = ent->en_addr;
@@ -458,9 +471,9 @@ static int
 akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 {
 	daos_iod_t	*iod = &ioc->ic_iods[ioc->ic_sgl_at];
-	daos_epoch_t	 epoch = ioc->ic_epoch;
 	struct vos_krec_df *krec = NULL;
 	daos_handle_t	 toh = DAOS_HDL_INVAL;
+	daos_epoch_range_t	val_epr = {0, ioc->ic_epoch};
 	int		 i, rc;
 	int		 flags = 0;
 
@@ -474,10 +487,10 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
 		if (iod->iod_eprs && iod->iod_eprs[0].epr_lo != 0)
-			epoch = iod->iod_eprs[0].epr_lo;
+			val_epr.epr_hi = iod->iod_eprs[0].epr_lo;
 
-		rc = key_tree_prepare(ioc->ic_obj, epoch, ak_toh, VOS_BTR_AKEY,
-				      &iod->iod_name, flags,
+		rc = key_tree_prepare(ioc->ic_obj, val_epr.epr_hi, ak_toh,
+				      VOS_BTR_AKEY, &iod->iod_name, flags,
 				      DAOS_INTENT_DEFAULT, NULL, &toh);
 		if (rc != 0) {
 			if (rc == -DER_NONEXIST) {
@@ -490,7 +503,7 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 			return rc;
 		}
 
-		rc = akey_fetch_single(toh, ioc->ic_epoch, &iod->iod_size, ioc);
+		rc = akey_fetch_single(toh, &val_epr, &iod->iod_size, ioc);
 
 		key_tree_release(toh, false);
 
@@ -501,24 +514,25 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 	for (i = 0; i < iod->iod_nr; i++) {
 		daos_size_t rsize;
 		if (iod->iod_eprs && iod->iod_eprs[i].epr_lo)
-			epoch = iod->iod_eprs[i].epr_lo;
+			val_epr.epr_hi = iod->iod_eprs[i].epr_lo;
 
 		/* If epoch on each iod_eprs are out of boundary, then it needs
 		 * to re-prepare the key tree.
 		 */
-		if (daos_handle_is_inval(toh) || (epoch > krec->kr_latest ||
-						  epoch < krec->kr_earliest)) {
+		if (daos_handle_is_inval(toh) ||
+		    (val_epr.epr_hi  > krec->kr_latest ||
+		     val_epr.epr_hi < krec->kr_earliest)) {
 			if (!daos_handle_is_inval(toh)) {
 				key_tree_release(toh, true);
 				toh = DAOS_HDL_INVAL;
 			}
 
 			D_DEBUG(DB_IO, "repare the key tree for eph "DF_U64"\n",
-				epoch);
-			rc = key_tree_prepare(ioc->ic_obj, epoch, ak_toh,
-					      VOS_BTR_AKEY, &iod->iod_name,
-					      flags, DAOS_INTENT_DEFAULT,
-					      &krec, &toh);
+				val_epr.epr_hi);
+			rc = key_tree_prepare(ioc->ic_obj, val_epr.epr_hi,
+					      ak_toh, VOS_BTR_AKEY,
+					      &iod->iod_name, flags,
+					      DAOS_INTENT_DEFAULT, &krec, &toh);
 			if (rc != 0) {
 				if (rc == -DER_NONEXIST) {
 					D_DEBUG(DB_IO, "Nonexist akey %.*s\n",
@@ -531,8 +545,8 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 			}
 		}
 
-		D_DEBUG(DB_IO, "fetch %d eph "DF_U64"\n", i, epoch);
-		rc = akey_fetch_recx(toh, epoch, &iod->iod_recxs[i],
+		D_DEBUG(DB_IO, "fetch %d eph "DF_U64"\n", i, val_epr.epr_hi);
+		rc = akey_fetch_recx(toh, &val_epr, &iod->iod_recxs[i],
 				     daos_iod_csum(iod, i), &rsize, ioc);
 		if (rc != 0) {
 			D_DEBUG(DB_IO, "Failed to fetch index %d: %d\n", i, rc);
@@ -595,7 +609,11 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 	}
 
 	if (rc != 0) {
-		D_ERROR("Failed to prepare subtree: %d\n", rc);
+		if (rc == -DER_INPROGRESS)
+			D_DEBUG(DB_TRACE, "Cannot prepare subtree because "
+				"of conflict modification: %d\n", rc);
+		else
+			D_ERROR("Failed to prepare subtree: %d\n", rc);
 		return rc;
 	}
 
@@ -708,10 +726,15 @@ akey_update_single(daos_handle_t toh, daos_epoch_t epoch, uint32_t pm_ver,
 	biov = iod_update_biov(ioc);
 
 	tree_rec_bundle2iov(&rbund, &riov);
-	if (iod->iod_csums)
-		rbund.rb_csum	= &iod->iod_csums[0];
-	else
+
+	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_FAIL)) {
 		rbund.rb_csum	= &csum;
+	} else {
+		if (iod->iod_csums)
+			rbund.rb_csum	= &iod->iod_csums[0];
+		else
+			rbund.rb_csum	= &csum;
+	}
 
 	rbund.rb_biov	= biov;
 	rbund.rb_rsize	= rsize;
@@ -746,8 +769,13 @@ akey_update_recx(daos_handle_t toh, daos_epoch_t epoch, uint32_t pm_ver,
 	ent.ei_rect.rc_ex.ex_hi = recx->rx_idx + recx->rx_nr - 1;
 	ent.ei_ver = pm_ver;
 	ent.ei_inob = rsize;
-	if (daos_csum_isvalid(iod_csum))
+
+	if (daos_csum_isvalid(iod_csum)) {
 		ent.ei_csum = *iod_csum;
+		/* change the checksum for fault injection*/
+		if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_FAIL))
+			ent.ei_csum.cs_csum[0] += 1;
+	}
 
 	biov = iod_update_biov(ioc);
 	ent.ei_addr = biov->bi_addr;
@@ -879,7 +907,13 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey)
 					      DAOS_INTENT_UPDATE,
 					      &krec, &ak_toh);
 			if (rc != 0) {
-				D_ERROR("Error preparing dkey tree: %d\n", rc);
+				if (rc == -DER_INPROGRESS)
+					D_DEBUG(DB_TRACE, "Cannot preparing "
+						"dkey tree because of conflict "
+						"modification: %d\n", rc);
+				else
+					D_ERROR("Error preparing dkey tree: "
+						"%d\n", rc);
 				goto out;
 			}
 			subtr_created = true;
@@ -1413,7 +1447,13 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	rc = vos_fetch_begin(coh, oid, epoch, dkey, iod_nr, iods, size_fetch,
 			     &ioh);
 	if (rc) {
-		D_ERROR("Fetch "DF_UOID" failed %d\n", DP_UOID(oid), rc);
+		if (rc == -DER_INPROGRESS)
+			D_DEBUG(DB_TRACE, "Cannot fetch "DF_UOID" because of "
+				"conflict modification: %d\n",
+				DP_UOID(oid), rc);
+		else
+			D_ERROR("Fetch "DF_UOID" failed %d\n",
+				DP_UOID(oid), rc);
 		return rc;
 	}
 

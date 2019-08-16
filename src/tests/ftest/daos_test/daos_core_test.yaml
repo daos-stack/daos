@@ -10,7 +10,10 @@ hosts:
     - boro-F
     - boro-G
     - boro-H
-timeout: 900
+# Note that subtests below can set their own timeout so this
+# should be a general average of all tests not including outliers
+# (I'm looking at you "rebuild tests")
+timeout: 600
 server_config:
   name: daos_server
 daos_tests:
@@ -34,12 +37,22 @@ daos_tests:
     test_e:
       daos_test: e
       test_name: DAOS epoch tests
+    test_X:
+      daos_test: X
+      test_name: DAOS DTX tests
     test_i:
       daos_test: i
       test_name: IO test
+      test_timeout: 900
     test_A:
       daos_test: A
+      test_name: DAOS Object Array tests
+    test_D:
+      daos_test: D
       test_name: DAOS Array tests
+    test_K:
+      daos_test: K
+      test_name: DAOS KV tests
     test_C:
       daos_test: C
       test_name: DAOS capability tests
@@ -52,3 +65,4 @@ daos_tests:
     test_O:
       daos_test: O
       test_name: OID Allocator tests
+      test_timeout: 1350

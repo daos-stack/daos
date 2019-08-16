@@ -207,7 +207,7 @@ dtx_handle_init(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 		daos_epoch_t epoch, uint64_t dkey_hash, uint32_t pm_ver,
 		uint32_t intent, struct dtx_conflict_entry *conflict,
 		struct dtx_id *dti_cos, int dti_cos_count, bool leader,
-		struct dtx_handle *dth)
+		bool no_rep, struct dtx_handle *dth)
 {
 	dth->dth_xid = *dti;
 	dth->dth_oid = *oid;
@@ -217,14 +217,21 @@ dtx_handle_init(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 	dth->dth_dkey_hash = dkey_hash;
 	dth->dth_ver = pm_ver;
 	dth->dth_intent = intent;
-	dth->dth_sync = 0;
 	dth->dth_leader = leader ? 1 : 0;
-	dth->dth_non_rep = 0;
+	dth->dth_non_rep = no_rep ? 1 : 0;
 	dth->dth_dti_cos = dti_cos;
 	dth->dth_dti_cos_count = dti_cos_count;
 	dth->dth_conflict = conflict;
 	dth->dth_ent = UMOFF_NULL;
 	dth->dth_obj = UMOFF_NULL;
+	/**
+	 * XXX, for EC obj, now works in synchronous commit mode, to simplify
+	 * the EC fetch handling. Can refine it as async commit later.
+	 */
+	if (leader && daos_oclass_is_ec(oid->id_pub, NULL))
+		dth->dth_sync = 1;
+	else
+		dth->dth_sync = 0;
 }
 
 static inline void
@@ -267,50 +274,61 @@ dtx_leader_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 	int			dti_cos_count = 0;
 	int			i;
 
+	/* Single replica case. */
+	if (tgts_cnt == 0) {
+		if (!daos_is_zero_dti(dti))
+			goto init;
+
+		daos_dti_gen(&dth->dth_xid, true);
+		return 0;
+	}
+
+	dlh->dlh_handled_time = crt_hlc_get();
+	dlh->dlh_future = ABT_FUTURE_NULL;
+	D_ALLOC(dlh->dlh_subs, tgts_cnt * sizeof(*dlh->dlh_subs));
+	if (dlh->dlh_subs == NULL)
+		return -DER_NOMEM;
+	for (i = 0; i < tgts_cnt; i++)
+		dlh->dlh_subs[i].dss_tgt = tgts[i];
+	dlh->dlh_sub_cnt = tgts_cnt;
+
+	if (daos_is_zero_dti(dti)) {
+		daos_dti_gen(&dth->dth_xid, true); /* zero it */
+		return 0;
+	}
+
 	/* XXX: For leader case, we need to find out the potential
 	 *	conflict DTXs in the CoS cache, and append them to
 	 *	the dispatched RPC to non-leaders. Then non-leader
 	 *	replicas can commit them before real modifications
 	 *	to avoid availability trouble.
 	 */
-	if (!daos_is_zero_dti(dti)) {
-		dti_cos_count = vos_dtx_list_cos(coh, oid, dkey_hash,
-				intent == DAOS_INTENT_UPDATE ?
-				DCLT_PUNCH : DCLT_PUNCH | DCLT_UPDATE,
-				DTX_THRESHOLD_COUNT, &dti_cos);
-		if (dti_cos_count < 0)
-			return dti_cos_count;
-
-		if (dti_cos_count > 0 && dti_cos == NULL) {
-			/* There are too many conflict DTXs to be committed,
-			 * as to cannot be taken via the normal IO RPC. The
-			 * background dedicated DTXs batched commit ULT has
-			 * not committed them in time. Let's retry later.
-			 */
-			D_DEBUG(DB_TRACE, "Too many pontential conflict DTXs"
-				" for the given "DF_DTI", let's retry later.\n",
-				DP_DTI(dti));
-			return -DER_INPROGRESS;
-		}
+	dti_cos_count = vos_dtx_list_cos(coh, oid, dkey_hash,
+			intent == DAOS_INTENT_UPDATE ? DCLT_PUNCH :
+						       DCLT_PUNCH | DCLT_UPDATE,
+			DTX_THRESHOLD_COUNT, &dti_cos);
+	if (dti_cos_count < 0) {
+		D_FREE(dlh->dlh_subs);
+		return dti_cos_count;
 	}
 
-	dlh->dlh_handled_time = crt_hlc_get();
-	dlh->dlh_future = ABT_FUTURE_NULL;
-	D_ALLOC(dlh->dlh_subs, tgts_cnt * sizeof(*dlh->dlh_subs));
-	if (dlh->dlh_subs == NULL) {
-		if (dti_cos != NULL)
-			D_FREE(dti_cos);
-		return -DER_NOMEM;
+	if (dti_cos_count > 0 && dti_cos == NULL) {
+		/* There are too many conflict DTXs to be committed,
+		 * as to cannot be taken via the normal IO RPC. The
+		 * background dedicated DTXs batched commit ULT has
+		 * not committed them in time. Let's retry later.
+		 */
+		D_DEBUG(DB_TRACE, "Too many pontential conflict DTXs"
+			" for the given "DF_DTI", let's retry later.\n",
+			DP_DTI(dti));
+		D_FREE(dlh->dlh_subs);
+		return -DER_INPROGRESS;
 	}
-	for (i = 0; i < tgts_cnt; i++)
-		dlh->dlh_subs[i].dss_tgt = tgts[i];
-	dlh->dlh_sub_cnt = tgts_cnt;
 
-	if (daos_is_zero_dti(dti))
-		return 0;
-
+init:
 	dtx_handle_init(dti, oid, coh, epoch, dkey_hash, pm_ver, intent,
-			NULL, dti_cos, dti_cos_count, true, dth);
+			NULL, dti_cos, dti_cos_count, true,
+			tgts_cnt == 0 ? true : false, dth);
 
 	D_DEBUG(DB_TRACE, "Start DTX "DF_DTI" for object "DF_OID
 		" ver %u, dkey %llu, dti_cos_count %d, intent %s\n",
@@ -422,42 +440,40 @@ dtx_conflict(daos_handle_t coh, struct dtx_leader_handle *dlh, uuid_t po_uuid,
 			}
 		}
 
-		if (!skip) {
-			rc = vos_dtx_lookup_cos(coh, oid, &dces[i].dce_xid,
-						dces[i].dce_dkey, true);
-			if (rc != -DER_NONEXIST)
-				goto found;
+		if (skip)
+			continue;
 
-			rc = vos_dtx_lookup_cos(coh, oid,
-						&dces[i].dce_xid,
-						dces[i].dce_dkey, false);
-			if (rc != -DER_NONEXIST)
-				goto found;
+		rc = vos_dtx_lookup_cos(coh, oid, &dces[i].dce_xid,
+					dces[i].dce_dkey, true);
+		if (rc != -DER_NONEXIST)
+			goto found;
 
-			rc = vos_dtx_check_committable(coh, NULL,
-						&dces[i].dce_xid,
-						dces[i].dce_dkey, true);
-			if (rc == DTX_ST_COMMITTED)
-				rc = 0;
-			else if (rc >= 0)
-				rc = -DER_NONEXIST;
+		rc = vos_dtx_lookup_cos(coh, oid, &dces[i].dce_xid,
+					dces[i].dce_dkey, false);
+		if (rc != -DER_NONEXIST)
+			goto found;
+
+		rc = vos_dtx_check(coh, &dces[i].dce_xid);
+		if (rc == DTX_ST_COMMITTED)
+			rc = 0;
+		else if (rc >= 0)
+			rc = -DER_NONEXIST;
 
 found:
-			if (rc == 0) {
-				daos_dti_copy(&commit_ids[commit_cnt++],
-					      &dces[i].dce_xid);
-				continue;
-			}
-
-			if (rc == -DER_NONEXIST) {
-				daos_dti_copy(&abort_dtes[abort_cnt].dte_xid,
-					      &dces[i].dce_xid);
-				abort_dtes[abort_cnt++].dte_oid = *oid;
-				continue;
-			}
-
-			goto out;
+		if (rc == 0) {
+			daos_dti_copy(&commit_ids[commit_cnt++],
+				      &dces[i].dce_xid);
+			continue;
 		}
+
+		if (rc == -DER_NONEXIST) {
+			daos_dti_copy(&abort_dtes[abort_cnt].dte_xid,
+				      &dces[i].dce_xid);
+			abort_dtes[abort_cnt++].dte_oid = *oid;
+			continue;
+		}
+
+		goto out;
 	}
 
 	if (commit_cnt > 0) {
@@ -484,8 +500,8 @@ found:
 	}
 
 	if (abort_cnt > 0) {
-		rc = dtx_abort(po_uuid, co_uuid, abort_dtes, abort_cnt,
-			       version);
+		rc = dtx_abort(po_uuid, co_uuid, dth->dth_epoch,
+			       abort_dtes, abort_cnt, version);
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 	}
@@ -519,19 +535,22 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *cont_hdl,
 {
 	struct dtx_handle		*dth = &dlh->dlh_handle;
 	struct dtx_conflict_entry	*dces = NULL;
-	int				dces_cnt = 0;
-	int				rc = 0;
+	int				*ptr = NULL;
+	int				 dces_cnt = 0;
+	int				 rc = 0;
 
 	if (dlh == NULL)
 		return result;
 
-	if (dth->dth_non_rep || dlh->dlh_subs == NULL)
+	if (dlh->dlh_sub_cnt == 0)
 		goto out_free;
 
 	/* NB: even the local request failure, dth_ent == NULL, we
 	 * should still wait for remote object to finish the request.
 	 */
-	rc = dtx_leader_wait(dlh, &dces, result >= 0 ? &dces_cnt : NULL);
+	if (!daos_is_zero_dti(&dth->dth_xid) && result >= 0)
+		ptr = &dces_cnt;
+	rc = dtx_leader_wait(dlh, &dces, ptr);
 	if (rc == -DER_INPROGRESS && dces != NULL) {
 		/* XXX: The local modification has been done, but remote
 		 *	replica failed because of some uncommitted DTX,
@@ -541,9 +560,9 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *cont_hdl,
 		 *	firstly then retry.
 		 */
 		D_ASSERT(dth != NULL);
-		D_DEBUG(DB_TRACE, "Hit conflict DTX (%d)"DF_DTI" for "
+		D_DEBUG(DB_TRACE, "Hit conflict DTX "DF_DTI" for "
 			DF_DTI", handle them and retry update.\n",
-			rc, DP_DTI(&dces[0].dce_xid), DP_DTI(&dth->dth_xid));
+			DP_DTI(&dces[0].dce_xid), DP_DTI(&dth->dth_xid));
 
 		rc = dtx_conflict(cont_hdl->sch_cont->sc_hdl, dlh,
 				  cont_hdl->sch_pool->spc_uuid,
@@ -559,24 +578,56 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *cont_hdl,
 		if (result == 0)
 			result = rc;
 
-		D_GOTO(fail, rc);
+		D_GOTO(fail, result);
 	} else if (rc < 0 || daos_is_zero_dti(&dth->dth_xid)) {
 		if (result == 0)
 			result = rc;
-		D_GOTO(fail, rc);
+
+		D_GOTO(fail, result);
 	}
+
+	if (result < 0 || rc < 0 || daos_is_zero_dti(&dth->dth_xid))
+		D_GOTO(fail, result = (result == 0 ? rc : result));
 
 	/* If the DTX is started befoe DTX resync operation (for rebuild),
 	 * then it is possbile that the DTX resync ULT may have aborted
-	 * current DTX before remote replica(s) modification by race. So
+	 * or committed the DTX during current ULT waiting for the reply.
 	 * let's check DTX status locally before marking as 'committable'.
 	 */
 	if (dlh->dlh_handled_time <= cont->sc_dtx_resync_time) {
-		rc = vos_dtx_check_committable(cont->sc_hdl, NULL,
-					       &dth->dth_xid, 0, false);
-		if (rc < 0) {
-			result = (rc == -DER_NONEXIST ? -DER_INPROGRESS : rc);
-			D_GOTO(fail, result);
+		rc = vos_dtx_check(cont->sc_hdl, &dth->dth_xid);
+		switch (rc) {
+		case DTX_ST_PREPARED:
+			rc = vos_dtx_lookup_cos(dth->dth_coh, &dth->dth_oid,
+					&dth->dth_xid, dth->dth_dkey_hash,
+					dth->dth_intent == DAOS_INTENT_PUNCH ?
+					true : false);
+			/* The resync ULT has already added it into the CoS
+			 * cache, current ULT needs to do nothing.
+			 */
+			if (rc == 0)
+				D_GOTO(out_free, result = 0);
+
+			/* normal case, then add it to CoS cache. */
+			if (rc == -DER_NONEXIST)
+				break;
+
+			D_GOTO(fail, result = (rc >= 0 ? -DER_INVAL : rc));
+		case DTX_ST_COMMITTED:
+			/* The DTX has been committed by resync ULT by race,
+			 * set dth_sync to indicate that in log.
+			 */
+			dth->dth_sync = 1;
+			D_GOTO(out_free, result = 0);
+		case -DER_NONEXIST:
+			/* The DTX has been aborted by resync ULT, ask the
+			 * client to retry via returning -DER_INPROGRESS.
+			 */
+			result = -DER_INPROGRESS;
+			goto out_free;
+		default:
+			result = rc >= 0 ? -DER_INVAL : rc;
+			goto fail;
 		}
 	}
 
@@ -606,7 +657,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *cont_hdl,
 fail:
 	if (result < 0)
 		dtx_abort(cont_hdl->sch_pool->spc_uuid, cont->sc_uuid,
-			  &dth->dth_dte, 1,
+			  dth->dth_epoch, &dth->dth_dte, 1,
 			  cont_hdl->sch_pool->spc_map_version);
 out_free:
 	if (daos_is_zero_dti(&dth->dth_xid))
@@ -640,7 +691,7 @@ out:
  * \param coh		[IN]	Container open handle.
  * \param epoch		[IN]	Epoch for the DTX.
  * \param dkey_hash	[IN]	Hash of the dkey to be modified if applicable.
- * \param conflict	[IN]	Hash of the dkey to be modified if applicable.
+ * \param conflict	[IN]	The pointer to record conflict dtx
  * \param dti_cos	[IN,OUT]The DTX array to be committed because of shared.
  * \param dti_cos_count [IN,OUT]The @dti_cos array size.
  * \param pm_ver	[IN]	Pool map version for the DTX.
@@ -661,7 +712,7 @@ dtx_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 		return 0;
 
 	dtx_handle_init(dti, oid, coh, epoch, dkey_hash, pm_ver, intent,
-			conflict, dti_cos, dti_cos_cnt, false, dth);
+			conflict, dti_cos, dti_cos_cnt, false, false, dth);
 
 	D_DEBUG(DB_TRACE, "Start the DTX "DF_DTI" for object "DF_OID
 		" ver %u, dkey %llu, dti_cos_count %d, intent %s\n",
@@ -701,13 +752,11 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_hdl *cont_hdl,
 	dtx_clean_shares(dth);
 
 	D_DEBUG(DB_TRACE,
-		"Stop the DTX "DF_DTI" ver %u, dkey %llu, intent %s, "
-		"%s, %s: rc = %d\n",
+		"Stop the DTX "DF_DTI" ver %u, dkey %llu, intent %s, rc = %d\n",
 		DP_DTI(&dth->dth_xid), dth->dth_ver,
 		(unsigned long long)dth->dth_dkey_hash,
 		dth->dth_intent == DAOS_INTENT_PUNCH ? "Punch" : "Update",
-		dth->dth_sync ? "sync" : "async",
-		dth->dth_non_rep ? "non-replicated" : "replicated", result);
+		result);
 out:
 	return result > 0 ? 0 : result;
 }
@@ -821,15 +870,15 @@ out:
 }
 
 int
-dtx_handle_resend(daos_handle_t coh, daos_unit_oid_t *oid,
-		  struct dtx_id *dti, uint64_t dkey_hash, bool punch)
+dtx_handle_resend(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
+		  uint64_t dkey_hash, bool punch, daos_epoch_t *epoch)
 {
 	int	rc;
 
 	if (daos_is_zero_dti(dti))
 		return 0;
 
-	rc = vos_dtx_check_committable(coh, oid, dti, dkey_hash, punch);
+	rc = vos_dtx_check_resend(coh, oid, dti, dkey_hash, punch, epoch);
 	switch (rc) {
 	case DTX_ST_PREPARED:
 		return 0;
@@ -837,12 +886,13 @@ dtx_handle_resend(daos_handle_t coh, daos_unit_oid_t *oid,
 		return -DER_ALREADY;
 	case -DER_NONEXIST:
 		if (dtx_hlc_age2sec(dti->dti_hlc) >
-		    DTX_AGG_THRESHOLD_AGE_LOWER) {
+		    DTX_AGG_THRESHOLD_AGE_LOWER ||
+		    DAOS_FAIL_CHECK(DAOS_DTX_LONG_TIME_RESEND)) {
 			D_DEBUG(DB_IO, "Not sure about whether the old RPC "
 				DF_DTI" is resent or not.\n", DP_DTI(dti));
-			return -DER_TIMEDOUT;
+			rc = -DER_EP_OLD;
 		}
-		/* fall through */
+		return rc;
 	default:
 		return rc >= 0 ? -DER_INVAL : rc;
 	}
@@ -941,6 +991,9 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 	struct dtx_ult_arg	*ult_arg;
 	int			rc;
 
+	if (dlh->dlh_sub_cnt == 0)
+		goto exec;
+
 	D_ALLOC_PTR(ult_arg);
 	if (ult_arg == NULL)
 		return -DER_NOMEM;
@@ -972,6 +1025,7 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 		D_GOTO(out, rc);
 	}
 
+exec:
 	/* Then execute the local operation */
 	rc = func(dlh, func_arg, -1, NULL);
 out:

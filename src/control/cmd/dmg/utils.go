@@ -28,6 +28,7 @@ import (
 	"sort"
 
 	"github.com/daos-stack/daos/src/control/client"
+	log "github.com/daos-stack/daos/src/control/logging"
 )
 
 func hasConns(results client.ResultMap) (bool, string) {
@@ -70,16 +71,18 @@ func sprintConns(results client.ResultMap) (out string) {
 func getConsent() bool {
 	var response string
 
+	log.Info("Are you sure you want to continue? (yes/no)\n")
+
 	_, err := fmt.Scanln(&response)
 	if err != nil {
-		fmt.Printf("Error reading input: %s\n", err)
+		log.Errorf("Error reading input: %s\n", err)
 		return false
 	}
 
 	if response == "no" {
 		return false
 	} else if response != "yes" {
-		fmt.Println("Please type yes or no and then press enter:")
+		log.Info("Please type yes or no and then press enter:")
 		return getConsent()
 	}
 

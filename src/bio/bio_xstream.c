@@ -47,13 +47,6 @@
 #define DAOS_DMA_CHUNK_CNT_INIT	2		/* Per-xstream init chunks */
 #define DAOS_DMA_CHUNK_CNT_MAX	32		/* Per-xstream max chunks */
 
-enum {
-	BDEV_CLASS_NVME = 0,
-	BDEV_CLASS_MALLOC,
-	BDEV_CLASS_AIO,
-	BDEV_CLASS_UNKNOWN
-};
-
 /* Chunk size of DMA buffer in pages */
 unsigned int bio_chk_sz;
 /* Per-xstream maximum DMA buffer size (in chunk count) */
@@ -66,7 +59,8 @@ struct bio_bdev {
 	uuid_t			 bb_uuid;
 	struct spdk_bdev	*bb_bdev;
 	struct bio_blobstore	*bb_blobstore;
-	int			 bb_xs_cnt; /* count of xstreams per device */
+	/* count of target(VOS xstream) per device */
+	int			 bb_tgt_cnt;
 };
 
 struct bio_nvme_data {
@@ -87,53 +81,19 @@ struct bio_nvme_data {
 };
 
 static struct bio_nvme_data nvme_glb;
-static uint64_t io_stat_period;
-
-/* Print the io stat every few seconds, for debug only */
-static void
-print_io_stat(struct bio_xs_context *ctxt, uint64_t now)
-{
-	struct spdk_bdev_io_stat	 stat;
-	struct spdk_bdev		*bdev;
-	struct spdk_io_channel		*channel;
-
-	if (io_stat_period == 0)
-		return;
-
-	if (ctxt->bxc_stat_age + io_stat_period >= now)
-		return;
-
-	if (ctxt->bxc_desc != NULL) {
-		channel = spdk_bdev_get_io_channel(ctxt->bxc_desc);
-		D_ASSERT(channel != NULL);
-		spdk_bdev_get_io_stat(NULL, channel, &stat);
-		spdk_put_io_channel(channel);
-
-		bdev = spdk_bdev_desc_get_bdev(ctxt->bxc_desc);
-
-		D_PRINT("SPDK IO STAT: xs_id[%d] dev[%s] read_bytes["DF_U64"], "
-			"read_ops["DF_U64"], write_bytes["DF_U64"], "
-			"write_ops["DF_U64"], read_latency_ticks["DF_U64"], "
-			"write_latency_ticks["DF_U64"]\n",
-			ctxt->bxc_xs_id, spdk_bdev_get_name(bdev),
-			stat.bytes_read, stat.num_read_ops, stat.bytes_written,
-			stat.num_write_ops, stat.read_latency_ticks,
-			stat.write_latency_ticks);
-	}
-
-	ctxt->bxc_stat_age = now;
-}
+uint64_t io_stat_period;
 
 int
-bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id)
+bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
+	      struct bio_reaction_ops *ops)
 {
 	char		*env;
 	int		rc, fd;
 	uint64_t	size_mb = DAOS_DMA_CHUNK_MB;
 
-	rc = smd_create_initialize(storage_path, NULL, -1);
+	rc = smd_init(storage_path);
 	if (rc != 0) {
-		D_ERROR("Error creating server metadata store: %d\n", rc);
+		D_ERROR("Initialize SMD store failed. %d\n", rc);
 		return rc;
 	}
 
@@ -195,6 +155,7 @@ bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id)
 	io_stat_period *= (NSEC_PER_SEC / NSEC_PER_USEC);
 
 	nvme_glb.bd_shm_id = shm_id;
+	ract_ops = ops;
 	return 0;
 
 free_cond:
@@ -313,10 +274,10 @@ stop_poller(struct spdk_poller *poller, void *ctxt)
 size_t
 bio_nvme_poll(struct bio_xs_context *ctxt)
 {
-	struct bio_msg *msg;
-	struct bio_nvme_poller *poller;
-	size_t count;
-	uint64_t now = d_timeus_secdiff(0);
+	struct bio_msg		*msg;
+	struct bio_nvme_poller	*poller;
+	size_t			 count;
+	uint64_t		 now = d_timeus_secdiff(0);
 
 	/* NVMe context setup was skipped */
 	if (ctxt == NULL)
@@ -340,7 +301,17 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 			poller->bnp_expire_us = now + poller->bnp_period_us;
 	}
 
-	print_io_stat(ctxt, now);
+	/* Print SPDK I/O stats for each xstream */
+	bio_xs_io_stat(ctxt, now);
+
+	/*
+	 * Query and print the SPDK device health stats for only the device
+	 * owner xstream.
+	 */
+	if (ctxt->bxc_blobstore != NULL) {
+		if (ctxt->bxc_blobstore->bb_owner_xs == ctxt)
+			bio_bs_monitor(ctxt, now);
+	}
 
 	return count;
 }
@@ -408,7 +379,7 @@ xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights)
 	} while (count > 0);
 }
 
-static int
+int
 get_bdev_type(struct spdk_bdev *bdev)
 {
 	if (strcmp(spdk_bdev_get_product_name(bdev), "NVMe disk") == 0)
@@ -490,7 +461,7 @@ create_bio_bdev(struct bio_xs_context *ctxt, struct spdk_bdev *bdev)
 	struct bio_bdev			*d_bdev;
 	struct spdk_blob_store		*bs = NULL;
 	struct spdk_bs_type		 bstype;
-	struct smd_nvme_device_info	 info;
+	struct smd_dev_info		*dev_info;
 	uuid_t				 bs_uuid;
 	int				 rc;
 	bool				 new_bs = false;
@@ -530,20 +501,22 @@ create_bio_bdev(struct bio_xs_context *ctxt, struct spdk_bdev *bdev)
 		goto error;
 	}
 
-	/* Find the initial xstream count per device */
-	rc = smd_nvme_get_device(bs_uuid, &info);
+	/* Find the initial target count per device */
+	rc = smd_dev_get_by_id(bs_uuid, &dev_info);
 	if (rc == 0) {
-		d_bdev->bb_xs_cnt = info.ndi_xs_cnt;
+		D_ASSERT(dev_info->sdi_tgt_cnt != 0);
+		d_bdev->bb_tgt_cnt = dev_info->sdi_tgt_cnt;
+		smd_free_dev_info(dev_info);
 	} else if (rc == -DER_NONEXIST) {
-		/* device not present in table, first xstream mapped to dev */
-		d_bdev->bb_xs_cnt = 0;
+		/* device not present in table, first target mapped to dev */
+		d_bdev->bb_tgt_cnt = 0;
 	} else {
 		D_ERROR("Unable to get dev info for "DF_UUID"\n",
 			DP_UUID(bs_uuid));
 		goto error;
 	}
-	D_DEBUG(DB_MGMT, "Initial xstream count for "DF_UUID" set at %d\n",
-		DP_UUID(bs_uuid), d_bdev->bb_xs_cnt);
+	D_DEBUG(DB_MGMT, "Initial target count for "DF_UUID" set at %d\n",
+		DP_UUID(bs_uuid), d_bdev->bb_tgt_cnt);
 
 	d_bdev->bb_bdev = bdev;
 	uuid_copy(d_bdev->bb_uuid, bs_uuid);
@@ -583,6 +556,10 @@ free_bio_blobstore(struct bio_blobstore *bb)
 	ABT_cond_free(&bb->bb_barrier);
 	ABT_mutex_free(&bb->bb_mutex);
 	D_FREE(bb->bb_xs_ctxts);
+
+	/* Free all device health monitoring info as well */
+	bio_fini_health_monitoring(bb);
+
 	D_FREE(bb);
 }
 
@@ -696,134 +673,129 @@ get_bio_blobstore(struct bio_blobstore *bb, struct bio_xs_context *ctxt)
 			return NULL;
 		} else if (bb->bb_xs_ctxts[i] == NULL) {
 			bb->bb_xs_ctxts[i] = ctxt;
+			bb->bb_ref++;
 			break;
 		}
 	}
+
+	ABT_mutex_unlock(bb->bb_mutex);
+
 	if (i == xs_cnt_max) {
 		D_ERROR("Too many xstreams per device!\n");
-		ABT_mutex_unlock(bb->bb_mutex);
 		return NULL;
 	}
-	bb->bb_ref++;
-	ABT_mutex_unlock(bb->bb_mutex);
 	return bb;
 }
 
 /**
- * Assign a device for xstream->device mapping. Device chosen will be the device
- * with the least amount of mapped xstreams.
+ * Assign a device for target->device mapping. Device chosen will be the device
+ * with the least amount of mapped targets(VOS xstreams).
  */
 static int
-assign_dev_to_xs(int xs_id)
+assign_device(int tgt_id)
 {
-	struct bio_bdev			*d_bdev;
-	struct bio_bdev			*chosen_bdev;
-	struct smd_nvme_stream_bond	 xs_bond;
-	int				 lowest_xs_cnt;
-	int				 rc;
+	struct bio_bdev	*d_bdev;
+	struct bio_bdev	*chosen_bdev;
+	int		 lowest_tgt_cnt, rc;
 
 	D_ASSERT(!d_list_empty(&nvme_glb.bd_bdevs));
 	chosen_bdev = d_list_entry(nvme_glb.bd_bdevs.next, struct bio_bdev,
 				  bb_link);
-	lowest_xs_cnt = chosen_bdev->bb_xs_cnt;
+	lowest_tgt_cnt = chosen_bdev->bb_tgt_cnt;
 
 	/*
 	 * Traverse the list and return the device with the least amount of
-	 * mapped xstreams.
+	 * mapped targets.
 	 */
 	d_list_for_each_entry(d_bdev, &nvme_glb.bd_bdevs, bb_link) {
-		if (d_bdev->bb_xs_cnt < lowest_xs_cnt) {
-			lowest_xs_cnt = d_bdev->bb_xs_cnt;
+		if (d_bdev->bb_tgt_cnt < lowest_tgt_cnt) {
+			lowest_tgt_cnt = d_bdev->bb_tgt_cnt;
 			chosen_bdev = d_bdev;
 		}
 	}
 
-	/* Update mapping for this xstream in NVMe device table */
-	smd_nvme_set_stream_bond(xs_id, chosen_bdev->bb_uuid, &xs_bond);
-	rc = smd_nvme_add_stream_bond(&xs_bond);
+	/* Update mapping for this target in NVMe device table */
+	rc = smd_dev_assign(chosen_bdev->bb_uuid, tgt_id);
 	if (rc) {
-		D_ERROR("Failure adding entry to SMD stream table\n");
+		D_ERROR("Failed to map dev "DF_UUID" to tgt %d. %d\n",
+			DP_UUID(chosen_bdev->bb_uuid), tgt_id, rc);
 		return rc;
 	}
 
-	chosen_bdev->bb_xs_cnt++;
+	chosen_bdev->bb_tgt_cnt++;
 
-	D_DEBUG(DB_MGMT, "Successfully added entry to SMD stream table,"
-		" xs_id:%d, dev:"DF_UUID", xs_cnt:%d\n",
-		xs_id, DP_UUID(xs_bond.nsm_dev_id), chosen_bdev->bb_xs_cnt);
+	D_DEBUG(DB_MGMT, "Successfully mapped dev "DF_UUID"/%d to tgt %d\n",
+		DP_UUID(chosen_bdev->bb_uuid), chosen_bdev->bb_tgt_cnt, tgt_id);
 
 	return 0;
 }
 
 static int
-init_blobstore_ctxt(struct bio_xs_context *ctxt, int xs_id)
+init_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id)
 {
-	struct bio_bdev			*d_bdev;
-	struct spdk_blob_store		*bs;
-	struct smd_nvme_stream_bond	 xs_bond;
-	int				 rc;
-	bool				 found = false;
+	struct bio_bdev		*d_bdev;
+	struct spdk_blob_store	*bs;
+	struct smd_dev_info	*dev_info;
+	int			 rc;
+	bool			 found = false;
 
 	D_ASSERT(ctxt->bxc_desc == NULL);
 	D_ASSERT(ctxt->bxc_blobstore == NULL);
 	D_ASSERT(ctxt->bxc_io_channel == NULL);
 
-	/*
-	 * Lookup @xs_id in the NVMe device table (per-server metadata),
-	 * if found, create blobstore on the mapped device.
-	 */
 	if (d_list_empty(&nvme_glb.bd_bdevs)) {
 		D_ERROR("No available SPDK bdevs, please check whether "
 			"VOS_BDEV_CLASS is set properly.\n");
 		return -DER_UNINIT;
 	}
 
-	rc = smd_nvme_get_stream_bond(xs_id, &xs_bond);
-	if (rc && rc != -DER_NONEXIST)
-		return rc;
-
+	/*
+	 * Lookup device mapped to @tgt_id in the per-server metadata,
+	 * if found, create blobstore on the mapped device.
+	 */
+	rc = smd_dev_get_by_tgt(tgt_id, &dev_info);
 	if (rc == -DER_NONEXIST) {
-		/*
-		 * Assign a device to the xstream if there isn't existing
-		 * mapping. Device chosen will be current device that is mapped
-		 * to the least amount of xstreams.
-		 */
-		rc = assign_dev_to_xs(xs_id);
-		if (rc) {
-			D_ERROR("No device assigned to xs_id:%d\n", xs_id);
-			return rc;
-		}
-
-		rc = smd_nvme_get_stream_bond(xs_id, &xs_bond);
+		rc = assign_device(tgt_id);
 		if (rc)
 			return rc;
 
+		rc = smd_dev_get_by_tgt(tgt_id, &dev_info);
+		if (rc) {
+			D_ERROR("Failed to get dev mapped to tgt %d. %d\n",
+				tgt_id, rc);
+			return rc;
+		}
+	} else if (rc) {
+		D_ERROR("Failed to get dev for tgt %d. %d\n", tgt_id, rc);
+		return rc;
 	}
 
-	D_DEBUG(DB_MGMT, "SMD stream table entry found, xs_id:%d, "
-		"dev:"DF_UUID"\n", xs_id, DP_UUID(xs_bond.nsm_dev_id));
+	D_DEBUG(DB_MGMT, "Get dev "DF_UUID" mapped to tgt %d.\n",
+		DP_UUID(dev_info->sdi_id), tgt_id);
 
 	/* Iterate thru device list to find matching dev */
 	d_list_for_each_entry(d_bdev, &nvme_glb.bd_bdevs, bb_link) {
-		if (uuid_compare(d_bdev->bb_uuid, xs_bond.nsm_dev_id) == 0) {
+		if (uuid_compare(d_bdev->bb_uuid, dev_info->sdi_id) == 0) {
 			found = true;
 			break;
 		}
 	}
+
+	smd_free_dev_info(dev_info);
 	if (!found) {
 		/* TODO
-		 * Mapping between device table entry and device list
+		 * Mapping in per-server metadata and device list
 		 * is inconsistent, either device currently mapped to
-		 * the xstream is not present in the device list or
-		 * stream table entry is invalid. Call per-server
+		 * the target is not present in the device list or
+		 * the mapping in SMD is invalid. Call per-server
 		 * metadata management tool to rectify.
 		 */
-		D_ERROR("Failure finding dev: "DF_UUID"\n",
-			DP_UUID(xs_bond.nsm_dev_id));
+		D_ERROR("Device list & device mapping is inconsistent\n");
 		return -DER_NONEXIST;
 	}
 
 	D_ASSERT(d_bdev->bb_bdev != NULL);
+	/* generic read only descriptor (currently used for IO stats) */
 	rc = spdk_bdev_open(d_bdev->bb_bdev, false, NULL, NULL,
 			    &ctxt->bxc_desc);
 	if (rc != 0) {
@@ -837,6 +809,13 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int xs_id)
 		if (d_bdev->bb_blobstore == NULL)
 			return -DER_NOMEM;
 
+		rc = bio_init_health_monitoring(d_bdev->bb_blobstore,
+						d_bdev->bb_bdev);
+		if (rc != 0) {
+			D_ERROR("BIO health monitoring not allocated\n");
+			return rc;
+		}
+
 		/* Load blobstore with bstype specified for sanity check */
 		bs = load_blobstore(ctxt, d_bdev->bb_bdev, &d_bdev->bb_uuid,
 				    false);
@@ -845,8 +824,8 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int xs_id)
 
 		d_bdev->bb_blobstore->bb_bs = bs;
 
-		D_DEBUG(DB_MGMT, "Loaded bs, xs_id:%d, xs:%p dev:%s\n",
-			xs_id, ctxt, spdk_bdev_get_name(d_bdev->bb_bdev));
+		D_DEBUG(DB_MGMT, "Loaded bs, tgt_id:%d, xs:%p dev:%s\n",
+			tgt_id, ctxt, spdk_bdev_get_name(d_bdev->bb_bdev));
 	}
 
 	ctxt->bxc_blobstore = get_bio_blobstore(d_bdev->bb_blobstore, ctxt);
@@ -948,7 +927,7 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 }
 
 int
-bio_xsctxt_alloc(struct bio_xs_context **pctxt, int xs_id)
+bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 {
 	struct spdk_conf *config = NULL;
 	struct bio_xs_context *ctxt;
@@ -967,14 +946,14 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int xs_id)
 
 	D_INIT_LIST_HEAD(&ctxt->bxc_pollers);
 	D_INIT_LIST_HEAD(&ctxt->bxc_io_ctxts);
-	ctxt->bxc_xs_id = xs_id;
+	ctxt->bxc_tgt_id = tgt_id;
 
 	ABT_mutex_lock(nvme_glb.bd_mutex);
 
 	nvme_glb.bd_xstream_cnt++;
 
-	D_INFO("Initialize NVMe context, xs_id:%d, init_thread:%p\n",
-	       xs_id, nvme_glb.bd_init_thread);
+	D_INFO("Initialize NVMe context, tgt_id:%d, init_thread:%p\n",
+	       tgt_id, nvme_glb.bd_init_thread);
 
 	/* Initialize SPDK env in first started xstream */
 	if (nvme_glb.bd_init_thread == NULL) {
@@ -1035,7 +1014,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int xs_id)
 		goto out;
 	}
 
-	snprintf(name, sizeof(name), "daos_spdk_%d", xs_id);
+	snprintf(name, sizeof(name), "daos_spdk_%d", tgt_id);
 	ctxt->bxc_thread = spdk_allocate_thread(send_msg, start_poller,
 						stop_poller, ctxt, name);
 	if (ctxt->bxc_thread == NULL) {
@@ -1081,7 +1060,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int xs_id)
 	}
 
 	/* Initialize per-xstream blobstore context */
-	rc = init_blobstore_ctxt(ctxt, xs_id);
+	rc = init_blobstore_ctxt(ctxt, tgt_id);
 	if (rc)
 		goto out;
 
@@ -1095,3 +1074,4 @@ out:
 	*pctxt = (rc != 0) ? NULL : ctxt;
 	return rc;
 }
+

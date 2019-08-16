@@ -61,6 +61,48 @@ struct evt_desc {
 	uint8_t				pt_csum[0];
 };
 
+/**
+ * Callbacks and parameters for evtree descriptor
+ *
+ * NB:
+ * - evtree is a standalone algorithm, it should not depend on the rest part
+ *   of VOS, this function table is abstraction of those direct calls to
+ *   VOS/DTX.
+ *
+ * - Most part of this function table is about undo log callbacks, we might
+ *   want to separate those fuctions to a dedicated function table for undo
+ *   log in the future. So both evtree & dbtree can share the same definition
+ *   of undo log.
+ */
+struct evt_desc_cbs {
+	/**
+	 * callback to free bio address, EVtree does not allocate bio address
+	 * so it wouldn't free it as well, user should provide callback to
+	 * free it.
+	 */
+	int		(*dc_bio_free_cb)(struct umem_instance *umm,
+					  struct evt_desc *desc,
+					  daos_size_t nob, void *args);
+	void		 *dc_bio_free_args;
+	/**
+	 * Availability check, it is for data tracked by DTX undo log.
+	 * It is optional, EVTree always treats data extent is available if
+	 * this method is absent.
+	 */
+	int		(*dc_log_status_cb)(struct umem_instance *umm,
+					    struct evt_desc *desc,
+					    int intent, void *args);
+	void		 *dc_log_status_args;
+	/** Add a descriptor to undo log */
+	int		(*dc_log_add_cb)(struct umem_instance *umm,
+					 struct evt_desc *desc, void *args);
+	void		 *dc_log_add_args;
+	/** remove a descriptor to undo log */
+	int		(*dc_log_del_cb)(struct umem_instance *umm,
+					 struct evt_desc *desc, void *args);
+	void		 *dc_log_del_args;
+};
+
 struct evt_extent {
 	daos_off_t	ex_lo;	/**< low offset */
 	daos_off_t	ex_hi;	/**< high offset */
@@ -230,6 +272,7 @@ enum evt_visibility {
 	/** In sorted iterator, marks final entry */
 	EVT_LAST	= (1 << 3),
 };
+
 /**
  * Data struct to pass in or return a versioned extent and its data block.
  */
@@ -248,8 +291,8 @@ struct evt_entry {
 	bio_addr_t			en_addr;
 	/** update epoch of extent */
 	daos_epoch_t			en_epoch;
-	/** The DTX entry address */
-	umem_off_t			en_dtx;
+	/** availability check result for the entry */
+	int				en_avail_rc;
 };
 
 struct evt_list_entry {
@@ -399,8 +442,9 @@ struct evt_policy_ops {
  * \return		0	Success
  *			-ve	error code
  */
-int evt_create(uint64_t feats, unsigned int order, struct umem_attr *uma,
-	       struct evt_root *root, daos_handle_t coh, daos_handle_t *toh);
+int evt_create(struct evt_root *root, uint64_t feats, unsigned int order,
+	       struct umem_attr *uma, struct evt_desc_cbs *cbs,
+	       daos_handle_t *toh);
 /**
  * Open a tree by its root address \a root
  *
@@ -413,8 +457,8 @@ int evt_create(uint64_t feats, unsigned int order, struct umem_attr *uma,
  * \return		0	Success
  *			-ve	error code
  */
-int evt_open(struct evt_root *root, struct umem_attr *uma, daos_handle_t coh,
-	     void *info, daos_handle_t *toh);
+int evt_open(struct evt_root *root, struct umem_attr *uma,
+	     struct evt_desc_cbs *cbs, daos_handle_t *toh);
 
 /**
  * Close a opened tree
@@ -429,6 +473,18 @@ int evt_close(daos_handle_t toh);
  * \param toh		[IN]	The tree open handle
  */
 int evt_destroy(daos_handle_t toh);
+
+/**
+ * This function drains rectangles from the tree, each time it deletes a
+ * rectangle, it consumes a @credits, which is input paramter of this function.
+ * It returns if all input credits are consumed or the tree is empty, in the
+ * later case, it also destroys the evtree.
+ *
+ * \param toh		[IN]	 Tree open handle.
+ * \param credis	[IN/OUT] Input and returned drain credits
+ * \param destroyed	[OUT]	 Tree is empty and destroyed
+ */
+int evt_drain(daos_handle_t toh, int *credits, bool *destroyed);
 
 /**
  * Insert a new extented version \a rect and its data memory ID \a addr to
@@ -459,11 +515,13 @@ int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
  * \a rect to \a ent_array.
  *
  * \param toh		[IN]		The tree open handle
- * \param rect		[IN]		The versioned extent to search
+ * \param epr		[IN]		Epoch range to search
+ * \param extent	[IN]		The extent to search
  * \param ent_array	[IN,OUT]	Pass in initialized list, filled in by
  *					the function
  */
-int evt_find(daos_handle_t toh, const struct evt_rect *rect,
+int evt_find(daos_handle_t toh, const daos_epoch_range_t *epr,
+	     const struct evt_extent *extent,
 	     struct evt_entry_array *ent_array);
 
 /**
@@ -578,10 +636,9 @@ int evt_iter_empty(daos_handle_t ih);
  * entries can move around in the tree.
  *
  * \param ih		[IN]	Iterator open handle.
- * \param value_out	[OUT]	Optional, buffer to preserve value while
- *				deleting evtree node.
+ * \param ent		[OUT]	If not NULL, returns the cached entry.
  */
-int evt_iter_delete(daos_handle_t ih, void *value_out);
+int evt_iter_delete(daos_handle_t ih, struct evt_entry *ent);
 
 /**
  * Fetch the extent and its data address from the current iterator position.

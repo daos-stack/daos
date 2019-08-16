@@ -10,7 +10,8 @@ DAOS_DIR=$(cd "${cwd}/../../.." && echo "$PWD")
 source "$DAOS_DIR/.build_vars.sh"
 EVT_CTL="$SL_PREFIX/bin/evt_ctl"
 
-cmd="$VCMD $EVT_CTL $* -C o:4"
+cmd_create="$VCMD $EVT_CTL $* -C o:4"
+cmd=$cmd_create
 
 function word_set {
     ((flag = $1 % 2))
@@ -159,4 +160,15 @@ echo "$cmd"
 $cmd -t
 result="${PIPESTATUS[0]}"
 echo "Test returned $result"
+if (( result != 0 )); then
+	exit "$result"
+fi
+
+cmd=$cmd_create
+cmd+=" -e s:0,e:128,n:2379 -c"
+echo "$cmd"
+$cmd
+
+result="${PIPESTATUS[0]}"
+echo "Drain test returned $result"
 exit "$result"

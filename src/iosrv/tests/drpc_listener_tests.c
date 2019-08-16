@@ -228,7 +228,7 @@ test_drpc_listener_init_cant_create_prog_ctx(void **state)
 	/* drpc_progress_context_create returns null */
 	mock_drpc_progress_context_create_teardown();
 
-	assert_int_equal(drpc_listener_init(), -DER_UNKNOWN);
+	assert_int_equal(drpc_listener_init(), -DER_NOMEM);
 
 	/*
 	 * Listener should have been freed.

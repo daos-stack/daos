@@ -90,6 +90,14 @@ struct test_pool {
 	daos_handle_t		poh;
 	daos_pool_info_t	pool_info;
 	daos_size_t		pool_size;
+	/* Updated if some ranks are killed during degraged or rebuild
+	 * test, so we know whether some tests is allowed to be run.
+	 */
+	d_rank_list_t		alive_svc;
+	/* Used for all pool related operation, since client will
+	 * use this rank list to find out the real leader, so it
+	 * can not be changed.
+	 */
 	d_rank_list_t		svc;
 	/* flag of slave that share the pool of other test_arg_t */
 	bool			slave;
@@ -136,7 +144,6 @@ typedef struct {
 	int			srv_disabled_ntgts;
 	int			index;
 	daos_epoch_t		hce;
-
 	/* The callback is called before pool rebuild. like disconnect
 	 * pool etc.
 	 */
@@ -251,13 +258,16 @@ int run_daos_cont_test(int rank, int size);
 int run_daos_capa_test(int rank, int size);
 int run_daos_io_test(int rank, int size, int *tests, int test_size);
 int run_daos_epoch_io_test(int rank, int size, int *tests, int test_size);
+int run_daos_obj_array_test(int rank, int size);
 int run_daos_array_test(int rank, int size);
+int run_daos_kv_test(int rank, int size);
 int run_daos_epoch_test(int rank, int size);
 int run_daos_epoch_recovery_test(int rank, int size);
 int run_daos_md_replication_test(int rank, int size);
 int run_daos_oid_alloc_test(int rank, int size);
 int run_daos_degraded_test(int rank, int size);
 int run_daos_rebuild_test(int rank, int size, int *tests, int test_size);
+int run_daos_dtx_test(int rank, int size, int *tests, int test_size);
 
 void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 		      d_rank_list_t *svc, d_rank_t rank);
@@ -421,13 +431,8 @@ test_rmdir(const char *path, bool force)
 		D_GOTO(out, rc = daos_errno2der(rc));
 	}
 
-	D_ALLOC(fullpath, PATH_MAX);
-	if (fullpath == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
 	dir = opendir(path);
 	if (dir == NULL) {
-		D_FREE(fullpath);
 		if (errno == ENOENT)
 			D_GOTO(out, rc);
 		D_ERROR("can't open directory %s, %d (%s)",
@@ -439,21 +444,28 @@ test_rmdir(const char *path, bool force)
 		if (!strcmp(ent->d_name, ".") || !strcmp(ent->d_name, ".."))
 			continue;   /* skips the dots */
 
-		sprintf(fullpath, "%s/%s", path, ent->d_name);
+		D_ASPRINTF(fullpath, "%s/%s", path, ent->d_name);
+		if (fullpath == NULL)
+			D_GOTO(out, -DER_NOMEM);
+
 		switch (ent->d_type) {
 		case DT_DIR:
 			rc = test_rmdir(fullpath, force);
+			if (rc != 0)
+				D_ERROR("test_rmdir %s failed, rc %d",
+						fullpath, rc);
 			break;
 		case DT_REG:
 			rc = unlink(fullpath);
+			if (rc != 0)
+				D_ERROR("unlink %s failed, rc %d",
+						fullpath, rc);
 			break;
 		default:
 			D_WARN("find unexpected type %d", ent->d_type);
 		}
-		if (rc != 0)
-			D_ERROR("unlink %s failed, rc %d", fullpath, rc);
 
-		memset(fullpath, 0, PATH_MAX);
+		D_FREE(fullpath);
 	}
 
 	rc = closedir(dir);
@@ -462,9 +474,9 @@ test_rmdir(const char *path, bool force)
 		if (rc != 0)
 			rc = errno;
 	}
-	D_FREE(fullpath);
 
 out:
+	D_FREE(fullpath);
 	return rc;
 }
 

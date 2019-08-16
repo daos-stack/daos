@@ -24,12 +24,15 @@
 package main
 
 import (
-	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/security"
-	"github.com/golang/protobuf/proto"
-	"github.com/pkg/errors"
 	"os/user"
 	"strconv"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/security"
+	"github.com/daos-stack/daos/src/control/security/auth"
 )
 
 // Module id for the Agent security module
@@ -70,7 +73,7 @@ func (u *userInfo) GroupIDs() ([]uint32, error) {
 type external struct{}
 
 // LookupUserId is a wrapper for user.LookupId
-func (e *external) LookupUserID(uid uint32) (security.User, error) {
+func (e *external) LookupUserID(uid uint32) (auth.User, error) {
 	uidStr := strconv.FormatUint(uint64(uid), 10)
 	info, err := user.LookupId(uidStr)
 	if err != nil {
@@ -89,7 +92,17 @@ func (e *external) LookupGroupID(gid uint32) (*user.Group, error) {
 
 // SecurityModule is the security drpc module struct
 type SecurityModule struct {
-	ext security.UserExt
+	ext    auth.UserExt
+	config *security.TransportConfig
+}
+
+//NewSecurityModule creates a new module with the given initialized TransportConfig
+func NewSecurityModule(tc *security.TransportConfig) *SecurityModule {
+	mod := SecurityModule{
+		config: tc,
+	}
+	mod.InitModule(nil)
+	return &mod
 }
 
 // HandleCall is the handler for calls to the SecurityModule
@@ -103,7 +116,12 @@ func (m *SecurityModule) HandleCall(client *drpc.Client, method int32, body []by
 		return nil, errors.WithMessage(err, "Unable to get credentials for client socket")
 	}
 
-	response, err := security.AuthSysRequestFromCreds(m.ext, info)
+	signingKey, err := m.config.PrivateKey()
+	if err != nil {
+		return nil, err
+	}
+
+	response, err := auth.AuthSysRequestFromCreds(m.ext, info, signingKey)
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed to get AuthSys struct")
 	}

@@ -197,7 +197,7 @@ cont_free(struct d_ulink *ulink)
 	D_ASSERT(cont->vc_open_count == 0);
 
 	if (!daos_handle_is_inval(cont->vc_dtx_cos_hdl))
-		dbtree_destroy(cont->vc_dtx_cos_hdl);
+		dbtree_destroy(cont->vc_dtx_cos_hdl, NULL);
 	D_ASSERT(d_list_empty(&cont->vc_dtx_committable));
 	dbtree_close(cont->vc_dtx_active_hdl);
 	dbtree_close(cont->vc_dtx_committed_hdl);
@@ -373,8 +373,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	rc = dbtree_open_inplace_ex(&cont->vc_otab_df->obt_btr,
 				    &cont->vc_pool->vp_uma,
 				    vos_cont2hdl(cont),
-				    cont->vc_pool->vp_vea_info,
-				    &cont->vc_btr_hdl);
+				    cont->vc_pool, &cont->vc_btr_hdl);
 	if (rc) {
 		D_ERROR("No Object handle, Tree open failed\n");
 		D_GOTO(exit, rc);
@@ -551,7 +550,7 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 	}
 
 	d_iov_set(&iov, &key, sizeof(struct d_uuid));
-	rc = dbtree_delete(vpool->vp_cont_th, &iov, NULL);
+	rc = dbtree_delete(vpool->vp_cont_th, BTR_PROBE_EQ, &iov, NULL);
 
 end:
 	rc = vos_tx_end(vpool, rc);

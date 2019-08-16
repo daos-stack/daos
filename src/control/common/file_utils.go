@@ -32,9 +32,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/daos-stack/daos/src/control/log"
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
+
+	log "github.com/daos-stack/daos/src/control/logging"
 )
 
 const (
@@ -243,7 +244,7 @@ func CheckSudo() (bool, string) {
 
 // Run executes command in os and builds useful error message.
 func Run(cmd string) error {
-	log.Debugdf(UtilLogDepth, "exec '%s'\n", cmd)
+	log.Debugf("exec '%s'\n", cmd)
 
 	// executing as subshell enables pipes in cmd string
 	out, err := exec.Command("sh", "-c", cmd).CombinedOutput()

@@ -33,7 +33,8 @@ extern "C" {
 
 #include <daos_types.h>
 #include <daos_obj.h>
-#include <daos_addons.h>
+#include <daos_kv.h>
+#include <daos_array.h>
 #include <daos_errno.h>
 #include <daos_prop.h>
 #include <daos/tse.h>
@@ -100,6 +101,7 @@ typedef enum {
 	DAOS_OPC_OBJ_PUNCH_AKEYS,
 	DAOS_OPC_OBJ_QUERY,
 	DAOS_OPC_OBJ_QUERY_KEY,
+	DAOS_OPC_OBJ_FETCH_SHARD,
 	DAOS_OPC_OBJ_FETCH,
 	DAOS_OPC_OBJ_UPDATE,
 	DAOS_OPC_OBJ_LIST_DKEY,
@@ -123,8 +125,6 @@ typedef enum {
 	DAOS_OPC_KV_PUT,
 	DAOS_OPC_KV_REMOVE,
 	DAOS_OPC_KV_LIST,
-	DAOS_OPC_OBJ_FETCH_MULTI,
-	DAOS_OPC_OBJ_UPDATE_MULTI,
 
 	DAOS_OPC_MAX
 } daos_opc_t;
@@ -431,6 +431,12 @@ typedef struct {
 typedef daos_obj_rw_t		daos_obj_fetch_t;
 typedef daos_obj_rw_t		daos_obj_update_t;
 
+struct daos_obj_fetch_shard {
+	daos_obj_fetch_t	base;
+	unsigned int		flags;
+	unsigned int		shard;
+};
+
 typedef struct {
 	daos_handle_t		oh;
 	daos_handle_t		th;
@@ -532,6 +538,7 @@ typedef struct {
 	daos_obj_id_t		oid;
 	daos_handle_t		th;
 	unsigned int		mode;
+	unsigned int		open_with_attr;
 	daos_size_t		*cell_size;
 	daos_size_t		*chunk_size;
 	daos_handle_t		*oh;
@@ -596,13 +603,6 @@ typedef struct {
 	d_sg_list_t		*sgl;
 	daos_anchor_t		*anchor;
 } daos_kv_list_t;
-
-typedef struct {
-	daos_handle_t		oh;
-	daos_handle_t		th;
-	unsigned int		num_dkeys;
-	daos_dkey_io_t		*io_array;
-} daos_obj_multi_io_t;
 
 /**
  * Create an asynchronous task and associate it with a daos client operation.
