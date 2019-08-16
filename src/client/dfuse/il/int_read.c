@@ -23,7 +23,6 @@
 
 #define D_LOGFAC DD_FAC(il)
 #include "dfuse_common.h"
-#include "dfuse_gah.h"
 #include "intercept.h"
 #include "daos.h"
 #include "daos_array.h"
@@ -78,9 +77,6 @@ read_bulk(char *buff, size_t len, off_t position,
 ssize_t ioil_do_pread(char *buff, size_t len, off_t position,
 		      struct dfuse_file_common *f_info, int *errcode)
 {
-	DFUSE_LOG_INFO("%#zx-%#zx " GAH_PRINT_STR, position, position + len - 1,
-		       GAH_PRINT_VAL(f_info->gah));
-
 	return read_bulk(buff, len, position, f_info, errcode);
 }
 

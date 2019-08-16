@@ -23,7 +23,6 @@
 
 #define D_LOGFAC DD_FAC(il)
 #include "dfuse_common.h"
-#include "dfuse_gah.h"
 #include "intercept.h"
 #include "daos.h"
 #include "daos_array.h"

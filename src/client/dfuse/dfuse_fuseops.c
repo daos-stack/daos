@@ -69,9 +69,7 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 {
 	struct dfuse_projection_info *fs_handle = arg;
 
-	DFUSE_TRA_INFO(fs_handle,
-		       "Fuse configuration for projection id:%d",
-		       fs_handle->dpi_proj.cli_fs_id);
+	DFUSE_TRA_INFO(fs_handle, "Fuse configuration");
 
 	DFUSE_TRA_INFO(fs_handle, "Proto %d %d", conn->proto_major,
 		       conn->proto_minor);
@@ -81,7 +79,7 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	 * set it before reporting the value.
 	 */
 	conn->max_read = fs_handle->dpi_max_read;
-	conn->max_write = fs_handle->dpi_proj.max_write;
+	conn->max_write = fs_handle->dpi_max_read;
 
 	DFUSE_TRA_INFO(fs_handle, "max read %#x", conn->max_read);
 	DFUSE_TRA_INFO(fs_handle, "max write %#x", conn->max_write);

@@ -43,6 +43,9 @@
 #include "dfuse_vector.h"
 #include "dfuse_common.h"
 
+#define GAH_PRINT_STR "%d"
+#define GAH_PRINT_VAL(x) x
+
 #include "daos.h"
 
 FOREACH_INTERCEPT(IOIL_FORWARD_DECL)
@@ -50,9 +53,6 @@ FOREACH_INTERCEPT(IOIL_FORWARD_DECL)
 static bool ioil_initialized;
 static __thread int saved_errno;
 static vector_t fd_table;
-static const char *dfuse_prefix;
-static int dfuse_id;
-static struct dfuse_projection *projections;
 
 #define SAVE_ERRNO(is_error)                 \
 	do {                                 \
@@ -195,9 +195,6 @@ ioil_init(void)
 		return;
 	}
 
-	DFUSE_LOG_INFO("Using IONSS: dfuse_prefix at %s, dfuse_id is %d",
-		       dfuse_prefix, dfuse_id);
-
 	__sync_synchronize();
 
 	ioil_initialized = true;
@@ -206,9 +203,6 @@ ioil_init(void)
 static __attribute__((destructor)) void
 ioil_fini(void)
 {
-	if (ioil_initialized) {
-		free(projections);
-	}
 	ioil_initialized = false;
 
 	__sync_synchronize();

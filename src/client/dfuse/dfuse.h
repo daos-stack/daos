@@ -29,12 +29,10 @@
 
 #include <gurt/list.h>
 #include <gurt/hash.h>
+#include <gurt/atomic.h>
 
 #include "daos.h"
 #include "daos_fs.h"
-
-#include "dfuse_gah.h"
-#include "dfuse_fs.h"
 
 #include "dfuse_common.h"
 #include "dfuse.h"
@@ -58,10 +56,10 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info,
 		  struct dfuse_projection_info *dfi_handle);
 
 struct dfuse_projection_info {
-	struct dfuse_projection		dpi_proj;
 	struct dfuse_info		*dpi_info;
 	struct dfuse_dfs		*dpi_ddfs;
 	uint32_t			dpi_max_read;
+	uint32_t			dpi_max_write;
 	/** Hash table of open inodes */
 	struct d_hash_table		dpi_iet;
 	struct d_hash_table		dpi_irt;

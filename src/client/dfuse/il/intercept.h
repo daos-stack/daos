@@ -27,10 +27,14 @@
 #include <stdlib.h>
 #include <sys/uio.h>
 #include "dfuse_log.h"
-#include "dfuse_gah.h"
-#include "dfuse_fs.h"
 #include "ioil_io.h"
 #include "ioil_api.h"
+
+/* Common data stored on open file handles */
+struct dfuse_file_common {
+	daos_handle_t		oh;
+	bool gah;
+};
 
 /* Low level I/O functions we intercept
  *
