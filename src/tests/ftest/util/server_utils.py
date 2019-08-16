@@ -156,6 +156,7 @@ class ServerCommand(CommandWithParameters):
             return self.__str__()
 
         elif manager.endswith("orterun"):
+            args = []
             if env:
                 assign_env = [
                     "{}={}".format(key, val) for key, val in env.items()]

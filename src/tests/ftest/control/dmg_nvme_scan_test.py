@@ -54,7 +54,7 @@ class DmgNvmeScanTest(TestWithServers):
         # Update config and start server
         server.update_configuration(self.basepath)
         server.prepare(self.workdir, self.hostfile_servers_slots)
-        server.start(self.orterun)
+        server.start(None)
 
         # Create daos_shell command
         dmg = DmgCommand()
