@@ -393,13 +393,14 @@ static inline struct evt_rect *evt_nd_off_rect_at(struct evt_context *tcx,
  * \param[IN]	node		The tree node
  * \param[IN]	at		The index in the node
  * \param[IN]	rect_srch	The original rectangle used for the search
+ * \param[IN]	intent		The operation intent
  * \param[OUT]	entry		The entry to fill
  *
  * The selected extent will be trimmed by the search rectangle used.
  */
 void evt_entry_fill(struct evt_context *tcx, struct evt_node *node,
 		    unsigned int at, const struct evt_rect *rect_srch,
-		    struct evt_entry *entry);
+		    uint32_t intent, struct evt_entry *entry);
 
 /**
  * Check whether the EVT record is available or not.

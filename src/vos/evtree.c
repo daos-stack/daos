@@ -1834,7 +1834,7 @@ out:
 void
 evt_entry_fill(struct evt_context *tcx, struct evt_node *node,
 	       unsigned int at, const struct evt_rect *rect_srch,
-	       struct evt_entry *entry)
+	       uint32_t intent, struct evt_entry *entry)
 {
 	struct evt_desc	   *desc;
 	struct evt_rect	   *rect;
@@ -1871,8 +1871,8 @@ evt_entry_fill(struct evt_context *tcx, struct evt_node *node,
 
 	entry->en_addr = desc->dc_ex_addr;
 	entry->en_ver = desc->dc_ver;
-	entry->en_desc = umem_ptr2off(evt_umm(tcx), desc);
 	evt_entry_csum_fill(tcx, desc, entry);
+	entry->en_avail_rc = evt_desc_log_status(tcx, desc, intent);
 
 	if (offset != 0) {
 		/* Adjust cached pointer since we're only referencing a
@@ -2041,7 +2041,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 				goto out;
 			}
 
-			evt_entry_fill(tcx, node, i, rect, ent);
+			evt_entry_fill(tcx, node, i, rect, intent, ent);
 			switch (find_opc) {
 			default:
 				D_ASSERTF(0, "%d\n", find_opc);

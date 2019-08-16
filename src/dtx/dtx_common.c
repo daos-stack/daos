@@ -207,7 +207,7 @@ dtx_handle_init(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 		daos_epoch_t epoch, uint64_t dkey_hash, uint32_t pm_ver,
 		uint32_t intent, struct dtx_conflict_entry *conflict,
 		struct dtx_id *dti_cos, int dti_cos_count, bool leader,
-		struct dtx_handle *dth)
+		bool no_rep, struct dtx_handle *dth)
 {
 	dth->dth_xid = *dti;
 	dth->dth_oid = *oid;
@@ -218,7 +218,7 @@ dtx_handle_init(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 	dth->dth_ver = pm_ver;
 	dth->dth_intent = intent;
 	dth->dth_leader = leader ? 1 : 0;
-	dth->dth_non_rep = 0;
+	dth->dth_non_rep = no_rep ? 1 : 0;
 	dth->dth_dti_cos = dti_cos;
 	dth->dth_dti_cos_count = dti_cos_count;
 	dth->dth_conflict = conflict;
@@ -274,6 +274,15 @@ dtx_leader_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 	int			dti_cos_count = 0;
 	int			i;
 
+	/* Single replica case. */
+	if (tgts_cnt == 0) {
+		if (!daos_is_zero_dti(dti))
+			goto init;
+
+		daos_dti_gen(&dth->dth_xid, true);
+		return 0;
+	}
+
 	dlh->dlh_handled_time = crt_hlc_get();
 	dlh->dlh_future = ABT_FUTURE_NULL;
 	D_ALLOC(dlh->dlh_subs, tgts_cnt * sizeof(*dlh->dlh_subs));
@@ -316,8 +325,10 @@ dtx_leader_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 		return -DER_INPROGRESS;
 	}
 
+init:
 	dtx_handle_init(dti, oid, coh, epoch, dkey_hash, pm_ver, intent,
-			NULL, dti_cos, dti_cos_count, true, dth);
+			NULL, dti_cos, dti_cos_count, true,
+			tgts_cnt == 0 ? true : false, dth);
 
 	D_DEBUG(DB_TRACE, "Start DTX "DF_DTI" for object "DF_OID
 		" ver %u, dkey %llu, dti_cos_count %d, intent %s\n",
@@ -489,8 +500,8 @@ found:
 	}
 
 	if (abort_cnt > 0) {
-		rc = dtx_abort(po_uuid, co_uuid, abort_dtes, abort_cnt,
-			       version);
+		rc = dtx_abort(po_uuid, co_uuid, dth->dth_epoch,
+			       abort_dtes, abort_cnt, version);
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 	}
@@ -524,19 +535,22 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *cont_hdl,
 {
 	struct dtx_handle		*dth = &dlh->dlh_handle;
 	struct dtx_conflict_entry	*dces = NULL;
-	int				dces_cnt = 0;
-	int				rc = 0;
+	int				*ptr = NULL;
+	int				 dces_cnt = 0;
+	int				 rc = 0;
 
 	if (dlh == NULL)
 		return result;
 
-	if (dth->dth_non_rep || dlh->dlh_subs == NULL)
+	if (dlh->dlh_sub_cnt == 0)
 		goto out_free;
 
 	/* NB: even the local request failure, dth_ent == NULL, we
 	 * should still wait for remote object to finish the request.
 	 */
-	rc = dtx_leader_wait(dlh, &dces, result >= 0 ? &dces_cnt : NULL);
+	if (!daos_is_zero_dti(&dth->dth_xid) && result >= 0)
+		ptr = &dces_cnt;
+	rc = dtx_leader_wait(dlh, &dces, ptr);
 	if (rc == -DER_INPROGRESS && dces != NULL) {
 		/* XXX: The local modification has been done, but remote
 		 *	replica failed because of some uncommitted DTX,
@@ -546,9 +560,9 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *cont_hdl,
 		 *	firstly then retry.
 		 */
 		D_ASSERT(dth != NULL);
-		D_DEBUG(DB_TRACE, "Hit conflict DTX (%d)"DF_DTI" for "
+		D_DEBUG(DB_TRACE, "Hit conflict DTX "DF_DTI" for "
 			DF_DTI", handle them and retry update.\n",
-			rc, DP_DTI(&dces[0].dce_xid), DP_DTI(&dth->dth_xid));
+			DP_DTI(&dces[0].dce_xid), DP_DTI(&dth->dth_xid));
 
 		rc = dtx_conflict(cont_hdl->sch_cont->sc_hdl, dlh,
 				  cont_hdl->sch_pool->spc_uuid,
@@ -571,6 +585,9 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *cont_hdl,
 
 		D_GOTO(fail, result);
 	}
+
+	if (result < 0 || rc < 0 || daos_is_zero_dti(&dth->dth_xid))
+		D_GOTO(fail, result = (result == 0 ? rc : result));
 
 	/* If the DTX is started befoe DTX resync operation (for rebuild),
 	 * then it is possbile that the DTX resync ULT may have aborted
@@ -640,7 +657,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *cont_hdl,
 fail:
 	if (result < 0)
 		dtx_abort(cont_hdl->sch_pool->spc_uuid, cont->sc_uuid,
-			  &dth->dth_dte, 1,
+			  dth->dth_epoch, &dth->dth_dte, 1,
 			  cont_hdl->sch_pool->spc_map_version);
 out_free:
 	if (daos_is_zero_dti(&dth->dth_xid))
@@ -695,7 +712,7 @@ dtx_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 		return 0;
 
 	dtx_handle_init(dti, oid, coh, epoch, dkey_hash, pm_ver, intent,
-			conflict, dti_cos, dti_cos_cnt, false, dth);
+			conflict, dti_cos, dti_cos_cnt, false, false, dth);
 
 	D_DEBUG(DB_TRACE, "Start the DTX "DF_DTI" for object "DF_OID
 		" ver %u, dkey %llu, dti_cos_count %d, intent %s\n",
@@ -735,13 +752,11 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_hdl *cont_hdl,
 	dtx_clean_shares(dth);
 
 	D_DEBUG(DB_TRACE,
-		"Stop the DTX "DF_DTI" ver %u, dkey %llu, intent %s, "
-		"%s, %s: rc = %d\n",
+		"Stop the DTX "DF_DTI" ver %u, dkey %llu, intent %s, rc = %d\n",
 		DP_DTI(&dth->dth_xid), dth->dth_ver,
 		(unsigned long long)dth->dth_dkey_hash,
 		dth->dth_intent == DAOS_INTENT_PUNCH ? "Punch" : "Update",
-		dth->dth_sync ? "sync" : "async",
-		dth->dth_non_rep ? "non-replicated" : "replicated", result);
+		result);
 out:
 	return result > 0 ? 0 : result;
 }
@@ -855,22 +870,15 @@ out:
 }
 
 int
-dtx_handle_resend(daos_handle_t coh, daos_unit_oid_t *oid,
-		  struct dtx_id *dti, uint64_t dkey_hash, bool punch)
+dtx_handle_resend(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
+		  uint64_t dkey_hash, bool punch, daos_epoch_t *epoch)
 {
 	int	rc;
 
 	if (daos_is_zero_dti(dti))
 		return 0;
 
-	rc = vos_dtx_lookup_cos(coh, oid, dti, dkey_hash, punch);
-	if (rc == 0)
-		return -DER_ALREADY;
-
-	if (rc != -DER_NONEXIST)
-		return rc >= 0 ? -DER_INVAL : rc;
-
-	rc = vos_dtx_check(coh, dti);
+	rc = vos_dtx_check_resend(coh, oid, dti, dkey_hash, punch, epoch);
 	switch (rc) {
 	case DTX_ST_PREPARED:
 		return 0;
@@ -878,12 +886,13 @@ dtx_handle_resend(daos_handle_t coh, daos_unit_oid_t *oid,
 		return -DER_ALREADY;
 	case -DER_NONEXIST:
 		if (dtx_hlc_age2sec(dti->dti_hlc) >
-		    DTX_AGG_THRESHOLD_AGE_LOWER) {
+		    DTX_AGG_THRESHOLD_AGE_LOWER ||
+		    DAOS_FAIL_CHECK(DAOS_DTX_LONG_TIME_RESEND)) {
 			D_DEBUG(DB_IO, "Not sure about whether the old RPC "
 				DF_DTI" is resent or not.\n", DP_DTI(dti));
-			return -DER_TIMEDOUT;
+			rc = -DER_EP_OLD;
 		}
-		/* fall through */
+		return rc;
 	default:
 		return rc >= 0 ? -DER_INVAL : rc;
 	}
@@ -982,6 +991,9 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 	struct dtx_ult_arg	*ult_arg;
 	int			rc;
 
+	if (dlh->dlh_sub_cnt == 0)
+		goto exec;
+
 	D_ALLOC_PTR(ult_arg);
 	if (ult_arg == NULL)
 		return -DER_NOMEM;
@@ -1013,6 +1025,7 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 		D_GOTO(out, rc);
 	}
 
+exec:
 	/* Then execute the local operation */
 	rc = func(dlh, func_arg, -1, NULL);
 out:

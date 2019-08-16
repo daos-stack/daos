@@ -535,10 +535,6 @@ void
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
 			int count);
 
-int
-vos_dtx_abort_internal(struct vos_container *cont, struct dtx_id *dtis,
-		       int count, bool force);
-
 /**
  * Register dbtree class for DTX CoS, it is called within vos_init().
  *

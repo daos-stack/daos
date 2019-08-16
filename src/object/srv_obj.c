@@ -796,6 +796,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	struct dtx_handle		*handle = &dth;
 	struct dtx_conflict_entry	 conflict = { 0 };
 	uint32_t			 map_ver = 0;
+	uint32_t			 opc = opc_get(rpc->cr_opc);
 	int				 rc;
 
 	D_ASSERT(orw != NULL);
@@ -812,7 +813,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 
 	D_DEBUG(DB_TRACE, "rpc %p opc %d "DF_UOID" dkey %d %s tag/xs %d/%d eph "
 		DF_U64", pool ver %u/%u with "DF_DTI".\n",
-		rpc, opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
+		rpc, opc, DP_UOID(orw->orw_oid),
 		(int)orw->orw_dkey.iov_len, (char *)orw->orw_dkey.iov_buf,
 		dss_get_module_info()->dmi_tgt_id,
 		dss_get_module_info()->dmi_xs_id, orw->orw_epoch,
@@ -822,9 +823,25 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	if (orw->orw_flags & ORF_RESEND) {
 		rc = dtx_handle_resend(cont->sc_hdl, &orw->orw_oid,
 				       &orw->orw_dti,
-				       orw->orw_dkey_hash, false);
-		if (rc == -DER_ALREADY)
+				       orw->orw_dkey_hash, false,
+				       &orw->orw_epoch);
+
+		/* Do nothing if 'prepared' or 'committed'. */
+		if (rc == -DER_ALREADY || rc == 0)
 			D_GOTO(out, rc = 0);
+
+		/* Abort it firstly if exist but with different epoch,
+		 * then re-execute with new epoch.
+		 */
+		if (rc == -DER_MISMATCH)
+			/* Abort it by force with MAX epoch to guarantee
+			 * that it can be aborted.
+			 */
+			rc = vos_dtx_abort(cont->sc_hdl, DAOS_EPOCH_MAX,
+					   &orw->orw_dti, 1, true);
+
+		if (rc != 0 && rc != -DER_NONEXIST)
+			D_GOTO(out, rc);
 	}
 
 	rc = dtx_begin(&orw->orw_dti, &orw->orw_oid, cont->sc_hdl,
@@ -845,6 +862,10 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	}
 
 out:
+	if (opc == DAOS_OBJ_RPC_TGT_UPDATE &&
+	    DAOS_FAIL_CHECK(DAOS_DTX_NONLEADER_ERROR))
+		rc = -DER_IO;
+
 	rc = dtx_end(handle, cont_hdl, cont, rc);
 	ds_obj_rw_reply(rpc, rc, map_ver, &conflict);
 
@@ -892,6 +913,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	uint64_t			time_start = 0;
 	uint32_t			map_ver = 0;
 	uint32_t			flags = 0;
+	uint32_t			opc = opc_get(rpc->cr_opc);
 	int				rc;
 
 	D_ASSERT(orw != NULL);
@@ -908,7 +930,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	D_DEBUG(DB_TRACE, "rpc %p opc %d "DF_UOID" dkey %d %s tag/xs %d/%d eph "
 		DF_U64", pool ver %u/%u with "DF_DTI".\n",
-		rpc, opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
+		rpc, opc, DP_UOID(orw->orw_oid),
 		(int)orw->orw_dkey.iov_len, (char *)orw->orw_dkey.iov_buf,
 		dss_get_module_info()->dmi_tgt_id,
 		dss_get_module_info()->dmi_xs_id, orw->orw_epoch,
@@ -919,12 +941,10 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", orw->orw_epoch);
 	}
 
-	/* Single replica update or fetch. */
-	if (orw->orw_shard_tgts.ca_arrays == NULL) {
-		/* No resend case for single replica yet XXX */
+	if (opc == DAOS_OBJ_RPC_FETCH) {
 		rc = obj_local_rw(rpc, cont_hdl, cont, NULL);
 		if (rc != 0) {
-			D_ERROR(DF_UOID": rw_local (update) failed %d.\n",
+			D_ERROR(DF_UOID": rw_local (fetch) failed %d.\n",
 				DP_UOID(orw->orw_oid), rc);
 			D_GOTO(out, rc);
 		}
@@ -934,18 +954,24 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	/* Handle resend. */
 	if (orw->orw_flags & ORF_RESEND) {
+		daos_epoch_t	tmp = 0;
+
 		rc = dtx_handle_resend(cont->sc_hdl, &orw->orw_oid,
 				       &orw->orw_dti,
-				       orw->orw_dkey_hash, false);
+				       orw->orw_dkey_hash, false, &tmp);
 		if (rc == -DER_ALREADY)
 			D_GOTO(out, rc = 0);
+
 		if (rc == 0) {
 			flags |= ORF_RESEND;
+			orw->orw_epoch = tmp;
 		} else if (rc == -DER_NONEXIST) {
 			rc = 0;
 		} else {
 			D_GOTO(out, rc);
 		}
+	} else if (DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REQUEST)) {
+		goto cleanup;
 	}
 
 	D_TIME_START(tls->ot_sp, time_start, OBJ_PF_UPDATE);
@@ -972,6 +998,9 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 
+	if (orw->orw_flags & ORF_DTX_SYNC)
+		dlh.dlh_handle.dth_sync = 1;
+
 	exec_arg.rpc = rpc;
 	exec_arg.cont_hdl = cont_hdl;
 	exec_arg.cont = cont;
@@ -980,6 +1009,10 @@ again:
 	/* Execute the operation on all targets */
 	rc = dtx_leader_exec_ops(&dlh, ds_obj_tgt_update, &exec_arg);
 out:
+	if (opc == DAOS_OBJ_RPC_UPDATE &&
+	    DAOS_FAIL_CHECK(DAOS_DTX_LEADER_ERROR))
+		rc = -DER_IO;
+
 	/* Stop the distribute transaction */
 	rc = dtx_leader_end(&dlh, cont_hdl, cont, rc);
 	if (rc == -DER_AGAIN) {
@@ -987,7 +1020,13 @@ out:
 		D_GOTO(again, rc);
 	}
 
+	if (opc == DAOS_OBJ_RPC_UPDATE && !(orw->orw_flags & ORF_RESEND) &&
+	    DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REPLY))
+		goto cleanup;
+
 	ds_obj_rw_reply(rpc, rc, map_ver, NULL);
+
+cleanup:
 	D_TIME_END(tls->ot_sp, time_start, OBJ_PF_UPDATE);
 
 	if (cont_hdl)
@@ -1374,9 +1413,25 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	/* Handle resend. */
 	if (opi->opi_flags & ORF_RESEND) {
 		rc = dtx_handle_resend(cont->sc_hdl, &opi->opi_oid,
-				       &opi->opi_dti, opi->opi_dkey_hash, true);
-		if (rc == -DER_ALREADY)
+				       &opi->opi_dti, opi->opi_dkey_hash,
+				       true, &opi->opi_epoch);
+
+		/* Do nothing if 'prepared' or 'committed'. */
+		if (rc == -DER_ALREADY || rc == 0)
 			D_GOTO(out, rc = 0);
+
+		/* Abort it firstly if exist but with different epoch,
+		 * then re-execute with new epoch.
+		 */
+		if (rc == -DER_MISMATCH)
+			/* Abort it by force with MAX epoch to guarantee
+			 * that it can be aborted.
+			 */
+			rc = vos_dtx_abort(cont->sc_hdl, DAOS_EPOCH_MAX,
+					   &opi->opi_dti, 1, true);
+
+		if (rc != 0 && rc != -DER_NONEXIST)
+			D_GOTO(out, rc);
 	}
 
 	/* Start the local transaction */
@@ -1399,6 +1454,9 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 out:
+	if (DAOS_FAIL_CHECK(DAOS_DTX_NONLEADER_ERROR))
+		rc = -DER_IO;
+
 	/* Stop the local transaction */
 	rc = dtx_end(handle, cont_hdl, cont, rc);
 	obj_punch_complete(rpc, rc, map_version, &conflict);
@@ -1477,16 +1535,25 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 
 	/* Handle resend. */
 	if (opi->opi_flags & ORF_RESEND) {
+		daos_epoch_t	tmp = 0;
+
 		rc = dtx_handle_resend(cont->sc_hdl, &opi->opi_oid,
-				       &opi->opi_dti, opi->opi_dkey_hash, true);
+				       &opi->opi_dti, opi->opi_dkey_hash,
+				       true, &tmp);
 		if (rc == -DER_ALREADY)
 			D_GOTO(out, rc = 0);
-		if (rc == 0)
+
+		if (rc == 0) {
+			opi->opi_epoch = tmp;
 			flags |= ORF_RESEND;
-		else if (rc == -DER_NONEXIST)
+		} else if (rc == -DER_NONEXIST) {
 			rc = 0;
-		else
+		} else {
 			D_GOTO(out, rc);
+		}
+	} else if (DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REQUEST) ||
+		   DAOS_FAIL_CHECK(DAOS_DTX_LONG_TIME_RESEND)) {
+		goto cleanup;
 	}
 
 	/*
@@ -1512,6 +1579,9 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 
+	if (opi->opi_flags & ORF_DTX_SYNC)
+		dlh.dlh_handle.dth_sync = 1;
+
 	exec_arg.rpc = rpc;
 	exec_arg.cont_hdl = cont_hdl;
 	exec_arg.cont = cont;
@@ -1520,6 +1590,9 @@ again:
 	/* Execute the operation on all shards */
 	rc = dtx_leader_exec_ops(&dlh, ds_obj_tgt_punch, &exec_arg);
 out:
+	if (DAOS_FAIL_CHECK(DAOS_DTX_LEADER_ERROR))
+		rc = -DER_IO;
+
 	/* Stop the distribute transaction */
 	rc = dtx_leader_end(&dlh, cont_hdl, cont, rc);
 	if (rc == -DER_AGAIN) {
@@ -1527,7 +1600,12 @@ out:
 		D_GOTO(again, rc);
 	}
 
+	if (!(opi->opi_flags & ORF_RESEND) &&
+	    DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REPLY))
+		goto cleanup;
+
 	obj_punch_complete(rpc, rc, map_version, NULL);
+cleanup:
 	if (cont_hdl)
 		ds_cont_hdl_put(cont_hdl);
 	if (cont)

@@ -78,11 +78,6 @@ typedef struct {
 	uint32_t	 cs_chunksize;
 } daos_csum_buf_t;
 
-enum daos_anchor_flags {
-	/* The RPC will be sent to leader replica. */
-	DAOS_ANCHOR_FLAGS_TO_LEADER	= 1,
-};
-
 typedef enum {
 	DAOS_ANCHOR_TYPE_ZERO	= 0,
 	DAOS_ANCHOR_TYPE_HKEY	= 1,
