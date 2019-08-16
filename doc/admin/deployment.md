@@ -853,7 +853,7 @@ to storage format).
 <p>
 
 ```bash
-[tanabarr@boro-45 daos_m]$ orterun -np 2 -H boro-44,boro-45 --report-uri /tmp/urifile --enable-recovery daos_server -t 1 -o /home/tanabarr/projects/daos_m/utils/config/examples/daos_server_sockets.yml
+[tanabarr@boro-45 daos_m]$ orterun -np 2 -H boro-44,boro-45 --report-uri /tmp/urifile --enable-recovery daos_server -o /home/tanabarr/projects/daos_m/utils/config/examples/daos_server_sockets.yml start -t 1
 2019/03/28 12:28:07 config.go:85: debug: DAOS config read from /home/tanabarr/projects/daos_m/utils/config/examples/daos_server_sockets.yml
 2019/03/28 12:28:07 config.go:85: debug: DAOS config read from /home/tanabarr/projects/daos_m/utils/config/examples/daos_server_sockets.yml
 2019/03/28 12:28:07 main.go:79: debug: Switching control log level to DEBUG
@@ -951,7 +951,7 @@ scm_class: dcpm
 scm_list: [/dev/pmem1]
 
 4. Start DAOS control plane
-    - `orterun -np 2 -H boro-44,boro-45 --report-uri /tmp/urifile --enable-recovery daos_server -t 1 -i -o <daos>/utils/config/examples/daos_server_sockets.yml`
+    - `orterun -np 2 -H boro-44,boro-45 --report-uri /tmp/urifile --enable-recovery daos_server -o <daos>/utils/config/examples/daos_server_sockets.yml start -t 1 -i`
     [details](#-parallel-launcher)
 
 5. Provision Storage
