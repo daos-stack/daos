@@ -39,7 +39,7 @@ func (nc NvmeControllers) String() string {
 
 	for _, ctrlr := range nc {
 		fmt.Fprintf(&buf,
-			"\tPCI Address:%s Serial:%s Model:%s Fwrev:%s Socket: %d\n",
+			"\tPCI Addr:%s Serial:%s Model:%s Fwrev:%s Socket:%d\n",
 			ctrlr.Pciaddr, ctrlr.Serial, ctrlr.Model, ctrlr.Fwrev,
 			ctrlr.Socketid)
 
@@ -64,13 +64,13 @@ func (ncr NvmeControllerResults) String() string {
 
 	for _, resp := range ncr {
 		fmt.Fprintf(
-			&buf, "\tpci-address %s: status %s", resp.Pciaddr, resp.State.Status)
+			&buf, "\tPCI Addr:%s Status:%s", resp.Pciaddr, resp.State.Status)
 
 		if resp.State.Error != "" {
-			fmt.Fprintf(&buf, " error: %s", resp.State.Error)
+			fmt.Fprintf(&buf, " Error:%s", resp.State.Error)
 		}
 		if resp.State.Info != "" {
-			fmt.Fprintf(&buf, " info: %s", resp.State.Info)
+			fmt.Fprintf(&buf, " Info:%s", resp.State.Info)
 		}
 
 		fmt.Fprintf(&buf, "\n")
@@ -124,13 +124,13 @@ func (smr ScmMountResults) String() string {
 
 	for _, resp := range smr {
 		fmt.Fprintf(
-			&buf, "\tmntpoint %s: status %s", resp.Mntpoint, resp.State.Status)
+			&buf, "\tMntpoint:%s Status:%s", resp.Mntpoint, resp.State.Status)
 
 		if resp.State.Error != "" {
-			fmt.Fprintf(&buf, " error: %s", resp.State.Error)
+			fmt.Fprintf(&buf, " Error:%s", resp.State.Error)
 		}
 		if resp.State.Info != "" {
-			fmt.Fprintf(&buf, " info: %s", resp.State.Info)
+			fmt.Fprintf(&buf, " Info:%s", resp.State.Info)
 		}
 
 		fmt.Fprintf(&buf, "\n")
@@ -170,8 +170,8 @@ func (sm ScmModules) String() string {
 
 	for _, module := range sm {
 		fmt.Fprintf(&buf,
-			"\tPhysical ID: %d Capacity: %d Location: (socket %d "+
-				"memctrlr %d chan %d pos %d)\n",
+			"\tPhysicalID:%d Capacity:%d Location:(socket:%d "+
+				"memctrlr:%d chan:%d pos:%d)\n",
 			module.Physicalid, module.Capacity, module.Loc.Socket,
 			module.Loc.Memctrlr, module.Loc.Channel, module.Loc.Channelpos)
 	}
@@ -187,14 +187,17 @@ func (smr ScmModuleResults) String() string {
 	var buf bytes.Buffer
 
 	for _, resp := range smr {
-		fmt.Fprintf(
-			&buf, "\tmodule location %+v: status %s", resp.Loc, resp.State.Status)
+		fmt.Fprintf(&buf,
+			"\tModule Location:(socket:%d memctrlr:%d chan:%d "+
+				"pos:%d) Status:%s",
+			resp.Loc.Socket, resp.Loc.Memctrlr, resp.Loc.Channel,
+			resp.Loc.Channelpos, resp.State.Status)
 
 		if resp.State.Error != "" {
-			fmt.Fprintf(&buf, " error: %s", resp.State.Error)
+			fmt.Fprintf(&buf, " Error:%s", resp.State.Error)
 		}
 		if resp.State.Info != "" {
-			fmt.Fprintf(&buf, " info: %s", resp.State.Info)
+			fmt.Fprintf(&buf, " Info:%s", resp.State.Info)
 		}
 
 		fmt.Fprintf(&buf, "\n")
