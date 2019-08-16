@@ -215,7 +215,7 @@ dss_tgt_nr_get(int ncores, int nr)
 	if (nr > nr_default) {
 		if (nr > 3 * nr_default)
 			nr_accept = nr_default * 3;
-		else 
+		else
 			nr_accept = nr;
 
 		D_PRINT("%d target XS(xstream) requested exceeded the "
