@@ -390,13 +390,14 @@ dss_srv_handler(void *arg)
 		} else {
 			if (dx->dx_main_xs)
 				D_ASSERTF(dx->dx_ctx_id ==
-					  dx->dx_tgt_id + dss_sys_xs_nr,
+					  dx->dx_tgt_id + dss_sys_xs_nr -
+					  DRPC_XS_NR,
 					  "incorrect ctx_id %d for xs_id %d\n",
 					  dx->dx_ctx_id, dx->dx_xs_id);
 			else
 				D_ASSERTF(dx->dx_ctx_id ==
 					  (dss_sys_xs_nr + dss_tgt_nr +
-					   dx->dx_tgt_id),
+					   dx->dx_tgt_id - DRPC_XS_NR),
 					  "incorrect ctx_id %d for xs_id %d\n",
 					  dx->dx_ctx_id, dx->dx_xs_id);
 		}
@@ -600,7 +601,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	 * as it is only for EC/checksum/compress offloading.
 	 */
 	xs_offset = xs_id < dss_sys_xs_nr ? -1 : DSS_XS_OFFSET_IN_TGT(xs_id);
-	comm = (xs_id < dss_sys_xs_nr) || xs_offset == 0 || xs_offset == 1;
+	comm = (xs_id == 0) || xs_offset == 0 || xs_offset == 1;
 	dx->dx_tgt_id	= dss_xs2tgt(xs_id);
 	if (xs_id < dss_sys_xs_nr) {
 		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_SYS_XS_NAME_FMT,
