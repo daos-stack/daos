@@ -160,7 +160,10 @@ type PrepScmCmd struct {
 // Execute is run when PrepScmCmd activates
 //
 // Perform task then exit immediately. No config parsing performed.
-func (p *PrepScmCmd) Execute(args []string) error {
+func (p *PrepScmCmd) Execute(args []string) (err error) {
+	needsReboot := false
+	pmemDevs := make([]pmemDev, 0)
+
 	ok, _ := common.CheckSudo()
 	if !ok {
 		return errors.New("subcommand must be run as root or sudo")
@@ -174,10 +177,8 @@ func (p *PrepScmCmd) Execute(args []string) error {
 		return errors.WithMessage(err, "initialising ControlService")
 	}
 
-	fmt.Println("Scanning locally-attached SCM storage...")
 	if err := server.scm.Setup(); err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		os.Exit(1)
+		return errors.WithMessage(err, "SCM setup")
 	}
 
 	if !server.scm.initialized {
@@ -190,19 +191,22 @@ func (p *PrepScmCmd) Execute(args []string) error {
 
 	if p.Reset {
 		// run reset to remove namespaces and clear regions
-		if err := server.scm.PrepReset(); err != nil {
+		needsReboot, err = server.scm.PrepReset()
+		if err != nil {
 			return errors.WithMessage(err, "SCM prep reset")
 		}
 	} else {
 		// transition to the next state in SCM preparation
-		needsReboot, pmemDevs, err := server.scm.Prep()
+		needsReboot, pmemDevs, err = server.scm.Prep()
 		if err != nil {
 			return errors.WithMessage(err, "SCM prep")
 		}
+	}
 
-		if needsReboot {
-			fmt.Println(msgScmRebootRequired)
-		} else {
+	if needsReboot {
+		fmt.Println(msgScmRebootRequired)
+	} else {
+		if len(pmemDevs) > 0 {
 			fmt.Printf("persistent memory kernel devices:\n\t%+v\n", pmemDevs)
 		}
 	}

@@ -50,9 +50,12 @@ const (
 	cmdScmShowRegions = "ipmctl show -d PersistentMemoryType,FreeCapacity -region"
 	outScmNoRegions   = "\nThere are no Regions defined in the system."
 	// creates a AppDirect/Interleaved memory allocation goal across all DCPMMs on a system.
-	cmdScmCreateRegions   = "ipmctl create -f -goal PersistentMemoryType=AppDirect"
-	cmdScmCreateNamespace = "ndctl create-namespace" // returns json ns info
-	cmdScmListNamespaces  = "ndctl list -N"          // returns json ns info
+	cmdScmCreateRegions    = "ipmctl create -f -goal PersistentMemoryType=AppDirect"
+	cmdScmRemoveRegions    = "ipmctl create -f -goal MemoryMode=100"
+	cmdScmCreateNamespace  = "ndctl create-namespace" // returns json ns info
+	cmdScmListNamespaces   = "ndctl list -N"          // returns json ns info
+	cmdScmDisableNamespace = "ndctl disable-namespace %s"
+	cmdScmDestroyNamespace = "ndctl destroy-namespace %s"
 
 	msgScmRebootRequired   = "A reboot is required to process new memory allocation goals."
 	msgScmNoModules        = "no scm modules to prepare"
@@ -71,6 +74,7 @@ const (
 type pmemDev struct {
 	UUID     string
 	Blockdev string
+	Dev      string
 	NumaNode int `json:"numa_node"`
 }
 
@@ -173,9 +177,11 @@ func (s *scmStorage) Prep() (needsReboot bool, pmemDevs []pmemDev, err error) {
 
 // reset executes commands to remove namespaces and regions on SCM models.
 func (s *scmStorage) PrepReset() (needsReboot bool, err error) {
-	pmemDevs, err := s.getNamespaces()
+	pmemDevs := make([]pmemDev, 0)
+
+	pmemDevs, err = s.getNamespaces()
 	if err != nil {
-		return err
+		return
 	}
 
 	for _, dev := range pmemDevs {
@@ -191,18 +197,18 @@ func (s *scmStorage) PrepReset() (needsReboot bool, err error) {
 	return
 }
 
-func (s *scmStorage) removeNamespace(devName string) error {
-	_, err := s.runCmd(fmt.Sprintf(cmdScmDisableNamespace, devName))
+func (s *scmStorage) removeNamespace(devName string) (err error) {
+	_, err = s.runCmd(fmt.Sprintf(cmdScmDisableNamespace, devName))
 	if err != nil {
-		return err
+		return
 	}
 
-	_, err := s.runCmd(fmt.Sprintf(cmdScmDestroyNamespace, devName))
+	_, err = s.runCmd(fmt.Sprintf(cmdScmDestroyNamespace, devName))
 	if err != nil {
-		return err
+		return
 	}
 
-	return nil
+	return
 }
 
 // getState establishes state of SCM regions and namespaces on local server.
