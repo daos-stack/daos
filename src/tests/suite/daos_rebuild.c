@@ -1566,6 +1566,7 @@ rebuild_io_cb(void *arg)
 	return 0;
 }
 
+#if 0
 static int
 rebuild_io_post_cb(void *arg)
 {
@@ -1577,6 +1578,7 @@ rebuild_io_post_cb(void *arg)
 
 	return 0;
 }
+#endif
 
 static void
 rebuild_master_failure(void **state)
@@ -1670,7 +1672,12 @@ rebuild_multiple_failures(void **state)
 
 	arg->rebuild_cb = rebuild_io_cb;
 	arg->rebuild_cb_arg = cb_arg_oids;
+#if 0
+	/* Disable data validation because of DAOS-2915. */
 	arg->rebuild_post_cb = rebuild_io_post_cb;
+#else
+	arg->rebuild_post_cb = NULL;
+#endif
 	arg->rebuild_post_cb_arg = cb_arg_oids;
 
 	rebuild_targets(&arg, 1, ranks_to_kill, NULL, MAX_KILLS, true);
