@@ -1005,7 +1005,7 @@ systemctl start daos-server
 To check the component status use:
 systemctl status daos-server
 
-DAOS Agent failed to start check the logs with:
+If DAOS Server failed to start check the logs with:
 journalctl --unit daos-server
 ```
 
@@ -1283,7 +1283,7 @@ systemctl start daos-agent
 To check the component status use:
 systemctl status daos-agent
 
-DAOS Agent failed to start check the logs with:
+If DAOS Agent failed to start check the logs with:
 journalctl --unit daos-agent
 ```
 
