@@ -41,7 +41,7 @@ message NvmeController {
 	string serial = 2;	// serial number
 	string pciaddr = 3;	// pci address
 	string fwrev = 4;	// firmware revision
-	int32 numanode = 5;	// NUMA node
+	int32 socketid = 5;	// NUMA socket ID
 	repeated Namespace namespaces = 6;	// controller's namespaces
 }
 

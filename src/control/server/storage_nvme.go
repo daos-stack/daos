@@ -527,7 +527,7 @@ func loadControllers(ctrlrs []spdk.Controller, nss []spdk.Namespace) (
 				Serial:   c.Serial,
 				Pciaddr:  c.PCIAddr,
 				Fwrev:    c.FWRev,
-				Numanode: c.NUMANode,
+				Socketid: c.SocketID,
 				// repeated pb field
 				Namespaces: loadNamespaces(c.PCIAddr, nss),
 			})

@@ -69,7 +69,7 @@ type Controller struct {
 	Serial   string
 	PCIAddr  string
 	FWRev    string
-	NUMANode int32
+	SocketID int32
 }
 
 // Namespace struct mirrors C.struct_ns_t and
@@ -147,7 +147,7 @@ func c2GoController(ctrlr *C.struct_ctrlr_t) Controller {
 		Serial:   C.GoString(&ctrlr.serial[0]),
 		PCIAddr:  C.GoString(&ctrlr.pci_addr[0]),
 		FWRev:    C.GoString(&ctrlr.fw_rev[0]),
-		NUMANode: int32(ctrlr.socket_id),
+		SocketID: int32(ctrlr.socket_id),
 	}
 }
 
