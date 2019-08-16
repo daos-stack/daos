@@ -147,9 +147,10 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_dtx_entry_df));
 	dtx = (struct vos_dtx_entry_df *)rec_iov.iov_buf;
 
+	it_entry->ie_epoch = dtx->te_epoch;
 	it_entry->ie_xid = dtx->te_xid;
 	it_entry->ie_oid = dtx->te_oid;
-	it_entry->ie_dtx_sec = dtx->te_sec;
+	it_entry->ie_dtx_time = dtx->te_time;
 	it_entry->ie_dtx_intent = dtx->te_intent;
 	it_entry->ie_dtx_hash = dtx->te_dkey_hash;
 

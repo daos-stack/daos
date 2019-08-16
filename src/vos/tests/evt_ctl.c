@@ -327,7 +327,7 @@ ts_add_rect(void **state)
 {
 	char			*val;
 	bio_addr_t		 bio_addr = {0}; /* Fake bio addr */
-	struct evt_entry_in	 entry;
+	struct evt_entry_in	 entry = {0};
 	int			 rc;
 	bool			 should_pass;
 	static int		 total_added;
@@ -614,7 +614,7 @@ ts_many_add(void **state)
 	char			*tmp;
 	int			*seq;
 	struct evt_rect		*rect;
-	struct evt_entry_in	 entry;
+	struct evt_entry_in	 entry = {0};
 	bio_addr_t		 bio_addr = {0}; /* Fake bio addr */
 	long			 offset = 0;
 	int			 size;

@@ -29,6 +29,7 @@ OPS_SRC = ['create',
            'readlink',
            'removexattr',
            'setxattr',
+           'setattr',
            'symlink',
            'unlink',
            'write']
