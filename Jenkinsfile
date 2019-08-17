@@ -207,7 +207,9 @@ pipeline {
                     steps {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 1,
-                                       snapshot: true
+                                       snapshot: true,
+                                       inst_repos: component_repos,
+                                       inst_rpms: "argobots cart fuse3-libs hwloc-devel libisa-l libpmem libpmemobj protobuf-c spdk-devel"
                         checkoutScm url: 'https://github.com/daos-stack/daos.git',
                                     branch: "master",
                                     withSubmodules: true
