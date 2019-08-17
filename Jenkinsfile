@@ -40,7 +40,7 @@
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
 
-def arch=""
+def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
 def component_repos = "openpa libfabric pmix ompi mercury spdk isa-l fio dpdk protobuf-c fuse pmdk argobots raft cart@daos_devel1"
@@ -66,11 +66,13 @@ pipeline {
         GITHUB_USER = credentials('daos-jenkins-review-posting')
         BAHTTPS_PROXY = "${env.HTTP_PROXY ? '--build-arg HTTP_PROXY="' + env.HTTP_PROXY + '" --build-arg http_proxy="' + env.HTTP_PROXY + '"' : ''}"
         BAHTTP_PROXY = "${env.HTTP_PROXY ? '--build-arg HTTPS_PROXY="' + env.HTTPS_PROXY + '" --build-arg https_proxy="' + env.HTTPS_PROXY + '"' : ''}"
-        UID=sh(script: "id -u", returnStdout: true)
+        UID = sh(script: "id -u", returnStdout: true)
         BUILDARGS = "$env.BAHTTP_PROXY $env.BAHTTPS_PROXY "                   +
                     "--build-arg NOBUILD=1 --build-arg UID=$env.UID "         +
                     "--build-arg JENKINS_URL=$env.JENKINS_URL "               +
                     "--build-arg CACHEBUST=${currentBuild.startTimeInMillis}"
+        QUICKBUILD = sh(script: "git show -s --format=%B | grep \"^Quick-build: true\"",
+                        returnStatus: true)
     }
 
     options {
@@ -100,7 +102,8 @@ pipeline {
                             dir 'utils/docker'
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
-                                                '$BUILDARGS'
+                                                '$BUILDARGS ' +
+                                                "--build-arg QUICKBUILD=" + env.QUICKBUILD
                         }
                     }
                     steps {
@@ -307,7 +310,7 @@ pipeline {
                                     branch: "master",
                                     withSubmodules: true
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''export SSH_KEY_ARGS="-i ci_key"
+                                script: '''export SSH_KEY_ARGS="-ici_key"
                                            export CLUSH_ARGS="-o$SSH_KEY_ARGS"
                                            test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
@@ -382,7 +385,7 @@ pipeline {
                                                    ' daos',
                                        inst_rpms: "ior-hpc mpich-autoload"
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''export SSH_KEY_ARGS="-i ci_key"
+                                script: '''export SSH_KEY_ARGS="-ici_key"
                                            export CLUSH_ARGS="-o$SSH_KEY_ARGS"
                                            test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
