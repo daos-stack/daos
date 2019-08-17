@@ -42,6 +42,7 @@ class DmgCommand(CommandWithParameters):
         self.hostlist = FormattedParameter("-l {}")
         self.hostfile = FormattedParameter("-f {}")
         self.configpath = FormattedParameter("-o {}")
+        self.insecure = FormattedParameter("-i", None)
 
         # dmg options
         self.gid = FormattedParameter("--gid={}")
