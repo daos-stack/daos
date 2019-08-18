@@ -208,19 +208,19 @@ dss_tgt_nr_get(int ncores, int nr)
 	if (nr_default == 0)
 		nr_default = 1;
 
-	/* accept the user required number up to 3 times of the default
+	/* accept the user required number up to 2 times of the default
 	 * available number calculated above, but inform the user that
 	 * creating more threads than #cores may have performance impact.
 	 */
 	if (nr > nr_default) {
 		if (nr > 3 * nr_default)
-			nr_accept = nr_default * 3;
+			nr_accept = nr_default * 2;
 		else
 			nr_accept = nr;
 
 		D_PRINT("%d target XS(xstream) requested exceeded the "
 			"available XS (%d) of %d cores, Will accept up to "
-			"3 times of the available XS with potential "
+			"2 times of the available XS with potential "
 			"performance impact, %d target accepted\n",
 			nr, nr_default, ncores, nr_accept);
 		return nr_accept;
