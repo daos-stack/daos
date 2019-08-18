@@ -50,7 +50,7 @@ def ior_repos = "mpich@daos_adio-rpm ior-hpc@daos"
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
-    env.BRANCH_NAME != "master") {
+    env.BRANCH_NAME != "weekly-testing") {
    currentBuild.result = 'SUCCESS'
    return
 }
