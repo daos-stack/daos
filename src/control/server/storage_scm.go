@@ -48,7 +48,7 @@ const (
 	scmStateNoCapacity
 
 	cmdScmShowRegions = "ipmctl show -d PersistentMemoryType,FreeCapacity -region"
-	outScmNoRegions   = "\nThere are no Regions defined in the system."
+	outScmNoRegions   = "\nThere are no Regions defined in the system.\n"
 	// creates a AppDirect/Interleaved memory allocation goal across all DCPMMs on a system.
 	cmdScmCreateRegions    = "ipmctl create -f -goal PersistentMemoryType=AppDirect"
 	cmdScmRemoveRegions    = "ipmctl create -f -goal MemoryMode=100"
@@ -198,6 +198,8 @@ func (s *scmStorage) PrepReset() (needsReboot bool, err error) {
 }
 
 func (s *scmStorage) removeNamespace(devName string) (err error) {
+	log.Infof("removing SCM namespace, may take a few minutes...\n")
+
 	_, err = s.runCmd(fmt.Sprintf(cmdScmDisableNamespace, devName))
 	if err != nil {
 		return
@@ -220,6 +222,8 @@ func (s *scmStorage) getState() error {
 	if err != nil {
 		return err
 	}
+
+	log.Debugf("show region output: %s\n", out)
 
 	if out == outScmNoRegions {
 		s.state = scmStateNoRegions
@@ -314,6 +318,8 @@ func (s *scmStorage) createNamespaces() ([]pmemDev, error) {
 	devs := make([]pmemDev, 0)
 
 	for {
+		log.Infof("creating SCM namespace, may take a few minutes...\n")
+
 		out, err := s.runCmd(cmdScmCreateNamespace)
 		if err != nil {
 			return nil, err
