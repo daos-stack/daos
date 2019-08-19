@@ -23,7 +23,6 @@
 '''
 from __future__ import print_function
 
-import os
 import time
 import traceback
 import uuid
@@ -84,7 +83,7 @@ class OpenContainerTest(TestWithServers):
         """
         Test basic container bad create.
 
-        :avocado: tags=container,containeropen
+        :avocado: tags=all,container,tiny,full_regression,containeropen
         """
         container_uuid = None
         expected_for_param = []
@@ -131,10 +130,7 @@ class OpenContainerTest(TestWithServers):
                 struuid = self.container1.get_uuid_str()
                 container_uuid = uuid.UUID(struuid)
             else:
-                if uuidlist[0] == 'MFUUID':
-                    container_uuid = "misformed-uuid-0000"
-                else:
-                    container_uuid = uuid.uuid4() # random uuid
+                container_uuid = uuid.uuid4() # random uuid
 
             # tries to open the container1
             # open should be ok only if poh = pool1.handle &&
@@ -163,9 +159,6 @@ class OpenContainerTest(TestWithServers):
             print(traceback.format_exc())
             if expected_result == 'PASS':
                 self.fail("Test was expected to pass but it failed.\n")
-        finally:
-            if self.hostfile is not None:
-                os.remove(self.hostfile)
 
 if __name__ == "__main__":
     main()

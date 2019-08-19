@@ -90,6 +90,14 @@ struct test_pool {
 	daos_handle_t		poh;
 	daos_pool_info_t	pool_info;
 	daos_size_t		pool_size;
+	/* Updated if some ranks are killed during degraged or rebuild
+	 * test, so we know whether some tests is allowed to be run.
+	 */
+	d_rank_list_t		alive_svc;
+	/* Used for all pool related operation, since client will
+	 * use this rank list to find out the real leader, so it
+	 * can not be changed.
+	 */
 	d_rank_list_t		svc;
 	/* flag of slave that share the pool of other test_arg_t */
 	bool			slave;
@@ -136,7 +144,6 @@ typedef struct {
 	int			srv_disabled_ntgts;
 	int			index;
 	daos_epoch_t		hce;
-
 	/* The callback is called before pool rebuild. like disconnect
 	 * pool etc.
 	 */
@@ -260,6 +267,7 @@ int run_daos_md_replication_test(int rank, int size);
 int run_daos_oid_alloc_test(int rank, int size);
 int run_daos_degraded_test(int rank, int size);
 int run_daos_rebuild_test(int rank, int size, int *tests, int test_size);
+int run_daos_dtx_test(int rank, int size, int *tests, int test_size);
 
 void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 		      d_rank_list_t *svc, d_rank_t rank);

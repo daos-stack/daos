@@ -834,14 +834,12 @@ evt_tcx_reset_trace(struct evt_context *tcx)
  * \param root		[IN]	root address for inplace open
  * \param feats		[IN]	Optional, feature bits for create
  * \param order		[IN]	Optional, tree order for create
- * \param uma		[IN]	Memory attribute for the tree
- * \param coh		[IN]	The container open handle
- * \param info		[IN]	NVMe free space info
+ * \param cbs		[IN]	Callbacks and arguments for evt_desc
  * \param tcx_pp	[OUT]	The returned tree context
  */
 static int
 evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
-	       struct umem_attr *uma, daos_handle_t coh, void *info,
+	       struct umem_attr *uma, struct evt_desc_cbs *cbs,
 	       struct evt_context **tcx_pp)
 {
 	struct evt_context	*tcx;
@@ -855,18 +853,16 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 	if (tcx == NULL)
 		return -DER_NOMEM;
 
-	tcx->tc_ref = 1; /* for the caller */
-	tcx->tc_magic = EVT_HDL_ALIVE;
+	tcx->tc_ref	 = 1; /* for the caller */
+	tcx->tc_magic	 = EVT_HDL_ALIVE;
+	tcx->tc_root	 = root;
+	tcx->tc_desc_cbs = *cbs;
 
 	rc = umem_class_init(uma, &tcx->tc_umm);
 	if (rc != 0) {
 		D_ERROR("Failed to setup mem class %d: %d\n", uma->uma_id, rc);
 		D_GOTO(failed, rc);
 	}
-	tcx->tc_blks_info = info;
-
-	tcx->tc_root = root;
-	tcx->tc_coh = coh;
 
 	if (feats != -1) { /* tree creation */
 		tcx->tc_feats	= feats;
@@ -875,7 +871,7 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 		V_TRACE(DB_TRACE, "Create context for a new tree\n");
 
 	} else {
-		if (root->tr_pool_uuid != umem_get_uuid(&tcx->tc_umm)) {
+		if (root->tr_pool_uuid != umem_get_uuid(evt_umm(tcx))) {
 			D_ERROR("Mixing pools in same evtree not allowed\n");
 			rc = -DER_INVAL;
 			goto failed;
@@ -905,7 +901,6 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 	}
 	D_DEBUG(DB_IO, "EVTree sort policy is 0x%x\n", policy);
 
-
 	/* Initialize the embedded iterator entry array.  This is a minor
 	 * optimization if the iterator is used more than once
 	 */
@@ -930,40 +925,58 @@ evt_tcx_clone(struct evt_context *tcx, struct evt_context **tcx_pp)
 	if (!tcx->tc_root || tcx->tc_root->tr_feats == 0)
 		return -DER_INVAL;
 
-	rc = evt_tcx_create(tcx->tc_root, -1, -1, &uma, tcx->tc_coh,
-			    tcx->tc_blks_info, tcx_pp);
+	rc = evt_tcx_create(tcx->tc_root, -1, -1, &uma,
+			    &tcx->tc_desc_cbs, tcx_pp);
 	return rc;
 }
 
-static int
-evt_desc_free(struct evt_context *tcx, struct evt_desc *desc, daos_size_t size)
+int
+evt_desc_bio_free(struct evt_context *tcx, struct evt_desc *desc,
+		  daos_size_t nob)
 {
-	bio_addr_t	*addr = &desc->dc_ex_addr;
-	int		 rc = 0;
+	struct evt_desc_cbs *cbs = &tcx->tc_desc_cbs;
 
-	if (bio_addr_is_hole(addr))
-		return 0;
+	/* Free the bio address referenced by dst_desc, it is a callback
+	 * because evtree should not depend on bio functions
+	 */
+	D_ASSERT(cbs && cbs->dc_bio_free_cb);
+	return cbs->dc_bio_free_cb(evt_umm(tcx), desc, nob,
+				   cbs->dc_bio_free_args);
+}
 
-	if (addr->ba_type == DAOS_MEDIA_SCM) {
-		rc = umem_free(evt_umm(tcx), addr->ba_off);
+int
+evt_desc_log_status(struct evt_context *tcx, struct evt_desc *desc,
+		  int intent)
+{
+	struct evt_desc_cbs *cbs = &tcx->tc_desc_cbs;
+
+	D_ASSERT(cbs);
+	if (!cbs->dc_log_status_cb) {
+		return ALB_AVAILABLE_CLEAN;
 	} else {
-		struct vea_space_info *vsi = tcx->tc_blks_info;
-		uint64_t blk_off;
-		uint32_t blk_cnt;
-
-		D_ASSERT(addr->ba_type == DAOS_MEDIA_NVME);
-		D_ASSERT(vsi != NULL);
-
-		blk_off = vos_byte2blkoff(addr->ba_off);
-		blk_cnt = vos_byte2blkcnt(size);
-
-		rc = vea_free(vsi, blk_off, blk_cnt);
-		if (rc)
-			D_ERROR("Error on block ["DF_U64", %u] free. %d\n",
-				blk_off, blk_cnt, rc);
+		return cbs->dc_log_status_cb(evt_umm(tcx), desc, intent,
+					     cbs->dc_log_status_args);
 	}
+}
 
-	return rc;
+int
+evt_desc_log_add(struct evt_context *tcx, struct evt_desc *desc)
+{
+	struct evt_desc_cbs *cbs = &tcx->tc_desc_cbs;
+
+	D_ASSERT(cbs);
+	return cbs->dc_log_add_cb ?
+	       cbs->dc_log_add_cb(evt_umm(tcx), desc, cbs->dc_log_add_args) : 0;
+}
+
+int
+evt_desc_log_del(struct evt_context *tcx, struct evt_desc *desc)
+{
+	struct evt_desc_cbs *cbs = &tcx->tc_desc_cbs;
+
+	D_ASSERT(cbs);
+	return cbs->dc_log_del_cb ?
+	       cbs->dc_log_del_cb(evt_umm(tcx), desc, cbs->dc_log_del_args) : 0;
 }
 
 static int
@@ -976,13 +989,22 @@ evt_node_entry_free(struct evt_context *tcx, struct evt_node_entry *ne)
 		return 0;
 
 	desc = evt_off2desc(tcx, ne->ne_child);
-	vos_dtx_deregister_record(evt_umm(tcx), desc->dc_dtx,
-				  ne->ne_child, DTX_RT_EVT);
-	rc = evt_desc_free(tcx, desc,
-			   tcx->tc_inob * evt_rect_width(&ne->ne_rect));
-	if (rc == 0)
-		rc = umem_free(evt_umm(tcx), ne->ne_child);
+	rc = evt_desc_log_del(tcx, desc);
+	if (rc)
+		goto out;
 
+	rc = evt_desc_bio_free(tcx, desc,
+			       tcx->tc_inob * evt_rect_width(&ne->ne_rect));
+	if (rc)
+		goto out;
+
+	rc = umem_free(evt_umm(tcx), ne->ne_child);
+	if (rc)
+		goto out;
+
+	return 0;
+out:
+	D_ERROR("Failed to release entry: %s\n", d_errstr(rc));
 	return rc;
 }
 
@@ -1110,10 +1132,12 @@ evt_node_free(struct evt_context *tcx, umem_off_t nd_off)
  * data extents.
  */
 static int
-evt_node_destroy(struct evt_context *tcx, umem_off_t nd_off, int level)
+evt_node_destroy(struct evt_context *tcx, umem_off_t nd_off, int level,
+		 bool *empty_ret)
 {
 	struct evt_node_entry	*ne;
 	struct evt_node		*nd;
+	bool			 empty;
 	bool			 leaf;
 	int			 i;
 	int			 rc = 0;
@@ -1124,17 +1148,59 @@ evt_node_destroy(struct evt_context *tcx, umem_off_t nd_off, int level)
 	V_TRACE(DB_TRACE, "Destroy %s node at level %d (nr = %d)\n",
 		leaf ? "leaf" : "", level, nd->tn_nr);
 
-	for (i = 0; i < nd->tn_nr; i++) {
+	empty = true;
+	for (i = nd->tn_nr - 1; i >= 0; i--) {
 		ne = evt_node_entry_at(tcx, nd, i);
-		if (leaf)
+		if (leaf) {
 			/* NB: This will be replaced with a callback */
 			rc = evt_node_entry_free(tcx, ne);
-		else
-			rc = evt_node_destroy(tcx, ne->ne_child, level + 1);
-		if (rc != 0)
-			return rc;
+			if (rc)
+				goto out;
+
+			if (!tcx->tc_creds_on)
+				continue;
+
+			D_ASSERT(tcx->tc_creds > 0);
+			tcx->tc_creds--;
+			if (tcx->tc_creds == 0) {
+				empty = (i == 0);
+				break;
+			}
+		} else {
+			rc = evt_node_destroy(tcx, ne->ne_child, level + 1,
+					      &empty);
+			if (rc) {
+				D_ERROR("destroy failed: %s\n", d_errstr(rc));
+				goto out;
+			}
+
+			if (!tcx->tc_creds_on || tcx->tc_creds > 0) {
+				D_ASSERT(empty);
+				continue;
+			}
+			D_ASSERT(tcx->tc_creds == 0);
+
+			if (empty) {
+				if (i > 0) /* some children are not empty */
+					empty = false;
+			} else {
+				i += 1;
+			}
+			break;
+		}
 	}
-	return evt_node_free(tcx, nd_off);
+
+	if (empty) {
+		rc = evt_node_free(tcx, nd_off);
+	} else {
+		evt_node_tx_add(tcx, nd);
+		nd->tn_nr = i;
+	}
+
+	if (empty_ret)
+		*empty_ret = empty;
+out:
+	return rc;
 }
 
 /** Return the MBR of a node */
@@ -1142,14 +1208,6 @@ static struct evt_rect *
 evt_node_mbr_get(struct evt_context *tcx, struct evt_node *node)
 {
 	return &node->tn_mbr;
-}
-
-int
-evt_dtx_check_availability(struct evt_context *tcx, umem_off_t entry,
-			   uint32_t intent)
-{
-	return vos_dtx_check_availability(evt_umm(tcx), tcx->tc_coh, entry,
-					  UMOFF_NULL, intent, DTX_RT_EVT);
 }
 
 /** (Re)compute MBR for a tree node */
@@ -1263,8 +1321,7 @@ evt_root_empty(struct evt_context *tcx)
 static int
 evt_root_tx_add(struct evt_context *tcx)
 {
-	struct umem_instance	*umm = evt_umm(tcx);
-	void			*root;
+	void	*root;
 
 	if (!evt_has_tx(tcx))
 		return 0;
@@ -1272,7 +1329,7 @@ evt_root_tx_add(struct evt_context *tcx)
 	D_ASSERT(tcx->tc_root != NULL);
 	root = tcx->tc_root;
 
-	return umem_tx_add_ptr(umm, root, sizeof(*tcx->tc_root));
+	return umem_tx_add_ptr(evt_umm(tcx), root, sizeof(*root));
 }
 
 /** Initialize the tree root */
@@ -1291,7 +1348,7 @@ evt_root_init(struct evt_context *tcx)
 	root->tr_feats = tcx->tc_feats;
 	root->tr_order = tcx->tc_order;
 	root->tr_node  = UMOFF_NULL;
-	root->tr_pool_uuid = umem_get_uuid(&tcx->tc_umm);
+	root->tr_pool_uuid = umem_get_uuid(evt_umm(tcx));
 
 	return 0;
 }
@@ -1383,20 +1440,25 @@ evt_root_deactivate(struct evt_context *tcx)
 
 /** Destroy the root node and all its descendants. */
 static int
-evt_root_destroy(struct evt_context *tcx)
+evt_root_destroy(struct evt_context *tcx, bool *destroyed)
 {
-	umem_off_t	node;
-	int		rc;
+	struct evt_root *root;
+	int		 rc;
+	bool		 empty = true;
 
-	node = tcx->tc_root->tr_node;
-	if (!UMOFF_IS_NULL(node)) {
+	root = tcx->tc_root;
+	if (root && !UMOFF_IS_NULL(root->tr_node)) {
 		/* destroy the root node and all descendants */
-		rc = evt_node_destroy(tcx, node, 0);
+		rc = evt_node_destroy(tcx, root->tr_node, 0, &empty);
 		if (rc != 0)
 			return rc;
 	}
 
-	return evt_root_free(tcx);
+	*destroyed = empty;
+	if (empty)
+		evt_root_free(tcx);
+
+	return 0;
 }
 
 static int64_t
@@ -1449,8 +1511,8 @@ static int
 evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
 {
 	struct evt_rect		*mbr	  = NULL;
-	struct evt_node		*nd_tmp = NULL;
-	umem_off_t		 nm_save = UMOFF_NULL;
+	struct evt_node		*nd_tmp   = NULL;
+	umem_off_t		 nm_save  = UMOFF_NULL;
 	struct evt_entry_in	 entry	  = *ent_new;
 	int			 rc	  = 0;
 	int			 level	  = tcx->tc_depth - 1;
@@ -1679,13 +1741,11 @@ evt_desc_copy(struct evt_context *tcx, const struct evt_entry_in *ent)
 	D_ASSERT(ent->ei_inob != 0);
 	size = ent->ei_inob * evt_rect_width(&ent->ei_rect);
 
-	/* Free the pmem that dst_desc references */
-	rc = evt_desc_free(tcx, dst_desc, size);
+	rc = evt_desc_bio_free(tcx, dst_desc, size);
 	if (rc != 0)
 		return rc;
 
 	csum_buf_len = evt_csum_buf_len(tcx, &ent->ei_rect.rc_ex);
-
 	rc = umem_tx_add_ptr(evt_umm(tcx), dst_desc,
 			     sizeof(*dst_desc) + csum_buf_len);
 	if (rc != 0)
@@ -1773,7 +1833,7 @@ out:
 void
 evt_entry_fill(struct evt_context *tcx, struct evt_node *node,
 	       unsigned int at, const struct evt_rect *rect_srch,
-	       struct evt_entry *entry)
+	       uint32_t intent, struct evt_entry *entry)
 {
 	struct evt_desc	   *desc;
 	struct evt_rect	   *rect;
@@ -1810,8 +1870,8 @@ evt_entry_fill(struct evt_context *tcx, struct evt_node *node,
 
 	entry->en_addr = desc->dc_ex_addr;
 	entry->en_ver = desc->dc_ver;
-	entry->en_dtx = desc->dc_dtx;
 	evt_entry_csum_fill(tcx, desc, entry);
+	entry->en_avail_rc = evt_desc_log_status(tcx, desc, intent);
 
 	if (offset != 0) {
 		/* Adjust cached pointer since we're only referencing a
@@ -1917,8 +1977,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 			V_TRACE(DB_TRACE, "Found overlapped leaf rect\n");
 
 			desc = evt_node_desc_at(tcx, node, i);
-			rc = evt_dtx_check_availability(tcx, desc->dc_dtx,
-							intent);
+			rc = evt_desc_log_status(tcx, desc, intent);
 			/* Skip the unavailable record. */
 			if (rc == ALB_UNAVAILABLE)
 				continue;
@@ -1981,7 +2040,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 				goto out;
 			}
 
-			evt_entry_fill(tcx, node, i, rect, ent);
+			evt_entry_fill(tcx, node, i, rect, intent, ent);
 			switch (find_opc) {
 			default:
 				D_ASSERTF(0, "%d\n", find_opc);
@@ -2123,8 +2182,8 @@ evt_move_trace(struct evt_context *tcx)
  * Please check API comment in evtree.h for the details.
  */
 int
-evt_open(struct evt_root *root, struct umem_attr *uma, daos_handle_t coh,
-	 void *info, daos_handle_t *toh)
+evt_open(struct evt_root *root, struct umem_attr *uma,
+	 struct evt_desc_cbs *cbs, daos_handle_t *toh)
 {
 	struct evt_context *tcx;
 	int		    rc;
@@ -2134,7 +2193,7 @@ evt_open(struct evt_root *root, struct umem_attr *uma, daos_handle_t coh,
 		return -DER_INVAL;
 	}
 
-	rc = evt_tcx_create(root, -1, -1, uma, coh, info, &tcx);
+	rc = evt_tcx_create(root, -1, -1, uma, cbs, &tcx);
 	if (rc != 0)
 		return rc;
 
@@ -2165,8 +2224,8 @@ evt_close(daos_handle_t toh)
  * Please check API comment in evtree.h for the details.
  */
 int
-evt_create(uint64_t feats, unsigned int order, struct umem_attr *uma,
-	   struct evt_root *root, daos_handle_t coh, daos_handle_t *toh)
+evt_create(struct evt_root *root, uint64_t feats, unsigned int order,
+	   struct umem_attr *uma, struct evt_desc_cbs *cbs, daos_handle_t *toh)
 {
 	struct evt_context *tcx;
 	int		    rc;
@@ -2181,8 +2240,7 @@ evt_create(uint64_t feats, unsigned int order, struct umem_attr *uma,
 		return -DER_INVAL;
 	}
 
-	rc = evt_tcx_create(root, feats, order, uma,
-			    coh, NULL, &tcx);
+	rc = evt_tcx_create(root, feats, order, uma, cbs, &tcx);
 	if (rc != 0)
 		return rc;
 
@@ -2210,6 +2268,7 @@ int
 evt_destroy(daos_handle_t toh)
 {
 	struct evt_context *tcx;
+	bool		    destroyed;
 	int		    rc;
 
 	tcx = evt_hdl2tcx(toh);
@@ -2220,7 +2279,9 @@ evt_destroy(daos_handle_t toh)
 	if (rc != 0)
 		return rc;
 
-	rc = evt_root_destroy(tcx);
+	D_ASSERT(!tcx->tc_creds_on);
+	rc = evt_root_destroy(tcx, &destroyed);
+	D_ASSERT(rc || destroyed);
 
 	rc = evt_tx_end(tcx, rc);
 
@@ -2302,7 +2363,6 @@ evt_debug(daos_handle_t toh, int debug_level)
 	return 0;
 }
 
-
 /**
  * Tree policies
  *
@@ -2354,8 +2414,7 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 		}
 
 		desc = evt_off2desc(tcx, ne->ne_child);
-		rc = evt_dtx_check_availability(tcx, desc->dc_dtx,
-						DAOS_INTENT_CHECK);
+		rc = evt_desc_log_status(tcx, desc, DAOS_INTENT_CHECK);
 		if (rc != ALB_UNAVAILABLE) {
 			nr = nd->tn_nr - i;
 			memmove(ne + 1, ne, nr * sizeof(*ne));
@@ -2385,8 +2444,7 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 		if (i != 0 && leaf) {
 			ne = evt_node_entry_at(tcx, nd, i - 1);
 			desc = evt_off2desc(tcx, ne->ne_child);
-			rc = evt_dtx_check_availability(tcx, desc->dc_dtx,
-							DAOS_INTENT_CHECK);
+			rc = evt_desc_log_status(tcx, desc, DAOS_INTENT_CHECK);
 			if (rc == ALB_UNAVAILABLE) {
 				umem_off_t	off = ne->ne_child;
 
@@ -2424,8 +2482,7 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 			return -DER_NOSPACE;
 		ne->ne_child = desc_off;
 		desc = evt_off2ptr(tcx, desc_off);
-		rc = vos_dtx_register_record(evt_umm(tcx), desc_off,
-					     DTX_RT_EVT, 0);
+		rc = evt_desc_log_add(tcx, desc);
 		if (rc != 0)
 			/* It is unnecessary to free the PMEM that will be
 			 * dropped automatically when the PMDK transaction
@@ -2745,7 +2802,7 @@ evt_tcx_fix_trace(struct evt_context *tcx, int level)
 
 /* Delete the node pointed to by current trace */
 int
-evt_node_delete(struct evt_context *tcx, bool remove)
+evt_node_delete(struct evt_context *tcx)
 {
 	struct evt_trace	*trace;
 	struct evt_node		*node;
@@ -2764,7 +2821,7 @@ evt_node_delete(struct evt_context *tcx, bool remove)
 	 * adjustments.
 	 */
 	while (1) {
-		int			 count;
+		int	count;
 
 		trace = &tcx->tc_trace[level];
 		nm_cur = trace->tr_node;
@@ -2776,24 +2833,8 @@ evt_node_delete(struct evt_context *tcx, bool remove)
 		if (!UMOFF_IS_NULL(old_cur))
 			D_ASSERT(old_cur == ne->ne_child);
 		if (leaf) {
-			struct evt_rect	*rect;
-			struct evt_desc	*desc;
-			size_t		 width;
-
 			/* Free the evt_desc */
-			if (remove) {
-				rect = evt_node_rect_at(tcx, node,
-							trace->tr_at);
-				width = tcx->tc_inob * evt_rect_width(rect);
-				desc = evt_off2desc(tcx, ne->ne_child);
-				vos_dtx_deregister_record(evt_umm(tcx),
-					desc->dc_dtx, ne->ne_child, DTX_RT_EVT);
-				rc = evt_desc_free(tcx, desc, width);
-				if (rc != 0)
-					return rc;
-			}
-
-			rc = umem_free(evt_umm(tcx), ne->ne_child);
+			rc = evt_node_entry_free(tcx, ne);
 			if (rc != 0)
 				return rc;
 		}
@@ -2928,7 +2969,7 @@ int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
 	if (rc != 0)
 		return rc;
 
-	rc = evt_node_delete(tcx, ent == NULL);
+	rc = evt_node_delete(tcx);
 
 	/* We return NON_EXIST from evt_node_delete if there
 	 * are no subsequent nodes in the tree.  We can
@@ -3014,8 +3055,9 @@ evt_entry_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 	}
 }
 
-int evt_overhead_get(int alloc_overhead, int tree_order,
-		     struct daos_tree_overhead *ovhd)
+int
+evt_overhead_get(int alloc_overhead, int tree_order,
+		 struct daos_tree_overhead *ovhd)
 {
 	if (ovhd == NULL) {
 		D_ERROR("Invalid ovhd argument\n");
@@ -3031,4 +3073,40 @@ int evt_overhead_get(int alloc_overhead, int tree_order,
 	ovhd->to_node_overhead.no_order = tree_order;
 
 	return 0;
+}
+
+int
+evt_drain(daos_handle_t toh, int *credits, bool *destroyed)
+{
+	struct evt_context *tcx;
+	int		    rc;
+
+	tcx = evt_hdl2tcx(toh);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
+
+	if (credits) {
+		if (*credits <= 0)
+			return -DER_INVAL;
+
+		tcx->tc_creds = *credits;
+		tcx->tc_creds_on = 1;
+	}
+
+	rc = evt_tx_begin(tcx);
+	if (rc != 0)
+		return rc;
+
+	rc = evt_root_destroy(tcx, destroyed);
+	if (rc)
+		goto out;
+
+	if (tcx->tc_creds_on)
+		*credits = tcx->tc_creds;
+out:
+	rc = evt_tx_end(tcx, rc);
+
+	tcx->tc_creds_on = 0;
+	tcx->tc_creds = 0;
+	return rc;
 }

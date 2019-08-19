@@ -175,8 +175,30 @@ int dtx_batched_commit_register(struct ds_cont_hdl *hdl);
 
 void dtx_batched_commit_deregister(struct ds_cont_hdl *hdl);
 
+/**
+ * Check whether the given DTX is resent one or not.
+ *
+ * \param coh		[IN]	Container open handle.
+ * \param oid		[IN]	Pointer to the object ID.
+ * \param xid		[IN]	Pointer to the DTX identifier.
+ * \param dkey_hash	[IN]	The hashed dkey.
+ * \param punch		[IN]	For punch operation or not.
+ * \param epoch		[IN,OUT] Pointer to current epoch, if it is zero and
+ *				 if the DTX exists, then the DTX's epoch will
+ *				 be saved in it.
+ *
+ * \return		0		means that the DTX has been 'prepared',
+ *					so the local modification has been done
+ *					on related replica(s).
+ *			-DER_ALREADY	means the DTX has been committed or is
+ *					committable.
+ *			-DER_MISMATCH	means that the DTX has ever been
+ *					processed with different epoch.
+ *			Other negative value if error.
+ */
 int dtx_handle_resend(daos_handle_t coh, daos_unit_oid_t *oid,
-		      struct dtx_id *dti, uint64_t dkey_hash, bool punch);
+		      struct dtx_id *dti, uint64_t dkey_hash,
+		      bool punch, daos_epoch_t *epoch);
 
 /* XXX: The higher 48 bits of HLC is the wall clock, the lower bits are for
  *	logic clock that will be hidden when divided by NSEC_PER_SEC.

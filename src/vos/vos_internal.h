@@ -547,10 +547,6 @@ void
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
 			int count);
 
-int
-vos_dtx_abort_internal(struct vos_container *cont, struct dtx_id *dtis,
-		       int count, bool force);
-
 /**
  * Register dbtree class for DTX CoS, it is called within vos_init().
  *
@@ -1025,6 +1021,13 @@ enum {
 	SUBTR_CREATE	= (1 << 0),	/**< may create the subtree */
 	SUBTR_EVT	= (1 << 1),	/**< subtree is evtree */
 };
+
+int
+vos_bio_addr_free(struct vos_pool *pool, bio_addr_t *addr, daos_size_t nob);
+
+void
+vos_evt_desc_cbs_init(struct evt_desc_cbs *cbs, struct vos_pool *pool,
+		      daos_handle_t coh);
 
 /* vos_obj.c */
 int

@@ -89,8 +89,8 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 				       ie->ie_obj, &entry.attr);
 			if (rc) {
 				DFUSE_TRA_ERROR(ie, "dfs_ostat() failed: (%s)",
-						strerror(-rc));
-				D_GOTO(err, rc = -rc);
+						strerror(rc));
+				D_GOTO(err, rc);
 			}
 
 			entry.attr.st_ino = ie->ie_stat.st_ino;
@@ -116,8 +116,8 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	rc = dfs_mount(parent->ie_dfs->dfs_poh, dfs->dfs_coh, O_RDWR, &ddfs);
 	if (rc) {
-		DFUSE_LOG_ERROR("dfs_mount() failed: (%s)", strerror(-rc));
-		D_GOTO(close, rc = -rc);
+		DFUSE_LOG_ERROR("dfs_mount() failed: (%s)", strerror(rc));
+		D_GOTO(close, rc);
 	}
 
 	dfs->dfs_ns = ddfs;
@@ -125,8 +125,8 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDONLY, &ie->ie_obj, NULL,
 			&ie->ie_stat);
 	if (rc) {
-		DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: (%s)", strerror(-rc));
-		D_GOTO(close, rc = -rc);
+		DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: (%s)", strerror(rc));
+		D_GOTO(close, rc);
 	}
 
 	ie->ie_parent = parent->ie_stat.st_ino;
@@ -140,7 +140,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 				&ie->ie_stat.st_ino);
 	if (rc) {
 		DFUSE_TRA_ERROR(ie, "dfuse_lookup_inode() failed: (%d)", rc);
-		D_GOTO(release, rc = -rc);
+		D_GOTO(release, rc);
 	}
 
 	dfs->dfs_root = ie->ie_stat.st_ino;

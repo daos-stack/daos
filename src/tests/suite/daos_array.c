@@ -27,7 +27,6 @@
  */
 
 #include <daos.h>
-#include <daos_array.h>
 #include "daos_test.h"
 
 /** number of elements to write to array */
@@ -229,7 +228,7 @@ small_io(void **state)
 	daos_array_iod_t iod;
 	d_sg_list_t	sgl;
 	daos_range_t	rg;
-	d_iov_t	iov;
+	d_iov_t		iov;
 	char		buf[BUFLEN], rbuf[BUFLEN];
 	daos_size_t	array_size;
 	int		rc;
@@ -1023,7 +1022,7 @@ static const struct CMUnitTest array_api_tests[] = {
 	 str_mem_str_arr_io, async_disable, NULL},
 	{"Array API: Strided memory and array (non-blocking)",
 	 str_mem_str_arr_io, async_enable, NULL},
-	{"Array API: Read from Empty array & records (blocking)",
+	{"Array API: Read from Empty array and records (blocking)",
 	 read_empty_records, async_disable, NULL},
 	{"Array API: strided_array (blocking)",
 	 strided_array, async_disable, NULL},

@@ -100,12 +100,15 @@ tse_task_buf_embedded(tse_task_t *task, int size)
 
 	/** Let's assume dtp_buf is always enough at the moment */
 	/** MSC - should malloc if size requested is bigger */
+	size = tse_task_buf_size(size);
 	avail_size = sizeof(dtp->dtp_buf) - dtp->dtp_stack_top;
-	D_ASSERTF(tse_task_buf_size(size) <= avail_size,
+	D_ASSERTF(size <= avail_size,
 		  "req size %u avail size %u (all_size %lu stack_top %u)\n",
-		  tse_task_buf_size(size), avail_size, sizeof(dtp->dtp_buf),
+		  size, avail_size, sizeof(dtp->dtp_buf),
 		  dtp->dtp_stack_top);
 	dtp->dtp_embed_top = size;
+	D_ASSERT((dtp->dtp_stack_top + dtp->dtp_embed_top) <=
+		  sizeof(dtp->dtp_buf));
 	return (void *)dtp->dtp_buf;
 }
 
@@ -118,6 +121,7 @@ tse_task_stack_push(tse_task_t *task, uint32_t size)
 
 	avail_size = sizeof(dtp->dtp_buf) -
 		     (dtp->dtp_stack_top + dtp->dtp_embed_top);
+	size = tse_task_buf_size(size);
 	D_ASSERTF(size <= avail_size, "push size %u exceed avail size %u "
 		   "(all_size %lu, stack_top %u, embed_top %u).\n",
 		   size, avail_size, sizeof(dtp->dtp_buf),
@@ -137,6 +141,7 @@ tse_task_stack_pop(tse_task_t *task, uint32_t size)
 	struct tse_task_private	*dtp = tse_task2priv(task);
 	void			*poped_ptr;
 
+	size = tse_task_buf_size(size);
 	D_ASSERTF(size <= dtp->dtp_stack_top,
 		   "pop size %u exceed stack_top %u.\n",
 		   size, dtp->dtp_stack_top);
