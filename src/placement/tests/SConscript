@@ -3,8 +3,7 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('denv')
-    Import('common_tgts')
+    Import('denv', 'common_tgts')
 
     denv.AppendUnique(LIBPATH=['../../client/api'])
 
@@ -13,7 +12,7 @@ def scons():
     test_tgt = denv.SharedObject('place_obj.c')
     pl_test = daos_build.program(denv, 'pl_map', test_tgt + common_tgts,
                                  LIBS=['daos', 'daos_common', 'gurt', 'cart',
-                                       'placement', 'uuid', 'pthread'])
+                                       'placement', 'uuid', 'pthread', 'isal'])
     denv.Install('$PREFIX/bin/', pl_test)
 
 if __name__ == "SCons.Script":

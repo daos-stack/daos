@@ -75,7 +75,7 @@ class BadExcludeTest(Test):
         """
         Pass bad parameters to pool connect
 
-        :avocado: tags=pool,poolexclude,badparam,badexclude
+        :avocado: tags=all,pool,full_regression,tiny,badexclude
         """
         # parameters used in pool create
         createmode = self.params.get("mode", '/run/pool/createmode/')

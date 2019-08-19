@@ -38,6 +38,7 @@
 struct dtx_resync_entry {
 	d_list_t		dre_link;
 	struct dtx_entry	dre_dte;
+	daos_epoch_t		dre_epoch;
 	uint64_t		dre_hash;
 	uint32_t		dre_intent;
 	uint32_t		dre_in_cache:1;
@@ -250,7 +251,8 @@ dtx_status_handle(struct dtx_resync_args *dra)
 			 * rollback logic, let's abort the DTXs one by one.
 			 */
 			rc = dtx_abort(dra->po_uuid, cont->sc_uuid,
-				       &dre->dre_dte, 1, dra->version);
+				       dre->dre_epoch, &dre->dre_dte, 1,
+				       dra->version);
 			if (rc < 0)
 				err = rc;
 		}
@@ -288,7 +290,7 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	struct dtx_resync_entry		*dre;
 
 	/* Ignore new DTX after the rebuild/recovery start. */
-	if (ent->ie_dtx_sec > dra->cont->sc_dtx_resync_time)
+	if (ent->ie_dtx_time > dra->cont->sc_dtx_resync_time)
 		return 0;
 
 	/* We commit the DTXs periodically, there will be not too many DTXs
@@ -302,6 +304,7 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	if (dre == NULL)
 		return -DER_NOMEM;
 
+	dre->dre_epoch = ent->ie_epoch;
 	dre->dre_xid = ent->ie_xid;
 	dre->dre_oid = ent->ie_oid;
 	dre->dre_intent = ent->ie_dtx_intent;

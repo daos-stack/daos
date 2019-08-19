@@ -51,7 +51,7 @@ class ArrayObjTest(TestWithServers):
         Test Description: Writes an array to an object and then reads it
         back and verifies it.
 
-        :avocado: tags=object,arrayobj,regression,vm,small
+        :avocado: tags=all,smoke,pr,object,tiny,basicobject
         """
         try:
             # parameters used in pool create
