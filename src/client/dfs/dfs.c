@@ -2875,7 +2875,7 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 	char		*xname = NULL;
 	daos_handle_t	th = DAOS_TX_NONE;
 	d_sg_list_t	sgl;
-	d_iov_t	sg_iov;
+	d_iov_t		sg_iov;
 	daos_iod_t	iod;
 	daos_key_t	dkey;
 	daos_handle_t	oh;

@@ -24,7 +24,7 @@
 
 from __future__    import print_function
 import os
-from apricot import TestWithServers
+from apricot import TestWithServers, skipForTicket
 
 import write_host_file
 from mpio_utils import MpioUtils, MpioFailed
@@ -107,6 +107,7 @@ class LlnlMpi4pyHdf5(TestWithServers):
         except (MpioFailed, DaosApiError) as excep:
             self.fail("<{0} Test Failed> \n{1}".format(test_name, excep))
 
+    @skipForTicket("CORCI-635")
     def test_llnl(self):
         """
         Jira ID: DAOS-2231
@@ -119,11 +120,12 @@ class LlnlMpi4pyHdf5(TestWithServers):
         test_nb_collective, test_nb_localpointer, test_nb_rdwr,
         test_nb_readwrite, test_rdwr, test_readwrite
 
-        :avocado: tags=mpio,llnlmpi4pyhdf5,llnl
+        :avocado: tags=all,mpiio,smoke,pr,small,llnlmpi4py
         """
         test_repo = self.params.get("llnl", '/run/test_repo/')
         self.run_test(test_repo, "llnl")
 
+    @skipForTicket("CORCI-635")
     def test_mpi4py(self):
         """
         Jira ID: DAOS-2231
@@ -135,11 +137,12 @@ class LlnlMpi4pyHdf5(TestWithServers):
         testReadWriteAtAllBeginEnd, testReadWriteAll
         testIReadIWriteAll, testReadWriteAllBeginEnd
 
-        :avocado: tags=mpio,llnlmpi4pyhdf5,mpi4py
+        :avocado: tags=all,mpiio,pr,small,llnlmpi4py,mpi4py
         """
         test_repo = self.params.get("mpi4py", '/run/test_repo/')
         self.run_test(test_repo, "mpi4py")
 
+    @skipForTicket("CORCI-635")
     def test_hdf5(self):
         """
         Jira ID: DAOS-2252
