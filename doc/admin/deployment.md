@@ -997,15 +997,16 @@ modify the ExecStart line to point to your in tree daos_server binary.
 
 Once the service file is installed you can start daos_server
 with the following commands:
-
 ```
 systemctl enable daos-server
 systemctl start daos-server
-
+```
 To check the component status use:
+```
 systemctl status daos-server
-
+```
 If DAOS Server failed to start check the logs with:
+```
 journalctl --unit daos-server
 ```
 
@@ -1279,11 +1280,13 @@ with the following commands:
 ```
 systemctl enable daos-agent
 systemctl start daos-agent
-
+```
 To check the component status use:
+```
 systemctl status daos-agent
-
+```
 If DAOS Agent failed to start check the logs with:
+```
 journalctl --unit daos-agent
 ```
 
