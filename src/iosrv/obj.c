@@ -161,8 +161,9 @@ ds_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
 	if (rc)
 		return rc;
 
-	rc = dc_obj_fetch_task_create(oh, th, dkey, nr, iods, sgls,
-				      maps, NULL, dss_tse_scheduler(), &task);
+	rc = dc_obj_fetch_shard_task_create(oh, th, DIOF_TO_LEADER, 0, dkey,
+					    nr, iods, sgls, maps, NULL,
+					    dss_tse_scheduler(), &task);
 	if (rc)
 		return rc;
 

@@ -644,7 +644,7 @@ rw_completion(void *cb_arg, int err)
 			goto skip_media_error;
 		mem->mem_update = biod->bd_update;
 		mem->mem_bs = biod->bd_ctxt->bic_xs_ctxt->bxc_blobstore;
-		mem->mem_tgt_id = biod->bd_ctxt->bic_xs_ctxt->bxc_xs_id;
+		mem->mem_tgt_id = biod->bd_ctxt->bic_xs_ctxt->bxc_tgt_id;
 		spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error,
 				     mem);
 	}
@@ -759,7 +759,7 @@ dma_rw(struct bio_desc *biod, bool prep)
 		}
 	}
 
-	if (xs_ctxt->bxc_xs_id == -1) {
+	if (xs_ctxt->bxc_tgt_id == -1) {
 		D_DEBUG(DB_IO, "Self poll completion, blob:%p\n", blob);
 		xs_poll_completion(xs_ctxt, &biod->bd_inflights);
 	} else {

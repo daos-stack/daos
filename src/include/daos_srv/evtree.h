@@ -291,8 +291,8 @@ struct evt_entry {
 	bio_addr_t			en_addr;
 	/** update epoch of extent */
 	daos_epoch_t			en_epoch;
-	/** the returned evt_desc address for delete/iterator */
-	umem_off_t			en_desc;
+	/** availability check result for the entry */
+	int				en_avail_rc;
 };
 
 struct evt_list_entry {
