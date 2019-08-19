@@ -267,12 +267,6 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 		entry->status = DFUSE_IO_DIS_RSRC;
 	}
 
-	printf("Using interception: %s %s %#lx %#lx\n",
-		gah_info.pool,
-		gah_info.cont,
-		gah_info.oid.hi,
-		gah_info.oid.lo);
-
 	return true;
 }
 

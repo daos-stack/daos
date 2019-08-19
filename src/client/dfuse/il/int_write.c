@@ -37,7 +37,7 @@ ioil_do_writex(const char *buff, size_t len, off_t position,
 	d_sg_list_t		sgl = {};
 	int rc;
 
-	DFUSE_LOG_INFO("%#zx-%#zx ", position, position + len - 1);
+	DFUSE_TRA_INFO(entry, "%#zx-%#zx ", position, position + len - 1);
 
 	sgl.sg_nr = 1;
 	d_iov_set(&iov, (void *)buff, len);
@@ -50,11 +50,12 @@ ioil_do_writex(const char *buff, size_t len, off_t position,
 
 	rc = daos_array_write(entry->aoh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
 	if (rc) {
+		DFUSE_TRA_INFO(entry, "daos_array_write() failed %d", rc);
 		*errcode = daos_der2errno(rc);
 		return -1;
 	}
 
-	return 0;
+	return len;
 }
 
 ssize_t

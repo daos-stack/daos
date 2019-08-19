@@ -39,6 +39,8 @@ read_bulk(char *buff, size_t len, off_t position,
 	d_sg_list_t		sgl = {};
 	int rc;
 
+	DFUSE_TRA_INFO(entry, "%#zx-%#zx ", position, position + len - 1);
+
 	rc = daos_array_get_size(entry->aoh, DAOS_TX_NONE, &array_size, NULL);
 	if (rc) {
 		D_ERROR("daos_array_get_size() failed (%d)\n", rc);
@@ -65,11 +67,10 @@ read_bulk(char *buff, size_t len, off_t position,
 
 	rc = daos_array_read(entry->aoh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
 	if (rc) {
+		DFUSE_TRA_INFO(entry, "daos_array_read() failed %d", rc);
 		*errcode = daos_der2errno(rc);
 		return -1;
 	}
-
-	DFUSE_LOG_INFO("%#zx-%#zx ", position, position + len - 1);
 
 	return len;
 }
