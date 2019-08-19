@@ -1,11 +1,36 @@
 """Build doas common tests"""
 import daos_build
+from prereq_tools import GitRepoRetriever
+
+def define_checksum_timing(daos_build, denv):
+    checksum_timing_libs=['daos_common']
+    mchecksum_support = ARGUMENTS.get('mchecksum', False)
+    if mchecksum_support:
+        prereqs.define('mchecksum',
+                       retriever=GitRepoRetriever("https://github.com/mercury-hpc/"
+                                                  "mchecksum.git"),
+                       commands=['cmake -DBUILD_SHARED_LIBS=ON $MCHECKSUM_SRC '
+                                 '-DBUILD_TESTING=ON '
+                                 '-DCMAKE_INSTALL_PREFIX=$MCHECKSUM_PREFIX '
+                                 '-DMCHECKSUM_ENABLE_COVERAGE=OFF '
+                                 '-DMCHECKSUM_ENABLE_VERBOSE_ERROR=ON '
+                                 '-DMCHECKSUM_USE_ZLIB=OFF '
+                                 '-DCMAKE_INSTALL_RPATH=$MCHECKSUM_PREFIX/lib '
+                                 '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE ',
+                                 'make $JOBS_OPT', 'make install'],
+                       libs=['mchecksum'],
+                       out_of_src_build=True)
+        prereqs.require(denv, 'mchecksum')
+        denv.Append(CCFLAGS=['-DMCHECKSUM_SUPPORT=1'])
+        checksum_timing_libs += ['mchecksum']
+        daos_build.test(denv, 'checksum_timing', 'checksum_timing.c',
+                            LIBS=checksum_timing_libs)
+
+
 
 def scons():
     """Execute build"""
     Import('denv', 'prereqs')
-
-    prereqs.require(denv, 'mchecksum')
 
     common_test_utils = denv.SharedObject(['test_mocks.c', 'test_utils.c'])
     Export('common_test_utils')
@@ -25,8 +50,6 @@ def scons():
                     ['common_test_runner.c', 'daos_checksum_tests.c',
                      'misc_tests.c'],
                     LIBS=['daos_common', 'gurt', 'cart', 'cmocka'])
-    daos_build.test(denv, 'checksum_timing', 'checksum_timing.c',
-                    LIBS=['daos_common', 'mchecksum'])
     daos_build.test(denv, 'lru', 'lru.c',
                     LIBS=['daos_common', 'gurt', 'cart'])
     daos_build.test(denv, 'sched', 'sched.c',
@@ -35,6 +58,7 @@ def scons():
                     LIBS=['daos_common', 'gurt', 'abt'])
     daos_build.test(denv, 'acl_util_real', 'acl_util_real_tests.c',
                     LIBS=['daos_common', 'gurt', 'cmocka'])
+    define_checksum_timing(daos_build, denv)
 
     unit_env = denv.Clone()
     # Some syscalls are aliased when fortification is enabled, which makes

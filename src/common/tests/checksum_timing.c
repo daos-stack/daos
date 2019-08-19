@@ -32,8 +32,10 @@
 
 #include <getopt.h>
 #include <daos/checksum.h>
+#ifdef MCHECKSUM_SUPPORT
 #include <mchecksum.h>
 #include <mchecksum_error.h>
+#endif
 
 void timespec_diff(struct timespec *start, struct timespec *stop,
 		   struct timespec *result)
@@ -143,6 +145,8 @@ int run_timings(struct csum_ft *fts[], const int types_count,
 
 /** ----------------------------------------------------------------------- */
 /** MCHECKSUM CRC64 */
+#ifdef MCHECKSUM_SUPPORT
+
 int
 m_csum64_init(struct daos_csummer *obj)
 {
@@ -217,6 +221,7 @@ struct csum_ft m_csum64_algo = {
 		.get_size = m_csum64_get_size,
 		.name = "mcrc64"
 	};
+#endif
 
 /** ----------------------------------------------------------------------- */
 
@@ -275,9 +280,10 @@ struct csum_ft *strarg2ft(char *str)
 		return daos_csum_type2algo(CSUM_TYPE_ISAL_CRC64_REFL);
 	if (csum_str_match(str, "sha1"))
 		return daos_csum_type2algo(CSUM_TYPE_ISAL_SHA1);
+#ifdef MCHECKSUM_SUPPORT
 	if (csum_str_match(str, "mcrc64"))
 		return &m_csum64_algo;
-
+#endif
 	return NULL;
 }
 
@@ -303,7 +309,7 @@ int main(int argc, char *argv[])
 			struct csum_ft *ft = strarg2ft(optarg);
 
 			if (ft == NULL)
-				printf("'%s' not a valid csum type",
+				printf("'%s' not a valid csum type\n",
 				       optarg);
 			else {
 				csum_fts[type_count++] = ft;
@@ -325,14 +331,15 @@ int main(int argc, char *argv[])
 		}
 	}
 
-
 	if (type_count == 0) {
 		/** Setup all types */
 		enum DAOS_CSUM_TYPE type = CSUM_TYPE_UNKNOWN + 1;
 
 		for (; type < CSUM_TYPE_END; type++)
 			csum_fts[type_count++] = daos_csum_type2algo(type);
+#ifdef MCHECKSUM_SUPPORT
 		csum_fts[type_count++] = &m_csum64_algo;
+#endif
 	}
 
 	if (sizes_count == 0) {

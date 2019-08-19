@@ -159,6 +159,9 @@ sha1_init(struct daos_csummer *obj)
 	struct mh_sha1_ctx *ctx;
 
 	D_ALLOC(ctx, sizeof(struct mh_sha1_ctx));
+	if (ctx == NULL)
+		return -DER_NOMEM;
+
 	obj->dcs_ctx = ctx;
 
 	return mh_sha1_init(ctx);
@@ -235,12 +238,14 @@ daos_csummer_init(struct daos_csummer **obj, struct csum_ft *ft,
 		      size_t chunk_bytes)
 {
 	if (!ft)
-		return DER_INVAL;
+		return -DER_INVAL;
 
 	struct daos_csummer *result;
 	int rc = 0;
 
 	D_ALLOC(result, sizeof(*result));
+	if (result== NULL)
+		return -DER_NOMEM;
 
 	result->dcs_algo = ft;
 	result->dcs_chunk_size = chunk_bytes;
@@ -353,7 +358,7 @@ daos_csummer_prep_csum_buf(struct daos_csummer *obj, size_t rec_len, size_t nr,
 	int		 i;
 
 	D_ALLOC(csums, sizeof(daos_csum_buf_t) * nr);
-	if (!csums)
+	if (csums == NULL)
 		return -DER_NOMEM;
 
 	for (i = 0; i < nr; i++) { /** for each extent/checksum buf */
@@ -365,7 +370,7 @@ daos_csummer_prep_csum_buf(struct daos_csummer *obj, size_t rec_len, size_t nr,
 		csums[i].cs_buf_len = (uint32_t)(csum_len * csum_nr);
 		csums[i].cs_nr = (uint32_t)csum_nr;
 		D_ALLOC(csums[i].cs_csum, csums[i].cs_buf_len);
-		if (!csums[i].cs_csum)
+		if (csums[i].cs_csum == NULL)
 			return -DER_NOMEM;
 	}
 	*pcsum_bufs = csums;
@@ -506,10 +511,11 @@ uint64_t
 csum_chunk_count(uint32_t chunk_size, uint64_t lo_idx, uint64_t hi_idx,
 		 uint64_t rec_size)
 {
-	if (chunk_size == 0)
-		return 0;
 	uint64_t lo = lo_idx * rec_size;
 	uint64_t hi = hi_idx * rec_size;
+
+	if (chunk_size == 0)
+		return 0;
 
 	/** Align to chunk size */
 	lo = lo - lo % chunk_size;

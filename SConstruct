@@ -45,21 +45,6 @@ def set_defaults(env):
 
 def preload_prereqs(prereqs):
     """Preload prereqs specific to platform"""
-    prereqs.define('mchecksum',
-                   retriever=GitRepoRetriever("https://github.com/mercury-hpc/"
-                                              "mchecksum.git"),
-                   commands=['cmake -DBUILD_SHARED_LIBS=ON $MCHECKSUM_SRC '
-                             '-DBUILD_TESTING=ON '
-                             '-DCMAKE_INSTALL_PREFIX=$MCHECKSUM_PREFIX '
-                             '-DMCHECKSUM_ENABLE_COVERAGE=OFF '
-                             '-DMCHECKSUM_ENABLE_VERBOSE_ERROR=ON '
-                             '-DMCHECKSUM_USE_ZLIB=OFF '
-                             '-DCMAKE_INSTALL_RPATH=$MCHECKSUM_PREFIX/lib '
-                             '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE ',
-                             'make $JOBS_OPT', 'make install'],
-                   libs=['mchecksum'],
-                   out_of_src_build=True)
-
     prereqs.define('isal_crypto',
                    retriever=GitRepoRetriever("https://github.com/intel/"
                                               "isa-l_crypto"),
@@ -73,7 +58,7 @@ def preload_prereqs(prereqs):
     prereqs.define('readline', libs=['readline', 'history'],
                    package='readline')
     reqs = ['cart', 'argobots', 'pmdk', 'cmocka',
-            'uuid', 'crypto', 'fuse', 'protobufc', 'mchecksum']
+            'uuid', 'crypto', 'fuse', 'protobufc']
     if not is_platform_arm():
         reqs.extend(['spdk', 'isal', 'isal_crypto'])
     prereqs.load_definitions(prebuild=reqs)
