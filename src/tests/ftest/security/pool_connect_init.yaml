@@ -1,0 +1,26 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+ test_machines:
+  - boro-A
+timeout: 300
+server_config:
+   name: daos_server
+poolparams:
+   createmode:
+     mode: 511
+   createset:
+     setname: daos_server
+   createsize:
+       size: 107374182
+object_class: !mux
+    OC_S1:
+        obj_class: 200
+    OC_S4:
+        obj_class: 202
+    OC_SX:
+        obj_class: 214
+    OC_RP_2G1:
+        obj_class: 220
+    OC_RP_2G2:
+        obj_class: 221
