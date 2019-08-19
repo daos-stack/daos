@@ -37,6 +37,7 @@ import errno
 import yaml
 
 from avocado.utils import genio
+from general_utils import pcmd
 
 SESSIONS = {}
 
@@ -78,14 +79,13 @@ def create_server_yaml(basepath):
     """
     # Read the baseline conf file data/daos_server_baseline.yml
     try:
-        with open('{}/{}'.format(basepath,
-                                 DEFAULT_FILE), 'r') as read_file:
+        with open('{}/{}'.format(basepath, DEFAULT_FILE), 'r') as read_file:
             default_value_set = yaml.safe_load(read_file)
     except Exception as excpn:
         print("<SERVER> Exception occurred: {0}".format(str(excpn)))
         traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
-        raise ServerFailed("Failed to Read {}/{}".format(basepath,
-                                                         DEFAULT_FILE))
+        raise ServerFailed(
+            "Failed to Read {}/{}".format(basepath, DEFAULT_FILE))
 
     # Read the values from avocado_testcase.yaml file if test ran with Avocado.
     new_value_set = {}
@@ -103,8 +103,8 @@ def create_server_yaml(basepath):
             print("<SERVER> Exception occurred: {0}".format(str(excpn)))
             traceback.print_exception(
                 excpn.__class__, excpn, sys.exc_info()[2])
-            raise ServerFailed("Failed to Read {}"
-                               .format('{}.tmp'.format(avocado_yaml_file)))
+            raise ServerFailed(
+                "Failed to Read {}".format('{}.tmp'.format(avocado_yaml_file)))
 
     # Update values from avocado_testcase.yaml in DAOS yaml variables.
     if new_value_set:
@@ -156,18 +156,25 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
 
         # Create the DAOS server configuration yaml file to pass
         # with daos_server -o <FILE_NAME>
+        print("Creating the server yaml file")
         create_server_yaml(basepath)
 
-        # First make sure there are no existing servers running
+        # first make sure there are no existing servers running
+        print("Removing any existing server processes")
         kill_server(servers)
 
-        # Clean the tmpfs on the servers
-        if clean:
-            for server in servers:
-                subprocess.check_call(
-                    ['ssh', server,
-                     ("find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | xargs "
-                      "-0r rm -rf")])
+        # clean the tmpfs on the servers
+        print("Cleaning the server tmpfs directories")
+        result = pcmd(
+            servers,
+            "find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | "
+            "xargs -0r rm -rf",
+            verbose=False)
+        if len(result) > 1 or 0 not in result:
+            raise ServerFailed(
+                "Error cleaning tmpfs on servers: {}".format(
+                    ", ".join(
+                        [str(result[key]) for key in result if key != 0])))
 
         # Pile of build time variables
         with open(os.path.join(basepath, ".build_vars.json")) as json_vars:
@@ -181,13 +188,20 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
             for key, value in env_dict.items():
                 os.environ[key] = value
                 env_args.extend(["-x", "{}={}".format(key, value)])
+        # the remote orte needs to know where to find daos, in the
+        # case that it's not in the system prefix
+        # but it should already be in our PATH, so just pass our
+        # PATH along to the remote
+        if build_vars["PREFIX"] != "/usr":
+            env_args.extend(["-x", "PATH"])
 
         server_cmd = [orterun_bin, "--np", str(server_count)]
         if uri_path is not None:
             server_cmd.extend(["--report-uri", uri_path])
         server_cmd.extend(["--hostfile", hostfile, "--enable-recovery"])
         server_cmd.extend(env_args)
-	# For now run server in insecure mode until Certificate tests are in place
+
+        # Run server in insecure mode until Certificate tests are in place
         server_cmd.extend([daos_srv_bin, "-i",
                            "-a", os.path.join(basepath, "install", "tmp"),
                            "-o", '{}/{}'.format(basepath, AVOCADO_FILE)])
@@ -215,8 +229,7 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
                 output = SESSIONS[setname].stdout.read()
             except IOError as excpn:
                 if excpn.errno != errno.EAGAIN:
-                    raise ServerFailed(
-                        "Servers did not start: {}".format(excpn))
+                    raise ServerFailed("Server didn't start: {}".format(excpn))
                 continue
             match = re.findall(pattern, output)
             expected_data += output
@@ -244,7 +257,7 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
                 SESSIONS[setname].kill()
             retcode = SESSIONS[setname].wait()
             print(
-                "<SERVER> server start return code: {}\n stderr:\n{}".format(
+                "<SERVER> server start return code: {}\nstderr:\n{}".format(
                     retcode, error))
         except KeyError:
             pass
@@ -252,18 +265,26 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
 
 
 def stop_server(setname=None, hosts=None):
-    """Stop the servers.
+    """Stop the daos servers.
 
-    orterun says that if you send a ctrl-c to it, it will
-    initiate an orderly shutdown of all the processes it
-    has spawned.  Doesn't always work though.
+    Attempt to initiate an orderly shutdown of all orterun processes it has
+    spawned by sending a ctrl-c to the process matching the setname (or all
+    processes if no setname is provided).
+
+    If a list of hosts is provided, verify that all daos server processes are
+    dead.  Report an error if any processes are found and attempt to forcably
+    kill the processes.
 
     Args:
-        setname (str, optional): [description]. Defaults to None.
-        hosts ([type], optional): [description]. Defaults to None.
+        setname (str, optional): server group name used to match the session
+            used to start the server. Defaults to None.
+        hosts (list, optional): list of hosts running the server processes.
+            Defaults to None.
 
     Raises:
-        ServerFailed: if there is an error stopping the servers
+        ServerFailed: if there was an error attempting to send a signal to stop
+            the processes running the servers or after sending the signal if
+            there are processes stiull running.
 
     """
     global SESSIONS    # pylint: disable=global-variable-not-assigned
@@ -282,6 +303,7 @@ def stop_server(setname=None, hosts=None):
                 SESSIONS[setname].kill()
             SESSIONS[setname].wait()
         print("<SERVER> server stopped")
+
     except Exception as error:
         print("<SERVER> Exception occurred: {0}".format(str(error)))
         raise ServerFailed("Server didn't stop!")
@@ -289,26 +311,22 @@ def stop_server(setname=None, hosts=None):
     if not hosts:
         return
 
-    # make sure they actually stopped
-    # but give them some time to stop first
+    # Make sure the servers actually stopped.  Give them time to stop first
+    # pgrep exit status:
+    #   0 - One or more processes matched the criteria.
+    #   1 - No processes matched.
+    #   2 - Syntax error in the command line.
+    #   3 - Fatal error: out of memory etc.
     time.sleep(5)
-    found_hosts = []
-    for host in hosts:
-        proc = subprocess.Popen(["ssh", host,
-                                 "pgrep '(daos_server|daos_io_server)'"],
-                                stdout=subprocess.PIPE)
-        stdout = proc.communicate()[0]
-        resp = proc.wait()
-        if resp == 0:
-            # a daos process was found hanging around!
-            found_hosts.append(host)
-
-    if found_hosts:
-        kill_server(found_hosts)
-        raise ServerFailed("daos processes {} found on hosts "
-                           "{} after stop_server() were "
-                           "killed".format(', '.join(stdout.splitlines()),
-                                           found_hosts))
+    result = pcmd(
+        hosts, "pgrep '(daos_server|daos_io_server)'", False, expect_rc=1)
+    if len(result) > 1 or 1 not in result:
+        bad_hosts = [
+            node for key in result if key != 1 for node in list(result[key])]
+        kill_server(bad_hosts)
+        raise ServerFailed(
+            "DAOS server processes detected after attempted stop on {}".format(
+                ", ".join([str(result[key]) for key in result if key != 1])))
 
     # we can also have orphaned ssh processes that started an orted on a
     # remote node but never get cleaned up when that remote node spontaneiously
@@ -317,16 +335,17 @@ def stop_server(setname=None, hosts=None):
 
 
 def kill_server(hosts):
-    """Force killing the servers.
+    """Forcably kill any daos server processes running on the specified hosts.
 
     Sometimes stop doesn't get everything.  Really whack everything with this.
 
     Args:
         hosts (list): list of host names where servers are running
     """
-    kill_cmds = ["pkill '(daos_server|daos_io_server)' --signal INT",
-                 "sleep 5",
-                 "pkill '(daos_server|daos_io_server)' --signal KILL"]
-    for host in hosts:
-        subprocess.call(
-            "ssh {0} \"{1}\"".format(host, '; '.join(kill_cmds)), shell=True)
+    kill_cmds = [
+        "pkill '(daos_server|daos_io_server)' --signal INT",
+        "sleep 5",
+        "pkill '(daos_server|daos_io_server)' --signal KILL",
+    ]
+    # Intentionally ignoring the exit status of the command
+    pcmd(hosts, "; ".join(kill_cmds), False, None, None)
