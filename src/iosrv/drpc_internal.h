@@ -48,8 +48,6 @@ extern char *drpc_listener_socket_path;
 struct drpc_progress_context {
 	struct drpc	*listener_ctx; /** Just a pointer, not a copy */
 	d_list_t	session_ctx_list; /** Head of the session list */
-	/** Head of the list of open handler threads */
-	d_list_t	hdlr_ult_list;
 };
 
 /**
