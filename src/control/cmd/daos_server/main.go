@@ -12,8 +12,10 @@ import (
 type mainOpts struct {
 	// Minimal set of top-level options
 	ConfigPath string `short:"o" long:"config" description:"Server config file path"`
-	Debug      bool   `short:"d" long:"debug" description:"Enable debug output"`
-	JSON       bool   `short:"j" long:"json" description:"Enable JSON output"`
+	// TODO(DAOS-3129): This should be -d, but it conflicts with the start
+	// subcommand's -d flag when we default to running it.
+	Debug bool `short:"b" long:"debug" description:"Enable debug output"`
+	JSON  bool `short:"j" long:"json" description:"Enable JSON output"`
 
 	// Define subcommands
 	Storage storageCmd `command:"storage" description:"Perform tasks related to locally-attached storage"`
@@ -39,19 +41,33 @@ func exitWithError(log *logging.LeveledLogger, err error) {
 }
 
 func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error {
-	p := flags.NewParser(opts, flags.Default)
-	p.SubcommandsOptional = false
-	p.Options ^= flags.PrintErrors // Don't allow the library to print errors
-	p.CommandHandler = func(cmd flags.Commander, args []string) error {
-		if cmd == nil {
-			return nil
-		}
-
+	p := flags.NewParser(opts, flags.HelpFlag|flags.PassDoubleDash)
+	// TODO(DAOS-3129): Remove this when subcommands are required, in order
+	// to eliminate parsing ambiguity.
+	p.Options |= flags.IgnoreUnknown
+	p.SubcommandsOptional = true
+	p.CommandHandler = func(cmd flags.Commander, cmdArgs []string) error {
 		if opts.Debug {
 			log.SetLevel(logging.LogLevelDebug)
 		}
 		if opts.JSON {
 			log.WithJSONOutput()
+		}
+
+		// TODO(DAOS-3129): We should require the user to specify a subcommand, in order to
+		// improve the UX of this utility.
+		if cmd == nil {
+			log.Error("No command supplied; defaulting to start (DEPRECATED: Future versions will require a subcommand)")
+			cmd = &opts.Start
+
+			if len(cmdArgs) > 0 {
+				log.Debugf("Re-parsing unknown flags as start flags: %v", cmdArgs)
+				cmdParser := flags.NewParser(cmd, flags.None)
+				_, err := cmdParser.ParseArgs(cmdArgs)
+				if err != nil {
+					return errors.Wrap(err, "failed to parse unknown flags as start flags")
+				}
+			}
 		}
 
 		if logCmd, ok := cmd.(cmdLogger); ok {
@@ -71,7 +87,7 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 			}
 		}
 
-		if err := cmd.Execute(args); err != nil {
+		if err := cmd.Execute(cmdArgs); err != nil {
 			return err
 		}
 

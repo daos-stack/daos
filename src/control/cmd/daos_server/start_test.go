@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"os"
+	"path"
 	"reflect"
 	"regexp"
 	"strings"
@@ -40,6 +41,7 @@ func genMinimalConfig() *server.Configuration {
 				FabricIface: "foo0",
 			},
 		)
+	cfg.Path = path.Join(os.Args[0], cfg.Path)
 	cfg.NvmeShmID = -1 // Don't generate this
 	return cfg
 }
@@ -306,6 +308,54 @@ func TestStartOptions(t *testing.T) {
 	}
 }
 
+// TODO(DAOS-3129): Remove this test when we remove the default subcommand.
+func TestStartAsDefaultCommand(t *testing.T) {
+	var logBuf bytes.Buffer
+	log := logging.NewCombinedLogger(t.Name(), &logBuf).
+		WithLogLevel(logging.LogLevelDebug)
+	defer showBufOnFailure(t, logBuf)
+
+	var opts mainOpts
+	var startCalled bool
+	var gotConfig *server.Configuration
+	opts.Start.start = func(log *logging.LeveledLogger, cfg *server.Configuration) error {
+		gotConfig = cfg
+		startCalled = true
+		return nil
+	}
+	opts.Start.config = genMinimalConfig()
+	insecureTransport := server.NewConfiguration().TransportConfig
+	insecureTransport.AllowInsecure = true
+	wantConfig := genDefaultExpected().WithTransportConfig(insecureTransport)
+	wantConfigPath := "/tmp/foo/bar.yml"
+
+	err := parseOpts([]string{"-i", "-o", wantConfigPath}, &opts, log)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !startCalled {
+		t.Fatal("expected start subcommand to be invoked; but it wasn't")
+	}
+
+	if opts.ConfigPath != wantConfigPath {
+		t.Fatalf("expected config path to be %q, but it was %q",
+			wantConfigPath, opts.ConfigPath)
+	}
+
+	cmpOpts := []cmp.Option{
+		cmpopts.IgnoreUnexported(
+			server.Configuration{},
+			server.IOServerConfig{},
+			security.CertificateConfig{},
+		),
+		cmpopts.SortSlices(func(a, b string) bool { return a < b }),
+	}
+	if diff := cmp.Diff(wantConfig, gotConfig, cmpOpts...); diff != "" {
+		t.Fatalf("(-want +got):\n%s", diff)
+	}
+}
+
 func TestStartLoggingOptions(t *testing.T) {
 	for desc, tc := range map[string]struct {
 		argList   []string
@@ -314,7 +364,7 @@ func TestStartLoggingOptions(t *testing.T) {
 		wantRe    *regexp.Regexp
 	}{
 		"Debug (Short)": {
-			argList:   []string{"-d"},
+			argList:   []string{"-b"},
 			logFnName: "Debug",
 			input:     "hello",
 			wantRe:    regexp.MustCompile(`hello\n$`),
