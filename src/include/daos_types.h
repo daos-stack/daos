@@ -127,11 +127,6 @@ daos_csum_from_offset(daos_csum_buf_t *csum, uint32_t offset_bytes)
 				  daos_csum_idx_from_off(csum, offset_bytes));
 }
 
-enum daos_anchor_flags {
-	/* The RPC will be sent to leader replica. */
-	DAOS_ANCHOR_FLAGS_TO_LEADER	= 1,
-};
-
 typedef enum {
 	DAOS_ANCHOR_TYPE_ZERO	= 0,
 	DAOS_ANCHOR_TYPE_HKEY	= 1,

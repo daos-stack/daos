@@ -81,7 +81,7 @@ class BadConnectTest(Test):
         """
         Pass bad parameters to pool connect
 
-        :avocado: tags=pool,poolconnect,badparam,badconnect
+        :avocado: tags=all,pool,full_regression,tiny,badconnect
         """
 
         # parameters used in pool create

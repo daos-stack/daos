@@ -39,12 +39,14 @@ BuildRequires:  numactl-devel
 BuildRequires: CUnit-devel
 BuildRequires: golang-bin
 BuildRequires: libipmctl-devel
+BuildRequires: python-devel python36-devel
 %else
 %if (0%{?suse_version} >= 1315)
 BuildRequires:  libnuma-devel
 BuildRequires: cunit-devel
 BuildRequires: go1.10
 BuildRequires: ipmctl-devel
+BuildRequires: python-devel python3-devel
 %endif
 %endif
 Requires: cart
@@ -200,6 +202,8 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_libdir}/libduns.so
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
+%{_libdir}/python2.7/site-packages/pydaos_shim_27.so
+%{_libdir}/python3/site-packages/pydaos_shim_3.so
 %{_datadir}/%{name}/ioil-ld-opts
 %{_prefix}%{_sysconfdir}/daos.yml
 %{_prefix}%{_sysconfdir}/daos_agent.yml
