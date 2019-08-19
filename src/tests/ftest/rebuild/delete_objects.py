@@ -22,7 +22,7 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 
-from apricot import TestWithServers
+from apricot import TestWithServers, skipForTicket
 from test_utils import TestPool, TestContainer
 
 
@@ -36,6 +36,7 @@ class RebuildDeleteObjects(TestWithServers):
     :avocado: recursive
     """
 
+    @skipForTicket("DAOS-2922")
     def test_rebuild_delete_objects(self):
         """JIRA ID: DAOS-2572.
 

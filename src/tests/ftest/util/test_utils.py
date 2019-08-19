@@ -253,6 +253,11 @@ class TestPool(TestDaosApiBase):
         # pylint: disable=unused-argument
         """Check the pool info attributes.
 
+        Note:
+            Arguments may also be provided as a string with a number preceeded
+            by '<', '<=', '>', or '>=' for other comparisions besides the
+            default '=='.
+
         Args:
             pi_uuid (str, optional): pool uuid. Defaults to None.
             pi_ntargets (int, optional): number of targets. Defaults to None.
@@ -281,6 +286,11 @@ class TestPool(TestDaosApiBase):
                          ps_free_mean=None, ps_ntargets=None, ps_padding=None):
         # pylint: disable=unused-argument
         """Check the pool info space attributes.
+
+        Note:
+            Arguments may also be provided as a string with a number preceeded
+            by '<', '<=', '>', or '>=' for other comparisions besides the
+            default '=='.
 
         Args:
             ps_free_min (list, optional): minimum free space per device.
@@ -317,6 +327,11 @@ class TestPool(TestDaosApiBase):
         # pylint: disable=unused-argument
         """Check the pool info daos space attributes.
 
+        Note:
+            Arguments may also be provided as a string with a number preceeded
+            by '<', '<=', '>', or '>=' for other comparisions besides the
+            default '=='.
+
         Args:
             s_total (list, optional): total space per device. Defaults to None.
             s_free (list, optional): free space per device. Defaults to None.
@@ -342,6 +357,11 @@ class TestPool(TestDaosApiBase):
                              rs_rec_nr=None):
         # pylint: disable=unused-argument
         """Check the pool info rebuild attributes.
+
+        Note:
+            Arguments may also be provided as a string with a number preceeded
+            by '<', '<=', '>', or '>=' for other comparisions besides the
+            default '=='.
 
         Args:
             rs_version (int, optional): rebuild version. Defaults to None.
@@ -373,7 +393,10 @@ class TestPool(TestDaosApiBase):
         Args:
             check_list (list): a list of tuples containing the name of the pool
                 information attribute to check, the current value of the
-                attribute, and the expected value of the attribute.
+                attribute, and the expected value of the attribute. If the
+                expected value is specified as a string with a number preceeded
+                by '<', '<=', '>', or '>=' then this comparision will be used
+                instead of the defult '=='.
 
         Returns:
             bool: True if at least one check has been specified and all the
@@ -382,6 +405,7 @@ class TestPool(TestDaosApiBase):
         """
         check_status = len(check_list) > 0
         for check, actual, expect in check_list:
+            # Determine which comparision to utilize for this check
             compare = ("==", lambda x, y: x == y, "does not match")
             if isinstance(expect, str):
                 comparisions = {
@@ -393,7 +417,7 @@ class TestPool(TestDaosApiBase):
                         lambda x, y: x >= y, "is too small or does not match"),
                 }
                 for key, val in comparisions.items():
-                    # If the expected value is preceeded by one of the know
+                    # If the expected value is preceeded by one of the known
                     # comparision keys, use the comparision and remove the key
                     # from the expected value
                     if expect[:len(key)] == key:
