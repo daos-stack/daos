@@ -37,12 +37,10 @@ import errno
 import yaml
 import getpass
 
-from agent_utils import node_setup_okay, NodeListType
 from command_utils import CommandWithParameters
 from command_utils import BasicParameter, FormattedParameter
 from general_utils import pcmd
 from avocado.utils import genio, process
-from write_host_file import write_host_file
 
 SESSIONS = {}
 
