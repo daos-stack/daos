@@ -34,6 +34,19 @@ import enum
 from daos_cref import *
 from conversion import *
 
+DAOS_MAGIC = 0x7A89
+
+# pylint: disable=import-error
+if sys.version_info < (3, 0):
+    import pydaos_shim_27 as pydaos_shim
+else:
+    import pydaos_shim_3 as pydaos_shim
+# pylint: enable=import-error
+
+DaosObjClass = enum.Enum(
+    "DaosObjClass",
+    {key: value for key, value in pydaos_shim.__dict__.items()
+    if key.startswith("OC_")})
 
 class DaosPool(object):
     """ A python object representing a DAOS pool."""
@@ -615,93 +628,6 @@ class DaosObjClassOld(enum.IntEnum):
     DAOS_OC_EC_K2P1_L32K  = 22
     DAOS_OC_EC_K2P2_L32K  = 23
     DAOS_OC_EC_K8P2_L1M   = 24
-
-
-class DaosObjClass(enum.IntEnum):
-    OC_BACK_COMPAT = 50
-    OC_TINY        = 51
-    OC_SMALL       = 52
-    OC_LARGE       = 53
-    OC_MAX         = 54
-    OC_RP_TINY     = 60
-    OC_RP_SMALL    = 61
-    OC_RP_LARGE    = 62
-    OC_RP_MAX      = 63
-    OC_RP_SF_TINY  = 70
-    OC_RP_SF_SMALL = 71
-    OC_RP_SF_LARGE = 72
-    OC_RP_SF_MAX   = 73
-    OC_RP_XSF      = 80
-    OC_EC_TINY     = 100
-    OC_EC_SMALL    = 101
-    OC_EC_LARGE    = 102
-    OC_EC_MAX      = 103
-    OC_S1          = 200
-    OC_S2          = 201
-    OC_S4          = 202
-    OC_S8          = 203
-    OC_S16         = 204
-    OC_S32         = 205
-    OC_S64         = 206
-    OC_S128        = 207
-    OC_S256        = 208
-    OC_S512        = 209
-    OC_S1K         = 210
-    OC_S2K         = 211
-    OC_S4K         = 212
-    OC_S8K         = 213
-    OC_SX          = 214
-    OC_RP_2G1      = 220
-    OC_RP_2G2      = 221
-    OC_RP_2G4      = 222
-    OC_RP_2G8      = 223
-    OC_RP_2G16     = 224
-    OC_RP_2G32     = 225
-    OC_RP_2G64     = 226
-    OC_RP_2G128    = 227
-    OC_RP_2G256    = 228
-    OC_RP_2G512    = 229
-    OC_RP_2G1K     = 230
-    OC_RP_2G2K     = 231
-    OC_RP_2G4K     = 232
-    OC_RP_2G8K     = 233
-    OC_RP_2GX      = 234
-    OC_RP_3G1      = 240
-    OC_RP_3G2      = 241
-    OC_RP_3G4      = 242
-    OC_RP_3G8      = 243
-    OC_RP_3G16     = 244
-    OC_RP_3G32     = 245
-    OC_RP_3G64     = 246
-    OC_RP_3G128    = 247
-    OC_RP_3G256    = 248
-    OC_RP_3G512    = 249
-    OC_RP_3G1K     = 250
-    OC_RP_3G2K     = 251
-    OC_RP_3G4K     = 252
-    OC_RP_3G8K     = 253
-    OC_RP_3GX      = 254
-    OC_RP_8G1      = 260
-    OC_RP_8G2      = 261
-    OC_RP_8G4      = 262
-    OC_RP_8G8      = 263
-    OC_RP_8G16     = 264
-    OC_RP_8G32     = 265
-    OC_RP_8G64     = 266
-    OC_RP_8G128    = 267
-    OC_RP_8G256    = 268
-    OC_RP_8G512    = 269
-    OC_RP_8G1K     = 270
-    OC_RP_8G2K     = 271
-    OC_RP_8G4K     = 272
-    OC_RP_8G8K     = 273
-    OC_RP_8GX      = 274
-    OC_RESERVED    = 1024
-    OC_RP_4G1      = 1025
-    OC_RP_4G2      = 1026
-    OC_RP_4G4      = 1027
-    OC_RP_4GX      = 1028
-
 
 ConvertObjClass = {
     DaosObjClassOld.DAOS_OC_TINY_RW     : DaosObjClass.OC_S1,
@@ -1625,7 +1551,7 @@ class DaosContainer(object):
         return c_tx.value
 
     def commit_tx(self, txn):
-        """ close out a transaction that is done being modified """
+        """commit a transaction that is done being modified """
 
         # container should be  in the open state
         if self.coh == 0:
@@ -1638,6 +1564,22 @@ class DaosContainer(object):
         if ret != 0:
             raise DaosApiError("TX commit returned non-zero. RC: {0}"
                                .format(ret))
+
+    def close_tx(self, txn):
+        """close out a transaction that is done being modified """
+
+        # container should be  in the open state
+        if self.coh == 0:
+            raise DaosApiError("Container needs to be open.")
+
+        c_tx = ctypes.c_uint64(txn)
+
+        func = self.context.get_function('close-tx')
+        ret = func(c_tx, None)
+        if ret != 0:
+            raise DaosApiError("TX close returned non-zero. RC: {0}"
+                               .format(ret))
+
 
     def write_an_array_value(self, datalist, dkey, akey, obj=None, rank=None,
                              obj_cls=None):

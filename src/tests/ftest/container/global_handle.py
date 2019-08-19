@@ -112,7 +112,7 @@ class GlobalHandle(TestWithServers):
 
         Test Description: Use a pool handle in another process.
 
-        :avocado: tags=container,conthandle,vm,small,regression
+        :avocado: tags=all,container,tiny,pr,conthandle
         """
 
         try:

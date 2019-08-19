@@ -412,6 +412,21 @@ bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now)
 	if (get_bdev_type(bdev) != BDEV_CLASS_NVME)
 		return;
 
+	/*
+	 * TODO:
+	 * Faulty device criteria check (Check current in-memory device health
+	 * state).
+	 * Mechanism to notify admin of if any BIO errors exist. Given I/O
+	 * error, checksum error and health monitoring information, admin can
+	 * determine if device should be marked as FAULTY (SMD device state
+	 * updated).
+	 */
+
+
+	/*
+	 * Continue querying current SPDK device health stats.
+	 */
+
 	if (!spdk_bdev_io_type_supported(bdev, SPDK_BDEV_IO_TYPE_NVME_ADMIN)) {
 		D_ERROR("Bdev NVMe admin passthru not supported!\n");
 		return;
@@ -476,11 +491,11 @@ bio_xs_io_stat(struct bio_xs_context *ctxt, uint64_t now)
 
 		D_ASSERT(bdev != NULL);
 
-		D_PRINT("SPDK IO STAT: xs_id[%d] dev[%s] read_bytes["DF_U64"], "
+		D_PRINT("SPDK IO STAT: tgt[%d] dev[%s] read_bytes["DF_U64"], "
 			"read_ops["DF_U64"], write_bytes["DF_U64"], "
 			"write_ops["DF_U64"], read_latency_ticks["DF_U64"], "
 			"write_latency_ticks["DF_U64"]\n",
-			ctxt->bxc_xs_id, spdk_bdev_get_name(bdev),
+			ctxt->bxc_tgt_id, spdk_bdev_get_name(bdev),
 			stat.bytes_read, stat.num_read_ops, stat.bytes_written,
 			stat.num_write_ops, stat.read_latency_ticks,
 			stat.write_latency_ticks);
@@ -562,4 +577,34 @@ bio_init_health_monitoring(struct bio_blobstore *bb,
 	bb->bb_dev_health.bdh_inflights = 0;
 
 	return 0;
+}
+
+/*
+ * MEDIA ERROR event.
+ * Store BIO I/O error in in-memory device state. Called from device owner
+ * xstream only.
+ */
+void
+bio_media_error(void *msg_arg)
+{
+	struct media_error_msg	*mem = msg_arg;
+	struct bio_dev_state	*dev_state;
+
+	dev_state = &mem->mem_bs->bb_dev_health.bdh_health_state;
+
+	if (mem->mem_unmap) {
+		/* Update unmap error counter */
+		dev_state->bds_bio_unmap_errs++;
+		D_ERROR("Unmap error logged from tgt_id:%d\n", mem->mem_tgt_id);
+	} else {
+		/* Update read/write I/O error counters */
+		if (mem->mem_update)
+			dev_state->bds_bio_write_errs++;
+		else
+			dev_state->bds_bio_read_errs++;
+		D_ERROR("%s error logged from xs_id:%d\n",
+			mem->mem_update ? "Write" : "Read", mem->mem_tgt_id);
+	}
+
+	D_FREE(mem);
 }

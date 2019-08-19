@@ -179,11 +179,11 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 		umem_attr_get(&tins->ti_umm, &uma);
 		rc = dbtree_open_inplace_ex(&obj->vo_tree, &uma, tins->ti_coh,
-					    tins->ti_blks_info, &toh);
+					    tins->ti_priv, &toh);
 		if (rc != 0)
 			D_ERROR("Failed to open OI tree: %d\n", rc);
 		else
-			dbtree_destroy(toh, NULL);
+			dbtree_destroy(toh, args);
 	}
 	umem_free(umm, rec->rec_off);
 	return rc;
@@ -291,7 +291,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 		return rc;
 
 	/* Object ID not found insert it to the OI tree */
-	D_DEBUG(DB_TRACE, "Object"DF_UOID" not found adding it.. eph "
+	D_DEBUG(DB_TRACE, "Object "DF_UOID" not found adding it.. eph "
 		DF_U64"\n", DP_UOID(oid), epoch);
 
 	hkey = &key.oi_hkey;
@@ -741,8 +741,7 @@ vos_obj_tab_destroy(struct vos_pool *pool, struct vos_obj_table_df *otab_df)
 	}
 
 	rc = dbtree_open_inplace_ex(&otab_df->obt_btr, &pool->vp_uma,
-				    DAOS_HDL_INVAL, pool->vp_vea_info,
-				    &btr_hdl);
+				    DAOS_HDL_INVAL, pool, &btr_hdl);
 	if (rc) {
 		D_ERROR("No Object handle, Tree open failed\n");
 		D_GOTO(exit, rc = -DER_NONEXIST);

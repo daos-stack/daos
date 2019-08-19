@@ -78,6 +78,10 @@ struct evt_context {
 	uint16_t			 tc_order;
 	/** cached tree depth (reduce PMEM access) */
 	uint16_t			 tc_depth;
+	/** number of credits for "drain" operation */
+	int				 tc_creds:30;
+	/** credits is enabled */
+	int				 tc_creds_on:1;
 	/** cached number of bytes per entry */
 	uint32_t			 tc_inob;
 	/** cached tree feature bits (reduce PMEM access) */
@@ -86,11 +90,6 @@ struct evt_context {
 	struct umem_instance		 tc_umm;
 	/** pmemobj pool uuid */
 	uint64_t			 tc_pmempool_uuid;
-	/**
-	 * NVMe free space tracking information used for NVMe record
-	 * alloc & free
-	 */
-	void				*tc_blks_info;
 	/** embedded iterator */
 	struct evt_iterator		 tc_iter;
 	/** space to store tree search path */
@@ -99,8 +98,7 @@ struct evt_context {
 	struct evt_trace		*tc_trace;
 	/** customized operation table for different tree policies */
 	struct evt_policy_ops		*tc_ops;
-	/* The container open handle */
-	daos_handle_t			 tc_coh;
+	struct evt_desc_cbs		 tc_desc_cbs;
 };
 
 #define EVT_NODE_NULL			UMOFF_NULL
@@ -144,6 +142,9 @@ evt_off2desc(struct evt_context *tcx, umem_off_t offset)
 
 	return desc;
 }
+
+int
+evt_desc_log_status(struct evt_context *tcx, struct evt_desc *desc, int intent);
 
 /** Helper function for starting a PMDK transaction, if applicable */
 static inline int
@@ -229,13 +230,12 @@ int evt_tcx_clone(struct evt_context *tcx, struct evt_context **tcx_pp);
 /** Remove the leaf node at the current trace
  *
  * \param[IN]	tcx	The context to use for delete
- * \param[IN]	remove	If true, payload is free'd internally
  *
  *  The trace is set as if evt_move_trace were called.
  *
  * Returns -DER_NONEXIST if it's the last item in the trace
  */
-int evt_node_delete(struct evt_context *tcx, bool remove);
+int evt_node_delete(struct evt_context *tcx);
 
 #define EVT_HDL_ALIVE	0xbabecafe
 #define EVT_HDL_DEAD	0xdeadbeef
@@ -398,13 +398,14 @@ static inline struct evt_rect *evt_nd_off_rect_at(struct evt_context *tcx,
  * \param[IN]	node		The tree node
  * \param[IN]	at		The index in the node
  * \param[IN]	rect_srch	The original rectangle used for the search
+ * \param[IN]	intent		The operation intent
  * \param[OUT]	entry		The entry to fill
  *
  * The selected extent will be trimmed by the search rectangle used.
  */
 void evt_entry_fill(struct evt_context *tcx, struct evt_node *node,
 		    unsigned int at, const struct evt_rect *rect_srch,
-		    struct evt_entry *entry);
+		    uint32_t intent, struct evt_entry *entry);
 
 /**
  * Check whether the EVT record is available or not.

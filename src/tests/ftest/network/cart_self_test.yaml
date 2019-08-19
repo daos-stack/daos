@@ -3,6 +3,7 @@
 hosts:
   test_machines:
     - boro-A
+timeout: 180
 server_config:
   name: daos_server
 testparams:
