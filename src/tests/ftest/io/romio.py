@@ -27,6 +27,7 @@ import os
 import sys
 import json
 from avocado import Test
+from apricot import skipForTicket
 
 sys.path.append('./util')
 sys.path.append('../util')
@@ -95,12 +96,13 @@ class Romio(Test):
             agent_utils.stop_agent(self.agent_sessions, self.hostlist_clients)
         server_utils.stop_server(hosts=self.hostlist_servers)
 
+    @skipForTicket("CORCI-635")
     def test_romio(self):
         """
         Test ID: DAOS-1994
         Run Romio test provided in mpich package
         Testing various I/O functions provided in romio test suite
-        :avocado: tags=mpio,romio
+        :avocado: tags=all,mpiio,pr,small,romio
         """
         # setting romio parameters
         romio_test_repo = self.params.get("romio_repo", '/run/romio/')
