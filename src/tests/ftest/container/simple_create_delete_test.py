@@ -28,11 +28,11 @@ import traceback
 from avocado import main
 from apricot import TestWithServers
 
-import write_host_file
 from daos_api import DaosApiError
 from conversion import c_uuid_to_str
 from general_utils import get_pool, get_container
 
+# pylint: disable=broad-except
 class SimpleCreateDeleteTest(TestWithServers):
     """
     Tests DAOS container basics including create, destroy, open, query
@@ -48,7 +48,7 @@ class SimpleCreateDeleteTest(TestWithServers):
         """
         Test basic container create/destroy/open/close/query.
 
-        :avocado:tags=all,pr,container,containercreate,containerdestroy,basecont
+        :avocado: tags=all,container,pr,medium,basecont
         """
         try:
             # Parameters used in pool create

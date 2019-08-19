@@ -39,7 +39,7 @@ tests:
         - PASS
     anotheruid:
       uid:
-        - 1001
+        - other_user
         - PASS
   gids: !mux
     validgid:
@@ -52,7 +52,7 @@ tests:
         - PASS
     anotheruid:
       gid:
-        - 1001
+        - other_group
         - PASS
   setnames: !mux
     validsetname:

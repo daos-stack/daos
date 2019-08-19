@@ -40,7 +40,7 @@ class IorEightServers(IorTestBase):
             Different combinations of 1/64/128 Clients and
             1K/4K/32K/128K/512K/1M transfersize.
 
-        :avocado: tags=ior,eightservers,ior_sequential
+        :avocado: tags=all,daosio,ior_sequential
         """
         ior_flags = self.params.get("F", "/run/ior/iorflags/sequential/")
         self.ior_cmd.flags.update(ior_flags)
@@ -56,7 +56,7 @@ class IorEightServers(IorTestBase):
             Different combinations of 1/64/128 Clients and
             1K/4K/32K/128K/512K/1M transfersize.
 
-        :avocado: tags=ior,eightservers,ior_random
+        :avocado: tags=all,daosio,ior_random
         """
         ior_flags = self.params.get("F", "/run/ior/iorflags/random/")
         self.ior_cmd.flags.update(ior_flags)
