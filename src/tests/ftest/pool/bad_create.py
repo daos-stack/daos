@@ -84,10 +84,6 @@ class BadCreateTest(Test):
         pool = None
         expected_for_param = []
 
-        modelist = self.params.get("mode", '/run/createtests/modes/*')
-        mode = modelist[0]
-        expected_for_param.append(modelist[1])
-
         uidlist = self.params.get("uid", '/run/createtests/uids/*')
         uid = uidlist[0]
         expected_for_param.append(uidlist[1])
@@ -148,7 +144,7 @@ class BadCreateTest(Test):
             # initialize a python pool object then create the underlying
             # daos storage
             pool = DaosPool(context)
-            pool.create(mode, uid, gid, size, group, targetptr)
+            pool.create(0, uid, gid, size, group, targetptr)
 
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
