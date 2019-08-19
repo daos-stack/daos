@@ -353,7 +353,7 @@ enum dss_ult_type {
 	/** aggregation ULT */
 	DSS_ULT_AGGREGATE,
 	/** drpc listener ULT */
-	DSS_ULT_DRPC,
+	DSS_ULT_DRPC_LISTENER,
 	/** miscellaneous ULT */
 	DSS_ULT_MISC,
 	/** drpc handler ULT */

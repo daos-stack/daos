@@ -142,7 +142,7 @@ drpc_listener_start_ult(ABT_thread *thread)
 
 	/* Create a ULT to start the drpc listener */
 	rc = dss_ult_create(drpc_listener_run, (void *)ctx,
-			    DSS_ULT_DRPC, 0, 0, thread);
+			    DSS_ULT_DRPC_LISTENER, 0, 0, thread);
 	if (rc != 0) {
 		D_ERROR("Failed to create drpc listener ULT: %d\n", rc);
 		drpc_progress_context_close(ctx);

@@ -111,7 +111,7 @@ dss_ult_xs(int ult_type, int tgt_id)
 	case DSS_ULT_RDB:
 	case DSS_ULT_DRPC_HANDLER:
 		return 0;
-	case DSS_ULT_DRPC:
+	case DSS_ULT_DRPC_LISTENER:
 		return 1;
 	case DSS_ULT_REBUILD:
 	case DSS_ULT_AGGREGATE:
@@ -140,7 +140,7 @@ dss_ult_pool(int ult_type)
 	case DSS_ULT_CHECKSUM:
 	case DSS_ULT_COMPRESS:
 	case DSS_ULT_POOL_SRV:
-	case DSS_ULT_DRPC:
+	case DSS_ULT_DRPC_LISTENER:
 	case DSS_ULT_RDB:
 	case DSS_ULT_MISC:
 	case DSS_ULT_DRPC_HANDLER:
