@@ -244,7 +244,7 @@ daos_csummer_init(struct daos_csummer **obj, struct csum_ft *ft,
 	int rc = 0;
 
 	D_ALLOC(result, sizeof(*result));
-	if (result== NULL)
+	if (result == NULL)
 		return -DER_NOMEM;
 
 	result->dcs_algo = ft;

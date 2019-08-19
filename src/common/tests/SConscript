@@ -2,11 +2,15 @@
 import daos_build
 from prereq_tools import GitRepoRetriever
 
-def define_checksum_timing(build, env):
+def define_checksum_timing(build, env, prereqs):
     """Define the Checksum Timing build"""
     checksum_timing_libs = ['daos_common']
-    mchecksum_support = ARGUMENTS.get('mchecksum', False)
-    if mchecksum_support:
+    AddOption('--mchecksum',
+              dest='mchecksum',
+              action='store_true',
+              default=False,
+              help='Include mchecksum library')
+    if GetOption("mchecksum"):
         prereqs.define('mchecksum',
                        retriever=GitRepoRetriever("https://github.com/"
                                                   "mercury-hpc/"
@@ -60,7 +64,7 @@ def scons():
                     LIBS=['daos_common', 'gurt', 'abt'])
     daos_build.test(denv, 'acl_util_real', 'acl_util_real_tests.c',
                     LIBS=['daos_common', 'gurt', 'cmocka'])
-    define_checksum_timing(daos_build, denv)
+    define_checksum_timing(daos_build, denv, prereqs)
 
     unit_env = denv.Clone()
     # Some syscalls are aliased when fortification is enabled, which makes

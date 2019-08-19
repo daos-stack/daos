@@ -142,7 +142,7 @@ The server flow is dependent on a custom handler function, whose job is to dispa
     ```
     drpc_close(session_ctx);
     ```
-7. When it's time to shut down the server, close any open session contexts, as noted above. Then `drpc_close()` the listener context. 
+7. When it's time to shut down the server, close any open session contexts, as noted above. Then `drpc_close()` the listener context.
 
 ## Checksum
 
