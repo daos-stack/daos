@@ -209,15 +209,18 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 	daos_cont_info_t	cont_info;
 	int			rc;
 	d_rank_list_t		*svcl;
-	uuid_t			p;
-	uuid_t			c;
+	uuid_t			pool_uuid;
+	uuid_t			cont_uuid;
 
 	if (fd == -1)
 		return false;
 
+	gah_info.version = DFUSE_IOCTL_VERSION;
+
 	rc = ioctl(fd, DFUSE_IOCTL_GAH, &gah_info);
 	if (rc != 0) {
-		DFUSE_LOG_INFO("ioctl call on %d failed %d", fd, rc);
+		int err = errno;
+		DFUSE_LOG_INFO("ioctl call on %d failed %d %d", fd, rc, err);
 		return false;
 	}
 
@@ -234,30 +237,30 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 
 	svcl = daos_rank_list_parse("0", ":");
 
-	if (uuid_parse(&gah_info.pool[0], p) < 0) {
+	if (uuid_parse(&gah_info.pool[0], pool_uuid) < 0) {
 		return false;
 	}
 
-	if (uuid_parse(&gah_info.cont[0], c) < 0) {
+	if (uuid_parse(&gah_info.cont[0], cont_uuid) < 0) {
 		return false;
 	}
 
-	rc = daos_pool_connect(p, NULL, svcl, DAOS_PC_RW,
+	rc = daos_pool_connect(pool_uuid, NULL, svcl, DAOS_PC_RW,
 			       &entry->poh, &pool_info,
 			       NULL);
 	if (rc)
 		return false;
 
-	rc = daos_cont_open(entry->poh, c, DAOS_COO_RW, &entry->coh,
+	rc = daos_cont_open(entry->poh, cont_uuid, DAOS_COO_RW, &entry->coh,
 			    &cont_info, NULL);
 	if (rc)
-		return false;
+		D_GOTO(pool_close, 0);
 
 	rc = daos_array_open_with_attr(entry->coh, gah_info.oid, DAOS_TX_NONE,
 				       DAOS_OO_RW, cell_size, chunk_size,
 				       &entry->aoh, NULL);
 	if (rc)
-		return false;
+		D_GOTO(cont_close, 0);
 
 	rc = vector_set(&fd_table, fd, entry);
 	if (rc != 0) {
@@ -265,9 +268,21 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 			       rc);
 		/* Disable kernel bypass */
 		entry->status = DFUSE_IO_DIS_RSRC;
+		D_GOTO(array_close, 0);
 	}
 
 	return true;
+
+array_close:
+	daos_array_close(entry->aoh, NULL);
+
+cont_close:
+	daos_cont_close(entry->coh, NULL);
+
+pool_close:
+	daos_pool_disconnect(entry->poh, NULL);
+
+	return false;
 }
 
 static bool
@@ -371,6 +386,18 @@ dfuse_close(int fd)
 	DFUSE_LOG_INFO("close(fd=%d." GAH_PRINT_STR ") intercepted, bypass=%s",
 		       fd, GAH_PRINT_VAL(entry),
 		       bypass_status[entry->status]);
+
+#if 0
+	/* This should be correct, however does not work in cases where
+	 * dup() has been called on the FD, because the old FD may be closed
+	 * leading to inability to access the new one.
+	 */
+	daos_array_close(entry->aoh, NULL);
+
+	daos_cont_close(entry->coh, NULL);
+
+	daos_pool_disconnect(entry->poh, NULL);
+#endif
 
 	vector_decref(&fd_table, entry);
 
