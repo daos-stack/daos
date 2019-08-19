@@ -2,12 +2,14 @@
 import daos_build
 from prereq_tools import GitRepoRetriever
 
-def define_checksum_timing(daos_build, denv):
-    checksum_timing_libs=['daos_common']
+def define_checksum_timing(build, env):
+    """Define the Checksum Timing build"""
+    checksum_timing_libs = ['daos_common']
     mchecksum_support = ARGUMENTS.get('mchecksum', False)
     if mchecksum_support:
         prereqs.define('mchecksum',
-                       retriever=GitRepoRetriever("https://github.com/mercury-hpc/"
+                       retriever=GitRepoRetriever("https://github.com/"
+                                                  "mercury-hpc/"
                                                   "mchecksum.git"),
                        commands=['cmake -DBUILD_SHARED_LIBS=ON $MCHECKSUM_SRC '
                                  '-DBUILD_TESTING=ON '
@@ -20,11 +22,11 @@ def define_checksum_timing(daos_build, denv):
                                  'make $JOBS_OPT', 'make install'],
                        libs=['mchecksum'],
                        out_of_src_build=True)
-        prereqs.require(denv, 'mchecksum')
-        denv.Append(CCFLAGS=['-DMCHECKSUM_SUPPORT=1'])
+        prereqs.require(env, 'mchecksum')
+        env.Append(CCFLAGS=['-DMCHECKSUM_SUPPORT=1'])
         checksum_timing_libs += ['mchecksum']
-        daos_build.test(denv, 'checksum_timing', 'checksum_timing.c',
-                            LIBS=checksum_timing_libs)
+        build.test(env, 'checksum_timing', 'checksum_timing.c',
+                   LIBS=checksum_timing_libs)
 
 
 
