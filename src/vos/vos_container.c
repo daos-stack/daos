@@ -159,14 +159,14 @@ static btr_ops_t vct_ops = {
 };
 
 static int
-cont_df_lookup(struct vos_pool *vpool, struct d_uuid *ukey,
+cont_df_lookup(struct vos_pool *pool, struct d_uuid *ukey,
 	       struct cont_df_args *args)
 {
 	d_iov_t	key, value;
 
 	d_iov_set(&key, ukey, sizeof(struct d_uuid));
 	d_iov_set(&value, args, sizeof(struct cont_df_args));
-	return dbtree_lookup(vpool->vp_cont_th, &key, &value);
+	return dbtree_lookup(pool->vp_cont_th, &key, &value);
 }
 
 /**
