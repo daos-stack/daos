@@ -255,3 +255,25 @@ func Run(cmd string) error {
 
 	return err
 }
+
+// GetConsent scans stdin for yes/no
+func GetConsent() bool {
+	var response string
+
+	log.Info("Are you sure you want to continue? (yes/no)\n")
+
+	_, err := fmt.Scanln(&response)
+	if err != nil {
+		log.Errorf("Error reading input: %s\n", err)
+		return false
+	}
+
+	if response == "no" {
+		return false
+	} else if response != "yes" {
+		log.Info("Please type yes or no and then press enter:")
+		return GetConsent()
+	}
+
+	return true
+}
