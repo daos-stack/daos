@@ -176,7 +176,7 @@ ioil_init(void)
 		return;
 	}
 
-	rc = ioil_initialize_fd_table(rlimit.rlim_max / 2);
+	rc = ioil_initialize_fd_table(rlimit.rlim_max);
 	if (rc != 0) {
 		DFUSE_LOG_ERROR("Could not create fd_table, rc = %d,"
 				", disabling kernel bypass", rc);
