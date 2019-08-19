@@ -408,11 +408,11 @@ class TestPool(TestDaosApiBase):
             self.log.info(
                 "Verifying the pool %s: %s %s %s",
                 check, actual, compare[0], expect)
-            check_status = compare[1](actual, expect)
-            if not check_status:
+            if not compare[1](actual, expect):
                 msg = "  The {} {}: actual={}, expected={}".format(
                     check, compare[2], actual, expect)
                 self.log.error(msg)
+                check_status = False
         return check_status
 
     def rebuild_complete(self):
@@ -820,9 +820,10 @@ class TestContainer(TestDaosApiBase):
         """
         self.open()
         self.log.info(
-            "Writing objects in container %s%s%s", self.uuid,
-            " on rank {}".format(
-                rank) if not isinstance(rank, type(None)) else "",
+            "Writing %s objects in container %s%s%s",
+            self.object_qty.value,
+            self.uuid,
+            " on rank {}".format(rank) if rank is not None else "",
             " with object class {}".format(obj_class) if obj_class else "")
         for _ in range(self.object_qty.value):
             self.written_data.append(TestContainerData())
@@ -925,4 +926,57 @@ class TestContainer(TestDaosApiBase):
         self.log.info(
             "Occurrences of rank {} in the target rank list: {}".format(
                 rank, count))
+        return count
+
+    def punch_objects(self, indices):
+        """Punch committed objects from the container.
+
+        Args:
+            indices (list): list of index numbers indicating which written
+                objects to punch from the self.written_data list
+
+        Raises:
+            DaosTestError: if there is an error punching the object or
+                determining which objec to punch
+
+        Returns:
+            int: number of successfully punched objects
+
+        """
+        self.open()
+        self.log.info(
+            "Punching %s objects from container %s with %s written objects",
+            len(indices), self.uuid, len(self.written_data))
+        count = 0
+        if len(self.written_data) > 0:
+            for index in indices:
+                # Find the object to punch at the specified index
+                txn = 0
+                try:
+                    obj = self.written_data[index].obj
+                except IndexError:
+                    raise DaosTestError(
+                        "Invalid index {} for written data".format(index))
+
+                # Close the object
+                self.log.info(
+                    "Closing object (index: %s, txn: %s) in container %s",
+                    index, txn, self.uuid)
+                try:
+                    self._call_method(obj.close, {})
+                except DaosApiError as error:
+                    self.log.error("  Error: %s", str(error))
+                    continue
+
+                # Punch the object
+                self.log.info(
+                    "Punching object (index: %s, txn: %s) from container %s",
+                    index, txn, self.uuid)
+                try:
+                    self._call_method(obj.punch, {"txn": txn})
+                    count += 1
+                except DaosApiError as error:
+                    self.log.error("  Error: %s", str(error))
+
+        # Retutrn the number of punched objects
         return count
