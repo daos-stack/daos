@@ -49,6 +49,14 @@ class PoolSecurityTest(TestWithServers):
         self.pool3 = self.poolCreate(root_id, root_id)
 
     def poolCreate(self, user_uid, user_gid):
+        """
+        pool create method, use pool mode, setid, and size from yaml.
+        Args:
+            user_uid: user or owner user id.
+            user_gid: user or owner group id.
+        Return:
+            pool handle.
+        """
         # get parameters from yaml file
         mode = self.params.get("mode", '/run/poolparams/createmode/', 511)
         setid = self.params.get("setname", '/run/poolparams/createset/',
@@ -69,6 +77,9 @@ class PoolSecurityTest(TestWithServers):
         return self.pool
 
     def tearDown(self):
+        """
+        tear down method
+        """
         try:
             if self.pool1 is not None:
                 self.pool1.disconnect()
