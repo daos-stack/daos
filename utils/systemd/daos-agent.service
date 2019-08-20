@@ -8,6 +8,7 @@ Type=simple
 RuntimeDirectory=daos_agent
 RuntimeDirectoryMode=0755
 #Only specify if you are running out of your development Tree
+#Also comment out the default ExecStart line
 #ExecStart=/<path to>/install/bin/daos_agent -i
 ExecStart=/usr/bin/daos_agent -i
 StandardOutput=journal
