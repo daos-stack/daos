@@ -44,11 +44,11 @@ class PoolSecurityTest(TestWithServers):
         root_id = 0
         user_uid = os.geteuid()
         user_gid = os.getegid()
-        self.pool1 = self.poolCreate(user_uid, root_id)
-        self.pool2 = self.poolCreate(root_id, user_gid)
-        self.pool3 = self.poolCreate(root_id, root_id)
+        self.pool1 = self.poolcreate(user_uid, root_id)
+        self.pool2 = self.poolcreate(root_id, user_gid)
+        self.pool3 = self.poolcreate(root_id, root_id)
 
-    def poolCreate(self, user_uid, user_gid):
+    def poolcreate(self, user_uid, user_gid):
         """
         pool create method, use pool mode, setid, and size from yaml.
         Args:
