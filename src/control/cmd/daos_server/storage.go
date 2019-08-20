@@ -100,12 +100,21 @@ type storagePrepScmCmd struct {
 	cfgCmd
 	logCmd
 	Reset bool `short:"r" long:"reset" description:"Reset modules to memory mode after removing namespaces"`
+	Force bool `short:"f" long:"force" description:"Perform format without prompting for confirmation"`
 }
 
-func (cmd *storagePrepScmCmd) Execute(args []string) error {
+func (cmd *storagePrepScmCmd) Execute(args []string) (err error) {
 	ok, _ := common.CheckSudo()
 	if !ok {
 		return errors.New("subcommand must be run as root or sudo")
+	}
+
+	cmd.log.Info("Memory allocation goals for SCM will be changed and namespaces " +
+		"modified, this will be a destructive operation. Please ensure " +
+		"namespaces are unmounted and SCM is otherwise unused.\n")
+
+	if !cmd.Force && !common.GetConsent() {
+		return errors.New("consent not given")
 	}
 
 	srv, err := server.NewControlService(cmd.config)
@@ -128,7 +137,9 @@ func (cmd *storagePrepScmCmd) Execute(args []string) error {
 	if rebootStr != "" {
 		cmd.log.Info(rebootStr)
 	} else {
-		cmd.log.Infof("persistent memory kernel devices:\n\t%+v\n", devices)
+		if len(devices) > 0 {
+			cmd.log.Infof("persistent memory kernel devices:\n\t%+v\n", devices)
+		}
 	}
 
 	return nil

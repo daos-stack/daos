@@ -130,6 +130,7 @@ type PrepScmRequest struct {
 
 func (c *ControlService) PrepScm(req PrepScmRequest) (rebootStr string, pmemDevs []pmemDev, err error) {
 	if err = c.scm.Setup(); err != nil {
+		err = errors.WithMessage(err, "SCM setup")
 		return
 	}
 
@@ -143,20 +144,27 @@ func (c *ControlService) PrepScm(req PrepScmRequest) (rebootStr string, pmemDevs
 		return
 	}
 
+	var needsReboot bool
 	if req.Reset {
 		// run reset to remove namespaces and clear regions
-		if err = c.scm.PrepReset(); err != nil {
+		needsReboot, err = c.scm.PrepReset()
+		if err != nil {
+			err = errors.WithMessage(err, "SCM prep reset")
+			return
+		}
+	} else {
+		// transition to the next state in SCM preparation
+		needsReboot, pmemDevs, err = c.scm.Prep()
+		if err != nil {
 			err = errors.WithMessage(err, "SCM prep reset")
 			return
 		}
 	}
 
-	// transition to the next state in SCM preparation
-	var rebootReq bool
-	rebootReq, pmemDevs, err = c.scm.Prep()
-	if rebootReq {
+	if needsReboot {
 		rebootStr = msgScmRebootRequired
 	}
+
 	return
 }
 
