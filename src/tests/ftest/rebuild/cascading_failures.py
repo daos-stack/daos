@@ -21,16 +21,61 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-
-from apricot import TestWithServers
-from test_utils import TestPool, TestContainer
+from rebuild_test_base import RebuldTestBase
 
 
-class CascadingFailures(TestWithServers):
+class CascadingFailures(RebuldTestBase):
     """Test cascading failures during rebuild.
 
     :avocado: recursive
     """
+
+    def create_test_container(self):
+        """Create a container and write objects."""
+        self.container.create()
+        self.container.write_objects(
+            self.inputs.rank.value[0], self.inputs.object_class.value)
+
+    def verify_rank_objects_before_rebuild(self):
+        """Verify the first rank to be excluded has at least one object."""
+        rank_list = self.container.get_target_rank_lists(" before rebuild")
+        objects = {
+            rank: self.container.get_target_rank_count(rank, rank_list)
+            for rank in self.inputs.rank.value
+        }
+        self.assertGreater(
+            objects[self.inputs.rank.value[0]], 0,
+            "No objects written to rank {}".format(self.inputs.rank.value[0]))
+
+    def verify_rank_objects_after_rebuild(self):
+        """Verify the excluded rank has zero objects."""
+        rank_list = self.container.get_target_rank_lists(" after rebuild")
+        objects = {
+            rank: self.container.get_target_rank_count(rank, rank_list)
+            for rank in self.inputs.rank.value
+        }
+        for rank in self.inputs.rank.value:
+            self.assertEqual(
+                objects[rank], 0,
+                "Excluded rank {} still has objects".format(rank))
+
+    def start_rebuild(self):
+        """Start the rebuild process."""
+        # Exclude the first rank from the pool to initiate rebuild
+        self.pool.start_rebuild(
+            self.server_group, self.inputs.rank.value[0], self.d_log)
+
+        # Wait for rebuild to start
+        self.pool.wait_for_rebuild(True, 1)
+
+    def execute_rebuild_steps(self):
+        """Execute test steps during rebuild."""
+        # Exclude the second rank from the pool during rebuild
+        self.pool.start_rebuild(
+            self.server_group, self.inputs.rank.value[1], self.d_log)
+
+        # Populate the container with additional data during rebuild
+        self.container.write_objects(obj_class=self.inputs.object_class.value)
 
     def test_cascading_failures(self):
         """Jira ID: DAOS-844.
@@ -48,111 +93,4 @@ class CascadingFailures(TestWithServers):
 
         :avocado: tags=rebuild,cascadingfailure
         """
-        # Get the test parameters
-        pool = TestPool(self.context, self.log)
-        pool.get_params(self)
-        container = TestContainer(pool)
-        container.get_params(self)
-        targets = self.params.get("targets", "/run/server_config/*")
-        obj_class = self.params.get("obj_class", "/run/test/*")
-        rank_index = self.params.get("rank_index", "/run/test/*")
-        node_qty = len(self.hostlist_servers)
-
-        # Verify there are enough servers for the requested replica
-        min_required = 6 if obj_class == "OC_RP_3G1" else 5
-        if node_qty < min_required:
-            self.cancel(
-                "Not enough servers ({}) for object class {}".format(
-                    min_required, obj_class))
-
-        # Create and connect to a pool
-        pool.create()
-        pool.connect()
-
-        # Create and open a container
-        container.create()
-
-        # Populate the container with data
-        container.write_objects(obj_class=obj_class)
-
-        # Determine which ranks have replicas of the data
-        target_rank_lists = container.get_target_rank_lists(" before rebuild")
-        exclude_rank_list = target_rank_lists[rank_index]
-        self.log.info("Excluding cascading ranks: %s", exclude_rank_list)
-
-        # Setup the pool info checks
-        info_checks = {
-            "pi_uuid": pool.uuid,
-            "pi_ntargets": node_qty * targets,
-            "pi_nnodes": node_qty,
-            "pi_ndisabled": 0,
-        }
-        rebuild_checks = {
-            "rs_errno": 0,
-            "rs_done": 1,
-            "rs_obj_nr": 0,
-            "rs_rec_nr": 0,
-        }
-        rebuild_objs = 0
-
-        # Verify the pool info and start rebuild
-        for index in range(2):
-            # Count the number of objects written to this rank
-            rebuild_objs = container.get_target_rank_count(
-                exclude_rank_list[index], target_rank_lists)
-            self.log.info(
-                "Expecting %s rebuilt objects for rank %s",
-                rebuild_objs, index)
-
-            # Check the pool info
-            status = pool.check_pool_info(**info_checks)
-            status &= pool.check_rebuild_status(**rebuild_checks)
-            self.assertTrue(
-                status,
-                "Error verifying pool info prior to excluding rank {}".format(
-                    exclude_rank_list[index]))
-
-            # Exclude the next rank with replica data
-            pool.start_rebuild(
-                self.server_group, exclude_rank_list[index], self.d_log)
-
-            # Update the checks to reflect the ongoing rebuild
-            info_checks["pi_ndisabled"] += targets
-            rebuild_checks["rs_done"] = 0
-            rebuild_checks["rs_obj_nr"] = ">=0"
-            rebuild_checks["rs_rec_nr"] = ">=0"
-
-            if index == 0:
-                # Wait for rebuild to start
-                pool.wait_for_rebuild(True, 1)
-            else:
-                # Check the pool info
-                status = pool.check_pool_info(**info_checks)
-                status &= pool.check_rebuild_status(**rebuild_checks)
-                self.assertTrue(
-                    status,
-                    "Error verifying pool info after excluding rank {}".format(
-                        exclude_rank_list[index]))
-
-        # Populate the container with data during rebuild
-        container.write_objects(obj_class=obj_class)
-
-        # Wait for rebuild to complete
-        pool.wait_for_rebuild(False, 1)
-
-        # # Verify all the data can be read after rebuild
-        # status = container.read_objects()
-        # self.assertTrue(status, "Error reading the data after rebuild")
-
-        # Display the updated target rank list
-        container.get_target_rank_lists(" after rebuild")
-
-        # Check the pool info
-        rebuild_checks["rs_done"] = 1
-        rebuild_checks["rs_obj_nr"] = rebuild_objs
-        rebuild_checks["rs_rec_nr"] = \
-            rebuild_checks["rs_obj_nr"] * container.record_qty.value
-        status = pool.check_pool_info(**info_checks)
-        status &= pool.check_rebuild_status(**rebuild_checks)
-        self.assertTrue(status, "Error verifying pool info after rebuild")
-        self.log.info("Test passed")
+        self.execute_rebuild_test()

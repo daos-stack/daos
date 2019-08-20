@@ -8,7 +8,7 @@ hosts:
     - boro-F
   test_clients:
     - boro-G
-timeout: 240
+timeout: 360
 server_config:
   name: daos_server
   targets: 8
@@ -16,7 +16,7 @@ pool:
   mode: 511
   group: daos_server
   scm_size: 1073741824
-  svcn: 6
+  svcn: 2
 container:
   akey_size: 5
   dkey_size: 5
@@ -24,17 +24,7 @@ container:
   object_qty: 10
   record_qty: 10
 test:
-  object_classes: !mux
-    OC_RP_2G1:
-      obj_class: OC_RP_2G1
-    OC_RP_3G1:
-      obj_class: OC_RP_3G1
-  rank_indicies: !mux
-    index_0:
-      rank_index: 0
-    index_1:
-      rank_index: 1
-    index_2:
-      rank_index: 2
-    index_3:
-      rank_index: 3
+  object_class: OC_RP_3G2
+  rank:
+    - 3
+    - 4
