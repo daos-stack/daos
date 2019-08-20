@@ -37,10 +37,18 @@ class NvmeObject(TestWithServers):
 
     Test Class Description:
         Test the general functional operations of objects on nvme storage
-        i.e. Creation/Updating/Fetching
+        i.e. Creation/Updating/Fetching for single pool and multiple pools.
 
     :avocado: recursive
     """
+
+    def setUp(self):
+        """Set Up nodes for each test case"""
+        super(NvmeObject, self).setUp()
+
+        # set common params
+        self.record_size = self.params.get("record_size", "/run/container/*")
+        self.pool_size = self.params.get("size", "/run/pool/createsize/*")
 
     def tearDown(self):
         """Tear Down each test case."""
@@ -54,7 +62,7 @@ class NvmeObject(TestWithServers):
             super(NvmeObject, self).tearDown()
 
     @avocado.fail_on(DaosApiError)
-    def test_nvme_object(self):
+    def test_nvme_object_single_pool(self):
         """Jira ID: DAOS-2087.
 
         Test Description:
@@ -65,18 +73,56 @@ class NvmeObject(TestWithServers):
         Use Cases:
             Verify the objects are being created and the data is not
             corrupted.
-        :avocado: tags=nvme,nvme_object,medium
+        :avocado: tags=nvme,nvme_object_single_pool,medium
         """
-        record_size = self.params.get("record_size", "/run/container/*")
-        pool_size = self.params.get("size", "/run/pool/createsize/*")
-        for size in pool_size:
+        
+        # Test Params
+        self.pool = TestPool(self.context, self.log)
+        self.pool.get_params(self)
+        self.container = TestContainer(self.pool)
+        self.container.get_params(self)
+
+        # set pool size
+        self.pool.scm_size.update(self.pool_size[0])
+        # Create a pool
+        self.pool.create()
+        self.pool.connect()
+
+        # create container   
+        self.container.create()
+        print(self.record_size[:-1])
+        for record in self.record_size[:-1]:
+            self.container.record_qty.update(record)
+            print(self.container.record_qty)
+            # write multiple objects
+            self.container.write_objects()
+
+            # read written objects and verify
+            self.container.read_objects()
+
+    @avocado.fail_on(DaosApiError)
+    def test_nvme_object_multiple_pools(self):
+        """Jira ID: DAOS-2087.
+
+        Test Description:
+            Test will create multiple pools on nvme using TestPool
+            Create large number of objects
+            Update/Fetch with different object ID in multiple pools
+
+        Use Cases:
+            Verify the objects are being created and the data is not
+            corrupted.
+        :avocado: tags=nvme,nvme_object_multiple_pools,medium
+        """
+        
+        for size in self.pool_size:
             # Test Params
             self.pool = TestPool(self.context, self.log) 
             self.pool.get_params(self)
             self.container = TestContainer(self.pool)
             self.container.get_params(self)
 
-#        for size in pool_size:
+            # set pool size
             self.pool.scm_size.update(size)
             # Create a pool
             self.pool.create()
@@ -84,8 +130,8 @@ class NvmeObject(TestWithServers):
 
             # create container
             self.container.create()
-            print(record_size)
-            for record in record_size:
+            print(self.record_size)
+            for record in self.record_size:
                 self.container.record_qty.update(record)
                 print(self.container.record_qty)
                 # write multiple objects
