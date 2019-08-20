@@ -47,7 +47,7 @@ class SimpleCreateDeleteTest(TestWithServers):
         """
         Test basic pool creation.
 
-        :avocado: tags=pool,poolcreate,simplecreate
+        :avocado: tags=all,pool,smoke,full_regression,tiny,simplecreate
         """
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the

@@ -34,6 +34,7 @@ from general_utils import DaosTestError
 
 from daos_api import DaosPool, DaosContainer, DaosApiError
 
+# pylint: disable = global-variable-not-assigned, global-statement
 GLOB_SIGNAL = None
 GLOB_RC = -99000000
 
@@ -141,7 +142,7 @@ class ContainerAttributeTest(TestWithServers):
     def test_container_attribute(self):
         """
         Test basic container attribute tests.
-        :avocado: tags=container,container_attr,attribute,sync_conattribute
+        :avocado: tags=all,tiny,full_regression,container,sync_conattribute
         """
         expected_for_param = []
         name = self.params.get("name", '/run/attrtests/name_handles/*/')
@@ -184,7 +185,7 @@ class ContainerAttributeTest(TestWithServers):
         """
         Test basic container attribute tests.
 
-        :avocado: tags=container,container_attr,attribute,async_conattribute
+        :avocado: tags=all,small,full_regression,container,async_conattribute
         """
         global GLOB_SIGNAL
         global GLOB_RC
