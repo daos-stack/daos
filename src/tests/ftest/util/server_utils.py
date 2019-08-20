@@ -37,7 +37,7 @@ import errno
 import yaml
 import getpass
 
-from agent_utils import node_setup_okay, NodeListType
+from agent_utils import run_agent
 from general_utils import pcmd
 from command_utils import CommandWithParameters
 from command_utils import BasicParameter, FormattedParameter
@@ -97,11 +97,7 @@ class ServerCommand(CommandWithParameters):
         clean_server(self.hosts)
 
         # Ensure the environment for the daos server on each host
-        okay, failed, path = node_setup_okay(self.hosts, NodeListType.SERVER)
-        if not okay:
-            raise ServerFailed(
-                "Server node {} does not have directory {} set up correctly "
-                "for user {}.".format(failed, path, getpass.getuser()))
+        run_agent(path, self.hosts)
 
         # Create the hostfile
         self.hostfile = write_host_file(self.hosts, path, slots)
