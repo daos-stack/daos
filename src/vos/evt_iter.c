@@ -236,12 +236,10 @@ evt_iter_move(struct evt_context *tcx, struct evt_iterator *iter)
 
 			entry = evt_ent_array_get(&iter->it_entries,
 						  iter->it_index);
-			desc = evt_off2desc(tcx, entry->en_desc);
-			rc1 = evt_desc_log_status(tcx, desc, intent);
-			if (rc1 < 0)
-				return rc1;
+			if (entry->en_avail_rc < 0)
+				return entry->en_avail_rc;
 
-			if (rc1 == ALB_UNAVAILABLE)
+			if (entry->en_avail_rc == ALB_UNAVAILABLE)
 				continue;
 
 			if (iter->it_options & EVT_ITER_SKIP_HOLES &&
@@ -591,7 +589,8 @@ evt_iter_fetch(daos_handle_t ih, unsigned int *inob, struct evt_entry *entry,
 	rect  = evt_node_rect_at(tcx, node, trace->tr_at);
 
 	if (entry)
-		evt_entry_fill(tcx, node, trace->tr_at, NULL, entry);
+		evt_entry_fill(tcx, node, trace->tr_at, NULL,
+			       evt_iter_intent(iter), entry);
 set_anchor:
 	*inob = tcx->tc_inob;
 
