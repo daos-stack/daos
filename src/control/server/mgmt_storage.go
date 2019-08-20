@@ -29,6 +29,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	types "github.com/daos-stack/daos/src/control/common/storage"
 	log "github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -46,6 +47,40 @@ func addState(status pb.ResponseStatus, errMsg string, infoMsg string,
 	}
 
 	return state
+}
+
+// PrepNvmeStorage configures SSDs for user specific access with SPDK.
+func (c *ControlService) PrepNvmeStorage(ctx context.Context, req *pb.PrepNvmeReq) (
+	*pb.PrepNvmeResp, error) {
+
+	resp := new(pb.PrepNvmeResp)
+
+	if req.Reset_ {
+		c.nvme.PrepReset(resp)
+
+		return resp, nil
+	}
+
+	c.nvme.Prep(resp)
+
+	return resp, nil
+}
+
+// PrepScmStorage configures modules collectively as kernel "pmem" devices.
+func (c *ControlService) PrepScmStorage(ctx context.Context, req *pb.PrepScmReq) (
+	*pb.PrepScmResp, error) {
+
+	resp := new(pb.PrepScmResp)
+
+	if req.Reset_ {
+		c.nvme.PrepReset(resp)
+
+		return resp, nil
+	}
+
+	c.scm.Prep(resp)
+
+	return resp, nil
 }
 
 // StorageScan discovers non-volatile storage hardware on node.
@@ -78,11 +113,11 @@ func (c *ControlService) doFormat(i int, resp *pb.StorageFormatResp) error {
 		serverFormatted = true
 	}
 
-	ctrlrResults := common.NvmeControllerResults{}
+	ctrlrResults := types.NvmeControllerResults{}
 	c.nvme.Format(i, &ctrlrResults)
 	resp.Crets = ctrlrResults
 
-	mountResults := common.ScmMountResults{}
+	mountResults := types.ScmMountResults{}
 	c.scm.Format(i, &mountResults)
 	resp.Mrets = mountResults
 
@@ -135,11 +170,11 @@ func (c *ControlService) StorageUpdate(
 	resp := new(pb.StorageUpdateResp)
 
 	for i := range c.config.Servers {
-		ctrlrResults := common.NvmeControllerResults{}
+		ctrlrResults := types.NvmeControllerResults{}
 		c.nvme.Update(i, req.Nvme, &ctrlrResults)
 		resp.Crets = ctrlrResults
 
-		moduleResults := common.ScmModuleResults{}
+		moduleResults := types.ScmModuleResults{}
 		c.scm.Update(i, req.Scm, &moduleResults)
 		resp.Mrets = moduleResults
 	}

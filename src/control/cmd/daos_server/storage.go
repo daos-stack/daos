@@ -78,10 +78,7 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 
 type storagePrepNvmeCmd struct {
 	cfgCmd
-	PCIWhiteList string `short:"w" long:"pci-whitelist" description:"Whitespace separated list of PCI devices (by address) to be unbound from Kernel driver and used with SPDK (default is all PCI devices)."`
-	NrHugepages  int    `short:"p" long:"hugepages" description:"Number of hugepages to allocate (in MB) for use by SPDK (default 1024)"`
-	TargetUser   string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
-	Reset        bool   `short:"r" long:"reset" description:"Reset SPDK returning devices to kernel modules"`
+	common.StoragePrepNvmeCmd
 }
 
 func (cmd *storagePrepNvmeCmd) Execute(args []string) error {
@@ -112,8 +109,7 @@ func (cmd *storagePrepNvmeCmd) Execute(args []string) error {
 type storagePrepScmCmd struct {
 	cfgCmd
 	logCmd
-	Reset bool `short:"r" long:"reset" description:"Reset modules to memory mode after removing namespaces"`
-	Force bool `short:"f" long:"force" description:"Perform format without prompting for confirmation"`
+	common.StoragePrepScmCmd
 }
 
 func (cmd *storagePrepScmCmd) Execute(args []string) (err error) {

@@ -27,11 +27,12 @@ package mgmt;
 import "common.proto";
 import "storage.proto";
 import "features.proto";
-import "srv.proto";
 
 // Service definitions for communications between gRPC management server and
 // client regarding tasks related to DAOS storage server hardware.
 service MgmtCtl {
+	// Prepare nonvolatile storage devices for use with DAOS
+	rpc StoragePrepare(StoragePrepareReq) returns (StoragePrepareResp) {};
         // Retrieve details of nonvolatile storage on server
         rpc StorageScan(StorageScanReq) returns(StorageScanResp) {};
         // Format nonvolatile storage devices for use with DAOS
@@ -45,8 +46,6 @@ service MgmtCtl {
             returns(stream StorageBurnInResp) {};
         // Fetch FIO configuration file specifying burn-in jobs/workloads
         rpc FetchFioConfigPaths(EmptyReq) returns(stream FilePath) {};
-        // Kill a given rank associated with a given pool
-        rpc KillRank(DaosRank) returns(DaosResp) {};
         // List features supported on remote storage server/DAOS system
         rpc ListFeatures(EmptyReq) returns(stream Feature) {};
 }

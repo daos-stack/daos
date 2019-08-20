@@ -32,9 +32,31 @@ import (
 
 // StorCmd is the struct representing the top-level storage subcommand.
 type StorCmd struct {
-	Scan   StorageScanCmd   `command:"scan" alias:"s" description:"Scan SCM and NVMe storage attached to remote servers."`
-	Format StorageFormatCmd `command:"format" alias:"f" description:"Format SCM and NVMe storage attached to remote servers."`
-	Update StorageUpdateCmd `command:"fwupdate" alias:"u" description:"Update firmware on NVMe storage attached to remote servers."`
+	Prepare StoragePrepareCmd `command:"prepare" alias:"p" description:"Prepare SCM and NVMe storage attached to remote servers."`
+	Scan    StorageScanCmd    `command:"scan" alias:"s" description:"Scan SCM and NVMe storage attached to remote servers."`
+	Format  StorageFormatCmd  `command:"format" alias:"f" description:"Format SCM and NVMe storage attached to remote servers."`
+	Update  StorageUpdateCmd  `command:"fwupdate" alias:"u" description:"Update firmware on NVMe storage attached to remote servers."`
+}
+
+// StoragePrepareCmd is the struct representing the prep storage subcommand.
+type StoragePrepareCmd struct {
+	broadcastCmd
+	connectedCmd
+	common.StoragePrepNvmeCmd
+	common.StoragePrepScmCmd
+}
+
+// run NVMe and SCM storage preparation on all connected servers
+func storagePrepare(conns client.Connect) {
+	cNvmeResults, cScmResults := conns.StoragePrepare()
+	log.Infof("NVMe preparation:\n%s", cNvmeResults)
+	log.Infof("SCM preparation:\n%s", cScmResults)
+}
+
+// Execute is run when StoragePrepareCmd activates
+func (s *StoragePrepareCmd) Execute(args []string) error {
+	storagePrepare(s.conns)
+	return nil
 }
 
 // StorageScanCmd is the struct representing the scan storage subcommand.

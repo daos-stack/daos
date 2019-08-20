@@ -33,6 +33,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/drpc"
 	log "github.com/daos-stack/daos/src/control/logging"
 )
@@ -80,7 +81,7 @@ func (c *ControlService) Teardown() {
 	}
 }
 
-func (c *ControlService) ScanNVMe() (common.NvmeControllers, error) {
+func (c *ControlService) ScanNVMe() (types.NvmeControllers, error) {
 	resp := new(pb.StorageScanResp)
 
 	c.nvme.Discover(resp)
@@ -90,7 +91,7 @@ func (c *ControlService) ScanNVMe() (common.NvmeControllers, error) {
 	return c.nvme.controllers, nil
 }
 
-func (c *ControlService) ScanSCM() (common.ScmModules, error) {
+func (c *ControlService) ScanSCM() (types.ScmModules, error) {
 	resp := new(pb.StorageScanResp)
 
 	c.scm.Discover(resp)
