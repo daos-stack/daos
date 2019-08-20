@@ -231,17 +231,6 @@ func SyncDir(path string) (err error) {
 	return d.Sync()
 }
 
-// CheckSudo returns true if current process is running as root or with sudo.
-// Returns either sudoer or current user if not running under sudo.
-func CheckSudo() (bool, string) {
-	usr := os.Getenv(sudoUserEnv)
-	if usr == "" {
-		usr = rootUser
-	}
-
-	return (os.Geteuid() == 0), usr
-}
-
 // Run executes command in os and builds useful error message.
 func Run(cmd string) error {
 	log.Debugf("exec '%s'\n", cmd)
@@ -254,26 +243,4 @@ func Run(cmd string) error {
 	}
 
 	return err
-}
-
-// GetConsent scans stdin for yes/no
-func GetConsent() bool {
-	var response string
-
-	log.Info("Are you sure you want to continue? (yes/no)\n")
-
-	_, err := fmt.Scanln(&response)
-	if err != nil {
-		log.Errorf("Error reading input: %s\n", err)
-		return false
-	}
-
-	if response == "no" {
-		return false
-	} else if response != "yes" {
-		log.Info("Please type yes or no and then press enter:")
-		return GetConsent()
-	}
-
-	return true
 }

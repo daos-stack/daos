@@ -171,8 +171,8 @@ func (p *PrepScmCmd) Execute(args []string) (err error) {
 	}
 
 	log.Info("Memory allocation goals for SCM will be changed and namespaces " +
-		"modified, this could be a destructive operation. Please " +
-		"ensure namespaces are unmounted and SCM is otherwise unused.\n")
+		"modified, this will be a destructive operation. Please ensure " +
+		"namespaces are unmounted and SCM is otherwise unused.\n")
 
 	if !p.Force && !common.GetConsent() {
 		return errors.New("consent not given")

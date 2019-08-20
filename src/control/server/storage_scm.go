@@ -160,7 +160,7 @@ func (s *scmStorage) Prep() (needsReboot bool, pmemDevs []pmemDev, err error) {
 
 	switch s.state {
 	case scmStateNoRegions:
-		// if successful, resource allocation change read by BIOS on reboot.
+		// if successful, memory allocation change read on reboot
 		if _, err = s.runCmd(cmdScmCreateRegions); err == nil {
 			needsReboot = true
 		}
@@ -175,26 +175,29 @@ func (s *scmStorage) Prep() (needsReboot bool, pmemDevs []pmemDev, err error) {
 	return
 }
 
-// reset executes commands to remove namespaces and regions on SCM models.
-func (s *scmStorage) PrepReset() (needsReboot bool, err error) {
-	pmemDevs := make([]pmemDev, 0)
-
-	pmemDevs, err = s.getNamespaces()
+// PrepReset executes commands to remove namespaces and regions on SCM modules.
+//
+// Returns indication of whether a reboot is required alongside error.
+func (s *scmStorage) PrepReset() (bool, error) {
+	pmemDevs, err := s.getNamespaces()
 	if err != nil {
-		return
+		return false, err
+	}
+	if len(pmemDevs) == 0 {
+		return false, nil // no namespaces
 	}
 
 	for _, dev := range pmemDevs {
-		if err = s.removeNamespace(dev.Dev); err != nil {
-			return
+		if err := s.removeNamespace(dev.Dev); err != nil {
+			return false, err
 		}
 	}
 
 	if _, err = s.runCmd(cmdScmRemoveRegions); err == nil {
-		needsReboot = true
+		return false, err
 	}
 
-	return
+	return true, nil // memory allocation reset requires a reboot
 }
 
 func (s *scmStorage) removeNamespace(devName string) (err error) {
@@ -288,18 +291,6 @@ func hasFreeCapacity(text string) (hasCapacity bool, err error) {
 	}
 
 	return
-}
-
-// createRegions sets DCPM modules into regions in interleaved AppDirect mode.
-//
-// External tool command output will indicate whether a subsequent reboot is needed.
-func (s *scmStorage) createRegions() (bool, error) {
-	out, err := s.runCmd(cmdScmCreateRegions)
-	if err != nil {
-		return false, err
-	}
-
-	return strings.Contains(out, msgScmRebootRequired), nil
 }
 
 func parsePmemDevs(jsonData string) (devs []pmemDev, err error) {
