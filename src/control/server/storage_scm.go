@@ -168,7 +168,7 @@ func (s *scmStorage) Prep() (needsReboot bool, pmemDevs []pmemDev, err error) {
 		pmemDevs, err = s.createNamespaces()
 	case scmStateNoCapacity:
 		pmemDevs, err = s.getNamespaces()
-	default:
+	case scmStateUnknown:
 		err = errors.New("unknown scm state")
 	}
 
@@ -179,12 +179,21 @@ func (s *scmStorage) Prep() (needsReboot bool, pmemDevs []pmemDev, err error) {
 //
 // Returns indication of whether a reboot is required alongside error.
 func (s *scmStorage) PrepReset() (bool, error) {
+	if err := s.getState(); err != nil {
+		return false, err
+	}
+
+	switch s.state {
+	case scmStateNoRegions:
+		log.Info("SCM is already reset\n")
+		return false, nil
+	case scmStateUnknown:
+		return false, errors.New("unknown scm state")
+	}
+
 	pmemDevs, err := s.getNamespaces()
 	if err != nil {
 		return false, err
-	}
-	if len(pmemDevs) == 0 {
-		return false, nil // no namespaces
 	}
 
 	for _, dev := range pmemDevs {
@@ -193,7 +202,9 @@ func (s *scmStorage) PrepReset() (bool, error) {
 		}
 	}
 
-	if _, err = s.runCmd(cmdScmRemoveRegions); err == nil {
+	log.Infof("resetting SCM memory allocations\n")
+	if out, err := s.runCmd(cmdScmRemoveRegions); err != nil {
+		log.Error(out)
 		return false, err
 	}
 

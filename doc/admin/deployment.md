@@ -123,35 +123,58 @@ The list of NVDIMMs can be displayed as follows:
 |0x1101 | 502.5 GiB | Healthy | 0 | Disabled | 01.00.00.5127
 
 Moreover, DAOS requires DCPM to be configured in interleaved mode. A
-command mode option (--set-interleaved) can be used as a "one-shot"
+storage subcommand (prep-scm) can be used as a "one-shot"
 invocation of *daos\_server* and must be run as root. SCM modules will
 be configured into interleaved regions with memory mode set to
 "app-direct" with one set per socket (each module is assigned to socket
-and reports this via its NUMA rating). This configuration may require a
-reboot and *daos\_server* will exit on completion of the task.
+and reports this via its NUMA rating).
 
-This can be done manually via the following commands:
+`sudo daos_server [<app_opts>] storage prep-scm [<cmd_opts>]`
+will automatically configure memory allocation goals for SCM and print
+message asking for reboot the first time it is run. When run for the
+second time, namespaces will be created and details displayed.
 
-\# to verify there is non-volatile memory type
+Example output from initial call (with SCM modules set to default
+MemoryMode):
 
-\# ipmctl show -a -topology | egrep 'Capac|MemoryType'
+"Memory allocation goals for SCM will be changed and namespaces modified, this
+will be a destructive operation.  ensure namespaces are unmounted and SCM is
+otherwise unused.
+Are you sure you want to continue? (yes/no)
+yes
+A reboot is required to process new memory allocation goals."
 
-MemoryType=Logical Non-Volatile Device
+Example output from subsequent call (SCM modules configured to AppDirect
+mode and host rebooted):
 
-Capacity=502.6 GiB
+"Memory allocation goals for SCM will be changed and namespaces modified, this
+will be a destructive operation. Please ensure namespaces are unmounted and SCM
+is otherwise unused.
+Are you sure you want to continue? (yes/no)
+yes
+creating SCM namespace, may take a few minutes...
+creating SCM namespace, may take a few minutes...
+Persistent memory kernel devices:
+        [{UUID:5d2f2517-9217-4d7d-9c32-70731c9ac11e Blockdev:pmem1
+	Dev:namespace1.0 NumaNode:1} {UUID:2bfe6c40-f79a-4b8e-bddf-ba81d4427b9b
+	Blockdev:pmem0 Dev:namespace0.0 NumaNode:0}]"
 
-MemoryType=Logical Non-Volatile Device
+SCM modules can be reset to the default memory mode and have namespaces
+removed (DESTRUCTIVE operation, make sure namespaces are not mounted,
+all data will be lost) with the command
+`sudo daos_server [<app_opts>] storage prep-scm --reset [<cmd_opts>]`
 
-Capacity=502.6 GiB
+Example output when resetting SCM modules:
 
-MemoryType=Logical Non-Volatile Device
-
-Capacity=502.6 GiB
-\[…\]
-
-\# ipmctl create -goal PersistentMemoryType=AppDirect
-
-A reboot is required after those changes.
+"Memory allocation goals for SCM will be changed and namespaces modified, this
+will be a destructive operation.  ensure namespaces are unmounted and SCM is
+otherwise unused.
+Are you sure you want to continue? (yes/no)
+yes
+removing SCM namespace, may take a few minutes...
+removing SCM namespace, may take a few minutes...
+resetting SCM memory allocations
+A reboot is required to process new memory allocation goals."
 
 #### NVMe prep
 
@@ -169,11 +192,12 @@ groups as needed in SPDK operations. If the target-user is unspecified
 (or root if not using sudo). The specification of hugepages (-p short
 option) defines the number of huge pages to allocate for use by SPDK.
 
-`sudo daos_server storage prep-nvme [<opts>]` command wraps the SPDK
-setup script to unbind the devices from original kernel drivers and
-then bind the devices to a generic driver through which SPDK can
-communicate. The devices can then be bound back to the original
-drivers with the command `sudo daos_server storage prep-nvme --reset`.
+`sudo daos_server [<app_opts>] storage prep-nvme [<cmd_opts>]`
+command wraps the SPDK setup script to unbind the devices from
+original kernel drivers and then bind the devices to a generic driver
+through which SPDK can communicate. The devices can then be bound
+back to the original drivers with the command
+`sudo daos_server [<app_opts>] storage prep-nvme --reset [<cmd_opts>]`
 
 ### Storage Detection & Selection
 
@@ -902,12 +926,13 @@ starts the data plane.
 
 Typically an administrator will perform the following tasks:
 1. Prepare NVMe and SCM Storage
-    - `sudo daos_server storage prep-nvme ...`
+    - `sudo daos_server [<app_opts>] storage prep-nvme [<cmd_opts>]`
     [NVMe details](#-nvme-prep)
-    - [SCM details](#-scm-prep)
+    - `sudo daos_server [<app_opts>] storage prep-scm [<cmd_opts>]`
+    [SCM details](#-scm-prep)
 
 2. Scan Storage
-    - `sudo daos_server storage scan`
+    - `sudo daos_server [<app_opts>] storage scan [<cmd_opts>]`
     [details](#-storage-detection-&-selection)
 
 3. Add device identifiers to Server config file
