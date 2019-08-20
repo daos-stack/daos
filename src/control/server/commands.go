@@ -24,13 +24,13 @@
 package server
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	log "github.com/daos-stack/daos/src/control/logging"
 )
 
 // cliOptions struct defined flags that can be used when invoking daos_server.
@@ -77,18 +77,18 @@ func (s *ScanStorCmd) Execute(args []string) (errs error) {
 		return errors.WithMessage(err, "failed to init ControlService")
 	}
 
-	fmt.Println("Scanning locally-attached storage...")
+	log.Info("Scanning locally-attached storage...")
 	srv.nvme.Discover(resp)
 	srv.scm.Discover(resp)
 
 	if resp.Nvmestate.Status != pb.ResponseStatus_CTRL_SUCCESS {
-		fmt.Fprintln(os.Stderr, "nvme scan: "+resp.Nvmestate.Error)
+		log.Error("nvme scan: " + resp.Nvmestate.Error)
 		isErrored = true
 	} else {
 		common.PrintStructs("NVMe", srv.nvme.controllers)
 	}
 	if resp.Scmstate.Status != pb.ResponseStatus_CTRL_SUCCESS {
-		fmt.Fprintln(os.Stderr, "scm scan: "+resp.Scmstate.Error)
+		log.Error("scm scan: " + resp.Scmstate.Error)
 		isErrored = true
 	} else {
 		common.PrintStructs("SCM", srv.scm.modules)
@@ -155,15 +155,27 @@ func (p *PrepNvmeCmd) Execute(args []string) error {
 // configuring in AppDirect mode and creating relevant namespaces.
 type PrepScmCmd struct {
 	Reset bool `short:"r" long:"reset" description:"Reset modules to memory mode after removing namespaces"`
+	Force bool `short:"f" long:"force" description:"Perform format without prompting for confirmation"`
 }
 
 // Execute is run when PrepScmCmd activates
 //
 // Perform task then exit immediately. No config parsing performed.
-func (p *PrepScmCmd) Execute(args []string) error {
+func (p *PrepScmCmd) Execute(args []string) (err error) {
+	needsReboot := false
+	pmemDevs := make([]pmemDev, 0)
+
 	ok, _ := common.CheckSudo()
 	if !ok {
 		return errors.New("subcommand must be run as root or sudo")
+	}
+
+	log.Info("Memory allocation goals for SCM will be changed and namespaces " +
+		"modified, this will be a destructive operation. Please ensure " +
+		"namespaces are unmounted and SCM is otherwise unused.\n")
+
+	if !p.Force && !common.GetConsent() {
+		return errors.New("consent not given")
 	}
 
 	config := newConfiguration()
@@ -174,10 +186,8 @@ func (p *PrepScmCmd) Execute(args []string) error {
 		return errors.WithMessage(err, "initialising ControlService")
 	}
 
-	fmt.Println("Scanning locally-attached SCM storage...")
 	if err := server.scm.Setup(); err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		os.Exit(1)
+		return errors.WithMessage(err, "SCM setup")
 	}
 
 	if !server.scm.initialized {
@@ -190,20 +200,23 @@ func (p *PrepScmCmd) Execute(args []string) error {
 
 	if p.Reset {
 		// run reset to remove namespaces and clear regions
-		if err := server.scm.PrepReset(); err != nil {
+		needsReboot, err = server.scm.PrepReset()
+		if err != nil {
 			return errors.WithMessage(err, "SCM prep reset")
 		}
 	} else {
 		// transition to the next state in SCM preparation
-		needsReboot, pmemDevs, err := server.scm.Prep()
+		needsReboot, pmemDevs, err = server.scm.Prep()
 		if err != nil {
 			return errors.WithMessage(err, "SCM prep")
 		}
+	}
 
-		if needsReboot {
-			fmt.Println(msgScmRebootRequired)
-		} else {
-			fmt.Printf("persistent memory kernel devices:\n\t%+v\n", pmemDevs)
+	if needsReboot {
+		log.Info(msgScmRebootRequired)
+	} else {
+		if len(pmemDevs) > 0 {
+			log.Infof("Persistent memory kernel devices:\n\t%+v\n", pmemDevs)
 		}
 	}
 
