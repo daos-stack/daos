@@ -391,7 +391,7 @@ daos_fail_value_get(void);
 int
 daos_fail_init(void);
 void
-daos_fail_fini();
+daos_fail_fini(void);
 
 /**
  * DAOS FAIL Mask
