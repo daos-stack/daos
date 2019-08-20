@@ -51,15 +51,6 @@ struct unixcomm_poll {
 	enum unixcomm_activity	activity;
 };
 
-/**
- * Context for an individual dRPC call.
- */
-struct drpc_call_ctx {
-	struct drpc	*session;
-	Drpc__Call	*call;
-	Drpc__Response	*resp;
-};
-
 struct drpc_progress_context *
 drpc_progress_context_create(struct drpc *listener)
 {
@@ -283,6 +274,19 @@ destroy_session_node(struct drpc_list *session_node)
 	D_FREE(session_node);
 }
 
+static void
+free_call_ctx(struct drpc_call_ctx *ctx)
+{
+	/*
+	 * Session is a copy - we can free it, but not close it. The main loop
+	 * still manages the sessions.
+	 */
+	drpc_free(ctx->session);
+	drpc_call_free(ctx->call);
+	drpc_response_free(ctx->resp);
+	D_FREE(ctx);
+}
+
 /**
  * ULT to execute the dRPC handler and send the response back
  */
@@ -304,13 +308,8 @@ drpc_handler_ult(void *call_ctx)
 
 	/*
 	 * We are responsible for cleaning up the call ctx.
-	 * Session is a copy - we can free it, but not close it. The main loop
-	 * still manages the sessions.
 	 */
-	drpc_free(ctx->session);
-	drpc_call_free(ctx->call);
-	drpc_response_free(ctx->resp);
-	D_FREE(ctx);
+	free_call_ctx(ctx);
 }
 
 static struct drpc_call_ctx *
@@ -376,9 +375,7 @@ handle_incoming_call(struct drpc *session_ctx)
 			    DSS_ULT_DRPC_HANDLER, 0, 0, NULL);
 	if (rc != 0) {
 		D_ERROR("Failed to create drpc handler ULT: %d\n", rc);
-		drpc_call_free(call);
-		drpc_response_free(resp);
-		D_FREE(call_ctx);
+		free_call_ctx(call_ctx);
 		return rc;
 	}
 
