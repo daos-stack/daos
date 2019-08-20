@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2018 Intel Corporation
+/* Copyright (C) 2017-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -162,7 +162,9 @@
 	/** Operation now in progress */				\
 	ACTION(DER_INPROGRESS,		(DER_ERR_DAOS_BASE + 18))	\
 	/** Not applicable. */						\
-	ACTION(DER_NOTAPPLICABLE,	(DER_ERR_DAOS_BASE + 19))
+	ACTION(DER_NOTAPPLICABLE,	(DER_ERR_DAOS_BASE + 19))	\
+	/** Not a service replica */					\
+	ACTION(DER_NOTREPLICA,		(DER_ERR_DAOS_BASE + 20))
 
 #define D_FOREACH_ERR_RANGE(ACTION)	\
 	ACTION(GURT,	1000)		\
