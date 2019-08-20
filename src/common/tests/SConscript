@@ -29,9 +29,9 @@ def define_checksum_timing(build, env, prereqs):
         prereqs.require(env, 'mchecksum')
         env.Append(CCFLAGS=['-DMCHECKSUM_SUPPORT=1'])
         checksum_timing_libs += ['mchecksum']
-        build.test(env, 'checksum_timing', 'checksum_timing.c',
-                   LIBS=checksum_timing_libs)
 
+    build.test(env, 'checksum_timing', 'checksum_timing.c',
+               LIBS=checksum_timing_libs)
 
 
 def scons():

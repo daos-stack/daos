@@ -15,7 +15,7 @@ def scons():
                     'protobufc', pmdk_libs=['pmemobj', 'pmem'])
 
     if not platform_arm:
-        prereqs.require(env, 'isal', 'isal_crypto')
+        prereqs.require(env, 'isal')
 
     denv = env.Clone()
     common_src = ['debug.c', 'mem.c', 'fail_loc.c', 'lru.c',

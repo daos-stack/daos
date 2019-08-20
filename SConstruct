@@ -3,7 +3,6 @@ import sys
 import os
 import platform
 from SCons.Script import BUILD_TARGETS
-from prereq_tools import GitRepoRetriever
 
 sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils'))
 
@@ -45,14 +44,6 @@ def set_defaults(env):
 
 def preload_prereqs(prereqs):
     """Preload prereqs specific to platform"""
-    prereqs.define('isal_crypto',
-                   retriever=GitRepoRetriever("https://github.com/intel/"
-                                              "isa-l_crypto"),
-                   commands=['./autogen.sh ',
-                             './configure --prefix=$ISAL_CRYPTO_PREFIX '
-                             '--libdir=$ISAL_CRYPTO_PREFIX/lib',
-                             'make $JOBS_OPT', 'make install'],
-                   libs=['isal_crypto'])
 
     prereqs.define('cmocka', libs=['cmocka'], package='libcmocka-devel')
     prereqs.define('readline', libs=['readline', 'history'],
@@ -60,7 +51,7 @@ def preload_prereqs(prereqs):
     reqs = ['cart', 'argobots', 'pmdk', 'cmocka',
             'uuid', 'crypto', 'fuse', 'protobufc']
     if not is_platform_arm():
-        reqs.extend(['spdk', 'isal', 'isal_crypto'])
+        reqs.extend(['spdk', 'isal'])
     prereqs.load_definitions(prebuild=reqs)
 
 def scons():

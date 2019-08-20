@@ -27,7 +27,6 @@
 #include <stdint.h>
 
 #include <isa-l.h>
-#include <isa-l_crypto.h>
 #include <gurt/types.h>
 #include <daos.h>
 #include <daos/common.h>
@@ -63,8 +62,7 @@ daos_cont_csum_prop_is_valid(uint16_t val)
 	if (val != DAOS_PROP_CO_CSUM_OFF &&
 	    val != DAOS_PROP_CO_CSUM_CRC16 &&
 	    val != DAOS_PROP_CO_CSUM_CRC32 &&
-	    val != DAOS_PROP_CO_CSUM_CRC64 &&
-	    val != DAOS_PROP_CO_CSUM_SHA1)
+	    val != DAOS_PROP_CO_CSUM_CRC64)
 		return false;
 	return true;
 }
@@ -74,8 +72,7 @@ daos_cont_csum_prop_is_enabled(uint16_t val)
 {
 	if (val != DAOS_PROP_CO_CSUM_CRC16 &&
 	    val != DAOS_PROP_CO_CSUM_CRC32 &&
-	    val != DAOS_PROP_CO_CSUM_CRC64 &&
-	    val != DAOS_PROP_CO_CSUM_SHA1)
+	    val != DAOS_PROP_CO_CSUM_CRC64)
 		return false;
 	return true;
 }
@@ -92,8 +89,6 @@ daos_contprop2csumtype(int contprop_csum_val)
 	case DAOS_PROP_CO_CSUM_CRC64:
 		return CSUM_TYPE_ISAL_CRC64_REFL;
 	case DAOS_PROP_CO_CSUM_SHA1:
-		return CSUM_TYPE_ISAL_SHA1;
-
 	default:
 		return CSUM_TYPE_UNKNOWN;
 	}
@@ -152,53 +147,6 @@ struct csum_ft crc64_algo = {
 		.name = "crc64"
 	};
 
-/** CSUM_TYPE_ISAL_SHA1 */
-static int
-sha1_init(struct daos_csummer *obj)
-{
-	struct mh_sha1_ctx *ctx;
-
-	D_ALLOC(ctx, sizeof(struct mh_sha1_ctx));
-	if (ctx == NULL)
-		return -DER_NOMEM;
-
-	obj->dcs_ctx = ctx;
-
-	return mh_sha1_init(ctx);
-}
-
-static void
-sha1_destroy(struct daos_csummer *obj)
-{
-	D_FREE(obj->dcs_ctx);
-}
-
-static int
-sha1_update(struct daos_csummer *obj,
-		 uint8_t *buf, size_t buf_len)
-{
-	struct mh_sha1_ctx *ctx = obj->dcs_ctx;
-
-	return mh_sha1_update(ctx, buf, buf_len);
-}
-
-static int
-sha1_finish(struct daos_csummer *obj)
-{
-	struct mh_sha1_ctx *ctx = obj->dcs_ctx;
-
-	return mh_sha1_finalize(ctx, obj->dcs_csum_buf);
-}
-
-struct csum_ft sha1_algo = {
-		.update = sha1_update,
-		.init = sha1_init,
-		.destroy = sha1_destroy,
-		.finish = sha1_finish,
-		.csum_len = SHA1_DIGEST_WORDS * 4,
-		.name = "sha1"
-	};
-
 /** ------------------------------------------------------------- */
 static char *csum_unknown_name = "unknown checksum type";
 
@@ -216,9 +164,6 @@ daos_csum_type2algo(enum DAOS_CSUM_TYPE type)
 		break;
 	case CSUM_TYPE_ISAL_CRC64_REFL:
 		result = &crc64_algo;
-		break;
-	case CSUM_TYPE_ISAL_SHA1:
-		result = &sha1_algo;
 		break;
 	case CSUM_TYPE_UNKNOWN:
 	case CSUM_TYPE_END:

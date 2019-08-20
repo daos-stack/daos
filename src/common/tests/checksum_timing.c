@@ -233,7 +233,7 @@ print_usage(char *name)
 		"Size of data used to calculate checksum.\n"
 		"\t\t\tDefault: Sizes will double starting with 128 until 4G");
 	printf("\t-c CHECKSUM, --checksum=CHECKSUM\t"
-			"Type of checksum (crc16, crc32, crc64, sha1, mcrc64)\n"
+			"Type of checksum (crc16, crc32, crc64, mcrc64)\n"
 		"\t\t\tDefault: Run through all checksums");
 	printf("\t-h, --help\t\tShow this message\n");
 }
@@ -278,8 +278,7 @@ struct csum_ft *strarg2ft(char *str)
 		return daos_csum_type2algo(CSUM_TYPE_ISAL_CRC32_ISCSI);
 	if (csum_str_match(str, "crc64"))
 		return daos_csum_type2algo(CSUM_TYPE_ISAL_CRC64_REFL);
-	if (csum_str_match(str, "sha1"))
-		return daos_csum_type2algo(CSUM_TYPE_ISAL_SHA1);
+
 #ifdef MCHECKSUM_SUPPORT
 	if (csum_str_match(str, "mcrc64"))
 		return &m_csum64_algo;
