@@ -40,21 +40,36 @@
  */
 int		dss_ult_create_return;
 void		(*dss_ult_create_func)(void *);
-void		*dss_ult_create_arg;
+void		*dss_ult_create_arg_ptr;
 int		dss_ult_create_ult_type;
 int		dss_ult_create_tgt_idx;
 size_t		dss_ult_create_stack_size;
-ABT_thread	*dss_ult_create_ult;
+ABT_thread	*dss_ult_create_ult_ptr;
 int
 dss_ult_create(void (*func)(void *), void *arg, int ult_type, int tgt_idx,
 	       size_t stack_size, ABT_thread *ult)
 {
+	struct drpc_call_ctx *call_ctx;
+
 	dss_ult_create_func = func;
-	dss_ult_create_arg = arg;
+	dss_ult_create_arg_ptr = arg;
 	dss_ult_create_ult_type = ult_type;
 	dss_ult_create_tgt_idx = tgt_idx;
 	dss_ult_create_stack_size = stack_size;
-	dss_ult_create_ult = ult;
+	dss_ult_create_ult_ptr = ult;
+
+	/*
+	 * arg is dynamically allocated and owned by the ULT. In cases where the
+	 * real ULT is expected to be executed, we need to clean up the memory
+	 * here.
+	 */
+	if (arg != NULL && dss_ult_create_return == 0) {
+		call_ctx = (struct drpc_call_ctx *)arg;
+		drpc_call_free(call_ctx->call);
+		drpc_response_free(call_ctx->resp);
+		drpc_free(call_ctx->session);
+		D_FREE(call_ctx);
+	}
 
 	return dss_ult_create_return;
 }
@@ -74,11 +89,11 @@ drpc_progress_test_setup(void **state)
 
 	dss_ult_create_return = 0;
 	dss_ult_create_func = NULL;
-	dss_ult_create_arg = NULL;
+	dss_ult_create_arg_ptr = NULL;
 	dss_ult_create_ult_type = -1;
 	dss_ult_create_tgt_idx = -1;
 	dss_ult_create_stack_size = -1;
-	dss_ult_create_ult = NULL;
+	dss_ult_create_ult_ptr = NULL;
 
 	return 0;
 }
@@ -86,22 +101,8 @@ drpc_progress_test_setup(void **state)
 static int
 drpc_progress_test_teardown(void **state)
 {
-	struct drpc_call_ctx *call_ctx;
-
 	mock_poll_teardown();
 	mock_drpc_handler_teardown();
-
-	/*
-	 * arg is dynamically allocated and owned by the ULT. Since these tests
-	 * aren't executing the real ULT, need to clean it up here.
-	 */
-	if (dss_ult_create_arg != NULL) {
-		call_ctx = (struct drpc_call_ctx *)dss_ult_create_arg;
-		drpc_call_free(call_ctx->call);
-		drpc_response_free(call_ctx->resp);
-		drpc_free(call_ctx->session);
-		D_FREE(dss_ult_create_arg);
-	}
 
 	return 0;
 }
@@ -435,11 +436,11 @@ test_drpc_progress_single_session_success(void **state)
 
 	/* ULT spawned to deal with the message */
 	assert_non_null(dss_ult_create_func);
-	assert_non_null(dss_ult_create_arg);
+	assert_non_null(dss_ult_create_arg_ptr);
 	assert_int_equal(dss_ult_create_ult_type, DSS_ULT_DRPC_HANDLER);
 	assert_int_equal(dss_ult_create_tgt_idx, 0);
 	assert_int_equal(dss_ult_create_stack_size, 0);
-	assert_null(dss_ult_create_ult); /* self-freeing ULT */
+	assert_null(dss_ult_create_ult_ptr); /* self-freeing ULT */
 
 	/* Final ctx should be unchanged */
 	assert_memory_equal(&ctx, &original_ctx,
@@ -623,9 +624,6 @@ test_drpc_progress_session_cleanup_if_ult_fails(void **state)
 	/* Failed sessions should be removed */
 	expect_sessions_missing_from_drpc_progress_session_list(&ctx,
 			session_fds, num_sessions);
-
-	/* arg should have been freed - update ptr for teardown */
-	dss_ult_create_arg = NULL;
 
 	cleanup_drpc_progress_context(&ctx);
 }
