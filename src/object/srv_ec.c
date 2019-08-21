@@ -239,7 +239,6 @@ ec_parity_target(unsigned int ptgt_idx, unsigned int nr, daos_iod_t *iods,
 				unsigned int	pcell = so / oca->u.ec.e_len;
 
 				if (pcell == ptgt_idx) {
-					//D_INFO("Keeping %u\n", pcell);
 					ec_bulk_spec_set(oca->u.ec.e_len, false,
 							 sl_idx++,
 							 &skip_list[i]);
