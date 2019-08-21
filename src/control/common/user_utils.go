@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,47 +21,44 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package common
 
 import (
 	"fmt"
-	"sort"
+	"os"
 
-	"github.com/daos-stack/daos/src/control/client"
+	log "github.com/daos-stack/daos/src/control/logging"
 )
 
-func hasConns(results client.ResultMap) (bool, string) {
-	out := sprintConns(results)
-	for _, res := range results {
-		if res.Err == nil {
-			return true, out
-		}
+// CheckSudo returns true if current process is running as root or with sudo.
+// Returns either sudoer or current user if not running under sudo.
+func CheckSudo() (bool, string) {
+	usr := os.Getenv(sudoUserEnv)
+	if usr == "" {
+		usr = rootUser
 	}
 
-	// notify if there have been no successful connections
-	return false, fmt.Sprintf("%sNo active connections!", out)
+	return (os.Geteuid() == 0), usr
 }
 
-func sprintConns(results client.ResultMap) (out string) {
-	// map keys always processed in order
-	var addrs []string
-	for addr := range results {
-		addrs = append(addrs, addr)
-	}
-	sort.Strings(addrs)
+// GetConsent scans stdin for yes/no
+func GetConsent() bool {
+	var response string
 
-	i := 0
-	for _, addr := range addrs {
-		if results[addr].Err != nil {
-			out = fmt.Sprintf(
-				"%sfailed to connect to %s (%s)\n",
-				out, addr, results[addr].Err)
-			continue
-		}
-		addrs[i] = addr
-		i++
-	}
-	addrs = addrs[:i]
+	log.Info("Are you sure you want to continue? (yes/no)\n")
 
-	return fmt.Sprintf("%sActive connections: %v\n", out, addrs)
+	_, err := fmt.Scanln(&response)
+	if err != nil {
+		log.Errorf("Error reading input: %s\n", err)
+		return false
+	}
+
+	if response == "no" {
+		return false
+	} else if response != "yes" {
+		log.Info("Please type yes or no and then press enter:")
+		return GetConsent()
+	}
+
+	return true
 }

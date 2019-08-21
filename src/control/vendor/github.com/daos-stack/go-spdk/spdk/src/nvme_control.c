@@ -31,6 +31,7 @@
 struct ctrlr_entry {
 	struct spdk_nvme_ctrlr	*ctrlr;
 	const char		*tr_addr;
+	int 			socket_id;
 	struct ctrlr_entry	*next;
 };
 
@@ -150,19 +151,11 @@ check_size(int written, int max, char *msg, struct ret_t *ret)
 
 static int
 set_pci_addr(
-	struct spdk_nvme_ctrlr *ctrlr, char *ctrlr_pci_addr, size_t size,
+	struct spdk_pci_device *pci_dev, char *ctrlr_pci_addr, size_t size,
 	struct ret_t *ret)
 {
 	int 			rc;
-	struct spdk_pci_device	*pci_dev;
 	struct spdk_pci_addr	pci_addr;
-
-	pci_dev = spdk_nvme_ctrlr_get_pci_device(ctrlr);
-	if (!pci_dev) {
-		snprintf(ret->err, sizeof(ret->err), "get_pci_device");
-		ret->rc = -NVMEC_ERR_GET_PCI_DEV;
-		return ret->rc;
-	}
 
 	// populate ns_t.ctrlr_pci_addr to map ns->ctrlr
 	pci_addr = spdk_pci_device_get_addr(pci_dev);
@@ -183,6 +176,7 @@ collect(struct ret_t *ret)
 	struct ns_entry				*ns_entry;
 	struct ctrlr_entry			*ctrlr_entry;
 	const struct spdk_nvme_ctrlr_data	*cdata;
+	struct spdk_pci_device			*pci_dev;
 	int					written;
 
 	ns_entry = g_namespaces;
@@ -206,10 +200,15 @@ collect(struct ret_t *ret)
 		ns_tmp->size = spdk_nvme_ns_get_size(ns_entry->ns) / \
 			       NVMECONTROL_GBYTE_BYTES;
 
-		if (set_pci_addr(
-			ns_entry->ctrlr, ns_tmp->ctrlr_pci_addr,
-			sizeof(ns_tmp->ctrlr_pci_addr), ret) != 0) {
+		pci_dev = spdk_nvme_ctrlr_get_pci_device(ns_entry->ctrlr);
+		if (!pci_dev) {
+			snprintf(ret->err, sizeof(ret->err), "get_pci_device");
+			ret->rc = -NVMEC_ERR_GET_PCI_DEV;
+			return;
+		}
 
+		if (set_pci_addr(pci_dev, ns_tmp->ctrlr_pci_addr,
+				 sizeof(ns_tmp->ctrlr_pci_addr), ret) != 0) {
 			return;
 		}
 
@@ -232,45 +231,41 @@ collect(struct ret_t *ret)
 
 		cdata = spdk_nvme_ctrlr_get_data(ctrlr_entry->ctrlr);
 
-		written = snprintf(
-			ctrlr_tmp->model, sizeof(ctrlr_tmp->model),
-			"%-20.20s", cdata->mn
-		);
-		if (check_size(
-			written, sizeof(ctrlr_tmp->model),
-			"model truncated", ret) != 0) {
-
+		written = snprintf(ctrlr_tmp->model, sizeof(ctrlr_tmp->model),
+				   "%-20.20s", cdata->mn);
+		if (check_size(written, sizeof(ctrlr_tmp->model),
+			       "model truncated", ret) != 0) {
 			return;
 		}
 
-		written = snprintf(
-			ctrlr_tmp->serial, sizeof(ctrlr_tmp->serial),
-			"%-20.20s", cdata->sn
-		);
-		if (check_size(
-			written, sizeof(ctrlr_tmp->serial),
-			"serial truncated", ret) != 0) {
-
+		written = snprintf(ctrlr_tmp->serial, sizeof(ctrlr_tmp->serial),
+				   "%-20.20s", cdata->sn);
+		if (check_size(written, sizeof(ctrlr_tmp->serial),
+			       "serial truncated", ret) != 0) {
 			return;
 		}
 
-		written = snprintf(
-			ctrlr_tmp->fw_rev, sizeof(ctrlr_tmp->fw_rev),
-			"%s", cdata->fr
-		);
-		if (check_size(
-			written, sizeof(ctrlr_tmp->fw_rev),
-			"firmware revision truncated", ret) != 0) {
-
+		written = snprintf(ctrlr_tmp->fw_rev, sizeof(ctrlr_tmp->fw_rev),
+				   "%s", cdata->fr);
+		if (check_size(written, sizeof(ctrlr_tmp->fw_rev),
+			       "firmware revision truncated", ret) != 0) {
 			return;
 		}
 
-		if (set_pci_addr(
-			ctrlr_entry->ctrlr, ctrlr_tmp->pci_addr,
-			sizeof(ctrlr_tmp->pci_addr), ret) != 0) {
-
+		pci_dev = spdk_nvme_ctrlr_get_pci_device(ctrlr_entry->ctrlr);
+		if (!pci_dev) {
+			snprintf(ret->err, sizeof(ret->err), "get_pci_device");
+			ret->rc = -NVMEC_ERR_GET_PCI_DEV;
 			return;
 		}
+
+		if (set_pci_addr(pci_dev, ctrlr_tmp->pci_addr,
+				 sizeof(ctrlr_tmp->pci_addr), ret) != 0) {
+			return;
+		}
+
+		// populate numa socket id
+		ctrlr_tmp->socket_id = spdk_pci_device_get_socket_id(pci_dev);
 
 		// cdata->cntlid is not unique per host, only per subsystem
 		ctrlr_tmp->next = ret->ctrlrs;
@@ -348,11 +343,9 @@ get_controller(char *addr, struct ctrlr_entry *ctrlr_entry, struct ret_t *ret)
 	struct spdk_pci_addr			pci_addr, entry_pci_addr;
 
 	if (spdk_pci_addr_parse(&pci_addr, addr) < 0) {
-		snprintf(
-			ret->err, sizeof(ret->err),
-			"pci addr could not be parsed: %s", addr);
+		snprintf(ret->err, sizeof(ret->err),
+			 "pci addr could not be parsed: %s", addr);
 		ret->rc = -NVMEC_ERR_PCI_ADDR_PARSE;
-
 		return ret->rc;
 	}
 
@@ -361,7 +354,6 @@ get_controller(char *addr, struct ctrlr_entry *ctrlr_entry, struct ret_t *ret)
 		if (!pci_dev) {
 			snprintf(ret->err, sizeof(ret->err), "get_pci_device");
 			ret->rc = -NVMEC_ERR_GET_PCI_DEV;
-
 			return ret->rc;
 		}
 
@@ -376,7 +368,6 @@ get_controller(char *addr, struct ctrlr_entry *ctrlr_entry, struct ret_t *ret)
 	if (ctrlr_entry == NULL) {
 		snprintf(ret->err, sizeof(ret->err), "controller not found");
 		ret->rc = -NVMEC_ERR_CTRLR_NOT_FOUND;
-
 		return ret->rc;
 	}
 
@@ -407,7 +398,6 @@ nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot)
 	if (fd < 0) {
 		sprintf(ret->err, "Open file failed");
 		ret->rc = 1;
-
 		return ret;
 	}
 	rc = fstat(fd, &fw_stat);
@@ -415,7 +405,6 @@ nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot)
 		close(fd);
 		sprintf(ret->err, "Fstat failed");
 		ret->rc = 1;
-
 		return ret;
 	}
 
@@ -423,7 +412,6 @@ nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot)
 		close(fd);
 		sprintf(ret->err, "Firmware image size is not multiple of 4");
 		ret->rc = 1;
-
 		return ret;
 	}
 
@@ -434,7 +422,6 @@ nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot)
 		close(fd);
 		sprintf(ret->err, "Allocation error");
 		ret->rc = 1;
-
 		return ret;
 	}
 
@@ -443,7 +430,6 @@ nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot)
 		spdk_dma_free(fw_image);
 		sprintf(ret->err, "Read firmware image failed");
 		ret->rc = 1;
-
 		return ret;
 	}
 	close(fd);
@@ -490,7 +476,6 @@ nvme_format(char *ctrlr_pci_addr)
 		snprintf(ret->err, sizeof(ret->err),
 			"Controller does not support Format NVM command\n");
 		ret->rc = -NVMEC_ERR_NOT_SUPPORTED;
-
 		return ret;
 	}
 
@@ -506,7 +491,6 @@ nvme_format(char *ctrlr_pci_addr)
 		snprintf(ret->err, sizeof(ret->err),
 			"Namespace ID %d not found", ns_id);
 		ret->rc = -NVMEC_ERR_NS_NOT_FOUND;
-
 		return ret;
 	}
 
@@ -520,7 +504,6 @@ nvme_format(char *ctrlr_pci_addr)
 
 	if (ret->rc != 0) {
 		snprintf(ret->err, sizeof(ret->err), "format failed");
-
 		return ret;
 	}
 

@@ -46,7 +46,7 @@ class DestroyTests(TestWithServers):
     def test_simple_delete(self):
         """Test destroying a pool created on a single server.
 
-        :avocado: tags=pool,pooldestroy,quick
+        :avocado: tags=all,pool,pr,medium,pooldestroy
         """
         hostlist_servers = self.hostlist_servers[:1]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
@@ -87,7 +87,7 @@ class DestroyTests(TestWithServers):
         """
         Test destroying a pool uuid that doesn't exist.
 
-        :avocado: tags=pool,pooldestroy
+        :avocado: tags=all,pool,full_regression,medium,pooldestroynoexist
         """
         hostlist_servers = self.hostlist_servers[:1]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
@@ -152,7 +152,7 @@ class DestroyTests(TestWithServers):
         """
         Test destroying a valid pool but use the wrong server group.
 
-        :avocado: tags=pool,pooldestroy
+        :avocado: tags=all,pool,full_regression,medium,pooldestroywrongsrv
         """
         hostlist_servers = self.hostlist_servers[:1]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
@@ -219,7 +219,7 @@ class DestroyTests(TestWithServers):
         """
         Test destroying a pool created on two servers.
 
-        :avocado: tags=pool,pooldestroy,multiserver
+        :avocado: tags=all,pool,pr,medium,pooldestroymultiserver
         """
         hostlist_servers = self.hostlist_servers[:2]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
@@ -258,10 +258,9 @@ class DestroyTests(TestWithServers):
     @skipForTicket("DAOS-2742")
     def test_bad_server_group(self):
         """Test destroying a pool.
-
          Destroy a pool on group A that was created on server group B,
          should fail.
-        :avocado: tags=pool,pooldestroy
+        :avocado: tags=all,pool,full_regression,pooldestroy
         """
         group_names = [self.server_group + "_a", self.server_group + "_b"]
         group_hosts = {
@@ -337,7 +336,8 @@ class DestroyTests(TestWithServers):
 
         Test destroying a pool that has a connected client with force == false.
         Should fail.
-        :avocado: tags=pool,pooldestroy
+
+        :avocado: tags=all,pool,pr,medium,forcedestroy
         """
         hostlist_servers = self.hostlist_servers[:1]
         group_hosts = {self.server_group: hostlist_servers}
@@ -379,7 +379,8 @@ class DestroyTests(TestWithServers):
 
         Test destroy and recreate one right after the other multiple times
         Should fail.
-        :avocado: tags=pool,pooldestroy,destroyredo
+
+        :avocado: tags=all,pool,pr,medium,destroyredo
         """
         hostlist_servers = self.hostlist_servers[:1]
         group_hosts = {self.server_group: hostlist_servers}
@@ -418,7 +419,7 @@ class DestroyTests(TestWithServers):
         """
         Test destroy on a large (relative) number of servers.
 
-        :avocado: tags=pool,pooldestroy,destroybig
+        :avocado: tags=all,pool,full_regression,medium,destroybig
         """
         counter = 0
         hostlist_servers = self.hostlist_servers[:6]
@@ -459,7 +460,8 @@ class DestroyTests(TestWithServers):
 
         Test destroy and recreate one right after the other multiple times
         Should fail.
-        :avocado: tags=pool,pooldestroy,destroydata
+
+        :avocado: tags=all,pool,pr,medium,destroydata
         """
         hostlist_servers = self.hostlist_servers[:1]
         group_hosts = {self.server_group: hostlist_servers}
@@ -515,7 +517,7 @@ class DestroyTests(TestWithServers):
         Create two server groups. Perform destroy asynchronously
         Expect the destroy to work on the server group where the pool was
         created and expect the destroy pool to fail on the second server.
-        :avocado: tags=pool,pooldestroy,destroyasync
+        :avocado: tags=all,pool,full_regression,medium,destroyasync
         """
         # Start two server groups
         group_names = [self.server_group + "_a", self.server_group + "_b"]
