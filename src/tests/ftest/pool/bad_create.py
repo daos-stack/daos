@@ -75,7 +75,7 @@ class BadCreateTest(Test):
         """
         Pass bad parameters to pool create.
 
-        :avocado: tags=pool,poolcreate,badparam,badcreate
+        :avocado: tags=all,pool,full_regression,tiny,badcreate
         """
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
