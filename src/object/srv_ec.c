@@ -76,7 +76,9 @@ ec_del_recx(daos_iod_t *iod, unsigned int idx)
 {
 	int j;
 
+
 	D_ASSERT(iod->iod_nr >= 1 && idx < iod->iod_nr);
+
 	for (j = idx; j < iod->iod_nr - 1; j++)
 		iod->iod_recxs[j] = iod->iod_recxs[j + 1];
 	iod->iod_nr--;
@@ -237,6 +239,7 @@ ec_parity_target(unsigned int ptgt_idx, unsigned int nr, daos_iod_t *iods,
 				unsigned int	pcell = so / oca->u.ec.e_len;
 
 				if (pcell == ptgt_idx) {
+					//D_INFO("Keeping %u\n", pcell);
 					ec_bulk_spec_set(oca->u.ec.e_len, false,
 							 sl_idx++,
 							 &skip_list[i]);
@@ -253,11 +256,13 @@ ec_parity_target(unsigned int ptgt_idx, unsigned int nr, daos_iod_t *iods,
 
 				if (ec_has_parity_srv(iod->iod_recxs, stripe,
 						      pss, iod->iod_size)) {
+
 					ec_del_recx(iod, idx);
 					ec_bulk_spec_set(this_recx->rx_nr *
 							 iod->iod_size, true,
 							 sl_idx++,
 							 &skip_list[i]);
+					continue;
 				} else {
 					ec_bulk_spec_set(this_recx->rx_nr *
 							 iod->iod_size, false,
@@ -299,17 +304,21 @@ ec_copy_iods(daos_iod_t *in_iod, int nr, daos_iod_t **out_iod)
 		D_GOTO(out, rc = -DER_NOMEM);
 	for (i = 0; i < nr; i++) {
 		(*out_iod)[i] = in_iod[i];
-		D_ALLOC_ARRAY((*out_iod)[i].iod_recxs, (*out_iod)[i].iod_nr);
-		if ((*out_iod)[i].iod_recxs == NULL) {
-			int j;
+		if (in_iod[i].iod_type == DAOS_IOD_ARRAY) {
+			D_ALLOC_ARRAY((*out_iod)[i].iod_recxs,
+				      (*out_iod)[i].iod_nr);
+			if ((*out_iod)[i].iod_recxs == NULL) {
+				int j;
 
-			for (j = 0; j < i; j++)
-				D_FREE((*out_iod)[j].iod_recxs);
-			D_FREE(out_iod);
-			D_GOTO(out, rc = -DER_NOMEM);
+				for (j = 0; j < i; j++)
+					D_FREE((*out_iod)[j].iod_recxs);
+				D_FREE(out_iod);
+				D_GOTO(out, rc = -DER_NOMEM);
+			}
+
+			memcpy((*out_iod)[i].iod_recxs, in_iod[i].iod_recxs,
+			       in_iod[i].iod_nr * sizeof(daos_recx_t));
 		}
-		memcpy((*out_iod)[i].iod_recxs, in_iod[i].iod_recxs,
-		       in_iod[i].iod_nr * sizeof(daos_recx_t));
 	}
 out:
 	return rc;
