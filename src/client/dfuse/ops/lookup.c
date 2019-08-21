@@ -125,16 +125,6 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_name[NAME_MAX] = '\0';
 	atomic_fetch_add(&ie->ie_ref, 1);
 
-	/* If the new entry is a link allocate an inode number here, as dfs
-	 * does not assign it an object id to be able to save an inode.
-	 *
-	 * see comment in symlink.c
-	 */
-	if (S_ISLNK(ie->ie_stat.st_mode))
-		ie->ie_stat.st_ino = atomic_fetch_add(&fs_handle->dpi_ino_next,
-						      1);
-
-	dfuse_reply_entry(fs_handle, ie, NULL, req);
 	return true;
 
 err:
