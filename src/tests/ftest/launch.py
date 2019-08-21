@@ -92,25 +92,33 @@ def set_test_environment():
         None
 
     """
-    build_vars = get_build_environment()
-    bin_dir = build_vars["PREFIX"] + "/bin"
-    sbin_dir = build_vars["PREFIX"] + "/sbin"
+    base_dir = get_build_environment()["PREFIX"]
+    bin_dir = os.path.join(base_dir, "bin")
+    sbin_dir = os.path.join(base_dir, "sbin")
     path = os.environ.get("PATH")
+
+    # Update env definitions
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, path])
     os.environ["DAOS_SINGLETON_CLI"] = "1"
     os.environ["CRT_CTX_SHARE_ADDR"] = "1"
-    os.environ["CRT_ATTACH_INFO_PATH"] = build_vars["PREFIX"] + "/tmp"
+    os.environ["CRT_ATTACH_INFO_PATH"] = os.path.join(base_dir, "tmp")
 
-    # Verify the PYTHONPATH env is set
-    python_path = os.environ.get("PYTHONPATH")
+    # Python paths required for functional testing
     required_python_paths = [
         os.path.abspath("util/apricot"),
         os.path.abspath("util"),
         os.path.abspath("../../utils/py"),
+        os.path.join(base_dir, "lib", "python2.7", "site-packages"),
+        os.path.join(base_dir, "lib", "python3", "site-packages"),
     ]
+
+    # Check the PYTHONPATH env definition
+    python_path = os.environ.get("PYTHONPATH")
     if python_path is None or python_path == "":
+        # Use the required paths to define the PYTHONPATH env if it is not set
         os.environ["PYTHONPATH"] = ":".join(required_python_paths)
     else:
+        # Append any missing required paths to the existing PYTHONPATH env
         defined_python_paths = [
             os.path.abspath(os.path.expanduser(path))
             for path in python_path.split(":")]
@@ -346,7 +354,7 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
                 missing_replacements.append(placeholder)
 
         if missing_replacements:
-            # Report an error for a placeholder w/o a replacement
+            # Report an error for all of the placeholders w/o a replacement
             print(
                 "Error: Placeholders missing replacements in {}:\n  {}".format(
                     yaml_file, ", ".join(missing_replacements)))
