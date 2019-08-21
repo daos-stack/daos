@@ -287,7 +287,7 @@ ds_rsvc_lookup(enum ds_rsvc_class_id class, d_iov_t *id,
 	}
 out:
 	if (nonexist)
-		return -DER_NONEXIST;
+		return -DER_NOTREPLICA;
 	if (entry == NULL)
 		return -DER_NOTLEADER;
 	*svc = rsvc_obj(entry);
