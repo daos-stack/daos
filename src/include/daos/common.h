@@ -312,13 +312,13 @@ daos_der2errno(int err)
 	case -DER_NO_PERM:
 	case -DER_EP_RO:
 	case -DER_EP_OLD:	return EPERM;
-	case -DER_NO_HDL:
 	case -DER_ENOENT:
 	case -DER_NONEXIST:	return ENOENT;
 	case -DER_INVAL:
 	case -DER_NOTYPE:
 	case -DER_NOSCHEMA:
 	case -DER_NOLOCAL:
+	case -DER_NO_HDL:
 	case -DER_IO_INVAL:	return EINVAL;
 	case -DER_KEY2BIG:
 	case -DER_REC2BIG:	return E2BIG;
@@ -392,7 +392,7 @@ daos_fail_value_get(void);
 int
 daos_fail_init(void);
 void
-daos_fail_fini();
+daos_fail_fini(void);
 
 /**
  * DAOS FAIL Mask
