@@ -32,24 +32,14 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 	if err != nil {
 		scanErrors = append(scanErrors, err)
 	} else {
-		str, err := common.StructsToString(controllers)
-		if err != nil {
-			scanErrors = append(scanErrors, err)
-		} else {
-			cmd.log.Infof("NVMe: %s", str)
-		}
+		cmd.log.Infof("NVMe SSD controller and constituent namespaces:\n%s", controllers)
 	}
 
 	modules, err := srv.ScanSCM()
 	if err != nil {
 		scanErrors = append(scanErrors, err)
 	} else {
-		str, err := common.StructsToString(modules)
-		if err != nil {
-			scanErrors = append(scanErrors, err)
-		} else {
-			cmd.log.Infof("SCM: %s", str)
-		}
+		cmd.log.Infof("SCM modules:\n%s", modules)
 	}
 
 	if len(scanErrors) > 0 {

@@ -80,24 +80,24 @@ func (c *ControlService) Teardown() {
 	}
 }
 
-func (c *ControlService) ScanNVMe() ([]*pb.NvmeController, error) {
+func (c *ControlService) ScanNVMe() (common.NvmeControllers, error) {
 	resp := new(pb.ScanStorageResp)
 
 	c.nvme.Discover(resp)
 	if resp.Nvmestate.Status != pb.ResponseStatus_CTRL_SUCCESS {
 		return nil, fmt.Errorf("nvme scan: %s", resp.Nvmestate.Error)
 	}
-	return resp.Ctrlrs, nil
+	return c.nvme.controllers, nil
 }
 
-func (c *ControlService) ScanSCM() ([]*pb.ScmModule, error) {
+func (c *ControlService) ScanSCM() (common.ScmModules, error) {
 	resp := new(pb.ScanStorageResp)
 
 	c.scm.Discover(resp)
 	if resp.Scmstate.Status != pb.ResponseStatus_CTRL_SUCCESS {
 		return nil, fmt.Errorf("scm scan: %s", resp.Scmstate.Error)
 	}
-	return resp.Modules, nil
+	return c.scm.modules, nil
 }
 
 type PrepNvmeRequest struct {
