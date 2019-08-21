@@ -24,7 +24,5 @@ container:
   object_qty: 30
   record_qty: 10
 testparams:
-  ranks:
-    rank0:
-      rank: 4
+  rank: 4
   object_class: DAOS_OC_R3_RW
