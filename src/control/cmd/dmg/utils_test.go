@@ -88,11 +88,11 @@ func TestCheckSprint(t *testing.T) {
 		},
 		{
 			NewClientNvme(MockCtrlrs, MockServers).String(),
-			"1.2.3.4:10000:\n\tPCI Address:0000:81:00.0 Serial:123ABC\n\tModel:ABC Fwrev:E2010413\n\t\tNamespace: id:12345 capacity:99999 \n\n1.2.3.5:10001:\n\tPCI Address:0000:81:00.0 Serial:123ABC\n\tModel:ABC Fwrev:E2010413\n\t\tNamespace: id:12345 capacity:99999 \n\n",
+			"1.2.3.4:10000:\n\tPCI Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:E2010413 Socket:0\n\t\tNamespace: id:12345 capacity:99999 \n\n1.2.3.5:10001:\n\tPCI Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:E2010413 Socket:0\n\t\tNamespace: id:12345 capacity:99999 \n\n",
 		},
 		{
 			NewClientScm(MockModules, MockServers).String(),
-			"1.2.3.4:10000:\n\tphysicalid:12345 capacity:12345 loc:<channel:1 channelpos:2 memctrlr:3 socket:4 > \n\n1.2.3.5:10001:\n\tphysicalid:12345 capacity:12345 loc:<channel:1 channelpos:2 memctrlr:3 socket:4 > \n\n",
+			"1.2.3.4:10000:\n\tPhysicalID:12345 Capacity:12345 Location:(socket:4 memctrlr:3 chan:1 pos:2)\n\n1.2.3.5:10001:\n\tPhysicalID:12345 Capacity:12345 Location:(socket:4 memctrlr:3 chan:1 pos:2)\n\n",
 		},
 		{
 			NewClientScmMount(MockMounts, MockServers).String(),
@@ -113,7 +113,7 @@ func TestCheckSprint(t *testing.T) {
 						},
 					},
 				}, MockServers).String(),
-			"1.2.3.4:10000:\n\tpci-address 0000:81:00.0: status CTRL_ERR_APP error: example application error\n\n1.2.3.5:10001:\n\tpci-address 0000:81:00.0: status CTRL_ERR_APP error: example application error\n\n",
+			"1.2.3.4:10000:\n\tPCI Addr:0000:81:00.0 Status:CTRL_ERR_APP Error:example application error\n\n1.2.3.5:10001:\n\tPCI Addr:0000:81:00.0 Status:CTRL_ERR_APP Error:example application error\n\n",
 		},
 		{
 			NewClientScmResults(
@@ -126,7 +126,7 @@ func TestCheckSprint(t *testing.T) {
 						},
 					},
 				}, MockServers).String(),
-			"1.2.3.4:10000:\n\tmodule location channel:1 channelpos:2 memctrlr:3 socket:4 : status CTRL_ERR_APP error: example application error\n\n1.2.3.5:10001:\n\tmodule location channel:1 channelpos:2 memctrlr:3 socket:4 : status CTRL_ERR_APP error: example application error\n\n",
+			"1.2.3.4:10000:\n\tModule Location:(socket:4 memctrlr:3 chan:1 pos:2) Status:CTRL_ERR_APP Error:example application error\n\n1.2.3.5:10001:\n\tModule Location:(socket:4 memctrlr:3 chan:1 pos:2) Status:CTRL_ERR_APP Error:example application error\n\n",
 		},
 		{
 			NewClientScmMountResults(
@@ -139,7 +139,7 @@ func TestCheckSprint(t *testing.T) {
 						},
 					},
 				}, MockServers).String(),
-			"1.2.3.4:10000:\n\tmntpoint /mnt/daos: status CTRL_ERR_APP error: example application error\n\n1.2.3.5:10001:\n\tmntpoint /mnt/daos: status CTRL_ERR_APP error: example application error\n\n",
+			"1.2.3.4:10000:\n\tMntpoint:/mnt/daos Status:CTRL_ERR_APP Error:example application error\n\n1.2.3.5:10001:\n\tMntpoint:/mnt/daos Status:CTRL_ERR_APP Error:example application error\n\n",
 		},
 	}
 	for _, tt := range shelltests {
