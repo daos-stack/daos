@@ -26,4 +26,3 @@ container:
 testparams:
   rank: 4
   object_class: DAOS_OC_R3_RW
-  
