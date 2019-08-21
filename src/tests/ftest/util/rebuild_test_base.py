@@ -104,6 +104,12 @@ class RebuldTestBase(TestWithServers):
             "rs_errno": 0,
         }
 
+    def update_pool_verify(self):
+        """Update the pool verification expected values."""
+        self.info_checks["pi_ndisabled"] = ">0"
+        self.rebuild_checks["rs_obj_nr"] = ">0"
+        self.rebuild_checks["rs_rec_nr"] = ">0"
+
     def execute_pool_verify(self, msg=None):
         """Verify the pool info.
 
@@ -132,7 +138,7 @@ class RebuldTestBase(TestWithServers):
         self.container.write_objects(
             self.inputs.rank.value, self.inputs.object_class.value)
 
-    def verify_rank_objects_before_rebuild(self):
+    def verify_rank_has_objects(self):
         """Verify the rank to be excluded has at least one object."""
         rank = self.inputs.rank.value
         rank_list = self.container.get_target_rank_lists(" before rebuild")
@@ -140,7 +146,7 @@ class RebuldTestBase(TestWithServers):
         self.assertGreater(
             qty, 0, "No objects written to rank {}".format(rank))
 
-    def verify_rank_objects_after_rebuild(self):
+    def verify_rank_has_no_objects(self):
         """Verify the excluded rank has zero objects."""
         rank = self.inputs.rank.value
         rank_list = self.container.get_target_rank_lists(" after rebuild")
@@ -157,7 +163,7 @@ class RebuldTestBase(TestWithServers):
         # Wait for rebuild to start
         self.pool.wait_for_rebuild(True, 1)
 
-    def execute_rebuild_steps(self):
+    def execute_during_rebuild(self):
         """Execute test steps during rebuild."""
         pass
 
@@ -181,27 +187,25 @@ class RebuldTestBase(TestWithServers):
         self.create_test_container()
 
         # Verify the rank to be excluded has at least one object
-        self.verify_rank_objects_before_rebuild()
+        self.verify_rank_has_objects()
 
         # Start the rebuild process
         self.start_rebuild()
 
         # Execute the test steps during rebuild
-        self.execute_rebuild_steps()
+        self.execute_during_rebuild()
 
         # Confirm rebuild completes
         self.pool.wait_for_rebuild(False, 1)
 
         # Verify the excluded rank is no longer used with the objects
-        self.verify_rank_objects_after_rebuild()
+        self.verify_rank_has_no_objects()
 
         # Verify the pool information after rebuild
-        self.info_checks["pi_ndisabled"] = ">0"
-        self.rebuild_checks["rs_obj_nr"] = ">0"
-        self.rebuild_checks["rs_rec_nr"] = ">0"
+        self.update_pool_verify()
         self.execute_pool_verify(" after rebuild")
 
-        # Vrify the container data can still be accessed
+        # Verify the container data can still be accessed
         self.verify_container_data()
 
         self.log.info("Test passed")
