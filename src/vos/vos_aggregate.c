@@ -239,6 +239,15 @@ vos_agg_obj(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	if (agg_param->ap_discard) {
+		if (agg_param->ap_sub_tree_empty) {
+			struct vos_obj_iter	*oiter = vos_hdl2oiter(ih);
+			struct vos_object	*obj = oiter->it_obj;
+
+			D_ASSERT(daos_unit_oid_compare(obj->obj_id,
+						       entry->ie_oid) == 0);
+			vos_obj_evict(obj);
+		}
+
 		rc = agg_discard_parent(ih, entry, agg_param, acts);
 		agg_param->ap_sub_tree_empty = 0;
 		return rc;
