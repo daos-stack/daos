@@ -80,8 +80,8 @@ RUN curl -sS -f -L -O ${UBUNTU_URL}/libopenmpi-dev_3.1.2-6_amd64.deb; \
     ln -s /usr/lib/x86_64-linux-gnu/pmix/lib/libpmix.so.2 \
       /usr/lib/x86_64-linux-gnu/pmix/lib/libpmix.so
 
-RUN curl -sS -f -L -O ${MER_ART}/libmercury1_1.0.1-8_amd64.deb; \
-    curl -sS -f -L -O ${MER_ART}/libmercury-dev_1.0.1-8_amd64.deb; \
+RUN curl -sS -f -L -O ${MER_ART}/libmercury1_1.0.1-9_amd64.deb; \
+    curl -sS -f -L -O ${MER_ART}/libmercury-dev_1.0.1-9_amd64.deb; \
     apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
       ./libmercury*_amd64.deb
 

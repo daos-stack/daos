@@ -40,7 +40,7 @@
 #
 
 # Pull base image
-FROM opensuse/leap:15.0
+FROM opensuse/leap:15
 MAINTAINER Johann Lombardi <johann.lombardi@intel.com>
 
 # Build arguments can be set via -build-arg

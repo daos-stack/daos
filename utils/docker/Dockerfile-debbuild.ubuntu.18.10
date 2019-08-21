@@ -52,8 +52,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
       /usr/lib/x86_64-linux-gnu/pmix/lib/libpmix.so
 
 
-RUN curl -sS -f -L -O ${MER_ART}/libmercury1_1.0.1-8_amd64.deb; \
-    curl -sS -f -L -O ${MER_ART}/libmercury-dev_1.0.1-8_amd64.deb; \
+RUN curl -sS -f -L -O ${MER_ART}/libmercury1_1.0.1-9_amd64.deb; \
+    curl -sS -f -L -O ${MER_ART}/libmercury-dev_1.0.1-9_amd64.deb; \
     apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
       ./libmercury*_amd64.deb
 
