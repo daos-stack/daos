@@ -48,7 +48,7 @@ class BasicTxTest(TestWithServers):
         Not a good test at this point, need to redesign when tx is fully
         working.
 
-        :avocado: tags=container,tx,basictx
+        :avocado: tags=all,container,tx,small,smoke,pr,basictx
         """
         pool = None
 

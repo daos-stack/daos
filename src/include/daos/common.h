@@ -113,6 +113,27 @@ daos_u32_hash(uint64_t key, unsigned int bits)
 
 #define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
 
+static inline uint8_t
+isset_range(uint8_t *bitmap, uint32_t start, uint32_t end)
+{
+	int index;
+
+	for (index = start; index <= end; ++index)
+		if (isclr(bitmap, index))
+			return 0;
+
+	return 1;
+}
+
+static inline void
+clrbit_range(uint8_t *bitmap, uint32_t start, uint32_t end)
+{
+	int index;
+
+	for (index = start; index <= end; ++index)
+		clrbit(bitmap, index);
+}
+
 static inline unsigned int
 daos_power2_nbits(unsigned int val)
 {
@@ -291,13 +312,13 @@ daos_der2errno(int err)
 	case -DER_NO_PERM:
 	case -DER_EP_RO:
 	case -DER_EP_OLD:	return EPERM;
-	case -DER_NO_HDL:
 	case -DER_ENOENT:
 	case -DER_NONEXIST:	return ENOENT;
 	case -DER_INVAL:
 	case -DER_NOTYPE:
 	case -DER_NOSCHEMA:
 	case -DER_NOLOCAL:
+	case -DER_NO_HDL:
 	case -DER_IO_INVAL:	return EINVAL;
 	case -DER_KEY2BIG:
 	case -DER_REC2BIG:	return E2BIG;
@@ -370,7 +391,7 @@ daos_fail_value_get(void);
 int
 daos_fail_init(void);
 void
-daos_fail_fini();
+daos_fail_fini(void);
 
 /**
  * DAOS FAIL Mask
@@ -442,6 +463,13 @@ enum {
 
 #define DAOS_CHECKSUM_UPDATE_FAIL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x20)
 #define DAOS_CHECKSUM_FETCH_FAIL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x21)
+
+#define DAOS_DTX_COMMIT_SYNC		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x30)
+#define DAOS_DTX_LEADER_ERROR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x31)
+#define DAOS_DTX_NONLEADER_ERROR	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x32)
+#define DAOS_DTX_LOST_RPC_REQUEST	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x33)
+#define DAOS_DTX_LOST_RPC_REPLY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x34)
+#define DAOS_DTX_LONG_TIME_RESEND	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x35)
 
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
 

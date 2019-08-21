@@ -26,6 +26,8 @@ from __future__ import print_function
 import os
 import traceback
 import json
+from grp import getgrnam
+from pwd import getpwnam
 
 from avocado.utils import process
 from apricot import Test
@@ -35,6 +37,7 @@ import server_utils
 import check_for_pool
 import write_host_file
 
+#pylint: disable=broad-except
 class MultiServerCreateDeleteTest(Test):
     """
     Tests DAOS pool creation, trying both valid and invalid parameters.
@@ -70,7 +73,7 @@ class MultiServerCreateDeleteTest(Test):
     def test_create(self):
         """
         Test basic pool creation.
-        :avocado: tags=pool,poolcreate,multitarget
+        :avocado: tags=all,pool,full_regression,small,multitarget
         """
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
@@ -85,6 +88,8 @@ class MultiServerCreateDeleteTest(Test):
         uidlist = self.params.get("uid", '/run/tests/uids/*')
         if uidlist[0] == 'valid':
             uid = os.geteuid()
+        elif uidlist[0] == 'other_user':
+            uid = getpwnam('nfsnobody')[2]
         else:
             uid = uidlist[0]
         expected_for_param.append(uidlist[1])
@@ -92,6 +97,8 @@ class MultiServerCreateDeleteTest(Test):
         gidlist = self.params.get("gid", '/run/tests/gids/*')
         if gidlist[0] == 'valid':
             gid = os.getegid()
+        elif gidlist[0] == 'other_group':
+            gid = getgrnam('nfsnobody')[2]
         else:
             gid = gidlist[0]
         expected_for_param.append(gidlist[1])

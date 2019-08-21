@@ -95,8 +95,9 @@ func TestGetState(t *testing.T) {
    "numa_node":%d
 }
 `
-	onePmemJson := fmt.Sprintf(pmemOut, 1, 1, 0)
+	onePmem, _ := parsePmemDevs(fmt.Sprintf(pmemOut, 1, 1, 0))
 	twoPmemsJson := "[" + fmt.Sprintf(pmemOut, 1, 1, 0) + "," + fmt.Sprintf(pmemOut, 2, 2, 1) + "]"
+	twoPmems, _ := parsePmemDevs(twoPmemsJson)
 	createRegionsOut := msgScmRebootRequired + "\n"
 	pmemId := 1
 
@@ -125,7 +126,6 @@ func TestGetState(t *testing.T) {
 		desc              string
 		errMsg            string
 		showRegionOut     string
-		createRegionOut   string
 		expRebootRequired bool
 		expPmemDevs       []pmemDev
 		expCommands       []string
@@ -147,7 +147,7 @@ func TestGetState(t *testing.T) {
 				"   FreeCapacity=3012.0 GiB\n" +
 				"\n",
 			expCommands: []string{cmdScmShowRegions, cmdScmCreateNamespace, cmdScmShowRegions},
-			expPmemDevs: parsePmemDevs(onePmemJson),
+			expPmemDevs: onePmem,
 		},
 		{
 			desc: "regions with free capacity",
@@ -163,7 +163,7 @@ func TestGetState(t *testing.T) {
 				cmdScmShowRegions, cmdScmCreateNamespace, cmdScmShowRegions,
 				cmdScmCreateNamespace, cmdScmShowRegions,
 			},
-			expPmemDevs: parsePmemDevs(twoPmemsJson),
+			expPmemDevs: twoPmems,
 		},
 		{
 			desc: "regions with no capacity",
@@ -176,7 +176,7 @@ func TestGetState(t *testing.T) {
 				"   FreeCapacity=0.0 GiB\n" +
 				"\n",
 			expCommands: []string{cmdScmShowRegions, cmdScmListNamespaces},
-			expPmemDevs: parsePmemDevs(twoPmemsJson),
+			expPmemDevs: twoPmems,
 		},
 	}
 

@@ -53,7 +53,8 @@ class DeleteContainerTest(TestWithServers):
     def test_container_delete(self):
         """
         Test basic container delete
-        :avocado: tags=regression,cont,vm,contdelete
+
+        :avocado: tags=all,container,tiny,smoke,pr,contdelete
         """
         expected_for_param = []
         uuidlist = self.params.get("uuid",
