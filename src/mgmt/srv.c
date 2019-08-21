@@ -409,6 +409,73 @@ out:
 	D_FREE(resp);
 }
 
+/*
+ * Adds user and group name as owner to a new copy of the daos_prop_t passed in.
+ * The newly allocated prop is freed after pool create call returns.
+ */
+static int
+add_ownership_props(daos_prop_t **prop_out, char *owner, char *owner_grp)
+{
+	daos_prop_t    *final_prop = NULL;
+	char	       *out_owner = NULL;
+	char	       *out_owner_grp = NULL;
+	uint32_t	idx = 0;
+	uint32_t	entries = 0;
+	int		rc = 0;
+
+	if (owner != NULL && *owner != '\0') {
+		D_ASPRINTF(out_owner, "%s", owner);
+		if (out_owner == NULL) {
+			D_ERROR("Failed to allocate string for owner\n");
+			rc = -DER_NOMEM;
+			goto err_out;
+		}
+
+		entries++;
+	}
+
+	if (owner_grp != NULL && *owner_grp != '\0') {
+		D_ASPRINTF(out_owner_grp, "%s", owner_grp);
+		if (out_owner_grp == NULL) {
+			D_ERROR("Failed to allocate string for owner_grp\n");
+			rc = -DER_NOMEM;
+			goto err_out;
+		}
+
+		entries++;
+	}
+
+	final_prop = daos_prop_alloc(entries);
+	if (final_prop == NULL) {
+		D_ERROR("Failed to allocate prop\n");
+		rc = -DER_NOMEM;
+		goto err_out;
+	}
+
+	if (out_owner != NULL) {
+		final_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_OWNER;
+		final_prop->dpp_entries[idx].dpe_str = out_owner;
+		idx++;
+	}
+
+	if (out_owner_grp != NULL) {
+		final_prop->dpp_entries[idx].dpe_type =
+			DAOS_PROP_PO_OWNER_GROUP;
+		final_prop->dpp_entries[idx].dpe_str = out_owner_grp;
+		idx++;
+	}
+
+	*prop_out = final_prop;
+
+	return rc;
+
+err_out:
+	daos_prop_free(final_prop);
+	D_FREE(out_owner);
+	D_FREE(out_owner_grp);
+	return rc;
+}
+
 static void
 process_createpool_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
@@ -417,6 +484,7 @@ process_createpool_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	d_rank_list_t		*targets = NULL;
 	d_rank_list_t		*svc = NULL;
 	uuid_t			pool_uuid;
+	daos_prop_t		*prop = NULL;
 	int			buflen = 16;
 	int			index;
 	int			i;
@@ -462,10 +530,14 @@ process_createpool_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	uuid_generate(pool_uuid);
 	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(pool_uuid));
 
+	rc = add_ownership_props(&prop, req->user, req->usergroup);
+	if (rc != 0)
+		goto out;
+
 	/* Ranks to allocate targets (in) & svc for pool replicas (out). */
 	rc = ds_mgmt_create_pool(pool_uuid, req->sys, "pmem", targets,
 				 req->scmbytes, req->nvmebytes,
-				 NULL /* props */, req->numsvcreps, &svc);
+				 prop, req->numsvcreps, &svc);
 	if (targets != NULL)
 		d_rank_list_free(targets);
 	if (rc != 0) {
@@ -535,6 +607,8 @@ out:
 	}
 
 	mgmt__create_pool_req__free_unpacked(req, NULL);
+
+	daos_prop_free(prop);
 
 	/** check for '\0' which is a static allocation from protobuf */
 	if (resp->svcreps && resp->svcreps[0] != '\0')
