@@ -36,7 +36,7 @@ class CascadingFailures(RebuldTestBase):
         self.container.write_objects(
             self.inputs.rank.value[0], self.inputs.object_class.value)
 
-    def verify_rank_objects_before_rebuild(self):
+    def verify_rank_has_objects(self):
         """Verify the first rank to be excluded has at least one object."""
         rank_list = self.container.get_target_rank_lists(" before rebuild")
         objects = {
@@ -47,7 +47,7 @@ class CascadingFailures(RebuldTestBase):
             objects[self.inputs.rank.value[0]], 0,
             "No objects written to rank {}".format(self.inputs.rank.value[0]))
 
-    def verify_rank_objects_after_rebuild(self):
+    def verify_rank_has_no_objects(self):
         """Verify the excluded rank has zero objects."""
         rank_list = self.container.get_target_rank_lists(" after rebuild")
         objects = {
@@ -68,7 +68,7 @@ class CascadingFailures(RebuldTestBase):
         # Wait for rebuild to start
         self.pool.wait_for_rebuild(True, 1)
 
-    def execute_rebuild_steps(self):
+    def execute_during_rebuild(self):
         """Execute test steps during rebuild."""
         # Exclude the second rank from the pool during rebuild
         self.pool.start_rebuild(
@@ -89,7 +89,7 @@ class CascadingFailures(RebuldTestBase):
             reflect a normal status.
 
         Use Cases:
-            ?
+            Verify rebuild with multiple server failures.
 
         :avocado: tags=rebuild,cascadingfailure
         """
