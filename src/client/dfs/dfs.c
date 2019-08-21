@@ -2046,8 +2046,7 @@ int
 dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t sgl, daos_off_t off,
 	 daos_size_t *read_size)
 {
-	daos_size_t	array_size, max_read;
-	daos_size_t	bytes_to_read, rem;
+	daos_size_t	bytes_to_read;
 	int		i;
 	int		rc;
 
@@ -2056,34 +2055,12 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t sgl, daos_off_t off,
 	if (obj == NULL || !S_ISREG(obj->mode))
 		return EINVAL;
 
-	rc = daos_array_get_size(obj->oh, DAOS_TX_NONE, &array_size, NULL);
-	if (rc) {
-		D_ERROR("daos_array_get_size() failed (%d)\n", rc);
-		return daos_der2errno(rc);
-	}
-
-	if (off >= array_size) {
-		*read_size = 0;
-		return 0;
-	}
-
-	/* Update SGL in case we try to read beyond eof to not do that */
-	max_read = array_size - off;
 	bytes_to_read = 0;
-	for (i = 0; i < sgl.sg_nr; i++) {
-		if (bytes_to_read + sgl.sg_iovs[i].iov_len <= max_read) {
-			bytes_to_read += sgl.sg_iovs[i].iov_len;
-		} else {
-			rem = max_read - bytes_to_read;
-			if (rem) {
-				bytes_to_read += rem;
-				sgl.sg_iovs[i].iov_len = rem;
-				i++;
-				break;
-			}
-		}
-	}
-	sgl.sg_nr = i;
+	for (i = 0; i < sgl.sg_nr; i++)
+		bytes_to_read += sgl.sg_iovs[i].iov_len;
+
+	if (bytes_to_read == 0)
+		return 0;
 
 	rc = io_internal(dfs, obj, sgl, off, DFS_READ);
 	if (rc) {
