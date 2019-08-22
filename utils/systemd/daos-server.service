@@ -14,3 +14,6 @@ ExecStart=/usr/bin/daos_server -i
 StandardOutput=journal
 StandardError=journal
 Restart=on-failure
+
+[Install]
+WantedBy = multi-user.target
