@@ -89,7 +89,7 @@ def run_agent(basepath, server_list, client_list=None):
     for client in client_list:
         sessions[client] = subprocess.Popen(
             ["ssh", client, "-o ConnectTimeout=10",
-	    "{} -i".format(daos_agent_bin)],
+             "{} -i".format(daos_agent_bin)],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT
         )
