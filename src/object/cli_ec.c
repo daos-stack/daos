@@ -365,7 +365,7 @@ ec_init_tgt_set(daos_iod_t *iods, unsigned int nr,
 			 */
 			D_ASSERT(!(PARITY_INDICATOR & rs));
 			for (ext_idx = rs; ext_idx <= re; ext_idx += len) {
-				unsigned int cell = ext_idx/len;
+				unsigned int cell = (ext_idx % (k*len))/len;
 
 				*tgt_set |= 1UL << (cell+p);
 				if (*tgt_set == full) {
