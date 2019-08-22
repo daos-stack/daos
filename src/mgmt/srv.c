@@ -409,12 +409,8 @@ out:
 	D_FREE(resp);
 }
 
-/*
- * Adds user and group name as owner to a new copy of the daos_prop_t passed in.
- * The newly allocated prop is freed after pool create call returns.
- */
 static int
-add_ownership_props(daos_prop_t **prop_out, char *owner, char *owner_grp)
+create_ownership_props(daos_prop_t **prop, char *owner, char *owner_grp)
 {
 	daos_prop_t    *final_prop = NULL;
 	char	       *out_owner = NULL;
@@ -443,6 +439,12 @@ add_ownership_props(daos_prop_t **prop_out, char *owner, char *owner_grp)
 		}
 
 		entries++;
+	}
+
+	if (entries == 0) {
+		D_ERROR("No owner identities provided, aborting!\n");
+		rc = -DER_INVAL;
+		goto err_out;
 	}
 
 	final_prop = daos_prop_alloc(entries);
@@ -530,7 +532,7 @@ process_createpool_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	uuid_generate(pool_uuid);
 	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(pool_uuid));
 
-	rc = add_ownership_props(&prop, req->user, req->usergroup);
+	rc = create_ownership_props(&prop, req->user, req->usergroup);
 	if (rc != 0)
 		goto out;
 
