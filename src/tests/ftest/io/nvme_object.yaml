@@ -18,19 +18,20 @@ pool:
  createset:
   group: daos_server
  createsize:
+  scm_size: 2000000000
   size:
-   - 1000000000
-   - 20000000000
-   - 30000000000
-#   - 
+   - 25000000000
+   - 40000000000
+   - 60000000000
  createsvc:
   svcn: 1
 container:
-  object_qty: 100
+  object_qty: 10
   record_size:
     - 1
     - 50
-#    - 100
+    - 100
+    - 1000
   akey_size: 10
   dkey_size: 10
-  data_size: 10
+  data_size: 2048

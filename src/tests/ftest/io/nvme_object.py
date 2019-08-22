@@ -83,7 +83,7 @@ class NvmeObject(TestWithServers):
         self.container.get_params(self)
 
         # set pool size
-        self.pool.scm_size.update(self.pool_size[0])
+        self.pool.nvme_size.update(self.pool_size[0])
         # Create a pool
         self.pool.create()
         self.pool.connect()
@@ -123,7 +123,7 @@ class NvmeObject(TestWithServers):
             self.container.get_params(self)
 
             # set pool size
-            self.pool.scm_size.update(size)
+            self.pool.nvme_size.update(size)
             # Create a pool
             self.pool.create()
             self.pool.connect()
