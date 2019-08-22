@@ -29,70 +29,36 @@ import (
 	"os"
 	"syscall"
 
-	flags "github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	log "github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/security/acl"
 )
 
-func parseCliOpts(opts *cliOptions) error {
-	p := flags.NewParser(opts, flags.Default)
-	// Continue with main if no subcommand is executed.
-	p.SubcommandsOptional = true
-
-	// Parse commandline flags which override options loaded from config.
-	_, err := p.Parse()
-	if err != nil {
-		return err
-	}
-
-	return nil
+type serverLogger interface {
+	Debug(string)
+	Debugf(string, ...interface{})
+	Info(string)
+	Infof(string, ...interface{})
+	Error(string)
+	Errorf(string, ...interface{})
 }
 
-// Main is the current entry point into daos_server functionality
-// TODO: Refactor this to decouple CLI functionality from core
-// server logic and allow for easier testing.
-func Main() error {
-
-	opts := new(cliOptions)
-	if err := parseCliOpts(opts); err != nil {
-		return err
-	}
-
-	if opts.Debug {
-		log.SetLevel(log.LogLevelDebug)
-		log.Debug("debug output enabled")
-	}
-	if opts.JSON {
-		log.SetJSONOutput()
-		log.Info("JSON output enabled")
-	}
-
-	host, err := os.Hostname()
-	if err != nil {
-		return err
-	}
-
-	// Parse configuration file and load values.
-	config, err := loadConfigOpts(opts, host)
-	if err != nil {
-		return errors.WithMessage(err, "load config options")
-	}
+// Start is the entry point for a daos_server instance.
+func Start(log *logging.LeveledLogger, config *Configuration) error {
+	// FIXME(mjmac): Temporarily set a global logger
+	// until we get the dependency injection correct.
+	level := log.Level()
+	logging.SetLogger(log)
+	// We have to set the global level because by default
+	// it's based on the previous logger's level.
+	logging.SetLevel(level)
 
 	// Backup active config.
 	saveActiveConfig(config)
-
-	ctlLogFile, err := config.setLogging(host, opts.JSON)
-	if err != nil {
-		return errors.Wrap(err, "configure logging")
-	}
-	if ctlLogFile != nil {
-		defer ctlLogFile.Close()
-	}
 
 	// Create and setup control service.
 	mgmtCtlSvc, err := newControlService(
@@ -166,7 +132,7 @@ func Main() error {
 
 	// Only start single io_server for now.
 	// TODO: Extend to start two io_servers per host.
-	iosrv, err := newIosrv(config, 0)
+	iosrv, err := newIosrv(log, config, 0)
 	if err != nil {
 		return errors.WithMessage(err, "load server")
 	}
@@ -184,10 +150,5 @@ func Main() error {
 	log.Infof("DAOS I/O server running %s", extraText)
 
 	// Wait for I/O server to return.
-	err = iosrv.wait()
-	if err != nil {
-		return errors.WithMessage(err, "DAOS I/O server exited with error")
-	}
-
-	return err
+	return errors.WithMessage(iosrv.wait(), "DAOS I/O server exited with error")
 }
