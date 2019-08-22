@@ -101,7 +101,7 @@ func TestChangeFilePermissions(t *testing.T) {
 		config.UserName = tt.username
 		config.GroupName = tt.groupname
 
-		err := changeFileOwnership(&config)
+		err := changeFileOwnership(config)
 		if err != nil {
 			if tt.errMsg != "" {
 				ExpectError(t, err, tt.errMsg, tt.desc)
