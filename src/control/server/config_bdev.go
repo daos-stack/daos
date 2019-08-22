@@ -72,16 +72,16 @@ const (
 type bdev struct {
 	templ   string
 	vosEnv  string
-	isEmpty func(*server) string            // check no elements
-	isValid func(*server) string            // check valid elements
-	prep    func(int, *configuration) error // prerequisite actions
+	isEmpty func(*IOServerConfig) string    // check no elements
+	isValid func(*IOServerConfig) string    // check valid elements
+	prep    func(int, *Configuration) error // prerequisite actions
 }
 
-func nilValidate(srv *server) string { return "" }
+func nilValidate(srv *IOServerConfig) string { return "" }
 
-func nilPrep(i int, c *configuration) error { return nil }
+func nilPrep(i int, c *Configuration) error { return nil }
 
-func isEmptyList(srv *server) string {
+func isEmptyList(srv *IOServerConfig) string {
 	if len(srv.BdevList) == 0 {
 		return "bdev_list empty " + msgBdevNone
 	}
@@ -89,7 +89,7 @@ func isEmptyList(srv *server) string {
 	return ""
 }
 
-func isEmptyNumber(srv *server) string {
+func isEmptyNumber(srv *IOServerConfig) string {
 	if srv.BdevNumber == 0 {
 		return "bdev_number == 0 " + msgBdevNone
 	}
@@ -97,7 +97,7 @@ func isEmptyNumber(srv *server) string {
 	return ""
 }
 
-func isValidList(srv *server) string {
+func isValidList(srv *IOServerConfig) string {
 	for i, elem := range srv.BdevList {
 		if elem == "" {
 			return fmt.Sprintf(
@@ -108,7 +108,7 @@ func isValidList(srv *server) string {
 	return ""
 }
 
-func isValidSize(srv *server) string {
+func isValidSize(srv *IOServerConfig) string {
 	if srv.BdevSize < 1 {
 		return msgBdevBadSize
 	}
@@ -116,7 +116,7 @@ func isValidSize(srv *server) string {
 	return ""
 }
 
-func prepBdevFile(i int, c *configuration) error {
+func prepBdevFile(i int, c *Configuration) error {
 	srv := c.Servers[i]
 
 	// truncate or create files for SPDK AIO emulation,
@@ -145,7 +145,7 @@ var bdevMap = map[BdevClass]bdev{
 // rank represents a rank of an I/O server or a nil rank.
 // genFromNvme takes NVMe device PCI addresses and generates config content
 // (output as string) from template.
-func genFromTempl(server *server, templ string) (out bytes.Buffer, err error) {
+func genFromTempl(server *IOServerConfig, templ string) (out bytes.Buffer, err error) {
 	t := template.Must(
 		template.New(confOut).Parse(templ))
 
@@ -158,7 +158,7 @@ func genFromTempl(server *server, templ string) (out bytes.Buffer, err error) {
 // generated from io_server config at given index populating template "templ".
 // Generated file is written to SCM mount specific to an io_server instance
 // to be consumed by SPDK in that process.
-func (c *configuration) createConf(srv *server, templ string, path string) (
+func (c *Configuration) createConf(srv *IOServerConfig, templ string, path string) (
 	err error) {
 
 	confBytes, err := genFromTempl(srv, templ)
@@ -182,8 +182,8 @@ func (c *configuration) createConf(srv *server, templ string, path string) (
 // parseNvme reads server config file, calls createConf and performs necessary
 // file creation and sets environment variable for SPDK emulation if needed.
 // Direct io_server to use generated NVMe conf by setting "-n" cli opt.
-func (c *configuration) parseNvme(i int) (err error) {
-	srv := &c.Servers[i]
+func (c *Configuration) parseNvme(i int) (err error) {
+	srv := c.Servers[i]
 	confPath := filepath.Join(srv.ScmMount, confOut)
 	bdev := bdevMap[srv.BdevClass]
 
