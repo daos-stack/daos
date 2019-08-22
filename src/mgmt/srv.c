@@ -410,13 +410,13 @@ out:
 }
 
 static int
-create_ownership_props(daos_prop_t **prop, char *owner, char *owner_grp)
+create_ownership_props(daos_prop_t **out_prop, char *owner, char *owner_grp)
 {
-	daos_prop_t    *final_prop = NULL;
 	char	       *out_owner = NULL;
 	char	       *out_owner_grp = NULL;
-	uint32_t	idx = 0;
+	daos_prop_t    *new_prop = NULL;
 	uint32_t	entries = 0;
+	uint32_t	idx = 0;
 	int		rc = 0;
 
 	if (owner != NULL && *owner != '\0') {
@@ -447,34 +447,33 @@ create_ownership_props(daos_prop_t **prop, char *owner, char *owner_grp)
 		goto err_out;
 	}
 
-	final_prop = daos_prop_alloc(entries);
-	if (final_prop == NULL) {
+	new_prop = daos_prop_alloc(entries);
+	if (new_prop == NULL) {
 		D_ERROR("Failed to allocate prop\n");
 		rc = -DER_NOMEM;
 		goto err_out;
 	}
 
 	if (out_owner != NULL) {
-		final_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_OWNER;
-		final_prop->dpp_entries[idx].dpe_str = out_owner;
+		new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_OWNER;
+		new_prop->dpp_entries[idx].dpe_str = out_owner;
 		idx++;
 	}
 
 	if (out_owner_grp != NULL) {
-		final_prop->dpp_entries[idx].dpe_type =
-			DAOS_PROP_PO_OWNER_GROUP;
-		final_prop->dpp_entries[idx].dpe_str = out_owner_grp;
+		new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_OWNER_GROUP;
+		new_prop->dpp_entries[idx].dpe_str = out_owner_grp;
 		idx++;
 	}
 
-	*prop_out = final_prop;
+	*out_prop = new_prop;
 
 	return rc;
 
 err_out:
-	daos_prop_free(final_prop);
-	D_FREE(out_owner);
+	daos_prop_free(new_prop);
 	D_FREE(out_owner_grp);
+	D_FREE(out_owner);
 	return rc;
 }
 
