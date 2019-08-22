@@ -1010,10 +1010,30 @@ TODO: add instructions
 
 ### Systemd Integration
 
-A preliminary systemd script to manage the DAOS server is available
-under utils/system. That being said, this startup method is not
-supported yet since the current DAOS version still relies on PMIx for
-DAOS server wireup.
+Systemd support for daos_server is still experimental as it will start the
+daos_server and daos_io_server components in PMIXless mode which is still in
+development.
+
+DAOS Server can be started as a systemd service. The DAOS Server
+unit file is installed in the correct location when installing from RPMs.
+If you wish to use systemd with a development build you must copy the service
+file from utils/systemd to /usr/lib/systemd/system. Once the file is copied
+modify the ExecStart line to point to your in tree daos_server binary.
+
+Once the service file is installed you can start daos_server
+with the following commands:
+```
+systemctl enable daos-server
+systemctl start daos-server
+```
+To check the component status use:
+```
+systemctl status daos-server
+```
+If DAOS Server failed to start check the logs with:
+```
+journalctl --unit daos-server
+```
 
 ### Kubernetes Pod
 
@@ -1268,9 +1288,31 @@ to communicate with the control plane over unencrypted channels. The following
 example shows daos_agent being configured to operate in insecure mode due to
 incomplete integration of certificate support as of the 0.6 release.
 
-To start the DAOS Agent, run:
+To start the DAOS Agent from the command line, run:
 ```
 daos_agent -i
+```
+
+Alternatively the DAOS Agent can be started as a systemd service. The DAOS Agent
+unit file is installed in the correct location when installing from RPMs.
+If you wish to use systemd with a development build you must copy the service
+file from utils/systemd to /usr/lib/systemd/system. Once the file is copied
+modify the ExecStart line to point to your in tree daos_agent binary.
+
+Once the service file is installed you can start daos_agent
+with the following commands:
+
+```
+systemctl enable daos-agent
+systemctl start daos-agent
+```
+To check the component status use:
+```
+systemctl status daos-agent
+```
+If DAOS Agent failed to start check the logs with:
+```
+journalctl --unit daos-agent
 ```
 
 System Validation
