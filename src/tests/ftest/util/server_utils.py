@@ -206,8 +206,8 @@ class ServerCommand(CommandWithParameters):
                 timed_out = time.time() - start_time > timeout
 
             if start_msgs != len(self.hosts):
-                err_msg = "{} detected starting {}/{} servers".format(
-                    "Timed out" if timed_out else "Error",
+                err_msg = "{} detected. Only started {}/{} servers".format(
+                    "Time out" if timed_out else "Error",
                     start_msgs, len(self.hosts))
                 print("{}:\n{}".format(err_msg, self.process.get_stdout()))
                 raise ServerFailed(err_msg)

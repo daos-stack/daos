@@ -61,7 +61,7 @@ class DmgCommand(CommandWithParameters):
         self.oid = FormattedParameter("--oid={}")
 
     def get_param_names(self):
-        """Get a sorted list of daos_server command parameter names."""
+        """Get a sorted list of dmg command parameter names."""
         names = self.get_attribute_names(FormattedParameter)
         names.extend(["request", "action"])
         return names

@@ -45,8 +45,8 @@ class DmgNvmeScanTest(TestWithServers):
     def test_dmg_nvme_scan_basic(self):
         """
         JIRA ID: DAOS-2485
-        Test Description: Test basic dmg functionality to scan nvme the storage
-        on system.
+        Test Description: Test basic dmg functionality to scan the nvme storage.
+        on the system.
         :avocado: tags=all,tiny,pr,dmg,nvme_scan,basic
         """
         # Create daos_server command
