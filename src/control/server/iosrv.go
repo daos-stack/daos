@@ -73,7 +73,7 @@ func findBinary(binName string) (string, error) {
 	return binPath, nil
 }
 
-func formatIosrvs(config *configuration, reformat bool) error {
+func formatIosrvs(config *Configuration, reformat bool) error {
 	// Determine if an I/O server needs to createMS or bootstrapMS.
 	addr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("0.0.0.0:%d", config.Port))
 	if err != nil {
@@ -147,7 +147,7 @@ func pmixRank() (rank, error) {
 // If format_override has been set in config and superblock does not exist,
 // continue to create a new superblock without formatting.
 func formatIosrv(
-	config *configuration, i int, reformat, createMS, bootstrapMS bool) error {
+	config *Configuration, i int, reformat, createMS, bootstrapMS bool) error {
 
 	srv := config.Servers[i]
 
@@ -205,7 +205,7 @@ func iosrvSuperPath(root string) string {
 
 // createIosrvSuper creates the superblock file for config.Servers[i]. Called
 // when formatting an I/O server.
-func createIosrvSuper(config *configuration, i int, reformat, createMS, bootstrapMS bool) error {
+func createIosrvSuper(config *Configuration, i int, reformat, createMS, bootstrapMS bool) error {
 	// Initialize the superblock object.
 	u, err := uuid.NewV4()
 	if err != nil {
@@ -257,8 +257,9 @@ func writeIosrvSuper(path string, super *iosrvSuper) error {
 //
 // NOTE: The superblock supercedes the format-time configuration in config.
 type iosrv struct {
+	log     serverLogger
 	super   *iosrvSuper
-	config  *configuration
+	config  *Configuration
 	index   int
 	cmd     *exec.Cmd
 	sigchld chan os.Signal
@@ -266,13 +267,14 @@ type iosrv struct {
 	conn    *drpc.ClientConnection
 }
 
-func newIosrv(config *configuration, i int) (*iosrv, error) {
+func newIosrv(logger serverLogger, config *Configuration, i int) (*iosrv, error) {
 	super, err := readIosrvSuper(iosrvSuperPath(config.Servers[i].ScmMount))
 	if err != nil {
 		return nil, err
 	}
 
 	srv := &iosrv{
+		log:     logger,
 		super:   super,
 		config:  config,
 		index:   i,
@@ -317,13 +319,14 @@ func (srv *iosrv) start() (err error) {
 	}
 
 	if pmixless() {
+		srv.log.Debugf("PMIXLESS mode detected; ready: %+v", ready)
 		if err = srv.setRank(ready); err != nil {
 			return
 		}
 	}
 
 	if srv.super.CreateMS {
-		log.Debugf("create MS (bootstrap=%t)", srv.super.BootstrapMS)
+		srv.log.Debugf("create MS (bootstrap=%t)", srv.super.BootstrapMS)
 		if err = srv.callCreateMS(); err != nil {
 			return
 		}
@@ -351,6 +354,25 @@ func (srv *iosrv) wait() error {
 	return nil
 }
 
+type cmdLogger struct {
+	logFn  func(string)
+	prefix string
+}
+
+func (cl *cmdLogger) Write(data []byte) (int, error) {
+	if cl.logFn == nil {
+		return 0, errors.New("no log function set in cmdLogger")
+	}
+
+	var msg string
+	if cl.prefix != "" {
+		msg = cl.prefix + " "
+	}
+	msg += string(data)
+	cl.logFn(msg)
+	return len(data), nil
+}
+
 func (srv *iosrv) startCmd() error {
 	// Exec io_server with generated cli opts from config context.
 	binPath, err := findBinary(ioServerBin)
@@ -359,8 +381,16 @@ func (srv *iosrv) startCmd() error {
 	}
 
 	srv.cmd = exec.Command(binPath, srv.config.Servers[srv.index].CliOpts...)
-	srv.cmd.Stdout = os.Stdout
-	srv.cmd.Stderr = os.Stderr
+	srv.cmd.Stdout = &cmdLogger{
+		logFn:  srv.log.Info,
+		prefix: fmt.Sprintf("%s:%d", ioServerBin, srv.index),
+	}
+	srv.cmd.Stderr = &cmdLogger{
+		logFn:  srv.log.Error,
+		prefix: fmt.Sprintf("%s:%d", ioServerBin, srv.index),
+	}
+	// FIXME(DAOS-3105): This shouldn't be the default. The command environment
+	// should be constructed from values in the configuration.
 	srv.cmd.Env = os.Environ()
 
 	// Populate I/O server environment with values from config before starting.
@@ -373,6 +403,7 @@ func (srv *iosrv) startCmd() error {
 
 	signal.Notify(srv.sigchld, syscall.SIGCHLD)
 
+	srv.log.Debugf("cmd args: %+v", srv.cmd.Args)
 	// Start the DAOS I/O server.
 	err = srv.cmd.Start()
 	if err != nil {
