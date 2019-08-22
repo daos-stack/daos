@@ -254,11 +254,12 @@ int
 test_setup(void **state, unsigned int step, bool multi_rank,
 	   daos_size_t pool_size, struct test_pool *pool)
 {
-	test_arg_t	*arg = *state;
-	struct timeval	 now;
-	unsigned int	 seed;
-	int		 rc = 0;
-	daos_prop_t	 co_props = {0};
+	test_arg_t		*arg = *state;
+	struct timeval		 now;
+	unsigned int		 seed;
+	int			 rc = 0;
+	daos_prop_t		 co_props = {0};
+	struct daos_prop_entry	 csum_entry = {0};
 
 
 	/* feed a seed for pseudo-random number generator */
@@ -308,7 +309,6 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 
 	if (env_checksum) {
 		printf("Checksum enabled in test!\n");
-		struct daos_prop_entry csum_entry = {0};
 
 		csum_entry.dpe_val = DAOS_PROP_CO_CSUM_CRC64;
 		csum_entry.dpe_type = DAOS_PROP_CO_CSUM;

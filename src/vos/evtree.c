@@ -3024,9 +3024,13 @@ void
 evt_desc_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 		   const struct evt_entry_in *ent)
 {
-	const daos_csum_buf_t *csum = &ent->ei_csum;
-	daos_size_t csum_buf_len = evt_csum_buf_len(tcx, &ent->ei_rect.rc_ex);
+	const daos_csum_buf_t	*csum = &ent->ei_csum;
+	daos_size_t		 csum_buf_len;
 
+	if (!dcb_is_valid(csum))
+		return;
+
+	csum_buf_len = evt_csum_buf_len(tcx, &ent->ei_rect.rc_ex);
 	if (csum->cs_buf_len < csum_buf_len) {
 		D_ERROR("Issue copying checksum. Source (%d) is "
 			"larger than destination (%"PRIu64")",
