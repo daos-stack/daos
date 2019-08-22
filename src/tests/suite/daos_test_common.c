@@ -308,9 +308,9 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 
 	if (env_checksum) {
 		printf("Checksum enabled in test!\n");
-		struct daos_prop_entry csum_entry;
+		struct daos_prop_entry csum_entry = {0};
 
-		csum_entry.dpe_val = DAOS_PROP_CO_CSUM_SHA1;
+		csum_entry.dpe_val = DAOS_PROP_CO_CSUM_CRC64;
 		csum_entry.dpe_type = DAOS_PROP_CO_CSUM;
 
 		co_props.dpp_nr = 1;

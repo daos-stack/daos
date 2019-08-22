@@ -562,7 +562,9 @@ static void test_is_valid_csum(void **state)
 	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_OFF));
 	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_CRC16));
 	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_CRC32));
-	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_SHA1));
+
+	/** Not supported yet */
+	assert_false(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_SHA1));
 	assert_false(daos_cont_csum_prop_is_valid(99));
 }
 
@@ -570,7 +572,9 @@ static void test_is_csum_enabled(void **state)
 {
 	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_CRC16));
 	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_CRC32));
-	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_SHA1));
+
+	/** Not supported yet */
+	assert_false(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_SHA1));
 	assert_false(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_OFF));
 	assert_false(daos_cont_csum_prop_is_enabled(9999));
 }

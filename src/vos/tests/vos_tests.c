@@ -137,7 +137,7 @@ main(int argc, char **argv)
 				  long_options, &index)) != -1) {
 		switch (opt) {
 		case 'e':
-#ifdef CMOCKA_FILTER_SUPPORTED /** requires cmocka 1.1.5 */
+#if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
 			cmocka_set_skip_filter(optarg);
 #else
 			D_PRINT("filter not enabled");
@@ -145,7 +145,7 @@ main(int argc, char **argv)
 
 			break;
 		case 'f':
-#ifdef CMOCKA_FILTER_SUPPORTED /** requires cmocka 1.1.5 */
+#if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
 			cmocka_set_test_filter(optarg);
 				printf("Test filter: %s\n", optarg);
 #else
