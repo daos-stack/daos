@@ -106,7 +106,7 @@ func checkMgmtSvcReplica(self *net.TCPAddr, accessPoints []string) (isReplica, b
 // resolveAccessPoints resolves the strings in accessPoints into addresses in
 // addrs. If a port isn't specified, assume the default port.
 func resolveAccessPoints(accessPoints []string) (addrs []*net.TCPAddr, err error) {
-	defaultPort := newConfiguration().Port
+	defaultPort := NewConfiguration().Port
 	for _, ap := range accessPoints {
 		if !hasPort(ap) {
 			ap = net.JoinHostPort(ap, strconv.Itoa(defaultPort))
@@ -155,7 +155,7 @@ type mgmtSvc struct {
 	dcli  drpc.DomainSocketClient
 }
 
-func newMgmtSvc(config *configuration) *mgmtSvc {
+func newMgmtSvc(config *Configuration) *mgmtSvc {
 	return &mgmtSvc{
 		dcli: getDrpcClientConnection(config.SocketDir),
 	}

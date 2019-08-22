@@ -27,13 +27,13 @@ import (
 	"testing"
 )
 
-func defaultMockControlService(t *testing.T) *controlService {
+func defaultMockControlService(t *testing.T) *ControlService {
 	c := defaultMockConfig(t)
-	return mockControlService(&c)
+	return mockControlService(c)
 }
 
-func mockControlService(config *configuration) *controlService {
-	cs := controlService{
+func mockControlService(config *Configuration) *ControlService {
+	cs := ControlService{
 		nvme:   defaultMockNvmeStorage(config),
 		scm:    defaultMockScmStorage(config),
 		config: config,
