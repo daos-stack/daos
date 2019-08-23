@@ -86,10 +86,12 @@ drpc_listener_run(void *arg)
 	while (is_listener_running()) {
 		int rc;
 
-		rc = drpc_progress(ctx, -1 /* indefinite */);
+		rc = drpc_progress(ctx, 0);
 		if (rc != DER_SUCCESS && rc != -DER_TIMEDOUT) {
 			D_ERROR("dRPC listener progress error: %d\n", rc);
 		}
+
+		ABT_thread_yield();
 	}
 
 	D_INFO("Closing down dRPC listener\n");

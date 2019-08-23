@@ -134,6 +134,12 @@ drpc_hdlr_process_msg(Drpc__Call *request, Drpc__Response **resp)
 {
 }
 
+int
+ABT_thread_yield(void)
+{
+	return 0;
+}
+
 /*
  * Test setup and teardown
  */
