@@ -36,7 +36,8 @@ enum cont_op {
 	CONT_CREATE_SNAP,
 	CONT_LIST_SNAPS,
 	CONT_DESTROY_SNAP,
-	CONT_ROLLBACK
+	CONT_ROLLBACK,
+	CONT_UNS_INSERT,
 };
 
 enum pool_op {
@@ -181,6 +182,7 @@ int pool_query_hdlr(struct cmd_args_s *ap);
 /* Container operations */
 int cont_create_hdlr(struct cmd_args_s *ap);
 int cont_create_uns_hdlr(struct cmd_args_s *ap);
+int cont_uns_insert_hdlr(struct cmd_args_s *ap);
 int cont_query_hdlr(struct cmd_args_s *ap);
 int cont_destroy_hdlr(struct cmd_args_s *ap);
 
