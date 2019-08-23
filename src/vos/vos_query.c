@@ -129,7 +129,7 @@ query_recx(struct open_query *query, daos_recx_t *recx)
 	struct evt_entry	entry;
 	daos_handle_t		toh;
 	daos_handle_t		ih;
-	struct evt_filter	filter;
+	struct evt_filter	filter = {0};
 	int			rc;
 	int			close_rc;
 	int			opc;
