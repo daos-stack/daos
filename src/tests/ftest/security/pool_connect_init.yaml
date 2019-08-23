@@ -26,7 +26,3 @@ pool:
            - 0
            - 0
            - FAIL
-
-object_class:
-    OC_S1:
-        obj_class: 200
