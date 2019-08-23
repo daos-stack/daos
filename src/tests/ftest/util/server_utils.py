@@ -37,7 +37,6 @@ import errno
 import yaml
 import getpass
 
-from agent_utils import run_agent
 from general_utils import pcmd, check_file_exists
 from command_utils import CommandWithParameters
 from command_utils import BasicParameter, FormattedParameter
