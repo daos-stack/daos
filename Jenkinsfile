@@ -67,7 +67,7 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
                             sudo cp /tmp/daos_server_baseline.yaml /usr/etc/daos_server.yml
                             cat /usr/etc/daos_server.yml
                             cat /usr/etc/daos_agent.yml
-                            coproc orterun -np 1 -H \\\$HOSTNAME --enable-recovery -x DAOS_SINGLETON_CLI=1  daos_server -c 1 -a /tmp -o /usr/etc/daos_server.yml -i
+                            coproc orterun -np 1 -H \\\$HOSTNAME --enable-recovery -x DAOS_SINGLETON_CLI=1 daos_server --debug --config /usr/etc/daos_server.yml start -t 1 -a /tmp -i
                             trap 'set -x; kill -INT \\\$COPROC_PID' EXIT
                             line=\"\"
                             while [[ \"\\\$line\" != *started\\\\ on\\\\ rank\\\\ 0* ]]; do
@@ -82,8 +82,9 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
-    env.BRANCH_NAME != "master") {
-   currentBuild.result = 'SUCCESS'
+    (env.BRANCH_NAME != "weekly-testing" &&
+     env.BRANCH_NAME != "master")) {
+   currentBuild.result = 'FAILURE'
    return
 }
 
@@ -91,7 +92,8 @@ pipeline {
     agent { label 'lightweight' }
 
     triggers {
-        cron(env.BRANCH_NAME == 'master' ? '0 0 * * *' : '')
+        cron(env.BRANCH_NAME == 'master' ? '0 0 * * *\n' : '' +
+             env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
     }
 
     environment {
@@ -106,13 +108,14 @@ pipeline {
         QUICKBUILD = sh(script: "git show -s --format=%B | grep \"^Quick-build: true\"",
                         returnStatus: true)
         SSH_KEY_ARGS="-ici_key"
-        PDSH_SSH_ARGS_APPEND="$SSH_KEY_ARGS"
         CLUSH_ARGS="-o$SSH_KEY_ARGS"
     }
 
     options {
         // preserve stashes so that jobs can be started at the test stage
         preserveStashes(buildCount: 5)
+        // How can we have different timeouts for weekly and master and PRs?
+        timeout(time: 24, unit: 'HOURS')
     }
 
     stages {
@@ -125,7 +128,11 @@ pipeline {
         stage('Pre-build') {
             when {
                 beforeAgent true
-                expression { return env.QUICKBUILD == '1' }
+                allOf {
+                    not { branch 'weekly-testing' }
+                    expression { env.CHANGE_TARGET != 'weekly-testing' }
+                    expression { return env.QUICKBUILD == '1' }
+                }
             }
             parallel {
                 stage('checkpatch') {
@@ -194,7 +201,11 @@ pipeline {
                 stage('Build RPM on CentOS 7') {
                     when {
                         beforeAgent true
-                        expression { return env.QUICKBUILD == '1' }
+                        allOf {
+                            not { branch 'weekly-testing' }
+                            expression { env.CHANGE_TARGET != 'weekly-testing' }
+                            expression { return env.QUICKBUILD == '1' }
+                        }
                     }
                     agent {
                         dockerfile {
@@ -257,7 +268,11 @@ pipeline {
                 stage('Build RPM on SLES 12.3') {
                     when {
                         beforeAgent true
-                        expression { return env.QUICKBUILD == '1' }
+                        allOf {
+                            not { branch 'weekly-testing' }
+                            expression { env.CHANGE_TARGET != 'weekly-testing' }
+                            expression { return env.QUICKBUILD == '1' }
+                        }
                     }
                     agent {
                         dockerfile {
@@ -563,7 +578,11 @@ pipeline {
                 stage('Build on Ubuntu 18.04 with Clang') {
                     when {
                         beforeAgent true
-                        expression { return env.QUICKBUILD == '1' }
+                        allOf {
+                            not { branch 'weekly-testing' }
+                            expression { env.CHANGE_TARGET != 'weekly-testing' }
+                            expression { return env.QUICKBUILD == '1' }
+                        }
                     }
                     agent {
                         dockerfile {
@@ -637,6 +656,8 @@ pipeline {
                         allOf {
                             environment name: 'SLES12_3_DOCKER', value: 'true'
                             expression { return env.QUICKBUILD == '1' }
+                            not { branch 'weekly-testing' }
+                            expression { env.CHANGE_TARGET != 'weekly-testing' }
                         }
                     }
                     agent {
@@ -713,6 +734,8 @@ pipeline {
                         allOf {
                             environment name: 'LEAP42_3_DOCKER', value: 'true'
                             expression { return env.QUICKBUILD == '1' }
+                            not { branch 'weekly-testing' }
+                            expression { env.CHANGE_TARGET != 'weekly-testing' }
                         }
                     }
                     agent {
@@ -934,7 +957,11 @@ pipeline {
                 stage('Build on Leap 15 with Intel-C') {
                     when {
                         beforeAgent true
-                        expression { return env.QUICKBUILD == '1' }
+                        allOf {
+                            not { branch 'weekly-testing' }
+                            expression { env.CHANGE_TARGET != 'weekly-testing' }
+                            expression { return env.QUICKBUILD == '1' }
+                        }
                     }
                     agent {
                         dockerfile {
@@ -1262,7 +1289,11 @@ pipeline {
                 stage('Test CentOS 7 RPMs') {
                     when {
                         beforeAgent true
-                        expression { return env.QUICKBUILD == '1' }
+                        allOf {
+                            not { branch 'weekly-testing' }
+                            expression { env.CHANGE_TARGET != 'weekly-testing' }
+                            expression { return env.QUICKBUILD == '1' }
+                        }
                     }
                     agent {
                         label 'ci_vm1'
@@ -1289,7 +1320,11 @@ pipeline {
                 stage('Test SLES12.3 RPMs') {
                     when {
                         beforeAgent true
-                        expression { return env.QUICKBUILD == '1' }
+                        allOf {
+                            not { branch 'weekly-testing' }
+                            expression { env.CHANGE_TARGET != 'weekly-testing' }
+                            expression { return env.QUICKBUILD == '1' }
+                        }
                     }
                     agent {
                         label 'ci_vm1'

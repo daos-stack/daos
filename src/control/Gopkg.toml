@@ -67,3 +67,9 @@
 [[constraint]]
   branch = "master"
   name = "github.com/inhies/go-bytesize"
+
+# go-cmp: BSD 3-Clause, allows comparison of complex structures in
+# tests
+[[constraint]]
+  name = "github.com/google/go-cmp"
+  version = "~0.3.1"
