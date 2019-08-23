@@ -38,15 +38,6 @@ import (
 	"github.com/daos-stack/daos/src/control/security/acl"
 )
 
-type serverLogger interface {
-	Debug(string)
-	Debugf(string, ...interface{})
-	Info(string)
-	Infof(string, ...interface{})
-	Error(string)
-	Errorf(string, ...interface{})
-}
-
 // Start is the entry point for a daos_server instance.
 func Start(log *logging.LeveledLogger, config *Configuration) error {
 	// FIXME(mjmac): Temporarily set a global logger

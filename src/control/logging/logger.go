@@ -28,6 +28,16 @@ import (
 )
 
 type (
+	// Logger defines a standard logging interface
+	Logger interface {
+		DebugLogger
+		Debug(msg string)
+		InfoLogger
+		Info(msg string)
+		ErrorLogger
+		Error(msg string)
+	}
+
 	// DebugLogger defines an interface to be implemented
 	// by Debug loggers.
 	DebugLogger interface {
