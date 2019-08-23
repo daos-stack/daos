@@ -1789,6 +1789,8 @@ test_evt_overlap_split_internal(void **state)
 			D_ALLOC_ARRAY(data, data_size);
 			if (data == NULL)
 				goto finish;
+		} else {
+			data_size = record_size;
 		}
 		switch (epoch) {
 		case 1:
@@ -1847,8 +1849,9 @@ test_evt_overlap_split_internal(void **state)
 		assert_int_equal(rc, 0);
 		rc = evt_insert(toh, &entry);
 		assert_int_equal(rc, 0);
-		D_FREE(data);
+		memset(data, 0, data_size);
 	}
+	D_FREE(data);
 
 	rc = evt_iter_prepare(toh, EVT_ITER_VISIBLE, NULL, &ih);
 	if (rc != 0)
@@ -2301,9 +2304,9 @@ run_internal_tests(void)
 		{ "EVT016: evt_variable_record_size_internal",
 			test_evt_variable_record_size_internal,
 			setup_builtin, teardown_builtin},
-		{ "EVT017: evt_iter_outer_punch", 
-			test_evt_outer_punch, 
-			setup_builtin, teardown_builtin}, 
+		{ "EVT017: evt_iter_outer_punch",
+			test_evt_outer_punch,
+			setup_builtin, teardown_builtin},
 		{ "EVT018: evt_node_size_internal",
 			test_evt_node_size_internal,
 			setup_builtin, teardown_builtin},
