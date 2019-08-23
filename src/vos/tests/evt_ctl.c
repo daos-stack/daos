@@ -68,7 +68,7 @@ static struct umem_attr		*ts_uma;
 static int			 ts_feats = EVT_FEAT_DEFAULT;
 
 #define ORDER_DEF_INTERNAL	13
-#define ORDER_DEF		16
+#define	ORDER_DEF		16
 #define	ORDER_TEST_SIZE		200
 
 static int			ts_order = ORDER_DEF;
@@ -1712,6 +1712,10 @@ test_evt_node_size_internal(void **state)
 /* Args : Input : string_val pointer
 *                 num: number of time to repeat string val
 *         Output: ret_string: Returns concatenated string.
+*		  NOTE: pre-allocate ret_string buffer
+*		  before calling this function. Otherwise,
+*		  you will get segmentation fault.
+*		    
 */
 void repeat_string(char *ret_string, char *string_val, int num)
 {
