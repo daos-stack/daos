@@ -1786,9 +1786,6 @@ test_evt_overlap_split_internal(void **state)
 			* The data is freed on each loop.
 			*/
 			data_size = 9;
-			D_ALLOC_ARRAY(data, data_size);
-			if (data == NULL)
-				goto finish;
 		} else {
 			data_size = record_size;
 		}
