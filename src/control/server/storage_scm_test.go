@@ -61,7 +61,7 @@ func (m *mockIpmctl) Discover() ([]DeviceDiscovery, error) {
 // mockScmStorage factory
 func newMockScmStorage(
 	discoverModulesRet error, mms []DeviceDiscovery, inited bool,
-	c *configuration) *scmStorage {
+	c *Configuration) *scmStorage {
 
 	return &scmStorage{
 		ipmctl:      &mockIpmctl{discoverModulesRet, mms},
@@ -70,7 +70,7 @@ func newMockScmStorage(
 	}
 }
 
-func defaultMockScmStorage(config *configuration) *scmStorage {
+func defaultMockScmStorage(config *Configuration) *scmStorage {
 	m := MockModule()
 
 	return newMockScmStorage(
@@ -182,7 +182,7 @@ func TestGetState(t *testing.T) {
 
 	for _, tt := range tests {
 		config := defaultMockConfig(t)
-		ss := defaultMockScmStorage(&config).withRunCmd(mockRun)
+		ss := defaultMockScmStorage(config).withRunCmd(mockRun)
 		ss.Discover(new(pb.ScanStorageResp)) // not concerned with response
 
 		// reset to initial values between tests
@@ -239,7 +239,7 @@ func TestDiscoverScm(t *testing.T) {
 	for _, tt := range tests {
 		ss := newMockScmStorage(
 			tt.ipmctlDiscoverRet, []DeviceDiscovery{m}, tt.inited,
-			&config)
+			config)
 
 		resp := new(pb.ScanStorageResp)
 		ss.Discover(resp)
@@ -501,7 +501,7 @@ func TestUpdateScm(t *testing.T) {
 	for _, tt := range tests {
 		config := defaultMockConfig(t)
 		ss := newMockScmStorage(
-			nil, []DeviceDiscovery{}, false, &config)
+			nil, []DeviceDiscovery{}, false, config)
 
 		results := ScmModuleResults{}
 

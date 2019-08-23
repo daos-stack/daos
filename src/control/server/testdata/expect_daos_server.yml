@@ -19,7 +19,7 @@ bdev_include: []
 bdev_exclude: []
 hyperthreads: false
 nr_hugepages: 1024
-control_log_mask: DEBUG
+control_log_mask: INFO
 control_log_file: ""
 user_name: ""
 group_name: ""
