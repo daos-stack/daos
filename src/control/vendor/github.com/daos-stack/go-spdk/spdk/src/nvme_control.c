@@ -182,7 +182,7 @@ collect(struct ret_t *ret)
 		pci_dev = spdk_nvme_ctrlr_get_pci_device(ns_entry->ctrlr);
 		if (!pci_dev) {
 			snprintf(ret->err, sizeof(ret->err),
-				 "%s: get_pci_device", __func_tep
+				 "%s: get_pci_device", __func__);
 
 			ret->rc = -NVMEC_ERR_GET_PCI_DEV;
 			return;
