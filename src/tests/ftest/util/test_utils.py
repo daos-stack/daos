@@ -433,7 +433,6 @@ class TestPool(TestDaosApiBase):
                 "Verifying the pool %s: %s %s %s",
                 check, actual, compare[0], expect)
             if not compare[1](actual, expect):
-            check_status = compare[1](actual, expect)
                 msg = "  The {} {}: actual={}, expected={}".format(
                     check, compare[2], actual, expect)
                 self.log.error(msg)
