@@ -3,10 +3,10 @@
 
 hosts:
  test_servers:
-  - boro-64
-  - boro-61
-  - boro-62
-  - boro-60
+  - boro-84
+#  - boro-61
+#  - boro-62
+#  - boro-60
 # test_clients:
 #  - boro-61
 timeout: 28800
