@@ -3,7 +3,7 @@ name: Greet Everybody
 on: [push]
 
 jobs:
-  build:
+  my_first_job:
     # Job name is Greeting
     name: Greeting
     # This job runs on Linux
@@ -19,4 +19,13 @@ jobs:
     - run: echo "The time was ${{ steps.hello.outputs.time }}"
     # See what's in the dir
     - run: ls -l
-
+  make_release:
+    # Job name is Greeting
+    name: Create Release
+    # This job runs on Linux
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    # This step uses the hello-world-action stored in this workflow's repository.
+    - uses: ./.github/actions/make_release
+      id: make_release
