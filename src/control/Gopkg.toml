@@ -60,7 +60,7 @@
 # pin with commit hash rather than just tip of master until tags exist.
 [[constraint]]
   name = "github.com/daos-stack/go-spdk"
-  revision = "7b664cdac14f4265934fa895f1b366136f3407d6"
+  revision = "ba6457edb1f7651cf1066dedfc0f25c55a9a176c"
 
 # go-bytesize: BSD 3-Clause, handle conversion from human readable size
 # strings to bytes.

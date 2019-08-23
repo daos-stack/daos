@@ -154,10 +154,11 @@ collect(struct ret_t *ret)
 {
 	struct ns_entry				*ns_entry;
 	struct ctrlr_entry			*ctrlr_entry;
-	struct spdk_nvme_ctrlr			*ns_ctrlr;
 	const struct spdk_nvme_ctrlr_data	*cdata;
 	struct spdk_pci_device			*pci_dev;
 	struct spdk_pci_addr			pci_addr;
+	struct ctrlr_t				*ctrlr_tmp;
+	struct ns_t				*ns_tmp;
 	int					written;
 	int					rc;
 
@@ -165,8 +166,6 @@ collect(struct ret_t *ret)
 	ctrlr_entry = g_controllers;
 
 	while (ns_entry) {
-		struct ns_t *ns_tmp;
-
 		ns_tmp = malloc(sizeof(struct ns_t));
 
 		if (ns_tmp == NULL) {
@@ -175,17 +174,16 @@ collect(struct ret_t *ret)
 			return;
 		}
 
-		ns_ctrlr = spdk_nvme_ns_get_ctrlr(ns_entry->ns);
-
 		ns_tmp->id = spdk_nvme_ns_get_id(ns_entry->ns);
 		// capacity in GBytes
-		ns_tmp->size = spdk_nvme_ns_get_size(ns_entry->ns) / \
+		ns_tmp->size = spdk_nvme_ns_get_size(ns_entry->ns) /
 			       NVMECONTROL_GBYTE_BYTES;
 
-		pci_dev = spdk_nvme_ctrlr_get_pci_device(ns_ctrlr);
+		pci_dev = spdk_nvme_ctrlr_get_pci_device(ns_entry->ctrlr);
 		if (!pci_dev) {
 			snprintf(ret->err, sizeof(ret->err),
-				 "collect(): get_pci_device");
+				 "%s: get_pci_device", __func_tep
+
 			ret->rc = -NVMEC_ERR_GET_PCI_DEV;
 			return;
 		}
@@ -196,7 +194,7 @@ collect(struct ret_t *ret)
 				       &pci_addr);
 		if (rc != 0) {
 			snprintf(ret->err, sizeof(ret->err),
-				"spdk_pci_addr_fmt: rc %d", rc);
+				 "spdk_pci_addr_fmt: rc %d", rc);
 			ret->rc = -NVMEC_ERR_PCI_ADDR_FMT;
 			return;
 		}
@@ -208,8 +206,6 @@ collect(struct ret_t *ret)
 	}
 
 	while (ctrlr_entry) {
-		struct ctrlr_t *ctrlr_tmp;
-
 		ctrlr_tmp = malloc(sizeof(struct ctrlr_t));
 
 		if (ctrlr_tmp == NULL) {
@@ -246,7 +242,7 @@ collect(struct ret_t *ret)
 				       &ctrlr_entry->pci_addr);
 		if (rc != 0) {
 			snprintf(ret->err, sizeof(ret->err),
-				"spdk_pci_addr_fmt: rc %d", rc);
+				 "spdk_pci_addr_fmt: rc %d", rc);
 			ret->rc = -NVMEC_ERR_PCI_ADDR_FMT;
 			return;
 		}
@@ -335,7 +331,7 @@ get_controller(char *addr, struct ret_t *ret)
 {
 	struct spdk_pci_addr			pci_addr;
 	struct ctrlr_entry			*entry = NULL;
-	
+
 	entry = g_controllers;
 
 	if (spdk_pci_addr_parse(&pci_addr, addr) < 0) {
@@ -344,21 +340,13 @@ get_controller(char *addr, struct ret_t *ret)
 		ret->rc = -NVMEC_ERR_PCI_ADDR_PARSE;
 		return entry;
 	}
-	printf("Search, looking for NVMe Controller:       %04x:%02x:%02x.%02x\n",
-			pci_addr.domain, pci_addr.bus, pci_addr.dev, pci_addr.func);
 
 	while (entry) {
-		printf("Search, iterating NVMe Controller:       %04x:%02x:%02x.%02x\n",
-			entry->pci_addr.domain, entry->pci_addr.bus, entry->pci_addr.dev, entry->pci_addr.func);
-
 		if (spdk_pci_addr_compare(&entry->pci_addr, &pci_addr) == 0)
 			break;
 
 		entry = entry->next;
 	}
-
-	printf("Search, found NVMe Controller:       %04x:%02x:%02x.%02x\n",
-			entry->pci_addr.domain, entry->pci_addr.bus, entry->pci_addr.dev, entry->pci_addr.func);
 
 	if (entry == NULL) {
 		snprintf(ret->err, sizeof(ret->err), "controller not found");
@@ -452,7 +440,7 @@ nvme_format(char *ctrlr_pci_addr)
 	int					ns_id;
 	const struct spdk_nvme_ctrlr_data	*cdata;
 	struct spdk_nvme_ns			*ns;
-	struct spdk_nvme_format 		format = {};
+	struct spdk_nvme_format			format = {};
 	struct ctrlr_entry			*ctrlr_entry;
 	struct spdk_pci_device			*pci_dev;
 	struct spdk_pci_addr			pci_addr;
@@ -463,9 +451,6 @@ nvme_format(char *ctrlr_pci_addr)
 	ctrlr_entry = get_controller(ctrlr_pci_addr, ret);
 	if (ret->rc != 0)
 		return ret;
-
-	printf("Format, selected NVMe Controller:⇥       %04x:%02x:%02x.%02x\n",
-	       ctrlr_entry->pci_addr.domain, ctrlr_entry->pci_addr.bus, ctrlr_entry->pci_addr.dev, ctrlr_entry->pci_addr.func);
 
 	cdata = spdk_nvme_ctrlr_get_data(ctrlr_entry->ctrlr);
 
@@ -513,11 +498,8 @@ nvme_format(char *ctrlr_pci_addr)
 
 	// print address of device updated for verification purposes
 	pci_addr = spdk_pci_device_get_addr(pci_dev);
-	printf("Formatted NVMe Controller:⇥       %04x:%02x:%02x.%02x\n",
+	printf("Formatted NVMe Controller:       %04x:%02x:%02x.%02x\n",
 	       pci_addr.domain, pci_addr.bus, pci_addr.dev, pci_addr.func);
-
-	// unreliable if we omit this
-	//spdk_nvme_detach(ctrlr_entry->ctrlr);
 
 	collect(ret);
 
