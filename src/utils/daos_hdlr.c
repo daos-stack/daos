@@ -274,7 +274,7 @@ cont_uns_insert_hdlr(struct cmd_args_s *ap)
 		err = errno;
 		fprintf(stderr,
 			"Failed to open new directory %s\n", strerror(err));
-		D_GOTO(close, rc = -DER_IO);
+		D_GOTO(unlink, rc = -DER_IO);
 	}
 
 	pool = DP_UUID(ap->p_uuid);
@@ -300,14 +300,15 @@ cont_uns_insert_hdlr(struct cmd_args_s *ap)
 
 	}
 
+	printf("Setup UNS entry point\n");
 	return 0;
 
 close_two:
 	close(nfd);
-
+unlink:
+	unlinkat(fd, base, AT_REMOVEDIR);
 close:
 	close(fd);
-
 err_rc:
 	return rc;
 }
