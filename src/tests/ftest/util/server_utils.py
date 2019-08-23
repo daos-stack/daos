@@ -58,7 +58,7 @@ class ServerCommand(CommandWithParameters):
 
     def __init__(self, hosts, path):
         """Create a server Command object"""
-        super(ServerCommand, self).__init__(path, "daos_server")
+        super(ServerCommand, self).__init__("daos_server", path)
 
         self.hosts = hosts
         self.process = None

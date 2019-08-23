@@ -33,7 +33,7 @@ class DmgCommand(CommandWithParameters):
 
     def __init__(self, path):
         """Create a dmg Command object."""
-        super(DmgCommand, self).__init__(path, "daos_shell")
+        super(DmgCommand, self).__init__("daos_shell", path)
 
         self.request = BasicParameter("{}")
         self.action = BasicParameter("{}")
