@@ -705,7 +705,7 @@ evt_find_visible(struct evt_context *tcx, struct evt_entry_array *ent_array,
  */
 int
 evt_ent_array_sort(struct evt_context *tcx, struct evt_entry_array *ent_array,
-		   int flags)
+		   const struct evt_filter *filter, int flags)
 {
 	struct evt_list_entry	*ents;
 	struct evt_entry	*ent;
@@ -743,6 +743,20 @@ evt_ent_array_sort(struct evt_context *tcx, struct evt_entry_array *ent_array,
 	}
 
 re_sort:
+	if (filter && filter->fr_punch != 0) {
+		/** If items are punched by outer layer, mark them covered */
+		evt_ent_array_for_each(ent, ent_array) {
+			if (ent->en_epoch > filter->fr_punch)
+				continue;
+			if (evt_flags_get(ent->en_visibility) == EVT_COVERED)
+				continue;
+			ent->en_visibility ^= EVT_VISIBLE;
+			ent->en_visibility |= EVT_COVERED;
+			D_ASSERT(evt_flags_equal(ent->en_visibility,
+						 EVT_COVERED));
+		}
+	}
+
 	ents = ent_array->ea_ents;
 	total = ent_array->ea_ent_nr;
 	compar = evt_ent_list_cmp;
@@ -1786,6 +1800,7 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry)
 	filter.fr_ex = entry->ei_rect.rc_ex;
 	filter.fr_epr.epr_lo = entry->ei_rect.rc_epc;
 	filter.fr_epr.epr_hi = entry->ei_rect.rc_epc;
+	filter.fr_punch = 0;
 	/* Phase-1: Check for overwrite */
 	rc = evt_ent_array_fill(tcx, EVT_FIND_OVERWRITE, DAOS_INTENT_UPDATE,
 				&filter, &entry->ei_rect, &ent_array);
@@ -1831,8 +1846,8 @@ out:
 
 /** Fill the entry with the extent at the specified position of \a node */
 void
-evt_entry_fill(struct evt_context *tcx, struct evt_node *node,
-	       unsigned int at, const struct evt_rect *rect_srch,
+evt_entry_fill(struct evt_context *tcx, struct evt_node *node, unsigned int at,
+	       const struct evt_rect *rect_srch, uint32_t intent,
 	       struct evt_entry *entry)
 {
 	struct evt_desc	   *desc;
@@ -1870,8 +1885,8 @@ evt_entry_fill(struct evt_context *tcx, struct evt_node *node,
 
 	entry->en_addr = desc->dc_ex_addr;
 	entry->en_ver = desc->dc_ver;
-	entry->en_desc = umem_ptr2off(evt_umm(tcx), desc);
 	evt_entry_csum_fill(tcx, desc, entry);
+	entry->en_avail_rc = evt_desc_log_status(tcx, desc, intent);
 
 	if (offset != 0) {
 		/* Adjust cached pointer since we're only referencing a
@@ -2040,7 +2055,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 				goto out;
 			}
 
-			evt_entry_fill(tcx, node, i, rect, ent);
+			evt_entry_fill(tcx, node, i, rect, intent, ent);
 			switch (find_opc) {
 			default:
 				D_ASSERTF(0, "%d\n", find_opc);
@@ -2118,12 +2133,13 @@ evt_find(daos_handle_t toh, const daos_epoch_range_t *epr,
 	evt_ent_array_init(ent_array);
 	rect.rc_ex = filter.fr_ex = *extent;
 	filter.fr_epr = *epr;
+	filter.fr_punch = 0;
 	rect.rc_epc = epr->epr_hi;
 
 	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, DAOS_INTENT_DEFAULT,
 				&filter, &rect, ent_array);
 	if (rc == 0)
-		rc = evt_ent_array_sort(tcx, ent_array, EVT_VISIBLE);
+		rc = evt_ent_array_sort(tcx, ent_array, NULL, EVT_VISIBLE);
 	if (rc != 0)
 		evt_ent_array_fini(ent_array);
 	return rc;
@@ -2953,6 +2969,7 @@ int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
 	filter.fr_ex = rect->rc_ex;
 	filter.fr_epr.epr_lo = rect->rc_epc;
 	filter.fr_epr.epr_hi = rect->rc_epc;
+	filter.fr_punch = 0;
 	rc = evt_ent_array_fill(tcx, EVT_FIND_SAME, DAOS_INTENT_PUNCH,
 				&filter, rect, &ent_array);
 	if (rc != 0)

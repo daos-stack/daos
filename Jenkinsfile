@@ -51,7 +51,6 @@ def ior_repos = "mpich@daos_adio-rpm ior-hpc@daos"
 def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
                           exit 0
                       fi
-                      export PDSH_SSH_ARGS_APPEND="-i ci_key"
                       nodelist=(${NODELIST//,/ })
                       scp -i ci_key src/tests/ftest/data/daos_server_baseline.yaml \
                                     jenkins@${nodelist[0]}:/tmp
@@ -68,7 +67,7 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
                             sudo cp /tmp/daos_server_baseline.yaml /usr/etc/daos_server.yml
                             cat /usr/etc/daos_server.yml
                             cat /usr/etc/daos_agent.yml
-                            coproc orterun -np 1 -H \\\$HOSTNAME --enable-recovery -x DAOS_SINGLETON_CLI=1  daos_server -c 1 -a /tmp -o /usr/etc/daos_server.yml -i
+                            coproc orterun -np 1 -H \\\$HOSTNAME --enable-recovery -x DAOS_SINGLETON_CLI=1 daos_server --debug --config /usr/etc/daos_server.yml start -t 1 -a /tmp -i
                             trap 'set -x; kill -INT \\\$COPROC_PID' EXIT
                             line=\"\"
                             while [[ \"\\\$line\" != *started\\\\ on\\\\ rank\\\\ 0* ]]; do
@@ -106,6 +105,9 @@ pipeline {
                     "--build-arg CACHEBUST=${currentBuild.startTimeInMillis}"
         QUICKBUILD = sh(script: "git show -s --format=%B | grep \"^Quick-build: true\"",
                         returnStatus: true)
+        SSH_KEY_ARGS="-ici_key"
+        PDSH_SSH_ARGS_APPEND="$SSH_KEY_ARGS"
+        CLUSH_ARGS="-o$SSH_KEY_ARGS"
     }
 
     options {
@@ -177,8 +179,8 @@ pipeline {
         stage('Build') {
             /* Don't use failFast here as whilst it avoids using extra resources
              * and gives faster results for PRs it's also on for master where we
-	     * do want complete results in the case of partial failure
-	     */
+             * do want complete results in the case of partial failure
+             */
             //failFast true
             when {
                 beforeAgent true
@@ -1024,11 +1026,9 @@ pipeline {
                                        inst_repos: component_repos,
                                        inst_rpms: "argobots cart fuse3-libs hwloc-devel libisa-l libpmem libpmemobj protobuf-c spdk-devel"
                         runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''export SSH_KEY_ARGS="-i ci_key"
-                                           export PDSH_SSH_ARGS_APPEND="$SSH_KEY_ARGS"
-                                           # JENKINS-52781 tar function is breaking symlinks
-					   rm -rf test_results
-					   mkdir test_results
+                                script: '''# JENKINS-52781 tar function is breaking symlinks
+                                           rm -rf test_results
+                                           mkdir test_results
                                            rm -f build/src/control/src/github.com/daos-stack/daos/src/control
                                            mkdir -p build/src/control/src/github.com/daos-stack/daos/src/
                                            ln -s ../../../../../../../../src/control build/src/control/src/github.com/daos-stack/daos/src/control
@@ -1041,38 +1041,16 @@ pipeline {
                                                if grep /mnt/daos\\  /proc/mounts; then
                                                    sudo umount /mnt/daos
                                                else
-                                                   if [ ! -d /mnt/daos ]; then
-                                                       sudo mkdir -p /mnt/daos
-                                                   fi
+                                                   sudo mkdir -p /mnt/daos
                                                fi
-                                               trap 'set +e; set -x; sudo umount /mnt/daos' EXIT
                                                sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
                                                sudo mkdir -p $DAOS_BASE
-                                               trap 'set +e; set -x
-                                                     cd
-                                                     sudo umount /mnt/daos
-                                                     sudo umount \"$DAOS_BASE\" || {
-                                                         echo "Failed to unmount $DAOS_BASE"
-                                                         ps axf
-                                                     }' EXIT
                                                sudo mount -t nfs $HOSTNAME:$PWD $DAOS_BASE
-					       # set CMOCKA envs here
-					       export CMOCKA_MESSAGE_OUTPUT="xml"
-					       export CMOCKA_XML_FILE="$DAOS_BASE/test_results/%g.xml"
+                                               # set CMOCKA envs here
+                                               export CMOCKA_MESSAGE_OUTPUT="xml"
+                                               export CMOCKA_XML_FILE="$DAOS_BASE/test_results/%g.xml"
                                                cd $DAOS_BASE
-                                               OLD_CI=false utils/run_test.sh
-                                               rm -rf run_test.sh/
-                                               mkdir run_test.sh/
-                                               if ls /tmp/daos*.log > /dev/null; then
-                                                   mv /tmp/daos*.log run_test.sh/
-                                               fi
-                                               # servers can sometimes take a while to stop when the test is done
-                                               x=0
-                                               while [ \"\\\$x\" -lt \"10\" ] &&
-                                                     pgrep '(orterun|daos_server|daos_io_server)'; do
-                                                   sleep 1
-                                                   let x=\\\$x+1
-                                               done"''',
+                                               OLD_CI=false utils/run_test.sh"''',
                               junit_files: 'test_results/*.xml'
                     }
                     post {
@@ -1097,9 +1075,43 @@ pipeline {
                         }
                         */
                         always {
-				sh 'python utils/fix_cmocka_xml.py'
-				junit 'test_results/*.xml'
-				archiveArtifacts artifacts: 'run_test.sh/**'
+                            /* https://issues.jenkins-ci.org/browse/JENKINS-58952
+                             * label is at the end
+                            sh label: "Collect artifacts and tear down",
+                               script '''set -ex */
+                            sh script: '''set -ex
+                                      . ./.build_vars.sh
+                                      DAOS_BASE=${SL_PREFIX%/install*}
+                                      NODE=${NODELIST%%,*}
+                                      ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
+                                          cd $DAOS_BASE
+                                          rm -rf run_test.sh/
+                                          mkdir run_test.sh/
+                                          if ls /tmp/daos*.log > /dev/null; then
+                                              mv /tmp/daos*.log run_test.sh/
+                                          fi
+                                          # servers can sometimes take a while to stop when the test is done
+                                          x=0
+                                          while [ \"\\\$x\" -lt \"10\" ] &&
+                                                pgrep '(orterun|daos_server|daos_io_server)'; do
+                                              sleep 1
+                                              let x=\\\$x+1
+                                          done
+                                          if ! sudo umount /mnt/daos; then
+                                              echo \"Failed to unmount $DAOS_BASE\"
+                                              ps axf
+                                          fi
+                                          cd
+                                          if ! sudo umount \"$DAOS_BASE\"; then
+                                              echo \"Failed to unmount $DAOS_BASE\"
+                                              ps axf
+                                          fi"
+                                      # Note that we are taking advantage of the NFS mount here and if that
+                                      # should ever go away, we need to pull run_test.sh/ from $NODE
+                                      python utils/fix_cmocka_xml.py''',
+                            label: "Collect artifacts and tear down"
+                            junit 'test_results/*.xml'
+                            archiveArtifacts artifacts: 'run_test.sh/**'
                         }
                     }
                 }
@@ -1127,11 +1139,9 @@ pipeline {
                                                    ' daos',
                                        inst_rpms: "ior-hpc mpich-autoload"
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''export SSH_KEY_ARGS="-ici_key"
-                                           export CLUSH_ARGS="-o$SSH_KEY_ARGS"
-                                           test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
+                                script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
-                                               test_tag=regression,vm
+                                               test_tag=pr,-hw
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
                                            ./ftest.sh "$test_tag" $tnodes''',
@@ -1199,9 +1209,7 @@ pipeline {
                                                    ' daos',
                                        inst_rpms: "ior-hpc mpich-autoload"
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''export SSH_KEY_ARGS="-ici_key"
-                                           export CLUSH_ARGS="-o$SSH_KEY_ARGS"
-                                           test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw:/s/^.*: *//p")
+                                script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
                                                test_tag=pr,hw
                                            fi

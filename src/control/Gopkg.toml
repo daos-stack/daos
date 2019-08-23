@@ -60,10 +60,16 @@
 # pin with commit hash rather than just tip of master until tags exist.
 [[constraint]]
   name = "github.com/daos-stack/go-spdk"
-  revision = "6756cd10c5c773de2b0c7aa99eb891a5bacf9e6a"
+  revision = "7b664cdac14f4265934fa895f1b366136f3407d6"
 
 # go-bytesize: BSD 3-Clause, handle conversion from human readable size
 # strings to bytes.
 [[constraint]]
   branch = "master"
   name = "github.com/inhies/go-bytesize"
+
+# go-cmp: BSD 3-Clause, allows comparison of complex structures in
+# tests
+[[constraint]]
+  name = "github.com/google/go-cmp"
+  version = "~0.3.1"

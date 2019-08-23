@@ -307,6 +307,7 @@ evt_ent2rect(struct evt_rect *rect, const struct evt_entry *ent)
 /** Sort entries in an entry array
  * \param[IN]		tcx		The evtree context
  * \param[IN, OUT]	ent_array	The entry array to sort
+ * \param[IN]		filter		The evt_filter for upper layer punch
  * \param[IN]		flags		Visibility flags
  *					EVT_VISIBLE: Return visible records
  *					EVT_COVERED: Return covered records
@@ -314,7 +315,9 @@ evt_ent2rect(struct evt_rect *rect, const struct evt_entry *ent)
  * be sorted by start offset, high epoch
  */
 int evt_ent_array_sort(struct evt_context *tcx,
-		       struct evt_entry_array *ent_array, int flags);
+		       struct evt_entry_array *ent_array,
+		       const struct evt_filter *filter,
+		       int flags);
 /** Scan the tree and select all rectangles that match
  * \param[IN]		tcx		The evtree context
  * \param[IN]		opc		The opcode for the scan
@@ -395,16 +398,18 @@ static inline struct evt_rect *evt_nd_off_rect_at(struct evt_context *tcx,
 
 /** Fill an evt_entry from the record at an index in a tree node
  * \param[IN]	tcx		The evtree context
+ * \param[IN]	filter		The passed filter for punched epoch
  * \param[IN]	node		The tree node
  * \param[IN]	at		The index in the node
  * \param[IN]	rect_srch	The original rectangle used for the search
+ * \param[IN]	intent		The operation intent
  * \param[OUT]	entry		The entry to fill
  *
  * The selected extent will be trimmed by the search rectangle used.
  */
 void evt_entry_fill(struct evt_context *tcx, struct evt_node *node,
 		    unsigned int at, const struct evt_rect *rect_srch,
-		    struct evt_entry *entry);
+		    uint32_t intent, struct evt_entry *entry);
 
 /**
  * Check whether the EVT record is available or not.

@@ -121,6 +121,8 @@ struct evt_rect {
 struct evt_filter {
 	struct evt_extent	fr_ex;	/**< extent range */
 	daos_epoch_range_t	fr_epr;	/**< epoch range */
+	/** higher level punch epoch (0 if not punched) */
+	daos_epoch_t		fr_punch;
 };
 
 /** Log format of extent */
@@ -150,11 +152,11 @@ struct evt_filter {
 
 /** Log format of evtree filter */
 #define DF_FILTER			\
-	DF_EXT "@" DF_U64"-"DF_U64
+	DF_EXT "@" DF_U64"-"DF_U64"(punch="DF_U64")"
 
 #define DP_FILTER(filter)					\
 	DP_EXT(&(filter)->fr_ex), (filter)->fr_epr.epr_lo,	\
-	(filter)->fr_epr.epr_hi
+	(filter)->fr_epr.epr_hi, (filter)->fr_punch
 
 /** Return the width of an extent */
 static inline daos_size_t
@@ -291,8 +293,8 @@ struct evt_entry {
 	bio_addr_t			en_addr;
 	/** update epoch of extent */
 	daos_epoch_t			en_epoch;
-	/** the returned evt_desc address for delete/iterator */
-	umem_off_t			en_desc;
+	/** availability check result for the entry */
+	int				en_avail_rc;
 };
 
 struct evt_list_entry {

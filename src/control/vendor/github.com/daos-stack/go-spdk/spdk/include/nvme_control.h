@@ -53,6 +53,7 @@ struct ctrlr_t {
 	char		serial[1024];
 	char		pci_addr[1024];
 	char		fw_rev[1024];
+	int		socket_id;
 	struct ctrlr_t	*next;
 };
 

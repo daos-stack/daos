@@ -50,7 +50,7 @@ func addState(
 }
 
 // ScanStorage discovers non-volatile storage hardware on node.
-func (c *controlService) ScanStorage(
+func (c *ControlService) ScanStorage(
 	ctx context.Context, req *pb.ScanStorageReq) (
 	*pb.ScanStorageResp, error) {
 
@@ -64,7 +64,7 @@ func (c *controlService) ScanStorage(
 
 // doFormat performs format on storage subsystems, populates response results
 // in storage subsystem routines and broadcasts (closes channel) if successful.
-func (c *controlService) doFormat(i int, resp *pb.FormatStorageResp) error {
+func (c *ControlService) doFormat(i int, resp *pb.FormatStorageResp) error {
 	srv := c.config.Servers[i]
 	serverFormatted := false
 
@@ -104,7 +104,7 @@ func (c *controlService) doFormat(i int, resp *pb.FormatStorageResp) error {
 //
 // Send response containing multiple results of format operations on scm mounts
 // and nvme controllers.
-func (c *controlService) FormatStorage(
+func (c *ControlService) FormatStorage(
 	req *pb.FormatStorageReq,
 	stream pb.MgmtCtl_FormatStorageServer) error {
 
@@ -129,7 +129,7 @@ func (c *controlService) FormatStorage(
 //
 // Send response containing multiple results of update operations on scm mounts
 // and nvme controllers.
-func (c *controlService) UpdateStorage(
+func (c *ControlService) UpdateStorage(
 	req *pb.UpdateStorageReq,
 	stream pb.MgmtCtl_UpdateStorageServer) error {
 
@@ -158,7 +158,7 @@ func (c *controlService) UpdateStorage(
 //
 // Send response containing multiple results of burn-in operations on scm mounts
 // and nvme controllers.
-func (c *controlService) BurninStorage(
+func (c *ControlService) BurninStorage(
 	req *pb.BurninStorageReq,
 	stream pb.MgmtCtl_BurninStorageServer) error {
 
@@ -176,7 +176,7 @@ func (c *controlService) BurninStorage(
 }
 
 // FetchFioConfigPaths retrieves any configuration files in fio_plugin directory
-func (c *controlService) FetchFioConfigPaths(
+func (c *ControlService) FetchFioConfigPaths(
 	empty *pb.EmptyReq, stream pb.MgmtCtl_FetchFioConfigPathsServer) error {
 
 	pluginDir, err := common.GetAbsInstallPath(spdkFioPluginDir)

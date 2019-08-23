@@ -159,12 +159,13 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 }
 
 static int
-dtx_req_send(struct dtx_req_rec *drr)
+dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 {
 	struct dtx_req_args	*dra = drr->drr_parent;
 	crt_rpc_t		*req;
 	crt_endpoint_t		 tgt_ep;
 	crt_opcode_t		 opc;
+	struct dtx_in		*din = NULL;
 	int			 rc;
 
 	tgt_ep.ep_grp = NULL;
@@ -174,11 +175,10 @@ dtx_req_send(struct dtx_req_rec *drr)
 
 	rc = crt_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opc, &req);
 	if (rc == 0) {
-		struct dtx_in	*din;
-
 		din = crt_req_get(req);
 		uuid_copy(din->di_po_uuid, dra->dra_po_uuid);
 		uuid_copy(din->di_co_uuid, dra->dra_co_uuid);
+		din->di_epoch = epoch;
 		din->di_dtx_array.ca_count = drr->drr_count;
 		din->di_dtx_array.ca_arrays = drr->drr_dti;
 
@@ -187,8 +187,8 @@ dtx_req_send(struct dtx_req_rec *drr)
 			crt_req_decref(req);
 	}
 
-	D_DEBUG(DB_TRACE, "DTX req for opc %x sent: rc = %d.\n",
-		dra->dra_opc, rc);
+	D_DEBUG(DB_TRACE, "DTX req for opc %x sent "DF_X64" : rc = %d.\n",
+		dra->dra_opc, din != NULL ? din->di_epoch : 0, rc);
 
 	if (rc != 0) {
 		drr->drr_result = rc;
@@ -253,7 +253,7 @@ dtx_req_list_cb(void **args)
 
 static int
 dtx_req_list_send(crt_opcode_t opc, d_list_t *head, int length, uuid_t po_uuid,
-		  uuid_t co_uuid)
+		  uuid_t co_uuid, daos_epoch_t epoch)
 {
 	ABT_future		 future;
 	struct dtx_req_args	 dra;
@@ -278,7 +278,7 @@ dtx_req_list_send(crt_opcode_t opc, d_list_t *head, int length, uuid_t po_uuid,
 	d_list_for_each_entry(drr, head, drr_link) {
 		drr->drr_parent = &dra;
 		drr->drr_result = 0;
-		rc = dtx_req_send(drr);
+		rc = dtx_req_send(drr, epoch);
 		if (rc != 0)
 			break;
 	}
@@ -461,7 +461,7 @@ dtx_dti_classify_one(struct ds_pool *pool, struct pl_map *map, uuid_t po_uuid,
 
 		/* skip unavailable target(s). */
 		shard = &layout->ol_shards[i];
-		if (shard->po_target == -1 || shard->po_rebuilding)
+		if (shard->po_target == -1)
 			continue;
 
 		rc = pool_map_find_target(pool->sp_map, shard->po_target,
@@ -584,13 +584,19 @@ dtx_commit(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dtes,
 	if (length < 0)
 		D_GOTO(out, rc = length);
 
-	if (!d_list_empty(&head))
-		rc = dtx_req_list_send(DTX_COMMIT, &head, length, po_uuid,
-				       co_uuid);
-
+	/* Local commit firstly. Then if client resend related RPC during the
+	 * subseqent remote commit, it will reply to the client with success.
+	 */
 	if (dti != NULL)
-		/* We cannot rollback the commit, so commit locally anyway. */
-		rc1 = vos_dtx_commit(cont->sc_hdl, dti, count);
+		rc = vos_dtx_commit(cont->sc_hdl, dti, count);
+
+	if (rc == 0 && !d_list_empty(&head))
+		/* If local commit is successful, then even if remote commit
+		 * hit failure, it is still recoverable, so let's ignore the
+		 * remote commit failure.
+		 */
+		rc1 = dtx_req_list_send(DTX_COMMIT, &head, length, po_uuid,
+					co_uuid, crt_hlc_get());
 
 out:
 	D_DEBUG(DB_TRACE, "Commit DTXs "DF_DTI", count %d: rc %d %d\n",
@@ -607,12 +613,12 @@ out:
 	if (cont != NULL)
 		ds_cont_child_put(cont);
 
-	return rc >= 0 ? rc1 : rc;
+	return rc > 0 ? 0 : rc;
 }
 
 int
-dtx_abort(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dtes,
-	  int count, uint32_t version)
+dtx_abort(uuid_t po_uuid, uuid_t co_uuid, daos_epoch_t epoch,
+	  struct dtx_entry *dtes, int count, uint32_t version)
 {
 	struct ds_cont_child	*cont = NULL;
 	struct dtx_id		*dti = NULL;
@@ -644,13 +650,17 @@ dtx_abort(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dtes,
 	D_ASSERT(dti != NULL);
 
 	/* Local abort firstly. */
-	rc = vos_dtx_abort(cont->sc_hdl, dti, count, false);
+	rc = vos_dtx_abort(cont->sc_hdl, epoch, dti, count, false);
+
+	if (rc == -DER_NONEXIST)
+		rc = 0;
+
 	if (rc != 0)
 		D_GOTO(out, rc);
 
 	if (!d_list_empty(&head))
 		rc1 = dtx_req_list_send(DTX_ABORT, &head, length, po_uuid,
-					co_uuid);
+					co_uuid, epoch);
 
 out:
 	D_DEBUG(DB_TRACE, "Abort DTXs "DF_DTI", count %d: rc %d %d\n",
@@ -667,13 +677,7 @@ out:
 	if (cont != NULL)
 		ds_cont_child_put(cont);
 
-	if (rc == -DER_NONEXIST)
-		rc = 0;
-
-	if (rc < 0)
-		return rc;
-
-	return rc1 == -DER_NONEXIST ? 0 : rc1;
+	return rc > 0 ? 0 : rc;
 }
 
 int
@@ -716,7 +720,7 @@ dtx_check(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dte,
 		struct pl_obj_shard	*shard;
 		struct pool_target	*target;
 
-		/* skip unavailable target(s). */
+		/* skip unavailable or in-rebuilding target(s). */
 		shard = &layout->ol_shards[i];
 		if (shard->po_target == -1 || shard->po_rebuilding)
 			continue;
@@ -752,7 +756,7 @@ dtx_check(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dte,
 		rc = DTX_ST_PREPARED;
 	else
 		rc = dtx_req_list_send(DTX_CHECK, &head, length, po_uuid,
-				       co_uuid);
+				       co_uuid, crt_hlc_get());
 
 out:
 	d_list_for_each_entry_safe(drr, next, &head, drr_link) {
