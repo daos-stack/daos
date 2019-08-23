@@ -123,35 +123,58 @@ The list of NVDIMMs can be displayed as follows:
 |0x1101 | 502.5 GiB | Healthy | 0 | Disabled | 01.00.00.5127
 
 Moreover, DAOS requires DCPM to be configured in interleaved mode. A
-command mode option (--set-interleaved) can be used as a "one-shot"
+storage subcommand (prep-scm) can be used as a "one-shot"
 invocation of *daos\_server* and must be run as root. SCM modules will
 be configured into interleaved regions with memory mode set to
 "app-direct" with one set per socket (each module is assigned to socket
-and reports this via its NUMA rating). This configuration may require a
-reboot and *daos\_server* will exit on completion of the task.
+and reports this via its NUMA rating).
 
-This can be done manually via the following commands:
+`sudo daos_server [<app_opts>] storage prep-scm [<cmd_opts>]`
+will automatically configure memory allocation goals for SCM and print
+message asking for reboot the first time it is run. When run for the
+second time, namespaces will be created and details displayed.
 
-\# to verify there is non-volatile memory type
+Example output from initial call (with SCM modules set to default
+MemoryMode):
 
-\# ipmctl show -a -topology | egrep 'Capac|MemoryType'
+"Memory allocation goals for SCM will be changed and namespaces modified, this
+will be a destructive operation.  ensure namespaces are unmounted and SCM is
+otherwise unused.
+Are you sure you want to continue? (yes/no)
+yes
+A reboot is required to process new memory allocation goals."
 
-MemoryType=Logical Non-Volatile Device
+Example output from subsequent call (SCM modules configured to AppDirect
+mode and host rebooted):
 
-Capacity=502.6 GiB
+"Memory allocation goals for SCM will be changed and namespaces modified, this
+will be a destructive operation. Please ensure namespaces are unmounted and SCM
+is otherwise unused.
+Are you sure you want to continue? (yes/no)
+yes
+creating SCM namespace, may take a few minutes...
+creating SCM namespace, may take a few minutes...
+Persistent memory kernel devices:
+        [{UUID:5d2f2517-9217-4d7d-9c32-70731c9ac11e Blockdev:pmem1
+	Dev:namespace1.0 NumaNode:1} {UUID:2bfe6c40-f79a-4b8e-bddf-ba81d4427b9b
+	Blockdev:pmem0 Dev:namespace0.0 NumaNode:0}]"
 
-MemoryType=Logical Non-Volatile Device
+SCM modules can be reset to the default memory mode and have namespaces
+removed (DESTRUCTIVE operation, make sure namespaces are not mounted,
+all data will be lost) with the command
+`sudo daos_server [<app_opts>] storage prep-scm --reset [<cmd_opts>]`
 
-Capacity=502.6 GiB
+Example output when resetting SCM modules:
 
-MemoryType=Logical Non-Volatile Device
-
-Capacity=502.6 GiB
-\[…\]
-
-\# ipmctl create -goal PersistentMemoryType=AppDirect
-
-A reboot is required after those changes.
+"Memory allocation goals for SCM will be changed and namespaces modified, this
+will be a destructive operation.  ensure namespaces are unmounted and SCM is
+otherwise unused.
+Are you sure you want to continue? (yes/no)
+yes
+removing SCM namespace, may take a few minutes...
+removing SCM namespace, may take a few minutes...
+resetting SCM memory allocations
+A reboot is required to process new memory allocation goals."
 
 #### NVMe prep
 
@@ -169,11 +192,12 @@ groups as needed in SPDK operations. If the target-user is unspecified
 (or root if not using sudo). The specification of hugepages (-p short
 option) defines the number of huge pages to allocate for use by SPDK.
 
-`sudo daos_server storage prep-nvme ...` command wraps the SPDK setup script
-to unbind the devices from original kernel drivers and then bind the devices
-to a generic driver through which SPDK can communicate. The devices can then
-be bound back to the original drivers with the command
-`sudo daos_server storage prep-nvme --reset`.
+`sudo daos_server [<app_opts>] storage prep-nvme [<cmd_opts>]`
+command wraps the SPDK setup script to unbind the devices from
+original kernel drivers and then bind the devices to a generic driver
+through which SPDK can communicate. The devices can then be bound
+back to the original drivers with the command
+`sudo daos_server [<app_opts>] storage prep-nvme --reset [<cmd_opts>]`
 
 ### Storage Detection & Selection
 
@@ -829,7 +853,7 @@ to storage format).
 <p>
 
 ```bash
-[tanabarr@boro-45 daos_m]$ orterun -np 2 -H boro-44,boro-45 --report-uri /tmp/urifile --enable-recovery daos_server -t 1 -o /home/tanabarr/projects/daos_m/utils/config/examples/daos_server_sockets.yml
+[tanabarr@boro-45 daos_m]$ orterun -np 2 -H boro-44,boro-45 --report-uri /tmp/urifile --enable-recovery daos_server -o /home/tanabarr/projects/daos_m/utils/config/examples/daos_server_sockets.yml start -t 1
 2019/03/28 12:28:07 config.go:85: debug: DAOS config read from /home/tanabarr/projects/daos_m/utils/config/examples/daos_server_sockets.yml
 2019/03/28 12:28:07 config.go:85: debug: DAOS config read from /home/tanabarr/projects/daos_m/utils/config/examples/daos_server_sockets.yml
 2019/03/28 12:28:07 main.go:79: debug: Switching control log level to DEBUG
@@ -902,12 +926,13 @@ starts the data plane.
 
 Typically an administrator will perform the following tasks:
 1. Prepare NVMe and SCM Storage
-    - `sudo daos_server storage prep-nvme ...`
+    - `sudo daos_server [<app_opts>] storage prep-nvme [<cmd_opts>]`
     [NVMe details](#-nvme-prep)
-    - [SCM details](#-scm-prep)
+    - `sudo daos_server [<app_opts>] storage prep-scm [<cmd_opts>]`
+    [SCM details](#-scm-prep)
 
 2. Scan Storage
-    - `sudo daos_server storage scan`
+    - `sudo daos_server [<app_opts>] storage scan [<cmd_opts>]`
     [details](#-storage-detection-&-selection)
 
 3. Add device identifiers to Server config file
@@ -926,7 +951,7 @@ scm_class: dcpm
 scm_list: [/dev/pmem1]
 
 4. Start DAOS control plane
-    - `orterun -np 2 -H boro-44,boro-45 --report-uri /tmp/urifile --enable-recovery daos_server -t 1 -i -o <daos>/utils/config/examples/daos_server_sockets.yml`
+    - `orterun -np 2 -H boro-44,boro-45 --report-uri /tmp/urifile --enable-recovery daos_server -o <daos>/utils/config/examples/daos_server_sockets.yml start -t 1 -i`
     [details](#-parallel-launcher)
 
 5. Provision Storage
@@ -985,10 +1010,30 @@ TODO: add instructions
 
 ### Systemd Integration
 
-A preliminary systemd script to manage the DAOS server is available
-under utils/system. That being said, this startup method is not
-supported yet since the current DAOS version still relies on PMIx for
-DAOS server wireup.
+Systemd support for daos_server is still experimental as it will start the
+daos_server and daos_io_server components in PMIXless mode which is still in
+development.
+
+DAOS Server can be started as a systemd service. The DAOS Server
+unit file is installed in the correct location when installing from RPMs.
+If you wish to use systemd with a development build you must copy the service
+file from utils/systemd to /usr/lib/systemd/system. Once the file is copied
+modify the ExecStart line to point to your in tree daos_server binary.
+
+Once the service file is installed you can start daos_server
+with the following commands:
+```
+systemctl enable daos-server
+systemctl start daos-server
+```
+To check the component status use:
+```
+systemctl status daos-server
+```
+If DAOS Server failed to start check the logs with:
+```
+journalctl --unit daos-server
+```
 
 ### Kubernetes Pod
 
@@ -1243,9 +1288,31 @@ to communicate with the control plane over unencrypted channels. The following
 example shows daos_agent being configured to operate in insecure mode due to
 incomplete integration of certificate support as of the 0.6 release.
 
-To start the DAOS Agent, run:
+To start the DAOS Agent from the command line, run:
 ```
 daos_agent -i
+```
+
+Alternatively the DAOS Agent can be started as a systemd service. The DAOS Agent
+unit file is installed in the correct location when installing from RPMs.
+If you wish to use systemd with a development build you must copy the service
+file from utils/systemd to /usr/lib/systemd/system. Once the file is copied
+modify the ExecStart line to point to your in tree daos_agent binary.
+
+Once the service file is installed you can start daos_agent
+with the following commands:
+
+```
+systemctl enable daos-agent
+systemctl start daos-agent
+```
+To check the component status use:
+```
+systemctl status daos-agent
+```
+If DAOS Agent failed to start check the logs with:
+```
+journalctl --unit daos-agent
 ```
 
 System Validation

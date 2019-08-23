@@ -233,9 +233,10 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 		if (oiter->it_iter.it_type == VOS_ITER_AKEY) {
 			if (rbund.rb_krec->kr_bmap & KREC_BF_EVT) {
 				ent->ie_child_type = VOS_ITER_RECX;
-			} else {
-				D_ASSERT(rbund.rb_krec->kr_bmap & KREC_BF_BTR);
+			} else if (rbund.rb_krec->kr_bmap & KREC_BF_BTR) {
 				ent->ie_child_type = VOS_ITER_SINGLE;
+			} else {
+				ent->ie_child_type = VOS_ITER_NONE;
 			}
 		} else {
 			ent->ie_child_type = VOS_ITER_AKEY;
@@ -801,7 +802,7 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 		  daos_key_t *akey)
 {
 	struct vos_object	*obj = oiter->it_obj;
-	struct evt_filter	 filter;
+	struct evt_filter	 filter = {0};
 	daos_handle_t		 dk_toh;
 	daos_handle_t		 ak_toh;
 	int			 rc;
@@ -1086,7 +1087,7 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 	struct vos_object	*obj = info->ii_obj;
 	struct vos_obj_iter	*oiter;
 	struct evt_desc_cbs	 cbs;
-	struct evt_filter	 filter;
+	struct evt_filter	 filter = {0};
 	daos_handle_t		 toh;
 	int			 rc = 0;
 	uint32_t		 options;

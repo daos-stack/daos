@@ -31,7 +31,9 @@ import random
 from apricot import TestWithServers
 
 from general_utils import DaosTestError
-from daos_api import DaosContext, DaosPool, DaosApiError
+from daos_api import DaosPool, DaosApiError
+
+# pylint: disable=global-variable-not-assigned, global-statement
 
 GLOB_SIGNAL = None
 GLOB_RC = -99000000
@@ -151,7 +153,7 @@ class PoolAttributeTest(TestWithServers):
 
         Test description: Test basic pool attribute tests (sync).
 
-        :avocado: tags=regression,pool,pool_attr,attribute,sync_poolattribute
+        :avocado: tags=all,pool,pr,tiny,sync_poolattribute
         """
         expected_for_param = []
         name = self.params.get("name", '/run/attrtests/name_handles/*/')
@@ -194,7 +196,7 @@ class PoolAttributeTest(TestWithServers):
 
         Test description: Test basic pool attribute tests (async).
 
-        :avocado: tags=regression,pool,pool_attr,attribute,async_poolattribute
+        :avocado: tags=all,pool,full_regression,tiny,async_poolattribute
         """
         global GLOB_SIGNAL
         global GLOB_RC

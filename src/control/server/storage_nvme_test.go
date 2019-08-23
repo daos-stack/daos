@@ -41,22 +41,24 @@ var nvmeFormatCalls []string // record calls to nvme.Format()
 func MockController(fwrev string) Controller {
 	c := MockControllerPB(fwrev)
 	return Controller{
-		Model:   c.Model,
-		Serial:  c.Serial,
-		PCIAddr: c.Pciaddr,
-		FWRev:   fwrev,
+		Model:    c.Model,
+		Serial:   c.Serial,
+		PCIAddr:  c.Pciaddr,
+		FWRev:    fwrev,
+		SocketID: c.Socketid,
 	}
 }
 
 // NewMockController specifies customer details fr a mock NVMe SSD controller.
 func NewMockController(
-	pciaddr string, fwrev string, model string, serial string) Controller {
-
+	pciaddr string, fwrev string, model string, serial string, socketID int32,
+) Controller {
 	return Controller{
-		Model:   model,
-		Serial:  serial,
-		PCIAddr: pciaddr,
-		FWRev:   fwrev,
+		Model:    model,
+		Serial:   serial,
+		PCIAddr:  pciaddr,
+		FWRev:    fwrev,
+		SocketID: socketID,
 	}
 }
 
@@ -150,7 +152,7 @@ func (m *mockSpdkSetup) reset() error                   { return nil }
 // mockNvmeStorage factory
 func newMockNvmeStorage(
 	spdkEnv ENV, spdkNvme NVME, inited bool,
-	config *configuration) *nvmeStorage {
+	config *Configuration) *nvmeStorage {
 
 	return &nvmeStorage{
 		env:         spdkEnv,
@@ -162,7 +164,7 @@ func newMockNvmeStorage(
 }
 
 // defaultMockNvmeStorage factory
-func defaultMockNvmeStorage(config *configuration) *nvmeStorage {
+func defaultMockNvmeStorage(config *Configuration) *nvmeStorage {
 	return newMockNvmeStorage(
 		defaultMockSpdkEnv(),
 		defaultMockSpdkNvme(),
@@ -175,6 +177,7 @@ func TestDiscoverNvmeSingle(t *testing.T) {
 		inited          bool
 		spdkInitEnvRet  error // return value from go-spdk pkg
 		spdkDiscoverRet error // return value from go-spdk pkg
+		numa            int32 // NUMA socket ID of NVMe ctrlr
 		errMsg          string
 	}{
 		{
@@ -189,12 +192,18 @@ func TestDiscoverNvmeSingle(t *testing.T) {
 			spdkInitEnvRet: errors.New("spdk example failure"),
 			errMsg:         msgSpdkInitFail + ": spdk example failure",
 		},
+		{
+			numa: 1,
+		},
 	}
 
 	c := MockController("1.0.0")
 	pbC := MockControllerPB("1.0.0")
 
 	for _, tt := range tests {
+		c.SocketID = tt.numa
+		pbC.Socketid = tt.numa
+
 		config := defaultMockConfig(t)
 		sn := newMockNvmeStorage(
 			newMockSpdkEnv(tt.spdkInitEnvRet),
@@ -203,7 +212,7 @@ func TestDiscoverNvmeSingle(t *testing.T) {
 				[]Controller{c}, []Namespace{MockNamespace(&c)},
 				tt.spdkDiscoverRet, nil, nil),
 			tt.inited,
-			&config)
+			config)
 
 		resp := new(pb.ScanStorageResp)
 		sn.Discover(resp)
@@ -239,8 +248,8 @@ func TestDiscoverNvmeMulti(t *testing.T) {
 	}{
 		{
 			[]Controller{
-				{"", "", "1.2.3.4.5", "1.0.0"},
-				{"", "", "1.2.3.4.6", "1.0.0"},
+				{"", "", "1.2.3.4.5", "1.0.0", 0},
+				{"", "", "1.2.3.4.6", "1.0.0", 0},
 			},
 			[]Namespace{
 				{0, 100, "1.2.3.4.5"},
@@ -249,15 +258,15 @@ func TestDiscoverNvmeMulti(t *testing.T) {
 		},
 		{
 			[]Controller{
-				{"", "", "1.2.3.4.5", "1.0.0"},
-				{"", "", "1.2.3.4.6", "1.0.0"},
+				{"", "", "1.2.3.4.5", "1.0.0", 0},
+				{"", "", "1.2.3.4.6", "1.0.0", 0},
 			},
 			[]Namespace{},
 		},
 		{
 			[]Controller{
-				{"", "", "1.2.3.4.5", "1.0.0"},
-				{"", "", "1.2.3.4.6", "1.0.0"},
+				{"", "", "1.2.3.4.5", "1.0.0", 0},
+				{"", "", "1.2.3.4.6", "1.0.0", 0},
 			},
 			[]Namespace{
 				{0, 100, "1.2.3.4.5"},
@@ -278,7 +287,7 @@ func TestDiscoverNvmeMulti(t *testing.T) {
 				"1.0.0", "1.0.1", tt.ctrlrs, tt.nss,
 				nil, nil, nil),
 			false,
-			&config)
+			config)
 
 		// not concerned with response
 		sn.Discover(new(pb.ScanStorageResp))
@@ -479,7 +488,7 @@ func TestFormatNvme(t *testing.T) {
 				"1.0.0", "1.0.1",
 				[]Controller{c}, []Namespace{MockNamespace(&c)},
 				nil, tt.devFormatRet, nil),
-			false, &config)
+			false, config)
 		sn.formatted = tt.formatted
 
 		results := NvmeControllerResults{}
@@ -598,7 +607,7 @@ func TestUpdateNvme(t *testing.T) {
 			inited:   true,
 			pciAddrs: []string{pciAddr},
 			initCtrlrs: []Controller{ // device has different model
-				NewMockController(pciAddr, startRev, "UKNOWN1", serial),
+				NewMockController(pciAddr, startRev, "UKNOWN1", serial, 0),
 			},
 			expResults: NvmeControllerResults{
 				{
@@ -622,7 +631,7 @@ func TestUpdateNvme(t *testing.T) {
 			inited:   true,
 			pciAddrs: []string{pciAddr},
 			initCtrlrs: []Controller{ // device has different start rev
-				NewMockController(pciAddr, "2.0.0", model, serial),
+				NewMockController(pciAddr, "2.0.0", model, serial, 0),
 			},
 			expResults: NvmeControllerResults{
 				{
@@ -703,9 +712,9 @@ func TestUpdateNvme(t *testing.T) {
 				pciAddr, "0000:81:00.1", "0000:aa:00.0", "0000:ab:00.0",
 			},
 			initCtrlrs: []Controller{
-				NewMockController("0000:ab:00.0", startRev, "UKN", serial),
-				NewMockController("0000:aa:00.0", defaultEndRev, model, serial),
-				NewMockController("0000:81:00.1", startRev, model, serial),
+				NewMockController("0000:ab:00.0", startRev, "UKN", serial, 0),
+				NewMockController("0000:aa:00.0", defaultEndRev, model, serial, 0),
+				NewMockController("0000:81:00.1", startRev, model, serial, 0),
 			},
 			expResults: NvmeControllerResults{
 				{
@@ -770,7 +779,7 @@ func TestUpdateNvme(t *testing.T) {
 				startRev, endRev, // ctrlr before/after fw revs
 				tt.initCtrlrs, []Namespace{}, // Nss ignored
 				nil, nil, tt.devUpdateRet),
-			false, &config)
+			false, config)
 
 		results := NvmeControllerResults{}
 
@@ -850,7 +859,7 @@ func TestBurnInNvme(t *testing.T) {
 
 	for _, tt := range tests {
 		config := defaultMockConfig(t)
-		sn := defaultMockNvmeStorage(&config)
+		sn := defaultMockNvmeStorage(config)
 
 		if tt.inited {
 			// not concerned with response

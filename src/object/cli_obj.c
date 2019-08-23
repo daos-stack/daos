@@ -379,22 +379,7 @@ obj_grp_valid_shard_get(struct dc_object *obj, int idx,
 	}
 
 	idx_first = (idx / grp_size) * grp_size;
-	if (DAOS_FAIL_CHECK(DAOS_OBJ_SPECIAL_SHARD)) {
-		idx = daos_fail_value_get();
-
-		if (idx >= grp_size) {
-			D_RWLOCK_UNLOCK(&obj->cob_lock);
-			return -DER_INVAL;
-		}
-
-		if (obj->cob_shards->do_shards[idx].do_shard != -1) {
-			D_DEBUG(DB_TRACE, "special shard %d\n", idx);
-			D_RWLOCK_UNLOCK(&obj->cob_lock);
-			return idx;
-		}
-	} else {
-		idx = idx_first + random() % grp_size;
-	}
+	idx = idx_first + random() % grp_size;
 
 	for (i = 0; i < grp_size;
 	     i++, idx = idx_first + (idx + 1 - idx_first) % grp_size) {
@@ -989,7 +974,8 @@ struct obj_auxi_args {
 	uint32_t			 io_retry:1,
 					 args_initialized:1,
 					 shard_task_scheded:1,
-					 retry_with_leader:1;
+					 to_leader:1,
+					 spec_shard:1;
 	/* request flags, now only with ORF_RESEND */
 	uint32_t			 flags;
 	struct obj_req_tgts		 req_tgts;
@@ -1014,6 +1000,7 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	tse_task_t	 *pool_task = NULL;
 	int		  result = task->dt_result;
 	int		  rc;
+	bool		  keep_result = false;
 
 	/* For the case of retry with leader, if it is for modification,
 	 * since we always send modification RPC to the leader, then no
@@ -1027,8 +1014,7 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	 * is not the leader. To guarantee the next retry can find the
 	 * right leader, we need to refresh the pool map before retry.
 	 */
-	if (!obj_auxi->retry_with_leader ||
-	    !obj_is_modification_opc(obj_auxi->opc)) {
+	if (!obj_auxi->to_leader || !obj_is_modification_opc(obj_auxi->opc)) {
 		rc = obj_pool_query_task(sched, obj, &pool_task);
 		if (rc != 0)
 			D_GOTO(err, rc);
@@ -1050,6 +1036,13 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 				D_GOTO(err, rc);
 			}
 		}
+	} else if (obj_auxi->spec_shard) {
+		/* If the RPC sponsor has specifies the shard, we will NOT
+		 * reschedule the IO, but not prevent the pool map refresh.
+		 * Restore the original RPC (task) result, the RPC sponsor
+		 * will handle that by itself.
+		 */
+		keep_result = true;
 	}
 
 	D_DEBUG(DB_IO, "Retrying task=%p for err=%d, io_retry=%d\n",
@@ -1058,6 +1051,9 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	if (pool_task != NULL)
 		/* ignore returned value, error is reported by comp_cb */
 		dc_task_schedule(pool_task, obj_auxi->io_retry);
+
+	if (keep_result)
+		task->dt_result = result;
 
 	return 0;
 err:
@@ -1394,18 +1390,30 @@ out:
 static int
 obj_req_get_tgts(struct dc_object *obj, enum obj_rpc_opc opc, int *shard,
 		 uint64_t dkey_hash, uint64_t tgt_set, uint32_t map_ver,
-		 bool to_leader, struct obj_req_tgts *req_tgts)
+		 bool to_leader, bool spec_shard, struct obj_req_tgts *req_tgts)
 {
-	uint32_t	shard_idx, shard_cnt;
-	uint32_t	grp_nr = 1;
 	int		rc;
 
 	switch (opc) {
 	case DAOS_OBJ_RPC_FETCH:
-		rc = obj_dkeyhash2shard(obj, dkey_hash, map_ver, opc,
-					to_leader);
-		if (rc < 0)
-			goto out;
+		if (spec_shard) {
+			D_ASSERT(shard != NULL);
+
+			rc = obj_dkey2grp(obj, dkey_hash, map_ver);
+			if (rc < 0)
+				goto out;
+
+			rc *= obj->cob_grp_size;
+			if (*shard < rc || *shard >= rc + obj->cob_grp_size)
+				D_GOTO(out, rc = -DER_INVAL);
+
+			rc = *shard;
+		} else {
+			rc = obj_dkeyhash2shard(obj, dkey_hash, map_ver, opc,
+						to_leader);
+			if (rc < 0)
+				goto out;
+		}
 		req_tgts->ort_shard_tgts = req_tgts->ort_tgts_inline;
 		req_tgts->ort_srv_disp = 0;
 		req_tgts->ort_grp_nr = 1;
@@ -1418,7 +1426,11 @@ obj_req_get_tgts(struct dc_object *obj, enum obj_rpc_opc opc, int *shard,
 	case DAOS_OBJ_RPC_UPDATE:
 	case DAOS_OBJ_RPC_PUNCH:
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
-	case DAOS_OBJ_RPC_PUNCH_AKEYS:
+	case DAOS_OBJ_RPC_PUNCH_AKEYS: {
+		uint32_t	shard_idx;
+		uint32_t	shard_cnt;
+		uint32_t	grp_nr = 1;
+
 		if (opc == DAOS_OBJ_RPC_PUNCH) {
 			obj_ptr2shards(obj, &shard_idx, &shard_cnt, &grp_nr);
 		} else {
@@ -1436,6 +1448,7 @@ obj_req_get_tgts(struct dc_object *obj, enum obj_rpc_opc opc, int *shard,
 			goto out;
 		}
 		break;
+	}
 	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
 	case DAOS_OBJ_RPC_ENUMERATE:
 	case DAOS_OBJ_AKEY_RPC_ENUMERATE:
@@ -1695,7 +1708,7 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 		 * shard if leader switched. That is why the resend logic
 		 * is handled at object layer rather than shard layer.
 		 */
-		obj_auxi->flags = ORF_RESEND;
+		obj_auxi->flags |= ORF_RESEND;
 
 		/* if with shard task list, reuse it and re-schedule */
 		if (!d_list_empty(task_list)) {
@@ -1724,6 +1737,8 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 			return rc;
 		}
 	}
+
+	D_ASSERT(!obj_auxi->args_initialized);
 
 	/* if with only one target, need not to create separate shard task */
 	if (tgts_nr == 1) {
@@ -1889,7 +1904,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 	bool			 pm_stale = false;
 
 	obj_auxi = tse_task_stack_pop(task, sizeof(*obj_auxi));
-	obj_auxi->retry_with_leader = 0;
+	obj_auxi->to_leader = 0;
 	obj_auxi->io_retry = 0;
 	switch (obj_auxi->opc) {
 	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
@@ -1961,9 +1976,20 @@ obj_comp_cb(tse_task_t *task, void *data)
 		pm_stale = true;
 	}
 	if (obj_retry_error(task->dt_result)) {
-		obj_auxi->io_retry = 1;
-		if (task->dt_result == -DER_INPROGRESS)
-			obj_auxi->retry_with_leader = 1;
+		/* If the RPC sponsor set the @spec_shard, then means it wants
+		 * to fetch data from the specified shard. If such shard isn't
+		 * ready for read, we should let the caller know that, instead
+		 * of re-direct the fetch RPC to other replica. But there are
+		 * some other cases we need to retry the RPC with current shard,
+		 * such as -DER_TIMEDOUT or daos_crt_network_error().
+		 */
+		if (!obj_auxi->spec_shard ||
+		    (task->dt_result != -DER_STALE &&
+		     task->dt_result != -DER_INPROGRESS))
+			obj_auxi->io_retry = 1;
+
+		if (!obj_auxi->spec_shard && task->dt_result == -DER_INPROGRESS)
+			obj_auxi->to_leader = 1;
 	}
 
 	if (pm_stale || obj_auxi->io_retry)
@@ -1978,6 +2004,10 @@ obj_comp_cb(tse_task_t *task, void *data)
 			D_ASSERT(d_list_empty(head));
 		}
 		obj_bulk_fini(obj_auxi);
+		/* zero it as user might reuse/resched the task, for example
+		 * the usage in dac_array_set_size().
+		 */
+		memset(obj_auxi, 0, sizeof(*obj_auxi));
 	}
 
 	obj_decref(obj);
@@ -2019,10 +2049,10 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 	return 0;
 }
 
-int
-dc_obj_fetch(tse_task_t *task)
+static int
+do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
+		uint32_t flags, uint32_t shard)
 {
-	daos_obj_fetch_t	*args = dc_task_get_args(task);
 	struct obj_auxi_args	*obj_auxi;
 	struct dc_object	*obj;
 	unsigned int		 map_ver;
@@ -2052,9 +2082,14 @@ dc_obj_fetch(tse_task_t *task)
 	}
 
 	dkey_hash = obj_dkey2hash(args->dkey);
-	rc = obj_req_get_tgts(obj, DAOS_OBJ_RPC_FETCH, NULL, dkey_hash, 0,
-			      map_ver, obj_auxi->retry_with_leader,
-			      &obj_auxi->req_tgts);
+	obj_auxi->spec_shard = (flags & DIOF_TO_SPEC_SHARD) != 0;
+	if (obj_auxi->spec_shard)
+		D_ASSERT(!obj_auxi->to_leader);
+	else
+		obj_auxi->to_leader = (flags & DIOF_TO_LEADER) != 0;
+	rc = obj_req_get_tgts(obj, DAOS_OBJ_RPC_FETCH, (int *)&shard,
+			      dkey_hash, 0, map_ver, obj_auxi->to_leader,
+			      obj_auxi->spec_shard, &obj_auxi->req_tgts);
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 
@@ -2073,6 +2108,20 @@ dc_obj_fetch(tse_task_t *task)
 out_task:
 	tse_task_complete(task, rc);
 	return rc;
+}
+
+int
+dc_obj_fetch_shard(tse_task_t *task)
+{
+	struct daos_obj_fetch_shard	*args = dc_task_get_args(task);
+
+	return do_dc_obj_fetch(task, &args->base, args->flags, args->shard);
+}
+
+int
+dc_obj_fetch(tse_task_t *task)
+{
+	return do_dc_obj_fetch(task, dc_task_get_args(task), 0, 0);
 }
 
 int
@@ -2123,9 +2172,13 @@ dc_obj_update(tse_task_t *task)
 
 	dkey_hash = obj_dkey2hash(args->dkey);
 	rc = obj_req_get_tgts(obj, DAOS_OBJ_RPC_UPDATE, NULL, dkey_hash,
-			      tgt_set, map_ver, false, &obj_auxi->req_tgts);
+			      tgt_set, map_ver, false, false,
+			      &obj_auxi->req_tgts);
 	if (rc)
 		goto out_task;
+
+	if (DAOS_FAIL_CHECK(DAOS_DTX_COMMIT_SYNC))
+		obj_auxi->flags |= ORF_DTX_SYNC;
 
 	D_DEBUG(DB_IO, "update "DF_OID" dkey_hash "DF_U64"\n",
 		DP_OID(obj->cob_md.omd_id), dkey_hash);
@@ -2169,7 +2222,6 @@ dc_obj_list_internal(tse_task_t *task, int opc, daos_obj_list_t *args)
 	unsigned int		 map_ver;
 	struct obj_list_arg	 list_args;
 	uint64_t		 dkey_hash;
-	bool			 to_leader = false;
 	int			 shard = -1;
 	daos_epoch_t		 epoch;
 	int			 rc;
@@ -2202,17 +2254,16 @@ dc_obj_list_internal(tse_task_t *task, int opc, daos_obj_list_t *args)
 	}
 
 	dkey_hash = obj_dkey2hash(args->dkey);
-	if (obj_auxi->retry_with_leader)
-		to_leader = true;
 	if (args->dkey == NULL) {
-		if (!to_leader && (daos_anchor_get_flags(args->dkey_anchor) &
-				   DAOS_ANCHOR_FLAGS_TO_LEADER))
-			to_leader = true;
+		D_ASSERT(args->dkey_anchor != NULL);
+
+		if (daos_anchor_get_flags(args->dkey_anchor) & DIOF_TO_LEADER)
+			obj_auxi->to_leader = 1;
 		shard = dc_obj_anchor2shard(args->dkey_anchor);
 		D_ASSERT(shard != -1);
 	}
 	rc = obj_req_get_tgts(obj, opc, &shard, dkey_hash, 0, map_ver,
-			      to_leader, &obj_auxi->req_tgts);
+			      obj_auxi->to_leader, false, &obj_auxi->req_tgts);
 	if (rc != 0)
 		goto out_task;
 	if (args->dkey == NULL)
@@ -2340,9 +2391,12 @@ obj_punch_internal(tse_task_t *task, enum obj_rpc_opc opc,
 
 	dkey_hash = obj_dkey2hash(api_args->dkey);
 	rc = obj_req_get_tgts(obj, opc, NULL, dkey_hash, 0, map_ver, false,
-			      &obj_auxi->req_tgts);
+			      false, &obj_auxi->req_tgts);
 	if (rc != 0)
 		goto out_task;
+
+	if (DAOS_FAIL_CHECK(DAOS_DTX_COMMIT_SYNC))
+		obj_auxi->flags |= ORF_DTX_SYNC;
 
 	D_DEBUG(DB_IO, "punch "DF_OID" dkey %llu\n",
 		DP_OID(obj->cob_md.omd_id), (unsigned long long)dkey_hash);
@@ -2601,7 +2655,7 @@ dc_obj_query_key(tse_task_t *api_task)
 		/* For the specified dkey, only need to query one replica. */
 		shard_first = obj_dkeyhash2shard(obj, dkey_hash, map_ver,
 						 DAOS_OPC_OBJ_QUERY,
-						 obj_auxi->retry_with_leader);
+						 obj_auxi->to_leader);
 		if (shard_first < 0)
 			D_GOTO(out_task, rc = shard_first);
 	}
@@ -2631,6 +2685,7 @@ dc_obj_query_key(tse_task_t *api_task)
 		goto task_sched;
 	}
 
+	D_ASSERT(!obj_auxi->args_initialized);
 	D_ASSERT(d_list_empty(head));
 
 	/* In each redundancy group, the QUERY RPC only needs to be sent
