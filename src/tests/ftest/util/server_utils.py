@@ -35,9 +35,10 @@ import signal
 import fcntl
 import errno
 import yaml
+import getpass
 
 from agent_utils import run_agent
-from general_utils import pcmd
+from general_utils import pcmd, check_file_exists
 from command_utils import CommandWithParameters
 from command_utils import BasicParameter, FormattedParameter
 from avocado.utils import genio, process
@@ -95,8 +96,17 @@ class ServerCommand(CommandWithParameters):
         # Clean up any files that exist on the hosts
         clean_server(self.hosts)
 
-        # Ensure the environment for the daos server on each host
-        run_agent(path, self.hosts)
+        # Verify the domain socket directory is present and owned by this user
+        user = getpass.getuser()
+        file_checks = (
+            ("Server", self.hosts, "/var/run/daos_server"),
+        )
+        for host_type, host_list, directory in file_checks:
+            status, nodeset = check_file_exists(host_list, directory, user)
+            if not status:
+                raise ServerFailed(
+                    "{}: {} missing directory {} for user {}.".format(
+                        nodeset, host_type, directory, user))
 
         # Create the hostfile
         self.hostfile = write_host_file(self.hosts, path, slots)
