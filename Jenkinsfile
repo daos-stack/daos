@@ -82,7 +82,7 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
-    (env.BRANCH_NAME != "weekly-testing" ||
+    (env.BRANCH_NAME != "weekly-testing" &&
      env.BRANCH_NAME != "master")) {
    currentBuild.result = 'SUCCESS'
    return
