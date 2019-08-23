@@ -472,7 +472,7 @@ ts_list_rect(void **state)
 {
 	char			*val;
 	daos_anchor_t		 anchor;
-	struct evt_filter	 filter;
+	struct evt_filter	 filter = {0};
 	struct evt_rect		 rect;
 	daos_epoch_t		 high = DAOS_EPOCH_MAX;
 	daos_handle_t		 ih;
@@ -1181,7 +1181,7 @@ test_evt_iter_delete(void **state)
 	int			 epoch;
 	int			 offset;
 	int			 sum, expected_sum;
-	struct evt_filter	 filter;
+	struct evt_filter	 filter = {0};
 	uint32_t		 inob;
 
 	rc = evt_create(arg->ta_root, ts_feats, ORDER_DEF_INTERNAL, arg->ta_uma,
@@ -1912,6 +1912,134 @@ run_drain_test(void)
 					   evt_drain, NULL, NULL);
 }
 
+static void
+test_evt_outer_punch(void **state)
+{
+	struct test_arg		*arg = *state;
+	int			*value;
+	daos_handle_t		 toh;
+	daos_handle_t		 ih;
+	struct evt_entry_in	 entry = {0};
+	struct evt_entry	 ent;
+	int			 rc;
+	int			 epoch;
+	int			 offset;
+	int			 count;
+	int			 sum, visible, covered;
+	struct evt_filter	 filter = {0};
+	uint32_t		 inob;
+
+	rc = evt_create(arg->ta_root, ts_feats, ORDER_DEF_INTERNAL, arg->ta_uma,
+			&ts_evt_desc_nofree_cbs, &toh);
+	assert_int_equal(rc, 0);
+	sum = 1;
+
+	/* Insert a bunch of entries */
+	for (epoch = 1; epoch <= NUM_EPOCHS; epoch++) {
+		for (count = 0; count < NUM_EXTENTS; count++) {
+			offset = count * NUM_EXTENTS;
+			entry.ei_rect.rc_ex.ex_lo = offset;
+			entry.ei_rect.rc_ex.ex_hi = offset;
+			entry.ei_rect.rc_epc = epoch;
+			memset(&entry.ei_csum, 0, sizeof(entry.ei_csum));
+			entry.ei_ver = 0;
+			entry.ei_inob = sizeof(offset);
+			rc = bio_alloc_init(arg->ta_utx, &entry.ei_addr, &sum,
+					    sizeof(sum));
+			assert_int_equal(rc, 0);
+
+			rc = evt_insert(toh, &entry);
+			assert_int_equal(rc, 0);
+		}
+	}
+
+	filter.fr_ex.ex_lo = 0;
+	filter.fr_ex.ex_hi = NUM_EPOCHS * NUM_EXTENTS;
+	filter.fr_epr.epr_lo = 0;
+	filter.fr_punch = NUM_EPOCHS - 1;
+	filter.fr_epr.epr_hi = DAOS_EPOCH_MAX;
+	rc = evt_iter_prepare(toh, EVT_ITER_VISIBLE | EVT_ITER_COVERED,
+			      &filter, &ih);
+	assert_int_equal(rc, 0);
+
+	rc = evt_iter_probe(ih, EVT_ITER_FIRST, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	visible = covered = 0;
+
+	for (;;) {
+		rc = evt_iter_fetch(ih, &inob, &ent, NULL);
+		assert_int_equal(rc, 0);
+
+		assert_false(bio_addr_is_hole(&ent.en_addr));
+
+		value = utest_off2ptr(arg->ta_utx, ent.en_addr.ba_off);
+
+		if (ent.en_visibility & EVT_COVERED) {
+			covered += *value;
+			assert_true(ent.en_epoch <= (NUM_EPOCHS - 1));
+			assert_false(ent.en_visibility & EVT_VISIBLE);
+		} else {
+			visible += *value;
+			assert_true(ent.en_epoch == NUM_EPOCHS);
+			assert_false(ent.en_visibility & EVT_COVERED);
+			assert_true(ent.en_visibility & EVT_VISIBLE);
+		}
+
+		rc = evt_iter_next(ih);
+		if (rc == -DER_NONEXIST)
+			break;
+		assert_int_equal(rc, 0);
+	}
+	assert_int_equal(visible, NUM_EXTENTS);
+	assert_int_equal(covered, (NUM_EPOCHS - 1) * NUM_EXTENTS);
+
+	rc = evt_iter_finish(ih);
+	assert_int_equal(rc, 0);
+
+	/* If user specifies punch for unsorted iterator, it will mark
+	 * punched entries EVT_COVERED
+	 */
+	rc = evt_iter_prepare(toh, 0, &filter, &ih);
+	assert_int_equal(rc, 0);
+
+	rc = evt_iter_probe(ih, EVT_ITER_FIRST, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	visible = covered = 0;
+
+	for (;;) {
+		rc = evt_iter_fetch(ih, &inob, &ent, NULL);
+		assert_int_equal(rc, 0);
+
+		assert_false(bio_addr_is_hole(&ent.en_addr));
+
+		value = utest_off2ptr(arg->ta_utx, ent.en_addr.ba_off);
+
+		if (ent.en_visibility & EVT_COVERED) {
+			covered += *value;
+			assert_true(ent.en_epoch <= (NUM_EPOCHS - 1));
+			assert_false(ent.en_visibility & EVT_VISIBLE);
+		} else {
+			visible += *value;
+			assert_true(ent.en_epoch == NUM_EPOCHS);
+		}
+
+		rc = evt_iter_next(ih);
+		if (rc == -DER_NONEXIST)
+			break;
+		assert_int_equal(rc, 0);
+	}
+	assert_int_equal(visible, NUM_EXTENTS);
+	assert_int_equal(covered, (NUM_EPOCHS - 1) * NUM_EXTENTS);
+
+	rc = evt_iter_finish(ih);
+	assert_int_equal(rc, 0);
+
+	rc = evt_destroy(toh);
+	assert_int_equal(rc, 0);
+}
+
 static int
 run_internal_tests(void)
 {
@@ -1938,6 +2066,9 @@ run_internal_tests(void)
 			setup_builtin, teardown_builtin},
 		{ "EVT016: evt_variable_record_size_internal",
 			test_evt_variable_record_size_internal,
+			setup_builtin, teardown_builtin},
+		{ "EVT017: evt_iter_outer_punch",
+			test_evt_outer_punch,
 			setup_builtin, teardown_builtin},
 		{ NULL, NULL, NULL, NULL }
 	};
