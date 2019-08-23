@@ -1715,7 +1715,6 @@ test_evt_node_size_internal(void **state)
 *		  NOTE: pre-allocate ret_string buffer
 *		  before calling this function. Otherwise,
 *		  you will get segmentation fault.
-*		    
 */
 void repeat_string(char *ret_string, char *string_val, int num)
 {
