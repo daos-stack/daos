@@ -203,10 +203,10 @@ On each storage node, the DAOS server will use a storage path (specified either 
 To start the DAOS server, run:
 
 ```
-    orterun -np <num_servers> --hostfile ${hostfile} --enable-recovery --report-uri ${urifile} daos_server -i
+    orterun -np <num_servers> --hostfile ${hostfile} --enable-recovery --report-uri ${urifile} daos_server start -i
 ```
 
-By default, the DAOS server will use all the cores available on the storage server. You can limit the number of execution streams in the configuration file (cpus) or with the -c #cores\_to\_use cli option.
+By default, the DAOS server will use all the cores available on the storage server. You can limit the number of execution streams in the configuration file (cpus) or with the -t #targets\_to\_use cli option.
 Hostfile used here is the same as the ones used by Open MPI. See (https://www.open-mpi.org/faq/?category=running#mpirun-hostfile) for additional details.
 
 ### Starting DAOS agent

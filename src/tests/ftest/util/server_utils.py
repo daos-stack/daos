@@ -393,9 +393,11 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
         server_cmd.extend(env_args)
 
         # Run server in insecure mode until Certificate tests are in place
-        server_cmd.extend([daos_srv_bin, "-i",
-                           "-a", os.path.join(basepath, "install", "tmp"),
-                           "-o", '{}/{}'.format(basepath, AVOCADO_FILE)])
+        server_cmd.extend([daos_srv_bin,
+                           "--debug",
+                           "--config", '{}/{}'.format(basepath, AVOCADO_FILE),
+                           "start", "-i",
+                           "-a", os.path.join(basepath, "install", "tmp")])
 
         print("Start CMD>>>>{0}".format(' '.join(server_cmd)))
 
@@ -412,7 +414,7 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
         timeout = 600
         start_time = time.time()
         result = 0
-        pattern = "DAOS I/O server"
+        pattern = "DAOS I/O server.*started"
         expected_data = "Starting Servers\n"
         while True:
             output = ""

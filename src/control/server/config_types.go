@@ -34,15 +34,13 @@ import (
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
 
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 )
 
 const (
 	maxRank rank = math.MaxUint32 - 1
 	nilRank rank = math.MaxUint32
-
-	cLogDebug ControlLogLevel = "DEBUG"
-	cLogError ControlLogLevel = "ERROR"
 
 	scmDCPM ScmClass = "dcpm"
 	scmRAM  ScmClass = "ram"
@@ -89,24 +87,37 @@ func checkRank(r rank) error {
 }
 
 // ControlLogLevel is a type that specifies log levels
-type ControlLogLevel string
+type ControlLogLevel logging.LogLevel
+
+// TODO(mjmac): Evaluate whether or not this layer of indirection
+// adds any value.
+const (
+	ControlLogLevelDebug = ControlLogLevel(logging.LogLevelDebug)
+	ControlLogLevelInfo  = ControlLogLevel(logging.LogLevelInfo)
+	ControlLogLevelError = ControlLogLevel(logging.LogLevelError)
+)
 
 // UnmarshalYAML implements yaml.Unmarshaler on ControlLogMask struct
 func (c *ControlLogLevel) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	var level string
-	if err := unmarshal(&level); err != nil {
+	var strLevel string
+	if err := unmarshal(&strLevel); err != nil {
 		return err
 	}
-	logLevel := ControlLogLevel(level)
-	switch logLevel {
-	case cLogDebug, cLogError:
-		*c = logLevel
-	default:
-		return errors.Errorf(
-			"control_log_mask value %v not supported in config (DEBUG/ERROR)",
-			logLevel)
+
+	var level logging.LogLevel
+	if err := level.SetString(strLevel); err != nil {
+		return err
 	}
+	*c = ControlLogLevel(level)
 	return nil
+}
+
+func (c ControlLogLevel) MarshalYAML() (interface{}, error) {
+	return c.String(), nil
+}
+
+func (c ControlLogLevel) String() string {
+	return logging.LogLevel(c).String()
 }
 
 // ScmClass enum specifing device type for Storage Class Memory
@@ -154,9 +165,9 @@ func (b *BdevClass) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 // TODO: implement UnMarshal for LogMask discriminated union
 
-// server defines configuration options for DAOS IO Server instances.
+// IOServerConfig defines configuration options for DAOS IO Server instances.
 // See utils/config/daos_server.yml for parameter descriptions.
-type server struct {
+type IOServerConfig struct {
 	Rank            *rank     `yaml:"rank"`
 	Targets         int       `yaml:"targets"`
 	NrXsHelpers     int       `yaml:"nr_xs_helpers"`
@@ -182,11 +193,11 @@ type server struct {
 }
 
 // newDefaultServer creates a new instance of server struct with default values.
-func newDefaultServer() server {
+func newDefaultServer() *IOServerConfig {
 	// TODO: fix by only ever creating server in one place
 	host, _ := os.Hostname()
 
-	return server{
+	return &IOServerConfig{
 		ScmClass:    scmDCPM,
 		BdevClass:   bdNVMe,
 		Hostname:    host,
@@ -198,8 +209,8 @@ func newDefaultServer() server {
 // to be applied to each nested server.
 //
 // Type alias used to prevent recursive calls to UnmarshalYAML.
-func (s *server) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	type serverAlias server
+func (s *IOServerConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type serverAlias IOServerConfig
 	srv := &serverAlias{
 		ScmClass:    scmDCPM,
 		BdevClass:   bdNVMe,
@@ -210,15 +221,15 @@ func (s *server) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		return err
 	}
 
-	*s = server(*srv)
+	*s = IOServerConfig(*srv)
 	return nil
 }
 
-// configuration describes options for DAOS control plane.
+// Configuration describes options for DAOS control plane.
 // See utils/config/daos_server.yml for parameter descriptions.
-type configuration struct {
+type Configuration struct {
 	SystemName      string                    `yaml:"name"`
-	Servers         []server                  `yaml:"servers"`
+	Servers         []*IOServerConfig         `yaml:"servers"`
 	Provider        string                    `yaml:"provider"`
 	SocketDir       string                    `yaml:"socket_dir"`
 	AccessPoints    []string                  `yaml:"access_points"`
@@ -234,6 +245,7 @@ type configuration struct {
 	NrHugepages     int                       `yaml:"nr_hugepages"`
 	ControlLogMask  ControlLogLevel           `yaml:"control_log_mask"`
 	ControlLogFile  string                    `yaml:"control_log_file"`
+	ControlLogJSON  bool                      `yaml:"control_log_json,omitempty"`
 	UserName        string                    `yaml:"user_name"`
 	GroupName       string                    `yaml:"group_name"`
 	// development (subject to change) config fields
@@ -249,16 +261,148 @@ type configuration struct {
 	NvmeShmID int
 }
 
+// WithSystemName sets the system name
+func (c *Configuration) WithSystemName(name string) *Configuration {
+	c.SystemName = name
+	return c
+}
+
+// WithServers sets the list of IOServer configurations
+func (c *Configuration) WithServers(srvList ...*IOServerConfig) *Configuration {
+	c.Servers = srvList
+	return c
+}
+
+// WithProvider sets the default fabric provider string
+func (c *Configuration) WithProvider(provider string) *Configuration {
+	c.Provider = provider
+	return c
+}
+
+// WithSocketDir sets the default socket directory
+func (c *Configuration) WithSocketDir(sockDir string) *Configuration {
+	c.SocketDir = sockDir
+	return c
+}
+
+// WithAccessPoints sets the access point list
+func (c *Configuration) WithAccessPoints(aps ...string) *Configuration {
+	c.AccessPoints = aps
+	return c
+}
+
+// WithPort sets the RPC listener port
+func (c *Configuration) WithPort(port int) *Configuration {
+	c.Port = port
+	return c
+}
+
+// WithTransportConfig sets the gRPC transport configuration
+func (c *Configuration) WithTransportConfig(cfg *security.TransportConfig) *Configuration {
+	c.TransportConfig = cfg
+	return c
+}
+
+// WithFaultPath sets the fault path
+func (c *Configuration) WithFaultPath(fp string) *Configuration {
+	c.FaultPath = fp
+	return c
+}
+
+// WithFaultCb sets the fault callback
+func (c *Configuration) WithFaultCb(cb string) *Configuration {
+	c.FaultCb = cb
+	return c
+}
+
+// WithFabricIfaces sets the list of fabric interfaces
+func (c *Configuration) WithFabricIfaces(ifaceList ...string) *Configuration {
+	c.FabricIfaces = ifaceList
+	return c
+}
+
+// WithScmMountPath sets the default SCM mount path
+func (c *Configuration) WithScmMountPath(mp string) *Configuration {
+	c.ScmMountPath = mp
+	return c
+}
+
+// WithBdevExclude sets the block device exclude list
+func (c *Configuration) WithBdevExclude(bList ...string) *Configuration {
+	c.BdevExclude = bList
+	return c
+}
+
+// WithBdevInclude sets the block device include list
+func (c *Configuration) WithBdevInclude(bList ...string) *Configuration {
+	c.BdevInclude = bList
+	return c
+}
+
+// WithHyperthreads enables or disables hyperthread support
+func (c *Configuration) WithHyperthreads(enabled bool) *Configuration {
+	c.Hyperthreads = enabled
+	return c
+}
+
+// WithNrHugePages sets the number of huge pages to be used
+func (c *Configuration) WithNrHugePages(nr int) *Configuration {
+	c.NrHugepages = nr
+	return c
+}
+
+// WithControlLogMask sets the log level
+func (c *Configuration) WithControlLogMask(lvl ControlLogLevel) *Configuration {
+	c.ControlLogMask = lvl
+	return c
+}
+
+// WithControlLogFile sets the path to the logfile
+func (c *Configuration) WithControlLogFile(filePath string) *Configuration {
+	c.ControlLogFile = filePath
+	return c
+}
+
+// WithControlLogJSON enables or disables JSON output
+func (c *Configuration) WithControlLogJSON(enabled bool) *Configuration {
+	c.ControlLogJSON = enabled
+	return c
+}
+
+// WithUserName sets the user to run as
+func (c *Configuration) WithUserName(name string) *Configuration {
+	c.UserName = name
+	return c
+}
+
+// WithGroupName sets the group to run as
+func (c *Configuration) WithGroupName(name string) *Configuration {
+	c.GroupName = name
+	return c
+}
+
+// WithModules sets a list of server modules to load
+func (c *Configuration) WithModules(mList string) *Configuration {
+	c.Modules = mList
+	return c
+}
+
+// WithAttach sets attachment info path
+func (c *Configuration) WithAttach(aip string) *Configuration {
+	c.Attach = aip
+	return c
+}
+
 // todo: implement UnMarshal for Provider discriminated union
 
 // parse decodes YAML representation of configuration
-func (c *configuration) parse(data []byte) error {
+func (c *Configuration) parse(data []byte) error {
 	return yaml.Unmarshal(data, c)
 }
 
 // checkMount verifies that the provided path or parent directory is listed as
 // a distinct mountpoint in output of os mount command.
-func (c *configuration) checkMount(path string) error {
+func (c *Configuration) checkMount(path string) error {
 	path = strings.TrimSpace(path)
 	f := func(p string) error {
 		return c.ext.runCommand(fmt.Sprintf("mount | grep ' %s '", p))
@@ -271,8 +415,8 @@ func (c *configuration) checkMount(path string) error {
 
 // newDefaultConfiguration creates a new instance of configuration struct
 // populated with defaults.
-func newDefaultConfiguration(ext External) configuration {
-	return configuration{
+func newDefaultConfiguration(ext External) *Configuration {
+	return &Configuration{
 		SystemName:      "daos_server",
 		SocketDir:       "/var/run/daos_server",
 		AccessPoints:    []string{"localhost"},
@@ -283,13 +427,13 @@ func newDefaultConfiguration(ext External) configuration {
 		NrHugepages:     1024,
 		Path:            "etc/daos_server.yml",
 		NvmeShmID:       0,
-		ControlLogMask:  cLogDebug,
+		ControlLogMask:  ControlLogLevel(logging.LogLevelInfo),
 		ext:             ext,
 	}
 }
 
-// newConfiguration creates a new instance of configuration struct
+// NewConfiguration creates a new instance of configuration struct
 // populated with defaults and default external interface.
-func newConfiguration() configuration {
+func NewConfiguration() *Configuration {
 	return newDefaultConfiguration(&ext{})
 }
