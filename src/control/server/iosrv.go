@@ -47,6 +47,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/logging"
 	log "github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 )
@@ -257,7 +258,7 @@ func writeIosrvSuper(path string, super *iosrvSuper) error {
 //
 // NOTE: The superblock supercedes the format-time configuration in config.
 type iosrv struct {
-	log     serverLogger
+	log     logging.Logger
 	super   *iosrvSuper
 	config  *Configuration
 	index   int
@@ -267,7 +268,7 @@ type iosrv struct {
 	conn    *drpc.ClientConnection
 }
 
-func newIosrv(logger serverLogger, config *Configuration, i int) (*iosrv, error) {
+func newIosrv(logger logging.Logger, config *Configuration, i int) (*iosrv, error) {
 	super, err := readIosrvSuper(iosrvSuperPath(config.Servers[i].ScmMount))
 	if err != nil {
 		return nil, err
