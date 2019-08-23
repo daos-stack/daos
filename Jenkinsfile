@@ -84,7 +84,7 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
 if (!env.CHANGE_ID &&
     (env.BRANCH_NAME != "weekly-testing" &&
      env.BRANCH_NAME != "master")) {
-   currentBuild.result = 'FAILED'
+   currentBuild.result = 'FAILURE'
    return
 }
 
