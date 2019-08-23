@@ -34,6 +34,7 @@
 
 #include <daos_srv/vos.h>
 #include <daos_srv/pool.h>
+#include <daos_srv/rebuild.h>
 #include <daos_srv/daos_mgmt_srv.h>
 
 #include "srv_internal.h"
@@ -681,6 +682,7 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 	td_out = crt_reply_get(td_req);
 	D_ASSERT(td_in != NULL && td_out != NULL);
 
+	ds_rebuild_leader_stop(td_in->td_pool_uuid, -1);
 	/** generate path to the target directory */
 	rc = ds_mgmt_tgt_file(td_in->td_pool_uuid, NULL, NULL, &path);
 	if (rc)

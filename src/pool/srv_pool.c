@@ -735,7 +735,6 @@ ds_pool_svc_destroy(const uuid_t pool_uuid)
 	crt_group_t    *group;
 	int		rc;
 
-	ds_rebuild_leader_stop(pool_uuid, -1);
 	rc = ds_pool_get_ranks(pool_uuid, MAP_RANKS_DOWN, &excluded);
 	if (rc)
 		return rc;
