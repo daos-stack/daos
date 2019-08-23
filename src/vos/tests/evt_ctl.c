@@ -71,9 +71,6 @@ static int			 ts_feats = EVT_FEAT_DEFAULT;
 #define ORDER_DEF		16
 #define	ORDER_TEST_SIZE		200
 
-#define EVT_MIN_ORDER	4
-#define EVT_MAX_ORDER	128
-
 static int			ts_order = ORDER_DEF;
 
 static struct evt_root		*ts_root;
