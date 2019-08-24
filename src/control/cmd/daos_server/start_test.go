@@ -38,6 +38,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server"
+	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
 
 func testExpectedError(t *testing.T, expected, actual error) {
@@ -59,13 +60,14 @@ func showBufOnFailure(t *testing.T, logBuf bytes.Buffer) {
 func genMinimalConfig() *server.Configuration {
 	cfg := server.NewConfiguration().
 		WithProvider("foo").
+		WithNvmeShmID(-1). // don't generate a ShmID in testing
 		WithServers(
-			&server.IOServerConfig{
-				FabricIface: "foo0",
-			},
+			ioserver.NewConfig().
+				WithScmClass("ram").
+				WithScmMountPoint("/mnt/daos").
+				WithFabricInterface("foo0"),
 		)
 	cfg.Path = path.Join(os.Args[0], cfg.Path)
-	cfg.NvmeShmID = -1 // Don't generate this
 	return cfg
 }
 
@@ -73,32 +75,45 @@ func genDefaultExpected() *server.Configuration {
 	hostname, _ := os.Hostname()
 	return genMinimalConfig().
 		WithServers(
-			&server.IOServerConfig{
-				ScmMount:    "/mnt/daos",
-				Hostname:    hostname,
-				FabricIface: "foo0",
-				CliOpts: []string{
-					"-t", "0",
-					"-g", "daos_server",
-					"-s", "/mnt/daos",
-					"-x", "0",
-					"-d", "/var/run/daos_server",
-				},
-				EnvVars: []string{
-					"CRT_PHY_ADDR_STR=foo",
-					"OFI_INTERFACE=foo0",
-					"D_LOG_MASK=",
-					"D_LOG_FILE=",
-				},
-			},
+			ioserver.NewConfig().
+				WithHostname(hostname).
+				WithScmClass("ram").
+				WithScmMountPoint("/mnt/daos").
+				WithFabricInterface("foo0"),
 		)
 }
 
-func updateOptValue(opts []string, key, value string) {
-	for i, opt := range opts {
-		if opt == key {
-			opts[i+1] = value
-		}
+func cmpArgs(t *testing.T, wantConfig, gotConfig *ioserver.Config) {
+	t.Helper()
+
+	wantArgs, err := wantConfig.CmdLineArgs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotArgs, err := gotConfig.CmdLineArgs()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if diff := cmp.Diff(wantArgs, gotArgs); diff != "" {
+		t.Fatalf("(-want, +got)\n%s", diff)
+	}
+}
+
+func cmpEnv(t *testing.T, wantConfig, gotConfig *ioserver.Config) {
+	t.Helper()
+
+	wantEnv, err := wantConfig.CmdLineEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotEnv, err := gotConfig.CmdLineEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if diff := cmp.Diff(wantEnv, gotEnv); diff != "" {
+		t.Fatalf("(-want, +got)\n%s", diff)
 	}
 }
 
@@ -118,166 +133,124 @@ func TestStartOptions(t *testing.T) {
 		"Port (short)": {
 			argList: []string{"-p", "42"},
 			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				return cfg.WithPort(42)
+				return cfg.WithControlPort(42)
 			},
 		},
 		"Port (long)": {
 			argList: []string{"--port=42"},
 			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				return cfg.WithPort(42)
+				return cfg.WithControlPort(42)
 			},
 		},
 		"Storage Path (short)": {
 			argList: []string{"-s", "/foo/bar"},
 			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				cfg.WithScmMountPath("/foo/bar")
-				cfg.Servers[0].ScmMount = "/foo/bar"
-				updateOptValue(cfg.Servers[0].CliOpts, "-s", "/foo/bar")
+				cfg.Servers[0].WithScmMountPoint("/foo/bar")
 				return cfg
 			},
 		},
 		"Storage Path (long)": {
 			argList: []string{"--storage=/foo/bar"},
 			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				cfg.WithScmMountPath("/foo/bar")
-				cfg.Servers[0].ScmMount = "/foo/bar"
-				updateOptValue(cfg.Servers[0].CliOpts, "-s", "/foo/bar")
+				cfg.Servers[0].WithScmMountPoint("/foo/bar")
 				return cfg
 			},
 		},
 		"Modules (short)": {
 			argList: []string{"-m", "foo,bar"},
 			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				cfg.WithModules("foo,bar")
-				cfg.Servers[0].CliOpts = append(cfg.Servers[0].CliOpts,
-					[]string{"-m", "foo,bar"}...)
-				return cfg
+				return cfg.WithModules("foo,bar")
 			},
 		},
 		"Modules (long)": {
 			argList: []string{"--modules=foo,bar"},
 			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				cfg.WithModules("foo,bar")
-				cfg.Servers[0].CliOpts = append(cfg.Servers[0].CliOpts,
-					[]string{"-m", "foo,bar"}...)
-				return cfg
+				return cfg.WithModules("foo,bar")
 			},
 		},
 		"Targets (short)": {
 			argList: []string{"-t", "42"},
 			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				cfg.Servers[0].Targets = 42
-				updateOptValue(cfg.Servers[0].CliOpts, "-t", "42")
+				cfg.Servers[0].WithTargetStreamCount(42)
 				return cfg
 			},
 		},
 		"Targets (long)": {
 			argList: []string{"--targets=42"},
 			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				cfg.Servers[0].Targets = 42
-				updateOptValue(cfg.Servers[0].CliOpts, "-t", "42")
+				cfg.Servers[0].WithTargetStreamCount(42)
 				return cfg
 			},
 		},
 		"XS Helpers (bad)": {
 			argList: []string{"-x", "42"},
 			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				cfg.Servers[0].NrXsHelpers = 2
-				// Kind of weird... If the value is crazy, then
-				// the desired behavior seems to be to not supply
-				// this flag (i.e. use ioserver default).
-				opts := cfg.Servers[0].CliOpts
-				for i, opt := range opts {
-					if opt == "-x" {
-						cfg.Servers[0].CliOpts = append(opts[:i], opts[i+2:]...)
-						break
-					}
-				}
+				cfg.Servers[0].WithHelperStreamCount(2)
 				return cfg
 			},
 		},
 		"XS Helpers (short)": {
 			argList: []string{"-x", "0"},
 			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				cfg.Servers[0].NrXsHelpers = 0
-				updateOptValue(cfg.Servers[0].CliOpts, "-x", "0")
+				cfg.Servers[0].WithHelperStreamCount(0)
 				return cfg
 			},
 		},
 		"XS Helpers (long)": {
 			argList: []string{"--xshelpernr=1"},
 			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				cfg.Servers[0].NrXsHelpers = 1
-				updateOptValue(cfg.Servers[0].CliOpts, "-x", "1")
+				cfg.Servers[0].WithHelperStreamCount(1)
 				return cfg
 			},
 		},
 		"First Core (short)": {
 			argList: []string{"-f", "42"},
 			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				cfg.Servers[0].FirstCore = 42
-				cfg.Servers[0].CliOpts = append(cfg.Servers[0].CliOpts,
-					[]string{"-f", "42"}...)
+				cfg.Servers[0].WithServiceThreadIndex(42)
 				return cfg
 			},
 		},
 		"First Core (long)": {
 			argList: []string{"--firstcore=42"},
 			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				cfg.Servers[0].FirstCore = 42
-				cfg.Servers[0].CliOpts = append(cfg.Servers[0].CliOpts,
-					[]string{"-f", "42"}...)
+				cfg.Servers[0].WithServiceThreadIndex(42)
 				return cfg
 			},
 		},
 		"Server Group (short)": {
 			argList: []string{"-g", "foo"},
 			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				cfg.WithSystemName("foo")
-				updateOptValue(cfg.Servers[0].CliOpts, "-g", "foo")
-				return cfg
+				return cfg.WithSystemName("foo")
 			},
 		},
 		"Server Group (long)": {
 			argList: []string{"--group=foo"},
 			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				cfg.WithSystemName("foo")
-				updateOptValue(cfg.Servers[0].CliOpts, "-g", "foo")
-				return cfg
+				return cfg.WithSystemName("foo")
 			},
 		},
 		"Attach Info (short)": {
 			argList: []string{"-a", "/foo/bar"},
 			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				cfg.WithAttach("/foo/bar")
-				cfg.Servers[0].CliOpts = append(cfg.Servers[0].CliOpts,
-					[]string{"-a", "/foo/bar"}...)
-				return cfg
+				return cfg.WithAttachInfo("/foo/bar")
 			},
 		},
 		"Attach Info (long)": {
 			argList: []string{"--attach_info=/foo/bar"},
 			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				cfg.WithAttach("/foo/bar")
-				cfg.Servers[0].CliOpts = append(cfg.Servers[0].CliOpts,
-					[]string{"-a", "/foo/bar"}...)
-				return cfg
+				return cfg.WithAttachInfo("/foo/bar")
 			},
 		},
 		"SocketDir (short)": {
 			argList: []string{"-d", "/foo/bar"},
 			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				cfg.WithSocketDir("/foo/bar")
-				updateOptValue(cfg.Servers[0].CliOpts, "-d", "/foo/bar")
-				return cfg
+				return cfg.WithSocketDir("/foo/bar")
 			},
 		},
 		"SocketDir (long)": {
 			argList: []string{"--socket_dir=/foo/bar"},
 			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
-				cfg.WithSocketDir("/foo/bar")
-				updateOptValue(cfg.Servers[0].CliOpts, "-d", "/foo/bar")
-				return cfg
+				return cfg.WithSocketDir("/foo/bar")
 			},
 		},
 		"Insecure (short)": {
@@ -319,7 +292,6 @@ func TestStartOptions(t *testing.T) {
 			cmpOpts := []cmp.Option{
 				cmpopts.IgnoreUnexported(
 					server.Configuration{},
-					server.IOServerConfig{},
 					security.CertificateConfig{},
 				),
 				cmpopts.SortSlices(func(a, b string) bool { return a < b }),
@@ -327,6 +299,9 @@ func TestStartOptions(t *testing.T) {
 			if diff := cmp.Diff(wantConfig, gotConfig, cmpOpts...); diff != "" {
 				t.Fatalf("(-want +got):\n%s", diff)
 			}
+
+			cmpArgs(t, wantConfig.Servers[0], gotConfig.Servers[0])
+			cmpEnv(t, wantConfig.Servers[0], gotConfig.Servers[0])
 		})
 	}
 }
@@ -369,7 +344,6 @@ func TestStartAsDefaultCommand(t *testing.T) {
 	cmpOpts := []cmp.Option{
 		cmpopts.IgnoreUnexported(
 			server.Configuration{},
-			server.IOServerConfig{},
 			security.CertificateConfig{},
 		),
 		cmpopts.SortSlices(func(a, b string) bool { return a < b }),
@@ -377,6 +351,9 @@ func TestStartAsDefaultCommand(t *testing.T) {
 	if diff := cmp.Diff(wantConfig, gotConfig, cmpOpts...); diff != "" {
 		t.Fatalf("(-want +got):\n%s", diff)
 	}
+
+	cmpArgs(t, wantConfig.Servers[0], gotConfig.Servers[0])
+	cmpEnv(t, wantConfig.Servers[0], gotConfig.Servers[0])
 }
 
 func TestStartLoggingOptions(t *testing.T) {

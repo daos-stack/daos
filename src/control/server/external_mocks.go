@@ -32,7 +32,7 @@ import (
 type mockExt struct {
 	// return error if cmd in shell fails
 	cmdRet error
-	// return true if file already exists
+	// return true if file already Exists
 	existsRet       bool
 	mountRet        error
 	isMountPointRet bool
@@ -55,80 +55,80 @@ func (m *mockExt) getHistory() []string {
 
 var files []string // record file content written in mocks
 
-func (m *mockExt) runCommand(cmd string) error {
+func (m *mockExt) RunCommand(cmd string) error {
 	m.history = append(m.history, fmt.Sprintf(msgCmd, cmd))
 
 	return m.cmdRet
 }
 
-func (m *mockExt) writeToFile(in string, outPath string) error {
+func (m *mockExt) WriteToFile(in string, outPath string) error {
 	files = append(files, fmt.Sprint(outPath, ":", in))
 
 	return nil
 }
 
-func (m *mockExt) createEmpty(path string, size int64) error {
+func (m *mockExt) CreateEmpty(path string, size int64) error {
 	if !m.existsRet {
 		files = append(files, fmt.Sprint(path, ":empty size ", size))
 	}
 	return nil
 }
 
-func (m *mockExt) mount(
-	dev string, mount string, typ string, flags uintptr, opts string) error {
+func (m *mockExt) Mount(
+	dev string, Mount string, typ string, flags uintptr, opts string) error {
 
-	op := fmt.Sprintf(msgMount, dev, mount, typ, fmt.Sprint(flags), opts)
+	op := fmt.Sprintf(msgMount, dev, Mount, typ, fmt.Sprint(flags), opts)
 
 	m.history = append(m.history, op)
 
 	return m.mountRet
 }
 
-func (m *mockExt) isMountPoint(path string) (bool, error) {
+func (m *mockExt) IsMountPoint(path string) (bool, error) {
 	m.history = append(m.history, fmt.Sprintf(msgIsMountPoint, path))
 
 	return m.isMountPointRet, nil
 }
 
-func (m *mockExt) unmount(path string) error {
+func (m *mockExt) Unmount(path string) error {
 	m.history = append(m.history, fmt.Sprintf(msgUnmount, path))
 
 	return m.unmountRet
 }
 
-func (m *mockExt) mkdir(path string) error {
+func (m *mockExt) Mkdir(path string) error {
 	m.history = append(m.history, fmt.Sprintf(msgMkdir, path))
 
 	return m.mkdirRet
 }
 
-func (m *mockExt) remove(path string) error {
+func (m *mockExt) Remove(path string) error {
 	m.history = append(m.history, fmt.Sprintf(msgRemove, path))
 
 	return m.removeRet
 }
 
-func (m *mockExt) exists(string) (bool, error) {
+func (m *mockExt) Exists(string) (bool, error) {
 	return m.existsRet, nil
 }
 
-func (m *mockExt) getAbsInstallPath(path string) (string, error) {
+func (m *mockExt) GetAbsInstallPath(path string) (string, error) {
 	return path, nil
 }
 
-func (m *mockExt) lookupUser(name string) (*user.User, error) {
+func (m *mockExt) LookupUser(name string) (*user.User, error) {
 	return m.lUsrRet, m.lUsrErr
 }
 
-func (m *mockExt) lookupGroup(name string) (*user.Group, error) {
+func (m *mockExt) LookupGroup(name string) (*user.Group, error) {
 	return m.lGrpRet, m.lGrpErr
 }
 
-func (m *mockExt) listGroups(usr *user.User) ([]string, error) {
+func (m *mockExt) ListGroups(usr *user.User) ([]string, error) {
 	return m.listGrpsRet, m.listGrpsErr
 }
 
-func (m *mockExt) chownR(root string, uid int, gid int) error {
+func (m *mockExt) ChownR(root string, uid int, gid int) error {
 	m.history = append(m.history, fmt.Sprintf(msgChownR, root, uid, gid))
 
 	return m.chownRErr

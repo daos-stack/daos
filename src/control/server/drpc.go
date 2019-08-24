@@ -34,6 +34,26 @@ import (
 	"github.com/daos-stack/daos/src/control/security"
 )
 
+// #cgo CFLAGS: -I${SRCDIR}/../../../include
+// #include <daos/drpc_modules.h>
+import "C"
+
+const (
+	drpcClientID  = C.DRPC_MODULE_MGMT
+	killRank      = C.DRPC_METHOD_MGMT_KILL_RANK
+	setRank       = C.DRPC_METHOD_MGMT_SET_RANK
+	createMS      = C.DRPC_METHOD_MGMT_CREATE_MS
+	startMS       = C.DRPC_METHOD_MGMT_START_MS
+	join          = C.DRPC_METHOD_MGMT_JOIN
+	getAttachInfo = C.DRPC_METHOD_MGMT_GET_ATTACH_INFO
+	createPool    = C.DRPC_METHOD_MGMT_CREATE_POOL
+	destroyPool   = C.DRPC_METHOD_MGMT_DESTROY_POOL
+	setUp         = C.DRPC_METHOD_MGMT_SET_UP
+
+	drpcServerID = C.DRPC_MODULE_SRV
+	notifyReady  = C.DRPC_METHOD_SRV_NOTIFY_READY
+)
+
 const sockFileName = "daos_server.sock"
 
 func getDrpcClientSocket(sockDir string) string {
@@ -47,36 +67,31 @@ func getDrpcClientConnection(sockDir string) *drpc.ClientConnection {
 
 // drpcSetup creates socket directory, specifies socket path and then
 // starts drpc server.
-func drpcSetup(sockDir string, iosrv *iosrv, tc *security.TransportConfig) error {
+func drpcSetup(sockDir string, iosrv *IOServerInstance, tc *security.TransportConfig) error {
 	// Create our socket directory if it doesn't exist
 	_, err := os.Stat(sockDir)
 	if err != nil && os.IsPermission(err) {
-		return errors.Wrap(
-			err, "user does not have permission to access "+sockDir)
+		return errors.Wrap(err, "user does not have permission to access "+sockDir)
 	} else if err != nil && os.IsNotExist(err) {
 		err = os.MkdirAll(sockDir, 0755)
 		if err != nil {
-			return errors.Wrap(
-				err,
-				"unable to create socket directory "+sockDir)
+			return errors.Wrap(err, "unable to create socket directory "+sockDir)
 		}
 	}
 
 	sockPath := filepath.Join(sockDir, sockFileName)
-	drpcServer, err := drpc.NewDomainSocketServer(sockPath)
+	server, err := drpc.NewDomainSocketServer(sockPath)
 	if err != nil {
 		return errors.Wrap(err, "unable to create socket server")
 	}
 
 	// Create and add our modules
-	drpcServer.RegisterRPCModule(NewSecurityModule(tc))
-	drpcServer.RegisterRPCModule(&mgmtModule{})
-	drpcServer.RegisterRPCModule(&srvModule{iosrv})
+	server.RegisterRPCModule(NewSecurityModule(tc))
+	server.RegisterRPCModule(&drpcClient{})
+	server.RegisterRPCModule(&drpcServer{iosrv})
 
-	err = drpcServer.Start()
-	if err != nil {
-		return errors.Wrap(
-			err, "unable to start socket server on "+sockPath)
+	if err := server.Start(); err != nil {
+		return errors.Wrap(err, "unable to start socket server on "+sockPath)
 	}
 
 	return nil
@@ -89,8 +104,7 @@ func checkDrpcResponse(drpcResp *drpc.Response) error {
 	}
 
 	if drpcResp.Status != drpc.Status_SUCCESS {
-		return errors.Errorf("bad dRPC response status: %v",
-			drpcResp.Status.String())
+		return errors.Errorf("bad dRPC response status: %s", drpcResp.Status)
 	}
 
 	return nil

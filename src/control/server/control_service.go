@@ -24,16 +24,77 @@
 package server
 
 import (
+	"context"
+	"encoding/json"
+	"io/ioutil"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
-	"golang.org/x/net/context"
 
+	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/logging"
 	log "github.com/daos-stack/daos/src/control/logging"
 )
 
-// ControlService mgmt methods forward gRPC request from management tool to
-// iosrv via dRPC channel. Usually on host identified as first access point.
+var jsonDBRelPath = "share/daos/control/mgmtinit_db.json"
+
+// ControlService implements the control plane control service, satisfying
+// pb.MgmtCtlServer, and is the data container for the service.
+type ControlService struct {
+	StorageControlService
+	log               logging.Logger
+	harness           *IOServerHarness
+	drpc              drpc.DomainSocketClient
+	supportedFeatures FeatureMap
+}
+
+// loadInitData retrieves initial data from relative file path.
+func loadInitData(relPath string) (m FeatureMap, err error) {
+	absPath, err := common.GetAbsInstallPath(relPath)
+	if err != nil {
+		return
+	}
+
+	m = make(FeatureMap)
+
+	file, err := ioutil.ReadFile(absPath)
+	if err != nil {
+		return
+	}
+
+	var features []*pb.Feature
+	if err = json.Unmarshal(file, &features); err != nil {
+		return
+	}
+
+	for _, f := range features {
+		m[f.Fname.Name] = f
+	}
+
+	return
+}
+
+func NewControlService(log logging.Logger, harness *IOServerHarness, cfg *Configuration) (*ControlService, error) {
+	scs, err := NewStorageControlService(log, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	fMap, err := loadInitData(jsonDBRelPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ControlService{
+		StorageControlService: *scs,
+		log:                   log,
+		harness:               harness,
+		drpc:                  scs.drpc,
+		supportedFeatures:     fMap,
+	}, nil
+}
 
 // callDrpcMethodWithMessage create a new drpc Call instance, open a
 // drpc connection, send a message with the protobuf message marshalled
@@ -41,7 +102,7 @@ import (
 func (c *ControlService) callDrpcMethodWithMessage(
 	methodID int32, body proto.Message) (resp *pb.DaosResp, err error) {
 
-	drpcResp, err := makeDrpcCall(c.drpc, mgmtModuleID, methodID, body)
+	drpcResp, err := makeDrpcCall(c.drpc, drpcClientID, methodID, body)
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
@@ -57,9 +118,7 @@ func (c *ControlService) callDrpcMethodWithMessage(
 }
 
 // KillRank implements the method defined for the MgmtControl protobuf service.
-func (c *ControlService) KillRank(
-	ctx context.Context, rank *pb.DaosRank) (*pb.DaosResp, error) {
-
+func (c *ControlService) KillRank(ctx context.Context, rank *pb.DaosRank) (*pb.DaosResp, error) {
 	log.Debugf("ControlService.KillRank dispatch\n")
 
 	return c.callDrpcMethodWithMessage(killRank, rank)

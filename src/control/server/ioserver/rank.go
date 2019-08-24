@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,35 +21,61 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package server
+package ioserver
 
 import (
-	"github.com/pkg/errors"
-	"golang.org/x/net/context"
+	"math"
+	"strconv"
 
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/pkg/errors"
 )
 
-// FeatureMap is a type alias
-type FeatureMap map[string]*pb.Feature
+// Rank is used to uniquely identify a server within a cluster
+type Rank uint32
 
-// GetFeature returns the feature from feature name.
-func (s *ControlService) GetFeature(
-	ctx context.Context, name *pb.FeatureName) (*pb.Feature, error) {
-	f, exists := s.supportedFeatures[name.Name]
-	if !exists {
-		return nil, errors.Errorf("no feature with name %s", name.Name)
-	}
-	return f, nil
+const (
+	// MaxRank is the largest valid Rank value
+	MaxRank Rank = math.MaxUint32 - 1
+	// NilRank is a an unset Rank (0 is a valid Rank)
+	NilRank Rank = math.MaxUint32
+)
+
+func NewRankPtr(in uint32) *Rank {
+	r := Rank(in)
+	return &r
 }
 
-// ListFeatures lists all features supported by the management server.
-func (s *ControlService) ListFeatures(
-	empty *pb.EmptyReq, stream pb.MgmtCtl_ListFeaturesServer) error {
-	for _, feature := range s.supportedFeatures {
-		if err := stream.Send(feature); err != nil {
-			return err
-		}
+func (r Rank) String() string {
+	return strconv.FormatUint(uint64(r), 10)
+}
+
+func (r *Rank) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var i uint32
+	if err := unmarshal(&i); err != nil {
+		return err
+	}
+	if err := checkRank(Rank(i)); err != nil {
+		return err
+	}
+	*r = Rank(i)
+	return nil
+}
+
+func (r *Rank) UnmarshalFlag(value string) error {
+	i, err := strconv.ParseUint(value, 0, 32)
+	if err != nil {
+		return err
+	}
+	if err = checkRank(Rank(i)); err != nil {
+		return err
+	}
+	*r = Rank(i)
+	return nil
+}
+
+func checkRank(r Rank) error {
+	if r == NilRank {
+		return errors.Errorf("rank %d out of range [0, %d]", r, MaxRank)
 	}
 	return nil
 }

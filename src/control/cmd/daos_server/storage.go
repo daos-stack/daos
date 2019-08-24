@@ -44,7 +44,7 @@ type storageScanCmd struct {
 }
 
 func (cmd *storageScanCmd) Execute(args []string) error {
-	srv, err := server.NewControlService(cmd.config)
+	srv, err := server.NewStorageControlService(cmd.log, cmd.config)
 	if err != nil {
 		return errors.WithMessage(err, "failed to init ControlService")
 	}
@@ -77,6 +77,7 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 }
 
 type storagePrepNvmeCmd struct {
+	logCmd
 	cfgCmd
 	PCIWhiteList string `short:"w" long:"pci-whitelist" description:"Whitespace separated list of PCI devices (by address) to be unbound from Kernel driver and used with SPDK (default is all PCI devices)."`
 	NrHugepages  int    `short:"p" long:"hugepages" description:"Number of hugepages to allocate (in MB) for use by SPDK (default 1024)"`
@@ -96,7 +97,7 @@ func (cmd *storagePrepNvmeCmd) Execute(args []string) error {
 		tUsr = cmd.TargetUser
 	}
 
-	srv, err := server.NewControlService(cmd.config)
+	srv, err := server.NewStorageControlService(cmd.log, cmd.config)
 	if err != nil {
 		return errors.WithMessage(err, "initialising ControlService")
 	}
@@ -130,7 +131,7 @@ func (cmd *storagePrepScmCmd) Execute(args []string) (err error) {
 		return errors.New("consent not given")
 	}
 
-	srv, err := server.NewControlService(cmd.config)
+	srv, err := server.NewStorageControlService(cmd.log, cmd.config)
 	if err != nil {
 		return errors.WithMessage(err, "initialising ControlService")
 	}

@@ -44,12 +44,12 @@ func getGroup(
 	}
 
 	// lookup group specified in config file
-	if group, err = ext.lookupGroup(tgtGroup); err != nil {
+	if group, err = ext.LookupGroup(tgtGroup); err != nil {
 		return
 	}
 
 	// check user group membership
-	if ids, err = ext.listGroups(usr); err != nil {
+	if ids, err = ext.ListGroups(usr); err != nil {
 		return
 	}
 	for _, gid := range ids {
@@ -87,7 +87,7 @@ func chownAll(config *Configuration, usr *user.User, grp *user.Group) error {
 	}
 
 	for _, srv := range config.Servers {
-		paths = append(paths, srv.ScmMount, srv.LogFile)
+		paths = append(paths, srv.Storage.SCM.MountPoint, srv.LogFile)
 	}
 
 	for _, path := range paths {
@@ -95,7 +95,7 @@ func chownAll(config *Configuration, usr *user.User, grp *user.Group) error {
 			continue
 		}
 
-		err := config.ext.chownR(path, int(uid), int(gid)) // 32 bit ints from ParseInt
+		err := config.ext.ChownR(path, int(uid), int(gid)) // 32 bit ints from ParseInt
 		if err != nil && !os.IsNotExist(err) {
 			return errors.Wrapf(err, "recursive chown %s", path)
 		}
@@ -112,7 +112,7 @@ func changeFileOwnership(config *Configuration) error {
 		return errors.New("no username supplied in config")
 	}
 
-	usr, err := config.ext.lookupUser(config.UserName)
+	usr, err := config.ext.LookupUser(config.UserName)
 	if err != nil {
 		return errors.Wrap(err, "user lookup")
 	}

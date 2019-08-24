@@ -24,64 +24,56 @@
 package server
 
 import (
-	"fmt"
+	"bytes"
 	"io/ioutil"
 	"os"
 	"path"
-	"path/filepath"
+	"strconv"
 	"testing"
+
+	. "github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
 
-func TestFindBinaryInPath(t *testing.T) {
-	testDir, err := ioutil.TempDir("", t.Name())
-	if err != nil {
-		t.Fatal(err)
-	}
+// Quick test to demonstrate writing/reading superblock in a temp dir
+// in order to avoid mocking OS calls
+func TestSuperblock(t *testing.T) {
+	testDir, err := ioutil.TempDir("", "TestSuperblock-*")
 	defer os.RemoveAll(testDir)
-
-	testName := t.Name()
-	testFile, err := os.OpenFile(path.Join(testDir, testName), os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
 		t.Fatal(err)
 	}
-	testFile.Close()
-
-	oldPathEnv := os.Getenv("PATH")
-	defer os.Setenv("PATH", oldPathEnv)
-	if err := os.Setenv("PATH", fmt.Sprintf("%s:%s", oldPathEnv, testDir)); err != nil {
+	storagePath := "/mnt/daos-test"
+	if err := os.MkdirAll(path.Join(testDir, storagePath), 0755); err != nil {
 		t.Fatal(err)
 	}
 
-	t.Run("expected success", func(t *testing.T) {
-		binPath, err := findBinary(testName)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if binPath != testFile.Name() {
-			t.Fatalf("expected %q; got %q", testFile.Name(), binPath)
-		}
-	})
-	t.Run("expected failure", func(t *testing.T) {
-		_, err := findBinary("noWayThisExistsQuackMoo")
-		if err == nil {
-			t.Fatal("expected lookup to fail")
-		}
-	})
-}
+	var logBuf bytes.Buffer
+	log := logging.NewCombinedLogger(t.Name(), &logBuf)
 
-func TestFindBinaryAdjacent(t *testing.T) {
-	testDir := filepath.Dir(os.Args[0])
-	testFile, err := os.OpenFile(path.Join(testDir, t.Name()), os.O_RDWR|os.O_CREATE, 0755)
-	if err != nil {
+	var rank uint32 = 42
+	systemName := "testSystem"
+	ti := &IOServerInstance{
+		ext: &mockExt{},
+		log: log,
+		runner: &ioserver.Runner{
+			Config: ioserver.NewConfig().
+				WithScmClass("ram").
+				WithScmMountPoint(storagePath).
+				WithSystemName(systemName).
+				WithRank(ioserver.NewRankPtr(rank)),
+		},
+		fsRoot: testDir,
+	}
+	if err := ti.CreateSuperblock(&mgmtInfo{}); err != nil {
 		t.Fatal(err)
 	}
-	testFile.Close()
 
-	binPath, err := findBinary(t.Name())
-	if err != nil {
+	if err := ti.ReadSuperblock(); err != nil {
 		t.Fatal(err)
 	}
-	if binPath != testFile.Name() {
-		t.Fatalf("expected %q; got %q", testFile.Name(), binPath)
-	}
+
+	AssertEqual(t, ti.superblock.Rank.String(), strconv.FormatUint(uint64(rank), 10), "superblock rank")
+	AssertEqual(t, ti.superblock.System, systemName, "superblock system")
 }

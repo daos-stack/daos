@@ -24,17 +24,21 @@
 package server
 
 import (
+	"fmt"
+
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	log "github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // addState creates, populates and returns ResponseState in addition
 // to logging any err.
 func addState(
+	log logging.Logger,
 	status pb.ResponseStatus, errMsg string, infoMsg string, logDepth int,
 	contextMsg string) *pb.ResponseState {
 
@@ -49,49 +53,73 @@ func addState(
 	return state
 }
 
-// ScanStorage discovers non-volatile storage hardware on node.
-func (c *ControlService) ScanStorage(
-	ctx context.Context, req *pb.ScanStorageReq) (
-	*pb.ScanStorageResp, error) {
+type StorageControlService struct {
+	log  logging.Logger
+	nvme *nvmeStorage
+	scm  *scmStorage
+	drpc drpc.DomainSocketClient
+}
 
+func NewStorageControlService(log logging.Logger, cfg *Configuration) (*StorageControlService, error) {
+	scriptPath, err := cfg.ext.GetAbsInstallPath(spdkSetupPath)
+	if err != nil {
+		return nil, err
+	}
+
+	spdkScript := &spdkSetup{
+		log:         log,
+		scriptPath:  scriptPath,
+		nrHugePages: cfg.NrHugepages,
+	}
+
+	return &StorageControlService{
+		log:  log,
+		nvme: newNvmeStorage(log, cfg.NvmeShmID, spdkScript, cfg.ext),
+		scm:  newScmStorage(log, cfg.ext),
+		drpc: getDrpcClientConnection(cfg.SocketDir),
+	}, nil
+}
+
+// ScanStorage discovers non-volatile storage hardware on node.
+func (scs *StorageControlService) ScanStorage(ctx context.Context, req *pb.ScanStorageReq) (*pb.ScanStorageResp, error) {
 	resp := new(pb.ScanStorageResp)
 
-	c.nvme.Discover(resp)
-	c.scm.Discover(resp)
+	scs.nvme.Discover(resp)
+	scs.scm.Discover(resp)
 
 	return resp, nil
 }
 
 // doFormat performs format on storage subsystems, populates response results
 // in storage subsystem routines and broadcasts (closes channel) if successful.
-func (c *ControlService) doFormat(i int, resp *pb.FormatStorageResp) error {
-	srv := c.config.Servers[i]
-	serverFormatted := false
+func (c *ControlService) doFormat(i *IOServerInstance, resp *pb.FormatStorageResp) error {
+	hasSuperblock := false
 
-	if ok, err := c.config.ext.exists(
-		iosrvSuperPath(srv.ScmMount)); err != nil {
+	needsSuperblock, err := i.NeedsSuperblock()
+	if err != nil {
+		return err
+	}
 
-		return errors.Wrap(err, "locating superblock")
-	} else if ok {
+	if !needsSuperblock {
 		// server already formatted, populate response appropriately
 		c.nvme.formatted = true
 		c.scm.formatted = true
-		serverFormatted = true
+		hasSuperblock = true
 	}
 
+	// scaffolding
 	ctrlrResults := common.NvmeControllerResults{}
-	c.nvme.Format(i, &ctrlrResults)
+	c.nvme.Format(i.runner.Config.Storage.Bdev, &ctrlrResults)
 	resp.Crets = ctrlrResults
 
 	mountResults := common.ScmMountResults{}
-	c.scm.Format(i, &mountResults)
+	c.scm.Format(i.runner.Config.Storage.SCM, &mountResults)
 	resp.Mrets = mountResults
 
-	if !serverFormatted && c.nvme.formatted && c.scm.formatted {
-		// storage subsystem format successful, broadcast formatted
-		close(srv.formatted)
-		log.Debugf("storage format successful on server %d\n", i)
+	if !hasSuperblock && c.nvme.formatted && c.scm.formatted {
+		c.log.Debugf("storage format successful on server %d\n", i.runner.Config.Index)
 	}
+	i.NotifyStorageReady()
 
 	return nil
 }
@@ -102,7 +130,7 @@ func (c *ControlService) doFormat(i int, resp *pb.FormatStorageResp) error {
 // Errors returned will stop other servers from formatting, non-fatal errors
 // specific to particular device should be reported within resp results instead.
 //
-// Send response containing multiple results of format operations on scm mounts
+// Send response containing multiple results of format operations on scm Mounts
 // and nvme controllers.
 func (c *ControlService) FormatStorage(
 	req *pb.FormatStorageReq,
@@ -110,7 +138,8 @@ func (c *ControlService) FormatStorage(
 
 	resp := new(pb.FormatStorageResp)
 
-	for i := range c.config.Servers {
+	// temporary scaffolding
+	for _, i := range c.harness.instances {
 		if err := c.doFormat(i, resp); err != nil {
 			return errors.WithMessage(err, "formatting storage")
 		}
@@ -127,13 +156,11 @@ func (c *ControlService) FormatStorage(
 // Update delegates to Storage implementation's fw update methods to prepare
 // storage for use by DAOS data plane.
 //
-// Send response containing multiple results of update operations on scm mounts
+// Send response containing multiple results of update operations on scm Mounts
 // and nvme controllers.
-func (c *ControlService) UpdateStorage(
-	req *pb.UpdateStorageReq,
-	stream pb.MgmtCtl_UpdateStorageServer) error {
-
-	resp := new(pb.UpdateStorageResp)
+func (c *ControlService) UpdateStorage(req *pb.UpdateStorageReq, stream pb.MgmtCtl_UpdateStorageServer) error {
+	return errors.New("UpdateStorage not implemented")
+	/*resp := new(pb.UpdateStorageResp)
 
 	for i := range c.config.Servers {
 		ctrlrResults := common.NvmeControllerResults{}
@@ -149,19 +176,16 @@ func (c *ControlService) UpdateStorage(
 		return errors.WithMessagef(err, "sending response (%+v)", resp)
 	}
 
-	return nil
+	return nil*/
 }
 
 // TODO: implement gRPC burn-in feature in nvme and scm subsystems
 // Burnin delegates to Storage implementation's Burnin methods to prepare
 // storage for use by DAOS data plane.
 //
-// Send response containing multiple results of burn-in operations on scm mounts
+// Send response containing multiple results of burn-in operations on scm Mounts
 // and nvme controllers.
-func (c *ControlService) BurninStorage(
-	req *pb.BurninStorageReq,
-	stream pb.MgmtCtl_BurninStorageServer) error {
-
+func (c *ControlService) BurninStorage(req *pb.BurninStorageReq, stream pb.MgmtCtl_BurninStorageServer) error {
 	return errors.New("BurninStorage not implemented")
 	//	for i := range c.config.Servers {
 	//		c.nvme.BurnIn(i, req.Nvme, resp)
@@ -176,9 +200,7 @@ func (c *ControlService) BurninStorage(
 }
 
 // FetchFioConfigPaths retrieves any configuration files in fio_plugin directory
-func (c *ControlService) FetchFioConfigPaths(
-	empty *pb.EmptyReq, stream pb.MgmtCtl_FetchFioConfigPathsServer) error {
-
+func (c *ControlService) FetchFioConfigPaths(empty *pb.EmptyReq, stream pb.MgmtCtl_FetchFioConfigPathsServer) error {
 	pluginDir, err := common.GetAbsInstallPath(spdkFioPluginDir)
 	if err != nil {
 		return err
@@ -244,3 +266,117 @@ func (c *ControlService) FetchFioConfigPaths(
 //	}
 //	return nil
 //}
+
+// Setup delegates to Storage implementation's Setup methods.
+func (c *StorageControlService) Setup() {
+	if err := c.nvme.Setup(); err != nil {
+		c.log.Debugf(
+			"%s\n", errors.Wrap(err, "Warning, NVMe Setup"))
+	}
+
+	if err := c.scm.Setup(); err != nil {
+		c.log.Debugf(
+			"%s\n", errors.Wrap(err, "Warning, SCM Setup"))
+	}
+}
+
+// Teardown delegates to Storage implementation's Teardown methods.
+func (c *StorageControlService) Teardown() {
+	if err := c.nvme.Teardown(); err != nil {
+		c.log.Debugf(
+			"%s\n", errors.Wrap(err, "Warning, NVMe Teardown"))
+	}
+
+	if err := c.scm.Teardown(); err != nil {
+		c.log.Debugf(
+			"%s\n", errors.Wrap(err, "Warning, SCM Teardown"))
+	}
+}
+
+func (c *StorageControlService) ScanNVMe() (common.NvmeControllers, error) {
+	resp := new(pb.ScanStorageResp)
+
+	c.nvme.Discover(resp)
+	if resp.Nvmestate.Status != pb.ResponseStatus_CTRL_SUCCESS {
+		return nil, fmt.Errorf("nvme scan: %s", resp.Nvmestate.Error)
+	}
+	return c.nvme.controllers, nil
+}
+
+func (c *StorageControlService) ScanSCM() (common.ScmModules, error) {
+	resp := new(pb.ScanStorageResp)
+
+	c.scm.Discover(resp)
+	if resp.Scmstate.Status != pb.ResponseStatus_CTRL_SUCCESS {
+		return nil, fmt.Errorf("scm scan: %s", resp.Scmstate.Error)
+	}
+	return c.scm.modules, nil
+}
+
+type PrepNvmeRequest struct {
+	HugePageCount int
+	TargetUser    string
+	PCIWhitelist  string
+	ResetOnly     bool
+}
+
+func (c *StorageControlService) PrepNvme(req PrepNvmeRequest) error {
+	// run reset first to ensure reallocation of hugepages
+	if err := c.nvme.spdk.reset(); err != nil {
+		return errors.WithMessage(err, "SPDK setup reset")
+	}
+
+	// if we're only resetting, just return before prep
+	if req.ResetOnly {
+		return nil
+	}
+
+	return errors.WithMessage(
+		c.nvme.spdk.prep(req.HugePageCount, req.TargetUser, req.PCIWhitelist),
+		"SPDK setup",
+	)
+}
+
+type PrepScmRequest struct {
+	Reset bool
+}
+
+func (c *StorageControlService) PrepScm(req PrepScmRequest) (rebootStr string, pmemDevs []pmemDev, err error) {
+	if err = c.scm.Setup(); err != nil {
+		err = errors.WithMessage(err, "SCM setup")
+		return
+	}
+
+	if !c.scm.initialized {
+		err = errors.New(msgScmNotInited)
+		return
+	}
+
+	if len(c.scm.modules) == 0 {
+		err = errors.New(msgScmNoModules)
+		return
+	}
+
+	var needsReboot bool
+	if req.Reset {
+		// run reset to Remove namespaces and clear regions
+		needsReboot, err = c.scm.PrepReset()
+		if err != nil {
+			err = errors.WithMessage(err, "SCM prep reset")
+			return
+		}
+	} else {
+		// transition to the next state in SCM preparation
+		needsReboot, pmemDevs, err = c.scm.Prep()
+		if err != nil {
+			err = errors.WithMessage(err, "SCM prep reset")
+			return
+		}
+	}
+
+	if needsReboot {
+		rebootStr = msgScmRebootRequired
+	}
+
+	return
+}
