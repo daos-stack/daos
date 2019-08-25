@@ -150,7 +150,7 @@ class ObjectWithParameters(object):
 class CommandWithParameters(ObjectWithParameters):
     """A class for command with paramaters."""
 
-    def __init__(self, command, path=None):
+    def __init__(self, command, path=""):
         """Create a CommandWithParameters object.
 
         Uses Avocado's utils.process module to run a command str provided.
