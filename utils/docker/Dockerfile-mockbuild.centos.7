@@ -6,7 +6,7 @@
 
 # Pull base image
 FROM centos:7
-MAINTAINER Brian J. Murrell <brian.murrell@intel.com>
+MAINTAINER <daos@daos.groups.io>
 
 # use same UID as host and default value of 1000 if not specified
 ARG UID=1000
@@ -66,4 +66,3 @@ gpgkey=https://copr-be.cloud.fedoraproject.org/results/jhli/safeclib/pubkey.gpg\
 repo_gpgcheck=0\n\
 enabled=1\n\
 enabled_metadata=1\n\"\"\"" >> /etc/mock/default.cfg
-
