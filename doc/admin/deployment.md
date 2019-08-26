@@ -126,8 +126,8 @@ Moreover, DAOS requires DCPM to be configured in interleaved mode. A
 storage subcommand (prep-scm) can be used as a "one-shot"
 invocation of *daos\_server* and must be run as root. SCM modules will
 be configured into interleaved regions with memory mode set to
-"app-direct" with one set per socket (each module is assigned to socket
-and reports this via its NUMA rating).
+"AppDirect" mode with one set per socket (each module is assigned to socket
+and reports this via its NUMA rating). 
 
 `sudo daos_server [<app_opts>] storage prep-scm [<cmd_opts>]`
 will automatically configure memory allocation goals for SCM and print
@@ -966,8 +966,8 @@ scm_list: [/dev/pmem1]
 7. Format Storage (from any node)
     - `daos_shell -i -l <host:port>,... storage format -f`
     [management tool details](/src/control/cmd/dmg/README.md#-storage-format)
-    - [SCM specific details](/src/control/server/README.md#-scm-format)
-    - [NVMe specific details](/src/control/server/README.md#-nvme-format)
+    - [SCM specific details](/src/control/server/README.md#scm-format)
+    - [NVMe specific details](/src/control/server/README.md#nvme-format)
 
 <div style="margin-left: 4em;">
 <details>
