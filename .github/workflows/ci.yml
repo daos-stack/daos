@@ -44,6 +44,8 @@ jobs:
         distro: [centos.7, ubuntu.18.04]
     steps:
     - uses: actions/checkout@v1
+      with:
+        submodules: true
     - name: Build in Docker Image
       env:
         DOCKER_IMAGE: ${{ github.repository }}:${{ github.sha }}
