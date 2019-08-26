@@ -44,6 +44,11 @@ jobs:
         distro: [centos.7, ubuntu.18.04]
     steps:
     - uses: actions/checkout@v1
-    - uses: ./.github/actions/build
+    - name: Build in Docker Image
+      env:
+        DOCKER_IMAGE: ${{ github.repository }}:${{ github.sha }}
+      run: |
+        docker build . --file utils/docker/Dockerfile.centos.7 --tag ${DOCKER_IMAGE} &&
+        docker run ${DOCKER_IMAGE}
       with:
         distro: ${{ matrix.distro }}
