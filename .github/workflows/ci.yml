@@ -31,17 +31,17 @@ jobs:
       id: make_release
   build:
     name: Build
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     strategy:
       matrix:
+        #Dockerfile.centos.7
+        #Dockerfile.leap.15
+        #Dockerfile.leap.42.3
+        #Dockerfile-mockbuild.centos.7
+        #Dockerfile-rpmbuild.sles.12.3
+        #Dockerfile.sles.12.3
+        #Dockerfile.ubuntu.18.04
         distro: [centos.7, ubuntu.18.04]
-#Dockerfile.centos.7
-#Dockerfile.leap.15
-#Dockerfile.leap.42.3
-#Dockerfile-mockbuild.centos.7
-#Dockerfile-rpmbuild.sles.12.3
-#Dockerfile.sles.12.3
-#Dockerfile.ubuntu.18.04
     steps:
     - uses: actions/checkout@v1
     - uses: ./.github/actions/build
