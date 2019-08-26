@@ -28,6 +28,8 @@ import uuid
 
 from avocado.utils.process import run, CmdError
 from command_utils import FormattedParameter, CommandWithParameters
+from daos_api import DaosPool
+from test_utils import TestPool
 
 
 
@@ -163,9 +165,13 @@ class IorCommand(CommandWithParameters):
             pool (DaosPool): DAOS pool API object
             display (bool, optional): print updated params. Defaults to True.
         """
-        #self.daos_pool.value = pool.uuid
+        if isinstance(pool, DaosPool):
+            pass
+        elif isinstance(pool, TestPool):
+            pool = pool.pool
+
         self.daos_pool.update(
-            pool.pool.get_uuid_str(), "daos_pool" if display else None)
+            pool.get_uuid_str(), "daos_pool" if display else None)
         self.set_daos_svcl_param(pool, display)
 
     def set_daos_svcl_param(self, pool, display=True):
@@ -175,10 +181,15 @@ class IorCommand(CommandWithParameters):
             pool (DaosPool): DAOS pool API object
             display (bool, optional): print updated params. Defaults to True.
         """
+        if isinstance(pool, DaosPool):
+            pass
+        elif isinstance(pool, TestPool):
+            pool = pool.pool
+
         svcl = ":".join(
             [str(item) for item in [
-                int(pool.pool.svc.rl_ranks[index])
-                for index in range(pool.pool.svc.rl_nr)]])
+                int(pool.svc.rl_ranks[index])
+                for index in range(pool.svc.rl_nr)]])
         self.daos_svcl.update(svcl, "daos_svcl" if display else None)
 
     def get_aggregate_total(self, processes):
