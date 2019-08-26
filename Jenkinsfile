@@ -107,7 +107,9 @@ pipeline {
                     "--build-arg CACHEBUST=${currentBuild.startTimeInMillis}"
         QUICKBUILD = sh(script: "git show -s --format=%B | grep \"^Quick-build: true\"",
                         returnStatus: true)
-        SSH_KEY_ARGS="-ici_key"
+        SSH_KEY_FILE='ci_key'
+        SSH_KEY_ARGS="-i$SSH_KEY_FILE"
+        PDSH_SSH_ARGS_APPEND="$SSH_KEY_ARGS"
         CLUSH_ARGS="-o$SSH_KEY_ARGS"
     }
 
@@ -1062,6 +1064,7 @@ pipeline {
                                            . ./.build_vars.sh
                                            DAOS_BASE=${SL_PREFIX%/install*}
                                            NODE=${NODELIST%%,*}
+                                           if [ ! -e $SSH_KEY_FILE ]; then exit 0; fi
                                            ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
                                                set -e
                                                sudo bash -c 'echo \"1\" > /proc/sys/kernel/sysrq'
@@ -1110,6 +1113,7 @@ pipeline {
                                       . ./.build_vars.sh
                                       DAOS_BASE=${SL_PREFIX%/install*}
                                       NODE=${NODELIST%%,*}
+                                      if [ ! -e $SSH_KEY_FILE ]; then exit 0; fi
                                       ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
                                           cd $DAOS_BASE
                                           rm -rf run_test.sh/
