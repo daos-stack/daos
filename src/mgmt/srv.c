@@ -422,7 +422,6 @@ create_ownership_props(daos_prop_t **out_prop, char *owner, char *owner_grp)
 	if (owner != NULL && *owner != '\0') {
 		D_ASPRINTF(out_owner, "%s", owner);
 		if (out_owner == NULL) {
-			D_ERROR("Failed to allocate string for owner\n");
 			rc = -DER_NOMEM;
 			goto err_out;
 		}
@@ -433,7 +432,6 @@ create_ownership_props(daos_prop_t **out_prop, char *owner, char *owner_grp)
 	if (owner_grp != NULL && *owner_grp != '\0') {
 		D_ASPRINTF(out_owner_grp, "%s", owner_grp);
 		if (out_owner_grp == NULL) {
-			D_ERROR("Failed to allocate string for owner_grp\n");
 			rc = -DER_NOMEM;
 			goto err_out;
 		}
@@ -449,7 +447,6 @@ create_ownership_props(daos_prop_t **out_prop, char *owner, char *owner_grp)
 
 	new_prop = daos_prop_alloc(entries);
 	if (new_prop == NULL) {
-		D_ERROR("Failed to allocate prop\n");
 		rc = -DER_NOMEM;
 		goto err_out;
 	}
