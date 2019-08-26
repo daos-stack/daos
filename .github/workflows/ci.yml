@@ -29,3 +29,19 @@ jobs:
     # This step uses the hello-world-action stored in this workflow's repository.
     - uses: ./.github/actions/make_release
       id: make_release
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        distro: [centos.7, ubuntu.18.04]
+#Dockerfile.centos.7
+#Dockerfile.leap.15
+#Dockerfile.leap.42.3
+#Dockerfile-mockbuild.centos.7
+#Dockerfile-rpmbuild.sles.12.3
+#Dockerfile.sles.12.3
+#Dockerfile.ubuntu.18.04
+    steps:
+    - uses: ./.github/actions/build
+      with:
+        distro: ${{ matrix.distro }}
