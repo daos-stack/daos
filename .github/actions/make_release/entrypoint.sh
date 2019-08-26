@@ -18,7 +18,7 @@ fi
 
 json="{
   \"tag_name\": \"v$release\",
-  \"target_commitish\": \"master\",
+  \"target_commitish\": \"$GITHUB_SHA\",
   \"name\": \"Release $release\",
   \"body\": \"DAOS release $release\",
   \"draft\": false,
