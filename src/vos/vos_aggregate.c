@@ -239,6 +239,14 @@ vos_agg_obj(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	if (agg_param->ap_discard) {
+		if (agg_param->ap_sub_tree_empty) {
+			rc = vos_obj_evict_by_oid(vos_obj_cache_current(),
+						vos_hdl2cont(agg_param->ap_coh),
+						entry->ie_oid);
+			if (rc != 0)
+				return rc;
+		}
+
 		rc = agg_discard_parent(ih, entry, agg_param, acts);
 		agg_param->ap_sub_tree_empty = 0;
 		return rc;
