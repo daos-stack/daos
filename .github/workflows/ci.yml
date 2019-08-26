@@ -50,5 +50,3 @@ jobs:
       run: |
         docker build . --file utils/docker/Dockerfile.centos.7 --tag ${DOCKER_IMAGE} &&
         docker run ${DOCKER_IMAGE}
-      with:
-        distro: ${{ matrix.distro }}
