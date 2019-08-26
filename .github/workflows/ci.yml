@@ -1,4 +1,4 @@
-name: Greet Everybody
+name: Workflow
 # This workflow is triggered on pushes to the repository.
 on: [push]
 
@@ -29,31 +29,33 @@ jobs:
     # This step uses the hello-world-action stored in this workflow's repository.
     - uses: ./.github/actions/make_release
       id: make_release
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        #Dockerfile.centos.7
-        #Dockerfile.leap.15
-        #Dockerfile.leap.42.3
-        #Dockerfile-mockbuild.centos.7
-        #Dockerfile-rpmbuild.sles.12.3
-        #Dockerfile.sles.12.3
-        #Dockerfile.ubuntu.18.04
-        distro: [centos.7, ubuntu.18.04]
-    steps:
-    - uses: actions/checkout@v1
-      with:
-        submodules: true
-    - name: Build in Docker Image
       env:
-        DOCKER_IMAGE: ${{ github.repository }}:${{ github.sha }}
-      run: |
-        ls -l; 
-        ls -l scons_local/;
-        ls -l scons_local/site_tools/;
-        ls -l scons_local/site_tools/extra/;
-        docker build . --file utils/docker/Dockerfile.${{ matrix.distro }} --tag ${DOCKER_IMAGE} --build-arg NOBUILD=1 --build-arg UID=$UID &&
-        docker run -v $PWD:/home/daos/daos:z $DOCKER_IMAGE /bin/bash -c "scons --build-deps=yes install" ||
-        (echo -e "\e[31m[${GITHUB_WORKFLOW}] failed to build\e[m" && exit 1)
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#  build:
+#    name: Build
+#    runs-on: ubuntu-latest
+#    strategy:
+#      matrix:
+#        #Dockerfile.centos.7
+#        #Dockerfile.leap.15
+#        #Dockerfile.leap.42.3
+#        #Dockerfile-mockbuild.centos.7
+#        #Dockerfile-rpmbuild.sles.12.3
+#        #Dockerfile.sles.12.3
+#        #Dockerfile.ubuntu.18.04
+#        distro: [centos.7, ubuntu.18.04]
+#    steps:
+#    - uses: actions/checkout@v1
+#      with:
+#        submodules: true
+#    - name: Build in Docker Image
+#      env:
+#        DOCKER_IMAGE: ${{ github.repository }}:${{ github.sha }}
+#      run: |
+#        ls -l; 
+#        ls -l scons_local/;
+#        ls -l scons_local/site_tools/;
+#        ls -l scons_local/site_tools/extra/;
+#        docker build . --file utils/docker/Dockerfile.${{ matrix.distro }} --tag ${DOCKER_IMAGE} --build-arg NOBUILD=1 --build-arg UID=$UID &&
+#        docker run -v $PWD:/home/daos/daos:z $DOCKER_IMAGE /bin/bash -c "scons --build-deps=yes install" ||
+#        (echo -e "\e[31m[${GITHUB_WORKFLOW}] failed to build\e[m" && exit 1)
