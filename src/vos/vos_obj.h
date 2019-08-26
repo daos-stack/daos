@@ -74,18 +74,11 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 void
 vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj);
 
-/**
- * Varify if the object reference is still valid, and refresh it if it's
- * invalide (evicted)
- */
-int vos_obj_revalidate(struct daos_lru_cache *occ, daos_epoch_t epoch,
-		       struct vos_object **obj_p);
-
 /** Evict an object reference from the cache */
 void vos_obj_evict(struct vos_object *obj);
 
-/** Check if an object reference has been evicted from the cache */
-bool vos_obj_evicted(struct vos_object *obj);
+int vos_obj_evict_by_oid(struct daos_lru_cache *occ, struct vos_container *cont,
+			 daos_unit_oid_t oid);
 
 /**
  * Create an object cache.
