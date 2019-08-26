@@ -30,6 +30,7 @@ jobs:
     - uses: ./.github/actions/make_release
       id: make_release
   build:
+    name: Build
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -42,6 +43,7 @@ jobs:
 #Dockerfile.sles.12.3
 #Dockerfile.ubuntu.18.04
     steps:
+    - uses: actions/checkout@v1
     - uses: ./.github/actions/build
       with:
         distro: ${{ matrix.distro }}

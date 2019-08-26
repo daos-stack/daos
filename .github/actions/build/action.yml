@@ -1,0 +1,12 @@
+name: 'Container Action Template'
+description: 'Get started with Container actions'
+author: 'GitHub'
+inputs:
+  myInput:
+    description: 'Input to use'
+    default: 'world'
+runs:
+  using: 'docker'
+  image: 'utils/docker/Dockerfile.centos7'
+  args:
+    - ${{ inputs.myInput }}
