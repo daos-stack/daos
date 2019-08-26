@@ -25,7 +25,8 @@ json="{
   \"prerelease\": false
 }"
 
-echo "Creating release $release"
+echo "Creating release $release with:"
+echo "$json"
 
 curl --request POST \
   --url https://api.github.com/repos/${GITHUB_REPOSITORY}/releases \

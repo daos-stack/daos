@@ -1,9 +1,10 @@
 name: Workflow
 # This workflow is triggered on pushes to the repository.
-on:
-  push:
-    branches:
-    - master
+#on:
+#  push:
+#    branches:
+#    - master
+on: [push]
 
 jobs:
   my_first_job:
