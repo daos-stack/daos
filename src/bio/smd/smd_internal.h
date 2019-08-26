@@ -30,6 +30,7 @@
 #ifndef __SMD_INTERNAL_H__
 #define __SMD_INTERNAL_H__
 
+#include <abt.h>
 #include <daos_types.h>
 #include <daos/btree.h>
 #include <daos/mem.h>
@@ -54,7 +55,7 @@ struct smd_df {
 /* SMD store (DRAM structure) */
 struct smd_store {
 	struct umem_instance	ss_umm;
-	pthread_rwlock_t	ss_rwlock;
+	ABT_mutex		ss_mutex;
 	daos_handle_t		ss_dev_hdl;
 	daos_handle_t		ss_pool_hdl;
 	daos_handle_t		ss_tgt_hdl;
@@ -82,6 +83,18 @@ smd_tx_end(struct smd_store *store, int rc)
 		return umem_tx_abort(&store->ss_umm, rc);
 
 	return umem_tx_commit(&store->ss_umm);
+}
+
+static inline void
+smd_lock(struct smd_store *store)
+{
+	ABT_mutex_lock(store->ss_mutex);
+}
+
+static inline void
+smd_unlock(struct smd_store *store)
+{
+	ABT_mutex_unlock(store->ss_mutex);
 }
 
 extern struct smd_store		smd_store;
