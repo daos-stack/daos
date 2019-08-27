@@ -6,7 +6,7 @@ def scons():
     Import('denv')
 
     libraries = ['smd', 'pmemobj', 'cmocka', 'daos_common',
-                 'uuid', 'pthread', 'gurt']
+                 'uuid', 'abt', 'gurt']
 
     denv.AppendUnique(LIBPATH=['..'])
     smd_ut = daos_build.test(denv, 'smd_ut', 'smd_ut.c', LIBS=libraries)
