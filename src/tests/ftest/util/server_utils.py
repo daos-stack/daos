@@ -1,26 +1,22 @@
 #!/usr/bin/python
-"""
+'''
   (C) Copyright 2018-2019 Intel Corporation.
-
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
   You may obtain a copy of the License at
-
      http://www.apache.org/licenses/LICENSE-2.0
-
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
   See the License for the specific language governing permissions and
   limitations under the License.
-
   GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
   The Government's rights to use, modify, reproduce, release, perform, display,
   or disclose this software are subject to the terms of the Apache License as
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-"""
+'''
 from __future__ import print_function
 
 import traceback
@@ -35,13 +31,9 @@ import signal
 import fcntl
 import errno
 import yaml
-import getpass
 
-from general_utils import pcmd, check_file_exists
-from command_utils import CommandWithParameters
-from command_utils import BasicParameter, FormattedParameter
-from avocado.utils import genio, process
-from write_host_file import write_host_file
+from avocado.utils import genio
+from general_utils import pcmd
 
 SESSIONS = {}
 
@@ -53,203 +45,9 @@ class ServerFailed(Exception):
     """Server didn't start/stop properly."""
 
 
-class ServerCommand(CommandWithParameters):
-    """Defines a object representing a server command."""
-
-    def __init__(self, hosts, path):
-        """Create a server Command object"""
-        super(ServerCommand, self).__init__("daos_server", path)
-
-        self.hosts = hosts
-        self.process = None
-        self.hostfile = None
-
-        self.request = BasicParameter("{}")
-        self.action = BasicParameter("{}")
-        self.targets = FormattedParameter("-t {}")
-        self.config = FormattedParameter("-o {}")
-        self.port = FormattedParameter("-p {}")
-        self.storage = FormattedParameter("-s {}")
-        self.modules = FormattedParameter("-m {}")
-        self.xshelpernr = FormattedParameter("-x {}")
-        self.firstcore = FormattedParameter("-f {}")
-        self.group = FormattedParameter("-g {}")
-        self.attach = FormattedParameter("-a {}")
-        self.sock_dir = FormattedParameter("-d {}")
-        self.insecure = FormattedParameter("-i", None)
-
-    def prepare(self, path, slots):
-        """Prepare the hosts before starting daos server.
-
-        Args:
-            path (str): location to write the hostfile
-            slots (int): slots per host to use in the hostfile
-
-        Raises:
-            ServerFailed: if there is any errors preparing the hosts
-
-        """
-        # Kill any doas servers running on the hosts
-        kill_server(self.hosts)
-
-        # Clean up any files that exist on the hosts
-        clean_server(self.hosts)
-
-        # Verify the domain socket directory is present and owned by this user
-        user = getpass.getuser()
-        file_checks = (
-            ("Server", self.hosts, "/var/run/daos_server"),
-        )
-        for host_type, host_list, directory in file_checks:
-            status, nodeset = check_file_exists(host_list, directory, user)
-            if not status:
-                raise ServerFailed(
-                    "{}: {} missing directory {} for user {}.".format(
-                        nodeset, host_type, directory, user))
-
-        # Create the hostfile
-        self.hostfile = write_host_file(self.hosts, path, slots)
-
-    def update_configuration(self, basepath):
-        """Update the config parameter with a yaml file.
-
-        Args:
-            basepath (str): DAOS install basepath
-        """
-        self.config.update(create_server_yaml(basepath), "server.config")
-
-    def get_param_names(self):
-        """Get a sorted list of daos_server command parameter names."""
-        names = self.get_attribute_names(FormattedParameter)
-        names.extend(["request", "action"])
-        return names
-
-    def get_params(self, test, path="/run/daos_server/*"):
-        """Get values for all of the server command params using a yaml file.
-
-        Sets each BasicParameter object's value to the yaml key that matches
-        the assigned name of the BasicParameter object in this class. For
-        example, the self.block_size.value will be set to the value in the yaml
-        file with the key 'block_size'.
-
-        Args:
-            test (Test): avocado Test object
-            path (str, optional): yaml namespace.
-                Defaults to "/run/daos_server/*".
-
-        """
-        super(ServerCommand, self).get_params(test, path)
-
-    def get_launch_command(self, manager, uri=None, env=None):
-        """Get the process launch command used to run daos_server.
-
-        Args:
-            manager (str): mpi job manager command
-            uri (str, optional): path to uri file. Defaults to None.
-            env (dict, optional): dictionary on env variable names and values.
-                Defaults to None.
-
-        Raises:
-            ServerFailed: if the specified job manager is unsupported.
-
-        Returns:
-            str: daos_sever launch command
-
-        """
-        if manager is None:
-            # Run locally
-            return self.__str__()
-
-        elif manager.endswith("orterun"):
-            args = []
-            if env:
-                assign_env = [
-                    "{}={}".format(key, val) for key, val in env.items()]
-                args = [
-                    "-np {}".format(len(self.hosts)),
-                    "-hostfile {}".format(self.hostfile),
-                    "--enable-recovery",
-                ]
-                args.extend(["-x {}".format(assign) for assign in assign_env])
-            if uri is not None:
-                args.append("--report-uri {}".format(uri))
-
-            return "{} {} {}".format(manager, " ".join(args), self.__str__())
-        else:
-            raise ServerFailed("Unsupported job manager: {}".format(manager))
-
-    def start(self, manager, verbose=True, env=None, sudo=None, timeout=600):
-        """Start the daos server on each specified host.
-
-        Args:
-            manager (str): mpi job manager command
-            verbose (bool, optional): [description]. Defaults to True.
-            env ([type], optional): [description]. Defaults to None.
-            timeout (int, optional): [description]. Defaults to 600.
-
-        Raises:
-            ServerFailed: if there are issues starting the servers
-
-        """
-        if self.process is None:
-            # Start the daos server as a subprocess
-            kwargs = {
-                "cmd": self.get_launch_command(manager),
-                "verbose": verbose,
-                "allow_output_check": "combined",
-                "shell": True,
-                "env": env,
-                "sudo": sudo,
-            }
-            self.process = process.SubProcess(**kwargs)
-            self.process.start()
-
-            # Wait for 'DAOS I/O server' messages to appear in the daos_server
-            # output indicating that the servers have started
-            start_time = time.time()
-            start_msgs = 0
-            timed_out = False
-            while start_msgs != len(self.hosts) and not timed_out:
-                output = self.process.get_stdout()
-                start_msgs = len(re.findall("DAOS I/O server", output))
-                timed_out = time.time() - start_time > timeout
-
-            if start_msgs != len(self.hosts):
-                err_msg = "{} detected. Only started {}/{} servers".format(
-                    "Time out" if timed_out else "Error",
-                    start_msgs, len(self.hosts))
-                print("{}:\n{}".format(err_msg, self.process.get_stdout()))
-                raise ServerFailed(err_msg)
-
-    def stop(self):
-        """Stop the process running the daos servers.
-
-        Raises:
-            ServerFailed: if there are errors stopping the servers
-
-        """
-        if self.process is not None:
-            signal_list = [
-                signal.SIGINT, None, None, None,
-                signal.SIGTERM, None, None,
-                signal.SIGQUIT, None,
-                signal.SIGKILL]
-            while self.process.poll() is None and signal_list:
-                sig = signal_list.pop(0)
-                if sig is not None:
-                    self.process.send_signal(sig)
-                if signal_list:
-                    time.sleep(1)
-            if not signal_list:
-                raise ServerFailed("Error stopping {}".format(self._command))
-            self.process = None
-
-
 def set_nvme_mode(default_value_set, bdev, enabled=False):
     """Enable/Disable NVMe Mode.
-
     NVMe is enabled by default in yaml file.So disable it for CI runs.
-
     Args:
         default_value_set (dict): dictionary of default values
         bdev (str): block device name
@@ -265,15 +63,10 @@ def set_nvme_mode(default_value_set, bdev, enabled=False):
 
 def create_server_yaml(basepath):
     """Create the DAOS server config YAML file based on Avocado test Yaml file.
-
     Args:
         basepath (str): DAOS install basepath
-
     Raises:
         ServerFailed: if there is an reading/writing yaml files
-
-    Returns:
-        (str): Absolute path of create server yaml file
     """
     # Read the baseline conf file data/daos_server_baseline.yml
     try:
@@ -328,13 +121,10 @@ def create_server_yaml(basepath):
         raise ServerFailed("Failed to Write {}/{}".format(basepath,
                                                           AVOCADO_FILE))
 
-    return os.path.join(basepath, AVOCADO_FILE)
-
 
 def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
                clean=True):
     """Launch DAOS servers in accordance with the supplied hostfile.
-
     Args:
         hostfile (str): hostfile defining on which hosts to start servers
         setname (str): session name
@@ -343,10 +133,8 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
         env_dict (dict, optional): dictionary on env variable names and values.
             Defaults to None.
         clean (bool, optional): remove files in /mnt/daos. Defaults to True.
-
     Raises:
         ServerFailed: if there is an error starting the servers
-
     """
     global SESSIONS    # pylint: disable=global-variable-not-assigned
     try:
@@ -468,26 +256,21 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
 
 def stop_server(setname=None, hosts=None):
     """Stop the daos servers.
-
     Attempt to initiate an orderly shutdown of all orterun processes it has
     spawned by sending a ctrl-c to the process matching the setname (or all
     processes if no setname is provided).
-
     If a list of hosts is provided, verify that all daos server processes are
     dead.  Report an error if any processes are found and attempt to forcably
     kill the processes.
-
     Args:
         setname (str, optional): server group name used to match the session
             used to start the server. Defaults to None.
         hosts (list, optional): list of hosts running the server processes.
             Defaults to None.
-
     Raises:
         ServerFailed: if there was an error attempting to send a signal to stop
             the processes running the servers or after sending the signal if
             there are processes stiull running.
-
     """
     global SESSIONS    # pylint: disable=global-variable-not-assigned
     try:
@@ -538,9 +321,7 @@ def stop_server(setname=None, hosts=None):
 
 def kill_server(hosts):
     """Forcably kill any daos server processes running on the specified hosts.
-
     Sometimes stop doesn't get everything.  Really whack everything with this.
-
     Args:
         hosts (list): list of host names where servers are running
     """
@@ -551,16 +332,3 @@ def kill_server(hosts):
     ]
     # Intentionally ignoring the exit status of the command
     pcmd(hosts, "; ".join(kill_cmds), False, None, None)
-
-
-def clean_server(hosts):
-    """Clean the tmpfs  on the servers.
-
-    Args:
-        hosts (list): list of host names where servers are running
-    """
-    cleanup_cmds = [
-        "find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | xargs -0r rm -rf"
-    ]
-    # Intentionally ignoring the exit status of the command
-    pcmd(hosts, "; ".join(cleanup_cmds), False, None, None)
