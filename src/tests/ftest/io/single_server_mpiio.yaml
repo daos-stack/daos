@@ -19,7 +19,7 @@ pool:
         mode_RW:
              mode: 146
     createset:
-        setname: daos_server
+        name: daos_server
     createsize:
         scm_size: 8000000000
         nvme_size: 30000000000
