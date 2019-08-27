@@ -190,10 +190,13 @@ def start_slurm(args):
     # Setting up slurm on all nodes
     all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
     cmd_list = [
-        "mkdir -p {0};chown {1}. {0}".format("/var/log/slurm", args.user),
-        "mkdir -p {0}d;mkdir -p {0}ctld;chown {1}. {0}ctld".format(
-            "/var/spool/slurm/", args.user)
+        "mkdir -p /var/log/slurm",
+        "chown {}. {}".format(args.user, "/var/log/slurm"),
+        "mkdir -p /var/spool/slurm/d",
+        "mkdir -p /var/spool/slurm/ctld",
+        "chown {}. {}/ctld".format(args.user, "/var/spool/slurm")
         ]
+
     if execute_cluster_cmds(all_nodes, cmd_list, args.sudo) > 0:
         return 1
 
