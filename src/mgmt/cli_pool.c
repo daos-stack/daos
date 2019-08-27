@@ -136,6 +136,10 @@ add_ownership_props(daos_prop_t **prop_out, daos_prop_t *prop_in,
 
 	/* We always free this prop in the callback - so need to make a copy */
 	final_prop = daos_prop_alloc(entries);
+	if (final_prop == NULL) {
+		D_ERROR("failed to allocate props");
+		D_GOTO(err_out, -DER_NOMEM);
+	}
 
 	if (prop_in != NULL) {
 		rc = daos_prop_copy(final_prop, prop_in);
