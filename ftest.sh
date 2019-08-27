@@ -70,40 +70,40 @@ cleanup() {
     restore_dist_files "${yaml_files[@]}"
     i=5
     while [ $i -gt 0 ]; do
-        if ! clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh \
+        if clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh \
              -S -w "$(IFS=','; echo "${nodes[*]}")" "set -x
-        if grep /mnt/daos /proc/mounts; then
-            if ! sudo umount /mnt/daos; then
-                echo \"During shutdown, failed to unmount /mnt/daos.  \"\
-                     \"Continuing...\"
-            fi
-        fi
-        x=0
-        sudo sed -i -e \"/added by ftest.sh/d\" /etc/fstab
-        if [ -n \"$DAOS_BASE\" ]; then
-            while [ \$x -lt 30 ] &&
-                  grep $DAOS_BASE /proc/mounts &&
-                  ! sudo umount $DAOS_BASE; do
-                sleep 1
-                let x+=1
-            done
-            if grep $DAOS_BASE /proc/mounts; then
-                echo \"Failed to unmount $DAOS_BASE\"
-                exit 1
-            fi
-            if [ -d $DAOS_BASE ] && ! sudo rmdir $DAOS_BASE; then
-                echo \"Failed to remove $DAOS_BASE\"
-                if [ -d $DAOS_BASE ]; then
-                    ls -l $DAOS_BASE
-                else
-                    echo \"because it doesnt exist\"
+            if grep /mnt/daos /proc/mounts; then
+                if ! sudo umount /mnt/daos; then
+                    echo \"During shutdown, failed to unmount /mnt/daos.  \"\
+                         \"Continuing...\"
                 fi
-                exit 1
             fi
-        fi"; then
-            i=0
+            x=0
+            sudo sed -i -e \"/added by ftest.sh/d\" /etc/fstab
+            if [ -n \"$DAOS_BASE\" ]; then
+                while [ \$x -lt 30 ] &&
+                      grep $DAOS_BASE /proc/mounts &&
+                      ! sudo umount $DAOS_BASE; do
+                    sleep 1
+                    let x+=1
+                done
+                if grep $DAOS_BASE /proc/mounts; then
+                    echo \"Failed to unmount $DAOS_BASE\"
+                    exit 1
+                fi
+                if [ -d $DAOS_BASE ] && ! sudo rmdir $DAOS_BASE; then
+                    echo \"Failed to remove $DAOS_BASE\"
+                    if [ -d $DAOS_BASE ]; then
+                        ls -l $DAOS_BASE
+                    else
+                        echo \"because it doesnt exist\"
+                    fi
+                    exit 1
+                fi
+            fi"; then
+            break
         fi
-        ((i-=1))
+        ((i-=1)) || true
     done
 }
 
