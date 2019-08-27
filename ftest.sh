@@ -71,12 +71,12 @@ restore_dist_files() {
 pre_clean () {
     i=5
     while [ $i -gt 0 ]; do
-        if ! clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh \
+        if clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh \
              -S -w "$(IFS=','; echo "${nodes[*]}")" "set -x -e
              mapfile -t ftest_mounts < <(grep 'added by ftest.sh' /etc/fstab)
              for n_mnt in \"\${ftest_mounts[@]}\"; do
                 mpnt=(\${n_mnt})
-                sudo umount \${mpnt[1]} || true
+                sudo umount \${mpnt[1]}
              done
              sudo sed -i -e \"/added by ftest.sh/d\" /etc/fstab"; then
             i=0

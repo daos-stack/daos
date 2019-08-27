@@ -109,7 +109,6 @@ pipeline {
                         returnStatus: true)
         SSH_KEY_FILE='ci_key'
         SSH_KEY_ARGS="-i$SSH_KEY_FILE"
-        PDSH_SSH_ARGS_APPEND="$SSH_KEY_ARGS"
         CLUSH_ARGS="-o$SSH_KEY_ARGS"
     }
 
