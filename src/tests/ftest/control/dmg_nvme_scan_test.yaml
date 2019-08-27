@@ -9,6 +9,3 @@ server_config:
 dmg:
   request: storage
   action: scan
-daos_server:
-  targets: 1
-  insecure: True

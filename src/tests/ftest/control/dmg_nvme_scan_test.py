@@ -39,7 +39,6 @@ class DmgNvmeScanTest(TestWithServers):
     def __init__(self, *args, **kwargs):
         """Initialize a DmgNvmeScanTest object."""
         super(DmgNvmeScanTest, self).__init__(*args, **kwargs)
-        self.setup_start_servers = False
         self.setup_start_agents = False
 
     def test_dmg_nvme_scan_basic(self):
@@ -49,16 +48,6 @@ class DmgNvmeScanTest(TestWithServers):
         on the system.
         :avocado: tags=all,tiny,pr,dmg,nvme_scan,basic
         """
-        # Create daos_server command
-        server = ServerCommand(
-            self.hostlist_servers, os.path.join(self.prefix, "bin"))
-        server.get_params(self)
-
-        # Update config and start server
-        server.update_configuration(self.basepath)
-        server.prepare(self.workdir, self.hostfile_servers_slots)
-        server.start(None)
-
         # Create daos_shell command
         dmg = DmgCommand(os.path.join(self.prefix, "bin"))
         dmg.get_params(self)
