@@ -26,7 +26,6 @@ from __future__ import print_function
 import os
 
 from dmg_utils import DmgCommand
-from server_utils import ServerCommand
 from apricot import TestWithServers
 from avocado.utils import process
 
