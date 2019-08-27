@@ -34,7 +34,7 @@ import (
 type FeatureMap map[string]*pb.Feature
 
 // GetFeature returns the feature from feature name.
-func (s *controlService) GetFeature(
+func (s *ControlService) GetFeature(
 	ctx context.Context, name *pb.FeatureName) (*pb.Feature, error) {
 	f, exists := s.supportedFeatures[name.Name]
 	if !exists {
@@ -44,7 +44,7 @@ func (s *controlService) GetFeature(
 }
 
 // ListFeatures lists all features supported by the management server.
-func (s *controlService) ListFeatures(
+func (s *ControlService) ListFeatures(
 	empty *pb.EmptyReq, stream pb.MgmtCtl_ListFeaturesServer) error {
 	for _, feature := range s.supportedFeatures {
 		if err := stream.Send(feature); err != nil {

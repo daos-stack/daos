@@ -152,7 +152,7 @@ func TestParseBdev(t *testing.T) {
 		config := mockConfigFromFile(t, ext, socketsExample)
 
 		srvIdx := 0 // we know that socketsExample only specifies one srv
-		srv := &config.Servers[srvIdx]
+		srv := config.Servers[srvIdx]
 
 		// populate bdev server config parameters
 		if tt.bdevClass != "" {
