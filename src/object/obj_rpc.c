@@ -183,7 +183,7 @@ crt_proc_daos_csum_buf_t(crt_proc_t proc, daos_csum_buf_t *csum)
 		D_FREE(csum->cs_csum);
 	}
 
-	if (csum->cs_len > 0) {
+	if (csum->cs_len > 0 && proc_op != CRT_PROC_FREE) {
 		rc = crt_proc_memcpy(proc, csum->cs_csum, csum->cs_len);
 		if (rc != 0) {
 			if (proc_op == CRT_PROC_DECODE)
@@ -240,7 +240,7 @@ crt_proc_daos_iod_t(crt_proc_t proc, daos_iod_t *dvi)
 	if (rc != 0)
 		return -DER_HG;
 
-	if (proc_op == CRT_PROC_ENCODE) {
+	if (proc_op == CRT_PROC_ENCODE || proc_op == CRT_PROC_FREE) {
 		if (dvi->iod_type == DAOS_IOD_ARRAY && dvi->iod_recxs != NULL)
 			existing_flags |= IOD_REC_EXIST;
 		if (dvi->iod_csums != NULL)
