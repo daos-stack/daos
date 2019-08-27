@@ -67,7 +67,10 @@ def update_config_cmdlist(args):
 
     """
     all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
-
+    if not args.sudo:
+        sudo = ""
+    else:
+        sudo = "sudo"
     # Copy the slurm*example.conf files to /etc/slurm/
     if execute_cluster_cmds(all_nodes, COPY_LIST, args.sudo) > 0:
         exit(1)
@@ -98,14 +101,14 @@ def update_config_cmdlist(args):
             # include in config file
             pass
         cmd_list.append("echo \"NodeName={0} Sockets={1} CoresPerSocket={2} "
-                        "ThreadsPerCore={3}\" >> {4}".format(
+                        "ThreadsPerCore={3}\" |{4} tee -a {5}".format(
                             NodeSet.fromlist(nodes), info["Socket"],
-                            info["Core"], info["Thread"], SLURM_CONF))
+                            info["Core"], info["Thread"], sudo, SLURM_CONF))
 
     #
     cmd_list.append("echo \"PartitionName=daos_client Nodes={} Default=YES "
-                    "MaxTime=INFINITE State=UP\" >> {}".format(
-                        args.nodes, SLURM_CONF))
+                    "MaxTime=INFINITE State=UP\" |{} tee -a {}".format(
+                        args.nodes, sudo, SLURM_CONF))
 
     return execute_cluster_cmds(all_nodes, cmd_list, args.sudo)
 
@@ -158,7 +161,8 @@ def start_munge(args):
 
     """
     # Check if file exists on slurm control node
-    if execute_cluster_cmds(args.control, ["ls /etc/munge/munge.key"]) > 0:
+    if execute_cluster_cmds(
+            args.control, ["ls /etc/munge/munge.key"], args.sudo) > 0:
         # Create one key on control node and then copy it to all slurm nodes
         if execute_cluster_cmds(
                 args.control, ["create-munge-key"], args.sudo) > 0:
