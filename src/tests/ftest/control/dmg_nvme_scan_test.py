@@ -61,6 +61,3 @@ class DmgNvmeScanTest(TestWithServers):
             dmg.run()
         except process.CmdError as details:
             self.fail("daos_shell command failed: {}".format(details))
-
-        # Cleanup/kill server
-        server.stop()
