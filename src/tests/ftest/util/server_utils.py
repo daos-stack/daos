@@ -1,15 +1,19 @@
 #!/usr/bin/python
 '''
   (C) Copyright 2018-2019 Intel Corporation.
+
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
   You may obtain a copy of the License at
+
      http://www.apache.org/licenses/LICENSE-2.0
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
   See the License for the specific language governing permissions and
   limitations under the License.
+
   GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
   The Government's rights to use, modify, reproduce, release, perform, display,
   or disclose this software are subject to the terms of the Apache License as
@@ -47,7 +51,9 @@ class ServerFailed(Exception):
 
 def set_nvme_mode(default_value_set, bdev, enabled=False):
     """Enable/Disable NVMe Mode.
+
     NVMe is enabled by default in yaml file.So disable it for CI runs.
+
     Args:
         default_value_set (dict): dictionary of default values
         bdev (str): block device name
@@ -63,10 +69,13 @@ def set_nvme_mode(default_value_set, bdev, enabled=False):
 
 def create_server_yaml(basepath):
     """Create the DAOS server config YAML file based on Avocado test Yaml file.
+
     Args:
         basepath (str): DAOS install basepath
+
     Raises:
         ServerFailed: if there is an reading/writing yaml files
+
     """
     # Read the baseline conf file data/daos_server_baseline.yml
     try:
@@ -125,6 +134,7 @@ def create_server_yaml(basepath):
 def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
                clean=True):
     """Launch DAOS servers in accordance with the supplied hostfile.
+
     Args:
         hostfile (str): hostfile defining on which hosts to start servers
         setname (str): session name
@@ -133,8 +143,10 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
         env_dict (dict, optional): dictionary on env variable names and values.
             Defaults to None.
         clean (bool, optional): remove files in /mnt/daos. Defaults to True.
+
     Raises:
         ServerFailed: if there is an error starting the servers
+
     """
     global SESSIONS    # pylint: disable=global-variable-not-assigned
     try:
@@ -256,21 +268,26 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
 
 def stop_server(setname=None, hosts=None):
     """Stop the daos servers.
+
     Attempt to initiate an orderly shutdown of all orterun processes it has
     spawned by sending a ctrl-c to the process matching the setname (or all
     processes if no setname is provided).
+
     If a list of hosts is provided, verify that all daos server processes are
     dead.  Report an error if any processes are found and attempt to forcably
     kill the processes.
+
     Args:
         setname (str, optional): server group name used to match the session
             used to start the server. Defaults to None.
         hosts (list, optional): list of hosts running the server processes.
             Defaults to None.
+
     Raises:
         ServerFailed: if there was an error attempting to send a signal to stop
             the processes running the servers or after sending the signal if
             there are processes stiull running.
+
     """
     global SESSIONS    # pylint: disable=global-variable-not-assigned
     try:
@@ -321,7 +338,9 @@ def stop_server(setname=None, hosts=None):
 
 def kill_server(hosts):
     """Forcably kill any daos server processes running on the specified hosts.
+
     Sometimes stop doesn't get everything.  Really whack everything with this.
+
     Args:
         hosts (list): list of host names where servers are running
     """
