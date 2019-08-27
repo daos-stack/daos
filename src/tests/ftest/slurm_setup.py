@@ -31,33 +31,27 @@ import re
 from general_utils import pcmd, run_task
 from ClusterShell.NodeSet import NodeSet
 
-slurm_conf = "/etc/slurm/slurm.conf"
-slurmdbd_conf = "/etc/slurm/slurmdbd.conf"
+SLURM_CONF = "/etc/slurm/slurm.conf"
 
-package_list = ["munge-devel", "munge-libs",
-                "readline-devel", "perl-ExtUtils-MakeMaker",
-                "openssl-devel", "pam-devel", "rpm-build",
-                "perl-DBI", "perl-Switch", "munge", "mariadb-devel",
-                "slurm", "slurm-contribs", "slurm-devel",
-                "slurm-example-configs", "slurm-libpmi", "slurm-openlava",
-                "slurm-pam_slurm", "slurm-perlapi", " slurm-slurmctld",
-                "slurm-slurmd", "slurm-slurmdbd", "slurm-torque",
-                "mariadb-server"]
 
-copy_list = ["cp /etc/slurm/slurm.conf.example /etc/slurm/slurm.conf",
+PACKAGE_LIST = ["munge-libs", "munge",
+                "slurm", "slurm-example-configs",
+                "slurm-slurmctld", "slurm-slurmd"]
+
+COPY_LIST = ["cp /etc/slurm/slurm.conf.example /etc/slurm/slurm.conf",
              "cp /etc/slurm/cgroup.conf.example /etc/slurm/cgroup.conf",
              "cp /etc/slurm/slurmdbd.conf.example /etc/slurm/slurmdbd.conf"]
 
-munge_startup = [
+MUNGE_STARTUP = [
     "chown munge. {0}".format("/etc/munge/munge.key"),
     "systemctl restart munge",
     "systemctl enable munge"]
 
-slurmctl_startup = [
+SLURMCTLD_STARTUP = [
     "systemctl restart slurmctld",
     "systemctl enable slurmctld"]
 
-slurm_srv_startup = [
+SLURMD_STARTUP = [
     "systemctl restart slurmd",
     "systemctl enable slurmd"]
 
@@ -75,18 +69,18 @@ def update_config_cmdlist(args):
     all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
 
     # Copy the slurm*example.conf files to /etc/slurm/
-    if execute_cluster_cmds(all_nodes, copy_list, args.sudo) > 0:
+    if execute_cluster_cmds(all_nodes, COPY_LIST, args.sudo) > 0:
         exit(1)
 
     cmd_list = [
         "sed -i -e 's/ControlMachine=linux0/ControlMachine={}/g' {}".format(
-            args.control, slurm_conf),
+            args.control, SLURM_CONF),
         "sed -i -e 's/ClusterName=linux/ClusterName=ci_cluster/g' {}".format(
-            slurm_conf),
+            SLURM_CONF),
         "sed -i -e 's/SlurmUser=slurm/SlurmUser={}/g' {}".format(
-            args.user, slurm_conf),
+            args.user, SLURM_CONF),
         "sed -i -e 's/NodeName/#NodeName/g' {}".format(
-            slurm_conf),
+            SLURM_CONF),
         ]
 
     # This info needs to be gathered from every node that can run a slurm job
@@ -106,18 +100,17 @@ def update_config_cmdlist(args):
         cmd_list.append("echo \"NodeName={0} Sockets={1} CoresPerSocket={2} "
                         "ThreadsPerCore={3}\" >> {4}".format(
                             NodeSet.fromlist(nodes), info["Socket"],
-                            info["Core"], info["Thread"], slurm_conf))
+                            info["Core"], info["Thread"], SLURM_CONF))
 
     #
     cmd_list.append("echo \"PartitionName=daos_client Nodes={} Default=YES "
                     "MaxTime=INFINITE State=UP\" >> {}".format(
-                        args.nodes, slurm_conf))
+                        args.nodes, SLURM_CONF))
 
-    if execute_cluster_cmds(all_nodes, cmd_list, args.sudo) > 0:
-        exit(1)
+    return execute_cluster_cmds(all_nodes, cmd_list, args.sudo)
 
 
-def execute_cluster_cmds(nodes, cmdlist, sudo=False, timeout=None):
+def execute_cluster_cmds(nodes, cmdlist, sudo=False):
     """Execute the list of cmds on hostlist nodes.
 
     Args:
@@ -151,11 +144,10 @@ def configuring_packages(args, action):
     # Install yum packages on control and compute nodes
     all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
     cmd_list = []
-    for package in package_list:
+    for package in PACKAGE_LIST:
         logging.info("{} {} on {}".format(action, package, all_nodes))
         cmd_list.append("yum {} -y ".format(action) + package)
-    if execute_cluster_cmds(all_nodes, cmd_list, args.sudo) > 0:
-        exit(1)
+    return execute_cluster_cmds(all_nodes, cmd_list, args.sudo)
 
 
 def start_munge(args):
@@ -169,19 +161,19 @@ def start_munge(args):
     if execute_cluster_cmds(args.control, ["ls /etc/munge/munge.key"]) > 0:
         # Create one key on control node and then copy it to all slurm nodes
         if execute_cluster_cmds(
-                    args.control, ["create-munge-key"], args.sudo) > 0:
-            exit(1)
+                args.control, ["create-munge-key"], args.sudo) > 0:
+            return 1
 
     # copy key to all nodes FROM slurmctl node;
     cmd_list = [
-        "clush --copy -p -w {} /etc/munge/munge.key".format(args.nodes)]
-    if execute_cluster_cmds(args.control, cmd_list, args.sudo) > 0:
-        exit(1)
+        "clush --copy -p -B -S -w {} /etc/munge/munge.key".format(args.nodes)]
+    ret_code = execute_cluster_cmds(args.control, cmd_list, args.sudo)
+    if ret_code > 0:
+        return 1
 
     # Start Munge service on all nodes
     all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
-    if execute_cluster_cmds(all_nodes, munge_startup, args.sudo) > 0:
-        exit(1)
+    return execute_cluster_cmds(all_nodes, MUNGE_STARTUP, args.sudo)
 
 
 def start_slurm(args):
@@ -199,15 +191,14 @@ def start_slurm(args):
             "/var/spool/slurm/", args.user)
         ]
     if execute_cluster_cmds(all_nodes, cmd_list, args.sudo) > 0:
-        exit(1)
+        return 1
 
     # Startup the slurm control service
-    if execute_cluster_cmds(args.control, slurmctl_startup, args.sudo) > 0:
-        exit(1)
+    if execute_cluster_cmds(args.control, SLURMCTLD_STARTUP, args.sudo) > 0:
+        return 1
     else:
         # Startup the slurm service
-        if execute_cluster_cmds(all_nodes, slurm_srv_startup, args.sudo) > 0:
-            exit(1)
+        return execute_cluster_cmds(all_nodes, SLURMD_STARTUP, args.sudo)
 
 
 def main():
@@ -258,21 +249,31 @@ def main():
 
     # Remove packages if specified with --remove and then exit
     if args.remove:
-        configuring_packages(args, "remove")
+        ret_code = configuring_packages(args, "remove")
+        if ret_code > 0:
+            exit(1)
         exit(0)
 
-    # Install packages if specified with --install
+    # Install packages if specified with --install and continue with setup
     if args.install:
-        configuring_packages(args, "install")
+        ret_code = configuring_packages(args, "install")
+        if ret_code > 0:
+            exit(1)
 
     # Edit the slurm conf files
-    update_config_cmdlist(args)
+    ret_code = update_config_cmdlist(args)
+    if ret_code > 0:
+        exit(1)
 
     # Munge Setup
-    start_munge(args)
+    ret_code = start_munge(args)
+    if ret_code > 0:
+        exit(1)
 
     # Slurm Startup
-    start_slurm(args)
+    ret_code = start_slurm(args)
+    if ret_code > 0:
+        exit(1)
 
     exit(0)
 
