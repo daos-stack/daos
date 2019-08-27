@@ -145,7 +145,7 @@ def configuring_packages(args, action):
     all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
     cmd_list = []
     for package in PACKAGE_LIST:
-        logging.info("{} {} on {}".format(action, package, all_nodes))
+        logging.info("%s %s on %s", action, package, all_nodes)
         cmd_list.append("yum {} -y ".format(action) + package)
     return execute_cluster_cmds(all_nodes, cmd_list, args.sudo)
 
@@ -236,7 +236,7 @@ def main():
         help="Run all commands with privileges")
 
     args = parser.parse_args()
-    logging.info("Arguments: {}".format(args))
+    logging.info("Arguments: %s", args)
 
     # Check params
     if args.nodes is None:
