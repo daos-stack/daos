@@ -129,7 +129,7 @@ storage subcommand (prep-scm) can be used as a "command mode"
 invocation of *daos\_server* and must be run as root. SCM modules will
 be configured into interleaved regions with memory mode set to
 "AppDirect" mode with one set per socket (each module is assigned to socket
-and reports this via its NUMA rating). 
+and reports this via its NUMA rating).
 
 `sudo daos_server [<app_opts>] storage prep-scm [<cmd_opts>]`
 The first time the command is run, SCM AppDirect regions will be created as
