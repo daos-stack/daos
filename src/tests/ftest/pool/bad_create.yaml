@@ -7,6 +7,19 @@ server_config:
    name: daos_server
 timeout: 50
 createtests:
+   modes: !mux
+      badmode1:
+          mode:
+             - 0
+             - FAIL
+      badmode2:
+          mode:
+             - 111093499399299949949949949
+             - FAIL
+      goodmode:
+          mode:
+             - 473
+             - PASS
    uids: !mux
       gooduid:
          uid:
