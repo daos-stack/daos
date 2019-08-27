@@ -93,6 +93,29 @@ err:
 	dfs_release(ie->ie_obj);
 }
 
+static void
+check_for_uns_ep(struct dfuse_inode_entry *ie)
+{
+	int rc;
+	char pool[40];
+	size_t pool_size = 40;
+	char cont[40];
+	size_t cont_size = 40;
+
+	rc = dfs_getxattr(ie->ie_dfs->dfs_ns, ie->ie_obj, "user.uns.pool",
+			  &pool, &pool_size);
+
+	if (rc)
+		return;
+
+	rc = dfs_getxattr(ie->ie_dfs->dfs_ns, ie->ie_obj, "user.uns.container",
+			&cont, &cont_size);
+	if (rc)
+		return;
+
+	DFUSE_TRA_DEBUG(ie, "'%s' '%s'", pool, cont);
+}
+
 bool
 dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		const char *name)
@@ -124,6 +147,10 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
 	atomic_fetch_add(&ie->ie_ref, 1);
+
+	if (S_ISDIR(ie->ie_stat.st_mode)) {
+		check_for_uns_ep(ie);
+	}
 
 	dfuse_reply_entry(fs_handle, ie, NULL, req);
 	return true;
