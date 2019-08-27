@@ -68,23 +68,20 @@ restore_dist_files() {
 
 # For nodes that are only rebooted between CI nodes left over mounts
 # need to be cleaned up.
-# shellcheck disable=SC2145,SC2154
 pre_clean () {
     i=5
     while [ $i -gt 0 ]; do
         if ! clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh \
-             -S -w "$(IFS=','; echo "${nodes[*]}")" "set -x
-            mapfile -t ftest_mounts < <(grep 'added by ftest.sh' /etc/fstab)
-            if [ ${#ftest_mounts[@]} -gt 0 ]; then
-                for n_mnt in \"${ftest_mounts[@]}\"; do
-                    mpnt=(${n_mnt})
-                    sudo umount ${mpnt[1]} || true
-                done
-                sudo sed -i -e \"/added by ftest.sh/d\" /etc/fstab
-            fi"; then
-                i=0
-            fi
-        ((i-=1))
+             -S -w "$(IFS=','; echo "${nodes[*]}")" "set -x -e
+             mapfile -t ftest_mounts < <(grep 'added by ftest.sh' /etc/fstab)
+             for n_mnt in \"\${ftest_mounts[@]}\"; do
+                mpnt=(\${n_mnt})
+                sudo umount \${mpnt[1]} || true
+             done
+             sudo sed -i -e \"/added by ftest.sh/d\" /etc/fstab"; then
+            i=0
+        fi
+        ((i-=1)) || true
     done
 }
 
