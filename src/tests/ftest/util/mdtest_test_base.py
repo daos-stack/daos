@@ -24,11 +24,15 @@
 from __future__ import print_function
 
 import os
+import subprocess
 
 from apricot import TestWithServers
 from test_utils import TestPool
 from mpio_utils import MpioUtils
 from mdtest_utils import MdtestCommand, MdtestFailed
+
+SERVER_LOG = "/tmp/server.log"
+CLIENT_LOG = "client_daos.log"
 
 class MdtestBase(TestWithServers):
     """
@@ -53,6 +57,17 @@ class MdtestBase(TestWithServers):
         self.mdtest_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/mdtest/client_processes/*')
         self.manager = self.params.get("manager", '/run/mdtest/*', "MPICH")
+        self.test_id = str(self.name).split("-")[0]
+        print("self.test_id:{}".format(self.test_id))
+
+        # Determine the path and name of the daos server log using the
+        # D_LOG_FILE env or, if not set, the value used in the doas server yaml
+        self.log_dir, self.server_log = os.path.split(
+            os.getenv("D_LOG_FILE", SERVER_LOG))
+        self.client_log = os.path.join(self.log_dir,
+                                       self.test_id + "_" + CLIENT_LOG)
+        # To generate the seperate client log file
+        self.orterun_env = '-x D_LOG_FILE={}'.format(self.client_log)
 
     def tearDown(self):
         """Tear down each test case."""
@@ -62,6 +77,21 @@ class MdtestBase(TestWithServers):
         finally:
             # Stop the servers and agents
             super(MdtestBase, self).tearDown()
+
+        # collect up a debug log so that we have a separate one for each
+        # subtest
+        if self.test_id:
+            try:
+                new_logfile = os.path.join(
+                    self.log_dir, self.test_id + "_" + self.server_log)
+                # rename on each of the servers
+                for host in self.hostlist_servers:
+                    subprocess.check_call(
+                        ['ssh', host,
+                         '[ -f \"{0}\" ] && mv \"{0}\" \"{1}\"'.format(
+                             SERVER_LOG, new_logfile)])
+            except KeyError:
+                pass
 
     def execute_mdtest(self):
         """

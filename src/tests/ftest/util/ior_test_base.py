@@ -22,11 +22,15 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import os
+import subprocess
 
 from apricot import TestWithServers
 from ior_utils import IorCommand, IorFailed
 from mpio_utils import MpioUtils
 from test_utils import TestPool
+
+SERVER_LOG = "/tmp/server.log"
+CLIENT_LOG = "client_daos.log"
 
 class IorTestBase(TestWithServers):
     """Base IOR test class.
@@ -51,6 +55,17 @@ class IorTestBase(TestWithServers):
         self.ior_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/ior/client_processes/*')
 
+        self.test_id = str(self.name).split("-")[0]
+
+        # Determine the path and name of the daos server log using the
+        # D_LOG_FILE env or, if not set, the value used in the doas server yaml
+        self.log_dir, self.server_log = os.path.split(
+            os.getenv("D_LOG_FILE", SERVER_LOG))
+        self.client_log = os.path.join(self.log_dir,
+                                       self.test_id + "_" + CLIENT_LOG)
+        # To generate the seperate client log file
+        self.orterun_env = '-x D_LOG_FILE={}'.format(self.client_log)
+
     def tearDown(self):
         """Tear down each test case."""
         try:
@@ -59,6 +74,21 @@ class IorTestBase(TestWithServers):
         finally:
             # Stop the servers and agents
             super(IorTestBase, self).tearDown()
+
+        # collect up a debug log so that we have a separate one for each
+        # subtest
+        if self.test_id:
+            try:
+                new_logfile = os.path.join(
+                    self.log_dir, self.test_id + "_" + self.server_log)
+                # rename on each of the servers
+                for host in self.hostlist_servers:
+                    subprocess.check_call(
+                        ['ssh', host,
+                         '[ -f \"{0}\" ] && mv \"{0}\" \"{1}\"'.format(
+                             SERVER_LOG, new_logfile)])
+            except KeyError:
+                pass
 
     def create_pool(self):
         """Create a TestPool object to use with ior."""
