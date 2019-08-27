@@ -2094,13 +2094,18 @@ class DaosServer(object):
                                .format(ret))
 
 
-class DaosContext(object):
+class DaosContext():
     """Provides environment and other info for a DAOS client."""
 
     def __init__(self, path):
         """ setup the DAOS API and MPI """
 
-        self.libdaos = ctypes.CDLL(path+"libdaos.so.0.6.0",
+        # first find the DAOS version
+        with open(os.path.join(path, "daos", "VERSION"),
+                  "r") as version_file:
+            daos_version = version_file.read().rstrip()
+
+        self.libdaos = ctypes.CDLL(path+"libdaos.so.{}".format(daos_version),
                                    mode=ctypes.DEFAULT_MODE)
         ctypes.CDLL(path+"libdaos_common.so",
                     mode=ctypes.RTLD_GLOBAL)
