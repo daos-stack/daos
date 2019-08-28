@@ -4,8 +4,8 @@
 %define daoshome %{_exec_prefix}/lib/%{name}
 
 Name:          daos
-Version:       0.6.0
-Release:       4%{?relval}%{?dist}
+Version:       0.7.0
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -236,6 +236,9 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/*.a
 
 %changelog
+* Wed Aug 28 2019 b'Brian J. Murrell <brian.murrell@intel.com>' - 0.7.0-1
+- Version bump up to 0.7.0
+
 * Thu Aug 15 2019 David Quigley <david.quigley@intel.com>
 - Add systemd unit files to packaging.
 
