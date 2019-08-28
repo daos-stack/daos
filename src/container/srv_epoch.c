@@ -221,7 +221,7 @@ ds_cont_epoch_aggregate(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 {
 	struct cont_epoch_op_in	*in = crt_req_get(rpc);
 	daos_epoch_t		 epoch = in->cei_epoch;
-	int			 rc = 0; 
+	int			 rc = 0;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,

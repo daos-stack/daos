@@ -791,6 +791,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti)
 	umem_tx_add_ptr(umm, tab, sizeof(*tab));
 
 	tab->tt_count++;
+	cont->vc_cont_df->cd_hce = MAX(cont->vc_cont_df->cd_hce, dtx->te_epoch);
 	if (dtx_is_null(tab->tt_entry_tail)) {
 		D_ASSERT(dtx_is_null(tab->tt_entry_head));
 

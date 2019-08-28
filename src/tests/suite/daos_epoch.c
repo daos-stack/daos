@@ -89,8 +89,10 @@ io_for_aggregation(test_arg_t *arg, daos_handle_t coh, daos_handle_t ths[],
 	else
 		print_message("Check empty records (%d)\n", gs_dkeys);
 
-	/* If verification data is provided, check every record against it;
-	 * else verify against generated records */
+	/**
+	 * If verification data is provided, check every record against it;
+	 * else verify against generated records
+	 **/
 	rec_verify = verify_data != NULL ?  verify_data : verify_buf;
 
 	for (i = 0, k = 0; i < gs_dkeys; i++) {

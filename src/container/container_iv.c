@@ -355,6 +355,7 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			return rc;
 	} else if (entry->iv_class->iv_class_id == IV_CONT_SNAP) {
 		struct cont_iv_entry *civ_ent = src->sg_iovs[0].iov_buf;
+
 		rc = ds_cont_tgt_snapshots_update(entry->ns->iv_pool_uuid,
 						  civ_key->cont_uuid,
 						  &civ_ent->iv_snap.snaps[0],

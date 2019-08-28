@@ -92,8 +92,17 @@ cont_child_alloc_ref(void *key, unsigned int ksize, void *varg,
 	cont->sc_aggregation_max = 0;
 	cont->sc_snapshots_nr = 0;
 	cont->sc_snapshots = NULL;
-
+	cont->sc_vos_aggregating = 1;
 	*link = &cont->sc_list;
+
+	ds_cont_child_get(cont);
+	rc = dss_ult_create(ds_cont_aggregate_ult, cont,
+			    DSS_ULT_AGGREGATE, DSS_TGT_SELF, 0, NULL);
+	if (rc) {
+		D_WARN(DF_UUID": Failed to create aggregation ULT; rc %d\n",
+		       DP_UUID(cont->sc_uuid), rc);
+		ds_cont_child_put(cont);
+	}
 	return 0;
  out_cond:
 	ABT_cond_free(&cont->sc_dtx_resync_cond);
@@ -108,6 +117,9 @@ static void
 cont_child_free_ref(struct daos_llink *llink)
 {
 	struct ds_cont_child *cont = cont_child_obj(llink);
+
+	cont->sc_vos_aggregating = 0;
+	ABT_thread_yield();
 
 	D_DEBUG(DF_DSMS, DF_CONT": freeing\n", DP_CONT(NULL, cont->sc_uuid));
 	vos_cont_close(cont->sc_hdl);
@@ -1247,6 +1259,9 @@ ds_cont_tgt_snapshots_refresh(uuid_t pool_uuid, uuid_t cont_uuid)
 	return rc;
 }
 
+/** Currently set to DTX_AGG_THRESHOLD_AGE_LOWER **/
+#define DAOS_AGG_THRESHOLD 3600 /** seconds **/
+
 int
 cont_child_aggregate(struct ds_cont_child *cont)
 {
@@ -1256,17 +1271,22 @@ cont_child_aggregate(struct ds_cont_child *cont)
 	int			 i;
 	int			 rc;
 
+	if (cont->sc_aggregation_max == 0)
+		return 0;
+
 	rc = vos_cont_query(cont->sc_hdl, &cinfo);
 	if (rc)
 		return rc;
-	/*
-	 * Upper bound for aggregation is the smallest of:
-	 * 1. Limit set when snapshot is in progress
-	 * 2. Lowest active (prepared) DTX epoch
-	 * 3. Highest committed DTX epoch
-	 */
-	epoch_max = MIN(cont->sc_aggregation_max,
-			MIN(cinfo.ci_lpe, cinfo.ci_hce));
+
+	/** Don't aggregate if no commits after last aggregation **/
+	if (cinfo.ci_hae > cinfo.ci_hce)
+		return 0;
+
+	epoch_max = crt_hlc_get() -
+		    (uint64_t)DAOS_AGG_THRESHOLD * NSEC_PER_SEC;
+
+	if (epoch_max > cinfo.ci_hce)
+		return 0;
 
 	D_ASSERTF(cinfo.ci_hae <= epoch_max,
 		  "Highest aggregated %lu; Max %lu",
@@ -1281,7 +1301,7 @@ cont_child_aggregate(struct ds_cont_child *cont)
 	} else {
 		/** Find highest snapshot less than last aggregated epoch **/
 		for (i = 0; i < cont->sc_snapshots_nr &&
-		     cont->sc_snapshots[i] < cinfo.ci_hae; ++i)
+			    cont->sc_snapshots[i] < cinfo.ci_hae; ++i)
 		     ;
 		/** Start from HAE if it is outside snapshot boundaries **/
 		if (i == 0 || i == cont->sc_snapshots_nr)
@@ -1292,11 +1312,10 @@ cont_child_aggregate(struct ds_cont_child *cont)
 
 	if (epoch_range.epr_lo == epoch_max)
 		return 0;
-	D_DEBUG(DB_TRACE, DF_UUID"[%d]: HAE: %lu; LPE: %lu; HCE: %lu; MAX: %lu",
+	D_DEBUG(DB_TRACE, DF_UUID"[%d]: HAE: %lu; HCE: %lu; HLC: %lu",
 			  DP_UUID(cont->sc_uuid),
 			  dss_get_module_info()->dmi_tgt_id,
-			  cinfo.ci_hae, cinfo.ci_lpe, cinfo.ci_hce,
-			  cont->sc_aggregation_max);
+			  cinfo.ci_hae, cinfo.ci_hce, crt_hlc_get());
 
 	for ( ; i < cont->sc_snapshots_nr &&
 		cont->sc_snapshots[i] < epoch_max; ++i) {
@@ -1323,33 +1342,18 @@ cont_child_aggregate(struct ds_cont_child *cont)
 void
 ds_cont_aggregate_ult(void *arg)
 {
-	struct dss_module_info		*dmi = dss_get_module_info();
-	struct dsm_tls			*tls = dsm_tls_get();
+	struct ds_cont_child		*cont	= arg;
+	struct dss_module_info		*dmi	= dss_get_module_info();
+	int				 rc	= 0;
 
-	for ( ;; ) {
-		struct daos_llink		*llink;
-		ABT_bool			 state;
-		int				 rc;
-
-		d_list_for_each_entry(llink,
-				      &tls->dt_cont_cache->dlc_busy_list,
-				      ll_qlink) {
-			rc = cont_child_aggregate(cont_child_obj(llink));
-		}
-
-		d_list_for_each_entry(llink,
-				      &tls->dt_cont_cache->dlc_idle_list,
-				      ll_qlink) {
-			rc = cont_child_aggregate(cont_child_obj(llink));
-		}
-
-		rc = ABT_future_test(dmi->dmi_xstream->dx_shutdown, &state);
-		D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
-		if (state == ABT_TRUE)
-			break;
+	D_DEBUG(DB_TRACE, DF_UUID": starting aggregation ULT on xstream %d\n",
+		DP_UUID(cont->sc_uuid), dmi->dmi_tgt_id);
+	while (!rc && cont->sc_vos_aggregating) {
+		rc = cont_child_aggregate(cont);
 		ABT_thread_yield();
 	}
-	D_DEBUG(DB_TRACE, "Aggregation ULT [%d] Exiting...\n", dmi->dmi_tgt_id);
+	D_DEBUG(DB_TRACE, DF_UUID": stopping aggregation ULT on stream %d\n",
+		DP_UUID(cont->sc_uuid), dmi->dmi_tgt_id);
 }
 
 static int
@@ -1418,7 +1422,8 @@ ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc)
 	/* Reply without waiting for the aggregation ULTs to finish. */
 	out->tao_rc = 0;
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
-		DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rpc, out->tao_rc);
+		DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rpc,
+		out->tao_rc);
 	crt_reply_send(rpc);
 	if (out->tao_rc != 0)
 		return;

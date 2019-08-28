@@ -70,12 +70,6 @@ fini(void)
 	return 0;
 }
 
-static int
-setup(void)
-{
-	return dss_ult_create_all(ds_cont_aggregate_ult, NULL, false);
-}
-
 static struct crt_corpc_ops ds_cont_tgt_destroy_co_ops = {
 	.co_aggregate   = ds_cont_tgt_destroy_aggregator,
 	.co_pre_forward = NULL,
@@ -178,7 +172,6 @@ struct dss_module cont_module =  {
 	.sm_ver		= DAOS_CONT_VERSION,
 	.sm_init	= init,
 	.sm_fini	= fini,
-	.sm_setup	= setup,
 	.sm_proto_fmt	= &cont_proto_fmt,
 	.sm_cli_count	= CONT_PROTO_CLI_COUNT,
 	.sm_handlers	= cont_handlers,
