@@ -763,11 +763,21 @@ dss_start_xs_id(int xs_id)
 {
 	hwloc_obj_t	obj;
 	int		rc;
+	int		xs_core_offset;
+
+	/*
+	 * System XS all use the first core
+	 */
+	if (xs_id < dss_sys_xs_nr)
+		xs_core_offset = 0;
+	else
+		xs_core_offset = xs_id - dss_sys_xs_nr + 1;
 
 	obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth,
-				     (xs_id + dss_core_offset) % dss_core_nr);
+				     (xs_core_offset + dss_core_offset)
+				     % dss_core_nr);
 	if (obj == NULL) {
-		D_ERROR("Null core returned by hwloc\n");
+		D_ERROR("Null core returned by hwloc for XS %d\n", xs_id);
 		return -DER_INVAL;
 	}
 
@@ -783,7 +793,6 @@ dss_xstreams_init()
 {
 	int		rc;
 	int		i, xs_id;
-	hwloc_obj_t	sys_xs_obj;
 
 	D_ASSERT(dss_tgt_nr >= 1);
 	D_ASSERT(dss_tgt_offload_xs_nr == 0 || dss_tgt_offload_xs_nr == 1 ||
@@ -796,16 +805,6 @@ dss_xstreams_init()
 		return -DER_NOMEM;
 	}
 
-	/*
-	 * System xstreams share CPUs
-	 */
-	sys_xs_obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth,
-					    dss_core_offset % dss_core_nr);
-	if (sys_xs_obj == NULL) {
-		D_ERROR("Null core returned by hwloc for sys XS\n");
-		D_GOTO(out, -DER_INVAL);
-	}
-
 	/* start the execution streams */
 	D_DEBUG(DB_TRACE, "%d cores detected, starting %d main xstreams\n",
 		dss_core_nr, dss_tgt_nr);
@@ -814,7 +813,7 @@ dss_xstreams_init()
 	/* start system service XS */
 	for (i = 0; i < dss_sys_xs_nr; i++) {
 		xs_id = i;
-		rc = dss_start_one_xstream(sys_xs_obj->allowed_cpuset, xs_id);
+		rc = dss_start_xs_id(xs_id);
 		if (rc)
 			D_GOTO(out, rc);
 	}
