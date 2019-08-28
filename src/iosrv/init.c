@@ -207,7 +207,7 @@ dss_tgt_nr_get(int ncores, int nr)
 	if (nr_default == 0)
 		nr_default = 1;
 
-	/* accept the user required target number even if it's more than the 
+	/* accept the user required target number even if it's more than the
 	 * default available number calculated above, but inform the user that
 	 * creating more threads than #cores may have performance impact.
 	 */
