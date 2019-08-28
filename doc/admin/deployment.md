@@ -37,7 +37,7 @@ By default daos\_server and daos\_agent will use the directories
 /var/run/daos\_server and /var/run/daos\_agent respectively. To change
 the default location that daos\_server uses for its runtime directory
 either uncomment and set the socket\_dir configuration value in
-install/etc/daos\_server.yaml or pass the location to daos\_server on
+install/etc/daos\_server.yml or pass the location to daos\_server on
 the command line using the -d flag. For the daos\_agent an alternate
 location can be passed on the command line using the -runtime\_dir flag.
 
@@ -395,8 +395,8 @@ The `daos_server` configuration file is parsed when starting the
 on the command line (`daos_server -h` for usage) or default location
 (`install/etc/daos_server.yml`).
 
-Parameter descriptions are specified in [daos_server.yml](../../utils/config/daos_server.yml)
-and example configurations files in the [examples](../../utils/config/examples)
+Parameter descriptions are specified in [daos_server.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+and example configurations files in the [examples](https://github.com/daos-stack/daos/tree/master/utils/config/examples)
 directory.
 
 Any option supplied to `daos_server` as a commandline option or flag will
@@ -1173,7 +1173,7 @@ The `daos_agent` configuration file is parsed when starting the
 on the command line (`daos_agent -h` for usage) or default location
 (`install/etc/daos_agent.yml`).
 
-Parameter descriptions are specified in [daos_agent.yml](/utils/config/daos_agent.yml).
+Parameter descriptions are specified in [daos_agent.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_agent.yml).
 
 Any option supplied to `daos_agent` as a commandline option or flag will
 take precedence over equivalent configuration file parameter.
