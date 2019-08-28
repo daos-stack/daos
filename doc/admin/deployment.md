@@ -5,9 +5,6 @@
 This section covers the preliminary setup required on the compute and
 storage nodes before deploying DAOS.
 
-For the impatient, skip to [Basic Workflows](#-basic-workflow) for
-commands to get you started quickly.
-
 ### Time Synchronization
 
 The DAOS transaction model relies on timestamps and requires time to be
@@ -1092,6 +1089,7 @@ starts the data plane.
 ![Server format diagram](/doc/graph/server_format_flow.png)
 
 Typically an administrator will perform the following tasks:
+
 1. Prepare NVMe and SCM Storage
     - `sudo daos_server [<app_opts>] storage prep-nvme [<cmd_opts>]`
     [NVMe details](#nvme-prep)
@@ -1122,8 +1120,8 @@ requires subsequent restart of `daos_server`)
     - populate the `scm_*` and `bdev_*` parameters as used in format (below)
 
 7. Format Storage (from any node)
-    - When 'daos_server' is started for the first time (and no SCM directory exists),
-'daos_server' enters "maintenance mode" and waits for a 'daos_shell storage format' call to be issued from the management tool. This remote call will trigger the formatting of the locally attached storage on the host for use with DAOS using the parameters defined in the server config file.
+    - When `daos_server` is started for the first time (and no SCM directory exists),
+`daos_server` enters "maintenance mode" and waits for a `daos_shell storage format` call to be issued from the management tool. This remote call will trigger the formatting of the locally attached storage on the host for use with DAOS using the parameters defined in the server config file.
     - `daos_shell -i -l <host:port>,... storage format -f`
 [management tool details](/src/control/cmd/dmg/README.md#storage-format)
     - [SCM specific details](/src/control/server/README.md#scm-format)
