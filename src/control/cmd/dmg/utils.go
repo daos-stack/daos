@@ -65,25 +65,3 @@ func sprintConns(results client.ResultMap) (out string) {
 
 	return fmt.Sprintf("%sActive connections: %v\n", out, addrs)
 }
-
-// getConsent scans stdin for yes/no
-func getConsent() bool {
-	var response string
-
-	fmt.Println("Are you sure you want to continue? (yes/no)")
-
-	_, err := fmt.Scanln(&response)
-	if err != nil {
-		fmt.Printf("Error reading input: %s\n", err)
-		return false
-	}
-
-	if response == "no" {
-		return false
-	} else if response != "yes" {
-		fmt.Println("Please type yes or no and then press enter:")
-		return getConsent()
-	}
-
-	return true
-}

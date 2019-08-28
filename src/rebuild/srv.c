@@ -1758,7 +1758,7 @@ rebuild_tgt_status_check(void *arg)
 			rpt->rt_global_scan_done, rpt->rt_global_done,
 			iv.riv_status);
 
-		if (rpt->rt_global_done || rpt->rt_abort)
+		if (rpt->rt_global_done)
 			break;
 	}
 

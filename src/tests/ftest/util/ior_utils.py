@@ -30,10 +30,10 @@ from avocado.utils.process import run, CmdError
 from command_utils import FormattedParameter, CommandWithParameters
 
 
+
 class IorFailed(Exception):
     """Raise if Ior failed."""
 
-# pylint: disable=attribute-defined-outside-init
 class IorCommand(CommandWithParameters):
     """Defines a object for executing an IOR command.
 
@@ -109,7 +109,7 @@ class IorCommand(CommandWithParameters):
         self.daos_destroy = FormattedParameter("--daos.destroy", True)
         self.daos_group = FormattedParameter("--daos.group {}")
         self.daos_chunk = FormattedParameter("--daos.chunk_size {}", 1048576)
-        self.daos_oclass = FormattedParameter("--daos.oclass {}")
+        self.daos_oclass = FormattedParameter("--daos.oclass {}", "SX")
 
     def get_param_names(self):
         """Get a sorted list of the defined IorCommand parameters."""
@@ -140,8 +140,7 @@ class IorCommand(CommandWithParameters):
         """
         super(IorCommand, self).get_params(test, path)
 
-    def set_daos_params(self, group, pool, cont_uuid=None, display=True,
-                        mpiio_oclass=None):
+    def set_daos_params(self, group, pool, cont_uuid=None, display=True):
         """Set the IOR parameters for the DAOS group, pool, and container uuid.
 
         Args:
@@ -156,13 +155,6 @@ class IorCommand(CommandWithParameters):
         self.daos_cont.update(
             cont_uuid if cont_uuid else uuid.uuid4(),
             "daos_cont" if display else None)
-
-        # assigning obj class as SX in None else
-        # the desired one
-        if mpiio_oclass is None:
-            self.mpiio_oclass = 214
-        else:
-            self.mpiio_oclass = mpiio_oclass
 
     def set_daos_pool_params(self, pool, display=True):
         """Set the IOR parameters that are based on a DAOS pool.
@@ -263,7 +255,8 @@ class IorCommand(CommandWithParameters):
                 "DAOS_POOL": self.daos_pool.value,
                 "DAOS_SVCL": self.daos_svcl.value,
                 "FI_PSM2_DISCONNECT": 1,
-                "IOR_HINT__MPI__romio_daos_obj_class": self.mpiio_oclass,
+                "IOR_HINT__MPI__romio_daos_obj_class":
+                self.daos_oclass.value
             })
             assign_env = ["{}={}".format(key, val) for key, val in env.items()]
             exports = "export {}; ".format("; export ".join(assign_env))

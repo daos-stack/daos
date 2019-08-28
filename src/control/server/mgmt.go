@@ -34,23 +34,23 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/log"
+	log "github.com/daos-stack/daos/src/control/logging"
 )
 
 var jsonDBRelPath = "share/daos/control/mgmtinit_db.json"
 
-// controlService implements the control plane control service, satisfying
+// ControlService implements the control plane control service, satisfying
 // pb.MgmtCtlServer, and is the data container for the service.
-type controlService struct {
+type ControlService struct {
 	nvme              *nvmeStorage
 	scm               *scmStorage
 	supportedFeatures FeatureMap
-	config            *configuration
+	config            *Configuration
 	drpc              drpc.DomainSocketClient
 }
 
 // Setup delegates to Storage implementation's Setup methods.
-func (c *controlService) Setup() {
+func (c *ControlService) Setup() {
 	// init sync primitive for storage formatting on each server
 	for idx := range c.config.Servers {
 		c.config.Servers[idx].formatted = make(chan struct{})
@@ -68,7 +68,7 @@ func (c *controlService) Setup() {
 }
 
 // Teardown delegates to Storage implementation's Teardown methods.
-func (c *controlService) Teardown() {
+func (c *ControlService) Teardown() {
 	if err := c.nvme.Teardown(); err != nil {
 		log.Debugf(
 			"%s\n", errors.Wrap(err, "Warning, NVMe Teardown"))
@@ -80,10 +80,98 @@ func (c *controlService) Teardown() {
 	}
 }
 
+func (c *ControlService) ScanNVMe() (common.NvmeControllers, error) {
+	resp := new(pb.ScanStorageResp)
+
+	c.nvme.Discover(resp)
+	if resp.Nvmestate.Status != pb.ResponseStatus_CTRL_SUCCESS {
+		return nil, fmt.Errorf("nvme scan: %s", resp.Nvmestate.Error)
+	}
+	return c.nvme.controllers, nil
+}
+
+func (c *ControlService) ScanSCM() (common.ScmModules, error) {
+	resp := new(pb.ScanStorageResp)
+
+	c.scm.Discover(resp)
+	if resp.Scmstate.Status != pb.ResponseStatus_CTRL_SUCCESS {
+		return nil, fmt.Errorf("scm scan: %s", resp.Scmstate.Error)
+	}
+	return c.scm.modules, nil
+}
+
+type PrepNvmeRequest struct {
+	HugePageCount int
+	TargetUser    string
+	PCIWhitelist  string
+	ResetOnly     bool
+}
+
+func (c *ControlService) PrepNvme(req PrepNvmeRequest) error {
+	// run reset first to ensure reallocation of hugepages
+	if err := c.nvme.spdk.reset(); err != nil {
+		return errors.WithMessage(err, "SPDK setup reset")
+	}
+
+	// if we're only resetting, just return before prep
+	if req.ResetOnly {
+		return nil
+	}
+
+	return errors.WithMessage(
+		c.nvme.spdk.prep(req.HugePageCount, req.TargetUser, req.PCIWhitelist),
+		"SPDK setup",
+	)
+}
+
+type PrepScmRequest struct {
+	Reset bool
+}
+
+func (c *ControlService) PrepScm(req PrepScmRequest) (rebootStr string, pmemDevs []pmemDev, err error) {
+	if err = c.scm.Setup(); err != nil {
+		err = errors.WithMessage(err, "SCM setup")
+		return
+	}
+
+	if !c.scm.initialized {
+		err = errors.New(msgScmNotInited)
+		return
+	}
+
+	if len(c.scm.modules) == 0 {
+		err = errors.New(msgScmNoModules)
+		return
+	}
+
+	var needsReboot bool
+	if req.Reset {
+		// run reset to remove namespaces and clear regions
+		needsReboot, err = c.scm.PrepReset()
+		if err != nil {
+			err = errors.WithMessage(err, "SCM prep reset")
+			return
+		}
+	} else {
+		// transition to the next state in SCM preparation
+		needsReboot, pmemDevs, err = c.scm.Prep()
+		if err != nil {
+			err = errors.WithMessage(err, "SCM prep reset")
+			return
+		}
+	}
+
+	if needsReboot {
+		rebootStr = msgScmRebootRequired
+	}
+
+	return
+}
+
 // awaitStorageFormat checks if running as root and server superblocks exist,
 // if both conditions are true, wait until storage is formatted through client
 // API calls from management tool. Then drop privileges of running process.
-func awaitStorageFormat(config *configuration) error {
+func awaitStorageFormat(config *Configuration) error {
 	msgFormat := "storage format on server %d"
 	msgSkip := "skipping " + msgFormat
 	msgWait := "waiting for " + msgFormat + "\n"
@@ -93,7 +181,7 @@ func awaitStorageFormat(config *configuration) error {
 		if err == nil && !isMount {
 			log.Debugf("attempting to mount existing SCM dir %s\n", srv.ScmMount)
 
-			mntType, devPath, mntOpts, err := getMntParams(&srv)
+			mntType, devPath, mntOpts, err := getMntParams(srv)
 			if err != nil {
 				return errors.WithMessage(err, "getting scm mount params")
 			}
@@ -152,10 +240,14 @@ func loadInitData(relPath string) (m FeatureMap, err error) {
 	return
 }
 
+func NewControlService(cfg *Configuration) (*ControlService, error) {
+	return newControlService(cfg, getDrpcClientConnection(cfg.SocketDir))
+}
+
 // newcontrolService creates a new instance of controlService struct.
 func newControlService(
-	config *configuration, client drpc.DomainSocketClient) (
-	cs *controlService, err error) {
+	config *Configuration, client drpc.DomainSocketClient) (
+	cs *ControlService, err error) {
 
 	fMap, err := loadInitData(jsonDBRelPath)
 	if err != nil {
@@ -167,7 +259,7 @@ func newControlService(
 		return
 	}
 
-	cs = &controlService{
+	cs = &ControlService{
 		nvme:              nvmeStorage,
 		scm:               newScmStorage(config),
 		supportedFeatures: fMap,

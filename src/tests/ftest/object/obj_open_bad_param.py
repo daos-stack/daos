@@ -108,7 +108,7 @@ class ObjOpenBadParam(TestWithServers):
 
         Test Description: Attempt to open a garbage object handle.
 
-        :avocado: tags=object,objopen,objopenbadhand,regression,vm,small
+        :avocado: tags=all,object,full_regression,tiny,objopenbadhandle
         """
         saved_handle = self.obj.obj_handle
         self.obj.obj_handle = 8675309
@@ -130,7 +130,7 @@ class ObjOpenBadParam(TestWithServers):
         Test Description: Attempt to open an object with a garbage container
                           handle.
 
-        :avocado: tags=object,objopen,objopenbadconthand,regression,vm,small
+        :avocado: tags=all,object,full_regression,tiny,objopenbadcont
         """
         saved_coh = self.container.coh
         self.container.coh = 8675309
@@ -152,7 +152,7 @@ class ObjOpenBadParam(TestWithServers):
         Test Description: Attempt to open an object in a container with
                           a closed handle.
 
-        :avocado: tags=object,objopen,objopenclosedcont,regression,vm,small
+        :avocado: tags=all,object,full_regression,tiny,objopenclosedcont
         """
         self.container.close()
 
@@ -174,7 +174,7 @@ class ObjOpenBadParam(TestWithServers):
                           to open an object that's had its handle set to
                           be the same as a valid pool handle.
 
-        :avocado: tags=object,objopen,objopenpoolhandle,regression,vm,small
+        :avocado: tags=all,object,full_regression,tiny,objopenbadpool
         """
         saved_oh = self.obj.obj_handle
         self.obj.obj_handle = self.pool.handle
@@ -196,7 +196,7 @@ class ObjOpenBadParam(TestWithServers):
         Test Description: Attempt to open an object in a container with
                           an empty ranklist.
 
-        :avocado: tags=object,objopen,objopennullrl,regression,vm,small
+        :avocado: tags=all,object,full_regression,tiny,objopennullrl
         """
         # null rl
         saved_rl = self.obj.tgt_rank_list
@@ -218,7 +218,7 @@ class ObjOpenBadParam(TestWithServers):
         Test Description: Attempt to open an object in a container with
                           null object id.
 
-        :avocado: tags=object,objopen,objopennulloid,regression,vm,small
+        :avocado: tags=all,object,full_regression,tiny,objopennulloid
         """
         # null oid
         saved_oid = self.obj.c_oid
@@ -240,7 +240,7 @@ class ObjOpenBadParam(TestWithServers):
         Test Description: Attempt to open an object in a container with
                           null tgt.
 
-        :avocado: tags=object,objopen,objopennulltgts,regression,vm,small
+        :avocado: tags=all,object,full_regression,tiny,objopennulltgts
         """
         # null tgts
         saved_ctgts = self.obj.c_tgts
@@ -261,8 +261,7 @@ class ObjOpenBadParam(TestWithServers):
 
         Test Description: Attempt to open an object in a container with
                           null object attributes.
-
-        :avocado: tags=object,objopen,objopennullattr,regression,vm,small
+        :avocado: tags=all,object,full_regression,tiny,objopennullattr
         """
         # null attr
         saved_attr = self.obj.attr

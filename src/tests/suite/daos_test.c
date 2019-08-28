@@ -30,8 +30,8 @@
 #include "daos_test.h"
 
 /** All tests in default order (tests that kill nodes must be last) */
-static const char *all_tests = "mpceiADKCoROdr";
-static const char *all_tests_defined = "mpceixADKCoROdr";
+static const char *all_tests = "mpceXiADKCoROdr";
+static const char *all_tests_defined = "mpceXixADKCoROdr";
 
 static void
 print_usage(int rank)
@@ -45,6 +45,7 @@ print_usage(int rank)
 	print_message("daos_test -p|--daos_pool_tests\n");
 	print_message("daos_test -c|--daos_container_tests\n");
 	print_message("daos_test -C|--capa\n");
+	print_message("daos_test -X|--dtx\n");
 	print_message("daos_test -i|--daos_io_tests\n");
 	print_message("daos_test -x|--epoch_io\n");
 	print_message("daos_test -A|--array\n");
@@ -97,6 +98,13 @@ run_specified_tests(const char *tests, int rank, int size,
 			daos_test_print(rank, "DAOS capability tests..");
 			daos_test_print(rank, "=================");
 			nr_failed += run_daos_capa_test(rank, size);
+			break;
+		case 'X':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "dtx test..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_dtx_test(rank, size, sub_tests,
+						       sub_tests_size);
 			break;
 		case 'i':
 			daos_test_print(rank, "\n\n=================");
@@ -207,6 +215,7 @@ main(int argc, char **argv)
 		{"pool",	no_argument,		NULL,	'p'},
 		{"cont",	no_argument,		NULL,	'c'},
 		{"capa",	no_argument,		NULL,	'C'},
+		{"dtx",		no_argument,		NULL,	'X'},
 		{"io",		no_argument,		NULL,	'i'},
 		{"epoch_io",	no_argument,		NULL,	'x'},
 		{"obj_array",	no_argument,		NULL,	'A'},
@@ -235,7 +244,7 @@ main(int argc, char **argv)
 
 	memset(tests, 0, sizeof(tests));
 
-	while ((opt = getopt_long(argc, argv, "ampcCdixADKeoROg:s:u:E:w:W:hr",
+	while ((opt = getopt_long(argc, argv, "ampcCdXixADKeoROg:s:u:E:w:W:hr",
 				  long_options, &index)) != -1) {
 		if (strchr(all_tests_defined, opt) != NULL) {
 			tests[ntests] = opt;

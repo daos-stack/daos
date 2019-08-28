@@ -341,7 +341,7 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 
 		if (sym_len != 0) {
 			D_ASSERT(value);
-			entry->value = strdup(value);
+			entry->value = strndup(value, PATH_MAX-1);
 			if (entry->value == NULL)
 				D_GOTO(out, rc = ENOMEM);
 		}
@@ -592,7 +592,7 @@ check_name(const char *name)
 {
 	if (name == NULL || strchr(name, '/'))
 		return EINVAL;
-	if (strlen(name) > DFS_MAX_PATH)
+	if (strnlen(name, DFS_MAX_PATH) > DFS_MAX_PATH)
 		return EINVAL;
 	return 0;
 }
@@ -850,18 +850,25 @@ open_symlink(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 		if (exists)
 			return EEXIST;
 
-		entry.value = (char *)value;
+		if (value == NULL || strnlen(value, PATH_MAX-1) > PATH_MAX-1)
+			return -DER_INVAL;
+
 		rc = oid_gen(dfs, 0, false, &sym->oid);
 		if (rc != 0)
 			return rc;
+		oid_cp(&entry.oid, sym->oid);
 		entry.mode = sym->mode;
 		entry.atime = entry.mtime = entry.ctime = time(NULL);
 		entry.chunk_size = 0;
+		sym->value = strndup(value, PATH_MAX-1);
+		entry.value = sym->value;
 
 		rc = insert_entry(parent->oh, th, sym->name, entry);
-		if (rc)
+		if (rc) {
+			D_FREE(sym->value);
 			D_ERROR("Inserting entry %s failed (rc = %d)\n",
 				sym->name, rc);
+		}
 		return rc;
 	}
 	return ENOTSUP;
@@ -1286,7 +1293,8 @@ out:
 }
 
 int
-dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force)
+dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force,
+	   daos_obj_id_t *oid)
 {
 	struct dfs_entry	entry = {0};
 	daos_handle_t           th = DAOS_TX_NONE;
@@ -1351,6 +1359,8 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force)
 	if (rc)
 		D_GOTO(out, rc);
 
+	if (oid)
+		oid_cp(oid, entry.oid);
 out:
 	return rc;
 }
@@ -1374,14 +1384,14 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 		return EINVAL;
 	if (_obj == NULL)
 		return EINVAL;
-	if (path == NULL)
+	if (path == NULL || strnlen(path, PATH_MAX-1) > PATH_MAX-1)
 		return EINVAL;
 
 	daos_mode = get_daos_obj_mode(flags);
 	if (daos_mode == -1)
 		return EINVAL;
 
-	rem = strdup(path);
+	rem = strndup(path, PATH_MAX-1);
 	if (rem == NULL)
 		return ENOMEM;
 
@@ -1510,7 +1520,7 @@ dfs_lookup_loop:
 
 		if (!S_ISDIR(entry.mode)) {
 			D_ERROR("Invalid entry type in path.\n");
-			D_GOTO(err_obj, rc = -EINVAL);
+			D_GOTO(err_obj, rc = EINVAL);
 		}
 
 		/* open the directory object */
@@ -1798,7 +1808,7 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 			stbuf->st_size = sizeof(entry);
 	} else {
 		D_ERROR("Invalid entry type (not a dir, file, symlink).\n");
-		D_GOTO(err_obj, rc = -EINVAL);
+		D_GOTO(err_obj, rc = EINVAL);
 	}
 
 	if (mode)
@@ -1946,7 +1956,7 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 		break;
 	}
 	case S_IFLNK:
-		new_obj->value = strdup(obj->value);
+		new_obj->value = strndup(obj->value, PATH_MAX-1);
 		break;
 	default:
 		D_ERROR("Invalid object type (not a dir, file, symlink).\n");
@@ -2351,6 +2361,121 @@ out:
 }
 
 int
+dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
+{
+	daos_handle_t		th = DAOS_TX_NONE;
+	uid_t			euid;
+	daos_key_t		dkey;
+	daos_handle_t           oh;
+	int			rc;
+	d_sg_list_t		sgls[3];
+	d_iov_t			sg_iovs[3];
+	daos_iod_t		iods[3];
+	bool			set_size = false;
+	int			i = 0;
+	int			akeys_nr;
+
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (obj == NULL)
+		return EINVAL;
+	if (dfs->amode != O_RDWR)
+		return EPERM;
+
+	euid = geteuid();
+	/** only root or owner can change mode */
+	if (euid != 0 && dfs->uid != euid)
+		return EPERM;
+
+	/** Open parent object and fetch entry of obj from it */
+	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RO, &oh, NULL);
+	if (rc)
+		return daos_der2errno(rc);
+
+	/** set dkey as the entry name */
+	d_iov_set(&dkey, (void *)obj->name, strlen(obj->name));
+
+	if (flags & DFS_SET_ATTR_MODE) {
+		/** set akey as the mode attr name */
+		d_iov_set(&sg_iovs[i], &stbuf->st_mode, sizeof(mode_t));
+		d_iov_set(&iods[i].iod_name, MODE_NAME, strlen(MODE_NAME));
+		iods[i].iod_size = sizeof(mode_t);
+		i++;
+		flags &= ~DFS_SET_ATTR_MODE;
+	}
+	if (flags & DFS_SET_ATTR_ATIME) {
+		d_iov_set(&sg_iovs[i], &stbuf->st_atim, sizeof(time_t));
+		d_iov_set(&iods[i].iod_name, ATIME_NAME, strlen(ATIME_NAME));
+		iods[i].iod_size = sizeof(time_t);
+
+		flags &= ~DFS_SET_ATTR_ATIME;
+		i++;
+	}
+	if (flags & DFS_SET_ATTR_MTIME) {
+		d_iov_set(&sg_iovs[i], &stbuf->st_mtim, sizeof(time_t));
+		d_iov_set(&iods[i].iod_name, MTIME_NAME, strlen(MTIME_NAME));
+		iods[i].iod_size = sizeof(time_t);
+
+		flags &= ~DFS_SET_ATTR_MTIME;
+		i++;
+	}
+	if (flags & DFS_SET_ATTR_SIZE) {
+
+		/* It shouldn't be possible to set the size of something which
+		 * isn't a file but check here anyway, as entries which aren't
+		 * files won't have array objects so check and return error here
+		 */
+		if (!S_ISREG(obj->mode))
+			D_GOTO(out_obj, rc = EIO);
+
+		set_size = true;
+		flags &= ~DFS_SET_ATTR_SIZE;
+	}
+
+	if (flags) {
+		D_GOTO(out_obj, rc = EINVAL);
+	}
+
+	if (set_size) {
+		rc = daos_array_set_size(obj->oh, th, stbuf->st_size, NULL);
+		if (rc)
+			D_GOTO(out_obj, rc = daos_der2errno(rc));
+	}
+
+	akeys_nr = i;
+
+	if (akeys_nr == 0)
+		D_GOTO(out_stat, 0);
+
+	for (i = 0; i < akeys_nr; i++) {
+		sgls[i].sg_nr		= 1;
+		sgls[i].sg_nr_out	= 0;
+		sgls[i].sg_iovs		= &sg_iovs[i];
+
+		daos_csum_set(&iods[i].iod_kcsum, NULL, 0);
+		iods[i].iod_nr		= 1;
+		iods[i].iod_recxs	= NULL;
+		iods[i].iod_eprs	= NULL;
+		iods[i].iod_csums	= NULL;
+		iods[i].iod_type	= DAOS_IOD_SINGLE;
+	}
+
+	rc = daos_obj_update(oh, th, &dkey, akeys_nr, iods, sgls, NULL);
+	if (rc) {
+		D_ERROR("Failed to update attr (rc = %d)\n", rc);
+		D_GOTO(out_obj, rc = daos_der2errno(rc));
+	}
+
+out_stat:
+	rc = entry_stat(dfs, th, oh, obj->name, stbuf);
+
+out_obj:
+	daos_obj_close(oh, NULL);
+	return rc;
+
+}
+
+int
 dfs_get_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t *size)
 {
 	int rc;
@@ -2446,6 +2571,8 @@ dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size)
 
 	if (obj == NULL || !S_ISLNK(obj->mode))
 		return EINVAL;
+	if (obj->value == NULL)
+		return EINVAL;
 
 	val_size = strlen(obj->value) + 1;
 	if (*size == 0 || buf == NULL) {
@@ -2464,7 +2591,7 @@ dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size)
 
 int
 dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
-	 char *new_name)
+	 char *new_name, daos_obj_id_t *oid)
 {
 	struct dfs_entry	entry = {0}, new_entry = {0};
 	daos_handle_t		th = DAOS_TX_NONE;
@@ -2565,6 +2692,9 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 				new_name, rc);
 			D_GOTO(out, rc);
 		}
+
+		if (oid)
+			oid_cp(oid, new_entry.oid);
 	}
 
 	/** rename symlink */
@@ -2745,7 +2875,7 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 	char		*xname = NULL;
 	daos_handle_t	th = DAOS_TX_NONE;
 	d_sg_list_t	sgl;
-	d_iov_t	sg_iov;
+	d_iov_t		sg_iov;
 	daos_iod_t	iod;
 	daos_key_t	dkey;
 	daos_handle_t	oh;
@@ -2790,21 +2920,20 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name,
 
 		iod.iod_size	= DAOS_REC_ANY;
 		rc = daos_obj_fetch(oh, th, &dkey, 1, &iod, NULL, NULL, NULL);
-		if (rc)
+		if (rc) {
+			D_ERROR("Failed to get extended attribute %s\n", name);
 			D_GOTO(out, rc = daos_der2errno(rc));
+		}
 
 		if (iod.iod_size == 0)
 			exists = false;
 		else
 			exists = true;
 
-		if (flags == XATTR_CREATE && exists) {
-			D_ERROR("Xattribute already exists (XATTR_CREATE)");
+		if (flags == XATTR_CREATE && exists)
 			D_GOTO(out, rc = EEXIST);
-		} else if (flags == XATTR_REPLACE && !exists) {
-			D_ERROR("Xattribute does not exist (XATTR_REPLACE)");
+		if (flags == XATTR_REPLACE && !exists)
 			D_GOTO(out, rc = ENOENT);
-		}
 	}
 
 	/** set sgl for update */
@@ -2899,8 +3028,8 @@ close:
 	daos_obj_close(oh, NULL);
 out:
 	D_FREE(xname);
-	if (rc == -ENOENT)
-		rc = -ENODATA;
+	if (rc == ENOENT)
+		rc = ENODATA;
 	return rc;
 }
 

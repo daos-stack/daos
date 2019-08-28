@@ -54,13 +54,6 @@ dfuse_cb_symlink(fuse_req_t req, const char *link,
 	if (rc)
 		D_GOTO(err, rc);
 
-	/* Allocate an inode number for the symlink.
-	 *
-	 * This is needed for the symlink itself, as dfs does not allocate an
-	 * object for links so the standard inode lookup does not work.
-	 */
-	ie->ie_stat.st_ino = atomic_fetch_add(&fs_handle->dpi_ino_next, 1);
-
 	DFUSE_TRA_INFO(ie, "Inserting inode %lu", ie->ie_stat.st_ino);
 
 	/* TODO: Should this not keep a reference on the parent */

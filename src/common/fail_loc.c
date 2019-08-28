@@ -143,7 +143,7 @@ daos_fail_init(void)
 }
 
 void
-daos_fail_fini()
+daos_fail_fini(void)
 {
 	d_fault_inject_fini();
 }
