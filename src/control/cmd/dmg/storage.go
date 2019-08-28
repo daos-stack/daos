@@ -25,6 +25,7 @@ package main
 
 import (
 	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	log "github.com/daos-stack/daos/src/control/logging"
 )
@@ -69,7 +70,7 @@ func formatStor(conns client.Connect, force bool) {
 			"specified in the server config file will be erased.\n" +
 			"Please be patient as it may take several minutes.\n")
 
-	if force || getConsent() {
+	if force || common.GetConsent() {
 		log.Info("")
 		cCtrlrResults, cMountResults := conns.FormatStorage()
 		log.Infof("NVMe storage format results:\n%s", cCtrlrResults)
@@ -102,7 +103,7 @@ func updateStor(conns client.Connect, req *pb.UpdateStorageReq, force bool) {
 			"updated. Please check this is a supported upgrade path " +
 			"and be patient as it may take several minutes.\n")
 
-	if force || getConsent() {
+	if force || common.GetConsent() {
 		log.Info("")
 		cCtrlrResults, cModuleResults := conns.UpdateStorage(req)
 		log.Infof("NVMe storage update results:\n%s", cCtrlrResults)

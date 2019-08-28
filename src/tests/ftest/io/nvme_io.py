@@ -51,7 +51,7 @@ class NvmeIo(IorTestBase):
         Use Cases:
             Running multiple IOR on same server start instance.
 
-        :avocado: tags=nvme,nvme_io,large
+        :avocado: tags=all,daosio,full_regression,hw,nvme_io
         """
         # Pool params
         pool_mode = self.params.get("mode", '/run/pool/createmode/*')

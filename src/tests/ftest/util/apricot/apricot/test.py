@@ -28,9 +28,12 @@ from __future__ import print_function
 
 import os
 import json
+import re
 
 from avocado import Test as avocadoTest
 from avocado import skip
+from avocado.utils import process
+from ClusterShell.NodeSet import NodeSet, NodeSetParseError
 
 import fault_config_utils
 import agent_utils
@@ -83,9 +86,11 @@ class Test(avocadoTest):
         self.hostlist_servers = None
         self.hostfile_servers = None
         self.hostfile_servers_slots = 1
+        self.partition_servers = None
         self.hostlist_clients = None
         self.hostfile_clients = None
         self.hostfile_clients_slots = 1
+        self.partition_clients = None
         self.d_log = None
         self.uri_file = None
         self.fault_file = None
@@ -114,10 +119,9 @@ class TestWithoutServers(Test):
         self.prefix = build_paths['PREFIX']
         self.ompi_prefix = build_paths["OMPI_PREFIX"]
         self.tmp = os.path.join(self.prefix, 'tmp')
-        self.daos_test = os.path.join(self.basepath, 'install', 'bin',
-                                      'daos_test')
+        self.daos_test = os.path.join(self.prefix, 'bin', 'daos_test')
         self.orterun = os.path.join(self.ompi_prefix, "bin", "orterun")
-        self.daosctl = os.path.join(self.basepath, 'install', 'bin', 'daosctl')
+        self.daosctl = os.path.join(self.prefix, 'bin', 'daosctl')
 
         # setup fault injection, this MUST be before API setup
         fault_list = self.params.get("fault_list", '/run/faults/*/')
@@ -173,6 +177,13 @@ class TestWithServers(TestWithoutServers):
         server_count = self.params.get("server_count", "/run/hosts/*")
         client_count = self.params.get("client_count", "/run/hosts/*")
 
+        # If server or client host list are defined through valid slurm
+        # partition names override any hosts specified through lists.
+        test_servers, self.partition_servers = self.get_partition_hosts(
+            "server_partition", test_servers)
+        test_clients, self.partition_clients = self.get_partition_hosts(
+            "client_partition", test_clients)
+
         # Supported combinations of yaml hosts arguments:
         #   - test_machines [+ server_count]
         #   - test_servers [+ server_count]
@@ -202,8 +213,6 @@ class TestWithServers(TestWithoutServers):
                     "Test requires {} {}; {} specified".format(
                         expected_count, host_type, actual_count))
 
-        # Start the servers and clients
-
         # Create host files
         self.hostfile_servers = write_host_file.write_host_file(
             self.hostlist_servers, self.workdir, self.hostfile_servers_slots)
@@ -212,9 +221,11 @@ class TestWithServers(TestWithoutServers):
                 self.hostlist_clients, self.workdir,
                 self.hostfile_clients_slots)
 
+        # Start the clients (agents)
         self.agent_sessions = agent_utils.run_agent(
             self.basepath, self.hostlist_servers, self.hostlist_clients)
 
+        # Start the servers
         if self.setup_start_servers:
             self.start_servers()
 
@@ -249,3 +260,41 @@ class TestWithServers(TestWithoutServers):
         else:
             server_utils.run_server(
                 self.hostfile_servers, self.server_group, self.basepath)
+
+    def get_partition_hosts(self, partition_key, host_list):
+        """[summary].
+
+        Args:
+            partition_key ([type]): [description]
+            host_list ([type]): [description]
+
+        Returns:
+            tuple: [description]
+
+        """
+        hosts = []
+        partiton_name = self.params.get(partition_key, "/run/hosts/*")
+        if partiton_name is not None:
+            cmd = "scontrol show partition {}".format(partiton_name)
+
+            try:
+                result = process.run(cmd, shell=True, timeout=10)
+            except process.CmdError as error:
+                self.log.warning(
+                    "Unable to obtain hosts from the {} slurm "
+                    "partition: {}".format(partiton_name, error))
+                result = None
+            if result:
+                output = result.stdout
+                try:
+                    hosts = list(
+                        NodeSet(re.findall(r"\s+Nodes=(.*)", output)[0]))
+                except (NodeSetParseError, IndexError):
+                    self.log.warning(
+                        "Unable to obtain hosts from the {} slurm partition "
+                        "output: {}".format(partiton_name, output))
+
+        if hosts:
+            return hosts, partiton_name
+        else:
+            return host_list, None

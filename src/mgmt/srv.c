@@ -111,7 +111,7 @@ process_killrank_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_DEBUG(DB_MGMT, "Received request to kill rank (%u) on pool (%s)\n",
+	D_INFO("Received request to kill rank (%u) on pool (%s)\n",
 		req->rank, req->pool_uuid);
 
 	D_ALLOC_PTR(resp);
@@ -148,7 +148,7 @@ process_setrank_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_DEBUG(DB_MGMT, "Received request to set rank to %u\n",
+	D_INFO("Received request to set rank to %u\n",
 		req->rank);
 
 	D_ALLOC_PTR(resp);
@@ -196,7 +196,7 @@ process_createms_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_DEBUG(DB_MGMT, "Received request to create MS (bootstrap=%d)\n",
+	D_INFO("Received request to create MS (bootstrap=%d)\n",
 		req->bootstrap);
 
 	D_ALLOC_PTR(resp);
@@ -242,7 +242,7 @@ process_startms_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__DaosResp	*resp = NULL;
 	int rc;
 
-	D_DEBUG(DB_MGMT, "Received request to start MS\n");
+	D_INFO("Received request to start MS\n");
 
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
@@ -287,7 +287,7 @@ process_getattachinfo_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_DEBUG(DB_MGMT, "Received request to get attach info\n");
+	D_INFO("Received request to get attach info\n");
 
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
@@ -342,7 +342,7 @@ process_join_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_DEBUG(DB_MGMT, "Received request to join\n");
+	D_INFO("Received request to join\n");
 
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
@@ -409,6 +409,71 @@ out:
 	D_FREE(resp);
 }
 
+static int
+create_ownership_props(daos_prop_t **out_prop, char *owner, char *owner_grp)
+{
+	char	       *out_owner = NULL;
+	char	       *out_owner_grp = NULL;
+	daos_prop_t    *new_prop = NULL;
+	uint32_t	entries = 0;
+	uint32_t	idx = 0;
+	int		rc = 0;
+
+	if (owner != NULL && *owner != '\0') {
+		D_ASPRINTF(out_owner, "%s", owner);
+		if (out_owner == NULL) {
+			rc = -DER_NOMEM;
+			goto err_out;
+		}
+
+		entries++;
+	}
+
+	if (owner_grp != NULL && *owner_grp != '\0') {
+		D_ASPRINTF(out_owner_grp, "%s", owner_grp);
+		if (out_owner_grp == NULL) {
+			rc = -DER_NOMEM;
+			goto err_out;
+		}
+
+		entries++;
+	}
+
+	if (entries == 0) {
+		D_ERROR("No owner identities provided, aborting!\n");
+		rc = -DER_INVAL;
+		goto err_out;
+	}
+
+	new_prop = daos_prop_alloc(entries);
+	if (new_prop == NULL) {
+		rc = -DER_NOMEM;
+		goto err_out;
+	}
+
+	if (out_owner != NULL) {
+		new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_OWNER;
+		new_prop->dpp_entries[idx].dpe_str = out_owner;
+		idx++;
+	}
+
+	if (out_owner_grp != NULL) {
+		new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_OWNER_GROUP;
+		new_prop->dpp_entries[idx].dpe_str = out_owner_grp;
+		idx++;
+	}
+
+	*out_prop = new_prop;
+
+	return rc;
+
+err_out:
+	daos_prop_free(new_prop);
+	D_FREE(out_owner_grp);
+	D_FREE(out_owner);
+	return rc;
+}
+
 static void
 process_createpool_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
@@ -417,6 +482,7 @@ process_createpool_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	d_rank_list_t		*targets = NULL;
 	d_rank_list_t		*svc = NULL;
 	uuid_t			pool_uuid;
+	daos_prop_t		*prop = NULL;
 	int			buflen = 16;
 	int			index;
 	int			i;
@@ -435,7 +501,7 @@ process_createpool_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_DEBUG(DB_MGMT, "Received request to create pool\n");
+	D_INFO("Received request to create pool\n");
 
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
@@ -462,10 +528,14 @@ process_createpool_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	uuid_generate(pool_uuid);
 	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(pool_uuid));
 
+	rc = create_ownership_props(&prop, req->user, req->usergroup);
+	if (rc != 0)
+		goto out;
+
 	/* Ranks to allocate targets (in) & svc for pool replicas (out). */
 	rc = ds_mgmt_create_pool(pool_uuid, req->sys, "pmem", targets,
 				 req->scmbytes, req->nvmebytes,
-				 NULL /* props */, req->numsvcreps, &svc);
+				 prop, req->numsvcreps, &svc);
 	if (targets != NULL)
 		d_rank_list_free(targets);
 	if (rc != 0) {
@@ -536,6 +606,8 @@ out:
 
 	mgmt__create_pool_req__free_unpacked(req, NULL);
 
+	daos_prop_free(prop);
+
 	/** check for '\0' which is a static allocation from protobuf */
 	if (resp->svcreps && resp->svcreps[0] != '\0')
 		D_FREE(resp->svcreps);
@@ -564,7 +636,7 @@ process_destroypool_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_DEBUG(DB_MGMT, "Received request to destroy pool %s\n",
+	D_INFO("Received request to destroy pool %s\n",
 		req->uuid);
 
 	D_ALLOC_PTR(resp);
@@ -615,6 +687,8 @@ process_setup_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__DaosResp	*resp = NULL;
 
+	D_INFO("Received request to setup server\n");
+
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
@@ -624,8 +698,6 @@ process_setup_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	/* Response status is populated with SUCCESS on init. */
 	mgmt__daos_resp__init(resp);
-
-	D_DEBUG(DB_MGMT, "Received request to set up server\n");
 
 	dss_init_state_set(DSS_INIT_STATE_SET_UP);
 

@@ -77,7 +77,7 @@ class BadEvictTest(Test):
         Test ID: DAOS-427
         Test Description: Pass bad parameters to the pool evict clients call.
 
-        :avocado: tags=pool,poolevict,badparam,badevict
+        :avocado: tags=all,pool,full_regression,tiny,badevict
         """
 
         # parameters used in pool create
