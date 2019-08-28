@@ -42,6 +42,7 @@ import os
 SIMPLE_TEST_SRC = ['test_crt_barrier.c', 'threaded_client.c',
                    'no_pmix_multi_ctx.c', 'threaded_server.c', 'test_pmix.c',
                    'test_corpc_version.c', 'test_corpc_prefwd.c',
+                   'test_corpc_exclusive.c',
                    'test_proto_server.c', 'test_proto_client.c',
                    'test_no_timeout.c', 'test_ep_cred_server.c',
                    'test_ep_cred_client.c', 'no_pmix_launcher_server.c',

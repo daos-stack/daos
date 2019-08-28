@@ -73,8 +73,8 @@ struct crt_corpc_hdr {
 	d_string_t		 coh_grpid;
 	/* collective bulk handle */
 	crt_bulk_t		 coh_bulk_hdl;
-	/* optional excluded ranks */
-	d_rank_list_t		*coh_excluded_ranks;
+	/* optional excluded or exclusive ranks */
+	d_rank_list_t		*coh_filter_ranks;
 	/* optional inline ranks, for example piggyback the group members */
 	d_rank_list_t		*coh_inline_ranks;
 	/* group membership version */
@@ -118,7 +118,8 @@ typedef enum {
 /* corpc info to track the tree topo and child RPCs info */
 struct crt_corpc_info {
 	struct crt_grp_priv	*co_grp_priv;
-	d_rank_list_t		*co_excluded_ranks;
+	/* excluded or exclusive ranks */
+	d_rank_list_t		*co_filter_ranks;
 	uint32_t		 co_grp_ver;
 	uint32_t		 co_tree_topo;
 	d_rank_t		 co_root;

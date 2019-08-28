@@ -419,7 +419,7 @@ crt_proc_corpc_hdr(crt_proc_t proc, struct crt_corpc_hdr *hdr)
 		D_ERROR("crt proc error, rc: %d.\n", rc);
 		D_GOTO(out, rc);
 	}
-	rc = crt_proc_d_rank_list_ptr_t(hg_proc, &hdr->coh_excluded_ranks);
+	rc = crt_proc_d_rank_list_ptr_t(hg_proc, &hdr->coh_filter_ranks);
 	if (rc != 0) {
 		D_ERROR("crt proc error, rc: %d.\n", rc);
 		D_GOTO(out, rc);

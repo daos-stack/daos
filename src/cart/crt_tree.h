@@ -52,8 +52,8 @@ int crt_tree_get_nchildren(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 			   d_rank_t grp_root, d_rank_t grp_self,
 			   uint32_t *nchildren);
 int crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
-			  d_rank_list_t *exclude_ranks, int tree_topo,
-			  d_rank_t grp_root, d_rank_t grp_self,
+			  bool exclusive, d_rank_list_t *filter_ranks,
+			  int tree_topo, d_rank_t grp_root, d_rank_t grp_self,
 			  d_rank_list_t **children_rank_list, bool *ver_match);
 int crt_tree_get_parent(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 			d_rank_list_t *exclude_ranks, int tree_topo,

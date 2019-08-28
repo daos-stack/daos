@@ -33,3 +33,9 @@ tests: !mux
     srv_arg: "--name service_group --is_service"
     srv_env: ""
     srv_ppn: "5"
+  corpc_exclusive:
+    name: corpc_exclusive
+    srv_bin: tests/test_corpc_exclusive
+    srv_arg: "--name service_group --is_service"
+    srv_env: ""
+    srv_ppn: "5"

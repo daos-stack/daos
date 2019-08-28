@@ -1165,11 +1165,10 @@ crt_group_rank_s2p(crt_group_t *subgrp, d_rank_t rank_in, d_rank_t *rank_out);
  *
  * \param[in] crt_ctx          CRT context
  * \param[in] grp              CRT group for the collective RPC
- * \param[in] excluded_ranks   optional excluded ranks, the RPC will be
- *                             delivered to all members in the group except
- *                             those in excluded_ranks.
- *                             the ranks in excluded_ranks are numbered in
- *                             primary group.
+ * \param[in] filter_ranks     optional excluded or exclusive ranks. the RPC
+ *                             will be delivered to all members in the group
+ *                             except or exclusively to those in ranks.
+ *                             the ranks are numbered in primary group.
  * \param[in] opc              unique opcode for the RPC
  * \param[in] co_bulk_hdl      collective bulk handle
  * \param[in] priv             A private pointer associated with the request
@@ -1177,7 +1176,9 @@ crt_group_rank_s2p(crt_group_t *subgrp, d_rank_t rank_in, d_rank_t *rank_out);
  *                             2nd parameter.
  * \param[in] flags            collective RPC flags for example taking
  *                             CRT_RPC_FLAG_GRP_DESTROY to destroy the subgroup
- *                             when this bcast RPC successfully finished.
+ *                             when this bcast RPC successfully finished, or
+ *                             CRT_RPC_FLAG_EXCLUSIVE to send exclusively to
+ *                             \a filter_ranks.
  * \param[in] tree_topo        tree topology for the collective propagation,
  *                             can be calculated by crt_tree_topo().
  *                             See \a crt_tree_type,
@@ -1188,7 +1189,7 @@ crt_group_rank_s2p(crt_group_t *subgrp, d_rank_t rank_in, d_rank_t *rank_out);
  */
 int
 crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
-		     d_rank_list_t *excluded_ranks, crt_opcode_t opc,
+		     d_rank_list_t *filter_ranks, crt_opcode_t opc,
 		     crt_bulk_t co_bulk_hdl, void *priv,  uint32_t flags,
 		     int tree_topo, crt_rpc_t **req);
 

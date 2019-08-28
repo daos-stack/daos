@@ -44,7 +44,7 @@
 static inline int
 crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 		    struct crt_grp_priv *grp_priv, bool grp_ref_taken,
-		    d_rank_list_t *excluded_ranks, uint32_t grp_ver,
+		    d_rank_list_t *filter_ranks, uint32_t grp_ver,
 		    crt_bulk_t co_bulk_hdl, void *priv, uint32_t flags,
 		    int tree_topo, d_rank_t grp_root, bool init_hdr,
 		    bool root_excluded)
@@ -53,6 +53,7 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 	struct crt_corpc_hdr	*co_hdr;
 	int			 rc = 0;
 	d_rank_list_t		*membs;
+	uint32_t		 nr;
 
 	D_ASSERT(rpc_priv != NULL);
 	D_ASSERT(grp_priv != NULL);
@@ -61,8 +62,7 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 	if (co_info == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = d_rank_list_dup_sort_uniq(&co_info->co_excluded_ranks,
-				       excluded_ranks);
+	rc = d_rank_list_dup_sort_uniq(&co_info->co_filter_ranks, filter_ranks);
 	if (rc != 0) {
 		D_ERROR("d_rank_list_dup failed, rc: %d.\n", rc);
 		D_FREE_PTR(co_info);
@@ -73,9 +73,19 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 	co_info->co_grp_ref_taken = 1;
 	co_info->co_grp_priv = grp_priv;
 
-	membs = grp_priv_get_membs(grp_priv);
-	d_rank_list_filter(membs,
-			   co_info->co_excluded_ranks, false /* exclude */);
+	if (co_info->co_filter_ranks != NULL) {
+		membs = grp_priv_get_membs(grp_priv);
+		nr = co_info->co_filter_ranks->rl_nr;
+		d_rank_list_filter(membs, co_info->co_filter_ranks,
+				   false /* exclude */);
+		if ((flags & CRT_RPC_FLAG_EXCLUSIVE) &&
+		    (co_info->co_filter_ranks->rl_nr != nr)) {
+			D_ERROR("%u/%u exclusive ranks out of group\n",
+				nr - co_info->co_filter_ranks->rl_nr, nr);
+			D_GOTO(out, rc = -DER_OOG);
+		}
+	}
+
 	co_info->co_grp_ver = grp_ver;
 	co_info->co_tree_topo = tree_topo;
 	co_info->co_root = grp_root;
@@ -94,9 +104,11 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 			rpc_priv->crp_flags |= CRT_RPC_FLAG_PRIMARY_GRP;
 		else if (flags & CRT_RPC_FLAG_GRP_DESTROY)
 			rpc_priv->crp_flags |= CRT_RPC_FLAG_GRP_DESTROY;
+		if (flags & CRT_RPC_FLAG_EXCLUSIVE)
+			rpc_priv->crp_flags |= CRT_RPC_FLAG_EXCLUSIVE;
 
 		co_hdr->coh_grpid = grp_priv->gp_pub.cg_grpid;
-		co_hdr->coh_excluded_ranks = co_info->co_excluded_ranks;
+		co_hdr->coh_filter_ranks = co_info->co_filter_ranks;
 		co_hdr->coh_inline_ranks = NULL;
 		co_hdr->coh_grp_ver = grp_ver;
 		co_hdr->coh_tree_topo = tree_topo;
@@ -115,7 +127,7 @@ void
 crt_corpc_info_fini(struct crt_rpc_priv *rpc_priv)
 {
 	D_ASSERT(rpc_priv->crp_coll && rpc_priv->crp_corpc_info);
-	d_rank_list_free(rpc_priv->crp_corpc_info->co_excluded_ranks);
+	d_rank_list_free(rpc_priv->crp_corpc_info->co_filter_ranks);
 	if (rpc_priv->crp_corpc_info->co_grp_ref_taken)
 		crt_grp_priv_decref(rpc_priv->crp_corpc_info->co_grp_priv);
 	D_FREE_PTR(rpc_priv->crp_corpc_info);
@@ -150,12 +162,13 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 	}
 
 	rc = crt_corpc_info_init(rpc_priv, grp_priv, grp_ref_taken,
-			co_hdr->coh_excluded_ranks,
-			co_hdr->coh_grp_ver /* grp_ver */,
-			rpc_priv->crp_pub.cr_co_bulk_hdl,
-			NULL /* priv */, rpc_priv->crp_flags,
-			co_hdr->coh_tree_topo, co_hdr->coh_root,
-			false /* init_hdr */, false /* root_excluded */);
+				 co_hdr->coh_filter_ranks,
+				 co_hdr->coh_grp_ver /* grp_ver */,
+				 rpc_priv->crp_pub.cr_co_bulk_hdl,
+				 NULL /* priv */, rpc_priv->crp_flags,
+				 co_hdr->coh_tree_topo, co_hdr->coh_root,
+				 false /* init_hdr */,
+				 false /* root_excluded */);
 	if (rc != 0) {
 		/* rollback refcount taken in above */
 		if (grp_ref_taken)
@@ -353,7 +366,7 @@ out:
 
 int
 crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
-		     d_rank_list_t *excluded_ranks, crt_opcode_t opc,
+		     d_rank_list_t *filter_ranks, crt_opcode_t opc,
 		     crt_bulk_t co_bulk_hdl, void *priv,  uint32_t flags,
 		     int tree_topo, crt_rpc_t **req)
 {
@@ -361,8 +374,9 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 	struct crt_grp_priv	*default_grp_priv;
 	struct crt_grp_gdata	*grp_gdata;
 	struct crt_rpc_priv	*rpc_priv = NULL;
-	d_rank_list_t		*tobe_excluded_ranks = NULL;
+	d_rank_list_t		*tobe_filter_ranks = NULL;
 	bool			 root_excluded = false;
+	bool			 exclusive = flags & CRT_RPC_FLAG_EXCLUSIVE;
 	d_rank_t		 grp_root, pri_root;
 	uint32_t		 grp_ver;
 	int			 rc = 0;
@@ -417,34 +431,41 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 	grp_root = grp_priv->gp_self;
 	pri_root = grp_priv_get_primary_rank(grp_priv, grp_root);
 
-
-	tobe_excluded_ranks = excluded_ranks;
+	tobe_filter_ranks = filter_ranks;
 	/*
-	 * if bcast initiator is in excluded ranks, here we remove it and set
+	 * if bcast initiator is not in the scope, here we add it and set
 	 * a special flag to indicate need not to execute RPC handler.
 	 */
-	if (d_rank_in_rank_list(excluded_ranks, pri_root)) {
-		d_rank_list_t		tmp_rank_list;
-		d_rank_t		tmp_rank;
-
-		tmp_rank = pri_root;
-		tmp_rank_list.rl_nr = 1;
-		tmp_rank_list.rl_ranks = &tmp_rank;
-
-		rc =  d_rank_list_dup(&tobe_excluded_ranks, excluded_ranks);
+	rc = d_rank_in_rank_list(filter_ranks, pri_root);
+	if ((exclusive && !rc) || (!exclusive && rc)) {
+		rc = d_rank_list_dup(&tobe_filter_ranks, filter_ranks);
 		if (rc != 0)
 			D_GOTO(out, rc);
 
-		d_rank_list_filter(&tmp_rank_list, tobe_excluded_ranks,
-				   true /* exclude */);
 		root_excluded = true;
+
+		/* make sure pri_root is in the scope */
+		if (exclusive) {
+			rc = d_rank_list_append(tobe_filter_ranks, pri_root);
+			if (rc != 0)
+				D_GOTO(out, rc);
+		} else {
+			d_rank_list_t	tmp_rank_list;
+			d_rank_t	tmp_rank;
+
+			tmp_rank = pri_root;
+			tmp_rank_list.rl_nr = 1;
+			tmp_rank_list.rl_ranks = &tmp_rank;
+			d_rank_list_filter(&tmp_rank_list, tobe_filter_ranks,
+					   true /* exclude */);
+		}
 	}
 
 	D_RWLOCK_RDLOCK(grp_priv->gp_rwlock_ft);
 	grp_ver = default_grp_priv->gp_membs_ver;
 	D_RWLOCK_UNLOCK(grp_priv->gp_rwlock_ft);
 
-	rc = crt_corpc_info_init(rpc_priv, grp_priv, false, tobe_excluded_ranks,
+	rc = crt_corpc_info_init(rpc_priv, grp_priv, false, tobe_filter_ranks,
 				 grp_ver /* grp_ver */, co_bulk_hdl, priv,
 				 flags, tree_topo, grp_root,
 				 true /* init_hdr */, root_excluded);
@@ -459,7 +480,7 @@ out:
 	if (rc < 0)
 		crt_rpc_priv_free(rpc_priv);
 	if (root_excluded)
-		d_rank_list_free(tobe_excluded_ranks);
+		d_rank_list_free(tobe_filter_ranks);
 	return rc;
 }
 
@@ -498,7 +519,7 @@ corpc_add_child_rpc(struct crt_rpc_priv *parent_rpc_priv,
 	child_co_hdr->coh_grpid = parent_co_hdr->coh_grpid;
 	/* child's coh_bulk_hdl is different with parent_co_hdr */
 	child_co_hdr->coh_bulk_hdl = parent_rpc_priv->crp_pub.cr_co_bulk_hdl;
-	child_co_hdr->coh_excluded_ranks = parent_co_hdr->coh_excluded_ranks;
+	child_co_hdr->coh_filter_ranks = parent_co_hdr->coh_filter_ranks;
 	child_co_hdr->coh_inline_ranks = parent_co_hdr->coh_inline_ranks;
 	child_co_hdr->coh_grp_ver = parent_co_hdr->coh_grp_ver;
 	child_co_hdr->coh_tree_topo = parent_co_hdr->coh_tree_topo;
@@ -720,11 +741,15 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 			    parent_rpc_priv->crp_pub.cr_output_size > 0) {
 				/*
 				 * when root excluded, copy first reply's
-				 * content to parent.
+				 * content to parent and zero child's copy so
+				 * that any pointers contained therein belong
+				 * solely to parent.
 				 */
 				memcpy(parent_rpc_priv->crp_pub.cr_output,
 				       child_rpc_priv->crp_pub.cr_output,
 				       parent_rpc_priv->crp_pub.cr_output_size);
+				memset(child_rpc_priv->crp_pub.cr_output, 0,
+				       child_rpc_priv->crp_pub.cr_output_size);
 			} else {
 				D_ASSERT(co_ops->co_aggregate != NULL);
 				rc = co_ops->co_aggregate(child_req,
@@ -819,7 +844,8 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 	}
 
 	rc = crt_tree_get_children(co_info->co_grp_priv, co_info->co_grp_ver,
-				   co_info->co_excluded_ranks,
+				   rpc_priv->crp_flags & CRT_RPC_FLAG_EXCLUSIVE,
+				   co_info->co_filter_ranks,
 				   co_info->co_tree_topo, co_info->co_root,
 				   co_info->co_grp_priv->gp_self,
 				   &children_rank_list, &ver_match);

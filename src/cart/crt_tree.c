@@ -45,8 +45,8 @@
 
 static int
 crt_get_filtered_grp_rank_list(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
-			       d_rank_list_t *exclude_ranks, d_rank_t root,
-			       d_rank_t self, d_rank_t *grp_size,
+			       bool exclusive, d_rank_list_t *filter_ranks,
+			       d_rank_t root, d_rank_t self, d_rank_t *grp_size,
 			       uint32_t *grp_root, d_rank_t *grp_self,
 			       d_rank_list_t **result_grp_rank_list,
 			       bool *allocated)
@@ -73,13 +73,20 @@ crt_get_filtered_grp_rank_list(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	D_ASSERT(grp_rank_list != NULL);
 	*allocated = true;
 
-	if (exclude_ranks == NULL || exclude_ranks->rl_nr == 0) {
-		*grp_size = grp_rank_list->rl_nr;
-
-	} else {
-		d_rank_list_filter(exclude_ranks, grp_rank_list,
+	if (exclusive) {
+		d_rank_list_filter(filter_ranks, grp_rank_list,
+				   false /* exclude */);
+		if (grp_rank_list->rl_nr != filter_ranks->rl_nr) {
+			D_ERROR("%u/%u exclusive ranks out of group\n",
+				filter_ranks->rl_nr - grp_rank_list->rl_nr,
+				filter_ranks->rl_nr);
+			d_rank_list_free(grp_rank_list);
+			grp_rank_list = NULL;
+			D_GOTO(out, rc = -DER_OOG);
+		}
+	} else if (filter_ranks != NULL && filter_ranks->rl_nr > 0) {
+		d_rank_list_filter(filter_ranks, grp_rank_list,
 				   true /* exclude */);
-
 		if (grp_rank_list->rl_nr == 0) {
 			D_DEBUG(DB_TRACE, "d_rank_list_filter(group %s) "
 				"get empty.\n", grp_priv->gp_pub.cg_grpid);
@@ -87,9 +94,8 @@ crt_get_filtered_grp_rank_list(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 			grp_rank_list = NULL;
 			D_GOTO(out, rc = 0);
 		}
-
-		*grp_size = grp_rank_list->rl_nr;
 	}
+	*grp_size = grp_rank_list->rl_nr;
 
 	rc = d_idx_in_rank_list(grp_rank_list, root, grp_root);
 	if (rc != 0) {
@@ -164,10 +170,11 @@ crt_tree_get_nchildren(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	 * grp_rank_list is the target group (filtered out the excluded ranks)
 	 * for building the tree, rank number in it is for primary group.
 	 */
-	rc = crt_get_filtered_grp_rank_list(grp_priv, grp_ver, exclude_ranks,
-					    root, self, &grp_size, &grp_root,
-					    &grp_self, &grp_rank_list,
-					    &allocated);
+	rc = crt_get_filtered_grp_rank_list(grp_priv, grp_ver,
+					    false /* exclusive */,
+					    exclude_ranks, root, self,
+					    &grp_size, &grp_root, &grp_self,
+					    &grp_rank_list, &allocated);
 	if (rc != 0) {
 		D_ERROR("crt_get_filtered_grp_rank_list(group %s, root %d, "
 			"self %d) failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
@@ -198,14 +205,14 @@ out:
 /*
  * query children rank list (rank number in primary group).
  *
- * rank number of grp_priv->gp_membs, grp_priv->gp_live_ranks and exclude_ranks
+ * rank number of grp_priv->gp_membs, grp_priv->gp_live_ranks and filter_ranks
  * are primary rank.  grp_root and grp_self are logical rank number within the
  * group.
  */
 int
 crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
-		      d_rank_list_t *exclude_ranks, int tree_topo,
-		      d_rank_t root, d_rank_t self,
+		      bool exclusive, d_rank_list_t *filter_ranks,
+		      int tree_topo, d_rank_t root, d_rank_t self,
 		      d_rank_list_t **children_rank_list, bool *ver_match)
 {
 	d_rank_list_t		*grp_rank_list = NULL;
@@ -241,13 +248,13 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	}
 
 	/*
-	 * grp_rank_list is the target group (filtered out the excluded ranks)
+	 * grp_rank_list is the target group (after applying filter_ranks)
 	 * for building the tree, rank number in it is for primary group.
 	 */
-	rc = crt_get_filtered_grp_rank_list(grp_priv, grp_ver, exclude_ranks,
-					    root, self, &grp_size, &grp_root,
-					    &grp_self, &grp_rank_list,
-					    &allocated);
+	rc = crt_get_filtered_grp_rank_list(grp_priv, grp_ver, exclusive,
+					    filter_ranks, root, self, &grp_size,
+					    &grp_root, &grp_self,
+					    &grp_rank_list, &allocated);
 	if (rc != 0) {
 		D_ERROR("crt_get_filtered_grp_rank_list(group %s, root %d, "
 			"self %d) failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
@@ -335,10 +342,11 @@ crt_tree_get_parent(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	 * grp_rank_list is the target group (filtered out the excluded ranks)
 	 * for building the tree, rank number in it is for primary group.
 	 */
-	rc = crt_get_filtered_grp_rank_list(grp_priv, grp_ver, exclude_ranks,
-					    root, self, &grp_size, &grp_root,
-					    &grp_self, &grp_rank_list,
-					    &allocated);
+	rc = crt_get_filtered_grp_rank_list(grp_priv, grp_ver,
+					    false /* exclusive */,
+					    exclude_ranks, root, self,
+					    &grp_size, &grp_root, &grp_self,
+					    &grp_rank_list, &allocated);
 	if (rc != 0) {
 		D_ERROR("crt_get_filtered_grp_rank_list(group %s, root %d, "
 			"self %d) failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
