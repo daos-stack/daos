@@ -54,10 +54,15 @@ struct  _Mgmt__CreatePoolReq
    * DAOS system identifier
    */
   char *sys;
+  /*
+   * Access Control Entries in short string format
+   */
+  size_t n_acl;
+  char **acl;
 };
 #define MGMT__CREATE_POOL_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__create_pool_req__descriptor) \
-    , 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+    , 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
 
 
 /*

@@ -187,7 +187,7 @@ void   mgmt__destroy_pool_resp__free_unpacked
   assert(message->base.descriptor == &mgmt__destroy_pool_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-static const ProtobufCFieldDescriptor mgmt__create_pool_req__field_descriptors[7] =
+static const ProtobufCFieldDescriptor mgmt__create_pool_req__field_descriptors[8] =
 {
   {
     "scmbytes",
@@ -273,8 +273,21 @@ static const ProtobufCFieldDescriptor mgmt__create_pool_req__field_descriptors[7
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "acl",
+    8,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_STRING,
+    offsetof(Mgmt__CreatePoolReq, n_acl),
+    offsetof(Mgmt__CreatePoolReq, acl),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__create_pool_req__field_indices_by_name[] = {
+  7,   /* field[7] = acl */
   3,   /* field[3] = numsvcreps */
   1,   /* field[1] = nvmebytes */
   2,   /* field[2] = ranks */
@@ -286,7 +299,7 @@ static const unsigned mgmt__create_pool_req__field_indices_by_name[] = {
 static const ProtobufCIntRange mgmt__create_pool_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 7 }
+  { 0, 8 }
 };
 const ProtobufCMessageDescriptor mgmt__create_pool_req__descriptor =
 {
@@ -296,7 +309,7 @@ const ProtobufCMessageDescriptor mgmt__create_pool_req__descriptor =
   "Mgmt__CreatePoolReq",
   "mgmt",
   sizeof(Mgmt__CreatePoolReq),
-  7,
+  8,
   mgmt__create_pool_req__field_descriptors,
   mgmt__create_pool_req__field_indices_by_name,
   1,  mgmt__create_pool_req__number_ranges,

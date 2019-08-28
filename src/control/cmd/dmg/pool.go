@@ -181,8 +181,12 @@ func createPool(conns client.Connect, scmSize string, nvmeSize string,
 		return errors.Wrap(err, "calculating pool storage sizes")
 	}
 
+	var acl []string
 	if aclFile != "" {
-		return errors.New("ACL file parsing not implemented")
+		acl, err = readACLFile(newFileOpener(), aclFile)
+		if err != nil {
+			return err
+		}
 	}
 
 	if numSvcReps > maxNumSvcReps {
@@ -199,7 +203,7 @@ func createPool(conns client.Connect, scmSize string, nvmeSize string,
 	req := &pb.CreatePoolReq{
 		Scmbytes: uint64(scmBytes), Nvmebytes: uint64(nvmeBytes),
 		Ranks: rankList, Numsvcreps: numSvcReps, Sys: sys,
-		User: usr, Usergroup: grp,
+		User: usr, Usergroup: grp, Acl: acl,
 	}
 
 	log.Infof("Creating DAOS pool: %+v\n", req)

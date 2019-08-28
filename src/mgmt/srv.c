@@ -37,6 +37,7 @@
 #include <daos_srv/daos_server.h>
 #include <daos_srv/rsvc.h>
 #include <daos_api.h>
+#include <daos_security.h>
 
 #include "mgmt.pb-c.h"
 #include "srv.pb-c.h"
@@ -410,14 +411,60 @@ out:
 }
 
 static int
-create_ownership_props(daos_prop_t **out_prop, char *owner, char *owner_grp)
+ace_strs_to_acl(char **ace_strs, size_t ace_nr, struct daos_acl **acl)
 {
-	char	       *out_owner = NULL;
-	char	       *out_owner_grp = NULL;
-	daos_prop_t    *new_prop = NULL;
+	struct daos_ace	*tmp_aces[ace_nr];
+	struct daos_acl	*tmp_acl = NULL;
+	size_t		i;
+	int		rc;
+
+	if (ace_strs == NULL || ace_nr == 0)
+		return 0; /* nothing to do */
+
+	memset(tmp_aces, 0, sizeof(tmp_aces));
+
+	for (i = 0; i < ace_nr; i++) {
+		rc = daos_ace_from_str(ace_strs[i], &(tmp_aces[i]));
+		if (rc != 0) {
+			D_ERROR("Failed to convert string '%s' to ACE, "
+				"err=%d\n", ace_strs[i], rc);
+			D_GOTO(out, rc);
+		}
+	}
+
+	tmp_acl = daos_acl_create(tmp_aces, ace_nr);
+	if (tmp_acl == NULL) {
+		D_ERROR("Failed to allocate ACL\n");
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	*acl = tmp_acl;
+	rc = 0;
+
+out:
+	for (i = 0; i < ace_nr; i++)
+		daos_ace_free(tmp_aces[i]);
+	return rc;
+}
+
+static int
+create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
+		  char **ace_list, size_t ace_nr)
+{
+	char		*out_owner = NULL;
+	char		*out_owner_grp = NULL;
+	struct daos_acl	*out_acl = NULL;
+	daos_prop_t	*new_prop = NULL;
 	uint32_t	entries = 0;
 	uint32_t	idx = 0;
 	int		rc = 0;
+
+	rc = ace_strs_to_acl(ace_list, ace_nr, &out_acl);
+	if (rc != 0)
+		D_GOTO(err_out, rc);
+
+	if (out_acl != NULL)
+		entries++;
 
 	if (owner != NULL && *owner != '\0') {
 		D_ASPRINTF(out_owner, "%s", owner);
@@ -440,7 +487,7 @@ create_ownership_props(daos_prop_t **out_prop, char *owner, char *owner_grp)
 	}
 
 	if (entries == 0) {
-		D_ERROR("No owner identities provided, aborting!\n");
+		D_ERROR("No prop entries provided, aborting!\n");
 		rc = -DER_INVAL;
 		goto err_out;
 	}
@@ -463,12 +510,19 @@ create_ownership_props(daos_prop_t **out_prop, char *owner, char *owner_grp)
 		idx++;
 	}
 
+	if (out_acl != NULL) {
+		new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_ACL;
+		new_prop->dpp_entries[idx].dpe_val_ptr = out_acl;
+		idx++;
+	}
+
 	*out_prop = new_prop;
 
 	return rc;
 
 err_out:
 	daos_prop_free(new_prop);
+	daos_acl_free(out_acl);
 	D_FREE(out_owner_grp);
 	D_FREE(out_owner);
 	return rc;
@@ -528,7 +582,8 @@ process_createpool_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	uuid_generate(pool_uuid);
 	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(pool_uuid));
 
-	rc = create_ownership_props(&prop, req->user, req->usergroup);
+	rc = create_pool_props(&prop, req->user, req->usergroup, req->acl,
+			       req->n_acl);
 	if (rc != 0)
 		goto out;
 
