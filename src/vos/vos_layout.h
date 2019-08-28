@@ -193,8 +193,8 @@ struct vos_dtx_entry_df {
 	uint32_t			te_flags;
 	/** The intent of related modification. */
 	uint32_t			te_intent;
-	/** The second timestamp when handles the transaction. */
-	uint64_t			te_sec;
+	/** The timestamp when handles the transaction. */
+	uint64_t			te_time;
 	/** The list of vos_dtx_record_df in SCM. */
 	umem_off_t			te_records;
 	/** The next committed DTX in global list. */

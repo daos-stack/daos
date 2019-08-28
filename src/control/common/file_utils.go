@@ -35,7 +35,7 @@ import (
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
 
-	"github.com/daos-stack/daos/src/control/log"
+	log "github.com/daos-stack/daos/src/control/logging"
 )
 
 const (
@@ -231,20 +231,9 @@ func SyncDir(path string) (err error) {
 	return d.Sync()
 }
 
-// CheckSudo returns true if current process is running as root or with sudo.
-// Returns either sudoer or current user if not running under sudo.
-func CheckSudo() (bool, string) {
-	usr := os.Getenv(sudoUserEnv)
-	if usr == "" {
-		usr = rootUser
-	}
-
-	return (os.Geteuid() == 0), usr
-}
-
 // Run executes command in os and builds useful error message.
 func Run(cmd string) error {
-	log.Debugdf(UtilLogDepth, "exec '%s'\n", cmd)
+	log.Debugf("exec '%s'\n", cmd)
 
 	// executing as subshell enables pipes in cmd string
 	out, err := exec.Command("sh", "-c", cmd).CombinedOutput()

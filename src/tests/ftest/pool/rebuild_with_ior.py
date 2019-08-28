@@ -59,6 +59,9 @@ class RebuildWithIOR(IorTestBase):
         file1 = "daos:testFile1"
         file2 = "daos:testFile2"
 
+        # create pool
+        self.create_pool()
+
         # make sure pool looks good before we start
         checks = {
             "pi_nnodes": len(self.hostlist_servers),

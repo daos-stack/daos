@@ -5,7 +5,7 @@
 
 Name:          daos
 Version:       0.6.0
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -34,17 +34,20 @@ BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
 BuildRequires: libcmocka-devel
 BuildRequires: readline-devel
+BuildRequires: systemd
 %if (0%{?rhel} >= 7)
 BuildRequires:  numactl-devel
 BuildRequires: CUnit-devel
 BuildRequires: golang-bin
 BuildRequires: libipmctl-devel
+BuildRequires: python-devel python36-devel
 %else
 %if (0%{?suse_version} >= 1315)
 BuildRequires:  libnuma-devel
 BuildRequires: cunit-devel
 BuildRequires: go1.10
 BuildRequires: ipmctl-devel
+BuildRequires: python-devel python3-devel
 %endif
 %endif
 Requires: cart
@@ -141,6 +144,9 @@ cp -al src/utils/py/daos_cref.py %{?buildroot}%{daoshome}/utils/py
 cp -al src/utils/py/conversion.py %{?buildroot}%{daoshome}/utils/py
 mkdir -p %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
+mkdir -p %{?buildroot}/%{_unitdir}
+install -m 644 utils/systemd/daos-server.service %{?buildroot}/%{_unitdir}
+install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 
 %post server -p /sbin/ldconfig
 %postun server -p /sbin/ldconfig
@@ -185,6 +191,7 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_libdir}/daos_srv/libsecurity.so
 %{_libdir}/daos_srv/libvos_srv.so
 %{_datadir}/%{name}
+%{_unitdir}/daos-server.service
 
 %files client
 %{_bindir}/daos_shell
@@ -200,9 +207,12 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_libdir}/libduns.so
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
+%{_libdir}/python2.7/site-packages/pydaos_shim_27.so
+%{_libdir}/python3/site-packages/pydaos_shim_3.so
 %{_datadir}/%{name}/ioil-ld-opts
 %{_prefix}%{_sysconfdir}/daos.yml
 %{_prefix}%{_sysconfdir}/daos_agent.yml
+%{_unitdir}/daos-agent.service
 
 %files tests
 %{daoshome}/utils/py
@@ -226,6 +236,9 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_libdir}/*.a
 
 %changelog
+* Thu Aug 15 2019 David Quigley <david.quigley@intel.com>
+- Add systemd unit files to packaging.
+
 * Thu Jul 25 2019 Brian J. Murrell <brian.murrell@intel.com>
 - Add git hash and commit count to release
 

@@ -33,6 +33,7 @@ import (
 	"github.com/golang/protobuf/proto"
 
 	. "github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/security"
 )
 
 // Mocks
@@ -79,6 +80,7 @@ func (e *mockExt) LookupGroupID(gid uint32) (*user.Group, error) {
 // Helpers for the unit tests below
 
 func expectAuthSysErrorForToken(t *testing.T, badToken *Token, expectedErrorMessage string) {
+	t.Helper()
 	authSys, err := AuthSysFromAuthToken(badToken)
 
 	if authSys != nil {
@@ -105,7 +107,7 @@ func TestAuthSysFromAuthToken_ErrorsIfTokenCannotBeUnmarshaled(t *testing.T) {
 	badToken := Token{Flavor: Flavor_AUTH_SYS,
 		Data: zeroArray}
 	expectAuthSysErrorForToken(t, &badToken,
-		"unmarshaling AUTH_SYS: proto: Sys: illegal tag 0 (wire type 0)")
+		"unmarshaling AUTH_SYS: proto: auth.Sys: illegal tag 0 (wire type 0)")
 }
 
 func TestAuthSysFromAuthToken_SucceedsWithGoodToken(t *testing.T) {
@@ -155,7 +157,7 @@ func TestAuthSysFromAuthToken_SucceedsWithGoodToken(t *testing.T) {
 // AuthSysRequestFromCreds tests
 
 func TestAuthSysRequestFromCreds_failsIfDomainInfoNil(t *testing.T) {
-	result, err := AuthSysRequestFromCreds(&mockExt{}, nil)
+	result, err := AuthSysRequestFromCreds(&mockExt{}, nil, nil)
 
 	if result != nil {
 		t.Error("Expected a nil request")
@@ -164,13 +166,12 @@ func TestAuthSysRequestFromCreds_failsIfDomainInfoNil(t *testing.T) {
 	ExpectError(t, err, "No credentials supplied", "")
 }
 
-func getTestCreds(uid uint32, gid uint32) *DomainInfo {
-	return &DomainInfo{
-		creds: &syscall.Ucred{
-			Uid: uid,
-			Gid: gid,
-		},
+func getTestCreds(uid uint32, gid uint32) *security.DomainInfo {
+	creds := &syscall.Ucred{
+		Uid: uid,
+		Gid: gid,
 	}
+	return security.InitDomainInfo(creds, "test")
 }
 
 func TestAuthSysRequestFromCreds_returnsAuthSys(t *testing.T) {
@@ -200,7 +201,7 @@ func TestAuthSysRequestFromCreds_returnsAuthSys(t *testing.T) {
 			})
 	}
 
-	result, err := AuthSysRequestFromCreds(ext, creds)
+	result, err := AuthSysRequestFromCreds(ext, creds, nil)
 
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -249,7 +250,7 @@ func TestAuthSysRequestFromCreds_UidLookupFails(t *testing.T) {
 	expectedErr := fmt.Errorf("Failed to lookup uid %v: %v", uid,
 		ext.lookupUserIDErr)
 
-	result, err := AuthSysRequestFromCreds(ext, creds)
+	result, err := AuthSysRequestFromCreds(ext, creds, nil)
 
 	if result != nil {
 		t.Error("Expected a nil result")
@@ -278,7 +279,7 @@ func TestAuthSysRequestFromCreds_GidLookupFails(t *testing.T) {
 	expectedErr := fmt.Errorf("Failed to lookup gid %v: %v", gid,
 		ext.lookupGroupIDErr)
 
-	result, err := AuthSysRequestFromCreds(ext, creds)
+	result, err := AuthSysRequestFromCreds(ext, creds, nil)
 
 	if result != nil {
 		t.Error("Expected a nil result")
@@ -314,7 +315,7 @@ func TestAuthSysRequestFromCreds_GroupIDListFails(t *testing.T) {
 		testUser.username,
 		testUser.groupIDErr)
 
-	result, err := AuthSysRequestFromCreds(ext, creds)
+	result, err := AuthSysRequestFromCreds(ext, creds, nil)
 
 	if result != nil {
 		t.Error("Expected a nil result")

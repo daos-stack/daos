@@ -66,7 +66,7 @@ func newMockStorageConfig(
 	mountRet error, unmountRet error, mkdirRet error, removeRet error,
 	scmMount string, scmClass ScmClass, scmDevs []string, scmSize int,
 	bdevClass BdevClass, bdevDevs []string, existsRet bool,
-) *configuration {
+) *Configuration {
 
 	c := newDefaultConfiguration(newMockExt(nil, existsRet, mountRet,
 		true, unmountRet, mkdirRet, removeRet))
@@ -80,7 +80,7 @@ func newMockStorageConfig(
 	c.Servers[0].BdevClass = bdevClass
 	c.Servers[0].BdevList = bdevDevs
 
-	return &c
+	return c
 }
 
 func TestScanStorage(t *testing.T) {
@@ -519,7 +519,7 @@ func TestUpdateStorage(t *testing.T) {
 
 	for _, tt := range tests {
 		config := defaultMockConfig(t)
-		cs := mockControlService(&config)
+		cs := mockControlService(config)
 		cs.Setup() // init channel used for sync
 		mock := &mockUpdateStorageServer{}
 

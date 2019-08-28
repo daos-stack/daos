@@ -307,27 +307,22 @@ vos_obj_evict(struct vos_object *obj)
 	daos_lru_ref_evict(&obj->obj_llink);
 }
 
-bool
-vos_obj_evicted(struct vos_object *obj)
-{
-	return daos_lru_ref_evicted(&obj->obj_llink);
-}
-
 int
-vos_obj_revalidate(struct daos_lru_cache *occ, daos_epoch_t epoch,
-		   struct vos_object **obj_p)
+vos_obj_evict_by_oid(struct daos_lru_cache *occ, struct vos_container *cont,
+		     daos_unit_oid_t oid)
 {
-	struct vos_object *obj = *obj_p;
-	int		   rc;
+	struct obj_lru_key	 lkey;
+	struct daos_llink	*lret;
+	int			 rc;
 
-	if (!vos_obj_evicted(obj))
-		return 0;
+	lkey.olk_cont = cont;
+	lkey.olk_oid = oid;
 
-	rc = vos_obj_hold(occ, obj->obj_cont, obj->obj_id,
-			  epoch, !obj->obj_df, DAOS_INTENT_UPDATE, obj_p);
+	rc = daos_lru_ref_hold(occ, &lkey, sizeof(lkey), NULL, &lret);
 	if (rc == 0) {
-		D_ASSERT(*obj_p != obj);
-		vos_obj_release(occ, obj);
+		daos_lru_ref_evict(lret);
+		daos_lru_ref_release(occ, lret);
 	}
-	return rc;
+
+	return rc == -DER_NONEXIST ? 0 : rc;
 }

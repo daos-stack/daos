@@ -44,7 +44,7 @@ class ServerLaunch(Test):
     def test_launch(self):
         """
         Test launching a DAOS server.
-        :avocado: tags=server
+        :avocado: tags=all,wireup,full_regression,tiny,launchserver
         """
         hostfile = self.params.get("hostfile1", '/files/', "/tmp/hostfile1")
         urifile = self.params.get("urifile", '/files/', "/tmp/urifile")
@@ -59,7 +59,7 @@ class ServerLaunch(Test):
             "-x D_LOG_FILE=/mnt/shared/test/tmp/daos.log "
             "-x LD_LIBRARY_PATH=/home/skirvan/daos_m10/install/lib"
             ":/home/skirvan/daos_m10/install/lib/daos_srv "
-            "../../install/bin/daos_server -d /tmp/.daos "
+            "../../install/bin/daos_server --debug start -d /tmp/.daos "
             "-g daos_server".format(urifile)
             )
 

@@ -381,8 +381,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	rc = dbtree_open_inplace_ex(&cont->vc_otab_df->obt_btr,
 				    &cont->vc_pool->vp_uma,
 				    vos_cont2hdl(cont),
-				    cont->vc_pool->vp_vea_info,
-				    &cont->vc_btr_hdl);
+				    cont->vc_pool, &cont->vc_btr_hdl);
 	if (rc) {
 		D_ERROR("No Object handle, Tree open failed\n");
 		D_GOTO(exit, rc);

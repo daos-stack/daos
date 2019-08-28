@@ -186,17 +186,13 @@ enum {
  * Returned entry of a VOS iterator
  */
 typedef struct {
-	union {
-		/** Returned epoch. It is ignored for container iteration. */
-		daos_epoch_t			ie_epoch;
-		/** Return the DTX identifier. */
-		struct dtx_id			ie_xid;
-	};
+	/** Returned epoch. It is ignored for container iteration. */
+	daos_epoch_t				ie_epoch;
 	union {
 		/** Returned earliest update epoch for a key */
 		daos_epoch_t			ie_earliest;
 		/** Return the DTX handled time for DTX iteration. */
-		uint64_t			ie_dtx_sec;
+		uint64_t			ie_dtx_time;
 	};
 	union {
 		/** Returned entry for container UUID iterator */
@@ -204,6 +200,8 @@ typedef struct {
 		/** dkey or akey */
 		daos_key_t			ie_key;
 		struct {
+			/** The DTX identifier. */
+			struct dtx_id		ie_xid;
 			/** oid */
 			daos_unit_oid_t		ie_oid;
 			/* The DTX dkey hash for DTX iteration. */

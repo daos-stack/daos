@@ -29,7 +29,7 @@ import (
 	"golang.org/x/net/context"
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/log"
+	log "github.com/daos-stack/daos/src/control/logging"
 )
 
 // ControlService mgmt methods forward gRPC request from management tool to
@@ -38,7 +38,7 @@ import (
 // callDrpcMethodWithMessage create a new drpc Call instance, open a
 // drpc connection, send a message with the protobuf message marshalled
 // in the body, and closes the connection. Returns unmarshalled response.
-func (c *controlService) callDrpcMethodWithMessage(
+func (c *ControlService) callDrpcMethodWithMessage(
 	methodID int32, body proto.Message) (resp *pb.DaosResp, err error) {
 
 	drpcResp, err := makeDrpcCall(c.drpc, mgmtModuleID, methodID, body)
@@ -57,7 +57,7 @@ func (c *controlService) callDrpcMethodWithMessage(
 }
 
 // KillRank implements the method defined for the MgmtControl protobuf service.
-func (c *controlService) KillRank(
+func (c *ControlService) KillRank(
 	ctx context.Context, rank *pb.DaosRank) (*pb.DaosResp, error) {
 
 	log.Debugf("ControlService.KillRank dispatch\n")

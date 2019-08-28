@@ -28,7 +28,7 @@ import (
 	"os/user"
 	"strconv"
 
-	"github.com/daos-stack/daos/src/control/log"
+	log "github.com/daos-stack/daos/src/control/logging"
 	"github.com/pkg/errors"
 )
 
@@ -63,7 +63,7 @@ func getGroup(
 
 // chownAll changes ownership of required directories (recursive) and
 // files using user/group derived from config file parameters.
-func chownAll(config *configuration, usr *user.User, grp *user.Group) error {
+func chownAll(config *Configuration, usr *user.User, grp *user.Group) error {
 	uid, err := strconv.ParseInt(usr.Uid, 10, 32)
 	if err != nil {
 		return errors.Wrap(err, "parsing uid to int")
@@ -107,7 +107,7 @@ func chownAll(config *configuration, usr *user.User, grp *user.Group) error {
 // changeFileOwnership changes the ownership of required files to the user and group
 // specified in the server config file. Fails if specified values are invalid. User
 // mandatory, group optional.
-func changeFileOwnership(config *configuration) error {
+func changeFileOwnership(config *Configuration) error {
 	if config.UserName == "" {
 		return errors.New("no username supplied in config")
 	}
