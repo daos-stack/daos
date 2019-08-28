@@ -354,10 +354,10 @@ enum dss_ult_type {
 	DSS_ULT_AGGREGATE,
 	/** drpc listener ULT */
 	DSS_ULT_DRPC_LISTENER,
-	/** miscellaneous ULT */
-	DSS_ULT_MISC,
 	/** drpc handler ULT */
 	DSS_ULT_DRPC_HANDLER,
+	/** miscellaneous ULT */
+	DSS_ULT_MISC,
 };
 
 int dss_parameters_set(unsigned int key_id, uint64_t value);
