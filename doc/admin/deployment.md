@@ -108,7 +108,7 @@ resultant nvdimm namespaces are defined a device identifier (e.g. /dev/pmem0).
 DCPM can be configured and managed through the
 [ipmctl](https://github.com/intel/ipmctl) library and associated tool. The
 ipmctl command just be run as root and has pretty detailed man pages and
-help output (use “ipmctl help” to display it).
+help output (use "ipmctl help" to display it).
 
 The list of NVDIMMs can be displayed as follows:
 
@@ -136,11 +136,11 @@ allocations and therefore after initial completion the command prints a
 message to ask for a reboot (the command will not a initiate reboot itself).
 
 'sudo daos_server storage prep-scm' should be run for a second time after
-system reboot in order to create the pmem kernel devices (/dev/pmemX -
+system reboot in order to create the pmem kernel devices (/dev/pmemX
 namespaces created on the new SCM regions).
 
 One namespace per region is created, each namespace may take up to a few
-minutes to create. Details of pmem devices will be displayed in JSON format
+minutes to create. Details of pmem devices will be displayed in JSON format
 on command completion.
 
 Example output from initial call (with SCM modules set to default MemoryMode):
@@ -244,7 +244,7 @@ and Intel Persistent Memory Models usable by DAOS.
 
 ```bash
 $ daos_server storage scan
-[…]
+[...]
 NVMe SSD controller and constituent namespaces:
         PCI Addr:0000:da:00.0 Serial:PHKS7505005Y750BGN   Model:INTEL SSDPED1K750GA  Fwrev:E2010325 Socket:1
                 Namespace: id:1 capacity:750
@@ -856,9 +856,6 @@ dependency on PMIx and will allow the DAOS servers to be started
 individually (e.g. independently on each storage node via systemd) or
 collectively (e.g. pdsh, mpirun or as a Kubernetes Pod).
 
-For further details on building and running DAOS see the
-[Quickstart guide](../quickstart.md).
-
 ### Parallel Launcher
 
 As stated above, only orterun(1) is currently supported.
@@ -1005,9 +1002,9 @@ The daos\_shell is a transitory tool used to exercise the management api
 and can be used to verify that the DAOS servers are up and running. It
 is to be run as a standard, unprivileged user as follows:
 
-\$ daos\_shell –l storagenode1:10001,storagenode2:10001 storage scan
+\$ daos\_shell -l storagenode1:10001,storagenode2:10001 storage scan
 
-“storagenode” should be replaced with the actual hostname of each
+"storagenode" should be replaced with the actual hostname of each
 storage node. This command will show whether the DAOS server is properly
 running and initialized on each storage node. A more comprehensive and
 user-friendly tool built over the management API is under development. A
