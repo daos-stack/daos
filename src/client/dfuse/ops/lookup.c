@@ -125,6 +125,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_name[NAME_MAX] = '\0';
 	atomic_fetch_add(&ie->ie_ref, 1);
 
+	dfuse_reply_entry(fs_handle, ie, NULL, req);
 	return true;
 
 err:
