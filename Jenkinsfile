@@ -62,8 +62,8 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
                                 sudo chmod 0755 /var/run/daos_\\\$dir
                                 sudo chown \\\$me:\\\$me /var/run/daos_\\\$dir
                             done
-							sudo mkdir /tmp/daos_sockets
-							sudo chmod 0755 /tmp/daos_sockets
+                            sudo mkdir /tmp/daos_sockets
+                            sudo chmod 0755 /tmp/daos_sockets
                             sudo mkdir -p /mnt/daos
                             sudo mount -t tmpfs -o size=16777216k tmpfs /mnt/daos
                             sudo cp /tmp/daos_server_baseline.yaml /usr/etc/daos_server.yml
