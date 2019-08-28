@@ -39,8 +39,11 @@ import fault_config_utils
 import agent_utils
 import server_utils
 import write_host_file
+import general_utils
 from daos_api import DaosContext, DaosLog
 
+SERVER_LOG = "/tmp/server.log"
+CLIENT_LOG = "client_daos.log"
 
 # pylint: disable=invalid-name
 def skipForTicket(ticket):
@@ -160,6 +163,11 @@ class TestWithServers(TestWithoutServers):
 
         self.agent_sessions = None
         self.setup_start_servers = True
+        self.orterun_env = None
+        self.server_log = None
+        self.log_dir = None
+        self.client_log = None
+        self.test_id = str(self.name).split("-")[0]
 
     def setUp(self):
         """Set up each test case."""
@@ -243,12 +251,15 @@ class TestWithServers(TestWithoutServers):
             finally:
                 super(TestWithServers, self).tearDown()
 
-    def start_servers(self, server_groups=None):
+    def start_servers(self, server_groups=None, orterun_env=None):
         """Start the servers and clients.
 
         Args:
             server_groups (dict, optional): [description]. Defaults to None.
         """
+        if self.orterun_env:
+            orterun_env = self.orterun_env
+
         if isinstance(server_groups, dict):
             # Optionally start servers on a different subset of hosts with a
             # different server group
@@ -256,10 +267,12 @@ class TestWithServers(TestWithoutServers):
                 self.log.info(
                     "Starting servers: group=%s, hosts=%s", group, hosts)
                 hostfile = write_host_file.write_host_file(hosts, self.workdir)
-                server_utils.run_server(hostfile, group, self.basepath)
+                server_utils.run_server(hostfile, group, self.basepath,
+                                        env_dict=orterun_env)
         else:
             server_utils.run_server(
-                self.hostfile_servers, self.server_group, self.basepath)
+                self.hostfile_servers, self.server_group, self.basepath,
+                env_dict=orterun_env)
 
     def get_partition_hosts(self, partition_key, host_list):
         """[summary].
@@ -298,3 +311,31 @@ class TestWithServers(TestWithoutServers):
             return hosts, partiton_name
         else:
             return host_list, None
+
+    def log_path(self, test_name=None):
+        """Determine log path for both servers and clients"""
+        # Determine the path and name of the daos server log using the
+        # D_LOG_FILE env or, if not set, the value used in the doas server yaml
+        if test_name:
+            self.test_id = test_name
+        self.log_dir, self.server_log = os.path.split(
+            os.getenv("D_LOG_FILE", SERVER_LOG))
+        self.client_log = os.path.join(self.log_dir,
+                                       self.test_id + "_" + CLIENT_LOG)
+        # To generate the seperate client log file
+        self.orterun_env = {'D_LOG_FILE':self.client_log}
+
+    def collect_separate_logs(self):
+        """Collect separate debug logs for each test variant"""
+        # collect up a debug log so that we have a separate one for each
+        # subtest
+        if self.test_id:
+            try:
+                new_logfile = os.path.join(
+                    self.log_dir, self.test_id + "_server_" + self.server_log)
+                # rename on each of the servers
+                general_utils.pcmd(self.hostlist_servers,
+                                   '[ -f \"{0}\" ] && mv \"{0}\" \"{1}\"'.\
+                                   format(SERVER_LOG, new_logfile))
+            except KeyError as error:
+                self.log.error("KeyError: %s", error)
