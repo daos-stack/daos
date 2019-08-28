@@ -11,8 +11,8 @@ repo_url: https://github.com/daos-stack/daos
 
 # Theme
 theme:
-  name: readthedocs
-  language: en
+    name: readthedocs
+    language: en
 
 docs_dir: ./
 
@@ -20,8 +20,11 @@ docs_dir: ./
 nav:
     - Home: index.md
     - Overview:
-        - 'Storage Model': 'storage_model.md'
-        - 'Terminology': 'terminology.md'
+        - 'Terminology': 'overview/terminology.md'
+        - 'Storage Model': 'overview/storage.md'
+        - 'Transaction Model': 'overview/transaction.md'
+        - 'Fault Model': 'overview/fault.md'
+        - 'Security Model': 'overview/security.md'
     - Administration Guide:
         - 'Introduction': 'admin/intro.md'
         - 'DAOS Architecture': 'admin/architecture.md'
