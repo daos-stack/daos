@@ -278,7 +278,7 @@ static void
 rebuild_io(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
 {
 	struct ioreq	req;
-	daos_epoch_t	eph = arg->hce + arg->index * 2 + 1;
+	daos_epoch_t	eph = arg->index * 2 + 1;
 	int		i;
 	int		punch_idx = 1;
 
@@ -302,7 +302,7 @@ rebuild_io_validate(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr,
 		    bool discard)
 {
 	struct ioreq	req;
-	daos_epoch_t	eph = arg->hce + arg->index * 2 + 1;
+	daos_epoch_t	eph = arg->index * 2 + 1;
 	int		i;
 	int		punch_idx = 1;
 

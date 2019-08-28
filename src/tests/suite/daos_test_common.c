@@ -493,8 +493,6 @@ test_runable(test_arg_t *arg, unsigned int required_nodes)
 		for (i = 0; i < MAX_KILLS; i++)
 			ranks_to_kill[i] = arg->srv_nnodes -
 					   disable_nodes - i - 1;
-
-		arg->hce = daos_ts2epoch();
 	}
 
 	MPI_Bcast(&runable, 1, MPI_INT, 0, MPI_COMM_WORLD);
