@@ -36,6 +36,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	log "github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 )
 
 const (
@@ -130,7 +131,8 @@ func (srv *IOServerConfig) SetFlags(cfg *Configuration) {
 		srv.CliOpts,
 		"-t", strconv.Itoa(srv.Targets),
 		"-g", cfg.SystemName,
-		"-s", srv.ScmMount)
+		"-s", srv.ScmMount,
+		"-p", strconv.Itoa(srv.PinnedNumaNode))
 
 	if cfg.Modules != "" {
 		srv.CliOpts = append(srv.CliOpts, "-m", cfg.Modules)
@@ -205,6 +207,17 @@ func (c *Configuration) Validate() error {
 			return errors.Errorf(
 				msgConfigServerNoIface+" for I/O service %d", i)
 		}
+
+		validConfig, err := netdetect.ValidateNetworkConfig(c.Provider, srv.FabricIface, uint(srv.PinnedNumaNode))
+		if err != nil {
+			return errors.Errorf("Unable to validate the network configuration for provider: %s, with device: %s on NUMA node %d.  Error: %v", c.Provider, srv.FabricIface, srv.PinnedNumaNode, err)
+		}
+
+		if !validConfig {
+			return errors.Errorf("Network device configuration for Provider: %s, with device: %s on NUMA node %d is invalid.", c.Provider, srv.FabricIface, srv.PinnedNumaNode)
+		}
+
+		log.Debugf("Network device configuration for Provider: %s, with device: %s on NUMA node %d is valid.", c.Provider, srv.FabricIface, srv.PinnedNumaNode)
 	}
 
 	return nil

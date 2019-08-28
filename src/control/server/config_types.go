@@ -174,6 +174,7 @@ type IOServerConfig struct {
 	FirstCore       int       `yaml:"first_core"`
 	FabricIface     string    `yaml:"fabric_iface"`
 	FabricIfacePort int       `yaml:"fabric_iface_port"`
+	PinnedNumaNode  int       `yaml:"pinned_numa_node"`
 	LogMask         string    `yaml:"log_mask"`
 	LogFile         string    `yaml:"log_file"`
 	EnvVars         []string  `yaml:"env_vars"`
