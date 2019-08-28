@@ -252,6 +252,12 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 		D_GOTO(err, 0);
 	}
 
+	if (!dfuse_info->di_foreground) {
+		rc = daemon(0, 0);
+		if (rc)
+			return daos_errno2der(rc);
+	}
+
 	if (!dfuse_launch_fuse(dfuse_info, fuse_ops, &args, fs_handle)) {
 		DFUSE_TRA_ERROR(fs_handle, "Unable to register FUSE fs");
 		D_GOTO(err, 0);

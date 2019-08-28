@@ -118,6 +118,7 @@ main(int argc, char **argv)
 		{"group",		required_argument, 0, 'g'},
 		{"mountpoint",		required_argument, 0, 'm'},
 		{"singlethread",	no_argument,	   0, 'S'},
+		{"foreground",		no_argument,	   0, 'f'},
 		{"help",		no_argument,	   0, 'h'},
 		{"prefix",		required_argument, 0, 'p'},
 		{0, 0, 0, 0}
@@ -134,7 +135,7 @@ main(int argc, char **argv)
 	dfuse_info->di_threaded = true;
 
 	while (1) {
-		c = getopt_long(argc, argv, "p:c:s:g:m:Sh",
+		c = getopt_long(argc, argv, "p:c:s:g:m:Sfh",
 				long_options, NULL);
 
 		if (c == -1)
@@ -158,6 +159,9 @@ main(int argc, char **argv)
 			break;
 		case 'S':
 			dfuse_info->di_threaded = false;
+			break;
+		case 'f':
+			dfuse_info->di_foreground = true;
 			break;
 		case 'h':
 			exit(0);
