@@ -1034,7 +1034,7 @@ ds_cont_tgt_query_handler(crt_rpc_t *rpc)
 	struct cont_tgt_query_in	*in  = crt_req_get(rpc);
 	struct cont_tgt_query_out	*out = crt_reply_get(rpc);
 	struct dss_coll_ops		coll_ops;
-	struct dss_coll_args		coll_args;
+	struct dss_coll_args		coll_args = { 0 };
 	struct xstream_cont_query	pack_args;
 
 	out->tqo_min_purged_epoch  = DAOS_EPOCH_MAX;

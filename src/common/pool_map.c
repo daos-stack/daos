@@ -1812,6 +1812,54 @@ pool_map_find_failed_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 				  tgt_cnt);
 }
 
+
+/**
+ * Find all targets with @status in specific rank. Note: &tgt_pp will be
+ * allocated and the caller is reponsible to free it.
+ */
+int
+pool_map_find_by_rank_status(struct pool_map *map,
+			     struct pool_target ***tgt_ppp,
+			     unsigned int *tgt_cnt, unsigned int status,
+			     d_rank_t rank)
+{
+	struct pool_domain	*dom;
+	int			i;
+
+	*tgt_ppp = NULL;
+	*tgt_cnt = 0;
+	dom = pool_map_find_node_by_rank(map, rank);
+	if (dom == NULL)
+		return 0;
+
+	for (i = 0; i < dom->do_target_nr; i++) {
+		if (dom->do_targets[i].ta_comp.co_status & status) {
+			if (*tgt_ppp == NULL) {
+				D_ALLOC(*tgt_ppp,
+					dom->do_target_nr * sizeof(**tgt_ppp));
+				if (*tgt_ppp == NULL)
+					return -DER_NOMEM;
+			}
+			(*tgt_ppp)[(*tgt_cnt)++] = &dom->do_targets[i];
+		}
+	}
+	return 0;
+}
+
+/**
+ * Find all targets with DOWN|DOWNOUT state in specific rank.
+ */
+int
+pool_map_find_failed_tgts_by_rank(struct pool_map *map,
+				  struct pool_target ***tgt_ppp,
+				  unsigned int *tgt_cnt, d_rank_t rank)
+{
+	return pool_map_find_by_rank_status(map, tgt_ppp, tgt_cnt,
+					    PO_COMP_ST_DOWN|PO_COMP_ST_DOWNOUT,
+					    rank);
+}
+
+
 /**
  * Find all targets in DOWN state. Raft leader can use it drive target
  * rebuild one by one.
