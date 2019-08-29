@@ -480,11 +480,11 @@ nvme_format(char *ctrlr_pci_addr)
 		return ret;
 	}
 
-	format.lbaf	= 0; // LBA format defaulted to 0
-	format.ms	= 0; // metadata transferred as part of a separate buffer
-	format.pi	= 0; // protection information is not enabled
-	format.pil	= 0; // protection information location N/A
-	format.ses	= 1; // secure erase operation set to user data erase
+	format.lbaf	= 0; /* LBA format defaulted to 0 */
+	format.ms	= 0; /* metadata xfer as part of separate buffer */
+	format.pi	= 0; /* protection information is not enabled */
+	format.pil	= 0; /* protection information location N/A */
+	format.ses	= 1; /* secure erase operation set user data erase */
 
 	ret->rc = spdk_nvme_ctrlr_format(ctrlr_entry->ctrlr, ns_id, &format);
 
