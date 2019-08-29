@@ -28,7 +28,7 @@ servers:
   first_core: 22
   fabric_iface: eth1
   fabric_iface_port: 20000
-  pinned_numa_node: 0
+  pinned_numa_node: 1
   log_mask: WARN
   log_file: /tmp/daos_server2.log
   env_vars:
@@ -46,7 +46,7 @@ servers:
   bdev_size: 16
   cliopts: []
   hostname: ""
-provider: ofi+verbs;ofi_rxm
+provider: ofi+sockets
 socket_dir: ./.daos/daos_server
 access_points:
 - hostname1

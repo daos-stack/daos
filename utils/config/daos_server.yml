@@ -71,7 +71,7 @@
 ## interfaces if any and fall back to socket on the first eth card
 ## otherwise.
 #
-#fabric_ifaces: [qib0,qib1]
+#fabric_ifaces: [eth0,eth1]
 #
 #
 ## Use specific OFI provider
@@ -81,7 +81,7 @@
 ## ofi+psm2 for Omni-Path, ofi+verbs;ofi_rxm for Infiniband/RoCE and finally
 ## ofi+socket for non-RDMA-capable Ethernet.
 #
-#provider: ofi+verbs;ofi_rxm
+#provider: ofi+sockets
 #
 #
 ## Storage mount directory
@@ -216,7 +216,7 @@
 #  # by this server but please only if you have a specific need, this will
 #  # normally be chosen automatically.
 #
-#  fabric_iface: qib0
+#  fabric_iface: eth0
 #  fabric_iface_port: 20000
 #  pinned_numa_node: 0
 #
@@ -310,7 +310,7 @@
 #  # by this server but please only if you have a specific need, this will
 #  # normally be chosen automatically.
 #
-#  fabric_iface: qib1
+#  fabric_iface: eth1
 #  fabric_iface_port: 20000
 #  pinned_numa_node: 1
 #
