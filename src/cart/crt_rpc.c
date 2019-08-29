@@ -251,6 +251,7 @@ crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 	rpc_priv->crp_opc_info = opc_info;
 	rpc_priv->crp_forward = forward;
 	*priv_allocated = rpc_priv;
+	rpc_priv->crp_pub.cr_opc = opc;
 
 	RPC_TRACE(DB_TRACE, rpc_priv, "(opc: %#x rpc_pub: %p) allocated.\n",
 		  rpc_priv->crp_opc_info->coi_opc,

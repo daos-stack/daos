@@ -293,7 +293,8 @@ crt_opc_reg(struct crt_opc_info *opc_info, crt_opcode_t opc, uint32_t flags,
 	opc_info->coi_reset_timer = D_BIT_IS_SET(flags, CRT_RPC_FEAT_NO_TIMEOUT);
 	opc_info->coi_queue_front = D_BIT_IS_SET(flags, CRT_RPC_FEAT_QUEUE_FRONT);
 
-	D_DEBUG(DB_TRACE, "opc %#x, reply %s, reset_timer %s, queue_front %s\n",
+	D_DEBUG(DB_TRACE,
+		"opc %#x, no_reply %s, reset_timer %s, queue_front %s\n",
 		opc,
 		opc_info->coi_no_reply ? "enabled" : "disabled",
 		opc_info->coi_reset_timer ? "enabled" : "disabled",

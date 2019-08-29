@@ -51,6 +51,14 @@
 #include <gurt/atomic.h>
 #include <cart/api.h>
 
+#define DBG_PRINT(x...)							\
+	do {								\
+		fprintf(stderr, "SRV [rank=%d pid=%d]\t",		\
+			test.t_my_rank,					\
+			test.t_my_pid);					\
+		fprintf(stderr, x);					\
+	} while (0)
+
 #define TEST_CORPC_BASE1 0x010000000
 #define TEST_CORPC_BASE2 0x020000000
 #define TEST_CORPC_VER 0
@@ -76,6 +84,7 @@ struct test_t {
 	ATOMIC uint32_t		 t_shutdown;
 	uint32_t		 t_holdtime;
 	uint32_t		 t_my_rank;
+	uint32_t		 t_my_pid;
 	uint32_t		 t_my_group_size;
 	uint32_t		 t_target_group_size;
 	crt_context_t		 t_crt_ctx;
@@ -158,7 +167,7 @@ test_parse_args(int argc, char **argv)
 		}
 	}
 	if (optind < argc) {
-		fprintf(stderr, "non-option argv elements encountered");
+		DBG_PRINT("non-option argv elements encountered");
 		return 1;
 	}
 
@@ -185,7 +194,7 @@ static void *progress_thread(void *arg)
 
 	D_ASSERTF(rc == 0 || rc == -DER_TIMEDOUT,
 		  "Failure exiting progress loop: rc: %d\n", rc);
-	fprintf(stderr, "progress_thread: progress thread exit ...\n");
+	DBG_PRINT("progress_thread: progress thread exit ...\n");
 
 	pthread_exit(NULL);
 }
@@ -200,12 +209,12 @@ corpc_ver_mismatch_hdlr(crt_rpc_t *rpc_req)
 	rpc_req_input = crt_req_get(rpc_req);
 	rpc_req_output = crt_reply_get(rpc_req);
 	D_ASSERT(rpc_req_input != NULL && rpc_req_output != NULL);
-	fprintf(stderr, "server received request, opc: 0x%x.\n",
+	DBG_PRINT("server received request, opc: 0x%x.\n",
 		rpc_req->cr_opc);
 	rpc_req_output->result = 1;
 	rc = crt_reply_send(rpc_req);
 	D_ASSERT(rc == 0);
-	fprintf(stderr, "received magic number %d, reply %d\n",
+	DBG_PRINT("received magic number %d, reply %d\n",
 		rpc_req_input->magic, rpc_req_output->result);
 
 	/* now everybody evicts rank 2 so group destroy can succeed */
@@ -218,13 +227,18 @@ corpc_ver_mismatch_hdlr(crt_rpc_t *rpc_req)
 static void
 test_shutdown_hdlr(crt_rpc_t *rpc_req)
 {
-	fprintf(stderr, "rpc err server received shutdown request, "
+	int rc = 0;
+
+	D_DEBUG(DB_ALL, "rpc err server received shutdown request, "
 		"opc: 0x%x.\n", rpc_req->cr_opc);
 	D_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");
 	D_ASSERTF(rpc_req->cr_output == NULL, "RPC request output is NULL\n");
 
 	atomic_store_release(&test.t_shutdown, 1);
-	fprintf(stderr, "server set shutdown flag.\n");
+	D_DEBUG(DB_ALL, "server set shutdown flag.\n");
+	rc = crt_reply_send(rpc_req);
+	D_ASSERTF(rc == 0, "crt_reply_send(opc=0x%x) failed, rc %d\n",
+		  rpc_req->cr_opc, rc);
 }
 
 static void
@@ -256,7 +270,7 @@ test_rank_evict_hdlr(crt_rpc_t *rpc_req)
 	rpc_req_output = crt_reply_get(rpc_req);
 	D_ASSERT(rpc_req_input != NULL && rpc_req_output != NULL);
 
-	fprintf(stderr, "server received eviction request, opc: 0x%x.\n",
+	DBG_PRINT("server received eviction request, opc: 0x%x.\n",
 		rpc_req->cr_opc);
 
 	test.t_sub_group = crt_group_lookup("example_grpid");
@@ -347,7 +361,7 @@ local_shutdown_cmd_issue()
 static int
 sub_grp_destroy_cb(void *arg, int status)
 {
-	fprintf(stderr, "in grp_destroy_cb, arg %p, status %d.\n", arg, status);
+	DBG_PRINT("in grp_destroy_cb, arg %p, status %d.\n", arg, status);
 	local_shutdown_cmd_issue();
 
 	return 0;
@@ -375,7 +389,7 @@ rank_evict_cb(crt_rpc_t *rpc_req)
 			NULL, NULL, 0,
 			crt_tree_topo(CRT_TREE_KNOMIAL, 4),
 			&corpc_req);
-	fprintf(stderr, "crt_corpc_req_create()  rc: %d, my_rank %d.\n", rc,
+	DBG_PRINT("crt_corpc_req_create()  rc: %d, my_rank %d.\n", rc,
 		test.t_my_rank);
 	D_ASSERT(rc == 0 && corpc_req != NULL);
 	corpc_in = crt_req_get(corpc_req);
@@ -401,14 +415,14 @@ corpc_ver_mismatch_cb(crt_rpc_t *rpc_req)
 	rpc_req_output = crt_reply_get(rpc_req);
 	if (rpc_req_output == NULL)
 		return -DER_INVAL;
-	fprintf(stderr, "%s, bounced back magic number: %d, %s\n",
+	DBG_PRINT("%s, bounced back magic number: %d, %s\n",
 		test.t_local_group_name,
 		rpc_req_output->magic,
 		rpc_req_output->magic == rpc_req_input->magic ?
 		"MATCH" : "MISMATCH");
 	rc = crt_group_destroy(test.t_sub_group, sub_grp_destroy_cb,
 			&test.t_my_rank);
-	fprintf(stderr, "crt_group_destroy rc: %d, arg %p.\n",
+	DBG_PRINT("crt_group_destroy rc: %d, arg %p.\n",
 		rc, &test.t_my_rank);
 
 	return rc;
@@ -474,7 +488,7 @@ client_cb(const struct crt_cb_info *cb_info)
 		subgrp_ping_cb(rpc_req);
 		break;
 	case TEST_OPC_CORPC_VER_MISMATCH:
-		fprintf(stderr, "RPC failed, return code: %d.\n",
+		DBG_PRINT("RPC failed, return code: %d.\n",
 			cb_info->cci_rc);
 /*
  * TODO: This needs to be investigated in a test. Depending on which
@@ -520,7 +534,7 @@ sub_grp_create_cb(crt_group_t *grp, void *priv, int status)
 	struct subgrp_ping_in		*rpc_req_input;
 	int				 rc = 0;
 
-	fprintf(stderr, "sub group created, grp %p, myrank %d, status %d.\n",
+	DBG_PRINT("sub group created, grp %p, myrank %d, status %d.\n",
 		grp, *(int *) priv, status);
 	D_ASSERT(status == 0);
 	test.t_sub_group = grp;
@@ -569,7 +583,7 @@ test_run(void)
 	rc = crt_group_create(sub_grp_id, &sub_grp_membs, 1,
 			      sub_grp_create_cb,
 			      &test.t_my_rank);
-	fprintf(stderr, "crt_group_create rc: %d, my_rank %d.\n",
+	DBG_PRINT("crt_group_create rc: %d, my_rank %d.\n",
 		rc, test.t_my_rank);
 	D_ASSERT(rc == 0);
 	for (i = 0; i < test.t_my_group_size - 1; i++)
@@ -598,7 +612,7 @@ struct crt_proto_format my_proto_fmt_corpc = {
 
 static struct crt_proto_rpc_format my_proto_rpc_fmt_srv[] = {
 	{
-		.prf_flags      = 0,
+		.prf_flags	= 0,
 		.prf_req_fmt    = NULL,
 		.prf_hdlr       = test_shutdown_hdlr,
 		.prf_co_ops     = NULL,
@@ -638,6 +652,7 @@ test_init(void)
 		test.t_target_group_name ? test.t_target_group_name : "NULL\n");
 
 	flag = test.t_is_service ? CRT_FLAG_BIT_SERVER : 0;
+	flag |= CRT_FLAG_BIT_LM_DISABLE;
 	rc = crt_init(test.t_local_group_name, flag);
 	D_ASSERTF(rc == 0, "crt_init() failed, rc: %d\n", rc);
 
@@ -648,6 +663,8 @@ test_init(void)
 	rc = crt_group_rank(NULL, &test.t_my_rank);
 	D_ASSERTF(rc == 0, "crt_group_rank() failed, rc: %d\n", rc);
 	D_DEBUG(DB_TEST, "local rank is %d\n", test.t_my_rank);
+
+	test.t_my_pid = getpid();
 
 	rc = crt_group_size(NULL, &test.t_my_group_size);
 	D_ASSERTF(rc == 0, "crt_group_size() failed. rc: %d\n", rc);
@@ -703,6 +720,10 @@ test_fini()
 	rc = pthread_join(test.t_tid, NULL);
 	D_ASSERTF(rc == 0, "pthread_join() failed, rc: %d\n", rc);
 
+	rc = crt_context_flush(test.t_crt_ctx, 60);
+	D_ASSERTF(rc == DER_SUCCESS || rc == -DER_TIMEDOUT,
+		  "crt_context_destroy() failed. rc: %d\n", rc);
+
 	rc = crt_context_destroy(test.t_crt_ctx, 0);
 	D_ASSERTF(rc == 0, "crt_context_destroy() failed. rc: %d\n", rc);
 	rc = crt_finalize();
@@ -717,7 +738,7 @@ int main(int argc, char **argv)
 
 	rc = test_parse_args(argc, argv);
 	if (rc != 0) {
-		fprintf(stderr, "test_parse_args() failed, rc: %d.\n", rc);
+		DBG_PRINT("test_parse_args() failed, rc: %d.\n", rc);
 		return rc;
 	}
 	test_init();
