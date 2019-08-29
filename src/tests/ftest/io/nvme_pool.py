@@ -28,7 +28,7 @@ import avocado
 
 from daos_api import DaosPool, DaosApiError
 from ior_test_base import IorTestBase
-
+from test_utils import TestPool
 
 class NvmePool(IorTestBase):
     """Test class for NVMe with IO tests.
@@ -54,44 +54,44 @@ class NvmePool(IorTestBase):
         :avocado: tags=all,daosio,full_regression,hw,nvme_pool
         """
         # Pool params
-        pool_mode = self.params.get("mode", '/run/pool/createmode/*')
-        pool_uid = os.geteuid()
-        pool_gid = os.getegid()
-        pool_group = self.params.get("setname", '/run/pool/createset/*')
-        pool_svcn = self.params.get("svcn", '/run/pool/createsvc/')
+#        pool_mode = self.params.get("mode", '/run/pool/createmode/*')
+#        pool_uid = os.geteuid()
+#        pool_gid = os.getegid()
+#        pool_group = self.params.get("setname", '/run/pool/createset/*')
+#        pool_svcn = self.params.get("svcn", '/run/pool/createsvc/')
 
         # Test params
         tests = self.params.get("ior_sequence", '/run/ior/*')
-        object_type = self.params.get("object_type", '/run/ior/*')
+        transfer_size = self.params.get("tsize", '/run/ior/transfersize/case1/')
 
         # Loop for every IOR object type
-        for obj_type in object_type:
-            for ior_param in tests:
+        for ior_param in tests:
+            for tsize in transfer_size:
                 # There is an issue with NVMe if Transfer size>64M,
                 # Skipped this sizes for now
-                if ior_param[2] > 67108864:
-                    self.log.warning("Xfersize > 64M fails - DAOS-1264")
-                    continue
+                #if ior_param[2] > 67108864:
+                #    self.log.warning("Xfersize > 64M fails - DAOS-1264")
+                #    continue
 
                 # Create and connect to a pool
-                self.pool = DaosPool(self.context)
-                self.pool.create(
-                    pool_mode, pool_uid, pool_gid, ior_param[0], pool_group,
-                    svcn=pool_svcn, nvme_size=ior_param[1])
-                self.pool.connect(1 << 1)
+#                self.pool = DaosPool(self.context)
+#                self.pool.create(
+#                    pool_mode, pool_uid, pool_gid, ior_param[0], pool_group,
+#                    svcn=pool_svcn, nvme_size=ior_param[1])
+#                self.pool.connect(1 << 1)
 
                 # Get the current pool sizes
-                size_before_ior = self.pool.pool_query()
+#                size_before_ior = self.pool.pool_query()
 
+                self.pool.scm_size.update(ior_param[0])
+                self.pool.nvme_size.update(ior_param[1])
                 # Run ior with the parameters specified for this pass
-                self.ior_cmd.transfer_size.update(ior_param[2])
-                self.ior_cmd.block_size.update(ior_param[3])
-                self.ior_cmd.daos_oclass.update(obj_type)
-                self.ior_cmd.set_daos_params(self.server_group, self.pool)
-                self.run_ior(self.get_job_manager_command(), ior_param[4])
+                print("tsize:{}".format(tsize))
+                self.ior_cmd.transfer_size.update(tsize)
+                self.run_ior_with_pool()
 
                 # Verify IOR consumed the expected amount ofrom the pool
-                self.verify_pool_size(size_before_ior, ior_param[4])
+                #self.verify_pool_size(size_before_ior, ior_param[4])
 
                 try:
                     if self.pool:

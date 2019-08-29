@@ -51,6 +51,10 @@ class IorTestBase(TestWithServers):
         self.ior_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/ior/client_processes/*')
 
+        # Get the pool params
+        self.pool = TestPool(self.context, self.log)
+        self.pool.get_params(self)
+
     def tearDown(self):
         """Tear down each test case."""
         try:
@@ -63,8 +67,8 @@ class IorTestBase(TestWithServers):
     def create_pool(self):
         """Create a TestPool object to use with ior."""
         # Get the pool params
-        self.pool = TestPool(self.context, self.log)
-        self.pool.get_params(self)
+#        self.pool = TestPool(self.context, self.log)
+#        self.pool.get_params(self)
 
         # Create a pool
         self.pool.create()
@@ -106,13 +110,15 @@ class IorTestBase(TestWithServers):
 
         return os.path.join(mpio_util.mpichinstall, "bin", "mpirun")
 
-    def run_ior(self, manager, processes):
+    def run_ior(self, manager, processes=None):
         """Run the IOR command.
 
         Args:
             manager (str): mpi job manager command
             processes (int): number of host processes
         """
+        if self.processes and processes is None:
+            processes = seld.processes
         try:
             self.ior_cmd.run(
                 manager, self.tmp, processes, self.hostfile_clients)
