@@ -82,6 +82,32 @@ vos_csum_compute(d_sg_list_t *sgl, daos_csum_buf_t *csum)
 	return rc;
 }
 
+int
+vos_bio_addr_free(struct vos_pool *pool, bio_addr_t *addr, daos_size_t nob)
+{
+	int	rc;
+
+	if (bio_addr_is_hole(addr))
+		return 0;
+
+	if (addr->ba_type == DAOS_MEDIA_SCM) {
+		rc = umem_free(&pool->vp_umm, addr->ba_off);
+	} else {
+		uint64_t blk_off;
+		uint32_t blk_cnt;
+
+		D_ASSERT(addr->ba_type == DAOS_MEDIA_NVME);
+		blk_off = vos_byte2blkoff(addr->ba_off);
+		blk_cnt = vos_byte2blkcnt(nob);
+
+		rc = vea_free(pool->vp_vea_info, blk_off, blk_cnt);
+		if (rc)
+			D_ERROR("Error on block ["DF_U64", %u] free. %d\n",
+				blk_off, blk_cnt, rc);
+	}
+	return rc;
+}
+
 /**
  * VOS in-memory structure creation.
  * Handle-hash:
@@ -132,7 +158,7 @@ vos_imem_strts_create(struct vos_imem_strts *imem_inst)
 		goto failed;
 	}
 
-	rc = d_uhash_create(0 /* no locking */, VOS_CONT_HHASH_BITS,
+	rc = d_uhash_create(D_HASH_FT_EPHEMERAL, VOS_CONT_HHASH_BITS,
 			    &imem_inst->vis_cont_hhash);
 	if (rc) {
 		D_ERROR("Error in creating CONT ref hash: %d\n", rc);
@@ -288,7 +314,8 @@ vos_nvme_init(void)
 	if (rc != 0 && rc != -DER_EXIST)
 		return rc;
 
-	rc = bio_nvme_init(VOS_STORAGE_PATH, VOS_NVME_CONF, VOS_NVME_SHM_ID);
+	rc = bio_nvme_init(VOS_STORAGE_PATH, VOS_NVME_CONF, VOS_NVME_SHM_ID,
+			   NULL);
 	if (rc)
 		return rc;
 	vsa_nvme_init = true;
@@ -314,8 +341,9 @@ vos_fini(void)
 int
 vos_init(void)
 {
-	int		rc = 0;
-	static int	is_init = 0;
+	char		*evt_mode;
+	int		 rc = 0;
+	static int	 is_init;
 
 	if (is_init) {
 		D_ERROR("Already initialized a VOS instance\n");
@@ -360,6 +388,24 @@ vos_init(void)
 	if (rc)
 		D_GOTO(exit, rc);
 
+	evt_mode = getenv("DAOS_EVTREE_MODE");
+	if (evt_mode) {
+		if (strcasecmp("soff", evt_mode) == 0)
+			vos_evt_feats = EVT_FEAT_SORT_SOFF;
+		else if (strcasecmp("dist_even", evt_mode) == 0)
+			vos_evt_feats = EVT_FEAT_SORT_DIST_EVEN;
+	}
+	switch (vos_evt_feats) {
+	case EVT_FEAT_SORT_SOFF:
+		D_INFO("Using start offset sort for evtree\n");
+		break;
+	case EVT_FEAT_SORT_DIST_EVEN:
+		D_INFO("Using distance sort sort for evtree with even split\n");
+		break;
+	default:
+		D_INFO("Using distance with closest side split for evtree "
+		       "(default)\n");
+	}
 	is_init = 1;
 exit:
 	D_MUTEX_UNLOCK(&mutex);

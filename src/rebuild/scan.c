@@ -268,7 +268,7 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 		}
 
 		for (i = 0; i < failed_tgts_cnt; i++) {
-			if (targets[i].ta_comp.co_rank == tgt_id) {
+			if (targets[i].ta_comp.co_id == tgt_id) {
 				target_failed = true;
 				break;
 			}
@@ -324,7 +324,7 @@ rebuild_tgt_fini_obj_send_cb(daos_handle_t ih, d_iov_t *key_iov,
 	if (rc < 0)
 		return rc;
 
-	rc = dbtree_destroy(root->root_hdl);
+	rc = dbtree_destroy(root->root_hdl, NULL);
 	if (rc)
 		return rc;
 
@@ -393,7 +393,7 @@ rebuild_tree_create(daos_handle_t toh, unsigned int tree_class,
 out:
 	if (rc < 0) {
 		if (!daos_handle_is_inval(root.root_hdl))
-			dbtree_destroy(root.root_hdl);
+			dbtree_destroy(root.root_hdl, NULL);
 	}
 	return rc;
 }
@@ -694,7 +694,7 @@ rebuild_scan_leader(void *data)
 	ABT_mutex_lock(rpt->rt_lock);
 	map = rebuild_pool_map_get(rpt->rt_pool);
 	D_ASSERT(map != NULL);
-	rc = pl_map_update(rpt->rt_pool_uuid, map, true);
+	rc = pl_map_update(rpt->rt_pool_uuid, map, true, DEFAULT_PL_TYPE);
 	if (rc != 0) {
 		ABT_mutex_unlock(rpt->rt_lock);
 		D_GOTO(out_map, rc = -DER_NOMEM);
@@ -738,7 +738,7 @@ put_plmap:
 	pl_map_disconnect(rpt->rt_pool_uuid);
 out_map:
 	rebuild_pool_map_put(map);
-	dbtree_destroy(arg->rebuild_tree_hdl);
+	dbtree_destroy(arg->rebuild_tree_hdl, NULL);
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
 	D_ASSERT(tls != NULL);
 	if (tls->rebuild_pool_status == 0 && rc != 0)
@@ -866,7 +866,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 
 	D_GOTO(out, rc);
 out_tree:
-	dbtree_destroy(scan_arg->rebuild_tree_hdl);
+	dbtree_destroy(scan_arg->rebuild_tree_hdl, NULL);
 out_lock:
 	ABT_mutex_free(&scan_arg->scan_lock);
 out_arg:
@@ -905,6 +905,9 @@ rebuild_tgt_scan_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 	struct rebuild_scan_out	*src = crt_reply_get(source);
 	struct rebuild_scan_out *dst = crt_reply_get(result);
 	int i;
+
+	if (dst->rso_status == 0)
+		dst->rso_status = src->rso_status;
 
 	if (src->rso_ranks_list == NULL ||
 	    src->rso_ranks_list->rl_nr == 0)

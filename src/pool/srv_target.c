@@ -516,7 +516,7 @@ aggregate_pool_space(struct daos_pool_space *agg_ps,
 	D_ASSERT(agg_ps && ps);
 
 	if (ps->ps_ntargets == 0) {
-		D_ERROR("Skip emtpy space info\n");
+		D_DEBUG(DB_TRACE, "Skip emtpy space info\n");
 		return;
 	}
 
@@ -711,7 +711,8 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 
-	rc = pool_tgt_query(pool, &out->tco_space);
+	if (in->tci_query_bits & DAOS_PO_QUERY_SPACE)
+		rc = pool_tgt_query(pool, &out->tco_space);
 out:
 	if (rc != 0 && map != NULL)
 		pool_map_decref(map);
@@ -833,7 +834,8 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			struct pool_map *tmp = pool->sp_map;
 
 			rc = pl_map_update(pool->sp_uuid, map,
-					   pool->sp_map != NULL ? false : true);
+					   pool->sp_map != NULL ? false : true,
+					   DEFAULT_PL_TYPE);
 			if (rc != 0) {
 				ABT_rwlock_unlock(pool->sp_lock);
 				D_ERROR(DF_UUID": failed update pl_map: %d\n",
@@ -860,7 +862,8 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		struct pool_map *tmp = pool->sp_map;
 
 		rc = pl_map_update(pool->sp_uuid, map,
-				   pool->sp_map != NULL ? false : true);
+				   pool->sp_map != NULL ? false : true,
+				   DEFAULT_PL_TYPE);
 		if (rc != 0) {
 			ABT_rwlock_unlock(pool->sp_lock);
 			D_ERROR(DF_UUID": failed to update pl_map: %d\n",

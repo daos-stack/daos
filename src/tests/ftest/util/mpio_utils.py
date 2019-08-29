@@ -43,14 +43,15 @@ class MpioUtils():
 
         try:
             # checking mpich install
-            checkmpich = subprocess.check_output(["ssh", hostlist[0],
-                                                  "which mpichversion"])
+            self.mpichinstall = subprocess.check_output(
+                ["ssh", hostlist[0],
+                 "command -v mpichversion"]).rstrip()[:-len('bin/mpichversion')]
+
             # Obtaning the location where mpich is installed by executing
             # "which mpichversion", which should return
             # /some_path/bin/mpichversion, hence removing 17 characters
             # to obtain just the installed location
-            self.mpichinstall = checkmpich[:-17]
-            print (self.mpichinstall)
+            print(self.mpichinstall)
 
             return True
 
@@ -69,10 +70,7 @@ class MpioUtils():
         """
 
         # environment variables only to be set on client node
-        env_variables = ["export PATH={}/bin:$PATH".format(self.mpichinstall),
-                         "export LD_LIBRARY_PATH={}/lib:$LD_LIBRARY_PATH" \
-                             .format(self.mpichinstall),
-                         "export CRT_ATTACH_INFO_PATH={}/install/tmp/" \
+        env_variables = ["export CRT_ATTACH_INFO_PATH={}/install/tmp/" \
                              .format(basepath),
                          "export MPI_LIB=''", "export DAOS_SINGLETON_CLI=1"]
 
@@ -80,7 +78,7 @@ class MpioUtils():
         cd_cmd = 'cd ' + romio_test_repo
         test_cmd = './runtests -fname=daos:test1 -subset -daos'
         run_cmd = cd_cmd + ' && ' + test_cmd
-        print ("Romio test run command: {}".format(run_cmd))
+        print("Romio test run command: {}".format(run_cmd))
 
         try:
             # establish conection and run romio test
@@ -117,10 +115,7 @@ class MpioUtils():
         """
         print("self.mpichinstall: {}".format(self.mpichinstall))
         # environment variables only to be set on client node
-        env_variables = {"PATH": "{}/bin:$PATH".format(self.mpichinstall),
-                         "LD_LIBRARY_PATH": "{}/lib:$LD_LIBRARY_PATH"\
-                             .format(self.mpichinstall),
-                         "CRT_ATTACH_INFO_PATH": "{}/install/tmp/"\
+        env_variables = {"CRT_ATTACH_INFO_PATH": "{}/install/tmp/"\
                              .format(basepath),
                          "MPI_LIB": '',
                          "MPIO_USER_PATH": "daos:",
@@ -154,7 +149,7 @@ class MpioUtils():
                                               for key, val in
                                               env_variables.items()]),
                             test_cmd])
-        print ("run command: {}".format(run_cmd))
+        print("run command: {}".format(run_cmd))
 
         try:
             process = subprocess.Popen(run_cmd, stdout=subprocess.PIPE,
@@ -164,7 +159,7 @@ class MpioUtils():
                 if output == '' and process.poll() is not None:
                     break
                 if output:
-                    print (output.strip())
+                    print(output.strip())
             if process.poll() != 0:
                 raise MpioFailed("{} Run process".format(test_name)
                                  + " Failed with non zero exit"

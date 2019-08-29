@@ -141,6 +141,7 @@ struct vos_container {
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_abort_aggregation:1;
+	unsigned int		vc_open_count;
 };
 
 struct vos_imem_strts {
@@ -162,6 +163,7 @@ struct bio_xs_context		*vsa_xsctxt_inst;
 struct umem_tx_stage_data	 vsa_txd_inst;
 struct dtx_handle		*vsa_dth;
 bool vsa_nvme_init;
+extern int vos_evt_feats;
 
 static inline struct bio_xs_context *
 vos_xsctxt_get(void)
@@ -544,10 +546,6 @@ vos_dtx_prepared(struct dtx_handle *dth);
 void
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
 			int count);
-
-int
-vos_dtx_abort_internal(struct vos_container *cont, struct dtx_id *dtis,
-		       int count, bool force);
 
 /**
  * Register dbtree class for DTX CoS, it is called within vos_init().
@@ -1023,6 +1021,13 @@ enum {
 	SUBTR_CREATE	= (1 << 0),	/**< may create the subtree */
 	SUBTR_EVT	= (1 << 1),	/**< subtree is evtree */
 };
+
+int
+vos_bio_addr_free(struct vos_pool *pool, bio_addr_t *addr, daos_size_t nob);
+
+void
+vos_evt_desc_cbs_init(struct evt_desc_cbs *cbs, struct vos_pool *pool,
+		      daos_handle_t coh);
 
 /* vos_obj.c */
 int

@@ -3,10 +3,12 @@
 def scons():
     """Execute build"""
 
-    SConscript('addons/SConscript')
+    SConscript('array/SConscript')
+    SConscript('kv/SConscript')
     SConscript('api/SConscript')
     SConscript('dfs/SConscript')
     SConscript('dfuse/SConscript')
+    SConscript('pydaos/SConscript')
 
 if __name__ == "SCons.Script":
     scons()

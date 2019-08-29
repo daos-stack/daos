@@ -32,8 +32,9 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <daos/common.h>
+#include <daos/object.h>
 #include "daos_types.h"
-#include "daos_api.h"
+#include "daos.h"
 #include "daos_fs.h"
 #include "daos_uns.h"
 
@@ -94,7 +95,7 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	}
 
 	t = strtok_r(NULL, "/", &saveptr);
-	daos_parse_oclass(t, &attr->da_oclass);
+	attr->da_oclass = daos_oclass_name2id(t);
 
 	t = strtok_r(NULL, "/", &saveptr);
 	attr->da_chunk_size = strtoull(t, NULL, 10);
@@ -107,16 +108,16 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
  * instead of regular extended attribute.
  */
 int
-duns_link_path(const char *path, struct duns_attr_t attr)
+duns_link_path(const char *path, const char *sysname,
+	       d_rank_list_t *svcl, struct duns_attr_t *attrp)
 {
-	char			*svcl_str, *group;
-	d_rank_list_t		*svcl = NULL;
 	daos_handle_t		poh;
 	daos_pool_info_t	pool_info;
 	char			pool[37], cont[37];
 	char			oclass[10], type[10];
 	char			str[DUNS_MAX_XATTR_LEN];
 	int			len;
+	int			try_multiple = 1;		/* boolean */
 	int			rc;
 
 	if (path == NULL) {
@@ -124,25 +125,7 @@ duns_link_path(const char *path, struct duns_attr_t attr)
 		return -DER_INVAL;
 	}
 
-	/*
-	 * MSC - for now SVCL and group need to be passed through env
-	 * variable. they shouldn't be required later.
-	 */
-	svcl_str = getenv("DAOS_SVCL");
-	if (svcl_str == NULL) {
-		D_ERROR("missing pool service rank list\n");
-		return -DER_INVAL;
-	}
-
-	svcl = daos_rank_list_parse(svcl_str, ":");
-	if (svcl == NULL) {
-		D_ERROR("Invalid pool service rank list\n");
-		return -DER_INVAL;
-	}
-
-	group = getenv("DAOS_GROUP");
-
-	if (attr.da_type == DAOS_PROP_CO_LAYOUT_HDF5) {
+	if (attrp->da_type == DAOS_PROP_CO_LAYOUT_HDF5) {
 		/** create a new file if HDF5 container */
 		int fd;
 
@@ -155,7 +138,7 @@ duns_link_path(const char *path, struct duns_attr_t attr)
 			return -DER_INVAL;
 		}
 		close(fd);
-	} else if (attr.da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
+	} else if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
 		/** create a new directory if POSIX/MPI-IO container */
 		rc = mkdir(path, S_IRWXU | S_IRWXG | S_IROTH | S_IWOTH);
 		if (rc == -1) {
@@ -170,25 +153,35 @@ duns_link_path(const char *path, struct duns_attr_t attr)
 	}
 
 	/** Connect to the pool. */
-	rc = daos_pool_connect(attr.da_puuid, group, svcl, DAOS_PC_RW, &poh,
-			       &pool_info, NULL);
+	rc = daos_pool_connect(attrp->da_puuid, sysname, svcl, DAOS_PC_RW,
+			       &poh, &pool_info, NULL);
 	if (rc) {
 		D_ERROR("Failed to connect to pool (%d)\n", rc);
 		D_GOTO(err_link, rc);
 	}
 
-	uuid_unparse(attr.da_puuid, pool);
-	daos_unparse_oclass(attr.da_oclass, oclass);
-	daos_unparse_ctype(attr.da_type, type);
+	uuid_unparse(attrp->da_puuid, pool);
+	daos_oclass_id2name(attrp->da_oclass, oclass);
+	daos_unparse_ctype(attrp->da_type, type);
 
-	/** generate a random container uuid and try to create it */
+	/* create container with specified container uuid (try_multiple=0)
+	 * or a generated random container uuid (try_multiple!=0).
+	 */
+	if (!uuid_is_null(attrp->da_cuuid)) {
+		try_multiple = 0;
+		uuid_unparse(attrp->da_cuuid, cont);
+		D_INFO("try create once with provided container UUID: %36s\n",
+			cont);
+	}
 	do {
-		uuid_generate(attr.da_cuuid);
-		uuid_unparse(attr.da_cuuid, cont);
+		if (try_multiple) {
+			uuid_generate(attrp->da_cuuid);
+			uuid_unparse(attrp->da_cuuid, cont);
+		}
 
 		/** store the daos attributes in the path xattr */
 		len = sprintf(str, DUNS_XATTR_FMT, type, pool, cont, oclass,
-			      attr.da_chunk_size);
+			      attrp->da_chunk_size);
 		if (len < 90) {
 			D_ERROR("Failed to create xattr value\n");
 			D_GOTO(err_pool, rc = -DER_INVAL);
@@ -200,8 +193,8 @@ duns_link_path(const char *path, struct duns_attr_t attr)
 			D_GOTO(err_pool, rc = -DER_INVAL);
 		}
 
-		rc = daos_cont_create(poh, attr.da_cuuid, NULL, NULL);
-	} while (rc == -DER_EXIST);
+		rc = daos_cont_create(poh, attrp->da_cuuid, NULL, NULL);
+	} while ((rc == -DER_EXIST) && try_multiple);
 	if (rc) {
 		D_ERROR("Failed to create container (%d)\n", rc);
 		D_GOTO(err_pool, rc);
@@ -213,12 +206,12 @@ duns_link_path(const char *path, struct duns_attr_t attr)
 	 */
 
 	/** If this is a POSIX container, create DFS mount */
-	if (attr.da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
+	if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
 		daos_handle_t		coh;
 		daos_cont_info_t	co_info;
 		dfs_t			*dfs;
 
-		rc = daos_cont_open(poh, attr.da_cuuid, DAOS_COO_RW, &coh,
+		rc = daos_cont_open(poh, attrp->da_cuuid, DAOS_COO_RW, &coh,
 				    &co_info, NULL);
 		if (rc) {
 			D_ERROR("Failed to open container (%d)\n", rc);
@@ -238,13 +231,13 @@ duns_link_path(const char *path, struct duns_attr_t attr)
 	return rc;
 
 err_cont:
-	daos_cont_destroy(poh, attr.da_cuuid, 1, NULL);
+	daos_cont_destroy(poh, attrp->da_cuuid, 1, NULL);
 err_pool:
 	daos_pool_disconnect(poh, NULL);
 err_link:
-	if (attr.da_type == DAOS_PROP_CO_LAYOUT_HDF5)
+	if (attrp->da_type == DAOS_PROP_CO_LAYOUT_HDF5)
 		unlink(path);
-	else if (attr.da_type == DAOS_PROP_CO_LAYOUT_POSIX)
+	else if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX)
 		rmdir(path);
 	return rc;
 }

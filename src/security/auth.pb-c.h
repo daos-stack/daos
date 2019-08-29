@@ -87,10 +87,11 @@ struct  _Auth__Credential
   ProtobufCMessage base;
   Auth__Token *token;
   Auth__Token *verifier;
+  char *origin;
 };
 #define AUTH__CREDENTIAL__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&auth__credential__descriptor) \
-    , NULL, NULL }
+    , NULL, NULL, (char *)protobuf_c_empty_string }
 
 
 /* Auth__Token methods */

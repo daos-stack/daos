@@ -5,6 +5,7 @@
 /build/
 tags
 daos_m.conf
+daos.conf
 /_build.external/
 config.log
 /install/
@@ -25,3 +26,4 @@ Gopkg.lock
 *.xml
 utils/certs/daosCA/**
 vos_size.yaml
+site/

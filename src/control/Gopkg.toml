@@ -9,12 +9,6 @@
   go-tests = true
   unused-packages = true
 
-# ishell: MIT License used for the frontend shell interface for Go components.
-# This is our ishell fork - we control the accepted patches.
-[[constraint]]
-  name = "github.com/daos-stack/ishell"
-  branch = "master"
-
 # protobuf: 3 Clause BSD Licensed and provides go GRPC compiler support
 [[constraint]]
   name = "github.com/golang/protobuf"
@@ -54,16 +48,21 @@
   name = "gopkg.in/yaml.v2"
   version = "2.2.1"
 
-# go-ipmctl: bindings to interact with libipmctl.so to manage SCM modules
-# maintained within daos-stack
-# pin with commit hash rather than just tip of master until tags exist.
-[[constraint]]
-  name = "github.com/daos-stack/go-ipmctl"
-  revision = "cb00fdf11001077f5451661448d44e900dfa8489"
-
 # go-spdk: bindings to interact with libspdk.so to manage NVMe SSDs
 # maintained within daos-stack
 # pin with commit hash rather than just tip of master until tags exist.
 [[constraint]]
   name = "github.com/daos-stack/go-spdk"
-  revision = "a7a7a864ea47192de3ce3d55d21e07bb502c40d8"
+  revision = "546f63c70bb70e32c69b7f7de11fcc219285f8e1"
+
+# go-bytesize: BSD 3-Clause, handle conversion from human readable size
+# strings to bytes.
+[[constraint]]
+  branch = "master"
+  name = "github.com/inhies/go-bytesize"
+
+# go-cmp: BSD 3-Clause, allows comparison of complex structures in
+# tests
+[[constraint]]
+  name = "github.com/google/go-cmp"
+  version = "~0.3.1"

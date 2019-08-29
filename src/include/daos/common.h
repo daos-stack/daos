@@ -46,6 +46,7 @@
 #include <gurt/common.h>
 #include <cart/api.h>
 #include <daos_types.h>
+#include <daos_prop.h>
 #include <daos/checksum.h>
 
 #define DF_OID		DF_U64"."DF_U64
@@ -94,6 +95,11 @@ char *DP_UUID(const void *uuid);
 #define DF_CONT			DF_UUID"/"DF_UUID
 #define DP_CONT(puuid, cuuid)	DP_UUID(puuid), DP_UUID(cuuid)
 
+char *daos_key2str(daos_key_t *key);
+
+#define DF_KEY			"[%d] %s"
+#define DP_KEY(key)		(int)(key)->iov_len, daos_key2str(key)
+
 static inline uint64_t
 daos_u64_hash(uint64_t val, unsigned int bits)
 {
@@ -111,6 +117,27 @@ daos_u32_hash(uint64_t key, unsigned int bits)
 
 
 #define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
+
+static inline uint8_t
+isset_range(uint8_t *bitmap, uint32_t start, uint32_t end)
+{
+	int index;
+
+	for (index = start; index <= end; ++index)
+		if (isclr(bitmap, index))
+			return 0;
+
+	return 1;
+}
+
+static inline void
+clrbit_range(uint8_t *bitmap, uint32_t start, uint32_t end)
+{
+	int index;
+
+	for (index = start; index <= end; ++index)
+		clrbit(bitmap, index);
+}
 
 static inline unsigned int
 daos_power2_nbits(unsigned int val)
@@ -176,14 +203,13 @@ daos_size_t daos_sgl_buf_size(d_sg_list_t *sgl);
 daos_size_t daos_sgls_buf_size(d_sg_list_t *sgls, int nr);
 daos_size_t daos_sgls_packed_size(d_sg_list_t *sgls, int nr,
 				  daos_size_t *buf_size);
-daos_size_t daos_iods_len(daos_iod_t *iods, int nr);
-int daos_iod_copy(daos_iod_t *dst, daos_iod_t *src);
-void daos_iods_free(daos_iod_t *iods, int nr, bool free);
 
 char *daos_str_trimwhite(char *str);
 int daos_iov_copy(d_iov_t *dst, d_iov_t *src);
 void daos_iov_free(d_iov_t *iov);
-bool daos_key_match(daos_key_t *key1, daos_key_t *key2);
+bool daos_iov_cmp(d_iov_t *iov1, d_iov_t *iov2);
+
+#define daos_key_match(key1, key2)	daos_iov_cmp(key1, key2)
 
 /* The DAOS BITS is composed by uint32_t[x] */
 #define DAOS_BITS_SIZE  (sizeof(uint32_t) * NBBY)
@@ -291,16 +317,16 @@ daos_der2errno(int err)
 	case -DER_NO_PERM:
 	case -DER_EP_RO:
 	case -DER_EP_OLD:	return EPERM;
-	case -DER_NO_HDL:
 	case -DER_ENOENT:
 	case -DER_NONEXIST:	return ENOENT;
 	case -DER_INVAL:
 	case -DER_NOTYPE:
 	case -DER_NOSCHEMA:
 	case -DER_NOLOCAL:
-	case -DER_KEY2BIG:
-	case -DER_REC2BIG:
+	case -DER_NO_HDL:
 	case -DER_IO_INVAL:	return EINVAL;
+	case -DER_KEY2BIG:
+	case -DER_REC2BIG:	return E2BIG;
 	case -DER_EXIST:	return EEXIST;
 	case -DER_UNREACH:	return EHOSTUNREACH;
 	case -DER_NOSPACE:	return ENOSPC;
@@ -370,7 +396,7 @@ daos_fail_value_get(void);
 int
 daos_fail_init(void);
 void
-daos_fail_fini();
+daos_fail_fini(void);
 
 /**
  * DAOS FAIL Mask
@@ -438,6 +464,17 @@ enum {
 #define DAOS_VOS_NON_LEADER		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1d)
 
 #define DAOS_FORCE_CAPA_FETCH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1e)
+#define DAOS_FORCE_PROP_VERIFY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1f)
+
+#define DAOS_CHECKSUM_UPDATE_FAIL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x20)
+#define DAOS_CHECKSUM_FETCH_FAIL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x21)
+
+#define DAOS_DTX_COMMIT_SYNC		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x30)
+#define DAOS_DTX_LEADER_ERROR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x31)
+#define DAOS_DTX_NONLEADER_ERROR	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x32)
+#define DAOS_DTX_LOST_RPC_REQUEST	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x33)
+#define DAOS_DTX_LOST_RPC_REPLY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x34)
+#define DAOS_DTX_LONG_TIME_RESEND	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x35)
 
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
 
@@ -490,53 +527,6 @@ struct daos_prop_entry *daos_prop_entry_get(daos_prop_t *prop, uint32_t type);
 int daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply);
 
 static inline void
-daos_parse_oclass(const char *string, daos_oclass_id_t *objectClass)
-{
-	if (strcasecmp(string, "tiny") == 0)
-		*objectClass = DAOS_OC_TINY_RW;
-	else if (strcasecmp(string, "small") == 0)
-		*objectClass = DAOS_OC_SMALL_RW;
-	else if (strcasecmp(string, "large") == 0)
-		*objectClass = DAOS_OC_LARGE_RW;
-	else if (strcasecmp(string, "R2") == 0)
-		*objectClass = DAOS_OC_R2_RW;
-	else if (strcasecmp(string, "R2S") == 0)
-		*objectClass = DAOS_OC_R2S_RW;
-	else if (strcasecmp(string, "repl_max") == 0)
-		*objectClass = DAOS_OC_REPL_MAX_RW;
-	else
-		*objectClass = DAOS_OC_UNKNOWN;
-}
-
-static inline void
-daos_unparse_oclass(daos_oclass_id_t objectClass, char *string)
-{
-	switch (objectClass) {
-	case DAOS_OC_TINY_RW:
-		strcpy(string, "tiny");
-		break;
-	case DAOS_OC_SMALL_RW:
-		strcpy(string, "small");
-		break;
-	case DAOS_OC_LARGE_RW:
-		strcpy(string, "large");
-		break;
-	case DAOS_OC_R2_RW:
-		strcpy(string, "R2");
-		break;
-	case DAOS_OC_R2S_RW:
-	       strcpy(string, "R2S");
-	       break;
-	case DAOS_OC_REPL_MAX_RW:
-	       strcpy(string, "repl_max");
-	       break;
-	default:
-		strcpy(string, "unknown");
-		break;
-	}
-}
-
-static inline void
 daos_parse_ctype(const char *string, daos_cont_layout_t *type)
 {
 	if (strcasecmp(string, "HDF5") == 0)
@@ -558,8 +548,21 @@ daos_unparse_ctype(daos_cont_layout_t ctype, char *string)
 		strcpy(string, "HDF5");
 		break;
 	default:
-		D_ASSERT(0);
+		strcpy(string, "unknown");
+		break;
 	}
+}
+
+static inline int daos_gettime_coarse(uint64_t *time)
+{
+	struct timespec	now;
+	int		rc;
+
+	rc = clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
+	if (rc == 0)
+		*time = now.tv_sec;
+
+	return rc;
 }
 
 #endif /* __DAOS_COMMON_H__ */

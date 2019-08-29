@@ -24,63 +24,56 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-#define REQ_NAME request
-#define POOL_NAME fsh_da
-#define TYPE_NAME common_req
-#include "dfuse_ops.h"
-
-static bool
-dfuse_setattr_result_fn(struct dfuse_request *request)
-{
-	struct dfuse_attr_out *out = request->out;
-
-	DFUSE_REQUEST_RESOLVE(request, out);
-
-	if (request->rc == 0)
-		DFUSE_REPLY_ATTR(request->req, &out->stat);
-	else
-		DFUSE_REPLY_ERR(request, request->rc);
-
-	dfuse_da_release(request->fsh->POOL_NAME, CONTAINER(request));
-	return false;
-}
-
-static const struct dfuse_request_api setattr_api = {
-	.on_result	= dfuse_setattr_result_fn,
-};
-
 void
-dfuse_cb_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, int to_set,
-		 struct fuse_file_info *fi)
+dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
+		 struct stat *attr, int to_set)
 {
-	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_file_handle	*handle = NULL;
-	struct TYPE_NAME		*desc = NULL;
+	int dfs_flags = 0;
 	int rc;
 
-	if (fi)
-		handle = (void *)fi->fh;
+	DFUSE_TRA_DEBUG(ie, "flags %#x", to_set);
 
-	DFUSE_TRA_INFO(fs_handle, "inode %lu handle %p", ino, handle);
+	if (to_set & FUSE_SET_ATTR_MODE) {
+		DFUSE_TRA_DEBUG(ie, "mode %#x %#x",
+				attr->st_mode, ie->ie_stat.st_mode);
 
-	DFUSE_REQ_INIT_REQ(desc, fs_handle, setattr_api, req, rc);
-	if (rc)
-		D_GOTO(err, rc);
-
-	if (handle) {
-		desc->request.ir_ht = RHS_FILE;
-		desc->request.ir_file = handle;
-	} else {
-		desc->request.ir_ht = RHS_INODE_NUM;
-		desc->request.ir_inode_num = ino;
+		to_set &= ~FUSE_SET_ATTR_MODE;
+		dfs_flags |= DFS_SET_ATTR_MODE;
 	}
 
-	rc = dfuse_fs_send(&desc->request);
-	if (rc != 0)
-		D_GOTO(err, rc);
-	return;
-err:
-	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
-	if (desc)
-		dfuse_da_release(fs_handle->POOL_NAME, desc);
+	if (to_set & FUSE_SET_ATTR_ATIME) {
+		DFUSE_TRA_DEBUG(ie, "atime %#lx",
+				attr->st_atime);
+		to_set &= ~(FUSE_SET_ATTR_ATIME | FUSE_SET_ATTR_ATIME_NOW);
+		dfs_flags |= DFS_SET_ATTR_ATIME;
+	}
+
+	if (to_set & FUSE_SET_ATTR_MTIME) {
+		DFUSE_TRA_DEBUG(ie, "mtime %#lx",
+				attr->st_mtime);
+		to_set &= ~(FUSE_SET_ATTR_MTIME | FUSE_SET_ATTR_MTIME_NOW);
+		dfs_flags |= DFS_SET_ATTR_MTIME;
+	}
+
+	if (to_set & FUSE_SET_ATTR_SIZE) {
+		DFUSE_TRA_DEBUG(ie, "size %#lx",
+				attr->st_size);
+		to_set &= ~(FUSE_SET_ATTR_SIZE);
+		dfs_flags |= DFS_SET_ATTR_SIZE;
+	}
+
+	if (to_set) {
+		DFUSE_TRA_WARNING(ie, "Unknown flags %#x", to_set);
+		DFUSE_REPLY_ERR_RAW(ie, req, ENOTSUP);
+		return;
+
+	}
+
+	rc = dfs_osetattr(ie->ie_dfs->dfs_ns, ie->ie_obj, attr, dfs_flags);
+	if (rc) {
+		DFUSE_REPLY_ERR_RAW(ie, req, rc);
+		return;
+	}
+
+	DFUSE_REPLY_ATTR(req, attr);
 }

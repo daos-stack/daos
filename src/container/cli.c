@@ -30,6 +30,7 @@
 
 #include <daos/container.h>
 #include <daos/event.h>
+#include <daos/mgmt.h>
 #include <daos/pool.h>
 #include <daos/rsvc.h>
 #include <daos_types.h>
@@ -153,7 +154,7 @@ dc_cont_create(tse_task_t *task)
 	D_DEBUG(DF_DSMC, DF_UUID": creating "DF_UUIDF"\n",
 		DP_UUID(pool->dp_pool), DP_UUID(args->uuid));
 
-	ep.ep_grp = pool->dp_group;
+	ep.ep_grp = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
@@ -252,7 +253,7 @@ dc_cont_destroy(tse_task_t *task)
 	D_DEBUG(DF_DSMC, DF_UUID": destroying "DF_UUID": force=%d\n",
 		DP_UUID(pool->dp_pool), DP_UUID(args->uuid), args->force);
 
-	ep.ep_grp = pool->dp_group;
+	ep.ep_grp = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
@@ -536,7 +537,7 @@ dc_cont_open(tse_task_t *task)
 		DP_CONT(pool->dp_pool, args->uuid), DP_UUID(cont->dc_cont_hdl),
 		args->flags);
 
-	ep.ep_grp = pool->dp_group;
+	ep.ep_grp = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
@@ -697,7 +698,7 @@ dc_cont_close(tse_task_t *task)
 		return 0;
 	}
 
-	ep.ep_grp = pool->dp_group;
+	ep.ep_grp = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
@@ -844,6 +845,9 @@ cont_query_bits(daos_prop_t *prop)
 		case DAOS_PROP_CO_ENCRYPT:
 			bits |= DAOS_CO_QUERY_PROP_ENCRYPT;
 			break;
+		case DAOS_PROP_CO_ACL:
+			bits |= DAOS_CO_QUERY_PROP_ACL;
+			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
 			break;
@@ -878,7 +882,7 @@ dc_cont_query(tse_task_t *task)
 		DP_CONT(pool->dp_pool_hdl, cont->dc_uuid),
 		DP_UUID(cont->dc_cont_hdl));
 
-	ep.ep_grp  = pool->dp_group;
+	ep.ep_grp  = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
@@ -1024,7 +1028,7 @@ get_tgt_rank(struct dc_pool *pool, unsigned int *rank)
 	unsigned int		tgt_cnt;
 	int			rc;
 
-	rc = pool_map_find_up_tgts(pool->dp_map, &tgts, &tgt_cnt);
+	rc = pool_map_find_upin_tgts(pool->dp_map, &tgts, &tgt_cnt);
 	if (rc)
 		return rc;
 
@@ -1068,7 +1072,7 @@ dc_cont_alloc_oids(tse_task_t *task)
 		DP_UUID(cont->dc_cont_hdl));
 
 	/** randomly select a rank from the pool map */
-	ep.ep_grp = pool->dp_group;
+	ep.ep_grp = pool->dp_sys->sy_group;
 	ep.ep_tag = 0;
 	rc = get_tgt_rank(pool, &ep.ep_rank);
 	if (rc != 0)
@@ -1413,7 +1417,7 @@ cont_req_prepare(daos_handle_t coh, enum cont_operation opcode,
 	args->cra_pool = dc_hdl2pool(args->cra_cont->dc_pool_hdl);
 	D_ASSERT(args->cra_pool != NULL);
 
-	ep.ep_grp  = args->cra_pool->dp_group;
+	ep.ep_grp  = args->cra_pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&args->cra_pool->dp_client_lock);
 	rsvc_client_choose(&args->cra_pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&args->cra_pool->dp_client_lock);
@@ -1823,7 +1827,7 @@ dc_cont_create_snap(tse_task_t *task)
 		return -DER_INVAL;
 	}
 
-	*args->epoch = daos_ts2epoch();
+	*args->epoch = crt_hlc_get();
 	return dc_epoch_op(args->coh, CONT_SNAP_CREATE, args->epoch, task);
 }
 

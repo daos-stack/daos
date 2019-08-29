@@ -1,4 +1,3 @@
-
 /**
  * (C) Copyright 2016-2019 Intel Corporation.
  *
@@ -28,6 +27,7 @@
  */
 #define D_LOGFAC	DD_FAC(object)
 
+#include <daos/common.h>
 #include <daos_task.h>
 #include <daos_types.h>
 #include "obj_rpc.h"
@@ -349,7 +349,7 @@ ec_init_tgt_set(daos_iod_t *iods, unsigned int nr,
  */
 int
 ec_obj_update_encode(tse_task_t *task, daos_obj_id_t oid,
-		     daos_oclass_attr_t *oca, uint64_t *tgt_set)
+		     struct daos_oclass_attr *oca, uint64_t *tgt_set)
 {
 	daos_obj_update_t	*args = dc_task_get_args(task);
 	struct ec_params	*head = NULL;
@@ -358,7 +358,7 @@ ec_obj_update_encode(tse_task_t *task, daos_obj_id_t oid,
 	int			 rc = 0;
 
 	for (i = 0; i < args->nr; i++) {
-		daos_sg_list_t	*sgl = &args->sgls[i];
+		d_sg_list_t	*sgl = &args->sgls[i];
 		daos_iod_t	*iod = &args->iods[i];
 
 		if (ec_has_full_stripe(iod, oca, tgt_set)) {

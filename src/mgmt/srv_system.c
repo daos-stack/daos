@@ -45,22 +45,6 @@ static d_iov_t mgmt_svc_id;
 /* Management service DB UUID */
 static uuid_t mgmt_svc_db_uuid;
 
-/* Management service */
-struct mgmt_svc {
-	struct ds_rsvc	ms_rsvc;
-	ABT_rwlock	ms_lock;
-	rdb_path_t	ms_root;
-	rdb_path_t	ms_servers;
-	rdb_path_t	ms_uuids;
-	ABT_mutex	ms_mutex;
-	bool		ms_step_down;
-	bool		ms_distribute;
-	ABT_cond	ms_distribute_cv;
-	ABT_thread	ms_distributord;
-	uint32_t	ms_map_version;
-	uint32_t	ms_rank_next;
-};
-
 static struct mgmt_svc *
 mgmt_svc_obj(struct ds_rsvc *rsvc)
 {
@@ -152,11 +136,18 @@ mgmt_svc_alloc_cb(d_iov_t *id, struct ds_rsvc **rsvc)
 	if (rc != 0)
 		goto err_uuids;
 
+	rc = rdb_path_clone(&svc->ms_root, &svc->ms_pools);
+	if (rc != 0)
+		goto err_uuids;
+	rc = rdb_path_push(&svc->ms_pools, &ds_mgmt_prop_pools);
+	if (rc != 0)
+		goto err_pools;
+
 	rc = ABT_mutex_create(&svc->ms_mutex);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("failed to create mutex: %d\n", rc);
 		rc = dss_abterr2der(rc);
-		goto err_uuids;
+		goto err_pools;
 	}
 
 	rc = ABT_cond_create(&svc->ms_distribute_cv);
@@ -171,6 +162,8 @@ mgmt_svc_alloc_cb(d_iov_t *id, struct ds_rsvc **rsvc)
 
 err_mutex:
 	ABT_mutex_free(&svc->ms_mutex);
+err_pools:
+	rdb_path_fini(&svc->ms_pools);
 err_uuids:
 	rdb_path_fini(&svc->ms_uuids);
 err_servers:
@@ -192,6 +185,7 @@ mgmt_svc_free_cb(struct ds_rsvc *rsvc)
 
 	ABT_cond_free(&svc->ms_distribute_cv);
 	ABT_mutex_free(&svc->ms_mutex);
+	rdb_path_fini(&svc->ms_pools);
 	rdb_path_fini(&svc->ms_uuids);
 	rdb_path_fini(&svc->ms_servers);
 	rdb_path_fini(&svc->ms_root);
@@ -241,6 +235,12 @@ mgmt_svc_bootstrap_cb(struct ds_rsvc *rsvc, void *varg)
 	attr.dsa_class = RDB_KVS_GENERIC;
 	attr.dsa_order = 16;
 	rc = rdb_tx_create_kvs(&tx, &svc->ms_root, &ds_mgmt_prop_uuids, &attr);
+	if (rc != 0)
+		goto out_lock;
+
+	attr.dsa_class = RDB_KVS_GENERIC;
+	attr.dsa_order = 4;
+	rc = rdb_tx_create_kvs(&tx, &svc->ms_root, &ds_mgmt_prop_pools, &attr);
 	if (rc != 0)
 		goto out_lock;
 
@@ -435,8 +435,8 @@ ds_mgmt_svc_stop(void)
 	return rc;
 }
 
-static int
-mgmt_svc_lookup_leader(struct mgmt_svc **svc, struct rsvc_hint *hint)
+int
+ds_mgmt_svc_lookup_leader(struct mgmt_svc **svc, struct rsvc_hint *hint)
 {
 	struct ds_rsvc *rsvc;
 	int		rc;
@@ -449,8 +449,8 @@ mgmt_svc_lookup_leader(struct mgmt_svc **svc, struct rsvc_hint *hint)
 	return 0;
 }
 
-static void
-mgmt_svc_put_leader(struct mgmt_svc *svc)
+void
+ds_mgmt_svc_put_leader(struct mgmt_svc *svc)
 {
 	ds_rsvc_put_leader(&svc->ms_rsvc);
 }
@@ -591,7 +591,7 @@ ds_mgmt_join_handler(struct mgmt_join_in *in, struct mgmt_join_out *out)
 	uint32_t		map_version;
 	int			rc;
 
-	rc = mgmt_svc_lookup_leader(&svc, &out->jo_hint);
+	rc = ds_mgmt_svc_lookup_leader(&svc, &out->jo_hint);
 	if (rc != 0)
 		goto out;
 
@@ -705,7 +705,71 @@ out_lock:
 	ABT_rwlock_unlock(svc->ms_lock);
 	rdb_tx_end(&tx);
 out_svc:
-	mgmt_svc_put_leader(svc);
+	ds_mgmt_svc_put_leader(svc);
+out:
+	return rc;
+}
+
+/* Callers are responsible for freeing resp->psrs. */
+int
+ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp)
+{
+	struct mgmt_svc	       *svc;
+	d_rank_list_t	       *ranks;
+	crt_group_t	       *grp;
+	int			i;
+	int			rc;
+
+	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
+	if (rc != 0)
+		goto out;
+
+	rc = rdb_get_ranks(svc->ms_rsvc.s_db, &ranks);
+	if (rc != 0)
+		goto out_svc;
+
+	D_ALLOC(resp->psrs, sizeof(*resp->psrs) * ranks->rl_nr);
+	if (resp->psrs == NULL) {
+		rc = -DER_NOMEM;
+		goto out_ranks;
+	}
+	grp = crt_group_lookup(NULL);
+	D_ASSERT(grp != NULL);
+	for (i = 0; i < ranks->rl_nr; i++) {
+		d_rank_t rank = ranks->rl_ranks[i];
+
+		D_ALLOC(resp->psrs[i], sizeof(*(resp->psrs[i])));
+		if (resp->psrs[i] == NULL) {
+			rc = -DER_NOMEM;
+			break;
+		}
+		mgmt__get_attach_info_resp__psr__init(resp->psrs[i]);
+		resp->psrs[i]->rank = rank;
+		rc = crt_rank_uri_get(grp, rank, 0 /* tag */,
+				      &(resp->psrs[i]->uri));
+		if (rc != 0) {
+			D_ERROR("unable to get rank %u URI: %d\n", rank, rc);
+			break;
+		}
+	}
+	if (rc != 0) {
+		for (; i >= 0; i--) {
+			if (resp->psrs[i] != NULL) {
+				if (resp->psrs[i]->uri != NULL)
+					D_FREE(resp->psrs[i]->uri);
+				D_FREE(resp->psrs[i]);
+			}
+		}
+		D_FREE(resp->psrs);
+		resp->psrs = NULL; /* paranoid */
+		goto out_ranks;
+	}
+	resp->n_psrs = ranks->rl_nr;
+
+out_ranks:
+	d_rank_list_free(ranks);
+out_svc:
+	ds_mgmt_svc_put_leader(svc);
 out:
 	return rc;
 }
@@ -818,6 +882,8 @@ map_distributord(void *arg)
 static void
 notify_map_distributord(struct mgmt_svc *svc)
 {
+	if (!dss_pmixless())
+		return;
 	svc->ms_distribute = true;
 	ABT_cond_broadcast(svc->ms_distribute_cv);
 }

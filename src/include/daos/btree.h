@@ -331,7 +331,8 @@ typedef struct {
 	 * \param args	[OUT]
 	 *			Optional: opaque buffer for providing arguments
 	 *			to handle special cases for free. for example,
-	 *			to return the freed record to the user
+	 *			allocator/GC address for externally allocated
+	 *			resources.
 	 */
 	int		(*to_rec_free)(struct btr_instance *tins,
 				       struct btr_record *rec, void *args);
@@ -426,11 +427,8 @@ typedef struct {
 struct btr_instance {
 	/** instance of memory class for the tree */
 	struct umem_instance		 ti_umm;
-	/**
-	 * NVMe free space tracking information used for NVMe record
-	 * alloc & free.
-	 */
-	void				*ti_blks_info;
+	/** Private data for opener */
+	void				*ti_priv;
 	/**
 	 * The container open handle.
 	 */
@@ -488,22 +486,24 @@ int  dbtree_create_inplace(unsigned int tree_class, uint64_t tree_feats,
 int  dbtree_create_inplace_ex(unsigned int tree_class, uint64_t tree_feats,
 			      unsigned int tree_order, struct umem_attr *uma,
 			      struct btr_root *root, daos_handle_t coh,
-			      daos_handle_t *toh);
+			      void *priv, daos_handle_t *toh);
 int  dbtree_open(umem_off_t root_off, struct umem_attr *uma,
 		 daos_handle_t *toh);
 int  dbtree_open_inplace(struct btr_root *root, struct umem_attr *uma,
 			 daos_handle_t *toh);
 int  dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
-			    daos_handle_t coh, void *info, daos_handle_t *toh);
+			    daos_handle_t coh, void *priv, daos_handle_t *toh);
 int  dbtree_close(daos_handle_t toh);
-int  dbtree_destroy(daos_handle_t toh);
+int  dbtree_destroy(daos_handle_t toh, void *args);
+int  dbtree_drain(daos_handle_t toh, int *credits, void *args, bool *destroyed);
 int  dbtree_lookup(daos_handle_t toh, d_iov_t *key, d_iov_t *val_out);
 int  dbtree_update(daos_handle_t toh, d_iov_t *key, d_iov_t *val);
 int  dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
 		  d_iov_t *key, d_iov_t *key_out, d_iov_t *val_out);
 int  dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
 		   d_iov_t *key, d_iov_t *val);
-int  dbtree_delete(daos_handle_t toh, d_iov_t *key, void *args);
+int  dbtree_delete(daos_handle_t toh, dbtree_probe_opc_t opc,
+		   d_iov_t *key, void *args);
 int  dbtree_query(daos_handle_t toh, struct btr_attr *attr,
 		  struct btr_stat *stat);
 int  dbtree_is_empty(daos_handle_t toh);

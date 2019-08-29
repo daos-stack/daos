@@ -21,15 +21,17 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
 	"os"
 	"path/filepath"
 
-	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/security"
 )
 
 const sockFileName = "daos_server.sock"
@@ -45,7 +47,7 @@ func getDrpcClientConnection(sockDir string) *drpc.ClientConnection {
 
 // drpcSetup creates socket directory, specifies socket path and then
 // starts drpc server.
-func drpcSetup(sockDir string, iosrv *iosrv) error {
+func drpcSetup(sockDir string, iosrv *iosrv, tc *security.TransportConfig) error {
 	// Create our socket directory if it doesn't exist
 	_, err := os.Stat(sockDir)
 	if err != nil && os.IsPermission(err) {
@@ -67,7 +69,7 @@ func drpcSetup(sockDir string, iosrv *iosrv) error {
 	}
 
 	// Create and add our modules
-	drpcServer.RegisterRPCModule(&SecurityModule{})
+	drpcServer.RegisterRPCModule(NewSecurityModule(tc))
 	drpcServer.RegisterRPCModule(&mgmtModule{})
 	drpcServer.RegisterRPCModule(&srvModule{iosrv})
 

@@ -16,29 +16,13 @@ PROTOBUF_C__BEGIN_DECLS
 
 
 typedef struct _Mgmt__DaosRank Mgmt__DaosRank;
-typedef struct _Mgmt__DaosResponse Mgmt__DaosResponse;
+typedef struct _Mgmt__DaosResp Mgmt__DaosResp;
 typedef struct _Mgmt__SetRankReq Mgmt__SetRankReq;
 typedef struct _Mgmt__CreateMsReq Mgmt__CreateMsReq;
 
 
 /* --- enums --- */
 
-typedef enum _Mgmt__DaosRequestStatus {
-  MGMT__DAOS_REQUEST_STATUS__SUCCESS = 0,
-  /*
-   * Unknown error
-   */
-  MGMT__DAOS_REQUEST_STATUS__ERR_UNKNOWN = -1,
-  /*
-   * Rank requested is invalid
-   */
-  MGMT__DAOS_REQUEST_STATUS__ERR_INVALID_RANK = -2,
-  /*
-   * Pool UUID requested is invalid
-   */
-  MGMT__DAOS_REQUEST_STATUS__ERR_INVALID_UUID = -3
-    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__DAOS_REQUEST_STATUS)
-} Mgmt__DaosRequestStatus;
 
 /* --- messages --- */
 
@@ -62,14 +46,17 @@ struct  _Mgmt__DaosRank
     , (char *)protobuf_c_empty_string, 0 }
 
 
-struct  _Mgmt__DaosResponse
+struct  _Mgmt__DaosResp
 {
   ProtobufCMessage base;
-  Mgmt__DaosRequestStatus status;
+  /*
+   * DAOS error code
+   */
+  int32_t status;
 };
-#define MGMT__DAOS_RESPONSE__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__daos_response__descriptor) \
-    , MGMT__DAOS_REQUEST_STATUS__SUCCESS }
+#define MGMT__DAOS_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__daos_resp__descriptor) \
+    , 0 }
 
 
 struct  _Mgmt__SetRankReq
@@ -86,7 +73,13 @@ struct  _Mgmt__CreateMsReq
 {
   ProtobufCMessage base;
   protobuf_c_boolean bootstrap;
+  /*
+   * Server UUID of this MS replica.
+   */
   char *uuid;
+  /*
+   * Server management address of this MS replica.
+   */
   char *addr;
 };
 #define MGMT__CREATE_MS_REQ__INIT \
@@ -113,24 +106,24 @@ Mgmt__DaosRank *
 void   mgmt__daos_rank__free_unpacked
                      (Mgmt__DaosRank *message,
                       ProtobufCAllocator *allocator);
-/* Mgmt__DaosResponse methods */
-void   mgmt__daos_response__init
-                     (Mgmt__DaosResponse         *message);
-size_t mgmt__daos_response__get_packed_size
-                     (const Mgmt__DaosResponse   *message);
-size_t mgmt__daos_response__pack
-                     (const Mgmt__DaosResponse   *message,
+/* Mgmt__DaosResp methods */
+void   mgmt__daos_resp__init
+                     (Mgmt__DaosResp         *message);
+size_t mgmt__daos_resp__get_packed_size
+                     (const Mgmt__DaosResp   *message);
+size_t mgmt__daos_resp__pack
+                     (const Mgmt__DaosResp   *message,
                       uint8_t             *out);
-size_t mgmt__daos_response__pack_to_buffer
-                     (const Mgmt__DaosResponse   *message,
+size_t mgmt__daos_resp__pack_to_buffer
+                     (const Mgmt__DaosResp   *message,
                       ProtobufCBuffer     *buffer);
-Mgmt__DaosResponse *
-       mgmt__daos_response__unpack
+Mgmt__DaosResp *
+       mgmt__daos_resp__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data);
-void   mgmt__daos_response__free_unpacked
-                     (Mgmt__DaosResponse *message,
+void   mgmt__daos_resp__free_unpacked
+                     (Mgmt__DaosResp *message,
                       ProtobufCAllocator *allocator);
 /* Mgmt__SetRankReq methods */
 void   mgmt__set_rank_req__init
@@ -175,8 +168,8 @@ void   mgmt__create_ms_req__free_unpacked
 typedef void (*Mgmt__DaosRank_Closure)
                  (const Mgmt__DaosRank *message,
                   void *closure_data);
-typedef void (*Mgmt__DaosResponse_Closure)
-                 (const Mgmt__DaosResponse *message,
+typedef void (*Mgmt__DaosResp_Closure)
+                 (const Mgmt__DaosResp *message,
                   void *closure_data);
 typedef void (*Mgmt__SetRankReq_Closure)
                  (const Mgmt__SetRankReq *message,
@@ -190,9 +183,8 @@ typedef void (*Mgmt__CreateMsReq_Closure)
 
 /* --- descriptors --- */
 
-extern const ProtobufCEnumDescriptor    mgmt__daos_request_status__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__daos_rank__descriptor;
-extern const ProtobufCMessageDescriptor mgmt__daos_response__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__daos_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__set_rank_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__create_ms_req__descriptor;
 

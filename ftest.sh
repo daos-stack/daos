@@ -44,63 +44,54 @@ if [ -f .localenv ]; then
     . .localenv
 fi
 
-TEST_TAG="${1:-quick}"
+TEST_TAG_ARG="${1:-quick}"
+TEST_TAG_ARR=($TEST_TAG_ARG)
+TEST_TAG_DIR="/tmp/Functional_${TEST_TAG_ARG// /_}"
 
 NFS_SERVER=${NFS_SERVER:-${HOSTNAME%%.*}}
 
 trap 'echo "encountered an unchecked return code, exiting with error"' ERR
 
 IFS=" " read -r -a nodes <<< "${2//,/ }"
-
-# put yaml files back
-restore_dist_files() {
-    local dist_files="$*"
-
-    for file in $dist_files; do
-        if [ -f "$file".dist ]; then
-            mv -f "$file".dist "$file"
-        fi
-    done
-
-}
+TEST_NODES=$(IFS=","; echo "${nodes[*]:1:8}")
 
 cleanup() {
-    restore_dist_files "${yaml_files[@]}"
     i=5
     while [ $i -gt 0 ]; do
-        pdsh -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
-             -w "$(IFS=','; echo "${nodes[*]}")" "set -x
-        if grep /mnt/daos /proc/mounts; then
-            if ! sudo umount /mnt/daos; then
-                echo \"During shutdown, failed to unmount /mnt/daos.  \"\
-                     \"Continuing...\"
+        if clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh \
+             -S -w "$(IFS=','; echo "${nodes[*]}")" "set -x
+            if grep /mnt/daos /proc/mounts; then
+                if ! sudo umount /mnt/daos; then
+                    echo \"During shutdown, failed to unmount /mnt/daos.  \"\
+                         \"Continuing...\"
+                fi
             fi
+            x=0
+            sudo sed -i -e \"/added by ftest.sh/d\" /etc/fstab
+            if [ -n \"$DAOS_BASE\" ]; then
+                while [ \$x -lt 30 ] &&
+                      grep $DAOS_BASE /proc/mounts &&
+                      ! sudo umount $DAOS_BASE; do
+                    sleep 1
+                    let x+=1
+                done
+                if grep $DAOS_BASE /proc/mounts; then
+                    echo \"Failed to unmount $DAOS_BASE\"
+                    exit 1
+                fi
+                if [ -d $DAOS_BASE ] && ! sudo rmdir $DAOS_BASE; then
+                    echo \"Failed to remove $DAOS_BASE\"
+                    if [ -d $DAOS_BASE ]; then
+                        ls -l $DAOS_BASE
+                    else
+                        echo \"because it doesnt exist\"
+                    fi
+                    exit 1
+                fi
+            fi"; then
+            break
         fi
-        x=0
-        sudo sed -i -e \"/added by ftest.sh/d\" /etc/fstab
-        while [ \$x -lt 30 ] &&
-              grep $DAOS_BASE /proc/mounts &&
-              ! sudo umount $DAOS_BASE; do
-            sleep 1
-            let x+=1
-        done
-        if grep $DAOS_BASE /proc/mounts; then
-            echo \"Failed to unmount $DAOS_BASE\"
-            exit 1
-        fi
-        if [ -d $DAOS_BASE ] && ! sudo rmdir $DAOS_BASE; then
-            echo \"Failed to remove $DAOS_BASE\"
-            if [ -d $DAOS_BASE ]; then
-                ls -l $DAOS_BASE
-            else
-                echo \"because it doesnt exist\"
-            fi
-            exit 1
-        fi" 2>&1 | dshbak -c
-        if [ "${PIPESTATUS[0]}" = 0 ]; then
-            i=0
-        fi
-        ((i-=1))
+        ((i-=1)) || true
     done
 }
 
@@ -112,30 +103,16 @@ if ${TEARDOWN_ONLY:-false}; then
     exit 0
 fi
 
-# set our machine names
-mapfile -t yaml_files < <(find src/tests/ftest -name \*.yaml)
-
-trap 'set +e; restore_dist_files "${yaml_files[@]}"' EXIT
-
-# shellcheck disable=SC2086
-sed -i.dist -e "s/- boro-A/- ${nodes[1]}/g" \
-            -e "s/- boro-B/- ${nodes[2]}/g" \
-            -e "s/- boro-C/- ${nodes[3]}/g" \
-            -e "s/- boro-D/- ${nodes[4]}/g" \
-            -e "s/- boro-E/- ${nodes[5]}/g" \
-            -e "s/- boro-F/- ${nodes[6]}/g" \
-            -e "s/- boro-G/- ${nodes[7]}/g" \
-            -e "s/- boro-H/- ${nodes[8]}/g" "${yaml_files[@]}"
-
-
 # let's output to a dir in the tree
 rm -rf src/tests/ftest/avocado ./*_results.xml
 mkdir -p src/tests/ftest/avocado/job-results
 
 trap 'set +e; cleanup' EXIT
 
+CLUSH_ARGS=($CLUSH_ARGS)
+
 DAOS_BASE=${SL_PREFIX%/install}
-if ! pdsh -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
+if ! clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
     -w "$(IFS=','; echo "${nodes[*]}")" "set -ex
 ulimit -c unlimited
 if [ \"\${HOSTNAME%%%%.*}\" != \"${nodes[0]}\" ]; then
@@ -177,41 +154,11 @@ wq
 EOF
 mount \\\"$DAOS_BASE\\\"\"
 
-rm -rf /tmp/Functional_$TEST_TAG/
-mkdir -p /tmp/Functional_$TEST_TAG/
+rm -rf \"${TEST_TAG_DIR:?}/\"
+mkdir -p \"$TEST_TAG_DIR/\"
 if [ -z \"\$JENKINS_URL\" ]; then
     exit 0
-fi
-sudo bash -c 'set -ex
-yum -y install yum-utils
-repo_file_base=\"*_job_${JOB_NAME%%/*}_job_\"
-# pkgs are of the format pkgname[:branch]
-pkgs=\"ior-hpc:daos\"
-install_pkgs=\"\"
-for ext in \$pkgs; do
-    IFS=':' read -ra ext <<< \"\$ext\"
-    ext=\"\${ext[0]}\"
-    if [ -n \"\${ext[1]}\" ]; then
-        branch=\"\${ext[1]}\"
-    else
-        branch=\"master\"
-    fi
-    install_pkgs+=\" \$ext\"
-    rm -f /etc/yum.repos.d/\${repo_file_base}\${ext}_job_*.repo
-    yum-config-manager --add-repo=${JENKINS_URL}job/${JOB_NAME%%/*}/job/\${ext}/job/\${branch}/lastSuccessfulBuild/artifact/artifacts/
-    echo \"gpgcheck = False\" >> /etc/yum.repos.d/\${repo_file_base}\${ext}_job_\${branch}_lastSuccessfulBuild_artifact_artifacts_.repo
-done
-# for testing with a PR for a dependency:
-depname=     # i.e. depname=mercury
-pr_num=      # set to which PR number your PR is
-if [ -n \"\$depname\" ]; then
-    rm -f /etc/yum.repos.d/\${repo_file_base}\${depname}_job_PR-\${pr_num}_lastSuccessfulBuild_artifact_artifacts_.repo
-    yum-config-manager --add-repo=${JENKINS_URL}job/${JOB_NAME%%/*}/job/\${depname}/job/PR-\${pr_num}/lastSuccessfulBuild/artifact/artifacts/
-    echo \"gpgcheck = False\" >> /etc/yum.repos.d/\${repo_file_base}\${depname}_job_PR-\${pr_num}_lastSuccessfulBuild_artifact_artifacts_.repo
-    install_pkgs+=\" \${depname}\"
-fi
-yum -y erase \$install_pkgs
-yum -y install \$install_pkgs'" 2>&1 | dshbak -c; then
+fi"; then
     echo "Cluster setup (i.e. provisioning) failed"
     exit 1
 fi
@@ -222,7 +169,7 @@ args+=" $*"
 
 # shellcheck disable=SC2029
 # shellcheck disable=SC2086
-if ! ssh $SSH_KEY_ARGS "${REMOTE_ACCT:-jenkins}"@"${nodes[0]}" "set -ex
+if ! ssh $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" "set -ex
 ulimit -c unlimited
 rm -rf $DAOS_BASE/install/tmp
 mkdir -p $DAOS_BASE/install/tmp
@@ -230,8 +177,9 @@ cd $DAOS_BASE
 export CRT_PHY_ADDR_STR=ofi+sockets
 export OFI_INTERFACE=eth0
 # At Oct2018 Longmond F2F it was decided that per-server logs are preferred
-# But now we need to collect them!
-export D_LOG_FILE=/tmp/Functional_$TEST_TAG/server_daos.log
+# But now we need to collect them!  Avoid using 'client_daos.log' due to
+# conflicts with the daos_test log renaming.
+export D_LOG_FILE=\"$TEST_TAG_DIR/daos.log\"
 
 mkdir -p ~/.config/avocado/
 cat <<EOF > ~/.config/avocado/avocado.conf
@@ -336,12 +284,22 @@ if ${SETUP_ONLY:-false}; then
 fi
 
 # now run it!
-export PYTHONPATH=./util:../../utils/py/:./util/apricot
-if ! ./launch.py -s \"$TEST_TAG\"; then
+launch_py=\$(sed -ne '1s/^#!//'p launch.py)
+launch_py_vers=\$(\$launch_py -c 'import sys; \
+print(\"{}.{}\".format(sys.version_info[0], sys.version_info[1]))')
+
+export PYTHONPATH=./util:../../utils/py/:./util/apricot:\
+../../../install/lib/python\$launch_py_vers/site-packages
+
+if ! ./launch.py -c -a -r -s -ts ${TEST_NODES} ${TEST_TAG_ARR[*]}; then
     rc=\${PIPESTATUS[0]}
 else
     rc=0
 fi
+
+# Remove the latest avocado symlink directory to avoid inclusion in the
+# jenkins build artifacts
+unlink $DAOS_BASE/src/tests/ftest/avocado/job-results/latest
 
 # get stacktraces for the core files
 if ls core.*; then
@@ -377,17 +335,4 @@ else
     rc=0
 fi
 
-# collect the logs
-if ! rpdcp -l "${REMOTE_ACCT:-jenkins}" -R ssh \
-    -w "$(IFS=','; echo "${nodes[*]}")" \
-    /tmp/Functional_"$TEST_TAG"/\*daos.log "$PWD"/; then
-    echo "Copying daos.logs from remote nodes failed"
-    # pass
-fi
-if ! rpdcp -l "${REMOTE_ACCT:-jenkins}" -R ssh \
-    -w "$(IFS=','; echo "${nodes[*]}")" \
-    /tmp/daos_agent.log "$PWD"/; then
-    echo "Copying daos_agent.logs from remote nodes failed"
-    # pass
-fi
 exit "$rc"

@@ -4,8 +4,8 @@
 %define daoshome %{_exec_prefix}/lib/%{name}
 
 Name:          daos
-Version:       0.5.0
-Release:       2%{?dist}
+Version:       0.6.0
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -34,17 +34,20 @@ BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
 BuildRequires: libcmocka-devel
 BuildRequires: readline-devel
+BuildRequires: systemd
 %if (0%{?rhel} >= 7)
 BuildRequires:  numactl-devel
 BuildRequires: CUnit-devel
 BuildRequires: golang-bin
 BuildRequires: libipmctl-devel
+BuildRequires: python-devel python36-devel
 %else
 %if (0%{?suse_version} >= 1315)
 BuildRequires:  libnuma-devel
 BuildRequires: cunit-devel
 BuildRequires: go1.10
 BuildRequires: ipmctl-devel
+BuildRequires: python-devel python3-devel
 %endif
 %endif
 Requires: cart
@@ -54,6 +57,7 @@ Requires: fuse >= 3.4.2
 Requires: protobuf-c
 Requires: spdk
 Requires: fio < 3.4
+Requires: openssl
 
 %description
 The Distributed Asynchronous Object Storage (DAOS) is an open-source
@@ -69,6 +73,7 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name} = %{version}-%{release}
+Requires: spdk-tools
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 
@@ -127,7 +132,8 @@ PREFIX="%{?_prefix}"
 sed -i -e s/${BUILDROOT//\//\\/}[^\"]\*/${PREFIX//\//\\/}/g %{?buildroot}%{_prefix}/TESTING/.build_vars.*
 mv %{?buildroot}%{_prefix}/lib{,64}
 #mv %{?buildroot}/{usr/,}etc
-mkdir -p %{?buildroot}/%{daoshome}
+mkdir -p %{?buildroot}/%{_exec_prefix}/lib/%{name}
+mv %{?buildroot}%{_prefix}/lib64/daos %{?buildroot}/%{_exec_prefix}/lib/
 mv %{?buildroot}%{_prefix}/{TESTING,lib/%{name}/}
 cp -al ftest.sh src/tests/ftest %{?buildroot}%{daoshome}/TESTING
 find %{?buildroot}%{daoshome}/TESTING/ftest -name \*.py[co] -print0 | xargs -r0 rm -f
@@ -138,6 +144,9 @@ cp -al src/utils/py/daos_cref.py %{?buildroot}%{daoshome}/utils/py
 cp -al src/utils/py/conversion.py %{?buildroot}%{daoshome}/utils/py
 mkdir -p %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
+mkdir -p %{?buildroot}/%{_unitdir}
+install -m 644 utils/systemd/daos-server.service %{?buildroot}/%{_unitdir}
+install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 
 %post server -p /sbin/ldconfig
 %postun server -p /sbin/ldconfig
@@ -150,10 +159,7 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 # you might think libdaos_tests.so goes in the tests RPM but
 # the 4 tools following it need it
 %{_libdir}/libdaos_tests.so
-%{_bindir}/obj_ctl
 %{_bindir}/vos_size
-%{_bindir}/daos_gen_io_conf
-%{_bindir}/daos_run_io_conf
 %{_bindir}/io_conf
 %{_bindir}/pl_map
 %{_bindir}/rdbt
@@ -164,6 +170,8 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_libdir}/libdaos_common.so
 # TODO: this should move to %{_libdir}/daos/libplacement.so
 %{_libdir}/daos_srv/libplacement.so
+# Certificate generation files
+%{daoshome}/certgen/
 %doc
 
 %files server
@@ -183,12 +191,12 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_libdir}/daos_srv/libsecurity.so
 %{_libdir}/daos_srv/libvos_srv.so
 %{_datadir}/%{name}
+%{_unitdir}/daos-server.service
 
 %files client
 %{_bindir}/daos_shell
 %{_bindir}/daosctl
 %{_bindir}/dcont
-%{_bindir}/duns
 %{_bindir}/daos_agent
 %{_bindir}/dfuse
 %{_bindir}/dmg
@@ -199,8 +207,12 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_libdir}/libduns.so
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
+%{_libdir}/python2.7/site-packages/pydaos_shim_27.so
+%{_libdir}/python3/site-packages/pydaos_shim_3.so
 %{_datadir}/%{name}/ioil-ld-opts
 %{_prefix}%{_sysconfdir}/daos.yml
+%{_prefix}%{_sysconfdir}/daos_agent.yml
+%{_unitdir}/daos-agent.service
 
 %files tests
 %{daoshome}/utils/py
@@ -214,6 +226,9 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_bindir}/daosbench
 %{_bindir}/daos_perf
 %{_bindir}/evt_ctl
+%{_bindir}/obj_ctl
+%{_bindir}/daos_gen_io_conf
+%{_bindir}/daos_run_io_conf
 
 %files devel
 %{_includedir}/*
@@ -221,6 +236,26 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_libdir}/*.a
 
 %changelog
+* Thu Aug 15 2019 David Quigley <david.quigley@intel.com>
+- Add systemd unit files to packaging.
+
+* Thu Jul 25 2019 Brian J. Murrell <brian.murrell@intel.com>
+- Add git hash and commit count to release
+
+* Thu Jul 18 2019 David Quigley <david.quigley@intel.com>
+- Add certificate generation files to packaging.
+
+* Tue Jul 09 2019 Johann Lombardi <johann.lombardi@intel.com>
+- Version bump up to 0.6.0
+
+* Fri Jun 21 2019 David Quigley <dquigley@intel.com>
+- Add daos_agent.yml to the list of packaged files
+
+* Thu Jun 13 2019 Brian J. Murrell <brian.murrell@intel.com>
+- move obj_ctl daos_gen_io_conf daos_run_io_conf to
+  daos-tests sub-package
+- daos-server needs spdk-tools
+
 * Fri May 31 2019 Ken Cain <kenneth.c.cain@intel.com>
 - Add new daos utility binary
 

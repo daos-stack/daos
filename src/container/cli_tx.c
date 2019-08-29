@@ -187,7 +187,7 @@ daos_tx_hdl2epoch(daos_handle_t th, daos_epoch_t *epoch)
 	struct dc_tx *tx = NULL;
 
 	if (daos_handle_is_inval(th)) {
-		*epoch = daos_ts2epoch();
+		*epoch = crt_hlc_get();
 		return 0;
 	}
 
@@ -216,7 +216,7 @@ dc_tx_open(tse_task_t *task)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	tx->tx_coh	= args->coh;
-	tx->tx_epoch	= daos_ts2epoch();
+	tx->tx_epoch	= crt_hlc_get();
 	tx->tx_status	= TX_OPEN;
 	tx->tx_mode	= TX_RW;
 

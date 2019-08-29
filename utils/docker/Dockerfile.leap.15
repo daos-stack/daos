@@ -6,7 +6,7 @@
 #
 
 # Pull base image
-FROM opensuse/leap:15.0
+FROM opensuse/leap:15
 MAINTAINER Johann Lombardi <johann.lombardi@intel.com>
 
 # Build arguments can be set via -build-arg
@@ -17,7 +17,8 @@ ARG UID=1000
 # It's better to put the zypper update in the same "cache layer" as the
 # zypper install command so that the database is updated if/when the
 # installed packages list below is updated
-RUN zypper --non-interactive update; \
+RUN zypper --non-interactive --no-gpg-checks refresh; \
+    zypper --non-interactive update; \
     zypper --non-interactive install                                  \
            boost-devel clang cmake cunit-devel curl doxygen flex      \
            gcc gcc-c++ git go graphviz gzip                           \
@@ -25,7 +26,8 @@ RUN zypper --non-interactive update; \
            libltdl7 libnuma-devel libopenssl-devel libtool            \
            libuuid-devel libyaml-devel                                \
            make man meson nasm ninja pandoc patch python2-pip         \
-           readline-devel sg3_utils which yasm
+           readline-devel sg3_utils which yasm                        \
+	   python-devel python3-devel
 
 RUN pip install --upgrade pip; \
     pip install -U setuptools; \
@@ -61,7 +63,7 @@ WORKDIR /home/$USER/daos
 
 # Build DAOS & dependencies
 RUN if [ "x$NOBUILD" = "x" ] ; then git submodule init && git submodule update; fi
-RUN if [ "x$NOBUILD" = "x" ] ; then scons --build-deps=yes USE_INSTALLED=all install; fi
+RUN if [ "x$NOBUILD" = "x" ] ; then scons --build-deps=yes install; fi
 
 # Set environment variables
 ENV PATH=/home/daos/daos/install/bin:$PATH

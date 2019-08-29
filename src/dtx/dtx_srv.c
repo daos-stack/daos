@@ -56,7 +56,8 @@ dtx_handler(crt_rpc_t *rpc)
 				    din->di_dtx_array.ca_count);
 		break;
 	case DTX_ABORT:
-		rc = vos_dtx_abort(cont->sc_hdl, din->di_dtx_array.ca_arrays,
+		rc = vos_dtx_abort(cont->sc_hdl, din->di_epoch,
+				   din->di_dtx_array.ca_arrays,
 				   din->di_dtx_array.ca_count, true);
 		break;
 	case DTX_CHECK:
@@ -64,12 +65,8 @@ dtx_handler(crt_rpc_t *rpc)
 		if (din->di_dtx_array.ca_count != 1)
 			rc = -DER_PROTO;
 		else
-			/* For the remote query about DTX check, it is NOT
-			 * necessary to lookup CoS cache, so set the 'oid'
-			 * as zero to bypass CoS cache.
-			 */
-			rc = vos_dtx_check_committable(cont->sc_hdl, NULL,
-					din->di_dtx_array.ca_arrays, 0, false);
+			rc = vos_dtx_check(cont->sc_hdl,
+					   din->di_dtx_array.ca_arrays);
 		break;
 	default:
 		rc = -DER_INVAL;
@@ -77,8 +74,10 @@ dtx_handler(crt_rpc_t *rpc)
 	}
 
 out:
-	D_DEBUG(DB_TRACE, "Handle DTX ("DF_DTI") rpc %u: rc = %d\n",
-		DP_DTI(din->di_dtx_array.ca_arrays), opc, rc);
+	D_DEBUG(DB_TRACE, "Handle DTX ("DF_DTI") rpc %u, count %d, epoch "
+		DF_X64" : rc = %d\n",
+		DP_DTI(din->di_dtx_array.ca_arrays), opc,
+		(int)din->di_dtx_array.ca_count, din->di_epoch, rc);
 
 	dout->do_status = rc;
 	rc = crt_reply_send(rpc);

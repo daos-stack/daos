@@ -1,0 +1,40 @@
+# Project Information
+site_name: DAOS
+site_description: Distributed Asynchronous Object Storage
+site_author: DAOS Project
+site_url: http://daos.io
+site_dir: ../site
+
+# Repository
+repo_name: daos-stack/daos
+repo_url: https://github.com/daos-stack/daos
+
+# Theme
+theme:
+    name: readthedocs
+    language: en
+
+docs_dir: ./
+
+# Page tree
+nav:
+    - Home: index.md
+    - Overview:
+        - 'Terminology': 'overview/terminology.md'
+        - 'Storage Model': 'overview/storage.md'
+        - 'Transaction Model': 'overview/transaction.md'
+        - 'Fault Model': 'overview/fault.md'
+        - 'Security Model': 'overview/security.md'
+    - Administration Guide:
+        - 'Introduction': 'admin/intro.md'
+        - 'DAOS Architecture': 'admin/architecture.md'
+        - 'Hardware Requirements': 'admin/hardware.md'
+        - 'Software Installation': 'admin/installation.md'
+        - 'System Deployment': 'admin/deployment.md'
+        - 'Administration': 'admin/administration.md'
+        - 'Pool Operations': 'admin/pool_operations.md'
+        - 'Applications Interface and Tiering': 'admin/app_interface_tiering.md'
+        - 'Performance Tuning': 'admin/performance_tuning.md'
+        - 'Troubleshooting': 'admin/troubleshooting.md'
+        - 'Utilities and Usage Examples': 'admin/utilities_examples.md'
+        - 'Environment Variables': 'admin/env_variables.md'

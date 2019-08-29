@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
 	"fmt"
@@ -30,25 +30,51 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/log"
-	"github.com/golang/protobuf/proto"
+	"github.com/daos-stack/daos/src/control/logging"
+	log "github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/security"
 )
 
-func formatIosrvs(config *configuration, reformat bool) error {
+const ioServerBin = "daos_io_server"
+
+func findBinary(binName string) (string, error) {
+	// Try the direct route first
+	binPath, err := exec.LookPath(binName)
+	if err == nil {
+		return binPath, nil
+	}
+
+	// If that fails, look to see if it's adjacent to
+	// this binary
+	selfPath, err := os.Readlink("/proc/self/exe")
+	if err != nil {
+		return "", errors.Wrap(err, "unable to determine path to self")
+	}
+	binPath = path.Join(path.Dir(selfPath), binName)
+	if _, err := os.Stat(binPath); err != nil {
+		return "", errors.Errorf("unable to locate %s", binName)
+	}
+	return binPath, nil
+}
+
+func formatIosrvs(config *Configuration, reformat bool) error {
 	// Determine if an I/O server needs to createMS or bootstrapMS.
 	addr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("0.0.0.0:%d", config.Port))
 	if err != nil {
@@ -57,6 +83,18 @@ func formatIosrvs(config *configuration, reformat bool) error {
 	createMS, bootstrapMS, err := checkMgmtSvcReplica(addr, config.AccessPoints)
 	if err != nil {
 		return err
+	}
+	// A temporary workaround to create and start MS before we fully
+	// migrate to PMIx-less mode.
+	if !pmixless() {
+		rank, err := pmixRank()
+		if err != nil {
+			return err
+		}
+		if rank == 0 {
+			createMS = true
+			bootstrapMS = true
+		}
 	}
 
 	for i := range config.Servers {
@@ -74,6 +112,31 @@ func formatIosrvs(config *configuration, reformat bool) error {
 	return nil
 }
 
+// pmixless returns if we are in PMIx-less or PMIx mode.
+func pmixless() bool {
+	if _, ok := os.LookupEnv("PMIX_RANK"); !ok {
+		return true
+	}
+	if _, ok := os.LookupEnv("DAOS_PMIXLESS"); ok {
+		return true
+	}
+	return false
+}
+
+// pmixRank returns the PMIx rank. If PMIx-less or PMIX_RANK has an unexpected
+// value, it returns an error.
+func pmixRank() (rank, error) {
+	s, ok := os.LookupEnv("PMIX_RANK")
+	if !ok {
+		return nilRank, errors.New("not in PMIx mode")
+	}
+	r, err := strconv.ParseUint(s, 0, 32)
+	if err != nil {
+		return nilRank, errors.Wrap(err, "PMIX_RANK="+s)
+	}
+	return rank(r), nil
+}
+
 // formatIosrv will prepare DAOS IO servers and store relevant metadata.
 //
 // If superblock exists and reformat not explicitly requested, no
@@ -85,7 +148,7 @@ func formatIosrvs(config *configuration, reformat bool) error {
 // If format_override has been set in config and superblock does not exist,
 // continue to create a new superblock without formatting.
 func formatIosrv(
-	config *configuration, i int, reformat, createMS, bootstrapMS bool) error {
+	config *Configuration, i int, reformat, createMS, bootstrapMS bool) error {
 
 	srv := config.Servers[i]
 
@@ -143,7 +206,7 @@ func iosrvSuperPath(root string) string {
 
 // createIosrvSuper creates the superblock file for config.Servers[i]. Called
 // when formatting an I/O server.
-func createIosrvSuper(config *configuration, i int, reformat, createMS, bootstrapMS bool) error {
+func createIosrvSuper(config *Configuration, i int, reformat, createMS, bootstrapMS bool) error {
 	// Initialize the superblock object.
 	u, err := uuid.NewV4()
 	if err != nil {
@@ -195,8 +258,9 @@ func writeIosrvSuper(path string, super *iosrvSuper) error {
 //
 // NOTE: The superblock supercedes the format-time configuration in config.
 type iosrv struct {
+	log     logging.Logger
 	super   *iosrvSuper
-	config  *configuration
+	config  *Configuration
 	index   int
 	cmd     *exec.Cmd
 	sigchld chan os.Signal
@@ -204,13 +268,14 @@ type iosrv struct {
 	conn    *drpc.ClientConnection
 }
 
-func newIosrv(config *configuration, i int) (*iosrv, error) {
+func newIosrv(logger logging.Logger, config *Configuration, i int) (*iosrv, error) {
 	super, err := readIosrvSuper(iosrvSuperPath(config.Servers[i].ScmMount))
 	if err != nil {
 		return nil, err
 	}
 
 	srv := &iosrv{
+		log:     logger,
 		super:   super,
 		config:  config,
 		index:   i,
@@ -240,7 +305,7 @@ func (srv *iosrv) start() (err error) {
 	}
 	defer func() {
 		if err != nil {
-			srv.stopCmd()
+			_ = srv.stopCmd()
 		}
 	}()
 
@@ -254,20 +319,15 @@ func (srv *iosrv) start() (err error) {
 		return errors.New("received SIGCHLD")
 	}
 
-	// If we are launched using orterun and DAOS_PMIXLESS isn't set, use
-	// the old bootstrapping method.
-	if _, ok := os.LookupEnv("PMIX_RANK"); ok {
-		if _, ok := os.LookupEnv("DAOS_PMIXLESS"); !ok {
+	if pmixless() {
+		srv.log.Debugf("PMIXLESS mode detected; ready: %+v", ready)
+		if err = srv.setRank(ready); err != nil {
 			return
 		}
 	}
 
-	if err = srv.setRank(ready); err != nil {
-		return
-	}
-
 	if srv.super.CreateMS {
-		log.Debugf("create MS (bootstrap=%t)", srv.super.BootstrapMS)
+		srv.log.Debugf("create MS (bootstrap=%t)", srv.super.BootstrapMS)
 		if err = srv.callCreateMS(); err != nil {
 			return
 		}
@@ -279,10 +339,13 @@ func (srv *iosrv) start() (err error) {
 	}
 
 	if srv.super.MS {
-		err = srv.callStartMS()
+		if err = srv.callStartMS(); err != nil {
+			return
+		}
 	}
 
-	return
+	// Notify the I/O server that it may set up its server modules now.
+	return srv.callSetUp()
 }
 
 func (srv *iosrv) wait() error {
@@ -292,11 +355,43 @@ func (srv *iosrv) wait() error {
 	return nil
 }
 
+type cmdLogger struct {
+	logFn  func(string)
+	prefix string
+}
+
+func (cl *cmdLogger) Write(data []byte) (int, error) {
+	if cl.logFn == nil {
+		return 0, errors.New("no log function set in cmdLogger")
+	}
+
+	var msg string
+	if cl.prefix != "" {
+		msg = cl.prefix + " "
+	}
+	msg += string(data)
+	cl.logFn(msg)
+	return len(data), nil
+}
+
 func (srv *iosrv) startCmd() error {
 	// Exec io_server with generated cli opts from config context.
-	srv.cmd = exec.Command("daos_io_server", srv.config.Servers[srv.index].CliOpts...)
-	srv.cmd.Stdout = os.Stdout
-	srv.cmd.Stderr = os.Stderr
+	binPath, err := findBinary(ioServerBin)
+	if err != nil {
+		return errors.Wrapf(err, "can't start %s", ioServerBin)
+	}
+
+	srv.cmd = exec.Command(binPath, srv.config.Servers[srv.index].CliOpts...)
+	srv.cmd.Stdout = &cmdLogger{
+		logFn:  srv.log.Info,
+		prefix: fmt.Sprintf("%s:%d", ioServerBin, srv.index),
+	}
+	srv.cmd.Stderr = &cmdLogger{
+		logFn:  srv.log.Error,
+		prefix: fmt.Sprintf("%s:%d", ioServerBin, srv.index),
+	}
+	// FIXME(DAOS-3105): This shouldn't be the default. The command environment
+	// should be constructed from values in the configuration.
 	srv.cmd.Env = os.Environ()
 
 	// Populate I/O server environment with values from config before starting.
@@ -309,8 +404,9 @@ func (srv *iosrv) startCmd() error {
 
 	signal.Notify(srv.sigchld, syscall.SIGCHLD)
 
+	srv.log.Debugf("cmd args: %+v", srv.cmd.Args)
 	// Start the DAOS I/O server.
-	err := srv.cmd.Start()
+	err = srv.cmd.Start()
 	if err != nil {
 		return errors.WithStack(err)
 	}
@@ -320,7 +416,7 @@ func (srv *iosrv) startCmd() error {
 
 func (srv *iosrv) stopCmd() error {
 	// Ignore potential errors, as the I/O server may have already died.
-	srv.cmd.Process.Kill()
+	_ = srv.cmd.Process.Kill()
 
 	if err := srv.cmd.Wait(); err != nil {
 		return errors.WithStack(err)
@@ -337,13 +433,15 @@ func (srv *iosrv) setRank(ready *srvpb.NotifyReadyReq) error {
 	}
 
 	if !srv.super.ValidRank || !srv.super.MS {
-		resp, err := mgmtJoin(srv.config.AccessPoints[0], &mgmtpb.JoinReq{
-			Uuid:  srv.super.UUID,
-			Rank:  uint32(r),
-			Uri:   ready.Uri,
-			Nctxs: ready.Nctxs,
-			Addr:  fmt.Sprintf("0.0.0.0:%d", srv.config.Port),
-		})
+		resp, err := mgmtJoin(context.Background(), srv.config.AccessPoints[0],
+			srv.config.TransportConfig,
+			&mgmtpb.JoinReq{
+				Uuid:  srv.super.UUID,
+				Rank:  uint32(r),
+				Uri:   ready.Uri,
+				Nctxs: ready.Nctxs,
+				Addr:  fmt.Sprintf("0.0.0.0:%d", srv.config.Port),
+			})
 		if err != nil {
 			return err
 		} else if resp.State == mgmtpb.JoinResp_OUT {
@@ -381,11 +479,11 @@ func (srv *iosrv) callCreateMS() error {
 		return err
 	}
 
-	resp := &mgmtpb.DaosResponse{}
+	resp := &mgmtpb.DaosResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return errors.Wrap(err, "unmarshal CreateMS response")
 	}
-	if resp.Status != mgmtpb.DaosRequestStatus_SUCCESS {
+	if resp.Status != 0 {
 		return errors.Errorf("CreateMS: %d\n", resp.Status)
 	}
 
@@ -398,11 +496,11 @@ func (srv *iosrv) callStartMS() error {
 		return err
 	}
 
-	resp := &mgmtpb.DaosResponse{}
+	resp := &mgmtpb.DaosResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return errors.Wrap(err, "unmarshal StartMS response")
 	}
-	if resp.Status != mgmtpb.DaosRequestStatus_SUCCESS {
+	if resp.Status != 0 {
 		return errors.Errorf("StartMS: %d\n", resp.Status)
 	}
 
@@ -415,12 +513,29 @@ func (srv *iosrv) callSetRank(rank rank) error {
 		return err
 	}
 
-	resp := &mgmtpb.DaosResponse{}
+	resp := &mgmtpb.DaosResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return errors.Wrap(err, "unmarshall SetRank response")
 	}
-	if resp.Status != mgmtpb.DaosRequestStatus_SUCCESS {
+	if resp.Status != 0 {
 		return errors.Errorf("SetRank: %d\n", resp.Status)
+	}
+
+	return nil
+}
+
+func (srv *iosrv) callSetUp() error {
+	dresp, err := makeDrpcCall(srv.conn, mgmtModuleID, setUp, nil)
+	if err != nil {
+		return err
+	}
+
+	resp := &mgmtpb.DaosResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return errors.Wrap(err, "unmarshall SetUp response")
+	}
+	if resp.Status != 0 {
+		return errors.Errorf("SetUp: %d\n", resp.Status)
 	}
 
 	return nil
@@ -430,14 +545,24 @@ func (srv *iosrv) writeSuper() error {
 	return writeIosrvSuper(iosrvSuperPath(srv.config.Servers[srv.index].ScmMount), srv.super)
 }
 
-// mgmtJoin sends the Join request to MS, retrying indefinitely until MS
-// responses.
-func mgmtJoin(ap string, req *mgmtpb.JoinReq) (*mgmtpb.JoinResp, error) {
-	log.Debugf("join(%s, %+v)", ap, *req)
+// mgmtJoin sends Join request(s) to MS.
+func mgmtJoin(ctx context.Context, ap string, tc *security.TransportConfig, req *mgmtpb.JoinReq) (*mgmtpb.JoinResp, error) {
+	prefix := fmt.Sprintf("join(%s, %+v)", ap, *req)
+	log.Debugf(prefix + " begin")
+	defer log.Debugf(prefix + " end")
 
-	conn, err := grpc.Dial(ap, grpc.WithInsecure(), grpc.WithBlock(),
-		grpc.WithBackoffMaxDelay(5*time.Second),
-		grpc.WithDefaultCallOptions(grpc.FailFast(false)))
+	const delay = 3 * time.Second
+
+	var opts []grpc.DialOption
+	authDialOption, err := security.DialOptionForTransportConfig(tc)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to determine dial option from TransportConfig")
+	}
+
+	// Setup Dial Options that will always be included.
+	opts = append(opts, grpc.WithBlock(), grpc.WithBackoffMaxDelay(delay),
+		grpc.WithDefaultCallOptions(grpc.FailFast(false)), authDialOption)
+	conn, err := grpc.DialContext(ctx, ap, opts...)
 	if err != nil {
 		return nil, errors.Wrapf(err, "dial %s", ap)
 	}
@@ -445,13 +570,31 @@ func mgmtJoin(ap string, req *mgmtpb.JoinReq) (*mgmtpb.JoinResp, error) {
 
 	client := mgmtpb.NewMgmtSvcClient(conn)
 
-	resp, err := client.Join(context.Background(), req)
-	if err != nil {
-		return nil, errors.Wrapf(err, "join %s %v", ap, *req)
-	}
-	if resp.Status != mgmtpb.DaosRequestStatus_SUCCESS {
-		return nil, errors.Errorf("join %s %v: %d\n", ap, *req, resp.Status)
-	}
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, errors.Wrap(ctx.Err(), prefix)
+		default:
+		}
 
-	return resp, nil
+		resp, err := client.Join(ctx, req)
+		if err != nil {
+			log.Debugf(prefix+": %v", err)
+		} else {
+			// TODO: Stop retrying upon certain errors (e.g., "not
+			// MS", "rank unavailable", and "excluded").
+			if resp.Status != 0 {
+				log.Debugf(prefix+": %d", resp.Status)
+			} else {
+				return resp, nil
+			}
+		}
+
+		// Delay next retry.
+		delayCtx, cancelDelayCtx := context.WithTimeout(ctx, delay)
+		select {
+		case <-delayCtx.Done():
+		}
+		cancelDelayCtx()
+	}
 }

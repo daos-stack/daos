@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@
 #include <gurt/list.h>
 #include <cart/iv.h>
 #include <daos_srv/iv.h>
+#include <daos_prop.h>
 #include "srv_internal.h"
 
 static d_list_t			 ds_iv_ns_list;
@@ -842,15 +843,15 @@ ds_iv_fini(void)
 	struct ds_iv_class	*class;
 	struct ds_iv_class	*class_tmp;
 
+	d_list_for_each_entry_safe(ns, tmp, &ds_iv_ns_list, iv_ns_link) {
+		iv_ns_destroy_internal(ns);
+		D_FREE(ns);
+	}
+
 	d_list_for_each_entry_safe(class, class_tmp, &ds_iv_class_list,
 				   iv_class_list) {
 		d_list_del(&class->iv_class_list);
 		D_FREE(class);
-	}
-
-	d_list_for_each_entry_safe(ns, tmp, &ds_iv_ns_list, iv_ns_link) {
-		iv_ns_destroy_internal(ns);
-		D_FREE(ns);
 	}
 
 	if (crt_iv_class_nr > 0)

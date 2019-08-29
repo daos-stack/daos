@@ -21,18 +21,20 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
+	"context"
 	"sync"
 	"testing"
 
-	. "github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	ipmctl "github.com/daos-stack/go-ipmctl/ipmctl"
-	spdk "github.com/daos-stack/go-spdk/spdk"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
+
+	. "github.com/daos-stack/daos/src/control/common"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/lib/ipmctl"
+	"github.com/daos-stack/go-spdk/spdk"
 )
 
 // mockFormatStorageServer provides mocking for server side streaming,
@@ -63,12 +65,12 @@ func (m *mockUpdateStorageServer) Send(resp *pb.UpdateStorageResp) error {
 func newMockStorageConfig(
 	mountRet error, unmountRet error, mkdirRet error, removeRet error,
 	scmMount string, scmClass ScmClass, scmDevs []string, scmSize int,
-	bdevClass BdevClass, bdevDevs []string, existsRet bool) *configuration {
+	bdevClass BdevClass, bdevDevs []string, existsRet bool,
+) *Configuration {
 
-	c := newDefaultConfiguration(
-		newMockExt(
-			nil, existsRet, mountRet, unmountRet, mkdirRet,
-			removeRet))
+	c := newDefaultConfiguration(newMockExt(nil, existsRet, mountRet,
+		true, unmountRet, mkdirRet, removeRet))
+
 	c.Servers = append(c.Servers, newDefaultServer())
 	c.Servers[0].ScmMount = scmMount
 	c.Servers[0].ScmClass = scmClass
@@ -78,7 +80,7 @@ func newMockStorageConfig(
 	c.Servers[0].BdevClass = bdevClass
 	c.Servers[0].BdevList = bdevDevs
 
-	return &c
+	return c
 }
 
 func TestScanStorage(t *testing.T) {
@@ -101,9 +103,9 @@ func TestScanStorage(t *testing.T) {
 		{
 			"success", nil, nil, nil, true, true,
 			pb.ScanStorageResp{
-				Ctrlrs:    []*pb.NvmeController{pbCtrlr},
+				Ctrlrs:    NvmeControllers{pbCtrlr},
 				Nvmestate: new(pb.ResponseState),
-				Modules:   []*pb.ScmModule{pbModule},
+				Modules:   ScmModules{pbModule},
 				Scmstate:  new(pb.ResponseState),
 			}, "",
 		},
@@ -115,7 +117,7 @@ func TestScanStorage(t *testing.T) {
 						": example failure",
 					Status: pb.ResponseStatus_CTRL_ERR_NVME,
 				},
-				Modules:  []*pb.ScmModule{pbModule},
+				Modules:  ScmModules{pbModule},
 				Scmstate: new(pb.ResponseState),
 			}, "",
 		},
@@ -127,14 +129,14 @@ func TestScanStorage(t *testing.T) {
 						": example failure",
 					Status: pb.ResponseStatus_CTRL_ERR_NVME,
 				},
-				Modules:  []*pb.ScmModule{pbModule},
+				Modules:  ScmModules{pbModule},
 				Scmstate: new(pb.ResponseState),
 			}, "",
 		},
 		{
 			"ipmctl discover fail", nil, nil, errExample, true, false,
 			pb.ScanStorageResp{
-				Ctrlrs:    []*pb.NvmeController{pbCtrlr},
+				Ctrlrs:    NvmeControllers{pbCtrlr},
 				Nvmestate: new(pb.ResponseState),
 				Scmstate: &pb.ResponseState{
 					Error: msgIpmctlDiscoverFail +
@@ -174,10 +176,10 @@ func TestScanStorage(t *testing.T) {
 				[]spdk.Namespace{MockNamespace(&ctrlr)},
 				tt.spdkDiscoverRet, nil, nil),
 			false, cs.config)
-		resp := new(pb.ScanStorageResp)
+		_ = new(pb.ScanStorageResp)
 
 		cs.Setup() // runs discovery for nvme & scm
-		resp, err := cs.ScanStorage(nil, &pb.ScanStorageParams{})
+		resp, err := cs.ScanStorage(context.TODO(), &pb.ScanStorageReq{})
 		if err != nil {
 			AssertEqual(t, err.Error(), tt.errMsg, tt.desc)
 		}
@@ -226,10 +228,9 @@ func TestFormatStorage(t *testing.T) {
 		bDevs            []string
 		expNvmeFormatted bool
 		expScmFormatted  bool
-		mountRets        []*pb.ScmMountResult
-		ctrlrRets        []*pb.NvmeControllerResult
+		mountRets        ScmMountResults
+		ctrlrRets        NvmeControllerResults
 		desc             string
-		errMsg           string
 	}{
 		{
 			desc:            "ram success",
@@ -237,7 +238,7 @@ func TestFormatStorage(t *testing.T) {
 			sClass:          scmRAM,
 			sSize:           6,
 			expScmFormatted: true,
-			ctrlrRets: []*pb.NvmeControllerResult{
+			ctrlrRets: NvmeControllerResults{
 				{
 					Pciaddr: "",
 					State: &pb.ResponseState{
@@ -246,7 +247,7 @@ func TestFormatStorage(t *testing.T) {
 					},
 				},
 			},
-			mountRets: []*pb.ScmMountResult{
+			mountRets: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
 					State:    new(pb.ResponseState),
@@ -259,7 +260,7 @@ func TestFormatStorage(t *testing.T) {
 			sClass:          scmDCPM,
 			sDevs:           []string{"/dev/pmem1"},
 			expScmFormatted: true,
-			ctrlrRets: []*pb.NvmeControllerResult{
+			ctrlrRets: NvmeControllerResults{
 				{
 					Pciaddr: "",
 					State: &pb.ResponseState{
@@ -268,7 +269,7 @@ func TestFormatStorage(t *testing.T) {
 					},
 				},
 			},
-			mountRets: []*pb.ScmMountResult{
+			mountRets: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
 					State:    new(pb.ResponseState),
@@ -284,13 +285,13 @@ func TestFormatStorage(t *testing.T) {
 			bDevs:            []string{"0000:81:00.0"},
 			expScmFormatted:  true,
 			expNvmeFormatted: true,
-			ctrlrRets: []*pb.NvmeControllerResult{
+			ctrlrRets: NvmeControllerResults{
 				{
 					Pciaddr: "0000:81:00.0",
 					State:   new(pb.ResponseState),
 				},
 			},
-			mountRets: []*pb.ScmMountResult{
+			mountRets: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
 					State:    new(pb.ResponseState),
@@ -307,13 +308,13 @@ func TestFormatStorage(t *testing.T) {
 			bDevs:            []string{"0000:81:00.0"},
 			expScmFormatted:  true,
 			expNvmeFormatted: true,
-			ctrlrRets: []*pb.NvmeControllerResult{
+			ctrlrRets: NvmeControllerResults{
 				{
 					Pciaddr: "0000:81:00.0",
 					State:   new(pb.ResponseState),
 				},
 			},
-			mountRets: []*pb.ScmMountResult{
+			mountRets: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
 					State:    new(pb.ResponseState),
@@ -331,7 +332,7 @@ func TestFormatStorage(t *testing.T) {
 			bDevs:            []string{"0000:81:00.0"},
 			expScmFormatted:  true,
 			expNvmeFormatted: true,
-			ctrlrRets: []*pb.NvmeControllerResult{
+			ctrlrRets: NvmeControllerResults{
 				{
 					Pciaddr: "",
 					State: &pb.ResponseState{
@@ -340,7 +341,7 @@ func TestFormatStorage(t *testing.T) {
 					},
 				},
 			},
-			mountRets: []*pb.ScmMountResult{
+			mountRets: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
 					State: &pb.ResponseState{
@@ -373,7 +374,7 @@ func TestFormatStorage(t *testing.T) {
 		go func() {
 			// should signal wait group in srv to unlock if
 			// successful once format completed
-			cs.FormatStorage(nil, mock)
+			_ = cs.FormatStorage(nil, mock)
 			mockWg.Done()
 		}()
 
@@ -428,29 +429,27 @@ func TestUpdateStorage(t *testing.T) {
 	pciAddr := "0000:81:00.0" // default pciaddr for tests
 
 	tests := []struct {
-		updateRet  error
 		bDevs      []string
-		nvmeParams *pb.UpdateNvmeParams // provided in client gRPC call
-		scmParams  *pb.UpdateScmParams
-		moduleRets []*pb.ScmModuleResult
-		ctrlrRets  []*pb.NvmeControllerResult
+		nvmeParams *pb.UpdateNvmeReq // provided in client gRPC call
+		scmParams  *pb.UpdateScmReq
+		moduleRets ScmModuleResults
+		ctrlrRets  NvmeControllerResults
 		desc       string
-		errMsg     string
 	}{
 		{
 			desc:  "nvme update success",
 			bDevs: []string{pciAddr},
-			nvmeParams: &pb.UpdateNvmeParams{
+			nvmeParams: &pb.UpdateNvmeReq{
 				Startrev: "1.0.0",
 				Model:    "ABC",
 			},
-			ctrlrRets: []*pb.NvmeControllerResult{
+			ctrlrRets: NvmeControllerResults{
 				{
 					Pciaddr: pciAddr,
 					State:   new(pb.ResponseState),
 				},
 			},
-			moduleRets: []*pb.ScmModuleResult{
+			moduleRets: ScmModuleResults{
 				{
 					Loc: &pb.ScmModule_Location{},
 					State: &pb.ResponseState{
@@ -463,11 +462,11 @@ func TestUpdateStorage(t *testing.T) {
 		{
 			desc:  "nvme update wrong model",
 			bDevs: []string{pciAddr},
-			nvmeParams: &pb.UpdateNvmeParams{
+			nvmeParams: &pb.UpdateNvmeReq{
 				Startrev: "1.0.0",
 				Model:    "AB",
 			},
-			ctrlrRets: []*pb.NvmeControllerResult{
+			ctrlrRets: NvmeControllerResults{
 				{
 					Pciaddr: pciAddr,
 					State: &pb.ResponseState{
@@ -478,7 +477,7 @@ func TestUpdateStorage(t *testing.T) {
 					},
 				},
 			},
-			moduleRets: []*pb.ScmModuleResult{
+			moduleRets: ScmModuleResults{
 				{
 					Loc: &pb.ScmModule_Location{},
 					State: &pb.ResponseState{
@@ -491,11 +490,11 @@ func TestUpdateStorage(t *testing.T) {
 		{
 			desc:  "nvme update wrong starting revision",
 			bDevs: []string{pciAddr},
-			nvmeParams: &pb.UpdateNvmeParams{
+			nvmeParams: &pb.UpdateNvmeReq{
 				Startrev: "2.0.0",
 				Model:    "ABC",
 			},
-			ctrlrRets: []*pb.NvmeControllerResult{
+			ctrlrRets: NvmeControllerResults{
 				{
 					Pciaddr: pciAddr,
 					State: &pb.ResponseState{
@@ -506,7 +505,7 @@ func TestUpdateStorage(t *testing.T) {
 					},
 				},
 			},
-			moduleRets: []*pb.ScmModuleResult{
+			moduleRets: ScmModuleResults{
 				{
 					Loc: &pb.ScmModule_Location{},
 					State: &pb.ResponseState{
@@ -520,16 +519,16 @@ func TestUpdateStorage(t *testing.T) {
 
 	for _, tt := range tests {
 		config := defaultMockConfig(t)
-		cs := mockControlService(&config)
+		cs := mockControlService(config)
 		cs.Setup() // init channel used for sync
 		mock := &mockUpdateStorageServer{}
 
-		params := &pb.UpdateStorageParams{
+		req := &pb.UpdateStorageReq{
 			Nvme: tt.nvmeParams,
 			Scm:  tt.scmParams,
 		}
 
-		cs.UpdateStorage(params, mock)
+		_ = cs.UpdateStorage(req, mock)
 
 		AssertEqual(
 			t, len(mock.Results), 1,

@@ -27,7 +27,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
             libltdl-dev libnuma-dev librdmacm-dev libreadline6-dev      \
             libssl-dev libtool-bin libyaml-dev                          \
             locales make meson nasm ninja-build pandoc patch            \
-            pylint python-dev scons sg3-utils uuid-dev yasm
+            pylint python-dev python3-dev scons         \
+            sg3-utils uuid-dev yasm
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
                        software-properties-common &&                    \
@@ -66,7 +67,7 @@ WORKDIR /home/$USER/daos
 
 # Build DAOS & dependencies
 RUN if [ "x$NOBUILD" = "x" ] ; then git submodule init && git submodule update; fi
-RUN if [ "x$NOBUILD" = "x" ] ; then scons --build-deps=yes USE_INSTALLED=all install; fi
+RUN if [ "x$NOBUILD" = "x" ] ; then scons --build-deps=yes install; fi
 
 # Set environment variables
 ENV PATH=/home/daos/daos/install/bin:$PATH

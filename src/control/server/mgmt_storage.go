@@ -21,14 +21,15 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
-	"github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/log"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
+
+	"github.com/daos-stack/daos/src/control/common"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	log "github.com/daos-stack/daos/src/control/logging"
 )
 
 // addState creates, populates and returns ResponseState in addition
@@ -42,15 +43,15 @@ func addState(
 	}
 
 	if errMsg != "" {
-		log.Errordf(logDepth, contextMsg+": "+errMsg)
+		log.Error(contextMsg + ": " + errMsg)
 	}
 
 	return state
 }
 
 // ScanStorage discovers non-volatile storage hardware on node.
-func (c *controlService) ScanStorage(
-	ctx context.Context, params *pb.ScanStorageParams) (
+func (c *ControlService) ScanStorage(
+	ctx context.Context, req *pb.ScanStorageReq) (
 	*pb.ScanStorageResp, error) {
 
 	resp := new(pb.ScanStorageResp)
@@ -63,7 +64,7 @@ func (c *controlService) ScanStorage(
 
 // doFormat performs format on storage subsystems, populates response results
 // in storage subsystem routines and broadcasts (closes channel) if successful.
-func (c *controlService) doFormat(i int, resp *pb.FormatStorageResp) error {
+func (c *ControlService) doFormat(i int, resp *pb.FormatStorageResp) error {
 	srv := c.config.Servers[i]
 	serverFormatted := false
 
@@ -78,8 +79,13 @@ func (c *controlService) doFormat(i int, resp *pb.FormatStorageResp) error {
 		serverFormatted = true
 	}
 
-	c.nvme.Format(i, &resp.Crets)
-	c.scm.Format(i, &resp.Mrets)
+	ctrlrResults := common.NvmeControllerResults{}
+	c.nvme.Format(i, &ctrlrResults)
+	resp.Crets = ctrlrResults
+
+	mountResults := common.ScmMountResults{}
+	c.scm.Format(i, &mountResults)
+	resp.Mrets = mountResults
 
 	if !serverFormatted && c.nvme.formatted && c.scm.formatted {
 		// storage subsystem format successful, broadcast formatted
@@ -98,9 +104,9 @@ func (c *controlService) doFormat(i int, resp *pb.FormatStorageResp) error {
 //
 // Send response containing multiple results of format operations on scm mounts
 // and nvme controllers.
-func (c *controlService) FormatStorage(
-	params *pb.FormatStorageParams,
-	stream pb.MgmtControl_FormatStorageServer) error {
+func (c *ControlService) FormatStorage(
+	req *pb.FormatStorageReq,
+	stream pb.MgmtCtl_FormatStorageServer) error {
 
 	resp := new(pb.FormatStorageResp)
 
@@ -123,15 +129,20 @@ func (c *controlService) FormatStorage(
 //
 // Send response containing multiple results of update operations on scm mounts
 // and nvme controllers.
-func (c *controlService) UpdateStorage(
-	params *pb.UpdateStorageParams,
-	stream pb.MgmtControl_UpdateStorageServer) error {
+func (c *ControlService) UpdateStorage(
+	req *pb.UpdateStorageReq,
+	stream pb.MgmtCtl_UpdateStorageServer) error {
 
 	resp := new(pb.UpdateStorageResp)
 
 	for i := range c.config.Servers {
-		c.nvme.Update(i, params.Nvme, &resp.Crets)
-		c.scm.Update(i, params.Scm, &resp.Mrets)
+		ctrlrResults := common.NvmeControllerResults{}
+		c.nvme.Update(i, req.Nvme, &ctrlrResults)
+		resp.Crets = ctrlrResults
+
+		moduleResults := common.ScmModuleResults{}
+		c.scm.Update(i, req.Scm, &moduleResults)
+		resp.Mrets = moduleResults
 	}
 
 	if err := stream.Send(resp); err != nil {
@@ -147,14 +158,14 @@ func (c *controlService) UpdateStorage(
 //
 // Send response containing multiple results of burn-in operations on scm mounts
 // and nvme controllers.
-func (c *controlService) BurninStorage(
-	params *pb.BurninStorageParams,
-	stream pb.MgmtControl_BurninStorageServer) error {
+func (c *ControlService) BurninStorage(
+	req *pb.BurninStorageReq,
+	stream pb.MgmtCtl_BurninStorageServer) error {
 
 	return errors.New("BurninStorage not implemented")
 	//	for i := range c.config.Servers {
-	//		c.nvme.BurnIn(i, params.Nvme, resp)
-	//		c.scm.BurnIn(i, params.Scm, resp)
+	//		c.nvme.BurnIn(i, req.Nvme, resp)
+	//		c.scm.BurnIn(i, req.Scm, resp)
 	//	}
 
 	//	if err := stream.Send(resp); err != nil {
@@ -164,32 +175,9 @@ func (c *controlService) BurninStorage(
 	//	return nil
 }
 
-//// UpdateNvmeCtrlr updates the firmware on a NVMe controller, verifying that the
-//// fwrev reported changes after update.
-////
-//// Todo: in real life Ctrlr.Id is not guaranteed to be unique, use pciaddr instead
-//func (c *controlService) UpdateNvmeCtrlr(
-//	ctx context.Context, params *pb.UpdateNvmeParams) (*pb.NvmeController, error) {
-//	pciAddr := params.GetPciaddr()
-//	//fwRev := params.GetFwrev()
-//	if err := c.nvme.Update(pciAddr, params.Path, params.Slot); err != nil {
-//		return nil, err
-//	}
-//	for _, ctrlr := range c.nvme.controllers {
-//		if ctrlr.Pciaddr == pciAddr {
-//			// TODO: verify at caller
-//			//			if ctrlr.Fwrev == fwRev {
-//			//				return nil, errors.Errorf("update failed, firmware revision unchanged")
-//			//			}
-//			return ctrlr, nil
-//		}
-//	}
-//	return nil, errors.Errorf("update failed, no matching controller found")
-//}
-
 // FetchFioConfigPaths retrieves any configuration files in fio_plugin directory
-func (c *controlService) FetchFioConfigPaths(
-	empty *pb.EmptyParams, stream pb.MgmtControl_FetchFioConfigPathsServer) error {
+func (c *ControlService) FetchFioConfigPaths(
+	empty *pb.EmptyReq, stream pb.MgmtCtl_FetchFioConfigPathsServer) error {
 
 	pluginDir, err := common.GetAbsInstallPath(spdkFioPluginDir)
 	if err != nil {
@@ -214,13 +202,13 @@ func (c *controlService) FetchFioConfigPaths(
 //// BurnInNvme runs burn-in validation on NVMe Namespace and returns cmd output
 //// in a stream to the gRPC consumer.
 //func (c *controlService) BurnInNvme(
-//	params *pb.BurnInNvmeParams, stream pb.MgmtControl_BurnInNvmeServer) error {
+//	req *pb.BurnInNvmeReq, stream pb.MgmtCtl_BurnInNvmeServer) error {
 //	// retrieve command components
 //	cmdName, args, env, err := c.nvme.BurnIn(
-//		params.GetPciaddr(),
+//		req.GetPciaddr(),
 //		// hardcode first Namespace on controller for the moment
 //		1,
-//		params.Path.Path)
+//		req.Path.Path)
 //	if err != nil {
 //		return err
 //	}

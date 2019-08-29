@@ -37,7 +37,7 @@ def c_uuid(p_uuid, c_uuid):
     """ utility function to create a UUID in C format from a python UUID """
     hexstr = p_uuid.hex
     for i in range(0, 31, 2):
-        c_uuid[i/2] = int(hexstr[i:i+2], 16)
+        c_uuid[int(i/2)] = int(hexstr[i:i+2], 16)
 
 def str_to_c_uuid(uuidstr):
     """ utility function to convert string format uuid to a C uuid """

@@ -22,18 +22,19 @@ pool:
  createsvc:
   svcn: 1
 ior:
- iteration: 1
- iorflags: "-w -r -k -vv"
+ flags: "-w -r -k -vv"
+ repetitions: 1
  object_type:
-  - "LARGE"
-  - "TINY"
-  - "SMALL"
-  - "R2"
-  - "R2S"
-  - "R3"
-  - "R3S"
-  - "R4"
-  - "R4S"
+  - "SX"
+  - "S1"
+  - "S4"
+  - "RP_2GX"
+  - "RP_2G1"
+  - "RP_3GX"
+  - "RP_3G1"
+  - "RP_4GX"
+  - "RP_4G1"
+ daos_destroy: False
  ior_sequence:
 #   - [scmsize, nvmesize, stripesize, blocksize, clientslots]
     - [6000000000, 40000000000, 1048576, 17179869184, 1]        #[6G, 40G, 1M, 16G, 1]
