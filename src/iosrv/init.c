@@ -224,7 +224,7 @@ dss_tgt_nr_get(int ncores, int nr)
 		nr_default = nr;
 
 	if (nr_default != nr)
-		D_PRINT("%d target XS(xstream) requested (#cores %d); " \
+		D_PRINT("%d target XS(xstream) requested (#cores %d); "
 			"use (%d) target XS\n", nr, ncores, nr_default);
 
 	return nr_default;
@@ -249,7 +249,7 @@ dss_topo_init()
 	num_obj = hwloc_get_nbobjs_by_depth(dss_topo, depth);
 
 	if (numa_node > num_obj) {
-		D_ERROR("Invalid NUMA node selected. " \
+		D_ERROR("Invalid NUMA node selected. "
 			"Must be no larger than %d\n",
 			num_obj);
 		return -DER_INVAL;
@@ -292,7 +292,7 @@ dss_topo_init()
 
 	dss_tgt_nr = dss_tgt_nr_get(dss_num_cores_numa_node, nr_threads);
 	if (dss_core_offset < 0 || dss_core_offset >= dss_num_cores_numa_node) {
-		D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), " \
+		D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), "
 			"should within range [0, %d]", dss_core_offset,
 			dss_num_cores_numa_node - 1);
 		return -DER_INVAL;
@@ -549,8 +549,8 @@ server_init(int argc, char *argv[])
 		goto exit_drpc_fini;
 	D_INFO("Modules successfully set up\n");
 
-	D_PRINT("DAOS I/O server (v%s) process %u started on rank %u " \
-		"(out of %u) with %u target xstream set(s), %d helper XS " \
+	D_PRINT("DAOS I/O server (v%s) process %u started on rank %u "
+		"(out of %u) with %u target xstream set(s), %d helper XS "
 		"per target, NUMA node %u, firstcore %d.\n",
 		DAOS_VERSION, getpid(), rank, size, dss_tgt_nr,
 		dss_tgt_offload_xs_nr, numa_node, dss_core_offset);
