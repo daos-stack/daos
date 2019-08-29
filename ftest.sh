@@ -53,18 +53,7 @@ NFS_SERVER=${NFS_SERVER:-${HOSTNAME%%.*}}
 trap 'echo "encountered an unchecked return code, exiting with error"' ERR
 
 IFS=" " read -r -a nodes <<< "${2//,/ }"
-
-# put yaml files back
-restore_dist_files() {
-    local dist_files="$*"
-
-    for file in $dist_files; do
-        if [ -f "$file".dist ]; then
-            mv -f "$file".dist "$file"
-        fi
-    done
-
-}
+TEST_NODES=$(IFS=","; echo "${nodes[*]:1:8}")
 
 # For nodes that are only rebooted between CI nodes left over mounts
 # need to be cleaned up.
@@ -86,43 +75,42 @@ pre_clean () {
 }
 
 cleanup() {
-    restore_dist_files "${yaml_files[@]}"
     i=5
     while [ $i -gt 0 ]; do
-        if ! clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh \
+        if clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh \
              -S -w "$(IFS=','; echo "${nodes[*]}")" "set -x
-        if grep /mnt/daos /proc/mounts; then
-            if ! sudo umount /mnt/daos; then
-                echo \"During shutdown, failed to unmount /mnt/daos.  \"\
-                     \"Continuing...\"
-            fi
-        fi
-        x=0
-        sudo sed -i -e \"/added by ftest.sh/d\" /etc/fstab
-        if [ -n \"$DAOS_BASE\" ]; then
-            while [ \$x -lt 30 ] &&
-                  grep $DAOS_BASE /proc/mounts &&
-                  ! sudo umount $DAOS_BASE; do
-                sleep 1
-                let x+=1
-            done
-            if grep $DAOS_BASE /proc/mounts; then
-                echo \"Failed to unmount $DAOS_BASE\"
-                exit 1
-            fi
-            if [ -d $DAOS_BASE ] && ! sudo rmdir $DAOS_BASE; then
-                echo \"Failed to remove $DAOS_BASE\"
-                if [ -d $DAOS_BASE ]; then
-                    ls -l $DAOS_BASE
-                else
-                    echo \"because it doesnt exist\"
+            if grep /mnt/daos /proc/mounts; then
+                if ! sudo umount /mnt/daos; then
+                    echo \"During shutdown, failed to unmount /mnt/daos.  \"\
+                         \"Continuing...\"
                 fi
-                exit 1
             fi
-        fi"; then
-            i=0
+            x=0
+            sudo sed -i -e \"/added by ftest.sh/d\" /etc/fstab
+            if [ -n \"$DAOS_BASE\" ]; then
+                while [ \$x -lt 30 ] &&
+                      grep $DAOS_BASE /proc/mounts &&
+                      ! sudo umount $DAOS_BASE; do
+                    sleep 1
+                    let x+=1
+                done
+                if grep $DAOS_BASE /proc/mounts; then
+                    echo \"Failed to unmount $DAOS_BASE\"
+                    exit 1
+                fi
+                if [ -d $DAOS_BASE ] && ! sudo rmdir $DAOS_BASE; then
+                    echo \"Failed to remove $DAOS_BASE\"
+                    if [ -d $DAOS_BASE ]; then
+                        ls -l $DAOS_BASE
+                    else
+                        echo \"because it doesnt exist\"
+                    fi
+                    exit 1
+                fi
+            fi"; then
+            break
         fi
-        ((i-=1))
+        ((i-=1)) || true
     done
 }
 
@@ -135,22 +123,6 @@ if ${TEARDOWN_ONLY:-false}; then
     cleanup
     exit 0
 fi
-
-# set our machine names
-mapfile -t yaml_files < <(find src/tests/ftest -name \*.yaml)
-
-trap 'set +e; restore_dist_files "${yaml_files[@]}"' EXIT
-
-# shellcheck disable=SC2086
-sed -i.dist -e "s/- boro-A/- ${nodes[1]}/g" \
-            -e "s/- boro-B/- ${nodes[2]}/g" \
-            -e "s/- boro-C/- ${nodes[3]}/g" \
-            -e "s/- boro-D/- ${nodes[4]}/g" \
-            -e "s/- boro-E/- ${nodes[5]}/g" \
-            -e "s/- boro-F/- ${nodes[6]}/g" \
-            -e "s/- boro-G/- ${nodes[7]}/g" \
-            -e "s/- boro-H/- ${nodes[8]}/g" "${yaml_files[@]}"
-
 
 # let's output to a dir in the tree
 rm -rf src/tests/ftest/avocado ./*_results.xml
@@ -340,7 +312,7 @@ print(\"{}.{}\".format(sys.version_info[0], sys.version_info[1]))')
 export PYTHONPATH=./util:../../utils/py/:./util/apricot:\
 ../../../install/lib/python\$launch_py_vers/site-packages
 
-if ! ./launch.py -c -a -r -s ${TEST_TAG_ARR[*]}; then
+if ! ./launch.py -c -a -r -s -ts ${TEST_NODES} ${TEST_TAG_ARR[*]}; then
     rc=\${PIPESTATUS[0]}
 else
     rc=0

@@ -388,10 +388,6 @@ pipeline {
                             */
                         }
                         success {
-                            sh '''rm -rf daos-devel/
-                                  mkdir daos-devel/
-                                  mv install/{lib,include} daos-devel/'''
-                            archiveArtifacts artifacts: 'daos-devel/**'
                             sh "rm -rf _build.external${arch}"
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
@@ -1184,6 +1180,10 @@ pipeline {
                                   if [ -n "$STAGE_NAME" ]; then
                                       rm -rf "$STAGE_NAME/"
                                       mkdir "$STAGE_NAME/"
+                                      # compress those potentially huge DAOS logs
+                                      if daos_logs=$(ls src/tests/ftest/avocado/job-results/*/daos_logs/*); then
+                                          lbzip2 $daos_logs
+                                      fi
                                       arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
                                       arts="$arts$(ls -d src/tests/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
                                       arts="$arts$(ls src/tests/ftest/*.stacktrace 2>/dev/null || true)"
@@ -1254,6 +1254,10 @@ pipeline {
                                   if [ -n "$STAGE_NAME" ]; then
                                       rm -rf "$STAGE_NAME/"
                                       mkdir "$STAGE_NAME/"
+                                      # compress those potentially huge DAOS logs
+                                      if daos_logs=$(ls src/tests/ftest/avocado/job-results/*/daos_logs/*); then
+                                          lbzip2 $daos_logs
+                                      fi
                                       arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
                                       arts="$arts$(ls -d src/tests/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
                                       arts="$arts$(ls src/tests/ftest/*.stacktrace 2>/dev/null || true)"

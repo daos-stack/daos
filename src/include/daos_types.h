@@ -352,15 +352,6 @@ typedef struct {
 
 typedef uint64_t	daos_epoch_t;
 
-static inline daos_epoch_t
-daos_ts2epoch(void)
-{
-	struct timespec ts;
-
-	clock_gettime(CLOCK_REALTIME, &ts);
-	return ts.tv_sec * 1e9 + ts.tv_nsec;
-}
-
 typedef struct {
 	/** Low bound of the epoch range */
 	daos_epoch_t	epr_lo;
