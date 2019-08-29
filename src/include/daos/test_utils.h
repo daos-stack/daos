@@ -46,6 +46,14 @@
 struct drpc *new_drpc_with_fd(int fd);
 
 /**
+ * Frees a drpc context and cleans up. Not tied to anything in the real file
+ * system.
+ *
+ * \param	ctx	drpc ctx to free
+ */
+void free_drpc(struct drpc *ctx);
+
+/**
  * Generates a valid Drpc__Call structure.
  *
  * \return	Newly allocated Drpc__Call
@@ -71,12 +79,5 @@ void mock_valid_drpc_call_in_recvmsg(void);
  * \return	Newly allocated Drpc__Response
  */
 Drpc__Response *new_drpc_response(void);
-
-/**
- * Frees the drpc context.
- *
- * \param	ctx	drpc context to free
- */
-void drpc_free(struct drpc *ctx);
 
 #endif /* __DAOS_TEST_UTILS_H__ */

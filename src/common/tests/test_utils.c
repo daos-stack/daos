@@ -46,6 +46,16 @@ new_drpc_with_fd(int fd)
 	return ctx;
 }
 
+
+void
+free_drpc(struct drpc *ctx)
+{
+	if (ctx) {
+		D_FREE(ctx->comm);
+		D_FREE(ctx);
+	}
+}
+
 Drpc__Call*
 new_drpc_call(void)
 {
@@ -90,13 +100,4 @@ new_drpc_response(void)
 	resp->status = DRPC__STATUS__FAILURE;
 
 	return resp;
-}
-
-void
-drpc_free(struct drpc *ctx)
-{
-	if (ctx) {
-		D_FREE(ctx->comm);
-		D_FREE(ctx);
-	}
 }

@@ -34,7 +34,6 @@
 
 #include <daos/drpc.h>
 #include <gurt/list.h>
-#include <abt.h>
 
 /**
  * Path to the Unix Domain Socket used by the dRPC listener thread
@@ -66,15 +65,6 @@ struct drpc_call_ctx {
 struct drpc_list {
 	struct drpc	*ctx; /** Just a pointer, not a copy */
 	d_list_t	link; /** Linked list metadata */
-};
-
-/**
- * Simple linked list node containing an Argobots thread.
- * Used for hdlr_ult_list in drpc_progress_context.
- */
-struct abt_ult_list {
-	ABT_thread	thread;
-	d_list_t	link;
 };
 
 /**

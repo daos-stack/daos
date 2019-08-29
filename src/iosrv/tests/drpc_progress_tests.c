@@ -137,7 +137,7 @@ cleanup_drpc_list(d_list_t *list)
 
 	d_list_for_each_entry_safe(current, next, list, link) {
 		d_list_del(&current->link);
-		drpc_free(current->ctx);
+		free_drpc(current->ctx);
 		D_FREE(current);
 	}
 }
@@ -145,7 +145,7 @@ cleanup_drpc_list(d_list_t *list)
 void
 cleanup_drpc_progress_context(struct drpc_progress_context *ctx)
 {
-	drpc_free(ctx->listener_ctx);
+	free_drpc(ctx->listener_ctx);
 	cleanup_drpc_list(&ctx->session_ctx_list);
 }
 

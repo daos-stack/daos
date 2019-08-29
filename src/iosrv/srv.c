@@ -791,8 +791,8 @@ dss_start_xs_id(int xs_id)
 static int
 dss_xstreams_init()
 {
-	int		rc;
-	int		i, xs_id;
+	int	rc;
+	int	i, xs_id;
 
 	D_ASSERT(dss_tgt_nr >= 1);
 	D_ASSERT(dss_tgt_offload_xs_nr == 0 || dss_tgt_offload_xs_nr == 1 ||

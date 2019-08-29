@@ -102,7 +102,7 @@ mock_drpc_progress_context_create_teardown()
 	D_FREE(drpc_progress_context_create_return);
 
 	/* if non-null, listener was allocated by drpc_listen */
-	drpc_free(drpc_progress_context_create_listener_ptr);
+	free_drpc(drpc_progress_context_create_listener_ptr);
 	drpc_progress_context_create_listener_ptr = NULL;
 }
 

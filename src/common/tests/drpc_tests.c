@@ -127,7 +127,7 @@ test_drpc_connect_success(void **state)
 	assert_null(ctx->handler);
 	assert_int_equal(ctx->ref_count, 1);
 
-	drpc_free(ctx);
+	free_drpc(ctx);
 }
 
 /*
@@ -206,7 +206,7 @@ test_drpc_close_with_multiple_refs(void **state)
 	assert_int_equal(close_fd, 0); /* close() wasn't called */
 	assert_int_equal(ctx->ref_count, 1);
 
-	drpc_free(ctx);
+	free_drpc(ctx);
 }
 
 /*
@@ -227,7 +227,7 @@ test_drpc_call_fails_if_sendmsg_fails(void **state)
 	assert_null(resp);
 
 	drpc__call__free_unpacked(call, NULL);
-	drpc_free(ctx);
+	free_drpc(ctx);
 }
 
 static void
@@ -270,7 +270,7 @@ test_drpc_call_sends_call_as_mesg(void **state)
 	D_FREE(expected_msg);
 	drpc__response__free_unpacked(resp, NULL);
 	drpc__call__free_unpacked(call, NULL);
-	drpc_free(ctx);
+	free_drpc(ctx);
 }
 
 static void
@@ -290,7 +290,7 @@ test_drpc_call_with_no_flags_returns_async(void **state)
 
 	drpc__response__free_unpacked(resp, NULL);
 	drpc__call__free_unpacked(call, NULL);
-	drpc_free(ctx);
+	free_drpc(ctx);
 }
 
 static void
@@ -320,7 +320,7 @@ test_drpc_call_with_sync_flag_gets_socket_response(void **state)
 	drpc__response__free_unpacked(resp, NULL);
 	drpc__response__free_unpacked(expected_resp, NULL);
 	drpc__call__free_unpacked(call, NULL);
-	drpc_free(ctx);
+	free_drpc(ctx);
 }
 
 static void
@@ -337,7 +337,7 @@ test_drpc_call_with_sync_flag_fails_on_recvmsg_fail(void **state)
 	assert_null(resp);
 
 	drpc__call__free_unpacked(call, NULL);
-	drpc_free(ctx);
+	free_drpc(ctx);
 }
 
 /*
@@ -400,7 +400,7 @@ test_drpc_listen_success(void **state)
 	assert_int_equal(listen_sockfd, socket_return);
 	assert_int_equal(listen_backlog, SOMAXCONN);
 
-	drpc_free(ctx);
+	free_drpc(ctx);
 }
 
 static void
@@ -462,7 +462,7 @@ test_drpc_accept_fails_with_null_handler(void **state)
 
 	assert_null(drpc_accept(ctx));
 
-	drpc_free(ctx);
+	free_drpc(ctx);
 }
 
 static void
@@ -487,8 +487,8 @@ test_drpc_accept_success(void **state)
 	assert_null(accept_addr_ptr);
 	assert_null(accept_addrlen_ptr);
 
-	drpc_free(session_ctx);
-	drpc_free(ctx);
+	free_drpc(session_ctx);
+	free_drpc(ctx);
 }
 
 static void
@@ -500,7 +500,7 @@ test_drpc_accept_fails_if_accept_fails(void **state)
 
 	assert_null(drpc_accept(ctx));
 
-	drpc_free(ctx);
+	free_drpc(ctx);
 }
 
 /*
@@ -525,7 +525,7 @@ test_drpc_recv_call_bad_handler(void **state)
 	assert_int_equal(drpc_recv_call(ctx, &call), -DER_INVAL);
 	assert_null(call);
 
-	drpc_free(ctx);
+	free_drpc(ctx);
 }
 
 static void
@@ -535,7 +535,7 @@ test_drpc_recv_call_null_call(void **state)
 
 	assert_int_equal(drpc_recv_call(ctx, NULL), -DER_INVAL);
 
-	drpc_free(ctx);
+	free_drpc(ctx);
 }
 
 static void
@@ -556,7 +556,7 @@ assert_drpc_recv_call_fails_with_recvmsg_errno(int recvmsg_errno,
 	assert_null(call);
 	assert_int_equal(recvmsg_call_count, 1);
 
-	drpc_free(ctx);
+	free_drpc(ctx);
 }
 
 static void
@@ -586,7 +586,7 @@ test_drpc_recv_call_malformed(void **state)
 
 	assert_null(call);
 
-	drpc_free(ctx);
+	free_drpc(ctx);
 }
 
 static void
@@ -615,7 +615,7 @@ test_drpc_recv_call_success(void **state)
 	assert_int_equal(recvmsg_msg_iov_len, UNIXCOMM_MAXMSGSIZE);
 	assert_int_equal(recvmsg_flags, 0);
 
-	drpc_free(ctx);
+	free_drpc(ctx);
 	drpc_call_free(call);
 	drpc_call_free(expected_call);
 }
@@ -643,7 +643,7 @@ test_drpc_send_response_bad_handler(void **state)
 
 	assert_int_equal(drpc_send_response(ctx, resp), -DER_INVAL);
 
-	drpc_free(ctx);
+	free_drpc(ctx);
 	drpc_response_free(resp);
 }
 
@@ -654,7 +654,7 @@ test_drpc_send_response_null_resp(void **state)
 
 	assert_int_equal(drpc_send_response(ctx, NULL), -DER_INVAL);
 
-	drpc_free(ctx);
+	free_drpc(ctx);
 }
 
 static void
@@ -668,7 +668,7 @@ test_drpc_send_response_sendmsg_fails(void **state)
 
 	assert_int_equal(drpc_send_response(ctx, resp), -DER_NOMEM);
 
-	drpc_free(ctx);
+	free_drpc(ctx);
 	drpc_response_free(resp);
 }
 
@@ -700,7 +700,7 @@ test_drpc_send_response_success(void **state)
 	assert_memory_equal(sendmsg_msg_content, expected_response,
 			expected_response_size);
 
-	drpc_free(ctx);
+	free_drpc(ctx);
 	drpc_response_free(resp);
 }
 
@@ -736,7 +736,7 @@ test_drpc_call_create_free(void **state)
 	assert_null(call->body.data);
 
 	drpc_call_free(call);
-	drpc_free(ctx);
+	free_drpc(ctx);
 }
 
 static void
@@ -801,7 +801,7 @@ test_drpc_add_ref_success(void **state)
 		assert_int_equal(ctx->ref_count, i + 1);
 	}
 
-	drpc_free(ctx);
+	free_drpc(ctx);
 }
 
 static void
@@ -815,7 +815,7 @@ check_drpc_add_ref_doesnt_update_bad_count(int bad_count)
 
 	assert_int_equal(ctx->ref_count, bad_count);
 
-	drpc_free(ctx);
+	free_drpc(ctx);
 }
 
 static void

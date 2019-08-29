@@ -74,20 +74,19 @@ drpc_progress_context_create(struct drpc *listener)
 void
 drpc_progress_context_close(struct drpc_progress_context *ctx)
 {
-	struct drpc_list	*current_drpc;
-	struct drpc_list	*next_drpc;
+	struct drpc_list	*current;
+	struct drpc_list	*next;
 
 	if (ctx == NULL) {
 		D_ERROR("NULL drpc_progress_context passed\n");
 		return;
 	}
 
-	d_list_for_each_entry_safe(current_drpc, next_drpc,
-				   &ctx->session_ctx_list,
+	d_list_for_each_entry_safe(current, next, &ctx->session_ctx_list,
 				   link) {
-		d_list_del(&current_drpc->link);
-		drpc_close(current_drpc->ctx);
-		D_FREE(current_drpc);
+		d_list_del(&current->link);
+		drpc_close(current->ctx);
+		D_FREE(current);
 	}
 
 	drpc_close(ctx->listener_ctx);
@@ -410,7 +409,7 @@ process_session_activity(struct drpc_list *session_node,
 
 static int
 process_all_session_activities(struct drpc_progress_context *ctx,
-			struct unixcomm_poll *comms, size_t num_comms)
+		struct unixcomm_poll *comms, size_t num_comms)
 {
 	int			rc = 0;
 	struct drpc_list	*current;
