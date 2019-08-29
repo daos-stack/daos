@@ -587,55 +587,6 @@ static inline na_bool_t is_integer_str(char *str)
 	return NA_TRUE;
 }
 
-static inline int
-crt_get_port(int *port)
-{
-	int			socketfd;
-	struct sockaddr_in	tmp_socket;
-	socklen_t		slen = sizeof(struct sockaddr);
-	int			rc;
-
-	socketfd = socket(AF_INET, SOCK_STREAM, 0);
-	if (socketfd == -1) {
-		D_ERROR("cannot create socket, errno: %d(%s).\n",
-			errno, strerror(errno));
-		D_GOTO(out, rc = -DER_ADDRSTR_GEN);
-	}
-	tmp_socket.sin_family = AF_INET;
-	tmp_socket.sin_addr.s_addr = INADDR_ANY;
-	tmp_socket.sin_port = 0;
-
-	rc = bind(socketfd, (const struct sockaddr *)&tmp_socket,
-		  sizeof(tmp_socket));
-	if (rc != 0) {
-		D_ERROR("cannot bind socket, errno: %d(%s).\n",
-			errno, strerror(errno));
-		close(socketfd);
-		D_GOTO(out, rc = -DER_ADDRSTR_GEN);
-	}
-
-	rc = getsockname(socketfd, (struct sockaddr *)&tmp_socket, &slen);
-	if (rc != 0) {
-		D_ERROR("cannot create getsockname, errno: %d(%s).\n",
-			errno, strerror(errno));
-		close(socketfd);
-		D_GOTO(out, rc = -DER_ADDRSTR_GEN);
-	}
-	rc = close(socketfd);
-	if (rc != 0) {
-		D_ERROR("cannot close socket, errno: %d(%s).\n",
-			errno, strerror(errno));
-		D_GOTO(out, rc = -DER_ADDRSTR_GEN);
-	}
-
-	D_ASSERT(port != NULL);
-	*port = ntohs(tmp_socket.sin_port);
-	D_DEBUG(DB_ALL, "get a port: %d.\n", *port);
-
-out:
-	return rc;
-}
-
 int crt_na_ofi_config_init(void)
 {
 	char		*port_str;
@@ -707,12 +658,7 @@ int crt_na_ofi_config_init(void)
 		D_GOTO(out, rc = -DER_PROTO);
 	}
 
-	rc = crt_get_port(&port);
-	if (rc != 0) {
-		D_ERROR("crt_get_port failed, rc: %d.\n", rc);
-		D_GOTO(out, rc);
-	}
-
+	port = -1;
 	port_str = getenv("OFI_PORT");
 	if (crt_is_service() && port_str != NULL && strlen(port_str) > 0) {
 		if (!is_integer_str(port_str)) {
