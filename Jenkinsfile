@@ -1033,10 +1033,9 @@ pipeline {
             when {
                 beforeAgent true
                 // expression { skipTest != true }
+                expression { env.NO_CI_TESTING != 'true' }
                 expression {
-                    sh script: '''git show -s --format=%B | \
-                                    grep "^Skip-test: true" | \
-                                    [ "${NO_CI_TESTING}" == "true" ]''',
+                    sh script: 'git show -s --format=%B | grep "^Skip-test: true',
                        returnStatus: true
                 }
             }
@@ -1147,10 +1146,9 @@ pipeline {
             when {
                 beforeAgent true
                 // expression { skipTest != true }
+                expression { env.NO_CI_TESTING != 'true' }
                 expression {
-                    sh script: '''git show -s --format=%B | \
-                                    grep "^Skip-test: true" | \
-                                    [ "${NO_CI_TESTING}" == "true" ]''',
+                    sh script: 'git show -s --format=%B | grep "^Skip-test: true"',
                        returnStatus: true
                 }
             }
