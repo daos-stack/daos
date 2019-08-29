@@ -261,6 +261,11 @@ class TestPool(TestDaosApiBase):
             pi_leader (int, optional): pool leader. Defaults to None.
             pi_bits (int, optional): pool bits. Defaults to None.
 
+        Note:
+            Arguments may also be provided as a string with a number preceeded
+            by '<', '<=', '>', or '>=' for other comparisions besides the
+            default '=='.
+
         Returns:
             bool: True if at least one expected value is specified and all the
                 specified values match; False otherwise
@@ -291,6 +296,11 @@ class TestPool(TestDaosApiBase):
             ps_ntargets (int, optional): number of targets. Defaults to None.
             ps_padding (int, optional): space padding. Defaults to None.
 
+        Note:
+            Arguments may also be provided as a string with a number preceeded
+            by '<', '<=', '>', or '>=' for other comparisions besides the
+            default '=='.
+
         Returns:
             bool: True if at least one expected value is specified and all the
                 specified values match; False otherwise
@@ -319,6 +329,11 @@ class TestPool(TestDaosApiBase):
         Args:
             s_total (list, optional): total space per device. Defaults to None.
             s_free (list, optional): free space per device. Defaults to None.
+
+        Note:
+            Arguments may also be provided as a string with a number preceeded
+            by '<', '<=', '>', or '>=' for other comparisions besides the
+            default '=='.
 
         Returns:
             bool: True if at least one expected value is specified and all the
@@ -354,6 +369,11 @@ class TestPool(TestDaosApiBase):
             rs_rec_nr (int, optional): number of rebuilt records.
                 Defaults to None.
 
+        Note:
+            Arguments may also be provided as a string with a number preceeded
+            by '<', '<=', '>', or '>=' for other comparisions besides the
+            default '=='.
+
         Returns:
             bool: True if at least one expected value is specified and all the
                 specified values match; False otherwise
@@ -372,7 +392,10 @@ class TestPool(TestDaosApiBase):
         Args:
             check_list (list): a list of tuples containing the name of the pool
                 information attribute to check, the current value of the
-                attribute, and the expected value of the attribute.
+                attribute, and the expected value of the attribute. If the
+                expected value is specified as a string with a number preceeded
+                by '<', '<=', '>', or '>=' then this comparision will be used
+                instead of the defult '=='.
 
         Returns:
             bool: True if at least one check has been specified and all the
@@ -381,6 +404,7 @@ class TestPool(TestDaosApiBase):
         """
         check_status = len(check_list) > 0
         for check, actual, expect in check_list:
+            # Determine which comparision to utilize for this check
             compare = ("==", lambda x, y: x == y, "does not match")
             if isinstance(expect, str):
                 comparisions = {
@@ -392,7 +416,7 @@ class TestPool(TestDaosApiBase):
                         lambda x, y: x >= y, "is too small or does not match"),
                 }
                 for key, val in comparisions.items():
-                    # If the expected value is preceeded by one of the know
+                    # If the expected value is preceeded by one of the known
                     # comparision keys, use the comparision and remove the key
                     # from the expected value
                     if expect[:len(key)] == key:
@@ -407,11 +431,11 @@ class TestPool(TestDaosApiBase):
             self.log.info(
                 "Verifying the pool %s: %s %s %s",
                 check, actual, compare[0], expect)
-            check_status = compare[1](actual, expect)
-            if not check_status:
+            if not compare[1](actual, expect):
                 msg = "  The {} {}: actual={}, expected={}".format(
                     check, compare[2], actual, expect)
                 self.log.error(msg)
+                check_status = False
         return check_status
 
     def rebuild_complete(self):
