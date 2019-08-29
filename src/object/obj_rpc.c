@@ -29,6 +29,8 @@
 #include <daos/event.h>
 #include <daos/rpc.h>
 #include <daos/object.h>
+#include <daos_obj.h>
+#include <gurt/types.h>
 #include "obj_rpc.h"
 
 static int
@@ -210,6 +212,10 @@ crt_proc_daos_iod_t(crt_proc_t proc, daos_iod_t *dvi)
 		D_ERROR("Invalid parameter, proc: %p, data: %p.\n", proc, dvi);
 		return -DER_INVAL;
 	}
+	if (dvi->iod_name.iov_buf_len < dvi->iod_name.iov_len)
+		D_ERROR("RYON: Issue with IOV: iov buf len ("DF_U64")"
+					" < iov len "DF_U64"\n",
+			dvi->iod_name.iov_buf_len, dvi->iod_name.iov_len);
 
 	rc = crt_proc_d_iov_t(proc, &dvi->iod_name);
 	if (rc != 0)
@@ -364,6 +370,13 @@ crt_proc_d_sg_list_t(crt_proc_t proc, d_sg_list_t *sgl)
 	}
 
 	for (i = 0; i < sgl->sg_nr; i++) {
+		d_iov_t *iov = &sgl->sg_iovs[i];
+		if (iov->iov_buf_len < iov->iov_len)
+			D_ERROR("RYON: Issue with IOV: "
+				"iov buf len ("DF_U64")"
+				" < iov len "DF_U64"\n",
+				iov->iov_buf_len, iov->iov_len);
+
 		rc = crt_proc_d_iov_t(proc, &sgl->sg_iovs[i]);
 		if (rc != 0) {
 			if (proc_op == CRT_PROC_DECODE)

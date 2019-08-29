@@ -30,6 +30,7 @@
 #include <daos_api.h>
 #include <daos_security.h>
 #include <cart/api.h>
+#include <gurt/types.h>
 
 static int
 crt_proc_prop_daos_acl(crt_proc_t proc, struct daos_prop_entry *entry)
@@ -50,6 +51,11 @@ crt_proc_prop_daos_acl(crt_proc_t proc, struct daos_prop_entry *entry)
 		d_iov_set(&iov, entry->dpe_val_ptr,
 			daos_acl_get_size(acl));
 	}
+
+	if (iov.iov_buf_len < iov.iov_len)
+		D_ERROR("RYON: Issue with IOV: iov buf len ("DF_U64")"
+				" < iov len "DF_U64"\n",
+			iov.iov_buf_len, iov.iov_len);
 
 	rc = crt_proc_d_iov_t(proc, &iov);
 	if (rc != 0)
