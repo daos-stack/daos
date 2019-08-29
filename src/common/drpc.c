@@ -565,62 +565,6 @@ get_incoming_call(struct drpc *ctx, Drpc__Call **call)
 	return 0;
 }
 
-static int
-handle_incoming_message(struct drpc *ctx, Drpc__Response **response)
-{
-	int		rc;
-	Drpc__Call	*request;
-
-	rc = get_incoming_call(ctx, &request);
-	if (rc != 0)
-		return rc;
-
-	*response = drpc_response_create(request);
-	if (*response == NULL) {
-		drpc_call_free(request);
-		return -DER_NOMEM;
-	}
-
-	ctx->handler(request, *response);
-
-	drpc_call_free(request);
-	return rc;
-}
-
-/**
- * Listen for a client message on a drpc session, handle the message, and send
- * the response back to the client.
- *
- * \param	ctx		drpc context on which to listen
- *
- * \return	DER_SUCCESS	Successfully got and handled the message
- *		-DER_INVAL	Invalid drpc session context
- *		-DER_NOMEM	Out of memory
- *		-DER_AGAIN	Listener socket is nonblocking and there was no
- *					pending message on the pipe.
- *		-DER_PROTO	Error processing message
- */
-int
-drpc_recv(struct drpc *session_ctx)
-{
-	int		rc;
-	Drpc__Response	*response;
-
-	if (!drpc_is_valid_listener(session_ctx)) {
-		D_ERROR("dRPC context isn't a valid listener\n");
-		return -DER_INVAL;
-	}
-
-	rc = handle_incoming_message(session_ctx, &response);
-	if (rc != 0)
-		return rc;
-
-	rc = send_response(session_ctx, response);
-
-	drpc_response_free(response);
-	return rc;
-}
-
 /**
  * Listen for a client message on a dRPC session and return the Drpc__Call
  * received.
