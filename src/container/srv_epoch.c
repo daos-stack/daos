@@ -230,7 +230,7 @@ ds_cont_epoch_aggregate(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (epoch >= DAOS_EPOCH_MAX)
 		return -DER_INVAL;
 	else if (in->cei_epoch == 0)
-		epoch = daos_ts2epoch();
+		epoch = crt_hlc_get();
 
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: epoch="DF_U64", %d\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
