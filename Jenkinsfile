@@ -1036,7 +1036,7 @@ pipeline {
                 expression {
                     sh script: '''git show -s --format=%B | \
                                     grep "^Skip-test: true" | \
-                                    [ "${NO_CI_TESTING}" != "true" ]''',
+                                    [ "${NO_CI_TESTING}" == "true" ]''',
                        returnStatus: true
                 }
             }
@@ -1150,7 +1150,7 @@ pipeline {
                 expression {
                     sh script: '''git show -s --format=%B | \
                                     grep "^Skip-test: true" | \
-                                    [ "${NO_CI_TESTING}" != "true" ]''',
+                                    [ "${NO_CI_TESTING}" == "true" ]''',
                        returnStatus: true
                 }
             }
