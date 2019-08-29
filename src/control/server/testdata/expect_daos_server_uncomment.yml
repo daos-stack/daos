@@ -4,8 +4,9 @@ servers:
   targets: 20
   nr_xs_helpers: 0
   first_core: 1
-  fabric_iface: qib0
+  fabric_iface: eth0
   fabric_iface_port: 20000
+  pinned_numa_node: 0
   log_mask: WARN
   log_file: /tmp/daos_server1.log
   env_vars:
@@ -25,8 +26,9 @@ servers:
   targets: 20
   nr_xs_helpers: 1
   first_core: 22
-  fabric_iface: qib0
+  fabric_iface: eth1
   fabric_iface_port: 20000
+  pinned_numa_node: 0
   log_mask: WARN
   log_file: /tmp/daos_server2.log
   env_vars:
@@ -60,8 +62,8 @@ transport_config:
 fault_path: /vcdu0/rack1/hostname
 fault_cb: ./.daos/fd_callback
 fabric_ifaces:
-- qib0
-- qib1
+- eth0
+- eth1
 scm_mount_path: /mnt/daosa
 bdev_include:
 - 0000:81:00.1

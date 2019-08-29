@@ -1,26 +1,3 @@
-//
-// (C) Copyright 2019 Intel Corporation.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
-//
-
 package main
 
 import (
@@ -58,10 +35,10 @@ func showBufOnFailure(t *testing.T, logBuf bytes.Buffer) {
 
 func genMinimalConfig() *server.Configuration {
 	cfg := server.NewConfiguration().
-		WithProvider("foo").
+		WithProvider("ofi+sockets").
 		WithServers(
 			&server.IOServerConfig{
-				FabricIface: "foo0",
+				FabricIface: "eth0",
 			},
 		)
 	cfg.Path = path.Join(os.Args[0], cfg.Path)
@@ -76,17 +53,18 @@ func genDefaultExpected() *server.Configuration {
 			&server.IOServerConfig{
 				ScmMount:    "/mnt/daos",
 				Hostname:    hostname,
-				FabricIface: "foo0",
+				FabricIface: "eth0",
 				CliOpts: []string{
 					"-t", "0",
 					"-g", "daos_server",
 					"-s", "/mnt/daos",
 					"-x", "0",
 					"-d", "/var/run/daos_server",
+					"-p", "0",
 				},
 				EnvVars: []string{
-					"CRT_PHY_ADDR_STR=foo",
-					"OFI_INTERFACE=foo0",
+					"CRT_PHY_ADDR_STR=ofi+sockets",
+					"OFI_INTERFACE=eth0",
 					"D_LOG_MASK=",
 					"D_LOG_FILE=",
 				},

@@ -48,8 +48,6 @@ type networkScanCmd struct {
 func (cmd *networkScanCmd) Execute(args []string) error {
 	var provider string
 
-	netdetect.SetLogger(cmd.log)
-
 	if len(args) > 0 {
 		cmd.log.Infof("An invalid argument was provided: %v", args)
 		return errors.WithMessage(nil, "failed to execute the fabric and device scan.  An invalid argument was provided.")
