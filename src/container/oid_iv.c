@@ -324,7 +324,7 @@ oid_iv_reserve(void *ns, uuid_t poh_uuid, uuid_t co_uuid,
 	struct oid_iv_range	*oids;
 	int		rc;
 
-	D_DEBUG(DB_TRACE, "%d: OID alloc CoUUID "DF_UUIDF" num_oids %"PRIu64"\n",
+	D_DEBUG(DB_TRACE, "%d: OID alloc CUUID "DF_UUIDF" num_oids %"PRIu64"\n",
 		dss_self_rank(), DP_UUID(co_uuid), num_oids);
 
 	memset(&key, 0, sizeof(key));
