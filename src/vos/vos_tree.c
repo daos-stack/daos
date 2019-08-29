@@ -967,7 +967,7 @@ key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
 	if (krecp != NULL)
 		*krecp = NULL;
 
-	D_DEBUG(DB_IO, "prepare tree, flags=%x, tclass=%d\n", flags, tclass);
+	D_DEBUG(DB_TRACE, "prepare tree, flags=%x, tclass=%d\n", flags, tclass);
 	if (tclass != VOS_BTR_AKEY && (flags & SUBTR_EVT))
 		D_GOTO(out, rc = -DER_INVAL);
 
