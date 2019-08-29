@@ -160,6 +160,7 @@ class TestWithServers(TestWithoutServers):
 
         self.agent_sessions = None
         self.setup_start_servers = True
+        self.setup_start_agents = True
 
     def setUp(self):
         """Set up each test case."""
@@ -222,8 +223,9 @@ class TestWithServers(TestWithoutServers):
                 self.hostfile_clients_slots)
 
         # Start the clients (agents)
-        self.agent_sessions = agent_utils.run_agent(
-            self.basepath, self.hostlist_servers, self.hostlist_clients)
+        if self.setup_start_agents:
+            self.agent_sessions = agent_utils.run_agent(
+                self.basepath, self.hostlist_servers, self.hostlist_clients)
 
         # Start the servers
         if self.setup_start_servers:
