@@ -101,8 +101,7 @@ attach_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
 		exit(1);
 	}
 
-	if (spdk_pci_addr_parse(&entry->pci_addr, trid->traddr) < 0) {
-		snprintf(ret->err, sizeof(ret->err),
+	if (spdk_pci_addr_parse(&entry->pci_addr, trid->traddr) != 0) {
 		perror("pci_addr_parse");
 		exit(1);
 	}
@@ -338,7 +337,7 @@ get_controller(char *addr, struct ret_t *ret)
 
 	entry = g_controllers;
 
-	if (spdk_pci_addr_parse(&pci_addr, addr) < 0) {
+	if (spdk_pci_addr_parse(&pci_addr, addr) != 0) {
 		snprintf(ret->err, sizeof(ret->err),
 			 "pci addr could not be parsed: %s", addr);
 		ret->rc = -NVMEC_ERR_PCI_ADDR_PARSE;
