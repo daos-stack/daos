@@ -397,6 +397,7 @@ migrate_end_cb(void *data, bool noop)
 		uint32_t blk_sz = vsi->vsi_md->vsd_blk_sz;
 		uint64_t off = vue->vue_ext.vfe_blk_off * blk_sz;
 		uint64_t cnt = (uint64_t)vue->vue_ext.vfe_blk_cnt * blk_sz;
+		uint64_t start_time = 0, end_time = 0;
 
 		d_list_del(&vue->vue_link);
 
@@ -405,11 +406,16 @@ migrate_end_cb(void *data, bool noop)
 		 * compound_free(), otherwise, the extent could be visible
 		 * for allocation before unmap done.
 		 */
+		daos_gettime_coarse(&start_time);
 		rc = vsi->vsi_unmap_ctxt.vnc_unmap(off, cnt,
 					vsi->vsi_unmap_ctxt.vnc_data);
 		if (rc)
 			D_ERROR("Unmap ["DF_U64", "DF_U64"] error: %d\n",
 				off, cnt, rc);
+
+		daos_gettime_coarse(&end_time);
+		D_ERROR("Unmap ["DF_U64", "DF_U64"] used "DF_U64" secs\n",
+			off, cnt, end_time - start_time);
 
 		rc = compound_free(vsi, &vue->vue_ext, VEA_FL_GEN_AGE);
 		if (rc)

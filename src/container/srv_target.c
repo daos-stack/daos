@@ -467,6 +467,9 @@ cont_child_destroy_one(void *vin)
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
+	D_ERROR(DF_CONT": destroying vos container, resync\n",
+		DP_CONT(pool->spc_uuid, in->tdi_uuid));
+
 	while (1) {
 		struct ds_cont_child *cont;
 		bool		      resyncing = false;
@@ -495,10 +498,14 @@ cont_child_destroy_one(void *vin)
 		} /* else: resync should have completed, try again */
 	}
 
-	D_DEBUG(DF_DSMS, DF_CONT": destroying vos container\n",
+	D_ERROR(DF_CONT": destroying vos container, destroy\n",
 		DP_CONT(pool->spc_uuid, in->tdi_uuid));
 
 	rc = vos_cont_destroy(pool->spc_hdl, in->tdi_uuid);
+
+	D_ERROR(DF_CONT": destroying vos container, destroy done\n",
+		DP_CONT(pool->spc_uuid, in->tdi_uuid));
+
 	if (rc == -DER_NONEXIST)
 		/** VOS container creation is effectively delayed until
 		 * container open time, so it might legitimately not exist if
@@ -517,12 +524,12 @@ ds_cont_tgt_destroy_handler(crt_rpc_t *rpc)
 	struct cont_tgt_destroy_out    *out = crt_reply_get(rpc);
 	int				rc = 0;
 
-	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p\n",
+	D_ERROR(DF_CONT": handling rpc %p\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc);
 
 	rc = dss_thread_collective(cont_child_destroy_one, in, 0);
 	out->tdo_rc = (rc == 0 ? 0 : 1);
-	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
+	D_ERROR(DF_CONT": replying rpc %p: %d (%d)\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc, out->tdo_rc,
 		rc);
 	crt_reply_send(rpc);
