@@ -41,6 +41,7 @@ new_drpc_with_fd(int fd)
 
 	ctx->sequence = 1;
 	ctx->handler = mock_drpc_handler;
+	ctx->ref_count = 1;
 
 	return ctx;
 }

@@ -51,6 +51,7 @@ typedef void (*drpc_handler_t)(Drpc__Call *, Drpc__Response *);
 struct drpc {
 	struct unixcomm	*comm; /** unix domain socket communication context */
 	int		sequence; /** sequence number of latest message sent */
+	int		ref_count; /** open refs to this ctx */
 
 	/**
 	 * Handler for messages received by a listening drpc context.
@@ -82,5 +83,6 @@ int drpc_close(struct drpc *ctx);
 
 struct drpc *drpc_dup(struct drpc *ctx);
 void drpc_free(struct drpc *ctx);
+int drpc_add_ref(struct drpc *ctx);
 
 #endif /* __DAOS_DRPC_H__ */

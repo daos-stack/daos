@@ -423,6 +423,7 @@ drpc_connect(char *sockaddr)
 	ctx->comm = comms;
 	ctx->sequence = 0;
 	ctx->handler = NULL;
+	ctx->ref_count = 1;
 	return ctx;
 }
 
@@ -459,6 +460,7 @@ drpc_listen(char *sockaddr, drpc_handler_t handler)
 	}
 
 	ctx->handler = handler;
+	ctx->ref_count = 1;
 
 	return ctx;
 }
@@ -509,6 +511,7 @@ drpc_accept(struct drpc *listener_ctx)
 	}
 
 	session_ctx->handler = listener_ctx->handler;
+	session_ctx->ref_count = 1;
 
 	return session_ctx;
 }
@@ -681,7 +684,11 @@ drpc_send_response(struct drpc *session_ctx, Drpc__Response *resp)
 /**
  * Close the existing drpc connection.
  *
- * \param ctx	The drpc context representing the connection (will be freed)
+ * If there are multiple references to the context, the ref count will be
+ * decremented. Otherwise the context will be freed.
+ *
+ * \param ctx	The drpc context representing the connection (will be freed if
+ *		last reference is removed)
  *
  * \returns	Whether the underlying close on the socket was successful.
  */
@@ -694,6 +701,14 @@ drpc_close(struct drpc *ctx)
 		D_ERROR("Context is already closed\n");
 		return -DER_INVAL;
 	}
+
+	if (ctx->ref_count > 1) {
+		D_INFO("Decrementing refcount (%d)\n", ctx->ref_count);
+		ctx->ref_count--;
+		return 0;
+	}
+
+	D_INFO("Closing dRPC socket fd=%d\n", ctx->comm->fd);
 
 	ret = unixcomm_close(ctx->comm);
 	D_FREE(ctx);
@@ -750,5 +765,32 @@ drpc_free(struct drpc *ctx)
 		D_FREE(ctx->comm);
 		D_FREE(ctx);
 	}
+}
+
+/**
+ * Adds to the reference count of the dRPC context.
+ *
+ * \param	ctx	dRPC context
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Context is not valid
+ */
+int
+drpc_add_ref(struct drpc *ctx)
+{
+	if (ctx == NULL) {
+		D_ERROR("Context is null\n");
+		return -DER_INVAL;
+	}
+
+	if (ctx->ref_count < 0 || ctx->ref_count == INT_MAX) {
+		D_ERROR("Can't increment current ref count (count=%d)\n",
+			ctx->ref_count);
+		return -DER_INVAL;
+	}
+
+	ctx->ref_count++;
+
+	return 0;
 }
 

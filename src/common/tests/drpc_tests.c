@@ -125,6 +125,7 @@ test_drpc_connect_success(void **state)
 	assert_int_equal(ctx->comm->fd, socket_return);
 	assert_int_equal(ctx->comm->flags, 0);
 	assert_null(ctx->handler);
+	assert_int_equal(ctx->ref_count, 1);
 
 	drpc_free(ctx);
 }
@@ -151,15 +152,61 @@ test_drpc_close_fails_if_ctx_comm_null(void **state)
 }
 
 static void
-test_drpc_close_success(void **state)
+test_drpc_close_closing_socket_fails(void **state)
 {
 	int		expected_fd = 123;
 	struct drpc	*ctx = new_drpc_with_fd(expected_fd);
 
-	assert_int_equal(drpc_close(ctx), DER_SUCCESS);
+	close_return = -1;
+	errno = ENOMEM;
+
+	assert_int_equal(drpc_close(ctx), -DER_NOMEM);
+
+	/* called close() */
+	assert_int_equal(close_fd, expected_fd);
+}
+
+static void
+expect_drpc_close_closes_ctx_with_ref_count(int ref_count)
+{
+	int		expected_fd = 123;
+	struct drpc	*ctx = new_drpc_with_fd(expected_fd);
+
+	ctx->ref_count = ref_count;
+
+	assert_int_equal(drpc_close(ctx), 0);
 
 	/* called close() with the ctx fd */
 	assert_int_equal(close_fd, expected_fd);
+}
+
+static void
+test_drpc_close_success(void **state)
+{
+	expect_drpc_close_closes_ctx_with_ref_count(1);
+}
+
+static void
+test_drpc_close_with_unexpected_ref_count(void **state)
+{
+	expect_drpc_close_closes_ctx_with_ref_count(0);
+	expect_drpc_close_closes_ctx_with_ref_count(-1);
+	expect_drpc_close_closes_ctx_with_ref_count(INT_MIN);
+}
+
+static void
+test_drpc_close_with_multiple_refs(void **state)
+{
+	struct drpc *ctx = new_drpc_with_fd(123);
+
+	ctx->ref_count = 2;
+
+	assert_int_equal(drpc_close(ctx), 0);
+
+	assert_int_equal(close_fd, 0); /* close() wasn't called */
+	assert_int_equal(ctx->ref_count, 1);
+
+	drpc_free(ctx);
 }
 
 /*
@@ -322,6 +369,7 @@ test_drpc_listen_success(void **state)
 	assert_int_equal(ctx->comm->flags, O_NONBLOCK);
 	assert_int_equal(ctx->sequence, 0);
 	assert_ptr_equal(ctx->handler, mock_drpc_handler);
+	assert_int_equal(ctx->ref_count, 1);
 
 	/*
 	 * Called socket() with correct params
@@ -432,6 +480,7 @@ test_drpc_accept_success(void **state)
 	assert_int_equal(session_ctx->comm->flags, 0);
 	assert_int_equal(session_ctx->sequence, 0);
 	assert_ptr_equal(session_ctx->handler, ctx->handler);
+	assert_int_equal(session_ctx->ref_count, 1);
 
 	/* called accept() on parent ctx */
 	assert_int_equal(accept_sockfd, ctx->comm->fd);
@@ -901,6 +950,51 @@ test_drpc_dup_success(void **state)
 	drpc_free(ctx);
 }
 
+static void
+test_drpc_add_ref_null(void **state)
+{
+	assert_int_equal(drpc_add_ref(NULL), -DER_INVAL);
+}
+
+static void
+test_drpc_add_ref_success(void **state)
+{
+	struct drpc	*ctx = new_drpc_with_fd(100);
+	int		i;
+
+	ctx->ref_count = 0;
+
+	/* Add a bunch of refs just to see how it goes */
+	for (i = 0; i < 125; i++) {
+		assert_int_equal(drpc_add_ref(ctx), 0);
+		assert_int_equal(ctx->ref_count, i + 1);
+	}
+
+	drpc_free(ctx);
+}
+
+static void
+check_drpc_add_ref_doesnt_update_bad_count(int bad_count)
+{
+	struct drpc *ctx = new_drpc_with_fd(100);
+
+	ctx->ref_count = bad_count;
+
+	assert_int_equal(drpc_add_ref(ctx), -DER_INVAL);
+
+	assert_int_equal(ctx->ref_count, bad_count);
+
+	drpc_free(ctx);
+}
+
+static void
+test_drpc_add_ref_invalid_count(void **state)
+{
+	check_drpc_add_ref_doesnt_update_bad_count(-1);
+	check_drpc_add_ref_doesnt_update_bad_count(-2096);
+	check_drpc_add_ref_doesnt_update_bad_count(INT_MAX);
+}
+
 /* Convenience macro for tests in this file */
 #define DRPC_UTEST(X)						\
 	cmocka_unit_test_setup_teardown(X, setup_drpc_mocks,	\
@@ -915,7 +1009,10 @@ main(void)
 		DRPC_UTEST(test_drpc_connect_success),
 		DRPC_UTEST(test_drpc_close_fails_if_ctx_null),
 		DRPC_UTEST(test_drpc_close_fails_if_ctx_comm_null),
+		DRPC_UTEST(test_drpc_close_closing_socket_fails),
 		DRPC_UTEST(test_drpc_close_success),
+		DRPC_UTEST(test_drpc_close_with_unexpected_ref_count),
+		DRPC_UTEST(test_drpc_close_with_multiple_refs),
 		DRPC_UTEST(test_drpc_call_fails_if_sendmsg_fails),
 		DRPC_UTEST(test_drpc_call_sends_call_as_mesg),
 		DRPC_UTEST(test_drpc_call_with_no_flags_returns_async),
@@ -959,7 +1056,10 @@ main(void)
 		cmocka_unit_test(test_drpc_response_free_null),
 		cmocka_unit_test(test_drpc_free_null),
 		cmocka_unit_test(test_drpc_dup_null),
-		cmocka_unit_test(test_drpc_dup_success)
+		cmocka_unit_test(test_drpc_dup_success),
+		cmocka_unit_test(test_drpc_add_ref_null),
+		cmocka_unit_test(test_drpc_add_ref_success),
+		cmocka_unit_test(test_drpc_add_ref_invalid_count)
 	};
 	return cmocka_run_group_tests(tests, NULL, NULL);
 }
