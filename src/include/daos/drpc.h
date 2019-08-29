@@ -81,8 +81,6 @@ int drpc_recv_call(struct drpc *ctx, Drpc__Call **call);
 int drpc_send_response(struct drpc *ctx, Drpc__Response *resp);
 int drpc_close(struct drpc *ctx);
 
-struct drpc *drpc_dup(struct drpc *ctx);
-void drpc_free(struct drpc *ctx);
 int drpc_add_ref(struct drpc *ctx);
 
 #endif /* __DAOS_DRPC_H__ */

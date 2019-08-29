@@ -277,11 +277,7 @@ destroy_session_node(struct drpc_list *session_node)
 static void
 free_call_ctx(struct drpc_call_ctx *ctx)
 {
-	/*
-	 * Session is a copy - we can free it, but not close it. The main loop
-	 * still manages the sessions.
-	 */
-	drpc_free(ctx->session);
+	drpc_close(ctx->session);
 	drpc_call_free(ctx->call);
 	drpc_response_free(ctx->resp);
 	D_FREE(ctx);
@@ -316,22 +312,17 @@ static struct drpc_call_ctx *
 create_call_ctx(struct drpc *session_ctx, Drpc__Call *call,
 		Drpc__Response *resp)
 {
-	struct drpc_call_ctx *call_ctx;
+	struct drpc_call_ctx	*call_ctx;
+	int			rc;
 
 	D_ALLOC_PTR(call_ctx);
 	if (call_ctx == NULL)
 		return NULL;
 
-	/*
-	 * Need to copy the session context to avoid the main loop potentially
-	 * freeing that memory out from under our thread.
-	 */
-	call_ctx->session = drpc_dup(session_ctx);
-	if (call_ctx->session == NULL) {
-		D_FREE(call_ctx);
-		return NULL;
-	}
+	rc = drpc_add_ref(session_ctx);
+	D_ASSERTF(rc == 0, "Couldn't add ref to dRPC session context");
 
+	call_ctx->session = session_ctx;
 	call_ctx->call = call;
 	call_ctx->resp = resp;
 

@@ -91,3 +91,12 @@ new_drpc_response(void)
 
 	return resp;
 }
+
+void
+drpc_free(struct drpc *ctx)
+{
+	if (ctx) {
+		D_FREE(ctx->comm);
+		D_FREE(ctx);
+	}
+}

@@ -72,4 +72,11 @@ void mock_valid_drpc_call_in_recvmsg(void);
  */
 Drpc__Response *new_drpc_response(void);
 
+/**
+ * Frees the drpc context.
+ *
+ * \param	ctx	drpc context to free
+ */
+void drpc_free(struct drpc *ctx);
+
 #endif /* __DAOS_TEST_UTILS_H__ */

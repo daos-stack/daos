@@ -716,58 +716,6 @@ drpc_close(struct drpc *ctx)
 }
 
 /**
- * Create a copy of the drpc context. Does not do anything to the connection
- * itself.
- *
- * \param	ctx	Context to be copied
- *
- * \return	Newly allocated copy of ctx. Needs to be freed with drpc_free().
- */
-struct drpc *
-drpc_dup(struct drpc *ctx)
-{
-	struct drpc *new_ctx;
-
-	if (ctx == NULL) {
-		D_ERROR("Context is NULL\n");
-		return NULL;
-	}
-
-	D_ALLOC_PTR(new_ctx);
-	if (new_ctx == NULL)
-		return NULL;
-
-	D_ALLOC_PTR(new_ctx->comm);
-	if (new_ctx->comm == NULL) {
-		D_FREE(new_ctx);
-		return NULL;
-	}
-
-	new_ctx->sequence = ctx->sequence;
-	new_ctx->handler = ctx->handler;
-	new_ctx->comm->fd = ctx->comm->fd;
-	new_ctx->comm->flags = ctx->comm->flags;
-
-	return new_ctx;
-}
-
-/**
- * Frees the drpc context without closing the connection.
- *
- * Useful for freeing context copies. Do not attempt to free a closed context.
- *
- * \param	ctx	drpc context to free
- */
-void
-drpc_free(struct drpc *ctx)
-{
-	if (ctx) {
-		D_FREE(ctx->comm);
-		D_FREE(ctx);
-	}
-}
-
-/**
  * Adds to the reference count of the dRPC context.
  *
  * \param	ctx	dRPC context

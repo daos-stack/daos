@@ -915,42 +915,6 @@ test_drpc_response_free_null(void **state)
 }
 
 static void
-test_drpc_free_null(void **state)
-{
-	/* NULL input is a noop - just make sure no segfault */
-	drpc_free(NULL);
-}
-
-static void
-test_drpc_dup_null(void **state)
-{
-	assert_null(drpc_dup(NULL));
-}
-
-static void
-test_drpc_dup_success(void **state)
-{
-	struct drpc *expected_ctx = new_drpc_with_fd(101);
-	struct drpc *ctx;
-
-	ctx = drpc_dup(expected_ctx);
-
-	/* Should be newly allocated */
-	assert_non_null(ctx);
-	assert_ptr_not_equal(ctx, expected_ctx);
-	assert_non_null(ctx->comm);
-	assert_ptr_not_equal(ctx->comm, expected_ctx->comm);
-
-	assert_int_equal(ctx->sequence, expected_ctx->sequence);
-	assert_ptr_equal(ctx->handler, expected_ctx->handler);
-	assert_int_equal(ctx->comm->fd, expected_ctx->comm->fd);
-	assert_int_equal(ctx->comm->flags, expected_ctx->comm->flags);
-
-	drpc_free(expected_ctx);
-	drpc_free(ctx);
-}
-
-static void
 test_drpc_add_ref_null(void **state)
 {
 	assert_int_equal(drpc_add_ref(NULL), -DER_INVAL);
@@ -1054,9 +1018,6 @@ main(void)
 		cmocka_unit_test(test_drpc_response_create_null_call),
 		cmocka_unit_test(test_drpc_response_create_free_success),
 		cmocka_unit_test(test_drpc_response_free_null),
-		cmocka_unit_test(test_drpc_free_null),
-		cmocka_unit_test(test_drpc_dup_null),
-		cmocka_unit_test(test_drpc_dup_success),
 		cmocka_unit_test(test_drpc_add_ref_null),
 		cmocka_unit_test(test_drpc_add_ref_success),
 		cmocka_unit_test(test_drpc_add_ref_invalid_count)

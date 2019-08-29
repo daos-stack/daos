@@ -67,7 +67,7 @@ dss_ult_create(void (*func)(void *), void *arg, int ult_type, int tgt_idx,
 		call_ctx = (struct drpc_call_ctx *)arg;
 		drpc_call_free(call_ctx->call);
 		drpc_response_free(call_ctx->resp);
-		drpc_free(call_ctx->session);
+		call_ctx->session->ref_count--;
 		D_FREE(call_ctx);
 	}
 
@@ -405,7 +405,7 @@ test_drpc_progress_single_session_success(void **state)
 
 	init_drpc_progress_context(&ctx, new_drpc_with_fd(listener_fd));
 	add_new_drpc_node_to_list(&ctx.session_ctx_list,
-			new_drpc_with_fd(session_fd));
+				  new_drpc_with_fd(session_fd));
 	memcpy(&original_ctx, &ctx, sizeof(struct drpc_progress_context));
 	mock_valid_drpc_call_in_recvmsg();
 
