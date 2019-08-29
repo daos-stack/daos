@@ -2189,6 +2189,7 @@ dc_obj_update(tse_task_t *task)
 	unsigned int		 map_ver;
 	uint64_t		 dkey_hash;
 	daos_epoch_t		 epoch;
+	bool			 is_ec;
 	int			 rc;
 
 	rc = obj_req_valid(args, DAOS_OBJ_RPC_UPDATE, &epoch);
@@ -2208,7 +2209,8 @@ dc_obj_update(tse_task_t *task)
 		goto out_task;
 	}
 
-	if (daos_oclass_is_ec(obj->cob_md.omd_id, &oca)) {
+	is_ec = daos_oclass_is_ec(obj->cob_md.omd_id, &oca);
+	if (is_ec) {
 		rc = ec_obj_update_encode(task, obj->cob_md.omd_id, oca,
 					  &tgt_set);
 		if (rc != 0) {
@@ -2231,7 +2233,7 @@ dc_obj_update(tse_task_t *task)
 	if (rc)
 		goto out_task;
 
-	if (DAOS_FAIL_CHECK(DAOS_DTX_COMMIT_SYNC))
+	if (is_ec || DAOS_FAIL_CHECK(DAOS_DTX_COMMIT_SYNC))
 		obj_auxi->flags |= ORF_DTX_SYNC;
 
 	D_DEBUG(DB_IO, "update "DF_OID" dkey_hash "DF_U64"\n",
@@ -2451,7 +2453,8 @@ obj_punch_internal(tse_task_t *task, enum obj_rpc_opc opc,
 	if (rc != 0)
 		goto out_task;
 
-	if (DAOS_FAIL_CHECK(DAOS_DTX_COMMIT_SYNC))
+	if (daos_oclass_is_ec(obj->cob_md.omd_id, NULL) ||
+	    DAOS_FAIL_CHECK(DAOS_DTX_COMMIT_SYNC))
 		obj_auxi->flags |= ORF_DTX_SYNC;
 
 	D_DEBUG(DB_IO, "punch "DF_OID" dkey %llu\n",

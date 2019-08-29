@@ -373,6 +373,7 @@ server_init(int argc, char *argv[])
 	uint32_t	flags = CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_LM_DISABLE;
 	d_rank_t	rank = -1;
 	uint32_t	size = -1;
+	char		hostname[256] = { 0 };
 
 	rc = daos_debug_init(NULL);
 	if (rc != 0)
@@ -489,11 +490,12 @@ server_init(int argc, char *argv[])
 		goto exit_drpc_fini;
 	D_INFO("Modules successfully set up\n");
 
+	gethostname(hostname, 255);
 	D_PRINT("DAOS I/O server (v%s) process %u started on rank %u "
-		"(out of %u) with %u target xstream set(s), %d helper XS "
-		"per target, firstcore %d.\n",
-		DAOS_VERSION, getpid(), rank, size, dss_tgt_nr,
-		dss_tgt_offload_xs_nr, dss_core_offset);
+		"(out of %u) with %u target, %d helper XS per target, "
+		"firstcore %d, host %s.\n", DAOS_VERSION, getpid(), rank,
+		size, dss_tgt_nr, dss_tgt_offload_xs_nr, dss_core_offset,
+		hostname);
 
 	return 0;
 
