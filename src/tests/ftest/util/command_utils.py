@@ -23,6 +23,7 @@
 """
 from __future__ import print_function
 
+import os
 
 class BasicParameter(object):
     """A class for parameters whose values are read from a yaml file."""
@@ -74,11 +75,11 @@ class FormattedParameter(BasicParameter):
     """A class for test parameters whose values are read from a yaml file."""
 
     def __init__(self, str_format, default=None):
-        """Create a IorParam object.
+        """Create a FormattedParameter  object.
 
         Args:
             str_format (str): format string used to convert the value into an
-                ior command line argument string
+                command line argument string
             default (object): default value for the param
         """
         super(FormattedParameter, self).__init__(default, default)
@@ -88,7 +89,7 @@ class FormattedParameter(BasicParameter):
         """Return a FormattedParameter object as a string.
 
         Returns:
-            str: if defined, the IOR parameter, otherwise an empty string
+            str: if defined, the parameter, otherwise an empty string
 
         """
         if isinstance(self._default, bool) and self.value:
@@ -102,11 +103,30 @@ class FormattedParameter(BasicParameter):
 class ObjectWithParameters(object):
     """A class for an object with parameters."""
 
-    def get_param_names(self):
-        """Get a sorted list of the names of the BasicParameter attributes."""
+    def get_attribute_names(self, attr_type=None):
+        """Get a sorted list of the names of the attr_type attributes.
+
+        Args:
+            attr_type(object, optional): A single object type or tuple of
+                object types used to filter class attributes by their type.
+                Defaults to None.
+
+        Returns:
+            list: a list of class attribute names used to define parameters
+
+        """
         return [
             name for name in sorted(self.__dict__.keys())
-            if isinstance(getattr(self, name), BasicParameter)]
+            if attr_type is None or isinstance(getattr(self, name), attr_type)]
+
+    def get_param_names(self):
+        """Get a sorted list of the names of the BasicParameter attributes.
+
+        Returns:
+            list: a list of class attribute names used to define parameters
+
+        """
+        return self.get_attribute_names(BasicParameter)
 
     def get_params(self, test, path):
         """Get values for all of the command params from the yaml file.
@@ -130,13 +150,17 @@ class ObjectWithParameters(object):
 class CommandWithParameters(ObjectWithParameters):
     """A class for command with paramaters."""
 
-    def __init__(self, command):
+    def __init__(self, command, path=""):
         """Create a CommandWithParameters object.
 
+        Uses Avocado's utils.process module to run a command str provided.
+
         Args:
-            command (str): command to execute
+            path (str): path to location of command binary file
+            command (str): string of the command to be executed.
         """
         self._command = command
+        self._path = path
 
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
@@ -152,4 +176,4 @@ class CommandWithParameters(ObjectWithParameters):
             value = str(getattr(self, name))
             if value != "":
                 params.append(value)
-        return " ".join([self._command] + params)
+        return " ".join([os.path.join(self._path, self._command)] + params)
