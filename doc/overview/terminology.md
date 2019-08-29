@@ -5,7 +5,7 @@
 |[ABT](https://github.com/pmodels/argobots/wiki/Introduction-to-Argobots)|Argobots|
 |[BIO](/doc/bio/README.md)|Blob I/O|
 |[CART](https://github.com/daos-stack/cart)|Collective and RPC Transport|
-|[DAOS](www.daos.io)|Distributed Asynchronous Object Storage |
+|[DAOS](http://www.daos.io)|Distributed Asynchronous Object Storage |
 |dRPC|DAOS Remote Procedure Call|
 |[gRPC](https://grpc.io)|gRPC Remote Procedure Calls|
 |[GURT](https://github.com/daos-stack/cart)|Gurt Useful Routines and Types|
