@@ -1034,7 +1034,9 @@ pipeline {
                 beforeAgent true
                 // expression { skipTest != true }
                 expression {
-                    sh script: 'git show -s --format=%B | grep "^Skip-test: true"',
+                    sh script: '''git show -s --format=%B | \
+                                    grep "^Skip-test: true" | \
+                                    [ "${NO_CI_TESTING}" != "true" ]''',
                        returnStatus: true
                 }
             }
@@ -1059,7 +1061,6 @@ pipeline {
                                            . ./.build_vars.sh
                                            DAOS_BASE=${SL_PREFIX%/install*}
                                            NODE=${NODELIST%%,*}
-                                           if [ ! -e $SSH_KEY_FILE ]; then exit 0; fi
                                            ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
                                                set -e
                                                sudo bash -c 'echo \"1\" > /proc/sys/kernel/sysrq'
@@ -1108,7 +1109,6 @@ pipeline {
                                       . ./.build_vars.sh
                                       DAOS_BASE=${SL_PREFIX%/install*}
                                       NODE=${NODELIST%%,*}
-                                      if [ ! -e $SSH_KEY_FILE ]; then exit 0; fi
                                       ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
                                           cd $DAOS_BASE
                                           rm -rf run_test.sh/
@@ -1148,7 +1148,9 @@ pipeline {
                 beforeAgent true
                 // expression { skipTest != true }
                 expression {
-                    sh script: 'git show -s --format=%B | grep "^Skip-test: true"',
+                    sh script: '''git show -s --format=%B | \
+                                    grep "^Skip-test: true" | \
+                                    [ "${NO_CI_TESTING}" != "true" ]''',
                        returnStatus: true
                 }
             }

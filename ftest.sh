@@ -68,7 +68,7 @@ pre_clean () {
                 sudo umount \${mpnt[1]}
              done
              sudo sed -i -e \"/added by ftest.sh/d\" /etc/fstab"; then
-            i=0
+            break
         fi
         ((i-=1)) || true
     done
