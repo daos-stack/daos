@@ -239,6 +239,10 @@ free_handle_cb(tse_task_t *task, void *data)
 	struct dc_array		*array;
 	int			rc = task->dt_result;
 
+	/* TODO: Why does this function not take a array pointer
+	 * directly
+	 */
+
 	if (rc != 0)
 		return rc;
 
@@ -247,6 +251,7 @@ free_handle_cb(tse_task_t *task, void *data)
 		return -DER_NO_HDL;
 
 	array_hdl_unlink(array);
+	array_decref(array);
 	array_decref(array);
 
 	return 0;
