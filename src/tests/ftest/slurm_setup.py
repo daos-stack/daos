@@ -34,8 +34,7 @@ from ClusterShell.NodeSet import NodeSet
 SLURM_CONF = "/etc/slurm/slurm.conf"
 
 
-PACKAGE_LIST = ["munge-libs", "munge",
-                "slurm", "slurm-example-configs",
+PACKAGE_LIST = ["slurm", "slurm-example-configs",
                 "slurm-slurmctld", "slurm-slurmd"]
 
 COPY_LIST = ["cp /etc/slurm/slurm.conf.example /etc/slurm/slurm.conf",
@@ -106,9 +105,9 @@ def update_config_cmdlist(args):
                             info["Core"], info["Thread"], sudo, SLURM_CONF))
 
     #
-    cmd_list.append("echo \"PartitionName=daos_client Nodes={} Default=YES "
+    cmd_list.append("echo \"PartitionName= {} Nodes={} Default=YES "
                     "MaxTime=INFINITE State=UP\" |{} tee -a {}".format(
-                        args.nodes, sudo, SLURM_CONF))
+                        args.partition, args.nodes, sudo, SLURM_CONF))
 
     return execute_cluster_cmds(all_nodes, cmd_list, args.sudo)
 
@@ -225,6 +224,10 @@ def main():
         "-c", "--control",
         default=socket.gethostname().split('.', 1)[0],
         help="slurm control node; test control node if None")
+    parser.add_argument(
+        "-p", "--partition",
+        default="daos_client",
+        help="Partiton name; all nodes will be in this partition")
     parser.add_argument(
         "-u", "--user",
         default=pwd.getpwuid(os.geteuid()).pw_name,
