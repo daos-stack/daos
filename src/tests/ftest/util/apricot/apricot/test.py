@@ -163,7 +163,8 @@ class TestWithServers(TestWithoutServers):
         self.setup_start_servers = True
         self.orterun_env = None
         self.server_log = None
-        self.log_dir = None
+        self.log_dir = os.path.split(os.getenv("D_LOG_FILE",
+                                     "/tmp/server.log"))[0]
         self.client_log = None
         self.test_id = "{}-{}".format(os.path.split(self.filename)[1],
                                       self.name.str_uid)
@@ -312,11 +313,10 @@ class TestWithServers(TestWithoutServers):
         else:
             return host_list, None
 
-    def separate_logs(self, test_name=None):
+    def update_log_file_names(self, test_name=None):
         """Get separate logs for both servers and clients
         Args:
             test_name (str, optional): name of test variant
-            log_name (bol, optional): enable separate server log files
         """
 
         # Determine the path and name of the daos server log using the
@@ -325,9 +325,7 @@ class TestWithServers(TestWithoutServers):
             self.test_id = test_name
 
         self.server_log = "/tmp/{}_server_daos.log".format(self.test_id)
-
-        self.log_dir = os.path.split(os.getenv("D_LOG_FILE"))
-        self.client_log = os.path.join(self.log_dir[0],
+        self.client_log = os.path.join(self.log_dir,
                                        self.test_id + "_" + CLIENT_LOG)
         # To generate the seperate client log file
-        self.orterun_env = {'D_LOG_FILE':self.client_log}
+        self.orterun_env = {'D_LOG_FILE': self.client_log}

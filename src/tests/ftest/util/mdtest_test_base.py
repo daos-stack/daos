@@ -47,7 +47,7 @@ class MdtestBase(TestWithServers):
     def setUp(self):
         """Set up each test case."""
         # obtain separate logs
-        self.separate_logs()
+        self.update_log_file_names()
         # Start the servers and agents
         super(MdtestBase, self).setUp()
 

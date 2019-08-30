@@ -34,7 +34,6 @@ class DaosCoreBase(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize the DaosCoreBase object."""
-        # Start servers and agents
         super(DaosCoreBase, self).__init__(*args, **kwargs)
         self.subtest_name = None
 
@@ -50,12 +49,8 @@ class DaosCoreBase(TestWithServers):
                                             '/run/daos_tests/Tests/*')
         self.subtest_name = self.subtest_name.replace(" ", "_")
         # obtain separate logs
-        self.separate_logs(self.subtest_name)
+        self.update_log_file_names(self.subtest_name)
         super(DaosCoreBase, self).setUp()
-
-    def tearDown(self):
-        """Tear down after each test."""
-        super(DaosCoreBase, self).tearDown()
 
     def run_subtest(self):
         """Run daos_test with a subtest argument."""
