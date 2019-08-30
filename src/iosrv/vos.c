@@ -428,8 +428,7 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, d_sg_list_t *sgl,
 
 	while (len > 0) {
 		struct obj_enum_rec *rec = *data;
-
-		D_DEBUG(DB_REBUILD, "data %p len "DF_U64"\n", *data, len);
+		daos_size_t len_bak = len;
 
 		/* Every recx begins with an obj_enum_rec. */
 		if (len < sizeof(*rec)) {
@@ -509,7 +508,7 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, d_sg_list_t *sgl,
 
 			if (rec->rec_flags & RECX_INLINE) {
 				d_iov_set(iov, *data, rec->rec_size *
-							 rec->rec_recx.rx_nr);
+						      rec->rec_recx.rx_nr);
 			} else {
 				d_iov_set(iov, NULL, 0);
 			}
@@ -521,15 +520,16 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, d_sg_list_t *sgl,
 			len -= iov->iov_len;
 		}
 
-		D_DEBUG(DB_REBUILD, "unpack %p idx/nr "DF_U64"/"DF_U64 "ver %u"
-			" epr lo/hi "DF_U64"/"DF_U64" size %zd\n",
-			*data, iod->iod_recxs[iod->iod_nr - 1].rx_idx,
+		D_DEBUG(DB_REBUILD,
+			"unpacked data %p len "DF_U64" idx/nr "DF_U64"/"DF_U64
+			" ver %u epr lo/hi "DF_U64"/"DF_U64" size %zd\n",
+			rec, len_bak, iod->iod_recxs[iod->iod_nr - 1].rx_idx,
 			iod->iod_recxs[iod->iod_nr - 1].rx_nr, rec->rec_version,
 			iod->iod_eprs[iod->iod_nr - 1].epr_lo,
 			iod->iod_eprs[iod->iod_nr - 1].epr_hi, iod->iod_size);
 	}
 
-	D_DEBUG(DB_REBUILD, "pack nr %d version/type /%u/%d rc %d\n",
+	D_DEBUG(DB_REBUILD, "unpacked nr %d version/type /%u/%d rc %d\n",
 		iod->iod_nr, *version, iod->iod_type, rc);
 	return rc;
 }

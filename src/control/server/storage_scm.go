@@ -34,8 +34,8 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/lib/ipmctl"
 	log "github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/go-ipmctl/ipmctl"
 )
 
 //go:generate stringer -type=scmState
@@ -116,10 +116,10 @@ func run(cmd string) (string, error) {
 // details.
 //
 // IpmCtl provides necessary methods to interact with Storage Class
-// Memory modules through libipmctl via go-ipmctl bindings.
+// Memory modules through libipmctl via ipmctl bindings.
 type scmStorage struct {
 	ipmctl      ipmctl.IpmCtl  // ipmctl NVM API interface
-	config      *configuration // server configuration structure
+	config      *Configuration // server configuration structure
 	runCmd      runCmdFn
 	modules     common.ScmModules
 	state       scmState
@@ -462,7 +462,7 @@ func (s *scmStorage) reFormat(devPath string) (err error) {
 	return
 }
 
-func getMntParams(srv *server) (mntType string, dev string, opts string, err error) {
+func getMntParams(srv *IOServerConfig) (mntType string, dev string, opts string, err error) {
 	switch srv.ScmClass {
 	case scmDCPM:
 		mntType = "ext4"
@@ -553,7 +553,7 @@ func (s *scmStorage) Format(i int, results *(common.ScmMountResults)) {
 		return
 	}
 
-	mntType, devPath, mntOpts, err := getMntParams(&srv)
+	mntType, devPath, mntOpts, err := getMntParams(srv)
 	if err != nil {
 		addMretFormat(pb.ResponseStatus_CTRL_ERR_CONF, err.Error())
 		return
@@ -617,8 +617,8 @@ func (s *scmStorage) Update(
 
 // newScmStorage creates a new instance of ScmStorage struct.
 //
-// NvmMgmt is the implementation of ipmctl interface in go-ipmctl
-func newScmStorage(config *configuration) *scmStorage {
+// NvmMgmt is the implementation of ipmctl interface in ipmctl
+func newScmStorage(config *Configuration) *scmStorage {
 	return &scmStorage{
 		ipmctl: &ipmctl.NvmMgmt{},
 		config: config,

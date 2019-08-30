@@ -213,7 +213,7 @@ Storage format is required after other storage management operations have been p
 
 ### SCM management capabilities
 
-Operations on SCM persistent memory modules are performed using [go-ipmctl bindings](https://github.com/daos-stack/go-ipmctl) to issue commands through the ipmctl native C libraries.
+Operations on SCM persistent memory modules are performed using [go-ipmctl bindings](https://github.com/daos-stack/daos/src/control/lib/ipmctl) to issue commands through the ipmctl native C libraries.
 
 [SCM provisioning](#scm-provision) is to be performed prior to formatting and allocating SCM through the DAOS control plane.
 

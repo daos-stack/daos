@@ -36,7 +36,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	log "github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/go-spdk/spdk"
+	"github.com/daos-stack/daos/src/control/lib/spdk"
 )
 
 const (
@@ -135,7 +135,7 @@ type nvmeStorage struct {
 	env         spdk.ENV       // SPDK ENV interface
 	nvme        spdk.NVME      // SPDK NVMe interface
 	spdk        SpdkSetup      // SPDK shell configuration interface
-	config      *configuration // server configuration structure
+	config      *Configuration // server configuration structure
 	controllers common.NvmeControllers
 	initialized bool
 	formatted   bool
@@ -554,7 +554,7 @@ func loadNamespaces(ctrlrPciAddr string, nss []spdk.Namespace) (
 }
 
 // newNvmeStorage creates a new instance of nvmeStorage struct.
-func newNvmeStorage(config *configuration) (*nvmeStorage, error) {
+func newNvmeStorage(config *Configuration) (*nvmeStorage, error) {
 
 	scriptPath, err := config.ext.getAbsInstallPath(spdkSetupPath)
 	if err != nil {
