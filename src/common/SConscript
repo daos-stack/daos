@@ -11,8 +11,8 @@ def scons():
     # in the rpath.   It is normally only included by libpmemobj
     # but that library doesn't contain the installed location
     # in the rpath.
-    prereqs.require(env, 'pmdk', 'argobots', 'cart', 'readline',
-                    'protobufc', pmdk_libs=['pmemobj', 'pmem'])
+    prereqs.require(env, 'pmdk', 'cart', 'protobufc')
+    #pmdk_libs=['pmemobj', 'pmem'])
 
     if platform_arm:
         prereqs.require(env, 'mchecksum')
@@ -29,11 +29,15 @@ def scons():
     common = daos_build.library(denv, 'libdaos_common', common_src)
     denv.Install('$PREFIX/lib/', common)
 
-    tests_lib_src = ['tests_lib.c']
-    tests_lib = daos_build.library(denv, 'libdaos_tests', tests_lib_src)
-    denv.Install('$PREFIX/lib/', tests_lib)
+    tenv = denv.Clone()
 
-    SConscript('tests/SConscript', exports='denv')
+    prereqs.require(tenv, 'argobots')
+
+    tests_lib_src = ['tests_lib.c']
+    tests_lib = daos_build.library(tenv, 'libdaos_tests', tests_lib_src)
+    tenv.Install('$PREFIX/lib/', tests_lib)
+
+    SConscript('tests/SConscript', exports='tenv')
 
 if __name__ == "SCons.Script":
     scons()
