@@ -176,8 +176,8 @@ func (n *nvmeStorage) Teardown() (err error) {
 	// TODO: Decide whether to rebind PCI devices back to their original
 	// drivers and release hugepages here.
 	// err = n.setup.reset()
-
 	n.initialized = false
+
 	return
 }
 
@@ -194,34 +194,24 @@ func (n *nvmeStorage) Teardown() (err error) {
 // TODO: This is currently a one-time only discovery for the lifetime of this
 //       process, presumably we want to be able to detect updates during
 //       process lifetime.
-func (n *nvmeStorage) Discover(resp *pb.StorageScanResp) {
-	msg := "nvme storage discover"
-
+func (n *nvmeStorage) Discover() error {
 	if n.initialized {
-		resp.Nvmestate = addState(pb.ResponseStatus_CTRL_SUCCESS, "", "", msg)
-		resp.Ctrlrs = n.controllers
-		return
+		return nil
 	}
 
 	// specify shmID to be set as opt in SPDK env init
 	if err := n.env.InitSPDKEnv(n.config.NvmeShmID); err != nil {
-		resp.Nvmestate = addState(pb.ResponseStatus_CTRL_ERR_NVME,
-			msgSpdkInitFail+": "+err.Error(), "", msg)
-		return
+		return err
 	}
 
 	cs, ns, err := n.nvme.Discover()
 	if err != nil {
-		resp.Nvmestate = addState(pb.ResponseStatus_CTRL_ERR_NVME,
-			msgSpdkDiscoverFail+": "+err.Error(), "", msg)
-		return
+		return err
 	}
 	n.controllers = loadControllers(cs, ns)
-
-	resp.Nvmestate = addState(pb.ResponseStatus_CTRL_SUCCESS, "", "", msg)
-	resp.Ctrlrs = n.controllers
-
 	n.initialized = true
+
+	return nil
 }
 
 // newCret creates and populates NVMe controller result and logs error

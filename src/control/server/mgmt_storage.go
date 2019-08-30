@@ -55,13 +55,19 @@ func (c *ControlService) PrepNvmeStorage(ctx context.Context, req *pb.PrepNvmeRe
 
 	resp := new(pb.PrepNvmeResp)
 
-	if req.Reset_ {
-		c.nvme.PrepReset(resp)
+	err := c.PrepNvme(PrepNvmeRequest{
+		HugePageCount: int(req.Nrhugepages),
+		TargetUser:    req.Targetuser,
+		PCIWhitelist:  req.Pciwhitelist,
+		ResetOnly:     req.Reset_,
+	})
 
-		return resp, nil
+	if err != nil {
+		resp.State = addState(pb.ResponseStatus_CTRL_ERR_NVM,
+			err.Error(), "", common.UtilLogDepth+1,
+			"prep nvme")
+		return resp, err
 	}
-
-	c.nvme.Prep(resp)
 
 	return resp, nil
 }

@@ -58,9 +58,20 @@ message PrepareNvmeReq {
 	bool reset = 4;			// Reset SPDK returning devices to kernel
 }
 
+<<<<<<< HEAD
 message PrepareNvmeResp {}
+=======
+message PrepNvmeResp {
+	ResponseState state = 1;
+}
+>>>>>>> 5d0d0af... proto definition encapsulation of storage type submessages, keep message packing logic in mgmt_storage
 
 message ScanNvmeReq {}
+
+message ScanNvmeResp {
+	repeated NvmeController ctrlrs = 1;
+	ResponseState state = 2;
+}
 
 message FormatNvmeReq {}
 

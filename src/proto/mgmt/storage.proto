@@ -31,6 +31,7 @@ import "storage_scm.proto";
 // Management Service Protobuf Definitions related to interactions between
 // DAOS control server and locally attached storage.
 
+<<<<<<< HEAD
 message StoragePrepareReq {
 	PrepareNvmeReq nvme = 1;
 	PrepareScmReq scm = 2;
@@ -43,10 +44,24 @@ message StoragePrepareResp {
 }
 
 message StorageScanReq {
+=======
+message PrepStorageReq {
+	PrepNvmeReq nvme = 1;
+	PrepScmReq scm = 2;
+}
+
+message PrepStorageResp {
+	PrepNvmeResp nvme = 1;
+	PrepScmResp scm = 2;
+}
+
+message ScanStorageReq {
+>>>>>>> 5d0d0af... proto definition encapsulation of storage type submessages, keep message packing logic in mgmt_storage
 	ScanNvmeReq nvme = 1;
 	ScanScmReq scm = 2;
 }
 
+<<<<<<< HEAD
 // StorageScanResp returns discovered storage devices.
 message StorageScanResp {
 	repeated NvmeController ctrlrs = 1;
@@ -54,6 +69,11 @@ message StorageScanResp {
 	repeated ScmModule modules = 3;
 	ResponseState scmstate = 4;		// Single non-module-specific state
 	// TODO: add scan for scm regions/mount
+=======
+message ScanStorageResp {
+	ScanNvmeResp nvme = 1;
+	ScanScmResp scm = 2;
+>>>>>>> 5d0d0af... proto definition encapsulation of storage type submessages, keep message packing logic in mgmt_storage
 }
 
 message StorageFormatReq {}

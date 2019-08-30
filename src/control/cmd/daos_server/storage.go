@@ -82,17 +82,6 @@ type storagePrepNvmeCmd struct {
 }
 
 func (cmd *storagePrepNvmeCmd) Execute(args []string) error {
-	ok, usr := common.CheckSudo()
-	if !ok {
-		return errors.New("subcommand must be run as root or sudo")
-	}
-
-	// falls back to sudoer or root if TargetUser is unspecified
-	tUsr := usr
-	if cmd.TargetUser != "" {
-		tUsr = cmd.TargetUser
-	}
-
 	srv, err := server.NewControlService(cmd.config)
 	if err != nil {
 		return errors.WithMessage(err, "initialising ControlService")
@@ -100,7 +89,7 @@ func (cmd *storagePrepNvmeCmd) Execute(args []string) error {
 
 	return srv.PrepNvme(server.PrepNvmeRequest{
 		HugePageCount: cmd.NrHugepages,
-		TargetUser:    tUsr,
+		TargetUser:    cmd.TargetUser,
 		PCIWhitelist:  cmd.PCIWhiteList,
 		ResetOnly:     cmd.Reset,
 	})

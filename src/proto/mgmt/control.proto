@@ -31,6 +31,7 @@ import "features.proto";
 // Service definitions for communications between gRPC management server and
 // client regarding tasks related to DAOS storage server hardware.
 service MgmtCtl {
+<<<<<<< HEAD
 	// Prepare nonvolatile storage devices for use with DAOS
 	rpc StoragePrepare(StoragePrepareReq) returns (StoragePrepareResp) {};
         // Retrieve details of nonvolatile storage on server
@@ -48,4 +49,20 @@ service MgmtCtl {
         rpc FetchFioConfigPaths(EmptyReq) returns(stream FilePath) {};
         // List features supported on remote storage server/DAOS system
         rpc ListFeatures(EmptyReq) returns(stream Feature) {};
+=======
+	// Configure nonvolatile storage to be accessible by DAOS
+	rpc PrepStorageStorage(PrepStorageReq) returns (PrepStorageResp) {};
+	// Retrieve details of nonvolatile storage on server
+	rpc ScanStorageStorage(ScanStorageReq) returns (ScanStorageResp) {};
+	// Format nonvolatile storage devices for use with DAOS
+	rpc FormatStorage(FormatStorageReq) returns (stream FormatStorageResp) {};
+	// Update nonvolatile storage device firmware
+	rpc UpdateStorage(UpdateStorageReq) returns (stream UpdateStorageResp) {};
+	// Perform burn-in testing to verify nonvolatile storage devices
+	rpc BurninStorage(BurninStorageReq) returns (stream BurninStorageResp) {};
+	// Fetch FIO configuration file specifying burn-in jobs/workloads
+	rpc FetchFioConfigPaths(EmptyReq) returns (stream FilePath) {};
+	// List features supported on remote storage server/DAOS system
+	rpc ListFeatures(EmptyReq) returns (stream Feature) {};
+>>>>>>> 5d0d0af... proto definition encapsulation of storage type submessages, keep message packing logic in mgmt_storage
 }

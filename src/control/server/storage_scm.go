@@ -393,27 +393,19 @@ func loadModules(mms []ipmctl.DeviceDiscovery) (pbMms types.ScmModules) {
 }
 
 // Discover method implementation for scmStorage
-func (s *scmStorage) Discover(resp *pb.StorageScanResp) {
-	msg := "scm storage discover"
-
+func (s *scmStorage) Discover() error {
 	if s.initialized {
-		resp.Scmstate = addState(pb.ResponseStatus_CTRL_SUCCESS, "", "", msg)
-		resp.Modules = s.modules
-		return
+		return nil
 	}
 
 	mms, err := s.ipmctl.Discover()
 	if err != nil {
-		resp.Scmstate = addState(pb.ResponseStatus_CTRL_ERR_SCM,
-			msgIpmctlDiscoverFail+": "+err.Error(), "", msg)
-		return
+		return err
 	}
 	s.modules = loadModules(mms)
-
-	resp.Scmstate = addState(pb.ResponseStatus_CTRL_SUCCESS, "", "", msg)
-	resp.Modules = s.modules
-
 	s.initialized = true
+
+	return nil
 }
 
 // clearMount unmounts then removes mount point.

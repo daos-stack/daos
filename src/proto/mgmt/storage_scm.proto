@@ -47,10 +47,20 @@ message ScmModule {
 	Location loc = 3;	// The location of the PMM in the hardware platform.
 }
 
+// PmemDevice represents SCM namespace as pmem kernel device created on a ScmRegion.
+message PmemDevice {
+	string uuid = 1;    
+	string blockdev = 2;
+	string dev = 3; // ndctl specific device identifier
+	uint32 numanode = 4;
+}
+
+
 // ScmMount represents mounted AppDirect region made up of SCM module set.
 message ScmMount {
 	string mntpoint = 1;
 	repeated ScmModule modules = 2;
+	PmemDevice pmem = 3;
 }
 
 // ScmModuleResult represents operation state for specific SCM/PM module.
@@ -71,11 +81,25 @@ message PrepareScmReq {
 	bool reset = 1;			// Reset SCM devices to memory mode
 }
 
+<<<<<<< HEAD
 message PrepareScmResp {}
+=======
+message PrepScmResp {
+	repeated PmemDevice pmems = 1;	// Existing pmem devices (new and old)
+	ResponseState state = 2;
+}
+>>>>>>> 5d0d0af... proto definition encapsulation of storage type submessages, keep message packing logic in mgmt_storage
 
 message ScanScmReq {}
 
+message ScanScmResp {
+	repeated ScmModule modules = 1;
+	ResponseState state = 2;
+	// TODO: return typed scm pmem devices or mount
+}
+
 message FormatScmReq {}
+// TODO: format should return existing / new mounts
 
 message UpdateScmReq {}
 
