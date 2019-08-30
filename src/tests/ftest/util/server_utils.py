@@ -49,25 +49,6 @@ AVOCADO_FILE = "src/tests/ftest/data/daos_avocado_test.yaml"
 class ServerFailed(Exception):
     """Server didn't start/stop properly."""
 
-
-def set_nvme_mode(default_value_set, bdev, enabled=False):
-    """Enable/Disable NVMe Mode.
-
-    NVMe is enabled by default in yaml file.So disable it for CI runs.
-
-    Args:
-        default_value_set (dict): dictionary of default values
-        bdev (str): block device name
-        enabled (bool, optional): enable NVMe. Defaults to False.
-    """
-    if 'bdev_class' in default_value_set['servers'][0]:
-        if (default_value_set['servers'][0]['bdev_class'] == bdev and
-                not enabled):
-            del default_value_set['servers'][0]['bdev_class']
-    if enabled:
-        default_value_set['servers'][0]['bdev_class'] = bdev
-
-
 def create_server_yaml(basepath):
     """Create the DAOS server config YAML file based on Avocado test Yaml file.
 
@@ -109,15 +90,12 @@ def create_server_yaml(basepath):
 
     # Update values from avocado_testcase.yaml in DAOS yaml variables.
     if new_value_set:
+        for key in new_value_set['server_config']['server']:
+            default_value_set['servers'][0][key] = \
+                    new_value_set['server_config']['server'][key]
         for key in new_value_set['server_config']:
-            if key in default_value_set['servers'][0]:
-                default_value_set['servers'][0][key] = \
-                    new_value_set['server_config'][key]
-            elif key in default_value_set:
+	    if 'server' not in key:
                 default_value_set[key] = new_value_set['server_config'][key]
-
-    # Disable NVMe from baseline data/daos_server_baseline.yml
-    set_nvme_mode(default_value_set, "nvme")
 
     # Write default_value_set dictionary in to AVOCADO_FILE
     # This will be used to start with daos_server -o option.
@@ -360,13 +338,12 @@ def storage_prepare(hosts):
     Args:
         hosts (str): a string of comma-separated host names
     """
-    try:
-        cmd = ("sudo /usr/bin/daos_server storage prep-nvme "
-               "--target-user=\"{0}\" --hugepages=4096"
-               .format(getpass.getuser()))
-        pmcd(hosts, cmd, timeout=120)
-    except ClusterCommandFailed as error:
-        raise ServerFailed("Error preparing NVMe storage:\n{}".format(error))
+    cmd = ("sudo daos_server storage prep-nvme "
+           "--target-user=\"{0}\" --hugepages=4096"
+           .format(getpass.getuser()))
+    result = pcmd(hosts, cmd, timeout=120)
+    if len(result) > 1 or 0 not in result:
+        raise ServerFailed("Error preparing NVMe storage")
 
 def storage_reset(hosts):
     """
@@ -375,8 +352,7 @@ def storage_reset(hosts):
     Args:
         hosts (str): a string of comma-separated host names
     """
-    try:
-        cmd = "sudo /usr/bin/daos_server storage prep-nvme --reset"
-        pmcd(hosts, cmd)
-    except ClusterCommandFailed as error:
-        raise ServerFailed("Error resetting NVMe storage:\n{}".format(error))
+    cmd = "sudo daos_server storage prep-nvme --reset"
+    result = pcmd(hosts, cmd)
+    if len(result) > 1 or 0 not in result:
+        raise ServerFailed("Error resetting NVMe storage")
