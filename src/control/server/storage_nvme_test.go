@@ -32,7 +32,7 @@ import (
 
 	. "github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	. "github.com/daos-stack/go-spdk/spdk"
+	. "github.com/daos-stack/daos/src/control/lib/spdk"
 )
 
 var nvmeFormatCalls []string // record calls to nvme.Format()
@@ -72,7 +72,7 @@ func MockNamespace(ctrlr *Controller) Namespace {
 	}
 }
 
-// mock external interface implementations for go-spdk/spdk package
+// mock external interface implementations for daos/src/control/lib/spdk package
 type mockSpdkEnv struct {
 	initRet error // ENV interface InitSPDKEnv() return value
 }
@@ -83,7 +83,7 @@ func newMockSpdkEnv(initRet error) ENV { return &mockSpdkEnv{initRet} }
 
 func defaultMockSpdkEnv() ENV { return newMockSpdkEnv(nil) }
 
-// mock external interface implementations for go-spdk/nvme package
+// mock external interface implementations for daos/src/control/lib/nvme package
 type mockSpdkNvme struct {
 	fwRevBefore  string
 	fwRevAfter   string
