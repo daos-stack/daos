@@ -46,11 +46,10 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <semaphore.h>
-#include <gurt/common.h>
 #include <cart/api.h>
 
-#include "no_pmix_launcher_common.h"
 #include "tests_common.h"
+#include "no_pmix_launcher_common.h"
 
 static void *
 progress_function(void *data)
@@ -150,9 +149,6 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
-	/* Give time for servers to start; need better way later on */
-	sleep(2);
-
 	rc = crt_group_size(grp, &grp_size);
 	if (rc != 0) {
 		D_ERROR("crt_group_size() failed; rc=%d\n", rc);
@@ -174,6 +170,20 @@ int main(int argc, char **argv)
 	rc = crt_group_psr_set(grp, rank_list->rl_ranks[0]);
 	if (rc != 0) {
 		D_ERROR("crt_group_psr_set() failed; rc=%d\n", rc);
+		assert(0);
+	}
+
+	/* This is needed until hg cancel is fully working.
+	 * RPCs in wait_for_ranks are expected to fail
+	 * and needs to be cancelled correctly.
+	 * It should be removed when hg cancel is fixed - HG PR #284
+	 */
+	sleep(2);
+
+	rc = wait_for_ranks(crt_ctx, grp, rank_list, NUM_SERVER_CTX - 1,
+			    NUM_SERVER_CTX, 5, 150);
+	if (rc != 0) {
+		D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
 		assert(0);
 	}
 

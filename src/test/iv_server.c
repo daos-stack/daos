@@ -50,10 +50,7 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 
-#include <gurt/common.h>
 #include <gurt/list.h>
-
-#include "tests_common.h"
 
 #define _SERVER
 #include "iv_common.h"
@@ -140,14 +137,6 @@ progress_function(void *data)
 	crt_context_destroy(*p_ctx, 1);
 
 	return NULL;
-}
-
-static void
-shutdown(void)
-{
-	DBG_PRINT("Joining progress thread\n");
-	pthread_join(g_progress_thread, NULL);
-	DBG_PRINT("Finished joining progress thread\n");
 }
 
 /* handler for RPC_SHUTDOWN */
@@ -1252,7 +1241,9 @@ int main(int argc, char **argv)
 	deinit_iv_storage();
 	deinit_iv();
 
-	shutdown();
+	DBG_PRINT("Joining progress thread\n");
+	pthread_join(g_progress_thread, NULL);
+	DBG_PRINT("Finished joining progress thread\n");
 
 	if (g_my_rank == 0) {
 		rc = crt_group_config_remove(NULL);

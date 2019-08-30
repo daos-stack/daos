@@ -46,7 +46,6 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <semaphore.h>
-#include <gurt/common.h>
 #include <cart/api.h>
 
 #include "tests_common.h"

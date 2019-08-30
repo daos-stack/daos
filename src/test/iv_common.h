@@ -39,9 +39,10 @@
  * This is a common file for IV client and IV server
  */
 #include <unistd.h>
-#include <gurt/common.h>
 #include <cart/api.h>
 #include <cart/iv.h>
+
+#include "tests_common.h"
 
 /* Describes internal structure of the value */
 #define MAX_DATA_SIZE 1024

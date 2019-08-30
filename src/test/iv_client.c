@@ -60,8 +60,6 @@
 #include <sys/stat.h>
 #include "iv_common.h"
 
-#include "tests_common.h"
-
 static crt_context_t	g_crt_ctx;
 static crt_endpoint_t	g_server_ep;
 static char		g_hostname[100];
