@@ -1858,7 +1858,7 @@ dc_cont_create_snap(tse_task_t *task)
 		return -DER_INVAL;
 	}
 
-	*args->epoch = daos_ts2epoch();
+	*args->epoch = crt_hlc_get();
 	return dc_epoch_op(args->coh, CONT_SNAP_CREATE, args->epoch, task);
 }
 

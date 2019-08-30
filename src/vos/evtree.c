@@ -914,7 +914,7 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 		D_ERROR("Bad sort policy specified: 0x%x\n", policy);
 		D_GOTO(failed, rc = -DER_INVAL);
 	}
-	D_DEBUG(DB_IO, "EVTree sort policy is 0x%x\n", policy);
+	D_DEBUG(DB_TRACE, "EVTree sort policy is 0x%x\n", policy);
 
 	/* Initialize the embedded iterator entry array.  This is a minor
 	 * optimization if the iterator is used more than once

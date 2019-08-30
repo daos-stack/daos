@@ -232,7 +232,7 @@
 #  log_file: /tmp/daos_server1.log
 #
 #  # Pass specific environment variables to the DAOS server.
-#  # Empty by default.
+#  # Empty by default. Values should be supplied without encapsulating quotes.
 #
 #  env_vars:
 #      - CRT_TIMEOUT=30
@@ -325,7 +325,7 @@
 #  log_file: /tmp/daos_server2.log
 #
 #  # Pass specific environment variables to the DAOS server
-#  # Empty by default.
+#  # Empty by default. Values should be supplied without encapsulating quotes.
 #
 #  env_vars:
 #      - CRT_TIMEOUT=100

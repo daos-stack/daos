@@ -479,8 +479,8 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 	int		 i, rc;
 	int		 flags = 0;
 
-	D_DEBUG(DB_IO, "akey %d %s fetch %s eph "DF_U64"\n",
-		(int)iod->iod_name.iov_len, (char *)iod->iod_name.iov_buf,
+	D_DEBUG(DB_IO, "akey "DF_KEY" fetch %s eph "DF_U64"\n",
+		DP_KEY(&iod->iod_name),
 		iod->iod_type == DAOS_IOD_ARRAY ? "array" : "single",
 		ioc->ic_epoch);
 
@@ -496,9 +496,8 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 				      DAOS_INTENT_DEFAULT, NULL, &toh);
 		if (rc != 0) {
 			if (rc == -DER_NONEXIST) {
-				D_DEBUG(DB_IO, "Nonexistent akey %.*s\n",
-					(int)iod->iod_name.iov_len,
-					(char *)iod->iod_name.iov_buf);
+				D_DEBUG(DB_IO, "Nonexistent akey "DF_KEY"\n",
+					DP_KEY(&iod->iod_name));
 				iod_empty_sgl(ioc, ioc->ic_sgl_at);
 				rc = 0;
 			}
@@ -529,7 +528,8 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 				toh = DAOS_HDL_INVAL;
 			}
 
-			D_DEBUG(DB_IO, "repare the key tree for eph "DF_U64"\n",
+			D_DEBUG(DB_IO,
+				"prepare the key tree for eph "DF_U64"\n",
 				val_epr.epr_hi);
 			rc = key_tree_prepare(ioc->ic_obj, val_epr.epr_hi,
 					      ak_toh, VOS_BTR_AKEY,
@@ -537,9 +537,9 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 					      DAOS_INTENT_DEFAULT, &krec, &toh);
 			if (rc != 0) {
 				if (rc == -DER_NONEXIST) {
-					D_DEBUG(DB_IO, "Nonexist akey %.*s\n",
-						(int)iod->iod_name.iov_len,
-						(char *)iod->iod_name.iov_buf);
+					D_DEBUG(DB_IO,
+						"Nonexist akey "DF_KEY"\n",
+						DP_KEY(&iod->iod_name));
 					rc = 0;
 					continue;
 				}
@@ -819,9 +819,9 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 	int		    i;
 	int		    rc = 0;
 
-	D_DEBUG(DB_TRACE, "akey %d %s update %s value eph "DF_U64"\n",
-		(int)iod->iod_name.iov_len, (char *)iod->iod_name.iov_buf,
-		is_array ? "array" : "single", ioc->ic_epoch);
+	D_DEBUG(DB_TRACE, "akey "DF_KEY" update %s value eph "DF_U64"\n",
+		DP_KEY(&iod->iod_name), is_array ? "array" : "single",
+		ioc->ic_epoch);
 
 	if (is_array)
 		flags |= SUBTR_EVT;
@@ -1335,6 +1335,9 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	struct vos_io_context	*ioc;
 	int			 rc;
 
+	D_DEBUG(DB_IO, "Prepare IOC for "DF_UOID", iod_nr %d, epc "DF_U64"\n",
+		DP_UOID(oid), iod_nr, epoch);
+
 	rc = vos_ioc_create(coh, oid, false, epoch, iod_nr, iods, false, &ioc);
 	if (rc != 0)
 		goto done;
@@ -1346,12 +1349,7 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		vos_update_end(vos_ioc2ioh(ioc), 0, dkey, rc, dth);
 		goto done;
 	}
-
-
-	D_DEBUG(DB_IO, "Prepared io context for updating %d iods\n", iod_nr);
-
 	*ioh = vos_ioc2ioh(ioc);
-
 done:
 	return rc;
 }
@@ -1414,9 +1412,6 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 {
 	daos_handle_t ioh;
 	int rc;
-
-	D_DEBUG(DB_IO, "Update "DF_UOID", desc_nr %d, epoch "DF_U64"\n",
-		DP_UOID(oid), iod_nr, epoch);
 
 	rc = vos_update_begin(coh, oid, epoch, dkey, iod_nr, iods, &ioh, NULL);
 	if (rc) {

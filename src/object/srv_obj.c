@@ -937,7 +937,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		orw->orw_map_ver, map_ver, DP_DTI(&orw->orw_dti));
 	/* FIXME: until distributed transaction. */
 	if (orw->orw_epoch == DAOS_EPOCH_MAX) {
-		orw->orw_epoch = daos_ts2epoch();
+		orw->orw_epoch = crt_hlc_get();
 		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", orw->orw_epoch);
 	}
 
@@ -1242,7 +1242,7 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 
 	/* FIXME: until distributed transaction. */
 	if (oei->oei_epoch == DAOS_EPOCH_MAX) {
-		oei->oei_epoch = daos_ts2epoch();
+		oei->oei_epoch = crt_hlc_get();
 		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", oei->oei_epoch);
 	}
 
@@ -1516,7 +1516,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 
 	/* FIXME: until distributed transaction. */
 	if (opi->opi_epoch == DAOS_EPOCH_MAX) {
-		opi->opi_epoch = daos_ts2epoch();
+		opi->opi_epoch = crt_hlc_get();
 		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", opi->opi_epoch);
 	}
 
@@ -1634,7 +1634,7 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 
 	/* FIXME: until distributed transaction. */
 	if (okqi->okqi_epoch == DAOS_EPOCH_MAX) {
-		okqi->okqi_epoch = daos_ts2epoch();
+		okqi->okqi_epoch = crt_hlc_get();
 		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", okqi->okqi_epoch);
 	}
 
