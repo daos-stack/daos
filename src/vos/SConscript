@@ -11,13 +11,13 @@ FILES = ["evt_iter.c", "vos_common.c", "vos_iterator.c", "vos_obj.c",
 def build_vos(env, standalone):
     """build vos"""
     denv = env.Clone()
-    install = 'lib/daos_srv'
+    install = 'lib64/daos_srv'
     libname = 'vos_srv'
 
     if standalone:
         denv.Append(CPPDEFINES={'VOS_STANDALONE' : '1'})
         denv.Append(OBJPREFIX="s_")
-        install = 'lib'
+        install = 'lib64'
         libname = 'vos'
 
     files = FILES

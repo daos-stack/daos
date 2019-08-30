@@ -129,7 +129,7 @@ class TestWithoutServers(Test):
                                                                   None)
             os.environ["D_FI_CONFIG"] = self.fault_file
 
-        self.context = DaosContext(self.prefix + '/lib/')
+        self.context = DaosContext(self.prefix + '/lib64/')
         self.d_log = DaosLog(self.context)
 
     def tearDown(self):

@@ -157,7 +157,7 @@ def scons():
         join(gospdkpath, "src", "nvme_control.c"),
         CC=compiler, LIBS=['spdk'])
 
-    denv.Install(join(denv.subst("$PREFIX"), "lib"), nvmecontrol)
+    denv.Install(join(denv.subst("$PREFIX"), "lib64"), nvmecontrol)
 
     # CGO shell env vars.
     denv.AppendENVPath(

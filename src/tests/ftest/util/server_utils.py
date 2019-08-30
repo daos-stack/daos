@@ -41,8 +41,8 @@ from general_utils import pcmd
 
 SESSIONS = {}
 
-DEFAULT_FILE = "src/tests/ftest/data/daos_server_baseline.yaml"
-AVOCADO_FILE = "src/tests/ftest/data/daos_avocado_test.yaml"
+DEFAULT_FILE = "lib/daos/TESTING/ftest/data/daos_server_baseline.yaml"
+AVOCADO_FILE = "lib/daos/TESTING/ftest/data/daos_avocado_test.yaml"
 
 
 class ServerFailed(Exception):
@@ -77,15 +77,18 @@ def create_server_yaml(basepath):
         ServerFailed: if there is an reading/writing yaml files
 
     """
+    with open(os.path.join(basepath, ".build_vars.json")) as json_vars:
+            build_vars = json.load(json_vars)
+    
     # Read the baseline conf file data/daos_server_baseline.yml
     try:
-        with open('{}/{}'.format(basepath, DEFAULT_FILE), 'r') as read_file:
+        with open('{}/{}'.format(build_vars["PREFIX"], DEFAULT_FILE), 'r') as read_file:
             default_value_set = yaml.safe_load(read_file)
     except Exception as excpn:
         print("<SERVER> Exception occurred: {0}".format(str(excpn)))
         traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
         raise ServerFailed(
-            "Failed to Read {}/{}".format(basepath, DEFAULT_FILE))
+            "Failed to Read {}/{}".format(build_vars["PREFIX"], DEFAULT_FILE))
 
     # Read the values from avocado_testcase.yaml file if test ran with Avocado.
     new_value_set = {}
@@ -121,13 +124,13 @@ def create_server_yaml(basepath):
     # Write default_value_set dictionary in to AVOCADO_FILE
     # This will be used to start with daos_server -o option.
     try:
-        with open('{}/{}'.format(basepath,
+        with open('{}/{}'.format(build_vars["PREFIX"],
                                  AVOCADO_FILE), 'w') as write_file:
             yaml.dump(default_value_set, write_file, default_flow_style=False)
     except Exception as excpn:
         print("<SERVER> Exception occurred: {0}".format(str(excpn)))
         traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
-        raise ServerFailed("Failed to Write {}/{}".format(basepath,
+        raise ServerFailed("Failed to Write {}/{}".format(build_vars["PREFIX"],
                                                           AVOCADO_FILE))
 
 
@@ -203,8 +206,8 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
 
         # Run server in insecure mode until Certificate tests are in place
         server_cmd.extend([daos_srv_bin, "-i",
-                           "-a", os.path.join(basepath, "install", "tmp"),
-                           "-o", '{}/{}'.format(basepath, AVOCADO_FILE)])
+                           "-a", os.path.join(build_vars["PREFIX"], "tmp"),
+                           "-o", '{}/{}'.format(build_vars["PREFIX"], AVOCADO_FILE)])
 
         print("Start CMD>>>>{0}".format(' '.join(server_cmd)))
 

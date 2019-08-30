@@ -27,11 +27,11 @@ def scons():
                   'acl_util.c']
 
     common = daos_build.library(denv, 'libdaos_common', common_src)
-    denv.Install('$PREFIX/lib/', common)
+    denv.Install('$PREFIX/lib64/', common)
 
     tests_lib_src = ['tests_lib.c']
     tests_lib = daos_build.library(denv, 'libdaos_tests', tests_lib_src)
-    denv.Install('$PREFIX/lib/', tests_lib)
+    denv.Install('$PREFIX/lib64/', tests_lib)
 
     SConscript('tests/SConscript', exports='denv')
 
