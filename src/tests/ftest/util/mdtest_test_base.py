@@ -47,7 +47,7 @@ class MdtestBase(TestWithServers):
     def setUp(self):
         """Set up each test case."""
         # obtain log path names
-        self.log_path()
+        self.log_path(log_name=True)
         # Start the servers and agents
         super(MdtestBase, self).setUp()
 

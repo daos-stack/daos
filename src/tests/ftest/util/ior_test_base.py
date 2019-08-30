@@ -45,7 +45,7 @@ class IorTestBase(TestWithServers):
     def setUp(self):
         """Set up each test case."""
         # obtain log path names
-        self.log_path()
+        self.log_path(log_name=True)
         # Start the servers and agents
         super(IorTestBase, self).setUp()
 
@@ -61,7 +61,7 @@ class IorTestBase(TestWithServers):
                 self.pool.destroy(1)
         finally:
             # collect separate debug logs
-            self.collect_separate_logs()
+#            self.collect_separate_logs()
             # Stop the servers and agents
             super(IorTestBase, self).tearDown()
 

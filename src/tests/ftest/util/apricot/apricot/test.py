@@ -42,7 +42,7 @@ import write_host_file
 import general_utils
 from daos_api import DaosContext, DaosLog
 
-SERVER_LOG = "/tmp/server.log"
+#SERVER_LOG = "/tmp/server.log"
 CLIENT_LOG = "client_daos.log"
 
 # pylint: disable=invalid-name
@@ -167,7 +167,9 @@ class TestWithServers(TestWithoutServers):
         self.server_log = None
         self.log_dir = None
         self.client_log = None
-        self.test_id = str(self.name).split("-")[0]
+#        self.test_id = str(self.name).split("-")[0]
+        self.test_id = "{}-{}".format(os.path.split(self.filename)[1], self.name.str_uid)
+#        self.server_log = None
         self.setup_start_agents = True
 
     def setUp(self):
@@ -253,14 +255,12 @@ class TestWithServers(TestWithoutServers):
             finally:
                 super(TestWithServers, self).tearDown()
 
-    def start_servers(self, server_groups=None, orterun_env=None):
+    def start_servers(self, server_groups=None):
         """Start the servers and clients.
 
         Args:
             server_groups (dict, optional): [description]. Defaults to None.
         """
-        if self.orterun_env:
-            orterun_env = self.orterun_env
 
         if isinstance(server_groups, dict):
             # Optionally start servers on a different subset of hosts with a
@@ -270,11 +270,11 @@ class TestWithServers(TestWithoutServers):
                     "Starting servers: group=%s, hosts=%s", group, hosts)
                 hostfile = write_host_file.write_host_file(hosts, self.workdir)
                 server_utils.run_server(hostfile, group, self.basepath,
-                                        env_dict=orterun_env)
+                                        env_dict=self.orterun_env, log_filename=self.server_log)
         else:
             server_utils.run_server(
                 self.hostfile_servers, self.server_group, self.basepath,
-                env_dict=orterun_env)
+                env_dict=self.orterun_env, log_filename=self.server_log)
 
     def get_partition_hosts(self, partition_key, host_list):
         """[summary].
@@ -314,15 +314,23 @@ class TestWithServers(TestWithoutServers):
         else:
             return host_list, None
 
-    def log_path(self, test_name=None):
+    def log_path(self, test_name=None, log_name=False):
         """Determine log path for both servers and clients"""
         # Determine the path and name of the daos server log using the
         # D_LOG_FILE env or, if not set, the value used in the doas server yaml
+        print("****self.test_id****:{}".format(self.test_id))
         if test_name:
             self.test_id = test_name
-        self.log_dir, self.server_log = os.path.split(
-            os.getenv("D_LOG_FILE", SERVER_LOG))
-        self.client_log = os.path.join(self.log_dir,
+        if log_name is True:
+            self.server_log = "/tmp/{}_server_daos.log".format(self.test_id)
+        print("****self.server_log****:{}".format(self.server_log))
+
+        self.log_dir = os.path.split(
+            os.getenv("D_LOG_FILE"))
+#        self.log_dir = os.path.split(
+#            os.getenv("D_LOG_FILE"))
+        print("****self.log_dir****:{}".format(self.log_dir[0]))
+        self.client_log = os.path.join(self.log_dir[0],
                                        self.test_id + "_" + CLIENT_LOG)
         # To generate the seperate client log file
         self.orterun_env = {'D_LOG_FILE':self.client_log}

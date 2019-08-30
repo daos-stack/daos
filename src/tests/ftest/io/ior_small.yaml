@@ -1,15 +1,11 @@
 hosts:
    test_machines:
         test_servers:
-            - boro-A
-            - boro-B
-            - boro-C
-            - boro-D
+            - boro-64
+            - boro-61
         test_clients:
-            - boro-E
-            - boro-F
-            - boro-G
-            - boro-H
+            - boro-64
+            - boro-61
 timeout: 500
 server_config:
     name: daos_server
@@ -35,14 +31,14 @@ ior:
         ssf:
           flags: "-v -W -w -r -R"
           ior_api: !mux
-            daos:
-              api: DAOS
+#            daos:
+#              api: DAOS
             mpiio:
               api: MPIIO
           transfersize_blocksize: !mux
-            256B:
-              transfer_size: '256B'
-              block_size: '4M'
+#            256B:
+#              transfer_size: '256B'
+#              block_size: '4M'
             1M:
               transfer_size: '1M'
               block_size: '32M'
@@ -53,12 +49,12 @@ ior:
 # Commenting it out until DAOS-3097/3143 is resolved.
 #            oclass_RP_2GX:
 #              daos_oclass: "RP_2GX"
-        fpp:
-          flags: "-v -W -w -r -R -F"
-          api: DAOS
-          transfer_size: '1M'
-          block_size: '32M'
-          daos_oclass: "SX"
+#        fpp:
+#          flags: "-v -W -w -r -R -F"
+#          api: DAOS
+#          transfer_size: '1M'
+#          block_size: '32M'
+#          daos_oclass: "SX"
 # Uncomment when DAOS-1733 is resolved
 #        random:
 #          flags: "-v -W -w -r -z"
