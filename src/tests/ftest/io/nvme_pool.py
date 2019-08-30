@@ -29,6 +29,7 @@ import avocado
 from daos_api import DaosPool, DaosApiError
 from ior_test_base import IorTestBase
 from test_utils import TestPool
+import general_utils
 
 class NvmePool(IorTestBase):
     """Test class for NVMe with IO tests.
@@ -54,11 +55,11 @@ class NvmePool(IorTestBase):
         :avocado: tags=all,daosio,full_regression,hw,nvme_pool
         """
         # Pool params
-#        pool_mode = self.params.get("mode", '/run/pool/createmode/*')
-#        pool_uid = os.geteuid()
-#        pool_gid = os.getegid()
-#        pool_group = self.params.get("setname", '/run/pool/createset/*')
-#        pool_svcn = self.params.get("svcn", '/run/pool/createsvc/')
+        pool_mode = self.params.get("mode", '/run/pool/createmode/*')
+        pool_uid = os.geteuid()
+        pool_gid = os.getegid()
+        pool_group = self.params.get("setname", '/run/pool/createset/*')
+        pool_svcn = self.params.get("svcn", '/run/pool/createsvc/')
 
         # Test params
         tests = self.params.get("ior_sequence", '/run/ior/*')
@@ -66,6 +67,18 @@ class NvmePool(IorTestBase):
 
         # Loop for every IOR object type
         for ior_param in tests:
+            # Create and connect to a pool
+            self.pool = DaosPool(self.context)
+            self.pool.create(
+                pool_mode, pool_uid, pool_gid, ior_param[0], pool_group,
+                svcn=pool_svcn, nvme_size=ior_param[1])
+
+#            general_utils.pcmd(self.hostlist_clients, self.pool.connect(1 << 1))
+
+            self.pool.connect(1 << 1)
+            # Get the current pool sizes
+            size_before_ior = self.pool.pool_query()
+
             for tsize in transfer_size:
                 # There is an issue with NVMe if Transfer size>64M,
                 # Skipped this sizes for now
@@ -83,21 +96,23 @@ class NvmePool(IorTestBase):
                 # Get the current pool sizes
 #                size_before_ior = self.pool.pool_query()
 
-                self.pool.scm_size.update(ior_param[0])
-                self.pool.nvme_size.update(ior_param[1])
+#                self.pool.scm_size.update(ior_param[0])
+#                self.pool.nvme_size.update(ior_param[1])
                 # Run ior with the parameters specified for this pass
                 print("tsize:{}".format(tsize))
                 self.ior_cmd.transfer_size.update(tsize)
-                self.run_ior_with_pool()
+                self.ior_cmd.set_daos_params(self.server_group, self.pool)
+                self.run_ior(self.get_job_manager_command())
 
                 # Verify IOR consumed the expected amount ofrom the pool
-                #self.verify_pool_size(size_before_ior, ior_param[4])
+                self.verify_pool_size(size_before_ior, self.ior_cmd.num_tasks.value)
 
-                try:
-                    if self.pool:
-                        self.pool.disconnect()
-                        self.pool.destroy(1)
-                except DaosApiError as error:
-                    self.log.error(
-                        "Pool disconnect/destroy error: %s", str(error))
-                    self.fail("Failed to Destroy/Disconnect the Pool")
+            try:
+                if self.pool:
+                    self.pool.disconnect()
+                    self.pool.destroy(1)
+                    self.pool = None
+            except DaosApiError as error:
+                self.log.error(
+                    "Pool disconnect/destroy error: %s", str(error))
+                self.fail("Failed to Destroy/Disconnect the Pool")

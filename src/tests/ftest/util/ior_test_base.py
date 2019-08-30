@@ -27,6 +27,7 @@ from apricot import TestWithServers
 from ior_utils import IorCommand, IorFailed
 from mpio_utils import MpioUtils
 from test_utils import TestPool
+from daos_api import DaosPool
 
 class IorTestBase(TestWithServers):
     """Base IOR test class.
@@ -51,10 +52,6 @@ class IorTestBase(TestWithServers):
         self.ior_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/ior/client_processes/*')
 
-        # Get the pool params
-        self.pool = TestPool(self.context, self.log)
-        self.pool.get_params(self)
-
     def tearDown(self):
         """Tear down each test case."""
         try:
@@ -67,8 +64,8 @@ class IorTestBase(TestWithServers):
     def create_pool(self):
         """Create a TestPool object to use with ior."""
         # Get the pool params
-#        self.pool = TestPool(self.context, self.log)
-#        self.pool.get_params(self)
+        self.pool = TestPool(self.context, self.log)
+        self.pool.get_params(self)
 
         # Create a pool
         self.pool.create()
@@ -118,7 +115,7 @@ class IorTestBase(TestWithServers):
             processes (int): number of host processes
         """
         if self.processes and processes is None:
-            processes = seld.processes
+            processes = self.processes
         try:
             self.ior_cmd.run(
                 manager, self.tmp, processes, self.hostfile_clients)
@@ -133,8 +130,13 @@ class IorTestBase(TestWithServers):
             original_pool_info (PoolInfo): Pool info prior to IOR
             processes (int): number of processes
         """
+        if isinstance(self.pool, DaosPool):
+            pass
+        elif isinstance(self.pool, TestPool):
+            self.pool = pool.pool
+
         # Get the current pool size for comparison
-        current_pool_info = self.pool.pool.pool_query()
+        current_pool_info = self.pool.pool_query()
 
         # If Transfer size is < 4K, Pool size will verified against NVMe, else
         # it will be checked against SCM
