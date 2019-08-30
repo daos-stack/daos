@@ -79,15 +79,15 @@ Setup environment variables:
 ```bash
 DAOS_REPO="/path/to/daos_repo"
 SPDK_REPO="/path/to/spdk_repo"
-export CGO_LDFLAGS="-L${SPDK_REPO}/build/lib"
-export CGO_CFLAGS=-I${SPDK_REPO}/include
-export LD_LIBRARY_PATH="${SPDK_REPO}/build/lib:${DAOS_REPO}/src/control/vendor/github.com/daos-stack/go-spdk/spdk"
+export CGO_LDFLAGS="-L${SPDK_REPO}/build/lib:${DAOS_REPO}/src/control/lib/spdk/src"
+export CGO_CFLAGS="-I${SPDK_REPO}/include:${DAOS_REPO}/src/control/lib/spdk/include"
+export LD_LIBRARY_PATH="${SPDK_REPO}/build/lib:${DAOS_REPO}/src/control/lib/spdk"
 ```
 
 Build NVME libs:
 
 ```bash
-cd ${DAOS_REPO}/src/control/vendor/github.com/daos-stack/go-spdk/spdk
+cd ${DAOS_REPO}/src/control/lib/spdk
 gcc ${CGO_LDFLAGS} ${CGO_CFLAGS} -Werror -g -Wshadow -Wall -Wno-missing-braces -c -fpic -Iinclude src/*.c -lspdk
 gcc ${CGO_LDFLAGS} ${CGO_CFLAGS} -shared -o libnvme_control.so *.o
 ```
@@ -102,7 +102,7 @@ cd ${DAOS_REPO}/src/control
 To run the go-spdk tests:
 
 ```base
-cd ${DAOS_REPO}/src/control/vendor/github.com/daos-stack/go-spdk/spdk
+cd ${DAOS_REPO}/src/control/lib/spdk
 go test -v
 ```
 
