@@ -36,7 +36,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	log "github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/go-spdk/spdk"
+	"github.com/daos-stack/daos/src/control/lib/spdk"
 )
 
 const (

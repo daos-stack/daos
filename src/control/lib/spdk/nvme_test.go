@@ -40,8 +40,8 @@ func checkFailure(shouldSucceed bool, err error) (rErr error) {
 }
 
 func TestDiscover(t *testing.T) {
-	var se Env
-	var n Nvme
+	//	var se Env
+	//	var n Nvme
 
 	tests := []struct {
 		shmID         int
@@ -57,23 +57,26 @@ func TestDiscover(t *testing.T) {
 		//		},
 	}
 
-	for i, tt := range tests {
-		if err := se.InitSPDKEnv(tt.shmID); err != nil {
-			t.Fatal(err.Error())
-		}
+	for _, _ = range tests {
+		fmt.Println("spdk binding tests currently disabled")
 
-		cs, nss, err := n.Discover()
-		if checkFailure(tt.shouldSucceed, err) != nil {
-			t.Errorf("case %d: %v", i, err)
-		}
-		fmt.Printf("controllers: %#v\n", cs)
-		fmt.Printf("namespaces: %#v\n", nss)
+		// TODO
+		//		if err := se.InitSPDKEnv(tt.shmID); err != nil {
+		//			t.Fatal(err.Error())
+		//		}
+		//
+		//		cs, nss, err := n.Discover()
+		//		if checkFailure(tt.shouldSucceed, err) != nil {
+		//			t.Errorf("case %d: %v", i, err)
+		//		}
+		//		fmt.Printf("controllers: %#v\n", cs)
+		//		fmt.Printf("namespaces: %#v\n", nss)
 
 		//		_, _, err = n.Update(0, "", 0)
 		//		if checkFailure(tt.shouldSucceed, err) != nil {
 		//			t.Errorf("case %d: %v", i, err)
 		//		}
 
-		n.Cleanup()
+		//		n.Cleanup()
 	}
 }
