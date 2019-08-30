@@ -94,7 +94,7 @@ def create_server_yaml(basepath):
             default_value_set['servers'][0][key] = \
                     new_value_set['server_config']['server'][key]
         for key in new_value_set['server_config']:
-	    if 'server' not in key:
+            if 'server' not in key:
                 default_value_set[key] = new_value_set['server_config'][key]
 
     # Write default_value_set dictionary in to AVOCADO_FILE
