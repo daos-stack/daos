@@ -107,8 +107,7 @@ pipeline {
                     "--build-arg CACHEBUST=${currentBuild.startTimeInMillis}"
         QUICKBUILD = sh(script: "git show -s --format=%B | grep \"^Quick-build: true\"",
                         returnStatus: true)
-        SSH_KEY_FILE='ci_key'
-        SSH_KEY_ARGS="-i$SSH_KEY_FILE"
+        SSH_KEY_ARGS="-ici_key"
         CLUSH_ARGS="-o$SSH_KEY_ARGS"
     }
 
@@ -1035,7 +1034,7 @@ pipeline {
                 // expression { skipTest != true }
                 expression { env.NO_CI_TESTING != 'true' }
                 expression {
-                    sh script: 'git show -s --format=%B | grep "^Skip-test: true',
+                    sh script: 'git show -s --format=%B | grep "^Skip-test: true"',
                        returnStatus: true
                 }
             }
