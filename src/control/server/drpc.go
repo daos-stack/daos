@@ -68,7 +68,7 @@ func checkSocketDir(sockDir string) error {
 }
 
 // drpcSetup checks socket directory exists, specifies socket path and starts drpc server.
-func drpcSetup(sockDir string, iosrv *iosrv, tc *security.TransportConfig) error {
+func drpcSetup(sockDir string, iosrv *IOServerInstance, tc *security.TransportConfig) error {
 	if err := checkSocketDir(sockDir); err != nil {
 		return err
 	}

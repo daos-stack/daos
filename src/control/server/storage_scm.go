@@ -35,7 +35,8 @@ import (
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/lib/ipmctl"
-	log "github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 //go:generate stringer -type=scmState
@@ -118,8 +119,9 @@ func run(cmd string) (string, error) {
 // IpmCtl provides necessary methods to interact with Storage Class
 // Memory modules through libipmctl via ipmctl bindings.
 type scmStorage struct {
-	ipmctl      ipmctl.IpmCtl  // ipmctl NVM API interface
-	config      *Configuration // server configuration structure
+	log         logging.Logger
+	ext         External
+	ipmctl      ipmctl.IpmCtl // ipmctl NVM API interface
 	runCmd      runCmdFn
 	modules     types.ScmModules
 	state       scmState
@@ -156,7 +158,7 @@ func (s *scmStorage) Prep() (needsReboot bool, pmemDevs []pmemDev, err error) {
 		return false, nil, errors.WithMessage(err, "establish scm state")
 	}
 
-	log.Debugf("scm in state %s\n", s.state)
+	s.log.Debugf("scm in state %s\n", s.state)
 
 	switch s.state {
 	case scmStateNoRegions:
@@ -185,7 +187,7 @@ func (s *scmStorage) PrepReset() (bool, error) {
 
 	switch s.state {
 	case scmStateNoRegions:
-		log.Info("SCM is already reset\n")
+		s.log.Info("SCM is already reset\n")
 		return false, nil
 	case scmStateUnknown:
 		return false, errors.New("unknown scm state")
@@ -202,9 +204,9 @@ func (s *scmStorage) PrepReset() (bool, error) {
 		}
 	}
 
-	log.Infof("resetting SCM memory allocations\n")
+	s.log.Infof("resetting SCM memory allocations\n")
 	if out, err := s.runCmd(cmdScmRemoveRegions); err != nil {
-		log.Error(out)
+		s.log.Error(out)
 		return false, err
 	}
 
@@ -212,7 +214,7 @@ func (s *scmStorage) PrepReset() (bool, error) {
 }
 
 func (s *scmStorage) removeNamespace(devName string) (err error) {
-	log.Infof("removing SCM namespace, may take a few minutes...\n")
+	s.log.Infof("removing SCM namespace, may take a few minutes...\n")
 
 	_, err = s.runCmd(fmt.Sprintf(cmdScmDisableNamespace, devName))
 	if err != nil {
@@ -237,7 +239,7 @@ func (s *scmStorage) getState() error {
 		return err
 	}
 
-	log.Debugf("show region output: %s\n", out)
+	s.log.Debugf("show region output: %s\n", out)
 
 	if out == outScmNoRegions {
 		s.state = scmStateNoRegions
@@ -320,7 +322,7 @@ func (s *scmStorage) createNamespaces() ([]pmemDev, error) {
 	devs := make([]pmemDev, 0)
 
 	for {
-		log.Infof("creating SCM namespace, may take a few minutes...\n")
+		s.log.Infof("creating SCM namespace, may take a few minutes...\n")
 
 		out, err := s.runCmd(cmdScmCreateNamespace)
 		if err != nil {
@@ -405,11 +407,11 @@ func (s *scmStorage) Discover() error {
 //
 // NOTE: requires elevated privileges
 func (s *scmStorage) clearMount(mntPoint string) (err error) {
-	if err = s.config.ext.unmount(mntPoint); err != nil {
+	if err = s.ext.unmount(mntPoint); err != nil {
 		return
 	}
 
-	if err = s.config.ext.remove(mntPoint); err != nil {
+	if err = s.ext.remove(mntPoint); err != nil {
 		return
 	}
 
@@ -421,15 +423,15 @@ func (s *scmStorage) clearMount(mntPoint string) (err error) {
 // NOTE: Requires elevated privileges and is a destructive operation, prompt
 //       user for confirmation before running.
 func (s *scmStorage) reFormat(devPath string) (err error) {
-	log.Debugf("wiping all fs identifiers on device %s", devPath)
+	s.log.Debugf("wiping all fs identifiers on device %s", devPath)
 
-	if err = s.config.ext.runCommand(
+	if err = s.ext.runCommand(
 		fmt.Sprintf("wipefs -a %s", devPath)); err != nil {
 
 		return errors.WithMessage(err, "wipefs")
 	}
 
-	if err = s.config.ext.runCommand(
+	if err = s.ext.runCommand(
 		fmt.Sprintf("mkfs.ext4 %s", devPath)); err != nil {
 
 		return errors.WithMessage(err, "mkfs format")
@@ -438,29 +440,29 @@ func (s *scmStorage) reFormat(devPath string) (err error) {
 	return
 }
 
-func getMntParams(srv *IOServerConfig) (mntType string, dev string, opts string, err error) {
-	switch srv.ScmClass {
-	case scmDCPM:
+func getMntParams(cfg storage.ScmConfig) (mntType string, dev string, opts string, err error) {
+	switch cfg.Class {
+	case storage.ScmClassDCPM:
 		mntType = "ext4"
 		opts = "dax"
-		if len(srv.ScmList) != 1 {
+		if len(cfg.DeviceList) != 1 {
 			err = errors.New(msgScmBadDevList)
 			break
 		}
 
-		dev = srv.ScmList[0]
+		dev = cfg.DeviceList[0]
 		if dev == "" {
 			err = errors.New(msgScmDevEmpty)
 		}
-	case scmRAM:
+	case storage.ScmClassRAM:
 		dev = "tmpfs"
 		mntType = "tmpfs"
 
-		if srv.ScmSize >= 0 {
-			opts = "size=" + strconv.Itoa(srv.ScmSize) + "g"
+		if cfg.RamdiskSize >= 0 {
+			opts = "size=" + strconv.Itoa(cfg.RamdiskSize) + "g"
 		}
 	default:
-		err = errors.New(string(srv.ScmClass) + ": " + msgScmClassNotSupported)
+		err = errors.Errorf("%s: %s", cfg.Class, msgScmClassNotSupported)
 	}
 
 	return
@@ -472,11 +474,11 @@ func getMntParams(srv *IOServerConfig) (mntType string, dev string, opts string,
 func (s *scmStorage) makeMount(devPath string, mntPoint string, mntType string,
 	mntOpts string) (err error) {
 
-	if err = s.config.ext.mkdir(mntPoint); err != nil {
+	if err = s.ext.mkdir(mntPoint); err != nil {
 		return
 	}
 
-	if err = s.config.ext.mount(devPath, mntPoint, mntType, uintptr(0), mntOpts); err != nil {
+	if err = s.ext.mount(devPath, mntPoint, mntType, uintptr(0), mntOpts); err != nil {
 		return
 	}
 
@@ -485,26 +487,25 @@ func (s *scmStorage) makeMount(devPath string, mntPoint string, mntType string,
 
 // newMntRet creates and populates NVMe ctrlr result and logs error through
 // newState.
-func newMntRet(op string, mntPoint string, status pb.ResponseStatus, errMsg string,
+func newMntRet(log logging.Logger, op string, mntPoint string, status pb.ResponseStatus, errMsg string,
 	infoMsg string) *pb.ScmMountResult {
 
 	return &pb.ScmMountResult{
 		Mntpoint: mntPoint,
-		State:    newState(status, errMsg, infoMsg, "scm mount "+op),
+		State:    newState(log, status, errMsg, infoMsg, "scm mount "+op),
 	}
 }
 
 // Format attempts to format (forcefully) SCM mounts on a given server
 // as specified in config file and populates resp ScmMountResult.
-func (s *scmStorage) Format(i int, results *(types.ScmMountResults)) {
-	srv := s.config.Servers[i]
-	mntPoint := srv.ScmMount
-	log.Debugf("performing SCM device reset, format and mount")
+func (s *scmStorage) Format(cfg storage.ScmConfig, results *(types.ScmMountResults)) {
+	mntPoint := cfg.MountPoint
+	s.log.Debugf("performing SCM device reset, format and mount")
 
 	// wraps around addMret to provide format specific function, ignore infoMsg
 	addMretFormat := func(status pb.ResponseStatus, errMsg string) {
 		*results = append(*results,
-			newMntRet("format", mntPoint, status, errMsg, ""))
+			newMntRet(s.log, "format", mntPoint, status, errMsg, ""))
 	}
 
 	if !s.initialized {
@@ -522,60 +523,60 @@ func (s *scmStorage) Format(i int, results *(types.ScmMountResults)) {
 		return
 	}
 
-	mntType, devPath, mntOpts, err := getMntParams(srv)
+	mntType, devPath, mntOpts, err := getMntParams(cfg)
 	if err != nil {
 		addMretFormat(pb.ResponseStatus_CTRL_ERR_CONF, err.Error())
 		return
 	}
 
-	switch srv.ScmClass {
-	case scmDCPM:
+	switch cfg.Class {
+	case storage.ScmClassDCPM:
 		if err := s.clearMount(mntPoint); err != nil {
 			addMretFormat(pb.ResponseStatus_CTRL_ERR_APP, err.Error())
 			return
 		}
 
-		log.Debugf("formatting scm device %s, should be quick!...", devPath)
+		s.log.Debugf("formatting scm device %s, should be quick!...", devPath)
 
 		if err := s.reFormat(devPath); err != nil {
 			addMretFormat(pb.ResponseStatus_CTRL_ERR_APP, err.Error())
 			return
 		}
 
-		log.Debugf("scm format complete.\n")
-	case scmRAM:
+		s.log.Debugf("scm format complete.\n")
+	case storage.ScmClassRAM:
 		if err := s.clearMount(mntPoint); err != nil {
 			addMretFormat(pb.ResponseStatus_CTRL_ERR_APP, err.Error())
 			return
 		}
 
-		log.Debugf("no scm_size specified in config for ram tmpfs")
+		s.log.Debugf("no scm_size specified in config for ram tmpfs")
 	}
 
-	log.Debugf("mounting scm device %s at %s (%s)...", devPath, mntPoint, mntType)
+	s.log.Debugf("mounting scm device %s at %s (%s)...", devPath, mntPoint, mntType)
 
 	if err := s.makeMount(devPath, mntPoint, mntType, mntOpts); err != nil {
 		addMretFormat(pb.ResponseStatus_CTRL_ERR_APP, err.Error())
 		return
 	}
 
-	log.Debugf("scm mount complete.\n")
+	s.log.Debugf("scm mount complete.\n")
 	addMretFormat(pb.ResponseStatus_CTRL_SUCCESS, "")
 
-	log.Debugf("SCM device reset, format and mount completed")
+	s.log.Debugf("SCM device reset, format and mount completed")
 	s.formatted = true
 }
 
 // Update is currently a placeholder method stubbing SCM module fw update.
 func (s *scmStorage) Update(
-	i int, req *pb.UpdateScmReq, results *(types.ScmModuleResults)) {
+	cfg storage.ScmConfig, req *pb.UpdateScmReq, results *(types.ScmModuleResults)) {
 
 	// respond with single result indicating no implementation
 	*results = append(
 		*results,
 		&pb.ScmModuleResult{
 			Loc: &pb.ScmModule_Location{},
-			State: newState(pb.ResponseStatus_CTRL_NO_IMPL,
+			State: newState(s.log, pb.ResponseStatus_CTRL_NO_IMPL,
 				msgScmUpdateNotImpl, "", "scm module update"),
 		})
 }
@@ -583,10 +584,11 @@ func (s *scmStorage) Update(
 // newScmStorage creates a new instance of ScmStorage struct.
 //
 // NvmMgmt is the implementation of ipmctl interface in ipmctl
-func newScmStorage(config *Configuration) *scmStorage {
+func newScmStorage(log logging.Logger, ext External) *scmStorage {
 	return &scmStorage{
+		log:    log,
+		ext:    ext,
 		ipmctl: &ipmctl.NvmMgmt{},
-		config: config,
 		runCmd: run,
 	}
 }
