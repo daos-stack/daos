@@ -72,7 +72,7 @@ def create_server_yaml(basepath, log_filename):
 
     Args:
         basepath (str): DAOS install basepath
-
+        log_filename (str): log file name
     Raises:
         ServerFailed: if there is an reading/writing yaml files
 
@@ -115,11 +115,9 @@ def create_server_yaml(basepath, log_filename):
             elif key in default_value_set:
                 default_value_set[key] = new_value_set['server_config'][key]
 
-    print("default_value_set['servers'][0]['log_file']:{}".format(default_value_set['servers'][0]['log_file']))
     # if sepcific log file name specified use that
     if log_filename:
         default_value_set['servers'][0]['log_file'] = log_filename
-    print("default_value_set['servers'][0]['log_file']:{}".format(default_value_set['servers'][0]['log_file']))
     # Disable NVMe from baseline data/daos_server_baseline.yml
     set_nvme_mode(default_value_set, "nvme")
 
@@ -137,7 +135,7 @@ def create_server_yaml(basepath, log_filename):
 
 
 def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
-               clean=True, log_filename=None):
+               log_filename=None):
     """Launch DAOS servers in accordance with the supplied hostfile.
 
     Args:
@@ -147,8 +145,7 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
         uri_path (str, optional): path to uri file. Defaults to None.
         env_dict (dict, optional): dictionary on env variable names and values.
             Defaults to None.
-        clean (bool, optional): remove files in /mnt/daos. Defaults to True.
-
+        log_filename (str): log file name
     Raises:
         ServerFailed: if there is an error starting the servers
 

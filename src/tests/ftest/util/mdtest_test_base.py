@@ -46,8 +46,8 @@ class MdtestBase(TestWithServers):
 
     def setUp(self):
         """Set up each test case."""
-        # obtain log path names
-        self.log_path(log_name=True)
+        # obtain separate logs
+        self.separate_logs()
         # Start the servers and agents
         super(MdtestBase, self).setUp()
 
@@ -65,8 +65,6 @@ class MdtestBase(TestWithServers):
             if self.pool is not None:
                 self.pool.destroy(1)
         finally:
-            # collect separate logs
-            self.collect_separate_logs()
             # Stop the servers and agents
             super(MdtestBase, self).tearDown()
 

@@ -49,15 +49,13 @@ class DaosCoreBase(TestWithServers):
         self.subtest_name = self.params.get("test_name",
                                             '/run/daos_tests/Tests/*')
         self.subtest_name = self.subtest_name.replace(" ", "_")
-        self.log_path(self.subtest_name)
+        # obtain separate logs
+        self.separate_logs(self.subtest_name)
         super(DaosCoreBase, self).setUp()
 
     def tearDown(self):
         """Tear down after each test."""
         super(DaosCoreBase, self).tearDown()
-
-        # collect separate debug logs
-        self.collect_separate_logs()
 
     def run_subtest(self):
         """Run daos_test with a subtest argument."""
