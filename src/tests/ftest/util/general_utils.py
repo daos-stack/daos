@@ -43,9 +43,6 @@ from ClusterShell.NodeSet import NodeSet
 class DaosTestError(Exception):
     """DAOS API exception class."""
 
-class ClusterCommandFailed(Exception):
-    """ Exception for ClusterCommandFailed """
-
 def run_task(hosts, command, timeout=None):
     """Create a task to run a command on each host in parallel.
 
@@ -423,28 +420,6 @@ def verify_rebuild(pool, log, to_be_rebuilt, object_qty, record_qty, errors=0):
                 "Unexpected {} value: expected={}, detected={}".format(
                     key, expected, detected))
     return messages
-
-def clustershell_execute(cmd, hosts, timeout=60):
-    """
-    Run command on given hosts using cluster shell utility.
-    Args:
-        cmd (str): command in string format to run on cluster
-        hosts (list):  a list of host names
-        timeout (int): command timeout in seconds
-    Raise:
-        ClusterCommandFailed: raised in case of command failed on any host
-                              return dictionary with hostname,rc,output.
-    """
-    rc_err = {}
-    local_task = task_self()
-    local_task.run(cmd, nodes=','.join(hosts), timeout=timeout)
-    for rc_code, keys in local_task.iter_retcodes():
-        if rc_code is not 0:
-            rc_err[keys[0]] = 'RC={}, output={}'.format(rc_code,
-                                                        local_task.
-                                                        node_buffer(keys[0]))
-    if rc_err:
-        raise ClusterCommandFailed(rc_err)
 
 def check_pool_files(log, hosts, uuid):
     """Check if pool files exist on the specified list of hosts.
