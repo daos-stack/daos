@@ -56,8 +56,6 @@ class MdtestBase(TestWithServers):
         self.mdtest_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/mdtest/client_processes/*')
         self.manager = self.params.get("manager", '/run/mdtest/*', "MPICH")
-        self.test_id = str(self.name).split("-")[0]
-        print("self.test_id:{}".format(self.test_id))
 
     def tearDown(self):
         """Tear down each test case."""

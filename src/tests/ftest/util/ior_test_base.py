@@ -45,7 +45,7 @@ class IorTestBase(TestWithServers):
     def setUp(self):
         """Set up each test case."""
         # obtain separate logs
-        #self.separate_logs()
+        self.separate_logs()
         # Start the servers and agents
         super(IorTestBase, self).setUp()
 
