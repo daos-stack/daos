@@ -2136,7 +2136,1703 @@ _Pragma("GCC diagnostic pop")
 
 
 
-CRT_RPC_DEFINE(obj_fetch, DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
+//CRT_RPC_DEFINE(obj_fetch, DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
+
+static int crt_proc_struct_obj_fetch_in(crt_proc_t proc,
+					struct obj_fetch_in *ptr)
+{
+	int rc = 0;
+	rc = crt_proc_struct_dtx_id(proc, &ptr->orw_dti);
+	if (rc)
+		do {
+			__typeof__(rc) __rc = (rc);
+			(void) (__rc);
+			goto out;
+		}
+		while (0);
+	rc = crt_proc_daos_unit_oid_t(proc, &ptr->orw_oid);
+	if (rc)
+		do {
+			__typeof__(rc) __rc = (rc);
+			(void) (__rc);
+			goto out;
+		}
+		while (0);
+	rc = crt_proc_uuid_t(proc, &ptr->orw_pool_uuid);
+	if (rc)
+		do {
+			__typeof__(rc) __rc = (rc);
+			(void) (__rc);
+			goto out;
+		}
+		while (0);
+	rc = crt_proc_uuid_t(proc, &ptr->orw_co_hdl);
+	if (rc)
+		do {
+			__typeof__(rc) __rc = (rc);
+			(void) (__rc);
+			goto out;
+		}
+		while (0);
+	rc = crt_proc_uuid_t(proc, &ptr->orw_co_uuid);
+	if (rc)
+		do {
+			__typeof__(rc) __rc = (rc);
+			(void) (__rc);
+			goto out;
+		}
+		while (0);
+	rc = crt_proc_uint64_t(proc, &ptr->orw_epoch);
+	if (rc)
+		do {
+			__typeof__(rc) __rc = (rc);
+			(void) (__rc);
+			goto out;
+		}
+		while (0);
+	rc = crt_proc_uint64_t(proc, &ptr->orw_dkey_hash);
+	if (rc)
+		do {
+			__typeof__(rc) __rc = (rc);
+			(void) (__rc);
+			goto out;
+		}
+		while (0);
+	rc = crt_proc_uint32_t(proc, &ptr->orw_map_ver);
+	if (rc)
+		do {
+			__typeof__(rc) __rc = (rc);
+			(void) (__rc);
+			goto out;
+		}
+		while (0);
+	rc = crt_proc_uint32_t(proc, &ptr->orw_nr);
+	if (rc)
+		do {
+			__typeof__(rc) __rc = (rc);
+			(void) (__rc);
+			goto out;
+		}
+		while (0);
+	rc = crt_proc_uint32_t(proc, &ptr->orw_start_shard);
+	if (rc)
+		do {
+			__typeof__(rc) __rc = (rc);
+			(void) (__rc);
+			goto out;
+		}
+		while (0);
+	rc = crt_proc_uint32_t(proc, &ptr->orw_flags);
+	if (rc)
+		do {
+			__typeof__(rc) __rc = (rc);
+			(void) (__rc);
+			goto out;
+		}
+		while (0);
+
+
+	daos_key_t *tmp_iov = &ptr->orw_dkey;
+	if (tmp_iov->iov_buf_len < tmp_iov->iov_len) {
+		D_ERROR("RYON: Issue with IOV: iov buf len ("DF_U64")"
+								   " < iov len "DF_U64"\n",
+			tmp_iov->iov_buf_len, tmp_iov->iov_len);
+		print_trace();
+	}
+	rc = crt_proc_d_iov_t(proc, &ptr->orw_dkey);
+	if (rc)
+		do {
+			__typeof__(rc) __rc = (rc);
+			(void) (__rc);
+			goto out;
+		}
+		while (0);
+	{
+		uint64_t      count    = ptr->orw_dti_cos.ca_count;
+		struct dtx_id **e_ptrp = &ptr->orw_dti_cos.ca_arrays;
+		struct dtx_id *e_ptr   = ptr->orw_dti_cos.ca_arrays;
+		int           i;
+		crt_proc_op_t proc_op;
+		rc = crt_proc_get_op(proc, &proc_op);
+		if (rc)
+			do {
+				__typeof__(rc) __rc = (rc);
+				(void) (__rc);
+				goto out;
+			}
+			while (0);
+		rc = crt_proc_uint64_t(proc, &count);
+		if (rc)
+			do {
+				__typeof__(rc) __rc = (rc);
+				(void) (__rc);
+				goto out;
+			}
+			while (0);
+		ptr->orw_dti_cos.ca_count = count;
+		if (count == 0) {
+			if (proc_op == CRT_PROC_DECODE)
+				*e_ptrp = ((void *) 0);
+			goto next_field_14;
+		}
+		if (proc_op == CRT_PROC_DECODE) {
+			do {
+				(e_ptr) = (__typeof__(e_ptr)) calloc(
+					(int) count, (sizeof(*e_ptr)));
+				do {
+					if (({
+						_Bool __rc;
+						__rc = d_fault_inject &&
+						       d_should_fail(
+							       d_fault_attr_mem);
+						if (__rc)
+							do {
+								int __tmp_mask;
+								do {
+									(__tmp_mask) = d_log_check(
+										(DLOG_WARN) |
+										daos_object_logfac);
+									if (__tmp_mask)
+										d_log(__tmp_mask,
+										      "%s:%d %s() " "fault_id %d, injecting fault.\n",
+										      "_file_name_",
+										      2139,
+										      "_function_name_",
+										      d_fault_attr_mem->fa_id);
+								}
+								while (0);
+							}
+							while (0);
+						__rc;
+					})) {
+						free(e_ptr);
+						e_ptr = ((void *) 0);
+					}
+					if ((1) && (e_ptr) != ((void *) 0)) {
+						if ((int) count <= 1)
+							do {
+								int __tmp_mask;
+								do {
+									(__tmp_mask) = d_log_check(
+										(DB_MEM) |
+										daos_object_logfac);
+									if (__tmp_mask)
+										d_log(__tmp_mask,
+										      "%s:%d %s() " "alloc(" "calloc" ") '" "e_ptr" "': %i at %p.\n",
+										      "_file_name_",
+										      2139,
+										      "_function_name_",
+										      (int) (sizeof(*e_ptr)),
+										      (e_ptr));
+								}
+								while (0);
+							}
+							while (0);
+						else
+							do {
+								int __tmp_mask;
+								do {
+									(__tmp_mask) = d_log_check(
+										(DB_MEM) |
+										daos_object_logfac);
+									if (__tmp_mask)
+										d_log(__tmp_mask,
+										      "%s:%d %s() " "alloc(" "calloc" ") '" "e_ptr" "': %i * '" "(int)count" "':%i at %p.\n",
+										      "_file_name_",
+										      2139,
+										      "_function_name_",
+										      (int) (sizeof(*e_ptr)),
+										      (int) ((int) count),
+										      (e_ptr));
+								}
+								while (0);
+							}
+							while (0);
+						break;
+					}
+					(void) (0);
+					if ((int) count >= 1)
+						do {
+							int __tmp_mask;
+							do {
+								(__tmp_mask) = d_log_check(
+									(DLOG_ERR) |
+									daos_object_logfac);
+								if (__tmp_mask)
+									d_log(__tmp_mask,
+									      "%s:%d %s() " "out of memory (tried to " "calloc" " '" "e_ptr" "': %i)\n",
+									      "_file_name_",
+									      2139,
+									      "_function_name_",
+									      (int) ((sizeof(*e_ptr)) *
+										     ((int) count)));
+							}
+							while (0);
+						}
+						while (0);
+					else
+						do {
+							int __tmp_mask;
+							do {
+								(__tmp_mask) = d_log_check(
+									(DLOG_ERR) |
+									daos_object_logfac);
+								if (__tmp_mask)
+									d_log(__tmp_mask,
+									      "%s:%d %s() " "out of memory (tried to " "calloc" " '" "e_ptr" "': %i)\n",
+									      "_file_name_",
+									      2139,
+									      "_function_name_",
+									      (int) (sizeof(*e_ptr)));
+							}
+							while (0);
+						}
+						while (0);
+				}
+				while (0);
+			}
+			while (0);
+			if (e_ptr == ((void *) 0))
+				do {
+					__typeof__(rc = -DER_NOMEM) __rc = (rc = -DER_NOMEM);
+					(void) (__rc);
+					goto out;
+				}
+				while (0);
+			*e_ptrp = e_ptr;
+		}
+		for (i                    = 0; i < count; i++) {
+			rc = crt_proc_struct_dtx_id(proc, &e_ptr[i]);
+			if (rc)
+				do {
+					__typeof__(rc) __rc = (rc);
+					(void) (__rc);
+					goto out;
+				}
+				while (0);
+		}
+		if (proc_op == CRT_PROC_FREE)
+			do {
+				do {
+					int __tmp_mask;
+					do {
+						(__tmp_mask) = d_log_check(
+							(DB_MEM) |
+							daos_object_logfac);
+						if (__tmp_mask)
+							d_log(__tmp_mask,
+							      "%s:%d %s() " "free '" "e_ptr" "' at %p.\n",
+							      "_file_name_",
+							      2139,
+							      "_function_name_",
+							      (e_ptr));
+					}
+					while (0);
+				}
+				while (0);
+				free(e_ptr);
+				(e_ptr) = ((void *) 0);
+			}
+			while (0);
+	}
+	next_field_14:
+	{
+		uint64_t      count    = ptr->orw_iods.ca_count;
+		daos_iod_t    **e_ptrp = &ptr->orw_iods.ca_arrays;
+		daos_iod_t    *e_ptr   = ptr->orw_iods.ca_arrays;
+		int           i;
+		crt_proc_op_t proc_op;
+		rc                     = crt_proc_get_op(proc, &proc_op);
+		if (rc)
+			do {
+				__typeof__(rc) __rc = (rc);
+				(void) (__rc);
+				goto out;
+			}
+			while (0);
+		rc = crt_proc_uint64_t(proc, &count);
+		if (rc)
+			do {
+				__typeof__(rc) __rc = (rc);
+				(void) (__rc);
+				goto out;
+			}
+			while (0);
+		ptr->orw_iods.ca_count = count;
+		if (count == 0) {
+			if (proc_op == CRT_PROC_DECODE)
+				*e_ptrp = ((void *) 0);
+			goto next_field_15;
+		}
+		if (proc_op == CRT_PROC_DECODE) {
+			do {
+				(e_ptr) = (__typeof__(e_ptr)) calloc(
+					(int) count, (sizeof(*e_ptr)));
+				do {
+					if (({
+						_Bool __rc;
+						__rc = d_fault_inject &&
+						       d_should_fail(
+							       d_fault_attr_mem);
+						if (__rc)
+							do {
+								int __tmp_mask;
+								do {
+									(__tmp_mask) = d_log_check(
+										(DLOG_WARN) |
+										daos_object_logfac);
+									if (__tmp_mask)
+										d_log(__tmp_mask,
+										      "%s:%d %s() " "fault_id %d, injecting fault.\n",
+										      "_file_name_",
+										      2139,
+										      "_function_name_",
+										      d_fault_attr_mem->fa_id);
+								}
+								while (0);
+							}
+							while (0);
+						__rc;
+					})) {
+						free(e_ptr);
+						e_ptr = ((void *) 0);
+					}
+					if ((1) && (e_ptr) != ((void *) 0)) {
+						if ((int) count <= 1)
+							do {
+								int __tmp_mask;
+								do {
+									(__tmp_mask) = d_log_check(
+										(DB_MEM) |
+										daos_object_logfac);
+									if (__tmp_mask)
+										d_log(__tmp_mask,
+										      "%s:%d %s() " "alloc(" "calloc" ") '" "e_ptr" "': %i at %p.\n",
+										      "_file_name_",
+										      2139,
+										      "_function_name_",
+										      (int) (sizeof(*e_ptr)),
+										      (e_ptr));
+								}
+								while (0);
+							}
+							while (0);
+						else
+							do {
+								int __tmp_mask;
+								do {
+									(__tmp_mask) = d_log_check(
+										(DB_MEM) |
+										daos_object_logfac);
+									if (__tmp_mask)
+										d_log(__tmp_mask,
+										      "%s:%d %s() " "alloc(" "calloc" ") '" "e_ptr" "': %i * '" "(int)count" "':%i at %p.\n",
+										      "_file_name_",
+										      2139,
+										      "_function_name_",
+										      (int) (sizeof(*e_ptr)),
+										      (int) ((int) count),
+										      (e_ptr));
+								}
+								while (0);
+							}
+							while (0);
+						break;
+					}
+					(void) (0);
+					if ((int) count >= 1)
+						do {
+							int __tmp_mask;
+							do {
+								(__tmp_mask) = d_log_check(
+									(DLOG_ERR) |
+									daos_object_logfac);
+								if (__tmp_mask)
+									d_log(__tmp_mask,
+									      "%s:%d %s() " "out of memory (tried to " "calloc" " '" "e_ptr" "': %i)\n",
+									      "_file_name_",
+									      2139,
+									      "_function_name_",
+									      (int) ((sizeof(*e_ptr)) *
+										     ((int) count)));
+							}
+							while (0);
+						}
+						while (0);
+					else
+						do {
+							int __tmp_mask;
+							do {
+								(__tmp_mask) = d_log_check(
+									(DLOG_ERR) |
+									daos_object_logfac);
+								if (__tmp_mask)
+									d_log(__tmp_mask,
+									      "%s:%d %s() " "out of memory (tried to " "calloc" " '" "e_ptr" "': %i)\n",
+									      "_file_name_",
+									      2139,
+									      "_function_name_",
+									      (int) (sizeof(*e_ptr)));
+							}
+							while (0);
+						}
+						while (0);
+				}
+				while (0);
+			}
+			while (0);
+			if (e_ptr == ((void *) 0))
+				do {
+					__typeof__(rc = -DER_NOMEM) __rc = (rc = -DER_NOMEM);
+					(void) (__rc);
+					goto out;
+				}
+				while (0);
+			*e_ptrp = e_ptr;
+		}
+		for (i                 = 0; i < count; i++) {
+			rc = crt_proc_daos_iod_t(proc, &e_ptr[i]);
+			if (rc)
+				do {
+					__typeof__(rc) __rc = (rc);
+					(void) (__rc);
+					goto out;
+				}
+				while (0);
+		}
+		if (proc_op == CRT_PROC_FREE)
+			do {
+				do {
+					int __tmp_mask;
+					do {
+						(__tmp_mask) = d_log_check(
+							(DB_MEM) |
+							daos_object_logfac);
+						if (__tmp_mask)
+							d_log(__tmp_mask,
+							      "%s:%d %s() " "free '" "e_ptr" "' at %p.\n",
+							      "_file_name_",
+							      2139,
+							      "_function_name_",
+							      (e_ptr));
+					}
+					while (0);
+				}
+				while (0);
+				free(e_ptr);
+				(e_ptr) = ((void *) 0);
+			}
+			while (0);
+	}
+	next_field_15:
+	{
+		uint64_t      count    = ptr->orw_sgls.ca_count;
+		d_sg_list_t   **e_ptrp = &ptr->orw_sgls.ca_arrays;
+		d_sg_list_t   *e_ptr   = ptr->orw_sgls.ca_arrays;
+		int           i;
+		crt_proc_op_t proc_op;
+		rc                     = crt_proc_get_op(proc, &proc_op);
+		if (rc)
+			do {
+				__typeof__(rc) __rc = (rc);
+				(void) (__rc);
+				goto out;
+			}
+			while (0);
+		rc = crt_proc_uint64_t(proc, &count);
+		if (rc)
+			do {
+				__typeof__(rc) __rc = (rc);
+				(void) (__rc);
+				goto out;
+			}
+			while (0);
+		ptr->orw_sgls.ca_count = count;
+		if (count == 0) {
+			if (proc_op == CRT_PROC_DECODE)
+				*e_ptrp = ((void *) 0);
+			goto next_field_16;
+		}
+		if (proc_op == CRT_PROC_DECODE) {
+			do {
+				(e_ptr) = (__typeof__(e_ptr)) calloc(
+					(int) count, (sizeof(*e_ptr)));
+				do {
+					if (({
+						_Bool __rc;
+						__rc = d_fault_inject &&
+						       d_should_fail(
+							       d_fault_attr_mem);
+						if (__rc)
+							do {
+								int __tmp_mask;
+								do {
+									(__tmp_mask) = d_log_check(
+										(DLOG_WARN) |
+										daos_object_logfac);
+									if (__tmp_mask)
+										d_log(__tmp_mask,
+										      "%s:%d %s() " "fault_id %d, injecting fault.\n",
+										      "_file_name_",
+										      2139,
+										      "_function_name_",
+										      d_fault_attr_mem->fa_id);
+								}
+								while (0);
+							}
+							while (0);
+						__rc;
+					})) {
+						free(e_ptr);
+						e_ptr = ((void *) 0);
+					}
+					if ((1) && (e_ptr) != ((void *) 0)) {
+						if ((int) count <= 1)
+							do {
+								int __tmp_mask;
+								do {
+									(__tmp_mask) = d_log_check(
+										(DB_MEM) |
+										daos_object_logfac);
+									if (__tmp_mask)
+										d_log(__tmp_mask,
+										      "%s:%d %s() " "alloc(" "calloc" ") '" "e_ptr" "': %i at %p.\n",
+										      "_file_name_",
+										      2139,
+										      "_function_name_",
+										      (int) (sizeof(*e_ptr)),
+										      (e_ptr));
+								}
+								while (0);
+							}
+							while (0);
+						else
+							do {
+								int __tmp_mask;
+								do {
+									(__tmp_mask) = d_log_check(
+										(DB_MEM) |
+										daos_object_logfac);
+									if (__tmp_mask)
+										d_log(__tmp_mask,
+										      "%s:%d %s() " "alloc(" "calloc" ") '" "e_ptr" "': %i * '" "(int)count" "':%i at %p.\n",
+										      "_file_name_",
+										      2139,
+										      "_function_name_",
+										      (int) (sizeof(*e_ptr)),
+										      (int) ((int) count),
+										      (e_ptr));
+								}
+								while (0);
+							}
+							while (0);
+						break;
+					}
+					(void) (0);
+					if ((int) count >= 1)
+						do {
+							int __tmp_mask;
+							do {
+								(__tmp_mask) = d_log_check(
+									(DLOG_ERR) |
+									daos_object_logfac);
+								if (__tmp_mask)
+									d_log(__tmp_mask,
+									      "%s:%d %s() " "out of memory (tried to " "calloc" " '" "e_ptr" "': %i)\n",
+									      "_file_name_",
+									      2139,
+									      "_function_name_",
+									      (int) ((sizeof(*e_ptr)) *
+										     ((int) count)));
+							}
+							while (0);
+						}
+						while (0);
+					else
+						do {
+							int __tmp_mask;
+							do {
+								(__tmp_mask) = d_log_check(
+									(DLOG_ERR) |
+									daos_object_logfac);
+								if (__tmp_mask)
+									d_log(__tmp_mask,
+									      "%s:%d %s() " "out of memory (tried to " "calloc" " '" "e_ptr" "': %i)\n",
+									      "_file_name_",
+									      2139,
+									      "_function_name_",
+									      (int) (sizeof(*e_ptr)));
+							}
+							while (0);
+						}
+						while (0);
+				}
+				while (0);
+			}
+			while (0);
+			if (e_ptr == ((void *) 0))
+				do {
+					__typeof__(rc = -DER_NOMEM) __rc = (rc = -DER_NOMEM);
+					(void) (__rc);
+					goto out;
+				}
+				while (0);
+			*e_ptrp = e_ptr;
+		}
+		for (i                 = 0; i < count; i++) {
+			rc = crt_proc_d_sg_list_t(proc, &e_ptr[i]);
+			if (rc)
+				do {
+					__typeof__(rc) __rc = (rc);
+					(void) (__rc);
+					goto out;
+				}
+				while (0);
+		}
+		if (proc_op == CRT_PROC_FREE)
+			do {
+				do {
+					int __tmp_mask;
+					do {
+						(__tmp_mask) = d_log_check(
+							(DB_MEM) |
+							daos_object_logfac);
+						if (__tmp_mask)
+							d_log(__tmp_mask,
+							      "%s:%d %s() " "free '" "e_ptr" "' at %p.\n",
+							      "_file_name_",
+							      2139,
+							      "_function_name_",
+							      (e_ptr));
+					}
+					while (0);
+				}
+				while (0);
+				free(e_ptr);
+				(e_ptr) = ((void *) 0);
+			}
+			while (0);
+	}
+	next_field_16:
+	{
+		uint64_t      count    = ptr->orw_bulks.ca_count;
+		crt_bulk_t    **e_ptrp = &ptr->orw_bulks.ca_arrays;
+		crt_bulk_t    *e_ptr   = ptr->orw_bulks.ca_arrays;
+		int           i;
+		crt_proc_op_t proc_op;
+		rc                     = crt_proc_get_op(proc, &proc_op);
+		if (rc)
+			do {
+				__typeof__(rc) __rc = (rc);
+				(void) (__rc);
+				goto out;
+			}
+			while (0);
+		rc = crt_proc_uint64_t(proc, &count);
+		if (rc)
+			do {
+				__typeof__(rc) __rc = (rc);
+				(void) (__rc);
+				goto out;
+			}
+			while (0);
+		ptr->orw_bulks.ca_count = count;
+		if (count == 0) {
+			if (proc_op == CRT_PROC_DECODE)
+				*e_ptrp = ((void *) 0);
+			goto next_field_17;
+		}
+		if (proc_op == CRT_PROC_DECODE) {
+			do {
+				(e_ptr) = (__typeof__(e_ptr)) calloc(
+					(int) count, (sizeof(*e_ptr)));
+				do {
+					if (({
+						_Bool __rc;
+						__rc = d_fault_inject &&
+						       d_should_fail(
+							       d_fault_attr_mem);
+						if (__rc)
+							do {
+								int __tmp_mask;
+								do {
+									(__tmp_mask) = d_log_check(
+										(DLOG_WARN) |
+										daos_object_logfac);
+									if (__tmp_mask)
+										d_log(__tmp_mask,
+										      "%s:%d %s() " "fault_id %d, injecting fault.\n",
+										      "_file_name_",
+										      2139,
+										      "_function_name_",
+										      d_fault_attr_mem->fa_id);
+								}
+								while (0);
+							}
+							while (0);
+						__rc;
+					})) {
+						free(e_ptr);
+						e_ptr = ((void *) 0);
+					}
+					if ((1) && (e_ptr) != ((void *) 0)) {
+						if ((int) count <= 1)
+							do {
+								int __tmp_mask;
+								do {
+									(__tmp_mask) = d_log_check(
+										(DB_MEM) |
+										daos_object_logfac);
+									if (__tmp_mask)
+										d_log(__tmp_mask,
+										      "%s:%d %s() " "alloc(" "calloc" ") '" "e_ptr" "': %i at %p.\n",
+										      "_file_name_",
+										      2139,
+										      "_function_name_",
+										      (int) (sizeof(*e_ptr)),
+										      (e_ptr));
+								}
+								while (0);
+							}
+							while (0);
+						else
+							do {
+								int __tmp_mask;
+								do {
+									(__tmp_mask) = d_log_check(
+										(DB_MEM) |
+										daos_object_logfac);
+									if (__tmp_mask)
+										d_log(__tmp_mask,
+										      "%s:%d %s() " "alloc(" "calloc" ") '" "e_ptr" "': %i * '" "(int)count" "':%i at %p.\n",
+										      "_file_name_",
+										      2139,
+										      "_function_name_",
+										      (int) (sizeof(*e_ptr)),
+										      (int) ((int) count),
+										      (e_ptr));
+								}
+								while (0);
+							}
+							while (0);
+						break;
+					}
+					(void) (0);
+					if ((int) count >= 1)
+						do {
+							int __tmp_mask;
+							do {
+								(__tmp_mask) = d_log_check(
+									(DLOG_ERR) |
+									daos_object_logfac);
+								if (__tmp_mask)
+									d_log(__tmp_mask,
+									      "%s:%d %s() " "out of memory (tried to " "calloc" " '" "e_ptr" "': %i)\n",
+									      "_file_name_",
+									      2139,
+									      "_function_name_",
+									      (int) ((sizeof(*e_ptr)) *
+										     ((int) count)));
+							}
+							while (0);
+						}
+						while (0);
+					else
+						do {
+							int __tmp_mask;
+							do {
+								(__tmp_mask) = d_log_check(
+									(DLOG_ERR) |
+									daos_object_logfac);
+								if (__tmp_mask)
+									d_log(__tmp_mask,
+									      "%s:%d %s() " "out of memory (tried to " "calloc" " '" "e_ptr" "': %i)\n",
+									      "_file_name_",
+									      2139,
+									      "_function_name_",
+									      (int) (sizeof(*e_ptr)));
+							}
+							while (0);
+						}
+						while (0);
+				}
+				while (0);
+			}
+			while (0);
+			if (e_ptr == ((void *) 0))
+				do {
+					__typeof__(rc = -DER_NOMEM) __rc = (rc = -DER_NOMEM);
+					(void) (__rc);
+					goto out;
+				}
+				while (0);
+			*e_ptrp = e_ptr;
+		}
+		for (i                  = 0; i < count; i++) {
+			rc = crt_proc_crt_bulk_t(proc, &e_ptr[i]);
+			if (rc)
+				do {
+					__typeof__(rc) __rc = (rc);
+					(void) (__rc);
+					goto out;
+				}
+				while (0);
+		}
+		if (proc_op == CRT_PROC_FREE)
+			do {
+				do {
+					int __tmp_mask;
+					do {
+						(__tmp_mask) = d_log_check(
+							(DB_MEM) |
+							daos_object_logfac);
+						if (__tmp_mask)
+							d_log(__tmp_mask,
+							      "%s:%d %s() " "free '" "e_ptr" "' at %p.\n",
+							      "_file_name_",
+							      2139,
+							      "_function_name_",
+							      (e_ptr));
+					}
+					while (0);
+				}
+				while (0);
+				free(e_ptr);
+				(e_ptr) = ((void *) 0);
+			}
+			while (0);
+	}
+	next_field_17:
+	{
+		uint64_t              count    = ptr->orw_shard_tgts.ca_count;
+		struct daos_shard_tgt **e_ptrp = &ptr->orw_shard_tgts.ca_arrays;
+		struct daos_shard_tgt *e_ptr   = ptr->orw_shard_tgts.ca_arrays;
+		int                   i;
+		crt_proc_op_t         proc_op;
+		rc                             = crt_proc_get_op(proc,
+								 &proc_op);
+		if (rc)
+			do {
+				__typeof__(rc) __rc = (rc);
+				(void) (__rc);
+				goto out;
+			}
+			while (0);
+		rc = crt_proc_uint64_t(proc, &count);
+		if (rc)
+			do {
+				__typeof__(rc) __rc = (rc);
+				(void) (__rc);
+				goto out;
+			}
+			while (0);
+		ptr->orw_shard_tgts.ca_count = count;
+		if (count == 0) {
+			if (proc_op == CRT_PROC_DECODE)
+				*e_ptrp = ((void *) 0);
+			goto next_field_18;
+		}
+		if (proc_op == CRT_PROC_DECODE) {
+			do {
+				(e_ptr) = (__typeof__(e_ptr)) calloc(
+					(int) count, (sizeof(*e_ptr)));
+				do {
+					if (({
+						_Bool __rc;
+						__rc = d_fault_inject &&
+						       d_should_fail(
+							       d_fault_attr_mem);
+						if (__rc)
+							do {
+								int __tmp_mask;
+								do {
+									(__tmp_mask) = d_log_check(
+										(DLOG_WARN) |
+										daos_object_logfac);
+									if (__tmp_mask)
+										d_log(__tmp_mask,
+										      "%s:%d %s() " "fault_id %d, injecting fault.\n",
+										      "_file_name_",
+										      2139,
+										      "_function_name_",
+										      d_fault_attr_mem->fa_id);
+								}
+								while (0);
+							}
+							while (0);
+						__rc;
+					})) {
+						free(e_ptr);
+						e_ptr = ((void *) 0);
+					}
+					if ((1) && (e_ptr) != ((void *) 0)) {
+						if ((int) count <= 1)
+							do {
+								int __tmp_mask;
+								do {
+									(__tmp_mask) = d_log_check(
+										(DB_MEM) |
+										daos_object_logfac);
+									if (__tmp_mask)
+										d_log(__tmp_mask,
+										      "%s:%d %s() " "alloc(" "calloc" ") '" "e_ptr" "': %i at %p.\n",
+										      "_file_name_",
+										      2139,
+										      "_function_name_",
+										      (int) (sizeof(*e_ptr)),
+										      (e_ptr));
+								}
+								while (0);
+							}
+							while (0);
+						else
+							do {
+								int __tmp_mask;
+								do {
+									(__tmp_mask) = d_log_check(
+										(DB_MEM) |
+										daos_object_logfac);
+									if (__tmp_mask)
+										d_log(__tmp_mask,
+										      "%s:%d %s() " "alloc(" "calloc" ") '" "e_ptr" "': %i * '" "(int)count" "':%i at %p.\n",
+										      "_file_name_",
+										      2139,
+										      "_function_name_",
+										      (int) (sizeof(*e_ptr)),
+										      (int) ((int) count),
+										      (e_ptr));
+								}
+								while (0);
+							}
+							while (0);
+						break;
+					}
+					(void) (0);
+					if ((int) count >= 1)
+						do {
+							int __tmp_mask;
+							do {
+								(__tmp_mask) = d_log_check(
+									(DLOG_ERR) |
+									daos_object_logfac);
+								if (__tmp_mask)
+									d_log(__tmp_mask,
+									      "%s:%d %s() " "out of memory (tried to " "calloc" " '" "e_ptr" "': %i)\n",
+									      "_file_name_",
+									      2139,
+									      "_function_name_",
+									      (int) ((sizeof(*e_ptr)) *
+										     ((int) count)));
+							}
+							while (0);
+						}
+						while (0);
+					else
+						do {
+							int __tmp_mask;
+							do {
+								(__tmp_mask) = d_log_check(
+									(DLOG_ERR) |
+									daos_object_logfac);
+								if (__tmp_mask)
+									d_log(__tmp_mask,
+									      "%s:%d %s() " "out of memory (tried to " "calloc" " '" "e_ptr" "': %i)\n",
+									      "_file_name_",
+									      2139,
+									      "_function_name_",
+									      (int) (sizeof(*e_ptr)));
+							}
+							while (0);
+						}
+						while (0);
+				}
+				while (0);
+			}
+			while (0);
+			if (e_ptr == ((void *) 0))
+				do {
+					__typeof__(rc = -DER_NOMEM) __rc = (rc = -DER_NOMEM);
+					(void) (__rc);
+					goto out;
+				}
+				while (0);
+			*e_ptrp = e_ptr;
+		}
+		for (i                       = 0; i < count; i++) {
+			rc = crt_proc_struct_daos_shard_tgt(proc, &e_ptr[i]);
+			if (rc)
+				do {
+					__typeof__(rc) __rc = (rc);
+					(void) (__rc);
+					goto out;
+				}
+				while (0);
+		}
+		if (proc_op == CRT_PROC_FREE)
+			do {
+				do {
+					int __tmp_mask;
+					do {
+						(__tmp_mask) = d_log_check(
+							(DB_MEM) |
+							daos_object_logfac);
+						if (__tmp_mask)
+							d_log(__tmp_mask,
+							      "%s:%d %s() " "free '" "e_ptr" "' at %p.\n",
+							      "_file_name_",
+							      2139,
+							      "_function_name_",
+							      (e_ptr));
+					}
+					while (0);
+				}
+				while (0);
+				free(e_ptr);
+				(e_ptr) = ((void *) 0);
+			}
+			while (0);
+	}
+	next_field_18:
+	out:
+	return rc;
+}
+
+static struct crt_msg_field CMF_obj_fetch_in            = {.cmf_flags=0, .cmf_size=sizeof(struct obj_fetch_in), .cmf_proc=(crt_proc_cb_t) crt_proc_struct_obj_fetch_in};
+static struct crt_msg_field *crt_obj_fetch_in_fields[]  = {&CMF_obj_fetch_in};
+
+static int crt_proc_struct_obj_fetch_out(crt_proc_t proc,
+					 struct obj_fetch_out *ptr)
+{
+	int rc = 0;
+	rc = crt_proc_int32_t(proc, &ptr->orw_ret);
+	if (rc)
+		do {
+			__typeof__(rc) __rc = (rc);
+			(void) (__rc);
+			goto out;
+		}
+		while (0);
+	rc = crt_proc_uint32_t(proc, &ptr->orw_map_version);
+	if (rc)
+		do {
+			__typeof__(rc) __rc = (rc);
+			(void) (__rc);
+			goto out;
+		}
+		while (0);
+	rc = crt_proc_uint64_t(proc, &ptr->orw_attr);
+	if (rc)
+		do {
+			__typeof__(rc) __rc = (rc);
+			(void) (__rc);
+			goto out;
+		}
+		while (0);
+	rc = crt_proc_uint64_t(proc, &ptr->orw_dkey_conflict);
+	if (rc)
+		do {
+			__typeof__(rc) __rc = (rc);
+			(void) (__rc);
+			goto out;
+		}
+		while (0);
+	rc = crt_proc_struct_dtx_id(proc, &ptr->orw_dti_conflict);
+	if (rc)
+		do {
+			__typeof__(rc) __rc = (rc);
+			(void) (__rc);
+			goto out;
+		}
+		while (0);
+	{
+		uint64_t      count    = ptr->orw_sizes.ca_count;
+		daos_size_t   **e_ptrp = &ptr->orw_sizes.ca_arrays;
+		daos_size_t   *e_ptr   = ptr->orw_sizes.ca_arrays;
+		int           i;
+		crt_proc_op_t proc_op;
+		rc = crt_proc_get_op(proc, &proc_op);
+		if (rc)
+			do {
+				__typeof__(rc) __rc = (rc);
+				(void) (__rc);
+				goto out;
+			}
+			while (0);
+		rc = crt_proc_uint64_t(proc, &count);
+		if (rc)
+			do {
+				__typeof__(rc) __rc = (rc);
+				(void) (__rc);
+				goto out;
+			}
+			while (0);
+		ptr->orw_sizes.ca_count = count;
+		if (count == 0) {
+			if (proc_op == CRT_PROC_DECODE)
+				*e_ptrp = ((void *) 0);
+			goto next_field_7;
+		}
+		if (proc_op == CRT_PROC_DECODE) {
+			do {
+				(e_ptr) = (__typeof__(e_ptr)) calloc(
+					(int) count, (sizeof(*e_ptr)));
+				do {
+					if (({
+						_Bool __rc;
+						__rc = d_fault_inject &&
+						       d_should_fail(
+							       d_fault_attr_mem);
+						if (__rc)
+							do {
+								int __tmp_mask;
+								do {
+									(__tmp_mask) = d_log_check(
+										(DLOG_WARN) |
+										daos_object_logfac);
+									if (__tmp_mask)
+										d_log(__tmp_mask,
+										      "%s:%d %s() " "fault_id %d, injecting fault.\n",
+										      "_file_name_",
+										      2139,
+										      "_function_name_",
+										      d_fault_attr_mem->fa_id);
+								}
+								while (0);
+							}
+							while (0);
+						__rc;
+					})) {
+						free(e_ptr);
+						e_ptr = ((void *) 0);
+					}
+					if ((1) && (e_ptr) != ((void *) 0)) {
+						if ((int) count <= 1)
+							do {
+								int __tmp_mask;
+								do {
+									(__tmp_mask) = d_log_check(
+										(DB_MEM) |
+										daos_object_logfac);
+									if (__tmp_mask)
+										d_log(__tmp_mask,
+										      "%s:%d %s() " "alloc(" "calloc" ") '" "e_ptr" "': %i at %p.\n",
+										      "_file_name_",
+										      2139,
+										      "_function_name_",
+										      (int) (sizeof(*e_ptr)),
+										      (e_ptr));
+								}
+								while (0);
+							}
+							while (0);
+						else
+							do {
+								int __tmp_mask;
+								do {
+									(__tmp_mask) = d_log_check(
+										(DB_MEM) |
+										daos_object_logfac);
+									if (__tmp_mask)
+										d_log(__tmp_mask,
+										      "%s:%d %s() " "alloc(" "calloc" ") '" "e_ptr" "': %i * '" "(int)count" "':%i at %p.\n",
+										      "_file_name_",
+										      2139,
+										      "_function_name_",
+										      (int) (sizeof(*e_ptr)),
+										      (int) ((int) count),
+										      (e_ptr));
+								}
+								while (0);
+							}
+							while (0);
+						break;
+					}
+					(void) (0);
+					if ((int) count >= 1)
+						do {
+							int __tmp_mask;
+							do {
+								(__tmp_mask) = d_log_check(
+									(DLOG_ERR) |
+									daos_object_logfac);
+								if (__tmp_mask)
+									d_log(__tmp_mask,
+									      "%s:%d %s() " "out of memory (tried to " "calloc" " '" "e_ptr" "': %i)\n",
+									      "_file_name_",
+									      2139,
+									      "_function_name_",
+									      (int) ((sizeof(*e_ptr)) *
+										     ((int) count)));
+							}
+							while (0);
+						}
+						while (0);
+					else
+						do {
+							int __tmp_mask;
+							do {
+								(__tmp_mask) = d_log_check(
+									(DLOG_ERR) |
+									daos_object_logfac);
+								if (__tmp_mask)
+									d_log(__tmp_mask,
+									      "%s:%d %s() " "out of memory (tried to " "calloc" " '" "e_ptr" "': %i)\n",
+									      "_file_name_",
+									      2139,
+									      "_function_name_",
+									      (int) (sizeof(*e_ptr)));
+							}
+							while (0);
+						}
+						while (0);
+				}
+				while (0);
+			}
+			while (0);
+			if (e_ptr == ((void *) 0))
+				do {
+					__typeof__(rc = -DER_NOMEM) __rc = (rc = -DER_NOMEM);
+					(void) (__rc);
+					goto out;
+				}
+				while (0);
+			*e_ptrp = e_ptr;
+		}
+		for (i                  = 0; i < count; i++) {
+			rc = crt_proc_uint64_t(proc, &e_ptr[i]);
+			if (rc)
+				do {
+					__typeof__(rc) __rc = (rc);
+					(void) (__rc);
+					goto out;
+				}
+				while (0);
+		}
+		if (proc_op == CRT_PROC_FREE)
+			do {
+				do {
+					int __tmp_mask;
+					do {
+						(__tmp_mask) = d_log_check(
+							(DB_MEM) |
+							daos_object_logfac);
+						if (__tmp_mask)
+							d_log(__tmp_mask,
+							      "%s:%d %s() " "free '" "e_ptr" "' at %p.\n",
+							      "_file_name_",
+							      2139,
+							      "_function_name_",
+							      (e_ptr));
+					}
+					while (0);
+				}
+				while (0);
+				free(e_ptr);
+				(e_ptr) = ((void *) 0);
+			}
+			while (0);
+	}
+	next_field_7:
+	{
+		uint64_t      count    = ptr->orw_sgls.ca_count;
+		d_sg_list_t   **e_ptrp = &ptr->orw_sgls.ca_arrays;
+		d_sg_list_t   *e_ptr   = ptr->orw_sgls.ca_arrays;
+		int           i;
+		crt_proc_op_t proc_op;
+		rc                     = crt_proc_get_op(proc, &proc_op);
+		if (rc)
+			do {
+				__typeof__(rc) __rc = (rc);
+				(void) (__rc);
+				goto out;
+			}
+			while (0);
+		rc = crt_proc_uint64_t(proc, &count);
+		if (rc)
+			do {
+				__typeof__(rc) __rc = (rc);
+				(void) (__rc);
+				goto out;
+			}
+			while (0);
+		ptr->orw_sgls.ca_count = count;
+		if (count == 0) {
+			if (proc_op == CRT_PROC_DECODE)
+				*e_ptrp = ((void *) 0);
+			goto next_field_8;
+		}
+		if (proc_op == CRT_PROC_DECODE) {
+			do {
+				(e_ptr) = (__typeof__(e_ptr)) calloc(
+					(int) count, (sizeof(*e_ptr)));
+				do {
+					if (({
+						_Bool __rc;
+						__rc = d_fault_inject &&
+						       d_should_fail(
+							       d_fault_attr_mem);
+						if (__rc)
+							do {
+								int __tmp_mask;
+								do {
+									(__tmp_mask) = d_log_check(
+										(DLOG_WARN) |
+										daos_object_logfac);
+									if (__tmp_mask)
+										d_log(__tmp_mask,
+										      "%s:%d %s() " "fault_id %d, injecting fault.\n",
+										      "_file_name_",
+										      2139,
+										      "_function_name_",
+										      d_fault_attr_mem->fa_id);
+								}
+								while (0);
+							}
+							while (0);
+						__rc;
+					})) {
+						free(e_ptr);
+						e_ptr = ((void *) 0);
+					}
+					if ((1) && (e_ptr) != ((void *) 0)) {
+						if ((int) count <= 1)
+							do {
+								int __tmp_mask;
+								do {
+									(__tmp_mask) = d_log_check(
+										(DB_MEM) |
+										daos_object_logfac);
+									if (__tmp_mask)
+										d_log(__tmp_mask,
+										      "%s:%d %s() " "alloc(" "calloc" ") '" "e_ptr" "': %i at %p.\n",
+										      "_file_name_",
+										      2139,
+										      "_function_name_",
+										      (int) (sizeof(*e_ptr)),
+										      (e_ptr));
+								}
+								while (0);
+							}
+							while (0);
+						else
+							do {
+								int __tmp_mask;
+								do {
+									(__tmp_mask) = d_log_check(
+										(DB_MEM) |
+										daos_object_logfac);
+									if (__tmp_mask)
+										d_log(__tmp_mask,
+										      "%s:%d %s() " "alloc(" "calloc" ") '" "e_ptr" "': %i * '" "(int)count" "':%i at %p.\n",
+										      "_file_name_",
+										      2139,
+										      "_function_name_",
+										      (int) (sizeof(*e_ptr)),
+										      (int) ((int) count),
+										      (e_ptr));
+								}
+								while (0);
+							}
+							while (0);
+						break;
+					}
+					(void) (0);
+					if ((int) count >= 1)
+						do {
+							int __tmp_mask;
+							do {
+								(__tmp_mask) = d_log_check(
+									(DLOG_ERR) |
+									daos_object_logfac);
+								if (__tmp_mask)
+									d_log(__tmp_mask,
+									      "%s:%d %s() " "out of memory (tried to " "calloc" " '" "e_ptr" "': %i)\n",
+									      "_file_name_",
+									      2139,
+									      "_function_name_",
+									      (int) ((sizeof(*e_ptr)) *
+										     ((int) count)));
+							}
+							while (0);
+						}
+						while (0);
+					else
+						do {
+							int __tmp_mask;
+							do {
+								(__tmp_mask) = d_log_check(
+									(DLOG_ERR) |
+									daos_object_logfac);
+								if (__tmp_mask)
+									d_log(__tmp_mask,
+									      "%s:%d %s() " "out of memory (tried to " "calloc" " '" "e_ptr" "': %i)\n",
+									      "_file_name_",
+									      2139,
+									      "_function_name_",
+									      (int) (sizeof(*e_ptr)));
+							}
+							while (0);
+						}
+						while (0);
+				}
+				while (0);
+			}
+			while (0);
+			if (e_ptr == ((void *) 0))
+				do {
+					__typeof__(rc = -DER_NOMEM) __rc = (rc = -DER_NOMEM);
+					(void) (__rc);
+					goto out;
+				}
+				while (0);
+			*e_ptrp = e_ptr;
+		}
+		for (i                 = 0; i < count; i++) {
+			rc = crt_proc_d_sg_list_t(proc, &e_ptr[i]);
+			if (rc)
+				do {
+					__typeof__(rc) __rc = (rc);
+					(void) (__rc);
+					goto out;
+				}
+				while (0);
+		}
+		if (proc_op == CRT_PROC_FREE)
+			do {
+				do {
+					int __tmp_mask;
+					do {
+						(__tmp_mask) = d_log_check(
+							(DB_MEM) |
+							daos_object_logfac);
+						if (__tmp_mask)
+							d_log(__tmp_mask,
+							      "%s:%d %s() " "free '" "e_ptr" "' at %p.\n",
+							      "_file_name_",
+							      2139,
+							      "_function_name_",
+							      (e_ptr));
+					}
+					while (0);
+				}
+				while (0);
+				free(e_ptr);
+				(e_ptr) = ((void *) 0);
+			}
+			while (0);
+	}
+	next_field_8:
+	{
+		uint64_t      count    = ptr->orw_nrs.ca_count;
+		uint32_t      **e_ptrp = &ptr->orw_nrs.ca_arrays;
+		uint32_t      *e_ptr   = ptr->orw_nrs.ca_arrays;
+		int           i;
+		crt_proc_op_t proc_op;
+		rc                     = crt_proc_get_op(proc, &proc_op);
+		if (rc)
+			do {
+				__typeof__(rc) __rc = (rc);
+				(void) (__rc);
+				goto out;
+			}
+			while (0);
+		rc = crt_proc_uint64_t(proc, &count);
+		if (rc)
+			do {
+				__typeof__(rc) __rc = (rc);
+				(void) (__rc);
+				goto out;
+			}
+			while (0);
+		ptr->orw_nrs.ca_count = count;
+		if (count == 0) {
+			if (proc_op == CRT_PROC_DECODE)
+				*e_ptrp = ((void *) 0);
+			goto next_field_9;
+		}
+		if (proc_op == CRT_PROC_DECODE) {
+			do {
+				(e_ptr) = (__typeof__(e_ptr)) calloc(
+					(int) count, (sizeof(*e_ptr)));
+				do {
+					if (({
+						_Bool __rc;
+						__rc = d_fault_inject &&
+						       d_should_fail(
+							       d_fault_attr_mem);
+						if (__rc)
+							do {
+								int __tmp_mask;
+								do {
+									(__tmp_mask) = d_log_check(
+										(DLOG_WARN) |
+										daos_object_logfac);
+									if (__tmp_mask)
+										d_log(__tmp_mask,
+										      "%s:%d %s() " "fault_id %d, injecting fault.\n",
+										      "_file_name_",
+										      2139,
+										      "_function_name_",
+										      d_fault_attr_mem->fa_id);
+								}
+								while (0);
+							}
+							while (0);
+						__rc;
+					})) {
+						free(e_ptr);
+						e_ptr = ((void *) 0);
+					}
+					if ((1) && (e_ptr) != ((void *) 0)) {
+						if ((int) count <= 1)
+							do {
+								int __tmp_mask;
+								do {
+									(__tmp_mask) = d_log_check(
+										(DB_MEM) |
+										daos_object_logfac);
+									if (__tmp_mask)
+										d_log(__tmp_mask,
+										      "%s:%d %s() " "alloc(" "calloc" ") '" "e_ptr" "': %i at %p.\n",
+										      "_file_name_",
+										      2139,
+										      "_function_name_",
+										      (int) (sizeof(*e_ptr)),
+										      (e_ptr));
+								}
+								while (0);
+							}
+							while (0);
+						else
+							do {
+								int __tmp_mask;
+								do {
+									(__tmp_mask) = d_log_check(
+										(DB_MEM) |
+										daos_object_logfac);
+									if (__tmp_mask)
+										d_log(__tmp_mask,
+										      "%s:%d %s() " "alloc(" "calloc" ") '" "e_ptr" "': %i * '" "(int)count" "':%i at %p.\n",
+										      "_file_name_",
+										      2139,
+										      "_function_name_",
+										      (int) (sizeof(*e_ptr)),
+										      (int) ((int) count),
+										      (e_ptr));
+								}
+								while (0);
+							}
+							while (0);
+						break;
+					}
+					(void) (0);
+					if ((int) count >= 1)
+						do {
+							int __tmp_mask;
+							do {
+								(__tmp_mask) = d_log_check(
+									(DLOG_ERR) |
+									daos_object_logfac);
+								if (__tmp_mask)
+									d_log(__tmp_mask,
+									      "%s:%d %s() " "out of memory (tried to " "calloc" " '" "e_ptr" "': %i)\n",
+									      "_file_name_",
+									      2139,
+									      "_function_name_",
+									      (int) ((sizeof(*e_ptr)) *
+										     ((int) count)));
+							}
+							while (0);
+						}
+						while (0);
+					else
+						do {
+							int __tmp_mask;
+							do {
+								(__tmp_mask) = d_log_check(
+									(DLOG_ERR) |
+									daos_object_logfac);
+								if (__tmp_mask)
+									d_log(__tmp_mask,
+									      "%s:%d %s() " "out of memory (tried to " "calloc" " '" "e_ptr" "': %i)\n",
+									      "_file_name_",
+									      2139,
+									      "_function_name_",
+									      (int) (sizeof(*e_ptr)));
+							}
+							while (0);
+						}
+						while (0);
+				}
+				while (0);
+			}
+			while (0);
+			if (e_ptr == ((void *) 0))
+				do {
+					__typeof__(rc = -DER_NOMEM) __rc = (rc = -DER_NOMEM);
+					(void) (__rc);
+					goto out;
+				}
+				while (0);
+			*e_ptrp = e_ptr;
+		}
+		for (i                = 0; i < count; i++) {
+			rc = crt_proc_uint32_t(proc, &e_ptr[i]);
+			if (rc)
+				do {
+					__typeof__(rc) __rc = (rc);
+					(void) (__rc);
+					goto out;
+				}
+				while (0);
+		}
+		if (proc_op == CRT_PROC_FREE)
+			do {
+				do {
+					int __tmp_mask;
+					do {
+						(__tmp_mask) = d_log_check(
+							(DB_MEM) |
+							daos_object_logfac);
+						if (__tmp_mask)
+							d_log(__tmp_mask,
+							      "%s:%d %s() " "free '" "e_ptr" "' at %p.\n",
+							      "_file_name_",
+							      2139,
+							      "_function_name_",
+							      (e_ptr));
+					}
+					while (0);
+				}
+				while (0);
+				free(e_ptr);
+				(e_ptr) = ((void *) 0);
+			}
+			while (0);
+	}
+	next_field_9:
+	out:
+	return rc;
+}
+
+static struct crt_msg_field CMF_obj_fetch_out           = {.cmf_flags=0, .cmf_size=sizeof(struct obj_fetch_out), .cmf_proc=(crt_proc_cb_t) crt_proc_struct_obj_fetch_out};
+static struct crt_msg_field *crt_obj_fetch_out_fields[] = {&CMF_obj_fetch_out};
+_Pragma("GCC diagnostic push")
+struct crt_req_format CQF_obj_fetch = {crf_in:{crf_count:(((crt_obj_fetch_in_fields) ==
+							   ((void *) 0)) ? 0 : (
+								  sizeof(crt_obj_fetch_in_fields) /
+								  sizeof((crt_obj_fetch_in_fields)[0]))), crf_msg:((crt_obj_fetch_in_fields))}, crf_out:{crf_count:(((crt_obj_fetch_out_fields) ==
+																				     ((void *) 0))
+																				    ? 0
+																				    : (sizeof(crt_obj_fetch_out_fields) /
+																				       sizeof((crt_obj_fetch_out_fields)[0]))), crf_msg:((crt_obj_fetch_out_fields))}};
+_Pragma("GCC diagnostic pop")
+
+
+
+
+
+
 CRT_RPC_DEFINE(obj_key_enum, DAOS_ISEQ_OBJ_KEY_ENUM, DAOS_OSEQ_OBJ_KEY_ENUM)
 CRT_RPC_DEFINE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
 CRT_RPC_DEFINE(obj_query_key, DAOS_ISEQ_OBJ_QUERY_KEY, DAOS_OSEQ_OBJ_QUERY_KEY)
