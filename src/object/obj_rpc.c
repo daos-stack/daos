@@ -2237,7 +2237,7 @@ static int crt_proc_struct_obj_fetch_in(crt_proc_t proc,
 		D_ERROR("RYON: Issue with IOV: iov buf len ("DF_U64")"
 								   " < iov len "DF_U64"\n",
 			tmp_iov->iov_buf_len, tmp_iov->iov_len);
-		print_trace();
+//		print_trace();
 	}
 	rc = crt_proc_d_iov_t(proc, &ptr->orw_dkey);
 	if (rc)
