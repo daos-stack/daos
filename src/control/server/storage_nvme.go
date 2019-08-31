@@ -314,6 +314,7 @@ func (n *nvmeStorage) Format(i int, results *(common.NvmeControllerResults)) {
 			addCretFormat(pb.ResponseStatus_CTRL_SUCCESS, "")
 			n.controllers = loadControllers(cs, ns)
 		}
+	case bdFile:
 	default:
 		addCretFormat(
 			pb.ResponseStatus_CTRL_ERR_CONF,
