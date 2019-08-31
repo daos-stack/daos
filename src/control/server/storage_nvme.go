@@ -35,8 +35,8 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	log "github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/lib/spdk"
+	log "github.com/daos-stack/daos/src/control/logging"
 )
 
 const (
@@ -61,6 +61,7 @@ const (
 	msgBdevFwrevEndMismatch   = "controller fwrev unchanged after update"
 	msgBdevModelMismatch      = "controller model unexpected"
 	msgBdevNoDevs             = "no controllers specified"
+	msgBdevClassIsFile        = "bdev class set to file, skipping format"
 )
 
 // SpdkSetup is an interface to configure spdk prerequisites via a
@@ -279,6 +280,16 @@ func (n *nvmeStorage) Format(i int, results *(common.NvmeControllerResults)) {
 	}
 
 	switch srv.BdevClass {
+	case bdFile:
+		*results = append(
+			*results,
+			&pb.NvmeControllerResult{
+				Pciaddr: pciAddr,
+				State: addState(pb.ResponseStatus_CTRL_SUCCESS,
+					"", msgBdevClassIsFile, common.UtilLogDepth,
+					"nvme controller former"),
+			},
+		)
 	case bdNVMe:
 		for _, pciAddr = range srv.BdevList {
 			if pciAddr == "" {
