@@ -140,7 +140,7 @@ class ObjectDataValidation(avocado.Test):
         Test Description:
             Write Avocado Test to verify commit tx and close tx
                           bad parameter behavior.
-        :avocado: tags=all,object,full_regression,small,single_object
+        :avocado: tags=all,object,full_regression,small,invalid_tx
         """
         self.d_log.info("==Writing the Single Dataset for negative test...")
         record_index = 0
