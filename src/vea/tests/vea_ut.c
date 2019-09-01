@@ -1261,6 +1261,94 @@ ut_fragmentation(void **state)
 	ut_teardown(&args);
 }
 
+static void
+ut_perf(void **state)
+{
+	struct vea_ut_args args;
+	struct vea_unmap_context unmap_ctxt;
+	uint64_t capacity = 128llu << 30; /* 128 GB */
+	uint32_t block_size = 4096;
+	uint32_t header_blocks = 1;
+	uint64_t *alloc_arr, alloc_cnt = 50000;
+	uint64_t i, index1, index2, tmp;
+	uint64_t start = 0, end = 0;
+	struct vea_hint_context *h_ctxt;
+	struct vea_resrvd_ext *ext;
+	d_list_t *r_list;
+	int rc;
+
+	print_message("Measure VEA performance\n");
+	ut_setup(&args);
+	rc = vea_format(&args.vua_umm, &args.vua_txd, args.vua_md, block_size,
+			header_blocks, capacity, NULL, NULL, false);
+	assert_int_equal(rc, 0);
+
+	unmap_ctxt.vnc_unmap = NULL;
+	unmap_ctxt.vnc_data = NULL;
+	rc = vea_load(&args.vua_umm, &args.vua_txd, args.vua_md, &unmap_ctxt,
+		      &args.vua_vsi);
+	assert_int_equal(rc, 0);
+
+	D_ALLOC_ARRAY(alloc_arr, alloc_cnt);
+	assert_ptr_not_equal(alloc_arr, NULL);
+
+	h_ctxt = args.vua_hint_ctxt[0];
+	rc = vea_hint_load(args.vua_hint[0], &h_ctxt);
+	assert_int_equal(rc, 0);
+	r_list = &args.vua_resrvd_list[0];
+
+	print_message("Do "DF_U64" allocations...\n", alloc_cnt);
+	daos_gettime_coarse(&start);
+	for (i = 0; i < alloc_cnt; i++) {
+		rc = vea_reserve(args.vua_vsi, 1, h_ctxt, r_list);
+		assert_int_equal(rc, 0);
+
+		/* save the reserved off */
+		ext = d_list_entry(r_list->prev, struct vea_resrvd_ext,
+				   vre_link);
+
+		alloc_arr[i] = ext->vre_blk_off;
+		assert_int_equal(ext->vre_blk_cnt, 1);
+	}
+
+	rc = umem_tx_begin(&args.vua_umm, &args.vua_txd);
+	assert_int_equal(rc, 0);
+	rc = vea_tx_publish(args.vua_vsi, h_ctxt, r_list);
+	assert_int_equal(rc, 0);
+	rc = umem_tx_commit(&args.vua_umm);
+	assert_int_equal(rc, 0);
+	daos_gettime_coarse(&end);
+	print_message("Allocations used "DF_U64" seconds\n", end - start);
+
+	print_message("Randomize frees...\n");
+	for (i = 0; i < (alloc_cnt / 2); i++) {
+		index1 = rand() % alloc_cnt;
+		index2 = rand() % alloc_cnt;
+		tmp = alloc_arr[index1];
+
+		alloc_arr[index1] = alloc_arr[index2];
+		alloc_arr[index2] = tmp;
+	}
+
+	print_message("Do "DF_U64" random frees...\n", alloc_cnt);
+	daos_gettime_coarse(&start);
+	rc = umem_tx_begin(&args.vua_umm, &args.vua_txd);
+	assert_int_equal(rc, 0);
+
+	for (i = 0; i < alloc_cnt; i++) {
+		rc = vea_free(args.vua_vsi, alloc_arr[i], 1);
+		assert_int_equal(rc, 0);
+	}
+	rc = umem_tx_commit(&args.vua_umm);
+	assert_int_equal(rc, 0);
+	daos_gettime_coarse(&end);
+	print_message("Random frees used "DF_U64" seconds\n", end - start);
+
+	vea_hint_unload(args.vua_hint_ctxt[0]);
+	vea_unload(args.vua_vsi);
+	ut_teardown(&args);
+}
+
 static const struct CMUnitTest vea_uts[] = {
 	{ "vea_format", ut_format, NULL, NULL},
 	{ "vea_load", ut_load, NULL, NULL},
@@ -1286,7 +1374,8 @@ static const struct CMUnitTest vea_uts[] = {
 	  NULL, NULL},
 	{ "vea_free_invalid_space", ut_free_invalid_space, NULL, NULL},
 	{ "vea_interleaved_ops", ut_interleaved_ops, NULL, NULL},
-	{ "vea_fragmentation", ut_fragmentation, NULL, NULL}
+	{ "vea_fragmentation", ut_fragmentation, NULL, NULL},
+	{ "vea_perf", ut_perf, NULL, NULL}
 };
 
 int main(int argc, char **argv)
