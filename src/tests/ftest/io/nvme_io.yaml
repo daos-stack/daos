@@ -30,4 +30,4 @@ ior:
  daos_destroy: False
  ior_sequence:
 #   - [scmsize, nvmesize, stripesize, blocksize, clientslots]
-    - [6000000000, 10000000000, 1048576, 1048576, 1]        #[6G, 40G, 1M, 16G, 1]
+    - [6000000000, 10000000000, 1048576, 1048576, 1]        #[6G, 40G, 1M, 16G, 1 ]
