@@ -87,7 +87,7 @@ func (cmd *storagePrepNvmeCmd) Execute(args []string) error {
 		return errors.WithMessage(err, "initialising ControlService")
 	}
 
-	return srv.PrepNvme(server.PrepNvmeRequest{
+	return srv.PrepNvme(server.PrepareNvmeRequest{
 		HugePageCount: cmd.NrHugepages,
 		TargetUser:    cmd.TargetUser,
 		PCIWhitelist:  cmd.PCIWhiteList,
@@ -120,20 +120,22 @@ func (cmd *storagePrepScmCmd) Execute(args []string) (err error) {
 		return errors.WithMessage(err, "initialising ControlService")
 	}
 
-	rebootStr, devices, err := srv.PrepScm(server.PrepScmRequest{
+	needsReboot, devices, err := srv.PrepareScm(server.PrepareScmRequest{
 		Reset: cmd.Reset,
 	})
 	if err != nil {
 		return err
 	}
 
-	if rebootStr != "" {
-		cmd.log.Info(rebootStr)
-	} else {
-		if len(devices) > 0 {
-			cmd.log.Infof("persistent memory kernel devices:\n\t%+v\n", devices)
-		}
+	if needsReboot {
+		cmd.log.Info(msgScmRebootRequired)
+		return nil
 	}
 
-	return nil
+	if len(devices) > 0 {
+		cmd.log.Infof("persistent memory kernel devices:\n\t%+v\n", devices)
+		return nil
+	}
+
+	return errors.New("unexpected failure")
 }

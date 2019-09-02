@@ -81,39 +81,17 @@ func (c *ControlService) Teardown() {
 	}
 }
 
-// ScanNVMe scans locally attached SSDs and returns list directly.
-//
-// Suitable for commands invoked directly on server, not over gRPC.
-func (c *ControlService) ScanNVMe() (types.NvmeControllers, error) {
-	if err := c.nvme.Discover(); err != nil {
-		return nil, errors.Wrap(err, "NVMe storage scan")
-	}
-
-	return c.nvme.controllers, nil
-}
-
-// ScanSCM scans locally attached modules and returns list directly.
-//
-// Suitable for commands invoked directly on server, not over gRPC.
-func (c *ControlService) ScanSCM() (types.ScmModules, error) {
-	if err := c.scm.Discover(); err != nil {
-		return nil, errors.Wrap(err, "SCM storage scan")
-	}
-
-	return c.scm.modules, nil
-}
-
-type PrepNvmeRequest struct {
+type PrepareNvmeRequest struct {
 	HugePageCount int
 	TargetUser    string
 	PCIWhitelist  string
 	ResetOnly     bool
 }
 
-// PrepNVMe preps locally attached SSDs and returns error.
+// PrepareNvme preps locally attached SSDs and returns error.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
-func (c *ControlService) PrepNvme(req PrepNvmeRequest) error {
+func (c *ControlService) PrepareNvme(req PrepareNvmeRequest) error {
 	ok, usr := common.CheckSudo()
 	if !ok {
 		return errors.Errorf("%s must be run as root or sudo", os.Args[0])
@@ -141,15 +119,15 @@ func (c *ControlService) PrepNvme(req PrepNvmeRequest) error {
 	)
 }
 
-type PrepScmRequest struct {
+type PrepareScmRequest struct {
 	Reset bool
 }
 
-// PrepSCM preps locally attached modules and returns need to reboot message,
+// PrepareScm preps locally attached modules and returns need to reboot message,
 // list of pmem kernel devices and error directly.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
-func (c *ControlService) PrepScm(req PrepScmRequest) (rebootStr string, pmemDevs []pmemDev, err error) {
+func (c *ControlService) PrepareScm(req PrepareScmRequest) (needsReboot bool, pmemDevs []pmemDev, err error) {
 	if err = c.scm.Setup(); err != nil {
 		err = errors.WithMessage(err, "SCM setup")
 		return
@@ -165,28 +143,36 @@ func (c *ControlService) PrepScm(req PrepScmRequest) (rebootStr string, pmemDevs
 		return
 	}
 
-	var needsReboot bool
 	if req.Reset {
 		// run reset to remove namespaces and clear regions
 		needsReboot, err = c.scm.PrepReset()
-		if err != nil {
-			err = errors.WithMessage(err, "SCM prep reset")
-			return
-		}
-	} else {
-		// transition to the next state in SCM preparation
-		needsReboot, pmemDevs, err = c.scm.Prep()
-		if err != nil {
-			err = errors.WithMessage(err, "SCM prep reset")
-			return
-		}
+		return
 	}
 
-	if needsReboot {
-		rebootStr = msgScmRebootRequired
+	// transition to the next state in SCM preparation
+	return c.scm.Prep()
+}
+
+// ScanNvme scans locally attached SSDs and returns list directly.
+//
+// Suitable for commands invoked directly on server, not over gRPC.
+func (c *ControlService) ScanNvme() (types.NvmeControllers, error) {
+	if err := c.nvme.Discover(); err != nil {
+		return nil, errors.Wrap(err, "NVMe storage scan")
 	}
 
-	return
+	return c.nvme.controllers, nil
+}
+
+// ScanScm scans locally attached modules and returns list directly.
+//
+// Suitable for commands invoked directly on server, not over gRPC.
+func (c *ControlService) ScanScm() (types.ScmModules, error) {
+	if err := c.scm.Discover(); err != nil {
+		return nil, errors.Wrap(err, "SCM storage scan")
+	}
+
+	return c.scm.modules, nil
 }
 
 // awaitStorageFormat checks if running as root and server superblocks exist,

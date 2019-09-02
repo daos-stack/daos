@@ -111,9 +111,9 @@ type StorageResult struct {
 	scmMount  common.MountResults
 }
 
-// StorageScanRequest returns all discovered SCM and NVMe storage devices
+// storageScanRequest returns all discovered SCM and NVMe storage devices
 // discovered on a remote server by calling over gRPC channel.
-func StorageScanRequest(mc Control, req interface{}, ch chan ClientResult) {
+func storageScanRequest(mc Control, req interface{}, ch chan ClientResult) {
 	sRes := StorageResult{}
 
 	resp, err := mc.getCtlClient().StorageScan(
@@ -152,7 +152,7 @@ func StorageScanRequest(mc Control, req interface{}, ch chan ClientResult) {
 // StorageScan returns details of nonvolatile storage devices attached to each
 // remote server. Data received over channel from requests running in parallel.
 func (c *connList) StorageScan() (ClientCtrlrMap, ClientModuleMap) {
-	cResults := c.makeRequests(nil, StorageScanRequest)
+	cResults := c.makeRequests(nil, storageScanRequest)
 	cCtrlrs := make(ClientCtrlrMap)   // mapping of server address to NVMe SSDs
 	cModules := make(ClientModuleMap) // mapping of server address to SCM modules
 

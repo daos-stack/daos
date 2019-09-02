@@ -49,42 +49,52 @@ func addState(status pb.ResponseStatus, errMsg string, infoMsg string,
 	return state
 }
 
-// PrepNvmeStorage configures SSDs for user specific access with SPDK.
-func (c *ControlService) PrepNvmeStorage(ctx context.Context, req *pb.PrepNvmeReq) (
-	*pb.PrepNvmeResp, error) {
-
-	resp := new(pb.PrepNvmeResp)
-
-	err := c.PrepNvme(PrepNvmeRequest{
-		HugePageCount: int(req.Nrhugepages),
-		TargetUser:    req.Targetuser,
-		PCIWhitelist:  req.Pciwhitelist,
-		ResetOnly:     req.Reset_,
+func (c *ControlService) doNvmePrepare(req *pb.PrepareNvmeReq) (resp *pb.ResponseState) {
+	msg := "Prepare NVMe storage"
+	err := c.PrepareNvme(PrepareNvmeRequest{
+		HugePageCount: int(req.GetNrhugepages()),
+		TargetUser:    req.GetTargetuser(),
+		PCIWhitelist:  req.GetPciwhitelist(),
+		ResetOnly:     req.GetReset_(),
 	})
 
 	if err != nil {
-		resp.State = addState(pb.ResponseStatus_CTRL_ERR_NVM,
-			err.Error(), "", common.UtilLogDepth+1,
-			"prep nvme")
-		return resp, err
+		return addState(pb.ResponseStatus_CTRL_ERR_NVME, err.Error(), "", msg)
 	}
 
-	return resp, nil
+	return addState(pb.ResponseStatus_CTRL_SUCCESS, "", "", msg)
 }
 
-// PrepScmStorage configures modules collectively as kernel "pmem" devices.
-func (c *ControlService) PrepScmStorage(ctx context.Context, req *pb.PrepScmReq) (
-	*pb.PrepScmResp, error) {
+func (c *ControlService) doScmPrepare(req *pb.PrepareScmReq) (resp *pb.PrepareScmResp) {
+	msg := "Prepare SCM storage"
 
-	resp := new(pb.PrepScmResp)
+	needsReboot, pmemDevs, err := c.PrepareScm(PrepareScmRequest{Reset: req.GetReset_()})
 
-	if req.Reset_ {
-		c.nvme.PrepReset(resp)
-
-		return resp, nil
+	if err != nil {
+		resp.State = addState(pb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg)
+		return
 	}
 
-	c.scm.Prep(resp)
+	info := ""
+	if needsReboot {
+		info = msgScmRebootRequired
+	}
+
+	resp.State = addState(pb.ResponseStatus_CTRL_SUCCESS, "", info, msg)
+	resp.Pmems = pmemDevs
+
+	return
+}
+
+// StoragePrepare configures SSDs for user specific access with SPDK and
+// groups SCM modules in AppDirect/interleaved mode as kernel "pmem" devices.
+func (c *ControlService) StoragePrepare(ctx context.Context, req *pb.StoragePrepareReq) (
+	*pb.StoragePrepareResp, error) {
+
+	resp := new(pb.StoragePrepareResp)
+
+	resp.Nvmestate = c.doNvmePrepare(req.Nvme)
+	resp.Scmstate = c.doScmPrepare(req.Scm)
 
 	return resp, nil
 }

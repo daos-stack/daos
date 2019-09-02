@@ -58,13 +58,9 @@ message PrepareNvmeReq {
 	bool reset = 4;			// Reset SPDK returning devices to kernel
 }
 
-<<<<<<< HEAD
-message PrepareNvmeResp {}
-=======
-message PrepNvmeResp {
+message PrepareNvmeResp {
 	ResponseState state = 1;
 }
->>>>>>> 5d0d0af... proto definition encapsulation of storage type submessages, keep message packing logic in mgmt_storage
 
 message ScanNvmeReq {}
 
@@ -74,6 +70,8 @@ message ScanNvmeResp {
 }
 
 message FormatNvmeReq {}
+
+// FormatNvmeResp isn't required because controller results are returned instead
 
 message UpdateNvmeReq {
 	string model = 1; // Only upgrade devices of specific model

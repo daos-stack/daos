@@ -81,14 +81,10 @@ message PrepareScmReq {
 	bool reset = 1;			// Reset SCM devices to memory mode
 }
 
-<<<<<<< HEAD
-message PrepareScmResp {}
-=======
-message PrepScmResp {
+message PrepareScmResp {
 	repeated PmemDevice pmems = 1;	// Existing pmem devices (new and old)
 	ResponseState state = 2;
 }
->>>>>>> 5d0d0af... proto definition encapsulation of storage type submessages, keep message packing logic in mgmt_storage
 
 message ScanScmReq {}
 
@@ -100,6 +96,8 @@ message ScanScmResp {
 
 message FormatScmReq {}
 // TODO: format should return existing / new mounts
+
+// FormatScmResp isn't required because SCM mount results are returned instead
 
 message UpdateScmReq {}
 
