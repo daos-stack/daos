@@ -35,8 +35,8 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	log "github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/lib/spdk"
+	log "github.com/daos-stack/daos/src/control/logging"
 )
 
 const (
@@ -195,41 +195,30 @@ func (n *nvmeStorage) Teardown() (err error) {
 //       process, presumably we want to be able to detect updates during
 //       process lifetime.
 func (n *nvmeStorage) Discover(resp *pb.StorageScanResp) {
-	addStateDiscover := func(
-		status pb.ResponseStatus, errMsg string,
-		infoMsg string) *pb.ResponseState {
-
-		return addState(
-			status, errMsg, infoMsg, common.UtilLogDepth+1,
-			"nvme storage discover")
-	}
+	msg := "nvme storage discover"
 
 	if n.initialized {
-		resp.Nvmestate = addStateDiscover(
-			pb.ResponseStatus_CTRL_SUCCESS, "", "")
+		resp.Nvmestate = addState(pb.ResponseStatus_CTRL_SUCCESS, "", "", msg)
 		resp.Ctrlrs = n.controllers
 		return
 	}
 
 	// specify shmID to be set as opt in SPDK env init
 	if err := n.env.InitSPDKEnv(n.config.NvmeShmID); err != nil {
-		resp.Nvmestate = addStateDiscover(
-			pb.ResponseStatus_CTRL_ERR_NVME,
-			msgSpdkInitFail+": "+err.Error(), "")
+		resp.Nvmestate = addState(pb.ResponseStatus_CTRL_ERR_NVME,
+			msgSpdkInitFail+": "+err.Error(), "", msg)
 		return
 	}
 
 	cs, ns, err := n.nvme.Discover()
 	if err != nil {
-		resp.Nvmestate = addStateDiscover(
-			pb.ResponseStatus_CTRL_ERR_NVME,
-			msgSpdkDiscoverFail+": "+err.Error(), "")
+		resp.Nvmestate = addState(pb.ResponseStatus_CTRL_ERR_NVME,
+			msgSpdkDiscoverFail+": "+err.Error(), "", msg)
 		return
 	}
 	n.controllers = loadControllers(cs, ns)
 
-	resp.Nvmestate = addStateDiscover(
-		pb.ResponseStatus_CTRL_SUCCESS, "", "")
+	resp.Nvmestate = addState(pb.ResponseStatus_CTRL_SUCCESS, "", "", msg)
 	resp.Ctrlrs = n.controllers
 
 	n.initialized = true
@@ -237,15 +226,12 @@ func (n *nvmeStorage) Discover(resp *pb.StorageScanResp) {
 
 // newCret creates and populates NVMe controller result and logs error
 // through addState.
-func newCret(
-	op string, pciaddr string, status pb.ResponseStatus, errMsg string,
-	logDepth int) *pb.NvmeControllerResult {
+func newCret(op string, pciaddr string, status pb.ResponseStatus, errMsg string,
+	infoMsg string) *pb.NvmeControllerResult {
 
 	return &pb.NvmeControllerResult{
 		Pciaddr: pciaddr,
-		State: addState(
-			status, errMsg, "", logDepth+1,
-			"nvme controller "+op),
+		State:   addState(status, errMsg, infoMsg, "nvme controller "+op),
 	}
 }
 
@@ -262,19 +248,13 @@ func (n *nvmeStorage) Format(i int, results *(common.NvmeControllerResults)) {
 	log.Debugf("performing device format on NVMe controllers")
 
 	// appends results to response to provide format specific function
-	addCretFormat := func(status pb.ResponseStatus, errMsg string) {
-		// log depth should be stack layer registering result
-		*results = append(
-			*results,
-			newCret(
-				"format", pciAddr, status, errMsg,
-				common.UtilLogDepth+1))
+	addCretFormat := func(status pb.ResponseStatus, errMsg string, infoMsg string) {
+		*results = append(*results,
+			newCret("format", pciAddr, status, errMsg, infoMsg))
 	}
 
 	if n.formatted {
-		addCretFormat(
-			pb.ResponseStatus_CTRL_ERR_APP,
-			msgBdevAlreadyFormatted)
+		addCretFormat(pb.ResponseStatus_CTRL_ERR_APP, msgBdevAlreadyFormatted, "")
 		return
 	}
 
@@ -282,57 +262,43 @@ func (n *nvmeStorage) Format(i int, results *(common.NvmeControllerResults)) {
 	case bdNVMe:
 		for _, pciAddr = range srv.BdevList {
 			if pciAddr == "" {
-				addCretFormat(
-					pb.ResponseStatus_CTRL_ERR_CONF,
-					msgBdevEmpty)
+				addCretFormat(pb.ResponseStatus_CTRL_ERR_CONF,
+					msgBdevEmpty, "")
 				continue
 			}
 
 			ctrlr := n.getController(pciAddr)
 			if ctrlr == nil {
-				addCretFormat(
-					pb.ResponseStatus_CTRL_ERR_NVME,
-					pciAddr+": "+msgBdevNotFound)
+				addCretFormat(pb.ResponseStatus_CTRL_ERR_NVME,
+					pciAddr+": "+msgBdevNotFound, "")
 				continue
 			}
 
-			log.Debugf(
-				"formatting nvme controller at %s, may take "+
-					"several minutes!...", pciAddr)
+			log.Debugf("formatting nvme controller at %s, may take "+
+				"several minutes!...", pciAddr)
 
 			cs, ns, err := n.nvme.Format(pciAddr)
 			if err != nil {
-				addCretFormat(
-					pb.ResponseStatus_CTRL_ERR_NVME,
-					pciAddr+": "+err.Error())
+				addCretFormat(pb.ResponseStatus_CTRL_ERR_NVME,
+					pciAddr+": "+err.Error(), "")
 				continue
 			}
 
-			log.Debugf(
-				"controller format successful (%s)\n", pciAddr)
+			log.Debugf("controller format successful (%s)\n", pciAddr)
 
-			addCretFormat(pb.ResponseStatus_CTRL_SUCCESS, "")
+			addCretFormat(pb.ResponseStatus_CTRL_SUCCESS, "", "")
 			n.controllers = loadControllers(cs, ns)
 		}
 	default:
-		addCretFormat(
-			pb.ResponseStatus_CTRL_ERR_CONF,
-			string(srv.BdevClass)+": "+msgBdevClassNotSupported)
+		addCretFormat(pb.ResponseStatus_CTRL_ERR_CONF,
+			string(srv.BdevClass)+": "+msgBdevClassNotSupported, "")
 		return
 	}
 
 	// add info to result if no controllers have been formatted
 	if len(*results) == 0 && len(srv.BdevList) == 0 {
-		*results = append(
-			*results,
-			&pb.NvmeControllerResult{
-				Pciaddr: "",
-				State: addState(
-					pb.ResponseStatus_CTRL_SUCCESS,
-					"", "no controllers specified",
-					common.UtilLogDepth,
-					"nvme controller format"),
-			})
+		addCretFormat(pb.ResponseStatus_CTRL_SUCCESS,
+			"", "no controllers specified")
 	}
 
 	log.Debugf("device format on NVMe controllers completed")
@@ -352,27 +318,19 @@ func (n *nvmeStorage) Format(i int, results *(common.NvmeControllerResults)) {
 // One result with empty Pciaddr will be reported if there are preliminary
 // errors occurring before devices could be accessed. Otherwise a result will
 // be populated for each device in bdev_list.
-func (n *nvmeStorage) Update(
-	i int, req *pb.UpdateNvmeReq, results *(common.NvmeControllerResults),
-) {
-
+func (n *nvmeStorage) Update(i int, req *pb.UpdateNvmeReq, results *(common.NvmeControllerResults)) {
 	var pciAddr string
 	srv := n.config.Servers[i]
 	log.Debugf("performing firmware update on NVMe controllers")
 
 	// appends results to response to provide update specific function
-	addCretUpdate := func(status pb.ResponseStatus, errMsg string) {
-		// log depth should be stack layer registering result
-		*results = append(
-			*results,
-			newCret(
-				"update", pciAddr, status, errMsg,
-				common.UtilLogDepth+1))
+	addCretUpdate := func(status pb.ResponseStatus, errMsg string, infoMsg string) {
+		*results = append(*results,
+			newCret("update", pciAddr, status, errMsg, infoMsg))
 	}
 
 	if !n.initialized {
-		addCretUpdate(
-			pb.ResponseStatus_CTRL_ERR_APP, msgBdevNotInited)
+		addCretUpdate(pb.ResponseStatus_CTRL_ERR_APP, msgBdevNotInited, "")
 		return
 	}
 
@@ -380,39 +338,33 @@ func (n *nvmeStorage) Update(
 	case bdNVMe:
 		for _, pciAddr = range srv.BdevList {
 			if pciAddr == "" {
-				addCretUpdate(
-					pb.ResponseStatus_CTRL_ERR_CONF,
-					msgBdevEmpty)
+				addCretUpdate(pb.ResponseStatus_CTRL_ERR_CONF,
+					msgBdevEmpty, "")
 				continue
 			}
 
 			ctrlr := n.getController(pciAddr)
 			if ctrlr == nil {
-				addCretUpdate(
-					pb.ResponseStatus_CTRL_ERR_NVME,
-					pciAddr+": "+msgBdevNotFound)
+				addCretUpdate(pb.ResponseStatus_CTRL_ERR_NVME,
+					pciAddr+": "+msgBdevNotFound, "")
 				continue
 			}
 
 			if strings.TrimSpace(ctrlr.Model) != req.Model {
-				addCretUpdate(
-					pb.ResponseStatus_CTRL_ERR_NVME,
-					fmt.Sprintf(
-						pciAddr+": "+
-							msgBdevModelMismatch+
-							" want %s, have %s",
-						req.Model, ctrlr.Model))
+				addCretUpdate(pb.ResponseStatus_CTRL_ERR_NVME,
+					fmt.Sprintf(pciAddr+": "+msgBdevModelMismatch+
+						" want %s, have %s",
+						req.Model, ctrlr.Model),
+					"")
 				continue
 			}
 
 			if strings.TrimSpace(ctrlr.Fwrev) != req.Startrev {
-				addCretUpdate(
-					pb.ResponseStatus_CTRL_ERR_NVME,
-					fmt.Sprintf(
-						pciAddr+": "+
-							msgBdevFwrevStartMismatch+
-							" want %s, have %s",
-						req.Startrev, ctrlr.Fwrev))
+				addCretUpdate(pb.ResponseStatus_CTRL_ERR_NVME,
+					fmt.Sprintf(pciAddr+": "+msgBdevFwrevStartMismatch+
+						" want %s, have %s",
+						req.Startrev, ctrlr.Fwrev),
+					"")
 				continue
 			}
 
@@ -423,11 +375,9 @@ func (n *nvmeStorage) Update(
 
 			cs, ns, err := n.nvme.Update(pciAddr, req.Path, req.Slot)
 			if err != nil {
-				addCretUpdate(
-					pb.ResponseStatus_CTRL_ERR_NVME,
-					fmt.Sprintf(
-						pciAddr+": %T: "+err.Error(),
-						n.nvme))
+				addCretUpdate(pb.ResponseStatus_CTRL_ERR_NVME,
+					fmt.Sprintf(pciAddr+": %T: "+err.Error(), n.nvme),
+					"")
 				// TODO: verify controller responsive after
 				//       error, return fatal response to stop
 				//       further updates if not
@@ -437,33 +387,28 @@ func (n *nvmeStorage) Update(
 
 			ctrlr = n.getController(pciAddr)
 			if ctrlr == nil {
-				addCretUpdate(
-					pb.ResponseStatus_CTRL_ERR_NVME,
-					pciAddr+": "+msgBdevNotFound+
-						" (after update)")
+				addCretUpdate(pb.ResponseStatus_CTRL_ERR_NVME,
+					pciAddr+": "+msgBdevNotFound+" (after update)",
+					"")
 				continue
 			}
 
 			// verify controller is reporting an updated rev
 			if ctrlr.Fwrev == req.Startrev || ctrlr.Fwrev == "" {
-				addCretUpdate(
-					pb.ResponseStatus_CTRL_ERR_NVME,
-					fmt.Sprintf(
-						pciAddr+": "+
-							msgBdevFwrevEndMismatch))
+				addCretUpdate(pb.ResponseStatus_CTRL_ERR_NVME,
+					fmt.Sprintf(pciAddr+": "+msgBdevFwrevEndMismatch),
+					"")
 				continue
 			}
 
-			log.Debugf(
-				"controller fwupdate successful (%s: %s->%s)\n",
+			log.Debugf("controller fwupdate successful (%s: %s->%s)\n",
 				pciAddr, req.Startrev, ctrlr.Fwrev)
 
-			addCretUpdate(pb.ResponseStatus_CTRL_SUCCESS, "")
+			addCretUpdate(pb.ResponseStatus_CTRL_SUCCESS, "", "")
 		}
 	default:
-		addCretUpdate(
-			pb.ResponseStatus_CTRL_ERR_CONF,
-			string(srv.BdevClass)+": "+msgBdevClassNotSupported)
+		addCretUpdate(pb.ResponseStatus_CTRL_ERR_CONF,
+			string(srv.BdevClass)+": "+msgBdevClassNotSupported, "")
 		return
 	}
 

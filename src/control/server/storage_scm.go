@@ -394,32 +394,23 @@ func loadModules(mms []ipmctl.DeviceDiscovery) (pbMms common.ScmModules) {
 
 // Discover method implementation for scmStorage
 func (s *scmStorage) Discover(resp *pb.StorageScanResp) {
-	addStateDiscover := func(
-		status pb.ResponseStatus, errMsg string,
-		infoMsg string) *pb.ResponseState {
-
-		return addState(
-			status, errMsg, infoMsg, common.UtilLogDepth+1,
-			"scm storage discover")
-	}
+	msg := "scm storage discover"
 
 	if s.initialized {
-		resp.Scmstate = addStateDiscover(
-			pb.ResponseStatus_CTRL_SUCCESS, "", "")
+		resp.Scmstate = addState(pb.ResponseStatus_CTRL_SUCCESS, "", "", msg)
 		resp.Modules = s.modules
 		return
 	}
 
 	mms, err := s.ipmctl.Discover()
 	if err != nil {
-		resp.Scmstate = addStateDiscover(
-			pb.ResponseStatus_CTRL_ERR_SCM,
-			msgIpmctlDiscoverFail+": "+err.Error(), "")
+		resp.Scmstate = addState(pb.ResponseStatus_CTRL_ERR_SCM,
+			msgIpmctlDiscoverFail+": "+err.Error(), "", msg)
 		return
 	}
 	s.modules = loadModules(mms)
 
-	resp.Scmstate = addStateDiscover(pb.ResponseStatus_CTRL_SUCCESS, "", "")
+	resp.Scmstate = addState(pb.ResponseStatus_CTRL_SUCCESS, "", "", msg)
 	resp.Modules = s.modules
 
 	s.initialized = true
@@ -493,9 +484,8 @@ func getMntParams(srv *IOServerConfig) (mntType string, dev string, opts string,
 // makeMount creates a mount target directory and mounts device there.
 //
 // NOTE: requires elevated privileges
-func (s *scmStorage) makeMount(
-	devPath string, mntPoint string, mntType string, mntOpts string,
-) (err error) {
+func (s *scmStorage) makeMount(devPath string, mntPoint string, mntType string,
+	mntOpts string) (err error) {
 
 	if err = s.config.ext.mkdir(mntPoint); err != nil {
 		return
@@ -510,14 +500,12 @@ func (s *scmStorage) makeMount(
 
 // newMntRet creates and populates NVMe ctrlr result and logs error through
 // addState.
-func newMntRet(
-	op string, mntPoint string, status pb.ResponseStatus, errMsg string,
-	logDepth int) *pb.ScmMountResult {
+func newMntRet(op string, mntPoint string, status pb.ResponseStatus, errMsg string,
+	infoMsg string) *pb.ScmMountResult {
 
 	return &pb.ScmMountResult{
 		Mntpoint: mntPoint,
-		State: addState(
-			status, errMsg, "", logDepth+1, "scm mount "+op),
+		State:    addState(status, errMsg, infoMsg, "scm mount "+op),
 	}
 }
 
@@ -528,14 +516,10 @@ func (s *scmStorage) Format(i int, results *(common.ScmMountResults)) {
 	mntPoint := srv.ScmMount
 	log.Debugf("performing SCM device reset, format and mount")
 
-	// wraps around addMret to provide format specific function
+	// wraps around addMret to provide format specific function, ignore infoMsg
 	addMretFormat := func(status pb.ResponseStatus, errMsg string) {
-		// log depth should be stack layer registering result
-		*results = append(
-			*results,
-			newMntRet(
-				"format", mntPoint, status, errMsg,
-				common.UtilLogDepth+1))
+		*results = append(*results,
+			newMntRet("format", mntPoint, status, errMsg, ""))
 	}
 
 	if !s.initialized {
@@ -583,9 +567,7 @@ func (s *scmStorage) Format(i int, results *(common.ScmMountResults)) {
 		log.Debugf("no scm_size specified in config for ram tmpfs")
 	}
 
-	log.Debugf(
-		"mounting scm device %s at %s (%s)...",
-		devPath, mntPoint, mntType)
+	log.Debugf("mounting scm device %s at %s (%s)...", devPath, mntPoint, mntType)
 
 	if err := s.makeMount(devPath, mntPoint, mntType, mntOpts); err != nil {
 		addMretFormat(pb.ResponseStatus_CTRL_ERR_APP, err.Error())
@@ -608,10 +590,8 @@ func (s *scmStorage) Update(
 		*results,
 		&pb.ScmModuleResult{
 			Loc: &pb.ScmModule_Location{},
-			State: addState(
-				pb.ResponseStatus_CTRL_NO_IMPL,
-				msgScmUpdateNotImpl, "",
-				common.UtilLogDepth+1, "scm module update"),
+			State: addState(pb.ResponseStatus_CTRL_NO_IMPL,
+				msgScmUpdateNotImpl, "", "scm module update"),
 		})
 }
 

@@ -34,8 +34,7 @@ import (
 
 // addState creates, populates and returns ResponseState in addition
 // to logging any err.
-func addState(
-	status pb.ResponseStatus, errMsg string, infoMsg string, logDepth int,
+func addState(status pb.ResponseStatus, errMsg string, infoMsg string,
 	contextMsg string) *pb.ResponseState {
 
 	state := &pb.ResponseState{
