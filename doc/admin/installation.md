@@ -1,7 +1,7 @@
 # DAOS Software Installation
 
 DAOS runs on both Intel 64 and ARM64 platforms and has been successfully tested
-on CentOS7, OpenSUSE 42.2 and Ubuntu 18.04 distributions.
+on CentOS 7, OpenSUSE 42.2 and Ubuntu 18.04 distributions.
 
 ## Software Dependencies
 
@@ -144,13 +144,13 @@ To build the Docker image directly from GitHub, run the following command:
     $ docker build -t daos -f Dockerfile.centos.7 github.com/daos-stack/daos#:utils/docker
 ```
 
-This creates a CentOS7 image, fetches the latest DAOS version from GitHub,
+This creates a CentOS 7 image, fetches the latest DAOS version from GitHub,
 builds it and install it in the image.
 For Ubuntu and other Linux distributions, replace Dockerfile.centos.7 with
 Dockerfile.ubuntu.18.04 and the appropriate version of interest.
 
-Once the image created, one can start start a container that will run eventually
-run the DAOS service (see section below):
+Once the image created, one can start start a container that will eventually run
+the DAOS service (see section below):
 
 ```
     $ docker run -it -d --privileged --name server \
