@@ -208,6 +208,7 @@ OSX. This still allows to run the DAOS service despite the error.
 The DAOS service can then be started as follows:
 
 ```
+    $ docker exec server mkdir /var/run/daos_server
     $ docker exec server orterun -allow-run-as-root -H localhost -np 1 \
             daos_server start \
             -a /tmp/uri \
