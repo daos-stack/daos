@@ -33,8 +33,8 @@ import (
 
 	. "github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/go-ipmctl/ipmctl"
-	"github.com/daos-stack/go-spdk/spdk"
+	"github.com/daos-stack/daos/src/control/lib/ipmctl"
+	"github.com/daos-stack/daos/src/control/lib/spdk"
 )
 
 // mockFormatStorageServer provides mocking for server side streaming,
