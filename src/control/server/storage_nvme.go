@@ -61,7 +61,7 @@ const (
 	msgBdevFwrevEndMismatch   = "controller fwrev unchanged after update"
 	msgBdevModelMismatch      = "controller model unexpected"
 	msgBdevNoDevs             = "no controllers specified"
-	msgBdevClassIsFile        = "bdev class set to file, skipping format"
+	msgBdevClassIsFile        = "nvme emulation initialized with backend file"
 )
 
 // SpdkSetup is an interface to configure spdk prerequisites via a
@@ -287,7 +287,7 @@ func (n *nvmeStorage) Format(i int, results *(common.NvmeControllerResults)) {
 				Pciaddr: pciAddr,
 				State: addState(pb.ResponseStatus_CTRL_SUCCESS,
 					"", msgBdevClassIsFile, common.UtilLogDepth,
-					"nvme controller former"),
+					"nvme controller format"),
 			},
 		)
 	case bdNVMe:
