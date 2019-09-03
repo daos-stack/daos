@@ -37,6 +37,7 @@
 #include <cmocka.h>
 #include <getopt.h>
 #include <daos_srv/vos.h>
+#include <vos_internal.h>
 
 static void
 print_usage()
@@ -89,6 +90,7 @@ run_all_tests(int keys, bool nest_iterators)
 	}
 	failed += run_discard_tests();
 	failed += run_aggregate_tests(false);
+	failed += run_gc_tests();
 	failed += run_dtx_tests();
 	return failed;
 }
@@ -113,6 +115,7 @@ main(int argc, char **argv)
 		{"nest_iterators",	no_argument, 0, 'n'},
 		{"aggregate_tests",	no_argument, 0, 'a'},
 		{"dtx_tests",		no_argument, 0, 'X'},
+		{"garbage_collector",	no_argument, 0, 'g'},
 		{"help",		no_argument, 0, 'h'},
 		{"filter",		required_argument, 0, 'f'},
 		{"exclude",		required_argument, 0, 'e'},
@@ -133,7 +136,7 @@ main(int argc, char **argv)
 	gc = 0;
 	bool test_run = false;
 
-	while ((opt = getopt_long(argc, argv, "apcdnti:XA:hf:e:",
+	while ((opt = getopt_long(argc, argv, "apcdgnti:XA:hf:e:",
 				  long_options, &index)) != -1) {
 		switch (opt) {
 		case 'e':
@@ -187,6 +190,9 @@ main(int argc, char **argv)
 			nr_failed += run_discard_tests();
 			test_run = true;
 			break;
+		case 'g':
+			nr_failed += run_gc_tests();
+			break;
 		case 'X':
 			nr_failed += run_dtx_tests();
 			test_run = true;
@@ -221,6 +227,13 @@ main(int argc, char **argv)
 		print_message("\nSUCCESS! NO TEST FAILURES\n");
 
 exit_1:
+	/* There is no ULT/thread calls vos_gc_run() in this utility, it is
+	 * possible VOS GC might still take refcount on already closed pools.
+	 * These in-mem pools will be freed by calling gc_wait().
+	 *
+	 * NB: this function is only defined for standalone mode.
+	 */
+	gc_wait();
 	vos_fini();
 exit_0:
 	daos_debug_fini();
