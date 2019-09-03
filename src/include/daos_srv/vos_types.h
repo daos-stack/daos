@@ -41,6 +41,18 @@ enum vos_oi_attr {
 };
 
 /**
+ * VOS garbage collector statistics
+ */
+struct vos_gc_stat {
+	uint64_t	gs_conts;	/**< GCed containers */
+	uint64_t	gs_objs;	/**< GCed objects */
+	uint64_t	gs_dkeys;	/**< GCed dkeys */
+	uint64_t	gs_akeys;	/**< GCed akeys */
+	uint64_t	gs_singvs;	/**< GCed single values */
+	uint64_t	gs_recxs;	/**< GCed array values */
+};
+
+/**
  * pool attributes returned to query
  */
 typedef struct {
@@ -58,6 +70,8 @@ typedef struct {
 	struct vea_attr		pif_vea_attr;
 	/** NVMe block allocator statistics */
 	struct vea_stat		pif_vea_stat;
+	/** garbage collector statistics */
+	struct vos_gc_stat	pif_gc_stat;
 	/** TODO */
 } vos_pool_info_t;
 

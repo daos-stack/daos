@@ -516,11 +516,16 @@ cont_child_destroy_one(void *vin)
 		DP_CONT(pool->spc_uuid, in->tdi_uuid));
 
 	rc = vos_cont_destroy(pool->spc_hdl, in->tdi_uuid);
-	if (rc == -DER_NONEXIST)
+	if (rc == -DER_NONEXIST) {
 		/** VOS container creation is effectively delayed until
 		 * container open time, so it might legitimately not exist if
 		 * the container has never been opened */
 		rc = 0;
+	}
+	/* XXX there might be a race between GC and pool destroy, let's do
+	 * synchronous GC for now.
+	 */
+	dss_gc_run(-1);
 out_pool:
 	ds_pool_child_put(pool);
 out:
