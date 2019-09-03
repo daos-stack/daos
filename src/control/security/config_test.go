@@ -24,53 +24,57 @@
 package security
 
 import (
+	"bytes"
 	"os"
 	"strings"
-	"bytes"
 	"testing"
 )
 
-func InsecureTC() *TransportConfig{
+func InsecureTC() *TransportConfig {
 	return &TransportConfig{
 		AllowInsecure: true,
 	}
 }
-func BadTC() *TransportConfig{
+
+func BadTC() *TransportConfig {
 	return &TransportConfig{
 		AllowInsecure: false,
 		CertificateConfig: CertificateConfig{
-			CARootPath: "testdata/certs/daosCA.crt",
+			CARootPath:      "testdata/certs/daosCA.crt",
 			CertificatePath: "testdata/certs/bad.crt",
-			PrivateKeyPath: "testdata/certs/bad.key",
+			PrivateKeyPath:  "testdata/certs/bad.key",
 			tlsKeypair:      nil,
 			caPool:          nil,
 		},
 	}
 }
+
 func ServerTC() *TransportConfig {
 	return &TransportConfig{
 		AllowInsecure: false,
 		CertificateConfig: CertificateConfig{
-			CARootPath: "testdata/certs/daosCA.crt",
+			CARootPath:      "testdata/certs/daosCA.crt",
 			CertificatePath: "testdata/certs/server.crt",
-			PrivateKeyPath: "testdata/certs/server.key",
+			PrivateKeyPath:  "testdata/certs/server.key",
 			tlsKeypair:      nil,
 			caPool:          nil,
 		},
 	}
 }
+
 func AgentTC() *TransportConfig {
 	return &TransportConfig{
 		AllowInsecure: false,
 		CertificateConfig: CertificateConfig{
-			CARootPath: "testdata/certs/daosCA.crt",
+			CARootPath:      "testdata/certs/daosCA.crt",
 			CertificatePath: "testdata/certs/agent.crt",
-			PrivateKeyPath: "testdata/certs/agent.key",
+			PrivateKeyPath:  "testdata/certs/agent.key",
 			tlsKeypair:      nil,
 			caPool:          nil,
 		},
 	}
 }
+
 func SetupTCFilePerms(t *testing.T, conf *TransportConfig) {
 	if err := os.Chmod(conf.CARootPath, SafeCertPerm); err != nil {
 		t.Fatal(err)
@@ -83,7 +87,7 @@ func SetupTCFilePerms(t *testing.T, conf *TransportConfig) {
 	}
 }
 
-func ValidateInsecure (t *testing.T, c *TransportConfig, err error){
+func ValidateInsecure(t *testing.T, c *TransportConfig, err error) {
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +95,8 @@ func ValidateInsecure (t *testing.T, c *TransportConfig, err error){
 		t.Fatal("insecure config loaded certs")
 	}
 }
-func ValidateGood (t *testing.T, c *TransportConfig, err error){
+
+func ValidateGood(t *testing.T, c *TransportConfig, err error) {
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,17 +104,20 @@ func ValidateGood (t *testing.T, c *TransportConfig, err error){
 		t.Fatal("certs did not load yet returned no error")
 	}
 }
-func ValidateBad (t *testing.T, c *TransportConfig, err error){
+
+func ValidateBad(t *testing.T, c *TransportConfig, err error) {
 	if err == nil {
 		t.Fatal(err)
 	}
 }
-func ValidateNil (t *testing.T, c *TransportConfig, err error){
+
+func ValidateNil(t *testing.T, c *TransportConfig, err error) {
 	if err != nil &&
 		strings.Compare(err.Error(), "nil TransportConfig") != 0 {
 		t.Fatal(err)
 	}
 }
+
 func TestPreLoadCertData(t *testing.T) {
 	insecureTC := InsecureTC()
 	serverTC := ServerTC()
@@ -121,7 +129,7 @@ func TestPreLoadCertData(t *testing.T) {
 
 	testCases := []struct {
 		testname string
-		config *TransportConfig
+		config   *TransportConfig
 		Validate func(t *testing.T, c *TransportConfig, err error)
 	}{
 		{"InsecureTC", insecureTC, ValidateInsecure},
@@ -137,6 +145,7 @@ func TestPreLoadCertData(t *testing.T) {
 		})
 	}
 }
+
 func TestReloadCertData(t *testing.T) {
 	serverTC := ServerTC()
 	agentTC := AgentTC()
@@ -165,6 +174,7 @@ func TestReloadCertData(t *testing.T) {
 		t.Fatal("cert before and after reload is the same")
 	}
 }
+
 func TestPrivateKey(t *testing.T) {
 	config := ServerTC()
 
@@ -174,7 +184,7 @@ func TestPrivateKey(t *testing.T) {
 
 	key, err := config.PrivateKey()
 
-	if key != nil && err != nil {
+	if key != nil && err == nil {
 		t.Fatal("Insecure config returned a PrivateKey")
 	}
 
@@ -186,6 +196,7 @@ func TestPrivateKey(t *testing.T) {
 	}
 
 }
+
 func TestPublicKey(t *testing.T) {
 	config := ServerTC()
 
@@ -195,7 +206,7 @@ func TestPublicKey(t *testing.T) {
 
 	key, err := config.PublicKey()
 
-	if key != nil && err != nil {
+	if key != nil && err == nil {
 		t.Fatal("Insecure config returned a PublicKey")
 	}
 
