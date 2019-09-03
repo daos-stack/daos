@@ -86,6 +86,7 @@ enum daos_ops_intent {
 	DAOS_INTENT_PUNCH	= 3,	/* punch/delete */
 	DAOS_INTENT_REBUILD	= 4,	/* for rebuild related scan */
 	DAOS_INTENT_CHECK	= 5,	/* check aborted or not */
+	DAOS_INTENT_KILL	= 6,	/* delete object/key */
 };
 
 enum daos_dtx_alb {

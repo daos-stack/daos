@@ -105,11 +105,11 @@ type Connect interface {
 	// GetActiveConns verifies states and removes inactive conns
 	GetActiveConns(ResultMap) ResultMap
 	ClearConns() ResultMap
-	ScanStorage() (ClientCtrlrMap, ClientModuleMap)
-	FormatStorage() (ClientCtrlrMap, ClientMountMap)
-	UpdateStorage(*pb.UpdateStorageReq) (ClientCtrlrMap, ClientModuleMap)
+	StorageScan() (ClientCtrlrMap, ClientModuleMap)
+	StorageFormat() (ClientCtrlrMap, ClientMountMap)
+	StorageUpdate(*pb.StorageUpdateReq) (ClientCtrlrMap, ClientModuleMap)
 	// TODO: implement Burnin client features
-	//BurninStorage() (ClientCtrlrMap, ClientModuleMap)
+	//StorageBurnIn() (ClientCtrlrMap, ClientModuleMap)
 	ListFeatures() ClientFeatureMap
 	KillRank(uuid string, rank uint32) ResultMap
 	CreatePool(*pb.CreatePoolReq) ResultMap
