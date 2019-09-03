@@ -31,8 +31,6 @@ import string
 from pathlib import Path
 from errno import ENOENT
 from time import sleep
-from avocado import fail_on
-from ClusterShell.Task import task_self
 
 from avocado import fail_on
 from daos_api import DaosApiError, DaosServer, DaosContainer, DaosPool
@@ -42,6 +40,7 @@ from ClusterShell.NodeSet import NodeSet
 
 class DaosTestError(Exception):
     """DAOS API exception class."""
+
 
 def run_task(hosts, command, timeout=None):
     """Create a task to run a command on each host in parallel.
@@ -420,6 +419,7 @@ def verify_rebuild(pool, log, to_be_rebuilt, object_qty, record_qty, errors=0):
                 "Unexpected {} value: expected={}, detected={}".format(
                     key, expected, detected))
     return messages
+
 
 def check_pool_files(log, hosts, uuid):
     """Check if pool files exist on the specified list of hosts.
