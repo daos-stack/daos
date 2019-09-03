@@ -49,12 +49,12 @@ func addState(
 	return state
 }
 
-// ScanStorage discovers non-volatile storage hardware on node.
-func (c *ControlService) ScanStorage(
-	ctx context.Context, req *pb.ScanStorageReq) (
-	*pb.ScanStorageResp, error) {
+// StorageScan discovers non-volatile storage hardware on node.
+func (c *ControlService) StorageScan(
+	ctx context.Context, req *pb.StorageScanReq) (
+	*pb.StorageScanResp, error) {
 
-	resp := new(pb.ScanStorageResp)
+	resp := new(pb.StorageScanResp)
 
 	c.nvme.Discover(resp)
 	c.scm.Discover(resp)
@@ -64,7 +64,7 @@ func (c *ControlService) ScanStorage(
 
 // doFormat performs format on storage subsystems, populates response results
 // in storage subsystem routines and broadcasts (closes channel) if successful.
-func (c *ControlService) doFormat(i int, resp *pb.FormatStorageResp) error {
+func (c *ControlService) doFormat(i int, resp *pb.StorageFormatResp) error {
 	srv := c.config.Servers[i]
 	serverFormatted := false
 
@@ -104,11 +104,11 @@ func (c *ControlService) doFormat(i int, resp *pb.FormatStorageResp) error {
 //
 // Send response containing multiple results of format operations on scm mounts
 // and nvme controllers.
-func (c *ControlService) FormatStorage(
-	req *pb.FormatStorageReq,
-	stream pb.MgmtCtl_FormatStorageServer) error {
+func (c *ControlService) StorageFormat(
+	req *pb.StorageFormatReq,
+	stream pb.MgmtCtl_StorageFormatServer) error {
 
-	resp := new(pb.FormatStorageResp)
+	resp := new(pb.StorageFormatResp)
 
 	for i := range c.config.Servers {
 		if err := c.doFormat(i, resp); err != nil {
@@ -129,11 +129,11 @@ func (c *ControlService) FormatStorage(
 //
 // Send response containing multiple results of update operations on scm mounts
 // and nvme controllers.
-func (c *ControlService) UpdateStorage(
-	req *pb.UpdateStorageReq,
-	stream pb.MgmtCtl_UpdateStorageServer) error {
+func (c *ControlService) StorageUpdate(
+	req *pb.StorageUpdateReq,
+	stream pb.MgmtCtl_StorageUpdateServer) error {
 
-	resp := new(pb.UpdateStorageResp)
+	resp := new(pb.StorageUpdateResp)
 
 	for i := range c.config.Servers {
 		ctrlrResults := common.NvmeControllerResults{}
@@ -158,11 +158,11 @@ func (c *ControlService) UpdateStorage(
 //
 // Send response containing multiple results of burn-in operations on scm mounts
 // and nvme controllers.
-func (c *ControlService) BurninStorage(
-	req *pb.BurninStorageReq,
-	stream pb.MgmtCtl_BurninStorageServer) error {
+func (c *ControlService) StorageBurnIn(
+	req *pb.StorageBurnInReq,
+	stream pb.MgmtCtl_StorageBurnInServer) error {
 
-	return errors.New("BurninStorage not implemented")
+	return errors.New("StorageBurnIn not implemented")
 	//	for i := range c.config.Servers {
 	//		c.nvme.BurnIn(i, req.Nvme, resp)
 	//		c.scm.BurnIn(i, req.Scm, resp)
