@@ -528,6 +528,7 @@ dtx_key_rec_exchange(struct umem_instance *umm, struct vos_krec_df *key,
 
 	umem_tx_add_ptr(umm, tgt_key, sizeof(*tgt_key));
 
+	tgt_key->kr_bmap |= (key->kr_bmap & KREC_BF_DKEY);
 	if (key->kr_bmap & KREC_BF_EVT) {
 		tgt_key->kr_bmap |= KREC_BF_EVT;
 		tgt_key->kr_evt = key->kr_evt;
