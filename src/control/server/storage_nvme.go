@@ -215,13 +215,13 @@ func (n *nvmeStorage) Discover() error {
 }
 
 // newCret creates and populates NVMe controller result and logs error
-// through addState.
+// through newState.
 func newCret(op string, pciaddr string, status pb.ResponseStatus, errMsg string,
 	infoMsg string) *pb.NvmeControllerResult {
 
 	return &pb.NvmeControllerResult{
 		Pciaddr: pciaddr,
-		State:   addState(status, errMsg, infoMsg, "nvme controller "+op),
+		State:   newState(status, errMsg, infoMsg, "nvme controller "+op),
 	}
 }
 

@@ -33,9 +33,9 @@ import (
 	log "github.com/daos-stack/daos/src/control/logging"
 )
 
-// addState creates, populates and returns ResponseState in addition
+// newState creates, populates and returns ResponseState in addition
 // to logging any err.
-func addState(status pb.ResponseStatus, errMsg string, infoMsg string,
+func newState(status pb.ResponseStatus, errMsg string, infoMsg string,
 	contextMsg string) *pb.ResponseState {
 
 	state := &pb.ResponseState{
@@ -49,7 +49,7 @@ func addState(status pb.ResponseStatus, errMsg string, infoMsg string,
 	return state
 }
 
-func (c *ControlService) doNvmePrepare(req *pb.PrepareNvmeReq) (resp *pb.ResponseState) {
+func (c *ControlService) doNvmePrepare(req *pb.PrepareNvmeReq) (resp *pb.PrepareNvmeResp) {
 	msg := "Prepare NVMe storage"
 	err := c.PrepareNvme(PrepareNvmeRequest{
 		HugePageCount: int(req.GetNrhugepages()),
@@ -59,19 +59,34 @@ func (c *ControlService) doNvmePrepare(req *pb.PrepareNvmeReq) (resp *pb.Respons
 	})
 
 	if err != nil {
-		return addState(pb.ResponseStatus_CTRL_ERR_NVME, err.Error(), "", msg)
+		resp.State = newState(pb.ResponseStatus_CTRL_ERR_NVME, err.Error(), "", msg)
+		return
 	}
 
-	return addState(pb.ResponseStatus_CTRL_SUCCESS, "", "", msg)
+	resp.State = newState(pb.ResponseStatus_CTRL_SUCCESS, "", "", msg)
+	return
+}
+
+func translatePmemDevices(inDevs []pmemDev) (outDevs types.PmemDevices) {
+	for _, dev := range inDevs {
+		outDevs = append(outDevs,
+			&pb.PmemDevice{
+				Uuid:     dev.UUID,
+				Blockdev: dev.Blockdev,
+				Dev:      dev.Dev,
+				Numanode: uint32(dev.NumaNode),
+			})
+	}
+
+	return
 }
 
 func (c *ControlService) doScmPrepare(req *pb.PrepareScmReq) (resp *pb.PrepareScmResp) {
 	msg := "Prepare SCM storage"
 
 	needsReboot, pmemDevs, err := c.PrepareScm(PrepareScmRequest{Reset: req.GetReset_()})
-
 	if err != nil {
-		resp.State = addState(pb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg)
+		resp.State = newState(pb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg)
 		return
 	}
 
@@ -80,8 +95,8 @@ func (c *ControlService) doScmPrepare(req *pb.PrepareScmReq) (resp *pb.PrepareSc
 		info = msgScmRebootRequired
 	}
 
-	resp.State = addState(pb.ResponseStatus_CTRL_SUCCESS, "", info, msg)
-	resp.Pmems = pmemDevs
+	resp.State = newState(pb.ResponseStatus_CTRL_SUCCESS, "", info, msg)
+	resp.Pmems = translatePmemDevices(pmemDevs)
 
 	return
 }
@@ -93,17 +108,31 @@ func (c *ControlService) StoragePrepare(ctx context.Context, req *pb.StoragePrep
 
 	resp := new(pb.StoragePrepareResp)
 
-	resp.Nvmestate = c.doNvmePrepare(req.Nvme)
-	resp.Scmstate = c.doScmPrepare(req.Scm)
+	resp.Nvme = c.doNvmePrepare(req.Nvme)
+	resp.Scm = c.doScmPrepare(req.Scm)
 
 	return resp, nil
 }
 
 // StorageScan discovers non-volatile storage hardware on node.
-func (c *ControlService) StorageScan(
-	ctx context.Context, req *pb.StorageScanReq) (
+func (c *ControlService) StorageScan(ctx context.Context, req *pb.StorageScanReq) (
 	*pb.StorageScanResp, error) {
 
+	resp := new(pb.StoragePrepareResp)
+
+	outStrs, err := server.StorageScan()
+
+	// print output entries before returning failures
+	for _, str := range outStrs {
+		cmd.log.Info(str)
+	}
+
+	return err
+}
+	resp.Nvme = c.doNvmePrepare(req.Nvme)
+	resp.Scm = c.doScmPrepare(req.Scm)
+
+	return resp, nil
 	resp := new(pb.StorageScanResp)
 
 	c.nvme.Discover(resp)

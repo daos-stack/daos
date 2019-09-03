@@ -175,6 +175,38 @@ func (c *ControlService) ScanScm() (types.ScmModules, error) {
 	return c.scm.modules, nil
 }
 
+func (c *ControlService) StorageScan() ([]string, error) {
+	scanErrors := make([]error, 0, 2)
+	outStrs := make([]string, 0, 3)
+
+	outStrs = append(outStrs, "Scanning locally-attached storage...")
+
+	controllers, err := c.ScanNVMe()
+	if err != nil {
+		scanErrors = append(scanErrors, err)
+	} else {
+		outStrs = append(outStrs,
+			fmt.Sprintf("NVMe SSD controller and constituent namespaces:\n%s", controllers))
+	}
+
+	modules, err := c.ScanSCM()
+	if err != nil {
+		scanErrors = append(scanErrors, err)
+	} else {
+		outStrs = append(outStrs, fmt.Sprintf("SCM modules:\n%s", modules))
+	}
+
+	if len(scanErrors) > 0 {
+		errStr := "scan error(s):\n"
+		for _, err := range scanErrors {
+			errStr += fmt.Sprintf("  %s\n", err.Error())
+		}
+		return outStrs, errors.New(errStr)
+	}
+
+	return outStrs, nil
+}
+
 // awaitStorageFormat checks if running as root and server superblocks exist,
 // if both conditions are true, wait until storage is formatted through client
 // API calls from management tool. Then drop privileges of running process.

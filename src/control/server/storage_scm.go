@@ -491,13 +491,13 @@ func (s *scmStorage) makeMount(devPath string, mntPoint string, mntType string,
 }
 
 // newMntRet creates and populates NVMe ctrlr result and logs error through
-// addState.
+// newState.
 func newMntRet(op string, mntPoint string, status pb.ResponseStatus, errMsg string,
 	infoMsg string) *pb.ScmMountResult {
 
 	return &pb.ScmMountResult{
 		Mntpoint: mntPoint,
-		State:    addState(status, errMsg, infoMsg, "scm mount "+op),
+		State:    newState(status, errMsg, infoMsg, "scm mount "+op),
 	}
 }
 
@@ -582,7 +582,7 @@ func (s *scmStorage) Update(
 		*results,
 		&pb.ScmModuleResult{
 			Loc: &pb.ScmModule_Location{},
-			State: addState(pb.ResponseStatus_CTRL_NO_IMPL,
+			State: newState(pb.ResponseStatus_CTRL_NO_IMPL,
 				msgScmUpdateNotImpl, "", "scm module update"),
 		})
 }

@@ -24,8 +24,6 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -49,31 +47,14 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 		return errors.WithMessage(err, "failed to init ControlService")
 	}
 
-	cmd.log.Info("Scanning locally-attached storage...")
-	scanErrors := make([]error, 0, 2)
-	controllers, err := srv.ScanNVMe()
-	if err != nil {
-		scanErrors = append(scanErrors, err)
-	} else {
-		cmd.log.Infof("NVMe SSD controller and constituent namespaces:\n%s", controllers)
+	outStrs, err := server.StorageScan()
+
+	// print output entries before returning failures
+	for _, str := range outStrs {
+		cmd.log.Info(str)
 	}
 
-	modules, err := srv.ScanSCM()
-	if err != nil {
-		scanErrors = append(scanErrors, err)
-	} else {
-		cmd.log.Infof("SCM modules:\n%s", modules)
-	}
-
-	if len(scanErrors) > 0 {
-		errStr := "scan error(s):\n"
-		for _, err := range scanErrors {
-			errStr += fmt.Sprintf("  %s\n", err.Error())
-		}
-		return errors.New(errStr)
-	}
-
-	return nil
+	return err
 }
 
 type storagePrepNvmeCmd struct {

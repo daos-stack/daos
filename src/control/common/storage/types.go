@@ -101,6 +101,21 @@ func (cr CtrlrResults) String() string {
 	return "no controllers found"
 }
 
+// PmemDevices is an alias for protobuf PmemDeviceice message slice representing
+// a number of mounted SCM regions on a storage node.
+type PmemDevices []*pb.PmemDevice
+
+func (pds PmemDevices) String() string {
+	var buf bytes.Buffer
+
+	for _, pd := range pds {
+		fmt.Fprintf(&buf, "\t%+v\n", pd)
+	}
+
+	return buf.String()
+}
+
+// ScmMountResults is an alias for protobuf ScmMountResult message slice
 // ScmMounts is an alias for protobuf ScmMount message slice representing
 // a number of mounted SCM regions on a storage node.
 type ScmMounts []*pb.ScmMount

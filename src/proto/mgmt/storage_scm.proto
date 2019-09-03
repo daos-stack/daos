@@ -49,7 +49,7 @@ message ScmModule {
 
 // PmemDevice represents SCM namespace as pmem kernel device created on a ScmRegion.
 message PmemDevice {
-	string uuid = 1;    
+	string uuid = 1;
 	string blockdev = 2;
 	string dev = 3; // ndctl specific device identifier
 	uint32 numanode = 4;
