@@ -789,7 +789,7 @@ dss_start_xs_id(int xs_id)
 	if (xs_id < dss_sys_xs_nr)
 		xs_core_offset = 0;
 	else
-		xs_core_offset = xs_id - dss_sys_xs_nr + 1;
+		xs_core_offset = xs_id - (dss_sys_xs_nr - DRPC_XS_NR);
 
 	obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth,
 				     (xs_core_offset + dss_core_offset)

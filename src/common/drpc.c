@@ -639,23 +639,25 @@ drpc_send_response(struct drpc *session_ctx, Drpc__Response *resp)
 int
 drpc_close(struct drpc *ctx)
 {
-	int ret;
+	int ret = 0;
 
 	if (!ctx || !ctx->comm) {
 		D_ERROR("Context is already closed\n");
 		return -DER_INVAL;
 	}
 
-	if (ctx->ref_count > 1) {
-		D_INFO("Decrementing refcount (%d)\n", ctx->ref_count);
+	if (ctx->ref_count > INT_MIN) {
+		D_DEBUG(DB_MGMT, "Decrementing refcount (%d)\n",
+			ctx->ref_count);
 		ctx->ref_count--;
-		return 0;
 	}
 
-	D_INFO("Closing dRPC socket fd=%d\n", ctx->comm->fd);
+	if (ctx->ref_count <= 0) {
+		D_INFO("Closing dRPC socket fd=%d\n", ctx->comm->fd);
 
-	ret = unixcomm_close(ctx->comm);
-	D_FREE(ctx);
+		ret = unixcomm_close(ctx->comm);
+		D_FREE(ctx);
+	}
 	return ret;
 }
 
