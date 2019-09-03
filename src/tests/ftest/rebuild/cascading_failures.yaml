@@ -14,7 +14,7 @@ server_config:
   targets: 8
 pool:
   mode: 511
-  group: daos_server
+  name: daos_server
   scm_size: 1073741824
   svcn: 2
 container:

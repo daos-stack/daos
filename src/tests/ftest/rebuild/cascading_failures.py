@@ -21,6 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+from apricot import skipForTicket
 from rebuild_test_base import RebuldTestBase
 
 
@@ -29,6 +30,11 @@ class CascadingFailures(RebuldTestBase):
 
     :avocado: recursive
     """
+
+    def __init__(self, *args, **kwargs):
+        """Initialize a CascadingFailures object."""
+        super(CascadingFailures, self).__init__(*args, **kwargs)
+        self.mode = None
 
     def create_test_container(self):
         """Create a container and write objects."""
@@ -61,21 +67,67 @@ class CascadingFailures(RebuldTestBase):
 
     def start_rebuild(self):
         """Start the rebuild process."""
-        # Exclude the first rank from the pool to initiate rebuild
-        self.pool.start_rebuild(
-            self.server_group, self.inputs.rank.value[0], self.d_log)
+        if self.mode == "simultaneous":
+            # Exclude both ranks from the pool to initiate rebuild
+            self.pool.start_rebuild(self.inputs.rank.value, self.d_log)
+        else:
+            # Exclude the first rank from the pool to initiate rebuild
+            self.pool.start_rebuild([self.inputs.rank.value[0]], self.d_log)
+
+        if self.mode == "sequential":
+            # Exclude the second rank from the pool
+            self.pool.start_rebuild([self.inputs.rank.value[1]], self.d_log)
 
         # Wait for rebuild to start
         self.pool.wait_for_rebuild(True, 1)
 
     def execute_during_rebuild(self):
         """Execute test steps during rebuild."""
-        # Exclude the second rank from the pool during rebuild
-        self.pool.start_rebuild(
-            self.server_group, self.inputs.rank.value[1], self.d_log)
+        if self.mode == "cascading":
+            # Exclude the second rank from the pool during rebuild
+            self.pool.start_rebuild([self.inputs.rank.value[1]], self.d_log)
 
         # Populate the container with additional data during rebuild
         self.container.write_objects(obj_class=self.inputs.object_class.value)
+
+    @skipForTicket("DAOS-3215")
+    def test_simultaneous_failures(self):
+        """Jira ID: DAOS-842.
+
+        Test Description:
+            Configure a pool with sufficient redundancy to survive and rebuild
+            from two target failures.  Trigger two target failures at the same
+            time.  User application I/O should continue to succeed throughout
+            the rebuild process and after.  Once the rebuild is complete the
+            pool should reflect a normal status.
+
+        Use Cases:
+            Verify rebuild with multiple server failures.
+
+        :avocado: tags=all,medium,pr,rebuild,multifailure,simultaneous
+        """
+        self.mode = "simultaneous"
+        self.execute_rebuild_test()
+
+    @skipForTicket("DAOS-2469")
+    def test_sequential_failures(self):
+        """Jira ID: DAOS-843.
+
+        Test Description:
+            Configure a pool with sufficient redundancy to survive and rebuild
+            from two target failures.  Trigger a single target failure.  Before
+            rebuilding from the first failure, activate a second failure.  User
+            application I/O should continue to succeed throughout the rebuild
+            process and after.  Once the rebuild is complete the pool should
+            reflect a normal status.
+
+        Use Cases:
+            Verify rebuild with multiple server failures.
+
+        :avocado: tags=all,medium,pr,rebuild,multifailure,sequential
+        """
+        self.mode = "sequential"
+        self.execute_rebuild_test()
 
     def test_cascading_failures(self):
         """Jira ID: DAOS-844.
@@ -91,6 +143,7 @@ class CascadingFailures(RebuldTestBase):
         Use Cases:
             Verify rebuild with multiple server failures.
 
-        :avocado: tags=rebuild,cascadingfailure
+        :avocado: tags=all,medium,pr,rebuild,multifailure,cascading
         """
+        self.mode = "cascading"
         self.execute_rebuild_test()
