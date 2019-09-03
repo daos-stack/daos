@@ -25,6 +25,7 @@ package security
 
 import (
 	"bytes"
+	"crypto"
 	"os"
 	"strings"
 	"testing"
@@ -107,14 +108,14 @@ func ValidateGood(t *testing.T, c *TransportConfig, err error) {
 
 func ValidateBad(t *testing.T, c *TransportConfig, err error) {
 	if err == nil {
-		t.Fatal(err)
+		t.Fatal("Expected an error but got nil")
 	}
 }
 
 func ValidateNil(t *testing.T, c *TransportConfig, err error) {
 	if err != nil &&
 		strings.Compare(err.Error(), "nil TransportConfig") != 0 {
-		t.Fatal(err)
+		t.Fatalf("Expected nil TransportConfig but got %s", err)
 	}
 }
 
@@ -175,46 +176,84 @@ func TestReloadCertData(t *testing.T) {
 	}
 }
 
-func TestPrivateKey(t *testing.T) {
-	config := ServerTC()
-
-	SetupTCFilePerms(t, config)
-
-	config.AllowInsecure = true
-
-	key, err := config.PrivateKey()
-
-	if key != nil && err == nil {
+func ValidateInsecurePrivateKey(t *testing.T, key crypto.PrivateKey, err error) {
+	if err != nil {
+		t.Fatalf("Unable to Load PrivateKey from TransportConfig: %s", err)
+	}
+	if key != nil {
 		t.Fatal("Insecure config returned a PrivateKey")
 	}
+}
 
-	config.AllowInsecure = false
-	key, err = config.PrivateKey()
+func ValidatePrivateKey(t *testing.T, key crypto.PrivateKey, err error) {
+	if err != nil {
+		t.Fatalf("Unable to Load PrivateKey from TransportConfig: %s", err)
+	}
+	if key == nil {
+		t.Fatal("TransportConfig is missing a PrivateKey")
+	}
+}
 
-	if key == nil || err != nil {
-		t.Fatal("Unable to load keys from transportconfig")
+func TestPrivateKey(t *testing.T) {
+	insecureTC := InsecureTC()
+	TC := ServerTC()
+
+	SetupTCFilePerms(t, TC)
+
+	testCases := []struct {
+		testname string
+		config   *TransportConfig
+		Validate func(t *testing.T, key crypto.PrivateKey, err error)
+	}{
+		{"InsecurePrivateKey", insecureTC, ValidateInsecurePrivateKey},
+		{"GoodPrivateKey", TC, ValidatePrivateKey},
 	}
 
+	for _, tc := range testCases {
+		t.Run(tc.testname, func(t *testing.T) {
+			key, err := tc.config.PrivateKey()
+			tc.Validate(t, key, err)
+		})
+	}
+}
+
+func ValidateInsecurePublicKey(t *testing.T, key crypto.PublicKey, err error) {
+	if err != nil {
+		t.Fatalf("Unable to Load PublicKey from TransportConfig: %s", err)
+	}
+	if key != nil {
+		t.Fatal("Insecure config returned a PublicKey")
+	}
+}
+
+func ValidatePublicKey(t *testing.T, key crypto.PublicKey, err error) {
+	if err != nil {
+		t.Fatalf("Unable to Load PublicKey from TransportConfig: %s", err)
+	}
+	if key == nil {
+		t.Fatal("TransportConfig is missing a PublicKey")
+	}
 }
 
 func TestPublicKey(t *testing.T) {
-	config := ServerTC()
+	insecureTC := InsecureTC()
+	TC := ServerTC()
 
-	SetupTCFilePerms(t, config)
+	SetupTCFilePerms(t, TC)
 
-	config.AllowInsecure = true
-
-	key, err := config.PublicKey()
-
-	if key != nil && err == nil {
-		t.Fatal("Insecure config returned a PublicKey")
+	testCases := []struct {
+		testname string
+		config   *TransportConfig
+		Validate func(t *testing.T, key crypto.PublicKey, err error)
+	}{
+		{"InsecurePrivateKey", insecureTC, ValidateInsecurePublicKey},
+		{"GoodPrivateKey", TC, ValidatePublicKey},
 	}
 
-	config.AllowInsecure = false
-	key, err = config.PublicKey()
-
-	if key == nil || err != nil {
-		t.Fatal("Unable to load keys from transportconfig")
+	for _, tc := range testCases {
+		t.Run(tc.testname, func(t *testing.T) {
+			key, err := tc.config.PublicKey()
+			tc.Validate(t, key, err)
+		})
 	}
-
 }
