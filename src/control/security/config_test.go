@@ -246,8 +246,8 @@ func TestPublicKey(t *testing.T) {
 		config   *TransportConfig
 		Validate func(t *testing.T, key crypto.PublicKey, err error)
 	}{
-		{"InsecurePrivateKey", insecureTC, ValidateInsecurePublicKey},
-		{"GoodPrivateKey", TC, ValidatePublicKey},
+		{"InsecurePublicKey", insecureTC, ValidateInsecurePublicKey},
+		{"GoodPublicKey", TC, ValidatePublicKey},
 	}
 
 	for _, tc := range testCases {
