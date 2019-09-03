@@ -127,6 +127,14 @@ func ShowLogOnFailure(t *testing.T) func() {
 	var buf strings.Builder
 	log.SetLogger(log.NewCombinedLogger(t.Name(), &buf))
 
+	return ShowBufferOnFailure(t, &buf)
+}
+
+// ShowBufferOnFailure displays captured output on test failure. Returns a
+// closure which should be run via defer in the test function.
+func ShowBufferOnFailure(t *testing.T, buf fmt.Stringer) func() {
+	t.Helper()
+
 	return func() {
 		if t.Failed() {
 			fmt.Printf("captured log output:\n%s", buf.String())

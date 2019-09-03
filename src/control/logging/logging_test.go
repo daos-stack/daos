@@ -31,10 +31,8 @@ import (
 )
 
 func TestStandardFormat(t *testing.T) {
-	var buf bytes.Buffer
-
-	logger := logging.NewCombinedLogger("testPrefix", &buf).
-		WithLogLevel(logging.LogLevelDebug)
+	logger, buf := logging.NewTestLogger("testPrefix")
+	logger.SetLevel(logging.LogLevelDebug)
 
 	tests := map[string]struct {
 		fn        func(string)
