@@ -22,7 +22,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * src/placement/mapless_jump_map.c
+ * src/placement/jump_map.c
  */
 #define D_LOGFAC        DD_FAC(placement)
 
@@ -34,22 +34,22 @@
 /**
  * Contains information related to object layout size.
  */
-struct mpls_obj_placement {
-	unsigned int	mop_grp_size;
-	unsigned int	mop_grp_nr;
+struct jm_obj_placement {
+	unsigned int	jmop_grp_size;
+	unsigned int	jmop_grp_nr;
 };
 
 /**
- * Mapless Placement map structure used to place objects.
+ * jump_map Placement map structure used to place objects.
  * The map is returned as a struct pl_map and then converted back into a
- * pl_mapless_map once passed from the caller into the object placement
+ * pl_jump_map once passed from the caller into the object placement
  * functions.
  */
-struct pl_mapless_map {
+struct pl_jump_map {
 	/** placement map interface */
-	struct pl_map   mmp_map;
+	struct pl_map   jmp_map;
 	/* Total size of domain type specified during map creation*/
-	unsigned int    mmp_domain_nr;
+	unsigned int    jmp_domain_nr;
 };
 
 /**
@@ -82,7 +82,7 @@ jump_consistent_hash(uint64_t key, uint32_t num_buckets)
 }
 
 /**
- * This is useful for Mapless placement to pseudorandomly permute input keys
+ * This is useful for jump_map placement to pseudorandomly permute input keys
  * that are similar to each other. This dramatically improves the even-ness of
  * the distribution of output placements.
  */
@@ -97,20 +97,20 @@ crc(uint64_t data, uint32_t init_val)
  * stores those requirements into a obj_placement  struct for usage during
  * layout creation.
  *
- * \param[in] mmap	The placement map for Mapless Placement, used for
+ * \param[in] jmap	The placement map for jump_map Placement, used for
  *			retrieving domain requirements for layout.
  * \param[in] md	Object metadata used for retrieve information
  *			about the object class.
  * \param[in] shard_md	Shard metadata used for determining the group number
- * \param[out] mop	Stores layout requirements for use later in placement.
+ * \param[out] jmop	Stores layout requirements for use later in placement.
  *
  * \return		Return code, 0 for success and an error code if the
  *			layout requirements could not be determined / satisfied.
  */
 static int
-mpls_obj_placement_get(struct pl_mapless_map *mmap, struct daos_obj_md *md,
+jm_obj_placement_get(struct pl_jump_map *jmap, struct daos_obj_md *md,
 		struct daos_obj_shard_md *shard_md,
-		struct mpls_obj_placement *mop)
+		struct jm_obj_placement *jmop)
 {
 	struct daos_oclass_attr *oc_attr;
 	struct pool_domain      *root;
@@ -127,57 +127,57 @@ mpls_obj_placement_get(struct pl_mapless_map *mmap, struct daos_obj_md *md,
 		return -DER_INVAL;
 	}
 
-	rc = pool_map_find_domain(mmap->mmp_map.pl_poolmap, PO_COMP_TP_ROOT,
+	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_ROOT,
 			     PO_COMP_ID_ALL, &root);
 	D_ASSERT(rc == 1);
 
-	rc = op_get_grp_size(mmap->mmp_domain_nr, &mop->mop_grp_size, oid);
+	rc = op_get_grp_size(jmap->jmp_domain_nr, &jmop->jmop_grp_size, oid);
 	if (rc)
 		return rc;
 
 	if (shard_md == NULL) {
-		unsigned int grp_max = root->do_target_nr / mop->mop_grp_size;
+		unsigned int grp_max = root->do_target_nr / jmop->jmop_grp_size;
 
 		if (grp_max == 0)
 			grp_max = 1;
 
-		mop->mop_grp_nr = daos_oclass_grp_nr(oc_attr, md);
-		if (mop->mop_grp_nr > grp_max)
-			mop->mop_grp_nr = grp_max;
+		jmop->jmop_grp_nr = daos_oclass_grp_nr(oc_attr, md);
+		if (jmop->jmop_grp_nr > grp_max)
+			jmop->jmop_grp_nr = grp_max;
 	} else {
-		mop->mop_grp_nr = 1;
+		jmop->jmop_grp_nr = 1;
 	}
 
-	D_ASSERT(mop->mop_grp_nr > 0);
-	D_ASSERT(mop->mop_grp_size > 0);
+	D_ASSERT(jmop->jmop_grp_nr > 0);
+	D_ASSERT(jmop->jmop_grp_size > 0);
 
 	D_DEBUG(DB_PL,
 		"obj="DF_OID"/ grp_size=%u grp_nr=%d\n",
-		DP_OID(oid), mop->mop_grp_size, mop->mop_grp_nr);
+		DP_OID(oid), jmop->jmop_grp_size, jmop->jmop_grp_nr);
 
 	return 0;
 }
 
 /**
- * Given a @mop and target determine if there exists a spare target
+ * Given a @jmop and target determine if there exists a spare target
  * that satisfies the layout requirements. This will return false if
- * there are no available domains of type mmp_domain_nr left.
+ * there are no available domains of type jmp_domain_nr left.
  *
- * \param[in] mmap	The currently used placement map.
- * \param[in] mop	Struct containing layout group size and number.
+ * \param[in] jmap	The currently used placement map.
+ * \param[in] jmop	Struct containing layout group size and number.
  *
  * \return		True if there exists a spare, false otherwise.
  */
 static bool
-mapless_remap_next_spare(struct pl_mapless_map *mmap,
-		struct mpls_obj_placement *mop)
+jump_map_remap_next_spare(struct pl_jump_map *jmap,
+		struct jm_obj_placement *jmop)
 {
-	D_ASSERTF(mop->mop_grp_size <= mmap->mmp_domain_nr,
+	D_ASSERTF(jmop->jmop_grp_size <= jmap->jmp_domain_nr,
 		  "grp_size: %u > domain_nr: %u\n",
-		  mop->mop_grp_size, mmap->mmp_domain_nr);
+		  jmop->jmop_grp_size, jmap->jmp_domain_nr);
 
-	if (mop->mop_grp_size == mmap->mmp_domain_nr &&
-	    mop->mop_grp_size > 1)
+	if (jmop->jmop_grp_size == jmap->jmp_domain_nr &&
+	    jmop->jmop_grp_size > 1)
 		return false;
 
 	return true;
@@ -186,20 +186,20 @@ mapless_remap_next_spare(struct pl_mapless_map *mmap,
 /**
  * This function converts a generic pl_map pointer into the
  * proper placement map. This function assumes that the original
- * map was allocated as a pl_mapless_map with a pl_map as it's
+ * map was allocated as a pl_jump_map with a pl_map as it's
  * first member.
  *
  * \param[in]   *map    A pointer to a pl_map which is the first
  *                      member of the specific placement map we're
  *                      converting to.
  *
- * \return      A pointer to the full pl_mapless_map used for
+ * \return      A pointer to the full pl_jump_map used for
  *              object placement, rebuild, and reintegration
  */
-static inline struct pl_mapless_map *
+static inline struct pl_jump_map *
 pl_map2mplmap(struct pl_map *map)
 {
-	return container_of(map, struct pl_mapless_map, mmp_map);
+	return container_of(map, struct pl_jump_map, jmp_map);
 }
 
 /**
@@ -486,11 +486,11 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 * remap succeeds, otherwise, corresponding shard and target id in
 * @layout will be cleared as -1.
 *
-* \paramp[in]	mmap		The placement map being used for placement.
+* \paramp[in]	jmap		The placement map being used for placement.
 * \paramp[in]	md		Object Metadata.
 * \paramp[in]	layout		The original layout which contains some shards
 *				on failed targets.
-* \paramp[in]	mop		Structure containing information related to
+* \paramp[in]	jmop		Structure containing information related to
 *				layout characteristics.
 * \paramp[in]	remap_list	List containing shards to be remapped sorted
 *				by failure sequence.
@@ -501,8 +501,8 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 *		successfully remapped properly.
 */
 static int
-obj_remap_shards(struct pl_mapless_map *mmap, struct daos_obj_md *md,
-		 struct pl_obj_layout *layout, struct mpls_obj_placement *mop,
+obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
+		 struct pl_obj_layout *layout, struct jm_obj_placement *jmop,
 		 d_list_t *remap_list, uint8_t *dom_used)
 {
 	struct failed_shard	*f_shard;
@@ -528,12 +528,12 @@ obj_remap_shards(struct pl_mapless_map *mmap, struct daos_obj_md *md,
 				       fs_list);
 		l_shard = &layout->ol_shards[f_shard->fs_shard_idx];
 
-		spare_avail = mapless_remap_next_spare(mmap, mop);
+		spare_avail = jump_map_remap_next_spare(jmap, jmop);
 
 		rebuild_key = (f_shard->fs_shard_idx * 10) + f_shard->fs_fseq;
 
 		if (spare_avail)
-			get_rebuild_target(mmap->mmp_map.pl_poolmap, &spare_tgt,
+			get_rebuild_target(jmap->jmp_map.pl_poolmap, &spare_tgt,
 				crc(key, rebuild_key), dom_used, layout, md);
 
 		determine_valid_spares(spare_tgt, md, spare_avail, &current,
@@ -546,7 +546,7 @@ obj_remap_shards(struct pl_mapless_map *mmap, struct daos_obj_md *md,
 }
 
 static int
-mapless_obj_spec_place_get(struct pl_mapless_map *mmap, daos_obj_id_t oid,
+jump_map_obj_spec_place_get(struct pl_jump_map *jmap, daos_obj_id_t oid,
 			   struct pool_target **target, uint8_t *dom_used,
 			   uint32_t dom_bytes)
 {
@@ -556,16 +556,16 @@ mapless_obj_spec_place_get(struct pl_mapless_map *mmap, daos_obj_id_t oid,
 	unsigned int		pos;
 	int			rc;
 
-	tgts = pool_map_targets(mmap->mmp_map.pl_poolmap);
+	tgts = pool_map_targets(jmap->jmp_map.pl_poolmap);
 
-	rc = spec_place_rank_get(&pos, oid, (mmap->mmp_map.pl_poolmap));
+	rc = spec_place_rank_get(&pos, oid, (jmap->jmp_map.pl_poolmap));
 	if (rc)
 		return rc;
 
 	*target = &(tgts[pos]);
 
 
-	rc = pool_map_find_domain(mmap->mmp_map.pl_poolmap, PO_COMP_TP_ROOT,
+	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_ROOT,
 				  PO_COMP_ID_ALL, &root);
 	D_ASSERT(rc == 1);
 	current_dom = root;
@@ -606,11 +606,11 @@ mapless_obj_spec_place_get(struct pl_mapless_map *mmap, daos_obj_id_t oid,
  * This function handles getting the initial layout for the object as well as
  * determining if there are targets that are unavailable.
  *
- * \param[in] mmap		The placement map used for this placement.
- * \param[in] mop		The layout group size and count.
- * \param[in] md		Object metadata.
- * \param[out] layout		This will contain the layout for the object
- * \param[out] remap_list	This will contain the targets that need to
+ * \param[in]	jmap		The placement map used for this placement.
+ * \param[in]	jmop		The layout group size and count.
+ * \param[in]	md		Object metadata.
+ * \param[out]	layout		This will contain the layout for the object
+ * \param[out]	remap_list	This will contain the targets that need to
  *				be rebuilt and in the case of rebuild, may be
  *				returned during the rebuild process.
  *
@@ -618,8 +618,8 @@ mapless_obj_spec_place_get(struct pl_mapless_map *mmap, daos_obj_id_t oid,
  *				succeeded (0) or failed.
  */
 static int
-get_object_layout(struct pl_mapless_map *mmap, struct pl_obj_layout *layout,
-		  struct mpls_obj_placement *mop, d_list_t *remap_list,
+get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
+		  struct jm_obj_placement *jmop, d_list_t *remap_list,
 		  struct daos_obj_md *md)
 {
 	struct pool_target      *target;
@@ -632,7 +632,7 @@ get_object_layout(struct pl_mapless_map *mmap, struct pl_obj_layout *layout,
 	int i, j, k, rc;
 
 	/* Set the pool map version */
-	layout->ol_ver = pl_map_version(&(mmap->mmp_map));
+	layout->ol_ver = pl_map_version(&(jmap->jmp_map));
 
 	j = 0;
 	k = 0;
@@ -643,7 +643,7 @@ get_object_layout(struct pl_mapless_map *mmap, struct pl_obj_layout *layout,
 	target = NULL;
 
 
-	rc = pool_map_find_domain(mmap->mmp_map.pl_poolmap, PO_COMP_TP_ROOT,
+	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_ROOT,
 				  PO_COMP_ID_ALL, &root);
 	if (rc == 0) {
 		D_ERROR("Could not find root node in pool map.");
@@ -667,7 +667,7 @@ get_object_layout(struct pl_mapless_map *mmap, struct pl_obj_layout *layout,
 	    daos_obj_id2class(oid) == DAOS_OC_R1S_SPEC_RANK ||
 	    daos_obj_id2class(oid) == DAOS_OC_R2S_SPEC_RANK) {
 
-		rc = mapless_obj_spec_place_get(mmap, oid, &target, dom_used,
+		rc = jump_map_obj_spec_place_get(jmap, oid, &target, dom_used,
 						dom_used_length);
 
 		if (rc) {
@@ -695,8 +695,8 @@ get_object_layout(struct pl_mapless_map *mmap, struct pl_obj_layout *layout,
 	}
 
 
-	for (i = 0; i < mop->mop_grp_nr; i++) {
-		for (; j < mop->mop_grp_size; j++, k++) {
+	for (i = 0; i < jmop->jmop_grp_nr; i++) {
+		for (; j < jmop->jmop_grp_size; j++, k++) {
 			uint32_t tgt_id;
 			uint32_t fseq;
 
@@ -720,10 +720,10 @@ get_object_layout(struct pl_mapless_map *mmap, struct pl_obj_layout *layout,
 		j = 0;
 	}
 
-	rc = obj_remap_shards(mmap, md, layout, mop, remap_list, dom_used);
+	rc = obj_remap_shards(jmap, md, layout, jmop, remap_list, dom_used);
 out:
 	if (rc) {
-		D_ERROR("mapless_obj_layout_fill failed, rc %d.\n", rc);
+		D_ERROR("jump_map_obj_layout_fill failed, rc %d.\n", rc);
 		remap_list_free_all(remap_list);
 	}
 
@@ -741,16 +741,16 @@ out:
  * \param[in]   map     The placement map to be freed
  */
 static void
-mapless_jump_map_destroy(struct pl_map *map)
+jump_map_destroy(struct pl_map *map)
 {
-	struct pl_mapless_map   *mmap;
+	struct pl_jump_map   *jmap;
 
-	mmap = pl_map2mplmap(map);
+	jmap = pl_map2mplmap(map);
 
-	if (mmap->mmp_map.pl_poolmap)
-		pool_map_decref(mmap->mmp_map.pl_poolmap);
+	if (jmap->jmp_map.pl_poolmap)
+		pool_map_decref(jmap->jmp_map.pl_poolmap);
 
-	D_FREE(mmap);
+	D_FREE(jmap);
 }
 
 /**
@@ -766,22 +766,22 @@ mapless_jump_map_destroy(struct pl_map *map)
  * \return              The error status of the function.
  */
 static int
-mapless_jump_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
+jump_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 			struct pl_map **mapp)
 {
 	struct pool_domain      *root;
-	struct pl_mapless_map   *mmap;
+	struct pl_jump_map   *jmap;
 	struct pool_domain      *doms;
 	int                     rc;
 
-	D_ALLOC_PTR(mmap);
-	if (mmap == NULL)
+	D_ALLOC_PTR(jmap);
+	if (jmap == NULL)
 		return -DER_NOMEM;
 
 	pool_map_addref(poolmap);
-	mmap->mmp_map.pl_poolmap = poolmap;
+	jmap->jmp_map.pl_poolmap = poolmap;
 
-	rc = pool_map_find_domain(mmap->mmp_map.pl_poolmap, PO_COMP_TP_ROOT,
+	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_ROOT,
 				  PO_COMP_ID_ALL, &root);
 	if (rc == 0) {
 		D_ERROR("Could not find root node in pool map.");
@@ -789,27 +789,27 @@ mapless_jump_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 		goto ERR;
 	}
 
-	rc = pool_map_find_domain(mmap->mmp_map.pl_poolmap,
-				mia->ia_mapless.domain, PO_COMP_ID_ALL, &doms);
+	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap,
+				mia->ia_jump_map.domain, PO_COMP_ID_ALL, &doms);
 	if (rc <= 0) {
 		rc = (rc == 0) ? -DER_INVAL : rc;
 		goto ERR;
 	}
 
-	mmap->mmp_domain_nr = rc;
-	*mapp = &mmap->mmp_map;
+	jmap->jmp_domain_nr = rc;
+	*mapp = &jmap->jmp_map;
 
 	return DER_SUCCESS;
 
 ERR:
-	mapless_jump_map_destroy(&mmap->mmp_map);
+	jump_map_destroy(&jmap->jmp_map);
 	return rc;
 }
 
 
 
 static void
-mapless_jump_map_print(struct pl_map *map)
+jump_map_print(struct pl_map *map)
 {
 	/** Currently nothing to print */
 }
@@ -831,38 +831,39 @@ mapless_jump_map_print(struct pl_map *map)
  *                              successfully.
  */
 static int
-mapless_obj_place(struct pl_map *map, struct daos_obj_md *md,
+jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 		  struct daos_obj_shard_md *shard_md,
 		  struct pl_obj_layout **layout_pp)
 {
-	struct pl_mapless_map           *mmap;
+	struct pl_jump_map           *jmap;
 	struct pl_obj_layout            *layout;
-	struct mpls_obj_placement    mop;
+	struct jm_obj_placement    jmop;
 	d_list_t                        remap_list;
 	daos_obj_id_t                   oid;
 	int                             rc;
 
-	mmap = pl_map2mplmap(map);
+	jmap = pl_map2mplmap(map);
 	oid = md->omd_id;
 
-	rc = mpls_obj_placement_get(mmap, md, shard_md, &mop);
+	rc = jm_obj_placement_get(jmap, md, shard_md, &jmop);
 	if (rc) {
-		D_ERROR("mpls_obj_placement_get failed, rc %d.\n", rc);
+		D_ERROR("jm_obj_placement_get failed, rc %d.\n", rc);
 		return rc;
 	}
 
 	/* Allocate space to hold the layout */
-	rc = pl_obj_layout_alloc(mop.mop_grp_nr * mop.mop_grp_size, &layout);
+	rc = pl_obj_layout_alloc(jmop.jmop_grp_nr * jmop.jmop_grp_size,
+			&layout);
 	if (rc != 0) {
 		D_ERROR("pl_obj_layout_alloc failed, rc %d.\n", rc);
 		return rc;
 	}
-	layout->ol_grp_nr = mop.mop_grp_nr;
-	layout->ol_grp_size = mop.mop_grp_size;
+	layout->ol_grp_nr = jmop.jmop_grp_nr;
+	layout->ol_grp_size = jmop.jmop_grp_size;
 
 	/* Get root node of pool map */
 	D_INIT_LIST_HEAD(&remap_list);
-	rc = get_object_layout(mmap, layout, &mop, &remap_list, md);
+	rc = get_object_layout(jmap, layout, &jmop, &remap_list, md);
 	if (rc < 0) {
 		D_ERROR("Could not generate placement layout, rc %d.\n", rc);
 		pl_obj_layout_free(layout);
@@ -901,18 +902,18 @@ mapless_obj_place(struct pl_map *map, struct daos_obj_md *md,
  *				another target, Or 0 if none need to be rebuilt.
  */
 static int
-mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
+jump_map_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 			 struct daos_obj_shard_md *shard_md,
 			 uint32_t rebuild_ver, uint32_t *tgt_id,
 			 uint32_t *shard_idx, unsigned int array_size,
 			 int myrank)
 {
-	struct pl_mapless_map           *mmap;
-	struct pl_obj_layout            *layout;
-	d_list_t                        remap_list;
-	struct mpls_obj_placement	mop;
-	daos_obj_id_t                   oid;
-	int                             rc;
+	struct pl_jump_map		*jmap;
+	struct pl_obj_layout		*layout;
+	d_list_t			remap_list;
+	struct jm_obj_placement		jmop;
+	daos_obj_id_t			oid;
+	int				rc;
 
 	int idx = 0;
 
@@ -925,32 +926,33 @@ mapless_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		return -DER_INVAL;
 	}
 
-	mmap = pl_map2mplmap(map);
+	jmap = pl_map2mplmap(map);
 	oid = md->omd_id;
 
-	rc = mpls_obj_placement_get(mmap, md, shard_md, &mop);
+	rc = jm_obj_placement_get(jmap, md, shard_md, &jmop);
 	if (rc) {
-		D_ERROR("mpls_obj_placement_get failed, rc %d.\n", rc);
+		D_ERROR("jm_obj_placement_get failed, rc %d.\n", rc);
 		return rc;
 	}
 
-	if (mop.mop_grp_size == 1) {
+	if (jmop.jmop_grp_size == 1) {
 		D_DEBUG(DB_PL, "Not replicated object "DF_OID"\n",
 			DP_OID(md->omd_id));
 		return 0;
 	}
 
 	/* Allocate space to hold the layout */
-	rc = pl_obj_layout_alloc(mop.mop_grp_size * mop.mop_grp_nr, &layout);
+	rc = pl_obj_layout_alloc(jmop.jmop_grp_size * jmop.jmop_grp_nr,
+			&layout);
 	if (rc) {
 		D_ERROR("pl_obj_layout_alloc failed, rc %d.\n", rc);
 		return rc;
 	}
-	layout->ol_grp_nr = mop.mop_grp_nr;
-	layout->ol_grp_size = mop.mop_grp_size;
+	layout->ol_grp_nr = jmop.jmop_grp_nr;
+	layout->ol_grp_size = jmop.jmop_grp_size;
 
 	D_INIT_LIST_HEAD(&remap_list);
-	rc = get_object_layout(mmap, layout, &mop, &remap_list, md);
+	rc = get_object_layout(jmap, layout, &jmop, &remap_list, md);
 
 	if (rc < 0) {
 		D_ERROR("Could not generate placement layout, rc %d.\n", rc);
@@ -969,7 +971,7 @@ out:
 }
 
 static int
-mapless_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
+jump_map_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 		       struct daos_obj_shard_md *shard_md,
 		       struct pl_target_grp *tgp_reint, uint32_t *tgt_reint)
 {
@@ -978,11 +980,11 @@ mapless_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 }
 
 /** API for generic placement map functionality */
-struct pl_map_ops       mapless_map_ops = {
-	.o_create               = mapless_jump_map_create,
-	.o_destroy              = mapless_jump_map_destroy,
-	.o_print                = mapless_jump_map_print,
-	.o_obj_place            = mapless_obj_place,
-	.o_obj_find_rebuild     = mapless_obj_find_rebuild,
-	.o_obj_find_reint       = mapless_obj_find_reint,
+struct pl_map_ops       jump_map_ops = {
+	.o_create               = jump_map_create,
+	.o_destroy              = jump_map_destroy,
+	.o_print                = jump_map_print,
+	.o_obj_place            = jump_map_obj_place,
+	.o_obj_find_rebuild     = jump_map_obj_find_rebuild,
+	.o_obj_find_reint       = jump_map_obj_find_reint,
 };

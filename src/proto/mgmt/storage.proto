@@ -31,10 +31,13 @@ import "storage_scm.proto";
 // Management Service Protobuf Definitions related to interactions between
 // DAOS control server and locally attached storage.
 
-message ScanStorageReq {}
+message StorageScanReq {
+	ScanNvmeReq nvme = 1;
+	ScanScmReq scm = 2;
+}
 
-// ScanStorageResp returns discovered storage devices.
-message ScanStorageResp {
+// StorageScanResp returns discovered storage devices.
+message StorageScanResp {
 	repeated NvmeController ctrlrs = 1;
 	ResponseState nvmestate = 2;		// Single non-ctrlr-specific state
 	repeated ScmModule modules = 3;
@@ -42,29 +45,29 @@ message ScanStorageResp {
 	// TODO: add scan for scm regions/mount
 }
 
-message FormatStorageReq {}
+message StorageFormatReq {}
 
-message FormatStorageResp {
+message StorageFormatResp {
 	repeated NvmeControllerResult crets = 1;	// One per controller format attempt
 	repeated ScmMountResult mrets = 2;		// One per scm format and mount attempt
 }
 
-message UpdateStorageReq {
+message StorageUpdateReq {
 	UpdateNvmeReq nvme = 1;
 	UpdateScmReq scm = 2;
 }
 
-message UpdateStorageResp {
+message StorageUpdateResp {
 	repeated NvmeControllerResult crets = 1;	// One per SSD firmware update attempt
 	repeated ScmModuleResult mrets = 2;		// One per module firmware update attempt
 }
 
-message BurninStorageReq {
+message StorageBurnInReq {
 	BurninNvmeReq nvme = 1;
 	BurninScmReq scm = 2;
 }
 
-message BurninStorageResp {
+message StorageBurnInResp {
 	repeated NvmeControllerResult crets = 1;	// One per SSD burnin test, report in state.info
 	repeated ScmMountResult mrets = 2;		// One per SCM mount burnin test
 }
