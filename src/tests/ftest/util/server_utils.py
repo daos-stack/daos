@@ -38,7 +38,7 @@ import getpass
 import yaml
 
 from avocado.utils import genio
-from general_utils import pcmd
+from general_utils import pcmd, get_file_path
 
 SESSIONS = {}
 
@@ -337,11 +337,14 @@ def storage_prepare(hosts):
     Prepare the storage on servers using the DAOS server's yaml settings file.
 
     Args:
+        basepath (str): DAOS install basepath
         hosts (str): a string of comma-separated host names
+    Raises:
+        ServerFailed: if server failed to prepare storage
     """
-    cmd = ("sudo daos_server storage prep-nvme "
-           "--target-user=\"{0}\" --hugepages=4096"
-           .format(getpass.getuser()))
+    daos_srv_bin = get_file_path("bin/daos_server")
+    cmd = ("sudo {} storage prep-nvme --target-user=\"{}\" --hugepages=4096"
+           .format(daos_srv_bin[0], getpass.getuser()))
     result = pcmd(hosts, cmd, timeout=120)
     if len(result) > 1 or 0 not in result:
         raise ServerFailed("Error preparing NVMe storage")
@@ -351,9 +354,13 @@ def storage_reset(hosts):
     Reset the Storage on servers using the DAOS server's yaml settings file.
 
     Args:
+        basepath (str): DAOS install basepath
         hosts (str): a string of comma-separated host names
+    Raises:
+        ServerFailed: if server failed to reset storage
     """
-    cmd = "sudo daos_server storage prep-nvme --reset"
+    daos_srv_bin = get_file_path("bin/daos_server")
+    cmd = "sudo {} storage prep-nvme --reset".format(daos_srv_bin[0])
     result = pcmd(hosts, cmd)
     if len(result) > 1 or 0 not in result:
         raise ServerFailed("Error resetting NVMe storage")
