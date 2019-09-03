@@ -161,12 +161,12 @@ func TestListFeatures(t *testing.T) {
 		"unexpected client features returned")
 }
 
-func TestScanStorage(t *testing.T) {
+func TestStorageScan(t *testing.T) {
 	defer common.ShowLogOnFailure(t)()
 
 	cc := defaultClientSetup()
 
-	clientNvme, clientScm := cc.ScanStorage()
+	clientNvme, clientScm := cc.StorageScan()
 
 	AssertEqual(
 		t, clientNvme, NewClientNvme(MockCtrlrs, MockServers),
@@ -177,7 +177,7 @@ func TestScanStorage(t *testing.T) {
 		"unexpected client SCM modules returned")
 }
 
-func TestFormatStorage(t *testing.T) {
+func TestStorageFormat(t *testing.T) {
 	defer common.ShowLogOnFailure(t)()
 
 	tests := []struct {
@@ -197,7 +197,7 @@ func TestFormatStorage(t *testing.T) {
 			MockModuleResults, MockMountResults, nil, tt.formatRet, nil, nil,
 			nil, nil)
 
-		cNvmeMap, cMountMap := cc.FormatStorage()
+		cNvmeMap, cMountMap := cc.StorageFormat()
 
 		if tt.formatRet != nil {
 			for _, addr := range MockServers {
@@ -223,7 +223,7 @@ func TestFormatStorage(t *testing.T) {
 	}
 }
 
-func TestUpdateStorage(t *testing.T) {
+func TestStorageUpdate(t *testing.T) {
 	defer common.ShowLogOnFailure(t)()
 
 	tests := []struct {
@@ -243,7 +243,7 @@ func TestUpdateStorage(t *testing.T) {
 			MockModuleResults, MockMountResults, nil, nil, tt.updateRet, nil,
 			nil, nil)
 
-		cNvmeMap, cModuleMap := cc.UpdateStorage(new(pb.UpdateStorageReq))
+		cNvmeMap, cModuleMap := cc.StorageUpdate(new(pb.StorageUpdateReq))
 
 		if tt.updateRet != nil {
 			for _, addr := range MockServers {

@@ -35,6 +35,7 @@
 #include <daos_errno.h>
 #include <daos_srv/bio.h>
 #include <daos_srv/smd.h>
+#include <daos_srv/vos.h>
 #include <gurt/list.h>
 #include "drpc_internal.h"
 #include "srv_internal.h"
@@ -98,6 +99,8 @@ dss_ctx_nr_get(void)
 	return DSS_CTX_NR_TOTAL;
 }
 
+static void dss_gc_ult(void *args);
+
 #define FIRST_DEFAULT_SCHEDULE_RATIO	80
 #define REBUILD_DEFAULT_SCHEDULE_RATIO	30
 unsigned int	dss_rebuild_res_percentage = REBUILD_DEFAULT_SCHEDULE_RATIO;
@@ -146,6 +149,17 @@ dss_sched_init(ABT_sched sched, ABT_sched_config config)
 	ret = ABT_sched_set_data(sched, (void *)p_data);
 
 	return ret;
+}
+
+static bool
+dss_xstream_exiting(struct dss_xstream *dxs)
+{
+	ABT_bool state;
+	int	 rc;
+
+	rc = ABT_future_test(dxs->dx_shutdown, &state);
+	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+	return state == ABT_TRUE;
 }
 
 static ABT_unit
@@ -410,13 +424,21 @@ dss_srv_handler(void *arg)
 		goto crt_destroy;
 	}
 
-	/* Initialize NVMe context for main XS which accesses NVME */
 	if (dx->dx_main_xs) {
+		/* Initialize NVMe context for main XS which accesses NVME */
 		rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, dmi->dmi_tgt_id);
 		if (rc != 0) {
 			D_ERROR("failed to init spdk context for xstream(%d) "
 				"rc:%d\n", dmi->dmi_xs_id, rc);
 			D_GOTO(tse_fini, rc);
+		}
+
+		rc = ABT_thread_create(dx->dx_pools[DSS_POOL_SHARE],
+				       dss_gc_ult, NULL,
+				       ABT_THREAD_ATTR_NULL, NULL);
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("create GC ULT failed: %d\n", rc);
+			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
 		}
 	}
 
@@ -438,8 +460,6 @@ dss_srv_handler(void *arg)
 	signal_caller = false;
 	/* main service progress loop */
 	for (;;) {
-		ABT_bool state;
-
 		if (dx->dx_comm) {
 			rc = crt_progress(dmi->dmi_ctx, 0 /* no wait */, NULL,
 					  NULL);
@@ -455,9 +475,7 @@ dss_srv_handler(void *arg)
 		if (dx->dx_main_xs)
 			bio_nvme_poll(dmi->dmi_nvme_ctxt);
 
-		rc = ABT_future_test(dx->dx_shutdown, &state);
-		D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
-		if (state == ABT_TRUE)
+		if (dss_xstream_exiting(dx))
 			break;
 
 		ABT_thread_yield();
@@ -483,7 +501,7 @@ dss_srv_handler(void *arg)
 
 		ABT_thread_yield();
 	}
-
+nvme_fini:
 	if (dx->dx_main_xs)
 		bio_xsctxt_free(dmi->dmi_nvme_ctxt);
 tse_fini:
@@ -646,7 +664,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 			       dss_srv_handler, dx, attr,
 			       &dx->dx_progress);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("create xstream failed: %d\n", rc);
+		D_ERROR("create progress ULT failed: %d\n", rc);
 		D_GOTO(out_xstream, rc = dss_abterr2der(rc));
 	}
 
@@ -1411,16 +1429,10 @@ dss_tse_progress_ult(void *arg)
 	struct dss_module_info *dmi = arg;
 
 	while (true) {
-		ABT_bool	state;
-		int		rc;
-
-		rc = ABT_future_test(dmi->dmi_xstream->dx_shutdown, &state);
-		D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
-		if (state == ABT_TRUE)
+		if (dss_xstream_exiting(dmi->dmi_xstream))
 			break;
 
 		tse_sched_progress(&dmi->dmi_sched);
-
 		ABT_thread_yield();
 	}
 }
@@ -1814,4 +1826,51 @@ dss_dump_ABT_state()
 		 */
 	}
 	ABT_mutex_unlock(xstream_data.xd_mutex);
+}
+
+void
+dss_gc_run(int credits)
+{
+	struct dss_xstream *dxs	 = dss_get_xstream();
+	int		    total = 0;
+
+	while (1) {
+		int	creds = DSS_GC_CREDS;
+		int	rc;
+
+		if (credits > 0 && (credits - total) < creds)
+			creds = credits - total;
+
+		total += creds;
+		rc = vos_gc_run(&creds);
+		if (rc) {
+			D_ERROR("GC run failed: %s\n", d_errstr(rc));
+			break;
+		}
+		total -= creds; /* subtract the remainded credits */
+		if (creds != 0) {
+			D_DEBUG(DB_TRACE, "GC consumed %d credits\n", total);
+			break;
+		}
+
+		if (credits > 0 && total >= credits)
+			break;
+
+		if (dss_xstream_exiting(dxs))
+			break;
+
+		ABT_thread_yield();
+	}
+}
+
+static void
+dss_gc_ult(void *args)
+{
+	 struct dss_xstream *dxs  = dss_get_xstream();
+
+	 while (!dss_xstream_exiting(dxs)) {
+		/* -1 means GC will run until there is nothing to do */
+		dss_gc_run(-1);
+		ABT_thread_yield();
+	 }
 }

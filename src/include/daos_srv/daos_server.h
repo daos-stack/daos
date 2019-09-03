@@ -198,9 +198,9 @@ struct dss_module_info {
 	int			dmi_tgt_id;
 	/* the cart context id */
 	int			dmi_ctx_id;
+	uint32_t		dmi_tse_ult_created:1;
 	d_list_t		dmi_dtx_batched_list;
 	tse_sched_t		dmi_sched;
-	uint64_t		dmi_tse_ult_created:1;
 };
 
 extern struct dss_module_key	daos_srv_modkey;
@@ -215,6 +215,12 @@ dss_get_module_info(void)
 	dmi = (struct dss_module_info *)
 	      dss_module_key_get(dtc, &daos_srv_modkey);
 	return dmi;
+}
+
+static inline struct dss_xstream *
+dss_get_xstream(void)
+{
+	return dss_get_module_info()->dmi_xstream;
 }
 
 static inline tse_sched_t *
@@ -619,5 +625,10 @@ enum dss_init_state {
 void dss_init_state_set(enum dss_init_state state);
 
 bool dss_pmixless(void);
+
+/* default credits */
+#define	DSS_GC_CREDS	256
+
+void dss_gc_run(int credits);
 
 #endif /* __DSS_API_H__ */
