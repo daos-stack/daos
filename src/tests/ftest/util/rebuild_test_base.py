@@ -157,8 +157,7 @@ class RebuldTestBase(TestWithServers):
     def start_rebuild(self):
         """Start the rebuild process."""
         # Exclude the rank from the pool to initiate rebuild
-        self.pool.start_rebuild(
-            self.server_group, self.inputs.rank.value, self.d_log)
+        self.pool.start_rebuild(self.inputs.rank.value, self.d_log)
 
         # Wait for rebuild to start
         self.pool.wait_for_rebuild(True, 1)
