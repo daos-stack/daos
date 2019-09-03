@@ -21,6 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
+from apricot import skipForTicket
 from rebuild_test_base import RebuldTestBase
 
 
@@ -39,6 +40,7 @@ class ReadArrayTest(RebuldTestBase):
             self.pool.read_data_during_rebuild(self.container),
             "Error reading data during rebuild")
 
+    @skipForTicket("DAOS-3172")
     def test_read_array_during_rebuild(self):
         """Jira ID: DAOS-691.
 
