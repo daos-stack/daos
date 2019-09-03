@@ -460,7 +460,8 @@ rdbt_fini_handler(crt_rpc_t *rpc)
 	MUST(ds_rsvc_lookup(DS_RSVC_CLASS_TEST, &test_svc_id, &svc));
 	MUST(rdb_get_ranks(svc->s_db, &ranks));
 	ds_rsvc_put(svc);
-	MUST(ds_rsvc_dist_stop(DS_RSVC_CLASS_TEST, &test_svc_id, ranks, true));
+	MUST(ds_rsvc_dist_stop(DS_RSVC_CLASS_TEST, &test_svc_id, ranks, NULL,
+			       true));
 	crt_reply_send(rpc);
 }
 
