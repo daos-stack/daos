@@ -1288,7 +1288,7 @@ static daos_epoch_t
 dc_io_epoch()
 {
 	return (srv_io_mode != DIM_CLIENT_DISPATCH) ?
-			DAOS_EPOCH_MAX : daos_ts2epoch();
+			DAOS_EPOCH_MAX : crt_hlc_get();
 }
 
 /* check if the obj request is valid */

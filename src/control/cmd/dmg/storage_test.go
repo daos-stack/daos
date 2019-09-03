@@ -46,7 +46,7 @@ func TestStorageCommands(t *testing.T) {
 		{
 			"Format with force",
 			"storage format --force",
-			"ConnectClients FormatStorage",
+			"ConnectClients StorageFormat",
 			nil,
 			cmdSuccess,
 		},
@@ -70,7 +70,7 @@ func TestStorageCommands(t *testing.T) {
 			"storage fwupdate --force --nvme-model foo --nvme-fw-path bar --nvme-fw-rev 123",
 			strings.Join([]string{
 				"ConnectClients",
-				fmt.Sprintf("UpdateStorage-%s", &pb.UpdateStorageReq{
+				fmt.Sprintf("StorageUpdate-%s", &pb.StorageUpdateReq{
 					Nvme: &pb.UpdateNvmeReq{
 						Model:    "foo",
 						Startrev: "123",
@@ -84,7 +84,7 @@ func TestStorageCommands(t *testing.T) {
 		{
 			"Scan",
 			"storage scan",
-			"ConnectClients ScanStorage",
+			"ConnectClients StorageScan",
 			nil,
 			cmdSuccess,
 		},

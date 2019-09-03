@@ -913,7 +913,7 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 		D_ERROR("Bad sort policy specified: 0x%x\n", policy);
 		D_GOTO(failed, rc = -DER_INVAL);
 	}
-	D_DEBUG(DB_IO, "EVTree sort policy is 0x%x\n", policy);
+	D_DEBUG(DB_TRACE, "EVTree sort policy is 0x%x\n", policy);
 
 	/* Initialize the embedded iterator entry array.  This is a minor
 	 * optimization if the iterator is used more than once
@@ -2205,8 +2205,8 @@ evt_open(struct evt_root *root, struct umem_attr *uma,
 	int		    rc;
 
 	if (root->tr_order == 0) {
-		V_TRACE(DB_TRACE, "Tree order is zero\n");
-		return -DER_INVAL;
+		V_TRACE(DB_TRACE, "Nonexistent tree.\n");
+		return -DER_NONEXIST;
 	}
 
 	rc = evt_tcx_create(root, -1, -1, uma, cbs, &tcx);

@@ -96,18 +96,18 @@ func (tc *testConn) ClearConns() client.ResultMap {
 	return nil
 }
 
-func (tc *testConn) ScanStorage() (client.ClientCtrlrMap, client.ClientModuleMap) {
-	tc.appendInvocation("ScanStorage")
+func (tc *testConn) StorageScan() (client.ClientCtrlrMap, client.ClientModuleMap) {
+	tc.appendInvocation("StorageScan")
 	return nil, nil
 }
 
-func (tc *testConn) FormatStorage() (client.ClientCtrlrMap, client.ClientMountMap) {
-	tc.appendInvocation("FormatStorage")
+func (tc *testConn) StorageFormat() (client.ClientCtrlrMap, client.ClientMountMap) {
+	tc.appendInvocation("StorageFormat")
 	return nil, nil
 }
 
-func (tc *testConn) UpdateStorage(req *pb.UpdateStorageReq) (client.ClientCtrlrMap, client.ClientModuleMap) {
-	tc.appendInvocation(fmt.Sprintf("UpdateStorage-%s", req))
+func (tc *testConn) StorageUpdate(req *pb.StorageUpdateReq) (client.ClientCtrlrMap, client.ClientModuleMap) {
+	tc.appendInvocation(fmt.Sprintf("StorageUpdate-%s", req))
 	return nil, nil
 }
 

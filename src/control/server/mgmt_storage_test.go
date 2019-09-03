@@ -33,30 +33,30 @@ import (
 
 	. "github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/go-ipmctl/ipmctl"
-	"github.com/daos-stack/go-spdk/spdk"
+	"github.com/daos-stack/daos/src/control/lib/ipmctl"
+	"github.com/daos-stack/daos/src/control/lib/spdk"
 )
 
-// mockFormatStorageServer provides mocking for server side streaming,
+// mockStorageFormatServer provides mocking for server side streaming,
 // implement send method and record sent format responses.
-type mockFormatStorageServer struct {
+type mockStorageFormatServer struct {
 	grpc.ServerStream
-	Results []*pb.FormatStorageResp
+	Results []*pb.StorageFormatResp
 }
 
-func (m *mockFormatStorageServer) Send(resp *pb.FormatStorageResp) error {
+func (m *mockStorageFormatServer) Send(resp *pb.StorageFormatResp) error {
 	m.Results = append(m.Results, resp)
 	return nil
 }
 
-// mockUpdateStorageServer provides mocking for server side streaming,
+// mockStorageUpdateServer provides mocking for server side streaming,
 // implement send method and record sent update responses.
-type mockUpdateStorageServer struct {
+type mockStorageUpdateServer struct {
 	grpc.ServerStream
-	Results []*pb.UpdateStorageResp
+	Results []*pb.StorageUpdateResp
 }
 
-func (m *mockUpdateStorageServer) Send(resp *pb.UpdateStorageResp) error {
+func (m *mockStorageUpdateServer) Send(resp *pb.StorageUpdateResp) error {
 	m.Results = append(m.Results, resp)
 	return nil
 }
@@ -83,7 +83,7 @@ func newMockStorageConfig(
 	return c
 }
 
-func TestScanStorage(t *testing.T) {
+func TestStorageScan(t *testing.T) {
 	ctrlr := MockController("")
 	pbCtrlr := MockControllerPB("")
 	module := MockModule()
@@ -97,12 +97,12 @@ func TestScanStorage(t *testing.T) {
 		ipmctlDiscoverRet error
 		expNvmeInited     bool
 		expScmInited      bool
-		expResp           pb.ScanStorageResp
+		expResp           pb.StorageScanResp
 		errMsg            string
 	}{
 		{
 			"success", nil, nil, nil, true, true,
-			pb.ScanStorageResp{
+			pb.StorageScanResp{
 				Ctrlrs:    NvmeControllers{pbCtrlr},
 				Nvmestate: new(pb.ResponseState),
 				Modules:   ScmModules{pbModule},
@@ -111,7 +111,7 @@ func TestScanStorage(t *testing.T) {
 		},
 		{
 			"spdk init fail", errExample, nil, nil, false, true,
-			pb.ScanStorageResp{
+			pb.StorageScanResp{
 				Nvmestate: &pb.ResponseState{
 					Error: msgSpdkInitFail +
 						": example failure",
@@ -123,7 +123,7 @@ func TestScanStorage(t *testing.T) {
 		},
 		{
 			"spdk discover fail", nil, errExample, nil, false, true,
-			pb.ScanStorageResp{
+			pb.StorageScanResp{
 				Nvmestate: &pb.ResponseState{
 					Error: msgSpdkDiscoverFail +
 						": example failure",
@@ -135,7 +135,7 @@ func TestScanStorage(t *testing.T) {
 		},
 		{
 			"ipmctl discover fail", nil, nil, errExample, true, false,
-			pb.ScanStorageResp{
+			pb.StorageScanResp{
 				Ctrlrs:    NvmeControllers{pbCtrlr},
 				Nvmestate: new(pb.ResponseState),
 				Scmstate: &pb.ResponseState{
@@ -147,7 +147,7 @@ func TestScanStorage(t *testing.T) {
 		},
 		{
 			"all discover fail", nil, errExample, errExample, false, false,
-			pb.ScanStorageResp{
+			pb.StorageScanResp{
 				Nvmestate: &pb.ResponseState{
 					Error: msgSpdkDiscoverFail +
 						": example failure",
@@ -176,10 +176,10 @@ func TestScanStorage(t *testing.T) {
 				[]spdk.Namespace{MockNamespace(&ctrlr)},
 				tt.spdkDiscoverRet, nil, nil),
 			false, cs.config)
-		_ = new(pb.ScanStorageResp)
+		_ = new(pb.StorageScanResp)
 
 		cs.Setup() // runs discovery for nvme & scm
-		resp, err := cs.ScanStorage(context.TODO(), &pb.ScanStorageReq{})
+		resp, err := cs.StorageScan(context.TODO(), &pb.StorageScanReq{})
 		if err != nil {
 			AssertEqual(t, err.Error(), tt.errMsg, tt.desc)
 		}
@@ -213,7 +213,7 @@ func TestScanStorage(t *testing.T) {
 	}
 }
 
-func TestFormatStorage(t *testing.T) {
+func TestStorageFormat(t *testing.T) {
 	tests := []struct {
 		superblockExists bool
 		mountRet         error
@@ -364,7 +364,7 @@ func TestFormatStorage(t *testing.T) {
 		cs := mockControlService(config)
 		cs.Setup() // init channel used for sync
 
-		mock := &mockFormatStorageServer{}
+		mock := &mockStorageFormatServer{}
 		mockWg := new(sync.WaitGroup)
 		mockWg.Add(1)
 
@@ -374,7 +374,7 @@ func TestFormatStorage(t *testing.T) {
 		go func() {
 			// should signal wait group in srv to unlock if
 			// successful once format completed
-			_ = cs.FormatStorage(nil, mock)
+			_ = cs.StorageFormat(nil, mock)
 			mockWg.Done()
 		}()
 
@@ -425,7 +425,7 @@ func TestFormatStorage(t *testing.T) {
 	}
 }
 
-func TestUpdateStorage(t *testing.T) {
+func TestStorageUpdate(t *testing.T) {
 	pciAddr := "0000:81:00.0" // default pciaddr for tests
 
 	tests := []struct {
@@ -521,14 +521,14 @@ func TestUpdateStorage(t *testing.T) {
 		config := defaultMockConfig(t)
 		cs := mockControlService(config)
 		cs.Setup() // init channel used for sync
-		mock := &mockUpdateStorageServer{}
+		mock := &mockStorageUpdateServer{}
 
-		req := &pb.UpdateStorageReq{
+		req := &pb.StorageUpdateReq{
 			Nvme: tt.nvmeParams,
 			Scm:  tt.scmParams,
 		}
 
-		_ = cs.UpdateStorage(req, mock)
+		_ = cs.StorageUpdate(req, mock)
 
 		AssertEqual(
 			t, len(mock.Results), 1,
