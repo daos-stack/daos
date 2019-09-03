@@ -157,14 +157,7 @@ func (n *nvmeStorage) getController(pciAddr string) *pb.NvmeController {
 // NOTE: doesn't attempt SPDK prep which requires elevated privileges,
 //       that instead can be performed explicitly with subcommand.
 func (n *nvmeStorage) Setup() error {
-	resp := new(pb.StorageScanResp)
-	n.Discover(resp)
-
-	if resp.Nvmestate.Status != pb.ResponseStatus_CTRL_SUCCESS {
-		return errors.New("nvme scan: " + resp.Nvmestate.Error)
-	}
-
-	return nil
+	return n.Discover()
 }
 
 // Teardown method implementation for nvmeStorage.

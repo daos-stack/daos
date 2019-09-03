@@ -24,6 +24,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -42,19 +44,36 @@ type storageScanCmd struct {
 }
 
 func (cmd *storageScanCmd) Execute(args []string) error {
-	srv, err := server.NewControlService(cmd.config)
+	svc, err := server.NewControlService(cmd.config)
 	if err != nil {
 		return errors.WithMessage(err, "failed to init ControlService")
 	}
 
-	outStrs, err := server.StorageScan()
-
-	// print output entries before returning failures
-	for _, str := range outStrs {
-		cmd.log.Info(str)
+	cmd.log.Info("Scanning locally-attached storage...")
+	scanErrors := make([]error, 0, 2)
+	controllers, err := svc.ScanNVMe()
+	if err != nil {
+		scanErrors = append(scanErrors, err)
+	} else {
+		cmd.log.Infof("NVMe SSD controller and constituent namespaces:\n%s", controllers)
 	}
 
-	return err
+	modules, err := svc.ScanSCM()
+	if err != nil {
+		scanErrors = append(scanErrors, err)
+	} else {
+		cmd.log.Infof("SCM modules:\n%s", modules)
+	}
+
+	if len(scanErrors) > 0 {
+		errStr := "scan error(s):\n"
+		for _, err := range scanErrors {
+			errStr += fmt.Sprintf("  %s\n", err.Error())
+		}
+		return errors.New(errStr)
+	}
+
+	return nil
 }
 
 type storagePrepNvmeCmd struct {
@@ -63,12 +82,12 @@ type storagePrepNvmeCmd struct {
 }
 
 func (cmd *storagePrepNvmeCmd) Execute(args []string) error {
-	srv, err := server.NewControlService(cmd.config)
+	svc, err := server.NewControlService(cmd.config)
 	if err != nil {
 		return errors.WithMessage(err, "initialising ControlService")
 	}
 
-	return srv.PrepNvme(server.PrepareNvmeRequest{
+	return svc.PrepNvme(server.PrepareNvmeRequest{
 		HugePageCount: cmd.NrHugepages,
 		TargetUser:    cmd.TargetUser,
 		PCIWhitelist:  cmd.PCIWhiteList,
@@ -96,12 +115,12 @@ func (cmd *storagePrepScmCmd) Execute(args []string) (err error) {
 		return errors.New("consent not given")
 	}
 
-	srv, err := server.NewControlService(cmd.config)
+	svc, err := server.NewControlService(cmd.config)
 	if err != nil {
 		return errors.WithMessage(err, "initialising ControlService")
 	}
 
-	needsReboot, devices, err := srv.PrepareScm(server.PrepareScmRequest{
+	needsReboot, devices, err := svc.PrepareScm(server.PrepareScmRequest{
 		Reset: cmd.Reset,
 	})
 	if err != nil {

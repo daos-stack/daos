@@ -358,14 +358,7 @@ func (s *scmStorage) getNamespaces() (devs []pmemDev, err error) {
 
 // Setup implementation for scmStorage providing initial device discovery
 func (s *scmStorage) Setup() error {
-	resp := new(pb.StorageScanResp)
-	s.Discover(resp)
-
-	if resp.Scmstate.Status != pb.ResponseStatus_CTRL_SUCCESS {
-		return errors.New("scm scan: " + resp.Scmstate.Error)
-	}
-
-	return nil
+	return s.Discover()
 }
 
 // Teardown implementation for scmStorage

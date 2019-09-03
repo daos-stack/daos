@@ -17,7 +17,6 @@
 // The Government's rights to use, modify, reproduce, release, perform, display,
 // or disclose this software are subject to the terms of the Apache License as
 // provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
@@ -194,11 +193,7 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *pb.JoinReq) (*pb.JoinResp, er
 }
 
 // CreatePool implements the method defined for the Management Service.
-func (svc *mgmtSvc) CreatePool(
-	ctx context.Context,
-	req *pb.CreatePoolReq,
-) (*pb.CreatePoolResp, error) {
-
+func (svc *mgmtSvc) CreatePool(ctx context.Context, req *pb.CreatePoolReq) (*pb.CreatePoolResp, error) {
 	log.Debugf("MgmtSvc.CreatePool dispatch, req:%+v\n", *req)
 
 	svc.mutex.Lock()
@@ -217,11 +212,7 @@ func (svc *mgmtSvc) CreatePool(
 }
 
 // DestroyPool implements the method defined for the Management Service.
-func (svc *mgmtSvc) DestroyPool(
-	ctx context.Context,
-	req *pb.DestroyPoolReq,
-) (*pb.DestroyPoolResp, error) {
-
+func (svc *mgmtSvc) DestroyPool(ctx context.Context, req *pb.DestroyPoolReq) (*pb.DestroyPoolResp, error) {
 	log.Debugf("MgmtSvc.DestroyPool dispatch, req:%+v\n", *req)
 
 	svc.mutex.Lock()
@@ -234,6 +225,25 @@ func (svc *mgmtSvc) DestroyPool(
 	resp := &pb.DestroyPoolResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal DestroyPool response")
+	}
+
+	return resp, nil
+}
+
+// KillRank implements the method defined for the Management Service.
+func (svc *mgmtSvc) KillRank(ctx context.Context, req *pb.DaosRank) (*pb.DaosResp, error) {
+	log.Debugf("MgmtSvc.KillRank dispatch, req:%+v\n", *req)
+
+	svc.mutex.Lock()
+	dresp, err := makeDrpcCall(svc.dcli, mgmtModuleID, killRank, req)
+	svc.mutex.Unlock()
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &pb.DaosResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal DAOS response")
 	}
 
 	return resp, nil
