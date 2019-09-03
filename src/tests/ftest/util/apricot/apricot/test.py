@@ -164,7 +164,7 @@ class TestWithServers(TestWithoutServers):
         self.orterun_env = None
         self.server_log = None
         self.log_dir = os.path.split(os.getenv("D_LOG_FILE",
-                                     "/tmp/server.log"))[0]
+                                               "/tmp/server.log"))[0]
         self.client_log = None
         self.test_id = "{}-{}".format(os.path.split(self.filename)[1],
                                       self.name.str_uid)
