@@ -36,7 +36,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	log "github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/go-spdk/spdk"
+	"github.com/daos-stack/daos/src/control/lib/spdk"
 )
 
 const (
@@ -157,7 +157,7 @@ func (n *nvmeStorage) getController(pciAddr string) *pb.NvmeController {
 // NOTE: doesn't attempt SPDK prep which requires elevated privileges,
 //       that instead can be performed explicitly with subcommand.
 func (n *nvmeStorage) Setup() error {
-	resp := new(pb.ScanStorageResp)
+	resp := new(pb.StorageScanResp)
 	n.Discover(resp)
 
 	if resp.Nvmestate.Status != pb.ResponseStatus_CTRL_SUCCESS {
@@ -194,7 +194,7 @@ func (n *nvmeStorage) Teardown() (err error) {
 // TODO: This is currently a one-time only discovery for the lifetime of this
 //       process, presumably we want to be able to detect updates during
 //       process lifetime.
-func (n *nvmeStorage) Discover(resp *pb.ScanStorageResp) {
+func (n *nvmeStorage) Discover(resp *pb.StorageScanResp) {
 	addStateDiscover := func(
 		status pb.ResponseStatus, errMsg string,
 		infoMsg string) *pb.ResponseState {
