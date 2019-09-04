@@ -91,6 +91,8 @@ drpc_listener_run(void *arg)
 		if (rc != DER_SUCCESS && rc != -DER_TIMEDOUT) {
 			D_ERROR("dRPC listener progress error: %d\n", rc);
 		}
+
+		ABT_thread_yield();
 	}
 
 	D_INFO("Closing down dRPC listener\n");
