@@ -872,7 +872,17 @@ dtx_handle_resend(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
 	int	rc;
 
 	if (daos_is_zero_dti(dti))
-		return 0;
+		/* If DTX is disabled, then means that the appplication does
+		 * not care about the replicas consistency. Under such case,
+		 * if client resends some modification RPC, then just handle
+		 * it as non-resent case, return -DER_NONEXIST.
+		 *
+		 * It will cause trouble if related modification has ever
+		 * been handled before the resending. But since we cannot
+		 * trace (if without DTX) whether it has ever been handled
+		 * or not, then just handle it as original without DTX case.
+		 */
+		return -DER_NONEXIST;
 
 	rc = vos_dtx_check_resend(coh, oid, dti, dkey_hash, punch, epoch);
 	switch (rc) {
