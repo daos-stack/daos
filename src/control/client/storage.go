@@ -114,16 +114,16 @@ type StorageResult struct {
 // storagePrepareRequest returns results of SCM and NVMe prepare actions
 // on a remote server by calling over gRPC channel.
 func storagePrepareRequest(mc Control, req interface{}, ch chan ClientResult) {
-	prepareReq, ok := req.(pb.StoragePrepareReq)
+	prepareReq, ok := req.(*pb.StoragePrepareReq)
 	if !ok {
-		err := errors.Errorf(msgTypeAssert, pb.StoragePrepareReq{}, req)
+		err := errors.Errorf(msgTypeAssert, &pb.StoragePrepareReq{}, req)
 
 		log.Errorf(err.Error())
 		ch <- ClientResult{mc.getAddress(), nil, err}
 		return // type err
 	}
 
-	resp, err := mc.getCtlClient().StoragePrepare(context.Background(), &prepareReq)
+	resp, err := mc.getCtlClient().StoragePrepare(context.Background(), prepareReq)
 	if err != nil {
 		ch <- ClientResult{mc.getAddress(), nil, err} // return comms error
 		return
