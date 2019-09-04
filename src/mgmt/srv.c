@@ -689,7 +689,7 @@ process_smdlistdevs_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__SmdDevReq		*req = NULL;
 	Mgmt__SmdDevResp	*resp = NULL;
 	struct mgmt_smd_devs	*smd_devs = NULL;
-	struct mgmt_smd_device	*device_entry = NULL;
+	struct mgmt_smd_device	*dev_entry = NULL;
 	uint8_t			*body;
 	size_t			 len;
 	int			 rc = 0;
@@ -748,12 +748,13 @@ process_smdlistdevs_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (smd_devs->ms_head == NULL) {
 		D_ERROR("Error acccessing the first device in SMD\n");
 		rc = -DER_NONEXIST;
-		goto out;
+		goto err_out;
 	}
-	device_entry = smd_devs->ms_head;
+	dev_entry = smd_devs->ms_head;
 
 	for (i = 0; i < smd_devs->ms_num_devs; i++) {
-		struct mgmt_smd_device *next = device_entry->next;
+		struct mgmt_smd_device *next = dev_entry->next;
+		struct smd_dev_info    *info = dev_entry->dev_info;
 
 		D_ALLOC(resp->devices[i], sizeof(*(resp->devices[i])));
 		if (resp->devices[i] == NULL) {
@@ -768,27 +769,28 @@ process_smdlistdevs_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			rc = -DER_NOMEM;
 			break;
 		}
-		uuid_unparse_lower(device_entry->devid, resp->devices[i]->uuid);
+		uuid_unparse_lower(info->sdi_id, resp->devices[i]->uuid);
 
-		resp->devices[i]->n_tgt_ids = device_entry->tgt_cnt;
-		D_ALLOC(resp->devices[i]->tgt_ids, sizeof(int) * device_entry->tgt_cnt);
+		resp->devices[i]->n_tgt_ids = info->sdi_tgt_cnt;
+		D_ALLOC(resp->devices[i]->tgt_ids,
+			sizeof(int) * info->sdi_tgt_cnt);
 		if (resp->devices[i]->tgt_ids == NULL) {
 			rc = -DER_NOMEM;
 			break;
 		}
-		for (j = 0; j < device_entry->tgt_cnt; j++) {
-			resp->devices[i]->tgt_ids[j] = device_entry->tgt_ids[j];
-		}
+		for (j = 0; j < info->sdi_tgt_cnt; j++)
+			resp->devices[i]->tgt_ids[j] = info->sdi_tgts[j];
 
-		D_FREE(device_entry->tgt_ids);
-		D_FREE(device_entry);
-		device_entry = next;
-		if (device_entry == NULL)
+		/* frees sdi_tgts and dev_info */
+		smd_free_dev_info(info);
+		D_FREE(dev_entry);
+		dev_entry = next;
+		if (dev_entry == NULL)
 			break;
 	}
 	/* Free all devices is there was an error allocating any */
 	if (rc != 0) {
-		for(; i >= 0; i--) {
+		for( ; i >= 0; i--) {
 			if (resp->devices[i] != NULL) {
 				if (resp->devices[i]->uuid != NULL)
 					D_FREE(resp->devices[i]->uuid);
@@ -799,10 +801,26 @@ process_smdlistdevs_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		}
 		D_FREE(resp->devices);
 		resp->devices = NULL;
-		goto out;
-	}
-	resp->n_devices = smd_devs->ms_num_devs;
+	} else
+		resp->n_devices = smd_devs->ms_num_devs;
 
+
+err_out:
+	/* Free all devices is there was an error allocating any */
+	if (rc != 0) {
+		if (smd_devs->ms_num_devs > 0) {
+			dev_entry = smd_devs->ms_head;
+			for (i = 0; i < smd_devs->ms_num_devs; i++) {
+				struct mgmt_smd_device *next = dev_entry->next;
+
+				smd_free_dev_info(dev_entry->dev_info);
+				D_FREE(dev_entry);
+				dev_entry = next;
+				if (dev_entry == NULL)
+					break;
+			}
+		}
+	}
 out:
 	resp->status = rc;
 	len = mgmt__smd_dev_resp__get_packed_size(resp);
@@ -829,6 +847,7 @@ process_biohealth_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__BioHealthReq	*req = NULL;
 	Mgmt__BioHealthResp	*resp = NULL;
 	struct mgmt_bio_health	*bio_health = NULL;
+	struct bio_dev_state	*bds;
 	uuid_t			 uuid;
 	uint8_t			*body;
 	size_t			 len;
@@ -888,17 +907,19 @@ process_biohealth_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 
 	uuid_unparse_lower(bio_health->mb_devid, resp->dev_uuid);
-	resp->error_count = bio_health->mb_error_count;
-	resp->temperature = bio_health->mb_temperature;
-	resp->media_errors = bio_health->mb_media_errors[0];
-	resp->read_errs = bio_health->mb_read_errs;
-	resp->write_errs = bio_health->mb_write_errs;
-	resp->unmap_errs = bio_health->mb_unmap_errs;
-	resp->temp = bio_health->mb_temp;
-	resp->spare = bio_health->mb_spare;
-	resp->readonly = bio_health->mb_readonly;
-	resp->device_reliability = bio_health->mb_reliability;
-	resp->volatile_memory = bio_health->mb_volatile;
+	bds = bio_health->mb_dev_state;
+	resp->error_count = bds->bds_error_count;
+	resp->temperature = bds->bds_temperature;
+	resp->media_errors = bds->bds_media_errors[0];
+	resp->read_errs = bds->bds_bio_read_errs;
+	resp->write_errs = bds->bds_bio_write_errs;
+	resp->unmap_errs = bds->bds_bio_unmap_errs;
+	resp->temp = bds->bds_temp_warning ? true : false;
+	resp->spare = bds->bds_avail_spare_warning ? true : false;
+	resp->readonly = bds->bds_read_only_warning ? true : false;
+	resp->device_reliability = bds->bds_dev_reliabilty_warning ?
+					true : false;
+	resp->volatile_memory = bds->bds_volatile_mem_warning ? true : false;
 
 out:
 	resp->status = rc;

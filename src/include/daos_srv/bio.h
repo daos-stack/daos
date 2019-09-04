@@ -446,7 +446,7 @@ bio_yield(void)
  *
  * \return		BIO device health state
  */
-struct bio_dev_state * bio_get_dev_state(struct bio_xs_context *xs);
+struct bio_dev_state *bio_get_dev_state(struct bio_xs_context *xs);
 
 
 #endif /* __BIO_API_H__ */

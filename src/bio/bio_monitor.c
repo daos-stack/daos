@@ -33,10 +33,60 @@
 /* Used to preallocate buffer to query error log pages from SPDK health info */
 #define DAOS_MAX_ERROR_LOG_PAGES 256
 
+/*
+ * Used for getting bio device state, which requires exclusive access from
+ * the device owner xstream.
+ */
+struct dev_state_msg_arg {
+	struct bio_xs_context	*xs;
+	struct bio_dev_state	*devstate;
+	bool			 send_msg_complete;
+	ABT_mutex		 mutex;
+	ABT_cond		 cond;
+};
+
+/* Copy out the bio_dev_state in the device owner xstream context */
+static void
+bio_get_dev_state_internal(void *msg_arg)
+{
+	struct dev_state_msg_arg	*dsm = msg_arg;
+
+	D_ASSERT(dsm != NULL);
+
+	ABT_mutex_lock(dsm->mutex);
+	dsm->devstate = &dsm->xs->bxc_blobstore->bb_dev_health.bdh_health_state;
+	ABT_cond_broadcast(dsm->cond);
+	ABT_mutex_unlock(dsm->mutex);
+}
+
+/* Call internal method to get BIO device state from the device owner xstream */
 struct bio_dev_state *
 bio_get_dev_state(struct bio_xs_context *xs)
 {
-	return &xs->bxc_blobstore->bb_dev_health.bdh_health_state;
+	struct dev_state_msg_arg	 dsm = { 0 };
+	int				 rc;
+
+	rc = ABT_mutex_create(&dsm.mutex);
+	if (rc != ABT_SUCCESS)
+		return NULL;
+
+	rc = ABT_cond_create(&dsm.cond);
+	if (rc != ABT_SUCCESS) {
+		ABT_mutex_free(&dsm.cond);
+		return NULL;
+	}
+
+	dsm.xs = xs;
+	dsm.devstate = NULL;
+
+	spdk_thread_send_msg(owner_thread(xs->bxc_blobstore),
+			     bio_get_dev_state_internal, &dsm);
+	ABT_cond_wait(dsm.cond, dsm.mutex);
+
+	ABT_cond_free(&dsm.cond);
+	ABT_mutex_free(&dsm.mutex);
+
+	return dsm.devstate;
 }
 
 static void

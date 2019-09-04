@@ -101,27 +101,15 @@ void ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req);
 /* Device health stats from bio_dev_state */
 struct mgmt_bio_health {
 	struct smd_dev_info	*mb_dev_info;
+	struct bio_dev_state	*mb_dev_state;
 	uuid_t			 mb_devid;
-	uint64_t		*mb_media_errors;
-	uint64_t		 mb_error_count;
-	uint32_t		 mb_read_errs;
-	uint32_t		 mb_write_errs;
-	uint32_t		 mb_unmap_errs;
-	uint16_t		 mb_temperature;
-	bool			 mb_temp;
-	bool			 mb_spare;
-	bool			 mb_readonly;
-	bool			 mb_reliability;
-	bool			 mb_volatile;
 };
 
 int ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid,
 			     char *tgt_id);
 
 struct mgmt_smd_device {
-	uuid_t			 devid;
-	int			*tgt_ids;
-	uint32_t		 tgt_cnt;
+	struct smd_dev_info	*dev_info;
 	struct mgmt_smd_device	*next;
 };
 

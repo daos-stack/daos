@@ -36,7 +36,6 @@ bio_health_query(void *arg)
 	struct mgmt_bio_health	*mbh = arg;
 	struct dss_module_info	*info = dss_get_module_info();
 	struct bio_xs_context	*bxc;
-	struct bio_dev_state	*health_stats;
 
 	D_ASSERT(info != NULL);
 	D_DEBUG(DB_MGMT, "BIO health stats query on xs:%d, tgt:%d\n",
@@ -49,22 +48,11 @@ bio_health_query(void *arg)
 		goto out;
 	}
 
-	health_stats = bio_get_dev_state(bxc);
-	if (health_stats == NULL)
+	mbh->mb_dev_state = bio_get_dev_state(bxc);
+	if (mbh->mb_dev_state == NULL) {
 		D_ERROR("Error getting BIO device state\n");
-
-	uuid_copy(mbh->mb_devid, mbh->mb_dev_info->sdi_id);
-	mbh->mb_error_count = health_stats->bds_error_count;
-	mbh->mb_media_errors = health_stats->bds_media_errors;
-	mbh->mb_read_errs = health_stats->bds_bio_read_errs;
-	mbh->mb_write_errs = health_stats->bds_bio_write_errs;
-	mbh->mb_unmap_errs = health_stats->bds_bio_unmap_errs;
-	mbh->mb_temperature = health_stats->bds_temperature;
-	mbh->mb_temp = health_stats->bds_temp_warning ? true : false;
-	mbh->mb_spare = health_stats->bds_avail_spare_warning ? true : false;
-	mbh->mb_readonly = health_stats->bds_read_only_warning ? true : false;
-	mbh->mb_reliability = health_stats->bds_dev_reliabilty_warning ? true : false;
-	mbh->mb_volatile = health_stats->bds_volatile_mem_warning ? true : false;
+		goto out;
+	}
 
 out:
 	smd_free_dev_info(mbh->mb_dev_info);
@@ -113,6 +101,7 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 
 	D_DEBUG(DB_MGMT, "Querying BIO Health Data for dev:"DF_UUID"\n",
 		DP_UUID(dev_uuid));
+	uuid_copy(mbh->mb_devid, dev_uuid);
 
 	/* Create a ULT on the tgt_id */
 	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
@@ -134,7 +123,7 @@ ds_mgmt_smd_list_devs(struct mgmt_smd_devs *devs)
 {
 	struct smd_dev_info	*dev_info, *tmp;
 	d_list_t		 dev_list;
-	int			 rc = 0, i;
+	int			 rc = 0;
 
 	D_DEBUG(DB_MGMT, "Querying SMD device list\n");
 
@@ -149,27 +138,14 @@ ds_mgmt_smd_list_devs(struct mgmt_smd_devs *devs)
 			smd_free_dev_info(dev_info);
 			return rc;
 		}
-		D_ALLOC_ARRAY(dev_tmp->tgt_ids, dev_info->sdi_tgt_cnt);
-		if (dev_tmp->tgt_ids == NULL) {
-			rc = -DER_NOMEM;
-			D_FREE(dev_tmp);
-			smd_free_dev_info(dev_info);
-			return rc;
-		}
 
-		uuid_copy(dev_tmp->devid, dev_info->sdi_id);
-		dev_tmp->tgt_cnt = dev_info->sdi_tgt_cnt;
-		for (i = 0; i < dev_info->sdi_tgt_cnt; i++) {
-			dev_tmp->tgt_ids[i] = dev_info->sdi_tgts[i];
-		}
-
+		dev_tmp->dev_info = dev_info;
 		dev_tmp->next = devs->ms_devs;
 		devs->ms_devs = dev_tmp;
 		devs->ms_head = dev_tmp;
 		devs->ms_num_devs++;
 
 		d_list_del(&dev_info->sdi_link);
-		smd_free_dev_info(dev_info);
 	}
 
 	return rc;
