@@ -126,7 +126,6 @@ dtx_batched_commit(void *arg)
 	struct dtx_batched_commit_args	*dbca;
 
 	while (1) {
-		ABT_bool			 state;
 		struct ds_cont_child		*cont;
 		struct dtx_entry		*dtes = NULL;
 		struct dtx_stat			 stat = { 0 };
@@ -184,11 +183,8 @@ dtx_batched_commit(void *arg)
 		}
 
 check:
-		rc = ABT_future_test(dmi->dmi_xstream->dx_shutdown, &state);
-		D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
-		if (state == ABT_TRUE)
+		if (dss_xstream_exiting(dmi->dmi_xstream))
 			break;
-
 		ABT_thread_yield();
 	}
 
