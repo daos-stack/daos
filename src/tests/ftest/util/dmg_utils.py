@@ -28,15 +28,12 @@ from command_utils import BasicParameter, FormattedParameter
 from avocado.utils import process
 
 
-class DmgCommand(CommandWithParameters):
+class DmgCommand(DaosCommand):
     """Defines a object representing a dmg (or daos_shell) command."""
 
     def __init__(self, path):
         """Create a dmg Command object."""
         super(DmgCommand, self).__init__("daos_shell", path)
-
-        self.request = BasicParameter("{}")
-        self.action = BasicParameter("{}")
 
         # daos_shell options
         self.hostlist = FormattedParameter("-l {}")
@@ -60,12 +57,6 @@ class DmgCommand(CommandWithParameters):
         self.cont = FormattedParameter("--cont={}")
         self.oid = FormattedParameter("--oid={}")
 
-    def get_param_names(self):
-        """Get a sorted list of dmg command parameter names."""
-        names = self.get_attribute_names(FormattedParameter)
-        names.extend(["request", "action"])
-        return names
-
     def get_params(self, test, path="/run/dmg/*"):
         """Get values for all of the dmg command params using a yaml file.
 
@@ -80,24 +71,3 @@ class DmgCommand(CommandWithParameters):
 
         """
         super(DmgCommand, self).get_params(test, path)
-
-    def run(self, timeout=None, verbose=True, env=None, sudo=False):
-        """ Run the dmg command.
-
-        Args:
-            timeout (int, optional): timeout in seconds. Defaults to None.
-            verbose (bool, optional): display command output. Defaults to True.
-            env (dict, optional): env for the command. Defaults to None.
-            sudo (bool, optional): sudo will be prepended to the command.
-                Defaults to False.
-
-        Raises:
-            process.CmdError: Avocado command exception
-
-        Returns:
-            process.CmdResult: CmdResult object containing the results from
-            the command.
-
-        """
-        return process.run(self.__str__(), timeout, verbose, env=env,
-                           shell=True, sudo=sudo)

@@ -53,7 +53,7 @@ class ServerFailed(Exception):
     """Server didn't start/stop properly."""
 
 
-class ServerCommand(CommandWithParameters):
+class ServerCommand(DaosCommand):
     """Defines a object representing a server command."""
 
     def __init__(self, hosts, path):
@@ -64,8 +64,6 @@ class ServerCommand(CommandWithParameters):
         self.process = None
         self.hostfile = None
 
-        self.request = BasicParameter("{}")
-        self.action = BasicParameter("{}")
         self.targets = FormattedParameter("-t {}")
         self.config = FormattedParameter("-o {}")
         self.port = FormattedParameter("-p {}")
@@ -117,12 +115,6 @@ class ServerCommand(CommandWithParameters):
             basepath (str): DAOS install basepath
         """
         self.config.update(create_server_yaml(basepath), "server.config")
-
-    def get_param_names(self):
-        """Get a sorted list of daos_server command parameter names."""
-        names = self.get_attribute_names(FormattedParameter)
-        names.extend(["request", "action"])
-        return names
 
     def get_params(self, test, path="/run/daos_server/*"):
         """Get values for all of the server command params using a yaml file.

@@ -177,3 +177,60 @@ class CommandWithParameters(ObjectWithParameters):
             if value != "":
                 params.append(value)
         return " ".join([os.path.join(self._path, self._command)] + params)
+
+    def run(self, timeout=None, verbose=True, env=None, sudo=False):
+        """ Run the command.
+
+        Args:
+            timeout (int, optional): timeout in seconds. Defaults to None.
+            verbose (bool, optional): display command output. Defaults to True.
+            env (dict, optional): env for the command. Defaults to None.
+            sudo (bool, optional): sudo will be prepended to the command.
+                Defaults to False.
+
+        Raises:
+            process.CmdError: Avocado command exception
+
+        Returns:
+            process.CmdResult: CmdResult object containing the results from
+            the command.
+
+        """
+        return process.run(self.__str__(), timeout, verbose, env=env,
+                           shell=True, sudo=sudo)
+
+
+class DaosCommand(CommandWithParameters):
+    """A class for similar daos command line tools."""
+
+    def __init__(self, command, path=""):
+        """__init__ [summary]
+
+        [extended_summary]
+
+        Args:
+            path ([type]): [description]
+            command ([type]): [description]
+        """
+        super(DaosCommand, self).__init__(command, path)
+        self.request = BasicParameter("{}")
+        self.action = BasicParameter("{}")
+
+    def get_param_names(self):
+        """Get a sorted list of DaosCommand parameter names."""
+        names = self.get_attribute_names(FormattedParameter)
+        names.extend(["request", "action"])
+        return names
+
+
+class JobManagerCommand(CommandWithParameters):
+    """A class for job manager commands."""
+
+    def __init__(self, manager):
+        """Create a JobManager object.
+
+        Construct and run a job manager tool. e.g. mpirun, orterun, slurm
+
+        Args:
+            manager (str): string of the manager tool to be executed
+        """
