@@ -84,58 +84,58 @@ func (m *mgmtCtlListFeaturesClient) Recv() (*pb.Feature, error) {
 	return m.features[0], nil
 }
 
-type mgmtCtlFormatStorageClient struct {
+type mgmtCtlStorageFormatClient struct {
 	grpc.ClientStream
 	ctrlrResults  NvmeControllerResults
 	mountResults  ScmMountResults
 	alreadyCalled bool
 }
 
-func (m *mgmtCtlFormatStorageClient) Recv() (*pb.FormatStorageResp, error) {
+func (m *mgmtCtlStorageFormatClient) Recv() (*pb.StorageFormatResp, error) {
 	if m.alreadyCalled {
 		return nil, io.EOF
 	}
 	m.alreadyCalled = true
 
-	return &pb.FormatStorageResp{
+	return &pb.StorageFormatResp{
 		Crets: m.ctrlrResults,
 		Mrets: m.mountResults,
 	}, nil
 }
 
-type mgmtCtlUpdateStorageClient struct {
+type mgmtCtlStorageUpdateClient struct {
 	grpc.ClientStream
 	ctrlrResults  NvmeControllerResults
 	moduleResults ScmModuleResults
 	alreadyCalled bool
 }
 
-func (m *mgmtCtlUpdateStorageClient) Recv() (*pb.UpdateStorageResp, error) {
+func (m *mgmtCtlStorageUpdateClient) Recv() (*pb.StorageUpdateResp, error) {
 	if m.alreadyCalled {
 		return nil, io.EOF
 	}
 	m.alreadyCalled = true
 
-	return &pb.UpdateStorageResp{
+	return &pb.StorageUpdateResp{
 		Crets: m.ctrlrResults,
 		Mrets: m.moduleResults,
 	}, nil
 }
 
-type mgmtCtlBurninStorageClient struct {
+type mgmtCtlStorageBurnInClient struct {
 	grpc.ClientStream
 	ctrlrResults  NvmeControllerResults
 	mountResults  ScmMountResults
 	alreadyCalled bool
 }
 
-func (m *mgmtCtlBurninStorageClient) Recv() (*pb.BurninStorageResp, error) {
+func (m *mgmtCtlStorageBurnInClient) Recv() (*pb.StorageBurnInResp, error) {
 	if m.alreadyCalled {
 		return nil, io.EOF
 	}
 	m.alreadyCalled = true
 
-	return &pb.BurninStorageResp{
+	return &pb.StorageBurnInResp{
 		Crets: m.ctrlrResults,
 		Mrets: m.mountResults,
 	}, nil
@@ -176,40 +176,40 @@ func (m *mockMgmtCtlClient) ListFeatures(
 	return &mgmtCtlListFeaturesClient{features: m.features}, nil
 }
 
-func (m *mockMgmtCtlClient) ScanStorage(
-	ctx context.Context, req *pb.ScanStorageReq, o ...grpc.CallOption) (
-	*pb.ScanStorageResp, error) {
+func (m *mockMgmtCtlClient) StorageScan(
+	ctx context.Context, req *pb.StorageScanReq, o ...grpc.CallOption) (
+	*pb.StorageScanResp, error) {
 	// return successful query results, state member messages
 	// initialise with zero values indicating mgmt.CTRL_SUCCESS
-	return &pb.ScanStorageResp{
+	return &pb.StorageScanResp{
 		Ctrlrs:  m.ctrlrs,
 		Modules: m.modules,
 	}, m.scanRet
 }
 
-func (m *mockMgmtCtlClient) FormatStorage(
-	ctx context.Context, req *pb.FormatStorageReq, o ...grpc.CallOption) (
-	pb.MgmtCtl_FormatStorageClient, error) {
+func (m *mockMgmtCtlClient) StorageFormat(
+	ctx context.Context, req *pb.StorageFormatReq, o ...grpc.CallOption) (
+	pb.MgmtCtl_StorageFormatClient, error) {
 
-	return &mgmtCtlFormatStorageClient{
+	return &mgmtCtlStorageFormatClient{
 		ctrlrResults: m.ctrlrResults, mountResults: m.mountResults,
 	}, m.formatRet
 }
 
-func (m *mockMgmtCtlClient) UpdateStorage(
-	ctx context.Context, req *pb.UpdateStorageReq, o ...grpc.CallOption) (
-	pb.MgmtCtl_UpdateStorageClient, error) {
+func (m *mockMgmtCtlClient) StorageUpdate(
+	ctx context.Context, req *pb.StorageUpdateReq, o ...grpc.CallOption) (
+	pb.MgmtCtl_StorageUpdateClient, error) {
 
-	return &mgmtCtlUpdateStorageClient{
+	return &mgmtCtlStorageUpdateClient{
 		ctrlrResults: m.ctrlrResults, moduleResults: m.moduleResults,
 	}, m.updateRet
 }
 
-func (m *mockMgmtCtlClient) BurninStorage(
-	ctx context.Context, req *pb.BurninStorageReq, o ...grpc.CallOption) (
-	pb.MgmtCtl_BurninStorageClient, error) {
+func (m *mockMgmtCtlClient) StorageBurnIn(
+	ctx context.Context, req *pb.StorageBurnInReq, o ...grpc.CallOption) (
+	pb.MgmtCtl_StorageBurnInClient, error) {
 
-	return &mgmtCtlBurninStorageClient{
+	return &mgmtCtlStorageBurnInClient{
 		ctrlrResults: m.ctrlrResults, mountResults: m.mountResults,
 	}, m.burninRet
 }

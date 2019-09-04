@@ -81,7 +81,7 @@ func (c *ControlService) Teardown() {
 }
 
 func (c *ControlService) ScanNVMe() (common.NvmeControllers, error) {
-	resp := new(pb.ScanStorageResp)
+	resp := new(pb.StorageScanResp)
 
 	c.nvme.Discover(resp)
 	if resp.Nvmestate.Status != pb.ResponseStatus_CTRL_SUCCESS {
@@ -91,7 +91,7 @@ func (c *ControlService) ScanNVMe() (common.NvmeControllers, error) {
 }
 
 func (c *ControlService) ScanSCM() (common.ScmModules, error) {
-	resp := new(pb.ScanStorageResp)
+	resp := new(pb.StorageScanResp)
 
 	c.scm.Discover(resp)
 	if resp.Scmstate.Status != pb.ResponseStatus_CTRL_SUCCESS {

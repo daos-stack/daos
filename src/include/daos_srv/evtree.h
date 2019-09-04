@@ -33,6 +33,12 @@
 #include <gurt/list.h>
 #include <daos_srv/bio.h>
 
+/** Minimum tree order for an evtree */
+#define EVT_MIN_ORDER	4
+/** Maximum tree order for an evtree */
+#define EVT_MAX_ORDER	128
+
+
 enum {
 	EVT_UMEM_TYPE	= 150,
 	EVT_UMEM_ROOT	= (EVT_UMEM_TYPE + 0),
@@ -433,6 +439,7 @@ struct evt_policy_ops {
 
 /**
  * Create a new tree in the specified address of root \a root, and open it.
+ * NOTE: Tree Order must be >= EVT_MIN_ORDER and <= EVT_MAX_ORDER.
  *
  * \param feats		[IN]	Feature bits, see \a evt_feats
  * \param order		[IN]	Tree order

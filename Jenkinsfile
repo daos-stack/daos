@@ -1158,8 +1158,7 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
                                        snapshot: true,
-                                       inst_repos: component_repos + ' ' + ior_repos +
-                                                   ' daos',
+                                       inst_repos: daos_repos + ' ' + ior_repos,
                                        inst_rpms: "ior-hpc mpich-autoload"
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
@@ -1225,15 +1224,13 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 1,
                                        snapshot: true,
-                                       inst_repos: component_repos + ' ' + ior_repos +
-                                                   ' daos',
+                                       inst_repos: daos_repos + ' ' + ior_repos,
                                        inst_rpms: "ior-hpc mpich-autoload"
                         // Then just reboot the physical nodes
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
                                        power_only: true,
-                                       inst_repos: component_repos + ' ' + ior_repos +
-                                                   ' daos',
+                                       inst_repos: daos_repos + ' ' + ior_repos,
                                        inst_rpms: "ior-hpc mpich-autoload"
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw:/s/^.*: *//p")

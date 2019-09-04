@@ -32,10 +32,10 @@ import (
 
 	. "github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	. "github.com/daos-stack/go-ipmctl/ipmctl"
+	. "github.com/daos-stack/daos/src/control/lib/ipmctl"
 )
 
-// MockModule returns a mock SCM module of type exported from go-ipmctl.
+// MockModule returns a mock SCM module of type exported from ipmctl.
 func MockModule() DeviceDiscovery {
 	m := MockModulePB()
 	dd := DeviceDiscovery{}
@@ -183,7 +183,7 @@ func TestGetState(t *testing.T) {
 	for _, tt := range tests {
 		config := defaultMockConfig(t)
 		ss := defaultMockScmStorage(config).withRunCmd(mockRun)
-		ss.Discover(new(pb.ScanStorageResp)) // not concerned with response
+		ss.Discover(new(pb.StorageScanResp)) // not concerned with response
 
 		// reset to initial values between tests
 		regionsOut = tt.showRegionOut
@@ -241,7 +241,7 @@ func TestDiscoverScm(t *testing.T) {
 			tt.ipmctlDiscoverRet, []DeviceDiscovery{m}, tt.inited,
 			config)
 
-		resp := new(pb.ScanStorageResp)
+		resp := new(pb.StorageScanResp)
 		ss.Discover(resp)
 		if tt.errMsg != "" {
 			AssertEqual(t, resp.Scmstate.Error, tt.errMsg, "")
@@ -436,7 +436,7 @@ func TestFormatScm(t *testing.T) {
 
 		if tt.inited {
 			// not concerned with response
-			ss.Discover(new(pb.ScanStorageResp))
+			ss.Discover(new(pb.StorageScanResp))
 		}
 
 		ss.Format(srvIdx, &results)

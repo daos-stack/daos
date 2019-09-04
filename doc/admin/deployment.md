@@ -5,9 +5,6 @@
 This section covers the preliminary setup required on the compute and
 storage nodes before deploying DAOS.
 
-For the impatient, skip to [Basic Workflows](#-basic-workflow) for
-commands to get you started quickly.
-
 ### Time Synchronization
 
 The DAOS transaction model relies on timestamps and requires time to be
@@ -40,7 +37,7 @@ By default daos\_server and daos\_agent will use the directories
 /var/run/daos\_server and /var/run/daos\_agent respectively. To change
 the default location that daos\_server uses for its runtime directory
 either uncomment and set the socket\_dir configuration value in
-install/etc/daos\_server.yaml or pass the location to daos\_server on
+install/etc/daos\_server.yml or pass the location to daos\_server on
 the command line using the -d flag. For the daos\_agent an alternate
 location can be passed on the command line using the -runtime\_dir flag.
 
@@ -111,7 +108,7 @@ resultant nvdimm namespaces are defined a device identifier (e.g. /dev/pmem0).
 DCPM can be configured and managed through the
 [ipmctl](https://github.com/intel/ipmctl) library and associated tool. The
 ipmctl command just be run as root and has pretty detailed man pages and
-help output (use “ipmctl help” to display it).
+help output (use "ipmctl help" to display it).
 
 The list of NVDIMMs can be displayed as follows:
 
@@ -139,11 +136,11 @@ allocations and therefore after initial completion the command prints a
 message to ask for a reboot (the command will not a initiate reboot itself).
 
 'sudo daos_server storage prep-scm' should be run for a second time after
-system reboot in order to create the pmem kernel devices (/dev/pmemX -
+system reboot in order to create the pmem kernel devices (/dev/pmemX
 namespaces created on the new SCM regions).
 
 One namespace per region is created, each namespace may take up to a few
-minutes to create. Details of pmem devices will be displayed in JSON format
+minutes to create. Details of pmem devices will be displayed in JSON format
 on command completion.
 
 Example output from initial call (with SCM modules set to default MemoryMode):
@@ -247,7 +244,7 @@ and Intel Persistent Memory Models usable by DAOS.
 
 ```bash
 $ daos_server storage scan
-[…]
+[...]
 NVMe SSD controller and constituent namespaces:
         PCI Addr:0000:da:00.0 Serial:PHKS7505005Y750BGN   Model:INTEL SSDPED1K750GA  Fwrev:E2010325 Socket:1
                 Namespace: id:1 capacity:750
@@ -398,8 +395,8 @@ The `daos_server` configuration file is parsed when starting the
 on the command line (`daos_server -h` for usage) or default location
 (`install/etc/daos_server.yml`).
 
-Parameter descriptions are specified in [daos_server.yml](../../utils/config/daos_server.yml)
-and example configurations files in the [examples](../../utils/config/examples)
+Parameter descriptions are specified in [daos_server.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+and example configurations files in the [examples](https://github.com/daos-stack/daos/tree/master/utils/config/examples)
 directory.
 
 Any option supplied to `daos_server` as a commandline option or flag will
@@ -859,9 +856,6 @@ dependency on PMIx and will allow the DAOS servers to be started
 individually (e.g. independently on each storage node via systemd) or
 collectively (e.g. pdsh, mpirun or as a Kubernetes Pod).
 
-For further details on building and running DAOS see the
-[Quickstart guide](../quickstart.md).
-
 ### Parallel Launcher
 
 As stated above, only orterun(1) is currently supported.
@@ -1008,9 +1002,9 @@ The daos\_shell is a transitory tool used to exercise the management api
 and can be used to verify that the DAOS servers are up and running. It
 is to be run as a standard, unprivileged user as follows:
 
-\$ daos\_shell –l storagenode1:10001,storagenode2:10001 storage scan
+\$ daos\_shell -l storagenode1:10001,storagenode2:10001 storage scan
 
-“storagenode” should be replaced with the actual hostname of each
+"storagenode" should be replaced with the actual hostname of each
 storage node. This command will show whether the DAOS server is properly
 running and initialized on each storage node. A more comprehensive and
 user-friendly tool built over the management API is under development. A
@@ -1092,6 +1086,7 @@ starts the data plane.
 ![Server format diagram](/doc/graph/server_format_flow.png)
 
 Typically an administrator will perform the following tasks:
+
 1. Prepare NVMe and SCM Storage
     - `sudo daos_server [<app_opts>] storage prep-nvme [<cmd_opts>]`
     [NVMe details](#nvme-prep)
@@ -1122,8 +1117,8 @@ requires subsequent restart of `daos_server`)
     - populate the `scm_*` and `bdev_*` parameters as used in format (below)
 
 7. Format Storage (from any node)
-    - When 'daos_server' is started for the first time (and no SCM directory exists),
-'daos_server' enters "maintenance mode" and waits for a 'daos_shell storage format' call to be issued from the management tool. This remote call will trigger the formatting of the locally attached storage on the host for use with DAOS using the parameters defined in the server config file.
+    - When `daos_server` is started for the first time (and no SCM directory exists),
+`daos_server` enters "maintenance mode" and waits for a `daos_shell storage format` call to be issued from the management tool. This remote call will trigger the formatting of the locally attached storage on the host for use with DAOS using the parameters defined in the server config file.
     - `daos_shell -i -l <host:port>,... storage format -f`
 [management tool details](/src/control/cmd/dmg/README.md#storage-format)
     - [SCM specific details](/src/control/server/README.md#scm-format)
@@ -1178,7 +1173,7 @@ The `daos_agent` configuration file is parsed when starting the
 on the command line (`daos_agent -h` for usage) or default location
 (`install/etc/daos_agent.yml`).
 
-Parameter descriptions are specified in [daos_agent.yml](/utils/config/daos_agent.yml).
+Parameter descriptions are specified in [daos_agent.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_agent.yml).
 
 Any option supplied to `daos_agent` as a commandline option or flag will
 take precedence over equivalent configuration file parameter.
