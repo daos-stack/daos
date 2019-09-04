@@ -3031,9 +3031,9 @@ dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
 	struct btr_context *tcx;
 	int		    rc;
 
-	if (root->tr_class == 0) {
-		D_DEBUG(DB_TRACE, "Tree class is zero\n");
-		return -DER_INVAL;
+	if (root->tr_order == 0) {
+		D_DEBUG(DB_TRACE, "Nonexistent tree\n");
+		return -DER_NONEXIST;
 	}
 
 	rc = btr_context_create(BTR_ROOT_NULL, root, -1, -1, -1, uma,

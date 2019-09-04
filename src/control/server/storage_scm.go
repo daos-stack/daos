@@ -358,7 +358,7 @@ func (s *scmStorage) getNamespaces() (devs []pmemDev, err error) {
 
 // Setup implementation for scmStorage providing initial device discovery
 func (s *scmStorage) Setup() error {
-	resp := new(pb.ScanStorageResp)
+	resp := new(pb.StorageScanResp)
 	s.Discover(resp)
 
 	if resp.Scmstate.Status != pb.ResponseStatus_CTRL_SUCCESS {
@@ -393,7 +393,7 @@ func loadModules(mms []ipmctl.DeviceDiscovery) (pbMms common.ScmModules) {
 }
 
 // Discover method implementation for scmStorage
-func (s *scmStorage) Discover(resp *pb.ScanStorageResp) {
+func (s *scmStorage) Discover(resp *pb.StorageScanResp) {
 	addStateDiscover := func(
 		status pb.ResponseStatus, errMsg string,
 		infoMsg string) *pb.ResponseState {
