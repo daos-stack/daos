@@ -194,6 +194,7 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_unitdir}/daos-server.service
 
 %files client
+%{_prefix}/etc/memcheck-daos-client.supp
 %{_bindir}/daos_shell
 %{_bindir}/daosctl
 %{_bindir}/dcont

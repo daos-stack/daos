@@ -101,6 +101,8 @@ def scons():
     env.InstallAs("$PREFIX/TESTING/.build_vars.sh", ".build_vars.sh")
     env.InstallAs("$PREFIX/TESTING/.build_vars.json", ".build_vars.json")
 
+    env.Install('$PREFIX/etc', ['utils/memcheck-daos-client.supp'])
+
     # install the configuration files
     SConscript('utils/config/SConscript')
 
