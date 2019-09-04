@@ -2071,33 +2071,34 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 	return 0;
 }
 
-//static void
-//obj_update_csums(const struct dc_object *obj, const daos_obj_update_t *args) {
-//	struct daos_csummer *csummer = dc_cont_hdl2csummer(obj->cob_coh);
-//
-//	if (!daos_csummer_initialized(csummer)) /** Not configured */
-//		return;
-//
-//	int i;
-//
-//	for (i = 0; i < args->nr; i++) {
-//		/**
-//		 * TODO: Turn this into an assert after csums are
-//		 * removed from public interface. csums should always be
-//		 * cleaned up/freed internally, so might be a memory leak if
-//		 * not NULL. But user can pass in right now so don't assert.
-//		 * (D_ASSERT(args->iods[i].iod_csums == NULL)
-//		 */
-//		if (args->iods[i].iod_csums != NULL)
-//			D_WARN("args->iods[i].iod_csums not NULL\n");
-//		daos_csummer_calc_csum(csummer,
-//				       &args->sgls[i],
-//				       args->iods[i].iod_size,
-//				       args->iods[i].iod_recxs,
-//				       args->iods[i].iod_nr,
-//				       &args->iods[i].iod_csums);
-//	}
-//}
+static void
+obj_update_csums(const struct dc_object *obj, const daos_obj_update_t *args) {
+	struct daos_csummer *csummer = dc_cont_hdl2csummer(obj->cob_coh);
+
+	if (!daos_csummer_initialized(csummer)) /** Not configured */
+		return;
+
+	D_ERROR("[RYON]Is checksums really initialized??\n");
+	int i;
+
+	for (i = 0; i < args->nr; i++) {
+		/**
+		 * TODO: Turn this into an assert after csums are
+		 * removed from public interface. csums should always be
+		 * cleaned up/freed internally, so might be a memory leak if
+		 * not NULL. But user can pass in right now so don't assert.
+		 * (D_ASSERT(args->iods[i].iod_csums == NULL)
+		 */
+		if (args->iods[i].iod_csums != NULL)
+			D_WARN("args->iods[i].iod_csums not NULL\n");
+		daos_csummer_calc_csum(csummer,
+				       &args->sgls[i],
+				       args->iods[i].iod_size,
+				       args->iods[i].iod_recxs,
+				       args->iods[i].iod_nr,
+				       &args->iods[i].iod_csums);
+	}
+}
 
 static int
 do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
@@ -2225,8 +2226,7 @@ dc_obj_update(tse_task_t *task)
 			      tgt_set, map_ver, false, false,
 			      &obj_auxi->req_tgts);
 
-	/* [todo-ryon]: testing without this */
-//	obj_update_csums(obj, args);
+	obj_update_csums(obj, args);
 
 	if (rc)
 		goto out_task;
