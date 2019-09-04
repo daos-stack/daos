@@ -27,6 +27,7 @@ import (
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	types "github.com/daos-stack/daos/src/control/common/storage"
 	log "github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -42,8 +43,8 @@ type StorCmd struct {
 type StoragePrepareCmd struct {
 	broadcastCmd
 	connectedCmd
-	common.StoragePrepNvmeCmd
-	common.StoragePrepScmCmd
+	types.StoragePrepareNvmeCmd
+	types.StoragePrepareScmCmd
 }
 
 // run NVMe and SCM storage preparation on all connected servers

@@ -194,12 +194,12 @@ func (n *nvmeStorage) Discover() error {
 
 	// specify shmID to be set as opt in SPDK env init
 	if err := n.env.InitSPDKEnv(n.config.NvmeShmID); err != nil {
-		return err
+		return errors.WithMessage(err, msgSpdkInitFail)
 	}
 
 	cs, ns, err := n.nvme.Discover()
 	if err != nil {
-		return err
+		return errors.WithMessage(err, msgSpdkDiscoverFail)
 	}
 	n.controllers = loadControllers(cs, ns)
 	n.initialized = true

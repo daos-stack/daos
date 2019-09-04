@@ -29,6 +29,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/server"
 )
 
@@ -51,14 +52,14 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 
 	cmd.log.Info("Scanning locally-attached storage...")
 	scanErrors := make([]error, 0, 2)
-	controllers, err := svc.ScanNVMe()
+	controllers, err := svc.ScanNvme()
 	if err != nil {
 		scanErrors = append(scanErrors, err)
 	} else {
 		cmd.log.Infof("NVMe SSD controller and constituent namespaces:\n%s", controllers)
 	}
 
-	modules, err := svc.ScanSCM()
+	modules, err := svc.ScanScm()
 	if err != nil {
 		scanErrors = append(scanErrors, err)
 	} else {
@@ -78,7 +79,7 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 
 type storagePrepNvmeCmd struct {
 	cfgCmd
-	common.StoragePrepNvmeCmd
+	types.StoragePrepareNvmeCmd
 }
 
 func (cmd *storagePrepNvmeCmd) Execute(args []string) error {
@@ -87,7 +88,7 @@ func (cmd *storagePrepNvmeCmd) Execute(args []string) error {
 		return errors.WithMessage(err, "initialising ControlService")
 	}
 
-	return svc.PrepNvme(server.PrepareNvmeRequest{
+	return svc.PrepareNvme(server.PrepareNvmeRequest{
 		HugePageCount: cmd.NrHugepages,
 		TargetUser:    cmd.TargetUser,
 		PCIWhitelist:  cmd.PCIWhiteList,
@@ -98,7 +99,7 @@ func (cmd *storagePrepNvmeCmd) Execute(args []string) error {
 type storagePrepScmCmd struct {
 	cfgCmd
 	logCmd
-	common.StoragePrepScmCmd
+	types.StoragePrepareScmCmd
 }
 
 func (cmd *storagePrepScmCmd) Execute(args []string) (err error) {
@@ -128,7 +129,7 @@ func (cmd *storagePrepScmCmd) Execute(args []string) (err error) {
 	}
 
 	if needsReboot {
-		cmd.log.Info(msgScmRebootRequired)
+		cmd.log.Info(server.MsgScmRebootRequired)
 		return nil
 	}
 

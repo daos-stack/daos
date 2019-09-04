@@ -57,7 +57,7 @@ const (
 	cmdScmDisableNamespace = "ndctl disable-namespace %s"
 	cmdScmDestroyNamespace = "ndctl destroy-namespace %s"
 
-	msgScmRebootRequired   = "A reboot is required to process new memory allocation goals."
+	MsgScmRebootRequired   = "A reboot is required to process new memory allocation goals."
 	msgScmNoModules        = "no scm modules to prepare"
 	msgScmNotInited        = "scm storage could not be accessed"
 	msgScmAlreadyFormatted = "scm storage has already been formatted and " +
@@ -393,7 +393,7 @@ func (s *scmStorage) Discover() error {
 
 	mms, err := s.ipmctl.Discover()
 	if err != nil {
-		return err
+		return errors.WithMessage(err, msgIpmctlDiscoverFail)
 	}
 	s.modules = loadModules(mms)
 	s.initialized = true

@@ -104,60 +104,80 @@ func TestStorageScan(t *testing.T) {
 		{
 			"success", nil, nil, nil, true, true,
 			pb.StorageScanResp{
-				Ctrlrs:    NvmeControllers{pbCtrlr},
-				Nvmestate: new(pb.ResponseState),
-				Modules:   ScmModules{pbModule},
-				Scmstate:  new(pb.ResponseState),
+				Nvme: &pb.ScanNvmeResp{
+					Ctrlrs: NvmeControllers{pbCtrlr},
+					State:  new(pb.ResponseState),
+				},
+				Scm: &pb.ScanScmResp{
+					Modules: ScmModules{pbModule},
+					State:   new(pb.ResponseState),
+				},
 			}, "",
 		},
 		{
 			"spdk init fail", errExample, nil, nil, false, true,
 			pb.StorageScanResp{
-				Nvmestate: &pb.ResponseState{
-					Error: msgSpdkInitFail +
-						": example failure",
-					Status: pb.ResponseStatus_CTRL_ERR_NVME,
+				Nvme: &pb.ScanNvmeResp{
+					State: &pb.ResponseState{
+						Error: "NVMe storage scan: " + msgSpdkInitFail +
+							": example failure",
+						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+					},
 				},
-				Modules:  ScmModules{pbModule},
-				Scmstate: new(pb.ResponseState),
+				Scm: &pb.ScanScmResp{
+					Modules: ScmModules{pbModule},
+					State:   new(pb.ResponseState),
+				},
 			}, "",
 		},
 		{
 			"spdk discover fail", nil, errExample, nil, false, true,
 			pb.StorageScanResp{
-				Nvmestate: &pb.ResponseState{
-					Error: msgSpdkDiscoverFail +
-						": example failure",
-					Status: pb.ResponseStatus_CTRL_ERR_NVME,
+				Nvme: &pb.ScanNvmeResp{
+					State: &pb.ResponseState{
+						Error: "NVMe storage scan: " + msgSpdkDiscoverFail +
+							": example failure",
+						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+					},
 				},
-				Modules:  ScmModules{pbModule},
-				Scmstate: new(pb.ResponseState),
+				Scm: &pb.ScanScmResp{
+					Modules: ScmModules{pbModule},
+					State:   new(pb.ResponseState),
+				},
 			}, "",
 		},
 		{
 			"ipmctl discover fail", nil, nil, errExample, true, false,
 			pb.StorageScanResp{
-				Ctrlrs:    NvmeControllers{pbCtrlr},
-				Nvmestate: new(pb.ResponseState),
-				Scmstate: &pb.ResponseState{
-					Error: msgIpmctlDiscoverFail +
-						": example failure",
-					Status: pb.ResponseStatus_CTRL_ERR_SCM,
+				Nvme: &pb.ScanNvmeResp{
+					Ctrlrs: NvmeControllers{pbCtrlr},
+					State:  new(pb.ResponseState),
+				},
+				Scm: &pb.ScanScmResp{
+					State: &pb.ResponseState{
+						Error: "SCM storage scan: " + msgIpmctlDiscoverFail +
+							": example failure",
+						Status: pb.ResponseStatus_CTRL_ERR_SCM,
+					},
 				},
 			}, "",
 		},
 		{
 			"all discover fail", nil, errExample, errExample, false, false,
 			pb.StorageScanResp{
-				Nvmestate: &pb.ResponseState{
-					Error: msgSpdkDiscoverFail +
-						": example failure",
-					Status: pb.ResponseStatus_CTRL_ERR_NVME,
+				Scm: &pb.ScanScmResp{
+					State: &pb.ResponseState{
+						Error: "SCM storage scan: " + msgIpmctlDiscoverFail +
+							": example failure",
+						Status: pb.ResponseStatus_CTRL_ERR_SCM,
+					},
 				},
-				Scmstate: &pb.ResponseState{
-					Error: msgIpmctlDiscoverFail +
-						": example failure",
-					Status: pb.ResponseStatus_CTRL_ERR_SCM,
+				Nvme: &pb.ScanNvmeResp{
+					State: &pb.ResponseState{
+						Error: "NVMe storage scan: " + msgSpdkDiscoverFail +
+							": example failure",
+						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+					},
 				},
 			}, "",
 		},
@@ -186,28 +206,14 @@ func TestStorageScan(t *testing.T) {
 		}
 		AssertEqual(t, "", tt.errMsg, tt.desc)
 
-		AssertEqual(
-			t, len(cs.nvme.controllers), len(resp.Ctrlrs),
-			"unexpected number of controllers")
-		AssertEqual(
-			t, len(cs.scm.modules), len(resp.Modules),
-			"unexpected number of modules")
+		AssertEqual(t, len(cs.nvme.controllers), len(resp.Nvme.Ctrlrs), "unexpected number of controllers")
+		AssertEqual(t, len(cs.scm.modules), len(resp.Scm.Modules), "unexpected number of modules")
 
-		AssertEqual(
-			t, resp.Nvmestate, tt.expResp.Nvmestate,
-			"unexpected Nvmestate, "+tt.desc)
-		AssertEqual(
-			t, resp.Nvmestate, tt.expResp.Nvmestate,
-			"unexpected Nvmestate, "+tt.desc)
-		AssertEqual(
-			t, resp.Scmstate, tt.expResp.Scmstate,
-			"unexpected Scmstate, "+tt.desc)
-		AssertEqual(
-			t, resp.Ctrlrs, tt.expResp.Ctrlrs,
-			"unexpected controllers, "+tt.desc)
-		AssertEqual(
-			t, resp.Modules, tt.expResp.Modules,
-			"unexpected modules, "+tt.desc)
+		AssertEqual(t, resp.Nvme.State, tt.expResp.Nvme.State, "unexpected Nvmestate, "+tt.desc)
+		AssertEqual(t, resp.Nvme.State, tt.expResp.Nvme.State, "unexpected Nvmestate, "+tt.desc)
+		AssertEqual(t, resp.Scm.State, tt.expResp.Scm.State, "unexpected Scmstate, "+tt.desc)
+		AssertEqual(t, resp.Nvme.Ctrlrs, tt.expResp.Nvme.Ctrlrs, "unexpected controllers, "+tt.desc)
+		AssertEqual(t, resp.Scm.Modules, tt.expResp.Scm.Modules, "unexpected modules, "+tt.desc)
 
 		AssertEqual(t, cs.nvme.initialized, tt.expNvmeInited, tt.desc)
 		AssertEqual(t, cs.scm.initialized, tt.expScmInited, tt.desc)
