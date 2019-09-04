@@ -356,8 +356,7 @@ if ls core.*; then
     python_debuginfo_rpm=\"\${python_rpm/-/-debuginfo-}\"
 
     if ! rpm -q \$python_debuginfo_rpm; then
-        sudo yum -y install \
- http://debuginfo.centos.org/7/x86_64/\$python_debuginfo_rpm.rpm
+        sudo yum --enablerepo=\*debug\* -y install \$python_debuginfo_rpm
     fi
     sudo yum -y install gdb
     for file in core.*; do
