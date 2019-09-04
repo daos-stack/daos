@@ -33,6 +33,12 @@
 #include <gurt/list.h>
 #include <daos_srv/bio.h>
 
+/** Minimum tree order for an evtree */
+#define EVT_MIN_ORDER	4
+/** Maximum tree order for an evtree */
+#define EVT_MAX_ORDER	128
+
+
 enum {
 	EVT_UMEM_TYPE	= 150,
 	EVT_UMEM_ROOT	= (EVT_UMEM_TYPE + 0),
@@ -121,6 +127,8 @@ struct evt_rect {
 struct evt_filter {
 	struct evt_extent	fr_ex;	/**< extent range */
 	daos_epoch_range_t	fr_epr;	/**< epoch range */
+	/** higher level punch epoch (0 if not punched) */
+	daos_epoch_t		fr_punch;
 };
 
 /** Log format of extent */
@@ -150,11 +158,11 @@ struct evt_filter {
 
 /** Log format of evtree filter */
 #define DF_FILTER			\
-	DF_EXT "@" DF_U64"-"DF_U64
+	DF_EXT "@" DF_U64"-"DF_U64"(punch="DF_U64")"
 
 #define DP_FILTER(filter)					\
 	DP_EXT(&(filter)->fr_ex), (filter)->fr_epr.epr_lo,	\
-	(filter)->fr_epr.epr_hi
+	(filter)->fr_epr.epr_hi, (filter)->fr_punch
 
 /** Return the width of an extent */
 static inline daos_size_t
@@ -431,6 +439,7 @@ struct evt_policy_ops {
 
 /**
  * Create a new tree in the specified address of root \a root, and open it.
+ * NOTE: Tree Order must be >= EVT_MIN_ORDER and <= EVT_MAX_ORDER.
  *
  * \param feats		[IN]	Feature bits, see \a evt_feats
  * \param order		[IN]	Tree order

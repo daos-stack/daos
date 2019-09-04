@@ -25,10 +25,10 @@ from __future__ import print_function
 
 import re
 import uuid
-import daos_api
 
 from avocado.utils.process import run, CmdError
 from command_utils import FormattedParameter, CommandWithParameters
+
 
 
 class IorFailed(Exception):
@@ -256,8 +256,7 @@ class IorCommand(CommandWithParameters):
                 "DAOS_SVCL": self.daos_svcl.value,
                 "FI_PSM2_DISCONNECT": 1,
                 "IOR_HINT__MPI__romio_daos_obj_class":
-                daos_api.get_object_class("OC_{}".\
-                format(self.daos_oclass.value)).value,
+                self.daos_oclass.value
             })
             assign_env = ["{}={}".format(key, val) for key, val in env.items()]
             exports = "export {}; ".format("; export ".join(assign_env))

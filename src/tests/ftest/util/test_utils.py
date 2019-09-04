@@ -267,6 +267,11 @@ class TestPool(TestDaosApiBase):
             pi_leader (int, optional): pool leader. Defaults to None.
             pi_bits (int, optional): pool bits. Defaults to None.
 
+        Note:
+            Arguments may also be provided as a string with a number preceeded
+            by '<', '<=', '>', or '>=' for other comparisions besides the
+            default '=='.
+
         Returns:
             bool: True if at least one expected value is specified and all the
                 specified values match; False otherwise
@@ -302,6 +307,11 @@ class TestPool(TestDaosApiBase):
             ps_ntargets (int, optional): number of targets. Defaults to None.
             ps_padding (int, optional): space padding. Defaults to None.
 
+        Note:
+            Arguments may also be provided as a string with a number preceeded
+            by '<', '<=', '>', or '>=' for other comparisions besides the
+            default '=='.
+
         Returns:
             bool: True if at least one expected value is specified and all the
                 specified values match; False otherwise
@@ -335,6 +345,11 @@ class TestPool(TestDaosApiBase):
         Args:
             s_total (list, optional): total space per device. Defaults to None.
             s_free (list, optional): free space per device. Defaults to None.
+
+        Note:
+            Arguments may also be provided as a string with a number preceeded
+            by '<', '<=', '>', or '>=' for other comparisions besides the
+            default '=='.
 
         Returns:
             bool: True if at least one expected value is specified and all the
@@ -374,6 +389,11 @@ class TestPool(TestDaosApiBase):
                 Defaults to None.
             rs_rec_nr (int, optional): number of rebuilt records.
                 Defaults to None.
+
+        Note:
+            Arguments may also be provided as a string with a number preceeded
+            by '<', '<=', '>', or '>=' for other comparisions besides the
+            default '=='.
 
         Returns:
             bool: True if at least one expected value is specified and all the

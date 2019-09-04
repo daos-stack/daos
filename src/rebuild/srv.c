@@ -1619,10 +1619,9 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 		d_list_for_each_entry_safe(rdone, tmp, &puller->rp_one_list,
 					   ro_list) {
 			d_list_del_init(&rdone->ro_list);
-			D_WARN(DF_UUID" left rebuild rdone %*.s\n",
+			D_WARN(DF_UUID" left rebuild rdone key="DF_KEY"\n",
 			       DP_UUID(rpt->rt_pool_uuid),
-			      (int)rdone->ro_dkey.iov_len,
-			      (char *)rdone->ro_dkey.iov_buf);
+			       DP_KEY(&rdone->ro_dkey));
 			rebuild_one_destroy(rdone);
 		}
 	}
@@ -1758,7 +1757,7 @@ rebuild_tgt_status_check(void *arg)
 			rpt->rt_global_scan_done, rpt->rt_global_done,
 			iv.riv_status);
 
-		if (rpt->rt_global_done || rpt->rt_abort)
+		if (rpt->rt_global_done)
 			break;
 	}
 

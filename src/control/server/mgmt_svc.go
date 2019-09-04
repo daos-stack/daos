@@ -106,7 +106,7 @@ func checkMgmtSvcReplica(self *net.TCPAddr, accessPoints []string) (isReplica, b
 // resolveAccessPoints resolves the strings in accessPoints into addresses in
 // addrs. If a port isn't specified, assume the default port.
 func resolveAccessPoints(accessPoints []string) (addrs []*net.TCPAddr, err error) {
-	defaultPort := newConfiguration().Port
+	defaultPort := NewConfiguration().Port
 	for _, ap := range accessPoints {
 		if !hasPort(ap) {
 			ap = net.JoinHostPort(ap, strconv.Itoa(defaultPort))
@@ -155,7 +155,7 @@ type mgmtSvc struct {
 	dcli  drpc.DomainSocketClient
 }
 
-func newMgmtSvc(config *configuration) *mgmtSvc {
+func newMgmtSvc(config *Configuration) *mgmtSvc {
 	return &mgmtSvc{
 		dcli: getDrpcClientConnection(config.SocketDir),
 	}
@@ -194,11 +194,7 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *pb.JoinReq) (*pb.JoinResp, er
 }
 
 // CreatePool implements the method defined for the Management Service.
-func (svc *mgmtSvc) CreatePool(
-	ctx context.Context,
-	req *pb.CreatePoolReq,
-) (*pb.CreatePoolResp, error) {
-
+func (svc *mgmtSvc) CreatePool(ctx context.Context, req *pb.CreatePoolReq) (*pb.CreatePoolResp, error) {
 	log.Debugf("MgmtSvc.CreatePool dispatch, req:%+v\n", *req)
 
 	svc.mutex.Lock()
@@ -217,11 +213,7 @@ func (svc *mgmtSvc) CreatePool(
 }
 
 // DestroyPool implements the method defined for the Management Service.
-func (svc *mgmtSvc) DestroyPool(
-	ctx context.Context,
-	req *pb.DestroyPoolReq,
-) (*pb.DestroyPoolResp, error) {
-
+func (svc *mgmtSvc) DestroyPool(ctx context.Context, req *pb.DestroyPoolReq) (*pb.DestroyPoolResp, error) {
 	log.Debugf("MgmtSvc.DestroyPool dispatch, req:%+v\n", *req)
 
 	svc.mutex.Lock()
@@ -234,6 +226,25 @@ func (svc *mgmtSvc) DestroyPool(
 	resp := &pb.DestroyPoolResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal DestroyPool response")
+	}
+
+	return resp, nil
+}
+
+// KillRank implements the method defined for the Management Service.
+func (svc *mgmtSvc) KillRank(ctx context.Context, req *pb.DaosRank) (*pb.DaosResp, error) {
+	log.Debugf("MgmtSvc.KillRank dispatch, req:%+v\n", *req)
+
+	svc.mutex.Lock()
+	dresp, err := makeDrpcCall(svc.dcli, mgmtModuleID, killRank, req)
+	svc.mutex.Unlock()
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &pb.DaosResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal DAOS response")
 	}
 
 	return resp, nil

@@ -294,10 +294,10 @@ error:
 void
 smd_fini(void)
 {
-	D_RWLOCK_WRLOCK(&smd_store.ss_rwlock);
+	smd_lock(&smd_store);
 	smd_store_close();
-	D_RWLOCK_UNLOCK(&smd_store.ss_rwlock);
-	D_RWLOCK_DESTROY(&smd_store.ss_rwlock);
+	smd_unlock(&smd_store);
+	ABT_mutex_free(&smd_store.ss_mutex);
 }
 
 int
@@ -324,14 +324,14 @@ smd_init(const char *path)
 	smd_store.ss_pool_hdl = DAOS_HDL_INVAL;
 	smd_store.ss_tgt_hdl = DAOS_HDL_INVAL;
 
-	rc = D_RWLOCK_INIT(&smd_store.ss_rwlock, NULL);
-	if (rc) {
-		D_ERROR("Init rwlock failed. %d\n", rc);
+	rc = ABT_mutex_create(&smd_store.ss_mutex);
+	if (rc != ABT_SUCCESS) {
+		rc = -DER_NOMEM;
 		D_FREE(fname);
 		return rc;
 	}
 
-	D_RWLOCK_WRLOCK(&smd_store.ss_rwlock);
+	smd_lock(&smd_store);
 
 	rc = smd_store_check(fname, &existing);
 	if (rc) {
@@ -356,7 +356,7 @@ smd_init(const char *path)
 
 	D_DEBUG(DB_MGMT, "SMD store initialized\n");
 out:
-	D_RWLOCK_UNLOCK(&smd_store.ss_rwlock);
+	smd_unlock(&smd_store);
 	D_FREE(fname);
 
 	if (rc)

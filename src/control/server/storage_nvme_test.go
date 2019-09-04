@@ -32,7 +32,8 @@ import (
 
 	. "github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	. "github.com/daos-stack/go-spdk/spdk"
+	. "github.com/daos-stack/daos/src/control/common/storage"
+	. "github.com/daos-stack/daos/src/control/lib/spdk"
 )
 
 var nvmeFormatCalls []string // record calls to nvme.Format()
@@ -72,7 +73,7 @@ func MockNamespace(ctrlr *Controller) Namespace {
 	}
 }
 
-// mock external interface implementations for go-spdk/spdk package
+// mock external interface implementations for daos/src/control/lib/spdk package
 type mockSpdkEnv struct {
 	initRet error // ENV interface InitSPDKEnv() return value
 }
@@ -83,7 +84,7 @@ func newMockSpdkEnv(initRet error) ENV { return &mockSpdkEnv{initRet} }
 
 func defaultMockSpdkEnv() ENV { return newMockSpdkEnv(nil) }
 
-// mock external interface implementations for go-spdk/nvme package
+// mock external interface implementations for daos/src/control/lib/nvme package
 type mockSpdkNvme struct {
 	fwRevBefore  string
 	fwRevAfter   string
@@ -152,7 +153,7 @@ func (m *mockSpdkSetup) reset() error                   { return nil }
 // mockNvmeStorage factory
 func newMockNvmeStorage(
 	spdkEnv ENV, spdkNvme NVME, inited bool,
-	config *configuration) *nvmeStorage {
+	config *Configuration) *nvmeStorage {
 
 	return &nvmeStorage{
 		env:         spdkEnv,
@@ -164,7 +165,7 @@ func newMockNvmeStorage(
 }
 
 // defaultMockNvmeStorage factory
-func defaultMockNvmeStorage(config *configuration) *nvmeStorage {
+func defaultMockNvmeStorage(config *Configuration) *nvmeStorage {
 	return newMockNvmeStorage(
 		defaultMockSpdkEnv(),
 		defaultMockSpdkNvme(),
@@ -212,30 +213,23 @@ func TestDiscoverNvmeSingle(t *testing.T) {
 				[]Controller{c}, []Namespace{MockNamespace(&c)},
 				tt.spdkDiscoverRet, nil, nil),
 			tt.inited,
-			&config)
+			config)
 
-		resp := new(pb.ScanStorageResp)
-		sn.Discover(resp)
-		if tt.errMsg != "" {
-			AssertEqual(t, resp.Nvmestate.Error, tt.errMsg, "")
-			AssertTrue(
-				t,
-				resp.Nvmestate.Status != pb.ResponseStatus_CTRL_SUCCESS,
-				"")
-			continue
+		if err := sn.Discover(); err != nil {
+			if tt.errMsg != "" {
+				AssertEqual(t, err.Error(), tt.errMsg, "")
+				continue
+			}
+			t.Fatal(err)
 		}
-		AssertEqual(t, resp.Nvmestate.Error, "", "")
-		AssertEqual(t, resp.Nvmestate.Status, pb.ResponseStatus_CTRL_SUCCESS, "")
 
 		if tt.inited {
-			AssertEqual(
-				t, sn.controllers, NvmeControllers(nil),
+			AssertEqual(t, sn.controllers, NvmeControllers(nil),
 				"unexpected list of protobuf format controllers")
 			continue
 		}
 
-		AssertEqual(
-			t, sn.controllers, NvmeControllers{pbC},
+		AssertEqual(t, sn.controllers, NvmeControllers{pbC},
 			"unexpected list of protobuf format controllers")
 	}
 }
@@ -287,10 +281,11 @@ func TestDiscoverNvmeMulti(t *testing.T) {
 				"1.0.0", "1.0.1", tt.ctrlrs, tt.nss,
 				nil, nil, nil),
 			false,
-			&config)
+			config)
 
-		// not concerned with response
-		sn.Discover(new(pb.ScanStorageResp))
+		if err := sn.Discover(); err != nil {
+			t.Fatal(err)
+		}
 
 		if len(tt.ctrlrs) != len(sn.controllers) {
 			t.Fatalf(
@@ -488,13 +483,14 @@ func TestFormatNvme(t *testing.T) {
 				"1.0.0", "1.0.1",
 				[]Controller{c}, []Namespace{MockNamespace(&c)},
 				nil, tt.devFormatRet, nil),
-			false, &config)
+			false, config)
 		sn.formatted = tt.formatted
 
 		results := NvmeControllerResults{}
 
-		// not concerned with response
-		sn.Discover(new(pb.ScanStorageResp))
+		if err := sn.Discover(); err != nil {
+			t.Fatal(err)
+		}
 
 		sn.Format(srvIdx, &results)
 
@@ -779,12 +775,14 @@ func TestUpdateNvme(t *testing.T) {
 				startRev, endRev, // ctrlr before/after fw revs
 				tt.initCtrlrs, []Namespace{}, // Nss ignored
 				nil, nil, tt.devUpdateRet),
-			false, &config)
+			false, config)
 
 		results := NvmeControllerResults{}
 
 		if tt.inited {
-			sn.Discover(new(pb.ScanStorageResp)) // not concerned with response
+			if err := sn.Discover(); err != nil {
+				t.Fatal(err)
+			}
 		}
 
 		// create parameters message with desired model name & starting fwrev
@@ -859,11 +857,12 @@ func TestBurnInNvme(t *testing.T) {
 
 	for _, tt := range tests {
 		config := defaultMockConfig(t)
-		sn := defaultMockNvmeStorage(&config)
+		sn := defaultMockNvmeStorage(config)
 
 		if tt.inited {
-			// not concerned with response
-			sn.Discover(new(pb.ScanStorageResp))
+			if err := sn.Discover(); err != nil {
+				t.Fatal(err)
+			}
 		}
 
 		cmdName, args, env, err := sn.BurnIn(c.Pciaddr, int32(nsID), configPath)

@@ -62,12 +62,15 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
                                 sudo chmod 0755 /var/run/daos_\\\$dir
                                 sudo chown \\\$me:\\\$me /var/run/daos_\\\$dir
                             done
+                            sudo mkdir /tmp/daos_sockets
+                            sudo chmod 0755 /tmp/daos_sockets
+                            sudo chown \\\$me:\\\$me /tmp/daos_sockets
                             sudo mkdir -p /mnt/daos
                             sudo mount -t tmpfs -o size=16777216k tmpfs /mnt/daos
                             sudo cp /tmp/daos_server_baseline.yaml /usr/etc/daos_server.yml
                             cat /usr/etc/daos_server.yml
                             cat /usr/etc/daos_agent.yml
-                            coproc orterun -np 1 -H \\\$HOSTNAME --enable-recovery -x DAOS_SINGLETON_CLI=1  daos_server -c 1 -a /tmp -o /usr/etc/daos_server.yml -i
+                            coproc orterun -np 1 -H \\\$HOSTNAME --enable-recovery -x DAOS_SINGLETON_CLI=1 daos_server --debug --config /usr/etc/daos_server.yml start -t 1 -a /tmp -i
                             trap 'set -x; kill -INT \\\$COPROC_PID' EXIT
                             line=\"\"
                             while [[ \"\\\$line\" != *started\\\\ on\\\\ rank\\\\ 0* ]]; do
@@ -82,7 +85,8 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
 
 // bail out of branch builds that are not on a whitelist
 if (!env.CHANGE_ID &&
-    env.BRANCH_NAME != "master") {
+    (env.BRANCH_NAME != "weekly-testing" &&
+     env.BRANCH_NAME != "master")) {
    currentBuild.result = 'SUCCESS'
    return
 }
@@ -91,7 +95,8 @@ pipeline {
     agent { label 'lightweight' }
 
     triggers {
-        cron(env.BRANCH_NAME == 'master' ? '0 0 * * *' : '')
+        cron(env.BRANCH_NAME == 'master' ? '0 0 * * *\n' : '' +
+             env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
     }
 
     environment {
@@ -106,13 +111,14 @@ pipeline {
         QUICKBUILD = sh(script: "git show -s --format=%B | grep \"^Quick-build: true\"",
                         returnStatus: true)
         SSH_KEY_ARGS="-ici_key"
-        PDSH_SSH_ARGS_APPEND="$SSH_KEY_ARGS"
         CLUSH_ARGS="-o$SSH_KEY_ARGS"
     }
 
     options {
         // preserve stashes so that jobs can be started at the test stage
         preserveStashes(buildCount: 5)
+        // How can we have different timeouts for weekly and master and PRs?
+        timeout(time: 24, unit: 'HOURS')
     }
 
     stages {
@@ -125,7 +131,11 @@ pipeline {
         stage('Pre-build') {
             when {
                 beforeAgent true
-                expression { return env.QUICKBUILD == '1' }
+                allOf {
+                    not { branch 'weekly-testing' }
+                    expression { env.CHANGE_TARGET != 'weekly-testing' }
+                    expression { return env.QUICKBUILD == '1' }
+                }
             }
             parallel {
                 stage('checkpatch') {
@@ -194,7 +204,11 @@ pipeline {
                 stage('Build RPM on CentOS 7') {
                     when {
                         beforeAgent true
-                        expression { return env.QUICKBUILD == '1' }
+                        allOf {
+                            not { branch 'weekly-testing' }
+                            expression { env.CHANGE_TARGET != 'weekly-testing' }
+                            expression { return env.QUICKBUILD == '1' }
+                        }
                     }
                     agent {
                         dockerfile {
@@ -257,7 +271,11 @@ pipeline {
                 stage('Build RPM on SLES 12.3') {
                     when {
                         beforeAgent true
-                        expression { return env.QUICKBUILD == '1' }
+                        allOf {
+                            not { branch 'weekly-testing' }
+                            expression { env.CHANGE_TARGET != 'weekly-testing' }
+                            expression { return env.QUICKBUILD == '1' }
+                        }
                     }
                     agent {
                         dockerfile {
@@ -372,10 +390,6 @@ pipeline {
                             */
                         }
                         success {
-                            sh '''rm -rf daos-devel/
-                                  mkdir daos-devel/
-                                  mv install/{lib,include} daos-devel/'''
-                            archiveArtifacts artifacts: 'daos-devel/**'
                             sh "rm -rf _build.external${arch}"
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
@@ -563,7 +577,11 @@ pipeline {
                 stage('Build on Ubuntu 18.04 with Clang') {
                     when {
                         beforeAgent true
-                        expression { return env.QUICKBUILD == '1' }
+                        allOf {
+                            not { branch 'weekly-testing' }
+                            expression { env.CHANGE_TARGET != 'weekly-testing' }
+                            expression { return env.QUICKBUILD == '1' }
+                        }
                     }
                     agent {
                         dockerfile {
@@ -637,6 +655,8 @@ pipeline {
                         allOf {
                             environment name: 'SLES12_3_DOCKER', value: 'true'
                             expression { return env.QUICKBUILD == '1' }
+                            not { branch 'weekly-testing' }
+                            expression { env.CHANGE_TARGET != 'weekly-testing' }
                         }
                     }
                     agent {
@@ -713,6 +733,8 @@ pipeline {
                         allOf {
                             environment name: 'LEAP42_3_DOCKER', value: 'true'
                             expression { return env.QUICKBUILD == '1' }
+                            not { branch 'weekly-testing' }
+                            expression { env.CHANGE_TARGET != 'weekly-testing' }
                         }
                     }
                     agent {
@@ -934,7 +956,11 @@ pipeline {
                 stage('Build on Leap 15 with Intel-C') {
                     when {
                         beforeAgent true
-                        expression { return env.QUICKBUILD == '1' }
+                        allOf {
+                            not { branch 'weekly-testing' }
+                            expression { env.CHANGE_TARGET != 'weekly-testing' }
+                            expression { return env.QUICKBUILD == '1' }
+                        }
                     }
                     agent {
                         dockerfile {
@@ -1135,8 +1161,7 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
                                        snapshot: true,
-                                       inst_repos: component_repos + ' ' + ior_repos +
-                                                   ' daos',
+                                       inst_repos: daos_repos + ' ' + ior_repos,
                                        inst_rpms: "ior-hpc mpich-autoload"
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
@@ -1154,6 +1179,10 @@ pipeline {
                                   if [ -n "$STAGE_NAME" ]; then
                                       rm -rf "$STAGE_NAME/"
                                       mkdir "$STAGE_NAME/"
+                                      # compress those potentially huge DAOS logs
+                                      if daos_logs=$(ls src/tests/ftest/avocado/job-results/*/daos_logs/*); then
+                                          lbzip2 $daos_logs
+                                      fi
                                       arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
                                       arts="$arts$(ls -d src/tests/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
                                       arts="$arts$(ls src/tests/ftest/*.stacktrace 2>/dev/null || true)"
@@ -1198,15 +1227,13 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 1,
                                        snapshot: true,
-                                       inst_repos: component_repos + ' ' + ior_repos +
-                                                   ' daos',
+                                       inst_repos: daos_repos + ' ' + ior_repos,
                                        inst_rpms: "ior-hpc mpich-autoload"
                         // Then just reboot the physical nodes
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
                                        power_only: true,
-                                       inst_repos: component_repos + ' ' + ior_repos +
-                                                   ' daos',
+                                       inst_repos: daos_repos + ' ' + ior_repos,
                                        inst_rpms: "ior-hpc mpich-autoload"
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw:/s/^.*: *//p")
@@ -1224,6 +1251,10 @@ pipeline {
                                   if [ -n "$STAGE_NAME" ]; then
                                       rm -rf "$STAGE_NAME/"
                                       mkdir "$STAGE_NAME/"
+                                      # compress those potentially huge DAOS logs
+                                      if daos_logs=$(ls src/tests/ftest/avocado/job-results/*/daos_logs/*); then
+                                          lbzip2 $daos_logs
+                                      fi
                                       arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
                                       arts="$arts$(ls -d src/tests/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
                                       arts="$arts$(ls src/tests/ftest/*.stacktrace 2>/dev/null || true)"
@@ -1262,7 +1293,11 @@ pipeline {
                 stage('Test CentOS 7 RPMs') {
                     when {
                         beforeAgent true
-                        expression { return env.QUICKBUILD == '1' }
+                        allOf {
+                            not { branch 'weekly-testing' }
+                            expression { env.CHANGE_TARGET != 'weekly-testing' }
+                            expression { return env.QUICKBUILD == '1' }
+                        }
                     }
                     agent {
                         label 'ci_vm1'
@@ -1289,7 +1324,11 @@ pipeline {
                 stage('Test SLES12.3 RPMs') {
                     when {
                         beforeAgent true
-                        expression { return env.QUICKBUILD == '1' }
+                        allOf {
+                            not { branch 'weekly-testing' }
+                            expression { env.CHANGE_TARGET != 'weekly-testing' }
+                            expression { return env.QUICKBUILD == '1' }
+                        }
                     }
                     agent {
                         label 'ci_vm1'
