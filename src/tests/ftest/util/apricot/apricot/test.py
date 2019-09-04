@@ -161,7 +161,6 @@ class TestWithServers(TestWithoutServers):
 
         self.agent_sessions = None
         self.setup_start_servers = True
-        self.orterun_env = None
         self.server_log = None
         self.log_dir = os.path.split(os.getenv("D_LOG_FILE",
                                                "/tmp/server.log"))[0]
@@ -268,12 +267,11 @@ class TestWithServers(TestWithoutServers):
                     "Starting servers: group=%s, hosts=%s", group, hosts)
                 hostfile = write_host_file.write_host_file(hosts, self.workdir)
                 server_utils.run_server(hostfile, group, self.basepath,
-                                        env_dict=self.orterun_env,
                                         log_filename=self.server_log)
         else:
             server_utils.run_server(
                 self.hostfile_servers, self.server_group, self.basepath,
-                env_dict=self.orterun_env, log_filename=self.server_log)
+                log_filename=self.server_log)
 
     def get_partition_hosts(self, partition_key, host_list):
         """[summary].
@@ -324,8 +322,9 @@ class TestWithServers(TestWithoutServers):
         if test_name:
             self.test_id = test_name
 
-        self.server_log = "/tmp/{}_server_daos.log".format(self.test_id)
-        self.client_log = os.path.join(self.log_dir,
-                                       self.test_id + "_" + CLIENT_LOG)
-        # To generate the seperate client log file
-        self.orterun_env = {'D_LOG_FILE': self.client_log}
+#        self.server_log = "/tmp/{}_server_daos.log".format(self.test_id)
+        self.server_log = os.path.join(
+            self.log_dir, "{}_server_daos.log".format(self.test_id))
+        self.client_log = os.path.join(
+            self.log_dir, "{}_client_daos.log".format(self.test_id))
+#                                       self.test_id + "_" + CLIENT_LOG)

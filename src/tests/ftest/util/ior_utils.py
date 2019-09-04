@@ -30,7 +30,6 @@ from avocado.utils.process import run, CmdError
 from command_utils import FormattedParameter, CommandWithParameters
 
 
-
 class IorFailed(Exception):
     """Raise if Ior failed."""
 
@@ -226,7 +225,8 @@ class IorCommand(CommandWithParameters):
 
         return total
 
-    def get_launch_command(self, manager, attach_info, processes, hostfile):
+    def get_launch_command(self, manager, attach_info, processes, hostfile,
+                           client_log):
         """Get the process launch command used to run IOR.
 
         Args:
@@ -249,6 +249,7 @@ class IorCommand(CommandWithParameters):
             "CRT_ATTACH_INFO_PATH": attach_info,
             "MPI_LIB": "\"\"",
             "DAOS_SINGLETON_CLI": 1,
+            "D_LOG_FILE": client_log,
         }
         if manager.endswith("mpirun"):
             env.update({
@@ -299,7 +300,8 @@ class IorCommand(CommandWithParameters):
         return "{}{} {} {}".format(
             exports, manager, " ".join(args), self.__str__())
 
-    def run(self, manager, attach_info, processes, hostfile, display=True):
+    def run(self, manager, attach_info, processes, hostfile, client_log,
+            display=True):
         """Run the IOR command.
 
         Args:
@@ -315,7 +317,7 @@ class IorCommand(CommandWithParameters):
 
         """
         command = self.get_launch_command(
-            manager, attach_info, processes, hostfile)
+            manager, attach_info, processes, hostfile, client_log)
         if display:
             print("<IOR CMD>: {}".format(command))
 

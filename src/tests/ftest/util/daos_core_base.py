@@ -61,9 +61,9 @@ class DaosCoreBase(TestWithServers):
                                        '/run/daos_tests/num_replicas/*')
         args = self.params.get("args", '/run/daos_tests/Tests/*', "")
 
-        cmd = "{} -n {} {} -s {} -{} {}".format(self.orterun, num_clients,
-                                                self.daos_test, num_replicas,
-                                                subtest, args)
+        cmd = "{} -n {} -x D_LOG_FILE={} {} -s {} -{} {}".format(
+            self.orterun, num_clients, self.client_log, self.daos_test,
+            num_replicas, subtest, args)
 
         env = {}
         env['CMOCKA_XML_FILE'] = "%g_results.xml"
