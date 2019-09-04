@@ -32,7 +32,7 @@ import (
 
 	. "github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	. "github.com/daos-stack/go-spdk/spdk"
+	. "github.com/daos-stack/daos/src/control/lib/spdk"
 )
 
 var nvmeFormatCalls []string // record calls to nvme.Format()
@@ -72,7 +72,7 @@ func MockNamespace(ctrlr *Controller) Namespace {
 	}
 }
 
-// mock external interface implementations for go-spdk/spdk package
+// mock external interface implementations for daos/src/control/lib/spdk package
 type mockSpdkEnv struct {
 	initRet error // ENV interface InitSPDKEnv() return value
 }
@@ -83,7 +83,7 @@ func newMockSpdkEnv(initRet error) ENV { return &mockSpdkEnv{initRet} }
 
 func defaultMockSpdkEnv() ENV { return newMockSpdkEnv(nil) }
 
-// mock external interface implementations for go-spdk/nvme package
+// mock external interface implementations for daos/src/control/lib/nvme package
 type mockSpdkNvme struct {
 	fwRevBefore  string
 	fwRevAfter   string
@@ -214,7 +214,7 @@ func TestDiscoverNvmeSingle(t *testing.T) {
 			tt.inited,
 			config)
 
-		resp := new(pb.ScanStorageResp)
+		resp := new(pb.StorageScanResp)
 		sn.Discover(resp)
 		if tt.errMsg != "" {
 			AssertEqual(t, resp.Nvmestate.Error, tt.errMsg, "")
@@ -290,7 +290,7 @@ func TestDiscoverNvmeMulti(t *testing.T) {
 			config)
 
 		// not concerned with response
-		sn.Discover(new(pb.ScanStorageResp))
+		sn.Discover(new(pb.StorageScanResp))
 
 		if len(tt.ctrlrs) != len(sn.controllers) {
 			t.Fatalf(
@@ -494,7 +494,7 @@ func TestFormatNvme(t *testing.T) {
 		results := NvmeControllerResults{}
 
 		// not concerned with response
-		sn.Discover(new(pb.ScanStorageResp))
+		sn.Discover(new(pb.StorageScanResp))
 
 		sn.Format(srvIdx, &results)
 
@@ -784,7 +784,7 @@ func TestUpdateNvme(t *testing.T) {
 		results := NvmeControllerResults{}
 
 		if tt.inited {
-			sn.Discover(new(pb.ScanStorageResp)) // not concerned with response
+			sn.Discover(new(pb.StorageScanResp)) // not concerned with response
 		}
 
 		// create parameters message with desired model name & starting fwrev
@@ -863,7 +863,7 @@ func TestBurnInNvme(t *testing.T) {
 
 		if tt.inited {
 			// not concerned with response
-			sn.Discover(new(pb.ScanStorageResp))
+			sn.Discover(new(pb.StorageScanResp))
 		}
 
 		cmdName, args, env, err := sn.BurnIn(c.Pciaddr, int32(nsID), configPath)

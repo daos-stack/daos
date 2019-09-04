@@ -354,6 +354,10 @@ static void
 rebuild_pool_destroy(test_arg_t *arg)
 {
 	test_teardown((void **)&arg);
+	/* make sure IV and GC release refcount on pool and free space,
+	 * otherwise rebuild test might run into ENOSPACE
+	 */
+	sleep(1);
 }
 
 static void

@@ -15,11 +15,8 @@ DAOS is licensed under the Apache License Version 2.0. Please see the [LICENSE](
 
 ## Documentations
 
-#### Operations guide:
-* quick [instructions](doc/quickstart.md) for building, installing and running DAOS
-* [DAOS operations manual](https://wiki.hpdd.intel.com/display/DC/Operations+Manual)
-* [testing](doc/testing.md) DAOS
-* [debugging](doc/debugging.md) DAOS
+#### Administration guide:
+The DAOS admin guide is available [online](https://daos-stack.github.io).
 
 #### User area:
 * [Overview of the DAOS storage model](doc/storage_model.md)
