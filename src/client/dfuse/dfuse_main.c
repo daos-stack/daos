@@ -172,6 +172,11 @@ main(int argc, char **argv)
 		}
 	}
 
+	if (!dfuse_info->di_foreground && getenv("PMIX_RANK")) {
+		DFUSE_LOG_WARNING("Not running in background under orterun");
+		dfuse_info->di_foreground = false;
+	}
+
 	if (!dfuse_info->di_mountpoint) {
 		DFUSE_LOG_ERROR("Mountpoint is required");
 		D_GOTO(out_dfuse, ret = -DER_INVAL);
