@@ -34,8 +34,8 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/lib/ipmctl"
 	log "github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/go-ipmctl/ipmctl"
 )
 
 //go:generate stringer -type=scmState
@@ -47,15 +47,18 @@ const (
 	scmStateFreeCapacity
 	scmStateNoCapacity
 
-	cmdScmShowRegions     = "ipmctl show -d PersistentMemoryType,FreeCapacity -region"
-	outScmNoRegions       = "\nThere are no Regions defined in the system."
-	cmdScmCreateRegions   = "ipmctl create -f -goal PersistentMemoryType=AppDirect"
-	cmdScmCreateNamespace = "ndctl create-namespace" // returns json ns info
-	cmdScmListNamespaces  = "ndctl list -N"          // returns json ns info
+	cmdScmShowRegions = "ipmctl show -d PersistentMemoryType,FreeCapacity -region"
+	outScmNoRegions   = "\nThere are no Regions defined in the system.\n"
+	// creates a AppDirect/Interleaved memory allocation goal across all DCPMMs on a system.
+	cmdScmCreateRegions    = "ipmctl create -f -goal PersistentMemoryType=AppDirect"
+	cmdScmRemoveRegions    = "ipmctl create -f -goal MemoryMode=100"
+	cmdScmCreateNamespace  = "ndctl create-namespace" // returns json ns info
+	cmdScmListNamespaces   = "ndctl list -N"          // returns json ns info
+	cmdScmDisableNamespace = "ndctl disable-namespace %s"
+	cmdScmDestroyNamespace = "ndctl destroy-namespace %s"
 
 	msgScmRebootRequired   = "A reboot is required to process new memory allocation goals."
 	msgScmNoModules        = "no scm modules to prepare"
-	msgScmPrepared         = "scm has been prepared"
 	msgScmNotInited        = "scm storage could not be accessed"
 	msgScmAlreadyFormatted = "scm storage has already been formatted and " +
 		"reformat not implemented"
@@ -71,6 +74,7 @@ const (
 type pmemDev struct {
 	UUID     string
 	Blockdev string
+	Dev      string
 	NumaNode int `json:"numa_node"`
 }
 
@@ -90,6 +94,7 @@ func (rce *runCmdError) Error() string {
 		return fmt.Sprintf("%s: stdout: %s; stderr: %s", ee.ProcessState,
 			rce.stdout, ee.Stderr)
 	}
+
 	return fmt.Sprintf("%s: stdout: %s", rce.wrapped.Error(), rce.stdout)
 }
 
@@ -102,6 +107,7 @@ func run(cmd string) (string, error) {
 			stdout:  string(out),
 		}
 	}
+
 	return string(out), nil
 }
 
@@ -110,13 +116,12 @@ func run(cmd string) (string, error) {
 // details.
 //
 // IpmCtl provides necessary methods to interact with Storage Class
-// Memory modules through libipmctl via go-ipmctl bindings.
+// Memory modules through libipmctl via ipmctl bindings.
 type scmStorage struct {
 	ipmctl      ipmctl.IpmCtl  // ipmctl NVM API interface
-	config      *configuration // server configuration structure
+	config      *Configuration // server configuration structure
 	runCmd      runCmdFn
 	modules     common.ScmModules
-	pmemDevs    []pmemDev
 	state       scmState
 	initialized bool
 	formatted   bool
@@ -142,8 +147,8 @@ func (s *scmStorage) withRunCmd(runCmd runCmdFn) *scmStorage {
 //
 // Actions based on state:
 // * modules exist and no regions -> create all regions (needs reboot)
-// * regions exist and free capacity -> create all namespaces
-// * regions exist but no free capacity -> no-op
+// * regions exist and free capacity -> create all namespaces, return created
+// * regions exist but no free capacity -> no-op, return namespaces
 //
 // Command output from external tools will be returned.
 func (s *scmStorage) Prep() (needsReboot bool, pmemDevs []pmemDev, err error) {
@@ -155,21 +160,71 @@ func (s *scmStorage) Prep() (needsReboot bool, pmemDevs []pmemDev, err error) {
 
 	switch s.state {
 	case scmStateNoRegions:
-		needsReboot, err = s.createRegions()
+		// if successful, memory allocation change read on reboot
+		if _, err = s.runCmd(cmdScmCreateRegions); err == nil {
+			needsReboot = true
+		}
 	case scmStateFreeCapacity:
 		pmemDevs, err = s.createNamespaces()
 	case scmStateNoCapacity:
 		pmemDevs, err = s.getNamespaces()
-	default:
+	case scmStateUnknown:
 		err = errors.New("unknown scm state")
 	}
 
 	return
 }
 
-// reset executes commands to remove namespaces and regions on SCM models.
-func (s *scmStorage) PrepReset() error {
-	return nil // TODO
+// PrepReset executes commands to remove namespaces and regions on SCM modules.
+//
+// Returns indication of whether a reboot is required alongside error.
+func (s *scmStorage) PrepReset() (bool, error) {
+	if err := s.getState(); err != nil {
+		return false, err
+	}
+
+	switch s.state {
+	case scmStateNoRegions:
+		log.Info("SCM is already reset\n")
+		return false, nil
+	case scmStateUnknown:
+		return false, errors.New("unknown scm state")
+	}
+
+	pmemDevs, err := s.getNamespaces()
+	if err != nil {
+		return false, err
+	}
+
+	for _, dev := range pmemDevs {
+		if err := s.removeNamespace(dev.Dev); err != nil {
+			return false, err
+		}
+	}
+
+	log.Infof("resetting SCM memory allocations\n")
+	if out, err := s.runCmd(cmdScmRemoveRegions); err != nil {
+		log.Error(out)
+		return false, err
+	}
+
+	return true, nil // memory allocation reset requires a reboot
+}
+
+func (s *scmStorage) removeNamespace(devName string) (err error) {
+	log.Infof("removing SCM namespace, may take a few minutes...\n")
+
+	_, err = s.runCmd(fmt.Sprintf(cmdScmDisableNamespace, devName))
+	if err != nil {
+		return
+	}
+
+	_, err = s.runCmd(fmt.Sprintf(cmdScmDestroyNamespace, devName))
+	if err != nil {
+		return
+	}
+
+	return
 }
 
 // getState establishes state of SCM regions and namespaces on local server.
@@ -181,6 +236,8 @@ func (s *scmStorage) getState() error {
 	if err != nil {
 		return err
 	}
+
+	log.Debugf("show region output: %s\n", out)
 
 	if out == outScmNoRegions {
 		s.state = scmStateNoRegions
@@ -247,37 +304,34 @@ func hasFreeCapacity(text string) (hasCapacity bool, err error) {
 	return
 }
 
-// createRegions sets DCPM modules into regions in interleaved AppDirect mode.
-//
-// External tool command output will indicate whether a subsequent reboot is needed.
-func (s *scmStorage) createRegions() (bool, error) {
-	out, err := s.runCmd(cmdScmCreateRegions)
-	if err != nil {
-		return false, err
-	}
-
-	return strings.Contains(out, msgScmRebootRequired), nil
-}
-
-func parsePmemDevs(jsonData string) (devs []pmemDev) {
+func parsePmemDevs(jsonData string) (devs []pmemDev, err error) {
 	// turn single entries into arrays
 	if !strings.HasPrefix(jsonData, "[") {
 		jsonData = "[" + jsonData + "]"
 	}
 
-	json.Unmarshal([]byte(jsonData), &devs)
+	err = json.Unmarshal([]byte(jsonData), &devs)
 
 	return
 }
 
 // createNamespaces runs create until no free capacity.
-func (s *scmStorage) createNamespaces() (devs []pmemDev, err error) {
+func (s *scmStorage) createNamespaces() ([]pmemDev, error) {
+	devs := make([]pmemDev, 0)
+
 	for {
+		log.Infof("creating SCM namespace, may take a few minutes...\n")
+
 		out, err := s.runCmd(cmdScmCreateNamespace)
 		if err != nil {
 			return nil, err
 		}
-		devs = append(devs, parsePmemDevs(out)...)
+
+		newDevs, err := parsePmemDevs(out)
+		if err != nil {
+			return nil, err
+		}
+		devs = append(devs, newDevs...)
 
 		if err := s.getState(); err != nil {
 			return nil, err
@@ -299,12 +353,12 @@ func (s *scmStorage) getNamespaces() (devs []pmemDev, err error) {
 		return nil, err
 	}
 
-	return parsePmemDevs(out), nil
+	return parsePmemDevs(out)
 }
 
 // Setup implementation for scmStorage providing initial device discovery
 func (s *scmStorage) Setup() error {
-	resp := new(pb.ScanStorageResp)
+	resp := new(pb.StorageScanResp)
 	s.Discover(resp)
 
 	if resp.Scmstate.Status != pb.ResponseStatus_CTRL_SUCCESS {
@@ -339,7 +393,7 @@ func loadModules(mms []ipmctl.DeviceDiscovery) (pbMms common.ScmModules) {
 }
 
 // Discover method implementation for scmStorage
-func (s *scmStorage) Discover(resp *pb.ScanStorageResp) {
+func (s *scmStorage) Discover(resp *pb.StorageScanResp) {
 	addStateDiscover := func(
 		status pb.ResponseStatus, errMsg string,
 		infoMsg string) *pb.ResponseState {
@@ -408,7 +462,7 @@ func (s *scmStorage) reFormat(devPath string) (err error) {
 	return
 }
 
-func getMntParams(srv *server) (mntType string, dev string, opts string, err error) {
+func getMntParams(srv *IOServerConfig) (mntType string, dev string, opts string, err error) {
 	switch srv.ScmClass {
 	case scmDCPM:
 		mntType = "ext4"
@@ -499,7 +553,7 @@ func (s *scmStorage) Format(i int, results *(common.ScmMountResults)) {
 		return
 	}
 
-	mntType, devPath, mntOpts, err := getMntParams(&srv)
+	mntType, devPath, mntOpts, err := getMntParams(srv)
 	if err != nil {
 		addMretFormat(pb.ResponseStatus_CTRL_ERR_CONF, err.Error())
 		return
@@ -563,8 +617,8 @@ func (s *scmStorage) Update(
 
 // newScmStorage creates a new instance of ScmStorage struct.
 //
-// NvmMgmt is the implementation of ipmctl interface in go-ipmctl
-func newScmStorage(config *configuration) *scmStorage {
+// NvmMgmt is the implementation of ipmctl interface in ipmctl
+func newScmStorage(config *Configuration) *scmStorage {
 	return &scmStorage{
 		ipmctl: &ipmctl.NvmMgmt{},
 		config: config,

@@ -95,6 +95,11 @@ char *DP_UUID(const void *uuid);
 #define DF_CONT			DF_UUID"/"DF_UUID
 #define DP_CONT(puuid, cuuid)	DP_UUID(puuid), DP_UUID(cuuid)
 
+char *daos_key2str(daos_key_t *key);
+
+#define DF_KEY			"[%d] %s"
+#define DP_KEY(key)		(int)(key)->iov_len, daos_key2str(key)
+
 static inline uint64_t
 daos_u64_hash(uint64_t val, unsigned int bits)
 {
@@ -391,7 +396,7 @@ daos_fail_value_get(void);
 int
 daos_fail_init(void);
 void
-daos_fail_fini();
+daos_fail_fini(void);
 
 /**
  * DAOS FAIL Mask

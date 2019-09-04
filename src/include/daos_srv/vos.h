@@ -242,14 +242,16 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 		daos_size_t blob_sz);
 
 /**
- * Destroy SPDK blob.
+ * Kill a VOS pool before destroy
+ * It deletes SPDK blob of this pool and detaches it from VOS GC
  *
  * \param uuid	[IN]	Pool UUID
+ * \param force [IN]	Delete blob even if it has open refcount
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_blob_destroy(void *uuid);
+vos_pool_kill(uuid_t uuid, bool force);
 
 /**
  * Destroy a Versioned Object Storage Pool (VOSP)
@@ -490,6 +492,17 @@ int
 vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      uint32_t pm_ver, uint32_t flags, daos_key_t *dkey,
 	      unsigned int akey_nr, daos_key_t *akeys, struct dtx_handle *dth);
+
+/**
+ * Delete an object, this object is unaccessible at any epoch after deletion.
+ *
+ * \param coh	[IN]	Container open handle
+ * \param oid	[IN]	ID of the object being deleted
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid);
 
 /**
  * I/O APIs
@@ -889,15 +902,33 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
  *
  *  \return 0 on success, error otherwise.
  */
-int vos_tree_get_overhead(int alloc_overhead, enum VOS_TREE_CLASS tclass,
-			  uint64_t ofeat, struct daos_tree_overhead *ovhd);
+int
+vos_tree_get_overhead(int alloc_overhead, enum VOS_TREE_CLASS tclass,
+		      uint64_t ofeat, struct daos_tree_overhead *ovhd);
 
 /** Return the size of the pool metadata in persistent memory on-disk format */
-int vos_pool_get_msize(void);
+int
+vos_pool_get_msize(void);
 
 /** Return the cutoff size for SCM allocation.  Larger blocks are allocated to
  *  NVME.
  */
-int vos_pool_get_scm_cutoff(void);
+int
+vos_pool_get_scm_cutoff(void);
+
+enum vos_pool_opc {
+	/** reset pool GC statistics */
+	VOS_PO_CTL_RESET_GC,
+};
+
+/**
+ * control ephemeral status of pool, see \a vos_pool_opc, this function is
+ * mostly for debug & test
+ */
+int
+vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc);
+
+int
+vos_gc_run(int *credits);
 
 #endif /* __VOS_API_H */

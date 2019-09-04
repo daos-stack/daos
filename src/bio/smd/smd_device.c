@@ -44,7 +44,7 @@ smd_dev_assign(uuid_t dev_id, int tgt_id)
 	D_ASSERT(!daos_handle_is_inval(smd_store.ss_tgt_hdl));
 
 	uuid_copy(key_dev.uuid, dev_id);
-	D_RWLOCK_WRLOCK(&smd_store.ss_rwlock);
+	smd_lock(&smd_store);
 
 	/* Check if the target is already bound to a device */
 	d_iov_set(&key, &tgt_id, sizeof(tgt_id));
@@ -108,7 +108,7 @@ smd_dev_assign(uuid_t dev_id, int tgt_id)
 tx_end:
 	rc = smd_tx_end(&smd_store, rc);
 out:
-	D_RWLOCK_UNLOCK(&smd_store.ss_rwlock);
+	smd_unlock(&smd_store);
 	return rc;
 }
 
@@ -130,7 +130,7 @@ smd_dev_set_state(uuid_t dev_id, enum smd_dev_state state)
 	D_ASSERT(!daos_handle_is_inval(smd_store.ss_dev_hdl));
 
 	uuid_copy(key_dev.uuid, dev_id);
-	D_RWLOCK_WRLOCK(&smd_store.ss_rwlock);
+	smd_lock(&smd_store);
 
 	d_iov_set(&key, &key_dev, sizeof(key_dev));
 	d_iov_set(&val, &entry, sizeof(entry));
@@ -150,7 +150,7 @@ smd_dev_set_state(uuid_t dev_id, enum smd_dev_state state)
 		goto out;
 	}
 out:
-	D_RWLOCK_UNLOCK(&smd_store.ss_rwlock);
+	smd_unlock(&smd_store);
 	return rc;
 }
 
@@ -198,8 +198,9 @@ fetch_dev_info(uuid_t dev_id, struct smd_dev_info **dev_info)
 	rc = dbtree_fetch(smd_store.ss_dev_hdl, BTR_PROBE_EQ,
 			  DAOS_INTENT_DEFAULT, &key, NULL, &val);
 	if (rc) {
-		D_ERROR("Fetch dev "DF_UUID" failed. %d\n",
-			DP_UUID(&key_dev.uuid), rc);
+		D_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MGMT,
+			 "Fetch dev "DF_UUID" failed. %d\n",
+			 DP_UUID(&key_dev.uuid), rc);
 		return rc;
 	}
 
@@ -216,9 +217,9 @@ smd_dev_get_by_id(uuid_t dev_id, struct smd_dev_info **dev_info)
 {
 	int	rc;
 
-	D_RWLOCK_RDLOCK(&smd_store.ss_rwlock);
+	smd_lock(&smd_store);
 	rc = fetch_dev_info(dev_id, dev_info);
-	D_RWLOCK_UNLOCK(&smd_store.ss_rwlock);
+	smd_unlock(&smd_store);
 	return rc;
 }
 
@@ -230,20 +231,21 @@ smd_dev_get_by_tgt(int tgt_id, struct smd_dev_info **dev_info)
 	int		rc;
 
 	D_ASSERT(!daos_handle_is_inval(smd_store.ss_tgt_hdl));
-	D_RWLOCK_RDLOCK(&smd_store.ss_rwlock);
+	smd_lock(&smd_store);
 
 	d_iov_set(&key, &tgt_id, sizeof(tgt_id));
 	d_iov_set(&val, &bond_dev, sizeof(bond_dev));
 	rc = dbtree_fetch(smd_store.ss_tgt_hdl, BTR_PROBE_EQ,
 			  DAOS_INTENT_DEFAULT, &key, NULL, &val);
 	if (rc) {
-		D_ERROR("Fetch target %d failed. %d\n", tgt_id, rc);
+		D_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MGMT,
+			 "Fetch target %d failed. %d\n", tgt_id, rc);
 		goto out;
 	}
 
 	rc = fetch_dev_info(bond_dev.uuid, dev_info);
 out:
-	D_RWLOCK_UNLOCK(&smd_store.ss_rwlock);
+	smd_unlock(&smd_store);
 	return rc;
 }
 
@@ -260,7 +262,7 @@ smd_dev_list(d_list_t *dev_list)
 	D_ASSERT(dev_list && d_list_empty(dev_list));
 	D_ASSERT(!daos_handle_is_inval(smd_store.ss_dev_hdl));
 
-	D_RWLOCK_RDLOCK(&smd_store.ss_rwlock);
+	smd_lock(&smd_store);
 
 	rc = dbtree_iter_prepare(smd_store.ss_dev_hdl, 0, &iter_hdl);
 	if (rc) {
@@ -308,6 +310,6 @@ smd_dev_list(d_list_t *dev_list)
 done:
 	dbtree_iter_finish(iter_hdl);
 out:
-	D_RWLOCK_UNLOCK(&smd_store.ss_rwlock);
+	smd_unlock(&smd_store);
 	return rc;
 }

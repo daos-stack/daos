@@ -36,7 +36,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	log "github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/go-spdk/spdk"
+	"github.com/daos-stack/daos/src/control/lib/spdk"
 )
 
 const (
@@ -135,7 +135,7 @@ type nvmeStorage struct {
 	env         spdk.ENV       // SPDK ENV interface
 	nvme        spdk.NVME      // SPDK NVMe interface
 	spdk        SpdkSetup      // SPDK shell configuration interface
-	config      *configuration // server configuration structure
+	config      *Configuration // server configuration structure
 	controllers common.NvmeControllers
 	initialized bool
 	formatted   bool
@@ -157,7 +157,7 @@ func (n *nvmeStorage) getController(pciAddr string) *pb.NvmeController {
 // NOTE: doesn't attempt SPDK prep which requires elevated privileges,
 //       that instead can be performed explicitly with subcommand.
 func (n *nvmeStorage) Setup() error {
-	resp := new(pb.ScanStorageResp)
+	resp := new(pb.StorageScanResp)
 	n.Discover(resp)
 
 	if resp.Nvmestate.Status != pb.ResponseStatus_CTRL_SUCCESS {
@@ -194,7 +194,7 @@ func (n *nvmeStorage) Teardown() (err error) {
 // TODO: This is currently a one-time only discovery for the lifetime of this
 //       process, presumably we want to be able to detect updates during
 //       process lifetime.
-func (n *nvmeStorage) Discover(resp *pb.ScanStorageResp) {
+func (n *nvmeStorage) Discover(resp *pb.StorageScanResp) {
 	addStateDiscover := func(
 		status pb.ResponseStatus, errMsg string,
 		infoMsg string) *pb.ResponseState {
@@ -523,10 +523,11 @@ func loadControllers(ctrlrs []spdk.Controller, nss []spdk.Namespace) (
 		pbCtrlrs = append(
 			pbCtrlrs,
 			&pb.NvmeController{
-				Model:   c.Model,
-				Serial:  c.Serial,
-				Pciaddr: c.PCIAddr,
-				Fwrev:   c.FWRev,
+				Model:    c.Model,
+				Serial:   c.Serial,
+				Pciaddr:  c.PCIAddr,
+				Fwrev:    c.FWRev,
+				Socketid: c.SocketID,
 				// repeated pb field
 				Namespaces: loadNamespaces(c.PCIAddr, nss),
 			})
@@ -553,7 +554,7 @@ func loadNamespaces(ctrlrPciAddr string, nss []spdk.Namespace) (
 }
 
 // newNvmeStorage creates a new instance of nvmeStorage struct.
-func newNvmeStorage(config *configuration) (*nvmeStorage, error) {
+func newNvmeStorage(config *Configuration) (*nvmeStorage, error) {
 
 	scriptPath, err := config.ext.getAbsInstallPath(spdkSetupPath)
 	if err != nil {
