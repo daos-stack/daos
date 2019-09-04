@@ -34,8 +34,8 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/lib/ipmctl"
 	log "github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/go-ipmctl/ipmctl"
 )
 
 //go:generate stringer -type=scmState
@@ -116,7 +116,7 @@ func run(cmd string) (string, error) {
 // details.
 //
 // IpmCtl provides necessary methods to interact with Storage Class
-// Memory modules through libipmctl via go-ipmctl bindings.
+// Memory modules through libipmctl via ipmctl bindings.
 type scmStorage struct {
 	ipmctl      ipmctl.IpmCtl  // ipmctl NVM API interface
 	config      *Configuration // server configuration structure
@@ -358,7 +358,7 @@ func (s *scmStorage) getNamespaces() (devs []pmemDev, err error) {
 
 // Setup implementation for scmStorage providing initial device discovery
 func (s *scmStorage) Setup() error {
-	resp := new(pb.ScanStorageResp)
+	resp := new(pb.StorageScanResp)
 	s.Discover(resp)
 
 	if resp.Scmstate.Status != pb.ResponseStatus_CTRL_SUCCESS {
@@ -393,7 +393,7 @@ func loadModules(mms []ipmctl.DeviceDiscovery) (pbMms common.ScmModules) {
 }
 
 // Discover method implementation for scmStorage
-func (s *scmStorage) Discover(resp *pb.ScanStorageResp) {
+func (s *scmStorage) Discover(resp *pb.StorageScanResp) {
 	addStateDiscover := func(
 		status pb.ResponseStatus, errMsg string,
 		infoMsg string) *pb.ResponseState {
@@ -617,7 +617,7 @@ func (s *scmStorage) Update(
 
 // newScmStorage creates a new instance of ScmStorage struct.
 //
-// NvmMgmt is the implementation of ipmctl interface in go-ipmctl
+// NvmMgmt is the implementation of ipmctl interface in ipmctl
 func newScmStorage(config *Configuration) *scmStorage {
 	return &scmStorage{
 		ipmctl: &ipmctl.NvmMgmt{},
