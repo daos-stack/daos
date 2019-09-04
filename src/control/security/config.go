@@ -117,6 +117,12 @@ func (cfg *TransportConfig) PreLoadCertData() error {
 	cfg.tlsKeypair = certificate
 	cfg.caPool = certPool
 
+	// Pre-parse the Leaf Certificate
+	cfg.tlsKeypair.Leaf, err = x509.ParseCertificate(cfg.tlsKeypair.Certificate[0])
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

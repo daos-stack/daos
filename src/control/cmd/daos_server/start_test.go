@@ -35,6 +35,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server"
@@ -103,6 +104,8 @@ func updateOptValue(opts []string, key, value string) {
 }
 
 func TestStartOptions(t *testing.T) {
+	defer common.ShowLogOnFailure(t)()
+
 	insecureTransport := server.NewConfiguration().TransportConfig
 	insecureTransport.AllowInsecure = true
 
