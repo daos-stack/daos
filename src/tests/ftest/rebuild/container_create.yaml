@@ -10,7 +10,7 @@ hosts:
 timeout: 480
 server_config:
   name: daos_server
-  targets: 8
+  targets: 1
 pool:
   mode: 511
   group: daos_server
@@ -32,11 +32,11 @@ test:
   loop_quantity: !mux
     one_loop:
       loops: 1
-    # three_loops:
-    #   loops: 3
+    three_loops:
+      loops: 3
   pool_quantity: !mux
-    # one_pool:
-    #   pools: 1
+    one_pool:
+      pools: 1
     two_pools:
       pools: 2
   exclude_rank: !mux
