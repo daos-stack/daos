@@ -49,7 +49,7 @@ def scons():
     tenv.AppendUnique(CPPPATH=['..'])
     tenv.AppendUnique(CPPPATH='../il')
     tenv.AppendUnique(LIBPATH='../il')
-    tenv.AppendUnique(RPATH='$PREFIX/lib')
+    tenv.AppendUnique(RPATH='$PREFIX/lib64')
 
     prereqs.require(tenv, 'cunit')
 

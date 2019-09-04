@@ -25,7 +25,7 @@ def scons():
     denv = env.Clone()
 
     # Add runtime paths for daos libraries
-    denv.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../lib/daos_srv')])
+    denv.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../lib64/daos_srv')])
 
     denv.Append(CPPPATH=[Dir('suite').srcnode()])
     prereqs.require(denv, 'ompi', 'argobots')
@@ -45,17 +45,13 @@ def scons():
                                  LIBS=libs)
     denv.Install('$PREFIX/bin/', obj_ctl)
 
-    # create a new directory
-    Mkdir("$PREFIX/lib/daos/TESTING/ftest")
-
-    # copy ftest to $PREFIX/install/lib/daos/TESTING
+    # link $PREFIX/install/lib/daos/TESTING to src/tests/ftest
     tpath = join(denv.subst("$PREFIX"), "lib/daos/TESTING/ftest")
-    spath = join(denv.subst("$PREFIX"), "../src/tests/ftest")
+    # copy ftest to $PREFIX/install/lib/daos/TESTING
+    spath = join(denv.subst("$PREFIX"), "../src/tests/ftest/")
+    # denv.InstallAs('$PREFIX/lib/daos/TESTING/ftest/', spath)
     if not check_dir_exists(tpath):
-        denv.Command(
-            tpath,
-	    spath,
-            Copy("$TARGET", "$SOURCE"))
+        os.symlink(spath, tpath)
 
     # tests
     SConscript('suite/SConscript', exports=['denv'])
