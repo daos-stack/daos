@@ -131,19 +131,26 @@ dtx_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 static int
 dtx_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
-	umem_off_t	*umoff;
-
-	D_ASSERT(args != NULL);
 	D_ASSERT(!UMOFF_IS_NULL(rec->rec_off));
 
-	/* Return the record addreass (offset in SCM). The caller will
-	 * release it after using.
-	 */
-	umoff = (umem_off_t *)args;
-	*umoff = rec->rec_off;
+	if (args != NULL) {
+		umem_off_t	*umoff;
 
-	umem_tx_add_ptr(&tins->ti_umm, &rec->rec_off, sizeof(rec->rec_off));
-	rec->rec_off = UMOFF_NULL;
+		/* Return the record addreass (offset in SCM).
+		 * The caller will release it after using.
+		 */
+		umoff = (umem_off_t *)args;
+		*umoff = rec->rec_off;
+		umem_tx_add_ptr(&tins->ti_umm, &rec->rec_off,
+				sizeof(rec->rec_off));
+		rec->rec_off = UMOFF_NULL;
+	} else {
+		/* This only can happen when the dtx entry is allocated but
+		 * fail to be inserted into DTX table. Under such case, the
+		 * new allocated dtx entry will be automatically freed when
+		 * related PMDK transaction is aborted.
+		 */
+	}
 
 	return 0;
 }
@@ -639,14 +646,12 @@ dtx_key_rec_release(struct umem_instance *umm, struct vos_krec_df *key,
 
 static void
 dtx_rec_release(struct umem_instance *umm, umem_off_t umoff,
-		bool abort, bool destroy)
+		bool abort, bool destroy, bool logged)
 {
 	struct vos_dtx_entry_df		*dtx;
 
 	dtx = umem_off2ptr(umm, umoff);
-	if (!destroy &&
-	    (!dtx_is_null(dtx->te_records) ||
-	     dtx->te_flags & (DTX_EF_EXCHANGE_PENDING | DTX_EF_SHARES)))
+	if (!logged)
 		umem_tx_add_ptr(umm, dtx, sizeof(*dtx));
 
 	while (!dtx_is_null(dtx->te_records)) {
@@ -812,7 +817,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti)
 	 *	record as to the current DTX will have invalid reference(s)
 	 *	via its DTX record(s).
 	 */
-	dtx_rec_release(umm, umoff, false, false);
+	dtx_rec_release(umm, umoff, false, false, true);
 	vos_dtx_del_cos(cont, &dtx->te_oid, dti, dtx->te_dkey_hash,
 			dtx->te_intent == DAOS_INTENT_PUNCH ? true : false);
 
@@ -851,7 +856,7 @@ vos_dtx_abort_one(struct vos_container *cont, daos_epoch_t epoch,
 
 	rc = dbtree_delete(cont->vc_dtx_active_hdl, opc, &kiov, &off);
 	if (rc == 0)
-		dtx_rec_release(&cont->vc_pool->vp_umm, off, true, true);
+		dtx_rec_release(&cont->vc_pool->vp_umm, off, true, true, false);
 
 out:
 	D_DEBUG(DB_TRACE, "Abort the DTX "DF_DTI": rc = %d\n", DP_DTI(dti), rc);
@@ -1310,7 +1315,7 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 				rc = vos_tx_begin(cont->vc_pool);
 				if (rc == 0) {
 					dtx_rec_release(umm, entry,
-							false, false);
+							false, false, false);
 					rc = vos_tx_end(cont->vc_pool, 0);
 				}
 
@@ -1351,6 +1356,19 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 
 		/* PUNCH DTX cannot be shared by others. */
 		if (dtx->te_intent == DAOS_INTENT_PUNCH) {
+			if (dth == NULL)
+				/* XXX: For rebuild case, if some normal IO
+				 *	has generated punch-record (by race)
+				 *	before rebuild logic handling that,
+				 *	then rebuild logic should ignore such
+				 *	punch-record, because the punch epoch
+				 *	will be higher than the rebuild epoch.
+				 *	The rebuild logic needs to create the
+				 *	original target record that exists on
+				 *	other healthy replicas before punch.
+				 */
+				return ALB_UNAVAILABLE;
+
 			dtx_record_conflict(dth, dtx);
 
 			return dtx_inprogress(dtx, 3);
@@ -1569,30 +1587,6 @@ vos_dtx_prepared(struct dtx_handle *dth)
 	D_ASSERT(cont != NULL);
 
 	dtx = umem_off2ptr(&cont->vc_pool->vp_umm, dth->dth_ent);
-	if (dth->dth_intent == DAOS_INTENT_UPDATE) {
-		d_iov_t	kiov;
-		d_iov_t	riov;
-
-		/* There is CPU yield during the bulk transfer, then it is
-		 * possible that some others (rebuild) abort this DTX by race.
-		 * So we need to locate (or verify) DTX via its ID instead of
-		 * directly using the dth_ent.
-		 */
-		d_iov_set(&kiov, &dth->dth_xid, sizeof(struct dtx_id));
-		d_iov_set(&riov, NULL, 0);
-		rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
-		if (rc == -DER_NONEXIST)
-			/* The DTX has been aborted by race, notify the RPC
-			 * sponsor to retry via returning -DER_INPROGRESS.
-			 */
-			return dtx_inprogress(dtx, 1);
-
-		if (rc != 0)
-			return rc;
-
-		D_ASSERT(dtx == (struct vos_dtx_entry_df *)riov.iov_buf);
-	}
-
 	/* The caller has already started the PMDK transaction
 	 * and add the DTX into the PMDK transaction.
 	 */
@@ -1766,8 +1760,9 @@ vos_dtx_aggregate(daos_handle_t coh, uint64_t max, uint64_t age)
 
 		tab->tt_count--;
 		dtx_umoff = dtx->te_next;
+		umem_tx_add_ptr(umm, dtx, sizeof(*dtx));
 		vos_dtx_unlink_entry(umm, tab, dtx);
-		dtx_rec_release(umm, umoff, false, true);
+		dtx_rec_release(umm, umoff, false, true, true);
 	}
 
 	vos_tx_end(cont->vc_pool, 0);
