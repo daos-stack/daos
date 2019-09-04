@@ -348,17 +348,21 @@ dc_cont_alloc(const uuid_t uuid)
 static void
 dc_cont_csum_init(struct dc_cont *cont, daos_prop_t *props)
 {
-	uint32_t csum_type_prop = daos_cont_prop2csum(props);
+	uint32_t		csum_type_prop;
+	enum DAOS_CSUM_TYPE	csum_type;
+	uint64_t		chunksize;
 
-	if (csum_type_prop != DAOS_PROP_CO_CSUM_OFF) {
-		enum DAOS_CSUM_TYPE type =
-			daos_contprop2csumtype(csum_type_prop);
-		uint64_t chunksize =
-			daos_cont_prop2chunksize(props);
-		daos_csummer_init(&cont->dc_csummer,
-				  daos_csum_type2algo(type),
-				  chunksize);
+	csum_type_prop = daos_cont_prop2csum(props);
+	if (csum_type_prop == DAOS_PROP_CO_CSUM_OFF) {
+		cont->dc_csummer = NULL;
+		return;
 	}
+
+	csum_type = daos_contprop2csumtype(csum_type_prop);
+	chunksize = daos_cont_prop2chunksize(props);
+	daos_csummer_init(&cont->dc_csummer,
+			  daos_csum_type2algo(csum_type),
+			  chunksize);
 }
 
 struct cont_open_args {
