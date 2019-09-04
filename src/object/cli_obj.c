@@ -2225,7 +2225,8 @@ dc_obj_update(tse_task_t *task)
 			      tgt_set, map_ver, false, false,
 			      &obj_auxi->req_tgts);
 
-	obj_update_csums(obj, args);
+	/* [todo-ryon]: testing without this */
+//	obj_update_csums(obj, args);
 
 	if (rc)
 		goto out_task;
