@@ -21,25 +21,15 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package client
+package common_storage
 
-import (
-	"golang.org/x/net/context"
+type StoragePrepareNvmeCmd struct {
+	PCIWhiteList string `short:"w" long:"pci-whitelist" description:"Whitespace separated list of PCI devices (by address) to be unbound from Kernel driver and used with SPDK (default is all PCI devices)."`
+	NrHugepages  int    `short:"p" long:"hugepages" description:"Number of hugepages to allocate (in MB) for use by SPDK (default 1024)"`
+	TargetUser   string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
+	ResetNvme    bool   `long:"reset-nvme" description:"Reset SPDK returning devices to kernel modules"`
+}
 
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-)
-
-// KillRank Will terminate server running at given rank on pool specified by
-// uuid. Request will only be issued to a single access point.
-func (c *connList) KillRank(uuid string, rank uint32) ResultMap {
-	results := make(ResultMap)
-	mc := c.controllers[0]
-
-	resp, err := mc.getSvcClient().KillRank(context.Background(),
-		&pb.DaosRank{PoolUuid: uuid, Rank: rank})
-
-	result := ClientResult{mc.getAddress(), resp, err}
-	results[result.Address] = result
-
-	return results
+type StoragePrepareScmCmd struct {
+	ResetScm bool `long:"reset-scm" description:"Reset modules to memory mode after removing namespaces"`
 }
