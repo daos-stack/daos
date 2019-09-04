@@ -124,10 +124,6 @@ main(int argc, char **argv)
 		{0, 0, 0, 0}
 	};
 
-	rc = daos_init();
-	if (rc != -DER_SUCCESS)
-		D_GOTO(out, ret = rc);
-
 	D_ALLOC_PTR(dfuse_info);
 	if (!dfuse_info)
 		D_GOTO(out_fini, ret = -DER_NOMEM);
@@ -174,7 +170,7 @@ main(int argc, char **argv)
 
 	if (!dfuse_info->di_foreground && getenv("PMIX_RANK")) {
 		DFUSE_LOG_WARNING("Not running in background under orterun");
-		dfuse_info->di_foreground = false;
+		dfuse_info->di_foreground = true;
 	}
 
 	if (!dfuse_info->di_mountpoint) {
@@ -203,6 +199,16 @@ main(int argc, char **argv)
 		DFUSE_LOG_ERROR("Invalid container uuid");
 		D_GOTO(out_dfuse, ret = -DER_INVAL);
 	}
+
+	if (!dfuse_info->di_foreground) {
+		rc = daemon(0, 0);
+		if (rc)
+			return daos_errno2der(rc);
+	}
+
+	rc = daos_init();
+	if (rc != -DER_SUCCESS)
+		D_GOTO(out, ret = rc);
 
 	dfuse_info->di_svcl = daos_rank_list_parse(svcl, ":");
 	if (dfuse_info->di_svcl == NULL) {
