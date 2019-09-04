@@ -50,6 +50,7 @@ func newState(status pb.ResponseStatus, errMsg string, infoMsg string,
 }
 
 func (c *ControlService) doNvmePrepare(req *pb.PrepareNvmeReq) (resp *pb.PrepareNvmeResp) {
+	resp = &pb.PrepareNvmeResp{}
 	msg := "Storage Prepare NVMe"
 	err := c.PrepareNvme(PrepareNvmeRequest{
 		HugePageCount: int(req.GetNrhugepages()),
@@ -82,6 +83,7 @@ func translatePmemDevices(inDevs []pmemDev) (outDevs types.PmemDevices) {
 }
 
 func (c *ControlService) doScmPrepare(req *pb.PrepareScmReq) (resp *pb.PrepareScmResp) {
+	resp = &pb.PrepareScmResp{}
 	msg := "Storage Prepare SCM"
 
 	needsReboot, pmemDevs, err := c.PrepareScm(PrepareScmRequest{Reset: req.GetReset_()})
@@ -106,7 +108,7 @@ func (c *ControlService) doScmPrepare(req *pb.PrepareScmReq) (resp *pb.PrepareSc
 func (c *ControlService) StoragePrepare(ctx context.Context, req *pb.StoragePrepareReq) (
 	*pb.StoragePrepareResp, error) {
 
-	resp := new(pb.StoragePrepareResp)
+	resp := &pb.StoragePrepareResp{}
 
 	resp.Nvme = c.doNvmePrepare(req.Nvme)
 	resp.Scm = c.doScmPrepare(req.Scm)
