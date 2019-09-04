@@ -104,7 +104,8 @@ class CascadingFailures(RebuldTestBase):
         Use Cases:
             Verify rebuild with multiple server failures.
 
-        :avocado: tags=all,medium,pr,rebuild,multifailure,simultaneous
+        :avocado: tags=all,medium,full_regression,rebuild
+        :avocado: tags=multitarget,simultaneous
         """
         self.mode = "simultaneous"
         self.execute_rebuild_test()
@@ -124,11 +125,13 @@ class CascadingFailures(RebuldTestBase):
         Use Cases:
             Verify rebuild with multiple server failures.
 
-        :avocado: tags=all,medium,pr,rebuild,multifailure,sequential
+        :avocado: tags=all,medium,full_regression,rebuild
+        :avocado: tags=multitarget,sequential
         """
         self.mode = "sequential"
         self.execute_rebuild_test()
 
+    @skipForTicket("DAOS-3172")
     def test_cascading_failures(self):
         """Jira ID: DAOS-844.
 
@@ -143,7 +146,8 @@ class CascadingFailures(RebuldTestBase):
         Use Cases:
             Verify rebuild with multiple server failures.
 
-        :avocado: tags=all,medium,pr,rebuild,multifailure,cascading
+        :avocado: tags=all,medium,full_regression,rebuild
+        :avocado: tags=multitarget,cascading
         """
         self.mode = "cascading"
         self.execute_rebuild_test()
