@@ -119,7 +119,7 @@ class IorTestBase(TestWithServers):
         try:
             self.ior_cmd.run(
                 manager, self.tmp, processes, self.hostfile_clients,
-                self.client_log)
+                client_log=self.client_log)
         except IorFailed as error:
             self.log.error("IOR Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")

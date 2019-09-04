@@ -110,7 +110,7 @@ class MdtestBase(TestWithServers):
         try:
             self.mdtest_cmd.run(
                 manager, self.tmp, processes, self.hostfile_clients,
-                self.client_log)
+                client_log=self.client_log)
         except MdtestFailed as error:
             self.log.error("Mdtest Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
