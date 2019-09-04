@@ -86,8 +86,8 @@ drpc_listener_run(void *arg)
 	while (is_listener_running()) {
 		int rc;
 
-		/* wait indefinitely */
-		rc = drpc_progress(ctx, -1);
+		/* wait a second */
+		rc = drpc_progress(ctx, 1000);
 		if (rc != DER_SUCCESS && rc != -DER_TIMEDOUT) {
 			D_ERROR("dRPC listener progress error: %d\n", rc);
 		}
