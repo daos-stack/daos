@@ -92,7 +92,7 @@ func (cmd *storagePrepNvmeCmd) Execute(args []string) error {
 		HugePageCount: cmd.NrHugepages,
 		TargetUser:    cmd.TargetUser,
 		PCIWhitelist:  cmd.PCIWhiteList,
-		ResetOnly:     cmd.Reset,
+		ResetOnly:     cmd.ResetNvme,
 	})
 }
 
@@ -100,6 +100,7 @@ type storagePrepScmCmd struct {
 	cfgCmd
 	logCmd
 	types.StoragePrepareScmCmd
+	Force bool `short:"f" long:"force" description:"Perform format without prompting for confirmation"`
 }
 
 func (cmd *storagePrepScmCmd) Execute(args []string) (err error) {
@@ -122,7 +123,7 @@ func (cmd *storagePrepScmCmd) Execute(args []string) (err error) {
 	}
 
 	needsReboot, devices, err := svc.PrepareScm(server.PrepareScmRequest{
-		Reset: cmd.Reset,
+		Reset: cmd.ResetScm,
 	})
 	if err != nil {
 		return err

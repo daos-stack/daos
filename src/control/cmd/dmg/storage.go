@@ -39,24 +39,43 @@ type StorCmd struct {
 	Update  StorageUpdateCmd  `command:"fwupdate" alias:"u" description:"Update firmware on NVMe storage attached to remote servers."`
 }
 
+func storagePrepare(conns client.Connect, req *pb.StoragePrepareReq, force bool) {
+	log.Info(
+		"This could be a destructive operation and storage devices " +
+			"may have data erased. Please be patient as it may take several minutes " +
+			"and a subsequent reboot maybe required.\n")
+
+	if force || common.GetConsent() {
+		log.Info("")
+		log.Infof("NVMe & SCM preparation:\n%s", conns.StoragePrepare(req))
+	}
+}
+
 // StoragePrepareCmd is the struct representing the prep storage subcommand.
 type StoragePrepareCmd struct {
 	broadcastCmd
 	connectedCmd
 	types.StoragePrepareNvmeCmd
 	types.StoragePrepareScmCmd
-}
-
-// run NVMe and SCM storage preparation on all connected servers
-func storagePrepare(conns client.Connect) {
-	cNvmeResults, cScmResults := conns.StoragePrepare()
-	log.Infof("NVMe preparation:\n%s", cNvmeResults)
-	log.Infof("SCM preparation:\n%s", cScmResults)
+	Force bool `short:"f" long:"force" description:"Perform format without prompting for confirmation"`
 }
 
 // Execute is run when StoragePrepareCmd activates
-func (s *StoragePrepareCmd) Execute(args []string) error {
-	storagePrepare(s.conns)
+func (cmd *StoragePrepareCmd) Execute(args []string) error {
+	storagePrepare(
+		cmd.conns,
+		&pb.StoragePrepareReq{
+			Nvme: &pb.PrepareNvmeReq{
+				Pciwhitelist: cmd.PCIWhiteList,
+				Nrhugepages:  int32(cmd.NrHugepages),
+				Targetuser:   cmd.TargetUser,
+				Reset_:       cmd.ResetNvme,
+			},
+			Scm: &pb.PrepareScmReq{
+				Reset_: cmd.ResetScm,
+			},
+		}, cmd.Force)
+
 	return nil
 }
 

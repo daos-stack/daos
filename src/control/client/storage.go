@@ -111,7 +111,34 @@ type StorageResult struct {
 	scmMount  types.MountResults
 }
 
-// storageScanRequest returns all discovered SCM and NVMe storage devices
+// storagePrepareRequest returns results of SCM and NVMe prepare actions
+// on a remote server by calling over gRPC channel.
+func storagePrepareRequest(mc Control, req interface{}, ch chan ClientResult) {
+	prepareReq, ok := req.(pb.StoragePrepareReq)
+	if !ok {
+		err := errors.Errorf(msgTypeAssert, pb.StoragePrepareReq{}, req)
+
+		log.Errorf(err.Error())
+		ch <- ClientResult{mc.getAddress(), nil, err}
+		return // type err
+	}
+
+	resp, err := mc.getCtlClient().StoragePrepare(context.Background(), &prepareReq)
+	if err != nil {
+		ch <- ClientResult{mc.getAddress(), nil, err} // return comms error
+		return
+	}
+
+	ch <- ClientResult{mc.getAddress(), resp, nil}
+}
+
+// StoragePrepare returns details of nonvolatile storage devices attached to each
+// remote server. Data received over channel from requests running in parallel.
+func (c *connList) StoragePrepare(req *pb.StoragePrepareReq) ResultMap {
+	return c.makeRequests(req, storagePrepareRequest)
+}
+
+// storageScan/etc/equest returns all discovered SCM and NVMe storage devices
 // discovered on a remote server by calling over gRPC channel.
 func storageScanRequest(mc Control, req interface{}, ch chan ClientResult) {
 	sRes := StorageResult{}
