@@ -322,9 +322,7 @@ class TestWithServers(TestWithoutServers):
         if test_name:
             self.test_id = test_name
 
-#        self.server_log = "/tmp/{}_server_daos.log".format(self.test_id)
         self.server_log = os.path.join(
             self.log_dir, "{}_server_daos.log".format(self.test_id))
         self.client_log = os.path.join(
             self.log_dir, "{}_client_daos.log".format(self.test_id))
-#                                       self.test_id + "_" + CLIENT_LOG)

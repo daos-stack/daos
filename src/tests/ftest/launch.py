@@ -476,7 +476,7 @@ def get_log_files(config_yaml, daos_files=None):
     # List of default DAOS files
     if daos_files is None:
         daos_core_test_dir = os.path.split(
-            os.getenv("D_LOG_FILE", "/tmp/server.log"))
+            os.getenv("D_LOG_FILE", "/tmp/server.log"))[0]
         daos_files = {
             "log_file": "/tmp/server.log",
             "agent_log_file": "/tmp/daos_agent.log",
