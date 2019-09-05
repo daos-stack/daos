@@ -4,9 +4,6 @@
 hosts:
  test_servers:
   - boro-A
-  - boro-B
-  - boro-C
-  - boro-D
  test_clients:
   - boro-E
 timeout: 28800
