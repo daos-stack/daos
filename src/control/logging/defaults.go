@@ -26,6 +26,7 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"sync"
 )
 
 const (
@@ -78,11 +79,41 @@ func NewCombinedLogger(prefix string, output io.Writer) *LeveledLogger {
 	}
 }
 
-// NewTestLogger returns a logger and a *bytes.Buffer,
+// LogBuffer provides a thread-safe wrapper for bytes.Buffer.
+type LogBuffer struct {
+	sync.Mutex
+	buf bytes.Buffer
+}
+
+func (lb *LogBuffer) Read(p []byte) (int, error) {
+	lb.Lock()
+	defer lb.Unlock()
+	return lb.buf.Read(p)
+}
+
+func (lb *LogBuffer) Write(p []byte) (int, error) {
+	lb.Lock()
+	defer lb.Unlock()
+	return lb.buf.Write(p)
+}
+
+func (lb *LogBuffer) String() string {
+	lb.Lock()
+	defer lb.Unlock()
+	return lb.buf.String()
+}
+
+func (lb *LogBuffer) Reset() {
+	lb.Lock()
+	defer lb.Unlock()
+	lb.buf.Reset()
+}
+
+// NewTestLogger returns a logger and a *LogBuffer,
 // with the logger configured to send all output into
 // the buffer. The logger's level is set to DEBUG by default.
-func NewTestLogger(prefix string) (*LeveledLogger, *bytes.Buffer) {
-	var buf bytes.Buffer
+func NewTestLogger(prefix string) (*LeveledLogger, *LogBuffer) {
+	var buf LogBuffer
 	return NewCombinedLogger(prefix, &buf).
 		WithLogLevel(LogLevelDebug), &buf
 }
