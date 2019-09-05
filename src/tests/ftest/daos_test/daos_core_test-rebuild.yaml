@@ -19,10 +19,15 @@ daos_tests:
   num_replicas:
     num_replicas: 1
   Tests: !mux
-    test_r_0-24:
+    test_r_0-16:
       daos_test: r
-      test_name: rebuild tests 0-24
-      args: -s3 -u subtests="0-24"
+      test_name: rebuild tests 0-16
+      args: -s3 -u subtests="0-16"
+      test_timeout: 1500
+    test_r_18-24:
+      daos_test: r
+      test_name: rebuild tests 18-24
+      args: -s3 -u subtests="18-24"
       test_timeout: 1500
     test_r_25:
       daos_test: r

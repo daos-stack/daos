@@ -142,8 +142,7 @@ def scons():
 
     install_go_bin(denv, gosrc, gopath, None, "agent", "daos_agent")
 
-    gospdkpath = join(gosrc, "vendor", "github.com", "daos-stack", "go-spdk",
-                      "spdk")
+    gospdkpath = join(gosrc, "lib", "spdk")
 
     # CGO prerequisite libs for go-spdk bindings
     denv.AppendUnique(CPPPATH=[join(gospdkpath, "include")])
