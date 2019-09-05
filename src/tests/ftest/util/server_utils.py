@@ -58,7 +58,8 @@ class ServerCommand(DaosCommand):
 
     def __init__(self, hosts, path):
         """Create a server Command object"""
-        super(ServerCommand, self).__init__("daos_server", path)
+        super(ServerCommand, self).__init__(
+            "daos_server", "/run/daos_server/*", path)
 
         self.hosts = hosts
         self.process = None
@@ -236,6 +237,23 @@ class ServerCommand(DaosCommand):
                 raise ServerFailed("Error stopping {}".format(self._command))
             self.process = None
 
+
+class ServerManager(object):
+
+
+    test
+    hosts
+    server
+
+    def create_hostfile(self, slots):
+    def setup(self):
+
+
+# Look up pyjournalctl.
+# Have a systemd class
+# Have functions to start and stop services.
+# Have enable and disable
+# plan is to keep command with parameters?
 
 def set_nvme_mode(default_value_set, bdev, enabled=False):
     """Enable/Disable NVMe Mode.

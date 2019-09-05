@@ -25,6 +25,11 @@ from __future__ import print_function
 
 import os
 
+from avocado.utils import process, CmdError
+
+class CommandFailure(Exception):
+    """Handle when command run has failed or timed out."""
+
 class BasicParameter(object):
     """A class for parameters whose values are read from a yaml file."""
 
@@ -95,13 +100,41 @@ class FormattedParameter(BasicParameter):
         if isinstance(self._default, bool) and self.value:
             return self._str_format
         elif not isinstance(self._default, bool) and self.value is not None:
-            return self._str_format.format(self.value)
+            if isinstance(self.value, (list, tuple)):
+                return ",".join(
+                    [self._str_format.format(value) for value in self.value])
+            else:
+                return self._str_format.format(self.value)
         else:
             return ""
 
 
+class EnvironmentParameter(FormattedParameter):
+    """A class for the environment parameters."""
+
+    def __str__(self):
+        """Return a EnvironmentParameter object as a string.
+
+        Returns:
+            str: if defined, the parameter, otherwise an empty string
+
+        """
+    def format_env_param(self):
+        """format_env_param [summary]
+
+        [extended_summary]
+        """
+
 class ObjectWithParameters(object):
     """A class for an object with parameters."""
+
+    def __init__(self, namespace):
+        """Create object with parameter objects.
+
+        Args:
+            namespace (str, optional): path to location of test yaml file.
+        """
+        self.namespace = namespace
 
     def get_attribute_names(self, attr_type=None):
         """Get a sorted list of the names of the attr_type attributes.
@@ -128,7 +161,7 @@ class ObjectWithParameters(object):
         """
         return self.get_attribute_names(BasicParameter)
 
-    def get_params(self, test, path):
+    def get_params(self, test):
         """Get values for all of the command params from the yaml file.
 
         Sets each BasicParameter object's value to the yaml key that matches
@@ -141,26 +174,40 @@ class ObjectWithParameters(object):
 
         Args:
             test (Test): avocado Test object
-            path (str): yaml namespace.
         """
         for name in self.get_param_names():
-            getattr(self, name).get_yaml_value(name, test, path)
+            getattr(self, name).get_yaml_value(name, test, self._namespace)
 
 
 class CommandWithParameters(ObjectWithParameters):
     """A class for command with paramaters."""
 
-    def __init__(self, command, path=""):
+    def __init__(self, command, namespace, path=""):
         """Create a CommandWithParameters object.
 
         Uses Avocado's utils.process module to run a command str provided.
 
         Args:
-            path (str): path to location of command binary file
             command (str): string of the command to be executed.
+            namespace (str): path to location of test yaml file.
+            path (str): path to location of command binary.
         """
+        super(CommandWithParameters, self).__init__(namespace)
         self._command = command
         self._path = path
+        self.timeout=None
+        self.verbose=True
+        self.env=None
+        self.sudo=False
+        self.kwargs = {
+            "cmd": self.__str__(),
+            "timeout": self.timeout,
+            "verbose": self.verbose,
+            "allow_output_check": "combined",
+            "shell": True,
+            "env": self.env,
+            "sudo": self.sudo,
+        }
 
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
@@ -178,15 +225,10 @@ class CommandWithParameters(ObjectWithParameters):
                 params.append(value)
         return " ".join([os.path.join(self._path, self._command)] + params)
 
-    def run(self, timeout=None, verbose=True, env=None, sudo=False):
+    def run(self):
         """ Run the command.
 
-        Args:
-            timeout (int, optional): timeout in seconds. Defaults to None.
-            verbose (bool, optional): display command output. Defaults to True.
-            env (dict, optional): env for the command. Defaults to None.
-            sudo (bool, optional): sudo will be prepended to the command.
-                Defaults to False.
+        This run will stop the test flow until the command has completed.
 
         Raises:
             process.CmdError: Avocado command exception
@@ -196,21 +238,26 @@ class CommandWithParameters(ObjectWithParameters):
             the command.
 
         """
-        return process.run(self.__str__(), timeout, verbose, env=env,
-                           shell=True, sudo=sudo)
+        try:
+            process.run(**self.kwargs)
+
+        except process.CmdError as error:
+            print("<{}> Exception occurred: {}".format(self._command, error))
+            raise CommandFailure("Run process Failed: {}".format(error))
 
 
 class DaosCommand(CommandWithParameters):
     """A class for similar daos command line tools."""
 
     def __init__(self, command, path=""):
-        """__init__ [summary]
+        """Create DaosCommand object.
 
-        [extended_summary]
+        Specific type of command object built so command str returns:
+            <command> <options> <request> <action>
 
         Args:
-            path ([type]): [description]
-            command ([type]): [description]
+            command (str): string of the command to be executed.
+            path (str): path to location of daos command binary.
         """
         super(DaosCommand, self).__init__(command, path)
         self.request = BasicParameter("{}")
@@ -226,11 +273,50 @@ class DaosCommand(CommandWithParameters):
 class JobManagerCommand(CommandWithParameters):
     """A class for job manager commands."""
 
-    def __init__(self, manager):
+    def __init__(self, managercmd, namespace):
         """Create a JobManager object.
 
         Construct and run a job manager tool. e.g. mpirun, orterun, slurm
 
         Args:
-            manager (str): string of the manager tool to be executed
+            managercmd (str): string of the manager tool to be executed
+            namespace (str): path to location of test yaml file.
         """
+        super(JobManagerCommand, self).__init__(managercmd, namespace)
+        self.command_to_manage = None
+        self.process = None
+        self.process_indicator = None
+        self.hosts = []
+
+    def get_param_names(self):
+        """Get a sorted list of JobManagerCommand parameter names."""
+        names = self.get_attribute_names(EnvironmentParameter)
+        names.insert(0, "export")
+        return names
+
+    def run(self):
+        """ Run the command as a subprocess."""
+
+
+        self.process = process.SubProcess(**self.kwargs)
+
+class OrterunCommand(JobManagerCommand):
+    """ A class to handle  orterun command."""
+
+    def __init__(self, path):
+        """Create a orterun command object."""
+        super(OrterunCommand, self).__init__(
+            "orterun", "/run/orterun/*", path)
+
+        self.hosts = FormattedParameter("--host", None)
+        self.hostfile = FormattedParameter("--hostfile", None)
+        self.processes = FormattedParameter("-np", 1)
+        self.display_map = FormattedParameter("--display-map", True)
+        self.map_by = FormattedParameter("--map-by", "node")
+        self.export = FormattedParameter("-x", None)
+        self.enable_recovery = FormattedParameter("--enable-recovery", True)
+        self.report_uri = FormattedParameter("--report-uri", None)
+
+    def get_host_count(self):
+        if self.hosts.value us not None:
+            return len(self.hosts.value)

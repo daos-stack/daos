@@ -33,7 +33,8 @@ class DmgCommand(DaosCommand):
 
     def __init__(self, path):
         """Create a dmg Command object."""
-        super(DmgCommand, self).__init__("daos_shell", path)
+        super(DmgCommand, self).__init__(
+            "daos_shell", "/run/dmg/*", path)
 
         # daos_shell options
         self.hostlist = FormattedParameter("-l {}")
@@ -57,7 +58,7 @@ class DmgCommand(DaosCommand):
         self.cont = FormattedParameter("--cont={}")
         self.oid = FormattedParameter("--oid={}")
 
-    def get_params(self, test, path="/run/dmg/*"):
+    def get_params(self, test):
         """Get values for all of the dmg command params using a yaml file.
 
         Sets each BasicParameter object's value to the yaml key that matches
