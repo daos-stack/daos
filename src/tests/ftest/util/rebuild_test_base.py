@@ -46,7 +46,6 @@ class RebuldTestBase(TestWithServers):
         super(RebuldTestBase, self).__init__(*args, **kwargs)
         self.inputs = RebuildTestParams()
         self.targets = None
-        self.container = None
         self.server_count = 0
         self.info_checks = None
         self.rebuild_checks = None
@@ -63,21 +62,6 @@ class RebuldTestBase(TestWithServers):
         self.targets = self.params.get("targets", "/run/server_config/*")
 
         self.server_count = len(self.hostlist_servers)
-
-    def tearDown(self):
-        """Tear down each test case."""
-        try:
-            # Destroy the containers - assuming a TestContainer object
-            if self.container is not None:
-                self.container.destroy(1)
-
-            # Destroy the pools - assuming a TestPool object
-            if self.pool is not None:
-                self.pool.destroy(1)
-
-        finally:
-            # Stop the servers and agents
-            super(RebuldTestBase, self).tearDown()
 
     def setup_test_pool(self):
         """Define a TestPool object."""

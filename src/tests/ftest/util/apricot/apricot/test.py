@@ -31,7 +31,7 @@ import json
 import re
 
 from avocado import Test as avocadoTest
-from avocado import skip
+from avocado import skip, TestFail
 from avocado.utils import process
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
 
@@ -39,7 +39,7 @@ import fault_config_utils
 import agent_utils
 import server_utils
 import write_host_file
-from daos_api import DaosContext, DaosLog
+from daos_api import DaosContext, DaosLog, DaosApiError
 
 
 # pylint: disable=invalid-name
@@ -144,6 +144,20 @@ class TestWithoutServers(Test):
         if self.fault_file:
             os.remove(self.fault_file)
 
+    def dual_log(self, msg, log_type="info"):
+        """Log the provided message to the daos log and the test log.
+
+        Args:
+            msg (str): message to log
+            log_type (str, optional): logging method name to call with the
+                message.  Defaults to "info".
+        """
+        for log_object in (self.d_log, self.log):
+            try:
+                getattr(log_object, log_type)(msg)
+            except AttributeError as error:
+                self.fail("Error logging '{}': {}".format(msg, error))
+
 
 class TestWithServers(TestWithoutServers):
     """Run tests with DAOS servers and at least one client.
@@ -233,17 +247,65 @@ class TestWithServers(TestWithoutServers):
 
     def tearDown(self):
         """Tear down after each test case."""
-        try:
-            if self.agent_sessions:
-                self.d_log.info("Stopping agents")
-                agent_utils.stop_agent(self.agent_sessions,
-                                       self.hostlist_clients)
-        finally:
-            self.d_log.info("Stopping servers")
+        # Report any errors after attempting each tear down step
+        errors = []
+
+        # Destroy any containers first
+        if self.container:
+            self.dual_log("Destroying containers")
+            if not isinstance(self.container, (list, tuple)):
+                self.container = [self.container]
+            for container in self.container:
+                try:
+                    container.close()
+                    container.destroy()
+                except (DaosApiError, TestFail) as error:
+                    self.dual_log("  {}".format(error))
+                    errors.append(
+                        "Error destroying container: {}".format(error))
+
+        # Destroy any pools next
+        if self.pool:
+            self.dual_log("Destroying pools")
+            if not isinstance(self.pool, (list, tuple)):
+                self.pool = [self.pool]
+            for pool in self.pool:
+                try:
+                    pool.disconnect()
+                    pool.destroy()
+                except (DaosApiError, TestFail) as error:
+                    self.dual_log("  {}".format(error))
+                    errors.append("Error destroying pool: {}".format(error))
+
+        # Stop the agents
+        if self.agent_sessions:
+            self.dual_log("Stopping agents")
             try:
-                server_utils.stop_server(hosts=self.hostlist_servers)
-            finally:
-                super(TestWithServers, self).tearDown()
+                agent_utils.stop_agent(
+                    self.agent_sessions, self.hostlist_clients)
+            except agent_utils.AgentFailed as error:
+                self.dual_log("  {}".format(error))
+                errors.append("Error stopping agents: {}".format(error))
+
+        # Stop the servers
+        self.dual_log("Stopping servers")
+        try:
+            server_utils.stop_server(hosts=self.hostlist_servers)
+        except server_utils.ServerFailed as error:
+            self.dual_log("  {}".format(error))
+            errors.append("Error stopping servers: {}".format(error))
+
+        # Disable fault injection, if enabled
+        try:
+            super(TestWithServers, self).tearDown()
+        except OSError as error:
+            errors.append("Error disabling fault injection: {}".format(error))
+
+        # Fail the test if any errors occurred during tear down
+        if errors:
+            self.fail(
+                "Errors detected during teardown:\n  - {}".format(
+                    "\n  - ".join(errors)))
 
     def start_servers(self, server_groups=None):
         """Start the servers and clients.
