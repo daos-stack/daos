@@ -1356,6 +1356,19 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 
 		/* PUNCH DTX cannot be shared by others. */
 		if (dtx->te_intent == DAOS_INTENT_PUNCH) {
+			if (dth == NULL)
+				/* XXX: For rebuild case, if some normal IO
+				 *	has generated punch-record (by race)
+				 *	before rebuild logic handling that,
+				 *	then rebuild logic should ignore such
+				 *	punch-record, because the punch epoch
+				 *	will be higher than the rebuild epoch.
+				 *	The rebuild logic needs to create the
+				 *	original target record that exists on
+				 *	other healthy replicas before punch.
+				 */
+				return ALB_UNAVAILABLE;
+
 			dtx_record_conflict(dth, dtx);
 
 			return dtx_inprogress(dtx, 3);
@@ -1574,30 +1587,6 @@ vos_dtx_prepared(struct dtx_handle *dth)
 	D_ASSERT(cont != NULL);
 
 	dtx = umem_off2ptr(&cont->vc_pool->vp_umm, dth->dth_ent);
-	if (dth->dth_intent == DAOS_INTENT_UPDATE) {
-		d_iov_t	kiov;
-		d_iov_t	riov;
-
-		/* There is CPU yield during the bulk transfer, then it is
-		 * possible that some others (rebuild) abort this DTX by race.
-		 * So we need to locate (or verify) DTX via its ID instead of
-		 * directly using the dth_ent.
-		 */
-		d_iov_set(&kiov, &dth->dth_xid, sizeof(struct dtx_id));
-		d_iov_set(&riov, NULL, 0);
-		rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
-		if (rc == -DER_NONEXIST)
-			/* The DTX has been aborted by race, notify the RPC
-			 * sponsor to retry via returning -DER_INPROGRESS.
-			 */
-			return dtx_inprogress(dtx, 1);
-
-		if (rc != 0)
-			return rc;
-
-		D_ASSERT(dtx == (struct vos_dtx_entry_df *)riov.iov_buf);
-	}
-
 	/* The caller has already started the PMDK transaction
 	 * and add the DTX into the PMDK transaction.
 	 */
