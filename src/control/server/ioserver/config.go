@@ -261,6 +261,12 @@ func (c *Config) WithBdevFileSize(size int) *Config {
 	return c
 }
 
+// WithBdevConfigPath sets the path to the generated NVMe config file used by SPDK.
+func (c *Config) WithBdevConfigPath(cfgPath string) *Config {
+	c.Storage.Bdev.ConfigPath = cfgPath
+	return c
+}
+
 // WithAttachInfoPath sets the path to PMIx-less attachment info.
 func (c *Config) WithAttachInfoPath(aip string) *Config {
 	c.AttachInfoPath = aip

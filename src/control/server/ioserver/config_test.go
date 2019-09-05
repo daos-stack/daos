@@ -26,6 +26,7 @@ package ioserver
 import (
 	"flag"
 	"os"
+	"strconv"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -156,5 +157,77 @@ func TestConfigValidation(t *testing.T) {
 
 	if err := good.Validate(); err != nil {
 		t.Fatalf("expected %#v to validate; got %s", good, err)
+	}
+}
+
+func TestConfigToCmdVals(t *testing.T) {
+	var (
+		mountPoint    = "/mnt/test"
+		provider      = "test+foo"
+		interfaceName = "qib0"
+		modules       = "foo,bar,baz"
+		systemName    = "test-system"
+		socketDir     = "/var/run/foo"
+		attachInfo    = "/tmp/attach"
+		logMask       = "LOG_MASK_VALUE"
+		logFile       = "/path/to/log"
+		cfgPath       = "/path/to/nvme.conf"
+		shmId         = 42
+		interfacePort = 20
+		targetCount   = 4
+		helperCount   = 1
+		serviceCore   = 8
+	)
+	cfg := NewConfig().
+		WithScmMountPoint(mountPoint).
+		WithTargetCount(targetCount).
+		WithHelperStreamCount(helperCount).
+		WithServiceThreadCore(serviceCore).
+		WithFabricProvider(provider).
+		WithFabricInterface(interfaceName).
+		WithFabricInterfacePort(interfacePort).
+		WithModules(modules).
+		WithSocketDir(socketDir).
+		WithAttachInfoPath(attachInfo).
+		WithLogFile(logFile).
+		WithLogMask(logMask).
+		WithShmID(shmId).
+		WithBdevConfigPath(cfgPath).
+		WithSystemName(systemName)
+
+	wantArgs := []string{
+		"-x", strconv.Itoa(helperCount),
+		"-t", strconv.Itoa(targetCount),
+		"-s", mountPoint,
+		"-m", modules,
+		"-f", strconv.Itoa(serviceCore),
+		"-g", systemName,
+		"-a", attachInfo,
+		"-d", socketDir,
+		"-i", strconv.Itoa(shmId),
+		"-n", cfgPath,
+	}
+	wantEnv := []string{
+		"OFI_INTERFACE=" + interfaceName,
+		"OFI_PORT=" + strconv.Itoa(interfacePort),
+		"CRT_PHY_ADDR_STR=" + provider,
+		"D_LOG_FILE=" + logFile,
+		"D_LOG_MASK=" + logMask,
+	}
+
+	gotArgs, err := cfg.CmdLineArgs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff(gotArgs, wantArgs, cmpOpts()...); diff != "" {
+		t.Fatalf("(-want, +got):\n%s", diff)
+	}
+
+	gotEnv, err := cfg.CmdLineEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff(gotEnv, wantEnv, cmpOpts()...); diff != "" {
+		t.Fatalf("(-want, +got):\n%s", diff)
 	}
 }
