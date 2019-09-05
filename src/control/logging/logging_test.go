@@ -32,7 +32,6 @@ import (
 
 func TestStandardFormat(t *testing.T) {
 	logger, buf := logging.NewTestLogger("testPrefix")
-	logger.SetLevel(logging.LogLevelDebug)
 
 	tests := map[string]struct {
 		fn        func(string)

@@ -176,43 +176,43 @@ func (c *Configuration) WithScmMountPoint(mp string) *Configuration {
 	return c
 }
 
-// WithAccessPoints sets the access point list
+// WithAccessPoints sets the access point list.
 func (c *Configuration) WithAccessPoints(aps ...string) *Configuration {
 	c.AccessPoints = aps
 	return c
 }
 
-// WithControlPort sets the RPC listener port
+// WithControlPort sets the gRPC listener port.
 func (c *Configuration) WithControlPort(port int) *Configuration {
 	c.ControlPort = port
 	return c
 }
 
-// WithTransportConfig sets the gRPC transport configuration
+// WithTransportConfig sets the gRPC transport configuration.
 func (c *Configuration) WithTransportConfig(cfg *security.TransportConfig) *Configuration {
 	c.TransportConfig = cfg
 	return c
 }
 
-// WithFaultPath sets the fault path
+// WithFaultPath sets the fault path (identification string e.g. rack/shelf/node).
 func (c *Configuration) WithFaultPath(fp string) *Configuration {
 	c.FaultPath = fp
 	return c
 }
 
-// WithFaultCb sets the fault callback
+// WithFaultCb sets the path to the fault callback script.
 func (c *Configuration) WithFaultCb(cb string) *Configuration {
 	c.FaultCb = cb
 	return c
 }
 
-// WithBdevExclude sets the block device exclude list
+// WithBdevExclude sets the block device exclude list.
 func (c *Configuration) WithBdevExclude(bList ...string) *Configuration {
 	c.BdevExclude = bList
 	return c
 }
 
-// WithBdevInclude sets the block device include list
+// WithBdevInclude sets the block device include list.
 func (c *Configuration) WithBdevInclude(bList ...string) *Configuration {
 	c.BdevInclude = bList
 	return c
@@ -224,37 +224,37 @@ func (c *Configuration) WithHyperthreads(enabled bool) *Configuration {
 	return c
 }
 
-// WithNrHugePages sets the number of huge pages to be used
+// WithNrHugePages sets the number of huge pages to be used.
 func (c *Configuration) WithNrHugePages(nr int) *Configuration {
 	c.NrHugepages = nr
 	return c
 }
 
-// WithControlLogMask sets the log level
+// WithControlLogMask sets the daos_server log level.
 func (c *Configuration) WithControlLogMask(lvl ControlLogLevel) *Configuration {
 	c.ControlLogMask = lvl
 	return c
 }
 
-// WithControlLogFile sets the path to the logfile
+// WithControlLogFile sets the path to the daos_server logfile.
 func (c *Configuration) WithControlLogFile(filePath string) *Configuration {
 	c.ControlLogFile = filePath
 	return c
 }
 
-// WithControlLogJSON enables or disables JSON output
+// WithControlLogJSON enables or disables JSON output.
 func (c *Configuration) WithControlLogJSON(enabled bool) *Configuration {
 	c.ControlLogJSON = enabled
 	return c
 }
 
-// WithUserName sets the user to run as
+// WithUserName sets the user to run as.
 func (c *Configuration) WithUserName(name string) *Configuration {
 	c.UserName = name
 	return c
 }
 
-// WithGroupName sets the group to run as
+// WithGroupName sets the group to run as.
 func (c *Configuration) WithGroupName(name string) *Configuration {
 	c.GroupName = name
 	return c
@@ -289,6 +289,7 @@ func NewConfiguration() *Configuration {
 	return newDefaultConfiguration(&ext{})
 }
 
+// Load reads the serialized configuration from disk and validates it.
 func (c *Configuration) Load() error {
 	if c.Path == "" {
 		return errors.New(msgConfigNoPath)
@@ -312,6 +313,7 @@ func (c *Configuration) Load() error {
 	return c.Validate()
 }
 
+// SaveToFile serializes the configuration and saves it to the specified filename.
 func (c *Configuration) SaveToFile(filename string) error {
 	bytes, err := yaml.Marshal(c)
 
@@ -336,6 +338,7 @@ func (c *Configuration) SetNvmeShmID(base string) {
 	c.WithNvmeShmID(hash(base + strconv.Itoa(os.Getpid())))
 }
 
+// SetPath sets the default path to the configuration file.
 func (c *Configuration) SetPath(path string) error {
 	if path != "" {
 		c.Path = path
@@ -371,7 +374,7 @@ func saveActiveConfig(log logging.Logger, config *Configuration) {
 	}
 }
 
-// Validate asserts that config meets minimum requirements
+// Validate asserts that config meets minimum requirements.
 func (c *Configuration) Validate() (err error) {
 	// append the user-friendly message to any error
 	// TODO: use a fault/resolution

@@ -155,9 +155,9 @@ func (srv *IOServerInstance) NotifyStorageReady() {
 func (srv *IOServerInstance) AwaitStorageReady(ctx context.Context) {
 	select {
 	case <-ctx.Done():
-		srv.log.Debugf("I/O server instance %d storage not ready: %s", srv.Index, ctx.Err())
+		srv.log.Infof("I/O server instance %d storage not ready: %s", srv.Index, ctx.Err())
 	case <-srv.storageReady:
-		srv.log.Debugf("I/O server instance %d ready", srv.Index)
+		srv.log.Infof("I/O server instance %d storage ready", srv.Index)
 	}
 }
 
