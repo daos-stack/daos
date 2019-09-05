@@ -119,34 +119,74 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 }
 
 int
-ds_mgmt_smd_list_devs(struct mgmt_smd_devs *devs)
+ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 {
 	struct smd_dev_info	*dev_info, *tmp;
 	d_list_t		 dev_list;
+	int			 dev_list_cnt = 0;
+	int			 i = 0, j;
 	int			 rc = 0;
 
 	D_DEBUG(DB_MGMT, "Querying SMD device list\n");
 
 	D_INIT_LIST_HEAD(&dev_list);
-	rc = smd_dev_list(&dev_list);
-	d_list_for_each_entry_safe(dev_info, tmp, &dev_list, sdi_link) {
-		struct mgmt_smd_device *dev_tmp;
+	rc = smd_dev_list(&dev_list, &dev_list_cnt);
 
-		D_ALLOC_PTR(dev_tmp);
-		if (dev_tmp == NULL) {
-			rc = -DER_NOMEM;
-			smd_free_dev_info(dev_info);
-			return rc;
-		}
-
-		dev_tmp->dev_info = dev_info;
-		dev_tmp->next = devs->ms_devs;
-		devs->ms_devs = dev_tmp;
-		devs->ms_head = dev_tmp;
-		devs->ms_num_devs++;
-
-		d_list_del(&dev_info->sdi_link);
+	D_ALLOC(resp->devices, sizeof(*resp->devices) * dev_list_cnt);
+	if (resp->devices == NULL) {
+		D_ERROR("Failed to allocate devices for resp\n");
+		return -DER_NOMEM;
 	}
 
+	d_list_for_each_entry_safe(dev_info, tmp, &dev_list, sdi_link) {
+		D_ALLOC(resp->devices[i], sizeof(*(resp->devices[i])));
+		if (resp->devices[i] == NULL) {
+			D_ERROR("Failed to allocate device\n");
+			rc = -DER_NOMEM;
+			break;
+		}
+		mgmt__smd_dev_resp__device__init(resp->devices[i]);
+		D_ALLOC(resp->devices[i]->uuid, DAOS_UUID_STR_SIZE);
+		if (resp->devices[i]->uuid == NULL) {
+			D_ERROR("Failed to allocate device uuid\n");
+			rc = -DER_NOMEM;
+			break;
+		}
+		uuid_unparse_lower(dev_info->sdi_id, resp->devices[i]->uuid);
+
+		resp->devices[i]->n_tgt_ids = dev_info->sdi_tgt_cnt;
+		D_ALLOC(resp->devices[i]->tgt_ids,
+			sizeof(int) * dev_info->sdi_tgt_cnt);
+		if (resp->devices[i]->tgt_ids == NULL) {
+			rc = -DER_NOMEM;
+			break;
+		}
+		for (j = 0; j < dev_info->sdi_tgt_cnt; j++)
+			resp->devices[i]->tgt_ids[j] = dev_info->sdi_tgts[j];
+
+		d_list_del(&dev_info->sdi_link);
+		/* Frees sdi_tgts and dev_info */
+		smd_free_dev_info(dev_info);
+
+		i++;
+	}
+	/* Free all devices is there was an error allocating any */
+	if (rc != 0) {
+		for( ; i >= 0; i--) {
+			if (resp->devices[i] != NULL) {
+				if (resp->devices[i]->uuid != NULL)
+					D_FREE(resp->devices[i]->uuid);
+				if (resp->devices[i]->tgt_ids != NULL)
+					D_FREE(resp->devices[i]->tgt_ids);
+				D_FREE(resp->devices[i]);
+			}
+		}
+		D_FREE(resp->devices);
+		resp->devices = NULL;
+		goto out;
+	}
+	resp->n_devices = dev_list_cnt;
+
+out:
 	return rc;
 }

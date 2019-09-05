@@ -107,19 +107,7 @@ struct mgmt_bio_health {
 
 int ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid,
 			     char *tgt_id);
-
-struct mgmt_smd_device {
-	struct smd_dev_info	*dev_info;
-	struct mgmt_smd_device	*next;
-};
-
-struct mgmt_smd_devs {
-	struct mgmt_smd_device *ms_devs;
-	struct mgmt_smd_device *ms_head;
-	int			ms_num_devs;
-};
-
-int ds_mgmt_smd_list_devs(struct mgmt_smd_devs *msd);
+int ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp);
 
 /** srv_target.c */
 int ds_mgmt_tgt_init(void);

@@ -688,12 +688,9 @@ process_smdlistdevs_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__SmdDevReq		*req = NULL;
 	Mgmt__SmdDevResp	*resp = NULL;
-	struct mgmt_smd_devs	*smd_devs = NULL;
-	struct mgmt_smd_device	*dev_entry = NULL;
 	uint8_t			*body;
 	size_t			 len;
 	int			 rc = 0;
-	int			 i, j;
 
 	/* Unpack the inner request from the drpc call body */
 	req = mgmt__smd_dev_req__unpack(
@@ -718,110 +715,10 @@ process_smdlistdevs_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	/* Response status is populated with SUCCESS on init. */
 	mgmt__smd_dev_resp__init(resp);
 
-	D_ALLOC_PTR(smd_devs);
-	if (smd_devs == NULL) {
-		D_ERROR("Failed to allocate smd_devs struct\n");
-		rc = -DER_NOMEM;
-		goto out;
-	}
-	smd_devs->ms_devs = NULL;
-	smd_devs->ms_num_devs = 0;
-	smd_devs->ms_head = NULL;
-
-	rc = ds_mgmt_smd_list_devs(smd_devs);
-	if (rc != 0) {
+	rc = ds_mgmt_smd_list_devs(resp);
+	if (rc != 0)
 		D_ERROR("Failed to list SMD devices :%d\n", rc);
-		goto out;
-	}
 
-	if (smd_devs->ms_devs == NULL) {
-		D_INFO("No devices found in SMD device list\n");
-		goto out;
-	}
-
-	D_ALLOC(resp->devices, sizeof(*resp->devices) * smd_devs->ms_num_devs);
-	if (resp->devices == NULL) {
-		D_ERROR("Failed to allocate devices for resp\n");
-		rc = -DER_NOMEM;
-		goto out;
-	}
-	if (smd_devs->ms_head == NULL) {
-		D_ERROR("Error acccessing the first device in SMD\n");
-		rc = -DER_NONEXIST;
-		goto err_out;
-	}
-	dev_entry = smd_devs->ms_head;
-
-	for (i = 0; i < smd_devs->ms_num_devs; i++) {
-		struct mgmt_smd_device *next = dev_entry->next;
-		struct smd_dev_info    *info = dev_entry->dev_info;
-
-		D_ALLOC(resp->devices[i], sizeof(*(resp->devices[i])));
-		if (resp->devices[i] == NULL) {
-			D_ERROR("Failed to allocate device\n");
-			rc = -DER_NOMEM;
-			break;
-		}
-		mgmt__smd_dev_resp__device__init(resp->devices[i]);
-		D_ALLOC(resp->devices[i]->uuid, DAOS_UUID_STR_SIZE);
-		if (resp->devices[i]->uuid == NULL) {
-			D_ERROR("Failed to allocate device uuid\n");
-			rc = -DER_NOMEM;
-			break;
-		}
-		uuid_unparse_lower(info->sdi_id, resp->devices[i]->uuid);
-
-		resp->devices[i]->n_tgt_ids = info->sdi_tgt_cnt;
-		D_ALLOC(resp->devices[i]->tgt_ids,
-			sizeof(int) * info->sdi_tgt_cnt);
-		if (resp->devices[i]->tgt_ids == NULL) {
-			rc = -DER_NOMEM;
-			break;
-		}
-		for (j = 0; j < info->sdi_tgt_cnt; j++)
-			resp->devices[i]->tgt_ids[j] = info->sdi_tgts[j];
-
-		/* frees sdi_tgts and dev_info */
-		smd_free_dev_info(info);
-		D_FREE(dev_entry);
-		dev_entry = next;
-		if (dev_entry == NULL)
-			break;
-	}
-	/* Free all devices is there was an error allocating any */
-	if (rc != 0) {
-		for( ; i >= 0; i--) {
-			if (resp->devices[i] != NULL) {
-				if (resp->devices[i]->uuid != NULL)
-					D_FREE(resp->devices[i]->uuid);
-				if (resp->devices[i]->tgt_ids != NULL)
-					D_FREE(resp->devices[i]->tgt_ids);
-				D_FREE(resp->devices[i]);
-			}
-		}
-		D_FREE(resp->devices);
-		resp->devices = NULL;
-	} else
-		resp->n_devices = smd_devs->ms_num_devs;
-
-
-err_out:
-	/* Free all devices is there was an error allocating any */
-	if (rc != 0) {
-		if (smd_devs->ms_num_devs > 0) {
-			dev_entry = smd_devs->ms_head;
-			for (i = 0; i < smd_devs->ms_num_devs; i++) {
-				struct mgmt_smd_device *next = dev_entry->next;
-
-				smd_free_dev_info(dev_entry->dev_info);
-				D_FREE(dev_entry);
-				dev_entry = next;
-				if (dev_entry == NULL)
-					break;
-			}
-		}
-	}
-out:
 	resp->status = rc;
 	len = mgmt__smd_dev_resp__get_packed_size(resp);
 	D_ALLOC(body, len);
@@ -836,9 +733,6 @@ out:
 
 	mgmt__smd_dev_req__free_unpacked(req, NULL);
 	D_FREE(resp);
-
-	if (smd_devs != NULL)
-		D_FREE(smd_devs);
 }
 
 static void
