@@ -36,39 +36,47 @@
 #include <daos/btree_class.h>
 
 static pthread_mutex_t	mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static bool vsa_nvme_init;
+static struct vos_tls	*standalone_tls;
+
+struct vos_tls *
+vos_tls_get(void)
+{
+#ifdef VOS_STANDALONE
+	return standalone_tls;
+#else
+	struct vos_tls			*tls;
+	struct dss_thread_local_storage	*dtc;
+
+	dtc = dss_tls_get();
+	tls = (struct vos_tls *)dss_module_key_get(dtc, &vos_module_key);
+	return tls;
+#endif /* VOS_STANDALONE */
+}
+
 /**
  * Object cache based on mode of instantiation
  */
 struct daos_lru_cache*
 vos_get_obj_cache(void)
 {
-#ifdef VOS_STANDALONE
-	return vsa_imems_inst->vis_ocache;
-#else
 	return vos_tls_get()->vtl_imems_inst.vis_ocache;
-#endif
 }
 
 int
 vos_csum_enabled(void)
 {
-#ifdef VOS_STANDALONE
-	return vsa_imems_inst->vis_enable_checksum;
-#else
 	return vos_tls_get()->vtl_imems_inst.vis_enable_checksum;
-#endif
 }
 
 int
 vos_csum_compute(d_sg_list_t *sgl, daos_csum_buf_t *csum)
 {
 	int	rc;
-#ifdef VOS_STANDALONE
-	daos_csum_t *checksum = &vsa_imems_inst->vis_checksum;
-#else
+
 	daos_csum_t *checksum =
 		&vos_tls_get()->vtl_imems_inst.vis_checksum;
-#endif
 	rc = daos_csum_compute(checksum, sgl);
 	if (rc != 0) {
 		D_ERROR("Checksum compute error from VOS: %d\n", rc);
@@ -194,6 +202,7 @@ vos_tls_init(const struct dss_thread_local_storage *dtls,
 	if (tls == NULL)
 		return NULL;
 
+	D_INIT_LIST_HEAD(&tls->vtl_gc_pools);
 	if (vos_imem_strts_create(&tls->vtl_imems_inst)) {
 		D_FREE(tls);
 		return NULL;
@@ -207,7 +216,6 @@ vos_tls_init(const struct dss_thread_local_storage *dtls,
 	}
 
 	tls->vtl_dth = NULL;
-
 	return tls;
 }
 
@@ -217,8 +225,10 @@ vos_tls_fini(const struct dss_thread_local_storage *dtls,
 {
 	struct vos_tls *tls = data;
 
+	D_ASSERT(d_list_empty(&tls->vtl_gc_pools));
 	vos_imem_strts_destroy(&tls->vtl_imems_inst);
 	umem_fini_txd(&tls->vtl_txd);
+
 	D_FREE(tls);
 }
 
@@ -324,17 +334,29 @@ vos_nvme_init(void)
 	return rc;
 }
 
+static int	vos_inited;
+
+static void
+vos_fini_locked(void)
+{
+	if (standalone_tls) {
+		vos_tls_fini(NULL, NULL, standalone_tls);
+		standalone_tls = NULL;
+	}
+	vos_nvme_fini();
+	ABT_finalize();
+}
+
 void
 vos_fini(void)
 {
 	D_MUTEX_LOCK(&mutex);
-	if (vsa_imems_inst) {
-		vos_imem_strts_destroy(vsa_imems_inst);
-		D_FREE(vsa_imems_inst);
-	}
-	umem_fini_txd(&vsa_txd_inst);
-	vos_nvme_fini();
-	ABT_finalize();
+
+	D_ASSERT(vos_inited > 0);
+	vos_inited--;
+	if (vos_inited == 0)
+		vos_fini_locked();
+
 	D_MUTEX_UNLOCK(&mutex);
 }
 
@@ -343,17 +365,12 @@ vos_init(void)
 {
 	char		*evt_mode;
 	int		 rc = 0;
-	static int	 is_init;
-
-	if (is_init) {
-		D_ERROR("Already initialized a VOS instance\n");
-		return rc;
-	}
 
 	D_MUTEX_LOCK(&mutex);
-
-	if (is_init && vsa_imems_inst)
-		D_GOTO(exit, rc);
+	if (vos_inited) {
+		vos_inited++;
+		D_GOTO(out, rc);
+	}
 
 	rc = ABT_init(0, NULL);
 	if (rc != 0) {
@@ -361,32 +378,21 @@ vos_init(void)
 		return rc;
 	}
 
-	rc = umem_init_txd(&vsa_txd_inst);
-	if (rc) {
+#if VOS_STANDALONE
+	standalone_tls = vos_tls_init(NULL, NULL);
+	if (!standalone_tls) {
 		ABT_finalize();
 		D_MUTEX_UNLOCK(&mutex);
 		return rc;
 	}
-
-	vsa_dth = NULL;
-	vsa_xsctxt_inst = NULL;
-	vsa_nvme_init = false;
-
-	D_ALLOC_PTR(vsa_imems_inst);
-	if (vsa_imems_inst == NULL)
-		D_GOTO(exit, rc = -DER_NOMEM);
-
-	rc = vos_imem_strts_create(vsa_imems_inst);
-	if (rc)
-		D_GOTO(exit, rc);
-
+#endif
 	rc = vos_mod_init();
 	if (rc)
-		D_GOTO(exit, rc);
+		D_GOTO(failed, rc);
 
 	rc = vos_nvme_init();
 	if (rc)
-		D_GOTO(exit, rc);
+		D_GOTO(failed, rc);
 
 	evt_mode = getenv("DAOS_EVTREE_MODE");
 	if (evt_mode) {
@@ -406,10 +412,12 @@ vos_init(void)
 		D_INFO("Using distance with closest side split for evtree "
 		       "(default)\n");
 	}
-	is_init = 1;
-exit:
+	vos_inited = 1;
+out:
 	D_MUTEX_UNLOCK(&mutex);
-	if (rc)
-		vos_fini();
+	return 0;
+failed:
+	vos_fini_locked();
+	D_MUTEX_UNLOCK(&mutex);
 	return rc;
 }

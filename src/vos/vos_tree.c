@@ -375,6 +375,10 @@ ktr_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 		krec->kr_earliest = krec->kr_latest = kbund->kb_epoch;
 		krec->kr_bmap |= KREC_BF_PUNCHED;
 	}
+
+	if (rbund->rb_tclass == VOS_BTR_DKEY)
+		krec->kr_bmap |= KREC_BF_DKEY;
+
 	rbund->rb_krec = krec;
 
 	/** Subtree will be created later */
@@ -390,11 +394,9 @@ ktr_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 static int
 ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
-	struct vos_pool	   *pool = tins->ti_priv;
 	struct vos_krec_df *krec;
 	struct umem_attr    uma;
-	daos_handle_t	    toh;
-	int		    rc = 0;
+	int		    gc;
 
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return 0;
@@ -410,34 +412,10 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		return -DER_BUSY;
 	}
 
-	/* has subtree? */
-	D_ASSERT(pool != NULL);
-	if (krec->kr_bmap & KREC_BF_EVT) {
-		struct evt_desc_cbs cbs;
-
-		if (krec->kr_evt.tr_order == 0)
-			goto exit; /* No subtree */
-
-		vos_evt_desc_cbs_init(&cbs, pool, tins->ti_coh);
-		rc = evt_open(&krec->kr_evt, &uma, &cbs, &toh);
-		if (rc != 0)
-			D_ERROR("Failed to open evtree: %d\n", rc);
-		else
-			evt_destroy(toh);
-	} else if (krec->kr_bmap & KREC_BF_BTR) {
-		D_ASSERT(krec->kr_bmap & KREC_BF_BTR);
-		if (krec->kr_btr.tr_order == 0)
-			goto exit; /* No subtree */
-		rc = dbtree_open_inplace_ex(&krec->kr_btr, &uma, tins->ti_coh,
-					    pool, &toh);
-		if (rc != 0)
-			D_ERROR("Failed to open btree: %d\n", rc);
-		else
-			dbtree_destroy(toh, args);
-	} /* It's possible that neither tree is created in case of punch only */
-exit:
-	umem_free(&tins->ti_umm, rec->rec_off);
-	return rc;
+	D_ASSERT(tins->ti_priv);
+	gc = (krec->kr_bmap & KREC_BF_DKEY) ? GC_DKEY : GC_AKEY;
+	return gc_add_item((struct vos_pool *)tins->ti_priv, gc,
+			   rec->rec_off, 0);
 }
 
 static int
@@ -808,12 +786,13 @@ evt_dop_bio_free(struct umem_instance *umm, struct evt_desc *desc,
 }
 
 static int
-evt_dop_log_check(struct umem_instance *umm, struct evt_desc *desc,
-	      int intent, void *args)
+evt_dop_log_status(struct umem_instance *umm, struct evt_desc *desc,
+		   int intent, void *args)
 {
 	daos_handle_t coh;
 
 	coh.cookie = (unsigned long)args;
+	D_ASSERT(coh.cookie != 0);
 	return vos_dtx_check_availability(umm, coh, desc->dc_dtx,
 					  UMOFF_NULL, intent, DTX_RT_EVT);
 }
@@ -840,7 +819,7 @@ vos_evt_desc_cbs_init(struct evt_desc_cbs *cbs, struct vos_pool *pool,
 	/* NB: coh is not required for destroy */
 	cbs->dc_bio_free_cb	= evt_dop_bio_free;
 	cbs->dc_bio_free_args	= (void *)pool;
-	cbs->dc_log_status_cb	= evt_dop_log_check;
+	cbs->dc_log_status_cb	= evt_dop_log_status;
 	cbs->dc_log_status_args	= (void *)(unsigned long)coh.cookie;
 	cbs->dc_log_add_cb	= evt_dop_log_add;
 	cbs->dc_log_add_args	= NULL;
@@ -933,12 +912,10 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 			goto out;
 		}
 	}
-
 	/* NB: Only happens on create so krec will be in the transaction log
 	 * already.
 	 */
 	krec->kr_bmap |= expected_flag;
-
 out:
 	return rc;
 }
@@ -1027,11 +1004,13 @@ key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
 		break;
 	}
 
+	rc = tree_open_create(obj, tclass, flags, krec, sub_toh);
+	if (rc)
+		goto out;
+
 	/* For updates, we need to be able to modify the epoch range */
 	if (krecp != NULL)
 		*krecp = krec;
-
-	rc = tree_open_create(obj, tclass, flags, krec, sub_toh);
  out:
 	return rc;
 }

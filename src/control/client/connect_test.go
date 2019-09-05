@@ -30,9 +30,9 @@ import (
 	"github.com/pkg/errors"
 	. "google.golang.org/grpc/connectivity"
 
-	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	. "github.com/daos-stack/daos/src/control/common/storage"
 )
 
 func connectSetup(
@@ -61,19 +61,18 @@ func defaultClientSetup() Connect {
 }
 
 func checkResults(t *testing.T, addrs Addresses, results ResultMap, e error) {
-	AssertEqual(
-		t, len(results), len(addrs), // duplicates ignored
-		"unexpected number of results")
+	t.Helper()
+
+	// duplicates ignored
+	AssertEqual(t, len(results), len(addrs), "unexpected number of results")
 
 	for _, res := range results {
-		AssertEqual(
-			t, res.Err, e,
-			"unexpected error value in results")
+		AssertEqual(t, res.Err, e, "unexpected error value in results")
 	}
 }
 
 func TestConnectClients(t *testing.T) {
-	defer common.ShowLogOnFailure(t)()
+	defer ShowLogOnFailure(t)()
 
 	eMsg := "socket connection is not active (%s)"
 
@@ -120,7 +119,7 @@ func TestConnectClients(t *testing.T) {
 }
 
 func TestDuplicateConns(t *testing.T) {
-	defer common.ShowLogOnFailure(t)()
+	defer ShowLogOnFailure(t)()
 
 	cc := defaultMockConnect()
 	results := cc.ConnectClients(append(MockServers, MockServers...))
@@ -129,7 +128,7 @@ func TestDuplicateConns(t *testing.T) {
 }
 
 func TestGetClearConns(t *testing.T) {
-	defer common.ShowLogOnFailure(t)()
+	defer ShowLogOnFailure(t)()
 
 	cc := defaultClientSetup()
 
@@ -150,7 +149,7 @@ func TestGetClearConns(t *testing.T) {
 }
 
 func TestListFeatures(t *testing.T) {
-	defer common.ShowLogOnFailure(t)()
+	defer ShowLogOnFailure(t)()
 
 	cc := defaultClientSetup()
 
@@ -161,12 +160,12 @@ func TestListFeatures(t *testing.T) {
 		"unexpected client features returned")
 }
 
-func TestScanStorage(t *testing.T) {
-	defer common.ShowLogOnFailure(t)()
+func TestStorageScan(t *testing.T) {
+	defer ShowLogOnFailure(t)()
 
 	cc := defaultClientSetup()
 
-	clientNvme, clientScm := cc.ScanStorage()
+	clientNvme, clientScm := cc.StorageScan()
 
 	AssertEqual(
 		t, clientNvme, NewClientNvme(MockCtrlrs, MockServers),
@@ -177,8 +176,8 @@ func TestScanStorage(t *testing.T) {
 		"unexpected client SCM modules returned")
 }
 
-func TestFormatStorage(t *testing.T) {
-	defer common.ShowLogOnFailure(t)()
+func TestStorageFormat(t *testing.T) {
+	defer ShowLogOnFailure(t)()
 
 	tests := []struct {
 		formatRet error
@@ -197,7 +196,7 @@ func TestFormatStorage(t *testing.T) {
 			MockModuleResults, MockMountResults, nil, tt.formatRet, nil, nil,
 			nil, nil)
 
-		cNvmeMap, cMountMap := cc.FormatStorage()
+		cNvmeMap, cMountMap := cc.StorageFormat()
 
 		if tt.formatRet != nil {
 			for _, addr := range MockServers {
@@ -223,8 +222,8 @@ func TestFormatStorage(t *testing.T) {
 	}
 }
 
-func TestUpdateStorage(t *testing.T) {
-	defer common.ShowLogOnFailure(t)()
+func TestStorageUpdate(t *testing.T) {
+	defer ShowLogOnFailure(t)()
 
 	tests := []struct {
 		updateRet error
@@ -243,7 +242,7 @@ func TestUpdateStorage(t *testing.T) {
 			MockModuleResults, MockMountResults, nil, nil, tt.updateRet, nil,
 			nil, nil)
 
-		cNvmeMap, cModuleMap := cc.UpdateStorage(new(pb.UpdateStorageReq))
+		cNvmeMap, cModuleMap := cc.StorageUpdate(new(pb.StorageUpdateReq))
 
 		if tt.updateRet != nil {
 			for _, addr := range MockServers {
@@ -270,7 +269,7 @@ func TestUpdateStorage(t *testing.T) {
 }
 
 func TestKillRank(t *testing.T) {
-	defer common.ShowLogOnFailure(t)()
+	defer ShowLogOnFailure(t)()
 
 	tests := []struct {
 		killRet error
@@ -278,16 +277,11 @@ func TestKillRank(t *testing.T) {
 		{
 			nil,
 		},
-		{
-			MockErr,
-		},
 	}
 
 	for _, tt := range tests {
-		cc := connectSetup(
-			Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
-			MockModuleResults, MockMountResults, nil, nil, nil, nil,
-			tt.killRet, nil)
+		cc := connectSetup(Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
+			MockModuleResults, MockMountResults, nil, nil, nil, nil, tt.killRet, nil)
 
 		resultMap := cc.KillRank("acd", 0)
 

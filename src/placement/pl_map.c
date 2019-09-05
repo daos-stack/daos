@@ -31,7 +31,7 @@
 #include <gurt/hash.h>
 
 extern struct pl_map_ops        ring_map_ops;
-extern struct pl_map_ops        mapless_map_ops;
+extern struct pl_map_ops        jump_map_ops;
 
 /** dictionary for all unknown placement maps */
 struct pl_map_dict {
@@ -51,9 +51,9 @@ static struct pl_map_dict pl_maps[] = {
 		.pd_name        = "ring",
 	},
 	{
-		.pd_type    = PL_TYPE_MAPLESS,
-		.pd_ops     = &mapless_map_ops,
-		.pd_name    = "mapless",
+		.pd_type    = PL_TYPE_JUMP_MAP,
+		.pd_ops     = &jump_map_ops,
+		.pd_name    = "jump",
 	},
 	{
 		.pd_type        = PL_TYPE_UNKNOWN,
@@ -300,7 +300,7 @@ struct d_hash_table     pl_htable = {
 };
 
 #define DSR_RING_DOMAIN         PO_COMP_TP_RACK
-#define DSR_MAPLESS_DOMAIN      PO_COMP_TP_RACK
+#define DSR_JUMP_MAP_DOMAIN      PO_COMP_TP_RACK
 
 static void
 pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
@@ -318,9 +318,9 @@ pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
 		mia->ia_ring.domain  = DSR_RING_DOMAIN;
 		mia->ia_ring.ring_nr = 1;
 		break;
-	case PL_TYPE_MAPLESS:
-		mia->ia_type            = PL_TYPE_MAPLESS;
-		mia->ia_mapless.domain  = DSR_MAPLESS_DOMAIN;
+	case PL_TYPE_JUMP_MAP:
+		mia->ia_type            = PL_TYPE_JUMP_MAP;
+		mia->ia_jump_map.domain  = DSR_JUMP_MAP_DOMAIN;
 	}
 
 }
@@ -475,7 +475,7 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect,
 			D_GOTO(out, rc = 0);
 		}
 
-		pl_map_attr_init(pool_map, PL_TYPE_MAPLESS, &mia);
+		pl_map_attr_init(pool_map, PL_TYPE_JUMP_MAP, &mia);
 		rc = pl_map_create_inited(pool_map, &mia, &map);
 		if (rc != 0) {
 			d_hash_rec_decref(&pl_htable, link);
