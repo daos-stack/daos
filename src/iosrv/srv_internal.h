@@ -113,6 +113,7 @@ dss_ult_xs(int ult_type, int tgt_id)
 		return 0;
 	case DSS_ULT_REBUILD:
 	case DSS_ULT_AGGREGATE:
+	case DSS_ULT_BIO:
 		return DSS_MAIN_XS_ID(tgt_id);
 	default:
 		D_ASSERTF(0, "bad ult_type %d.\n", ult_type);
@@ -141,6 +142,7 @@ dss_ult_pool(int ult_type)
 	case DSS_ULT_DRPC:
 	case DSS_ULT_RDB:
 	case DSS_ULT_MISC:
+	case DSS_ULT_BIO:
 		return DSS_POOL_SHARE;
 	case DSS_ULT_REBUILD:
 	case DSS_ULT_AGGREGATE:

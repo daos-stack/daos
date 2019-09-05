@@ -105,8 +105,8 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 
 	/* Create a ULT on the tgt_id */
 	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
-	rc = dss_ult_create(bio_health_query, mbh, DSS_ULT_AGGREGATE,
-			    tgt_id, 0, &thread);
+	rc = dss_ult_create(bio_health_query, mbh, DSS_ULT_BIO, tgt_id, 0,
+			    &thread);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
 		return rc;
