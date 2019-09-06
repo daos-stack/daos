@@ -49,12 +49,12 @@ AVOCADO_FILE = "src/tests/ftest/data/daos_avocado_test.yaml"
 class ServerFailed(Exception):
     """Server didn't start/stop properly."""
 
-def create_server_yaml(basepath):
+def create_server_yaml(basepath, log_filename):
     """Create the DAOS server config YAML file based on Avocado test Yaml file.
 
     Args:
         basepath (str): DAOS install basepath
-
+        log_filename (str): log file name
     Raises:
         ServerFailed: if there is an reading/writing yaml files
 
@@ -98,6 +98,10 @@ def create_server_yaml(basepath):
             if 'server' not in key:
                 default_value_set[key] = new_value_set['server_config'][key]
 
+    # if sepcific log file name specified use that
+    if log_filename:
+        default_value_set['servers'][0]['log_file'] = log_filename
+
     # Write default_value_set dictionary in to AVOCADO_FILE
     # This will be used to start with daos_server -o option.
     try:
@@ -112,7 +116,7 @@ def create_server_yaml(basepath):
 
 
 def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
-               clean=True):
+               log_filename=None):
     """Launch DAOS servers in accordance with the supplied hostfile.
 
     Args:
@@ -122,8 +126,7 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
         uri_path (str, optional): path to uri file. Defaults to None.
         env_dict (dict, optional): dictionary on env variable names and values.
             Defaults to None.
-        clean (bool, optional): remove files in /mnt/daos. Defaults to True.
-
+        log_filename (str): log file name
     Raises:
         ServerFailed: if there is an error starting the servers
 
@@ -137,7 +140,7 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
         # Create the DAOS server configuration yaml file to pass
         # with daos_server -o <FILE_NAME>
         print("Creating the server yaml file")
-        create_server_yaml(basepath)
+        create_server_yaml(basepath, log_filename)
 
         # first make sure there are no existing servers running
         print("Removing any existing server processes")
