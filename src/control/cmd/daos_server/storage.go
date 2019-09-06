@@ -34,9 +34,8 @@ import (
 )
 
 type storageCmd struct {
-	Scan     storageScanCmd     `command:"scan" description:"Scan SCM and NVMe storage attached to local server"`
-	PrepNvme storagePrepNvmeCmd `command:"prep-nvme" description:"Prep NVMe devices for use with SPDK as current user"`
-	PrepScm  storagePrepScmCmd  `command:"prep-scm" description:"Prep SCM modules into interleaved AppDirect and create the relevant namespace kernel devices"`
+	Scan    storageScanCmd    `command:"scan" description:"Scan SCM and NVMe storage attached to local server"`
+	Prepare storagePrepareCmd `command:"prepare" alias:"p" description:"Prepare SCM and NVMe storage attached to remote servers."`
 }
 
 type storageScanCmd struct {
@@ -50,19 +49,38 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 	}
 
 	cmd.log.Info("Scanning locally-attached storage...")
-	scanErrors := make([]error, 0, 2)
-	controllers, err := svc.ScanNvme()
-	if err != nil {
-		scanErrors = append(scanErrors, err)
-	} else {
-		cmd.log.Infof("NVMe SSD controller and constituent namespaces:\n%s", controllers)
-	}
 
-	modules, err := svc.ScanScm()
-	if err != nil {
+	scanErrors := make([]error, 0, 2)
+	e := make(chan error)
+	c := make(chan types.NvmeControllers)
+	m := make(chan types.ScmModules)
+
+	go func() {
+		controllers, err := svc.ScanNvme()
+		if err == nil {
+			c <- controllers
+		}
+		e <- err // last err value always processed after entries returned
+	}()
+
+	go func() {
+		modules, err := svc.ScanScm()
+		if err == nil {
+			m <- modules
+		}
+		e <- err
+	}()
+
+	select {
+	case err := <-e:
 		scanErrors = append(scanErrors, err)
-	} else {
+		if len(scanErrors) == 2 {
+			break
+		}
+	case modules := <-m:
 		cmd.log.Infof("SCM modules:\n%s", modules)
+	case controllers := <-c:
+		cmd.log.Infof("NVMe SSD controller and constituent namespaces:\n%s", controllers)
 	}
 
 	if len(scanErrors) > 0 {
@@ -76,32 +94,12 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 	return nil
 }
 
-type storagePrepNvmeCmd struct {
+type storagePrepareCmd struct {
 	logCmd
-	types.StoragePrepareNvmeCmd
+	types.StoragePrepareCmd
 }
 
-func (cmd *storagePrepNvmeCmd) Execute(args []string) error {
-	svc, err := server.NewStorageControlService(cmd.log, server.NewConfiguration())
-	if err != nil {
-		return errors.WithMessage(err, "initialising ControlService")
-	}
-
-	return svc.PrepareNvme(server.PrepareNvmeRequest{
-		HugePageCount: cmd.NrHugepages,
-		TargetUser:    cmd.TargetUser,
-		PCIWhitelist:  cmd.PCIWhiteList,
-		ResetOnly:     cmd.ResetNvme,
-	})
-}
-
-type storagePrepScmCmd struct {
-	logCmd
-	types.StoragePrepareScmCmd
-	Force bool `short:"f" long:"force" description:"Perform format without prompting for confirmation"`
-}
-
-func (cmd *storagePrepScmCmd) Execute(args []string) (err error) {
+func (cmd *storagePrepareCmd) Execute(args []string) error {
 	ok, _ := common.CheckSudo()
 	if !ok {
 		return errors.New("subcommand must be run as root or sudo")
@@ -120,22 +118,56 @@ func (cmd *storagePrepScmCmd) Execute(args []string) (err error) {
 		return errors.WithMessage(err, "initialising ControlService")
 	}
 
-	needsReboot, devices, err := svc.PrepareScm(server.PrepareScmRequest{
-		Reset: cmd.ResetScm,
-	})
-	if err != nil {
-		return err
+	cmd.log.Info("Preparing locally-attached storage...")
+
+	scanErrors := make([]error, 0, 2)
+	e := make(chan error)
+
+	go func() {
+		e <- svc.PrepareNvme(server.PrepareNvmeRequest{
+			HugePageCount: cmd.NrHugepages,
+			TargetUser:    cmd.TargetUser,
+			PCIWhitelist:  cmd.PCIWhiteList,
+			ResetOnly:     cmd.Reset,
+		})
+	}()
+
+	go func() {
+		needsReboot, devices, err := svc.PrepareScm(server.PrepareScmRequest{
+			Reset: cmd.Reset,
+		})
+		if err != nil {
+			e <- err
+		}
+
+		if needsReboot {
+			// TODO: return message on channel for deterministic logging
+			cmd.log.Info(server.MsgScmRebootRequired)
+			e <- nil
+		}
+
+		if len(devices) > 0 {
+			cmd.log.Infof("persistent memory kernel devices:\n\t%+v\n", devices)
+		}
+
+		e <- nil
+	}()
+
+	select {
+	case err := <-e:
+		scanErrors = append(scanErrors, err)
+		if len(scanErrors) == 2 {
+			break
+		}
 	}
 
-	if needsReboot {
-		cmd.log.Info(server.MsgScmRebootRequired)
-		return nil
+	if len(scanErrors) > 0 {
+		errStr := "scan error(s):\n"
+		for _, err := range scanErrors {
+			errStr += fmt.Sprintf("  %s\n", err.Error())
+		}
+		return errors.New(errStr)
 	}
 
-	if len(devices) > 0 {
-		cmd.log.Infof("persistent memory kernel devices:\n\t%+v\n", devices)
-		return nil
-	}
-
-	return errors.New("unexpected failure")
+	return nil
 }

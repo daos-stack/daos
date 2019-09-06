@@ -33,17 +33,14 @@ import (
 
 // StorCmd is the struct representing the top-level storage subcommand.
 type StorCmd struct {
-	Prepare StoragePrepareCmd `command:"prepare" alias:"p" description:"Prepare SCM and NVMe storage attached to remote servers."`
-	Scan    StorageScanCmd    `command:"scan" alias:"s" description:"Scan SCM and NVMe storage attached to remote servers."`
-	Format  StorageFormatCmd  `command:"format" alias:"f" description:"Format SCM and NVMe storage attached to remote servers."`
-	Update  StorageUpdateCmd  `command:"fwupdate" alias:"u" description:"Update firmware on NVMe storage attached to remote servers."`
+	Prepare storagePrepareCmd `command:"prepare" alias:"p" description:"Prepare SCM and NVMe storage attached to remote servers."`
+	Scan    storageScanCmd    `command:"scan" alias:"s" description:"Scan SCM and NVMe storage attached to remote servers."`
+	Format  storageFormatCmd  `command:"format" alias:"f" description:"Format SCM and NVMe storage attached to remote servers."`
+	Update  storageUpdateCmd  `command:"fwupdate" alias:"u" description:"Update firmware on NVMe storage attached to remote servers."`
 }
 
 func storagePrepare(conns client.Connect, req *pb.StoragePrepareReq, force bool) {
-	log.Info(
-		"This could be a destructive operation and storage devices " +
-			"may have data erased. Please be patient as it may take several minutes " +
-			"and a subsequent reboot maybe required.\n")
+	log.Info(types.MsgStoragePrepareWarn)
 
 	if force || common.GetConsent() {
 		log.Info("")
