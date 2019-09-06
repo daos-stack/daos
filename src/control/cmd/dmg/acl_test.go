@@ -26,75 +26,47 @@ package main
 import (
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
-// badFileOpener is a mock used to represent failure to open a file
-type badFileOpener struct {
-	errorMsg string
+// mockReader is a mock used to represent a successful read of some text
+type mockReader struct {
+	text string
+	read int
 }
 
-func (b *badFileOpener) OpenFile(filename string) (readableFile, error) {
-	return nil, errors.New(b.errorMsg)
-}
-
-// mockReadableFile is a mock used to represent a file to be read
-type mockReadableFile struct {
-	fileText string
-	read     int
-}
-
-func (f *mockReadableFile) Close() error {
-	return nil
-}
-
-func (f *mockReadableFile) Read(p []byte) (n int, err error) {
-	if f.read >= len(f.fileText) {
+func (r *mockReader) Read(p []byte) (n int, err error) {
+	if r.read >= len(r.text) {
 		return 0, io.EOF
 	}
 
-	copy(p, f.fileText[f.read:])
+	copy(p, r.text[r.read:])
 
-	remaining := len(f.fileText) - f.read
+	remaining := len(r.text) - r.read
 	var readLen int
 	if remaining > len(p) {
 		readLen = len(p)
 	} else {
 		readLen = remaining
 	}
-	f.read = f.read + readLen
+	r.read = r.read + readLen
 	return readLen, nil
 }
 
-type mockErrorFile struct {
+// mockErrorReader is a mock used to represent an error reading
+type mockErrorReader struct {
 	errorMsg string
 }
 
-func (f *mockErrorFile) Close() error {
-	return nil
-}
-
-func (f *mockErrorFile) Read(p []byte) (n int, err error) {
-	return 1, errors.New(f.errorMsg)
-}
-
-// mockFileOpener is a mock that returns a readableFile
-type mockFileOpener struct {
-	textFile readableFile
-}
-
-func (m *mockFileOpener) OpenFile(filename string) (readableFile, error) {
-	return m.textFile, nil
+func (r *mockErrorReader) Read(p []byte) (n int, err error) {
+	return 1, errors.New(r.errorMsg)
 }
 
 func TestReadACLFile_FileOpenFailed(t *testing.T) {
-	expectedError := "badFileOpener error"
-	badOpener := &badFileOpener{
-		errorMsg: expectedError,
-	}
-
-	result, err := readACLFile(badOpener, "badfile.txt")
+	result, err := readACLFile("/some/fake/path/badfile.txt")
 
 	if result != nil {
 		t.Error("Expected no result, got something back")
@@ -103,20 +75,49 @@ func TestReadACLFile_FileOpenFailed(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected an error, got nil")
 	}
+}
 
-	if !strings.Contains(err.Error(), expectedError) {
-		t.Errorf("Wrong error message '%s' (expected to contain '%s')",
-			err.Error(), expectedError)
+func createTestFile(t *testing.T, filePath string, content string) {
+	file, err := os.Create(filePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+
+	_, err = file.WriteString(content)
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 
-func TestReadACLFile_EmptyFile(t *testing.T) {
-	mockFile := &mockReadableFile{}
-	mockOpener := &mockFileOpener{
-		textFile: mockFile,
+func TestReadACLFile_Success(t *testing.T) {
+	path := filepath.Join(os.TempDir(), "testACLFile.txt")
+	createTestFile(t, path, "A::OWNER@:rw\nA::user1@:rw\nA:g:group1@:r\n")
+	defer os.Remove(path)
+
+	expectedNumACEs := 3
+
+	result, err := readACLFile(path)
+
+	if err != nil {
+		t.Errorf("Expected no error, got '%s'", err.Error())
 	}
 
-	result, err := readACLFile(mockOpener, "file.txt")
+	if result == nil {
+		t.Fatal("Expected result, got nil")
+	}
+
+	// Just sanity check - parsing is already tested more in-depth below
+	if len(result) != expectedNumACEs {
+		t.Errorf("Expected %d items, got %d",
+			expectedNumACEs, len(result))
+	}
+}
+
+func TestParseACL_EmptyFile(t *testing.T) {
+	mockFile := &mockReader{}
+
+	result, err := parseACL(mockFile)
 
 	if err != nil {
 		t.Errorf("Expected no error, got '%s'", err.Error())
@@ -131,16 +132,13 @@ func TestReadACLFile_EmptyFile(t *testing.T) {
 	}
 }
 
-func TestReadACLFile_OneValidACE(t *testing.T) {
+func TestParseACL_OneValidACE(t *testing.T) {
 	expectedACE := "A::OWNER@:rw"
-	mockFile := &mockReadableFile{
-		fileText: expectedACE + "\n",
-	}
-	mockOpener := &mockFileOpener{
-		textFile: mockFile,
+	mockFile := &mockReader{
+		text: expectedACE + "\n",
 	}
 
-	result, err := readACLFile(mockOpener, "file.txt")
+	result, err := parseACL(mockFile)
 
 	if err != nil {
 		t.Errorf("Expected no error, got '%s'", err.Error())
@@ -159,16 +157,13 @@ func TestReadACLFile_OneValidACE(t *testing.T) {
 	}
 }
 
-func TestReadACLFile_WhitespaceExcluded(t *testing.T) {
+func TestParseACL_WhitespaceExcluded(t *testing.T) {
 	expectedACE := "A::OWNER@:rw"
-	mockFile := &mockReadableFile{
-		fileText: expectedACE + " \n\n",
-	}
-	mockOpener := &mockFileOpener{
-		textFile: mockFile,
+	mockFile := &mockReader{
+		text: expectedACE + " \n\n",
 	}
 
-	result, err := readACLFile(mockOpener, "file.txt")
+	result, err := parseACL(mockFile)
 
 	if err != nil {
 		t.Errorf("Expected no error, got '%s'", err.Error())
@@ -187,7 +182,7 @@ func TestReadACLFile_WhitespaceExcluded(t *testing.T) {
 	}
 }
 
-func TestReadACLFile_MultiValidACE(t *testing.T) {
+func TestParseACL_MultiValidACE(t *testing.T) {
 	expectedACEs := []string{
 		"A:g:GROUP@:r",
 		"A::OWNER@:rw",
@@ -196,14 +191,11 @@ func TestReadACLFile_MultiValidACE(t *testing.T) {
 		"U:f:EVERYONE@:rw",
 	}
 
-	mockFile := &mockReadableFile{
-		fileText: strings.Join(expectedACEs, "\n"),
-	}
-	mockOpener := &mockFileOpener{
-		textFile: mockFile,
+	mockFile := &mockReader{
+		text: strings.Join(expectedACEs, "\n"),
 	}
 
-	result, err := readACLFile(mockOpener, "file.txt")
+	result, err := parseACL(mockFile)
 
 	if err != nil {
 		t.Errorf("Expected no error, got '%s'", err.Error())
@@ -226,16 +218,13 @@ func TestReadACLFile_MultiValidACE(t *testing.T) {
 	}
 }
 
-func TestReadACLFile_ErrorReadingFile(t *testing.T) {
-	expectedError := "mockErrorFile error"
-	mockFile := &mockErrorFile{
+func TestParseACL_ErrorReadingFile(t *testing.T) {
+	expectedError := "mockErrorReader error"
+	mockFile := &mockErrorReader{
 		errorMsg: expectedError,
 	}
-	mockOpener := &mockFileOpener{
-		textFile: mockFile,
-	}
 
-	result, err := readACLFile(mockOpener, "file.txt")
+	result, err := parseACL(mockFile)
 
 	if result != nil {
 		t.Error("Expected nil result, but got a result")

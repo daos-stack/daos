@@ -25,57 +25,41 @@ package main
 
 import (
 	"bufio"
+	"io"
 	"os"
 	"strings"
 
 	"github.com/pkg/errors"
 )
 
-// readableFile is an interface for a file that can be read from the filesystem
-type readableFile interface {
-	Close() error
-	Read(p []byte) (n int, err error)
-}
-
-// fileOpener is an interface for opening a file.
-type fileOpener interface {
-	OpenFile(filename string) (readableFile, error)
-}
-
-// fileOpenerImpl is a concrete implementation of the fileOpener interface
-type fileOpenerImpl struct{}
-
-// OpenFile calls into the OS to open a file
-func (e *fileOpenerImpl) OpenFile(filename string) (readableFile, error) {
-	return os.Open(filename)
-}
-
-// newFileOpener creates a new instance of a fileOpener
-func newFileOpener() fileOpener {
-	return &fileOpenerImpl{}
-}
-
-// readACLFile opens and reads in the ACL file line by line, assuming ACEs are
-// provided line by line.
-func readACLFile(opener fileOpener, aclFile string) ([]string, error) {
-	file, err := opener.OpenFile(aclFile)
+// readACLFile reads in a file representing an ACL, and translates it into a
+// list of ACE strings.
+func readACLFile(aclFile string) ([]string, error) {
+	file, err := os.Open(aclFile)
 	if err != nil {
 		return nil, errors.WithMessage(err, "opening ACL file")
 	}
 	defer file.Close()
 
-	aclList := make([]string, 0)
-	scanner := bufio.NewScanner(file)
+	return parseACL(file)
+}
+
+// parseACL reads the content from io.Reader and puts the results into a list
+// of Access Control Entry strings.
+// Assumes that ACE strings are provided one per line.
+func parseACL(reader io.Reader) ([]string, error) {
+	aceList := make([]string, 0)
+	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
-		if err = scanner.Err(); err != nil {
+		if err := scanner.Err(); err != nil {
 			return nil, errors.WithMessage(err, "reading ACL file")
 		}
 
 		line := strings.TrimSpace(scanner.Text())
 		if line != "" {
-			aclList = append(aclList, line)
+			aceList = append(aceList, line)
 		}
 	}
 
-	return aclList, nil
+	return aceList, nil
 }
