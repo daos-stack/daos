@@ -172,7 +172,7 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 	}
 	/* Free all devices is there was an error allocating any */
 	if (rc != 0) {
-		for( ; i >= 0; i--) {
+		for( ; i >= 0; i-- ) {
 			if (resp->devices[i] != NULL) {
 				if (resp->devices[i]->uuid != NULL)
 					D_FREE(resp->devices[i]->uuid);

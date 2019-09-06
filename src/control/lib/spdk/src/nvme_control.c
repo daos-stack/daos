@@ -31,9 +31,10 @@
 struct ctrlr_entry {
 	struct spdk_nvme_ctrlr	*ctrlr;
 	struct spdk_pci_addr	 pci_addr;
-	int 			 socket_id;
-	struct dev_health_entry *dev_health;
+	struct dev_health_entry	*dev_health;
 	struct ctrlr_entry	*next;
+	int			 socket_id;
+
 };
 
 struct ns_entry {
@@ -161,36 +162,38 @@ check_size(int written, int max, char *msg, struct ret_t *ret)
 }
 
 static int
-collect_health_stats(struct dev_health_entry *dev_health_entry,
-		     struct ctrlr_t *ctrlr)
+collect_health_stats(struct dev_health_entry *entry, struct ctrlr_t *ctrlr)
 {
-	struct dev_health_t *health_tmp;
+	struct dev_health_t *h_tmp;
 	union spdk_nvme_critical_warning_state cwarn;
 
-	health_tmp = malloc(sizeof(struct dev_health_t));
-	if (health_tmp == NULL) {
+	h_tmp = malloc(sizeof(struct dev_health_t));
+	if (h_tmp == NULL) {
 		perror("dev_health_t malloc");
 		return -ENOMEM;
 	}
 
-	health_tmp->temperature = dev_health_entry->health_page.temperature;
-	health_tmp->warn_temp_time = dev_health_entry->health_page.warning_temp_time;
-	health_tmp->crit_temp_time = dev_health_entry->health_page.critical_temp_time;
-	health_tmp->ctrl_busy_time = dev_health_entry->health_page.controller_busy_time[0];
-	health_tmp->power_cycles = dev_health_entry->health_page.power_cycles[0];
-	health_tmp->power_on_hours = dev_health_entry->health_page.power_on_hours[0];
-	health_tmp->unsafe_shutdowns = dev_health_entry->health_page.unsafe_shutdowns[0];
-	health_tmp->media_errors = dev_health_entry->health_page.media_errors[0];
-	health_tmp->error_log_entries = dev_health_entry->health_page.num_error_info_log_entries[0];
+	h_tmp->temperature = entry->health_page.temperature;
+	h_tmp->warn_temp_time = entry->health_page.warning_temp_time;
+	h_tmp->crit_temp_time = entry->health_page.critical_temp_time;
+	h_tmp->ctrl_busy_time = entry->health_page.controller_busy_time[0];
+	h_tmp->power_cycles = entry->health_page.power_cycles[0];
+	h_tmp->power_on_hours = entry->health_page.power_on_hours[0];
+	h_tmp->unsafe_shutdowns = entry->health_page.unsafe_shutdowns[0];
+	h_tmp->media_errors = entry->health_page.media_errors[0];
+	h_tmp->error_log_entries = \
+			entry->health_page.num_error_info_log_entries[0];
 	/* Critical warnings */
-	cwarn = dev_health_entry->health_page.critical_warning;
-	health_tmp->temp_warning = cwarn.bits.temperature ? true : false;
-	health_tmp->avail_spare_warning = cwarn.bits.available_spare ? true : false;
-	health_tmp->dev_reliabilty_warning = cwarn.bits.device_reliability ? true : false;
-	health_tmp->read_only_warning = cwarn.bits.read_only ? true : false;
-	health_tmp->volatile_mem_warning = cwarn.bits.volatile_memory_backup ? true : false;
+	cwarn = entry->health_page.critical_warning;
+	h_tmp->temp_warning = cwarn.bits.temperature ? true : false;
+	h_tmp->avail_spare_warning = cwarn.bits.available_spare ? true : false;
+	h_tmp->dev_reliabilty_warning = cwarn.bits.device_reliability ?
+					true : false;
+	h_tmp->read_only_warning = cwarn.bits.read_only ? true : false;
+	h_tmp->volatile_mem_warning = cwarn.bits.volatile_memory_backup ?
+					true : false;
 
-	ctrlr->dev_health = health_tmp;
+	ctrlr->dev_health = h_tmp;
 
 	return 0;
 }
@@ -308,7 +311,8 @@ collect(struct ret_t *ret)
 		 * health stats are queried, not by default for discovery.
 		 */
 		if (ctrlr_entry->dev_health != NULL)
-			ret->rc = collect_health_stats(ctrlr_entry->dev_health, ctrlr_tmp);
+			ret->rc = collect_health_stats(ctrlr_entry->dev_health,
+						       ctrlr_tmp);
 
 		// cdata->cntlid is not unique per host, only per subsystem
 		ctrlr_tmp->next = ret->ctrlrs;
@@ -359,7 +363,8 @@ get_spdk_log_page_completion(void *cb_arg, const struct spdk_nvme_cpl *cpl)
 }
 
 static bool
-get_dev_health_logs(struct spdk_nvme_ctrlr *ctrlr, struct dev_health_entry *entry)
+get_dev_health_logs(struct spdk_nvme_ctrlr *ctrlr,
+		    struct dev_health_entry *entry)
 {
 	struct spdk_nvme_health_information_page health_page;
 
@@ -369,7 +374,8 @@ get_dev_health_logs(struct spdk_nvme_ctrlr *ctrlr, struct dev_health_entry *entr
 					     SPDK_NVME_GLOBAL_NS_TAG,
 					     &health_page,
 					     sizeof(health_page),
-					     0, get_spdk_log_page_completion, entry)) {
+					     0, get_spdk_log_page_completion,
+					     entry)) {
 		return false;
 	}
 
@@ -385,7 +391,7 @@ nvme_dev_health(void)
 {
 	struct ret_t		*ret;
 	struct ctrlr_entry	*ctrlr_entry;
-	struct dev_health_entry	*dev_health_entry;
+	struct dev_health_entry	*health_entry;
 
 	ret = init_ret();
 
@@ -396,19 +402,20 @@ nvme_dev_health(void)
 	}
 
 	while (ctrlr_entry) {
-		dev_health_entry = malloc(sizeof(struct dev_health_entry));
-		if (dev_health_entry == NULL) {
-			sprintf(ret->err, "dev_health_entry malloc failed");
+		health_entry = malloc(sizeof(struct dev_health_entry));
+		if (health_entry == NULL) {
+			sprintf(ret->err, "health_entry malloc failed");
 			return ret;
 		}
 
-		if (!get_dev_health_logs(ctrlr_entry->ctrlr, dev_health_entry)) {
-			sprintf(ret->err, "Unable to get SPDK ctrlr health logs\n");
-			free(dev_health_entry);
+		if (!get_dev_health_logs(ctrlr_entry->ctrlr, health_entry)) {
+			sprintf(ret->err,
+				"Unable to get SPDK ctrlr health logs\n");
+			free(health_entry);
 			return ret;
 		}
 
-		ctrlr_entry->dev_health = dev_health_entry;
+		ctrlr_entry->dev_health = health_entry;
 		ctrlr_entry = ctrlr_entry->next;
 	}
 
