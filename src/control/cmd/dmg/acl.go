@@ -31,34 +31,10 @@ import (
 	"github.com/pkg/errors"
 )
 
-// readableFile is an interface for a file that can be read from the filesystem
-type readableFile interface {
-	Close() error
-	Read(p []byte) (n int, err error)
-}
-
-// fileOpener is an interface for opening a file.
-type fileOpener interface {
-	OpenFile(filename string) (readableFile, error)
-}
-
-// fileOpenerImpl is a concrete implementation of the fileOpener interface
-type fileOpenerImpl struct{}
-
-// OpenFile calls into the OS to open a file
-func (e *fileOpenerImpl) OpenFile(filename string) (readableFile, error) {
-	return os.Open(filename)
-}
-
-// newFileOpener creates a new instance of a fileOpener
-func newFileOpener() fileOpener {
-	return &fileOpenerImpl{}
-}
-
 // readACLFile opens and reads in the ACL file line by line, assuming ACEs are
 // provided line by line.
-func readACLFile(opener fileOpener, aclFile string) ([]string, error) {
-	file, err := opener.OpenFile(aclFile)
+func readACLFile(aclFile string) ([]string, error) {
+	file, err := os.Open(aclFile)
 	if err != nil {
 		return nil, errors.WithMessage(err, "opening ACL file")
 	}

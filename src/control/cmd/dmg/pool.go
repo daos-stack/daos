@@ -183,7 +183,7 @@ func createPool(conns client.Connect, scmSize string, nvmeSize string,
 
 	var acl []string
 	if aclFile != "" {
-		acl, err = readACLFile(newFileOpener(), aclFile)
+		acl, err = readACLFile(aclFile)
 		if err != nil {
 			return err
 		}

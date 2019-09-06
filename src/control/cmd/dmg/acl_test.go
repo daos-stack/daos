@@ -24,77 +24,40 @@
 package main
 
 import (
-	"errors"
-	"io"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/pkg/errors"
 )
 
-// badFileOpener is a mock used to represent failure to open a file
-type badFileOpener struct {
-	errorMsg string
-}
-
-func (b *badFileOpener) OpenFile(filename string) (readableFile, error) {
-	return nil, errors.New(b.errorMsg)
-}
-
-// mockReadableFile is a mock used to represent a file to be read
-type mockReadableFile struct {
-	fileText string
-	read     int
-}
-
-func (f *mockReadableFile) Close() error {
-	return nil
-}
-
-func (f *mockReadableFile) Read(p []byte) (n int, err error) {
-	if f.read >= len(f.fileText) {
-		return 0, io.EOF
+func createTestDir(t *testing.T) (string, func()) {
+	t.Helper()
+	testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	copy(p, f.fileText[f.read:])
-
-	remaining := len(f.fileText) - f.read
-	var readLen int
-	if remaining > len(p) {
-		readLen = len(p)
-	} else {
-		readLen = remaining
+	return testDir, func() {
+		os.RemoveAll(testDir)
 	}
-	f.read = f.read + readLen
-	return readLen, nil
 }
 
-type mockErrorFile struct {
-	errorMsg string
-}
-
-func (f *mockErrorFile) Close() error {
-	return nil
-}
-
-func (f *mockErrorFile) Read(p []byte) (n int, err error) {
-	return 1, errors.New(f.errorMsg)
-}
-
-// mockFileOpener is a mock that returns a readableFile
-type mockFileOpener struct {
-	textFile readableFile
-}
-
-func (m *mockFileOpener) OpenFile(filename string) (readableFile, error) {
-	return m.textFile, nil
+func createTestFile(t *testing.T, filePath string, content string) {
+	file, err := os.Create(filePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = file.WriteString(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	file.Close()
 }
 
 func TestReadACLFile_FileOpenFailed(t *testing.T) {
-	expectedError := "badFileOpener error"
-	badOpener := &badFileOpener{
-		errorMsg: expectedError,
-	}
-
-	result, err := readACLFile(badOpener, "badfile.txt")
+	result, err := readACLFile("badfile.txt")
 
 	if result != nil {
 		t.Error("Expected no result, got something back")
@@ -104,19 +67,21 @@ func TestReadACLFile_FileOpenFailed(t *testing.T) {
 		t.Fatal("Expected an error, got nil")
 	}
 
-	if !strings.Contains(err.Error(), expectedError) {
-		t.Errorf("Wrong error message '%s' (expected to contain '%s')",
-			err.Error(), expectedError)
+	// NB: Not really convinced that testing for a specific error
+	// is that useful, but this is fine.
+	if !os.IsNotExist(errors.Cause(err)) {
+		t.Errorf("Wrong error '%s' (expected to be os.IsNotExist)", err)
 	}
 }
 
 func TestReadACLFile_EmptyFile(t *testing.T) {
-	mockFile := &mockReadableFile{}
-	mockOpener := &mockFileOpener{
-		textFile: mockFile,
-	}
+	testDir, cleanup := createTestDir(t)
+	defer cleanup()
 
-	result, err := readACLFile(mockOpener, "file.txt")
+	testPath := filepath.Join(testDir, "empty-file.txt")
+	createTestFile(t, testPath, "")
+
+	result, err := readACLFile(testPath)
 
 	if err != nil {
 		t.Errorf("Expected no error, got '%s'", err.Error())
@@ -133,14 +98,13 @@ func TestReadACLFile_EmptyFile(t *testing.T) {
 
 func TestReadACLFile_OneValidACE(t *testing.T) {
 	expectedACE := "A::OWNER@:rw"
-	mockFile := &mockReadableFile{
-		fileText: expectedACE + "\n",
-	}
-	mockOpener := &mockFileOpener{
-		textFile: mockFile,
-	}
+	testDir, cleanup := createTestDir(t)
+	defer cleanup()
 
-	result, err := readACLFile(mockOpener, "file.txt")
+	testPath := filepath.Join(testDir, "file.txt")
+	createTestFile(t, testPath, expectedACE+"\n")
+
+	result, err := readACLFile(testPath)
 
 	if err != nil {
 		t.Errorf("Expected no error, got '%s'", err.Error())
@@ -161,14 +125,14 @@ func TestReadACLFile_OneValidACE(t *testing.T) {
 
 func TestReadACLFile_WhitespaceExcluded(t *testing.T) {
 	expectedACE := "A::OWNER@:rw"
-	mockFile := &mockReadableFile{
-		fileText: expectedACE + " \n\n",
-	}
-	mockOpener := &mockFileOpener{
-		textFile: mockFile,
-	}
 
-	result, err := readACLFile(mockOpener, "file.txt")
+	testDir, cleanup := createTestDir(t)
+	defer cleanup()
+
+	testPath := filepath.Join(testDir, "file.txt")
+	createTestFile(t, testPath, expectedACE+" \n\n")
+
+	result, err := readACLFile(testPath)
 
 	if err != nil {
 		t.Errorf("Expected no error, got '%s'", err.Error())
@@ -196,14 +160,13 @@ func TestReadACLFile_MultiValidACE(t *testing.T) {
 		"U:f:EVERYONE@:rw",
 	}
 
-	mockFile := &mockReadableFile{
-		fileText: strings.Join(expectedACEs, "\n"),
-	}
-	mockOpener := &mockFileOpener{
-		textFile: mockFile,
-	}
+	testDir, cleanup := createTestDir(t)
+	defer cleanup()
 
-	result, err := readACLFile(mockOpener, "file.txt")
+	testPath := filepath.Join(testDir, "file.txt")
+	createTestFile(t, testPath, strings.Join(expectedACEs, "\n"))
+
+	result, err := readACLFile(testPath)
 
 	if err != nil {
 		t.Errorf("Expected no error, got '%s'", err.Error())
@@ -227,15 +190,16 @@ func TestReadACLFile_MultiValidACE(t *testing.T) {
 }
 
 func TestReadACLFile_ErrorReadingFile(t *testing.T) {
-	expectedError := "mockErrorFile error"
-	mockFile := &mockErrorFile{
-		errorMsg: expectedError,
-	}
-	mockOpener := &mockFileOpener{
-		textFile: mockFile,
+	testDir, cleanup := createTestDir(t)
+	defer cleanup()
+
+	testPath := filepath.Join(testDir, "file.txt")
+	createTestFile(t, testPath, "")
+	if err := os.Chmod(testPath, 0000); err != nil {
+		t.Fatal(err)
 	}
 
-	result, err := readACLFile(mockOpener, "file.txt")
+	result, err := readACLFile(testPath)
 
 	if result != nil {
 		t.Error("Expected nil result, but got a result")
@@ -243,10 +207,5 @@ func TestReadACLFile_ErrorReadingFile(t *testing.T) {
 
 	if err == nil {
 		t.Fatal("Expected an error, got nil")
-	}
-
-	if !strings.Contains(err.Error(), expectedError) {
-		t.Errorf("Wrong error message '%s' (expected to contain '%s')",
-			err.Error(), expectedError)
 	}
 }
