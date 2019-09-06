@@ -26,6 +26,7 @@ package mgmt;
 
 // Import Pool request and response
 import "pool.proto";
+import "srv.proto";
 
 // For storage query commands for BIO data and SMD device list
 import "storage_query.proto";
@@ -44,6 +45,8 @@ service MgmtSvc {
 	rpc BioHealthQuery(BioHealthReq) returns (BioHealthResp) {}
 	// Get SMD device list
 	rpc SmdListDevs(SmdDevReq) returns (SmdDevResp) {}
+	// Kill a given rank associated with a given pool
+	rpc KillRank(DaosRank) returns (DaosResp) {};
 }
 
 message JoinReq {

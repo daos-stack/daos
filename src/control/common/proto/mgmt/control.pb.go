@@ -35,21 +35,22 @@ const _ = grpc.SupportPackageIsVersion4
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type MgmtCtlClient interface {
-	// Retrieve details of nonvolatile storage devices on server
-	ScanStorage(ctx context.Context, in *ScanStorageReq, opts ...grpc.CallOption) (*ScanStorageResp, error)
-	DeviceHealthQuery(ctx context.Context, in *QueryHealthReq, opts ...grpc.CallOption) (*QueryHealthResp, error)
+	// Prepare nonvolatile storage devices for use with DAOS
+	StoragePrepare(ctx context.Context, in *StoragePrepareReq, opts ...grpc.CallOption) (*StoragePrepareResp, error)
+	// Retrieve details of nonvolatile storage on server
+	StorageScan(ctx context.Context, in *StorageScanReq, opts ...grpc.CallOption) (*StorageScanResp, error)
 	// Format nonvolatile storage devices for use with DAOS
-	FormatStorage(ctx context.Context, in *FormatStorageReq, opts ...grpc.CallOption) (MgmtCtl_FormatStorageClient, error)
+	StorageFormat(ctx context.Context, in *StorageFormatReq, opts ...grpc.CallOption) (MgmtCtl_StorageFormatClient, error)
 	// Update nonvolatile storage device firmware
-	UpdateStorage(ctx context.Context, in *UpdateStorageReq, opts ...grpc.CallOption) (MgmtCtl_UpdateStorageClient, error)
+	StorageUpdate(ctx context.Context, in *StorageUpdateReq, opts ...grpc.CallOption) (MgmtCtl_StorageUpdateClient, error)
 	// Perform burn-in testing to verify nonvolatile storage devices
-	BurninStorage(ctx context.Context, in *BurninStorageReq, opts ...grpc.CallOption) (MgmtCtl_BurninStorageClient, error)
+	StorageBurnIn(ctx context.Context, in *StorageBurnInReq, opts ...grpc.CallOption) (MgmtCtl_StorageBurnInClient, error)
 	// Fetch FIO configuration file specifying burn-in jobs/workloads
 	FetchFioConfigPaths(ctx context.Context, in *EmptyReq, opts ...grpc.CallOption) (MgmtCtl_FetchFioConfigPathsClient, error)
-	// Kill a given rank associated with a given pool
-	KillRank(ctx context.Context, in *DaosRank, opts ...grpc.CallOption) (*DaosResp, error)
 	// List features supported on remote storage server/DAOS system
 	ListFeatures(ctx context.Context, in *EmptyReq, opts ...grpc.CallOption) (MgmtCtl_ListFeaturesClient, error)
+	// Query raw SPDK NVMe SSD device health stats
+	DeviceHealthQuery(ctx context.Context, in *QueryHealthReq, opts ...grpc.CallOption) (*QueryHealthResp, error)
 }
 
 type mgmtCtlClient struct {
@@ -60,30 +61,30 @@ func NewMgmtCtlClient(cc *grpc.ClientConn) MgmtCtlClient {
 	return &mgmtCtlClient{cc}
 }
 
-func (c *mgmtCtlClient) ScanStorage(ctx context.Context, in *ScanStorageReq, opts ...grpc.CallOption) (*ScanStorageResp, error) {
-	out := new(ScanStorageResp)
-	err := c.cc.Invoke(ctx, "/mgmt.MgmtCtl/ScanStorage", in, out, opts...)
+func (c *mgmtCtlClient) StoragePrepare(ctx context.Context, in *StoragePrepareReq, opts ...grpc.CallOption) (*StoragePrepareResp, error) {
+	out := new(StoragePrepareResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtCtl/StoragePrepare", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *mgmtCtlClient) DeviceHealthQuery(ctx context.Context, in *QueryHealthReq, opts ...grpc.CallOption) (*QueryHealthResp, error) {
-	out := new(QueryHealthResp)
-	err := c.cc.Invoke(ctx, "/mgmt.MgmtCtl/DeviceHealthQuery", in, out, opts...)
+func (c *mgmtCtlClient) StorageScan(ctx context.Context, in *StorageScanReq, opts ...grpc.CallOption) (*StorageScanResp, error) {
+	out := new(StorageScanResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtCtl/StorageScan", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *mgmtCtlClient) FormatStorage(ctx context.Context, in *FormatStorageReq, opts ...grpc.CallOption) (MgmtCtl_FormatStorageClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_MgmtCtl_serviceDesc.Streams[0], "/mgmt.MgmtCtl/FormatStorage", opts...)
+func (c *mgmtCtlClient) StorageFormat(ctx context.Context, in *StorageFormatReq, opts ...grpc.CallOption) (MgmtCtl_StorageFormatClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_MgmtCtl_serviceDesc.Streams[0], "/mgmt.MgmtCtl/StorageFormat", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &mgmtCtlFormatStorageClient{stream}
+	x := &mgmtCtlStorageFormatClient{stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -93,29 +94,29 @@ func (c *mgmtCtlClient) FormatStorage(ctx context.Context, in *FormatStorageReq,
 	return x, nil
 }
 
-type MgmtCtl_FormatStorageClient interface {
-	Recv() (*FormatStorageResp, error)
+type MgmtCtl_StorageFormatClient interface {
+	Recv() (*StorageFormatResp, error)
 	grpc.ClientStream
 }
 
-type mgmtCtlFormatStorageClient struct {
+type mgmtCtlStorageFormatClient struct {
 	grpc.ClientStream
 }
 
-func (x *mgmtCtlFormatStorageClient) Recv() (*FormatStorageResp, error) {
-	m := new(FormatStorageResp)
+func (x *mgmtCtlStorageFormatClient) Recv() (*StorageFormatResp, error) {
+	m := new(StorageFormatResp)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil
 }
 
-func (c *mgmtCtlClient) UpdateStorage(ctx context.Context, in *UpdateStorageReq, opts ...grpc.CallOption) (MgmtCtl_UpdateStorageClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_MgmtCtl_serviceDesc.Streams[1], "/mgmt.MgmtCtl/UpdateStorage", opts...)
+func (c *mgmtCtlClient) StorageUpdate(ctx context.Context, in *StorageUpdateReq, opts ...grpc.CallOption) (MgmtCtl_StorageUpdateClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_MgmtCtl_serviceDesc.Streams[1], "/mgmt.MgmtCtl/StorageUpdate", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &mgmtCtlUpdateStorageClient{stream}
+	x := &mgmtCtlStorageUpdateClient{stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -125,29 +126,29 @@ func (c *mgmtCtlClient) UpdateStorage(ctx context.Context, in *UpdateStorageReq,
 	return x, nil
 }
 
-type MgmtCtl_UpdateStorageClient interface {
-	Recv() (*UpdateStorageResp, error)
+type MgmtCtl_StorageUpdateClient interface {
+	Recv() (*StorageUpdateResp, error)
 	grpc.ClientStream
 }
 
-type mgmtCtlUpdateStorageClient struct {
+type mgmtCtlStorageUpdateClient struct {
 	grpc.ClientStream
 }
 
-func (x *mgmtCtlUpdateStorageClient) Recv() (*UpdateStorageResp, error) {
-	m := new(UpdateStorageResp)
+func (x *mgmtCtlStorageUpdateClient) Recv() (*StorageUpdateResp, error) {
+	m := new(StorageUpdateResp)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil
 }
 
-func (c *mgmtCtlClient) BurninStorage(ctx context.Context, in *BurninStorageReq, opts ...grpc.CallOption) (MgmtCtl_BurninStorageClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_MgmtCtl_serviceDesc.Streams[2], "/mgmt.MgmtCtl/BurninStorage", opts...)
+func (c *mgmtCtlClient) StorageBurnIn(ctx context.Context, in *StorageBurnInReq, opts ...grpc.CallOption) (MgmtCtl_StorageBurnInClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_MgmtCtl_serviceDesc.Streams[2], "/mgmt.MgmtCtl/StorageBurnIn", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &mgmtCtlBurninStorageClient{stream}
+	x := &mgmtCtlStorageBurnInClient{stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -157,17 +158,17 @@ func (c *mgmtCtlClient) BurninStorage(ctx context.Context, in *BurninStorageReq,
 	return x, nil
 }
 
-type MgmtCtl_BurninStorageClient interface {
-	Recv() (*BurninStorageResp, error)
+type MgmtCtl_StorageBurnInClient interface {
+	Recv() (*StorageBurnInResp, error)
 	grpc.ClientStream
 }
 
-type mgmtCtlBurninStorageClient struct {
+type mgmtCtlStorageBurnInClient struct {
 	grpc.ClientStream
 }
 
-func (x *mgmtCtlBurninStorageClient) Recv() (*BurninStorageResp, error) {
-	m := new(BurninStorageResp)
+func (x *mgmtCtlStorageBurnInClient) Recv() (*StorageBurnInResp, error) {
+	m := new(StorageBurnInResp)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -206,15 +207,6 @@ func (x *mgmtCtlFetchFioConfigPathsClient) Recv() (*FilePath, error) {
 	return m, nil
 }
 
-func (c *mgmtCtlClient) KillRank(ctx context.Context, in *DaosRank, opts ...grpc.CallOption) (*DaosResp, error) {
-	out := new(DaosResp)
-	err := c.cc.Invoke(ctx, "/mgmt.MgmtCtl/KillRank", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *mgmtCtlClient) ListFeatures(ctx context.Context, in *EmptyReq, opts ...grpc.CallOption) (MgmtCtl_ListFeaturesClient, error) {
 	stream, err := c.cc.NewStream(ctx, &_MgmtCtl_serviceDesc.Streams[4], "/mgmt.MgmtCtl/ListFeatures", opts...)
 	if err != nil {
@@ -247,125 +239,135 @@ func (x *mgmtCtlListFeaturesClient) Recv() (*Feature, error) {
 	return m, nil
 }
 
+func (c *mgmtCtlClient) DeviceHealthQuery(ctx context.Context, in *QueryHealthReq, opts ...grpc.CallOption) (*QueryHealthResp, error) {
+	out := new(QueryHealthResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtCtl/DeviceHealthQuery", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MgmtCtlServer is the server API for MgmtCtl service.
 type MgmtCtlServer interface {
-	// Retrieve details of nonvolatile storage devices on server
-	ScanStorage(context.Context, *ScanStorageReq) (*ScanStorageResp, error)
-	DeviceHealthQuery(context.Context, *QueryHealthReq) (*QueryHealthResp, error)
+	// Prepare nonvolatile storage devices for use with DAOS
+	StoragePrepare(context.Context, *StoragePrepareReq) (*StoragePrepareResp, error)
+	// Retrieve details of nonvolatile storage on server
+	StorageScan(context.Context, *StorageScanReq) (*StorageScanResp, error)
 	// Format nonvolatile storage devices for use with DAOS
-	FormatStorage(*FormatStorageReq, MgmtCtl_FormatStorageServer) error
+	StorageFormat(*StorageFormatReq, MgmtCtl_StorageFormatServer) error
 	// Update nonvolatile storage device firmware
-	UpdateStorage(*UpdateStorageReq, MgmtCtl_UpdateStorageServer) error
+	StorageUpdate(*StorageUpdateReq, MgmtCtl_StorageUpdateServer) error
 	// Perform burn-in testing to verify nonvolatile storage devices
-	BurninStorage(*BurninStorageReq, MgmtCtl_BurninStorageServer) error
+	StorageBurnIn(*StorageBurnInReq, MgmtCtl_StorageBurnInServer) error
 	// Fetch FIO configuration file specifying burn-in jobs/workloads
 	FetchFioConfigPaths(*EmptyReq, MgmtCtl_FetchFioConfigPathsServer) error
-	// Kill a given rank associated with a given pool
-	KillRank(context.Context, *DaosRank) (*DaosResp, error)
 	// List features supported on remote storage server/DAOS system
 	ListFeatures(*EmptyReq, MgmtCtl_ListFeaturesServer) error
+	// Query raw SPDK NVMe SSD device health stats
+	DeviceHealthQuery(context.Context, *QueryHealthReq) (*QueryHealthResp, error)
 }
 
 func RegisterMgmtCtlServer(s *grpc.Server, srv MgmtCtlServer) {
 	s.RegisterService(&_MgmtCtl_serviceDesc, srv)
 }
 
-func _MgmtCtl_ScanStorage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ScanStorageReq)
+func _MgmtCtl_StoragePrepare_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StoragePrepareReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(MgmtCtlServer).ScanStorage(ctx, in)
+		return srv.(MgmtCtlServer).StoragePrepare(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/mgmt.MgmtCtl/ScanStorage",
+		FullMethod: "/mgmt.MgmtCtl/StoragePrepare",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MgmtCtlServer).ScanStorage(ctx, req.(*ScanStorageReq))
+		return srv.(MgmtCtlServer).StoragePrepare(ctx, req.(*StoragePrepareReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _MgmtCtl_DeviceHealthQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(QueryHealthReq)
+func _MgmtCtl_StorageScan_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StorageScanReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(MgmtCtlServer).DeviceHealthQuery(ctx, in)
+		return srv.(MgmtCtlServer).StorageScan(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/mgmt.MgmtCtl/DeviceHealthQuery",
+		FullMethod: "/mgmt.MgmtCtl/StorageScan",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MgmtCtlServer).DeviceHealthQuery(ctx, req.(*QueryHealthReq))
+		return srv.(MgmtCtlServer).StorageScan(ctx, req.(*StorageScanReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _MgmtCtl_FormatStorage_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(FormatStorageReq)
+func _MgmtCtl_StorageFormat_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(StorageFormatReq)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(MgmtCtlServer).FormatStorage(m, &mgmtCtlFormatStorageServer{stream})
+	return srv.(MgmtCtlServer).StorageFormat(m, &mgmtCtlStorageFormatServer{stream})
 }
 
-type MgmtCtl_FormatStorageServer interface {
-	Send(*FormatStorageResp) error
+type MgmtCtl_StorageFormatServer interface {
+	Send(*StorageFormatResp) error
 	grpc.ServerStream
 }
 
-type mgmtCtlFormatStorageServer struct {
+type mgmtCtlStorageFormatServer struct {
 	grpc.ServerStream
 }
 
-func (x *mgmtCtlFormatStorageServer) Send(m *FormatStorageResp) error {
+func (x *mgmtCtlStorageFormatServer) Send(m *StorageFormatResp) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _MgmtCtl_UpdateStorage_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(UpdateStorageReq)
+func _MgmtCtl_StorageUpdate_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(StorageUpdateReq)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(MgmtCtlServer).UpdateStorage(m, &mgmtCtlUpdateStorageServer{stream})
+	return srv.(MgmtCtlServer).StorageUpdate(m, &mgmtCtlStorageUpdateServer{stream})
 }
 
-type MgmtCtl_UpdateStorageServer interface {
-	Send(*UpdateStorageResp) error
+type MgmtCtl_StorageUpdateServer interface {
+	Send(*StorageUpdateResp) error
 	grpc.ServerStream
 }
 
-type mgmtCtlUpdateStorageServer struct {
+type mgmtCtlStorageUpdateServer struct {
 	grpc.ServerStream
 }
 
-func (x *mgmtCtlUpdateStorageServer) Send(m *UpdateStorageResp) error {
+func (x *mgmtCtlStorageUpdateServer) Send(m *StorageUpdateResp) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _MgmtCtl_BurninStorage_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(BurninStorageReq)
+func _MgmtCtl_StorageBurnIn_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(StorageBurnInReq)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(MgmtCtlServer).BurninStorage(m, &mgmtCtlBurninStorageServer{stream})
+	return srv.(MgmtCtlServer).StorageBurnIn(m, &mgmtCtlStorageBurnInServer{stream})
 }
 
-type MgmtCtl_BurninStorageServer interface {
-	Send(*BurninStorageResp) error
+type MgmtCtl_StorageBurnInServer interface {
+	Send(*StorageBurnInResp) error
 	grpc.ServerStream
 }
 
-type mgmtCtlBurninStorageServer struct {
+type mgmtCtlStorageBurnInServer struct {
 	grpc.ServerStream
 }
 
-func (x *mgmtCtlBurninStorageServer) Send(m *BurninStorageResp) error {
+func (x *mgmtCtlStorageBurnInServer) Send(m *StorageBurnInResp) error {
 	return x.ServerStream.SendMsg(m)
 }
 
@@ -390,24 +392,6 @@ func (x *mgmtCtlFetchFioConfigPathsServer) Send(m *FilePath) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _MgmtCtl_KillRank_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DaosRank)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MgmtCtlServer).KillRank(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/mgmt.MgmtCtl/KillRank",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MgmtCtlServer).KillRank(ctx, req.(*DaosRank))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _MgmtCtl_ListFeatures_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(EmptyReq)
 	if err := stream.RecvMsg(m); err != nil {
@@ -429,37 +413,55 @@ func (x *mgmtCtlListFeaturesServer) Send(m *Feature) error {
 	return x.ServerStream.SendMsg(m)
 }
 
+func _MgmtCtl_DeviceHealthQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryHealthReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtCtlServer).DeviceHealthQuery(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtCtl/DeviceHealthQuery",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtCtlServer).DeviceHealthQuery(ctx, req.(*QueryHealthReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _MgmtCtl_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "mgmt.MgmtCtl",
 	HandlerType: (*MgmtCtlServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "ScanStorage",
-			Handler:    _MgmtCtl_ScanStorage_Handler,
+			MethodName: "StoragePrepare",
+			Handler:    _MgmtCtl_StoragePrepare_Handler,
+		},
+		{
+			MethodName: "StorageScan",
+			Handler:    _MgmtCtl_StorageScan_Handler,
 		},
 		{
 			MethodName: "DeviceHealthQuery",
 			Handler:    _MgmtCtl_DeviceHealthQuery_Handler,
 		},
-		{
-			MethodName: "KillRank",
-			Handler:    _MgmtCtl_KillRank_Handler,
-		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "FormatStorage",
-			Handler:       _MgmtCtl_FormatStorage_Handler,
+			StreamName:    "StorageFormat",
+			Handler:       _MgmtCtl_StorageFormat_Handler,
 			ServerStreams: true,
 		},
 		{
-			StreamName:    "UpdateStorage",
-			Handler:       _MgmtCtl_UpdateStorage_Handler,
+			StreamName:    "StorageUpdate",
+			Handler:       _MgmtCtl_StorageUpdate_Handler,
 			ServerStreams: true,
 		},
 		{
-			StreamName:    "BurninStorage",
-			Handler:       _MgmtCtl_BurninStorage_Handler,
+			StreamName:    "StorageBurnIn",
+			Handler:       _MgmtCtl_StorageBurnIn_Handler,
 			ServerStreams: true,
 		},
 		{
@@ -476,27 +478,27 @@ var _MgmtCtl_serviceDesc = grpc.ServiceDesc{
 	Metadata: "control.proto",
 }
 
-func init() { proto.RegisterFile("control.proto", fileDescriptor_control_d7fa73992683b059) }
+func init() { proto.RegisterFile("control.proto", fileDescriptor_control_cbfede2e86bad3c8) }
 
-var fileDescriptor_control_d7fa73992683b059 = []byte{
-	// 295 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0x92, 0x4d, 0x4b, 0xf4, 0x30,
-	0x10, 0xc7, 0x9f, 0x07, 0xc5, 0x97, 0xb8, 0x5d, 0xb0, 0xbe, 0x41, 0x8f, 0x9e, 0x65, 0xf1, 0xe5,
-	0x24, 0x78, 0xda, 0xad, 0x45, 0x50, 0x41, 0x77, 0xf1, 0x03, 0xc4, 0x3a, 0xdb, 0x06, 0x93, 0x4c,
-	0x4d, 0xa6, 0x0b, 0xfb, 0xd1, 0xbd, 0x49, 0x9a, 0x14, 0xdb, 0xba, 0xb7, 0xfc, 0x7f, 0x99, 0xf9,
-	0x4d, 0x48, 0xc2, 0xa2, 0x1c, 0x35, 0x19, 0x94, 0x93, 0xca, 0x20, 0x61, 0xbc, 0xad, 0x0a, 0x45,
-	0xc9, 0x28, 0x47, 0xa5, 0x50, 0x7b, 0x96, 0x44, 0x96, 0xd0, 0xf0, 0x02, 0x42, 0x1c, 0x2f, 0x81,
-	0x53, 0x6d, 0xc0, 0x86, 0xbc, 0x6f, 0xcd, 0xca, 0x2f, 0xaf, 0xbf, 0xb7, 0xd8, 0xee, 0x73, 0xa1,
-	0x68, 0x46, 0x32, 0xbe, 0x63, 0x07, 0x8b, 0x9c, 0xeb, 0x85, 0xef, 0x8d, 0x8f, 0x27, 0xce, 0x3c,
-	0xe9, 0xa0, 0x39, 0x7c, 0x25, 0x27, 0x1b, 0xa8, 0xad, 0xce, 0xff, 0xc5, 0x53, 0x76, 0x98, 0xc2,
-	0x4a, 0xe4, 0xf0, 0x00, 0x5c, 0x52, 0xf9, 0x5a, 0x83, 0x59, 0xb7, 0x8e, 0x26, 0x78, 0xde, 0x71,
-	0xf4, 0x68, 0xe3, 0x48, 0x59, 0x94, 0xa1, 0x51, 0x9c, 0xda, 0x33, 0x9c, 0xfa, 0xca, 0x1e, 0x74,
-	0x86, 0xb3, 0x8d, 0xdc, 0x39, 0x2e, 0xff, 0x3b, 0xcb, 0x5b, 0xf5, 0xc1, 0x09, 0x06, 0x96, 0x1e,
-	0xec, 0x58, 0x06, 0xfc, 0xd7, 0x32, 0xad, 0x8d, 0x16, 0x7a, 0x60, 0xe9, 0xc1, 0x8e, 0x65, 0xc0,
-	0x83, 0xe5, 0x96, 0x1d, 0x65, 0x40, 0x79, 0x99, 0x09, 0x9c, 0xa1, 0x5e, 0x8a, 0xe2, 0x85, 0x53,
-	0x69, 0xe3, 0xb1, 0xef, 0xb9, 0x57, 0x15, 0xad, 0x9d, 0x23, 0xe4, 0x4c, 0x48, 0x70, 0x05, 0x4d,
-	0xeb, 0x05, 0xdb, 0x7b, 0x14, 0x52, 0xce, 0xb9, 0xfe, 0x6c, 0xeb, 0x53, 0x8e, 0xd6, 0xe5, 0xa4,
-	0x9b, 0xfd, 0xd5, 0x5d, 0xb1, 0xd1, 0x93, 0xb0, 0x94, 0x85, 0x97, 0xfe, 0x33, 0x21, 0x0a, 0x13,
-	0xfc, 0xbe, 0x1b, 0xf0, 0xbe, 0xd3, 0x7c, 0x81, 0x9b, 0x9f, 0x00, 0x00, 0x00, 0xff, 0xff, 0xcc,
-	0xdb, 0x06, 0x58, 0x51, 0x02, 0x00, 0x00,
+var fileDescriptor_control_cbfede2e86bad3c8 = []byte{
+	// 289 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0x92, 0xdb, 0x4a, 0xf3, 0x40,
+	0x14, 0x85, 0xff, 0x1f, 0x8a, 0xc2, 0xd8, 0x04, 0x1c, 0x0f, 0x95, 0x5c, 0xfa, 0x00, 0xc1, 0xc3,
+	0x95, 0xe0, 0x55, 0x0f, 0x41, 0x41, 0xa1, 0x5a, 0x7c, 0x80, 0x31, 0xee, 0x26, 0x81, 0xcc, 0xec,
+	0x38, 0xb3, 0x23, 0xf4, 0x35, 0x7c, 0x62, 0x99, 0x43, 0xa0, 0x69, 0x72, 0xb9, 0xbe, 0x59, 0xeb,
+	0x23, 0xb0, 0xc3, 0xa2, 0x1c, 0x15, 0x69, 0xac, 0xd3, 0x46, 0x23, 0x21, 0x9f, 0xc8, 0x42, 0x52,
+	0x32, 0xcd, 0x51, 0x4a, 0x54, 0x9e, 0x25, 0x91, 0x21, 0xd4, 0xa2, 0x80, 0x10, 0xe3, 0x2d, 0x08,
+	0x6a, 0x35, 0x18, 0x9f, 0xef, 0x7e, 0x27, 0xec, 0xf8, 0xb5, 0x90, 0xb4, 0xa0, 0x9a, 0xaf, 0x58,
+	0xbc, 0xf1, 0xe5, 0xb5, 0x86, 0x46, 0x68, 0xe0, 0xb3, 0xd4, 0x1a, 0xd3, 0x3e, 0x7d, 0x87, 0xef,
+	0xe4, 0x6a, 0xfc, 0xc1, 0x34, 0xd7, 0xff, 0xf8, 0x23, 0x3b, 0x09, 0x7c, 0x93, 0x0b, 0xc5, 0xcf,
+	0x7b, 0x55, 0x8b, 0xac, 0xe0, 0x62, 0x84, 0xba, 0xf5, 0x92, 0x45, 0x01, 0x66, 0xa8, 0xa5, 0x20,
+	0x7e, 0xd9, 0x6b, 0x7a, 0x68, 0x0d, 0xb3, 0x51, 0x6e, 0x1d, 0x37, 0xff, 0xf7, 0x2c, 0x1f, 0xcd,
+	0x97, 0x20, 0x38, 0xb0, 0x78, 0x38, 0xb4, 0x74, 0x7c, 0x60, 0x99, 0xb7, 0x5a, 0x3d, 0xab, 0x03,
+	0x8b, 0x87, 0x43, 0x4b, 0xc7, 0x83, 0xe5, 0x81, 0x9d, 0x65, 0x40, 0x79, 0x99, 0x55, 0xb8, 0x40,
+	0xb5, 0xad, 0x8a, 0xb5, 0xa0, 0xd2, 0xf0, 0xd8, 0x6f, 0x56, 0xb2, 0xa1, 0x9d, 0x75, 0x84, 0x9c,
+	0x55, 0x35, 0xd8, 0x82, 0x9b, 0xde, 0xb2, 0xe9, 0x4b, 0x65, 0x28, 0x0b, 0x37, 0x1b, 0x6c, 0xa2,
+	0xb0, 0xf1, 0xef, 0x6e, 0x32, 0x67, 0xa7, 0x4b, 0xf8, 0xa9, 0x72, 0x78, 0x02, 0x51, 0x53, 0xf9,
+	0xd6, 0x82, 0xde, 0x75, 0x37, 0x70, 0xc1, 0xf3, 0xbd, 0x1b, 0xf4, 0xa8, 0xfd, 0xe6, 0xcf, 0x23,
+	0xf7, 0x6f, 0xdc, 0xff, 0x05, 0x00, 0x00, 0xff, 0xff, 0x57, 0x6e, 0x30, 0x0f, 0x5f, 0x02, 0x00,
+	0x00,
 }

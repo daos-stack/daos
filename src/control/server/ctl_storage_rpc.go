@@ -29,13 +29,13 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	types "github.com/daos-stack/daos/src/control/common/storage"
 	log "github.com/daos-stack/daos/src/control/logging"
 )
 
-// addState creates, populates and returns ResponseState in addition
+// newState creates, populates and returns ResponseState in addition
 // to logging any err.
-func addState(
-	status pb.ResponseStatus, errMsg string, infoMsg string, logDepth int,
+func newState(status pb.ResponseStatus, errMsg string, infoMsg string,
 	contextMsg string) *pb.ResponseState {
 
 	state := &pb.ResponseState{
@@ -49,15 +49,103 @@ func addState(
 	return state
 }
 
-// ScanStorage discovers non-volatile storage hardware on node.
-func (c *ControlService) ScanStorage(
-	ctx context.Context, req *pb.ScanStorageReq) (
-	*pb.ScanStorageResp, error) {
+func (c *ControlService) doNvmePrepare(req *pb.PrepareNvmeReq) (resp *pb.PrepareNvmeResp) {
+	resp = &pb.PrepareNvmeResp{}
+	msg := "Storage Prepare NVMe"
+	err := c.PrepareNvme(PrepareNvmeRequest{
+		HugePageCount: int(req.GetNrhugepages()),
+		TargetUser:    req.GetTargetuser(),
+		PCIWhitelist:  req.GetPciwhitelist(),
+		ResetOnly:     req.GetReset_(),
+	})
 
-	resp := new(pb.ScanStorageResp)
+	if err != nil {
+		resp.State = newState(pb.ResponseStatus_CTRL_ERR_NVME, err.Error(), "", msg)
+		return
+	}
 
-	c.nvme.Discover(resp)
-	c.scm.Discover(resp)
+	resp.State = newState(pb.ResponseStatus_CTRL_SUCCESS, "", "", msg)
+	return
+}
+
+func translatePmemDevices(inDevs []pmemDev) (outDevs types.PmemDevices) {
+	for _, dev := range inDevs {
+		outDevs = append(outDevs,
+			&pb.PmemDevice{
+				Uuid:     dev.UUID,
+				Blockdev: dev.Blockdev,
+				Dev:      dev.Dev,
+				Numanode: uint32(dev.NumaNode),
+			})
+	}
+
+	return
+}
+
+func (c *ControlService) doScmPrepare(req *pb.PrepareScmReq) (resp *pb.PrepareScmResp) {
+	resp = &pb.PrepareScmResp{}
+	msg := "Storage Prepare SCM"
+
+	needsReboot, pmemDevs, err := c.PrepareScm(PrepareScmRequest{Reset: req.GetReset_()})
+	if err != nil {
+		resp.State = newState(pb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg)
+		return
+	}
+
+	info := ""
+	if needsReboot {
+		info = MsgScmRebootRequired
+	}
+
+	resp.State = newState(pb.ResponseStatus_CTRL_SUCCESS, "", info, msg)
+	resp.Pmems = translatePmemDevices(pmemDevs)
+
+	return
+}
+
+// StoragePrepare configures SSDs for user specific access with SPDK and
+// groups SCM modules in AppDirect/interleaved mode as kernel "pmem" devices.
+func (c *ControlService) StoragePrepare(ctx context.Context, req *pb.StoragePrepareReq) (
+	*pb.StoragePrepareResp, error) {
+
+	resp := &pb.StoragePrepareResp{}
+
+	resp.Nvme = c.doNvmePrepare(req.Nvme)
+	resp.Scm = c.doScmPrepare(req.Scm)
+
+	return resp, nil
+}
+
+// StorageScan discovers non-volatile storage hardware on node.
+func (c *ControlService) StorageScan(ctx context.Context, req *pb.StorageScanReq) (
+	*pb.StorageScanResp, error) {
+
+	msg := "Storage Scan "
+	resp := new(pb.StorageScanResp)
+
+	controllers, err := c.ScanNvme()
+	if err != nil {
+		resp.Nvme = &pb.ScanNvmeResp{
+			State: newState(pb.ResponseStatus_CTRL_ERR_NVME, err.Error(), "", msg+"NVMe"),
+		}
+	} else {
+		resp.Nvme = &pb.ScanNvmeResp{
+			State:  newState(pb.ResponseStatus_CTRL_SUCCESS, "", "", msg+"NVMe"),
+			Ctrlrs: controllers,
+		}
+	}
+
+	modules, err := c.ScanScm()
+	if err != nil {
+		resp.Scm = &pb.ScanScmResp{
+			State: newState(pb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg+"SCM"),
+		}
+	} else {
+		resp.Scm = &pb.ScanScmResp{
+			State:   newState(pb.ResponseStatus_CTRL_SUCCESS, "", "", msg+"SCM"),
+			Modules: modules,
+		}
+	}
 
 	return resp, nil
 }
@@ -77,7 +165,7 @@ func (c *ControlService) DeviceHealthQuery(
 
 // doFormat performs format on storage subsystems, populates response results
 // in storage subsystem routines and broadcasts (closes channel) if successful.
-func (c *ControlService) doFormat(i int, resp *pb.FormatStorageResp) error {
+func (c *ControlService) doFormat(i int, resp *pb.StorageFormatResp) error {
 	srv := c.config.Servers[i]
 	serverFormatted := false
 
@@ -92,11 +180,11 @@ func (c *ControlService) doFormat(i int, resp *pb.FormatStorageResp) error {
 		serverFormatted = true
 	}
 
-	ctrlrResults := common.NvmeControllerResults{}
+	ctrlrResults := types.NvmeControllerResults{}
 	c.nvme.Format(i, &ctrlrResults)
 	resp.Crets = ctrlrResults
 
-	mountResults := common.ScmMountResults{}
+	mountResults := types.ScmMountResults{}
 	c.scm.Format(i, &mountResults)
 	resp.Mrets = mountResults
 
@@ -117,11 +205,8 @@ func (c *ControlService) doFormat(i int, resp *pb.FormatStorageResp) error {
 //
 // Send response containing multiple results of format operations on scm mounts
 // and nvme controllers.
-func (c *ControlService) FormatStorage(
-	req *pb.FormatStorageReq,
-	stream pb.MgmtCtl_FormatStorageServer) error {
-
-	resp := new(pb.FormatStorageResp)
+func (c *ControlService) StorageFormat(req *pb.StorageFormatReq, stream pb.MgmtCtl_StorageFormatServer) error {
+	resp := new(pb.StorageFormatResp)
 
 	for i := range c.config.Servers {
 		if err := c.doFormat(i, resp); err != nil {
@@ -142,18 +227,15 @@ func (c *ControlService) FormatStorage(
 //
 // Send response containing multiple results of update operations on scm mounts
 // and nvme controllers.
-func (c *ControlService) UpdateStorage(
-	req *pb.UpdateStorageReq,
-	stream pb.MgmtCtl_UpdateStorageServer) error {
-
-	resp := new(pb.UpdateStorageResp)
+func (c *ControlService) StorageUpdate(req *pb.StorageUpdateReq, stream pb.MgmtCtl_StorageUpdateServer) error {
+	resp := new(pb.StorageUpdateResp)
 
 	for i := range c.config.Servers {
-		ctrlrResults := common.NvmeControllerResults{}
+		ctrlrResults := types.NvmeControllerResults{}
 		c.nvme.Update(i, req.Nvme, &ctrlrResults)
 		resp.Crets = ctrlrResults
 
-		moduleResults := common.ScmModuleResults{}
+		moduleResults := types.ScmModuleResults{}
 		c.scm.Update(i, req.Scm, &moduleResults)
 		resp.Mrets = moduleResults
 	}
@@ -171,11 +253,9 @@ func (c *ControlService) UpdateStorage(
 //
 // Send response containing multiple results of burn-in operations on scm mounts
 // and nvme controllers.
-func (c *ControlService) BurninStorage(
-	req *pb.BurninStorageReq,
-	stream pb.MgmtCtl_BurninStorageServer) error {
+func (c *ControlService) StorageBurnIn(req *pb.StorageBurnInReq, stream pb.MgmtCtl_StorageBurnInServer) error {
 
-	return errors.New("BurninStorage not implemented")
+	return errors.New("StorageBurnIn not implemented")
 	//	for i := range c.config.Servers {
 	//		c.nvme.BurnIn(i, req.Nvme, resp)
 	//		c.scm.BurnIn(i, req.Scm, resp)

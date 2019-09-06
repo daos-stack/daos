@@ -29,7 +29,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
-	"github.com/daos-stack/daos/src/control/common"
+	types "github.com/daos-stack/daos/src/control/common/storage"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
@@ -95,7 +95,7 @@ func (c *connList) DeviceHealthQuery() (ClientCtrlrMap) {
 
 	for _, res := range cResults {
 		if res.Err != nil {
-			cCtrlrs[res.Address] = common.CtrlrResults{Err: res.Err}
+			cCtrlrs[res.Address] = types.CtrlrResults{Err: res.Err}
 			continue
 		}
 
@@ -103,7 +103,7 @@ func (c *connList) DeviceHealthQuery() (ClientCtrlrMap) {
 		if !ok {
 			err := fmt.Errorf(msgBadType, StorageResult{}, res.Value)
 
-			cCtrlrs[res.Address] = common.CtrlrResults{Err: err}
+			cCtrlrs[res.Address] = types.CtrlrResults{Err: err}
 			continue
 		}
 

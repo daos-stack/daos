@@ -167,26 +167,10 @@ enum {
 
 #define DSS_XS_NAME_LEN		64
 
-/** Per-xstream configuration data */
-struct dss_xstream {
-	char		dx_name[DSS_XS_NAME_LEN];
-	ABT_future	dx_shutdown;
-	hwloc_cpuset_t	dx_cpuset;
-	ABT_xstream	dx_xstream;
-	ABT_pool	dx_pools[DSS_POOL_CNT];
-	ABT_sched	dx_sched;
-	ABT_thread	dx_progress;
-	/* xstream id, [0, DSS_XS_NR_TOTAL - 1] */
-	int		dx_xs_id;
-	/* VOS target id, [0, dss_tgt_nr - 1]. Invalid (-1) for system XS.
-	 * For offload XS it is same value as its main XS.
-	 */
-	int		dx_tgt_id;
-	/* CART context id, invalid (-1) for the offload XS w/o CART context */
-	int		dx_ctx_id;
-	bool		dx_main_xs;	/* true for main XS */
-	bool		dx_comm;	/* true with cart context */
-};
+/* Opaque xstream configuration data */
+struct dss_xstream;
+
+bool dss_xstream_exiting(struct dss_xstream *dxs);
 
 struct dss_module_info {
 	crt_context_t		dmi_ctx;
@@ -199,8 +183,6 @@ struct dss_module_info {
 	/* the cart context id */
 	int			dmi_ctx_id;
 	d_list_t		dmi_dtx_batched_list;
-	tse_sched_t		dmi_sched;
-	uint64_t		dmi_tse_ult_created:1;
 };
 
 extern struct dss_module_key	daos_srv_modkey;
@@ -217,10 +199,10 @@ dss_get_module_info(void)
 	return dmi;
 }
 
-static inline tse_sched_t *
-dss_tse_scheduler(void)
+static inline struct dss_xstream *
+dss_get_xstream(void)
 {
-	return &dss_get_module_info()->dmi_sched;
+	return dss_get_module_info()->dmi_xstream;
 }
 
 /**
@@ -452,11 +434,6 @@ dss_thread_collective_reduce(struct dss_coll_ops *ops,
 
 int dss_task_collective(int (*func)(void *), void *arg, int flag);
 int dss_thread_collective(int (*func)(void *), void *arg, int flag);
-int dss_task_run(tse_task_t *task, unsigned int type, tse_task_cb_t cb,
-		 void *arg, ABT_eventual eventual);
-int dss_eventual_create(ABT_eventual *eventual_ptr);
-int dss_eventual_wait(ABT_eventual eventual);
-void dss_eventual_free(ABT_eventual *eventual);
 struct dss_module *dss_module_get(int mod_id);
 /* Convert Argobots errno to DAOS ones. */
 static inline int
@@ -516,25 +493,27 @@ struct dss_acc_task {
  */
 int dss_acc_offload(struct dss_acc_task *at_args);
 
-/* DAOS object API on the server side */
-int ds_obj_open(daos_handle_t coh, daos_obj_id_t oid,
-		unsigned int mode, daos_handle_t *oh);
-int ds_obj_close(daos_handle_t obj_hl);
+/* DAOS client APIs called on the server side */
+int dsc_obj_open(daos_handle_t coh, daos_obj_id_t oid,
+		 unsigned int mode, daos_handle_t *oh);
+int dsc_obj_close(daos_handle_t obj_hl);
 
-int ds_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch,
-		 daos_key_t *dkey, uint32_t *nr,
-		 daos_key_desc_t *kds, d_sg_list_t *sgl,
-		 daos_anchor_t *anchor);
+int dsc_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch,
+		daos_key_t *dkey, uint32_t *nr,
+		daos_key_desc_t *kds, d_sg_list_t *sgl,
+		daos_anchor_t *anchor);
 
-int ds_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
-		 daos_key_t *dkey, unsigned int nr,
-		 daos_iod_t *iods, d_sg_list_t *sgls,
-		 daos_iom_t *maps);
-int ds_obj_list_obj(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
+int dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
+		daos_key_t *dkey, unsigned int nr,
+		daos_iod_t *iods, d_sg_list_t *sgls,
+		daos_iom_t *maps);
+int dsc_obj_list_obj(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		daos_key_t *akey, daos_size_t *size, uint32_t *nr,
 		daos_key_desc_t *kds, daos_epoch_range_t *eprs,
 		d_sg_list_t *sgl, daos_anchor_t *anchor,
 		daos_anchor_t *dkey_anchor, daos_anchor_t *akey_anchor);
+int dsc_pool_tgt_exclude(const uuid_t uuid, const char *grp,
+			 const d_rank_list_t *svc, struct d_tgt_list *tgts);
 
 struct dss_enum_arg {
 	bool			fill_recxs;	/* type == S||R */
@@ -619,5 +598,10 @@ enum dss_init_state {
 void dss_init_state_set(enum dss_init_state state);
 
 bool dss_pmixless(void);
+
+/* default credits */
+#define	DSS_GC_CREDS	256
+
+void dss_gc_run(int credits);
 
 #endif /* __DSS_API_H__ */

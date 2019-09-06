@@ -27,24 +27,24 @@ package mgmt;
 import "common.proto";
 import "storage.proto";
 import "features.proto";
-import "srv.proto";
 
 // Service definitions for communications between gRPC management server and
 // client regarding tasks related to DAOS storage server hardware.
 service MgmtCtl {
-	// Retrieve details of nonvolatile storage devices on server
-	rpc ScanStorage(ScanStorageReq) returns (ScanStorageResp) {};
-	rpc DeviceHealthQuery(QueryHealthReq) returns (QueryHealthResp) {};
-	// Format nonvolatile storage devices for use with DAOS
-	rpc FormatStorage(FormatStorageReq) returns (stream FormatStorageResp) {};
-	// Update nonvolatile storage device firmware
-	rpc UpdateStorage(UpdateStorageReq) returns (stream UpdateStorageResp) {};
-	// Perform burn-in testing to verify nonvolatile storage devices
-	rpc BurninStorage(BurninStorageReq) returns (stream BurninStorageResp) {};
-	// Fetch FIO configuration file specifying burn-in jobs/workloads
-	rpc FetchFioConfigPaths(EmptyReq) returns (stream FilePath) {};
-	// Kill a given rank associated with a given pool
-	rpc KillRank(DaosRank) returns (DaosResp) {};
-	// List features supported on remote storage server/DAOS system
-	rpc ListFeatures(EmptyReq) returns (stream Feature) {};
+    // Prepare nonvolatile storage devices for use with DAOS
+    rpc StoragePrepare(StoragePrepareReq) returns (StoragePrepareResp) {};
+    // Retrieve details of nonvolatile storage on server
+    rpc StorageScan(StorageScanReq) returns(StorageScanResp) {};
+    // Format nonvolatile storage devices for use with DAOS
+    rpc StorageFormat(StorageFormatReq) returns(stream StorageFormatResp) {};
+    // Update nonvolatile storage device firmware
+    rpc StorageUpdate(StorageUpdateReq) returns(stream StorageUpdateResp) {};
+    // Perform burn-in testing to verify nonvolatile storage devices
+    rpc StorageBurnIn(StorageBurnInReq) returns(stream StorageBurnInResp) {};
+    // Fetch FIO configuration file specifying burn-in jobs/workloads
+    rpc FetchFioConfigPaths(EmptyReq) returns(stream FilePath) {};
+    // List features supported on remote storage server/DAOS system
+    rpc ListFeatures(EmptyReq) returns(stream Feature) {};
+    // Query raw SPDK NVMe SSD device health stats
+    rpc DeviceHealthQuery(QueryHealthReq) returns (QueryHealthResp) {};
 }

@@ -32,10 +32,10 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	types "github.com/daos-stack/daos/src/control/common/storage"
+	"github.com/daos-stack/daos/src/control/lib/ipmctl"
 	log "github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/go-ipmctl/ipmctl"
 )
 
 //go:generate stringer -type=scmState
@@ -57,7 +57,7 @@ const (
 	cmdScmDisableNamespace = "ndctl disable-namespace %s"
 	cmdScmDestroyNamespace = "ndctl destroy-namespace %s"
 
-	msgScmRebootRequired   = "A reboot is required to process new memory allocation goals."
+	MsgScmRebootRequired   = "A reboot is required to process new memory allocation goals."
 	msgScmNoModules        = "no scm modules to prepare"
 	msgScmNotInited        = "scm storage could not be accessed"
 	msgScmAlreadyFormatted = "scm storage has already been formatted and " +
@@ -116,12 +116,12 @@ func run(cmd string) (string, error) {
 // details.
 //
 // IpmCtl provides necessary methods to interact with Storage Class
-// Memory modules through libipmctl via go-ipmctl bindings.
+// Memory modules through libipmctl via ipmctl bindings.
 type scmStorage struct {
 	ipmctl      ipmctl.IpmCtl  // ipmctl NVM API interface
 	config      *Configuration // server configuration structure
 	runCmd      runCmdFn
-	modules     common.ScmModules
+	modules     types.ScmModules
 	state       scmState
 	initialized bool
 	formatted   bool
@@ -358,14 +358,7 @@ func (s *scmStorage) getNamespaces() (devs []pmemDev, err error) {
 
 // Setup implementation for scmStorage providing initial device discovery
 func (s *scmStorage) Setup() error {
-	resp := new(pb.ScanStorageResp)
-	s.Discover(resp)
-
-	if resp.Scmstate.Status != pb.ResponseStatus_CTRL_SUCCESS {
-		return errors.New("scm scan: " + resp.Scmstate.Error)
-	}
-
-	return nil
+	return s.Discover()
 }
 
 // Teardown implementation for scmStorage
@@ -374,7 +367,7 @@ func (s *scmStorage) Teardown() error {
 	return nil
 }
 
-func loadModules(mms []ipmctl.DeviceDiscovery) (pbMms common.ScmModules) {
+func loadModules(mms []ipmctl.DeviceDiscovery) (pbMms types.ScmModules) {
 	for _, c := range mms {
 		pbMms = append(
 			pbMms,
@@ -393,36 +386,19 @@ func loadModules(mms []ipmctl.DeviceDiscovery) (pbMms common.ScmModules) {
 }
 
 // Discover method implementation for scmStorage
-func (s *scmStorage) Discover(resp *pb.ScanStorageResp) {
-	addStateDiscover := func(
-		status pb.ResponseStatus, errMsg string,
-		infoMsg string) *pb.ResponseState {
-
-		return addState(
-			status, errMsg, infoMsg, common.UtilLogDepth+1,
-			"scm storage discover")
-	}
-
+func (s *scmStorage) Discover() error {
 	if s.initialized {
-		resp.Scmstate = addStateDiscover(
-			pb.ResponseStatus_CTRL_SUCCESS, "", "")
-		resp.Modules = s.modules
-		return
+		return nil
 	}
 
 	mms, err := s.ipmctl.Discover()
 	if err != nil {
-		resp.Scmstate = addStateDiscover(
-			pb.ResponseStatus_CTRL_ERR_SCM,
-			msgIpmctlDiscoverFail+": "+err.Error(), "")
-		return
+		return errors.WithMessage(err, msgIpmctlDiscoverFail)
 	}
 	s.modules = loadModules(mms)
-
-	resp.Scmstate = addStateDiscover(pb.ResponseStatus_CTRL_SUCCESS, "", "")
-	resp.Modules = s.modules
-
 	s.initialized = true
+
+	return nil
 }
 
 // clearMount unmounts then removes mount point.
@@ -493,9 +469,8 @@ func getMntParams(srv *IOServerConfig) (mntType string, dev string, opts string,
 // makeMount creates a mount target directory and mounts device there.
 //
 // NOTE: requires elevated privileges
-func (s *scmStorage) makeMount(
-	devPath string, mntPoint string, mntType string, mntOpts string,
-) (err error) {
+func (s *scmStorage) makeMount(devPath string, mntPoint string, mntType string,
+	mntOpts string) (err error) {
 
 	if err = s.config.ext.mkdir(mntPoint); err != nil {
 		return
@@ -509,33 +484,27 @@ func (s *scmStorage) makeMount(
 }
 
 // newMntRet creates and populates NVMe ctrlr result and logs error through
-// addState.
-func newMntRet(
-	op string, mntPoint string, status pb.ResponseStatus, errMsg string,
-	logDepth int) *pb.ScmMountResult {
+// newState.
+func newMntRet(op string, mntPoint string, status pb.ResponseStatus, errMsg string,
+	infoMsg string) *pb.ScmMountResult {
 
 	return &pb.ScmMountResult{
 		Mntpoint: mntPoint,
-		State: addState(
-			status, errMsg, "", logDepth+1, "scm mount "+op),
+		State:    newState(status, errMsg, infoMsg, "scm mount "+op),
 	}
 }
 
 // Format attempts to format (forcefully) SCM mounts on a given server
 // as specified in config file and populates resp ScmMountResult.
-func (s *scmStorage) Format(i int, results *(common.ScmMountResults)) {
+func (s *scmStorage) Format(i int, results *(types.ScmMountResults)) {
 	srv := s.config.Servers[i]
 	mntPoint := srv.ScmMount
 	log.Debugf("performing SCM device reset, format and mount")
 
-	// wraps around addMret to provide format specific function
+	// wraps around addMret to provide format specific function, ignore infoMsg
 	addMretFormat := func(status pb.ResponseStatus, errMsg string) {
-		// log depth should be stack layer registering result
-		*results = append(
-			*results,
-			newMntRet(
-				"format", mntPoint, status, errMsg,
-				common.UtilLogDepth+1))
+		*results = append(*results,
+			newMntRet("format", mntPoint, status, errMsg, ""))
 	}
 
 	if !s.initialized {
@@ -583,9 +552,7 @@ func (s *scmStorage) Format(i int, results *(common.ScmMountResults)) {
 		log.Debugf("no scm_size specified in config for ram tmpfs")
 	}
 
-	log.Debugf(
-		"mounting scm device %s at %s (%s)...",
-		devPath, mntPoint, mntType)
+	log.Debugf("mounting scm device %s at %s (%s)...", devPath, mntPoint, mntType)
 
 	if err := s.makeMount(devPath, mntPoint, mntType, mntOpts); err != nil {
 		addMretFormat(pb.ResponseStatus_CTRL_ERR_APP, err.Error())
@@ -601,23 +568,21 @@ func (s *scmStorage) Format(i int, results *(common.ScmMountResults)) {
 
 // Update is currently a placeholder method stubbing SCM module fw update.
 func (s *scmStorage) Update(
-	i int, req *pb.UpdateScmReq, results *(common.ScmModuleResults)) {
+	i int, req *pb.UpdateScmReq, results *(types.ScmModuleResults)) {
 
 	// respond with single result indicating no implementation
 	*results = append(
 		*results,
 		&pb.ScmModuleResult{
 			Loc: &pb.ScmModule_Location{},
-			State: addState(
-				pb.ResponseStatus_CTRL_NO_IMPL,
-				msgScmUpdateNotImpl, "",
-				common.UtilLogDepth+1, "scm module update"),
+			State: newState(pb.ResponseStatus_CTRL_NO_IMPL,
+				msgScmUpdateNotImpl, "", "scm module update"),
 		})
 }
 
 // newScmStorage creates a new instance of ScmStorage struct.
 //
-// NvmMgmt is the implementation of ipmctl interface in go-ipmctl
+// NvmMgmt is the implementation of ipmctl interface in ipmctl
 func newScmStorage(config *Configuration) *scmStorage {
 	return &scmStorage{
 		ipmctl: &ipmctl.NvmMgmt{},
