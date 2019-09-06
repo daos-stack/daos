@@ -71,16 +71,18 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 		e <- err
 	}()
 
-	select {
-	case err := <-e:
-		scanErrors = append(scanErrors, err)
-		if len(scanErrors) == 2 {
-			break
+	for {
+		select {
+		case err := <-e:
+			scanErrors = append(scanErrors, err)
+			if len(scanErrors) == 2 {
+				break
+			}
+		case modules := <-m:
+			cmd.log.Infof("SCM modules:\n%s", modules)
+		case controllers := <-c:
+			cmd.log.Infof("NVMe SSD controller and constituent namespaces:\n%s", controllers)
 		}
-	case modules := <-m:
-		cmd.log.Infof("SCM modules:\n%s", modules)
-	case controllers := <-c:
-		cmd.log.Infof("NVMe SSD controller and constituent namespaces:\n%s", controllers)
 	}
 
 	if len(scanErrors) > 0 {
@@ -153,11 +155,13 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		e <- nil
 	}()
 
-	select {
-	case err := <-e:
-		scanErrors = append(scanErrors, err)
-		if len(scanErrors) == 2 {
-			break
+	for {
+		select {
+		case err := <-e:
+			scanErrors = append(scanErrors, err)
+			if len(scanErrors) == 2 {
+				break
+			}
 		}
 	}
 
