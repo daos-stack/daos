@@ -397,6 +397,17 @@ drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg,
 	return 0;
 }
 
+static void
+init_drpc_ctx(struct drpc *ctx, struct unixcomm *comm, drpc_handler_t handler)
+{
+	ctx->comm = comm;
+	ctx->handler = handler;
+	ctx->sequence = 0;
+	ctx->ref_count = 1;
+
+	ABT_mutex_create(&ctx->ref_count_mutex);
+}
+
 /**
  * Connect to a drpc socket server on the given path.
  *
@@ -420,10 +431,7 @@ drpc_connect(char *sockaddr)
 		return NULL;
 	}
 
-	ctx->comm = comms;
-	ctx->sequence = 0;
-	ctx->handler = NULL;
-	ctx->ref_count = 1;
+	init_drpc_ctx(ctx, comms, NULL);
 	return ctx;
 }
 
@@ -441,7 +449,8 @@ drpc_connect(char *sockaddr)
 struct drpc *
 drpc_listen(char *sockaddr, drpc_handler_t handler)
 {
-	struct drpc *ctx;
+	struct drpc	*ctx;
+	struct unixcomm *comm;
 
 	if (sockaddr == NULL || handler == NULL) {
 		D_ERROR("Bad input, sockaddr=%p, handler=%p\n",
@@ -453,15 +462,13 @@ drpc_listen(char *sockaddr, drpc_handler_t handler)
 	if (ctx == NULL)
 		return NULL;
 
-	ctx->comm = unixcomm_listen(sockaddr, O_NONBLOCK);
-	if (ctx->comm == NULL) {
+	comm = unixcomm_listen(sockaddr, O_NONBLOCK);
+	if (comm == NULL) {
 		D_FREE(ctx);
 		return NULL;
 	}
 
-	ctx->handler = handler;
-	ctx->ref_count = 1;
-
+	init_drpc_ctx(ctx, comm, handler);
 	return ctx;
 }
 
@@ -493,7 +500,8 @@ drpc_is_valid_listener(struct drpc *ctx)
 struct drpc *
 drpc_accept(struct drpc *listener_ctx)
 {
-	struct drpc *session_ctx;
+	struct drpc	*session_ctx;
+	struct unixcomm	*comm;
 
 	if (!drpc_is_valid_listener(listener_ctx)) {
 		D_ERROR("dRPC context is not a listener\n");
@@ -504,15 +512,13 @@ drpc_accept(struct drpc *listener_ctx)
 	if (session_ctx == NULL)
 		return NULL;
 
-	session_ctx->comm = unixcomm_accept(listener_ctx->comm);
-	if (session_ctx->comm == NULL) {
+	comm = unixcomm_accept(listener_ctx->comm);
+	if (comm == NULL) {
 		D_FREE(session_ctx);
 		return NULL;
 	}
 
-	session_ctx->handler = listener_ctx->handler;
-	session_ctx->ref_count = 1;
-
+	init_drpc_ctx(session_ctx, comm, listener_ctx->handler);
 	return session_ctx;
 }
 
@@ -639,26 +645,38 @@ drpc_send_response(struct drpc *session_ctx, Drpc__Response *resp)
 int
 drpc_close(struct drpc *ctx)
 {
-	int ret = 0;
+	int		ret;
+	uint32_t	new_count;
 
 	if (!ctx || !ctx->comm) {
 		D_ERROR("Context is already closed\n");
 		return -DER_INVAL;
 	}
 
-	if (ctx->ref_count > INT_MIN) {
-		D_DEBUG(DB_MGMT, "Decrementing refcount (%d)\n",
-			ctx->ref_count);
-		ctx->ref_count--;
+	ABT_mutex_lock(ctx->ref_count_mutex);
+	if (ctx->ref_count == 0) {
+		D_ERROR("Ref count is already zero\n");
+		ABT_mutex_unlock(ctx->ref_count_mutex);
+		return -DER_INVAL;
 	}
 
-	if (ctx->ref_count <= 0) {
+	D_DEBUG(DB_MGMT, "Decrementing refcount (%u)\n",
+		ctx->ref_count);
+	ctx->ref_count--;
+
+	new_count = ctx->ref_count;
+	ABT_mutex_unlock(ctx->ref_count_mutex);
+
+	if (new_count == 0) {
 		D_INFO("Closing dRPC socket fd=%d\n", ctx->comm->fd);
 
 		ret = unixcomm_close(ctx->comm);
+		if (ret != 0)
+			D_ERROR("Failed to close dRPC socket (rc=%d)\n", ret);
+		ABT_mutex_free(&ctx->ref_count_mutex);
 		D_FREE(ctx);
 	}
-	return ret;
+	return 0;
 }
 
 /**
@@ -672,19 +690,23 @@ drpc_close(struct drpc *ctx)
 int
 drpc_add_ref(struct drpc *ctx)
 {
+	int rc = 0;
+
 	if (ctx == NULL) {
 		D_ERROR("Context is null\n");
 		return -DER_INVAL;
 	}
 
-	if (ctx->ref_count < 0 || ctx->ref_count == INT_MAX) {
-		D_ERROR("Can't increment current ref count (count=%d)\n",
+	ABT_mutex_lock(ctx->ref_count_mutex);
+	if (ctx->ref_count == UINT_MAX) {
+		D_ERROR("Can't increment current ref count (count=%u)\n",
 			ctx->ref_count);
-		return -DER_INVAL;
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	ctx->ref_count++;
-
-	return 0;
+out:
+	ABT_mutex_unlock(ctx->ref_count_mutex);
+	return rc;
 }
 

@@ -26,6 +26,7 @@
 
 #include <daos/drpc.pb-c.h>
 #include <daos/common.h>
+#include <abt.h>
 
 /*
  * Using a packetsocket over the unix domain socket means that we receive
@@ -51,7 +52,8 @@ typedef void (*drpc_handler_t)(Drpc__Call *, Drpc__Response *);
 struct drpc {
 	struct unixcomm	*comm; /** unix domain socket communication context */
 	int		sequence; /** sequence number of latest message sent */
-	int		ref_count; /** open refs to this ctx */
+	uint32_t	ref_count; /** open refs to this ctx */
+	ABT_mutex	ref_count_mutex; /** mutex for accessing ref_count */
 
 	/**
 	 * Handler for messages received by a listening drpc context.

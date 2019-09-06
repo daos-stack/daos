@@ -160,19 +160,20 @@ test_drpc_close_closing_socket_fails(void **state)
 	close_return = -1;
 	errno = ENOMEM;
 
-	assert_int_equal(drpc_close(ctx), -DER_NOMEM);
+	/* error is logged but ignored */
+	assert_int_equal(drpc_close(ctx), 0);
 
 	/* called close() */
 	assert_int_equal(close_fd, expected_fd);
 }
 
 static void
-expect_drpc_close_closes_ctx_with_ref_count(int ref_count)
+test_drpc_close_success(void **state)
 {
 	int		expected_fd = 123;
 	struct drpc	*ctx = new_drpc_with_fd(expected_fd);
 
-	ctx->ref_count = ref_count;
+	ctx->ref_count = 1;
 
 	assert_int_equal(drpc_close(ctx), 0);
 
@@ -181,17 +182,15 @@ expect_drpc_close_closes_ctx_with_ref_count(int ref_count)
 }
 
 static void
-test_drpc_close_success(void **state)
-{
-	expect_drpc_close_closes_ctx_with_ref_count(1);
-}
-
-static void
 test_drpc_close_with_unexpected_ref_count(void **state)
 {
-	expect_drpc_close_closes_ctx_with_ref_count(0);
-	expect_drpc_close_closes_ctx_with_ref_count(-1);
-	expect_drpc_close_closes_ctx_with_ref_count(INT_MIN);
+	struct drpc	*ctx = new_drpc_with_fd(123);
+
+	ctx->ref_count = 0;
+
+	assert_int_equal(drpc_close(ctx), -DER_INVAL);
+
+	free_drpc(ctx);
 }
 
 static void
@@ -805,25 +804,17 @@ test_drpc_add_ref_success(void **state)
 }
 
 static void
-check_drpc_add_ref_doesnt_update_bad_count(int bad_count)
+test_drpc_add_ref_doesnt_update_max_count(void **state)
 {
 	struct drpc *ctx = new_drpc_with_fd(100);
 
-	ctx->ref_count = bad_count;
+	ctx->ref_count = UINT_MAX;
 
 	assert_int_equal(drpc_add_ref(ctx), -DER_INVAL);
 
-	assert_int_equal(ctx->ref_count, bad_count);
+	assert_int_equal(ctx->ref_count, UINT_MAX);
 
 	free_drpc(ctx);
-}
-
-static void
-test_drpc_add_ref_invalid_count(void **state)
-{
-	check_drpc_add_ref_doesnt_update_bad_count(-1);
-	check_drpc_add_ref_doesnt_update_bad_count(-2096);
-	check_drpc_add_ref_doesnt_update_bad_count(INT_MAX);
 }
 
 /* Convenience macro for tests in this file */
@@ -880,7 +871,7 @@ main(void)
 		cmocka_unit_test(test_drpc_response_free_null),
 		cmocka_unit_test(test_drpc_add_ref_null),
 		cmocka_unit_test(test_drpc_add_ref_success),
-		cmocka_unit_test(test_drpc_add_ref_invalid_count)
+		cmocka_unit_test(test_drpc_add_ref_doesnt_update_max_count)
 	};
 	return cmocka_run_group_tests(tests, NULL, NULL);
 }
