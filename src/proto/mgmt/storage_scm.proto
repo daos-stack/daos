@@ -90,8 +90,8 @@ message ScanScmReq {}
 
 message ScanScmResp {
 	repeated ScmModule modules = 1;
-	ResponseState state = 2;
-	// TODO: return typed scm pmem devices or mount
+	repeated PmemDevice pmems = 2;
+	ResponseState state = 3;
 }
 
 message FormatScmReq {}

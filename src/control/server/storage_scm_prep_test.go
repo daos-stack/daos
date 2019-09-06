@@ -50,6 +50,7 @@ type mockPrepScm struct {
 	resetRet         error
 	currentState     ScmState
 	getStateRet      error
+	getNamespacesRet error
 }
 
 func (mp *mockPrepScm) Prep(ScmState) (bool, []pmemDev, error) {
@@ -60,6 +61,9 @@ func (mp *mockPrepScm) PrepReset(ScmState) (bool, error) {
 }
 func (mp *mockPrepScm) GetState() (ScmState, error) {
 	return mp.currentState, mp.getStateRet
+}
+func (mp *mockPrepScm) GetNamespaces() ([]pmemDev, error) {
+	return mp.pmemDevs, mp.getNamespacesRet
 }
 
 func newMockPrepScm() PrepScm {
