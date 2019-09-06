@@ -87,7 +87,7 @@ func chownAll(config *Configuration, usr *user.User, grp *user.Group) error {
 	}
 
 	for _, srv := range config.Servers {
-		paths = append(paths, srv.ScmMount, srv.LogFile)
+		paths = append(paths, srv.Storage.SCM.MountPoint, srv.LogFile)
 	}
 
 	for _, path := range paths {

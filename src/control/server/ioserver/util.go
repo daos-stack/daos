@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,39 +21,53 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package server
+package ioserver
 
 import (
-	"context"
-	"testing"
+	"os"
+	"os/exec"
+	"path"
 
-	. "github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/pkg/errors"
 )
 
-// TODO: add server side streaming test for list features
+type (
+	cmdLogger struct {
+		logFn  func(string)
+		prefix string
+	}
+)
 
-func TestGetFeature(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer ShowBufferOnFailure(t, buf)()
-
-	cs := defaultMockControlService(t, log)
-
-	mockFeature := MockFeaturePB()
-	fMap := make(FeatureMap)
-	fMap[mockFeature.Fname.Name] = mockFeature
-	cs.supportedFeatures = fMap
-
-	feature, err := cs.GetFeature(context.TODO(), mockFeature.Fname)
-	if err != nil {
-		t.Fatal(err)
+func (cl *cmdLogger) Write(data []byte) (int, error) {
+	if cl.logFn == nil {
+		return 0, errors.New("no log function set in cmdLogger")
 	}
 
-	AssertEqual(t, feature, mockFeature, "")
+	var msg string
+	if cl.prefix != "" {
+		msg = cl.prefix + " "
+	}
+	msg += string(data)
+	cl.logFn(msg)
+	return len(data), nil
+}
 
-	_, err = cs.GetFeature(context.TODO(), &pb.FeatureName{Name: "non-existent"})
+func findBinary(binName string) (string, error) {
+	// Try the direct route first
+	binPath, err := exec.LookPath(binName)
 	if err == nil {
-		t.Fatal(err)
+		return binPath, nil
 	}
+
+	// If that fails, look to see if it's adjacent to
+	// this binary
+	selfPath, err := os.Readlink("/proc/self/exe")
+	if err != nil {
+		return "", errors.Wrap(err, "unable to determine path to self")
+	}
+	binPath = path.Join(path.Dir(selfPath), binName)
+	if _, err := os.Stat(binPath); err != nil {
+		return "", errors.Errorf("unable to locate %s", binName)
+	}
+	return binPath, nil
 }
