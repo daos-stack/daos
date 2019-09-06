@@ -53,7 +53,6 @@ struct drpc {
 	struct unixcomm	*comm; /** unix domain socket communication context */
 	int		sequence; /** sequence number of latest message sent */
 	uint32_t	ref_count; /** open refs to this ctx */
-	ABT_mutex	ref_count_mutex; /** mutex for accessing ref_count */
 
 	/**
 	 * Handler for messages received by a listening drpc context.

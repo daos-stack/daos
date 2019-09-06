@@ -404,8 +404,6 @@ init_drpc_ctx(struct drpc *ctx, struct unixcomm *comm, drpc_handler_t handler)
 	ctx->handler = handler;
 	ctx->sequence = 0;
 	ctx->ref_count = 1;
-
-	ABT_mutex_create(&ctx->ref_count_mutex);
 }
 
 /**
@@ -653,10 +651,8 @@ drpc_close(struct drpc *ctx)
 		return -DER_INVAL;
 	}
 
-	ABT_mutex_lock(ctx->ref_count_mutex);
 	if (ctx->ref_count == 0) {
 		D_ERROR("Ref count is already zero\n");
-		ABT_mutex_unlock(ctx->ref_count_mutex);
 		return -DER_INVAL;
 	}
 
@@ -665,7 +661,6 @@ drpc_close(struct drpc *ctx)
 	ctx->ref_count--;
 
 	new_count = ctx->ref_count;
-	ABT_mutex_unlock(ctx->ref_count_mutex);
 
 	if (new_count == 0) {
 		D_INFO("Closing dRPC socket fd=%d\n", ctx->comm->fd);
@@ -673,7 +668,6 @@ drpc_close(struct drpc *ctx)
 		ret = unixcomm_close(ctx->comm);
 		if (ret != 0)
 			D_ERROR("Failed to close dRPC socket (rc=%d)\n", ret);
-		ABT_mutex_free(&ctx->ref_count_mutex);
 		D_FREE(ctx);
 	}
 	return 0;
@@ -697,7 +691,6 @@ drpc_add_ref(struct drpc *ctx)
 		return -DER_INVAL;
 	}
 
-	ABT_mutex_lock(ctx->ref_count_mutex);
 	if (ctx->ref_count == UINT_MAX) {
 		D_ERROR("Can't increment current ref count (count=%u)\n",
 			ctx->ref_count);
@@ -706,7 +699,6 @@ drpc_add_ref(struct drpc *ctx)
 
 	ctx->ref_count++;
 out:
-	ABT_mutex_unlock(ctx->ref_count_mutex);
 	return rc;
 }
 
