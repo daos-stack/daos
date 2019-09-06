@@ -20,7 +20,7 @@ def scons():
     denv.AppendUnique(LIBPATH=[Dir('.')])
 
     fenv = denv.Clone()
-    prereqs.require(fenv, 'fuse')    
+    prereqs.require(fenv, 'fuse')
     dfuse_hl_src = ['dfuse_hl.c']
     dfuse_hl = daos_build.program(fenv, 'dfuse_hl', dfuse_hl_src,
                                   LIBS=libraries)

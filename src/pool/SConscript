@@ -9,7 +9,7 @@ def scons():
     denv = env.Clone()
 
     prereqs.require(denv, 'argobots', 'protobufc')
-    
+
     common = denv.SharedObject(['rpc.c'])
     # ds_pool: Pool Server
     ds_pool = daos_build.library(denv, 'pool',

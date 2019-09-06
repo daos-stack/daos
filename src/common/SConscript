@@ -13,7 +13,7 @@ def scons():
     # linked in.
 
     prereqs.require(env, 'pmdk', 'cart')
-    
+
     if platform_arm:
         prereqs.require(env, 'mchecksum')
     else:

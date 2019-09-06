@@ -18,7 +18,7 @@ def scons():
     denv = env.Clone()
 
     prereqs.require(denv, 'protobufc', 'argobots')
-    
+
     # Populate the object cache
     cache = {}
     for src_file in SRC_FILES:
