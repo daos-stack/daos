@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,39 +21,49 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package server
+package ioserver
 
 import (
-	"context"
-	"testing"
+	"math"
+	"strconv"
 
-	. "github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/pkg/errors"
 )
 
-// TODO: add server side streaming test for list features
+// Rank is used to uniquely identify a server within a cluster
+type Rank uint32
 
-func TestGetFeature(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer ShowBufferOnFailure(t, buf)()
+const (
+	// MaxRank is the largest valid Rank value
+	MaxRank Rank = math.MaxUint32 - 1
+	// NilRank is a an unset Rank (0 is a valid Rank)
+	NilRank Rank = math.MaxUint32
+)
 
-	cs := defaultMockControlService(t, log)
+func NewRankPtr(in uint32) *Rank {
+	r := Rank(in)
+	return &r
+}
 
-	mockFeature := MockFeaturePB()
-	fMap := make(FeatureMap)
-	fMap[mockFeature.Fname.Name] = mockFeature
-	cs.supportedFeatures = fMap
+func (r Rank) String() string {
+	return strconv.FormatUint(uint64(r), 10)
+}
 
-	feature, err := cs.GetFeature(context.TODO(), mockFeature.Fname)
-	if err != nil {
-		t.Fatal(err)
+func (r *Rank) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var i uint32
+	if err := unmarshal(&i); err != nil {
+		return err
 	}
-
-	AssertEqual(t, feature, mockFeature, "")
-
-	_, err = cs.GetFeature(context.TODO(), &pb.FeatureName{Name: "non-existent"})
-	if err == nil {
-		t.Fatal(err)
+	if err := checkRank(Rank(i)); err != nil {
+		return err
 	}
+	*r = Rank(i)
+	return nil
+}
+
+func checkRank(r Rank) error {
+	if r == NilRank {
+		return errors.Errorf("rank %d out of range [0, %d]", r, MaxRank)
+	}
+	return nil
 }
