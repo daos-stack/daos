@@ -247,7 +247,6 @@ func (n *nvmeStorage) Format(i int, results *(types.NvmeControllerResults)) {
 		log.Debugf("bdev file format successful (%s)\n", pciAddr)
 
 		addCretFormat(pb.ResponseStatus_CTRL_SUCCESS, "", msgBdevClassIsFile)
-		n.controllers = loadControllers(cs, ns)
 	case bdNVMe:
 		for _, pciAddr = range srv.BdevList {
 			if pciAddr == "" {
