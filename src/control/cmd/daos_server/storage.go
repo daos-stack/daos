@@ -40,12 +40,11 @@ type storageCmd struct {
 }
 
 type storageScanCmd struct {
-	cfgCmd
 	logCmd
 }
 
 func (cmd *storageScanCmd) Execute(args []string) error {
-	svc, err := server.NewStorageControlService(cmd.log, cmd.config)
+	svc, err := server.NewStorageControlService(cmd.log, server.NewConfiguration())
 	if err != nil {
 		return errors.WithMessage(err, "failed to init ControlService")
 	}
@@ -79,12 +78,11 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 
 type storagePrepNvmeCmd struct {
 	logCmd
-	cfgCmd
 	types.StoragePrepareNvmeCmd
 }
 
 func (cmd *storagePrepNvmeCmd) Execute(args []string) error {
-	svc, err := server.NewStorageControlService(cmd.log, cmd.config)
+	svc, err := server.NewStorageControlService(cmd.log, server.NewConfiguration())
 	if err != nil {
 		return errors.WithMessage(err, "initialising ControlService")
 	}
@@ -98,7 +96,6 @@ func (cmd *storagePrepNvmeCmd) Execute(args []string) error {
 }
 
 type storagePrepScmCmd struct {
-	cfgCmd
 	logCmd
 	types.StoragePrepareScmCmd
 	Force bool `short:"f" long:"force" description:"Perform format without prompting for confirmation"`
@@ -118,7 +115,7 @@ func (cmd *storagePrepScmCmd) Execute(args []string) (err error) {
 		return errors.New("consent not given")
 	}
 
-	svc, err := server.NewStorageControlService(cmd.log, cmd.config)
+	svc, err := server.NewStorageControlService(cmd.log, server.NewConfiguration())
 	if err != nil {
 		return errors.WithMessage(err, "initialising ControlService")
 	}
