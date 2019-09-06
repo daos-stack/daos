@@ -14,6 +14,9 @@ timeout: 500
 server_config:
     name: daos_server
     log_mask: ERR
+ server:
+  bdev_class: nvme
+  bdev_list: ["0000:81:00.0"]
 pool:
     createmode:
         mode_RW:
