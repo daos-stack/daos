@@ -57,19 +57,30 @@ type storagePrepareCmd struct {
 
 // Execute is run when storagePrepareCmd activates
 func (cmd *storagePrepareCmd) Execute(args []string) error {
-	storagePrepare(
-		cmd.conns,
-		&pb.StoragePrepareReq{
-			Nvme: &pb.PrepareNvmeReq{
-				Pciwhitelist: cmd.PCIWhiteList,
-				Nrhugepages:  int32(cmd.NrHugepages),
-				Targetuser:   cmd.TargetUser,
-				Reset_:       cmd.Reset,
-			},
-			Scm: &pb.PrepareScmReq{
-				Reset_: cmd.Reset,
-			},
-		}, cmd.Force)
+	var nReq *pb.PrepareNvmeReq
+	var sReq *pb.PrepareScmReq
+
+	if !cmd.Nvme && !cmd.Scm {
+		cmd.Nvme = true
+		cmd.Scm = true
+	}
+
+	if cmd.Nvme {
+		nReq = &pb.PrepareNvmeReq{
+			Pciwhitelist: cmd.PCIWhiteList,
+			Nrhugepages:  int32(cmd.NrHugepages),
+			Targetuser:   cmd.TargetUser,
+			Reset_:       cmd.Reset,
+		}
+	}
+	if cmd.Scm {
+		sReq = &pb.PrepareScmReq{
+			Reset_: cmd.Reset,
+		}
+	}
+
+	storagePrepare(cmd.conns, &pb.StoragePrepareReq{Nvme: nReq, Scm: sReq},
+		cmd.Force)
 
 	return nil
 }
