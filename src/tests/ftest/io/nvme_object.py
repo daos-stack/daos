@@ -23,12 +23,10 @@
 """
 from __future__ import print_function
 
-import os
 import avocado
 
-from daos_api import DaosPool, DaosApiError
-from ior_test_base import IorTestBase
-from test_utils import TestPool, TestContainer, TestContainerData
+from daos_api import DaosApiError
+from test_utils import TestPool, TestContainer
 from apricot import TestWithServers
 
 class NvmeObject(TestWithServers):
@@ -66,16 +64,16 @@ class NvmeObject(TestWithServers):
         """Jira ID: DAOS-2087.
 
         Test Description:
-            Test will create pool on nvme using TestPool
+            Test will create single pool on nvme using TestPool
             Create large number of objects
             Update/Fetch with different object ID in single pool
 
         Use Cases:
             Verify the objects are being created and the data is not
             corrupted.
-        :avocado: tags=nvme,nvme_object_single_pool,medium
+        :avocado: tags=nvme,pr,nvme_object_single_pool,small
         """
-        
+
         # Test Params
         self.pool = TestPool(self.context, self.log)
         self.pool.get_params(self)
@@ -88,7 +86,7 @@ class NvmeObject(TestWithServers):
         self.pool.create()
         self.pool.connect()
 
-        # create container   
+        # create container
         self.container.create()
         print(self.record_size[:-1])
         for record in self.record_size[:-1]:
@@ -106,18 +104,18 @@ class NvmeObject(TestWithServers):
 
         Test Description:
             Test will create multiple pools on nvme using TestPool
-            Create large number of objects
+            Create large number of objects for each pool
             Update/Fetch with different object ID in multiple pools
 
         Use Cases:
             Verify the objects are being created and the data is not
             corrupted.
-        :avocado: tags=nvme,nvme_object_multiple_pools,medium
+        :avocado: tags=nvme,full_regression,hw,nvme_object_multiple_pools,small
         """
-        
+
         for size in self.pool_size:
             # Test Params
-            self.pool = TestPool(self.context, self.log) 
+            self.pool = TestPool(self.context, self.log)
             self.pool.get_params(self)
             self.container = TestContainer(self.pool)
             self.container.get_params(self)
