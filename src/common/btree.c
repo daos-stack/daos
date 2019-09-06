@@ -1871,7 +1871,7 @@ btr_insert(struct btr_context *tcx, d_iov_t *key, d_iov_t *val)
 		if (rc != 0) {
 			D_DEBUG(DB_TRACE,
 				"Failed to insert record to leaf: %d\n", rc);
-			goto failed;
+			return rc;
 		}
 
 	} else {
@@ -1881,13 +1881,10 @@ btr_insert(struct btr_context *tcx, d_iov_t *key, d_iov_t *val)
 		rc = btr_root_start(tcx, rec);
 		if (rc != 0) {
 			D_DEBUG(DB_TRACE, "Failed to start the tree: %d\n", rc);
-			goto failed;
+			return rc;
 		}
 	}
 	return 0;
- failed:
-	btr_rec_free(tcx, rec, NULL);
-	return rc;
 }
 
 static int
