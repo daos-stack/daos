@@ -712,7 +712,9 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		D_ASSERT(ul_req != NULL);
 		ul_in = crt_req_get(ul_req);
 		RPC_ERROR(rpc_priv,
-			  "timedout due to URI_LOOKUP to group %s, rank %d through PSR %d timedout\n",
+			  "timedout due to URI_LOOKUP(rpc_priv %p) to group %s,"
+			  "rank %d through PSR %d timedout\n",
+			  container_of(ul_req, struct crt_rpc_priv, crp_pub),
 			  ul_in->ul_grp_id,
 			  ul_in->ul_rank,
 			  ul_req->cr_ep.ep_rank);
@@ -720,7 +722,7 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		/*
 		 * don't crt_rpc_complete rpc_priv here, because crt_req_abort
 		 * above will lead to ul_req's completion callback --
-		 * crt_req_uri_lookup_psr_cb() be called inside there will
+		 * crt_req_uri_lookup_by_rpc_cb() be called inside there will
 		 * complete this rpc_priv.
 		 */
 		/* crt_rpc_complete(rpc_priv, -DER_PROTO); */

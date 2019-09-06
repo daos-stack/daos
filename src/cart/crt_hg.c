@@ -1225,14 +1225,6 @@ crt_hg_req_cancel(struct crt_rpc_priv *rpc_priv)
 	if (!rpc_priv->crp_hg_hdl)
 		D_GOTO(out, rc = -DER_INVAL);
 
-	if (rpc_priv->crp_state != RPC_STATE_REQ_SENT ||
-	    rpc_priv->crp_on_wire != 1) {
-		RPC_TRACE(DB_NET, rpc_priv,
-			  "rpc_priv->crp_state %#x, RPC not sent, skipping.\n",
-			  rpc_priv->crp_state);
-		return rc;
-	}
-
 	hg_ret = HG_Cancel(rpc_priv->crp_hg_hdl);
 	if (hg_ret != HG_SUCCESS) {
 		RPC_ERROR(rpc_priv, "crt_hg_req_cancel failed, hg_ret: %d\n",

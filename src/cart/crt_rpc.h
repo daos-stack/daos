@@ -151,6 +151,7 @@ struct crt_corpc_info {
 };
 
 struct crt_rpc_priv {
+	crt_rpc_t		crp_pub; /* public part */
 	/* link to crt_ep_inflight::epi_req_q/::epi_req_waitq */
 	d_list_t		crp_epi_link;
 	/* tmp_link used in crt_context_req_untrack */
@@ -167,7 +168,6 @@ struct crt_rpc_priv {
 	void			*crp_arg; /* argument for crp_complete_cb */
 	struct crt_ep_inflight	*crp_epi; /* point back to inflight ep */
 
-	crt_rpc_t		crp_pub; /* public part */
 	crt_rpc_state_t		crp_state; /* RPC state */
 	hg_handle_t		crp_hg_hdl; /* HG request handle */
 	hg_addr_t		crp_hg_addr; /* target na address */
