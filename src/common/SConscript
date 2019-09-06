@@ -7,12 +7,7 @@ def scons():
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
-    # Hack alert.   Add pmem to pmdk libs so libpmem is found
-    # in the rpath.   It is normally only included by libpmemobj
-    # but that library doesn't contain the installed location
-    # in the rpath.
-    prereqs.require(env, 'pmdk', 'cart', 'protobufc')
-    #pmdk_libs=['pmemobj', 'pmem'])
+    prereqs.require(env, 'pmdk', 'cart', 'protobufc', 'argobots')
 
     if platform_arm:
         prereqs.require(env, 'mchecksum')
