@@ -142,7 +142,7 @@ func (cr ClientSmdResult) String() string {
 		fmt.Fprintf(&buf, "\t\tUUID: %+v\n", d.Uuid)
 		fmt.Fprintf(&buf, "\t\tVOS Target IDs: ")
 		for _, t := range d.TgtIds {
-			fmt.Fprintf(&buf, "%d,", t)
+			fmt.Fprintf(&buf, "%d ", t)
 		}
 		fmt.Fprintf(&buf, "\n")
 	}
