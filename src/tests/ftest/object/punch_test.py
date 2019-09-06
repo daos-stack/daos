@@ -66,30 +66,6 @@ class PunchTest(TestWithServers):
             print(traceback.format_exc())
             self.fail("Test failed during setup.\n")
 
-    def tearDown(self):
-
-        try:
-            if self.container:
-                self.container.close()
-
-            # wait a few seconds and then destroy
-            time.sleep(5)
-            if self.container:
-                self.container.destroy()
-
-            # cleanup the pool
-            if self.pool:
-                self.pool.disconnect()
-                self.pool.destroy(1)
-
-        except DaosApiError as excpn:
-            print(excpn)
-            print(traceback.format_exc())
-            self.fail("Test failed during teardown.\n")
-
-        finally:
-            super(PunchTest, self).tearDown()
-
     def test_dkey_punch(self):
         """
         The most basic test of the dkey punch function.
