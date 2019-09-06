@@ -32,25 +32,22 @@
 
 #include <getopt.h>
 #include <daos/checksum.h>
+#include <gurt/common.h>
+
 #ifdef MCHECKSUM_SUPPORT
 #include <mchecksum.h>
 #include <mchecksum_error.h>
 #endif
 
-void timespec_diff(struct timespec *start, struct timespec *stop,
+void
+timespec_diff(struct timespec *start, struct timespec *stop,
 		   struct timespec *result)
 {
-	if (stop->tv_nsec < start->tv_nsec) {
-		/** borrow from seconds */
-		result->tv_sec = stop->tv_sec - start->tv_sec - 1;
-		result->tv_nsec = stop->tv_nsec - start->tv_nsec + 1000000000;
-	} else {
-		result->tv_sec = stop->tv_sec - start->tv_sec;
-		result->tv_nsec = stop->tv_nsec - start->tv_nsec;
-	}
+	*result = d_timediff(*start, *stop);
 }
 
-static int timebox(int (*cb)(void *), void *arg, uint64_t *usec)
+static int
+timebox(int (*cb)(void *), void *arg, uint64_t *usec)
 {
 	struct timespec start, end, result;
 
@@ -75,7 +72,8 @@ struct csum_timing_args {
 
 };
 
-int csum_timed_cb(void *arg)
+int
+csum_timed_cb(void *arg)
 {
 	struct csum_timing_args *timing_args = arg;
 	int rc =  daos_csummer_update(timing_args->csummer, timing_args->buf,
@@ -85,7 +83,8 @@ int csum_timed_cb(void *arg)
 	return daos_csummer_finish(timing_args->csummer);
 }
 
-int run_timings(struct csum_ft *fts[], const int types_count,
+int
+run_timings(struct csum_ft *fts[], const int types_count,
 		 const size_t *sizes, const int sizes_count)
 {
 	int size_idx;
@@ -246,7 +245,8 @@ static struct option l_opts[] = {
 	{"help",	no_argument,		NULL, 'h'}
 };
 
-bool show_help(int argc, char *argv[])
+bool
+show_help(int argc, char *argv[])
 {
 	bool result = false;
 	int t_optind = optind;
@@ -270,7 +270,8 @@ bool show_help(int argc, char *argv[])
 #define	csum_str_match(str, csum_str) \
 	(strncmp((str), (csum_str), sizeof((csum_str))) == 0)
 
-struct csum_ft *strarg2ft(char *str)
+struct csum_ft *
+strarg2ft(char *str)
 {
 	if (csum_str_match(str, "crc16"))
 		return daos_csum_type2algo(CSUM_TYPE_ISAL_CRC16_T10DIF);
@@ -286,7 +287,8 @@ struct csum_ft *strarg2ft(char *str)
 	return NULL;
 }
 
-int main(int argc, char *argv[])
+int
+main(int argc, char *argv[])
 {
 	const int		 MAX_TYPES = 64;
 	const int		 MAX_SIZES = 64;

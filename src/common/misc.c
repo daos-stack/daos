@@ -244,7 +244,8 @@ daos_sgls_packed_size(d_sg_list_t *sgls, int nr, daos_size_t *buf_size)
 
 	return size;
 }
-bool daos_sgl_get_bytes(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
+bool
+daos_sgl_get_bytes(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
 			size_t buf_len_req,
 			uint8_t **buf, size_t *buf_len)
 {
@@ -270,8 +271,9 @@ bool daos_sgl_get_bytes(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
 	return idx->iov_idx >= sgl->sg_nr;
 }
 
-int daos_sgl_processor(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
-		       size_t bytes,
+int
+daos_sgl_processor(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
+		       size_t requested_bytes,
 		       daos_sgl_process_cb process_cb, void *cb_args)
 {
 	uint8_t		*buf;
@@ -283,14 +285,14 @@ int daos_sgl_processor(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
 	 * loop until all bytes are consumed, the end of the sgl is reached,
 	 *  or an error occurs
 	 */
-	while (bytes > 0 && !end && !rc) {
-		end = daos_sgl_get_bytes(sgl, idx, bytes, &buf, &len);
-		bytes -= len;
+	while (requested_bytes > 0 && !end && !rc) {
+		end = daos_sgl_get_bytes(sgl, idx, requested_bytes, &buf, &len);
+		requested_bytes -= len;
 		rc = process_cb(buf, len, cb_args);
 	}
 
-	if (bytes)
-		D_WARN("WARN: Not enough in SGL to satisfy requested bytes");
+	if (requested_bytes)
+		D_WARN("Requested more bytes than what's available in sgl");
 
 	return rc;
 }

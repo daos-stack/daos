@@ -238,7 +238,7 @@ typedef int (*daos_sgl_process_cb)(uint8_t *buf, size_t len, void *args);
  *
  * @param sgl		sgl to process
  * @param idx		index to keep track of what's been processed
- * @param bytes		number of bytes to process
+ * @param requested_bytes		number of bytes to process
  * @param process_cb	callback function for the processing
  * @param cb_args	arguments for the callback function
  *
@@ -246,7 +246,7 @@ typedef int (*daos_sgl_process_cb)(uint8_t *buf, size_t len, void *args);
  *			Expectation is 0 is success.
  */
 int daos_sgl_processor(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
-		       size_t bytes,
+		       size_t requested_bytes,
 		       daos_sgl_process_cb process_cb, void *cb_args);
 
 char *daos_str_trimwhite(char *str);
