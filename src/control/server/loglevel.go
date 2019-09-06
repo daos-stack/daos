@@ -20,47 +20,40 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
-
 package server
 
-import (
-	"testing"
+import "github.com/daos-stack/daos/src/control/logging"
 
-	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
-	"github.com/daos-stack/daos/src/control/server/storage"
+// ControlLogLevel is a type that specifies log levels
+type ControlLogLevel logging.LogLevel
+
+// TODO(mjmac): Evaluate whether or not this layer of indirection
+// adds any value.
+const (
+	ControlLogLevelDebug = ControlLogLevel(logging.LogLevelDebug)
+	ControlLogLevelInfo  = ControlLogLevel(logging.LogLevelInfo)
+	ControlLogLevelError = ControlLogLevel(logging.LogLevelError)
 )
 
-func defaultMockControlService(t *testing.T, log logging.Logger) *ControlService {
-	c := defaultMockConfig(t)
-	return mockControlService(t, log, c)
+// UnmarshalYAML implements yaml.Unmarshaler on ControlLogMask struct
+func (c *ControlLogLevel) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var strLevel string
+	if err := unmarshal(&strLevel); err != nil {
+		return err
+	}
+
+	var level logging.LogLevel
+	if err := level.SetString(strLevel); err != nil {
+		return err
+	}
+	*c = ControlLogLevel(level)
+	return nil
 }
 
-func mockControlService(t *testing.T, log logging.Logger, cfg *Configuration) *ControlService {
-	t.Helper()
+func (c ControlLogLevel) MarshalYAML() (interface{}, error) {
+	return c.String(), nil
+}
 
-	cs := ControlService{
-		StorageControlService: StorageControlService{
-			log:  log,
-			nvme: defaultMockNvmeStorage(log, cfg.ext),
-			scm:  defaultMockScmStorage(log, cfg.ext),
-		},
-		harness: &IOServerHarness{
-			log: log,
-		},
-	}
-
-	for _, srvCfg := range cfg.Servers {
-		bp, err := storage.NewBdevProvider(log, "", &srvCfg.Storage.Bdev)
-		if err != nil {
-			t.Fatal(err)
-		}
-		runner := ioserver.NewRunner(log, srvCfg)
-		instance := NewIOServerInstance(cfg.ext, log, bp, nil, runner)
-		if err := cs.harness.AddInstance(instance); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	return &cs
+func (c ControlLogLevel) String() string {
+	return logging.LogLevel(c).String()
 }
