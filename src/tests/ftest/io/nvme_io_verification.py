@@ -28,10 +28,8 @@ import avocado
 
 from daos_api import DaosPool, DaosApiError
 from ior_test_base import IorTestBase
-from test_utils import TestPool
-import general_utils
 
-class NvmePool(IorTestBase):
+class NvmeIoVerification(IorTestBase):
     """Test class for NVMe with IO tests.
 
     Test Class Description:
@@ -41,18 +39,27 @@ class NvmePool(IorTestBase):
     """
 
     @avocado.fail_on(DaosApiError)
-    def test_nvme_pool(self):
+    def test_nvme_io_verification(self):
         """Jira ID: DAOS-2649.
 
         Test Description:
-            Test will run IOR with standard and non standard sizes.  IOR will
-            be run for all Object type supported. Purpose is to verify pool
-            size (SCM and NVMe) for IOR file.
+            Test will run IOR with non standard transfer sizes for different
+            set of pool sizes. Purpose is to verify io transaction to scm and
+            nvme for different pool sizes under different situations.
 
         Use Cases:
-            Running multiple IOR on same server start instance.
-
-        :avocado: tags=all,daosio,full_regression,hw,nvme_pool
+            (1) Running IOR with different set of transfer size where first
+            transfer size is < 4096 and then > 4096. Verify that data goes to
+            scm if transfer size < 4096 and then it goes to nvme if transfer
+            size is > 4096.
+            (2) Repeat the case(1) with maximum nvme pool size that can be
+            created.
+            (3) Running IOR with different set of transfer size where the
+            transfer size is > 4096 throughout. Verify that data goes to nvme
+            as transfer size is > 4096.
+            (4) Repeat the case(3) with maximum nvme pool size that can be
+            created.
+        :avocado: tags=all,daosio,full_regression,hw,nvme_io_verification
         """
         # Pool params
         pool_mode = self.params.get("mode", '/run/pool/createmode/*')
@@ -63,7 +70,7 @@ class NvmePool(IorTestBase):
 
         # Test params
         tests = self.params.get("ior_sequence", '/run/ior/*')
-        transfer_size = self.params.get("tsize", '/run/ior/transfersize/case1/')
+        transfer_size = self.params.get("tsize", '/run/ior/transfersize/*/')
 
         # Loop for every IOR object type
         for ior_param in tests:
@@ -73,39 +80,18 @@ class NvmePool(IorTestBase):
                 pool_mode, pool_uid, pool_gid, ior_param[0], pool_group,
                 svcn=pool_svcn, nvme_size=ior_param[1])
 
-#            general_utils.pcmd(self.hostlist_clients, self.pool.connect(1 << 1))
-
             self.pool.connect(1 << 1)
             # Get the current pool sizes
             size_before_ior = self.pool.pool_query()
 
             for tsize in transfer_size:
-                # There is an issue with NVMe if Transfer size>64M,
-                # Skipped this sizes for now
-                #if ior_param[2] > 67108864:
-                #    self.log.warning("Xfersize > 64M fails - DAOS-1264")
-                #    continue
-
-                # Create and connect to a pool
-#                self.pool = DaosPool(self.context)
-#                self.pool.create(
-#                    pool_mode, pool_uid, pool_gid, ior_param[0], pool_group,
-#                    svcn=pool_svcn, nvme_size=ior_param[1])
-#                self.pool.connect(1 << 1)
-
-                # Get the current pool sizes
-#                size_before_ior = self.pool.pool_query()
-
-#                self.pool.scm_size.update(ior_param[0])
-#                self.pool.nvme_size.update(ior_param[1])
                 # Run ior with the parameters specified for this pass
-                print("tsize:{}".format(tsize))
                 self.ior_cmd.transfer_size.update(tsize)
                 self.ior_cmd.set_daos_params(self.server_group, self.pool)
                 self.run_ior(self.get_job_manager_command())
 
                 # Verify IOR consumed the expected amount ofrom the pool
-                self.verify_pool_size(size_before_ior, self.ior_cmd.num_tasks.value)
+                self.verify_pool_size(size_before_ior, self.processes)
 
             try:
                 if self.pool:

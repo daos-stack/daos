@@ -27,7 +27,6 @@ from apricot import TestWithServers
 from ior_utils import IorCommand, IorFailed
 from mpio_utils import MpioUtils
 from test_utils import TestPool
-from daos_api import DaosPool
 
 class IorTestBase(TestWithServers):
     """Base IOR test class.
@@ -54,8 +53,10 @@ class IorTestBase(TestWithServers):
 
     def tearDown(self):
         """Tear down each test case."""
+        if isinstance(self.pool, TestPool):
+            self.pool = self.pool.pool
         try:
-            if self.pool is not None and self.pool.pool.attached:
+            if self.pool is not None and self.pool.attached:
                 self.pool.destroy(1)
         finally:
             # Stop the servers and agents
@@ -85,7 +86,7 @@ class IorTestBase(TestWithServers):
             self.create_pool()
 
         # Update IOR params with the pool
-        self.ior_cmd.set_daos_params(self.server_group, self.pool)
+        self.ior_cmd.set_daos_params(self.server_group, self.pool.pool)
 
         # Run IOR
         self.run_ior(self.get_job_manager_command(), self.processes)
@@ -130,10 +131,8 @@ class IorTestBase(TestWithServers):
             original_pool_info (PoolInfo): Pool info prior to IOR
             processes (int): number of processes
         """
-        if isinstance(self.pool, DaosPool):
-            pass
-        elif isinstance(self.pool, TestPool):
-            self.pool = pool.pool
+        if isinstance(self.pool, TestPool):
+            self.pool = self.pool.pool
 
         # Get the current pool size for comparison
         current_pool_info = self.pool.pool_query()
@@ -148,7 +147,6 @@ class IorTestBase(TestWithServers):
             self.log.info(
                 "Size is < 4K,Size verification will be done with SCM size")
             storage_index = 0
-
         actual_pool_size = \
             original_pool_info.pi_space.ps_space.s_free[storage_index] - \
             current_pool_info.pi_space.ps_space.s_free[storage_index]
