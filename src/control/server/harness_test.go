@@ -47,7 +47,9 @@ func TestHarnessCreateSuperblocks(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ext := &mockExt{}
+	ext := &mockExt{
+		isMountPointRet: true,
+	}
 	h := NewIOServerHarness(ext, log)
 	for idx, mnt := range []string{"one", "two"} {
 		if err := os.MkdirAll(filepath.Join(testDir, mnt), 0777); err != nil {

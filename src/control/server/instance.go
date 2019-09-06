@@ -78,11 +78,26 @@ func NewIOServerInstance(ext External, log logging.Logger,
 	}
 }
 
+// scmConfig returns the SCM configuration assigned to this instance.
+func (srv *IOServerInstance) scmConfig() (storage.ScmConfig, error) {
+	var nullCfg storage.ScmConfig
+	if srv.runner == nil {
+		return nullCfg, errors.New("no runner configured")
+	}
+	if srv.runner.Config == nil {
+		return nullCfg, errors.New("no SCM config set on runner")
+	}
+	return srv.runner.Config.Storage.SCM, nil
+}
+
 // MountScmDevice mounts the configured SCM device (DCPM or ramdisk emulation)
 // at the mountpoint specified in the configuration. If the device is already
 // mounted, the function returns nil, indicating success.
 func (srv *IOServerInstance) MountScmDevice() error {
-	scmCfg := srv.runner.Config.Storage.SCM
+	scmCfg, err := srv.scmConfig()
+	if err != nil {
+		return err
+	}
 
 	isMount, err := srv.ext.isMountPoint(scmCfg.MountPoint)
 	if err != nil && !os.IsNotExist(errors.Cause(err)) {
@@ -105,6 +120,56 @@ func (srv *IOServerInstance) MountScmDevice() error {
 	}
 
 	return nil
+}
+
+// NeedsScmFormat probes the configured instance storage and determines whether
+// or not it requires a format operation before it can be used.
+func (srv *IOServerInstance) NeedsScmFormat() (bool, error) {
+	scmCfg, err := srv.scmConfig()
+	if err != nil {
+		return false, err
+	}
+
+	srv.log.Debugf("%s: checking formatting", scmCfg.MountPoint)
+
+	// TODO: More thorough probing of storage. For now, rely on
+	// existing methods.
+
+	// First, check to see if the mount point even exists.
+	isMounted, err := srv.ext.isMountPoint(scmCfg.MountPoint)
+	if err != nil {
+		// In theory, the only possible error is ENOENT. In practice,
+		// test that assumption and return an error if we get something else.
+		if !os.IsNotExist(errors.Cause(err)) {
+			return false, err
+		}
+		// If there's no mount point, then we need to let our format
+		// operation create it.
+		srv.log.Debugf("%s: needs format (mountpoint doesn't exist)", scmCfg.MountPoint)
+		return true, nil
+	}
+
+	// If it's mounted, then we can assume it doesn't need to be formatted.
+	if isMounted {
+		return false, nil
+	}
+
+	// If we're using ramdisk, then we should stop here and return true,
+	// as an umounted ramdisk is by definition unformatted.
+	if scmCfg.Class == storage.ScmClassRAM {
+		srv.log.Debugf("%s: needs format (unmounted ramdisk)", scmCfg.MountPoint)
+		return true, nil
+	}
+
+	// Next, try to mount the SCM device. If that succeeds, then we shouldn't
+	// try to format it.
+	if err := srv.MountScmDevice(); err == nil {
+		return false, nil
+	}
+
+	// At this point we can be pretty sure that the device needs to be formatted.
+	srv.log.Debugf("%s: needs format (mount failed)", scmCfg.MountPoint)
+	return true, nil
 }
 
 // Start checks to make sure that the instance has a valid superblock before

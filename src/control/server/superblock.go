@@ -81,8 +81,15 @@ func (srv *IOServerInstance) superblockPath() string {
 // NeedsSuperblock indicates whether or not the instance appears
 // to need a superblock to be created in order to start.
 func (srv *IOServerInstance) NeedsSuperblock() (bool, error) {
-	err := srv.ReadSuperblock()
+	scmCfg, err := srv.scmConfig()
+	if err != nil {
+		return false, err
+	}
+	srv.log.Debugf("%s: checking superblock", scmCfg.MountPoint)
+
+	err = srv.ReadSuperblock()
 	if os.IsNotExist(errors.Cause(err)) {
+		srv.log.Debugf("%s: needs superblock (doesn't exist)", scmCfg.MountPoint)
 		return true, nil
 	}
 
@@ -138,13 +145,21 @@ func (srv *IOServerInstance) WriteSuperblock() error {
 // ReadSuperblock reads the instance's superblock
 // from storage.
 func (srv *IOServerInstance) ReadSuperblock() error {
+	needsFormat, err := srv.NeedsScmFormat()
+	if err != nil {
+		return errors.Wrap(err, "failed to check storage formatting")
+	}
+	if needsFormat {
+		return errors.New("can't read superblock from unformatted storage")
+	}
+
 	if err := srv.MountScmDevice(); err != nil {
-		return err
+		return errors.Wrap(err, "failed to mount SCM device")
 	}
 
 	sb, err := ReadSuperblock(srv.superblockPath())
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to read instance superblock")
 	}
 	srv.superblock = sb
 
