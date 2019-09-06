@@ -11,15 +11,17 @@ def scons():
     # library isn't so add the dependancy so the include path
     # is correct, but set _libs to [] so that the library isn't
     # linked in.
-    prereqs.require(env, 'pmdk', 'cart', 'protobufc', 'argobots',
-                    argobots_libs=[])
 
+    prereqs.require(env, 'pmdk', 'cart')
+    
     if platform_arm:
         prereqs.require(env, 'mchecksum')
     else:
         prereqs.require(env, 'isal')
 
     denv = env.Clone()
+
+    prereqs.require(denv, 'protobufc', 'cart')
     common_src = ['debug.c', 'mem.c', 'fail_loc.c', 'lru.c',
                   'misc.c', 'pool_map.c', 'sort.c', 'btree.c', 'prop.c',
                   'btree_class.c', 'tse.c', 'rsvc.c', 'checksum.c',
