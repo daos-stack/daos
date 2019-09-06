@@ -1580,6 +1580,20 @@ class DaosContainer(object):
             raise DaosApiError("TX close returned non-zero. RC: {0}"
                                .format(ret))
 
+    def abort_tx(self, txn):
+        """abort a transaction that is done being modified """
+
+        # container should be  in the open state
+        if self.coh == 0:
+            raise DaosApiError("Container needs to be open.")
+
+        c_tx = ctypes.c_uint64(txn)
+
+        func = self.context.get_function('destroy-tx')
+        ret = func(c_tx, None)
+        if ret != 0:
+            raise DaosApiError("TX abort returned non-zero. RC: {0}"
+                               .format(ret))
 
     def write_an_array_value(self, datalist, dkey, akey, obj=None, rank=None,
                              obj_cls=None):

@@ -28,6 +28,7 @@ from ior_utils import IorCommand, IorFailed
 from mpio_utils import MpioUtils
 from test_utils import TestPool
 
+
 class IorTestBase(TestWithServers):
     """Base IOR test class.
 
@@ -43,6 +44,8 @@ class IorTestBase(TestWithServers):
 
     def setUp(self):
         """Set up each test case."""
+        # obtain separate logs
+        self.update_log_file_names()
         # Start the servers and agents
         super(IorTestBase, self).setUp()
 
@@ -115,7 +118,8 @@ class IorTestBase(TestWithServers):
         """
         try:
             self.ior_cmd.run(
-                manager, self.tmp, processes, self.hostfile_clients)
+                manager, self.tmp, processes, self.hostfile_clients,
+                client_log=self.client_log)
         except IorFailed as error:
             self.log.error("IOR Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
