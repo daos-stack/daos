@@ -42,11 +42,12 @@ message BioHealthResp {
 	uint32 read_errs = 6;
 	uint32 write_errs = 7;
 	uint32 unmap_errs = 8;
-	bool temp = 9;
-	bool spare = 10;
-	bool readonly = 11;
-	bool device_reliability = 12;
-	bool volatile_memory = 13;
+	uint32 checksum_errs = 9;
+	bool temp = 10;
+	bool spare = 11;
+	bool readonly = 12;
+	bool device_reliability = 13;
+	bool volatile_memory = 14;
 }
 
 message SmdDevReq {

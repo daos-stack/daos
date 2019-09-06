@@ -808,6 +808,7 @@ process_biohealth_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp->read_errs = bds->bds_bio_read_errs;
 	resp->write_errs = bds->bds_bio_write_errs;
 	resp->unmap_errs = bds->bds_bio_unmap_errs;
+	resp->checksum_errs = bds->bds_checksum_errs;
 	resp->temp = bds->bds_temp_warning ? true : false;
 	resp->spare = bds->bds_avail_spare_warning ? true : false;
 	resp->readonly = bds->bds_read_only_warning ? true : false;

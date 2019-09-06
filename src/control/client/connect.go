@@ -79,6 +79,7 @@ func (cr ClientQueryResult) String() string {
 	fmt.Fprintf(&buf, "\tRead errors: %v\n", cr.Stats.ReadErrs)
 	fmt.Fprintf(&buf, "\tWrite errors: %v\n", cr.Stats.WriteErrs)
 	fmt.Fprintf(&buf, "\tUnmap errors: %v\n", cr.Stats.UnmapErrs)
+	fmt.Fprintf(&buf, "\tChecksum errors: %v\n", cr.Stats.ChecksumErrs)
 	fmt.Fprintf(&buf, "\tDevice Health:\n")
 	fmt.Fprintf(&buf, "\t\tError log entries: %v\n", cr.Stats.ErrorCount)
 	fmt.Fprintf(&buf, "\t\tMedia errors: %v\n", cr.Stats.MediaErrors)

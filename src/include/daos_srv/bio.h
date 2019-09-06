@@ -99,6 +99,7 @@ struct bio_dev_state {
 	uint32_t	 bds_bio_read_errs;
 	uint32_t	 bds_bio_write_errs;
 	uint32_t	 bds_bio_unmap_errs;
+	uint32_t	 bds_checksum_errs;
 	uint16_t	 bds_temperature; /* in Kelvin */
 	/* Critical warnings */
 	uint8_t		 bds_temp_warning	: 1;

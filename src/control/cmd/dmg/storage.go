@@ -35,7 +35,7 @@ type StorCmd struct {
 	Scan   ScanStorCmd   `command:"scan" alias:"s" description:"Scan SCM and NVMe storage attached to remote servers."`
 	Format FormatStorCmd `command:"format" alias:"f" description:"Format SCM and NVMe storage attached to remote servers."`
 	Update UpdateStorCmd `command:"fwupdate" alias:"u" description:"Update firmware on NVMe storage attached to remote servers."`
-	Query  QueryStorCmd `command:"query" alias:"q" description:"Query storage commands, including NVMe SSD device health stats and internal health info."`
+	Query  QueryStorCmd `command:"query" alias:"q" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
 }
 
 // ScanStorCmd is the struct representing the scan storage subcommand.

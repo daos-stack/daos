@@ -55,6 +55,7 @@ struct  _Mgmt__BioHealthResp
   uint32_t read_errs;
   uint32_t write_errs;
   uint32_t unmap_errs;
+  uint32_t checksum_errs;
   protobuf_c_boolean temp;
   protobuf_c_boolean spare;
   protobuf_c_boolean readonly;
@@ -63,7 +64,7 @@ struct  _Mgmt__BioHealthResp
 };
 #define MGMT__BIO_HEALTH_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__bio_health_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+    , 0, (char *)protobuf_c_empty_string, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
 
 
 struct  _Mgmt__SmdDevReq

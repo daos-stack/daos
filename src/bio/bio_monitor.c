@@ -662,5 +662,8 @@ bio_media_error(void *msg_arg)
 			mem->mem_update ? "Write" : "Read", mem->mem_tgt_id);
 	}
 
+	/* TODO Implement checksum error counter */
+	dev_state->bds_checksum_errs = 0;
+
 	D_FREE(mem);
 }

@@ -31,8 +31,8 @@ import (
 
 // QueryStorCmd is the struct representing the query storage subcommand
 type QueryStorCmd struct {
-	Health HealthQueryCmd `command:"health" alias:"h" description:"Query full NVMe SPDK device statistics."`
-	Bio    BioQueryCmd    `command:"bio" alias:"b" description:"Query blob I/O module health data."`
+	Health HealthQueryCmd `command:"device-health" alias:"d" description:"Query raw NVMe SPDK device statistics."`
+	Bio    BioQueryCmd    `command:"blobstore-health" alias:"b" description:"Query internal blobstore health data."`
 	Smd    SmdQueryCmd    `command:"smd" alias:"s" description:"Query per-server metadata."`
 }
 
@@ -45,7 +45,7 @@ type HealthQueryCmd struct {
 // Query the SPDK NVMe device health stats from all devices on all hosts
 func healthQuery(conns client.Connect) {
 	cCtrlrs := conns.DeviceHealthQuery()
-	log.Infof("NVMe SSD controller health stats:\n%s", cCtrlrs)
+	log.Infof("NVMe SSD Device Health Stats:\n%s", cCtrlrs)
 }
 
 // Execute is run when HealthQueryCmd activates
@@ -65,7 +65,7 @@ type BioQueryCmd struct {
 func bioQuery(conns client.Connect, uuid string, tgtid string) {
 	req := &pb.BioHealthReq{DevUuid: uuid, TgtId: tgtid}
 
-	log.Infof("Blob I/O health data:\n%s\n", conns.BioHealthQuery(req))
+	log.Infof("Blobstore Health Data:\n%s\n", conns.BioHealthQuery(req))
 }
 
 // Execute is run when BioQueryCmd activates
@@ -76,22 +76,31 @@ func (b *BioQueryCmd) Execute(args []string) error {
 
 // SmdQueryCmd is the struct representing the "storage query smd" subcommand
 type SmdQueryCmd struct {
-	Devices ListSmdDevCmd `command:"list-devs" alias:"l" description:"List all devices/blobstores stored in per-server metadata table."`
-}
-
-// ListSmdDevCmd is the struct representing the "smd list-devs" subcommand
-type ListSmdDevCmd struct {
 	connectedCmd
+	Devices bool `short:"d" long:"devices" description:"List all devices/blobstores stored in per-server metadata table."`
+	Pools   bool `short:"p" long:"pools" descriptsion:"List all VOS pool targets stored in per-server metadata table."`
 }
 
 // Query per-server metadata device table for all connected servers
-func smdListDev(conns client.Connect) {
-	req := &pb.SmdDevReq{}
-	log.Infof("SMD Device List:\n%s\n", conns.SmdListDevs(req))
+func smdQuery(conns client.Connect, devices bool, pools bool) {
+	// default is to print both pools and devices if not specified
+	if !pools && !devices {
+		pools = true
+		devices = true
+	}
+	if pools {
+		// TODO implement query pool table
+		log.Infof("SMD Pool List:\n")
+		log.Infof("--pools option not implemented yet\n")
+	}
+	if devices {
+		req := &pb.SmdDevReq{}
+		log.Infof("SMD Device List:\n%s\n", conns.SmdListDevs(req))
+	}
 }
 
 // Execute is run when ListSmdDevCmd activates
-func (l *ListSmdDevCmd) Execute(args []string) error {
-	smdListDev(l.conns)
+func (s *SmdQueryCmd) Execute(args []string) error {
+	smdQuery(s.conns, s.Devices, s.Pools)
 	return nil
 }

@@ -244,7 +244,7 @@ const ProtobufCMessageDescriptor mgmt__bio_health_req__descriptor =
   (ProtobufCMessageInit) mgmt__bio_health_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__bio_health_resp__field_descriptors[13] =
+static const ProtobufCFieldDescriptor mgmt__bio_health_resp__field_descriptors[14] =
 {
   {
     "status",
@@ -343,8 +343,20 @@ static const ProtobufCFieldDescriptor mgmt__bio_health_resp__field_descriptors[1
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "temp",
+    "checksum_errs",
     9,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__BioHealthResp, checksum_errs),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "temp",
+    10,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_BOOL,
     0,   /* quantifier_offset */
@@ -356,7 +368,7 @@ static const ProtobufCFieldDescriptor mgmt__bio_health_resp__field_descriptors[1
   },
   {
     "spare",
-    10,
+    11,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_BOOL,
     0,   /* quantifier_offset */
@@ -368,7 +380,7 @@ static const ProtobufCFieldDescriptor mgmt__bio_health_resp__field_descriptors[1
   },
   {
     "readonly",
-    11,
+    12,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_BOOL,
     0,   /* quantifier_offset */
@@ -380,7 +392,7 @@ static const ProtobufCFieldDescriptor mgmt__bio_health_resp__field_descriptors[1
   },
   {
     "device_reliability",
-    12,
+    13,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_BOOL,
     0,   /* quantifier_offset */
@@ -392,7 +404,7 @@ static const ProtobufCFieldDescriptor mgmt__bio_health_resp__field_descriptors[1
   },
   {
     "volatile_memory",
-    13,
+    14,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_BOOL,
     0,   /* quantifier_offset */
@@ -404,24 +416,25 @@ static const ProtobufCFieldDescriptor mgmt__bio_health_resp__field_descriptors[1
   },
 };
 static const unsigned mgmt__bio_health_resp__field_indices_by_name[] = {
+  8,   /* field[8] = checksum_errs */
   1,   /* field[1] = dev_uuid */
-  11,   /* field[11] = device_reliability */
+  12,   /* field[12] = device_reliability */
   2,   /* field[2] = error_count */
   4,   /* field[4] = media_errors */
   5,   /* field[5] = read_errs */
-  10,   /* field[10] = readonly */
-  9,   /* field[9] = spare */
+  11,   /* field[11] = readonly */
+  10,   /* field[10] = spare */
   0,   /* field[0] = status */
-  8,   /* field[8] = temp */
+  9,   /* field[9] = temp */
   3,   /* field[3] = temperature */
   7,   /* field[7] = unmap_errs */
-  12,   /* field[12] = volatile_memory */
+  13,   /* field[13] = volatile_memory */
   6,   /* field[6] = write_errs */
 };
 static const ProtobufCIntRange mgmt__bio_health_resp__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 13 }
+  { 0, 14 }
 };
 const ProtobufCMessageDescriptor mgmt__bio_health_resp__descriptor =
 {
@@ -431,7 +444,7 @@ const ProtobufCMessageDescriptor mgmt__bio_health_resp__descriptor =
   "Mgmt__BioHealthResp",
   "mgmt",
   sizeof(Mgmt__BioHealthResp),
-  13,
+  14,
   mgmt__bio_health_resp__field_descriptors,
   mgmt__bio_health_resp__field_indices_by_name,
   1,  mgmt__bio_health_resp__number_ranges,
