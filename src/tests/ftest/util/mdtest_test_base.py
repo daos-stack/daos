@@ -30,6 +30,7 @@ from test_utils import TestPool
 from mpio_utils import MpioUtils
 from mdtest_utils import MdtestCommand, MdtestFailed
 
+
 class MdtestBase(TestWithServers):
     """
     Base mdtest class
@@ -45,6 +46,8 @@ class MdtestBase(TestWithServers):
 
     def setUp(self):
         """Set up each test case."""
+        # obtain separate logs
+        self.update_log_file_names()
         # Start the servers and agents
         super(MdtestBase, self).setUp()
 
@@ -106,7 +109,8 @@ class MdtestBase(TestWithServers):
         """
         try:
             self.mdtest_cmd.run(
-                manager, self.tmp, processes, self.hostfile_clients)
+                manager, self.tmp, processes, self.hostfile_clients,
+                client_log=self.client_log)
         except MdtestFailed as error:
             self.log.error("Mdtest Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")

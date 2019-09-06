@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,20 +24,36 @@
 package server
 
 import (
+	"context"
 	"testing"
+
+	. "github.com/daos-stack/daos/src/control/common"
+	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func defaultMockControlService(t *testing.T) *ControlService {
-	c := defaultMockConfig(t)
-	return mockControlService(c)
-}
+// TODO: add server side streaming test for list features
 
-func mockControlService(config *Configuration) *ControlService {
-	cs := ControlService{
-		nvme:   defaultMockNvmeStorage(config),
-		scm:    defaultMockScmStorage(config),
-		config: config,
+func TestGetFeature(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer ShowBufferOnFailure(t, buf)()
+
+	cs := defaultMockControlService(t, log)
+
+	mockFeature := MockFeaturePB()
+	fMap := make(FeatureMap)
+	fMap[mockFeature.Fname.Name] = mockFeature
+	cs.supportedFeatures = fMap
+
+	feature, err := cs.GetFeature(context.TODO(), mockFeature.Fname)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	return &cs
+	AssertEqual(t, feature, mockFeature, "")
+
+	_, err = cs.GetFeature(context.TODO(), &pb.FeatureName{Name: "non-existent"})
+	if err == nil {
+		t.Fatal(err)
+	}
 }
