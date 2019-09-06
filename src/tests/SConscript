@@ -3,18 +3,6 @@ import daos_build
 import os
 from os.path import join, isdir
 
-def check_dir_exists(path):
-    """
-    Check if path points to an existing directory. If it is a file but not a
-    directory, delete it.
-    """
-    if not isdir(path):
-        # Not a directory - clear out any file
-        if os.path.exists(path):
-            os.unlink(path)
-        return False
-    return True
-
 def scons():
     """Execute build"""
     Import('env', 'prereqs')
@@ -45,13 +33,9 @@ def scons():
                                  LIBS=libs)
     denv.Install('$PREFIX/bin/', obj_ctl)
 
-    # link $PREFIX/install/lib/daos/TESTING to src/tests/ftest
-    tpath = join(denv.subst("$PREFIX"), "lib/daos/TESTING/ftest")
-    # copy ftest to $PREFIX/install/lib/daos/TESTING
+    # copy src/tests/ftest to $PREFIX/lib/daos/TESTING/ftest
     spath = join(denv.subst("$PREFIX"), "../src/tests/ftest/")
-    # denv.InstallAs('$PREFIX/lib/daos/TESTING/ftest/', spath)
-    if not check_dir_exists(tpath):
-        os.symlink(spath, tpath)
+    denv.InstallAs('$PREFIX/lib/daos/TESTING/ftest/', spath)
 
     # tests
     SConscript('suite/SConscript', exports=['denv'])
