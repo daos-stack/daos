@@ -23,8 +23,10 @@
 
 package common_storage
 
-const MsgStoragePrepareWarn = "This could be a destructive operation and storage devices " +
-	"may have data erased. Please be patient as it may take several minutes " +
+const MsgStoragePrepareWarn = "Memory allocation goals for SCM will be changed and " +
+	"namespaces modified, this will be a destructive operation. Please ensure " +
+	"namespaces are unmounted and locally attached SCM & NVMe devices " +
+	"are not in use. Please be patient as it may take several minutes " +
 	"and subsequent reboot maybe required.\n"
 
 type StoragePrepareNvmeCmd struct {

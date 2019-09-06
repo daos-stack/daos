@@ -29,7 +29,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
-	types "github.com/daos-stack/daos/src/control/common/storage"
+	commands "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/server"
 )
 
@@ -51,38 +51,19 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 	cmd.log.Info("Scanning locally-attached storage...")
 
 	scanErrors := make([]error, 0, 2)
-	e := make(chan error)
-	c := make(chan types.NvmeControllers)
-	m := make(chan types.ScmModules)
 
-	go func() {
-		controllers, err := svc.ScanNvme()
-		if err == nil {
-			c <- controllers
-		}
-		e <- err // last err value always processed after entries returned
-	}()
+	controllers, err := svc.ScanNvme()
+	if err != nil {
+		scanErrors = append(scanErrors, err)
+	} else {
+		cmd.log.Infof("NVMe SSD controller and constituent namespaces:\n%s", controllers)
+	}
 
-	go func() {
-		modules, err := svc.ScanScm()
-		if err == nil {
-			m <- modules
-		}
-		e <- err
-	}()
-
-	for {
-		select {
-		case err := <-e:
-			scanErrors = append(scanErrors, err)
-			if len(scanErrors) == 2 {
-				break
-			}
-		case modules := <-m:
-			cmd.log.Infof("SCM modules:\n%s", modules)
-		case controllers := <-c:
-			cmd.log.Infof("NVMe SSD controller and constituent namespaces:\n%s", controllers)
-		}
+	modules, err := svc.ScanScm()
+	if err != nil {
+		scanErrors = append(scanErrors, err)
+	} else {
+		cmd.log.Infof("SCM modules:\n%s", modules)
 	}
 
 	if len(scanErrors) > 0 {
@@ -98,7 +79,7 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 
 type storagePrepareCmd struct {
 	logCmd
-	types.StoragePrepareCmd
+	commands.StoragePrepareCmd
 }
 
 func (cmd *storagePrepareCmd) Execute(args []string) error {
@@ -107,9 +88,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		return errors.New("subcommand must be run as root or sudo")
 	}
 
-	cmd.log.Info("Memory allocation goals for SCM will be changed and namespaces " +
-		"modified, this will be a destructive operation. Please ensure " +
-		"namespaces are unmounted and SCM is otherwise unused.\n")
+	cmd.log.Info(commands.MsgStoragePrepareWarn)
 
 	if !cmd.Force && !common.GetConsent() {
 		return errors.New("consent not given")
@@ -123,46 +102,30 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	cmd.log.Info("Preparing locally-attached storage...")
 
 	scanErrors := make([]error, 0, 2)
-	e := make(chan error)
 
-	go func() {
-		e <- svc.PrepareNvme(server.PrepareNvmeRequest{
-			HugePageCount: cmd.NrHugepages,
-			TargetUser:    cmd.TargetUser,
-			PCIWhitelist:  cmd.PCIWhiteList,
-			ResetOnly:     cmd.Reset,
-		})
-	}()
+	// Prepare NVMe access through SPDK
+	if err := svc.PrepareNvme(server.PrepareNvmeRequest{
+		HugePageCount: cmd.NrHugepages,
+		TargetUser:    cmd.TargetUser,
+		PCIWhitelist:  cmd.PCIWhiteList,
+		ResetOnly:     cmd.Reset,
+	}); err != nil {
+		scanErrors = append(scanErrors, err)
+	}
 
-	go func() {
-		needsReboot, devices, err := svc.PrepareScm(server.PrepareScmRequest{
-			Reset: cmd.Reset,
-		})
-		if err != nil {
-			e <- err
-		}
-
-		if needsReboot {
-			// TODO: return message on channel for deterministic logging
-			cmd.log.Info(server.MsgScmRebootRequired)
-			e <- nil
-		}
-
-		if len(devices) > 0 {
-			cmd.log.Infof("persistent memory kernel devices:\n\t%+v\n", devices)
-		}
-
-		e <- nil
-	}()
-
-	for {
-		select {
-		case err := <-e:
-			scanErrors = append(scanErrors, err)
-			if len(scanErrors) == 2 {
-				break
-			}
-		}
+	// Prepare SCM modules to be presented as pmem kernel devices
+	needsReboot, devices, err := svc.PrepareScm(server.PrepareScmRequest{
+		Reset: cmd.Reset,
+	})
+	if err != nil {
+		scanErrors = append(scanErrors, err)
+	}
+	if needsReboot {
+		cmd.log.Info(server.MsgScmRebootRequired)
+	} else if len(devices) > 0 {
+		cmd.log.Infof("persistent memory kernel devices:\n\t%+v\n", devices)
+	} else {
+		cmd.log.Info("no persistent memory kernel devices")
 	}
 
 	if len(scanErrors) > 0 {
