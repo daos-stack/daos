@@ -68,7 +68,7 @@ def set_nvme_mode(default_value_set, bdev, enabled=False):
         default_value_set['servers'][0]['bdev_class'] = bdev
 
 
-def create_server_yaml(basepath, log_filename):
+def create_server_yaml(log_filename):
     """Create the DAOS server config YAML file based on Avocado test Yaml file.
 
     Args:
@@ -134,6 +134,7 @@ def create_server_yaml(basepath, log_filename):
 
 def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
                log_filename=None):
+    #pylint: disable=redefined-variable-type
     """Launch DAOS servers in accordance with the supplied hostfile.
 
     Args:
@@ -157,7 +158,7 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
         # Create the DAOS server configuration yaml file to pass
         # with daos_server -o <FILE_NAME>
         print("Creating the server yaml file")
-        create_server_yaml(basepath, log_filename)
+        create_server_yaml(log_filename)
 
         # first make sure there are no existing servers running
         print("Removing any existing server processes")
