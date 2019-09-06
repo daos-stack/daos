@@ -26,3 +26,4 @@ Gopkg.lock
 *.xml
 utils/certs/daosCA/**
 vos_size.yaml
+site/

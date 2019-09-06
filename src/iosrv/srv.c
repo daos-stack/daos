@@ -35,6 +35,7 @@
 #include <daos_errno.h>
 #include <daos_srv/bio.h>
 #include <daos_srv/smd.h>
+#include <daos_srv/vos.h>
 #include <gurt/list.h>
 #include "drpc_internal.h"
 #include "srv_internal.h"
@@ -96,6 +97,8 @@ dss_ctx_nr_get(void)
 	return DSS_CTX_NR_TOTAL;
 }
 
+static void dss_gc_ult(void *args);
+
 #define FIRST_DEFAULT_SCHEDULE_RATIO	80
 #define REBUILD_DEFAULT_SCHEDULE_RATIO	30
 unsigned int	dss_rebuild_res_percentage = REBUILD_DEFAULT_SCHEDULE_RATIO;
@@ -144,6 +147,17 @@ dss_sched_init(ABT_sched sched, ABT_sched_config config)
 	ret = ABT_sched_set_data(sched, (void *)p_data);
 
 	return ret;
+}
+
+bool
+dss_xstream_exiting(struct dss_xstream *dxs)
+{
+	ABT_bool state;
+	int	 rc;
+
+	rc = ABT_future_test(dxs->dx_shutdown, &state);
+	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+	return state == ABT_TRUE;
 }
 
 static ABT_unit
@@ -400,20 +414,28 @@ dss_srv_handler(void *arg)
 		}
 	}
 
-	/* Prepare the scheduler */
-	rc = tse_sched_init(&dmi->dmi_sched, NULL, dmi->dmi_ctx);
+	/* Prepare the scheduler for DSC (Server call client API) */
+	rc = tse_sched_init(&dx->dx_sched_dsc, NULL, dmi->dmi_ctx);
 	if (rc != 0) {
 		D_ERROR("failed to init the scheduler\n");
 		goto crt_destroy;
 	}
 
-	/* Initialize NVMe context for main XS which accesses NVME */
 	if (dx->dx_main_xs) {
+		/* Initialize NVMe context for main XS which accesses NVME */
 		rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, dmi->dmi_tgt_id);
 		if (rc != 0) {
 			D_ERROR("failed to init spdk context for xstream(%d) "
 				"rc:%d\n", dmi->dmi_xs_id, rc);
 			D_GOTO(tse_fini, rc);
+		}
+
+		rc = ABT_thread_create(dx->dx_pools[DSS_POOL_SHARE],
+				       dss_gc_ult, NULL,
+				       ABT_THREAD_ATTR_NULL, NULL);
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("create GC ULT failed: %d\n", rc);
+			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
 		}
 	}
 
@@ -435,8 +457,6 @@ dss_srv_handler(void *arg)
 	signal_caller = false;
 	/* main service progress loop */
 	for (;;) {
-		ABT_bool state;
-
 		if (dx->dx_comm) {
 			rc = crt_progress(dmi->dmi_ctx, 0 /* no wait */, NULL,
 					  NULL);
@@ -452,9 +472,7 @@ dss_srv_handler(void *arg)
 		if (dx->dx_main_xs)
 			bio_nvme_poll(dmi->dmi_nvme_ctxt);
 
-		rc = ABT_future_test(dx->dx_shutdown, &state);
-		D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
-		if (state == ABT_TRUE)
+		if (dss_xstream_exiting(dx))
 			break;
 
 		ABT_thread_yield();
@@ -480,11 +498,11 @@ dss_srv_handler(void *arg)
 
 		ABT_thread_yield();
 	}
-
+nvme_fini:
 	if (dx->dx_main_xs)
 		bio_xsctxt_free(dmi->dmi_nvme_ctxt);
 tse_fini:
-	tse_sched_fini(&dmi->dmi_sched);
+	tse_sched_fini(&dx->dx_sched_dsc);
 crt_destroy:
 	if (dx->dx_comm)
 		crt_context_destroy(dmi->dmi_ctx, true);
@@ -611,6 +629,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	dx->dx_ctx_id	= -1;
 	dx->dx_comm	= comm;
 	dx->dx_main_xs	= xs_id >= dss_sys_xs_nr && xs_offset == 0;
+	dx->dx_dsc_started = false;
 
 	rc = dss_sched_create(dx->dx_pools, DSS_POOL_CNT, &dx->dx_sched);
 	if (rc != 0) {
@@ -643,7 +662,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 			       dss_srv_handler, dx, attr,
 			       &dx->dx_progress);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("create xstream failed: %d\n", rc);
+		D_ERROR("create progress ULT failed: %d\n", rc);
 		D_GOTO(out_xstream, rc = dss_abterr2der(rc));
 	}
 
@@ -1392,156 +1411,6 @@ dss_thread_collective(int (*func)(void *), void *arg, int flag)
 	return dss_collective_internal(func, arg, true, flag);
 }
 
-static void
-dss_tse_progress_ult(void *arg)
-{
-	struct dss_module_info *dmi = arg;
-
-	while (true) {
-		ABT_bool	state;
-		int		rc;
-
-		rc = ABT_future_test(dmi->dmi_xstream->dx_shutdown, &state);
-		D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
-		if (state == ABT_TRUE)
-			break;
-
-		tse_sched_progress(&dmi->dmi_sched);
-
-		ABT_thread_yield();
-	}
-}
-
-static int
-generate_task_progress_ult(unsigned int type)
-{
-	struct dss_module_info	*dmi = dss_get_module_info();
-	int rc;
-
-	if (dmi->dmi_tse_ult_created)
-		return 0;
-
-	D_ASSERT(type < DSS_POOL_CNT);
-	rc = ABT_thread_create(dmi->dmi_xstream->dx_pools[type],
-			       dss_tse_progress_ult, dmi,
-			       ABT_THREAD_ATTR_NULL, NULL);
-	if (rc)
-		return rc;
-
-	dmi->dmi_tse_ult_created = 1;
-	return 0;
-}
-
-static int
-dss_task_comp_cb(tse_task_t *task, void *arg)
-{
-	ABT_eventual *eventual = arg;
-
-	ABT_eventual_set(*eventual, &task->dt_result, sizeof(task->dt_result));
-	return 0;
-}
-
-/**
- * Create an eventual which can be used for dss_task_run()/dss_eventual_wait().
- */
-int
-dss_eventual_create(ABT_eventual *eventual_ptr)
-{
-	ABT_eventual	eventual;
-	int		*status;
-	int		rc;
-
-	rc = ABT_eventual_create(sizeof(*status), &eventual);
-	if (rc != 0)
-		return dss_abterr2der(rc);
-
-	*eventual_ptr = eventual;
-	return 0;
-}
-
-/**
- * Wait the completion of eventual associated task, the task's result will be
- * returned by return value.
- */
-int
-dss_eventual_wait(ABT_eventual eventual)
-{
-	int	*status;
-	int	 rc;
-
-	D_ASSERTF(eventual != ABT_EVENTUAL_NULL, "invalid ABT_EVENTUAL_NULL\n");
-	rc = ABT_eventual_wait(eventual, (void **)&status);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out, rc = dss_abterr2der(rc));
-
-	rc = *status;
-
-out:
-	return rc;
-}
-
-void
-dss_eventual_free(ABT_eventual *eventual)
-{
-	ABT_eventual_free(eventual);
-}
-
-/**
- * Call client side API on the server side.
- * If the passed in eventual_in is ABT_EVENTUAL_NULL, then it is a synchronous
- * call. If the \a eventual_in is non-NULL, then it is an asynchronous call and
- * caller needs to do dss_eventual_wait() and dss_eventual_free() later if
- * dss_task_run returns zero.
- */
-int
-dss_task_run(tse_task_t *task, unsigned int type, tse_task_cb_t cb, void *arg,
-	     ABT_eventual eventual_in)
-{
-	ABT_eventual	eventual;
-	int		rc;
-
-	/* Generate the progress task */
-	rc = generate_task_progress_ult(type);
-	if (rc)
-		return rc;
-
-	if (eventual_in == ABT_EVENTUAL_NULL) {
-		rc = dss_eventual_create(&eventual);
-		if (rc != 0)
-			return rc;
-	} else {
-		eventual = eventual_in;
-	}
-
-	rc = dc_task_reg_comp_cb(task, dss_task_comp_cb, &eventual,
-				 sizeof(eventual));
-	if (rc != 0)
-		D_GOTO(err, rc = -DER_NOMEM);
-
-	if (cb != NULL) {
-		rc = dc_task_reg_comp_cb(task, cb, arg, sizeof(arg));
-		if (rc)
-			D_GOTO(err, rc);
-	}
-
-	/* task will be freed inside scheduler */
-	rc = tse_task_schedule(task, true);
-	if (rc != 0) {
-		tse_task_complete(task, rc);
-		D_GOTO(err, rc = -DER_NOMEM);
-	}
-
-	if (eventual_in == ABT_EVENTUAL_NULL)
-		rc = dss_eventual_wait(eventual);
-
-	return rc;
-
-err:
-	if (eventual_in == ABT_EVENTUAL_NULL)
-		dss_eventual_free(&eventual);
-	return rc;
-}
-
 /*
  * Set parameters on the server.
  *
@@ -1801,4 +1670,51 @@ dss_dump_ABT_state()
 		 */
 	}
 	ABT_mutex_unlock(xstream_data.xd_mutex);
+}
+
+void
+dss_gc_run(int credits)
+{
+	struct dss_xstream *dxs	 = dss_get_xstream();
+	int		    total = 0;
+
+	while (1) {
+		int	creds = DSS_GC_CREDS;
+		int	rc;
+
+		if (credits > 0 && (credits - total) < creds)
+			creds = credits - total;
+
+		total += creds;
+		rc = vos_gc_run(&creds);
+		if (rc) {
+			D_ERROR("GC run failed: %s\n", d_errstr(rc));
+			break;
+		}
+		total -= creds; /* subtract the remainded credits */
+		if (creds != 0) {
+			D_DEBUG(DB_TRACE, "GC consumed %d credits\n", total);
+			break;
+		}
+
+		if (credits > 0 && total >= credits)
+			break;
+
+		if (dss_xstream_exiting(dxs))
+			break;
+
+		ABT_thread_yield();
+	}
+}
+
+static void
+dss_gc_ult(void *args)
+{
+	 struct dss_xstream *dxs  = dss_get_xstream();
+
+	 while (!dss_xstream_exiting(dxs)) {
+		/* -1 means GC will run until there is nothing to do */
+		dss_gc_run(-1);
+		ABT_thread_yield();
+	 }
 }

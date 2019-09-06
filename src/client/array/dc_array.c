@@ -235,18 +235,17 @@ err_obj:
 static int
 free_handle_cb(tse_task_t *task, void *data)
 {
-	daos_handle_t		*oh = (daos_handle_t *)data;
-	struct dc_array		*array;
+	struct dc_array		*array = *((struct dc_array **)data);
 	int			rc = task->dt_result;
 
 	if (rc != 0)
 		return rc;
 
-	array = array_hdl2ptr(*oh);
-	if (array == NULL)
-		return -DER_NO_HDL;
-
 	array_hdl_unlink(array);
+
+	/* -1 for ref taken in dc_array_close */
+	array_decref(array);
+	/* -1 for array handle */
 	array_decref(array);
 
 	return 0;
@@ -848,6 +847,7 @@ dc_array_close(tse_task_t *task)
 	daos_obj_close_t	*close_args;
 	int			rc;
 
+	/** decref for that in free_handle_cb */
 	array = array_hdl2ptr(args->oh);
 	if (array == NULL)
 		D_GOTO(err_ptask, rc = -DER_NO_HDL);
@@ -871,7 +871,7 @@ dc_array_close(tse_task_t *task)
 
 	/** Add a completion CB on the upper task to free the array */
 	rc = tse_task_register_cbs(task, NULL, NULL, 0, free_handle_cb,
-				   &args->oh, sizeof(args->oh));
+				   &array, sizeof(array));
 	if (rc != 0) {
 		D_ERROR("Failed to register completion cb\n");
 		D_GOTO(err_put2, rc);
@@ -879,7 +879,6 @@ dc_array_close(tse_task_t *task)
 
 	tse_task_schedule(close_task, false);
 	tse_sched_progress(tse_task2sched(task));
-	array_decref(array);
 
 	return rc;
 err_put2:

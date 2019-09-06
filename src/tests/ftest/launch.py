@@ -27,14 +27,48 @@ from argparse import ArgumentParser, RawDescriptionHelpFormatter
 import json
 from multiprocessing import Process
 import os
+import re
 import socket
 import subprocess
 import time
 import yaml
 
+try:
+    # For python versions >= 3.2
+    from tempfile import TemporaryDirectory
+
+except ImportError:
+    # Basic implementation of TemporaryDirectory for python versions < 3.2
+    from tempfile import mkdtemp
+    from shutil import rmtree
+
+    class TemporaryDirectory(object):
+        # pylint: disable=too-few-public-methods
+        """Create a temporary directory.
+
+        When the last reference of this object goes out of scope the directory
+        and its contents are removed.
+        """
+
+        def __init__(self):
+            """Initialize a TemporaryDirectory object."""
+            self.name = mkdtemp()
+
+        def __del__(self):
+            """Destroy a TemporaryDirectory object."""
+            rmtree(self.name)
+
 
 TEST_LOG_FILE_YAML = "./data/daos_avocado_test.yaml"
 BASE_LOG_FILE_YAML = "./data/daos_server_baseline.yaml"
+SERVER_KEYS = (
+    "test_machines",
+    "test_servers",
+    "daos_servers",
+    )
+CLIENT_KEYS = (
+    "test_clients",
+    )
 
 
 def get_build_environment():
@@ -58,25 +92,33 @@ def set_test_environment():
         None
 
     """
-    build_vars = get_build_environment()
-    bin_dir = build_vars["PREFIX"] + "/bin"
-    sbin_dir = build_vars["PREFIX"] + "/sbin"
+    base_dir = get_build_environment()["PREFIX"]
+    bin_dir = os.path.join(base_dir, "bin")
+    sbin_dir = os.path.join(base_dir, "sbin")
     path = os.environ.get("PATH")
+
+    # Update env definitions
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, path])
     os.environ["DAOS_SINGLETON_CLI"] = "1"
     os.environ["CRT_CTX_SHARE_ADDR"] = "1"
-    os.environ["CRT_ATTACH_INFO_PATH"] = build_vars["PREFIX"] + "/tmp"
+    os.environ["CRT_ATTACH_INFO_PATH"] = os.path.join(base_dir, "tmp")
 
-    # Verify the PYTHONPATH env is set
-    python_path = os.environ.get("PYTHONPATH")
+    # Python paths required for functional testing
     required_python_paths = [
         os.path.abspath("util/apricot"),
         os.path.abspath("util"),
         os.path.abspath("../../utils/py"),
+        os.path.join(base_dir, "lib", "python2.7", "site-packages"),
+        os.path.join(base_dir, "lib", "python3", "site-packages"),
     ]
+
+    # Check the PYTHONPATH env definition
+    python_path = os.environ.get("PYTHONPATH")
     if python_path is None or python_path == "":
+        # Use the required paths to define the PYTHONPATH env if it is not set
         os.environ["PYTHONPATH"] = ":".join(required_python_paths)
     else:
+        # Append any missing required paths to the existing PYTHONPATH env
         defined_python_paths = [
             os.path.abspath(os.path.expanduser(path))
             for path in python_path.split(":")]
@@ -215,33 +257,118 @@ def get_test_list(tags):
             # Otherwise it is assumed that this is a tag
             test_tags.append(" --filter-by-tags={}".format(tag))
 
-    # Find all the tests that match the tags.  If no tags are specified all of
-    # the tests will be found.
-    command = " | ".join([
-        "avocado list --paginator off{} ./".format(" ".join(test_tags)),
-        r"sed -ne '/INSTRUMENTED/s/.* \([^:]*\):.*/\1/p'",
-        "uniq"])
-    test_list.extend(get_output(command).splitlines())
+    # Add to the list of tests any test that matches the specified tags.  If no
+    # tags and no specific tests have been specified then all of the functional
+    # tests will be added.
+    if test_tags or not test_list:
+        command = " | ".join([
+            "avocado list --paginator off{} ./".format(" ".join(test_tags)),
+            r"sed -ne '/INSTRUMENTED/s/.* \([^:]*\):.*/\1/p'",
+            "uniq"])
+        test_list.extend(get_output(command).splitlines())
 
     return " ".join(test_tags), test_list
 
 
-def get_test_files(test_list):
+def get_test_files(test_list, args, tmp_dir):
     """Get a list of the test scripts to run and their yaml files.
 
     Args:
         test_list (list): list of test scripts to run
+        args (argparse.Namespace): command line arguments for this program
+        tmp_dir (TemporaryDirectory): temporary directory object to use to
+            write modified yaml files
 
     Returns:
-        list: a list of dictionaries of each test script and yaml file
+        list: a list of dictionaries of each test script and yaml file; If
+            there was an issue replacing a yaml host placeholder the yaml
+            dictionary entry will be set to None.
 
     """
     test_files = [{"py": test, "yaml": None} for test in test_list]
     for test_file in test_files:
         base, _ = os.path.splitext(test_file["py"])
-        test_file["yaml"] = "{}.yaml".format(base)
+        test_file["yaml"] = replace_yaml_file(
+            "{}.yaml".format(base), args, tmp_dir)
 
     return test_files
+
+
+def replace_yaml_file(yaml_file, args, tmp_dir):
+    """Replace the server/client yaml file placeholders.
+
+    Replace any server or client yaml file placeholder names with the host
+    names provided by the command line arguments in a copy of the original
+    test yaml file.  If no replacements are specified return the original
+    test yaml file.
+
+    Args:
+        yaml_file (str): test yaml file
+        args (argparse.Namespace): command line arguments for this program
+        tmp_dir (TemporaryDirectory): temporary directory object to use to
+            write modified yaml files
+
+    Returns:
+        str: the test yaml file; None if the yaml file contains placeholders
+            w/o replacements
+
+    """
+    if args.test_servers:
+        # Determine which placeholder names need to be replaced in this yaml by
+        # getting the lists of hosts specified in the yaml file
+        unique_hosts = {"servers": set(), "clients": set()}
+        for key, placeholders in find_yaml_hosts(yaml_file).items():
+            if key in SERVER_KEYS:
+                unique_hosts["servers"].update(placeholders)
+            elif key in CLIENT_KEYS:
+                # If no specific clients are specified use a specified server
+                key = "clients" if args.test_clients else "servers"
+                unique_hosts[key].update(placeholders)
+
+        # Map the placeholder names to values provided by the user
+        mapping_pairings = [("servers", args.test_servers.split(","))]
+        if args.test_clients:
+            mapping_pairings.append(("clients", args.test_clients.split(",")))
+        mapping = {
+            tmp: node_list[index] if index < len(node_list) else None
+            for key, node_list in mapping_pairings
+            for index, tmp in enumerate(sorted(unique_hosts[key]))}
+
+        # Read in the contents of the yaml file to retain the !mux entries
+        print("Reading {}".format(yaml_file))
+        with open(yaml_file) as yaml_buffer:
+            file_str = yaml_buffer.read()
+
+        # Apply the placeholder replacements
+        missing_replacements = []
+        for placeholder, host in mapping.items():
+            if host:
+                # Replace the host entries with their mapped values
+                file_str = re.sub(
+                    "- {}".format(placeholder), "- {}".format(host), file_str)
+            elif args.discard:
+                # Discard any host entries without a replacement value
+                file_str = re.sub(r"\s+- {}".format(placeholder), "", file_str)
+            else:
+                # Keep track of any placeholders without a replacement value
+                missing_replacements.append(placeholder)
+
+        if missing_replacements:
+            # Report an error for all of the placeholders w/o a replacement
+            print(
+                "Error: Placeholders missing replacements in {}:\n  {}".format(
+                    yaml_file, ", ".join(missing_replacements)))
+            return None
+
+        # Write the modified yaml file into a temporary file
+        yaml_name = os.path.basename(os.path.splitext(yaml_file)[0])
+        yaml_file = os.path.join(tmp_dir.name, "{}.yaml".format(yaml_name))
+        print("Creating {}".format(yaml_file))
+        with open(yaml_file, "w") as yaml_buffer:
+            yaml_buffer.write(file_str)
+
+    # Return the untouched or modified yaml file
+    return yaml_file
 
 
 def run_tests(test_files, tag_filter, args):
@@ -297,9 +424,13 @@ def run_tests(test_files, tag_filter, args):
             if args.archive:
                 archive_logs(avocado_logs_dir, test_file["yaml"])
 
-            # Optionally reanme the test results directory for this test
+            # Optionally rename the test results directory for this test
             if args.rename:
                 rename_logs(avocado_logs_dir, test_file["py"])
+        else:
+            # The test was not run due to an error replacing host placeholders
+            # in the yaml file.  Treat this like a failed avocado command.
+            return_code |= 4
 
     return return_code
 
@@ -344,18 +475,18 @@ def get_log_files(config_yaml, daos_files=None):
     """
     # List of default DAOS files
     if daos_files is None:
-        daos_core_test_dir, daos_core_test_log = os.path.split(
-            os.getenv("D_LOG_FILE", "/tmp/server.log"))
+        daos_core_test_dir = os.path.split(
+            os.getenv("D_LOG_FILE", "/tmp/server.log"))[0]
         daos_files = {
             "log_file": "/tmp/server.log",
             "agent_log_file": "/tmp/daos_agent.log",
             "control_log_file": "/tmp/daos_control.log",
             "socket_dir": "/tmp/daos_sockets",
             "debug_log_default": os.getenv("D_LOG_FILE", "/tmp/daos.log"),
-            "daos_core_test_client_logs":
+            "test_variant_client_logs":
                 "{}/*_client_daos.log".format(daos_core_test_dir),
-            "daos_core_test_server_logs":
-                "{}/*_{}".format(daos_core_test_dir, daos_core_test_log),
+            "test_variant_server_logs":
+                "{}/*_server_daos.log".format(daos_core_test_dir),
         }
 
     # Determine the log file locations defined by the last run test
@@ -374,6 +505,19 @@ def get_log_files(config_yaml, daos_files=None):
     return daos_files
 
 
+def find_yaml_hosts(test_yaml):
+    """Find the all the host values in the specified yaml file.
+
+    Args:
+        test_yaml (str): test yaml file
+
+    Returns:
+        dict: a dictionary of each host key and its host values
+
+    """
+    return find_values(get_yaml_data(test_yaml), SERVER_KEYS + CLIENT_KEYS)
+
+
 def get_hosts_from_yaml(test_yaml):
     """Extract the list of hosts from the test yaml file.
 
@@ -387,27 +531,11 @@ def get_hosts_from_yaml(test_yaml):
         list: a unique list of hosts specified in the test's yaml file
 
     """
-    yaml_data = get_yaml_data(test_yaml)
-    server_keys = [
-        "test_machines",
-        "test_servers",
-        "daos_servers",
-        "servers",
-        "test_machines1",
-        "test_machines2",
-        "test_machines2a",
-        "test_machines3",
-        "test_machines6"]
-    client_keys = [
-        "test_clients",
-        "clients",
-    ]
     host_set = set()
     found_client_key = False
-    matches = find_values(yaml_data, server_keys + client_keys)
-    for key, value in matches.items():
+    for key, value in find_yaml_hosts(test_yaml).items():
         host_set.update(value)
-        if key in client_keys:
+        if key in CLIENT_KEYS:
             found_client_key = True
 
     # Include this host as a client if no clients are specified
@@ -435,6 +563,7 @@ def clean_logs(test_yaml):
         return False
 
     return True
+
 
 def archive_logs(avocado_logs_dir, test_yaml):
     """Copy all of the host test log files to the avocado results directory.
@@ -473,7 +602,7 @@ def rename_logs(avocado_logs_dir, test_file):
         avocado_logs_dir (str): avocado job-results directory
         test_file (str): the test python file
     """
-    test_name = os.path.splitext(os.path.basename(test_file))[0]
+    test_name = get_test_category(test_file)
     test_logs_lnk = os.path.join(avocado_logs_dir, "latest")
     test_logs_dir = os.path.realpath(test_logs_lnk)
     new_test_logs_dir = "{}-{}".format(test_logs_dir, test_name)
@@ -486,6 +615,21 @@ def rename_logs(avocado_logs_dir, test_file):
         print(
             "Error renaming {} to {}: {}".format(
                 test_logs_dir, new_test_logs_dir, error))
+
+
+def get_test_category(test_file):
+    """Get a category for the specified test using its path and name.
+
+    Args:
+        test_file (str): the test python file
+
+    Returns:
+        str: concatenation of the test path and base filename joined by dashes
+
+    """
+    file_parts = os.path.split(test_file)
+    return "-".join(
+        [os.path.splitext(os.path.basename(part))[0] for part in file_parts])
 
 
 def main():
@@ -521,6 +665,18 @@ def main():
         "Tests can also be launched by specifying a path to the python script "
         "instead of its tag.",
         "",
+        "The placeholder server and client names in the yaml file can also be "
+        "replaced with the following options:",
+        "\tlaunch.py -ts node1,node2 -tc node3 <tag>",
+        "\t  - Use node[1-2] to run the daos server in each test",
+        "\t  - Use node3 to run the daos client in each test",
+        "\tlaunch.py -ts node1,node2 <tag>",
+        "\t  - Use node[1-2] to run the daos server or client in each test",
+        "\tlaunch.py -ts node1,node2 -d <tag>",
+        "\t  - Use node[1-2] to run the daos server or client in each test",
+        "\t  - Discard of any additional server or client placeholders for "
+        "each test",
+        "",
         "You can also specify the sparse flag -s to limit output to "
         "pass/fail.",
         "\tExample command: launch.py -s pool"
@@ -538,6 +694,11 @@ def main():
         action="store_true",
         help="remove daos log files from the test hosts prior to the test")
     parser.add_argument(
+        "-d", "--discard",
+        action="store_true",
+        help="when replacing server/client yaml file placeholders, discard "
+             "any placeholders that do not end up with a replacement value")
+    parser.add_argument(
         "-l", "--list",
         action="store_true",
         help="list the python scripts that match the specified tags")
@@ -554,6 +715,18 @@ def main():
         nargs="*",
         type=str,
         help="test category or file to run")
+    parser.add_argument(
+        "-tc", "--test_clients",
+        action="store",
+        help="comma-separated list of hosts to use as replacement values for "
+             "client placeholders in each test's yaml file")
+    parser.add_argument(
+        "-ts", "--test_servers",
+        action="store",
+        help="comma-separated list of hosts to use as replacement values for "
+             "server placeholders in each test's yaml file.  If the "
+             "'--test_clients' argument is not specified, this list of hosts "
+             "will also be used to replace client placeholders.")
     args = parser.parse_args()
     print("Arguments: {}".format(args))
 
@@ -573,8 +746,11 @@ def main():
     if args.list:
         exit(0)
 
-    # Create a dictioanry of test and their yaml files
-    test_files = get_test_files(test_list)
+    # Create a temporary directory
+    tmp_dir = TemporaryDirectory()
+
+    # Create a dictionary of test and their yaml files
+    test_files = get_test_files(test_list, args, tmp_dir)
 
     # Run all the tests
     status = run_tests(test_files, tag_filter, args)

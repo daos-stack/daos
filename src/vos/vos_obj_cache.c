@@ -192,7 +192,6 @@ vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj)
 	daos_lru_ref_release(occ, &obj->obj_llink);
 }
 
-
 int
 vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	     daos_unit_oid_t oid, daos_epoch_t epoch,
@@ -204,6 +203,9 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	int			 rc;
 
 	D_ASSERT(cont != NULL);
+	D_ASSERT(cont->vc_pool);
+	if (cont->vc_pool->vp_dying)
+		return -DER_NONEXIST;
 
 	D_DEBUG(DB_TRACE, "Try to hold cont="DF_UUID", obj="DF_UOID"\n",
 		DP_UUID(cont->vc_id), DP_UOID(oid));
@@ -223,8 +225,26 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 		if (obj->obj_epoch == 0) /* new cache element */
 			obj->obj_epoch = epoch;
 
+		if (intent == DAOS_INTENT_KILL) {
+			if (!obj->obj_df) /* new object, nothing to delete */
+				D_GOTO(failed, rc = -DER_NONEXIST);
+
+			if (vos_obj_refcount(obj) > 2)
+				D_GOTO(failed, rc = -DER_BUSY);
+
+			/* no one else can hold it */
+			obj->obj_zombie = true;
+			vos_obj_evict(obj);
+			break; /* OK to delete */
+		}
+
 		if (!obj->obj_df) /* new object */
 			break;
+
+		if (obj->obj_zombie) {
+			vos_obj_release(occ, obj);
+			D_GOTO(failed, rc = -DER_AGAIN);
+		}
 
 		if ((!(obj->obj_df->vo_oi_attr & VOS_OI_PUNCHED) ||
 		     obj->obj_df->vo_latest >= epoch) &&
@@ -307,27 +327,22 @@ vos_obj_evict(struct vos_object *obj)
 	daos_lru_ref_evict(&obj->obj_llink);
 }
 
-bool
-vos_obj_evicted(struct vos_object *obj)
-{
-	return daos_lru_ref_evicted(&obj->obj_llink);
-}
-
 int
-vos_obj_revalidate(struct daos_lru_cache *occ, daos_epoch_t epoch,
-		   struct vos_object **obj_p)
+vos_obj_evict_by_oid(struct daos_lru_cache *occ, struct vos_container *cont,
+		     daos_unit_oid_t oid)
 {
-	struct vos_object *obj = *obj_p;
-	int		   rc;
+	struct obj_lru_key	 lkey;
+	struct daos_llink	*lret;
+	int			 rc;
 
-	if (!vos_obj_evicted(obj))
-		return 0;
+	lkey.olk_cont = cont;
+	lkey.olk_oid = oid;
 
-	rc = vos_obj_hold(occ, obj->obj_cont, obj->obj_id,
-			  epoch, !obj->obj_df, DAOS_INTENT_UPDATE, obj_p);
+	rc = daos_lru_ref_hold(occ, &lkey, sizeof(lkey), NULL, &lret);
 	if (rc == 0) {
-		D_ASSERT(*obj_p != obj);
-		vos_obj_release(occ, obj);
+		daos_lru_ref_evict(lret);
+		daos_lru_ref_release(occ, lret);
 	}
-	return rc;
+
+	return rc == -DER_NONEXIST ? 0 : rc;
 }

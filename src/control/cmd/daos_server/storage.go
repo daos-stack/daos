@@ -29,6 +29,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/server"
 )
 
@@ -39,26 +40,25 @@ type storageCmd struct {
 }
 
 type storageScanCmd struct {
-	cfgCmd
 	logCmd
 }
 
 func (cmd *storageScanCmd) Execute(args []string) error {
-	srv, err := server.NewControlService(cmd.config)
+	svc, err := server.NewStorageControlService(cmd.log, server.NewConfiguration())
 	if err != nil {
 		return errors.WithMessage(err, "failed to init ControlService")
 	}
 
 	cmd.log.Info("Scanning locally-attached storage...")
 	scanErrors := make([]error, 0, 2)
-	controllers, err := srv.ScanNVMe()
+	controllers, err := svc.ScanNvme()
 	if err != nil {
 		scanErrors = append(scanErrors, err)
 	} else {
 		cmd.log.Infof("NVMe SSD controller and constituent namespaces:\n%s", controllers)
 	}
 
-	modules, err := srv.ScanSCM()
+	modules, err := svc.ScanScm()
 	if err != nil {
 		scanErrors = append(scanErrors, err)
 	} else {
@@ -77,42 +77,27 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 }
 
 type storagePrepNvmeCmd struct {
-	cfgCmd
-	PCIWhiteList string `short:"w" long:"pci-whitelist" description:"Whitespace separated list of PCI devices (by address) to be unbound from Kernel driver and used with SPDK (default is all PCI devices)."`
-	NrHugepages  int    `short:"p" long:"hugepages" description:"Number of hugepages to allocate (in MB) for use by SPDK (default 1024)"`
-	TargetUser   string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
-	Reset        bool   `short:"r" long:"reset" description:"Reset SPDK returning devices to kernel modules"`
+	logCmd
+	types.StoragePrepareNvmeCmd
 }
 
 func (cmd *storagePrepNvmeCmd) Execute(args []string) error {
-	ok, usr := common.CheckSudo()
-	if !ok {
-		return errors.New("subcommand must be run as root or sudo")
-	}
-
-	// falls back to sudoer or root if TargetUser is unspecified
-	tUsr := usr
-	if cmd.TargetUser != "" {
-		tUsr = cmd.TargetUser
-	}
-
-	srv, err := server.NewControlService(cmd.config)
+	svc, err := server.NewStorageControlService(cmd.log, server.NewConfiguration())
 	if err != nil {
 		return errors.WithMessage(err, "initialising ControlService")
 	}
 
-	return srv.PrepNvme(server.PrepNvmeRequest{
+	return svc.PrepareNvme(server.PrepareNvmeRequest{
 		HugePageCount: cmd.NrHugepages,
-		TargetUser:    tUsr,
+		TargetUser:    cmd.TargetUser,
 		PCIWhitelist:  cmd.PCIWhiteList,
-		ResetOnly:     cmd.Reset,
+		ResetOnly:     cmd.ResetNvme,
 	})
 }
 
 type storagePrepScmCmd struct {
-	cfgCmd
 	logCmd
-	Reset bool `short:"r" long:"reset" description:"Reset modules to memory mode after removing namespaces"`
+	types.StoragePrepareScmCmd
 	Force bool `short:"f" long:"force" description:"Perform format without prompting for confirmation"`
 }
 
@@ -130,25 +115,27 @@ func (cmd *storagePrepScmCmd) Execute(args []string) (err error) {
 		return errors.New("consent not given")
 	}
 
-	srv, err := server.NewControlService(cmd.config)
+	svc, err := server.NewStorageControlService(cmd.log, server.NewConfiguration())
 	if err != nil {
 		return errors.WithMessage(err, "initialising ControlService")
 	}
 
-	rebootStr, devices, err := srv.PrepScm(server.PrepScmRequest{
-		Reset: cmd.Reset,
+	needsReboot, devices, err := svc.PrepareScm(server.PrepareScmRequest{
+		Reset: cmd.ResetScm,
 	})
 	if err != nil {
 		return err
 	}
 
-	if rebootStr != "" {
-		cmd.log.Info(rebootStr)
-	} else {
-		if len(devices) > 0 {
-			cmd.log.Infof("persistent memory kernel devices:\n\t%+v\n", devices)
-		}
+	if needsReboot {
+		cmd.log.Info(server.MsgScmRebootRequired)
+		return nil
 	}
 
-	return nil
+	if len(devices) > 0 {
+		cmd.log.Infof("persistent memory kernel devices:\n\t%+v\n", devices)
+		return nil
+	}
+
+	return errors.New("unexpected failure")
 }
