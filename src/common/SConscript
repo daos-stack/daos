@@ -7,7 +7,12 @@ def scons():
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
-    prereqs.require(env, 'pmdk', 'cart', 'protobufc', 'argobots')
+    # Hack alert, the argobots headers are required but the shared
+    # library isn't so add the dependancy so the include path
+    # is correct, but set _libs to [] so that the library isn't
+    # linked in.
+    prereqs.require(env, 'pmdk', 'cart', 'protobufc', 'argobots',
+                    argobots_libs=[])
 
     if platform_arm:
         prereqs.require(env, 'mchecksum')
