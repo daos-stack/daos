@@ -42,7 +42,7 @@ type PrepareNvmeRequest struct {
 // PrepareNvme preps locally attached SSDs and returns error.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
-func (c *ControlService) PrepareNvme(req PrepareNvmeRequest) error {
+func (c *StorageControlService) PrepareNvme(req PrepareNvmeRequest) error {
 	ok, usr := common.CheckSudo()
 	if !ok {
 		return errors.Errorf("%s must be run as root or sudo", os.Args[0])
@@ -78,7 +78,7 @@ type PrepareScmRequest struct {
 // list of pmem kernel devices and error directly.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
-func (c *ControlService) PrepareScm(req PrepareScmRequest) (needsReboot bool, pmemDevs []pmemDev, err error) {
+func (c *StorageControlService) PrepareScm(req PrepareScmRequest) (needsReboot bool, pmemDevs []pmemDev, err error) {
 	if err = c.scm.Setup(); err != nil {
 		err = errors.WithMessage(err, "SCM setup")
 		return
@@ -107,7 +107,7 @@ func (c *ControlService) PrepareScm(req PrepareScmRequest) (needsReboot bool, pm
 // ScanNvme scans locally attached SSDs and returns list directly.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
-func (c *ControlService) ScanNvme() (types.NvmeControllers, error) {
+func (c *StorageControlService) ScanNvme() (types.NvmeControllers, error) {
 	if err := c.nvme.Discover(); err != nil {
 		return nil, errors.Wrap(err, "NVMe storage scan")
 	}
@@ -118,7 +118,7 @@ func (c *ControlService) ScanNvme() (types.NvmeControllers, error) {
 // ScanScm scans locally attached modules and returns list directly.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
-func (c *ControlService) ScanScm() (types.ScmModules, error) {
+func (c *StorageControlService) ScanScm() (types.ScmModules, error) {
 	if err := c.scm.Discover(); err != nil {
 		return nil, errors.Wrap(err, "SCM storage scan")
 	}
