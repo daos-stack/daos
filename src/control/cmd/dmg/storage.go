@@ -39,15 +39,6 @@ type storageCmd struct {
 	Update  storageUpdateCmd  `command:"fwupdate" alias:"u" description:"Update firmware on NVMe storage attached to remote servers."`
 }
 
-func storagePrepare(conns client.Connect, req *pb.StoragePrepareReq, force bool) {
-	log.Info(types.MsgStoragePrepareWarn)
-
-	if force || common.GetConsent() {
-		log.Info("")
-		log.Infof("NVMe & SCM preparation:\n%s", conns.StoragePrepare(req))
-	}
-}
-
 // storagePrepareCmd is the struct representing the prep storage subcommand.
 type storagePrepareCmd struct {
 	broadcastCmd
@@ -60,6 +51,10 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	var nReq *pb.PrepareNvmeReq
 	var sReq *pb.PrepareScmReq
 
+	if err := cmd.Init(); err != nil {
+		return err
+	}
+
 	if cmd.NvmeOnly || !cmd.ScmOnly {
 		nReq = &pb.PrepareNvmeReq{
 			Pciwhitelist: cmd.PCIWhiteList,
@@ -68,14 +63,13 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 			Reset_:       cmd.Reset,
 		}
 	}
+
 	if cmd.ScmOnly || !cmd.NvmeOnly {
-		sReq = &pb.PrepareScmReq{
-			Reset_: cmd.Reset,
-		}
+		sReq = &pb.PrepareScmReq{Reset_: cmd.Reset}
 	}
 
-	storagePrepare(cmd.conns, &pb.StoragePrepareReq{Nvme: nReq, Scm: sReq},
-		cmd.Force)
+	log.Infof("NVMe & SCM preparation:\n%s",
+		cmd.conns.StoragePrepare(&pb.StoragePrepareReq{Nvme: nReq, Scm: sReq}))
 
 	return nil
 }

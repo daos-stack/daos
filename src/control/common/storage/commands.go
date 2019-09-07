@@ -23,6 +23,13 @@
 
 package common_storage
 
+import (
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common"
+	log "github.com/daos-stack/daos/src/control/logging"
+)
+
 const MsgStoragePrepareWarn = "Memory allocation goals for SCM will be changed and " +
 	"namespaces modified, this will be a destructive operation. Please ensure " +
 	"namespaces are unmounted and locally attached SCM & NVMe devices " +
@@ -44,4 +51,18 @@ type StoragePrepareCmd struct {
 	ScmOnly  bool `short:"s" long:"scm-only" description:"Only prepare SCM."`
 	Reset    bool `long:"reset" description:"Reset SCM modules to memory mode after removing namespaces. Reset SPDK returning NVMe device bindings back to kernel modules."`
 	Force    bool `short:"f" long:"force" description:"Perform format without prompting for confirmation"`
+}
+
+func (cmd *StoragePrepareCmd) Init() error {
+	if cmd.NvmeOnly && cmd.ScmOnly {
+		return errors.New("nvme-only and scm-only options should not be set together")
+	}
+
+	log.Info(MsgStoragePrepareWarn)
+
+	if !cmd.Force && !common.GetConsent() {
+		return errors.New("consent not given")
+	}
+
+	return nil
 }

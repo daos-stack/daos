@@ -28,7 +28,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	commands "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/server"
 )
@@ -83,15 +82,8 @@ type storagePrepareCmd struct {
 }
 
 func (cmd *storagePrepareCmd) Execute(args []string) error {
-	ok, _ := common.CheckSudo()
-	if !ok {
-		return errors.New("subcommand must be run as root or sudo")
-	}
-
-	cmd.log.Info(commands.MsgStoragePrepareWarn)
-
-	if !cmd.Force && !common.GetConsent() {
-		return errors.New("consent not given")
+	if err := cmd.Init(); err != nil {
+		return err
 	}
 
 	svc, err := server.NewStorageControlService(cmd.log, server.NewConfiguration())
