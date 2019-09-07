@@ -185,8 +185,8 @@ class TestWithServers(TestWithoutServers):
         test_clients = self.params.get("test_clients", "/run/hosts/*")
         server_count = self.params.get("server_count", "/run/hosts/*")
         client_count = self.params.get("client_count", "/run/hosts/*")
-        self.nvme_parameter = self.params.get("bdev_class",
-                                              '/server_config/server/')
+        self.nvme_parameter = self.params.get(
+            "bdev_class", '/server_config/server/')
         # If server or client host list are defined through valid slurm
         # partition names override any hosts specified through lists.
         test_servers, self.partition_servers = self.get_partition_hosts(
