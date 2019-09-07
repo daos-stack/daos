@@ -101,8 +101,6 @@ def create_server_yaml(basepath, log_filename):
     # if sepcific log file name specified use that
     if log_filename:
         default_value_set['servers'][0]['log_file'] = log_filename
-    # Disable NVMe from baseline data/daos_server_baseline.yml
-    set_nvme_mode(default_value_set, "nvme")
 
     # Write default_value_set dictionary in to AVOCADO_FILE
     # This will be used to start with daos_server -o option.
