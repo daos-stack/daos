@@ -40,8 +40,8 @@ type StoragePrepareScmCmd struct{}
 type StoragePrepareCmd struct {
 	StoragePrepareNvmeCmd
 	StoragePrepareScmCmd
-	Nvme  bool `long:"nvme" description:"Only prepare NVMe storage."`
-	Scm   bool `long:"scm" description:"Only prepare SCM."`
-	Reset bool `long:"reset" description:"Reset SCM modules to memory mode after removing namespaces. Reset SPDK returning NVMe device bindings back to kernel modules."`
-	Force bool `short:"f" long:"force" description:"Perform format without prompting for confirmation"`
+	NvmeOnly bool `short:"n" long:"nvme-only" description:"Only prepare NVMe storage."`
+	ScmOnly  bool `short:"s" long:"scm-only" description:"Only prepare SCM."`
+	Reset    bool `long:"reset" description:"Reset SCM modules to memory mode after removing namespaces. Reset SPDK returning NVMe device bindings back to kernel modules."`
+	Force    bool `short:"f" long:"force" description:"Perform format without prompting for confirmation"`
 }

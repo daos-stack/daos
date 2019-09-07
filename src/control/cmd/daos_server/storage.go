@@ -103,29 +103,33 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 
 	scanErrors := make([]error, 0, 2)
 
-	// Prepare NVMe access through SPDK
-	if err := svc.PrepareNvme(server.PrepareNvmeRequest{
-		HugePageCount: cmd.NrHugepages,
-		TargetUser:    cmd.TargetUser,
-		PCIWhitelist:  cmd.PCIWhiteList,
-		ResetOnly:     cmd.Reset,
-	}); err != nil {
-		scanErrors = append(scanErrors, err)
+	if cmd.NvmeOnly || !cmd.ScmOnly {
+		// Prepare NVMe access through SPDK
+		if err := svc.PrepareNvme(server.PrepareNvmeRequest{
+			HugePageCount: cmd.NrHugepages,
+			TargetUser:    cmd.TargetUser,
+			PCIWhitelist:  cmd.PCIWhiteList,
+			ResetOnly:     cmd.Reset,
+		}); err != nil {
+			scanErrors = append(scanErrors, err)
+		}
 	}
 
-	// Prepare SCM modules to be presented as pmem kernel devices
-	needsReboot, devices, err := svc.PrepareScm(server.PrepareScmRequest{
-		Reset: cmd.Reset,
-	})
-	if err != nil {
-		scanErrors = append(scanErrors, err)
-	}
-	if needsReboot {
-		cmd.log.Info(server.MsgScmRebootRequired)
-	} else if len(devices) > 0 {
-		cmd.log.Infof("persistent memory kernel devices:\n\t%+v\n", devices)
-	} else {
-		cmd.log.Info("no persistent memory kernel devices")
+	if cmd.ScmOnly || !cmd.NvmeOnly {
+		// Prepare SCM modules to be presented as pmem kernel devices
+		needsReboot, devices, err := svc.PrepareScm(server.PrepareScmRequest{
+			Reset: cmd.Reset,
+		})
+		if err != nil {
+			scanErrors = append(scanErrors, err)
+		}
+		if needsReboot {
+			cmd.log.Info(server.MsgScmRebootRequired)
+		} else if len(devices) > 0 {
+			cmd.log.Infof("persistent memory kernel devices:\n\t%+v\n", devices)
+		} else {
+			cmd.log.Info("no persistent memory kernel devices")
+		}
 	}
 
 	if len(scanErrors) > 0 {
