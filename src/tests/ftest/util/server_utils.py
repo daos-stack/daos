@@ -35,9 +35,10 @@ import signal
 import fcntl
 import errno
 import yaml
+import getpass
 
 from avocado.utils import genio
-from general_utils import pcmd
+from general_utils import pcmd, get_file_path
 
 SESSIONS = {}
 
@@ -47,25 +48,6 @@ AVOCADO_FILE = "src/tests/ftest/data/daos_avocado_test.yaml"
 
 class ServerFailed(Exception):
     """Server didn't start/stop properly."""
-
-
-def set_nvme_mode(default_value_set, bdev, enabled=False):
-    """Enable/Disable NVMe Mode.
-
-    NVMe is enabled by default in yaml file.So disable it for CI runs.
-
-    Args:
-        default_value_set (dict): dictionary of default values
-        bdev (str): block device name
-        enabled (bool, optional): enable NVMe. Defaults to False.
-    """
-    if 'bdev_class' in default_value_set['servers'][0]:
-        if (default_value_set['servers'][0]['bdev_class'] == bdev and
-                not enabled):
-            del default_value_set['servers'][0]['bdev_class']
-    if enabled:
-        default_value_set['servers'][0]['bdev_class'] = bdev
-
 
 def create_server_yaml(basepath, log_filename):
     """Create the DAOS server config YAML file based on Avocado test Yaml file.
@@ -108,11 +90,12 @@ def create_server_yaml(basepath, log_filename):
 
     # Update values from avocado_testcase.yaml in DAOS yaml variables.
     if new_value_set:
-        for key in new_value_set['server_config']:
-            if key in default_value_set['servers'][0]:
+        if 'server' in new_value_set['server_config']:
+            for key in new_value_set['server_config']['server']:
                 default_value_set['servers'][0][key] = \
-                    new_value_set['server_config'][key]
-            elif key in default_value_set:
+                        new_value_set['server_config']['server'][key]
+        for key in new_value_set['server_config']:
+            if 'server' not in key:
                 default_value_set[key] = new_value_set['server_config'][key]
 
     # if sepcific log file name specified use that
@@ -352,4 +335,35 @@ def kill_server(hosts):
         "pkill '(daos_server|daos_io_server)' --signal KILL",
     ]
     # Intentionally ignoring the exit status of the command
-    pcmd(hosts, "; ".join(kill_cmds), False, None, None)
+    ipcmd(hosts, "; ".join(kill_cmds), False, None, None)
+
+def storage_prepare(hosts):
+    """
+    Prepare the storage on servers using the DAOS server's yaml settings file.
+    Args:
+        basepath (str): DAOS install basepath
+        hosts (str): a string of comma-separated host names
+    Raises:
+        ServerFailed: if server failed to prepare storage
+    """
+    daos_srv_bin = get_file_path("bin/daos_server")
+    cmd = ("sudo {} storage prep-nvme --target-user=\"{}\" --hugepages=4096"
+           .format(daos_srv_bin[0], getpass.getuser()))
+    result = pcmd(hosts, cmd, timeout=120)
+    if len(result) > 1 or 0 not in result:
+        raise ServerFailed("Error preparing NVMe storage")
+
+def storage_reset(hosts):
+    """
+    Reset the Storage on servers using the DAOS server's yaml settings file.
+    Args:
+        basepath (str): DAOS install basepath
+        hosts (str): a string of comma-separated host names
+    Raises:
+        ServerFailed: if server failed to reset storage
+    """
+    daos_srv_bin = get_file_path("bin/daos_server")
+    cmd = "sudo {} storage prep-nvme --reset".format(daos_srv_bin[0])
+    result = pcmd(hosts, cmd)
+    if len(result) > 1 or 0 not in result:
+        raise ServerFailed("Error resetting NVMe storage")
