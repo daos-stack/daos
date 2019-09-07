@@ -41,10 +41,8 @@ from general_utils import pcmd
 
 SESSIONS = {}
 
-DEFAULT_FILE = "./data/daos_server_baseline.yaml"
-AVOCADO_FILE = "./data/daos_avocado_test.yaml"
-default_yaml = os.path.realpath(DEFAULT_FILE)
-avocado_yaml = os.path.realpath(AVOCADO_FILE)
+DEFAULT_FILE = "etc/daos/daos_server_baseline.yaml"
+AVOCADO_FILE = "etc/daos/daos_avocado_test.yaml"
 
 class ServerFailed(Exception):
     """Server didn't start/stop properly."""
@@ -68,7 +66,7 @@ def set_nvme_mode(default_value_set, bdev, enabled=False):
         default_value_set['servers'][0]['bdev_class'] = bdev
 
 
-def create_server_yaml(log_filename):
+def create_server_yaml(basepath, log_filename):
     """Create the DAOS server config YAML file based on Avocado test Yaml file.
 
     Args:
@@ -78,14 +76,19 @@ def create_server_yaml(log_filename):
         ServerFailed: if there is an reading/writing yaml files
 
     """
+    with open(os.path.join(basepath, ".build_vars.json")) as json_vars:
+        build_vars = json.load(json_vars)
+
     # Read the baseline conf file data/daos_server_baseline.yml
     try:
-        with open(default_yaml, 'r') as read_file:
+        with open('{}/{}'.format(build_vars["PREFIX"], DEFAULT_FILE), 'r')\
+            as read_file:
             default_value_set = yaml.safe_load(read_file)
     except Exception as excpn:
         print("<SERVER> Exception occurred: {0}".format(str(excpn)))
         traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
-        raise ServerFailed("Failed to Read {}".format(default_yaml))
+        raise ServerFailed(
+            "Failed to Read {}/{}".format(build_vars["PREFIX"], DEFAULT_FILE))
 
     # Read the values from avocado_testcase.yaml file if test ran with Avocado.
     new_value_set = {}
@@ -124,12 +127,14 @@ def create_server_yaml(log_filename):
     # Write default_value_set dictionary in to AVOCADO_FILE
     # This will be used to start with daos_server -o option.
     try:
-        with open(avocado_yaml, 'w') as write_file:
+        with open('{}/{}'.format(build_vars["PREFIX"], AVOCADO_FILE), 'w')\
+            as write_file:
             yaml.dump(default_value_set, write_file, default_flow_style=False)
     except Exception as excpn:
         print("<SERVER> Exception occurred: {0}".format(str(excpn)))
         traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
-        raise ServerFailed("Failed to Write {}".format(avocado_yaml))
+        raise ServerFailed("Failed to Write {}/{}".format(build_vars["PREFIX"],\
+                           AVOCADO_FILE))
 
 
 def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
@@ -158,7 +163,7 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
         # Create the DAOS server configuration yaml file to pass
         # with daos_server -o <FILE_NAME>
         print("Creating the server yaml file")
-        create_server_yaml(log_filename)
+        create_server_yaml(basepath, log_filename)
 
         # first make sure there are no existing servers running
         print("Removing any existing server processes")
@@ -205,7 +210,7 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
         # Run server in insecure mode until Certificate tests are in place
         server_cmd.extend([daos_srv_bin,
                            "--debug",
-                           "--config", '{}'.format(avocado_yaml),
+                           "--config", '{}/{}'.format(build_vars["PREFIX"], AVOCADO_FILE),
                            "start", "-i",
                            "-a", os.path.join(build_vars["PREFIX"], "tmp")])
 

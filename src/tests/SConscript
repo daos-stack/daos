@@ -1,7 +1,7 @@
 """Build tests"""
 import daos_build
 import os
-from os.path import join, isdir
+from os.path import join
 
 def scons():
     """Execute build"""
@@ -32,6 +32,10 @@ def scons():
     obj_ctl = daos_build.program(denv, 'obj_ctl', ['obj_ctl.c', dts_common],
                                  LIBS=libs)
     denv.Install('$PREFIX/bin/', obj_ctl)
+
+    # install yamls files
+    env.Install('$PREFIX/etc/daos', ['ftest/data/daos_server_baseline.yaml',
+        'ftest/data/daos_avocado_test.yaml'])
 
     # copy src/tests/ftest to $PREFIX/lib/daos/TESTING/ftest
     spath = join(denv.subst("$PREFIX"), "../src/tests/ftest/")
