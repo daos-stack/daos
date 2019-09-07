@@ -335,7 +335,7 @@ def kill_server(hosts):
         "pkill '(daos_server|daos_io_server)' --signal KILL",
     ]
     # Intentionally ignoring the exit status of the command
-    ipcmd(hosts, "; ".join(kill_cmds), False, None, None)
+    pcmd(hosts, "; ".join(kill_cmds), False, None, None)
 
 def storage_prepare(hosts):
     """
