@@ -26,6 +26,7 @@ package server
 import (
 	"context"
 	"os"
+	"sync"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -52,12 +53,17 @@ type IOServerInstance struct {
 	log           logging.Logger
 	runner        *ioserver.Runner
 	bdevProvider  *storage.BdevProvider
-	superblock    *Superblock
 	drpcClient    drpc.DomainSocketClient
 	msClient      *mgmtSvcClient
 	instanceReady chan *srvpb.NotifyReadyReq
 	storageReady  chan struct{}
 	fsRoot        string
+
+	sync.RWMutex
+	// these must be protected by a mutex in order to
+	// avoid racy access.
+	_scmStorageOk bool // cache positive result of NeedsStorageFormat()
+	_superblock   *Superblock
 }
 
 // NewIOServerInstance returns an *IOServerInstance initialized with
@@ -125,12 +131,24 @@ func (srv *IOServerInstance) MountScmDevice() error {
 // NeedsScmFormat probes the configured instance storage and determines whether
 // or not it requires a format operation before it can be used.
 func (srv *IOServerInstance) NeedsScmFormat() (bool, error) {
+	srv.RLock()
+	if srv._scmStorageOk {
+		srv.RUnlock()
+		return false, nil
+	}
+	srv.RUnlock()
+
 	scmCfg, err := srv.scmConfig()
 	if err != nil {
 		return false, err
 	}
 
 	srv.log.Debugf("%s: checking formatting", scmCfg.MountPoint)
+
+	// take a lock here to ensure that we can safely set _scmStorageOk
+	// as well as avoiding racy access to stuff in srv.ext.
+	srv.Lock()
+	defer srv.Unlock()
 
 	// TODO: More thorough probing of storage. For now, rely on
 	// existing methods.
@@ -151,6 +169,7 @@ func (srv *IOServerInstance) NeedsScmFormat() (bool, error) {
 
 	// If it's mounted, then we can assume it doesn't need to be formatted.
 	if isMounted {
+		srv._scmStorageOk = true
 		return false, nil
 	}
 
@@ -164,6 +183,7 @@ func (srv *IOServerInstance) NeedsScmFormat() (bool, error) {
 	// Next, try to mount the SCM device. If that succeeds, then we shouldn't
 	// try to format it.
 	if err := srv.MountScmDevice(); err == nil {
+		srv._scmStorageOk = true
 		return false, nil
 	}
 
@@ -176,7 +196,7 @@ func (srv *IOServerInstance) NeedsScmFormat() (bool, error) {
 // performing any required NVMe preparation steps and launching a managed
 // daos_io_server instance.
 func (srv *IOServerInstance) Start(ctx context.Context, errChan chan<- error) error {
-	if srv.superblock == nil {
+	if !srv.hasSuperblock() {
 		if err := srv.ReadSuperblock(); err != nil {
 			return errors.Wrap(err, "start failed; no superblock")
 		}
@@ -229,14 +249,19 @@ func (srv *IOServerInstance) AwaitStorageReady(ctx context.Context) {
 // SetRank determines the instance rank and sends a SetRank dRPC request
 // to the IOServer.
 func (srv *IOServerInstance) SetRank(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
-	r := ioserver.NilRank
-	if srv.superblock.Rank != nil {
-		r = *srv.superblock.Rank
+	superblock := srv.getSuperblock()
+	if superblock == nil {
+		return errors.New("nil superblock in SetRank()")
 	}
 
-	if !srv.superblock.ValidRank || !srv.superblock.MS {
+	r := ioserver.NilRank
+	if superblock.Rank != nil {
+		r = *superblock.Rank
+	}
+
+	if !superblock.ValidRank || !superblock.MS {
 		resp, err := srv.msClient.Join(ctx, &mgmtpb.JoinReq{
-			Uuid:  srv.superblock.UUID,
+			Uuid:  superblock.UUID,
 			Rank:  uint32(r),
 			Uri:   ready.Uri,
 			Nctxs: ready.Nctxs,
@@ -248,10 +273,11 @@ func (srv *IOServerInstance) SetRank(ctx context.Context, ready *srvpb.NotifyRea
 		}
 		r = ioserver.Rank(resp.Rank)
 
-		if !srv.superblock.ValidRank {
-			srv.superblock.Rank = new(ioserver.Rank)
-			*srv.superblock.Rank = r
-			srv.superblock.ValidRank = true
+		if !superblock.ValidRank {
+			superblock.Rank = new(ioserver.Rank)
+			*superblock.Rank = r
+			superblock.ValidRank = true
+			srv.setSuperblock(superblock)
 			if err := srv.WriteSuperblock(); err != nil {
 				return err
 			}
@@ -286,24 +312,27 @@ func (srv *IOServerInstance) callSetRank(rank ioserver.Rank) error {
 // with this instance. If no replica is associated with this instance, this
 // function is a no-op.
 func (srv *IOServerInstance) StartManagementService() error {
+	superblock := srv.getSuperblock()
+
 	// should have been loaded by now
-	if srv.superblock == nil {
+	if superblock == nil {
 		return errors.Errorf("I/O server instance %d: nil superblock", srv.Index)
 	}
 
-	if srv.superblock.CreateMS {
-		srv.log.Debugf("create MS (bootstrap=%t)", srv.superblock.BootstrapMS)
-		if err := srv.callCreateMS(); err != nil {
+	if superblock.CreateMS {
+		srv.log.Debugf("create MS (bootstrap=%t)", superblock.BootstrapMS)
+		if err := srv.callCreateMS(superblock); err != nil {
 			return err
 		}
-		srv.superblock.CreateMS = false
-		srv.superblock.BootstrapMS = false
+		superblock.CreateMS = false
+		superblock.BootstrapMS = false
+		srv.setSuperblock(superblock)
 		if err := srv.WriteSuperblock(); err != nil {
 			return err
 		}
 	}
 
-	if srv.superblock.MS {
+	if superblock.MS {
 		srv.log.Debug("start MS")
 		if err := srv.callStartMS(); err != nil {
 			return err
@@ -326,15 +355,15 @@ func (srv *IOServerInstance) StartManagementService() error {
 	return srv.callSetUp()
 }
 
-func (srv *IOServerInstance) callCreateMS() error {
+func (srv *IOServerInstance) callCreateMS(superblock *Superblock) error {
 	msAddr, err := srv.msClient.LeaderAddress()
 	if err != nil {
 		return err
 	}
 	req := &mgmtpb.CreateMsReq{}
-	if srv.superblock.BootstrapMS {
+	if superblock.BootstrapMS {
 		req.Bootstrap = true
-		req.Uuid = srv.superblock.UUID
+		req.Uuid = superblock.UUID
 		req.Addr = msAddr
 	}
 
