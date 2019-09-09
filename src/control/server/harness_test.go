@@ -47,7 +47,9 @@ func TestHarnessCreateSuperblocks(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ext := &mockExt{}
+	ext := &mockExt{
+		isMountPointRet: true,
+	}
 	h := NewIOServerHarness(ext, log)
 	for idx, mnt := range []string{"one", "two"} {
 		if err := os.MkdirAll(filepath.Join(testDir, mnt), 0777); err != nil {
@@ -79,21 +81,21 @@ func TestHarnessCreateSuperblocks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if mi.superblock == nil {
+	if mi._superblock == nil {
 		t.Fatal("instance superblock is nil after CreateSuperblocks()")
 	}
-	if mi.superblock.System != t.Name() {
-		t.Fatalf("expected superblock system name to be %q, got %q", t.Name(), mi.superblock.System)
+	if mi._superblock.System != t.Name() {
+		t.Fatalf("expected superblock system name to be %q, got %q", t.Name(), mi._superblock.System)
 	}
 
 	for idx, i := range h.Instances() {
-		if uint32(*i.superblock.Rank) != uint32(idx) {
-			t.Fatalf("instance %d has rank %s (not %d)", idx, i.superblock.Rank, idx)
+		if uint32(*i._superblock.Rank) != uint32(idx) {
+			t.Fatalf("instance %d has rank %s (not %d)", idx, i._superblock.Rank, idx)
 		}
 		if i == mi {
 			continue
 		}
-		if i.superblock.UUID == mi.superblock.UUID {
+		if i._superblock.UUID == mi._superblock.UUID {
 			t.Fatal("second instance has same superblock as first")
 		}
 	}
