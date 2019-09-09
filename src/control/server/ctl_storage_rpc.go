@@ -111,8 +111,12 @@ func (c *StorageControlService) StoragePrepare(ctx context.Context, req *pb.Stor
 
 	resp := &pb.StoragePrepareResp{}
 
-	resp.Nvme = c.doNvmePrepare(req.Nvme)
-	resp.Scm = c.doScmPrepare(req.Scm)
+	if req.Nvme != nil {
+		resp.Nvme = c.doNvmePrepare(req.Nvme)
+	}
+	if req.Scm != nil {
+		resp.Scm = c.doScmPrepare(req.Scm)
+	}
 
 	return resp, nil
 }
