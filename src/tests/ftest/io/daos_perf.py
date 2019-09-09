@@ -102,8 +102,8 @@ class DaosPerf(TestWithServers):
                              "Failed", "failed"]
 
             for line in searchfile:
-                for i in range(len(error_message)):
-                    if error_message[i] in line:
+                for message in error_message:
+                    if message in line:
                         self.fail("DaosPerf Test Failed with error_message: "
                                   "{}".format(line))
         except (daos_perf_utils.DaosPerfFailed) as excep:

@@ -624,6 +624,7 @@ class DaosObjClassOld(enum.IntEnum):
     DAOS_OC_EC_K8P2_L1M = 24
 
 
+# pylint: disable=no-member
 ConvertObjClass = {
     DaosObjClassOld.DAOS_OC_TINY_RW:     DaosObjClass.OC_S1,
     DaosObjClassOld.DAOS_OC_SMALL_RW:    DaosObjClass.OC_S4,
@@ -639,6 +640,7 @@ ConvertObjClass = {
     DaosObjClassOld.DAOS_OC_R4_MAX_RW:   DaosObjClass.OC_RP_4GX,
     DaosObjClassOld.DAOS_OC_REPL_MAX_RW: DaosObjClass.OC_RP_XSF
 }
+# pylint: enable=no-member
 
 
 def get_object_class(item):
