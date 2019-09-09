@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -126,6 +126,14 @@ func ShowLogOnFailure(t *testing.T) func() {
 
 	var buf strings.Builder
 	log.SetLogger(log.NewCombinedLogger(t.Name(), &buf))
+
+	return ShowBufferOnFailure(t, &buf)
+}
+
+// ShowBufferOnFailure displays captured output on test failure. Returns a
+// closure which should be run via defer in the test function.
+func ShowBufferOnFailure(t *testing.T, buf fmt.Stringer) func() {
+	t.Helper()
 
 	return func() {
 		if t.Failed() {

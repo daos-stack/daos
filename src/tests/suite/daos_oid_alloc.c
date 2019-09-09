@@ -267,7 +267,6 @@ check:
 			      MPI_COMM_WORLD);
 		rc = rc_reduce;
 	}
-	assert(rc == 0);
 	assert_int_equal(rc, 0);
 	if (arg->myrank == 0)
 		print_message("Allocation done. Verifying no overlaps...\n");
