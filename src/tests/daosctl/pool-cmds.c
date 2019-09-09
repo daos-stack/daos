@@ -398,7 +398,7 @@ cmd_query_pool_status(int argc, const char **argv, void *ctx)
 	uuid_t			uuid;
 	int			rc;
 	unsigned int		flag = DAOS_PC_RO;
-	daos_pool_info_t	info = { 0 };
+	daos_pool_info_t	info = {0};
 	daos_handle_t		poh;
 	struct pool_cmd_options	qp_options = {"daos_server", NULL, NULL, NULL,
 					      0, 0, 0, 0, 0, 0, 0};
