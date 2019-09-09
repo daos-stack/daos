@@ -100,8 +100,7 @@ void ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req);
 
 /* Device health stats from bio_dev_state */
 struct mgmt_bio_health {
-	struct smd_dev_info	*mb_dev_info;
-	struct bio_dev_state	*mb_dev_state;
+	struct bio_dev_state	 mb_dev_state;
 	uuid_t			 mb_devid;
 };
 

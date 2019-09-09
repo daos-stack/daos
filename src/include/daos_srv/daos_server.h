@@ -338,8 +338,6 @@ enum dss_ult_type {
 	DSS_ULT_DRPC,
 	/** miscellaneous ULT */
 	DSS_ULT_MISC,
-	/* blob I/O module commands */
-	DSS_ULT_BIO,
 };
 
 int dss_parameters_set(unsigned int key_id, uint64_t value);

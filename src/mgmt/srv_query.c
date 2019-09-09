@@ -36,6 +36,7 @@ bio_health_query(void *arg)
 	struct mgmt_bio_health	*mbh = arg;
 	struct dss_module_info	*info = dss_get_module_info();
 	struct bio_xs_context	*bxc;
+	int			 rc;
 
 	D_ASSERT(info != NULL);
 	D_DEBUG(DB_MGMT, "BIO health stats query on xs:%d, tgt:%d\n",
@@ -45,23 +46,21 @@ bio_health_query(void *arg)
 	if (bxc == NULL) {
 		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n",
 			info->dmi_xs_id, info->dmi_tgt_id);
-		goto out;
+		return;
 	}
 
-	mbh->mb_dev_state = bio_get_dev_state(bxc);
-	if (mbh->mb_dev_state == NULL) {
+	rc = bio_get_dev_state(&mbh->mb_dev_state, bxc);
+	if (rc != 0) {
 		D_ERROR("Error getting BIO device state\n");
-		goto out;
+		return;
 	}
-
-out:
-	smd_free_dev_info(mbh->mb_dev_info);
 }
 
 int
 ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 			char *tgt)
 {
+	struct smd_dev_info	*dev_info;
 	ABT_thread		 thread;
 	int			 tgt_id;
 	int			 rc = 0;
@@ -77,26 +76,27 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 	 * device or alternatively the device mapped to a given target.
 	 */
 	if (!uuid_is_null(dev_uuid)) {
-		rc = smd_dev_get_by_id(dev_uuid, &mbh->mb_dev_info);
+		rc = smd_dev_get_by_id(dev_uuid, &dev_info);
 		if (rc != 0) {
 			D_ERROR("Device UUID:"DF_UUID" not found\n",
 				DP_UUID(dev_uuid));
-			return rc;
+			goto out;
 		}
-		if (mbh->mb_dev_info->sdi_tgts == NULL) {
+		if (dev_info->sdi_tgts == NULL) {
 			D_ERROR("No targets mapped to device\n");
-			return -DER_NONEXIST;
+			rc = -DER_NONEXIST;
+			goto out;
 		}
 		/* Default tgt_id is the first mapped tgt */
-		tgt_id = mbh->mb_dev_info->sdi_tgts[0];
+		tgt_id = dev_info->sdi_tgts[0];
 	} else {
 		tgt_id = atoi(tgt);
-		rc = smd_dev_get_by_tgt(tgt_id, &mbh->mb_dev_info);
+		rc = smd_dev_get_by_tgt(tgt_id, &dev_info);
 		if (rc != 0) {
 			D_ERROR("Tgt_id:%d not found\n", tgt_id);
-			return rc;
+			goto out;
 		}
-		uuid_copy(dev_uuid, mbh->mb_dev_info->sdi_id);
+		uuid_copy(dev_uuid, dev_info->sdi_id);
 	}
 
 	D_DEBUG(DB_MGMT, "Querying BIO Health Data for dev:"DF_UUID"\n",
@@ -105,7 +105,8 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 
 	/* Create a ULT on the tgt_id */
 	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
-	rc = dss_ult_create(bio_health_query, mbh, DSS_ULT_BIO, tgt_id, 0,
+	/* TODO Add a new DSS_ULT_BIO tag */
+	rc = dss_ult_create(bio_health_query, mbh, DSS_ULT_AGGREGATE, tgt_id, 0,
 			    &thread);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
@@ -115,13 +116,15 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 	ABT_thread_join(thread);
 	ABT_thread_free(&thread);
 
+out:
+	smd_free_dev_info(dev_info);
 	return rc;
 }
 
 int
 ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 {
-	struct smd_dev_info	*dev_info, *tmp;
+	struct smd_dev_info	*dev_info = NULL, *tmp;
 	d_list_t		 dev_list;
 	int			 dev_list_cnt = 0;
 	int			 i = 0, j;
@@ -131,6 +134,10 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 
 	D_INIT_LIST_HEAD(&dev_list);
 	rc = smd_dev_list(&dev_list, &dev_list_cnt);
+	if (rc != 0) {
+		D_ERROR("Failed to get all NVMe devices from SMD\n");
+		return rc;
+	}
 
 	D_ALLOC(resp->devices, sizeof(*resp->devices) * dev_list_cnt);
 	if (resp->devices == NULL) {
@@ -167,12 +174,15 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 		d_list_del(&dev_info->sdi_link);
 		/* Frees sdi_tgts and dev_info */
 		smd_free_dev_info(dev_info);
+		dev_info = NULL;
 
 		i++;
 	}
 	/* Free all devices is there was an error allocating any */
 	if (rc != 0) {
-		for( ; i >= 0; i-- ) {
+		if (dev_info != NULL)
+			smd_free_dev_info(dev_info);
+		for (; i >= 0; i--) {
 			if (resp->devices[i] != NULL) {
 				if (resp->devices[i]->uuid != NULL)
 					D_FREE(resp->devices[i]->uuid);
@@ -183,6 +193,7 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 		}
 		D_FREE(resp->devices);
 		resp->devices = NULL;
+		resp->n_devices = 0;
 		goto out;
 	}
 	resp->n_devices = dev_list_cnt;

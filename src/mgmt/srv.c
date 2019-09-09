@@ -690,6 +690,7 @@ process_smdlistdevs_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__SmdDevResp	*resp = NULL;
 	uint8_t			*body;
 	size_t			 len;
+	int			 i;
 	int			 rc = 0;
 
 	/* Unpack the inner request from the drpc call body */
@@ -732,6 +733,16 @@ process_smdlistdevs_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 
 	mgmt__smd_dev_req__free_unpacked(req, NULL);
+
+	for (i = 0; i < resp->n_devices; i++) {
+		if (resp->devices[i] != NULL) {
+			if (resp->devices[i]->uuid != NULL)
+				D_FREE(resp->devices[i]->uuid);
+			if (resp->devices[i]->tgt_ids != NULL)
+				D_FREE(resp->devices[i]->tgt_ids);
+			D_FREE(resp->devices[i]);
+		}
+	}
 	D_FREE(resp);
 }
 
@@ -741,7 +752,7 @@ process_biohealth_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__BioHealthReq	*req = NULL;
 	Mgmt__BioHealthResp	*resp = NULL;
 	struct mgmt_bio_health	*bio_health = NULL;
-	struct bio_dev_state	*bds;
+	struct bio_dev_state	 bds;
 	uuid_t			 uuid;
 	uint8_t			*body;
 	size_t			 len;
@@ -802,19 +813,19 @@ process_biohealth_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	uuid_unparse_lower(bio_health->mb_devid, resp->dev_uuid);
 	bds = bio_health->mb_dev_state;
-	resp->error_count = bds->bds_error_count;
-	resp->temperature = bds->bds_temperature;
-	resp->media_errors = bds->bds_media_errors[0];
-	resp->read_errs = bds->bds_bio_read_errs;
-	resp->write_errs = bds->bds_bio_write_errs;
-	resp->unmap_errs = bds->bds_bio_unmap_errs;
-	resp->checksum_errs = bds->bds_checksum_errs;
-	resp->temp = bds->bds_temp_warning ? true : false;
-	resp->spare = bds->bds_avail_spare_warning ? true : false;
-	resp->readonly = bds->bds_read_only_warning ? true : false;
-	resp->device_reliability = bds->bds_dev_reliabilty_warning ?
+	resp->error_count = bds.bds_error_count;
+	resp->temperature = bds.bds_temperature;
+	resp->media_errors = bds.bds_media_errors[0];
+	resp->read_errs = bds.bds_bio_read_errs;
+	resp->write_errs = bds.bds_bio_write_errs;
+	resp->unmap_errs = bds.bds_bio_unmap_errs;
+	resp->checksum_errs = bds.bds_checksum_errs;
+	resp->temp = bds.bds_temp_warning ? true : false;
+	resp->spare = bds.bds_avail_spare_warning ? true : false;
+	resp->readonly = bds.bds_read_only_warning ? true : false;
+	resp->device_reliability = bds.bds_dev_reliabilty_warning ?
 					true : false;
-	resp->volatile_memory = bds->bds_volatile_mem_warning ? true : false;
+	resp->volatile_memory = bds.bds_volatile_mem_warning ? true : false;
 
 out:
 	resp->status = rc;

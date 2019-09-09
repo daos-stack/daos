@@ -443,11 +443,13 @@ bio_yield(void)
  * Helper function to get the device health state for a given xstream.
  * Used for querying the BIO health information from the control plane command.
  *
- * \param xs	[IN]	xstream context
+ * \param dev_state	[OUT]	BIO device health state
+ * \param xs		[IN]	xstream context
  *
- * \return		BIO device health state
+ * \return			Zero on success, negative value on error
  */
-struct bio_dev_state *bio_get_dev_state(struct bio_xs_context *xs);
+int bio_get_dev_state(struct bio_dev_state *dev_state,
+		      struct bio_xs_context *xs);
 
 
 #endif /* __BIO_API_H__ */

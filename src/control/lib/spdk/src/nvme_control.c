@@ -164,8 +164,9 @@ check_size(int written, int max, char *msg, struct ret_t *ret)
 static int
 collect_health_stats(struct dev_health_entry *entry, struct ctrlr_t *ctrlr)
 {
-	struct dev_health_t *h_tmp;
-	union spdk_nvme_critical_warning_state cwarn;
+	struct dev_health_t			 *h_tmp;
+	struct spdk_nvme_health_information_page health_pg;
+	union spdk_nvme_critical_warning_state	 cwarn;
 
 	h_tmp = malloc(sizeof(struct dev_health_t));
 	if (h_tmp == NULL) {
@@ -173,16 +174,16 @@ collect_health_stats(struct dev_health_entry *entry, struct ctrlr_t *ctrlr)
 		return -ENOMEM;
 	}
 
-	h_tmp->temperature = entry->health_page.temperature;
-	h_tmp->warn_temp_time = entry->health_page.warning_temp_time;
-	h_tmp->crit_temp_time = entry->health_page.critical_temp_time;
-	h_tmp->ctrl_busy_time = entry->health_page.controller_busy_time[0];
-	h_tmp->power_cycles = entry->health_page.power_cycles[0];
-	h_tmp->power_on_hours = entry->health_page.power_on_hours[0];
-	h_tmp->unsafe_shutdowns = entry->health_page.unsafe_shutdowns[0];
-	h_tmp->media_errors = entry->health_page.media_errors[0];
-	h_tmp->error_log_entries = \
-			entry->health_page.num_error_info_log_entries[0];
+	health_pg = entry->health_page;
+	h_tmp->temperature = health_pg.temperature;
+	h_tmp->warn_temp_time = health_pg.warning_temp_time;
+	h_tmp->crit_temp_time = health_pg.critical_temp_time;
+	h_tmp->ctrl_busy_time = health_pg.controller_busy_time[0];
+	h_tmp->power_cycles = health_pg.power_cycles[0];
+	h_tmp->power_on_hours = health_pg.power_on_hours[0];
+	h_tmp->unsafe_shutdowns = health_pg.unsafe_shutdowns[0];
+	h_tmp->media_errors = health_pg.media_errors[0];
+	h_tmp->error_log_entries = health_pg.num_error_info_log_entries[0];
 	/* Critical warnings */
 	cwarn = entry->health_page.critical_warning;
 	h_tmp->temp_warning = cwarn.bits.temperature ? true : false;
