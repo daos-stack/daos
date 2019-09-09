@@ -105,30 +105,30 @@ func (h *IOServerHarness) GetManagementInstance() (*IOServerInstance, error) {
 }
 
 // CreateSuperblocks creates instance superblocks as needed.
-func (h *IOServerHarness) CreateSuperblocks(reformat bool) error {
+func (h *IOServerHarness) CreateSuperblocks(recreate bool) error {
 	if h.IsStarted() {
 		return errors.Errorf("Can't create superblocks with running instances")
 	}
 
 	instances := h.Instances()
-	toFormat := make([]*IOServerInstance, 0, len(instances))
+	toCreate := make([]*IOServerInstance, 0, len(instances))
 
 	for _, instance := range instances {
-		needsFormat, err := instance.NeedsSuperblock()
-		if !needsFormat {
+		needsSuperblock, err := instance.NeedsSuperblock()
+		if !needsSuperblock {
 			continue
 		}
-		if err != nil && !reformat {
+		if err != nil && !recreate {
 			return err
 		}
-		toFormat = append(toFormat, instance)
+		toCreate = append(toCreate, instance)
 	}
 
-	if len(toFormat) == 0 {
+	if len(toCreate) == 0 {
 		return nil
 	}
 
-	for _, instance := range toFormat {
+	for _, instance := range toCreate {
 		// Only the first I/O server can be an MS replica.
 		if instance.Index == 0 {
 			mInfo, err := getMgmtInfo(instance)
@@ -160,13 +160,21 @@ func (h *IOServerHarness) AwaitStorageReady(ctx context.Context) error {
 
 	h.log.Info("Waiting for I/O server instance storage to be ready...")
 	for _, instance := range h.instances {
-		needsSuperblock, err := instance.NeedsSuperblock()
+		needsScmFormat, err := instance.NeedsScmFormat()
 		if err != nil {
-			return err
+			return errors.Wrap(err, "failed to check storage formatting")
 		}
-		if needsSuperblock {
-			instance.AwaitStorageReady(ctx)
+
+		if !needsScmFormat {
+			needsSuperblock, err := instance.NeedsSuperblock()
+			if err != nil {
+				return errors.Wrap(err, "failed to check instance superblock")
+			}
+			if !needsSuperblock {
+				continue
+			}
 		}
+		instance.AwaitStorageReady(ctx)
 	}
 	return ctx.Err()
 }
