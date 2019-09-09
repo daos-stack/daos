@@ -509,6 +509,18 @@ cont_child_destroy_one(void *vin)
 	 * synchronous GC for now.
 	 */
 	dss_gc_run(-1);
+
+	/*
+	 * Force VEA to expire all the just freed extents and make them
+	 * available for allocation immediately.
+	 */
+	vos_pool_ctl(pool->spc_hdl, VOS_PO_CTL_VEA_FLUSH);
+	if (rc) {
+		D_ERROR(DF_CONT": VEA flush failed. %d\n",
+			DP_CONT(pool->spc_uuid, in->tdi_uuid), rc);
+		goto out_pool;
+	}
+
 out_pool:
 	ds_pool_child_put(pool);
 out:

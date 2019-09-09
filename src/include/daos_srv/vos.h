@@ -919,6 +919,8 @@ vos_pool_get_scm_cutoff(void);
 enum vos_pool_opc {
 	/** reset pool GC statistics */
 	VOS_PO_CTL_RESET_GC,
+	/** force VEA flush */
+	VOS_PO_CTL_VEA_FLUSH,
 };
 
 /**
