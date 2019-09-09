@@ -82,7 +82,7 @@ type storagePrepareCmd struct {
 }
 
 func (cmd *storagePrepareCmd) Execute(args []string) error {
-	if err := cmd.Init(); err != nil {
+	if err := cmd.Validate(); err != nil {
 		return err
 	}
 
@@ -107,13 +107,24 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		}
 	}
 
-	if cmd.ScmOnly || !cmd.NvmeOnly {
+	for cmd.ScmOnly || !cmd.NvmeOnly {
+		if err := svc.scm.prep.getState(); err != nil {
+			scanErrors = append(scanErrors, err)
+			break
+		}
+
+		if err := cmd.CheckWarn(svc.scm.prep.state); err != nil {
+			scanErrors = append(scanErrors, err)
+			break
+		}
+
 		// Prepare SCM modules to be presented as pmem kernel devices
 		needsReboot, devices, err := svc.PrepareScm(server.PrepareScmRequest{
 			Reset: cmd.Reset,
 		})
 		if err != nil {
 			scanErrors = append(scanErrors, err)
+			break
 		}
 		if needsReboot {
 			cmd.log.Info(server.MsgScmRebootRequired)
@@ -122,6 +133,8 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		} else {
 			cmd.log.Info("no persistent memory kernel devices")
 		}
+
+		break
 	}
 
 	if len(scanErrors) > 0 {

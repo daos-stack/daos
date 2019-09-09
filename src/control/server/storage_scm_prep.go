@@ -33,20 +33,13 @@ import (
 	"github.com/pkg/errors"
 )
 
-//go:generate stringer -type=scmState
-type scmState int
-
 const (
-	scmStateUnknown scmState = iota
-	scmStateNoRegions
-	scmStateFreeCapacity
-	scmStateNoCapacity
-
 	cmdScmShowRegions = "ipmctl show -d PersistentMemoryType,FreeCapacity -region"
 	outScmNoRegions   = "\nThere are no Regions defined in the system.\n"
 	// creates a AppDirect/Interleaved memory allocation goal across all DCPMMs on a system.
 	cmdScmCreateRegions    = "ipmctl create -f -goal PersistentMemoryType=AppDirect"
 	cmdScmRemoveRegions    = "ipmctl create -f -goal MemoryMode=100"
+	cmdScmDeleteGoal       = "ipmctl delete -goal"
 	cmdScmCreateNamespace  = "ndctl create-namespace" // returns json ns info
 	cmdScmListNamespaces   = "ndctl list -N"          // returns json ns info
 	cmdScmDisableNamespace = "ndctl disable-namespace %s"
@@ -130,6 +123,10 @@ func (ps prepScm) Prep() (needsReboot bool, pmemDevs []pmemDev, err error) {
 
 	switch ps.state {
 	case scmStateNoRegions:
+		// clear any pre-existing goals first
+		if _, err = ps.runCmd(cmdScmDeleteGoal); err != nil {
+			return
+		}
 		// if successful, memory allocation change read on reboot
 		if _, err = ps.runCmd(cmdScmCreateRegions); err == nil {
 			needsReboot = true
@@ -173,6 +170,11 @@ func (ps prepScm) PrepReset() (bool, error) {
 	}
 
 	ps.log.Infof("resetting SCM memory allocations\n")
+	// clear any pre-existing goals first
+	if _, err = ps.runCmd(cmdScmDeleteGoal); err != nil {
+		return false, nil
+	}
+	// TODO: clear any pre-existing goals first
 	if out, err := ps.runCmd(cmdScmRemoveRegions); err != nil {
 		ps.log.Error(out)
 		return false, err
@@ -181,7 +183,7 @@ func (ps prepScm) PrepReset() (bool, error) {
 	return true, nil // memory allocation reset requires a reboot
 }
 
-func (ps prepScm) withRunCmd(runCmd runCmdFn) PrepScm {
+func (ps prepScm) withRunCmd(runCmd runCmdFn) prepScm {
 	ps.runCmd = runCmd
 
 	return ps

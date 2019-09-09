@@ -53,7 +53,7 @@ func (cr ClientResult) String() string {
 	if cr.Err != nil {
 		return fmt.Sprintf("error: " + cr.Err.Error())
 	}
-	return fmt.Sprintf("%+v", cr.Value)
+	return fmt.Sprintf("%#v", cr.Value)
 }
 
 // ResultMap map client addresses to method call ClientResults
