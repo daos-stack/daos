@@ -95,14 +95,6 @@ class ObjectMetadata(TestWithServers):
         self.pool.get_params(self)
         self.pool.create()
 
-    def tearDown(self):
-        """Tear down each test case."""
-        try:
-            if self.pool is not None:
-                self.pool.destroy(1)
-        finally:
-            super(ObjectMetadata, self).tearDown()
-
     def thread_control(self, threads, operation):
         """Start threads and wait until all threads are finished.
 

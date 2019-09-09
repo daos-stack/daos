@@ -24,12 +24,11 @@
 from __future__ import print_function
 
 import os
-import time
 import traceback
+
 from apricot import TestWithServers
-
-
 from daos_api import DaosPool, DaosContainer, DaosApiError
+
 
 class PunchTest(TestWithServers):
     """
@@ -108,7 +107,6 @@ class PunchTest(TestWithServers):
         except DaosApiError as dummy_e:
             self.fail("Punch should have worked.\n")
 
-
         # there are a bunch of other cases to test here,
         #    --test punching the same updating and punching the same data in
         #    the same tx, should fail
@@ -156,7 +154,7 @@ class PunchTest(TestWithServers):
 
         # expecting it to work this time so error
         except DaosApiError as excep:
-            self.fail("Punch should have worked.\n")
+            self.fail("Punch should have worked: {}\n".format(excep))
 
     def test_obj_punch(self):
         """

@@ -342,7 +342,7 @@ class TestWithServers(TestWithoutServers):
                 # Only destroy a pool that has been created by the test
                 if not hasattr(pool, "attached") or pool.attached:
                     try:
-                        pool.destroy()
+                        pool.destroy(1)
                     except (DaosApiError, TestFail) as error:
                         self.multi_log("  {}".format(error))
                         error_list.append(

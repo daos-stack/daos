@@ -57,15 +57,6 @@ class MdtestBase(TestWithServers):
         self.processes = self.params.get("np", '/run/mdtest/client_processes/*')
         self.manager = self.params.get("manager", '/run/mdtest/*', "MPICH")
 
-    def tearDown(self):
-        """Tear down each test case."""
-        try:
-            if self.pool is not None:
-                self.pool.destroy(1)
-        finally:
-            # Stop the servers and agents
-            super(MdtestBase, self).tearDown()
-
     def execute_mdtest(self):
         """
         Execute mdtest with optional overrides for mdtest flags

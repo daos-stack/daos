@@ -28,27 +28,22 @@ from apricot import TestWithServers
 import write_host_file
 import daos_perf_utils
 
+
 class DaosPerf(TestWithServers):
     """
     Test Class Description: Tests daos_perf with different config.
     :avocado: recursive
     """
+
     def setUp(self):
         super(DaosPerf, self).setUp()
 
-        #set client variables
+        # set client variables
         self.hostfile_clients = (
             write_host_file.write_host_file(self.hostlist_clients,
                                             self.workdir, None))
         # initialise daos_perf_cmd
         self.daos_perf_cmd = daos_perf_utils.DaosPerfCommand()
-
-    def tearDown(self):
-        try:
-            if self.pool is not None and self.pool.attached:
-                self.pool.destroy(1)
-        finally:
-            super(DaosPerf, self).tearDown()
 
     def runner(self, test_path):
         """
@@ -107,7 +102,7 @@ class DaosPerf(TestWithServers):
                              "Failed", "failed"]
 
             for line in searchfile:
-                for i in xrange(len(error_message)):
+                for i in range(len(error_message)):
                     if error_message[i] in line:
                         self.fail("DaosPerf Test Failed with error_message: "
                                   "{}".format(line))

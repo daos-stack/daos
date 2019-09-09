@@ -54,15 +54,6 @@ class IorTestBase(TestWithServers):
         self.ior_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/ior/client_processes/*')
 
-    def tearDown(self):
-        """Tear down each test case."""
-        try:
-            if self.pool is not None and self.pool.pool.attached:
-                self.pool.destroy(1)
-        finally:
-            # Stop the servers and agents
-            super(IorTestBase, self).tearDown()
-
     def create_pool(self):
         """Create a TestPool object to use with ior."""
         # Get the pool params
