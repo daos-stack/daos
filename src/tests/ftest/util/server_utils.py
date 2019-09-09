@@ -339,7 +339,6 @@ def storage_prepare(hosts):
     """
     Prepare the storage on servers using the DAOS server's yaml settings file.
     Args:
-        basepath (str): DAOS install basepath
         hosts (str): a string of comma-separated host names
     Raises:
         ServerFailed: if server failed to prepare storage
@@ -355,7 +354,6 @@ def storage_reset(hosts):
     """
     Reset the Storage on servers using the DAOS server's yaml settings file.
     Args:
-        basepath (str): DAOS install basepath
         hosts (str): a string of comma-separated host names
     Raises:
         ServerFailed: if server failed to reset storage
