@@ -39,13 +39,6 @@
 #include <mchecksum_error.h>
 #endif
 
-void
-timespec_diff(struct timespec *start, struct timespec *stop,
-		   struct timespec *result)
-{
-	*result = d_timediff(*start, *stop);
-}
-
 static int
 timebox(int (*cb)(void *), void *arg, uint64_t *usec)
 {
@@ -57,7 +50,8 @@ timebox(int (*cb)(void *), void *arg, uint64_t *usec)
 
 	clock_gettime(CLOCK_MONOTONIC_RAW, &end);
 
-	timespec_diff(&start, &end, &result);
+	result = d_timediff(start, end);
+
 	uint64_t delta_us = ((uint64_t)result.tv_sec * 1000000000 +
 				(uint64_t)result.tv_nsec) / 1000;
 	*usec = delta_us;
