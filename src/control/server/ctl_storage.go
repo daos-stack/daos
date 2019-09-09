@@ -79,6 +79,12 @@ type PrepareScmRequest struct {
 //
 // Suitable for commands invoked directly on server, not over gRPC.
 func (c *StorageControlService) PrepareScm(req PrepareScmRequest) (needsReboot bool, pmemDevs []pmemDev, err error) {
+	ok, _ := common.CheckSudo()
+	if !ok {
+		err = errors.Errorf("%s must be run as root or sudo", os.Args[0])
+		return
+	}
+
 	if err = c.scm.Setup(); err != nil {
 		err = errors.WithMessage(err, "SCM setup")
 		return
