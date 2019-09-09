@@ -28,15 +28,13 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
-	types "github.com/daos-stack/daos/src/control/common/storage"
+	commands "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/server"
 )
 
 type storageCmd struct {
-	Scan     storageScanCmd     `command:"scan" description:"Scan SCM and NVMe storage attached to local server"`
-	PrepNvme storagePrepNvmeCmd `command:"prep-nvme" description:"Prep NVMe devices for use with SPDK as current user"`
-	PrepScm  storagePrepScmCmd  `command:"prep-scm" description:"Prep SCM modules into interleaved AppDirect and create the relevant namespace kernel devices"`
+	Scan    storageScanCmd    `command:"scan" description:"Scan SCM and NVMe storage attached to local server"`
+	Prepare storagePrepareCmd `command:"prepare" alias:"p" description:"Prepare SCM and NVMe storage attached to remote servers."`
 }
 
 type storageScanCmd struct {
@@ -50,7 +48,9 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 	}
 
 	cmd.log.Info("Scanning locally-attached storage...")
+
 	scanErrors := make([]error, 0, 2)
+
 	controllers, err := svc.ScanNvme()
 	if err != nil {
 		scanErrors = append(scanErrors, err)
@@ -76,66 +76,61 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 	return nil
 }
 
-type storagePrepNvmeCmd struct {
+type storagePrepareCmd struct {
 	logCmd
-	types.StoragePrepareNvmeCmd
+	commands.StoragePrepareCmd
 }
 
-func (cmd *storagePrepNvmeCmd) Execute(args []string) error {
-	svc, err := server.NewStorageControlService(cmd.log, server.NewConfiguration())
-	if err != nil {
-		return errors.WithMessage(err, "initialising ControlService")
-	}
-
-	return svc.PrepareNvme(server.PrepareNvmeRequest{
-		HugePageCount: cmd.NrHugepages,
-		TargetUser:    cmd.TargetUser,
-		PCIWhitelist:  cmd.PCIWhiteList,
-		ResetOnly:     cmd.ResetNvme,
-	})
-}
-
-type storagePrepScmCmd struct {
-	logCmd
-	types.StoragePrepareScmCmd
-	Force bool `short:"f" long:"force" description:"Perform format without prompting for confirmation"`
-}
-
-func (cmd *storagePrepScmCmd) Execute(args []string) (err error) {
-	ok, _ := common.CheckSudo()
-	if !ok {
-		return errors.New("subcommand must be run as root or sudo")
-	}
-
-	cmd.log.Info("Memory allocation goals for SCM will be changed and namespaces " +
-		"modified, this will be a destructive operation. Please ensure " +
-		"namespaces are unmounted and SCM is otherwise unused.\n")
-
-	if !cmd.Force && !common.GetConsent() {
-		return errors.New("consent not given")
-	}
-
-	svc, err := server.NewStorageControlService(cmd.log, server.NewConfiguration())
-	if err != nil {
-		return errors.WithMessage(err, "initialising ControlService")
-	}
-
-	needsReboot, devices, err := svc.PrepareScm(server.PrepareScmRequest{
-		Reset: cmd.ResetScm,
-	})
-	if err != nil {
+func (cmd *storagePrepareCmd) Execute(args []string) error {
+	if err := cmd.Init(); err != nil {
 		return err
 	}
 
-	if needsReboot {
-		cmd.log.Info(server.MsgScmRebootRequired)
-		return nil
+	svc, err := server.NewStorageControlService(cmd.log, server.NewConfiguration())
+	if err != nil {
+		return errors.WithMessage(err, "initialising ControlService")
 	}
 
-	if len(devices) > 0 {
-		cmd.log.Infof("persistent memory kernel devices:\n\t%+v\n", devices)
-		return nil
+	cmd.log.Info("Preparing locally-attached storage...")
+
+	scanErrors := make([]error, 0, 2)
+
+	if cmd.NvmeOnly || !cmd.ScmOnly {
+		// Prepare NVMe access through SPDK
+		if err := svc.PrepareNvme(server.PrepareNvmeRequest{
+			HugePageCount: cmd.NrHugepages,
+			TargetUser:    cmd.TargetUser,
+			PCIWhitelist:  cmd.PCIWhiteList,
+			ResetOnly:     cmd.Reset,
+		}); err != nil {
+			scanErrors = append(scanErrors, err)
+		}
 	}
 
-	return errors.New("unexpected failure")
+	if cmd.ScmOnly || !cmd.NvmeOnly {
+		// Prepare SCM modules to be presented as pmem kernel devices
+		needsReboot, devices, err := svc.PrepareScm(server.PrepareScmRequest{
+			Reset: cmd.Reset,
+		})
+		if err != nil {
+			scanErrors = append(scanErrors, err)
+		}
+		if needsReboot {
+			cmd.log.Info(server.MsgScmRebootRequired)
+		} else if len(devices) > 0 {
+			cmd.log.Infof("persistent memory kernel devices:\n\t%+v\n", devices)
+		} else {
+			cmd.log.Info("no persistent memory kernel devices")
+		}
+	}
+
+	if len(scanErrors) > 0 {
+		errStr := "scan error(s):\n"
+		for _, err := range scanErrors {
+			errStr += fmt.Sprintf("  %s\n", err.Error())
+		}
+		return errors.New(errStr)
+	}
+
+	return nil
 }
