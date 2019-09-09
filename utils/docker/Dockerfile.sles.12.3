@@ -13,6 +13,8 @@ MAINTAINER <daos@daos.groups.io>
 # use same UID as host and default value of 1000 if not specified
 ARG UID=1000
 
+RUN echo "solver.allowVendorChange = true" >> /etc/zypp/zypp.conf
+
 # Update distribution
 # It's better to put the zypper update in the same "cache layer" as the
 # zypper install command so that the database is updated if/when the
