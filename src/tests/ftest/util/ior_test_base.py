@@ -59,6 +59,7 @@ class IorTestBase(TestWithServers):
         if isinstance(self.pool, TestPool):
             self.pool = self.pool.pool
         try:
+            # pylint: disable=no-member
             if self.pool is not None and self.pool.attached:
                 self.pool.destroy(1)
         finally:
@@ -139,6 +140,7 @@ class IorTestBase(TestWithServers):
             self.pool = self.pool.pool
 
         # Get the current pool size for comparison
+        # pylint: disable=no-member
         current_pool_info = self.pool.pool_query()
 
         # If Transfer size is < 4K, Pool size will verified against NVMe, else
