@@ -29,6 +29,7 @@ import (
 	"os/exec"
 	"strings"
 
+	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/pkg/errors"
 )
@@ -88,18 +89,18 @@ func run(cmd string) (string, error) {
 
 // PrepScm interface provides capability to prepare SCM storage
 type PrepScm interface {
-	Prep() (bool, []pmemDev, error)
-	PrepReset() (bool, error)
+	Prep(types.ScmState) (bool, []pmemDev, error)
+	PrepReset(types.ScmState) (bool, error)
+	GetState() (types.ScmState, error)
 }
 
 type prepScm struct {
 	log    logging.Logger
 	runCmd runCmdFn
-	state  scmState
 }
 
-func newPrepScm(log logging.Logger) PrepScm {
-	return prepScm{runCmd: run, log: log}
+func newPrepScm(log logging.Logger, myRun runCmdFn) PrepScm {
+	return &prepScm{runCmd: myRun, log: log}
 }
 
 // Prep executes commands to configure SCM modules into AppDirect interleaved
@@ -113,29 +114,36 @@ func newPrepScm(log logging.Logger) PrepScm {
 // * regions exist and free capacity -> create all namespaces, return created
 // * regions exist but no free capacity -> no-op, return namespaces
 //
-// Command output from external tools will be returned.
-func (ps prepScm) Prep() (needsReboot bool, pmemDevs []pmemDev, err error) {
-	if err := ps.getState(); err != nil {
-		return false, nil, errors.WithMessage(err, "establish scm state")
+// Command output from external tools will be returned. State will be retrieved
+// if input param == ScmStateUnknown
+func (ps *prepScm) Prep(inState types.ScmState) (needsReboot bool, pmemDevs []pmemDev,
+	err error) {
+
+	state := inState
+	if state == types.ScmStateUnknown {
+		state, err = ps.GetState()
+		if err != nil {
+			return false, nil, errors.WithMessage(err, "establish scm state")
+		}
 	}
 
-	ps.log.Debugf("scm in state %s\n", ps.state)
+	ps.log.Debugf("scm in state %s\n", state)
 
-	switch ps.state {
-	case scmStateNoRegions:
+	switch state {
+	case types.ScmStateNoRegions:
 		// clear any pre-existing goals first
 		if _, err = ps.runCmd(cmdScmDeleteGoal); err != nil {
-			return
+			return false, nil, errors.WithMessage(err, "clear goal")
 		}
 		// if successful, memory allocation change read on reboot
 		if _, err = ps.runCmd(cmdScmCreateRegions); err == nil {
 			needsReboot = true
 		}
-	case scmStateFreeCapacity:
+	case types.ScmStateFreeCapacity:
 		pmemDevs, err = ps.createNamespaces()
-	case scmStateNoCapacity:
+	case types.ScmStateNoCapacity:
 		pmemDevs, err = ps.getNamespaces()
-	case scmStateUnknown:
+	case types.ScmStateUnknown:
 		err = errors.New("unknown scm state")
 	}
 
@@ -145,16 +153,22 @@ func (ps prepScm) Prep() (needsReboot bool, pmemDevs []pmemDev, err error) {
 // PrepReset executes commands to remove namespaces and regions on SCM modules.
 //
 // Returns indication of whether a reboot is required alongside error.
-func (ps prepScm) PrepReset() (bool, error) {
-	if err := ps.getState(); err != nil {
-		return false, err
+// Command output from external tools will be returned. State will be retrieved
+// if input param == ScmStateUnknown
+func (ps *prepScm) PrepReset(inState types.ScmState) (needsReboot bool, err error) {
+	state := inState
+	if state == types.ScmStateUnknown {
+		state, err = ps.GetState()
+		if err != nil {
+			return
+		}
 	}
 
-	switch ps.state {
-	case scmStateNoRegions:
+	switch state {
+	case types.ScmStateNoRegions:
 		ps.log.Info("SCM is already reset\n")
-		return false, nil
-	case scmStateUnknown:
+		return
+	case types.ScmStateUnknown:
 		return false, errors.New("unknown scm state")
 	}
 
@@ -164,17 +178,16 @@ func (ps prepScm) PrepReset() (bool, error) {
 	}
 
 	for _, dev := range pmemDevs {
-		if err := ps.removeNamespace(dev.Dev); err != nil {
-			return false, err
+		if err = ps.removeNamespace(dev.Dev); err != nil {
+			return
 		}
 	}
 
 	ps.log.Infof("resetting SCM memory allocations\n")
 	// clear any pre-existing goals first
 	if _, err = ps.runCmd(cmdScmDeleteGoal); err != nil {
-		return false, nil
+		return
 	}
-	// TODO: clear any pre-existing goals first
 	if out, err := ps.runCmd(cmdScmRemoveRegions); err != nil {
 		ps.log.Error(out)
 		return false, err
@@ -183,13 +196,7 @@ func (ps prepScm) PrepReset() (bool, error) {
 	return true, nil // memory allocation reset requires a reboot
 }
 
-func (ps prepScm) withRunCmd(runCmd runCmdFn) prepScm {
-	ps.runCmd = runCmd
-
-	return ps
-}
-
-func (ps prepScm) removeNamespace(devName string) (err error) {
+func (ps *prepScm) removeNamespace(devName string) (err error) {
 	ps.log.Infof("removing SCM namespace, may take a few minutes...\n")
 
 	_, err = ps.runCmd(fmt.Sprintf(cmdScmDisableNamespace, devName))
@@ -206,33 +213,28 @@ func (ps prepScm) removeNamespace(devName string) (err error) {
 }
 
 // getState establishes state of SCM regions and namespaces on local server.
-func (ps prepScm) getState() error {
-	ps.state = scmStateUnknown
-
+func (ps *prepScm) GetState() (types.ScmState, error) {
 	// TODO: discovery should provide SCM region details
 	out, err := ps.runCmd(cmdScmShowRegions)
 	if err != nil {
-		return err
+		return types.ScmStateUnknown, err
 	}
 
 	ps.log.Debugf("show region output: %s\n", out)
 
 	if out == outScmNoRegions {
-		ps.state = scmStateNoRegions
-		return nil
+		return types.ScmStateNoRegions, nil
 	}
 
 	ok, err := hasFreeCapacity(out)
 	if err != nil {
-		return err
+		return types.ScmStateUnknown, err
 	}
 	if ok {
-		ps.state = scmStateFreeCapacity
-		return nil
+		return types.ScmStateFreeCapacity, nil
 	}
-	ps.state = scmStateNoCapacity
 
-	return nil
+	return types.ScmStateNoCapacity, nil
 }
 
 // hasFreeCapacity takes output from ipmctl and checks for free capacity.
@@ -294,7 +296,7 @@ func parsePmemDevs(jsonData string) (devs []pmemDev, err error) {
 }
 
 // createNamespaces runs create until no free capacity.
-func (ps prepScm) createNamespaces() ([]pmemDev, error) {
+func (ps *prepScm) createNamespaces() ([]pmemDev, error) {
 	devs := make([]pmemDev, 0)
 
 	for {
@@ -302,25 +304,26 @@ func (ps prepScm) createNamespaces() ([]pmemDev, error) {
 
 		out, err := ps.runCmd(cmdScmCreateNamespace)
 		if err != nil {
-			return nil, err
+			return nil, errors.WithMessage(err, "create namespace cmd")
 		}
 
 		newDevs, err := parsePmemDevs(out)
 		if err != nil {
-			return nil, err
+			return nil, errors.WithMessage(err, "parsing pmem devs")
 		}
 		devs = append(devs, newDevs...)
 
-		if err := ps.getState(); err != nil {
-			return nil, err
+		state, err := ps.GetState()
+		if err != nil {
+			return nil, errors.WithMessage(err, "getting state")
 		}
 
 		switch {
-		case ps.state == scmStateNoCapacity:
+		case state == types.ScmStateNoCapacity:
 			return devs, nil
-		case ps.state != scmStateFreeCapacity:
+		case state != types.ScmStateFreeCapacity:
 			return nil, errors.Errorf("unexpected state: want %s, got %s",
-				scmStateFreeCapacity.String(), ps.state.String())
+				types.ScmStateFreeCapacity.String(), state.String())
 		}
 	}
 }

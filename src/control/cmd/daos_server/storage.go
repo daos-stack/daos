@@ -108,20 +108,22 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	}
 
 	for cmd.ScmOnly || !cmd.NvmeOnly {
-		if err := svc.scm.prep.getState(); err != nil {
+		state, err := svc.GetScmState()
+		if err != nil {
 			scanErrors = append(scanErrors, err)
 			break
 		}
 
-		if err := cmd.CheckWarn(svc.scm.prep.state); err != nil {
+		if err := cmd.CheckWarn(state); err != nil {
 			scanErrors = append(scanErrors, err)
 			break
 		}
 
-		// Prepare SCM modules to be presented as pmem kernel devices
+		// Prepare SCM modules to be presented as pmem kernel devices.
+		// Pass evaluated state to avoid running GetScmState() twice.
 		needsReboot, devices, err := svc.PrepareScm(server.PrepareScmRequest{
 			Reset: cmd.Reset,
-		})
+		}, state)
 		if err != nil {
 			scanErrors = append(scanErrors, err)
 			break

@@ -29,60 +29,52 @@ import (
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/common"
+	. "github.com/daos-stack/daos/src/control/common/storage"
+	. "github.com/daos-stack/daos/src/control/lib/ipmctl"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-type mockPrepareScm struct {
+// MockPmemDevice returns a mock pmem kernel device.
+func MockPmemDevice() pmemDev {
+	pmdPB := MockPmemDevicePB()
+
+	return pmemDev{pmdPB.Uuid, pmdPB.Blockdev, pmdPB.Dev, int(pmdPB.Numanode)}
+}
+
+// mock implementation of PrepScm interface for external testing
+type mockPrepScm struct {
 	pmemDevs         []pmemDev
 	prepNeedsReboot  bool
 	resetNeedsReboot bool
 	prepRet          error
 	resetRet         error
+	currentState     ScmState
+	getStateRet      error
 }
 
-func (mp mockPrepareScm) Prep() (needsReboot bool, pmemDevs []pmemDev, err error) {
+func (mp *mockPrepScm) Prep(ScmState) (bool, []pmemDev, error) {
 	return mp.prepNeedsReboot, mp.pmemDevs, mp.prepRet
 }
-func (mp mockPrepareScm) PrepReset() (needsReboot bool, err error) {
+func (mp *mockPrepScm) PrepReset(ScmState) (bool, error) {
 	return mp.resetNeedsReboot, mp.resetRet
 }
-
-func newMockPrepareScm() PrepScm {
-	return &mockPrepareScm{}
+func (mp *mockPrepScm) GetState() (ScmState, error) {
+	return mp.currentState, mp.getStateRet
 }
 
-func (mp mockPrepareScm) withDevs(devs []pmemDev) mockPrepareScm {
-	mp.pmemDevs = devs
-	return mp
+func newMockPrepScm() PrepScm {
+	return &mockPrepScm{}
 }
 
-func (mp mockPrepareScm) withPrepNeedsReboot(b bool) mockPrepareScm {
-	mp.prepNeedsReboot = b
-	return mp
-}
-
-func (mp mockPrepareScm) withResetNeedsReboot(b bool) mockPrepareScm {
-	mp.resetNeedsReboot = b
-	return mp
-}
-
-func (mp mockPrepareScm) withPrepRet(err error) mockPrepareScm {
-	mp.prepRet = err
-	return mp
-}
-
-func (mp mockPrepareScm) withResetRet(err error) mockPrepareScm {
-	mp.resetRet = err
-	return mp
-}
-
+// TestGetState tests the internals of prepScm, pass in mock runCmd to verify
+// behaviour. Don't use mockPrepScm as we want to test prepScm logic.
 func TestGetState(t *testing.T) {
 	var regionsOut string  // variable cmd output
 	commands := []string{} // external commands issued
 	// ndctl create-namespace command return json format
 	pmemOut := `{
    "dev":"namespace%d.0",
-   o"mode":"fsdax",
+   "mode":"fsdax",
    "map":"dev",
    "size":"2964.94 GiB (3183.58 GB)",
    "uuid":"842fc847-28e0-4bb6-8dfc-d24afdba1528",
@@ -131,7 +123,7 @@ func TestGetState(t *testing.T) {
 			desc:              "modules but no regions",
 			showRegionOut:     outScmNoRegions,
 			expRebootRequired: true,
-			expCommands:       []string{cmdScmShowRegions, cmdScmCreateRegions},
+			expCommands:       []string{cmdScmShowRegions, cmdScmDeleteGoal, cmdScmCreateRegions},
 		},
 		{
 			desc: "single region with free capacity",
@@ -182,8 +174,10 @@ func TestGetState(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)()
 
-			ss := defaultMockScmStorage(log, nil)
-			ss.prep.setRunCmd(mockRun)
+			// not using mockPrepScm because we want to exercise
+			// prepScm
+			ss := newMockScmStorage(log, defaultMockExt(), nil, []DeviceDiscovery{MockModule()},
+				false, newPrepScm(log, mockRun))
 
 			if err := ss.Discover(); err != nil {
 				t.Fatal(err)
@@ -194,7 +188,7 @@ func TestGetState(t *testing.T) {
 			pmemId = 1
 			commands = nil
 
-			needsReboot, pmemDevs, err := ss.Prep()
+			needsReboot, pmemDevs, err := ss.Prep(ScmStateUnknown)
 			if tt.errMsg != "" {
 				ExpectError(t, err, tt.errMsg, tt.desc)
 				return

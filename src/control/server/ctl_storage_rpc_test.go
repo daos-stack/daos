@@ -199,7 +199,7 @@ func TestStorageScan(t *testing.T) {
 			config := defaultMockConfig(t)
 			cs := defaultMockControlService(t, log)
 			cs.scm = newMockScmStorage(log, config.ext, tt.ipmctlDiscoverRet,
-				[]ipmctl.DeviceDiscovery{module}, false, newMockPrepareScm())
+				[]ipmctl.DeviceDiscovery{module}, false, newMockPrepScm())
 			cs.nvme = newMockNvmeStorage(
 				log, config.ext,
 				newMockSpdkEnv(tt.spdkInitEnvRet),
@@ -234,18 +234,16 @@ func TestStorageScan(t *testing.T) {
 }
 
 func TestStoragePrepare(t *testing.T) {
-	//errExample := errors.New("example failure")
 	ctrlr := MockController("")
-	//pbCtrlr := MockControllerPB("")
 	module := MockModule()
-	//pbModule := MockModulePB()
 
 	tests := []struct {
-		desc    string
-		inReq   pb.StoragePrepareReq
-		expResp pb.StoragePrepareResp
-		isRoot  bool
-		errMsg  string
+		desc     string
+		inReq    pb.StoragePrepareReq
+		outPmems []pmemDev
+		expResp  pb.StoragePrepareResp
+		isRoot   bool
+		errMsg   string
 	}{
 		{
 			"success",
@@ -253,9 +251,79 @@ func TestStoragePrepare(t *testing.T) {
 				Nvme: &pb.PrepareNvmeReq{},
 				Scm:  &pb.PrepareScmReq{},
 			},
+			[]pmemDev{},
 			pb.StoragePrepareResp{
 				Nvme: &pb.PrepareNvmeResp{State: new(pb.ResponseState)},
 				Scm:  &pb.PrepareScmResp{State: new(pb.ResponseState)},
+			},
+			true,
+			"",
+		},
+		{
+			"not run as root",
+			pb.StoragePrepareReq{
+				Nvme: &pb.PrepareNvmeReq{},
+				Scm:  &pb.PrepareScmReq{},
+			},
+			[]pmemDev{},
+			pb.StoragePrepareResp{
+				Nvme: &pb.PrepareNvmeResp{
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+						Error:  os.Args[0] + " must be run as root or sudo",
+					},
+				},
+				Scm: &pb.PrepareScmResp{
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_ERR_SCM,
+						Error:  os.Args[0] + " must be run as root or sudo",
+					},
+				},
+			},
+			false,
+			"",
+		},
+		{
+			"scm only",
+			pb.StoragePrepareReq{
+				Nvme: nil,
+				Scm:  &pb.PrepareScmReq{},
+			},
+			[]pmemDev{},
+			pb.StoragePrepareResp{
+				Nvme: nil,
+				Scm:  &pb.PrepareScmResp{State: new(pb.ResponseState)},
+			},
+			true,
+			"",
+		},
+		{
+			"nvme only",
+			pb.StoragePrepareReq{
+				Nvme: &pb.PrepareNvmeReq{},
+				Scm:  nil,
+			},
+			[]pmemDev{},
+			pb.StoragePrepareResp{
+				Nvme: &pb.PrepareNvmeResp{State: new(pb.ResponseState)},
+				Scm:  nil,
+			},
+			true,
+			"",
+		},
+		{
+			"success with pmem devices",
+			pb.StoragePrepareReq{
+				Nvme: &pb.PrepareNvmeReq{},
+				Scm:  &pb.PrepareScmReq{},
+			},
+			[]pmemDev{MockPmemDevice()},
+			pb.StoragePrepareResp{
+				Nvme: &pb.PrepareNvmeResp{State: new(pb.ResponseState)},
+				Scm: &pb.PrepareScmResp{
+					State: new(pb.ResponseState),
+					Pmems: []*pb.PmemDevice{MockPmemDevicePB()},
+				},
 			},
 			true,
 			"",
@@ -273,7 +341,7 @@ func TestStoragePrepare(t *testing.T) {
 			cs := defaultMockControlService(t, log)
 			cs.scm = newMockScmStorage(log, config.ext, nil,
 				[]ipmctl.DeviceDiscovery{module}, false,
-				newMockPrepareScm())
+				&mockPrepScm{pmemDevs: tt.outPmems})
 			cs.nvme = newMockNvmeStorage(log, config.ext, newMockSpdkEnv(nil),
 				newMockSpdkNvme(log, "", "", []spdk.Controller{ctrlr},
 					[]spdk.Namespace{MockNamespace(&ctrlr)},
@@ -289,10 +357,14 @@ func TestStoragePrepare(t *testing.T) {
 
 			if resp.Nvme == nil {
 				AssertEqual(t, resp.Nvme, tt.expResp.Nvme, "unexpected nvme response, "+tt.desc)
-				AssertEqual(t, resp.Scm, tt.expResp.Scm, "unexpected scm response, "+tt.desc)
 			} else {
 				AssertEqual(t, resp.Nvme.State, tt.expResp.Nvme.State, "unexpected nvme state in response, "+tt.desc)
+			}
+			if resp.Scm == nil {
+				AssertEqual(t, resp.Scm, tt.expResp.Scm, "unexpected scm response, "+tt.desc)
+			} else {
 				AssertEqual(t, resp.Scm.State, tt.expResp.Scm.State, "unexpected scm state in response, "+tt.desc)
+				AssertEqual(t, resp.Scm.Pmems, tt.expResp.Scm.Pmems, "unexpected pmem devices in response, "+tt.desc)
 			}
 		})
 	}

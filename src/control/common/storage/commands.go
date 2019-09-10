@@ -63,15 +63,15 @@ func (cmd *StoragePrepareCmd) Validate() error {
 
 func (cmd *StoragePrepareCmd) CheckWarn(state ScmState) error {
 	switch state {
-	case scmStateNoRegions:
+	case ScmStateNoRegions:
 		if cmd.Reset {
 			return nil
 		}
-	case scmStateFreeCapacity, scmStateNoCapacity:
+	case ScmStateFreeCapacity, ScmStateNoCapacity:
 		if !cmd.Reset {
 			return nil
 		}
-	case scmStateUnknown:
+	case ScmStateUnknown:
 		return errors.New("unknown scm state")
 	}
 

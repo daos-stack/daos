@@ -76,7 +76,7 @@ func newMockScmStorage(log logging.Logger, ext External, discoverModulesRet erro
 func defaultMockScmStorage(log logging.Logger, ext External) *scmStorage {
 	m := MockModule()
 
-	return newMockScmStorage(log, ext, nil, []DeviceDiscovery{m}, false, newMockPrepareScm())
+	return newMockScmStorage(log, ext, nil, []DeviceDiscovery{m}, false, newMockPrepScm())
 }
 
 func TestDiscoverScm(t *testing.T) {
@@ -115,7 +115,7 @@ func TestDiscoverScm(t *testing.T) {
 			defer ShowBufferOnFailure(t, buf)()
 
 			ss := newMockScmStorage(log, nil, tt.ipmctlDiscoverRet,
-				[]DeviceDiscovery{m}, tt.inited, mockPrepareScm{})
+				[]DeviceDiscovery{m}, tt.inited, newMockPrepScm())
 
 			if err := ss.Discover(); err != nil {
 				if tt.errMsg != "" {
@@ -304,7 +304,7 @@ func TestFormatScm(t *testing.T) {
 				tt.mkdirRet, tt.removeRet, tt.mount, tt.class, tt.devs,
 				tt.size, storage.BdevClassNvme, []string{}, false, false)
 			ss := newMockScmStorage(log, config.ext, nil, []DeviceDiscovery{},
-				false, newMockPrepareScm())
+				false, newMockPrepScm())
 			ss.formatted = tt.formatted
 
 			results := ScmMountResults{}
@@ -383,7 +383,7 @@ func TestUpdateScm(t *testing.T) {
 
 			config := defaultMockConfig(t)
 			ss := newMockScmStorage(log, config.ext, nil, []DeviceDiscovery{},
-				false, newMockPrepareScm())
+				false, newMockPrepScm())
 
 			results := ScmModuleResults{}
 

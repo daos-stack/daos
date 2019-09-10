@@ -85,13 +85,13 @@ func (s *scmStorage) Teardown() error {
 }
 
 // Prep configures pmem kernel devices for SCM
-func (s *scmStorage) Prep() (needsReboot bool, pmemDevs []pmemDev, err error) {
-	return s.prep.Prep()
+func (s *scmStorage) Prep(state types.ScmState) (needsReboot bool, pmemDevs []pmemDev, err error) {
+	return s.prep.Prep(state)
 }
 
 // PrepReset resets configuration of SCM
-func (s *scmStorage) PrepReset() (needsReboot bool, err error) {
-	return s.prep.PrepReset()
+func (s *scmStorage) PrepReset(state types.ScmState) (needsReboot bool, err error) {
+	return s.prep.PrepReset(state)
 }
 
 // Discover method implementation for scmStorage
@@ -314,6 +314,6 @@ func newScmStorage(log logging.Logger, ext External) *scmStorage {
 		log:    log,
 		ext:    ext,
 		ipmctl: &ipmctl.NvmMgmt{},
-		prep:   newPrepScm(log),
+		prep:   newPrepScm(log, run),
 	}
 }
