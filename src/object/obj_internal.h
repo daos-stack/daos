@@ -215,6 +215,11 @@ struct shard_list_args {
 	daos_obj_list_t		*la_api_args;
 };
 
+struct shard_sync_args {
+	struct shard_auxi_args	 sa_auxi;
+	daos_epoch_t		*sa_epoch;
+};
+
 int dc_obj_shard_open(struct dc_object *obj, daos_unit_oid_t id,
 		      unsigned int mode, struct dc_obj_shard *shard);
 void dc_obj_shard_close(struct dc_obj_shard *shard);
@@ -240,6 +245,10 @@ int dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
 			   daos_recx_t *recx, const uuid_t coh_uuid,
 			   const uuid_t cont_uuid, unsigned int *map_ver,
 			   tse_task_t *task);
+
+int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
+		      void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
+		      uint32_t fw_cnt, tse_task_t *task);
 
 static inline bool
 obj_retry_error(int err)
@@ -274,6 +283,7 @@ void ds_obj_enum_handler(crt_rpc_t *rpc);
 void ds_obj_punch_handler(crt_rpc_t *rpc);
 void ds_obj_tgt_punch_handler(crt_rpc_t *rpc);
 void ds_obj_query_key_handler(crt_rpc_t *rpc);
+void ds_obj_sync_handler(crt_rpc_t *rpc);
 ABT_pool ds_obj_abt_pool_choose_cb(crt_rpc_t *rpc, ABT_pool *pools);
 typedef int (*ds_iofw_cb_t)(crt_rpc_t *req, void *arg);
 
