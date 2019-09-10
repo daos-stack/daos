@@ -81,8 +81,22 @@ type storagePrepareCmd struct {
 	commands.StoragePrepareCmd
 }
 
+func concatErrors(scanErrors []error, err error) error {
+	if err != nil {
+		scanErrors = append(scanErrors, err)
+	}
+
+	errStr := "scan error(s):\n"
+	for _, err := range scanErrors {
+		errStr += fmt.Sprintf("  %s\n", err.Error())
+	}
+
+	return errors.New(errStr)
+}
+
 func (cmd *storagePrepareCmd) Execute(args []string) error {
-	if err := cmd.Validate(); err != nil {
+	prepNvme, prepScm, err := cmd.Validate()
+	if err != nil {
 		return err
 	}
 
@@ -95,7 +109,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 
 	scanErrors := make([]error, 0, 2)
 
-	if cmd.NvmeOnly || !cmd.ScmOnly {
+	if prepNvme {
 		// Prepare NVMe access through SPDK
 		if err := svc.PrepareNvme(server.PrepareNvmeRequest{
 			HugePageCount: cmd.NrHugepages,
@@ -107,16 +121,14 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		}
 	}
 
-	for cmd.ScmOnly || !cmd.NvmeOnly {
+	if prepScm {
 		state, err := svc.GetScmState()
 		if err != nil {
-			scanErrors = append(scanErrors, err)
-			break
+			return concatErrors(scanErrors, err)
 		}
 
 		if err := cmd.CheckWarn(state); err != nil {
-			scanErrors = append(scanErrors, err)
-			break
+			return concatErrors(scanErrors, err)
 		}
 
 		// Prepare SCM modules to be presented as pmem kernel devices.
@@ -125,8 +137,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 			Reset: cmd.Reset,
 		}, state)
 		if err != nil {
-			scanErrors = append(scanErrors, err)
-			break
+			return concatErrors(scanErrors, err)
 		}
 		if needsReboot {
 			cmd.log.Info(server.MsgScmRebootRequired)
@@ -135,16 +146,10 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		} else {
 			cmd.log.Info("no persistent memory kernel devices")
 		}
-
-		break
 	}
 
 	if len(scanErrors) > 0 {
-		errStr := "scan error(s):\n"
-		for _, err := range scanErrors {
-			errStr += fmt.Sprintf("  %s\n", err.Error())
-		}
-		return errors.New(errStr)
+		return concatErrors(scanErrors, nil)
 	}
 
 	return nil

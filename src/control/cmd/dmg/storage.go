@@ -51,11 +51,12 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	var nReq *pb.PrepareNvmeReq
 	var sReq *pb.PrepareScmReq
 
-	if err := cmd.Validate(); err != nil {
+	prepNvme, prepScm, err := cmd.Validate()
+	if err != nil {
 		return err
 	}
 
-	if cmd.NvmeOnly || !cmd.ScmOnly {
+	if prepNvme {
 		nReq = &pb.PrepareNvmeReq{
 			Pciwhitelist: cmd.PCIWhiteList,
 			Nrhugepages:  int32(cmd.NrHugepages),
@@ -64,7 +65,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		}
 	}
 
-	if cmd.ScmOnly || !cmd.NvmeOnly {
+	if prepScm {
 		if err := cmd.Warn(); err != nil {
 			return err
 		}
