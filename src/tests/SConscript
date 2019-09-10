@@ -35,7 +35,7 @@ def scons():
 
     # install yamls files
     env.Install('$PREFIX/etc/daos', ['ftest/data/daos_server_baseline.yaml',
-        'ftest/data/daos_avocado_test.yaml'])
+                                     'ftest/data/daos_avocado_test.yaml'])
 
     # copy src/tests/ftest to $PREFIX/lib/daos/TESTING/ftest
     spath = join(denv.subst("$PREFIX"), "../src/tests/ftest/")

@@ -26,13 +26,12 @@ from __future__ import print_function
 import ctypes
 import os
 import traceback
-import json
 from multiprocessing import sharedctypes
 
 from apricot import TestWithServers
 
 import check_for_pool
-from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
+from daos_api import DaosPool, DaosContainer, DaosApiError
 from daos_cref import IOV
 
 def check_handle(self, pool_glob_handle, uuidstr, cont_glob_handle, rank):
@@ -158,7 +157,8 @@ class GlobalHandle(TestWithServers):
             #p.join()
             # for now verifying global handle in the same process which is not
             # the intended use case
-            check_handle(self, sct_pool_handle, sct_pool_uuid, sct_cont_handle, 0)
+            check_handle(self, sct_pool_handle, sct_pool_uuid,
+                         sct_cont_handle, 0)
 
         except DaosApiError as excep:
             print(excep)

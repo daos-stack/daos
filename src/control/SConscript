@@ -127,8 +127,8 @@ def scons():
             context.Result('%s' % go_version)
             return 1
 
-    conf = Configure(denv, custom_tests={'CheckGoVersion': check_go_version})
-    if not conf.CheckGoVersion():
+    conf = Configure(denv, custom_tests={'check_go_version': check_go_version})
+    if not conf.check_go_version():
         print("no usable Go compiler found (yum install golang?)")
         exit(1)
     denv = conf.Finish()
