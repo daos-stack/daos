@@ -6,6 +6,7 @@ hosts:
 timeout: 1800
 server_config:
     name: daos_server
+    targets: 1
 pool:
     createmode:
         mode_RW:
