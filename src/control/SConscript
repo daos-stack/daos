@@ -128,12 +128,12 @@ def scons():
             return 1
 
     conf = Configure(denv, custom_tests={'CheckGoVersion': check_go_version})
-    # pylint disable=no-member
+    # pylint: disable=no-member
     if not conf.CheckGoVersion():
         print("no usable Go compiler found (yum install golang?)")
         exit(1)
     denv = conf.Finish()
-    # pylint enable=no-member
+    # pylint: enable=no-member
 
     # GOPATH for SCons builds in the build directory
     gopath = Dir('.').abspath
