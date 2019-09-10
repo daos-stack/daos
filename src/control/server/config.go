@@ -410,7 +410,7 @@ func (c *Configuration) Validate() (err error) {
 		if err := srv.Validate(); err != nil {
 			return errors.Wrapf(err, "I/O server %d failed config validation", i)
 		}
-/*
+
 		validConfig, err := c.ValidateNetworkConfig(srv.Fabric.Provider, srv.Fabric.Interface, uint(srv.Fabric.PinnedNumaNode))
 		if err != nil {
 			return errors.Errorf("Unable to validate the network configuration for provider: %s, with device: %s on NUMA node %d.  Error: %v",
@@ -421,8 +421,6 @@ func (c *Configuration) Validate() (err error) {
 			return errors.Errorf("Network device configuration for Provider: %s, with device: %s on NUMA node %d is invalid.",
 				srv.Fabric.Provider, srv.Fabric.Interface, srv.Fabric.PinnedNumaNode)
 		}
-*/
-		//log.Debugf("Network device configuration for Provider: %s, with device: %s on NUMA node %d is valid.", srv.Provider, srv.Interface, srv.PinnedNumaNode)
 	}
 
 	return nil

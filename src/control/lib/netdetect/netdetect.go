@@ -598,7 +598,7 @@ func ValidateNetworkConfig(provider string, device string, numaNode uint) (bool,
 		return false, errors.New("device required")
 	}
 
-	log.Infof("Input provider string: %s", provider)
+	log.Debugf("Input provider string: %s", provider)
 	// convert the Mercury provider string into a libfabric provider string
 	// to aid in matching it against the libfabric providers
 	tmp := strings.Split(provider, ";")
@@ -607,8 +607,8 @@ func ValidateNetworkConfig(provider string, device string, numaNode uint) (bool,
 		if len(libFabricProvider) > 0 {
 			libfabricProviderList += libFabricProvider + ";"
 		} else {
-			log.Infof("Provider '%s' is not known by libfabric.", subProvider)
-			return false, errors.New(fmt.Sprintf("Fabric provider: %s not known by libfabric.", subProvider))
+			log.Debugf("Provider '%s' is not known by libfabric.", subProvider)
+			return false, errors.New(fmt.Sprintf("Fabric provider: %s not known by libfabric.  Use 'daos_server network list' to view supported providers", subProvider))
 		}
 	}
 	libfabricProviderList = strings.TrimSuffix(libfabricProviderList, ";")
@@ -642,16 +642,18 @@ func ValidateNetworkConfig(provider string, device string, numaNode uint) (bool,
 		deviceAffinity, err := GetAffinityForDevice(deviceScanCfg)
 		if err == nil && len(deviceAffinity) > 0 {
 			if deviceAffinity[0].DeviceName == device {
-				log.Infof("Device %s supports provider: %s", device, provider)
+				log.Debugf("Device %s supports provider: %s", device, provider)
 				if deviceAffinity[0].NUMANode != numaNode {
-					log.Infof("The NUMA node for device %s does not match the provided value %d.  Performance degradation may result.", device, numaNode)
+					log.Debugf("The NUMA node for device %s does not match the provided value %d.  Performance degradation may result. " +
+						"Remove the pinned_numa_node value from daos_server.yml then execute 'daos_server network scan' " +
+						"to see the valid NUMA node associated with the network device", device, numaNode)
 					return false, nil
 				}
-				log.Infof("The NUMA node for device %s matches the provided value %d.  Network configuration is valid.", device, numaNode)
+				log.Debugf("The NUMA node for device %s matches the provided value %d.  Network configuration is valid.", device, numaNode)
 				return true, nil
 			}
 		}
 	}
-	log.Infof("Configuration error!  Device %s does not support provider: %s", device, provider)
+	log.Debugf("Configuration error!  Device %s does not support provider: %s", device, provider)
 	return false, nil
 }

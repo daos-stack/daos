@@ -160,18 +160,6 @@ func (c *Config) Validate() error {
 		c.HelperStreamCount = maxHelperStreamCount
 	}
 
-//	validConfig, err := c.ValidateNetworkConfig(c.Fabric.Provider, c.Fabric.Interface, uint(c.Fabric.PinnedNumaNode))
-//	if err != nil {
-		return errors.Errorf(" fake! Unable to validate the network configuration for provider: %s, with device: %s on NUMA node %d.  Error: %v",
-			c.Fabric.Provider, c.Fabric.Interface, c.Fabric.PinnedNumaNode, 0)
-//	}
-
-//	if !validConfig {
-//		return errors.Errorf("Network device configuration for Provider: %s, with device: %s on NUMA node %d is invalid.",
-//			c.Fabric.Provider, c.Fabric.Interface, c.Fabric.PinnedNumaNode)
-//	}
-
-
 	return nil
 }
 
