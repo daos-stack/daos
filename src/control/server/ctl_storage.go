@@ -43,7 +43,7 @@ type PrepareNvmeRequest struct {
 //
 // Suitable for commands invoked directly on server, not over gRPC.
 func (c *StorageControlService) PrepareNvme(req PrepareNvmeRequest) error {
-	ok, usr := common.CheckSudo()
+	ok, usr := c.nvme.ext.checkSudo()
 	if !ok {
 		return errors.Errorf("%s must be run as root or sudo", os.Args[0])
 	}
@@ -78,8 +78,10 @@ type PrepareScmRequest struct {
 // list of pmem kernel devices and error directly.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
-func (c *StorageControlService) PrepareScm(req PrepareScmRequest) (needsReboot bool, pmemDevs []pmemDev, err error) {
-	ok, _ := common.CheckSudo()
+func (c *StorageControlService) PrepareScm(req PrepareScmRequest, state types.ScmState,
+) (needsReboot bool, pmemDevs []pmemDev, err error) {
+
+	ok, _ := c.scm.ext.checkSudo()
 	if !ok {
 		err = errors.Errorf("%s must be run as root or sudo", os.Args[0])
 		return
@@ -102,12 +104,12 @@ func (c *StorageControlService) PrepareScm(req PrepareScmRequest) (needsReboot b
 
 	if req.Reset {
 		// run reset to remove namespaces and clear regions
-		needsReboot, err = c.scm.PrepReset()
+		needsReboot, err = c.scm.PrepReset(state)
 		return
 	}
 
 	// transition to the next state in SCM preparation
-	return c.scm.Prep()
+	return c.scm.Prep(state)
 }
 
 // ScanNvme scans locally attached SSDs and returns list directly.
@@ -130,4 +132,9 @@ func (c *StorageControlService) ScanScm() (types.ScmModules, error) {
 	}
 
 	return c.scm.modules, nil
+}
+
+// GetScmState returns current state of SCM module preparation
+func (c *StorageControlService) GetScmState() (types.ScmState, error) {
+	return c.scm.prep.GetState()
 }

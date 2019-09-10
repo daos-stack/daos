@@ -51,7 +51,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	var nReq *pb.PrepareNvmeReq
 	var sReq *pb.PrepareScmReq
 
-	if err := cmd.Init(); err != nil {
+	if err := cmd.Validate(); err != nil {
 		return err
 	}
 
@@ -65,6 +65,10 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	}
 
 	if cmd.ScmOnly || !cmd.NvmeOnly {
+		if err := cmd.Warn(); err != nil {
+			return err
+		}
+
 		sReq = &pb.PrepareScmReq{Reset_: cmd.Reset}
 	}
 

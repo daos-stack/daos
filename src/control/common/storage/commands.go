@@ -53,11 +53,32 @@ type StoragePrepareCmd struct {
 	Force    bool `short:"f" long:"force" description:"Perform format without prompting for confirmation"`
 }
 
-func (cmd *StoragePrepareCmd) Init() error {
+func (cmd *StoragePrepareCmd) Validate() error {
 	if cmd.NvmeOnly && cmd.ScmOnly {
 		return errors.New("nvme-only and scm-only options should not be set together")
 	}
 
+	return nil
+}
+
+func (cmd *StoragePrepareCmd) CheckWarn(state ScmState) error {
+	switch state {
+	case ScmStateNoRegions:
+		if cmd.Reset {
+			return nil
+		}
+	case ScmStateFreeCapacity, ScmStateNoCapacity:
+		if !cmd.Reset {
+			return nil
+		}
+	case ScmStateUnknown:
+		return errors.New("unknown scm state")
+	}
+
+	return cmd.Warn()
+}
+
+func (cmd *StoragePrepareCmd) Warn() error {
 	log.Info(MsgStoragePrepareWarn)
 
 	if !cmd.Force && !common.GetConsent() {

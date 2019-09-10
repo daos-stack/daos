@@ -87,7 +87,8 @@ func (c *StorageControlService) doScmPrepare(req *pb.PrepareScmReq) (resp *pb.Pr
 	resp = &pb.PrepareScmResp{}
 	msg := "Storage Prepare SCM"
 
-	needsReboot, pmemDevs, err := c.PrepareScm(PrepareScmRequest{Reset: req.GetReset_()})
+	needsReboot, pmemDevs, err := c.PrepareScm(PrepareScmRequest{Reset: req.GetReset_()},
+		types.ScmStateUnknown)
 	if err != nil {
 		resp.State = newState(c.log, pb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg)
 		return
