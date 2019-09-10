@@ -23,10 +23,8 @@
 package logging
 
 import (
-	"bytes"
 	"io"
 	"os"
-	"sync"
 )
 
 const (
@@ -77,36 +75,6 @@ func NewCombinedLogger(prefix string, output io.Writer) *LeveledLogger {
 			NewErrorLogger(prefix, output),
 		},
 	}
-}
-
-// LogBuffer provides a thread-safe wrapper for bytes.Buffer.
-type LogBuffer struct {
-	sync.Mutex
-	buf bytes.Buffer
-}
-
-func (lb *LogBuffer) Read(p []byte) (int, error) {
-	lb.Lock()
-	defer lb.Unlock()
-	return lb.buf.Read(p)
-}
-
-func (lb *LogBuffer) Write(p []byte) (int, error) {
-	lb.Lock()
-	defer lb.Unlock()
-	return lb.buf.Write(p)
-}
-
-func (lb *LogBuffer) String() string {
-	lb.Lock()
-	defer lb.Unlock()
-	return lb.buf.String()
-}
-
-func (lb *LogBuffer) Reset() {
-	lb.Lock()
-	defer lb.Unlock()
-	lb.buf.Reset()
 }
 
 // NewTestLogger returns a logger and a *LogBuffer,

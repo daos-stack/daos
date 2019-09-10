@@ -36,7 +36,7 @@ type Rank uint32
 const (
 	// MaxRank is the largest valid Rank value
 	MaxRank Rank = math.MaxUint32 - 1
-	// NilRank is a an unset Rank (0 is a valid Rank)
+	// NilRank is an unset Rank (0 is a valid Rank)
 	NilRank Rank = math.MaxUint32
 )
 
