@@ -127,7 +127,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 			return concatErrors(scanErrors, err)
 		}
 
-		if err := cmd.CheckWarn(state); err != nil {
+		if err := cmd.CheckWarn(cmd.log, state); err != nil {
 			return concatErrors(scanErrors, err)
 		}
 

@@ -67,7 +67,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	}
 
 	if prepScm {
-		if err := cmd.Warn(); err != nil {
+		if err := cmd.Warn(cmd.log); err != nil {
 			return err
 		}
 
