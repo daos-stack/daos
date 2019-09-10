@@ -63,7 +63,6 @@ const (
 	msgBdevFwrevEndMismatch   = "controller fwrev unchanged after update"
 	msgBdevModelMismatch      = "controller model unexpected"
 	msgBdevNoDevs             = "no controllers specified"
-	msgSpdkHealthQueryFail    = "SPDK NVMe device health query"
 )
 
 // SpdkSetup is an interface to configure spdk prerequisites via a
@@ -203,26 +202,12 @@ func (n *nvmeStorage) Discover() error {
 		return errors.WithMessage(err, msgSpdkInitFail)
 	}
 
-	cs, ns, err := n.nvme.Discover()
+	cs, ns, dh, err := n.nvme.Discover()
 	if err != nil {
 		return errors.WithMessage(err, msgSpdkDiscoverFail)
 	}
-	n.controllers = loadControllers(cs, ns)
+	n.controllers = loadControllers(cs, ns, dh)
 	n.initialized = true
-
-	return nil
-}
-
-// HealthQuery method implementation for nvmeStorage.
-func (n *nvmeStorage) HealthQuery(resp *pb.QueryHealthResp) error {
-
-	cs, ns, dh, err := n.nvme.HealthQuery()
-	if err != nil {
-		return errors.WithMessage(err, msgSpdkHealthQueryFail)
-	}
-	n.controllers = loadDeviceHealth(cs, ns, dh)
-
-	resp.Ctrlrs = n.controllers
 
 	return nil
 }
@@ -288,7 +273,7 @@ func (n *nvmeStorage) Format(cfg storage.BdevConfig, results *(types.NvmeControl
 			n.log.Debugf("controller format successful (%s)\n", pciAddr)
 
 			addCretFormat(pb.ResponseStatus_CTRL_SUCCESS, "", "")
-			n.controllers = loadControllers(cs, ns)
+			n.controllers = loadControllers(cs, ns, nil)
 		}
 	default:
 		addCretFormat(pb.ResponseStatus_CTRL_ERR_CONF,
@@ -376,7 +361,7 @@ func (n *nvmeStorage) Update(cfg storage.BdevConfig, req *pb.UpdateNvmeReq, resu
 				//       further updates if not
 				continue
 			}
-			n.controllers = loadControllers(cs, ns)
+			n.controllers = loadControllers(cs, ns, nil)
 
 			ctrlr = n.getController(pciAddr)
 			if ctrlr == nil {
@@ -450,20 +435,20 @@ func (n *nvmeStorage) BurnIn(pciAddr string, nsID int32, configPath string) (
 	return
 }
 
-// loadDeviceHealth converts a slice of Controller into protobuf equivalent,
-// similar to loadControllers function but add additional device health info.
+// loadControllers converts slice of Controller into protobuf equivalent.
 // Implemented as a pure function.
-func loadDeviceHealth(ctrlrs []spdk.Controller, nss []spdk.Namespace,
+func loadControllers(ctrlrs []spdk.Controller, nss []spdk.Namespace,
 	health []spdk.DeviceHealth) (pbCtrlrs types.NvmeControllers) {
 
-		for _, c := range ctrlrs {
+	for _, c := range ctrlrs {
 		pbCtrlrs = append(
 			pbCtrlrs,
 			&pb.NvmeController{
-				Model:   c.Model,
-				Serial:  c.Serial,
-				Pciaddr: c.PCIAddr,
-				Fwrev:   c.FWRev,
+				Model:    c.Model,
+				Serial:   c.Serial,
+				Pciaddr:  c.PCIAddr,
+				Fwrev:    c.FWRev,
+				Socketid: c.SocketID,
 				// repeated pb field
 				Namespaces: loadNamespaces(c.PCIAddr, nss),
 				Healthstats: loadHealthStats(health),
@@ -472,11 +457,25 @@ func loadDeviceHealth(ctrlrs []spdk.Controller, nss []spdk.Namespace,
 	return pbCtrlrs
 }
 
+// loadNamespaces converts slice of Namespace into protobuf equivalent.
+// Implemented as a pure function.
+func loadNamespaces(ctrlrPciAddr string, nss []spdk.Namespace) (_nss types.NvmeNamespaces) {
+	for _, ns := range nss {
+		if ns.CtrlrPciAddr == ctrlrPciAddr {
+			_nss = append(
+				_nss,
+				&pb.NvmeController_Namespace{
+					Id:       ns.ID,
+					Capacity: ns.Size,
+				})
+		}
+	}
+	return
+}
+
 // loadHealthStats converts a slice of DeviceHealth into protobuf equivalent.
 // Implemented as a pure function.
-func loadHealthStats(health []spdk.DeviceHealth) (
-	_health types.NvmeHealthstats) {
-
+func loadHealthStats(health []spdk.DeviceHealth) (_health types.NvmeHealthstats) {
 	for _, h := range health {
 		_health = append(
 			_health,
@@ -498,45 +497,6 @@ func loadHealthStats(health []spdk.DeviceHealth) (
 			})
 	}
 
-	return
-}
-
-// loadControllers converts slice of Controller into protobuf equivalent.
-// Implemented as a pure function.
-func loadControllers(ctrlrs []spdk.Controller, nss []spdk.Namespace) (
-	pbCtrlrs types.NvmeControllers) {
-
-	for _, c := range ctrlrs {
-		pbCtrlrs = append(
-			pbCtrlrs,
-			&pb.NvmeController{
-				Model:    c.Model,
-				Serial:   c.Serial,
-				Pciaddr:  c.PCIAddr,
-				Fwrev:    c.FWRev,
-				Socketid: c.SocketID,
-				// repeated pb field
-				Namespaces: loadNamespaces(c.PCIAddr, nss),
-			})
-	}
-	return pbCtrlrs
-}
-
-// loadNamespaces converts slice of Namespace into protobuf equivalent.
-// Implemented as a pure function.
-func loadNamespaces(ctrlrPciAddr string, nss []spdk.Namespace) (
-	_nss types.NvmeNamespaces) {
-
-	for _, ns := range nss {
-		if ns.CtrlrPciAddr == ctrlrPciAddr {
-			_nss = append(
-				_nss,
-				&pb.NvmeController_Namespace{
-					Id:       ns.ID,
-					Capacity: ns.Size,
-				})
-		}
-	}
 	return
 }
 

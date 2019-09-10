@@ -100,13 +100,13 @@ struct ret_t {
 };
 
 /**
- * Discover NVMe controllers and namespaces.
+ * Discover NVMe controllers and namespaces, as well as return device health
+ * information.
  *
  * \return a pointer to a return struct (ret_t).
  */
 struct ret_t *nvme_discover(void);
 
-struct ret_t *nvme_dev_health(void);
 
 /**
  * Update NVMe controller firmware.

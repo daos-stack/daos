@@ -151,18 +151,6 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *pb.Storage
 	return resp, nil
 }
 
-// DeviceHealthQuery queries SPDK NVMe device health stats of attached storage
-// on a node.
-func (c *ControlService) DeviceHealthQuery(ctx context.Context, req *pb.QueryHealthReq) (
-	*pb.QueryHealthResp, error) {
-
-	resp := new(pb.QueryHealthResp)
-
-	c.nvme.HealthQuery(resp)
-
-	return resp, nil
-}
-
 // StorageControlService encapsulates the storage part of the control service
 type StorageControlService struct {
 	log  logging.Logger

@@ -363,73 +363,39 @@ get_spdk_log_page_completion(void *cb_arg, const struct spdk_nvme_cpl *cpl)
 	entry->inflight--;
 }
 
-static bool
+static int
 get_dev_health_logs(struct spdk_nvme_ctrlr *ctrlr,
 		    struct dev_health_entry *entry)
 {
 	struct spdk_nvme_health_information_page health_page;
+	int					 rc = 0;
 
 	entry->inflight++;
-	if (spdk_nvme_ctrlr_cmd_get_log_page(ctrlr,
-					     SPDK_NVME_LOG_HEALTH_INFORMATION,
-					     SPDK_NVME_GLOBAL_NS_TAG,
-					     &health_page,
-					     sizeof(health_page),
-					     0, get_spdk_log_page_completion,
-					     entry)) {
-		return false;
-	}
+	rc = spdk_nvme_ctrlr_cmd_get_log_page(ctrlr,
+					      SPDK_NVME_LOG_HEALTH_INFORMATION,
+					      SPDK_NVME_GLOBAL_NS_TAG,
+					      &health_page,
+					      sizeof(health_page),
+					      0, get_spdk_log_page_completion,
+					      entry);
+	if (rc != 0)
+		return rc;
 
 	while (entry->inflight)
 		spdk_nvme_ctrlr_process_admin_completions(ctrlr);
 
 	entry->health_page = health_page;
-	return true;
-}
-
-struct ret_t *
-nvme_dev_health(void)
-{
-	struct ret_t		*ret;
-	struct ctrlr_entry	*ctrlr_entry;
-	struct dev_health_entry	*health_entry;
-
-	ret = init_ret();
-
-	ctrlr_entry = g_controllers;
-	if (ctrlr_entry == NULL) {
-		sprintf(ret->err, "NVMe controllers not found/probed\n");
-		return ret;
-	}
-
-	while (ctrlr_entry) {
-		health_entry = malloc(sizeof(struct dev_health_entry));
-		if (health_entry == NULL) {
-			sprintf(ret->err, "health_entry malloc failed");
-			return ret;
-		}
-
-		if (!get_dev_health_logs(ctrlr_entry->ctrlr, health_entry)) {
-			sprintf(ret->err,
-				"Unable to get SPDK ctrlr health logs\n");
-			free(health_entry);
-			return ret;
-		}
-
-		ctrlr_entry->dev_health = health_entry;
-		ctrlr_entry = ctrlr_entry->next;
-	}
-
-	collect(ret);
-
-	return ret;
+	return rc;
 }
 
 struct ret_t *
 nvme_discover(void)
 {
-	int 		rc;
-	struct ret_t	*ret;
+	int			 rc;
+	struct ret_t		*ret;
+	struct ctrlr_entry	*ctrlr_entry;
+	struct dev_health_entry	*health_entry;
+
 
 	ret = init_ret();
 
@@ -452,6 +418,32 @@ nvme_discover(void)
 		fprintf(stderr, "no NVMe controllers found\n");
 		cleanup();
 		return ret;
+	}
+
+	/*
+	 * Collect NVMe SSD health stats for each probed controller.
+	 */
+	ctrlr_entry = g_controllers;
+
+	while (ctrlr_entry) {
+		health_entry = malloc(sizeof(struct dev_health_entry));
+		if (health_entry == NULL) {
+			fprintf(stderr, "health_entry malloc failed");
+			cleanup();
+			return ret;
+		}
+
+		rc = get_dev_health_logs(ctrlr_entry->ctrlr, health_entry);
+		if (rc != 0) {
+			fprintf(stderr,
+				"Unable to get SPDK ctrlr health logs\n");
+			free(health_entry);
+			cleanup();
+			return ret;
+		}
+
+		ctrlr_entry->dev_health = health_entry;
+		ctrlr_entry = ctrlr_entry->next;
 	}
 
 	collect(ret);

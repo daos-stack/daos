@@ -56,15 +56,15 @@ func (cr ClientResult) String() string {
 	return fmt.Sprintf("%+v", cr.Value)
 }
 
-// ClientQueryResult is a container for output of BIO health
+// ClientBioResult is a container for output of BIO health
 // query client requests.
-type ClientQueryResult struct {
+type ClientBioResult struct {
 	Address string
 	Stats	*pb.BioHealthResp
 	Err	error
 }
 
-func (cr ClientQueryResult) String() string {
+func (cr ClientBioResult) String() string {
 	var buf bytes.Buffer
 
 	if cr.Err != nil {
@@ -152,7 +152,7 @@ func (cr ClientSmdResult) String() string {
 
 // ResultMap map client addresses to method call ClientResults
 type ResultMap map[string]ClientResult
-type ResultQueryMap map[string]ClientQueryResult
+type ResultQueryMap map[string]ClientBioResult
 type ResultSmdMap map[string]ClientSmdResult
 
 func (rm ResultMap) String() string {
@@ -237,7 +237,6 @@ type Connect interface {
 	StorageScan() (ClientCtrlrMap, ClientModuleMap)
 	StorageFormat() (ClientCtrlrMap, ClientMountMap)
 	StorageUpdate(*pb.StorageUpdateReq) (ClientCtrlrMap, ClientModuleMap)
-	DeviceHealthQuery() (ClientCtrlrMap)
 	// TODO: implement Burnin client features
 	//StorageBurnIn() (ClientCtrlrMap, ClientModuleMap)
 	ListFeatures() ClientFeatureMap

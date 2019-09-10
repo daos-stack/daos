@@ -29,48 +29,56 @@ import (
 	log "github.com/daos-stack/daos/src/control/logging"
 )
 
-// QueryStorCmd is the struct representing the query storage subcommand
-type QueryStorCmd struct {
-	Health HealthQueryCmd `command:"device-health" alias:"d" description:"Query raw NVMe SPDK device statistics."`
-	Bio    BioQueryCmd    `command:"blobstore-health" alias:"b" description:"Query internal blobstore health data."`
-	Smd    SmdQueryCmd    `command:"smd" alias:"s" description:"Query per-server metadata."`
+// StorageQueryCmd is the struct representing the query storage subcommand
+type StorageQueryCmd struct {
+	NVMe   NvmeHealthQueryCmd `command:"nvme-health" alias:"d" description:"Query raw NVMe SPDK device statistics."`
+	BS     BSHealthQueryCmd   `command:"blobstore-health" alias:"b" description:"Query internal blobstore health data."`
+	Smd    SmdQueryCmd        `command:"smd" alias:"s" description:"Query per-server metadata."`
 }
 
-// HealthQueryCmd is the struct representing the "storage query health" subcommand
-type HealthQueryCmd struct {
+// NvmeHealthQueryCmd is the struct representing the "storage query health" subcommand
+type NvmeHealthQueryCmd struct {
 	broadcastCmd
 	connectedCmd
 }
 
 // Query the SPDK NVMe device health stats from all devices on all hosts
-func healthQuery(conns client.Connect) {
-	cCtrlrs := conns.DeviceHealthQuery()
+func nvmeHealthQuery(conns client.Connect) {
+	cCtrlrs, _ := conns.StorageScan()
 	log.Infof("NVMe SSD Device Health Stats:\n%s", cCtrlrs)
 }
 
-// Execute is run when HealthQueryCmd activates
-func (h *HealthQueryCmd) Execute(args []string) error {
-	healthQuery(h.conns)
+// Execute is run when NvmeHealthQueryCmd activates
+func (h *NvmeHealthQueryCmd) Execute(args []string) error {
+	nvmeHealthQuery(h.conns)
 	return nil
 }
 
-// BioQueryCmd is the struct representing the "storage query bio" subcommand
-type BioQueryCmd struct {
+// BSHealthQueryCmd is the struct representing the "storage query bio" subcommand
+type BSHealthQueryCmd struct {
 	connectedCmd
 	Devuuid	string `short:"u" long:"devuuid" description:"Device/Blobstore UUID to query"`
 	Tgtid	string `short:"t" long:"tgtid" description:"VOS target ID to query"`
 }
 
 // Query the BIO health and error stats of the given device
-func bioQuery(conns client.Connect, uuid string, tgtid string) {
+func bsHealthQuery(conns client.Connect, uuid string, tgtid string) {
+	if uuid != "" && tgtid != "" {
+		log.Infof("Either device UUID OR target ID need to be specified, not both\n")
+		return
+	} else if uuid == "" && tgtid == "" {
+		log.Infof("Device UUID or target ID is required\n")
+		return
+	}
+
 	req := &pb.BioHealthReq{DevUuid: uuid, TgtId: tgtid}
 
 	log.Infof("Blobstore Health Data:\n%s\n", conns.BioHealthQuery(req))
 }
 
-// Execute is run when BioQueryCmd activates
-func (b *BioQueryCmd) Execute(args []string) error {
-	bioQuery(b.conns, b.Devuuid, b.Tgtid)
+// Execute is run when BSHealthQueryCmd activates
+func (b *BSHealthQueryCmd) Execute(args []string) error {
+	bsHealthQuery(b.conns, b.Devuuid, b.Tgtid)
 	return nil
 }
 

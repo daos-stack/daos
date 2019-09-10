@@ -165,7 +165,6 @@ type mockMgmtCtlClient struct {
 	moduleResults ScmModuleResults
 	mountResults  ScmMountResults
 	scanRet       error
-	healthRet     error
 	formatRet     error
 	updateRet     error
 	burninRet     error
@@ -186,16 +185,6 @@ func (m *mockMgmtCtlClient) StoragePrepare(ctx context.Context, req *pb.StorageP
 			State: &MockSuccessState,
 		},
 	}, m.scanRet
-}
-
-func (m *mockMgmtCtlClient) DeviceHealthQuery(
-	ctx context.Context, req *pb.QueryHealthReq, o ...grpc.CallOption) (
-	*pb.QueryHealthResp, error) {
-	// return successful query results, state member messages
-	// initialise with zero values indicating mgmt.CTRL_SUCCESS
-	return &pb.QueryHealthResp{
-		Ctrlrs:  m.ctrlrs,
-	}, m.healthRet
 }
 
 func (m *mockMgmtCtlClient) StorageScan(ctx context.Context, req *pb.StorageScanReq, o ...grpc.CallOption) (*pb.StorageScanResp, error) {
@@ -237,15 +226,13 @@ func newMockMgmtCtlClient(
 	moduleResults ScmModuleResults,
 	mountResults ScmMountResults,
 	scanRet error,
-	healthRet error,
 	formatRet error,
 	updateRet error,
 	burninRet error,
 ) pb.MgmtCtlClient {
 	return &mockMgmtCtlClient{
 		MockFeatures, ctrlrs, ctrlrResults, modules, moduleResults,
-		mountResults, scanRet, healthRet, formatRet, updateRet,
-		burninRet,
+		mountResults, scanRet, formatRet, updateRet, burninRet,
 	}
 }
 
@@ -352,7 +339,6 @@ type mockControllerFactory struct {
 	mountResults  ScmMountResults
 	// to provide error injection into Control objects
 	scanRet    error
-	healthRet  error
 	formatRet  error
 	updateRet  error
 	burninRet  error
@@ -365,7 +351,7 @@ func (m *mockControllerFactory) create(address string, cfg *security.TransportCo
 	cClient := newMockMgmtCtlClient(
 		m.features, m.ctrlrs, m.ctrlrResults,
 		m.modules, m.moduleResults, m.mountResults,
-		m.scanRet, m.healthRet, m.formatRet, m.updateRet, m.burninRet)
+		m.scanRet, m.formatRet, m.updateRet, m.burninRet)
 
 	sClient := newMockMgmtSvcClient()
 
@@ -380,14 +366,14 @@ func newMockConnect(
 	state connectivity.State, features []*pb.Feature, ctrlrs NvmeControllers,
 	ctrlrResults NvmeControllerResults, modules ScmModules,
 	moduleResults ScmModuleResults, mountResults ScmMountResults,
-	scanRet error, healthRet error, formatRet error, updateRet error,
-	burninRet error, killRet error, connectRet error) Connect {
+	scanRet error, formatRet error, updateRet error, burninRet error,
+	killRet error, connectRet error) Connect {
 
 	return &connList{
 		factory: &mockControllerFactory{
 			state, MockFeatures, ctrlrs, ctrlrResults, modules,
-			moduleResults, mountResults, scanRet, healthRet,
-			formatRet, updateRet, burninRet, killRet, connectRet,
+			moduleResults, mountResults, scanRet, formatRet,
+			updateRet, burninRet, killRet, connectRet,
 		},
 	}
 }
@@ -395,7 +381,7 @@ func newMockConnect(
 func defaultMockConnect() Connect {
 	return newMockConnect(
 		connectivity.Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
-		MockModuleResults, MockMountResults, nil, nil, nil, nil, nil, nil, nil)
+		MockModuleResults, MockMountResults, nil, nil, nil, nil, nil, nil)
 }
 
 // NewClientFM provides a mock ClientFeatureMap for testing.

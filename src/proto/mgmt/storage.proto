@@ -24,7 +24,6 @@
 syntax = "proto3";
 package mgmt;
 
-import "common.proto";
 import "storage_nvme.proto";
 import "storage_scm.proto";
 
@@ -79,11 +78,4 @@ message StorageBurnInReq {
 message StorageBurnInResp {
 	repeated NvmeControllerResult crets = 1;	// One per SSD burnin test, report in state.info
 	repeated ScmMountResult mrets = 2;		// One per SCM mount burnin test
-}
-
-message QueryHealthReq {}
-
-message QueryHealthResp {
-	repeated NvmeController ctrlrs = 1;
-	ResponseState nvmestate = 2;
 }

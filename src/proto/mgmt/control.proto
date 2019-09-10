@@ -33,7 +33,7 @@ import "features.proto";
 service MgmtCtl {
     // Prepare nonvolatile storage devices for use with DAOS
     rpc StoragePrepare(StoragePrepareReq) returns (StoragePrepareResp) {};
-    // Retrieve details of nonvolatile storage on server
+    // Retrieve details of nonvolatile storage on server, including health info
     rpc StorageScan(StorageScanReq) returns(StorageScanResp) {};
     // Format nonvolatile storage devices for use with DAOS
     rpc StorageFormat(StorageFormatReq) returns(stream StorageFormatResp) {};
@@ -45,6 +45,4 @@ service MgmtCtl {
     rpc FetchFioConfigPaths(EmptyReq) returns(stream FilePath) {};
     // List features supported on remote storage server/DAOS system
     rpc ListFeatures(EmptyReq) returns(stream Feature) {};
-    // Query raw SPDK NVMe SSD device health stats
-    rpc DeviceHealthQuery(QueryHealthReq) returns (QueryHealthResp) {};
 }

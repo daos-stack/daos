@@ -45,10 +45,8 @@ import (
 
 // NVME is the interface that provides SPDK NVMe functionality.
 type NVME interface {
-	// Discover NVMe controllers and namespaces
-	Discover() ([]Controller, []Namespace, error)
-	// Query raw SPDK NVMe SSD health stats
-	HealthQuery() ([]Controller, []Namespace, []DeviceHealth, error)
+	// Discover NVMe controllers and namespaces, and device health info
+	Discover() ([]Controller, []Namespace, []DeviceHealth, error)
 	// Format NVMe controller namespaces
 	Format(ctrlrPciAddr string) ([]Controller, []Namespace, error)
 	// Update NVMe controller firmware
@@ -106,28 +104,15 @@ type DeviceHealth struct {
 }
 
 // Discover calls C.nvme_discover which returns
-// pointers to single linked list of ctrlr_t and ns_t structs.
-// These are converted to slices of Controller and Namespace structs.
-func (n *Nvme) Discover() ([]Controller, []Namespace, error) {
+// pointers to single linked list of ctrlr_t, ns_t and
+// dev_health_t structs.
+// These are converted to slices of Controller, Namespace
+// and DeviceHealth structs.
+func (n *Nvme) Discover() ([]Controller, []Namespace, []DeviceHealth, error) {
 	failLocation := "NVMe Discover(): C.nvme_discover"
 
 	if retPtr := C.nvme_discover(); retPtr != nil {
-		return processReturn(retPtr, failLocation)
-	}
-
-	return nil, nil, fmt.Errorf(
-		"%s unexpectedly returned NULL", failLocation)
-}
-
-// HealthQuery calls C.nvme_dev_health which returns
-// pointers to single linked list of ctrlr_t, ns_t, and
-// dev_health_t structs. These are converted to slices
-// of Controller, Namespace, and DeviceHealth structs.
-func (n *Nvme) HealthQuery() ([]Controller, []Namespace, []DeviceHealth, error) {
-	failLocation := "NVMe Device Health(): C.nvme_dev_health"
-
-	if retPtr := C.nvme_dev_health(); retPtr != nil {
-		return processHealthReturn(retPtr, failLocation)
+		return processDiscoverReturn(retPtr, failLocation)
 	}
 
 	return nil, nil, nil, fmt.Errorf(
@@ -251,8 +236,8 @@ func processReturn(retPtr *C.struct_ret_t, failLocation string) (
 		C.GoString(&retPtr.err[0]))
 }
 
-// processHealthReturn parses return structs
-func processHealthReturn(retPtr *C.struct_ret_t, failLocation string) (
+// processDiscoverReturn parses return structs, including device health struct
+func processDiscoverReturn(retPtr *C.struct_ret_t, failLocation string) (
 	[]Controller, []Namespace, []DeviceHealth, error) {
 
 	var ctrlrs []Controller
