@@ -73,11 +73,11 @@ func (m *mockStorageUpdateServer) Send(resp *pb.StorageUpdateResp) error {
 func newMockStorageConfig(
 	mountRet error, unmountRet error, mkdirRet error, removeRet error,
 	scmMount string, scmClass storage.ScmClass, scmDevs []string, scmSize int,
-	bdevClass storage.BdevClass, bdevDevs []string, existsRet bool,
+	bdevClass storage.BdevClass, bdevDevs []string, existsRet bool, isRoot bool,
 ) *Configuration {
 
 	c := newDefaultConfiguration(newMockExt(nil, existsRet, mountRet,
-		true, unmountRet, mkdirRet, removeRet, true))
+		true, unmountRet, mkdirRet, removeRet, isRoot))
 
 	c.Servers = append(c.Servers,
 		ioserver.NewConfig().
@@ -198,11 +198,8 @@ func TestStorageScan(t *testing.T) {
 
 			config := defaultMockConfig(t)
 			cs := defaultMockControlService(t, log)
-			cs.scm = newMockScmStorage(
-				log, config.ext,
-				tt.ipmctlDiscoverRet,
-				[]ipmctl.DeviceDiscovery{module},
-				false)
+			cs.scm = newMockScmStorage(log, config.ext, tt.ipmctlDiscoverRet,
+				[]ipmctl.DeviceDiscovery{module}, false, newMockPrepScm())
 			cs.nvme = newMockNvmeStorage(
 				log, config.ext,
 				newMockSpdkEnv(tt.spdkInitEnvRet),
@@ -226,13 +223,149 @@ func TestStorageScan(t *testing.T) {
 			AssertEqual(t, len(cs.scm.modules), len(resp.Scm.Modules), "unexpected number of modules")
 
 			AssertEqual(t, resp.Nvme.State, tt.expResp.Nvme.State, "unexpected Nvmestate, "+tt.desc)
-			AssertEqual(t, resp.Nvme.State, tt.expResp.Nvme.State, "unexpected Nvmestate, "+tt.desc)
 			AssertEqual(t, resp.Scm.State, tt.expResp.Scm.State, "unexpected Scmstate, "+tt.desc)
 			AssertEqual(t, resp.Nvme.Ctrlrs, tt.expResp.Nvme.Ctrlrs, "unexpected controllers, "+tt.desc)
 			AssertEqual(t, resp.Scm.Modules, tt.expResp.Scm.Modules, "unexpected modules, "+tt.desc)
 
 			AssertEqual(t, cs.nvme.initialized, tt.expNvmeInited, tt.desc)
 			AssertEqual(t, cs.scm.initialized, tt.expScmInited, tt.desc)
+		})
+	}
+}
+
+func TestStoragePrepare(t *testing.T) {
+	ctrlr := MockController("")
+	module := MockModule()
+
+	tests := []struct {
+		desc     string
+		inReq    pb.StoragePrepareReq
+		outPmems []pmemDev
+		expResp  pb.StoragePrepareResp
+		isRoot   bool
+		errMsg   string
+	}{
+		{
+			"success",
+			pb.StoragePrepareReq{
+				Nvme: &pb.PrepareNvmeReq{},
+				Scm:  &pb.PrepareScmReq{},
+			},
+			[]pmemDev{},
+			pb.StoragePrepareResp{
+				Nvme: &pb.PrepareNvmeResp{State: new(pb.ResponseState)},
+				Scm:  &pb.PrepareScmResp{State: new(pb.ResponseState)},
+			},
+			true,
+			"",
+		},
+		{
+			"not run as root",
+			pb.StoragePrepareReq{
+				Nvme: &pb.PrepareNvmeReq{},
+				Scm:  &pb.PrepareScmReq{},
+			},
+			[]pmemDev{},
+			pb.StoragePrepareResp{
+				Nvme: &pb.PrepareNvmeResp{
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+						Error:  os.Args[0] + " must be run as root or sudo",
+					},
+				},
+				Scm: &pb.PrepareScmResp{
+					State: &pb.ResponseState{
+						Status: pb.ResponseStatus_CTRL_ERR_SCM,
+						Error:  os.Args[0] + " must be run as root or sudo",
+					},
+				},
+			},
+			false,
+			"",
+		},
+		{
+			"scm only",
+			pb.StoragePrepareReq{
+				Nvme: nil,
+				Scm:  &pb.PrepareScmReq{},
+			},
+			[]pmemDev{},
+			pb.StoragePrepareResp{
+				Nvme: nil,
+				Scm:  &pb.PrepareScmResp{State: new(pb.ResponseState)},
+			},
+			true,
+			"",
+		},
+		{
+			"nvme only",
+			pb.StoragePrepareReq{
+				Nvme: &pb.PrepareNvmeReq{},
+				Scm:  nil,
+			},
+			[]pmemDev{},
+			pb.StoragePrepareResp{
+				Nvme: &pb.PrepareNvmeResp{State: new(pb.ResponseState)},
+				Scm:  nil,
+			},
+			true,
+			"",
+		},
+		{
+			"success with pmem devices",
+			pb.StoragePrepareReq{
+				Nvme: &pb.PrepareNvmeReq{},
+				Scm:  &pb.PrepareScmReq{},
+			},
+			[]pmemDev{MockPmemDevice()},
+			pb.StoragePrepareResp{
+				Nvme: &pb.PrepareNvmeResp{State: new(pb.ResponseState)},
+				Scm: &pb.PrepareScmResp{
+					State: new(pb.ResponseState),
+					Pmems: []*pb.PmemDevice{MockPmemDevicePB()},
+				},
+			},
+			true,
+			"",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)()
+
+			config := newDefaultConfiguration(newMockExt(nil, true, nil,
+				true, nil, nil, nil, tt.isRoot))
+
+			cs := defaultMockControlService(t, log)
+			cs.scm = newMockScmStorage(log, config.ext, nil,
+				[]ipmctl.DeviceDiscovery{module}, false,
+				&mockPrepScm{pmemDevs: tt.outPmems})
+			cs.nvme = newMockNvmeStorage(log, config.ext, newMockSpdkEnv(nil),
+				newMockSpdkNvme(log, "", "", []spdk.Controller{ctrlr},
+					[]spdk.Namespace{MockNamespace(&ctrlr)},
+					nil, nil, nil), false)
+			_ = new(pb.StoragePrepareResp)
+
+			cs.Setup() // runs discovery for nvme & scm
+			resp, err := cs.StoragePrepare(context.TODO(), &tt.inReq)
+			if err != nil {
+				AssertEqual(t, err.Error(), tt.errMsg, tt.desc)
+			}
+			AssertEqual(t, "", tt.errMsg, tt.desc)
+
+			if resp.Nvme == nil {
+				AssertEqual(t, resp.Nvme, tt.expResp.Nvme, "unexpected nvme response, "+tt.desc)
+			} else {
+				AssertEqual(t, resp.Nvme.State, tt.expResp.Nvme.State, "unexpected nvme state in response, "+tt.desc)
+			}
+			if resp.Scm == nil {
+				AssertEqual(t, resp.Scm, tt.expResp.Scm, "unexpected scm response, "+tt.desc)
+			} else {
+				AssertEqual(t, resp.Scm.State, tt.expResp.Scm.State, "unexpected scm state in response, "+tt.desc)
+				AssertEqual(t, resp.Scm.Pmems, tt.expResp.Scm.Pmems, "unexpected pmem devices in response, "+tt.desc)
+			}
 		})
 	}
 }
@@ -254,6 +387,7 @@ func TestStorageFormat(t *testing.T) {
 		expScmFormatted  bool
 		mountRets        ScmMountResults
 		ctrlrRets        NvmeControllerResults
+		isRoot           bool
 		desc             string
 	}{
 		{
@@ -388,10 +522,9 @@ func TestStorageFormat(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			config := newMockStorageConfig(
-				tt.mountRet, tt.unmountRet, tt.mkdirRet, tt.removeRet,
-				tt.sMount, tt.sClass, tt.sDevs, tt.sSize,
-				tt.bClass, tt.bDevs, tt.superblockExists)
+			config := newMockStorageConfig(tt.mountRet, tt.unmountRet, tt.mkdirRet,
+				tt.removeRet, tt.sMount, tt.sClass, tt.sDevs, tt.sSize,
+				tt.bClass, tt.bDevs, tt.superblockExists, tt.isRoot)
 
 			cs := mockControlService(t, log, config)
 			cs.Setup() // init channel used for sync
