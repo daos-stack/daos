@@ -24,7 +24,7 @@ def scons():
     iosrv = daos_build.program(denv, 'daos_io_server',
                                ['drpc_client.c', 'drpc_handler.c',
                                 'drpc_listener.c', 'drpc_progress.c', 'init.c',
-                                'module.c', 'obj.c', 'profile.c', 'rpc.c',
+                                'module.c', 'srv_cli.c', 'profile.c', 'rpc.c',
                                 'server_iv.c', 'srv.c', 'srv.pb-c.c', 'tls.c',
                                 'vos.c'],
                                LIBS=libraries)

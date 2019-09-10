@@ -25,6 +25,29 @@
 
 #include <daos_srv/daos_server.h>
 
+/** Per-xstream configuration data */
+struct dss_xstream {
+	char		dx_name[DSS_XS_NAME_LEN];
+	ABT_future	dx_shutdown;
+	hwloc_cpuset_t	dx_cpuset;
+	ABT_xstream	dx_xstream;
+	ABT_pool	dx_pools[DSS_POOL_CNT];
+	ABT_sched	dx_sched;
+	ABT_thread	dx_progress;
+	tse_sched_t	dx_sched_dsc;
+	/* xstream id, [0, DSS_XS_NR_TOTAL - 1] */
+	int		dx_xs_id;
+	/* VOS target id, [0, dss_tgt_nr - 1]. Invalid (-1) for system XS.
+	 * For offload XS it is same value as its main XS.
+	 */
+	int		dx_tgt_id;
+	/* CART context id, invalid (-1) for the offload XS w/o CART context */
+	int		dx_ctx_id;
+	bool		dx_main_xs;	/* true for main XS */
+	bool		dx_comm;	/* true with cart context */
+	bool		dx_dsc_started;	/* DSC progress ULT started */
+};
+
 /** Server node topology */
 extern hwloc_topology_t	dss_topo;
 /** core depth of the topology */

@@ -138,6 +138,7 @@ oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	key = key_iov->iov_buf;
 	hkey = &key->oi_hkey;
 
+	obj->vo_sync	= 0;
 	obj->vo_id	= hkey->oi_oid;
 	obj->vo_earliest = key->oi_epc_lo;
 	if (hkey->oi_epc == DAOS_EPOCH_MAX) {
@@ -161,7 +162,6 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
 	struct umem_instance	*umm = &tins->ti_umm;
 	struct vos_obj_df	*obj;
-	int			 rc = 0;
 
 	obj = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 
@@ -171,22 +171,9 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 			obj->vo_dtx_shares);
 		return -DER_BUSY;
 	}
-
-	/** Free the KV tree within this object */
-	if (obj->vo_tree.tr_class != 0) {
-		struct umem_attr uma;
-		daos_handle_t	 toh;
-
-		umem_attr_get(&tins->ti_umm, &uma);
-		rc = dbtree_open_inplace_ex(&obj->vo_tree, &uma, tins->ti_coh,
-					    tins->ti_priv, &toh);
-		if (rc != 0)
-			D_ERROR("Failed to open OI tree: %d\n", rc);
-		else
-			dbtree_destroy(toh, args);
-	}
-	umem_free(umm, rec->rec_off);
-	return rc;
+	D_ASSERT(tins->ti_priv);
+	return gc_add_item((struct vos_pool *)tins->ti_priv, GC_OBJ,
+			   rec->rec_off, 0);
 }
 
 static int
@@ -244,14 +231,9 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
 	    daos_epoch_t epoch, uint32_t intent, struct vos_obj_df **obj_p)
 {
 	struct oi_hkey	hkey;
-	d_iov_t	key_iov;
-	d_iov_t	val_iov;
+	d_iov_t		key_iov;
+	d_iov_t		val_iov;
 	int		rc;
-
-	if (!cont->vc_otab_df) {
-		D_ERROR("Object index cannot be empty\n");
-		return -DER_NONEXIST;
-	}
 
 	hkey.oi_oid = oid;
 	hkey.oi_epc = epoch;
@@ -386,6 +368,41 @@ out:
 	if (rc != 0)
 		D_ERROR("Failed to punch object, rc=%d\n", rc);
 	return rc;
+}
+
+/**
+ * Delete a durable object
+ *
+ * NB: this operation is not going to be part of distributed transaction,
+ * it is only used by rebalance and reintegration.
+ *
+ * XXX: this only deletes the latest incarnation of the object, but the
+ * ongoing work (incarnation log) will change it and there will be only
+ * one incarnation for each object.
+ */
+int
+vos_oi_delete(struct vos_container *cont, daos_unit_oid_t oid)
+{
+	struct oi_hkey	hkey;
+	d_iov_t		key_iov;
+	int		rc = 0;
+
+	D_DEBUG(DB_TRACE, "Delete obj "DF_UOID"\n", DP_UOID(oid));
+
+	hkey.oi_oid = oid;
+	hkey.oi_epc = DAOS_EPOCH_MAX;
+	d_iov_set(&key_iov, &hkey, sizeof(hkey));
+
+	rc = dbtree_delete(cont->vc_btr_hdl, BTR_PROBE_GE | BTR_PROBE_MATCHED,
+			   &key_iov, cont->vc_pool);
+	if (rc == -DER_NONEXIST)
+		return 0;
+
+	if (rc != 0) {
+		D_ERROR("Failed to delete object, rc=%s\n", d_errstr(rc));
+		return rc;
+	}
+	return 0;
 }
 
 static struct vos_oi_iter *
@@ -652,20 +669,19 @@ static int
 oi_iter_delete(struct vos_iterator *iter, void *args)
 {
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
-	struct vos_pool		*vpool;
+	struct vos_pool		*pool;
 	int			rc = 0;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
-	vpool = vos_cont2pool(oiter->oit_cont);
+	pool = vos_cont2pool(oiter->oit_cont);
 
-	rc = vos_tx_begin(vpool);
+	rc = vos_tx_begin(pool);
 	if (rc != 0)
 		goto exit;
 
 	rc = dbtree_iter_delete(oiter->oit_hdl, args);
 
-	rc = vos_tx_end(vpool, rc);
-
+	rc = vos_tx_end(pool, rc);
 	if (rc != 0)
 		D_ERROR("Failed to delete oid entry: %d\n", rc);
 exit:
@@ -697,59 +713,5 @@ vos_obj_tab_register()
 	rc = dbtree_class_register(VOS_BTR_OBJ_TABLE, 0, &oi_btr_ops);
 	if (rc)
 		D_ERROR("dbtree create failed\n");
-	return rc;
-}
-
-int
-vos_obj_tab_create(struct vos_pool *pool, struct vos_obj_table_df *otab_df)
-{
-
-	int				rc = 0;
-	daos_handle_t			btr_hdl;
-	struct btr_root			*oi_root = NULL;
-
-	if (!pool || !otab_df) {
-		D_ERROR("Invalid handle\n");
-		return -DER_INVAL;
-	}
-
-	/** Inplace btr_root */
-	oi_root = (struct btr_root *) &(otab_df->obt_btr);
-	if (!oi_root->tr_class) {
-		D_DEBUG(DB_DF, "create OI Tree in-place: %d\n",
-			VOS_BTR_OBJ_TABLE);
-
-		rc = dbtree_create_inplace(VOS_BTR_OBJ_TABLE, 0,
-					   VOS_OBJ_ORDER, &pool->vp_uma,
-					   &otab_df->obt_btr, &btr_hdl);
-		if (rc)
-			D_ERROR("dbtree create failed\n");
-		dbtree_close(btr_hdl);
-	}
-	return rc;
-}
-
-int
-vos_obj_tab_destroy(struct vos_pool *pool, struct vos_obj_table_df *otab_df)
-{
-	int				rc = 0;
-	daos_handle_t			btr_hdl;
-
-	if (!pool || !otab_df) {
-		D_ERROR("Invalid handle\n");
-		return -DER_INVAL;
-	}
-
-	rc = dbtree_open_inplace_ex(&otab_df->obt_btr, &pool->vp_uma,
-				    DAOS_HDL_INVAL, pool, &btr_hdl);
-	if (rc) {
-		D_ERROR("No Object handle, Tree open failed\n");
-		D_GOTO(exit, rc = -DER_NONEXIST);
-	}
-
-	rc = dbtree_destroy(btr_hdl, NULL);
-	if (rc)
-		D_ERROR("OI BTREE destroy failed\n");
-exit:
 	return rc;
 }
