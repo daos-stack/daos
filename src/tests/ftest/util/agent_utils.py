@@ -86,6 +86,9 @@ def run_agent(basepath, server_list, client_list=None):
         build_vars = json.load(json_vars)
     daos_agent_bin = os.path.join(build_vars["PREFIX"], "bin", "daos_agent")
 
+    # adding localhost to the client list to start agents on that node as well
+    client_list += [socket.gethostname().split('.', 1)[0]]
+
     for client in client_list:
         sessions[client] = subprocess.Popen(
             ["ssh", client, "-o ConnectTimeout=10",
