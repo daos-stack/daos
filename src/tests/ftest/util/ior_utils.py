@@ -29,6 +29,7 @@ import uuid
 from avocado.utils.process import run, CmdError
 from command_utils import FormattedParameter, CommandWithParameters
 
+
 class IorFailed(Exception):
     """Raise if Ior failed."""
 
