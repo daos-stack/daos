@@ -36,6 +36,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 )
 
 const (
@@ -45,7 +46,14 @@ const (
 	msgConfigNoProvider = "provider not specified in config"
 	msgConfigNoPath     = "no config path set"
 	msgConfigNoServers  = "no servers specified in config"
+
 )
+
+type NetworkDeviceValidation func(string, string, uint) (bool, error)
+
+func NetworkDeviceValidationStub(provider string, device string, numa_node uint) (bool, error) {
+	return true,nil
+}
 
 // Configuration describes options for DAOS control plane.
 // See utils/config/daos_server.yml for parameter descriptions.
@@ -85,6 +93,9 @@ type Configuration struct {
 	// memory and therefore NVMe controllers.
 	// TODO: Is it also necessary to provide distinct coremask args?
 	NvmeShmID int
+
+	// Function pointer to a function that validates the chosen provider, device and numa node
+	ValidateNetworkConfig NetworkDeviceValidation
 }
 
 // WithSystemName sets the system name.
@@ -280,6 +291,7 @@ func newDefaultConfiguration(ext External) *Configuration {
 		NvmeShmID:       0,
 		ControlLogMask:  ControlLogLevel(logging.LogLevelInfo),
 		ext:             ext,
+		ValidateNetworkConfig: netdetect.ValidateNetworkConfig,
 	}
 }
 
@@ -398,6 +410,19 @@ func (c *Configuration) Validate() (err error) {
 		if err := srv.Validate(); err != nil {
 			return errors.Wrapf(err, "I/O server %d failed config validation", i)
 		}
+/*
+		validConfig, err := c.ValidateNetworkConfig(srv.Fabric.Provider, srv.Fabric.Interface, uint(srv.Fabric.PinnedNumaNode))
+		if err != nil {
+			return errors.Errorf("Unable to validate the network configuration for provider: %s, with device: %s on NUMA node %d.  Error: %v",
+				srv.Fabric.Provider, srv.Fabric.Interface, srv.Fabric.PinnedNumaNode, err)
+		}
+
+		if !validConfig {
+			return errors.Errorf("Network device configuration for Provider: %s, with device: %s on NUMA node %d is invalid.",
+				srv.Fabric.Provider, srv.Fabric.Interface, srv.Fabric.PinnedNumaNode)
+		}
+*/
+		//log.Debugf("Network device configuration for Provider: %s, with device: %s on NUMA node %d is valid.", srv.Provider, srv.Interface, srv.PinnedNumaNode)
 	}
 
 	return nil

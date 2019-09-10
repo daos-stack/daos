@@ -57,6 +57,7 @@ type FabricConfig struct {
 	Provider      string `yaml:"provider,omitempty" cmdEnv:"CRT_PHY_ADDR_STR"`
 	Interface     string `yaml:"fabric_iface,omitempty" cmdEnv:"OFI_INTERFACE"`
 	InterfacePort int    `yaml:"fabric_iface_port,omitempty" cmdEnv:"OFI_PORT,nonzero"`
+	PinnedNumaNode int   `yaml:"pinned_numa_node"`
 }
 
 // Update fills in any missing fields from the provided FabricConfig.
@@ -158,6 +159,18 @@ func (c *Config) Validate() error {
 	if c.HelperStreamCount > maxHelperStreamCount {
 		c.HelperStreamCount = maxHelperStreamCount
 	}
+
+//	validConfig, err := c.ValidateNetworkConfig(c.Fabric.Provider, c.Fabric.Interface, uint(c.Fabric.PinnedNumaNode))
+//	if err != nil {
+		return errors.Errorf(" fake! Unable to validate the network configuration for provider: %s, with device: %s on NUMA node %d.  Error: %v",
+			c.Fabric.Provider, c.Fabric.Interface, c.Fabric.PinnedNumaNode, 0)
+//	}
+
+//	if !validConfig {
+//		return errors.Errorf("Network device configuration for Provider: %s, with device: %s on NUMA node %d is invalid.",
+//			c.Fabric.Provider, c.Fabric.Interface, c.Fabric.PinnedNumaNode)
+//	}
+
 
 	return nil
 }
