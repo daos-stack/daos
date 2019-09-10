@@ -18,6 +18,8 @@ RUN useradd -u $UID -ms /bin/bash $USER
 RUN groupadd -g $UID $USER
 RUN echo "$USER:$PASSWD" | chpasswd
 
+RUN echo "solver.allowVendorChange = true" >> /etc/zypp/zypp.conf
+
 # Install basic tools
 RUN zypper --non-interactive update
 # basic building
