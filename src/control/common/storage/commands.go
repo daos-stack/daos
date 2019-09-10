@@ -27,7 +27,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
-	log "github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 const MsgStoragePrepareWarn = "Memory allocation goals for SCM will be changed and " +
@@ -53,14 +53,14 @@ type StoragePrepareCmd struct {
 	Force    bool `short:"f" long:"force" description:"Perform format without prompting for confirmation"`
 }
 
-func (cmd *StoragePrepareCmd) Init() error {
+func (cmd *StoragePrepareCmd) Init(log logging.Logger) error {
 	if cmd.NvmeOnly && cmd.ScmOnly {
 		return errors.New("nvme-only and scm-only options should not be set together")
 	}
 
 	log.Info(MsgStoragePrepareWarn)
 
-	if !cmd.Force && !common.GetConsent() {
+	if !cmd.Force && !common.GetConsent(log) {
 		return errors.New("consent not given")
 	}
 
