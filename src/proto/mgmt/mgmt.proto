@@ -26,6 +26,7 @@ package mgmt;
 
 // Import Pool request and response
 import "pool.proto";
+import "srv.proto";
 
 // Management Service is replicated on a small number of servers in the system.
 service MgmtSvc {
@@ -37,6 +38,8 @@ service MgmtSvc {
 	rpc DestroyPool(DestroyPoolReq) returns (DestroyPoolResp) {}
 	// Get the information required by libdaos to attach to the system.
 	rpc GetAttachInfo(GetAttachInfoReq) returns (GetAttachInfoResp) {}
+	// Kill a given rank associated with a given pool
+	rpc KillRank(DaosRank) returns (DaosResp) {};
 }
 
 message JoinReq {

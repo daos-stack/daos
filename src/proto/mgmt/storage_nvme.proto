@@ -51,9 +51,27 @@ message NvmeControllerResult {
 	ResponseState state = 2;	// state of current operation
 }
 
+message PrepareNvmeReq {
+	string pciwhitelist = 1;	// Whitespace separated list of PCI addresses
+	int32 nrhugepages = 2;		// Number of hugepages to allocate (in MB)
+	string targetuser = 3;		// User to access NVMe devices
+	bool reset = 4;			// Reset SPDK returning devices to kernel
+}
+
+message PrepareNvmeResp {
+	ResponseState state = 1;
+}
+
 message ScanNvmeReq {}
 
+message ScanNvmeResp {
+	repeated NvmeController ctrlrs = 1;
+	ResponseState state = 2;
+}
+
 message FormatNvmeReq {}
+
+// FormatNvmeResp isn't required because controller results are returned instead
 
 message UpdateNvmeReq {
 	string model = 1; // Only upgrade devices of specific model

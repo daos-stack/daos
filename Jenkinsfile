@@ -62,6 +62,9 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
                                 sudo chmod 0755 /var/run/daos_\\\$dir
                                 sudo chown \\\$me:\\\$me /var/run/daos_\\\$dir
                             done
+                            sudo mkdir /tmp/daos_sockets
+                            sudo chmod 0755 /tmp/daos_sockets
+                            sudo chown \\\$me:\\\$me /tmp/daos_sockets
                             sudo mkdir -p /mnt/daos
                             sudo mount -t tmpfs -o size=16777216k tmpfs /mnt/daos
                             sudo cp /tmp/daos_server_baseline.yaml /usr/etc/daos_server.yml
@@ -387,10 +390,6 @@ pipeline {
                             */
                         }
                         success {
-                            sh '''rm -rf daos-devel/
-                                  mkdir daos-devel/
-                                  mv install/{lib,include} daos-devel/'''
-                            archiveArtifacts artifacts: 'daos-devel/**'
                             sh "rm -rf _build.external${arch}"
                             /* temporarily moved into stepResult due to JENKINS-39203
                             githubNotify credentialsId: 'daos-jenkins-commit-status',
@@ -1036,6 +1035,7 @@ pipeline {
             when {
                 beforeAgent true
                 // expression { skipTest != true }
+                expression { env.NO_CI_TESTING != 'true' }
                 expression {
                     sh script: 'git show -s --format=%B | grep "^Skip-test: true"',
                        returnStatus: true
@@ -1148,6 +1148,7 @@ pipeline {
             when {
                 beforeAgent true
                 // expression { skipTest != true }
+                expression { env.NO_CI_TESTING != 'true' }
                 expression {
                     sh script: 'git show -s --format=%B | grep "^Skip-test: true"',
                        returnStatus: true
@@ -1162,8 +1163,7 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
                                        snapshot: true,
-                                       inst_repos: component_repos + ' ' + ior_repos +
-                                                   ' daos',
+                                       inst_repos: daos_repos + ' ' + ior_repos,
                                        inst_rpms: "ior-hpc mpich-autoload"
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
@@ -1181,6 +1181,10 @@ pipeline {
                                   if [ -n "$STAGE_NAME" ]; then
                                       rm -rf "$STAGE_NAME/"
                                       mkdir "$STAGE_NAME/"
+                                      # compress those potentially huge DAOS logs
+                                      if daos_logs=$(ls src/tests/ftest/avocado/job-results/*/daos_logs/*); then
+                                          lbzip2 $daos_logs
+                                      fi
                                       arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
                                       arts="$arts$(ls -d src/tests/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
                                       arts="$arts$(ls src/tests/ftest/*.stacktrace 2>/dev/null || true)"
@@ -1225,15 +1229,13 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 1,
                                        snapshot: true,
-                                       inst_repos: component_repos + ' ' + ior_repos +
-                                                   ' daos',
+                                       inst_repos: daos_repos + ' ' + ior_repos,
                                        inst_rpms: "ior-hpc mpich-autoload"
                         // Then just reboot the physical nodes
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
                                        power_only: true,
-                                       inst_repos: component_repos + ' ' + ior_repos +
-                                                   ' daos',
+                                       inst_repos: daos_repos + ' ' + ior_repos,
                                        inst_rpms: "ior-hpc mpich-autoload"
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw:/s/^.*: *//p")
@@ -1251,6 +1253,10 @@ pipeline {
                                   if [ -n "$STAGE_NAME" ]; then
                                       rm -rf "$STAGE_NAME/"
                                       mkdir "$STAGE_NAME/"
+                                      # compress those potentially huge DAOS logs
+                                      if daos_logs=$(ls src/tests/ftest/avocado/job-results/*/daos_logs/*); then
+                                          lbzip2 $daos_logs
+                                      fi
                                       arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
                                       arts="$arts$(ls -d src/tests/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
                                       arts="$arts$(ls src/tests/ftest/*.stacktrace 2>/dev/null || true)"
