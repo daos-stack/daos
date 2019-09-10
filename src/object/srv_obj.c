@@ -742,7 +742,6 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	struct obj_tls		*tls = obj_tls_get();
 	struct bio_desc		*biod;
 	struct daos_oclass_attr *oca = NULL;
-				 daos_oclass_attr_find(orw->orw_oid.id_pub);
 	struct ec_bulk_spec	**skip_list = NULL;
 	crt_bulk_op_t		bulk_op;
 	bool			rma;
