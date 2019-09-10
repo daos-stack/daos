@@ -719,7 +719,7 @@ out_client:
 out_creation:
 	if (rc != 0)
 		ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, &psid, ranks,
-				  true /* destroy */);
+				  NULL, true /* destroy */);
 out_ranks:
 	d_rank_list_free(ranks);
 out:
@@ -730,14 +730,20 @@ int
 ds_pool_svc_destroy(const uuid_t pool_uuid)
 {
 	char		id[DAOS_UUID_STR_SIZE];
-	d_iov_t	psid;
+	d_iov_t		psid;
+	d_rank_list_t	excluded = { 0 };
 	crt_group_t    *group;
 	int		rc;
 
 	ds_rebuild_leader_stop(pool_uuid, -1);
+	rc = ds_pool_get_ranks(pool_uuid, MAP_RANKS_DOWN, &excluded);
+	if (rc)
+		return rc;
+
 	d_iov_set(&psid, (void *)pool_uuid, sizeof(uuid_t));
 	rc = ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, &psid, NULL /* ranks */,
-			       true /* destroy */);
+			       &excluded, true /* destroy */);
+	map_ranks_fini(&excluded);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to destroy pool service: %d\n",
 			DP_UUID(pool_uuid), rc);

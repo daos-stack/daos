@@ -177,7 +177,8 @@ class MdtestCommand(CommandWithParameters):
                 for index in range(pool.pool.svc.rl_nr)]])
         self.dfs_svcl.update(svcl, "dfs_svcl" if display else None)
 
-    def get_launch_command(self, manager, attach_info, processes, hostfile):
+    def get_launch_command(self, manager, attach_info, processes, hostfile,
+                           client_log=None):
         """Get the process launch command used to run Mdtest
         Args:
             manager (str): mpi job manager command
@@ -185,6 +186,7 @@ class MdtestCommand(CommandWithParameters):
             mpi_prefix (str): path for the mpi launch command
             processes (int): number of host processes
             hostfile (str): file defining host names and slots
+            client_log (str, optional): client log dir
         Raises:
             MdtestFailed: if an error occured building the Mdtest command
         Returns:
@@ -196,6 +198,7 @@ class MdtestCommand(CommandWithParameters):
             "CRT_ATTACH_INFO_PATH": attach_info,
             "MPI_LIB": "\"\"",
             "DAOS_SINGLETON_CLI": 1,
+            "D_LOG_FILE": client_log
         }
         if manager.endswith("mpirun"):
             env.update({
@@ -243,7 +246,8 @@ class MdtestCommand(CommandWithParameters):
         return "{}{} {} {}".format(
             exports, manager, " ".join(args), self.__str__())
 
-    def run(self, manager, attach_info, processes, hostfile, display=True):
+    def run(self, manager, attach_info, processes, hostfile, display=True,
+            client_log=None):
         """Run the Mdtest command.
         Args:
             manager (str): mpi job manager command
@@ -252,11 +256,13 @@ class MdtestCommand(CommandWithParameters):
             hostfile (str): file defining host names and slots
             display (bool, optional): print Mdtest output to the console.
                 Defaults to True.
+            client_log (str, optional): client log dir
+
         Raises:
             MdtestFailed: if an error occured runnig the Mdtest command
         """
         command = self.get_launch_command(
-            manager, attach_info, processes, hostfile)
+            manager, attach_info, processes, hostfile, client_log)
         if display:
             print("<MDTEST CMD>: {}".format(command))
 

@@ -953,7 +953,8 @@ cont_oid_alloc_complete(tse_task_t *task, void *data)
 	struct dc_cont *cont = arg->coaa_cont;
 	int rc = task->dt_result;
 
-	if (daos_rpc_retryable_rc(rc)) {
+	if (daos_rpc_retryable_rc(rc) || daos_crt_network_error(rc) ||
+	    rc == -DER_STALE) {
 		tse_sched_t *sched = tse_task2sched(task);
 		daos_pool_query_t *pargs;
 		tse_task_t *ptask;
@@ -1827,7 +1828,7 @@ dc_cont_create_snap(tse_task_t *task)
 		return -DER_INVAL;
 	}
 
-	*args->epoch = daos_ts2epoch();
+	*args->epoch = crt_hlc_get();
 	return dc_epoch_op(args->coh, CONT_SNAP_CREATE, args->epoch, task);
 }
 
