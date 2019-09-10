@@ -27,7 +27,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
-	log "github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 const MsgStoragePrepareWarn = "Memory allocation goals for SCM will be changed and " +
@@ -35,6 +35,18 @@ const MsgStoragePrepareWarn = "Memory allocation goals for SCM will be changed a
 	"namespaces are unmounted and locally attached SCM & NVMe devices " +
 	"are not in use. Please be patient as it may take several minutes " +
 	"and subsequent reboot maybe required.\n"
+
+type cmdLogger interface {
+	setLog(*logging.LeveledLogger)
+}
+
+type logCmd struct {
+	log *logging.LeveledLogger
+}
+
+func (c *logCmd) setLog(log *logging.LeveledLogger) {
+	c.log = log
+}
 
 type StoragePrepareNvmeCmd struct {
 	PCIWhiteList string `short:"w" long:"pci-whitelist" description:"Whitespace separated list of PCI devices (by address) to be unbound from Kernel driver and used with SPDK (default is all PCI devices)."`
@@ -45,6 +57,7 @@ type StoragePrepareNvmeCmd struct {
 type StoragePrepareScmCmd struct{}
 
 type StoragePrepareCmd struct {
+	logCmd
 	StoragePrepareNvmeCmd
 	StoragePrepareScmCmd
 	NvmeOnly bool `short:"n" long:"nvme-only" description:"Only prepare NVMe storage."`
@@ -85,9 +98,9 @@ func (cmd *StoragePrepareCmd) CheckWarn(state ScmState) error {
 }
 
 func (cmd *StoragePrepareCmd) Warn() error {
-	log.Info(MsgStoragePrepareWarn)
+	cmd.log.Info(MsgStoragePrepareWarn)
 
-	if !cmd.Force && !common.GetConsent() {
+	if !cmd.Force && !common.GetConsent(cmd.log) {
 		return errors.New("consent not given")
 	}
 
