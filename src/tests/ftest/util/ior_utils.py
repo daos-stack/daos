@@ -28,9 +28,6 @@ import uuid
 
 from avocado.utils.process import run, CmdError
 from command_utils import FormattedParameter, CommandWithParameters
-from daos_api import DaosPool
-from test_utils import TestPool
-
 
 class IorFailed(Exception):
     """Raise if Ior failed."""
@@ -164,11 +161,6 @@ class IorCommand(CommandWithParameters):
             pool (DaosPool): DAOS pool API object
             display (bool, optional): print updated params. Defaults to True.
         """
-        if isinstance(pool, DaosPool):
-            pass
-        elif isinstance(pool, TestPool):
-            pool = pool.pool
-
         self.daos_pool.update(
             pool.get_uuid_str(), "daos_pool" if display else None)
         self.set_daos_svcl_param(pool, display)
@@ -180,11 +172,6 @@ class IorCommand(CommandWithParameters):
             pool (DaosPool): DAOS pool API object
             display (bool, optional): print updated params. Defaults to True.
         """
-        if isinstance(pool, DaosPool):
-            pass
-        elif isinstance(pool, TestPool):
-            pool = pool.pool
-
         svcl = ":".join(
             [str(item) for item in [
                 int(pool.svc.rl_ranks[index])
