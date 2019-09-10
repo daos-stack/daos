@@ -59,4 +59,13 @@ plt_spare_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 		   pl_map_type_t map_type, uint32_t spare_max_nr,
 		   struct pool_map *po_map, struct pl_map *pl_map);
 
+void
+gen_pool_and_placement_map(int num_domains, int nodes_per_domain,
+			   int vos_per_target, pl_map_type_t pl_type,
+			   struct pool_map **po_map_out,
+			   struct pl_map **pl_map_out);
+
+void
+free_pool_and_placement_map(struct pool_map *po_map_in,
+			    struct pl_map *pl_map_in);
 #endif /*   PL_MAP_COMMON_H   */
