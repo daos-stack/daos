@@ -208,12 +208,10 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
         server_cmd.extend(env_args)
 
         # Run server in insecure mode until Certificate tests are in place
-        server_cmd.extend([daos_srv_bin,
-                           "--debug",
-                           "--config", '{}/{}'.format(build_vars["PREFIX"],
-			   AVOCADO_FILE),
-                           "start", "-i",
-                           "-a", os.path.join(build_vars["PREFIX"], "tmp")])
+        server_cmd.extend([daos_srv_bin, "--debug", "--config",
+                          '{}/{}'.format(build_vars["PREFIX"], AVOCADO_FILE),
+                          "start", "-i", "-a",
+                          os.path.join(build_vars["PREFIX"], "tmp")])
 
         print("Start CMD>>>>{0}".format(' '.join(server_cmd)))
 
