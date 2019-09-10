@@ -5,7 +5,7 @@
 
 Name:          daos
 Version:       0.6.0
-Release:       4%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -58,7 +58,6 @@ Requires: protobuf-c
 Requires: spdk
 Requires: fio < 3.4
 Requires: openssl
-Requires: ndctl
 
 %description
 The Distributed Asynchronous Object Storage (DAOS) is an open-source
@@ -75,6 +74,8 @@ to optimize performance and cost.
 Summary: The DAOS server
 Requires: %{name} = %{version}-%{release}
 Requires: spdk-tools
+Requires: ndctl
+Requires: ipmctl
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 
