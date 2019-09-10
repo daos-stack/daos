@@ -117,22 +117,6 @@ class ServerCommand(DaosCommand):
         """
         self.config.update(create_server_yaml(basepath), "server.config")
 
-    def get_params(self, test, path="/run/daos_server/*"):
-        """Get values for all of the server command params using a yaml file.
-
-        Sets each BasicParameter object's value to the yaml key that matches
-        the assigned name of the BasicParameter object in this class. For
-        example, the self.block_size.value will be set to the value in the yaml
-        file with the key 'block_size'.
-
-        Args:
-            test (Test): avocado Test object
-            path (str, optional): yaml namespace.
-                Defaults to "/run/daos_server/*".
-
-        """
-        super(ServerCommand, self).get_params(test, path)
-
     def get_launch_command(self, manager, uri=None, env=None):
         """Get the process launch command used to run daos_server.
 
@@ -171,82 +155,22 @@ class ServerCommand(DaosCommand):
         else:
             raise ServerFailed("Unsupported job manager: {}".format(manager))
 
-    def start(self, manager, verbose=True, env=None, sudo=None, timeout=600):
-        """Start the daos server on each specified host.
 
-        Args:
-            manager (str): mpi job manager command
-            verbose (bool, optional): [description]. Defaults to True.
-            env ([type], optional): [description]. Defaults to None.
-            timeout (int, optional): [description]. Defaults to 600.
+class ServerManager(JobManagerCommand):
+    """Defines object to manage server functions and launch server command."""
 
-        Raises:
-            ServerFailed: if there are issues starting the servers
+    def __init__(self, test, hosts):
+            """Create a ServerManager object"""
+            super(ServerManager, self).__init__(
+                "daos_server", "/run/daos_server/*", path)
 
-        """
-        if self.process is None:
-            # Start the daos server as a subprocess
-            kwargs = {
-                "cmd": self.get_launch_command(manager),
-                "verbose": verbose,
-                "allow_output_check": "combined",
-                "shell": True,
-                "env": env,
-                "sudo": sudo,
-            }
-            self.process = process.SubProcess(**kwargs)
-            self.process.start()
-
-            # Wait for 'DAOS I/O server' messages to appear in the daos_server
-            # output indicating that the servers have started
-            start_time = time.time()
-            start_msgs = 0
-            timed_out = False
-            while start_msgs != len(self.hosts) and not timed_out:
-                output = self.process.get_stdout()
-                start_msgs = len(re.findall("DAOS I/O server", output))
-                timed_out = time.time() - start_time > timeout
-
-            if start_msgs != len(self.hosts):
-                err_msg = "{} detected. Only started {}/{} servers".format(
-                    "Time out" if timed_out else "Error",
-                    start_msgs, len(self.hosts))
-                print("{}:\n{}".format(err_msg, self.process.get_stdout()))
-                raise ServerFailed(err_msg)
-
-    def stop(self):
-        """Stop the process running the daos servers.
-
-        Raises:
-            ServerFailed: if there are errors stopping the servers
-
-        """
-        if self.process is not None:
-            signal_list = [
-                signal.SIGINT, None, None, None,
-                signal.SIGTERM, None, None,
-                signal.SIGQUIT, None,
-                signal.SIGKILL]
-            while self.process.poll() is None and signal_list:
-                sig = signal_list.pop(0)
-                if sig is not None:
-                    self.process.send_signal(sig)
-                if signal_list:
-                    time.sleep(1)
-            if not signal_list:
-                raise ServerFailed("Error stopping {}".format(self._command))
-            self.process = None
-
-
-class ServerManager(object):
-
-
-    test
-    hosts
-    server
+            self.test = test
+            self.hosts = hosts
+            self.server = ServerCommand()
 
     def create_hostfile(self, slots):
     def setup(self):
+        """Setup server and job manager default attributes."""
 
 
 # Look up pyjournalctl.

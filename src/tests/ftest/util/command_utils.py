@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 #!/usr/bin/python
 """
   (C) Copyright 2018-2019 Intel Corporation.
@@ -24,8 +25,11 @@
 from __future__ import print_function
 
 import os
+import time
+import re
 
-from avocado.utils import process, CmdError
+# from avocado.utils import process
+from avocado.utils import genio, process
 
 class CommandFailure(Exception):
     """Handle when command run has failed or timed out."""
@@ -125,6 +129,7 @@ class EnvironmentParameter(FormattedParameter):
         [extended_summary]
         """
 
+
 class ObjectWithParameters(object):
     """A class for an object with parameters."""
 
@@ -195,19 +200,11 @@ class CommandWithParameters(ObjectWithParameters):
         super(CommandWithParameters, self).__init__(namespace)
         self._command = command
         self._path = path
+        self.process = None
         self.timeout=None
         self.verbose=True
         self.env=None
         self.sudo=False
-        self.kwargs = {
-            "cmd": self.__str__(),
-            "timeout": self.timeout,
-            "verbose": self.verbose,
-            "allow_output_check": "combined",
-            "shell": True,
-            "env": self.env,
-            "sudo": self.sudo,
-        }
 
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
@@ -226,24 +223,36 @@ class CommandWithParameters(ObjectWithParameters):
         return " ".join([os.path.join(self._path, self._command)] + params)
 
     def run(self):
-        """ Run the command.
+        """ Run the command
 
         This run will stop the test flow until the command has completed.
 
         Raises:
-            process.CmdError: Avocado command exception
+            CommandFailure: Will raise when command run failed or timedout.
 
         Returns:
             process.CmdResult: CmdResult object containing the results from
             the command.
 
         """
+        kwargs = {
+            "cmd": self.__str__(),
+            "timeout": self.timeout,
+            "verbose": self.verbose,
+            "allow_output_check": "combined",
+            "shell": True,
+            "env": self.env,
+            "sudo": self.sudo,
+        }
         try:
-            process.run(**self.kwargs)
+            self.process = process.run(**kwargs)
 
         except process.CmdError as error:
             print("<{}> Exception occurred: {}".format(self._command, error))
             raise CommandFailure("Run process Failed: {}".format(error))
+
+        finally:
+            return self.process
 
 
 class DaosCommand(CommandWithParameters):
@@ -273,20 +282,18 @@ class DaosCommand(CommandWithParameters):
 class JobManagerCommand(CommandWithParameters):
     """A class for job manager commands."""
 
-    def __init__(self, managercmd, namespace):
+    def __init__(self, command, namespace):
         """Create a JobManager object.
 
         Construct and run a job manager tool. e.g. mpirun, orterun, slurm
 
         Args:
-            managercmd (str): string of the manager tool to be executed
+            command (str): string of the manager tool to be executed
             namespace (str): path to location of test yaml file.
         """
-        super(JobManagerCommand, self).__init__(managercmd, namespace)
+        super(JobManagerCommand, self).__init__(command, namespace)
         self.command_to_manage = None
-        self.process = None
-        self.process_indicator = None
-        self.hosts = []
+        self.process_str_pattern = None
 
     def get_param_names(self):
         """Get a sorted list of JobManagerCommand parameter names."""
@@ -294,11 +301,92 @@ class JobManagerCommand(CommandWithParameters):
         names.insert(0, "export")
         return names
 
+    def get_host_count(self):
+        """Get the host count from either hosts.value or from hostlist.value.
+
+        Returns:
+            int: number of hosts where command will be launched.
+
+        """
+        if (self.hosts.value is not None and
+                isinstance(self.host.value, (list, tuple))):
+            return len(self.hosts.value)
+        elif: self.hostfile.value is not None:
+            return len([line.split(' ')[0]
+                        for line in genio.read_all_lines(self.hostfile.value)])
+        else:
+            return 0
+
+    def poll_pattern(self, pattern=None):
+        """Wait for message from command output.
+
+        Args:
+            pattern (str): string to wait for on command output.
+        """
+        start_time = time.time()
+        start_msgs = 0
+        timed_out = False
+        while start_msgs != get_host_count() and not timed_out:
+            output = self.process.get_stdout()
+            start_msgs = len(re.findall(pattern, output))
+            timed_out = time.time() - start_time > self.timeout
+
+        if start_msgs != get_host_count():
+            err_msg = "{} detected. Only started {}/{} servers".format(
+                "Time out" if timed_out else "Error",
+                start_msgs, get_host_count())
+            print("{}:\n{}".format(err_msg, self.process.get_stdout()))
+            raise CommandFailure(err_msg)
+
     def run(self):
-        """ Run the command as a subprocess."""
+        """Run the command on each specified host.
 
+        Raises:
+            CommandFailure: if there are issues running the command.
 
-        self.process = process.SubProcess(**self.kwargs)
+        """
+        if self.process is None:
+            # Start the daos server as a subprocess
+            kwargs = {
+                "cmd": self._command.__str__(),
+                "verbose": self.verbose,
+                "allow_output_check": "combined",
+                "shell": True,
+                "env": self.env,
+                "sudo": self.sudo,
+            }
+            self.process = process.SubProcess(**kwargs)
+            self.process.start()
+
+            if self.process_str_pattern() is not None:
+                try:
+                    poll_pattern(self.process_str_pattern)
+                except CommandFailure as error:
+                    print("Exception in poll_pattern(): {}".format(error))
+
+    def stop(self):
+        """Stop the process running the daos servers.
+
+        Raises:
+            ServerFailed: if there are errors stopping the servers
+
+        """
+        if self.process is not None:
+            signal_list = [
+                signal.SIGINT, None, None, None,
+                signal.SIGTERM, None, None,
+                signal.SIGQUIT, None,
+                signal.SIGKILL]
+            while self.process.poll() is None and signal_list:
+                sig = signal_list.pop(0)
+                if sig is not None:
+                    self.process.send_signal(sig)
+                if signal_list:
+                    time.sleep(1)
+            if not signal_list:
+                raise ServerFailed("Error stopping {}".format(self._command))
+            self.process = None
+
 
 class OrterunCommand(JobManagerCommand):
     """ A class to handle  orterun command."""
@@ -317,6 +405,9 @@ class OrterunCommand(JobManagerCommand):
         self.enable_recovery = FormattedParameter("--enable-recovery", True)
         self.report_uri = FormattedParameter("--report-uri", None)
 
-    def get_host_count(self):
-        if self.hosts.value us not None:
-            return len(self.hosts.value)
+
+def main():
+    print("Running...")
+
+if __name__ == "__main__":
+    main()
