@@ -58,6 +58,7 @@ Requires: protobuf-c
 Requires: spdk
 Requires: fio < 3.4
 Requires: openssl
+Requires: ndctl
 
 %description
 The Distributed Asynchronous Object Storage (DAOS) is an open-source
@@ -238,6 +239,9 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/*.a
 
 %changelog
+* Tue Sep 10 2019 Tom Nabarro <tom.nabarro@intel.com>
+- Add requires ndctl as runtime dep for control plane.
+
 * Thu Aug 15 2019 David Quigley <david.quigley@intel.com>
 - Add systemd unit files to packaging.
 
