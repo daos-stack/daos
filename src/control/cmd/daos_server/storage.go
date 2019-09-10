@@ -82,7 +82,7 @@ type storagePrepareCmd struct {
 }
 
 func (cmd *storagePrepareCmd) Execute(args []string) error {
-	if err := cmd.Init(); err != nil {
+	if err := cmd.Init(cmd.log); err != nil {
 		return err
 	}
 

@@ -41,20 +41,17 @@ func TestStorageCommands(t *testing.T) {
 			"storage format",
 			"ConnectClients",
 			nil,
-			cmdSuccess,
 		},
 		{
 			"Format with force",
 			"storage format --force",
 			"ConnectClients StorageFormat",
 			nil,
-			cmdSuccess,
 		},
 		{
 			"Update with missing arguments",
 			"storage fwupdate",
 			"",
-			nil,
 			errMissingFlag,
 		},
 		{
@@ -63,7 +60,6 @@ func TestStorageCommands(t *testing.T) {
 			"storage fwupdate --nvme-model foo --nvme-fw-path bar --nvme-fw-rev 123",
 			"ConnectClients",
 			nil,
-			cmdSuccess,
 		},
 		{
 			"Update with force",
@@ -79,20 +75,17 @@ func TestStorageCommands(t *testing.T) {
 				}),
 			}, " "),
 			nil,
-			cmdSuccess,
 		},
 		{
 			"Scan",
 			"storage scan",
 			"ConnectClients StorageScan",
 			nil,
-			cmdSuccess,
 		},
 		{
 			"Nonexistent subcommand",
 			"storage quack",
 			"",
-			nil,
 			fmt.Errorf("Unknown command"),
 		},
 	})

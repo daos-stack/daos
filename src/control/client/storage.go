@@ -35,7 +35,6 @@ import (
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	types "github.com/daos-stack/daos/src/control/common/storage"
-	log "github.com/daos-stack/daos/src/control/logging"
 )
 
 const (
@@ -118,7 +117,7 @@ func storagePrepareRequest(mc Control, req interface{}, ch chan ClientResult) {
 	if !ok {
 		err := errors.Errorf(msgTypeAssert, &pb.StoragePrepareReq{}, req)
 
-		log.Errorf(err.Error())
+		mc.logger().Errorf(err.Error())
 		ch <- ClientResult{mc.getAddress(), nil, err}
 		return // type err
 	}
@@ -233,7 +232,7 @@ func StorageFormatRequest(mc Control, parms interface{}, ch chan ClientResult) {
 		}
 		if err != nil {
 			err := errors.Wrapf(err, msgStreamRecv, stream)
-			log.Errorf(err.Error())
+			mc.logger().Errorf(err.Error())
 			ch <- ClientResult{mc.getAddress(), nil, err}
 			return // recv err
 		}
@@ -300,14 +299,14 @@ func storageUpdateRequest(
 		err := errors.Errorf(
 			msgTypeAssert, pb.StorageUpdateReq{}, req)
 
-		log.Errorf(err.Error())
+		mc.logger().Errorf(err.Error())
 		ch <- ClientResult{mc.getAddress(), nil, err}
 		return // type err
 	}
 
 	stream, err := mc.getCtlClient().StorageUpdate(ctx, updateReq)
 	if err != nil {
-		log.Errorf(err.Error())
+		mc.logger().Errorf(err.Error())
 		ch <- ClientResult{mc.getAddress(), nil, err}
 		return // stream err
 	}
@@ -319,7 +318,7 @@ func storageUpdateRequest(
 		}
 		if err != nil {
 			err := errors.Wrapf(err, msgStreamRecv, stream)
-			log.Errorf(err.Error())
+			mc.logger().Errorf(err.Error())
 			ch <- ClientResult{mc.getAddress(), nil, err}
 			return // recv err
 		}
