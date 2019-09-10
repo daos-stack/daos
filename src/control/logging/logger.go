@@ -23,6 +23,7 @@
 package logging
 
 import (
+	"bytes"
 	"io"
 	"sync"
 )
@@ -205,4 +206,38 @@ func (ll *LeveledLogger) Errorf(format string, args ...interface{}) {
 	for _, l := range loggers {
 		l.Errorf(format, args...)
 	}
+}
+
+// LogBuffer provides a thread-safe wrapper for bytes.Buffer.
+// It only wraps a subset of bytes.Buffer's methods; just enough
+// to implement io.Reader, io.Writer, and fmt.Stringer. The
+// Reset() method is also wrapped in order to make it useful
+// for testing.
+type LogBuffer struct {
+	sync.Mutex
+	buf bytes.Buffer
+}
+
+func (lb *LogBuffer) Read(p []byte) (int, error) {
+	lb.Lock()
+	defer lb.Unlock()
+	return lb.buf.Read(p)
+}
+
+func (lb *LogBuffer) Write(p []byte) (int, error) {
+	lb.Lock()
+	defer lb.Unlock()
+	return lb.buf.Write(p)
+}
+
+func (lb *LogBuffer) String() string {
+	lb.Lock()
+	defer lb.Unlock()
+	return lb.buf.String()
+}
+
+func (lb *LogBuffer) Reset() {
+	lb.Lock()
+	defer lb.Unlock()
+	lb.buf.Reset()
 }
