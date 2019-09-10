@@ -41,20 +41,25 @@
 //@Library(value="pipeline-lib@your_branch") _
 
 def doc_only_change() {
+
+    if (cachedCommitPragma(pragma: 'Doc-only') == 'true') {
+        return true
+    }
+
     def rc = sh script: 'if [ "' + env.CHANGE_ID + '''" = "null" ]; then
                               mb_modifier="^"
                          fi
                          git diff-tree --no-commit-id --name-only \
                            $(git merge-base origin/''' + target_branch +
                       '''$mb_modifier HEAD) HEAD | \
-                           grep -v -e "^doc$"''',
+                           grep -v -e "^doc$" -e "\\.md$"''',
                 returnStatus: true
 
     return rc == 1
 }
 
 def skip_stage(String stage) {
-    return cachedCommitPragma(pragma: 'Skip-' + stage).contains('true')
+    return cachedCommitPragma(pragma: 'Skip-' + stage) == 'true'
 }
 
 def quickbuild() {
