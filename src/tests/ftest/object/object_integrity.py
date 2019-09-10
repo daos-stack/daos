@@ -35,6 +35,7 @@ import write_host_file
 
 from daos_api import (DaosContext, DaosPool, DaosContainer, IORequest, DaosObj,
                       DaosApiError, DaosLog)
+from apricot import skipForTicket
 
 class ObjectDataValidation(avocado.Test):
     """
@@ -238,6 +239,7 @@ class ObjectDataValidation(avocado.Test):
 
 
     @avocado.fail_on(DaosApiError)
+    @skipForTicket("DAOS-3208")
     def test_single_object_validation(self):
         """
         Test ID: DAOS-707
@@ -296,6 +298,7 @@ class ObjectDataValidation(avocado.Test):
                     record_index = 0
 
     @avocado.fail_on(DaosApiError)
+    @skipForTicket("DAOS-3208")
     def test_array_object_validation(self):
         """
         Test ID: DAOS-707

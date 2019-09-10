@@ -1247,7 +1247,7 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 		return -DER_INVAL;
 	}
 
-	if (intent == DAOS_INTENT_CHECK) {
+	if (intent == DAOS_INTENT_CHECK || intent == DAOS_INTENT_COS) {
 		if (dtx_is_aborted(entry))
 			return ALB_UNAVAILABLE;
 
@@ -1789,4 +1789,47 @@ vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat)
 	} else {
 		stat->dtx_oldest_committed_time = 0;
 	}
+}
+
+int
+vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
+{
+	struct vos_container	*cont;
+	struct daos_lru_cache	*occ;
+	struct vos_object	*obj;
+	int	rc;
+
+	cont = vos_hdl2cont(coh);
+	occ = vos_obj_cache_current();
+	rc = vos_obj_hold(occ, cont, oid, epoch, true,
+			  DAOS_INTENT_DEFAULT, &obj);
+	if (rc != 0) {
+		D_ERROR(DF_UOID" fail to mark sync(1): rc = %d\n",
+			DP_UOID(oid), rc);
+		return rc;
+	}
+
+	if (obj->obj_df != NULL && obj->obj_df->vo_sync < epoch) {
+		rc = vos_tx_begin(cont->vc_pool);
+		if (rc == 0) {
+			umem_tx_add_ptr(&cont->vc_pool->vp_umm,
+					&obj->obj_df->vo_sync,
+					sizeof(obj->obj_df->vo_sync));
+			obj->obj_df->vo_sync = epoch;
+			rc = vos_tx_end(cont->vc_pool, rc);
+		}
+
+		if (rc == 0) {
+			D_INFO("Update sync epoch "DF_U64" => "DF_U64
+			       " for the obj "DF_UOID"\n",
+			       obj->obj_sync_epoch, epoch, DP_UOID(oid));
+			obj->obj_sync_epoch = epoch;
+		} else {
+			D_ERROR(DF_UOID" fail to mark sync(2): rc = %d\n",
+				DP_UOID(oid), rc);
+		}
+	}
+
+	vos_obj_release(occ, obj);
+	return rc;
 }

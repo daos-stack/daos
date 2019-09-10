@@ -78,11 +78,38 @@ func (srv *IOServerInstance) superblockPath() string {
 	return filepath.Join(srv.fsRoot, storagePath, "superblock")
 }
 
+func (srv *IOServerInstance) setSuperblock(sb *Superblock) {
+	srv.Lock()
+	defer srv.Unlock()
+	srv._superblock = sb
+}
+
+func (srv *IOServerInstance) getSuperblock() *Superblock {
+	srv.RLock()
+	defer srv.RUnlock()
+	return srv._superblock
+}
+
+func (srv *IOServerInstance) hasSuperblock() bool {
+	return srv.getSuperblock() != nil
+}
+
 // NeedsSuperblock indicates whether or not the instance appears
 // to need a superblock to be created in order to start.
 func (srv *IOServerInstance) NeedsSuperblock() (bool, error) {
-	err := srv.ReadSuperblock()
+	if srv.hasSuperblock() {
+		return false, nil
+	}
+
+	scmCfg, err := srv.scmConfig()
+	if err != nil {
+		return false, err
+	}
+	srv.log.Debugf("%s: checking superblock", scmCfg.MountPoint)
+
+	err = srv.ReadSuperblock()
 	if os.IsNotExist(errors.Cause(err)) {
+		srv.log.Debugf("%s: needs superblock (doesn't exist)", scmCfg.MountPoint)
 		return true, nil
 	}
 
@@ -109,7 +136,7 @@ func (srv *IOServerInstance) CreateSuperblock(msInfo *mgmtInfo) error {
 		systemName = defaultGroupName
 	}
 
-	srv.superblock = &Superblock{
+	superblock := &Superblock{
 		Version:     superblockVersion,
 		UUID:        u.String(),
 		System:      systemName,
@@ -120,11 +147,12 @@ func (srv *IOServerInstance) CreateSuperblock(msInfo *mgmtInfo) error {
 	}
 
 	if srv.runner.Config.Rank != nil || msInfo.isReplica && msInfo.shouldBootstrap {
-		srv.superblock.Rank = new(ioserver.Rank)
+		superblock.Rank = new(ioserver.Rank)
 		if srv.runner.Config.Rank != nil {
-			*srv.superblock.Rank = *srv.runner.Config.Rank
+			*superblock.Rank = *srv.runner.Config.Rank
 		}
 	}
+	srv.setSuperblock(superblock)
 
 	return srv.WriteSuperblock()
 }
@@ -132,21 +160,29 @@ func (srv *IOServerInstance) CreateSuperblock(msInfo *mgmtInfo) error {
 // WriteSuperblock writes the instance's superblock
 // to storage.
 func (srv *IOServerInstance) WriteSuperblock() error {
-	return WriteSuperblock(srv.superblockPath(), srv.superblock)
+	return WriteSuperblock(srv.superblockPath(), srv.getSuperblock())
 }
 
 // ReadSuperblock reads the instance's superblock
 // from storage.
 func (srv *IOServerInstance) ReadSuperblock() error {
+	needsFormat, err := srv.NeedsScmFormat()
+	if err != nil {
+		return errors.Wrap(err, "failed to check storage formatting")
+	}
+	if needsFormat {
+		return errors.New("can't read superblock from unformatted storage")
+	}
+
 	if err := srv.MountScmDevice(); err != nil {
-		return err
+		return errors.Wrap(err, "failed to mount SCM device")
 	}
 
 	sb, err := ReadSuperblock(srv.superblockPath())
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to read instance superblock")
 	}
-	srv.superblock = sb
+	srv.setSuperblock(sb)
 
 	return nil
 }

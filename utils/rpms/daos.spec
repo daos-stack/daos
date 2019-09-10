@@ -172,6 +172,7 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/daos_srv/libplacement.so
 # Certificate generation files
 %{daoshome}/certgen/
+%{daoshome}/VERSION
 %doc
 
 %files server
