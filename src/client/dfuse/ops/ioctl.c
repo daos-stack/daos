@@ -31,20 +31,28 @@
 static void
 handle_gah_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 {
-	struct dfuse_gah_info gah_info = {0};
-	int rc;
+	struct dfuse_il_reply	il_reply = {0};
+	int			rc;
 
 	DFUSE_TRA_INFO(oh, "Requested");
 
 	/* TODO: Check rc */;
-	rc = dfs_obj2id(oh->doh_ie->ie_obj, &gah_info.oid);
+	rc = dfs_obj2id(oh->doh_ie->ie_obj, &il_reply.fir_oid);
 	if (rc)
-		DFUSE_REPLY_ERR_RAW(oh, req, rc);
+		D_GOTO(err, rc);
 
-	gah_info.version = DFUSE_IOCTL_VERSION;
-	strncpy((char *)gah_info.pool, oh->doh_ie->ie_dfs->dfs_pool, NAME_MAX);
-	strncpy((char *)gah_info.cont, oh->doh_ie->ie_dfs->dfs_cont, NAME_MAX);
-	DFUSE_REPLY_IOCTL(oh, req, gah_info);
+	il_reply.fir_version = DFUSE_IOCTL_VERSION;
+
+	if (uuid_parse(oh->doh_ie->ie_dfs->dfs_pool, il_reply.fir_pool) < 0)
+		D_GOTO(err, rc = EIO);
+
+	if (uuid_parse(oh->doh_ie->ie_dfs->dfs_cont, il_reply.fir_cont) < 0)
+		D_GOTO(err, rc = EIO);
+
+	DFUSE_REPLY_IOCTL(oh, req, il_reply);
+	return;
+err:
+	DFUSE_REPLY_ERR_RAW(oh, req, rc);
 }
 
 void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
@@ -66,7 +74,7 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 		D_GOTO(out_err, rc = ENOTSUP);
 	}
 
-	if (out_bufsz < sizeof(struct dfuse_gah_info))
+	if (out_bufsz < sizeof(struct dfuse_il_reply))
 		D_GOTO(out_err, rc = EIO);
 
 	handle_gah_ioctl(oh, req);

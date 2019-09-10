@@ -119,13 +119,12 @@
 #endif /* IOIL_PRELOAD */
 
 struct fd_entry {
-
-	daos_handle_t		aoh;
-	daos_handle_t		poh;
-	daos_handle_t		coh;
-	off_t pos;
-	int flags;
-	int status;
+	daos_handle_t	fd_aoh;
+	daos_handle_t	fd_poh;
+	daos_handle_t	fd_coh;
+	off_t		fd_pos;
+	int		fd_flags;
+	int		fd_status;
 };
 
 ssize_t

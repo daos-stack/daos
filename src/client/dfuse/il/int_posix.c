@@ -50,9 +50,17 @@
 
 FOREACH_INTERCEPT(IOIL_FORWARD_DECL)
 
-static bool ioil_initialized;
+struct ioil_common {
+	pthread_mutex_t	ioc_lock;
+	int		ioc_open_fd_count;
+	bool		ioc_initialized;
+};
+
+static vector_t	fd_table;
+
+static struct ioil_common ioil_ioc;
+
 static __thread int saved_errno;
-static vector_t fd_table;
 
 #define SAVE_ERRNO(is_error)                 \
 	do {                                 \
@@ -152,6 +160,7 @@ pwritev_rpc(struct fd_entry *entry, const struct iovec *iov, int count,
 
 static pthread_once_t init_links_flag = PTHREAD_ONCE_INIT;
 
+/* This is also called from dfuse_fopen() */
 static void init_links(void)
 {
 	FOREACH_INTERCEPT(IOIL_FORWARD_MAP_OR_FAIL);
@@ -164,6 +173,8 @@ ioil_init(void)
 	int rc;
 
 	rc = daos_init();
+	if (rc)
+		return;
 
 	pthread_once(&init_links_flag, init_links);
 
@@ -184,15 +195,17 @@ ioil_init(void)
 		return;
 	}
 
-	__sync_synchronize();
+	rc = pthread_mutex_init(&ioil_ioc.ioc_lock, NULL);
+	if (rc)
+		return;
 
-	ioil_initialized = true;
+	ioil_ioc.ioc_initialized = true;
 }
 
 static __attribute__((destructor)) void
 ioil_fini(void)
 {
-	ioil_initialized = false;
+	ioil_ioc.ioc_initialized = false;
 
 	__sync_synchronize();
 
@@ -202,63 +215,54 @@ ioil_fini(void)
 static bool
 check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 {
-	struct dfuse_gah_info	gah_info;
+	struct dfuse_il_reply	il_reply;
 	daos_size_t		cell_size = 1;
 	daos_size_t		chunk_size = 1024 * 1024;
 	daos_pool_info_t	pool_info;
 	daos_cont_info_t	cont_info;
 	int			rc;
 	d_rank_list_t		*svcl;
-	uuid_t			pool_uuid;
-	uuid_t			cont_uuid;
 
 	if (fd == -1)
 		return false;
 
-	gah_info.version = DFUSE_IOCTL_VERSION;
-
-	rc = ioctl(fd, DFUSE_IOCTL_GAH, &gah_info);
+	rc = ioctl(fd, DFUSE_IOCTL_GAH, &il_reply);
 	if (rc != 0) {
 		int err = errno;
+
 		DFUSE_LOG_INFO("ioctl call on %d failed %d %d", fd, rc, err);
 		return false;
 	}
 
-	if (gah_info.version != DFUSE_IOCTL_VERSION) {
+	if (il_reply.fir_version != DFUSE_IOCTL_VERSION) {
 		DFUSE_LOG_INFO("ioctl version mismatch (fd=%d): expected "
 			       "%d got %d", fd, DFUSE_IOCTL_VERSION,
-			       gah_info.version);
+			       il_reply.fir_version);
 		return false;
 	}
 
-	entry->pos = 0;
-	entry->flags = flags;
-	entry->status = DFUSE_IO_BYPASS;
+	pthread_mutex_lock(&ioil_ioc.ioc_lock);
+	entry->fd_pos = 0;
+	entry->fd_flags = flags;
+	entry->fd_status = DFUSE_IO_BYPASS;
 
 	svcl = daos_rank_list_parse("0", ":");
 
-	if (uuid_parse(&gah_info.pool[0], pool_uuid) < 0) {
-		return false;
-	}
-
-	if (uuid_parse(&gah_info.cont[0], cont_uuid) < 0) {
-		return false;
-	}
-
-	rc = daos_pool_connect(pool_uuid, NULL, svcl, DAOS_PC_RW,
-			       &entry->poh, &pool_info,
+	rc = daos_pool_connect(il_reply.fir_pool, NULL, svcl, DAOS_PC_RW,
+			       &entry->fd_poh, &pool_info,
 			       NULL);
 	if (rc)
-		return false;
+		D_GOTO(drop_lock, 0);
 
-	rc = daos_cont_open(entry->poh, cont_uuid, DAOS_COO_RW, &entry->coh,
-			    &cont_info, NULL);
+	rc = daos_cont_open(entry->fd_poh, il_reply.fir_cont, DAOS_COO_RW,
+			    &entry->fd_coh, &cont_info, NULL);
 	if (rc)
 		D_GOTO(pool_close, 0);
 
-	rc = daos_array_open_with_attr(entry->coh, gah_info.oid, DAOS_TX_NONE,
-				       DAOS_OO_RW, cell_size, chunk_size,
-				       &entry->aoh, NULL);
+	rc = daos_array_open_with_attr(entry->fd_coh, il_reply.fir_oid,
+				       DAOS_TX_NONE, DAOS_OO_RW,
+				       cell_size, chunk_size,
+				       &entry->fd_aoh, NULL);
 	if (rc)
 		D_GOTO(cont_close, 0);
 
@@ -267,28 +271,34 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 		DFUSE_LOG_INFO("Failed to track IOF file fd=%d., disabling kernel bypass",
 			       rc);
 		/* Disable kernel bypass */
-		entry->status = DFUSE_IO_DIS_RSRC;
+		entry->fd_status = DFUSE_IO_DIS_RSRC;
 		D_GOTO(array_close, 0);
 	}
+	ioil_ioc.ioc_open_fd_count += 1;
+
+	pthread_mutex_unlock(&ioil_ioc.ioc_lock);
 
 	return true;
 
 array_close:
-	daos_array_close(entry->aoh, NULL);
+	daos_array_close(entry->fd_aoh, NULL);
 
 cont_close:
-	daos_cont_close(entry->coh, NULL);
+	daos_cont_close(entry->fd_coh, NULL);
 
 pool_close:
-	daos_pool_disconnect(entry->poh, NULL);
+	daos_pool_disconnect(entry->fd_poh, NULL);
 
+drop_lock:
+
+	pthread_mutex_unlock(&ioil_ioc.ioc_lock);
 	return false;
 }
 
 static bool
 drop_reference_if_disabled(struct fd_entry *entry)
 {
-	if (entry->status == DFUSE_IO_BYPASS)
+	if (entry->fd_status == DFUSE_IO_BYPASS)
 		return false;
 
 	vector_decref(&fd_table, entry);
@@ -319,7 +329,7 @@ dfuse_open(const char *pathname, int flags, ...)
 		mode = 0;
 	}
 
-	if (!ioil_initialized || (fd == -1))
+	if (!ioil_ioc.ioc_initialized || (fd == -1))
 		return fd;
 
 	status = DFUSE_IO_BYPASS;
@@ -335,13 +345,13 @@ dfuse_open(const char *pathname, int flags, ...)
 			       "%d." GAH_PRINT_STR " intercepted, "
 			       "bypass=%s", pathname, flags, mode, fd,
 			       GAH_PRINT_VAL(&entry),
-			       bypass_status[entry.status]);
+			       bypass_status[entry.fd_status]);
 	else
 		DFUSE_LOG_INFO("open(pathname=%s, flags=0%o) = %d."
 			       GAH_PRINT_STR
 			       " intercepted, bypass=%s", pathname, flags, fd,
 			       GAH_PRINT_VAL(&entry),
-			       bypass_status[entry.status]);
+			       bypass_status[entry.fd_status]);
 
 finish:
 	return fd;
@@ -356,7 +366,7 @@ dfuse_creat(const char *pathname, mode_t mode)
 	/* Same as open with O_CREAT|O_WRONLY|O_TRUNC */
 	fd = __real_open(pathname, O_CREAT | O_WRONLY | O_TRUNC, mode);
 
-	if (!ioil_initialized || (fd == -1))
+	if (!ioil_ioc.ioc_initialized || (fd == -1))
 		return fd;
 
 	if (!check_ioctl_on_open(fd, &entry, O_CREAT | O_WRONLY | O_TRUNC,
@@ -366,7 +376,7 @@ dfuse_creat(const char *pathname, mode_t mode)
 	DFUSE_LOG_INFO("creat(pathname=%s, mode=0%o) = %d." GAH_PRINT_STR
 		     " intercepted, bypass=%s", pathname, mode, fd,
 		     GAH_PRINT_VAL(&entry),
-		     bypass_status[entry.status]);
+		     bypass_status[entry.fd_status]);
 
 finish:
 	return fd;
@@ -385,18 +395,18 @@ dfuse_close(int fd)
 
 	DFUSE_LOG_INFO("close(fd=%d." GAH_PRINT_STR ") intercepted, bypass=%s",
 		       fd, GAH_PRINT_VAL(entry),
-		       bypass_status[entry->status]);
+		       bypass_status[entry->fd_status]);
 
 #if 0
 	/* This should be correct, however does not work in cases where
 	 * dup() has been called on the FD, because the old FD may be closed
 	 * leading to inability to access the new one.
 	 */
-	daos_array_close(entry->aoh, NULL);
+	daos_array_close(entry->fd_aoh, NULL);
 
-	daos_cont_close(entry->coh, NULL);
+	daos_cont_close(entry->fd_coh, NULL);
 
-	daos_pool_disconnect(entry->poh, NULL);
+	daos_pool_disconnect(entry->fd_poh, NULL);
 #endif
 
 	vector_decref(&fd_table, entry);
@@ -421,15 +431,15 @@ dfuse_read(int fd, void *buf, size_t len)
 		       "intercepted, bypass=%s", fd,
 		       GAH_PRINT_VAL(entry),
 		       buf, len,
-		       bypass_status[entry->status]);
+		       bypass_status[entry->fd_status]);
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_read;
 
-	oldpos = entry->pos;
+	oldpos = entry->fd_pos;
 	bytes_read = pread_rpc(entry, buf, len, oldpos);
 	if (bytes_read > 0)
-		entry->pos = oldpos + bytes_read;
+		entry->fd_pos = oldpos + bytes_read;
 	vector_decref(&fd_table, entry);
 
 	RESTORE_ERRNO(bytes_read < 0);
@@ -454,7 +464,7 @@ dfuse_pread(int fd, void *buf, size_t count, off_t offset)
 	DFUSE_LOG_INFO("pread(fd=%d." GAH_PRINT_STR ", buf=%p, count=%zu, "
 		       "offset=%zd) intercepted, bypass=%s", fd,
 		       GAH_PRINT_VAL(entry), buf, count, offset,
-		       bypass_status[entry->status]);
+		       bypass_status[entry->fd_status]);
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_pread;
@@ -486,15 +496,15 @@ dfuse_write(int fd, const void *buf, size_t len)
 	DFUSE_LOG_INFO("write(fd=%d." GAH_PRINT_STR ", buf=%p, len=%zu) "
 		       "intercepted, bypass=%s", fd,
 		       GAH_PRINT_VAL(entry), buf, len,
-		       bypass_status[entry->status]);
+		       bypass_status[entry->fd_status]);
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_write;
 
-	oldpos = entry->pos;
-	bytes_written = pwrite_rpc(entry, buf, len, entry->pos);
+	oldpos = entry->fd_pos;
+	bytes_written = pwrite_rpc(entry, buf, len, entry->fd_pos);
 	if (bytes_written > 0)
-		entry->pos = oldpos + bytes_written;
+		entry->fd_pos = oldpos + bytes_written;
 	vector_decref(&fd_table, entry);
 
 	RESTORE_ERRNO(bytes_written < 0);
@@ -519,7 +529,7 @@ dfuse_pwrite(int fd, const void *buf, size_t count, off_t offset)
 	DFUSE_LOG_INFO("pwrite(fd=%d." GAH_PRINT_STR ", buf=%p, count=%zu, "
 		       "offset=%zd) intercepted, bypass=%s", fd,
 		       GAH_PRINT_VAL(entry), buf, count, offset,
-		       bypass_status[entry->status]);
+		       bypass_status[entry->fd_status]);
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_pwrite;
@@ -550,7 +560,7 @@ dfuse_lseek(int fd, off_t offset, int whence)
 	DFUSE_LOG_INFO("lseek(fd=%d." GAH_PRINT_STR ", offset=%zd, whence=%d) "
 		       "intercepted, bypass=%s", fd,
 		       GAH_PRINT_VAL(entry), offset, whence,
-		       bypass_status[entry->status]);
+		       bypass_status[entry->fd_status]);
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_lseek;
@@ -558,14 +568,14 @@ dfuse_lseek(int fd, off_t offset, int whence)
 	if (whence == SEEK_SET) {
 		new_offset = offset;
 	} else if (whence == SEEK_CUR) {
-		new_offset = entry->pos + offset;
+		new_offset = entry->fd_pos + offset;
 	} else {
 		/* Let the system handle SEEK_END as well as non-standard
 		 * values such as SEEK_DATA and SEEK_HOLE
 		 */
 		new_offset = __real_lseek(fd, offset, whence);
 		if (new_offset >= 0)
-			entry->pos = new_offset;
+			entry->fd_pos = new_offset;
 		goto cleanup;
 	}
 
@@ -573,7 +583,7 @@ dfuse_lseek(int fd, off_t offset, int whence)
 		new_offset = (off_t)-1;
 		errno = EINVAL;
 	} else {
-		entry->pos = new_offset;
+		entry->fd_pos = new_offset;
 	}
 
 cleanup:
@@ -605,15 +615,15 @@ dfuse_readv(int fd, const struct iovec *vector, int iovcnt)
 	DFUSE_LOG_INFO("readv(fd=%d." GAH_PRINT_STR ", vector=%p, iovcnt=%d) "
 		       "intercepted, bypass=%s", fd,
 		       GAH_PRINT_VAL(entry), vector, iovcnt,
-		       bypass_status[entry->status]);
+		       bypass_status[entry->fd_status]);
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_readv;
 
-	oldpos = entry->pos;
-	bytes_read = preadv_rpc(entry, vector, iovcnt, entry->pos);
+	oldpos = entry->fd_pos;
+	bytes_read = preadv_rpc(entry, vector, iovcnt, entry->fd_pos);
 	if (bytes_read > 0)
-		entry->pos = oldpos + bytes_read;
+		entry->fd_pos = oldpos + bytes_read;
 	vector_decref(&fd_table, entry);
 
 	RESTORE_ERRNO(bytes_read < 0);
@@ -638,7 +648,7 @@ dfuse_preadv(int fd, const struct iovec *vector, int iovcnt, off_t offset)
 	DFUSE_LOG_INFO("preadv(fd=%d." GAH_PRINT_STR ", vector=%p, iovcnt=%d, "
 		       "offset=%zd) intercepted, bypass=%s", fd,
 		       GAH_PRINT_VAL(entry), vector, iovcnt, offset,
-		       bypass_status[entry->status]);
+		       bypass_status[entry->fd_status]);
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_preadv;
@@ -669,15 +679,15 @@ dfuse_writev(int fd, const struct iovec *vector, int iovcnt)
 	DFUSE_LOG_INFO("writev(fd=%d." GAH_PRINT_STR ", vector=%p, iovcnt=%d) "
 		       "intercepted, bypass=%s", fd,
 		       GAH_PRINT_VAL(entry), vector, iovcnt,
-		       bypass_status[entry->status]);
+		       bypass_status[entry->fd_status]);
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_writev;
 
-	oldpos = entry->pos;
-	bytes_written = pwritev_rpc(entry, vector, iovcnt, entry->pos);
+	oldpos = entry->fd_pos;
+	bytes_written = pwritev_rpc(entry, vector, iovcnt, entry->fd_pos);
 	if (bytes_written > 0)
-		entry->pos = oldpos + bytes_written;
+		entry->fd_pos = oldpos + bytes_written;
 	vector_decref(&fd_table, entry);
 
 	RESTORE_ERRNO(bytes_written < 0);
@@ -702,7 +712,7 @@ dfuse_pwritev(int fd, const struct iovec *vector, int iovcnt, off_t offset)
 	DFUSE_LOG_INFO("pwritev(fd=%d." GAH_PRINT_STR ", vector=%p, iovcnt=%d, "
 		       "offset=%zd) intercepted, bypass=%s", fd,
 		       GAH_PRINT_VAL(entry), vector, iovcnt, offset,
-		       bypass_status[entry->status]);
+		       bypass_status[entry->fd_status]);
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_pwritev;
@@ -734,10 +744,10 @@ dfuse_mmap(void *address, size_t length, int prot, int flags, int fd,
 			       length, prot, flags, fd,
 			       GAH_PRINT_VAL(entry), offset);
 
-		if (entry->pos != 0)
-			__real_lseek(fd, entry->pos, SEEK_SET);
+		if (entry->fd_pos != 0)
+			__real_lseek(fd, entry->fd_pos, SEEK_SET);
 		/* Disable kernel bypass */
-		entry->status = DFUSE_IO_DIS_MMAP;
+		entry->fd_status = DFUSE_IO_DIS_MMAP;
 
 		vector_decref(&fd_table, entry);
 	}
@@ -757,7 +767,7 @@ dfuse_fsync(int fd)
 
 	DFUSE_LOG_INFO("fsync(fd=%d." GAH_PRINT_STR ") intercepted, bypass=%s",
 		       fd, GAH_PRINT_VAL(entry),
-		       bypass_status[entry->status]);
+		       bypass_status[entry->fd_status]);
 
 	vector_decref(&fd_table, entry);
 
@@ -777,7 +787,7 @@ dfuse_fdatasync(int fd)
 
 	DFUSE_LOG_INFO("fdatasync(fd=%d." GAH_PRINT_STR ") intercepted, "
 		       "bypass=%s", fd, GAH_PRINT_VAL(entry),
-		       bypass_status[entry->status]);
+		       bypass_status[entry->fd_status]);
 
 	vector_decref(&fd_table, entry);
 
@@ -799,7 +809,7 @@ DFUSE_PUBLIC int dfuse_dup(int oldfd)
 		DFUSE_LOG_INFO("dup(oldfd=%d) = %d." GAH_PRINT_STR
 			       " intercepted, bypass=%s", oldfd, newfd,
 			       GAH_PRINT_VAL(entry),
-			       bypass_status[entry->status]);
+			       bypass_status[entry->fd_status]);
 		vector_decref(&fd_table, entry);
 	}
 
@@ -821,7 +831,7 @@ dfuse_dup2(int oldfd, int newfd)
 		DFUSE_LOG_INFO("dup2(oldfd=%d, newfd=%d) = %d." GAH_PRINT_STR
 			       " intercepted, bypass=%s", oldfd, newfd,
 			       realfd, GAH_PRINT_VAL(entry),
-			       bypass_status[entry->status]);
+			       bypass_status[entry->fd_status]);
 		vector_decref(&fd_table, entry);
 	}
 
@@ -840,11 +850,11 @@ dfuse_fdopen(int fd, const char *mode)
 			       "intercepted, disabling kernel bypass", fd,
 			       GAH_PRINT_VAL(entry), mode);
 
-		if (entry->pos != 0)
-			__real_lseek(fd, entry->pos, SEEK_SET);
+		if (entry->fd_pos != 0)
+			__real_lseek(fd, entry->fd_pos, SEEK_SET);
 
 		/* Disable kernel bypass */
-		entry->status = DFUSE_IO_DIS_STREAM;
+		entry->fd_status = DFUSE_IO_DIS_STREAM;
 
 		vector_decref(&fd_table, entry);
 	}
@@ -876,7 +886,7 @@ dfuse_fcntl(int fd, int cmd, ...)
 			       GAH_PRINT_VAL(entry));
 		if (!drop_reference_if_disabled(entry)) {
 			/* Disable kernel bypass */
-			entry->status = DFUSE_IO_DIS_FCNTL;
+			entry->fd_status = DFUSE_IO_DIS_FCNTL;
 			vector_decref(&fd_table, entry);
 		}
 		return __real_fcntl(fd, cmd, arg);
@@ -901,7 +911,7 @@ dfuse_fcntl(int fd, int cmd, ...)
 		DFUSE_LOG_INFO("fcntl(fd=%d." GAH_PRINT_STR ", cmd=%d "
 			       "/* F_DUPFD* */, arg=%d) intercepted, bypass=%s",
 			       fd, GAH_PRINT_VAL(entry), cmd, fdarg,
-			       bypass_status[entry->status]);
+			       bypass_status[entry->fd_status]);
 		vector_decref(&fd_table, entry);
 	}
 
@@ -919,7 +929,7 @@ dfuse_fopen(const char *path, const char *mode)
 
 	fp = __real_fopen(path, mode);
 
-	if (!ioil_initialized || fp == NULL)
+	if (!ioil_ioc.ioc_initialized || fp == NULL)
 		return fp;
 
 	fd = fileno(fp);
@@ -934,7 +944,7 @@ dfuse_fopen(const char *path, const char *mode)
 	DFUSE_LOG_INFO("fopen(path=%s, mode=%s) = %p(fd=%d." GAH_PRINT_STR
 		       ") intercepted, bypass=%s", path, mode, fp, fd,
 		       GAH_PRINT_VAL(&entry),
-		       bypass_status[entry.status]);
+		       bypass_status[entry.fd_status]);
 
 finish:
 	return fp;
@@ -950,7 +960,7 @@ dfuse_freopen(const char *path, const char *mode, FILE *stream)
 	int newfd;
 	int rc;
 
-	if (!ioil_initialized)
+	if (!ioil_ioc.ioc_initialized)
 		return __real_freopen(path, mode, stream);
 
 	oldfd = fileno(stream);
@@ -1008,7 +1018,7 @@ dfuse_fclose(FILE *stream)
 	int fd;
 	int rc;
 
-	if (!ioil_initialized)
+	if (!ioil_ioc.ioc_initialized)
 		goto do_real_fclose;
 
 	fd = fileno(stream);
@@ -1024,7 +1034,7 @@ dfuse_fclose(FILE *stream)
 	DFUSE_LOG_INFO("fclose(stream=%p(fd=%d." GAH_PRINT_STR ")) intercepted, "
 		       "bypass=%s", stream, fd,
 		       GAH_PRINT_VAL(entry),
-		       bypass_status[entry->status]);
+		       bypass_status[entry->fd_status]);
 
 	vector_decref(&fd_table, entry);
 
@@ -1043,7 +1053,7 @@ dfuse_get_bypass_status(int fd)
 	if (rc != 0)
 		return DFUSE_IO_EXTERNAL;
 
-	rc = entry->status;
+	rc = entry->fd_status;
 
 	vector_decref(&fd_table, entry);
 

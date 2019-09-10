@@ -27,18 +27,19 @@
 #include "daos.h"
 
 #define DFUSE_IOCTL_TYPE 0xA3       /* Arbitrary "unique" type of the IOCTL */
-#define DFUSE_IOCTL_GAH_NUMBER 0xC1 /* Number of the GAH IOCTL.  Also arbitrary */
+#define DFUSE_IOCTL_REPLY_NUMBER 0xC1 /* Number of the IOCTL.  Also arbitrary */
 #define DFUSE_IOCTL_VERSION 4       /* Version of ioctl protocol */
 
-struct dfuse_gah_info {
-	int version;
-	daos_obj_id_t	oid;
-	const char pool[NAME_MAX];
-	const char cont[NAME_MAX];
+struct dfuse_il_reply {
+	int		fir_version;
+	daos_obj_id_t	fir_oid;
+	uuid_t		fir_pool;
+	uuid_t		fir_cont;
+	/* TODO: Rank list? */
 };
 
 /* Defines the IOCTL command to get the gah for a IOF file */
-#define DFUSE_IOCTL_GAH ((int)_IOR(DFUSE_IOCTL_TYPE, DFUSE_IOCTL_GAH_NUMBER, \
-				 struct dfuse_gah_info))
+#define DFUSE_IOCTL_GAH ((int)_IOR(DFUSE_IOCTL_TYPE, DFUSE_IOCTL_REPLY_NUMBER, \
+				 struct dfuse_il_reply))
 
 #endif /* __DFUSE_IOCTL_H__ */

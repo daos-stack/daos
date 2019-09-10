@@ -48,7 +48,8 @@ ioil_do_writex(const char *buff, size_t len, off_t position,
 	rg.rg_idx = position;
 	iod.arr_rgs = &rg;
 
-	rc = daos_array_write(entry->aoh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
+	rc = daos_array_write(entry->fd_aoh, DAOS_TX_NONE, &iod, &sgl, NULL,
+			      NULL);
 	if (rc) {
 		DFUSE_TRA_INFO(entry, "daos_array_write() failed %d", rc);
 		*errcode = daos_der2errno(rc);
