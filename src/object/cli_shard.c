@@ -182,9 +182,11 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		sizes = orwo->orw_sizes.ca_arrays;
 
 		if (orwo->orw_sizes.ca_count != orw->orw_nr) {
-			D_ERROR("out:%u != in:%u\n",
+			D_ERROR("out:%u != in:%u for "DF_UOID" with eph "
+				DF_U64".\n",
 				(unsigned)orwo->orw_sizes.ca_count,
-				orw->orw_nr);
+				orw->orw_nr, DP_UOID(orw->orw_oid),
+				orw->orw_epoch);
 			D_GOTO(out, rc = -DER_PROTO);
 		}
 
