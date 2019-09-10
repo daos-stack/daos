@@ -30,7 +30,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	types "github.com/daos-stack/daos/src/control/common/storage"
-	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -154,35 +153,6 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *pb.Storage
 	}
 
 	return resp, nil
-}
-
-// StorageControlService encapsulates the storage part of the control service
-type StorageControlService struct {
-	log  logging.Logger
-	nvme *nvmeStorage
-	scm  *scmStorage
-	drpc drpc.DomainSocketClient
-}
-
-// NewStorageControlService returns an initialized *StorageControlService
-func NewStorageControlService(log logging.Logger, cfg *Configuration) (*StorageControlService, error) {
-	scriptPath, err := cfg.ext.getAbsInstallPath(spdkSetupPath)
-	if err != nil {
-		return nil, err
-	}
-
-	spdkScript := &spdkSetup{
-		log:         log,
-		scriptPath:  scriptPath,
-		nrHugePages: cfg.NrHugepages,
-	}
-
-	return &StorageControlService{
-		log:  log,
-		nvme: newNvmeStorage(log, cfg.NvmeShmID, spdkScript, cfg.ext),
-		scm:  newScmStorage(log, cfg.ext),
-		drpc: getDrpcClientConnection(cfg.SocketDir),
-	}, nil
 }
 
 // doFormat performs format on storage subsystems, populates response results

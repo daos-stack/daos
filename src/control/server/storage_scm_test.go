@@ -33,6 +33,7 @@ import (
 	. "github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	. "github.com/daos-stack/daos/src/control/common/storage"
+	types "github.com/daos-stack/daos/src/control/common/storage"
 	. "github.com/daos-stack/daos/src/control/lib/ipmctl"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -135,7 +136,7 @@ func TestGetState(t *testing.T) {
 			desc:              "modules but no regions",
 			showRegionOut:     outScmNoRegions,
 			expRebootRequired: true,
-			expCommands:       []string{cmdScmShowRegions, cmdScmCreateRegions},
+			expCommands:       []string{cmdScmShowRegions, cmdScmDeleteGoal, cmdScmCreateRegions},
 		},
 		{
 			desc: "single region with free capacity",
@@ -186,7 +187,8 @@ func TestGetState(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)()
 
-			ss := defaultMockScmStorage(log, nil).withRunCmd(mockRun)
+			ss := defaultMockScmStorage(log, nil)
+			ss.prep = newPrepScm(log, mockRun)
 
 			if err := ss.Discover(); err != nil {
 				t.Fatal(err)
@@ -197,7 +199,7 @@ func TestGetState(t *testing.T) {
 			pmemId = 1
 			commands = nil
 
-			needsReboot, pmemDevs, err := ss.Prep()
+			needsReboot, pmemDevs, err := ss.Prep(types.ScmStateUnknown)
 			if tt.errMsg != "" {
 				ExpectError(t, err, tt.errMsg, tt.desc)
 				return

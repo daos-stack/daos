@@ -77,7 +77,7 @@ func newMockStorageConfig(
 ) *Configuration {
 
 	c := newDefaultConfiguration(newMockExt(nil, existsRet, mountRet,
-		true, unmountRet, mkdirRet, removeRet))
+		true, unmountRet, mkdirRet, removeRet, true))
 
 	c.Servers = append(c.Servers,
 		ioserver.NewConfig().
