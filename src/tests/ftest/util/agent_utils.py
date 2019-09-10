@@ -68,6 +68,8 @@ def run_agent(basepath, server_list, client_list=None):
     # if empty client list, 'self' is effectively client
     if client_list is None:
         client_list = [socket.gethostname().split('.', 1)[0]]
+    else:
+        client_list += [socket.gethostname().split('.', 1)[0]]
 
     # Verify the domain socket directory is present and owned by this user
     file_checks = (
@@ -87,7 +89,7 @@ def run_agent(basepath, server_list, client_list=None):
     daos_agent_bin = os.path.join(build_vars["PREFIX"], "bin", "daos_agent")
 
     # adding localhost to the client list to start agents on that node as well
-    client_list += [socket.gethostname().split('.', 1)[0]]
+    #client_list += [socket.gethostname().split('.', 1)[0]]
 
     for client in client_list:
         sessions[client] = subprocess.Popen(
@@ -161,6 +163,8 @@ def stop_agent(sessions, client_list=None):
     # if empty client list, 'self' is effectively client
     if client_list is None:
         client_list = [socket.gethostname().split('.', 1)[0]]
+    else:
+        client_list += [socket.gethostname().split('.', 1)[0]]
 
     # Kill the agents processes
     pcmd(client_list, "pkill daos_agent", False)
