@@ -51,7 +51,7 @@ class Permission(Test):
                                             'daos_server')
 
         # setup the DAOS python API
-        self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
+        self.context = DaosContext(build_paths['PREFIX'] + '/lib64/')
         self.pool = None
         self.d_log = DaosLog(self.context)
 

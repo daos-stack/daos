@@ -74,7 +74,7 @@ class BasicSnapshot(Test):
                                        'daos_server')
 
         # setup the DAOS python API
-        self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
+        self.context = DaosContext(build_paths['PREFIX'] + '/lib64/')
         self.d_log = DaosLog(self.context)
 
         self.hostlist = self.params.get("test_machines", '/run/hosts/*')

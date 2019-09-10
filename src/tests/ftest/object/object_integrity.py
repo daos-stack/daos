@@ -64,7 +64,7 @@ class ObjectDataValidation(avocado.Test):
         server_group = self.params.get("name",
                                        '/server_config/',
                                        'daos_server')
-        self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
+        self.context = DaosContext(build_paths['PREFIX'] + '/lib64/')
         self.d_log = DaosLog(self.context)
         self.hostlist = self.params.get("test_machines", '/run/hosts/*')
         self.hostfile = write_host_file.write_host_file(self.hostlist,

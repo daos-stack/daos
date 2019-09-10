@@ -68,7 +68,7 @@ class Romio(Test):
                                             'daos_server')
 
         # setup the DAOS python API
-        self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
+        self.context = DaosContext(build_paths['PREFIX'] + '/lib64/')
 
         self.hostlist_servers = self.params.get("test_servers", '/run/hosts/')
         self.hostfile_servers = (

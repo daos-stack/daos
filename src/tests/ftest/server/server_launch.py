@@ -57,8 +57,8 @@ class ServerLaunch(Test):
         launch_cmd += (
             "--report-uri {0} "
             "-x D_LOG_FILE=/mnt/shared/test/tmp/daos.log "
-            "-x LD_LIBRARY_PATH=/home/skirvan/daos_m10/install/lib"
-            ":/home/skirvan/daos_m10/install/lib/daos_srv "
+            "-x LD_LIBRARY_PATH=/home/skirvan/daos_m10/install/lib64"
+            ":/home/skirvan/daos_m10/install/lib64/daos_srv "
             "../../install/bin/daos_server --debug start -d /tmp/.daos "
             "-g daos_server".format(urifile)
             )
