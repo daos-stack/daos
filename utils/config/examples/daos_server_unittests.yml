@@ -30,6 +30,8 @@ servers:
   fabric_iface: lo          # map to OFI_INTERFACE=lo
   log_mask: DEBUG,RPC=ERR,MEM=ERR
   log_file: /tmp/server.log # map to D_LOG_FILE=/tmp/server.log
+
+  # Environment variable values should be supplied without encapsulating quotes.
   env_vars:                 # influence DAOS IO Server behaviour by setting env variables
   - DAOS_MD_CAP=1024
   - CRT_CTX_SHARE_ADDR=0

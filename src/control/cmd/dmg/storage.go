@@ -27,44 +27,81 @@ import (
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	types "github.com/daos-stack/daos/src/control/common/storage"
 	log "github.com/daos-stack/daos/src/control/logging"
 )
 
-// StorCmd is the struct representing the top-level storage subcommand.
-type StorCmd struct {
-	Scan   ScanStorCmd   `command:"scan" alias:"s" description:"Scan SCM and NVMe storage attached to remote servers."`
-	Format FormatStorCmd `command:"format" alias:"f" description:"Format SCM and NVMe storage attached to remote servers."`
-	Update UpdateStorCmd `command:"fwupdate" alias:"u" description:"Update firmware on NVMe storage attached to remote servers."`
+// storageCmd is the struct representing the top-level storage subcommand.
+type storageCmd struct {
+	Prepare storagePrepareCmd `command:"prepare" alias:"p" description:"Prepare SCM and NVMe storage attached to remote servers."`
+	Scan    storageScanCmd    `command:"scan" alias:"s" description:"Scan SCM and NVMe storage attached to remote servers."`
+	Format  storageFormatCmd  `command:"format" alias:"f" description:"Format SCM and NVMe storage attached to remote servers."`
+	Update  storageUpdateCmd  `command:"fwupdate" alias:"u" description:"Update firmware on NVMe storage attached to remote servers."`
 }
 
-// ScanStorCmd is the struct representing the scan storage subcommand.
-type ScanStorCmd struct {
+// storagePrepareCmd is the struct representing the prep storage subcommand.
+type storagePrepareCmd struct {
+	broadcastCmd
+	connectedCmd
+	types.StoragePrepareCmd
+}
+
+// Execute is run when storagePrepareCmd activates
+func (cmd *storagePrepareCmd) Execute(args []string) error {
+	var nReq *pb.PrepareNvmeReq
+	var sReq *pb.PrepareScmReq
+
+	if err := cmd.Init(); err != nil {
+		return err
+	}
+
+	if cmd.NvmeOnly || !cmd.ScmOnly {
+		nReq = &pb.PrepareNvmeReq{
+			Pciwhitelist: cmd.PCIWhiteList,
+			Nrhugepages:  int32(cmd.NrHugepages),
+			Targetuser:   cmd.TargetUser,
+			Reset_:       cmd.Reset,
+		}
+	}
+
+	if cmd.ScmOnly || !cmd.NvmeOnly {
+		sReq = &pb.PrepareScmReq{Reset_: cmd.Reset}
+	}
+
+	log.Infof("NVMe & SCM preparation:\n%s",
+		cmd.conns.StoragePrepare(&pb.StoragePrepareReq{Nvme: nReq, Scm: sReq}))
+
+	return nil
+}
+
+// storageScanCmd is the struct representing the scan storage subcommand.
+type storageScanCmd struct {
 	broadcastCmd
 	connectedCmd
 }
 
 // run NVMe and SCM storage query on all connected servers
-func scanStor(conns client.Connect) {
-	cCtrlrs, cModules := conns.ScanStorage()
+func storageScan(conns client.Connect) {
+	cCtrlrs, cModules := conns.StorageScan()
 	log.Infof("NVMe SSD controller and constituent namespaces:\n%s", cCtrlrs)
 	log.Infof("SCM modules:\n%s", cModules)
 }
 
-// Execute is run when ScanStorCmd activates
-func (s *ScanStorCmd) Execute(args []string) error {
-	scanStor(s.conns)
+// Execute is run when storageScanCmd activates
+func (s *storageScanCmd) Execute(args []string) error {
+	storageScan(s.conns)
 	return nil
 }
 
-// FormatStorCmd is the struct representing the format storage subcommand.
-type FormatStorCmd struct {
+// storageFormatCmd is the struct representing the format storage subcommand.
+type storageFormatCmd struct {
 	broadcastCmd
 	connectedCmd
 	Force bool `short:"f" long:"force" description:"Perform format without prompting for confirmation"`
 }
 
 // run NVMe and SCM storage format on all connected servers
-func formatStor(conns client.Connect, force bool) {
+func storageFormat(conns client.Connect, force bool) {
 	log.Info(
 		"This is a destructive operation and storage devices " +
 			"specified in the server config file will be erased.\n" +
@@ -72,20 +109,20 @@ func formatStor(conns client.Connect, force bool) {
 
 	if force || common.GetConsent() {
 		log.Info("")
-		cCtrlrResults, cMountResults := conns.FormatStorage()
+		cCtrlrResults, cMountResults := conns.StorageFormat()
 		log.Infof("NVMe storage format results:\n%s", cCtrlrResults)
 		log.Infof("SCM storage format results:\n%s", cMountResults)
 	}
 }
 
-// Execute is run when FormatStorCmd activates
-func (s *FormatStorCmd) Execute(args []string) error {
-	formatStor(s.conns, s.Force)
+// Execute is run when storageFormatCmd activates
+func (s *storageFormatCmd) Execute(args []string) error {
+	storageFormat(s.conns, s.Force)
 	return nil
 }
 
-// UpdateStorCmd is the struct representing the update storage subcommand.
-type UpdateStorCmd struct {
+// storageUpdateCmd is the struct representing the update storage subcommand.
+type storageUpdateCmd struct {
 	broadcastCmd
 	connectedCmd
 	Force        bool   `short:"f" long:"force" description:"Perform update without prompting for confirmation"`
@@ -96,7 +133,7 @@ type UpdateStorCmd struct {
 }
 
 // run NVMe and SCM storage update on all connected servers
-func updateStor(conns client.Connect, req *pb.UpdateStorageReq, force bool) {
+func storageUpdate(conns client.Connect, req *pb.StorageUpdateReq, force bool) {
 	log.Info(
 		"This could be a destructive operation and storage devices " +
 			"specified in the server config file will have firmware " +
@@ -105,18 +142,18 @@ func updateStor(conns client.Connect, req *pb.UpdateStorageReq, force bool) {
 
 	if force || common.GetConsent() {
 		log.Info("")
-		cCtrlrResults, cModuleResults := conns.UpdateStorage(req)
+		cCtrlrResults, cModuleResults := conns.StorageUpdate(req)
 		log.Infof("NVMe storage update results:\n%s", cCtrlrResults)
 		log.Infof("SCM storage update results:\n%s", cModuleResults)
 	}
 }
 
-// Execute is run when UpdateStorCmd activates
-func (u *UpdateStorCmd) Execute(args []string) error {
+// Execute is run when storageUpdateCmd activates
+func (u *storageUpdateCmd) Execute(args []string) error {
 	// only populate nvme fwupdate params for the moment
-	updateStor(
+	storageUpdate(
 		u.conns,
-		&pb.UpdateStorageReq{
+		&pb.StorageUpdateReq{
 			Nvme: &pb.UpdateNvmeReq{
 				Model: u.NVMeModel, Startrev: u.NVMeStartRev,
 				Path: u.NVMeFwPath, Slot: int32(u.NVMeFwSlot),
