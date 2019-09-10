@@ -242,18 +242,18 @@ add_ds_shard(d_list_t *ds_list, struct pool_target *target)
  * become unavailable, and targets that were already used as fallback targets
  * in this layout.
  *
- * [in]    down_targets    List of targets that are either down, or
- *             already exist in the layout. Both cannot be
- *             used as fallback targets.
- * [out]   selected_dom    The top level domain being examined for
- *                 fallback target selection/
- * [in]        used_tgts   The bitmap that this function populates.
- * [in]        skipped_targets The number of skipped targets, used to keep
- *                 track of when we have tried all targets in
- *                 this domain.
+ * \param[in]	down_targets	List of targets that are either down, or
+ *				already exist in the layout. Both cannot be
+ *				used as fallback targets.
+ * \param[out]	selected_dom	The top level domain being examined for
+ *				fallback target selection/
+ * \param[in]	used_tgts	The bitmap that this function populates.
+ * \param[in]	skipped_targets The number of skipped targets, used to keep
+ *				track of when we have tried all targets in
+ *				this domain.
  *
- * return          An error code, 0 if successful, or less than 0
- *                 denoting an error occurred.
+ * return		An error code, 0 if successful, or less than 0
+ *			denoting an error occurred.
  */
 static int
 set_used_targets(d_list_t *down_targets, struct pool_domain *selected_dom,
