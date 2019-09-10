@@ -67,8 +67,8 @@ class DmgScmScanTest(TestWithServers):
             self.fail("daos_shell command failed: {}".format(details))
 
         # Run ipmctl to verify output of dmg storage scan
-        ipmclt = IpmctlCommand()
-        ipmclt.get_params(self)
+        ipmctl = IpmctlCommand()
+        ipmctl.get_params(self)
 
         try:
             ipmctlprocess = ipmctl.run()
