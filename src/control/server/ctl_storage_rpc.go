@@ -111,8 +111,12 @@ func (c *StorageControlService) StoragePrepare(ctx context.Context, req *pb.Stor
 
 	resp := &pb.StoragePrepareResp{}
 
-	resp.Nvme = c.doNvmePrepare(req.Nvme)
-	resp.Scm = c.doScmPrepare(req.Scm)
+	if req.Nvme != nil {
+		resp.Nvme = c.doNvmePrepare(req.Nvme)
+	}
+	if req.Scm != nil {
+		resp.Scm = c.doScmPrepare(req.Scm)
+	}
 
 	return resp, nil
 }
@@ -185,16 +189,23 @@ func NewStorageControlService(log logging.Logger, cfg *Configuration) (*StorageC
 func (c *ControlService) doFormat(i *IOServerInstance, resp *pb.StorageFormatResp) error {
 	hasSuperblock := false
 
-	needsSuperblock, err := i.NeedsSuperblock()
+	needsScmFormat, err := i.NeedsScmFormat()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "unable to check storage formatting")
 	}
 
-	if !needsSuperblock {
+	if !needsScmFormat {
+		needsSuperblock, err := i.NeedsSuperblock()
+		if err != nil {
+			return errors.Wrap(err, "unable to check instance superblock")
+		}
+		hasSuperblock = !needsSuperblock
+	}
+
+	if hasSuperblock {
 		// server already formatted, populate response appropriately
 		c.nvme.formatted = true
 		c.scm.formatted = true
-		hasSuperblock = true
 	}
 
 	// scaffolding

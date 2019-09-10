@@ -31,6 +31,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 )
 
@@ -212,11 +213,15 @@ type ControllerFactory interface {
 }
 
 // controllerFactory as an implementation of ControllerFactory.
-type controllerFactory struct{}
+type controllerFactory struct {
+	log logging.Logger
+}
 
 // create instantiates and connects a client to server at given address.
 func (c *controllerFactory) create(address string, cfg *security.TransportConfig) (Control, error) {
-	controller := &control{}
+	controller := &control{
+		log: c.log,
+	}
 
 	err := controller.connect(address, cfg)
 
@@ -250,6 +255,7 @@ type Connect interface {
 // connList is an implementation of Connect and stores controllers
 // (connections to clients, one per DAOS server).
 type connList struct {
+	log             logging.Logger
 	transportConfig *security.TransportConfig
 	factory         ControllerFactory
 	controllers     []Control
@@ -390,10 +396,13 @@ func (c *connList) makeRequests(
 
 // NewConnect is a factory for Connect interface to operate over
 // multiple clients.
-func NewConnect() Connect {
+func NewConnect(log logging.Logger) Connect {
 	return &connList{
+		log:             log,
 		transportConfig: nil,
-		factory:         &controllerFactory{},
-		controllers:     []Control{},
+		factory: &controllerFactory{
+			log: log,
+		},
+		controllers: []Control{},
 	}
 }

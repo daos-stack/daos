@@ -114,8 +114,8 @@ func TestRunnerContextExit(t *testing.T) {
 	cancel()
 
 	exitErr := <-errOut
-	if errors.Cause(exitErr).Error() != "context canceled" {
-		t.Fatalf("expected context cancel; got %s", exitErr)
+	if errors.Cause(exitErr) == NormalExit {
+		t.Fatal("expected process to not exit normally")
 	}
 }
 
