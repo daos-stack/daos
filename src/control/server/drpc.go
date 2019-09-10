@@ -45,21 +45,32 @@ func getDrpcClientConnection(sockDir string) *drpc.ClientConnection {
 	return drpc.NewClientConnection(clientSock)
 }
 
-// drpcSetup creates socket directory, specifies socket path and then
-// starts drpc server.
-func drpcSetup(sockDir string, iosrv *iosrv, tc *security.TransportConfig) error {
-	// Create our socket directory if it doesn't exist
-	_, err := os.Stat(sockDir)
-	if err != nil && os.IsPermission(err) {
-		return errors.Wrap(
-			err, "user does not have permission to access "+sockDir)
-	} else if err != nil && os.IsNotExist(err) {
-		err = os.MkdirAll(sockDir, 0755)
-		if err != nil {
-			return errors.Wrap(
-				err,
-				"unable to create socket directory "+sockDir)
+// checkSocketDir verifies socket directory exists, has appropriate permissions
+// and is a directory. SocketDir should be created during configuration management
+// as locations may not be user creatable.
+func checkSocketDir(sockDir string) error {
+	f, err := os.Stat(sockDir)
+	if err != nil {
+		msg := "unexpected error locating"
+		if os.IsPermission(err) {
+			msg = "permissions failure accessing"
+		} else if os.IsNotExist(err) {
+			msg = "missing"
 		}
+
+		return errors.WithMessagef(err, "%s socket directory %s", msg, sockDir)
+	}
+	if !f.IsDir() {
+		return errors.Errorf("path %s not a directory", sockDir)
+	}
+
+	return nil
+}
+
+// drpcSetup checks socket directory exists, specifies socket path and starts drpc server.
+func drpcSetup(sockDir string, iosrv *IOServerInstance, tc *security.TransportConfig) error {
+	if err := checkSocketDir(sockDir); err != nil {
+		return err
 	}
 
 	sockPath := filepath.Join(sockDir, sockFileName)
@@ -73,10 +84,8 @@ func drpcSetup(sockDir string, iosrv *iosrv, tc *security.TransportConfig) error
 	drpcServer.RegisterRPCModule(&mgmtModule{})
 	drpcServer.RegisterRPCModule(&srvModule{iosrv})
 
-	err = drpcServer.Start()
-	if err != nil {
-		return errors.Wrap(
-			err, "unable to start socket server on "+sockPath)
+	if err := drpcServer.Start(); err != nil {
+		return errors.Wrapf(err, "unable to start socket server on %s", sockPath)
 	}
 
 	return nil

@@ -96,6 +96,11 @@ func (tc *testConn) ClearConns() client.ResultMap {
 	return nil
 }
 
+func (tc *testConn) StoragePrepare(req *pb.StoragePrepareReq) client.ResultMap {
+	tc.appendInvocation("StoragePrepare")
+	return nil
+}
+
 func (tc *testConn) StorageScan() (client.ClientCtrlrMap, client.ClientModuleMap) {
 	tc.appendInvocation("StorageScan")
 	return nil, nil

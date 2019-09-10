@@ -46,6 +46,7 @@ struct dfuse_info {
 	char				*di_mountpoint;
 	d_rank_list_t			*di_svcl;
 	bool				di_threaded;
+	bool				di_foreground;
 };
 
 /* Launch fuse, and do not return until complete */
