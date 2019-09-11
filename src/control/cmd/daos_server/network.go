@@ -62,10 +62,10 @@ func (cmd *networkScanCmd) Execute(args []string) error {
 		provider = cmd.config.Fabric.Provider
 		cmd.log.Infof("Scanning fabric for YML specified provider: %s", provider)
 	} else {
-		cmd.log.Info("Scanning fabric for all providers.")
+		cmd.log.Info("Scanning fabric for all providers")
 	}
 
-	devCount, err := netdetect.ScanFabric(provider)
+	results, err := netdetect.ScanFabric(provider)
 	if err != nil {
 		cmd.log.Error("An error occured while attempting to scan the fabric for devices")
 		return errors.WithMessage(err, "failed to execute the fabric and device scan")
@@ -74,7 +74,14 @@ func (cmd *networkScanCmd) Execute(args []string) error {
 	if provider == "" {
 		provider = "All"
 	}
-	cmd.log.Infof("\nFabric scan found %d devices matching the provider spec: %s", devCount, provider)
+	cmd.log.Infof("Fabric scan found %d devices matching the provider spec: %s", len(results), provider)
+
+	cmd.log.Debugf("Compressed: %v\n", results)
+
+	for _, sr := range(results) {
+		cmd.log.Infof("\n%s\n\n", sr.String())
+	}
+
 	return nil
 }
 

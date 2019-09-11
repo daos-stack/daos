@@ -67,6 +67,17 @@ type DeviceAffinity struct {
 	NUMANode     int
 }
 
+type FabricScan struct {
+	Provider     string
+	DeviceName   string
+	NUMANode     int
+	Priority     int
+}
+
+func (fs *FabricScan) String() string {
+	return fmt.Sprintf("\tfabric_iface: %s\n\tprovider: %s\n\tpinned_numa_node: %d", fs.DeviceName, fs.Provider, fs.NUMANode)
+}
+
 // DeviceScan caches initialization data for later hwloc usage
 type DeviceScan struct {
 	topology C.hwloc_topology_t
@@ -589,107 +600,9 @@ func LibFabricToMercury(provider string) (string) {
 	return ""
 }
 
-// ScanFabric examines libfabric data to find the network devices that support the given fabric provider.
-// Returns a list of 'provider, network device and NUMA ID' for each match found.  The output
-// is compatible strings for the yaml configuration file.  Returns the count of matching records.
-func ScanFabric(provider string) (int, error) {
-	var fi *C.struct_fi_info
-	var hints *C.struct_fi_info
-	var devCount int
-	var libfabricProviderList string
-	var mercuryProviderList string
-	hints = C.fi_allocinfo()
-	defer C.fi_freeinfo(fi)
-
-	resultsMap := make(map[string]struct{})
-
-	if (hints == nil) {
-		return devCount, errors.New("enable to allocate memory for libfabric query")
-	}
-
-	// If a provider was given, then set the libfabric search hint to match the provider
-	if (provider != "") {
-		log.Debugf("Input provider string: %s", provider)
-		tmp := strings.Split(provider, ";")
-		for i, subProvider := range tmp {
-			log.Debugf("Mercury provider %d is %s", i, subProvider)
-			libFabricProvider := MercuryToLibFabric(subProvider)
-			if len(libFabricProvider) > 0 {
-				libfabricProviderList += libFabricProvider + ";"
-			} else {
-				log.Debugf("Provider '%s' is not known by libfabric.", subProvider)
-				return devCount, errors.New(fmt.Sprintf("Fabric provider: %s not known by libfabric. Try 'daos_server network list' to view available providers", subProvider))
-			}
-		}
-		libfabricProviderList = strings.TrimSuffix(libfabricProviderList, ";")
-		log.Debugf("Final libFabricProviderList is %s", libfabricProviderList)
-		hints.fabric_attr.prov_name = C.strdup(C.CString(libfabricProviderList))
-	}
-
-	// Initialize libfabric and perform the scan
-	C.fi_getinfo(C.uint(libFabricMajorVersion << 16 | libFabricMinorVersion), nil, nil, 0, hints, &fi)
-	if (fi == nil) {
-		return devCount, errors.New("libfabric failed to initialize")
-	}
-
-	// We have some data from libfabric scan.  Let's initialize hwloc and get the device scan started
-	deviceScanCfg, err := initDeviceScan()
-	if err != nil {
-		return devCount, err
-	}
-	defer cleanUp(deviceScanCfg.topology)
-
-	log.Debugf("initDeviceScan completed.  Depth %d, numObj %d, systemDeviceNames %v, hwlocDeviceNames %v",
-		deviceScanCfg.depth, deviceScanCfg.numObj, deviceScanCfg.systemDeviceNames, deviceScanCfg.hwlocDeviceNames)
-
-	for ; fi != nil; fi = fi.next {
-		mercuryProviderList = ""
-		if fi.domain_attr == nil || fi.domain_attr.name == nil {
-			continue
-		}
-		if fi.fabric_attr == nil || fi.fabric_attr.prov_name == nil {
-			continue
-		}
-
-		deviceScanCfg.targetDevice = C.GoString(fi.domain_attr.name)
-		deviceAffinity, err := GetAffinityForDevice(deviceScanCfg)
-		var results string
-
-		if err != nil {
-			log.Debugf("Error from GetAffinityForDevice: %v", err)
-			continue
-		}
-
-		results += "	fabric_iface: " + deviceAffinity[0].DeviceName + "\n"
-		tmp := strings.Split(C.GoString(fi.fabric_attr.prov_name), ";")
-		for _, subProvider := range tmp {
-			mercuryProvider := LibFabricToMercury(subProvider)
-			if len(mercuryProvider) > 0 {
-				mercuryProviderList += mercuryProvider + ";"
-			}
-		}
-		mercuryProviderList = strings.TrimSuffix(mercuryProviderList, ";")
-		if (mercuryProviderList != "") {
-			results += "	provider: " + mercuryProviderList + "\n"
-		} else {
-			results += "	provider: <unknown to Mercury> " + C.GoString(fi.fabric_attr.prov_name) + "\n"
-		}
-
-		results += "	pinned_numa_node: " + fmt.Sprintf("%d", deviceAffinity[0].NUMANode) + "\n"
-
-		if _, found := resultsMap[results]; !found {
-			devCount++
-			resultsMap[results] = struct{}{}
-			log.Infof("\n%s", results)
-		}
-	}
-
-	return devCount, nil
-}
-
-// Used for unit testing to replace ValidateNetworkConfig because the network configuration
+// Used for most unit testing to replace ValidateNetworkConfig because the network configuration
 // validation depends upon physical hardware resources and configuration on the target machine
-// that are not known in the test environment
+// that are either not known or static in the test environment
 func ValidateNetworkConfigStub(provider string, device string, numa_node int) (bool, error) {
 	return true, nil
 }
@@ -771,4 +684,135 @@ func ValidateNetworkConfig(provider string, device string, numaNode int) (bool, 
 	}
 	log.Debugf("Configuration error!  Device %s does not support provider: %s", device, provider)
 	return false, nil
+}
+
+/*
+func FindBestProvider() (string, error) {
+	// Scan the fabric for all providers, return the best one (according to libfabric priority)
+	provider := ""
+	results, err := ScanFabricV2(provider)
+	if (err != nil) {
+		return provider, err
+	}
+
+	for _, sr := range(results) {
+		if sr.Priority == 0 {
+			return sr.Provider, nil
+		}
+	}
+
+	return provider, errors.New("libfabric found no providers")
+}
+
+func FindBestNetworkDevice() (string, error) {
+	// Scan the fabric for all providers, return the device linked to the best one (according to libfabric priority)
+	provider := ""
+	results, err := ScanFabricV2(provider)
+	if (err != nil) {
+		return provider, err
+	}
+
+	for _, sr := range(results) {
+		if sr.Priority == 0 {
+			return sr.DeviceName, nil
+		}
+	}
+
+	return "", errors.New("could not identify any network devices known to libfabric")
+}
+*/
+
+// ScanFabric examines libfabric data to find the network devices that support the given fabric provider.
+func ScanFabric(provider string) ([]FabricScan, error) {
+	var ScanResults []FabricScan
+	var fi *C.struct_fi_info
+	var hints *C.struct_fi_info
+	var devCount int
+	var libfabricProviderList string
+	var mercuryProviderList string
+	hints = C.fi_allocinfo()
+	defer C.fi_freeinfo(fi)
+
+	resultsMap := make(map[string]struct{})
+
+	if (hints == nil) {
+		return ScanResults, errors.New("enable to allocate memory for libfabric query")
+	}
+
+	// If a provider was given, then set the libfabric search hint to match the provider
+	if (provider != "") {
+		log.Debugf("Input provider string: %s", provider)
+		tmp := strings.Split(provider, ";")
+		for i, subProvider := range tmp {
+			log.Debugf("Mercury provider %d is %s", i, subProvider)
+			libFabricProvider := MercuryToLibFabric(subProvider)
+			if len(libFabricProvider) > 0 {
+				libfabricProviderList += libFabricProvider + ";"
+			} else {
+				log.Debugf("Provider '%s' is not known by libfabric.", subProvider)
+				return ScanResults, errors.New(fmt.Sprintf("Fabric provider: %s not known by libfabric. Try 'daos_server network list' to view available providers", subProvider))
+			}
+		}
+		libfabricProviderList = strings.TrimSuffix(libfabricProviderList, ";")
+		log.Debugf("Final libFabricProviderList is %s", libfabricProviderList)
+		hints.fabric_attr.prov_name = C.strdup(C.CString(libfabricProviderList))
+	}
+
+	// Initialize libfabric and perform the scan
+	C.fi_getinfo(C.uint(libFabricMajorVersion << 16 | libFabricMinorVersion), nil, nil, 0, hints, &fi)
+	if (fi == nil) {
+		return ScanResults, errors.New("libfabric found no records matching the specified provider")
+	}
+
+	// We have some data from libfabric scan.  Let's initialize hwloc and get the device scan started
+	deviceScanCfg, err := initDeviceScan()
+	if err != nil {
+		return ScanResults, err
+	}
+	defer cleanUp(deviceScanCfg.topology)
+
+	log.Debugf("initDeviceScan completed.  Depth %d, numObj %d, systemDeviceNames %v, hwlocDeviceNames %v",
+		deviceScanCfg.depth, deviceScanCfg.numObj, deviceScanCfg.systemDeviceNames, deviceScanCfg.hwlocDeviceNames)
+
+	for ; fi != nil; fi = fi.next {
+		mercuryProviderList = ""
+		if fi.domain_attr == nil || fi.domain_attr.name == nil {
+			continue
+		}
+		if fi.fabric_attr == nil || fi.fabric_attr.prov_name == nil {
+			continue
+		}
+
+		deviceScanCfg.targetDevice = C.GoString(fi.domain_attr.name)
+		deviceAffinity, err := GetAffinityForDevice(deviceScanCfg)
+		if err != nil {
+			log.Debugf("Error from GetAffinityForDevice: %v", err)
+			continue
+		}
+
+		tmp := strings.Split(C.GoString(fi.fabric_attr.prov_name), ";")
+		for _, subProvider := range tmp {
+			mercuryProvider := LibFabricToMercury(subProvider)
+			if len(mercuryProvider) > 0 {
+				mercuryProviderList += mercuryProvider + ";"
+			}
+		}
+		mercuryProviderList = strings.TrimSuffix(mercuryProviderList, ";")
+
+		scanResults := FabricScan {
+			Provider: mercuryProviderList,
+			DeviceName: deviceAffinity[0].DeviceName,
+			NUMANode: deviceAffinity[0].NUMANode,
+			Priority: devCount,
+		}
+
+		results := scanResults.String()
+		if _, found := resultsMap[results]; !found {
+			resultsMap[results] = struct{}{}
+			log.Debugf("\n%s", results)
+			ScanResults = append(ScanResults, scanResults)
+			devCount++
+		}
+	}
+	return ScanResults, nil
 }

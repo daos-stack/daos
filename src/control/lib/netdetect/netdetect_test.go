@@ -42,6 +42,7 @@ func TestParseTopology(t *testing.T) {
 	}{
 		// boro-84 has two NUMA nodes, with eth0, eth1, ib0 on NUMA 0,
 		// and no ib1 in the topology
+		// The format for the expected string is "device:cpuset:nodeset:numa"
 		{[]string{""}, "testdata/boro-84.xml", []string{}},
 		{[]string{"eth0"}, "testdata/boro-84.xml", []string{"eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
 		{[]string{"eth1"}, "testdata/boro-84.xml", []string{"eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
@@ -78,5 +79,47 @@ func TestParseTopology(t *testing.T) {
 			AssertEqual(t, i.String(), tt.expected[j],
 				"unexpected mismatch with device and topology")
 		}
+	}
+}
+
+// TestScanFabric scans the fabric on the test system.  Even though we don't know how the test system is configured,
+// we do expect that libfabric is installed and will report at least one provider,device,numa record.
+// If we get at least one record and no errors, the test is successful.
+func TestScanFabric(t *testing.T) {
+
+	provider := "" // an empty provider string is a search for 'all'
+	results, err := ScanFabric(provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(results) == 0 {
+		t.Fatal(err)
+	}
+}
+
+// TestValidateNetworkConfig runs in a basic loopback mode with ScanFabric.  ScanFabric
+// is used to generate data found on the actual test system, which is then fed back to the
+// ValidateNetworkConfig function to make sure it matches.  Each record from ScanFabric is
+// run through ValidateNetworkConfig.  We expect that libfabric is installed and will report
+// at least one provider, device, numa record.
+func TestValidateNetworkConfig(t *testing.T) {
+
+	provider := "" // an empty provider string is a search for 'all'
+	results, err := ScanFabric(provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(results) == 0 {
+		t.Fatal(err)
+	}
+
+	for _, sf := range(results) {
+		validConfig, err := ValidateNetworkConfig(sf.Provider, sf.DeviceName, sf.NUMANode)
+		if err != nil {
+			t.Fatal(err)
+		}
+		AssertEqual(t, validConfig, true, "Network device configuration is invalid")
 	}
 }
