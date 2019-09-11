@@ -296,19 +296,14 @@ int ds_iv_invalidate(struct ds_iv_ns *ns, struct ds_iv_key *key,
 		     unsigned int sync_flags);
 
 int ds_iv_ns_create(crt_context_t ctx, uuid_t pool_uuid, crt_group_t *grp,
-		    unsigned int *ns_id, d_iov_t *g_ivns,
-		    struct ds_iv_ns **p_iv_ns);
+		    unsigned int *ns_id, struct ds_iv_ns **p_iv_ns);
 
-int ds_iv_ns_attach(crt_context_t ctx, uuid_t pool_uuid, unsigned int ns_id,
-		    unsigned int master_rank, d_iov_t *iv_ctxt,
-		    struct ds_iv_ns **p_iv_ns);
 int ds_iv_ns_update(uuid_t pool_uuid, unsigned int master_rank,
-		    crt_group_t *grp, d_iov_t *iv_iov, unsigned int iv_ns_id,
+		    crt_group_t *grp, unsigned int iv_ns_id,
 		    struct ds_iv_ns **iv_ns);
 
 void ds_iv_ns_destroy(void *ns);
 
 unsigned int ds_iv_ns_id_get(void *ns);
 
-int ds_iv_global_ns_get(struct ds_iv_ns *ns, d_iov_t *gl_iov);
 #endif /* __DAOS_SRV_IV_H__ */
