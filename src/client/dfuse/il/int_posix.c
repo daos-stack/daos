@@ -88,13 +88,20 @@ static const char * const bypass_status[] = {
 	"off-rsrc",
 };
 
+static void
+entry_array_close(void *arg) {
+	struct fd_entry *entry = arg;
+
+	daos_array_close(entry->fd_aoh, NULL);
+}
+
 int
 ioil_initialize_fd_table(int max_fds)
 {
 	int rc;
 
-	rc = vector_init(&fd_table, sizeof(struct fd_entry), max_fds);
-
+	rc = vector_init(&fd_table, sizeof(struct fd_entry), max_fds,
+			 entry_array_close);
 	if (rc != 0)
 		DFUSE_LOG_ERROR("Could not allocate file descriptor table"
 				", disabling kernel bypass: rc = %d", rc);
@@ -227,8 +234,6 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 	struct dfuse_il_reply	il_reply;
 	daos_size_t		cell_size = 1;
 	daos_size_t		chunk_size = 1024 * 1024;
-	daos_pool_info_t	pool_info;
-	daos_cont_info_t	cont_info;
 	int			rc;
 	d_rank_list_t		*svcl;
 
@@ -256,19 +261,18 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 
 		svcl = daos_rank_list_parse("0", ":");
 
-		rc = daos_pool_connect(il_reply.fir_pool, NULL, svcl, DAOS_PC_RW,
-				       &ioil_ioc.ioc_poh, &pool_info,
-				NULL);
+		rc = daos_pool_connect(il_reply.fir_pool, NULL, svcl,
+				       DAOS_PC_RW, &ioil_ioc.ioc_poh, NULL,
+				       NULL);
 		if (rc)
 			D_GOTO(drop_lock, 0);
 
 		uuid_copy(ioil_ioc.ioc_pool, il_reply.fir_pool);
 
-		rc = daos_cont_open(ioil_ioc.ioc_poh, il_reply.fir_cont, DAOS_COO_RW,
-				    &ioil_ioc.ioc_coh, &cont_info, NULL);
+		rc = daos_cont_open(ioil_ioc.ioc_poh, il_reply.fir_cont,
+				    DAOS_COO_RW, &ioil_ioc.ioc_coh, NULL, NULL);
 		if (rc)
 			D_GOTO(pool_close, 0);
-
 
 		uuid_copy(ioil_ioc.ioc_cont, il_reply.fir_cont);
 
@@ -432,14 +436,9 @@ dfuse_close(int fd)
 		       fd, GAH_PRINT_VAL(entry),
 		       bypass_status[entry->fd_status]);
 
-	/* This should be correct, however does not work in cases where
-	 * dup() has been called on the FD, because the old FD may be closed
-	 * leading to inability to access the new one.
+	/* This will drop a reference which will cause the array to be closed
+	 * when the last duplicated fd is closed
 	 */
-#if 0
-	daos_array_close(entry->fd_aoh, NULL);
-#endif
-
 	vector_decref(&fd_table, entry);
 
 do_real_close:
