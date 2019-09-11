@@ -143,7 +143,7 @@ set_pci_addr(
 	struct spdk_nvme_ctrlr *ctrlr, char *ctrlr_pci_addr, size_t size,
 	struct ret_t *ret)
 {
-	int 			rc;
+	int			rc;
 	struct spdk_pci_device	*pci_dev;
 	struct spdk_pci_addr	pci_addr;
 
@@ -154,7 +154,7 @@ set_pci_addr(
 		return ret->rc;
 	}
 
-	// populate ns_t.ctrlr_pci_addr to map ns->ctrlr
+	/* populate ns_t.ctrlr_pci_addr to map ns->ctrlr */
 	pci_addr = spdk_pci_device_get_addr(pci_dev);
 	rc = spdk_pci_addr_fmt(ctrlr_pci_addr, size, &pci_addr);
 	if (rc != 0) {
@@ -193,7 +193,7 @@ collect(struct ret_t *ret)
 		}
 
 		ns_tmp->id = spdk_nvme_ns_get_id(ns_entry->ns);
-		// capacity in GBytes
+		/* capacity in GBytes */
 		ns_tmp->size = spdk_nvme_ns_get_size(ns_entry->ns) /
 			       NVMECONTROL_GBYTE_BYTES;
 
@@ -272,10 +272,10 @@ collect(struct ret_t *ret)
 			return;
 		}
 
-		// populate numa socket id
+		/* populate numa socket id */
 		ctrlr_tmp->socket_id = spdk_pci_device_get_socket_id(pci_dev);
 
-		// cdata->cntlid is not unique per host, only per subsystem
+		/* cdata->cntlid is not unique per host, only per subsystem */
 		ctrlr_tmp->next = ret->ctrlrs;
 		ret->ctrlrs = ctrlr_tmp;
 

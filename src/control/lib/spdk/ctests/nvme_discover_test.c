@@ -40,16 +40,18 @@
  * ==============================
  */
 
-struct ret_t * __wrap_init_ret(void)
+struct ret_t *__wrap_init_ret(void)
 {
 	return mock_ptr_type(struct ret_t *);
 }
 
-void __wrap_cleanup(void){
+void __wrap_cleanup(void)
+{
 	printf("Mock cleanup()...\n");
 }
 
-void __wrap_collect(struct ret_t *ret){
+void __wrap_collect(struct ret_t *ret)
+{
 	printf("Mock collect()...\n");
 }
 
@@ -115,7 +117,7 @@ static void test_nvme_discover_set_g_controllers(void **state)
 	ret->nss = NULL;
 	snprintf(ret->err, sizeof(ret->err), "none");
 
-	if(g_controllers == NULL) {
+	if (g_controllers == NULL) {
 		g_controllers = malloc(sizeof(struct ctrlr_entry));
 		g_controllers->ctrlr = NULL;
 		g_controllers->tr_addr = NULL;
