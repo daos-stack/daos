@@ -1501,13 +1501,6 @@ vos_aggregate_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return rc;
 	}
 
-	if (cont->vc_abort_aggregation) {
-		D_DEBUG(DB_EPC, "VOS aggregation aborted\n");
-		cont->vc_abort_aggregation = 0;
-		cont->vc_in_aggregation = 0;
-		return 1;
-	}
-
 	agg_param->ap_credits++;
 	/*
 	 * TODO: Aggregation can't yield in object, dkey, akey tree
@@ -1536,17 +1529,8 @@ static int
 aggregate_enter(struct vos_container *cont, bool discard)
 {
 	if (cont->vc_in_aggregation) {
-		D_ERROR(DF_CONT": Already in ggregation. discard:%d\n",
+		D_ERROR(DF_CONT": Already in agregation. discard:%d\n",
 			DP_CONT(cont->vc_pool->vp_id, cont->vc_id), discard);
-
-		/*
-		 * The container will be eventually aggregated on next time
-		 * when the aggregation being triggered by metadata server.
-		 *
-		 * TODO: This can be improved by tracking the new requested
-		 * aggregation epoch range in vos_container, and start new
-		 * aggregation immediately after current one is done.
-		 */
 		return -DER_BUSY;
 	}
 
@@ -1609,7 +1593,6 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr)
 	agg_param.ap_discard = false;
 	merge_window_init(&agg_param.ap_window);
 
-	iter_param.ip_flags |= VOS_IT_FOR_PURGE;
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
 			 vos_aggregate_cb, &agg_param);
 	if (rc != 0)
@@ -1670,7 +1653,6 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr)
 	agg_param.ap_credits = 0;
 	agg_param.ap_discard = true;
 
-	iter_param.ip_flags |= VOS_IT_FOR_PURGE;
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
 			 vos_aggregate_cb, &agg_param);
 

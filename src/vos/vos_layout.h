@@ -257,8 +257,6 @@ struct vos_dtx_entry_df {
 struct vos_dtx_table_df {
 	/** The count of committed DTXs in the table. */
 	uint64_t			tt_count;
-	/** The list tail of active DTXs. */
-	umem_off_t			tt_active_tail;
 	/** The list head of committed DTXs. */
 	umem_off_t			tt_entry_head;
 	/** The list tail of committed DTXs. */
@@ -285,10 +283,6 @@ struct vos_cont_df {
 	uuid_t				cd_id;
 	uint64_t			cd_nobjs;
 	daos_size_t			cd_used;
-	/** The lowest prepared DTX epoch (that should not be aggregated). */
-	daos_epoch_t			cd_lpe;
-	/** The highest committed DTX epoch (that can be aggregated). */
-	daos_epoch_t			cd_hce;
 	/** The highest aggregated epoch. */
 	daos_epoch_t			cd_hae;
 	struct btr_root			cd_obj_root;

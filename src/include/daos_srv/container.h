@@ -64,17 +64,14 @@ struct ds_cont_child {
 	uint32_t		 sc_dtx_resyncing:1,
 				 sc_dtx_aggregating:1,
 				 sc_vos_aggregating:1,
+				 sc_abort_vos_aggregating:1,
 				 sc_closing:1,
 				 sc_destroying:1;
 	uint32_t		 sc_dtx_flush_wait_count;
-	/** Time when last aggregation was performed **/
-	uint64_t		 sc_aggregated_ts;
-	/** Time when snapshots were last refreshed **/
-	uint64_t		 sc_snapshots_ts;
 	/** Aggregation limit (set when snapshot is in progress) **/
 	uint64_t		 sc_aggregation_max;
-	uint32_t		 sc_snapshots_nr;
 	uint64_t		*sc_snapshots;
+	uint32_t		 sc_snapshots_nr;
 };
 
 /*

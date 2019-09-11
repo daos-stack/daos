@@ -108,67 +108,38 @@ read_snap_list(struct rdb_tx *tx, struct cont *cont,
 	return 0;
 }
 
-struct cont_snap_args {
-	uuid_t		 pool_uuid;
-	uuid_t		 cont_uuid;
-	int		 snap_count;
-	uint64_t	*snapshots;
-};
-
-static void
-update_snap_iv_ult(void *data)
+int
+update_snap_iv(struct rdb_tx *tx, struct cont *cont)
 {
-	struct cont_snap_args	*args = data;
-	struct ds_pool		*pool;
-	int			 rc;
+	struct ds_pool	*pool;
+	uint64_t	*snapshots = NULL;
+	int		 snap_count = -1, rc;
 
-	pool = ds_pool_lookup(args->pool_uuid);
+	/* Only happens on xstream 0 */
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+
+	rc = read_snap_list(tx, cont, &snapshots, &snap_count);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to update snapshots IV: %d\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
+		return rc;
+	}
+
+	pool = ds_pool_lookup(cont->c_svc->cs_pool_uuid);
 	if (pool == NULL) {
 		rc = -DER_INVAL;
 		goto out;
 	}
-	rc = cont_iv_snapshots_update(pool->sp_iv_ns, args->cont_uuid,
-				      args->snapshots, args->snap_count);
+
+	rc = cont_iv_snapshots_update(pool->sp_iv_ns, cont->c_uuid, snapshots,
+				      snap_count);
 	ds_pool_put(pool);
 out:
 	if (rc != 0)
-		D_WARN(DF_UUID": failed to update snapshots IV: rc %d;"
-			" Aggregation may not work correctly\n",
-			DP_UUID(args->cont_uuid), rc);
-	D_FREE(args->snapshots);
-	D_FREE(args);
-}
+		D_ERROR(DF_UUID": failed to update snapshots IV: rc %d\n",
+			DP_UUID(cont->c_uuid), rc);
 
-
-int
-update_snap_iv(struct rdb_tx *tx, struct cont *cont)
-{
-	struct cont_snap_args	*args;
-	int			 rc;
-
-	D_ALLOC(args, sizeof(*args));
-	if (args == NULL) {
-		rc = -DER_NOMEM;
-		goto out;
-	}
-	uuid_copy(args->pool_uuid, cont->c_svc->cs_pool_uuid);
-	uuid_copy(args->cont_uuid, cont->c_uuid);
-	args->snap_count = -1;
-	args->snapshots = NULL;
-	rc = read_snap_list(tx, cont, &args->snapshots, &args->snap_count);
-	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to update snapshots IV: %d\n",
-			DP_CONT(args->pool_uuid, args->cont_uuid), rc);
-		goto err;
-	}
-	rc = dss_ult_create(update_snap_iv_ult, args, DSS_ULT_POOL_SRV,
-			    0, 0, NULL);
-	if (!rc)
-		goto out;
-err:
-	D_FREE(args->snapshots);
-	D_FREE(args);
-out:
+	D_FREE(snapshots);
 	return rc;
 }
 

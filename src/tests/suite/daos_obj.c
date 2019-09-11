@@ -1122,6 +1122,8 @@ insert_records(daos_obj_id_t oid, struct ioreq *req, char *data_buf,
 					ENUM_IOD_SIZE, num_rec_exts,
 					DAOS_TX_NONE, req);
 		idx += num_rec_exts;
+		/* Prevent records coalescing on aggregation */
+		idx += 1;
 	}
 }
 
@@ -1362,8 +1364,8 @@ enumerate_simple(void **state)
 	 */
 	insert_records(oid, &req, data_buf, 1);
 	key_nr = iterate_records(&req);
-	/** One partial record at start */
-	assert_int_equal(key_nr, ENUM_KEY_REC_NR + 1);
+	/** Records could be merged with previous updates by aggregation */
+	assert_true(key_nr <= ENUM_KEY_REC_NR + 1);
 
 	/**
 	 * Insert N mixed NVMe and SCM records starting at offset 2,
@@ -1371,8 +1373,8 @@ enumerate_simple(void **state)
 	 */
 	insert_records(oid, &req, data_buf, 2);
 	key_nr = iterate_records(&req);
-	/** Two partial record at start */
-	assert_int_equal(key_nr, ENUM_KEY_REC_NR + 2);
+	/** Records could be merged with previous updates by aggregation */
+	assert_true(key_nr <= ENUM_KEY_REC_NR + 2);
 
 	D_FREE(small_buf);
 	D_FREE(large_buf);
