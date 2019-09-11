@@ -739,6 +739,16 @@ vos_gc_run(int *credits)
 		return -DER_INVAL;
 	}
 
+	if (d_list_empty(pools)) {
+		/* Garbage collection has nothing to do.  Just consume the
+		 * credits and return to check when more credits are available.
+		 * No logging here as it causes log explosion when trace is
+		 * set.
+		 */
+		*credits = 0;
+		return 0;
+	}
+
 	while (!d_list_empty(pools)) {
 		struct vos_pool *pool;
 		bool		 empty = false;
