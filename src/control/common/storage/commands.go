@@ -79,6 +79,8 @@ func (cmd *StoragePrepareCmd) CheckWarn(log *logging.LeveledLogger, state ScmSta
 		}
 	case ScmStateUnknown:
 		return errors.New("unknown scm state")
+	default:
+		return errors.Errorf("unhandled scm state %q", state)
 	}
 
 	return cmd.Warn(log)
