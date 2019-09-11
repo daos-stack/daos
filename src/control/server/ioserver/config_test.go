@@ -114,7 +114,7 @@ func TestConstructedConfig(t *testing.T) {
 		WithServiceThreadCore(8).
 		WithTargetCount(12).
 		WithHelperStreamCount(1).
-		WithPinnedNumaNode(1)
+		WithPinnedNumaNode(0)
 
 	if *update {
 		outFile, err := os.Create(goldenPath)
