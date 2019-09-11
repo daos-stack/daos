@@ -36,6 +36,18 @@ const MsgStoragePrepareWarn = "Memory allocation goals for SCM will be changed a
 	"are not in use. Please be patient as it may take several minutes " +
 	"and subsequent reboot maybe required.\n"
 
+type cmdLogger interface {
+	setLog(*logging.LeveledLogger)
+}
+
+type logCmd struct {
+	log *logging.LeveledLogger
+}
+
+func (c *logCmd) setLog(log *logging.LeveledLogger) {
+	c.log = log
+}
+
 type StoragePrepareNvmeCmd struct {
 	PCIWhiteList string `short:"w" long:"pci-whitelist" description:"Whitespace separated list of PCI devices (by address) to be unbound from Kernel driver and used with SPDK (default is all PCI devices)."`
 	NrHugepages  int    `short:"p" long:"hugepages" description:"Number of hugepages to allocate (in MB) for use by SPDK (default 1024)"`
@@ -45,6 +57,7 @@ type StoragePrepareNvmeCmd struct {
 type StoragePrepareScmCmd struct{}
 
 type StoragePrepareCmd struct {
+	logCmd
 	StoragePrepareNvmeCmd
 	StoragePrepareScmCmd
 	NvmeOnly bool `short:"n" long:"nvme-only" description:"Only prepare NVMe storage."`
@@ -53,14 +66,41 @@ type StoragePrepareCmd struct {
 	Force    bool `short:"f" long:"force" description:"Perform format without prompting for confirmation"`
 }
 
-func (cmd *StoragePrepareCmd) Init(log logging.Logger) error {
+// Validate checks both only options are not set and returns flags to direct
+// which subsystem types to prepare.
+func (cmd *StoragePrepareCmd) Validate() (bool, bool, error) {
+	prepNvme := cmd.NvmeOnly || !cmd.ScmOnly
+	prepScm := cmd.ScmOnly || !cmd.NvmeOnly
+
 	if cmd.NvmeOnly && cmd.ScmOnly {
-		return errors.New("nvme-only and scm-only options should not be set together")
+		return false, false, errors.New(
+			"nvme-only and scm-only options should not be set together")
 	}
 
-	log.Info(MsgStoragePrepareWarn)
+	return prepNvme, prepScm, nil
+}
 
-	if !cmd.Force && !common.GetConsent(log) {
+func (cmd *StoragePrepareCmd) CheckWarn(state ScmState) error {
+	switch state {
+	case ScmStateNoRegions:
+		if cmd.Reset {
+			return nil
+		}
+	case ScmStateFreeCapacity, ScmStateNoCapacity:
+		if !cmd.Reset {
+			return nil
+		}
+	case ScmStateUnknown:
+		return errors.New("unknown scm state")
+	}
+
+	return cmd.Warn()
+}
+
+func (cmd *StoragePrepareCmd) Warn() error {
+	cmd.log.Info(MsgStoragePrepareWarn)
+
+	if !cmd.Force && !common.GetConsent(cmd.log) {
 		return errors.New("consent not given")
 	}
 
