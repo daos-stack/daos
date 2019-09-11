@@ -27,7 +27,7 @@
 struct ctrlr_entry {
 	struct spdk_nvme_ctrlr	*ctrlr;
 	struct spdk_pci_addr	pci_addr;
-	int 			socket_id;
+	int			socket_id;
 	struct ctrlr_entry	*next;
 };
 
