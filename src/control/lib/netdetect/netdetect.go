@@ -686,42 +686,6 @@ func ValidateNetworkConfig(provider string, device string, numaNode int) (bool, 
 	return false, nil
 }
 
-/*
-func FindBestProvider() (string, error) {
-	// Scan the fabric for all providers, return the best one (according to libfabric priority)
-	provider := ""
-	results, err := ScanFabricV2(provider)
-	if (err != nil) {
-		return provider, err
-	}
-
-	for _, sr := range(results) {
-		if sr.Priority == 0 {
-			return sr.Provider, nil
-		}
-	}
-
-	return provider, errors.New("libfabric found no providers")
-}
-
-func FindBestNetworkDevice() (string, error) {
-	// Scan the fabric for all providers, return the device linked to the best one (according to libfabric priority)
-	provider := ""
-	results, err := ScanFabricV2(provider)
-	if (err != nil) {
-		return provider, err
-	}
-
-	for _, sr := range(results) {
-		if sr.Priority == 0 {
-			return sr.DeviceName, nil
-		}
-	}
-
-	return "", errors.New("could not identify any network devices known to libfabric")
-}
-*/
-
 // ScanFabric examines libfabric data to find the network devices that support the given fabric provider.
 func ScanFabric(provider string) ([]FabricScan, error) {
 	var ScanResults []FabricScan

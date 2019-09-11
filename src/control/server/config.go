@@ -46,7 +46,6 @@ const (
 	msgConfigNoProvider = "provider not specified in config"
 	msgConfigNoPath     = "no config path set"
 	msgConfigNoServers  = "no servers specified in config"
-
 )
 
 type NetworkDeviceValidation func(string, string, int) (bool, error)
