@@ -292,8 +292,27 @@ class JobManagerCommand(CommandWithParameters):
             namespace (str): path to location of test yaml file.
         """
         super(JobManagerCommand, self).__init__(command, namespace)
-        self.command_to_manage = None
+        self.command_to_manage = ""
         self.process_str_pattern = None
+
+    def __str__(self):
+        """Return the command with all of its defined parameters as a string
+            and lastly the command to manage.
+
+        Returns:
+            str: the command with all the defined parameters and the command
+                to manage.
+
+        """
+        # Join all the parameters that have been assigned a value with the
+        # command to create the command string
+        params = []
+        for name in self.get_param_names():
+            value = str(getattr(self, name))
+            if value != "":
+                params.append(value)
+        return " ".join([os.path.join(
+            self._path, self._command)] + params + self.command_to_manage)
 
     def get_param_names(self):
         """Get a sorted list of JobManagerCommand parameter names."""
@@ -332,11 +351,38 @@ class JobManagerCommand(CommandWithParameters):
             timed_out = time.time() - start_time > self.timeout
 
         if start_msgs != get_host_count():
-            err_msg = "{} detected. Only started {}/{} servers".format(
+            err_msg = "{} detected. Only {}/{} messages received".format(
                 "Time out" if timed_out else "Error",
                 start_msgs, get_host_count())
             print("{}:\n{}".format(err_msg, self.process.get_stdout()))
             raise CommandFailure(err_msg)
+
+    def is_stopped(self, pattern):
+
+        if not hosts:
+            return
+        # Make sure the servers actually stopped.  Give them time to stop first
+        # pgrep exit status:
+        #   0 - One or more processes matched the criteria.
+        #   1 - No processes matched.
+        #   2 - Syntax error in the command line.
+        #   3 - Fatal error: out of memory etc.
+        time.sleep(5)
+        result = pcmd(
+            hosts, "pgrep '(daos_server|daos_io_server)'", False, expect_rc=1)
+        if len(result) > 1 or 1 not in result:
+            bad_hosts = [
+                node for key in result if key != 1 for node in list(result[key])]
+            kill_server(bad_hosts)
+            raise ServerFailed(
+                "DAOS server processes detected after attempted stop on {}".format(
+                    ", ".join([str(result[key]) for key in result if key != 1])))
+
+        # we can also have orphaned ssh processes that started an orted on a
+        # remote node but never get cleaned up when that remote node spontaneiously
+        # reboots
+        subprocess.call(["pkill", "^ssh$"])
+
 
     def run(self):
         """Run the command on each specified host.
@@ -346,7 +392,7 @@ class JobManagerCommand(CommandWithParameters):
 
         """
         if self.process is None:
-            # Start the daos server as a subprocess
+            # Start the command as a subprocess
             kwargs = {
                 "cmd": self._command.__str__(),
                 "verbose": self.verbose,
@@ -365,10 +411,10 @@ class JobManagerCommand(CommandWithParameters):
                     print("Exception in poll_pattern(): {}".format(error))
 
     def stop(self):
-        """Stop the process running the daos servers.
+        """Stop the running process.
 
         Raises:
-            ServerFailed: if there are errors stopping the servers
+            CommandFailure: if there are errors stopping process.
 
         """
         if self.process is not None:
@@ -384,7 +430,7 @@ class JobManagerCommand(CommandWithParameters):
                 if signal_list:
                     time.sleep(1)
             if not signal_list:
-                raise ServerFailed("Error stopping {}".format(self._command))
+                raise CommandFailure("Error stopping {}".format(self._command))
             self.process = None
 
 
