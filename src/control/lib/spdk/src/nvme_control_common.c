@@ -20,7 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
-
++
 #include "spdk/stdinc.h"
 #include "spdk/nvme.h"
 #include "spdk/env.h"
@@ -87,8 +87,11 @@ attach_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
 		exit(1);
 	}
 
+	if (spdk_pci_addr_parse(&entry->pci_addr, trid->traddr) != 0) {
+		perror("pci_addr_parse");
+		exit(1);
+	}
 	entry->ctrlr = ctrlr;
-	entry->tr_addr = trid->traddr;
 	entry->next = g_controllers;
 	g_controllers = entry;
 
@@ -170,14 +173,17 @@ collect(struct ret_t *ret)
 	struct ns_entry				*ns_entry;
 	struct ctrlr_entry			*ctrlr_entry;
 	const struct spdk_nvme_ctrlr_data	*cdata;
+	struct spdk_pci_device			*pci_dev;
+	struct spdk_pci_addr			pci_addr;
+	struct ctrlr_t				*ctrlr_tmp;
+	struct ns_t				*ns_tmp;
 	int					written;
+	int					rc;
 
 	ns_entry = g_namespaces;
 	ctrlr_entry = g_controllers;
 
 	while (ns_entry) {
-		struct ns_t *ns_tmp;
-
 		ns_tmp = malloc(sizeof(struct ns_t));
 
 		if (ns_tmp == NULL) {
@@ -186,17 +192,28 @@ collect(struct ret_t *ret)
 			return;
 		}
 
-		cdata = spdk_nvme_ctrlr_get_data(ns_entry->ctrlr);
-
 		ns_tmp->id = spdk_nvme_ns_get_id(ns_entry->ns);
 		// capacity in GBytes
-		ns_tmp->size = spdk_nvme_ns_get_size(ns_entry->ns) / \
+		ns_tmp->size = spdk_nvme_ns_get_size(ns_entry->ns) /
 			       NVMECONTROL_GBYTE_BYTES;
 
-		if (set_pci_addr(
-			ns_entry->ctrlr, ns_tmp->ctrlr_pci_addr,
-			sizeof(ns_tmp->ctrlr_pci_addr), ret) != 0) {
+		pci_dev = spdk_nvme_ctrlr_get_pci_device(ns_entry->ctrlr);
+		if (!pci_dev) {
+			snprintf(ret->err, sizeof(ret->err),
+				 "%s: get_pci_device", __func__);
 
+			ret->rc = -NVMEC_ERR_GET_PCI_DEV;
+			return;
+		}
+
+		pci_addr = spdk_pci_device_get_addr(pci_dev);
+		rc = spdk_pci_addr_fmt(ns_tmp->ctrlr_pci_addr,
+				       sizeof(ns_tmp->ctrlr_pci_addr),
+				       &pci_addr);
+		if (rc != 0) {
+			snprintf(ret->err, sizeof(ret->err),
+				 "spdk_pci_addr_fmt: rc %d", rc);
+			ret->rc = -NVMEC_ERR_PCI_ADDR_FMT;
 			return;
 		}
 
@@ -207,8 +224,6 @@ collect(struct ret_t *ret)
 	}
 
 	while (ctrlr_entry) {
-		struct ctrlr_t *ctrlr_tmp;
-
 		ctrlr_tmp = malloc(sizeof(struct ctrlr_t));
 
 		if (ctrlr_tmp == NULL) {
@@ -219,45 +234,46 @@ collect(struct ret_t *ret)
 
 		cdata = spdk_nvme_ctrlr_get_data(ctrlr_entry->ctrlr);
 
-		written = snprintf(
-			ctrlr_tmp->model, sizeof(ctrlr_tmp->model),
-			"%-20.20s", cdata->mn
-		);
-		if (check_size(
-			written, sizeof(ctrlr_tmp->model),
-			"model truncated", ret) != 0) {
-
+		written = snprintf(ctrlr_tmp->model, sizeof(ctrlr_tmp->model),
+				   "%-20.20s", cdata->mn);
+		if (check_size(written, sizeof(ctrlr_tmp->model),
+			       "model truncated", ret) != 0) {
 			return;
 		}
 
-		written = snprintf(
-			ctrlr_tmp->serial, sizeof(ctrlr_tmp->serial),
-			"%-20.20s", cdata->sn
-		);
-		if (check_size(
-			written, sizeof(ctrlr_tmp->serial),
-			"serial truncated", ret) != 0) {
-
+		written = snprintf(ctrlr_tmp->serial, sizeof(ctrlr_tmp->serial),
+				   "%-20.20s", cdata->sn);
+		if (check_size(written, sizeof(ctrlr_tmp->serial),
+			       "serial truncated", ret) != 0) {
 			return;
 		}
 
-		written = snprintf(
-			ctrlr_tmp->fw_rev, sizeof(ctrlr_tmp->fw_rev),
-			"%s", cdata->fr
-		);
-		if (check_size(
-			written, sizeof(ctrlr_tmp->fw_rev),
-			"firmware revision truncated", ret) != 0) {
-
+		written = snprintf(ctrlr_tmp->fw_rev, sizeof(ctrlr_tmp->fw_rev),
+				   "%s", cdata->fr);
+		if (check_size(written, sizeof(ctrlr_tmp->fw_rev),
+			       "firmware revision truncated", ret) != 0) {
 			return;
 		}
 
-		if (set_pci_addr(
-			ctrlr_entry->ctrlr, ctrlr_tmp->pci_addr,
-			sizeof(ctrlr_tmp->pci_addr), ret) != 0) {
-
+		rc = spdk_pci_addr_fmt(ctrlr_tmp->pci_addr,
+				       sizeof(ctrlr_tmp->pci_addr),
+				       &ctrlr_entry->pci_addr);
+		if (rc != 0) {
+			snprintf(ret->err, sizeof(ret->err),
+				 "spdk_pci_addr_fmt: rc %d", rc);
+			ret->rc = -NVMEC_ERR_PCI_ADDR_FMT;
 			return;
 		}
+
+		pci_dev = spdk_nvme_ctrlr_get_pci_device(ctrlr_entry->ctrlr);
+		if (!pci_dev) {
+			snprintf(ret->err, sizeof(ret->err), "get_pci_device");
+			ret->rc = -NVMEC_ERR_GET_PCI_DEV;
+			return;
+		}
+
+		// populate numa socket id
+		ctrlr_tmp->socket_id = spdk_pci_device_get_socket_id(pci_dev);
 
 		// cdata->cntlid is not unique per host, only per subsystem
 		ctrlr_tmp->next = ret->ctrlrs;
