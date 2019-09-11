@@ -415,12 +415,18 @@ func GetAffinityForNetworkDevices(deviceNames []string) ([]DeviceAffinity, error
 			ancestorNode.cpuset)
 		nodesetLen := C.hwloc_bitmap_asprintf(&nodeset,
 			ancestorNode.nodeset)
+
+		numanode := C.hwloc_get_ancestor_obj_by_type (topology, C.HWLOC_OBJ_NUMANODE, node)
+		if (numanode == nil) {
+			continue
+		}
+
 		if cpusetLen > 0 && nodesetLen > 0 {
 			deviceNode := DeviceAffinity{
 				DeviceName: C.GoString(node.name),
 				CPUSet:     C.GoString(cpuset),
 				NodeSet:    C.GoString(nodeset),
-				NUMANode:   int(C.hwloc_bitmap_to_ulong(ancestorNode.nodeset) - 1), // adjust the NUMA node for 0 indexing
+				NUMANode:   int(C.uint(numanode.logical_index)),
 			}
 			affinity = append(affinity, deviceNode)
 		}
