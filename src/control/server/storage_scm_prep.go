@@ -180,6 +180,7 @@ func (ps *prepScm) PrepReset(state types.ScmState) (bool, error) {
 	case types.ScmStateNoRegions:
 		ps.log.Info("SCM is already reset\n")
 		return false, nil
+	case types.ScmStateFreeCapacity, types.ScmStateNoCapacity:
 	case types.ScmStateUnknown:
 		return false, errors.New("unknown scm state")
 	default:
@@ -307,10 +308,11 @@ func (ps *prepScm) createNamespaces() ([]pmemDev, error) {
 			return nil, errors.WithMessage(err, "getting state")
 		}
 
-		switch {
-		case state == types.ScmStateNoCapacity:
+		switch state {
+		case types.ScmStateNoCapacity:
 			return devs, nil
-		case state != types.ScmStateFreeCapacity:
+		case types.ScmStateFreeCapacity:
+		default:
 			return nil, errors.Errorf("unexpected state: want %s, got %s",
 				types.ScmStateFreeCapacity.String(), state.String())
 		}
