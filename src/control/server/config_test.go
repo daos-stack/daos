@@ -137,7 +137,7 @@ func TestConfigMarshalUnmarshal(t *testing.T) {
 				uncommentServerConfig(t, tt.inPath)
 			}
 
-			configA := newDefaultConfiguration(tt.inExt)
+			configA := newDefaultConfiguration(tt.inExt).WithValidateNetworkConfigStub()
 			configA.Path = tt.inPath
 			err = configA.Load()
 			if tt.errMsg != "" {
@@ -149,7 +149,7 @@ func TestConfigMarshalUnmarshal(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			configB := newDefaultConfiguration(tt.inExt)
+			configB := newDefaultConfiguration(tt.inExt).WithValidateNetworkConfigStub()
 			if err := configB.SetPath(testFile); err != nil {
 				t.Fatal(err)
 			}

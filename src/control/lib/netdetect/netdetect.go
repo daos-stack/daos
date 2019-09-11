@@ -64,7 +64,7 @@ type DeviceAffinity struct {
 	DeviceName   string
 	CPUSet       string
 	NodeSet      string
-	NUMANode     uint
+	NUMANode     int
 }
 
 // DeviceScan caches initialization data for later hwloc usage
@@ -313,7 +313,7 @@ func getNodeBestFit(deviceScanCfg DeviceScan) (C.hwloc_obj_t) {
 // there may be no NUMA ancestor node available.  In this case, we must iterate through
 // all NUMA nodes in the toplogy to find one that has a cpuset that intersects with
 // the cpuset of the given device node to determine where it belongs.
-func getNUMASocketID(deviceScanCfg DeviceScan, node C.hwloc_obj_t) (uint, error) {
+func getNUMASocketID(deviceScanCfg DeviceScan, node C.hwloc_obj_t) (int, error) {
 	var numanode C.hwloc_obj_t
 	var ancestorNode C.hwloc_obj_t
 	var i C.uint
@@ -324,7 +324,7 @@ func getNUMASocketID(deviceScanCfg DeviceScan, node C.hwloc_obj_t) (uint, error)
 
 	numanode = C.hwloc_get_ancestor_obj_by_type (deviceScanCfg.topology, C.HWLOC_OBJ_NUMANODE, node)
 	if (numanode != nil) {
-		return uint(C.uint(numanode.logical_index)), nil
+		return int(C.uint(numanode.logical_index)), nil
 	}
 
 	// If we made it here, it means that we're running in some flavor of a restricted environment
@@ -344,7 +344,7 @@ func getNUMASocketID(deviceScanCfg DeviceScan, node C.hwloc_obj_t) (uint, error)
 			continue
 		}
 		if C.hwloc_bitmap_isincluded(ancestorNode.allowed_cpuset, numanode.allowed_cpuset) != 0 {
-			return uint(C.uint(numanode.logical_index)), nil
+			return int(C.uint(numanode.logical_index)), nil
 		}
 	}
 	return 0, errors.New("unable to determine the NUMA socket ID")
@@ -580,14 +580,14 @@ func ScanFabric(provider string) (int, error) {
 	return devCount, nil
 }
 
-func ValidateNetworkConfigStub(provider string, device string, numa_node uint) (bool, error) {
+func ValidateNetworkConfigStub(provider string, device string, numa_node int) (bool, error) {
 	return true, nil
 }
 
 // ValidateNetworkConfig confirms that the given network device supports the chosen provider
 // and that the device matches the NUMA ID given.
 // If everything matches, the result is true.  Otherwise, false.
-func ValidateNetworkConfig(provider string, device string, numaNode uint) (bool, error) {
+func ValidateNetworkConfig(provider string, device string, numaNode int) (bool, error) {
 	var fi *C.struct_fi_info
 	var hints *C.struct_fi_info
 	var libfabricProviderList string

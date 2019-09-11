@@ -133,7 +133,8 @@ func TestRunnerNormalExit(t *testing.T) {
 	cfg := NewConfig().
 		WithTargetCount(42).
 		WithHelperStreamCount(1).
-		WithFabricInterface("qib0")
+		WithFabricInterface("qib0").
+		WithPinnedNumaNode(1)
 	runner := NewRunner(log, cfg)
 	errOut := make(chan error)
 
@@ -147,7 +148,7 @@ func TestRunnerNormalExit(t *testing.T) {
 	}
 
 	// Light integration testing of arg/env generation; unit tests elsewhere.
-	wantArgs := "-t 42 -x 1"
+	wantArgs := "-t 42 -x 1 -p 1"
 	var gotArgs string
 	wantEnv := "OFI_INTERFACE=qib0"
 	var gotEnv string
