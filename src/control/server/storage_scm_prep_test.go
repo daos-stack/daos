@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -188,7 +188,12 @@ func TestGetState(t *testing.T) {
 			pmemId = 1
 			commands = nil
 
-			needsReboot, pmemDevs, err := ss.Prep(ScmStateUnknown)
+			scmState, err := ss.prep.GetState()
+			if err != nil {
+				t.Fatal(tt.desc + " GetState: " + err.Error())
+			}
+
+			needsReboot, pmemDevs, err := ss.Prep(scmState)
 			if tt.errMsg != "" {
 				ExpectError(t, err, tt.errMsg, tt.desc)
 				return
