@@ -580,6 +580,10 @@ func ScanFabric(provider string) (int, error) {
 	return devCount, nil
 }
 
+func ValidateNetworkConfigStub(provider string, device string, numa_node uint) (bool, error) {
+	return true, nil
+}
+
 // ValidateNetworkConfig confirms that the given network device supports the chosen provider
 // and that the device matches the NUMA ID given.
 // If everything matches, the result is true.  Otherwise, false.
@@ -587,6 +591,7 @@ func ValidateNetworkConfig(provider string, device string, numaNode uint) (bool,
 	var fi *C.struct_fi_info
 	var hints *C.struct_fi_info
 	var libfabricProviderList string
+
 	hints = C.fi_allocinfo()
 	defer C.fi_freeinfo(fi)
 

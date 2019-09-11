@@ -134,7 +134,9 @@ func TestStartOptions(t *testing.T) {
 	}{
 		"None": {
 			argList:  []string{},
-			expCfgFn: func(cfg *server.Configuration) *server.Configuration { return cfg },
+			expCfgFn: func(cfg *server.Configuration) *server.Configuration {
+				return cfg
+			},
 		},
 		"Port (short)": {
 			argList: []string{"-p", "42"},
@@ -281,7 +283,6 @@ func TestStartOptions(t *testing.T) {
 			var gotConfig *server.Configuration
 			var opts mainOpts
 			opts.Start.start = func(log *logging.LeveledLogger, cfg *server.Configuration) error {
-				gotConfig = cfg
 				return nil
 			}
 			opts.Start.config = genMinimalConfig()
@@ -322,6 +323,7 @@ func TestStartAsDefaultCommand(t *testing.T) {
 	var opts mainOpts
 	var startCalled bool
 	var gotConfig *server.Configuration
+
 	opts.Start.start = func(log *logging.LeveledLogger, cfg *server.Configuration) error {
 		gotConfig = cfg
 		startCalled = true

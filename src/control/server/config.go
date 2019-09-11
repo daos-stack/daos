@@ -36,7 +36,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+//	"github.com/daos-stack/daos/src/control/lib/netdetect"
 )
 
 const (
@@ -50,10 +50,6 @@ const (
 )
 
 type NetworkDeviceValidation func(string, string, uint) (bool, error)
-
-func NetworkDeviceValidationStub(provider string, device string, numa_node uint) (bool, error) {
-	return true,nil
-}
 
 // Configuration describes options for DAOS control plane.
 // See utils/config/daos_server.yml for parameter descriptions.
@@ -94,9 +90,18 @@ type Configuration struct {
 	// TODO: Is it also necessary to provide distinct coremask args?
 	NvmeShmID int
 
-	// Function pointer to a function that validates the chosen provider, device and numa node
-	ValidateNetworkConfig NetworkDeviceValidation
+	// Pointer to a function that validates the chosen provider, device and numa node
+	//ValidateNetworkConfig NetworkDeviceValidation
 }
+
+//var ValidateNetworkConfig NetworkDeviceValidation = netdetect.ValidateNetworkConfig
+
+//func (c *Configuration) WithValidateNetworkConfigStub() *Configuration {
+//	//c.ValidateNetworkConfig = netdetect.ValidateNetworkConfigStub
+//	ValidateNetworkConfig = netdetect.ValidateNetworkConfigStub
+//	return c
+//}
+
 
 // WithSystemName sets the system name.
 func (c *Configuration) WithSystemName(name string) *Configuration {
@@ -291,7 +296,7 @@ func newDefaultConfiguration(ext External) *Configuration {
 		NvmeShmID:       0,
 		ControlLogMask:  ControlLogLevel(logging.LogLevelInfo),
 		ext:             ext,
-		ValidateNetworkConfig: netdetect.ValidateNetworkConfig,
+		//ValidateNetworkConfig: netdetect.ValidateNetworkConfig,
 	}
 }
 
@@ -411,16 +416,17 @@ func (c *Configuration) Validate() (err error) {
 			return errors.Wrapf(err, "I/O server %d failed config validation", i)
 		}
 
-		validConfig, err := c.ValidateNetworkConfig(srv.Fabric.Provider, srv.Fabric.Interface, uint(srv.Fabric.PinnedNumaNode))
+/*		validConfig, err := ValidateNetworkConfig(srv.Fabric.Provider, srv.Fabric.Interface, uint(srv.Fabric.PinnedNumaNode))
 		if err != nil {
-			return errors.Errorf("Unable to validate the network configuration for provider: %s, with device: %s on NUMA node %d.  Error: %v",
-				srv.Fabric.Provider, srv.Fabric.Interface, srv.Fabric.PinnedNumaNode, err)
+			return errors.Wrapf(err, "Unable to validate the network configuration for provider: %s, with device: %s on NUMA node %d.",
+				srv.Fabric.Provider, srv.Fabric.Interface, srv.Fabric.PinnedNumaNode)
 		}
 
 		if !validConfig {
 			return errors.Errorf("Network device configuration for Provider: %s, with device: %s on NUMA node %d is invalid.",
 				srv.Fabric.Provider, srv.Fabric.Interface, srv.Fabric.PinnedNumaNode)
 		}
+*/
 	}
 
 	return nil

@@ -57,7 +57,7 @@ type FabricConfig struct {
 	Provider      string `yaml:"provider,omitempty" cmdEnv:"CRT_PHY_ADDR_STR"`
 	Interface     string `yaml:"fabric_iface,omitempty" cmdEnv:"OFI_INTERFACE"`
 	InterfacePort int    `yaml:"fabric_iface_port,omitempty" cmdEnv:"OFI_PORT,nonzero"`
-	PinnedNumaNode int   `yaml:"pinned_numa_node"`
+	PinnedNumaNode uint  `yaml:"pinned_numa_node,omitempty" cmdLongFlag:"--pinned_numa_node" cmdShortFlag:"-p"`
 }
 
 // Update fills in any missing fields from the provided FabricConfig.
@@ -301,6 +301,12 @@ func (c *Config) WithFabricInterface(iface string) *Config {
 // WithFabricInterfacePort sets the numeric interface port to be used by this instance.
 func (c *Config) WithFabricInterfacePort(ifacePort int) *Config {
 	c.Fabric.InterfacePort = ifacePort
+	return c
+}
+
+// WithPinnedNumaNode sets the NUMA node affinity for the I/O server instance
+func (c *Config) WithPinnedNumaNode(numa uint) *Config {
+	c.Fabric.PinnedNumaNode = numa
 	return c
 }
 
