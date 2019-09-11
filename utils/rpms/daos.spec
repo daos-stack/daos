@@ -5,7 +5,7 @@
 
 Name:          daos
 Version:       0.6.0
-Release:       4%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -74,6 +74,8 @@ to optimize performance and cost.
 Summary: The DAOS server
 Requires: %{name} = %{version}-%{release}
 Requires: spdk-tools
+Requires: ndctl
+Requires: ipmctl
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 
@@ -172,6 +174,7 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/daos_srv/libplacement.so
 # Certificate generation files
 %{daoshome}/certgen/
+%{daoshome}/VERSION
 %doc
 
 %files server
@@ -237,6 +240,9 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/*.a
 
 %changelog
+* Tue Sep 10 2019 Tom Nabarro <tom.nabarro@intel.com>
+- Add requires ndctl as runtime dep for control plane.
+
 * Thu Aug 15 2019 David Quigley <david.quigley@intel.com>
 - Add systemd unit files to packaging.
 

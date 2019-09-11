@@ -33,6 +33,7 @@ import (
 
 	. "github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // TestGetSize verifies the correct number of bytes are returned from input
@@ -97,18 +98,23 @@ func TestCalcStorage(t *testing.T) {
 		{"Z0", "Z8G", 0, 0, "illegal scm size: Z0: Unrecognized size suffix Z0B", "zero scm"},
 	}
 
-	for _, tt := range tests {
-		scmBytes, nvmeBytes, err := calcStorage(tt.scm, tt.nvme)
-		if tt.errMsg != "" {
-			ExpectError(t, err, tt.errMsg, tt.desc)
-			continue
-		}
-		if err != nil {
-			t.Fatal(err)
-		}
+	for idx, tt := range tests {
+		t.Run(fmt.Sprintf("%s-%d", t.Name(), idx), func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)()
 
-		AssertEqual(t, scmBytes, tt.outScm, "bad scm bytes, "+tt.desc)
-		AssertEqual(t, nvmeBytes, tt.outNvme, "bad nvme bytes, "+tt.desc)
+			scmBytes, nvmeBytes, err := calcStorage(log, tt.scm, tt.nvme)
+			if tt.errMsg != "" {
+				ExpectError(t, err, tt.errMsg, tt.desc)
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			AssertEqual(t, scmBytes, tt.outScm, "bad scm bytes, "+tt.desc)
+			AssertEqual(t, nvmeBytes, tt.outNvme, "bad nvme bytes, "+tt.desc)
+		})
 	}
 }
 
@@ -132,7 +138,6 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with missing arguments",
 			"pool create",
 			"",
-			nil,
 			errMissingFlag,
 		},
 		{
@@ -149,7 +154,6 @@ func TestPoolCommands(t *testing.T) {
 				}),
 			}, " "),
 			nil,
-			cmdSuccess,
 		},
 		{
 			"Create pool with all arguments",
@@ -167,7 +171,6 @@ func TestPoolCommands(t *testing.T) {
 				}),
 			}, " "),
 			nil,
-			cmdSuccess,
 		},
 		{
 			"Create pool with user and group domains",
@@ -183,7 +186,6 @@ func TestPoolCommands(t *testing.T) {
 				}),
 			}, " "),
 			nil,
-			cmdSuccess,
 		},
 		{
 			"Create pool with user but no group",
@@ -198,7 +200,6 @@ func TestPoolCommands(t *testing.T) {
 				}),
 			}, " "),
 			nil,
-			cmdSuccess,
 		},
 		{
 			"Create pool with group but no user",
@@ -213,7 +214,6 @@ func TestPoolCommands(t *testing.T) {
 				}),
 			}, " "),
 			nil,
-			cmdSuccess,
 		},
 		{
 			"Destroy pool with force",
@@ -226,13 +226,11 @@ func TestPoolCommands(t *testing.T) {
 				}),
 			}, " "),
 			nil,
-			cmdSuccess,
 		},
 		{
 			"Nonexistent subcommand",
 			"pool quack",
 			"",
-			nil,
 			fmt.Errorf("Unknown command"),
 		},
 	})

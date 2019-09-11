@@ -81,8 +81,22 @@ type storagePrepareCmd struct {
 	commands.StoragePrepareCmd
 }
 
+func concatErrors(scanErrors []error, err error) error {
+	if err != nil {
+		scanErrors = append(scanErrors, err)
+	}
+
+	errStr := "scan error(s):\n"
+	for _, err := range scanErrors {
+		errStr += fmt.Sprintf("  %s\n", err.Error())
+	}
+
+	return errors.New(errStr)
+}
+
 func (cmd *storagePrepareCmd) Execute(args []string) error {
-	if err := cmd.Init(); err != nil {
+	prepNvme, prepScm, err := cmd.Validate()
+	if err != nil {
 		return err
 	}
 
@@ -95,7 +109,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 
 	scanErrors := make([]error, 0, 2)
 
-	if cmd.NvmeOnly || !cmd.ScmOnly {
+	if prepNvme {
 		// Prepare NVMe access through SPDK
 		if err := svc.PrepareNvme(server.PrepareNvmeRequest{
 			HugePageCount: cmd.NrHugepages,
@@ -107,13 +121,23 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		}
 	}
 
-	if cmd.ScmOnly || !cmd.NvmeOnly {
-		// Prepare SCM modules to be presented as pmem kernel devices
+	if prepScm {
+		state, err := svc.GetScmState()
+		if err != nil {
+			return concatErrors(scanErrors, err)
+		}
+
+		if err := cmd.CheckWarn(state); err != nil {
+			return concatErrors(scanErrors, err)
+		}
+
+		// Prepare SCM modules to be presented as pmem kernel devices.
+		// Pass evaluated state to avoid running GetScmState() twice.
 		needsReboot, devices, err := svc.PrepareScm(server.PrepareScmRequest{
 			Reset: cmd.Reset,
-		})
+		}, state)
 		if err != nil {
-			scanErrors = append(scanErrors, err)
+			return concatErrors(scanErrors, err)
 		}
 		if needsReboot {
 			cmd.log.Info(server.MsgScmRebootRequired)
@@ -125,11 +149,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	}
 
 	if len(scanErrors) > 0 {
-		errStr := "scan error(s):\n"
-		for _, err := range scanErrors {
-			errStr += fmt.Sprintf("  %s\n", err.Error())
-		}
-		return errors.New(errStr)
+		return concatErrors(scanErrors, nil)
 	}
 
 	return nil
