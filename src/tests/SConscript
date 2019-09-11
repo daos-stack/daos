@@ -37,7 +37,7 @@ def scons():
     env.Install('$PREFIX/etc/daos', 'ftest/data/daos_server_baseline.yaml')
 
     # copy src/tests/ftest to $PREFIX/lib/daos/TESTING/ftest
-    spath = join(denv.subst("$PREFIX"), "../src/tests/ftest/")
+    spath = os.path.join(Dir('ftest').srcnode())
     denv.InstallAs('$PREFIX/lib/daos/TESTING/ftest/', spath)
 
     # tests
