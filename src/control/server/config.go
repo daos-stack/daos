@@ -33,10 +33,10 @@ import (
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
 
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
 )
 
 const (
@@ -48,7 +48,7 @@ const (
 	msgConfigNoServers  = "no servers specified in config"
 )
 
-type NetworkDeviceValidation func(string, string, int) (bool, error)
+type networkDeviceValidation func(string, string, int) (bool, error)
 
 // Configuration describes options for DAOS control plane.
 // See utils/config/daos_server.yml for parameter descriptions.
@@ -90,12 +90,12 @@ type Configuration struct {
 	NvmeShmID int
 }
 
-// Pointer to a function that validates the chosen provider, device and numa node
+// ValidateNetworkConfig is a pointer to a function that validates the chosen provider, device and numa node
 // The default handler is the netdetect.ValidateNetworkConfig.
-var ValidateNetworkConfig NetworkDeviceValidation = netdetect.ValidateNetworkConfig
+var ValidateNetworkConfig networkDeviceValidation = netdetect.ValidateNetworkConfig
 
-// For unit testing configurations that are not necessarily valid on the test machine,
-// we use the stub function ValidateNetworkConfigStub to avoid unnecessary failures
+// WithValidateNetworkConfigStub is used for unit testing configurations that are not necessarily valid on the test machine.
+// We use the stub function ValidateNetworkConfigStub to avoid unnecessary failures
 // in those tests that are not concerned with testing a truly valid configuration
 // for the test system
 func (c *Configuration) WithValidateNetworkConfigStub() *Configuration {

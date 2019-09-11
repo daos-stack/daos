@@ -32,8 +32,8 @@ import (
 )
 
 type networkCmd struct {
-	Scan     networkScanCmd     `command:"scan" description:"Scan for network interface devices on local server"`
-	List     networkListCmd     `command:"list" description:"List all known OFI providers that are understood by 'scan'"`
+	Scan networkScanCmd `command:"scan" description:"Scan for network interface devices on local server"`
+	List networkListCmd `command:"list" description:"List all known OFI providers that are understood by 'scan'"`
 }
 
 // ScanNetCmd is the struct representing the command to scan the machine for network interface devices
@@ -42,7 +42,7 @@ type networkScanCmd struct {
 	cfgCmd
 	logCmd
 	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider (default is the provider specified in daos_server.yml)"`
-	AllProviders bool `short:"a" long:"all" description:"Specify 'all' to see all devices on all providers.  Overrides --provider"`
+	AllProviders   bool   `short:"a" long:"all" description:"Specify 'all' to see all devices on all providers.  Overrides --provider"`
 }
 
 func (cmd *networkScanCmd) Execute(args []string) error {
@@ -78,7 +78,7 @@ func (cmd *networkScanCmd) Execute(args []string) error {
 
 	cmd.log.Debugf("Compressed: %v\n", results)
 
-	for _, sr := range(results) {
+	for _, sr := range results {
 		cmd.log.Infof("\n%s\n\n", sr.String())
 	}
 
@@ -105,5 +105,3 @@ func (cmd *networkListCmd) Execute(args []string) error {
 
 	return nil
 }
-
-

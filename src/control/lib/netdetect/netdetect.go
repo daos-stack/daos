@@ -55,23 +55,24 @@ import (
 const (
 	libFabricMajorVersion = 1
 	libFabricMinorVersion = 7
-	hwlocFlagsStandard = 0
+	hwlocFlagsStandard    = 0
 	hwlocFlagsWholeSystem = 1
 )
 
 // DeviceAffinity describes the essential details of a device and its NUMA affinity
 type DeviceAffinity struct {
-	DeviceName   string
-	CPUSet       string
-	NodeSet      string
-	NUMANode     int
+	DeviceName string
+	CPUSet     string
+	NodeSet    string
+	NUMANode   int
 }
 
+// FabricScan data encapsulates the results of the fabric scanning
 type FabricScan struct {
-	Provider     string
-	DeviceName   string
-	NUMANode     int
-	Priority     int
+	Provider   string
+	DeviceName string
+	NUMANode   int
+	Priority   int
 }
 
 func (fs *FabricScan) String() string {
@@ -80,14 +81,14 @@ func (fs *FabricScan) String() string {
 
 // DeviceScan caches initialization data for later hwloc usage
 type DeviceScan struct {
-	topology C.hwloc_topology_t
-	depth C.int
-	numObj C.uint
-	systemDeviceNames []string
+	topology             C.hwloc_topology_t
+	depth                C.int
+	numObj               C.uint
+	systemDeviceNames    []string
 	systemDeviceNamesMap map[string]struct{}
-	hwlocDeviceNames []string
-	hwlocDeviceNamesMap map[string]struct{}
-	targetDevice string
+	hwlocDeviceNames     []string
+	hwlocDeviceNamesMap  map[string]struct{}
+	targetDevice         string
 }
 
 type logger interface {
@@ -100,6 +101,7 @@ type logger interface {
 }
 
 var log logger = logging.NewStdoutLogger("netdetect")
+
 // SetLogger sets the package-level logger
 func SetLogger(l logger) {
 	log = l
@@ -120,8 +122,8 @@ func initLib(flags int) (C.hwloc_topology_t, error) {
 		return nil, errors.New("hwloc_topology_init failure")
 	}
 
-	if (flags != 0) {
-		if (flags == hwlocFlagsWholeSystem) {
+	if flags != 0 {
+		if flags == hwlocFlagsWholeSystem {
 			flags = C.HWLOC_TOPOLOGY_FLAG_WHOLE_SYSTEM
 			log.Debug("Setting HWLOC_TOPOLOGY_FLAG_WHOLE_SYSTEM")
 		} else {
@@ -129,8 +131,8 @@ func initLib(flags int) (C.hwloc_topology_t, error) {
 		}
 	}
 
-	status = C.hwloc_topology_set_flags(topology, C.HWLOC_TOPOLOGY_FLAG_IO_DEVICES | hwlocFlags)
-		if status != 0 {
+	status = C.hwloc_topology_set_flags(topology, C.HWLOC_TOPOLOGY_FLAG_IO_DEVICES|hwlocFlags)
+	if status != 0 {
 		return nil, errors.New("hwloc_topology_set_flags failure")
 	}
 
@@ -217,14 +219,14 @@ func initDeviceScan() (DeviceScan, error) {
 }
 
 const (
-	direct = iota
+	direct  = iota
 	sibling = iota
 	bestfit = iota
 )
 
 // getLookupMethod is used to determine how to perform a match between the device we are looking for
 // and the devices that are reported by hwloc.
-func getLookupMethod(deviceScanCfg DeviceScan) (int) {
+func getLookupMethod(deviceScanCfg DeviceScan) int {
 
 	// If the target device is on both the systemDeviceNames list and the hwlocDeviceNames list,
 	// then we know we can do a valid direct lookup.  If it only shows up on the systemDevicesNames list
@@ -247,7 +249,7 @@ func getLookupMethod(deviceScanCfg DeviceScan) (int) {
 }
 
 // getNodeDirect finds a node object that is a direct exact match lookup of the target device against the hwloc device list
-func getNodeDirect(deviceScanCfg DeviceScan) (C.hwloc_obj_t) {
+func getNodeDirect(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 	var node C.hwloc_obj_t
 	var i C.uint
 
@@ -266,7 +268,7 @@ func getNodeDirect(deviceScanCfg DeviceScan) (C.hwloc_obj_t) {
 
 // getNodeSibling finds a node object that is the sibling of the device being matched.  The sibling will be something found
 // on the systemDevicesNameMap.
-func getNodeSibling(deviceScanCfg DeviceScan) (C.hwloc_obj_t) {
+func getNodeSibling(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 	var node C.hwloc_obj_t
 
 	node = getNodeDirect(deviceScanCfg)
@@ -281,7 +283,7 @@ func getNodeSibling(deviceScanCfg DeviceScan) (C.hwloc_obj_t) {
 	if node.parent.arity > 0 {
 		childNode := (*[1 << 30]C.hwloc_obj_t)(unsafe.Pointer(node.parent.children))
 		var j C.uint
-		for j=0; j < C.uint(node.parent.arity); j++ {
+		for j = 0; j < C.uint(node.parent.arity); j++ {
 			if _, found := deviceScanCfg.systemDeviceNamesMap[C.GoString(childNode[j].name)]; found {
 				node = childNode[j]
 				return node
@@ -295,7 +297,7 @@ func getNodeSibling(deviceScanCfg DeviceScan) (C.hwloc_obj_t) {
 // In order to succeed, one or more hwlocDeviceNames must be a subset of the target device name.
 // This allows us to find a decorated virtual device name such as "hfi1_0-dgram" which matches against one of the hwlocDeviceNames
 // which can then be mapped to a sibling, "ib0" which is found on the systemDeviceNamesMap.
-func getNodeBestFit(deviceScanCfg DeviceScan) (C.hwloc_obj_t) {
+func getNodeBestFit(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 	var node C.hwloc_obj_t
 	var newDeviceName string
 
@@ -329,16 +331,16 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (int, erro
 	var ancestorNode C.hwloc_obj_t
 	var i C.uint
 
-	if (node == nil) {
+	if node == nil {
 		return 0, errors.New("invalid node provided")
 	}
 
-	if (C.GoString(node.name) == "lo") {
+	if C.GoString(node.name) == "lo" {
 		return 0, nil
 	}
 
-	numanode = C.hwloc_get_ancestor_obj_by_type (topology, C.HWLOC_OBJ_NUMANODE, node)
-	if (numanode != nil) {
+	numanode = C.hwloc_get_ancestor_obj_by_type(topology, C.HWLOC_OBJ_NUMANODE, node)
+	if numanode != nil {
 		return int(C.uint(numanode.logical_index)), nil
 	}
 
@@ -427,7 +429,7 @@ func GetAffinityForNetworkDevices(deviceNames []string) ([]DeviceAffinity, error
 			ancestorNode.nodeset)
 
 		numaSocket, err := getNUMASocketID(topology, node)
-		if (err != nil) {
+		if err != nil {
 			numaSocket = 0
 		}
 
@@ -446,7 +448,6 @@ func GetAffinityForNetworkDevices(deviceNames []string) ([]DeviceAffinity, error
 	cleanUp(topology)
 	return affinity, nil
 }
-
 
 // GetAffinityForDevice searches the system topology reported by hwloc
 // for the device specified by netDeviceName and returns the corresponding
@@ -483,7 +484,7 @@ func GetAffinityForDevice(deviceScanCfg DeviceScan) ([]DeviceAffinity, error) {
 
 	// The loopback device isn't a physical device that hwloc will find in the topology
 	// If "lo" is specified, it is treated specially and be given NUMA node 0.
-	if (deviceScanCfg.targetDevice == "lo") {
+	if deviceScanCfg.targetDevice == "lo" {
 		deviceNode := DeviceAffinity{
 			DeviceName: "lo",
 			CPUSet:     "0x0",
@@ -506,7 +507,7 @@ func GetAffinityForDevice(deviceScanCfg DeviceScan) ([]DeviceAffinity, error) {
 		node = getNodeBestFit(deviceScanCfg)
 	}
 
-	if (node == nil) {
+	if node == nil {
 		return affinity, errors.New(fmt.Sprintf("unable to find a system device matching: %s", deviceScanCfg.targetDevice))
 	}
 
@@ -564,7 +565,7 @@ func GetDeviceNames() ([]string, error) {
 
 // MercuryToLibFabric converts a Mercury fabric provider string into a libfabric compatible provider string
 // Returns null string if the Mercury provider has no known equivalent
-func MercuryToLibFabric(provider string) (string) {
+func MercuryToLibFabric(provider string) string {
 	switch provider {
 	case "ofi+sockets":
 		return "sockets"
@@ -583,7 +584,7 @@ func MercuryToLibFabric(provider string) (string) {
 
 // LibFabricToMercury convert a libfabric provider string into a Mercury compatible provider string
 // Returns null string if the libfabric provider has no known equivalent
-func LibFabricToMercury(provider string) (string) {
+func LibFabricToMercury(provider string) string {
 	switch provider {
 	case "sockets":
 		return "ofi+sockets"
@@ -600,10 +601,10 @@ func LibFabricToMercury(provider string) (string) {
 	return ""
 }
 
-// Used for most unit testing to replace ValidateNetworkConfig because the network configuration
+// ValidateNetworkConfigStub is used for most unit testing to replace ValidateNetworkConfig because the network configuration
 // validation depends upon physical hardware resources and configuration on the target machine
 // that are either not known or static in the test environment
-func ValidateNetworkConfigStub(provider string, device string, numa_node int) (bool, error) {
+func ValidateNetworkConfigStub(provider string, device string, numaNode int) (bool, error) {
 	return true, nil
 }
 
@@ -642,7 +643,7 @@ func ValidateNetworkConfig(provider string, device string, numaNode int) (bool, 
 	libfabricProviderList = strings.TrimSuffix(libfabricProviderList, ";")
 	hints.fabric_attr.prov_name = C.strdup(C.CString(libfabricProviderList))
 
-	C.fi_getinfo(C.uint(libFabricMajorVersion << 16 | libFabricMinorVersion), nil, nil, 0, hints, &fi)
+	C.fi_getinfo(C.uint(libFabricMajorVersion<<16|libFabricMinorVersion), nil, nil, 0, hints, &fi)
 	deviceScanCfg, err := initDeviceScan()
 	if err != nil {
 		return false, errors.New(fmt.Sprintf("unable to initialize device scan:  Error: %v", err))
@@ -672,8 +673,8 @@ func ValidateNetworkConfig(provider string, device string, numaNode int) (bool, 
 			if deviceAffinity[0].DeviceName == device {
 				log.Debugf("Device %s supports provider: %s", device, provider)
 				if deviceAffinity[0].NUMANode != numaNode {
-					log.Debugf("The NUMA node for device %s does not match the provided value %d.  Performance degradation may result. " +
-						"Remove the pinned_numa_node value from daos_server.yml then execute 'daos_server network scan' " +
+					log.Debugf("The NUMA node for device %s does not match the provided value %d.  Performance degradation may result. "+
+						"Remove the pinned_numa_node value from daos_server.yml then execute 'daos_server network scan' "+
 						"to see the valid NUMA node associated with the network device", device, numaNode)
 					return false, nil
 				}
@@ -699,12 +700,12 @@ func ScanFabric(provider string) ([]FabricScan, error) {
 
 	resultsMap := make(map[string]struct{})
 
-	if (hints == nil) {
+	if hints == nil {
 		return ScanResults, errors.New("enable to allocate memory for libfabric query")
 	}
 
 	// If a provider was given, then set the libfabric search hint to match the provider
-	if (provider != "") {
+	if provider != "" {
 		log.Debugf("Input provider string: %s", provider)
 		tmp := strings.Split(provider, ";")
 		for i, subProvider := range tmp {
@@ -723,8 +724,8 @@ func ScanFabric(provider string) ([]FabricScan, error) {
 	}
 
 	// Initialize libfabric and perform the scan
-	C.fi_getinfo(C.uint(libFabricMajorVersion << 16 | libFabricMinorVersion), nil, nil, 0, hints, &fi)
-	if (fi == nil) {
+	C.fi_getinfo(C.uint(libFabricMajorVersion<<16|libFabricMinorVersion), nil, nil, 0, hints, &fi)
+	if fi == nil {
 		return ScanResults, errors.New("libfabric found no records matching the specified provider")
 	}
 
@@ -763,11 +764,11 @@ func ScanFabric(provider string) ([]FabricScan, error) {
 		}
 		mercuryProviderList = strings.TrimSuffix(mercuryProviderList, ";")
 
-		scanResults := FabricScan {
-			Provider: mercuryProviderList,
+		scanResults := FabricScan{
+			Provider:   mercuryProviderList,
 			DeviceName: deviceAffinity[0].DeviceName,
-			NUMANode: deviceAffinity[0].NUMANode,
-			Priority: devCount,
+			NUMANode:   deviceAffinity[0].NUMANode,
+			Priority:   devCount,
 		}
 
 		results := scanResults.String()

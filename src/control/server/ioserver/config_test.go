@@ -163,21 +163,21 @@ func TestConfigValidation(t *testing.T) {
 
 func TestConfigToCmdVals(t *testing.T) {
 	var (
-		mountPoint    = "/mnt/test"
-		provider      = "test+foo"
-		interfaceName = "qib0"
-		modules       = "foo,bar,baz"
-		systemName    = "test-system"
-		socketDir     = "/var/run/foo"
-		attachInfo    = "/tmp/attach"
-		logMask       = "LOG_MASK_VALUE"
-		logFile       = "/path/to/log"
-		cfgPath       = "/path/to/nvme.conf"
-		shmId         = 42
-		interfacePort = 20
-		targetCount   = 4
-		helperCount   = 1
-		serviceCore   = 8
+		mountPoint     = "/mnt/test"
+		provider       = "test+foo"
+		interfaceName  = "qib0"
+		modules        = "foo,bar,baz"
+		systemName     = "test-system"
+		socketDir      = "/var/run/foo"
+		attachInfo     = "/tmp/attach"
+		logMask        = "LOG_MASK_VALUE"
+		logFile        = "/path/to/log"
+		cfgPath        = "/path/to/nvme.conf"
+		shmId          = 42
+		interfacePort  = 20
+		targetCount    = 4
+		helperCount    = 1
+		serviceCore    = 8
 		pinnedNumaNode = 1
 	)
 	cfg := NewConfig().
