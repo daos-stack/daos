@@ -153,8 +153,8 @@ extern struct dfuse_inode_ops dfuse_pool_ops;
 struct dfuse_dfs {
 	struct dfuse_inode_ops	*dfs_ops;
 	dfs_t			*dfs_ns;
-	char			dfs_pool[NAME_MAX + 1];
-	char			dfs_cont[NAME_MAX + 1];
+	uuid_t			dfs_pool;
+	uuid_t			dfs_cont;
 	daos_handle_t		dfs_poh;
 	daos_handle_t		dfs_coh;
 	daos_pool_info_t	dfs_pool_info;

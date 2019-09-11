@@ -62,19 +62,13 @@ ir_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 		return true;
 	}
 
-	/* Now check the pool name */
-	if (strncmp(ir->ir_id.irid_dfs->dfs_pool,
-		    ir_id->irid_dfs->dfs_pool,
-		    NAME_MAX) != 0) {
+	if (uuid_compare(ir->ir_id.irid_dfs->dfs_pool,
+			 ir_id->irid_dfs->dfs_pool) != 0)
 		return false;
-	}
 
-	/* Now check the container name */
-	if (strncmp(ir->ir_id.irid_dfs->dfs_cont,
-		    ir_id->irid_dfs->dfs_cont,
-			NAME_MAX) != 0) {
+	if (uuid_compare(ir->ir_id.irid_dfs->dfs_cont,
+			 ir_id->irid_dfs->dfs_cont) != 0)
 		return false;
-	}
 
 	/* This case means it's the same container name, but a different dfs
 	 * struct which can happen with repeated lookups of already open

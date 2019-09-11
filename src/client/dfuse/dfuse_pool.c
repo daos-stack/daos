@@ -38,7 +38,6 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct dfuse_dfs		*dfs = NULL;
 	daos_prop_t			*prop = NULL;
 	struct daos_prop_entry		*prop_entry;
-	uuid_t				pool_uuid;
 	daos_pool_info_t		pool_info;
 	struct fuse_entry_param		entry = {0};
 	int				rc;
@@ -50,37 +49,36 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	 */
 	D_ASSERT(parent->ie_stat.st_ino == parent->ie_dfs->dfs_root);
 
+	D_ALLOC_PTR(dfs);
+	if (!dfs)
+		D_GOTO(err, rc = ENOMEM);
+
 	/*
 	 * Dentry names with invalid uuids cannot possibly be added. In this
 	 * case, return the negative dentry with a timeout to prevent future
 	 * lookups.
 	 */
-	if (uuid_parse(name, pool_uuid) < 0) {
+	if (uuid_parse(name, dfs->dfs_pool) < 0) {
 		entry.entry_timeout = 60;
 		DFUSE_LOG_ERROR("Invalid container uuid");
 		DFUSE_REPLY_ENTRY(req, entry);
+		D_FREE(dfs);
 		return false;
 	}
-
-	D_ALLOC_PTR(dfs);
-	if (!dfs)
-		D_GOTO(err, rc = ENOMEM);
-	strncpy(dfs->dfs_pool, name, NAME_MAX);
-	dfs->dfs_pool[NAME_MAX] = '\0';
 
 	rc = dfuse_check_for_inode(fs_handle, dfs, &ie);
 	if (rc == -DER_SUCCESS) {
 		DFUSE_TRA_INFO(ie,
 			       "Reusing existing pool entry without reconnect");
-		D_FREE(dfs);
 		entry.attr = ie->ie_stat;
 		entry.generation = 1;
 		entry.ino = entry.attr.st_ino;
 		DFUSE_REPLY_ENTRY(req, entry);
+		D_FREE(dfs);
 		return true;
 	}
 
-	rc = daos_pool_connect(pool_uuid, dfuse_info->di_group,
+	rc = daos_pool_connect(dfs->dfs_pool, dfuse_info->di_group,
 			       dfuse_info->di_svcl, DAOS_PC_RW,
 			       &dfs->dfs_poh, &dfs->dfs_pool_info,
 			       NULL);

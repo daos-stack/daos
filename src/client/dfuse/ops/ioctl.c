@@ -43,11 +43,8 @@ handle_gah_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 
 	il_reply.fir_version = DFUSE_IOCTL_VERSION;
 
-	if (uuid_parse(oh->doh_ie->ie_dfs->dfs_pool, il_reply.fir_pool) < 0)
-		D_GOTO(err, rc = EIO);
-
-	if (uuid_parse(oh->doh_ie->ie_dfs->dfs_cont, il_reply.fir_cont) < 0)
-		D_GOTO(err, rc = EIO);
+	uuid_copy(il_reply.fir_pool, oh->doh_ie->ie_dfs->dfs_pool);
+	uuid_copy(il_reply.fir_cont, oh->doh_ie->ie_dfs->dfs_cont);
 
 	DFUSE_REPLY_IOCTL(oh, req, il_reply);
 	return;

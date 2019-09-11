@@ -103,8 +103,6 @@ int
 main(int argc, char **argv)
 {
 	struct dfuse_info	*dfuse_info = NULL;
-	uuid_t			pool_uuid;
-	uuid_t			co_uuid;
 	char			*svcl = NULL;
 	struct dfuse_dfs	*dfs = NULL;
 	char			c;
@@ -188,18 +186,6 @@ main(int argc, char **argv)
 
 	DFUSE_TRA_ROOT(dfuse_info, "dfuse_info");
 
-	if (dfuse_info->di_pool &&
-	    (uuid_parse(dfuse_info->di_pool, pool_uuid) < 0)) {
-		DFUSE_LOG_ERROR("Invalid pool uuid");
-		D_GOTO(out_dfuse, ret = -DER_INVAL);
-	}
-
-	if (dfuse_info->di_cont &&
-	    (uuid_parse(dfuse_info->di_cont, co_uuid) < 0)) {
-		DFUSE_LOG_ERROR("Invalid container uuid");
-		D_GOTO(out_dfuse, ret = -DER_INVAL);
-	}
-
 	if (!dfuse_info->di_foreground) {
 		rc = daemon(0, 0);
 		if (rc)
@@ -222,8 +208,13 @@ main(int argc, char **argv)
 	}
 
 	if (dfuse_info->di_pool) {
+		if (uuid_parse(dfuse_info->di_pool, dfs->dfs_pool) < 0) {
+			DFUSE_LOG_ERROR("Invalid pool uuid");
+			D_GOTO(out_dfs, ret = -DER_INVAL);
+		}
+
 		/** Connect to DAOS pool */
-		rc = daos_pool_connect(pool_uuid, dfuse_info->di_group,
+		rc = daos_pool_connect(dfs->dfs_pool, dfuse_info->di_group,
 				       dfuse_info->di_svcl, DAOS_PC_RW,
 				       &dfs->dfs_poh, &dfs->dfs_pool_info,
 				       NULL);
@@ -233,10 +224,16 @@ main(int argc, char **argv)
 		}
 
 		if (dfuse_info->di_cont) {
+
+			if (uuid_parse(dfuse_info->di_cont, dfs->dfs_cont) < 0) {
+				DFUSE_LOG_ERROR("Invalid container uuid");
+				D_GOTO(out_pool, ret = -DER_INVAL);
+			}
+
 			/** Try to open the DAOS container (the mountpoint) */
-			rc = daos_cont_open(dfs->dfs_poh, co_uuid, DAOS_COO_RW,
-					    &dfs->dfs_coh, &dfs->dfs_co_info,
-					    NULL);
+			rc = daos_cont_open(dfs->dfs_poh, dfs->dfs_cont,
+					    DAOS_COO_RW, &dfs->dfs_coh,
+					    &dfs->dfs_co_info, NULL);
 			if (rc) {
 				DFUSE_LOG_ERROR("Failed container open (%d)",
 						rc);
