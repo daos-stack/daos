@@ -121,8 +121,9 @@ func appSetup(log logging.Logger, broadcast bool, opts *cliOptions, conns client
 	// broadcast app requests to host list by default
 	addresses := config.HostList
 	if !broadcast {
-		// send app requests to first access point only
-		addresses = []string{config.AccessPoints[0]}
+		// send app requests to first element in hostlist (assumed to be
+		// the access point to the DAOS replicated management service)
+		addresses = config.HostList[:1]
 	}
 
 	ok, out := hasConns(conns.ConnectClients(addresses))
