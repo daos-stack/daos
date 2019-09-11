@@ -25,6 +25,7 @@ from __future__ import print_function
 
 import server_utils
 from apricot import TestWithServers, skipForTicket
+from avocado.core.exceptions import TestFail
 from test_utils import TestPool, CallbackHandler, TestContainer
 from daos_api import DaosApiError
 import ctypes
@@ -51,7 +52,13 @@ class DestroyTests(TestWithServers):
             exception_expected (bool, optional): is an exception expected to be
                 raised when destroying the pool. Defaults to False.
         """
+        # Start servers with the server group
+        self.start_servers({group_name: hosts})
+
+        # Validate the creation of a pool
         self.validate_pool_creation(hosts, group_name)
+
+        # Validate pool destruction
         self.validate_pool_destroy(hosts, case, exception_expected)
 
     def validate_pool_creation(self, hosts, group_name):
@@ -61,9 +68,6 @@ class DestroyTests(TestWithServers):
             hosts (list): hosts running servers serving the pool
             group_name (str): server group name
         """
-        # Start servers with server group
-        self.start_servers({group_name: hosts})
-
         # Create a pool
         self.log.info("Create a pool")
         self.pool = TestPool(self.context, self.log)
@@ -91,7 +95,7 @@ class DestroyTests(TestWithServers):
         self.log.info("Attempting to destroy pool %s", case)
         try:
             self.pool.destroy(0)
-        except DaosApiError as result:
+        except TestFail as result:
             exception_detected = True
             if exception_expected:
                 self.log.info(
@@ -163,12 +167,19 @@ class DestroyTests(TestWithServers):
         """
         hostlist_servers = self.hostlist_servers[:1]
 
+        # Start servers
+        self.start_servers({self.server_group: hostlist_servers})
+
         counter = 0
         while counter < 10:
             counter += 1
+
+            # Create a pool
+            self.validate_pool_creation(hostlist_servers, self.server_group)
+
             # Attempt to destroy the pool
-            self.execute_test(
-                hostlist_servers, self.server_group,
+            self.validate_pool_destroy(
+                hostlist_servers,
                 "with a single server - pass {}".format(counter))
 
     def test_destroy_multi_loop(self):
@@ -179,12 +190,19 @@ class DestroyTests(TestWithServers):
         """
         hostlist_servers = self.hostlist_servers[:6]
 
+        # Start servers
+        self.start_servers({self.server_group: hostlist_servers})
+
         counter = 0
         while counter < 10:
             counter += 1
+
+            # Create a pool
+            self.validate_pool_creation(hostlist_servers, self.server_group)
+
             # Attempt to destroy the pool
-            self.execute_test(
-                hostlist_servers, self.server_group,
+            self.validate_pool_destroy(
+                hostlist_servers,
                 "with multiple servers - pass {}".format(counter))
 
     @skipForTicket("DAOS-2739")
@@ -197,13 +215,26 @@ class DestroyTests(TestWithServers):
         hostlist_servers = self.hostlist_servers[:1]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
 
-        # Attempt to destroy the pool with an invalid UUID
+        # Start servers
+        self.start_servers({setid: hostlist_servers})
+
+        # Create a pool
         self.validate_pool_creation(hostlist_servers, setid)
+
+        # Change the pool uuid
+        valid_uuid = self.pool.pool.uuid
         self.pool.pool.set_uuid_str("81ef94d7-a59d-4a5e-935b-abfbd12f2105")
+
+        # Attempt to destroy the pool with an invalid UUID
         self.validate_pool_destroy(
             hostlist_servers,
             "with an invalid UUID {}".format(self.pool.pool.get_uuid_str()),
             True)
+
+        # Restore th valid uuid to allow tearDown() to pass
+        self.log.info(
+            "Restoring the pool's valid uuid: %s", str(valid_uuid.value))
+        self.pool.pool.uuid = valid_uuid
 
     def test_destroy_invalid_group(self):
         """Test destroying a valid pool but use the wrong server group.
@@ -215,13 +246,27 @@ class DestroyTests(TestWithServers):
         setid = self.params.get("setname", '/run/setnames/validsetname/')
         badsetid = self.params.get("setname", '/run/setnames/badsetname/')
 
-        # Attempt to destroy the pool with an invald server group name
+        # Start servers
+        self.start_servers({setid: hostlist_servers})
+
+        # Create a pool
         self.validate_pool_creation(hostlist_servers, setid)
+
+        # Change the pool server group name
+        valid_group = self.pool.pool.group
         self.pool.pool.group = ctypes.create_string_buffer(badsetid)
+
+        # Attempt to destroy the pool with an invald server group name
         self.validate_pool_destroy(
             hostlist_servers,
             "with an invalid server group name {}".format(badsetid),
             True)
+
+        # Restore the valid pool server group name to allow tearDown() to pass
+        self.log.info(
+            "Restoring the pool's valid server group name: %s",
+            str(valid_group.value))
+        self.pool.pool.group = valid_group
 
     @skipForTicket("DAOS-2742")
     def test_destroy_wrong_group(self):
@@ -284,6 +329,9 @@ class DestroyTests(TestWithServers):
         """
         hostlist_servers = self.hostlist_servers[:1]
 
+        # Start servers
+        self.start_servers({self.server_group: hostlist_servers})
+
         # Create the pool
         self.validate_pool_creation(hostlist_servers, self.server_group)
 
@@ -330,6 +378,9 @@ class DestroyTests(TestWithServers):
         :avocado: tags=pool,destroy,destroywithdata
         """
         hostlist_servers = self.hostlist_servers[:1]
+
+        # Start servers
+        self.start_servers({self.server_group: hostlist_servers})
 
         # Attempt to destroy the pool with an invald server group name
         self.validate_pool_creation(hostlist_servers, self.server_group)
