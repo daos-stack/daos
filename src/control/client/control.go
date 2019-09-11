@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 )
 
@@ -39,6 +40,7 @@ type Control interface {
 	getAddress() string
 	getCtlClient() pb.MgmtCtlClient
 	getSvcClient() pb.MgmtSvcClient
+	logger() logging.Logger
 }
 
 // control is an abstraction around the Mgmt{Control,Svc}Clients
@@ -48,6 +50,11 @@ type control struct {
 	ctlClient pb.MgmtCtlClient
 	svcClient pb.MgmtSvcClient
 	gconn     *grpc.ClientConn
+	log       logging.Logger
+}
+
+func (c *control) logger() logging.Logger {
+	return c.log
 }
 
 // connect provides an easy interface to connect to Mgmt DAOS server.
