@@ -1,7 +1,6 @@
 """Build tests"""
 import daos_build
 import os
-from os.path import join
 
 def scons():
     """Execute build"""
