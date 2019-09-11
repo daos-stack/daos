@@ -383,6 +383,13 @@ ds_obj_update_sizes_in_reply(crt_rpc_t *rpc)
 	iods = orw->orw_iods.ca_arrays;
 	size_count = orw->orw_iods.ca_count;
 
+	if (size_count <= 0) {
+		D_ERROR("rpc %p contains invalid sizes count %d for "
+			DF_UOID" with eph "DF_U64".\n",
+			rpc, size_count, DP_UOID(orw->orw_oid), orw->orw_epoch);
+		return -DER_INVAL;
+	}
+
 	orwo->orw_sizes.ca_count = size_count;
 	D_ALLOC_ARRAY(sizes, size_count);
 	if (sizes == NULL)
@@ -392,6 +399,11 @@ ds_obj_update_sizes_in_reply(crt_rpc_t *rpc)
 		sizes[i] = iods[i].iod_size;
 
 	orwo->orw_sizes.ca_arrays = sizes;
+
+	D_DEBUG(DB_TRACE, "rpc %p set sizes count as %d for "
+		DF_UOID" with eph "DF_U64".\n",
+		rpc, size_count, DP_UOID(orw->orw_oid), orw->orw_epoch);
+
 	return 0;
 }
 
@@ -925,8 +937,11 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	rc = ds_pre_check(orw->orw_oid, orw->orw_map_ver, orw->orw_pool_uuid,
 			  orw->orw_co_hdl, orw->orw_co_uuid,
 			  opc_get(rpc->cr_opc), &cont_hdl, &cont, &map_ver);
-	if (rc)
-		goto out;
+	if (rc != 0) {
+		D_ASSERTF(rc < 0, "unexpected error# %d\n", rc);
+
+		goto reply;
+	}
 
 	D_ASSERT(cont_hdl->sch_pool != NULL);
 
@@ -1026,6 +1041,7 @@ out:
 	    DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REPLY))
 		goto cleanup;
 
+reply:
 	ds_obj_rw_reply(rpc, rc, map_ver, NULL);
 
 cleanup:
