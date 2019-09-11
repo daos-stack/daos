@@ -350,6 +350,88 @@ func getNUMASocketID(deviceScanCfg DeviceScan, node C.hwloc_obj_t) (int, error) 
 	return 0, errors.New("unable to determine the NUMA socket ID")
 }
 
+// GetAffinityForNetworkDevices searches the system topology reported by hwloc
+// for the devices specified by deviceNames and returns the corresponding
+// name, cpuset and nodeset information for each device it finds.
+//
+// The input deviceNames []string specifies names of each network device to
+// search for. Typical network device names are "eth0", "eth1", "ib0", etc.
+//
+// The DeviceAffinity struct specifies a name, cpuset and nodeset strings.
+// The DeviceAffinity DeviceName matches the deviceNames strings and should be
+// used to help match an input device with the output.
+// The DeviceAffinity CPUSet and NodeSet are string representations of the
+// corresponding hwloc bitmaps.  When converted back to hwloc_bitmap_t via
+// hwloc_bitmap_sscanf() these bitmaps are used by the hwloc API to bind a
+// thread to processing units that are closest to the given network device.
+//
+// Network device names that are not found in the topology are ignored.
+// The order of network devices in the return string depends on the natural
+// order in the system topology and does not depend on the order specified
+// by the input string.
+func GetAffinityForNetworkDevices(deviceNames []string) ([]DeviceAffinity, error) {
+	var affinity []DeviceAffinity
+	var node C.hwloc_obj_t
+	var i C.uint
+	var cpuset *C.char
+	var nodeset *C.char
+
+	topology, err := initLib(hwlocFlagsStandard)
+	if err != nil {
+		log.Debugf("Error from initLib %v", err)
+		return nil,
+			errors.New("unable to initialize hwloc library")
+	}
+
+	depth := C.hwloc_get_type_depth(topology, C.HWLOC_OBJ_OS_DEVICE)
+	if depth != C.HWLOC_TYPE_DEPTH_OS_DEVICE {
+		return nil,
+			errors.New("hwloc_get_type_depth returned invalid value")
+	}
+
+	netNames := make(map[string]struct{})
+	for _, deviceName := range deviceNames {
+		netNames[deviceName] = struct{}{}
+	}
+
+	numObj := C.hwloc_get_nbobjs_by_depth(topology, C.uint(depth))
+	// for any OS object found in the network device list,
+	// detect and store the cpuset and nodeset of the ancestor node
+	// containing this object
+	for i = 0; i < numObj; i++ {
+		node = C.hwloc_get_obj_by_depth(topology, C.uint(depth), i)
+		if node == nil {
+			continue
+		}
+		log.Debugf("Found: %s", C.GoString(node.name))
+		if _, found := netNames[C.GoString(node.name)]; !found {
+			continue
+		}
+		ancestorNode := C.hwloc_get_non_io_ancestor_obj(topology, node)
+		if ancestorNode == nil {
+			continue
+		}
+		cpusetLen := C.hwloc_bitmap_asprintf(&cpuset,
+			ancestorNode.cpuset)
+		nodesetLen := C.hwloc_bitmap_asprintf(&nodeset,
+			ancestorNode.nodeset)
+		if cpusetLen > 0 && nodesetLen > 0 {
+			deviceNode := DeviceAffinity{
+				DeviceName: C.GoString(node.name),
+				CPUSet:     C.GoString(cpuset),
+				NodeSet:    C.GoString(nodeset),
+				NUMANode:   int(C.hwloc_bitmap_to_ulong(ancestorNode.nodeset) - 1), // adjust the NUMA node for 0 indexing
+			}
+			affinity = append(affinity, deviceNode)
+		}
+		C.free(unsafe.Pointer(cpuset))
+		C.free(unsafe.Pointer(nodeset))
+	}
+	cleanUp(topology)
+	return affinity, nil
+}
+
+
 // GetAffinityForDevice searches the system topology reported by hwloc
 // for the device specified by netDeviceName and returns the corresponding
 // name, cpuset, nodeset, and NUMA node ID information.
