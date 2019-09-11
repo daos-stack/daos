@@ -126,4 +126,5 @@ RUN zypper addlock fio
 
 # force an upgrade to get any newly built RPMs
 ARG CACHEBUST=1
+RUN zypper --non-interactive ref
 RUN zypper --non-interactive up
