@@ -193,10 +193,6 @@ func (n *nvmeStorage) Teardown() (err error) {
 //       process, presumably we want to be able to detect updates during
 //       process lifetime.
 func (n *nvmeStorage) Discover() error {
-	if n.initialized {
-		return nil
-	}
-
 	// specify shmID to be set as opt in SPDK env init
 	if err := n.env.InitSPDKEnv(n.shmID); err != nil {
 		return errors.WithMessage(err, msgSpdkInitFail)

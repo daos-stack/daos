@@ -230,12 +230,6 @@ func TestDiscoverNvmeSingle(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if tt.inited {
-			AssertEqual(t, sn.controllers, NvmeControllers(nil),
-				"unexpected list of protobuf format controllers")
-			continue
-		}
-
 		AssertEqual(t, sn.controllers, NvmeControllers{pbC},
 			"unexpected list of protobuf format controllers")
 	}

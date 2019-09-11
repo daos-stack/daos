@@ -225,12 +225,6 @@ func TestDiscoverScm(t *testing.T) {
 		errMsg            string
 		expModules        ScmModules
 	}{
-		"already initialized": {
-			true,
-			nil,
-			"",
-			ScmModules(nil),
-		},
 		"normal run": {
 			false,
 			nil,

@@ -96,10 +96,6 @@ func (s *scmStorage) PrepReset(state types.ScmState) (needsReboot bool, err erro
 
 // Discover method implementation for scmStorage
 func (s *scmStorage) Discover() error {
-	if s.initialized {
-		return nil
-	}
-
 	mms, err := s.ipmctl.Discover()
 	if err != nil {
 		return errors.WithMessage(err, msgIpmctlDiscoverFail)
