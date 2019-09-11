@@ -311,7 +311,7 @@ ec_copy_iods(daos_iod_t *in_iod, int nr, daos_iod_t **out_iod)
 
 				for (j = 0; j < i; j++)
 					D_FREE((*out_iod)[j].iod_recxs);
-				D_FREE(out_iod);
+				D_FREE(*out_iod);
 				D_GOTO(out, rc = -DER_NOMEM);
 			}
 
