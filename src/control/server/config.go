@@ -92,8 +92,13 @@ type Configuration struct {
 }
 
 // Pointer to a function that validates the chosen provider, device and numa node
+// The default handler is the netdetect.ValidateNetworkConfig.
 var ValidateNetworkConfig NetworkDeviceValidation = netdetect.ValidateNetworkConfig
 
+// For unit testing configurations that are not necessarily valid on the test machine,
+// we use the stub function ValidateNetworkConfigStub to avoid unnecessary failures
+// in those tests that are not concerned with testing a truly valid configuration
+// for the test system
 func (c *Configuration) WithValidateNetworkConfigStub() *Configuration {
 	ValidateNetworkConfig = netdetect.ValidateNetworkConfigStub
 	return c

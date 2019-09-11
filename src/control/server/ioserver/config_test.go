@@ -113,7 +113,8 @@ func TestConstructedConfig(t *testing.T) {
 		WithEnvVars("FOO=BAR", "BAZ=QUX").
 		WithServiceThreadCore(8).
 		WithTargetCount(12).
-		WithHelperStreamCount(1)
+		WithHelperStreamCount(1).
+		WithPinnedNumaNode(1)
 
 	if *update {
 		outFile, err := os.Create(goldenPath)
