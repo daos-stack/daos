@@ -1,4 +1,4 @@
-//
+/**
 // (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +19,7 @@
 // provided in Contract No. 8F-30005.
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
-//
+*/
 
 #ifndef NVMECONTROL_STATIC_H
 #define NVMECONTROL_STATIC_H
