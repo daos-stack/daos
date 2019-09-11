@@ -120,8 +120,6 @@
 
 struct fd_entry {
 	daos_handle_t	fd_aoh;
-	daos_handle_t	fd_poh;
-	daos_handle_t	fd_coh;
 	off_t		fd_pos;
 	int		fd_flags;
 	int		fd_status;

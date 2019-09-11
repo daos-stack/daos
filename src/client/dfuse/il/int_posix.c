@@ -52,6 +52,10 @@ FOREACH_INTERCEPT(IOIL_FORWARD_DECL)
 
 struct ioil_common {
 	pthread_mutex_t	ioc_lock;
+	uuid_t		ioc_pool;
+	uuid_t		ioc_cont;
+	daos_handle_t	ioc_poh;
+	daos_handle_t	ioc_coh;
 	int		ioc_open_fd_count;
 	bool		ioc_initialized;
 };
@@ -207,7 +211,12 @@ ioil_fini(void)
 {
 	ioil_ioc.ioc_initialized = false;
 
-	__sync_synchronize();
+	if (ioil_ioc.ioc_open_fd_count > 0) {
+		daos_cont_close(ioil_ioc.ioc_coh, NULL);
+
+		daos_pool_disconnect(ioil_ioc.ioc_poh, NULL);
+	}
+	daos_fini();
 
 	vector_destroy(&fd_table);
 }
@@ -242,24 +251,45 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 	}
 
 	pthread_mutex_lock(&ioil_ioc.ioc_lock);
+
+	if (ioil_ioc.ioc_open_fd_count == 0) {
+
+		svcl = daos_rank_list_parse("0", ":");
+
+		rc = daos_pool_connect(il_reply.fir_pool, NULL, svcl, DAOS_PC_RW,
+				       &ioil_ioc.ioc_poh, &pool_info,
+				NULL);
+		if (rc)
+			D_GOTO(drop_lock, 0);
+
+		uuid_copy(ioil_ioc.ioc_pool, il_reply.fir_pool);
+
+		rc = daos_cont_open(ioil_ioc.ioc_poh, il_reply.fir_cont, DAOS_COO_RW,
+				    &ioil_ioc.ioc_coh, &cont_info, NULL);
+		if (rc)
+			D_GOTO(pool_close, 0);
+
+
+		uuid_copy(ioil_ioc.ioc_cont, il_reply.fir_cont);
+
+	} else {
+		if (uuid_compare(ioil_ioc.ioc_pool, il_reply.fir_pool) != 0) {
+			DFUSE_LOG_INFO("Not intercepting fd as wrong pool");
+			pthread_mutex_unlock(&ioil_ioc.ioc_lock);
+			return false;
+		}
+		if (uuid_compare(ioil_ioc.ioc_cont, il_reply.fir_cont) != 0) {
+			DFUSE_LOG_INFO("Not intercepting fd as wrong cont");
+			pthread_mutex_unlock(&ioil_ioc.ioc_lock);
+			return false;
+		}
+	}
+
 	entry->fd_pos = 0;
 	entry->fd_flags = flags;
 	entry->fd_status = DFUSE_IO_BYPASS;
 
-	svcl = daos_rank_list_parse("0", ":");
-
-	rc = daos_pool_connect(il_reply.fir_pool, NULL, svcl, DAOS_PC_RW,
-			       &entry->fd_poh, &pool_info,
-			       NULL);
-	if (rc)
-		D_GOTO(drop_lock, 0);
-
-	rc = daos_cont_open(entry->fd_poh, il_reply.fir_cont, DAOS_COO_RW,
-			    &entry->fd_coh, &cont_info, NULL);
-	if (rc)
-		D_GOTO(pool_close, 0);
-
-	rc = daos_array_open_with_attr(entry->fd_coh, il_reply.fir_oid,
+	rc = daos_array_open_with_attr(ioil_ioc.ioc_coh, il_reply.fir_oid,
 				       DAOS_TX_NONE, DAOS_OO_RW,
 				       cell_size, chunk_size,
 				       &entry->fd_aoh, NULL);
@@ -284,10 +314,15 @@ array_close:
 	daos_array_close(entry->fd_aoh, NULL);
 
 cont_close:
-	daos_cont_close(entry->fd_coh, NULL);
-
+	if (ioil_ioc.ioc_open_fd_count == 0) {
+		daos_cont_close(ioil_ioc.ioc_coh, NULL);
+		uuid_clear(ioil_ioc.ioc_cont);
+	}
 pool_close:
-	daos_pool_disconnect(entry->fd_poh, NULL);
+	if (ioil_ioc.ioc_open_fd_count == 0) {
+		daos_pool_disconnect(ioil_ioc.ioc_poh, NULL);
+		uuid_clear(ioil_ioc.ioc_pool);
+	}
 
 drop_lock:
 
@@ -397,16 +432,12 @@ dfuse_close(int fd)
 		       fd, GAH_PRINT_VAL(entry),
 		       bypass_status[entry->fd_status]);
 
-#if 0
 	/* This should be correct, however does not work in cases where
 	 * dup() has been called on the FD, because the old FD may be closed
 	 * leading to inability to access the new one.
 	 */
+#if 0
 	daos_array_close(entry->fd_aoh, NULL);
-
-	daos_cont_close(entry->fd_coh, NULL);
-
-	daos_pool_disconnect(entry->fd_poh, NULL);
 #endif
 
 	vector_decref(&fd_table, entry);
