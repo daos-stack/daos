@@ -24,6 +24,7 @@
 package main
 
 import (
+	"fmt"
 	"os/user"
 	"strings"
 
@@ -32,7 +33,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -44,12 +44,12 @@ const (
 
 // PoolCmd is the struct representing the top-level pool subcommand.
 type PoolCmd struct {
-	Create  CreatePoolCmd  `command:"create" alias:"c" description:"Create a DAOS pool"`
-	Destroy DestroyPoolCmd `command:"destroy" alias:"d" description:"Destroy a DAOS pool"`
+	Create  PoolCreateCmd  `command:"create" alias:"c" description:"Create a DAOS pool"`
+	Destroy PoolDestroyCmd `command:"destroy" alias:"d" description:"Destroy a DAOS pool"`
 }
 
-// CreatePoolCmd is the struct representing the command to create a DAOS pool.
-type CreatePoolCmd struct {
+// PoolCreateCmd is the struct representing the command to create a DAOS pool.
+type PoolCreateCmd struct {
 	logCmd
 	connectedCmd
 	GroupName  string `short:"g" long:"group" description:"DAOS pool to be owned by given group, format name@domain"`
@@ -62,24 +62,24 @@ type CreatePoolCmd struct {
 	Sys        string `short:"S" long:"sys" default:"daos_server" description:"DAOS system that pool is to be a part of"`
 }
 
-// Execute is run when CreatePoolCmd subcommand is activated
-func (c *CreatePoolCmd) Execute(args []string) error {
-	return createPool(c.log, c.conns,
+// Execute is run when PoolCreateCmd subcommand is activated
+func (c *PoolCreateCmd) Execute(args []string) error {
+	return poolCreate(c.log, c.conns,
 		c.ScmSize, c.NVMeSize, c.RankList, c.NumSvcReps,
 		c.GroupName, c.UserName, c.Sys, c.ACLFile)
 }
 
-// DestroyPoolCmd is the struct representing the command to destroy a DAOS pool.
-type DestroyPoolCmd struct {
+// PoolDestroyCmd is the struct representing the command to destroy a DAOS pool.
+type PoolDestroyCmd struct {
 	logCmd
 	connectedCmd
 	Uuid  string `short:"u" long:"uuid" required:"1" description:"UUID of DAOS pool to destroy"`
 	Force bool   `short:"f" long:"force" description:"Force removal of DAOS pool"`
 }
 
-// Execute is run when DestroyPoolCmd subcommand is activated
-func (d *DestroyPoolCmd) Execute(args []string) error {
-	return destroyPool(d.log, d.conns, d.Uuid, d.Force)
+// Execute is run when PoolDestroyCmd subcommand is activated
+func (d *PoolDestroyCmd) Execute(args []string) error {
+	return poolDestroy(d.log, d.conns, d.Uuid, d.Force)
 }
 
 // getSize retrieves number of bytes from human readable string representation
@@ -173,11 +173,14 @@ func formatNameGroup(usr string, grp string) (string, string, error) {
 	return usr, grp, nil
 }
 
-// createPool with specified parameters.
-func createPool(log logging.Logger,
+// poolCreate with specified parameters.
+func poolCreate(log logging.Logger,
 	conns client.Connect, scmSize string, nvmeSize string,
 	rankList string, numSvcReps uint32, groupName string,
-	userName string, sys string, aclFile string) error {
+	userName string, sys string, aclFile string) (err error) {
+
+	var uuid, svcreps string
+	msg := "SUCCEEDED: "
 
 	scmBytes, nvmeBytes, err := calcStorage(log, scmSize, nvmeSize)
 	if err != nil {
@@ -199,26 +202,26 @@ func createPool(log logging.Logger,
 		return errors.WithMessage(err, "formatting user/group strings")
 	}
 
-	req := &pb.CreatePoolReq{
-		Scmbytes: uint64(scmBytes), Nvmebytes: uint64(nvmeBytes),
-		Ranks: rankList, Numsvcreps: numSvcReps, Sys: sys,
-		User: usr, Usergroup: grp,
+	uuid, svcreps, err = conns.PoolCreate(log, uint64(scmBytes), uint64(nvmeBytes),
+		rankList, numSvcReps, sys, usr, grp)
+	if err != nil {
+		msg = errors.WithMessage(err, "FAILED").Error()
+	} else {
+		msg += fmt.Sprintf("UUID: %s, Service replicas: %s", uuid, svcreps)
 	}
 
-	log.Infof("Creating DAOS pool: %+v\n", req)
+	log.Infof("Pool-create command %s\n", msg)
 
-	log.Infof("pool create command results:\n%s\n", conns.CreatePool(req))
-
-	return nil
+	return err
 }
 
-// destroyPool identified by UUID.
-func destroyPool(log logging.Logger, conns client.Connect, uuid string, force bool) error {
-	req := &pb.DestroyPoolReq{Uuid: uuid, Force: force}
+// poolDestroy identified by UUID.
+func poolDestroy(log logging.Logger, conns client.Connect, uuid string, force bool) {
+	msg := "succeeded"
 
-	log.Infof("Destroying DAOS pool: %+v\n", req)
+	if err := conns.PoolDestroy(log, uuid, force); err != nil {
+		msg = errors.WithMessage(err, "failed").Error()
+	}
 
-	log.Infof("pool destroy command results:\n%s\n", conns.DestroyPool(req))
-
-	return nil
+	log.Infof("Pool-destroy command %s\n", msg)
 }
