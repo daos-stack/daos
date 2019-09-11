@@ -34,7 +34,7 @@
 #include <daos_api.h>
 
 /* XXX Temporary limit for IV */
-#define MAX_SNAP_CNT	20
+#define MAX_SNAP_CNT	50
 
 static struct cont_iv_key *
 key2priv(struct ds_iv_key *iv_key)
@@ -353,6 +353,15 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		rc = cont_iv_capa_ent_update(entry, key, src, priv);
 		if (rc)
 			return rc;
+	} else if (entry->iv_class->iv_class_id == IV_CONT_SNAP) {
+		struct cont_iv_entry *civ_ent = src->sg_iovs[0].iov_buf;
+
+		rc = ds_cont_tgt_snapshots_update(entry->ns->iv_pool_uuid,
+						  civ_key->cont_uuid,
+						  &civ_ent->iv_snap.snaps[0],
+						  civ_ent->iv_snap.snap_cnt);
+		if (rc)
+			return rc;
 	}
 
 	/* Put it to IV tree */
@@ -510,39 +519,57 @@ cont_iv_update(void *ns, int class_id, uuid_t key_uuid,
 }
 
 int
-cont_iv_snapshots_fetch(void *ns, uuid_t cont_uuid, uint64_t **snapshots,
-			int *snap_count)
+cont_iv_snapshots_update(void *ns, uuid_t cont_uuid, uint64_t *snapshots,
+			 int snap_count)
 {
 	struct cont_iv_entry	*iv_entry;
-	int			iv_entry_size;
-	int			rc;
+	uint32_t		 entry_size;
+	int			 rc;
 
-	iv_entry_size = cont_iv_snap_ent_size(MAX_SNAP_CNT);
-	D_ALLOC(iv_entry, iv_entry_size);
+	/* Only happens on xstream 0 */
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+
+	entry_size = cont_iv_snap_ent_size(snap_count);
+	D_ALLOC(iv_entry, entry_size);
 	if (iv_entry == NULL)
-		return -DER_NOMEM;
+		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = cont_iv_fetch(ns, IV_CONT_SNAP, cont_uuid, iv_entry,
-			   iv_entry_size);
-	if (rc)
-		D_GOTO(free, rc);
+	uuid_copy(iv_entry->cont_uuid, cont_uuid);
+	iv_entry->iv_snap.snap_cnt = snap_count;
+	memcpy(iv_entry->iv_snap.snaps, snapshots,
+	       sizeof(*snapshots) * snap_count);
 
-	D_ASSERT(iv_entry->iv_snap.snap_cnt <= MAX_SNAP_CNT);
-	if (iv_entry->iv_snap.snap_cnt == 0) {
-		*snap_count = 0;
-		D_GOTO(free, rc = 0);
-	}
-
-	D_ALLOC(*snapshots,
-	      sizeof(iv_entry->iv_snap.snaps[0]) * iv_entry->iv_snap.snap_cnt);
-	if (*snapshots == NULL)
-		D_GOTO(free, rc = -DER_NOMEM);
-
-	memcpy(*snapshots, iv_entry->iv_snap.snaps,
-	       sizeof(iv_entry->iv_snap.snaps[0]) * iv_entry->iv_snap.snap_cnt);
-	*snap_count = iv_entry->iv_snap.snap_cnt;
-free:
+	rc = cont_iv_update(ns, IV_CONT_SNAP, cont_uuid, iv_entry, entry_size,
+			    CRT_IV_SHORTCUT_TO_ROOT, CRT_IV_SYNC_EAGER);
 	D_FREE(iv_entry);
+
+out:
+	return rc;
+}
+
+int
+cont_iv_snapshots_refresh(void *ns, uuid_t cont_uuid)
+{
+	struct cont_iv_entry	*iv_entry;
+	uint32_t		 entry_size;
+	int			 rc;
+
+	/* Only happens on xstream 0 */
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+
+	entry_size = cont_iv_snap_ent_size(MAX_SNAP_CNT);
+	D_ALLOC(iv_entry, entry_size);
+	if (iv_entry == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+	rc = cont_iv_fetch(ns, IV_CONT_SNAP, cont_uuid, iv_entry, entry_size);
+	if (rc != 0)
+		goto out_free;
+	D_ASSERT(iv_entry->iv_snap.snap_cnt <= MAX_SNAP_CNT);
+out_free:
+	D_FREE(iv_entry);
+out:
 	return rc;
 }
 
