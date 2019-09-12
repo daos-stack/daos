@@ -123,6 +123,10 @@ func (bc *BdevConfig) Validate() error {
 	return nil
 }
 
-func (bc *BdevConfig) HasNvmeDevs() bool {
-	return bc.Class == BdevClassNvme && len(bc.DeviceList) > 0
+func (bc *BdevConfig) GetNvmeDevs() []string {
+	if bc.Class == BdevClassNvme {
+		return bc.DeviceList
+	}
+
+	return []string{}
 }

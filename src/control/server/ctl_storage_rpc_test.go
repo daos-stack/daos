@@ -129,14 +129,14 @@ func TestStorageScan(t *testing.T) {
 			"spdk init fail", errExample, nil, nil, false, true,
 			defaultMockConfig(t),
 			pb.StorageScanResp{},
-			msgSpdkFailHasBdevs + ": " + msgSpdkInitFail + ": example failure",
+			msgBdevNotFound + ": missing [0000:81:00.0]",
 			"",
 		},
 		{
 			"spdk discover fail", nil, errExample, nil, false, true,
 			defaultMockConfig(t),
 			pb.StorageScanResp{},
-			msgSpdkFailHasBdevs + ": " + msgSpdkDiscoverFail + ": example failure",
+			msgBdevNotFound + ": missing [0000:81:00.0]",
 			"",
 		},
 		{
@@ -160,7 +160,7 @@ func TestStorageScan(t *testing.T) {
 			"all discover fail", nil, errExample, errExample, false, false,
 			defaultMockConfig(t),
 			pb.StorageScanResp{},
-			msgSpdkFailHasBdevs + ": " + msgSpdkDiscoverFail + ": example failure",
+			msgBdevNotFound + ": missing [0000:81:00.0]",
 			"",
 		},
 		{

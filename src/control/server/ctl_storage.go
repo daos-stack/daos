@@ -62,24 +62,29 @@ func NewStorageControlService(log logging.Logger, cfg *Configuration) (*StorageC
 	}, nil
 }
 
-func hasBdevs(cfg *Configuration) bool {
+func (c *StorageControlService) canAccessBdevs(cfg *Configuration) (
+	missing []string, ok bool) {
+
 	for _, srvCfg := range cfg.Servers {
-		if srvCfg.Storage.Bdev.HasNvmeDevs() {
-			return true
+		_missing, _ok := c.nvme.hasControllers(srvCfg.Storage.Bdev.GetNvmeDevs())
+		if !_ok {
+			missing = append(missing, _missing...)
 		}
 	}
 
-	return false
+	return missing, len(missing) == 0
 }
 
 // Setup delegates to Storage implementation's Setup methods.
 func (c *StorageControlService) Setup(cfg *Configuration) error {
 	if err := c.nvme.Setup(); err != nil {
-		// fail if nvme devices have been specified and nvme setup fails
-		if hasBdevs(cfg) {
-			return errors.Wrap(err, msgSpdkFailHasBdevs)
-		}
 		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, NVMe Setup"))
+	}
+
+	// fail if config specified nvme devices are inaccessible
+	missing, ok := c.canAccessBdevs(cfg)
+	if !ok {
+		return errors.Errorf("%s: missing %v", msgBdevNotFound, missing)
 	}
 
 	if err := c.scm.Setup(); err != nil {

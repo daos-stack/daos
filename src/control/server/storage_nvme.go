@@ -58,7 +58,6 @@ const (
 	msgBdevNotInited          = "nvme storage not initialized"
 	msgBdevClassNotSupported  = "operation unsupported on bdev class"
 	msgSpdkInitFail           = "SPDK env init, has setup been run?"
-	msgSpdkFailHasBdevs       = "config specifies nvme and nvme setup failed"
 	msgSpdkDiscoverFail       = "SPDK controller discovery"
 	msgBdevFwrevStartMismatch = "controller fwrev unexpected before update"
 	msgBdevFwrevEndMismatch   = "controller fwrev unchanged after update"
@@ -145,6 +144,16 @@ type nvmeStorage struct {
 	controllers types.NvmeControllers
 	initialized bool
 	formatted   bool
+}
+
+func (n *nvmeStorage) hasControllers(pciAddrs []string) (missing []string, ok bool) {
+	for _, addr := range pciAddrs {
+		if n.getController(addr) == nil {
+			missing = append(missing, addr)
+		}
+	}
+
+	return missing, len(missing) == 0
 }
 
 func (n *nvmeStorage) getController(pciAddr string) *pb.NvmeController {
