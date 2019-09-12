@@ -2,7 +2,7 @@
 # required quantity is indicated by the placeholders
 
 defaultENV:
-  #!filter-only : /run/envs_CRT_CTX_SHARE_ADDR/sep
+  !filter-only : /run/env_CRT_CTX_SHARE_ADDR/sep
   #!filter-only : /run/tests/barrier
   D_LOG_MASK: "DEBUG,MEM=ERR"
   CRT_PHY_ADDR_STR: "ofi+sockets"
@@ -23,7 +23,7 @@ hosts: !mux
 tests: !mux
   barrier:
     name: barrier_basic
-    srv_bin: tests/test_crt_barrier
-    srv_arg: ""
+    srv_bin: ../bin/crt_launch
+    srv_arg: "-e tests/test_crt_barrier"
     srv_env: ""
     srv_ppn: "8"

@@ -45,6 +45,52 @@
 
 #include "crt_internal.h"
 
+int g_shutdown;
+
+static inline int drain_queue(crt_context_t ctx)
+{
+	int	rc;
+	/* Drain the queue. Progress until 1 second timeout.  We need
+	 * a more robust method
+	 */
+	do {
+		rc = crt_progress(ctx, 1000000, NULL, NULL);
+		if (rc != 0 && rc != -DER_TIMEDOUT) {
+			printf("crt_progress failed rc: %d.\n", rc);
+			return rc;
+		}
+
+		if (rc == -DER_TIMEDOUT)
+			break;
+	} while (1);
+
+	printf("Done draining queue\n");
+	return 0;
+}
+
+static void *
+progress_fn(void *data)
+{
+	int rc;
+
+	crt_context_t *p_ctx = (crt_context_t *)data;
+
+	while (g_shutdown == 0)
+		crt_progress(*p_ctx, 1000, NULL, NULL);
+
+	rc = drain_queue(*p_ctx);
+
+	if (crt_context_destroy(*p_ctx, 0) != 0) {
+		D_ERROR("Failed to destroy context\n");
+		assert(0);
+	}
+
+	pthread_exit(rc ? *p_ctx : NULL);
+
+
+	return NULL;
+}
+
 struct wfr_status {
 	sem_t	sem;
 	int	rc;
@@ -252,4 +298,80 @@ tc_sem_timedwait(sem_t *sem, int sec, int line_number)
 	D_ASSERTF(rc == 0, "sem_timedwait() failed at line %d rc: %d\n",
 		  line_number, rc);
 }
+
+void
+tc_srv_start_basic(crt_context_t *crt_ctx, pthread_t *progress_thread)
+{
+	char		*env_self_rank;
+	char		*grp_cfg_file;
+	char		*my_uri;
+	crt_group_t	*grp;
+	d_rank_t	 my_rank;
+	uint32_t	 grp_size;
+	int		 rc = 0;
+
+	env_self_rank = getenv("CRT_L_RANK");
+	my_rank = atoi(env_self_rank);
+
+	rc = d_log_init();
+	assert(rc == 0);
+
+	rc = crt_init("server_grp", CRT_FLAG_BIT_SERVER |
+		CRT_FLAG_BIT_PMIX_DISABLE | CRT_FLAG_BIT_LM_DISABLE);
+	if (rc != 0) {
+		D_ERROR("crt_init() failed; rc=%d\n", rc);
+		assert(0);
+	}
+
+	grp = crt_group_lookup(NULL);
+	if (!grp) {
+		D_ERROR("Failed to lookup group\n");
+		assert(0);
+	}
+
+	rc = crt_rank_self_set(my_rank);
+	if (rc != 0) {
+		D_ERROR("crt_rank_self_set(%d) failed; rc=%d\n",
+			my_rank, rc);
+		assert(0);
+	}
+
+	rc = crt_context_create(crt_ctx);
+	if (rc != 0) {
+		D_ERROR("crt_context_create() failed; rc=%d\n", rc);
+		assert(0);
+	}
+
+	rc = pthread_create(progress_thread, NULL,
+			    progress_fn, crt_ctx);
+	if (rc != 0) {
+		D_ERROR("pthread_create() failed; rc=%d\n", rc);
+		assert(0);
+	}
+
+	grp_cfg_file = getenv("CRT_L_GRP_CFG");
+
+	rc = crt_rank_uri_get(grp, my_rank, 0, &my_uri);
+	if (rc != 0) {
+		D_ERROR("crt_rank_uri_get() failed; rc=%d\n", rc);
+		assert(0);
+	}
+
+	/* load group info from a config file and delete file upon return */
+	rc = tc_load_group_from_file(grp_cfg_file, crt_ctx[0], grp, my_rank,
+					true);
+	if (rc != 0) {
+		D_ERROR("tc_load_group_from_file() failed; rc=%d\n", rc);
+		assert(0);
+	}
+
+	D_FREE(my_uri);
+
+	rc = crt_group_size(NULL, &grp_size);
+	if (rc != 0) {
+		D_ERROR("crt_group_size() failed; rc=%d\n", rc);
+		assert(0);
+	}
+}
+
 #endif /* __TESTS_COMMON_H__ */

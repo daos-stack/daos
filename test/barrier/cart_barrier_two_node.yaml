@@ -24,7 +24,7 @@ hosts: !mux
 tests: !mux
   barrier:
     name: barrier_basic
-    srv_bin: tests/test_crt_barrier
-    srv_arg: ""
+    srv_bin: ../bin/crt_launch
+    srv_arg: "-e tests/test_crt_barrier"
     srv_env: ""
     srv_ppn: "8"
