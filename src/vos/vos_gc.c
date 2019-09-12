@@ -740,12 +740,10 @@ vos_gc_run(int *credits)
 	}
 
 	if (d_list_empty(pools)) {
-		/* Garbage collection has nothing to do.  Just consume the
-		 * credits and return to check when more credits are available.
-		 * No logging here as it causes log explosion when trace is
-		 * set.
+		/* Garbage collection has nothing to do.  Just return without
+		 * logging.  Otherwise, tests produce huge logs with little
+		 * useful information when trace debug bit is set.
 		 */
-		*credits = 0;
 		return 0;
 	}
 
