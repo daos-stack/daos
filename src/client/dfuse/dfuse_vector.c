@@ -92,7 +92,7 @@ struct vector {
 	union ptr_lock		*data;		/* entries in vector */
 	obj_da_t		da;		/* Applocator of free entries */
 	pthread_rwlock_t	lock;		/* reader/writer lock for vector */
-	vector_destroy_cb	destroy_cb;	/* Destort callback */
+	vector_destroy_cb	destroy_cb;	/* Destroy callback */
 	int			magic;		/* Magic number for sanity */
 	unsigned int		entry_size;	/* Size of entries in vector */
 	unsigned int		num_entries;	/* Current number of allocated entries */

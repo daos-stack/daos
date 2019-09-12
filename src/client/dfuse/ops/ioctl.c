@@ -29,7 +29,7 @@
 #include "dfuse_ioctl.h"
 
 static void
-handle_gah_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
+handle_il_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 {
 	struct dfuse_il_reply	il_reply = {0};
 	int			rc;
@@ -66,7 +66,7 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 		D_GOTO(out_err, rc = ENOTTY);
 	}
 
-	if (cmd != DFUSE_IOCTL_GAH) {
+	if (cmd != DFUSE_IOCTL_IL) {
 		DFUSE_TRA_INFO(oh, "Real ioctl support is not implemented");
 		D_GOTO(out_err, rc = ENOTSUP);
 	}
@@ -74,7 +74,7 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 	if (out_bufsz < sizeof(struct dfuse_il_reply))
 		D_GOTO(out_err, rc = EIO);
 
-	handle_gah_ioctl(oh, req);
+	handle_il_ioctl(oh, req);
 
 	return;
 

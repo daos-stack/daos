@@ -35,11 +35,10 @@ struct dfuse_il_reply {
 	daos_obj_id_t	fir_oid;
 	uuid_t		fir_pool;
 	uuid_t		fir_cont;
-	/* TODO: Rank list? */
 };
 
-/* Defines the IOCTL command to get the gah for a IOF file */
-#define DFUSE_IOCTL_GAH ((int)_IOR(DFUSE_IOCTL_TYPE, DFUSE_IOCTL_REPLY_NUMBER, \
+/* Defines the IOCTL command to get the object ID for a open file */
+#define DFUSE_IOCTL_IL ((int)_IOR(DFUSE_IOCTL_TYPE, DFUSE_IOCTL_REPLY_NUMBER, \
 				 struct dfuse_il_reply))
 
 #endif /* __DFUSE_IOCTL_H__ */

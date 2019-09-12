@@ -353,12 +353,12 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define DFUSE_REPLY_IOCTL(handle, req, gah_info)			\
+#define DFUSE_REPLY_IOCTL(handle, req, arg)				\
 	do {								\
 		int __rc;						\
 		DFUSE_TRA_DEBUG(handle, "Returning ioctl");		\
-		__rc = fuse_reply_ioctl(req, 0, &(gah_info),		\
-					sizeof(gah_info));		\
+		__rc = fuse_reply_ioctl(req, 0, &(arg),			\
+					sizeof(arg));			\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(handle,				\
 					"fuse_reply_ioctl returned %d:%s", \
