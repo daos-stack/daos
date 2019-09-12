@@ -115,14 +115,14 @@ ENV go_version=${go_version}
 RUN zypper --non-interactive rm libpmem1;                                      \
     zypper --non-interactive install spdk-devel spdk-tools libisa-l-devel      \
                                      protobuf-c-devel fuse-devel libpmem-devel \
-                                     libpmemobj-devel raft-devel               \
+                                     libpmemobj-devel raft-devel\ \<=\ 0.5.0   \
                                      argobots-devel cart-devel                 \
                                      ipmctl-devel readline-devel               \
                                      go${go_version} fio\ \<\ 3.4;             \
     rpm -qa | grep ^go\[1-9\]\* | grep -v ^go${go_version/\./\\.} |            \
-        xargs zypper --non-interactive rm
+        xargs -r zypper --non-interactive rm
 
-RUN zypper addlock fio
+RUN zypper addlock fio raft-devel
 
 # force an upgrade to get any newly built RPMs
 ARG CACHEBUST=1
