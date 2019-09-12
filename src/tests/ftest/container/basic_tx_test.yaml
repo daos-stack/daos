@@ -21,6 +21,7 @@ faults: !mux
       fault_list: []
 server_config:
    name: daos_server
+   targets: 1
 poolparams:
    createmode:
      mode: 511

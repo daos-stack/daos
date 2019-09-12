@@ -83,6 +83,48 @@ func TestStorageCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Prepare without force",
+			"storage prepare",
+			"ConnectClients",
+			fmt.Errorf("consent not given"),
+		},
+		{
+			"Prepare with nvme-only and scm-only",
+			"storage prepare --force --nvme-only --scm-only",
+			"ConnectClients",
+			fmt.Errorf("nvme-only and scm-only options should not be set together"),
+		},
+		{
+			"Prepare with scm-only",
+			"storage prepare --force --scm-only",
+			"ConnectClients StoragePrepare",
+			nil,
+		},
+		{
+			"Prepare with nvme-only",
+			"storage prepare --force --nvme-only",
+			"ConnectClients StoragePrepare",
+			nil,
+		},
+		{
+			"Prepare with non-existent option",
+			"storage prepare --force --nvme",
+			"",
+			fmt.Errorf("unknown flag `nvme'"),
+		},
+		{
+			"Prepare with force and reset",
+			"storage prepare --force --reset",
+			"ConnectClients StoragePrepare",
+			nil,
+		},
+		{
+			"Prepare with force",
+			"storage prepare --force",
+			"ConnectClients StoragePrepare",
+			nil,
+		},
+		{
 			"Nonexistent subcommand",
 			"storage quack",
 			"",

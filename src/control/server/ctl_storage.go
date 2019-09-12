@@ -28,9 +28,39 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	types "github.com/daos-stack/daos/src/control/common/storage"
+	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/logging"
 )
+
+// StorageControlService encapsulates the storage part of the control service
+type StorageControlService struct {
+	log  logging.Logger
+	nvme *nvmeStorage
+	scm  *scmStorage
+	drpc drpc.DomainSocketClient
+}
+
+// NewStorageControlService returns an initialized *StorageControlService
+func NewStorageControlService(log logging.Logger, cfg *Configuration) (*StorageControlService, error) {
+	scriptPath, err := cfg.ext.getAbsInstallPath(spdkSetupPath)
+	if err != nil {
+		return nil, err
+	}
+
+	spdkScript := &spdkSetup{
+		log:         log,
+		scriptPath:  scriptPath,
+		nrHugePages: cfg.NrHugepages,
+	}
+
+	return &StorageControlService{
+		log:  log,
+		nvme: newNvmeStorage(log, cfg.NvmeShmID, spdkScript, cfg.ext),
+		scm:  newScmStorage(log, cfg.ext),
+		drpc: getDrpcClientConnection(cfg.SocketDir),
+	}, nil
+}
 
 type PrepareNvmeRequest struct {
 	HugePageCount int
@@ -43,7 +73,7 @@ type PrepareNvmeRequest struct {
 //
 // Suitable for commands invoked directly on server, not over gRPC.
 func (c *StorageControlService) PrepareNvme(req PrepareNvmeRequest) error {
-	ok, usr := common.CheckSudo()
+	ok, usr := c.nvme.ext.checkSudo()
 	if !ok {
 		return errors.Errorf("%s must be run as root or sudo", os.Args[0])
 	}
@@ -74,40 +104,46 @@ type PrepareScmRequest struct {
 	Reset bool
 }
 
+// GetScmState performs required initialisation and returns current state
+// of SCM module preparation.
+func (c *StorageControlService) GetScmState() (types.ScmState, error) {
+	state := types.ScmStateUnknown
+
+	ok, _ := c.scm.ext.checkSudo()
+	if !ok {
+		return state, errors.Errorf("%s must be run as root or sudo", os.Args[0])
+	}
+
+	if err := c.scm.Setup(); err != nil {
+		return state, errors.WithMessage(err, "SCM setup")
+	}
+
+	if !c.scm.initialized {
+		return state, errors.New(msgScmNotInited)
+	}
+
+	if len(c.scm.modules) == 0 {
+		return state, errors.New(msgScmNoModules)
+	}
+
+	return c.scm.prep.GetState()
+}
+
 // PrepareScm preps locally attached modules and returns need to reboot message,
 // list of pmem kernel devices and error directly.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
-func (c *StorageControlService) PrepareScm(req PrepareScmRequest) (needsReboot bool, pmemDevs []pmemDev, err error) {
-	ok, _ := common.CheckSudo()
-	if !ok {
-		err = errors.Errorf("%s must be run as root or sudo", os.Args[0])
-		return
-	}
-
-	if err = c.scm.Setup(); err != nil {
-		err = errors.WithMessage(err, "SCM setup")
-		return
-	}
-
-	if !c.scm.initialized {
-		err = errors.New(msgScmNotInited)
-		return
-	}
-
-	if len(c.scm.modules) == 0 {
-		err = errors.New(msgScmNoModules)
-		return
-	}
+func (c *StorageControlService) PrepareScm(req PrepareScmRequest, state types.ScmState,
+) (needsReboot bool, pmemDevs []pmemDev, err error) {
 
 	if req.Reset {
 		// run reset to remove namespaces and clear regions
-		needsReboot, err = c.scm.PrepReset()
+		needsReboot, err = c.scm.PrepReset(state)
 		return
 	}
 
 	// transition to the next state in SCM preparation
-	return c.scm.Prep()
+	return c.scm.Prep(state)
 }
 
 // ScanNvme scans locally attached SSDs and returns list directly.

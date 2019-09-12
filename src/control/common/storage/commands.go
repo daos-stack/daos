@@ -53,11 +53,40 @@ type StoragePrepareCmd struct {
 	Force    bool `short:"f" long:"force" description:"Perform format without prompting for confirmation"`
 }
 
-func (cmd *StoragePrepareCmd) Init(log logging.Logger) error {
+// Validate checks both only options are not set and returns flags to direct
+// which subsystem types to prepare.
+func (cmd *StoragePrepareCmd) Validate() (bool, bool, error) {
+	prepNvme := cmd.NvmeOnly || !cmd.ScmOnly
+	prepScm := cmd.ScmOnly || !cmd.NvmeOnly
+
 	if cmd.NvmeOnly && cmd.ScmOnly {
-		return errors.New("nvme-only and scm-only options should not be set together")
+		return false, false, errors.New(
+			"nvme-only and scm-only options should not be set together")
 	}
 
+	return prepNvme, prepScm, nil
+}
+
+func (cmd *StoragePrepareCmd) CheckWarn(log *logging.LeveledLogger, state ScmState) error {
+	switch state {
+	case ScmStateNoRegions:
+		if cmd.Reset {
+			return nil
+		}
+	case ScmStateFreeCapacity, ScmStateNoCapacity:
+		if !cmd.Reset {
+			return nil
+		}
+	case ScmStateUnknown:
+		return errors.New("unknown scm state")
+	default:
+		return errors.Errorf("unhandled scm state %q", state)
+	}
+
+	return cmd.Warn(log)
+}
+
+func (cmd *StoragePrepareCmd) Warn(log *logging.LeveledLogger) error {
 	log.Info(MsgStoragePrepareWarn)
 
 	if !cmd.Force && !common.GetConsent(log) {

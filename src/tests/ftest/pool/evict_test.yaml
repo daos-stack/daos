@@ -6,6 +6,7 @@ hosts:
     - boro-D
 server_config:
    name: daos_server
+   targets: 1
 timeout: 400
 pool:
    mode: 146

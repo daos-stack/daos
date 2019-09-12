@@ -48,6 +48,7 @@ type mockExt struct {
 	listGrpsErr     error       // list groups error
 	listGrpsRet     []string    // list of user's groups
 	chownRErr       error
+	isRoot          bool
 	history         []string
 	files           []string
 }
@@ -153,6 +154,10 @@ func (m *mockExt) listGroups(usr *user.User) ([]string, error) {
 	return m.listGrpsRet, m.listGrpsErr
 }
 
+func (m *mockExt) checkSudo() (bool, string) {
+	return m.isRoot, ""
+}
+
 func (m *mockExt) chownR(root string, uid int, gid int) error {
 	m.appendHistory(fmt.Sprintf(msgChownR, root, uid, gid))
 
@@ -161,13 +166,14 @@ func (m *mockExt) chownR(root string, uid int, gid int) error {
 
 func newMockExt(
 	cmdRet error, existsRet bool, mountRet error, isMountPointRet bool,
-	unmountRet error, mkdirRet error, removeRet error,
+	unmountRet error, mkdirRet error, removeRet error, isRoot bool,
 ) External {
 
 	return &mockExt{
 		sync.RWMutex{},
 		cmdRet, existsRet, mountRet, isMountPointRet, unmountRet, mkdirRet,
-		removeRet, nil, nil, nil, nil, nil, []string{}, nil, []string{}, []string{},
+		removeRet, nil, nil, nil, nil, nil, []string{}, nil, isRoot,
+		[]string{}, []string{},
 	}
 }
 

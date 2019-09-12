@@ -6,6 +6,7 @@ hosts:
 timeout: 180
 server_config:
   name: daos_server
+  targets: 1
 testparams:
   repetitions: 1000
   endpoint: 0:0

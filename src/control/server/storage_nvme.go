@@ -54,7 +54,7 @@ const (
 		"reformat not implemented"
 	msgBdevNotFound = "controller at pci addr not found, check device exists " +
 		"and can be discovered, you may need to run `sudo daos_server " +
-		"storage prep-nvme` to setup SPDK to access SSDs"
+		"storage prepare --nvme-only` to setup SPDK to access SSDs"
 	msgBdevNotInited          = "nvme storage not initialized"
 	msgBdevClassNotSupported  = "operation unsupported on bdev class"
 	msgSpdkInitFail           = "SPDK env init, has setup been run?"
