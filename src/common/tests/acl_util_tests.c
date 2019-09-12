@@ -456,7 +456,7 @@ static void
 test_acl_principal_is_valid_too_long(void **state)
 {
 	size_t	len = DAOS_ACL_MAX_PRINCIPAL_LEN * 2;
-	char	name[len];
+	char	name[DAOS_ACL_MAX_PRINCIPAL_LEN * 2];
 	size_t	i;
 
 	for (i = 0; i < len; i++) {
@@ -1013,7 +1013,7 @@ test_ace_from_str_too_long(void **state)
 {
 	size_t		i;
 	size_t		len = DAOS_ACL_MAX_ACE_STR_LEN * 2;
-	char		input[len];
+	char		input[DAOS_ACL_MAX_ACE_STR_LEN * 2];
 	struct daos_ace	*ace = NULL;
 
 	i = snprintf(input, len, "AUL:SG:somelongergroupname@:");

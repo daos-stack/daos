@@ -81,12 +81,16 @@ ds_mgmt_pool_svc_create(uuid_t pool_uuid,
 			const char *group, d_rank_list_t *ranks,
 			daos_prop_t *prop, d_rank_list_t *svc_list)
 {
-	int	doms[ntargets];
+	int	*doms;
 	int	rc;
 	int	i;
 
 	D_DEBUG(DB_MGMT, DF_UUID": all tgts created, setting up pool "
 		"svc\n", DP_UUID(pool_uuid));
+
+	D_ALLOC_ARRAY(doms, ntargets);
+	if (doms == NULL)
+		return -DER_NOMEM;
 
 	for (i = 0; i < ntargets; i++)
 		doms[i] = 1;
@@ -99,6 +103,7 @@ ds_mgmt_pool_svc_create(uuid_t pool_uuid,
 				target_uuids, group, ranks, ARRAY_SIZE(doms),
 				doms, prop, svc_list);
 
+	D_FREE(doms);
 	return rc;
 }
 

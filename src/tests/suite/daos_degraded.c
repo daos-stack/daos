@@ -31,7 +31,7 @@
 #define D_LOGFAC	DD_FAC(tests)
 #include "daos_iotest.h"
 
-int		g_dkeys	  = 1000;
+#define	g_dkeys	1000
 
 /**
  * Enumerator for Kill op for degraded tests

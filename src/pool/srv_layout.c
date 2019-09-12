@@ -109,20 +109,19 @@ alloc_ace_with_rw_access(enum daos_acl_principal_type type)
 static struct daos_acl *
 get_default_daos_acl(void)
 {
-	int		num_aces = 2;
 	int		i;
-	struct daos_ace	*default_aces[num_aces];
+	struct daos_ace	*default_aces[2];
 	struct daos_acl	*default_acl;
 
 	default_aces[0] = alloc_ace_with_rw_access(DAOS_ACL_OWNER);
 	default_aces[1] = alloc_ace_with_rw_access(DAOS_ACL_OWNER_GROUP);
 
-	default_acl = daos_acl_create(default_aces, num_aces);
+	default_acl = daos_acl_create(default_aces, 2);
 	if (default_acl == NULL) {
 		D_ERROR("Failed to allocate default ACL for pool properties");
 	}
 
-	for (i = 0; i < num_aces; i++) {
+	for (i = 0; i < 2; i++) {
 		daos_ace_free(default_aces[i]);
 	}
 

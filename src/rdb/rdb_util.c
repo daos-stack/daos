@@ -506,8 +506,8 @@ rdb_vos_update(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, int n,
 	       d_iov_t akeys[], d_iov_t values[])
 {
 	daos_unit_oid_t	uoid;
-	daos_iod_t	iods[n];
-	d_sg_list_t	sgls[n];
+	daos_iod_t	iods[RDB_VOS_BATCH_MAX];
+	d_sg_list_t	sgls[RDB_VOS_BATCH_MAX];
 
 	D_ASSERTF(n <= RDB_VOS_BATCH_MAX, "%d <= %d\n", n, RDB_VOS_BATCH_MAX);
 	rdb_oid_to_uoid(oid, &uoid);

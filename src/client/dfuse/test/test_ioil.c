@@ -99,7 +99,7 @@ static void do_write_tests(int fd, char *buf, size_t len)
 static void do_read_tests(const char *fname, size_t len)
 {
 	char *buf;
-	char buf2[len + 1];
+	char *buf2;
 	struct iovec iov[2];
 	ssize_t bytes;
 	off_t offset;
@@ -109,6 +109,9 @@ static void do_read_tests(const char *fname, size_t len)
 
 	buf = calloc(2, BUF_SIZE);
 	CU_ASSERT_PTR_NOT_NULL(buf);
+
+	buf2 = calloc(1, len + 1);
+	CU_ASSERT_PTR_NOT_NULL(buf2);
 
 	fd = open(fname, O_RDONLY);
 	printf("Opened %s, fd = %d\n", fname, fd);
@@ -161,6 +164,7 @@ static void do_read_tests(const char *fname, size_t len)
 	CU_ASSERT_STRING_EQUAL(fname, buf2);
 
 	free(buf);
+	free(buf2);
 
 	rc = close(fd);
 	printf("Closed file, rc = %d\n", rc);

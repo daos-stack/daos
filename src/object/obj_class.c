@@ -565,10 +565,17 @@ obj_encode_full_stripe(daos_obj_id_t oid, d_sg_list_t *sgl, uint32_t *sg_idx,
 	unsigned int			 len = oca->ca_ec_cell;
 	unsigned int			 k = oca->ca_ec_k;
 	unsigned int			 p = oca->ca_ec_p;
-	unsigned char			*data[k];
-	unsigned char			*ldata[k];
+	unsigned char			**data;
+	unsigned char			**ldata = NULL;
 	int				 i, lcnt = 0;
 	int				 rc = 0;
+
+	D_ALLOC_ARRAY(data, k);
+	if (data == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	D_ALLOC_ARRAY(ldata, k);
+	if (ldata == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	for (i = 0; i < k; i++) {
 		if (sgl->sg_iovs[*sg_idx].iov_len - *sg_off >= len) {
@@ -617,5 +624,7 @@ obj_encode_full_stripe(daos_obj_id_t oid, d_sg_list_t *sgl, uint32_t *sg_idx,
 out:
 	for (i = 0; i < lcnt; i++)
 		D_FREE(ldata[i]);
+	D_FREE(ldata);
+	D_FREE(data);
 	return rc;
 }

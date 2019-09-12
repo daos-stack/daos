@@ -111,11 +111,13 @@ poll_events_to_unixcomm_activity(int event_bits)
 static int
 unixcomm_poll(struct unixcomm_poll *comms, size_t num_comms, int timeout_ms)
 {
-	struct pollfd	fds[num_comms];
+	struct pollfd	*fds;
 	int		poll_rc;
 	size_t		i;
 
-	memset(fds, 0, sizeof(fds));
+	D_ALLOC_ARRAY(fds, num_comms);
+	if (fds == NULL)
+		return -DER_NOMEM;
 
 	for (i = 0; i < num_comms; i++) {
 		fds[i].fd = comms[i].comm->fd;
@@ -123,11 +125,14 @@ unixcomm_poll(struct unixcomm_poll *comms, size_t num_comms, int timeout_ms)
 	}
 
 	poll_rc = poll(fds, num_comms, timeout_ms);
-	if (poll_rc == 0)
+	if (poll_rc == 0) {
+		D_FREE(fds);
 		return -DER_TIMEDOUT;
+	}
 
 	if (poll_rc < 0) {
 		D_ERROR("Polling failed, errno=%u\n", errno);
+		D_FREE(fds);
 		return daos_errno2der(errno);
 	}
 
@@ -136,6 +141,7 @@ unixcomm_poll(struct unixcomm_poll *comms, size_t num_comms, int timeout_ms)
 				fds[i].revents);
 	}
 
+	D_FREE(fds);
 	return poll_rc;
 }
 

@@ -249,7 +249,7 @@ insert_nowait(const char *dkey, int nr, const char **akey,
 	      daos_size_t *iod_size, int *rx_nr, uint64_t *idx, void **val,
 	      daos_handle_t th, struct ioreq *req)
 {
-	daos_size_t	data_size[nr];
+	daos_size_t	data_size[IOREQ_SG_IOD_NR];
 	int		i;
 
 	assert_in_range(nr, 1, IOREQ_SG_IOD_NR);
@@ -466,7 +466,7 @@ lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
 	daos_handle_t th, struct ioreq *req, bool empty)
 {
 	int		i;
-	int		rx_nr[nr];
+	int		rx_nr[IOREQ_SG_IOD_NR];
 
 	assert_in_range(nr, 1, IOREQ_SG_IOD_NR);
 

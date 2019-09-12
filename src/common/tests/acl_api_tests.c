@@ -300,7 +300,7 @@ test_acl_alloc_two_users(void **state)
 	struct daos_acl *acl;
 	ssize_t		ace_len;
 	size_t		num_aces = 2;
-	struct daos_ace *ace[num_aces];
+	struct daos_ace *ace[2];
 
 	fill_ace_list_with_users(ace, num_aces);
 	ace_len = get_total_ace_list_size(ace, num_aces);
@@ -342,7 +342,7 @@ test_acl_alloc_type_order(void **state)
 	int				i;
 	ssize_t				ace_len = 0;
 	size_t				num_aces = NUM_DAOS_ACL_TYPES;
-	struct daos_ace			*ace[num_aces];
+	struct daos_ace			*ace[NUM_DAOS_ACL_TYPES];
 	const char			group_name[] = "mygroup@";
 	const char			user_name[] = "me@";
 	struct daos_ace			*current_ace;
@@ -385,7 +385,7 @@ test_acl_alloc_null_ace(void **state)
 {
 	struct daos_acl *acl;
 	size_t		num_aces = 2;
-	struct daos_ace *ace[num_aces];
+	struct daos_ace *ace[2];
 
 	ace[0] = daos_ace_create(DAOS_ACL_OWNER, NULL);
 	ace[1] = NULL;
@@ -426,7 +426,7 @@ test_acl_copy_with_aces(void **state)
 	struct daos_acl	*acl;
 	struct daos_acl	*copy;
 	size_t		num_aces = 3;
-	struct daos_ace	*ace[num_aces];
+	struct daos_ace	*ace[3];
 
 	fill_ace_list_with_users(ace, num_aces);
 	acl = daos_acl_create(ace, num_aces);
@@ -465,7 +465,7 @@ test_acl_get_size_with_aces(void **state)
 {
 	struct daos_acl	*acl;
 	size_t		num_aces = 3;
-	struct daos_ace	*ace[num_aces];
+	struct daos_ace	*ace[3];
 	size_t		expected_ace_len;
 
 	fill_ace_list_with_users(ace, num_aces);
@@ -495,7 +495,7 @@ test_acl_get_first_ace_multiple(void **state)
 	struct daos_acl *acl;
 	struct daos_ace *result;
 	size_t		num_aces = 2;
-	struct daos_ace *ace[num_aces];
+	struct daos_ace *ace[2];
 
 	fill_ace_list_with_users(ace, num_aces);
 
@@ -528,7 +528,7 @@ test_acl_get_next_ace_success(void **state)
 	struct daos_acl *acl;
 	struct daos_ace *result;
 	size_t		num_aces = 2;
-	struct daos_ace *ace[num_aces];
+	struct daos_ace *ace[2];
 
 	fill_ace_list_with_users(ace, num_aces);
 
@@ -552,7 +552,7 @@ test_acl_get_next_ace_last_item(void **state)
 	struct daos_ace *result;
 	struct daos_ace *last;
 	size_t		num_aces = 2;
-	struct daos_ace *ace[num_aces];
+	struct daos_ace *ace[2];
 
 	fill_ace_list_with_users(ace, num_aces);
 
@@ -590,7 +590,7 @@ test_acl_get_next_ace_bad_ace(void **state)
 	struct daos_acl *acl;
 	struct daos_ace *result;
 	size_t		num_aces = 2;
-	struct daos_ace *ace[num_aces];
+	struct daos_ace *ace[2];
 
 	fill_ace_list_with_users(ace, num_aces);
 	acl = daos_acl_create(ace, num_aces);
@@ -622,7 +622,7 @@ test_acl_get_ace_null_ace_ptr(void **state)
 {
 	struct daos_acl *acl;
 	size_t		num_aces = 2;
-	struct daos_ace *ace[num_aces];
+	struct daos_ace *ace[2];
 
 	fill_ace_list_with_users(ace, num_aces);
 	acl = daos_acl_create(ace, num_aces);
@@ -641,7 +641,7 @@ test_acl_get_ace_invalid_type(void **state)
 	struct daos_acl *acl;
 	struct daos_ace *result = NULL;
 	size_t		num_aces = 2;
-	struct daos_ace *ace[num_aces];
+	struct daos_ace *ace[2];
 
 	fill_ace_list_with_users(ace, num_aces);
 	acl = daos_acl_create(ace, num_aces);
@@ -664,7 +664,7 @@ test_acl_get_ace_first_item(void **state)
 	struct daos_acl *acl;
 	struct daos_ace *result = NULL;
 	size_t		num_aces = 2;
-	struct daos_ace *ace[num_aces];
+	struct daos_ace *ace[2];
 
 	fill_ace_list_with_users(ace, num_aces);
 	acl = daos_acl_create(ace, num_aces);
@@ -687,7 +687,7 @@ test_acl_get_ace_later_item(void **state)
 	struct daos_acl *acl;
 	struct daos_ace *result = NULL;
 	size_t		num_aces = 2;
-	struct daos_ace *ace[num_aces];
+	struct daos_ace *ace[2];
 
 	fill_ace_list_with_users(ace, num_aces);
 	acl = daos_acl_create(ace, num_aces);
@@ -710,7 +710,7 @@ test_acl_get_ace_match_wrong_type(void **state)
 	struct daos_acl *acl;
 	struct daos_ace *result = NULL;
 	size_t		num_aces = 2;
-	struct daos_ace *ace[num_aces];
+	struct daos_ace *ace[2];
 
 	fill_ace_list_with_users(ace, num_aces);
 
@@ -732,7 +732,7 @@ test_acl_get_ace_name_not_found(void **state)
 	struct daos_acl *acl;
 	struct daos_ace *result = NULL;
 	size_t		num_aces = 2;
-	struct daos_ace *ace[num_aces];
+	struct daos_ace *ace[2];
 
 	fill_ace_list_with_users(ace, num_aces);
 	acl = daos_acl_create(ace, num_aces);
@@ -752,7 +752,7 @@ test_acl_get_ace_name_needed(void **state)
 {
 	struct daos_acl *acl;
 	size_t		num_aces = NUM_DAOS_ACL_TYPES;
-	struct daos_ace *ace[num_aces];
+	struct daos_ace *ace[NUM_DAOS_ACL_TYPES];
 	struct daos_ace *result = NULL;
 
 	fill_ace_list_with_all_types_shuffled(ace, "user1@", "group1@");
@@ -789,7 +789,7 @@ test_acl_get_ace_name_not_needed(void **state)
 {
 	struct daos_acl *acl;
 	size_t		num_aces = NUM_DAOS_ACL_TYPES;
-	struct daos_ace *ace[num_aces];
+	struct daos_ace *ace[NUM_DAOS_ACL_TYPES];
 
 	fill_ace_list_with_all_types_shuffled(ace, "user1@", "group1@");
 	acl = daos_acl_create(ace, num_aces);
@@ -968,7 +968,7 @@ static void
 test_acl_add_ace_user_to_existing_list(void **state)
 {
 	int		num_aces = NUM_DAOS_ACL_TYPES;
-	struct daos_ace	*ace[num_aces];
+	struct daos_ace	*ace[NUM_DAOS_ACL_TYPES];
 	struct daos_ace	*new_ace;
 	const char	new_ace_name[] = "newuser@";
 
@@ -987,7 +987,7 @@ static void
 test_acl_add_ace_group_to_existing_list(void **state)
 {
 	int		num_aces = NUM_DAOS_ACL_TYPES;
-	struct daos_ace	*ace[num_aces];
+	struct daos_ace	*ace[NUM_DAOS_ACL_TYPES];
 	struct daos_ace	*new_ace;
 	const char	new_ace_name[] = "newgroup@";
 
@@ -1006,7 +1006,7 @@ static void
 test_acl_add_ace_owner_to_existing_list(void **state)
 {
 	int		num_aces = DAOS_ACL_EVERYONE;
-	struct daos_ace	*ace[num_aces];
+	struct daos_ace	*ace[DAOS_ACL_EVERYONE];
 	struct daos_ace	*new_ace;
 	const char	user_name[] = "user1@";
 	const char	group_name[] = "group1@";
@@ -1029,7 +1029,7 @@ static void
 test_acl_add_ace_owner_group_to_existing_list(void **state)
 {
 	int		num_aces = DAOS_ACL_EVERYONE;
-	struct daos_ace	*ace[num_aces];
+	struct daos_ace	*ace[DAOS_ACL_EVERYONE];
 	struct daos_ace	*new_ace;
 	const char	user_name[] = "user1@";
 	const char	group_name[] = "group1@";
@@ -1052,7 +1052,7 @@ static void
 test_acl_add_ace_everyone_to_existing_list(void **state)
 {
 	int		num_aces = DAOS_ACL_EVERYONE;
-	struct daos_ace	*ace[num_aces];
+	struct daos_ace	*ace[DAOS_ACL_EVERYONE];
 	struct daos_ace	*new_ace;
 	const char	user_name[] = "user1@";
 	const char	group_name[] = "group1@";
@@ -1075,7 +1075,7 @@ static void
 expect_add_duplicate_ace_unchanged(enum daos_acl_principal_type type)
 {
 	int		num_aces = NUM_DAOS_ACL_TYPES;
-	struct daos_ace	*ace[num_aces];
+	struct daos_ace	*ace[NUM_DAOS_ACL_TYPES];
 	struct daos_ace	*new_ace;
 	struct daos_acl	*acl;
 	struct daos_acl	*orig_acl;
@@ -1124,7 +1124,7 @@ static void
 test_acl_add_ace_replace(void **state)
 {
 	int		num_aces = NUM_DAOS_ACL_TYPES;
-	struct daos_ace	*ace[num_aces];
+	struct daos_ace	*ace[NUM_DAOS_ACL_TYPES];
 	struct daos_ace	*new_ace;
 	struct daos_acl	*acl;
 	struct daos_acl	*orig_acl;
@@ -1189,7 +1189,7 @@ static void
 test_acl_remove_ace_invalid_type(void **state)
 {
 	int		num_aces = 1;
-	struct daos_ace	*ace[num_aces];
+	struct daos_ace	*ace[1];
 	struct daos_acl	*acl;
 
 	fill_ace_list_with_users(ace, num_aces);
@@ -1208,7 +1208,7 @@ static void
 expect_acl_remove_ace_missing_name_fails(enum daos_acl_principal_type type)
 {
 	int		num_aces = 1;
-	struct daos_ace	*ace[num_aces];
+	struct daos_ace	*ace[1];
 	struct daos_acl	*acl;
 
 	fill_ace_list_with_users(ace, num_aces);
@@ -1232,7 +1232,7 @@ static void
 test_acl_remove_ace_name_len_zero(void **state)
 {
 	int		num_aces = 1;
-	struct daos_ace	*ace[num_aces];
+	struct daos_ace	*ace[1];
 	struct daos_acl	*acl;
 
 	fill_ace_list_with_users(ace, num_aces);
@@ -1253,7 +1253,7 @@ static void
 test_acl_remove_ace_one_user(void **state)
 {
 	int		num_aces = 1;
-	struct daos_ace	*ace[num_aces];
+	struct daos_ace	*ace[1];
 	struct daos_acl	*acl;
 
 	fill_ace_list_with_users(ace, num_aces);
@@ -1275,7 +1275,7 @@ static void
 test_acl_remove_ace_multi_user(void **state)
 {
 	int		num_aces = 4;
-	struct daos_ace	*ace[num_aces];
+	struct daos_ace	*ace[4];
 	struct daos_acl	*acl;
 	struct daos_acl	*orig_acl;
 	int		removed_idx = 2;
@@ -1322,7 +1322,7 @@ expect_acl_remove_ace_removes_principal(enum daos_acl_principal_type type,
 		const char *principal)
 {
 	int		num_aces = NUM_DAOS_ACL_TYPES;
-	struct daos_ace	*ace[num_aces];
+	struct daos_ace	*ace[NUM_DAOS_ACL_TYPES];
 	struct daos_acl	*acl;
 	struct daos_acl	*orig_acl;
 	struct daos_ace	*ace_to_find = NULL;
@@ -1372,7 +1372,7 @@ static void
 test_acl_remove_ace_not_found(void **state)
 {
 	int		num_aces = 4;
-	struct daos_ace	*ace[num_aces];
+	struct daos_ace	*ace[4];
 	struct daos_acl	*acl;
 	const char	name[] = "notarealuser@";
 
@@ -1851,7 +1851,7 @@ test_acl_is_valid_valid_aces(void **state)
 {
 	struct daos_acl *acl;
 	size_t		num_aces = 3;
-	struct daos_ace *ace[num_aces];
+	struct daos_ace *ace[3];
 
 	fill_ace_list_with_users(ace, num_aces);
 	acl = daos_acl_create(ace, num_aces);
@@ -1867,7 +1867,7 @@ test_acl_is_valid_later_ace_invalid(void **state)
 {
 	struct daos_acl *acl;
 	size_t		num_aces = 3;
-	struct daos_ace *ace[num_aces];
+	struct daos_ace *ace[3];
 
 	fill_ace_list_with_users(ace, num_aces);
 	ace[num_aces - 1]->dae_access_types = 1 << 7; /* invalid access type */
@@ -1884,7 +1884,7 @@ test_acl_is_valid_duplicate_ace_type(void **state)
 {
 	struct daos_acl *acl;
 	size_t		num_aces = 3;
-	struct daos_ace *ace[num_aces];
+	struct daos_ace *ace[3];
 
 	ace[0] = daos_ace_create(DAOS_ACL_EVERYONE, NULL);
 	ace[1] = daos_ace_create(DAOS_ACL_USER, "user1@");
@@ -1902,7 +1902,7 @@ test_acl_is_valid_duplicate_user(void **state)
 {
 	struct daos_acl *acl;
 	size_t		num_aces = 3;
-	struct daos_ace *ace[num_aces];
+	struct daos_ace *ace[3];
 
 	ace[0] = daos_ace_create(DAOS_ACL_USER, "user1@");
 	ace[1] = daos_ace_create(DAOS_ACL_USER, "anotheruser@");
@@ -1920,7 +1920,7 @@ test_acl_is_valid_duplicate_group(void **state)
 {
 	struct daos_acl *acl;
 	size_t		num_aces = 3;
-	struct daos_ace *ace[num_aces];
+	struct daos_ace *ace[3];
 
 	ace[0] = daos_ace_create(DAOS_ACL_GROUP, "grp1@");
 	ace[1] = daos_ace_create(DAOS_ACL_GROUP, "anothergroup@");
@@ -1968,7 +1968,7 @@ expect_acl_invalid_bad_ordering(enum daos_acl_principal_type type1,
 {
 	struct daos_acl *acl;
 	size_t		num_aces = 2;
-	struct daos_ace *ace[num_aces];
+	struct daos_ace *ace[3];
 	const char	*name1 = NULL;
 	const char	*name2 = NULL;
 

@@ -573,7 +573,7 @@ get_acl_with_perms(uint64_t owner_perms, uint64_t group_perms)
 {
 	struct daos_acl *acl;
 	size_t		num_aces = 2;
-	struct daos_ace *aces[num_aces];
+	struct daos_ace *aces[2];
 	size_t		i;
 
 	aces[0] = daos_ace_create(DAOS_ACL_OWNER, NULL);
@@ -1067,7 +1067,7 @@ test_check_pool_access_user_matches_second(void **state)
 {
 	struct daos_acl		*acl;
 	size_t			num_aces = 2;
-	struct daos_ace		*ace[num_aces];
+	struct daos_ace		*ace[2];
 	d_iov_t			cred;
 	struct pool_owner	ownership;
 
@@ -1201,7 +1201,7 @@ test_check_pool_access_grp_matches_second(void **state)
 {
 	struct daos_acl		*acl;
 	size_t			num_aces = 2;
-	struct daos_ace		*ace[num_aces];
+	struct daos_ace		*ace[2];
 	d_iov_t			cred;
 	struct pool_owner	ownership;
 
@@ -1234,7 +1234,7 @@ test_check_pool_access_grp_matches_multiple(void **state)
 {
 	struct daos_acl		*acl;
 	size_t			num_aces = 2;
-	struct daos_ace		*ace[num_aces];
+	struct daos_ace		*ace[2];
 	d_iov_t			cred;
 	struct pool_owner	ownership;
 	static const char	*groups[] = { "group1@", "group2@" };
@@ -1267,8 +1267,8 @@ static void
 test_check_pool_access_grp_no_match(void **state)
 {
 	struct daos_acl		*acl;
-	size_t			num_aces = 2;
-	struct daos_ace		*ace[num_aces];
+	size_t			num_aces = 3;
+	struct daos_ace		*ace[3];
 	d_iov_t			cred;
 	struct pool_owner	ownership;
 	static const char	*groups[] = { "group1@", "group2@" };
@@ -1305,7 +1305,7 @@ test_check_pool_access_grp_check_includes_owner(void **state)
 {
 	struct daos_acl		*acl;
 	size_t			num_aces = 2;
-	struct daos_ace		*ace[num_aces];
+	struct daos_ace		*ace[2];
 	d_iov_t			cred;
 	struct pool_owner	ownership;
 	static const char	*groups[] = { "group1@", "group2@" };
@@ -1339,7 +1339,7 @@ test_check_pool_access_grps_beat_everyone(void **state)
 {
 	struct daos_acl		*acl;
 	size_t			num_aces = 2;
-	struct daos_ace		*ace[num_aces];
+	struct daos_ace		*ace[2];
 	d_iov_t			cred;
 	struct pool_owner	ownership;
 	static const char	*groups[] = { "group1@", "group2@" };
