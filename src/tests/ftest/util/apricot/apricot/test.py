@@ -160,6 +160,7 @@ class TestWithServers(TestWithoutServers):
         super(TestWithServers, self).__init__(*args, **kwargs)
 
         self.agent_sessions = None
+        self.nvme_parameter = None
         self.setup_start_servers = True
         self.server_log = None
         self.log_dir = os.path.split(os.getenv("D_LOG_FILE",
@@ -184,7 +185,8 @@ class TestWithServers(TestWithoutServers):
         test_clients = self.params.get("test_clients", "/run/hosts/*")
         server_count = self.params.get("server_count", "/run/hosts/*")
         client_count = self.params.get("client_count", "/run/hosts/*")
-
+        self.nvme_parameter = self.params.get(
+            "bdev_class", '/server_config/server/')
         # If server or client host list are defined through valid slurm
         # partition names override any hosts specified through lists.
         test_servers, self.partition_servers = self.get_partition_hosts(
@@ -221,6 +223,10 @@ class TestWithServers(TestWithoutServers):
                     "Test requires {} {}; {} specified".format(
                         expected_count, host_type, actual_count))
 
+        #Storage setup if requested in test input file
+        if self.nvme_parameter == "nvme":
+            server_utils.storage_prepare(self.hostlist_servers)
+
         # Create host files
         self.hostfile_servers = write_host_file.write_host_file(
             self.hostlist_servers, self.workdir, self.hostfile_servers_slots)
@@ -250,6 +256,12 @@ class TestWithServers(TestWithoutServers):
             try:
                 server_utils.stop_server(hosts=self.hostlist_servers)
             finally:
+                try:
+                    #Storage reset
+                    if self.nvme_parameter == "nvme":
+                        server_utils.storage_reset(self.hostlist_servers)
+                finally:
+                    super(TestWithServers, self).tearDown()
                 super(TestWithServers, self).tearDown()
 
     def start_servers(self, server_groups=None):
