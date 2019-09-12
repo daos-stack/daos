@@ -510,7 +510,9 @@ out:
 	if (abort_dtes != NULL)
 		D_FREE(abort_dtes);
 
-	return rc > 0 ? 0 : rc;
+	D_ASSERTF(rc <= 0, "unexpected return value %d\n", rc);
+
+	return rc;
 }
 
 /**
@@ -682,8 +684,11 @@ out_free:
 
 	if (dth->dth_dti_cos != NULL)
 		D_FREE(dth->dth_dti_cos);
+
+	D_ASSERTF(result <= 0, "unexpected return value %d\n", result);
+
 out:
-	return result > 0 ? 0 : result;
+	return result;
 }
 
 /**
@@ -763,8 +768,11 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_hdl *cont_hdl,
 		(unsigned long long)dth->dth_dkey_hash,
 		dth->dth_intent == DAOS_INTENT_PUNCH ? "Punch" : "Update",
 		result);
+
+	D_ASSERTF(result <= 0, "unexpected return value %d\n", result);
+
 out:
-	return result > 0 ? 0 : result;
+	return result;
 }
 
 

@@ -6,6 +6,7 @@ hosts:
 server_config:
   name: daos_server
   port: 10001
+  targets: 1
 dmg:
   request: storage
   action: scan
