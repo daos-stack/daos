@@ -26,7 +26,7 @@ import os
 from apricot import TestWithServers
 from ior_utils import IorCommand, IorFailed
 from mpio_utils import MpioUtils
-from test_utils import TestPool
+from test_utils import TestPool, TestContainer
 
 
 class IorTestBase(TestWithServers):
@@ -72,6 +72,28 @@ class IorTestBase(TestWithServers):
         # Create a pool
         self.pool.create()
 
+    def create_cont(self):
+        """Create a TestContainer object to be used to create container."""
+        # Get Container params
+        self.cont = TestContainer(self.pool)
+        self.cont.get_params(self)
+
+        # create container
+        self.cont.create()
+
+    def start_dfuse(self):
+        """Create a DfuseCommand object to start dfuse."""
+        # Get Dfuse params
+        self.dfuse = DfuseCommand()
+        self.dfuse.get_params(self)
+
+        # update dfuse params
+        self.dfuse.set_dfuse_pool_params(self.pool)
+        self.dfuse.set_dfuse_cont_param(self.cont)
+        
+        # start dfuse
+        self.dfuse.run()
+
     def run_ior_with_pool(self):
         """Execute ior with optional overrides for ior flags and object_class.
 
@@ -85,9 +107,14 @@ class IorTestBase(TestWithServers):
         # Create a pool if one does not already exist
         if self.pool is None:
             self.create_pool()
-
+            self.create_cont()
         # Update IOR params with the pool
         self.ior_cmd.set_daos_params(self.server_group, self.pool)
+
+        # start dfuse if api is POSIX
+        if self.ior_cmd.api.value == "POSIX":
+            self.create_cont()
+            self.start_dfuse()
 
         # Run IOR
         self.run_ior(self.get_job_manager_command(), self.processes)
@@ -100,7 +127,7 @@ class IorTestBase(TestWithServers):
 
         """
         # Initialize MpioUtils if IOR is running in MPIIO or DAOS mode
-        if self.ior_cmd.api.value in ["MPIIO", "DAOS"]:
+        if self.ior_cmd.api.value in ["MPIIO", "DAOS", "POSIX"]:
             mpio_util = MpioUtils()
             if mpio_util.mpich_installed(self.hostlist_clients) is False:
                 self.fail("Exiting Test: Mpich not installed")

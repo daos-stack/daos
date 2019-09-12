@@ -766,6 +766,7 @@ class TestContainer(TestDaosApiBase):
             uuid (str, optional): contianer uuid. Defaults to None.
         """
         self.destroy()
+        print("***pool_uuid***:{}".format(self.pool.pool.get_uuid_str()))
         self.log.info(
             "Creating a container with pool handle %s",
             self.pool.pool.handle.value)
