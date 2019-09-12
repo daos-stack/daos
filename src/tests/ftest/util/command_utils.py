@@ -258,7 +258,7 @@ class CommandWithParameters(ObjectWithParameters):
 class DaosCommand(CommandWithParameters):
     """A class for similar daos command line tools."""
 
-    def __init__(self, command, path=""):
+    def __init__(self, command, namespace, path=""):
         """Create DaosCommand object.
 
         Specific type of command object built so command str returns:
@@ -268,7 +268,7 @@ class DaosCommand(CommandWithParameters):
             command (str): string of the command to be executed.
             path (str): path to location of daos command binary.
         """
-        super(DaosCommand, self).__init__(command, path)
+        super(DaosCommand, self).__init__(command, namespace, path)
         self.request = BasicParameter("{}")
         self.action = BasicParameter("{}")
 
@@ -378,12 +378,6 @@ class JobManagerCommand(CommandWithParameters):
                 "DAOS server processes detected after attempted stop on {}".format(
                     ", ".join([str(result[key]) for key in result if key != 1])))
 
-        # we can also have orphaned ssh processes that started an orted on a
-        # remote node but never get cleaned up when that remote node spontaneiously
-        # reboots
-        subprocess.call(["pkill", "^ssh$"])
-
-
     def run(self):
         """Run the command on each specified host.
 
@@ -435,12 +429,11 @@ class JobManagerCommand(CommandWithParameters):
 
 
 class OrterunCommand(JobManagerCommand):
-    """ A class to handle  orterun command."""
+    """ A class to handle orterun command."""
 
     def __init__(self, path):
         """Create a orterun command object."""
-        super(OrterunCommand, self).__init__(
-            "orterun", "/run/orterun/*", path)
+        super(OrterunCommand, self).__init__("orterun", "/run/orterun/*")
 
         self.hosts = FormattedParameter("--host", None)
         self.hostfile = FormattedParameter("--hostfile", None)
@@ -450,10 +443,3 @@ class OrterunCommand(JobManagerCommand):
         self.export = FormattedParameter("-x", None)
         self.enable_recovery = FormattedParameter("--enable-recovery", True)
         self.report_uri = FormattedParameter("--report-uri", None)
-
-
-def main():
-    print("Running...")
-
-if __name__ == "__main__":
-    main()
