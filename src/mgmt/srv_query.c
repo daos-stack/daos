@@ -110,7 +110,7 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 			    &thread);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
-		return rc;
+		goto out;
 	}
 
 	ABT_thread_join(thread);
@@ -178,10 +178,14 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 
 		i++;
 	}
+
 	/* Free all devices is there was an error allocating any */
 	if (rc != 0) {
-		if (dev_info != NULL)
-			smd_free_dev_info(dev_info);
+		d_list_for_each_entry_safe(dev_info, tmp, &dev_list, sdi_link) {
+			d_list_del(&dev_info->sdi_link);
+			if (dev_info != NULL)
+				smd_free_dev_info(dev_info);
+		}
 		for (; i >= 0; i--) {
 			if (resp->devices[i] != NULL) {
 				if (resp->devices[i]->uuid != NULL)
