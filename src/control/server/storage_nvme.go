@@ -58,6 +58,7 @@ const (
 	msgBdevNotInited          = "nvme storage not initialized"
 	msgBdevClassNotSupported  = "operation unsupported on bdev class"
 	msgSpdkInitFail           = "SPDK env init, has setup been run?"
+	msgSpdkFailHasBdevs       = "config specifies nvme and nvme setup failed"
 	msgSpdkDiscoverFail       = "SPDK controller discovery"
 	msgBdevFwrevStartMismatch = "controller fwrev unexpected before update"
 	msgBdevFwrevEndMismatch   = "controller fwrev unchanged after update"

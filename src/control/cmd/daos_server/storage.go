@@ -100,10 +100,15 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		return err
 	}
 
-	svc, err := server.NewStorageControlService(cmd.log, server.NewConfiguration())
+	cfg := server.NewConfiguration()
+	svc, err := server.NewStorageControlService(cmd.log, cfg)
 	if err != nil {
-		return errors.WithMessage(err, "initialising ControlService")
+		return errors.WithMessage(err, "init control service")
 	}
+	if err := svc.Setup(cfg); err != nil {
+		return errors.Wrap(err, "setup control service")
+	}
+	defer svc.Teardown()
 
 	op := "Preparing"
 	if cmd.Reset {

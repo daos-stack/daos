@@ -62,6 +62,44 @@ func NewStorageControlService(log logging.Logger, cfg *Configuration) (*StorageC
 	}, nil
 }
 
+func hasBdevs(cfg *Configuration) bool {
+	for _, srvCfg := range cfg.Servers {
+		if srvCfg.Storage.Bdev.HasNvmeDevs() {
+			return true
+		}
+	}
+
+	return false
+}
+
+// Setup delegates to Storage implementation's Setup methods.
+func (c *StorageControlService) Setup(cfg *Configuration) error {
+	if err := c.nvme.Setup(); err != nil {
+		// fail if nvme devices have been specified and nvme setup fails
+		if hasBdevs(cfg) {
+			return errors.Wrap(err, msgSpdkFailHasBdevs)
+		}
+		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, NVMe Setup"))
+	}
+
+	if err := c.scm.Setup(); err != nil {
+		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, SCM Setup"))
+	}
+
+	return nil
+}
+
+// Teardown delegates to Storage implementation's Teardown methods.
+func (c *StorageControlService) Teardown() {
+	if err := c.nvme.Teardown(); err != nil {
+		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, NVMe Teardown"))
+	}
+
+	if err := c.scm.Teardown(); err != nil {
+		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, SCM Teardown"))
+	}
+}
+
 type PrepareNvmeRequest struct {
 	HugePageCount int
 	TargetUser    string
@@ -112,10 +150,6 @@ func (c *StorageControlService) GetScmState() (types.ScmState, error) {
 	ok, _ := c.scm.ext.checkSudo()
 	if !ok {
 		return state, errors.Errorf("%s must be run as root or sudo", os.Args[0])
-	}
-
-	if err := c.scm.Setup(); err != nil {
-		return state, errors.WithMessage(err, "SCM setup")
 	}
 
 	if !c.scm.initialized {
