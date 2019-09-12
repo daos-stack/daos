@@ -136,6 +136,16 @@ func (tc *testConn) DestroyPool(req *pb.DestroyPoolReq) client.ResultMap {
 	return nil
 }
 
+func (tc *testConn) BioHealthQuery(req *pb.BioHealthReq) client.ResultQueryMap {
+	tc.appendInvocation(fmt.Sprintf("BioHealthQuery-%s", req))
+	return nil
+}
+
+func (tc *testConn) SmdListDevs(req *pb.SmdDevReq) client.ResultSmdMap {
+	tc.appendInvocation(fmt.Sprintf("SmdListDevs-%s", req))
+	return nil
+}
+
 func (tc *testConn) SetTransportConfig(cfg *security.TransportConfig) {
 	tc.appendInvocation("SetTransportConfig")
 }
