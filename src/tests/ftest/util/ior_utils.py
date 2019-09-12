@@ -25,7 +25,6 @@ from __future__ import print_function
 
 import re
 import uuid
-import daos_api
 
 from avocado.utils.process import run, CmdError
 from command_utils import FormattedParameter, CommandWithParameters
@@ -226,7 +225,8 @@ class IorCommand(CommandWithParameters):
 
         return total
 
-    def get_launch_command(self, manager, attach_info, processes, hostfile):
+    def get_launch_command(self, manager, attach_info, processes, hostfile,
+                           client_log=None):
         """Get the process launch command used to run IOR.
 
         Args:
@@ -235,6 +235,7 @@ class IorCommand(CommandWithParameters):
             mpi_prefix (str): path for the mpi launch command
             processes (int): number of host processes
             hostfile (str): file defining host names and slots
+            client_log (str, optional): client log dir
 
         Raises:
             IorFailed: if an error occured building the IOR command
@@ -250,14 +251,16 @@ class IorCommand(CommandWithParameters):
             "MPI_LIB": "\"\"",
             "DAOS_SINGLETON_CLI": 1,
         }
+        if client_log:
+            env.update({"D_LOG_FILE": client_log})
+
         if manager.endswith("mpirun"):
             env.update({
                 "DAOS_POOL": self.daos_pool.value,
                 "DAOS_SVCL": self.daos_svcl.value,
                 "FI_PSM2_DISCONNECT": 1,
                 "IOR_HINT__MPI__romio_daos_obj_class":
-                daos_api.get_object_class("OC_{}".\
-                format(self.daos_oclass.value)).value,
+                self.daos_oclass.value
             })
             assign_env = ["{}={}".format(key, val) for key, val in env.items()]
             exports = "export {}; ".format("; export ".join(assign_env))
@@ -300,7 +303,8 @@ class IorCommand(CommandWithParameters):
         return "{}{} {} {}".format(
             exports, manager, " ".join(args), self.__str__())
 
-    def run(self, manager, attach_info, processes, hostfile, display=True):
+    def run(self, manager, attach_info, processes, hostfile, display=True,
+            client_log=None):
         """Run the IOR command.
 
         Args:
@@ -310,13 +314,14 @@ class IorCommand(CommandWithParameters):
             hostfile (str): file defining host names and slots
             display (bool, optional): print IOR output to the console.
                 Defaults to True.
+            client_log (str, optional): client log dir
 
         Raises:
             IorFailed: if an error occured runnig the IOR command
 
         """
         command = self.get_launch_command(
-            manager, attach_info, processes, hostfile)
+            manager, attach_info, processes, hostfile, client_log)
         if display:
             print("<IOR CMD>: {}".format(command))
 

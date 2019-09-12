@@ -828,7 +828,7 @@ out_stop:
 	if (ranks->rl_nr > 0) {
 		D_ASSERT(rc != 0);
 		ds_rsvc_dist_stop(svc->s_class, &svc->s_id, ranks,
-				  true /* destroy */);
+				  NULL, true /* destroy */);
 	}
 	return rc;
 }
@@ -864,7 +864,7 @@ ds_rsvc_remove_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks)
 	daos_rank_list_filter(ranks, stop_ranks, true /* exclude */);
 	if (stop_ranks->rl_nr > 0)
 		ds_rsvc_dist_stop(svc->s_class, &svc->s_id, stop_ranks,
-				  true /* destroy */);
+				  NULL, true /* destroy */);
 	d_rank_list_free(stop_ranks);
 	return rc;
 }
@@ -906,15 +906,17 @@ rsvc_corpc_incr_cb(d_rank_list_t *ranks, d_rank_t target, int rpc_rc,
 }
 
 static int
-bcast_create(crt_opcode_t opc, crt_group_t *group, crt_rpc_t **rpc, void *priv)
+bcast_create(crt_opcode_t opc, crt_group_t *group, d_rank_list_t *excluded,
+	     crt_rpc_t **rpc, void *priv)
 {
 	struct dss_module_info *info = dss_get_module_info();
 	crt_opcode_t		opc_full;
 
 	opc_full = DAOS_RPC_OPCODE(opc, DAOS_RSVC_MODULE, DAOS_RSVC_VERSION);
 	return crt_corpc_req_create(info->dmi_ctx, group,
-				    NULL /* excluded_ranks */, opc_full,
-				    NULL /* co_bulk_hdl */, priv, 0 /* flags */,
+				    excluded /* excluded_ranks */, opc_full,
+				    NULL /* co_bulk_hdl */, priv,
+				    0 /* flags */,
 				    crt_tree_topo(CRT_TREE_FLAT, 0), rpc);
 }
 
@@ -950,7 +952,8 @@ ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id,
 	 * If ranks doesn't include myself, creating a group with ranks will
 	 * fail; bcast to the primary group instead.
 	 */
-	rc = bcast_create(RSVC_START, NULL /* group */, &rpc, &nstarted);
+	rc = bcast_create(RSVC_START, NULL /* group */, NULL, &rpc,
+			  &nstarted);
 	if (rc != 0)
 		goto out;
 	in = crt_req_get(rpc);
@@ -1032,14 +1035,21 @@ ds_rsvc_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
  * all replicas of a database spanning \a ranks. This method can be called on
  * any rank. \a ranks may be NULL.
  *
+ * XXX excluded and ranks are a bit duplicate here, since this function only
+ * suppose to send RPC to @ranks list, but cart does not have such interface
+ * for collective RPC, so we have to use both ranks and exclued for the moment,
+ * and it should be simplied once cart can provide rank list collective RPC.
+ *
  * \param[in]	class		replicated service class
  * \param[in]	id		replicated service ID
  * \param[in]	ranks		list of \a ranks->rl_nr replica ranks
+ * \param[in]	excluded	excluded rank list.
  * \param[in]	destroy		destroy after close
  */
 int
 ds_rsvc_dist_stop(enum ds_rsvc_class_id class, d_iov_t *id,
-		  const d_rank_list_t *ranks, bool destroy)
+		  const d_rank_list_t *ranks, d_rank_list_t *excluded,
+		  bool destroy)
 {
 	crt_rpc_t		*rpc;
 	struct rsvc_stop_in	*in;
@@ -1051,7 +1061,8 @@ ds_rsvc_dist_stop(enum ds_rsvc_class_id class, d_iov_t *id,
 	 * If ranks doesn't include myself, creating a group with ranks will
 	 * fail; bcast to the primary group instead.
 	 */
-	rc = bcast_create(RSVC_STOP, NULL /* group */, &rpc, &nstopped);
+	rc = bcast_create(RSVC_STOP, NULL /* group */, excluded, &rpc,
+			  &nstopped);
 	if (rc != 0)
 		goto out;
 	in = crt_req_get(rpc);

@@ -5,7 +5,7 @@
 
 Name:          daos
 Version:       0.6.0
-Release:       3%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -34,6 +34,7 @@ BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
 BuildRequires: libcmocka-devel
 BuildRequires: readline-devel
+BuildRequires: systemd
 %if (0%{?rhel} >= 7)
 BuildRequires:  numactl-devel
 BuildRequires: CUnit-devel
@@ -73,6 +74,8 @@ to optimize performance and cost.
 Summary: The DAOS server
 Requires: %{name} = %{version}-%{release}
 Requires: spdk-tools
+Requires: ndctl
+Requires: ipmctl
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 
@@ -143,6 +146,9 @@ cp -al src/utils/py/daos_cref.py %{?buildroot}%{daoshome}/utils/py
 cp -al src/utils/py/conversion.py %{?buildroot}%{daoshome}/utils/py
 mkdir -p %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
+mkdir -p %{?buildroot}/%{_unitdir}
+install -m 644 utils/systemd/daos-server.service %{?buildroot}/%{_unitdir}
+install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 
 %post server -p /sbin/ldconfig
 %postun server -p /sbin/ldconfig
@@ -168,6 +174,7 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_libdir}/daos_srv/libplacement.so
 # Certificate generation files
 %{daoshome}/certgen/
+%{daoshome}/VERSION
 %doc
 
 %files server
@@ -187,8 +194,10 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_libdir}/daos_srv/libsecurity.so
 %{_libdir}/daos_srv/libvos_srv.so
 %{_datadir}/%{name}
+%{_unitdir}/daos-server.service
 
 %files client
+%{_prefix}/etc/memcheck-daos-client.supp
 %{_bindir}/daos_shell
 %{_bindir}/daosctl
 %{_bindir}/dcont
@@ -207,6 +216,7 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_datadir}/%{name}/ioil-ld-opts
 %{_prefix}%{_sysconfdir}/daos.yml
 %{_prefix}%{_sysconfdir}/daos_agent.yml
+%{_unitdir}/daos-agent.service
 
 %files tests
 %{daoshome}/utils/py
@@ -230,6 +240,12 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_libdir}/*.a
 
 %changelog
+* Tue Sep 10 2019 Tom Nabarro <tom.nabarro@intel.com>
+- Add requires ndctl as runtime dep for control plane.
+
+* Thu Aug 15 2019 David Quigley <david.quigley@intel.com>
+- Add systemd unit files to packaging.
+
 * Thu Jul 25 2019 Brian J. Murrell <brian.murrell@intel.com>
 - Add git hash and commit count to release
 

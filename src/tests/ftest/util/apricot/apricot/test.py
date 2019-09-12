@@ -28,9 +28,12 @@ from __future__ import print_function
 
 import os
 import json
+import re
 
 from avocado import Test as avocadoTest
 from avocado import skip
+from avocado.utils import process
+from ClusterShell.NodeSet import NodeSet, NodeSetParseError
 
 import fault_config_utils
 import agent_utils
@@ -38,6 +41,7 @@ import server_utils
 import write_host_file
 from daos_api import DaosContext, DaosLog
 
+CLIENT_LOG = "client_daos.log"
 
 # pylint: disable=invalid-name
 def skipForTicket(ticket):
@@ -83,9 +87,11 @@ class Test(avocadoTest):
         self.hostlist_servers = None
         self.hostfile_servers = None
         self.hostfile_servers_slots = 1
+        self.partition_servers = None
         self.hostlist_clients = None
         self.hostfile_clients = None
         self.hostfile_clients_slots = 1
+        self.partition_clients = None
         self.d_log = None
         self.uri_file = None
         self.fault_file = None
@@ -155,6 +161,13 @@ class TestWithServers(TestWithoutServers):
 
         self.agent_sessions = None
         self.setup_start_servers = True
+        self.server_log = None
+        self.log_dir = os.path.split(os.getenv("D_LOG_FILE",
+                                               "/tmp/server.log"))[0]
+        self.client_log = None
+        self.test_id = "{}-{}".format(os.path.split(self.filename)[1],
+                                      self.name.str_uid)
+        self.setup_start_agents = True
 
     def setUp(self):
         """Set up each test case."""
@@ -171,6 +184,13 @@ class TestWithServers(TestWithoutServers):
         test_clients = self.params.get("test_clients", "/run/hosts/*")
         server_count = self.params.get("server_count", "/run/hosts/*")
         client_count = self.params.get("client_count", "/run/hosts/*")
+
+        # If server or client host list are defined through valid slurm
+        # partition names override any hosts specified through lists.
+        test_servers, self.partition_servers = self.get_partition_hosts(
+            "server_partition", test_servers)
+        test_clients, self.partition_clients = self.get_partition_hosts(
+            "client_partition", test_clients)
 
         # Supported combinations of yaml hosts arguments:
         #   - test_machines [+ server_count]
@@ -201,8 +221,6 @@ class TestWithServers(TestWithoutServers):
                     "Test requires {} {}; {} specified".format(
                         expected_count, host_type, actual_count))
 
-        # Start the servers and clients
-
         # Create host files
         self.hostfile_servers = write_host_file.write_host_file(
             self.hostlist_servers, self.workdir, self.hostfile_servers_slots)
@@ -211,9 +229,12 @@ class TestWithServers(TestWithoutServers):
                 self.hostlist_clients, self.workdir,
                 self.hostfile_clients_slots)
 
-        self.agent_sessions = agent_utils.run_agent(
-            self.basepath, self.hostlist_servers, self.hostlist_clients)
+        # Start the clients (agents)
+        if self.setup_start_agents:
+            self.agent_sessions = agent_utils.run_agent(
+                self.basepath, self.hostlist_servers, self.hostlist_clients)
 
+        # Start the servers
         if self.setup_start_servers:
             self.start_servers()
 
@@ -237,6 +258,7 @@ class TestWithServers(TestWithoutServers):
         Args:
             server_groups (dict, optional): [description]. Defaults to None.
         """
+
         if isinstance(server_groups, dict):
             # Optionally start servers on a different subset of hosts with a
             # different server group
@@ -244,7 +266,63 @@ class TestWithServers(TestWithoutServers):
                 self.log.info(
                     "Starting servers: group=%s, hosts=%s", group, hosts)
                 hostfile = write_host_file.write_host_file(hosts, self.workdir)
-                server_utils.run_server(hostfile, group, self.basepath)
+                server_utils.run_server(hostfile, group, self.basepath,
+                                        log_filename=self.server_log)
         else:
             server_utils.run_server(
-                self.hostfile_servers, self.server_group, self.basepath)
+                self.hostfile_servers, self.server_group, self.basepath,
+                log_filename=self.server_log)
+
+    def get_partition_hosts(self, partition_key, host_list):
+        """[summary].
+
+        Args:
+            partition_key ([type]): [description]
+            host_list ([type]): [description]
+
+        Returns:
+            tuple: [description]
+
+        """
+        hosts = []
+        partiton_name = self.params.get(partition_key, "/run/hosts/*")
+        if partiton_name is not None:
+            cmd = "scontrol show partition {}".format(partiton_name)
+
+            try:
+                result = process.run(cmd, shell=True, timeout=10)
+            except process.CmdError as error:
+                self.log.warning(
+                    "Unable to obtain hosts from the {} slurm "
+                    "partition: {}".format(partiton_name, error))
+                result = None
+            if result:
+                output = result.stdout
+                try:
+                    hosts = list(
+                        NodeSet(re.findall(r"\s+Nodes=(.*)", output)[0]))
+                except (NodeSetParseError, IndexError):
+                    self.log.warning(
+                        "Unable to obtain hosts from the {} slurm partition "
+                        "output: {}".format(partiton_name, output))
+
+        if hosts:
+            return hosts, partiton_name
+        else:
+            return host_list, None
+
+    def update_log_file_names(self, test_name=None):
+        """Get separate logs for both servers and clients
+        Args:
+            test_name (str, optional): name of test variant
+        """
+
+        # Determine the path and name of the daos server log using the
+        # D_LOG_FILE env or, if not set, the value used in the doas server yaml
+        if test_name:
+            self.test_id = test_name
+
+        self.server_log = os.path.join(
+            self.log_dir, "{}_server_daos.log".format(self.test_id))
+        self.client_log = os.path.join(
+            self.log_dir, "{}_client_daos.log".format(self.test_id))

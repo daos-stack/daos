@@ -67,12 +67,12 @@ def set_nvme_mode(default_value_set, bdev, enabled=False):
         default_value_set['servers'][0]['bdev_class'] = bdev
 
 
-def create_server_yaml(basepath):
+def create_server_yaml(basepath, log_filename):
     """Create the DAOS server config YAML file based on Avocado test Yaml file.
 
     Args:
         basepath (str): DAOS install basepath
-
+        log_filename (str): log file name
     Raises:
         ServerFailed: if there is an reading/writing yaml files
 
@@ -115,6 +115,9 @@ def create_server_yaml(basepath):
             elif key in default_value_set:
                 default_value_set[key] = new_value_set['server_config'][key]
 
+    # if sepcific log file name specified use that
+    if log_filename:
+        default_value_set['servers'][0]['log_file'] = log_filename
     # Disable NVMe from baseline data/daos_server_baseline.yml
     set_nvme_mode(default_value_set, "nvme")
 
@@ -132,7 +135,7 @@ def create_server_yaml(basepath):
 
 
 def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
-               clean=True):
+               log_filename=None):
     """Launch DAOS servers in accordance with the supplied hostfile.
 
     Args:
@@ -142,8 +145,7 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
         uri_path (str, optional): path to uri file. Defaults to None.
         env_dict (dict, optional): dictionary on env variable names and values.
             Defaults to None.
-        clean (bool, optional): remove files in /mnt/daos. Defaults to True.
-
+        log_filename (str): log file name
     Raises:
         ServerFailed: if there is an error starting the servers
 
@@ -157,7 +159,7 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
         # Create the DAOS server configuration yaml file to pass
         # with daos_server -o <FILE_NAME>
         print("Creating the server yaml file")
-        create_server_yaml(basepath)
+        create_server_yaml(basepath, log_filename)
 
         # first make sure there are no existing servers running
         print("Removing any existing server processes")
@@ -202,9 +204,11 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
         server_cmd.extend(env_args)
 
         # Run server in insecure mode until Certificate tests are in place
-        server_cmd.extend([daos_srv_bin, "-i",
-                           "-a", os.path.join(basepath, "install", "tmp"),
-                           "-o", '{}/{}'.format(basepath, AVOCADO_FILE)])
+        server_cmd.extend([daos_srv_bin,
+                           "--debug",
+                           "--config", '{}/{}'.format(basepath, AVOCADO_FILE),
+                           "start", "-i",
+                           "-a", os.path.join(basepath, "install", "tmp")])
 
         print("Start CMD>>>>{0}".format(' '.join(server_cmd)))
 
@@ -221,7 +225,7 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
         timeout = 600
         start_time = time.time()
         result = 0
-        pattern = "DAOS I/O server"
+        pattern = "DAOS I/O server.*started"
         expected_data = "Starting Servers\n"
         while True:
             output = ""

@@ -111,21 +111,21 @@ TODO: examples for both DCPM and RAM (emulation) SCM classes including config fi
 
 `daos_server` supports various subcommands (see `daos_server --help` for available subcommands) which will perform stand-alone tasks as opposed to launching as a daemon (default operation if launched without subcommand).
 
-### storage prep-nvme
+### storage prepare --nvme-only
 
 This subcommand requires elevated permissions (sudo).
 
-NVMe access through SPDK as an unprivileged user can be enabled by first running `sudo daos_server storage prep-nvme -w 0000:81:00.0 -p 4096 -u bob`. This will perform the required setup in order for `daos_server` to be run by user "bob" who will own the hugepage mountpoint directory and vfio groups as needed in SPDK operations. If the `target-user` is unspecified (`-u` short option), the target user will be the issuer of the sudo command (or root if not using sudo). The specification of `hugepages` (`-p` short option) defines the number of huge pages to allocate for use by SPDK. The specification of `pci-whitelist` (`-w` short option) allows user to optionally specify which PCI devices to unbind from the Kernel driver for use with SPDK, as opposed to unbinding all devices by default. Multiple devices can be specified as a whitespace separated list of full PCI addresses (-w \"0000:81:00.0 000:2\"). If one of the addresses is non-valid (for example 000:2), then that device will be skipped, unless it is the only address listed in which case all PCI devices will be blacklisted. A use for all device blacklisting could involve the need to only set up hugepages and skip all device unbindings.
+NVMe access through SPDK as an unprivileged user can be enabled by first running `sudo daos_server storage prepare --nvme-only -w 0000:81:00.0 -p 4096 -u bob`. This will perform the required setup in order for `daos_server` to be run by user "bob" who will own the hugepage mountpoint directory and vfio groups as needed in SPDK operations. If the `target-user` is unspecified (`-u` short option), the target user will be the issuer of the sudo command (or root if not using sudo). The specification of `hugepages` (`-p` short option) defines the number of huge pages to allocate for use by SPDK. The specification of `pci-whitelist` (`-w` short option) allows user to optionally specify which PCI devices to unbind from the Kernel driver for use with SPDK, as opposed to unbinding all devices by default. Multiple devices can be specified as a whitespace separated list of full PCI addresses (-w \"0000:81:00.0 000:2\"). If one of the addresses is non-valid (for example 000:2), then that device will be skipped, unless it is the only address listed in which case all PCI devices will be blacklisted. A use for all device blacklisting could involve the need to only set up hugepages and skip all device unbindings.
 
 The configuration commands that require elevated permissions are in `src/control/server/init/setup_spdk.sh` (script is installed as `install/share/control/setup_spdk.sh`).
 
 The sudoers file can be accessed with command `visudo` and permissions can be granted to a user to execute a specific command pattern (requires prior knowledge of `daos_server` binary location):
 
 ```bash
-linuxuser ALL=/home/linuxuser/projects/daos_m/install/bin/daos_server prep-nvme*
+linuxuser ALL=/home/linuxuser/projects/daos_m/install/bin/daos_server prepare --nvme-only*
 ```
 
-See `daos_server storage prep-nvme --help` for usage.
+See `daos_server storage prepare --help` for usage.
 
 ### storage scan
 
@@ -213,7 +213,7 @@ Storage format is required after other storage management operations have been p
 
 ### SCM management capabilities
 
-Operations on SCM persistent memory modules are performed using [go-ipmctl bindings](https://github.com/daos-stack/go-ipmctl) to issue commands through the ipmctl native C libraries.
+Operations on SCM persistent memory modules are performed using [go-ipmctl bindings](https://github.com/daos-stack/daos/src/control/lib/ipmctl) to issue commands through the ipmctl native C libraries.
 
 [SCM provisioning](#scm-provision) is to be performed prior to formatting and allocating SCM through the DAOS control plane.
 
@@ -374,7 +374,7 @@ wolf-72.wolf.hpdd.intel.com 2019/04/10 04:00:21 external.go:54: debug: exec 'wip
 wolf-72.wolf.hpdd.intel.com 2019/04/10 04:00:21 external.go:54: debug: exec 'mkfs.ext4 /dev/pmem4'
 wolf-72.wolf.hpdd.intel.com 2019/04/10 04:00:22 external.go:98: debug: calling mount with /dev/pmem4, /mnt/daos, ext4, 33806, dax
 wolf-72.wolf.hpdd.intel.com 2019/04/10 04:00:22 external.go:54: debug: exec 'mount | grep ' /mnt/daos ''
-wolf-72.wolf.hpdd.intel.com 2019/04/10 04:00:22 mgmt.go:153: debug: FormatStorage: storage format successful on server 0
+wolf-72.wolf.hpdd.intel.com 2019/04/10 04:00:22 mgmt.go:153: debug: StorageFormat: storage format successful on server 0
 wolf-72.wolf.hpdd.intel.com 2019/04/10 04:00:22 iosrv.go:128: debug: format server /mnt/daos (createMS=false bootstrapMS=false)
 wolf-72.wolf.hpdd.intel.com 2019/04/10 04:00:23 main.go:156: debug: DAOS server listening on 0.0.0.0:10001
 DAOS I/O server (v0.4.0) process 135863 started on rank 0 (out of 1) with 1 target xstream set(s), 2 helper XS per target, firstcore 0.
