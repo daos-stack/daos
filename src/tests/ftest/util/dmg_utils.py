@@ -101,3 +101,69 @@ class DmgCommand(CommandWithParameters):
         """
         return process.run(self.__str__(), timeout, verbose, env=env,
                            shell=True, sudo=sudo)
+
+
+def clean_daos_mnt(hosts):
+        """Clean up daos mnts on servers.
+
+        Args:
+            hosts (list): list of host names where servers are running
+        """
+        cleanup_cmds = [
+            "umount /mnt/daos; rm -rf /mnt/daos",
+            "rm -rf /tmp/daos_sockets/",
+            "rm -rf /tmp/*.log",
+        ]
+        # Intentionally ignoring the exit status of the command
+        return pcmd(hosts, "; ".join(cleanup_cmds), False, None, None)
+
+def storage_scan(hosts, path=""):
+    """ Execute scan command through dmg tool to servers provided.
+
+    Args:
+        hosts (list): list of servers to run scan on.
+        path (str, optional): Path to dmg command binary. Defaults to "".
+    """
+
+    # Create and setup the command
+    dmg = DmgCommand(path)
+    dmg.request.value = "storage"
+    dmg.action.value = "scan"
+    dmg.insecure.value = True
+    dmg.hostlist.value = hosts
+
+    # Run command
+    process = None
+    try:
+        process = dmg.run()
+    except process.CmdError as details:
+        self.fail("<dmg> command failed: {}".format(details))
+    finally:
+        return process
+
+def storage_format(hosts, path=""):
+    """ Execute scan command through dmg tool to servers provided.
+
+    Args:
+        hosts (list): list of servers to run scan on.
+        path (str, optional): Path to dmg command binary. Defaults to "".
+    """
+
+    # Clean up daos mnt on servers
+    clean_daos_mnt(hosts)
+
+    # Create and setup the command
+    dmg = DmgCommand(path)
+    dmg.request.value = "storage"
+    dmg.action.value = "format"
+    dmg.insecure.value = True
+    dmg.hostlist.value = hosts
+
+    # Run command
+    process = None
+    try:
+        process = dmg.run(sudo=True)
+    except process.CmdError as details:
+        self.fail("<dmg> command failed: {}".format(details))
+    finally:
+        return process
