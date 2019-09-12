@@ -33,6 +33,7 @@ from command_utils import FormattedParameter, CommandWithParameters
 class IorFailed(Exception):
     """Raise if Ior failed."""
 
+
 class IorCommand(CommandWithParameters):
     """Defines a object for executing an IOR command.
 
@@ -144,7 +145,7 @@ class IorCommand(CommandWithParameters):
 
         Args:
             group (str): DAOS server group name
-            pool (DaosPool): DAOS pool API object
+            pool (TestPool): DAOS test pool object
             cont_uuid (str, optional): the container uuid. If not specified one
                 is generated. Defaults to None.
             display (bool, optional): print updated params. Defaults to True.
@@ -159,10 +160,9 @@ class IorCommand(CommandWithParameters):
         """Set the IOR parameters that are based on a DAOS pool.
 
         Args:
-            pool (DaosPool): DAOS pool API object
+            pool (TestPool): DAOS test pool object
             display (bool, optional): print updated params. Defaults to True.
         """
-        #self.daos_pool.value = pool.uuid
         self.daos_pool.update(
             pool.pool.get_uuid_str(), "daos_pool" if display else None)
         self.set_daos_svcl_param(pool, display)
@@ -171,7 +171,7 @@ class IorCommand(CommandWithParameters):
         """Set the IOR daos_svcl param from the ranks of a DAOS pool object.
 
         Args:
-            pool (DaosPool): DAOS pool API object
+            pool (TestPool): DAOS test pool object
             display (bool, optional): print updated params. Defaults to True.
         """
         svcl = ":".join(
