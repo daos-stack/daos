@@ -1589,8 +1589,8 @@ rebuild_master_failure(void **state)
 {
 	test_arg_t		*arg = *state;
 	daos_obj_id_t		oids[OBJ_NR];
-	daos_pool_info_t	pinfo = { 0 };
-	daos_pool_info_t	pinfo_new = { 0 };
+	daos_pool_info_t	pinfo = {0};
+	daos_pool_info_t	pinfo_new = {0};
 	int			i;
 	int			rc;
 
