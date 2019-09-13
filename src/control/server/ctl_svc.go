@@ -45,7 +45,7 @@ type ControlService struct {
 }
 
 func NewControlService(l logging.Logger, h *IOServerHarness, cfg *Configuration) (*ControlService, error) {
-	scs, err := NewStorageControlService(l, cfg)
+	scs, err := DefaultStorageControlService(l, cfg)
 	if err != nil {
 		return nil, err
 	}

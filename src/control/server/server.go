@@ -106,7 +106,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	if err != nil {
 		return errors.Wrap(err, "init control service")
 	}
-	if err := controlService.Setup(cfg); err != nil {
+	if err := controlService.Setup(); err != nil {
 		return errors.Wrap(err, "setup control service")
 	}
 	defer controlService.Teardown()

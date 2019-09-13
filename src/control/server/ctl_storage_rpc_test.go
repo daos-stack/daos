@@ -257,7 +257,7 @@ func TestStorageScan(t *testing.T) {
 
 			// test for both empty and default config cases
 			config := tt.config
-			cs := defaultMockControlService(t, log)
+			cs := mockControlService(t, log, config)
 			cs.scm = newMockScmStorage(log, config.ext, tt.ipmctlDiscoverRet,
 				[]ipmctl.DeviceDiscovery{module}, false, newMockPrepScm())
 			cs.nvme = newMockNvmeStorage(
@@ -273,7 +273,7 @@ func TestStorageScan(t *testing.T) {
 			_ = new(pb.StorageScanResp)
 
 			// runs discovery for nvme & scm
-			err := cs.Setup(config)
+			err := cs.Setup()
 			if err != nil {
 				AssertEqual(t, err.Error(), tt.setupErrMsg, tt.desc)
 				return
@@ -417,7 +417,7 @@ func TestStoragePrepare(t *testing.T) {
 			_ = new(pb.StoragePrepareResp)
 
 			// runs discovery for nvme & scm
-			if err := cs.Setup(config); err != nil {
+			if err := cs.Setup(); err != nil {
 				t.Fatal(err.Error() + tt.desc)
 			}
 			resp, err := cs.StoragePrepare(context.TODO(), &tt.inReq)
@@ -599,7 +599,7 @@ func TestStorageFormat(t *testing.T) {
 			cs := mockControlService(t, log, config)
 
 			// runs discovery for nvme & scm
-			if err := cs.Setup(config); err != nil {
+			if err := cs.Setup(); err != nil {
 				t.Fatal(err.Error() + tt.desc)
 			}
 
@@ -779,7 +779,7 @@ func TestStorageUpdate(t *testing.T) {
 			cs := mockControlService(t, log, config)
 
 			// runs discovery for nvme & scm
-			if err := cs.Setup(config); err != nil {
+			if err := cs.Setup(); err != nil {
 				t.Fatal(err)
 			}
 
