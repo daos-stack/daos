@@ -53,7 +53,7 @@ class NvmeObject(TestWithServers):
         try:
             if self.container is not None:
                 self.container.destroy()
-            if self.pool is not None and self.pool.pool.attached:
+            if self.pool is not None:
                 self.pool.destroy(1)
         finally:
             # Stop the servers and agents
@@ -95,8 +95,12 @@ class NvmeObject(TestWithServers):
             # write multiple objects
             self.container.write_objects()
 
-            # read written objects and verify
-            self.container.read_objects()
+        # read written objects and verify
+        self.container.read_objects()
+
+        # destroy container
+        if self.container is not None:
+            self.container.destroy()
 
     @avocado.fail_on(DaosApiError)
     def test_nvme_object_multiple_pools(self):
@@ -135,5 +139,13 @@ class NvmeObject(TestWithServers):
                 # write multiple objects
                 self.container.write_objects()
 
-                # read written objects and verify
-                self.container.read_objects()
+            # read written objects and verify
+            self.container.read_objects()
+
+            # destroy container
+            if self.container is not None:
+                self.container.destroy()
+
+            # destroy pool
+            if self.pool is not None:
+                self.pool.destroy(1)

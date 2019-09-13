@@ -3,10 +3,14 @@
 
 hosts:
  test_servers:
-  - boro-A
+  - boro-14
 timeout: 2700
 server_config:
  name: daos_server
+ server:
+   bdev_class: nvme
+   bdev_list: ["0000:81:00.0","0000:da:00.0"]
+   targets: 1
 pool:
  createmode:
   mode: 511
@@ -26,7 +30,7 @@ container:
     - 1
     - 50
     - 100
-    - 1000
+#    - 1000
   akey_size: 10
   dkey_size: 10
   data_size: 4096
