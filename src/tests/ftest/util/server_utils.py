@@ -168,24 +168,23 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
         orterun_bin = os.path.join(build_vars["OMPI_PREFIX"], "bin", "orterun")
         daos_srv_bin = os.path.join(build_vars["PREFIX"], "bin", "daos_server")
 
-        env_args = []
+        server_cmd = [orterun_bin, "--np", str(server_count)]
+        if uri_path is not None:
+            server_cmd.extend(["--report-uri", uri_path])
+        server_cmd.extend(["--hostfile", hostfile, "--enable-recovery"])
+
         # Add any user supplied environment
         if env_dict is not None:
             for key, value in env_dict.items():
                 os.environ[key] = value
-                env_args.extend(["-x", "{}={}".format(key, value)])
+                server_cmd.extend(["-x", "{}={}".format(key, value)])
+
         # the remote orte needs to know where to find daos, in the
         # case that it's not in the system prefix
         # but it should already be in our PATH, so just pass our
         # PATH along to the remote
         if build_vars["PREFIX"] != "/usr":
-            env_args.extend(["-x", "PATH"])
-
-        server_cmd = [orterun_bin, "--np", str(server_count)]
-        if uri_path is not None:
-            server_cmd.extend(["--report-uri", uri_path])
-        server_cmd.extend(["--hostfile", hostfile, "--enable-recovery"])
-        server_cmd.extend(env_args)
+            server_cmd.extend(["-x", "PATH"])
 
         # Run server in insecure mode until Certificate tests are in place
         server_cmd.extend([daos_srv_bin,

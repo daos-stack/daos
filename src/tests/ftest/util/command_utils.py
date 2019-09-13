@@ -315,6 +315,9 @@ class ExecutableCommand(CommandWithParameters):
             bool: whether or not the command progress has been detected
 
         """
+        print(
+            "Checking status of the {} command in {}".format(
+                self._command, subprocess))
         return True
 
     def stop(self):
