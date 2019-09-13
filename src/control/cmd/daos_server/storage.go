@@ -105,10 +105,6 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	if err != nil {
 		return errors.WithMessage(err, "init control service")
 	}
-	if err := svc.Setup(cfg); err != nil {
-		return errors.Wrap(err, "setup control service")
-	}
-	defer svc.Teardown()
 
 	op := "Preparing"
 	if cmd.Reset {

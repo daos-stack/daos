@@ -157,6 +157,10 @@ func (c *StorageControlService) GetScmState() (types.ScmState, error) {
 		return state, errors.Errorf("%s must be run as root or sudo", os.Args[0])
 	}
 
+	if err := c.scm.Setup(); err != nil {
+		return state, errors.WithMessage(err, "SCM setup")
+	}
+
 	if !c.scm.initialized {
 		return state, errors.New(msgScmNotInited)
 	}
