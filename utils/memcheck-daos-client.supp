@@ -62,7 +62,7 @@
    Memcheck:Leak
    match-leak-kinds: indirect
    fun:calloc
-   fun:dfuse_cont_open
+   fun:dfuse_cont_open*
 }
 {
    pool-connect-leak
@@ -70,10 +70,10 @@
    match-leak-kinds: reachable
    fun:calloc
    fun:d_hash_table_create_inplace
-   fun:pl_htable_init
+   ...
    fun:pl_map_update
    fun:pool_map_update
-   fun:process_query_reply
+   ...
    fun:pool_connect_cp
 }
 {
@@ -91,6 +91,6 @@
    match-leak-kinds: indirect
    fun:calloc
    ...
-   fun:process_query_reply
+   fun:process_query_reply*
    fun:pool_query_cb
 }
