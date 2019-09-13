@@ -39,7 +39,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	daos_prop_t			*prop = NULL;
 	struct daos_prop_entry		*prop_entry;
 	uuid_t				pool_uuid;
-	daos_pool_info_t		pool_info;
+	daos_pool_info_t		pool_info = {};
 	struct fuse_entry_param		entry = {0};
 	int				rc;
 
