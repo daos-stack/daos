@@ -163,8 +163,8 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 			return err
 		}
 	}
-	reformat := false // TODO: make this configurable
-	if err := harness.CreateSuperblocks(reformat); err != nil {
+	recreate := false // TODO: make this configurable
+	if err := harness.CreateSuperblocks(recreate); err != nil {
 		return err
 	}
 

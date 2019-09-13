@@ -541,6 +541,7 @@ func TestStorageFormat(t *testing.T) {
 				if err := os.MkdirAll(filepath.Join(testDir, tt.sMount), 0777); err != nil {
 					t.Fatal(err)
 				}
+				// if the instance is expected to have a valid superblock, create one
 				if tt.superblockExists {
 					if err := i.CreateSuperblock(&mgmtInfo{}); err != nil {
 						t.Fatal(err)
