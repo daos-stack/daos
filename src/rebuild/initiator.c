@@ -108,11 +108,11 @@ rebuild_fetch_update_inline(struct rebuild_one *rdone, daos_handle_t oh,
 		rdone->ro_epoch, fetch ? "yes":"no");
 
 	if (fetch) {
-		rc = ds_obj_fetch(oh, rdone->ro_epoch, &rdone->ro_dkey,
-				  rdone->ro_iod_num, rdone->ro_iods,
-				  sgls, NULL);
+		rc = dsc_obj_fetch(oh, rdone->ro_epoch, &rdone->ro_dkey,
+				   rdone->ro_iod_num, rdone->ro_iods, sgls,
+				   NULL);
 		if (rc) {
-			D_ERROR("ds_obj_fetch %d\n", rc);
+			D_ERROR("dsc_obj_fetch %d\n", rc);
 			return rc;
 		}
 	}
@@ -202,9 +202,8 @@ rebuild_fetch_update_bulk(struct rebuild_one *rdone, daos_handle_t oh,
 		DP_UOID(rdone->ro_oid), rdone, DP_KEY(&rdone->ro_dkey),
 		rdone->ro_iod_num, rdone->ro_epoch);
 
-	rc = ds_obj_fetch(oh, rdone->ro_epoch, &rdone->ro_dkey,
-			  rdone->ro_iod_num, rdone->ro_iods,
-			  sgls, NULL);
+	rc = dsc_obj_fetch(oh, rdone->ro_epoch, &rdone->ro_dkey,
+			   rdone->ro_iod_num, rdone->ro_iods, sgls, NULL);
 	if (rc)
 		D_ERROR("rebuild dkey "DF_KEY" failed rc %d\n",
 			DP_KEY(&rdone->ro_dkey), rc);
@@ -322,7 +321,7 @@ rebuild_dkey(struct rebuild_tgt_pool_tracker *rpt,
 	if (rc)
 		D_GOTO(free, rc);
 
-	rc = ds_obj_open(coh, rdone->ro_oid.id_pub, DAOS_OO_RW, &oh);
+	rc = dsc_obj_open(coh, rdone->ro_oid.id_pub, DAOS_OO_RW, &oh);
 	if (rc)
 		D_GOTO(cont_close, rc);
 
@@ -355,7 +354,7 @@ rebuild_dkey(struct rebuild_tgt_pool_tracker *rpt,
 cont_put:
 	ds_cont_child_put(rebuild_cont);
 obj_close:
-	ds_obj_close(oh);
+	dsc_obj_close(oh);
 cont_close:
 	dc_cont_local_close(tls->rebuild_pool_hdl, coh);
 free:
@@ -783,7 +782,7 @@ rebuild_obj_ult(void *data)
 			D_GOTO(free, rc);
 	}
 
-	rc = ds_obj_open(arg->cont_hdl, arg->oid.id_pub, DAOS_OO_RW, &oh);
+	rc = dsc_obj_open(arg->cont_hdl, arg->oid.id_pub, DAOS_OO_RW, &oh);
 	if (rc)
 		D_GOTO(free, rc);
 
@@ -817,9 +816,9 @@ rebuild_obj_ult(void *data)
 		sgl.sg_nr_out = 1;
 		sgl.sg_iovs = &iov;
 
-		rc = ds_obj_list_obj(oh, arg->epoch, NULL, NULL, &size,
-				     &num, kds, eprs, &sgl, &anchor,
-				     &dkey_anchor, &akey_anchor);
+		rc = dsc_obj_list_obj(oh, arg->epoch, NULL, NULL, &size, &num,
+				      kds, eprs, &sgl, &anchor, &dkey_anchor,
+				      &akey_anchor);
 
 		if (rc == -DER_KEY2BIG) {
 			D_DEBUG(DB_REBUILD, "rebuild obj "DF_UOID" got "
@@ -867,7 +866,7 @@ rebuild_obj_ult(void *data)
 			break;
 	}
 
-	ds_obj_close(oh);
+	dsc_obj_close(oh);
 free:
 	if (buf != NULL && buf != stack_buf)
 		D_FREE(buf);

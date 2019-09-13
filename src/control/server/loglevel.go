@@ -20,24 +20,40 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
-
 package server
 
-import (
-	"testing"
+import "github.com/daos-stack/daos/src/control/logging"
+
+// ControlLogLevel is a type that specifies log levels
+type ControlLogLevel logging.LogLevel
+
+// TODO(mjmac): Evaluate whether or not this layer of indirection
+// adds any value.
+const (
+	ControlLogLevelDebug = ControlLogLevel(logging.LogLevelDebug)
+	ControlLogLevelInfo  = ControlLogLevel(logging.LogLevelInfo)
+	ControlLogLevelError = ControlLogLevel(logging.LogLevelError)
 )
 
-func defaultMockControlService(t *testing.T) *ControlService {
-	c := defaultMockConfig(t)
-	return mockControlService(c)
-}
-
-func mockControlService(config *Configuration) *ControlService {
-	cs := ControlService{
-		nvme:   defaultMockNvmeStorage(config),
-		scm:    defaultMockScmStorage(config),
-		config: config,
+// UnmarshalYAML implements yaml.Unmarshaler on ControlLogMask struct
+func (c *ControlLogLevel) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var strLevel string
+	if err := unmarshal(&strLevel); err != nil {
+		return err
 	}
 
-	return &cs
+	var level logging.LogLevel
+	if err := level.SetString(strLevel); err != nil {
+		return err
+	}
+	*c = ControlLogLevel(level)
+	return nil
+}
+
+func (c ControlLogLevel) MarshalYAML() (interface{}, error) {
+	return c.String(), nil
+}
+
+func (c ControlLogLevel) String() string {
+	return logging.LogLevel(c).String()
 }
