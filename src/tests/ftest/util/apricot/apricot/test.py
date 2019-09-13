@@ -235,7 +235,7 @@ class TestWithServers(TestWithoutServers):
             # Format hostlist for dmg tool
             port = self.params.get("port", "/run/server_config/*")
             servers_with_ports = [
-            "{}:{}".format(host, port) for host in self.hostlist_servers]
+                "{}:{}".format(host, port) for host in self.hostlist_servers]
             self.assertTrue(dmg_utils.storage_format(
                 ",".join(servers_with_ports), self.bin))
 
