@@ -960,7 +960,7 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver,
 	bool			 is_array = (iod->iod_type == DAOS_IOD_ARRAY);
 	int			 flags = SUBTR_CREATE;
 	daos_epoch_t		 epoch = 0;
-	daos_epoch_range_t	 akey_epr = {DAOS_EPOCH_MAX, 0};
+	daos_epoch_range_t	 akey_epr = {ioc->ic_epoch, ioc->ic_epoch};
 	daos_handle_t		 toh = DAOS_HDL_INVAL;
 	int			 i;
 	int			 rc = 0;
@@ -981,9 +981,6 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver,
 	rc = ilog_open(vos_ioc2umm(ioc), &krec->kr_ilog, &loh);
 	if (rc != 0)
 		return rc;
-
-	if (iod->iod_eprs == NULL || iod->iod_eprs[0].epr_lo == 0)
-		akey_epr.epr_hi = akey_epr.epr_lo = ioc->ic_epoch;
 
 	rc = key_ilog_update(ioc, loh, &epoch, &akey_epr, 0, &akey_epr);
 	if (rc != 0) {
