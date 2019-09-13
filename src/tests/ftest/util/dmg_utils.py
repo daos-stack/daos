@@ -108,14 +108,22 @@ def clean_daos_mnt(hosts):
 
         Args:
             hosts (list): list of host names where servers are running
+
+        Returns:
+        False if issue running command. True otherwise.
+
         """
         cleanup_cmds = [
-            "umount /mnt/daos; rm -rf /mnt/daos",
+            "sudo umount /mnt/daos; sudo rm -rf /mnt/daos",
             "rm -rf /tmp/daos_sockets/",
             "rm -rf /tmp/*.log",
         ]
         # Intentionally ignoring the exit status of the command
-        return pcmd(hosts, "; ".join(cleanup_cmds), False, None, None)
+        result = pcmd(hosts, "; ".join(cleanup_cmds), False, None, None)
+        if len(result) > 1 or 0 not in result:
+            print("Error removing daos mount")
+            return False
+        return True
 
 def storage_scan(hosts, path=""):
     """ Execute scan command through dmg tool to servers provided.
@@ -123,8 +131,11 @@ def storage_scan(hosts, path=""):
     Args:
         hosts (list): list of servers to run scan on.
         path (str, optional): Path to dmg command binary. Defaults to "".
-    """
 
+    Returns:
+        False if issue running command. True otherwise.
+
+    """
     # Create and setup the command
     dmg = DmgCommand(path)
     dmg.request.value = "storage"
@@ -132,14 +143,13 @@ def storage_scan(hosts, path=""):
     dmg.insecure.value = True
     dmg.hostlist.value = hosts
 
-    # Run command
-    process = None
     try:
-        process = dmg.run()
+        dmg.run()
     except process.CmdError as details:
-        self.fail("<dmg> command failed: {}".format(details))
-    finally:
-        return process
+        print("<dmg> command failed: {}".format(details))
+        return False
+
+    return True
 
 def storage_format(hosts, path=""):
     """ Execute scan command through dmg tool to servers provided.
@@ -147,11 +157,11 @@ def storage_format(hosts, path=""):
     Args:
         hosts (list): list of servers to run scan on.
         path (str, optional): Path to dmg command binary. Defaults to "".
+
+    Returns:
+        False if issue running command. True otherwise.
+
     """
-
-    # Clean up daos mnt on servers
-    clean_daos_mnt(hosts)
-
     # Create and setup the command
     dmg = DmgCommand(path)
     dmg.request.value = "storage"
@@ -159,11 +169,36 @@ def storage_format(hosts, path=""):
     dmg.insecure.value = True
     dmg.hostlist.value = hosts
 
-    # Run command
-    process = None
     try:
-        process = dmg.run(sudo=True)
+        dmg.run()
     except process.CmdError as details:
-        self.fail("<dmg> command failed: {}".format(details))
-    finally:
-        return process
+        print("<dmg> command failed: {}".format(details))
+        return False
+
+    return True
+
+def storage_prep(hosts, path=""):
+    """ Execute scan command through dmg tool to servers provided.
+
+    Args:
+        hosts (list): list of servers to run scan on.
+        path (str, optional): Path to dmg command binary. Defaults to "".
+
+    Returns:
+        False if issue running command. True otherwise.
+
+    """
+    # Create and setup the command
+    dmg = DmgCommand(path)
+    dmg.request.value = "storage"
+    dmg.action.value = "prep"
+    dmg.insecure.value = True
+    dmg.hostlist.value = hosts
+
+    try:
+        dmg.run()
+    except process.CmdError as details:
+        print("<dmg> command failed: {}".format(details))
+        return False
+
+    return True
