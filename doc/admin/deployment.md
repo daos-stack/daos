@@ -94,7 +94,7 @@ by the DAOS server require elevated permissions on the storage nodes
 
 ### Storage Preparation
 
-#### SCM
+#### SCM Preparation
 
 This section addresses how to verify that Optane DC Persistent memory
 (DCPM) is correctly installed on the storage nodes and how to configure
@@ -128,7 +128,7 @@ be configured into interleaved regions with memory mode set to
 "AppDirect" mode with one set per socket (each module is assigned to socket
 and reports this via its NUMA rating).
 
-`sudo daos_server [<app_opts>] storage prepare --scm-only [<cmd_opts>]`
+`sudo daos_server [<app_opts>] storage prepare [--scm-only|-s] [<cmd_opts>]`
 The first time the command is run, SCM AppDirect regions will be created as
 resource allocations on any available DCPM modules (one region per NUMA
 node/socket). The regions are activated after BIOS reads the new resource
@@ -169,7 +169,7 @@ Persistent memory kernel devices:
 [{UUID:5d2f2517-9217-4d7d-9c32-70731c9ac11e Blockdev:pmem1 Dev:namespace1.0 NumaNode:1} {UUID:2bfe6c40-f79a-4b8e-bddf-ba81d4427b9b Blockdev:pmem0 Dev:namespace0.0 NumaNode:0}]
 ```
 
-`sudo daos_server [<app_opts>] storage prepare --scm-only --reset [<cmd_opts>]`
+`sudo daos_server [<app_opts>] storage prepare [--scm-only|-s] --reset [<cmd_opts>]`
 
 All namespaces are disabled and destroyed. SCM regions are removed by
 resetting modules into "MemoryMode" through resource allocations.
@@ -194,7 +194,7 @@ resetting SCM memory allocations
 A reboot is required to process new memory allocation goals.
 ```
 
-#### NVMe
+#### NVMe Preparation
 
 DAOS supports only NVMe-capable SSDs that are accessed directly from
 userspace through the SPDK library.
@@ -216,7 +216,7 @@ of huge pages to allocate for use by SPDK.
 A list of PCI addresses can also be supplied to avoid unbinding all
 PCI devices from the kernel, using the `-w` / `--pci-whitelist` option.
 
-`sudo daos_server [<app_opts>] storage prepare --nvme-only [<cmd_opts>]`
+`sudo daos_server [<app_opts>] storage prepare [--nvme-only|-n] [<cmd_opts>]`
 command wraps the SPDK setup script to unbind the devices from
 original kernel drivers and then binds the devices to a UIO driver
 through which SPDK can communicate.
@@ -227,7 +227,7 @@ specified as --target-user or effective user - in that order of precedence)
 involving changing ownership of relevant files in addition to SPDK setup.
 
 The devices can then be bound back to the original drivers with the command
-`sudo daos_server [<app_opts>] storage prepare --nvme-only --reset [<cmd_opts>]`.
+`sudo daos_server [<app_opts>] storage prepare [--nvme-only|-n] --reset [<cmd_opts>]`.
 
 ### Storage Detection & Selection
 
@@ -1089,8 +1089,8 @@ Typically an administrator will perform the following tasks:
 
 1. Prepare NVMe and SCM Storage
     - `sudo daos_server [<app_opts>] storage prepare [<cmd_opts>]`
-    [NVMe details](#nvme-prep)
-    [SCM details](#scm-prep)
+    [NVMe details](#nvme-preparation)
+    [SCM details](#scm-preparation)
 
 2. Scan Storage
     - `sudo daos_server [<app_opts>] storage scan [<cmd_opts>]`

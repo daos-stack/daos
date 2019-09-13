@@ -173,6 +173,7 @@ class TestWithServers(TestWithoutServers):
         super(TestWithServers, self).__init__(*args, **kwargs)
 
         self.agent_sessions = None
+        self.nvme_parameter = None
         self.setup_start_servers = True
         self.setup_start_agents = True
         self.server_log = None
@@ -197,7 +198,8 @@ class TestWithServers(TestWithoutServers):
         test_clients = self.params.get("test_clients", "/run/hosts/*")
         server_count = self.params.get("server_count", "/run/hosts/*")
         client_count = self.params.get("client_count", "/run/hosts/*")
-
+        self.nvme_parameter = self.params.get(
+            "bdev_class", '/server_config/server/')
         # If server or client host list are defined through valid slurm
         # partition names override any hosts specified through lists.
         test_servers, self.partition_servers = self.get_partition_hosts(
@@ -233,6 +235,10 @@ class TestWithServers(TestWithoutServers):
                     expected_count, actual_count,
                     "Test requires {} {}; {} specified".format(
                         expected_count, host_type, actual_count))
+
+        #Storage setup if requested in test input file
+        if self.nvme_parameter == "nvme":
+            server_utils.storage_prepare(self.hostlist_servers)
 
         # Create host files
         self.hostfile_servers = write_host_file.write_host_file(
@@ -376,6 +382,17 @@ class TestWithServers(TestWithoutServers):
         """
         error_list = []
         if self.hostfile_servers:
+            # Reset the nvme storage
+            if self.nvme_parameter == "nvme":
+                self.multi_log("Resetting NVMe storage on the servers")
+                try:
+                    server_utils.storage_reset(self.hostlist_servers)
+                except server_utils.ServerFailed as error:
+                    self.multi_log("  {}".format(error))
+                error_list.append(
+                    "Error resetting nvme storage: {}".format(error))
+
+            # Stop the servers
             self.multi_log("Stopping servers")
             try:
                 server_utils.stop_server(hosts=self.hostlist_servers)

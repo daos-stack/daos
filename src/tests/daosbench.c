@@ -312,7 +312,7 @@ free_buffers()
 static void
 kill_daos_server(const char *grp)
 {
-	daos_pool_info_t	info;
+	daos_pool_info_t	info = {0};
 	d_rank_t		rank;
 	int			tgt = -1;
 	struct d_tgt_list	targets;
