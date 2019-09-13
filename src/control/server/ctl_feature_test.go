@@ -29,12 +29,16 @@ import (
 
 	. "github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // TODO: add server side streaming test for list features
 
 func TestGetFeature(t *testing.T) {
-	cs := defaultMockControlService(t)
+	log, buf := logging.NewTestLogger(t.Name())
+	defer ShowBufferOnFailure(t, buf)()
+
+	cs := defaultMockControlService(t, log)
 
 	mockFeature := MockFeaturePB()
 	fMap := make(FeatureMap)

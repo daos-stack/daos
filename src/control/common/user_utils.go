@@ -25,24 +25,12 @@ package common
 
 import (
 	"fmt"
-	"os"
 
-	log "github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
-// CheckSudo returns true if current process is running as root or with sudo.
-// Returns either sudoer or current user if not running under sudo.
-func CheckSudo() (bool, string) {
-	usr := os.Getenv(sudoUserEnv)
-	if usr == "" {
-		usr = rootUser
-	}
-
-	return (os.Geteuid() == 0), usr
-}
-
 // GetConsent scans stdin for yes/no
-func GetConsent() bool {
+func GetConsent(log logging.Logger) bool {
 	var response string
 
 	log.Info("Are you sure you want to continue? (yes/no)\n")
@@ -57,7 +45,7 @@ func GetConsent() bool {
 		return false
 	} else if response != "yes" {
 		log.Info("Please type yes or no and then press enter:")
-		return GetConsent()
+		return GetConsent(log)
 	}
 
 	return true

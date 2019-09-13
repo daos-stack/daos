@@ -30,12 +30,12 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	types "github.com/daos-stack/daos/src/control/common/storage"
-	log "github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // newState creates, populates and returns ResponseState in addition
 // to logging any err.
-func newState(status pb.ResponseStatus, errMsg string, infoMsg string,
+func newState(log logging.Logger, status pb.ResponseStatus, errMsg string, infoMsg string,
 	contextMsg string) *pb.ResponseState {
 
 	state := &pb.ResponseState{
@@ -49,7 +49,7 @@ func newState(status pb.ResponseStatus, errMsg string, infoMsg string,
 	return state
 }
 
-func (c *ControlService) doNvmePrepare(req *pb.PrepareNvmeReq) (resp *pb.PrepareNvmeResp) {
+func (c *StorageControlService) doNvmePrepare(req *pb.PrepareNvmeReq) (resp *pb.PrepareNvmeResp) {
 	resp = &pb.PrepareNvmeResp{}
 	msg := "Storage Prepare NVMe"
 	err := c.PrepareNvme(PrepareNvmeRequest{
@@ -60,11 +60,11 @@ func (c *ControlService) doNvmePrepare(req *pb.PrepareNvmeReq) (resp *pb.Prepare
 	})
 
 	if err != nil {
-		resp.State = newState(pb.ResponseStatus_CTRL_ERR_NVME, err.Error(), "", msg)
+		resp.State = newState(c.log, pb.ResponseStatus_CTRL_ERR_NVME, err.Error(), "", msg)
 		return
 	}
 
-	resp.State = newState(pb.ResponseStatus_CTRL_SUCCESS, "", "", msg)
+	resp.State = newState(c.log, pb.ResponseStatus_CTRL_SUCCESS, "", "", msg)
 	return
 }
 
@@ -82,13 +82,19 @@ func translatePmemDevices(inDevs []pmemDev) (outDevs types.PmemDevices) {
 	return
 }
 
-func (c *ControlService) doScmPrepare(req *pb.PrepareScmReq) (resp *pb.PrepareScmResp) {
+func (c *StorageControlService) doScmPrepare(req *pb.PrepareScmReq) (resp *pb.PrepareScmResp) {
 	resp = &pb.PrepareScmResp{}
 	msg := "Storage Prepare SCM"
 
-	needsReboot, pmemDevs, err := c.PrepareScm(PrepareScmRequest{Reset: req.GetReset_()})
+	scmState, err := c.GetScmState()
 	if err != nil {
-		resp.State = newState(pb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg)
+		resp.State = newState(c.log, pb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg)
+		return
+	}
+
+	needsReboot, pmemDevs, err := c.PrepareScm(PrepareScmRequest{Reset: req.GetReset_()}, scmState)
+	if err != nil {
+		resp.State = newState(c.log, pb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg)
 		return
 	}
 
@@ -97,7 +103,7 @@ func (c *ControlService) doScmPrepare(req *pb.PrepareScmReq) (resp *pb.PrepareSc
 		info = MsgScmRebootRequired
 	}
 
-	resp.State = newState(pb.ResponseStatus_CTRL_SUCCESS, "", info, msg)
+	resp.State = newState(c.log, pb.ResponseStatus_CTRL_SUCCESS, "", info, msg)
 	resp.Pmems = translatePmemDevices(pmemDevs)
 
 	return
@@ -105,19 +111,23 @@ func (c *ControlService) doScmPrepare(req *pb.PrepareScmReq) (resp *pb.PrepareSc
 
 // StoragePrepare configures SSDs for user specific access with SPDK and
 // groups SCM modules in AppDirect/interleaved mode as kernel "pmem" devices.
-func (c *ControlService) StoragePrepare(ctx context.Context, req *pb.StoragePrepareReq) (
+func (c *StorageControlService) StoragePrepare(ctx context.Context, req *pb.StoragePrepareReq) (
 	*pb.StoragePrepareResp, error) {
 
 	resp := &pb.StoragePrepareResp{}
 
-	resp.Nvme = c.doNvmePrepare(req.Nvme)
-	resp.Scm = c.doScmPrepare(req.Scm)
+	if req.Nvme != nil {
+		resp.Nvme = c.doNvmePrepare(req.Nvme)
+	}
+	if req.Scm != nil {
+		resp.Scm = c.doScmPrepare(req.Scm)
+	}
 
 	return resp, nil
 }
 
 // StorageScan discovers non-volatile storage hardware on node.
-func (c *ControlService) StorageScan(ctx context.Context, req *pb.StorageScanReq) (
+func (c *StorageControlService) StorageScan(ctx context.Context, req *pb.StorageScanReq) (
 	*pb.StorageScanResp, error) {
 
 	msg := "Storage Scan "
@@ -126,11 +136,11 @@ func (c *ControlService) StorageScan(ctx context.Context, req *pb.StorageScanReq
 	controllers, err := c.ScanNvme()
 	if err != nil {
 		resp.Nvme = &pb.ScanNvmeResp{
-			State: newState(pb.ResponseStatus_CTRL_ERR_NVME, err.Error(), "", msg+"NVMe"),
+			State: newState(c.log, pb.ResponseStatus_CTRL_ERR_NVME, err.Error(), "", msg+"NVMe"),
 		}
 	} else {
 		resp.Nvme = &pb.ScanNvmeResp{
-			State:  newState(pb.ResponseStatus_CTRL_SUCCESS, "", "", msg+"NVMe"),
+			State:  newState(c.log, pb.ResponseStatus_CTRL_SUCCESS, "", "", msg+"NVMe"),
 			Ctrlrs: controllers,
 		}
 	}
@@ -138,11 +148,11 @@ func (c *ControlService) StorageScan(ctx context.Context, req *pb.StorageScanReq
 	modules, err := c.ScanScm()
 	if err != nil {
 		resp.Scm = &pb.ScanScmResp{
-			State: newState(pb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg+"SCM"),
+			State: newState(c.log, pb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg+"SCM"),
 		}
 	} else {
 		resp.Scm = &pb.ScanScmResp{
-			State:   newState(pb.ResponseStatus_CTRL_SUCCESS, "", "", msg+"SCM"),
+			State:   newState(c.log, pb.ResponseStatus_CTRL_SUCCESS, "", "", msg+"SCM"),
 			Modules: modules,
 		}
 	}
@@ -152,34 +162,41 @@ func (c *ControlService) StorageScan(ctx context.Context, req *pb.StorageScanReq
 
 // doFormat performs format on storage subsystems, populates response results
 // in storage subsystem routines and broadcasts (closes channel) if successful.
-func (c *ControlService) doFormat(i int, resp *pb.StorageFormatResp) error {
-	srv := c.config.Servers[i]
-	serverFormatted := false
+func (c *ControlService) doFormat(i *IOServerInstance, resp *pb.StorageFormatResp) error {
+	hasSuperblock := false
 
-	if ok, err := c.config.ext.exists(
-		iosrvSuperPath(srv.ScmMount)); err != nil {
+	needsScmFormat, err := i.NeedsScmFormat()
+	if err != nil {
+		return errors.Wrap(err, "unable to check storage formatting")
+	}
 
-		return errors.Wrap(err, "locating superblock")
-	} else if ok {
+	if !needsScmFormat {
+		needsSuperblock, err := i.NeedsSuperblock()
+		if err != nil {
+			return errors.Wrap(err, "unable to check instance superblock")
+		}
+		hasSuperblock = !needsSuperblock
+	}
+
+	if hasSuperblock {
 		// server already formatted, populate response appropriately
 		c.nvme.formatted = true
 		c.scm.formatted = true
-		serverFormatted = true
 	}
 
+	// scaffolding
 	ctrlrResults := types.NvmeControllerResults{}
-	c.nvme.Format(i, &ctrlrResults)
+	c.nvme.Format(i.runner.Config.Storage.Bdev, &ctrlrResults)
 	resp.Crets = ctrlrResults
 
 	mountResults := types.ScmMountResults{}
-	c.scm.Format(i, &mountResults)
+	c.scm.Format(i.runner.Config.Storage.SCM, &mountResults)
 	resp.Mrets = mountResults
 
-	if !serverFormatted && c.nvme.formatted && c.scm.formatted {
-		// storage subsystem format successful, broadcast formatted
-		close(srv.formatted)
-		log.Debugf("storage format successful on server %d\n", i)
+	if !hasSuperblock && c.nvme.formatted && c.scm.formatted {
+		c.log.Debugf("storage format successful on server %d\n", i.runner.Config.Index)
 	}
+	i.NotifyStorageReady()
 
 	return nil
 }
@@ -195,7 +212,15 @@ func (c *ControlService) doFormat(i int, resp *pb.StorageFormatResp) error {
 func (c *ControlService) StorageFormat(req *pb.StorageFormatReq, stream pb.MgmtCtl_StorageFormatServer) error {
 	resp := new(pb.StorageFormatResp)
 
-	for i := range c.config.Servers {
+	// TODO: We may want to ease this restriction at some point, but having this
+	// here for now should help to cut down on shenanigans which might result
+	// in data loss.
+	if c.harness.IsStarted() {
+		return errors.New("cannot format storage with running I/O server instances")
+	}
+
+	// temporary scaffolding
+	for _, i := range c.harness.Instances() {
 		if err := c.doFormat(i, resp); err != nil {
 			return errors.WithMessage(err, "formatting storage")
 		}
@@ -217,13 +242,22 @@ func (c *ControlService) StorageFormat(req *pb.StorageFormatReq, stream pb.MgmtC
 func (c *ControlService) StorageUpdate(req *pb.StorageUpdateReq, stream pb.MgmtCtl_StorageUpdateServer) error {
 	resp := new(pb.StorageUpdateResp)
 
-	for i := range c.config.Servers {
+	// TODO: We may want to ease this restriction at some point, but having this
+	// here for now should help to cut down on shenanigans which might result
+	// in data loss.
+	if c.harness.IsStarted() {
+		return errors.New("cannot update storage with running I/O server instances")
+	}
+
+	// temporary scaffolding
+	for _, i := range c.harness.Instances() {
+		stCfg := i.runner.Config.Storage
 		ctrlrResults := types.NvmeControllerResults{}
-		c.nvme.Update(i, req.Nvme, &ctrlrResults)
+		c.nvme.Update(stCfg.Bdev, req.Nvme, &ctrlrResults)
 		resp.Crets = ctrlrResults
 
 		moduleResults := types.ScmModuleResults{}
-		c.scm.Update(i, req.Scm, &moduleResults)
+		c.scm.Update(stCfg.SCM, req.Scm, &moduleResults)
 		resp.Mrets = moduleResults
 	}
 
