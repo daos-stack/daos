@@ -215,7 +215,7 @@ co_properties(void **state)
 	daos_prop_t		*prop;
 	daos_prop_t		*prop_query;
 	struct daos_prop_entry	*entry;
-	daos_pool_info_t	 info;
+	daos_pool_info_t	 info = {0};
 	int			 rc;
 
 	print_message("create container with properties, and query/verify.\n");

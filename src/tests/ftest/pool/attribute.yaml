@@ -6,7 +6,6 @@ hosts:
 timeout: 120
 server_config:
   name: daos_server
-  targets: 1
 attrtests:
   createmode:
     mode: 511
