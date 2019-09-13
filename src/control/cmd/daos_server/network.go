@@ -34,7 +34,7 @@ type networkCmd struct {
 	List     networkListCmd     `command:"list" description:"List all known OFI providers that are understood by 'scan'"`
 }
 
-// ScanNetCmd is the struct representing the command to scan the machine for network interface devices
+// networkScanCmd is the struct representing the command to scan the machine for network interface devices
 // that match the given fabric provider.
 type networkScanCmd struct {
 	cfgCmd
@@ -47,25 +47,26 @@ func (cmd *networkScanCmd) Execute(args []string) error {
 	var provider string
 
 	if len(args) > 0 {
-		cmd.log.Infof("An invalid argument was provided: %v", args)
+		cmd.log.Debugf("An invalid argument was provided: %v", args)
 		return errors.WithMessage(nil, "failed to execute the fabric and device scan.  An invalid argument was provided.")
 	}
 
-	if cmd.AllProviders {
+	switch {
+	case cmd.AllProviders:
 		cmd.log.Info("Scanning fabric for all providers")
-	} else if len(cmd.FabricProvider) > 0 {
+	case len(cmd.FabricProvider) > 0:
 		provider = cmd.FabricProvider
 		cmd.log.Infof("Scanning fabric for cmdline specified provider: %s", provider)
-	} else if len(cmd.config.Fabric.Provider) > 0 {
+	case len(cmd.config.Fabric.Provider) > 0:
 		provider = cmd.config.Fabric.Provider
 		cmd.log.Infof("Scanning fabric for YML specified provider: %s", provider)
-	} else {
+	default:
+		// all providers case
 		cmd.log.Info("Scanning fabric for all providers")
 	}
 
 	results, err := netdetect.ScanFabric(provider)
 	if err != nil {
-		cmd.log.Error("An error occured while attempting to scan the fabric for devices")
 		return errors.WithMessage(err, "failed to execute the fabric and device scan")
 	}
 
@@ -89,13 +90,13 @@ type networkListCmd struct {
 }
 
 func (cmd *networkListCmd) Execute(args []string) error {
+	providers := netdetect.GetSupportedProviders()
+
 	cmd.log.Info("Supported providers:")
-	cmd.log.Info("\tofi+gni")
-	cmd.log.Info("\tofi+psm2")
-	cmd.log.Info("\tofi_rxm")
-	cmd.log.Info("\tofi+sockets")
-	cmd.log.Info("\tofi+verbs")
-	cmd.log.Info("\tofi+verbs;ofi_rxm")
+	for _, p := range(providers) {
+		cmd.log.Infof("\t%s", p)
+	}
+
 	cmd.log.Info("\nExamples:\n\tdaos_server network scan --provider ofi+sockets")
 	cmd.log.Info("\tdaos_server network scan --provider ofi_rxm")
 	cmd.log.Info("\tdaos_server network scan --provider \"ofi+sockets;ofi+verbs\"")

@@ -35,6 +35,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
@@ -62,6 +63,7 @@ func genMinimalConfig() *server.Configuration {
 	cfg := server.NewConfiguration().
 		WithFabricProvider("foo").
 		WithNvmeShmID(-1). // don't generate a ShmID in testing
+		WithNetDeviceValidator(netdetect.ValidateNetworkConfigStub).
 		WithServers(
 			ioserver.NewConfig().
 				WithScmClass("ram").
@@ -284,8 +286,9 @@ func TestStartOptions(t *testing.T) {
 				gotConfig = cfg
 				return nil
 			}
-			opts.Start.config = genMinimalConfig().WithValidateNetworkConfigStub()
-			wantConfig := tc.expCfgFn(genDefaultExpected().WithValidateNetworkConfigStub())
+
+			opts.Start.config = genMinimalConfig().WithNetDeviceValidator(netdetect.ValidateNetworkConfigStub)
+			wantConfig := tc.expCfgFn(genDefaultExpected().WithNetDeviceValidator(netdetect.ValidateNetworkConfigStub))
 
 			err := parseOpts(append([]string{"start"}, tc.argList...), &opts, log)
 			if err != tc.expErr {

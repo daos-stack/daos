@@ -36,6 +36,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
@@ -82,7 +83,7 @@ func defaultMockConfig(t *testing.T) *Configuration {
 // supply mock external interface, populates config from given file path
 func mockConfigFromFile(t *testing.T, e External, path string) *Configuration {
 	t.Helper()
-	c := newDefaultConfiguration(e)
+	c := newDefaultConfiguration(e).WithNetDeviceValidator(netdetect.ValidateNetworkConfigStub)
 	c.Path = path
 
 	if err := c.Load(); err != nil {
@@ -137,7 +138,7 @@ func TestConfigMarshalUnmarshal(t *testing.T) {
 				uncommentServerConfig(t, tt.inPath)
 			}
 
-			configA := newDefaultConfiguration(tt.inExt).WithValidateNetworkConfigStub()
+			configA := newDefaultConfiguration(tt.inExt).WithNetDeviceValidator(netdetect.ValidateNetworkConfigStub)
 			configA.Path = tt.inPath
 			err = configA.Load()
 			if tt.errMsg != "" {
@@ -149,7 +150,7 @@ func TestConfigMarshalUnmarshal(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			configB := newDefaultConfiguration(tt.inExt).WithValidateNetworkConfigStub()
+			configB := newDefaultConfiguration(tt.inExt).WithNetDeviceValidator(netdetect.ValidateNetworkConfigStub)
 			if err := configB.SetPath(testFile); err != nil {
 				t.Fatal(err)
 			}
@@ -201,6 +202,7 @@ func TestConstructedConfig(t *testing.T) {
 		WithFaultCb("./.daos/fd_callback").
 		WithFaultPath("/vcdu0/rack1/hostname").
 		WithHyperthreads(true).
+		WithNetDeviceValidator(netdetect.ValidateNetworkConfigStub).
 		WithServers(
 			ioserver.NewConfig().
 				WithRank(0).
@@ -214,6 +216,7 @@ func TestConstructedConfig(t *testing.T) {
 				WithBdevDeviceList("0000:81:00.0").
 				WithFabricInterface("qib0").
 				WithFabricInterfacePort(20000).
+				WithPinnedNumaNode(0).
 				WithEnvVars("CRT_TIMEOUT=30").
 				WithLogFile("/tmp/daos_server1.log").
 				WithLogMask("WARN"),
@@ -231,6 +234,7 @@ func TestConstructedConfig(t *testing.T) {
 				WithBdevFileSize(16).
 				WithFabricInterface("qib0").
 				WithFabricInterfacePort(20000).
+				WithPinnedNumaNode(0).
 				WithEnvVars("CRT_TIMEOUT=100").
 				WithLogFile("/tmp/daos_server2.log").
 				WithLogMask("WARN"),

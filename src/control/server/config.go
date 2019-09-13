@@ -88,18 +88,17 @@ type Configuration struct {
 	// memory and therefore NVMe controllers.
 	// TODO: Is it also necessary to provide distinct coremask args?
 	NvmeShmID int
+
+	//a pointer to a function that validates the chosen provider, device and numa node
+	validateNetworkDeviceFn networkDeviceValidation
 }
 
-// ValidateNetworkConfig is a pointer to a function that validates the chosen provider, device and numa node
-// The default handler is the netdetect.ValidateNetworkConfig.
-var ValidateNetworkConfig networkDeviceValidation = netdetect.ValidateNetworkConfig
-
-// WithValidateNetworkConfigStub is used for unit testing configurations that are not necessarily valid on the test machine.
+// WithNetDeviceValidator is used for unit testing configurations that are not necessarily valid on the test machine.
 // We use the stub function ValidateNetworkConfigStub to avoid unnecessary failures
 // in those tests that are not concerned with testing a truly valid configuration
 // for the test system
-func (c *Configuration) WithValidateNetworkConfigStub() *Configuration {
-	ValidateNetworkConfig = netdetect.ValidateNetworkConfigStub
+func (c *Configuration) WithNetDeviceValidator(fn networkDeviceValidation) *Configuration {
+	c.validateNetworkDeviceFn = fn
 	return c
 }
 
@@ -296,6 +295,7 @@ func newDefaultConfiguration(ext External) *Configuration {
 		NvmeShmID:       0,
 		ControlLogMask:  ControlLogLevel(logging.LogLevelInfo),
 		ext:             ext,
+		validateNetworkDeviceFn: netdetect.ValidateNetworkConfig,
 	}
 }
 
@@ -415,7 +415,7 @@ func (c *Configuration) Validate() (err error) {
 			return errors.Wrapf(err, "I/O server %d failed config validation", i)
 		}
 
-		validConfig, err := ValidateNetworkConfig(srv.Fabric.Provider, srv.Fabric.Interface, srv.Fabric.PinnedNumaNode)
+		validConfig, err := c.validateNetworkDeviceFn(srv.Fabric.Provider, srv.Fabric.Interface, srv.Fabric.PinnedNumaNode)
 		if err != nil {
 			return errors.Wrapf(err, "Unable to validate the network configuration for provider: %s, with device: %s on NUMA node %d.",
 				srv.Fabric.Provider, srv.Fabric.Interface, srv.Fabric.PinnedNumaNode)
