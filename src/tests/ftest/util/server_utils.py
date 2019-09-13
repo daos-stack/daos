@@ -208,7 +208,7 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
         fcntl.fcntl(fdesc, fcntl.F_SETFL, fstat | os.O_NONBLOCK)
         timeout = 600
         start_time = time.time()
-        result = 0
+        matches = 0
         pattern = "DAOS I/O server.*started"
         expected_data = "Starting Servers\n"
         while True:
@@ -221,11 +221,11 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
                 continue
             match = re.findall(pattern, output)
             expected_data += output
-            result += len(match)
-            if not output or result == server_count or \
+            matches += len(match)
+            if not output or matches == server_count or \
                time.time() - start_time > timeout:
                 print("<SERVER>: {}".format(expected_data))
-                if result != server_count:
+                if matches != server_count:
                     raise ServerFailed("Server didn't start!")
                 break
         print(

@@ -302,14 +302,14 @@ class ExecutableCommand(CommandWithParameters):
         else:
             print("Process is already running")
 
-    def check_subprocess_status(self, process):
+    def check_subprocess_status(self, subprocess):
         """Verify command status when called in a subprocess.
 
         Optional method to provide a means for detecting successful command
         execution when running the command as a subprocess.
 
         Args:
-            process (process.SubProcess): sub process used to run the command
+            subprocess (process.SubProcess): subprocess used to run the command
 
         Returns:
             bool: whether or not the command progress has been detected
@@ -405,17 +405,17 @@ class JobManager(ExecutableCommand):
         job_manager_command = super(JobManager, self).__str__()
         return "{} {}".format(job_manager_command, self.job)
 
-    def check_subprocess_status(self, process):
+    def check_subprocess_status(self, subprocess):
         """Verify command status when called in a subprocess.
 
         Args:
-            process (process.SubProcess): sub process used to run the command
+            subprocess (process.SubProcess): subprocess used to run the command
 
         Returns:
             bool: whether or not the command progress has been detected
 
         """
-        return self.job.check_subprocess_status(process)
+        return self.job.check_subprocess_status(subprocess)
 
     def setup_command(self, env, hostfile, processes):
         """Set up the job manager command with common inputs.
