@@ -549,6 +549,11 @@ dss_enum_pack(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 /** Maximal number of iods (i.e., akeys) in dss_enum_unpack_io.ui_iods */
 #define DSS_ENUM_UNPACK_MAX_IODS 16
 
+struct punched_ephs {
+	int		p_num;
+	daos_epoch_t	*p_epochs;
+};
+
 /**
  * Used by dss_enum_unpack to accumulate recxs that can be stored with a single
  * VOS update.
@@ -568,12 +573,15 @@ struct dss_enum_unpack_io {
 	daos_unit_oid_t	ui_oid;		/**< type <= OBJ */
 	daos_key_t	ui_dkey;	/**< type <= DKEY */
 	daos_iod_t     *ui_iods;
+	/* punched epochs per akey */
+	struct punched_ephs *ui_akey_punch_ephs;
+	int             ui_akey_punch_ephs_num;
 	int		ui_iods_cap;
-	int		ui_iods_len;
+	int		ui_iods_size;
 	int	       *ui_recxs_caps;
-	daos_epoch_t	ui_dkey_eph;
-	daos_epoch_t   *ui_akey_ephs;
-	d_sg_list_t *ui_sgls;	/**< optional */
+	/* punched epochs for dkey */
+	struct punched_ephs     ui_dkey_punch_ephs;
+	d_sg_list_t	*ui_sgls;	/**< optional */
 	uint32_t	ui_version;
 };
 
