@@ -54,7 +54,7 @@ const (
 		"reformat not implemented"
 	msgBdevNotFound = "controller at pci addr not found, check device exists " +
 		"and can be discovered, you may need to run `sudo daos_server " +
-		"storage prep-nvme` to setup SPDK to access SSDs"
+		"storage prepare --nvme-only` to setup SPDK to access SSDs"
 	msgBdevNotInited          = "nvme storage not initialized"
 	msgBdevClassNotSupported  = "operation unsupported on bdev class"
 	msgSpdkInitFail           = "SPDK env init, has setup been run?"
@@ -63,6 +63,7 @@ const (
 	msgBdevFwrevEndMismatch   = "controller fwrev unchanged after update"
 	msgBdevModelMismatch      = "controller model unexpected"
 	msgBdevNoDevs             = "no controllers specified"
+	msgBdevClassIsFile        = "nvme emulation initialized with backend file"
 )
 
 // SpdkSetup is an interface to configure spdk prerequisites via a
@@ -245,6 +246,15 @@ func (n *nvmeStorage) Format(cfg storage.BdevConfig, results *(types.NvmeControl
 	}
 
 	switch cfg.Class {
+	case storage.BdevClassMalloc:
+		n.log.Debugf("malloc bdev format successful (%s)\n", pciAddr)
+		addCretFormat(pb.ResponseStatus_CTRL_SUCCESS, "", "")
+	case storage.BdevClassKdev:
+		n.log.Debugf("kernel bdev format successful (%s)\n", pciAddr)
+		addCretFormat(pb.ResponseStatus_CTRL_SUCCESS, "", "")
+	case storage.BdevClassFile:
+		n.log.Debugf("bdev file format successful (%s)\n", pciAddr)
+		addCretFormat(pb.ResponseStatus_CTRL_SUCCESS, "", msgBdevClassIsFile)
 	case storage.BdevClassNvme:
 		for _, pciAddr = range cfg.DeviceList {
 			if pciAddr == "" {

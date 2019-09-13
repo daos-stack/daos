@@ -16,6 +16,7 @@ hosts:
 timeout: 600
 server_config:
   name: daos_server
+  targets: 1
 daos_tests:
   num_clients:
     num_clients: 1
@@ -25,6 +26,7 @@ daos_tests:
     test_d:
       daos_test: d
       test_name: DAOS degraded-mode tests
+      test_timeout: 1200
     test_m:
       daos_test: m
       test_name: Management tests
@@ -43,7 +45,7 @@ daos_tests:
     test_i:
       daos_test: i
       test_name: IO test
-      test_timeout: 900
+      test_timeout: 1200
     test_A:
       daos_test: A
       test_name: DAOS Object Array tests
