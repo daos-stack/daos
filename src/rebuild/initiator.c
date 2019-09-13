@@ -728,7 +728,7 @@ rebuild_one_queue_cb(struct dss_enum_unpack_io *io, void *arg)
 {
 	return rebuild_one_queue(arg, &io->ui_oid, &io->ui_dkey,
 				 &io->ui_dkey_punch_ephs, io->ui_iods,
-				 &io->ui_akey_punch_ephs_num ?
+				 io->ui_akey_punch_ephs_num ?
 				 io->ui_akey_punch_ephs : NULL,
 				 io->ui_iods_size,
 				 io->ui_sgls, io->ui_version);
