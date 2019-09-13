@@ -49,6 +49,7 @@ AVOCADO_FILE = "src/tests/ftest/data/daos_avocado_test.yaml"
 class ServerFailed(Exception):
     """Server didn't start/stop properly."""
 
+
 def create_server_yaml(basepath, log_filename):
     """Create the DAOS server config YAML file based on Avocado test Yaml file.
 
@@ -116,7 +117,7 @@ def create_server_yaml(basepath, log_filename):
 
 
 def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
-               log_filename=None):
+               clean=True, log_filename=None):
     """Launch DAOS servers in accordance with the supplied hostfile.
 
     Args:
@@ -126,6 +127,7 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
         uri_path (str, optional): path to uri file. Defaults to None.
         env_dict (dict, optional): dictionary on env variable names and values.
             Defaults to None.
+        clean (bool, optional): clean the mount point. Defaults to True.
         log_filename (str): log file name
     Raises:
         ServerFailed: if there is an error starting the servers
@@ -147,17 +149,18 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
         kill_server(servers)
 
         # clean the tmpfs on the servers
-        print("Cleaning the server tmpfs directories")
-        result = pcmd(
-            servers,
-            "find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | "
-            "xargs -0r rm -rf",
-            verbose=False)
-        if len(result) > 1 or 0 not in result:
-            raise ServerFailed(
-                "Error cleaning tmpfs on servers: {}".format(
-                    ", ".join(
-                        [str(result[key]) for key in result if key != 0])))
+        if clean:
+            print("Cleaning the server tmpfs directories")
+            result = pcmd(
+                servers,
+                "find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | "
+                "xargs -0r rm -rf",
+                verbose=False)
+            if len(result) > 1 or 0 not in result:
+                raise ServerFailed(
+                    "Error cleaning tmpfs on servers: {}".format(
+                        ", ".join(
+                            [str(result[key]) for key in result if key != 0])))
 
         # Pile of build time variables
         with open(os.path.join(basepath, ".build_vars.json")) as json_vars:
@@ -335,6 +338,7 @@ def kill_server(hosts):
     # Intentionally ignoring the exit status of the command
     pcmd(hosts, "; ".join(kill_cmds), False, None, None)
 
+
 def storage_prepare(hosts):
     """
     Prepare the storage on servers using the DAOS server's yaml settings file.
@@ -349,6 +353,7 @@ def storage_prepare(hosts):
     result = pcmd(hosts, cmd, timeout=120)
     if len(result) > 1 or 0 not in result:
         raise ServerFailed("Error preparing NVMe storage")
+
 
 def storage_reset(hosts):
     """

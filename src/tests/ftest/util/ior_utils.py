@@ -26,14 +26,11 @@ from __future__ import print_function
 import re
 import uuid
 
-from avocado.utils.process import run, CmdError
-from command_utils import FormattedParameter, CommandWithParameters
+from command_utils import FormattedParameter, ExecutableCommand
+from command_utils import EnvironmentVariables, CommandFailure
 
 
-class IorFailed(Exception):
-    """Raise if Ior failed."""
-
-class IorCommand(CommandWithParameters):
+class IorCommand(ExecutableCommand):
     """Defines a object for executing an IOR command.
 
     Example:
@@ -41,14 +38,16 @@ class IorCommand(CommandWithParameters):
         >>> ior_cmd = IorCommand()
         >>> ior_cmd.get_params(self)
         >>> ior_cmd.set_daos_params(self.server_group, self.pool)
-        >>> ior_cmd.run(
-                self.basepath, len(self.hostlist_clients),
-                self.hostfile_clients)
+        >>> mpirun = Mpirun()
+        >>> env = self.ior_cmd.get_default_env(self.tmp, self.client_log)
+        >>> processes = len(self.hostlist_clients)
+        >>> mpirun.setup_command(env, self.hostfile_clients, processes)
+        >>> mpirun.run()
     """
 
     def __init__(self):
         """Create an IorCommand object."""
-        super(IorCommand, self).__init__("ior")
+        super(IorCommand, self).__init__("/run/ior/*", "ior")
 
         # Flags
         self.flags = FormattedParameter("{}")
@@ -124,21 +123,6 @@ class IorCommand(CommandWithParameters):
 
         return param_names
 
-    def get_params(self, test, path="/run/ior/*"):
-        """Get values for all of the ior command params using a yaml file.
-
-        Sets each BasicParameter object's value to the yaml key that matches
-        the assigned name of the BasicParameter object in this class. For
-        example, the self.block_size.value will be set to the value in the yaml
-        file with the key 'block_size'.
-
-        Args:
-            test (Test): avocado Test object
-            path (str, optional): yaml namespace. Defaults to "/run/ior/*".
-
-        """
-        super(IorCommand, self).get_params(test, path)
-
     def set_daos_params(self, group, pool, cont_uuid=None, display=True):
         """Set the IOR parameters for the DAOS group, pool, and container uuid.
 
@@ -162,7 +146,6 @@ class IorCommand(CommandWithParameters):
             pool (DaosPool): DAOS pool API object
             display (bool, optional): print updated params. Defaults to True.
         """
-        #self.daos_pool.value = pool.uuid
         self.daos_pool.update(
             pool.pool.get_uuid_str(), "daos_pool" if display else None)
         self.set_daos_svcl_param(pool, display)
@@ -189,6 +172,9 @@ class IorCommand(CommandWithParameters):
         Returns:
             int: total number of bytes written
 
+        Raises:
+            CommandFailure: if there is an error obtaining the aggregate total
+
         """
         power = {"k": 1, "m": 2, "g": 3, "t": 4}
         total = processes
@@ -203,12 +189,12 @@ class IorCommand(CommandWithParameters):
                         if key in power:
                             total *= 1024**power[key]
                         else:
-                            raise IorFailed(
+                            raise CommandFailure(
                                 "Error obtaining the IOR aggregate total from "
                                 "the {} - bad key: value: {}, split: {}, "
                                 "key: {}".format(name, item, sub_item, key))
                 else:
-                    raise IorFailed(
+                    raise CommandFailure(
                         "Error obtaining the IOR aggregate total from the {}: "
                         "value: {}, split: {}".format(name, item, sub_item))
 
@@ -225,110 +211,30 @@ class IorCommand(CommandWithParameters):
 
         return total
 
-    def get_launch_command(self, manager, attach_info, processes, hostfile,
-                           client_log=None):
-        """Get the process launch command used to run IOR.
+    def get_default_env(self, manager_cmd, attach_info, log_file=None):
+        """Get the default enviroment settings for running IOR.
 
         Args:
-            manager (str): mpi job manager command
+            manager_cmd (str): job manager command
             attach_info (str): CART attach info path
-            mpi_prefix (str): path for the mpi launch command
-            processes (int): number of host processes
-            hostfile (str): file defining host names and slots
-            client_log (str, optional): client log dir
-
-        Raises:
-            IorFailed: if an error occured building the IOR command
+            log_file (str, optional): log file. Defaults to None.
 
         Returns:
-            str: ior launch command
+            EnvironmentVariables: a dictionary of environment names and values
 
         """
-        print("Getting launch command for {}".format(manager))
-        exports = ""
-        env = {
-            "CRT_ATTACH_INFO_PATH": attach_info,
-            "MPI_LIB": "\"\"",
-            "DAOS_SINGLETON_CLI": 1,
-        }
-        if client_log:
-            env.update({"D_LOG_FILE": client_log})
+        env = EnvironmentVariables()
+        env["CRT_ATTACH_INFO_PATH"] = attach_info
+        env["MPI_LIB"] = "\"\""
+        env["DAOS_SINGLETON_CLI"] = 1
+        env["FI_PSM2_DISCONNECT"] = 1
+        if log_file:
+            env["D_LOG_FILE"] = log_file
 
-        if manager.endswith("mpirun"):
-            env.update({
-                "DAOS_POOL": self.daos_pool.value,
-                "DAOS_SVCL": self.daos_svcl.value,
-                "FI_PSM2_DISCONNECT": 1,
-                "IOR_HINT__MPI__romio_daos_obj_class":
-                self.daos_oclass.value
-            })
-            assign_env = ["{}={}".format(key, val) for key, val in env.items()]
-            exports = "export {}; ".format("; export ".join(assign_env))
-            args = [
-                "-np {}".format(processes),
-                "-hostfile {}".format(hostfile),
-                # "-map-by node",
-            ]
+        if "mpirun" in manager_cmd or "srun" in manager_cmd:
+            env["DAOS_POOL"] = self.daos_pool.value
+            env["DAOS_SVCL"] = self.daos_svcl.value
+            env["FI_PSM2_DISCONNECT"] = 1
+            env["IOR_HINT__MPI__romio_daos_obj_class"] = self.daos_oclass.value
 
-        elif manager.endswith("orterun"):
-            assign_env = ["{}={}".format(key, val) for key, val in env.items()]
-            args = [
-                "-np {}".format(processes),
-                "-hostfile {}".format(hostfile),
-                "-map-by node",
-            ]
-            args.extend(["-x {}".format(assign) for assign in assign_env])
-
-        elif manager.endswith("srun"):
-            env.update({
-                "DAOS_POOL": self.daos_pool.value,
-                "DAOS_SVCL": self.daos_svcl.value,
-                "FI_PSM2_DISCONNECT": 1,
-            })
-            assign_env = ["{}={}".format(key, val) for key, val in env.items()]
-            args = [
-                "-l",
-                "--mpi=pmi2",
-                "--export={}".format(",".join(["ALL"] + assign_env)),
-            ]
-            if processes is not None:
-                args.append("--ntasks={}".format(processes))
-                args.append("--distribution=cyclic")            # --map-by node
-            if hostfile is not None:
-                args.append("--nodefile={}".format(hostfile))
-
-        else:
-            raise IorFailed("Unsupported job manager: {}".format(manager))
-
-        return "{}{} {} {}".format(
-            exports, manager, " ".join(args), self.__str__())
-
-    def run(self, manager, attach_info, processes, hostfile, display=True,
-            client_log=None):
-        """Run the IOR command.
-
-        Args:
-            manager (str): mpi job manager command
-            attach_info (str): CART attach info path
-            processes (int): number of host processes
-            hostfile (str): file defining host names and slots
-            display (bool, optional): print IOR output to the console.
-                Defaults to True.
-            client_log (str, optional): client log dir
-
-        Raises:
-            IorFailed: if an error occured runnig the IOR command
-
-        """
-        command = self.get_launch_command(
-            manager, attach_info, processes, hostfile, client_log)
-        if display:
-            print("<IOR CMD>: {}".format(command))
-
-        # Run IOR
-        try:
-            run(command, allow_output_check="combined", shell=True)
-
-        except CmdError as error:
-            print("<IorRunFailed> Exception occurred: {}".format(error))
-            raise IorFailed("IOR Run process Failed: {}".format(error))
+        return env

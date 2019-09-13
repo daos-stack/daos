@@ -27,17 +27,19 @@ from __future__ import print_function
 import uuid
 
 from avocado.utils.process import run, CmdError
-from command_utils import FormattedParameter, CommandWithParameters
+from command_utils import FormattedParameter, ExecutableCommand
+
 
 class MdtestFailed(Exception):
-    """Raise if mdtest failed"""
+    """Raise if mdtest failed."""
 
-class MdtestCommand(CommandWithParameters):
+
+class MdtestCommand(ExecutableCommand):
     """Defines a object representing a mdtest command."""
 
     def __init__(self):
         """Create an MdtestCommand object."""
-        super(MdtestCommand, self).__init__("mdtest")
+        super(MdtestCommand, self).__init__("/run/mdtest/*", "mdtest")
         self.flags = FormattedParameter("{}")   # mdtest flags
         # Optional arguments
         #  -a=STRING             API for I/O [POSIX|DUMMY]
@@ -127,21 +129,10 @@ class MdtestCommand(CommandWithParameters):
         self.dfs_group = FormattedParameter("--dfs.group {}")
         self.dfs_destroy = FormattedParameter("--dfs.destroy", True)
 
-    def get_params(self, test, path="/run/mdtest/*"):
-        """Get values for all of the mdtest command params using a yaml file.
-        Sets each BasicParameter object's value to the yaml key that matches
-        the assigned name of the BasicParameter object in this class. For
-        example, the self.depth.value will be set to the value in the yaml
-        file with the key 'depth'.
-        Args:
-            test (Test): avocado Test object
-            path (str, optional): yaml namespace. Defaults to "/run/mdtest/*".
-        """
-        super(MdtestCommand, self).get_params(test, path)
-
     def set_daos_params(self, group, pool, cont_uuid=None, display=True):
         """Set the Mdtest parameters for the DAOS group, pool, and container
            uuid.
+
         Args:
             group (str): DAOS server group name
             pool (TestPool): DAOS test pool object
@@ -157,6 +148,7 @@ class MdtestCommand(CommandWithParameters):
 
     def set_daos_pool_params(self, pool, display=True):
         """Set the Mdtest parameters that are based on a DAOS pool.
+
         Args:
             pool (TestPool): DAOS test pool object
             display (bool, optional): print updated params. Defaults to True.
@@ -166,7 +158,8 @@ class MdtestCommand(CommandWithParameters):
         self.set_daos_svcl_param(pool, display)
 
     def set_daos_svcl_param(self, pool, display=True):
-        """Set the Mdtest daos_svcl param from the ranks of a DAOS pool object
+        """Set the Mdtest daos_svcl param from the ranks of a DAOS pool object.
+
         Args:
             pool (TestPool): DAOS test pool object
             display (bool, optional): print updated params. Defaults to True.
@@ -179,7 +172,8 @@ class MdtestCommand(CommandWithParameters):
 
     def get_launch_command(self, manager, attach_info, processes, hostfile,
                            client_log=None):
-        """Get the process launch command used to run Mdtest
+        """Get the process launch command used to run Mdtest.
+
         Args:
             manager (str): mpi job manager command
             attach_info (str): CART attach info path
@@ -187,10 +181,13 @@ class MdtestCommand(CommandWithParameters):
             processes (int): number of host processes
             hostfile (str): file defining host names and slots
             client_log (str, optional): client log dir
+
         Raises:
             MdtestFailed: if an error occured building the Mdtest command
+
         Returns:
             str: mdtest launch command
+
         """
         print("Getting launch command for {}".format(manager))
         exports = ""
@@ -249,6 +246,7 @@ class MdtestCommand(CommandWithParameters):
     def run(self, manager, attach_info, processes, hostfile, display=True,
             client_log=None):
         """Run the Mdtest command.
+
         Args:
             manager (str): mpi job manager command
             attach_info (str): CART attach info path
@@ -260,6 +258,7 @@ class MdtestCommand(CommandWithParameters):
 
         Raises:
             MdtestFailed: if an error occured runnig the Mdtest command
+
         """
         command = self.get_launch_command(
             manager, attach_info, processes, hostfile, client_log)
