@@ -135,6 +135,8 @@ sed -i -e s/${BUILDROOT//\//\\/}[^\"]\*/${PREFIX//\//\\/}/g %{?buildroot}%{_pref
 mv %{?buildroot}%{_prefix}/lib{,64}
 #mv %{?buildroot}/{usr/,}etc
 mkdir -p %{?buildroot}/%{_exec_prefix}/lib/%{name}
+cp -al VERSION %{?buildroot}/%{_exec_prefix}/lib/%{name} 
+mkdir -p %{?buildroot}/%{_exec_prefix}/lib/%{name}/certgen
 mv %{?buildroot}%{_prefix}/{TESTING,lib/%{name}/}
 cp -al ftest.sh src/tests/ftest %{?buildroot}%{daoshome}/TESTING
 find %{?buildroot}%{daoshome}/TESTING/ftest -name \*.py[co] -print0 | xargs -r0 rm -f
