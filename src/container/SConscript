@@ -3,10 +3,12 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('env')
+    Import('env', 'prereqs')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
+
+    prereqs.require(denv, 'argobots', 'protobufc')
 
     common = denv.SharedObject(['rpc.c'])
     # ds_cont: Container Server
