@@ -145,7 +145,7 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool create --scm-size %s --nsvc 3", testSizeStr),
 			strings.Join([]string{
 				"ConnectClients",
-				fmt.Sprintf("CreatePool-%s", &pb.CreatePoolReq{
+				fmt.Sprintf("PoolCreate-%s", &pb.PoolCreateReq{
 					Scmbytes:   uint64(testSize),
 					Numsvcreps: 3,
 					Sys:        "daos_server", // FIXME: This should be a constant
@@ -161,7 +161,7 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo --group bar --nvme-size %s --sys fnord", testSizeStr, testSizeStr),
 			strings.Join([]string{
 				"ConnectClients",
-				fmt.Sprintf("CreatePool-%s", &pb.CreatePoolReq{
+				fmt.Sprintf("PoolCreate-%s", &pb.PoolCreateReq{
 					Scmbytes:   uint64(testSize),
 					Nvmebytes:  uint64(testSize),
 					Numsvcreps: 3,
@@ -177,7 +177,7 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo@home --group bar@home", testSizeStr),
 			strings.Join([]string{
 				"ConnectClients",
-				fmt.Sprintf("CreatePool-%s", &pb.CreatePoolReq{
+				fmt.Sprintf("PoolCreate-%s", &pb.PoolCreateReq{
 					Scmbytes:   uint64(testSize),
 					Numsvcreps: 3,
 					Sys:        "daos_server",
@@ -192,7 +192,7 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo", testSizeStr),
 			strings.Join([]string{
 				"ConnectClients",
-				fmt.Sprintf("CreatePool-%s", &pb.CreatePoolReq{
+				fmt.Sprintf("PoolCreate-%s", &pb.PoolCreateReq{
 					Scmbytes:   uint64(testSize),
 					Numsvcreps: 3,
 					Sys:        "daos_server",
@@ -206,7 +206,7 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --group foo", testSizeStr),
 			strings.Join([]string{
 				"ConnectClients",
-				fmt.Sprintf("CreatePool-%s", &pb.CreatePoolReq{
+				fmt.Sprintf("PoolCreate-%s", &pb.PoolCreateReq{
 					Scmbytes:   uint64(testSize),
 					Numsvcreps: 3,
 					Sys:        "daos_server",
@@ -220,7 +220,7 @@ func TestPoolCommands(t *testing.T) {
 			"pool destroy --uuid 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --force",
 			strings.Join([]string{
 				"ConnectClients",
-				fmt.Sprintf("DestroyPool-%s", &pb.DestroyPoolReq{
+				fmt.Sprintf("PoolDestroy-%s", &pb.PoolDestroyReq{
 					Uuid:  "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Force: true,
 				}),
