@@ -32,7 +32,6 @@
 #include <daos_errno.h>
 #include <daos/btree.h>
 #include <daos/dtx.h>
-#include <daos_srv/vos_types.h>
 
 /**
  * Tree node types.
