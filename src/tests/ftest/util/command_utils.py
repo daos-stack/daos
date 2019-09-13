@@ -184,6 +184,7 @@ class CommandWithParameters(ObjectWithParameters):
         super(CommandWithParameters, self).__init__(namespace)
         self._command = command
         self._path = path
+        self._pre_command = None
 
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
@@ -199,7 +200,14 @@ class CommandWithParameters(ObjectWithParameters):
             value = str(getattr(self, name))
             if value != "":
                 params.append(value)
-        return " ".join([os.path.join(self._path, self._command)] + params)
+
+        # Append the path to the command and preceed it with any other
+        # specified commands
+        command_list = [] if self._pre_command is None else [self._pre_command]
+        command_list.append(os.path.join(self._path, self._command))
+
+        # Return the command and its parameters
+        return " ".join(command_list + params)
 
 
 class ExecutableCommand(CommandWithParameters):
@@ -364,8 +372,8 @@ class EnvironmentVariables(dict):
             str: a string of export commands for each environment variable
 
         """
-        join_str = "{} export".format(separator)
-        return "export {}".format(join_str.join(self.get_list()))
+        join_str = "{} export ".format(separator)
+        return "export {}{}".format(join_str.join(self.get_list()), separator)
 
 
 class JobManager(ExecutableCommand):
@@ -493,9 +501,7 @@ class Mpirun(JobManager):
             processes (int): number of host processes
         """
         # Setup the env for the job to export with the mpirun command
-        if not self.env:
-            self.env = {}
-        self.env.update(env)
+        self._pre_command = env.get_export_str()
 
         # Setup the orterun command
         self.hostfile.value = hostfile
