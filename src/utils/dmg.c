@@ -37,7 +37,7 @@ const char		*default_nvme_size = "8G";
 const char		*default_sysname = DAOS_DEFAULT_SYS_NAME;
 const unsigned int	 default_svc_nreplicas = 1;
 
-const int max_svc_nreplicas = 13;
+#define max_svc_nreplicas 13
 
 typedef int (*command_hdlr_t)(int, char *[]);
 

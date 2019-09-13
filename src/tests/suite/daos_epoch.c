@@ -209,12 +209,12 @@ test_snapshots(void **argp)
 	int			i;
 	daos_epoch_t		garbage	   = 0xAAAAAAAAAAAAAAAAL;
 	int			snaps_in[] = { 21, 29, 35, 47, 57, 78, 81 };
-	const int		snap_count = ARRAY_SIZE(snaps_in);
+	const int		snap_count = 7;
 	daos_epoch_range_t	epr;
 	int			snap_count_out;
 	int			snap_split_index = snap_count/2;
-	daos_epoch_t		snaps[snap_count];
-	daos_epoch_t		snaps_out[snap_count];
+	daos_epoch_t		snaps[7];
+	daos_epoch_t		snaps_out[7];
 	daos_handle_t		*ths = NULL;
 	daos_anchor_t		anchor;
 

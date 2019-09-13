@@ -44,11 +44,11 @@ io(enum io_op op, test_arg_t *arg, daos_handle_t coh, daos_obj_id_t oid,
 	const int	nakeys = 4;
 	const size_t	nakeys_strlen = 4 /* "9999" */;
 	const char     *akey_fmt = "epoch_recovery akey%d";
-	char	       *akey[nakeys];
-	char	       *rec[nakeys];
-	daos_size_t	rec_size[nakeys];
-	int		rx_nr[nakeys];
-	daos_off_t	offset[nakeys];
+	char	       *akey[4];
+	char	       *rec[4];
+	daos_size_t	rec_size[4];
+	int		rx_nr[4];
+	daos_off_t	offset[4];
 	const char     *val_fmt = "epoch_recovery val%d '%s'";
 	daos_size_t	rsize;
 	int		i;

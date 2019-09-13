@@ -31,7 +31,7 @@ parse_rank_list(char *str_rank_list, d_rank_list_t *num_rank_list)
 	 * any currently imaginable situation.
 	 */
 	const uint32_t MAX = 1000;
-	uint32_t rank_list[MAX];
+	uint32_t rank_list[1000];
 	int i = 0;
 	char *token;
 
