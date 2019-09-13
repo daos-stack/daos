@@ -78,7 +78,7 @@ func (cmd *networkScanCmd) Execute(args []string) error {
 	cmd.log.Debugf("Compressed: %v\n", results)
 
 	for _, sr := range(results) {
-		cmd.log.Infof("\n%s\n\n", sr.String())
+		cmd.log.Infof("\n%v\n\n", sr)
 	}
 
 	return nil

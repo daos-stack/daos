@@ -178,7 +178,7 @@ func TestConfigToCmdVals(t *testing.T) {
 		targetCount    = 4
 		helperCount    = 1
 		serviceCore    = 8
-		pinnedNumaNode = 1
+		pinnedNumaNode = uint(1)
 	)
 	cfg := NewConfig().
 		WithScmMountPoint(mountPoint).
@@ -209,7 +209,7 @@ func TestConfigToCmdVals(t *testing.T) {
 		"-d", socketDir,
 		"-i", strconv.Itoa(shmId),
 		"-n", cfgPath,
-		"-p", strconv.Itoa(pinnedNumaNode),
+		"-p", strconv.FormatUint(uint64(pinnedNumaNode), 10),
 	}
 	wantEnv := []string{
 		"OFI_INTERFACE=" + interfaceName,

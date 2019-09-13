@@ -48,7 +48,7 @@ const (
 	msgConfigNoServers  = "no servers specified in config"
 )
 
-type networkDeviceValidation func(string, string, int) (bool, error)
+type networkDeviceValidation func(string, string, uint) (error)
 
 // Configuration describes options for DAOS control plane.
 // See utils/config/daos_server.yml for parameter descriptions.
@@ -415,14 +415,9 @@ func (c *Configuration) Validate() (err error) {
 			return errors.Wrapf(err, "I/O server %d failed config validation", i)
 		}
 
-		validConfig, err := c.validateNetworkDeviceFn(srv.Fabric.Provider, srv.Fabric.Interface, srv.Fabric.PinnedNumaNode)
+		err := c.validateNetworkDeviceFn(srv.Fabric.Provider, srv.Fabric.Interface, srv.Fabric.PinnedNumaNode)
 		if err != nil {
-			return errors.Wrapf(err, "Unable to validate the network configuration for provider: %s, with device: %s on NUMA node %d.",
-				srv.Fabric.Provider, srv.Fabric.Interface, srv.Fabric.PinnedNumaNode)
-		}
-
-		if !validConfig {
-			return errors.Errorf("Network device configuration for Provider: %s, with device: %s on NUMA node %d is invalid.",
+			return errors.Wrapf(err, "Network device configuration for Provider: %s, with device: %s on NUMA node %d is invalid.",
 				srv.Fabric.Provider, srv.Fabric.Interface, srv.Fabric.PinnedNumaNode)
 		}
 	}

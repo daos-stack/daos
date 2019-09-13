@@ -64,19 +64,19 @@ type DeviceAffinity struct {
 	DeviceName   string
 	CPUSet       string
 	NodeSet      string
-	NUMANode     int
+	NUMANode     uint
 }
 
 // FabricScan data encapsulates the results of the fabric scanning
 type FabricScan struct {
 	Provider     string
 	DeviceName   string
-	NUMANode     int
+	NUMANode     uint
 	Priority     int
 }
 
-func (fs *FabricScan) String() string {
-	return fmt.Sprintf("\tfabric_iface: %s\n\tprovider: %s\n\tpinned_numa_node: %d", fs.DeviceName, fs.Provider, fs.NUMANode)
+func (fs FabricScan) String() string {
+	return fmt.Sprintf("\tfabric_iface: %v\n\tprovider: %v\n\tpinned_numa_node: %d", fs.DeviceName, fs.Provider, fs.NUMANode)
 }
 
 // DeviceScan caches initialization data for later hwloc usage
@@ -94,10 +94,6 @@ type DeviceScan struct {
 type logger interface {
 	Debug(string)
 	Debugf(string, ...interface{})
-	Info(string)
-	Infof(string, ...interface{})
-	Error(string)
-	Errorf(string, ...interface{})
 }
 
 var log logger = logging.NewStdoutLogger("netdetect")
@@ -121,24 +117,28 @@ func initLib(flags int) (C.hwloc_topology_t, error) {
 		return nil, errors.New("hwloc_topology_init failure")
 	}
 
-	if (flags != 0) {
-		if (flags == hwlocFlagsWholeSystem) {
-			flags = C.HWLOC_TOPOLOGY_FLAG_WHOLE_SYSTEM
-			log.Debug("Setting HWLOC_TOPOLOGY_FLAG_WHOLE_SYSTEM")
-		} else {
-			defer cleanUp(topology)
-			return nil, errors.New("Invalid flag provided")
-		}
+	switch flags {
+	case hwlocFlagsStandard:
+		hwlocFlags = hwlocFlagsStandard
+	case hwlocFlagsWholeSystem:
+		log.Debug("Setting HWLOC_TOPOLOGY_FLAG_WHOLE_SYSTEM")
+		hwlocFlags = hwlocFlagsWholeSystem
+	default:
+		// If we fail inside initLib, do our own cleanup.
+		defer cleanUp(topology)
+		return nil, errors.New("Invalid flag provided")
 	}
 
 	status = C.hwloc_topology_set_flags(topology, C.HWLOC_TOPOLOGY_FLAG_IO_DEVICES | hwlocFlags)
 	if status != 0 {
+		// If we fail inside initLib, do our own cleanup.
 		defer cleanUp(topology)
 		return nil, errors.New("hwloc_topology_set_flags failure")
 	}
 
 	status = C.hwloc_topology_load(topology)
 	if status != 0 {
+		// If we fail inside initLib, do our own cleanup.
 		defer cleanUp(topology)
 		return nil, errors.New("hwloc_topology_load failure")
 	}
@@ -325,7 +325,7 @@ func getNodeBestFit(deviceScanCfg DeviceScan) (C.hwloc_obj_t) {
 // there may be no NUMA ancestor node available.  In this case, we must iterate through
 // all NUMA nodes in the toplogy to find one that has a cpuset that intersects with
 // the cpuset of the given device node to determine where it belongs.
-func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (int, error) {
+func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, error) {
 	var i C.uint
 
 	if (node == nil) {
@@ -338,7 +338,8 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (int, erro
 
 	numanode := C.hwloc_get_ancestor_obj_by_type (topology, C.HWLOC_OBJ_NUMANODE, node)
 	if (numanode != nil) {
-		return int(C.uint(numanode.logical_index)), nil
+		//return uint(C.uint(numanode.logical_index)), nil
+		return uint(numanode.logical_index), nil
 	}
 
 	// If we made it here, it means that we're running in some flavor of a restricted environment
@@ -358,7 +359,7 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (int, erro
 			continue
 		}
 		if C.hwloc_bitmap_isincluded(ancestorNode.allowed_cpuset, numanode.allowed_cpuset) != 0 {
-			return int(C.uint(numanode.logical_index)), nil
+			return uint(numanode.logical_index), nil
 		}
 	}
 	return 0, errors.New("unable to determine the NUMA socket ID")
@@ -466,17 +467,16 @@ func GetAffinityForNetworkDevices(deviceNames []string) ([]DeviceAffinity, error
 // is closest to.  Note that, if administrator cgroup settings exclude any NUMA Node resources
 // that cover the particular network device, then the NUMA node ID may be inaccurate.
 func GetAffinityForDevice(deviceScanCfg DeviceScan) (DeviceAffinity, error) {
-	var da DeviceAffinity
 	var node C.hwloc_obj_t
 	var cpuset *C.char
 	var nodeset *C.char
 
 	if deviceScanCfg.topology == nil {
-		return da, errors.New("hwloc libary not yet initialized")
+		return DeviceAffinity{}, errors.New("hwloc libary not yet initialized")
 	}
 
 	if deviceScanCfg.targetDevice == "" {
-		return da, errors.New("no network device name specified")
+		return DeviceAffinity{}, errors.New("no network device name specified")
 	}
 
 	// The loopback device isn't a physical device that hwloc will find in the topology
@@ -502,39 +502,37 @@ func GetAffinityForDevice(deviceScanCfg DeviceScan) (DeviceAffinity, error) {
 	}
 
 	if (node == nil) {
-		return da, errors.Errorf("unable to find a system device matching: %s", deviceScanCfg.targetDevice)
+		return DeviceAffinity{}, errors.Errorf("unable to find a system device matching: %s", deviceScanCfg.targetDevice)
 	}
 
 	ancestorNode := C.hwloc_get_non_io_ancestor_obj(deviceScanCfg.topology, node)
 	if ancestorNode == nil {
-		return da, errors.Errorf("unable to find an ancestor node in topology for device for device: %s", deviceScanCfg.targetDevice)
+		return DeviceAffinity{}, errors.Errorf("unable to find an ancestor node in topology for device for device: %s", deviceScanCfg.targetDevice)
 	}
 
 	cpusetLen := C.hwloc_bitmap_asprintf(&cpuset, ancestorNode.cpuset)
 	if cpusetLen <= 0 {
-		return da, errors.Errorf("there was no cpuset available for device: %s", deviceScanCfg.targetDevice)
+		return DeviceAffinity{}, errors.Errorf("there was no cpuset available for device: %s", deviceScanCfg.targetDevice)
 	}
 	defer C.free(unsafe.Pointer(cpuset))
 
 	nodesetLen := C.hwloc_bitmap_asprintf(&nodeset, ancestorNode.nodeset)
 	if nodesetLen <= 0 {
-		return da, errors.Errorf("there was no nodeset available for device: %s", deviceScanCfg.targetDevice)
+		return DeviceAffinity{}, errors.Errorf("there was no nodeset available for device: %s", deviceScanCfg.targetDevice)
 	}
 	defer C.free(unsafe.Pointer(nodeset))
 
 	numaSocket, err := getNUMASocketID(deviceScanCfg.topology, node)
 	if err != nil {
-		return da, err
+		return DeviceAffinity{}, err
 	}
 
-	deviceNode := DeviceAffinity{
+	return DeviceAffinity{
 		DeviceName: C.GoString(node.name),
 		CPUSet:     C.GoString(cpuset),
 		NodeSet:    C.GoString(nodeset),
 		NUMANode:   numaSocket,
-	}
-
-	return deviceNode, nil
+	}, nil
 }
 
 // GetDeviceNames examines the network interfaces
@@ -657,22 +655,22 @@ func ConvertLibFabricToMercury(provider string) (string, error) {
 // ValidateNetworkConfigStub is used for most unit testing to replace ValidateNetworkConfig because the network configuration
 // validation depends upon physical hardware resources and configuration on the target machine
 // that are either not known or static in the test environment
-func ValidateNetworkConfigStub(provider string, device string, numaNode int) (bool, error) {
-	return true, nil
+func ValidateNetworkConfigStub(provider string, device string, numaNode uint) (error) {
+	return nil
 }
 
 // ValidateNetworkConfig confirms that the given network device supports the chosen provider
 // and that the device matches the NUMA ID given.
-func ValidateNetworkConfig(provider string, device string, numaNode int) (bool, error) {
+func ValidateNetworkConfig(provider string, device string, numaNode uint) (error) {
 	var fi *C.struct_fi_info
 	var hints *C.struct_fi_info
 
 	if provider == "" {
-		return false, errors.New("provider required")
+		return errors.New("provider required")
 	}
 
 	if device == "" {
-		return false, errors.New("device required")
+		return errors.New("device required")
 	}
 
 	log.Debugf("Input provider string: %s", provider)
@@ -680,30 +678,30 @@ func ValidateNetworkConfig(provider string, device string, numaNode int) (bool, 
 	// to aid in matching it against the libfabric providers
 	libfabricProviderList, err := ConvertMercuryToLibFabric(provider)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	hints = C.fi_allocinfo()
 	if hints == nil {
-		return false, errors.New("unable to initialize lib fabric - failed to allocinfo")
+		return errors.New("unable to initialize lib fabric - failed to allocinfo")
 	}
 	defer C.fi_freeinfo(hints)
 
 	hints.fabric_attr.prov_name = C.strdup(C.CString(libfabricProviderList))
 	C.fi_getinfo(C.uint(libFabricMajorVersion << 16 | libFabricMinorVersion), nil, nil, 0, hints, &fi)
 	if (fi == nil) {
-		return false, errors.New("unable to initialize lib fabric")
+		return errors.New("unable to initialize lib fabric")
 	}
 	defer C.fi_freeinfo(fi)
 
 	deviceScanCfg, err := initDeviceScan()
 	if err != nil {
-		return false, errors.Errorf("unable to initialize device scan:  Error: %v", err)
+		return errors.Errorf("unable to initialize device scan:  Error: %v", err)
 	}
 	defer cleanUp(deviceScanCfg.topology)
 
 	if _, found := deviceScanCfg.systemDeviceNamesMap[device]; !found {
-		return false, errors.Errorf("device: %s is an invalid device name", device)
+		return errors.Errorf("device: %s is an invalid device name", device)
 	}
 
 	// iterate over the libfabric records that match this provider
@@ -727,17 +725,15 @@ func ValidateNetworkConfig(provider string, device string, numaNode int) (bool, 
 		if deviceAffinity.DeviceName == device {
 			log.Debugf("Device %s supports provider: %s", device, provider)
 			if deviceAffinity.NUMANode != numaNode {
-				log.Debugf("The NUMA node for device %s does not match the provided value %d.  Performance degradation may result. " +
+				return errors.Errorf("The NUMA node for device %s does not match the provided value %d. " +
 					"Remove the pinned_numa_node value from daos_server.yml then execute 'daos_server network scan' " +
 					"to see the valid NUMA node associated with the network device", device, numaNode)
-				return false, nil
 			}
 			log.Debugf("The NUMA node for device %s matches the provided value %d.  Network configuration is valid.", device, numaNode)
-			return true, nil
+			return nil
 		}
 	}
-	log.Debugf("Configuration error!  Device %s does not support provider: %s", device, provider)
-	return false, nil
+	return errors.Errorf("Device %s does not support provider: %s", device, provider)
 }
 
 // ScanFabric examines libfabric data to find the network devices that support the given fabric provider.
