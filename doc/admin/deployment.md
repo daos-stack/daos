@@ -1083,7 +1083,7 @@ storage on the server node (skipping confirmation) on devices specified
 in the server configuration file, then writes the superblock and
 starts the data plane.
 
-![Server format diagram](/doc/graph/server_format_flow.png)
+![Server format diagram](./media/server_format_flow.png)
 
 Typically an administrator will perform the following tasks:
 
