@@ -199,7 +199,7 @@ First of all, SPDK should be initialized in this newly created container.
 This can be done by running the following command:
 
 ```
-    $ docker exec server daos_server storage prep-nvme
+    $ docker exec server daos_server storage prepare -n -f
 ```
 
 Please note that this command reports that /dev/hugepages is not accessible on
