@@ -68,6 +68,8 @@ def run_agent(basepath, server_list, client_list=None):
     # if empty client list, 'self' is effectively client
     if client_list is None:
         client_list = [socket.gethostname().split('.', 1)[0]]
+    elif socket.gethostname().split('.', 1)[0] not in client_list:
+        client_list += [socket.gethostname().split('.', 1)[0]]
 
     # Verify the domain socket directory is present and owned by this user
     file_checks = (
@@ -158,6 +160,8 @@ def stop_agent(sessions, client_list=None):
     # if empty client list, 'self' is effectively client
     if client_list is None:
         client_list = [socket.gethostname().split('.', 1)[0]]
+    elif socket.gethostname().split('.', 1)[0] not in client_list:
+        client_list += [socket.gethostname().split('.', 1)[0]]
 
     # Kill the agents processes
     pcmd(client_list, "pkill daos_agent", False)
