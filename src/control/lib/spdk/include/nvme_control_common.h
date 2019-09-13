@@ -100,22 +100,12 @@ int
 check_size(int written, int max, char *msg, struct ret_t *ret);
 
 /**
- * Set pci addresss of NVMe controller.
- *
- * \return int
- **/
-int
-set_pci_addr(
-	struct spdk_nvme_ctrlr *ctrlr, char *ctrlr_pci_addr, size_t size,
-	struct ret_t *ret);
-
-/**
  * Get the NVMe controller
  *
- * \return int
+ * \return ctrlr_entry *
  **/
-int
-get_controller(char *addr, struct ctrlr_entry *ctrlr_entry, struct ret_t *ret);
+struct ctrlr_entry *
+get_controller(char *addr, struct ret_t *ret);
 
 /**
  * Collect controller and namespace information of the NVMe devices.

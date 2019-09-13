@@ -138,35 +138,6 @@ check_size(int written, int max, char *msg, struct ret_t *ret)
 	return NVMEC_SUCCESS;
 }
 
-int
-set_pci_addr(
-	struct spdk_nvme_ctrlr *ctrlr, char *ctrlr_pci_addr, size_t size,
-	struct ret_t *ret)
-{
-	int			rc;
-	struct spdk_pci_device	*pci_dev;
-	struct spdk_pci_addr	pci_addr;
-
-	pci_dev = spdk_nvme_ctrlr_get_pci_device(ctrlr);
-	if (!pci_dev) {
-		snprintf(ret->err, sizeof(ret->err), "get_pci_device");
-		ret->rc = -NVMEC_ERR_GET_PCI_DEV;
-		return ret->rc;
-	}
-
-	/* populate ns_t.ctrlr_pci_addr to map ns->ctrlr */
-	pci_addr = spdk_pci_device_get_addr(pci_dev);
-	rc = spdk_pci_addr_fmt(ctrlr_pci_addr, size, &pci_addr);
-	if (rc != 0) {
-		snprintf(ret->err, sizeof(ret->err),
-			"spdk_pci_addr_fmt: rc %d", rc);
-		ret->rc = -NVMEC_ERR_PCI_ADDR_FMT;
-		return ret->rc;
-	}
-
-	return NVMEC_SUCCESS;
-}
-
 void
 collect(struct ret_t *ret)
 {
@@ -310,44 +281,33 @@ cleanup(void)
 	}
 }
 
-int
-get_controller(char *addr, struct ctrlr_entry *ctrlr_entry, struct ret_t *ret)
+struct ctrlr_entry *
+get_controller(char *addr, struct ret_t *ret)
 {
-	struct spdk_pci_device			*pci_dev;
-	struct spdk_pci_addr			pci_addr, entry_pci_addr;
+	struct spdk_pci_addr			pci_addr;
+	struct ctrlr_entry			*entry = NULL;
 
-	if (spdk_pci_addr_parse(&pci_addr, addr) < 0) {
-		snprintf(
-			ret->err, sizeof(ret->err),
-			"pci addr could not be parsed: %s", addr);
+	entry = g_controllers;
+
+	if (spdk_pci_addr_parse(&pci_addr, addr) != 0) {
+		snprintf(ret->err, sizeof(ret->err),
+			 "pci addr could not be parsed: %s", addr);
 		ret->rc = -NVMEC_ERR_PCI_ADDR_PARSE;
-
-		return ret->rc;
+		return entry;
 	}
 
-	while (ctrlr_entry) {
-		pci_dev = spdk_nvme_ctrlr_get_pci_device(ctrlr_entry->ctrlr);
-		if (!pci_dev) {
-			snprintf(ret->err, sizeof(ret->err), "get_pci_device");
-			ret->rc = -NVMEC_ERR_GET_PCI_DEV;
-
-			return ret->rc;
-		}
-
-		entry_pci_addr = spdk_pci_device_get_addr(pci_dev);
-
-		if (spdk_pci_addr_compare(&pci_addr, &entry_pci_addr) == 0)
+	while (entry) {
+		if (spdk_pci_addr_compare(&entry->pci_addr, &pci_addr) == 0)
 			break;
 
-		ctrlr_entry = ctrlr_entry->next;
+		entry = entry->next;
 	}
 
-	if (ctrlr_entry == NULL) {
+	if (entry == NULL) {
 		snprintf(ret->err, sizeof(ret->err), "controller not found");
 		ret->rc = -NVMEC_ERR_CTRLR_NOT_FOUND;
-
-		return ret->rc;
+		return entry;
 	}
 
-	return NVMEC_SUCCESS;
+	return entry;
 }
