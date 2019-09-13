@@ -82,8 +82,8 @@ func (fs FabricScan) String() string {
 // DeviceScan caches initialization data for later hwloc usage
 type DeviceScan struct {
 	topology C.hwloc_topology_t
-	depth C.int
-	numObj C.uint
+	depth int
+	numObj uint
 	systemDeviceNames []string
 	systemDeviceNamesMap map[string]struct{}
 	hwlocDeviceNames []string
@@ -154,15 +154,15 @@ func cleanUp(topology C.hwloc_topology_t) {
 
 // getHwlocDeviceNames retrieves all of the system device names that hwloc knows about
 func getHwlocDeviceNames(deviceScanCfg DeviceScan) ([]string, error) {
-	var i C.uint
 	var hwlocDeviceNames []string
+	var i uint
 
 	if deviceScanCfg.topology == nil {
 		return hwlocDeviceNames, errors.New("hwloc was not initialized")
 	}
 
 	for i = 0; i < deviceScanCfg.numObj; i++ {
-		node := C.hwloc_get_obj_by_depth(deviceScanCfg.topology, C.uint(deviceScanCfg.depth), i)
+		node := C.hwloc_get_obj_by_depth(deviceScanCfg.topology, C.uint(deviceScanCfg.depth), C.uint(i))
 		if node == nil {
 			continue
 		}
@@ -183,22 +183,27 @@ func initDeviceScan() (DeviceScan, error) {
 		return deviceScanCfg,
 			errors.New("unable to initialize hwloc library")
 	}
-
 	deviceScanCfg.topology = topology
 
 	depth := C.hwloc_get_type_depth(topology, C.HWLOC_OBJ_OS_DEVICE)
 	if depth != C.HWLOC_TYPE_DEPTH_OS_DEVICE {
+		defer cleanUp(deviceScanCfg.topology)
 		return deviceScanCfg,
 			errors.New("hwloc_get_type_depth returned invalid value")
 	}
-	deviceScanCfg.depth = depth
+	deviceScanCfg.depth = int(depth)
 
-	numObj := C.hwloc_get_nbobjs_by_depth(topology, C.uint(depth))
-	deviceScanCfg.numObj = numObj
+	deviceScanCfg.numObj = uint(C.hwloc_get_nbobjs_by_depth(topology, C.uint(depth)))
+	if deviceScanCfg.numObj == 0 {
+		defer cleanUp(deviceScanCfg.topology)
+		return deviceScanCfg,
+			errors.New("hwloc_get_nbobjs_by_depth returned invalid value: no OS devices found")
+	}
 
 	// Create the list of all the valid network device names
 	systemDeviceNames, err := GetDeviceNames()
 	if err != nil {
+		defer cleanUp(deviceScanCfg.topology)
 		return deviceScanCfg, err
 	}
 	deviceScanCfg.systemDeviceNames = systemDeviceNames
@@ -210,6 +215,7 @@ func initDeviceScan() (DeviceScan, error) {
 
 	deviceScanCfg.hwlocDeviceNames, err = getHwlocDeviceNames(deviceScanCfg)
 	if err != nil {
+		defer cleanUp(deviceScanCfg.topology)
 		return deviceScanCfg, errors.New("unable to obtain hwloc I/O device names")
 	}
 
@@ -253,10 +259,10 @@ func getLookupMethod(deviceScanCfg DeviceScan) (int) {
 
 // getNodeDirect finds a node object that is a direct exact match lookup of the target device against the hwloc device list
 func getNodeDirect(deviceScanCfg DeviceScan) (C.hwloc_obj_t) {
-	var i C.uint
+	var i uint
 
 	for i = 0; i < deviceScanCfg.numObj; i++ {
-		node := C.hwloc_get_obj_by_depth(deviceScanCfg.topology, C.uint(deviceScanCfg.depth), i)
+		node := C.hwloc_get_obj_by_depth(deviceScanCfg.topology, C.uint(deviceScanCfg.depth), C.uint(i))
 		if node == nil {
 			continue
 		}
@@ -326,7 +332,7 @@ func getNodeBestFit(deviceScanCfg DeviceScan) (C.hwloc_obj_t) {
 // all NUMA nodes in the toplogy to find one that has a cpuset that intersects with
 // the cpuset of the given device node to determine where it belongs.
 func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, error) {
-	var i C.uint
+	var i uint
 
 	if (node == nil) {
 		return 0, errors.New("invalid node provided")
@@ -352,9 +358,9 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 	}
 
 	depth := C.hwloc_get_type_depth(topology, C.HWLOC_OBJ_NUMANODE)
-	numObj := C.hwloc_get_nbobjs_by_depth(topology, C.uint(depth))
+	numObj := uint(C.hwloc_get_nbobjs_by_depth(topology, C.uint(depth)))
 	for i = 0; i < numObj; i++ {
-		numanode := C.hwloc_get_obj_by_depth(topology, C.uint(depth), i)
+		numanode := C.hwloc_get_obj_by_depth(topology, C.uint(depth), C.uint(i))
 		if numanode == nil {
 			continue
 		}
@@ -381,9 +387,9 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 // by the input string.
 func GetAffinityForNetworkDevices(deviceNames []string) ([]DeviceAffinity, error) {
 	var affinity []DeviceAffinity
-	var i C.uint
 	var cpuset *C.char
 	var nodeset *C.char
+	var i uint
 
 	topology, err := initLib(hwlocFlagsStandard)
 	if err != nil {
@@ -404,12 +410,12 @@ func GetAffinityForNetworkDevices(deviceNames []string) ([]DeviceAffinity, error
 		netNames[deviceName] = struct{}{}
 	}
 
-	numObj := C.hwloc_get_nbobjs_by_depth(topology, C.uint(depth))
+	numObj := uint(C.hwloc_get_nbobjs_by_depth(topology, C.uint(depth)))
 	// for any OS object found in the network device list,
 	// detect and store the cpuset and nodeset of the ancestor node
 	// containing this object
 	for i = 0; i < numObj; i++ {
-		node := C.hwloc_get_obj_by_depth(topology, C.uint(depth), i)
+		node := C.hwloc_get_obj_by_depth(topology, C.uint(depth), C.uint(i))
 		if node == nil {
 			continue
 		}
