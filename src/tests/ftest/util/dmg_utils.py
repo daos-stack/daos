@@ -25,6 +25,7 @@ from __future__ import print_function
 
 from command_utils import CommandWithParameters
 from command_utils import BasicParameter, FormattedParameter
+from general_utils import pcmd
 from avocado.utils import process
 
 
@@ -104,26 +105,26 @@ class DmgCommand(CommandWithParameters):
 
 
 def clean_daos_mnt(hosts):
-        """Clean up daos mnts on servers.
+    """Clean up daos mnts on servers.
 
-        Args:
-            hosts (list): list of host names where servers are running
+    Args:
+        hosts (list): list of host names where servers are running
 
-        Returns:
-        False if issue running command. True otherwise.
+    Returns:
+    False if issue running command. True otherwise.
 
-        """
-        cleanup_cmds = [
-            "sudo umount /mnt/daos; sudo rm -rf /mnt/daos",
-            "rm -rf /tmp/daos_sockets/",
-            "rm -rf /tmp/*.log",
-        ]
-        # Intentionally ignoring the exit status of the command
-        result = pcmd(hosts, "; ".join(cleanup_cmds), False, None, None)
-        if len(result) > 1 or 0 not in result:
-            print("Error removing daos mount")
-            return False
-        return True
+    """
+    cleanup_cmds = [
+        "sudo umount /mnt/daos; sudo rm -rf /mnt/daos",
+        "rm -rf /tmp/daos_sockets/",
+        "rm -rf /tmp/*.log",
+    ]
+    # Intentionally ignoring the exit status of the command
+    result = pcmd(hosts, "; ".join(cleanup_cmds), False, None, None)
+    if len(result) > 1 or 0 not in result:
+        print("Error removing daos mount")
+        return False
+    return True
 
 def storage_scan(hosts, path=""):
     """ Execute scan command through dmg tool to servers provided.
