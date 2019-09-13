@@ -236,7 +236,7 @@ class TestWithServers(TestWithoutServers):
                     "Test requires {} {}; {} specified".format(
                         expected_count, host_type, actual_count))
 
-        #Storage setup if requested in test input file
+        # Storage setup if requested in test input file
         if self.nvme_parameter == "nvme":
             server_utils.storage_prepare(self.hostlist_servers)
 
@@ -275,7 +275,8 @@ class TestWithServers(TestWithoutServers):
         try:
             super(TestWithServers, self).tearDown()
         except OSError as error:
-            errors.append("Error disabling fault injection: {}".format(error))
+            errors.append(
+                "Error running inheritted teardown(): {}".format(error))
 
         # Fail the test if any errors occurred during tear down
         if errors:
@@ -389,8 +390,8 @@ class TestWithServers(TestWithoutServers):
                     server_utils.storage_reset(self.hostlist_servers)
                 except server_utils.ServerFailed as error:
                     self.multi_log("  {}".format(error))
-                error_list.append(
-                    "Error resetting nvme storage: {}".format(error))
+                    error_list.append(
+                        "Error resetting nvme storage: {}".format(error))
 
             # Stop the servers
             self.multi_log("Stopping servers")
