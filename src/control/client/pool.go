@@ -27,30 +27,100 @@ import (
 	"golang.org/x/net/context"
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/pkg/errors"
 )
 
-// CreatePool will create a DAOS pool using provided parameters and return uuid
-func (c *connList) CreatePool(req *pb.CreatePoolReq) ResultMap {
-	results := make(ResultMap)
-	mc := c.controllers[0] // connect to first AP only for now
+func verifyUnicast(cs []Control) (Control, error) {
+	if len(cs) > 1 {
+		return nil, errors.Errorf("unexpected number of connections, "+
+			"want 1, have %d", len(cs))
+	}
 
-	resp, err := mc.getSvcClient().CreatePool(context.Background(), req)
-
-	result := ClientResult{mc.getAddress(), resp, err}
-	results[result.Address] = result
-
-	return results
+	return cs[0], nil
 }
 
-// DestroyPool will Destroy a DAOS pool identified by its UUID.
-func (c *connList) DestroyPool(req *pb.DestroyPoolReq) ResultMap {
-	results := make(ResultMap)
-	mc := c.controllers[0] // connect to first AP only for now
+// PoolCreateReq struct contains request
+type PoolCreateReq struct {
+	ScmBytes   uint64
+	NvmeBytes  uint64
+	RankList   string
+	NumSvcReps uint32
+	Sys        string
+	Usr        string
+	Grp        string
+}
 
-	resp, err := mc.getSvcClient().DestroyPool(context.Background(), req)
+// PoolCreateResp struct contains response
+type PoolCreateResp struct {
+	Uuid    string
+	SvcReps string
+}
 
-	result := ClientResult{mc.getAddress(), resp, err}
-	results[result.Address] = result
+// PoolCreate will create a DAOS pool using provided parameters and return
+// uuid, list of service replicas and error (including any DER code from DAOS).
+//
+// Isolate protobuf encapsulation in client and don't expose to calling code.
+func (c *connList) PoolCreate(log logging.Logger, req *PoolCreateReq) (
+	*PoolCreateResp, error) {
 
-	return results
+	mc, err := verifyUnicast(c.controllers)
+	if err != nil {
+		return nil, err
+	}
+
+	rpcReq := &pb.PoolCreateReq{
+		Scmbytes: req.ScmBytes, Nvmebytes: req.NvmeBytes,
+		Ranks: req.RankList, Numsvcreps: req.NumSvcReps, Sys: req.Sys,
+		User: req.Usr, Usergroup: req.Grp,
+	}
+
+	log.Infof("Creating DAOS pool: %s\n", rpcReq)
+
+	rpcResp, err := mc.getSvcClient().PoolCreate(context.Background(), rpcReq)
+	if err != nil {
+		return nil, err
+	}
+
+	if rpcResp.GetStatus() != 0 {
+		return nil, errors.Errorf("DAOS returned error code: %d\n",
+			rpcResp.GetStatus())
+	}
+
+	return &PoolCreateResp{Uuid: rpcResp.GetUuid(), SvcReps: rpcResp.GetSvcreps()}, nil
+}
+
+// PoolDestroyReq struct contains request
+type PoolDestroyReq struct {
+	Uuid  string
+	Force bool
+}
+
+// No PoolDestroyResp as no other parameters other than success/failure.
+
+// PoolDestroy will Destroy a DAOS pool identified by its uuid and returns
+// error (including any DER code from DAOS).
+//
+// Isolate protobuf encapsulation in client and don't expose to calling code.
+func (c *connList) PoolDestroy(log logging.Logger, req *PoolDestroyReq) error {
+	mc, err := verifyUnicast(c.controllers)
+	if err != nil {
+		return err
+	}
+
+	rpcReq := &pb.PoolDestroyReq{Uuid: req.Uuid, Force: req.Force}
+
+	log.Infof("Destroying DAOS pool: %s\n", rpcReq)
+
+	rpcResp, err := mc.getSvcClient().PoolDestroy(context.Background(), rpcReq)
+	if err != nil {
+		return err
+	}
+
+	if rpcResp.GetStatus() != 0 {
+		return errors.Errorf("DAOS returned error code: %d\n",
+			rpcResp.GetStatus())
+	}
+
+	return nil
 }
