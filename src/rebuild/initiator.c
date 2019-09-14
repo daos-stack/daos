@@ -101,7 +101,7 @@ rebuild_fetch_update_inline(struct rebuild_one *rdone, daos_handle_t oh,
 			fetch = true;
 		}
 	}
- 
+
 	D_DEBUG(DB_REBUILD, DF_UOID" rdone %p dkey "DF_KEY" nr %d eph "DF_U64
 		" fetch %s\n", DP_UOID(rdone->ro_oid), rdone,
 		DP_KEY(&rdone->ro_dkey), rdone->ro_iod_num,
@@ -277,9 +277,9 @@ rebuild_one_punch_keys(struct rebuild_tgt_pool_tracker *rpt,
 					   1, &rdone->ro_iods[i].iod_name,
 					   NULL);
 			if (rc) {
-			       D_ERROR(DF_UOID" punch akey failed: rc %d\n",
-				       DP_UOID(rdone->ro_oid), rc);
-			       return rc;
+				D_ERROR(DF_UOID" punch akey failed: rc %d\n",
+					DP_UOID(rdone->ro_oid), rc);
+				return rc;
 			}
 		}
 	}
@@ -636,7 +636,7 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 		if (rdone->ro_akey_punch_ephs == NULL)
 			D_GOTO(free, rc = -DER_NOMEM);
 	}
- 
+
 	rdone->ro_iod_alloc_num = iod_eph_total;
 	/* only do the copy below when each with inline recx data */
 	for (i = 0; i < iod_eph_total; i++) {
@@ -710,7 +710,7 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 	D_DEBUG(DB_REBUILD, DF_UOID" %p dkey "DF_KEY" rebuild on idx %d"
 		" iod_num %d\n", DP_UOID(rdone->ro_oid), rdone,
 		DP_KEY(dkey), iter_arg->tgt_idx,
-                rdone->ro_iod_num);
+		rdone->ro_iod_num);
 
 	ABT_mutex_lock(puller->rp_lock);
 	d_list_add_tail(&rdone->ro_list, &puller->rp_one_list);

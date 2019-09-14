@@ -44,9 +44,9 @@ struct obj_enum_rec {
 };
 
 /**
- * The type of the packing data. 
+ * The type of the packing data.
  */
-typedef enum {
+enum {
 	PACK_OBJ_TYPE,
 	PACK_DKEY_TYPE,
 	PACK_AKEY_TYPE,
@@ -54,12 +54,12 @@ typedef enum {
 	PACK_RECX_TYPE,
 	PACK_DKEY_EPOCH_TYPE,
 	PACK_AKEY_EPOCH_TYPE,
-} iter_type_t;
+};
 
 static int
 vos_iter_type_2pack_type(int vos_type)
 {
-	switch(vos_type) {
+	switch (vos_type) {
 	case VOS_ITER_OBJ:
 		return PACK_OBJ_TYPE;
 	case VOS_ITER_DKEY:
@@ -279,7 +279,7 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 
 	D_ASSERT(vos_type == VOS_ITER_SINGLE || vos_type == VOS_ITER_RECX);
 	type = vos_iter_type_2pack_type(vos_type);
-	
+
 	/* Client needs zero iod_size to tell a punched record */
 	if (bio_addr_is_hole(&key_ent->ie_biov.bi_addr))
 		iod_size = 0;
@@ -606,7 +606,7 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, d_sg_list_t *sgl,
  * \param[in]		iods		daos_iod_t array
  * \param[in]		recxs_caps	recxs capacity array
  * \param[in]		sgls		optional sgl array for inline recxs
- * \param[in]		ephs		akey punched ephs 
+ * \param[in]		ephs		akey punched ephs
  * \param[in]		iods_cap	maximal number of elements in \a iods,
  *					\a recxs_caps, \a sgls, and \a ephs
  */
@@ -835,12 +835,12 @@ enum_unpack_punched_ephs(daos_key_desc_t *kds, char *data,
 			kds->kd_key_len);
 		return 0;
 	}
- 
-        if (io->ui_iods_size == 0) {
+
+	if (io->ui_iods_size == 0) {
 		D_ERROR("punched epoch for empty akey rc %d\n", -DER_INVAL);
 		return -DER_INVAL;
-	} 
- 
+	}
+
 	idx = io->ui_iods_size - 1;
 	io->ui_akey_punch_ephs[idx].p_num =
 		kds->kd_key_len/sizeof(daos_epoch_t);
@@ -923,8 +923,8 @@ enum_unpack_oid(daos_key_desc_t *kds, void *data,
 {
 	daos_unit_oid_t *oid = data;
 	int rc = 0;
- 
-        if (kds->kd_key_len != sizeof(*oid)) {
+
+	if (kds->kd_key_len != sizeof(*oid)) {
 		D_ERROR("Invalid object ID size: "DF_U64
 			" != %zu\n", kds->kd_key_len, sizeof(*oid));
 		rc = -DER_INVAL;
@@ -967,7 +967,7 @@ dss_enum_unpack(vos_iter_type_t vos_type, struct dss_enum_arg *arg,
 	daos_iod_t			iods[DSS_ENUM_UNPACK_MAX_IODS];
 	int				recxs_caps[DSS_ENUM_UNPACK_MAX_IODS];
 	d_sg_list_t			sgls[DSS_ENUM_UNPACK_MAX_IODS];
-	struct punched_ephs             punched_ephs[DSS_ENUM_UNPACK_MAX_IODS]; 
+	struct punched_ephs             punched_ephs[DSS_ENUM_UNPACK_MAX_IODS];
 	void				*ptr;
 	unsigned int			i;
 	int				rc = 0;
@@ -980,7 +980,7 @@ dss_enum_unpack(vos_iter_type_t vos_type, struct dss_enum_arg *arg,
 
 	D_ASSERT(arg->kds_len > 0);
 	D_ASSERT(arg->kds != NULL);
-	type = vos_iter_type_2pack_type(vos_type); 
+	type = vos_iter_type_2pack_type(vos_type);
 	if (arg->kds[0].kd_val_type != type) {
 		D_ERROR("the first kds type %d != %d\n",
 			arg->kds[0].kd_val_type, type);
@@ -1004,7 +1004,7 @@ dss_enum_unpack(vos_iter_type_t vos_type, struct dss_enum_arg *arg,
 			kds->kd_key_len, arg->sgl->sg_iovs[0].iov_len);
 
 		D_ASSERT(kds->kd_key_len > 0);
-		switch(kds->kd_val_type) {
+		switch (kds->kd_val_type) {
 		case PACK_OBJ_TYPE:
 			rc = enum_unpack_oid(&arg->kds[i], ptr, &io, cb,
 					     cb_arg);
@@ -1026,7 +1026,7 @@ dss_enum_unpack(vos_iter_type_t vos_type, struct dss_enum_arg *arg,
 			rc = -DER_INVAL;
 			break;
 		}
-	
+
 		if (rc) {
 			D_ERROR("unpack %dth failed: rc%d\n", i, rc);
 			goto out;
