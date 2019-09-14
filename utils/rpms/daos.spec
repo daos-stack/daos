@@ -22,7 +22,7 @@ BuildRequires: protobuf-c-devel
 BuildRequires: spdk-devel, spdk-tools
 BuildRequires: fio < 3.4
 BuildRequires: libisa-l-devel
-BuildRequires: raft-devel
+BuildRequires: raft-devel <= 0.5.0
 BuildRequires: mercury-devel
 BuildRequires: openpa-devel
 BuildRequires: libfabric-devel
