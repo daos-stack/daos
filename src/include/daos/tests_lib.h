@@ -24,17 +24,6 @@
 #ifndef __DAOS_TESTS_LIB_H__
 #define __DAOS_TESTS_LIB_H__
 
-#define HAVE_LIB_READLINE	1
-
-#if HAVE_LIB_READLINE
-# include <readline/history.h>
-# include <readline/readline.h>
-
-#define dts_add_history(s)	add_history(s)
-#else /* HAVE_LIB_READLINE */
-# define dts_add_history(s)	do {} while (0)
-#endif /* HAVE_LIB_READLINE */
-
 #include <getopt.h>
 #include <daos_types.h>
 #include <daos/object.h>
