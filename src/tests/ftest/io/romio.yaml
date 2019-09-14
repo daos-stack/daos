@@ -8,6 +8,5 @@ timeout: 240
 # romio test suite directory in CI nodes when available.
 server_config:
     name: daos_server
-    targets: 1
 romio:
     romio_repo: "/home/standan/mpiotest/build/src/mpi/romio/test/"

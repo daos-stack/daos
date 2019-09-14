@@ -365,7 +365,7 @@ static int
 daos_test_cb_query(test_arg_t *arg, struct test_op_record *op,
 		   char **rbuf, daos_size_t *rbuf_size)
 {
-	daos_pool_info_t pinfo = { 0 };
+	daos_pool_info_t pinfo = {0};
 	int rc;
 
 	/*get only pool space info*/
