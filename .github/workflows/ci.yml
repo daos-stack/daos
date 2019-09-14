@@ -17,10 +17,6 @@ jobs:
       env:
         DOCKER_IMAGE: ${{ github.repository }}:${{ github.sha }}
       run: |
-        ls -l;
-        ls -l scons_local/;
-        ls -l scons_local/site_tools/;
-        ls -l scons_local/site_tools/extra/;
         docker build --file utils/docker/Dockerfile.${{ matrix.distro }} -t ${DOCKER_IMAGE} --build-arg NOBUILD=1 --build-arg UID=$UID . &&
         docker run -v $PWD:/home/daos/daos:z $DOCKER_IMAGE /bin/bash -c "scons --build-deps=yes install" ||
         (echo -e "\e[31m[${GITHUB_WORKFLOW}] failed to build\e[m" && exit 1)
