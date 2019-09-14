@@ -126,13 +126,15 @@ func (tc *testConn) KillRank(uuid string, rank uint32) client.ResultMap {
 	return nil
 }
 
-func (tc *testConn) PoolCreate(req *pb.PoolCreateReq) client.ResultMap {
-	tc.appendInvocation(fmt.Sprintf("PoolCreate-%s", req))
-	return nil
+func (tc *testConn) PoolCreate(log logging.Logger, req *client.PoolCreateReq) (
+	*client.PoolCreateResp, error) {
+
+	tc.appendInvocation(fmt.Sprintf("PoolCreate-%+v", req))
+	return &client.PoolCreateResp{}, nil
 }
 
-func (tc *testConn) PoolDestroy(req *pb.PoolDestroyReq) client.ResultMap {
-	tc.appendInvocation(fmt.Sprintf("PoolDestroy-%s", req))
+func (tc *testConn) PoolDestroy(log logging.Logger, req *client.PoolDestroyReq) error {
+	tc.appendInvocation(fmt.Sprintf("PoolDestroy-%+v", req))
 	return nil
 }
 

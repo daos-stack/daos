@@ -174,12 +174,10 @@ func formatNameGroup(usr string, grp string) (string, string, error) {
 }
 
 // poolCreate with specified parameters.
-func poolCreate(log logging.Logger,
-	conns client.Connect, scmSize string, nvmeSize string,
-	rankList string, numSvcReps uint32, groupName string,
-	userName string, sys string, aclFile string) (err error) {
+func poolCreate(log logging.Logger, conns client.Connect, scmSize string,
+	nvmeSize string, rankList string, numSvcReps uint32, groupName string,
+	userName string, sys string, aclFile string) error {
 
-	var uuid, svcreps string
 	msg := "SUCCEEDED: "
 
 	scmBytes, nvmeBytes, err := calcStorage(log, scmSize, nvmeSize)
@@ -192,8 +190,7 @@ func poolCreate(log logging.Logger,
 	}
 
 	if numSvcReps > maxNumSvcReps {
-		return errors.Errorf(
-			"max number of service replicas is %d, got %d",
+		return errors.Errorf("max number of service replicas is %d, got %d",
 			maxNumSvcReps, numSvcReps)
 	}
 
@@ -202,12 +199,18 @@ func poolCreate(log logging.Logger,
 		return errors.WithMessage(err, "formatting user/group strings")
 	}
 
-	uuid, svcreps, err = conns.PoolCreate(log, uint64(scmBytes), uint64(nvmeBytes),
-		rankList, numSvcReps, sys, usr, grp)
+	req := &client.PoolCreateReq{
+		ScmBytes: uint64(scmBytes), NvmeBytes: uint64(nvmeBytes),
+		RankList: rankList, NumSvcReps: numSvcReps, Sys: sys,
+		Usr: usr, Grp: grp,
+	}
+
+	resp, err := conns.PoolCreate(log, req)
 	if err != nil {
 		msg = errors.WithMessage(err, "FAILED").Error()
 	} else {
-		msg += fmt.Sprintf("UUID: %s, Service replicas: %s", uuid, svcreps)
+		msg += fmt.Sprintf("UUID: %s, Service replicas: %s",
+			resp.Uuid, resp.SvcReps)
 	}
 
 	log.Infof("Pool-create command %s\n", msg)
@@ -216,12 +219,17 @@ func poolCreate(log logging.Logger,
 }
 
 // poolDestroy identified by UUID.
-func poolDestroy(log logging.Logger, conns client.Connect, uuid string, force bool) {
+func poolDestroy(log logging.Logger, conns client.Connect, uuid string, force bool) error {
 	msg := "succeeded"
 
-	if err := conns.PoolDestroy(log, uuid, force); err != nil {
+	req := &client.PoolDestroyReq{Uuid: uuid, Force: force}
+
+	err := conns.PoolDestroy(log, req)
+	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
 
 	log.Infof("Pool-destroy command %s\n", msg)
+
+	return err
 }
