@@ -27,7 +27,6 @@ import os
 
 from command_utils import DaosCommand, CommandWithParameters
 from command_utils import BasicParameter, FormattedParameter
-from general_utils import pcmd
 from avocado.utils import process
 
 
@@ -201,7 +200,7 @@ def storage_prep(hosts, path="", user=None, hugepages="4096", nvme=None,
     dmg.prepare.nvmeonly.value = nvme
     dmg.prepare.scmonly.value = scm
     dmg.prepare.targetuser.value = user
-    dmg.prepare.hugepages.value = "4096"
+    dmg.prepare.hugepages.value = hugepages
     dmg.prepare.force.value = True
 
     try:
