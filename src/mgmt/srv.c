@@ -533,7 +533,7 @@ process_poolcreate_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		goto out;
 
 	/* Ranks to allocate targets (in) & svc for pool replicas (out). */
-	rc = ds_mgmt_pool_create(pool_uuid, req->sys, "pmem", targets,
+	rc = ds_mgmt_create_pool(pool_uuid, req->sys, "pmem", targets,
 				 req->scmbytes, req->nvmebytes,
 				 prop, req->numsvcreps, &svc);
 	if (targets != NULL)
@@ -658,7 +658,7 @@ process_pooldestroy_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 
 	/* Sys and force params are currently ignored in receiver. */
-	rc = ds_mgmt_pool_destroy(uuid, req->sys,
+	rc = ds_mgmt_destroy_pool(uuid, req->sys,
 				  (req->force == true) ? 1 : 0);
 	if (rc != 0) {
 		D_ERROR("Failed to destroy pool %s: %d\n", req->uuid, rc);
@@ -734,7 +734,7 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_POOL_CREATE:
 		process_poolcreate_request(drpc_req, drpc_resp);
 		break;
-	case DRPC_METHOD_POOL_DESTROY:
+	case DRPC_METHOD_MGMT_POOL_DESTROY:
 		process_pooldestroy_request(drpc_req, drpc_resp);
 		break;
 	case DRPC_METHOD_MGMT_SET_UP:
