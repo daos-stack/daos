@@ -104,33 +104,37 @@ type PrepareScmRequest struct {
 	Reset bool
 }
 
+// GetScmState performs required initialisation and returns current state
+// of SCM module preparation.
+func (c *StorageControlService) GetScmState() (types.ScmState, error) {
+	state := types.ScmStateUnknown
+
+	ok, _ := c.scm.ext.checkSudo()
+	if !ok {
+		return state, errors.Errorf("%s must be run as root or sudo", os.Args[0])
+	}
+
+	if err := c.scm.Setup(); err != nil {
+		return state, errors.WithMessage(err, "SCM setup")
+	}
+
+	if !c.scm.initialized {
+		return state, errors.New(msgScmNotInited)
+	}
+
+	if len(c.scm.modules) == 0 {
+		return state, errors.New(msgScmNoModules)
+	}
+
+	return c.scm.prep.GetState()
+}
+
 // PrepareScm preps locally attached modules and returns need to reboot message,
 // list of pmem kernel devices and error directly.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
 func (c *StorageControlService) PrepareScm(req PrepareScmRequest, state types.ScmState,
 ) (needsReboot bool, pmemDevs []pmemDev, err error) {
-
-	ok, _ := c.scm.ext.checkSudo()
-	if !ok {
-		err = errors.Errorf("%s must be run as root or sudo", os.Args[0])
-		return
-	}
-
-	if err = c.scm.Setup(); err != nil {
-		err = errors.WithMessage(err, "SCM setup")
-		return
-	}
-
-	if !c.scm.initialized {
-		err = errors.New(msgScmNotInited)
-		return
-	}
-
-	if len(c.scm.modules) == 0 {
-		err = errors.New(msgScmNoModules)
-		return
-	}
 
 	if req.Reset {
 		// run reset to remove namespaces and clear regions
@@ -162,9 +166,4 @@ func (c *StorageControlService) ScanScm() (types.ScmModules, error) {
 	}
 
 	return c.scm.modules, nil
-}
-
-// GetScmState returns current state of SCM module preparation
-func (c *StorageControlService) GetScmState() (types.ScmState, error) {
-	return c.scm.prep.GetState()
 }

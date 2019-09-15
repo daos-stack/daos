@@ -36,18 +36,6 @@ const MsgStoragePrepareWarn = "Memory allocation goals for SCM will be changed a
 	"are not in use. Please be patient as it may take several minutes " +
 	"and subsequent reboot maybe required.\n"
 
-type cmdLogger interface {
-	setLog(*logging.LeveledLogger)
-}
-
-type logCmd struct {
-	log *logging.LeveledLogger
-}
-
-func (c *logCmd) setLog(log *logging.LeveledLogger) {
-	c.log = log
-}
-
 type StoragePrepareNvmeCmd struct {
 	PCIWhiteList string `short:"w" long:"pci-whitelist" description:"Whitespace separated list of PCI devices (by address) to be unbound from Kernel driver and used with SPDK (default is all PCI devices)."`
 	NrHugepages  int    `short:"p" long:"hugepages" description:"Number of hugepages to allocate (in MB) for use by SPDK (default 1024)"`
@@ -57,7 +45,6 @@ type StoragePrepareNvmeCmd struct {
 type StoragePrepareScmCmd struct{}
 
 type StoragePrepareCmd struct {
-	logCmd
 	StoragePrepareNvmeCmd
 	StoragePrepareScmCmd
 	NvmeOnly bool `short:"n" long:"nvme-only" description:"Only prepare NVMe storage."`
@@ -80,7 +67,7 @@ func (cmd *StoragePrepareCmd) Validate() (bool, bool, error) {
 	return prepNvme, prepScm, nil
 }
 
-func (cmd *StoragePrepareCmd) CheckWarn(state ScmState) error {
+func (cmd *StoragePrepareCmd) CheckWarn(log *logging.LeveledLogger, state ScmState) error {
 	switch state {
 	case ScmStateNoRegions:
 		if cmd.Reset {
@@ -92,15 +79,17 @@ func (cmd *StoragePrepareCmd) CheckWarn(state ScmState) error {
 		}
 	case ScmStateUnknown:
 		return errors.New("unknown scm state")
+	default:
+		return errors.Errorf("unhandled scm state %q", state)
 	}
 
-	return cmd.Warn()
+	return cmd.Warn(log)
 }
 
-func (cmd *StoragePrepareCmd) Warn() error {
-	cmd.log.Info(MsgStoragePrepareWarn)
+func (cmd *StoragePrepareCmd) Warn(log *logging.LeveledLogger) error {
+	log.Info(MsgStoragePrepareWarn)
 
-	if !cmd.Force && !common.GetConsent(cmd.log) {
+	if !cmd.Force && !common.GetConsent(log) {
 		return errors.New("consent not given")
 	}
 

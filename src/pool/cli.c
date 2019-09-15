@@ -1368,7 +1368,8 @@ out:
  * \param[in]	pool	pool handle object
  * \param[in]	ctx	RPC context
  * \param[out]	tgts	if not NULL, pool target ranks returned on success
- * \param[out]	info	if not NULL, pool information returned on success
+ * \param[in,out]
+ *		info	if not NULL, pool information returned on success
  * \param[in]	cb	callback called only on success
  * \param[in]	cb_arg	argument passed to \a cb
  * \return		zero or error
