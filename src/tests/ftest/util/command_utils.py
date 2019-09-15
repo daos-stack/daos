@@ -177,3 +177,26 @@ class CommandWithParameters(ObjectWithParameters):
             if value != "":
                 params.append(value)
         return " ".join([os.path.join(self._path, self._command)] + params)
+
+class DaosCommand(CommandWithParameters):
+    """A class for similar daos command line tools."""
+
+    def __init__(self, command, path=""):
+        """Create DaosCommand object.
+
+        Specific type of command object built so command str returns:
+            <command> <options> <request> <action/subcommand> <options>
+
+        Args:
+            command (str): string of the command to be executed.
+            path (str): path to location of daos command binary.
+        """
+        super(DaosCommand, self).__init__(command, path)
+        self.request = BasicParameter("{}")
+        self.action = BasicParameter("{}")
+
+    def get_param_names(self):
+        """Get a sorted list of DaosCommand parameter names."""
+        names = self.get_attribute_names(FormattedParameter)
+        names.extend(["request", "action"])
+        return names

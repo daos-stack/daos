@@ -38,7 +38,6 @@ from ClusterShell.NodeSet import NodeSet, NodeSetParseError
 import fault_config_utils
 import agent_utils
 import server_utils
-import dmg_utils
 import write_host_file
 from daos_api import DaosContext, DaosLog
 
@@ -121,10 +120,9 @@ class TestWithoutServers(Test):
         self.prefix = build_paths['PREFIX']
         self.ompi_prefix = build_paths["OMPI_PREFIX"]
         self.tmp = os.path.join(self.prefix, 'tmp')
-        self.bin = os.path.join(self.prefix, 'bin')
-        self.daos_test = os.path.join(self.bin, 'daos_test')
+        self.daos_test = os.path.join(self.prefix, 'bin', 'daos_test')
         self.orterun = os.path.join(self.ompi_prefix, "bin", "orterun")
-        self.daosctl = os.path.join(self.bin, 'daosctl')
+        self.daosctl = os.path.join(self.prefix, 'bin', 'daosctl')
 
         # setup fault injection, this MUST be before API setup
         fault_list = self.params.get("fault_list", '/run/faults/*/')
@@ -228,16 +226,6 @@ class TestWithServers(TestWithoutServers):
         #Storage setup if requested in test input file
         if self.nvme_parameter == "nvme":
             server_utils.storage_prepare(self.hostlist_servers)
-
-            # Clean daos mnt
-            self.assertTrue(dmg_utils.clean_daos_mnt(self.hostlist_servers))
-
-            # Format hostlist for dmg tool
-            port = self.params.get("port", "/run/server_config/*")
-            servers_with_ports = [
-                "{}:{}".format(host, port) for host in self.hostlist_servers]
-            self.assertTrue(dmg_utils.storage_format(
-                ",".join(servers_with_ports), self.bin))
 
         # Create host files
         self.hostfile_servers = write_host_file.write_host_file(
