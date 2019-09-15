@@ -261,7 +261,7 @@ rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *ep,
 		D_DEBUG(DB_MD, "service not found reply from rank %u: ",
 			ep->ep_rank);
 		rsvc_client_process_error(client, rc_svc, ep);
-		return client->sc_ranks == NULL ?
+		return client->sc_ranks->rl_nr == 0 ?
 			RSVC_CLIENT_PROCEED : RSVC_CLIENT_RECHOOSE;
 	} else if (hint == NULL || !(hint->sh_flags & RSVC_HINT_VALID)) {
 		/* This may happen if the service wasn't found. */
