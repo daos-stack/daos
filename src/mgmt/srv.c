@@ -414,7 +414,7 @@ static int
 ace_strs_to_acl(char **ace_strs, size_t ace_nr, struct daos_acl **acl)
 {
 	struct daos_ace	**tmp_aces;
-	struct daos_acl	*tmp_acl = NULL;
+	struct daos_acl	*tmp_acl;
 	size_t		i;
 	int		rc;
 
