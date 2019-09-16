@@ -30,15 +30,13 @@ import time
 import subprocess
 import json
 import re
-import resource
 import signal
-import fcntl
 import errno
 import yaml
 import getpass
 
 from general_utils import pcmd, check_file_exists
-from command_utils import CommandWithParameters
+from command_utils import JobManager, DaosCommand, Orterun
 from command_utils import BasicParameter, FormattedParameter
 from avocado.utils import genio, process
 from write_host_file import write_host_file
@@ -54,12 +52,16 @@ class ServerFailed(Exception):
 
 
 class ServerCommand(DaosCommand):
-    """Defines a object representing a server command."""
+    """Defines an object representing a server command."""
 
     def __init__(self, path):
-        """Create a server Command object"""
+        """Create a server command object
+
+        Args:
+            path (str): path to location of daos_server binary.
+        """
         super(ServerCommand, self).__init__(
-            "daos_server", "/run/daos_server/*", path)
+            "/run/daos_server/*", "daos_server", path)
 
         self.debug = FormattedParameter("-b", None)
         self.targets = FormattedParameter("-t {}")
@@ -78,51 +80,65 @@ class ServerCommand(DaosCommand):
 class ServerManager(object):
     """Defines object to manage server functions and launch server command."""
 
-    def __init__(self, test):
-        """Create a ServerManager object"""
-        self.test = test
-        self.server = ServerCommand(
-            os.path.join(self.test.prefix, "bin"))
-        self.orterun = OrterunCommand(
-            os.path.join(self.test.ompi_prefix, "bin"))
+    def __init__(self, hosts, path="", manager_path=""):
+        """Create a ServerManager object.
 
-    def create_hostfile(self, slots):
-        # This function will create a hostfile with the values from
-        # self.hostlist.value
-        # This should replace write_host_file???
+        Args:
+            hosts (list): list of servers to launch/setup.
+            path (str, optional): path to location of daos_server binary.
+                Defaults to "".
+            manager_path (str, optional): path to location of orterun binary.
+                Defaults to "".
+        """
+        self.hosts = hosts
+        self.cmd = ServerCommand(path)
+        self.orterun = Orterun(self.cmd, manager_path, True)
 
-    def update_configuration(self):
-        """Update the server config parameter with a yaml file."""
-        self.server.config.update(
-            create_server_yaml(self.test.basepath), "server.config")
+    def setup(self, env=None, basepath="", hostfile="", test=None):
+        """Setup server and orterun default attributes.
 
-    def setup(self):
-        """Setup server and job manager default attributes."""
-        self.server.debug.update(True, "server.debug")
-        self.server.insecure.update(True, "server.insecure")
-        self.server.get_params(self.test)
+        Args:
+            env (EnvironmentVariables, optional): the environment variables
+                to use with the orterun command. Defaults to None.
+            basepath (str, optional): DAOS install basepath.
+                Defaults to "".
+            hostfile (str, optional): file defining host names and slots.
+                Defaults to "".
+            test (Avocado Test Object, optional): If specified, used to
+                override defaults with values from yaml file.
+                Defaults to None.
+        """
+        self.cmd.debug.value = True
+        self.cmd.insecure.value = True
+        self.cmd.request.value = True
+        self.cmd.config.value = self.create_server_yaml(basepath, None)
 
-        self.orterun.processes.update(True, "orterun.processes")
-        self.orterun.debug.update(True, "orterun.processes")
+        self.orterun.setup_command(env, hostfile, len(self.hosts))
         self.orterun.enable_recovery.update(True, "orterun.enable_recovery")
-        self.orterun.get_params(self.test)
 
-    def prepare(self, path, slots):
+        # If test object provided, override values with yaml file values.
+        if test is not None:
+            self.cmd.get_params(test)
+            self.orterun.get_params(test)
+
+        # Prepare servers
+        self.prep()
+
+    def prep(self):
         """Prepare the hosts before starting daos server.
 
         Args:
-            path (str): location to write the hostfile
-            slots (int): slots per host to use in the hostfile
+            hosts (list): list of host names to prepare
 
         Raises:
             ServerFailed: if there is any errors preparing the hosts
 
         """
         # Kill any doas servers running on the hosts
-        kill_server(self.test.hostlist_servers)
+        self.kill(self.hosts)
 
         # Clean up any files that exist on the hosts
-        clean_server(self.test.hostlist_servers)
+        self.clean(self.hosts, scm=True)
 
         # Verify the domain socket directory is present and owned by this user
         user = getpass.getuser()
@@ -136,58 +152,51 @@ class ServerManager(object):
                     "{}: {} missing directory {} for user {}.".format(
                         nodeset, host_type, directory, user))
 
-        # Create the hostfile
-        self.hostfile = write_host_file(self.hosts, path, slots)
+    def kill(self, hosts):
+        """Forcably kill any daos server processes running on hosts.
 
-    def kill_server(self, hosts):
-        """Forcably kill any daos server processes running on the specified hosts.
-
-        Sometimes stop doesn't get everything.  Really whack everything with this.
+        Sometimes stop doesn't get everything.  Really whack everything
+        with this.
 
         Args:
             hosts (list): list of host names where servers are running
         """
-        k_cmds = [
+        kill_cmds = [
             "pkill '(daos_server|daos_io_server)' --signal INT",
             "sleep 5",
             "pkill '(daos_server|daos_io_server)' --signal KILL",
         ]
         # Intentionally ignoring the exit status of the command
-        pcmd(
-            self.test.hostlist_servers, "; ".join(k_cmds), False, None, None)
+        result = pcmd(hosts, "; ".join(kill_cmds), False, None, None)
+        if len(result) > 1 or 0 not in result:
+            raise ServerFailed(
+                "Error cleaning tmpfs on servers: {}".format(
+                    ", ".join(
+                        [str(result[key]) for key in result if key != 0])))
 
-    def clean_server(self, hosts):
+    def clean(self, hosts, scm=False):
         """Clean the tmpfs  on the servers.
 
         Args:
             hosts (list): list of host names where servers are running
+            scm (bool): if true, remove tmpfs mount
         """
-        c_cmds = [
+        clean_cmds = [
             "find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | xargs -0r rm -rf"
         ]
+
+        if scm:
+            clean_cmds.append("sudo umount /mnt/daos; sudo rm -rf /mnt/daos")
+
         # Intentionally ignoring the exit status of the command
-        pcmd(
-            self.test.hostlist_servers, "; ".join(c_cmds), False, None, None)
+        result = pcmd(hosts, "; ".join(clean_cmds), False, None, None)
+        if len(result) > 1 or 0 not in result:
+            raise ServerFailed(
+                "Error cleaning tmpfs on servers: {}".format(
+                    ", ".join(
+                        [str(result[key]) for key in result if key != 0])))
 
-    def set_nvme_mode(default_value_set, bdev, enabled=False):
-        """Enable/Disable NVMe Mode.
-
-        NVMe is enabled by default in yaml file.So disable it for CI runs.
-
-        Args:
-            default_value_set (dict): dictionary of default values
-            bdev (str): block device name
-            enabled (bool, optional): enable NVMe. Defaults to False.
-        """
-        if 'bdev_class' in default_value_set['servers'][0]:
-            if (default_value_set['servers'][0]['bdev_class'] == bdev and
-                    not enabled):
-                del default_value_set['servers'][0]['bdev_class']
-        if enabled:
-            default_value_set['servers'][0]['bdev_class'] = bdev
-
-
-    def create_server_yaml(self, basepath):
+    def create_server_yaml(self, basepath, log_filename):
         """Create the DAOS server config YAML file based on Avocado test
             Yaml file.
 
@@ -203,15 +212,16 @@ class ServerManager(object):
         """
         # Read the baseline conf file data/daos_server_baseline.yml
         try:
-            with open('{}/{}'.format(basepath, DEFAULT_FILE), 'r') as read_file:
-                default_value_set = yaml.safe_load(read_file)
-        except Exception as excpn:
-            print("<SERVER> Exception occurred: {0}".format(str(excpn)))
-            traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
+            with open('{}/{}'.format(basepath, DEFAULT_FILE), 'r') as rfile:
+                default_value_set = yaml.safe_load(rfile)
+        except Exception as err:
+            print("<SERVER> Exception occurred: {0}".format(str(err)))
+            traceback.print_exception(err.__class__, err, sys.exc_info()[2])
             raise ServerFailed(
                 "Failed to Read {}/{}".format(basepath, DEFAULT_FILE))
 
-        # Read the values from avocado_testcase.yaml file if test ran with Avocado.
+        # Read the values from avocado_testcase.yaml file if test ran
+        # with Avocado.
         new_value_set = {}
         if "AVOCADO_TEST_DATADIR" in os.environ:
             avocado_yaml_file = str(os.environ["AVOCADO_TEST_DATADIR"]).\
@@ -223,12 +233,13 @@ class ServerManager(object):
                     filedata = rfile.read()
                 # Remove !mux for yaml load
                 new_value_set = yaml.safe_load(filedata.replace('!mux', ''))
-            except Exception as excpn:
-                print("<SERVER> Exception occurred: {0}".format(str(excpn)))
+            except Exception as err:
+                print("<SERVER> Exception occurred: {0}".format(str(err)))
                 traceback.print_exception(
-                    excpn.__class__, excpn, sys.exc_info()[2])
+                    err.__class__, err, sys.exc_info()[2])
                 raise ServerFailed(
-                    "Failed to Read {}".format('{}.tmp'.format(avocado_yaml_file)))
+                    "Failed to Read {}".format(
+                        '{}.tmp'.format(avocado_yaml_file)))
 
         # Update values from avocado_testcase.yaml in DAOS yaml variables.
         if new_value_set:
@@ -237,21 +248,22 @@ class ServerManager(object):
                     default_value_set['servers'][0][key] = \
                         new_value_set['server_config'][key]
                 elif key in default_value_set:
-                    default_value_set[key] = new_value_set['server_config'][key]
+                    default_value_set[key] = \
+                        new_value_set['server_config'][key]
 
-        # Disable NVMe from baseline data/daos_server_baseline.yml
-        set_nvme_mode(default_value_set, "nvme")
+        # if sepcific log file name specified use that
+        if log_filename:
+            default_value_set['servers'][0]['log_file'] = log_filename
 
         # Write default_value_set dictionary in to AVOCADO_FILE
         # This will be used to start with daos_server -o option.
         try:
-            with open('{}/{}'.format(basepath,
-                                    AVOCADO_FILE), 'w') as write_file:
-                yaml.dump(default_value_set, write_file, default_flow_style=False)
-        except Exception as excpn:
-            print("<SERVER> Exception occurred: {0}".format(str(excpn)))
-            traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
+            with open('{}/{}'.format(basepath, AVOCADO_FILE), 'w') as wfile:
+                yaml.dump(default_value_set, wfile, default_flow_style=False)
+        except Exception as err:
+            print("<SERVER> Exception occurred: {0}".format(str(err)))
+            traceback.print_exception(err.__class__, err, sys.exc_info()[2])
             raise ServerFailed("Failed to Write {}/{}".format(basepath,
-                                                            AVOCADO_FILE))
+                                                              AVOCADO_FILE))
 
         return os.path.join(basepath, AVOCADO_FILE)
