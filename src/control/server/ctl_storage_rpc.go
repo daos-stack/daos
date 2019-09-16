@@ -30,7 +30,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	types "github.com/daos-stack/daos/src/control/common/storage"
-	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -87,7 +86,13 @@ func (c *StorageControlService) doScmPrepare(req *pb.PrepareScmReq) (resp *pb.Pr
 	resp = &pb.PrepareScmResp{}
 	msg := "Storage Prepare SCM"
 
-	needsReboot, pmemDevs, err := c.PrepareScm(PrepareScmRequest{Reset: req.GetReset_()})
+	scmState, err := c.GetScmState()
+	if err != nil {
+		resp.State = newState(c.log, pb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg)
+		return
+	}
+
+	needsReboot, pmemDevs, err := c.PrepareScm(PrepareScmRequest{Reset: req.GetReset_()}, scmState)
 	if err != nil {
 		resp.State = newState(c.log, pb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg)
 		return
@@ -111,8 +116,12 @@ func (c *StorageControlService) StoragePrepare(ctx context.Context, req *pb.Stor
 
 	resp := &pb.StoragePrepareResp{}
 
-	resp.Nvme = c.doNvmePrepare(req.Nvme)
-	resp.Scm = c.doScmPrepare(req.Scm)
+	if req.Nvme != nil {
+		resp.Nvme = c.doNvmePrepare(req.Nvme)
+	}
+	if req.Scm != nil {
+		resp.Scm = c.doScmPrepare(req.Scm)
+	}
 
 	return resp, nil
 }
@@ -151,50 +160,28 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *pb.Storage
 	return resp, nil
 }
 
-// StorageControlService encapsulates the storage part of the control service
-type StorageControlService struct {
-	log  logging.Logger
-	nvme *nvmeStorage
-	scm  *scmStorage
-	drpc drpc.DomainSocketClient
-}
-
-// NewStorageControlService returns an initialized *StorageControlService
-func NewStorageControlService(log logging.Logger, cfg *Configuration) (*StorageControlService, error) {
-	scriptPath, err := cfg.ext.getAbsInstallPath(spdkSetupPath)
-	if err != nil {
-		return nil, err
-	}
-
-	spdkScript := &spdkSetup{
-		log:         log,
-		scriptPath:  scriptPath,
-		nrHugePages: cfg.NrHugepages,
-	}
-
-	return &StorageControlService{
-		log:  log,
-		nvme: newNvmeStorage(log, cfg.NvmeShmID, spdkScript, cfg.ext),
-		scm:  newScmStorage(log, cfg.ext),
-		drpc: getDrpcClientConnection(cfg.SocketDir),
-	}, nil
-}
-
 // doFormat performs format on storage subsystems, populates response results
 // in storage subsystem routines and broadcasts (closes channel) if successful.
 func (c *ControlService) doFormat(i *IOServerInstance, resp *pb.StorageFormatResp) error {
 	hasSuperblock := false
 
-	needsSuperblock, err := i.NeedsSuperblock()
+	needsScmFormat, err := i.NeedsScmFormat()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "unable to check storage formatting")
 	}
 
-	if !needsSuperblock {
+	if !needsScmFormat {
+		needsSuperblock, err := i.NeedsSuperblock()
+		if err != nil {
+			return errors.Wrap(err, "unable to check instance superblock")
+		}
+		hasSuperblock = !needsSuperblock
+	}
+
+	if hasSuperblock {
 		// server already formatted, populate response appropriately
 		c.nvme.formatted = true
 		c.scm.formatted = true
-		hasSuperblock = true
 	}
 
 	// scaffolding

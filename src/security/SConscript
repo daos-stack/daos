@@ -14,10 +14,10 @@ def scons():
     """Execute build"""
     Import('env', 'prereqs')
 
-    prereqs.require(env, 'protobufc')
-
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
+
+    prereqs.require(denv, 'protobufc', 'argobots')
 
     # Populate the object cache
     cache = {}

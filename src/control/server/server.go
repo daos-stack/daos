@@ -104,9 +104,11 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	// Create and setup control service.
 	controlService, err := NewControlService(log, harness, cfg)
 	if err != nil {
-		return errors.Wrap(err, "init control server")
+		return errors.Wrap(err, "init control service")
 	}
-	controlService.Setup()
+	if err := controlService.Setup(); err != nil {
+		return errors.Wrap(err, "setup control service")
+	}
 	defer controlService.Teardown()
 
 	// Create and start listener on management network.

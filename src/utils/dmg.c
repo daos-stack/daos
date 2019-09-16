@@ -449,7 +449,7 @@ pool_op_hdlr(int argc, char *argv[])
 		return rc;
 
 	if (op == POOL_QUERY) {
-		daos_pool_info_t		 pinfo;
+		daos_pool_info_t		 pinfo = {0};
 		struct daos_pool_space		*ps = &pinfo.pi_space;
 		struct daos_rebuild_status	*rstat = &pinfo.pi_rebuild_st;
 		int				 i;
