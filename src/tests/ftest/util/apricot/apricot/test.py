@@ -229,7 +229,13 @@ class TestWithServers(TestWithoutServers):
 
         #Storage setup if requested in test input file
         if self.nvme_parameter == "nvme":
-            server_utils.clean_server(self.hostlist_servers, scm=True)
+            port = self.params.get("port", "/run/server_config/*")
+            if port is None:
+                port = "10001"
+            servers_with_ports = [
+                "{}:{}".format(host, port) for host in self.hostlist_servers]
+            dmg_hostlist = ",".join(servers_with_ports)
+            server_utils.clean_server(dmg_hostlist, scm=True)
 
         # Create host files
         self.hostfile_servers = write_host_file.write_host_file(
@@ -250,7 +256,7 @@ class TestWithServers(TestWithoutServers):
 
             if self.nvme_parameter == "nvme":
                 # Format servers
-                format_res = dmg_utils.storage_format(self.hostlist_servers)
+                format_res = dmg_utils.storage_format(dmg_hostlist)
                 try:
                     format_str = "Mntpoint:/mnt/daos Status:CTRL_SUCCESS"
                     general_utils.poll_pattern(
@@ -268,8 +274,7 @@ class TestWithServers(TestWithoutServers):
                 self.start_servers()
 
                 # Storage prep
-                res = dmg_utils.storage_prep(
-                    self.hostlist_servers, nvme=True)
+                res = dmg_utils.storage_prep(dmg_hostlist, nvme=True)
                 if res.exit_status != 0:
                     self.fail(res.stderr)
 
