@@ -147,6 +147,16 @@ type nvmeStorage struct {
 	formatted   bool
 }
 
+func (n *nvmeStorage) hasControllers(pciAddrs []string) (missing []string, ok bool) {
+	for _, addr := range pciAddrs {
+		if n.getController(addr) == nil {
+			missing = append(missing, addr)
+		}
+	}
+
+	return missing, len(missing) == 0
+}
+
 func (n *nvmeStorage) getController(pciAddr string) *pb.NvmeController {
 	for _, c := range n.controllers {
 		if c.Pciaddr == pciAddr {
