@@ -316,6 +316,8 @@ pipeline {
                                               ln $arts artifacts/sles12.3/
                                               createrepo artifacts/sles12.3/
                                           fi'''
+                             stepResult name: env.STAGE_NAME, context: "build",
+                                        result: "SUCCESS"
                         }
                         unsuccessful {
                             sh label: "Collect artifacts",
