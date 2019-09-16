@@ -82,10 +82,10 @@ func TestParseBdev(t *testing.T) {
 			bdevList:  []string{"myfile", "myotherfile"},
 			bdevSize:  5, // GB/file
 			wantBuf: []string{
-				"[AIO]",
-				"    AIO myfile AIO__0 4096",
-				"    AIO myotherfile AIO__1 4096",
-				"",
+				`[AIO]`,
+				`    AIO myfile AIO__0 4096`,
+				`    AIO myotherfile AIO__1 4096`,
+				``,
 			},
 			vosEnv: "AIO",
 		},
@@ -93,10 +93,10 @@ func TestParseBdev(t *testing.T) {
 			bdevClass: BdevClassKdev,
 			bdevList:  []string{"sdb", "sdc"},
 			wantBuf: []string{
-				"[AIO]",
+				`[AIO]`,
 				`    AIO sdb AIO__0`,
 				`    AIO sdc AIO__1`,
-				"",
+				``,
 			},
 			vosEnv: "AIO",
 		},
@@ -105,10 +105,10 @@ func TestParseBdev(t *testing.T) {
 			bdevSize:   5, // GB/file
 			bdevNumber: 2, // number of LUNs
 			wantBuf: []string{
-				"[Malloc]",
-				"    NumberOfLuns 2",
-				"    LunSizeInMB 5000",
-				"",
+				`[Malloc]`,
+				`    NumberOfLuns 2`,
+				`    LunSizeInMB 5000`,
+				``,
 			},
 			vosEnv: "MALLOC",
 		},

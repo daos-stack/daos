@@ -3,7 +3,7 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('denv')
+    Import('denv', 'prereqs')
 
     libraries = ['daos_common', 'daos', 'daos_tests', 'gurt', 'cart']
     libraries += ['uuid', 'mpi']
@@ -22,6 +22,7 @@ def scons():
     denv.Install('$PREFIX/bin/', test)
     denv.Install('$PREFIX/bin/io_conf', Glob('io_conf/daos_io_conf_1'))
     denv.Install('$PREFIX/bin/io_conf', Glob('io_conf/daos_io_conf_2'))
+    denv.Install('$PREFIX/bin/io_conf', Glob('io_conf/daos_io_conf_3'))
     SConscript('io_conf/SConscript', exports='denv')
 
 if __name__ == "SCons.Script":
