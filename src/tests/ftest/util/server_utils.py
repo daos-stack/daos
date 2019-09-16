@@ -319,6 +319,31 @@ def stop_server(setname=None, hosts=None):
     subprocess.call(["pkill", "^ssh$"])
 
 
+def clean_server(hosts, scm=False, mountpoint="/mnt/daos"):
+        """Clean the tmpfs  on the servers.
+
+        Args:
+            hosts (list): list of host names where servers are running
+            scm (bool): if true, remove tmpfs mount
+            mountpoint (str): mount point path to clean
+        """
+        clean_cmds = [
+            "find {} -mindepth 1 -maxdepth 1 -print0 | \
+            xargs -0r rm -rf".format(mountpoint)
+        ]
+
+        if scm:
+            clean_cmds.append(
+                "sudo umount {0}; sudo rm -rf {0}".format(mountpoint))
+
+        # Intentionally ignoring the exit status of the command
+        result = pcmd(hosts, "; ".join(clean_cmds), False, None, None)
+        if len(result) > 1 or 0 not in result:
+            raise ServerFailed(
+                "Error cleaning tmpfs on servers: {}".format(
+                    ", ".join(
+                        [str(result[key]) for key in result if key != 0])))
+
 def kill_server(hosts):
     """Forcably kill any daos server processes running on the specified hosts.
 

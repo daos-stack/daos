@@ -24,9 +24,11 @@
 from __future__ import print_function
 
 import os
+import getpass
 
 from command_utils import DaosCommand, CommandWithParameters
 from command_utils import BasicParameter, FormattedParameter
+from general_utils import get_file_path
 from avocado.utils import process
 
 
@@ -126,7 +128,7 @@ class DmgCommand(DaosCommand):
             self.reset = FormattedParameter("--reset", None)
 
 
-def storage_scan(hosts, path=""):
+def storage_scan(hosts):
     """ Execute scan command through dmg tool to servers provided.
 
     Args:
@@ -138,7 +140,7 @@ def storage_scan(hosts, path=""):
 
     """
     # Create and setup the command
-    dmg = DmgCommand(path)
+    dmg = DmgCommand(get_file_path("bin/daos_shell"))
     dmg.request.value = "storage"
     dmg.action.value = "scan"
     dmg.insecure.value = True
@@ -152,7 +154,7 @@ def storage_scan(hosts, path=""):
 
     return result
 
-def storage_format(hosts, path=""):
+def storage_format(hosts):
     """ Execute format command through dmg tool to servers provided.
 
     Args:
@@ -164,7 +166,7 @@ def storage_format(hosts, path=""):
 
     """
     # Create and setup the command
-    dmg = DmgCommand(path)
+    dmg = DmgCommand(get_file_path("bin/daos_shell"))
     dmg.insecure.value = True
     dmg.hostlist.value = hosts
     dmg.request.value = "storage"
@@ -179,7 +181,7 @@ def storage_format(hosts, path=""):
 
     return result
 
-def storage_prep(hosts, path="", user=None, hugepages="4096", nvme=None,
+def storage_prep(hosts, user=None, hugepages="4096", nvme=None,
                  scm=None):
     """ Execute prepare command through dmg tool to servers provided.
 
@@ -192,14 +194,14 @@ def storage_prep(hosts, path="", user=None, hugepages="4096", nvme=None,
 
     """
     # Create and setup the command
-    dmg = DmgCommand(path)
+    dmg = DmgCommand(get_file_path("bin/daos_shell"))
     dmg.insecure.value = True
     dmg.hostlist.value = hosts
     dmg.request.value = "storage"
     dmg.action.value = "prepare"
     dmg.prepare.nvmeonly.value = nvme
     dmg.prepare.scmonly.value = scm
-    dmg.prepare.targetuser.value = user
+    dmg.prepare.targetuser.value = getpass.getuser() if user is None else user
     dmg.prepare.hugepages.value = hugepages
     dmg.prepare.force.value = True
 
@@ -211,7 +213,7 @@ def storage_prep(hosts, path="", user=None, hugepages="4096", nvme=None,
 
     return result
 
-def storage_reset(hosts, path="", user=None, hugepages="4096"):
+def storage_reset(hosts, user=None, hugepages="4096"):
     """Execute prepare reset command through dmg tool to servers provided.
 
     Args:
@@ -225,14 +227,15 @@ def storage_reset(hosts, path="", user=None, hugepages="4096"):
 
     """
     # Create and setup the command
-    dmg = DmgCommand(path)
+    dmg = DmgCommand(get_file_path("bin/daos_shell"))
     dmg.insecure.value = True
     dmg.hostlist.value = hosts
     dmg.request.value = "storage"
     dmg.action.value = "prepare"
     dmg.prepare.nvmeonly.value = True
-    dmg.prepare.targetuser.value = user
+    dmg.prepare.targetuser.value = getpass.getuser() if user is None else user
     dmg.prepare.hugepages.value = hugepages
+    dmg.prepare.reset.value = True
     dmg.prepare.force.value = True
 
     try:
