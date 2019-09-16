@@ -79,13 +79,7 @@ int			dss_core_depth;
 int			dss_core_nr;
 /** start offset index of the first core for service XS */
 int			dss_core_offset;
-/** NUMA node to bind to */
-int			numa_node;
-hwloc_bitmap_t core_allocation_bitmap;
-/** a copy of the NUMA node object in the topology */
-hwloc_obj_t	numa_obj;
-/** number of cores in the given NUMA node */
-int			dss_num_cores_numa_node;
+
 /** Module facility bitmask */
 static uint64_t		dss_mod_facs;
 
@@ -112,7 +106,7 @@ register_dbtree_classes(void)
 	rc = dbtree_class_register(DBTREE_CLASS_KV, 0 /* feats */,
 				   &dbtree_kv_ops);
 	if (rc != 0) {
-		D_PRINT("failed to register DBTREE_CLASS_KV: %d\n", rc);
+		D_ERROR("failed to register DBTREE_CLASS_KV: %d\n", rc);
 		return rc;
 	}
 
@@ -120,21 +114,21 @@ register_dbtree_classes(void)
 				   BTR_FEAT_UINT_KEY /* feats */,
 				   &dbtree_iv_ops);
 	if (rc != 0) {
-		D_PRINT("failed to register DBTREE_CLASS_IV: %d\n", rc);
+		D_ERROR("failed to register DBTREE_CLASS_IV: %d\n", rc);
 		return rc;
 	}
 
 	rc = dbtree_class_register(DBTREE_CLASS_NV, 0 /* feats */,
 				   &dbtree_nv_ops);
 	if (rc != 0) {
-		D_PRINT("failed to register DBTREE_CLASS_NV: %d\n", rc);
+		D_ERROR("failed to register DBTREE_CLASS_NV: %d\n", rc);
 		return rc;
 	}
 
 	rc = dbtree_class_register(DBTREE_CLASS_UV, 0 /* feats */,
 				   &dbtree_uv_ops);
 	if (rc != 0) {
-		D_PRINT("failed to register DBTREE_CLASS_UV: %d\n", rc);
+		D_ERROR("failed to register DBTREE_CLASS_UV: %d\n", rc);
 		return rc;
 	}
 
@@ -142,7 +136,7 @@ register_dbtree_classes(void)
 				   BTR_FEAT_UINT_KEY /* feats */,
 				   &dbtree_ec_ops);
 	if (rc != 0) {
-		D_PRINT("failed to register DBTREE_CLASS_EC: %d\n", rc);
+		D_ERROR("failed to register DBTREE_CLASS_EC: %d\n", rc);
 		return rc;
 	}
 
@@ -180,7 +174,7 @@ modules_load(uint64_t *facs)
 		mod_facs = 0;
 		rc = dss_module_load(mod, &mod_facs);
 		if (rc != 0) {
-			D_PRINT("Failed to load module %s: %d\n",
+			D_ERROR("Failed to load module %s: %d\n",
 				mod, rc);
 			break;
 		}
@@ -207,12 +201,9 @@ dss_tgt_nr_get(int ncores, int nr)
 	D_ASSERT(ncores >= 1);
 	/* Each system XS uses one core, and each main XS with
 	 * dss_tgt_offload_xs_nr offload XS. Calculate the nr_default
-	 * as the number of main XS based on number of cores available
-	 * on this NUMA node.  Reduce the number of cores available
-	 * by the starting core offset.
+	 * as the number of main XS based on number of cores.
 	 */
-	nr_default = (((ncores - dss_sys_xs_nr) - dss_core_offset) /
-		DSS_XS_NR_PER_TGT);
+	nr_default = (ncores - dss_sys_xs_nr) / DSS_XS_NR_PER_TGT;
 	if (nr_default == 0)
 		nr_default = 1;
 
@@ -233,71 +224,20 @@ dss_tgt_nr_get(int ncores, int nr)
 static int
 dss_topo_init()
 {
-	uint depth;
-	int num_obj;
-	int num_cores_visited;
-	char *cpuset;
-	int k;
-	hwloc_obj_t corenode;
-D_PRINT("Hello from dss_topo_init\n");
 	hwloc_topology_init(&dss_topo);
 	hwloc_topology_load(dss_topo);
 
 	dss_core_depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_CORE);
 	dss_core_nr = hwloc_get_nbobjs_by_type(dss_topo, HWLOC_OBJ_CORE);
-	depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_NUMANODE);
-	num_obj = hwloc_get_nbobjs_by_depth(dss_topo, depth);
+	dss_tgt_nr = dss_tgt_nr_get(dss_core_nr, nr_threads);
 
-	if (numa_node > num_obj) {
-		D_PRINT("Invalid NUMA node selected. "
-			"Must be no larger than %d\n",
-			num_obj);
-		return -DER_INVAL;
-	}
-
-	numa_obj = hwloc_get_obj_by_depth(dss_topo, depth, numa_node);
-	if (numa_obj == NULL) {
-		D_PRINT("NUMA node %d was not found in the topology",
-			numa_node);
-		return -DER_INVAL;
-	}
-
-	/* create an empty bitmap, then set each bit as we */
-	/* find a core that matches */
-	core_allocation_bitmap = hwloc_bitmap_alloc();
-	if (core_allocation_bitmap == NULL) {
-		D_PRINT("Unable to allocate core allocation bitmap\n");
-		return -DER_INVAL;
-	}
-
-	dss_num_cores_numa_node = 0;
-	num_cores_visited = 0;
-
-	for (k = 0; k < dss_core_nr; k++) {
-		corenode = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, k);
-		if (corenode == NULL)
-			continue;
-		if (hwloc_bitmap_isincluded(corenode->allowed_cpuset,
-			numa_obj->allowed_cpuset) != 0) {
-			if (num_cores_visited++ >= dss_core_offset) {
-				hwloc_bitmap_set(core_allocation_bitmap, k);
-				hwloc_bitmap_asprintf(&cpuset,
-					corenode->allowed_cpuset);
-			}
-			dss_num_cores_numa_node++;
-		}
-	}
-	hwloc_bitmap_asprintf(&cpuset, core_allocation_bitmap);
-	free(cpuset);
-
-	dss_tgt_nr = dss_tgt_nr_get(dss_num_cores_numa_node, nr_threads);
-	if (dss_core_offset < 0 || dss_core_offset >= dss_num_cores_numa_node) {
-		D_PRINT("invalid dss_core_offset %d (set by \"-f\" option), "
+	if (dss_core_offset < 0 || dss_core_offset >= dss_core_nr) {
+		D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), "
 			"should within range [0, %d]", dss_core_offset,
-			dss_num_cores_numa_node - 1);
+			dss_core_nr - 1);
 		return -DER_INVAL;
 	}
-D_PRINT("Success from topo topo_init\n");
+
 	return 0;
 }
 
@@ -402,7 +342,7 @@ abt_init(int argc, char *argv[])
 	/* Now, initialize Argobots. */
 	rc = ABT_init(argc, argv);
 	if (rc != ABT_SUCCESS) {
-		D_PRINT("failed to init ABT: %d\n", rc);
+		D_ERROR("failed to init ABT: %d\n", rc);
 		return dss_abterr2der(rc);
 	}
 
@@ -446,16 +386,16 @@ server_init(int argc, char *argv[])
 	rc = dss_topo_init();
 	if (rc != 0)
 		D_GOTO(exit_debug_init, rc);
-D_PRINT("STAGE 1\n");
+
 	rc = abt_init(argc, argv);
 	if (rc != 0)
 		goto exit_debug_init;
-D_PRINT("STAGE 2\n");
+
 	/* initialize the modular interface */
 	rc = dss_module_init();
 	if (rc)
 		goto exit_abt_init;
-D_PRINT("STAGE 3\n");
+
 	D_INFO("Module interface successfully initialized\n");
 
 	/* initialize the network layer */
@@ -466,7 +406,7 @@ D_PRINT("STAGE 3\n");
 	if (rc)
 		D_GOTO(exit_mod_init, rc);
 	D_INFO("Network successfully initialized\n");
-D_PRINT("STAGE 4\n");
+
 	ds_iv_init();
 
 	/* load modules */
@@ -475,51 +415,51 @@ D_PRINT("STAGE 4\n");
 		/* Some modules may have been loaded successfully. */
 		D_GOTO(exit_mod_loaded, rc);
 	D_INFO("Module %s successfully loaded\n", modules);
-D_PRINT("STAGE 5\n");
+
 	/* start up service */
 	rc = dss_srv_init();
 	if (rc) {
-		D_PRINT("DAOS cannot be initialized using the configured "
+		D_ERROR("DAOS cannot be initialized using the configured "
 			"path (%s).   Please ensure it is on a PMDK compatible "
 			"file system and writeable by the current user\n",
 			dss_storage_path);
 		D_GOTO(exit_mod_loaded, rc);
 	}
 	D_INFO("Service is now running\n");
-D_PRINT("STAGE 6\n");
+
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		rc = daos_init();
 		if (rc) {
-			D_PRINT("daos_init (client) failed, rc: %d.\n", rc);
+			D_ERROR("daos_init (client) failed, rc: %d.\n", rc);
 			D_GOTO(exit_srv_init, rc);
 		}
 		D_INFO("Client stack enabled\n");
 	} else {
 		rc = daos_hhash_init();
 		if (rc) {
-			D_PRINT("daos_hhash_init failed, rc: %d.\n", rc);
+			D_ERROR("daos_hhash_init failed, rc: %d.\n", rc);
 			D_GOTO(exit_srv_init, rc);
 		}
 		D_INFO("daos handle hash-table initialized\n");
 	}
 	/* server-side uses D_HTYPE_PTR handle */
 	d_hhash_set_ptrtype(daos_ht.dht_hhash);
-D_PRINT("STAGE 7\n");
+
 	rc = server_init_state_init();
 	if (rc != 0) {
-		D_PRINT("failed to init server init state: %d\n", rc);
+		D_ERROR("failed to init server init state: %d\n", rc);
 		goto exit_daos_fini;
 	}
-D_PRINT("STAGE 8\n");
+
 	rc = drpc_init();
 	if (rc != 0) {
-		D_PRINT("Failed to initialize dRPC: %d\n", rc);
+		D_ERROR("Failed to initialize dRPC: %d\n", rc);
 		goto exit_init_state;
 	}
-D_PRINT("STAGE 9\n");
+
 	if (dss_pmixless())
 		server_init_state_wait(DSS_INIT_STATE_RANK_SET);
-D_PRINT("STAGE 10\n");
+
 	rc = crt_group_rank(NULL, &rank);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 	rc = crt_group_size(NULL, &size);
@@ -530,7 +470,7 @@ D_PRINT("STAGE 10\n");
 		if (attach_info_path != NULL) {
 			rc = crt_group_config_path_set(attach_info_path);
 			if (rc != 0) {
-				D_PRINT("crt_group_config_path_set(path %s) "
+				D_ERROR("crt_group_config_path_set(path %s) "
 					"failed, rc: %d.\n", attach_info_path,
 					rc);
 				goto exit_drpc_fini;
@@ -541,19 +481,19 @@ D_PRINT("STAGE 10\n");
 			goto exit_drpc_fini;
 		D_INFO("server group attach info saved\n");
 	}
-D_PRINT("STAGE 11\n");
+
 	server_init_state_wait(DSS_INIT_STATE_SET_UP);
 
 	rc = dss_module_setup_all();
 	if (rc != 0)
 		goto exit_drpc_fini;
 	D_INFO("Modules successfully set up\n");
-D_PRINT("STAGE 12\n");
+
 	D_PRINT("DAOS I/O server (v%s) process %u started on rank %u "
 		"(out of %u) with %u target xstream set(s), %d helper XS "
-		"per target, NUMA node %u, firstcore %d.\n",
+		"per target, firstcore %d.\n",
 		DAOS_VERSION, getpid(), rank, size, dss_tgt_nr,
-		dss_tgt_offload_xs_nr, numa_node, dss_core_offset);
+		dss_tgt_offload_xs_nr, dss_core_offset);
 
 	return 0;
 
@@ -617,10 +557,10 @@ Options:\n\
       Number of targets to use (use all cores by default)\n\
   --xshelpernr=nhelpers, -x helpers\n\
       Number of helper XS -per vos target (default 1)\n\
+  --pinned_numa_node, -p (default 0)\n\
+      pinned numa node\n\
   --firstcore=firstcore, -f firstcore\n\
       index of first core for service thread (default 0)\n\
-  --pinned_numa_node=numanode, -p numanode\n\
-      Bind to cores within the specified NUMA node (default 0)\n\
   --group=group, -g group\n\
       Server group name (default \"%s\")\n\
   --storage=path, -s path\n\
@@ -637,7 +577,6 @@ Options:\n\
       Print this description\n",
 		prog, prog, modules, daos_sysname, dss_storage_path,
 		dss_socket_dir, dss_nvme_conf);
-	exit(0);
 }
 
 static int
@@ -648,12 +587,12 @@ parse(int argc, char **argv)
 		{ "cores",		required_argument,	NULL,	'c' },
 		{ "socket_dir",		required_argument,	NULL,	'd' },
 		{ "firstcore",		required_argument,	NULL,	'f' },
+		{ "pinned_numa_node",   required_argument, NULL, 'p' },
 		{ "group",		required_argument,	NULL,	'g' },
 		{ "help",		no_argument,		NULL,	'h' },
 		{ "shm_id",		required_argument,	NULL,	'i' },
 		{ "modules",		required_argument,	NULL,	'm' },
 		{ "nvme",		required_argument,	NULL,	'n' },
-		{ "pinned_numa_node",	required_argument,	NULL,	'p' },
 		{ "targets",		required_argument,	NULL,	't' },
 		{ "storage",		required_argument,	NULL,	's' },
 		{ "xshelpernr",		required_argument,	NULL,	'x' },
@@ -664,7 +603,7 @@ parse(int argc, char **argv)
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "a:c:d:f:g:h:i:m:n:p:t:s:x:", opts,
+	while ((c = getopt_long(argc, argv, "a:c:d:f:g:hi:m:n:p:t:s:x:", opts,
 				NULL)) != -1) {
 		unsigned int	 nr;
 		char		*end;
@@ -730,9 +669,6 @@ parse(int argc, char **argv)
 		case 'n':
 			dss_nvme_conf = optarg;
 			break;
-		case 'p':
-			numa_node = atoi(optarg);
-			break;
 		case 'i':
 			dss_nvme_shm_id = atoi(optarg);
 			break;
@@ -742,6 +678,9 @@ parse(int argc, char **argv)
 		case 'a':
 			save_attach_info = true;
 			attach_info_path = optarg;
+			break;
+		case 'p':
+			printf("Got numa node option but ignoreing it for this test\n");
 			break;
 		default:
 			usage(argv[0], stderr);
@@ -763,7 +702,7 @@ daos_register_sighand(int signo, void (*handler) (int, siginfo_t *, void *))
 	int			rc;
 
 	if ((signo < 0) || (signo >= _NSIG)) {
-		D_PRINT("invalid signo %d to register\n", signo);
+		D_ERROR("invalid signo %d to register\n", signo);
 		return -DER_INVAL;
 	}
 
@@ -773,7 +712,7 @@ daos_register_sighand(int signo, void (*handler) (int, siginfo_t *, void *))
 	/* register new and save old handler */
 	rc = sigaction(signo, &act, &old_handlers[signo]);
 	if (rc != 0) {
-		D_PRINT("sigaction() failure registering new and reading "
+		D_ERROR("sigaction() failure registering new and reading "
 			"old %d signal handler\n", signo);
 		return rc;
 	}
@@ -825,7 +764,7 @@ print_backtrace(int signo, siginfo_t *info, void *p)
 	/* re-register old handler */
 	rc = sigaction(signo, &old_handlers[signo], NULL);
 	if (rc != 0) {
-		D_PRINT("sigaction() failure registering new and reading old "
+		D_ERROR("sigaction() failure registering new and reading old "
 			"%d signal handler\n", signo);
 		/* XXX it is weird, we may end-up in a loop handling same
 		 * signal with this handler if we return
@@ -896,7 +835,7 @@ main(int argc, char **argv)
 	while (1) {
 		rc = sigwait(&set, &sig);
 		if (rc) {
-			D_PRINT("failed to wait for signals: %d\n", rc);
+			D_ERROR("failed to wait for signals: %d\n", rc);
 			break;
 		}
 
