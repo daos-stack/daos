@@ -705,7 +705,7 @@ static int
 singv_iter_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor)
 {
 	vos_iter_entry_t	entry;
-	daos_anchor_t		tmp;
+	daos_anchor_t		tmp = {0};
 	int			opc;
 	int			rc;
 

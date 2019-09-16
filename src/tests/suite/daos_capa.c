@@ -62,7 +62,7 @@ static void
 query(void **state)
 {
 	test_arg_t		*arg = *state;
-	daos_pool_info_t	 info;
+	daos_pool_info_t	 info = {0};
 	daos_handle_t		 poh;
 	int			 rc;
 

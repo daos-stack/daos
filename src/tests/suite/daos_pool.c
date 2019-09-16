@@ -55,7 +55,7 @@ pool_connect(void **state)
 	test_arg_t	*arg = *state;
 	daos_handle_t	 poh;
 	daos_event_t	 ev;
-	daos_pool_info_t info;
+	daos_pool_info_t info = {0};
 	int		 rc;
 
 	if (!arg->hdl_share && arg->myrank != 0)
@@ -164,7 +164,7 @@ pool_exclude(void **state)
 	test_arg_t	*arg = *state;
 	daos_handle_t	 poh;
 	daos_event_t	 ev;
-	daos_pool_info_t info;
+	daos_pool_info_t info = {0};
 	struct d_tgt_list tgts;
 	d_rank_t	 rank;
 	int		 tgt = -1;
@@ -464,7 +464,7 @@ pool_properties(void **state)
 	daos_prop_t		*prop;
 	daos_prop_t		*prop_query;
 	struct daos_prop_entry	*entry;
-	daos_pool_info_t	 info;
+	daos_pool_info_t	 info = {0};
 	int			 rc;
 	char			*expected_owner;
 	char			*expected_group;

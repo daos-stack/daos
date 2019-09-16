@@ -94,7 +94,7 @@ by the DAOS server require elevated permissions on the storage nodes
 
 ### Storage Preparation
 
-#### SCM
+#### SCM Preparation
 
 This section addresses how to verify that Optane DC Persistent memory
 (DCPM) is correctly installed on the storage nodes and how to configure
@@ -122,20 +122,20 @@ The list of NVDIMMs can be displayed as follows:
 | 0x1101 | 502.5 GiB | Healthy     | 0              | Disabled  | 01.00.00.5127 |
 
 Moreover, DAOS requires DCPM to be configured in interleaved mode. A
-storage subcommand (prep-scm) can be used as a "command mode"
+storage subcommand (prepare --scm-only) can be used as a "command mode"
 invocation of *daos\_server* and must be run as root. SCM modules will
 be configured into interleaved regions with memory mode set to
 "AppDirect" mode with one set per socket (each module is assigned to socket
 and reports this via its NUMA rating).
 
-`sudo daos_server [<app_opts>] storage prep-scm [<cmd_opts>]`
+`sudo daos_server [<app_opts>] storage prepare [--scm-only|-s] [<cmd_opts>]`
 The first time the command is run, SCM AppDirect regions will be created as
 resource allocations on any available DCPM modules (one region per NUMA
 node/socket). The regions are activated after BIOS reads the new resource
 allocations and therefore after initial completion the command prints a
 message to ask for a reboot (the command will not a initiate reboot itself).
 
-'sudo daos_server storage prep-scm' should be run for a second time after
+'sudo daos_server storage prepare --scm-only' should be run for a second time after
 system reboot in order to create the pmem kernel devices (/dev/pmemX
 namespaces created on the new SCM regions).
 
@@ -169,7 +169,7 @@ Persistent memory kernel devices:
 [{UUID:5d2f2517-9217-4d7d-9c32-70731c9ac11e Blockdev:pmem1 Dev:namespace1.0 NumaNode:1} {UUID:2bfe6c40-f79a-4b8e-bddf-ba81d4427b9b Blockdev:pmem0 Dev:namespace0.0 NumaNode:0}]
 ```
 
-`sudo daos_server [<app_opts>] storage prep-scm --reset [<cmd_opts>]`
+`sudo daos_server [<app_opts>] storage prepare [--scm-only|-s] --reset [<cmd_opts>]`
 
 All namespaces are disabled and destroyed. SCM regions are removed by
 resetting modules into "MemoryMode" through resource allocations.
@@ -194,14 +194,14 @@ resetting SCM memory allocations
 A reboot is required to process new memory allocation goals.
 ```
 
-#### NVMe
+#### NVMe Preparation
 
 DAOS supports only NVMe-capable SSDs that are accessed directly from
 userspace through the SPDK library.
 
 NVMe access through SPDK as an unprivileged user can be enabled by
 running the example command
-`sudo daos_server storage prep-nvme -p 4096 -u bob`.
+`sudo daos_server storage prepare --nvme-only -p 4096 -u bob`.
 
 This will perform the required setup in order for `daos_server` to be run
 by user "bob" who will own the hugepage mountpoint directory and vfio
@@ -216,7 +216,7 @@ of huge pages to allocate for use by SPDK.
 A list of PCI addresses can also be supplied to avoid unbinding all
 PCI devices from the kernel, using the `-w` / `--pci-whitelist` option.
 
-`sudo daos_server [<app_opts>] storage prep-nvme [<cmd_opts>]`
+`sudo daos_server [<app_opts>] storage prepare [--nvme-only|-n] [<cmd_opts>]`
 command wraps the SPDK setup script to unbind the devices from
 original kernel drivers and then binds the devices to a UIO driver
 through which SPDK can communicate.
@@ -227,7 +227,7 @@ specified as --target-user or effective user - in that order of precedence)
 involving changing ownership of relevant files in addition to SPDK setup.
 
 The devices can then be bound back to the original drivers with the command
-`sudo daos_server [<app_opts>] storage prep-nvme --reset [<cmd_opts>]`.
+`sudo daos_server [<app_opts>] storage prepare [--nvme-only|-n] --reset [<cmd_opts>]`.
 
 ### Storage Detection & Selection
 
@@ -1088,10 +1088,9 @@ starts the data plane.
 Typically an administrator will perform the following tasks:
 
 1. Prepare NVMe and SCM Storage
-    - `sudo daos_server [<app_opts>] storage prep-nvme [<cmd_opts>]`
-    [NVMe details](#nvme-prep)
-    - `sudo daos_server [<app_opts>] storage prep-scm [<cmd_opts>]`
-    [SCM details](#scm-prep)
+    - `sudo daos_server [<app_opts>] storage prepare [<cmd_opts>]`
+    [NVMe details](#nvme-preparation)
+    [SCM details](#scm-preparation)
 
 2. Scan Storage
     - `sudo daos_server [<app_opts>] storage scan [<cmd_opts>]`

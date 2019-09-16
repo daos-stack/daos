@@ -85,6 +85,9 @@
 	X(DAOS_OBJ_RPC_QUERY_KEY,					\
 		0, &CQF_obj_query_key,					\
 		ds_obj_query_key_handler, NULL),			\
+	X(DAOS_OBJ_RPC_SYNC,						\
+		0, &CQF_obj_sync,					\
+		ds_obj_sync_handler, NULL),				\
 	X(DAOS_OBJ_RPC_TGT_UPDATE,					\
 		0, &CQF_obj_update,					\
 		ds_obj_tgt_update_handler, NULL),			\
@@ -234,6 +237,22 @@ CRT_RPC_DECLARE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
 	((daos_recx_t)		(okqo_recx)		CRT_VAR)
 
 CRT_RPC_DECLARE(obj_query_key, DAOS_ISEQ_OBJ_QUERY_KEY, DAOS_OSEQ_OBJ_QUERY_KEY)
+
+#define DAOS_ISEQ_OBJ_SYNC /* input fields */			 \
+	((uuid_t)		(osi_co_hdl)		CRT_VAR) \
+	((uuid_t)		(osi_pool_uuid)		CRT_VAR) \
+	((uuid_t)		(osi_co_uuid)		CRT_VAR) \
+	((daos_unit_oid_t)	(osi_oid)		CRT_VAR) \
+	((uint64_t)		(osi_epoch)		CRT_VAR) \
+	((uint32_t)		(osi_map_ver)		CRT_VAR) \
+	((uint32_t)		(osi_padding)		CRT_VAR)
+
+#define DAOS_OSEQ_OBJ_SYNC /* output fields */			 \
+	((int32_t)		(oso_ret)		CRT_VAR) \
+	((uint32_t)		(oso_map_version)	CRT_VAR) \
+	((uint64_t)		(oso_epoch)		CRT_VAR)
+
+CRT_RPC_DECLARE(obj_sync, DAOS_ISEQ_OBJ_SYNC, DAOS_OSEQ_OBJ_SYNC)
 
 static inline int
 obj_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,

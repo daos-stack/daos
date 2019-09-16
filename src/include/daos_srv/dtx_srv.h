@@ -175,6 +175,9 @@ int dtx_batched_commit_register(struct ds_cont_hdl *hdl);
 
 void dtx_batched_commit_deregister(struct ds_cont_hdl *hdl);
 
+int dtx_obj_sync(uuid_t po_uuid, uuid_t co_uuid, daos_handle_t coh,
+		 daos_unit_oid_t oid, daos_epoch_t epoch, uint32_t map_ver);
+
 /**
  * Check whether the given DTX is resent one or not.
  *

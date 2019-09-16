@@ -45,32 +45,6 @@
    fun:clone
 }
 {
-   access-1
-   Memcheck:Cond
-   fun:process_query_reply
-   fun:pool_query_cb
-   fun:tse_task_complete_callback
-   fun:tse_task_complete
-   fun:crt_hg_req_send_cb
-   fun:hg_core_forward_cb
-   fun:hg_core_trigger_entry
-   fun:hg_core_trigger
-   fun:HG_Core_trigger
-   fun:crt_hg_trigger
-   fun:crt_progress
-   fun:daos_event_priv_wait
-   fun:dc_task_schedule
-   fun:daos_pool_query
-   fun:dfuse_pool_lookup
-   fun:df_ll_lookup
-   fun:fuse_session_process_buf_int
-   fun:fuse_session_loop
-   fun:ll_loop_fn
-   fun:dfuse_launch_fuse
-   fun:dfuse_start
-   fun:main
-}
-{
    access-2
    Memcheck:Param
    socketcall.sendto(msg)
@@ -110,11 +84,6 @@
    fun:dfuse_pool_lookup
    fun:df_ll_lookup
    fun:fuse_session_process_buf_int
-   fun:fuse_session_loop
-   fun:ll_loop_fn
-   fun:dfuse_launch_fuse
-   fun:dfuse_start
-   fun:main
 }
 {
    pool-query-leak
