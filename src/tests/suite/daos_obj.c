@@ -3123,6 +3123,18 @@ blob_unmap_trigger(void **state)
 	int		 i, t;
 	int		 rc;
 
+	/* Skip this test.   It is doing multiple operations inside a
+	 * transaction.  The current DTX model assigns a new transaction
+	 * to each of these updates with the same timestamp.  This doesn't
+	 * work as the incarnation log rejects multiple updates from
+	 * different transactions at the same epoch.
+	 * When distributing transactions are enabled, we will be able
+	 * to reenable this test though the lookup check will not work
+	 * as written here because the initial version of distributed
+	 * transactions will not support reading updated data.
+	 */
+	skip();
+
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
