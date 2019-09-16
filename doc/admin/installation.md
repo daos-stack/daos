@@ -56,16 +56,17 @@ below). Then initialize the submodules with:
 
 ## DAOS from Scratch
 
-The below instructions have been verified with CentOS. Installations on other
+The following instructions have been verified with CentOS. Installations on other
 Linux distributions might be similar with some variations.
-Developers of DAOS may want to check additional sections below before beginning
-for suggestions related specifically to development. Please contact us in our
-[*forum*](https://daos.groups.io/g/daos) if running into issues.
+Developers of DAOS may want to review the additional sections below before beginning,
+for suggestions related specifically to development. Contact us in our
+[*forum*](https://daos.groups.io/g/daos) for further help with any issues.
 
 ### Build Prerequisites
 
-First of all, please verify that the autotools packages listed below are at the
+First, verify that the autotools packages listed below are at the
 appropriate versions (or above):
+
 -   m4 (GNU M4) 1.4.16
 -   flex 2.5.37
 -   autoconf (GNU Autoconf) 2.69
@@ -75,18 +76,19 @@ appropriate versions (or above):
 Moreover, a Go version of at least 1.10 is required.
 
 To build DAOS and its dependencies, several software packages must be installed
-on the system. This includes scons, libuuid, cmocka, ipmctl and several other
+on the system. This includes scons, libuuid, cmocka, ipmctl, and several other
 packages usually available on all the Linux distributions.
 
 A exhaustive list of packages for each supported Linux distribution is
 maintained in the Docker files:
-- [CentOS](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.centos.7#L53-L72)
-- [OpenSUSE](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.leap.15#L16-L40)
-- [Ubuntu](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.ubuntu.18.04#L21-L38)
 
-The command lines to install the required packages can be easily extracted from
+-    [CentOS](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.centos.7#L53-L72)
+-    [OpenSUSE](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.leap.15#L16-L40)
+-    [Ubuntu](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.ubuntu.18.04#L21-L38)
+
+The command lines to install the required packages can be extracted from
 the Docker files by removing the "RUN" command which is specific to Docker.
-Please check the [docker](https://github.com/daos-stack/daos/tree/master/utils/docker)
+Check the [docker](https://github.com/daos-stack/daos/tree/master/utils/docker)
 directory for different Linux distribution versions.
 
 ### Building DAOS & Dependencies
@@ -99,7 +101,7 @@ type the following command in the top source directory to build the DAOS stack:
 ```
 
 If you are a developer of DAOS, we recommend following the instructions in the
-last section of this chapter.
+[DAOS for Development](https://daos-stack.github.io/admin/installation/#daos-for-development) section.
 
 Otherwise, the missing dependencies can be built automatically by invoking scons
 with the following parameters:
@@ -145,12 +147,12 @@ To build the Docker image directly from GitHub, run the following command:
 ```
 
 This creates a CentOS 7 image, fetches the latest DAOS version from GitHub,
-builds it and install it in the image.
+builds it, and installs it in the image.
 For Ubuntu and other Linux distributions, replace Dockerfile.centos.7 with
 Dockerfile.ubuntu.18.04 and the appropriate version of interest.
 
 Once the image created, one can start start a container that will eventually run
-the DAOS service (see section below):
+the DAOS service:
 
 ```
     $ docker run -it -d --privileged --name server \
@@ -159,13 +161,13 @@ the DAOS service (see section below):
             daos
 ```
 
-If Docker is being run on a non Linux system (e.g. OSX), the export of /dev/hugepages
+If Docker is being run on a non-Linux system (e.g., OSX), the export of /dev/hugepages
 should be removed since it is not supported.
 
-### Building from Local Tree
+### Building from a Local Tree
 
 To build from a local tree stored on the host, a volume must be created to share
-the source tree with the Docker container. To do so, please execute the following
+the source tree with the Docker container. To do so, execute the following
 command to create a docker image without checking out the DAOS source tree:
 
 ```
@@ -184,9 +186,9 @@ Then create a container that can access the local DAOS source tree:
 
 ${daospath} should be replaced with the full path to your DAOS source tree.
 As mentioned above, the export of /dev/hugepages should be removed if the
-host is a not a Linux system.
+host is not a Linux system.
 
-Then please execute the following command to build and install DAOS in the
+Then execute the following command to build and install DAOS in the
 container:
 
 ```
@@ -195,15 +197,15 @@ container:
 
 ### Running DAOS Service in Docker
 
-First of all, SPDK should be initialized in this newly created container.
+First, SPDK should be initialized in this newly created container.
 This can be done by running the following command:
 
 ```
     $ docker exec server daos_server storage prepare -n -f
 ```
 
-Please note that this command reports that /dev/hugepages is not accessible on
-OSX. This still allows to run the DAOS service despite the error.
+Note that this command reports that /dev/hugepages is not accessible on
+OSX. This still allows running the DAOS service despite the error.
 
 The DAOS service can then be started as follows:
 
@@ -218,24 +220,24 @@ The DAOS service can then be started as follows:
 The daos_server_local.yml configuration file sets up a simple local DAOS system
 with a single server instance running in the container. By default, it uses 4GB
 of DRAM to emulate persistent memory and 16GB of bulk storage under /tmp.
-The storage size can be tweaked in the yaml file if necessariy.
+The storage size can be changed in the yaml file if necessariy.
 
 Once started, the DAOS server waits for the administrator to format the system.
-This can be triggered in a different shell via the following command:
+This can be triggered in a different shell, using the following command:
 
 ```
     $ docker exec server daos_shell -i storage format -f
 ```
 
-Upon successful completion of format, the storage engine is started and pools
-can be created via the daos admin tool (see next section).
+Upon successful completion of the format, the storage engine is started, and pools
+can be created using the daos admin tool (see next section).
 
 ## DAOS for Development
 
 This section covers specific instructions to create a developer-friendly
 environment to contribute to the DAOS development. This includes how to
-regenerate the protobuf files or add new Go package dependencies which is
-only required for development purpose.
+regenerate the protobuf files or add new Go package dependencies, which is
+only required for development purposes.
 
 ### Building DAOS for Development
 
@@ -245,12 +247,15 @@ TARGET\_PREFIX variable. Once the submodules have been initialized and updated,
 run the following commands:
 
 ```
-    scons PREFIX=${daos_prefix_path} TARGET_PREFIX=${daos_prefix_path}/opt install --build-deps=yes --config=force
+    scons PREFIX=${daos_prefix_path} 
+	TARGET_PREFIX=${daos_prefix_path}/opt install 
+	--build-deps=yes 
+	--config=force
 ```
 
-Installing the components into seperate directories allow to upgrade the
-components individually replacing --build-deps=yes with
---update-prereq={component\_name}. This requires change to the environment
+Installing the components into seperate directories allow upgrading the
+components individually by replacing --build-deps=yes with
+--update-prereq={component\_name}. This requires a change to the environment
 configuration from before. For automated environment setup, source
 scons_local/utils/setup_local.sh.
 
@@ -269,14 +274,14 @@ scons_local/utils/setup_local.sh.
     PATH=$CART/bin/:$OMPI/bin/:${daos_prefix_path}/bin/:$PATH
 ```
 
-With this approach DAOS would get built using the prebuilt dependencies in
-${daos_prefix_path}/opt and required options are saved for future compilations.
-So, after the first time, during development, a mere "scons --config=force" and
+With this approach, DAOS would get built using the prebuilt dependencies in
+${daos_prefix_path}/opt, and required options are saved for future compilations.
+So, after the first time, during development, only "scons --config=force" and
 "scons --config=force install" would suffice for compiling changes to DAOS
 source code.
 
 If you wish to compile DAOS with clang rather than gcc, set COMPILER=clang on
-the scons command line.   This option is also saved for future compilations.
+the scons command line. This option is also saved for future compilations.
 
 ### Go dependencies
 
@@ -305,7 +310,8 @@ On Ubuntu 18.04 and later:
 ```
 
 For OSes that don't supply a package:
-- Ensure that you have a personal GOPATH (see "go env GOPATH", referred to as
+
+-    Ensure that you have a personal GOPATH (see "go env GOPATH", referred to as
 "$GOPATH" in this document) and a GOBIN ($GOPATH/bin) set up and included in
 your PATH:
 
@@ -316,7 +322,7 @@ your PATH:
 
 - Then follow the [installation instructions on Github](https://github.com/golang/dep).
 
-To update the vendor directory using dep after changing Gopkg.toml, first make
+To update the vendor directory using dep after changing Gopkg.toml, make
 sure DAOS is cloned into
 
 ```
@@ -332,8 +338,8 @@ Then:
 
 ### Protobuf Compiler
 
-The DAOS control plane infrastructure use protobuf as the data serialization
-format for its RPC requests. The DAOS proto files use protobuf 3 syntax which is
+The DAOS control plane infrastructure uses protobuf as the data serialization
+format for its RPC requests. The DAOS proto files use protobuf 3 syntax, which is
 not supported by the platform protobuf compiler in all cases. Not all developers
 will need to build the proto files into the various source files.
 However, if changes are made to the proto files, the corresponding C and Go
