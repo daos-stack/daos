@@ -41,6 +41,7 @@ import server_utils
 import write_host_file
 from daos_api import DaosContext, DaosLog
 
+CLIENT_LOG = "client_daos.log"
 
 # pylint: disable=invalid-name
 def skipForTicket(ticket):
@@ -159,7 +160,14 @@ class TestWithServers(TestWithoutServers):
         super(TestWithServers, self).__init__(*args, **kwargs)
 
         self.agent_sessions = None
+        self.nvme_parameter = None
         self.setup_start_servers = True
+        self.server_log = None
+        self.log_dir = os.path.split(os.getenv("D_LOG_FILE",
+                                               "/tmp/server.log"))[0]
+        self.client_log = None
+        self.test_id = "{}-{}".format(os.path.split(self.filename)[1],
+                                      self.name.str_uid)
         self.setup_start_agents = True
 
     def setUp(self):
@@ -177,7 +185,8 @@ class TestWithServers(TestWithoutServers):
         test_clients = self.params.get("test_clients", "/run/hosts/*")
         server_count = self.params.get("server_count", "/run/hosts/*")
         client_count = self.params.get("client_count", "/run/hosts/*")
-
+        self.nvme_parameter = self.params.get(
+            "bdev_class", '/server_config/server/')
         # If server or client host list are defined through valid slurm
         # partition names override any hosts specified through lists.
         test_servers, self.partition_servers = self.get_partition_hosts(
@@ -214,6 +223,10 @@ class TestWithServers(TestWithoutServers):
                     "Test requires {} {}; {} specified".format(
                         expected_count, host_type, actual_count))
 
+        #Storage setup if requested in test input file
+        if self.nvme_parameter == "nvme":
+            server_utils.storage_prepare(self.hostlist_servers)
+
         # Create host files
         self.hostfile_servers = write_host_file.write_host_file(
             self.hostlist_servers, self.workdir, self.hostfile_servers_slots)
@@ -243,6 +256,12 @@ class TestWithServers(TestWithoutServers):
             try:
                 server_utils.stop_server(hosts=self.hostlist_servers)
             finally:
+                try:
+                    #Storage reset
+                    if self.nvme_parameter == "nvme":
+                        server_utils.storage_reset(self.hostlist_servers)
+                finally:
+                    super(TestWithServers, self).tearDown()
                 super(TestWithServers, self).tearDown()
 
     def start_servers(self, server_groups=None):
@@ -251,6 +270,7 @@ class TestWithServers(TestWithoutServers):
         Args:
             server_groups (dict, optional): [description]. Defaults to None.
         """
+
         if isinstance(server_groups, dict):
             # Optionally start servers on a different subset of hosts with a
             # different server group
@@ -258,10 +278,12 @@ class TestWithServers(TestWithoutServers):
                 self.log.info(
                     "Starting servers: group=%s, hosts=%s", group, hosts)
                 hostfile = write_host_file.write_host_file(hosts, self.workdir)
-                server_utils.run_server(hostfile, group, self.basepath)
+                server_utils.run_server(hostfile, group, self.basepath,
+                                        log_filename=self.server_log)
         else:
             server_utils.run_server(
-                self.hostfile_servers, self.server_group, self.basepath)
+                self.hostfile_servers, self.server_group, self.basepath,
+                log_filename=self.server_log)
 
     def get_partition_hosts(self, partition_key, host_list):
         """[summary].
@@ -300,3 +322,19 @@ class TestWithServers(TestWithoutServers):
             return hosts, partiton_name
         else:
             return host_list, None
+
+    def update_log_file_names(self, test_name=None):
+        """Get separate logs for both servers and clients
+        Args:
+            test_name (str, optional): name of test variant
+        """
+
+        # Determine the path and name of the daos server log using the
+        # D_LOG_FILE env or, if not set, the value used in the doas server yaml
+        if test_name:
+            self.test_id = test_name
+
+        self.server_log = os.path.join(
+            self.log_dir, "{}_server_daos.log".format(self.test_id))
+        self.client_log = os.path.join(
+            self.log_dir, "{}_client_daos.log".format(self.test_id))

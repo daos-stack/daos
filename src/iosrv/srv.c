@@ -1706,7 +1706,6 @@ dss_gc_run(int credits)
 		}
 		total -= creds; /* subtract the remainded credits */
 		if (creds != 0) {
-			D_DEBUG(DB_TRACE, "GC consumed %d credits\n", total);
 			break;
 		}
 
@@ -1717,6 +1716,10 @@ dss_gc_run(int credits)
 			break;
 
 		ABT_thread_yield();
+	}
+
+	if (total != 0) {
+		D_DEBUG(DB_TRACE, "GC consumed %d credits\n", total);
 	}
 }
 

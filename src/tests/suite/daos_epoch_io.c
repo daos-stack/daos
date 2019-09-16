@@ -365,7 +365,7 @@ static int
 daos_test_cb_query(test_arg_t *arg, struct test_op_record *op,
 		   char **rbuf, daos_size_t *rbuf_size)
 {
-	daos_pool_info_t pinfo = { 0 };
+	daos_pool_info_t pinfo = {0};
 	int rc;
 
 	/*get only pool space info*/
@@ -1213,6 +1213,21 @@ cmd_line_parse(test_arg_t *arg, char *cmd_line, struct test_op_record **op)
 		D_STRNDUP(arg->eio_args.op_akey, akey, strlen(akey));
 	} else if (strcmp(argv[0], "iod_size") == 0) {
 		arg->eio_args.op_iod_size = atoi(argv[1]);
+	} else if (strcmp(argv[0], "obj_class") == 0) {
+		if (strcmp(argv[1], "ec") == 0) {
+			arg->eio_args.op_ec = 1;
+			arg->eio_args.op_oid = dts_oid_gen(dts_ec_obj_class, 0,
+							   arg->myrank);
+			print_message("the test is for EC object.\n");
+		} else if (strcmp(argv[1], "replica") == 0) {
+			arg->eio_args.op_ec = 0;
+			arg->eio_args.op_oid = dts_oid_gen(dts_obj_class, 0,
+							   arg->myrank);
+			print_message("the test is for replica object.\n");
+		} else {
+			print_message("bad obj_class %s.\n", argv[1]);
+			rc = -DER_INVAL;
+		}
 	} else if (strcmp(argv[0], "oid") == 0) {
 		rc = cmd_parse_oid(arg, argc, argv);
 	} else if (strcmp(argv[0], "update") == 0) {
@@ -1341,7 +1356,7 @@ cmd_line_run(test_arg_t *arg, struct test_op_record *op_rec)
 	D_ASSERT(lvl == TEST_LVL_DAOS || lvl == TEST_LVL_VOS);
 
 	/* for modification OP, just go through DAOS stack and return */
-	if (test_op_is_modify(op))
+	if (test_op_is_modify(op) || op == TEST_OP_POOL_QUERY)
 		return op_dict[op].op_cb[lvl](arg, op_rec, NULL, 0);
 
 	/* for verification OP, firstly retrieve it through DAOS stack */

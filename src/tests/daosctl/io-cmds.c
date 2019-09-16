@@ -237,7 +237,7 @@ open_container(struct container_info *oc_info)
 {
 	int              rc;
 	unsigned int     flag = DAOS_PC_EX;
-	daos_pool_info_t pinfo;
+	daos_pool_info_t pinfo = {0};
 	daos_cont_info_t cinfo;
 
 	rc = daos_pool_connect(oc_info->pool_uuid, oc_info->server_group,

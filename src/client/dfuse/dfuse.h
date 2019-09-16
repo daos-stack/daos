@@ -29,12 +29,10 @@
 
 #include <gurt/list.h>
 #include <gurt/hash.h>
+#include <gurt/atomic.h>
 
 #include "daos.h"
 #include "daos_fs.h"
-
-#include "dfuse_gah.h"
-#include "dfuse_fs.h"
 
 #include "dfuse_common.h"
 #include "dfuse.h"
@@ -48,6 +46,7 @@ struct dfuse_info {
 	char				*di_mountpoint;
 	d_rank_list_t			*di_svcl;
 	bool				di_threaded;
+	bool				di_foreground;
 };
 
 /* Launch fuse, and do not return until complete */
@@ -58,10 +57,10 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info,
 		  struct dfuse_projection_info *dfi_handle);
 
 struct dfuse_projection_info {
-	struct dfuse_projection		dpi_proj;
 	struct dfuse_info		*dpi_info;
 	struct dfuse_dfs		*dpi_ddfs;
 	uint32_t			dpi_max_read;
+	uint32_t			dpi_max_write;
 	/** Hash table of open inodes */
 	struct d_hash_table		dpi_iet;
 	struct d_hash_table		dpi_irt;
@@ -154,8 +153,8 @@ extern struct dfuse_inode_ops dfuse_pool_ops;
 struct dfuse_dfs {
 	struct dfuse_inode_ops	*dfs_ops;
 	dfs_t			*dfs_ns;
-	char			dfs_pool[NAME_MAX + 1];
-	char			dfs_cont[NAME_MAX + 1];
+	uuid_t			dfs_pool;
+	uuid_t			dfs_cont;
 	daos_handle_t		dfs_poh;
 	daos_handle_t		dfs_coh;
 	daos_pool_info_t	dfs_pool_info;
@@ -354,12 +353,12 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define DFUSE_REPLY_IOCTL(handle, req, gah_info)			\
+#define DFUSE_REPLY_IOCTL(handle, req, arg)				\
 	do {								\
 		int __rc;						\
 		DFUSE_TRA_DEBUG(handle, "Returning ioctl");		\
-		__rc = fuse_reply_ioctl(req, 0, &(gah_info),		\
-					sizeof(gah_info));		\
+		__rc = fuse_reply_ioctl(req, 0, &(arg),			\
+					sizeof(arg));			\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(handle,				\
 					"fuse_reply_ioctl returned %d:%s", \
@@ -529,6 +528,10 @@ dfuse_cb_removexattr(fuse_req_t, struct dfuse_inode_entry *, const char *);
 
 void
 dfuse_cb_setattr(fuse_req_t, struct dfuse_inode_entry *, struct stat *, int);
+
+void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
+		    struct fuse_file_info *fi, unsigned int flags,
+		    const void *in_buf, size_t in_bufsz, size_t out_bufsz);
 
 /* Return inode information to fuse
  *

@@ -35,6 +35,9 @@
 int dts_obj_class	= OC_RP_2G1;
 int dts_obj_replica_cnt	= 2;
 
+int dts_ec_obj_class	= OC_EC_2P2G1;
+int dts_ec_grp_size	= 4;
+
 void
 ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
 	   daos_iod_type_t iod_type, test_arg_t *arg)
@@ -2844,7 +2847,7 @@ fetch_replica_unavail(void **state)
 	const char		 akey[] = "test_update akey";
 	const char		 rec[]  = "test_update record";
 	uint32_t		 size = 64;
-	daos_pool_info_t	 info;
+	daos_pool_info_t	 info = {0};
 	d_rank_t		 rank = 2;
 	char			*buf;
 	int			 rc;

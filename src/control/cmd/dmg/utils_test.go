@@ -27,14 +27,11 @@ import (
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/client"
-	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 func TestHasConnection(t *testing.T) {
-	defer common.ShowLogOnFailure(t)()
-
 	var shelltests = []struct {
 		results ResultMap
 		out     string
@@ -76,8 +73,6 @@ func TestHasConnection(t *testing.T) {
 }
 
 func TestCheckSprint(t *testing.T) {
-	defer common.ShowLogOnFailure(t)()
-
 	var shelltests = []struct {
 		m   string
 		out string
