@@ -193,6 +193,12 @@ main(int argc, char **argv)
 	if (rc != 0)
 		return rc;
 
+	rc = pl_init();
+	if (rc != 0) {
+		daos_debug_fini();
+		return rc;
+	}
+
 	uuid_generate(pl_uuid);
 	srand(time(NULL));
 	oid.lo = rand();
@@ -338,6 +344,7 @@ main(int argc, char **argv)
 
 	pool_map_decref(po_map);
 	pool_buf_free(buf);
+	pl_fini();
 	daos_debug_fini();
 	D_PRINT("\nall tests passed!\n");
 	return 0;
