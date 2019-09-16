@@ -677,8 +677,8 @@ obj_ec_codec_init()
 
 	i = 0;
 	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
-		if (oc->oc_attr.ca_resil != DAOS_RES_EC &&
-		    oc->oc_attr.ca_grp_nr != 1 &&
+		if (oc->oc_attr.ca_resil != DAOS_RES_EC || 
+		    oc->oc_attr.ca_grp_nr != 1 || 
 		    oc->oc_attr.ca_schema != DAOS_OS_SINGLE)
 			continue;
 
