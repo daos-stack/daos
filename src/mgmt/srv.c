@@ -413,7 +413,7 @@ out:
 static int
 ace_strs_to_acl(char **ace_strs, size_t ace_nr, struct daos_acl **acl)
 {
-	struct daos_ace	*tmp_aces[ace_nr];
+	struct daos_ace	**tmp_aces;
 	struct daos_acl	*tmp_acl = NULL;
 	size_t		i;
 	int		rc;
@@ -421,7 +421,9 @@ ace_strs_to_acl(char **ace_strs, size_t ace_nr, struct daos_acl **acl)
 	if (ace_strs == NULL || ace_nr == 0)
 		return 0; /* nothing to do */
 
-	memset(tmp_aces, 0, sizeof(tmp_aces));
+	D_ALLOC_ARRAY(tmp_aces, ace_nr);
+	if (tmp_aces == NULL)
+		return -DER_NOMEM;
 
 	for (i = 0; i < ace_nr; i++) {
 		rc = daos_ace_from_str(ace_strs[i], &(tmp_aces[i]));
@@ -444,6 +446,7 @@ ace_strs_to_acl(char **ace_strs, size_t ace_nr, struct daos_acl **acl)
 out:
 	for (i = 0; i < ace_nr; i++)
 		daos_ace_free(tmp_aces[i]);
+	D_FREE(tmp_aces);
 	return rc;
 }
 
