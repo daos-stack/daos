@@ -39,14 +39,34 @@
 
 #define LRU_CACHE_BITS 16
 
-/**
- * Reference of a cached object.
- * NB: DRAM data structure.
- */
-struct vos_object;
-
 /* Internal container handle structure */
 struct vos_container;
+
+/**
+ * A cached object (DRAM data structure).
+ */
+struct vos_object {
+	/** llink for daos lru cache */
+	struct daos_llink		obj_llink;
+	/** Key for searching, object ID within a container */
+	daos_unit_oid_t			obj_id;
+	/** dkey tree open handle of the object */
+	daos_handle_t			obj_toh;
+	/** btree iterator handle */
+	daos_handle_t			obj_ih;
+	/** epoch when the object(cache) is initialized */
+	daos_epoch_t			obj_epoch;
+	/** The latest sync epoch */
+	daos_epoch_t			obj_sync_epoch;
+	/** cached vos_obj_df::vo_incarnation, for revalidation. */
+	uint32_t			obj_incarnation;
+	/** nobody should access this object */
+	bool				obj_zombie;
+	/** Persistent memory address of the object */
+	struct vos_obj_df		*obj_df;
+	/** backref to container */
+	struct vos_container		*obj_cont;
+};
 
 /**
  * Find an object in the cache \a occ and take its reference. If the object is
@@ -73,6 +93,12 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
  */
 void
 vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj);
+
+static inline int
+vos_obj_refcount(struct vos_object *obj)
+{
+	return obj->obj_llink.ll_ref;
+}
 
 /** Evict an object reference from the cache */
 void vos_obj_evict(struct vos_object *obj);
@@ -169,5 +195,10 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
 int
 vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 	     daos_epoch_t epoch, uint32_t flags, struct vos_obj_df *obj);
+
+
+/** delete an object from OI table */
+int
+vos_oi_delete(struct vos_container *cont, daos_unit_oid_t oid);
 
 #endif

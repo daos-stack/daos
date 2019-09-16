@@ -88,7 +88,8 @@ dtx_flush_committable(struct dss_module_info *dmi,
 		struct dtx_entry	*dtes = NULL;
 
 		rc = vos_dtx_fetch_committable(cont->sc_hdl,
-					       DTX_THRESHOLD_COUNT, &dtes);
+					       DTX_THRESHOLD_COUNT, NULL,
+					       DAOS_EPOCH_MAX, &dtes);
 		if (rc <= 0)
 			break;
 
@@ -126,7 +127,6 @@ dtx_batched_commit(void *arg)
 	struct dtx_batched_commit_args	*dbca;
 
 	while (1) {
-		ABT_bool			 state;
 		struct ds_cont_child		*cont;
 		struct dtx_entry		*dtes = NULL;
 		struct dtx_stat			 stat = { 0 };
@@ -151,7 +151,8 @@ dtx_batched_commit(void *arg)
 		     dtx_hlc_age2sec(stat.dtx_oldest_committable_time) >
 		     DTX_COMMIT_THRESHOLD_AGE)) {
 			rc = vos_dtx_fetch_committable(cont->sc_hdl,
-						DTX_THRESHOLD_COUNT, &dtes);
+						DTX_THRESHOLD_COUNT, NULL,
+						DAOS_EPOCH_MAX, &dtes);
 			if (rc > 0) {
 				rc = dtx_commit(dbca->dbca_pool->spc_uuid,
 					cont->sc_uuid, dtes, rc,
@@ -184,11 +185,8 @@ dtx_batched_commit(void *arg)
 		}
 
 check:
-		rc = ABT_future_test(dmi->dmi_xstream->dx_shutdown, &state);
-		D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
-		if (state == ABT_TRUE)
+		if (dss_xstream_exiting(dmi->dmi_xstream))
 			break;
-
 		ABT_thread_yield();
 	}
 
@@ -512,7 +510,9 @@ out:
 	if (abort_dtes != NULL)
 		D_FREE(abort_dtes);
 
-	return rc > 0 ? 0 : rc;
+	D_ASSERTF(rc <= 0, "unexpected return value %d\n", rc);
+
+	return rc;
 }
 
 /**
@@ -632,13 +632,21 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *cont_hdl,
 	}
 
 	rc = vos_dtx_add_cos(dth->dth_coh, &dth->dth_oid, &dth->dth_xid,
-			     dth->dth_dkey_hash, dlh->dlh_handled_time,
+			     dth->dth_dkey_hash, dth->dth_epoch,
 			     dth->dth_intent == DAOS_INTENT_PUNCH ?
-			     true : false);
+			     true : false, true);
+	if (rc == -DER_INPROGRESS) {
+		D_WARN(DF_UUID": Fail to add DTX "DF_DTI" to CoS "
+		       "because of using old epoch "DF_U64"\n",
+		       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid),
+		       dth->dth_epoch);
+		D_GOTO(fail, result = rc);
+	}
+
 	if (rc != 0) {
-		D_ERROR(DF_UUID": Fail to add DTX "DF_DTI" to CoS cache: %d. "
-			"Try to commit it sychronously.\n",
-			DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid), rc);
+		D_WARN(DF_UUID": Fail to add DTX "DF_DTI" to CoS cache: %d. "
+		       "Try to commit it sychronously.\n",
+		       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid), rc);
 		dth->dth_sync = 1;
 	}
 
@@ -676,8 +684,11 @@ out_free:
 
 	if (dth->dth_dti_cos != NULL)
 		D_FREE(dth->dth_dti_cos);
+
+	D_ASSERTF(result <= 0, "unexpected return value %d\n", result);
+
 out:
-	return result > 0 ? 0 : result;
+	return result;
 }
 
 /**
@@ -757,8 +768,11 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_hdl *cont_hdl,
 		(unsigned long long)dth->dth_dkey_hash,
 		dth->dth_intent == DAOS_INTENT_PUNCH ? "Punch" : "Update",
 		result);
+
+	D_ASSERTF(result <= 0, "unexpected return value %d\n", result);
+
 out:
-	return result > 0 ? 0 : result;
+	return result;
 }
 
 
@@ -876,7 +890,17 @@ dtx_handle_resend(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
 	int	rc;
 
 	if (daos_is_zero_dti(dti))
-		return 0;
+		/* If DTX is disabled, then means that the appplication does
+		 * not care about the replicas consistency. Under such case,
+		 * if client resends some modification RPC, then just handle
+		 * it as non-resent case, return -DER_NONEXIST.
+		 *
+		 * It will cause trouble if related modification has ever
+		 * been handled before the resending. But since we cannot
+		 * trace (if without DTX) whether it has ever been handled
+		 * or not, then just handle it as original without DTX case.
+		 */
+		return -DER_NONEXIST;
 
 	rc = vos_dtx_check_resend(coh, oid, dti, dkey_hash, punch, epoch);
 	switch (rc) {
@@ -1029,5 +1053,40 @@ exec:
 	/* Then execute the local operation */
 	rc = func(dlh, func_arg, -1, NULL);
 out:
+	return rc;
+}
+
+int
+dtx_obj_sync(uuid_t po_uuid, uuid_t co_uuid, daos_handle_t coh,
+	     daos_unit_oid_t oid, daos_epoch_t epoch, uint32_t map_ver)
+{
+	int	rc = 0;
+
+	while (1) {
+		struct dtx_entry	*dtes = NULL;
+
+		rc = vos_dtx_fetch_committable(coh, DTX_THRESHOLD_COUNT, &oid,
+					       epoch, &dtes);
+		if (rc < 0) {
+			D_ERROR(DF_UOID" fail to fetch dtx: rc = %d\n",
+				DP_UOID(oid), rc);
+			break;
+		}
+
+		if (rc == 0)
+			break;
+
+		rc = dtx_commit(po_uuid, co_uuid, dtes, rc, map_ver);
+		dtx_free_committable(dtes);
+		if (rc < 0) {
+			D_ERROR(DF_UOID" fail to commit dtx: rc = %d\n",
+				DP_UOID(oid), rc);
+			break;
+		}
+	}
+
+	if (rc == 0)
+		rc = vos_dtx_mark_sync(coh, oid, epoch);
+
 	return rc;
 }

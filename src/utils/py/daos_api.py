@@ -1580,6 +1580,20 @@ class DaosContainer(object):
             raise DaosApiError("TX close returned non-zero. RC: {0}"
                                .format(ret))
 
+    def abort_tx(self, txn):
+        """abort a transaction that is done being modified """
+
+        # container should be  in the open state
+        if self.coh == 0:
+            raise DaosApiError("Container needs to be open.")
+
+        c_tx = ctypes.c_uint64(txn)
+
+        func = self.context.get_function('destroy-tx')
+        ret = func(c_tx, None)
+        if ret != 0:
+            raise DaosApiError("TX abort returned non-zero. RC: {0}"
+                               .format(ret))
 
     def write_an_array_value(self, datalist, dkey, akey, obj=None, rank=None,
                              obj_cls=None):
@@ -2094,13 +2108,19 @@ class DaosServer(object):
                                .format(ret))
 
 
+# pylint: disable=pylint-too-few-public-methods
 class DaosContext(object):
     """Provides environment and other info for a DAOS client."""
 
     def __init__(self, path):
         """ setup the DAOS API and MPI """
 
-        self.libdaos = ctypes.CDLL(path+"libdaos.so.0.6.0",
+        # first find the DAOS version
+        with open(os.path.join(path, "daos", "VERSION"),
+                  "r") as version_file:
+            daos_version = version_file.read().rstrip()
+
+        self.libdaos = ctypes.CDLL(path+"libdaos.so.{}".format(daos_version),
                                    mode=ctypes.DEFAULT_MODE)
         ctypes.CDLL(path+"libdaos_common.so",
                     mode=ctypes.RTLD_GLOBAL)
@@ -2172,6 +2192,7 @@ class DaosContext(object):
     def get_function(self, function):
         """ call a function through the API """
         return self.ftable[function]
+# pylint: enable=pylint-too-few-public-methods
 
 
 class DaosLog:

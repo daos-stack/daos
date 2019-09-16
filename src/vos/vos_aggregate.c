@@ -273,8 +273,8 @@ vos_agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 		agg_param->ap_dkey = entry->ie_key;
 		memset(&agg_param->ap_akey, 0, sizeof(agg_param->ap_akey));
 	} else if (!agg_param->ap_discard) {
-		D_DEBUG(DB_EPC, "Skip dkey:[%s] aggregation on re-probe\n",
-			(char *)entry->ie_key.iov_buf);
+		D_DEBUG(DB_EPC, "Skip dkey: "DF_KEY" aggregation on re-probe\n",
+			DP_KEY(&entry->ie_key));
 		*acts |= VOS_ITER_CB_SKIP;
 	}
 
@@ -393,8 +393,8 @@ vos_agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 	if (vos_agg_key_compare(agg_param->ap_akey, entry->ie_key)) {
 		agg_param->ap_akey = entry->ie_key;
 	} else if (!agg_param->ap_discard) {
-		D_DEBUG(DB_EPC, "Skip akey:[%s] aggregation on re-probe\n",
-			(char *)entry->ie_key.iov_buf);
+		D_DEBUG(DB_EPC, "Skip akey: "DF_KEY" aggregation on re-probe\n",
+			DP_KEY(&entry->ie_key));
 		*acts |= VOS_ITER_CB_SKIP;
 	}
 

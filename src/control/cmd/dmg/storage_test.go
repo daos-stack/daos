@@ -41,20 +41,17 @@ func TestStorageCommands(t *testing.T) {
 			"storage format",
 			"ConnectClients",
 			nil,
-			cmdSuccess,
 		},
 		{
 			"Format with force",
 			"storage format --force",
-			"ConnectClients FormatStorage",
+			"ConnectClients StorageFormat",
 			nil,
-			cmdSuccess,
 		},
 		{
 			"Update with missing arguments",
 			"storage fwupdate",
 			"",
-			nil,
 			errMissingFlag,
 		},
 		{
@@ -63,14 +60,13 @@ func TestStorageCommands(t *testing.T) {
 			"storage fwupdate --nvme-model foo --nvme-fw-path bar --nvme-fw-rev 123",
 			"ConnectClients",
 			nil,
-			cmdSuccess,
 		},
 		{
 			"Update with force",
 			"storage fwupdate --force --nvme-model foo --nvme-fw-path bar --nvme-fw-rev 123",
 			strings.Join([]string{
 				"ConnectClients",
-				fmt.Sprintf("UpdateStorage-%s", &pb.UpdateStorageReq{
+				fmt.Sprintf("StorageUpdate-%s", &pb.StorageUpdateReq{
 					Nvme: &pb.UpdateNvmeReq{
 						Model:    "foo",
 						Startrev: "123",
@@ -79,20 +75,59 @@ func TestStorageCommands(t *testing.T) {
 				}),
 			}, " "),
 			nil,
-			cmdSuccess,
 		},
 		{
 			"Scan",
 			"storage scan",
-			"ConnectClients ScanStorage",
+			"ConnectClients StorageScan",
 			nil,
-			cmdSuccess,
+		},
+		{
+			"Prepare without force",
+			"storage prepare",
+			"ConnectClients",
+			fmt.Errorf("consent not given"),
+		},
+		{
+			"Prepare with nvme-only and scm-only",
+			"storage prepare --force --nvme-only --scm-only",
+			"ConnectClients",
+			fmt.Errorf("nvme-only and scm-only options should not be set together"),
+		},
+		{
+			"Prepare with scm-only",
+			"storage prepare --force --scm-only",
+			"ConnectClients StoragePrepare",
+			nil,
+		},
+		{
+			"Prepare with nvme-only",
+			"storage prepare --force --nvme-only",
+			"ConnectClients StoragePrepare",
+			nil,
+		},
+		{
+			"Prepare with non-existent option",
+			"storage prepare --force --nvme",
+			"",
+			fmt.Errorf("unknown flag `nvme'"),
+		},
+		{
+			"Prepare with force and reset",
+			"storage prepare --force --reset",
+			"ConnectClients StoragePrepare",
+			nil,
+		},
+		{
+			"Prepare with force",
+			"storage prepare --force",
+			"ConnectClients StoragePrepare",
+			nil,
 		},
 		{
 			"Nonexistent subcommand",
 			"storage quack",
 			"",
-			nil,
 			fmt.Errorf("Unknown command"),
 		},
 	})

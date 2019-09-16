@@ -118,14 +118,11 @@ main(int argc, char **argv)
 		{"group",		required_argument, 0, 'g'},
 		{"mountpoint",		required_argument, 0, 'm'},
 		{"singlethread",	no_argument,	   0, 'S'},
+		{"foreground",		no_argument,	   0, 'f'},
 		{"help",		no_argument,	   0, 'h'},
 		{"prefix",		required_argument, 0, 'p'},
 		{0, 0, 0, 0}
 	};
-
-	rc = daos_init();
-	if (rc != -DER_SUCCESS)
-		D_GOTO(out, ret = rc);
 
 	D_ALLOC_PTR(dfuse_info);
 	if (!dfuse_info)
@@ -134,7 +131,7 @@ main(int argc, char **argv)
 	dfuse_info->di_threaded = true;
 
 	while (1) {
-		c = getopt_long(argc, argv, "p:c:s:g:m:Sh",
+		c = getopt_long(argc, argv, "p:c:s:g:m:Sfh",
 				long_options, NULL);
 
 		if (c == -1)
@@ -159,6 +156,9 @@ main(int argc, char **argv)
 		case 'S':
 			dfuse_info->di_threaded = false;
 			break;
+		case 'f':
+			dfuse_info->di_foreground = true;
+			break;
 		case 'h':
 			exit(0);
 			break;
@@ -166,6 +166,11 @@ main(int argc, char **argv)
 			exit(1);
 			break;
 		}
+	}
+
+	if (!dfuse_info->di_foreground && getenv("PMIX_RANK")) {
+		DFUSE_LOG_WARNING("Not running in background under orterun");
+		dfuse_info->di_foreground = true;
 	}
 
 	if (!dfuse_info->di_mountpoint) {
@@ -194,6 +199,16 @@ main(int argc, char **argv)
 		DFUSE_LOG_ERROR("Invalid container uuid");
 		D_GOTO(out_dfuse, ret = -DER_INVAL);
 	}
+
+	if (!dfuse_info->di_foreground) {
+		rc = daemon(0, 0);
+		if (rc)
+			return daos_errno2der(rc);
+	}
+
+	rc = daos_init();
+	if (rc != -DER_SUCCESS)
+		D_GOTO(out, ret = rc);
 
 	dfuse_info->di_svcl = daos_rank_list_parse(svcl, ":");
 	if (dfuse_info->di_svcl == NULL) {

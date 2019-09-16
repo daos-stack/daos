@@ -182,6 +182,43 @@ reset:
 	return rc;
 }
 
+int
+vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
+{
+	struct daos_lru_cache	*occ  = vos_obj_cache_current();
+	struct vos_container	*cont = vos_hdl2cont(coh);
+	struct vos_object	*obj;
+	int			 rc;
+
+	rc = vos_obj_hold(occ, cont, oid, DAOS_EPOCH_MAX, true,
+			  DAOS_INTENT_KILL, &obj);
+	if (rc == -DER_NONEXIST)
+		return 0;
+
+	if (rc) {
+		D_ERROR("Failed to hold object: %s\n", d_errstr(rc));
+		return rc;
+	}
+
+	rc = vos_tx_begin(cont->vc_pool);
+	if (rc)
+		goto out;
+
+	rc = vos_oi_delete(cont, obj->obj_id);
+	if (rc)
+		D_ERROR("Failed to delete object: %s\n", d_errstr(rc));
+
+	rc = vos_tx_end(cont->vc_pool, rc);
+	if (rc)
+		goto out;
+
+	/* NB: noop for full-stack mode */
+	gc_wait_pool(vos_obj2pool(obj));
+out:
+	vos_obj_release(occ, obj);
+	return rc;
+}
+
 /**
  * @defgroup vos_obj_iters VOS object iterators
  * @{
@@ -667,7 +704,7 @@ static int
 singv_iter_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor)
 {
 	vos_iter_entry_t	entry;
-	daos_anchor_t		tmp;
+	daos_anchor_t		tmp = {0};
 	int			opc;
 	int			rc;
 
@@ -1290,19 +1327,16 @@ vos_obj_iter_copy(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 static int
 obj_iter_delete(struct vos_obj_iter *oiter, void *args)
 {
-	int		rc = 0;
-	struct vos_pool	*vpool;
+	struct vos_pool	*pool = vos_obj2pool(oiter->it_obj);
+	int		 rc = 0;
 
-	D_DEBUG(DB_TRACE, "BTR delete called of obj\n");
-	vpool = vos_obj2pool(oiter->it_obj);
-
-	rc = vos_tx_begin(vpool);
+	rc = vos_tx_begin(pool);
 	if (rc != 0)
 		goto exit;
 
 	rc = dbtree_iter_delete(oiter->it_hdl, args);
 
-	rc = vos_tx_end(vpool, rc);
+	rc = vos_tx_end(pool, rc);
 exit:
 	if (rc != 0)
 		D_ERROR("Failed to delete iter entry: %d\n", rc);

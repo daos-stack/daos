@@ -718,3 +718,12 @@ vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
 
 	return 0;
 }
+
+void
+vea_flush(struct vea_space_info *vsi)
+{
+	D_ASSERT(vsi != NULL);
+
+	vsi->vsi_agg_time = 0;
+	migrate_free_exts(vsi);
+}

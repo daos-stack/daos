@@ -39,7 +39,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	daos_prop_t			*prop = NULL;
 	struct daos_prop_entry		*prop_entry;
 	uuid_t				pool_uuid;
-	daos_pool_info_t		pool_info;
+	daos_pool_info_t		pool_info = {};
 	struct fuse_entry_param		entry = {0};
 	int				rc;
 
@@ -86,6 +86,13 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 			       NULL);
 	if (rc) {
 		DFUSE_LOG_ERROR("daos_pool_connect() failed: (%d)", rc);
+
+		/* This is the error you get when the agent isn't started
+		 * and EHOSTUNREACH seems to better reflect this than ENOTDIR
+		 */
+		if (rc == -DER_BADPATH)
+			D_GOTO(err, rc = EHOSTUNREACH);
+
 		D_GOTO(err, rc = daos_der2errno(rc));
 	}
 

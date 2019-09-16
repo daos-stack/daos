@@ -32,7 +32,6 @@
 #include <daos_errno.h>
 #include <daos/btree.h>
 #include <daos/dtx.h>
-#include <daos_srv/vos_types.h>
 
 /**
  * Tree node types.
@@ -1871,7 +1870,7 @@ btr_insert(struct btr_context *tcx, d_iov_t *key, d_iov_t *val)
 		if (rc != 0) {
 			D_DEBUG(DB_TRACE,
 				"Failed to insert record to leaf: %d\n", rc);
-			goto failed;
+			return rc;
 		}
 
 	} else {
@@ -1881,13 +1880,10 @@ btr_insert(struct btr_context *tcx, d_iov_t *key, d_iov_t *val)
 		rc = btr_root_start(tcx, rec);
 		if (rc != 0) {
 			D_DEBUG(DB_TRACE, "Failed to start the tree: %d\n", rc);
-			goto failed;
+			return rc;
 		}
 	}
 	return 0;
- failed:
-	btr_rec_free(tcx, rec, NULL);
-	return rc;
 }
 
 static int
@@ -3031,9 +3027,9 @@ dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
 	struct btr_context *tcx;
 	int		    rc;
 
-	if (root->tr_class == 0) {
-		D_DEBUG(DB_TRACE, "Tree class is zero\n");
-		return -DER_INVAL;
+	if (root->tr_order == 0) {
+		D_DEBUG(DB_TRACE, "Nonexistent tree\n");
+		return -DER_NONEXIST;
 	}
 
 	rc = btr_context_create(BTR_ROOT_NULL, root, -1, -1, -1, uma,
