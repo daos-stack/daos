@@ -706,7 +706,6 @@ obj_ec_codec_init()
 			       ec_codec->ec_gftbls);
 	}
 
-	D_ASSERT(i == ocnr);
 	return 0;
 
 failed:
