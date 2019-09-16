@@ -270,9 +270,8 @@ class TestWithServers(TestWithoutServers):
                 # Storage prep
                 res = dmg_utils.storage_prep(
                     self.hostlist_servers, nvme=True)
-                if res != 0:
+                if res.exit_status != 0:
                     self.fail(res.stderr)
-
 
     def tearDown(self):
         """Tear down after each test case."""
