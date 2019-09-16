@@ -86,6 +86,9 @@ class NvmeObject(TestWithServers):
         self.pool.create()
         self.pool.connect()
 
+        # invoke pool query before write
+        self.pool.get_info()
+
         # create container
         self.container.create()
         print(self.record_size[:-1])
@@ -97,6 +100,9 @@ class NvmeObject(TestWithServers):
 
         # read written objects and verify
         self.container.read_objects()
+
+        # invoke pool query after write
+        self.pool.get_info()
 
         # destroy container
         if self.container is not None:
@@ -130,6 +136,9 @@ class NvmeObject(TestWithServers):
             self.pool.create()
             self.pool.connect()
 
+            # invoke pool query before write
+            self.pool.get_info()
+
             # create container
             self.container.create()
             print(self.record_size)
@@ -141,6 +150,9 @@ class NvmeObject(TestWithServers):
 
             # read written objects and verify
             self.container.read_objects()
+
+            # invoke pool query after write
+            self.pool.get_info()
 
             # destroy container
             if self.container is not None:
