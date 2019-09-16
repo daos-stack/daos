@@ -24,20 +24,24 @@
 package client
 
 import (
+	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/pkg/errors"
 )
 
-func verifyUnicast(cs []Control) (Control, error) {
-	if len(cs) > 1 {
+// chooseServiceLeader will decide which connection to send request on.
+//
+// Currently expect only one connection to be available and return that.
+func chooseServiceLeader(cs []Control) (Control, error) {
+	switch len(cs) {
+	case 1:
+		return cs[0], nil
+	default:
 		return nil, errors.Errorf("unexpected number of connections, "+
 			"want 1, have %d", len(cs))
 	}
 
-	return cs[0], nil
 }
 
 // PoolCreateReq struct contains request
@@ -61,10 +65,8 @@ type PoolCreateResp struct {
 // uuid, list of service replicas and error (including any DER code from DAOS).
 //
 // Isolate protobuf encapsulation in client and don't expose to calling code.
-func (c *connList) PoolCreate(log logging.Logger, req *PoolCreateReq) (
-	*PoolCreateResp, error) {
-
-	mc, err := verifyUnicast(c.controllers)
+func (c *connList) PoolCreate(req *PoolCreateReq) (*PoolCreateResp, error) {
+	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
 		return nil, err
 	}
@@ -75,12 +77,14 @@ func (c *connList) PoolCreate(log logging.Logger, req *PoolCreateReq) (
 		User: req.Usr, Usergroup: req.Grp,
 	}
 
-	log.Infof("Creating DAOS pool: %s\n", rpcReq)
+	c.log.Debugf("Create DAOS pool request: %s\n", rpcReq)
 
 	rpcResp, err := mc.getSvcClient().PoolCreate(context.Background(), rpcReq)
 	if err != nil {
 		return nil, err
 	}
+
+	c.log.Debugf("Create DAOS pool response: %s\n", rpcResp)
 
 	if rpcResp.GetStatus() != 0 {
 		return nil, errors.Errorf("DAOS returned error code: %d\n",
@@ -102,20 +106,22 @@ type PoolDestroyReq struct {
 // error (including any DER code from DAOS).
 //
 // Isolate protobuf encapsulation in client and don't expose to calling code.
-func (c *connList) PoolDestroy(log logging.Logger, req *PoolDestroyReq) error {
-	mc, err := verifyUnicast(c.controllers)
+func (c *connList) PoolDestroy(req *PoolDestroyReq) error {
+	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
 		return err
 	}
 
 	rpcReq := &pb.PoolDestroyReq{Uuid: req.Uuid, Force: req.Force}
 
-	log.Infof("Destroying DAOS pool: %s\n", rpcReq)
+	c.log.Debugf("Destroy DAOS pool request: %s\n", rpcReq)
 
 	rpcResp, err := mc.getSvcClient().PoolDestroy(context.Background(), rpcReq)
 	if err != nil {
 		return err
 	}
+
+	c.log.Debugf("Destroy DAOS pool response: %s\n", rpcResp)
 
 	if rpcResp.GetStatus() != 0 {
 		return errors.Errorf("DAOS returned error code: %d\n",
