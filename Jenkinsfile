@@ -207,7 +207,6 @@ pipeline {
                         allOf {
                             not { branch 'weekly-testing' }
                             expression { env.CHANGE_TARGET != 'weekly-testing' }
-                            expression { return env.QUICKBUILD == '1' }
                         }
                     }
                     agent {
@@ -274,7 +273,6 @@ pipeline {
                         allOf {
                             not { branch 'weekly-testing' }
                             expression { env.CHANGE_TARGET != 'weekly-testing' }
-                            expression { return env.QUICKBUILD == '1' }
                         }
                     }
                     agent {
@@ -329,6 +327,71 @@ pipeline {
                         failure {
                             stepResult name: env.STAGE_NAME, context: "build",
                                        result: "FAILURE", ignore_failure: true
+                        }
+                    }
+                }
+                stage('Build RPM on Leap 42.3') {
+                    when {
+                        beforeAgent true
+                        allOf {
+                            not { branch 'weekly-testing' }
+                            expression { env.CHANGE_TARGET != 'weekly-testing' }
+                        }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile-rpmbuild.leap.42.3'
+                            dir 'utils/docker'
+                            label 'docker_runner'
+                            additionalBuildArgs '--build-arg UID=$(id -u) --build-arg JENKINS_URL=' +
+                                                env.JENKINS_URL +
+                                                 " --build-arg CACHEBUST=${currentBuild.startTimeInMillis}"
+                        }
+                    }
+                    steps {
+                         githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                      description: env.STAGE_NAME,
+                                      context: "build" + "/" + env.STAGE_NAME,
+                                      status: "PENDING"
+                        checkoutScm withSubmodules: true
+                        catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
+                            sh label: env.STAGE_NAME,
+                               script: '''rm -rf artifacts/leap42.3/
+                                          mkdir -p artifacts/leap42.3/
+                                          if git show -s --format=%B | grep "^Skip-build: true"; then
+                                              exit 0
+                                          fi
+                                          rm -rf utils/rpms/_topdir/{S,}RPMS
+                                          make -C utils/rpms srpm
+                                          make -C utils/rpms rpms'''
+                        }
+                    }
+                    post {
+                        success {
+                            sh label: "Collect artifacts",
+                               script: '''if arts=$(ls utils/rpms/_topdir/{RPMS/*,SRPMS}/*); then
+                                              ln $arts artifacts/leap42.3/
+                                              createrepo artifacts/leap42.3/
+                                          fi'''
+                             stepResult name: env.STAGE_NAME, context: "build",
+                                        result: "SUCCESS"
+                        }
+                        unsuccessful {
+                            sh label: "Collect artifacts",
+                               script: '''if arts=$(ls utils/rpms/_topdir/BUILD/*/config.log); then
+                                              ln $arts artifacts/leap42.3/
+                                          fi'''
+                        }
+                        unstable {
+                            stepResult name: env.STAGE_NAME, context: "build",
+                                       result: "UNSTABLE", ignore_failure: true
+                        }
+                        failure {
+                            stepResult name: env.STAGE_NAME, context: "build",
+                                       result: "FAILURE", ignore_failure: true
+                        }
+                        cleanup {
+                            archiveArtifacts artifacts: 'artifacts/leap42.3/**'
                         }
                     }
                 }
