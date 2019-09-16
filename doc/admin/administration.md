@@ -10,18 +10,18 @@ control plane and will be documented in a future revision.
 ### Full Shutdown and Restart
 
 Details on how to support proper DAOS server shutdown will be provided
-in future revision.
+in a future revision.
 
-### Fault Domain Maintenance & Reintegration
+### Fault Domain Maintenance and Reintegration
 
 Details on how to drain an individual storage node or fault domain (e.g.
 rack) in preparation for maintenance activity and how to reintegrate it
-will be provided in future revision.
+will be provided in a future revision.
 
 ### DAOS System Extension
 
 Ability to add new DAOS server instances to a pre-existing DAOS system
-will be documented in future revision.
+will be documented in a future revision.
 
 ## Fault Management
 
@@ -33,7 +33,7 @@ redundancy across targets in different fault domains.
 ### Fault Detection & Isolation
 
 DAOS servers are monitored within a DAOS system through a gossip-based
-protocol called SWIM[^1] that provides accurate, efficient and scalable
+protocol called SWIM[^1] that provides accurate, efficient, and scalable
 server fault detection.
 
 Storage attached to each DAOS target is monitored through periodic local
@@ -57,17 +57,17 @@ Tools to monitor and manage rebuild are still under development.
 
 ### Rebuild Throttling
 
-The rebuild process may consume a lot of resources on each server and
-can be throttled to reduce impact on application performance. This
+The rebuild process may consume many resources on each server and
+can be throttled to reduce the impact on application performance. This
 current logic relies on CPU cycles on the storage nodes. By default, the
 rebuild process is configured to consume up to 30% of the CPU cycles,
 leaving the other 70% for regular I/O operations.
 
-During rebuild process, the user can set the throttle to guarantee the
+During the rebuild process, the user can set the throttle to guarantee the
 rebuild will not use more resource than the user setting. The user can
 only set the CPU cycle for now. For example, if the user set the
-throttle to 50, then the rebuild will at most use 50% of CPU cycle to do
-rebuild job. The default rebuild throttle for CPU cycle is 30. This
+throttle to 50, then the rebuild will at most use 50% of the CPU cycle to do
+the rebuild job. The default rebuild throttle for CPU cycle is 30. This
 parameter can be changed via the daos_mgmt_set_params() API call and
 will be eventually available through the management tools.
 
@@ -75,7 +75,7 @@ will be eventually available through the management tools.
 
 Interoperability in DAOS is handled via protocol and schema versioning
 for persistent data structures. Further instructions on how to manage
-DAOS software upgrades will be provided in future revision.
+DAOS software upgrades will be provided in a future revision.
 
 ### Protocol Interoperability
 
@@ -96,7 +96,7 @@ error.
 ### Persistent Schema Compatibility and Update
 
 The schema of persistent data structures may evolve from time to time to
-fix bugs, add new optimizations or support new features. To that end,
+fix bugs, add new optimizations, or support new features. To that end,
 the persistent data structures support schema versioning.
 
 Upgrading the schema version will not be performed automatically and
@@ -116,7 +116,7 @@ that only stores user data with no metadata.
 ## Storage Scrubbing
 
 Support for end-to-end data integrity is planned for DAOS v1.2 and
-background checksum scrubbing for v2.2. Once available, those
+background checksum scrubbing for v2.2. Once available, that
 functionality will be documented here.
 
 [^1]: https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=1028914
