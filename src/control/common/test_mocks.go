@@ -70,6 +70,7 @@ func NewMockControllerPB(
 	}
 }
 
+// MockModulePB is a mock protobuf Module message used in tests for
 // multiple packages.
 func MockModulePB() *pb.ScmModule {
 	return &pb.ScmModule{
@@ -89,6 +90,17 @@ func MockModulePB() *pb.ScmModule {
 func MockMountPB() *pb.ScmMount {
 	// MockModulePB is a mock protobuf Module message used in tests for
 	return &pb.ScmMount{Mntpoint: "/mnt/daos"}
+}
+
+// MockPmemDevicePB is a mock protobuf PmemDevice used in tests for multiple
+// packages.
+func MockPmemDevicePB() *pb.PmemDevice {
+	return &pb.PmemDevice{
+		Uuid:     "abcd-1234-efgh-5678",
+		Blockdev: "pmem1",
+		Dev:      "namespace-1",
+		Numanode: 1,
+	}
 }
 
 // MockCheckMountOk mocks CheckMount and always returns nil error.

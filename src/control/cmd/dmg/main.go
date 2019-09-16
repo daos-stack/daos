@@ -32,19 +32,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/client"
-	log "github.com/daos-stack/daos/src/control/logging"
-)
-
-type dmgErr string
-
-func (de dmgErr) Error() string {
-	return string(de)
-}
-
-const (
-	// use this error type to signal that a
-	// subcommand completed without error
-	cmdSuccess dmgErr = "command execution completed"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 type (
@@ -79,31 +67,35 @@ func (cmd *connectedCmd) setConns(conns client.Connect) {
 	cmd.conns = conns
 }
 
+type cmdLogger interface {
+	setLog(*logging.LeveledLogger)
+}
+
+type logCmd struct {
+	log *logging.LeveledLogger
+}
+
+func (c *logCmd) setLog(log *logging.LeveledLogger) {
+	c.log = log
+}
+
 type cliOptions struct {
 	HostList string `short:"l" long:"host-list" description:"comma separated list of addresses <ipv4addr/hostname:port>"`
 	Insecure bool   `short:"i" long:"insecure" description:"have dmg attempt to connect without certificates"`
 	Debug    bool   `short:"d" long:"debug" description:"enable debug output"`
 	JSON     bool   `short:"j" long:"json" description:"Enable JSON output"`
 	// TODO: implement host file parsing
-	HostFile   string  `short:"f" long:"host-file" description:"path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList"`
-	ConfigPath string  `short:"o" long:"config-path" description:"Client config file path"`
-	Storage    StorCmd `command:"storage" alias:"st" description:"Perform tasks related to storage attached to remote servers"`
-	Service    SvcCmd  `command:"service" alias:"sv" description:"Perform distributed tasks related to DAOS system"`
-	Network    NetCmd  `command:"network" alias:"n" description:"Perform tasks related to network devices attached to remote servers"`
-	Pool       PoolCmd `command:"pool" alias:"p" description:"Perform tasks related to DAOS pools"`
+	HostFile   string     `short:"f" long:"host-file" description:"path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList"`
+	ConfigPath string     `short:"o" long:"config-path" description:"Client config file path"`
+	Storage    storageCmd `command:"storage" alias:"st" description:"Perform tasks related to storage attached to remote servers"`
+	Service    SvcCmd     `command:"service" alias:"sv" description:"Perform distributed tasks related to DAOS system"`
+	Network    NetCmd     `command:"network" alias:"n" description:"Perform tasks related to network devices attached to remote servers"`
+	Pool       PoolCmd    `command:"pool" alias:"p" description:"Perform tasks related to DAOS pools"`
 }
 
 // appSetup loads config file, processes cli overrides and connects clients.
-func appSetup(broadcast bool, opts *cliOptions, conns client.Connect) error {
-	if opts.Debug {
-		log.SetLevel(log.LogLevelDebug)
-		log.Debug("debug output enabled")
-	}
-	if opts.JSON {
-		log.SetJSONOutput()
-	}
-
-	config, err := client.GetConfig(opts.ConfigPath)
+func appSetup(log logging.Logger, broadcast bool, opts *cliOptions, conns client.Connect) error {
+	config, err := client.GetConfig(log, opts.ConfigPath)
 	if err != nil {
 		return errors.WithMessage(err, "processing config file")
 	}
@@ -143,14 +135,12 @@ func appSetup(broadcast bool, opts *cliOptions, conns client.Connect) error {
 	return nil
 }
 
-func exitWithError(err error) {
+func exitWithError(log logging.Logger, err error) {
 	log.Errorf("%s: %v", path.Base(os.Args[0]), err)
 	os.Exit(1)
 }
 
-func parseOpts(args []string, conns client.Connect) (*cliOptions, error) {
-	opts := new(cliOptions)
-
+func parseOpts(args []string, opts *cliOptions, conns client.Connect, log *logging.LeveledLogger) error {
 	p := flags.NewParser(opts, flags.Default)
 	p.Options ^= flags.PrintErrors // Don't allow the library to print errors
 	p.CommandHandler = func(cmd flags.Commander, args []string) error {
@@ -158,8 +148,20 @@ func parseOpts(args []string, conns client.Connect) (*cliOptions, error) {
 			return nil
 		}
 
+		if opts.Debug {
+			log.WithLogLevel(logging.LogLevelDebug)
+			log.Debug("debug output enabled")
+		}
+		if opts.JSON {
+			log.WithJSONOutput()
+		}
+
+		if logCmd, ok := cmd.(cmdLogger); ok {
+			logCmd.setLog(log)
+		}
+
 		_, shouldBroadcast := cmd.(broadcaster)
-		if err := appSetup(shouldBroadcast, opts, conns); err != nil {
+		if err := appSetup(log, shouldBroadcast, opts, conns); err != nil {
 			return err
 		}
 		if wantsConn, ok := cmd.(connector); ok {
@@ -169,28 +171,20 @@ func parseOpts(args []string, conns client.Connect) (*cliOptions, error) {
 			return err
 		}
 
-		return cmdSuccess
+		return nil
 	}
 
-	unparsed, err := p.ParseArgs(args)
-	if err != nil {
-		return nil, err
-	}
-	if len(unparsed) > 0 {
-		log.Debugf("Unparsed arguments: %v", unparsed)
-	}
-
-	return opts, nil
+	_, err := p.ParseArgs(args)
+	return err
 }
 
 func main() {
-	conns := client.NewConnect()
+	var opts cliOptions
+	log := logging.NewCommandLineLogger()
 
-	_, err := parseOpts(os.Args[1:], conns)
-	if err != nil {
-		if err == cmdSuccess {
-			os.Exit(0)
-		}
-		exitWithError(err)
+	conns := client.NewConnect(log)
+
+	if err := parseOpts(os.Args[1:], &opts, conns, log); err != nil {
+		exitWithError(log, err)
 	}
 }

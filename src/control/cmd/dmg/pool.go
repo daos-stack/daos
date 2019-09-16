@@ -33,7 +33,7 @@ import (
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	log "github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 const (
@@ -50,6 +50,7 @@ type PoolCmd struct {
 
 // CreatePoolCmd is the struct representing the command to create a DAOS pool.
 type CreatePoolCmd struct {
+	logCmd
 	connectedCmd
 	GroupName  string `short:"g" long:"group" description:"DAOS pool to be owned by given group, format name@domain"`
 	UserName   string `short:"u" long:"user" description:"DAOS pool to be owned by given user, format name@domain"`
@@ -63,13 +64,14 @@ type CreatePoolCmd struct {
 
 // Execute is run when CreatePoolCmd subcommand is activated
 func (c *CreatePoolCmd) Execute(args []string) error {
-	return createPool(c.conns,
+	return createPool(c.log, c.conns,
 		c.ScmSize, c.NVMeSize, c.RankList, c.NumSvcReps,
 		c.GroupName, c.UserName, c.Sys, c.ACLFile)
 }
 
 // DestroyPoolCmd is the struct representing the command to destroy a DAOS pool.
 type DestroyPoolCmd struct {
+	logCmd
 	connectedCmd
 	Uuid  string `short:"u" long:"uuid" required:"1" description:"UUID of DAOS pool to destroy"`
 	Force bool   `short:"f" long:"force" description:"Force removal of DAOS pool"`
@@ -77,7 +79,7 @@ type DestroyPoolCmd struct {
 
 // Execute is run when DestroyPoolCmd subcommand is activated
 func (d *DestroyPoolCmd) Execute(args []string) error {
-	return destroyPool(d.conns, d.Uuid, d.Force)
+	return destroyPool(d.log, d.conns, d.Uuid, d.Force)
 }
 
 // getSize retrieves number of bytes from human readable string representation
@@ -101,7 +103,7 @@ func getSize(sizeStr string) (bytesize.ByteSize, error) {
 }
 
 // calcStorage calculates SCM & NVMe size for pool from user supplied parameters
-func calcStorage(scmSize string, nvmeSize string) (
+func calcStorage(log logging.Logger, scmSize string, nvmeSize string) (
 	scmBytes bytesize.ByteSize, nvmeBytes bytesize.ByteSize, err error) {
 
 	scmBytes, err = getSize(scmSize)
@@ -172,11 +174,12 @@ func formatNameGroup(usr string, grp string) (string, string, error) {
 }
 
 // createPool with specified parameters.
-func createPool(conns client.Connect, scmSize string, nvmeSize string,
+func createPool(log logging.Logger,
+	conns client.Connect, scmSize string, nvmeSize string,
 	rankList string, numSvcReps uint32, groupName string,
 	userName string, sys string, aclFile string) error {
 
-	scmBytes, nvmeBytes, err := calcStorage(scmSize, nvmeSize)
+	scmBytes, nvmeBytes, err := calcStorage(log, scmSize, nvmeSize)
 	if err != nil {
 		return errors.Wrap(err, "calculating pool storage sizes")
 	}
@@ -214,7 +217,7 @@ func createPool(conns client.Connect, scmSize string, nvmeSize string,
 }
 
 // destroyPool identified by UUID.
-func destroyPool(conns client.Connect, uuid string, force bool) error {
+func destroyPool(log logging.Logger, conns client.Connect, uuid string, force bool) error {
 	req := &pb.DestroyPoolReq{Uuid: uuid, Force: force}
 
 	log.Infof("Destroying DAOS pool: %+v\n", req)
