@@ -104,8 +104,6 @@ static int
 check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		 struct dfuse_inode_entry *ie)
 {
-	uuid_t			pool_uuid;
-	uuid_t			co_uuid;
 	daos_obj_id_t		oid;
 	int			rc;
 	char			pool[40];
@@ -135,21 +133,19 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	D_ALLOC_PTR(dfs);
 
 	dfs->dfs_ops = ie->ie_dfs->dfs_ops;
-	strncpy(dfs->dfs_pool, pool, pool_size);
-	strncpy(dfs->dfs_cont, cont, cont_size);
 
-	if (uuid_parse(pool, pool_uuid) < 0) {
+	if (uuid_parse(pool, dfs->dfs_pool) < 0) {
 		DFUSE_LOG_ERROR("Invalid pool uuid");
 		D_GOTO(out_dfuse, rc = -DER_INVAL);
 	}
 
-	if (uuid_parse(cont, co_uuid) < 0) {
+	if (uuid_parse(cont, dfs->dfs_cont) < 0) {
 		DFUSE_LOG_ERROR("Invalid container uuid");
 		D_GOTO(out_dfuse, rc = -DER_INVAL);
 	}
 
 	/** Connect to DAOS pool */
-	rc = daos_pool_connect(pool_uuid, fs_handle->dpi_info->di_group,
+	rc = daos_pool_connect(dfs->dfs_pool, fs_handle->dpi_info->di_group,
 			fs_handle->dpi_info->di_svcl, DAOS_PC_RW,
 			&dfs->dfs_poh, &dfs->dfs_pool_info,
 			NULL);
@@ -159,7 +155,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	}
 
 	/** Try to open the DAOS container (the mountpoint) */
-	rc = daos_cont_open(dfs->dfs_poh, co_uuid, DAOS_COO_RW,
+	rc = daos_cont_open(dfs->dfs_poh, dfs->dfs_cont, DAOS_COO_RW,
 			&dfs->dfs_coh, &dfs->dfs_co_info,
 			NULL);
 	if (rc) {
