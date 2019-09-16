@@ -30,9 +30,9 @@ from avocado.utils.process import run, CmdError
 from command_utils import FormattedParameter, CommandWithParameters
 
 
-
 class IorFailed(Exception):
     """Raise if Ior failed."""
+
 
 class IorCommand(CommandWithParameters):
     """Defines a object for executing an IOR command.
@@ -145,7 +145,7 @@ class IorCommand(CommandWithParameters):
 
         Args:
             group (str): DAOS server group name
-            pool (DaosPool): DAOS pool API object
+            pool (TestPool): DAOS test pool object
             cont_uuid (str, optional): the container uuid. If not specified one
                 is generated. Defaults to None.
             display (bool, optional): print updated params. Defaults to True.
@@ -160,10 +160,9 @@ class IorCommand(CommandWithParameters):
         """Set the IOR parameters that are based on a DAOS pool.
 
         Args:
-            pool (DaosPool): DAOS pool API object
+            pool (TestPool): DAOS test pool object
             display (bool, optional): print updated params. Defaults to True.
         """
-        #self.daos_pool.value = pool.uuid
         self.daos_pool.update(
             pool.pool.get_uuid_str(), "daos_pool" if display else None)
         self.set_daos_svcl_param(pool, display)
@@ -172,7 +171,7 @@ class IorCommand(CommandWithParameters):
         """Set the IOR daos_svcl param from the ranks of a DAOS pool object.
 
         Args:
-            pool (DaosPool): DAOS pool API object
+            pool (TestPool): DAOS test pool object
             display (bool, optional): print updated params. Defaults to True.
         """
         svcl = ":".join(
@@ -226,7 +225,8 @@ class IorCommand(CommandWithParameters):
 
         return total
 
-    def get_launch_command(self, manager, attach_info, processes, hostfile):
+    def get_launch_command(self, manager, attach_info, processes, hostfile,
+                           client_log=None):
         """Get the process launch command used to run IOR.
 
         Args:
@@ -235,6 +235,7 @@ class IorCommand(CommandWithParameters):
             mpi_prefix (str): path for the mpi launch command
             processes (int): number of host processes
             hostfile (str): file defining host names and slots
+            client_log (str, optional): client log dir
 
         Raises:
             IorFailed: if an error occured building the IOR command
@@ -250,6 +251,9 @@ class IorCommand(CommandWithParameters):
             "MPI_LIB": "\"\"",
             "DAOS_SINGLETON_CLI": 1,
         }
+        if client_log:
+            env.update({"D_LOG_FILE": client_log})
+
         if manager.endswith("mpirun"):
             env.update({
                 "DAOS_POOL": self.daos_pool.value,
@@ -299,7 +303,8 @@ class IorCommand(CommandWithParameters):
         return "{}{} {} {}".format(
             exports, manager, " ".join(args), self.__str__())
 
-    def run(self, manager, attach_info, processes, hostfile, display=True):
+    def run(self, manager, attach_info, processes, hostfile, display=True,
+            client_log=None):
         """Run the IOR command.
 
         Args:
@@ -309,13 +314,14 @@ class IorCommand(CommandWithParameters):
             hostfile (str): file defining host names and slots
             display (bool, optional): print IOR output to the console.
                 Defaults to True.
+            client_log (str, optional): client log dir
 
         Raises:
             IorFailed: if an error occured runnig the IOR command
 
         """
         command = self.get_launch_command(
-            manager, attach_info, processes, hostfile)
+            manager, attach_info, processes, hostfile, client_log)
         if display:
             print("<IOR CMD>: {}".format(command))
 

@@ -63,7 +63,7 @@
 int
 pool_query_hdlr(struct cmd_args_s *ap)
 {
-	daos_pool_info_t		 pinfo;
+	daos_pool_info_t		 pinfo = {0};
 	struct daos_pool_space		*ps = &pinfo.pi_space;
 	struct daos_rebuild_status	*rstat = &pinfo.pi_rebuild_st;
 	int				 i;

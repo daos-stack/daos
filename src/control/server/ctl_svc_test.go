@@ -25,18 +25,42 @@ package server
 
 import (
 	"testing"
+
+	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-func defaultMockControlService(t *testing.T) *ControlService {
+func defaultMockControlService(t *testing.T, log logging.Logger) *ControlService {
 	c := defaultMockConfig(t)
-	return mockControlService(c)
+	return mockControlService(t, log, c)
 }
 
-func mockControlService(config *Configuration) *ControlService {
+func mockControlService(t *testing.T, log logging.Logger, cfg *Configuration) *ControlService {
+	t.Helper()
+
 	cs := ControlService{
-		nvme:   defaultMockNvmeStorage(config),
-		scm:    defaultMockScmStorage(config),
-		config: config,
+		StorageControlService: *NewStorageControlService(log,
+			defaultMockNvmeStorage(log, cfg.ext),
+			defaultMockScmStorage(log, cfg.ext),
+			cfg.Servers, &drpc.ClientConnection{},
+		),
+		harness: &IOServerHarness{
+			log: log,
+		},
+	}
+
+	for _, srvCfg := range cfg.Servers {
+		bp, err := storage.NewBdevProvider(log, "", &srvCfg.Storage.Bdev)
+		if err != nil {
+			t.Fatal(err)
+		}
+		runner := ioserver.NewRunner(log, srvCfg)
+		instance := NewIOServerInstance(cfg.ext, log, bp, nil, runner)
+		if err := cs.harness.AddInstance(instance); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	return &cs

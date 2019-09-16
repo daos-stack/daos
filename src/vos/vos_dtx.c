@@ -1247,7 +1247,7 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 		return -DER_INVAL;
 	}
 
-	if (intent == DAOS_INTENT_CHECK) {
+	if (intent == DAOS_INTENT_CHECK || intent == DAOS_INTENT_COS) {
 		if (dtx_is_aborted(entry))
 			return ALB_UNAVAILABLE;
 
@@ -1356,6 +1356,19 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 
 		/* PUNCH DTX cannot be shared by others. */
 		if (dtx->te_intent == DAOS_INTENT_PUNCH) {
+			if (dth == NULL)
+				/* XXX: For rebuild case, if some normal IO
+				 *	has generated punch-record (by race)
+				 *	before rebuild logic handling that,
+				 *	then rebuild logic should ignore such
+				 *	punch-record, because the punch epoch
+				 *	will be higher than the rebuild epoch.
+				 *	The rebuild logic needs to create the
+				 *	original target record that exists on
+				 *	other healthy replicas before punch.
+				 */
+				return ALB_UNAVAILABLE;
+
 			dtx_record_conflict(dth, dtx);
 
 			return dtx_inprogress(dtx, 3);
@@ -1574,30 +1587,6 @@ vos_dtx_prepared(struct dtx_handle *dth)
 	D_ASSERT(cont != NULL);
 
 	dtx = umem_off2ptr(&cont->vc_pool->vp_umm, dth->dth_ent);
-	if (dth->dth_intent == DAOS_INTENT_UPDATE) {
-		d_iov_t	kiov;
-		d_iov_t	riov;
-
-		/* There is CPU yield during the bulk transfer, then it is
-		 * possible that some others (rebuild) abort this DTX by race.
-		 * So we need to locate (or verify) DTX via its ID instead of
-		 * directly using the dth_ent.
-		 */
-		d_iov_set(&kiov, &dth->dth_xid, sizeof(struct dtx_id));
-		d_iov_set(&riov, NULL, 0);
-		rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
-		if (rc == -DER_NONEXIST)
-			/* The DTX has been aborted by race, notify the RPC
-			 * sponsor to retry via returning -DER_INPROGRESS.
-			 */
-			return dtx_inprogress(dtx, 1);
-
-		if (rc != 0)
-			return rc;
-
-		D_ASSERT(dtx == (struct vos_dtx_entry_df *)riov.iov_buf);
-	}
-
 	/* The caller has already started the PMDK transaction
 	 * and add the DTX into the PMDK transaction.
 	 */
@@ -1800,4 +1789,47 @@ vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat)
 	} else {
 		stat->dtx_oldest_committed_time = 0;
 	}
+}
+
+int
+vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
+{
+	struct vos_container	*cont;
+	struct daos_lru_cache	*occ;
+	struct vos_object	*obj;
+	int	rc;
+
+	cont = vos_hdl2cont(coh);
+	occ = vos_obj_cache_current();
+	rc = vos_obj_hold(occ, cont, oid, epoch, true,
+			  DAOS_INTENT_DEFAULT, &obj);
+	if (rc != 0) {
+		D_ERROR(DF_UOID" fail to mark sync(1): rc = %d\n",
+			DP_UOID(oid), rc);
+		return rc;
+	}
+
+	if (obj->obj_df != NULL && obj->obj_df->vo_sync < epoch) {
+		rc = vos_tx_begin(cont->vc_pool);
+		if (rc == 0) {
+			umem_tx_add_ptr(&cont->vc_pool->vp_umm,
+					&obj->obj_df->vo_sync,
+					sizeof(obj->obj_df->vo_sync));
+			obj->obj_df->vo_sync = epoch;
+			rc = vos_tx_end(cont->vc_pool, rc);
+		}
+
+		if (rc == 0) {
+			D_INFO("Update sync epoch "DF_U64" => "DF_U64
+			       " for the obj "DF_UOID"\n",
+			       obj->obj_sync_epoch, epoch, DP_UOID(oid));
+			obj->obj_sync_epoch = epoch;
+		} else {
+			D_ERROR(DF_UOID" fail to mark sync(2): rc = %d\n",
+				DP_UOID(oid), rc);
+		}
+	}
+
+	vos_obj_release(occ, obj);
+	return rc;
 }
