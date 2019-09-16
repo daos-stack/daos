@@ -132,7 +132,7 @@ scons %{?no_smp_mflags}              \
 BUILDROOT="%{?buildroot}"
 PREFIX="%{?_prefix}"
 sed -i -e s/${BUILDROOT//\//\\/}[^\"]\*/${PREFIX//\//\\/}/g %{?buildroot}%{_prefix}/TESTING/.build_vars.*
-mv %{?buildroot}%{_prefix}/lib{,64}
+#mv %{?buildroot}%{_prefix}/lib{,64}
 #mv %{?buildroot}/{usr/,}etc
 mkdir -p %{?buildroot}/%{_exec_prefix}/lib/%{name}
 cp -al VERSION %{?buildroot}/%{_exec_prefix}/lib/%{name}
