@@ -1252,7 +1252,7 @@ pipeline {
     }
     post {
         unsuccessful {
-            notifyBrokenBranch branches: "master PR-1068"
+            notifyBrokenBranch branches: "master"
         }
     }
 }
