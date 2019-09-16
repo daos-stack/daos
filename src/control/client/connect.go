@@ -118,8 +118,8 @@ type Connect interface {
 	//StorageBurnIn() (ClientCtrlrMap, ClientModuleMap)
 	ListFeatures() ClientFeatureMap
 	KillRank(uuid string, rank uint32) ResultMap
-	PoolCreate(logging.Logger, *PoolCreateReq) (*PoolCreateResp, error)
-	PoolDestroy(logging.Logger, *PoolDestroyReq) error
+	PoolCreate(*PoolCreateReq) (*PoolCreateResp, error)
+	PoolDestroy(*PoolDestroyReq) error
 }
 
 // connList is an implementation of Connect and stores controllers

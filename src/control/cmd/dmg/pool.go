@@ -205,7 +205,7 @@ func poolCreate(log logging.Logger, conns client.Connect, scmSize string,
 		Usr: usr, Grp: grp,
 	}
 
-	resp, err := conns.PoolCreate(log, req)
+	resp, err := conns.PoolCreate(req)
 	if err != nil {
 		msg = errors.WithMessage(err, "FAILED").Error()
 	} else {
@@ -224,7 +224,7 @@ func poolDestroy(log logging.Logger, conns client.Connect, uuid string, force bo
 
 	req := &client.PoolDestroyReq{Uuid: uuid, Force: force}
 
-	err := conns.PoolDestroy(log, req)
+	err := conns.PoolDestroy(req)
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}

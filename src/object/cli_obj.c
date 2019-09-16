@@ -536,6 +536,9 @@ struct obj_req_tgts {
 	 */
 	struct daos_shard_tgt	*ort_shard_tgts;
 	uint32_t		 ort_grp_nr;
+	/* ort_grp_size is the size of the group that is sent as forwarded
+	 * shards
+	 */
 	uint32_t		 ort_grp_size;
 	/* ort_start_shard is only for EC object, it is the start shard number
 	 * of the EC stripe. To facilitate calculate the offset of different
@@ -599,8 +602,7 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint64_t tgt_set,
 		req_tgts->ort_shard_tgts = req_tgts->ort_tgts_inline;
 	}
 	req_tgts->ort_grp_nr = grp_nr;
-	req_tgts->ort_grp_size = grp_size;
-
+	req_tgts->ort_grp_size = (shard_nr == shard_cnt) ? grp_size : shard_nr;
 	for (i = 0; i < grp_nr; i++) {
 		shard_idx = start_shard + i * grp_size;
 		tgt = req_tgts->ort_shard_tgts + i * grp_size;
@@ -623,7 +625,7 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint64_t tgt_set,
 
 		for (j = 0; j < grp_size; j++, shard_idx++) {
 			if (shard_idx == leader_shard ||
-			    (tgt_set && !(tgt_set & 1UL << i)))
+			    (tgt_set && !(tgt_set & 1UL << j)))
 				continue;
 			rc = obj_shard_tgts_query(obj, map_ver, shard_idx,
 						  tgt++);
@@ -1179,7 +1181,9 @@ obj_rw_bulk_prep(struct dc_object *obj, daos_iod_t *iods, d_sg_list_t *sgls,
 	 */
 	data_size = sgls_size;
 
-	if (data_size >= OBJ_BULK_LIMIT) {
+	if (data_size >= OBJ_BULK_LIMIT ||
+		ec_mult_data_targets(obj_auxi->req_tgts.ort_grp_size,
+				     obj->cob_md.omd_id)) {
 		bulk_perm = update ? CRT_BULK_RO : CRT_BULK_RW;
 		rc = obj_bulk_prep(sgls, nr, bulk_bind, bulk_perm, task,
 				   obj_auxi);

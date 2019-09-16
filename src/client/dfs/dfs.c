@@ -939,7 +939,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 {
 	dfs_t			*dfs;
 	daos_handle_t		th;
-	daos_pool_info_t	pool_info;
+	daos_pool_info_t	pool_info = {};
 	daos_prop_t		*prop;
 	struct daos_prop_entry	*prop_entry;
 	struct dfs_entry	entry = {0};
