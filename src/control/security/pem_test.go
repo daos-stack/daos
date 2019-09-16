@@ -33,8 +33,9 @@ import (
 func TestLoadPEMData(t *testing.T) {
 
 	goodCertPath := "testdata/certs/daosCA.crt"
+	betterCertPermPath := "testdata/certs/server.crt"
 	badCertPerm := "testdata/certs/badperms.crt"
-	badCertPermError := &insecureError{badCertPerm, SafeCertPerm}
+	badCertPermError := &improperError{badCertPerm, MaxCertPerm}
 
 	testCases := []struct {
 		filename string
@@ -42,12 +43,16 @@ func TestLoadPEMData(t *testing.T) {
 		testname string
 		expected string
 	}{
-		{goodCertPath, SafeCertPerm, "GoodCert", ""},
-		{badCertPerm, SafeCertPerm, "ImproperPermissions", badCertPermError.Error()},
+		{goodCertPath, MaxCertPerm, "GoodCert", ""},
+		{betterCertPermPath, MaxCertPerm, "BetterCertPerms", ""},
+		{badCertPerm, MaxCertPerm, "ImproperPermissions", badCertPermError.Error()},
 	}
 
 	// Setup permissions for tests below.
-	if err := os.Chmod(goodCertPath, SafeCertPerm); err != nil {
+	if err := os.Chmod(goodCertPath, MaxCertPerm); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(betterCertPermPath, 0444); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Chmod(badCertPerm, 0666); err != nil {
@@ -74,26 +79,26 @@ func TestLoadPrivateKey(t *testing.T) {
 	malformed := "testdata/certs/bad.key"
 	toomany := "testdata/certs/toomanypem.key"
 	notkey := "testdata/certs/notkey.crt"
-	badKeyPermError := &insecureError{badKeyPerm, SafeKeyPerm}
+	badKeyPermError := &improperError{badKeyPerm, MaxKeyPerm}
 	malformedError := fmt.Sprintf("%s does not contain PEM data", malformed)
 	toomanyError := "Only one key allowed per file"
 	notkeyError := "PEM Block is not a Private Key"
 
 	// Setup permissions for tests below.
-	if err := os.Chmod(goodKeyPath, SafeKeyPerm); err != nil {
+	if err := os.Chmod(goodKeyPath, MaxKeyPerm); err != nil {
 		t.Fatal(err)
 	}
 	// Intentionallly safe cert perm as it should be incorrect
-	if err := os.Chmod(badKeyPerm, SafeCertPerm); err != nil {
+	if err := os.Chmod(badKeyPerm, MaxCertPerm); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chmod(malformed, SafeKeyPerm); err != nil {
+	if err := os.Chmod(malformed, MaxKeyPerm); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chmod(toomany, SafeKeyPerm); err != nil {
+	if err := os.Chmod(toomany, MaxKeyPerm); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chmod(notkey, SafeKeyPerm); err != nil {
+	if err := os.Chmod(notkey, MaxKeyPerm); err != nil {
 		t.Fatal(err)
 	}
 
@@ -127,22 +132,22 @@ func TestLoadCertificate(t *testing.T) {
 	badPerm := "testdata/certs/badperms.crt"
 	malformed := "testdata/certs/bad.crt"
 	toomany := "testdata/certs/toomanypem.crt"
-	badError := &insecureError{badPerm, SafeCertPerm}
+	badError := &improperError{badPerm, MaxCertPerm}
 	malformedError := fmt.Sprintf("%s does not contain PEM data", malformed)
 	toomanyError := "Only one cert allowed per file"
 
 	// Setup permissions for tests below.
-	if err := os.Chmod(goodPath, SafeCertPerm); err != nil {
+	if err := os.Chmod(goodPath, MaxCertPerm); err != nil {
 		t.Fatal(err)
 	}
 	// Intentionallly safe cert perm as it should be incorrect
-	if err := os.Chmod(badPerm, SafeKeyPerm); err != nil {
+	if err := os.Chmod(badPerm, MaxKeyPerm); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chmod(malformed, SafeCertPerm); err != nil {
+	if err := os.Chmod(malformed, MaxCertPerm); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chmod(toomany, SafeCertPerm); err != nil {
+	if err := os.Chmod(toomany, MaxCertPerm); err != nil {
 		t.Fatal(err)
 	}
 
@@ -174,7 +179,7 @@ func TestValidateCertDirectory(t *testing.T) {
 	goodDirPath := "testdata/certs/goodperms"
 	badDirPerm := "testdata/certs/badperms"
 	notDir := "testdata/certs/daosCA.crt"
-	badDirPermError := &insecureError{badDirPerm, SafeDirPerm}
+	badDirPermError := &improperError{badDirPerm, MaxDirPerm}
 	notDirError := fmt.Sprintf("Certificate directory path (%s) is not a directory", notDir)
 	testCases := []struct {
 		pathname string
@@ -186,7 +191,7 @@ func TestValidateCertDirectory(t *testing.T) {
 		{notDir, "NotADirectory", notDirError},
 	}
 
-	if err := os.Chmod(goodDirPath, SafeDirPerm); err != nil {
+	if err := os.Chmod(goodDirPath, MaxDirPerm); err != nil {
 		t.Fatal(err)
 	}
 	// Intentionall safe cert perm as to be incorrect

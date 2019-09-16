@@ -38,33 +38,43 @@ import (
 )
 
 const (
-	SafeKeyPerm  os.FileMode = 0400
-	SafeCertPerm os.FileMode = 0664
-	SafeDirPerm  os.FileMode = 0700
+	MaxKeyPerm  os.FileMode = 0700
+	MaxCertPerm os.FileMode = 0664
+	MaxDirPerm  os.FileMode = 0700
 )
 
-type insecureError struct {
+type improperError struct {
 	filename string
 	perms    os.FileMode
 }
 
-func (e *insecureError) Error() string {
-	return fmt.Sprintf("%s has insecure permissions set to %#o",
+func (e *improperError) Error() string {
+	return fmt.Sprintf("%s has incorrect permissions please set to %#o",
 		e.filename, e.perms)
 }
 
+func checkMaxPermissions(filePath string, mode os.FileMode, modeMax os.FileMode) error {
+	maxPermMask := (^modeMax.Perm()) & 0777
+	maskedPermissions := maxPermMask & mode.Perm()
+
+	if maskedPermissions != 0 {
+		return &improperError{filePath, modeMax}
+	}
+	return nil
+}
+
 func loadCertWithCustomCA(caRootPath, certPath, keyPath string) (*tls.Certificate, *x509.CertPool, error) {
-	caPEM, err := LoadPEMData(caRootPath, SafeCertPerm)
+	caPEM, err := LoadPEMData(caRootPath, MaxCertPerm)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "could not load caRoot")
 	}
 
-	certPEM, err := LoadPEMData(certPath, SafeCertPerm)
+	certPEM, err := LoadPEMData(certPath, MaxCertPerm)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "could not load cert")
 	}
 
-	keyPEM, err := LoadPEMData(keyPath, SafeKeyPerm)
+	keyPEM, err := LoadPEMData(keyPath, MaxKeyPerm)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "could not load key")
 	}
@@ -95,8 +105,10 @@ func LoadPEMData(filePath string, perms os.FileMode) ([]byte, error) {
 	if !statInfo.Mode().IsRegular() {
 		return nil, fmt.Errorf("%s is not a regular file", filePath)
 	}
-	if statInfo.Mode().Perm() != perms {
-		return nil, &insecureError{filePath, perms}
+
+	err = checkMaxPermissions(filePath, statInfo.Mode(), perms)
+	if err != nil {
+		return nil, err
 	}
 
 	fileContents, err := ioutil.ReadFile(filePath)
@@ -109,7 +121,7 @@ func LoadPEMData(filePath string, perms os.FileMode) ([]byte, error) {
 // LoadCertificate loads the certificate specified at the given path into an
 // x509 Certificate object
 func LoadCertificate(certPath string) (*x509.Certificate, error) {
-	pemData, err := LoadPEMData(certPath, SafeCertPerm)
+	pemData, err := LoadPEMData(certPath, MaxCertPerm)
 
 	if err != nil {
 		return nil, err
@@ -132,7 +144,7 @@ func LoadCertificate(certPath string) (*x509.Certificate, error) {
 // LoadPrivateKey loads the private key specified at the given patc into an
 // crypto.PrivateKey interface complient object.
 func LoadPrivateKey(keyPath string) (crypto.PrivateKey, error) {
-	pemData, err := LoadPEMData(keyPath, SafeKeyPerm)
+	pemData, err := LoadPEMData(keyPath, MaxKeyPerm)
 
 	if err != nil {
 		return nil, err
@@ -185,8 +197,9 @@ func ValidateCertDirectory(certDir string) error {
 	if !statInfo.IsDir() {
 		return fmt.Errorf("Certificate directory path (%s) is not a directory", certDir)
 	}
-	if statInfo.Mode().Perm() != SafeDirPerm {
-		return &insecureError{certDir, SafeDirPerm}
+	err = checkMaxPermissions(certDir, statInfo.Mode(), MaxDirPerm)
+	if err != nil {
+		return err
 	}
 	return nil
 }
