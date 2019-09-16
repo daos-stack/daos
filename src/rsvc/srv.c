@@ -1008,7 +1008,7 @@ ds_rsvc_start_handler(crt_rpc_t *rpc)
 			   (in->sai_flags & RDB_AF_BOOTSTRAP) ?
 			   in->sai_ranks : NULL, NULL /* arg */);
 out:
-	out->sao_rc = rc;
+	out->sao_rc = (rc == 0 ? 0 : 1);
 	crt_reply_send(rpc);
 }
 
@@ -1107,7 +1107,7 @@ ds_rsvc_stop_handler(crt_rpc_t *rpc)
 	rc = ds_rsvc_stop(in->soi_class, &in->soi_svc_id,
 			  in->soi_flags & RDB_OF_DESTROY);
 out:
-	out->soo_rc = rc;
+	out->soo_rc = (rc == 0 || rc == -DER_ALREADY ? 0 : 1);
 	crt_reply_send(rpc);
 }
 
