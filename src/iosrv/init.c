@@ -256,10 +256,20 @@ D_PRINT("Hello from dss_topo_init\n");
 	}
 
 	numa_obj = hwloc_get_obj_by_depth(dss_topo, depth, numa_node);
+	/* if we are not NUMA aware, fall back to non-NUMA implementation */
 	if (numa_obj == NULL) {
-		D_PRINT("NUMA node %d was not found in the topology",
+		D_PRINT("NUMA node %d was not found in the topology.  Ignoring NUMA node request.",
 			numa_node);
-		return -DER_INVAL;
+		dss_tgt_nr = dss_tgt_nr_get(dss_core_nr, nr_threads);
+
+		if (dss_core_offset < 0 || dss_core_offset >= dss_core_nr) {
+			D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), "
+				"should within range [0, %d]", dss_core_offset,
+				dss_core_nr - 1);
+			return -DER_INVAL;
+		}
+		D_PRINT("Success from topo topo_init (NON-NUMA aware)\n");
+		return 0;
 	}
 
 	/* create an empty bitmap, then set each bit as we */
@@ -297,7 +307,7 @@ D_PRINT("Hello from dss_topo_init\n");
 			dss_num_cores_numa_node - 1);
 		return -DER_INVAL;
 	}
-D_PRINT("Success from topo topo_init\n");
+D_PRINT("Success from topo topo_init (NUMA aware)\n");
 	return 0;
 }
 
