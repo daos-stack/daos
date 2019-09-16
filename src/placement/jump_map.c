@@ -699,7 +699,6 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 	daos_obj_id_t           oid;
 	d_list_t                used_targets_list;
 	uint8_t                 *dom_used;
-	uint8_t                *used_targets;
 	uint32_t                dom_used_length;
 	uint64_t                key;
 	int i, j, k, rc;
@@ -725,11 +724,10 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 
 	dom_used_length = (struct pool_domain *)(root->do_targets) - (root) + 1;
 
-	D_ALLOC_ARRAY(dom_used, dom_used_length);
-	D_ALLOC_ARRAY(used_targets, ((layout->ol_nr) / 8) + 1);
+	D_ALLOC_ARRAY(dom_used, (dom_used_length / 8) + 1);
 	D_INIT_LIST_HEAD(&used_targets_list);
 
-	if (dom_used == NULL || used_targets == NULL)
+	if (dom_used == NULL)
 		D_GOTO(out, rc);
 
 	/**
@@ -804,8 +802,6 @@ out:
 		remap_list_free_all(remap_list);
 	}
 
-	if (used_targets)
-		D_FREE(used_targets);
 	if (dom_used)
 		D_FREE(dom_used);
 
