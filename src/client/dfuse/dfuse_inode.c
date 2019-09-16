@@ -148,14 +148,21 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 	}
 
 	if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_root) {
-		DFUSE_TRA_INFO(ie, "Closing dfs_root %d %d",
+		DFUSE_TRA_INFO(ie->ie_dfs, "Closing dfs_root %d %d",
 			       !daos_handle_is_inval(ie->ie_dfs->dfs_poh),
 			       !daos_handle_is_inval(ie->ie_dfs->dfs_coh));
 
 		if (!daos_handle_is_inval(ie->ie_dfs->dfs_coh)) {
+
+			rc = dfs_umount(ie->ie_dfs->dfs_ns);
+			if (rc != 0)
+				DFUSE_TRA_ERROR(ie->ie_dfs,
+						"dfs_umount() failed (%d)",
+						rc);
+
 			rc = daos_cont_close(ie->ie_dfs->dfs_coh, NULL);
 			if (rc != -DER_SUCCESS) {
-				DFUSE_TRA_ERROR(ie,
+				DFUSE_TRA_ERROR(ie->ie_dfs,
 						"daos_cont_close() failed: (%d)",
 						rc);
 			}
@@ -163,7 +170,7 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 		} else if (!daos_handle_is_inval(ie->ie_dfs->dfs_poh)) {
 			rc = daos_pool_disconnect(ie->ie_dfs->dfs_poh, NULL);
 			if (rc != -DER_SUCCESS) {
-				DFUSE_TRA_ERROR(ie,
+				DFUSE_TRA_ERROR(ie->ie_dfs,
 						"daos_pool_disconnect() failed: (%d)",
 						rc);
 			}

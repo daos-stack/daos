@@ -190,4 +190,7 @@ map_ranks_init(const struct pool_map *map, enum map_ranks_class class,
 
 void
 map_ranks_fini(d_rank_list_t *ranks);
+
+int ds_pool_get_ranks(const uuid_t pool_uuid, int status,
+		      d_rank_list_t *ranks);
 #endif /* __DAOS_SRV_POOL_H__ */

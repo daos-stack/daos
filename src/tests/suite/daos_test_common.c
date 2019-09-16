@@ -131,7 +131,7 @@ test_setup_pool_connect(void **state, struct test_pool *pool)
 	}
 
 	if (arg->myrank == 0) {
-		daos_pool_info_t	info;
+		daos_pool_info_t info = {0};
 
 		print_message("setup: connecting to pool\n");
 		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
@@ -309,9 +309,9 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 static int
 pool_destroy_safe(test_arg_t *arg)
 {
-	daos_pool_info_t		 pinfo;
-	daos_handle_t			 poh = arg->pool.poh;
-	int				 rc;
+	daos_pool_info_t	 pinfo = {0};
+	daos_handle_t		 poh = arg->pool.poh;
+	int			 rc;
 
 	if (daos_handle_is_inval(poh)) {
 		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
@@ -494,7 +494,7 @@ test_runable(test_arg_t *arg, unsigned int required_nodes)
 			ranks_to_kill[i] = arg->srv_nnodes -
 					   disable_nodes - i - 1;
 
-		arg->hce = daos_ts2epoch();
+		arg->hce = crt_hlc_get();
 	}
 
 	MPI_Bcast(&runable, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -540,7 +540,7 @@ test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo)
 static bool
 rebuild_pool_wait(test_arg_t *arg)
 {
-	daos_pool_info_t	   pinfo = { 0 };
+	daos_pool_info_t	   pinfo = {0};
 	struct daos_rebuild_status *rst;
 	int			   rc;
 	bool			   done = false;
@@ -570,7 +570,7 @@ rebuild_pool_wait(test_arg_t *arg)
 int
 test_get_leader(test_arg_t *arg, d_rank_t *rank)
 {
-	daos_pool_info_t	pinfo = { 0 };
+	daos_pool_info_t	pinfo = {0};
 	int			rc;
 
 	rc = test_pool_get_info(arg, &pinfo);

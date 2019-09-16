@@ -112,7 +112,7 @@ duns_link_path(const char *path, const char *sysname,
 	       d_rank_list_t *svcl, struct duns_attr_t *attrp)
 {
 	daos_handle_t		poh;
-	daos_pool_info_t	pool_info;
+	daos_pool_info_t	pool_info = {};
 	char			pool[37], cont[37];
 	char			oclass[10], type[10];
 	char			str[DUNS_MAX_XATTR_LEN];

@@ -1077,7 +1077,7 @@ int main(int argc, char *argv[])
 	bool			free_svcl = true;
 	bool			free_grp = true;
 	uuid_t			pool_uuid, co_uuid;
-	daos_pool_info_t	pool_info;
+	daos_pool_info_t	pool_info = {};
 	daos_cont_info_t	co_info;
 	d_rank_list_t		*svcl = NULL;
 	daos_handle_t		poh, coh;
