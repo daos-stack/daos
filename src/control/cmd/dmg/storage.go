@@ -42,7 +42,6 @@ type storageCmd struct {
 // storagePrepareCmd is the struct representing the prep storage subcommand.
 type storagePrepareCmd struct {
 	logCmd
-	broadcastCmd
 	connectedCmd
 	types.StoragePrepareCmd
 }
@@ -83,7 +82,6 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 // storageScanCmd is the struct representing the scan storage subcommand.
 type storageScanCmd struct {
 	logCmd
-	broadcastCmd
 	connectedCmd
 }
 
@@ -103,7 +101,6 @@ func (s *storageScanCmd) Execute(args []string) error {
 // storageFormatCmd is the struct representing the format storage subcommand.
 type storageFormatCmd struct {
 	logCmd
-	broadcastCmd
 	connectedCmd
 	Force bool `short:"f" long:"force" description:"Perform format without prompting for confirmation"`
 }
@@ -132,7 +129,6 @@ func (s *storageFormatCmd) Execute(args []string) error {
 // storageUpdateCmd is the struct representing the update storage subcommand.
 type storageUpdateCmd struct {
 	logCmd
-	broadcastCmd
 	connectedCmd
 	Force        bool   `short:"f" long:"force" description:"Perform update without prompting for confirmation"`
 	NVMeModel    string `short:"m" long:"nvme-model" description:"Only update firmware on NVMe SSDs with this model name/number." required:"1"`

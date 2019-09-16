@@ -35,13 +35,13 @@ import (
 // Currently expect only one connection to be available and return that.
 func chooseServiceLeader(cs []Control) (Control, error) {
 	switch len(cs) {
-	case 1:
-		return cs[0], nil
-	default:
+	case 0:
 		return nil, errors.Errorf("unexpected number of connections, "+
 			"want 1, have %d", len(cs))
+	default:
+		// just return the first connection, the service leader
+		return cs[0], nil
 	}
-
 }
 
 // PoolCreateReq struct contains request
