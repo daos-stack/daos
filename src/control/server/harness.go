@@ -100,6 +100,8 @@ func (h *IOServerHarness) GetManagementInstance() (*IOServerInstance, error) {
 		return nil, errors.Errorf("no instance index %d", defaultManagementInstance)
 	}
 
+	// TODO: verify we are listed as access point
+
 	// Just pick one for now.
 	return h.instances[defaultManagementInstance], nil
 }
