@@ -43,14 +43,15 @@ const (
 	MaxDirPerm  os.FileMode = 0700
 )
 
-type improperError struct {
+type badPermsError struct {
 	filename string
 	perms    os.FileMode
+	fixperms os.FileMode
 }
 
-func (e *improperError) Error() string {
-	return fmt.Sprintf("%s has incorrect permissions please set to %#o",
-		e.filename, e.perms)
+func (e *badPermsError) Error() string {
+	return fmt.Sprintf("%s has insecure permissions %#o (suggested: %#o)",
+		e.filename, e.perms.Perm(), e.fixperms.Perm())
 }
 
 func checkMaxPermissions(filePath string, mode os.FileMode, modeMax os.FileMode) error {
@@ -58,7 +59,7 @@ func checkMaxPermissions(filePath string, mode os.FileMode, modeMax os.FileMode)
 	maskedPermissions := maxPermMask & mode.Perm()
 
 	if maskedPermissions != 0 {
-		return &improperError{filePath, modeMax}
+		return &badPermsError{filePath, mode, modeMax}
 	}
 	return nil
 }
@@ -141,8 +142,8 @@ func LoadCertificate(certPath string) (*x509.Certificate, error) {
 	return cert, err
 }
 
-// LoadPrivateKey loads the private key specified at the given patc into an
-// crypto.PrivateKey interface complient object.
+// LoadPrivateKey loads the private key specified at the given path into an
+// crypto.PrivateKey interface compliant object.
 func LoadPrivateKey(keyPath string) (crypto.PrivateKey, error) {
 	pemData, err := LoadPEMData(keyPath, MaxKeyPerm)
 

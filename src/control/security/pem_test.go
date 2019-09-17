@@ -35,7 +35,7 @@ func TestLoadPEMData(t *testing.T) {
 	goodCertPath := "testdata/certs/daosCA.crt"
 	betterCertPermPath := "testdata/certs/server.crt"
 	badCertPerm := "testdata/certs/badperms.crt"
-	badCertPermError := &improperError{badCertPerm, MaxCertPerm}
+	badCertPermError := &badPermsError{badCertPerm, 0666, MaxCertPerm}
 
 	testCases := []struct {
 		filename string
@@ -79,7 +79,7 @@ func TestLoadPrivateKey(t *testing.T) {
 	malformed := "testdata/certs/bad.key"
 	toomany := "testdata/certs/toomanypem.key"
 	notkey := "testdata/certs/notkey.crt"
-	badKeyPermError := &improperError{badKeyPerm, MaxKeyPerm}
+	badKeyPermError := &badPermsError{badKeyPerm, MaxCertPerm, MaxKeyPerm}
 	malformedError := fmt.Sprintf("%s does not contain PEM data", malformed)
 	toomanyError := "Only one key allowed per file"
 	notkeyError := "PEM Block is not a Private Key"
@@ -132,7 +132,7 @@ func TestLoadCertificate(t *testing.T) {
 	badPerm := "testdata/certs/badperms.crt"
 	malformed := "testdata/certs/bad.crt"
 	toomany := "testdata/certs/toomanypem.crt"
-	badError := &improperError{badPerm, MaxCertPerm}
+	badError := &badPermsError{badPerm, MaxKeyPerm, MaxCertPerm}
 	malformedError := fmt.Sprintf("%s does not contain PEM data", malformed)
 	toomanyError := "Only one cert allowed per file"
 
@@ -140,7 +140,7 @@ func TestLoadCertificate(t *testing.T) {
 	if err := os.Chmod(goodPath, MaxCertPerm); err != nil {
 		t.Fatal(err)
 	}
-	// Intentionallly safe cert perm as it should be incorrect
+	// Intentionally safe cert perm as it should be incorrect
 	if err := os.Chmod(badPerm, MaxKeyPerm); err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +179,7 @@ func TestValidateCertDirectory(t *testing.T) {
 	goodDirPath := "testdata/certs/goodperms"
 	badDirPerm := "testdata/certs/badperms"
 	notDir := "testdata/certs/daosCA.crt"
-	badDirPermError := &improperError{badDirPerm, MaxDirPerm}
+	badDirPermError := &badPermsError{badDirPerm, 0777, MaxDirPerm}
 	notDirError := fmt.Sprintf("Certificate directory path (%s) is not a directory", notDir)
 	testCases := []struct {
 		pathname string
