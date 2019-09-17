@@ -305,7 +305,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 		D_DEBUG(DB_TRACE, "nonexistent obj "DF_UOID"\n",
 			DP_UOID(oid));
 		if (intent == DAOS_INTENT_KILL) {
-			vos_obj_release(obj);
+			vos_obj_release(occ, obj);
 			D_GOTO(failed, rc = -DER_NONEXIST);
 		}
 		goto out;
