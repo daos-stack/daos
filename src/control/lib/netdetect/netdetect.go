@@ -764,6 +764,16 @@ func ValidateNetworkConfig(provider string, device string, numaNode uint) (error
 		}
 	}
 	log.Debugf("No match was found for the device %s and provider %s\n", device, provider)
+	log.Debugf("-----------------------------------------------------")
+	log.Debugf("Because we failed, let's scan the fabric to see what's there.")
+	results, errSF := ScanFabric("")
+	if errSF != nil {
+		log.Debugf("Failed to execute fabric scan")
+	}
+	for _, sr := range(results) {
+		log.Debugf("\n%v\n\n", sr)
+	}
+	log.Debugf("-----------------------------------------------------")
 	return errors.Errorf("Device %s does not support provider: %s", device, provider)
 }
 
