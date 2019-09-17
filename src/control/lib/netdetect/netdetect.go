@@ -344,7 +344,6 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 
 	numanode := C.hwloc_get_ancestor_obj_by_type (topology, C.HWLOC_OBJ_NUMANODE, node)
 	if (numanode != nil) {
-		//return uint(C.uint(numanode.logical_index)), nil
 		return uint(numanode.logical_index), nil
 	}
 
@@ -362,7 +361,8 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 	for i = 0; i < numObj; i++ {
 		numanode := C.hwloc_get_obj_by_depth(topology, C.uint(depth), C.uint(i))
 		if numanode == nil {
-			continue
+			log.Debugf("hwloc_get_obj_by_depth for type HWLOC_OBJ_NUMANODE was nil.  Using NUMA 0\n")
+			return 0, nil
 		}
 		if C.hwloc_bitmap_isincluded(ancestorNode.allowed_cpuset, numanode.allowed_cpuset) != 0 {
 			return uint(numanode.logical_index), nil
