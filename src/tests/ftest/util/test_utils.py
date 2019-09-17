@@ -82,13 +82,15 @@ class TestDaosApiBase(ObjectWithParameters):
     # pylint: disable=too-few-public-methods
     """A base class for functional testing of DaosPools objects."""
 
-    def __init__(self, cb_handler=None):
+    def __init__(self, namespace, cb_handler=None):
         """Create a TestDaosApi object.
 
         Args:
+            namespace (str): yaml namespace (path to parameters)
             cb_handler (CallbackHandler, optional): callback object to use with
                 the API methods. Defaults to None.
         """
+        super(TestDaosApiBase, self).__init__(namespace)
         self.cb_handler = cb_handler
 
     def _call_method(self, method, kwargs):
@@ -118,7 +120,7 @@ class TestPool(TestDaosApiBase):
             cb_handler (CallbackHandler, optional): callback object to use with
                 the API methods. Defaults to None.
         """
-        super(TestPool, self).__init__(cb_handler)
+        super(TestPool, self).__init__("/run/pool/*", cb_handler)
         self.context = context
         self.log = log
         self.uid = os.geteuid()
@@ -137,15 +139,6 @@ class TestPool(TestDaosApiBase):
         self.info = None
         self.svc_ranks = None
         self.connected = False
-
-    def get_params(self, test, path="/run/pool/*"):
-        """Get the pool parameters from the yaml file.
-
-        Args:
-            test (Test): avocado Test object
-            path (str, optional): yaml namespace. Defaults to "/run/pool/*".
-        """
-        super(TestPool, self).get_params(test, path)
 
     @fail_on(DaosApiError)
     def create(self):
@@ -733,7 +726,7 @@ class TestContainer(TestDaosApiBase):
             cb_handler (CallbackHandler, optional): callback object to use with
                 the API methods. Defaults to None.
         """
-        super(TestContainer, self).__init__(cb_handler)
+        super(TestContainer, self).__init__("/run/container/*", cb_handler)
         self.pool = pool
         self.log = self.pool.log
 
@@ -747,16 +740,6 @@ class TestContainer(TestDaosApiBase):
         self.uuid = None
         self.opened = False
         self.written_data = []
-
-    def get_params(self, test, path="/run/container/*"):
-        """Get the container parameters from the yaml file.
-
-        Args:
-            test (Test): avocado Test object
-            path (str, optional): yaml namespace. Defaults to
-                "/run/container/*".
-        """
-        super(TestContainer, self).get_params(test, path)
 
     @fail_on(DaosApiError)
     def create(self, uuid=None):

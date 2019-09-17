@@ -9,9 +9,9 @@ storage nodes before deploying DAOS.
 
 The DAOS transaction model relies on timestamps and requires time to be
 synchronized across all the storage and client nodes. This can be done
-via NTP or any other equivalent protocol.
+using NTP or any other equivalent protocol.
 
-### User & Group
+### Users and Groups
 
 DAOS requires users and groups to be synchronized on both storage and
 client nodes.
@@ -19,56 +19,52 @@ client nodes.
 ### Runtime Directory Setup
 
 DAOS uses a series of Unix Domain Sockets to communicate between its
-various components. On modern Linux systems Unix Domain Sockets are
+various components. On modern Linux systems, Unix Domain Sockets are
 typically stored under /run or /var/run (usually a symlink to /run) and
 are a mounted tmpfs file system. There are several methods for ensuring
 the necessary directories are setup.
 
 A sign that this step may have been missed is when starting daos\_server
-or daos\_agent you may see the message:
-
+or daos\_agent, you may see the message:
+```
 mkdir /var/run/daos\_server: permission denied
-
 Unable to create socket directory: /var/run/daos\_server
-
+```
 #### Non-default Directory
 
-By default daos\_server and daos\_agent will use the directories
+By default, daos\_server and daos\_agent will use the directories
 /var/run/daos\_server and /var/run/daos\_agent respectively. To change
-the default location that daos\_server uses for its runtime directory
+the default location that daos\_server uses for its runtime directory,
 either uncomment and set the socket\_dir configuration value in
-install/etc/daos\_server.yml or pass the location to daos\_server on
-the command line using the -d flag. For the daos\_agent an alternate
+install/etc/daos\_server.yml, or pass the location to daos\_server on
+the command line using the -d flag. For the daos\_agent, an alternate
 location can be passed on the command line using the -runtime\_dir flag.
 
 #### Default Directory (non-persistent)
 
 Files and directories created in /run and /var/run only survive until
-the next reboot. However if reboots are infrequent an easy solution
-while still utilizing the default locations is to manually create the
-required directories. To do this execute the following commands.
+the next reboot. However, if reboots are infrequent, an easy solution
+while still utilizing the default locations is to create the
+required directories manually. To do this execute the following commands.
 
 daos\_server:
-
--   mkdir /var/run/daos\_server
-
--   chmod 0755 /var/run/daos\_server
-
--   chown user:user /var/run/daos\_server (where user is the user you
+```
+mkdir /var/run/daos\_server
+chmod 0755 /var/run/daos\_server
+chown user:user /var/run/daos\_server (where user is the user you
     will run daos\_server as)
-
+```
 daos\_agent:
-
--   mkdir /var/run/daos\_agent
-
--   chmod 0755 /var/run/daos\_agent
-
--   chown user:user /var/run/daos\_agent (where user is the user you
+```
+mkdir /var/run/daos\_agent
+chmod 0755 /var/run/daos\_agent
+chown user:user /var/run/daos\_agent (where user is the user you
     will run daos\_agent as)
+```
 
 #### Default Directory (persistent)
 
-If the server hosting daos\_server or daos\_agent will be rebooted often
+If the server hosting daos\_server or daos\_agent will be rebooted often,
 systemd provides a persistent mechanism for creating the required
 directories called tmpfiles.d. This mechanism will be required every
 time the system is provisioned and requires a reboot to take effect.
@@ -81,12 +77,12 @@ To tell systemd to create the necessary directories for DAOS:
 -   Modify the copied file to change the user and group fields
     (currently daos) to the user daos will be run as
 
--   Reboot the system and the directories will be created automatically
+-   Reboot the system, and the directories will be created automatically
     on all subsequent reboots.
 
 ### Elevated Privileges
 
-Several tasks (e.g. storage access, hugepages configuration) performed
+Several tasks (e.g., storage access, hugepages configuration) performed
 by the DAOS server require elevated permissions on the storage nodes
 (requiring certain commands to be run as root or with sudo).
 
@@ -94,25 +90,27 @@ by the DAOS server require elevated permissions on the storage nodes
 
 ### Storage Preparation
 
-#### SCM
+#### SCM Preparation
 
-This section addresses how to verify that Optane DC Persistent memory
-(DCPM) is correctly installed on the storage nodes and how to configure
+This section addresses how to verify that Optane DC Persistent Memory
+(DCPM) is correctly installed on the storage nodes, and how to configure
 it in interleaved mode to be used by DAOS in AppDirect mode.
-Instructions for other type of SCM may be covered in the future.
+Instructions for other types of SCM may be covered in the future.
 
-Provisioning SCM occurs by configuring DCPM modules in AppDirect memory regions
-(interleaved mode) in groups of modules local to a specific socket (NUMA) and
-resultant nvdimm namespaces are defined a device identifier (e.g. /dev/pmem0).
+Provisioning the SCM occurs by configuring DCPM modules in AppDirect memory regions
+(interleaved mode) in groups of modules local to a specific socket (NUMA), and
+resultant nvdimm namespaces are defined by a device identifier (e.g., /dev/pmem0).
 
 DCPM can be configured and managed through the
 [ipmctl](https://github.com/intel/ipmctl) library and associated tool. The
-ipmctl command just be run as root and has pretty detailed man pages and
+ipmctl command can be run as root and has detailed man pages and
 help output (use "ipmctl help" to display it).
 
 The list of NVDIMMs can be displayed as follows:
 
-\# ipmctl show -dimm
+```
+ipmctl show -dimm
+```
 
 | DimmID | Capacity  | HealthState | ActionRequired | LockState | FWVersion     |
 | ------ | --------- | ----------- | -------------- | --------- | ------------- |
@@ -125,25 +123,25 @@ Moreover, DAOS requires DCPM to be configured in interleaved mode. A
 storage subcommand (prepare --scm-only) can be used as a "command mode"
 invocation of *daos\_server* and must be run as root. SCM modules will
 be configured into interleaved regions with memory mode set to
-"AppDirect" mode with one set per socket (each module is assigned to socket
+"AppDirect" mode with one set per socket (each module is assigned to a socket,
 and reports this via its NUMA rating).
 
-`sudo daos_server [<app_opts>] storage prepare --scm-only [<cmd_opts>]`
-The first time the command is run, SCM AppDirect regions will be created as
+`sudo daos_server [<app_opts>] storage prepare [--scm-only|-s] [<cmd_opts>]`
+The first time the command is run, the SCM AppDirect regions will be created as
 resource allocations on any available DCPM modules (one region per NUMA
 node/socket). The regions are activated after BIOS reads the new resource
-allocations and therefore after initial completion the command prints a
-message to ask for a reboot (the command will not a initiate reboot itself).
+allocations, and after initial completion the command prints a
+message to ask for a reboot (the command will not initiate reboot itself).
 
 'sudo daos_server storage prepare --scm-only' should be run for a second time after
-system reboot in order to create the pmem kernel devices (/dev/pmemX
+system reboot to create the pmem kernel devices (/dev/pmemX
 namespaces created on the new SCM regions).
 
-One namespace per region is created, each namespace may take up to a few
-minutes to create. Details of pmem devices will be displayed in JSON format
+One namespace per region is created, and each namespace may take up to a few
+minutes to create. Details of the pmem devices will be displayed in JSON format
 on command completion.
 
-Example output from initial call (with SCM modules set to default MemoryMode):
+Example output from the initial call (with the SCM modules set to default MemoryMode):
 
 ```bash
 Memory allocation goals for SCM will be changed and namespaces modified, this
@@ -154,12 +152,12 @@ yes
 A reboot is required to process new memory allocation goals.
 ```
 
-Example output from subsequent call (SCM modules configured to AppDirect
-mode and host rebooted):
+Example output from the subsequent call (SCM modules configured to AppDirect
+mode, and host rebooted):
 
 ```bash
-Memory allocation goals for SCM will be changed and namespaces modified, this
-will be a destructive operation. Please ensure namespaces are unmounted and SCM
+Memory allocation goals for SCM will be changed and namespaces modified. This
+will be a destructive operation. Ensure namespaces are unmounted and the SCM
 is otherwise unused.
 Are you sure you want to continue? (yes/no)
 yes
@@ -169,18 +167,18 @@ Persistent memory kernel devices:
 [{UUID:5d2f2517-9217-4d7d-9c32-70731c9ac11e Blockdev:pmem1 Dev:namespace1.0 NumaNode:1} {UUID:2bfe6c40-f79a-4b8e-bddf-ba81d4427b9b Blockdev:pmem0 Dev:namespace0.0 NumaNode:0}]
 ```
 
-`sudo daos_server [<app_opts>] storage prepare --scm-only --reset [<cmd_opts>]`
+`sudo daos_server [<app_opts>] storage prepare [--scm-only|-s] --reset [<cmd_opts>]`
 
-All namespaces are disabled and destroyed. SCM regions are removed by
+All namespaces are disabled and destroyed. The SCM regions are removed by
 resetting modules into "MemoryMode" through resource allocations.
 
-Note, undefined behaviour may result if the namespaces/pmem kernel
-devices are mounted prior to running reset (as per the printed warning).
+Note that undefined behavior may result if the namespaces/pmem kernel
+devices are mounted before running reset (as per the printed warning).
 
-Subsequent reboot is required in order for BIOS to read the new resource
+A subsequent reboot is required for BIOS to read the new resource
 allocations.
 
-Example output when resetting SCM modules:
+Example output when resetting the SCM modules:
 
 ```bash
 Memory allocation goals for SCM will be changed and namespaces modified, this
@@ -194,7 +192,7 @@ resetting SCM memory allocations
 A reboot is required to process new memory allocation goals.
 ```
 
-#### NVMe
+#### NVMe Preparation
 
 DAOS supports only NVMe-capable SSDs that are accessed directly from
 userspace through the SPDK library.
@@ -216,26 +214,26 @@ of huge pages to allocate for use by SPDK.
 A list of PCI addresses can also be supplied to avoid unbinding all
 PCI devices from the kernel, using the `-w` / `--pci-whitelist` option.
 
-`sudo daos_server [<app_opts>] storage prepare --nvme-only [<cmd_opts>]`
+The `sudo daos_server [<app_opts>] storage prepare [--nvme-only|-n] [<cmd_opts>]`
 command wraps the SPDK setup script to unbind the devices from
 original kernel drivers and then binds the devices to a UIO driver
 through which SPDK can communicate.
 
 When a PCI address whitelist is not specified, SPDK access to all SSDs
 will be enabled for the user (either the user executing sudo, the user
-specified as --target-user or effective user - in that order of precedence)
-involving changing ownership of relevant files in addition to SPDK setup.
+specified as --target-user, or effective user - in that order of precedence)
+involving changing the ownership of relevant files in addition to SPDK setup.
 
 The devices can then be bound back to the original drivers with the command
-`sudo daos_server [<app_opts>] storage prepare --nvme-only --reset [<cmd_opts>]`.
+`sudo daos_server [<app_opts>] storage prepare [--nvme-only|-n] --reset [<cmd_opts>]`.
 
 ### Storage Detection & Selection
 
-While the DAOS server will eventually auto-detect all the usable
-storage, the administrator will still be provided the ability through
+While the DAOS server auto-detects all the usable
+storage, the administrator will still be provided with the ability through
 the configuration file (see next section) to whitelist or blacklist the
 storage devices to be (or not) used. This section covers how to manually
-detect the storage devices potentially usable by DAOS in order to
+detect the storage devices potentially usable by DAOS to
 populate the configuration file when the administrator wants to have
 finer control over the storage selection.
 
@@ -273,12 +271,14 @@ configuration file to identified NVMe SSDs.
 Devices with the same NUMA node/socket should be used in the same per-server
 section of the server configuration file for best performance.
 
-### Network Interface Detection & Selection
+### Network Interface Detection and Selection
 
 To display the supported OFI provider, use the following command:
+```
+ /scratch/standan/daos\_m/opt/ofi/bin/fi\_info -l
+```
 
-\# /scratch/standan/daos\_m/opt/ofi/bin/fi\_info -l
-
+```
 psm2:
 
 version: 1.7
@@ -322,10 +322,10 @@ version: 1.0
 ofi\_mrail:
 
 version: 1.0
-
+```
 The fi\_pingpong test (delivered as part of OFI/libfabric) can be used
 to verify that the targeted OFI provider works fine:
-
+```
 node1\$ fi\_pingpong -p psm2
 
 node2\$ fi\_pingpong -p psm2 \${IP\_ADDRESS\_NODE1}
@@ -345,7 +345,7 @@ bytes \#sent \#ack total time MB/sec usec/xfer Mxfers/sec
 1m 10 =10 20m 0.00s 8867.45 118.25 0.01
 
 Further details will be added to this section in a future revision.
-
+```
 ### Storage Firmware Upgrade
 
 Firmware on an NVMe controller can be updated from an image on local
@@ -353,25 +353,25 @@ storage (initially installing from a local path on the host that is
 running *daos\_server* but to be extended to downloading remotely from
 central storage location).
 
-When the controller is selected and an update firmware task runs,
+When the controller is selected, and an update firmware task runs,
 controller data is accessed through an existing linked list through the
-binding fwupdate call and a raw command specifying firmware update with
-local image (specified by filepath) and slot identifier. The firmware
+binding fwupdate call, and a raw command specifying a firmware update with
+the local image (specified by file path) and slot identifier. The firmware
 update is followed by a hard reset on the controller.
 
 ### Storage Burn in
 
 Burn-in testing can be performed on discovered NVMe controllers. By
-default this involves a 15-minute slow burn-in test with a mixed
-read/write workload issued by fio but test duration and load strength
-should be user configurable. Burn-in should run in the background to
+default, this involves a 15-minute slow burn-in test with a mixed
+read/write workload issued by fio, but test duration and load strength
+should be user-configurable. Burn-in should run in the background to
 allow administrators to use the control-plane for other tasks in the
 meantime.
 
 The fio repo is to be built and needs to be referenced when building the
 SPDK fio\_plugin. The plug-in can then be run by fio to exercise the
-NVMe device through SPDK. Currently the output of the burn-in is
-displayed in the shell and control is returned to the user after
+NVMe device through SPDK. Currently, the output of the burn-in is
+displayed in the shell, and control is returned to the user after
 completion. Future iterations may perform this as a background task.
 
 ## Server Configuration
@@ -385,7 +385,7 @@ The DAOS security framework relies on certificates to authenticate
 administrators. The security infrastructure is currently under
 development and will be delivered in DAOS v1.0. Initial support for certificates
 has been added to DAOS and can be disabled either via the command line or in the
-DAOS server configuration file. Currently the easiest way to disable certificate
+DAOS server configuration file. Currently, the easiest way to disable certificate
 support is to pass the -i flag to daos\_server.
 
 ### Server Configuration File
@@ -396,455 +396,27 @@ on the command line (`daos_server -h` for usage) or default location
 (`install/etc/daos_server.yml`).
 
 Parameter descriptions are specified in [daos_server.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
-and example configurations files in the [examples](https://github.com/daos-stack/daos/tree/master/utils/config/examples)
+and example configuration files in the [examples](https://github.com/daos-stack/daos/tree/master/utils/config/examples)
 directory.
 
-Any option supplied to `daos_server` as a commandline option or flag will
+Any option supplied to `daos_server` as a command line option or flag will
 take precedence over equivalent configuration file parameter.
 
-For convenience, active parsed config values are written to a temporary
-file for reference, location will be written to the log.
-
-The following section lists the format, options, defaults and
-descriptions available in the configuration file.
+For convenience, active parsed configuration values are written to a temporary
+file for reference, and the location will be written to the log.
 
 #### Configuration File Options
 
-This section lists the default empty configuration listing all the
+The example configuration file lists the default empty configuration, listing all the
 options (living documentation of the config file). Live examples are
 available at
 <https://github.com/daos-stack/daos/tree/master/utils/config>
 
-The Location of this configuration file is determined by first checking
+The location of this configuration file is determined by first checking
 for the path specified through the -o option of the daos\_server command
 line. Otherwise, /etc/daos\_server.conf is used.
 
-**Name associated with the DAOS system**
-
-Immutable after reformat.
-
-name: daos
-
-**Access points**
-
-To operate, DAOS will need a quorum of access point nodes to be
-available.
-
-Immutable after reformat.
-
-Hosts can be specified with or without port, default port below assumed
-if not specified.
-
-default: hostname of this node at port 10000 for local testing
-
-access\_points:
-\['hostname1:10001','hostname2:10001','hostname3:10001'\]
-
-access\_points: \[hostname1,hostname2,hostname3\]
-
-**Force default port**
-
-Force different port number to bind daos\_server to, this will also be
-used when connecting to access points if no port is specified.
-
-default: 10000
-
-port: 10001
-
-**Transport Certificate Credentials**
-
-Certificate support for securing the administrative channel for the DAOS
-components is specified in a key called transport_config: It contains the
-following keys with these default values
-
-
-***Allow Insecure Communications***
-
-default: false
-
-allow_insecure: false
-
-***Path to Root Certificate***
-
-default: ./.daos/daosCA.crt
-
-ca\_cert: ./.daos/daosCA.crt
-
-***Path to server certificate and key file***
-
-default: ./.daos/daos\_server.{crt,key}
-
-cert: ./.daos/daos\_server.crt
-
-key: ./.daos/daos\_server.key
-
-**Fault domain path**
-
-Immutable after reformat.
-
-default: /hostname for a local configuration w/o fault domain
-
-fault\_path: /vcdu0/rack1/hostname
-
-**Fault domain callback**
-
-Path to executable which will return fault domain string.
-
-Immutable after reformat.
-
-fault\_cb: ./.daos/fd\_callback
-
-**Use specific OFI interfaces**
-
-Specify either a single fabric interface that will be used by all
-spawned servers or a comma-separated list of fabric interfaces to be
-assigned individually.
-
-By default, the DAOS server will auto-detect and use all fabric
-interfaces if any and fall back to socket on the first eth card,
-otherwise.
-
-fabric\_ifaces: \[qib0,qib1\]
-
-**Use specific OFI provider**
-
-Force a specific provider to be used by all the servers.
-
-The default provider depends on the interfaces that will be
-auto-detected:
-
-ofi+psm2 for Omni-Path, ofi+verbs;ofi\_rxm for Infiniband/RoCE and
-finally
-
-ofi+socket for non-RDMA-capable Ethernet.
-
-provider: ofi+verbs;ofi\_rxm
-
-**Storage mount directory**
-
-TODO: If no pre-configured mountpoins are specified, DAOS will
-auto-detect NVDIMMs, configure them in interleave mode, format with ext4
-and mount with the DAX extension creating a subdirectory within
-scm\_mount\_path.
-
-This option allows to specify a preferred path where the mountpoints
-will be created. Either the specified directory or its parent must be a
-mount point.
-
-default: /mnt/daos
-
-scm\_mount\_path: /mnt/daosa
-
-**NVMe SSD whitelist**
-
-Only use NVMe controllers with specific PCI addresses.
-
-Immutable after reformat, colons replaced by dots in PCI identifiers.
-
-By default, DAOS will use all the NVMe-capable SSDs that don't have
-active mount points.
-
-bdev\_include: \["0000:81:00.1","0000:81:00.2","0000:81:00.3"\]
-
-**NVMe SSD blacklist**
-
-Only use NVMe controllers with specific PCI addresses. Overrides drives
-listed in nvme\_include and forces auto-detection to skip those drives.
-
-Immutable after reformat, colons replaced by dots in PCI identifiers.
-
-bdev\_exclude: \["0000:81:00.1"\]
-
-**Use Hyperthreads**
-
-When Hyperthreading is enabled and supported on the system, this
-parameter defines whether the DAOS service thread should only be bound
-to different physical cores (value 0) or hyperthreads (value 1).
-
-default: false
-
-hyperthreads: true
-
-**Use the given directory for creating unix domain sockets**
-
-DAOS Agent and DAOS Server both use unix domain sockets for
-communication with other system components. This setting is the base
-location to place the sockets in.
-
-default: /var/run/daos\_server
-
-socket\_dir: ./.daos/daos\_server
-
-**Number of hugepages to allocate for use by NVMe SSDs**
-
-Specifies the number (not size) of hugepages to allocate for use by NVMe
-through SPDK. This indicates the total number to be used by any spawned
-servers. Default system hugepage size will be used and hugepages will be
-evenly distributed between CPU nodes.
-
-default: 1024
-
-nr\_hugepages: 4096
-
-**Force specific debug mask for daos\_server (control plane).**
-
-By default, just use the default debug mask used by daos\_server.
-
-Mask specifies minimum level of message significance to pass to logger.
-
-Currently supported values are DEBUG and ERROR.
-
-default: DEBUG
-
-control\_log\_mask: ERROR
-
-**Force specific path for daos\_server (control plane) logs.**
-
-default: print to stderr
-
-control\_log\_file: /tmp/daos\_control.log
-
-
-When per-server definitions exist, auto-allocation of resources is not
-performed. Without per-server definitions, node resources will
-automatically be assigned to servers based on NUMA ratings, there will
-be a one-to-one relationship between servers and sockets.
-
-servers:
-
-Rank to be assigned as identifier for server.
-
-Immutable after reformat.
-
-Optional parameter, will be auto generated if not supplied.
-
-rank: 0
-
-**Targets (and service thread related parameters).**
-
-Targets (VOS) represent the count of storage targets per data plane
-server starting at core offset specified by first_core.
-
-Immutable after reformat.
-
-targets: 20
-
-
-Count of offload/helper xstreams per target. (allowed values: 0-2)
-
-Immutable after reformat.
-
-default: 2
-
-nr_xs_helpers: 0
-
-
-Offset of the first core for service xstreams.
-
-Immutable after reformat.
-
-default: 0
-
-first_core: 1
-
-**Use specific OFI interfaces.**
-
-Specify the fabric network interface that will be used by this server.
-
-Optionally specify the fabric network interface port that will be used
-by this server but please only if you have a specific need, this will
-normally be chosen automatically.
-
-fabric\_iface: qib0
-
-fabric\_iface\_port: 20000
-
-**Force specific debug mask (D\_LOG\_MASK) at start up time.**
-
-By default, just use the default debug mask used by DAOS.
-
-Mask specifies minimum level of message significance to pass to logger.
-
-default: ERR
-
-log\_mask: WARN
-
-**Force specific path for DAOS debug logs.**
-
-default: /tmp/daos.log
-
-log\_file: /tmp/daos\_server1.log
-
-**Pass specific environment variables to the DAOS server**
-
-Empty by default.
-
-env\_vars:
-
-ABT\_MAX\_NUM\_XSTREAMS=100
-
-CRT\_TIMEOUT=30
-
-**Define a pre-configured mountpoint for storage class memory to be used
-by this server.**
-
-Path should be unique to server instance (can use different subdirs).
-
-Either the specified directory or its parent must be a mount point.
-
-scm\_mount: /mnt/daos/1
-
-**Backend block device type. Force a SPDK driver to be used by this
-server instance.**
-
-Options are:
-
-"nvme" for NVMe SSDs (preferred option)
-
-"malloc" to emulate a NVMe SSD with memory
-
-"file" to emulate a NVMe SSD with a regular file
-
-"kdev" to use a kernel block device
-
-Immutable after reformat.
-
-default: nvme
-
-bdev\_class: nvme
-
-**Backend block device configuration to be used by this server
-instance.**
-
-Immutable after reformat.
-
-When bdev\_class is set to nvme, bdev\_list is the list of unique NVMe
-IDs that should be different across different server instance.
-
-Colons replaced by dots in PCI identifiers.
-
-bdev\_list: \["0000:81:00.0"\] \# generate regular nvme.conf
-
-**Rank to be assigned as identifier for server.**
-
-Immutable after reformat.
-
-Optional parameter, will be auto generated if not supplied.
-
-rank: 1
-
-**Targets (and service thread related parameters).**
-
-Targets (VOS) represent the count of storage targets per data plane
-server starting at core offset specified by first_core.
-
-Immutable after reformat.
-
-targets: 20
-
-
-Count of offload/helper xstreams per target. (allowed values: 0-2)
-
-Immutable after reformat.
-
-default: 2
-
-nr_xs_helpers: 0
-
-
-Offset of the first core for service xstreams.
-
-Immutable after reformat.
-
-default: 0
-
-first_core: 21
-
-**Use specific OFI interfaces.**
-
-Specify the fabric network interface that will be used by this server.
-Optionally specify the fabric network interface port that will be used
-by this server but only if you have a specific need, this will normally
-be chosen automatically.
-
-fabric\_iface: qib0
-
-fabric\_iface\_port: 20000
-
-**Force specific debug mask (D\_LOG\_MASK) at start up time.**
-
-By default, just use the default debug mask used by DAOS. Mask specifies
-minimum level of message significance to pass to logger.
-
-default: ERR
-
-log\_mask: WARN
-
-**Force specific path for DAOS debug logs.**
-
-default: /tmp/daos.log
-
-log\_file: /tmp/daos\_server2.log
-
-**Pass specific environment variables to the DAOS server**
-
-Empty by default.
-
-env\_vars:
-
-ABT\_MAX\_NUM\_XSTREAMS=200
-
-CRT\_TIMEOUT=100
-
-**Define a pre-configured mountpoint for storage class memory to be used
-by this server.**
-
-Path should be unique to server instance (can use different subdirs).
-
-scm\_mount: /mnt/daos/2
-
-**Backend block device type. Force a SPDK driver to be used by this
-server instance.**
-
-Options are:
-
-"nvme" for NVMe SSDs (preferred option)
-
-"malloc" to emulate a NVMe SSD with memory
-
-"file" to emulate a NVMe SSD with a regular file
-
-"kdev" to use a kernel block device
-
-Immutable after reformat.
-
-When bdev\_class is set to malloc, bdev\_number is the number of devices
-to allocate and bdev\_size is the size in GB of each LUN/device.
-
-\# bdev\_class: malloc
-
-\# bdev\_number: 1
-
-\# bdev\_size: 4
-
-When bdev\_class is set to file, bdev\_list is the list of file paths
-that will be used to emulate NVMe SSDs. The size of each file is
-specified by
-
-bdev\_size in GB unit.
-
-bdev\_class: file
-
-bdev\_list: \[/tmp/daos-bdev1,/tmp/daos-bdev2\]
-
-bdev\_size: 16
-
-When bdev\_class is set to kdev, bdev\_list is the list of unique kernel
-block devices that should be different across different server instance.
-
-bdev\_class: kdev
-
-bdev\_list: \[/dev/sdc,/dev/sdd\]
+Refer to the example configuration file ([daos_server.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)) for latest information and examples.
 
 ## Server Startup
 
@@ -862,7 +434,7 @@ As stated above, only orterun(1) is currently supported.
 
 The list of storage nodes can be specified in a host file (referred to
 as \${hostfile}). The DAOS server and the application can be started
-separately but must share a URI file (referred as \${urifile}) to
+separately but must share a URI file (referred to as \${urifile}) to
 connect. The \${urifile} is generated by orterun using (--report-uri
 filename) at the server and used at the application with (--ompi-server
 file:filename). Also, the DAOS server must be started with the
@@ -870,18 +442,18 @@ file:filename). Also, the DAOS server must be started with the
 man page for additional options.
 
 To start the DAOS server, run:
-
+```
 orterun -np &lt;num\_servers&gt; --hostfile \${hostfile}
 --enable-recovery --report-uri \${urifile} daos\_server -i
-
+```
 The --enable-recovery is required for fault tolerance to guarantee that
 the fault of one server does not cause the others to be stopped.
 
-Hostfile used here is the same as the ones used by Open MPI. See the
+The hostfile used here is the same as the ones used by Open MPI. See the
 mpirun documentation[^3] for additional details.
 
 The --allow-run-as-root option can be added to the command line to
-allow the daos\_server to run with root priviledges on each storage
+allow the daos\_server to run with root privileges on each storage
 nodes (for example when needing to perform privileged tasks relating
 to storage format).
 
@@ -947,12 +519,12 @@ DAOS I/O server (v0.0.2) process 23680 started on rank 0 (out of 2) with 1 targe
 ### Systemd Integration
 
 Systemd support for daos_server is still experimental as it will start the
-daos_server and daos_io_server components in PMIXless mode which is still in
+daos_server and daos_io_server components in PMIXless mode, which is still in
 development.
 
 DAOS Server can be started as a systemd service. The DAOS Server
 unit file is installed in the correct location when installing from RPMs.
-If you wish to use systemd with a development build you must copy the service
+If you wish to use systemd with a development build, you must copy the service
 file from utils/systemd to /usr/lib/systemd/system. Once the file is copied
 modify the ExecStart line to point to your in tree daos_server binary.
 
@@ -970,7 +542,7 @@ To check the component status use:
 systemctl status daos-server
 ```
 
-If DAOS Server failed to start check the logs with:
+If DAOS Server failed to start, check the logs with:
 
 ```bash
 journalctl --unit daos-server
@@ -993,7 +565,7 @@ components:
 
 - storage subsystems for handling interactions with NVM devices
 
-- SPDK environment using a shared memory segment identifier causing
+- SPDK environment using a shared memory segment identifier, causing
 the process to act as a primary in multi-process mode. From there,
 the main process can respond to requests over the client API for
 information through the SPDK interface.
@@ -1001,9 +573,9 @@ information through the SPDK interface.
 The daos\_shell is a transitory tool used to exercise the management api
 and can be used to verify that the DAOS servers are up and running. It
 is to be run as a standard, unprivileged user as follows:
-
+```
 \$ daos\_shell -l storagenode1:10001,storagenode2:10001 storage scan
-
+```
 "storagenode" should be replaced with the actual hostname of each
 storage node. This command will show whether the DAOS server is properly
 running and initialized on each storage node. A more comprehensive and
@@ -1026,17 +598,17 @@ modules and NVMe SSDs installed and prepared.
 
 #### SCM Format
 
-When the command is run, pmem kernel devices created on SCM/DCPM regions are
+When the command is run, the pmem kernel devices created on SCM/DCPM regions are
 formatted and mounted based on the parameters provided in the server config file.
 
-- `scm_mount` specifies location of the mountpoint to create.
+- `scm_mount` specifies the location of the mountpoint to create.
 - `scm_class` can be set to `ram` to use a tmpfs in the situation that no SCM/DCPM
-is available (scm_size dictates size of tmpfs in GB), when set to `dcpm` the device
+is available (scm_size dictates the size of tmpfs in GB), when set to `dcpm` the device
 specified under `scm_list` will be mounted at `scm_mount` path.
 
 #### NVMe Format
 
-When the command is run, NVMe SSDs are formatted and setup to be used by DAOS
+When the command is run, NVMe SSDs are formatted and set up to be used by DAOS
 based on the parameters provided in the server config file.
 
 `bdev_class` can be set to `nvme` to use actual NVMe devices with SPDK for DAOS
@@ -1051,7 +623,7 @@ file `scm_mount` parameter should be mounted and should contain a file named
 `daos_nvme.conf`.
 The file should describe the devices with PCI addresses as listed in the
 `bdev_list` parameter of the server config file.
-The presence and contents of the file indicates that the specified NVMe SSDs have
+The presence and contents of the file indicate that the specified NVMe SSDs have
 been configured correctly for use with DAOS.
 
 The contents of the NVMe SSDs listed in the server configuration file `bdev_list`
@@ -1083,14 +655,14 @@ storage on the server node (skipping confirmation) on devices specified
 in the server configuration file, then writes the superblock and
 starts the data plane.
 
-![Server format diagram](/doc/graph/server_format_flow.png)
+![../graph/server_format_flow.png](../graph/server_format_flow.png "Server Format Diagram")
 
 Typically an administrator will perform the following tasks:
 
 1. Prepare NVMe and SCM Storage
     - `sudo daos_server [<app_opts>] storage prepare [<cmd_opts>]`
-    [NVMe details](#nvme-prep)
-    [SCM details](#scm-prep)
+    [NVMe details](#nvme-preparation)
+    [SCM details](#scm-preparation)
 
 2. Scan Storage
     - `sudo daos_server [<app_opts>] storage scan [<cmd_opts>]`
@@ -1110,7 +682,7 @@ Typically an administrator will perform the following tasks:
     - burn-in testing [details](#storage-burn-in)
 
 6. Amend Server config file (adjust based on the results of storage provisioning,
-requires subsequent restart of `daos_server`)
+requires a subsequent restart of `daos_server`)
     - `vim <daos>/utils/config/examples/daos_server_sockets.yml`
     [details](#server-configuration)
     - populate the `scm_*` and `bdev_*` parameters as used in format (below)
@@ -1162,7 +734,7 @@ The DAOS security framework relies on certificates to authenticate
 administrators. The security infrastructure is currently under
 development and will be delivered in DAOS v1.0. Initial support for certificates
 has been added to DAOS and can be disabled either via the command line or in the
-DAOS Agent configuration file. Currently the easiest way to disable certificate
+DAOS Agent configuration file. Currently, the easiest way to disable certificate
 support is to pass the -i flag to daos\_agent.
 
 ### Agent Configuration File
@@ -1174,98 +746,27 @@ on the command line (`daos_agent -h` for usage) or default location
 
 Parameter descriptions are specified in [daos_agent.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_agent.yml).
 
-Any option supplied to `daos_agent` as a commandline option or flag will
+Any option supplied to `daos_agent` as a command line option or flag will
 take precedence over equivalent configuration file parameter.
 
 For convenience, active parsed config values are written to a temporary
-file for reference, location will be written to the log.
+file for reference, and the location will be written to the log.
 
-The following section lists the format, options, defaults and
+The following section lists the format, options, defaults, and
 descriptions available in the configuration file.
 
 #### Configuration File Options
 
-This section lists the default empty configuration listing all the
+The example configuration file lists the default empty configuration listing all the
 options (living documentation of the config file). Live examples are
 available at
 <https://github.com/daos-stack/daos/tree/master/utils/config>
 
-The Location of this configuration file is determined by first checking
+The location of this configuration file is determined by first checking
 for the path specified through the -o option of the daos\_agent command
 line. Otherwise, /etc/daos\_agent.conf is used.
 
-**Name associated with the DAOS system**
-
-Immutable after reformat.
-
-name: daos
-
-**Access points**
-
-To operate, DAOS will need a quorum of access point nodes to be
-available.
-
-Immutable after reformat.
-
-Hosts can be specified with or without port, default port below assumed
-if not specified.
-
-default: hostname of this node at port 10000 for local testing
-
-access\_points:
-\['hostname1:10001','hostname2:10001','hostname3:10001'\]
-
-access\_points: \[hostname1,hostname2,hostname3\]
-
-**Force default port**
-
-Force different port number to connect to access points.
-
-default: 10000
-
-port: 10001
-
-**Transport Certificate Credentials**
-
-Certificate support for securing the administrative channel for the DAOS
-components is specified in a key called transport_config: It contains the
-following keys with these default values.
-
-
-***Allow Insecure Communications***
-
-default: false
-
-allow_insecure: false
-
-***Path to Root Certificate***
-
-default: ./.daos/daosCA.crt
-
-ca\_cert: ./.daos/daosCA.crt
-
-***Path to server certificate and key file***
-
-default: ./.daos/daos\_agent.{crt,key}
-
-cert: ./.daos/daos\_agent.crt
-
-key: ./.daos/daos\_agent.key
-
-**Use the given directory for creating unix domain sockets**
-
-DAOS Agent uses unix domain sockets for communication with other system
-components. This setting is the base location to place the sockets in.
-
-default: /var/run/daos\_agent
-
-runtime\_dir: ./.daos/daos\_agent
-
-**Force specific path for DAOS Agent debug logs.**
-
-default: /tmp/daos_agent.log
-
-log\_file: /tmp/daos\_agent2.log
+Refer to the example configuration file ([daos_server.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)) for latest information and examples.
 
 ## Agent Startup
 
@@ -1281,13 +782,13 @@ To start the DAOS Agent from the command line, run:
 daos_agent -i
 ```
 
-Alternatively the DAOS Agent can be started as a systemd service. The DAOS Agent
+Alternatively, the DAOS Agent can be started as a systemd service. The DAOS Agent
 unit file is installed in the correct location when installing from RPMs.
-If you wish to use systemd with a development build you must copy the service
+If you wish to use systemd with a development build, you must copy the service
 file from utils/systemd to /usr/lib/systemd/system. Once the file is copied
 modify the ExecStart line to point to your in tree daos_agent binary.
 
-Once the service file is installed you can start daos_agent
+Once the service file is installed, you can start daos_agent
 with the following commands:
 
 ```bash
@@ -1313,7 +814,7 @@ To validate that the DAOS system is properly installed, the daos\_test
 suite can be executed. Ensure the DAOS Agent is configured and running before
 running daos\_test:
 
-[[]{#_Toc4574315 .anchor}]{#_Toc4572376 .anchor}orterun -np
+orterun -np
 &lt;num\_clients&gt; --hostfile \${hostfile} --ompi-server
 file:\${urifile} ./daos\_test
 

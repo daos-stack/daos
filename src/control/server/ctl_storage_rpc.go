@@ -86,8 +86,13 @@ func (c *StorageControlService) doScmPrepare(req *pb.PrepareScmReq) (resp *pb.Pr
 	resp = &pb.PrepareScmResp{}
 	msg := "Storage Prepare SCM"
 
-	needsReboot, pmemDevs, err := c.PrepareScm(PrepareScmRequest{Reset: req.GetReset_()},
-		types.ScmStateUnknown)
+	scmState, err := c.GetScmState()
+	if err != nil {
+		resp.State = newState(c.log, pb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg)
+		return
+	}
+
+	needsReboot, pmemDevs, err := c.PrepareScm(PrepareScmRequest{Reset: req.GetReset_()}, scmState)
 	if err != nil {
 		resp.State = newState(c.log, pb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg)
 		return
@@ -109,6 +114,8 @@ func (c *StorageControlService) doScmPrepare(req *pb.PrepareScmReq) (resp *pb.Pr
 func (c *StorageControlService) StoragePrepare(ctx context.Context, req *pb.StoragePrepareReq) (
 	*pb.StoragePrepareResp, error) {
 
+	c.log.Debug("received StoragePrepare RPC; proceeding to instance storage preparation")
+
 	resp := &pb.StoragePrepareResp{}
 
 	if req.Nvme != nil {
@@ -124,6 +131,8 @@ func (c *StorageControlService) StoragePrepare(ctx context.Context, req *pb.Stor
 // StorageScan discovers non-volatile storage hardware on node.
 func (c *StorageControlService) StorageScan(ctx context.Context, req *pb.StorageScanReq) (
 	*pb.StorageScanResp, error) {
+
+	c.log.Debug("received StorageScan RPC")
 
 	msg := "Storage Scan "
 	resp := new(pb.StorageScanResp)
@@ -160,6 +169,8 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *pb.Storage
 func (c *ControlService) doFormat(i *IOServerInstance, resp *pb.StorageFormatResp) error {
 	hasSuperblock := false
 
+	c.log.Infof("formatting storage for I/O server instance %d", i.Index)
+
 	needsScmFormat, err := i.NeedsScmFormat()
 	if err != nil {
 		return errors.Wrap(err, "unable to check storage formatting")
@@ -179,19 +190,46 @@ func (c *ControlService) doFormat(i *IOServerInstance, resp *pb.StorageFormatRes
 		c.scm.formatted = true
 	}
 
+	var formatFailed bool
+
 	// scaffolding
-	ctrlrResults := types.NvmeControllerResults{}
-	c.nvme.Format(i.runner.Config.Storage.Bdev, &ctrlrResults)
-	resp.Crets = ctrlrResults
-
-	mountResults := types.ScmMountResults{}
-	c.scm.Format(i.runner.Config.Storage.SCM, &mountResults)
-	resp.Mrets = mountResults
-
-	if !hasSuperblock && c.nvme.formatted && c.scm.formatted {
-		c.log.Debugf("storage format successful on server %d\n", i.runner.Config.Index)
+	bdevConfig, err := i.bdevConfig()
+	if err != nil {
+		return err
 	}
-	i.NotifyStorageReady()
+	ctrlrResults := types.NvmeControllerResults{}
+	// A config with SCM and no block devices is valid, apparently.
+	if len(bdevConfig.DeviceList) > 0 {
+		c.nvme.Format(bdevConfig, &ctrlrResults)
+		resp.Crets = ctrlrResults
+		formatFailed = ctrlrResults.HasErrors()
+	}
+
+	scmConfig, err := i.scmConfig()
+	if err != nil {
+		return err
+	}
+	mountResults := types.ScmMountResults{}
+	c.scm.Format(scmConfig, &mountResults)
+	resp.Mrets = mountResults
+	formatFailed = formatFailed || mountResults.HasErrors()
+
+	c.log.Debugf("nvme formatted: %t, scm formatted: %t, has superblock: %t",
+		c.nvme.formatted, c.scm.formatted, hasSuperblock)
+
+	if c.nvme.formatted && c.scm.formatted {
+		// Use this an indicator for whether storage format was requested and completed
+		// vs. storage was already formatted and skipped.
+		// TODO: Rework this logic to be less convoluted.
+		if !hasSuperblock {
+			c.log.Infof("storage format successful on server %d\n", i.runner.Config.Index)
+		}
+	}
+
+	// Only notify that storage is ready if there were no errors.
+	if !formatFailed {
+		i.NotifyStorageReady()
+	}
 
 	return nil
 }
@@ -206,6 +244,8 @@ func (c *ControlService) doFormat(i *IOServerInstance, resp *pb.StorageFormatRes
 // and nvme controllers.
 func (c *ControlService) StorageFormat(req *pb.StorageFormatReq, stream pb.MgmtCtl_StorageFormatServer) error {
 	resp := new(pb.StorageFormatResp)
+
+	c.log.Debug("received StorageFormat RPC; proceeding to instance storage format")
 
 	// TODO: We may want to ease this restriction at some point, but having this
 	// here for now should help to cut down on shenanigans which might result
@@ -236,6 +276,8 @@ func (c *ControlService) StorageFormat(req *pb.StorageFormatReq, stream pb.MgmtC
 // and nvme controllers.
 func (c *ControlService) StorageUpdate(req *pb.StorageUpdateReq, stream pb.MgmtCtl_StorageUpdateServer) error {
 	resp := new(pb.StorageUpdateResp)
+
+	c.log.Debug("received StorageUpdate RPC; proceeding to instance storage update")
 
 	// TODO: We may want to ease this restriction at some point, but having this
 	// here for now should help to cut down on shenanigans which might result
@@ -270,6 +312,8 @@ func (c *ControlService) StorageUpdate(req *pb.StorageUpdateReq, stream pb.MgmtC
 // Send response containing multiple results of burn-in operations on scm mounts
 // and nvme controllers.
 func (c *ControlService) StorageBurnIn(req *pb.StorageBurnInReq, stream pb.MgmtCtl_StorageBurnInServer) error {
+
+	c.log.Debug("received StorageBurnIn RPC; proceeding to instance storage burnin")
 
 	return errors.New("StorageBurnIn not implemented")
 	//	for i := range c.config.Servers {

@@ -73,7 +73,13 @@ func uncommentServerConfig(t *testing.T, outFile string) {
 	}
 }
 
-// defaultMoc2kConfig returns configuration populated from blank config file
+// emptyMockConfig returns unpopulated configuration with a default mock
+// external interfacing implementation.
+func emptyMockConfig(t *testing.T) *Configuration {
+	return newDefaultConfiguration(defaultMockExt())
+}
+
+// defaultMockConfig returns configuration populated from blank config file
 // with mocked external interface.
 func defaultMockConfig(t *testing.T) *Configuration {
 	return mockConfigFromFile(t, defaultMockExt(), socketsExample)

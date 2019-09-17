@@ -42,7 +42,7 @@ type storageScanCmd struct {
 }
 
 func (cmd *storageScanCmd) Execute(args []string) error {
-	svc, err := server.NewStorageControlService(cmd.log, server.NewConfiguration())
+	svc, err := server.DefaultStorageControlService(cmd.log, server.NewConfiguration())
 	if err != nil {
 		return errors.WithMessage(err, "failed to init ControlService")
 	}
@@ -100,16 +100,22 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		return err
 	}
 
-	svc, err := server.NewStorageControlService(cmd.log, server.NewConfiguration())
+	cfg := server.NewConfiguration()
+	svc, err := server.DefaultStorageControlService(cmd.log, cfg)
 	if err != nil {
-		return errors.WithMessage(err, "initialising ControlService")
+		return errors.WithMessage(err, "init control service")
 	}
 
-	cmd.log.Info("Preparing locally-attached storage...")
+	op := "Preparing"
+	if cmd.Reset {
+		op = "Resetting"
+	}
 
 	scanErrors := make([]error, 0, 2)
 
 	if prepNvme {
+		cmd.log.Info(op + " locally-attached NVMe storage...")
+
 		// Prepare NVMe access through SPDK
 		if err := svc.PrepareNvme(server.PrepareNvmeRequest{
 			HugePageCount: cmd.NrHugepages,
@@ -122,12 +128,14 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	}
 
 	if prepScm {
+		cmd.log.Info(op + " locally-attached SCM...")
+
 		state, err := svc.GetScmState()
 		if err != nil {
 			return concatErrors(scanErrors, err)
 		}
 
-		if err := cmd.CheckWarn(state); err != nil {
+		if err := cmd.CheckWarn(cmd.log, state); err != nil {
 			return concatErrors(scanErrors, err)
 		}
 

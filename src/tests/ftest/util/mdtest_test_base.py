@@ -28,12 +28,13 @@ import os
 from apricot import TestWithServers
 from test_utils import TestPool
 from mpio_utils import MpioUtils
-from mdtest_utils import MdtestCommand, MdtestFailed
+from mdtest_utils import MdtestCommand
+from command_utils import Mpirun, Orterun, CommandFailure
 
 
 class MdtestBase(TestWithServers):
-    """
-    Base mdtest class
+    """Base mdtest class.
+
     :avocado: recursive
     """
 
@@ -67,15 +68,7 @@ class MdtestBase(TestWithServers):
             super(MdtestBase, self).tearDown()
 
     def execute_mdtest(self):
-        """
-        Execute mdtest with optional overrides for mdtest flags
-        and object_class.
-        If specified the mdtest flags and mdtest daos object class parameters
-        will override the values read from the yaml file.
-        Args:
-            mdtest_flags (str, optional): mdtest flags. Defaults to None.
-            object_class (str, optional): daos object class. Defaults to None.
-        """
+        """Create a pool and execute Mdtest."""
         # Get the pool params
         self.pool = TestPool(self.context, self.log)
         self.pool.get_params(self)
@@ -90,27 +83,34 @@ class MdtestBase(TestWithServers):
 
     def get_job_manager_command(self, manager):
         """Get the MPI job manager command for Mdtest.
+
         Returns:
-            str: the path for the mpi job manager command
+            JobManager: the object for the mpi job manager command
+
         """
         # Initialize MpioUtils if mdtest needs to be run using mpich
         if manager == "MPICH":
             mpio_util = MpioUtils()
             if mpio_util.mpich_installed(self.hostlist_clients) is False:
                 self.fail("Exiting Test: Mpich not installed")
-            return os.path.join(mpio_util.mpichinstall, "bin", "mpirun")
-        return self.orterun
+            path = os.path.join(mpio_util.mpichinstall, "bin")
+            return Mpirun(self.mdtest_cmd, path)
+
+        path = os.path.join(self.ompi_prefix, "bin")
+        return Orterun(self.mdtest_cmd, path)
 
     def run_mdtest(self, manager, processes):
         """Run the Mdtest command.
+
         Args:
             manager (str): mpi job manager command
             processes (int): number of host processes
         """
+        env = self.mdtest_cmd.get_default_env(
+            str(manager), self.tmp, self.client_log)
+        manager.setup_command(env, self.hostfile_clients, processes)
         try:
-            self.mdtest_cmd.run(
-                manager, self.tmp, processes, self.hostfile_clients,
-                client_log=self.client_log)
-        except MdtestFailed as error:
+            manager.run()
+        except CommandFailure as error:
             self.log.error("Mdtest Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
