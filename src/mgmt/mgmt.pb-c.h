@@ -243,13 +243,13 @@ struct _Mgmt__MgmtSvc_Service
                const Mgmt__JoinReq *input,
                Mgmt__JoinResp_Closure closure,
                void *closure_data);
-  void (*create_pool)(Mgmt__MgmtSvc_Service *service,
-                      const Mgmt__CreatePoolReq *input,
-                      Mgmt__CreatePoolResp_Closure closure,
+  void (*pool_create)(Mgmt__MgmtSvc_Service *service,
+                      const Mgmt__PoolCreateReq *input,
+                      Mgmt__PoolCreateResp_Closure closure,
                       void *closure_data);
-  void (*destroy_pool)(Mgmt__MgmtSvc_Service *service,
-                       const Mgmt__DestroyPoolReq *input,
-                       Mgmt__DestroyPoolResp_Closure closure,
+  void (*pool_destroy)(Mgmt__MgmtSvc_Service *service,
+                       const Mgmt__PoolDestroyReq *input,
+                       Mgmt__PoolDestroyResp_Closure closure,
                        void *closure_data);
   void (*get_attach_info)(Mgmt__MgmtSvc_Service *service,
                           const Mgmt__GetAttachInfoReq *input,
@@ -276,8 +276,8 @@ void mgmt__mgmt_svc__init (Mgmt__MgmtSvc_Service *service,
 #define MGMT__MGMT_SVC__INIT(function_prefix__) \
     { MGMT__MGMT_SVC__BASE_INIT,\
       function_prefix__ ## join,\
-      function_prefix__ ## create_pool,\
-      function_prefix__ ## destroy_pool,\
+      function_prefix__ ## pool_create,\
+      function_prefix__ ## pool_destroy,\
       function_prefix__ ## get_attach_info,\
       function_prefix__ ## bio_health_query,\
       function_prefix__ ## smd_list_devs,\
@@ -286,13 +286,13 @@ void mgmt__mgmt_svc__join(ProtobufCService *service,
                           const Mgmt__JoinReq *input,
                           Mgmt__JoinResp_Closure closure,
                           void *closure_data);
-void mgmt__mgmt_svc__create_pool(ProtobufCService *service,
-                                 const Mgmt__CreatePoolReq *input,
-                                 Mgmt__CreatePoolResp_Closure closure,
+void mgmt__mgmt_svc__pool_create(ProtobufCService *service,
+                                 const Mgmt__PoolCreateReq *input,
+                                 Mgmt__PoolCreateResp_Closure closure,
                                  void *closure_data);
-void mgmt__mgmt_svc__destroy_pool(ProtobufCService *service,
-                                  const Mgmt__DestroyPoolReq *input,
-                                  Mgmt__DestroyPoolResp_Closure closure,
+void mgmt__mgmt_svc__pool_destroy(ProtobufCService *service,
+                                  const Mgmt__PoolDestroyReq *input,
+                                  Mgmt__PoolDestroyResp_Closure closure,
                                   void *closure_data);
 void mgmt__mgmt_svc__get_attach_info(ProtobufCService *service,
                                      const Mgmt__GetAttachInfoReq *input,

@@ -246,8 +246,8 @@ type Connect interface {
 	//StorageBurnIn() (ClientCtrlrMap, ClientModuleMap)
 	ListFeatures() ClientFeatureMap
 	KillRank(uuid string, rank uint32) ResultMap
-	CreatePool(*pb.CreatePoolReq) ResultMap
-	DestroyPool(*pb.DestroyPoolReq) ResultMap
+	PoolCreate(*PoolCreateReq) (*PoolCreateResp, error)
+	PoolDestroy(*PoolDestroyReq) error
 	BioHealthQuery(*pb.BioHealthReq) ResultQueryMap
 	SmdListDevs(*pb.SmdDevReq) ResultSmdMap
 }

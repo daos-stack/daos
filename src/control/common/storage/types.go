@@ -133,6 +133,15 @@ type NvmeHealthstats []*pb.NvmeController_Health
 // representing operation results on a number of NVMe controllers.
 type NvmeControllerResults []*pb.NvmeControllerResult
 
+func (ncr NvmeControllerResults) HasErrors() bool {
+	for _, res := range ncr {
+		if res.State.Error != "" {
+			return true
+		}
+	}
+	return false
+}
+
 func (ncr NvmeControllerResults) String() string {
 	var buf bytes.Buffer
 
@@ -207,6 +216,15 @@ func (sm ScmMounts) String() string {
 // ScmMountResults is an alias for protobuf ScmMountResult message slice
 // representing operation results on a number of SCM mounts.
 type ScmMountResults []*pb.ScmMountResult
+
+func (smr ScmMountResults) HasErrors() bool {
+	for _, res := range smr {
+		if res.State.Error != "" {
+			return true
+		}
+	}
+	return false
+}
 
 func (smr ScmMountResults) String() string {
 	var buf bytes.Buffer

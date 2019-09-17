@@ -239,16 +239,16 @@ func newMockMgmtCtlClient(
 
 type mockMgmtSvcClient struct{}
 
-func (m *mockMgmtSvcClient) CreatePool(ctx context.Context, req *pb.CreatePoolReq, o ...grpc.CallOption) (*pb.CreatePoolResp, error) {
+func (m *mockMgmtSvcClient) PoolCreate(ctx context.Context, req *pb.PoolCreateReq, o ...grpc.CallOption) (*pb.PoolCreateResp, error) {
 	// return successful pool creation results
 	// initialise with zero values indicating mgmt.CTRL_SUCCESS
-	return &pb.CreatePoolResp{}, nil
+	return &pb.PoolCreateResp{}, nil
 }
 
-func (m *mockMgmtSvcClient) DestroyPool(ctx context.Context, req *pb.DestroyPoolReq, o ...grpc.CallOption) (*pb.DestroyPoolResp, error) {
+func (m *mockMgmtSvcClient) PoolDestroy(ctx context.Context, req *pb.PoolDestroyReq, o ...grpc.CallOption) (*pb.PoolDestroyResp, error) {
 	// return successful pool destroy results
 	// initialise with zero values indicating mgmt.CTRL_SUCCESS
-	return &pb.DestroyPoolResp{}, nil
+	return &pb.PoolDestroyResp{}, nil
 }
 
 func (m *mockMgmtSvcClient) BioHealthQuery(

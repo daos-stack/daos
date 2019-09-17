@@ -31,6 +31,8 @@ typedef struct {
 	char pad[256];
 } vector_t;
 
+typedef void (*vector_destroy_cb)(void *arg);
+
 /* Initialize a vector of fixed sized entries.
  * \param vector[in, out] The vector to initialize
  * \param sizeof_entry[in] size of each entry.
@@ -38,7 +40,8 @@ typedef struct {
  *                        0 for no maximum
  * \retval -DER_SUCCESS on success
  */
-int vector_init(vector_t *vector, int sizeof_entry, int max_entries);
+int vector_init(vector_t *vector, int sizeof_entry, int max_entries,
+		vector_destroy_cb destroy_cb);
 
 /* Destroy a vector
  * \param vector[in] The vector to destroy

@@ -6,7 +6,6 @@ hosts:
 timeout: 200
 server_config:
    name: daos_server
-   targets: 1
 pool:
   mode: 511
   name: daos_server
