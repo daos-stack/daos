@@ -28,7 +28,7 @@ import time
 from apricot import TestWithServers
 from ior_utils import IorCommand
 import slurm_utils
-from test_utils import TestPool
+from test_utils import TestPool, TestContainer
 from ClusterShell.NodeSet import NodeSet
 from avocado.utils import process
 import socket
@@ -79,16 +79,15 @@ class Soak(TestWithServers):
         for pool_name in pools:
             path = "/run/" + pool_name + "/"
             # Create a pool
-            pool = TestPool(self.context, self.log)
-            pool.get_params(self, path)
-            pool.create()
-            self.log.info("Valid Pool UUID is %s", pool.uuid)
+            pool_obj_list.append(TestPool(self.context, self.log))
+            pool_obj_list[-1].get_params(self, path)
+            pool_obj_list[-1].create()
+            self.log.info("Valid Pool UUID is %s", pool_obj_list[-1].uuid)
 
             # Check that the pool was created
             self.assertTrue(
-                pool.check_files(self.hostlist_servers),
+                pool_obj_list[-1].check_files(self.hostlist_servers),
                 "Pool data not detected on servers")
-            pool_obj_list.append(pool)
         return pool_obj_list
 
     def destroy_pool(self, pool):
@@ -164,11 +163,12 @@ class Soak(TestWithServers):
                             "MPI_LIB": "\"\"",
                             "DAOS_SVCL": str(ior_cmd.daos_svcl.value),
                             "DAOS_SINGLETON_CLI": 1,
-                            "FI_PSM2_DISCONNECT": 1,
+                            "FI_PSM2_DISCONNECT": 1
                         }
                         exports.extend(
                             ["{}={}".format(
                                 key, val) for key, val in env.items()])
+                    # exports.extend(["FI_PSM2_DISCONNECT=1"])
                     cmd = "srun -l --mpi=pmi2 --export={} {}".format(
                         ",".join(exports), ior_cmd)
                     command.append(cmd)
@@ -249,7 +249,7 @@ class Soak(TestWithServers):
                             "ntasks": num_tasks,
                             "time": job_time,
                             "partition": self.partition_clients,
-                            "exclude": self.test_node[0]}
+                            "exclude": NodeSet.fromlist(self.hostlist_servers)}
                     script = slurm_utils.write_slurm_script(
                         self.rem_pass_dir, job_name, output, nodesperjob,
                         [cmd], sbatch)
@@ -404,7 +404,7 @@ class Soak(TestWithServers):
             self.soak_results = {}
         return job_id_list
 
-    def execute_soak_test(self, test_param, pools):
+    def execute_jobs(self, test_param, pools):
         """Execute the overall soak test.
 
         Args:
@@ -434,6 +434,61 @@ class Soak(TestWithServers):
         if len(self.failed_job_id_list) > 0:
             raise SoakTestError("<<FAILED:  Soak {} >>".format(self.test_name))
 
+    def run_soak(self, test_param):
+        """
+
+        Args:
+            test_param (str): test_params from yaml file
+
+        """
+        pool_list = self.params.get("poollist", test_param + "*")
+        self.test_timeout = self.params.get("test_timeout", test_param)
+        self.job_id_list = []
+        start_time = time.time()
+
+        rank = self.params.get("rank", "/run/container_reserved/*")
+        obj_class = self.params.get(
+            "object_class", "/run/container_reserved/*")
+
+        # Create the reserved pool with data
+        self.pool = self.create_pool(["pool_reserved"])
+        self.pool[0].connect()
+        container = TestContainer(self.pool[0])
+        container.get_params(self, "/run/container_reserved/")
+        container.create()
+        container.write_objects(rank, obj_class)
+
+        while time.time() < start_time + self.test_timeout:
+            print("<<Soak1 PASS {}: time until done {}>>".format(
+                self.loop, (start_time + self.test_timeout - time.time())))
+            # Create all specified pools
+            self.pool_obj_list = self.create_pool(pool_list)
+            try:
+                self.execute_jobs(test_param, self.pool_obj_list)
+            except SoakTestError as error:
+                self.fail(error)
+            for pool in self.pool_obj_list:
+                pool.destroy(1)
+            self.loop += 1
+            if "smoke" in self.test_name:
+                break
+        # Check that the reserve pool is still allocated
+        self.assertTrue(
+                self.pool[0].check_files(self.hostlist_servers),
+                "Pool data not detected on servers")
+        # Verify the data after soak is done
+        self.assertTrue(
+                container.read_objects(),
+                "Data verification error on reserved pool"
+                "after SOAK completed")
+        self.assertTrue(
+                container.close(),
+                "Error closing container on reserved pool"
+                "after soak completed")
+        self.assertTrue(
+                self.pool[0].destroy(1),
+                "Error destroying reserved pool after soak completed")
+
     def setUp(self):
         """Define test setup to be done."""
         print("<<setUp Started>> at {}".format(time.ctime()))
@@ -447,14 +502,21 @@ class Soak(TestWithServers):
             raise SoakTestError(
                 "<<FAILED: Partition is not correctly setup for daos "
                 "slurm partition>>")
-
-        # include test node for log cleanup; remove from client list
-        self.test_node = [socket.gethostname().split('.', 1)[0]]
-        if self.test_node[0] in self.hostlist_clients:
-            self.hostlist_clients.remove(self.test_node[0])
-            self.log.info(
+        # Check if the server nodes are in the client list;
+        # this will happen when only one partition is specified
+        for host_server in self.hostlist_servers:
+            if host_server in self.hostlist_clients:
+                self.hostlist_clients.remove(host_server)
+        self.log.info(
                 "<<Updated hostlist_clients %s >>", self.hostlist_clients)
-        self.node_list = self.hostlist_clients + self.test_node
+        # # include test node for log cleanup; remove from client list
+        # self.test_node = [socket.gethostname().split('.', 1)[0]]
+        # if self.test_node[0] in self.hostlist_clients:
+        #     self.hostlist_clients.remove(self.test_node[0])
+        #     self.log.info(
+        #         "<<Updated hostlist_clients %s >>", self.hostlist_clients)
+        # self.node_list = self.hostlist_clients + self.test_node
+        self.node_list = self.hostlist_clients
 
         # Setup logging directories for soak logfiles
         # self.output dir is an avocado directory .../data/
@@ -474,20 +536,23 @@ class Soak(TestWithServers):
         """Define tearDown and clear any left over jobs in squeue."""
         print("<<tearDown Started>> at {}".format(time.ctime()))
         # clear out any jobs in squeue;
-        try:
-            if len(self.failed_job_id_list) > 0:
-                print("<<Cancel jobs in queue with ids {} >>".format(
-                    self.failed_job_id_list))
-                for job_id in self.failed_job_id_list:
-                    slurm_utils.cancel_jobs(job_id)
-        finally:
-            # One last attempt to copy any logfiles from client nodes
-            status = self.remote_copy(
-                self.node_list, self.rem_pass_dir, self.outputsoakdir)
-            if not status:
-                self.log.info(
-                    "Some logfiles may not be available from client node")
-            super(Soak, self).tearDown()
+
+        if len(self.failed_job_id_list) > 0:
+            print("<<Cancel jobs in queue with ids {} >>".format(
+                self.failed_job_id_list))
+            for job_id in self.failed_job_id_list:
+                slurm_utils.cancel_jobs(job_id)
+        # One last attempt to copy any logfiles from client nodes
+        status = self.remote_copy(
+            self.node_list, self.rem_pass_dir, self.outputsoakdir)
+        if not status:
+            self.log.info(
+                "Some logfiles may not be available from client node")
+        # Attempt to destroy any pools that remain
+        if len(self.pool_obj_list) > 0:
+            for pool in self.pool_obj_list:
+                pool.destroy(1)
+        super(Soak, self).tearDown()
 
     def test_soak_smoke(self):
         """Run soak smoke.
@@ -500,26 +565,7 @@ class Soak(TestWithServers):
         :avocado: tags=soak,soak_smoke
         """
         test_param = "/run/smoke/"
-        pool_list = self.params.get("poollist", "/run/smoke/*")
-
-        self.test_timeout = self.params.get("test_timeout", test_param)
-        self.job_id_list = []
-
-        # Create the reserved pool
-        pool_res_obj = self.create_pool(["pool_reserved"])
-
-        # Create all specified pool for the test case
-        pool_obj_list = self.create_pool(pool_list)
-        try:
-            self.execute_soak_test(test_param, pool_obj_list)
-        except SoakTestError as error:
-            self.fail(error)
-        for pool in pool_obj_list:
-            pool.destroy(1)
-        # Check that the reserve pool is still allocated
-        self.assertTrue(
-                pool_res_obj[0].check_files(self.hostlist_servers),
-                "Pool data not detected on servers")
+        self.run_soak(test_param)
 
     def test_soak_ior_daos(self):
         """Run soak test with IOR -a daos.
@@ -533,31 +579,7 @@ class Soak(TestWithServers):
         :avocado: tags=soak,soak_ior,soak_ior_daos
         """
         test_param = "/run/soak_ior_daos/"
-        pool_list = self.params.get("poollist", "/run/soak_ior_daos/*")
-        self.test_timeout = self.params.get("test_timeout", test_param)
-        self.job_id_list = []
-        start_time = time.time()
-
-        # Create the reserved pool
-        pool_res_obj = self.create_pool(["pool_reserved"])
-        # TODO write data and check
-
-        while time.time() < start_time + self.test_timeout:
-            print("<<Soak1 PASS {}: time until done {}>>".format(
-                self.loop, (start_time + self.test_timeout - time.time())))
-            # Create all specified pools
-            pool_obj_list = self.create_pool(pool_list)
-            try:
-                self.execute_soak_test(test_param, pool_obj_list)
-            except SoakTestError as error:
-                self.fail(error)
-            for pool in pool_obj_list:
-                pool.destroy(1)
-            self.loop += 1
-        # Check that the reserve pool is still allocated
-        self.assertTrue(
-                pool_res_obj[0].check_files(self.hostlist_servers),
-                "Pool data not detected on servers")
+        self.run_soak(test_param)
 
     def test_soak_ior_mpiio(self):
         """Run soak test with IOR -a mpiio.
@@ -571,30 +593,7 @@ class Soak(TestWithServers):
         :avocado: tags=soak,soak_ior,soak_ior_mpiio
         """
         test_param = "/run/soak_ior_mpiio/"
-        pool_list = self.params.get("poollist", "/run/soak_ior_mpiio/*")
-        self.test_timeout = self.params.get("test_timeout", test_param)
-        self.job_id_list = []
-        start_time = time.time()
-
-        # Create the reserved pool
-        pool_res_obj = self.create_pool(["pool_reserved"])
-
-        while time.time() < start_time + self.test_timeout:
-            print("<<Soak1 PASS {}: time until done {}>>".format(
-                self.loop, (start_time + self.test_timeout - time.time())))
-            # Create all specified pools
-            pool_obj_list = self.create_pool(pool_list)
-            try:
-                self.execute_soak_test(test_param, pool_obj_list)
-            except SoakTestError as error:
-                self.fail(error)
-            for pool in pool_obj_list:
-                pool.destroy(1)
-            self.loop += 1
-        # Check that the reserve pool is still allocated
-        self.assertTrue(
-                pool_res_obj[0].check_files(self.hostlist_servers),
-                "Pool data not detected on servers")
+        self.run_soak(test_param)
 
     def test_soak_stress(self):
         """Run soak test with IOR -a mpiio.
@@ -608,27 +607,4 @@ class Soak(TestWithServers):
         :avocado: tags=soak,soak_stress
         """
         test_param = "/run/soak_stress/"
-        pool_list = self.params.get("poollist", "/run/soak_stress/*")
-        self.test_timeout = self.params.get("test_timeout", test_param)
-        self.job_id_list = []
-        start_time = time.time()
-
-        # Create the reserved pool
-        pool_res_obj = self.create_pool(["pool_reserved"])
-
-        while time.time() < start_time + self.test_timeout:
-            print("<<Soak1 PASS {}: time until done {}>>".format(
-                self.loop, (start_time + self.test_timeout - time.time())))
-            # Create all specified pools
-            pool_obj_list = self.create_pool(pool_list)
-            try:
-                self.execute_soak_test(test_param, pool_obj_list)
-            except SoakTestError as error:
-                self.fail(error)
-            for pool in pool_obj_list:
-                pool.destroy(1)
-            self.loop += 1
-        # Check that the reserve pool is still allocated
-        self.assertTrue(
-                pool_res_obj[0].check_files(self.hostlist_servers),
-                "Pool data not detected on servers")
+        self.run_soak(test_param)
