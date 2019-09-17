@@ -994,7 +994,7 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 	}
 
 	/** check if SB info exists */
-	if (iods[i].iod_size == 0) {
+	if (iods[0].iod_size == 0) {
 		D_ERROR("SB does not exist.\n");
 		D_GOTO(err, rc = ENOENT);
 	}
