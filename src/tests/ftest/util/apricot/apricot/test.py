@@ -38,11 +38,8 @@ from ClusterShell.NodeSet import NodeSet, NodeSetParseError
 import fault_config_utils
 import agent_utils
 import server_utils
-import dmg_utils
 import write_host_file
 from daos_api import DaosContext, DaosLog
-from general_utils import poll_pattern
-from command_utils import CommandFailure
 
 CLIENT_LOG = "client_daos.log"
 
@@ -123,10 +120,9 @@ class TestWithoutServers(Test):
         self.prefix = build_paths['PREFIX']
         self.ompi_prefix = build_paths["OMPI_PREFIX"]
         self.tmp = os.path.join(self.prefix, 'tmp')
-        self.bin = os.path.join(self.prefix, 'bin')
-        self.daos_test = os.path.join(self.bin, 'daos_test')
+        self.daos_test = os.path.join(self.prefix, 'bin', 'daos_test')
         self.orterun = os.path.join(self.ompi_prefix, "bin", "orterun")
-        self.daosctl = os.path.join(self.bin, 'daosctl')
+        self.daosctl = os.path.join(self.prefix, 'bin', 'daosctl')
 
         # setup fault injection, this MUST be before API setup
         fault_list = self.params.get("fault_list", '/run/faults/*/')
@@ -229,13 +225,7 @@ class TestWithServers(TestWithoutServers):
 
         #Storage setup if requested in test input file
         if self.nvme_parameter == "nvme":
-            port = self.params.get("port", "/run/server_config/*")
-            if port is None:
-                port = "10001"
-            servers_with_ports = [
-                "{}:{}".format(host, port) for host in self.hostlist_servers]
-            dmg_hostlist = ",".join(servers_with_ports)
-            server_utils.clean_server(dmg_hostlist, scm=True)
+            server_utils.storage_prepare(self.hostlist_servers)
 
         # Create host files
         self.hostfile_servers = write_host_file.write_host_file(
@@ -253,30 +243,6 @@ class TestWithServers(TestWithoutServers):
         # Start the servers
         if self.setup_start_servers:
             self.start_servers()
-
-            if self.nvme_parameter == "nvme":
-                # Format servers
-                format_res = dmg_utils.storage_format(dmg_hostlist)
-                try:
-                    format_str = "Mntpoint:/mnt/daos Status:CTRL_SUCCESS"
-                    general_utils.poll_pattern(
-                        len(self.hostlist_servers), format_res, 300, format_str)
-                except CommandFailure as details:
-                    self.fail(details)
-
-                # Stop servers
-                server_utils.stop_server(hosts=self.hostlist_servers)
-
-                # Clean and prepare server storage
-                server_utils.clean_server(self.hostlist_servers)
-
-                # Run servers as Jenkins user
-                self.start_servers()
-
-                # Storage prep
-                res = dmg_utils.storage_prep(dmg_hostlist, nvme=True)
-                if res.exit_status != 0:
-                    self.fail(res.stderr)
 
     def tearDown(self):
         """Tear down after each test case."""
