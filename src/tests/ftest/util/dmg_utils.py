@@ -29,6 +29,7 @@ import getpass
 from command_utils import DaosCommand, CommandWithParameters
 from command_utils import BasicParameter, FormattedParameter
 from general_utils import get_file_path
+from avocado.utils import process
 
 
 class DmgCommand(DaosCommand):
