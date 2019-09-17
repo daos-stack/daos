@@ -37,6 +37,7 @@
 #include <daos/kv.h>
 #include <daos/btree.h>
 #include <daos/btree_class.h>
+#include <daos/placement.h>
 #include "task_internal.h"
 #include <pthread.h>
 
@@ -157,10 +158,15 @@ daos_init(void)
 		D_GOTO(out_hhash, rc);
 	}
 
+	/** set up placement */
+	rc = pl_init();
+	if (rc != 0)
+		goto out_eq;
+
 	/** set up management interface */
 	rc = dc_mgmt_init();
 	if (rc != 0)
-		D_GOTO(out_eq, rc);
+		D_GOTO(out_pl, rc);
 
 	/** set up pool */
 	rc = dc_pool_init();
@@ -193,6 +199,8 @@ out_pool:
 	dc_pool_fini();
 out_mgmt:
 	dc_mgmt_fini();
+out_pl:
+	pl_fini();
 out_eq:
 	daos_eq_lib_fini();
 out_hhash:
@@ -228,6 +236,7 @@ daos_fini(void)
 	dc_mgmt_fini();
 	dc_agent_fini();
 
+	pl_fini();
 	daos_hhash_fini();
 	daos_debug_fini();
 	module_initialized = false;
