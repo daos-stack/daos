@@ -406,6 +406,18 @@ int
 dfs_get_file_oh(dfs_obj_t *obj, daos_handle_t *oh);
 
 /**
+ * Retrieve the chunk size of a DFS file object.
+ *
+ * \param[in]	obj	Open object.
+ * \param[out]	chunk_size
+ *			Chunk size of array object.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_get_chunk_size(dfs_obj_t *obj, daos_size_t *chunk_size);
+
+/**
  * Retrieve Symlink value of object if it's a symlink. If the buffer size passed
  * in is not large enough, we copy up to size of the buffer, and update the size
  * to actual value size.

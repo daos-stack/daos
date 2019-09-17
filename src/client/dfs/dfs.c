@@ -1256,6 +1256,25 @@ dfs_get_file_oh(dfs_obj_t *obj, daos_handle_t *oh)
 }
 
 int
+dfs_get_chunk_size(dfs_obj_t *obj, daos_size_t *chunk_size)
+{
+	daos_size_t	cell_size;
+	int		rc;
+
+	if (obj == NULL || !S_ISREG(obj->mode))
+		return EINVAL;
+	if (chunk_size == NULL)
+		return EINVAL;
+
+	rc = daos_array_get_attr(obj->oh, chunk_size, &cell_size);
+	if (rc)
+		return daos_der2errno(rc);
+
+	D_ASSERT(cell_size == 1);
+	return 0;
+}
+
+int
 dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 {
 	dfs_obj_t		new_dir;
