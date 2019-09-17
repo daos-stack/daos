@@ -1121,7 +1121,6 @@ int
 dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 {
 	dfs_t			*dfs;
-	daos_handle_t		th;
 	daos_pool_info_t	pool_info = {};
 	daos_prop_t		*prop;
 	struct daos_prop_entry	*prop_entry;
@@ -1191,7 +1190,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	dfs->root.parent_oid.lo = RESERVED_LO;
 	dfs->root.parent_oid.hi = SB_HI;
 	daos_obj_generate_id(&dfs->root.parent_oid, 0, OC_RP_XSF, 0);
-	rc = open_dir(dfs, th, dfs->super_oh, amode, 0, &dfs->root);
+	rc = open_dir(dfs, DAOS_TX_NONE, dfs->super_oh, amode, 0, &dfs->root);
 	if (rc) {
 		D_ERROR("Failed to open root object\n");
 		D_GOTO(err_super, rc);
