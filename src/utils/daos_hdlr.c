@@ -171,10 +171,10 @@ cont_create_hdlr(struct cmd_args_s *ap)
 	if (rc != 0) {
 		fprintf(stderr, "failed to create container: %d\n", rc);
 		return rc;
-	} else {
-		fprintf(stdout, "Successfully created container "DF_UUIDF"\n",
-			DP_UUID(ap->c_uuid));
 	}
+
+	fprintf(stdout, "Successfully created container "DF_UUIDF"\n",
+		DP_UUID(ap->c_uuid));
 
 	return rc;
 }

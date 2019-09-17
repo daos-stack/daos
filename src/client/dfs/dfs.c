@@ -1204,7 +1204,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 			D_ERROR("daos_cont_alloc_oids() Failed (%d)\n", rc);
 			D_GOTO(err_root, rc = daos_der2errno(rc));
 		}
-		
+
 		/*
 		 * if this is the first time we allocate on this container,
 		 * account 0 for SB, 1 for root obj.

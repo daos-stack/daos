@@ -228,7 +228,7 @@ duns_link_path(const char *path, const char *sysname,
 	rc = daos_pool_disconnect(poh, NULL);
 	if (rc)
 		D_ERROR("daos_pool_disconnect() Failed (%d)\n", rc);
-		
+
 	return rc;
 
 err_pool:
