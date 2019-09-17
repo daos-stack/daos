@@ -4,12 +4,11 @@ This section will be expanded in a future revision.
 
 ## Network Performance
 
-Similar to the Lustre Network stack, the DAOS CART layer has the ability
-to validate and benchmark network communications in the same context as
+Similar to the Lustre Network stack, the DAOS CART layer can validate and benchmark network communications in the same context as
 an application and using the same networks/tuning options as regular
 DAOS. The CART selftest can run against the DAOS servers in a production
 environment in a non-destructive manner. CART selftest supports
-different message sizes, bulk transfers, multiple targets and the
+different message sizes, bulk transfers, multiple targets, and the
 following test scenarios:
 
 -   **Selftest client to servers** where selftest issues RPCs directly
