@@ -435,7 +435,7 @@ class Soak(TestWithServers):
             raise SoakTestError("<<FAILED:  Soak {} >>".format(self.test_name))
 
     def run_soak(self, test_param):
-        """
+        """Run the soak test specified by the test params.
 
         Args:
             test_param (str): test_params from yaml file
