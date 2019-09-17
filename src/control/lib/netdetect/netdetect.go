@@ -335,6 +335,7 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 	var i uint
 
 	if (node == nil) {
+		log.Debugf("getNUMASocketID error 1")
 		return 0, errors.New("invalid node provided")
 	}
 
@@ -353,6 +354,7 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 	// numa node cpuset until a match is found or we run out of candidates.
 	ancestorNode := C.hwloc_get_non_io_ancestor_obj(topology, node)
 	if ancestorNode == nil {
+		log.Debugf("getNUMASocketID error 2")
 		return 0, errors.New("unable to find non-io ancestor node for device")
 	}
 
@@ -362,12 +364,14 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 		numanode := C.hwloc_get_obj_by_depth(topology, C.uint(depth), C.uint(i))
 		if numanode == nil {
 			log.Debugf("hwloc_get_obj_by_depth for type HWLOC_OBJ_NUMANODE was nil.  Using NUMA 0\n")
+			log.Debugf("getNUMASocketID error 3")
 			return 0, nil
 		}
 		if C.hwloc_bitmap_isincluded(ancestorNode.allowed_cpuset, numanode.allowed_cpuset) != 0 {
 			return uint(numanode.logical_index), nil
 		}
 	}
+	log.Debugf("getNUMASocketID error 4")
 	return 0, errors.New("unable to determine the NUMA socket ID")
 }
 
@@ -478,10 +482,12 @@ func GetAffinityForDevice(deviceScanCfg DeviceScan) (DeviceAffinity, error) {
 	var nodeset *C.char
 
 	if deviceScanCfg.topology == nil {
+		log.Debugf("GetAffinityForDevice error 1")
 		return DeviceAffinity{}, errors.New("hwloc libary not yet initialized")
 	}
 
 	if deviceScanCfg.targetDevice == "" {
+		log.Debugf("GetAffinityForDevice error 2")
 		return DeviceAffinity{}, errors.New("no network device name specified")
 	}
 
@@ -508,31 +514,36 @@ func GetAffinityForDevice(deviceScanCfg DeviceScan) (DeviceAffinity, error) {
 	}
 
 	if (node == nil) {
+		log.Debugf("GetAffinityForDevice error 3")
 		return DeviceAffinity{}, errors.Errorf("unable to find a system device matching: %s", deviceScanCfg.targetDevice)
 	}
 
 	ancestorNode := C.hwloc_get_non_io_ancestor_obj(deviceScanCfg.topology, node)
 	if ancestorNode == nil {
+		log.Debugf("GetAffinityForDevice error 4")
 		return DeviceAffinity{}, errors.Errorf("unable to find an ancestor node in topology for device for device: %s", deviceScanCfg.targetDevice)
 	}
 
 	cpusetLen := C.hwloc_bitmap_asprintf(&cpuset, ancestorNode.cpuset)
 	if cpusetLen <= 0 {
+		log.Debugf("GetAffinityForDevice error 5")
 		return DeviceAffinity{}, errors.Errorf("there was no cpuset available for device: %s", deviceScanCfg.targetDevice)
 	}
 	defer C.free(unsafe.Pointer(cpuset))
 
 	nodesetLen := C.hwloc_bitmap_asprintf(&nodeset, ancestorNode.nodeset)
 	if nodesetLen <= 0 {
+		log.Debugf("GetAffinityForDevice error 6")
 		return DeviceAffinity{}, errors.Errorf("there was no nodeset available for device: %s", deviceScanCfg.targetDevice)
 	}
 	defer C.free(unsafe.Pointer(nodeset))
 
 	numaSocket, err := getNUMASocketID(deviceScanCfg.topology, node)
 	if err != nil {
+		log.Debugf("GetAffinityForDevice error 7 -- getNUMASocketID error")
 		return DeviceAffinity{}, err
 	}
-
+	log.Debugf("No issues with GetAffinityForDevice().  Found %s with %d\n",C.GoString(node.name), numaSocket)
 	return DeviceAffinity{
 		DeviceName: C.GoString(node.name),
 		CPUSet:     C.GoString(cpuset),
@@ -717,6 +728,7 @@ func ValidateNetworkConfig(provider string, device string, numaNode uint) (error
 	// In order to find a device and provider match, the libfabric device name must be converted into a system device name.
 	// GetAffinityForDevice() is used to provide this conversion.
 	for ; fi != nil; fi = fi.next {
+		log.Debugf("Searching provider list for devices and matching NUMA nodes..\n")
 		if fi.domain_attr == nil || fi.domain_attr.name == nil {
 			continue
 		}
@@ -724,10 +736,13 @@ func ValidateNetworkConfig(provider string, device string, numaNode uint) (error
 			continue
 		}
 		deviceScanCfg.targetDevice = C.GoString(fi.domain_attr.name)
+		log.Debugf("The target device is: %s", deviceScanCfg.targetDevice)
 		deviceAffinity, err := GetAffinityForDevice(deviceScanCfg)
 		if err != nil {
+			log.Debugf("An error occured from GetAffinityForDevice()")
 			continue
 		}
+		log.Debugf("GetAffinity returns NUMA node: %d", deviceAffinity.NUMANode)
 		if deviceAffinity.DeviceName == device {
 			log.Debugf("Device %s supports provider: %s", device, provider)
 			if deviceAffinity.NUMANode != numaNode {
@@ -738,6 +753,7 @@ func ValidateNetworkConfig(provider string, device string, numaNode uint) (error
 			log.Debugf("The NUMA node for device %s matches the provided value %d.  Network configuration is valid.", device, numaNode)
 			return nil
 		}
+		log.Debugf("Device name from libfabric: %s doesn't match what we want: %s\n", device,  deviceAffinity.DeviceName)
 	}
 	return errors.Errorf("Device %s does not support provider: %s", device, provider)
 }
