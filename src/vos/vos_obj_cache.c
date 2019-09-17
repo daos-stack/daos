@@ -225,19 +225,17 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 			obj->obj_epoch = epoch;
 
 		if (intent == DAOS_INTENT_KILL) {
-			if (!obj->obj_df) /* new object, nothing to delete */
-				D_GOTO(failed, rc = -DER_NONEXIST);
-
 			if (vos_obj_refcount(obj) > 2)
 				D_GOTO(failed, rc = -DER_BUSY);
 
 			/* no one else can hold it */
 			obj->obj_zombie = true;
 			vos_obj_evict(obj);
-			break; /* OK to delete */
+			if (obj->obj_df)
+				goto out; /* OK to delete */
 		}
 
-		if (!obj->obj_df) /* new object */
+		if (!obj->obj_df) /* newly cached object */
 			break;
 
 		if (obj->obj_zombie) {
@@ -306,6 +304,10 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	if (!obj->obj_df) {
 		D_DEBUG(DB_TRACE, "nonexistent obj "DF_UOID"\n",
 			DP_UOID(oid));
+		if (intent == DAOS_INTENT_KILL) {
+			vos_obj_release(obj);
+			D_GOTO(failed, rc = -DER_NONEXIST);
+		}
 		goto out;
 	}
 
