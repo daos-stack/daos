@@ -35,7 +35,7 @@ import errno
 import yaml
 import getpass
 
-from general_utils import pcmd, check_file_exists
+from general_utils import pcmd, check_file_exists, poll_pattern
 from command_utils import JobManager, DaosCommand, Orterun
 from command_utils import BasicParameter, FormattedParameter
 from avocado.utils import genio, process
@@ -151,6 +151,28 @@ class ServerManager(object):
                 raise ServerFailed(
                     "{}: {} missing directory {} for user {}.".format(
                         nodeset, host_type, directory, user))
+
+    def start(self, sudo=False, mode="normal"):
+        """Start the server in normal mode or maintanence mode.
+
+        Args:
+            mode (str, optional): If "normal", will start server and wait
+                for IO servers to be started. If maintanence mode selected,
+                will wait for server to ask for storage format and return
+                when it does. Defaults to "normal".
+        """
+        patterns = {
+            "mtnc": "needs format (mountpoint doesn't exist)",
+            "normal": "DAOS I/O server.*started",
+        }
+        # Run servers
+        result = self.orterun.run(sudo=sudo)
+
+        # Check for pattern
+        if mode == "mtnc":
+            poll_pattern(len(self.hosts), result, patterns[mode])
+        elif mode in patterns:
+            poll_pattern(len(self.hosts), result, patterns[mode])
 
     def kill(self, hosts):
         """Forcably kill any daos server processes running on hosts.
