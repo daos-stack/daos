@@ -134,9 +134,9 @@ PREFIX="%{?_prefix}"
 sed -i -e s/${BUILDROOT//\//\\/}[^\"]\*/${PREFIX//\//\\/}/g %{?buildroot}%{_prefix}/TESTING/.build_vars.*
 #mv %{?buildroot}%{_prefix}/lib{,64}
 #mv %{?buildroot}/{usr/,}etc
-mkdir -p %{?buildroot}/%{_exec_prefix}/lib/%{name}
+mkdir -p %{?buildroot}/%{_exec_prefix}/lib64/%{name}
 #cp -al VERSION %{?buildroot}/%{_exec_prefix}/lib/%{name}
-#mkdir -p %{?buildroot}/%{_exec_prefix}/lib/%{name}/certgen
+mkdir -p %{?buildroot}/%{_exec_prefix}/lib64/%{name}/certgen
 #mv %{?buildroot}%{_prefix}/{TESTING,lib/%{name}/}
 #cp -al ftest.sh src/tests/ftest %{?buildroot}%{daoshome}/TESTING
 #find %{?buildroot}%{daoshome}/TESTING/ftest -name \*.py[co] -print0 | xargs -r0 rm -f
@@ -174,8 +174,8 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 # TODO: this should move to %{_libdir}/daos/libplacement.so
 %{_libdir}/daos_srv/libplacement.so
 # Certificate generation files
-%{_libdir}/certgen/
-%{_libdir}/VERSION
+%{_libdir}/%{name}/certgen/
+%{_libdir}/%{name}/VERSION
 %doc
 
 %files server
