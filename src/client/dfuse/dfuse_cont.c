@@ -63,7 +63,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	uuid_copy(dfs->dfs_pool, parent->ie_dfs->dfs_pool);
 
 	if (create) {
-		rc = dfs_cont_create(parent->ie_dfs->dfs_poh, dfs->dfs_cont,,
+		rc = dfs_cont_create(parent->ie_dfs->dfs_poh, dfs->dfs_cont,
 				     NULL, NULL, NULL);
 		if (rc) {
 			DFUSE_LOG_ERROR("dfs_cont_create() failed: (%d)", rc);
