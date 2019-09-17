@@ -132,12 +132,12 @@ scons %{?no_smp_mflags}              \
 BUILDROOT="%{?buildroot}"
 PREFIX="%{?_prefix}"
 sed -i -e s/${BUILDROOT//\//\\/}[^\"]\*/${PREFIX//\//\\/}/g %{?buildroot}%{_prefix}/TESTING/.build_vars.*
-#mv %{?buildroot}%{_prefix}/lib{,64}
+mv %{?buildroot}%{_prefix}/lib{,64}
 #mv %{?buildroot}/{usr/,}etc
 mkdir -p %{?buildroot}/%{_exec_prefix}/lib/%{name}
-#cp -al VERSION %{?buildroot}/%{_exec_prefix}/lib/%{name}
+cp -al VERSION %{?buildroot}/%{_exec_prefix}/lib/%{name}
 mkdir -p %{?buildroot}/%{_exec_prefix}/lib/%{name}/certgen
-#mv %{?buildroot}%{_prefix}/{TESTING,lib/%{name}/}
+mv %{?buildroot}%{_prefix}/{TESTING,lib/%{name}/}
 cp -al ftest.sh src/tests/ftest %{?buildroot}%{daoshome}/TESTING
 find %{?buildroot}%{daoshome}/TESTING/ftest -name \*.py[co] -print0 | xargs -r0 rm -f
 #ln %{?buildroot}%{daoshome}/{TESTING/.build_vars,.build_vars-Linux}.sh
