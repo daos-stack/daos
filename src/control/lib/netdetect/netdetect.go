@@ -360,10 +360,16 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 
 	depth := C.hwloc_get_type_depth(topology, C.HWLOC_OBJ_NUMANODE)
 	numObj := uint(C.hwloc_get_nbobjs_by_depth(topology, C.uint(depth)))
+	if numObj == 0 {
+		log.Debugf("NUMA Node data is unavailable.  Using NUMA 0\n")
+		return 0, nil
+	}
+	log.Debugf("There are %d NUMA nodes.", numObj)
+
 	for i = 0; i < numObj; i++ {
 		numanode := C.hwloc_get_obj_by_depth(topology, C.uint(depth), C.uint(i))
 		if numanode == nil {
-			log.Debugf("hwloc_get_obj_by_depth for type HWLOC_OBJ_NUMANODE was nil.  Using NUMA 0\n")
+			log.Debugf("NUMA Node data is unavailable.  Using NUMA 0\n")
 			log.Debugf("getNUMASocketID error 3")
 			return 0, nil
 		}
@@ -371,8 +377,9 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 			return uint(numanode.logical_index), nil
 		}
 	}
-	log.Debugf("getNUMASocketID error 4")
-	return 0, errors.New("unable to determine the NUMA socket ID")
+
+	log.Debugf("Unable to determine NUMA socket ID.  Using NUMA 0")
+	return 0, nil
 }
 
 // GetAffinityForNetworkDevices searches the system topology reported by hwloc
@@ -728,7 +735,7 @@ func ValidateNetworkConfig(provider string, device string, numaNode uint) (error
 	// In order to find a device and provider match, the libfabric device name must be converted into a system device name.
 	// GetAffinityForDevice() is used to provide this conversion.
 	for ; fi != nil; fi = fi.next {
-		log.Debugf("Searching provider list for devices and matching NUMA nodes..\n")
+		log.Debugf("Searching provider list for devices %s and matching NUMA nodes %d..\n", device, numaNode)
 		if fi.domain_attr == nil || fi.domain_attr.name == nil {
 			continue
 		}
@@ -736,13 +743,15 @@ func ValidateNetworkConfig(provider string, device string, numaNode uint) (error
 			continue
 		}
 		deviceScanCfg.targetDevice = C.GoString(fi.domain_attr.name)
-		log.Debugf("The target device is: %s", deviceScanCfg.targetDevice)
 		deviceAffinity, err := GetAffinityForDevice(deviceScanCfg)
+		log.Debugf("The libfabric record has device name: %s.\n", deviceScanCfg.targetDevice)
 		if err != nil {
 			log.Debugf("An error occured from GetAffinityForDevice()")
 			continue
 		}
+		log.Debugf("The device name is converted to: %s\n", deviceAffinity.DeviceName)
 		log.Debugf("GetAffinity returns NUMA node: %d", deviceAffinity.NUMANode)
+
 		if deviceAffinity.DeviceName == device {
 			log.Debugf("Device %s supports provider: %s", device, provider)
 			if deviceAffinity.NUMANode != numaNode {
@@ -753,8 +762,8 @@ func ValidateNetworkConfig(provider string, device string, numaNode uint) (error
 			log.Debugf("The NUMA node for device %s matches the provided value %d.  Network configuration is valid.", device, numaNode)
 			return nil
 		}
-		log.Debugf("Device name from libfabric: %s doesn't match what we want: %s\n", device,  deviceAffinity.DeviceName)
 	}
+	log.Debugf("No match was found for the device %s and provider %s\n", device, provider)
 	return errors.Errorf("Device %s does not support provider: %s", device, provider)
 }
 
