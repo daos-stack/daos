@@ -63,6 +63,7 @@ const (
 	msgBdevFwrevEndMismatch   = "controller fwrev unchanged after update"
 	msgBdevModelMismatch      = "controller model unexpected"
 	msgBdevNoDevs             = "no controllers specified"
+	msgBdevClassIsFile        = "nvme emulation initialized with backend file"
 )
 
 // SpdkSetup is an interface to configure spdk prerequisites via a
@@ -144,6 +145,16 @@ type nvmeStorage struct {
 	controllers types.NvmeControllers
 	initialized bool
 	formatted   bool
+}
+
+func (n *nvmeStorage) hasControllers(pciAddrs []string) (missing []string, ok bool) {
+	for _, addr := range pciAddrs {
+		if n.getController(addr) == nil {
+			missing = append(missing, addr)
+		}
+	}
+
+	return missing, len(missing) == 0
 }
 
 func (n *nvmeStorage) getController(pciAddr string) *pb.NvmeController {
@@ -245,6 +256,15 @@ func (n *nvmeStorage) Format(cfg storage.BdevConfig, results *(types.NvmeControl
 	}
 
 	switch cfg.Class {
+	case storage.BdevClassMalloc:
+		n.log.Debugf("malloc bdev format successful (%s)\n", pciAddr)
+		addCretFormat(pb.ResponseStatus_CTRL_SUCCESS, "", "")
+	case storage.BdevClassKdev:
+		n.log.Debugf("kernel bdev format successful (%s)\n", pciAddr)
+		addCretFormat(pb.ResponseStatus_CTRL_SUCCESS, "", "")
+	case storage.BdevClassFile:
+		n.log.Debugf("bdev file format successful (%s)\n", pciAddr)
+		addCretFormat(pb.ResponseStatus_CTRL_SUCCESS, "", msgBdevClassIsFile)
 	case storage.BdevClassNvme:
 		for _, pciAddr = range cfg.DeviceList {
 			if pciAddr == "" {

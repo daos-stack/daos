@@ -119,11 +119,7 @@ dts_buf_render_uppercase(char *buf, unsigned int buf_len)
 void
 dts_freeline(char *line)
 {
-#if HAVE_LIB_READLINE
 	D_FREE(line);
-#else
-	D_FREE(line);
-#endif
 }
 
 /**
@@ -132,9 +128,6 @@ dts_freeline(char *line)
 char *
 dts_readline(const char *prompt)
 {
-#if HAVE_LIB_READLINE
-	return readline(prompt);
-#else
 	char	*line;
 	char	*cur;
 	bool	 eof;
@@ -179,7 +172,6 @@ dts_readline(const char *prompt)
  out_free:
 	dts_freeline(line);
 	return NULL;
-#endif
 }
 
 int
@@ -206,7 +198,6 @@ dts_cmd_parser(struct option *opts, const char *prompt,
 			continue; /* empty line */
 
 		cmd = daos_str_trimwhite(line);
-		dts_add_history(cmd);
 
 		for (i = 0, opc = 0;; i++) {
 			struct option *opt;

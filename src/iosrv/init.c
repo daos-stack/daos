@@ -35,6 +35,7 @@
 
 #include <daos/btree_class.h>
 #include <daos/common.h>
+#include <daos/placement.h>
 #include "srv_internal.h"
 #include "drpc_internal.h"
 
@@ -207,18 +208,16 @@ dss_tgt_nr_get(int ncores, int nr)
 	if (nr_default == 0)
 		nr_default = 1;
 
-	/* accept the user required target number even if it's more than the
-	 * default available number calculated above, but inform the user that
-	 * creating more threads than #cores may have performance impact.
+	/* If user requires less target threads then set it as dss_tgt_nr,
+	 * if user requires more then uses the number calculated above
+	 * as creating more threads than #cores may hurt performance.
 	 */
-	if (nr_default < nr)
-		D_PRINT("%d target XS(xstream) requested exceeded the "
-			"available XS (%d) of %d cores, Will accept the "
-			"requested %d target XS with potential performance "
-			"impact\n", nr, nr_default, ncores, nr);
-
-	if (nr >= 1)
+	if (nr >= 1 && nr < nr_default)
 		nr_default = nr;
+
+	if (nr_default != nr)
+		D_PRINT("%d target XS(xstream) requested (#cores %d); "
+			"use (%d) target XS\n", nr, ncores, nr_default);
 
 	return nr_default;
 }
@@ -442,7 +441,12 @@ server_init(int argc, char *argv[])
 			D_ERROR("daos_hhash_init failed, rc: %d.\n", rc);
 			D_GOTO(exit_srv_init, rc);
 		}
-		D_INFO("daos handle hash-table initialized\n");
+		rc = pl_init();
+		if (rc != 0) {
+			daos_hhash_fini();
+			goto exit_srv_init;
+		}
+		D_INFO("handle hash table and placement initialized\n");
 	}
 	/* server-side uses D_HTYPE_PTR handle */
 	d_hhash_set_ptrtype(daos_ht.dht_hhash);
@@ -504,10 +508,12 @@ exit_drpc_fini:
 exit_init_state:
 	server_init_state_fini();
 exit_daos_fini:
-	if (dss_mod_facs & DSS_FAC_LOAD_CLI)
+	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		daos_fini();
-	else
+	} else {
+		pl_fini();
 		daos_hhash_fini();
+	}
 exit_srv_init:
 	dss_srv_fini(true);
 exit_mod_loaded:
@@ -530,10 +536,12 @@ server_fini(bool force)
 	dss_module_cleanup_all();
 	drpc_fini();
 	server_init_state_fini();
-	if (dss_mod_facs & DSS_FAC_LOAD_CLI)
+	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		daos_fini();
-	else
+	} else {
+		pl_fini();
 		daos_hhash_fini();
+	}
 	dss_srv_fini(force);
 	dss_module_unload_all();
 	ds_iv_fini();

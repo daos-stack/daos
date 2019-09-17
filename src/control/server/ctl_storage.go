@@ -31,18 +31,21 @@ import (
 	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
 
 // StorageControlService encapsulates the storage part of the control service
 type StorageControlService struct {
-	log  logging.Logger
-	nvme *nvmeStorage
-	scm  *scmStorage
-	drpc drpc.DomainSocketClient
+	log             logging.Logger
+	nvme            *nvmeStorage
+	scm             *scmStorage
+	drpc            drpc.DomainSocketClient
+	instanceStorage []ioserver.StorageConfig
 }
 
-// NewStorageControlService returns an initialized *StorageControlService
-func NewStorageControlService(log logging.Logger, cfg *Configuration) (*StorageControlService, error) {
+// DefaultStorageControlService returns a initialized *StorageControlService
+// with default behaviour
+func DefaultStorageControlService(log logging.Logger, cfg *Configuration) (*StorageControlService, error) {
 	scriptPath, err := cfg.ext.getAbsInstallPath(spdkSetupPath)
 	if err != nil {
 		return nil, err
@@ -54,12 +57,69 @@ func NewStorageControlService(log logging.Logger, cfg *Configuration) (*StorageC
 		nrHugePages: cfg.NrHugepages,
 	}
 
+	return NewStorageControlService(log,
+		newNvmeStorage(log, cfg.NvmeShmID, spdkScript, cfg.ext),
+		newScmStorage(log, cfg.ext), cfg.Servers,
+		getDrpcClientConnection(cfg.SocketDir)), nil
+}
+
+// NewStorageControlService returns an initialized *StorageControlService
+func NewStorageControlService(log logging.Logger, nvme *nvmeStorage, scm *scmStorage,
+	srvCfgs []*ioserver.Config, drpc drpc.DomainSocketClient) *StorageControlService {
+
+	instanceStorage := []ioserver.StorageConfig{}
+	for _, srvCfg := range srvCfgs {
+		instanceStorage = append(instanceStorage, srvCfg.Storage)
+	}
+
 	return &StorageControlService{
-		log:  log,
-		nvme: newNvmeStorage(log, cfg.NvmeShmID, spdkScript, cfg.ext),
-		scm:  newScmStorage(log, cfg.ext),
-		drpc: getDrpcClientConnection(cfg.SocketDir),
-	}, nil
+		log:             log,
+		nvme:            nvme,
+		scm:             scm,
+		drpc:            drpc,
+		instanceStorage: instanceStorage,
+	}
+}
+
+func (c *StorageControlService) canAccessBdevs() (missing []string, ok bool) {
+	for _, storageCfg := range c.instanceStorage {
+		_missing, _ok := c.nvme.hasControllers(storageCfg.Bdev.GetNvmeDevs())
+		if !_ok {
+			missing = append(missing, _missing...)
+		}
+	}
+
+	return missing, len(missing) == 0
+}
+
+// Setup delegates to Storage implementation's Setup methods.
+func (c *StorageControlService) Setup() error {
+	if err := c.nvme.Setup(); err != nil {
+		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, NVMe Setup"))
+	}
+
+	// fail if config specified nvme devices are inaccessible
+	missing, ok := c.canAccessBdevs()
+	if !ok {
+		return errors.Errorf("%s: missing %v", msgBdevNotFound, missing)
+	}
+
+	if err := c.scm.Setup(); err != nil {
+		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, SCM Setup"))
+	}
+
+	return nil
+}
+
+// Teardown delegates to Storage implementation's Teardown methods.
+func (c *StorageControlService) Teardown() {
+	if err := c.nvme.Teardown(); err != nil {
+		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, NVMe Teardown"))
+	}
+
+	if err := c.scm.Teardown(); err != nil {
+		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, SCM Teardown"))
+	}
 }
 
 type PrepareNvmeRequest struct {

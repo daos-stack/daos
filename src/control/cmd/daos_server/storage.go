@@ -42,7 +42,7 @@ type storageScanCmd struct {
 }
 
 func (cmd *storageScanCmd) Execute(args []string) error {
-	svc, err := server.NewStorageControlService(cmd.log, server.NewConfiguration())
+	svc, err := server.DefaultStorageControlService(cmd.log, server.NewConfiguration())
 	if err != nil {
 		return errors.WithMessage(err, "failed to init ControlService")
 	}
@@ -100,9 +100,10 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		return err
 	}
 
-	svc, err := server.NewStorageControlService(cmd.log, server.NewConfiguration())
+	cfg := server.NewConfiguration()
+	svc, err := server.DefaultStorageControlService(cmd.log, cfg)
 	if err != nil {
-		return errors.WithMessage(err, "initialising ControlService")
+		return errors.WithMessage(err, "init control service")
 	}
 
 	op := "Preparing"

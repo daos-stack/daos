@@ -29,7 +29,6 @@ import getpass
 from command_utils import DaosCommand, CommandWithParameters
 from command_utils import BasicParameter, FormattedParameter
 from general_utils import get_file_path
-from avocado.utils import process
 
 
 class DmgCommand(DaosCommand):
@@ -37,9 +36,10 @@ class DmgCommand(DaosCommand):
 
     def __init__(self, path):
         """Create a dmg Command object."""
-        super(DmgCommand, self).__init__("daos_shell", path)
+        super(DmgCommand, self).__init__("/run/dmg/*", "daos_shell", path)
         self.format = self.DmgFormatSubCommand()
         self.prepare = self.DmgPrepareSubCommand()
+
         self.hostlist = FormattedParameter("-l {}")
         self.hostfile = FormattedParameter("-f {}")
         self.configpath = FormattedParameter("-o {}")
@@ -68,42 +68,6 @@ class DmgCommand(DaosCommand):
             elif value != "":
                 params.append(value)
         return " ".join([os.path.join(self._path, self._command)] + params)
-
-    def get_params(self, test, path="/run/dmg/*"):
-        """Get values for all of the dmg command params using a yaml file.
-
-        Sets each BasicParameter object's value to the yaml key that matches
-        the assigned name of the BasicParameter object in this class. For
-        example, the self.block_size.value will be set to the value in the yaml
-        file with the key 'block_size'.
-
-        Args:
-            test (Test): avocado Test object
-            path (str, optional): yaml namespace. Defaults to "/run/dmg/*".
-
-        """
-        super(DmgCommand, self).get_params(test, path)
-
-    def run(self, timeout=None, verbose=True, env=None, sudo=False):
-        """ Run the dmg command.
-
-        Args:
-            timeout (int, optional): timeout in seconds. Defaults to None.
-            verbose (bool, optional): display command output. Defaults to True.
-            env (dict, optional): env for the command. Defaults to None.
-            sudo (bool, optional): sudo will be prepended to the command.
-                Defaults to False.
-
-        Raises:
-            process.CmdError: Avocado command exception
-
-        Returns:
-            process.CmdResult: CmdResult object containing the results from
-            the command.
-
-        """
-        return process.run(self.__str__(), timeout, verbose, env=env,
-                           shell=True, sudo=sudo)
 
     class DmgFormatSubCommand(CommandWithParameters):
         """Defines a object representing a sub dmg (or daos_shell) command."""
