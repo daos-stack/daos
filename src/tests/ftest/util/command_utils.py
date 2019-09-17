@@ -188,10 +188,10 @@ class CommandWithParameters(ObjectWithParameters):
 
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
-        
+
         Returns:
             str: the command with all the defined parameters
-        
+
         """
         # Join all the parameters that have been assigned a value with the
         # command to create the command string
