@@ -921,8 +921,8 @@ enum_unpack_oid(daos_key_desc_t *kds, void *data,
 		struct dss_enum_unpack_io *io,
 		dss_enum_unpack_cb_t cb, void *cb_arg)
 {
-	daos_unit_oid_t *oid = data;
-	int rc = 0;
+	daos_unit_oid_t	*oid = data;
+	int		 rc = 0;
 
 	if (kds->kd_key_len != sizeof(*oid)) {
 		D_ERROR("Invalid object ID size: "DF_U64

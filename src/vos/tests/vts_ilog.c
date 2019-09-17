@@ -492,7 +492,7 @@ ilog_test_update(void **state)
 	rc = entries_check(loh, NULL, 0, entries);
 	assert_int_equal(rc, 0);
 
-	/** New epoch, updgrade to punch */
+	/** New epoch, upgrade to punch */
 	rc = ilog_update(loh, epoch, true);
 	if (rc != 0) {
 		print_message("Failed to insert log entry: %s\n", d_errstr(rc));
@@ -521,7 +521,7 @@ ilog_test_update(void **state)
 	}
 	/** NB: It's a bit of a hack to insert aborted entries.   Since fetch
 	 * will happily return everything, insert one more punch that will
-	 * gaurantee we don't have any aborted entries in the log.
+	 * guarantee we don't have any aborted entries in the log.
 	 */
 	current_status = PREPARED;
 	rc = do_update(loh, epoch, true, &prior_punch, &prior_status,

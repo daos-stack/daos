@@ -570,19 +570,19 @@ struct punched_ephs {
  * data, then ui_sgls[i].sg_iovs[j] will be empty.
  */
 struct dss_enum_unpack_io {
-	daos_unit_oid_t	ui_oid;		/**< type <= OBJ */
-	daos_key_t	ui_dkey;	/**< type <= DKEY */
-	daos_iod_t     *ui_iods;
+	daos_unit_oid_t		 ui_oid;	/**< type <= OBJ */
+	daos_key_t		 ui_dkey;	/**< type <= DKEY */
+	daos_iod_t		*ui_iods;
 	/* punched epochs per akey */
-	struct punched_ephs *ui_akey_punch_ephs;
-	int             ui_akey_punch_ephs_num;
-	int		ui_iods_cap;
-	int		ui_iods_size;
-	int	       *ui_recxs_caps;
+	struct punched_ephs	*ui_akey_punch_ephs;
+	int			 ui_akey_punch_ephs_num;
+	int			 ui_iods_cap;
+	int			 ui_iods_size;
+	int			*ui_recxs_caps;
 	/* punched epochs for dkey */
-	struct punched_ephs     ui_dkey_punch_ephs;
-	d_sg_list_t	*ui_sgls;	/**< optional */
-	uint32_t	ui_version;
+	struct punched_ephs      ui_dkey_punch_ephs;
+	d_sg_list_t		*ui_sgls;	/**< optional */
+	uint32_t		 ui_version;
 };
 
 typedef int (*dss_enum_unpack_cb_t)(struct dss_enum_unpack_io *io, void *arg);
