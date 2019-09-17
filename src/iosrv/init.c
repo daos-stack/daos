@@ -35,6 +35,7 @@
 
 #include <daos/btree_class.h>
 #include <daos/common.h>
+#include <daos/placement.h>
 #include "srv_internal.h"
 #include "drpc_internal.h"
 
@@ -440,7 +441,12 @@ server_init(int argc, char *argv[])
 			D_ERROR("daos_hhash_init failed, rc: %d.\n", rc);
 			D_GOTO(exit_srv_init, rc);
 		}
-		D_INFO("daos handle hash-table initialized\n");
+		rc = pl_init();
+		if (rc != 0) {
+			daos_hhash_fini();
+			goto exit_srv_init;
+		}
+		D_INFO("handle hash table and placement initialized\n");
 	}
 	/* server-side uses D_HTYPE_PTR handle */
 	d_hhash_set_ptrtype(daos_ht.dht_hhash);
@@ -502,10 +508,12 @@ exit_drpc_fini:
 exit_init_state:
 	server_init_state_fini();
 exit_daos_fini:
-	if (dss_mod_facs & DSS_FAC_LOAD_CLI)
+	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		daos_fini();
-	else
+	} else {
+		pl_fini();
 		daos_hhash_fini();
+	}
 exit_srv_init:
 	dss_srv_fini(true);
 exit_mod_loaded:
@@ -528,10 +536,12 @@ server_fini(bool force)
 	dss_module_cleanup_all();
 	drpc_fini();
 	server_init_state_fini();
-	if (dss_mod_facs & DSS_FAC_LOAD_CLI)
+	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		daos_fini();
-	else
+	} else {
+		pl_fini();
 		daos_hhash_fini();
+	}
 	dss_srv_fini(force);
 	dss_module_unload_all();
 	ds_iv_fini();

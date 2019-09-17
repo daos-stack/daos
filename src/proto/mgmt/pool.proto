@@ -27,8 +27,8 @@ package mgmt;
 // Management Service Protobuf Definitions related to interactions between
 // DAOS control server and DAOS pools.
 
-// CreatePoolReq supplies new pool parameters.
-message CreatePoolReq {
+// PoolCreateReq supplies new pool parameters.
+message PoolCreateReq {
 	uint64 scmbytes = 1;
 	uint64 nvmebytes = 2;
 	string ranks = 3; // comma separated integers
@@ -38,21 +38,21 @@ message CreatePoolReq {
 	string sys = 7; // DAOS system identifier
 }
 
-// CreatePoolResp returns created pool uuid and ranks.
-message CreatePoolResp {
+// PoolCreateResp returns created pool uuid and ranks.
+message PoolCreateResp {
 	int32 status = 1; // DAOS error code
 	string uuid = 2; // new pool's uuid
 	string svcreps = 3; // comma separated integers
 }
 
-// DestroyPoolReq supplies pool identifier and force flag.
-message DestroyPoolReq {
+// PoolDestroyReq supplies pool identifier and force flag.
+message PoolDestroyReq {
 	string uuid = 1; // uuid of pool to destroy
 	string sys = 2; // DAOS system identifier
 	bool force = 3; // destroy regardless of active connections
 }
 
-// DestroyPoolResp returns resultant state of destroy operation.
-message DestroyPoolResp {
+// PoolDestroyResp returns resultant state of destroy operation.
+message PoolDestroyResp {
 	int32 status = 1; // DAOS error code
 }

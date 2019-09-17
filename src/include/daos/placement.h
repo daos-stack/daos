@@ -109,6 +109,9 @@ struct pl_map {
 	struct pl_map_ops       *pl_ops;
 };
 
+int pl_init(void);
+void pl_fini(void);
+
 int pl_map_create(struct pool_map *pool_map, struct pl_map_init_attr *mia,
 		  struct pl_map **pl_mapp);
 void pl_map_destroy(struct pl_map *map);
