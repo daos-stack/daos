@@ -81,10 +81,11 @@ class NvmeIoVerification(IorTestBase):
                 svcn=pool_svcn, nvme_size=ior_param[1])
 
             self.pool.connect(1 << 1)
-            # Get the current pool sizes
-            size_before_ior = self.pool.pool_query()
 
             for tsize in transfer_size:
+                # Get the current pool sizes
+                size_before_ior = self.pool.pool_query()
+
                 # Run ior with the parameters specified for this pass
                 self.ior_cmd.transfer_size.update(tsize)
                 self.ior_cmd.set_daos_params(self.server_group, self.pool)
