@@ -532,10 +532,10 @@ err_out:
 }
 
 static void
-process_createpool_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+process_poolcreate_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	Mgmt__CreatePoolReq	*req = NULL;
-	Mgmt__CreatePoolResp	*resp = NULL;
+	Mgmt__PoolCreateReq	*req = NULL;
+	Mgmt__PoolCreateResp	*resp = NULL;
 	d_rank_list_t		*targets = NULL;
 	d_rank_list_t		*svc = NULL;
 	uuid_t			pool_uuid;
@@ -549,7 +549,7 @@ process_createpool_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	int			rc;
 
 	/* Unpack the inner request from the drpc call body */
-	req = mgmt__create_pool_req__unpack(NULL, drpc_req->body.len,
+	req = mgmt__pool_create_req__unpack(NULL, drpc_req->body.len,
 						 drpc_req->body.data);
 
 	if (req == NULL) {
@@ -564,12 +564,12 @@ process_createpool_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (resp == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
 		D_ERROR("Failed to allocate daos response ref\n");
-		mgmt__create_pool_req__free_unpacked(req, NULL);
+		mgmt__pool_create_req__free_unpacked(req, NULL);
 		return;
 	}
 
 	/* Response status is populated with SUCCESS on init */
-	mgmt__create_pool_resp__init(resp);
+	mgmt__pool_create_resp__init(resp);
 
 	/* Parse targets rank list. */
 	if (strlen(req->ranks) != 0) {
@@ -651,18 +651,18 @@ out_svc:
 	d_rank_list_free(svc);
 out:
 	resp->status = rc;
-	len = mgmt__create_pool_resp__get_packed_size(resp);
+	len = mgmt__pool_create_resp__get_packed_size(resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
 		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
-		mgmt__create_pool_resp__pack(resp, body);
+		mgmt__pool_create_resp__pack(resp, body);
 		drpc_resp->body.len = len;
 		drpc_resp->body.data = body;
 	}
 
-	mgmt__create_pool_req__free_unpacked(req, NULL);
+	mgmt__pool_create_req__free_unpacked(req, NULL);
 
 	daos_prop_free(prop);
 
@@ -675,17 +675,17 @@ out:
 }
 
 static void
-process_destroypool_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+process_pooldestroy_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	Mgmt__DestroyPoolReq	*req = NULL;
-	Mgmt__DestroyPoolResp	*resp = NULL;
+	Mgmt__PoolDestroyReq	*req = NULL;
+	Mgmt__PoolDestroyResp	*resp = NULL;
 	uuid_t			uuid;
 	uint8_t			*body;
 	size_t			len;
 	int			rc;
 
 	/* Unpack the inner request from the drpc call body */
-	req = mgmt__destroy_pool_req__unpack(
+	req = mgmt__pool_destroy_req__unpack(
 		NULL, drpc_req->body.len, drpc_req->body.data);
 
 	if (req == NULL) {
@@ -701,12 +701,12 @@ process_destroypool_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (resp == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
 		D_ERROR("Failed to allocate daos response ref\n");
-		mgmt__destroy_pool_req__free_unpacked(req, NULL);
+		mgmt__pool_destroy_req__free_unpacked(req, NULL);
 		return;
 	}
 
 	/* Response status is populated with SUCCESS on init. */
-	mgmt__destroy_pool_resp__init(resp);
+	mgmt__pool_destroy_resp__init(resp);
 
 	rc = uuid_parse(req->uuid, uuid);
 	if (rc != 0) {
@@ -725,18 +725,18 @@ process_destroypool_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 out:
 	resp->status = rc;
-	len = mgmt__destroy_pool_resp__get_packed_size(resp);
+	len = mgmt__pool_destroy_resp__get_packed_size(resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
 		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
-		mgmt__destroy_pool_resp__pack(resp, body);
+		mgmt__pool_destroy_resp__pack(resp, body);
 		drpc_resp->body.len = len;
 		drpc_resp->body.data = body;
 	}
 
-	mgmt__destroy_pool_req__free_unpacked(req, NULL);
+	mgmt__pool_destroy_req__free_unpacked(req, NULL);
 	D_FREE(resp);
 }
 
@@ -789,11 +789,11 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_JOIN:
 		process_join_request(drpc_req, drpc_resp);
 		break;
-	case DRPC_METHOD_MGMT_CREATE_POOL:
-		process_createpool_request(drpc_req, drpc_resp);
+	case DRPC_METHOD_MGMT_POOL_CREATE:
+		process_poolcreate_request(drpc_req, drpc_resp);
 		break;
-	case DRPC_METHOD_MGMT_DESTROY_POOL:
-		process_destroypool_request(drpc_req, drpc_resp);
+	case DRPC_METHOD_MGMT_POOL_DESTROY:
+		process_pooldestroy_request(drpc_req, drpc_resp);
 		break;
 	case DRPC_METHOD_MGMT_SET_UP:
 		process_setup_request(drpc_req, drpc_resp);
