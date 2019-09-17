@@ -281,7 +281,7 @@ func TestConfigValidation(t *testing.T) {
 			func(c *Configuration) *Configuration {
 				return c.WithAccessPoints()
 			},
-			"",
+			msgBadConfig + relConfExamplesPath + ": " + msgConfigBadAccessPoints,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

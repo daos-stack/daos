@@ -163,7 +163,7 @@ func newMgmtSvc(h *IOServerHarness) *mgmtSvc {
 }
 
 func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *pb.GetAttachInfoReq) (*pb.GetAttachInfoResp, error) {
-	mi, err := svc.harness.GetManagementInstance()
+	mi, _, err := svc.harness.GetManagementInstance()
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +184,7 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *pb.GetAttachInfoReq)
 }
 
 func (svc *mgmtSvc) Join(ctx context.Context, req *pb.JoinReq) (*pb.JoinResp, error) {
-	mi, err := svc.harness.GetManagementInstance()
+	mi, _, err := svc.harness.GetManagementInstance()
 	if err != nil {
 		return nil, err
 	}
@@ -206,9 +206,13 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *pb.JoinReq) (*pb.JoinResp, er
 
 // PoolCreate implements the method defined for the Management Service.
 func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *pb.PoolCreateReq) (*pb.PoolCreateResp, error) {
-	mi, err := svc.harness.GetManagementInstance()
+	mi, isReplica, err := svc.harness.GetManagementInstance()
 	if err != nil {
 		return nil, err
+	}
+	if !isReplica {
+		return nil, errors.Errorf("target instance is not an access point, "+
+			"access points: %+v", mi.msClient.cfg.AccessPoints)
 	}
 
 	svc.log.Debugf("MgmtSvc.PoolCreate dispatch, req:%+v\n", *req)
@@ -230,9 +234,13 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *pb.PoolCreateReq) (*pb.
 
 // PoolDestroy implements the method defined for the Management Service.
 func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *pb.PoolDestroyReq) (*pb.PoolDestroyResp, error) {
-	mi, err := svc.harness.GetManagementInstance()
+	mi, isReplica, err := svc.harness.GetManagementInstance()
 	if err != nil {
 		return nil, err
+	}
+	if !isReplica {
+		return nil, errors.Errorf("target instance is not an access point, "+
+			"access points: %+v", mi.msClient.cfg.AccessPoints)
 	}
 
 	svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, req:%+v\n", *req)
@@ -254,9 +262,13 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *pb.PoolDestroyReq) (*p
 
 // KillRank implements the method defined for the Management Service.
 func (svc *mgmtSvc) KillRank(ctx context.Context, req *pb.DaosRank) (*pb.DaosResp, error) {
-	mi, err := svc.harness.GetManagementInstance()
+	mi, isReplica, err := svc.harness.GetManagementInstance()
 	if err != nil {
 		return nil, err
+	}
+	if !isReplica {
+		return nil, errors.Errorf("target instance is not an access point, "+
+			"access points: %+v", mi.msClient.cfg.AccessPoints)
 	}
 
 	svc.log.Debugf("MgmtSvc.KillRank dispatch, req:%+v\n", *req)

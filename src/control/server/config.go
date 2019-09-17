@@ -45,7 +45,7 @@ const (
 	msgConfigNoProvider      = "provider not specified in config"
 	msgConfigNoPath          = "no config path set"
 	msgConfigNoServers       = "no servers specified in config"
-	msgConfigBadAccessPoints = "multiple access points are not currently supported"
+	msgConfigBadAccessPoints = "only a single access point is currently supported"
 )
 
 // Configuration describes options for DAOS control plane.
@@ -271,7 +271,7 @@ func newDefaultConfiguration(ext External) *Configuration {
 	return &Configuration{
 		SystemName:      "daos_server",
 		SocketDir:       "/var/run/daos_server",
-		AccessPoints:    []string{},
+		AccessPoints:    []string{"localhost"},
 		ControlPort:     10000,
 		TransportConfig: security.DefaultServerTransportConfig(),
 		Hyperthreads:    false,
@@ -390,7 +390,7 @@ func (c *Configuration) Validate() (err error) {
 	}
 
 	// only single access point valid for now
-	if len(c.AccessPoints) > 1 {
+	if len(c.AccessPoints) != 1 {
 		return errors.New(msgConfigBadAccessPoints)
 	}
 
