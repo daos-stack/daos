@@ -4,8 +4,11 @@
 hosts:
  test_servers:
   - boro-A
- test_clients:
   - boro-B
+  - boro-C
+  - boro-D
+ test_clients:
+  - boro-E
 timeout: 28800
 server_config:
  name: daos_server
