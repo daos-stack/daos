@@ -251,6 +251,28 @@ func (m *mockMgmtSvcClient) PoolDestroy(ctx context.Context, req *pb.PoolDestroy
 	return &pb.PoolDestroyResp{}, nil
 }
 
+func (m *mockMgmtSvcClient) BioHealthQuery(
+	ctx context.Context,
+	req *pb.BioHealthReq,
+	o ...grpc.CallOption,
+) (*pb.BioHealthResp, error) {
+
+	// return successful bio health results
+	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	return &pb.BioHealthResp{}, nil
+}
+
+func (m *mockMgmtSvcClient) SmdListDevs(
+	ctx context.Context,
+	req *pb.SmdDevReq,
+	o ...grpc.CallOption,
+) (*pb.SmdDevResp, error) {
+
+	// return successful SMD device list
+	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	return &pb.SmdDevResp{}, nil
+}
+
 func (m *mockMgmtSvcClient) Join(ctx context.Context, req *pb.JoinReq, o ...grpc.CallOption) (*pb.JoinResp, error) {
 
 	return &pb.JoinResp{}, nil
