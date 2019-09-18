@@ -464,8 +464,9 @@ uint32_t
 csum_chunk_count(uint32_t chunk_size, uint64_t lo_idx, uint64_t hi_idx,
 		 uint64_t rec_size)
 {
-	uint64_t lo = lo_idx * rec_size;
-	uint64_t hi = hi_idx * rec_size;
+	uint64_t	lo = lo_idx * rec_size;
+	uint64_t	hi = hi_idx * rec_size;
+	daos_off_t	width;
 
 	if (chunk_size == 0)
 		return 0;
@@ -473,9 +474,9 @@ csum_chunk_count(uint32_t chunk_size, uint64_t lo_idx, uint64_t hi_idx,
 	/** Align to chunk size */
 	lo = lo - lo % chunk_size;
 	hi = hi + chunk_size - hi % chunk_size;
-	daos_off_t width = hi - lo;
+	width = hi - lo;
 
-	return (uint32_t)width / chunk_size;
+	return (uint32_t)(width / chunk_size);
 }
 
 static int
