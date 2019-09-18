@@ -72,7 +72,7 @@ def build_client_libs_shared(env):
                                     LIBS=[])
     script = ilenv.Command('il/check_ioil_syms', gen_script,
                            "$SOURCE -s $TARGET")
-    env.Install('$PREFIX/TESTING/scripts', script)
+    env.Install('$PREFIX/lib/daos/TESTING/scripts', script)
     script = ilenv.Command('il/ioil-ld-opts', gen_script,
                            '$SOURCE -l $TARGET')
     env.Install('$PREFIX/share/daos', script)

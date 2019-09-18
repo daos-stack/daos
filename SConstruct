@@ -277,8 +277,8 @@ def scons():
     buildinfo = prereqs.get_build_info()
     buildinfo.gen_script('.build_vars.sh')
     buildinfo.save('.build_vars.json')
-    env.InstallAs("$PREFIX/TESTING/.build_vars.sh", ".build_vars.sh")
-    env.InstallAs("$PREFIX/TESTING/.build_vars.json", ".build_vars.json")
+    env.InstallAs("$PREFIX/lib/daos/TESTING/.build_vars.sh", ".build_vars.sh")
+    env.InstallAs("$PREFIX/lib/daos/TESTING/.build_vars.json", ".build_vars.json")
     # also install to $PREFIX/lib to work with existing avocado test code
     env.InstallAs("$PREFIX/lib/.build_vars.sh", ".build_vars.sh")
     env.InstallAs("$PREFIX/lib/.build_vars.json", ".build_vars.json")
