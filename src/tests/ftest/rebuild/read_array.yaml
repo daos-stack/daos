@@ -24,6 +24,6 @@ container:
   akey_size: 5
   dkey_size: 5
   data_size: 5
-test:
+rebuild:
   object_class: OC_RP_3GX
   rank: 3

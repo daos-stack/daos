@@ -31,6 +31,7 @@ class RebuildTestParams(ObjectWithParameters):
 
     def __init__(self):
         """Initialize a RebuildTestParams object."""
+        super(RebuildTestParams, self).__init__("/run/rebuild/*")
         self.object_class = BasicParameter(None)
         self.rank = BasicParameter(None)
 
@@ -56,7 +57,7 @@ class RebuldTestBase(TestWithServers):
         super(RebuldTestBase, self).setUp()
 
         # Get the test parameters
-        self.inputs.get_params(self, "/run/test/*")
+        self.inputs.get_params(self)
 
         # Get the number of targets per server for pool info calculations
         self.targets = self.params.get("targets", "/run/server_config/*")
