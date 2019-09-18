@@ -210,9 +210,8 @@ func checkIsMSReplica(mi *IOServerInstance) error {
 			return err
 		}
 
-		aps, err := resolveAccessPoints([]string{leader})
-		if err == nil {
-			msg += ", try " + aps[0].String()
+		if !strings.HasPrefix(leader, "localhost") {
+			msg += ", try " + leader
 		}
 
 		return errors.New(msg)
