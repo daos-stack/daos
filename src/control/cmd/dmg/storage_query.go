@@ -31,9 +31,10 @@ import (
 
 // storageQueryCmd is the struct representing the query storage subcommand
 type storageQueryCmd struct {
-	NVMe nvmeHealthQueryCmd `command:"nvme-health" alias:"d" description:"Query raw NVMe SPDK device statistics."`
-	BS   bsHealthQueryCmd   `command:"blobstore-health" alias:"b" description:"Query internal blobstore health data."`
-	Smd  smdQueryCmd        `command:"smd" alias:"s" description:"Query per-server metadata."`
+	NVMe      nvmeHealthQueryCmd `command:"nvme-health" alias:"n" description:"Query raw NVMe SPDK device statistics."`
+	BS        bsHealthQueryCmd   `command:"blobstore-health" alias:"b" description:"Query internal blobstore health data."`
+	Smd       smdQueryCmd        `command:"smd" alias:"s" description:"Query per-server metadata."`
+	DevState  devStateQueryCmd   `command:"device-state" alias:"d" description:"Query the device state (ie NORMAL or FAULTY)."`
 }
 
 // nvmeHealthQueryCmd is the struct representing the "storage query health" subcommand
@@ -121,3 +122,29 @@ func (s *smdQueryCmd) Execute(args []string) error {
 	smdQuery(s.log, s.conns, s.Devices, s.Pools)
 	return nil
 }
+
+// devStateQueryCmd is the struct representing the "storage query devie-state" subcommand
+type devStateQueryCmd struct {
+	logCmd
+	connectedCmd
+	Devuuid	string `short:"u" long:"devuuid" description:"Device/Blobstore UUID to query" required:"1"`
+}
+
+// Query the SMD device state of the given device
+func devStateQuery(log logging.Logger, conns client.Connect, uuid string) {
+	if uuid == "" {
+		log.Infof("Device UUID needs to be specified\n")
+		return
+	}
+
+	req := &pb.DevStateReq{DevUuid: uuid}
+
+	log.Infof("Device State Info:\n%s\n", conns.DevStateQuery(req))
+}
+
+// Execute is run when devStateQueryCmd activates
+func (d *devStateQueryCmd) Execute(args []string) error {
+	devStateQuery(d.log, d.conns, d.Devuuid)
+	return nil
+}
+

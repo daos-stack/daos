@@ -47,6 +47,10 @@ service MgmtSvc {
 	rpc SmdListDevs(SmdDevReq) returns (SmdDevResp) {}
 	// Kill a given rank associated with a given pool
 	rpc KillRank(DaosRank) returns (DaosResp) {};
+	// Get the current state of the device
+	rpc DevStateQuery(DevStateReq) returns (DevStateResp) {}
+	// Set the device state of an NVMe SSD to FAULTY
+	rpc StorageSetFaulty(DevStateReq) returns (DevStateResp) {}
 }
 
 message JoinReq {

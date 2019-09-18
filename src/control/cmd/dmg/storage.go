@@ -33,11 +33,12 @@ import (
 
 // storageCmd is the struct representing the top-level storage subcommand.
 type storageCmd struct {
-	Prepare storagePrepareCmd `command:"prepare" alias:"p" description:"Prepare SCM and NVMe storage attached to remote servers."`
-	Scan    storageScanCmd    `command:"scan" alias:"s" description:"Scan SCM and NVMe storage attached to remote servers."`
-	Format  storageFormatCmd  `command:"format" alias:"f" description:"Format SCM and NVMe storage attached to remote servers."`
-	Update  storageUpdateCmd  `command:"fwupdate" alias:"u" description:"Update firmware on NVMe storage attached to remote servers."`
-	Query   storageQueryCmd   `command:"query" alias:"q" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
+	Prepare   storagePrepareCmd    `command:"prepare" alias:"p" description:"Prepare SCM and NVMe storage attached to remote servers."`
+	Scan      storageScanCmd       `command:"scan" alias:"s" description:"Scan SCM and NVMe storage attached to remote servers."`
+	Format    storageFormatCmd     `command:"format" alias:"f" description:"Format SCM and NVMe storage attached to remote servers."`
+	Update    storageUpdateCmd     `command:"fwupdate" alias:"u" description:"Update firmware on NVMe storage attached to remote servers."`
+	Query     storageQueryCmd      `command:"query" alias:"q" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
+	SetFaulty storageSetFaultyCmd  `command:"setfaulty" alias:"sf" descrption:"Manually set the device state of an NVMe SSD to FAULTY."`
 }
 
 // storagePrepareCmd is the struct representing the prep storage subcommand.
@@ -267,3 +268,28 @@ func (u *storageUpdateCmd) Execute(args []string) error {
 //
 //	return nil
 //}
+
+// storageSetFaultyCmd is the struct representing the set-faulty storage subcommand
+type storageSetFaultyCmd struct {
+	logCmd
+	connectedCmd
+	Devuuid string `short:"u" long:"devuuid" description:"Device/Blobstore UUID to query" required:"1"`
+}
+
+// Set the SMD device state of the given device to "FAULTY"
+func storageSetFaulty(log logging.Logger, conns client.Connect, uuid string) {
+	if uuid == "" {
+		log.Infof("Device UUID needs to be specified\n")
+		return
+	}
+
+	req := &pb.DevStateReq{DevUuid: uuid}
+
+	log.Infof("Device State Info:\n%s\n", conns.StorageSetFaulty(req))
+}
+
+// Execute is run when storageSetFaultyCmd activates
+func (s *storageSetFaultyCmd) Execute(args []string) error {
+	storageSetFaulty(s.log, s.conns, s.Devuuid)
+	return nil
+}

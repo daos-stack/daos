@@ -449,3 +449,16 @@ func (c *control) BurnInNvme(pciAddr string, configPath string) (
 	//	}
 	return
 }
+
+// StorageSetFaulty will set the state of the given device UUID to FAULTY
+func (c *connList) StorageSetFaulty(req *pb.DevStateReq) ResultStateMap {
+	results := make(ResultStateMap)
+	mc := c.controllers[0] // connect to first AP only for now
+
+	resp, err := mc.getSvcClient().StorageSetFaulty(context.Background(), req)
+
+	result := ClientStateResult{mc.getAddress(), resp, err}
+	results[result.Address] = result
+
+	return results
+}

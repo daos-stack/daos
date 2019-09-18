@@ -68,7 +68,7 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 	if (uuid_is_null(dev_uuid) && strlen(tgt) == 0) {
 		/* Either dev uuid or tgt id needs to be specified for query */
 		D_ERROR("Neither dev_uuid or tgt_id specified for BIO query\n");
-		return -DER_INVAL;
+		return -1;
 	}
 
 	/*
@@ -183,8 +183,7 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 	if (rc != 0) {
 		d_list_for_each_entry_safe(dev_info, tmp, &dev_list, sdi_link) {
 			d_list_del(&dev_info->sdi_link);
-			if (dev_info != NULL)
-				smd_free_dev_info(dev_info);
+			smd_free_dev_info(dev_info);
 		}
 		for (; i >= 0; i--) {
 			if (resp->devices[i] != NULL) {
@@ -203,5 +202,77 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 	resp->n_devices = dev_list_cnt;
 
 out:
+	return rc;
+}
+
+int
+ds_mgmt_dev_state_query(uuid_t dev_uuid, Mgmt__DevStateResp *resp,
+			bool set_state)
+{
+	struct smd_dev_info	*dev_info;
+	int			 buflen = 10;
+	int			 rc = 0;
+
+	if (uuid_is_null(dev_uuid))
+		return -1;
+
+	if (set_state) {
+		rc = smd_dev_set_state(dev_uuid, SMD_DEV_FAULTY);
+		if (rc != 0) {
+			D_ERROR("FAULTY state not set for dev:"DF_UUID"\n",
+				DP_UUID(dev_uuid));
+			return rc;
+		}
+	}
+
+	D_DEBUG(DB_MGMT, "Querying SMD device state for dev:"DF_UUID"\n",
+		DP_UUID(dev_uuid));
+
+	/*
+	 * Query per-server metadata (SMD) to get NVMe device info for given
+	 * device UUID.
+	 */
+	rc = smd_dev_get_by_id(dev_uuid, &dev_info);
+	if (rc != 0) {
+		D_ERROR("Device UUID:"DF_UUID" not found\n", DP_UUID(dev_uuid));
+		goto out;
+	}
+
+	D_ALLOC(resp->dev_state, buflen);
+	if (resp->dev_state == NULL) {
+		D_ERROR("Failed to allocate device state");
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	if (dev_info->sdi_state == SMD_DEV_NORMAL)
+		strncpy(resp->dev_state, "NORMAL\n", buflen);
+	else if (dev_info->sdi_state == SMD_DEV_FAULTY)
+		strncpy(resp->dev_state, "FAULTY\n", buflen);
+	else {
+		D_ERROR("Device state cannot be determined\n");
+		rc = -1;
+		goto out;
+	}
+
+	D_ALLOC(resp->dev_uuid, DAOS_UUID_STR_SIZE);
+	if (resp->dev_uuid == NULL) {
+		D_ERROR("Failed to allocate device uuid");
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	uuid_unparse_lower(dev_uuid, resp->dev_uuid);
+
+out:
+	smd_free_dev_info(dev_info);
+
+	if (rc != 0) {
+		if (resp->dev_state != NULL)
+			D_FREE(resp->dev_state);
+		if (resp->dev_uuid != NULL)
+			D_FREE(resp->dev_uuid);
+	}
+
 	return rc;
 }

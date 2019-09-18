@@ -20,6 +20,8 @@ typedef struct _Mgmt__BioHealthResp Mgmt__BioHealthResp;
 typedef struct _Mgmt__SmdDevReq Mgmt__SmdDevReq;
 typedef struct _Mgmt__SmdDevResp Mgmt__SmdDevResp;
 typedef struct _Mgmt__SmdDevResp__Device Mgmt__SmdDevResp__Device;
+typedef struct _Mgmt__DevStateReq Mgmt__DevStateReq;
+typedef struct _Mgmt__DevStateResp Mgmt__DevStateResp;
 
 
 /* --- enums --- */
@@ -106,6 +108,40 @@ struct  _Mgmt__SmdDevResp
     , 0, 0,NULL }
 
 
+struct  _Mgmt__DevStateReq
+{
+  ProtobufCMessage base;
+  /*
+   * UUID of blobstore
+   */
+  char *dev_uuid;
+};
+#define MGMT__DEV_STATE_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__dev_state_req__descriptor) \
+    , (char *)protobuf_c_empty_string }
+
+
+struct  _Mgmt__DevStateResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code
+   */
+  int32_t status;
+  /*
+   * UUID of blobstore
+   */
+  char *dev_uuid;
+  /*
+   *NORMAL or FAULTY
+   */
+  char *dev_state;
+};
+#define MGMT__DEV_STATE_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__dev_state_resp__descriptor) \
+    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+
+
 /* Mgmt__BioHealthReq methods */
 void   mgmt__bio_health_req__init
                      (Mgmt__BioHealthReq         *message);
@@ -185,6 +221,44 @@ Mgmt__SmdDevResp *
 void   mgmt__smd_dev_resp__free_unpacked
                      (Mgmt__SmdDevResp *message,
                       ProtobufCAllocator *allocator);
+/* Mgmt__DevStateReq methods */
+void   mgmt__dev_state_req__init
+                     (Mgmt__DevStateReq         *message);
+size_t mgmt__dev_state_req__get_packed_size
+                     (const Mgmt__DevStateReq   *message);
+size_t mgmt__dev_state_req__pack
+                     (const Mgmt__DevStateReq   *message,
+                      uint8_t             *out);
+size_t mgmt__dev_state_req__pack_to_buffer
+                     (const Mgmt__DevStateReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__DevStateReq *
+       mgmt__dev_state_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__dev_state_req__free_unpacked
+                     (Mgmt__DevStateReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__DevStateResp methods */
+void   mgmt__dev_state_resp__init
+                     (Mgmt__DevStateResp         *message);
+size_t mgmt__dev_state_resp__get_packed_size
+                     (const Mgmt__DevStateResp   *message);
+size_t mgmt__dev_state_resp__pack
+                     (const Mgmt__DevStateResp   *message,
+                      uint8_t             *out);
+size_t mgmt__dev_state_resp__pack_to_buffer
+                     (const Mgmt__DevStateResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__DevStateResp *
+       mgmt__dev_state_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__dev_state_resp__free_unpacked
+                     (Mgmt__DevStateResp *message,
+                      ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
 typedef void (*Mgmt__BioHealthReq_Closure)
@@ -202,6 +276,12 @@ typedef void (*Mgmt__SmdDevResp__Device_Closure)
 typedef void (*Mgmt__SmdDevResp_Closure)
                  (const Mgmt__SmdDevResp *message,
                   void *closure_data);
+typedef void (*Mgmt__DevStateReq_Closure)
+                 (const Mgmt__DevStateReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__DevStateResp_Closure)
+                 (const Mgmt__DevStateResp *message,
+                  void *closure_data);
 
 /* --- services --- */
 
@@ -213,6 +293,8 @@ extern const ProtobufCMessageDescriptor mgmt__bio_health_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__smd_dev_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__smd_dev_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__smd_dev_resp__device__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__dev_state_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__dev_state_resp__descriptor;
 
 PROTOBUF_C__END_DECLS
 

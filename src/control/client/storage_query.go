@@ -65,3 +65,16 @@ func (c *connList) SmdListDevs(req *pb.SmdDevReq) ResultSmdMap {
 
 	return results
 }
+
+// DevStateQuery will print the state of the given device UUID
+func (c *connList) DevStateQuery(req *pb.DevStateReq) ResultStateMap {
+	results := make(ResultStateMap)
+	mc := c.controllers[0] // connect to first AP only for now
+
+	resp, err := mc.getSvcClient().DevStateQuery(context.Background(), req)
+
+	result := ClientStateResult{mc.getAddress(), resp, err}
+	results[result.Address] = result
+
+	return results
+}

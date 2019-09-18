@@ -267,6 +267,14 @@ struct _Mgmt__MgmtSvc_Service
                     const Mgmt__DaosRank *input,
                     Mgmt__DaosResp_Closure closure,
                     void *closure_data);
+  void (*dev_state_query)(Mgmt__MgmtSvc_Service *service,
+                          const Mgmt__DevStateReq *input,
+                          Mgmt__DevStateResp_Closure closure,
+                          void *closure_data);
+  void (*storage_set_faulty)(Mgmt__MgmtSvc_Service *service,
+                             const Mgmt__DevStateReq *input,
+                             Mgmt__DevStateResp_Closure closure,
+                             void *closure_data);
 };
 typedef void (*Mgmt__MgmtSvc_ServiceDestroy)(Mgmt__MgmtSvc_Service *);
 void mgmt__mgmt_svc__init (Mgmt__MgmtSvc_Service *service,
@@ -281,7 +289,9 @@ void mgmt__mgmt_svc__init (Mgmt__MgmtSvc_Service *service,
       function_prefix__ ## get_attach_info,\
       function_prefix__ ## bio_health_query,\
       function_prefix__ ## smd_list_devs,\
-      function_prefix__ ## kill_rank  }
+      function_prefix__ ## kill_rank,\
+      function_prefix__ ## dev_state_query,\
+      function_prefix__ ## storage_set_faulty  }
 void mgmt__mgmt_svc__join(ProtobufCService *service,
                           const Mgmt__JoinReq *input,
                           Mgmt__JoinResp_Closure closure,
@@ -310,6 +320,14 @@ void mgmt__mgmt_svc__kill_rank(ProtobufCService *service,
                                const Mgmt__DaosRank *input,
                                Mgmt__DaosResp_Closure closure,
                                void *closure_data);
+void mgmt__mgmt_svc__dev_state_query(ProtobufCService *service,
+                                     const Mgmt__DevStateReq *input,
+                                     Mgmt__DevStateResp_Closure closure,
+                                     void *closure_data);
+void mgmt__mgmt_svc__storage_set_faulty(ProtobufCService *service,
+                                        const Mgmt__DevStateReq *input,
+                                        Mgmt__DevStateResp_Closure closure,
+                                        void *closure_data);
 
 /* --- descriptors --- */
 

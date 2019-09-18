@@ -277,6 +277,28 @@ func (m *mockMgmtSvcClient) SmdListDevs(
 	return &pb.SmdDevResp{}, nil
 }
 
+func (m *mockMgmtSvcClient) DevStateQuery(
+	ctx context.Context,
+	req *pb.DevStateReq,
+	o ...grpc.CallOption,
+) (*pb.DevStateResp, error) {
+
+	// return successful device state
+	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	return &pb.DevStateResp{}, nil
+}
+
+func (m *mockMgmtSvcClient) StorageSetFaulty(
+	ctx context.Context,
+	req *pb.DevStateReq,
+	o ...grpc.CallOption,
+) (*pb.DevStateResp, error) {
+
+	// return suscessful FAULTY device state
+	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	return &pb.DevStateResp{}, nil
+}
+
 func (m *mockMgmtSvcClient) Join(ctx context.Context, req *pb.JoinReq, o ...grpc.CallOption) (*pb.JoinResp, error) {
 
 	return &pb.JoinResp{}, nil

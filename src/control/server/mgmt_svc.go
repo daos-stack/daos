@@ -326,6 +326,54 @@ func (svc *mgmtSvc) SmdListDevs(ctx context.Context, req *pb.SmdDevReq) (*pb.Smd
 	return resp, nil
 }
 
+// DevStateQuery implements the method defined for the Management Service.
+func (svc *mgmtSvc) DevStateQuery(ctx context.Context, req *pb.DevStateReq) (*pb.DevStateResp, error) {
+	mi, err := svc.harness.GetManagementInstance()
+	if err != nil {
+		return nil, err
+	}
+
+	svc.log.Debugf("MgmtSvc.DevStateQuery dispatch, req:%+v\n", *req)
+
+	svc.mutex.Lock()
+	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, devState, req)
+	svc.mutex.Unlock()
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &pb.DevStateResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal DevStateQuery response")
+	}
+
+	return resp, nil
+}
+
+// StorageSetFaulty implements the method defined for the Management Service.
+func (svc *mgmtSvc) StorageSetFaulty(ctx context.Context, req *pb.DevStateReq) (*pb.DevStateResp, error) {
+	mi, err := svc.harness.GetManagementInstance()
+	if err != nil {
+		return nil, err
+	}
+
+	svc.log.Debugf("MgmtSvc.StorageSetFaulty dispatch, req:%+v\n", *req)
+
+	svc.mutex.Lock()
+	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, setFaulty, req)
+	svc.mutex.Unlock()
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &pb.DevStateResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal DevStateQuery response")
+	}
+
+	return resp, nil
+}
+
 // KillRank implements the method defined for the Management Service.
 func (svc *mgmtSvc) KillRank(ctx context.Context, req *pb.DaosRank) (*pb.DaosResp, error) {
 	mi, err := svc.harness.GetManagementInstance()
