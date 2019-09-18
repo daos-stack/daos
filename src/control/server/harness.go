@@ -88,28 +88,20 @@ func (h *IOServerHarness) AddInstance(srv *IOServerInstance) error {
 
 // GetManagementInstance returns a managed IO Server instance
 // to be used as a management target.
-func (h *IOServerHarness) GetManagementInstance() (*IOServerInstance, bool, error) {
+func (h *IOServerHarness) GetManagementInstance() (*IOServerInstance, error) {
 	h.RLock()
 	defer h.RUnlock()
 
 	if len(h.instances) == 0 {
-		return nil, false, errors.New("harness has no managed instances")
+		return nil, errors.New("harness has no managed instances")
 	}
 
 	if defaultManagementInstance > len(h.instances) {
-		return nil, false, errors.Errorf("no instance index %d", defaultManagementInstance)
+		return nil, errors.Errorf("no instance index %d", defaultManagementInstance)
 	}
 
 	// Just pick one for now.
-	mi := h.instances[defaultManagementInstance]
-
-	// Verify this instance can be used to issue management service requests
-	mInfo, err := getMgmtInfo(mi)
-	if err != nil {
-		return nil, false, err
-	}
-
-	return mi, mInfo.isReplica, nil
+	return h.instances[defaultManagementInstance], nil
 }
 
 // CreateSuperblocks creates instance superblocks as needed.

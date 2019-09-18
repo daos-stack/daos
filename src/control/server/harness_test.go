@@ -77,7 +77,7 @@ func TestHarnessCreateSuperblocks(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	mi, _, err := h.GetManagementInstance()
+	mi, err := h.GetManagementInstance()
 	if err != nil {
 		t.Fatal(err)
 	}

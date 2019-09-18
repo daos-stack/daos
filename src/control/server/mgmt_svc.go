@@ -40,24 +40,20 @@ import (
 
 // CheckReplica verifies if this server is supposed to host an MS replica,
 // only performing the check and printing the result for now.
-//
-// TODO: format and start the MS replica
-func CheckReplica(
-	lis net.Listener, accessPoints []string, srv *exec.Cmd) (
-	msReplicaCheck string, err error) {
-
-	isReplica, bootstrap, err := checkMgmtSvcReplica(
-		lis.Addr().(*net.TCPAddr), accessPoints)
+func CheckReplica(lis net.Listener, accessPoints []string, srv *exec.Cmd) (msReplicaCheck string, err error) {
+	isReplica, bootstrap, err := checkMgmtSvcReplica(lis.Addr().(*net.TCPAddr), accessPoints)
 	if err != nil {
 		_ = srv.Process.Kill()
 		return
 	}
+
 	if isReplica {
 		msReplicaCheck = " as access point"
 		if bootstrap {
 			msReplicaCheck += " (bootstrap)"
 		}
 	}
+
 	return
 }
 
@@ -163,7 +159,7 @@ func newMgmtSvc(h *IOServerHarness) *mgmtSvc {
 }
 
 func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *pb.GetAttachInfoReq) (*pb.GetAttachInfoResp, error) {
-	mi, _, err := svc.harness.GetManagementInstance()
+	mi, err := svc.harness.GetManagementInstance()
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +180,7 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *pb.GetAttachInfoReq)
 }
 
 func (svc *mgmtSvc) Join(ctx context.Context, req *pb.JoinReq) (*pb.JoinResp, error) {
-	mi, _, err := svc.harness.GetManagementInstance()
+	mi, err := svc.harness.GetManagementInstance()
 	if err != nil {
 		return nil, err
 	}
@@ -204,15 +200,35 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *pb.JoinReq) (*pb.JoinResp, er
 	return resp, nil
 }
 
+// checkIsMSReplica provides a hint as to who is service leader if instance is
+// not a Management Service replica.
+func checkIsMSReplica(mi *IOServerInstance) error {
+	msg := "instance is not an access point"
+	if !mi.IsMSReplica() {
+		leader, err := mi.msClient.LeaderAddress()
+		if err != nil {
+			return err
+		}
+
+		aps, err := resolveAccessPoints([]string{leader})
+		if err == nil {
+			msg += ", try " + aps[0].String()
+		}
+
+		return errors.New(msg)
+	}
+
+	return nil
+}
+
 // PoolCreate implements the method defined for the Management Service.
 func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *pb.PoolCreateReq) (*pb.PoolCreateResp, error) {
-	mi, isReplica, err := svc.harness.GetManagementInstance()
+	mi, err := svc.harness.GetManagementInstance()
 	if err != nil {
 		return nil, err
 	}
-	if !isReplica {
-		return nil, errors.Errorf("target instance is not an access point, "+
-			"access points: %+v", mi.msClient.cfg.AccessPoints)
+	if err := checkIsMSReplica(mi); err != nil {
+		return nil, err
 	}
 
 	svc.log.Debugf("MgmtSvc.PoolCreate dispatch, req:%+v\n", *req)
@@ -229,18 +245,19 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *pb.PoolCreateReq) (*pb.
 		return nil, errors.Wrap(err, "unmarshal PoolCreate response")
 	}
 
+	svc.log.Debugf("MgmtSvc.PoolCreate dispatch, resp:%+v\n", *resp)
+
 	return resp, nil
 }
 
 // PoolDestroy implements the method defined for the Management Service.
 func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *pb.PoolDestroyReq) (*pb.PoolDestroyResp, error) {
-	mi, isReplica, err := svc.harness.GetManagementInstance()
+	mi, err := svc.harness.GetManagementInstance()
 	if err != nil {
 		return nil, err
 	}
-	if !isReplica {
-		return nil, errors.Errorf("target instance is not an access point, "+
-			"access points: %+v", mi.msClient.cfg.AccessPoints)
+	if err := checkIsMSReplica(mi); err != nil {
+		return nil, err
 	}
 
 	svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, req:%+v\n", *req)
@@ -257,18 +274,19 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *pb.PoolDestroyReq) (*p
 		return nil, errors.Wrap(err, "unmarshal PoolDestroy response")
 	}
 
+	svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, resp:%+v\n", *resp)
+
 	return resp, nil
 }
 
 // KillRank implements the method defined for the Management Service.
 func (svc *mgmtSvc) KillRank(ctx context.Context, req *pb.DaosRank) (*pb.DaosResp, error) {
-	mi, isReplica, err := svc.harness.GetManagementInstance()
+	mi, err := svc.harness.GetManagementInstance()
 	if err != nil {
 		return nil, err
 	}
-	if !isReplica {
-		return nil, errors.Errorf("target instance is not an access point, "+
-			"access points: %+v", mi.msClient.cfg.AccessPoints)
+	if err := checkIsMSReplica(mi); err != nil {
+		return nil, err
 	}
 
 	svc.log.Debugf("MgmtSvc.KillRank dispatch, req:%+v\n", *req)
@@ -284,6 +302,8 @@ func (svc *mgmtSvc) KillRank(ctx context.Context, req *pb.DaosRank) (*pb.DaosRes
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal DAOS response")
 	}
+
+	svc.log.Debugf("MgmtSvc.KillRank dispatch, resp:%+v\n", *resp)
 
 	return resp, nil
 }
