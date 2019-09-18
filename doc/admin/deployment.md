@@ -458,7 +458,7 @@ to storage format).
 The content of the configuration file is documented in the next section
 and a few examples are [available](/src/utils/config/examples).
 
-Client processes (i.e. utilities, applications, ...) should be have the
+Client processes (i.e. utilities, applications, ...) should have the
 following environment variables set to connect to the DAOS servers:
 ```
 export DAOS\_SINGLETON\_CLI=1
