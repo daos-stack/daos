@@ -42,6 +42,7 @@ class IorTestBase(TestWithServers):
         self.ior_cmd = None
         self.processes = None
         self.hostfile_clients_slots = None
+        self.dfuse = None
         self.container = None
 
     def setUp(self):
@@ -60,7 +61,7 @@ class IorTestBase(TestWithServers):
         """Tear down each test case."""
         try:
             if self.dfuse is not None:
-                self.dfuse.stop(self.hostlist_clients)
+                self.dfuse.stop_dfuse(self.hostlist_clients)
         finally:
             # Stop the servers and agents
             super(IorTestBase, self).tearDown()
@@ -70,7 +71,7 @@ class IorTestBase(TestWithServers):
         # Get the pool params
         self.pool = TestPool(self.context, self.log)
         self.pool.get_params(self)
-        
+
         # Create a pool
         self.pool.create()
 
@@ -93,10 +94,10 @@ class IorTestBase(TestWithServers):
         self.dfuse.set_dfuse_params(self.pool)
         if self.container:
             self.dfuse.set_dfuse_cont_param(self.container)
-        
+
         try:
             # start dfuse
-            self.dfuse.run(self.hostlist_clients)
+            self.dfuse.run_dfuse(self.hostlist_clients)
         except CommandFailure as error:
             self.log.error("Dfuse Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
@@ -119,9 +120,11 @@ class IorTestBase(TestWithServers):
 
         # start dfuse if api is POSIX
         if self.ior_cmd.api.value == "POSIX":
+            # Connect to the pool, create container and then start dfuse
             self.pool.connect()
             self.create_cont()
             self.start_dfuse()
+            self.ior_cmd.test_file.update(self.dfuse.mount_dir.value + "/testfile")
 
         # Run IOR
         self.run_ior(self.get_job_manager_command(), self.processes)
