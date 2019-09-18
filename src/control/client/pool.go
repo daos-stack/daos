@@ -53,6 +53,7 @@ type PoolCreateReq struct {
 	Sys        string
 	Usr        string
 	Grp        string
+	Acl        []string
 }
 
 // PoolCreateResp struct contains response
@@ -74,7 +75,7 @@ func (c *connList) PoolCreate(req *PoolCreateReq) (*PoolCreateResp, error) {
 	rpcReq := &pb.PoolCreateReq{
 		Scmbytes: req.ScmBytes, Nvmebytes: req.NvmeBytes,
 		Ranks: req.RankList, Numsvcreps: req.NumSvcReps, Sys: req.Sys,
-		User: req.Usr, Usergroup: req.Grp,
+		User: req.Usr, Usergroup: req.Grp, Acl: req.Acl,
 	}
 
 	c.log.Debugf("Create DAOS pool request: %s\n", rpcReq)
