@@ -23,11 +23,6 @@
 
 package main
 
-import (
-	"github.com/daos-stack/daos/src/control/client"
-	log "github.com/daos-stack/daos/src/control/logging"
-)
-
 // SvcCmd is the struct representing the top-level service subcommand.
 type SvcCmd struct {
 	KillRank KillRankSvcCmd `command:"kill-rank" alias:"kr" description:"Terminate server running as specific rank on a DAOS pool"`
@@ -36,18 +31,14 @@ type SvcCmd struct {
 // KillRankSvcCmd is the struct representing the command to kill server
 // identified by rank on given pool identified by uuid.
 type KillRankSvcCmd struct {
+	logCmd
 	connectedCmd
 	Rank     uint32 `short:"r" long:"rank" description:"Rank identifying DAOS server" required:"1"`
 	PoolUUID string `short:"p" long:"pool-uuid" description:"Pool uuid that rank relates to" required:"1"`
 }
 
-// run kill rank command with specified parameters on all connected servers
-func killRankSvc(conns client.Connect, uuid string, rank uint32) {
-	log.Infof("Kill Rank command results:\n%s", conns.KillRank(uuid, rank))
-}
-
 // Execute is run when KillRankSvcCmd activates
 func (k *KillRankSvcCmd) Execute(args []string) error {
-	killRankSvc(k.conns, k.PoolUUID, k.Rank)
+	k.log.Infof("Kill Rank command results:\n%s", k.conns.KillRank(k.PoolUUID, k.Rank))
 	return nil
 }

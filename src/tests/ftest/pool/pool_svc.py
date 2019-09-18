@@ -30,18 +30,12 @@ from apricot import TestWithServers
 
 from daos_api import DaosPool, DaosServer, DaosApiError
 
+
 class PoolSvc(TestWithServers):
     """
     Tests svc argument while pool create.
     :avocado: recursive
     """
-
-    def tearDown(self):
-        try:
-            if self.pool is not None and self.pool.attached:
-                self.pool.destroy(1)
-        finally:
-            super(PoolSvc, self).tearDown()
 
     def test_poolsvc(self):
         """

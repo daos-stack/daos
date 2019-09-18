@@ -144,7 +144,7 @@ class TestWithoutServers(Test):
         if self.fault_file:
             os.remove(self.fault_file)
 
-    def dual_log(self, msg, log_type="info"):
+    def multi_log(self, msg, log_type="info"):
         """Log the provided message to the daos log and the test log.
 
         Args:
@@ -173,8 +173,15 @@ class TestWithServers(TestWithoutServers):
         super(TestWithServers, self).__init__(*args, **kwargs)
 
         self.agent_sessions = None
+        self.nvme_parameter = None
         self.setup_start_servers = True
         self.setup_start_agents = True
+        self.server_log = None
+        self.client_log = None
+        self.log_dir = os.path.split(
+            os.getenv("D_LOG_FILE", "/tmp/server.log"))[0]
+        self.test_id = "{}-{}".format(
+            os.path.split(self.filename)[1], self.name.str_uid)
 
     def setUp(self):
         """Set up each test case."""
@@ -191,7 +198,8 @@ class TestWithServers(TestWithoutServers):
         test_clients = self.params.get("test_clients", "/run/hosts/*")
         server_count = self.params.get("server_count", "/run/hosts/*")
         client_count = self.params.get("client_count", "/run/hosts/*")
-
+        self.nvme_parameter = self.params.get(
+            "bdev_class", '/server_config/server/')
         # If server or client host list are defined through valid slurm
         # partition names override any hosts specified through lists.
         test_servers, self.partition_servers = self.get_partition_hosts(
@@ -228,6 +236,10 @@ class TestWithServers(TestWithoutServers):
                     "Test requires {} {}; {} specified".format(
                         expected_count, host_type, actual_count))
 
+        # Storage setup if requested in test input file
+        if self.nvme_parameter == "nvme":
+            server_utils.storage_prepare(self.hostlist_servers)
+
         # Create host files
         self.hostfile_servers = write_host_file.write_host_file(
             self.hostlist_servers, self.workdir, self.hostfile_servers_slots)
@@ -247,65 +259,148 @@ class TestWithServers(TestWithoutServers):
 
     def tearDown(self):
         """Tear down after each test case."""
-        # Report any errors after attempting each tear down step
-        errors = []
-
         # Destroy any containers first
-        if self.container:
-            self.dual_log("Destroying containers")
-            if not isinstance(self.container, (list, tuple)):
-                self.container = [self.container]
-            for container in self.container:
-                try:
-                    container.close()
-                    container.destroy()
-                except (DaosApiError, TestFail) as error:
-                    self.dual_log("  {}".format(error))
-                    errors.append(
-                        "Error destroying container: {}".format(error))
+        errors = self.destroy_containers(self.container)
 
         # Destroy any pools next
-        if self.pool:
-            self.dual_log("Destroying pools")
-            if not isinstance(self.pool, (list, tuple)):
-                self.pool = [self.pool]
-            for pool in self.pool:
-                try:
-                    pool.disconnect()
-                    pool.destroy()
-                except (DaosApiError, TestFail) as error:
-                    self.dual_log("  {}".format(error))
-                    errors.append("Error destroying pool: {}".format(error))
+        errors.extend(self.destroy_pools(self.pool))
 
         # Stop the agents
-        if self.agent_sessions:
-            self.dual_log("Stopping agents")
-            try:
-                agent_utils.stop_agent(
-                    self.agent_sessions, self.hostlist_clients)
-            except agent_utils.AgentFailed as error:
-                self.dual_log("  {}".format(error))
-                errors.append("Error stopping agents: {}".format(error))
+        errors.extend(self.stop_agents())
 
         # Stop the servers
-        self.dual_log("Stopping servers")
-        try:
-            server_utils.stop_server(hosts=self.hostlist_servers)
-        except server_utils.ServerFailed as error:
-            self.dual_log("  {}".format(error))
-            errors.append("Error stopping servers: {}".format(error))
+        errors.extend(self.stop_servers())
 
         # Disable fault injection, if enabled
         try:
             super(TestWithServers, self).tearDown()
         except OSError as error:
-            errors.append("Error disabling fault injection: {}".format(error))
+            errors.append(
+                "Error running inheritted teardown(): {}".format(error))
 
         # Fail the test if any errors occurred during tear down
         if errors:
             self.fail(
                 "Errors detected during teardown:\n  - {}".format(
                     "\n  - ".join(errors)))
+
+    def destroy_containers(self, containers):
+        """Close and destroy one or more containers.
+
+        Args:
+            containers (object): a list of or single DaosContainer or
+                TestContainer object(s) to destroy
+
+        Returns:
+            list: a list of exceptions raised destroying the containers
+
+        """
+        error_list = []
+        if containers:
+            if not isinstance(containers, (list, tuple)):
+                containers = [containers]
+            self.multi_log("Destroying containers")
+            for container in containers:
+                # Only close a container that has been openned by the test
+                if not hasattr(container, "opened") or container.opened:
+                    try:
+                        container.close()
+                    except (DaosApiError, TestFail) as error:
+                        self.multi_log("  {}".format(error))
+                        error_list.append(
+                            "Error closing the container: {}".format(error))
+
+                # Only destroy a container that has been created by the test
+                if not hasattr(container, "attached") or container.attached:
+                    try:
+                        container.destroy()
+                    except (DaosApiError, TestFail) as error:
+                        self.multi_log("  {}".format(error))
+                        error_list.append(
+                            "Error destroying container: {}".format(error))
+        return error_list
+
+    def destroy_pools(self, pools):
+        """Disconnect and destroy one or more pools.
+
+        Args:
+            pools (object): a list of or single DaosPool or TestPool object(s)
+                to destroy
+
+        Returns:
+            list: a list of exceptions raised destroying the pools
+
+        """
+        error_list = []
+        if pools:
+            if not isinstance(pools, (list, tuple)):
+                pools = [pools]
+            self.multi_log("Destroying pools")
+            for pool in pools:
+                # Only disconnect a pool that has been connected by the test
+                if not hasattr(pool, "connected") or pool.connected:
+                    try:
+                        pool.disconnect()
+                    except (DaosApiError, TestFail) as error:
+                        self.multi_log("  {}".format(error))
+                        error_list.append(
+                            "Error disconnecting pool: {}".format(error))
+
+                # Only destroy a pool that has been created by the test
+                if not hasattr(pool, "attached") or pool.attached:
+                    try:
+                        pool.destroy(1)
+                    except (DaosApiError, TestFail) as error:
+                        self.multi_log("  {}".format(error))
+                        error_list.append(
+                            "Error destroying pool: {}".format(error))
+        return error_list
+
+    def stop_agents(self):
+        """Stop the daos agents.
+
+        Returns:
+            list: a list of exceptions raised stopping the agents
+
+        """
+        error_list = []
+        if self.agent_sessions:
+            self.multi_log("Stopping agents")
+            try:
+                agent_utils.stop_agent(
+                    self.agent_sessions, self.hostlist_clients)
+            except agent_utils.AgentFailed as error:
+                self.multi_log("  {}".format(error))
+                error_list.append("Error stopping agents: {}".format(error))
+        return error_list
+
+    def stop_servers(self):
+        """Stop the daos server and I/O servers.
+
+        Returns:
+            list: a list of exceptions raised stopping the servers
+
+        """
+        error_list = []
+        if self.hostfile_servers:
+            # Reset the nvme storage
+            if self.nvme_parameter == "nvme":
+                self.multi_log("Resetting NVMe storage on the servers")
+                try:
+                    server_utils.storage_reset(self.hostlist_servers)
+                except server_utils.ServerFailed as error:
+                    self.multi_log("  {}".format(error))
+                    error_list.append(
+                        "Error resetting nvme storage: {}".format(error))
+
+            # Stop the servers
+            self.multi_log("Stopping servers")
+            try:
+                server_utils.stop_server(hosts=self.hostlist_servers)
+            except server_utils.ServerFailed as error:
+                self.multi_log("  {}".format(error))
+                error_list.append("Error stopping servers: {}".format(error))
+        return error_list
 
     def start_servers(self, server_groups=None):
         """Start the servers and clients.
@@ -320,10 +415,14 @@ class TestWithServers(TestWithoutServers):
                 self.log.info(
                     "Starting servers: group=%s, hosts=%s", group, hosts)
                 hostfile = write_host_file.write_host_file(hosts, self.workdir)
-                server_utils.run_server(hostfile, group, self.basepath)
+                server_utils.run_server(
+                    hostfile, group, self.basepath,
+                    log_filename=self.server_log)
+
         else:
             server_utils.run_server(
-                self.hostfile_servers, self.server_group, self.basepath)
+                self.hostfile_servers, self.server_group, self.basepath,
+                log_filename=self.server_log)
 
     def get_partition_hosts(self, partition_key, host_list):
         """[summary].
@@ -362,3 +461,19 @@ class TestWithServers(TestWithoutServers):
             return hosts, partiton_name
         else:
             return host_list, None
+
+    def update_log_file_names(self, test_name=None):
+        """Get separate logs for both servers and clients.
+
+        Args:
+            test_name (str, optional): name of test variant
+        """
+        # Determine the path and name of the daos server log using the
+        # D_LOG_FILE env or, if not set, the value used in the doas server yaml
+        if test_name:
+            self.test_id = test_name
+
+        self.server_log = os.path.join(
+            self.log_dir, "{}_server_daos.log".format(self.test_id))
+        self.client_log = os.path.join(
+            self.log_dir, "{}_client_daos.log".format(self.test_id))

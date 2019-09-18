@@ -197,7 +197,6 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	     daos_unit_oid_t oid, daos_epoch_t epoch,
 	     bool no_create, uint32_t intent, struct vos_object **obj_p)
 {
-
 	struct vos_object	*obj;
 	struct obj_lru_key	 lkey;
 	int			 rc;
@@ -289,7 +288,10 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 		if (rc == -DER_NONEXIST) {
 			D_DEBUG(DB_TRACE, "non exist oid "DF_UOID"\n",
 				DP_UOID(oid));
+			obj->obj_sync_epoch = 0;
 			rc = 0;
+		} else if (rc == 0) {
+			obj->obj_sync_epoch = obj->obj_df->vo_sync;
 		}
 	} else {
 		rc = vos_oi_find_alloc(cont, oid, epoch, intent, &obj->obj_df);
@@ -314,6 +316,26 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 
 	obj->obj_incarnation = obj->obj_df->vo_incarnation;
 out:
+	if (obj->obj_df != NULL && epoch <= obj->obj_sync_epoch &&
+	    (intent == DAOS_INTENT_COS || (vos_dth_get() != NULL &&
+	     (intent == DAOS_INTENT_PUNCH || intent == DAOS_INTENT_UPDATE)))) {
+		/* If someone has synced the object against the
+		 * obj->obj_sync_epoch, then we do not allow to modify the
+		 * object with old epoch. Let's ask the caller to retry with
+		 * newer epoch.
+		 *
+		 * Fot rebuild case, the @dth will be NULL.
+		 */
+		D_ASSERT(obj->obj_sync_epoch > 0);
+
+		D_INFO("Refuse %s obj "DF_UOID" because of the epoch "DF_U64
+		       " is not newer than the sync epoch "DF_U64"\n",
+		       intent == DAOS_INTENT_PUNCH ? "punch" : "update",
+		       DP_UOID(oid), epoch, obj->obj_sync_epoch);
+		vos_obj_release(occ, obj);
+		D_GOTO(failed, rc = -DER_INPROGRESS);
+	}
+
 	*obj_p = obj;
 	return 0;
 failed:

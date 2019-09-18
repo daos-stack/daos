@@ -728,6 +728,10 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc)
 	case VOS_PO_CTL_RESET_GC:
 		memset(&pool->vp_gc_stat, 0, sizeof(pool->vp_gc_stat));
 		break;
+	case VOS_PO_CTL_VEA_FLUSH:
+		if (pool->vp_vea_info != NULL)
+			vea_flush(pool->vp_vea_info);
+		break;
 	}
 	return 0;
 }
