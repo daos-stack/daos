@@ -411,6 +411,8 @@ struct dss_coll_args {
 	/** Arguments for dss_collective func (Mandatory) */
 	void				*ca_func_args;
 	void				*ca_aggregator;
+	int				*ca_exclude_tgts;
+	int				ca_exclude_tgts_cnt;
 	/** Stream arguments for all streams */
 	struct dss_coll_stream_args	ca_stream_args;
 };
