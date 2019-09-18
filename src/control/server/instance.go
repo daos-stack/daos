@@ -428,3 +428,7 @@ func (srv *IOServerInstance) callSetUp() error {
 
 	return nil
 }
+
+func (srv *IOServerInstance) IsMSReplica() bool {
+	return srv.hasSuperblock() && srv.getSuperblock().MS
+}
