@@ -33,7 +33,12 @@ import (
 // given device UUID
 func (c *connList) BioHealthQuery(req *pb.BioHealthReq) ResultQueryMap {
 	results := make(ResultQueryMap)
-	mc := c.controllers[0] // connect to first AP only for now
+
+	mc, err := chooseServiceLeader(c.controllers)
+	if err != nil {
+		results[""] = ClientBioResult{"", nil, err}
+		return results
+	}
 
 	resp, err := mc.getSvcClient().BioHealthQuery(context.Background(), req)
 
@@ -46,7 +51,12 @@ func (c *connList) BioHealthQuery(req *pb.BioHealthReq) ResultQueryMap {
 // SmdListDevs will list all devices in SMD device table
 func (c *connList) SmdListDevs(req *pb.SmdDevReq) ResultSmdMap {
 	results := make(ResultSmdMap)
-	mc := c.controllers[0] // connect to first AP only for now
+
+	mc, err := chooseServiceLeader(c.controllers)
+	if err != nil {
+		results[""] = ClientSmdResult{"", nil, err}
+		return results
+	}
 
 	resp, err := mc.getSvcClient().SmdListDevs(context.Background(), req)
 
