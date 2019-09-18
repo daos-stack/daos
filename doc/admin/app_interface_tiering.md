@@ -12,7 +12,7 @@ provided to manage containers.
 
 To create a container:
 ```
-$ orterun -np 1 --ompi-server file:~/uri.txt daos container create --pool=a171434a-05a5-4671-8fe2-615aa0d05094 --svc=0
+$ daos container create --pool=a171434a-05a5-4671-8fe2-615aa0d05094 --svc=0
 Successfully created container 008123fc-6b6c-4768-a88a-a2a5ef34a1a2
 ```
 
@@ -23,7 +23,7 @@ Then subsequent invocations of the daos tools need to reference the path
 to the POSIX file or directory.
 
 ```
-$ orterun -np 1 --ompi-server file:~/uri.txt daos container create --pool=a171434a-05a5-4671-8fe2-615aa0d05094 --svc=0 --path=/tmp/mycontainer --type=POSIX --oclass=large --chunk_size=4K
+$ daos container create --pool=a171434a-05a5-4671-8fe2-615aa0d05094 --svc=0 --path=/tmp/mycontainer --type=POSIX --oclass=large --chunk_size=4K
 Successfully created container 419b7562-5bb8-453f-bd52-917c8f5d80d1 type POSIX
 $ daos container query --svc=0 --path=/tmp/mycontainer
 Pool UUID:      a171434a-05a5-4671-8fe2-615aa0d05094
@@ -154,8 +154,7 @@ is granted access to the pool and container).
 To mount an existing POSIX container with dfuse, run the following command:
 
 ```
-$ orterun -np 1 --ompi-server file:~/uri.txt dfuse -p a171434a-05a5-4671-8fe2-615aa0d05094 -s 0 -c 464e68ca-0a30-4a5f-8829-238e890899d2 -m /tmp/daos -S &
-[1] 157981
+$ dfuse -p a171434a-05a5-4671-8fe2-615aa0d05094 -s 0 -c 464e68ca-0a30-4a5f-8829-238e890899d2 -m /tmp/daos -S
 ```
 
 The UUID after -p and -c should be replaced with respectively the pool and

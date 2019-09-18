@@ -37,9 +37,11 @@ type storageQueryCmd struct {
 }
 
 // nvmeHealthQueryCmd is the struct representing the "storage query health" subcommand
+//
+// Command is issued across all connected hosts (calls client.StorageScan and is
+// an alias for "storage scan").
 type nvmeHealthQueryCmd struct {
 	logCmd
-	broadcastCmd
 	connectedCmd
 }
 
@@ -56,6 +58,8 @@ func (h *nvmeHealthQueryCmd) Execute(args []string) error {
 }
 
 // bsHealthQueryCmd is the struct representing the "storage query bio" subcommand
+//
+// Command is issued to the management service access point.
 type bsHealthQueryCmd struct {
 	logCmd
 	connectedCmd
@@ -85,6 +89,8 @@ func (b *bsHealthQueryCmd) Execute(args []string) error {
 }
 
 // smdQueryCmd is the struct representing the "storage query smd" subcommand
+//
+// Command is issued to the management service access point.
 type smdQueryCmd struct {
 	logCmd
 	connectedCmd

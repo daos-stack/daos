@@ -348,6 +348,11 @@ ec_parity_target(unsigned int ptgt_idx, unsigned int nr, daos_iod_t *iods,
 int
 ec_copy_iods(daos_iod_t *in, int nr, daos_iod_t **out);
 
+/* cli_ec.c */
+void
+ec_get_tgt_set(daos_iod_t *iods, unsigned int nr, struct daos_oclass_attr *oca,
+	       bool parify_include, uint64_t *tgt_set);
+
 void
 ec_free_iods(daos_iod_t *iods, int nr);
 

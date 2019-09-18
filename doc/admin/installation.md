@@ -37,7 +37,34 @@ DAOS RPM and deb packaging is under development and will be available for DAOS
 v1.0. Integration with the [Spack](https://spack.io/) package manager is also
 under consideration.
 
-## DAOS Source Code
+## DAOS from Scratch
+
+The following instructions have been verified with CentOS. Installations on other
+Linux distributions might be similar with some variations.
+Developers of DAOS may want to review the additional sections below before beginning,
+for suggestions related specifically to development. Contact us in our
+[*forum*](https://daos.groups.io/g/daos) for further help with any issues.
+
+### Build Prerequisites
+
+To build DAOS and its dependencies, several software packages must be installed
+on the system. This includes scons, libuuid, cmocka, ipmctl, and several other
+packages usually available on all the Linux distributions. Moreover, a Go
+version of at least 1.10 is required.
+
+A exhaustive list of packages for each supported Linux distribution is
+maintained in the Docker files:
+
+-    [CentOS](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.centos.7#L53-L72)
+-    [OpenSUSE](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.leap.15#L16-L40)
+-    [Ubuntu](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.ubuntu.18.04#L21-L38)
+
+The command lines to install the required packages can be extracted from
+the Docker files by removing the "RUN" command which is specific to Docker.
+Check the [docker](https://github.com/daos-stack/daos/tree/master/utils/docker)
+directory for different Linux distribution versions.
+
+### DAOS Source Code
 
 To check out the DAOS source code, run the following command:
 
@@ -53,43 +80,6 @@ below). Then initialize the submodules with:
     $ git submodule init
     $ git submodule update
 ```
-
-## DAOS from Scratch
-
-The following instructions have been verified with CentOS. Installations on other
-Linux distributions might be similar with some variations.
-Developers of DAOS may want to review the additional sections below before beginning,
-for suggestions related specifically to development. Contact us in our
-[*forum*](https://daos.groups.io/g/daos) for further help with any issues.
-
-### Build Prerequisites
-
-First, verify that the autotools packages listed below are at the
-appropriate versions (or above):
-
--   m4 (GNU M4) 1.4.16
--   flex 2.5.37
--   autoconf (GNU Autoconf) 2.69
--   automake (GNU automake) 1.13.4
--   libtool (GNU libtool) 2.4.2
-
-Moreover, a Go version of at least 1.10 is required.
-
-To build DAOS and its dependencies, several software packages must be installed
-on the system. This includes scons, libuuid, cmocka, ipmctl, and several other
-packages usually available on all the Linux distributions.
-
-A exhaustive list of packages for each supported Linux distribution is
-maintained in the Docker files:
-
--    [CentOS](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.centos.7#L53-L72)
--    [OpenSUSE](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.leap.15#L16-L40)
--    [Ubuntu](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.ubuntu.18.04#L21-L38)
-
-The command lines to install the required packages can be extracted from
-the Docker files by removing the "RUN" command which is specific to Docker.
-Check the [docker](https://github.com/daos-stack/daos/tree/master/utils/docker)
-directory for different Linux distribution versions.
 
 ### Building DAOS & Dependencies
 
