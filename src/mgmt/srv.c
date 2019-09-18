@@ -25,6 +25,7 @@
  * management interface that covers:
  * - storage detection;
  * - storage allocation;
+ * - storage health query
  * - DAOS pool initialization.
  *
  * The management server is a first-class server module (like object/pool
@@ -741,6 +742,170 @@ out:
 }
 
 static void
+process_smdlistdevs_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__SmdDevReq		*req = NULL;
+	Mgmt__SmdDevResp	*resp = NULL;
+	uint8_t			*body;
+	size_t			 len;
+	int			 i;
+	int			 rc = 0;
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__smd_dev_req__unpack(
+		NULL, drpc_req->body.len, drpc_req->body.data);
+
+	if (req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to unpack req (smd list devs)\n");
+		return;
+	}
+
+	D_INFO("Received request to list SMD devices\n");
+
+	D_ALLOC_PTR(resp);
+	if (resp == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to allocate daos response ref\n");
+		mgmt__smd_dev_req__free_unpacked(req, NULL);
+		return;
+	}
+
+	/* Response status is populated with SUCCESS on init. */
+	mgmt__smd_dev_resp__init(resp);
+
+	rc = ds_mgmt_smd_list_devs(resp);
+	if (rc != 0)
+		D_ERROR("Failed to list SMD devices :%d\n", rc);
+
+	resp->status = rc;
+	len = mgmt__smd_dev_resp__get_packed_size(resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to allocate drpc response body\n");
+	} else {
+		mgmt__smd_dev_resp__pack(resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__smd_dev_req__free_unpacked(req, NULL);
+
+	for (i = 0; i < resp->n_devices; i++) {
+		if (resp->devices[i] != NULL) {
+			if (resp->devices[i]->uuid != NULL)
+				D_FREE(resp->devices[i]->uuid);
+			if (resp->devices[i]->tgt_ids != NULL)
+				D_FREE(resp->devices[i]->tgt_ids);
+			D_FREE(resp->devices[i]);
+		}
+	}
+	D_FREE(resp);
+}
+
+static void
+process_biohealth_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__BioHealthReq	*req = NULL;
+	Mgmt__BioHealthResp	*resp = NULL;
+	struct mgmt_bio_health	*bio_health = NULL;
+	struct bio_dev_state	 bds;
+	uuid_t			 uuid;
+	uint8_t			*body;
+	size_t			 len;
+	int			 rc = 0;
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__bio_health_req__unpack(
+		NULL, drpc_req->body.len, drpc_req->body.data);
+
+	if (req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to unpack req (bio health query)\n");
+		return;
+	}
+
+	D_DEBUG(DB_MGMT, "Received request to query BIO health data\n");
+
+	D_ALLOC_PTR(resp);
+	if (resp == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to allocate daos response ref\n");
+		mgmt__bio_health_req__free_unpacked(req, NULL);
+		return;
+	}
+
+	/* Response status is populated with SUCCESS on init. */
+	mgmt__bio_health_resp__init(resp);
+
+	if (strlen(req->dev_uuid) != 0) {
+		rc = uuid_parse(req->dev_uuid, uuid);
+		if (rc != 0) {
+			D_ERROR("Unable to parse device UUID %s: %d\n",
+				req->dev_uuid, rc);
+			goto out;
+		}
+	} else
+		uuid_clear(uuid); /* need to set uuid = NULL */
+
+	D_ALLOC_PTR(bio_health);
+	if (bio_health == NULL) {
+		D_ERROR("Failed to allocate bio health struct\n");
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	rc = ds_mgmt_bio_health_query(bio_health, uuid, req->tgt_id);
+	if (rc != 0) {
+		D_ERROR("Failed to query BIO health data :%d\n", rc);
+		goto out;
+	}
+
+	D_ALLOC(resp->dev_uuid, DAOS_UUID_STR_SIZE);
+	if (resp->dev_uuid == NULL) {
+		D_ERROR("failed to allocate buffer");
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	uuid_unparse_lower(bio_health->mb_devid, resp->dev_uuid);
+	bds = bio_health->mb_dev_state;
+	resp->error_count = bds.bds_error_count;
+	resp->temperature = bds.bds_temperature;
+	resp->media_errors = bds.bds_media_errors[0];
+	resp->read_errs = bds.bds_bio_read_errs;
+	resp->write_errs = bds.bds_bio_write_errs;
+	resp->unmap_errs = bds.bds_bio_unmap_errs;
+	resp->checksum_errs = bds.bds_checksum_errs;
+	resp->temp = bds.bds_temp_warning ? true : false;
+	resp->spare = bds.bds_avail_spare_warning ? true : false;
+	resp->readonly = bds.bds_read_only_warning ? true : false;
+	resp->device_reliability = bds.bds_dev_reliabilty_warning ?
+					true : false;
+	resp->volatile_memory = bds.bds_volatile_mem_warning ? true : false;
+
+out:
+	resp->status = rc;
+	len = mgmt__bio_health_resp__get_packed_size(resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to allocate drpc response body\n");
+	} else {
+		mgmt__bio_health_resp__pack(resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__bio_health_req__free_unpacked(req, NULL);
+	D_FREE(resp);
+
+	if (bio_health != NULL)
+		D_FREE(bio_health);
+}
+
+static void
 process_setup_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__DaosResp	*resp = NULL;
@@ -797,6 +962,12 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		break;
 	case DRPC_METHOD_MGMT_SET_UP:
 		process_setup_request(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_BIO_HEALTH_QUERY:
+		process_biohealth_request(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_SMD_LIST_DEVS:
+		process_smdlistdevs_request(drpc_req, drpc_resp);
 		break;
 	default:
 		drpc_resp->status = DRPC__STATUS__UNKNOWN_METHOD;
