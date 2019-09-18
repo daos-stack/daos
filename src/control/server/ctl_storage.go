@@ -32,13 +32,16 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/storage"
+	. "github.com/daos-stack/daos/src/control/server/storage/messages"
 )
 
 // StorageControlService encapsulates the storage part of the control service
 type StorageControlService struct {
 	log             logging.Logger
-	nvme            *nvmeStorage
-	scm             *scmStorage
+	ext             External
+	nvme            *storage.NvmeProvider
+	scm             *storage.ScmProvider
 	drpc            drpc.DomainSocketClient
 	instanceStorage []ioserver.StorageConfig
 }
@@ -46,25 +49,26 @@ type StorageControlService struct {
 // DefaultStorageControlService returns a initialized *StorageControlService
 // with default behaviour
 func DefaultStorageControlService(log logging.Logger, cfg *Configuration) (*StorageControlService, error) {
-	scriptPath, err := cfg.ext.getAbsInstallPath(spdkSetupPath)
+	if len(cfg.Servers) < 1 {
+		return nil, errors.New("no I/O Servers configured")
+	}
+
+	// TODO: make per-instance providers
+	storCfg := cfg.Servers[0].Storage
+	nvmeProvider, err := storage.NewNvmeProvider(log, storCfg.Bdev)
 	if err != nil {
 		return nil, err
 	}
 
-	spdkScript := &spdkSetup{
-		log:         log,
-		scriptPath:  scriptPath,
-		nrHugePages: cfg.NrHugepages,
-	}
-
-	return NewStorageControlService(log,
-		newNvmeStorage(log, cfg.NvmeShmID, spdkScript, cfg.ext),
-		newScmStorage(log, cfg.ext), cfg.Servers,
+	return NewStorageControlService(log, cfg.ext,
+		nvmeProvider,
+		storage.NewScmProvider(log), cfg.Servers,
 		getDrpcClientConnection(cfg.SocketDir)), nil
 }
 
 // NewStorageControlService returns an initialized *StorageControlService
-func NewStorageControlService(log logging.Logger, nvme *nvmeStorage, scm *scmStorage,
+func NewStorageControlService(log logging.Logger, ext External,
+	nvme *storage.NvmeProvider, scm *storage.ScmProvider,
 	srvCfgs []*ioserver.Config, drpc drpc.DomainSocketClient) *StorageControlService {
 
 	instanceStorage := []ioserver.StorageConfig{}
@@ -74,6 +78,7 @@ func NewStorageControlService(log logging.Logger, nvme *nvmeStorage, scm *scmSto
 
 	return &StorageControlService{
 		log:             log,
+		ext:             ext,
 		nvme:            nvme,
 		scm:             scm,
 		drpc:            drpc,
@@ -84,7 +89,7 @@ func NewStorageControlService(log logging.Logger, nvme *nvmeStorage, scm *scmSto
 // canAccessBdevs evaluates if any specified Bdevs are not accessible.
 func (c *StorageControlService) canAccessBdevs() (missing []string, ok bool) {
 	for _, storageCfg := range c.instanceStorage {
-		_missing, _ok := c.nvme.hasControllers(storageCfg.Bdev.GetNvmeDevs())
+		_missing, _ok := c.nvme.HasControllers(storageCfg.Bdev.GetNvmeDevs())
 		if !_ok {
 			missing = append(missing, _missing...)
 		}
@@ -102,7 +107,7 @@ func (c *StorageControlService) Setup() error {
 	// fail if config specified nvme devices are inaccessible
 	missing, ok := c.canAccessBdevs()
 	if !ok {
-		return errors.Errorf("%s: missing %v", msgBdevNotFound, missing)
+		return errors.Errorf("%s: missing %v", MsgBdevNotFound, missing)
 	}
 
 	if err := c.scm.Setup(); err != nil {
@@ -134,7 +139,7 @@ type PrepareNvmeRequest struct {
 //
 // Suitable for commands invoked directly on server, not over gRPC.
 func (c *StorageControlService) PrepareNvme(req PrepareNvmeRequest) error {
-	ok, usr := c.nvme.ext.checkSudo()
+	ok, usr := c.ext.checkSudo()
 	if !ok {
 		return errors.Errorf("%s must be run as root or sudo", os.Args[0])
 	}
@@ -146,7 +151,7 @@ func (c *StorageControlService) PrepareNvme(req PrepareNvmeRequest) error {
 	}
 
 	// run reset first to ensure reallocation of hugepages
-	if err := c.nvme.spdk.reset(); err != nil {
+	if err := c.nvme.ResetSpdk(); err != nil {
 		return errors.WithMessage(err, "SPDK setup reset")
 	}
 
@@ -156,7 +161,7 @@ func (c *StorageControlService) PrepareNvme(req PrepareNvmeRequest) error {
 	}
 
 	return errors.WithMessage(
-		c.nvme.spdk.prep(req.HugePageCount, tUsr, req.PCIWhitelist),
+		c.nvme.PrepSpdk(req.HugePageCount, tUsr, req.PCIWhitelist),
 		"SPDK setup",
 	)
 }
@@ -170,7 +175,7 @@ type PrepareScmRequest struct {
 func (c *StorageControlService) GetScmState() (types.ScmState, error) {
 	state := types.ScmStateUnknown
 
-	ok, _ := c.scm.ext.checkSudo()
+	ok, _ := c.ext.checkSudo()
 	if !ok {
 		return state, errors.Errorf("%s must be run as root or sudo", os.Args[0])
 	}
@@ -179,15 +184,15 @@ func (c *StorageControlService) GetScmState() (types.ScmState, error) {
 		return state, errors.WithMessage(err, "SCM setup")
 	}
 
-	if !c.scm.initialized {
-		return state, errors.New(msgScmNotInited)
+	if !c.scm.Initialized() {
+		return state, errors.New(MsgScmNotInited)
 	}
 
-	if len(c.scm.modules) == 0 {
-		return state, errors.New(msgScmNoModules)
+	if len(c.scm.Modules()) == 0 {
+		return state, errors.New(MsgScmNoModules)
 	}
 
-	return c.scm.prep.GetState()
+	return c.scm.GetPrepState()
 }
 
 // PrepareScm preps locally attached modules and returns need to reboot message,
@@ -195,7 +200,7 @@ func (c *StorageControlService) GetScmState() (types.ScmState, error) {
 //
 // Suitable for commands invoked directly on server, not over gRPC.
 func (c *StorageControlService) PrepareScm(req PrepareScmRequest, state types.ScmState,
-) (needsReboot bool, pmemDevs []pmemDev, err error) {
+) (needsReboot bool, pmemDevs []storage.PmemDev, err error) {
 
 	if req.Reset {
 		// run reset to remove namespaces and clear regions
@@ -215,7 +220,7 @@ func (c *StorageControlService) ScanNvme() (types.NvmeControllers, error) {
 		return nil, errors.Wrap(err, "NVMe storage scan")
 	}
 
-	return c.nvme.controllers, nil
+	return c.nvme.Controllers(), nil
 }
 
 // ScanScm scans locally attached modules and returns list directly.
@@ -226,5 +231,5 @@ func (c *StorageControlService) ScanScm() (types.ScmModules, types.PmemDevices, 
 		return nil, nil, errors.Wrap(err, "SCM storage scan")
 	}
 
-	return c.scm.modules, c.scm.pmemDevs, nil
+	return c.scm.Modules(), c.scm.PmemDevs(), nil
 }

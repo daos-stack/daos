@@ -30,24 +30,9 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	types "github.com/daos-stack/daos/src/control/common/storage"
-	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage"
+	. "github.com/daos-stack/daos/src/control/server/storage/messages"
 )
-
-// newState creates, populates and returns ResponseState in addition
-// to logging any err.
-func newState(log logging.Logger, status ctlpb.ResponseStatus, errMsg string, infoMsg string,
-	contextMsg string) *ctlpb.ResponseState {
-
-	state := &ctlpb.ResponseState{
-		Status: status, Error: errMsg, Info: infoMsg,
-	}
-
-	if errMsg != "" {
-		log.Error(contextMsg + ": " + errMsg)
-	}
-
-	return state
-}
 
 func (c *StorageControlService) doNvmePrepare(req *ctlpb.PrepareNvmeReq) (resp *ctlpb.PrepareNvmeResp) {
 	resp = &ctlpb.PrepareNvmeResp{}
@@ -60,25 +45,11 @@ func (c *StorageControlService) doNvmePrepare(req *ctlpb.PrepareNvmeReq) (resp *
 	})
 
 	if err != nil {
-		resp.State = newState(c.log, ctlpb.ResponseStatus_CTRL_ERR_NVME, err.Error(), "", msg)
+		resp.State = storage.NewState(c.log, ctlpb.ResponseStatus_CTRL_ERR_NVME, err.Error(), "", msg)
 		return
 	}
 
-	resp.State = newState(c.log, ctlpb.ResponseStatus_CTRL_SUCCESS, "", "", msg)
-	return
-}
-
-func translatePmemDevices(inDevs []pmemDev) (outDevs types.PmemDevices) {
-	for _, dev := range inDevs {
-		outDevs = append(outDevs,
-			&ctlpb.PmemDevice{
-				Uuid:     dev.UUID,
-				Blockdev: dev.Blockdev,
-				Dev:      dev.Dev,
-				Numanode: uint32(dev.NumaNode),
-			})
-	}
-
+	resp.State = storage.NewState(c.log, ctlpb.ResponseStatus_CTRL_SUCCESS, "", "", msg)
 	return
 }
 
@@ -88,13 +59,13 @@ func (c *StorageControlService) doScmPrepare(req *ctlpb.PrepareScmReq) (resp *ct
 
 	scmState, err := c.GetScmState()
 	if err != nil {
-		resp.State = newState(c.log, ctlpb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg)
+		resp.State = storage.NewState(c.log, ctlpb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg)
 		return
 	}
 
 	needsReboot, pmemDevs, err := c.PrepareScm(PrepareScmRequest{Reset: req.GetReset_()}, scmState)
 	if err != nil {
-		resp.State = newState(c.log, ctlpb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg)
+		resp.State = storage.NewState(c.log, ctlpb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg)
 		return
 	}
 
@@ -103,8 +74,8 @@ func (c *StorageControlService) doScmPrepare(req *ctlpb.PrepareScmReq) (resp *ct
 		info = MsgScmRebootRequired
 	}
 
-	resp.State = newState(c.log, ctlpb.ResponseStatus_CTRL_SUCCESS, "", info, msg)
-	resp.Pmems = translatePmemDevices(pmemDevs)
+	resp.State = storage.NewState(c.log, ctlpb.ResponseStatus_CTRL_SUCCESS, "", info, msg)
+	resp.Pmems = storage.TranslatePmemDevices(pmemDevs)
 
 	return
 }
@@ -140,11 +111,11 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 	controllers, err := c.ScanNvme()
 	if err != nil {
 		resp.Nvme = &ctlpb.ScanNvmeResp{
-			State: newState(c.log, ctlpb.ResponseStatus_CTRL_ERR_NVME, err.Error(), "", msg+"NVMe"),
+			State: storage.NewState(c.log, ctlpb.ResponseStatus_CTRL_ERR_NVME, err.Error(), "", msg+"NVMe"),
 		}
 	} else {
 		resp.Nvme = &ctlpb.ScanNvmeResp{
-			State:  newState(c.log, ctlpb.ResponseStatus_CTRL_SUCCESS, "", "", msg+"NVMe"),
+			State:  storage.NewState(c.log, ctlpb.ResponseStatus_CTRL_SUCCESS, "", "", msg+"NVMe"),
 			Ctrlrs: controllers,
 		}
 	}
@@ -152,11 +123,11 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 	modules, pmemDevs, err := c.ScanScm()
 	if err != nil {
 		resp.Scm = &ctlpb.ScanScmResp{
-			State: newState(c.log, ctlpb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg+"SCM"),
+			State: storage.NewState(c.log, ctlpb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg+"SCM"),
 		}
 	} else {
 		resp.Scm = &ctlpb.ScanScmResp{
-			State:   newState(c.log, ctlpb.ResponseStatus_CTRL_SUCCESS, "", "", msg+"SCM"),
+			State:   storage.NewState(c.log, ctlpb.ResponseStatus_CTRL_SUCCESS, "", "", msg+"SCM"),
 			Modules: modules,
 			Pmems:   pmemDevs,
 		}
@@ -185,10 +156,20 @@ func (c *ControlService) doFormat(i *IOServerInstance, resp *ctlpb.StorageFormat
 		hasSuperblock = !needsSuperblock
 	}
 
+	ctrlrResults := types.NvmeControllerResults{}
+	resp.Crets = ctrlrResults
+	mountResults := types.ScmMountResults{}
+	resp.Mrets = mountResults
 	if hasSuperblock {
-		// server already formatted, populate response appropriately
-		c.nvme.formatted = true
-		c.scm.formatted = true
+		// FIXME: For the moment, we'll use the presence of an instance
+		// superblock to indicate that no storage formatting is necessary.
+		// Longer-term, we should be inspecting configured storage devices
+		// individually for their formatted state. This will enable workflows
+		// for formatting storage after it's been replaced, etc.
+		c.nvme.SetFormatted(true)
+		c.scm.SetFormatted(true)
+		i.NotifyStorageReady()
+		return nil
 	}
 
 	var formatFailed bool
@@ -198,11 +179,9 @@ func (c *ControlService) doFormat(i *IOServerInstance, resp *ctlpb.StorageFormat
 	if err != nil {
 		return err
 	}
-	ctrlrResults := types.NvmeControllerResults{}
 	// A config with SCM and no block devices is valid, apparently.
 	if len(bdevConfig.DeviceList) > 0 {
 		c.nvme.Format(bdevConfig, &ctrlrResults)
-		resp.Crets = ctrlrResults
 		formatFailed = ctrlrResults.HasErrors()
 	}
 
@@ -210,25 +189,12 @@ func (c *ControlService) doFormat(i *IOServerInstance, resp *ctlpb.StorageFormat
 	if err != nil {
 		return err
 	}
-	mountResults := types.ScmMountResults{}
 	c.scm.Format(scmConfig, &mountResults)
-	resp.Mrets = mountResults
 	formatFailed = formatFailed || mountResults.HasErrors()
-
-	c.log.Debugf("nvme formatted: %t, scm formatted: %t, has superblock: %t",
-		c.nvme.formatted, c.scm.formatted, hasSuperblock)
-
-	if c.nvme.formatted && c.scm.formatted {
-		// Use this an indicator for whether storage format was requested and completed
-		// vs. storage was already formatted and skipped.
-		// TODO: Rework this logic to be less convoluted.
-		if !hasSuperblock {
-			c.log.Infof("storage format successful on server %d\n", i.runner.Config.Index)
-		}
-	}
 
 	// Only notify that storage is ready if there were no errors.
 	if !formatFailed {
+		c.log.Infof("storage format successful on server %d\n", i.runner.Config.Index)
 		i.NotifyStorageReady()
 	}
 
@@ -333,7 +299,7 @@ func (c *ControlService) StorageBurnIn(req *ctlpb.StorageBurnInReq, stream ctlpb
 func (c *ControlService) FetchFioConfigPaths(
 	empty *ctlpb.EmptyReq, stream ctlpb.MgmtCtl_FetchFioConfigPathsServer) error {
 
-	pluginDir, err := common.GetAbsInstallPath(spdkFioPluginDir)
+	pluginDir, err := common.GetAbsInstallPath(storage.SpdkFioPluginDir)
 	if err != nil {
 		return err
 	}

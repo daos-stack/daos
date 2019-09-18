@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package server
+package storage
 
 import (
 	"fmt"
@@ -29,46 +29,10 @@ import (
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/common"
-	. "github.com/daos-stack/daos/src/control/common/storage"
 	. "github.com/daos-stack/daos/src/control/lib/ipmctl"
 	"github.com/daos-stack/daos/src/control/logging"
+	. "github.com/daos-stack/daos/src/control/server/storage/messages"
 )
-
-// MockPmemDevice returns a mock pmem device file.
-func MockPmemDevice() pmemDev {
-	pmdPB := MockPmemDevicePB()
-
-	return pmemDev{pmdPB.Uuid, pmdPB.Blockdev, pmdPB.Dev, int(pmdPB.Numanode)}
-}
-
-// mock implementation of PrepScm interface for external testing
-type mockPrepScm struct {
-	pmemDevs         []pmemDev
-	prepNeedsReboot  bool
-	resetNeedsReboot bool
-	prepRet          error
-	resetRet         error
-	currentState     ScmState
-	getStateRet      error
-	getNamespacesRet error
-}
-
-func (mp *mockPrepScm) Prep(ScmState) (bool, []pmemDev, error) {
-	return mp.prepNeedsReboot, mp.pmemDevs, mp.prepRet
-}
-func (mp *mockPrepScm) PrepReset(ScmState) (bool, error) {
-	return mp.resetNeedsReboot, mp.resetRet
-}
-func (mp *mockPrepScm) GetState() (ScmState, error) {
-	return mp.currentState, mp.getStateRet
-}
-func (mp *mockPrepScm) GetNamespaces() ([]pmemDev, error) {
-	return mp.pmemDevs, mp.getNamespacesRet
-}
-
-func newMockPrepScm() PrepScm {
-	return &mockPrepScm{}
-}
 
 // TestGetState tests the internals of prepScm, pass in mock runCmd to verify
 // behaviour. Don't use mockPrepScm as we want to test prepScm logic.
@@ -120,7 +84,7 @@ func TestGetState(t *testing.T) {
 		errMsg            string
 		showRegionOut     string
 		expRebootRequired bool
-		expPmemDevs       []pmemDev
+		expPmemDevs       []PmemDev
 		expCommands       []string
 	}{
 		{
@@ -180,7 +144,7 @@ func TestGetState(t *testing.T) {
 
 			// not using mockPrepScm because we want to exercise
 			// prepScm
-			ss := newMockScmStorage(log, defaultMockExt(), nil, []DeviceDiscovery{MockModule()},
+			ss := NewMockScmProvider(log, nil, nil, []DeviceDiscovery{MockModule()},
 				false, newPrepScm(log, mockRun))
 
 			if err := ss.Discover(); err != nil {

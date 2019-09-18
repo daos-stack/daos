@@ -48,12 +48,12 @@ type ENV interface {
 // Env is a simple ENV implementation.
 type Env struct{}
 
-// Rc2err returns an failure if rc != 0.
+// rc2err returns an failure if rc != 0.
 //
 // TODO: If err is already set then it is wrapped,
 // otherwise it is ignored. e.g.
-// func Rc2err(label string, rc C.int, err error) error {
-func Rc2err(label string, rc C.int) error {
+// func rc2err(label string, rc C.int, err error) error {
+func rc2err(label string, rc C.int) error {
 	if rc != 0 {
 		if rc < 0 {
 			rc = -rc
@@ -80,7 +80,7 @@ func (e *Env) InitSPDKEnv(shmID int) (err error) {
 	}
 
 	rc := C.spdk_env_init(opts)
-	if err = Rc2err("spdk_env_opts_init", rc); err != nil {
+	if err = rc2err("spdk_env_opts_init", rc); err != nil {
 		return
 	}
 

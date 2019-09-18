@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package server
+package storage
 
 import (
 	"encoding/json"
@@ -29,9 +29,10 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/pkg/errors"
+
 	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -47,14 +48,14 @@ const (
 	cmdScmDestroyNamespace = "ndctl destroy-namespace %s"
 )
 
-type pmemDev struct {
+type PmemDev struct {
 	UUID     string
 	Blockdev string
 	Dev      string
 	NumaNode int `json:"numa_node"`
 }
 
-func (pd *pmemDev) String() string {
+func (pd *PmemDev) String() string {
 	return fmt.Sprintf("%s, numa %d", pd.Blockdev, pd.NumaNode)
 }
 
@@ -89,10 +90,10 @@ func run(cmd string) (string, error) {
 
 // PrepScm interface provides capability to prepare SCM storage
 type PrepScm interface {
-	Prep(types.ScmState) (bool, []pmemDev, error)
+	Prep(types.ScmState) (bool, []PmemDev, error)
 	PrepReset(types.ScmState) (bool, error)
 	GetState() (types.ScmState, error)
-	GetNamespaces() ([]pmemDev, error)
+	GetNamespaces() ([]PmemDev, error)
 }
 
 type prepScm struct {
@@ -141,7 +142,7 @@ func (ps *prepScm) GetState() (types.ScmState, error) {
 // * regions exist but no free capacity -> no-op, return namespaces
 //
 // Command output from external tools will be returned. State will be passed in.
-func (ps *prepScm) Prep(state types.ScmState) (needsReboot bool, pmemDevs []pmemDev,
+func (ps *prepScm) Prep(state types.ScmState) (needsReboot bool, pmemDevs []PmemDev,
 	err error) {
 
 	ps.log.Debugf("scm in state %s\n", state)
@@ -275,7 +276,7 @@ func hasFreeCapacity(text string) (hasCapacity bool, err error) {
 	return
 }
 
-func parsePmemDevs(jsonData string) (devs []pmemDev, err error) {
+func parsePmemDevs(jsonData string) (devs []PmemDev, err error) {
 	// turn single entries into arrays
 	if !strings.HasPrefix(jsonData, "[") {
 		jsonData = "[" + jsonData + "]"
@@ -287,8 +288,8 @@ func parsePmemDevs(jsonData string) (devs []pmemDev, err error) {
 }
 
 // createNamespaces runs create until no free capacity.
-func (ps *prepScm) createNamespaces() ([]pmemDev, error) {
-	devs := make([]pmemDev, 0)
+func (ps *prepScm) createNamespaces() ([]PmemDev, error) {
+	devs := make([]PmemDev, 0)
 
 	for {
 		ps.log.Infof("creating SCM namespace, may take a few minutes...\n")
@@ -320,7 +321,7 @@ func (ps *prepScm) createNamespaces() ([]pmemDev, error) {
 	}
 }
 
-func (ps prepScm) GetNamespaces() (devs []pmemDev, err error) {
+func (ps prepScm) GetNamespaces() (devs []PmemDev, err error) {
 	out, err := ps.runCmd(cmdScmListNamespaces)
 	if err != nil {
 		return nil, err

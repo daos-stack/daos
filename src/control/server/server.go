@@ -73,6 +73,8 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}
 
 	harness := NewIOServerHarness(&ext{}, log)
+	sp := storage.NewScmProvider(log) // TODO: Create a unique sp for each instance?
+
 	for i, srvCfg := range cfg.Servers {
 		if i+1 > maxIoServers {
 			break
@@ -89,7 +91,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 			TransportConfig: cfg.TransportConfig,
 		})
 
-		srv := NewIOServerInstance(harness.ext, log, bp, msClient, ioserver.NewRunner(log, srvCfg))
+		srv := NewIOServerInstance(log, bp, sp, msClient, ioserver.NewRunner(log, srvCfg))
 		if err := harness.AddInstance(srv); err != nil {
 			return err
 		}

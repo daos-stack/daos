@@ -30,6 +30,7 @@ import (
 
 	commands "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/server"
+	. "github.com/daos-stack/daos/src/control/server/storage/messages"
 )
 
 type storageCmd struct {
@@ -148,7 +149,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 			return concatErrors(scanErrors, err)
 		}
 		if needsReboot {
-			cmd.log.Info(server.MsgScmRebootRequired)
+			cmd.log.Info(MsgScmRebootRequired)
 		} else if len(devices) > 0 {
 			cmd.log.Infof("persistent memory device files:\n\t%+v\n", devices)
 		} else {

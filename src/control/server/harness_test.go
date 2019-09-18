@@ -35,6 +35,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 func TestHarnessCreateSuperblocks(t *testing.T) {
@@ -51,6 +52,9 @@ func TestHarnessCreateSuperblocks(t *testing.T) {
 		isMountPointRet: true,
 	}
 	h := NewIOServerHarness(ext, log)
+	sp := storage.DefaultMockScmProvider(log, storage.NewMockScmExt(
+		true, nil, nil, nil, nil, nil,
+	))
 	for idx, mnt := range []string{"one", "two"} {
 		if err := os.MkdirAll(filepath.Join(testDir, mnt), 0777); err != nil {
 			t.Fatal(err)
@@ -66,7 +70,7 @@ func TestHarnessCreateSuperblocks(t *testing.T) {
 				ControlAddr: &net.TCPAddr{},
 			},
 		)
-		i := NewIOServerInstance(ext, log, nil, m, r)
+		i := NewIOServerInstance(log, nil, sp, m, r)
 		i.fsRoot = testDir
 		if err := h.AddInstance(i); err != nil {
 			t.Fatal(err)

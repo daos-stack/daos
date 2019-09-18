@@ -35,6 +35,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
+	. "github.com/daos-stack/daos/src/control/server/storage/config"
 )
 
 const (
@@ -62,9 +63,9 @@ const (
 	gbyte   = 1000000000
 	blkSize = 4096
 
-	msgBdevNone    = "in config, no nvme.conf generated for server"
-	msgBdevEmpty   = "bdev device list entry empty"
-	msgBdevBadSize = "backfile_size should be greater than 0"
+	MsgBdevNone    = "in config, no nvme.conf generated for server"
+	MsgBdevEmpty   = "bdev device list entry empty"
+	MsgBdevBadSize = "backfile_size should be greater than 0"
 )
 
 // bdev describes parameters and behaviours for a particular bdev class.
@@ -82,7 +83,7 @@ func nilPrep(l logging.Logger, c BdevConfig) error { return nil }
 
 func isEmptyList(c BdevConfig) string {
 	if len(c.DeviceList) == 0 {
-		return "bdev_list empty " + msgBdevNone
+		return "bdev_list empty " + MsgBdevNone
 	}
 
 	return ""
@@ -90,7 +91,7 @@ func isEmptyList(c BdevConfig) string {
 
 func isEmptyNumber(c BdevConfig) string {
 	if c.DeviceCount == 0 {
-		return "bdev_number == 0 " + msgBdevNone
+		return "bdev_number == 0 " + MsgBdevNone
 	}
 
 	return ""
@@ -99,7 +100,7 @@ func isEmptyNumber(c BdevConfig) string {
 func isValidList(c BdevConfig) string {
 	for i, elem := range c.DeviceList {
 		if elem == "" {
-			return fmt.Sprintf("%s (index %d)", msgBdevEmpty, i)
+			return fmt.Sprintf("%s (index %d)", MsgBdevEmpty, i)
 		}
 	}
 
@@ -108,7 +109,7 @@ func isValidList(c BdevConfig) string {
 
 func isValidSize(c BdevConfig) string {
 	if c.FileSize < 1 {
-		return msgBdevBadSize
+		return MsgBdevBadSize
 	}
 
 	return ""

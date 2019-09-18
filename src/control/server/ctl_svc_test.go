@@ -40,10 +40,19 @@ func defaultMockControlService(t *testing.T, log logging.Logger) *ControlService
 func mockControlService(t *testing.T, log logging.Logger, cfg *Configuration) *ControlService {
 	t.Helper()
 
+	ext := cfg.ext.(*mockExt)
+	sp := storage.DefaultMockScmProvider(log, storage.NewMockScmExt(
+		ext.isMountPointRet,
+		ext.cmdRet,
+		ext.mountRet,
+		ext.unmountRet,
+		ext.mkdirRet,
+		ext.removeRet,
+	))
 	cs := ControlService{
-		StorageControlService: *NewStorageControlService(log,
-			defaultMockNvmeStorage(log, cfg.ext),
-			defaultMockScmStorage(log, cfg.ext),
+		StorageControlService: *NewStorageControlService(log, ext,
+			storage.DefaultMockNvmeStorage(log),
+			sp,
 			cfg.Servers, &drpc.ClientConnection{},
 		),
 		harness: &IOServerHarness{
@@ -57,7 +66,7 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *Configuration) *C
 			t.Fatal(err)
 		}
 		runner := ioserver.NewRunner(log, srvCfg)
-		instance := NewIOServerInstance(cfg.ext, log, bp, nil, runner)
+		instance := NewIOServerInstance(log, bp, sp, nil, runner)
 		if err := cs.harness.AddInstance(instance); err != nil {
 			t.Fatal(err)
 		}

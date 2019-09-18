@@ -20,7 +20,7 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
-package storage
+package storage_config
 
 import "github.com/pkg/errors"
 
@@ -109,14 +109,15 @@ func (b BdevClass) String() string {
 
 // BdevConfig represents a Block Device (NVMe, etc.) configuration entry.
 type BdevConfig struct {
-	ConfigPath  string    `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
-	Class       BdevClass `yaml:"bdev_class,omitempty"`
-	DeviceList  []string  `yaml:"bdev_list,omitempty"`
-	DeviceCount int       `yaml:"bdev_number,omitempty"`
-	FileSize    int       `yaml:"bdev_size,omitempty"`
-	ShmID       int       `yaml:"-" cmdLongFlag:"--shm_id,nonzero" cmdShortFlag:"-i,nonzero"`
-	VosEnv      string    `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
-	Hostname    string    `yaml:"-"` // used when generating templates
+	ConfigPath    string    `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
+	Class         BdevClass `yaml:"bdev_class,omitempty"`
+	DeviceList    []string  `yaml:"bdev_list,omitempty"`
+	DeviceCount   int       `yaml:"bdev_number,omitempty"`
+	FileSize      int       `yaml:"bdev_size,omitempty"`
+	ShmID         int       `yaml:"-" cmdLongFlag:"--shm_id,nonzero" cmdShortFlag:"-i,nonzero"`
+	HugePageCount int
+	VosEnv        string `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
+	Hostname      string `yaml:"-"` // used when generating templates
 }
 
 func (bc *BdevConfig) Validate() error {

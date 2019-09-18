@@ -64,7 +64,7 @@ type NvmMgmt struct{}
 // for each.
 func (n *NvmMgmt) Discover() (devices []DeviceDiscovery, err error) {
 	var count C.uint
-	if err = Rc2err(
+	if err = rc2err(
 		"get_number_of_devices",
 		C.nvm_get_number_of_devices(&count)); err != nil {
 		return
@@ -78,7 +78,7 @@ func (n *NvmMgmt) Discover() (devices []DeviceDiscovery, err error) {
 	// println(len(devs))
 
 	// don't need to defer free on devs as we allocated in go
-	if err = Rc2err(
+	if err = rc2err(
 		"get_devices",
 		C.nvm_get_devices(&devs[0], C.NVM_UINT8(count))); err != nil {
 		return
@@ -112,7 +112,7 @@ func (n *NvmMgmt) GetStatuses(devices []DeviceDiscovery) (
 		fmt.Printf("uid of device %d: %s\n", i, C.GoString(uidCharPtr))
 
 		status := C.struct_device_status{}
-		if err = Rc2err(
+		if err = rc2err(
 			"get_device_status",
 			C.nvm_get_device_status(uidCharPtr, &status)); err != nil {
 			return
@@ -130,10 +130,10 @@ func (n *NvmMgmt) GetStatuses(devices []DeviceDiscovery) (
 	return
 }
 
-// Rc2err returns an failure if rc != NVM_SUCCESS.
+// rc2err returns an failure if rc != NVM_SUCCESS.
 //
 // TODO: print human readable error with provided lib macros
-func Rc2err(label string, rc C.int) error {
+func rc2err(label string, rc C.int) error {
 	if rc != C.NVM_SUCCESS {
 		// e := errors.Error(C.NVDIMM_ERR_W(FORMAT_STR_NL, rc))
 		return fmt.Errorf("%s: rc=%d", label, int(rc)) // e

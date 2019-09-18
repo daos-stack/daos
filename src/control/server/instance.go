@@ -36,7 +36,8 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
-	"github.com/daos-stack/daos/src/control/server/storage"
+	providers "github.com/daos-stack/daos/src/control/server/storage"
+	storage "github.com/daos-stack/daos/src/control/server/storage/config"
 )
 
 // IOServerInstance encapsulates control-plane specific configuration
@@ -49,10 +50,10 @@ import (
 type IOServerInstance struct {
 	Index int
 
-	ext           External
 	log           logging.Logger
 	runner        *ioserver.Runner
-	bdevProvider  *storage.BdevProvider
+	bdevProvider  *providers.BdevProvider
+	scmProvider   *providers.ScmProvider
 	drpcClient    drpc.DomainSocketClient
 	msClient      *mgmtSvcClient
 	instanceReady chan *srvpb.NotifyReadyReq
@@ -68,15 +69,16 @@ type IOServerInstance struct {
 
 // NewIOServerInstance returns an *IOServerInstance initialized with
 // its dependencies.
-func NewIOServerInstance(ext External, log logging.Logger,
-	bp *storage.BdevProvider, msc *mgmtSvcClient, r *ioserver.Runner) *IOServerInstance {
+func NewIOServerInstance(log logging.Logger,
+	bp *providers.BdevProvider, sp *providers.ScmProvider,
+	msc *mgmtSvcClient, r *ioserver.Runner) *IOServerInstance {
 
 	return &IOServerInstance{
 		Index:         r.Config.Index,
-		ext:           ext,
 		log:           log,
 		runner:        r,
 		bdevProvider:  bp,
+		scmProvider:   sp,
 		msClient:      msc,
 		drpcClient:    getDrpcClientConnection(r.Config.SocketDir),
 		instanceReady: make(chan *srvpb.NotifyReadyReq),
@@ -117,27 +119,7 @@ func (srv *IOServerInstance) MountScmDevice() error {
 		return err
 	}
 
-	isMount, err := srv.ext.isMountPoint(scmCfg.MountPoint)
-	if err != nil && !os.IsNotExist(errors.Cause(err)) {
-		return errors.WithMessage(err, "failed to check SCM mount")
-	}
-	if isMount {
-		srv.log.Debugf("%s already mounted", scmCfg.MountPoint)
-		return nil
-	}
-
-	srv.log.Debugf("attempting to mount existing SCM dir %s\n", scmCfg.MountPoint)
-	mntType, devPath, mntOpts, err := getMntParams(scmCfg)
-	if err != nil {
-		return errors.WithMessage(err, "getting scm mount params")
-	}
-
-	srv.log.Debugf("mounting scm %s at %s (%s)...", devPath, scmCfg.MountPoint, mntType)
-	if err := srv.ext.mount(devPath, scmCfg.MountPoint, mntType, uintptr(0), mntOpts); err != nil {
-		return errors.WithMessage(err, "mounting existing scm dir")
-	}
-
-	return nil
+	return srv.scmProvider.Mount(scmCfg)
 }
 
 // NeedsScmFormat probes the configured instance storage and determines whether
@@ -166,7 +148,7 @@ func (srv *IOServerInstance) NeedsScmFormat() (bool, error) {
 	// existing methods.
 
 	// First, check to see if the mount point even exists.
-	isMounted, err := srv.ext.isMountPoint(scmCfg.MountPoint)
+	isMounted, err := srv.scmProvider.IsMounted(scmCfg)
 	if err != nil {
 		// In theory, the only possible error is ENOENT. In practice,
 		// test that assumption and return an error if we get something else.

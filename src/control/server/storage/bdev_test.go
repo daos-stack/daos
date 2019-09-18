@@ -34,6 +34,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/daos-stack/daos/src/control/logging"
+	. "github.com/daos-stack/daos/src/control/server/storage/config"
 )
 
 // TestParseBdev verifies config parameters for bdev get converted into nvme

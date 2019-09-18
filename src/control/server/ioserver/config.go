@@ -28,7 +28,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/server/storage"
+	storage "github.com/daos-stack/daos/src/control/server/storage/config"
 )
 
 const (
