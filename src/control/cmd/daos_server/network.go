@@ -47,7 +47,7 @@ func (cmd *networkScanCmd) Execute(args []string) error {
 	var provider string
 
 	if len(args) > 0 {
-		cmd.log.Debugf("An invalid argument was provided: %v", args)
+		cmd.log.Debugf("An invalid argument was provided: %+v", args)
 		return errors.WithMessage(nil, "failed to execute the fabric and device scan.  An invalid argument was provided.")
 	}
 
@@ -75,8 +75,6 @@ func (cmd *networkScanCmd) Execute(args []string) error {
 	}
 	cmd.log.Infof("Fabric scan found %d devices matching the provider spec: %s", len(results), provider)
 
-	cmd.log.Debugf("Compressed: %v\n", results)
-
 	for _, sr := range(results) {
 		cmd.log.Infof("\n%v\n\n", sr)
 	}
@@ -89,20 +87,12 @@ type networkListCmd struct {
 	logCmd
 }
 
+// List the supported providers and show the example text
 func (cmd *networkListCmd) Execute(args []string) error {
 	providers := netdetect.GetSupportedProviders()
-
-	cmd.log.Info("Supported providers:")
+	cmd.log.Info("Supported providers:\n\n")
 	for _, p := range(providers) {
 		cmd.log.Infof("\t%s", p)
 	}
-
-	cmd.log.Info("\nExamples:\n\tdaos_server network scan --provider ofi+sockets")
-	cmd.log.Info("\tdaos_server network scan --provider ofi_rxm")
-	cmd.log.Info("\tdaos_server network scan --provider \"ofi+sockets;ofi+verbs\"")
-	cmd.log.Info("\tdaos_server network scan --provider \"ofi+verbs;ofi_rxm\"")
-
 	return nil
 }
-
-

@@ -248,6 +248,20 @@ dss_topo_init()
 	depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_NUMANODE);
 	num_obj = hwloc_get_nbobjs_by_depth(dss_topo, depth);
 
+	/* if we are not NUMA aware, fall back to non-NUMA implementation */
+	if (num_obj <= 0) {
+		D_PRINT("NUMA information unavailable.\n");
+		dss_tgt_nr = dss_tgt_nr_get(dss_core_nr, nr_threads);
+
+		if (dss_core_offset < 0 || dss_core_offset >= dss_core_nr) {
+			D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), "
+				"should within range [0, %d]", dss_core_offset,
+				dss_core_nr - 1);
+			return -DER_INVAL;
+		}
+		return 0;
+	}
+
 	if (numa_node > num_obj) {
 		D_ERROR("Invalid NUMA node selected. "
 			"Must be no larger than %d\n",

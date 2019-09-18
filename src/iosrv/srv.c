@@ -783,23 +783,34 @@ dss_start_xs_id(int xs_id)
 	char *cpuset;
 
 	D_DEBUG(DB_TRACE, "start xs_id called for %d.  ", xs_id);
-	idx = hwloc_bitmap_first(core_allocation_bitmap);
-	if (idx == -1) {
-		D_DEBUG(DB_TRACE, "No core available for XS: %d", xs_id);
-		return -DER_INVAL;
-	}
-	D_DEBUG(DB_TRACE, "Choosing next available core index %d.  ", idx);
-	hwloc_bitmap_clr(core_allocation_bitmap, idx);
+	/* if we are NUMA aware, use the NUMA information */
+	if (numa_obj) {
+		idx = hwloc_bitmap_first(core_allocation_bitmap);
+		if (idx == -1) {
+			D_DEBUG(DB_TRACE, "No core available for XS: %d", xs_id);
+			return -DER_INVAL;
+		}
+		D_DEBUG(DB_TRACE, "Choosing next available core index %d.", idx);
+		hwloc_bitmap_clr(core_allocation_bitmap, idx);
 
-	obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, idx);
-	if (obj == NULL) {
-		D_ERROR("Null core returned by hwloc\n");
-		return -DER_INVAL;
-	}
+		obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, idx);
+		if (obj == NULL) {
+			D_PRINT("Null core returned by hwloc\n");
+			return -DER_INVAL;
+		}
 
-	hwloc_bitmap_asprintf(&cpuset, obj->allowed_cpuset);
-	D_DEBUG(DB_TRACE, "Using CPU set %s\n", cpuset);
-	free(cpuset);
+		hwloc_bitmap_asprintf(&cpuset, obj->allowed_cpuset);
+		D_DEBUG(DB_TRACE, "Using CPU set %s\n", cpuset);
+		free(cpuset);
+	} else {
+		D_DEBUG(DB_TRACE, "Using non-NUMA aware core allocation\n");
+		obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth,
+			(xs_id + dss_core_offset) % dss_core_nr);
+		if (obj == NULL) {
+			D_ERROR("Null core returned by hwloc\n");
+			return -DER_INVAL;
+		}
+	}
 
 	rc = dss_start_one_xstream(obj->allowed_cpuset, xs_id);
 	if (rc)

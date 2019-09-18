@@ -48,7 +48,7 @@ const (
 	msgConfigNoServers  = "no servers specified in config"
 )
 
-type networkDeviceValidation func(string, string, uint) (error)
+type networkDeviceValidation func(string, string, uint) error
 
 // Configuration describes options for DAOS control plane.
 // See utils/config/daos_server.yml for parameter descriptions.

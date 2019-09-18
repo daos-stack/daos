@@ -53,6 +53,9 @@ import (
 )
 
 const (
+	direct = iota
+	sibling
+	bestfit
 	libFabricMajorVersion = 1
 	libFabricMinorVersion = 7
 	hwlocFlagsStandard = 0
@@ -114,7 +117,7 @@ func initLib(flags int) (C.hwloc_topology_t, error) {
 	var hwlocFlags C.ulong
 	status := C.hwloc_topology_init(&topology)
 	if status != 0 {
-		return nil, errors.New("hwloc_topology_init failure")
+		return nil, errors.Errorf("hwloc_topology_init failure: %v", status)
 	}
 
 	switch flags {
@@ -124,23 +127,23 @@ func initLib(flags int) (C.hwloc_topology_t, error) {
 		log.Debug("Setting HWLOC_TOPOLOGY_FLAG_WHOLE_SYSTEM")
 		hwlocFlags = hwlocFlagsWholeSystem
 	default:
-		// If we fail inside initLib, do our own cleanup.
-		defer cleanUp(topology)
-		return nil, errors.New("Invalid flag provided")
+		// Call cleanUp because we failed after hwloc_topology_init succeeded.
+		cleanUp(topology)
+		return nil, errors.Errorf("Invalid flag provided: %v", flags)
 	}
 
 	status = C.hwloc_topology_set_flags(topology, C.HWLOC_TOPOLOGY_FLAG_IO_DEVICES | hwlocFlags)
 	if status != 0 {
-		// If we fail inside initLib, do our own cleanup.
-		defer cleanUp(topology)
-		return nil, errors.New("hwloc_topology_set_flags failure")
+		// Call cleanUp because we failed after hwloc_topology_init succeeded.
+		cleanUp(topology)
+		return nil, errors.Errorf("hwloc_topology_set_flags failure: %v", status)
 	}
 
 	status = C.hwloc_topology_load(topology)
 	if status != 0 {
-		// If we fail inside initLib, do our own cleanup.
-		defer cleanUp(topology)
-		return nil, errors.New("hwloc_topology_load failure")
+		// Call cleanUp because we failed after hwloc_topology_init succeeded.
+		cleanUp(topology)
+		return nil, errors.Errorf("hwloc_topology_load failure: %v", status)
 	}
 	return topology, nil
 }
@@ -227,15 +230,9 @@ func initDeviceScan() (DeviceScan, error) {
 	return deviceScanCfg, err
 }
 
-const (
-	direct = iota
-	sibling
-	bestfit
-)
-
 // getLookupMethod is used to determine how to perform a match between the device we are looking for
 // and the devices that are reported by hwloc.
-func getLookupMethod(deviceScanCfg DeviceScan) (int) {
+func getLookupMethod(deviceScanCfg DeviceScan) int {
 
 	// If the target device is on both the systemDeviceNames list and the hwlocDeviceNames list,
 	// then we know we can do a valid direct lookup.  If it only shows up on the systemDevicesNames list
@@ -258,7 +255,7 @@ func getLookupMethod(deviceScanCfg DeviceScan) (int) {
 }
 
 // getNodeDirect finds a node object that is a direct exact match lookup of the target device against the hwloc device list
-func getNodeDirect(deviceScanCfg DeviceScan) (C.hwloc_obj_t) {
+func getNodeDirect(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 	var i uint
 
 	for i = 0; i < deviceScanCfg.numObj; i++ {
@@ -276,7 +273,7 @@ func getNodeDirect(deviceScanCfg DeviceScan) (C.hwloc_obj_t) {
 
 // getNodeSibling finds a node object that is the sibling of the device being matched.  The sibling will be something found
 // on the systemDevicesNameMap.
-func getNodeSibling(deviceScanCfg DeviceScan) (C.hwloc_obj_t) {
+func getNodeSibling(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 
 	node := getNodeDirect(deviceScanCfg)
 	if node == nil || node.parent == nil {
@@ -303,7 +300,7 @@ func getNodeSibling(deviceScanCfg DeviceScan) (C.hwloc_obj_t) {
 // In order to succeed, one or more hwlocDeviceNames must be a subset of the target device name.
 // This allows us to find a decorated virtual device name such as "hfi1_0-dgram" which matches against one of the hwlocDeviceNames
 // which can then be mapped to a sibling, "ib0" which is found on the systemDeviceNamesMap.
-func getNodeBestFit(deviceScanCfg DeviceScan) (C.hwloc_obj_t) {
+func getNodeBestFit(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 	var newDeviceName string
 
 	// Find the largest hwloc device name that is contained by the target device name to ensure the closest match
@@ -331,6 +328,8 @@ func getNodeBestFit(deviceScanCfg DeviceScan) (C.hwloc_obj_t) {
 // there may be no NUMA ancestor node available.  In this case, we must iterate through
 // all NUMA nodes in the toplogy to find one that has a cpuset that intersects with
 // the cpuset of the given device node to determine where it belongs.
+// In some configurations, the number of NUMA nodes found is 0.  In that case,
+// the NUMA ID will be considered 0.
 func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, error) {
 	var i uint
 
@@ -344,7 +343,6 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 
 	numanode := C.hwloc_get_ancestor_obj_by_type (topology, C.HWLOC_OBJ_NUMANODE, node)
 	if (numanode != nil) {
-		//return uint(C.uint(numanode.logical_index)), nil
 		return uint(numanode.logical_index), nil
 	}
 
@@ -359,16 +357,29 @@ func getNUMASocketID(topology C.hwloc_topology_t, node C.hwloc_obj_t) (uint, err
 
 	depth := C.hwloc_get_type_depth(topology, C.HWLOC_OBJ_NUMANODE)
 	numObj := uint(C.hwloc_get_nbobjs_by_depth(topology, C.uint(depth)))
+	if numObj == 0 {
+		log.Debugf("NUMA Node data is unavailable.  Using NUMA 0\n")
+		return 0, nil
+	}
+
+	log.Debugf("There are %d NUMA nodes.", numObj)
+
 	for i = 0; i < numObj; i++ {
 		numanode := C.hwloc_get_obj_by_depth(topology, C.uint(depth), C.uint(i))
 		if numanode == nil {
-			continue
+			// We don't want the lack of NUMA information to be an error.
+			// If we get this far and can't access the NUMA topology data,
+			// we will use NUMA ID 0.
+			log.Debugf("NUMA Node data is unavailable.  Using NUMA 0\n")
+			return 0, nil
 		}
 		if C.hwloc_bitmap_isincluded(ancestorNode.allowed_cpuset, numanode.allowed_cpuset) != 0 {
 			return uint(numanode.logical_index), nil
 		}
 	}
-	return 0, errors.New("unable to determine the NUMA socket ID")
+
+	log.Debugf("Unable to determine NUMA socket ID.  Using NUMA 0")
+	return 0, nil
 }
 
 // GetAffinityForNetworkDevices searches the system topology reported by hwloc
@@ -558,14 +569,13 @@ func GetDeviceNames() ([]string, error) {
 	return netNames, nil
 }
 
-// GetSupportedProviders returns a []string representing all supported Mercury providers
+// GetSupportedProviders returns a string containing all supported Mercury providers
 func GetSupportedProviders() []string {
-	providers := []string{"ofi+gni","ofi+psm2","ofi+tcp","ofi+sockets","ofi+verbs","ofi_rxm"}
-	return providers
+	return []string {"ofi+gni","ofi+psm2","ofi+tcp","ofi+sockets","ofi+verbs","ofi_rxm"}
 }
 
-// MercuryToLibFabric converts a single Mercury fabric provider string into a libfabric compatible provider string
-func MercuryToLibFabric(provider string) (string, error) {
+// mercuryToLibFabric converts a single Mercury fabric provider string into a libfabric compatible provider string
+func mercuryToLibFabric(provider string) (string, error) {
 	switch provider {
 	case "ofi+sockets":
 		return "sockets", nil
@@ -584,10 +594,10 @@ func MercuryToLibFabric(provider string) (string, error) {
 	return "", errors.Errorf("fabric provider: %s not known by libfabric.  Use 'daos_server network list' to view supported providers", provider)
 }
 
-// ConvertMercuryToLibFabric converts a Mercury provider string containing one or more providers
+// convertMercuryToLibFabric converts a Mercury provider string containing one or more providers
 // separated by ';' into a libfabric compatible provider string
 // All subproviders must convert successfully in order to have a successful conversion.
-func ConvertMercuryToLibFabric(provider string) (string, error) {
+func convertMercuryToLibFabric(provider string) (string, error) {
 	var libFabricProviderList string
 
 	if len(provider) == 0 {
@@ -596,7 +606,7 @@ func ConvertMercuryToLibFabric(provider string) (string, error) {
 
 	tmp := strings.Split(provider, ";")
 	for _, subProvider := range tmp {
-		libFabricProvider, err := MercuryToLibFabric(subProvider)
+		libFabricProvider, err := mercuryToLibFabric(subProvider)
 		if err != nil {
 			return "", errors.Errorf("fabric provider: '%s' is not known by libfabric.  Use 'daos_server network list' to view supported providers", subProvider)
 		}
@@ -605,8 +615,8 @@ func ConvertMercuryToLibFabric(provider string) (string, error) {
 	return strings.TrimSuffix(libFabricProviderList, ";"), nil
 }
 
-// LibFabricToMercury converts a single libfabric provider string into a Mercury compatible provider string
-func LibFabricToMercury(provider string) (string, error) {
+// libFabricToMercury converts a single libfabric provider string into a Mercury compatible provider string
+func libFabricToMercury(provider string) (string, error) {
 	switch provider {
 	case "sockets":
 		return "ofi+sockets", nil
@@ -626,10 +636,10 @@ func LibFabricToMercury(provider string) (string, error) {
 	return "", errors.Errorf("fabric provider: %s not known by Mercury", provider)
 }
 
-// ConvertLibFabricToMercury converts a libfabric provider string containing one or more providers
+// convertLibFabricToMercury converts a libfabric provider string containing one or more providers
 // separated by ';' into a Mercury compatible provider string
 // At least one provider in the list must convert to a Mercury provider in order to have success.
-func ConvertLibFabricToMercury(provider string) (string, error) {
+func convertLibFabricToMercury(provider string) (string, error) {
 	var mercuryProviderList string
 
 	log.Debugf("Converting provider string: '%s' to Mercury", provider)
@@ -640,8 +650,8 @@ func ConvertLibFabricToMercury(provider string) (string, error) {
 
 	tmp := strings.Split(provider, ";")
 	for _, subProvider := range tmp {
-		mercuryProvider, err := LibFabricToMercury(subProvider)
-		// It's non-fatal if LibFabricToMercury returns an error.  It just means that
+		mercuryProvider, err := libFabricToMercury(subProvider)
+		// It's non-fatal if libFabricToMercury returns an error.  It just means that
 		// this individual provider could not be converted.  It is only an error when
 		// none of the providers can be converted.
 		if err != nil {
@@ -661,13 +671,13 @@ func ConvertLibFabricToMercury(provider string) (string, error) {
 // ValidateNetworkConfigStub is used for most unit testing to replace ValidateNetworkConfig because the network configuration
 // validation depends upon physical hardware resources and configuration on the target machine
 // that are either not known or static in the test environment
-func ValidateNetworkConfigStub(provider string, device string, numaNode uint) (error) {
+func ValidateNetworkConfigStub(provider string, device string, numaNode uint) error {
 	return nil
 }
 
 // ValidateNetworkConfig confirms that the given network device supports the chosen provider
 // and that the device matches the NUMA ID given.
-func ValidateNetworkConfig(provider string, device string, numaNode uint) (error) {
+func ValidateNetworkConfig(provider string, device string, numaNode uint) error {
 	var fi *C.struct_fi_info
 	var hints *C.struct_fi_info
 
@@ -682,7 +692,7 @@ func ValidateNetworkConfig(provider string, device string, numaNode uint) (error
 	log.Debugf("Input provider string: %s", provider)
 	// convert the Mercury provider string into a libfabric provider string
 	// to aid in matching it against the libfabric providers
-	libfabricProviderList, err := ConvertMercuryToLibFabric(provider)
+	libfabricProviderList, err := convertMercuryToLibFabric(provider)
 	if err != nil {
 		return err
 	}
@@ -717,10 +727,7 @@ func ValidateNetworkConfig(provider string, device string, numaNode uint) (error
 	// In order to find a device and provider match, the libfabric device name must be converted into a system device name.
 	// GetAffinityForDevice() is used to provide this conversion.
 	for ; fi != nil; fi = fi.next {
-		if fi.domain_attr == nil || fi.domain_attr.name == nil {
-			continue
-		}
-		if fi.fabric_attr == nil || fi.fabric_attr.prov_name == nil {
+		if fi.domain_attr == nil || fi.domain_attr.name == nil || fi.fabric_attr == nil || fi.fabric_attr.prov_name == nil {
 			continue
 		}
 		deviceScanCfg.targetDevice = C.GoString(fi.domain_attr.name)
@@ -760,7 +767,7 @@ func ScanFabric(provider string) ([]FabricScan, error) {
 	// If a provider was given, then set the libfabric search hint to match the provider
 	if (provider != "") {
 		log.Debugf("Input provider string: %s", provider)
-		libfabricProviderList, err := ConvertMercuryToLibFabric(provider)
+		libfabricProviderList, err := convertMercuryToLibFabric(provider)
 		if err != nil {
 			return ScanResults, err
 		}
@@ -771,7 +778,8 @@ func ScanFabric(provider string) ([]FabricScan, error) {
 	// Initialize libfabric and perform the scan
 	C.fi_getinfo(C.uint(libFabricMajorVersion << 16 | libFabricMinorVersion), nil, nil, 0, hints, &fi)
 	if (fi == nil) {
-		return ScanResults, errors.New("libfabric found no records matching the specified provider")
+		log.Debugf("libfabric found no records matching the specified provider")
+		return ScanResults, nil
 	}
 	defer C.fi_freeinfo(fi)
 
@@ -786,10 +794,7 @@ func ScanFabric(provider string) ([]FabricScan, error) {
 		deviceScanCfg.depth, deviceScanCfg.numObj, deviceScanCfg.systemDeviceNames, deviceScanCfg.hwlocDeviceNames)
 
 	for ; fi != nil; fi = fi.next {
-		if fi.domain_attr == nil || fi.domain_attr.name == nil {
-			continue
-		}
-		if fi.fabric_attr == nil || fi.fabric_attr.prov_name == nil {
+		if fi.domain_attr == nil || fi.domain_attr.name == nil || fi.fabric_attr == nil || fi.fabric_attr.prov_name == nil {
 			continue
 		}
 
@@ -801,7 +806,7 @@ func ScanFabric(provider string) ([]FabricScan, error) {
 		}
 
 		// Convert the libfabric provider list to a Mercury compatible provider list
-		mercuryProviderList, err := ConvertLibFabricToMercury(C.GoString(fi.fabric_attr.prov_name))
+		mercuryProviderList, err := convertLibFabricToMercury(C.GoString(fi.fabric_attr.prov_name))
 		if err != nil {
 			log.Debugf("Couldn't convert the libfabric provider string: %s", C.GoString(fi.fabric_attr.prov_name))
 			log.Debugf("Skipping FI record for device %s, provider %s", deviceAffinity.DeviceName, C.GoString(fi.fabric_attr.prov_name))
@@ -827,6 +832,10 @@ func ScanFabric(provider string) ([]FabricScan, error) {
 			ScanResults = append(ScanResults, scanResults)
 			devCount++
 		}
+	}
+
+	if len(ScanResults) == 0 {
+		log.Debugf("libfabric found records matching provider \"%s\" but there were no valid system devices that matched.", provider)
 	}
 	return ScanResults, nil
 }
