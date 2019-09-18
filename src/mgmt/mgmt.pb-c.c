@@ -515,20 +515,24 @@ const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__descriptor =
   (ProtobufCMessageInit) mgmt__get_attach_info_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCMethodDescriptor mgmt__mgmt_svc__method_descriptors[5] =
+static const ProtobufCMethodDescriptor mgmt__mgmt_svc__method_descriptors[7] =
 {
   { "Join", &mgmt__join_req__descriptor, &mgmt__join_resp__descriptor },
   { "PoolCreate", &mgmt__pool_create_req__descriptor, &mgmt__pool_create_resp__descriptor },
   { "PoolDestroy", &mgmt__pool_destroy_req__descriptor, &mgmt__pool_destroy_resp__descriptor },
   { "GetAttachInfo", &mgmt__get_attach_info_req__descriptor, &mgmt__get_attach_info_resp__descriptor },
+  { "BioHealthQuery", &mgmt__bio_health_req__descriptor, &mgmt__bio_health_resp__descriptor },
+  { "SmdListDevs", &mgmt__smd_dev_req__descriptor, &mgmt__smd_dev_resp__descriptor },
   { "KillRank", &mgmt__daos_rank__descriptor, &mgmt__daos_resp__descriptor },
 };
 const unsigned mgmt__mgmt_svc__method_indices_by_name[] = {
+  4,        /* BioHealthQuery */
   3,        /* GetAttachInfo */
   0,        /* Join */
-  4,        /* KillRank */
+  6,        /* KillRank */
   1,        /* PoolCreate */
-  2         /* PoolDestroy */
+  2,        /* PoolDestroy */
+  5         /* SmdListDevs */
 };
 const ProtobufCServiceDescriptor mgmt__mgmt_svc__descriptor =
 {
@@ -537,7 +541,7 @@ const ProtobufCServiceDescriptor mgmt__mgmt_svc__descriptor =
   "MgmtSvc",
   "Mgmt__MgmtSvc",
   "mgmt",
-  5,
+  7,
   mgmt__mgmt_svc__method_descriptors,
   mgmt__mgmt_svc__method_indices_by_name
 };
@@ -573,13 +577,29 @@ void mgmt__mgmt_svc__get_attach_info(ProtobufCService *service,
   assert(service->descriptor == &mgmt__mgmt_svc__descriptor);
   service->invoke(service, 3, (const ProtobufCMessage *) input, (ProtobufCClosure) closure, closure_data);
 }
+void mgmt__mgmt_svc__bio_health_query(ProtobufCService *service,
+                                      const Mgmt__BioHealthReq *input,
+                                      Mgmt__BioHealthResp_Closure closure,
+                                      void *closure_data)
+{
+  assert(service->descriptor == &mgmt__mgmt_svc__descriptor);
+  service->invoke(service, 4, (const ProtobufCMessage *) input, (ProtobufCClosure) closure, closure_data);
+}
+void mgmt__mgmt_svc__smd_list_devs(ProtobufCService *service,
+                                   const Mgmt__SmdDevReq *input,
+                                   Mgmt__SmdDevResp_Closure closure,
+                                   void *closure_data)
+{
+  assert(service->descriptor == &mgmt__mgmt_svc__descriptor);
+  service->invoke(service, 5, (const ProtobufCMessage *) input, (ProtobufCClosure) closure, closure_data);
+}
 void mgmt__mgmt_svc__kill_rank(ProtobufCService *service,
                                const Mgmt__DaosRank *input,
                                Mgmt__DaosResp_Closure closure,
                                void *closure_data)
 {
   assert(service->descriptor == &mgmt__mgmt_svc__descriptor);
-  service->invoke(service, 4, (const ProtobufCMessage *) input, (ProtobufCClosure) closure, closure_data);
+  service->invoke(service, 6, (const ProtobufCMessage *) input, (ProtobufCClosure) closure, closure_data);
 }
 void mgmt__mgmt_svc__init (Mgmt__MgmtSvc_Service *service,
                            Mgmt__MgmtSvc_ServiceDestroy destroy)

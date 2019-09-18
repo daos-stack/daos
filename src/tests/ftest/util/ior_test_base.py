@@ -42,8 +42,7 @@ class IorTestBase(TestWithServers):
         self.ior_cmd = None
         self.processes = None
         self.hostfile_clients_slots = None
-        
-        self.cont = None
+        self.container = None
 
     def setUp(self):
         """Set up each test case."""
@@ -60,13 +59,8 @@ class IorTestBase(TestWithServers):
     def tearDown(self):
         """Tear down each test case."""
         try:
-            if self.pool is not None and self.pool.pool.attached:
-                self.pool.destroy(1)
             if self.dfuse is not None:
                 self.dfuse.stop(self.hostlist_clients)
-        except CommandFailure as error:
-            self.log.error("Dfuse Failed: %s", str(error))
-            self.fail("Test was expected to pass but it failed.\n")
         finally:
             # Stop the servers and agents
             super(IorTestBase, self).tearDown()
@@ -83,11 +77,11 @@ class IorTestBase(TestWithServers):
     def create_cont(self):
         """Create a TestContainer object to be used to create container."""
         # Get Container params
-        self.cont = TestContainer(self.pool)
-        self.cont.get_params(self)
+        self.container = TestContainer(self.pool)
+        self.container.get_params(self)
 
         # create container
-        self.cont.create()
+        self.container.create()
 
     def start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
@@ -97,8 +91,8 @@ class IorTestBase(TestWithServers):
 
         # update dfuse params
         self.dfuse.set_dfuse_params(self.pool)
-        if self.cont:
-            self.dfuse.set_dfuse_cont_param(self.cont)
+        if self.container:
+            self.dfuse.set_dfuse_cont_param(self.container)
         
         try:
             # start dfuse

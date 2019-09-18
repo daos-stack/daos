@@ -37,6 +37,7 @@ type storageCmd struct {
 	Scan    storageScanCmd    `command:"scan" alias:"s" description:"Scan SCM and NVMe storage attached to remote servers."`
 	Format  storageFormatCmd  `command:"format" alias:"f" description:"Format SCM and NVMe storage attached to remote servers."`
 	Update  storageUpdateCmd  `command:"fwupdate" alias:"u" description:"Update firmware on NVMe storage attached to remote servers."`
+	Query   storageQueryCmd   `command:"query" alias:"q" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
 }
 
 // storagePrepareCmd is the struct representing the prep storage subcommand.
@@ -87,10 +88,10 @@ type storageScanCmd struct {
 	connectedCmd
 }
 
-// run NVMe and SCM storage query on all connected servers
+// run NVMe and SCM storage and health query on all connected servers
 func storageScan(log logging.Logger, conns client.Connect) {
 	cCtrlrs, cModules := conns.StorageScan()
-	log.Infof("NVMe SSD controller and constituent namespaces:\n%s", cCtrlrs)
+	log.Infof("NVMe SSD controllers and constituent namespaces:\n%s", cCtrlrs)
 	log.Infof("SCM modules:\n%s", cModules)
 }
 

@@ -221,7 +221,8 @@ class TestPool(TestDaosApiBase):
         if self.pool:
             self.disconnect()
             self.log.info("Destroying pool %s", self.uuid)
-            self._call_method(self.pool.destroy, {"force": force})
+            if self.pool.attached:
+                self._call_method(self.pool.destroy, {"force": force})
             self.pool = None
             self.uuid = None
             self.info = None
@@ -808,7 +809,8 @@ class TestContainer(TestDaosApiBase):
         if self.container:
             self.close()
             self.log.info("Destroying container %s", self.uuid)
-            self._call_method(self.container.destroy, {"force": force})
+            if self.container.attached:
+                self._call_method(self.container.destroy, {"force": force})
             self.container = None
             self.written_data = []
             return True
