@@ -23,7 +23,6 @@
 
 #include "common_utils.h"
 
-#pragma GCC diagnostic ignored "-Wframe-larger-than="
 int
 parse_rank_list(char *str_rank_list, d_rank_list_t *num_rank_list)
 {
