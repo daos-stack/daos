@@ -20,20 +20,20 @@ This table defines a type:
 |----|----|
 |BOOL|0 means false; any other value means true|
 |BOOL2|no means false; any other value means true|
-|BOOL3|set to empty or any value means true; unset means false|
+|BOOL3|set to empty, or any value means true; unset means false|
 |INTEGER|Non-negative decimal integer|
 |STRING|String|
                 
 
 ## Common environment variables 
 
-Environment variables in this section apply to both the server side and the client side
+Environment variables in this section apply to both the server-side and the client-side.
 
     DAOS\_IO\_BYPASS
 
 ## Server environment variables
 
-Environment variables in this section only apply to the server side.
+Environment variables in this section only apply to the server-side.
 
 |Variable|Description|
 |----|----|
@@ -51,7 +51,7 @@ Environment variables in this section only apply to the server side.
 
 ## Client
 
-Environment variables in this section only apply to the client side.
+Environment variables in this section only apply to the client-side.
 
 |Variable|Description|
 |----|----| 

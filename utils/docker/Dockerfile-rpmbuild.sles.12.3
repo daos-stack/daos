@@ -6,7 +6,7 @@
 
 # Pull base image
 FROM suse/sles:12.3
-MAINTAINER Brian J. Murrell <brian.murrell@intel.com>
+MAINTAINER <daos@daos.groups.io>
 
 # use same UID as host and default value of 1000 if not specified
 ARG UID=1000
@@ -17,6 +17,8 @@ ENV PASSWD build
 RUN useradd -u $UID -ms /bin/bash $USER
 RUN groupadd -g $UID $USER
 RUN echo "$USER:$PASSWD" | chpasswd
+
+RUN echo "solver.allowVendorChange = true" >> /etc/zypp/zypp.conf
 
 # Install basic tools
 RUN zypper --non-interactive update
@@ -100,12 +102,12 @@ RUN zypper --non-interactive ar --gpgcheck-allow-unsigned -f ${JENKINS_URL}job/d
     zypper --non-interactive ar --gpgcheck-allow-unsigned -f ${JENKINS_URL}job/daos-stack/job/raft/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ raft;             \
     zypper --non-interactive ar --gpgcheck-allow-unsigned -f ${JENKINS_URL}job/daos-stack/job/argobots/job/master/lastSuccessfulBuild/artifact/artifacts/sles12.3/ argbots;      \
     zypper --non-interactive ar --gpgcheck-allow-unsigned -f ${JENKINS_URL}job/daos-stack/job/cart/job/daos_devel1/lastSuccessfulBuild/artifact/artifacts/sles12.3/ cart;        \
-    zypper --non-interactive ar http://download.opensuse.org/repositories/devel:/languages:/go/SLE_12_SP3_Backports/devel:languages:go.repo;                                                    \
-    zypper --non-interactive ar https://download.opensuse.org/repositories/home:/jhli/SLE_15/home:jhli.repo;                                                                                    \
-    zypper --non-interactive --gpg-auto-import-keys ref spdk isa-l protobuf-c                                                                                                                   \
-                                                        fuse pmdk raft argbots                                                                                                                  \
-                                                        cart fio                                                                                                                                \
-                                                        'The Go Programming Language (SLE_12_SP3_Backports)'                                                                                    \
+    zypper --non-interactive ar http://download.opensuse.org/repositories/devel:/languages:/go/SLE_12_SP3_Backports/devel:languages:go.repo;                                     \
+    zypper --non-interactive ar https://download.opensuse.org/repositories/home:/jhli/SLE_15/home:jhli.repo;                                                                     \
+    zypper --non-interactive --gpg-auto-import-keys ref spdk isa-l protobuf-c                                                                                                    \
+                                                        fuse pmdk raft argbots                                                                                                   \
+                                                        cart fio                                                                                                                 \
+                                                        'The Go Programming Language (SLE_12_SP3_Backports)'                                                                     \
                                                         'home:jhli (SLE_15)'
 ARG go_version=1.10
 ENV go_version=${go_version}
@@ -113,13 +115,16 @@ ENV go_version=${go_version}
 RUN zypper --non-interactive rm libpmem1;                                      \
     zypper --non-interactive install spdk-devel spdk-tools libisa-l-devel      \
                                      protobuf-c-devel fuse-devel libpmem-devel \
-                                     libpmemobj-devel raft-devel               \
+                                     libpmemobj-devel raft-devel\ \<=\ 0.5.0   \
                                      argobots-devel cart-devel                 \
                                      ipmctl-devel readline-devel               \
                                      go${go_version} fio\ \<\ 3.4;             \
     rpm -qa | grep ^go\[1-9\]\* | grep -v ^go${go_version/\./\\.} |            \
-        xargs zypper --non-interactive rm
+        xargs -r zypper --non-interactive rm
+
+RUN zypper addlock fio raft-devel
 
 # force an upgrade to get any newly built RPMs
 ARG CACHEBUST=1
+RUN zypper --non-interactive ref
 RUN zypper --non-interactive up

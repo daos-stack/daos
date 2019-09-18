@@ -41,7 +41,7 @@
 
 # Pull base image
 FROM centos:7
-MAINTAINER Johann Lombardi <johann.lombardi@intel.com>
+MAINTAINER <daos@daos.groups.io>
 
 # Build arguments can be set via --build-arg
 # use same UID as host and default value of 1000 if not specified
@@ -58,9 +58,9 @@ RUN yum -y install epel-release; \
         libaio-devel libcmocka-devel libevent-devel libiscsi-devel     \
         libtool libtool-ltdl-devel libuuid-devel libyaml-devel         \
         make meson nasm ninja-build numactl-devel openssl-devel        \
-	pandoc patch pylint python python-devel python36-devel         \
-	python-pep8 python-requests python2-pygithub readline-devel    \
-	scons sg3_utils ShellCheck yasm
+        pandoc patch pylint python python-devel python36-devel         \
+        python-pep8 python-pygit2 python2-pygithub python-requests     \
+        readline-devel scons sg3_utils ShellCheck yasm pciutils
 
 # DAOS specific
 RUN yum -y install \
@@ -117,7 +117,7 @@ ARG CACHEBUST=1
 RUN yum -y upgrade --exclude=dpdk-devel,dpdk
 
 # Switch to new user
-USER $USER
+#USER $USER
 WORKDIR /home/$USER
 
 # set NOBUILD to disable git clone & build
@@ -129,11 +129,12 @@ WORKDIR /home/$USER/daos
 
 # Build DAOS & dependencies
 RUN if [ "x$NOBUILD" = "x" ] ; then git submodule init && git submodule update; fi
-RUN if [ "x$NOBUILD" = "x" ] ; then scons --build-deps=yes install; fi
+RUN if [ "x$NOBUILD" = "x" ] ; then scons --build-deps=yes install PREFIX=/usr; fi
 
 # Set environment variables
-ENV PATH=/home/daos/daos/install/bin:$PATH
-ENV LD_LIBRARY_PATH=/home/daos/daos/install/lib:/home/daos/daos/install/lib/daos_srv:$LD_LIBRARY_PATH
-ENV CPATH=/home/daos/daos/install/include:$CPATH
+ENV LD_LIBRARY_PATH=/usr/lib:$LD_LIBRARY_PATH
 ENV CRT_PHY_ADDR_STR="ofi+sockets"
 ENV OFI_INTERFACE=eth0
+ENV FI_SOCKETS_MAX_CONN_RETRY=1
+ENV DAOS_SINGLETON_CLI=1
+ENV CRT_ATTACH_INFO_PATH=/tmp/uri

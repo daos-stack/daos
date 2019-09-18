@@ -2,7 +2,7 @@
 
 ## DAOS Errors
 
-DAOS has its own error numbering that starts at 1000. The most common
+DAOS error numbering starts at 1000. The most common
 errors are documented in the table below.
 
 |DAOS Error|Value|Description
@@ -74,7 +74,7 @@ order below.
 The priority level that outputs to stderr is set with DD_STDERR. By
 default in DAOS (specific to the project), this is set to CRIT
 ("DD_STDERR=CRIT") meaning that all CRIT and more severe log messages
-will dump to stderr. This, however, is separate from the priority of
+will dump to stderr. However, this is separate from the priority of
 logging to "/tmp/daos.log". The priority level of logging can be set
 with D_LOG_MASK, which by default is set to INFO
 ("D_LOG_MASK=INFO"), which will result in all messages excluding DEBUG
@@ -150,7 +150,7 @@ are enabled by default ("DD_MASK=all").
         $ DD_MASK=mgmt -> only logs DEBUG messages related to pool
         management
 
-Refer to the DAOS Environment Variables documentation for
+Refer to the DAOS Environment Variables document for
 more information about the debug system environment.
 
 ## Common DAOS Problems

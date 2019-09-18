@@ -48,8 +48,7 @@ func TestHasPort(t *testing.T) {
 }
 
 func TestCheckMgmtSvcReplica(t *testing.T) {
-	defaultPort := strconv.Itoa(
-		mockConfigFromFile(t, defaultMockExt(), defaultConfig).Port)
+	defaultPort := strconv.Itoa(NewConfiguration().ControlPort)
 
 	tests := []struct {
 		self              string

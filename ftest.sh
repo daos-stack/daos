@@ -55,6 +55,25 @@ trap 'echo "encountered an unchecked return code, exiting with error"' ERR
 IFS=" " read -r -a nodes <<< "${2//,/ }"
 TEST_NODES=$(IFS=","; echo "${nodes[*]:1:8}")
 
+# For nodes that are only rebooted between CI nodes left over mounts
+# need to be cleaned up.
+pre_clean () {
+    i=5
+    while [ $i -gt 0 ]; do
+        if clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh \
+              -S -w "$(IFS=','; echo "${nodes[*]}")" "set -x -e
+              mapfile -t ftest_mounts < <(grep 'added by ftest.sh' /etc/fstab)
+              for n_mnt in \"\${ftest_mounts[@]}\"; do
+                  mpnt=(\${n_mnt})
+                  sudo umount \${mpnt[1]}
+              done
+              sudo sed -i -e \"/added by ftest.sh/d\" /etc/fstab"; then
+            break
+        fi
+        ((i-=1)) || true
+    done
+}
+
 cleanup() {
     i=5
     while [ $i -gt 0 ]; do
@@ -94,6 +113,8 @@ cleanup() {
         ((i-=1)) || true
     done
 }
+
+pre_clean
 
 # shellcheck disable=SC1091
 . .build_vars.sh

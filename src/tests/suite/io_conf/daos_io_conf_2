@@ -30,6 +30,7 @@
 ## dkey xxx
 ## akey xxx
 ## iod_size xxx (default is 1)
+## obj_class xxx(ec or replica, default is replica)
 ##
 ## 2) update
 ## 2.1) update array and take snapshot

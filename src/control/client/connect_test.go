@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,12 +30,14 @@ import (
 	"github.com/pkg/errors"
 	. "google.golang.org/grpc/connectivity"
 
-	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	. "github.com/daos-stack/daos/src/control/common/storage"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func connectSetup(
+	log logging.Logger,
 	state State, features []*pb.Feature, ctrlrs NvmeControllers,
 	ctrlrResults NvmeControllerResults, modules ScmModules,
 	moduleResults ScmModuleResults, mountResults ScmMountResults,
@@ -43,7 +45,7 @@ func connectSetup(
 	killRet error, connectRet error) Connect {
 
 	connect := newMockConnect(
-		state, features, ctrlrs, ctrlrResults, modules,
+		log, state, features, ctrlrs, ctrlrResults, modules,
 		moduleResults, mountResults, scanRet, formatRet,
 		updateRet, burninRet, killRet, connectRet)
 
@@ -52,8 +54,8 @@ func connectSetup(
 	return connect
 }
 
-func defaultClientSetup() Connect {
-	cc := defaultMockConnect()
+func defaultClientSetup(log logging.Logger) Connect {
+	cc := defaultMockConnect(log)
 
 	_ = cc.ConnectClients(MockServers)
 
@@ -61,19 +63,19 @@ func defaultClientSetup() Connect {
 }
 
 func checkResults(t *testing.T, addrs Addresses, results ResultMap, e error) {
-	AssertEqual(
-		t, len(results), len(addrs), // duplicates ignored
-		"unexpected number of results")
+	t.Helper()
+
+	// duplicates ignored
+	AssertEqual(t, len(results), len(addrs), "unexpected number of results")
 
 	for _, res := range results {
-		AssertEqual(
-			t, res.Err, e,
-			"unexpected error value in results")
+		AssertEqual(t, res.Err, e, "unexpected error value in results")
 	}
 }
 
 func TestConnectClients(t *testing.T) {
-	defer common.ShowLogOnFailure(t)()
+	log, buf := logging.NewTestLogger(t.Name())
+	defer ShowBufferOnFailure(t, buf)()
 
 	eMsg := "socket connection is not active (%s)"
 
@@ -94,7 +96,7 @@ func TestConnectClients(t *testing.T) {
 	}
 	for _, tt := range conntests {
 		cc := newMockConnect(
-			tt.state, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
+			log, tt.state, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
 			MockModuleResults, MockMountResults, nil, nil, nil, nil, nil,
 			tt.connRet)
 
@@ -120,18 +122,20 @@ func TestConnectClients(t *testing.T) {
 }
 
 func TestDuplicateConns(t *testing.T) {
-	defer common.ShowLogOnFailure(t)()
+	log, buf := logging.NewTestLogger(t.Name())
+	defer ShowBufferOnFailure(t, buf)()
 
-	cc := defaultMockConnect()
+	cc := defaultMockConnect(log)
 	results := cc.ConnectClients(append(MockServers, MockServers...))
 
 	checkResults(t, MockServers, results, nil)
 }
 
 func TestGetClearConns(t *testing.T) {
-	defer common.ShowLogOnFailure(t)()
+	log, buf := logging.NewTestLogger(t.Name())
+	defer ShowBufferOnFailure(t, buf)()
 
-	cc := defaultClientSetup()
+	cc := defaultClientSetup(log)
 
 	results := cc.GetActiveConns(ResultMap{})
 	checkResults(t, MockServers, results, nil)
@@ -150,9 +154,10 @@ func TestGetClearConns(t *testing.T) {
 }
 
 func TestListFeatures(t *testing.T) {
-	defer common.ShowLogOnFailure(t)()
+	log, buf := logging.NewTestLogger(t.Name())
+	defer ShowBufferOnFailure(t, buf)()
 
-	cc := defaultClientSetup()
+	cc := defaultClientSetup(log)
 
 	clientFeatures := cc.ListFeatures()
 
@@ -162,9 +167,10 @@ func TestListFeatures(t *testing.T) {
 }
 
 func TestStorageScan(t *testing.T) {
-	defer common.ShowLogOnFailure(t)()
+	log, buf := logging.NewTestLogger(t.Name())
+	defer ShowBufferOnFailure(t, buf)()
 
-	cc := defaultClientSetup()
+	cc := defaultClientSetup(log)
 
 	clientNvme, clientScm := cc.StorageScan()
 
@@ -178,7 +184,8 @@ func TestStorageScan(t *testing.T) {
 }
 
 func TestStorageFormat(t *testing.T) {
-	defer common.ShowLogOnFailure(t)()
+	log, buf := logging.NewTestLogger(t.Name())
+	defer ShowBufferOnFailure(t, buf)()
 
 	tests := []struct {
 		formatRet error
@@ -193,7 +200,7 @@ func TestStorageFormat(t *testing.T) {
 
 	for _, tt := range tests {
 		cc := connectSetup(
-			Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
+			log, Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
 			MockModuleResults, MockMountResults, nil, tt.formatRet, nil, nil,
 			nil, nil)
 
@@ -224,7 +231,8 @@ func TestStorageFormat(t *testing.T) {
 }
 
 func TestStorageUpdate(t *testing.T) {
-	defer common.ShowLogOnFailure(t)()
+	log, buf := logging.NewTestLogger(t.Name())
+	defer ShowBufferOnFailure(t, buf)()
 
 	tests := []struct {
 		updateRet error
@@ -239,7 +247,7 @@ func TestStorageUpdate(t *testing.T) {
 
 	for _, tt := range tests {
 		cc := connectSetup(
-			Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
+			log, Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
 			MockModuleResults, MockMountResults, nil, nil, tt.updateRet, nil,
 			nil, nil)
 
@@ -270,7 +278,8 @@ func TestStorageUpdate(t *testing.T) {
 }
 
 func TestKillRank(t *testing.T) {
-	defer common.ShowLogOnFailure(t)()
+	log, buf := logging.NewTestLogger(t.Name())
+	defer ShowBufferOnFailure(t, buf)()
 
 	tests := []struct {
 		killRet error
@@ -278,16 +287,11 @@ func TestKillRank(t *testing.T) {
 		{
 			nil,
 		},
-		{
-			MockErr,
-		},
 	}
 
 	for _, tt := range tests {
-		cc := connectSetup(
-			Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
-			MockModuleResults, MockMountResults, nil, nil, nil, nil,
-			tt.killRet, nil)
+		cc := connectSetup(log, Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
+			MockModuleResults, MockMountResults, nil, nil, nil, nil, tt.killRet, nil)
 
 		resultMap := cc.KillRank("acd", 0)
 
