@@ -36,6 +36,7 @@ message PoolCreateReq {
 	string user = 5; // formatted user e.g. "bob@"
 	string usergroup = 6; // formatted group e.g. "builders@"
 	string sys = 7; // DAOS system identifier
+	repeated string acl = 8; // Access Control Entries in short string format
 }
 
 // PoolCreateResp returns created pool uuid and ranks.
