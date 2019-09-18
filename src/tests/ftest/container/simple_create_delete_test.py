@@ -32,6 +32,7 @@ from daos_api import DaosApiError
 from conversion import c_uuid_to_str
 from general_utils import get_pool, get_container
 
+
 # pylint: disable=broad-except
 class SimpleCreateDeleteTest(TestWithServers):
     """
@@ -40,9 +41,6 @@ class SimpleCreateDeleteTest(TestWithServers):
 
     :avocado: recursive
     """
-    def __init__(self, *args, **kwargs):
-        super(SimpleCreateDeleteTest, self).__init__(*args, **kwargs)
-        self.agent_sessions = None
 
     def test_container_basics(self):
         """
@@ -83,11 +81,7 @@ class SimpleCreateDeleteTest(TestWithServers):
             self.fail("Test was expected to pass but it failed.\n")
         except Exception as excep:
             self.fail("Daos code segfaulted most likely, error: %s" % excep)
-        finally:
-            self.log.info("Clean up pool")
-            if self.pool is not None:
-                self.pool.disconnect()
-                self.pool.destroy(1)
+
 
 if __name__ == "__main__":
     main()

@@ -38,3 +38,5 @@ nav:
         - 'Troubleshooting': 'admin/troubleshooting.md'
         - 'Utilities and Usage Examples': 'admin/utilities_examples.md'
         - 'Environment Variables': 'admin/env_variables.md'
+    - User Guide:
+    - Developer Guide:

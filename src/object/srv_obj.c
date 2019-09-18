@@ -782,45 +782,45 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	       orw->orw_bulks.ca_count != 0);
 	oca = daos_oclass_attr_find(orw->orw_oid.id_pub);
 
+	if (oca->ca_resil == DAOS_RES_EC) {
+		unsigned int	tgt_idx = orw->orw_oid.id_shard -
+					  orw->orw_start_shard;
+
+		D_ALLOC_ARRAY(skip_list, orw->orw_nr);
+		if (skip_list == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		if (tgt_idx >= oca->u.ec.e_p) {
+			rc = ec_data_target(tgt_idx - oca->u.ec.e_p,
+					    orw->orw_nr, tmp_iods,
+					    oca, skip_list);
+		} else {
+			if (tgt_idx == 0) {
+				rc = ec_copy_iods(tmp_iods,
+						    orw->orw_nr,
+						    &cpy_iods);
+				if (rc) {
+					D_ERROR(
+					DF_UOID"EC update failed: %d\n",
+					DP_UOID(orw->orw_oid), rc);
+					goto out;
+				}
+				tmp_iods = cpy_iods;
+			}
+			rc = ec_parity_target(tgt_idx,
+					      orw->orw_nr, tmp_iods,
+					      oca, skip_list);
+		}
+		if (rc) {
+			D_ERROR(DF_UOID"EC update failed: %d\n",
+			DP_UOID(orw->orw_oid), rc);
+			goto out;
+		}
+	}
+
 	/* Prepare IO descriptor */
 	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE ||
 	    opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_UPDATE) {
 		bulk_op = CRT_BULK_GET;
-		if (oca->ca_resil == DAOS_RES_EC) {
-			unsigned int	tgt_idx = orw->orw_oid.id_shard -
-							orw->orw_start_shard;
-
-			D_ALLOC_ARRAY(skip_list, orw->orw_nr);
-			if (skip_list == NULL) {
-				D_GOTO(out, rc = -DER_NOMEM);
-			}
-			if (tgt_idx >= oca->u.ec.e_p) {
-				rc = ec_data_target(tgt_idx - oca->u.ec.e_p,
-						    orw->orw_nr, tmp_iods,
-						    oca, skip_list);
-			} else {
-				if (tgt_idx == 0) {
-					rc = ec_copy_iods(tmp_iods,
-							    orw->orw_nr,
-							    &cpy_iods);
-					if (rc) {
-						D_ERROR(
-						DF_UOID"EC update failed: %d\n",
-						DP_UOID(orw->orw_oid), rc);
-						goto out;
-					}
-					tmp_iods = cpy_iods;
-				}
-				rc = ec_parity_target(tgt_idx,
-						      orw->orw_nr, tmp_iods,
-						      oca, skip_list);
-			}
-			if (rc) {
-				D_ERROR(DF_UOID"EC update failed: %d\n",
-				DP_UOID(orw->orw_oid), rc);
-				goto out;
-			}
-		}
 		rc = vos_update_begin(cont->sc_hdl, orw->orw_oid,
 				      orw->orw_epoch, &orw->orw_dkey,
 				      orw->orw_nr, tmp_iods,
@@ -836,7 +836,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		bulk_op = CRT_BULK_PUT;
 		rc = vos_fetch_begin(cont->sc_hdl, orw->orw_oid, orw->orw_epoch,
 				     &orw->orw_dkey, orw->orw_nr,
-				     orw->orw_iods.ca_arrays, size_fetch, &ioh);
+				     tmp_iods, size_fetch, &ioh);
 		if (rc) {
 			D_ERROR(DF_UOID" Fetch begin failed: %d\n",
 				DP_UOID(orw->orw_oid), rc);
@@ -871,7 +871,8 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	if (rma) {
 		bulk_bind = orw->orw_flags & ORF_BULK_BIND;
 		if ((opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE ||
-			opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_UPDATE) &&
+		     opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_UPDATE ||
+		     opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH) &&
 			oca->ca_resil == DAOS_RES_EC) {
 			rc = ec_update_bulk_transfer(rpc, bulk_bind,
 						     orw->orw_bulks.ca_arrays,
