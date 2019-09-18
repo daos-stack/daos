@@ -563,7 +563,7 @@ sys_attach(const char *name, int npsrbs, struct psr_buf *psrbs,
 	   struct dc_mgmt_sys **sysp)
 {
 	struct dc_mgmt_sys     *sys;
-	int			rc;
+	int			rc = 0;
 
 	if (name == NULL)
 		name = DAOS_DEFAULT_SYS_NAME;

@@ -164,9 +164,15 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	       bool size_fetch, struct vos_io_context **ioc_pp)
 {
 	struct vos_container *cont;
-	struct vos_io_context *ioc;
+	struct vos_io_context *ioc = NULL;
 	struct bio_io_context *bioc;
 	int i, rc;
+
+	if (iod_nr == 0) {
+		D_ERROR("Invalid iod_nr (0).\n");
+		rc = -DER_IO_INVAL;
+		goto error;
+	}
 
 	D_ALLOC_PTR(ioc);
 	if (ioc == NULL)
@@ -203,8 +209,10 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 		int iov_nr = iods[i].iod_nr;
 		struct bio_sglist *bsgl;
 
-		if (iods[i].iod_type == DAOS_IOD_SINGLE && iov_nr != 1) {
-			D_ERROR("Invalid sv iod_nr=%d\n", iov_nr);
+		if ((iods[i].iod_type == DAOS_IOD_SINGLE && iov_nr != 1) ||
+		    (iov_nr == 0 && iods[i].iod_recxs != NULL)) {
+			D_ERROR("Invalid iod_nr=%d, iod_type %d.\n",
+				iov_nr, iods[i].iod_type);
 			rc = -DER_IO_INVAL;
 			goto error;
 		}
@@ -222,7 +230,8 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	*ioc_pp = ioc;
 	return 0;
 error:
-	vos_ioc_destroy(ioc);
+	if (ioc != NULL)
+		vos_ioc_destroy(ioc);
 	return rc;
 }
 
