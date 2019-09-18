@@ -174,10 +174,9 @@ def storage_reset(hosts, user=None, hugepages="4096"):
     """Execute prepare reset command through dmg tool to servers provided.
 
     Args:
-        hosts ([type]): [description]
-        path (str, optional): [description]. Defaults to "".
-        user ([type], optional): [description]. Defaults to None.
-        hugepages (str, optional): [description]. Defaults to "4096".
+        hosts (list): list of servers to run prepare on.
+        user (str, optional): User with priviledges. Defaults to False.
+        hugepages (str, optional): Hugepages to allocate. Defaults to "4096".
 
     Returns:
         Avocado CmdResult object that contains exit status, stdout information.
