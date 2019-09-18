@@ -115,6 +115,9 @@ def define_mercury(reqs):
 
 def define_common(reqs):
     """common system component definitions"""
+    reqs.define('valgrind_devel', headers=['valgrind/valgrind.h'],
+                package='valgrind-devel')
+
     reqs.define('cunit', libs=['cunit'], headers=['CUnit/Basic.h'],
                 package='CUnit-devel')
 
@@ -254,9 +257,11 @@ def define_components(reqs):
                 retriever=retriever,
                 commands=['git clean -dxf ',
                           './autogen.sh',
-                          './configure --prefix=$ARGOBOTS_PREFIX CC=gcc',
+                          './configure --prefix=$ARGOBOTS_PREFIX CC=gcc'
+                          ' --enable-valgrind',
                           'make $JOBS_OPT',
                           'make $JOBS_OPT install'],
+                requires=['valgrind_devel'],
                 libs=['abt'],
                 headers=['abt.h'])
 
