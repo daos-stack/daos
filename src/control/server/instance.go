@@ -78,7 +78,6 @@ func NewIOServerInstance(ext External, log logging.Logger,
 		runner:        r,
 		bdevProvider:  bp,
 		msClient:      msc,
-		drpcClient:    getDrpcClientConnection(r.Config.SocketDir),
 		instanceReady: make(chan *srvpb.NotifyReadyReq),
 		storageReady:  make(chan struct{}),
 	}
@@ -229,6 +228,10 @@ func (srv *IOServerInstance) NotifyReady(msg *srvpb.NotifyReadyReq) {
 	srv.log.Debugf("I/O server instance %d ready: %v", srv.Index, msg)
 
 	go func() {
+		// TODO KJ: What should we do if the message offers no server socket?
+		// Activate the dRPC client connection to this iosrv
+		srv.drpcClient = drpc.NewClientConnection(msg.DrpcListenerSock)
+
 		srv.instanceReady <- msg
 	}()
 }

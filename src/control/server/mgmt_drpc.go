@@ -74,7 +74,7 @@ func (m *mgmtModule) ID() int32 {
 // srvModule represents the daos_server dRPC module. It handles dRPCs sent by
 // the daos_io_server iosrv module (src/iosrv).
 type srvModule struct {
-	iosrv *IOServerInstance
+	iosrv []*IOServerInstance
 }
 
 // HandleCall is the handler for calls to the srvModule
@@ -99,7 +99,7 @@ func (mod *srvModule) handleNotifyReady(reqb []byte) error {
 		return errors.Wrap(err, "unmarshal NotifyReady request")
 	}
 
-	mod.iosrv.NotifyReady(req)
+	mod.iosrv[req.InstanceIdx].NotifyReady(req)
 
 	return nil
 }

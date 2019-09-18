@@ -32,6 +32,7 @@
 #include <daos_srv/daos_server.h>
 #include "srv.pb-c.h"
 #include "srv_internal.h"
+#include "drpc_internal.h"
 
 /** dRPC client context */
 struct drpc *dss_drpc_ctx;
@@ -51,6 +52,14 @@ notify_ready(void)
 	if (rc != 0)
 		goto out;
 	req.nctxs = DSS_CTX_NR_TOTAL;
+	/* Do not free, this string is managed by the dRPC listener */
+	req.drpclistenersock = drpc_listener_socket_path;
+	/*
+	 * TODO DAOS-2881: Use idx that is passed from daos_server on startup.
+	 * This is specifically for the case where there is more than one
+	 * IO server.
+	 */
+	req.instanceidx = 0;
 
 	reqb_size = srv__notify_ready_req__get_packed_size(&req);
 	D_ALLOC(reqb, reqb_size);
