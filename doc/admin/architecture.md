@@ -1,9 +1,6 @@
 # DAOS Architecture 
 
-DAOS is an open source software-defined scale-out object store that
-provides high bandwidth and high IOPS storage containers to applications
-and enables next generation data-centric workflows combining simulation,
-data analytics and machine learning.
+DAOS is an open-source software-defined scale-out object store that provides high bandwidth and high IOPS storage containers to applications and enables next-generation data-centric workflows combining simulation, data analytics, and machine learning.
 
 Unlike the traditional storage stacks that were primarily designed for
 rotating media, DAOS is architected from the ground up to exploit new
@@ -11,7 +8,7 @@ NVM technologies and is extremely lightweight since it operates
 End-to-End (E2E) in user space with full OS bypass. DAOS offers a shift
 away from an I/O model designed for block-based and high-latency storage
 to one that inherently supports fine-grained data access and unlocks the
-performance of the next generation storage technologies.
+performance of the next-generation storage technologies.
 
 Unlike traditional Burst Buffers, DAOS is a high-performant independent
 and fault-tolerant storage tier that does not rely on a third-party tier
@@ -22,7 +19,7 @@ to manage metadata and data resilience.
 DAOS relies on OFI for low-latency communications and stores data on
 both storage-class memory and NVMe storage. DAOS presents a native
 key-array-value storage interface that offers a unified storage model
-over which domain-specific data models are ported, such as HDF5, MPI-IO
+over which domain-specific data models are ported, such as HDF5, MPI-IO,
 and Apache Arrow. A POSIX I/O emulation layer implementing files and
 directories over the native DAOS API is also available.
 
@@ -45,9 +42,9 @@ data, will typically be stored in the former, whereas checkpoints and
 bulk data will be stored in the latter. This approach allows DAOS to
 deliver the raw NVMe bandwidth for bulk data by streaming the data to
 NVMe storage and maintaining internal metadata index in SCM. The
-Persistent Memory Development Kit (PMDK)[^1] allows to manage
+Persistent Memory Development Kit (PMDK)[^1] allows managing
 transactional access to SCM and the Storage Performance Development Kit
-(SPDK)[^2] enables user space I/O to NVMe devices.
+(SPDK)[^2] enables user-space I/O to NVMe devices.
 
 ![](./media/image1.png)
 Figure 2‑1. DAOS Storage
@@ -67,7 +64,7 @@ DAOS aims at delivering:
 -   Advanced data placement taking into account fault domains
 
 -   Software-managed redundancy supporting both replication and erasure
-    code with online rebuild
+    code with an online rebuild
 
 -   End-to-end data integrity
 
@@ -93,7 +90,7 @@ DAOS aims at delivering:
 
 ## DAOS Components
 
-A datacenter may have hundreds of thousands of compute nodes
+A data center may have hundreds of thousands of compute nodes
 interconnected via a scalable high-performance fabric, where all, or a
 subset of the nodes called storage nodes, have direct access to NVM
 storage. A DAOS installation involves several components that can be
@@ -108,7 +105,7 @@ storage. It listens to a management port, addressed by an IP address and
 a TCP port number, plus one or more fabric endpoints, addressed by
 network URIs. The DAOS server is configured through a YAML file and can
 be integrated with different daemon management or orchestration
-frameworks (e.g. a systemd script, a Kunernetes service or even via a
+frameworks (e.g., a systemd script, a Kubernetes service or even via a
 parallel launcher like pdsh or srun).
 
 A DAOS system is identified by a system name and consists of a set of
@@ -133,26 +130,26 @@ A target is the unit of performance. Hardware components associated with
 the target, such as the backend storage medium, the server, and the
 network, have limited capability and capacity.
 
-The number of target exported by a DAOS server instance is configurable
-and depends on the underlying hardware (i.e. number of SCM modules,
+The number of targets exported by a DAOS server instance is configurable
+and depends on the underlying hardware (i.e., the number of SCM modules,
 CPUs, NVMe SSDs ...). A target is the unit of fault.
 
 ### Storage API, Application Interface and Tools
 
-Applications, users and administrators can interact with a DAOS system
+Applications, users, and administrators can interact with a DAOS system
 through two different client APIs. The management API offers the ability
 to administrate a DAOS system. It is intended to be integrated with
 different vendor-specific storage management or open-source
 orchestration frameworks. A CLI tool is built over the DAOS management
-API. On the other hand, the DAOS library (i.e. libdaos) implements the
+API. On the other hand, the DAOS library (i.e., libdaos) implements the
 DAOS storage model and is primarily targeted at application and I/O
 middleware developers who want to store datasets in a DAOS system. User
 utilities are also built over the API to allow users to manage datasets
 from a CLI.
 
 Applications can access datasets stored in DAOS either directly through
-the native DAOS API or through an I/O middleware libraries (e.g. POSIX
-emulation, MPI-IO, HDF5) or frameworks (e.g. Spark, TensorFlow) already
+the native DAOS API or an I/O middleware libraries (e.g. POSIX
+emulation, MPI-IO, HDF5) or frameworks (e.g., Spark, TensorFlow) already
 integrated with the native DAOS storage model.
 
 ### Agent
@@ -170,7 +167,7 @@ targets. The actual space allocated to the pool on each target is called
 a pool shard. The total space allocated to a pool is decided at creation
 time and can be expanded over time by resizing all the pool shards
 (within the limit of the storage capacity dedicated to each target) or
-by spanning more targets (i.e. adding more pool shards). A pool offers
+by spanning more targets (i.e., adding more pool shards). A pool offers
 storage virtualization and is the unit of provisioning and isolation.
 DAOS pools cannot span across multiple systems.
 
@@ -180,15 +177,15 @@ be modified transactional and independently of the other containers
 stored in the same pool. A container is the unit of snapshot and data
 management. DAOS objects belonging to a container can be distributed
 across any target of the pool for both performance and resilience and
-can be accessed through different APIs to efficiently represent
-structured, semi-structured and unstructured data.
+can be accessed through different APIs to represent
+structured, semi-structured and unstructured data efficiently.
 
 Figure 2‑2 illustrates the different DAOS abstractions.
 
 ![Fig\_001.png](./media/image2.png)
 
 Figure 2‑2. Example of
-four Storage Nodes, eight DAOS Targets and three DAOS Pools
+four Storage Nodes, eight DAOS Targets, and three DAOS Pools
 
 Table 2‑1 shows the targeted level of scalability for each DAOS
 abstraction.
@@ -205,22 +202,9 @@ Scalability
 
 ### DAOS Pool
 
-A Pool is identified by a unique UUID and maintains target memberships
-in the pool map stored in persistent memory. The pool map not only
-records the list of active targets, it also contains the storage
-topology under the form of a tree that is used to identify targets
-sharing common hardware components. For instance, the first level of the
-tree can represent targets sharing the same motherboard, then the second
-level can represent all motherboards sharing the same rack and finally
-the third level can represent all racks in the same cage. This framework
-effectively represents hierarchical fault domains, which are then used
-to avoid placing redundant data on targets subject to correlated
-failures. At any point in time, new targets can be added to the pool map
-and failed ones can be excluded. Moreover, the pool map is fully
-versioned, which effectively assigns a unique sequence to each
-modification of the map, more particularly for failed node removal.
+A Pool is identified by a unique UUID and maintains target memberships in the pool map stored in persistent memory. The pool map not only records the list of active targets, it also contains the storage topology under the form of a tree that is used to identify targets sharing common hardware components. For instance, the first level of the tree can represent targets sharing the same motherboard, and then the second level can represent all motherboards sharing the same rack and finally the third level can represent all racks in the same cage. This framework effectively represents hierarchical fault domains, which are then used to avoid placing redundant data on targets subject to correlated failures. At any point in time, new targets can be added to the pool map, and failed ones can be excluded. Moreover, the pool map is fully versioned, which effectively assigns a unique sequence to each modification of the map, more particularly for failed node removal.
 
-A pool shard is a reservation of NVM storage (i.e. SCM optionally
+A pool shard is a reservation of NVM storage (i.e., SCM optionally
 combined with a pre-allocated space on NVMe storage) on a specific
 target. It has a fixed capacity and fails operations when full. Current
 space usage can be queried at any time and reports the total amount of
@@ -241,7 +225,7 @@ erasure-coded to ensure durability and availability.
 
 When creating a pool, a set of system properties must be defined to
 configure the different features supported by the pool. In addition,
-user can define their own attributes that will be stored persistently.
+the user can define their own attributes that will be stored persistently.
 
 A pool is only accessible to authenticated and authorized applications.
 Multiple security frameworks could be supported, from NFSv4 access
@@ -251,8 +235,8 @@ connection to the pool, a connection context is returned to the
 application process.
 
 A pool stores many different sorts of persistent metadata, such as the
-pool map, authentication and authorization information, user attributes,
-properties and rebuild logs. Such metadata are critical and require the
+pool map, authentication, and authorization information, user attributes,
+properties, and rebuild logs. Such metadata are critical and require the
 highest level of resiliency. Therefore, the pool metadata are replicated
 on a few nodes from distinct high-level fault domains. For very large
 configurations with hundreds of thousands of storage nodes, only a very
@@ -265,12 +249,12 @@ syndrome.
 ### DAOS Container
 
 A container represents an object address space inside a pool and is
-identified by a UUID. Applications (i.e. directly or via I/O middleware,
+identified by a UUID. Applications (i.e., directly or via I/O middleware,
 domain-specific data format, big data or AI frameworks) store all
 related datasets into a container which is the unit of storage
 management for the user.
 
-Likewise to pools, containers can store user attributes and a set of
+Like pools, containers can store user attributes and a set of
 properties must be passed at container creation time to configure
 different features like checksums.
 
@@ -308,21 +292,21 @@ its own engine.
 
 ### DAOS Object
 
-To avoid scaling problems and overhead common to traditional storage
+To avoid scaling problems and overhead common to a traditional storage
 system, DAOS objects are intentionally simple. No default object
 metadata beyond the type and schema are provided. This means that the
 system does not maintain time, size, owner, permissions or even track
 openers. To achieve high availability and horizontal scalability, many
-object schemas (replication/erasure code, static/dynamic striping, etc.)
+object schemas (replication/erasure code, static/dynamic striping, and others)
 are provided. The schema framework is flexible and easily expandable to
 allow for new custom schema types in the future. The layout is generated
-algorithmically on object open from the object identifier and the pool
+algorithmically on an object open from the object identifier and the pool
 map. End-to-end integrity is assured by protecting object data with
 checksums during network transfer and storage.
 
 A DAOS object can be accessed through different native interfaces
 exported by libdaos: multi-level key-array, key-value or array APIs that
-allows to represent efficiently structured, semi-structured or
+allows representing efficiently structured, semi-structured or
 unstructured data.
 
 [^1]: http://pmem.io/pmdk/

@@ -1245,6 +1245,21 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 		stream			= &stream_args->csa_streams[tid];
 		stream->st_coll_args	= &carg;
 
+		if (args->ca_exclude_tgts_cnt) {
+			int i;
+
+			for (i = 0; i < args->ca_exclude_tgts_cnt; i++)
+				if (args->ca_exclude_tgts[i] == tid)
+					break;
+
+			if (i < args->ca_exclude_tgts_cnt) {
+				D_DEBUG(DB_TRACE, "Skip tgt %d\n", tid);
+				rc = ABT_future_set(future, (void *)stream);
+				D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+				continue;
+			}
+		}
+
 		dx = dss_xstream_get(DSS_MAIN_XS_ID(tid));
 		if (create_ult)
 			rc = ABT_thread_create(dx->dx_pools[DSS_POOL_SHARE],
@@ -1255,9 +1270,8 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 					     collective_func, stream, NULL);
 
 		if (rc != ABT_SUCCESS) {
-			aggregator.at_args.st_rc = dss_abterr2der(rc);
-			rc = ABT_future_set(future,
-					    (void *)&aggregator);
+			stream->st_rc = dss_abterr2der(rc);
+			rc = ABT_future_set(future, (void *)stream);
 			D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 		}
 	}
@@ -1327,12 +1341,8 @@ static int
 dss_collective_internal(int (*func)(void *), void *arg, bool thread, int flag)
 {
 	int				rc;
-	struct dss_coll_ops		coll_ops;
-	struct dss_coll_args		coll_args;
-
-
-	memset(&coll_ops, 0, sizeof(coll_ops));
-	memset(&coll_args, 0, sizeof(coll_args));
+	struct dss_coll_ops		coll_ops = { 0 };
+	struct dss_coll_args		coll_args = { 0 };
 
 	coll_ops.co_func	= func;
 	coll_args.ca_func_args	= arg;
@@ -1720,7 +1730,6 @@ dss_gc_run(int credits)
 		}
 		total -= creds; /* subtract the remainded credits */
 		if (creds != 0) {
-			D_DEBUG(DB_TRACE, "GC consumed %d credits\n", total);
 			break;
 		}
 
@@ -1731,6 +1740,10 @@ dss_gc_run(int credits)
 			break;
 
 		ABT_thread_yield();
+	}
+
+	if (total != 0) {
+		D_DEBUG(DB_TRACE, "GC consumed %d credits\n", total);
 	}
 }
 

@@ -35,6 +35,7 @@ import (
 	. "github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	. "github.com/daos-stack/daos/src/control/common/storage"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 )
 
@@ -238,16 +239,38 @@ func newMockMgmtCtlClient(
 
 type mockMgmtSvcClient struct{}
 
-func (m *mockMgmtSvcClient) CreatePool(ctx context.Context, req *pb.CreatePoolReq, o ...grpc.CallOption) (*pb.CreatePoolResp, error) {
+func (m *mockMgmtSvcClient) PoolCreate(ctx context.Context, req *pb.PoolCreateReq, o ...grpc.CallOption) (*pb.PoolCreateResp, error) {
 	// return successful pool creation results
 	// initialise with zero values indicating mgmt.CTRL_SUCCESS
-	return &pb.CreatePoolResp{}, nil
+	return &pb.PoolCreateResp{}, nil
 }
 
-func (m *mockMgmtSvcClient) DestroyPool(ctx context.Context, req *pb.DestroyPoolReq, o ...grpc.CallOption) (*pb.DestroyPoolResp, error) {
+func (m *mockMgmtSvcClient) PoolDestroy(ctx context.Context, req *pb.PoolDestroyReq, o ...grpc.CallOption) (*pb.PoolDestroyResp, error) {
 	// return successful pool destroy results
 	// initialise with zero values indicating mgmt.CTRL_SUCCESS
-	return &pb.DestroyPoolResp{}, nil
+	return &pb.PoolDestroyResp{}, nil
+}
+
+func (m *mockMgmtSvcClient) BioHealthQuery(
+	ctx context.Context,
+	req *pb.BioHealthReq,
+	o ...grpc.CallOption,
+) (*pb.BioHealthResp, error) {
+
+	// return successful bio health results
+	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	return &pb.BioHealthResp{}, nil
+}
+
+func (m *mockMgmtSvcClient) SmdListDevs(
+	ctx context.Context,
+	req *pb.SmdDevReq,
+	o ...grpc.CallOption,
+) (*pb.SmdDevResp, error) {
+
+	// return successful SMD device list
+	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	return &pb.SmdDevResp{}, nil
 }
 
 func (m *mockMgmtSvcClient) Join(ctx context.Context, req *pb.JoinReq, o ...grpc.CallOption) (*pb.JoinResp, error) {
@@ -274,6 +297,7 @@ type mockControl struct {
 	connectRet error
 	ctlClient  pb.MgmtCtlClient
 	svcClient  pb.MgmtSvcClient
+	log        logging.Logger
 }
 
 func (m *mockControl) connect(addr string, cfg *security.TransportConfig) error {
@@ -300,11 +324,16 @@ func (m *mockControl) getSvcClient() pb.MgmtSvcClient {
 	return m.svcClient
 }
 
+func (m *mockControl) logger() logging.Logger {
+	return m.log
+}
+
 func newMockControl(
+	log logging.Logger,
 	address string, state connectivity.State, connectRet error,
 	cClient pb.MgmtCtlClient, sClient pb.MgmtSvcClient) Control {
 
-	return &mockControl{address, state, connectRet, cClient, sClient}
+	return &mockControl{address, state, connectRet, cClient, sClient, log}
 }
 
 type mockControllerFactory struct {
@@ -315,6 +344,7 @@ type mockControllerFactory struct {
 	modules       ScmModules
 	moduleResults ScmModuleResults
 	mountResults  ScmMountResults
+	log           logging.Logger
 	// to provide error injection into Control objects
 	scanRet    error
 	formatRet  error
@@ -333,7 +363,7 @@ func (m *mockControllerFactory) create(address string, cfg *security.TransportCo
 
 	sClient := newMockMgmtSvcClient()
 
-	controller := newMockControl(address, m.state, m.connectRet, cClient, sClient)
+	controller := newMockControl(m.log, address, m.state, m.connectRet, cClient, sClient)
 
 	err := controller.connect(address, cfg)
 
@@ -341,6 +371,7 @@ func (m *mockControllerFactory) create(address string, cfg *security.TransportCo
 }
 
 func newMockConnect(
+	log logging.Logger,
 	state connectivity.State, features []*pb.Feature, ctrlrs NvmeControllers,
 	ctrlrResults NvmeControllerResults, modules ScmModules,
 	moduleResults ScmModuleResults, mountResults ScmMountResults,
@@ -350,15 +381,15 @@ func newMockConnect(
 	return &connList{
 		factory: &mockControllerFactory{
 			state, MockFeatures, ctrlrs, ctrlrResults, modules,
-			moduleResults, mountResults, scanRet, formatRet,
+			moduleResults, mountResults, log, scanRet, formatRet,
 			updateRet, burninRet, killRet, connectRet,
 		},
 	}
 }
 
-func defaultMockConnect() Connect {
+func defaultMockConnect(log logging.Logger) Connect {
 	return newMockConnect(
-		connectivity.Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
+		log, connectivity.Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
 		MockModuleResults, MockMountResults, nil, nil, nil, nil, nil, nil)
 }
 

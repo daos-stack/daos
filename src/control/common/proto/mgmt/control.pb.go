@@ -37,7 +37,7 @@ const _ = grpc.SupportPackageIsVersion4
 type MgmtCtlClient interface {
 	// Prepare nonvolatile storage devices for use with DAOS
 	StoragePrepare(ctx context.Context, in *StoragePrepareReq, opts ...grpc.CallOption) (*StoragePrepareResp, error)
-	// Retrieve details of nonvolatile storage on server
+	// Retrieve details of nonvolatile storage on server, including health info
 	StorageScan(ctx context.Context, in *StorageScanReq, opts ...grpc.CallOption) (*StorageScanResp, error)
 	// Format nonvolatile storage devices for use with DAOS
 	StorageFormat(ctx context.Context, in *StorageFormatReq, opts ...grpc.CallOption) (MgmtCtl_StorageFormatClient, error)
@@ -241,7 +241,7 @@ func (x *mgmtCtlListFeaturesClient) Recv() (*Feature, error) {
 type MgmtCtlServer interface {
 	// Prepare nonvolatile storage devices for use with DAOS
 	StoragePrepare(context.Context, *StoragePrepareReq) (*StoragePrepareResp, error)
-	// Retrieve details of nonvolatile storage on server
+	// Retrieve details of nonvolatile storage on server, including health info
 	StorageScan(context.Context, *StorageScanReq) (*StorageScanResp, error)
 	// Format nonvolatile storage devices for use with DAOS
 	StorageFormat(*StorageFormatReq, MgmtCtl_StorageFormatServer) error
@@ -443,9 +443,9 @@ var _MgmtCtl_serviceDesc = grpc.ServiceDesc{
 	Metadata: "control.proto",
 }
 
-func init() { proto.RegisterFile("control.proto", fileDescriptor_control_f325a27f61b02b5d) }
+func init() { proto.RegisterFile("control.proto", fileDescriptor_control_e39ddbc8b4732a95) }
 
-var fileDescriptor_control_f325a27f61b02b5d = []byte{
+var fileDescriptor_control_e39ddbc8b4732a95 = []byte{
 	// 261 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0x91, 0xcd, 0x4a, 0xc3, 0x40,
 	0x14, 0x85, 0x15, 0x45, 0x61, 0x6c, 0xb2, 0x18, 0x7f, 0x2a, 0x59, 0xfa, 0x00, 0xc1, 0x9f, 0x95,

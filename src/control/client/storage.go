@@ -35,7 +35,6 @@ import (
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	types "github.com/daos-stack/daos/src/control/common/storage"
-	log "github.com/daos-stack/daos/src/control/logging"
 )
 
 const (
@@ -118,7 +117,7 @@ func storagePrepareRequest(mc Control, req interface{}, ch chan ClientResult) {
 	if !ok {
 		err := errors.Errorf(msgTypeAssert, &pb.StoragePrepareReq{}, req)
 
-		log.Errorf(err.Error())
+		mc.logger().Errorf(err.Error())
 		ch <- ClientResult{mc.getAddress(), nil, err}
 		return // type err
 	}
@@ -176,7 +175,9 @@ func storageScanRequest(mc Control, req interface{}, ch chan ClientResult) {
 }
 
 // StorageScan returns details of nonvolatile storage devices attached to each
-// remote server. Data received over channel from requests running in parallel.
+// remote server. Critical storage device health information is also returned
+// for all NVMe SSDs discovered. Data received over channel from requests
+// running in parallel.
 func (c *connList) StorageScan() (ClientCtrlrMap, ClientModuleMap) {
 	cResults := c.makeRequests(nil, storageScanRequest)
 	cCtrlrs := make(ClientCtrlrMap)   // mapping of server address to NVMe SSDs
@@ -233,7 +234,7 @@ func StorageFormatRequest(mc Control, parms interface{}, ch chan ClientResult) {
 		}
 		if err != nil {
 			err := errors.Wrapf(err, msgStreamRecv, stream)
-			log.Errorf(err.Error())
+			mc.logger().Errorf(err.Error())
 			ch <- ClientResult{mc.getAddress(), nil, err}
 			return // recv err
 		}
@@ -300,14 +301,14 @@ func storageUpdateRequest(
 		err := errors.Errorf(
 			msgTypeAssert, pb.StorageUpdateReq{}, req)
 
-		log.Errorf(err.Error())
+		mc.logger().Errorf(err.Error())
 		ch <- ClientResult{mc.getAddress(), nil, err}
 		return // type err
 	}
 
 	stream, err := mc.getCtlClient().StorageUpdate(ctx, updateReq)
 	if err != nil {
-		log.Errorf(err.Error())
+		mc.logger().Errorf(err.Error())
 		ch <- ClientResult{mc.getAddress(), nil, err}
 		return // stream err
 	}
@@ -319,7 +320,7 @@ func storageUpdateRequest(
 		}
 		if err != nil {
 			err := errors.Wrapf(err, msgStreamRecv, stream)
-			log.Errorf(err.Error())
+			mc.logger().Errorf(err.Error())
 			ch <- ClientResult{mc.getAddress(), nil, err}
 			return // recv err
 		}
