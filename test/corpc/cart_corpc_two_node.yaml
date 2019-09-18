@@ -28,9 +28,9 @@ tests: !mux
     srv_arg: "--name service_group --is_service"
     srv_env: ""
     srv_ppn: "5"
-  corpc_version:
-    name: corpc_version
-    srv_bin: tests/test_corpc_version
-    srv_arg: "--name service_group --is_service"
-    srv_env: ""
-    srv_ppn: "5"
+  #corpc_version:
+    #name: corpc_version
+    #srv_bin: tests/test_corpc_version
+    #srv_arg: "--name service_group --is_service"
+    #srv_env: ""
+    #srv_ppn: "5"

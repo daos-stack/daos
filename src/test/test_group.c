@@ -428,6 +428,8 @@ check_in(crt_group_t *remote_group, int rank)
 		rpc_req_input->age, rpc_req_input->days,
 		rpc_req_input->bool_val);
 
+	D_ERROR("ALEXMOD: Sending rpc to group %s rank=%d\n",
+			remote_group->cg_grpid, rank);
 	/* send an rpc, print out reply */
 	rc = crt_req_send(rpc_req, client_cb_common, NULL);
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);

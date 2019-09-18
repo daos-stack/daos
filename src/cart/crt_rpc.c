@@ -938,19 +938,23 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 
 
 	/* this is a remote group, contact the PSR */
-	if (grp_priv->gp_local == 0 && !crt_is_service()) {
-		/* send an RPC to the PSR */
-		RPC_TRACE(DB_NET, rpc_priv,
-			  "Querying PSR to find out target NA Address.\n");
-		rc = crt_req_uri_lookup_psr(rpc_priv,
-					    crt_req_uri_lookup_by_rpc_cb,
-					    rpc_priv);
-		if (rc != 0) {
-			rpc_priv->crp_state = RPC_STATE_INITED;
-			D_ERROR("crt_grp_uri_lookup_psr() failed, rc %d.\n",
-				rc);
+	if (grp_priv->gp_local == 0) {
+		/* Note: In case of no-pmix all groups are local */
+		if (CRT_PMIX_ENABLED() ||
+		(!CRT_PMIX_ENABLED() && !crt_is_service())) {
+			/* send an RPC to the PSR */
+			RPC_TRACE(DB_NET, rpc_priv,
+			"Querying PSR to find out target NA Address.\n");
+			rc = crt_req_uri_lookup_psr(rpc_priv,
+					crt_req_uri_lookup_by_rpc_cb,
+					rpc_priv);
+			if (rc != 0) {
+				rpc_priv->crp_state = RPC_STATE_INITED;
+				D_ERROR("psr uri lookup failed, rc %d.\n",
+					rc);
+			}
+			D_GOTO(out, rc);
 		}
-		D_GOTO(out, rc);
 	}
 
 	/* this is a local group */
@@ -973,7 +977,9 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 
 		/* lookup through PMIx */
 		grp_id = default_grp_priv->gp_pub.cg_grpid;
-		rc = crt_pmix_uri_lookup(grp_id, rank, &uri);
+		rc = crt_pmix_uri_lookup(grp_id,
+				grp_priv_get_primary_rank(grp_priv, rank),
+				&uri);
 		if (rc != 0) {
 			D_ERROR("crt_pmix_uri_lookup() failed, rc %d.\n", rc);
 			D_GOTO(out, rc);
