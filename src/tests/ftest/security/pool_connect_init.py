@@ -36,20 +36,6 @@ class PoolSecurityTest(TestWithServers):
     :avocado: recursive
     """
 
-    def tearDown(self):
-        """
-        tear down method
-        """
-        try:
-            if self.pool is not None:
-                self.pool.destroy()
-        except DaosApiError as exc:
-            self.log.info(exc)
-            self.log.info(traceback.format_exc())
-            self.fail("##Pool destroy failed in tearDown.\n")
-        finally:
-            super(PoolSecurityTest, self).tearDown()
-
     def test_poolconnect(self):
         """
         Test basic pool security in pool creation and connect.

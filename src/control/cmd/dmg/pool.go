@@ -185,8 +185,12 @@ func poolCreate(log logging.Logger, conns client.Connect, scmSize string,
 		return errors.Wrap(err, "calculating pool storage sizes")
 	}
 
+	var acl []string
 	if aclFile != "" {
-		return errors.New("ACL file parsing not implemented")
+		acl, err = readACLFile(aclFile)
+		if err != nil {
+			return err
+		}
 	}
 
 	if numSvcReps > maxNumSvcReps {
@@ -202,7 +206,7 @@ func poolCreate(log logging.Logger, conns client.Connect, scmSize string,
 	req := &client.PoolCreateReq{
 		ScmBytes: uint64(scmBytes), NvmeBytes: uint64(nvmeBytes),
 		RankList: rankList, NumSvcReps: numSvcReps, Sys: sys,
-		Usr: usr, Grp: grp,
+		Usr: usr, Grp: grp, Acl: acl,
 	}
 
 	resp, err := conns.PoolCreate(req)

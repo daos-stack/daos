@@ -268,6 +268,7 @@ func TestStorageScan(t *testing.T) {
 					"1.0.0", "1.0.1",
 					[]spdk.Controller{ctrlr},
 					[]spdk.Namespace{MockNamespace(&ctrlr)},
+					[]spdk.DeviceHealth{MockDeviceHealth(&ctrlr)},
 					tt.spdkDiscoverRet, nil, nil),
 				false)
 			_ = new(pb.StorageScanResp)
@@ -413,6 +414,7 @@ func TestStoragePrepare(t *testing.T) {
 			cs.nvme = newMockNvmeStorage(log, config.ext, newMockSpdkEnv(nil),
 				newMockSpdkNvme(log, "", "", []spdk.Controller{ctrlr},
 					[]spdk.Namespace{MockNamespace(&ctrlr)},
+					[]spdk.DeviceHealth{MockDeviceHealth(&ctrlr)},
 					nil, nil, nil), false)
 			_ = new(pb.StoragePrepareResp)
 

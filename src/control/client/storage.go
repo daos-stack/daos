@@ -175,7 +175,9 @@ func storageScanRequest(mc Control, req interface{}, ch chan ClientResult) {
 }
 
 // StorageScan returns details of nonvolatile storage devices attached to each
-// remote server. Data received over channel from requests running in parallel.
+// remote server. Critical storage device health information is also returned
+// for all NVMe SSDs discovered. Data received over channel from requests
+// running in parallel.
 func (c *connList) StorageScan() (ClientCtrlrMap, ClientModuleMap) {
 	cResults := c.makeRequests(nil, storageScanRequest)
 	cCtrlrs := make(ClientCtrlrMap)   // mapping of server address to NVMe SSDs
