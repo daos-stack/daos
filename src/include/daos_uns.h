@@ -59,10 +59,8 @@ struct duns_attr_t {
  * container. This is to be used in a unified namespace solution to be able to
  * map a path in the unified namespace to a location in the DAOS tier.
  *
+ * \param[in]	poh	Pool handle
  * \param[in]	path	Valid path in an existing namespace.
- * \param[in]	sysname	DAOS system name.
- * \param[in]	svcl	DAOS pool service ranks list.
- *			NOTE: svcl is temporary and will be removed.
  * \param[in/out]
  *		attr	Struct containing the attributes. The uuid of the
  *			container created is returned in da_cuuid.
@@ -70,8 +68,8 @@ struct duns_attr_t {
  * \return		0 on Success. Negative on Failure.
  */
 int
-duns_link_path(const char *path, const char *sysname,
-	       d_rank_list_t *svcl, struct duns_attr_t *attrp);
+duns_create_path(daos_handle_t poh, const char *path,
+		 struct duns_attr_t *attrp);
 
 /**
  * Retrieve the extended attributes on a path corresponding to DAOS location and
@@ -85,6 +83,16 @@ duns_link_path(const char *path, const char *sysname,
 int
 duns_resolve_path(const char *path, struct duns_attr_t *attr);
 
+/**
+ * Destroy a container and remove the path associated with it in the UNS.
+ *
+ * \param[in]	poh	Pool handle
+ * \param[in]	path	Valid path in an existing namespace.
+ *
+ * \return		0 on Success. Negative on Failure.
+ */
+int
+duns_destroy_path(daos_handle_t poh, const char *path);
 
 #if defined(__cplusplus)
 }

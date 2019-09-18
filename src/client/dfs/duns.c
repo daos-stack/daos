@@ -108,11 +108,8 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
  * instead of regular extended attribute.
  */
 int
-duns_link_path(const char *path, const char *sysname,
-	       d_rank_list_t *svcl, struct duns_attr_t *attrp)
+duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 {
-	daos_handle_t		poh;
-	daos_pool_info_t	pool_info = {};
 	char			pool[37], cont[37];
 	char			oclass[10], type[10];
 	char			str[DUNS_MAX_XATTR_LEN];
@@ -152,14 +149,6 @@ duns_link_path(const char *path, const char *sysname,
 		return -DER_INVAL;
 	}
 
-	/** Connect to the pool. */
-	rc = daos_pool_connect(attrp->da_puuid, sysname, svcl, DAOS_PC_RW,
-			       &poh, &pool_info, NULL);
-	if (rc) {
-		D_ERROR("Failed to connect to pool (%d)\n", rc);
-		D_GOTO(err_link, rc);
-	}
-
 	uuid_unparse(attrp->da_puuid, pool);
 	if (attrp->da_oclass_id != OC_UNKNOWN)
 		daos_oclass_id2name(attrp->da_oclass_id, oclass);
@@ -187,13 +176,13 @@ duns_link_path(const char *path, const char *sysname,
 			      attrp->da_chunk_size);
 		if (len < 90) {
 			D_ERROR("Failed to create xattr value\n");
-			D_GOTO(err_pool, rc = -DER_INVAL);
+			D_GOTO(err_link, rc = -DER_INVAL);
 		}
 
 		rc = lsetxattr(path, DUNS_XATTR_NAME, str, len + 1, 0);
 		if (rc) {
 			D_ERROR("Failed to set DAOS xattr (rc = %d).\n", rc);
-			D_GOTO(err_pool, rc = -DER_INVAL);
+			D_GOTO(err_link, rc = -DER_INVAL);
 		}
 
 		if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
@@ -211,7 +200,7 @@ duns_link_path(const char *path, const char *sysname,
 			prop = daos_prop_alloc(1);
 			if (prop == NULL) {
 				D_ERROR("Failed to allocate container prop.");
-				D_GOTO(err_pool, rc = -DER_NOMEM);
+				D_GOTO(err_link, rc = -DER_NOMEM);
 			}
 			prop->dpp_entries[0].dpe_type =
 				DAOS_PROP_CO_LAYOUT_TYPE;
@@ -222,21 +211,55 @@ duns_link_path(const char *path, const char *sysname,
 	} while ((rc == -DER_EXIST) && try_multiple);
 	if (rc) {
 		D_ERROR("Failed to create container (%d)\n", rc);
-		D_GOTO(err_pool, rc);
+		D_GOTO(err_link, rc);
 	}
 
-	rc = daos_pool_disconnect(poh, NULL);
-	if (rc)
-		D_ERROR("daos_pool_disconnect() Failed (%d)\n", rc);
-
 	return rc;
-
-err_pool:
-	daos_pool_disconnect(poh, NULL);
 err_link:
 	if (attrp->da_type == DAOS_PROP_CO_LAYOUT_HDF5)
 		unlink(path);
 	else if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX)
 		rmdir(path);
 	return rc;
+}
+
+int
+duns_destroy_path(daos_handle_t poh, const char *path)
+{
+	struct duns_attr_t dattr = {0};
+	int	rc;
+
+	/* Resolve pool, container UUIDs from path */
+	rc = duns_resolve_path(path, &dattr);
+	if (rc) {
+		D_ERROR("duns_resolve_path() Failed on path %s (%d)\n",
+			path, rc);
+		return rc;
+	}
+
+	if (dattr.da_type == DAOS_PROP_CO_LAYOUT_HDF5) {
+		rc = unlink(path);
+		if (rc) {
+			D_ERROR("Failed to unlink file %s: %s\n",
+				path, strerror(errno));
+			return -DER_INVAL;
+		}
+	} else if (dattr.da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
+		rc = rmdir(path);
+		if (rc) {
+			D_ERROR("Failed to remove dir %s: %s\n",
+				path, strerror(errno));
+			return -DER_INVAL;
+		}
+	}
+
+	/** Destroy the container */
+	rc = daos_cont_destroy(poh, dattr.da_cuuid, 1, NULL);
+	if (rc) {
+		D_ERROR("Failed to destroy container (%d)\n", rc);
+		/** recreate the link ? */
+		return rc;
+	}
+
+	return 0;
 }

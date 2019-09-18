@@ -201,9 +201,9 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 	dattr.da_oclass_id = ap->oclass;
 	dattr.da_chunk_size = ap->chunk_size;
 
-	rc = duns_link_path(ap->path, ap->sysname, ap->mdsrv, &dattr);
+	rc = duns_create_path(ap->pool, ap->path, &dattr);
 	if (rc) {
-		fprintf(stderr, "duns_link_path() error: rc=%d\n", rc);
+		fprintf(stderr, "duns_create_path() error: rc=%d\n", rc);
 		D_GOTO(err_rc, rc);
 	}
 
@@ -266,6 +266,17 @@ int
 cont_destroy_hdlr(struct cmd_args_s *ap)
 {
 	int	rc;
+
+	if (ap->path) {
+		rc = duns_destroy_path(ap->pool, ap->path);
+		if (rc)
+			fprintf(stderr, "duns_destroy_path() failed %s (%d)\n",
+				ap->path, rc);
+		else
+			fprintf(stdout, "Successfully destroyed path %s\n",
+				ap->path);
+		return rc;
+	}
 
 	/* TODO: when API supports, change arg 3 to ap->force_destroy. */
 	rc = daos_cont_destroy(ap->pool, ap->c_uuid, 1, NULL);
