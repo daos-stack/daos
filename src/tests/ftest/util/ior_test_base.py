@@ -28,7 +28,7 @@ from ior_utils import IorCommand
 from command_utils import Mpirun, CommandFailure
 from mpio_utils import MpioUtils
 from test_utils import TestPool, TestContainer
-
+from dfuse_utils import DfuseCommand
 
 class IorTestBase(TestWithServers):
     """Base IOR test class.
@@ -42,6 +42,8 @@ class IorTestBase(TestWithServers):
         self.ior_cmd = None
         self.processes = None
         self.hostfile_clients_slots = None
+        
+        self.cont = None
 
     def setUp(self):
         """Set up each test case."""
@@ -60,6 +62,11 @@ class IorTestBase(TestWithServers):
         try:
             if self.pool is not None and self.pool.pool.attached:
                 self.pool.destroy(1)
+            if self.dfuse is not None:
+                self.dfuse.stop(self.hostlist_clients)
+        except CommandFailure as error:
+            self.log.error("Dfuse Failed: %s", str(error))
+            self.fail("Test was expected to pass but it failed.\n")
         finally:
             # Stop the servers and agents
             super(IorTestBase, self).tearDown()
@@ -69,7 +76,7 @@ class IorTestBase(TestWithServers):
         # Get the pool params
         self.pool = TestPool(self.context, self.log)
         self.pool.get_params(self)
-
+        
         # Create a pool
         self.pool.create()
 
@@ -89,11 +96,16 @@ class IorTestBase(TestWithServers):
         self.dfuse.get_params(self)
 
         # update dfuse params
-        self.dfuse.set_dfuse_pool_params(self.pool)
-        self.dfuse.set_dfuse_cont_param(self.cont)
+        self.dfuse.set_dfuse_params(self.pool)
+        if self.cont:
+            self.dfuse.set_dfuse_cont_param(self.cont)
         
-        # start dfuse
-        self.dfuse.run()
+        try:
+            # start dfuse
+            self.dfuse.run(self.hostlist_clients)
+        except CommandFailure as error:
+            self.log.error("Dfuse Failed: %s", str(error))
+            self.fail("Test was expected to pass but it failed.\n")
 
     def run_ior_with_pool(self):
         """Execute ior with optional overrides for ior flags and object_class.
@@ -108,12 +120,12 @@ class IorTestBase(TestWithServers):
         # Create a pool if one does not already exist
         if self.pool is None:
             self.create_pool()
-            self.create_cont()
         # Update IOR params with the pool
         self.ior_cmd.set_daos_params(self.server_group, self.pool)
 
         # start dfuse if api is POSIX
         if self.ior_cmd.api.value == "POSIX":
+            self.pool.connect()
             self.create_cont()
             self.start_dfuse()
 

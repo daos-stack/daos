@@ -2,16 +2,16 @@ hosts:
    test_machines:
         test_servers:
             - boro-62
-            - boro-61
+            - boro-64
             - boro-60
         test_clients:
-            - boro-64
+            - boro-61
 timeout: 500
 server_config:
     name: daos_server
-    server:
-        bdev_class: nvme
-        bdev_list: ["0000:81:00.0","0000:da:00.0"]
+#    server:
+#        bdev_class: nvme
+#        bdev_list: ["0000:81:00.0","0000:da:00.0"]
 pool:
     createmode:
         mode_RW:
@@ -26,7 +26,8 @@ ior:
     client_processes:
         np_16:
             np: 16
-    test_file: daos:testFile
+#    test_file: daos:testFile
+    test_file: /tmp/daos_dfuse/testfile
     repetitions: 2
 # Remove the below line once DAOS-3143 is resolved
     daos_destroy: False
@@ -41,9 +42,9 @@ ior:
             posix:
               api: POSIX
           transfersize_blocksize: !mux
-#            256B:
-#              transfer_size: '256B'
-#              block_size: '4M'
+            256B:
+              transfer_size: '256B'
+              block_size: '4M'
             1M:
               transfer_size: '1M'
               block_size: '32M'
