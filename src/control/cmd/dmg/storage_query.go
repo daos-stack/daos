@@ -31,9 +31,9 @@ import (
 
 // storageQueryCmd is the struct representing the query storage subcommand
 type storageQueryCmd struct {
-	NVMe   nvmeHealthQueryCmd `command:"nvme-health" alias:"d" description:"Query raw NVMe SPDK device statistics."`
-	BS     bsHealthQueryCmd   `command:"blobstore-health" alias:"b" description:"Query internal blobstore health data."`
-	Smd    smdQueryCmd        `command:"smd" alias:"s" description:"Query per-server metadata."`
+	NVMe nvmeHealthQueryCmd `command:"nvme-health" alias:"d" description:"Query raw NVMe SPDK device statistics."`
+	BS   bsHealthQueryCmd   `command:"blobstore-health" alias:"b" description:"Query internal blobstore health data."`
+	Smd  smdQueryCmd        `command:"smd" alias:"s" description:"Query per-server metadata."`
 }
 
 // nvmeHealthQueryCmd is the struct representing the "storage query health" subcommand
@@ -45,7 +45,7 @@ type nvmeHealthQueryCmd struct {
 
 // Query the SPDK NVMe device health stats from all devices on all hosts
 func nvmeHealthQuery(log logging.Logger, conns client.Connect) {
-	cCtrlrs, _ := conns.StorageScan()
+	cCtrlrs, _, _ := conns.StorageScan()
 	log.Infof("NVMe SSD Device Health Stats:\n%s", cCtrlrs)
 }
 
@@ -59,8 +59,8 @@ func (h *nvmeHealthQueryCmd) Execute(args []string) error {
 type bsHealthQueryCmd struct {
 	logCmd
 	connectedCmd
-	Devuuid	string `short:"u" long:"devuuid" description:"Device/Blobstore UUID to query"`
-	Tgtid	string `short:"t" long:"tgtid" description:"VOS target ID to query"`
+	Devuuid string `short:"u" long:"devuuid" description:"Device/Blobstore UUID to query"`
+	Tgtid   string `short:"t" long:"tgtid" description:"VOS target ID to query"`
 }
 
 // Query the BIO health and error stats of the given device

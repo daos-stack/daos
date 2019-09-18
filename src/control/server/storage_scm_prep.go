@@ -130,7 +130,7 @@ func (ps *prepScm) GetState() (types.ScmState, error) {
 }
 
 // Prep executes commands to configure SCM modules into AppDirect interleaved
-// regions/sets hosting pmem kernel device namespaces.
+// regions/sets hosting pmem device file namespaces.
 //
 // Presents of nonvolatile memory modules is assumed in this method and state
 // is established based on presence and free capacity of regions.

@@ -36,7 +36,7 @@ func (m *ScmModule) Reset()         { *m = ScmModule{} }
 func (m *ScmModule) String() string { return proto.CompactTextString(m) }
 func (*ScmModule) ProtoMessage()    {}
 func (*ScmModule) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_scm_9681b32df55ee261, []int{0}
+	return fileDescriptor_storage_scm_fd1c75f9ee18a67b, []int{0}
 }
 func (m *ScmModule) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ScmModule.Unmarshal(m, b)
@@ -91,7 +91,7 @@ func (m *ScmModule_Location) Reset()         { *m = ScmModule_Location{} }
 func (m *ScmModule_Location) String() string { return proto.CompactTextString(m) }
 func (*ScmModule_Location) ProtoMessage()    {}
 func (*ScmModule_Location) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_scm_9681b32df55ee261, []int{0, 0}
+	return fileDescriptor_storage_scm_fd1c75f9ee18a67b, []int{0, 0}
 }
 func (m *ScmModule_Location) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ScmModule_Location.Unmarshal(m, b)
@@ -139,7 +139,7 @@ func (m *ScmModule_Location) GetSocket() uint32 {
 	return 0
 }
 
-// PmemDevice represents SCM namespace as pmem kernel device created on a ScmRegion.
+// PmemDevice represents SCM namespace as pmem device files created on a ScmRegion.
 type PmemDevice struct {
 	Uuid                 string   `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
 	Blockdev             string   `protobuf:"bytes,2,opt,name=blockdev,proto3" json:"blockdev,omitempty"`
@@ -154,7 +154,7 @@ func (m *PmemDevice) Reset()         { *m = PmemDevice{} }
 func (m *PmemDevice) String() string { return proto.CompactTextString(m) }
 func (*PmemDevice) ProtoMessage()    {}
 func (*PmemDevice) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_scm_9681b32df55ee261, []int{1}
+	return fileDescriptor_storage_scm_fd1c75f9ee18a67b, []int{1}
 }
 func (m *PmemDevice) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PmemDevice.Unmarshal(m, b)
@@ -216,7 +216,7 @@ func (m *ScmMount) Reset()         { *m = ScmMount{} }
 func (m *ScmMount) String() string { return proto.CompactTextString(m) }
 func (*ScmMount) ProtoMessage()    {}
 func (*ScmMount) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_scm_9681b32df55ee261, []int{2}
+	return fileDescriptor_storage_scm_fd1c75f9ee18a67b, []int{2}
 }
 func (m *ScmMount) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ScmMount.Unmarshal(m, b)
@@ -272,7 +272,7 @@ func (m *ScmModuleResult) Reset()         { *m = ScmModuleResult{} }
 func (m *ScmModuleResult) String() string { return proto.CompactTextString(m) }
 func (*ScmModuleResult) ProtoMessage()    {}
 func (*ScmModuleResult) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_scm_9681b32df55ee261, []int{3}
+	return fileDescriptor_storage_scm_fd1c75f9ee18a67b, []int{3}
 }
 func (m *ScmModuleResult) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ScmModuleResult.Unmarshal(m, b)
@@ -319,7 +319,7 @@ func (m *ScmMountResult) Reset()         { *m = ScmMountResult{} }
 func (m *ScmMountResult) String() string { return proto.CompactTextString(m) }
 func (*ScmMountResult) ProtoMessage()    {}
 func (*ScmMountResult) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_scm_9681b32df55ee261, []int{4}
+	return fileDescriptor_storage_scm_fd1c75f9ee18a67b, []int{4}
 }
 func (m *ScmMountResult) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ScmMountResult.Unmarshal(m, b)
@@ -364,7 +364,7 @@ func (m *PrepareScmReq) Reset()         { *m = PrepareScmReq{} }
 func (m *PrepareScmReq) String() string { return proto.CompactTextString(m) }
 func (*PrepareScmReq) ProtoMessage()    {}
 func (*PrepareScmReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_scm_9681b32df55ee261, []int{5}
+	return fileDescriptor_storage_scm_fd1c75f9ee18a67b, []int{5}
 }
 func (m *PrepareScmReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PrepareScmReq.Unmarshal(m, b)
@@ -403,7 +403,7 @@ func (m *PrepareScmResp) Reset()         { *m = PrepareScmResp{} }
 func (m *PrepareScmResp) String() string { return proto.CompactTextString(m) }
 func (*PrepareScmResp) ProtoMessage()    {}
 func (*PrepareScmResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_scm_9681b32df55ee261, []int{6}
+	return fileDescriptor_storage_scm_fd1c75f9ee18a67b, []int{6}
 }
 func (m *PrepareScmResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PrepareScmResp.Unmarshal(m, b)
@@ -447,7 +447,7 @@ func (m *ScanScmReq) Reset()         { *m = ScanScmReq{} }
 func (m *ScanScmReq) String() string { return proto.CompactTextString(m) }
 func (*ScanScmReq) ProtoMessage()    {}
 func (*ScanScmReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_scm_9681b32df55ee261, []int{7}
+	return fileDescriptor_storage_scm_fd1c75f9ee18a67b, []int{7}
 }
 func (m *ScanScmReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ScanScmReq.Unmarshal(m, b)
@@ -480,7 +480,7 @@ func (m *ScanScmResp) Reset()         { *m = ScanScmResp{} }
 func (m *ScanScmResp) String() string { return proto.CompactTextString(m) }
 func (*ScanScmResp) ProtoMessage()    {}
 func (*ScanScmResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_scm_9681b32df55ee261, []int{8}
+	return fileDescriptor_storage_scm_fd1c75f9ee18a67b, []int{8}
 }
 func (m *ScanScmResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ScanScmResp.Unmarshal(m, b)
@@ -531,7 +531,7 @@ func (m *FormatScmReq) Reset()         { *m = FormatScmReq{} }
 func (m *FormatScmReq) String() string { return proto.CompactTextString(m) }
 func (*FormatScmReq) ProtoMessage()    {}
 func (*FormatScmReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_scm_9681b32df55ee261, []int{9}
+	return fileDescriptor_storage_scm_fd1c75f9ee18a67b, []int{9}
 }
 func (m *FormatScmReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_FormatScmReq.Unmarshal(m, b)
@@ -561,7 +561,7 @@ func (m *UpdateScmReq) Reset()         { *m = UpdateScmReq{} }
 func (m *UpdateScmReq) String() string { return proto.CompactTextString(m) }
 func (*UpdateScmReq) ProtoMessage()    {}
 func (*UpdateScmReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_scm_9681b32df55ee261, []int{10}
+	return fileDescriptor_storage_scm_fd1c75f9ee18a67b, []int{10}
 }
 func (m *UpdateScmReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_UpdateScmReq.Unmarshal(m, b)
@@ -591,7 +591,7 @@ func (m *BurninScmReq) Reset()         { *m = BurninScmReq{} }
 func (m *BurninScmReq) String() string { return proto.CompactTextString(m) }
 func (*BurninScmReq) ProtoMessage()    {}
 func (*BurninScmReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_scm_9681b32df55ee261, []int{11}
+	return fileDescriptor_storage_scm_fd1c75f9ee18a67b, []int{11}
 }
 func (m *BurninScmReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BurninScmReq.Unmarshal(m, b)
@@ -627,9 +627,9 @@ func init() {
 	proto.RegisterType((*BurninScmReq)(nil), "mgmt.BurninScmReq")
 }
 
-func init() { proto.RegisterFile("storage_scm.proto", fileDescriptor_storage_scm_9681b32df55ee261) }
+func init() { proto.RegisterFile("storage_scm.proto", fileDescriptor_storage_scm_fd1c75f9ee18a67b) }
 
-var fileDescriptor_storage_scm_9681b32df55ee261 = []byte{
+var fileDescriptor_storage_scm_fd1c75f9ee18a67b = []byte{
 	// 471 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x53, 0xcd, 0x6e, 0x13, 0x31,
 	0x10, 0x96, 0xbb, 0x49, 0x9b, 0x4c, 0x7e, 0x5a, 0x0c, 0x42, 0xab, 0x1c, 0x50, 0xb4, 0x02, 0x94,

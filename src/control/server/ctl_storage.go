@@ -191,7 +191,7 @@ func (c *StorageControlService) GetScmState() (types.ScmState, error) {
 }
 
 // PrepareScm preps locally attached modules and returns need to reboot message,
-// list of pmem kernel devices and error directly.
+// list of pmem device files and error directly.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
 func (c *StorageControlService) PrepareScm(req PrepareScmRequest, state types.ScmState,

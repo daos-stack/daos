@@ -85,7 +85,7 @@ func (s *scmStorage) Teardown() error {
 	return nil
 }
 
-// Prep configures pmem kernel devices for SCM
+// Prep configures pmem device files for SCM
 func (s *scmStorage) Prep(state types.ScmState) (needsReboot bool, pmemDevs []pmemDev, err error) {
 	return s.prep.Prep(state)
 }
