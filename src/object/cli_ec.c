@@ -337,19 +337,25 @@ ec_free_params_cb(tse_task_t *task, void *data)
 /* Identifies the applicable subset of forwarding targets for non-full-stripe
  * EC updates.
  */
-static void
-ec_init_tgt_set(daos_iod_t *iods, unsigned int nr,
-		struct daos_oclass_attr *oca, uint64_t *tgt_set)
+void
+ec_get_tgt_set(daos_iod_t *iods, unsigned int nr, struct daos_oclass_attr *oca,
+	       bool parity_include, uint64_t *tgt_set)
 {
 	unsigned int    len = oca->u.ec.e_len;
 	unsigned int    k = oca->u.ec.e_k;
 	unsigned int    p = oca->u.ec.e_p;
+	uint64_t	ss = k * len;
 	uint64_t	par_only = (1UL << p) - 1;
-	uint64_t	full = (1UL <<  (k+p)) - 1;
+	uint64_t	full;
 	unsigned int	i, j;
 
-	for (i = 0; i < p; i++)
-		*tgt_set |= 1UL << i;
+	if (parity_include) {
+		full = (1UL << (k+p)) - 1;
+		for (i = 0; i < p; i++)
+			*tgt_set |= 1UL << i;
+	} else {
+		full = (1UL << k) - 1;
+	}
 	for (i = 0; i < nr; i++) {
 		if (iods->iod_type != DAOS_IOD_ARRAY)
 			continue;
@@ -365,10 +371,10 @@ ec_init_tgt_set(daos_iod_t *iods, unsigned int nr,
 			 */
 			D_ASSERT(!(PARITY_INDICATOR & rs));
 			for (ext_idx = rs; ext_idx <= re; ext_idx += len) {
-				unsigned int cell = (ext_idx % (k*len))/len;
+				unsigned int cell = (ext_idx % ss)/len;
 
 				*tgt_set |= 1UL << (cell+p);
-				if (*tgt_set == full) {
+				if (*tgt_set == full && parity_include) {
 					*tgt_set = 0;
 					return;
 				}
@@ -477,7 +483,7 @@ ec_obj_update_encode(tse_task_t *task, daos_obj_id_t oid,
 		 * a proper subset. Sets tgt_set to zero if all targets
 		 * are addressed.
 		 */
-		ec_init_tgt_set(args->iods, args->nr, oca, tgt_set);
+		ec_get_tgt_set(args->iods, args->nr, oca, true, tgt_set);
 	}
 
 	if (rc != 0 && head != NULL) {

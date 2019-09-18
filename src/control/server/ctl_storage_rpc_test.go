@@ -268,6 +268,7 @@ func TestStorageScan(t *testing.T) {
 					"1.0.0", "1.0.1",
 					[]spdk.Controller{ctrlr},
 					[]spdk.Namespace{MockNamespace(&ctrlr)},
+					[]spdk.DeviceHealth{MockDeviceHealth(&ctrlr)},
 					tt.spdkDiscoverRet, nil, nil),
 				false)
 			_ = new(pb.StorageScanResp)
@@ -413,6 +414,7 @@ func TestStoragePrepare(t *testing.T) {
 			cs.nvme = newMockNvmeStorage(log, config.ext, newMockSpdkEnv(nil),
 				newMockSpdkNvme(log, "", "", []spdk.Controller{ctrlr},
 					[]spdk.Namespace{MockNamespace(&ctrlr)},
+					[]spdk.DeviceHealth{MockDeviceHealth(&ctrlr)},
 					nil, nil, nil), false)
 			_ = new(pb.StoragePrepareResp)
 
@@ -615,6 +617,7 @@ func TestStorageFormat(t *testing.T) {
 				if err := os.MkdirAll(filepath.Join(testDir, tt.sMount), 0777); err != nil {
 					t.Fatal(err)
 				}
+				// if the instance is expected to have a valid superblock, create one
 				if tt.superblockExists {
 					if err := i.CreateSuperblock(&mgmtInfo{}); err != nil {
 						t.Fatal(err)

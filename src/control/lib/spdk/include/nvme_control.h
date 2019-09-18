@@ -44,17 +44,38 @@ typedef enum _NvmeControlStatusCode {
 	NVMEC_LAST_STATUS_VALUE
 } NvmeControlStatusCode;
 
+/*
+ * \brief Raw SPDK device health statistics.
+ */
+struct dev_health_t {
+	uint16_t	 temperature; /* in Kelvin */
+	uint32_t	 warn_temp_time;
+	uint32_t	 crit_temp_time;
+	uint64_t	 ctrl_busy_time;
+	uint64_t	 power_cycles;
+	uint64_t	 power_on_hours;
+	uint64_t	 unsafe_shutdowns;
+	uint64_t	 media_errors;
+	uint64_t	 error_log_entries;
+	/* Critical warnings */
+	bool		 temp_warning;
+	bool		 avail_spare_warning;
+	bool		 dev_reliabilty_warning;
+	bool		 read_only_warning;
+	bool		 volatile_mem_warning;
+};
 
 /**
  * \brief NVMe controller details
  */
 struct ctrlr_t {
-	char		model[1024];
-	char		serial[1024];
-	char		pci_addr[1024];
-	char		fw_rev[1024];
-	int		socket_id;
-	struct ctrlr_t	*next;
+	char		     model[1024];
+	char		     serial[1024];
+	char		     pci_addr[1024];
+	char		     fw_rev[1024];
+	int		     socket_id;
+	struct dev_health_t *dev_health;
+	struct ctrlr_t	    *next;
 };
 
 /**
@@ -79,11 +100,13 @@ struct ret_t {
 };
 
 /**
- * Discover NVMe controllers and namespaces.
+ * Discover NVMe controllers and namespaces, as well as return device health
+ * information.
  *
  * \return a pointer to a return struct (ret_t).
  */
 struct ret_t *nvme_discover(void);
+
 
 /**
  * Update NVMe controller firmware.
