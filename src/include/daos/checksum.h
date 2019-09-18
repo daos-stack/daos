@@ -63,16 +63,15 @@ enum DAOS_CSUM_TYPE {
 	CSUM_TYPE_END = 4,
 };
 
-
 /** Lookup the appropriate CSUM_TYPE given daos container property */
 enum DAOS_CSUM_TYPE daos_contprop2csumtype(int contprop_csum_val);
 
 struct csum_ft;
 struct daos_csummer {
 	/** Size of csum_buf. */
-	size_t dcs_csum_buf_size;
+	uint32_t dcs_csum_buf_size;
 	/** Cached configuration for chunk size*/
-	size_t dcs_chunk_size;
+	uint32_t dcs_chunk_size;
 	/** Pointer to the function table to be used for calculating csums */
 	struct csum_ft *dcs_algo;
 	/** Pointer to function table specific contexts */
@@ -82,18 +81,19 @@ struct daos_csummer {
 };
 
 struct csum_ft {
-	int (*init)(struct daos_csummer *obj);
-	void (*destroy)(struct daos_csummer *obj);
-	int (*finish)(struct daos_csummer *obj);
-	int (*update)(struct daos_csummer *obj, uint8_t *buf, size_t buf_len);
-	void (*reset)(struct daos_csummer *obj);
-	void (*get)(struct daos_csummer *obj);
-	size_t (*get_size)(struct daos_csummer *obj);
+	int		(*cf_init)(struct daos_csummer *obj);
+	void		(*cf_destroy)(struct daos_csummer *obj);
+	int		(*cf_finish)(struct daos_csummer *obj);
+	int		(*cf_update)(struct daos_csummer *obj,
+				     uint8_t *buf, size_t buf_len);
+	void		(*cf_reset)(struct daos_csummer *obj);
+	void		(*cf_get)(struct daos_csummer *obj);
+	uint16_t	(*cf_get_size)(struct daos_csummer *obj);
 
 	/** Len in bytes. Ft can either statically set csum_len or provide
 	 *  a get_len function
 	 */
-	size_t csum_len;
+	uint16_t csum_len;
 	char *name;
 	uint16_t type;
 };
@@ -125,7 +125,7 @@ void
 daos_csummer_destroy(struct daos_csummer **obj);
 
 /** Get the checksum length from the configured csummer. */
-size_t
+uint16_t
 daos_csummer_get_size(struct daos_csummer *obj);
 
 /** Determine if the checksums is configured. */
@@ -142,7 +142,8 @@ daos_csummer_get_name(struct daos_csummer *obj);
 
 /** Set the csum buffer where the calculated checksumm will be written to */
 void
-daos_csummer_set_buffer(struct daos_csummer *obj, uint8_t *buf, size_t buf_len);
+daos_csummer_set_buffer(struct daos_csummer *obj, uint8_t *buf,
+			uint32_t buf_len);
 
 /** Reset the csummer */
 void
@@ -203,13 +204,14 @@ daos_csummer_calc_csum(struct daos_csummer *obj, d_sg_list_t *sgl,
  * @return			0 for success, or an error code
  */
 int
-daos_csummer_prep_csum_buf(struct daos_csummer *obj, size_t rec_len, size_t nr,
-			   daos_recx_t *recxs, daos_csum_buf_t **pcsum_bufs);
+daos_csummer_prep_csum_buf(struct daos_csummer *obj, uint32_t rec_len,
+			   uint32_t nr, daos_recx_t *recxs,
+			   daos_csum_buf_t **pcsum_bufs);
 
 /** Destroy the csum buf and memory allocated for checksums */
 void
-daos_csummer_destroy_csum_buf(struct daos_csummer *obj,
-			      daos_csum_buf_t **pcsum_buf);
+daos_csummer_destroy_csum_buf(struct daos_csummer *obj, size_t nr,
+			      daos_csum_buf_t **pcsum_bufs);
 
 /**
  * -----------------------------------------------------------------------------
@@ -236,7 +238,6 @@ dcb_set_null(daos_csum_buf_t *csum_buf);
 bool
 dcb_is_valid(const daos_csum_buf_t *csum);
 
-
 /** Returns the index of the checksum provided the offset into the data
  * the checksums are derived from.
  */
@@ -253,20 +254,17 @@ dcb_idx2csum(daos_csum_buf_t *csum_buf, uint32_t idx);
 uint8_t *
 dcb_off2csum(daos_csum_buf_t *csum_buf, uint32_t offset);
 
-
 /** Gets the number checksums needed given a record extent.  */
 uint32_t
 daos_recx_calc_chunks(daos_recx_t extent, uint32_t record_size,
 		      uint32_t chunk_size);
 
-
 /** Helper function for dividing a range (lo-hi) into number of chunks, using
  * absolute alignment
  */
-uint64_t
+uint32_t
 csum_chunk_count(uint32_t chunk_size, uint64_t lo_idx, uint64_t hi_idx,
 		 uint64_t rec_size);
-
 
 #endif /** __DAOS_CHECKSUM_H */
 

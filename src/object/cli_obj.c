@@ -32,6 +32,7 @@
 #include <daos/pool.h>
 #include <daos_task.h>
 #include <daos_types.h>
+#include <daos_obj.h>
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
@@ -1937,7 +1938,8 @@ obj_list_dkey_cb(tse_task_t *task, struct obj_list_arg *arg, unsigned int opc)
 	}
 }
 
-void obj_update_csum_destroy(const struct dc_object *obj,
+static void
+obj_update_csum_destroy(const struct dc_object *obj,
 			     const daos_obj_update_t *args) {
 	int i;
 	struct daos_csummer *csummer = dc_cont_hdl2csummer(obj->cob_coh);
@@ -1948,7 +1950,7 @@ void obj_update_csum_destroy(const struct dc_object *obj,
 	for (i = 0; i < args->nr; i++) {
 		daos_iod_t *iod = &args->iods[i];
 
-		daos_csummer_destroy_csum_buf(csummer,
+		daos_csummer_destroy_csum_buf(csummer, iod->iod_nr,
 					      &iod->iod_csums);
 	}
 }
@@ -2131,12 +2133,12 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 
 static void
 obj_update_csums(const struct dc_object *obj, const daos_obj_update_t *args) {
-	struct daos_csummer *csummer = dc_cont_hdl2csummer(obj->cob_coh);
+	struct daos_csummer	*csummer = dc_cont_hdl2csummer(obj->cob_coh);
+	int			i;
 
 	if (!daos_csummer_initialized(csummer)) /** Not configured */
 		return;
 
-	int i;
 
 	for (i = 0; i < args->nr; i++) {
 		/**

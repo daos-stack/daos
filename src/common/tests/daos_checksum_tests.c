@@ -72,8 +72,8 @@ static int fake_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 	return 0;
 }
 
-static size_t fake_get_size_result;
-static size_t fake_get_size(struct daos_csummer *obj)
+static uint16_t fake_get_size_result;
+static uint16_t fake_get_size(struct daos_csummer *obj)
 {
 	return fake_get_size_result;
 }
@@ -84,12 +84,12 @@ void fake_reset(struct daos_csummer *obj)
 }
 
 static struct csum_ft fake_algo = {
-		.init = fake_init,
-		.destroy = fake_fini,
-		.update = fake_update,
-		.reset = fake_reset,
+		.cf_init = fake_init,
+		.cf_destroy = fake_fini,
+		.cf_update = fake_update,
+		.cf_reset = fake_reset,
 		.csum_len = 0,
-		.get_size = NULL,
+		.cf_get_size = NULL,
 		.type = FAKE_CSUM_TYPE,
 		.name = "fake"
 	};
@@ -114,7 +114,7 @@ static void test_init_and_destroy(void **state)
 	fake_algo.csum_len = 4;
 	assert_int_equal(4, daos_csummer_get_size(csummer));
 	fake_algo.csum_len = 0;
-	fake_algo.get_size = fake_get_size;
+	fake_algo.cf_get_size = fake_get_size;
 	fake_get_size_result = 5;
 	assert_int_equal(5, daos_csummer_get_size(csummer));
 	assert_true(daos_csummer_initialized(csummer));
@@ -122,6 +122,7 @@ static void test_init_and_destroy(void **state)
 
 	daos_csummer_destroy(&csummer);
 	assert_int_equal(1, fake_fini_called);
+	assert_null(csummer);
 }
 
 static void test_update_reset(void **state)
@@ -205,7 +206,7 @@ static void test_checksummer_allocates_csum_buf(void **state)
 	assert_non_null(actual->cs_csum);
 	assert_int_equal(4, actual->cs_buf_len); /** 2 csums * 2 bytes */
 
-	daos_csummer_destroy_csum_buf(csummer, &actual);
+	daos_csummer_destroy_csum_buf(csummer, nr, &actual);
 	assert_null(actual);
 
 	daos_csummer_destroy(&csummer);
@@ -216,10 +217,11 @@ static void test_daos_checksummer_with_single_iov_single_chunk(void **state)
 	struct daos_csummer	*csummer;
 	d_sg_list_t		 sgl;
 	daos_recx_t		 recx;
-	daos_csum_buf_t	*actual;
+	daos_csum_buf_t		*actual;
 
 	fake_get_size_result = 4;
 	daos_csummer_init(&csummer, &fake_algo, 16);
+	fake_algo.cf_get_size = fake_get_size;
 
 	daos_sgl_init_with_strings(&sgl, 1, "abcdef");
 
@@ -237,7 +239,7 @@ static void test_daos_checksummer_with_single_iov_single_chunk(void **state)
 
 	assert_int_equal(1, *dcb_idx2csum(actual, 0));
 
-	daos_csummer_destroy_csum_buf(csummer, &actual);
+	daos_csummer_destroy_csum_buf(csummer, 1, &actual);
 	daos_sgl_fini(&sgl, true);
 	daos_csummer_destroy(&csummer);
 }
@@ -273,7 +275,7 @@ static void test_daos_checksummer_with_mult_iov_single_chunk(void **state)
 	assert_int_equal(3, *dcb_idx2csum(actual, 0));
 
 	daos_sgl_fini(&sgl, true);
-	daos_csummer_destroy_csum_buf(csummer, &actual);
+	daos_csummer_destroy_csum_buf(csummer, 1, &actual);
 	daos_csummer_destroy(&csummer);
 
 }
@@ -313,7 +315,7 @@ static void test_daos_checksummer_with_multi_iov_multi_extents(void **state)
 	assert_int_equal(2, *dcb_idx2csum(&actual[1], 0));
 
 	daos_sgl_fini(&sgl, true);
-	daos_csummer_destroy_csum_buf(csummer, &actual);
+	daos_csummer_destroy_csum_buf(csummer, 2, &actual);
 	daos_csummer_destroy(&csummer);
 
 }
@@ -355,7 +357,7 @@ static void test_daos_checksummer_with_multiple_chunks(void **state)
 	assert_string_equal("0123456789", fake_update_buf_copy);
 
 	daos_sgl_fini(&sgl, true);
-	daos_csummer_destroy_csum_buf(csummer, &actual);
+	daos_csummer_destroy_csum_buf(csummer, 1, &actual);
 	daos_csummer_destroy(&csummer);
 }
 
@@ -426,8 +428,8 @@ static void test_compare_checksums(void **state)
 	assert_true(daos_csummer_compare(csummer, one, two));
 
 	daos_sgl_fini(&sgl, true);
-	daos_csummer_destroy_csum_buf(csummer, &one);
-	daos_csummer_destroy_csum_buf(csummer, &two);
+	daos_csummer_destroy_csum_buf(csummer, 1, &one);
+	daos_csummer_destroy_csum_buf(csummer, 1, &two);
 	daos_csummer_destroy(&csummer);
 }
 
@@ -491,7 +493,7 @@ static void test_all_checksum_types(void **state)
 		}
 		D_PRINT("\n");
 
-		daos_csummer_destroy_csum_buf(csummer, &csums);
+		daos_csummer_destroy_csum_buf(csummer, 1, &csums);
 		daos_csummer_destroy(&csummer);
 	}
 

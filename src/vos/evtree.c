@@ -3003,23 +3003,6 @@ int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
 }
 
 daos_size_t
-csum_chunk_count(uint32_t chunk_size, daos_off_t lo, daos_off_t hi,
-		 daos_off_t inob)
-{
-	if (chunk_size == 0)
-		return 0;
-	lo *= inob;
-	hi *= inob;
-
-	/** Align to chunk size */
-	lo = lo - lo % chunk_size;
-	hi = hi + chunk_size - hi % chunk_size;
-	daos_off_t width = hi - lo;
-
-	return width / chunk_size;
-}
-
-daos_size_t
 evt_csum_count(const struct evt_context *tcx,
 	       const struct evt_extent *extent)
 {
@@ -3052,8 +3035,9 @@ evt_desc_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 		D_ERROR("Issue copying checksum. Source (%d) is "
 			"larger than destination (%"PRIu64")",
 			csum->cs_buf_len, csum_buf_len);
-	} else
+	} else {
 		memcpy(desc->pt_csum, csum->cs_csum, csum_buf_len);
+	}
 }
 
 void

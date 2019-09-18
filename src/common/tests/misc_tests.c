@@ -154,14 +154,15 @@ int dummy_sgl_cb(uint8_t *buf, size_t len, void *args)
 
 static void test_completely_process_sgl(void **state)
 {
+	d_sg_list_t		sgl;
+	struct daos_sgl_idx	idx = {0};
+
 	memset(sgl_cb_buf, 0, SGL_CB_BUFF_SIZE);
 	sgl_cb_buf_idx = sgl_cb_buf;
 	sgl_cb_call_count = 0;
 
-	d_sg_list_t sgl;
 
 	daos_sgl_init_with_strings(&sgl, 2, "a", "bc");
-	struct daos_sgl_idx idx = {0};
 
 	daos_sgl_processor(&sgl, &idx, 6, dummy_sgl_cb, NULL);
 

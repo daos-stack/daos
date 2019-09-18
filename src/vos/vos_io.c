@@ -399,7 +399,7 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 
 			D_ASSERT(lo >= recx->rx_idx);
 			csum_ptr = dcb_off2csum(csum,
-				(uint32_t) ((lo - recx->rx_idx) * rsize));
+				(uint32_t)((lo - recx->rx_idx) * rsize));
 			csum_nr = csum_chunk_count(csum->cs_chunksize,
 						   lo, hi, rsize);
 
@@ -716,7 +716,7 @@ akey_update_single(daos_handle_t toh, daos_epoch_t epoch, uint32_t pm_ver,
 	daos_iod_t		*iod = &ioc->ic_iods[ioc->ic_sgl_at];
 	int			 rc;
 
-	memset(&csum, 0, sizeof(csum));
+	dcb_set_null(&csum);
 	tree_key_bundle2iov(&kbund, &kiov);
 	kbund.kb_epoch	= epoch;
 
