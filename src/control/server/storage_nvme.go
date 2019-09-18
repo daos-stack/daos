@@ -213,11 +213,11 @@ func (n *nvmeStorage) Discover() error {
 		return errors.WithMessage(err, msgSpdkInitFail)
 	}
 
-	cs, ns, err := n.nvme.Discover()
+	cs, ns, dh, err := n.nvme.Discover()
 	if err != nil {
 		return errors.WithMessage(err, msgSpdkDiscoverFail)
 	}
-	n.controllers = loadControllers(cs, ns)
+	n.controllers = loadControllers(cs, ns, dh)
 	n.initialized = true
 
 	return nil
@@ -293,7 +293,7 @@ func (n *nvmeStorage) Format(cfg storage.BdevConfig, results *(types.NvmeControl
 			n.log.Debugf("controller format successful (%s)\n", pciAddr)
 
 			addCretFormat(pb.ResponseStatus_CTRL_SUCCESS, "", "")
-			n.controllers = loadControllers(cs, ns)
+			n.controllers = loadControllers(cs, ns, nil)
 		}
 	default:
 		addCretFormat(pb.ResponseStatus_CTRL_ERR_CONF,
@@ -381,7 +381,7 @@ func (n *nvmeStorage) Update(cfg storage.BdevConfig, req *pb.UpdateNvmeReq, resu
 				//       further updates if not
 				continue
 			}
-			n.controllers = loadControllers(cs, ns)
+			n.controllers = loadControllers(cs, ns, nil)
 
 			ctrlr = n.getController(pciAddr)
 			if ctrlr == nil {
@@ -457,8 +457,8 @@ func (n *nvmeStorage) BurnIn(pciAddr string, nsID int32, configPath string) (
 
 // loadControllers converts slice of Controller into protobuf equivalent.
 // Implemented as a pure function.
-func loadControllers(ctrlrs []spdk.Controller, nss []spdk.Namespace) (
-	pbCtrlrs types.NvmeControllers) {
+func loadControllers(ctrlrs []spdk.Controller, nss []spdk.Namespace,
+	health []spdk.DeviceHealth) (pbCtrlrs types.NvmeControllers) {
 
 	for _, c := range ctrlrs {
 		pbCtrlrs = append(
@@ -471,6 +471,7 @@ func loadControllers(ctrlrs []spdk.Controller, nss []spdk.Namespace) (
 				Socketid: c.SocketID,
 				// repeated pb field
 				Namespaces: loadNamespaces(c.PCIAddr, nss),
+				Healthstats: loadHealthStats(health),
 			})
 	}
 	return pbCtrlrs
@@ -478,9 +479,7 @@ func loadControllers(ctrlrs []spdk.Controller, nss []spdk.Namespace) (
 
 // loadNamespaces converts slice of Namespace into protobuf equivalent.
 // Implemented as a pure function.
-func loadNamespaces(ctrlrPciAddr string, nss []spdk.Namespace) (
-	_nss types.NvmeNamespaces) {
-
+func loadNamespaces(ctrlrPciAddr string, nss []spdk.Namespace) (_nss types.NvmeNamespaces) {
 	for _, ns := range nss {
 		if ns.CtrlrPciAddr == ctrlrPciAddr {
 			_nss = append(
@@ -491,6 +490,33 @@ func loadNamespaces(ctrlrPciAddr string, nss []spdk.Namespace) (
 				})
 		}
 	}
+	return
+}
+
+// loadHealthStats converts a slice of DeviceHealth into protobuf equivalent.
+// Implemented as a pure function.
+func loadHealthStats(health []spdk.DeviceHealth) (_health types.NvmeHealthstats) {
+	for _, h := range health {
+		_health = append(
+			_health,
+			&pb.NvmeController_Health{
+				Temp:		 h.Temp,
+				Tempwarn:	 h.TempWarnTime,
+				Tempcrit:	 h.TempCritTime,
+				Ctrlbusy:	 h.CtrlBusyTime,
+				Powercycles:	 h.PowerCycles,
+				Poweronhours:	 h.PowerOnHours,
+				Unsafeshutdowns: h.UnsafeShutdowns,
+				Mediaerrors:	 h.MediaErrors,
+				Errorlogs:	 h.ErrorLogEntries,
+				Tempwarning:	 h.TempWarn,
+				Availspare: 	 h.AvailSpareWarn,
+				Reliability:	 h.ReliabilityWarn,
+				Readonly:	 h.ReadOnlyWarn,
+				Volatilemem:	 h.VolatileWarn,
+			})
+	}
+
 	return
 }
 

@@ -59,13 +59,9 @@ class IorTestBase(TestWithServers):
         """Tear down each test case."""
         if isinstance(self.pool, TestPool):
             self.pool = self.pool.pool
-        try:
-            # pylint: disable=no-member
-            if self.pool is not None and self.pool.attached:
-                self.pool.destroy(1)
-        finally:
-            # Stop the servers and agents
-            super(IorTestBase, self).tearDown()
+
+        # Stop the servers and agents
+        super(IorTestBase, self).tearDown()
 
     def create_pool(self):
         """Create a TestPool object to use with ior."""
