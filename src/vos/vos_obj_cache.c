@@ -218,11 +218,14 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 
 		rc = daos_lru_ref_hold(occ, &lkey, sizeof(lkey), cont, &lret);
 		if (rc)
-			D_GOTO(failed, rc);
+			D_GOTO(failed_2, rc);
 
 		obj = container_of(lret, struct vos_object, obj_llink);
 		if (obj->obj_epoch == 0) /* new cache element */
 			obj->obj_epoch = epoch;
+
+		if (obj->obj_zombie)
+			D_GOTO(failed, rc = -DER_AGAIN);
 
 		if (intent == DAOS_INTENT_KILL) {
 			if (vos_obj_refcount(obj) > 2)
@@ -238,11 +241,6 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 		if (!obj->obj_df) /* newly cached object */
 			break;
 
-		if (obj->obj_zombie) {
-			vos_obj_release(occ, obj);
-			D_GOTO(failed, rc = -DER_AGAIN);
-		}
-
 		if ((!(obj->obj_df->vo_oi_attr & VOS_OI_PUNCHED) ||
 		     obj->obj_df->vo_latest >= epoch) &&
 		    (obj->obj_df->vo_incarnation == obj->obj_incarnation) &&
@@ -253,10 +251,8 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 						obj->obj_df->vo_dtx,
 						umem_ptr2off(umm, obj->obj_df),
 						intent, DTX_RT_OBJ);
-			if (rc < 0) {
-				vos_obj_release(occ, obj);
+			if (rc < 0)
 				D_GOTO(failed, rc);
-			}
 
 			if (rc != ALB_UNAVAILABLE) {
 				if (obj->obj_incarnation == 0)
@@ -296,16 +292,13 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 		D_ASSERT(rc || obj->obj_df);
 	}
 
-	if (rc) {
-		vos_obj_release(occ, obj);
+	if (rc)
 		goto failed;
-	}
 
 	if (!obj->obj_df) {
 		D_DEBUG(DB_TRACE, "nonexistent obj "DF_UOID"\n",
 			DP_UOID(oid));
 		if (intent == DAOS_INTENT_KILL) {
-			vos_obj_release(occ, obj);
 			D_GOTO(failed, rc = -DER_NONEXIST);
 		}
 		goto out;
@@ -334,13 +327,14 @@ out:
 		       " is not newer than the sync epoch "DF_U64"\n",
 		       intent == DAOS_INTENT_PUNCH ? "punch" : "update",
 		       DP_UOID(oid), epoch, obj->obj_sync_epoch);
-		vos_obj_release(occ, obj);
 		D_GOTO(failed, rc = -DER_INPROGRESS);
 	}
 
 	*obj_p = obj;
 	return 0;
 failed:
+	vos_obj_release(occ, obj);
+failed_2:
 	D_ERROR("failed to hold object, rc=%d\n", rc);
 	return	rc;
 }
