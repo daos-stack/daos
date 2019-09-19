@@ -124,6 +124,8 @@ main(int argc, char **argv)
 		{"exclude",		required_argument, 0, 'e'},
 	};
 
+	d_register_alt_assert(mock_assert);
+
 	rc = daos_debug_init(NULL);
 	if (rc) {
 		print_error("Error initializing debug system\n");

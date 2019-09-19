@@ -204,6 +204,8 @@ main(int argc, char **argv)
 	int		 size;
 	int		 rc;
 
+	d_register_alt_assert(mock_assert);
+
 	MPI_Init(&argc, &argv);
 
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
