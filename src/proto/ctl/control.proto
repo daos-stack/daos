@@ -22,7 +22,7 @@
 //
 
 syntax = "proto3";
-package mgmt;
+package ctl;
 
 import "common.proto";
 import "storage.proto";
