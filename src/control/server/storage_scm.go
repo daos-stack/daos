@@ -63,6 +63,7 @@ type scmStorage struct {
 	ipmctl      ipmctl.IpmCtl // ipmctl NVM API interface
 	prep        PrepScm
 	modules     types.ScmModules
+	pmemDevs    types.PmemDevices
 	initialized bool
 	formatted   bool
 }
@@ -84,7 +85,7 @@ func (s *scmStorage) Teardown() error {
 	return nil
 }
 
-// Prep configures pmem kernel devices for SCM
+// Prep configures pmem device files for SCM
 func (s *scmStorage) Prep(state types.ScmState) (needsReboot bool, pmemDevs []pmemDev, err error) {
 	return s.prep.Prep(state)
 }
@@ -105,6 +106,13 @@ func (s *scmStorage) Discover() error {
 		return errors.WithMessage(err, msgIpmctlDiscoverFail)
 	}
 	s.modules = loadModules(mms)
+
+	pmems, err := s.prep.GetNamespaces()
+	if err != nil {
+		return errors.WithMessage(err, msgIpmctlDiscoverFail)
+	}
+	s.pmemDevs = translatePmemDevices(pmems)
+
 	s.initialized = true
 
 	return nil

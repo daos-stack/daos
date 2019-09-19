@@ -125,6 +125,16 @@ enum daos_cont_props {
 	 */
 	DAOS_PROP_CO_CSUM,
 	/**
+	 * Checksum chunk size
+	 * default = 32K
+	 */
+	DAOS_PROP_CO_CSUM_CHUNK_SIZE,
+	/**
+	* Checksum verification on server. Value = ON/OFF
+	* default = DAOS_PROP_CO_CSUM_SV_OFF
+	*/
+	DAOS_PROP_CO_CSUM_SERVER_VERIFY,
+	/**
 	 * Redundancy factor:
 	 * RF1: no data protection. scratched data.
 	 * RF3: 3-way replication, EC 4+2, 8+2, 16+2
@@ -163,9 +173,16 @@ enum {
 	DAOS_PROP_CO_CSUM_OFF,
 	DAOS_PROP_CO_CSUM_CRC16,
 	DAOS_PROP_CO_CSUM_CRC32,
-	DAOS_PROP_CO_CSUM_SHA1,
-	DAOS_PROP_CO_CSUM_SHA2,
+	DAOS_PROP_CO_CSUM_CRC64,
+	DAOS_PROP_CO_CSUM_SHA1
 };
+
+/** container checksum server verify */
+enum {
+	DAOS_PROP_CO_CSUM_SV_OFF,
+	DAOS_PROP_CO_CSUM_SV_ON
+};
+
 
 /** container compress type */
 enum {

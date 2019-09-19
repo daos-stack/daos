@@ -77,13 +77,13 @@ func AgentTC() *TransportConfig {
 }
 
 func SetupTCFilePerms(t *testing.T, conf *TransportConfig) {
-	if err := os.Chmod(conf.CARootPath, SafeCertPerm); err != nil {
+	if err := os.Chmod(conf.CARootPath, MaxCertPerm); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chmod(conf.CertificatePath, SafeCertPerm); err != nil {
+	if err := os.Chmod(conf.CertificatePath, MaxCertPerm); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chmod(conf.PrivateKeyPath, SafeKeyPerm); err != nil {
+	if err := os.Chmod(conf.PrivateKeyPath, MaxKeyPerm); err != nil {
 		t.Fatal(err)
 	}
 }
