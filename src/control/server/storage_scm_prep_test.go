@@ -34,7 +34,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-// MockPmemDevice returns a mock pmem kernel device.
+// MockPmemDevice returns a mock pmem device file.
 func MockPmemDevice() pmemDev {
 	pmdPB := MockPmemDevicePB()
 
@@ -50,6 +50,7 @@ type mockPrepScm struct {
 	resetRet         error
 	currentState     ScmState
 	getStateRet      error
+	getNamespacesRet error
 }
 
 func (mp *mockPrepScm) Prep(ScmState) (bool, []pmemDev, error) {
@@ -60,6 +61,9 @@ func (mp *mockPrepScm) PrepReset(ScmState) (bool, error) {
 }
 func (mp *mockPrepScm) GetState() (ScmState, error) {
 	return mp.currentState, mp.getStateRet
+}
+func (mp *mockPrepScm) GetNamespaces() ([]pmemDev, error) {
+	return mp.pmemDevs, mp.getNamespacesRet
 }
 
 func newMockPrepScm() PrepScm {
@@ -204,7 +208,7 @@ func TestGetState(t *testing.T) {
 
 			AssertEqual(t, commands, tt.expCommands, tt.desc+": unexpected list of commands run")
 			AssertEqual(t, needsReboot, tt.expRebootRequired, tt.desc+": unexpected value for is reboot required")
-			AssertEqual(t, pmemDevs, tt.expPmemDevs, tt.desc+": unexpected list of pmem kernel device names")
+			AssertEqual(t, pmemDevs, tt.expPmemDevs, tt.desc+": unexpected list of pmem device file names")
 		})
 	}
 }

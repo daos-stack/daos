@@ -61,6 +61,7 @@ var (
 			State: &MockState,
 		},
 	}
+	MockPmemDevices  = PmemDevices{MockPmemDevicePB()}
 	MockMounts       = ScmMounts{MockMountPB()}
 	MockMountResults = ScmMountResults{
 		&pb.ScmMountResult{
@@ -164,6 +165,7 @@ type mockMgmtCtlClient struct {
 	ctrlrResults  NvmeControllerResults
 	modules       ScmModules
 	moduleResults ScmModuleResults
+	pmems         PmemDevices
 	mountResults  ScmMountResults
 	scanRet       error
 	formatRet     error
@@ -199,6 +201,7 @@ func (m *mockMgmtCtlClient) StorageScan(ctx context.Context, req *pb.StorageScan
 		Scm: &pb.ScanScmResp{
 			State:   &MockSuccessState,
 			Modules: m.modules,
+			Pmems:   m.pmems,
 		},
 	}, m.scanRet
 }
@@ -225,6 +228,7 @@ func newMockMgmtCtlClient(
 	ctrlrResults NvmeControllerResults,
 	modules ScmModules,
 	moduleResults ScmModuleResults,
+	pmems PmemDevices,
 	mountResults ScmMountResults,
 	scanRet error,
 	formatRet error,
@@ -232,7 +236,7 @@ func newMockMgmtCtlClient(
 	burninRet error,
 ) pb.MgmtCtlClient {
 	return &mockMgmtCtlClient{
-		MockFeatures, ctrlrs, ctrlrResults, modules, moduleResults,
+		MockFeatures, ctrlrs, ctrlrResults, modules, moduleResults, pmems,
 		mountResults, scanRet, formatRet, updateRet, burninRet,
 	}
 }
@@ -343,6 +347,7 @@ type mockControllerFactory struct {
 	ctrlrResults  NvmeControllerResults
 	modules       ScmModules
 	moduleResults ScmModuleResults
+	pmems         PmemDevices
 	mountResults  ScmMountResults
 	log           logging.Logger
 	// to provide error injection into Control objects
@@ -358,7 +363,7 @@ func (m *mockControllerFactory) create(address string, cfg *security.TransportCo
 	// returns controller with mock properties specified in constructor
 	cClient := newMockMgmtCtlClient(
 		m.features, m.ctrlrs, m.ctrlrResults,
-		m.modules, m.moduleResults, m.mountResults,
+		m.modules, m.moduleResults, m.pmems, m.mountResults,
 		m.scanRet, m.formatRet, m.updateRet, m.burninRet)
 
 	sClient := newMockMgmtSvcClient()
@@ -374,14 +379,14 @@ func newMockConnect(
 	log logging.Logger,
 	state connectivity.State, features []*pb.Feature, ctrlrs NvmeControllers,
 	ctrlrResults NvmeControllerResults, modules ScmModules,
-	moduleResults ScmModuleResults, mountResults ScmMountResults,
+	moduleResults ScmModuleResults, pmems PmemDevices, mountResults ScmMountResults,
 	scanRet error, formatRet error, updateRet error, burninRet error,
 	killRet error, connectRet error) Connect {
 
 	return &connList{
 		factory: &mockControllerFactory{
 			state, MockFeatures, ctrlrs, ctrlrResults, modules,
-			moduleResults, mountResults, log, scanRet, formatRet,
+			moduleResults, pmems, mountResults, log, scanRet, formatRet,
 			updateRet, burninRet, killRet, connectRet,
 		},
 	}
@@ -390,7 +395,7 @@ func newMockConnect(
 func defaultMockConnect(log logging.Logger) Connect {
 	return newMockConnect(
 		log, connectivity.Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
-		MockModuleResults, MockMountResults, nil, nil, nil, nil, nil, nil)
+		MockModuleResults, MockPmemDevices, MockMountResults, nil, nil, nil, nil, nil, nil)
 }
 
 // NewClientFM provides a mock ClientFeatureMap for testing.
@@ -445,6 +450,15 @@ func NewClientScmResults(
 	cMap := make(ClientModuleMap)
 	for _, addr := range addrs {
 		cMap[addr] = ModuleResults{Responses: results}
+	}
+	return cMap
+}
+
+// NewClientPmem provides a mock ClientPmemMap populated with pmem device file details
+func NewClientPmem(pms PmemDevices, addrs Addresses) ClientPmemMap {
+	cMap := make(ClientPmemMap)
+	for _, addr := range addrs {
+		cMap[addr] = PmemResults{Devices: pms}
 	}
 	return cMap
 }
