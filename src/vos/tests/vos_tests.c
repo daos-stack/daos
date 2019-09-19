@@ -107,7 +107,7 @@ main(int argc, char **argv)
 	int	ofeats;
 	int	keys;
 	bool	nest_iterators = false;
-
+	const char *short_options = "apcdglni:XA:hf:e:";
 	static struct option long_options[] = {
 		{"all_tests",		required_argument, 0, 'A'},
 		{"pool_tests",		no_argument, 0, 'p'},
@@ -139,7 +139,7 @@ main(int argc, char **argv)
 	gc = 0;
 	bool test_run = false;
 
-	while ((opt = getopt_long(argc, argv, "apcdglnti:XA:hf:e:",
+	while ((opt = getopt_long(argc, argv, short_options,
 				  long_options, &index)) != -1) {
 		switch (opt) {
 		case 'e':
@@ -165,7 +165,7 @@ main(int argc, char **argv)
 	index = 0;
 	optind = 0;
 
-	while ((opt = getopt_long(argc, argv, "apcdlnti:A:hf:e:",
+	while ((opt = getopt_long(argc, argv, short_options,
 				  long_options, &index)) != -1) {
 		switch (opt) {
 		case 'p':
