@@ -35,6 +35,7 @@
 
 #include <daos/btree_class.h>
 #include <daos/common.h>
+#include <daos/placement.h>
 #include "srv_internal.h"
 #include "drpc_internal.h"
 
@@ -373,6 +374,7 @@ server_init(int argc, char *argv[])
 	uint32_t	flags = CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_LM_DISABLE;
 	d_rank_t	rank = -1;
 	uint32_t	size = -1;
+	char		hostname[256] = { 0 };
 
 	rc = daos_debug_init(NULL);
 	if (rc != 0)
@@ -440,7 +442,12 @@ server_init(int argc, char *argv[])
 			D_ERROR("daos_hhash_init failed, rc: %d.\n", rc);
 			D_GOTO(exit_srv_init, rc);
 		}
-		D_INFO("daos handle hash-table initialized\n");
+		rc = pl_init();
+		if (rc != 0) {
+			daos_hhash_fini();
+			goto exit_srv_init;
+		}
+		D_INFO("handle hash table and placement initialized\n");
 	}
 	/* server-side uses D_HTYPE_PTR handle */
 	d_hhash_set_ptrtype(daos_ht.dht_hhash);
@@ -489,11 +496,12 @@ server_init(int argc, char *argv[])
 		goto exit_drpc_fini;
 	D_INFO("Modules successfully set up\n");
 
+	gethostname(hostname, 255);
 	D_PRINT("DAOS I/O server (v%s) process %u started on rank %u "
-		"(out of %u) with %u target xstream set(s), %d helper XS "
-		"per target, firstcore %d.\n",
-		DAOS_VERSION, getpid(), rank, size, dss_tgt_nr,
-		dss_tgt_offload_xs_nr, dss_core_offset);
+		"(out of %u) with %u target, %d helper XS per target, "
+		"firstcore %d, host %s.\n", DAOS_VERSION, getpid(), rank,
+		size, dss_tgt_nr, dss_tgt_offload_xs_nr, dss_core_offset,
+		hostname);
 
 	return 0;
 
@@ -502,10 +510,12 @@ exit_drpc_fini:
 exit_init_state:
 	server_init_state_fini();
 exit_daos_fini:
-	if (dss_mod_facs & DSS_FAC_LOAD_CLI)
+	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		daos_fini();
-	else
+	} else {
+		pl_fini();
 		daos_hhash_fini();
+	}
 exit_srv_init:
 	dss_srv_fini(true);
 exit_mod_loaded:
@@ -528,10 +538,12 @@ server_fini(bool force)
 	dss_module_cleanup_all();
 	drpc_fini();
 	server_init_state_fini();
-	if (dss_mod_facs & DSS_FAC_LOAD_CLI)
+	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		daos_fini();
-	else
+	} else {
+		pl_fini();
 		daos_hhash_fini();
+	}
 	dss_srv_fini(force);
 	dss_module_unload_all();
 	ds_iv_fini();

@@ -91,17 +91,6 @@ class ObjFetchBadParam(TestWithServers):
             print(traceback.format_exc())
             self.fail("Test failed during the initial setup.\n")
 
-    def tearDown(self):
-        try:
-            if self.container:
-                self.container.close()
-                self.container.destroy()
-            if self.pool:
-                self.pool.disconnect()
-                self.pool.destroy(1)
-        finally:
-            super(ObjFetchBadParam, self).tearDown()
-
     def test_bad_handle(self):
         """
         Test ID: DAOS-1377
