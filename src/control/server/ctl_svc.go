@@ -88,3 +88,5 @@ func loadInitData(relPath string) (m FeatureMap, err error) {
 
 	return
 }
+
+func (cs *ControlService) InstanceStop(
