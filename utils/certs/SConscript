@@ -6,7 +6,7 @@ def scons():
     Import('env')
 
     env.Install("$PREFIX/lib64/daos/certgen",
-                 ['admin.cnf', 'agent.cnf', 'ca.cnf',
+                ['admin.cnf', 'agent.cnf', 'ca.cnf',
                  'server.cnf', 'gen_certificates.sh'])
 
 if __name__ == "SCons.Script":

@@ -100,7 +100,7 @@ RUN if [ "x$NOBUILD" = "x" ] ; then scons --build-deps=yes install; fi
 
 # Set environment variables
 ENV PATH=/home/daos/daos/install/bin:$PATH
-ENV LD_LIBRARY_PATH=/home/daos/daos/install/lib:/home/daos/daos/install/lib/daos_srv:$LD_LIBRARY_PATH
+ENV LD_LIBRARY_PATH=/home/daos/daos/install/lib64:/home/daos/daos/install/lib64/daos_srv:$LD_LIBRARY_PATH
 ENV CPATH=/home/daos/daos/install/include:$CPATH
 ENV CRT_PHY_ADDR_STR="ofi+sockets"
 ENV OFI_INTERFACE=eth0
