@@ -19,34 +19,13 @@
  * provided in Contract No. B609815.
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
+ *
  */
 
+#ifndef DAOS_CHECKSUM_TESTS_H
+#define DAOS_CHECKSUM_TESTS_H
 
-#ifndef __CSUM_TESTS_H__
-#define __CSUM_TESTS_H__
+int
+daos_checksum_tests_run();
 
-void
-csum_multiple_extents_tests(void **state);
-
-void
-csum_test_csum_buffer_of_0_during_fetch(void **state);
-
-void
-csum_test_holes(void **state);
-
-void
-csum_extent_not_starting_at_0(void **state);
-
-void
-csum_extent_not_chunk_aligned(void **state);
-
-void
-evt_csum_helper_functions_tests(void **state);
-
-void
-csum_invalid_input_tests(void **state);
-
-void
-csum_fault_injection_multiple_extents_tests(void **state);
-
-#endif
+#endif /** DAOS_CHECKSUM_TESTS_H */
