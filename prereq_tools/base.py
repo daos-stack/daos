@@ -806,8 +806,10 @@ class PreReqComponent(object):
         version = env.get("INTEL_C_COMPILER_VERSION")
         self.__env.Replace(INTEL_C_COMPILER_VERSION=version)
         self.__env.Replace(LINK=env.get("LINK"))
+        # Link intel symbols statically with no external visibility and
         # disable the warning about Cilk since we don't use it
-        self.__env.AppendUnique(LINKFLAGS=["-static-intel",
+        self.__env.AppendUnique(LINKFLAGS=["-Wl,--exclude-libs,ALL",
+                                           "-static-intel",
                                            "-diag-disable=10237"])
 
 
