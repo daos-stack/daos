@@ -43,9 +43,9 @@
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
-def el7_component_repos = ""
+def el7_component_repos = "libpsm2@PR-1"
 def sle12_component_repos = ""
-def component_repos = "spdk fio dpdk pmdk raft"
+def component_repos = "libfabric@PR-16 ompi@PR-7 cart@PR-216"
 def daos_repo = "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
 def el7_daos_repos = el7_component_repos + ' ' + component_repos + ' ' + daos_repo
 def sle12_daos_repos = sle12_component_repos + ' ' + component_repos + ' ' + daos_repo
@@ -1316,6 +1316,11 @@ pipeline {
                                                test_tag=pr,hw
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
+                                           sed -i -e 's/ofi+sockets/ofi+psm2/'                                                       \
+                                                  -e 's/\\(fabric_iface: *\\)[^ ]*\\( *.*\\)/\\1ib0\\2/'                             \
+                                                  -e '/FI_SOCKETS_CONN_TIMEOUT=/a\\ \\ - FI_PSM2_DISCONNECT=1\\n  - PSM2_MULTI_EP=1' \
+                                                     src/tests/ftest/data/daos_server_baseline.yaml
+                                           cat src/tests/ftest/data/daos_server_baseline.yaml
                                            ./ftest.sh "$test_tag" $tnodes''',
                                 junit_files: "src/tests/ftest/avocado/*/*/*.xml src/tests/ftest/*_results.xml",
                                 failure_artifacts: env.STAGE_NAME
