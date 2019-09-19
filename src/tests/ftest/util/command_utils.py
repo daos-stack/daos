@@ -253,8 +253,8 @@ class ExecutableCommand(CommandWithParameters):
         """
         if self.run_as_subprocess:
             self._run_subprocess()
-        else:
-            self._run_process()
+            return None
+        return self._run_process()
 
     def _run_process(self):
         """Run the command as a foreground process.
@@ -379,7 +379,7 @@ class DaosCommand(ExecutableCommand):
         self.action = BasicParameter(None)
         self.action_command = None
 
-    def _get_action_command(self):
+    def get_action_command(self):
         """Assign a command object for the specified request and action."""
         self.action_command = None
 
@@ -395,8 +395,8 @@ class DaosCommand(ExecutableCommand):
         Args:
             test (Test): avocado Test object
         """
-        super(DaosCommand, self).get_param_names(test)
-        self._get_action_command()
+        super(DaosCommand, self).get_param_names()
+        self.get_action_command()
 
     def get_str_param_names(self):
         """Get a sorted list of the names of the command attributes.
@@ -407,7 +407,8 @@ class DaosCommand(ExecutableCommand):
 
         """
         names = self.get_param_names()
-        names[-1] = "action_command"
+        if self.action_command is not None:
+            names[-1] = "action_command"
         return names
 
 

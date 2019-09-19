@@ -23,13 +23,11 @@
 """
 from __future__ import print_function
 
-import os
 import getpass
 
 from command_utils import DaosCommand, CommandWithParameters, CommandFailure
-from command_utils import BasicParameter, FormattedParameter
+from command_utils import FormattedParameter
 from general_utils import get_file_path
-from avocado.utils import process
 
 
 class DmgCommand(DaosCommand):
@@ -46,12 +44,16 @@ class DmgCommand(DaosCommand):
         self.debug = FormattedParameter("-d", False)
         self.json = FormattedParameter("-j", False)
 
-    def _get_action_command(self):
+    def get_action_command(self):
         """Assign a command object for the specified request and action."""
         if self.action.value == "format":
             self.action_command = self.DmgFormatSubCommand()
+            self.action_command.get_params()
         elif self.action.value == "prepare":
             self.action_command = self.DmgPrepareSubCommand()
+            self.action_command.get_params()
+        else:
+            self.action_command = None
 
     class DmgFormatSubCommand(CommandWithParameters):
         """Defines an object representing a format sub dmg command."""
@@ -78,7 +80,7 @@ class DmgCommand(DaosCommand):
             self.reset = FormattedParameter("--reset", False)
 
 
-def storage_scan(hosts):
+def storage_scan(hosts, insecure=True):
     """ Execute scan command through dmg tool to servers provided.
 
     Args:
@@ -92,19 +94,19 @@ def storage_scan(hosts):
     dmg = DmgCommand(get_file_path("bin/daos_shell"))
     dmg.request.value = "storage"
     dmg.action.value = "scan"
-    dmg.insecure.value = True
+    dmg.insecure.value = insecure
     dmg.hostlist.value = hosts
 
     try:
         result = dmg.run()
     except CommandFailure as details:
         print("<dmg> command failed: {}".format(details))
-        return False
+        return None
 
     return result
 
 
-def storage_format(hosts):
+def storage_format(hosts, insecure=True):
     """ Execute format command through dmg tool to servers provided.
 
     Args:
@@ -116,24 +118,24 @@ def storage_format(hosts):
     """
     # Create and setup the command
     dmg = DmgCommand(get_file_path("bin/daos_shell"))
-    dmg.insecure.value = True
+    dmg.insecure.value = insecure
     dmg.hostlist.value = hosts
     dmg.request.value = "storage"
     dmg.action.value = "format"
-    dmg._get_action_command()
+    dmg.get_action_command()
     dmg.action_command.force.value = True
 
     try:
         result = dmg.run(sudo=True)
     except CommandFailure as details:
         print("<dmg> command failed: {}".format(details))
-        return False
+        return None
 
     return result
 
 
 def storage_prep(hosts, user=False, hugepages="4096", nvme=False,
-                 scm=False):
+                 scm=False, insecure=True):
     """Execute prepare command through dmg tool to servers provided.
 
     Args:
@@ -149,11 +151,11 @@ def storage_prep(hosts, user=False, hugepages="4096", nvme=False,
     """
     # Create and setup the command
     dmg = DmgCommand(get_file_path("bin/daos_shell"))
-    dmg.insecure.value = True
+    dmg.insecure.value = insecure
     dmg.hostlist.value = hosts
     dmg.request.value = "storage"
     dmg.action.value = "prepare"
-    dmg._get_action_command()
+    dmg.get_action_command()
     dmg.action_command.nvmeonly.value = nvme
     dmg.action_command.scmonly.value = scm
     dmg.action_command.targetuser.value = getpass.getuser() \
@@ -165,12 +167,12 @@ def storage_prep(hosts, user=False, hugepages="4096", nvme=False,
         result = dmg.run()
     except CommandFailure as details:
         print("<dmg> command failed: {}".format(details))
-        return False
+        return None
 
     return result
 
 
-def storage_reset(hosts, user=None, hugepages="4096"):
+def storage_reset(hosts, user=None, hugepages="4096", insecure=True):
     """Execute prepare reset command through dmg tool to servers provided.
 
     Args:
@@ -184,11 +186,11 @@ def storage_reset(hosts, user=None, hugepages="4096"):
     """
     # Create and setup the command
     dmg = DmgCommand(get_file_path("bin/daos_shell"))
-    dmg.insecure.value = True
+    dmg.insecure.value = insecure
     dmg.hostlist.value = hosts
     dmg.request.value = "storage"
     dmg.action.value = "prepare"
-    dmg._get_action_command()
+    dmg.get_action_command()
     dmg.action_command.nvmeonly.value = True
     dmg.action_command.targetuser.value = getpass.getuser() \
         if user is None else user
@@ -200,6 +202,6 @@ def storage_reset(hosts, user=None, hugepages="4096"):
         result = dmg.run()
     except CommandFailure as details:
         print("<dmg> command failed: {}".format(details))
-        return False
+        return None
 
     return result
