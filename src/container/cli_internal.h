@@ -27,24 +27,26 @@
 #ifndef __CONTAINER_CLIENT_INTERNAL_H__
 #define __CONTAINER_CLIENT_INTERNAL_H__
 
+
 /* Client container handle */
 struct dc_cont {
 	/** link chain in the global handle hash table */
-	struct d_hlink	  dc_hlink;
+	struct d_hlink		dc_hlink;
 	/* list to pool */
-	d_list_t	  dc_po_list;
+	d_list_t		dc_po_list;
 	/* object list for this container */
-	d_list_t	  dc_obj_list;
+	d_list_t		dc_obj_list;
 	/* lock for list of dc_obj_list */
-	pthread_rwlock_t  dc_obj_list_lock;
+	pthread_rwlock_t	dc_obj_list_lock;
 	/* uuid for this container */
-	uuid_t		  dc_uuid;
-	uuid_t		  dc_cont_hdl;
-	uint64_t	  dc_capas;
+	uuid_t			dc_uuid;
+	uuid_t			dc_cont_hdl;
+	uint64_t		dc_capas;
 	/* pool handler of the container */
-	daos_handle_t	  dc_pool_hdl;
-	uint32_t	  dc_closing:1,
-			  dc_slave:1; /* generated via g2l */
+	daos_handle_t		dc_pool_hdl;
+	struct daos_csummer    *dc_csummer;
+	uint32_t		dc_closing:1,
+				dc_slave:1; /* generated via g2l */
 };
 
 static inline struct dc_cont *

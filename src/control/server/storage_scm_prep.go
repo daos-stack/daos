@@ -92,6 +92,7 @@ type PrepScm interface {
 	Prep(types.ScmState) (bool, []pmemDev, error)
 	PrepReset(types.ScmState) (bool, error)
 	GetState() (types.ScmState, error)
+	GetNamespaces() ([]pmemDev, error)
 }
 
 type prepScm struct {
@@ -129,7 +130,7 @@ func (ps *prepScm) GetState() (types.ScmState, error) {
 }
 
 // Prep executes commands to configure SCM modules into AppDirect interleaved
-// regions/sets hosting pmem kernel device namespaces.
+// regions/sets hosting pmem device file namespaces.
 //
 // Presents of nonvolatile memory modules is assumed in this method and state
 // is established based on presence and free capacity of regions.
@@ -159,7 +160,7 @@ func (ps *prepScm) Prep(state types.ScmState) (needsReboot bool, pmemDevs []pmem
 	case types.ScmStateFreeCapacity:
 		pmemDevs, err = ps.createNamespaces()
 	case types.ScmStateNoCapacity:
-		pmemDevs, err = ps.getNamespaces()
+		pmemDevs, err = ps.GetNamespaces()
 	case types.ScmStateUnknown:
 		err = errors.New("unknown scm state")
 	default:
@@ -187,7 +188,7 @@ func (ps *prepScm) PrepReset(state types.ScmState) (bool, error) {
 		return false, errors.Errorf("unhandled scm state %q", state)
 	}
 
-	pmemDevs, err := ps.getNamespaces()
+	pmemDevs, err := ps.GetNamespaces()
 	if err != nil {
 		return false, err
 	}
@@ -319,7 +320,7 @@ func (ps *prepScm) createNamespaces() ([]pmemDev, error) {
 	}
 }
 
-func (ps prepScm) getNamespaces() (devs []pmemDev, err error) {
+func (ps prepScm) GetNamespaces() (devs []pmemDev, err error) {
 	out, err := ps.runCmd(cmdScmListNamespaces)
 	if err != nil {
 		return nil, err

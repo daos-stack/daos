@@ -32,6 +32,7 @@
 #include <daos_types.h>
 #include <daos_srv/vos.h>
 #include <daos_api.h> /* For ofeat bits */
+#include <daos/checksum.h>
 #include "vos_internal.h"
 
 struct open_query {
@@ -90,7 +91,7 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 
 	do {
 		d_iov_set(rbund.rb_iov, NULL, 0);
-		daos_csum_set(rbund.rb_csum, NULL, 0);
+		dcb_set_null(rbund.rb_csum);
 
 		rc = dbtree_iter_fetch(ih, &kiov, &riov, anchor);
 		if (rc != 0)
