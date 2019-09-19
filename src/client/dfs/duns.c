@@ -237,6 +237,14 @@ duns_destroy_path(daos_handle_t poh, const char *path)
 		return rc;
 	}
 
+	/** Destroy the container */
+	rc = daos_cont_destroy(poh, dattr.da_cuuid, 1, NULL);
+	if (rc) {
+		D_ERROR("Failed to destroy container (%d)\n", rc);
+		/** recreate the link ? */
+		return rc;
+	}
+
 	if (dattr.da_type == DAOS_PROP_CO_LAYOUT_HDF5) {
 		rc = unlink(path);
 		if (rc) {
@@ -251,14 +259,6 @@ duns_destroy_path(daos_handle_t poh, const char *path)
 				path, strerror(errno));
 			return -DER_INVAL;
 		}
-	}
-
-	/** Destroy the container */
-	rc = daos_cont_destroy(poh, dattr.da_cuuid, 1, NULL);
-	if (rc) {
-		D_ERROR("Failed to destroy container (%d)\n", rc);
-		/** recreate the link ? */
-		return rc;
 	}
 
 	return 0;
