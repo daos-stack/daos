@@ -47,7 +47,7 @@ type nvmeHealthQueryCmd struct {
 
 // Query the SPDK NVMe device health stats from all devices on all hosts
 func nvmeHealthQuery(log logging.Logger, conns client.Connect) {
-	cCtrlrs, _ := conns.StorageScan()
+	cCtrlrs, _, _ := conns.StorageScan()
 	log.Infof("NVMe SSD Device Health Stats:\n%s", cCtrlrs)
 }
 
