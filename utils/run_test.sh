@@ -98,7 +98,8 @@ if [ -d "/mnt/daos" ]; then
     run_test "${SL_PREFIX}/bin/vea_ut"
     run_test src/rdb/raft_tests/raft_tests.py
     # Satisfy CGO requirements for go-spdk binding and internal daos imports
-    LD_LIBRARY_PATH="${SL_PREFIX}/lib64:${SL_SPDK_PREFIX}/lib64:${LD_LIBRARY_PATH}"
+    LD_LIBRARY_PATH=
+    "${SL_PREFIX}/lib64:${SL_SPDK_PREFIX}/lib64:${LD_LIBRARY_PATH}"
     export LD_LIBRARY_PATH
     export CGO_LDFLAGS="-L${SL_SPDK_PREFIX}/lib64 -L${SL_PREFIX}/lib64"
     export CGO_CFLAGS="-I${SL_SPDK_PREFIX}/include"
