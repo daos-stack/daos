@@ -103,11 +103,32 @@ func (cmm ClientModuleMap) String() string {
 	return buf.String()
 }
 
+// ClientPmemMap is an alias for query results of PMEM device files existing
+// on connected servers keyed on address.
+type ClientPmemMap map[string]types.PmemResults
+
+func (cmm ClientPmemMap) String() string {
+	var buf bytes.Buffer
+	servers := make([]string, 0, len(cmm))
+
+	for server := range cmm {
+		servers = append(servers, server)
+	}
+	sort.Strings(servers)
+
+	for _, server := range servers {
+		fmt.Fprintf(&buf, "%s:\n%s\n", server, cmm[server])
+	}
+
+	return buf.String()
+}
+
 // StorageResult generic container for results of storage subsystems queries.
 type StorageResult struct {
 	nvmeCtrlr types.CtrlrResults
 	scmModule types.ModuleResults
 	scmMount  types.MountResults
+	scmPmem   types.PmemResults
 }
 
 // storagePrepareRequest returns results of SCM and NVMe prepare actions
@@ -167,24 +188,30 @@ func storageScanRequest(mc Control, req interface{}, ch chan ClientResult) {
 			msg = fmt.Sprintf("scm %+v", sState.GetStatus())
 		}
 		sRes.scmModule.Err = errors.Errorf(msg)
+		sRes.scmPmem.Err = errors.Errorf(msg)
 	} else {
 		sRes.scmModule.Modules = resp.Scm.Modules
+		sRes.scmPmem.Devices = resp.Scm.Pmems
 	}
 
 	ch <- ClientResult{mc.getAddress(), sRes, nil}
 }
 
 // StorageScan returns details of nonvolatile storage devices attached to each
-// remote server. Data received over channel from requests running in parallel.
-func (c *connList) StorageScan() (ClientCtrlrMap, ClientModuleMap) {
+// remote server. Critical storage device health information is also returned
+// for all NVMe SSDs discovered. Data received over channel from requests
+// running in parallel.
+func (c *connList) StorageScan() (ClientCtrlrMap, ClientModuleMap, ClientPmemMap) {
 	cResults := c.makeRequests(nil, storageScanRequest)
 	cCtrlrs := make(ClientCtrlrMap)   // mapping of server address to NVMe SSDs
 	cModules := make(ClientModuleMap) // mapping of server address to SCM modules
+	cPmems := make(ClientPmemMap)     // mapping of server address to PMEM device files
 
 	for _, res := range cResults {
 		if res.Err != nil {
 			cCtrlrs[res.Address] = types.CtrlrResults{Err: res.Err}
 			cModules[res.Address] = types.ModuleResults{Err: res.Err}
+			cPmems[res.Address] = types.PmemResults{Err: res.Err}
 			continue
 		}
 
@@ -194,15 +221,16 @@ func (c *connList) StorageScan() (ClientCtrlrMap, ClientModuleMap) {
 
 			cCtrlrs[res.Address] = types.CtrlrResults{Err: err}
 			cModules[res.Address] = types.ModuleResults{Err: err}
+			cPmems[res.Address] = types.PmemResults{Err: err}
 			continue
 		}
 
 		cCtrlrs[res.Address] = storageRes.nvmeCtrlr
 		cModules[res.Address] = storageRes.scmModule
-		// TODO: return SCM region/mount info in storageRes.scmMount
+		cPmems[res.Address] = storageRes.scmPmem
 	}
 
-	return cCtrlrs, cModules
+	return cCtrlrs, cModules, cPmems
 }
 
 // StorageFormatRequest attempts to format nonvolatile storage devices on a

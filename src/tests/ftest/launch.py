@@ -360,8 +360,9 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
                     yaml_file, ", ".join(missing_replacements)))
             return None
 
-        # Write the modified yaml file into a temporary file
-        yaml_name = os.path.basename(os.path.splitext(yaml_file)[0])
+        # Write the modified yaml file into a temporary file.  Use the path to
+        # ensure unique yaml files for tests with the same filename.
+        yaml_name = get_test_category(yaml_file)
         yaml_file = os.path.join(tmp_dir.name, "{}.yaml".format(yaml_name))
         print("Creating {}".format(yaml_file))
         with open(yaml_file, "w") as yaml_buffer:

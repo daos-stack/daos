@@ -29,7 +29,7 @@ func (m *FeatureName) Reset()         { *m = FeatureName{} }
 func (m *FeatureName) String() string { return proto.CompactTextString(m) }
 func (*FeatureName) ProtoMessage()    {}
 func (*FeatureName) Descriptor() ([]byte, []int) {
-	return fileDescriptor_features_db0f6b8cbcb61275, []int{0}
+	return fileDescriptor_features_46afbd0587667b68, []int{0}
 }
 func (m *FeatureName) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_FeatureName.Unmarshal(m, b)
@@ -67,7 +67,7 @@ func (m *Category) Reset()         { *m = Category{} }
 func (m *Category) String() string { return proto.CompactTextString(m) }
 func (*Category) ProtoMessage()    {}
 func (*Category) Descriptor() ([]byte, []int) {
-	return fileDescriptor_features_db0f6b8cbcb61275, []int{1}
+	return fileDescriptor_features_46afbd0587667b68, []int{1}
 }
 func (m *Category) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Category.Unmarshal(m, b)
@@ -108,7 +108,7 @@ func (m *Feature) Reset()         { *m = Feature{} }
 func (m *Feature) String() string { return proto.CompactTextString(m) }
 func (*Feature) ProtoMessage()    {}
 func (*Feature) Descriptor() ([]byte, []int) {
-	return fileDescriptor_features_db0f6b8cbcb61275, []int{2}
+	return fileDescriptor_features_46afbd0587667b68, []int{2}
 }
 func (m *Feature) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Feature.Unmarshal(m, b)
@@ -155,9 +155,9 @@ func init() {
 	proto.RegisterType((*Feature)(nil), "mgmt.Feature")
 }
 
-func init() { proto.RegisterFile("features.proto", fileDescriptor_features_db0f6b8cbcb61275) }
+func init() { proto.RegisterFile("features.proto", fileDescriptor_features_46afbd0587667b68) }
 
-var fileDescriptor_features_db0f6b8cbcb61275 = []byte{
+var fileDescriptor_features_46afbd0587667b68 = []byte{
 	// 163 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x4b, 0x4b, 0x4d, 0x2c,
 	0x29, 0x2d, 0x4a, 0x2d, 0xd6, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0xc9, 0x4d, 0xcf, 0x2d,

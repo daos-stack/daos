@@ -12,8 +12,9 @@ A DAOS pool can be created and destroyed through the DAOS management API
 storage pools from the command line.
 
 **To create a pool:**
-
-    orterun --ompi-server file:${urifile} dmg create --size=xxG –nvme=yyT
+```
+dmg create --size=xxG --nvme=yyT
+```
 
 This command creates a pool distributed across the DAOS servers with a
 target size on each server with xxGB of SCM and yyTB of NVMe storage.
@@ -23,15 +24,19 @@ located (referred as ${svcl}).
 
 The typical output of this command is as follows:
 
-    orterun --ompi-server file:${urifile} dmg create --size=xxG –nvme=yyT
-    4056fb6d-9fca-4f2d-af8a-cfd57d92a92d 1:2
+```
+dmg create --size=xxG --nvme=yyT
+4056fb6d-9fca-4f2d-af8a-cfd57d92a92d 1:2
+```
 
 This created a pool with UUID 4056fb6d-9fca-4f2d-af8a-cfd57d92a92d with
 two pool service replica on rank 1 and 2.
 
 **To destroy a pool:**
 
-    orterun --ompi-server file:${urifile} dmg destroy --pool=${puuid}
+```
+dmg destroy --pool=${puuid}
+```
 
 ## Pool Properties
 
@@ -39,8 +44,8 @@ At creation time, a list of pool properties can be specified through the
 API (not supported by the tool yet):
 
 -   DAOS_PROP_CO_LABEL is a string that the administrator can
-    associate with a pool. e.g., “project A,” “project B,” “IO500 test
-    pool”
+    associate with a pool. e.g., project A, project B, IO500 test
+    pool
 
 -   DAOS_PROP_PO_ACL is the access control list (ACL) associated with
     the pool
@@ -71,8 +76,9 @@ is integrated into the dmg utility.
 
 **To query a pool:**
 
-    orterun --ompi-server file:${urifile} dmg query --svc=${svcl}
-    --pool=${puuid}
+```
+dmg query --svc=${svcl} --pool=${puuid}
+```
 
 Below is the output for a pool created with SCM space only.
 
@@ -115,8 +121,9 @@ the management API and tool and will be documented here once available.
 
 **To exclude a target from a pool:**
 
-    orterun --ompi-server file:${urifile} dmg exclude --svc=${svcl}
-    --pool=${puuid} –target=${rank}
+```
+dmg exclude --svc=${svcl} --pool=${puuid} --target=${rank}
+```
 
 ### Pool Extension
 
