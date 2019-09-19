@@ -395,7 +395,7 @@ class DaosCommand(ExecutableCommand):
         Args:
             test (Test): avocado Test object
         """
-        super(DaosCommand, self).get_param_names()
+        super(DaosCommand, self).get_params(test)
         self.get_action_command()
 
     def get_str_param_names(self):

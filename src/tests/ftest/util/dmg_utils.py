@@ -46,6 +46,7 @@ class DmgCommand(DaosCommand):
 
     def get_action_command(self):
         """Assign a command object for the specified request and action."""
+        # pylint: disable=redefined-variable-type
         if self.action.value == "format":
             self.action_command = self.DmgFormatSubCommand()
             self.action_command.get_params()
