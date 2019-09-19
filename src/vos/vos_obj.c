@@ -28,6 +28,7 @@
 #define D_LOGFAC	DD_FAC(vos)
 
 #include <daos/common.h>
+#include <daos/checksum.h>
 #include <daos/btree.h>
 #include <daos_types.h>
 #include <daos_srv/vos.h>
@@ -397,7 +398,7 @@ key_iter_fetch_helper(struct vos_obj_iter *oiter, struct vos_rec_bundle *rbund,
 	rbund->rb_csum	= &csum;
 
 	d_iov_set(rbund->rb_iov, NULL, 0); /* no copy */
-	daos_csum_set(rbund->rb_csum, NULL, 0);
+	dcb_set_null(rbund->rb_csum);
 
 	return dbtree_iter_fetch(oiter->it_hdl, &kiov, &riov, anchor);
 }
@@ -944,7 +945,7 @@ singv_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	rbund.rb_csum	= &it_entry->ie_csum;
 
 	memset(&it_entry->ie_biov, 0, sizeof(it_entry->ie_biov));
-	daos_csum_set(rbund.rb_csum, NULL, 0);
+	dcb_set_null(rbund.rb_csum);
 
 	rc = dbtree_iter_fetch(oiter->it_hdl, &kiov, &riov, anchor);
 	if (rc)

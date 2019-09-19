@@ -65,32 +65,6 @@ vos_get_obj_cache(void)
 }
 
 int
-vos_csum_enabled(void)
-{
-	return vos_tls_get()->vtl_imems_inst.vis_enable_checksum;
-}
-
-int
-vos_csum_compute(d_sg_list_t *sgl, daos_csum_buf_t *csum)
-{
-	int	rc;
-
-	daos_csum_t *checksum =
-		&vos_tls_get()->vtl_imems_inst.vis_checksum;
-	rc = daos_csum_compute(checksum, sgl);
-	if (rc != 0) {
-		D_ERROR("Checksum compute error from VOS: %d\n", rc);
-		return rc;
-	}
-
-	csum->cs_len = csum->cs_buf_len = daos_csum_get_size(checksum);
-	rc = daos_csum_get(checksum, csum);
-	if (rc != 0)
-		D_ERROR("Error while obtaining checksum :%d\n", rc);
-	return rc;
-}
-
-int
 vos_bio_addr_free(struct vos_pool *pool, bio_addr_t *addr, daos_size_t nob)
 {
 	int	rc;
@@ -148,10 +122,8 @@ vos_imem_strts_destroy(struct vos_imem_strts *imem_inst)
 static inline int
 vos_imem_strts_create(struct vos_imem_strts *imem_inst)
 {
-	char		*env;
 	int		rc;
 
-	imem_inst->vis_enable_checksum = 0;
 	rc = vos_obj_cache_create(LRU_CACHE_BITS,
 				  &imem_inst->vis_ocache);
 	if (rc) {
@@ -171,17 +143,6 @@ vos_imem_strts_create(struct vos_imem_strts *imem_inst)
 	if (rc) {
 		D_ERROR("Error in creating CONT ref hash: %d\n", rc);
 		goto failed;
-	}
-
-	env = getenv("VOS_CHECKSUM");
-	if (env != NULL) {
-		rc = daos_csum_init(env, &imem_inst->vis_checksum);
-		if (rc != 0) {
-			D_ERROR("Error in initializing checksum\n");
-			goto failed;
-		}
-		D_DEBUG(DB_IO, "Enable VOS checksum=%s\n", env);
-		imem_inst->vis_enable_checksum = 1;
 	}
 
 	return 0;

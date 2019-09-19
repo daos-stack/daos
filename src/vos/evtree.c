@@ -22,6 +22,7 @@
  */
 #define D_LOGFAC	DD_FAC(vos)
 
+#include <daos/checksum.h>
 #include "evt_priv.h"
 #include "vos_internal.h"
 
@@ -1410,7 +1411,7 @@ evt_root_activate(struct evt_context *tcx, const struct evt_entry_in *ent)
 	root->tr_depth = 1;
 	if (inob != 0)
 		tcx->tc_inob = root->tr_inob = inob;
-	if (daos_csum_isvalid(csum)) {
+	if (dcb_is_valid(csum)) {
 		/**
 		 * csum len, type, and chunksize will be a configuration stored
 		 * in the container meta data. for now trust the entity checksum
@@ -3002,23 +3003,6 @@ int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
 }
 
 daos_size_t
-csum_chunk_count(uint32_t chunk_size, daos_off_t lo, daos_off_t hi,
-		 daos_off_t inob)
-{
-	if (chunk_size == 0)
-		return 0;
-	lo *= inob;
-	hi *= inob;
-
-	/** Align to chunk size */
-	lo = lo - lo % chunk_size;
-	hi = hi + chunk_size - hi % chunk_size;
-	daos_off_t width = hi - lo;
-
-	return width / chunk_size;
-}
-
-daos_size_t
 evt_csum_count(const struct evt_context *tcx,
 	       const struct evt_extent *extent)
 {
@@ -3040,11 +3024,20 @@ void
 evt_desc_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 		   const struct evt_entry_in *ent)
 {
-	const daos_csum_buf_t *csum = &ent->ei_csum;
-	daos_size_t csum_buf_len = evt_csum_buf_len(tcx, &ent->ei_rect.rc_ex);
+	const daos_csum_buf_t	*csum = &ent->ei_csum;
+	daos_size_t		 csum_buf_len;
 
-	D_ASSERT(csum->cs_buf_len >= csum_buf_len);
-	memcpy(desc->pt_csum, csum->cs_csum, csum_buf_len);
+	if (!dcb_is_valid(csum))
+		return;
+
+	csum_buf_len = evt_csum_buf_len(tcx, &ent->ei_rect.rc_ex);
+	if (csum->cs_buf_len < csum_buf_len) {
+		D_ERROR("Issue copying checksum. Source (%d) is "
+			"larger than destination (%"PRIu64")",
+			csum->cs_buf_len, csum_buf_len);
+	} else {
+		memcpy(desc->pt_csum, csum->cs_csum, csum_buf_len);
+	}
 }
 
 void

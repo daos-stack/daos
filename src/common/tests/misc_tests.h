@@ -19,34 +19,27 @@
  * provided in Contract No. B609815.
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
+ *
  */
 
 
-#ifndef __CSUM_TESTS_H__
-#define __CSUM_TESTS_H__
+#include <daos.h>
 
+#ifndef __DAOS_MISC_TESTS_H
+#define __DAOS_MISC_TESTS_H
+
+/** Initialize and SGL with a variable number of IOVs and set the IOV buffers
+ *  to the value of the strings passed
+ *
+ * @param sgl		Scatter gather list to initialize
+ * @param count		Number of IO Vectors that will be created in the SGL
+ * @param str		First string that will be used
+ * @param ...		Rest of strings, up to count
+ */
 void
-csum_multiple_extents_tests(void **state);
+daos_sgl_init_with_strings(d_sg_list_t *sgl, uint32_t count, char *str, ...);
 
-void
-csum_test_csum_buffer_of_0_during_fetch(void **state);
+int
+misc_tests_run();
 
-void
-csum_test_holes(void **state);
-
-void
-csum_extent_not_starting_at_0(void **state);
-
-void
-csum_extent_not_chunk_aligned(void **state);
-
-void
-evt_csum_helper_functions_tests(void **state);
-
-void
-csum_invalid_input_tests(void **state);
-
-void
-csum_fault_injection_multiple_extents_tests(void **state);
-
-#endif
+#endif /** __DAOS_MISC_TESTS_H */

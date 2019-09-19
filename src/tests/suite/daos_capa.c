@@ -26,6 +26,8 @@
  * tests/suite/daos_capa.c
  */
 #define D_LOGFAC	DD_FAC(tests)
+
+#include <daos/checksum.h>
 #include "daos_test.h"
 
 void
@@ -331,7 +333,7 @@ io_invalid_poh(void **state)
 		sgl.sg_nr_out		= 0;
 		sgl.sg_iovs		= &sg_iov;
 		d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-		daos_csum_set(&iod.iod_kcsum, NULL, 0);
+		dcb_set_null(&iod.iod_kcsum);
 		iod.iod_nr	= 1;
 		iod.iod_size	= 1;
 		recx.rx_idx	= 0;
@@ -422,7 +424,7 @@ io_invalid_coh(void **state)
 		sgl.sg_nr_out		= 0;
 		sgl.sg_iovs		= &sg_iov;
 		d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-		daos_csum_set(&iod.iod_kcsum, NULL, 0);
+		dcb_set_null(&iod.iod_kcsum);
 		iod.iod_nr	= 1;
 		iod.iod_size	= 1;
 		recx.rx_idx	= 0;
@@ -501,7 +503,7 @@ update_ro(void **state)
 	sgl.sg_nr_out		= 0;
 	sgl.sg_iovs		= &sg_iov;
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;
 	recx.rx_idx	= 0;

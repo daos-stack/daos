@@ -149,7 +149,7 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *pb.Storage
 		}
 	}
 
-	modules, err := c.ScanScm()
+	modules, pmemDevs, err := c.ScanScm()
 	if err != nil {
 		resp.Scm = &pb.ScanScmResp{
 			State: newState(c.log, pb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg+"SCM"),
@@ -158,6 +158,7 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *pb.Storage
 		resp.Scm = &pb.ScanScmResp{
 			State:   newState(c.log, pb.ResponseStatus_CTRL_SUCCESS, "", "", msg+"SCM"),
 			Modules: modules,
+			Pmems:   pmemDevs,
 		}
 	}
 

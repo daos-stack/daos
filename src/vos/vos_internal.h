@@ -34,7 +34,6 @@
 #include <gurt/hash.h>
 #include <daos/btree.h>
 #include <daos/common.h>
-#include <daos/checksum.h>
 #include <daos/lru.h>
 #include <daos_srv/daos_server.h>
 #include <daos_srv/bio.h>
@@ -158,8 +157,6 @@ struct vos_imem_strts {
 	/** (container/pool, etc.,) */
 	struct d_hash_table	*vis_pool_hhash;
 	struct d_hash_table	*vis_cont_hhash;
-	int			vis_enable_checksum;
-	daos_csum_t		vis_checksum;
 };
 /* in-memory structures standalone instance */
 struct bio_xs_context		*vsa_xsctxt_inst;
@@ -278,15 +275,6 @@ vos_pool_hash_del(struct vos_pool *pool)
  */
 struct daos_lru_cache *vos_get_obj_cache(void);
 
-/**
- * Check if checksum is enabled
- */
-int vos_csum_enabled(void);
-
-/**
- * compute checksum for a sgl using CRC64
- */
-int vos_csum_compute(d_sg_list_t *sgl, daos_csum_buf_t *csum);
 /**
  * Register btree class for container table, it is called within vos_init()
  *

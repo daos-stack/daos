@@ -60,7 +60,7 @@ func (nc NvmeControllers) String() string {
 		for _, hs := range ctrlr.Healthstats {
 			fmt.Fprintf(
 				&buf, "\tHealth Stats:\n\t\tTemperature:%dK(%dC)\n",
-				hs.Temp, hs.Temp - 273)
+				hs.Temp, hs.Temp-273)
 
 			if hs.Tempwarn > 0 {
 				fmt.Fprintf(&buf, "\t\t\tWarning Time:%d\n",
@@ -89,7 +89,7 @@ func (nc NvmeControllers) String() string {
 			if hs.Tempwarning {
 				fmt.Fprintf(&buf, "WARNING\n")
 			} else {
-				fmt.Fprintf(&buf, "OK\n");
+				fmt.Fprintf(&buf, "OK\n")
 			}
 			fmt.Fprintf(&buf, "\t\t\tAvailable Spare: ")
 			if hs.Availspare {
@@ -101,19 +101,19 @@ func (nc NvmeControllers) String() string {
 			if hs.Reliability {
 				fmt.Fprintf(&buf, "WARNING\n")
 			} else {
-				fmt.Fprintf(&buf, "OK\n");
+				fmt.Fprintf(&buf, "OK\n")
 			}
 			fmt.Fprintf(&buf, "\t\t\tRead Only: ")
 			if hs.Readonly {
 				fmt.Fprintf(&buf, "WARNING\n")
 			} else {
-				fmt.Fprintf(&buf, "OK\n");
+				fmt.Fprintf(&buf, "OK\n")
 			}
 			fmt.Fprintf(&buf, "\t\t\tVolatile Memory Backup: ")
 			if hs.Volatilemem {
 				fmt.Fprintf(&buf, "WARNING\n")
 			} else {
-				fmt.Fprintf(&buf, "OK\n");
+				fmt.Fprintf(&buf, "OK\n")
 			}
 		}
 	}
@@ -196,6 +196,12 @@ func (pds PmemDevices) String() string {
 	}
 
 	return buf.String()
+}
+
+// PmemResults contains PMEM device file details created on SCM regions.
+type PmemResults struct {
+	Devices PmemDevices
+	Err     error
 }
 
 // ScmMountResults is an alias for protobuf ScmMountResult message slice
