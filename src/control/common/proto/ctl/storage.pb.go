@@ -30,7 +30,7 @@ func (m *StoragePrepareReq) Reset()         { *m = StoragePrepareReq{} }
 func (m *StoragePrepareReq) String() string { return proto.CompactTextString(m) }
 func (*StoragePrepareReq) ProtoMessage()    {}
 func (*StoragePrepareReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_6a5fe4570f385e76, []int{0}
+	return fileDescriptor_storage_45a4a2d06e2caa02, []int{0}
 }
 func (m *StoragePrepareReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StoragePrepareReq.Unmarshal(m, b)
@@ -76,7 +76,7 @@ func (m *StoragePrepareResp) Reset()         { *m = StoragePrepareResp{} }
 func (m *StoragePrepareResp) String() string { return proto.CompactTextString(m) }
 func (*StoragePrepareResp) ProtoMessage()    {}
 func (*StoragePrepareResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_6a5fe4570f385e76, []int{1}
+	return fileDescriptor_storage_45a4a2d06e2caa02, []int{1}
 }
 func (m *StoragePrepareResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StoragePrepareResp.Unmarshal(m, b)
@@ -122,7 +122,7 @@ func (m *StorageScanReq) Reset()         { *m = StorageScanReq{} }
 func (m *StorageScanReq) String() string { return proto.CompactTextString(m) }
 func (*StorageScanReq) ProtoMessage()    {}
 func (*StorageScanReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_6a5fe4570f385e76, []int{2}
+	return fileDescriptor_storage_45a4a2d06e2caa02, []int{2}
 }
 func (m *StorageScanReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StorageScanReq.Unmarshal(m, b)
@@ -168,7 +168,7 @@ func (m *StorageScanResp) Reset()         { *m = StorageScanResp{} }
 func (m *StorageScanResp) String() string { return proto.CompactTextString(m) }
 func (*StorageScanResp) ProtoMessage()    {}
 func (*StorageScanResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_6a5fe4570f385e76, []int{3}
+	return fileDescriptor_storage_45a4a2d06e2caa02, []int{3}
 }
 func (m *StorageScanResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StorageScanResp.Unmarshal(m, b)
@@ -214,7 +214,7 @@ func (m *StorageFormatReq) Reset()         { *m = StorageFormatReq{} }
 func (m *StorageFormatReq) String() string { return proto.CompactTextString(m) }
 func (*StorageFormatReq) ProtoMessage()    {}
 func (*StorageFormatReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_6a5fe4570f385e76, []int{4}
+	return fileDescriptor_storage_45a4a2d06e2caa02, []int{4}
 }
 func (m *StorageFormatReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StorageFormatReq.Unmarshal(m, b)
@@ -260,7 +260,7 @@ func (m *StorageFormatResp) Reset()         { *m = StorageFormatResp{} }
 func (m *StorageFormatResp) String() string { return proto.CompactTextString(m) }
 func (*StorageFormatResp) ProtoMessage()    {}
 func (*StorageFormatResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_6a5fe4570f385e76, []int{5}
+	return fileDescriptor_storage_45a4a2d06e2caa02, []int{5}
 }
 func (m *StorageFormatResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StorageFormatResp.Unmarshal(m, b)
@@ -306,7 +306,7 @@ func (m *StorageUpdateReq) Reset()         { *m = StorageUpdateReq{} }
 func (m *StorageUpdateReq) String() string { return proto.CompactTextString(m) }
 func (*StorageUpdateReq) ProtoMessage()    {}
 func (*StorageUpdateReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_6a5fe4570f385e76, []int{6}
+	return fileDescriptor_storage_45a4a2d06e2caa02, []int{6}
 }
 func (m *StorageUpdateReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StorageUpdateReq.Unmarshal(m, b)
@@ -352,7 +352,7 @@ func (m *StorageUpdateResp) Reset()         { *m = StorageUpdateResp{} }
 func (m *StorageUpdateResp) String() string { return proto.CompactTextString(m) }
 func (*StorageUpdateResp) ProtoMessage()    {}
 func (*StorageUpdateResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_6a5fe4570f385e76, []int{7}
+	return fileDescriptor_storage_45a4a2d06e2caa02, []int{7}
 }
 func (m *StorageUpdateResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StorageUpdateResp.Unmarshal(m, b)
@@ -398,7 +398,7 @@ func (m *StorageBurnInReq) Reset()         { *m = StorageBurnInReq{} }
 func (m *StorageBurnInReq) String() string { return proto.CompactTextString(m) }
 func (*StorageBurnInReq) ProtoMessage()    {}
 func (*StorageBurnInReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_6a5fe4570f385e76, []int{8}
+	return fileDescriptor_storage_45a4a2d06e2caa02, []int{8}
 }
 func (m *StorageBurnInReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StorageBurnInReq.Unmarshal(m, b)
@@ -444,7 +444,7 @@ func (m *StorageBurnInResp) Reset()         { *m = StorageBurnInResp{} }
 func (m *StorageBurnInResp) String() string { return proto.CompactTextString(m) }
 func (*StorageBurnInResp) ProtoMessage()    {}
 func (*StorageBurnInResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_6a5fe4570f385e76, []int{9}
+	return fileDescriptor_storage_45a4a2d06e2caa02, []int{9}
 }
 func (m *StorageBurnInResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_StorageBurnInResp.Unmarshal(m, b)
@@ -491,9 +491,9 @@ func init() {
 	proto.RegisterType((*StorageBurnInResp)(nil), "ctl.StorageBurnInResp")
 }
 
-func init() { proto.RegisterFile("storage.proto", fileDescriptor_storage_6a5fe4570f385e76) }
+func init() { proto.RegisterFile("storage.proto", fileDescriptor_storage_45a4a2d06e2caa02) }
 
-var fileDescriptor_storage_6a5fe4570f385e76 = []byte{
+var fileDescriptor_storage_45a4a2d06e2caa02 = []byte{
 	// 366 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x94, 0x4d, 0x4b, 0x7a, 0x41,
 	0x18, 0xc5, 0x51, 0xff, 0xfe, 0x17, 0x23, 0xa5, 0x77, 0x74, 0x61, 0xae, 0xcc, 0xb4, 0xac, 0x85,

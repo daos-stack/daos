@@ -37,7 +37,7 @@ func (m *PoolCreateReq) Reset()         { *m = PoolCreateReq{} }
 func (m *PoolCreateReq) String() string { return proto.CompactTextString(m) }
 func (*PoolCreateReq) ProtoMessage()    {}
 func (*PoolCreateReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_pool_e89282fdb5ae9f98, []int{0}
+	return fileDescriptor_pool_b1ea4bb098e9bbc0, []int{0}
 }
 func (m *PoolCreateReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PoolCreateReq.Unmarshal(m, b)
@@ -127,7 +127,7 @@ func (m *PoolCreateResp) Reset()         { *m = PoolCreateResp{} }
 func (m *PoolCreateResp) String() string { return proto.CompactTextString(m) }
 func (*PoolCreateResp) ProtoMessage()    {}
 func (*PoolCreateResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_pool_e89282fdb5ae9f98, []int{1}
+	return fileDescriptor_pool_b1ea4bb098e9bbc0, []int{1}
 }
 func (m *PoolCreateResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PoolCreateResp.Unmarshal(m, b)
@@ -182,7 +182,7 @@ func (m *PoolDestroyReq) Reset()         { *m = PoolDestroyReq{} }
 func (m *PoolDestroyReq) String() string { return proto.CompactTextString(m) }
 func (*PoolDestroyReq) ProtoMessage()    {}
 func (*PoolDestroyReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_pool_e89282fdb5ae9f98, []int{2}
+	return fileDescriptor_pool_b1ea4bb098e9bbc0, []int{2}
 }
 func (m *PoolDestroyReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PoolDestroyReq.Unmarshal(m, b)
@@ -235,7 +235,7 @@ func (m *PoolDestroyResp) Reset()         { *m = PoolDestroyResp{} }
 func (m *PoolDestroyResp) String() string { return proto.CompactTextString(m) }
 func (*PoolDestroyResp) ProtoMessage()    {}
 func (*PoolDestroyResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_pool_e89282fdb5ae9f98, []int{3}
+	return fileDescriptor_pool_b1ea4bb098e9bbc0, []int{3}
 }
 func (m *PoolDestroyResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PoolDestroyResp.Unmarshal(m, b)
@@ -269,9 +269,9 @@ func init() {
 	proto.RegisterType((*PoolDestroyResp)(nil), "mgmt.PoolDestroyResp")
 }
 
-func init() { proto.RegisterFile("pool.proto", fileDescriptor_pool_e89282fdb5ae9f98) }
+func init() { proto.RegisterFile("pool.proto", fileDescriptor_pool_b1ea4bb098e9bbc0) }
 
-var fileDescriptor_pool_e89282fdb5ae9f98 = []byte{
+var fileDescriptor_pool_b1ea4bb098e9bbc0 = []byte{
 	// 275 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x74, 0x91, 0xcd, 0x4e, 0xeb, 0x30,
 	0x10, 0x85, 0xe5, 0xe6, 0xa7, 0xe9, 0x48, 0xbd, 0x17, 0x8d, 0x2a, 0x64, 0x21, 0x84, 0xa2, 0xac,

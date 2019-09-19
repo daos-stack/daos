@@ -48,6 +48,7 @@ const (
 	bioHealth     = C.DRPC_METHOD_MGMT_BIO_HEALTH_QUERY
 	setUp         = C.DRPC_METHOD_MGMT_SET_UP
 	smdDevs       = C.DRPC_METHOD_MGMT_SMD_LIST_DEVS
+	smdPools      = C.DRPC_METHOD_MGMT_SMD_LIST_POOLS
 
 	srvModuleID = C.DRPC_MODULE_SRV
 	notifyReady = C.DRPC_METHOD_SRV_NOTIFY_READY
