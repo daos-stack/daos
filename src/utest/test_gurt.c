@@ -1835,5 +1835,7 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_gurt_atomic),
 	};
 
+	d_register_alt_assert(mock_assert);
+
 	return cmocka_run_group_tests(tests, init_tests, fini_tests);
 }

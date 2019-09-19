@@ -119,5 +119,7 @@ int main(int argc, char **argv)
 		cmocka_unit_test(test_hlc_get_msg),
 	};
 
+	d_register_alt_assert(mock_assert);
+
 	return cmocka_run_group_tests(tests, init_tests, fini_tests);
 }
