@@ -76,8 +76,8 @@ int dc_tx_commit(tse_task_t *task);
 int dc_tx_abort(tse_task_t *task);
 int dc_tx_open_snap(tse_task_t *task);
 int dc_tx_close(tse_task_t *task);
-int dc_tx_rebuild_open(daos_handle_t coh, daos_epoch_t epoch,
-		       daos_handle_t *th);
-int dc_tx_rebuild_close(daos_handle_t th);
+int dc_tx_local_open(daos_handle_t coh, daos_epoch_t epoch,
+		     daos_handle_t *th);
+int dc_tx_local_close(daos_handle_t th);
 
 #endif /* __DAOS_CONTAINER_H__ */

@@ -623,6 +623,7 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent)
 			      NULL, NULL, NULL, &entries);
 	if (rc == 0)
 		rc = IT_OPC_NOOP;
+
 	if (rc == -DER_NONEXIST)
 		rc = IT_OPC_NEXT;
 
@@ -969,6 +970,13 @@ singv_iter_next(struct vos_obj_iter *oiter)
 	vos_iter_entry_t entry;
 	int		 rc;
 	int		 opc;
+
+	/* Only one SV rec is visible for the given @epoch,
+	 * so return -DER_NONEXIST directly for the next().
+	 */
+	if (oiter->it_flags & VOS_IT_RECX_VISIBLE &&
+	    !oiter->it_iter.it_for_purge)
+		return -DER_NONEXIST;
 
 	memset(&entry, 0, sizeof(entry));
 	rc = singv_iter_fetch(oiter, &entry, NULL);

@@ -26,7 +26,6 @@
 
 #include <daos/drpc.pb-c.h>
 #include <daos/common.h>
-#include <abt.h>
 
 /*
  * Using a packetsocket over the unix domain socket means that we receive
