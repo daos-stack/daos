@@ -97,7 +97,7 @@ class IorTestBase(TestWithServers):
 
         try:
             # start dfuse
-            self.dfuse.run_dfuse(self.hostlist_clients)
+            self.dfuse.run_dfuse(self.hostlist_clients, self.tmp)
         except CommandFailure as error:
             self.log.error("Dfuse Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
