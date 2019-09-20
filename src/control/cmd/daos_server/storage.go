@@ -30,6 +30,7 @@ import (
 
 	commands "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/server"
+	"github.com/daos-stack/daos/src/control/server/ioserver"
 	. "github.com/daos-stack/daos/src/control/server/storage/messages"
 )
 
@@ -42,8 +43,15 @@ type storageScanCmd struct {
 	logCmd
 }
 
+func defaultSrvConfig() *server.Configuration {
+	return server.NewConfiguration().
+		WithServers(
+			ioserver.NewConfig(),
+		)
+}
+
 func (cmd *storageScanCmd) Execute(args []string) error {
-	svc, err := server.DefaultStorageControlService(cmd.log, server.NewConfiguration())
+	svc, err := server.DefaultStorageControlService(cmd.log, defaultSrvConfig())
 	if err != nil {
 		return errors.WithMessage(err, "failed to init ControlService")
 	}
@@ -101,8 +109,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		return err
 	}
 
-	cfg := server.NewConfiguration()
-	svc, err := server.DefaultStorageControlService(cmd.log, cfg)
+	svc, err := server.DefaultStorageControlService(cmd.log, defaultSrvConfig())
 	if err != nil {
 		return errors.WithMessage(err, "init control service")
 	}
