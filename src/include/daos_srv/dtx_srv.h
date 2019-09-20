@@ -171,9 +171,10 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_hdl *cont_hdl,
 int dtx_leader_exec_ops(struct dtx_leader_handle *dth, dtx_sub_func_t exec_func,
 			void *func_arg);
 
-int dtx_batched_commit_register(struct ds_cont_hdl *hdl);
+int dtx_batched_commit_register(struct ds_pool_child *pool,
+				struct ds_cont_child *cont);
 
-void dtx_batched_commit_deregister(struct ds_cont_hdl *hdl);
+void dtx_batched_commit_deregister(struct ds_cont_child *cont);
 
 int dtx_obj_sync(uuid_t po_uuid, uuid_t co_uuid, daos_handle_t coh,
 		 daos_unit_oid_t oid, daos_epoch_t epoch, uint32_t map_ver);

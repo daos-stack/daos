@@ -38,7 +38,6 @@ struct dtx_batched_commit_args {
 	d_list_t		 dbca_link;
 	struct ds_pool_child	*dbca_pool;
 	struct ds_cont_child	*dbca_cont;
-	uint32_t		 dbca_shares;
 };
 
 void
@@ -110,14 +109,6 @@ dtx_flush_committable(struct dss_module_info *dmi,
 			  "flush on "DF_UUID": rc = %d\n",
 			  DP_UUID(cont->sc_uuid), rc);
 	}
-
-	if (dbca->dbca_shares == 0) {
-		D_ASSERT(cont->sc_closing);
-
-		dtx_free_dbca(dbca);
-	} else {
-		d_list_move_tail(&dbca->dbca_link, &dmi->dmi_dtx_batched_list);
-	}
 }
 
 void
@@ -140,6 +131,7 @@ dtx_batched_commit(void *arg)
 		cont = dbca->dbca_cont;
 		if (cont->sc_closing) {
 			dtx_flush_committable(dmi, dbca);
+			dtx_free_dbca(dbca);
 			goto check;
 		}
 
@@ -161,6 +153,7 @@ dtx_batched_commit(void *arg)
 
 				if (cont->sc_closing) {
 					dtx_flush_committable(dmi, dbca);
+					dtx_free_dbca(dbca);
 					goto check;
 				}
 
@@ -770,22 +763,25 @@ out:
 
 
 int
-dtx_batched_commit_register(struct ds_cont_hdl *hdl)
+dtx_batched_commit_register(struct ds_pool_child *pool,
+			    struct ds_cont_child *cont)
 {
-	struct ds_cont_child		*cont = hdl->sch_cont;
 	struct dtx_batched_commit_args	*dbca;
 	d_list_t			*head;
 
 	D_ASSERT(cont != NULL);
 
-	if (hdl->sch_dtx_registered)
+	if (cont->sc_dtx_registered)
 		return 0;
 
 	head = &dss_get_module_info()->dmi_dtx_batched_list;
 	d_list_for_each_entry(dbca, head, dbca_link) {
 		if (uuid_compare(dbca->dbca_cont->sc_uuid,
-				 cont->sc_uuid) == 0)
-			goto out;
+				 cont->sc_uuid) == 0) {
+			D_ERROR(DF_UUID": repeatedly register the container.\n",
+				DP_UUID(cont->sc_uuid));
+			return -DER_INVAL;
+		}
 	}
 
 	D_ALLOC_PTR(dbca);
@@ -794,21 +790,18 @@ dtx_batched_commit_register(struct ds_cont_hdl *hdl)
 
 	ds_cont_child_get(cont);
 	dbca->dbca_cont = cont;
-	dbca->dbca_pool = ds_pool_child_get(hdl->sch_pool);
+	dbca->dbca_pool = ds_pool_child_get(pool);
 	d_list_add_tail(&dbca->dbca_link, head);
 
-out:
 	cont->sc_closing = 0;
-	hdl->sch_dtx_registered = 1;
-	dbca->dbca_shares++;
+	cont->sc_dtx_registered = 1;
 
 	return 0;
 }
 
 void
-dtx_batched_commit_deregister(struct ds_cont_hdl *hdl)
+dtx_batched_commit_deregister(struct ds_cont_child *cont)
 {
-	struct ds_cont_child		*cont = hdl->sch_cont;
 	struct dtx_batched_commit_args	*dbca;
 	d_list_t			*head;
 	ABT_future			 future;
@@ -817,7 +810,7 @@ dtx_batched_commit_deregister(struct ds_cont_hdl *hdl)
 	if (cont == NULL)
 		return;
 
-	if (!hdl->sch_dtx_registered)
+	if (!cont->sc_dtx_registered)
 		return;
 
 	if (cont->sc_closing) {
@@ -832,9 +825,6 @@ dtx_batched_commit_deregister(struct ds_cont_hdl *hdl)
 		if (uuid_compare(dbca->dbca_cont->sc_uuid,
 				 cont->sc_uuid) != 0)
 			continue;
-
-		if (--(dbca->dbca_shares) > 0)
-			goto out;
 
 		/* Notify the dtx_batched_commit ULT to flush the
 		 * committable DTXs via setting @sc_closing as 1.
@@ -873,7 +863,7 @@ wait:
 	}
 
 out:
-	hdl->sch_dtx_registered = 0;
+	cont->sc_dtx_registered = 0;
 }
 
 int

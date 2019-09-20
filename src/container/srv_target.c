@@ -469,7 +469,7 @@ cont_child_destroy_one(void *vin)
 
 	while (1) {
 		struct ds_cont_child *cont;
-		bool		      resyncing = false;
+		bool		      busy = true;
 
 		rc = cont_child_lookup(tls->dt_cont_cache, in->tdi_uuid, NULL,
 				       &cont);
@@ -482,14 +482,22 @@ cont_child_destroy_one(void *vin)
 		ABT_mutex_lock(cont->sc_mutex);
 		cont->sc_destroying = 1;
 		if (cont->sc_dtx_resyncing) {
-			resyncing = true;
+			busy = false;
 			ABT_cond_wait(cont->sc_dtx_resync_cond, cont->sc_mutex);
 		}
 		ABT_mutex_unlock(cont->sc_mutex);
+
+		/* The container will be deregistered from DTX batched commit
+		 * ULT when close. If it is not deregistered, then it is not
+		 * closed yet.
+		 */
+		if (cont->sc_dtx_registered)
+			busy = true;
+
 		/* Should evict if idle, but no such interface at the moment. */
 		cont_child_put(tls->dt_cont_cache, cont);
 
-		if (!resyncing) {
+		if (busy) {
 			D_ERROR("container is still in-use\n");
 			D_GOTO(out_pool, rc = -DER_BUSY);
 		} /* else: resync should have completed, try again */
@@ -758,7 +766,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	if (cont_uuid != NULL) {
 		struct ds_dtx_resync_args	*ddra = NULL;
 
-		rc = dtx_batched_commit_register(hdl);
+		rc = dtx_batched_commit_register(hdl->sch_pool, hdl->sch_cont);
 		if (rc != 0) {
 			D_ERROR("Failed to register the container "DF_UUID
 				" to the DTX batched commit list: rc = %d\n",
@@ -784,7 +792,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	return 0;
 
 err_cont:
-	dtx_batched_commit_deregister(hdl);
+	dtx_batched_commit_deregister(hdl->sch_cont);
 	if (hdl->sch_cont)
 		cont_child_put(tls->dt_cont_cache, hdl->sch_cont);
 
@@ -879,7 +887,7 @@ cont_close_one_rec(struct cont_tgt_close_rec *rec)
 		hdl->sch_cont->sc_closing ? "resent" : "new",
 		DP_UUID(rec->tcr_hdl), rec->tcr_hce);
 
-	dtx_batched_commit_deregister(hdl);
+	dtx_batched_commit_deregister(hdl->sch_cont);
 	if (!hdl->sch_deleted) {
 		cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
 		hdl->sch_deleted = 1;

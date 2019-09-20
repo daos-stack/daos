@@ -63,6 +63,7 @@ struct ds_cont_child {
 	uint64_t		 sc_dtx_resync_time;
 	uint32_t		 sc_dtx_resyncing:1,
 				 sc_dtx_aggregating:1,
+				 sc_dtx_registered:1,
 				 sc_closing:1,
 				 sc_destroying:1;
 	uint32_t		 sc_dtx_flush_wait_count;
@@ -81,8 +82,7 @@ struct ds_cont_hdl {
 	struct ds_pool_child	*sch_pool;
 	struct ds_cont_child	*sch_cont;
 	int			sch_ref;
-	uint32_t		sch_dtx_registered:1,
-				sch_deleted:1;
+	uint32_t		sch_deleted:1;
 };
 
 struct ds_cont_hdl *ds_cont_hdl_lookup(const uuid_t uuid);
