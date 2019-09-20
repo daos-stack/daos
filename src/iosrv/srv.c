@@ -819,10 +819,10 @@ dss_start_xs_id(int xs_id)
 			xs_core_offset = xs_id - (dss_sys_xs_nr - DRPC_XS_NR);
 
 		obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth,
-						(xs_core_offset + dss_core_offset)
-						% dss_core_nr);
+			(xs_core_offset + dss_core_offset) % dss_core_nr);
 		if (obj == NULL) {
-			D_ERROR("Null core returned by hwloc for XS %d\n", xs_id);
+			D_ERROR("Null core returned by hwloc for XS %d\n",
+				xs_id);
 			return -DER_INVAL;
 		}
 	}

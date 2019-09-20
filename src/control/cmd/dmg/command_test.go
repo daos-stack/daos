@@ -75,7 +75,7 @@ func (tc *testConn) ConnectClients(addrList client.Addresses) client.ResultMap {
 	tc.appendInvocation("ConnectClients")
 
 	return map[string]client.ClientResult{
-		tc.clientConfig.HostList[0]: client.ClientResult{
+		tc.clientConfig.HostList[0]: {
 			Address: tc.clientConfig.HostList[0],
 		},
 	}
@@ -85,7 +85,7 @@ func (tc *testConn) GetActiveConns(rm client.ResultMap) client.ResultMap {
 	tc.appendInvocation("GetActiveConns")
 
 	return map[string]client.ClientResult{
-		tc.clientConfig.HostList[0]: client.ClientResult{
+		tc.clientConfig.HostList[0]: {
 			Address: tc.clientConfig.HostList[0],
 		},
 	}

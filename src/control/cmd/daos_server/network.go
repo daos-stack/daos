@@ -30,8 +30,8 @@ import (
 )
 
 type networkCmd struct {
-	Scan     networkScanCmd     `command:"scan" description:"Scan for network interface devices on local server"`
-	List     networkListCmd     `command:"list" description:"List all known OFI providers that are understood by 'scan'"`
+	Scan networkScanCmd `command:"scan" description:"Scan for network interface devices on local server"`
+	List networkListCmd `command:"list" description:"List all known OFI providers that are understood by 'scan'"`
 }
 
 // networkScanCmd is the struct representing the command to scan the machine for network interface devices
@@ -40,7 +40,7 @@ type networkScanCmd struct {
 	cfgCmd
 	logCmd
 	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider (default is the provider specified in daos_server.yml)"`
-	AllProviders bool `short:"a" long:"all" description:"Specify 'all' to see all devices on all providers.  Overrides --provider"`
+	AllProviders   bool   `short:"a" long:"all" description:"Specify 'all' to see all devices on all providers.  Overrides --provider"`
 }
 
 func (cmd *networkScanCmd) Execute(args []string) error {
@@ -75,7 +75,7 @@ func (cmd *networkScanCmd) Execute(args []string) error {
 	}
 	cmd.log.Infof("Fabric scan found %d devices matching the provider spec: %s", len(results), provider)
 
-	for _, sr := range(results) {
+	for _, sr := range results {
 		cmd.log.Infof("\n%v\n\n", sr)
 	}
 
@@ -91,7 +91,7 @@ type networkListCmd struct {
 func (cmd *networkListCmd) Execute(args []string) error {
 	providers := netdetect.GetSupportedProviders()
 	cmd.log.Info("Supported providers:\n\n")
-	for _, p := range(providers) {
+	for _, p := range providers {
 		cmd.log.Infof("\t%s", p)
 	}
 	return nil

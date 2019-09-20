@@ -115,7 +115,7 @@ func TestValidateNetworkConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, sf := range(results) {
+	for _, sf := range results {
 		err := ValidateNetworkConfig(sf.Provider, sf.DeviceName, sf.NUMANode)
 		AssertEqual(t, err, nil, "Network device configuration is invalid")
 	}
