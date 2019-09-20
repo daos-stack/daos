@@ -245,6 +245,45 @@ struct shard_sync_args {
 	daos_epoch_t		*sa_epoch;
 };
 
+#define DOVA_NUM	32
+#define DOVA_BUF_LEN	4096
+
+struct dc_obj_verify_cursor {
+	daos_key_t		 dkey;
+	daos_iod_t		 iod;
+	daos_recx_t		 recx;
+	uint32_t		 gen;
+	uint32_t		 type;
+	uint32_t		 kds_idx;
+	uint32_t		 iod_off;
+	void			*ptr;
+};
+
+struct dc_obj_verify_args {
+	daos_handle_t			 oh;
+	daos_handle_t			 th;
+	daos_size_t			 size;
+	uint32_t			 num;
+	unsigned int			 eof:1,
+					 non_exist:1,
+					 data_fetched:1;
+	daos_key_desc_t			 kds[DOVA_NUM];
+	daos_epoch_range_t		 eprs[DOVA_NUM];
+	d_sg_list_t			 list_sgl;
+	d_sg_list_t			 fetch_sgl;
+	daos_anchor_t			 anchor;
+	daos_anchor_t			 dkey_anchor;
+	daos_anchor_t			 akey_anchor;
+	d_iov_t				 list_iov;
+	d_iov_t				 fetch_iov;
+	daos_size_t			 list_buf_len;
+	daos_size_t			 fetch_buf_len;
+	char				*list_buf;
+	char				*fetch_buf;
+	char				 inline_buf[DOVA_BUF_LEN];
+	struct dc_obj_verify_cursor	 cursor;
+};
+
 int dc_obj_shard_open(struct dc_object *obj, daos_unit_oid_t id,
 		      unsigned int mode, struct dc_obj_shard *shard);
 void dc_obj_shard_close(struct dc_obj_shard *shard);
@@ -274,6 +313,9 @@ int dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
 int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		      void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
 		      uint32_t fw_cnt, tse_task_t *task);
+
+int dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
+		      uint32_t rdg_idx, uint32_t reps, daos_epoch_t epoch);
 
 static inline bool
 obj_retry_error(int err)
