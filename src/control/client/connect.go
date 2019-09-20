@@ -61,8 +61,8 @@ func (cr ClientResult) String() string {
 // query client requests.
 type ClientBioResult struct {
 	Address string
-	Stats	*pb.BioHealthResp
-	Err	error
+	Stats   *pb.BioHealthResp
+	Err     error
 }
 
 func (cr ClientBioResult) String() string {
@@ -123,8 +123,8 @@ func (cr ClientBioResult) String() string {
 // query client requests.
 type ClientSmdResult struct {
 	Address string
-	Devs	*pb.SmdDevResp
-	Err	error
+	Devs    *pb.SmdDevResp
+	Err     error
 }
 
 func (cr ClientSmdResult) String() string {
@@ -239,7 +239,7 @@ type Connect interface {
 	GetActiveConns(ResultMap) ResultMap
 	ClearConns() ResultMap
 	StoragePrepare(*pb.StoragePrepareReq) ResultMap
-	StorageScan() (ClientCtrlrMap, ClientModuleMap)
+	StorageScan() (ClientCtrlrMap, ClientModuleMap, ClientPmemMap)
 	StorageFormat() (ClientCtrlrMap, ClientMountMap)
 	StorageUpdate(*pb.StorageUpdateReq) (ClientCtrlrMap, ClientModuleMap)
 	// TODO: implement Burnin client features

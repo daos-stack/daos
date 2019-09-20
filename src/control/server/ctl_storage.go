@@ -81,6 +81,7 @@ func NewStorageControlService(log logging.Logger, nvme *nvmeStorage, scm *scmSto
 	}
 }
 
+// canAccessBdevs evaluates if any specified Bdevs are not accessible.
 func (c *StorageControlService) canAccessBdevs() (missing []string, ok bool) {
 	for _, storageCfg := range c.instanceStorage {
 		_missing, _ok := c.nvme.hasControllers(storageCfg.Bdev.GetNvmeDevs())
@@ -190,7 +191,7 @@ func (c *StorageControlService) GetScmState() (types.ScmState, error) {
 }
 
 // PrepareScm preps locally attached modules and returns need to reboot message,
-// list of pmem kernel devices and error directly.
+// list of pmem device files and error directly.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
 func (c *StorageControlService) PrepareScm(req PrepareScmRequest, state types.ScmState,
@@ -220,10 +221,10 @@ func (c *StorageControlService) ScanNvme() (types.NvmeControllers, error) {
 // ScanScm scans locally attached modules and returns list directly.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
-func (c *StorageControlService) ScanScm() (types.ScmModules, error) {
+func (c *StorageControlService) ScanScm() (types.ScmModules, types.PmemDevices, error) {
 	if err := c.scm.Discover(); err != nil {
-		return nil, errors.Wrap(err, "SCM storage scan")
+		return nil, nil, errors.Wrap(err, "SCM storage scan")
 	}
 
-	return c.scm.modules, nil
+	return c.scm.modules, c.scm.pmemDevs, nil
 }

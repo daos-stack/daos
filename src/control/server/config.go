@@ -39,12 +39,13 @@ import (
 )
 
 const (
-	configOut           = ".daos_server.active.yml"
-	relConfExamplesPath = "utils/config/examples/"
-	msgBadConfig        = "insufficient config file, see examples in "
-	msgConfigNoProvider = "provider not specified in config"
-	msgConfigNoPath     = "no config path set"
-	msgConfigNoServers  = "no servers specified in config"
+	configOut                = ".daos_server.active.yml"
+	relConfExamplesPath      = "utils/config/examples/"
+	msgBadConfig             = "insufficient config file, see examples in "
+	msgConfigNoProvider      = "provider not specified in config"
+	msgConfigNoPath          = "no config path set"
+	msgConfigNoServers       = "no servers specified in config"
+	msgConfigBadAccessPoints = "only a single access point is currently supported"
 )
 
 // Configuration describes options for DAOS control plane.
@@ -70,7 +71,6 @@ type Configuration struct {
 	Modules    string
 	Attach     string
 
-	// deprecated
 	AccessPoints []string `yaml:"access_points"`
 
 	// unused (?)
@@ -387,6 +387,11 @@ func (c *Configuration) Validate() (err error) {
 
 	if c.Fabric.Provider == "" {
 		return errors.New(msgConfigNoProvider)
+	}
+
+	// only single access point valid for now
+	if len(c.AccessPoints) != 1 {
+		return errors.New(msgConfigBadAccessPoints)
 	}
 
 	if len(c.Servers) == 0 {
