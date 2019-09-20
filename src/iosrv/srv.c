@@ -787,10 +787,12 @@ dss_start_xs_id(int xs_id)
 	if (numa_obj) {
 		idx = hwloc_bitmap_first(core_allocation_bitmap);
 		if (idx == -1) {
-			D_DEBUG(DB_TRACE, "No core available for XS: %d", xs_id);
+			D_DEBUG(DB_TRACE,
+				"No core available for XS: %d", xs_id);
 			return -DER_INVAL;
 		}
-		D_DEBUG(DB_TRACE, "Choosing next available core index %d.", idx);
+		D_DEBUG(DB_TRACE,
+			"Choosing next available core index %d.", idx);
 		hwloc_bitmap_clr(core_allocation_bitmap, idx);
 
 		obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, idx);
