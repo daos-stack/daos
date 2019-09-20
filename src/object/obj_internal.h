@@ -250,7 +250,8 @@ ec_rs2cs(uint64_t rs, unsigned char cs_exp)
 	if (rs == 1)
 		return 1 << cs_exp;
 	__asm__ ("bsr %[rs], %[msb]":[msb] "=r" (msb):[rs] "mr" (rs));
-	return 1 << ((cs_exp - msb - (((1 << (msb-1)) & rs) ? 1 : 0)));
+	return msb >= cs_exp ? 1 :
+		1 << ((cs_exp - msb - (((1 << (msb-1)) & rs) ? 1 : 0)));
 }
 
 struct shard_sync_args {
