@@ -48,20 +48,20 @@ func MockNamespacePB() *pb.NvmeController_Namespace {
 // multiple packages.
 func MockDeviceHealthPB() *pb.NvmeController_Health {
 	return &pb.NvmeController_Health{
-		Temp:		uint32(300),
-		Tempwarn:	uint32(0),
-		Tempcrit:	uint32(0),
-		Ctrlbusy:	uint64(0),
-		Powercycles:	uint64(99),
-		Poweronhours:	uint64(9999),
+		Temp:            uint32(300),
+		Tempwarn:        uint32(0),
+		Tempcrit:        uint32(0),
+		Ctrlbusy:        uint64(0),
+		Powercycles:     uint64(99),
+		Poweronhours:    uint64(9999),
 		Unsafeshutdowns: uint64(1),
-		Mediaerrors:	uint64(0),
-		Errorlogs:	uint64(0),
-		Tempwarning:	false,
-		Availspare:	false,
-		Reliability:	false,
-		Readonly:	false,
-		Volatilemem:	false,
+		Mediaerrors:     uint64(0),
+		Errorlogs:       uint64(0),
+		Tempwarning:     false,
+		Availspare:      false,
+		Reliability:     false,
+		Readonly:        false,
+		Volatilemem:     false,
 	}
 }
 
@@ -84,11 +84,11 @@ func NewMockControllerPB(
 	nss []*pb.NvmeController_Namespace, dh []*pb.NvmeController_Health) *pb.NvmeController {
 
 	return &pb.NvmeController{
-		Model:      model,
-		Serial:     serial,
-		Pciaddr:    pciAddr,
-		Fwrev:      fwRev,
-		Namespaces: nss,
+		Model:       model,
+		Serial:      serial,
+		Pciaddr:     pciAddr,
+		Fwrev:       fwRev,
+		Namespaces:  nss,
 		Healthstats: dh,
 	}
 }

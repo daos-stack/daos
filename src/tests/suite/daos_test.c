@@ -60,6 +60,7 @@ print_usage(int rank)
 	print_message("daos_test -g|--group GROUP\n");
 	print_message("daos_test -s|--svcn NSVCREPLICAS\n");
 	print_message("daos_test -E|--exclude TESTS\n");
+	print_message("daos_test -f|--filter TESTS\n");
 	print_message("daos_test -h|--help\n");
 	print_message("Default <daos_tests> runs all tests\n=============\n");
 }
@@ -203,6 +204,8 @@ main(int argc, char **argv)
 	int		 size;
 	int		 rc;
 
+	d_register_alt_assert(mock_assert);
+
 	MPI_Init(&argc, &argv);
 
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -231,6 +234,7 @@ main(int argc, char **argv)
 		{"svcn",	required_argument,	NULL,	's'},
 		{"subtests",	required_argument,	NULL,	'u'},
 		{"exclude",	required_argument,	NULL,	'E'},
+		{"filter",	required_argument,	NULL,	'f'},
 		{"work_dir",	required_argument,	NULL,	'W'},
 		{"workload_file", required_argument,	NULL,	'w'},
 		{"help",	no_argument,		NULL,	'h'}
@@ -244,7 +248,8 @@ main(int argc, char **argv)
 
 	memset(tests, 0, sizeof(tests));
 
-	while ((opt = getopt_long(argc, argv, "ampcCdXixADKeoROg:s:u:E:w:W:hr",
+	while ((opt = getopt_long(argc, argv,
+				  "ampcCdXixADKeoROg:s:u:E:f:w:W:hr",
 				  long_options, &index)) != -1) {
 		if (strchr(all_tests_defined, opt) != NULL) {
 			tests[ntests] = opt;
@@ -268,6 +273,13 @@ main(int argc, char **argv)
 			break;
 		case 'E':
 			exclude_str = optarg;
+			break;
+		case 'f':
+#if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
+			cmocka_set_test_filter(optarg);
+#else
+			D_PRINT("filter not enabled");
+#endif
 			break;
 		case 'w':
 			test_io_conf = optarg;

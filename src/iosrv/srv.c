@@ -84,12 +84,14 @@
  * 2) dss_ult_xs() to query the XS id of the xstream for specific ULT task.
  */
 
+/** Number of dRPC xstreams */
+#define	DRPC_XS_NR	(1)
 /** Number of offload XS per target [0, 2] */
 unsigned int	dss_tgt_offload_xs_nr = 2;
 /** number of target (XS set) per server */
 unsigned int	dss_tgt_nr;
 /** number of system XS */
-unsigned int	dss_sys_xs_nr = DAOS_TGT0_OFFSET;
+unsigned int	dss_sys_xs_nr = DAOS_TGT0_OFFSET + DRPC_XS_NR;
 
 unsigned int
 dss_ctx_nr_get(void)
@@ -402,13 +404,14 @@ dss_srv_handler(void *arg)
 		} else {
 			if (dx->dx_main_xs)
 				D_ASSERTF(dx->dx_ctx_id ==
-					  dx->dx_tgt_id + dss_sys_xs_nr,
+					  dx->dx_tgt_id + dss_sys_xs_nr -
+					  DRPC_XS_NR,
 					  "incorrect ctx_id %d for xs_id %d\n",
 					  dx->dx_ctx_id, dx->dx_xs_id);
 			else
 				D_ASSERTF(dx->dx_ctx_id ==
 					  (dss_sys_xs_nr + dss_tgt_nr +
-					   dx->dx_tgt_id),
+					   dx->dx_tgt_id - DRPC_XS_NR),
 					  "incorrect ctx_id %d for xs_id %d\n",
 					  dx->dx_ctx_id, dx->dx_xs_id);
 		}
@@ -616,7 +619,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	 * as it is only for EC/checksum/compress offloading.
 	 */
 	xs_offset = xs_id < dss_sys_xs_nr ? -1 : DSS_XS_OFFSET_IN_TGT(xs_id);
-	comm = (xs_id < dss_sys_xs_nr) || xs_offset == 0 || xs_offset == 1;
+	comm = (xs_id == 0) || xs_offset == 0 || xs_offset == 1;
 	dx->dx_tgt_id	= dss_xs2tgt(xs_id);
 	if (xs_id < dss_sys_xs_nr) {
 		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_SYS_XS_NAME_FMT,
@@ -781,6 +784,7 @@ dss_start_xs_id(int xs_id)
 	int		rc;
 	unsigned idx;
 	char *cpuset;
+	int		xs_core_offset;
 
 	D_DEBUG(DB_TRACE, "start xs_id called for %d.  ", xs_id);
 	/* if we are NUMA aware, use the NUMA information */
@@ -806,10 +810,19 @@ dss_start_xs_id(int xs_id)
 		free(cpuset);
 	} else {
 		D_DEBUG(DB_TRACE, "Using non-NUMA aware core allocation\n");
+		/*
+		* System XS all use the first core
+		*/
+		if (xs_id < dss_sys_xs_nr)
+			xs_core_offset = 0;
+		else
+			xs_core_offset = xs_id - (dss_sys_xs_nr - DRPC_XS_NR);
+
 		obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth,
-			(xs_id + dss_core_offset) % dss_core_nr);
+						(xs_core_offset + dss_core_offset)
+						% dss_core_nr);
 		if (obj == NULL) {
-			D_ERROR("Null core returned by hwloc\n");
+			D_ERROR("Null core returned by hwloc for XS %d\n", xs_id);
 			return -DER_INVAL;
 		}
 	}

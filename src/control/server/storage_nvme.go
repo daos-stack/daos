@@ -470,7 +470,7 @@ func loadControllers(ctrlrs []spdk.Controller, nss []spdk.Namespace,
 				Fwrev:    c.FWRev,
 				Socketid: c.SocketID,
 				// repeated pb field
-				Namespaces: loadNamespaces(c.PCIAddr, nss),
+				Namespaces:  loadNamespaces(c.PCIAddr, nss),
 				Healthstats: loadHealthStats(health),
 			})
 	}
@@ -500,20 +500,20 @@ func loadHealthStats(health []spdk.DeviceHealth) (_health types.NvmeHealthstats)
 		_health = append(
 			_health,
 			&pb.NvmeController_Health{
-				Temp:		 h.Temp,
-				Tempwarn:	 h.TempWarnTime,
-				Tempcrit:	 h.TempCritTime,
-				Ctrlbusy:	 h.CtrlBusyTime,
-				Powercycles:	 h.PowerCycles,
-				Poweronhours:	 h.PowerOnHours,
+				Temp:            h.Temp,
+				Tempwarn:        h.TempWarnTime,
+				Tempcrit:        h.TempCritTime,
+				Ctrlbusy:        h.CtrlBusyTime,
+				Powercycles:     h.PowerCycles,
+				Poweronhours:    h.PowerOnHours,
 				Unsafeshutdowns: h.UnsafeShutdowns,
-				Mediaerrors:	 h.MediaErrors,
-				Errorlogs:	 h.ErrorLogEntries,
-				Tempwarning:	 h.TempWarn,
-				Availspare: 	 h.AvailSpareWarn,
-				Reliability:	 h.ReliabilityWarn,
-				Readonly:	 h.ReadOnlyWarn,
-				Volatilemem:	 h.VolatileWarn,
+				Mediaerrors:     h.MediaErrors,
+				Errorlogs:       h.ErrorLogEntries,
+				Tempwarning:     h.TempWarn,
+				Availspare:      h.AvailSpareWarn,
+				Reliability:     h.ReliabilityWarn,
+				Readonly:        h.ReadOnlyWarn,
+				Volatilemem:     h.VolatileWarn,
 			})
 	}
 
