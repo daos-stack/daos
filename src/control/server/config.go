@@ -284,17 +284,17 @@ func (c *Configuration) parse(data []byte) error {
 // populated with defaults.
 func newDefaultConfiguration(ext External) *Configuration {
 	return &Configuration{
-		SystemName:      "daos_server",
-		SocketDir:       "/var/run/daos_server",
-		AccessPoints:    []string{"localhost"},
-		ControlPort:     10000,
-		TransportConfig: security.DefaultServerTransportConfig(),
-		Hyperthreads:    false,
-		NrHugepages:     1024,
-		Path:            "etc/daos_server.yml",
-		NvmeShmID:       0,
-		ControlLogMask:  ControlLogLevel(logging.LogLevelInfo),
-		ext:             ext,
+		SystemName:              "daos_server",
+		SocketDir:               "/var/run/daos_server",
+		AccessPoints:            []string{"localhost"},
+		ControlPort:             10000,
+		TransportConfig:         security.DefaultServerTransportConfig(),
+		Hyperthreads:            false,
+		NrHugepages:             1024,
+		Path:                    "etc/daos_server.yml",
+		NvmeShmID:               0,
+		ControlLogMask:          ControlLogLevel(logging.LogLevelInfo),
+		ext:                     ext,
 		validateNetworkDeviceFn: netdetect.ValidateNetworkConfig,
 	}
 }
