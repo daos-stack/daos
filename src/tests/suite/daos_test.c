@@ -30,8 +30,8 @@
 #include "daos_test.h"
 
 /** All tests in default order (tests that kill nodes must be last) */
-static const char *all_tests = "mpceXiADKCoROdr";
-static const char *all_tests_defined = "mpceXixADKCoROdr";
+static const char *all_tests = "mpceXViADKCoROdr";
+static const char *all_tests_defined = "mpceXVixADKCoROdr";
 
 static void
 print_usage(int rank)
@@ -54,6 +54,8 @@ print_usage(int rank)
 	print_message("daos_test -d|--degraded\n");
 	print_message("daos_test -e|--daos_epoch_tests\n");
 	print_message("daos_test -o|--daos_epoch_recovery_tests\n");
+	print_message("daos_test -V|--verify_consistency\n");
+	print_message("daos_test -R|--MD_replication_tests\n");
 	print_message("daos_test -O|--oid_alloc\n");
 	print_message("daos_test -r|--rebuild\n");
 	print_message("daos_test -a|--daos_all_tests\n");
@@ -151,6 +153,13 @@ run_specified_tests(const char *tests, int rank, int size,
 			daos_test_print(rank, "=================");
 			nr_failed += run_daos_epoch_recovery_test(rank, size);
 			break;
+		case 'V':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS verify consistency..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_vc_test(rank, size, sub_tests,
+						      sub_tests_size);
+			break;
 		case 'R':
 			daos_test_print(rank, "\n\n=================");
 			daos_test_print(rank, "DAOS MD replication tests..");
@@ -219,6 +228,7 @@ main(int argc, char **argv)
 		{"cont",	no_argument,		NULL,	'c'},
 		{"capa",	no_argument,		NULL,	'C'},
 		{"dtx",		no_argument,		NULL,	'X'},
+		{"verify",	no_argument,		NULL,	'V'},
 		{"io",		no_argument,		NULL,	'i'},
 		{"epoch_io",	no_argument,		NULL,	'x'},
 		{"obj_array",	no_argument,		NULL,	'A'},
@@ -249,7 +259,7 @@ main(int argc, char **argv)
 	memset(tests, 0, sizeof(tests));
 
 	while ((opt = getopt_long(argc, argv,
-				  "ampcCdXixADKeoROg:s:u:E:f:w:W:hr",
+				  "ampcCdXVixADKeoROg:s:u:E:f:w:W:hr",
 				  long_options, &index)) != -1) {
 		if (strchr(all_tests_defined, opt) != NULL) {
 			tests[ntests] = opt;

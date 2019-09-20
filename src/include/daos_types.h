@@ -97,7 +97,7 @@ typedef struct {
 static inline void
 daos_anchor_set_flags(daos_anchor_t *anchor, uint32_t flags)
 {
-	anchor->da_flags |= flags;
+	anchor->da_flags = flags;
 }
 
 static inline uint32_t
