@@ -146,6 +146,16 @@ func (tc *testConn) SmdListDevs(req *pb.SmdDevReq) client.ResultSmdMap {
 	return nil
 }
 
+func (tc *testConn) DevStateQuery(req *pb.DevStateReq) client.ResultStateMap {
+	tc.appendInvocation(fmt.Sprintf("DevStateQuery-%s", req))
+	return nil
+}
+
+func (tc *testConn) StorageSetFaulty(req *pb.DevStateReq) client.ResultStateMap {
+	tc.appendInvocation(fmt.Sprintf("StorageSetFaulty-%s", req))
+	return nil
+}
+
 func (tc *testConn) SetTransportConfig(cfg *security.TransportConfig) {
 	tc.appendInvocation("SetTransportConfig")
 }

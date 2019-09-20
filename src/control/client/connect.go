@@ -154,8 +154,8 @@ func (cr ClientSmdResult) String() string {
 // ClientStateResult is a container for output of device state query requests
 type ClientStateResult struct {
 	Address string
-	Dev	*pb.DevStateResp
-	Err	error
+	Dev     *pb.DevStateResp
+	Err     error
 }
 
 func (cr ClientStateResult) String() string {
@@ -174,7 +174,6 @@ func (cr ClientStateResult) String() string {
 
 	return buf.String()
 }
-
 
 // ResultMap map client addresses to method call ClientResults
 type ResultMap map[string]ClientResult
