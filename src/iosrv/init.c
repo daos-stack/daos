@@ -255,9 +255,10 @@ dss_topo_init()
 		dss_tgt_nr = dss_tgt_nr_get(dss_core_nr, nr_threads);
 
 		if (dss_core_offset < 0 || dss_core_offset >= dss_core_nr) {
-			D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), "
-				"should within range [0, %d]", dss_core_offset,
-				dss_core_nr - 1);
+			D_ERROR("invalid dss_core_offset %d "
+				"(set by \"-f\" option),"
+				" should within range [0, %d]",
+				dss_core_offset, dss_core_nr - 1);
 			return -DER_INVAL;
 		}
 		return 0;

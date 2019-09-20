@@ -139,8 +139,10 @@ dss_ult_xs(int ult_type, int tgt_id)
 		return DSS_MAIN_XS_ID(tgt_id) + dss_tgt_offload_xs_nr;
 	case DSS_ULT_POOL_SRV:
 	case DSS_ULT_RDB:
-	case DSS_ULT_DRPC:
+	case DSS_ULT_DRPC_HANDLER:
 		return 0;
+	case DSS_ULT_DRPC_LISTENER:
+		return 1;
 	case DSS_ULT_REBUILD:
 	case DSS_ULT_AGGREGATE:
 		return DSS_MAIN_XS_ID(tgt_id);
@@ -168,9 +170,10 @@ dss_ult_pool(int ult_type)
 	case DSS_ULT_CHECKSUM:
 	case DSS_ULT_COMPRESS:
 	case DSS_ULT_POOL_SRV:
-	case DSS_ULT_DRPC:
+	case DSS_ULT_DRPC_LISTENER:
 	case DSS_ULT_RDB:
 	case DSS_ULT_MISC:
+	case DSS_ULT_DRPC_HANDLER:
 		return DSS_POOL_SHARE;
 	case DSS_ULT_REBUILD:
 	case DSS_ULT_AGGREGATE:
