@@ -811,8 +811,8 @@ dss_start_xs_id(int xs_id)
 	} else {
 		D_DEBUG(DB_TRACE, "Using non-NUMA aware core allocation\n");
 		/*
-	 	* System XS all use the first core
-	 	*/
+		* System XS all use the first core
+		*/
 		if (xs_id < dss_sys_xs_nr)
 			xs_core_offset = 0;
 		else
