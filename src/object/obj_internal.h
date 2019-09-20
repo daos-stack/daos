@@ -240,6 +240,19 @@ ec_bulk_spec_get_skip(int index, struct ec_bulk_spec *skip_list)
 {
 	return skip_list[index].is_skip;
 }
+
+static inline uint32_t
+ec_rs2cs(uint64_t rs, unsigned char cs_exp)
+{
+	int msb;
+
+	D_ASSERT(rs);
+	if (rs == 1)
+		return 1 << cs_exp;
+	__asm__ ("bsr %[rs], %[msb]":[msb] "=r" (msb):[rs] "mr" (rs));
+	return 1 << ((cs_exp - msb - (((1 << (msb-1)) & rs) ? 1 : 0)));
+}
+
 struct shard_sync_args {
 	struct shard_auxi_args	 sa_auxi;
 	daos_epoch_t		*sa_epoch;
