@@ -1,3 +1,31 @@
+/**
+ * (C) Copyright 2019 Intel Corporation.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+ * The Government's rights to use, modify, reproduce, release, perform, display,
+ * or disclose this software are subject to the terms of the Apache License as
+ * provided in Contract No. B609815.
+ * Any reproduction of computer software, computer software documentation, or
+ * portions thereof marked with this legend must also reproduce the markings.
+ */
+/**
+ * VOS Object/Key incarnation log
+ * vos/ilog.c
+ *
+ * Author: Jeff Olivier <jeffrey.v.olivier@intel.com>
+ */
 #define D_LOGFAC DD_FAC(vos)
 #include <daos/common.h>
 #include <daos_srv/vos.h>
@@ -137,7 +165,12 @@ ilog_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	 *  to fit the value without allocating new memory.
 	 */
 	prec->p_punch = *(bool *)val_iov->iov_buf;
-	prec->p_magic = 1; /* So free is always called */
+	/** Generic btree code will not call ilog_rec_free if rec->rec_off is
+	 * UMOFF_NULL.   Since we are using that field to store the data and
+	 * the data (p_punch) can be 0, set this flag to force rec_free to be
+	 * called.
+	 */
+	prec->p_magic = 1;
 
 	return 0;
 }
@@ -421,8 +454,6 @@ done:
 
 #define ilog_ptr_set(lctx, dest, src)	\
 	ilog_ptr_set_full(lctx, dest, src, sizeof(*(src)))
-
-#define ilog_entry_set
 
 int
 ilog_create(struct umem_instance *umm, struct ilog_df *root)
