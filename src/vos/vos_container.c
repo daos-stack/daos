@@ -100,6 +100,7 @@ cont_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 
 	cont_df = umem_off2ptr(&tins->ti_umm, offset);
 	uuid_copy(cont_df->cd_id, ukey->uuid);
+	cont_df->cd_dtx_resync_gen = 1;
 
 	rc = dbtree_create_inplace_ex(VOS_BTR_OBJ_TABLE, 0, VOS_OBJ_ORDER,
 				      &pool->vp_uma, &cont_df->cd_obj_root,
@@ -110,11 +111,15 @@ cont_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	}
 	dbtree_close(hdl);
 
-	rc = vos_dtx_table_create(pool, &cont_df->cd_dtx_table_df);
+	rc = dbtree_create_inplace_ex(VOS_BTR_DTX_ACTIVE_TABLE, 0,
+				      DTX_BTREE_ORDER, &pool->vp_uma,
+				      &cont_df->cd_dtx_root,
+				      DAOS_HDL_INVAL, pool, &hdl);
 	if (rc) {
-		D_ERROR("Failed to create DTX table: rc = %d\n", rc);
+		D_ERROR("Failed to create active DTX table: rc = %d\n", rc);
 		D_GOTO(failed, rc);
 	}
+	dbtree_close(hdl);
 
 	args->ca_cont_df = cont_df;
 	rec->rec_off = offset;
@@ -197,9 +202,13 @@ cont_free(struct d_ulink *ulink)
 
 	if (!daos_handle_is_inval(cont->vc_dtx_cos_hdl))
 		dbtree_destroy(cont->vc_dtx_cos_hdl, NULL);
-	D_ASSERT(d_list_empty(&cont->vc_dtx_committable));
+	D_ASSERT(d_list_empty(&cont->vc_dtx_committable_list));
+
+	if (!daos_handle_is_inval(cont->vc_dtx_committed_hdl))
+		dbtree_destroy(cont->vc_dtx_committed_hdl, NULL);
+	D_ASSERT(d_list_empty(&cont->vc_dtx_committed_list));
+
 	dbtree_close(cont->vc_dtx_active_hdl);
-	dbtree_close(cont->vc_dtx_committed_hdl);
 	dbtree_close(cont->vc_btr_hdl);
 
 	for (i = 0; i < VOS_IOS_CNT; i++) {
@@ -363,9 +372,13 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	uuid_copy(cont->vc_id, co_uuid);
 	cont->vc_pool	 = pool;
 	cont->vc_cont_df = args.ca_cont_df;
+	cont->vc_dtx_committed_hdl = DAOS_HDL_INVAL;
 	cont->vc_dtx_cos_hdl = DAOS_HDL_INVAL;
-	D_INIT_LIST_HEAD(&cont->vc_dtx_committable);
+	D_INIT_LIST_HEAD(&cont->vc_dtx_committable_list);
+	D_INIT_LIST_HEAD(&cont->vc_dtx_committed_list);
 	cont->vc_dtx_committable_count = 0;
+	cont->vc_dtx_committed_count = 0;
+	cont->vc_dtx_resync_gen = cont->vc_cont_df->cd_dtx_resync_gen;
 
 	/* Cache this btr object ID in container handle */
 	rc = dbtree_open_inplace_ex(&cont->vc_cont_df->cd_obj_root,
@@ -376,17 +389,8 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 		D_GOTO(exit, rc);
 	}
 
-	rc = dbtree_open_inplace(
-			&cont->vc_cont_df->cd_dtx_table_df.tt_committed_btr,
-			&pool->vp_uma, &cont->vc_dtx_committed_hdl);
-	if (rc) {
-		D_ERROR("Failed to open committed DTX table: rc = %d\n", rc);
-		D_GOTO(exit, rc);
-	}
-
-	rc = dbtree_open_inplace(
-			&cont->vc_cont_df->cd_dtx_table_df.tt_active_btr,
-			&pool->vp_uma, &cont->vc_dtx_active_hdl);
+	rc = dbtree_open_inplace(&cont->vc_cont_df->cd_dtx_root,
+				 &pool->vp_uma, &cont->vc_dtx_active_hdl);
 	if (rc) {
 		D_ERROR("Failed to open active DTX table: rc = %d\n", rc);
 		D_GOTO(exit, rc);
@@ -394,10 +398,19 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
-	memset(&cont->vc_dtx_cos_btr, 0, sizeof(cont->vc_dtx_cos_btr));
-	rc = dbtree_create_inplace(VOS_BTR_DTX_COS, 0, VOS_CONT_ORDER, &uma,
-				   &cont->vc_dtx_cos_btr,
-				   &cont->vc_dtx_cos_hdl);
+	rc = dbtree_create_inplace_ex(VOS_BTR_DTX_COMMITTED_TABLE, 0,
+				      DTX_BTREE_ORDER, &uma,
+				      &cont->vc_dtx_committed_btr,
+				      DAOS_HDL_INVAL, cont,
+				      &cont->vc_dtx_committed_hdl);
+	if (rc != 0) {
+		D_ERROR("Failed to create DTX committed btree: rc = %d\n", rc);
+		D_GOTO(exit, rc);
+	}
+
+	rc = dbtree_create_inplace_ex(VOS_BTR_DTX_COS, 0, DTX_BTREE_ORDER, &uma,
+				      &cont->vc_dtx_cos_btr, DAOS_HDL_INVAL,
+				      cont, &cont->vc_dtx_cos_hdl);
 	if (rc != 0) {
 		D_ERROR("Failed to create DTX CoS btree: rc = %d\n", rc);
 		D_GOTO(exit, rc);
@@ -493,6 +506,7 @@ int
 vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 {
 
+	daos_handle_t		 hdl;
 	struct vos_pool		*pool;
 	struct vos_container	*cont;
 	struct cont_df_args	 args;
@@ -543,6 +557,18 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 		D_GOTO(exit, rc);
 	}
 
+	rc = dbtree_open_inplace(&args.ca_cont_df->cd_dtx_root,
+				 &pool->vp_uma, &hdl);
+	if (rc == 0)
+		rc = dbtree_destroy(hdl, NULL);
+
+	if (rc != 0 && rc != -DER_NONEXIST) {
+		D_ERROR("Failed to destroy active DTX table: rc = %d\n", rc);
+		rc = vos_tx_end(pool, rc);
+
+		D_GOTO(exit, rc);
+	}
+
 	d_iov_set(&iov, &key, sizeof(struct d_uuid));
 	rc = dbtree_delete(pool->vp_cont_th, BTR_PROBE_EQ, &iov, NULL);
 
@@ -585,6 +611,31 @@ vos_cont_tab_register()
 	rc = dbtree_class_register(VOS_BTR_CONT_TABLE, 0, &vct_ops);
 	if (rc)
 		D_ERROR("dbtree create failed\n");
+	return rc;
+}
+
+int
+vos_dtx_update_resync_gen(daos_handle_t coh)
+{
+	struct vos_container	*cont;
+	struct vos_cont_df	*cont_df;
+	int			 rc;
+
+	cont = vos_hdl2cont(coh);
+	D_ASSERT(cont != NULL);
+
+	cont_df = cont->vc_cont_df;
+	rc = vos_tx_begin(cont->vc_pool);
+	if (rc == 0) {
+		umem_tx_add_ptr(&cont->vc_pool->vp_umm,
+				&cont_df->cd_dtx_resync_gen,
+				sizeof(cont_df->cd_dtx_resync_gen));
+		cont_df->cd_dtx_resync_gen++;
+		rc = vos_tx_end(cont->vc_pool, rc);
+		if (rc == 0)
+			cont->vc_dtx_resync_gen = cont_df->cd_dtx_resync_gen;
+	}
+
 	return rc;
 }
 

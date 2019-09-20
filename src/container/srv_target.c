@@ -86,7 +86,6 @@ cont_child_alloc_ref(void *key, unsigned int ksize, void *varg,
 		goto out_cond;
 
 	uuid_copy(cont->sc_uuid, key);
-	cont->sc_dtx_resync_time = crt_hlc_get();
 
 	*link = &cont->sc_list;
 	return 0;

@@ -45,6 +45,8 @@
 #define VOS_KTR_ORDER		23	/* order of d/a-key tree */
 #define VOS_SVT_ORDER		5	/* order of single value tree */
 #define VOS_EVT_ORDER		23	/* evtree order */
+#define DTX_BTREE_ORDER		23	/* Order for DTX tree */
+
 
 
 #define DAOS_VOS_VERSION 1
@@ -119,20 +121,26 @@ struct vos_container {
 	struct vos_pool		*vc_pool;
 	/* Unique UID of VOS container */
 	uuid_t			vc_id;
+	/* DAOS handle for object index btree */
+	daos_handle_t		vc_btr_hdl;
 	/* The handle for active DTX table */
 	daos_handle_t		vc_dtx_active_hdl;
 	/* The handle for committed DTX table */
 	daos_handle_t		vc_dtx_committed_hdl;
-	/* DAOS handle for object index btree */
-	daos_handle_t		vc_btr_hdl;
 	/* The objects with committable DTXs in DRAM. */
 	daos_handle_t		vc_dtx_cos_hdl;
+	/** The root of the B+ tree for committed DTXs. */
+	struct btr_root		vc_dtx_committed_btr;
 	/* The DTX COS-btree. */
 	struct btr_root		vc_dtx_cos_btr;
-	/* The global list for commiitable DTXs. */
-	d_list_t		vc_dtx_committable;
-	/* The count of commiitable DTXs. */
+	/* The global list for committable DTXs. */
+	d_list_t		vc_dtx_committable_list;
+	/* The global list for committed DTXs. */
+	d_list_t		vc_dtx_committed_list;
+	/* The count of committable DTXs. */
 	uint32_t		vc_dtx_committable_count;
+	/* The count of committed DTXs. */
+	uint32_t		vc_dtx_committed_count;
 	/** Direct pointer to the VOS container */
 	struct vos_cont_df	*vc_cont_df;
 	/**
@@ -144,6 +152,7 @@ struct vos_container {
 	unsigned int		vc_in_aggregation:1,
 				vc_abort_aggregation:1;
 	unsigned int		vc_open_count;
+	uint64_t		vc_dtx_resync_gen;
 };
 
 struct vos_imem_strts {
@@ -294,30 +303,6 @@ int
 vos_obj_tab_register();
 
 /**
- * DTX table create
- * Called from cont_df_rec_alloc.
- *
- * \param pool		[IN]	vos pool
- * \param dtab_df	[IN]	Pointer to the DTX table (pmem data structure)
- *
- * \return		0 on success and negative on failure
- */
-int
-vos_dtx_table_create(struct vos_pool *pool, struct vos_dtx_table_df *dtab_df);
-
-/**
- * DTX table destroy
- * Called from vos_cont_destroy
- *
- * \param pool		[IN]	vos pool
- * \param dtab_df	[IN]	Pointer to the DTX table (pmem data structure)
- *
- * \return		0 on success and negative on failure
- */
-int
-vos_dtx_table_destroy(struct vos_pool *pool, struct vos_dtx_table_df *dtab_df);
-
-/**
  * Register dbtree class for DTX table, it is called within vos_init().
  *
  * \return		0 on success and negative on failure
@@ -427,21 +412,23 @@ vos_dtx_cos_oldest(struct vos_container *cont);
 
 enum vos_tree_class {
 	/** the first reserved tree class */
-	VOS_BTR_BEGIN		= DBTREE_VOS_BEGIN,
+	VOS_BTR_BEGIN			= DBTREE_VOS_BEGIN,
 	/** distribution key tree */
-	VOS_BTR_DKEY		= (VOS_BTR_BEGIN + 0),
+	VOS_BTR_DKEY			= (VOS_BTR_BEGIN + 0),
 	/** attribute key tree */
-	VOS_BTR_AKEY		= (VOS_BTR_BEGIN + 1),
+	VOS_BTR_AKEY			= (VOS_BTR_BEGIN + 1),
 	/** single value + epoch tree */
-	VOS_BTR_SINGV		= (VOS_BTR_BEGIN + 2),
+	VOS_BTR_SINGV			= (VOS_BTR_BEGIN + 2),
 	/** object index table */
-	VOS_BTR_OBJ_TABLE	= (VOS_BTR_BEGIN + 3),
+	VOS_BTR_OBJ_TABLE		= (VOS_BTR_BEGIN + 3),
 	/** container index table */
-	VOS_BTR_CONT_TABLE	= (VOS_BTR_BEGIN + 4),
+	VOS_BTR_CONT_TABLE		= (VOS_BTR_BEGIN + 4),
 	/** DAOS two-phase commit transation table */
-	VOS_BTR_DTX_TABLE	= (VOS_BTR_BEGIN + 5),
+	VOS_BTR_DTX_ACTIVE_TABLE	= (VOS_BTR_BEGIN + 5),
+	/** DAOS two-phase commit transation table */
+	VOS_BTR_DTX_COMMITTED_TABLE	= (VOS_BTR_BEGIN + 6),
 	/** The objects with committable DTXs in DRAM */
-	VOS_BTR_DTX_COS		= (VOS_BTR_BEGIN + 6),
+	VOS_BTR_DTX_COS			= (VOS_BTR_BEGIN + 7),
 	/** the last reserved tree class */
 	VOS_BTR_END,
 };

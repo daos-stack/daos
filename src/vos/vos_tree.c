@@ -1036,6 +1036,7 @@ int
 key_tree_punch(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov,
 	       d_iov_t *val_iov, int flags)
 {
+	struct dtx_handle	*dth;
 	struct vos_key_bundle	*kbund;
 	struct vos_rec_bundle	*rbund;
 	struct vos_krec_df	*krec;
@@ -1084,7 +1085,8 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov,
 	if (rc != 0 || replay)
 		return rc;
 
-	if (vos_dth_get() == NULL) { /* delete the max epoch */
+	dth = vos_dth_get();
+	if (dth == NULL || dth->dth_single_participator) {
 		struct umem_instance	*umm = vos_obj2umm(obj);
 		struct vos_krec_df	*krec2;
 		struct vos_key_bundle	 kbund2;

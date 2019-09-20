@@ -49,7 +49,7 @@ dtx_aggregate(void *arg)
 	while (!cont->sc_closing) {
 		int	rc;
 
-		rc = vos_dtx_aggregate(cont->sc_hdl, DTX_AGG_YIELD_INTERVAL,
+		rc = vos_dtx_aggregate(cont->sc_hdl, DTX_YIELD_CYCLE,
 				       DTX_AGG_THRESHOLD_AGE_LOWER);
 		if (rc != 0)
 			break;
@@ -205,7 +205,7 @@ dtx_handle_init(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 		daos_epoch_t epoch, uint64_t dkey_hash, uint32_t pm_ver,
 		uint32_t intent, struct dtx_conflict_entry *conflict,
 		struct dtx_id *dti_cos, int dti_cos_count, bool leader,
-		bool no_rep, struct dtx_handle *dth)
+		bool single_participator, struct dtx_handle *dth)
 {
 	dth->dth_xid = *dti;
 	dth->dth_oid = *oid;
@@ -216,7 +216,7 @@ dtx_handle_init(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 	dth->dth_ver = pm_ver;
 	dth->dth_intent = intent;
 	dth->dth_leader = leader ? 1 : 0;
-	dth->dth_non_rep = no_rep ? 1 : 0;
+	dth->dth_single_participator = single_participator ? 1 : 0;
 	dth->dth_dti_cos = dti_cos;
 	dth->dth_dti_cos_count = dti_cos_count;
 	dth->dth_conflict = conflict;
@@ -274,7 +274,6 @@ dtx_leader_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 		return 0;
 	}
 
-	dlh->dlh_handled_time = crt_hlc_get();
 	dlh->dlh_future = ABT_FUTURE_NULL;
 	D_ALLOC(dlh->dlh_subs, tgts_cnt * sizeof(*dlh->dlh_subs));
 	if (dlh->dlh_subs == NULL)
@@ -582,50 +581,8 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *cont_hdl,
 	if (result < 0 || rc < 0 || daos_is_zero_dti(&dth->dth_xid))
 		D_GOTO(fail, result = (result == 0 ? rc : result));
 
-	/* If the DTX is started befoe DTX resync operation (for rebuild),
-	 * then it is possbile that the DTX resync ULT may have aborted
-	 * or committed the DTX during current ULT waiting for the reply.
-	 * let's check DTX status locally before marking as 'committable'.
-	 */
-	if (dlh->dlh_handled_time <= cont->sc_dtx_resync_time) {
-		rc = vos_dtx_check(cont->sc_hdl, &dth->dth_xid);
-		switch (rc) {
-		case DTX_ST_PREPARED:
-			rc = vos_dtx_lookup_cos(dth->dth_coh, &dth->dth_oid,
-					&dth->dth_xid, dth->dth_dkey_hash,
-					dth->dth_intent == DAOS_INTENT_PUNCH ?
-					true : false);
-			/* The resync ULT has already added it into the CoS
-			 * cache, current ULT needs to do nothing.
-			 */
-			if (rc == 0)
-				D_GOTO(out_free, result = 0);
-
-			/* normal case, then add it to CoS cache. */
-			if (rc == -DER_NONEXIST)
-				break;
-
-			D_GOTO(fail, result = (rc >= 0 ? -DER_INVAL : rc));
-		case DTX_ST_COMMITTED:
-			/* The DTX has been committed by resync ULT by race,
-			 * set dth_sync to indicate that in log.
-			 */
-			dth->dth_sync = 1;
-			D_GOTO(out_free, result = 0);
-		case -DER_NONEXIST:
-			/* The DTX has been aborted by resync ULT, ask the
-			 * client to retry via returning -DER_INPROGRESS.
-			 */
-			result = -DER_INPROGRESS;
-			goto out_free;
-		default:
-			result = rc >= 0 ? -DER_INVAL : rc;
-			goto fail;
-		}
-	}
-
 	rc = vos_dtx_add_cos(dth->dth_coh, &dth->dth_oid, &dth->dth_xid,
-			     dth->dth_dkey_hash, dth->dth_epoch,
+			     dth->dth_dkey_hash, dth->dth_epoch, dth->dth_gen,
 			     dth->dth_intent == DAOS_INTENT_PUNCH ?
 			     true : false, true);
 	if (rc == -DER_INPROGRESS) {
@@ -635,6 +592,18 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *cont_hdl,
 		       dth->dth_epoch);
 		D_GOTO(fail, result = rc);
 	}
+
+	/* The DTX has been aborted by resync ULT, ask the client to retry. */
+	if (rc == -DER_NONEXIST) {
+		D_WARN(DF_UUID": Fail to add DTX "DF_DTI" with eph "DF_U64
+		       "to CoS because of being aborted by race\n",
+		       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid),
+		       dth->dth_epoch);
+		D_GOTO(out_free, result = -DER_INPROGRESS);
+	}
+
+	if (rc == -DER_ALREADY)
+		D_GOTO(out_free, result = 0);
 
 	if (rc != 0) {
 		D_WARN(DF_UUID": Fail to add DTX "DF_DTI" to CoS cache: %d. "
@@ -673,7 +642,8 @@ out_free:
 		(unsigned long long)dth->dth_dkey_hash,
 		dth->dth_intent == DAOS_INTENT_PUNCH ? "Punch" : "Update",
 		dth->dth_sync ? "sync" : "async",
-		dth->dth_non_rep ? "non-replicated" : "replicated", result);
+		dth->dth_single_participator ? "single-participator" :
+		"multiple-participators", result);
 
 	if (dth->dth_dti_cos != NULL)
 		D_FREE(dth->dth_dti_cos);

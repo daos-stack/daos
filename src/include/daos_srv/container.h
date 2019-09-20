@@ -59,8 +59,6 @@ struct ds_cont_child {
 	ABT_mutex		 sc_mutex;
 	ABT_cond		 sc_dtx_resync_cond;
 	void			*sc_dtx_flush_cbdata;
-	/* The time for the latest DTX resync operation. */
-	uint64_t		 sc_dtx_resync_time;
 	uint32_t		 sc_dtx_resyncing:1,
 				 sc_dtx_aggregating:1,
 				 sc_closing:1,

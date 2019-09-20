@@ -301,12 +301,13 @@ int
 vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 	     daos_epoch_t epoch, uint32_t flags, struct vos_obj_df *obj)
 {
-	struct oi_hkey	*hkey;
-	struct oi_key	 key;
-	d_iov_t	 key_iov;
-	d_iov_t	 val_iov;
-	int		 rc = 0;
-	bool		 replay = (flags & VOS_OF_REPLAY_PC);
+	struct dtx_handle	*dth;
+	struct oi_hkey		*hkey;
+	struct oi_key		 key;
+	d_iov_t			 key_iov;
+	d_iov_t			 val_iov;
+	int			 rc = 0;
+	bool			 replay = (flags & VOS_OF_REPLAY_PC);
 
 	D_DEBUG(DB_TRACE, "Punch obj "DF_UOID", epoch="DF_U64".\n",
 		DP_UOID(oid), epoch);
@@ -337,7 +338,8 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 	if (rc != 0 || replay)
 		goto out;
 
-	if (vos_dth_get() == NULL) {
+	dth = vos_dth_get();
+	if (dth == NULL || dth->dth_single_participator) {
 		struct vos_obj_df *tmp;
 
 		D_ASSERT((obj->vo_oi_attr & VOS_OI_PUNCHED) == 0);
