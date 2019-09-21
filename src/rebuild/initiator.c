@@ -817,7 +817,6 @@ rebuild_obj_ult(void *data)
 	buf_len = ITER_BUF_SIZE;
 	while (1) {
 		daos_key_desc_t	kds[KDS_NUM] = { 0 };
-		daos_epoch_range_t eprs[KDS_NUM];
 		uint32_t	num = KDS_NUM;
 		daos_size_t	size;
 
@@ -831,7 +830,7 @@ rebuild_obj_ult(void *data)
 		sgl.sg_iovs = &iov;
 
 		rc = dsc_obj_list_obj(oh, arg->epoch, NULL, NULL, &size, &num,
-				      kds, eprs, &sgl, &anchor, &dkey_anchor,
+				      kds, &sgl, &anchor, &dkey_anchor,
 				      &akey_anchor);
 
 		if (rc == -DER_KEY2BIG) {
@@ -865,9 +864,6 @@ rebuild_obj_ult(void *data)
 		enum_arg.kds_len = num;
 		enum_arg.sgl = &sgl;
 		enum_arg.sgl_idx = 1;
-		enum_arg.eprs = eprs;
-		enum_arg.eprs_cap = KDS_NUM;
-		enum_arg.eprs_len = num;
 		rc = dss_enum_unpack(VOS_ITER_DKEY, &enum_arg,
 				     rebuild_one_queue_cb, arg);
 		if (rc) {

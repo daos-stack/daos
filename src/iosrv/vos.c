@@ -31,41 +31,6 @@
 #include <daos_srv/daos_server.h>
 #include <daos_srv/vos.h>
 #include <daos/object.h>
-
-/**
- * The type of the packing data.
- */
-enum {
-	PACK_OBJ_TYPE,
-	PACK_DKEY_TYPE,
-	PACK_AKEY_TYPE,
-	PACK_SINGLE_TYPE,
-	PACK_RECX_TYPE,
-	PACK_DKEY_EPOCH_TYPE,
-	PACK_AKEY_EPOCH_TYPE,
-};
-
-static int
-vos_iter_type_2pack_type(int vos_type)
-{
-	switch (vos_type) {
-	case VOS_ITER_OBJ:
-		return PACK_OBJ_TYPE;
-	case VOS_ITER_DKEY:
-		return PACK_DKEY_TYPE;
-	case VOS_ITER_AKEY:
-		return PACK_AKEY_TYPE;
-	case VOS_ITER_SINGLE:
-		return PACK_SINGLE_TYPE;
-	case VOS_ITER_RECX:
-		return PACK_RECX_TYPE;
-	default:
-		D_ASSERTF(0, "Invalid type %d\n", vos_type);
-	}
-
-	return 0;
-}
-
 static int
 fill_recxs(daos_handle_t ih, vos_iter_entry_t *key_ent,
 	   struct dss_enum_arg *arg, vos_iter_type_t type)
@@ -209,13 +174,6 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	arg->kds[arg->kds_len].kd_val_type = type;
 	arg->kds_len++;
 
-	if (arg->eprs != NULL) {
-		arg->eprs[arg->eprs_len].epr_lo = key_ent->ie_epoch;
-		arg->eprs[arg->eprs_len].epr_hi = DAOS_EPOCH_MAX;
-		arg->eprs_len++;
-	}
-
-
 	D_ASSERT(iovs[arg->sgl_idx].iov_len + size <
 		 iovs[arg->sgl_idx].iov_buf_len);
 	memcpy(iovs[arg->sgl_idx].iov_buf + iovs[arg->sgl_idx].iov_len,
@@ -229,12 +187,12 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 
 		arg->kds[arg->kds_len].kd_key_len = pi_size;
 		arg->kds[arg->kds_len].kd_csum_len = 0;
-		if (type == PACK_AKEY_TYPE)
+		if (type == OBJ_ITER_AKEY)
 			arg->kds[arg->kds_len].kd_val_type =
-						PACK_AKEY_EPOCH_TYPE;
+						OBJ_ITER_AKEY_EPOCH;
 		else
 			arg->kds[arg->kds_len].kd_val_type =
-						PACK_DKEY_EPOCH_TYPE;
+						OBJ_ITER_DKEY_EPOCH;
 		arg->kds_len++;
 
 		D_ASSERT(iovs[arg->sgl_idx].iov_len + size <
@@ -242,7 +200,7 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 		memcpy(iovs[arg->sgl_idx].iov_buf + iovs[arg->sgl_idx].iov_len,
 		       key_ent->ie_key_punches.pi_punches, size);
 
-		iovs[arg->sgl_idx].iov_len += size;
+		iovs[arg->sgl_idx].iov_len += pi_size;
 	}
 
 	D_DEBUG(DB_IO, "Pack key "DF_KEY" iov total %zd kds len %d eph "
@@ -356,18 +314,6 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	if (arg->last_type != type) {
 		arg->last_type = type;
 		bump_kds_len = true;
-		/** This eprs will not be used during rebuild,
-		 * because the epoch for each record will be returned
-		 * through obj_enum_rec anyway, see fill_rec().
-		 * This "empty" eprs is just for eprs and kds to
-		 * be matched, so it would be easier for unpacking
-		 * see dss_enum_unpack().
-		 */
-		if (arg->eprs != NULL) {
-			arg->eprs[arg->eprs_len].epr_lo = DAOS_EPOCH_MAX;
-			arg->eprs[arg->eprs_len].epr_hi = DAOS_EPOCH_MAX;
-			arg->eprs_len++;
-		}
 	}
 out:
 	if (bump_kds_len)
@@ -474,7 +420,7 @@ unpack_recxs(daos_iod_t *iod, int *recxs_cap, d_sg_list_t *sgl,
 	if (kds == NULL)
 		return 0;
 
-	if (kds->kd_val_type == PACK_SINGLE_TYPE)
+	if (kds->kd_val_type == OBJ_ITER_SINGLE)
 		type = DAOS_IOD_SINGLE;
 	else
 		type = DAOS_IOD_ARRAY;
@@ -753,20 +699,20 @@ enum_unpack_key(daos_key_desc_t *kds, char *key_data,
 	daos_key_t	key;
 	int		rc = 0;
 
-	D_ASSERT(kds->kd_val_type == PACK_DKEY_TYPE ||
-		 kds->kd_val_type == PACK_AKEY_TYPE);
+	D_ASSERT(kds->kd_val_type == OBJ_ITER_DKEY ||
+		 kds->kd_val_type == OBJ_ITER_AKEY);
 
 	key.iov_buf = key_data;
 	key.iov_buf_len = kds->kd_key_len;
 	key.iov_len = kds->kd_key_len;
-	if (kds->kd_val_type == PACK_AKEY_TYPE &&
+	if (kds->kd_val_type == OBJ_ITER_AKEY &&
 	    io->ui_dkey.iov_buf == NULL) {
 		D_ERROR("No dkey for akey "DF_KEY" invalid buf.\n",
 			DP_KEY(&key));
 		return -DER_INVAL;
 	}
 
-	if (kds->kd_val_type == PACK_DKEY_TYPE) {
+	if (kds->kd_val_type == OBJ_ITER_DKEY) {
 		if (io->ui_dkey.iov_len == 0) {
 			daos_iov_copy(&io->ui_dkey, &key);
 		} else if (!daos_key_match(&io->ui_dkey, &key)) {
@@ -813,7 +759,7 @@ enum_unpack_punched_ephs(daos_key_desc_t *kds, char *data,
 {
 	int idx;
 
-	if (kds->kd_val_type == PACK_DKEY_EPOCH_TYPE) {
+	if (kds->kd_val_type == OBJ_ITER_DKEY_EPOCH) {
 		io->ui_dkey_punch_ephs.p_num =
 			kds->kd_key_len/sizeof(daos_epoch_t);
 		D_ALLOC_ARRAY(io->ui_dkey_punch_ephs.p_epochs,
@@ -978,7 +924,7 @@ dss_enum_unpack(vos_iter_type_t vos_type, struct dss_enum_arg *arg,
 
 	dss_enum_unpack_io_init(&io, iods, recxs_caps, sgls, punched_ephs,
 				DSS_ENUM_UNPACK_MAX_IODS);
-	if (type != PACK_OBJ_TYPE)
+	if (type != OBJ_ITER_OBJ)
 		io.ui_oid = arg->oid;
 
 	D_ASSERTF(arg->sgl->sg_nr > 0, "%u\n", arg->sgl->sg_nr);
@@ -994,20 +940,20 @@ dss_enum_unpack(vos_iter_type_t vos_type, struct dss_enum_arg *arg,
 
 		D_ASSERT(kds->kd_key_len > 0);
 		switch (kds->kd_val_type) {
-		case PACK_OBJ_TYPE:
+		case OBJ_ITER_OBJ:
 			rc = enum_unpack_oid(&arg->kds[i], ptr, &io, cb,
 					     cb_arg);
 			break;
-		case PACK_DKEY_TYPE:
-		case PACK_AKEY_TYPE:
+		case OBJ_ITER_DKEY:
+		case OBJ_ITER_AKEY:
 			rc = enum_unpack_key(kds, ptr, &io, cb, cb_arg);
 			break;
-		case PACK_RECX_TYPE:
-		case PACK_SINGLE_TYPE:
+		case OBJ_ITER_RECX:
+		case OBJ_ITER_SINGLE:
 			rc = enum_unpack_recxs(kds, ptr, &io, cb, cb_arg);
 			break;
-		case PACK_DKEY_EPOCH_TYPE:
-		case PACK_AKEY_EPOCH_TYPE:
+		case OBJ_ITER_DKEY_EPOCH:
+		case OBJ_ITER_AKEY_EPOCH:
 			rc = enum_unpack_punched_ephs(kds, ptr, &io);
 			break;
 		default:

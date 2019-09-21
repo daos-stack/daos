@@ -117,6 +117,29 @@ typedef enum {
 	VOS_ITER_DTX,
 } vos_iter_type_t;
 
+static inline int
+vos_iter_type_2pack_type(int vos_type)
+{
+	switch (vos_type) {
+	case VOS_ITER_NONE:
+		return OBJ_ITER_NONE;
+	case VOS_ITER_OBJ:
+		return OBJ_ITER_OBJ;
+	case VOS_ITER_DKEY:
+		return OBJ_ITER_DKEY;
+	case VOS_ITER_AKEY:
+		return OBJ_ITER_AKEY;
+	case VOS_ITER_SINGLE:
+		return OBJ_ITER_SINGLE;
+	case VOS_ITER_RECX:
+		return OBJ_ITER_RECX;
+	default:
+		D_ASSERTF(0, "Invalid type %d\n", vos_type);
+	}
+
+	return 0;
+}
+
 /** epoch logic expression for the single value iterator */
 typedef enum {
 	VOS_IT_EPC_LE		= 0,
