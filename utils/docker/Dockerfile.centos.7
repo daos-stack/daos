@@ -60,7 +60,8 @@ RUN yum -y install epel-release; \
         make meson nasm ninja-build numactl-devel openssl-devel        \
         pandoc patch pylint python python-devel python36-devel         \
         python-pep8 python-pygit2 python2-pygithub python-requests     \
-        readline-devel scons sg3_utils ShellCheck yasm pciutils
+        readline-devel scons sg3_utils ShellCheck yasm pciutils        \
+        valgrind-devel
 
 # DAOS specific
 RUN yum -y install \
