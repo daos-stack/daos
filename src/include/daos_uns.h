@@ -48,6 +48,8 @@ struct duns_attr_t {
 	daos_oclass_id_t	da_oclass;
 	/** Default Chunks size for all files in container */
 	daos_size_t		da_chunk_size;
+	/** Path is on Lustre */
+	bool			da_on_lustre;
 };
 
 /**
@@ -85,6 +87,16 @@ duns_link_path(const char *path, const char *sysname,
 int
 duns_resolve_path(const char *path, struct duns_attr_t *attr);
 
+/**
+ * If dynamicaly resolved, will point to the llapi_unlink_foreign() Lustre
+ * API, which needs to be used to remove foreign DAOS file/dir.
+ *
+ * \param[in]	path	Valid path in an existing Lustre namespace.
+ *
+ * \return		0 on Success. Negative on Failure.
+ */
+extern int
+(*unlink_foreign)(char *);
 
 #if defined(__cplusplus)
 }
