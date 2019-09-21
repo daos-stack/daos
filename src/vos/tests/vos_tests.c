@@ -106,6 +106,8 @@ main(int argc, char **argv)
 	int	keys;
 	bool	nest_iterators = false;
 
+	d_register_alt_assert(mock_assert);
+
 	static struct option long_options[] = {
 		{"all_tests",		required_argument, 0, 'A'},
 		{"pool_tests",		no_argument, 0, 'p'},
