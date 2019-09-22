@@ -82,13 +82,15 @@ class TestDaosApiBase(ObjectWithParameters):
     # pylint: disable=too-few-public-methods
     """A base class for functional testing of DaosPools objects."""
 
-    def __init__(self, cb_handler=None):
+    def __init__(self, namespace, cb_handler=None):
         """Create a TestDaosApi object.
 
         Args:
+            namespace (str): yaml namespace (path to parameters)
             cb_handler (CallbackHandler, optional): callback object to use with
                 the API methods. Defaults to None.
         """
+        super(TestDaosApiBase, self).__init__(namespace)
         self.cb_handler = cb_handler
 
     def _call_method(self, method, kwargs):
@@ -118,7 +120,7 @@ class TestPool(TestDaosApiBase):
             cb_handler (CallbackHandler, optional): callback object to use with
                 the API methods. Defaults to None.
         """
-        super(TestPool, self).__init__(cb_handler)
+        super(TestPool, self).__init__("/run/pool/*", cb_handler)
         self.context = context
         self.log = log
         self.uid = os.geteuid()
@@ -137,15 +139,6 @@ class TestPool(TestDaosApiBase):
         self.info = None
         self.svc_ranks = None
         self.connected = False
-
-    def get_params(self, test, path="/run/pool/*"):
-        """Get the pool parameters from the yaml file.
-
-        Args:
-            test (Test): avocado Test object
-            path (str, optional): yaml namespace. Defaults to "/run/pool/*".
-        """
-        super(TestPool, self).get_params(test, path)
 
     @fail_on(DaosApiError)
     def create(self):
@@ -228,7 +221,8 @@ class TestPool(TestDaosApiBase):
         if self.pool:
             self.disconnect()
             self.log.info("Destroying pool %s", self.uuid)
-            self._call_method(self.pool.destroy, {"force": force})
+            if self.pool.attached:
+                self._call_method(self.pool.destroy, {"force": force})
             self.pool = None
             self.uuid = None
             self.info = None
@@ -262,6 +256,11 @@ class TestPool(TestDaosApiBase):
             pi_leader (int, optional): pool leader. Defaults to None.
             pi_bits (int, optional): pool bits. Defaults to None.
 
+        Note:
+            Arguments may also be provided as a string with a number preceeded
+            by '<', '<=', '>', or '>=' for other comparisions besides the
+            default '=='.
+
         Returns:
             bool: True if at least one expected value is specified and all the
                 specified values match; False otherwise
@@ -292,6 +291,11 @@ class TestPool(TestDaosApiBase):
             ps_ntargets (int, optional): number of targets. Defaults to None.
             ps_padding (int, optional): space padding. Defaults to None.
 
+        Note:
+            Arguments may also be provided as a string with a number preceeded
+            by '<', '<=', '>', or '>=' for other comparisions besides the
+            default '=='.
+
         Returns:
             bool: True if at least one expected value is specified and all the
                 specified values match; False otherwise
@@ -320,6 +324,11 @@ class TestPool(TestDaosApiBase):
         Args:
             s_total (list, optional): total space per device. Defaults to None.
             s_free (list, optional): free space per device. Defaults to None.
+
+        Note:
+            Arguments may also be provided as a string with a number preceeded
+            by '<', '<=', '>', or '>=' for other comparisions besides the
+            default '=='.
 
         Returns:
             bool: True if at least one expected value is specified and all the
@@ -355,6 +364,11 @@ class TestPool(TestDaosApiBase):
             rs_rec_nr (int, optional): number of rebuilt records.
                 Defaults to None.
 
+        Note:
+            Arguments may also be provided as a string with a number preceeded
+            by '<', '<=', '>', or '>=' for other comparisions besides the
+            default '=='.
+
         Returns:
             bool: True if at least one expected value is specified and all the
                 specified values match; False otherwise
@@ -373,7 +387,10 @@ class TestPool(TestDaosApiBase):
         Args:
             check_list (list): a list of tuples containing the name of the pool
                 information attribute to check, the current value of the
-                attribute, and the expected value of the attribute.
+                attribute, and the expected value of the attribute. If the
+                expected value is specified as a string with a number preceeded
+                by '<', '<=', '>', or '>=' then this comparision will be used
+                instead of the defult '=='.
 
         Returns:
             bool: True if at least one check has been specified and all the
@@ -382,6 +399,7 @@ class TestPool(TestDaosApiBase):
         """
         check_status = len(check_list) > 0
         for check, actual, expect in check_list:
+            # Determine which comparision to utilize for this check
             compare = ("==", lambda x, y: x == y, "does not match")
             if isinstance(expect, str):
                 comparisions = {
@@ -393,7 +411,7 @@ class TestPool(TestDaosApiBase):
                         lambda x, y: x >= y, "is too small or does not match"),
                 }
                 for key, val in comparisions.items():
-                    # If the expected value is preceeded by one of the know
+                    # If the expected value is preceeded by one of the known
                     # comparision keys, use the comparision and remove the key
                     # from the expected value
                     if expect[:len(key)] == key:
@@ -408,11 +426,11 @@ class TestPool(TestDaosApiBase):
             self.log.info(
                 "Verifying the pool %s: %s %s %s",
                 check, actual, compare[0], expect)
-            check_status = compare[1](actual, expect)
-            if not check_status:
+            if not compare[1](actual, expect):
                 msg = "  The {} {}: actual={}, expected={}".format(
                     check, compare[2], actual, expect)
                 self.log.error(msg)
+                check_status = False
         return check_status
 
     def rebuild_complete(self):
@@ -709,7 +727,7 @@ class TestContainer(TestDaosApiBase):
             cb_handler (CallbackHandler, optional): callback object to use with
                 the API methods. Defaults to None.
         """
-        super(TestContainer, self).__init__(cb_handler)
+        super(TestContainer, self).__init__("/run/container/*", cb_handler)
         self.pool = pool
         self.log = self.pool.log
 
@@ -723,16 +741,6 @@ class TestContainer(TestDaosApiBase):
         self.uuid = None
         self.opened = False
         self.written_data = []
-
-    def get_params(self, test, path="/run/container/*"):
-        """Get the container parameters from the yaml file.
-
-        Args:
-            test (Test): avocado Test object
-            path (str, optional): yaml namespace. Defaults to
-                "/run/container/*".
-        """
-        super(TestContainer, self).get_params(test, path)
 
     @fail_on(DaosApiError)
     def create(self, uuid=None):
@@ -800,7 +808,8 @@ class TestContainer(TestDaosApiBase):
         if self.container:
             self.close()
             self.log.info("Destroying container %s", self.uuid)
-            self._call_method(self.container.destroy, {"force": force})
+            if self.container.attached:
+                self._call_method(self.container.destroy, {"force": force})
             self.container = None
             self.written_data = []
             return True

@@ -1619,10 +1619,9 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 		d_list_for_each_entry_safe(rdone, tmp, &puller->rp_one_list,
 					   ro_list) {
 			d_list_del_init(&rdone->ro_list);
-			D_WARN(DF_UUID" left rebuild rdone %*.s\n",
+			D_WARN(DF_UUID" left rebuild rdone key="DF_KEY"\n",
 			       DP_UUID(rpt->rt_pool_uuid),
-			      (int)rdone->ro_dkey.iov_len,
-			      (char *)rdone->ro_dkey.iov_buf);
+			       DP_KEY(&rdone->ro_dkey));
 			rebuild_one_destroy(rdone);
 		}
 	}
@@ -1687,9 +1686,14 @@ rebuild_tgt_status_check(void *arg)
 		memset(&iv, 0, sizeof(iv));
 		uuid_copy(iv.riv_pool_uuid, rpt->rt_pool_uuid);
 
-		D_ASSERT(status.obj_count >= rpt->rt_reported_obj_cnt);
-		D_ASSERT(status.rec_count >= rpt->rt_reported_rec_cnt);
 		D_ASSERT(rpt->rt_toberb_objs >= rpt->rt_reported_toberb_objs);
+		/* rebuild_tgt_query above possibly lost some counter
+		 * when target being excluded.
+		 */
+		if (status.obj_count < rpt->rt_reported_obj_cnt)
+			status.obj_count = rpt->rt_reported_obj_cnt;
+		if (status.rec_count < rpt->rt_reported_rec_cnt)
+			status.rec_count = rpt->rt_reported_rec_cnt;
 		if (rpt->rt_re_report) {
 			iv.riv_toberb_obj_count = rpt->rt_toberb_objs;
 			iv.riv_obj_count = status.obj_count;

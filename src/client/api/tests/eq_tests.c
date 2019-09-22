@@ -989,6 +989,8 @@ main(int argc, char **argv)
 	int		test_fail = 0;
 	int		rc;
 
+	d_register_alt_assert(mock_assert);
+
 	setenv("DAOS_SINGLETON_CLI", "1", 1);
 	setenv("OFI_INTERFACE", "lo", 1);
 

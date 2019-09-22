@@ -35,6 +35,9 @@
 extern int dts_obj_class;
 extern int dts_obj_replica_cnt;
 
+extern int dts_ec_obj_class;
+extern int dts_ec_grp_size;
+
 #define UPDATE_CSUM_SIZE	32
 #define IOREQ_IOD_NR	5
 #define IOREQ_SG_NR	5

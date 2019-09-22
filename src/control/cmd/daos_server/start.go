@@ -57,22 +57,22 @@ func (cmd *startCmd) setCLIOverrides() error {
 		cmd.config.TransportConfig.AllowInsecure = true
 	}
 	if cmd.Port > 0 {
-		cmd.config.Port = int(cmd.Port)
+		cmd.config.ControlPort = int(cmd.Port)
 	}
 	if cmd.MountPath != "" {
-		cmd.config.ScmMountPath = cmd.MountPath
+		cmd.config.WithScmMountPoint(cmd.MountPath)
 	}
 	if cmd.Group != "" {
-		cmd.config.SystemName = cmd.Group
+		cmd.config.WithSystemName(cmd.Group)
 	}
 	if cmd.SocketDir != "" {
-		cmd.config.SocketDir = cmd.SocketDir
+		cmd.config.WithSocketDir(cmd.SocketDir)
 	}
 	if cmd.Modules != nil {
-		cmd.config.Modules = *cmd.Modules
+		cmd.config.WithModules(*cmd.Modules)
 	}
 	if cmd.Attach != nil {
-		cmd.config.Attach = *cmd.Attach
+		cmd.config.WithAttachInfo(*cmd.Attach)
 	}
 
 	host, err := os.Hostname()
@@ -84,27 +84,20 @@ func (cmd *startCmd) setCLIOverrides() error {
 	}
 
 	for _, srv := range cmd.config.Servers {
-		srv.Hostname = host
+		srv.WithHostname(host)
 
-		if cmd.MountPath != "" {
-			// override each per-server config in addition to global value
-			srv.ScmMount = cmd.MountPath
-		} else if srv.ScmMount == "" {
-			// if scm not specified for server, apply global
-			srv.ScmMount = cmd.config.ScmMountPath
-		}
 		if cmd.Targets > 0 {
-			srv.Targets = int(cmd.Targets)
+			srv.WithTargetCount(int(cmd.Targets))
 		}
 		if cmd.NrXsHelpers != nil {
-			srv.NrXsHelpers = int(*cmd.NrXsHelpers)
+			srv.WithHelperStreamCount(int(*cmd.NrXsHelpers))
 		}
 		if cmd.FirstCore > 0 {
-			srv.FirstCore = int(cmd.FirstCore)
+			srv.WithServiceThreadCore(int(cmd.FirstCore))
 		}
 	}
 
-	return cmd.config.SetIOServerFlags()
+	return cmd.config.Validate()
 }
 
 func (cmd *startCmd) configureLogging() error {
@@ -171,9 +164,5 @@ func (cmd *startCmd) Execute(args []string) error {
 		return err
 	}
 
-	cmd.log.Debugf("cfg: %+v", cmd.config)
-	for _, srv := range cmd.config.Servers {
-		cmd.log.Debugf("iosrv: %+v", srv)
-	}
 	return cmd.start(cmd.log, cmd.config)
 }

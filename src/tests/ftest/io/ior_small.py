@@ -46,6 +46,6 @@ class IorSmall(IorTestBase):
             All above three cases to be run with single client and
                 multiple client processes in two separate nodes.
 
-        :avocado: tags=all,daosio,small,pr,hw,iorsmall
+        :avocado: tags=all,daosio,small,hw,iorsmall
         """
         self.run_ior_with_pool()

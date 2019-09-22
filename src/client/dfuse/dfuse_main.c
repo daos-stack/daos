@@ -103,8 +103,6 @@ int
 main(int argc, char **argv)
 {
 	struct dfuse_info	*dfuse_info = NULL;
-	uuid_t			pool_uuid;
-	uuid_t			co_uuid;
 	char			*svcl = NULL;
 	struct dfuse_dfs	*dfs = NULL;
 	char			c;
@@ -118,14 +116,11 @@ main(int argc, char **argv)
 		{"group",		required_argument, 0, 'g'},
 		{"mountpoint",		required_argument, 0, 'm'},
 		{"singlethread",	no_argument,	   0, 'S'},
+		{"foreground",		no_argument,	   0, 'f'},
 		{"help",		no_argument,	   0, 'h'},
 		{"prefix",		required_argument, 0, 'p'},
 		{0, 0, 0, 0}
 	};
-
-	rc = daos_init();
-	if (rc != -DER_SUCCESS)
-		D_GOTO(out, ret = rc);
 
 	D_ALLOC_PTR(dfuse_info);
 	if (!dfuse_info)
@@ -134,7 +129,7 @@ main(int argc, char **argv)
 	dfuse_info->di_threaded = true;
 
 	while (1) {
-		c = getopt_long(argc, argv, "p:c:s:g:m:Sh",
+		c = getopt_long(argc, argv, "p:c:s:g:m:Sfh",
 				long_options, NULL);
 
 		if (c == -1)
@@ -159,6 +154,9 @@ main(int argc, char **argv)
 		case 'S':
 			dfuse_info->di_threaded = false;
 			break;
+		case 'f':
+			dfuse_info->di_foreground = true;
+			break;
 		case 'h':
 			exit(0);
 			break;
@@ -166,6 +164,11 @@ main(int argc, char **argv)
 			exit(1);
 			break;
 		}
+	}
+
+	if (!dfuse_info->di_foreground && getenv("PMIX_RANK")) {
+		DFUSE_LOG_WARNING("Not running in background under orterun");
+		dfuse_info->di_foreground = true;
 	}
 
 	if (!dfuse_info->di_mountpoint) {
@@ -183,17 +186,15 @@ main(int argc, char **argv)
 
 	DFUSE_TRA_ROOT(dfuse_info, "dfuse_info");
 
-	if (dfuse_info->di_pool &&
-	    (uuid_parse(dfuse_info->di_pool, pool_uuid) < 0)) {
-		DFUSE_LOG_ERROR("Invalid pool uuid");
-		D_GOTO(out_dfuse, ret = -DER_INVAL);
+	if (!dfuse_info->di_foreground) {
+		rc = daemon(0, 0);
+		if (rc)
+			return daos_errno2der(rc);
 	}
 
-	if (dfuse_info->di_cont &&
-	    (uuid_parse(dfuse_info->di_cont, co_uuid) < 0)) {
-		DFUSE_LOG_ERROR("Invalid container uuid");
-		D_GOTO(out_dfuse, ret = -DER_INVAL);
-	}
+	rc = daos_init();
+	if (rc != -DER_SUCCESS)
+		D_GOTO(out, ret = rc);
 
 	dfuse_info->di_svcl = daos_rank_list_parse(svcl, ":");
 	if (dfuse_info->di_svcl == NULL) {
@@ -207,8 +208,13 @@ main(int argc, char **argv)
 	}
 
 	if (dfuse_info->di_pool) {
+		if (uuid_parse(dfuse_info->di_pool, dfs->dfs_pool) < 0) {
+			DFUSE_LOG_ERROR("Invalid pool uuid");
+			D_GOTO(out_dfs, ret = -DER_INVAL);
+		}
+
 		/** Connect to DAOS pool */
-		rc = daos_pool_connect(pool_uuid, dfuse_info->di_group,
+		rc = daos_pool_connect(dfs->dfs_pool, dfuse_info->di_group,
 				       dfuse_info->di_svcl, DAOS_PC_RW,
 				       &dfs->dfs_poh, &dfs->dfs_pool_info,
 				       NULL);
@@ -218,10 +224,16 @@ main(int argc, char **argv)
 		}
 
 		if (dfuse_info->di_cont) {
+
+			if (uuid_parse(dfuse_info->di_cont, dfs->dfs_cont) < 0) {
+				DFUSE_LOG_ERROR("Invalid container uuid");
+				D_GOTO(out_pool, ret = -DER_INVAL);
+			}
+
 			/** Try to open the DAOS container (the mountpoint) */
-			rc = daos_cont_open(dfs->dfs_poh, co_uuid, DAOS_COO_RW,
-					    &dfs->dfs_coh, &dfs->dfs_co_info,
-					    NULL);
+			rc = daos_cont_open(dfs->dfs_poh, dfs->dfs_cont,
+					    DAOS_COO_RW, &dfs->dfs_coh,
+					    &dfs->dfs_co_info, NULL);
 			if (rc) {
 				DFUSE_LOG_ERROR("Failed container open (%d)",
 						rc);

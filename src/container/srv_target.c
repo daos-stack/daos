@@ -499,11 +499,28 @@ cont_child_destroy_one(void *vin)
 		DP_CONT(pool->spc_uuid, in->tdi_uuid));
 
 	rc = vos_cont_destroy(pool->spc_hdl, in->tdi_uuid);
-	if (rc == -DER_NONEXIST)
+	if (rc == -DER_NONEXIST) {
 		/** VOS container creation is effectively delayed until
 		 * container open time, so it might legitimately not exist if
 		 * the container has never been opened */
 		rc = 0;
+	}
+	/* XXX there might be a race between GC and pool destroy, let's do
+	 * synchronous GC for now.
+	 */
+	dss_gc_run(-1);
+
+	/*
+	 * Force VEA to expire all the just freed extents and make them
+	 * available for allocation immediately.
+	 */
+	vos_pool_ctl(pool->spc_hdl, VOS_PO_CTL_VEA_FLUSH);
+	if (rc) {
+		D_ERROR(DF_CONT": VEA flush failed. %d\n",
+			DP_CONT(pool->spc_uuid, in->tdi_uuid), rc);
+		goto out_pool;
+	}
+
 out_pool:
 	ds_pool_child_put(pool);
 out:
@@ -1029,7 +1046,7 @@ ds_cont_tgt_query_handler(crt_rpc_t *rpc)
 	struct cont_tgt_query_in	*in  = crt_req_get(rpc);
 	struct cont_tgt_query_out	*out = crt_reply_get(rpc);
 	struct dss_coll_ops		coll_ops;
-	struct dss_coll_args		coll_args;
+	struct dss_coll_args		coll_args = { 0 };
 	struct xstream_cont_query	pack_args;
 
 	out->tqo_min_purged_epoch  = DAOS_EPOCH_MAX;

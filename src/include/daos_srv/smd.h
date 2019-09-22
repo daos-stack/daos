@@ -145,10 +145,11 @@ int smd_dev_get_by_tgt(int tgt_id, struct smd_dev_info **dev_info);
  * List all NVMe devices, caller is responsible to free list items
  *
  * \param [OUT]	dev_list	Device list
+ * \param [OUT] dev_cnt		Number of devices in list
  *
  * \return			Zero on success, negative value on error
  */
-int smd_dev_list(d_list_t *dev_list);
+int smd_dev_list(d_list_t *dev_list, int *dev_cnt);
 
 /**
  * Assign a blob to a VOS pool target

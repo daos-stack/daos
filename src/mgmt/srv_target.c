@@ -610,11 +610,25 @@ out:
 	crt_reply_send(tc_req);
 }
 
+int
+tgt_kill_pool(void *args)
+{
+	struct d_uuid	*id = args;
+
+	/* XXX: there are a few test cases that leak pool close
+	 * before destroying pool, we have to force the kill to pass
+	 * those tests, but we should try to disable "force" and
+	 * fix those issues in the future.
+	 */
+	return vos_pool_kill(id->uuid, true);
+}
+
 static int
 tgt_destroy(uuid_t pool_uuid, char *path)
 {
-	char	*zombie = NULL;
-	int	 rc;
+	char	      *zombie = NULL;
+	struct d_uuid  id;
+	int	       rc;
 
 	/** XXX: many synchronous/blocking operations below */
 
@@ -624,7 +638,8 @@ tgt_destroy(uuid_t pool_uuid, char *path)
 		return rc;
 
 	/* destroy blobIDs first */
-	rc = dss_thread_collective(vos_blob_destroy, pool_uuid, 0);
+	uuid_copy(id.uuid, pool_uuid);
+	rc = dss_thread_collective(tgt_kill_pool, &id, 0);
 	if (rc)
 		D_GOTO(out, rc);
 
