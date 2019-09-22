@@ -25,6 +25,7 @@ package client
 
 import (
 	"github.com/pkg/errors"
+	uuid "github.com/satori/go.uuid"
 	"golang.org/x/net/context"
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -52,6 +53,7 @@ type PoolCreateReq struct {
 	Usr        string
 	Grp        string
 	Acl        []string
+	Uuid       string
 }
 
 // PoolCreateResp struct contains response
@@ -60,8 +62,9 @@ type PoolCreateResp struct {
 	SvcReps string
 }
 
-// PoolCreate will create a DAOS pool using provided parameters and return
-// uuid, list of service replicas and error (including any DER code from DAOS).
+// PoolCreate will create a DAOS pool using provided parameters and generated
+// UUID. Return values will be UUID, list of service replicas and error
+// (including any DER code from DAOS).
 //
 // Isolate protobuf encapsulation in client and don't expose to calling code.
 func (c *connList) PoolCreate(req *PoolCreateReq) (*PoolCreateResp, error) {
@@ -70,10 +73,16 @@ func (c *connList) PoolCreate(req *PoolCreateReq) (*PoolCreateResp, error) {
 		return nil, err
 	}
 
+	poolUUID, err := uuid.NewV4()
+	if err != nil {
+		return nil, errors.Wrap(err, "generating pool uuid")
+	}
+	poolUUIDStr := poolUUID.String()
+
 	rpcReq := &pb.PoolCreateReq{
-		Scmbytes: req.ScmBytes, Nvmebytes: req.NvmeBytes,
-		Ranks: req.RankList, Numsvcreps: req.NumSvcReps, Sys: req.Sys,
-		User: req.Usr, Usergroup: req.Grp, Acl: req.Acl,
+		Scmbytes: req.ScmBytes, Nvmebytes: req.NvmeBytes, Ranks: req.RankList,
+		Numsvcreps: req.NumSvcReps, Sys: req.Sys, User: req.Usr,
+		Usergroup: req.Grp, Acl: req.Acl, Uuid: poolUUIDStr,
 	}
 
 	c.log.Debugf("Create DAOS pool request: %s\n", rpcReq)
@@ -90,7 +99,7 @@ func (c *connList) PoolCreate(req *PoolCreateReq) (*PoolCreateResp, error) {
 			rpcResp.GetStatus())
 	}
 
-	return &PoolCreateResp{Uuid: rpcResp.GetUuid(), SvcReps: rpcResp.GetSvcreps()}, nil
+	return &PoolCreateResp{Uuid: poolUUIDStr, SvcReps: rpcResp.GetSvcreps()}, nil
 }
 
 // PoolDestroyReq struct contains request

@@ -34,7 +34,6 @@ import (
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
-	uuid "github.com/satori/go.uuid"
 )
 
 const (
@@ -204,15 +203,10 @@ func poolCreate(log logging.Logger, conns client.Connect, scmSize string,
 		return errors.WithMessage(err, "formatting user/group strings")
 	}
 
-	uuid, err := uuid.NewV4()
-	if err != nil {
-		return errors.Wrap(err, "generating pool uuid")
-	}
-
 	req := &client.PoolCreateReq{
 		ScmBytes: uint64(scmBytes), NvmeBytes: uint64(nvmeBytes),
 		RankList: rankList, NumSvcReps: numSvcReps, Sys: sys,
-		Usr: usr, Grp: grp, Acl: acl, Uuid: u,
+		Usr: usr, Grp: grp, Acl: acl,
 	}
 
 	resp, err := conns.PoolCreate(req)
@@ -229,10 +223,10 @@ func poolCreate(log logging.Logger, conns client.Connect, scmSize string,
 }
 
 // poolDestroy identified by UUID.
-func poolDestroy(log logging.Logger, conns client.Connect, uuid string, force bool) error {
+func poolDestroy(log logging.Logger, conns client.Connect, poolUUID string, force bool) error {
 	msg := "succeeded"
 
-	req := &client.PoolDestroyReq{Uuid: uuid, Force: force}
+	req := &client.PoolDestroyReq{Uuid: poolUUID, Force: force}
 
 	err := conns.PoolDestroy(req)
 	if err != nil {
