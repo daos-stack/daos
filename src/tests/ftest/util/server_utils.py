@@ -77,7 +77,7 @@ class ServerManager(object):
     """Defines object to manage server functions and launch server command."""
 
     def __init__(self, basepath, attach="/tmp", insecure=True,
-                 debug=True, slots=1, uri_path=None, env=None,
+                 debug=True, uri_path=None, env=None,
                  sudo=True, log_filename=None):
         """Create a ServerManager object.
 
@@ -108,19 +108,31 @@ class ServerManager(object):
 
     @property
     def hosts(self):
+        """Hosts attribute getter."""
         return self._hosts
 
     @hosts.setter
     def hosts(self, value):
+        """Hosts attribute setter
+
+        Args:
+            value (list): list of hosts
+        """
         self._hosts = value
         self.runner.processes.value = len(self._hosts)
 
     @property
     def hostfile(self):
+        """Hostfile attribute setter."""
         return self._hostfile
 
     @hostfile.setter
     def hostfile(self, value):
+        """Hostfile attribute setter.
+
+        Args:
+            value (str): path to hostfile.
+        """
         self._hostfile = value
         self._hosts = get_hosts_from_file(value)
         self.runner.hostfile.value = value
@@ -182,9 +194,11 @@ class ServerManager(object):
 
         # Check for pattern
         if mode in patterns:
-            poll_pattern(len(self.hosts), result, patterns[mode])
+            pattern = patterns[mode]
+            poll_pattern(len(self.hosts), result, pattern)
 
     def kill(self, hosts):
+        # pylint: disable=pylint-no-self-use
         """Forcably kill any daos server processes running on hosts.
 
         Sometimes stop doesn't get everything.  Really whack everything
@@ -207,6 +221,7 @@ class ServerManager(object):
                         [str(result[key]) for key in result if key != 0])))
 
     def clean(self, hosts, scm=False):
+        # pylint: disable=pylint-no-self-use
         """Clean the tmpfs  on the servers.
 
         Args:
@@ -229,6 +244,7 @@ class ServerManager(object):
                         [str(result[key]) for key in result if key != 0])))
 
     def _create_yaml(self, basepath, log_filename):
+        # pylint: disable=pylint-no-self-use
         """Create the DAOS server config YAML file based on Avocado test
             Yaml file.
 

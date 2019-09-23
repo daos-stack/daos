@@ -30,7 +30,7 @@ import random
 import string
 from pathlib import Path
 from errno import ENOENT
-from time import sleep
+from time import sleep, time
 
 from avocado import fail_on
 from command_utils import CommandFailure
