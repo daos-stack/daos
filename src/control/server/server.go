@@ -34,6 +34,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
@@ -124,7 +125,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}
 
 	grpcServer := grpc.NewServer(tcOpt)
-	mgmtpb.RegisterMgmtCtlServer(grpcServer, controlService)
+	ctlpb.RegisterMgmtCtlServer(grpcServer, controlService)
 
 	// If running as root and user name specified in config file, respawn proc.
 	needsRespawn := syscall.Getuid() == 0 && cfg.UserName != ""

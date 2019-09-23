@@ -27,7 +27,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 // chooseServiceLeader will decide which connection to send request on.
@@ -70,7 +70,7 @@ func (c *connList) PoolCreate(req *PoolCreateReq) (*PoolCreateResp, error) {
 		return nil, err
 	}
 
-	rpcReq := &pb.PoolCreateReq{
+	rpcReq := &mgmtpb.PoolCreateReq{
 		Scmbytes: req.ScmBytes, Nvmebytes: req.NvmeBytes,
 		Ranks: req.RankList, Numsvcreps: req.NumSvcReps, Sys: req.Sys,
 		User: req.Usr, Usergroup: req.Grp, Acl: req.Acl,
@@ -111,7 +111,7 @@ func (c *connList) PoolDestroy(req *PoolDestroyReq) error {
 		return err
 	}
 
-	rpcReq := &pb.PoolDestroyReq{Uuid: req.Uuid, Force: req.Force}
+	rpcReq := &mgmtpb.PoolDestroyReq{Uuid: req.Uuid, Force: req.Force}
 
 	c.log.Debugf("Destroy DAOS pool request: %s\n", rpcReq)
 

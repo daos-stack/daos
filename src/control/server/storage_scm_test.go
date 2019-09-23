@@ -30,7 +30,7 @@ import (
 	"github.com/pkg/errors"
 
 	. "github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	. "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	. "github.com/daos-stack/daos/src/control/common/storage"
 	. "github.com/daos-stack/daos/src/control/lib/ipmctl"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -153,8 +153,8 @@ func TestFormatScm(t *testing.T) {
 			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_APP,
+					State: &ResponseState{
+						Status: ResponseStatus_CTRL_ERR_APP,
 						Error:  msgScmNotInited,
 					},
 				},
@@ -168,8 +168,8 @@ func TestFormatScm(t *testing.T) {
 			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_APP,
+					State: &ResponseState{
+						Status: ResponseStatus_CTRL_ERR_APP,
 						Error:  msgScmAlreadyFormatted,
 					},
 				},
@@ -181,8 +181,8 @@ func TestFormatScm(t *testing.T) {
 			expResults: ScmMountResults{
 				{
 					Mntpoint: "",
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_CONF,
+					State: &ResponseState{
+						Status: ResponseStatus_CTRL_ERR_CONF,
 						Error:  msgScmMountEmpty,
 					},
 				},
@@ -195,8 +195,8 @@ func TestFormatScm(t *testing.T) {
 			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_CONF,
+					State: &ResponseState{
+						Status: ResponseStatus_CTRL_ERR_CONF,
 						Error:  ": " + msgScmClassNotSupported,
 					},
 				},
@@ -211,7 +211,7 @@ func TestFormatScm(t *testing.T) {
 			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
-					State:    &pb.ResponseState{},
+					State:    &ResponseState{},
 				},
 			},
 			expCmds: []string{
@@ -230,7 +230,7 @@ func TestFormatScm(t *testing.T) {
 			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
-					State:    &pb.ResponseState{},
+					State:    &ResponseState{},
 				},
 			},
 			expCmds: []string{
@@ -251,8 +251,8 @@ func TestFormatScm(t *testing.T) {
 			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_CONF,
+					State: &ResponseState{
+						Status: ResponseStatus_CTRL_ERR_CONF,
 						Error:  msgScmBadDevList,
 					},
 				},
@@ -267,8 +267,8 @@ func TestFormatScm(t *testing.T) {
 			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_CONF,
+					State: &ResponseState{
+						Status: ResponseStatus_CTRL_ERR_CONF,
 						Error:  msgScmBadDevList,
 					},
 				},
@@ -283,8 +283,8 @@ func TestFormatScm(t *testing.T) {
 			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_CONF,
+					State: &ResponseState{
+						Status: ResponseStatus_CTRL_ERR_CONF,
 						Error:  msgScmDevEmpty,
 					},
 				},
@@ -335,7 +335,7 @@ func TestFormatScm(t *testing.T) {
 				t, result.Mntpoint, tt.expResults[0].Mntpoint,
 				"unexpected mntpoint, "+tt.desc)
 
-			if result.State.Status == pb.ResponseStatus_CTRL_SUCCESS {
+			if result.State.Status == ResponseStatus_CTRL_SUCCESS {
 				AssertEqual(
 					t, ss.formatted,
 					true, "expect formatted state, "+tt.desc)
@@ -363,9 +363,9 @@ func TestUpdateScm(t *testing.T) {
 		{
 			expResults: ScmModuleResults{
 				{
-					Loc: &pb.ScmModule_Location{},
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_NO_IMPL,
+					Loc: &ScmModule_Location{},
+					State: &ResponseState{
+						Status: ResponseStatus_CTRL_NO_IMPL,
 						Error:  msgScmUpdateNotImpl,
 					},
 				},
@@ -387,7 +387,7 @@ func TestUpdateScm(t *testing.T) {
 
 			results := ScmModuleResults{}
 
-			req := &pb.UpdateScmReq{}
+			req := &UpdateScmReq{}
 			scmCfg := config.Servers[srvIdx].Storage.SCM
 			ss.Update(scmCfg, req, &results)
 

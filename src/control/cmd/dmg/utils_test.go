@@ -28,7 +28,7 @@ import (
 
 	. "github.com/daos-stack/daos/src/control/client"
 	. "github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	. "github.com/daos-stack/daos/src/control/common/proto/ctl"
 )
 
 func TestHasConnection(t *testing.T) {
@@ -99,11 +99,11 @@ func TestCheckSprint(t *testing.T) {
 		},
 		{
 			NewClientNvmeResults(
-				[]*pb.NvmeControllerResult{
+				[]*NvmeControllerResult{
 					{
 						Pciaddr: "0000:81:00.0",
-						State: &pb.ResponseState{
-							Status: pb.ResponseStatus_CTRL_ERR_APP,
+						State: &ResponseState{
+							Status: ResponseStatus_CTRL_ERR_APP,
 							Error:  "example application error",
 						},
 					},
@@ -112,11 +112,11 @@ func TestCheckSprint(t *testing.T) {
 		},
 		{
 			NewClientScmResults(
-				[]*pb.ScmModuleResult{
+				[]*ScmModuleResult{
 					{
 						Loc: MockModulePB().Loc,
-						State: &pb.ResponseState{
-							Status: pb.ResponseStatus_CTRL_ERR_APP,
+						State: &ResponseState{
+							Status: ResponseStatus_CTRL_ERR_APP,
 							Error:  "example application error",
 						},
 					},
@@ -125,11 +125,11 @@ func TestCheckSprint(t *testing.T) {
 		},
 		{
 			NewClientScmMountResults(
-				[]*pb.ScmMountResult{
+				[]*ScmMountResult{
 					{
 						Mntpoint: "/mnt/daos",
-						State: &pb.ResponseState{
-							Status: pb.ResponseStatus_CTRL_ERR_APP,
+						State: &ResponseState{
+							Status: ResponseStatus_CTRL_ERR_APP,
 							Error:  "example application error",
 						},
 					},
