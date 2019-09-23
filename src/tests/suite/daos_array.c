@@ -115,6 +115,11 @@ simple_array_mgmt(void **state)
 			       &oh, NULL);
 	assert_int_equal(rc, 0);
 
+	rc = daos_array_get_attr(oh, &csize, &cell_size);
+	assert_int_equal(rc, 0);
+	assert_int_equal(4, cell_size);
+	assert_int_equal(chunk_size, csize);
+
 	rc = daos_array_set_size(oh, DAOS_TX_NONE, 265, NULL);
 	assert_int_equal(rc, 0);
 	rc = daos_array_get_size(oh, DAOS_TX_NONE, &size, NULL);

@@ -939,6 +939,26 @@ err_ptask:
 	return rc;
 }
 
+int
+dc_array_get_attr(daos_handle_t oh, daos_size_t *chunk_size,
+		  daos_size_t *cell_size)
+{
+	struct dc_array		*array;
+
+	if (chunk_size == NULL || cell_size == NULL)
+		return -DER_INVAL;
+
+	/** decref for that in free_handle_cb */
+	array = array_hdl2ptr(oh);
+	if (array == NULL)
+		return -DER_NO_HDL;
+
+	*chunk_size = array->chunk_size;
+	*cell_size = array->cell_size;
+
+	return 0;
+}
+
 static bool
 io_extent_same(daos_array_iod_t *iod, d_sg_list_t *sgl,
 	       daos_size_t cell_size)
