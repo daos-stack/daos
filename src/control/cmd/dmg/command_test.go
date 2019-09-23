@@ -31,7 +31,8 @@ import (
 
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 )
@@ -96,7 +97,7 @@ func (tc *testConn) ClearConns() client.ResultMap {
 	return nil
 }
 
-func (tc *testConn) StoragePrepare(req *pb.StoragePrepareReq) client.ResultMap {
+func (tc *testConn) StoragePrepare(req *ctlpb.StoragePrepareReq) client.ResultMap {
 	tc.appendInvocation("StoragePrepare")
 	return nil
 }
@@ -111,7 +112,7 @@ func (tc *testConn) StorageFormat() (client.ClientCtrlrMap, client.ClientMountMa
 	return nil, nil
 }
 
-func (tc *testConn) StorageUpdate(req *pb.StorageUpdateReq) (client.ClientCtrlrMap, client.ClientModuleMap) {
+func (tc *testConn) StorageUpdate(req *ctlpb.StorageUpdateReq) (client.ClientCtrlrMap, client.ClientModuleMap) {
 	tc.appendInvocation(fmt.Sprintf("StorageUpdate-%s", req))
 	return nil, nil
 }
@@ -136,12 +137,12 @@ func (tc *testConn) PoolDestroy(req *client.PoolDestroyReq) error {
 	return nil
 }
 
-func (tc *testConn) BioHealthQuery(req *pb.BioHealthReq) client.ResultQueryMap {
+func (tc *testConn) BioHealthQuery(req *mgmtpb.BioHealthReq) client.ResultQueryMap {
 	tc.appendInvocation(fmt.Sprintf("BioHealthQuery-%s", req))
 	return nil
 }
 
-func (tc *testConn) SmdListDevs(req *pb.SmdDevReq) client.ResultSmdMap {
+func (tc *testConn) SmdListDevs(req *mgmtpb.SmdDevReq) client.ResultSmdMap {
 	tc.appendInvocation(fmt.Sprintf("SmdListDevs-%s", req))
 	return nil
 }

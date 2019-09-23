@@ -26,12 +26,12 @@ package client
 import (
 	"golang.org/x/net/context"
 
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 // BioHealthQuery will return all BIO device health and I/O error stats for
 // given device UUID
-func (c *connList) BioHealthQuery(req *pb.BioHealthReq) ResultQueryMap {
+func (c *connList) BioHealthQuery(req *mgmtpb.BioHealthReq) ResultQueryMap {
 	results := make(ResultQueryMap)
 
 	mc, err := chooseServiceLeader(c.controllers)
@@ -49,7 +49,7 @@ func (c *connList) BioHealthQuery(req *pb.BioHealthReq) ResultQueryMap {
 }
 
 // SmdListDevs will list all devices in SMD device table
-func (c *connList) SmdListDevs(req *pb.SmdDevReq) ResultSmdMap {
+func (c *connList) SmdListDevs(req *mgmtpb.SmdDevReq) ResultSmdMap {
 	results := make(ResultSmdMap)
 
 	mc, err := chooseServiceLeader(c.controllers)
@@ -67,11 +67,24 @@ func (c *connList) SmdListDevs(req *pb.SmdDevReq) ResultSmdMap {
 }
 
 // DevStateQuery will print the state of the given device UUID
-func (c *connList) DevStateQuery(req *pb.DevStateReq) ResultStateMap {
+func (c *connList) DevStateQuery(req *mgmtpb.DevStateReq) ResultStateMap {
 	results := make(ResultStateMap)
 	mc := c.controllers[0] // connect to first AP only for now
 
 	resp, err := mc.getSvcClient().DevStateQuery(context.Background(), req)
+
+	result := ClientStateResult{mc.getAddress(), resp, err}
+	results[result.Address] = result
+
+	return results
+}
+
+// StorageSetFaulty will set the state of the given device UUID to FAULTY
+func (c *connList) StorageSetFaulty(req *mgmtpb.DevStateReq) ResultStateMap {
+	results := make(ResultStateMap)
+	mc := c.controllers[0] // connect to first AP only for now
+
+	resp, err := mc.getSvcClient().StorageSetFaulty(context.Background(), req)
 
 	result := ClientStateResult{mc.getAddress(), resp, err}
 	results[result.Address] = result

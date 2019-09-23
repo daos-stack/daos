@@ -30,7 +30,8 @@ import (
 	"time"
 
 	"github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 )
@@ -61,7 +62,7 @@ func (cr ClientResult) String() string {
 // query client requests.
 type ClientBioResult struct {
 	Address string
-	Stats   *pb.BioHealthResp
+	Stats   *mgmtpb.BioHealthResp
 	Err     error
 }
 
@@ -123,7 +124,7 @@ func (cr ClientBioResult) String() string {
 // query client requests.
 type ClientSmdResult struct {
 	Address string
-	Devs    *pb.SmdDevResp
+	Devs    *mgmtpb.SmdDevResp
 	Err     error
 }
 
@@ -154,7 +155,7 @@ func (cr ClientSmdResult) String() string {
 // ClientStateResult is a container for output of device state query requests
 type ClientStateResult struct {
 	Address string
-	Dev     *pb.DevStateResp
+	Dev     *mgmtpb.DevStateResp
 	Err     error
 }
 
@@ -279,20 +280,20 @@ type Connect interface {
 	// GetActiveConns verifies states and removes inactive conns
 	GetActiveConns(ResultMap) ResultMap
 	ClearConns() ResultMap
-	StoragePrepare(*pb.StoragePrepareReq) ResultMap
+	StoragePrepare(*ctlpb.StoragePrepareReq) ResultMap
 	StorageScan() (ClientCtrlrMap, ClientModuleMap, ClientPmemMap)
 	StorageFormat() (ClientCtrlrMap, ClientMountMap)
-	StorageUpdate(*pb.StorageUpdateReq) (ClientCtrlrMap, ClientModuleMap)
+	StorageUpdate(*ctlpb.StorageUpdateReq) (ClientCtrlrMap, ClientModuleMap)
 	// TODO: implement Burnin client features
 	//StorageBurnIn() (ClientCtrlrMap, ClientModuleMap)
 	ListFeatures() ClientFeatureMap
 	KillRank(uuid string, rank uint32) ResultMap
 	PoolCreate(*PoolCreateReq) (*PoolCreateResp, error)
 	PoolDestroy(*PoolDestroyReq) error
-	BioHealthQuery(*pb.BioHealthReq) ResultQueryMap
-	SmdListDevs(*pb.SmdDevReq) ResultSmdMap
-	DevStateQuery(*pb.DevStateReq) ResultStateMap
-	StorageSetFaulty(*pb.DevStateReq) ResultStateMap
+	BioHealthQuery(*mgmtpb.BioHealthReq) ResultQueryMap
+	SmdListDevs(*mgmtpb.SmdDevReq) ResultSmdMap
+	DevStateQuery(*mgmtpb.DevStateReq) ResultStateMap
+	StorageSetFaulty(*mgmtpb.DevStateReq) ResultStateMap
 }
 
 // connList is an implementation of Connect and stores controllers

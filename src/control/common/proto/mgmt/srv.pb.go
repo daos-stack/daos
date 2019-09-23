@@ -31,7 +31,7 @@ func (m *DaosRank) Reset()         { *m = DaosRank{} }
 func (m *DaosRank) String() string { return proto.CompactTextString(m) }
 func (*DaosRank) ProtoMessage()    {}
 func (*DaosRank) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_4a95c7b2f5cb01fb, []int{0}
+	return fileDescriptor_srv_8ffad8837fce5c06, []int{0}
 }
 func (m *DaosRank) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DaosRank.Unmarshal(m, b)
@@ -76,7 +76,7 @@ func (m *DaosResp) Reset()         { *m = DaosResp{} }
 func (m *DaosResp) String() string { return proto.CompactTextString(m) }
 func (*DaosResp) ProtoMessage()    {}
 func (*DaosResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_4a95c7b2f5cb01fb, []int{1}
+	return fileDescriptor_srv_8ffad8837fce5c06, []int{1}
 }
 func (m *DaosResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DaosResp.Unmarshal(m, b)
@@ -114,7 +114,7 @@ func (m *SetRankReq) Reset()         { *m = SetRankReq{} }
 func (m *SetRankReq) String() string { return proto.CompactTextString(m) }
 func (*SetRankReq) ProtoMessage()    {}
 func (*SetRankReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_4a95c7b2f5cb01fb, []int{2}
+	return fileDescriptor_srv_8ffad8837fce5c06, []int{2}
 }
 func (m *SetRankReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SetRankReq.Unmarshal(m, b)
@@ -156,7 +156,7 @@ func (m *CreateMsReq) Reset()         { *m = CreateMsReq{} }
 func (m *CreateMsReq) String() string { return proto.CompactTextString(m) }
 func (*CreateMsReq) ProtoMessage()    {}
 func (*CreateMsReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_srv_4a95c7b2f5cb01fb, []int{3}
+	return fileDescriptor_srv_8ffad8837fce5c06, []int{3}
 }
 func (m *CreateMsReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CreateMsReq.Unmarshal(m, b)
@@ -204,9 +204,9 @@ func init() {
 	proto.RegisterType((*CreateMsReq)(nil), "mgmt.CreateMsReq")
 }
 
-func init() { proto.RegisterFile("srv.proto", fileDescriptor_srv_4a95c7b2f5cb01fb) }
+func init() { proto.RegisterFile("srv.proto", fileDescriptor_srv_8ffad8837fce5c06) }
 
-var fileDescriptor_srv_4a95c7b2f5cb01fb = []byte{
+var fileDescriptor_srv_8ffad8837fce5c06 = []byte{
 	// 187 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x4c, 0x8f, 0x31, 0x0f, 0xc2, 0x20,
 	0x10, 0x85, 0x43, 0xad, 0x4d, 0x39, 0xe3, 0xc2, 0x60, 0x9a, 0xe8, 0xd0, 0x30, 0x75, 0x72, 0x71,
