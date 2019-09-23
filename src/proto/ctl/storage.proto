@@ -22,7 +22,7 @@
 //
 
 syntax = "proto3";
-package mgmt;
+package ctl;
 
 import "storage_nvme.proto";
 import "storage_scm.proto";

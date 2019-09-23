@@ -40,6 +40,10 @@ daos_tests:
     test_X:
       daos_test: X
       test_name: DAOS DTX tests
+    test_V:
+      daos_test: V
+      test_name: DAOS verify consistency tests
+      test_timeout: 900
     test_i:
       daos_test: i
       test_name: IO test

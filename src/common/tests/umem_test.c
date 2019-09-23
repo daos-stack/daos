@@ -264,6 +264,8 @@ main(int argc, char **argv)
 		{ NULL, NULL, NULL, NULL }
 	};
 
+	d_register_alt_assert(mock_assert);
+
 	return cmocka_run_group_tests_name("umem tests", umem_tests,
 					   global_setup, global_teardown);
 }

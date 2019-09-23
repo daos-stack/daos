@@ -1009,6 +1009,14 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 
 	D_ASSERT(cont_hdl->sch_pool != NULL);
 
+	if (DAOS_FAIL_CHECK(DAOS_VC_DIFF_DKEY)) {
+		daos_key_t	*dkey = &orw->orw_dkey;
+		unsigned char	*buf = dkey->iov_buf;
+
+		buf[0] += 1;
+		orw->orw_dkey_hash = obj_dkey2hash(&orw->orw_dkey);
+	}
+
 	D_DEBUG(DB_TRACE, "rpc %p opc %d "DF_UOID" dkey %d %s tag/xs %d/%d eph "
 		DF_U64", pool ver %u/%u with "DF_DTI".\n",
 		rpc, opc, DP_UOID(orw->orw_oid),
@@ -1040,6 +1048,17 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 
 		if (rc != 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
+	}
+
+	/* Inject failure for test to simulate the case of lost some
+	 * record/akey/dkey on some non-leader.
+	 */
+	if (DAOS_FAIL_CHECK(DAOS_VC_LOST_DATA)) {
+		if (orw->orw_dti_cos.ca_count > 0)
+			vos_dtx_commit(cont->sc_hdl, orw->orw_dti_cos.ca_arrays,
+				       orw->orw_dti_cos.ca_count);
+
+		D_GOTO(out, rc = 0);
 	}
 
 	rc = dtx_begin(&orw->orw_dti, &orw->orw_oid, cont->sc_hdl,
@@ -1323,11 +1342,18 @@ ds_iter_vos(crt_rpc_t *rpc, struct vos_iter_anchors *anchors,
 	} else if (opc == DAOS_OBJ_AKEY_RPC_ENUMERATE) {
 		type = VOS_ITER_AKEY;
 	} else {
-		/* object iteration for rebuild */
+		/* object iteration for rebuild or consistency verification. */
 		D_ASSERT(opc == DAOS_OBJ_RPC_ENUMERATE);
 		type = VOS_ITER_DKEY;
+		if (daos_anchor_get_flags(&anchors->ia_dkey) &
+		      DIOF_WITH_SPEC_EPOCH) {
+			/* For obj verification case. */
+			param.ip_flags = VOS_IT_RECX_VISIBLE;
+			param.ip_epc_expr = VOS_IT_EPC_RR;
+		} else {
+			param.ip_epc_expr = VOS_IT_EPC_RE;
+		}
 		param.ip_epr.epr_lo = 0;
-		param.ip_epc_expr = VOS_IT_EPC_RE;
 		recursive = true;
 		enum_arg->chk_key2big = true;
 	}
@@ -1343,6 +1369,9 @@ ds_iter_vos(crt_rpc_t *rpc, struct vos_iter_anchors *anchors,
 	 */
 	if (type == VOS_ITER_SINGLE)
 		anchors->ia_sv = anchors->ia_ev;
+	else if (oei->oei_oid.id_shard % 2 == 0 &&
+		DAOS_FAIL_CHECK(DAOS_VC_LOST_REPLICA))
+		D_GOTO(out_cont_hdl, rc =  -DER_NONEXIST);
 
 	rc = dss_enum_pack(&param, type, recursive, anchors, enum_arg);
 

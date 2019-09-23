@@ -1,3 +1,4 @@
+//
 // (C) Copyright 2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,29 +22,20 @@
 //
 
 syntax = "proto3";
-package mgmt;
+package ctl;
 
-message EmptyReq {}
-
-message FilePath {
-	string path = 1;
+message FeatureName {
+	string name = 1;
 }
 
-enum ResponseStatus {
-	CTRL_SUCCESS = 0;
-	CTRL_IN_PROGRESS = 1;	// Not yet completed
-	CTRL_WAITING = 2;	// Blocked
-	CTRL_ERR_CONF = -1;	// Config file parsing error
-	CTRL_ERR_NVME = -2;	// NVMe subsystem error
-	CTRL_ERR_SCM = -3;	// SCM subsystem error
-	CTRL_ERR_APP = -4;	// Other application error
-	CTRL_ERR_UNKNOWN = -5;	// Unknown error
-	CTRL_NO_IMPL = -6;	// No implementation
+message Category {
+	string category = 1;
 }
 
-message ResponseState {
-	ResponseStatus status = 1;
-	string error = 2;
-	string info = 3;
+// Feature represents a management task that can be performed by server.
+message Feature {
+	Category category = 1;	// The category of capabilities this feature belongs to.
+	FeatureName fname = 2;	// The name of the feature.
+	string description = 3;	// The description of the feature.
 }
 

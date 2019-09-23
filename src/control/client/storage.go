@@ -33,7 +33,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	types "github.com/daos-stack/daos/src/control/common/storage"
 )
 
@@ -134,9 +134,9 @@ type StorageResult struct {
 // storagePrepareRequest returns results of SCM and NVMe prepare actions
 // on a remote server by calling over gRPC channel.
 func storagePrepareRequest(mc Control, req interface{}, ch chan ClientResult) {
-	prepareReq, ok := req.(*pb.StoragePrepareReq)
+	prepareReq, ok := req.(*ctlpb.StoragePrepareReq)
 	if !ok {
-		err := errors.Errorf(msgTypeAssert, &pb.StoragePrepareReq{}, req)
+		err := errors.Errorf(msgTypeAssert, &ctlpb.StoragePrepareReq{}, req)
 
 		mc.logger().Errorf(err.Error())
 		ch <- ClientResult{mc.getAddress(), nil, err}
@@ -154,7 +154,7 @@ func storagePrepareRequest(mc Control, req interface{}, ch chan ClientResult) {
 
 // StoragePrepare returns details of nonvolatile storage devices attached to each
 // remote server. Data received over channel from requests running in parallel.
-func (c *connList) StoragePrepare(req *pb.StoragePrepareReq) ResultMap {
+func (c *connList) StoragePrepare(req *ctlpb.StoragePrepareReq) ResultMap {
 	return c.makeRequests(req, storagePrepareRequest)
 }
 
@@ -163,7 +163,7 @@ func (c *connList) StoragePrepare(req *pb.StoragePrepareReq) ResultMap {
 func storageScanRequest(mc Control, req interface{}, ch chan ClientResult) {
 	sRes := StorageResult{}
 
-	resp, err := mc.getCtlClient().StorageScan(context.Background(), &pb.StorageScanReq{})
+	resp, err := mc.getCtlClient().StorageScan(context.Background(), &ctlpb.StorageScanReq{})
 	if err != nil {
 		ch <- ClientResult{mc.getAddress(), nil, err} // return comms error
 		return
@@ -171,7 +171,7 @@ func storageScanRequest(mc Control, req interface{}, ch chan ClientResult) {
 
 	// process storage subsystem responses
 	nState := resp.Nvme.GetState()
-	if nState.GetStatus() != pb.ResponseStatus_CTRL_SUCCESS {
+	if nState.GetStatus() != ctlpb.ResponseStatus_CTRL_SUCCESS {
 		msg := nState.GetError()
 		if msg == "" {
 			msg = fmt.Sprintf("nvme %+v", nState.GetStatus())
@@ -182,7 +182,7 @@ func storageScanRequest(mc Control, req interface{}, ch chan ClientResult) {
 	}
 
 	sState := resp.Scm.GetState()
-	if sState.GetStatus() != pb.ResponseStatus_CTRL_SUCCESS {
+	if sState.GetStatus() != ctlpb.ResponseStatus_CTRL_SUCCESS {
 		msg := sState.GetError()
 		if msg == "" {
 			msg = fmt.Sprintf("scm %+v", sState.GetStatus())
@@ -247,7 +247,7 @@ func StorageFormatRequest(mc Control, parms interface{}, ch chan ClientResult) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Minute)
 	defer cancel()
 
-	stream, err := mc.getCtlClient().StorageFormat(ctx, &pb.StorageFormatReq{})
+	stream, err := mc.getCtlClient().StorageFormat(ctx, &ctlpb.StorageFormatReq{})
 	if err != nil {
 		ch <- ClientResult{mc.getAddress(), nil, err}
 		return // stream err
@@ -319,13 +319,13 @@ func storageUpdateRequest(
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Minute)
 	defer cancel()
 
-	var updateReq *pb.StorageUpdateReq
+	var updateReq *ctlpb.StorageUpdateReq
 	switch v := req.(type) {
-	case *pb.StorageUpdateReq:
+	case *ctlpb.StorageUpdateReq:
 		updateReq = v
 	default:
 		err := errors.Errorf(
-			msgTypeAssert, pb.StorageUpdateReq{}, req)
+			msgTypeAssert, ctlpb.StorageUpdateReq{}, req)
 
 		mc.logger().Errorf(err.Error())
 		ch <- ClientResult{mc.getAddress(), nil, err}
@@ -360,7 +360,7 @@ func storageUpdateRequest(
 
 // StorageUpdate prepares nonvolatile storage devices attached to each
 // remote server in the connection list for use with DAOS.
-func (c *connList) StorageUpdate(req *pb.StorageUpdateReq) (
+func (c *connList) StorageUpdate(req *ctlpb.StorageUpdateReq) (
 	ClientCtrlrMap, ClientModuleMap) {
 
 	cResults := c.makeRequests(req, storageUpdateRequest)
@@ -400,11 +400,11 @@ func (c *control) FetchFioConfigPaths() (paths []string, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	stream, err := c.getCtlClient().FetchFioConfigPaths(ctx, &pb.EmptyReq{})
+	stream, err := c.getCtlClient().FetchFioConfigPaths(ctx, &ctlpb.EmptyReq{})
 	if err != nil {
 		return
 	}
-	var p *pb.FilePath
+	var p *ctlpb.FilePath
 	for {
 		p, err = stream.Recv()
 		if err == io.EOF {
@@ -427,15 +427,15 @@ func (c *control) BurnInNvme(pciAddr string, configPath string) (
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Minute)
 	defer cancel()
 
-	req := &pb.BurninNvmeReq{
-		Fioconfig: &pb.FilePath{Path: configPath},
+	req := &ctlpb.BurninNvmeReq{
+		Fioconfig: &ctlpb.FilePath{Path: configPath},
 	}
 	_, err = c.getCtlClient().StorageBurnIn(
-		ctx, &pb.StorageBurnInReq{Nvme: req})
+		ctx, &ctlpb.StorageBurnInReq{Nvme: req})
 	if err != nil {
 		return
 	}
-	//	var report *pb.BurnInNvmeReport
+	//	var report *ctlpb.BurnInNvmeReport
 	//	for {
 	//		report, err = stream.Recv()
 	//		if err == io.EOF {

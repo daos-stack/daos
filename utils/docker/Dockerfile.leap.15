@@ -27,7 +27,7 @@ RUN zypper --non-interactive --no-gpg-checks refresh; \
            libuuid-devel libyaml-devel                                \
            make man meson nasm ninja pandoc patch python2-pip         \
            readline-devel sg3_utils which yasm                        \
-	   python-devel python3-devel
+	   python-devel python3-devel valgrind-devel
 
 RUN pip install --upgrade pip; \
     pip install -U setuptools; \
