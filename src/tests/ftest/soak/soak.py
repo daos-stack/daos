@@ -471,6 +471,7 @@ class Soak(TestWithServers):
             except SoakTestError as error:
                 self.fail(error)
             errors = self.destroy_pools(self.pool[1:])
+            del self.pool[1:]
             self.assertEqual(len(errors), 0, "\n".join(errors))
             self.loop += 1
             # Break out of loop if smoke
