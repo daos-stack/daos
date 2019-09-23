@@ -23,7 +23,7 @@ def scons():
 
     # Object client library
     dc_obj_tgts = denv.SharedObject(['cli_obj.c', 'cli_shard.c', 'cli_mod.c',
-                                     'cli_ec.c'])
+                                     'cli_ec.c', 'obj_verify.c'])
     dc_obj_tgts += common_tgts
     Export('dc_obj_tgts')
 

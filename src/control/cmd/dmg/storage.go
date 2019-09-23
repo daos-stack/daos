@@ -26,7 +26,7 @@ package main
 import (
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -49,8 +49,8 @@ type storagePrepareCmd struct {
 
 // Execute is run when storagePrepareCmd activates
 func (cmd *storagePrepareCmd) Execute(args []string) error {
-	var nReq *pb.PrepareNvmeReq
-	var sReq *pb.PrepareScmReq
+	var nReq *ctlpb.PrepareNvmeReq
+	var sReq *ctlpb.PrepareScmReq
 
 	prepNvme, prepScm, err := cmd.Validate()
 	if err != nil {
@@ -58,7 +58,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	}
 
 	if prepNvme {
-		nReq = &pb.PrepareNvmeReq{
+		nReq = &ctlpb.PrepareNvmeReq{
 			Pciwhitelist: cmd.PCIWhiteList,
 			Nrhugepages:  int32(cmd.NrHugepages),
 			Targetuser:   cmd.TargetUser,
@@ -71,11 +71,11 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 			return err
 		}
 
-		sReq = &pb.PrepareScmReq{Reset_: cmd.Reset}
+		sReq = &ctlpb.PrepareScmReq{Reset_: cmd.Reset}
 	}
 
 	cmd.log.Infof("NVMe & SCM preparation:\n%s",
-		cmd.conns.StoragePrepare(&pb.StoragePrepareReq{Nvme: nReq, Scm: sReq}))
+		cmd.conns.StoragePrepare(&ctlpb.StoragePrepareReq{Nvme: nReq, Scm: sReq}))
 
 	return nil
 }
@@ -88,9 +88,10 @@ type storageScanCmd struct {
 
 // run NVMe and SCM storage and health query on all connected servers
 func storageScan(log logging.Logger, conns client.Connect) {
-	cCtrlrs, cModules := conns.StorageScan()
+	cCtrlrs, cModules, cPmems := conns.StorageScan()
 	log.Infof("NVMe SSD controllers and constituent namespaces:\n%s", cCtrlrs)
 	log.Infof("SCM modules:\n%s", cModules)
+	log.Infof("PMEM device files:\n%s", cPmems)
 }
 
 // Execute is run when storageScanCmd activates
@@ -139,7 +140,7 @@ type storageUpdateCmd struct {
 }
 
 // run NVMe and SCM storage update on all connected servers
-func storageUpdate(log logging.Logger, conns client.Connect, req *pb.StorageUpdateReq, force bool) {
+func storageUpdate(log logging.Logger, conns client.Connect, req *ctlpb.StorageUpdateReq, force bool) {
 	log.Info(
 		"This could be a destructive operation and storage devices " +
 			"specified in the server config file will have firmware " +
@@ -160,8 +161,8 @@ func (u *storageUpdateCmd) Execute(args []string) error {
 	storageUpdate(
 		u.log,
 		u.conns,
-		&pb.StorageUpdateReq{
-			Nvme: &pb.UpdateNvmeReq{
+		&ctlpb.StorageUpdateReq{
+			Nvme: &ctlpb.UpdateNvmeReq{
 				Model: u.NVMeModel, Startrev: u.NVMeStartRev,
 				Path: u.NVMeFwPath, Slot: int32(u.NVMeFwSlot),
 			},
@@ -216,7 +217,7 @@ func (u *storageUpdateCmd) Execute(args []string) error {
 //}
 
 //func nvmeTaskLookup(
-//	c *ishell.Context, ctrlrs []*pb.NvmeController, feature string) error {
+//	c *ishell.Context, ctrlrs []*ctlpb.NvmeController, feature string) error {
 //
 //	switch feature {
 //	case "nvme-fw-update":

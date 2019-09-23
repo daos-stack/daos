@@ -169,10 +169,12 @@ CRT_RPC_DECLARE(cont_destroy, DAOS_ISEQ_CONT_DESTROY, DAOS_OSEQ_CONT_DESTROY)
 
 #define DAOS_ISEQ_CONT_OPEN	/* input fields */		 \
 	((struct cont_op_in)	(coi_op)		CRT_VAR) \
-	((uint64_t)		(coi_capas)		CRT_VAR)
+	((uint64_t)		(coi_capas)		CRT_VAR) \
+	((uint64_t)		(coi_prop_bits)		CRT_VAR)
 
 #define DAOS_OSEQ_CONT_OPEN	/* output fields */		 \
-	((struct cont_op_out)	(coo_op)		CRT_VAR)
+	((struct cont_op_out)	(coo_op)		CRT_VAR) \
+	((daos_prop_t)		(coo_prop)		CRT_PTR)
 
 CRT_RPC_DECLARE(cont_open, DAOS_ISEQ_CONT_OPEN, DAOS_OSEQ_CONT_OPEN)
 
@@ -189,14 +191,16 @@ CRT_RPC_DECLARE(cont_close, DAOS_ISEQ_CONT_CLOSE, DAOS_OSEQ_CONT_CLOSE)
 #define DAOS_CO_QUERY_PROP_LAYOUT_TYPE	(1ULL << 1)
 #define DAOS_CO_QUERY_PROP_LAYOUT_VER	(1ULL << 2)
 #define DAOS_CO_QUERY_PROP_CSUM		(1ULL << 3)
-#define DAOS_CO_QUERY_PROP_REDUN_FAC	(1ULL << 4)
-#define DAOS_CO_QUERY_PROP_REDUN_LVL	(1ULL << 5)
-#define DAOS_CO_QUERY_PROP_SNAPSHOT_MAX	(1ULL << 6)
-#define DAOS_CO_QUERY_PROP_COMPRESS	(1ULL << 7)
-#define DAOS_CO_QUERY_PROP_ENCRYPT	(1ULL << 8)
-#define DAOS_CO_QUERY_PROP_ACL		(1ULL << 9)
+#define DAOS_CO_QUERY_PROP_CSUM_CHUNK	(1ULL << 4)
+#define DAOS_CO_QUERY_PROP_CSUM_SERVER	(1ULL << 5)
+#define DAOS_CO_QUERY_PROP_REDUN_FAC	(1ULL << 6)
+#define DAOS_CO_QUERY_PROP_REDUN_LVL	(1ULL << 7)
+#define DAOS_CO_QUERY_PROP_SNAPSHOT_MAX	(1ULL << 8)
+#define DAOS_CO_QUERY_PROP_COMPRESS	(1ULL << 9)
+#define DAOS_CO_QUERY_PROP_ENCRYPT	(1ULL << 10)
+#define DAOS_CO_QUERY_PROP_ACL		(1ULL << 11)
 
-#define DAOS_CO_QUERY_PROP_BITS_NR	(10)
+#define DAOS_CO_QUERY_PROP_BITS_NR	(12)
 #define DAOS_CO_QUERY_PROP_ALL					\
 	((1ULL << DAOS_CO_QUERY_PROP_BITS_NR) - 1)
 
