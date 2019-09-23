@@ -227,11 +227,10 @@ func (srv *IOServerInstance) Start(ctx context.Context, errChan chan<- error) er
 func (srv *IOServerInstance) NotifyReady(msg *srvpb.NotifyReadyReq) {
 	srv.log.Debugf("I/O server instance %d ready: %v", srv.Index, msg)
 
-	go func() {
-		// TODO KJ: What should we do if the message offers no server socket?
-		// Activate the dRPC client connection to this iosrv
-		srv.drpcClient = drpc.NewClientConnection(msg.DrpcListenerSock)
+	// Activate the dRPC client connection to this iosrv
+	srv.drpcClient = drpc.NewClientConnection(msg.DrpcListenerSock)
 
+	go func() {
 		srv.instanceReady <- msg
 	}()
 }
