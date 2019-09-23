@@ -82,7 +82,7 @@ int			dss_core_nr;
 int			dss_core_offset;
 /** NUMA node to bind to */
 int			dss_numa_node;
-hwloc_bitmap_t 		core_allocation_bitmap;
+hwloc_bitmap_t		core_allocation_bitmap;
 /** a copy of the NUMA node object in the topology */
 hwloc_obj_t		numa_obj;
 /** number of cores in the given NUMA node */
