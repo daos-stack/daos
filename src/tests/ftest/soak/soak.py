@@ -455,24 +455,25 @@ class Soak(TestWithServers):
         # Create the reserved pool with data
         self.pool = self.create_pool(["pool_reserved"])
         self.pool[0].connect()
-        container = TestContainer(self.pool[0])
-        container.namespace = "/run/container_reserved/"
-        container.get_params(self)
-        container.create()
-        container.write_objects(rank, obj_class)
+        self.container = TestContainer(self.pool[0])
+        self.container.namespace = "/run/container_reserved/"
+        self.container.get_params(self)
+        self.container.create()
+        self.container.write_objects(rank, obj_class)
 
         while time.time() < start_time + self.test_timeout:
             print("<<Soak1 PASS {}: time until done {}>>".format(
                 self.loop, (start_time + self.test_timeout - time.time())))
             # Create all specified pools
-            self.pool_obj_list = self.create_pool(pool_list)
+            self.pool.extend(self.create_pool(pool_list))
             try:
-                self.execute_jobs(test_param, self.pool_obj_list)
+                self.execute_jobs(test_param, self.pool[1:])
             except SoakTestError as error:
                 self.fail(error)
-            for pool in self.pool_obj_list:
-                pool.destroy(1)
+            errors = self.destroy_pools(self.pool[1:])
+            self.assertEqual(len(errors), 0, "\n".join(errors))
             self.loop += 1
+            # Break out of loop if smoke
             if "smoke" in self.test_name:
                 break
         # Check that the reserve pool is still allocated
@@ -481,16 +482,9 @@ class Soak(TestWithServers):
                 "Pool data not detected on servers")
         # Verify the data after soak is done
         self.assertTrue(
-                container.read_objects(),
+                self.container.read_objects(),
                 "Data verification error on reserved pool"
                 "after SOAK completed")
-        self.assertTrue(
-                container.close(),
-                "Error closing container on reserved pool"
-                "after soak completed")
-        self.assertTrue(
-                self.pool[0].destroy(1),
-                "Error destroying reserved pool after soak completed")
 
     def setUp(self):
         """Define test setup to be done."""
@@ -551,10 +545,6 @@ class Soak(TestWithServers):
         if not status:
             self.log.info(
                 "Some logfiles may not be available from client node")
-        # Attempt to destroy any pools that remain
-        if len(self.pool_obj_list) > 0:
-            for pool in self.pool_obj_list:
-                pool.destroy(1)
         super(Soak, self).tearDown()
 
     def test_soak_smoke(self):
