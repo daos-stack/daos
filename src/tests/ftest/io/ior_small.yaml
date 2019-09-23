@@ -10,7 +10,7 @@ hosts:
             - boro-F
             - boro-G
             - boro-H
-timeout: 2000
+timeout: 500
 server_config:
     name: daos_server
     server:
@@ -59,11 +59,11 @@ ior:
 # Commenting it out until DAOS-3097/3143 is resolved.
 #            oclass_RP_2GX:
 #              daos_oclass: "RP_2GX"
-        fpp:            
-          flags: "-v -W -w -r -R -F"            
-          api: DAOS             
-          transfer_size: '1M'           
-          block_size: '32M'             
+        fpp:
+          flags: "-v -W -w -r -R -F"
+          api: DAOS
+          transfer_size: '1M'
+          block_size: '32M'
           daos_oclass: "SX"
 # Uncomment when DAOS-1733 is resolved
 #        random:
