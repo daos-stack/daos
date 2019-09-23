@@ -786,8 +786,15 @@ aggregate_done:
 
 	D_SPIN_UNLOCK(&parent_rpc_priv->crp_lock);
 
-	if (req_done)
+	if (req_done) {
+		RPC_ADDREF(parent_rpc_priv);
 		crt_corpc_complete(parent_rpc_priv);
+
+		if (co_ops->co_post_reply)
+			co_ops->co_post_reply(&parent_rpc_priv->crp_pub,
+					co_info->co_priv);
+		RPC_DECREF(parent_rpc_priv);
+	}
 
 out:
 	return;

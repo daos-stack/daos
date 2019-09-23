@@ -51,6 +51,7 @@
 
 static bool pre_forward_called;
 static bool hdlr_called;
+static bool post_reply_called;
 static int g_do_shutdown;
 
 static int
@@ -73,9 +74,18 @@ corpc_pre_forward(crt_rpc_t *rpc, void *arg)
 	return 0;
 }
 
+static int
+corpc_post_reply(crt_rpc_t *rpc, void *arg)
+{
+	D_DEBUG(DB_TEST, "Post-reply called\n");
+	post_reply_called = true;
+	return 0;
+}
+
 struct crt_corpc_ops corpc_set_ivns_ops = {
 	.co_aggregate = corpc_aggregate,
 	.co_pre_forward = corpc_pre_forward,
+	.co_post_reply = corpc_post_reply,
 };
 
 static void
@@ -190,6 +200,11 @@ int main(void)
 	if (my_rank == 0) {
 		rc = crt_group_config_remove(NULL);
 		assert(rc == 0);
+	} else {
+		if (!post_reply_called) {
+			D_ERROR("post_reply callback was not called\n");
+			assert(0);
+		}
 	}
 
 	rc = crt_finalize();

@@ -964,6 +964,23 @@ struct crt_corpc_ops {
 	 *				cause CORPC to abort.
 	 */
 	int (*co_pre_forward)(crt_rpc_t *rpc, void *arg);
+
+	/**
+	 * Collective RPC post-reply callback.
+	 * This is an optional callback. If specified, it will execute after
+	 * reply is sent to parent (after co_aggregate executes).
+	 *
+	 * \param[in] rpc		the rpc structure of the parent
+	 * \param[in] arg		the private pointer, valid only on
+	 *				collective RPC initiator (same as the
+	 *				priv pointer passed in for
+	 *				crt_corpc_req_create).
+	 *				Can be used to share data between
+	 *				co_aggregate and co_post_reply  when
+	 *				executing those callbacks on the same
+	 *				node.
+	 */
+	int (*co_post_reply)(crt_rpc_t *rpc, void *arg);
 };
 
 /**
