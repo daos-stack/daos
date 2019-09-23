@@ -1,5 +1,6 @@
 """Build DAOS utilities"""
 import daos_build
+import os
 
 def scons():
     """Execute build"""
@@ -20,6 +21,10 @@ def scons():
     denv.Install('$PREFIX/bin/', dmg)
     denv.Install('$PREFIX/bin/', dcont)
     denv.Install('$PREFIX/bin/', daos)
+
+    # copy utils/py to $PREFIX/lib/daos/utils/py
+    spath = os.path.join(Dir('py').srcnode())
+    denv.InstallAs('$PREFIX/lib/daos/utils/py/', spath)
 
 if __name__ == "SCons.Script":
     scons()
