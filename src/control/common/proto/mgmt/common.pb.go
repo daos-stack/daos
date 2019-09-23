@@ -59,7 +59,7 @@ func (x ResponseStatus) String() string {
 	return proto.EnumName(ResponseStatus_name, int32(x))
 }
 func (ResponseStatus) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_common_b4acff35d6b9d00d, []int{0}
+	return fileDescriptor_common_e88ebc017994317f, []int{0}
 }
 
 type EmptyReq struct {
@@ -72,7 +72,7 @@ func (m *EmptyReq) Reset()         { *m = EmptyReq{} }
 func (m *EmptyReq) String() string { return proto.CompactTextString(m) }
 func (*EmptyReq) ProtoMessage()    {}
 func (*EmptyReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_common_b4acff35d6b9d00d, []int{0}
+	return fileDescriptor_common_e88ebc017994317f, []int{0}
 }
 func (m *EmptyReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_EmptyReq.Unmarshal(m, b)
@@ -103,7 +103,7 @@ func (m *FilePath) Reset()         { *m = FilePath{} }
 func (m *FilePath) String() string { return proto.CompactTextString(m) }
 func (*FilePath) ProtoMessage()    {}
 func (*FilePath) Descriptor() ([]byte, []int) {
-	return fileDescriptor_common_b4acff35d6b9d00d, []int{1}
+	return fileDescriptor_common_e88ebc017994317f, []int{1}
 }
 func (m *FilePath) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_FilePath.Unmarshal(m, b)
@@ -143,7 +143,7 @@ func (m *ResponseState) Reset()         { *m = ResponseState{} }
 func (m *ResponseState) String() string { return proto.CompactTextString(m) }
 func (*ResponseState) ProtoMessage()    {}
 func (*ResponseState) Descriptor() ([]byte, []int) {
-	return fileDescriptor_common_b4acff35d6b9d00d, []int{2}
+	return fileDescriptor_common_e88ebc017994317f, []int{2}
 }
 func (m *ResponseState) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ResponseState.Unmarshal(m, b)
@@ -191,9 +191,9 @@ func init() {
 	proto.RegisterEnum("mgmt.ResponseStatus", ResponseStatus_name, ResponseStatus_value)
 }
 
-func init() { proto.RegisterFile("common.proto", fileDescriptor_common_b4acff35d6b9d00d) }
+func init() { proto.RegisterFile("common.proto", fileDescriptor_common_e88ebc017994317f) }
 
-var fileDescriptor_common_b4acff35d6b9d00d = []byte{
+var fileDescriptor_common_e88ebc017994317f = []byte{
 	// 285 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0x91, 0x5f, 0x4b, 0xc3, 0x30,
 	0x14, 0xc5, 0xed, 0x9c, 0x63, 0x5e, 0xb6, 0x71, 0x09, 0x7b, 0xa8, 0x82, 0x22, 0x7d, 0x12, 0x91,

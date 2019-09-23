@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 )
 
@@ -56,10 +57,138 @@ func (cr ClientResult) String() string {
 	return fmt.Sprintf("%+v", cr.Value)
 }
 
+// ClientBioResult is a container for output of BIO health
+// query client requests.
+type ClientBioResult struct {
+	Address string
+	Stats   *pb.BioHealthResp
+	Err     error
+}
+
+func (cr ClientBioResult) String() string {
+	var buf bytes.Buffer
+
+	if cr.Err != nil {
+		return fmt.Sprintf("error: " + cr.Err.Error())
+	}
+
+	if cr.Stats.Status != 0 {
+		return fmt.Sprintf("error: %v\n", cr.Stats.Status)
+	}
+
+	fmt.Fprintf(&buf, "Device UUID: %v\n", cr.Stats.DevUuid)
+	fmt.Fprintf(&buf, "\tRead errors: %v\n", cr.Stats.ReadErrs)
+	fmt.Fprintf(&buf, "\tWrite errors: %v\n", cr.Stats.WriteErrs)
+	fmt.Fprintf(&buf, "\tUnmap errors: %v\n", cr.Stats.UnmapErrs)
+	fmt.Fprintf(&buf, "\tChecksum errors: %v\n", cr.Stats.ChecksumErrs)
+	fmt.Fprintf(&buf, "\tDevice Health:\n")
+	fmt.Fprintf(&buf, "\t\tError log entries: %v\n", cr.Stats.ErrorCount)
+	fmt.Fprintf(&buf, "\t\tMedia errors: %v\n", cr.Stats.MediaErrors)
+	fmt.Fprintf(&buf, "\t\tTemperature: %v\n", cr.Stats.Temperature)
+	fmt.Fprintf(&buf, "\t\tTemperature: ")
+	if cr.Stats.Temp {
+		fmt.Fprintf(&buf, "WARNING\n")
+	} else {
+		fmt.Fprintf(&buf, "OK\n")
+	}
+	fmt.Fprintf(&buf, "\t\tAvailable Spare: ")
+	if cr.Stats.Spare {
+		fmt.Fprintf(&buf, "WARNING\n")
+	} else {
+		fmt.Fprintf(&buf, "OK\n")
+	}
+	fmt.Fprintf(&buf, "\t\tDevice Reliability: ")
+	if cr.Stats.DeviceReliability {
+		fmt.Fprintf(&buf, "WARNING\n")
+	} else {
+		fmt.Fprintf(&buf, "OK\n")
+	}
+	fmt.Fprintf(&buf, "\t\tRead Only: ")
+	if cr.Stats.Readonly {
+		fmt.Fprintf(&buf, "WARNING\n")
+	} else {
+		fmt.Fprintf(&buf, "OK\n")
+	}
+	fmt.Fprintf(&buf, "\t\tVolatile Memory Backup: ")
+	if cr.Stats.VolatileMemory {
+		fmt.Fprintf(&buf, "WARNING\n")
+	} else {
+		fmt.Fprintf(&buf, "OK\n")
+	}
+
+	return buf.String()
+}
+
+// ClientSmdResult is a container for output of SMD dev list
+// query client requests.
+type ClientSmdResult struct {
+	Address string
+	Devs    *pb.SmdDevResp
+	Err     error
+}
+
+func (cr ClientSmdResult) String() string {
+	var buf bytes.Buffer
+
+	if cr.Err != nil {
+		return fmt.Sprintf("error: " + cr.Err.Error())
+	}
+
+	if cr.Devs.Status != 0 {
+		return fmt.Sprintf("error: %v\n", cr.Devs.Status)
+	}
+
+	for _, d := range cr.Devs.Devices {
+		fmt.Fprintf(&buf, "Device:\n")
+		fmt.Fprintf(&buf, "\t\tUUID: %+v\n", d.Uuid)
+		fmt.Fprintf(&buf, "\t\tVOS Target IDs: ")
+		for _, t := range d.TgtIds {
+			fmt.Fprintf(&buf, "%d ", t)
+		}
+		fmt.Fprintf(&buf, "\n")
+	}
+
+	return buf.String()
+}
+
 // ResultMap map client addresses to method call ClientResults
 type ResultMap map[string]ClientResult
+type ResultQueryMap map[string]ClientBioResult
+type ResultSmdMap map[string]ClientSmdResult
 
 func (rm ResultMap) String() string {
+	var buf bytes.Buffer
+	servers := make([]string, 0, len(rm))
+
+	for server := range rm {
+		servers = append(servers, server)
+	}
+	sort.Strings(servers)
+
+	for _, server := range servers {
+		fmt.Fprintf(&buf, "%s:\n\t%s\n", server, rm[server])
+	}
+
+	return buf.String()
+}
+
+func (rm ResultQueryMap) String() string {
+	var buf bytes.Buffer
+	servers := make([]string, 0, len(rm))
+
+	for server := range rm {
+		servers = append(servers, server)
+	}
+	sort.Strings(servers)
+
+	for _, server := range servers {
+		fmt.Fprintf(&buf, "%s:\n\t%s\n", server, rm[server])
+	}
+
+	return buf.String()
+}
+
+func (rm ResultSmdMap) String() string {
 	var buf bytes.Buffer
 	servers := make([]string, 0, len(rm))
 
@@ -84,11 +213,15 @@ type ControllerFactory interface {
 }
 
 // controllerFactory as an implementation of ControllerFactory.
-type controllerFactory struct{}
+type controllerFactory struct {
+	log logging.Logger
+}
 
 // create instantiates and connects a client to server at given address.
 func (c *controllerFactory) create(address string, cfg *security.TransportConfig) (Control, error) {
-	controller := &control{}
+	controller := &control{
+		log: c.log,
+	}
 
 	err := controller.connect(address, cfg)
 
@@ -105,20 +238,24 @@ type Connect interface {
 	// GetActiveConns verifies states and removes inactive conns
 	GetActiveConns(ResultMap) ResultMap
 	ClearConns() ResultMap
-	StorageScan() (ClientCtrlrMap, ClientModuleMap)
+	StoragePrepare(*pb.StoragePrepareReq) ResultMap
+	StorageScan() (ClientCtrlrMap, ClientModuleMap, ClientPmemMap)
 	StorageFormat() (ClientCtrlrMap, ClientMountMap)
 	StorageUpdate(*pb.StorageUpdateReq) (ClientCtrlrMap, ClientModuleMap)
 	// TODO: implement Burnin client features
 	//StorageBurnIn() (ClientCtrlrMap, ClientModuleMap)
 	ListFeatures() ClientFeatureMap
 	KillRank(uuid string, rank uint32) ResultMap
-	CreatePool(*pb.CreatePoolReq) ResultMap
-	DestroyPool(*pb.DestroyPoolReq) ResultMap
+	PoolCreate(*PoolCreateReq) (*PoolCreateResp, error)
+	PoolDestroy(*PoolDestroyReq) error
+	BioHealthQuery(*pb.BioHealthReq) ResultQueryMap
+	SmdListDevs(*pb.SmdDevReq) ResultSmdMap
 }
 
 // connList is an implementation of Connect and stores controllers
 // (connections to clients, one per DAOS server).
 type connList struct {
+	log             logging.Logger
 	transportConfig *security.TransportConfig
 	factory         ControllerFactory
 	controllers     []Control
@@ -259,10 +396,13 @@ func (c *connList) makeRequests(
 
 // NewConnect is a factory for Connect interface to operate over
 // multiple clients.
-func NewConnect() Connect {
+func NewConnect(log logging.Logger) Connect {
 	return &connList{
+		log:             log,
 		transportConfig: nil,
-		factory:         &controllerFactory{},
-		controllers:     []Control{},
+		factory: &controllerFactory{
+			log: log,
+		},
+		controllers: []Control{},
 	}
 }

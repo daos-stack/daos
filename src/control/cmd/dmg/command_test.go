@@ -32,6 +32,7 @@ import (
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 )
 
@@ -49,7 +50,6 @@ type cmdTest struct {
 	name          string
 	cmd           string
 	expectedCalls string
-	expectedOpts  *cliOptions
 	expectedErr   error
 }
 
@@ -96,9 +96,14 @@ func (tc *testConn) ClearConns() client.ResultMap {
 	return nil
 }
 
-func (tc *testConn) StorageScan() (client.ClientCtrlrMap, client.ClientModuleMap) {
+func (tc *testConn) StoragePrepare(req *pb.StoragePrepareReq) client.ResultMap {
+	tc.appendInvocation("StoragePrepare")
+	return nil
+}
+
+func (tc *testConn) StorageScan() (client.ClientCtrlrMap, client.ClientModuleMap, client.ClientPmemMap) {
 	tc.appendInvocation("StorageScan")
-	return nil, nil
+	return nil, nil, nil
 }
 
 func (tc *testConn) StorageFormat() (client.ClientCtrlrMap, client.ClientMountMap) {
@@ -121,13 +126,23 @@ func (tc *testConn) KillRank(uuid string, rank uint32) client.ResultMap {
 	return nil
 }
 
-func (tc *testConn) CreatePool(req *pb.CreatePoolReq) client.ResultMap {
-	tc.appendInvocation(fmt.Sprintf("CreatePool-%s", req))
+func (tc *testConn) PoolCreate(req *client.PoolCreateReq) (*client.PoolCreateResp, error) {
+	tc.appendInvocation(fmt.Sprintf("PoolCreate-%+v", req))
+	return &client.PoolCreateResp{}, nil
+}
+
+func (tc *testConn) PoolDestroy(req *client.PoolDestroyReq) error {
+	tc.appendInvocation(fmt.Sprintf("PoolDestroy-%+v", req))
 	return nil
 }
 
-func (tc *testConn) DestroyPool(req *pb.DestroyPoolReq) client.ResultMap {
-	tc.appendInvocation(fmt.Sprintf("DestroyPool-%s", req))
+func (tc *testConn) BioHealthQuery(req *pb.BioHealthReq) client.ResultQueryMap {
+	tc.appendInvocation(fmt.Sprintf("BioHealthQuery-%s", req))
+	return nil
+}
+
+func (tc *testConn) SmdListDevs(req *pb.SmdDevReq) client.ResultSmdMap {
+	tc.appendInvocation(fmt.Sprintf("SmdListDevs-%s", req))
 	return nil
 }
 
@@ -149,42 +164,47 @@ func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 
 	for _, st := range cmdTests {
 		t.Run(st.name, func(t *testing.T) {
-			defer common.ShowLogOnFailure(t)()
 			t.Helper()
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)()
 
+			var opts cliOptions
 			conn := newTestConn(t)
 			args := append([]string{"--insecure"}, strings.Split(st.cmd, " ")...)
-			opts, err := parseOpts(args, conn)
+			err := parseOpts(args, &opts, conn, log)
 			if err != st.expectedErr {
 				if st.expectedErr == nil {
 					t.Fatalf("expected nil error, got %+v", err)
 				}
 
 				testExpectedError(t, st.expectedErr, err)
+				return
 			}
 			if st.expectedCalls != "" {
 				st.expectedCalls = fmt.Sprintf("SetTransportConfig %s", st.expectedCalls)
 			}
 			common.AssertEqual(t, strings.Join(conn.called, " "), st.expectedCalls,
 				"called functions do not match expected calls")
-			common.AssertEqual(t, opts, st.expectedOpts,
-				"parsed options do not match expected options")
 		})
 	}
 }
 
 func TestBadCommand(t *testing.T) {
-	defer common.ShowLogOnFailure(t)()
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)()
 
+	var opts cliOptions
 	conn := newTestConn(t)
-	_, err := parseOpts([]string{"foo"}, conn)
+	err := parseOpts([]string{"foo"}, &opts, conn, log)
 	testExpectedError(t, fmt.Errorf("Unknown command `foo'"), err)
 }
 
 func TestNoCommand(t *testing.T) {
-	defer common.ShowLogOnFailure(t)()
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)()
 
+	var opts cliOptions
 	conn := newTestConn(t)
-	_, err := parseOpts([]string{}, conn)
+	err := parseOpts([]string{}, &opts, conn, log)
 	testExpectedError(t, fmt.Errorf("Please specify one command"), err)
 }

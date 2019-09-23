@@ -26,6 +26,7 @@ type NvmeController struct {
 	Fwrev                string                      `protobuf:"bytes,4,opt,name=fwrev,proto3" json:"fwrev,omitempty"`
 	Socketid             int32                       `protobuf:"varint,5,opt,name=socketid,proto3" json:"socketid,omitempty"`
 	Namespaces           []*NvmeController_Namespace `protobuf:"bytes,6,rep,name=namespaces,proto3" json:"namespaces,omitempty"`
+	Healthstats          []*NvmeController_Health    `protobuf:"bytes,7,rep,name=healthstats,proto3" json:"healthstats,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                    `json:"-"`
 	XXX_unrecognized     []byte                      `json:"-"`
 	XXX_sizecache        int32                       `json:"-"`
@@ -35,7 +36,7 @@ func (m *NvmeController) Reset()         { *m = NvmeController{} }
 func (m *NvmeController) String() string { return proto.CompactTextString(m) }
 func (*NvmeController) ProtoMessage()    {}
 func (*NvmeController) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_ebeb7ca32a345a72, []int{0}
+	return fileDescriptor_storage_nvme_28ffae7e534c51fd, []int{0}
 }
 func (m *NvmeController) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_NvmeController.Unmarshal(m, b)
@@ -97,6 +98,13 @@ func (m *NvmeController) GetNamespaces() []*NvmeController_Namespace {
 	return nil
 }
 
+func (m *NvmeController) GetHealthstats() []*NvmeController_Health {
+	if m != nil {
+		return m.Healthstats
+	}
+	return nil
+}
+
 // Namespace represents a namespace created on an NvmeController.
 type NvmeController_Namespace struct {
 	Id                   int32    `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -110,7 +118,7 @@ func (m *NvmeController_Namespace) Reset()         { *m = NvmeController_Namespa
 func (m *NvmeController_Namespace) String() string { return proto.CompactTextString(m) }
 func (*NvmeController_Namespace) ProtoMessage()    {}
 func (*NvmeController_Namespace) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_ebeb7ca32a345a72, []int{0, 0}
+	return fileDescriptor_storage_nvme_28ffae7e534c51fd, []int{0, 0}
 }
 func (m *NvmeController_Namespace) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_NvmeController_Namespace.Unmarshal(m, b)
@@ -144,6 +152,149 @@ func (m *NvmeController_Namespace) GetCapacity() int32 {
 	return 0
 }
 
+type NvmeController_Health struct {
+	Temp            uint32 `protobuf:"varint,1,opt,name=temp,proto3" json:"temp,omitempty"`
+	Tempwarn        uint32 `protobuf:"varint,2,opt,name=tempwarn,proto3" json:"tempwarn,omitempty"`
+	Tempcrit        uint32 `protobuf:"varint,3,opt,name=tempcrit,proto3" json:"tempcrit,omitempty"`
+	Ctrlbusy        uint64 `protobuf:"varint,4,opt,name=ctrlbusy,proto3" json:"ctrlbusy,omitempty"`
+	Powercycles     uint64 `protobuf:"varint,5,opt,name=powercycles,proto3" json:"powercycles,omitempty"`
+	Poweronhours    uint64 `protobuf:"varint,6,opt,name=poweronhours,proto3" json:"poweronhours,omitempty"`
+	Unsafeshutdowns uint64 `protobuf:"varint,7,opt,name=unsafeshutdowns,proto3" json:"unsafeshutdowns,omitempty"`
+	Mediaerrors     uint64 `protobuf:"varint,8,opt,name=mediaerrors,proto3" json:"mediaerrors,omitempty"`
+	Errorlogs       uint64 `protobuf:"varint,9,opt,name=errorlogs,proto3" json:"errorlogs,omitempty"`
+	// critical warnings
+	Tempwarning          bool     `protobuf:"varint,10,opt,name=tempwarning,proto3" json:"tempwarning,omitempty"`
+	Availspare           bool     `protobuf:"varint,11,opt,name=availspare,proto3" json:"availspare,omitempty"`
+	Reliability          bool     `protobuf:"varint,12,opt,name=reliability,proto3" json:"reliability,omitempty"`
+	Readonly             bool     `protobuf:"varint,13,opt,name=readonly,proto3" json:"readonly,omitempty"`
+	Volatilemem          bool     `protobuf:"varint,14,opt,name=volatilemem,proto3" json:"volatilemem,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *NvmeController_Health) Reset()         { *m = NvmeController_Health{} }
+func (m *NvmeController_Health) String() string { return proto.CompactTextString(m) }
+func (*NvmeController_Health) ProtoMessage()    {}
+func (*NvmeController_Health) Descriptor() ([]byte, []int) {
+	return fileDescriptor_storage_nvme_28ffae7e534c51fd, []int{0, 1}
+}
+func (m *NvmeController_Health) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_NvmeController_Health.Unmarshal(m, b)
+}
+func (m *NvmeController_Health) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_NvmeController_Health.Marshal(b, m, deterministic)
+}
+func (dst *NvmeController_Health) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_NvmeController_Health.Merge(dst, src)
+}
+func (m *NvmeController_Health) XXX_Size() int {
+	return xxx_messageInfo_NvmeController_Health.Size(m)
+}
+func (m *NvmeController_Health) XXX_DiscardUnknown() {
+	xxx_messageInfo_NvmeController_Health.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_NvmeController_Health proto.InternalMessageInfo
+
+func (m *NvmeController_Health) GetTemp() uint32 {
+	if m != nil {
+		return m.Temp
+	}
+	return 0
+}
+
+func (m *NvmeController_Health) GetTempwarn() uint32 {
+	if m != nil {
+		return m.Tempwarn
+	}
+	return 0
+}
+
+func (m *NvmeController_Health) GetTempcrit() uint32 {
+	if m != nil {
+		return m.Tempcrit
+	}
+	return 0
+}
+
+func (m *NvmeController_Health) GetCtrlbusy() uint64 {
+	if m != nil {
+		return m.Ctrlbusy
+	}
+	return 0
+}
+
+func (m *NvmeController_Health) GetPowercycles() uint64 {
+	if m != nil {
+		return m.Powercycles
+	}
+	return 0
+}
+
+func (m *NvmeController_Health) GetPoweronhours() uint64 {
+	if m != nil {
+		return m.Poweronhours
+	}
+	return 0
+}
+
+func (m *NvmeController_Health) GetUnsafeshutdowns() uint64 {
+	if m != nil {
+		return m.Unsafeshutdowns
+	}
+	return 0
+}
+
+func (m *NvmeController_Health) GetMediaerrors() uint64 {
+	if m != nil {
+		return m.Mediaerrors
+	}
+	return 0
+}
+
+func (m *NvmeController_Health) GetErrorlogs() uint64 {
+	if m != nil {
+		return m.Errorlogs
+	}
+	return 0
+}
+
+func (m *NvmeController_Health) GetTempwarning() bool {
+	if m != nil {
+		return m.Tempwarning
+	}
+	return false
+}
+
+func (m *NvmeController_Health) GetAvailspare() bool {
+	if m != nil {
+		return m.Availspare
+	}
+	return false
+}
+
+func (m *NvmeController_Health) GetReliability() bool {
+	if m != nil {
+		return m.Reliability
+	}
+	return false
+}
+
+func (m *NvmeController_Health) GetReadonly() bool {
+	if m != nil {
+		return m.Readonly
+	}
+	return false
+}
+
+func (m *NvmeController_Health) GetVolatilemem() bool {
+	if m != nil {
+		return m.Volatilemem
+	}
+	return false
+}
+
 // NvmeControllerResult represents state of operation performed on controller.
 type NvmeControllerResult struct {
 	Pciaddr              string         `protobuf:"bytes,1,opt,name=pciaddr,proto3" json:"pciaddr,omitempty"`
@@ -157,7 +308,7 @@ func (m *NvmeControllerResult) Reset()         { *m = NvmeControllerResult{} }
 func (m *NvmeControllerResult) String() string { return proto.CompactTextString(m) }
 func (*NvmeControllerResult) ProtoMessage()    {}
 func (*NvmeControllerResult) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_ebeb7ca32a345a72, []int{1}
+	return fileDescriptor_storage_nvme_28ffae7e534c51fd, []int{1}
 }
 func (m *NvmeControllerResult) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_NvmeControllerResult.Unmarshal(m, b)
@@ -191,6 +342,106 @@ func (m *NvmeControllerResult) GetState() *ResponseState {
 	return nil
 }
 
+type PrepareNvmeReq struct {
+	Pciwhitelist         string   `protobuf:"bytes,1,opt,name=pciwhitelist,proto3" json:"pciwhitelist,omitempty"`
+	Nrhugepages          int32    `protobuf:"varint,2,opt,name=nrhugepages,proto3" json:"nrhugepages,omitempty"`
+	Targetuser           string   `protobuf:"bytes,3,opt,name=targetuser,proto3" json:"targetuser,omitempty"`
+	Reset_               bool     `protobuf:"varint,4,opt,name=reset,proto3" json:"reset,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *PrepareNvmeReq) Reset()         { *m = PrepareNvmeReq{} }
+func (m *PrepareNvmeReq) String() string { return proto.CompactTextString(m) }
+func (*PrepareNvmeReq) ProtoMessage()    {}
+func (*PrepareNvmeReq) Descriptor() ([]byte, []int) {
+	return fileDescriptor_storage_nvme_28ffae7e534c51fd, []int{2}
+}
+func (m *PrepareNvmeReq) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_PrepareNvmeReq.Unmarshal(m, b)
+}
+func (m *PrepareNvmeReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_PrepareNvmeReq.Marshal(b, m, deterministic)
+}
+func (dst *PrepareNvmeReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PrepareNvmeReq.Merge(dst, src)
+}
+func (m *PrepareNvmeReq) XXX_Size() int {
+	return xxx_messageInfo_PrepareNvmeReq.Size(m)
+}
+func (m *PrepareNvmeReq) XXX_DiscardUnknown() {
+	xxx_messageInfo_PrepareNvmeReq.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_PrepareNvmeReq proto.InternalMessageInfo
+
+func (m *PrepareNvmeReq) GetPciwhitelist() string {
+	if m != nil {
+		return m.Pciwhitelist
+	}
+	return ""
+}
+
+func (m *PrepareNvmeReq) GetNrhugepages() int32 {
+	if m != nil {
+		return m.Nrhugepages
+	}
+	return 0
+}
+
+func (m *PrepareNvmeReq) GetTargetuser() string {
+	if m != nil {
+		return m.Targetuser
+	}
+	return ""
+}
+
+func (m *PrepareNvmeReq) GetReset_() bool {
+	if m != nil {
+		return m.Reset_
+	}
+	return false
+}
+
+type PrepareNvmeResp struct {
+	State                *ResponseState `protobuf:"bytes,1,opt,name=state,proto3" json:"state,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
+	XXX_unrecognized     []byte         `json:"-"`
+	XXX_sizecache        int32          `json:"-"`
+}
+
+func (m *PrepareNvmeResp) Reset()         { *m = PrepareNvmeResp{} }
+func (m *PrepareNvmeResp) String() string { return proto.CompactTextString(m) }
+func (*PrepareNvmeResp) ProtoMessage()    {}
+func (*PrepareNvmeResp) Descriptor() ([]byte, []int) {
+	return fileDescriptor_storage_nvme_28ffae7e534c51fd, []int{3}
+}
+func (m *PrepareNvmeResp) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_PrepareNvmeResp.Unmarshal(m, b)
+}
+func (m *PrepareNvmeResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_PrepareNvmeResp.Marshal(b, m, deterministic)
+}
+func (dst *PrepareNvmeResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PrepareNvmeResp.Merge(dst, src)
+}
+func (m *PrepareNvmeResp) XXX_Size() int {
+	return xxx_messageInfo_PrepareNvmeResp.Size(m)
+}
+func (m *PrepareNvmeResp) XXX_DiscardUnknown() {
+	xxx_messageInfo_PrepareNvmeResp.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_PrepareNvmeResp proto.InternalMessageInfo
+
+func (m *PrepareNvmeResp) GetState() *ResponseState {
+	if m != nil {
+		return m.State
+	}
+	return nil
+}
+
 type ScanNvmeReq struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -201,7 +452,7 @@ func (m *ScanNvmeReq) Reset()         { *m = ScanNvmeReq{} }
 func (m *ScanNvmeReq) String() string { return proto.CompactTextString(m) }
 func (*ScanNvmeReq) ProtoMessage()    {}
 func (*ScanNvmeReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_ebeb7ca32a345a72, []int{2}
+	return fileDescriptor_storage_nvme_28ffae7e534c51fd, []int{4}
 }
 func (m *ScanNvmeReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ScanNvmeReq.Unmarshal(m, b)
@@ -221,6 +472,52 @@ func (m *ScanNvmeReq) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ScanNvmeReq proto.InternalMessageInfo
 
+type ScanNvmeResp struct {
+	Ctrlrs               []*NvmeController `protobuf:"bytes,1,rep,name=ctrlrs,proto3" json:"ctrlrs,omitempty"`
+	State                *ResponseState    `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
+	XXX_unrecognized     []byte            `json:"-"`
+	XXX_sizecache        int32             `json:"-"`
+}
+
+func (m *ScanNvmeResp) Reset()         { *m = ScanNvmeResp{} }
+func (m *ScanNvmeResp) String() string { return proto.CompactTextString(m) }
+func (*ScanNvmeResp) ProtoMessage()    {}
+func (*ScanNvmeResp) Descriptor() ([]byte, []int) {
+	return fileDescriptor_storage_nvme_28ffae7e534c51fd, []int{5}
+}
+func (m *ScanNvmeResp) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ScanNvmeResp.Unmarshal(m, b)
+}
+func (m *ScanNvmeResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ScanNvmeResp.Marshal(b, m, deterministic)
+}
+func (dst *ScanNvmeResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ScanNvmeResp.Merge(dst, src)
+}
+func (m *ScanNvmeResp) XXX_Size() int {
+	return xxx_messageInfo_ScanNvmeResp.Size(m)
+}
+func (m *ScanNvmeResp) XXX_DiscardUnknown() {
+	xxx_messageInfo_ScanNvmeResp.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ScanNvmeResp proto.InternalMessageInfo
+
+func (m *ScanNvmeResp) GetCtrlrs() []*NvmeController {
+	if m != nil {
+		return m.Ctrlrs
+	}
+	return nil
+}
+
+func (m *ScanNvmeResp) GetState() *ResponseState {
+	if m != nil {
+		return m.State
+	}
+	return nil
+}
+
 type FormatNvmeReq struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -231,7 +528,7 @@ func (m *FormatNvmeReq) Reset()         { *m = FormatNvmeReq{} }
 func (m *FormatNvmeReq) String() string { return proto.CompactTextString(m) }
 func (*FormatNvmeReq) ProtoMessage()    {}
 func (*FormatNvmeReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_ebeb7ca32a345a72, []int{3}
+	return fileDescriptor_storage_nvme_28ffae7e534c51fd, []int{6}
 }
 func (m *FormatNvmeReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_FormatNvmeReq.Unmarshal(m, b)
@@ -265,7 +562,7 @@ func (m *UpdateNvmeReq) Reset()         { *m = UpdateNvmeReq{} }
 func (m *UpdateNvmeReq) String() string { return proto.CompactTextString(m) }
 func (*UpdateNvmeReq) ProtoMessage()    {}
 func (*UpdateNvmeReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_ebeb7ca32a345a72, []int{4}
+	return fileDescriptor_storage_nvme_28ffae7e534c51fd, []int{7}
 }
 func (m *UpdateNvmeReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_UpdateNvmeReq.Unmarshal(m, b)
@@ -325,7 +622,7 @@ func (m *BurninNvmeReq) Reset()         { *m = BurninNvmeReq{} }
 func (m *BurninNvmeReq) String() string { return proto.CompactTextString(m) }
 func (*BurninNvmeReq) ProtoMessage()    {}
 func (*BurninNvmeReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_ebeb7ca32a345a72, []int{5}
+	return fileDescriptor_storage_nvme_28ffae7e534c51fd, []int{8}
 }
 func (m *BurninNvmeReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BurninNvmeReq.Unmarshal(m, b)
@@ -355,38 +652,62 @@ func (m *BurninNvmeReq) GetFioconfig() *FilePath {
 func init() {
 	proto.RegisterType((*NvmeController)(nil), "mgmt.NvmeController")
 	proto.RegisterType((*NvmeController_Namespace)(nil), "mgmt.NvmeController.Namespace")
+	proto.RegisterType((*NvmeController_Health)(nil), "mgmt.NvmeController.Health")
 	proto.RegisterType((*NvmeControllerResult)(nil), "mgmt.NvmeControllerResult")
+	proto.RegisterType((*PrepareNvmeReq)(nil), "mgmt.PrepareNvmeReq")
+	proto.RegisterType((*PrepareNvmeResp)(nil), "mgmt.PrepareNvmeResp")
 	proto.RegisterType((*ScanNvmeReq)(nil), "mgmt.ScanNvmeReq")
+	proto.RegisterType((*ScanNvmeResp)(nil), "mgmt.ScanNvmeResp")
 	proto.RegisterType((*FormatNvmeReq)(nil), "mgmt.FormatNvmeReq")
 	proto.RegisterType((*UpdateNvmeReq)(nil), "mgmt.UpdateNvmeReq")
 	proto.RegisterType((*BurninNvmeReq)(nil), "mgmt.BurninNvmeReq")
 }
 
-func init() { proto.RegisterFile("storage_nvme.proto", fileDescriptor_storage_nvme_ebeb7ca32a345a72) }
+func init() { proto.RegisterFile("storage_nvme.proto", fileDescriptor_storage_nvme_28ffae7e534c51fd) }
 
-var fileDescriptor_storage_nvme_ebeb7ca32a345a72 = []byte{
-	// 366 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x74, 0x52, 0xb1, 0x0e, 0xd3, 0x30,
-	0x10, 0x55, 0xd2, 0xa6, 0xd0, 0x0b, 0x29, 0x92, 0xa9, 0x50, 0xd4, 0x01, 0x55, 0x99, 0x8a, 0x84,
-	0x32, 0x94, 0x81, 0x09, 0x06, 0x90, 0x3a, 0x56, 0xc8, 0x15, 0x13, 0x03, 0x32, 0xce, 0xb5, 0xb5,
-	0x88, 0xed, 0x60, 0x5f, 0x8b, 0x98, 0xf9, 0x71, 0x64, 0xa7, 0x09, 0xed, 0xc0, 0xe6, 0xf7, 0xee,
-	0x72, 0xef, 0xbd, 0xbb, 0x00, 0xf3, 0x64, 0x9d, 0x38, 0xe1, 0x37, 0x73, 0xd5, 0x58, 0x77, 0xce,
-	0x92, 0x65, 0x53, 0x7d, 0xd2, 0xb4, 0x7a, 0x26, 0xad, 0xd6, 0xd6, 0xf4, 0x5c, 0xf5, 0x27, 0x85,
-	0xc5, 0xfe, 0xaa, 0xf1, 0x93, 0x35, 0xe4, 0x6c, 0xdb, 0xa2, 0x63, 0x4b, 0xc8, 0xb4, 0x6d, 0xb0,
-	0x2d, 0x93, 0x75, 0xb2, 0x99, 0xf3, 0x1e, 0xb0, 0x97, 0x30, 0xf3, 0xe8, 0x94, 0x68, 0xcb, 0x34,
-	0xd2, 0x37, 0xc4, 0x4a, 0x78, 0xd2, 0x49, 0x25, 0x9a, 0xc6, 0x95, 0x93, 0x58, 0x18, 0x60, 0x98,
-	0x73, 0xfc, 0xe5, 0xf0, 0x5a, 0x4e, 0xfb, 0x39, 0x11, 0xb0, 0x15, 0x3c, 0xf5, 0x56, 0xfe, 0x40,
-	0x52, 0x4d, 0x99, 0xad, 0x93, 0x4d, 0xc6, 0x47, 0xcc, 0x3e, 0x00, 0x18, 0xa1, 0xd1, 0x77, 0x42,
-	0xa2, 0x2f, 0x67, 0xeb, 0xc9, 0x26, 0xdf, 0xbe, 0xaa, 0x83, 0xeb, 0xfa, 0xd1, 0x63, 0xbd, 0x1f,
-	0xda, 0xf8, 0xdd, 0x17, 0xab, 0x77, 0x30, 0x1f, 0x0b, 0x6c, 0x01, 0xa9, 0x6a, 0x62, 0x86, 0x8c,
-	0xa7, 0xaa, 0x09, 0xc2, 0x52, 0x74, 0x42, 0x2a, 0xfa, 0x1d, 0x23, 0x64, 0x7c, 0xc4, 0xd5, 0x57,
-	0x58, 0x3e, 0x0a, 0x70, 0xf4, 0x97, 0x96, 0xee, 0xc3, 0x25, 0x8f, 0xe1, 0x5e, 0x43, 0xe6, 0x49,
-	0x10, 0xc6, 0x51, 0xf9, 0xf6, 0x45, 0xef, 0x92, 0xa3, 0xef, 0xac, 0xf1, 0x78, 0x08, 0x25, 0xde,
-	0x77, 0x54, 0x05, 0xe4, 0x07, 0x29, 0x4c, 0x10, 0xe0, 0xf8, 0xb3, 0x7a, 0x0e, 0xc5, 0xce, 0x3a,
-	0x2d, 0x68, 0x20, 0x14, 0x14, 0x5f, 0xba, 0x46, 0x10, 0xde, 0x88, 0xff, 0x1c, 0x20, 0x2c, 0x8e,
-	0x84, 0xa3, 0xb0, 0xd1, 0xfe, 0x04, 0x23, 0x66, 0x0c, 0xa6, 0x9d, 0xa0, 0xf3, 0xed, 0x02, 0xf1,
-	0x1d, 0x38, 0xdf, 0x5a, 0x8a, 0xdb, 0xcf, 0x78, 0x7c, 0x57, 0xef, 0xa1, 0xf8, 0x78, 0x71, 0x46,
-	0x0d, 0x66, 0xd8, 0x1b, 0x98, 0x1f, 0x95, 0x95, 0xd6, 0x1c, 0xd5, 0x29, 0xca, 0xe5, 0xdb, 0x45,
-	0x1f, 0x65, 0xa7, 0x5a, 0xfc, 0x2c, 0xe8, 0xcc, 0xff, 0x35, 0x7c, 0x9f, 0xc5, 0x7f, 0xe6, 0xed,
-	0xdf, 0x00, 0x00, 0x00, 0xff, 0xff, 0x0b, 0x48, 0x5e, 0x71, 0x5d, 0x02, 0x00, 0x00,
+var fileDescriptor_storage_nvme_28ffae7e534c51fd = []byte{
+	// 683 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x54, 0xcd, 0x6a, 0xdb, 0x4a,
+	0x14, 0x46, 0x89, 0xed, 0xd8, 0xc7, 0x3f, 0x81, 0xb9, 0xe1, 0x32, 0xf8, 0x5e, 0x82, 0xf1, 0xca,
+	0x85, 0xe0, 0x45, 0xba, 0xe8, 0xa6, 0xe9, 0xa2, 0x85, 0xd0, 0x55, 0x08, 0x13, 0xba, 0xea, 0xa2,
+	0x4c, 0xa4, 0x63, 0x69, 0xe8, 0x48, 0xa3, 0xce, 0x8c, 0x6c, 0xfc, 0x04, 0xdd, 0xf4, 0xa9, 0xfa,
+	0x64, 0xe5, 0x8c, 0x64, 0x59, 0x2e, 0x81, 0xd2, 0x95, 0xe6, 0xfb, 0xce, 0xef, 0x7c, 0x3a, 0x73,
+	0x80, 0x39, 0x6f, 0xac, 0x4c, 0xf1, 0x4b, 0xb1, 0xcd, 0x71, 0x5d, 0x5a, 0xe3, 0x0d, 0xeb, 0xe5,
+	0x69, 0xee, 0xe7, 0x93, 0xd8, 0xe4, 0xb9, 0x29, 0x6a, 0x6e, 0xf9, 0x7d, 0x00, 0xb3, 0x87, 0x6d,
+	0x8e, 0x1f, 0x4c, 0xe1, 0xad, 0xd1, 0x1a, 0x2d, 0xbb, 0x82, 0x7e, 0x6e, 0x12, 0xd4, 0x3c, 0x5a,
+	0x44, 0xab, 0x91, 0xa8, 0x01, 0xfb, 0x17, 0x06, 0x0e, 0xad, 0x92, 0x9a, 0x9f, 0x05, 0xba, 0x41,
+	0x8c, 0xc3, 0x45, 0x19, 0x2b, 0x99, 0x24, 0x96, 0x9f, 0x07, 0xc3, 0x01, 0x52, 0x9e, 0xcd, 0xce,
+	0xe2, 0x96, 0xf7, 0xea, 0x3c, 0x01, 0xb0, 0x39, 0x0c, 0x9d, 0x89, 0xbf, 0xa2, 0x57, 0x09, 0xef,
+	0x2f, 0xa2, 0x55, 0x5f, 0xb4, 0x98, 0xbd, 0x03, 0x28, 0x64, 0x8e, 0xae, 0x94, 0x31, 0x3a, 0x3e,
+	0x58, 0x9c, 0xaf, 0xc6, 0xb7, 0xd7, 0x6b, 0xea, 0x7a, 0x7d, 0xda, 0xe3, 0xfa, 0xe1, 0xe0, 0x26,
+	0x3a, 0x11, 0xec, 0x0e, 0xc6, 0x19, 0x4a, 0xed, 0x33, 0xe7, 0xa5, 0x77, 0xfc, 0x22, 0x24, 0xf8,
+	0xef, 0xc5, 0x04, 0x1f, 0x83, 0x9f, 0xe8, 0xfa, 0xcf, 0xdf, 0xc0, 0xa8, 0xcd, 0xcb, 0x66, 0x70,
+	0xa6, 0x92, 0x20, 0x41, 0x5f, 0x9c, 0xa9, 0x84, 0xfa, 0x8e, 0x65, 0x29, 0x63, 0xe5, 0xf7, 0x41,
+	0x81, 0xbe, 0x68, 0xf1, 0xfc, 0xe7, 0x39, 0x0c, 0xea, 0x84, 0x8c, 0x41, 0xcf, 0x63, 0x5e, 0x86,
+	0xc0, 0xa9, 0x08, 0x67, 0x0a, 0xa5, 0xef, 0x4e, 0xda, 0x22, 0x84, 0x4e, 0x45, 0x8b, 0x0f, 0xb6,
+	0xd8, 0x2a, 0x1f, 0xf4, 0x6b, 0x6c, 0x84, 0x43, 0x49, 0x6f, 0xf5, 0x73, 0xe5, 0xf6, 0x41, 0xc3,
+	0x9e, 0x68, 0x31, 0x5b, 0xc0, 0xb8, 0x34, 0x3b, 0xb4, 0xf1, 0x3e, 0xd6, 0xe8, 0x82, 0x92, 0x3d,
+	0xd1, 0xa5, 0xd8, 0x12, 0x26, 0x01, 0x9a, 0x22, 0x33, 0x95, 0x25, 0x39, 0xc9, 0xe5, 0x84, 0x63,
+	0x2b, 0xb8, 0xac, 0x0a, 0x27, 0x37, 0xe8, 0xb2, 0xca, 0x27, 0x66, 0x57, 0x90, 0x68, 0xe4, 0xf6,
+	0x3b, 0x4d, 0xf5, 0x72, 0x4c, 0x94, 0x44, 0x6b, 0x8d, 0x75, 0x7c, 0x58, 0xd7, 0xeb, 0x50, 0xec,
+	0x7f, 0x18, 0x85, 0x93, 0x36, 0xa9, 0xe3, 0xa3, 0x60, 0x3f, 0x12, 0x14, 0x7f, 0xb8, 0xb3, 0x2a,
+	0x52, 0x0e, 0x8b, 0x68, 0x35, 0x14, 0x5d, 0x8a, 0x5d, 0x03, 0xc8, 0xad, 0x54, 0xda, 0x95, 0xd2,
+	0x22, 0x1f, 0x07, 0x87, 0x0e, 0x43, 0x19, 0x2c, 0x6a, 0x25, 0x9f, 0x95, 0xa6, 0x7f, 0x30, 0xa9,
+	0x33, 0x74, 0x28, 0xd2, 0xcb, 0xa2, 0x4c, 0x4c, 0xa1, 0xf7, 0x7c, 0x1a, 0xcc, 0x2d, 0xa6, 0xe8,
+	0xad, 0xd1, 0xd2, 0x2b, 0x8d, 0x39, 0xe6, 0x7c, 0x56, 0x47, 0x77, 0xa8, 0xe5, 0x67, 0xb8, 0x3a,
+	0x9d, 0x11, 0x81, 0xae, 0xd2, 0xbe, 0x3b, 0xe0, 0xd1, 0xe9, 0x80, 0xbf, 0x82, 0x3e, 0x0d, 0x0e,
+	0x86, 0x9f, 0x3a, 0xbe, 0xfd, 0xa7, 0x1e, 0x34, 0x81, 0xae, 0x34, 0x85, 0xc3, 0x27, 0x32, 0x89,
+	0xda, 0x63, 0xf9, 0x23, 0x82, 0xd9, 0xa3, 0x45, 0xba, 0x08, 0x15, 0x11, 0xf8, 0x2d, 0xfc, 0x9f,
+	0x58, 0xed, 0x32, 0xe5, 0x51, 0x2b, 0xe7, 0x9b, 0xe4, 0x27, 0x1c, 0x75, 0x5d, 0xd8, 0xac, 0x4a,
+	0xb1, 0x94, 0x29, 0xba, 0x66, 0xee, 0xba, 0x14, 0xa9, 0xe6, 0xa5, 0x4d, 0xd1, 0x57, 0x0e, 0x0f,
+	0x2f, 0xb0, 0xc3, 0xd0, 0x23, 0xb4, 0xe8, 0xd0, 0x87, 0x01, 0x1a, 0x8a, 0x1a, 0x2c, 0xdf, 0xc2,
+	0xe5, 0x49, 0x37, 0xae, 0x3c, 0x5e, 0x26, 0xfa, 0xe3, 0x65, 0xa6, 0x30, 0x7e, 0x8a, 0x65, 0xd1,
+	0x5c, 0x64, 0x99, 0xc2, 0xe4, 0x08, 0x5d, 0xc9, 0x6e, 0x60, 0x40, 0x63, 0x6a, 0x1d, 0x8f, 0xc2,
+	0x03, 0xbc, 0x7a, 0xe9, 0x01, 0x8a, 0xc6, 0xe7, 0x6f, 0x44, 0xbc, 0x84, 0xe9, 0xbd, 0xb1, 0xb9,
+	0xf4, 0x87, 0xca, 0x0a, 0xa6, 0x9f, 0xca, 0x44, 0xfa, 0x56, 0xd3, 0x97, 0x57, 0x17, 0xad, 0x1c,
+	0x2f, 0xad, 0xa7, 0x5d, 0x54, 0x2f, 0xaf, 0x16, 0xd3, 0x7b, 0x2d, 0xa5, 0xcf, 0x1a, 0xe5, 0xc2,
+	0x99, 0x38, 0xa7, 0x4d, 0x2d, 0x59, 0x5f, 0x84, 0xf3, 0xf2, 0x0e, 0xa6, 0xef, 0x2b, 0x1a, 0xd4,
+	0x43, 0xa9, 0x1b, 0x18, 0x6d, 0x94, 0x89, 0x4d, 0xb1, 0x51, 0x69, 0xa3, 0xd9, 0xac, 0xee, 0xfd,
+	0x5e, 0x69, 0x7c, 0x94, 0x3e, 0x13, 0x47, 0x87, 0xe7, 0x41, 0xd8, 0xb6, 0xaf, 0x7f, 0x05, 0x00,
+	0x00, 0xff, 0xff, 0xf7, 0x40, 0xaa, 0x8c, 0x97, 0x05, 0x00, 0x00,
 }

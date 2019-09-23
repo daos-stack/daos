@@ -25,6 +25,29 @@
 
 #include <daos_srv/daos_server.h>
 
+/** Per-xstream configuration data */
+struct dss_xstream {
+	char		dx_name[DSS_XS_NAME_LEN];
+	ABT_future	dx_shutdown;
+	hwloc_cpuset_t	dx_cpuset;
+	ABT_xstream	dx_xstream;
+	ABT_pool	dx_pools[DSS_POOL_CNT];
+	ABT_sched	dx_sched;
+	ABT_thread	dx_progress;
+	tse_sched_t	dx_sched_dsc;
+	/* xstream id, [0, DSS_XS_NR_TOTAL - 1] */
+	int		dx_xs_id;
+	/* VOS target id, [0, dss_tgt_nr - 1]. Invalid (-1) for system XS.
+	 * For offload XS it is same value as its main XS.
+	 */
+	int		dx_tgt_id;
+	/* CART context id, invalid (-1) for the offload XS w/o CART context */
+	int		dx_ctx_id;
+	bool		dx_main_xs;	/* true for main XS */
+	bool		dx_comm;	/* true with cart context */
+	bool		dx_dsc_started;	/* DSC progress ULT started */
+};
+
 /** Server node topology */
 extern hwloc_topology_t	dss_topo;
 /** core depth of the topology */
@@ -109,8 +132,10 @@ dss_ult_xs(int ult_type, int tgt_id)
 		return DSS_MAIN_XS_ID(tgt_id) + dss_tgt_offload_xs_nr;
 	case DSS_ULT_POOL_SRV:
 	case DSS_ULT_RDB:
-	case DSS_ULT_DRPC:
+	case DSS_ULT_DRPC_HANDLER:
 		return 0;
+	case DSS_ULT_DRPC_LISTENER:
+		return 1;
 	case DSS_ULT_REBUILD:
 	case DSS_ULT_AGGREGATE:
 		return DSS_MAIN_XS_ID(tgt_id);
@@ -138,9 +163,10 @@ dss_ult_pool(int ult_type)
 	case DSS_ULT_CHECKSUM:
 	case DSS_ULT_COMPRESS:
 	case DSS_ULT_POOL_SRV:
-	case DSS_ULT_DRPC:
+	case DSS_ULT_DRPC_LISTENER:
 	case DSS_ULT_RDB:
 	case DSS_ULT_MISC:
+	case DSS_ULT_DRPC_HANDLER:
 		return DSS_POOL_SHARE;
 	case DSS_ULT_REBUILD:
 	case DSS_ULT_AGGREGATE:

@@ -43,9 +43,11 @@ const (
 	startMS       = C.DRPC_METHOD_MGMT_START_MS
 	join          = C.DRPC_METHOD_MGMT_JOIN
 	getAttachInfo = C.DRPC_METHOD_MGMT_GET_ATTACH_INFO
-	createPool    = C.DRPC_METHOD_MGMT_CREATE_POOL
-	destroyPool   = C.DRPC_METHOD_MGMT_DESTROY_POOL
+	poolCreate    = C.DRPC_METHOD_MGMT_POOL_CREATE
+	poolDestroy   = C.DRPC_METHOD_MGMT_POOL_DESTROY
+	bioHealth     = C.DRPC_METHOD_MGMT_BIO_HEALTH_QUERY
 	setUp         = C.DRPC_METHOD_MGMT_SET_UP
+	smdDevs       = C.DRPC_METHOD_MGMT_SMD_LIST_DEVS
 
 	srvModuleID = C.DRPC_MODULE_SRV
 	notifyReady = C.DRPC_METHOD_SRV_NOTIFY_READY
@@ -72,7 +74,7 @@ func (m *mgmtModule) ID() int32 {
 // srvModule represents the daos_server dRPC module. It handles dRPCs sent by
 // the daos_io_server iosrv module (src/iosrv).
 type srvModule struct {
-	iosrv *iosrv
+	iosrv *IOServerInstance
 }
 
 // HandleCall is the handler for calls to the srvModule
@@ -97,7 +99,7 @@ func (mod *srvModule) handleNotifyReady(reqb []byte) error {
 		return errors.Wrap(err, "unmarshal NotifyReady request")
 	}
 
-	mod.iosrv.ready <- req
+	mod.iosrv.NotifyReady(req)
 
 	return nil
 }

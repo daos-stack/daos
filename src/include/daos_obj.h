@@ -795,6 +795,22 @@ daos_obj_query_key(daos_handle_t oh, daos_handle_t th, uint32_t flags,
 		   daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
 		   daos_event_t *ev);
 
+/**
+ * Verify object data consistency against the specified epoch.
+ *
+ * \param[in]	coh	Container open handle.
+ * \param[in]	oid	Object ID.
+ * \param[in]	epoch	The (stable) epoch against that the verification will
+ *			be done. DAOS_EPOCH_MAX means current highest epoch.
+ *
+ * \return		0		Success and consistent
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_MISMATCH	Found data inconsistency
+ */
+int
+daos_obj_verify(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch);
+
 #if defined(__cplusplus)
 }
 #endif

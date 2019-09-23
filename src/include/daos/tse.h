@@ -32,7 +32,7 @@
 #include <gurt/list.h>
 /**
  * tse_task is used to track single asynchronous operation.
- * 512 bytes all together.
+ * 1K bytes all together.
  */
 #define TSE_TASK_SIZE		1024
 /* 8 bytes used for public members */

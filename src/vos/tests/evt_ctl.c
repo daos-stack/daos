@@ -68,7 +68,8 @@ static struct umem_attr		*ts_uma;
 static int			 ts_feats = EVT_FEAT_DEFAULT;
 
 #define ORDER_DEF_INTERNAL	13
-#define ORDER_DEF		16
+#define	ORDER_DEF		16
+#define	ORDER_TEST_SIZE		200
 
 static int			ts_order = ORDER_DEF;
 
@@ -1682,6 +1683,239 @@ test_evt_various_data_size_internal(void **state)
 	}
 }
 
+static void
+test_evt_node_size_internal(void **state)
+{
+	struct test_arg		*arg = *state;
+	daos_handle_t		 toh;
+	int			order_size, rc;
+	bool			evt_created;
+
+	for (order_size = 0; order_size < ORDER_TEST_SIZE; order_size++) {
+		evt_created = false;
+		rc = evt_create(arg->ta_root, ts_feats, order_size,
+				arg->ta_uma, &ts_evt_desc_cbs, &toh);
+		if ((order_size >= EVT_MIN_ORDER) &&
+		(order_size <= EVT_MAX_ORDER)) {
+			assert_int_equal(rc, 0);
+			evt_created = true;
+		} else {
+			assert_int_not_equal(rc, 0);
+		}
+		if (evt_created) {
+			rc = evt_destroy(toh);
+			assert_int_equal(rc, 0);
+		}
+	}
+}
+
+/* Args : Input : string_val pointer
+*                 num: number of time to repeat string val
+*         Output: ret_string: Returns concatenated string.
+*		  NOTE: pre-allocate ret_string buffer
+*		  before calling this function. Otherwise,
+*		  you will get segmentation fault.
+*/
+void repeat_string(char *ret_string, char *string_val, int num)
+{
+	int	counter;
+
+	counter = num;
+	strcpy(ret_string, string_val);
+	counter--;
+	while (counter-- > 0)
+		strcat(ret_string, string_val);
+}
+
+static void
+test_evt_overlap_split_internal(void **state)
+{
+	struct test_arg		*arg = *state;
+	daos_handle_t		toh;
+	daos_handle_t		ih;
+	struct evt_entry	ent;
+	int			rc;
+	struct evt_entry_in	entry = {0};
+	int			epoch;
+	int			record_size, data_size;
+	char			*data;
+	char			*expected_data = NULL;
+	char			*actual_data = NULL;
+	char			*read_data = NULL;
+	uint32_t		 inob;
+	int			data_len = 9;
+	int			tree_depth_fail = 0;
+	int			mem_cmp_fail = 0;
+	int			read_counter, counter, temp_val;
+	int			last_offset = 0;
+
+	rc = evt_create(arg->ta_root, ts_feats, ORDER_DEF_INTERNAL,
+				arg->ta_uma, &ts_evt_desc_cbs, &toh);
+	assert_int_equal(rc, 0);
+	/* Overall data : September
+	* overlap value1: Wonderful
+	* overlap value2: Rainydays
+	*/
+	record_size = ((data_len * NUM_EPOCHS) + 1);
+	/* First data malloc is for record_size.
+	* Other data malloc is only for 9 bytes.
+	* for loop frees the data every time.
+	*/
+	D_ALLOC_ARRAY(data, record_size);
+	if (data == NULL)
+		goto finish;
+	repeat_string(data, "September", NUM_EPOCHS);
+	data_size = record_size;
+
+	D_ALLOC_ARRAY(expected_data, NUM_EPOCHS * record_size);
+	if (expected_data == NULL)
+		goto finish1;
+	D_ALLOC_ARRAY(actual_data, NUM_EPOCHS * record_size);
+	if (actual_data == NULL)
+		goto finish2;
+
+	for (epoch = 1; epoch < NUM_EPOCHS; epoch++) {
+	/* Write a big extent at epoch 1.
+	* Then, write some data in the front, end, middle
+	* at different epochs and see whether overlapped data
+	* is visible.
+	*/
+		if (epoch > 1) {
+			/* For epoch=1, the data size is different.
+			* All other epoch, data size is same.
+			* The data is freed on each loop.
+			*/
+			data_size = 9;
+		} else {
+			data_size = record_size;
+		}
+		switch (epoch) {
+		case 1:
+			/* Initial long data */
+			entry.ei_rect.rc_ex.ex_lo = epoch;
+			entry.ei_rect.rc_ex.ex_hi = data_size;
+			memcpy(expected_data, data, data_size);
+			break;
+		case 2:
+			/* Add some value in front */
+			memcpy(data, "Wonderful", strlen("Wonderful"));
+			entry.ei_rect.rc_ex.ex_lo = epoch - 1;
+			entry.ei_rect.rc_ex.ex_hi = data_size;
+			memcpy(expected_data, data, data_size);
+			break;
+		case 3:
+			/* Add something in the middle */
+			memcpy(data, "Rainydays", strlen("Rainydays"));
+			temp_val = epoch * data_size;
+			entry.ei_rect.rc_ex.ex_lo = temp_val + 1;
+			entry.ei_rect.rc_ex.ex_hi = temp_val +
+			data_size;
+			memcpy(&expected_data[temp_val], data,
+				data_size);
+			break;
+		case 4:
+			/* Add something at the end */
+			memcpy(data, "deafbeefs", strlen("deadbeefs"));
+			temp_val = NUM_EPOCHS * data_size;
+			entry.ei_rect.rc_ex.ex_lo = temp_val + 1;
+			entry.ei_rect.rc_ex.ex_hi = temp_val +
+			data_size;
+			memcpy(&expected_data[temp_val], data,
+			data_size);
+			last_offset = temp_val + data_size;
+			break;
+		default:
+			/* Create extent far away for node split */
+			memcpy(data, "Wildfire", strlen("Wildfire"));
+			temp_val = epoch * NUM_EPOCHS * NUM_EPOCHS;
+			entry.ei_rect.rc_ex.ex_lo = temp_val + 1;
+			entry.ei_rect.rc_ex.ex_hi = temp_val +
+			data_size;
+			memcpy(&expected_data[last_offset],
+			data, data_size);
+			last_offset += data_size;
+			break;
+		}
+		entry.ei_rect.rc_epc = epoch;
+		entry.ei_ver = 0;
+		entry.ei_inob = 1;
+
+		memset(&entry.ei_csum, 0, sizeof(entry.ei_csum));
+		rc = bio_alloc_init(arg->ta_utx, &entry.ei_addr,
+				    data, data_size);
+		assert_int_equal(rc, 0);
+		rc = evt_insert(toh, &entry);
+		assert_int_equal(rc, 0);
+		memset(data, 0, data_size);
+	}
+	D_FREE(data);
+
+	rc = evt_iter_prepare(toh, EVT_ITER_VISIBLE, NULL, &ih);
+	if (rc != 0)
+		goto finish;
+	rc = evt_iter_probe(ih, EVT_ITER_FIRST, NULL, NULL);
+	if (rc != 0)
+		goto finish;
+
+	read_counter = 0;
+
+	for (;;) {
+		rc = evt_iter_fetch(ih, &inob, &ent, NULL);
+		if (rc == -DER_NONEXIST)
+			break;
+		assert_int_equal(rc, 0);
+		read_data = utest_off2ptr(arg->ta_utx, ent.en_addr.ba_off);
+		for (counter = 0;
+		counter < (int)evt_extent_width(&ent.en_sel_ext); counter++) {
+			memcpy(&actual_data[read_counter], &read_data[counter],
+				sizeof(char));
+			read_counter++;
+		}
+		rc = evt_iter_next(ih);
+		if (rc == -DER_NONEXIST)
+			break;
+		assert_int_equal(rc, 0);
+	}
+
+	rc = memcmp(actual_data, expected_data,
+		NUM_EPOCHS * record_size *
+		sizeof(char));
+	if (rc != 0) {
+		mem_cmp_fail = 1;
+		goto finish;
+	}
+
+
+	D_PRINT("Tree depth :%d\n", arg->ta_root->tr_depth);
+	if (arg->ta_root->tr_depth < 2)
+		tree_depth_fail = 1;
+
+
+finish:
+	if (tree_depth_fail)
+		fail_msg("Node not splitted\n");
+	if (mem_cmp_fail) {
+		D_PRINT("Actual Data\n");
+		D_PRINT("===========\n");
+		for (counter = 0; counter < read_counter; counter++)
+			D_PRINT("%c", actual_data[counter]);
+		D_PRINT("\n");
+		D_PRINT("Expected Data\n");
+		D_PRINT("===========\n");
+		for (counter = 0; counter < last_offset; counter++)
+			D_PRINT("%c", expected_data[counter]);
+		D_PRINT("\n");
+		fail_msg("Actual/Expected Data MisMatch\n");
+	}
+	D_FREE(actual_data);
+finish1:
+	D_FREE(data);
+finish2:
+	D_FREE(expected_data);
+	rc = evt_destroy(toh);
+	assert_int_equal(rc, 0);
+}
+
 static inline int
 insert_and_check(daos_handle_t toh, struct evt_entry_in *entry, int idx, int nr)
 {
@@ -2070,6 +2304,12 @@ run_internal_tests(void)
 		{ "EVT017: evt_iter_outer_punch",
 			test_evt_outer_punch,
 			setup_builtin, teardown_builtin},
+		{ "EVT018: evt_node_size_internal",
+			test_evt_node_size_internal,
+			setup_builtin, teardown_builtin},
+		{ "EVT019: evt_overlap_split_internal",
+			test_evt_overlap_split_internal,
+			setup_builtin, teardown_builtin},
 		{ NULL, NULL, NULL, NULL }
 	};
 
@@ -2164,6 +2404,8 @@ main(int argc, char **argv)
 {
 	struct timeval	tv;
 	int		rc;
+
+	d_register_alt_assert(mock_assert);
 
 	gettimeofday(&tv, NULL);
 	srand(tv.tv_usec);
