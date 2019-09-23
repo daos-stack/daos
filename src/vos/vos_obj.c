@@ -944,8 +944,10 @@ singv_iter_next(struct vos_obj_iter *oiter)
 	 * so return -DER_NONEXIST directly for the next().
 	 */
 	if (oiter->it_flags & VOS_IT_RECX_VISIBLE &&
-	    !oiter->it_iter.it_for_purge)
+	    !(oiter->it_flags & VOS_IT_RECX_COVERED)) {
+		D_ASSERT(oiter->it_epc_expr == VOS_IT_EPC_RR);
 		return -DER_NONEXIST;
+	}
 
 	memset(&entry, 0, sizeof(entry));
 	rc = singv_iter_fetch(oiter, &entry, NULL);
