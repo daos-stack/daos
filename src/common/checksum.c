@@ -57,6 +57,15 @@ daos_cont_prop2chunksize(daos_prop_t *props)
 }
 
 bool
+daos_cont_prop2serververify(daos_prop_t *props)
+{
+	struct daos_prop_entry *prop =
+		daos_prop_entry_get(props, DAOS_PROP_CO_CSUM_SERVER_VERIFY);
+
+	return prop == NULL ? false : prop->dpe_val == DAOS_PROP_CO_CSUM_SV_ON;
+}
+
+bool
 daos_cont_csum_prop_is_valid(uint16_t val)
 {
 	if (daos_cont_csum_prop_is_enabled(val) || val == DAOS_PROP_CO_CSUM_OFF)
@@ -199,6 +208,13 @@ daos_csummer_init(struct daos_csummer **obj, struct csum_ft *ft,
 		*obj = result;
 
 	return rc;
+}
+
+int
+daos_csummer_type_init(struct daos_csummer **obj, enum DAOS_CSUM_TYPE type,
+		       size_t chunk_bytes)
+{
+	return daos_csummer_init(obj, daos_csum_type2algo(type), chunk_bytes);
 }
 
 void daos_csummer_destroy(struct daos_csummer **obj)
@@ -485,4 +501,40 @@ checksum_sgl_cb(uint8_t *buf, size_t len, void *args)
 	struct daos_csummer *obj = args;
 
 	return daos_csummer_update(obj, buf, len);
+}
+
+int
+daos_csum_check_sgl(const daos_iod_t *iod, d_sg_list_t *sgl)
+{
+	struct daos_csummer	*csummer;
+	daos_csum_buf_t		*csum_bufs;
+	daos_csum_buf_t		*csum = iod->iod_csums;
+	int			 rc;
+
+	if (!dcb_is_valid(csum))
+		return 0;
+
+	rc = daos_csummer_type_init(&csummer,
+				    (enum DAOS_CSUM_TYPE) csum->cs_type,
+				    csum->cs_chunksize);
+	if (rc != 0) {
+		D_ERROR("Issue initializing csummer. "
+			"Unable to check data. Returning success so checksum "
+			"doesn't kill IO.");
+
+		return 0;
+	}
+
+	daos_csummer_calc_csum(csummer, sgl, iod->iod_size,
+			       iod->iod_recxs, iod->iod_nr, &csum_bufs);
+
+	if (!daos_csummer_compare(csummer, csum_bufs, csum)) {
+		D_WARN("Corruption found!!\n");
+		rc = -DER_IO;
+	}
+
+	daos_csummer_destroy_csum_buf(csummer, iod->iod_nr, &csum_bufs);
+	daos_csummer_destroy(&csummer);
+
+	return rc;
 }

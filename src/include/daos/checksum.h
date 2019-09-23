@@ -40,6 +40,9 @@ uint64_t
 daos_cont_prop2chunksize(daos_prop_t *props);
 
 bool
+daos_cont_prop2serververify(daos_prop_t *props);
+
+bool
 daos_cont_csum_prop_is_valid(uint16_t val);
 
 bool
@@ -118,6 +121,20 @@ daos_csum_type2algo(enum DAOS_CSUM_TYPE type);
  */
 int
 daos_csummer_init(struct daos_csummer **obj, struct csum_ft *ft,
+		  size_t chunk_bytes);
+
+/**
+ * Initialize the daos_csummer with a known DAOS_CSUM_TYPE
+ *
+ * @param obj		daos_csummer to be initialized. Memory will be allocated
+ *			for it.
+ * @param type		Type of the checksum algorithm that will be used
+ * @param chunk_bytes	Chunksize, typically from the container configuration
+ *
+ * @return		0 for success, or an error code
+ */
+int
+daos_csummer_type_init(struct daos_csummer **obj, enum DAOS_CSUM_TYPE type,
 		  size_t chunk_bytes);
 
 /** Destroy the daos_csummer */
@@ -265,6 +282,18 @@ daos_recx_calc_chunks(daos_recx_t extent, uint32_t record_size,
 uint32_t
 csum_chunk_count(uint32_t chunk_size, uint64_t lo_idx, uint64_t hi_idx,
 		 uint64_t rec_size);
+
+/**
+ * A facade for verifying data (represented by an sgl) is not corrupt. Uses the
+ * checksums stored in the iod to compare against calculated checksums.
+ *
+ * @param iod	I/O Descriptor which contains checksums
+ * @param sgl	Scatter Gather List pointing to the data to be verified
+ *
+ * @return	0 for success, -DER_IO if corruption is detected
+ */
+int
+daos_csum_check_sgl(const daos_iod_t *iod, d_sg_list_t *sgl);
 
 #endif /** __DAOS_CHECKSUM_H */
 
