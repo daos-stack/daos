@@ -783,8 +783,8 @@ dss_start_xs_id(int xs_id)
 	hwloc_obj_t	obj;
 	int		rc;
 	int		xs_core_offset;
-	unsigned 	idx;
-	char 		*cpuset;
+	unsigned	idx;
+	char		*cpuset;
 
 	D_DEBUG(DB_TRACE, "start xs_id called for %d.  ", xs_id);
 	/* if we are NUMA aware, use the NUMA information */

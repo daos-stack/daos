@@ -234,12 +234,12 @@ dss_tgt_nr_get(int ncores, int nr)
 static int
 dss_topo_init()
 {
-	uint 		depth;
-	int 		numa_node_nr;
-	int 		num_cores_visited;
-	char 		*cpuset;
-	int 		k;
-	hwloc_obj_t 	corenode;
+	int		depth;
+	int		numa_node_nr;
+	int		num_cores_visited;
+	char		*cpuset;
+	int		k;
+	hwloc_obj_t	corenode;
 
 	hwloc_topology_init(&dss_topo);
 	hwloc_topology_load(dss_topo);
