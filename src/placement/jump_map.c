@@ -728,7 +728,7 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 	D_INIT_LIST_HEAD(&used_targets_list);
 
 	if (dom_used == NULL)
-		D_GOTO(out, rc);
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	/**
 	 * If the object class is a special class then the first shard must be
