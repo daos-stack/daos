@@ -107,7 +107,7 @@ cmd_create_container(int argc, const char **argv, void *ctx)
 	daos_handle_t    poh;
 	d_rank_list_t    pool_service_list = {NULL, 0};
 	unsigned int     flag = DAOS_PC_EX;
-	daos_pool_info_t info;
+	daos_pool_info_t info = {0};
 
 	struct argp_option options[] = {
 		{"server-group", 's', "SERVER-GROUP", 0,
@@ -191,7 +191,7 @@ cmd_destroy_container(int argc, const char **argv, void *ctx)
 	daos_handle_t    poh;
 	d_rank_list_t    pool_service_list = {NULL, 0};
 	unsigned int     flag = DAOS_PC_RW;
-	daos_pool_info_t info;
+	daos_pool_info_t info = {0};
 
 	struct argp_option options[] = {
 		{"server-group",    's',  "SERVER-GROUP", 0,
@@ -267,7 +267,7 @@ cmd_query_container(int argc, const char **argv, void *ctx)
 	daos_handle_t    poh;
 	d_rank_list_t    pool_service_list = {NULL, 0};
 	unsigned int     flag = DAOS_PC_RW;
-	daos_pool_info_t pool_info;
+	daos_pool_info_t pool_info = {0};
 	daos_handle_t    coh;
 	daos_cont_info_t cont_info;
 

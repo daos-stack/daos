@@ -44,32 +44,56 @@ func MockNamespacePB() *pb.NvmeController_Namespace {
 	}
 }
 
+// MockDeviceHealthPB is a mock protobuf Health message used in tests for
+// multiple packages.
+func MockDeviceHealthPB() *pb.NvmeController_Health {
+	return &pb.NvmeController_Health{
+		Temp:            uint32(300),
+		Tempwarn:        uint32(0),
+		Tempcrit:        uint32(0),
+		Ctrlbusy:        uint64(0),
+		Powercycles:     uint64(99),
+		Poweronhours:    uint64(9999),
+		Unsafeshutdowns: uint64(1),
+		Mediaerrors:     uint64(0),
+		Errorlogs:       uint64(0),
+		Tempwarning:     false,
+		Availspare:      false,
+		Reliability:     false,
+		Readonly:        false,
+		Volatilemem:     false,
+	}
+}
+
 // MockControllerPB is a mock protobuf Controller message used in tests for
 // multiple packages (message contains repeated namespace field).
 func MockControllerPB(fwRev string) *pb.NvmeController {
 	return &pb.NvmeController{
-		Model:      "ABC",
-		Serial:     "123ABC",
-		Pciaddr:    "0000:81:00.0",
-		Fwrev:      fwRev,
-		Namespaces: []*pb.NvmeController_Namespace{MockNamespacePB()},
+		Model:       "ABC",
+		Serial:      "123ABC",
+		Pciaddr:     "0000:81:00.0",
+		Fwrev:       fwRev,
+		Namespaces:  []*pb.NvmeController_Namespace{MockNamespacePB()},
+		Healthstats: []*pb.NvmeController_Health{MockDeviceHealthPB()},
 	}
 }
 
 // NewMockControllerPB generates specific protobuf controller message
 func NewMockControllerPB(
 	pciAddr string, fwRev string, model string, serial string,
-	nss []*pb.NvmeController_Namespace) *pb.NvmeController {
+	nss []*pb.NvmeController_Namespace, dh []*pb.NvmeController_Health) *pb.NvmeController {
 
 	return &pb.NvmeController{
-		Model:      model,
-		Serial:     serial,
-		Pciaddr:    pciAddr,
-		Fwrev:      fwRev,
-		Namespaces: nss,
+		Model:       model,
+		Serial:      serial,
+		Pciaddr:     pciAddr,
+		Fwrev:       fwRev,
+		Namespaces:  nss,
+		Healthstats: dh,
 	}
 }
 
+// MockModulePB is a mock protobuf Module message used in tests for
 // multiple packages.
 func MockModulePB() *pb.ScmModule {
 	return &pb.ScmModule{
@@ -89,6 +113,17 @@ func MockModulePB() *pb.ScmModule {
 func MockMountPB() *pb.ScmMount {
 	// MockModulePB is a mock protobuf Module message used in tests for
 	return &pb.ScmMount{Mntpoint: "/mnt/daos"}
+}
+
+// MockPmemDevicePB is a mock protobuf PmemDevice used in tests for multiple
+// packages.
+func MockPmemDevicePB() *pb.PmemDevice {
+	return &pb.PmemDevice{
+		Uuid:     "abcd-1234-efgh-5678",
+		Blockdev: "pmem1",
+		Dev:      "namespace-1",
+		Numanode: 1,
+	}
 }
 
 // MockCheckMountOk mocks CheckMount and always returns nil error.

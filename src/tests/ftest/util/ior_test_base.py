@@ -24,9 +24,11 @@
 import os
 
 from apricot import TestWithServers
-from ior_utils import IorCommand, IorFailed
+from ior_utils import IorCommand
+from command_utils import Mpirun, CommandFailure
 from mpio_utils import MpioUtils
 from test_utils import TestPool
+
 
 class IorTestBase(TestWithServers):
     """Base IOR test class.
@@ -43,6 +45,8 @@ class IorTestBase(TestWithServers):
 
     def setUp(self):
         """Set up each test case."""
+        # obtain separate logs
+        self.update_log_file_names()
         # Start the servers and agents
         super(IorTestBase, self).setUp()
 
@@ -50,15 +54,6 @@ class IorTestBase(TestWithServers):
         self.ior_cmd = IorCommand()
         self.ior_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/ior/client_processes/*')
-
-    def tearDown(self):
-        """Tear down each test case."""
-        try:
-            if self.pool is not None and self.pool.pool.attached:
-                self.pool.destroy(1)
-        finally:
-            # Stop the servers and agents
-            super(IorTestBase, self).tearDown()
 
     def create_pool(self):
         """Create a TestPool object to use with ior."""
@@ -104,7 +99,8 @@ class IorTestBase(TestWithServers):
         else:
             self.fail("Unsupported IOR API")
 
-        return os.path.join(mpio_util.mpichinstall, "bin", "mpirun")
+        mpirun_path = os.path.join(mpio_util.mpichinstall, "bin")
+        return Mpirun(self.ior_cmd, mpirun_path)
 
     def run_ior(self, manager, processes):
         """Run the IOR command.
@@ -113,10 +109,12 @@ class IorTestBase(TestWithServers):
             manager (str): mpi job manager command
             processes (int): number of host processes
         """
+        env = self.ior_cmd.get_default_env(
+            str(manager), self.tmp, self.client_log)
+        manager.setup_command(env, self.hostfile_clients, processes)
         try:
-            self.ior_cmd.run(
-                manager, self.tmp, processes, self.hostfile_clients)
-        except IorFailed as error:
+            manager.run()
+        except CommandFailure as error:
             self.log.error("IOR Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
 

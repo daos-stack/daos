@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,9 @@
 #include <daos/common.h>
 #include <daos/tse.h>
 #include "tse_internal.h"
+
+D_CASSERT(sizeof(struct tse_task) == TSE_TASK_SIZE);
+D_CASSERT(sizeof(struct tse_task_private) <= TSE_PRIV_SIZE);
 
 struct tse_task_link {
 	d_list_t		 tl_link;
@@ -380,10 +383,8 @@ int
 tse_task_register_comp_cb(tse_task_t *task, tse_task_cb_t comp_cb,
 			  void *arg, daos_size_t arg_size)
 {
-	if (comp_cb)
-		register_cb(task, true, comp_cb, arg, arg_size);
-
-	return 0;
+	D_ASSERT(comp_cb != NULL);
+	return register_cb(task, true, comp_cb, arg, arg_size);
 }
 
 int
@@ -392,12 +393,16 @@ tse_task_register_cbs(tse_task_t *task, tse_task_cb_t prep_cb,
 		      tse_task_cb_t comp_cb, void *comp_data,
 		      daos_size_t comp_data_size)
 {
-	if (prep_cb)
-		register_cb(task, false, prep_cb, prep_data, prep_data_size);
-	if (comp_cb)
-		register_cb(task, true, comp_cb, comp_data, comp_data_size);
+	int	rc = 0;
 
-	return 0;
+	D_ASSERT(prep_cb != NULL || comp_cb != NULL);
+	if (prep_cb)
+		rc = register_cb(task, false, prep_cb, prep_data,
+				 prep_data_size);
+	if (comp_cb && !rc)
+		rc = register_cb(task, true, comp_cb, comp_data,
+				 comp_data_size);
+	return rc;
 }
 
 /*

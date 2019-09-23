@@ -179,11 +179,6 @@ daos_size_t
 evt_csum_count(const struct evt_context *tcx,
 		 const struct evt_extent *extent);
 
-/** Helper function for dividing a range (lo-hi) into number of chunks */
-daos_size_t
-csum_chunk_count(uint32_t chunk_size, daos_off_t lo, daos_off_t hi,
-		 daos_off_t inob);
-
 /**
  * Copy the csum from the evt_entry into the evt_desc. It is expected that
  * enough memory was allocated for the evt_desc to account for the csums.

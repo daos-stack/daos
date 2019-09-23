@@ -116,10 +116,6 @@ drpc_progress_context_close(struct drpc_progress_context *ctx)
 /*
  * Stubs - just needed to make it build
  */
-void
-dss_sleep(int ms)
-{
-}
 
 int
 drpc_progress(struct drpc_progress_context *ctx, int timeout_ms)
@@ -136,6 +132,12 @@ drpc_hdlr_get_handler(int module_id)
 void
 drpc_hdlr_process_msg(Drpc__Call *request, Drpc__Response **resp)
 {
+}
+
+int
+ABT_thread_yield(void)
+{
+	return 0;
 }
 
 /*

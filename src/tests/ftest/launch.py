@@ -360,8 +360,9 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
                     yaml_file, ", ".join(missing_replacements)))
             return None
 
-        # Write the modified yaml file into a temporary file
-        yaml_name = os.path.basename(os.path.splitext(yaml_file)[0])
+        # Write the modified yaml file into a temporary file.  Use the path to
+        # ensure unique yaml files for tests with the same filename.
+        yaml_name = get_test_category(yaml_file)
         yaml_file = os.path.join(tmp_dir.name, "{}.yaml".format(yaml_name))
         print("Creating {}".format(yaml_file))
         with open(yaml_file, "w") as yaml_buffer:
@@ -475,18 +476,18 @@ def get_log_files(config_yaml, daos_files=None):
     """
     # List of default DAOS files
     if daos_files is None:
-        daos_core_test_dir, daos_core_test_log = os.path.split(
-            os.getenv("D_LOG_FILE", "/tmp/server.log"))
+        daos_core_test_dir = os.path.split(
+            os.getenv("D_LOG_FILE", "/tmp/server.log"))[0]
         daos_files = {
             "log_file": "/tmp/server.log",
             "agent_log_file": "/tmp/daos_agent.log",
             "control_log_file": "/tmp/daos_control.log",
             "socket_dir": "/tmp/daos_sockets",
             "debug_log_default": os.getenv("D_LOG_FILE", "/tmp/daos.log"),
-            "daos_core_test_client_logs":
+            "test_variant_client_logs":
                 "{}/*_client_daos.log".format(daos_core_test_dir),
-            "daos_core_test_server_logs":
-                "{}/*_{}".format(daos_core_test_dir, daos_core_test_log),
+            "test_variant_server_logs":
+                "{}/*_server_daos.log".format(daos_core_test_dir),
         }
 
     # Determine the log file locations defined by the last run test

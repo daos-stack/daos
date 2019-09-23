@@ -1,6 +1,6 @@
 # Hardware Requirements
 
-The purpose of this section is to describe processor, storage and
+The purpose of this section is to describe processor, storage, and
 network requirements to deploy a DAOS system.
 
 ## Deployment Options
@@ -8,15 +8,15 @@ network requirements to deploy a DAOS system.
 As illustrated in the figure below, a DAOS system can be deployed in two
 different ways:
 
--   **Pooled Storage Model** : The DAOS servers can run on dedicated
+-   **Pooled Storage Model**: The DAOS servers can run on dedicated
     storage nodes in separate racks. This is a traditional pool model
     where storage is uniformly accessed by all compute nodes. In order
     to minimize the number of I/O racks and to optimize floor space,
-    this approach usually requires high density storage servers.
+    this approach usually requires high-density storage servers.
 
--   **Disaggregated Storage Model** : In the disaggregated model, the
+-   **Disaggregated Storage Model**: In the disaggregated model, the
     storage nodes are integrated into compute racks and can be either
-    dedicated or shared (e.g. in a hyper-converged infrastructure)
+    dedicated or shared (e.g., in a hyper-converged infrastructure)
     nodes. The DAOS servers are thus massively distributed and storage
     access is non-uniform and must take locality into account.
 
@@ -30,7 +30,7 @@ well.
 
 DAOS requires a 64-bit processor architecture and is primarily developed
 on Intel 64 architecture. The DAOS software and the libraries it depends
-on (e.g. ISA-L, SPDK, PMDK and DPDK) can take advantage of Intel® SSE
+on (e.g., ISA-L, SPDK, PMDK, and DPDK) can take advantage of Intel® SSE
 and AVX extensions.
 
 DAOS is also regularly tested on 64-bit ARM processors configured in
@@ -45,7 +45,7 @@ The DAOS network layer relies on libfabrics and supports OFI providers
 for Ethernet/sockets, InfiniBand/verbs, RoCE, Cray’s GNI, and the Intel
 Omni-Path Architecture. An RDMA-capable fabric is preferred for better
 performance. DAOS can support multiple rails by binding different
-instances of the DAOS server to individual network card.
+instances of the DAOS server to individual network cards.
 
 An additional out-of-band network connecting the nodes in the DAOS
 service cluster is required for DAOS administration. Management traffic
@@ -59,22 +59,22 @@ Persistent Memory, the DAOS software stack is built over the Persistent
 Memory Development Kit (PMDK) and the DAX feature of the Linux and
 Windows operating systems as described in the SNIA NVM Programming
 Model[^1]. As a result, the open-source DAOS software stack should be
-able to run transparently over any type of storage-class memory
+able to run transparently over any storage-class memory
 supported by PMDK.
 
 The storage node can be optionally equipped with NVMe (non-volatile
-memory express) SSDs to provide capacity. HDDs as well as SATA and SAS
-SSDs are not supported by DAOS. Both NVMe 3D-NAND and Optane SSDs are
+memory express) SSDs to provide capacity. HDDs, as well as SATA and SAS
+SSDs, are not supported by DAOS. Both NVMe 3D-NAND and Optane SSDs are
 supported. Optane SSDs are preferred for DAOS installation that targets
 a very high IOPS rate. NVMe-oF devices are also supported by the
 userspace storage stack, but have never been tested.
 
 The minimal recommended ratio between SCM and SSDs capacity is 6% to
 guarantee that DAOS has enough space in SCM to store internal metadata
-(e.g. pool metadata, SSD block allocation tracking).
+(e.g., pool metadata, SSD block allocation tracking).
 
 For testing purposes, SCM can be emulated with DRAM by mounting a tmpfs
-filesystem and NVMe SSDs can be also emulated with DRAM or a loopback
+filesystem, and NVMe SSDs can be also emulated with DRAM or a loopback
 file.
 
 ## CPU Affinity
@@ -105,12 +105,12 @@ different storage nodes. Each storage node is thus a single point of
 failure. DAOS achieves fault tolerance by providing data redundancy
 across storage nodes in different fault domains.
 
-DAOS assumes that fault domains are hierarchical and do no overlap. For
-instance, the first level of fault domain could be the racks and the
+DAOS assumes that fault domains are hierarchical and do not overlap. For
+instance, the first level of a fault domain could be the racks and the
 second one the storage nodes.
 
-For efficient placement and optimal data resilience, the more fault
-domains, the better. As a result, it is preferable to distribute storage
+For efficient placement and optimal data resilience, more fault
+domains are better. As a result, it is preferable to distribute storage
 nodes across as many racks as possible.
 
 [^1]: <https://www.snia.org/sites/default/files/technical_work/final/NVMProgrammingModel_v1.2.pdf>

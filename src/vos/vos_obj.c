@@ -28,6 +28,7 @@
 #define D_LOGFAC	DD_FAC(vos)
 
 #include <daos/common.h>
+#include <daos/checksum.h>
 #include <daos/btree.h>
 #include <daos_types.h>
 #include <daos_srv/vos.h>
@@ -245,7 +246,7 @@ key_iter_fetch_helper(struct vos_obj_iter *oiter, struct vos_key_bundle *kbund,
 	rbund->rb_csum	= &csum;
 
 	d_iov_set(rbund->rb_iov, NULL, 0); /* no copy */
-	daos_csum_set(rbund->rb_csum, NULL, 0);
+	dcb_set_null(rbund->rb_csum);
 
 	return dbtree_iter_fetch(oiter->it_hdl, &kiov, &riov, anchor);
 }
@@ -350,9 +351,9 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent, int *probe_p)
 	struct vos_key_bundle	 kbund;
 	struct vos_rec_bundle	 rbund;
 	daos_handle_t		 toh;
-	d_iov_t		 kiov;
-	d_iov_t		 riov;
-	int			 probe;
+	d_iov_t			 kiov;
+	d_iov_t			 riov;
+	int			 probe = 0;
 	int			 rc;
 
 	rc = key_iter_fetch(oiter, ent, NULL);
@@ -365,8 +366,13 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent, int *probe_p)
 		return rc;
 	}
 
-	probe = 0;
-	if (ent->ie_earliest > epr->epr_hi) {
+	if (oiter->it_flags & VOS_IT_RECX_VISIBLE &&
+	    ent->ie_epoch <= epr->epr_hi) {
+		/* A punched dkey which punch epoch is older than
+		 * the expected epoch, skip it, probe next dkey.
+		 */
+		probe = BTR_PROBE_GT;
+	} else if (ent->ie_earliest > epr->epr_hi) {
 		/* The key was created after our range.
 		 * GT + EPOCH_MAX will probe next key.
 		 */
@@ -412,8 +418,14 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent, int *probe_p)
 	rc = dbtree_fetch(toh, BTR_PROBE_GT | BTR_PROBE_MATCHED,
 			  vos_iter_intent(&oiter->it_iter), &kiov, NULL, &riov);
 	key_tree_release(toh, false);
-	if (rc == 0)
+	if (rc == 0) {
+		if (oiter->it_flags & VOS_IT_RECX_VISIBLE &&
+		    rbund.rb_krec->kr_bmap & KREC_BF_PUNCHED &&
+		    rbund.rb_krec->kr_latest <= epr->epr_hi)
+			return IT_OPC_NEXT; /* Punched akey, invisible. */
+
 		return IT_OPC_NOOP; /* match the condition (akey), done */
+	}
 
 	if (rc == -DER_NONEXIST)
 		return IT_OPC_NEXT; /* no matched akey */
@@ -704,7 +716,7 @@ static int
 singv_iter_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor)
 {
 	vos_iter_entry_t	entry;
-	daos_anchor_t		tmp;
+	daos_anchor_t		tmp = {0};
 	int			opc;
 	int			rc;
 
@@ -756,7 +768,7 @@ singv_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	rbund.rb_csum	= &it_entry->ie_csum;
 
 	memset(&it_entry->ie_biov, 0, sizeof(it_entry->ie_biov));
-	daos_csum_set(rbund.rb_csum, NULL, 0);
+	dcb_set_null(rbund.rb_csum);
 
 	rc = dbtree_iter_fetch(oiter->it_hdl, &kiov, &riov, anchor);
 	if (rc)
@@ -777,6 +789,13 @@ singv_iter_next(struct vos_obj_iter *oiter)
 	vos_iter_entry_t entry;
 	int		 rc;
 	int		 opc;
+
+	/* Only one SV rec is visible for the given @epoch,
+	 * so return -DER_NONEXIST directly for the next().
+	 */
+	if (oiter->it_flags & VOS_IT_RECX_VISIBLE &&
+	    !oiter->it_iter.it_for_purge)
+		return -DER_NONEXIST;
 
 	memset(&entry, 0, sizeof(entry));
 	rc = singv_iter_fetch(oiter, &entry, NULL);

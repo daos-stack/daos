@@ -22,13 +22,8 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 
-import os
-import subprocess
 from avocado.utils import process
 from apricot import TestWithServers
-
-SERVER_LOG = "/tmp/server.log"
-CLIENT_LOG = "client_daos.log"
 
 
 class DaosCoreBase(TestWithServers):
@@ -49,38 +44,13 @@ class DaosCoreBase(TestWithServers):
 
     def setUp(self):
         """Set up before each test."""
-        super(DaosCoreBase, self).setUp()
+
         self.subtest_name = self.params.get("test_name",
                                             '/run/daos_tests/Tests/*')
         self.subtest_name = self.subtest_name.replace(" ", "_")
-
-        # Determine the path and name of the daos server log using the
-        # D_LOG_FILE env or, if not set, the value used in the doas server yaml
-        self.log_dir, self.server_log = os.path.split(
-            os.getenv("D_LOG_FILE", SERVER_LOG))
-        self.client_log = os.path.join(self.log_dir,
-                                       self.subtest_name + "_" + CLIENT_LOG)
-        # To generate the seperate client log file
-        self.orterun_env = '-x D_LOG_FILE={}'.format(self.client_log)
-
-    def tearDown(self):
-        """Tear down after each test."""
-        super(DaosCoreBase, self).tearDown()
-
-        # collect up a debug log so that we have a separate one for each
-        # subtest
-        if self.subtest_name:
-            try:
-                new_logfile = os.path.join(
-                    self.log_dir, self.subtest_name + "_" + self.server_log)
-                # rename on each of the servers
-                for host in self.hostlist_servers:
-                    subprocess.check_call(
-                        ['ssh', host,
-                         '[ -f \"{0}\" ] && mv \"{0}\" \"{1}\"'.format(
-                             SERVER_LOG, new_logfile)])
-            except KeyError:
-                pass
+        # obtain separate logs
+        self.update_log_file_names(self.subtest_name)
+        super(DaosCoreBase, self).setUp()
 
     def run_subtest(self):
         """Run daos_test with a subtest argument."""
@@ -91,10 +61,9 @@ class DaosCoreBase(TestWithServers):
                                        '/run/daos_tests/num_replicas/*')
         args = self.params.get("args", '/run/daos_tests/Tests/*', "")
 
-        cmd = "{} -n {} {} {} -s {} -{} {}".format(self.orterun, num_clients,
-                                                   self.orterun_env,
-                                                   self.daos_test,
-                                                   num_replicas, subtest, args)
+        cmd = "{} -n {} -x D_LOG_FILE={} {} -s {} -{} {}".format(
+            self.orterun, num_clients, self.client_log, self.daos_test,
+            num_replicas, subtest, args)
 
         env = {}
         env['CMOCKA_XML_FILE'] = "%g_results.xml"
