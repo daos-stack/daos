@@ -26,12 +26,12 @@ package client
 import (
 	"golang.org/x/net/context"
 
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 // BioHealthQuery will return all BIO device health and I/O error stats for
 // given device UUID
-func (c *connList) BioHealthQuery(req *pb.BioHealthReq) ResultQueryMap {
+func (c *connList) BioHealthQuery(req *mgmtpb.BioHealthReq) ResultQueryMap {
 	results := make(ResultQueryMap)
 
 	mc, err := chooseServiceLeader(c.controllers)
@@ -49,7 +49,7 @@ func (c *connList) BioHealthQuery(req *pb.BioHealthReq) ResultQueryMap {
 }
 
 // SmdListDevs will list all devices in SMD device table
-func (c *connList) SmdListDevs(req *pb.SmdDevReq) ResultSmdMap {
+func (c *connList) SmdListDevs(req *mgmtpb.SmdDevReq) ResultSmdMap {
 	results := make(ResultSmdMap)
 
 	mc, err := chooseServiceLeader(c.controllers)
