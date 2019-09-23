@@ -5,7 +5,7 @@
 
 Name:          daos
 Version:       0.6.0
-Release:       5%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -44,15 +44,13 @@ BuildRequires: libipmctl-devel
 BuildRequires: python-devel python36-devel
 %else
 %if (0%{?suse_version} >= 1315)
-BuildRequires:  libnuma-devel
+BuildRequires: libnuma-devel
 BuildRequires: cunit-devel
 BuildRequires: go1.10
 BuildRequires: ipmctl-devel
 BuildRequires: python-devel python3-devel
 %endif
 %endif
-Requires: cart
-Requires: argobots >= 1.0rc1
 Requires: libpmem, libpmemobj
 Requires: fuse >= 3.4.2
 Requires: protobuf-c
@@ -247,6 +245,10 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/*.a
 
 %changelog
+* Sat Sep 21 2019 Brian J. Murrell <brian.murrell@intel.com>
+- Remove Requires: {argobots, cart}
+  - autodependencies should take care of these
+
 * Thu Sep 19 2019 Jeff Olivier <jeffrey.v.olivier@intel.com>
 - Add valgrind-devel requirement for argobots change
 
