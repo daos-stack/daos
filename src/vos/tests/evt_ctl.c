@@ -337,7 +337,7 @@ ts_add_rect(void **state)
 	arg = tst_fn_val.optval;
 
 	if (arg == NULL) {
-		D_PRINT("No parameters %s\n", arg);
+		D_PRINT("No parameters\n");
 		fail();
 	}
 
