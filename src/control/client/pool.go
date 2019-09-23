@@ -24,8 +24,8 @@
 package client
 
 import (
+	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
-	uuid "github.com/satori/go.uuid"
 	"golang.org/x/net/context"
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -73,7 +73,7 @@ func (c *connList) PoolCreate(req *PoolCreateReq) (*PoolCreateResp, error) {
 		return nil, err
 	}
 
-	poolUUID, err := uuid.NewV4()
+	poolUUID, err := uuid.NewRandom()
 	if err != nil {
 		return nil, errors.Wrap(err, "generating pool uuid")
 	}
