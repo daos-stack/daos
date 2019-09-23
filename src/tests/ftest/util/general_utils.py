@@ -125,7 +125,7 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     return retcode_dict
 
 
-def check_file_exists(hosts, filename, user=None):
+def check_file_exists(hosts, filename, user=None, directory=False):
     """Check if a specified file exist on each specified hosts.
 
     If specified, verify that the file exists and is owned by the user.
@@ -142,7 +142,13 @@ def check_file_exists(hosts, filename, user=None):
 
     """
     missing_file = NodeSet()
-    command = "test {} '{}'".format("-e" if user is None else "-O", filename)
+    if directory is False:
+        print(1)
+        command = "test {} '{}'".format("-e" if user is None  else "-O", filename)
+    else:
+        print(2)
+        command = "test -d '{}'".format(filename)
+    
     task = run_task(hosts, command)
     for ret_code, node_list in task.iter_retcodes():
         if ret_code != 0:

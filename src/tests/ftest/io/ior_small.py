@@ -48,4 +48,5 @@ class IorSmall(IorTestBase):
 
         :avocado: tags=all,daosio,small,pr,hw,iorsmall
         """
+        print("***self.hostlist_clients_ior:{}***".format(self.hostlist_clients)) 
         self.run_ior_with_pool()

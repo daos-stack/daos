@@ -6,6 +6,7 @@ hosts:
             - boro-60
         test_clients:
             - boro-61
+            - boro-14
 timeout: 500
 server_config:
     name: daos_server
