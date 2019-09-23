@@ -46,7 +46,7 @@ func (x JoinResp_State) String() string {
 	return proto.EnumName(JoinResp_State_name, int32(x))
 }
 func (JoinResp_State) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_mgmt_043fae4fd6dd1244, []int{1, 0}
+	return fileDescriptor_mgmt_9c953ae82d503969, []int{1, 0}
 }
 
 type JoinReq struct {
@@ -69,7 +69,7 @@ func (m *JoinReq) Reset()         { *m = JoinReq{} }
 func (m *JoinReq) String() string { return proto.CompactTextString(m) }
 func (*JoinReq) ProtoMessage()    {}
 func (*JoinReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_mgmt_043fae4fd6dd1244, []int{0}
+	return fileDescriptor_mgmt_9c953ae82d503969, []int{0}
 }
 func (m *JoinReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_JoinReq.Unmarshal(m, b)
@@ -139,7 +139,7 @@ func (m *JoinResp) Reset()         { *m = JoinResp{} }
 func (m *JoinResp) String() string { return proto.CompactTextString(m) }
 func (*JoinResp) ProtoMessage()    {}
 func (*JoinResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_mgmt_043fae4fd6dd1244, []int{1}
+	return fileDescriptor_mgmt_9c953ae82d503969, []int{1}
 }
 func (m *JoinResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_JoinResp.Unmarshal(m, b)
@@ -192,7 +192,7 @@ func (m *GetAttachInfoReq) Reset()         { *m = GetAttachInfoReq{} }
 func (m *GetAttachInfoReq) String() string { return proto.CompactTextString(m) }
 func (*GetAttachInfoReq) ProtoMessage()    {}
 func (*GetAttachInfoReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_mgmt_043fae4fd6dd1244, []int{2}
+	return fileDescriptor_mgmt_9c953ae82d503969, []int{2}
 }
 func (m *GetAttachInfoReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetAttachInfoReq.Unmarshal(m, b)
@@ -233,7 +233,7 @@ func (m *GetAttachInfoResp) Reset()         { *m = GetAttachInfoResp{} }
 func (m *GetAttachInfoResp) String() string { return proto.CompactTextString(m) }
 func (*GetAttachInfoResp) ProtoMessage()    {}
 func (*GetAttachInfoResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_mgmt_043fae4fd6dd1244, []int{3}
+	return fileDescriptor_mgmt_9c953ae82d503969, []int{3}
 }
 func (m *GetAttachInfoResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetAttachInfoResp.Unmarshal(m, b)
@@ -280,7 +280,7 @@ func (m *GetAttachInfoResp_Psr) Reset()         { *m = GetAttachInfoResp_Psr{} }
 func (m *GetAttachInfoResp_Psr) String() string { return proto.CompactTextString(m) }
 func (*GetAttachInfoResp_Psr) ProtoMessage()    {}
 func (*GetAttachInfoResp_Psr) Descriptor() ([]byte, []int) {
-	return fileDescriptor_mgmt_043fae4fd6dd1244, []int{3, 0}
+	return fileDescriptor_mgmt_9c953ae82d503969, []int{3, 0}
 }
 func (m *GetAttachInfoResp_Psr) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetAttachInfoResp_Psr.Unmarshal(m, b)
@@ -607,9 +607,9 @@ var _MgmtSvc_serviceDesc = grpc.ServiceDesc{
 	Metadata: "mgmt.proto",
 }
 
-func init() { proto.RegisterFile("mgmt.proto", fileDescriptor_mgmt_043fae4fd6dd1244) }
+func init() { proto.RegisterFile("mgmt.proto", fileDescriptor_mgmt_9c953ae82d503969) }
 
-var fileDescriptor_mgmt_043fae4fd6dd1244 = []byte{
+var fileDescriptor_mgmt_9c953ae82d503969 = []byte{
 	// 454 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x7c, 0x53, 0x4d, 0xaf, 0xd2, 0x40,
 	0x14, 0xa5, 0xb4, 0x85, 0xf7, 0x2e, 0x01, 0xeb, 0x05, 0x9f, 0x4d, 0xdd, 0x90, 0xc6, 0x44, 0xa2,
