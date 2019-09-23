@@ -99,6 +99,10 @@ func (mod *srvModule) handleNotifyReady(reqb []byte) error {
 		return errors.Wrap(err, "unmarshal NotifyReady request")
 	}
 
+	if err := checkDrpcClientSocketPath(req.DrpcListenerSock); err != nil {
+		return errors.Wrap(err, "check NotifyReady request socket path")
+	}
+
 	mod.iosrv[req.InstanceIdx].NotifyReady(req)
 
 	return nil

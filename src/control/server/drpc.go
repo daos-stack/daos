@@ -45,6 +45,25 @@ func getDrpcClientConnection(sockDir string) *drpc.ClientConnection {
 	return drpc.NewClientConnection(clientSock)
 }
 
+func checkDrpcClientSocketPath(socketPath string) error {
+	if socketPath == "" {
+		return errors.New("Socket path empty")
+	}
+
+	f, err := os.Stat(socketPath)
+	if err != nil {
+		return errors.Errorf("Socket path '%s' could not be accessed: %s",
+			socketPath, err.Error())
+	}
+
+	if f.IsDir() {
+		return errors.Errorf("Invalid socket path '%s' is a directory",
+			socketPath)
+	}
+
+	return nil
+}
+
 // checkSocketDir verifies socket directory exists, has appropriate permissions
 // and is a directory. SocketDir should be created during configuration management
 // as locations may not be user creatable.
