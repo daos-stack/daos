@@ -207,7 +207,6 @@ class TestWithServers(TestWithoutServers):
         test_clients, self.partition_clients = self.get_partition_hosts(
             "client_partition", test_clients)
 
-        print("***self.hostlist_clients1:{}***".format(self.hostlist_clients))
         # Supported combinations of yaml hosts arguments:
         #   - test_machines [+ server_count]
         #   - test_servers [+ server_count]
@@ -250,7 +249,6 @@ class TestWithServers(TestWithoutServers):
                 self.hostfile_clients_slots)
 
         # Start the clients (agents)
-        print("***self.hostlist_clients2:{}***".format(self.hostlist_clients))
         if self.setup_start_agents:
             self.agent_sessions = agent_utils.run_agent(
                 self.basepath, self.hostlist_servers, self.hostlist_clients)

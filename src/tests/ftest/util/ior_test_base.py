@@ -56,7 +56,6 @@ class IorTestBase(TestWithServers):
         self.ior_cmd = IorCommand()
         self.ior_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/ior/client_processes/*')
-        print("***self.hostlist_clients_setup:{}***".format(self.hostlist_clients))
     def tearDown(self):
         """Tear down each test case."""
         try:
@@ -97,7 +96,6 @@ class IorTestBase(TestWithServers):
 
         try:
             # start dfuse
-            print("***self.hostlist_clients:{}***".format(self.hostlist_clients))
             self.dfuse.run_dfuse(self.hostlist_clients, self.tmp)
         except CommandFailure as error:
             self.log.error("Dfuse Failed: %s", str(error))

@@ -23,7 +23,7 @@
 """
 
 from ior_test_base import IorTestBase
-
+from apricot import skipForTicket
 
 class IorSmall(IorTestBase):
     """Test class Description: Runs IOR with 1 server with basic parameters.
@@ -48,5 +48,7 @@ class IorSmall(IorTestBase):
 
         :avocado: tags=all,daosio,small,pr,hw,iorsmall
         """
-        print("***self.hostlist_clients_ior:{}***".format(self.hostlist_clients)) 
+        # remove this skip once DAOS-3320 is fixed
+        if self.ior_cmd.api.value in ["POSIX"]:
+            skipForTicket("DAOS-3320")
         self.run_ior_with_pool()
