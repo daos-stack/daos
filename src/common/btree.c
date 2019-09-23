@@ -2799,6 +2799,12 @@ btr_tree_stat(struct btr_context *tcx, struct btr_stat *stat)
 	return 0;
 }
 
+/* Estimates the number of elements in a btree.  If the depth is 1,
+ * the count is exact.  Otherwise, it's an estimate based on the
+ * depth of the tree.  The primary existing use case is to know
+ * when to collapse the incarnation log so we can reduce space
+ * usage when only 1 entry exists.
+ */
 static int
 btr_tree_count(struct btr_context *tcx, struct btr_root *root)
 {

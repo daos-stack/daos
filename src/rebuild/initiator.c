@@ -386,14 +386,11 @@ rebuild_one_destroy(struct rebuild_one *rdone)
 		daos_iods_free(rdone->ro_punch_iods, rdone->ro_iod_alloc_num,
 			       true);
 
-	if (rdone->ro_dkey_punch_ephs.p_epochs)
-		D_FREE(rdone->ro_dkey_punch_ephs.p_epochs);
+	D_FREE(rdone->ro_dkey_punch_ephs.p_epochs);
 
 	if (rdone->ro_akey_punch_ephs) {
-		for (i = 0; i < rdone->ro_iod_alloc_num; i++) {
-			if (rdone->ro_akey_punch_ephs[i].p_epochs)
-				D_FREE(rdone->ro_akey_punch_ephs[i].p_epochs);
-		}
+		for (i = 0; i < rdone->ro_iod_alloc_num; i++)
+			D_FREE(rdone->ro_akey_punch_ephs[i].p_epochs);
 		D_FREE(rdone->ro_akey_punch_ephs);
 	}
 

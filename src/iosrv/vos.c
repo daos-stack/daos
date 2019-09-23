@@ -146,7 +146,7 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	int		type;
 
 	D_ASSERT(vos_type == VOS_ITER_DKEY || vos_type == VOS_ITER_AKEY);
-	
+
 	total_size = key_ent->ie_key.iov_len +
 	       key_ent->ie_key_punches.pi_nr * sizeof(daos_epoch_t);
 
@@ -958,7 +958,7 @@ dss_enum_unpack(vos_iter_type_t vos_type, struct dss_enum_arg *arg,
 			rc = enum_unpack_punched_ephs(kds, ptr, &io);
 			break;
 		default:
-			D_ERROR("unknow kds type %d\n", kds->kd_val_type);
+			D_ERROR("unknown kds type %d\n", kds->kd_val_type);
 			rc = -DER_INVAL;
 			break;
 		}
