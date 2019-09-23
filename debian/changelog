@@ -1,3 +1,10 @@
+cart (1.2.0-1) unstable; urgency=medium
+
+  [ Jeffrey Olivier ]
+  * 1.2.0 version of CaRT
+
+ -- Jeffrey Olivier <jeffrey.v.olivier@intel.com>  Mon, 23 Sep 2019 14:20:44 +0000
+
 cart (1.1.0-1) unstable; urgency=medium
 
   [ Alexander Oganezov ]

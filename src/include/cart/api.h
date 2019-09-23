@@ -624,12 +624,13 @@ crt_ep_abort(crt_endpoint_t *ep);
 		CRT_GEN_STRUCT(rpc_name##_out, fields_out), )		\
 	extern struct crt_req_format CQF_##rpc_name;
 
-#if __GNUC__ >= 8 /* warning was introduced in version 8 of GCC */
+/* warning was introduced in version 8 of GCC */
+#if D_HAS_WARNING(8, "-Wsizeof-pointer-div")
 #define CRT_DISABLE_SIZEOF_POINTER_DIV					\
 	_Pragma("GCC diagnostic ignored \"-Wsizeof-pointer-div\"")
-#else /* __GNUC__ < 8 */
+#else /* warning not available */
 #define CRT_DISABLE_SIZEOF_POINTER_DIV
-#endif /* __GNUC__ >= 8 */
+#endif /* warning is available */
 
 #define CRT_RPC_DEFINE(rpc_name, fields_in, fields_out)			\
 	CRT_GEN_PROC(rpc_name##_in, fields_in)				\

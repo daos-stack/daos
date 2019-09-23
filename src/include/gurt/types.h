@@ -67,6 +67,12 @@
 extern "C" {
 #endif
 
+#if defined(__has_warning)
+#define D_HAS_WARNING(gcc_version, warning)	__has_warning(warning)
+#else  /* !defined(__has_warning) */
+#define D_HAS_WARNING(gcc_version, warning) ((gcc_version) <= __GNUC__)
+#endif /* defined(__has_warning) */
+
 /**
  * hide the dark secret that uuid_t is an array not a structure.
  */
