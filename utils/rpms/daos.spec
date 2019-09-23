@@ -143,10 +143,10 @@ mkdir -p %{?buildroot}/%{_exec_prefix}/lib64/%{name}/certgen
 #cp -al ftest.sh src/tests/ftest %{?buildroot}%{daoshome}/TESTING
 #find %{?buildroot}%{daoshome}/TESTING/ftest -name \*.py[co] -print0 | xargs -r0 rm -f
 #ln %{?buildroot}%{daoshome}/{TESTING/.build_vars,.build_vars-Linux}.sh
-mkdir -p %{?buildroot}%{daoshome}/utils/py
-cp -al src/utils/py/daos_api.py %{?buildroot}%{daoshome}/utils/py
-cp -al src/utils/py/daos_cref.py %{?buildroot}%{daoshome}/utils/py
-cp -al src/utils/py/conversion.py %{?buildroot}%{daoshome}/utils/py
+#mkdir -p %{?buildroot}%{daoshome}/utils/py
+#cp -al src/utils/py/daos_api.py %{?buildroot}%{daoshome}/utils/py
+#cp -al src/utils/py/daos_cref.py %{?buildroot}%{daoshome}/utils/py
+#cp -al src/utils/py/conversion.py %{?buildroot}%{daoshome}/utils/py
 mkdir -p %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{?buildroot}/%{_unitdir}
