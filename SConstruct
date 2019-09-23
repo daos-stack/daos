@@ -77,6 +77,7 @@ def set_defaults(env):
     env.Append(CCFLAGS=['-g', '-Wshadow', '-Wall', '-Wno-missing-braces',
                         '-fpic', '-D_GNU_SOURCE', '-DD_LOG_V2'])
     env.Append(CCFLAGS=['-O2', '-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
+    env.Append(CCFLAGS=['-DCMOCKA_FILTER_SUPPORTED=0'])
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
     if GetOption("preprocess"):
         #could refine this but for now, just assume these warnings are ok
@@ -84,6 +85,7 @@ def set_defaults(env):
 
 def preload_prereqs(prereqs):
     """Preload prereqs specific to platform"""
+
     prereqs.define('cmocka', libs=['cmocka'], package='libcmocka-devel')
     prereqs.define('readline', libs=['readline', 'history'],
                    package='readline')

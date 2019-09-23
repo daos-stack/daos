@@ -28,7 +28,7 @@ import (
 	"strings"
 	"testing"
 
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	. "github.com/daos-stack/daos/src/control/common/proto/ctl"
 )
 
 func TestStorageCommands(t *testing.T) {
@@ -66,8 +66,8 @@ func TestStorageCommands(t *testing.T) {
 			"storage fwupdate --force --nvme-model foo --nvme-fw-path bar --nvme-fw-rev 123",
 			strings.Join([]string{
 				"ConnectClients",
-				fmt.Sprintf("StorageUpdate-%s", &pb.StorageUpdateReq{
-					Nvme: &pb.UpdateNvmeReq{
+				fmt.Sprintf("StorageUpdate-%s", &StorageUpdateReq{
+					Nvme: &UpdateNvmeReq{
 						Model:    "foo",
 						Startrev: "123",
 						Path:     "bar",
@@ -80,6 +80,48 @@ func TestStorageCommands(t *testing.T) {
 			"Scan",
 			"storage scan",
 			"ConnectClients StorageScan",
+			nil,
+		},
+		{
+			"Prepare without force",
+			"storage prepare",
+			"ConnectClients",
+			fmt.Errorf("consent not given"),
+		},
+		{
+			"Prepare with nvme-only and scm-only",
+			"storage prepare --force --nvme-only --scm-only",
+			"ConnectClients",
+			fmt.Errorf("nvme-only and scm-only options should not be set together"),
+		},
+		{
+			"Prepare with scm-only",
+			"storage prepare --force --scm-only",
+			"ConnectClients StoragePrepare",
+			nil,
+		},
+		{
+			"Prepare with nvme-only",
+			"storage prepare --force --nvme-only",
+			"ConnectClients StoragePrepare",
+			nil,
+		},
+		{
+			"Prepare with non-existent option",
+			"storage prepare --force --nvme",
+			"",
+			fmt.Errorf("unknown flag `nvme'"),
+		},
+		{
+			"Prepare with force and reset",
+			"storage prepare --force --reset",
+			"ConnectClients StoragePrepare",
+			nil,
+		},
+		{
+			"Prepare with force",
+			"storage prepare --force",
+			"ConnectClients StoragePrepare",
 			nil,
 		},
 		{

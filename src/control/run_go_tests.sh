@@ -56,25 +56,42 @@ function setup_environment()
 	CGO_CFLAGS+=" -I${SL_HWLOC_PREFIX}/include"
 }
 
+function check_formatting()
+{
+	srcdir=${1:-"./"}
+	output=$(find "$srcdir/" -name '*.go' -and -not -path '*vendor*' \
+		-print0 | xargs -0 gofmt -d)
+	if [ -n "$output" ]; then
+		echo "ERROR: Your code hasn't been run through gofmt!"
+		echo "Please configure your editor to run gofmt on save."
+		echo "Alternatively, at a minimum, run the following command:"
+		echo -n "find $srcdir/ -name '*.go' -and -not -path '*vendor*'"
+		echo "| xargs gofmt -w"
+		echo -e "\ngofmt check found the following:\n\n$output\n"
+		exit 1
+	fi
+}
+
 check=$(check_environment)
 
 if [ "$check" == "false" ]; then
 	setup_environment
 fi
 
+DIR="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")"
+GOPATH="$(readlink -f "$DIR/../../build/src/control")"
+repopath=github.com/daos-stack/daos
+controldir="$GOPATH/src/$repopath/src/control"
+
+check_formatting "$controldir"
+
 echo "Environment:"
 echo "  LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
 echo "  CGO_LDFLAGS: $CGO_LDFLAGS"
 echo "  CGO_CFLAGS: $CGO_CFLAGS"
 
-DIR="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")"
-
-GOPATH="$(readlink -f "$DIR/../../build/src/control")"
 echo "  GOPATH: $GOPATH"
 echo
-
-repopath=github.com/daos-stack/daos
-controldir="$GOPATH/src/$repopath/src/control"
 
 echo "Running all tests under $controldir..."
 pushd "$controldir" >/dev/null

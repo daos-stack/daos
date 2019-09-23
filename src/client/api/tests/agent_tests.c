@@ -118,6 +118,8 @@ main(void)
 			test_dc_agent_init_with_env),
 	};
 
+	d_register_alt_assert(mock_assert);
+
 	return cmocka_run_group_tests(tests, NULL, NULL);
 }
 

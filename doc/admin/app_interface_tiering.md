@@ -12,18 +12,18 @@ provided to manage containers.
 
 To create a container:
 ```
-$ orterun -np 1 --ompi-server file:~/uri.txt daos container create --pool=a171434a-05a5-4671-8fe2-615aa0d05094 --svc=0
+$ daos container create --pool=a171434a-05a5-4671-8fe2-615aa0d05094 --svc=0
 Successfully created container 008123fc-6b6c-4768-a88a-a2a5ef34a1a2
 ```
 
-The container type (i.e. POSIX or HDF5) can be passed via the --type option.
-As shown below, the pool UUID, container UUID and container attributes can be
+The container type (i.e., POSIX or HDF5) can be passed via the --type option.
+As shown below, the pool UUID, container UUID, and container attributes can be
 stored in the extended attributes of a POSIX file or directory for convenience.
-Then subsequent invocations of the daos tools just need to reference the path
+Then subsequent invocations of the daos tools need to reference the path
 to the POSIX file or directory.
 
 ```
-$ orterun -np 1 --ompi-server file:~/uri.txt daos container create --pool=a171434a-05a5-4671-8fe2-615aa0d05094 --svc=0 --path=/tmp/mycontainer --type=POSIX --oclass=large --chunk_size=4K
+$ daos container create --pool=a171434a-05a5-4671-8fe2-615aa0d05094 --svc=0 --path=/tmp/mycontainer --type=POSIX --oclass=large --chunk_size=4K
 Successfully created container 419b7562-5bb8-453f-bd52-917c8f5d80d1 type POSIX
 $ daos container query --svc=0 --path=/tmp/mycontainer
 Pool UUID:      a171434a-05a5-4671-8fe2-615aa0d05094
@@ -41,7 +41,7 @@ Chunk Size:     4096
 At creation time, a list of container properties can be specified:
 
 -   DAOS_PROP_CO_LABEL is a string that a user can associate with a
-    container. e.g. "Cat Pics" or "ResNet-50 training data"
+    container. e.g., "Cat Pics" or "ResNet-50 training data"
 
 -   DAOS_PROP_CO_LAYOUT_TYPE is the container type (POSIX, MPI-IO,
     HDF5, ...)
@@ -54,27 +54,27 @@ At creation time, a list of container properties can be specified:
 
 -   DAOS_PROP_CO_REDUN_FAC is the redundancy factor that drives the
     minimal data protection required for objects stored in the
-    container. e.g. RF1 means no data protection, RF3 only allows 3-way
+    container. e.g., RF1 means no data protection, RF3 only allows 3-way
     replication or erasure code N+2.
 
 -   DAOS_PROP_CO_REDUN_LVL is the fault domain level that should be
-    used to place data redundancy information (e.g. storage nodes, racks
+    used to place data redundancy information (e.g., storage nodes, racks
     ...). This information will be eventually consumed to determine object
     placement.
 
--   DAOS_PROP_CO_SNAPSHOT_MAX is the maximum number of snapshot to
-    retain. When a new snapshot is taken and the threshold is reached,
+-   DAOS_PROP_CO_SNAPSHOT_MAX is the maximum number of snapshots to
+    retain. When a new snapshot is taken, and the threshold is reached,
     the oldest snapshot will be automatically deleted.
 
 -   DAOS_PROP_CO_ACL is the list of ACL for the container.
 
--   DAOS_PROP_CO_COMPRESS and DAOS_PROP_CO_ENCRYPT are reserved to
-    configure respectively compression and encryption. Those features
+-   DAOS_PROP_CO_COMPRESS and DAOS_PROP_CO_ENCRYPT are reserved for configuring
+ respectively compression and encryption. These features
     are currently not on the roadmap.
 
 While those properties are currently stored persistently with container
 metadata, many of them are still under development. The ability to modify some
-of these properties on an existing container will also be eventually provided.
+of these properties on an existing container will also be provided in a future release.
 
 ### Container Snapshot
 
@@ -104,7 +104,7 @@ will be documented here once available.
 
 ### Building against the DAOS library
 
-To build an applications or I/O middleware against the native DAOS API, include
+To build application or I/O middleware against the native DAOS API, include
 the daos.h header file in your program and link with -Ldaos. Examples are
 available under src/tests.
 
@@ -124,19 +124,19 @@ API bindings to both Python[^1] and Go[^2] languages are available.
 A regular POSIX namespace can be encapsulated into a DAOS container.  This
 capability is provided by the libdfs library that implements the file and
 directory abstractions over the native libdaos library. The POSIX emulation can
-be exposed to applications or I/O frameworks either directly (e.g. for
-frameworks Spark or TensorFlow or benchmark like IOR or mdtest that support
-different storage backend plugin) or transparently via a FUSE daemon combined
+be exposed to applications or I/O frameworks either directly (e.g., for
+frameworks Spark or TensorFlow, or benchmark like IOR or mdtest that support
+different a storage backend plugin), or transparently via a FUSE daemon, combined
 optionally with an interception library to address some of the FUSE performance
 bottleneck by delivering full OS bypass for POSIX read/write operations.
 
 ### libdfs
 
 DFS stands for DAOS File System and is a library that allows a DAOS container to
-be accessed as a hierarchical POSIX namespace. It supports files, directories
+be accessed as a hierarchical POSIX namespace. It supports files, directories,
 and symbolic links, but not hard links. Access permissions are inherited from
 the parent pool and not implemented on a per-file or per-directory basis.
-setuid() and setgid() programs as well as supplementary groups are currently not
+setuid() and setgid() programs, as well as supplementary groups, are currently not
 supported.
 
 While libdfs can be tested from a single instance (i.e. single process or client
@@ -149,13 +149,12 @@ will be documented here once ready.
 
 A fuse daemon called dfuse is provided to mount a POSIX container in the local
 filesystem tree. dfuse exposes one mountpoint as a single DFS namespace with a
-single pool and container and can be mounted by a regular use (provided that it
+single pool and container and can be mounted by regular use (provided that it
 is granted access to the pool and container).
 To mount an existing POSIX container with dfuse, run the following command:
 
 ```
-$ orterun -np 1 --ompi-server file:~/uri.txt dfuse -p a171434a-05a5-4671-8fe2-615aa0d05094 -s 0 -c 464e68ca-0a30-4a5f-8829-238e890899d2 -m /tmp/daos -S &
-[1] 157981
+$ dfuse -p a171434a-05a5-4671-8fe2-615aa0d05094 -s 0 -c 464e68ca-0a30-4a5f-8829-238e890899d2 -m /tmp/daos -S
 ```
 
 The UUID after -p and -c should be replaced with respectively the pool and
@@ -210,10 +209,10 @@ To build the MPI-IO driver:
 
 -   make -j8; make install
 
-Switch PATH and LD_LIBRARY_PATH where you want to build your client apps or libs
-that use MPI to the above installed MPICH. Note that the DAOS server will still
+Switch the PATH and LD_LIBRARY_PATH to where you want to build your client apps or libs
+that use MPI to the installed MPICH. Note that the DAOS server will still
 need to be launched with OMPI's orterun. This is a unique situation where the
-server uses OMPI and the clients will be launched with MPICH.
+server uses OMPI, and the clients will be launched with MPICH.
 
 Build any client (HDF5, ior, mpi test suites) normally with the mpicc and mpich
 library installed above (see child pages).
@@ -246,7 +245,7 @@ Limitations to the current implementation include:
 
 ### HDF5
 
-A prototype version of a HDF5 DAOS connector is available. Please refer to the
+A prototype version of an HDF5 DAOS connector is available. Please refer to the
 DAOS VOL connector user guide[^3] for instructions on how to build and use it.
 
 ## Spark Support

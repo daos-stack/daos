@@ -34,30 +34,26 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // CheckReplica verifies if this server is supposed to host an MS replica,
 // only performing the check and printing the result for now.
-//
-// TODO: format and start the MS replica
-func CheckReplica(
-	lis net.Listener, accessPoints []string, srv *exec.Cmd) (
-	msReplicaCheck string, err error) {
-
-	isReplica, bootstrap, err := checkMgmtSvcReplica(
-		lis.Addr().(*net.TCPAddr), accessPoints)
+func CheckReplica(lis net.Listener, accessPoints []string, srv *exec.Cmd) (msReplicaCheck string, err error) {
+	isReplica, bootstrap, err := checkMgmtSvcReplica(lis.Addr().(*net.TCPAddr), accessPoints)
 	if err != nil {
 		_ = srv.Process.Kill()
 		return
 	}
+
 	if isReplica {
 		msReplicaCheck = " as access point"
 		if bootstrap {
 			msReplicaCheck += " (bootstrap)"
 		}
 	}
+
 	return
 }
 
@@ -148,7 +144,7 @@ func getListenIPs(listenAddr *net.TCPAddr) (listenIPs []net.IP, err error) {
 }
 
 // mgmtSvc implements (the Go portion of) Management Service, satisfying
-// pb.MgmtSvcServer.
+// mgmtpb.MgmtSvcServer.
 type mgmtSvc struct {
 	log     logging.Logger
 	mutex   sync.Mutex
@@ -162,7 +158,7 @@ func newMgmtSvc(h *IOServerHarness) *mgmtSvc {
 	}
 }
 
-func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *pb.GetAttachInfoReq) (*pb.GetAttachInfoResp, error) {
+func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
 	mi, err := svc.harness.GetManagementInstance()
 	if err != nil {
 		return nil, err
@@ -175,7 +171,7 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *pb.GetAttachInfoReq)
 		return nil, err
 	}
 
-	resp := &pb.GetAttachInfoResp{}
+	resp := &mgmtpb.GetAttachInfoResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal GetAttachInfo response")
 	}
@@ -183,7 +179,7 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *pb.GetAttachInfoReq)
 	return resp, nil
 }
 
-func (svc *mgmtSvc) Join(ctx context.Context, req *pb.JoinReq) (*pb.JoinResp, error) {
+func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.JoinResp, error) {
 	mi, err := svc.harness.GetManagementInstance()
 	if err != nil {
 		return nil, err
@@ -196,7 +192,7 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *pb.JoinReq) (*pb.JoinResp, er
 		return nil, err
 	}
 
-	resp := &pb.JoinResp{}
+	resp := &mgmtpb.JoinResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal Join response")
 	}
@@ -204,58 +200,139 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *pb.JoinReq) (*pb.JoinResp, er
 	return resp, nil
 }
 
-// CreatePool implements the method defined for the Management Service.
-func (svc *mgmtSvc) CreatePool(ctx context.Context, req *pb.CreatePoolReq) (*pb.CreatePoolResp, error) {
+// checkIsMSReplica provides a hint as to who is service leader if instance is
+// not a Management Service replica.
+func checkIsMSReplica(mi *IOServerInstance) error {
+	msg := "instance is not an access point"
+	if !mi.IsMSReplica() {
+		leader, err := mi.msClient.LeaderAddress()
+		if err != nil {
+			return err
+		}
+
+		if !strings.HasPrefix(leader, "localhost") {
+			msg += ", try " + leader
+		}
+
+		return errors.New(msg)
+	}
+
+	return nil
+}
+
+// PoolCreate implements the method defined for the Management Service.
+func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (*mgmtpb.PoolCreateResp, error) {
 	mi, err := svc.harness.GetManagementInstance()
 	if err != nil {
 		return nil, err
 	}
+	if err := checkIsMSReplica(mi); err != nil {
+		return nil, err
+	}
 
-	svc.log.Debugf("MgmtSvc.CreatePool dispatch, req:%+v\n", *req)
+	svc.log.Debugf("MgmtSvc.PoolCreate dispatch, req:%+v\n", *req)
 
 	svc.mutex.Lock()
-	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, createPool, req)
+	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, poolCreate, req)
 	svc.mutex.Unlock()
 	if err != nil {
 		return nil, err
 	}
 
-	resp := &pb.CreatePoolResp{}
+	resp := &mgmtpb.PoolCreateResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal CreatePool response")
+		return nil, errors.Wrap(err, "unmarshal PoolCreate response")
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolCreate dispatch, resp:%+v\n", *resp)
+
+	return resp, nil
+}
+
+// PoolDestroy implements the method defined for the Management Service.
+func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq) (*mgmtpb.PoolDestroyResp, error) {
+	mi, err := svc.harness.GetManagementInstance()
+	if err != nil {
+		return nil, err
+	}
+	if err := checkIsMSReplica(mi); err != nil {
+		return nil, err
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, req:%+v\n", *req)
+
+	svc.mutex.Lock()
+	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, poolDestroy, req)
+	svc.mutex.Unlock()
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.PoolDestroyResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal PoolDestroy response")
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, resp:%+v\n", *resp)
+
+	return resp, nil
+}
+
+// BioHealthQuery implements the method defined for the Management Service.
+func (svc *mgmtSvc) BioHealthQuery(ctx context.Context, req *mgmtpb.BioHealthReq) (*mgmtpb.BioHealthResp, error) {
+	mi, err := svc.harness.GetManagementInstance()
+	if err != nil {
+		return nil, err
+	}
+
+	svc.log.Debugf("MgmtSvc.BioHealthQuery dispatch, req:%+v\n", *req)
+
+	svc.mutex.Lock()
+	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, bioHealth, req)
+	svc.mutex.Unlock()
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.BioHealthResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal BioHealthQuery response")
 	}
 
 	return resp, nil
 }
 
-// DestroyPool implements the method defined for the Management Service.
-func (svc *mgmtSvc) DestroyPool(ctx context.Context, req *pb.DestroyPoolReq) (*pb.DestroyPoolResp, error) {
+// SmdListDevs implements the method defined for the Management Service.
+func (svc *mgmtSvc) SmdListDevs(ctx context.Context, req *mgmtpb.SmdDevReq) (*mgmtpb.SmdDevResp, error) {
 	mi, err := svc.harness.GetManagementInstance()
 	if err != nil {
 		return nil, err
 	}
 
-	svc.log.Debugf("MgmtSvc.DestroyPool dispatch, req:%+v\n", *req)
+	svc.log.Debugf("MgmtSvc.SmdListDevs dispatch, req:%+v\n", *req)
 
 	svc.mutex.Lock()
-	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, destroyPool, req)
+	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, smdDevs, req)
 	svc.mutex.Unlock()
 	if err != nil {
 		return nil, err
 	}
 
-	resp := &pb.DestroyPoolResp{}
+	resp := &mgmtpb.SmdDevResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal DestroyPool response")
+		return nil, errors.Wrap(err, "unmarshal SmdListDevs response")
 	}
 
 	return resp, nil
 }
 
 // KillRank implements the method defined for the Management Service.
-func (svc *mgmtSvc) KillRank(ctx context.Context, req *pb.DaosRank) (*pb.DaosResp, error) {
+func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.DaosRank) (*mgmtpb.DaosResp, error) {
 	mi, err := svc.harness.GetManagementInstance()
 	if err != nil {
+		return nil, err
+	}
+	if err := checkIsMSReplica(mi); err != nil {
 		return nil, err
 	}
 
@@ -268,10 +345,12 @@ func (svc *mgmtSvc) KillRank(ctx context.Context, req *pb.DaosRank) (*pb.DaosRes
 		return nil, err
 	}
 
-	resp := &pb.DaosResp{}
+	resp := &mgmtpb.DaosResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal DAOS response")
 	}
+
+	svc.log.Debugf("MgmtSvc.KillRank dispatch, resp:%+v\n", *resp)
 
 	return resp, nil
 }

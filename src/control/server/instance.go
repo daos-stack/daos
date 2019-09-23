@@ -91,9 +91,21 @@ func (srv *IOServerInstance) scmConfig() (storage.ScmConfig, error) {
 		return nullCfg, errors.New("no runner configured")
 	}
 	if srv.runner.Config == nil {
-		return nullCfg, errors.New("no SCM config set on runner")
+		return nullCfg, errors.New("no ioserver config set on runner")
 	}
 	return srv.runner.Config.Storage.SCM, nil
+}
+
+// bdevConfig returns the block device configuration assigned to this instance.
+func (srv *IOServerInstance) bdevConfig() (storage.BdevConfig, error) {
+	var nullCfg storage.BdevConfig
+	if srv.runner == nil {
+		return nullCfg, errors.New("no runner configured")
+	}
+	if srv.runner.Config == nil {
+		return nullCfg, errors.New("no ioserver config set on runner")
+	}
+	return srv.runner.Config.Storage.Bdev, nil
 }
 
 // MountScmDevice mounts the configured SCM device (DCPM or ramdisk emulation)
@@ -415,4 +427,8 @@ func (srv *IOServerInstance) callSetUp() error {
 	}
 
 	return nil
+}
+
+func (srv *IOServerInstance) IsMSReplica() bool {
+	return srv.hasSuperblock() && srv.getSuperblock().MS
 }

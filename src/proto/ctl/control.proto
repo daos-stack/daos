@@ -22,7 +22,7 @@
 //
 
 syntax = "proto3";
-package mgmt;
+package ctl;
 
 import "common.proto";
 import "storage.proto";
@@ -33,7 +33,7 @@ import "features.proto";
 service MgmtCtl {
     // Prepare nonvolatile storage devices for use with DAOS
     rpc StoragePrepare(StoragePrepareReq) returns (StoragePrepareResp) {};
-    // Retrieve details of nonvolatile storage on server
+    // Retrieve details of nonvolatile storage on server, including health info
     rpc StorageScan(StorageScanReq) returns(StorageScanResp) {};
     // Format nonvolatile storage devices for use with DAOS
     rpc StorageFormat(StorageFormatReq) returns(stream StorageFormatResp) {};

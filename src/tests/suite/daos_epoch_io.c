@@ -305,14 +305,14 @@ fio_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 				data_len = pwrite(fd, data, len, off);
 			else
 				data_len = pread(fd, data, len, off);
-			if (data_len != len) {
+			if (data_len != len && op->or_op == TEST_OP_UPDATE) {
 				print_message("fio %s/%s failed, len %zu "
 					      "got %zu.\n", dkey, akey,
 					      len, data_len);
 				D_GOTO(out, rc = -DER_IO);
 			}
 			data += len;
-			total_len += len;
+			total_len += data_len;
 		}
 	} else {
 		if (op->or_op == TEST_OP_UPDATE)
@@ -320,7 +320,7 @@ fio_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 		else
 			total_len = pread(fd, buf, buf_size, 0);
 	}
-	if (total_len != buf_size) {
+	if (total_len != buf_size && op->or_op == TEST_OP_UPDATE) {
 		print_message("fio %s/%s failed, buf_size "DF_U64", total_len "
 			      "%zu.\n", dkey, akey, buf_size, total_len);
 		rc = -DER_IO;
@@ -365,7 +365,7 @@ static int
 daos_test_cb_query(test_arg_t *arg, struct test_op_record *op,
 		   char **rbuf, daos_size_t *rbuf_size)
 {
-	daos_pool_info_t pinfo = { 0 };
+	daos_pool_info_t pinfo = {0};
 	int rc;
 
 	/*get only pool space info*/

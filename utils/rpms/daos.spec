@@ -22,7 +22,7 @@ BuildRequires: protobuf-c-devel
 BuildRequires: spdk-devel, spdk-tools
 BuildRequires: fio < 3.4
 BuildRequires: libisa-l-devel
-BuildRequires: raft-devel
+BuildRequires: raft-devel <= 0.5.0
 BuildRequires: mercury-devel
 BuildRequires: openpa-devel
 BuildRequires: libfabric-devel
@@ -34,6 +34,7 @@ BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
 BuildRequires: libcmocka-devel
 BuildRequires: readline-devel
+BuildRequires: valgrind-devel
 BuildRequires: systemd
 %if (0%{?rhel} >= 7)
 BuildRequires:  numactl-devel
@@ -246,6 +247,9 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/*.a
 
 %changelog
+* Thu Sep 19 2019 Jeff Olivier <jeffrey.v.olivier@intel.com>
+- Add valgrind-devel requirement for argobots change
+
 * Tue Sep 10 2019 Tom Nabarro <tom.nabarro@intel.com>
 - Add requires ndctl as runtime dep for control plane.
 
