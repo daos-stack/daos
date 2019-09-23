@@ -47,17 +47,17 @@ func getDrpcClientConnection(sockDir string) *drpc.ClientConnection {
 
 func checkDrpcClientSocketPath(socketPath string) error {
 	if socketPath == "" {
-		return errors.New("Socket path empty")
+		return errors.New("socket path empty")
 	}
 
 	f, err := os.Stat(socketPath)
 	if err != nil {
-		return errors.Errorf("Socket path '%s' could not be accessed: %s",
+		return errors.Errorf("socket path %q could not be accessed: %s",
 			socketPath, err.Error())
 	}
 
-	if f.IsDir() {
-		return errors.Errorf("Invalid socket path '%s' is a directory",
+	if (f.Mode() & os.ModeSocket) == 0 {
+		return errors.Errorf("path %q is not a socket",
 			socketPath)
 	}
 
