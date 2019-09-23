@@ -45,8 +45,8 @@
 
 # Use the given directory for creating unix domain sockets
 # default: /var/run/daos_agent
-runtime_dir: /var/run/daos_agent
+#runtime_dir: /var/run/daos_agent
 
 # Full path and name of the DAOS agent logfile.
 # default: /tmp/daos_agent.log
-log_file: /tmp/daos_agent.log
+#log_file: /tmp/daos_agent.log
