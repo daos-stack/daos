@@ -57,9 +57,9 @@ extern int		dss_core_nr;
 /** start offset index of the first core for service XS */
 extern int		dss_core_offset;
 /** NUMA node to bind to */
-extern int		numa_node;
+extern int		dss_numa_node;
 /** bitmap describing core allocation */
-extern hwloc_bitmap_t core_allocation_bitmap;
+extern hwloc_bitmap_t 	core_allocation_bitmap;
 /** a copy of the NUMA node object in the topology */
 extern hwloc_obj_t	numa_obj;
 /** number of cores in the given NUMA node */

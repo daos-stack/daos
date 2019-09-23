@@ -783,8 +783,8 @@ dss_start_xs_id(int xs_id)
 	hwloc_obj_t	obj;
 	int		rc;
 	int		xs_core_offset;
-	unsigned idx;
-	char *cpuset;
+	unsigned 	idx;
+	char 		*cpuset;
 
 	D_DEBUG(DB_TRACE, "start xs_id called for %d.  ", xs_id);
 	/* if we are NUMA aware, use the NUMA information */
@@ -855,8 +855,8 @@ dss_xstreams_init()
 	D_DEBUG(DB_TRACE,
 		"%d cores total detected, %d cores on NUMA node %d, "
 		"starting %d main xstreams\n",
-		dss_core_nr, dss_num_cores_numa_node, numa_node, dss_tgt_nr);
-
+		dss_core_nr, dss_num_cores_numa_node, dss_numa_node,
+		dss_tgt_nr);
 	xstream_data.xd_xs_nr = DSS_XS_NR_TOTAL;
 	/* start system service XS */
 	for (i = 0; i < dss_sys_xs_nr; i++) {

@@ -81,10 +81,10 @@ int			dss_core_nr;
 /** start offset index of the first core for service XS */
 int			dss_core_offset;
 /** NUMA node to bind to */
-int			numa_node;
-hwloc_bitmap_t core_allocation_bitmap;
+int			dss_numa_node;
+hwloc_bitmap_t 		core_allocation_bitmap;
 /** a copy of the NUMA node object in the topology */
-hwloc_obj_t	numa_obj;
+hwloc_obj_t		numa_obj;
 /** number of cores in the given NUMA node */
 int			dss_num_cores_numa_node;
 /** Module facility bitmask */
@@ -213,7 +213,7 @@ dss_tgt_nr_get(int ncores, int nr)
 	 * by the starting core offset.
 	 */
 	nr_default = (((ncores - dss_sys_xs_nr) - dss_core_offset) /
-		DSS_XS_NR_PER_TGT);
+		      DSS_XS_NR_PER_TGT);
 	if (nr_default == 0)
 		nr_default = 1;
 
@@ -234,12 +234,12 @@ dss_tgt_nr_get(int ncores, int nr)
 static int
 dss_topo_init()
 {
-	uint depth;
-	int num_obj;
-	int num_cores_visited;
-	char *cpuset;
-	int k;
-	hwloc_obj_t corenode;
+	uint 		depth;
+	int 		numa_node_nr;
+	int 		num_cores_visited;
+	char 		*cpuset;
+	int 		k;
+	hwloc_obj_t 	corenode;
 
 	hwloc_topology_init(&dss_topo);
 	hwloc_topology_load(dss_topo);
@@ -247,10 +247,10 @@ dss_topo_init()
 	dss_core_depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_CORE);
 	dss_core_nr = hwloc_get_nbobjs_by_type(dss_topo, HWLOC_OBJ_CORE);
 	depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_NUMANODE);
-	num_obj = hwloc_get_nbobjs_by_depth(dss_topo, depth);
+	numa_node_nr = hwloc_get_nbobjs_by_depth(dss_topo, depth);
 
 	/* if we are not NUMA aware, fall back to non-NUMA implementation */
-	if (num_obj <= 0) {
+	if (numa_node_nr <= 0) {
 		D_PRINT("NUMA information unavailable.\n");
 		dss_tgt_nr = dss_tgt_nr_get(dss_core_nr, nr_threads);
 
@@ -264,17 +264,17 @@ dss_topo_init()
 		return 0;
 	}
 
-	if (numa_node > num_obj) {
+	if (dss_numa_node > numa_node_nr) {
 		D_ERROR("Invalid NUMA node selected. "
 			"Must be no larger than %d\n",
-			num_obj);
+			numa_node_nr);
 		return -DER_INVAL;
 	}
 
-	numa_obj = hwloc_get_obj_by_depth(dss_topo, depth, numa_node);
+	numa_obj = hwloc_get_obj_by_depth(dss_topo, depth, dss_numa_node);
 	if (numa_obj == NULL) {
 		D_ERROR("NUMA node %d was not found in the topology",
-			numa_node);
+			dss_numa_node);
 		return -DER_INVAL;
 	}
 
@@ -294,11 +294,11 @@ dss_topo_init()
 		if (corenode == NULL)
 			continue;
 		if (hwloc_bitmap_isincluded(corenode->allowed_cpuset,
-			numa_obj->allowed_cpuset) != 0) {
+					    numa_obj->allowed_cpuset) != 0) {
 			if (num_cores_visited++ >= dss_core_offset) {
 				hwloc_bitmap_set(core_allocation_bitmap, k);
 				hwloc_bitmap_asprintf(&cpuset,
-					corenode->allowed_cpuset);
+						      corenode->allowed_cpuset);
 			}
 			dss_num_cores_numa_node++;
 		}
@@ -576,7 +576,7 @@ server_init(int argc, char *argv[])
 		"(out of %u) with %u target, %d helper XS per target, "
 		"NUMA node %d, firstcore %d, host %s.\n", DAOS_VERSION,
 		getpid(), rank, size, dss_tgt_nr, dss_tgt_offload_xs_nr,
-		numa_node, dss_core_offset, hostname);
+		dss_numa_node, dss_core_offset, hostname);
 
 	return 0;
 
@@ -758,7 +758,7 @@ parse(int argc, char **argv)
 			dss_nvme_conf = optarg;
 			break;
 		case 'p':
-			numa_node = atoi(optarg);
+			dss_numa_node = atoi(optarg);
 			break;
 		case 'i':
 			dss_nvme_shm_id = atoi(optarg);
