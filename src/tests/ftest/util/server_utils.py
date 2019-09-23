@@ -26,20 +26,13 @@ from __future__ import print_function
 import traceback
 import sys
 import os
-import time
-import subprocess
-import json
-import re
-import signal
-import errno
 import yaml
 import getpass
 
-from general_utils import pcmd, check_file_exists, poll_pattern
-from command_utils import JobManager, DaosCommand, Orterun
-from command_utils import BasicParameter, FormattedParameter
-from avocado.utils import genio, process
-from write_host_file import write_host_file
+from general_utils import pcmd, check_file_exists, poll_pattern, get_file_path
+from command_utils import DaosCommand, Orterun
+from command_utils import FormattedParameter
+from get_hosts_from_file import get_hosts_from_file
 
 SESSIONS = {}
 
@@ -54,12 +47,15 @@ class ServerFailed(Exception):
 class ServerCommand(DaosCommand):
     """Defines an object representing a server command."""
 
-    def __init__(self, path):
+    def __init__(self, path=""):
         """Create a server command object
 
         Args:
             path (str): path to location of daos_server binary.
         """
+        if path == "":
+            path = get_file_path("bin/daos_server")
+
         super(ServerCommand, self).__init__(
             "/run/daos_server/*", "daos_server", path)
 
@@ -80,49 +76,65 @@ class ServerCommand(DaosCommand):
 class ServerManager(object):
     """Defines object to manage server functions and launch server command."""
 
-    def __init__(self, hosts, path="", manager_path=""):
+    def __init__(self, basepath, attach="/tmp", insecure=True,
+                 debug=True, slots=1, uri_path=None, env=None,
+                 sudo=True, log_filename=None):
         """Create a ServerManager object.
 
         Args:
-            hosts (list): list of servers to launch/setup.
-            path (str, optional): path to location of daos_server binary.
-                Defaults to "".
-            manager_path (str, optional): path to location of orterun binary.
-                Defaults to "".
         """
-        self.hosts = hosts
-        self.cmd = ServerCommand(path)
-        self.orterun = Orterun(self.cmd, manager_path, True)
+        self.basepath = basepath
+        self.log_filename = log_filename
+        self._hosts = None
+        self._hostfile = None
 
-    def setup(self, env=None, basepath="", hostfile="", test=None):
-        """Setup server and orterun default attributes.
+        # Setup server command defaults
+        self.server_command = ServerCommand()
+        self.server_command.attach.value = attach
+        self.server_command.debug.value = debug
+        self.server_command.insecure.value = insecure
+        self.server_command.request.value = "start"
+        self.set_server_yaml()
+
+        # Setup orterun command defaults
+        self.runner = Orterun(
+            self.server_command, get_file_path("opt/ompi/bin/orterun"), True)
+        self.runner.enable_recovery.value = True
+        self.runner.report_uri.value = uri_path
+        self.runner.sudo = sudo
+        if env is not None:
+            self.runner.export.value = []
+            self.runner.export.value.extend(env.get_list())
+
+    @property
+    def hosts(self):
+        return self._hosts
+
+    @hosts.setter
+    def hosts(self, value):
+        self._hosts = value
+        self.runner.processes.value = len(self._hosts)
+
+    @property
+    def hostfile(self):
+        return self._hostfile
+
+    @hostfile.setter
+    def hostfile(self, value):
+        self._hostfile = value
+        self._hosts = get_hosts_from_file(value)
+        self.runner.hostfile.value = value
+        self.runner.processes.value = len(self._hosts)
+
+    def set_server_yaml(self):
+        """Set the server's config option to the path of the yaml file.
 
         Args:
-            env (EnvironmentVariables, optional): the environment variables
-                to use with the orterun command. Defaults to None.
-            basepath (str, optional): DAOS install basepath.
-                Defaults to "".
-            hostfile (str, optional): file defining host names and slots.
-                Defaults to "".
-            test (Avocado Test Object, optional): If specified, used to
-                override defaults with values from yaml file.
-                Defaults to None.
+            basepath (str): DAOS install basepath
+            log_filename (str): Set a specific logfile name
         """
-        self.cmd.debug.value = True
-        self.cmd.insecure.value = True
-        self.cmd.request.value = True
-        self.cmd.config.value = self.create_server_yaml(basepath, None)
-
-        self.orterun.setup_command(env, hostfile, len(self.hosts))
-        self.orterun.enable_recovery.update(True, "orterun.enable_recovery")
-
-        # If test object provided, override values with yaml file values.
-        if test is not None:
-            self.cmd.get_params(test)
-            self.orterun.get_params(test)
-
-        # Prepare servers
-        self.prep()
+        self.server_command.config.value = self._create_yaml(
+            self.basepath, self.log_filename)
 
     def prep(self):
         """Prepare the hosts before starting daos server.
@@ -152,7 +164,7 @@ class ServerManager(object):
                     "{}: {} missing directory {} for user {}.".format(
                         nodeset, host_type, directory, user))
 
-    def start(self, sudo=False, mode="normal"):
+    def start(self, mode="normal"):
         """Start the server in normal mode or maintanence mode.
 
         Args:
@@ -166,12 +178,10 @@ class ServerManager(object):
             "normal": "DAOS I/O server.*started",
         }
         # Run servers
-        result = self.orterun.run(sudo=sudo)
+        result = self.runner.run()
 
         # Check for pattern
-        if mode == "mtnc":
-            poll_pattern(len(self.hosts), result, patterns[mode])
-        elif mode in patterns:
+        if mode in patterns:
             poll_pattern(len(self.hosts), result, patterns[mode])
 
     def kill(self, hosts):
@@ -218,12 +228,13 @@ class ServerManager(object):
                     ", ".join(
                         [str(result[key]) for key in result if key != 0])))
 
-    def create_server_yaml(self, basepath, log_filename):
+    def _create_yaml(self, basepath, log_filename):
         """Create the DAOS server config YAML file based on Avocado test
             Yaml file.
 
         Args:
             basepath (str): DAOS install basepath
+            log_filename (str): Set a specific logfile name
 
         Raises:
             ServerFailed: if there is an reading/writing yaml files
