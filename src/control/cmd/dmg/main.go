@@ -32,33 +32,8 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/client"
-	log "github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/logging"
 )
-
-type dmgErr string
-
-func (de dmgErr) Error() string {
-	return string(de)
-}
-
-const (
-	// use this error type to signal that a
-	// subcommand completed without error
-	cmdSuccess dmgErr = "command execution completed"
-)
-
-type (
-	// this interface decorates a command which
-	// should be broadcast rather than unicast
-	// to a single access point
-	broadcaster interface {
-		isBroadcast()
-	}
-	broadcastCmd struct{}
-)
-
-// implement the interface
-func (broadcastCmd) isBroadcast() {}
 
 type (
 	// this interface decorates a command which
@@ -79,6 +54,18 @@ func (cmd *connectedCmd) setConns(conns client.Connect) {
 	cmd.conns = conns
 }
 
+type cmdLogger interface {
+	setLog(*logging.LeveledLogger)
+}
+
+type logCmd struct {
+	log *logging.LeveledLogger
+}
+
+func (c *logCmd) setLog(log *logging.LeveledLogger) {
+	c.log = log
+}
+
 type cliOptions struct {
 	HostList string `short:"l" long:"host-list" description:"comma separated list of addresses <ipv4addr/hostname:port>"`
 	Insecure bool   `short:"i" long:"insecure" description:"have dmg attempt to connect without certificates"`
@@ -94,16 +81,8 @@ type cliOptions struct {
 }
 
 // appSetup loads config file, processes cli overrides and connects clients.
-func appSetup(broadcast bool, opts *cliOptions, conns client.Connect) error {
-	if opts.Debug {
-		log.SetLevel(log.LogLevelDebug)
-		log.Debug("debug output enabled")
-	}
-	if opts.JSON {
-		log.SetJSONOutput()
-	}
-
-	config, err := client.GetConfig(opts.ConfigPath)
+func appSetup(log logging.Logger, opts *cliOptions, conns client.Connect) error {
+	config, err := client.GetConfig(log, opts.ConfigPath)
 	if err != nil {
 		return errors.WithMessage(err, "processing config file")
 	}
@@ -126,14 +105,7 @@ func appSetup(broadcast bool, opts *cliOptions, conns client.Connect) error {
 	}
 	conns.SetTransportConfig(config.TransportConfig)
 
-	// broadcast app requests to host list by default
-	addresses := config.HostList
-	if !broadcast {
-		// send app requests to first access point only
-		addresses = []string{config.AccessPoints[0]}
-	}
-
-	ok, out := hasConns(conns.ConnectClients(addresses))
+	ok, out := hasConns(conns.ConnectClients(config.HostList))
 	if !ok {
 		return errors.New(out) // no active connections
 	}
@@ -143,14 +115,12 @@ func appSetup(broadcast bool, opts *cliOptions, conns client.Connect) error {
 	return nil
 }
 
-func exitWithError(err error) {
+func exitWithError(log logging.Logger, err error) {
 	log.Errorf("%s: %v", path.Base(os.Args[0]), err)
 	os.Exit(1)
 }
 
-func parseOpts(args []string, conns client.Connect) (*cliOptions, error) {
-	opts := new(cliOptions)
-
+func parseOpts(args []string, opts *cliOptions, conns client.Connect, log *logging.LeveledLogger) error {
 	p := flags.NewParser(opts, flags.Default)
 	p.Options ^= flags.PrintErrors // Don't allow the library to print errors
 	p.CommandHandler = func(cmd flags.Commander, args []string) error {
@@ -158,8 +128,19 @@ func parseOpts(args []string, conns client.Connect) (*cliOptions, error) {
 			return nil
 		}
 
-		_, shouldBroadcast := cmd.(broadcaster)
-		if err := appSetup(shouldBroadcast, opts, conns); err != nil {
+		if opts.Debug {
+			log.WithLogLevel(logging.LogLevelDebug)
+			log.Debug("debug output enabled")
+		}
+		if opts.JSON {
+			log.WithJSONOutput()
+		}
+
+		if logCmd, ok := cmd.(cmdLogger); ok {
+			logCmd.setLog(log)
+		}
+
+		if err := appSetup(log, opts, conns); err != nil {
 			return err
 		}
 		if wantsConn, ok := cmd.(connector); ok {
@@ -169,28 +150,20 @@ func parseOpts(args []string, conns client.Connect) (*cliOptions, error) {
 			return err
 		}
 
-		return cmdSuccess
+		return nil
 	}
 
-	unparsed, err := p.ParseArgs(args)
-	if err != nil {
-		return nil, err
-	}
-	if len(unparsed) > 0 {
-		log.Debugf("Unparsed arguments: %v", unparsed)
-	}
-
-	return opts, nil
+	_, err := p.ParseArgs(args)
+	return err
 }
 
 func main() {
-	conns := client.NewConnect()
+	var opts cliOptions
+	log := logging.NewCommandLineLogger()
 
-	_, err := parseOpts(os.Args[1:], conns)
-	if err != nil {
-		if err == cmdSuccess {
-			os.Exit(0)
-		}
-		exitWithError(err)
+	conns := client.NewConnect(log)
+
+	if err := parseOpts(os.Args[1:], &opts, conns, log); err != nil {
+		exitWithError(log, err)
 	}
 }

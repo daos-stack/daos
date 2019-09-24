@@ -33,6 +33,71 @@
 /* Used to preallocate buffer to query error log pages from SPDK health info */
 #define DAOS_MAX_ERROR_LOG_PAGES 256
 
+/* See DAOS-3319 on this.  We should generally try to avoid reading unaligned
+ * variables directly as it results in more than one instruction for each such
+ * access.  The instances of these possible unaligned accesses happen with
+ * default gcc on Fedora 30.
+ */
+#if !defined(__has_warning)  /* gcc */
+#if __GNUC__ >= 9
+	#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
+#endif /* warning only defined in version 9 or later */
+#else /* __has_warning is defined */
+#if __has_warning("-Waddress-of-packed-member") /* valid clang warning */
+	#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
+#endif /* Warning is defined in clang */
+#endif /* __has_warning not defined */
+
+
+
+/*
+ * Used for getting bio device state, which requires exclusive access from
+ * the device owner xstream.
+ */
+struct dev_state_msg_arg {
+	struct bio_xs_context	*xs;
+	struct bio_dev_state	 devstate;
+	ABT_eventual		 eventual;
+};
+
+/* Copy out the bio_dev_state in the device owner xstream context */
+static void
+bio_get_dev_state_internal(void *msg_arg)
+{
+	struct dev_state_msg_arg	*dsm = msg_arg;
+
+	D_ASSERT(dsm != NULL);
+
+	dsm->devstate = dsm->xs->bxc_blobstore->bb_dev_health.bdh_health_state;
+	ABT_eventual_set(dsm->eventual, NULL, 0);
+}
+
+/* Call internal method to get BIO device state from the device owner xstream */
+int
+bio_get_dev_state(struct bio_dev_state *dev_state, struct bio_xs_context *xs)
+{
+	struct dev_state_msg_arg	 dsm = { 0 };
+	int				 rc;
+
+	rc = ABT_eventual_create(0, &dsm.eventual);
+	if (rc != ABT_SUCCESS)
+		return rc;
+
+	dsm.xs = xs;
+
+	spdk_thread_send_msg(owner_thread(xs->bxc_blobstore),
+			     bio_get_dev_state_internal, &dsm);
+	ABT_eventual_wait(dsm.eventual, NULL);
+
+	*dev_state = dsm.devstate;
+
+	rc = ABT_eventual_free(&dsm.eventual);
+	if (rc != ABT_SUCCESS)
+		D_ERROR("BIO get device state ABT future not freed\n");
+
+	return rc;
+}
+
 static void
 dprint_uint128_hex(uint64_t *v)
 {
@@ -605,6 +670,9 @@ bio_media_error(void *msg_arg)
 		D_ERROR("%s error logged from xs_id:%d\n",
 			mem->mem_update ? "Write" : "Read", mem->mem_tgt_id);
 	}
+
+	/* TODO Implement checksum error counter */
+	dev_state->bds_checksum_errs = 0;
 
 	D_FREE(mem);
 }

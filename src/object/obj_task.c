@@ -167,8 +167,8 @@ dc_obj_query_key_task_create(daos_handle_t oh, daos_handle_t th,
 }
 
 int
-dc_obj_sync_task_create(daos_handle_t oh, daos_handle_t th,
-			daos_epoch_t **epoch, int *nr, daos_event_t *ev,
+dc_obj_sync_task_create(daos_handle_t oh, daos_epoch_t epoch,
+			daos_epoch_t **epochs_p, int *nr, daos_event_t *ev,
 			tse_sched_t *tse, tse_task_t **task)
 {
 	struct daos_obj_sync_args	*args;
@@ -181,8 +181,8 @@ dc_obj_sync_task_create(daos_handle_t oh, daos_handle_t th,
 
 	args = dc_task_get_args(*task);
 	args->oh	= oh;
-	args->th	= th;
 	args->epoch	= epoch;
+	args->epochs_p	= epochs_p;
 	args->nr	= nr;
 
 	return 0;

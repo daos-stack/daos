@@ -26,6 +26,7 @@
  * tests/suite/daos_obj_array.c
  */
 
+#include <daos/checksum.h>
 #include "daos_test.h"
 
 #define STACK_BUF_LEN	24
@@ -63,7 +64,7 @@ byte_array_simple_stack(void **state)
 
 	/** init I/O descriptor */
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;
 	recx.rx_idx	= 0;
@@ -137,7 +138,7 @@ array_simple(void **state)
 
 	/** init I/O descriptor */
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= arg->size;
 	srand(time(NULL) + arg->size);
@@ -220,7 +221,7 @@ array_partial(void **state)
 
 	/** init I/O descriptor */
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= arg->size;
 	recx.rx_idx	= 0;
@@ -374,7 +375,7 @@ replicator(void **state)
 
 	/** init I/O descriptor */
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;
 	recx.rx_idx	= 27136;
@@ -452,7 +453,7 @@ read_empty(void **state)
 
 	/** init I/O descriptor */
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;
 	recx.rx_idx	= 0;
@@ -557,7 +558,7 @@ array_dkey_punch_enumerate(void **state)
 
 	/** init I/O descriptor */
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;
 	recx.rx_nr	= SM_BUF_LEN;
@@ -643,7 +644,7 @@ array_akey_punch_enumerate(void **state)
 	d_iov_set(&dkey, "dkey", strlen("dkey"));
 
 	/** init I/O descriptor */
-	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;
 	recx.rx_nr	= SM_BUF_LEN;
@@ -748,7 +749,7 @@ array_recx_punch_enumerate(void **state)
 
 	/** init I/O descriptor */
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;
 	recx.rx_nr	= SM_BUF_LEN;

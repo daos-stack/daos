@@ -222,14 +222,7 @@ dtx_handle_init(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 	dth->dth_conflict = conflict;
 	dth->dth_ent = UMOFF_NULL;
 	dth->dth_obj = UMOFF_NULL;
-	/**
-	 * XXX, for EC obj, now works in synchronous commit mode, to simplify
-	 * the EC fetch handling. Can refine it as async commit later.
-	 */
-	if (leader && daos_oclass_is_ec(oid->id_pub, NULL))
-		dth->dth_sync = 1;
-	else
-		dth->dth_sync = 0;
+	dth->dth_sync = 0;
 }
 
 static inline void
@@ -510,7 +503,9 @@ out:
 	if (abort_dtes != NULL)
 		D_FREE(abort_dtes);
 
-	return rc > 0 ? 0 : rc;
+	D_ASSERTF(rc <= 0, "unexpected return value %d\n", rc);
+
+	return rc;
 }
 
 /**
@@ -682,8 +677,11 @@ out_free:
 
 	if (dth->dth_dti_cos != NULL)
 		D_FREE(dth->dth_dti_cos);
+
+	D_ASSERTF(result <= 0, "unexpected return value %d\n", result);
+
 out:
-	return result > 0 ? 0 : result;
+	return result;
 }
 
 /**
@@ -763,8 +761,11 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_hdl *cont_hdl,
 		(unsigned long long)dth->dth_dkey_hash,
 		dth->dth_intent == DAOS_INTENT_PUNCH ? "Punch" : "Update",
 		result);
+
+	D_ASSERTF(result <= 0, "unexpected return value %d\n", result);
+
 out:
-	return result > 0 ? 0 : result;
+	return result;
 }
 
 
