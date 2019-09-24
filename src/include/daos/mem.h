@@ -382,6 +382,7 @@ umem_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
 
 #define umem_tx_add(umm, umoff, size)					\
 	umem_tx_add_range(umm, umoff, 0, size)
+
 static inline int
 umem_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
 {

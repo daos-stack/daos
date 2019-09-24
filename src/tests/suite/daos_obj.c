@@ -3119,7 +3119,7 @@ blob_unmap_trigger(void **state)
 	char		*enum_buf;
 	char		 dkey[5] = "dkey";
 	char		 akey[20];
-	int		 nvme_recs = 2;
+	int		 nvme_recs = 1;
 	daos_handle_t	 th[3];
 	int		 i, t;
 	int		 rc;

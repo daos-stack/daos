@@ -289,27 +289,6 @@ ilog_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	return 0;
 }
 
-static int
-ilog_rec_update(struct btr_instance *tins, struct btr_record *rec,
-	       d_iov_t *key_iov, d_iov_t *val_iov)
-{
-	bool	*new_punch = val_iov->iov_buf;
-	bool	*old_punch = rec2punch(rec);
-	int	 rc = 0;
-
-	if (*new_punch <= *old_punch)
-		return 0;
-
-	/* The new one is a punch so promote the in-tree entry */
-	rc = umem_tx_add_ptr(&tins->ti_umm, old_punch, sizeof(*old_punch));
-	if (rc != 0)
-		goto done;
-
-	*old_punch = true;
-done:
-	return rc;
-}
-
 static btr_ops_t ilog_btr_ops = {
 	.to_rec_msize		= ilog_rec_msize,
 	.to_hkey_size		= ilog_hkey_size,
@@ -318,7 +297,6 @@ static btr_ops_t ilog_btr_ops = {
 	.to_rec_alloc		= ilog_rec_alloc,
 	.to_rec_free		= ilog_rec_free,
 	.to_rec_fetch		= ilog_rec_fetch,
-	.to_rec_update		= ilog_rec_update,
 };
 
 int
@@ -974,8 +952,7 @@ ilog_tree_modify(struct ilog_context *lctx, const struct ilog_id *id_in,
 	d_iov_set(&key_iov, &key, sizeof(key));
 	d_iov_set(&val_iov, &punch, sizeof(punch));
 	key = id;
-	rc = dbtree_upsert(toh, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, &key_iov,
-			   &val_iov);
+	rc = dbtree_update(toh, &key_iov, &val_iov);
 	if (rc) {
 		D_ERROR("Failed to update incarnation log: rc = %s\n",
 			d_errstr(rc));

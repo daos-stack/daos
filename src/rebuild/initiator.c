@@ -256,9 +256,6 @@ rebuild_one_punch_keys(struct rebuild_tgt_pool_tracker *rpt,
 		    i < rdone->ro_iod_num; i++) {
 		int j;
 
-		if (rdone->ro_akey_punch_ephs[i].p_num == 0)
-			continue;
-
 		for (j = 0; j < rdone->ro_akey_punch_ephs[i].p_num; j++) {
 			daos_epoch_t eph;
 

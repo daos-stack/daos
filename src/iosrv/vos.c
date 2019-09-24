@@ -141,7 +141,7 @@ static int
 fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	 vos_iter_type_t vos_type)
 {
-	d_iov_t		*iovs = arg->sgl->sg_iovs;
+	d_iov_t		*iov;
 	daos_size_t	total_size;
 	int		type;
 
@@ -169,18 +169,20 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 		}
 	}
 
+	iov = &arg->sgl->sg_iovs[arg->sgl_idx];
+
 	D_ASSERT(arg->kds_len < arg->kds_cap);
 	arg->kds[arg->kds_len].kd_key_len = key_ent->ie_key.iov_len;
 	arg->kds[arg->kds_len].kd_csum_len = 0;
 	arg->kds[arg->kds_len].kd_val_type = type;
 	arg->kds_len++;
 
-	D_ASSERT(iovs[arg->sgl_idx].iov_len + key_ent->ie_key.iov_len <
-		 iovs[arg->sgl_idx].iov_buf_len);
-	memcpy(iovs[arg->sgl_idx].iov_buf + iovs[arg->sgl_idx].iov_len,
-	       key_ent->ie_key.iov_buf, key_ent->ie_key.iov_len);
+	D_ASSERT(iov->iov_len + key_ent->ie_key.iov_len <
+		 iov->iov_buf_len);
+	memcpy(iov->iov_buf + iov->iov_len, key_ent->ie_key.iov_buf,
+	       key_ent->ie_key.iov_len);
 
-	iovs[arg->sgl_idx].iov_len += key_ent->ie_key.iov_len;
+	iov->iov_len += key_ent->ie_key.iov_len;
 
 	if (key_ent->ie_key_punches.pi_nr > 0) {
 		int pi_size = key_ent->ie_key_punches.pi_nr *
@@ -196,19 +198,17 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 						OBJ_ITER_DKEY_EPOCH;
 		arg->kds_len++;
 
-		D_ASSERT(iovs[arg->sgl_idx].iov_len + pi_size <
-			 iovs[arg->sgl_idx].iov_buf_len);
-		memcpy(iovs[arg->sgl_idx].iov_buf + iovs[arg->sgl_idx].iov_len,
+		D_ASSERT(iov->iov_len + pi_size < iov->iov_buf_len);
+		memcpy(iov->iov_buf + iov->iov_len,
 		       key_ent->ie_key_punches.pi_punches, pi_size);
 
-		iovs[arg->sgl_idx].iov_len += pi_size;
+		iov->iov_len += pi_size;
 	}
 
 	D_DEBUG(DB_IO, "Pack key "DF_KEY" iov total %zd kds len %d eph "
-		DF_U64" punched eph num "DF_U64"\n",
-		DP_KEY(&key_ent->ie_key),
-		iovs[arg->sgl_idx].iov_len, arg->kds_len - 1,
-		key_ent->ie_epoch, key_ent->ie_key_punches.pi_nr);
+		DF_U64" punched eph num "DF_U64"\n", DP_KEY(&key_ent->ie_key),
+		iov->iov_len, arg->kds_len - 1, key_ent->ie_epoch,
+		key_ent->ie_key_punches.pi_nr);
 	return 0;
 }
 
