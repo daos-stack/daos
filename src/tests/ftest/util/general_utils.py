@@ -147,7 +147,7 @@ def check_file_exists(hosts, filename, user=None, directory=False):
                                         filename)
     else:
         command = "test -d '{}'".format(filename)
-    
+
     task = run_task(hosts, command)
     for ret_code, node_list in task.iter_retcodes():
         if ret_code != 0:

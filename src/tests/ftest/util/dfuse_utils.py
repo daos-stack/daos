@@ -100,14 +100,15 @@ class DfuseCommand(ExecutableCommand):
         """
         for host in hosts:
             if general_utils.check_file_exists(
-                [host], self.mount_dir.value, directory=True)[0] is False:
+                    [host], self.mount_dir.value, directory=True)[0] is False:
                 ret_code = general_utils.pcmd(
                     [host], "mkdir " + self.mount_dir.value, timeout=30)
                 for key in ret_code:
                     if key is not 0:
-                        raise CommandFailure("DfuseFailure: Error creating directory: "
-                                             "{}".format(self.mount_dir.value))
-    
+                        raise CommandFailure(
+                            "DfuseFailure: Error creating directory: "
+                            "{}".format(self.mount_dir.value))
+
     def remove_dfuse_dir(self, hosts):
         """Remove dfuse directory
 
@@ -161,24 +162,25 @@ class DfuseCommand(ExecutableCommand):
         """
 
         for host in hosts:
-             if 0 in general_utils.pcmd([host], "which fusermount"):
-                 fuse_cmd = "fusermount -u {}".format(self.mount_dir.value)
-             elif 0 in general_utils.pcmd([host], "which fusermount3"):
-                 fuse_cmd = "fusermount3 -u {}".format(self.mount_dir.value)
-             else:
-                 raise CommandFailure("No Fuse on {}".format([host]))
+            if 0 in general_utils.pcmd([host], "which fusermount"):
+                fuse_cmd = "fusermount -u {}".format(self.mount_dir.value)
+            elif 0 in general_utils.pcmd([host], "which fusermount3"):
+                fuse_cmd = "fusermount3 -u {}".format(self.mount_dir.value)
+            else:
+                raise CommandFailure("No Fuse on {}".format([host]))
 
-             ret_code = general_utils.pcmd([host], fuse_cmd, timeout=30)
+            ret_code = general_utils.pcmd([host], fuse_cmd, timeout=30)
 
-             self.remove_dfuse_dir([host])
+            self.remove_dfuse_dir([host])
 
-             for key in ret_code:
-                 if key is not 0:
-                     raise CommandFailure("DfuseFailure: Error stopping dfuse. "
-                                          "RC:{}".format(ret_code))
+            for key in ret_code:
+                if key is not 0:
+                    raise CommandFailure("DfuseFailure: Error stopping dfuse. "
+                                         "RC:{}".format(ret_code))
 
 
-    def get_default_env(self, attach_info):
+    @classmethod
+    def get_default_env(cls, attach_info):
         """Get the default enviroment settings for running Dfuse.
 
         Args:
@@ -189,12 +191,11 @@ class DfuseCommand(ExecutableCommand):
                                   exported
 
         """
-        
+
         # obtain any env variables to be exported
         env = EnvironmentVariables()
         env["CRT_ATTACH_INFO_PATH"] = attach_info
         env["DAOS_SINGLETON_CLI"] = 1
         env_export = env.get_export_str()
-        
-        return env_export
 
+        return env_export
