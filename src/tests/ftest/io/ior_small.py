@@ -24,6 +24,7 @@
 
 from ior_test_base import IorTestBase
 
+
 class IorSmall(IorTestBase):
     """Test class Description: Runs IOR with 1 server with basic parameters.
 
