@@ -137,22 +137,31 @@ func TestDiscoverScm(t *testing.T) {
 }
 
 func TestFormatScm(t *testing.T) {
+	err := errors.New(msgNdctlNotFound)
+	noNdctlPrep := &mockPrepScm{
+		prepRet:          err,
+		resetRet:         err,
+		getStateRet:      err,
+		getNamespacesRet: err,
+	}
+
 	tests := []struct {
 		inited    bool
 		formatted bool
 		mountRet  error
 		// log context should be stack layer registering result
-		unmountRet  error
-		mkdirRet    error
-		removeRet   error
-		prepNoNdctl bool
-		mount       string
-		class       storage.ScmClass
-		devs        []string
-		size        int
-		expCmds     []string // expected arguments in syscall methods
-		expResults  ScmMountResults
-		desc        string
+		unmountRet error
+		mkdirRet   error
+		removeRet  error
+		mount      string
+		prep       PrepScm
+		expErrMsg  string
+		class      storage.ScmClass
+		devs       []string
+		size       int
+		expCmds    []string // expected arguments in syscall methods
+		expResults ScmMountResults
+		desc       string
 	}{
 		{
 			inited: false,
@@ -230,11 +239,12 @@ func TestFormatScm(t *testing.T) {
 			desc: "ram success",
 		},
 		{
-			inited:      true,
-			mount:       "/mnt/daos",
-			class:       storage.ScmClassRAM,
-			size:        6,
-			prepNoNdctl: true, // format should succeed without ndctl being installed
+			inited:    true,
+			mount:     "/mnt/daos",
+			class:     storage.ScmClassRAM,
+			size:      6,
+			prep:      noNdctlPrep, // format should succeed without ndctl being installed
+			expErrMsg: msgIpmctlDiscoverFail + ": " + msgNdctlNotFound,
 			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
@@ -271,11 +281,12 @@ func TestFormatScm(t *testing.T) {
 			desc: "dcpm success",
 		},
 		{
-			inited:      true,
-			mount:       "/mnt/daos",
-			class:       storage.ScmClassDCPM,
-			devs:        []string{"/dev/pmem0"},
-			prepNoNdctl: true, // format should succeed without ndctl being installed
+			inited:    true,
+			mount:     "/mnt/daos",
+			class:     storage.ScmClassDCPM,
+			devs:      []string{"/dev/pmem0"},
+			prep:      noNdctlPrep, // format should succeed without ndctl being installed
+			expErrMsg: msgIpmctlDiscoverFail + ": " + msgNdctlNotFound,
 			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
@@ -353,15 +364,9 @@ func TestFormatScm(t *testing.T) {
 				tt.mkdirRet, tt.removeRet, tt.mount, tt.class, tt.devs,
 				tt.size, storage.BdevClassNvme, []string{}, false, false)
 
-			mockPrep := newMockPrepScm()
-			if tt.prepNoNdctl {
-				err := errors.New(msgNdctlNotFound)
-				mockPrep = &mockPrepScm{
-					prepRet:          err,
-					resetRet:         err,
-					getStateRet:      err,
-					getNamespacesRet: err,
-				}
+			mockPrep := tt.prep
+			if mockPrep == nil {
+				mockPrep = newMockPrepScm()
 			}
 
 			ss := newMockScmStorage(log, config.ext, nil, []DeviceDiscovery{},
@@ -375,10 +380,8 @@ func TestFormatScm(t *testing.T) {
 				// fatal, continue with expected errors to
 				// format as in normal program execution.
 				if err := ss.Discover(); err != nil {
-					if tt.prepNoNdctl {
-						ExpectError(t, err,
-							msgIpmctlDiscoverFail+": "+msgNdctlNotFound,
-							tt.desc)
+					if tt.expErrMsg != "" {
+						ExpectError(t, err, tt.expErrMsg, tt.desc)
 					} else {
 						// unexpected failure
 						t.Fatal(tt.desc + ": " + err.Error())
