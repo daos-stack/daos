@@ -22,7 +22,7 @@
 //
 
 syntax = "proto3";
-package mgmt;
+package ctl;
 
 import "common.proto";
 
@@ -47,7 +47,7 @@ message ScmModule {
 	Location loc = 3;	// The location of the PMM in the hardware platform.
 }
 
-// PmemDevice represents SCM namespace as pmem kernel device created on a ScmRegion.
+// PmemDevice represents SCM namespace as pmem device files created on a ScmRegion.
 message PmemDevice {
 	string uuid = 1;
 	string blockdev = 2;
@@ -90,8 +90,8 @@ message ScanScmReq {}
 
 message ScanScmResp {
 	repeated ScmModule modules = 1;
-	ResponseState state = 2;
-	// TODO: return typed scm pmem devices or mount
+	repeated PmemDevice pmems = 2;
+	ResponseState state = 3;
 }
 
 message FormatScmReq {}

@@ -24,7 +24,7 @@
 
 from __future__ import print_function
 
-from apricot import TestWithServers
+from apricot import TestWithServers, skipForTicket
 from general_utils import get_pool, get_container, kill_server, DaosTestError
 from general_utils import get_pool_status, wait_for_rebuild, verify_rebuild
 from io_utilities import read_array_objects, read_during_rebuild
@@ -37,6 +37,7 @@ class ReadArrayTest(TestWithServers):
     :avocado: recursive
     """
 
+    @skipForTicket("DAOS-3172")
     def test_read_array_during_rebuild(self):
         """Jira ID: DAOS-691
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,21 +19,13 @@
  * provided in Contract No. B609815.
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
- */
-
-#ifndef __DFUSE_GAH_H__
-#define __DFUSE_GAH_H__
-
-/**
- * Global Access Handle (GAH).
  *
  */
-struct ios_gah {
-	uint64_t root;		/**< The rank where the GAH was allocated */
 
-};
+#ifndef DAOS_CHECKSUM_TESTS_H
+#define DAOS_CHECKSUM_TESTS_H
 
-#define GAH_PRINT_STR "Gah(%" PRIx64 ")"
-#define GAH_PRINT_VAL(P) (P).root
+int
+daos_checksum_tests_run();
 
-#endif /* __DFUSE_GAH_H__ */
+#endif /** DAOS_CHECKSUM_TESTS_H */

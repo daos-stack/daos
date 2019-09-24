@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2019 Intel Corporation.
+ * (C) Copyright 2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,19 +19,27 @@
  * provided in Contract No. B609815.
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
+ *
  */
 
-#include "dfuse_log.h"
 
-#include "dfuse_fs.h"
+#include <daos.h>
 
-/* Progress until all callbacks are invoked */
+#ifndef __DAOS_MISC_TESTS_H
+#define __DAOS_MISC_TESTS_H
+
+/** Initialize and SGL with a variable number of IOVs and set the IOV buffers
+ *  to the value of the strings passed
+ *
+ * @param sgl		Scatter gather list to initialize
+ * @param count		Number of IO Vectors that will be created in the SGL
+ * @param str		First string that will be used
+ * @param ...		Rest of strings, up to count
+ */
 void
-dfuse_wait(void *arg, struct dfuse_tracker *tracker)
-{
-	for (;;) {
+daos_sgl_init_with_strings(d_sg_list_t *sgl, uint32_t count, char *str, ...);
 
-		if (dfuse_tracker_test(tracker))
-			return;
-	}
-}
+int
+misc_tests_run();
+
+#endif /** __DAOS_MISC_TESTS_H */

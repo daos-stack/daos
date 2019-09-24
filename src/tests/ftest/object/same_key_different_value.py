@@ -30,6 +30,7 @@ from apricot import TestWithServers
 
 from daos_api import DaosPool, DaosContainer, DaosApiError
 
+
 class SameKeyDifferentValue(TestWithServers):
     """
     Test Description: Test to verify different type of values
@@ -65,28 +66,6 @@ class SameKeyDifferentValue(TestWithServers):
             print(excpn)
             print(traceback.format_exc())
             self.fail("Test failed during setup.\n")
-
-    def tearDown(self):
-
-        try:
-            if self.container:
-                self.container.close()
-                # wait a few seconds and then destroy
-                time.sleep(5)
-                self.container.destroy()
-
-            # cleanup the pool
-            if self.pool:
-                self.pool.disconnect()
-                self.pool.destroy(1)
-
-        except DaosApiError as excpn:
-            print(excpn)
-            print(traceback.format_exc())
-            self.fail("Test failed during teardown.\n")
-
-        finally:
-            super(SameKeyDifferentValue, self).tearDown()
 
     def test_single_to_array_value(self):
         """

@@ -39,11 +39,40 @@ extern "C" {
 
 #include <dirent.h>
 
-#define DFS_MAX_PATH NAME_MAX
-#define DFS_MAX_FSIZE (~0ULL)
+#define DFS_MAX_PATH		NAME_MAX
+#define DFS_MAX_FSIZE		(~0ULL)
 
 typedef struct dfs_obj dfs_obj_t;
 typedef struct dfs dfs_t;
+
+typedef struct {
+	/*
+	 * User ID for DFS container (Optional); can be mapped to a Lustre FID
+	 * for example in the Unified namespace.
+	 */
+	uint64_t		da_id;
+	/** Default Chunk size for all files in container */
+	daos_size_t		da_chunk_size;
+	/** Default Object Class for all objects in the container */
+	daos_oclass_id_t	da_oclass_id;
+} dfs_attr_t;
+
+/**
+ * Create a DFS container with the the POSIX property layout set.
+ * Optionally set attributes for hints on the container.
+ *
+ * \param[in]	poh	Pool open handle.
+ * \param[in]	co_uuid	Container UUID.
+ * \param[in]	attr	Optional set of attributes to set on the container.
+ *			Pass NULL if none.
+ * \param[out]	coh	Optionally leave the container open and return it hdl.
+ * \param[out]	dfs	Optionally mount DFS on the container and return it.
+ *
+ * \return              0 on success, errno code on failure.
+ */
+int
+dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
+		daos_handle_t *coh, dfs_t **dfs);
 
 /**
  * Mount a file system over DAOS. The pool and container handle must remain
@@ -375,6 +404,18 @@ dfs_get_mode(dfs_obj_t *obj, mode_t *mode);
  */
 int
 dfs_get_file_oh(dfs_obj_t *obj, daos_handle_t *oh);
+
+/**
+ * Retrieve the chunk size of a DFS file object.
+ *
+ * \param[in]	obj	Open object.
+ * \param[out]	chunk_size
+ *			Chunk size of array object.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_get_chunk_size(dfs_obj_t *obj, daos_size_t *chunk_size);
 
 /**
  * Retrieve Symlink value of object if it's a symlink. If the buffer size passed
