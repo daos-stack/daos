@@ -430,7 +430,8 @@ class Soak(TestWithServers):
         if len(self.failed_job_id_list) > 0:
             raise SoakTestError(
                 "<<FAILED: The following jobs failed {} >>".format(
-                    " ,".join(job_id for job_id in self.failed_job_id_list)))
+                    " ,".join(
+                        str(job_id) for job_id in self.failed_job_id_list)))
 
     def run_soak(self, test_param):
         """Run the soak test specified by the test params.
