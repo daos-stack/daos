@@ -38,17 +38,9 @@
  * access.  The instances of these possible unaligned accesses happen with
  * default gcc on Fedora 30.
  */
-#if !defined(__has_warning)  /* gcc */
-#if __GNUC__ >= 9
+#if D_HAS_WARNING(9, "-Waddress-of-packed-member")
 	#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
-#endif /* warning only defined in version 9 or later */
-#else /* __has_warning is defined */
-#if __has_warning("-Waddress-of-packed-member") /* valid clang warning */
-	#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
-#endif /* Warning is defined in clang */
-#endif /* __has_warning not defined */
-
-
+#endif
 
 /*
  * Used for getting bio device state, which requires exclusive access from
