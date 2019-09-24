@@ -43,6 +43,7 @@ func getTestNotifyReadyReqBytes(t *testing.T, sockPath string, idx uint32) []byt
 func TestSrvModule_HandleNotifyReady_Invalid(t *testing.T) {
 	expectedErr := "unmarshal NotifyReady request"
 	mod := &srvModule{}
+	mod.iosrv = append(mod.iosrv, getTestIOServerInstance())
 
 	// Some arbitrary bytes, shouldn't translate to a request
 	badBytes := make([]byte, 16)
@@ -65,6 +66,7 @@ func TestSrvModule_HandleNotifyReady_Invalid(t *testing.T) {
 func TestSrvModule_HandleNotifyReady_BadSockPath(t *testing.T) {
 	expectedErr := "check NotifyReady request socket path"
 	mod := &srvModule{}
+	mod.iosrv = append(mod.iosrv, getTestIOServerInstance())
 
 	reqBytes := getTestNotifyReadyReqBytes(t, "/some/bad/path", 0)
 
@@ -129,5 +131,34 @@ func TestSrvModule_HandleNotifyReady_Success_Multi(t *testing.T) {
 		if uint32(i) != idx && isIosrvReady(s) {
 			t.Errorf("Expected IOsrv at idx %v to be NOT ready", i)
 		}
+	}
+}
+
+func TestSrvModule_HandleNotifyReady_IdxOutOfRange(t *testing.T) {
+	expectedError := "out of range"
+	mod := &srvModule{}
+	numInstances := 5
+
+	for i := 0; i < numInstances; i++ {
+		mod.iosrv = append(mod.iosrv, getTestIOServerInstance())
+	}
+
+	// Needs to be a real socket at the path
+	sockPath := "/tmp/mgmt_drpc_test.sock"
+	sock := createTestSocket(t, sockPath)
+	defer cleanupTestSocket(sockPath, sock)
+
+	reqBytes := getTestNotifyReadyReqBytes(t, sockPath,
+		uint32(numInstances))
+
+	err := mod.handleNotifyReady(reqBytes)
+
+	if err == nil {
+		t.Fatal("Expected error, got nil")
+	}
+
+	if !strings.Contains(err.Error(), expectedError) {
+		t.Errorf("Expected error to contain %q, got %q",
+			expectedError, err.Error())
 	}
 }

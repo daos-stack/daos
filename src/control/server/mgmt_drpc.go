@@ -99,6 +99,11 @@ func (mod *srvModule) handleNotifyReady(reqb []byte) error {
 		return errors.Wrap(err, "unmarshal NotifyReady request")
 	}
 
+	if req.InstanceIdx >= uint32(len(mod.iosrv)) {
+		return errors.Errorf("instance index %v is out of range (%v instances)",
+			req.InstanceIdx, len(mod.iosrv))
+	}
+
 	if err := checkDrpcClientSocketPath(req.DrpcListenerSock); err != nil {
 		return errors.Wrap(err, "check NotifyReady request socket path")
 	}
