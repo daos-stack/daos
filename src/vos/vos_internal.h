@@ -838,12 +838,6 @@ struct vos_obj_iter {
 	struct ilog_entries	 it_ilog_entries;
 	/** handle of iterator */
 	daos_handle_t		 it_hdl;
-	/** number of allocated punch log entries */
-	uint32_t		 it_pl_size;
-	/** number of punch log entries at current cursor */
-	uint32_t		 it_pl_nr;
-	/** punch log entries */
-	daos_epoch_t		*it_pl;
 	/** condition of the iterator: epoch logic expression */
 	vos_it_epc_expr_t	 it_epc_expr;
 	/** iterator flags */

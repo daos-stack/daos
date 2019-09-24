@@ -1711,11 +1711,13 @@ count_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 		break;
 	case VOS_ITER_DKEY:
 		counts->dkey_nr++;
-		counts->dkey_punch_nr += entry->ie_key_punches.pi_nr;
+		if (entry->ie_key_punch)
+			counts->dkey_punch_nr++;
 		break;
 	case VOS_ITER_AKEY:
 		counts->akey_nr++;
-		counts->akey_punch_nr += entry->ie_key_punches.pi_nr;
+		if (entry->ie_key_punch)
+			counts->akey_punch_nr++;
 		break;
 	case VOS_ITER_RECX:
 		counts->recx_nr++;

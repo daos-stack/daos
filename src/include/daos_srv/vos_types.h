@@ -217,11 +217,6 @@ enum {
 	VOS_VIS_FLAG_LAST    = (1 << 3),
 };
 
-struct vos_punch_info {
-	uint64_t	 pi_nr;
-	uint64_t	*pi_punches;
-};
-
 /**
  * Returned entry of a VOS iterator
  */
@@ -240,16 +235,16 @@ typedef struct {
 		struct {
 			/** dkey or akey */
 			daos_key_t		ie_key;
-			/** Punch information for key */
-			struct vos_punch_info	ie_key_punches;
+			/** Non-zero if punched */
+			daos_epoch_t		ie_key_punch;
 		};
 		struct {
 			/** The DTX identifier. */
 			struct dtx_id		ie_xid;
 			/** oid */
 			daos_unit_oid_t		ie_oid;
-			/** Punch information for object */
-			struct vos_punch_info	ie_obj_punches;
+			/** Non-zero if punched */
+			daos_epoch_t		ie_obj_punch;
 			/* The DTX dkey hash for DTX iteration. */
 			uint64_t		ie_dtx_hash;
 			/* The DTX intent for DTX iteration. */

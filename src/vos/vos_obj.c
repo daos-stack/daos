@@ -335,8 +335,9 @@ key_ilog_prepare(struct vos_obj_iter *oiter, daos_handle_t toh, int key_type,
 	struct vos_krec_df	*krec = NULL;
 	struct vos_object	*obj = oiter->it_obj;
 	/* Grab all entries at or after the low epoch.  For visible keys
-	 * we need to return subsequent punches so processes like
-	 * rebuild can replay them and some of them may be in the future.
+	 * we need to return the first subsequent punch so processes like
+	 * rebuild can replay it so things are not visible at the next
+	 * snapshot.
 	 */
 	daos_epoch_range_t	 range = {0, DAOS_EPOCH_MAX};
 	int			 rc;
@@ -403,39 +404,13 @@ key_iter_fetch_helper(struct vos_obj_iter *oiter, struct vos_rec_bundle *rbund,
 	return dbtree_iter_fetch(oiter->it_hdl, &kiov, &riov, anchor);
 }
 
-#define VOS_INITIAL_PL_SIZE 8
-static int
-record_punch(struct vos_obj_iter *oiter, daos_epoch_t epoch)
-{
-	daos_epoch_t	*new_ptr;
-
-	if (oiter->it_pl == NULL) {
-		D_ALLOC_ARRAY(oiter->it_pl, VOS_INITIAL_PL_SIZE);
-		if (oiter->it_pl == NULL)
-			return -DER_NOMEM;
-		oiter->it_pl_nr = 0;
-		oiter->it_pl_size = VOS_INITIAL_PL_SIZE;
-	} else if (oiter->it_pl_nr == oiter->it_pl_size) {
-		D_REALLOC_ARRAY(new_ptr, oiter->it_pl, oiter->it_pl_size * 2);
-		if (new_ptr == NULL)
-			return -DER_NOMEM;
-		oiter->it_pl = new_ptr;
-		oiter->it_pl_size *= 2;
-	}
-
-	oiter->it_pl[oiter->it_pl_nr] = epoch;
-	oiter->it_pl_nr++;
-	return 0;
-}
-
-static int
-key_record_punches(struct vos_obj_iter *oiter, struct ilog_entries *entries,
-		   vos_iter_entry_t *ent)
+static void
+key_record_punch(struct vos_obj_iter *oiter, struct ilog_entries *entries,
+		 vos_iter_entry_t *ent)
 {
 	struct ilog_entry	*entry;
-	int			 rc;
 
-	oiter->it_pl_nr = 0;
+	ent->ie_key_punch = 0;
 
 	ilog_foreach_entry(entries, entry) {
 		if (entry->ie_id.id_epoch < oiter->it_epr.epr_lo)
@@ -445,15 +420,11 @@ key_record_punches(struct vos_obj_iter *oiter, struct ilog_entries *entries,
 			continue; /* Skip any uncommited, punches */
 
 		if (entry->ie_punch) {
-			rc = record_punch(oiter, entry->ie_id.id_epoch);
-			if (rc != 0)
-				return rc;
+			/* Only need one punch */
+			ent->ie_key_punch = entry->ie_id.id_epoch;
+			break;
 		}
 	}
-
-	ent->ie_key_punches.pi_punches = oiter->it_pl;
-	ent->ie_key_punches.pi_nr = oiter->it_pl_nr;
-	return 0;
 }
 
 static int
@@ -470,52 +441,51 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 
 	rc = key_iter_fetch_helper(oiter, &rbund, &ent->ie_key, anchor);
 
-	if (rc == 0) {
-		D_ASSERT(rbund.rb_krec);
-		if (oiter->it_iter.it_type == VOS_ITER_AKEY) {
-			if (rbund.rb_krec->kr_bmap & KREC_BF_EVT) {
-				ent->ie_child_type = VOS_ITER_RECX;
-			} else if (rbund.rb_krec->kr_bmap & KREC_BF_BTR) {
-				ent->ie_child_type = VOS_ITER_SINGLE;
-			} else {
-				ent->ie_child_type = VOS_ITER_NONE;
-			}
+	if (rc != 0)
+		return rc;
+
+	D_ASSERT(rbund.rb_krec);
+	if (oiter->it_iter.it_type == VOS_ITER_AKEY) {
+		if (rbund.rb_krec->kr_bmap & KREC_BF_EVT) {
+			ent->ie_child_type = VOS_ITER_RECX;
+		} else if (rbund.rb_krec->kr_bmap & KREC_BF_BTR) {
+			ent->ie_child_type = VOS_ITER_SINGLE;
 		} else {
-			ent->ie_child_type = VOS_ITER_AKEY;
+			ent->ie_child_type = VOS_ITER_NONE;
 		}
-
-		krec = rbund.rb_krec;
-		rc = key_ilog_fetch(vos_obj2umm(obj),
-				    vos_iter_intent(&oiter->it_iter), &epr,
-				    krec, &oiter->it_ilog_entries);
-
-		if (rc != 0)
-			return rc;
-
-		if (!check_existence)
-			goto record;
-
-		epr = oiter->it_epr;
-		punched = oiter->it_punched;
-		rc = key_check_existence(oiter, &oiter->it_ilog_entries, &epr,
-					 &punched);
-		if (rc != 0) {
-			if (rc == -DER_NONEXIST)
-				return IT_OPC_NEXT;
-			return rc;
-		}
-		ent->ie_epoch = epr.epr_lo;
-		ent->ie_vis_flags = VOS_VIS_FLAG_VISIBLE;
-		if (punched == epr.epr_hi) {
-			/* The key has no visible subtrees so mark it covered */
-			ent->ie_epoch = punched;
-			ent->ie_vis_flags = VOS_VIS_FLAG_COVERED;
-		}
-record:
-		rc = key_record_punches(oiter, &oiter->it_ilog_entries, ent);
-		if (rc != 0)
-			return rc;
+	} else {
+		ent->ie_child_type = VOS_ITER_AKEY;
 	}
+
+	krec = rbund.rb_krec;
+	rc = key_ilog_fetch(vos_obj2umm(obj),
+			    vos_iter_intent(&oiter->it_iter), &epr,
+			    krec, &oiter->it_ilog_entries);
+
+	if (rc != 0)
+		return rc;
+
+	if (!check_existence)
+		goto record;
+
+	epr = oiter->it_epr;
+	punched = oiter->it_punched;
+	rc = key_check_existence(oiter, &oiter->it_ilog_entries, &epr,
+				 &punched);
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST)
+			return IT_OPC_NEXT;
+		return rc;
+	}
+	ent->ie_epoch = epr.epr_lo;
+	ent->ie_vis_flags = VOS_VIS_FLAG_VISIBLE;
+	if (punched == epr.epr_hi) {
+		/* The key has no visible subtrees so mark it covered */
+		ent->ie_epoch = punched;
+		ent->ie_vis_flags = VOS_VIS_FLAG_COVERED;
+	}
+record:
+	key_record_punch(oiter, &oiter->it_ilog_entries, ent);
 	return rc;
 }
 
