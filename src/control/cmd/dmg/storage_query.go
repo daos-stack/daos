@@ -25,7 +25,7 @@ package main
 
 import (
 	"github.com/daos-stack/daos/src/control/client"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -77,7 +77,7 @@ func bsHealthQuery(log logging.Logger, conns client.Connect, uuid string, tgtid 
 		return
 	}
 
-	req := &pb.BioHealthReq{DevUuid: uuid, TgtId: tgtid}
+	req := &mgmtpb.BioHealthReq{DevUuid: uuid, TgtId: tgtid}
 
 	log.Infof("Blobstore Health Data:\n%s\n", conns.BioHealthQuery(req))
 }
@@ -111,7 +111,7 @@ func smdQuery(log logging.Logger, conns client.Connect, devices bool, pools bool
 		log.Infof("--pools option not implemented yet\n")
 	}
 	if devices {
-		req := &pb.SmdDevReq{}
+		req := &mgmtpb.SmdDevReq{}
 		log.Infof("SMD Device List:\n%s\n", conns.SmdListDevs(req))
 	}
 }

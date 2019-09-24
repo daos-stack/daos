@@ -28,7 +28,7 @@ import (
 	"io/ioutil"
 
 	"github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -36,7 +36,7 @@ import (
 var jsonDBRelPath = "share/daos/control/mgmtinit_db.json"
 
 // ControlService implements the control plane control service, satisfying
-// pb.MgmtCtlServer, and is the data container for the service.
+// ctlpb.MgmtCtlServer, and is the data container for the service.
 type ControlService struct {
 	StorageControlService
 	harness           *IOServerHarness
@@ -77,7 +77,7 @@ func loadInitData(relPath string) (m FeatureMap, err error) {
 		return
 	}
 
-	var features []*pb.Feature
+	var features []*ctlpb.Feature
 	if err = json.Unmarshal(file, &features); err != nil {
 		return
 	}
