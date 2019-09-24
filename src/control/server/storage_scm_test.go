@@ -107,6 +107,12 @@ func TestDiscoverScm(t *testing.T) {
 			msgIpmctlDiscoverFail + ": ipmctl example failure",
 			ScmModules{mPB},
 		},
+		"discover succeeds but get pmem fails": {
+			false,
+			nil,
+			msgIpmctlDiscoverFail,
+			ScmModules{mPB},
+		},
 	}
 
 	for name, tt := range tests {
@@ -136,16 +142,17 @@ func TestFormatScm(t *testing.T) {
 		formatted bool
 		mountRet  error
 		// log context should be stack layer registering result
-		unmountRet error
-		mkdirRet   error
-		removeRet  error
-		mount      string
-		class      storage.ScmClass
-		devs       []string
-		size       int
-		expCmds    []string // expected arguments in syscall methods
-		expResults ScmMountResults
-		desc       string
+		unmountRet  error
+		mkdirRet    error
+		removeRet   error
+		prepNoNdctl bool
+		mount       string
+		class       storage.ScmClass
+		devs        []string
+		size        int
+		expCmds     []string // expected arguments in syscall methods
+		expResults  ScmMountResults
+		desc        string
 	}{
 		{
 			inited: false,
@@ -223,6 +230,26 @@ func TestFormatScm(t *testing.T) {
 			desc: "ram success",
 		},
 		{
+			inited:      true,
+			mount:       "/mnt/daos",
+			class:       storage.ScmClassRAM,
+			size:        6,
+			prepNoNdctl: true, // format should succeed without ndctl being installed
+			expResults: ScmMountResults{
+				{
+					Mntpoint: "/mnt/daos",
+					State:    &ResponseState{},
+				},
+			},
+			expCmds: []string{
+				"syscall: calling unmount with /mnt/daos, MNT_DETACH",
+				"os: removeall /mnt/daos",
+				"os: mkdirall /mnt/daos, 0777",
+				"syscall: mount tmpfs, /mnt/daos, tmpfs, 0, size=6g",
+			},
+			desc: "ram no ndctl installed",
+		},
+		{
 			inited: true,
 			mount:  "/mnt/daos",
 			class:  storage.ScmClassDCPM,
@@ -242,6 +269,28 @@ func TestFormatScm(t *testing.T) {
 				"syscall: mount /dev/pmem0, /mnt/daos, ext4, 0, dax",
 			},
 			desc: "dcpm success",
+		},
+		{
+			inited:      true,
+			mount:       "/mnt/daos",
+			class:       storage.ScmClassDCPM,
+			devs:        []string{"/dev/pmem0"},
+			prepNoNdctl: true, // format should succeed without ndctl being installed
+			expResults: ScmMountResults{
+				{
+					Mntpoint: "/mnt/daos",
+					State:    &ResponseState{},
+				},
+			},
+			expCmds: []string{
+				"syscall: calling unmount with /mnt/daos, MNT_DETACH",
+				"os: removeall /mnt/daos",
+				"cmd: wipefs -a /dev/pmem0",
+				"cmd: mkfs.ext4 /dev/pmem0",
+				"os: mkdirall /mnt/daos, 0777",
+				"syscall: mount /dev/pmem0, /mnt/daos, ext4, 0, dax",
+			},
+			desc: "dcpm no ndctl installed",
 		},
 		{
 			inited: true,
@@ -303,15 +352,37 @@ func TestFormatScm(t *testing.T) {
 			config := newMockStorageConfig(tt.mountRet, tt.unmountRet,
 				tt.mkdirRet, tt.removeRet, tt.mount, tt.class, tt.devs,
 				tt.size, storage.BdevClassNvme, []string{}, false, false)
+
+			mockPrep := newMockPrepScm()
+			if tt.prepNoNdctl {
+				err := errors.New(msgNdctlNotFound)
+				mockPrep = &mockPrepScm{
+					prepRet:          err,
+					resetRet:         err,
+					getStateRet:      err,
+					getNamespacesRet: err,
+				}
+			}
+
 			ss := newMockScmStorage(log, config.ext, nil, []DeviceDiscovery{},
-				false, newMockPrepScm())
+				false, mockPrep)
 			ss.formatted = tt.formatted
 
 			results := ScmMountResults{}
 
 			if tt.inited {
+				// Discovery is run in SCS.Setup() and is not
+				// fatal, continue with expected errors to
+				// format as in normal program execution.
 				if err := ss.Discover(); err != nil {
-					t.Fatal(err)
+					if tt.prepNoNdctl {
+						ExpectError(t, err,
+							msgIpmctlDiscoverFail+": "+msgNdctlNotFound,
+							tt.desc)
+					} else {
+						// unexpected failure
+						t.Fatal(tt.desc + ": " + err.Error())
+					}
 				}
 			}
 

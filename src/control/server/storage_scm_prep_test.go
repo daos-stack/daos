@@ -32,6 +32,7 @@ import (
 	. "github.com/daos-stack/daos/src/control/common/storage"
 	. "github.com/daos-stack/daos/src/control/lib/ipmctl"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/pkg/errors"
 )
 
 // MockPmemDevice returns a mock pmem device file.
@@ -122,6 +123,7 @@ func TestGetState(t *testing.T) {
 		expRebootRequired bool
 		expPmemDevs       []pmemDev
 		expCommands       []string
+		lookPathErrMsg    string
 	}{
 		{
 			desc:              "modules but no regions",
@@ -171,6 +173,10 @@ func TestGetState(t *testing.T) {
 			expCommands: []string{cmdScmShowRegions, cmdScmListNamespaces},
 			expPmemDevs: twoPmems,
 		},
+		{
+			desc:           "ndctl not installed",
+			lookPathErrMsg: msgNdctlNotFound,
+		},
 	}
 
 	for _, tt := range tests {
@@ -178,13 +184,25 @@ func TestGetState(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)()
 
+			mockLookPath := func(string) (s string, err error) {
+				if tt.lookPathErrMsg != "" {
+					err = errors.New(tt.lookPathErrMsg)
+				}
+				return
+			}
+
 			// not using mockPrepScm because we want to exercise
 			// prepScm
 			ss := newMockScmStorage(log, defaultMockExt(), nil, []DeviceDiscovery{MockModule()},
-				false, newPrepScm(log, mockRun))
+				false, newPrepScm(log, mockRun, mockLookPath))
 
 			if err := ss.Discover(); err != nil {
-				t.Fatal(err)
+				// if GetNamespaces fails, init should still be set
+				if tt.lookPathErrMsg != "" {
+					AssertEqual(t, ss.initialized, true, tt.desc+": expected SCM to be initialized even if ndctl is not installed")
+				} else {
+					t.Fatal(err)
+				}
 			}
 
 			// reset to initial values between tests
@@ -194,7 +212,11 @@ func TestGetState(t *testing.T) {
 
 			scmState, err := ss.prep.GetState()
 			if err != nil {
-				t.Fatal(tt.desc + " GetState: " + err.Error())
+				if tt.lookPathErrMsg != "" {
+					ExpectError(t, err, tt.lookPathErrMsg, tt.desc)
+					return
+				}
+				t.Fatal(tt.desc + ": GetState: " + err.Error())
 			}
 
 			needsReboot, pmemDevs, err := ss.Prep(scmState)
