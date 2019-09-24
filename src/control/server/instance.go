@@ -47,7 +47,7 @@ import (
 // be used with IOServerHarness to manage and monitor multiple instances
 // per node.
 type IOServerInstance struct {
-	Index int
+	Index uint32
 
 	ext           External
 	log           logging.Logger

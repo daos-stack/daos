@@ -68,6 +68,9 @@ const char	       *dss_socket_dir = "/var/run/daos_server";
 /** NVMe shm_id for enabling SPDK multi-process mode */
 int			dss_nvme_shm_id = DAOS_NVME_SHMID_NONE;
 
+/** IO server instance index */
+unsigned int		dss_instance_idx = 0;
+
 /** attach_info path to support singleton client */
 static bool	        save_attach_info;
 const char	       *attach_info_path;
@@ -583,10 +586,12 @@ Options:\n\
       Shared segment ID (enable multi-process mode in SPDK, default none)\n\
   --attach_info=path, -apath\n\
       Attach info patch (to support non-PMIx client, default \"/tmp\")\n\
+  --instance_idx=idx, -I idx\n\
+      Identifier for this server instance (default %u)\n\
   --help, -h\n\
       Print this description\n",
 		prog, prog, modules, daos_sysname, dss_storage_path,
-		dss_socket_dir, dss_nvme_conf);
+		dss_socket_dir, dss_nvme_conf, dss_instance_idx);
 }
 
 static int
@@ -605,6 +610,7 @@ parse(int argc, char **argv)
 		{ "targets",		required_argument,	NULL,	't' },
 		{ "storage",		required_argument,	NULL,	's' },
 		{ "xshelpernr",		required_argument,	NULL,	'x' },
+		{ "instance_idx",	required_argument,	NULL,	'I' },
 		{ NULL,			0,			NULL,	0}
 	};
 	int	rc = 0;
@@ -612,7 +618,7 @@ parse(int argc, char **argv)
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "a:c:d:f:g:hi:m:n:t:s:x:", opts,
+	while ((c = getopt_long(argc, argv, "a:c:d:f:g:hi:m:n:t:s:x:I:", opts,
 				NULL)) != -1) {
 		unsigned int	 nr;
 		char		*end;
@@ -687,6 +693,9 @@ parse(int argc, char **argv)
 		case 'a':
 			save_attach_info = true;
 			attach_info_path = optarg;
+			break;
+		case 'I':
+			dss_instance_idx = atoi(optarg);
 			break;
 		default:
 			usage(argv[0], stderr);
