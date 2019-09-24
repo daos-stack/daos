@@ -583,7 +583,12 @@ process_poolcreate_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_DEBUG(DB_MGMT, "ranks in: %s\n", req->ranks);
 	}
 
-	uuid_generate(pool_uuid);
+	rc = uuid_parse(req->uuid, pool_uuid);
+	if (rc != 0) {
+		D_ERROR("Unable to parse pool UUID %s: %d\n", req->uuid,
+			rc);
+		goto out;
+	}
 	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(pool_uuid));
 
 	rc = create_pool_props(&prop, req->user, req->usergroup, req->acl,
@@ -601,15 +606,6 @@ process_poolcreate_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_ERROR("failed to create pool: %d\n", rc);
 		goto out;
 	}
-
-	D_ALLOC(resp->uuid, DAOS_UUID_STR_SIZE);
-	if (resp->uuid == NULL) {
-		D_ERROR("failed to allocate buffer");
-		rc = -DER_NOMEM;
-		goto out_svc;
-	}
-
-	uuid_unparse_lower(pool_uuid, resp->uuid);
 
 	assert(svc->rl_nr > 0);
 
@@ -670,8 +666,6 @@ out:
 	/** check for '\0' which is a static allocation from protobuf */
 	if (resp->svcreps && resp->svcreps[0] != '\0')
 		D_FREE(resp->svcreps);
-	if (resp->uuid && resp->uuid[0] != '\0')
-		D_FREE(resp->uuid);
 	D_FREE(resp);
 }
 

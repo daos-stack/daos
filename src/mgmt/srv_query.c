@@ -273,7 +273,8 @@ ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp)
 
 	/* Free all pools if there was an error allocating any */
 	if (rc != 0) {
-		d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {
+		d_list_for_each_entry_safe(pool_info, tmp, &pool_list,
+					   spi_link) {
 			d_list_del(&pool_info->spi_link);
 			smd_free_pool_info(pool_info);
 		}
