@@ -223,10 +223,10 @@ func poolCreate(log logging.Logger, conns client.Connect, scmSize string,
 }
 
 // poolDestroy identified by UUID.
-func poolDestroy(log logging.Logger, conns client.Connect, uuid string, force bool) error {
+func poolDestroy(log logging.Logger, conns client.Connect, poolUUID string, force bool) error {
 	msg := "succeeded"
 
-	req := &client.PoolDestroyReq{Uuid: uuid, Force: force}
+	req := &client.PoolDestroyReq{Uuid: poolUUID, Force: force}
 
 	err := conns.PoolDestroy(req)
 	if err != nil {
