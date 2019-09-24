@@ -2790,8 +2790,10 @@ dc_obj_query_key(tse_task_t *api_task)
 
 	rc = check_query_flags(obj->cob_md.omd_id, api_args->flags,
 			       api_args->dkey, api_args->akey, api_args->recx);
-	if (rc)
+	if (rc) {
+		obj_decref(obj);
 		D_GOTO(out_task, rc);
+	}
 
 	obj_auxi = tse_task_stack_push(api_task, sizeof(*obj_auxi));
 	obj_auxi->opc = DAOS_OBJ_RPC_QUERY_KEY;
