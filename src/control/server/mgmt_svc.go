@@ -354,3 +354,68 @@ func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.DaosRank) (*mgmtpb
 
 	return resp, nil
 }
+
+// newSysMembersPB converts internal member structs to protobuf equivalents.
+func newSysMembersPB(members []*SysMember) []*mgmtpb.SystemMember {
+	_ := make([]*mgmtpb.SystemStopResp, 0)
+
+	// TODO: iterate through input parameter and populates response
+	return resp
+}
+
+// SystemQuery implements the method defined for the Management Service.
+//
+// Return system membership list including member state.
+func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq) (*mgmtpb.SystemQueryResp, error) {
+	resp := &mgmtpb.SystemStopResp{}
+
+	mi, err := svc.harness.GetManagementInstance()
+	if err != nil {
+		return nil, err
+	}
+	if err := checkIsMSReplica(mi); err != nil {
+		return nil, err
+	}
+
+	c.log.Debug("received SystemQuery RPC; proceeding to shutdown DAOS system")
+
+	if err := svc.systemQuery(); err != nil {
+		return nil, err
+	}
+	resp.Members = newSysMembersPB(svc.getMembers())
+
+	c.log.Debug("responding to SystemQuery RPC")
+
+	return resp, nil
+}
+
+// SystemStop implements the method defined for the Management Service.
+//
+// Initiate controlled shutdown of DAOS system.
+func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (*mgmtpb.SystemStopResp, error) {
+	resp := &mgmtpb.SystemStopResp{}
+
+	mi, err := svc.harness.GetManagementInstance()
+	if err != nil {
+		return nil, err
+	}
+	if err := checkIsMSReplica(mi); err != nil {
+		return nil, err
+	}
+
+	c.log.Debug("received SystemStop RPC; proceeding to shutdown DAOS system")
+
+	// perform controlled shutdown (synchronous)
+	if results, err := svc.systemStop(); err != nil {
+		return nil, err
+	}
+	// fetch current membership details
+	if err := svc.systemQuery(); err != nil {
+		return nil, err
+	}
+	resp.Members = newSysMembersPB(svc.getMembers())
+
+	c.log.Debug("responding to SystemStop RPC")
+
+	return resp, nil
+}
