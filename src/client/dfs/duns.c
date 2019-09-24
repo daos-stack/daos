@@ -75,12 +75,14 @@ bind_liblustre()
 	lib = dlopen(LIBLUSTRE, RTLD_NOW);
 	if (lib == NULL) {
 		liblustre_notfound = true;
-		D_ERROR("unable to locate/bind %s, dlerror() says '%s', reverting to non-lustre behaviour.\n",
+		D_ERROR("unable to locate/bind %s, dlerror() says '%s', "
+			"reverting to non-lustre behaviour.\n",
 			LIBLUSTRE, dlerror());
 		return -DER_INVAL;
 	}
 
-	D_DEBUG(DB_TRACE, "%s has been found and dynamicaly binded !\n", LIBLUSTRE);
+	D_DEBUG(DB_TRACE, "%s has been found and dynamicaly binded !\n",
+		LIBLUSTRE);
 
 	/* now try to map the API methods we need */
 	dir_create_foreign = (int (*)(const char *, mode_t, __u32, __u32,
@@ -88,23 +90,29 @@ bind_liblustre()
 						  "llapi_dir_create_foreign");
 	if (dir_create_foreign == NULL) {
 		liblustre_notfound = true;
-		D_ERROR("unable to resolve llapi_dir_create_foreign symbol, dlerror() says '%s', Lustre version do not seem to support foreign LOV/LMV, reverting to non-lustre behaviour.\n",
-			dlerror());
+		D_ERROR("unable to resolve llapi_dir_create_foreign symbol, "
+			"dlerror() says '%s', Lustre version do not seem to "
+			"support foreign LOV/LMV, reverting to non-lustre "
+			"behaviour.\n", dlerror());
 		return -DER_INVAL;
 	}
 
-	D_DEBUG(DB_TRACE, "llapi_dir_create_foreign() resolved at %p\n", dir_create_foreign);
+	D_DEBUG(DB_TRACE, "llapi_dir_create_foreign() resolved at %p\n",
+		dir_create_foreign);
 
 	unlink_foreign = (int (*)(char *))dlsym(lib,
 						      "llapi_unlink_foreign");
 	if (unlink_foreign == NULL) {
 		liblustre_notfound = true;
-		D_ERROR("unable to resolve llapi_unlink_foreign symbol, dlerror() says '%s', Lustre version do not seem to support foreign daos type, reverting to non-lustre behaviour.\n",
-			dlerror());
+		D_ERROR("unable to resolve llapi_unlink_foreign symbol, "
+			"dlerror() says '%s', Lustre version do not seem to "
+			"support foreign daos type, reverting to non-lustre "
+			"behaviour.\n", dlerror());
 		return -DER_INVAL;
 	}
 
-	D_DEBUG(DB_TRACE, "llapi_unlink_foreign() resolved at %p\n", unlink_foreign);
+	D_DEBUG(DB_TRACE, "llapi_unlink_foreign() resolved at %p\n",
+		unlink_foreign);
 
 	liblustre_binded = true;
 	return 0;
@@ -113,17 +121,17 @@ bind_liblustre()
 static int
 duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 {
-	char	str[DUNS_MAX_XATTR_LEN + 1];
-	char	*saveptr, *t;
-	char	*buf;
-	struct lmv_user_md *lum;
-	struct lmv_foreign_md *lfm;
-	int	fd;
-	int	rc;
+	char			str[DUNS_MAX_XATTR_LEN + 1];
+	char			*saveptr, *t;
+	char			*buf;
+	struct lmv_user_md	*lum;
+	struct lmv_foreign_md	*lfm;
+	int			fd;
+	int			rc;
 
 	/* XXX if a Posix container is not always mapped with a daos foreign dir
 	 * with LMV, both LOV and LMV will need to be queried if ENODATA is
-	 * returned at 1st, as the file/dir type is hidden to help decide before 
+	 * returned at 1st, as the file/dir type is hidden to help decide before
 	 * due to the symlink fake !!
 	 * Also, querying/checking container's type/oclass/chunk_size/...
 	 * vs EA content could be a good idea ?
@@ -139,14 +147,15 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 		return -DER_INVAL;
 	} else if (liblustre_binded == false) {
 		/* this should not happen */
-		D_ERROR("liblustre_notfound == false && liblustre_notfound == false not expected after bind_liblustre()\n");
+		D_ERROR("liblustre_notfound == false && liblustre_notfound == "
+			"false not expected after bind_liblustre()\n");
 		return -DER_INVAL;
 	}
 
-	D_DEBUG(DB_TRACE, "Trying to retrieve associated container's infos from Lustre path '%s'\n",
-		path);
+	D_DEBUG(DB_TRACE, "Trying to retrieve associated container's infos "
+		"from Lustre path '%s'\n", path);
 
-	/* get LMV
+	/* get LOV/LMV
 	 * llapi_getstripe() API can not be used here as it frees
 	 * param.[fp_lmv_md, fp_lmd->lmd_lmm]  buffer for LMV after printing
 	 * its content
@@ -154,39 +163,53 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 	 */
 	buf = calloc(1, XATTR_SIZE_MAX);
 	if (buf == NULL) {
-		D_ERROR("unable to allocate XATTR_SIZE_MAX to get LOV/LMV for '%s', errno %d(%s).\n",
-			path, errno, strerror(errno));
+		D_ERROR("unable to allocate XATTR_SIZE_MAX to get LOV/LMV "
+			"for '%s', errno %d(%s).\n", path, errno,
+			strerror(errno));
 		/** TODO - convert errno to rc */
 		return -DER_NOSPACE;
 	}
-	fd = open(path, O_RDONLY | O_NOFOLLOW);
-	if (fd == -1) {
-		D_ERROR("unable to open '%s' errno %d(%s).\n", path, errno, strerror(errno));
+	fd = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+	if (fd == -1 && errno != ENOTDIR) {
+		D_ERROR("unable to open '%s' errno %d(%s).\n", path, errno,
+			strerror(errno));
 		/** TODO - convert errno to rc */
 		return -DER_INVAL;
-	}
-	lum = (struct lmv_user_md *)buf;
-	/* to get LMV and not default one !! */
-	lum->lum_magic = LMV_MAGIC_V1;
-	/* to confirm we have already a buffer large enough get a BIG LMV !! */
-	lum->lum_stripe_count = (XATTR_SIZE_MAX - sizeof(struct lmv_user_md)) /
-				sizeof(struct lmv_user_mds_data);
-	rc = ioctl(fd, LL_IOC_LMV_GETSTRIPE, buf);
-	if (rc != 0) {
-		D_ERROR("ioctl(LL_IOC_LMV_GETSTRIPE) failed, rc: %d, errno %d(%s).\n",
-			rc, errno, strerror(errno));
-		/** TODO - convert errno to rc */
-		return -DER_INVAL;
-	}
-
-	lfm = (struct lmv_foreign_md *)buf;
-	/* sanity check */
-	if (lfm->lfm_magic != LMV_MAGIC_FOREIGN  ||
-	    lfm->lfm_type != LU_FOREIGN_TYPE_DAOS ||
-	    lfm->lfm_length > DUNS_MAX_XATTR_LEN ||
-	    snprintf(str, DUNS_MAX_XATTR_LEN, "%s", lfm->lfm_value) > DUNS_MAX_XATTR_LEN) {
-		D_ERROR("Invalid DAOS LMV format (%s).\n", str);
-		return -DER_INVAL;
+	} else if (errno == ENOTDIR) {
+		/* should we handle file/LOV case ?
+		 * for link to HDF5 container ?
+		 */
+		D_ERROR("file with foreign LOV support is presently not "
+			"supported\n");
+	} else {
+		/* it is a dir so get LMV ! */
+		lum = (struct lmv_user_md *)buf;
+		/* to get LMV and not default one !! */
+		lum->lum_magic = LMV_MAGIC_V1;
+		/* to confirm we have already a buffer large enough get a
+		 * BIG LMV !!
+		 */
+		lum->lum_stripe_count = (XATTR_SIZE_MAX - 
+					sizeof(struct lmv_user_md)) /
+					sizeof(struct lmv_user_mds_data);
+		rc = ioctl(fd, LL_IOC_LMV_GETSTRIPE, buf);
+		if (rc != 0) {
+			D_ERROR("ioctl(LL_IOC_LMV_GETSTRIPE) failed, rc: %d, "
+				"errno %d(%s).\n", rc, errno, strerror(errno));
+			/** TODO - convert errno to rc */
+			return -DER_INVAL;
+		}
+	
+		lfm = (struct lmv_foreign_md *)buf;
+		/* sanity check */
+		if (lfm->lfm_magic != LMV_MAGIC_FOREIGN  ||
+		    lfm->lfm_type != LU_FOREIGN_TYPE_DAOS ||
+		    lfm->lfm_length > DUNS_MAX_XATTR_LEN ||
+		    snprintf(str, DUNS_MAX_XATTR_LEN, "%s",
+			     lfm->lfm_value) > DUNS_MAX_XATTR_LEN) {
+			D_ERROR("Invalid DAOS LMV format (%s).\n", str);
+			return -DER_INVAL;
+		}
 	}
 
 	t = strtok_r(str, ".", &saveptr);
@@ -265,8 +288,8 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 
 	dir = malloc(PATH_MAX);
 	if (dir == NULL) {
-		D_ERROR("Failed to allocate %d bytes for required copy of path %s: %s\n",
-			PATH_MAX, path, strerror(errno));
+		D_ERROR("Failed to allocate %d bytes for required copy of "
+			"path %s: %s\n", PATH_MAX, path, strerror(errno));
 		/** TODO - convert errno to rc */
 		return -DER_NOSPACE;
 	}
@@ -354,7 +377,7 @@ duns_create_lustre_path(daos_handle_t poh, const char *path,
 	char			str[DUNS_MAX_XATTR_LEN + 1];
 	int			len;
 	int			try_multiple = 1;		/* boolean */
-	int			rc, rc2;
+	int			rc;
 
 	/* XXX pool must already be created, and associated DFuse-mount
 	 * should already be mounted
@@ -390,7 +413,7 @@ duns_create_lustre_path(daos_handle_t poh, const char *path,
 		if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
 			dfs_attr_t	dfs_attr;
 
- 			/** TODO: set Lustre FID here. */
+			/** TODO: set Lustre FID here. */
 			dfs_attr.da_id = 0;
 			dfs_attr.da_oclass_id = attrp->da_oclass_id;
 			dfs_attr.da_chunk_size = attrp->da_chunk_size;
@@ -399,7 +422,7 @@ duns_create_lustre_path(daos_handle_t poh, const char *path,
 		} else {
 			daos_prop_t	*prop;
 
- 			prop = daos_prop_alloc(1);
+			prop = daos_prop_alloc(1);
 			if (prop == NULL) {
 				D_ERROR("Failed to allocate container prop.");
 				D_GOTO(err, rc = -DER_NOMEM);
@@ -412,10 +435,13 @@ duns_create_lustre_path(daos_handle_t poh, const char *path,
 		}
 
 	} while ((rc == -DER_EXIST) && try_multiple);
+
 	if (rc) {
 		D_ERROR("Failed to create container (%d)\n", rc);
 		D_GOTO(err, rc);
 	}
+
+	/* XXX should file with foreign LOV be expected/supoorted here ? */
 
 	/** create dir and store the daos attributes in the path LMV */
 	len = sprintf(str, DUNS_XATTR_FMT, type, pool, cont, oclass,
@@ -428,17 +454,13 @@ duns_create_lustre_path(daos_handle_t poh, const char *path,
 	rc = (*dir_create_foreign)(path, S_IRWXU | S_IRWXG | S_IROTH | S_IWOTH,
 				   LU_FOREIGN_TYPE_DAOS, 0xda05, str);
 	if (rc) {
-		D_ERROR("Failed to create Lustre dir '%s' with foreign LMV '%s' (rc = %d).\n",
-			path, str, rc);
+		D_ERROR("Failed to create Lustre dir '%s' with foreign "
+			"LMV '%s' (rc = %d).\n", path, str, rc);
 		D_GOTO(err_cont, rc = -DER_INVAL);
 	}
 
 	return rc;
 
-	rc2 = (*unlink_foreign)((char *)path);
-	if (rc2 < 0)
-		D_ERROR("Failed to unlink Lustre dir '%s' with foreign LMV '%s' (rc = %d).\n",
-			path, str, rc2);
 err_cont:
 	daos_cont_destroy(poh, attrp->da_cuuid, 1, NULL);
 err:
@@ -479,8 +501,9 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 
 		dir = malloc(PATH_MAX);
 		if (dir == NULL) {
-			D_ERROR("Failed to allocate %d bytes for required copy of path %s: %s\n",
-				PATH_MAX, path, strerror(errno));
+			D_ERROR("Failed to allocate %d bytes for required "
+				"copy of path %s: %s\n", PATH_MAX, path,
+				strerror(errno));
 			/** TODO - convert errno to rc */
 			return -DER_NOSPACE;
 		}
