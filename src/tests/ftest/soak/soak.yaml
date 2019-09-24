@@ -10,10 +10,12 @@ timeout: 5400
 logdir: /tmp/soak
 server_config:
     name: daos_server
-    log_mask: ERR
-    crt_timeout: 2000
-    fabric_iface: ib0
     provider: ofi+sockets
+    server:
+        log_mask: ERR
+        crt_timeout: 2000
+        fabric_iface: ib0
+
 # If slurm is not specified; launch jobs with mpirun; {slurm|mpirun}
 jobmanager: slurm
 # pool_params - attributes of the pools to create; Currently only create one
@@ -112,7 +114,7 @@ job_ior_daos:
     tasks:
         - 1
         - 16
-        #- 32
+        - 32
     jobspec:
         - ior_daos
 # IOR MPIIO job params; multiple jobs, one job per node;
@@ -123,7 +125,7 @@ job_ior_mpiio:
     tasks:
         - 1
         - 16
-        #- 32
+        - 32
     jobspec:
         - ior_mpiio
 # TBD job params for DMG

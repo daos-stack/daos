@@ -30,7 +30,7 @@ from ior_utils import IorCommand
 import slurm_utils
 from test_utils import TestPool, TestContainer
 from ClusterShell.NodeSet import NodeSet
-from avocado.utils import process
+from general_utils import pcmd
 import socket
 
 
@@ -98,26 +98,27 @@ class Soak(TestWithServers):
     def remote_copy(self, hostlist, remote_dir, local_dir):
         """Copy files from remote dir to local dir.
 
-        This is a temporary method and will be replaced by
-        clush in general_utils
         Args:
                 hostlist (list): list of remote nodes
                 remote_dir (str): remote directory of files
                 local_dir (str): local directory
 
-        Returns:
-            status: bool
+        Raises:
+            SoakTestError: if there is an error with the remote copy 
 
         """
         this_host = socket.gethostname()
-        # Copy logfiles from non-empty client directories
-        command = "clush -w {} -B -S \"{}\"".format(
+        result = pcmd(
             NodeSet.fromlist(hostlist),
-            "if [ ! -z \\\"\\$(ls -A {0})\\\" ]; then "
-            "scp -p -r {0}/ \\\"{1}:'{2}/'\\\" && rm -rf {0}/*; fi".format(
-                remote_dir, this_host, local_dir))
-        status = process.run(command, timeout=300)
-        return status
+            "if [ ! -z '$(ls -A {0})' ]; then "
+            "scp -p -r {0}/ \"{1}:'{2}/'\" && rm -rf {0}/*; fi".format(
+                remote_dir, this_host, local_dir),
+            verbose=False)
+        if len(result) > 1 or 0 not in result:
+            raise SoakTestError(
+                "Error executing remote copy: {}".format(
+                    ", ".join(
+                        [str(result[key]) for key in result if key != 0])))
 
     def create_ior_cmdline(self, job_params, job_spec, pool):
         """Create an IOR cmdline to run in slurm batch.
@@ -170,7 +171,6 @@ class Soak(TestWithServers):
                         exports.extend(
                             ["{}={}".format(
                                 key, val) for key, val in env.items()])
-                    # exports.extend(["FI_PSM2_DISCONNECT=1"])
                     cmd = "srun -l --mpi=pmi2 --export={} {}".format(
                         ",".join(exports), ior_cmd)
                     command.append(cmd)
@@ -279,21 +279,20 @@ class Soak(TestWithServers):
         self.soak_results = {}
         script_list = []
 
-        status = 0
-
         self.log.info(
             "<<Job_Setup %s >> at %s", self.test_name, time.ctime())
         # Create the remote log directories from new loop/pass
         self.rem_pass_dir = self.log_dir + "/pass" + str(self.loop)
         self.local_pass_dir = self.outputsoakdir + "/pass" + str(self.loop)
-        remote_cmd = "mkdir -p {}".format(self.rem_pass_dir)
-        command = "clush -w {} -B -S {}".format(
-            NodeSet.fromlist(self.hostlist_clients), remote_cmd)
-
-        status = process.run(command, timeout=300)
-        if not status:
+        result = pcmd(
+            NodeSet.fromlist(self.hostlist_clients),
+            "mkdir -p {}".format(self.rem_pass_dir),
+            verbose=False)
+        if len(result) > 1 or 0 not in result:
             raise SoakTestError(
-                "<<FAILED: logfile directory not created on clients>>")
+                "<<FAILED: logfile directory not"
+                "created on clients>>: {}".format(", ".join(
+                    [str(result[key]) for key in result if key != 0])))
 
         # Create local log directory
         os.makedirs(self.local_pass_dir)
@@ -393,16 +392,11 @@ class Soak(TestWithServers):
                         self.log.info("<<Job %s could not be killed>>", job)
             # gather all the logfiles for this pass and cleanup test nodes
             # If there is a failure the files can be gathered again in Teardown
-            status = self.remote_copy(
-                self.node_list, self.rem_pass_dir, self.outputsoakdir)
-            if status == 0:
-                # cleanup files
-                command = "clush -w {} -B -S rm -rf {}".format(
-                    NodeSet.fromlist(self.hostlist_clients), self.rem_pass_dir)
-                status = process.run(command, timeout=300)
-            else:
-                self.log.info(
-                    "Some logfiles may not be available from client node")
+            try:
+                self.remote_copy(
+                    self.node_list, self.rem_pass_dir, self.outputsoakdir)
+            except SoakTestError as error:
+                self.log.info("Remote copy failed with %s", error)
             self.soak_results = {}
         return job_id_list
 
@@ -434,7 +428,9 @@ class Soak(TestWithServers):
 
         # Test fails on first error but could use continue on error here
         if len(self.failed_job_id_list) > 0:
-            raise SoakTestError("<<FAILED:  Soak {} >>".format(self.test_name))
+            raise SoakTestError(
+                "<<FAILED: The following jobs failed {} >>".format(
+                    " ,".join(job_id for job_id in self.failed_job_id_list)))
 
     def run_soak(self, test_param):
         """Run the soak test specified by the test params.
@@ -471,7 +467,8 @@ class Soak(TestWithServers):
             except SoakTestError as error:
                 self.fail(error)
             errors = self.destroy_pools(self.pool[1:])
-            del self.pool[1:]
+            # delete the test pools from self.pool; preserving reserved pool
+            self.pool = [self.pool[0]]
             self.assertEqual(len(errors), 0, "\n".join(errors))
             self.loop += 1
             # Break out of loop if smoke
@@ -507,7 +504,7 @@ class Soak(TestWithServers):
                 self.hostlist_clients.remove(host_server)
         self.log.info(
                 "<<Updated hostlist_clients %s >>", self.hostlist_clients)
-        # # include test node for log cleanup; remove from client list
+        # include test node for log cleanup; remove from client list
         # self.test_node = [socket.gethostname().split('.', 1)[0]]
         # if self.test_node[0] in self.hostlist_clients:
         #     self.hostlist_clients.remove(self.test_node[0])
@@ -526,27 +523,42 @@ class Soak(TestWithServers):
         self.local_pass_dir = self.outputsoakdir + "/pass" + str(self.loop)
 
         # cleanup soak log directories before test on all nodes
-        command = "clush -w {} -B -S rm -rf {}".format(
-            NodeSet.fromlist(self.node_list), self.log_dir)
-        process.run(command, timeout=300)
+        result = pcmd(
+            NodeSet.fromlist(self.node_list),
+            "rm -rf {}".format(self.log_dir),
+            verbose=False)
+        if len(result) > 1 or 0 not in result:
+            raise SoakTestError(
+                "<<FAILED: Soak directories not removed"
+                "from clients>>: {}".format(", ".join(
+                    [str(result[key]) for key in result if key != 0])))
 
     def tearDown(self):
         """Define tearDown and clear any left over jobs in squeue."""
         print("<<tearDown Started>> at {}".format(time.ctime()))
         # clear out any jobs in squeue;
-
+        errors_detected = False
         if len(self.failed_job_id_list) > 0:
             print("<<Cancel jobs in queue with ids {} >>".format(
                 self.failed_job_id_list))
             for job_id in self.failed_job_id_list:
-                slurm_utils.cancel_jobs(job_id)
+                try:
+                    slurm_utils.cancel_jobs(job_id)
+                except slurm_utils.SlurmFailed as error:
+                    self.log.info(
+                        "  Failed to cancel job %s with error %s", job_id, str(
+                            error))
+                    errors_detected = True
         # One last attempt to copy any logfiles from client nodes
-        status = self.remote_copy(
-            self.node_list, self.rem_pass_dir, self.outputsoakdir)
-        if not status:
-            self.log.info(
-                "Some logfiles may not be available from client node")
+        try:
+            self.remote_copy(
+                self.node_list, self.rem_pass_dir, self.outputsoakdir)
+        except SoakTestError as error:
+            self.log.info("Remote copy failed with %s", error)
+            errors_detected = True
         super(Soak, self).tearDown()
+        if errors_detected:
+            self.fail("Errors detected cancelling slurm jobs in tearDown()")
 
     def test_soak_smoke(self):
         """Run soak smoke.
