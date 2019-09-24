@@ -125,6 +125,8 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 	 * with LMV, both LOV and LMV will need to be queried if ENODATA is
 	 * returned at 1st, as the file/dir type is hidden to help decide before 
 	 * due to the symlink fake !!
+	 * Also, querying/checking container's type/oclass/chunk_size/...
+	 * vs EA content could be a good idea ?
 	 */
 
 	/* XXX if liblustreapi is not binded, do it now ! */
@@ -243,7 +245,7 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 	 */
 	attr->da_on_lustre = true;
 
-	attr->da_oclass = daos_oclass_name2id(t);
+	attr->da_oclass_id = daos_oclass_name2id(t);
 
 	t = strtok_r(NULL, "/", &saveptr);
 	attr->da_chunk_size = strtoull(t, NULL, 10);
@@ -344,11 +346,9 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 }
 
 static int
-duns_create_lustre_path(const char *path, const char *sysname,
-		      d_rank_list_t *svcl, struct duns_attr_t *attrp)
+duns_create_lustre_path(daos_handle_t poh, const char *path,
+			struct duns_attr_t *attrp)
 {
-	daos_handle_t		poh;
-	daos_pool_info_t	pool_info;
 	char			pool[37], cont[37];
 	char			oclass[10], type[10];
 	char			str[DUNS_MAX_XATTR_LEN + 1];
@@ -370,16 +370,8 @@ duns_create_lustre_path(const char *path, const char *sysname,
 			return -DER_INVAL;
 	}
 
-	/** Connect to the pool. */
-	rc = daos_pool_connect(attrp->da_puuid, sysname, svcl, DAOS_PC_RW,
-			       &poh, &pool_info, NULL);
-	if (rc) {
-		D_ERROR("Failed to connect to pool (%d)\n", rc);
-		D_GOTO(err, rc);
-	}
-
 	uuid_unparse(attrp->da_puuid, pool);
-	daos_oclass_id2name(attrp->da_oclass, oclass);
+	daos_oclass_id2name(attrp->da_oclass_id, oclass);
 	daos_unparse_ctype(attrp->da_type, type);
 
 	/* create container with specified container uuid (try_multiple=0)
@@ -398,11 +390,34 @@ duns_create_lustre_path(const char *path, const char *sysname,
 			uuid_unparse(attrp->da_cuuid, cont);
 		}
 
-		rc = daos_cont_create(poh, attrp->da_cuuid, NULL, NULL);
+		if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
+			dfs_attr_t	dfs_attr;
+
+ 			/** TODO: set Lustre FID here. */
+			dfs_attr.da_id = 0;
+			dfs_attr.da_oclass_id = attrp->da_oclass_id;
+			dfs_attr.da_chunk_size = attrp->da_chunk_size;
+			rc = dfs_cont_create(poh, attrp->da_cuuid, &dfs_attr,
+					     NULL, NULL);
+		} else {
+			daos_prop_t	*prop;
+
+ 			prop = daos_prop_alloc(1);
+			if (prop == NULL) {
+				D_ERROR("Failed to allocate container prop.");
+				D_GOTO(err_link, rc = -DER_NOMEM);
+			}
+			prop->dpp_entries[0].dpe_type =
+				DAOS_PROP_CO_LAYOUT_TYPE;
+			prop->dpp_entries[0].dpe_val = attrp->da_type;
+			rc = daos_cont_create(poh, attrp->da_cuuid, prop, NULL);
+			daos_prop_free(prop);
+		}
+
 	} while ((rc == -DER_EXIST) && try_multiple);
 	if (rc) {
 		D_ERROR("Failed to create container (%d)\n", rc);
-		D_GOTO(err_pool, rc);
+		D_GOTO(err, rc);
 	}
 
 	/** create dir and store the daos attributes in the path LMV */
@@ -421,42 +436,14 @@ duns_create_lustre_path(const char *path, const char *sysname,
 		D_GOTO(err_cont, rc = -DER_INVAL);
 	}
 
-	/*
-	 * TODO: Add a container attribute to store the inode number (or Lustre
-	 * FID) of the file.
-	 */
-
-	/** create DFS mount */
-
-	rc = daos_cont_open(poh, attrp->da_cuuid, DAOS_COO_RW, &coh,
-			    &co_info, NULL);
-	if (rc) {
-		D_ERROR("Failed to open container (%d)\n", rc);
-		D_GOTO(err_lmv, rc = 1);
-	}
-
-	/* XXX dfs_mount() will permit to check/resolve stuff on Daos side */
-	rc = dfs_mount(poh, coh, O_RDWR, &dfs);
-	dfs_umount(dfs);
-
-	daos_cont_close(coh, NULL);
-	if (rc) {
-		D_ERROR("dfs_mount failed (%d)\n", rc);
-		D_GOTO(err_lmv, rc = 1);
-	}
-
-	daos_pool_disconnect(poh, NULL);
 	return rc;
 
-err_lmv:
 	rc2 = (*unlink_foreign)((char *)path);
 	if (rc2 < 0)
 		D_ERROR("Failed to unlink Lustre dir '%s' with foreign LMV '%s' (rc = %d).\n",
 			path, str, rc2);
 err_cont:
 	daos_cont_destroy(poh, attrp->da_cuuid, 1, NULL);
-err_pool:
-	daos_pool_disconnect(poh, NULL);
 err:
 	return rc;
 }
@@ -515,7 +502,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		}
 
 		if (fs.f_type == LL_SUPER_MAGIC) {
-			rc = duns_create_lustre_path(path, sysname, svcl, attrp);
+			rc = duns_create_lustre_path(poh, path, attrp);
 			if (rc == 0)
 				return 0;
 			/* if Lustre specific method fails, fallback to try
@@ -634,7 +621,7 @@ duns_destroy_path(daos_handle_t poh, const char *path)
 
 	if (dattr.da_type == DAOS_PROP_CO_LAYOUT_HDF5) {
 		if (dattr.da_on_lustre)
-			rc = (*unlink_foreign)((char *)ap->path);
+			rc = (*unlink_foreign)((char *)path);
 		else
 			rc = unlink(path);
 		if (rc) {
@@ -645,7 +632,7 @@ duns_destroy_path(daos_handle_t poh, const char *path)
 		}
 	} else if (dattr.da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
 		if (dattr.da_on_lustre)
-			rc = (*unlink_foreign)((char *)ap->path);
+			rc = (*unlink_foreign)((char *)path);
 		else
 			rc = rmdir(path);
 		if (rc) {
