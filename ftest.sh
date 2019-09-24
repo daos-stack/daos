@@ -124,6 +124,7 @@ if ${TEARDOWN_ONLY:-false}; then
     exit 0
 fi
 
+mv src/tests/ftest src/tests/ftest_camp
 # let's output to a dir in the tree
 rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
 #rm -rf src/tests/ftest/avocado ./*_results.xml
@@ -358,5 +359,7 @@ else
     fi
     rc=0
 fi
+
+mv src/tests/ftest_camp src/tests/ftest
 
 exit "$rc"
