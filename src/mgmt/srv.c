@@ -247,6 +247,54 @@ out:
 	crt_reply_send(rpc);
 }
 
+/**
+ * Set mark on all of server targets
+ */
+void
+ds_mgmt_mark_hdlr(crt_rpc_t *rpc)
+{
+	struct mgmt_mark_in	*in;
+	crt_opcode_t		opc;
+	int			topo;
+	crt_rpc_t		*tc_req;
+	struct mgmt_mark_in	*tc_in;
+	struct mgmt_mark_out	*out;
+	int			rc;
+
+	in = crt_req_get(rpc);
+	D_ASSERT(in != NULL);
+
+	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 32);
+	opc = DAOS_RPC_OPCODE(MGMT_TGT_MARK, DAOS_MGMT_MODULE,
+			      DAOS_MGMT_VERSION);
+	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL, NULL,
+				  opc, NULL, NULL, 0, topo, &tc_req);
+	if (rc)
+		D_GOTO(out, rc);
+
+	tc_in = crt_req_get(tc_req);
+	D_ASSERT(tc_in != NULL);
+
+	tc_in->m_mark = in->m_mark;
+	rc = dss_rpc_send(tc_req);
+	if (rc != 0) {
+		crt_req_decref(tc_req);
+		D_GOTO(out, rc);
+	}
+
+	out = crt_reply_get(tc_req);
+	rc = out->m_rc;
+	if (rc != 0) {
+		crt_req_decref(tc_req);
+		D_GOTO(out, rc);
+	}
+out:
+	out = crt_reply_get(rpc);
+	D_DEBUG(DB_MGMT, "mark hdlr: rc %d\n", rc);
+	out->m_rc = rc;
+	crt_reply_send(rpc);
+}
+
 void
 ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc)
 {
