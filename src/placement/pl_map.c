@@ -31,7 +31,7 @@
 #include <gurt/hash.h>
 
 extern struct pl_map_ops        ring_map_ops;
-extern struct pl_map_ops        mapless_map_ops;
+extern struct pl_map_ops        jump_map_ops;
 
 /** dictionary for all unknown placement maps */
 struct pl_map_dict {
@@ -51,9 +51,9 @@ static struct pl_map_dict pl_maps[] = {
 		.pd_name        = "ring",
 	},
 	{
-		.pd_type    = PL_TYPE_MAPLESS,
-		.pd_ops     = &mapless_map_ops,
-		.pd_name    = "mapless",
+		.pd_type    = PL_TYPE_JUMP_MAP,
+		.pd_ops     = &jump_map_ops,
+		.pd_name    = "jump",
 	},
 	{
 		.pd_type        = PL_TYPE_UNKNOWN,
@@ -293,14 +293,12 @@ pl_obj_shard2grp_index(struct daos_obj_shard_md *shard_md,
 }
 
 /** serialize operations on pl_htable */
-pthread_rwlock_t        pl_rwlock = PTHREAD_RWLOCK_INITIALIZER;
+static pthread_rwlock_t		pl_rwlock = PTHREAD_RWLOCK_INITIALIZER;
 /** hash table for placement maps */
-struct d_hash_table     pl_htable = {
-	.ht_ops                   = NULL,
-};
+static struct d_hash_table	pl_htable;
 
 #define DSR_RING_DOMAIN         PO_COMP_TP_RACK
-#define DSR_MAPLESS_DOMAIN      PO_COMP_TP_RACK
+#define DSR_JUMP_MAP_DOMAIN      PO_COMP_TP_RACK
 
 static void
 pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
@@ -318,9 +316,9 @@ pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
 		mia->ia_ring.domain  = DSR_RING_DOMAIN;
 		mia->ia_ring.ring_nr = 1;
 		break;
-	case PL_TYPE_MAPLESS:
-		mia->ia_type            = PL_TYPE_MAPLESS;
-		mia->ia_mapless.domain  = DSR_MAPLESS_DOMAIN;
+	case PL_TYPE_JUMP_MAP:
+		mia->ia_type            = PL_TYPE_JUMP_MAP;
+		mia->ia_jump_map.domain  = DSR_JUMP_MAP_DOMAIN;
 	}
 
 }
@@ -392,20 +390,6 @@ static d_hash_table_ops_t pl_hash_ops = {
 	.hop_rec_free           = pl_hop_rec_free,
 };
 
-#define PL_HTABLE_BITS          7
-
-static int
-pl_htable_init()
-{
-	/* NB: this hash table is created on demand, it will never
-	 * be destroyed.
-	 */
-	D_ASSERT(pl_htable.ht_ops == NULL);
-	return d_hash_table_create_inplace(D_HASH_FT_NOLOCK,
-					   PL_HTABLE_BITS, NULL,
-					   &pl_hash_ops, &pl_htable);
-}
-
 /**
  * Create a placement map based on attributes in \a mia
  */
@@ -413,21 +397,7 @@ int
 pl_map_create(struct pool_map *pool_map, struct pl_map_init_attr *mia,
 	      struct pl_map **pl_mapp)
 {
-	int rc = 0;
-
-	D_RWLOCK_WRLOCK(&pl_rwlock);
-	if (!pl_htable.ht_ops)
-		rc = pl_htable_init();
-	D_RWLOCK_UNLOCK(&pl_rwlock);
-
-	if (rc) {
-		D_ERROR("pl_htable_init failed, rc %d.\n", rc);
-		return rc;
-	}
-
 	return pl_map_create_inited(pool_map, mia, pl_mapp);
-
-
 }
 
 /**
@@ -448,17 +418,8 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect,
 	int                      rc;
 
 	D_RWLOCK_WRLOCK(&pl_rwlock);
-	if (!pl_htable.ht_ops) {
-		rc = pl_htable_init();
-		if (rc)
-			D_GOTO(out, rc);
 
-		link = NULL;
-	} else {
-		/* already created */
-		link = d_hash_rec_find(&pl_htable, uuid, sizeof(uuid_t));
-	}
-
+	link = d_hash_rec_find(&pl_htable, uuid, sizeof(uuid_t));
 	if (!link) {
 		pl_map_attr_init(pool_map, default_type, &mia);
 		rc = pl_map_create_inited(pool_map, &mia, &map);
@@ -475,7 +436,7 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect,
 			D_GOTO(out, rc = 0);
 		}
 
-		pl_map_attr_init(pool_map, PL_TYPE_MAPLESS, &mia);
+		pl_map_attr_init(pool_map, PL_TYPE_JUMP_MAP, &mia);
 		rc = pl_map_create_inited(pool_map, &mia, &map);
 		if (rc != 0) {
 			d_hash_rec_decref(&pl_htable, link);
@@ -544,6 +505,7 @@ pl_map_find(uuid_t uuid, daos_obj_id_t oid)
 
 	return link ? pl_link2map(link) : NULL;
 }
+
 void
 pl_map_addref(struct pl_map *map)
 {
@@ -658,4 +620,19 @@ pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
 
 	/* If all the replicas are failed or in-rebuilding, then NONEXIST. */
 	return -DER_NONEXIST;
+}
+
+#define PL_HTABLE_BITS 7
+
+/** Initialize the placement module. */
+int pl_init(void)
+{
+	return d_hash_table_create_inplace(D_HASH_FT_NOLOCK, PL_HTABLE_BITS,
+					   NULL, &pl_hash_ops, &pl_htable);
+}
+
+/** Finalize the placement module. */
+void pl_fini(void)
+{
+	d_hash_table_destroy_inplace(&pl_htable, true /* force */);
 }

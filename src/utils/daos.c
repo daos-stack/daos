@@ -576,7 +576,6 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	int			rc2;
 	enum cont_op		op;
 	const int		RC_PRINT_HELP = 2;
-	bool			on_lustre = false;
 
 	assert(ap != NULL);
 	op = ap->c_op;
@@ -599,9 +598,8 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		ap->type = dattr.da_type;
 		uuid_copy(ap->p_uuid, dattr.da_puuid);
 		uuid_copy(ap->c_uuid, dattr.da_cuuid);
-		ap->oclass = dattr.da_oclass;
+		ap->oclass = dattr.da_oclass_id;
 		ap->chunk_size = dattr.da_chunk_size;
-		on_lustre = dattr.da_on_lustre;
 	} else {
 		ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
 	}
@@ -649,18 +647,6 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		break;
 	case CONT_DESTROY:
 		rc = cont_destroy_hdlr(ap);
-		if (rc)
-			break;
-
-		/* if path is a Lustre foreign DAOS file/dir it must be removed
-		 * using unlink_foreign specific API
-		 */
-		if (ap->path != NULL && on_lustre) {
-			rc = (*unlink_foreign)((char *)ap->path);
-			if (rc < 0)
-				D_ERROR("Failed to unlink Lustre foreign DAOS path '%s' (rc = %d).\n",
-					ap->path, rc);
-		}
 		break;
 
 	/* TODO: implement the following ops */

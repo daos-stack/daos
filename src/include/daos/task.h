@@ -74,6 +74,10 @@ dc_obj_query_key_task_create(daos_handle_t oh, daos_handle_t th,
 			     daos_recx_t *recx, daos_event_t *ev,
 			     tse_sched_t *tse, tse_task_t **task);
 int
+dc_obj_sync_task_create(daos_handle_t oh, daos_epoch_t epoch,
+			daos_epoch_t **epochs_p, int *nr, daos_event_t *ev,
+			tse_sched_t *tse, tse_task_t **task);
+int
 dc_obj_fetch_shard_task_create(daos_handle_t oh, daos_handle_t th,
 			       unsigned int flags, unsigned int shard,
 			       daos_key_t *dkey, unsigned int nr,

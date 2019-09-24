@@ -37,6 +37,7 @@
 #include <cmocka.h>
 #include <getopt.h>
 #include <daos_srv/vos.h>
+#include <vos_internal.h>
 
 static void
 print_usage()
@@ -51,6 +52,8 @@ print_usage()
 	print_message("vos_tests -a |--aggregate-tests\n");
 	print_message("vos_tests -X|--dtx_tests\n");
 	print_message("vos_tests -A|--all_tests\n");
+	print_message("vos_tests -f|--filter <filter>\n");
+	print_message("vos_tests -e|--exclude <filter>\n");
 	print_message("vos_tests -h|--help\n");
 	print_message("Default <vos_tests> runs all tests\n");
 }
@@ -87,6 +90,7 @@ run_all_tests(int keys, bool nest_iterators)
 	}
 	failed += run_discard_tests();
 	failed += run_aggregate_tests(false);
+	failed += run_gc_tests();
 	failed += run_dtx_tests();
 	return failed;
 }
@@ -102,6 +106,8 @@ main(int argc, char **argv)
 	int	keys;
 	bool	nest_iterators = false;
 
+	d_register_alt_assert(mock_assert);
+
 	static struct option long_options[] = {
 		{"all_tests",		required_argument, 0, 'A'},
 		{"pool_tests",		no_argument, 0, 'p'},
@@ -111,7 +117,10 @@ main(int argc, char **argv)
 		{"nest_iterators",	no_argument, 0, 'n'},
 		{"aggregate_tests",	no_argument, 0, 'a'},
 		{"dtx_tests",		no_argument, 0, 'X'},
+		{"garbage_collector",	no_argument, 0, 'g'},
 		{"help",		no_argument, 0, 'h'},
+		{"filter",		required_argument, 0, 'f'},
+		{"exclude",		required_argument, 0, 'e'},
 	};
 
 	rc = daos_debug_init(NULL);
@@ -127,49 +136,92 @@ main(int argc, char **argv)
 	}
 
 	gc = 0;
-	if (argc < 2) {
-		nr_failed = run_all_tests(0, false);
-	} else {
-		while ((opt = getopt_long(argc, argv, "apcdnti:XA:h",
+	bool test_run = false;
+
+	while ((opt = getopt_long(argc, argv, "apcdgnti:XA:hf:e:",
 				  long_options, &index)) != -1) {
-			switch (opt) {
-			case 'p':
-				nr_failed += run_pool_test();
-				break;
-			case 'c':
-				nr_failed += run_co_test();
-				break;
-			case 'n':
-				nest_iterators = true;
-				break;
-			case 'i':
-				ofeats = strtol(optarg, NULL, 16);
-				nr_failed += run_io_test(ofeats, 0,
-							 nest_iterators);
-				break;
-			case 'a':
-				nr_failed += run_aggregate_tests(true);
-				break;
-			case 'd':
-				nr_failed += run_discard_tests();
-				break;
-			case 'X':
-				nr_failed += run_dtx_tests();
-				break;
-			case 'A':
-				keys = atoi(optarg);
-				nr_failed = run_all_tests(keys, nest_iterators);
-				break;
-			case 'h':
-				print_usage();
-				goto exit_1;
-			default:
-				print_error("Unkown option\n");
-				print_usage();
-				goto exit_1;
-			}
+		switch (opt) {
+		case 'e':
+#if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
+			cmocka_set_skip_filter(optarg);
+#else
+			D_PRINT("filter not enabled");
+#endif
+
+			break;
+		case 'f':
+#if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
+			cmocka_set_test_filter(optarg);
+				printf("Test filter: %s\n", optarg);
+#else
+			D_PRINT("filter not enabled");
+#endif
+			break;
+		default:
+			break;
 		}
 	}
+	index = 0;
+	optind = 0;
+
+	while ((opt = getopt_long(argc, argv, "apcdnti:A:hf:e:",
+				  long_options, &index)) != -1) {
+		switch (opt) {
+		case 'p':
+			nr_failed += run_pool_test();
+			test_run = true;
+			break;
+		case 'c':
+			nr_failed += run_co_test();
+			test_run = true;
+			break;
+		case 'n':
+			nest_iterators = true;
+			break;
+		case 'i':
+			ofeats = strtol(optarg, NULL, 16);
+			nr_failed += run_io_test(ofeats, 0,
+						 nest_iterators);
+			test_run = true;
+			break;
+		case 'a':
+			nr_failed += run_aggregate_tests(true);
+			test_run = true;
+			break;
+		case 'd':
+			nr_failed += run_discard_tests();
+			test_run = true;
+			break;
+		case 'g':
+			nr_failed += run_gc_tests();
+			break;
+		case 'X':
+			nr_failed += run_dtx_tests();
+			test_run = true;
+			break;
+		case 'A':
+			keys = atoi(optarg);
+			nr_failed = run_all_tests(keys, nest_iterators);
+			test_run = true;
+			break;
+		case 'f':
+		case 'e':
+			/** already handled */
+			break;
+		case 'h':
+			print_usage();
+			goto exit_1;
+		default:
+			print_error("Unkown option\n");
+			print_usage();
+			goto exit_1;
+		}
+	}
+
+	/** options didn't include specific tests, just run them all */
+	if (!test_run)
+		nr_failed = run_all_tests(0, false);
+
 
 	if (nr_failed)
 		print_error("ERROR, %i TEST(S) FAILED\n", nr_failed);
@@ -177,6 +229,13 @@ main(int argc, char **argv)
 		print_message("\nSUCCESS! NO TEST FAILURES\n");
 
 exit_1:
+	/* There is no ULT/thread calls vos_gc_run() in this utility, it is
+	 * possible VOS GC might still take refcount on already closed pools.
+	 * These in-mem pools will be freed by calling gc_wait().
+	 *
+	 * NB: this function is only defined for standalone mode.
+	 */
+	gc_wait();
 	vos_fini();
 exit_0:
 	daos_debug_fini();

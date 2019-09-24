@@ -5,7 +5,7 @@
 
 Name:          daos
 Version:       0.6.0
-Release:       4%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -22,7 +22,7 @@ BuildRequires: protobuf-c-devel
 BuildRequires: spdk-devel, spdk-tools
 BuildRequires: fio < 3.4
 BuildRequires: libisa-l-devel
-BuildRequires: raft-devel
+BuildRequires: raft-devel <= 0.5.0
 BuildRequires: mercury-devel
 BuildRequires: openpa-devel
 BuildRequires: libfabric-devel
@@ -34,6 +34,7 @@ BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
 BuildRequires: libcmocka-devel
 BuildRequires: readline-devel
+BuildRequires: valgrind-devel
 BuildRequires: systemd
 %if (0%{?rhel} >= 7)
 BuildRequires:  numactl-devel
@@ -43,15 +44,13 @@ BuildRequires: libipmctl-devel
 BuildRequires: python-devel python36-devel
 %else
 %if (0%{?suse_version} >= 1315)
-BuildRequires:  libnuma-devel
+BuildRequires: libnuma-devel
 BuildRequires: cunit-devel
 BuildRequires: go1.10
 BuildRequires: ipmctl-devel
 BuildRequires: python-devel python3-devel
 %endif
 %endif
-Requires: cart
-Requires: argobots >= 1.0rc1
 Requires: libpmem, libpmemobj
 Requires: fuse >= 3.4.2
 Requires: protobuf-c
@@ -74,6 +73,8 @@ to optimize performance and cost.
 Summary: The DAOS server
 Requires: %{name} = %{version}-%{release}
 Requires: spdk-tools
+Requires: ndctl
+Requires: ipmctl
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 
@@ -172,6 +173,7 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/daos_srv/libplacement.so
 # Certificate generation files
 %{daoshome}/certgen/
+%{daoshome}/VERSION
 %doc
 
 %files server
@@ -194,6 +196,7 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_unitdir}/daos-server.service
 
 %files client
+%{_prefix}/etc/memcheck-daos-client.supp
 %{_bindir}/daos_shell
 %{_bindir}/daosctl
 %{_bindir}/dcont
@@ -236,6 +239,16 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/*.a
 
 %changelog
+* Sat Sep 21 2019 Brian J. Murrell <brian.murrell@intel.com>
+- Remove Requires: {argobots, cart}
+  - autodependencies should take care of these
+
+* Thu Sep 19 2019 Jeff Olivier <jeffrey.v.olivier@intel.com>
+- Add valgrind-devel requirement for argobots change
+
+* Tue Sep 10 2019 Tom Nabarro <tom.nabarro@intel.com>
+- Add requires ndctl as runtime dep for control plane.
+
 * Thu Aug 15 2019 David Quigley <david.quigley@intel.com>
 - Add systemd unit files to packaging.
 

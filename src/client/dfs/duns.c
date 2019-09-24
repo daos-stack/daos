@@ -335,7 +335,7 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	}
 
 	t = strtok_r(NULL, "/", &saveptr);
-	attr->da_oclass = daos_oclass_name2id(t);
+	attr->da_oclass_id = daos_oclass_name2id(t);
 
 	t = strtok_r(NULL, "/", &saveptr);
 	attr->da_chunk_size = strtoull(t, NULL, 10);
@@ -462,11 +462,8 @@ err:
 }
 
 int
-duns_link_path(const char *path, const char *sysname,
-	       d_rank_list_t *svcl, struct duns_attr_t *attrp)
+duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 {
-	daos_handle_t		poh;
-	daos_pool_info_t	pool_info;
 	char			pool[37], cont[37];
 	char			oclass[10], type[10];
 	char			str[DUNS_MAX_XATTR_LEN];
@@ -527,7 +524,7 @@ duns_link_path(const char *path, const char *sysname,
 		}
 
 		/** create a new directory if POSIX/MPI-IO container */
-		rc = mkdir(path, S_IRWXU | S_IRWXG | S_IROTH | S_IWOTH);
+		rc = mkdir(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 		if (rc == -1) {
 			D_ERROR("Failed to create dir %s: %s\n",
 				path, strerror(errno));
@@ -539,16 +536,11 @@ duns_link_path(const char *path, const char *sysname,
 		return -DER_INVAL;
 	}
 
-	/** Connect to the pool. */
-	rc = daos_pool_connect(attrp->da_puuid, sysname, svcl, DAOS_PC_RW,
-			       &poh, &pool_info, NULL);
-	if (rc) {
-		D_ERROR("Failed to connect to pool (%d)\n", rc);
-		D_GOTO(err_link, rc);
-	}
-
 	uuid_unparse(attrp->da_puuid, pool);
-	daos_oclass_id2name(attrp->da_oclass, oclass);
+	if (attrp->da_oclass_id != OC_UNKNOWN)
+		daos_oclass_id2name(attrp->da_oclass_id, oclass);
+	else
+		strcpy(oclass, "UNKNOWN");
 	daos_unparse_ctype(attrp->da_type, type);
 
 	/* create container with specified container uuid (try_multiple=0)
@@ -571,60 +563,98 @@ duns_link_path(const char *path, const char *sysname,
 			      attrp->da_chunk_size);
 		if (len < DUNS_MIN_XATTR_LEN) {
 			D_ERROR("Failed to create xattr value\n");
-			D_GOTO(err_pool, rc = -DER_INVAL);
+			D_GOTO(err_link, rc = -DER_INVAL);
 		}
 
 		rc = lsetxattr(path, DUNS_XATTR_NAME, str, len + 1, 0);
 		if (rc) {
 			D_ERROR("Failed to set DAOS xattr (rc = %d).\n", rc);
-			D_GOTO(err_pool, rc = -DER_INVAL);
+			D_GOTO(err_link, rc = -DER_INVAL);
 		}
 
-		rc = daos_cont_create(poh, attrp->da_cuuid, NULL, NULL);
+		if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
+			dfs_attr_t	dfs_attr;
+
+			/** TODO: set Lustre FID here. */
+			dfs_attr.da_id = 0;
+			dfs_attr.da_oclass_id = attrp->da_oclass_id;
+			dfs_attr.da_chunk_size = attrp->da_chunk_size;
+			rc = dfs_cont_create(poh, attrp->da_cuuid, &dfs_attr,
+					     NULL, NULL);
+		} else {
+			daos_prop_t	*prop;
+
+			prop = daos_prop_alloc(1);
+			if (prop == NULL) {
+				D_ERROR("Failed to allocate container prop.");
+				D_GOTO(err_link, rc = -DER_NOMEM);
+			}
+			prop->dpp_entries[0].dpe_type =
+				DAOS_PROP_CO_LAYOUT_TYPE;
+			prop->dpp_entries[0].dpe_val = attrp->da_type;
+			rc = daos_cont_create(poh, attrp->da_cuuid, prop, NULL);
+			daos_prop_free(prop);
+		}
 	} while ((rc == -DER_EXIST) && try_multiple);
 	if (rc) {
 		D_ERROR("Failed to create container (%d)\n", rc);
-		D_GOTO(err_pool, rc);
+		D_GOTO(err_link, rc);
 	}
 
-	/*
-	 * TODO: Add a container attribute to store the inode number (or Lustre
-	 * FID) of the file.
-	 */
-
-	/** If this is a POSIX container, create DFS mount */
-	if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
-		daos_handle_t		coh;
-		daos_cont_info_t	co_info;
-		dfs_t			*dfs;
-
-		rc = daos_cont_open(poh, attrp->da_cuuid, DAOS_COO_RW, &coh,
-				    &co_info, NULL);
-		if (rc) {
-			D_ERROR("Failed to open container (%d)\n", rc);
-			D_GOTO(err_cont, rc = 1);
-		}
-
-		rc = dfs_mount(poh, coh, O_RDWR, &dfs);
-		dfs_umount(dfs);
-		daos_cont_close(coh, NULL);
-		if (rc) {
-			D_ERROR("dfs_mount failed (%d)\n", rc);
-			D_GOTO(err_cont, rc = 1);
-		}
-	}
-
-	daos_pool_disconnect(poh, NULL);
 	return rc;
-
-err_cont:
-	daos_cont_destroy(poh, attrp->da_cuuid, 1, NULL);
-err_pool:
-	daos_pool_disconnect(poh, NULL);
 err_link:
 	if (attrp->da_type == DAOS_PROP_CO_LAYOUT_HDF5)
 		unlink(path);
 	else if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX)
 		rmdir(path);
 	return rc;
+}
+
+int
+duns_destroy_path(daos_handle_t poh, const char *path)
+{
+	struct duns_attr_t dattr = {0};
+	int	rc;
+
+	/* Resolve pool, container UUIDs from path */
+	rc = duns_resolve_path(path, &dattr);
+	if (rc) {
+		D_ERROR("duns_resolve_path() Failed on path %s (%d)\n",
+			path, rc);
+		return rc;
+	}
+
+	/** Destroy the container */
+	rc = daos_cont_destroy(poh, dattr.da_cuuid, 1, NULL);
+	if (rc) {
+		D_ERROR("Failed to destroy container (%d)\n", rc);
+		/** recreate the link ? */
+		return rc;
+	}
+
+	if (dattr.da_type == DAOS_PROP_CO_LAYOUT_HDF5) {
+		if (dattr.da_on_lustre)
+			rc = (*unlink_foreign)((char *)ap->path);
+		else
+			rc = unlink(path);
+		if (rc) {
+			D_ERROR("Failed to unlink %sfile %s: %s\n",
+				dattr.da_on_lustre ? "Lustre " : " ", path,
+				strerror(errno));
+			return -DER_INVAL;
+		}
+	} else if (dattr.da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
+		if (dattr.da_on_lustre)
+			rc = (*unlink_foreign)((char *)ap->path);
+		else
+			rc = rmdir(path);
+		if (rc) {
+			D_ERROR("Failed to remove %sdir %s: %s\n",
+				dattr.da_on_lustre ? "Lustre " : " ", path,
+				strerror(errno));
+			return -DER_INVAL;
+		}
+	}
+
+	return 0;
 }

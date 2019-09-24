@@ -28,41 +28,41 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	commands "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/server"
 )
 
 type storageCmd struct {
-	Scan     storageScanCmd     `command:"scan" description:"Scan SCM and NVMe storage attached to local server"`
-	PrepNvme storagePrepNvmeCmd `command:"prep-nvme" description:"Prep NVMe devices for use with SPDK as current user"`
-	PrepScm  storagePrepScmCmd  `command:"prep-scm" description:"Prep SCM modules into interleaved AppDirect and create the relevant namespace kernel devices"`
+	Scan    storageScanCmd    `command:"scan" description:"Scan SCM and NVMe storage attached to local server"`
+	Prepare storagePrepareCmd `command:"prepare" alias:"p" description:"Prepare SCM and NVMe storage attached to remote servers."`
 }
 
 type storageScanCmd struct {
-	cfgCmd
 	logCmd
 }
 
 func (cmd *storageScanCmd) Execute(args []string) error {
-	srv, err := server.NewControlService(cmd.config)
+	svc, err := server.DefaultStorageControlService(cmd.log, server.NewConfiguration())
 	if err != nil {
 		return errors.WithMessage(err, "failed to init ControlService")
 	}
 
 	cmd.log.Info("Scanning locally-attached storage...")
+
 	scanErrors := make([]error, 0, 2)
-	controllers, err := srv.ScanNVMe()
+
+	controllers, err := svc.ScanNvme()
 	if err != nil {
 		scanErrors = append(scanErrors, err)
 	} else {
 		cmd.log.Infof("NVMe SSD controller and constituent namespaces:\n%s", controllers)
 	}
 
-	modules, err := srv.ScanSCM()
+	modules, pmems, err := svc.ScanScm()
 	if err != nil {
 		scanErrors = append(scanErrors, err)
 	} else {
-		cmd.log.Infof("SCM modules:\n%s", modules)
+		cmd.log.Infof("SCM modules:\n%s\nPMEM device files:\n%s", modules, pmems)
 	}
 
 	if len(scanErrors) > 0 {
@@ -76,78 +76,88 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 	return nil
 }
 
-type storagePrepNvmeCmd struct {
-	cfgCmd
-	PCIWhiteList string `short:"w" long:"pci-whitelist" description:"Whitespace separated list of PCI devices (by address) to be unbound from Kernel driver and used with SPDK (default is all PCI devices)."`
-	NrHugepages  int    `short:"p" long:"hugepages" description:"Number of hugepages to allocate (in MB) for use by SPDK (default 1024)"`
-	TargetUser   string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
-	Reset        bool   `short:"r" long:"reset" description:"Reset SPDK returning devices to kernel modules"`
-}
-
-func (cmd *storagePrepNvmeCmd) Execute(args []string) error {
-	ok, usr := common.CheckSudo()
-	if !ok {
-		return errors.New("subcommand must be run as root or sudo")
-	}
-
-	// falls back to sudoer or root if TargetUser is unspecified
-	tUsr := usr
-	if cmd.TargetUser != "" {
-		tUsr = cmd.TargetUser
-	}
-
-	srv, err := server.NewControlService(cmd.config)
-	if err != nil {
-		return errors.WithMessage(err, "initialising ControlService")
-	}
-
-	return srv.PrepNvme(server.PrepNvmeRequest{
-		HugePageCount: cmd.NrHugepages,
-		TargetUser:    tUsr,
-		PCIWhitelist:  cmd.PCIWhiteList,
-		ResetOnly:     cmd.Reset,
-	})
-}
-
-type storagePrepScmCmd struct {
-	cfgCmd
+type storagePrepareCmd struct {
 	logCmd
-	Reset bool `short:"r" long:"reset" description:"Reset modules to memory mode after removing namespaces"`
-	Force bool `short:"f" long:"force" description:"Perform format without prompting for confirmation"`
+	commands.StoragePrepareCmd
 }
 
-func (cmd *storagePrepScmCmd) Execute(args []string) (err error) {
-	ok, _ := common.CheckSudo()
-	if !ok {
-		return errors.New("subcommand must be run as root or sudo")
-	}
-
-	cmd.log.Info("Memory allocation goals for SCM will be changed and namespaces " +
-		"modified, this will be a destructive operation. Please ensure " +
-		"namespaces are unmounted and SCM is otherwise unused.\n")
-
-	if !cmd.Force && !common.GetConsent() {
-		return errors.New("consent not given")
-	}
-
-	srv, err := server.NewControlService(cmd.config)
+func concatErrors(scanErrors []error, err error) error {
 	if err != nil {
-		return errors.WithMessage(err, "initialising ControlService")
+		scanErrors = append(scanErrors, err)
 	}
 
-	rebootStr, devices, err := srv.PrepScm(server.PrepScmRequest{
-		Reset: cmd.Reset,
-	})
+	errStr := "scan error(s):\n"
+	for _, err := range scanErrors {
+		errStr += fmt.Sprintf("  %s\n", err.Error())
+	}
+
+	return errors.New(errStr)
+}
+
+func (cmd *storagePrepareCmd) Execute(args []string) error {
+	prepNvme, prepScm, err := cmd.Validate()
 	if err != nil {
 		return err
 	}
 
-	if rebootStr != "" {
-		cmd.log.Info(rebootStr)
-	} else {
-		if len(devices) > 0 {
-			cmd.log.Infof("persistent memory kernel devices:\n\t%+v\n", devices)
+	cfg := server.NewConfiguration()
+	svc, err := server.DefaultStorageControlService(cmd.log, cfg)
+	if err != nil {
+		return errors.WithMessage(err, "init control service")
+	}
+
+	op := "Preparing"
+	if cmd.Reset {
+		op = "Resetting"
+	}
+
+	scanErrors := make([]error, 0, 2)
+
+	if prepNvme {
+		cmd.log.Info(op + " locally-attached NVMe storage...")
+
+		// Prepare NVMe access through SPDK
+		if err := svc.PrepareNvme(server.PrepareNvmeRequest{
+			HugePageCount: cmd.NrHugepages,
+			TargetUser:    cmd.TargetUser,
+			PCIWhitelist:  cmd.PCIWhiteList,
+			ResetOnly:     cmd.Reset,
+		}); err != nil {
+			scanErrors = append(scanErrors, err)
 		}
+	}
+
+	if prepScm {
+		cmd.log.Info(op + " locally-attached SCM...")
+
+		state, err := svc.GetScmState()
+		if err != nil {
+			return concatErrors(scanErrors, err)
+		}
+
+		if err := cmd.CheckWarn(cmd.log, state); err != nil {
+			return concatErrors(scanErrors, err)
+		}
+
+		// Prepare SCM modules to be presented as pmem device files.
+		// Pass evaluated state to avoid running GetScmState() twice.
+		needsReboot, devices, err := svc.PrepareScm(server.PrepareScmRequest{
+			Reset: cmd.Reset,
+		}, state)
+		if err != nil {
+			return concatErrors(scanErrors, err)
+		}
+		if needsReboot {
+			cmd.log.Info(server.MsgScmRebootRequired)
+		} else if len(devices) > 0 {
+			cmd.log.Infof("persistent memory device files:\n\t%+v\n", devices)
+		} else {
+			cmd.log.Info("no persistent memory device files")
+		}
+	}
+
+	if len(scanErrors) > 0 {
+		return concatErrors(scanErrors, nil)
 	}
 
 	return nil
