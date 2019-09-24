@@ -354,9 +354,6 @@ duns_create_lustre_path(daos_handle_t poh, const char *path,
 	char			str[DUNS_MAX_XATTR_LEN + 1];
 	int			len;
 	int			try_multiple = 1;		/* boolean */
-	daos_handle_t		coh;
-	daos_cont_info_t	co_info;
-	dfs_t			*dfs;
 	int			rc, rc2;
 
 	/* XXX pool must already be created, and associated DFuse-mount
@@ -405,7 +402,7 @@ duns_create_lustre_path(daos_handle_t poh, const char *path,
  			prop = daos_prop_alloc(1);
 			if (prop == NULL) {
 				D_ERROR("Failed to allocate container prop.");
-				D_GOTO(err_link, rc = -DER_NOMEM);
+				D_GOTO(err, rc = -DER_NOMEM);
 			}
 			prop->dpp_entries[0].dpe_type =
 				DAOS_PROP_CO_LAYOUT_TYPE;
