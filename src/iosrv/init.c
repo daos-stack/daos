@@ -69,7 +69,7 @@ const char	       *dss_socket_dir = "/var/run/daos_server";
 int			dss_nvme_shm_id = DAOS_NVME_SHMID_NONE;
 
 /** IO server instance index */
-unsigned int		dss_instance_idx = 0;
+unsigned int		dss_instance_idx;
 
 /** attach_info path to support singleton client */
 static bool	        save_attach_info;
