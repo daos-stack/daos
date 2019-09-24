@@ -147,12 +147,12 @@ func (tc *testConn) SmdListDevs(req *mgmtpb.SmdDevReq) client.ResultSmdMap {
 	return nil
 }
 
-func (tc *testConn) DevStateQuery(req *pb.DevStateReq) client.ResultStateMap {
+func (tc *testConn) DevStateQuery(req *mgmtpb.DevStateReq) client.ResultStateMap {
 	tc.appendInvocation(fmt.Sprintf("DevStateQuery-%s", req))
 	return nil
 }
 
-func (tc *testConn) StorageSetFaulty(req *pb.DevStateReq) client.ResultStateMap {
+func (tc *testConn) StorageSetFaulty(req *mgmtpb.DevStateReq) client.ResultStateMap {
 	tc.appendInvocation(fmt.Sprintf("StorageSetFaulty-%s", req))
 	return nil
 }
