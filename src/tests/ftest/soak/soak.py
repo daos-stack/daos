@@ -104,7 +104,7 @@ class Soak(TestWithServers):
                 local_dir (str): local directory
 
         Raises:
-            SoakTestError: if there is an error with the remote copy 
+            SoakTestError: if there is an error with the remote copy
 
         """
         this_host = socket.gethostname()
