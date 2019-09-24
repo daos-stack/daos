@@ -344,7 +344,7 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 }
 
 static int
-duns_link_lustre_path(const char *path, const char *sysname,
+duns_create_lustre_path(const char *path, const char *sysname,
 		      d_rank_list_t *svcl, struct duns_attr_t *attrp)
 {
 	daos_handle_t		poh;
@@ -515,7 +515,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		}
 
 		if (fs.f_type == LL_SUPER_MAGIC) {
-			rc = duns_link_lustre_path(path, sysname, svcl, attrp);
+			rc = duns_create_lustre_path(path, sysname, svcl, attrp);
 			if (rc == 0)
 				return 0;
 			/* if Lustre specific method fails, fallback to try
