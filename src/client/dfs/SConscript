@@ -21,7 +21,7 @@ def scons():
             ts = rpm.TransactionSet()
             headers = ts.dbMatch('name', 'lustre')
             if not headers:
-                print "No package lustre found."
+                print("No package lustre found.")
             else:
                 from pkg_resources import parse_version
                 for h in headers:
@@ -36,9 +36,9 @@ def scons():
                 if parse_version(instver.version) >= parse_version('2.12.57'):
                     denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
             else:
-                print "No package lustre found."
+                print("No package lustre found.")
         else:
-            print "Unable to identify distro."
+            print("Unable to identify distro.")
     except ImportError:
         pass
 
