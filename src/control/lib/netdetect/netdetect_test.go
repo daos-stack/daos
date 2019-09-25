@@ -100,9 +100,8 @@ func TestScanFabric(t *testing.T) {
 
 // TestValidateNetworkConfig runs in a basic loopback mode with ScanFabric.  ScanFabric
 // is used to generate data found on the actual test system, which is then fed back to the
-// ValidateNetworkConfig function to make sure it matches.  Each record from ScanFabric is
-// run through ValidateNetworkConfig.  We expect that libfabric is installed and will report
-// at least one provider, device, numa record.
+// ValidateProviderConfig and  ValidateNUMAConfig functions to make sure it matches.  Each record from ScanFabric is
+// examined.  We expect that libfabric is installed and will report at least one provider, device, numa record.
 func TestValidateNetworkConfig(t *testing.T) {
 
 	provider := "" // an empty provider string is a search for 'all'
@@ -116,7 +115,10 @@ func TestValidateNetworkConfig(t *testing.T) {
 	}
 
 	for _, sf := range results {
-		err := ValidateNetworkConfig(sf.Provider, sf.DeviceName, sf.NUMANode)
-		AssertEqual(t, err, nil, "Network device configuration is invalid")
+		err := ValidateProviderConfig(sf.DeviceName, sf.Provider)
+		AssertEqual(t, err, nil, "Network device configuration is invalid - provider not supported")
+
+		err = ValidateNUMAConfig(sf.DeviceName, sf.NUMANode)
+		AssertEqual(t, err, nil, "Network device configuration is invalid - NUMA node does not match")
 	}
 }

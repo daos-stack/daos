@@ -63,7 +63,8 @@ func genMinimalConfig() *server.Configuration {
 	cfg := server.NewConfiguration().
 		WithFabricProvider("foo").
 		WithNvmeShmID(-1). // don't generate a ShmID in testing
-		WithNetDeviceValidator(netdetect.ValidateNetworkConfigStub).
+		WithProviderValidator(netdetect.ValidateProviderStub).
+		WithNUMAValidator(netdetect.ValidateNUMAStub).
 		WithServers(
 			ioserver.NewConfig().
 				WithScmClass("ram").
@@ -287,8 +288,12 @@ func TestStartOptions(t *testing.T) {
 				return nil
 			}
 
-			opts.Start.config = genMinimalConfig().WithNetDeviceValidator(netdetect.ValidateNetworkConfigStub)
-			wantConfig := tc.expCfgFn(genDefaultExpected().WithNetDeviceValidator(netdetect.ValidateNetworkConfigStub))
+			opts.Start.config = genMinimalConfig().
+				WithProviderValidator(netdetect.ValidateProviderStub).
+				WithNUMAValidator(netdetect.ValidateNUMAStub)
+			wantConfig := tc.expCfgFn(genDefaultExpected().
+				WithProviderValidator(netdetect.ValidateProviderStub).
+				WithNUMAValidator(netdetect.ValidateNUMAStub))
 
 			err := parseOpts(append([]string{"start"}, tc.argList...), &opts, log)
 			if err != tc.expErr {

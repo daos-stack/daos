@@ -853,10 +853,16 @@ dss_xstreams_init()
 
 	/* start the execution streams */
 	D_DEBUG(DB_TRACE,
-		"%d cores total detected, %d cores on NUMA node %d, "
+		"%d cores total detected "
 		"starting %d main xstreams\n",
-		dss_core_nr, dss_num_cores_numa_node, dss_numa_node,
-		dss_tgt_nr);
+		dss_core_nr, dss_tgt_nr);
+
+	if (dss_numa_node != -1) {
+		D_DEBUG(DB_TRACE,
+			"Detected %d cores on NUMA node %d\n",
+			dss_num_cores_numa_node, dss_numa_node);
+	}
+
 	xstream_data.xd_xs_nr = DSS_XS_NR_TOTAL;
 	/* start system service XS */
 	for (i = 0; i < dss_sys_xs_nr; i++) {

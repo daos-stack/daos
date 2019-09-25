@@ -120,6 +120,7 @@ func TestRunnerContextExit(t *testing.T) {
 }
 
 func TestRunnerNormalExit(t *testing.T) {
+	var numaNode uint = 1
 	createFakeBinary(t)
 
 	// set this to control the behavior in TestMain()
@@ -134,7 +135,7 @@ func TestRunnerNormalExit(t *testing.T) {
 		WithTargetCount(42).
 		WithHelperStreamCount(1).
 		WithFabricInterface("qib0").
-		WithPinnedNumaNode(1)
+		WithPinnedNumaNode(&numaNode)
 	runner := NewRunner(log, cfg)
 	errOut := make(chan error)
 

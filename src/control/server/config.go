@@ -49,7 +49,8 @@ const (
 	msgConfigBadAccessPoints = "only a single access point is currently supported"
 )
 
-type networkDeviceValidation func(string, string, uint) error
+type networkProviderValidation func(string, string) error
+type networkNUMAValidation func(string, uint) error
 
 // Configuration describes options for DAOS control plane.
 // See utils/config/daos_server.yml for parameter descriptions.
@@ -90,15 +91,27 @@ type Configuration struct {
 	NvmeShmID int
 
 	//a pointer to a function that validates the chosen provider, device and numa node
-	validateNetworkDeviceFn networkDeviceValidation
+	validateProviderFn networkProviderValidation
+
+	//a pointer to a function that validates the chosen provider, device and numa node
+	validateNUMAFn networkNUMAValidation
 }
 
-// WithNetDeviceValidator is used for unit testing configurations that are not necessarily valid on the test machine.
+// WithProviderValidator is used for unit testing configurations that are not necessarily valid on the test machine.
 // We use the stub function ValidateNetworkConfigStub to avoid unnecessary failures
 // in those tests that are not concerned with testing a truly valid configuration
 // for the test system
-func (c *Configuration) WithNetDeviceValidator(fn networkDeviceValidation) *Configuration {
-	c.validateNetworkDeviceFn = fn
+func (c *Configuration) WithProviderValidator(fn networkProviderValidation) *Configuration {
+	c.validateProviderFn = fn
+	return c
+}
+
+// WithNUMAValidator is used for unit testing configurations that are not necessarily valid on the test machine.
+// We use the stub function ValidateNetworkConfigStub to avoid unnecessary failures
+// in those tests that are not concerned with testing a truly valid configuration
+// for the test system
+func (c *Configuration) WithNUMAValidator(fn networkNUMAValidation) *Configuration {
+	c.validateNUMAFn = fn
 	return c
 }
 
@@ -284,18 +297,20 @@ func (c *Configuration) parse(data []byte) error {
 // populated with defaults.
 func newDefaultConfiguration(ext External) *Configuration {
 	return &Configuration{
-		SystemName:              "daos_server",
-		SocketDir:               "/var/run/daos_server",
-		AccessPoints:            []string{"localhost"},
-		ControlPort:             10000,
-		TransportConfig:         security.DefaultServerTransportConfig(),
-		Hyperthreads:            false,
-		NrHugepages:             1024,
-		Path:                    "etc/daos_server.yml",
-		NvmeShmID:               0,
-		ControlLogMask:          ControlLogLevel(logging.LogLevelInfo),
-		ext:                     ext,
-		validateNetworkDeviceFn: netdetect.ValidateNetworkConfig,
+		SystemName:      "daos_server",
+		SocketDir:       "/var/run/daos_server",
+		AccessPoints:    []string{"localhost"},
+		ControlPort:     10000,
+		TransportConfig: security.DefaultServerTransportConfig(),
+		Hyperthreads:    false,
+		NrHugepages:     1024,
+		Path:            "etc/daos_server.yml",
+		NvmeShmID:       0,
+		ControlLogMask:  ControlLogLevel(logging.LogLevelInfo),
+		ext:             ext,
+		//validateNetworkDeviceFn: netdetect.ValidateNetworkConfig,
+		validateProviderFn: netdetect.ValidateProviderConfig,
+		validateNUMAFn:     netdetect.ValidateNUMAConfig,
 	}
 }
 
@@ -420,10 +435,23 @@ func (c *Configuration) Validate() (err error) {
 			return errors.Wrapf(err, "I/O server %d failed config validation", i)
 		}
 
-		err := c.validateNetworkDeviceFn(srv.Fabric.Provider, srv.Fabric.Interface, srv.Fabric.PinnedNumaNode)
+		err := c.validateProviderFn(srv.Fabric.Interface, srv.Fabric.Provider)
 		if err != nil {
-			return errors.Wrapf(err, "Network device configuration for Provider: %s, with device: %s on NUMA node %d is invalid.",
-				srv.Fabric.Provider, srv.Fabric.Interface, srv.Fabric.PinnedNumaNode)
+			return errors.Wrapf(err, "Network device %s does not support provider %s.  The configuration is invalid.",
+				srv.Fabric.Interface, srv.Fabric.Provider)
+		}
+
+		// Check to see if the pinned NUMA node was provided in the configuration.
+		// If it was provided, validate that the NUMA node is correct for the given device.
+		// An error from srv.Fabric.GetNumaNode() means that no configuration was provided in the YML.
+		// Because this is an optional parameter, this is considered non-fatal.
+		numaNode, err := srv.Fabric.GetNumaNode()
+		if err == nil {
+			err = c.validateNUMAFn(srv.Fabric.Interface, numaNode)
+			if err != nil {
+				return errors.Wrapf(err, "Network device %s on NUMA node %d is an invalid configuration.",
+					srv.Fabric.Interface, numaNode)
+			}
 		}
 	}
 	return nil

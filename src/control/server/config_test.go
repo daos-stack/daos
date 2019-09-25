@@ -89,7 +89,9 @@ func defaultMockConfig(t *testing.T) *Configuration {
 // supply mock external interface, populates config from given file path
 func mockConfigFromFile(t *testing.T, e External, path string) *Configuration {
 	t.Helper()
-	c := newDefaultConfiguration(e).WithNetDeviceValidator(netdetect.ValidateNetworkConfigStub)
+	c := newDefaultConfiguration(e).
+		WithProviderValidator(netdetect.ValidateProviderStub).
+		WithNUMAValidator(netdetect.ValidateNUMAStub)
 	c.Path = path
 
 	if err := c.Load(); err != nil {
@@ -144,7 +146,9 @@ func TestConfigMarshalUnmarshal(t *testing.T) {
 				uncommentServerConfig(t, tt.inPath)
 			}
 
-			configA := newDefaultConfiguration(tt.inExt).WithNetDeviceValidator(netdetect.ValidateNetworkConfigStub)
+			configA := newDefaultConfiguration(tt.inExt).
+				WithProviderValidator(netdetect.ValidateProviderStub).
+				WithNUMAValidator(netdetect.ValidateNUMAStub)
 			configA.Path = tt.inPath
 			err = configA.Load()
 			if tt.errMsg != "" {
@@ -156,7 +160,9 @@ func TestConfigMarshalUnmarshal(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			configB := newDefaultConfiguration(tt.inExt).WithNetDeviceValidator(netdetect.ValidateNetworkConfigStub)
+			configB := newDefaultConfiguration(tt.inExt).
+				WithProviderValidator(netdetect.ValidateProviderStub).
+				WithNUMAValidator(netdetect.ValidateNUMAStub)
 			if err := configB.SetPath(testFile); err != nil {
 				t.Fatal(err)
 			}
@@ -190,6 +196,9 @@ func TestConstructedConfig(t *testing.T) {
 	uncommentServerConfig(t, testFile)
 	defaultCfg := mockConfigFromFile(t, defaultMockExt(), testFile)
 
+	var numaNode0 uint = 8
+	var numaNode1 uint = 9
+
 	// Next, construct a config to compare against the first one. It should be
 	// possible to construct an identical configuration with the helpers.
 	constructed := NewConfiguration().
@@ -208,7 +217,8 @@ func TestConstructedConfig(t *testing.T) {
 		WithFaultCb("./.daos/fd_callback").
 		WithFaultPath("/vcdu0/rack1/hostname").
 		WithHyperthreads(true).
-		WithNetDeviceValidator(netdetect.ValidateNetworkConfigStub).
+		WithProviderValidator(netdetect.ValidateProviderStub).
+		WithNUMAValidator(netdetect.ValidateNUMAStub).
 		WithServers(
 			ioserver.NewConfig().
 				WithRank(0).
@@ -222,7 +232,7 @@ func TestConstructedConfig(t *testing.T) {
 				WithBdevDeviceList("0000:81:00.0").
 				WithFabricInterface("qib0").
 				WithFabricInterfacePort(20000).
-				WithPinnedNumaNode(0).
+				WithPinnedNumaNode(&numaNode0).
 				WithEnvVars("CRT_TIMEOUT=30").
 				WithLogFile("/tmp/daos_server1.log").
 				WithLogMask("WARN"),
@@ -240,7 +250,7 @@ func TestConstructedConfig(t *testing.T) {
 				WithBdevFileSize(16).
 				WithFabricInterface("qib0").
 				WithFabricInterfacePort(20000).
-				WithPinnedNumaNode(0).
+				WithPinnedNumaNode(&numaNode1).
 				WithEnvVars("CRT_TIMEOUT=100").
 				WithLogFile("/tmp/daos_server2.log").
 				WithLogMask("WARN"),

@@ -89,6 +89,7 @@ func TestMergeEnvVars(t *testing.T) {
 }
 
 func TestConstructedConfig(t *testing.T) {
+	var numaNode uint = 0
 	goldenPath := "testdata/full.golden"
 
 	// just set all values regardless of validity
@@ -114,7 +115,7 @@ func TestConstructedConfig(t *testing.T) {
 		WithServiceThreadCore(8).
 		WithTargetCount(12).
 		WithHelperStreamCount(1).
-		WithPinnedNumaNode(0)
+		WithPinnedNumaNode(&numaNode)
 
 	if *update {
 		outFile, err := os.Create(goldenPath)
@@ -188,7 +189,7 @@ func TestConfigToCmdVals(t *testing.T) {
 		WithFabricProvider(provider).
 		WithFabricInterface(interfaceName).
 		WithFabricInterfacePort(interfacePort).
-		WithPinnedNumaNode(pinnedNumaNode).
+		WithPinnedNumaNode(&pinnedNumaNode).
 		WithModules(modules).
 		WithSocketDir(socketDir).
 		WithAttachInfoPath(attachInfo).

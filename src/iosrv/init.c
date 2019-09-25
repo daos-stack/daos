@@ -81,8 +81,8 @@ int			dss_core_nr;
 /** start offset index of the first core for service XS */
 int			dss_core_offset;
 /** NUMA node to bind to */
-int			dss_numa_node;
-hwloc_bitmap_t		core_allocation_bitmap;
+int			dss_numa_node = -1;
+hwloc_bitmap_t	core_allocation_bitmap;
 /** a copy of the NUMA node object in the topology */
 hwloc_obj_t		numa_obj;
 /** number of cores in the given NUMA node */
@@ -209,7 +209,7 @@ dss_tgt_nr_get(int ncores, int nr)
 	/* Each system XS uses one core, and each main XS with
 	 * dss_tgt_offload_xs_nr offload XS. Calculate the nr_default
 	 * as the number of main XS based on number of cores available
-	 * on this NUMA node.  Reduce the number of cores available
+	 * Reduce the number of cores available
 	 * by the starting core offset.
 	 */
 	nr_default = (((ncores - dss_sys_xs_nr) - dss_core_offset) /
@@ -249,9 +249,10 @@ dss_topo_init()
 	depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_NUMANODE);
 	numa_node_nr = hwloc_get_nbobjs_by_depth(dss_topo, depth);
 
-	/* if we are not NUMA aware, fall back to non-NUMA implementation */
-	if (numa_node_nr <= 0) {
-		D_PRINT("NUMA information unavailable.\n");
+	/* if no NUMA node was specified, or NUMA data unavailable */
+	/* fall back to the legacy core allocation algorithm */
+	if (dss_numa_node == -1 || numa_node_nr <= 0) {
+		D_PRINT("Using legacy core allocation algorithm\n");
 		dss_tgt_nr = dss_tgt_nr_get(dss_core_nr, nr_threads);
 
 		if (dss_core_offset < 0 || dss_core_offset >= dss_core_nr) {
@@ -574,9 +575,12 @@ server_init(int argc, char *argv[])
 	gethostname(hostname, 255);
 	D_PRINT("DAOS I/O server (v%s) process %u started on rank %u "
 		"(out of %u) with %u target, %d helper XS per target, "
-		"NUMA node %d, firstcore %d, host %s.\n", DAOS_VERSION,
+		"firstcore %d, host %s.\n", DAOS_VERSION,
 		getpid(), rank, size, dss_tgt_nr, dss_tgt_offload_xs_nr,
-		dss_numa_node, dss_core_offset, hostname);
+		dss_core_offset, hostname);
+
+	if (numa_obj)
+		D_PRINT("Using NUMA node: %d", dss_numa_node);
 
 	return 0;
 
@@ -647,7 +651,7 @@ Options:\n\
   --firstcore=firstcore, -f firstcore\n\
       index of first core for service thread (default 0)\n\
   --pinned_numa_node=numanode, -p numanode\n\
-      Bind to cores within the specified NUMA node (default 0)\n\
+      Bind to cores within the specified NUMA node\n\
   --group=group, -g group\n\
       Server group name (default \"%s\")\n\
   --storage=path, -s path\n\

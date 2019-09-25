@@ -668,16 +668,15 @@ func convertLibFabricToMercury(provider string) (string, error) {
 	return "", errors.Errorf("failed to convert the libfabric provider list '%s' to any mercury provider", provider)
 }
 
-// ValidateNetworkConfigStub is used for most unit testing to replace ValidateNetworkConfig because the network configuration
+// ValidateProviderStub is used for most unit testing to replace ValidateProviderConfig because the network configuration
 // validation depends upon physical hardware resources and configuration on the target machine
 // that are either not known or static in the test environment
-func ValidateNetworkConfigStub(provider string, device string, numaNode uint) error {
+func ValidateProviderStub(provider string, device string) error {
 	return nil
 }
 
-// ValidateNetworkConfig confirms that the given network device supports the chosen provider
-// and that the device matches the NUMA ID given.
-func ValidateNetworkConfig(provider string, device string, numaNode uint) error {
+// ValidateProviderConfig confirms that the given network device supports the chosen provider
+func ValidateProviderConfig(device string, provider string) error {
 	var fi *C.struct_fi_info
 	var hints *C.struct_fi_info
 
@@ -737,16 +736,48 @@ func ValidateNetworkConfig(provider string, device string, numaNode uint) error 
 		}
 		if deviceAffinity.DeviceName == device {
 			log.Debugf("Device %s supports provider: %s", device, provider)
-			if deviceAffinity.NUMANode != numaNode {
-				return errors.Errorf("The NUMA node for device %s does not match the provided value %d. "+
-					"Remove the pinned_numa_node value from daos_server.yml then execute 'daos_server network scan' "+
-					"to see the valid NUMA node associated with the network device", device, numaNode)
-			}
-			log.Debugf("The NUMA node for device %s matches the provided value %d.  Network configuration is valid.", device, numaNode)
 			return nil
 		}
 	}
 	return errors.Errorf("Device %s does not support provider: %s", device, provider)
+}
+
+// ValidateNUMAStub is used for most unit testing to replace ValidateNUMAConfig because the network configuration
+// validation depends upon physical hardware resources and configuration on the target machine
+// that are either not known or static in the test environment
+func ValidateNUMAStub(device string, numaNode uint) error {
+	return nil
+}
+
+// ValidateNUMAConfig confirms that the given network device matches the NUMA ID given.
+func ValidateNUMAConfig(device string, numaNode uint) error {
+	log.Debugf("Validate network config -- given numaNode: %d", numaNode)
+	if device == "" {
+		return errors.New("device required")
+	}
+
+	deviceScanCfg, err := initDeviceScan()
+	if err != nil {
+		return errors.Errorf("unable to initialize device scan:  Error: %v", err)
+	}
+	defer cleanUp(deviceScanCfg.topology)
+
+	if _, found := deviceScanCfg.systemDeviceNamesMap[device]; !found {
+		return errors.Errorf("device: %s is an invalid device name", device)
+	}
+
+	deviceScanCfg.targetDevice = device
+	deviceAffinity, err := GetAffinityForDevice(deviceScanCfg)
+	if err != nil {
+		return err
+	}
+	if deviceAffinity.NUMANode != numaNode {
+		return errors.Errorf("The NUMA node for device %s does not match the provided value %d. "+
+			"Remove the pinned_numa_node value from daos_server.yml then execute 'daos_server network scan' "+
+			"to see the valid NUMA node associated with the network device", device, numaNode)
+	}
+	log.Debugf("The NUMA node for device %s matches the provided value %d.  Network configuration is valid.", device, numaNode)
+	return nil
 }
 
 // ScanFabric examines libfabric data to find the network devices that support the given fabric provider.
