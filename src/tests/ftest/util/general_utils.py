@@ -30,10 +30,9 @@ import random
 import string
 from pathlib import Path
 from errno import ENOENT
-from time import sleep, time
+from time import sleep
 
 from avocado import fail_on
-from command_utils import CommandFailure
 from daos_api import DaosApiError, DaosServer, DaosContainer, DaosPool
 from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet
@@ -125,30 +124,6 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
 
     return retcode_dict
 
-def poll_pattern(num_msg, process, timeout, pattern):
-    """Wait for message from command output.
-
-    Args:
-        num_msg (list): number of messages expected
-        process (Avocado.process.CmdResult object) object to access stdout of
-            command executed.
-        timeout (int): timeout in seconds
-        pattern (str): string to wait for on command output.
-    """
-    start_time = time()
-    start_msgs = 0
-    timed_out = False
-    while start_msgs != num_msg and not timed_out:
-        output = process.get_stdout()
-        start_msgs = len(re.findall(pattern, output))
-        timed_out = time() - start_time > timeout
-
-    if start_msgs != num_msg:
-        err_msg = "{} detected. Only {}/{} messages received".format(
-            "Time out" if timed_out else "Error",
-            start_msgs, num_msg)
-        print("{}:\n{}".format(err_msg, process.get_stdout()))
-        raise CommandFailure(err_msg)
 
 def check_file_exists(hosts, filename, user=None):
     """Check if a specified file exist on each specified hosts.

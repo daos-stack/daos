@@ -91,8 +91,10 @@ def storage_scan(hosts, insecure=True):
         Avocado CmdResult object that contains exit status, stdout information.
 
     """
+    # Get binary path
+    daos_shell_path = get_file_path("bin/daos_shell")
     # Create and setup the command
-    dmg = DmgCommand(get_file_path("bin/daos_shell"))
+    dmg = DmgCommand(daos_shell_path[0])
     dmg.request.value = "storage"
     dmg.action.value = "scan"
     dmg.insecure.value = insecure
@@ -117,8 +119,10 @@ def storage_format(hosts, insecure=True):
         Avocado CmdResult object that contains exit status, stdout information.
 
     """
+    # Get binary path
+    daos_shell_path = get_file_path("bin/daos_shell")
     # Create and setup the command
-    dmg = DmgCommand(get_file_path("bin/daos_shell"))
+    dmg = DmgCommand(daos_shell_path[0])
     dmg.insecure.value = insecure
     dmg.hostlist.value = hosts
     dmg.request.value = "storage"
@@ -150,8 +154,10 @@ def storage_prep(hosts, user=False, hugepages="4096", nvme=False,
         Avocado CmdResult object that contains exit status, stdout information.
 
     """
+    # Get binary path
+    daos_shell_path = get_file_path("bin/daos_shell")
     # Create and setup the command
-    dmg = DmgCommand(get_file_path("bin/daos_shell"))
+    dmg = DmgCommand(daos_shell_path[0])
     dmg.insecure.value = insecure
     dmg.hostlist.value = hosts
     dmg.request.value = "storage"
@@ -185,8 +191,10 @@ def storage_reset(hosts, user=None, hugepages="4096", insecure=True):
         Avocado CmdResult object that contains exit status, stdout information.
 
     """
+    # Get binary path
+    daos_shell_path = get_file_path("bin/daos_shell")
     # Create and setup the command
-    dmg = DmgCommand(get_file_path("bin/daos_shell"))
+    dmg = DmgCommand(daos_shell_path[0])
     dmg.insecure.value = insecure
     dmg.hostlist.value = hosts
     dmg.request.value = "storage"

@@ -464,9 +464,11 @@ class JobManager(ExecutableCommand):
             str: the command with all the defined parameters
 
         """
-        # Join the job manager command with the command to manage
-        job_manager_command = super(JobManager, self).__str__()
-        return "{} {}".format(job_manager_command, self.job)
+        commands = [super(JobManager, self).__str__(), str(self.job)]
+        if self.job.sudo:
+            commands.insert(-1, "sudo -n")
+
+        return " ".join(commands)
 
     def check_subprocess_status(self, subprocess):
         """Verify command status when called in a subprocess.
