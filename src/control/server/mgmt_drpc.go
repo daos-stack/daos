@@ -74,7 +74,7 @@ func (m *mgmtModule) ID() int32 {
 // srvModule represents the daos_server dRPC module. It handles dRPCs sent by
 // the daos_io_server iosrv module (src/iosrv).
 type srvModule struct {
-	iosrv []*IOServerInstance
+	iosrvs []*IOServerInstance
 }
 
 // HandleCall is the handler for calls to the srvModule
@@ -99,16 +99,16 @@ func (mod *srvModule) handleNotifyReady(reqb []byte) error {
 		return errors.Wrap(err, "unmarshal NotifyReady request")
 	}
 
-	if req.InstanceIdx >= uint32(len(mod.iosrv)) {
+	if req.InstanceIdx >= uint32(len(mod.iosrvs)) {
 		return errors.Errorf("instance index %v is out of range (%v instances)",
-			req.InstanceIdx, len(mod.iosrv))
+			req.InstanceIdx, len(mod.iosrvs))
 	}
 
 	if err := checkDrpcClientSocketPath(req.DrpcListenerSock); err != nil {
 		return errors.Wrap(err, "check NotifyReady request socket path")
 	}
 
-	mod.iosrv[req.InstanceIdx].NotifyReady(req)
+	mod.iosrvs[req.InstanceIdx].NotifyReady(req)
 
 	return nil
 }

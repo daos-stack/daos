@@ -87,7 +87,7 @@ func checkSocketDir(sockDir string) error {
 }
 
 // drpcSetup checks socket directory exists, specifies socket path and starts drpc server.
-func drpcSetup(sockDir string, iosrv []*IOServerInstance, tc *security.TransportConfig) error {
+func drpcSetup(sockDir string, iosrvs []*IOServerInstance, tc *security.TransportConfig) error {
 	if err := checkSocketDir(sockDir); err != nil {
 		return err
 	}
@@ -101,7 +101,7 @@ func drpcSetup(sockDir string, iosrv []*IOServerInstance, tc *security.Transport
 	// Create and add our modules
 	drpcServer.RegisterRPCModule(NewSecurityModule(tc))
 	drpcServer.RegisterRPCModule(&mgmtModule{})
-	drpcServer.RegisterRPCModule(&srvModule{iosrv})
+	drpcServer.RegisterRPCModule(&srvModule{iosrvs})
 
 	if err := drpcServer.Start(); err != nil {
 		return errors.Wrapf(err, "unable to start socket server on %s", sockPath)

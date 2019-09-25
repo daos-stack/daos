@@ -55,13 +55,19 @@ func isIosrvReady(instance *IOServerInstance) bool {
 	}
 }
 
+func addIOServerInstances(mod *srvModule, numInstances int, log logging.Logger) {
+	for i := 0; i < numInstances; i++ {
+		mod.iosrvs = append(mod.iosrvs, getTestIOServerInstance(log))
+	}
+}
+
 func TestSrvModule_HandleNotifyReady_Invalid(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)()
 
 	expectedErr := "unmarshal NotifyReady request"
 	mod := &srvModule{}
-	mod.iosrv = append(mod.iosrv, getTestIOServerInstance(log))
+	addIOServerInstances(mod, 1, log)
 
 	// Some arbitrary bytes, shouldn't translate to a request
 	badBytes := make([]byte, 16)
@@ -87,7 +93,7 @@ func TestSrvModule_HandleNotifyReady_BadSockPath(t *testing.T) {
 
 	expectedErr := "check NotifyReady request socket path"
 	mod := &srvModule{}
-	mod.iosrv = append(mod.iosrv, getTestIOServerInstance(log))
+	addIOServerInstances(mod, 1, log)
 
 	reqBytes := getTestNotifyReadyReqBytes(t, "/some/bad/path", 0)
 
@@ -108,7 +114,7 @@ func TestSrvModule_HandleNotifyReady_Success_Single(t *testing.T) {
 	defer common.ShowBufferOnFailure(t, buf)()
 
 	mod := &srvModule{}
-	mod.iosrv = append(mod.iosrv, getTestIOServerInstance(log))
+	addIOServerInstances(mod, 1, log)
 
 	// Needs to be a real socket at the path
 	tmpDir := createTestDir(t)
@@ -126,7 +132,7 @@ func TestSrvModule_HandleNotifyReady_Success_Single(t *testing.T) {
 		t.Fatalf("Expected no error, got %q", err.Error())
 	}
 
-	waitForIosrvReady(t, mod.iosrv[0])
+	waitForIosrvReady(t, mod.iosrvs[0])
 }
 
 func TestSrvModule_HandleNotifyReady_Success_Multi(t *testing.T) {
@@ -137,9 +143,7 @@ func TestSrvModule_HandleNotifyReady_Success_Multi(t *testing.T) {
 	numInstances := 5
 	idx := uint32(numInstances - 1)
 
-	for i := 0; i < numInstances; i++ {
-		mod.iosrv = append(mod.iosrv, getTestIOServerInstance(log))
-	}
+	addIOServerInstances(mod, numInstances, log)
 
 	// Needs to be a real socket at the path
 	tmpDir := createTestDir(t)
@@ -158,9 +162,9 @@ func TestSrvModule_HandleNotifyReady_Success_Multi(t *testing.T) {
 	}
 
 	// IO server at idx should be marked ready
-	waitForIosrvReady(t, mod.iosrv[idx])
+	waitForIosrvReady(t, mod.iosrvs[idx])
 	// None of the other IO servers should have gotten the message
-	for i, s := range mod.iosrv {
+	for i, s := range mod.iosrvs {
 		if uint32(i) != idx && isIosrvReady(s) {
 			t.Errorf("Expected IOsrv at idx %v to be NOT ready", i)
 		}
@@ -175,9 +179,7 @@ func TestSrvModule_HandleNotifyReady_IdxOutOfRange(t *testing.T) {
 	mod := &srvModule{}
 	numInstances := 5
 
-	for i := 0; i < numInstances; i++ {
-		mod.iosrv = append(mod.iosrv, getTestIOServerInstance(log))
-	}
+	addIOServerInstances(mod, numInstances, log)
 
 	// Needs to be a real socket at the path
 	tmpDir := createTestDir(t)
