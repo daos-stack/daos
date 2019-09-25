@@ -424,6 +424,16 @@ uint64_t
 crt_hlc_get(void);
 
 /**
+ * Return the second timestamp of hlc.
+ *
+ * \param[in] hlc              HLC timestamp
+ *
+ * \return                     The timestamp in second
+ */
+uint64_t
+crt_hlc2sec(uint64_t hlc);
+
+/**
  * Abort an RPC request.
  *
  * \param[in] req              pointer to RPC request

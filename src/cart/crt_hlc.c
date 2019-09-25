@@ -96,3 +96,8 @@ uint64_t crt_hlc_get_msg(uint64_t msg)
 
 	return ret;
 }
+
+uint64_t crt_hlc2sec(uint64_t hlc)
+{
+	return (hlc & ~CRT_HLC_MASK) / NSEC_PER_SEC;
+}
