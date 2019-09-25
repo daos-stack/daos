@@ -90,10 +90,10 @@ type Configuration struct {
 	// TODO: Is it also necessary to provide distinct coremask args?
 	NvmeShmID int
 
-	//a pointer to a function that validates the chosen provider, device and numa node
+	//a pointer to a function that validates the chosen provider
 	validateProviderFn networkProviderValidation
 
-	//a pointer to a function that validates the chosen provider, device and numa node
+	//a pointer to a function that validates the chosen numa node
 	validateNUMAFn networkNUMAValidation
 }
 
@@ -308,7 +308,6 @@ func newDefaultConfiguration(ext External) *Configuration {
 		NvmeShmID:       0,
 		ControlLogMask:  ControlLogLevel(logging.LogLevelInfo),
 		ext:             ext,
-		//validateNetworkDeviceFn: netdetect.ValidateNetworkConfig,
 		validateProviderFn: netdetect.ValidateProviderConfig,
 		validateNUMAFn:     netdetect.ValidateNUMAConfig,
 	}
