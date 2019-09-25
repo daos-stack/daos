@@ -37,9 +37,9 @@ from ClusterShell.NodeSet import NodeSet, NodeSetParseError
 
 import fault_config_utils
 import agent_utils
-import server_utils
 import write_host_file
 from daos_api import DaosContext, DaosLog, DaosApiError
+from server_utils import ServerManager
 
 
 # pylint: disable=invalid-name
@@ -173,7 +173,6 @@ class TestWithServers(TestWithoutServers):
         super(TestWithServers, self).__init__(*args, **kwargs)
 
         self.agent_sessions = None
-        self.nvme_parameter = None
         self.setup_start_servers = True
         self.setup_start_agents = True
         self.server_log = None
@@ -198,8 +197,6 @@ class TestWithServers(TestWithoutServers):
         test_clients = self.params.get("test_clients", "/run/hosts/*")
         server_count = self.params.get("server_count", "/run/hosts/*")
         client_count = self.params.get("client_count", "/run/hosts/*")
-        self.nvme_parameter = self.params.get(
-            "bdev_class", '/server_config/server/')
         # If server or client host list are defined through valid slurm
         # partition names override any hosts specified through lists.
         test_servers, self.partition_servers = self.get_partition_hosts(
@@ -236,13 +233,7 @@ class TestWithServers(TestWithoutServers):
                     "Test requires {} {}; {} specified".format(
                         expected_count, host_type, actual_count))
 
-        # Storage setup if requested in test input file
-        if self.nvme_parameter == "nvme":
-            server_utils.storage_prepare(self.hostlist_servers)
-
         # Create host files
-        self.hostfile_servers = write_host_file.write_host_file(
-            self.hostlist_servers, self.workdir, self.hostfile_servers_slots)
         if self.hostlist_clients:
             self.hostfile_clients = write_host_file.write_host_file(
                 self.hostlist_clients, self.workdir,
@@ -383,23 +374,8 @@ class TestWithServers(TestWithoutServers):
         """
         error_list = []
         if self.hostfile_servers:
-            # Reset the nvme storage
-            if self.nvme_parameter == "nvme":
-                self.multi_log("Resetting NVMe storage on the servers")
-                try:
-                    server_utils.storage_reset(self.hostlist_servers)
-                except server_utils.ServerFailed as error:
-                    self.multi_log("  {}".format(error))
-                    error_list.append(
-                        "Error resetting nvme storage: {}".format(error))
-
-            # Stop the servers
-            self.multi_log("Stopping servers")
-            try:
-                server_utils.stop_server(hosts=self.hostlist_servers)
-            except server_utils.ServerFailed as error:
-                self.multi_log("  {}".format(error))
-                error_list.append("Error stopping servers: {}".format(error))
+            error = self.sm.stop()
+            error_list.append(error)
         return error_list
 
     def start_servers(self, server_groups=None):
@@ -412,17 +388,15 @@ class TestWithServers(TestWithoutServers):
             # Optionally start servers on a different subset of hosts with a
             # different server group
             for group, hosts in server_groups.items():
+                self.sm = ServerManager(
+                    self.basepath, os.path.join(self.ompi_prefix, "bin"))
                 self.log.info(
                     "Starting servers: group=%s, hosts=%s", group, hosts)
-                hostfile = write_host_file.write_host_file(hosts, self.workdir)
-                server_utils.run_server(
-                    hostfile, group, self.basepath,
-                    log_filename=self.server_log)
-
+                self.sm.hosts = (
+                    hosts, self.workdir, self.hostfile_servers_slots)
+                self.sm.start(log_file=self.server_log)
         else:
-            server_utils.run_server(
-                self.hostfile_servers, self.server_group, self.basepath,
-                log_filename=self.server_log)
+            self.sm.start(log_file=self.server_log)
 
     def get_partition_hosts(self, partition_key, host_list):
         """[summary].
