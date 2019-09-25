@@ -26,6 +26,7 @@
 #define D_LOGFAC	DD_FAC(mgmt)
 
 #include <daos_srv/pool.h>
+#include <daos/rpc.h>
 
 #include "srv_internal.h"
 

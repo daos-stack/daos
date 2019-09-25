@@ -41,7 +41,7 @@ var update = flag.Bool("update", false, "update .golden files")
 
 func SignTestSetup(t *testing.T) (rsaKey, ecdsaKey crypto.PrivateKey, source []byte) {
 	keyPath := "testdata/certs/daosCA.key"
-	if err := os.Chmod(keyPath, SafeKeyPerm); err != nil {
+	if err := os.Chmod(keyPath, MaxKeyPerm); err != nil {
 		t.Fatal(err)
 	}
 	rsaKey, err := LoadPrivateKey(keyPath)
@@ -100,7 +100,7 @@ func TestSign(t *testing.T) {
 
 func VerifyTestSetup(t *testing.T) (rsaKey, ecdsaKey crypto.PublicKey, source []byte) {
 	certPath := "testdata/certs/daosCA.crt"
-	if err := os.Chmod(certPath, SafeCertPerm); err != nil {
+	if err := os.Chmod(certPath, MaxCertPerm); err != nil {
 		t.Fatal(err)
 	}
 	cert, err := LoadCertificate(certPath)

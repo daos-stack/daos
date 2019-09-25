@@ -31,22 +31,22 @@ import (
 	. "google.golang.org/grpc/connectivity"
 
 	. "github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	. "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	. "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func connectSetup(
 	log logging.Logger,
-	state State, features []*pb.Feature, ctrlrs NvmeControllers,
+	state State, features []*Feature, ctrlrs NvmeControllers,
 	ctrlrResults NvmeControllerResults, modules ScmModules,
-	moduleResults ScmModuleResults, mountResults ScmMountResults,
+	moduleResults ScmModuleResults, pmems PmemDevices, mountResults ScmMountResults,
 	scanRet error, formatRet error, updateRet error, burninRet error,
 	killRet error, connectRet error) Connect {
 
 	connect := newMockConnect(
 		log, state, features, ctrlrs, ctrlrResults, modules,
-		moduleResults, mountResults, scanRet, formatRet,
+		moduleResults, pmems, mountResults, scanRet, formatRet,
 		updateRet, burninRet, killRet, connectRet)
 
 	_ = connect.ConnectClients(MockServers)
@@ -97,7 +97,7 @@ func TestConnectClients(t *testing.T) {
 	for _, tt := range conntests {
 		cc := newMockConnect(
 			log, tt.state, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
-			MockModuleResults, MockMountResults, nil, nil, nil, nil, nil,
+			MockModuleResults, MockPmemDevices, MockMountResults, nil, nil, nil, nil, nil,
 			tt.connRet)
 
 		results := cc.ConnectClients(tt.addrsIn)
@@ -172,15 +172,16 @@ func TestStorageScan(t *testing.T) {
 
 	cc := defaultClientSetup(log)
 
-	clientNvme, clientScm := cc.StorageScan()
+	clientNvme, clientScm, clientPmem := cc.StorageScan()
 
-	AssertEqual(
-		t, clientNvme, NewClientNvme(MockCtrlrs, MockServers),
+	AssertEqual(t, clientNvme, NewClientNvme(MockCtrlrs, MockServers),
 		"unexpected client NVMe SSD controllers returned")
 
-	AssertEqual(
-		t, clientScm, NewClientScm(MockModules, MockServers),
+	AssertEqual(t, clientScm, NewClientScm(MockModules, MockServers),
 		"unexpected client SCM modules returned")
+
+	AssertEqual(t, clientPmem, NewClientPmem(MockPmemDevices, MockServers),
+		"unexpected client PMEM device files returned")
 }
 
 func TestStorageFormat(t *testing.T) {
@@ -201,7 +202,7 @@ func TestStorageFormat(t *testing.T) {
 	for _, tt := range tests {
 		cc := connectSetup(
 			log, Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
-			MockModuleResults, MockMountResults, nil, tt.formatRet, nil, nil,
+			MockModuleResults, MockPmemDevices, MockMountResults, nil, tt.formatRet, nil, nil,
 			nil, nil)
 
 		cNvmeMap, cMountMap := cc.StorageFormat()
@@ -248,10 +249,10 @@ func TestStorageUpdate(t *testing.T) {
 	for _, tt := range tests {
 		cc := connectSetup(
 			log, Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
-			MockModuleResults, MockMountResults, nil, nil, tt.updateRet, nil,
+			MockModuleResults, MockPmemDevices, MockMountResults, nil, nil, tt.updateRet, nil,
 			nil, nil)
 
-		cNvmeMap, cModuleMap := cc.StorageUpdate(new(pb.StorageUpdateReq))
+		cNvmeMap, cModuleMap := cc.StorageUpdate(new(StorageUpdateReq))
 
 		if tt.updateRet != nil {
 			for _, addr := range MockServers {
@@ -291,7 +292,7 @@ func TestKillRank(t *testing.T) {
 
 	for _, tt := range tests {
 		cc := connectSetup(log, Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
-			MockModuleResults, MockMountResults, nil, nil, nil, nil, tt.killRet, nil)
+			MockModuleResults, MockPmemDevices, MockMountResults, nil, nil, nil, nil, tt.killRet, nil)
 
 		resultMap := cc.KillRank("acd", 0)
 

@@ -31,7 +31,7 @@
 
 #define DAOS_TASK_MAGIC			0xbabeface
 
-/* size of daos_task_args should within limitation of TSE_TASK_ARG_LEN (248) */
+/* size of daos_task_args should within limitation of TSE_TASK_ARG_LEN */
 struct daos_task_args {
 	uint32_t			ta_magic;
 	uint32_t			ta_opc;

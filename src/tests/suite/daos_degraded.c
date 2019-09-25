@@ -74,7 +74,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 	int			enum_op = 1;
 	int			size;
 	int			rc;
-	daos_pool_info_t	info;
+	daos_pool_info_t	info = {0};
 	int			enumed = 1;
 
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);

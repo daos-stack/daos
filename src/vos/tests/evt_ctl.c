@@ -337,7 +337,7 @@ ts_add_rect(void **state)
 	arg = tst_fn_val.optval;
 
 	if (arg == NULL) {
-		D_PRINT("No parameters %s\n", arg);
+		D_PRINT("No parameters\n");
 		fail();
 	}
 
@@ -2404,6 +2404,8 @@ main(int argc, char **argv)
 {
 	struct timeval	tv;
 	int		rc;
+
+	d_register_alt_assert(mock_assert);
 
 	gettimeofday(&tv, NULL);
 	srand(tv.tv_usec);

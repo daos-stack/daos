@@ -682,6 +682,12 @@ cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
 		case DAOS_PROP_CO_CSUM:
 			iv_prop->cip_csum = prop_entry->dpe_val;
 			break;
+		case DAOS_PROP_CO_CSUM_CHUNK_SIZE:
+			iv_prop->cip_csum_chunk_size = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_CO_CSUM_SERVER_VERIFY:
+			iv_prop->cip_csum_server_verify = prop_entry->dpe_val;
+			break;
 		case DAOS_PROP_CO_REDUN_FAC:
 			iv_prop->cip_redun_fac = prop_entry->dpe_val;
 			break;
@@ -742,6 +748,12 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_CO_CSUM:
 			prop_entry->dpe_val = iv_prop->cip_csum;
+			break;
+		case DAOS_PROP_CO_CSUM_CHUNK_SIZE:
+			prop_entry->dpe_val = iv_prop->cip_csum_chunk_size;
+			break;
+		case DAOS_PROP_CO_CSUM_SERVER_VERIFY:
+			prop_entry->dpe_val = iv_prop->cip_csum_server_verify;
 			break;
 		case DAOS_PROP_CO_REDUN_FAC:
 			prop_entry->dpe_val = iv_prop->cip_redun_fac;

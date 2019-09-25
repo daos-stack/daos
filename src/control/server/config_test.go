@@ -73,7 +73,13 @@ func uncommentServerConfig(t *testing.T, outFile string) {
 	}
 }
 
-// defaultMoc2kConfig returns configuration populated from blank config file
+// emptyMockConfig returns unpopulated configuration with a default mock
+// external interfacing implementation.
+func emptyMockConfig(t *testing.T) *Configuration {
+	return newDefaultConfiguration(defaultMockExt())
+}
+
+// defaultMockConfig returns configuration populated from blank config file
 // with mocked external interface.
 func defaultMockConfig(t *testing.T) *Configuration {
 	return mockConfigFromFile(t, defaultMockExt(), socketsExample)
@@ -197,7 +203,7 @@ func TestConstructedConfig(t *testing.T) {
 		WithSystemName("daos").
 		WithSocketDir("./.daos/daos_server").
 		WithFabricProvider("ofi+verbs;ofi_rxm").
-		WithAccessPoints("hostname1", "hostname2", "hostname3").
+		WithAccessPoints("hostname1:10001").
 		WithFaultCb("./.daos/fd_callback").
 		WithFaultPath("/vcdu0/rack1/hostname").
 		WithHyperthreads(true).
@@ -245,5 +251,63 @@ func TestConstructedConfig(t *testing.T) {
 	}
 	if diff := cmp.Diff(defaultCfg, constructed, cmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got): %s", diff)
+	}
+}
+
+func TestConfigValidation(t *testing.T) {
+	noopExtra := func(c *Configuration) *Configuration { return c }
+
+	for name, tt := range map[string]struct {
+		extraConfig func(c *Configuration) *Configuration
+		errMsg      string
+	}{
+		"example config": {
+			noopExtra,
+			"",
+		},
+		"single access point": {
+			func(c *Configuration) *Configuration {
+				return c.WithAccessPoints("1.2.3.4:1234")
+			},
+			"",
+		},
+		"multiple access points": {
+			func(c *Configuration) *Configuration {
+				return c.WithAccessPoints("1.2.3.4:1234", "5.6.7.8:5678")
+			},
+			msgBadConfig + relConfExamplesPath + ": " + msgConfigBadAccessPoints,
+		},
+		"no access points": {
+			func(c *Configuration) *Configuration {
+				return c.WithAccessPoints()
+			},
+			msgBadConfig + relConfExamplesPath + ": " + msgConfigBadAccessPoints,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
+			defer os.RemoveAll(testDir)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// First, load a config based on the server config with all options uncommented.
+			testFile := filepath.Join(testDir, sConfigUncomment)
+			uncommentServerConfig(t, testFile)
+			config := mockConfigFromFile(t, defaultMockExt(), testFile)
+
+			// Apply extra config test case
+			config = tt.extraConfig(config)
+
+			err = config.Validate()
+			if tt.errMsg != "" {
+				ExpectError(t, err, tt.errMsg, name)
+				return
+			}
+
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }

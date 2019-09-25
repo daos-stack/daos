@@ -27,7 +27,7 @@ import (
 	"bytes"
 	"fmt"
 
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 )
 
 //go:generate stringer -type=ScmState
@@ -42,7 +42,7 @@ const (
 
 // NvmeControllers is an alias for protobuf NvmeController message slice
 // representing a number of NVMe SSD controllers installed on a storage node.
-type NvmeControllers []*pb.NvmeController
+type NvmeControllers []*ctlpb.NvmeController
 
 func (nc NvmeControllers) String() string {
 	var buf bytes.Buffer
@@ -56,6 +56,66 @@ func (nc NvmeControllers) String() string {
 		for _, ns := range ctrlr.Namespaces {
 			fmt.Fprintf(&buf, "\t\tNamespace: %+v\n", ns)
 		}
+
+		for _, hs := range ctrlr.Healthstats {
+			fmt.Fprintf(
+				&buf, "\tHealth Stats:\n\t\tTemperature:%dK(%dC)\n",
+				hs.Temp, hs.Temp-273)
+
+			if hs.Tempwarn > 0 {
+				fmt.Fprintf(&buf, "\t\t\tWarning Time:%d\n",
+					uint64(hs.Tempwarn))
+			}
+			if hs.Tempcrit > 0 {
+				fmt.Fprintf(&buf, "\t\t\tCritical Time:%d\n",
+					uint64(hs.Tempcrit))
+			}
+
+			fmt.Fprintf(&buf, "\t\tController Busy Time:%d minutes\n",
+				uint64(hs.Ctrlbusy))
+			fmt.Fprintf(&buf, "\t\tPower Cycles:%d\n",
+				uint64(hs.Powercycles))
+			fmt.Fprintf(&buf, "\t\tPower On Hours:%d hours\n",
+				uint64(hs.Poweronhours))
+			fmt.Fprintf(&buf, "\t\tUnsafe Shutdowns:%d\n",
+				uint64(hs.Unsafeshutdowns))
+			fmt.Fprintf(&buf, "\t\tMedia Errors:%d\n",
+				uint64(hs.Mediaerrors))
+			fmt.Fprintf(&buf, "\t\tError Log Entries:%d\n",
+				uint64(hs.Errorlogs))
+
+			fmt.Fprintf(&buf, "\t\tCritical Warnings:\n")
+			fmt.Fprintf(&buf, "\t\t\tTemperature: ")
+			if hs.Tempwarning {
+				fmt.Fprintf(&buf, "WARNING\n")
+			} else {
+				fmt.Fprintf(&buf, "OK\n")
+			}
+			fmt.Fprintf(&buf, "\t\t\tAvailable Spare: ")
+			if hs.Availspare {
+				fmt.Fprintf(&buf, "WARNING\n")
+			} else {
+				fmt.Fprintf(&buf, "OK\n")
+			}
+			fmt.Fprintf(&buf, "\t\t\tDevice Reliability: ")
+			if hs.Reliability {
+				fmt.Fprintf(&buf, "WARNING\n")
+			} else {
+				fmt.Fprintf(&buf, "OK\n")
+			}
+			fmt.Fprintf(&buf, "\t\t\tRead Only: ")
+			if hs.Readonly {
+				fmt.Fprintf(&buf, "WARNING\n")
+			} else {
+				fmt.Fprintf(&buf, "OK\n")
+			}
+			fmt.Fprintf(&buf, "\t\t\tVolatile Memory Backup: ")
+			if hs.Volatilemem {
+				fmt.Fprintf(&buf, "WARNING\n")
+			} else {
+				fmt.Fprintf(&buf, "OK\n")
+			}
+		}
 	}
 
 	return buf.String()
@@ -63,11 +123,24 @@ func (nc NvmeControllers) String() string {
 
 // NvmeNamespaces is an alias for protobuf NvmeController_Namespace message slice
 // representing namespaces existing on a NVMe SSD.
-type NvmeNamespaces []*pb.NvmeController_Namespace
+type NvmeNamespaces []*ctlpb.NvmeController_Namespace
+
+// NvmeHealthstats is an alias for protobuf NvmeController_Health message slice
+// representing device health stats per controller.
+type NvmeHealthstats []*ctlpb.NvmeController_Health
 
 // NvmeControllerResults is an alias for protobuf NvmeControllerResult messages
 // representing operation results on a number of NVMe controllers.
-type NvmeControllerResults []*pb.NvmeControllerResult
+type NvmeControllerResults []*ctlpb.NvmeControllerResult
+
+func (ncr NvmeControllerResults) HasErrors() bool {
+	for _, res := range ncr {
+		if res.State.Error != "" {
+			return true
+		}
+	}
+	return false
+}
 
 func (ncr NvmeControllerResults) String() string {
 	var buf bytes.Buffer
@@ -113,7 +186,7 @@ func (cr CtrlrResults) String() string {
 
 // PmemDevices is an alias for protobuf PmemDeviceice message slice representing
 // a number of mounted SCM regions on a storage node.
-type PmemDevices []*pb.PmemDevice
+type PmemDevices []*ctlpb.PmemDevice
 
 func (pds PmemDevices) String() string {
 	var buf bytes.Buffer
@@ -125,10 +198,16 @@ func (pds PmemDevices) String() string {
 	return buf.String()
 }
 
+// PmemResults contains PMEM device file details created on SCM regions.
+type PmemResults struct {
+	Devices PmemDevices
+	Err     error
+}
+
 // ScmMountResults is an alias for protobuf ScmMountResult message slice
 // ScmMounts is an alias for protobuf ScmMount message slice representing
 // a number of mounted SCM regions on a storage node.
-type ScmMounts []*pb.ScmMount
+type ScmMounts []*ctlpb.ScmMount
 
 func (sm ScmMounts) String() string {
 	var buf bytes.Buffer
@@ -142,7 +221,16 @@ func (sm ScmMounts) String() string {
 
 // ScmMountResults is an alias for protobuf ScmMountResult message slice
 // representing operation results on a number of SCM mounts.
-type ScmMountResults []*pb.ScmMountResult
+type ScmMountResults []*ctlpb.ScmMountResult
+
+func (smr ScmMountResults) HasErrors() bool {
+	for _, res := range smr {
+		if res.State.Error != "" {
+			return true
+		}
+	}
+	return false
+}
 
 func (smr ScmMountResults) String() string {
 	var buf bytes.Buffer
@@ -188,7 +276,7 @@ func (mr MountResults) String() string {
 
 // ScmModules is an alias for protobuf ScmModule message slice representing
 // a number of SCM modules installed on a storage node.
-type ScmModules []*pb.ScmModule
+type ScmModules []*ctlpb.ScmModule
 
 func (sm ScmModules) String() string {
 	var buf bytes.Buffer
@@ -206,7 +294,7 @@ func (sm ScmModules) String() string {
 
 // ScmModuleResults is an alias for protobuf ScmModuleResult message slice
 // representing operation results on a number of SCM modules.
-type ScmModuleResults []*pb.ScmModuleResult
+type ScmModuleResults []*ctlpb.ScmModuleResult
 
 func (smr ScmModuleResults) String() string {
 	var buf bytes.Buffer
