@@ -37,7 +37,9 @@
  * Mocks of DAOS internals
  */
 
-/* Globals for socket locations - arbitrary, these tests don't create a real one */
+/*
+ * Globals for socket locations - arbitrary, these tests don't create a real one
+ */
 const char	*dss_socket_dir = "/my/fake/path";
 char		*drpc_listener_socket_path = "/fake/listener.sock";
 
