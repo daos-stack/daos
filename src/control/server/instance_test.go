@@ -27,13 +27,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/daos-stack/daos/src/control/common"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
 
-func getTestIOServerInstance() *IOServerInstance {
-	logger := logging.NewStdoutLogger("")
+func getTestIOServerInstance(logger logging.Logger) *IOServerInstance {
 	runner := ioserver.NewRunner(logger, &ioserver.Config{})
 	return NewIOServerInstance(nil, logger,
 		nil, nil, runner)
@@ -46,33 +46,20 @@ func getTestNotifyReadyReq(t *testing.T, sockPath string, idx uint32) *srvpb.Not
 	}
 }
 
-func isIosrvReady(instance *IOServerInstance) bool {
-	select {
-	case <-instance.AwaitReady():
-		return true
-	default:
-		return false
-	}
-}
-
 func waitForIosrvReady(t *testing.T, instance *IOServerInstance) {
-	elapsed := time.Duration(0)
-	timeout := 100 * time.Millisecond
-	interval := 5 * time.Millisecond
-	for elapsed < timeout {
-		if isIosrvReady(instance) {
-			return
-		}
-
-		time.Sleep(interval)
-		elapsed += interval
+	select {
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("IO server never became ready!")
+	case <-instance.AwaitReady():
+		return
 	}
-
-	t.Fatal("IO server never became ready!")
 }
 
 func TestIOServerInstance_NotifyReady(t *testing.T) {
-	instance := getTestIOServerInstance()
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)()
+
+	instance := getTestIOServerInstance(log)
 
 	req := getTestNotifyReadyReq(t, "/tmp/instance_test.sock", 0)
 

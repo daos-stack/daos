@@ -25,8 +25,13 @@ package server
 
 import (
 	"github.com/golang/protobuf/proto"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func getTestNotifyReadyReqBytes(t *testing.T, sockPath string, idx uint32) []byte {
@@ -40,10 +45,22 @@ func getTestNotifyReadyReqBytes(t *testing.T, sockPath string, idx uint32) []byt
 	return reqBytes
 }
 
+func isIosrvReady(instance *IOServerInstance) bool {
+	select {
+	case <-instance.AwaitReady():
+		return true
+	default:
+		return false
+	}
+}
+
 func TestSrvModule_HandleNotifyReady_Invalid(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)()
+
 	expectedErr := "unmarshal NotifyReady request"
 	mod := &srvModule{}
-	mod.iosrv = append(mod.iosrv, getTestIOServerInstance())
+	mod.iosrv = append(mod.iosrv, getTestIOServerInstance(log))
 
 	// Some arbitrary bytes, shouldn't translate to a request
 	badBytes := make([]byte, 16)
@@ -64,9 +81,12 @@ func TestSrvModule_HandleNotifyReady_Invalid(t *testing.T) {
 }
 
 func TestSrvModule_HandleNotifyReady_BadSockPath(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)()
+
 	expectedErr := "check NotifyReady request socket path"
 	mod := &srvModule{}
-	mod.iosrv = append(mod.iosrv, getTestIOServerInstance())
+	mod.iosrv = append(mod.iosrv, getTestIOServerInstance(log))
 
 	reqBytes := getTestNotifyReadyReqBytes(t, "/some/bad/path", 0)
 
@@ -83,11 +103,17 @@ func TestSrvModule_HandleNotifyReady_BadSockPath(t *testing.T) {
 }
 
 func TestSrvModule_HandleNotifyReady_Success_Single(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)()
+
 	mod := &srvModule{}
-	mod.iosrv = append(mod.iosrv, getTestIOServerInstance())
+	mod.iosrv = append(mod.iosrv, getTestIOServerInstance(log))
 
 	// Needs to be a real socket at the path
-	sockPath := "/tmp/mgmt_drpc_test.sock"
+	tmpDir := createTestDir(t)
+	defer os.Remove(tmpDir)
+	sockPath := filepath.Join(tmpDir, "mgmt_drpc_test.sock")
+
 	sock := createTestSocket(t, sockPath)
 	defer cleanupTestSocket(sockPath, sock)
 
@@ -103,16 +129,22 @@ func TestSrvModule_HandleNotifyReady_Success_Single(t *testing.T) {
 }
 
 func TestSrvModule_HandleNotifyReady_Success_Multi(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)()
+
 	mod := &srvModule{}
 	numInstances := 5
 	idx := uint32(numInstances - 1)
 
 	for i := 0; i < numInstances; i++ {
-		mod.iosrv = append(mod.iosrv, getTestIOServerInstance())
+		mod.iosrv = append(mod.iosrv, getTestIOServerInstance(log))
 	}
 
 	// Needs to be a real socket at the path
-	sockPath := "/tmp/mgmt_drpc_test.sock"
+	tmpDir := createTestDir(t)
+	defer os.Remove(tmpDir)
+	sockPath := filepath.Join(tmpDir, "mgmt_drpc_test.sock")
+
 	sock := createTestSocket(t, sockPath)
 	defer cleanupTestSocket(sockPath, sock)
 
@@ -135,16 +167,22 @@ func TestSrvModule_HandleNotifyReady_Success_Multi(t *testing.T) {
 }
 
 func TestSrvModule_HandleNotifyReady_IdxOutOfRange(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)()
+
 	expectedError := "out of range"
 	mod := &srvModule{}
 	numInstances := 5
 
 	for i := 0; i < numInstances; i++ {
-		mod.iosrv = append(mod.iosrv, getTestIOServerInstance())
+		mod.iosrv = append(mod.iosrv, getTestIOServerInstance(log))
 	}
 
 	// Needs to be a real socket at the path
-	sockPath := "/tmp/mgmt_drpc_test.sock"
+	tmpDir := createTestDir(t)
+	defer os.Remove(tmpDir)
+	sockPath := filepath.Join(tmpDir, "mgmt_drpc_test.sock")
+
 	sock := createTestSocket(t, sockPath)
 	defer cleanupTestSocket(sockPath, sock)
 

@@ -24,11 +24,22 @@
 package server
 
 import (
+	"io/ioutil"
 	"net"
 	"os"
+	"path/filepath"
 	"syscall"
 	"testing"
 )
+
+func createTestDir(t *testing.T) string {
+	tmpDir, err := ioutil.TempDir("", t.Name())
+	if err != nil {
+		t.Fatalf("Couldn't create temporary directory: %v", err)
+	}
+
+	return tmpDir
+}
 
 func createTestSocket(t *testing.T, sockPath string) *net.UnixListener {
 	addr := &net.UnixAddr{Name: sockPath, Net: "unixpacket"}
@@ -68,7 +79,10 @@ func TestCheckDrpcClientSocketPath_BadPath(t *testing.T) {
 }
 
 func TestCheckDrpcClientSocketPath_DirNotSocket(t *testing.T) {
-	path := "/tmp/drpc_test.sock"
+	tmpDir := createTestDir(t)
+	defer os.Remove(tmpDir)
+
+	path := filepath.Join(tmpDir, "drpc_test.sock")
 	err := os.Mkdir(path, 0755)
 	if err != nil {
 		t.Fatalf("Failed to create directory: %v", err)
@@ -83,7 +97,10 @@ func TestCheckDrpcClientSocketPath_DirNotSocket(t *testing.T) {
 }
 
 func TestCheckDrpcClientSocketPath_FileNotSocket(t *testing.T) {
-	path := "/tmp/drpc_test.sock"
+	tmpDir := createTestDir(t)
+	defer os.Remove(tmpDir)
+
+	path := filepath.Join(tmpDir, "drpc_test.sock")
 	f, err := os.Create(path)
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
@@ -99,7 +116,10 @@ func TestCheckDrpcClientSocketPath_FileNotSocket(t *testing.T) {
 }
 
 func TestCheckDrpcClientSocketPath_Success(t *testing.T) {
-	path := "/tmp/drpc_test.sock"
+	tmpDir := createTestDir(t)
+	defer os.Remove(tmpDir)
+
+	path := filepath.Join(tmpDir, "drpc_test.sock")
 	sock := createTestSocket(t, path)
 	defer cleanupTestSocket(path, sock)
 
