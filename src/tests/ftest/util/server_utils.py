@@ -34,7 +34,7 @@ import getpass
 from command_utils import BasicParameter, FormattedParameter, ExecutableCommand
 from command_utils import DaosCommand, Orterun, CommandFailure
 from general_utils import pcmd, check_file_exists, get_file_path
-from dmg_utils import storage_format, storage_prep, storage_reset
+from dmg_utils import storage_format, storage_reset
 from write_host_file import write_host_file
 
 SESSIONS = {}
@@ -109,7 +109,7 @@ class ServerCommand(DaosCommand):
             # Read the baseline conf file data/daos_server_baseline.yml
             try:
                 with open('{}/{}'.format(basepath, DEFAULT_FILE), 'r') as rfile:
-                        default_value_set = yaml.safe_load(rfile)
+                    default_value_set = yaml.safe_load(rfile)
             except Exception as err:
                 print("<SERVER> Exception occurred: {0}".format(str(err)))
                 traceback.print_exception(
@@ -164,8 +164,8 @@ class ServerCommand(DaosCommand):
             # This will be used to start with daos_server -o option.
             try:
                 with open('{}/{}'.format(basepath, AVOCADO_FILE), 'w') as wfile:
-                        yaml.dump(
-                            default_value_set, wfile, default_flow_style=False)
+                    yaml.dump(
+                        default_value_set, wfile, default_flow_style=False)
             except Exception as err:
                 print("<SERVER> Exception occurred: {0}".format(str(err)))
                 traceback.print_exception(
@@ -178,7 +178,7 @@ class ServerCommand(DaosCommand):
 
 class ServerManager(ExecutableCommand):
     """Defines object to manage server functions and launch server command."""
-    # pylint: disable=pylint-no-self-use
+    # pylint: disable=pylint-no-self-use, pylint-protected-access
 
     def __init__(self, basepath, runnerpath, attach="/tmp", timeout=120,
                  enable_path=False):

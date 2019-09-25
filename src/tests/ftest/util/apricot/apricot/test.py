@@ -374,7 +374,7 @@ class TestWithServers(TestWithoutServers):
         """
         error_list = []
         if self.hostfile_servers:
-            error = self.sm.stop()
+            error = self.server_manager.stop()
             error_list.append(error)
         return error_list
 
@@ -388,15 +388,19 @@ class TestWithServers(TestWithoutServers):
             # Optionally start servers on a different subset of hosts with a
             # different server group
             for group, hosts in server_groups.items():
-                self.sm = ServerManager(
+                self.server_manager = ServerManager(
                     self.basepath, os.path.join(self.ompi_prefix, "bin"))
                 self.log.info(
                     "Starting servers: group=%s, hosts=%s", group, hosts)
-                self.sm.hosts = (
+                self.server_manager.hosts = (
                     hosts, self.workdir, self.hostfile_servers_slots)
-                self.sm.start(log_file=self.server_log)
+                self.server_manager.start(log_file=self.server_log)
         else:
-            self.sm.start(log_file=self.server_log)
+            self.server_manager = ServerManager(
+                self.basepath, os.path.join(self.ompi_prefix, "bin"))
+            self.server_manager.hosts = (
+                hosts, self.workdir, self.hostfile_servers_slots)
+            self.server_manager.start(log_file=self.server_log)
 
     def get_partition_hosts(self, partition_key, host_list):
         """[summary].
