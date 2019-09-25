@@ -13,7 +13,7 @@ hosts:
     - boro-G
 server_config:
   name: daos_server
-  server:
+  servers:
     targets: 8
 pool:
   mode: 511
