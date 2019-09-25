@@ -208,6 +208,25 @@ daos_csummer_calc_csum(struct daos_csummer *obj, d_sg_list_t *sgl,
 		       daos_csum_buf_t **pcsum_bufs);
 
 /**
+ * Using the data from the sgl, calculates the checksums for each extent and
+ * then compare the calculated checksum with the checksum held in the iod to
+ * verify the data is still valid. If a difference in checksum is found, an
+ * error is returned.
+ *
+ * @param obj		the daos_csummer obj
+ * @param iod		The IOD that holds the already calculated checksums
+ * @param sgl		Scatter Gather List with the data to be used
+ *			for the extents \a recxs. The total data
+ *			length of the sgl should be the same as the sum
+ *			of the lengths of all recxs
+ *
+ * @return		0 for success, -DER_IO if corruption is detected
+ */
+int
+daos_csummer_verify_data(struct daos_csummer *obj,
+			 daos_iod_t *iod, d_sg_list_t *sgl);
+
+/**
  * Allocate memory for the daos_csum_buf_t structures and the memory buffer for
  * each csum within the structure. Will initialize the daos_csum_buf_t to
  * appropriate values.
@@ -293,7 +312,7 @@ csum_chunk_count(uint32_t chunk_size, uint64_t lo_idx, uint64_t hi_idx,
  * @return	0 for success, -DER_IO if corruption is detected
  */
 int
-daos_csum_check_sgl(const daos_iod_t *iod, d_sg_list_t *sgl);
+daos_csum_check_sgl(daos_iod_t *iod, d_sg_list_t *sgl);
 
 #endif /** __DAOS_CHECKSUM_H */
 

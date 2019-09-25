@@ -45,7 +45,8 @@
 #include "obj_internal.h"
 
 static int
-ds_csum_verify_bio(crt_rpc_t *rpc, struct bio_desc *biod);
+ds_csum_verify_bio(crt_rpc_t *rpc, struct bio_desc *biod,
+		   struct daos_csummer *csummer);
 
 /**
  * After bulk finish, let's send reply, then release the resource.
@@ -901,7 +902,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		goto post;
 	}
 
-	rc = ds_csum_verify_bio(rpc, biod);
+	rc = ds_csum_verify_bio(rpc, biod, cont_hdl->csummer);
 
 post:
 	err = bio_iod_post(biod);
@@ -2008,16 +2009,21 @@ cont_prop_srv_verify(struct ds_iv_ns *ns, uuid_t co_hdl)
 }
 
 static int
-ds_csum_verify_bio(crt_rpc_t *rpc, struct bio_desc *biod)
+ds_csum_verify_bio(crt_rpc_t *rpc, struct bio_desc *biod,
+		   struct daos_csummer *csummer)
 {
 	struct obj_rw_in	*orw = crt_req_get(rpc);
-	struct ds_pool		*pool = ds_pool_lookup(orw->orw_pool_uuid);
+	struct ds_pool		*pool;
 	daos_iod_t		*iods = orw->orw_iods.ca_arrays;
 	uint64_t		 iods_nr = orw->orw_iods.ca_count;
 	unsigned int		 i;
-	int			 rc = 0;
 	bool			 is_update;
+	int			 rc = 0;
 
+	if (!daos_csummer_initialized(csummer))
+		return 0;
+
+	pool = ds_pool_lookup(orw->orw_pool_uuid);
 	is_update =	opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE ||
 			opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_UPDATE;
 	if (!is_update ||
@@ -2038,7 +2044,7 @@ ds_csum_verify_bio(crt_rpc_t *rpc, struct bio_desc *biod)
 		rc = bio_sgl_convert(bsgl, &sgl);
 
 		if (rc == 0)
-			rc = daos_csum_check_sgl(iod, &sgl);
+			rc = daos_csummer_verify_data(csummer, iod, &sgl);
 
 		daos_sgl_fini(&sgl, false);
 	}

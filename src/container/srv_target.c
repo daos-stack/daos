@@ -40,6 +40,7 @@
 
 #include <daos_srv/container.h>
 
+#include <daos/checksum.h>
 #include <daos/rpc.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/vos.h>
@@ -321,6 +322,32 @@ ds_cont_hdl_put(struct ds_cont_hdl *hdl)
 	struct d_hash_table *hash = &dsm_tls_get()->dt_cont_hdl_hash;
 
 	cont_hdl_put_internal(hash, hdl);
+}
+
+int cont_hdl_csummer_init(struct ds_cont_hdl *hdl)
+{
+	struct ds_pool	*pool = ds_pool_lookup(hdl->sch_pool->spc_uuid);
+	daos_prop_t	*props = daos_prop_alloc(2);
+	uint32_t	 csum_val;
+	int		 rc;
+
+	/** Get the container csum related properties */
+	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM;
+	props->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
+	rc = cont_iv_prop_fetch(pool->sp_iv_ns, hdl->sch_uuid, props);
+	if (rc != 0)
+		goto done;
+	csum_val = daos_cont_prop2csum(props);
+
+	/** If enabled, initialize the csummer for the container */
+	if (daos_cont_csum_prop_is_enabled(csum_val))
+		rc = daos_csummer_type_init(&hdl->csummer,
+					    daos_contprop2csumtype(csum_val),
+					    daos_cont_prop2chunksize(props));
+done:
+	daos_prop_free(props);
+
+	return rc;
 }
 
 /**
@@ -729,6 +756,10 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		*cont_hdl = hdl;
 	}
 
+	rc = cont_hdl_csummer_init(hdl);
+	if (rc != 0)
+		D_GOTO(err_cont, rc);
+
 	/* It is possible to sync DTX status before destroy the CoS for close
 	 * the container. But that may be not enough. Because the server may
 	 * crashed before closing the container. Then the DTXs' status in the
@@ -865,6 +896,9 @@ cont_close_one_rec(struct cont_tgt_close_rec *rec)
 	struct ds_cont_hdl     *hdl;
 
 	hdl = cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash, rec->tcr_hdl);
+
+	daos_csummer_destroy(&hdl->csummer);
+
 	if (hdl == NULL) {
 		D_DEBUG(DF_DSMS, DF_CONT": already closed: hdl="DF_UUID" hce="
 			DF_U64"\n", DP_CONT(NULL, NULL), DP_UUID(rec->tcr_hdl),

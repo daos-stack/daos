@@ -404,6 +404,32 @@ daos_csummer_destroy_csum_buf(struct daos_csummer *obj, size_t nr,
 	D_FREE((*pcsum_bufs));
 }
 
+int
+daos_csummer_verify_data(struct daos_csummer *obj,
+			 daos_iod_t *iod, d_sg_list_t *sgl)
+{
+	daos_csum_buf_t		*csum_bufs;
+	int			 i;
+	int			 rc = 0;
+
+	daos_csummer_calc_csum(obj, sgl, iod->iod_size,
+			       iod->iod_recxs, iod->iod_nr, &csum_bufs);
+	for (i = 0; i < iod->iod_nr && rc == 0; i++) {
+		bool match = daos_csummer_compare(obj, &csum_bufs[i],
+						  &iod->iod_csums[i]);
+		if (!match) {
+			D_ERROR("Data is corrupted\n");
+			/** TODO: change rc to a new more appropriate
+			 * error code
+			 */
+			rc = -DER_IO;
+		}
+	}
+
+	daos_csummer_destroy_csum_buf(obj, iod->iod_nr, &csum_bufs);
+	return rc;
+}
+
 /**
  * daos_csum_buf_t functions
  */
@@ -504,10 +530,9 @@ checksum_sgl_cb(uint8_t *buf, size_t len, void *args)
 }
 
 int
-daos_csum_check_sgl(const daos_iod_t *iod, d_sg_list_t *sgl)
+daos_csum_check_sgl(daos_iod_t *iod, d_sg_list_t *sgl)
 {
 	struct daos_csummer	*csummer;
-	daos_csum_buf_t		*csum_bufs;
 	daos_csum_buf_t		*csum = iod->iod_csums;
 	int			 rc;
 
@@ -518,22 +543,12 @@ daos_csum_check_sgl(const daos_iod_t *iod, d_sg_list_t *sgl)
 				    (enum DAOS_CSUM_TYPE) csum->cs_type,
 				    csum->cs_chunksize);
 	if (rc != 0) {
-		D_ERROR("Issue initializing csummer. "
-			"Unable to check data. Returning success so checksum "
-			"doesn't kill IO.");
-
-		return 0;
+		D_ERROR("Issue initializing csummer. Unable to check data.");
+		return -DER_MISC;
 	}
 
-	daos_csummer_calc_csum(csummer, sgl, iod->iod_size,
-			       iod->iod_recxs, iod->iod_nr, &csum_bufs);
+	rc = daos_csummer_verify_data(csummer, iod, sgl);
 
-	if (!daos_csummer_compare(csummer, csum_bufs, csum)) {
-		D_WARN("Corruption found!!\n");
-		rc = -DER_IO;
-	}
-
-	daos_csummer_destroy_csum_buf(csummer, iod->iod_nr, &csum_bufs);
 	daos_csummer_destroy(&csummer);
 
 	return rc;

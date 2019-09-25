@@ -449,20 +449,24 @@ test_compare_checksums(void **state)
 static void
 test_verify_data(void **state)
 {
-	daos_iod_t		iod = {0};
-	d_sg_list_t		sgl = {0};
-	daos_recx_t		recx = {0};
 	struct daos_csummer	*csummer;
-	int			rc;
+	daos_iod_t		 iod = {0};
+	d_sg_list_t		 sgl = {0};
+	daos_size_t		 sgl_buf_half;
+	daos_recx_t		 recxs[2] = {0};
+	int			 rc;
 
 	daos_sgl_init_with_strings(&sgl, 1, "0123456789");
 
-	recx.rx_idx = 0;
-	recx.rx_nr = daos_sgl_buf_size(&sgl);
+	recxs[0].rx_idx = 0;
+	sgl_buf_half = daos_sgl_buf_size(&sgl) / 2;
+	recxs[0].rx_nr = sgl_buf_half;
+	recxs[1].rx_idx = sgl_buf_half;
+	recxs[1].rx_nr = sgl_buf_half;
 
 	iod.iod_size = 1;
-	iod.iod_nr = 1;
-	iod.iod_recxs = &recx;
+	iod.iod_nr = 2;
+	iod.iod_recxs = recxs;
 
 	/** Checksum not set in iod should pass verify */
 	rc = daos_csum_check_sgl(&iod, &sgl);
@@ -470,12 +474,18 @@ test_verify_data(void **state)
 
 	daos_csummer_type_init(&csummer, CSUM_TYPE_ISAL_CRC64_REFL, 1024*1024);
 	daos_csummer_calc_csum(csummer, &sgl, iod.iod_size,
-			       &recx, 1, &iod.iod_csums);
+			       recxs, 2, &iod.iod_csums);
 
 	rc = daos_csum_check_sgl(&iod, &sgl);
 	assert_int_equal(0, rc);
 
 	((char *)sgl.sg_iovs[0].iov_buf)[0]++; /** Corrupt the data */
+	rc = daos_csum_check_sgl(&iod, &sgl);
+	assert_int_equal(-DER_IO, rc);
+
+	((char *)sgl.sg_iovs[0].iov_buf)[0]--; /** Un-corrupt the data */
+	/** Corrupt data elsewhere*/
+	((char *)sgl.sg_iovs[0].iov_buf)[sgl_buf_half + 1]++;
 	rc = daos_csum_check_sgl(&iod, &sgl);
 	assert_int_equal(-DER_IO, rc);
 

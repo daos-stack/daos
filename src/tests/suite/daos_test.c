@@ -29,9 +29,19 @@
 #include <getopt.h>
 #include "daos_test.h"
 
-/** All tests in default order (tests that kill nodes must be last) */
-static const char *all_tests = "mpceXVizADKCoROdr";
-static const char *all_tests_defined = "mpceXVizxADKCoROdr";
+/**
+ * Tests can be run by specifying the appropriate argument for a test or
+ * all will be run if no test is specified. Tests will be run in order
+ * so tests that kill nodes must be last.
+ */
+#define TESTS "mpceXVizADKCoROdr"
+/**
+ * These tests will only be run if explicity specified. They don't get
+ * run if no test is specified.
+ */
+#define EXPLICIT_TESTS "x"
+static const char *all_tests = TESTS;
+static const char *all_tests_defined = TESTS EXPLICIT_TESTS;
 
 static void
 print_usage(int rank)
