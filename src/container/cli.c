@@ -345,6 +345,26 @@ dc_cont_alloc(const uuid_t uuid)
 	return dc;
 }
 
+static void
+dc_cont_csum_init(struct dc_cont *cont, daos_prop_t *props)
+{
+	uint32_t		csum_type_prop;
+	enum DAOS_CSUM_TYPE	csum_type;
+	uint64_t		chunksize;
+
+	csum_type_prop = daos_cont_prop2csum(props);
+	if (csum_type_prop == DAOS_PROP_CO_CSUM_OFF) {
+		cont->dc_csummer = NULL;
+		return;
+	}
+
+	csum_type = daos_contprop2csumtype(csum_type_prop);
+	chunksize = daos_cont_prop2chunksize(props);
+	daos_csummer_init(&cont->dc_csummer,
+			  daos_csum_type2algo(csum_type),
+			  chunksize);
+}
+
 struct cont_open_args {
 	struct dc_pool		*coa_pool;
 	daos_cont_info_t	*coa_info;
@@ -398,6 +418,9 @@ cont_open_complete(tse_task_t *task, void *data)
 
 	d_list_add(&cont->dc_po_list, &pool->dp_co_list);
 	cont->dc_pool_hdl = arg->hdl;
+
+	dc_cont_csum_init(cont, out->coo_prop);
+
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
 	dc_cont_hdl_link(cont);
@@ -552,7 +575,11 @@ dc_cont_open(tse_task_t *task)
 	uuid_copy(in->coi_op.ci_uuid, args->uuid);
 	uuid_copy(in->coi_op.ci_hdl, cont->dc_cont_hdl);
 	in->coi_capas = args->flags;
-
+	/** Determine which container properties need to be retrieved while
+	 * opening the contianer
+	 */
+	in->coi_prop_bits	= DAOS_CO_QUERY_PROP_CSUM |
+				  DAOS_CO_QUERY_PROP_CSUM_CHUNK;
 	arg.coa_pool		= pool;
 	arg.coa_info		= args->info;
 	arg.rpc			= rpc;
@@ -629,6 +656,8 @@ cont_close_complete(tse_task_t *task, void *data)
 
 	dc_cont_hdl_unlink(cont);
 	dc_cont_put(cont);
+
+	daos_csummer_destroy(&cont->dc_csummer);
 
 	/* Remove the container from pool container list */
 	D_RWLOCK_WRLOCK(&pool->dp_co_list_lock);
@@ -829,6 +858,12 @@ cont_query_bits(daos_prop_t *prop)
 			break;
 		case DAOS_PROP_CO_CSUM:
 			bits |= DAOS_CO_QUERY_PROP_CSUM;
+			break;
+		case DAOS_PROP_CO_CSUM_CHUNK_SIZE:
+			bits |= DAOS_CO_QUERY_PROP_CSUM_CHUNK;
+			break;
+		case DAOS_PROP_CO_CSUM_SERVER_VERIFY:
+			bits |= DAOS_CO_QUERY_PROP_CSUM_SERVER;
 			break;
 		case DAOS_PROP_CO_REDUN_FAC:
 			bits |= DAOS_CO_QUERY_PROP_REDUN_FAC;
@@ -2047,4 +2082,15 @@ dc_cont_hdl2pool_hdl(daos_handle_t coh)
 	ph = dc->dc_pool_hdl;
 	dc_cont_put(dc);
 	return ph;
+}
+struct daos_csummer *
+dc_cont_hdl2csummer(daos_handle_t coh)
+{
+	struct dc_cont	*dc;
+
+	dc = dc_hdl2cont(coh);
+	if (dc == NULL)
+		return NULL;
+
+	return dc->dc_csummer;
 }

@@ -119,6 +119,14 @@ type BdevConfig struct {
 	Hostname    string    `yaml:"-"` // used when generating templates
 }
 
-func (nc *BdevConfig) Validate() error {
+func (bc *BdevConfig) Validate() error {
 	return nil
+}
+
+func (bc *BdevConfig) GetNvmeDevs() []string {
+	if bc.Class == BdevClassNvme {
+		return bc.DeviceList
+	}
+
+	return []string{}
 }

@@ -440,8 +440,8 @@ struct daos_obj_fetch_shard {
 
 struct daos_obj_sync_args {
 	daos_handle_t		oh;
-	daos_handle_t		th;
-	daos_epoch_t		**epoch;
+	daos_epoch_t		epoch;
+	daos_epoch_t		**epochs_p;
 	int			*nr;
 };
 
