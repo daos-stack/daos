@@ -24,11 +24,12 @@
 package server
 
 import (
-	"github.com/golang/protobuf/proto"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/golang/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
