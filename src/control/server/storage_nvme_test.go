@@ -29,7 +29,7 @@ import (
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	. "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	. "github.com/daos-stack/daos/src/control/common/storage"
 	. "github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -413,8 +413,8 @@ func TestFormatNvme(t *testing.T) {
 			expResults: NvmeControllerResults{
 				{
 					Pciaddr: "",
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_SUCCESS,
+					State: &ResponseState{
+						Status: ResponseStatus_CTRL_SUCCESS,
 						Info:   msgBdevNoDevs,
 					},
 				},
@@ -429,8 +429,8 @@ func TestFormatNvme(t *testing.T) {
 			expResults: NvmeControllerResults{
 				{
 					Pciaddr: "",
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_APP,
+					State: &ResponseState{
+						Status: ResponseStatus_CTRL_ERR_APP,
 						Error:  msgBdevAlreadyFormatted,
 					},
 				},
@@ -445,8 +445,8 @@ func TestFormatNvme(t *testing.T) {
 			expResults: NvmeControllerResults{
 				{
 					Pciaddr: "",
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_CONF,
+					State: &ResponseState{
+						Status: ResponseStatus_CTRL_ERR_CONF,
 						Error:  msgBdevEmpty,
 					},
 				},
@@ -461,7 +461,7 @@ func TestFormatNvme(t *testing.T) {
 			expResults: NvmeControllerResults{
 				{
 					Pciaddr: "0000:81:00.0",
-					State:   new(pb.ResponseState),
+					State:   new(ResponseState),
 				},
 			},
 			expCtrlrs: newDefaultCtrlrs(),
@@ -474,8 +474,8 @@ func TestFormatNvme(t *testing.T) {
 			expResults: NvmeControllerResults{
 				{
 					Pciaddr: "0000:83:00.0",
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+					State: &ResponseState{
+						Status: ResponseStatus_CTRL_ERR_NVME,
 						Error:  "0000:83:00.0: " + msgBdevNotFound,
 					},
 				},
@@ -490,12 +490,12 @@ func TestFormatNvme(t *testing.T) {
 			expResults: NvmeControllerResults{
 				{
 					Pciaddr: "0000:81:00.0",
-					State:   new(pb.ResponseState),
+					State:   new(ResponseState),
 				},
 				{
 					Pciaddr: "0000:83:00.0",
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+					State: &ResponseState{
+						Status: ResponseStatus_CTRL_ERR_NVME,
 						Error:  "0000:83:00.0: " + msgBdevNotFound,
 					},
 				},
@@ -510,14 +510,14 @@ func TestFormatNvme(t *testing.T) {
 			expResults: NvmeControllerResults{
 				{
 					Pciaddr: "0000:83:00.0",
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+					State: &ResponseState{
+						Status: ResponseStatus_CTRL_ERR_NVME,
 						Error:  "0000:83:00.0: " + msgBdevNotFound,
 					},
 				},
 				{
 					Pciaddr: "0000:81:00.0",
-					State:   new(pb.ResponseState),
+					State:   new(ResponseState),
 				},
 			},
 			expCtrlrs: newDefaultCtrlrs(),
@@ -530,15 +530,15 @@ func TestFormatNvme(t *testing.T) {
 			expResults: NvmeControllerResults{
 				{
 					Pciaddr: "0000:83:00.0",
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+					State: &ResponseState{
+						Status: ResponseStatus_CTRL_ERR_NVME,
 						Error:  "0000:83:00.0: " + msgBdevNotFound,
 					},
 				},
 				{
 					Pciaddr: "0000:81:00.0",
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+					State: &ResponseState{
+						Status: ResponseStatus_CTRL_ERR_NVME,
 						Error: "0000:81:00.0: " +
 							"example format failure",
 					},
@@ -600,7 +600,7 @@ func TestFormatNvme(t *testing.T) {
 					t, result.Pciaddr, tt.expResults[i].Pciaddr,
 					"unexpected pciaddr, "+tt.desc)
 
-				if result.State.Status == pb.ResponseStatus_CTRL_SUCCESS {
+				if result.State.Status == ResponseStatus_CTRL_SUCCESS {
 					if result.State.Info != msgBdevNoDevs {
 						successPciaddrs = append(successPciaddrs, result.Pciaddr)
 					}
@@ -654,8 +654,8 @@ func TestUpdateNvme(t *testing.T) {
 			expResults: NvmeControllerResults{
 				{
 					Pciaddr: "",
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_CONF,
+					State: &ResponseState{
+						Status: ResponseStatus_CTRL_ERR_CONF,
 						Error:  msgBdevEmpty,
 					},
 				},
@@ -669,7 +669,7 @@ func TestUpdateNvme(t *testing.T) {
 			expResults: NvmeControllerResults{
 				{
 					Pciaddr: pciAddr,
-					State:   new(pb.ResponseState),
+					State:   new(ResponseState),
 				},
 			},
 			expCtrlrs: newDefaultCtrlrs(defaultEndRev),
@@ -682,8 +682,8 @@ func TestUpdateNvme(t *testing.T) {
 			expResults: NvmeControllerResults{
 				{
 					Pciaddr: "0000:aa:00.0",
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+					State: &ResponseState{
+						Status: ResponseStatus_CTRL_ERR_NVME,
 						Error:  "0000:aa:00.0: " + msgBdevNotFound,
 					},
 				},
@@ -700,8 +700,8 @@ func TestUpdateNvme(t *testing.T) {
 			expResults: NvmeControllerResults{
 				{
 					Pciaddr: pciAddr,
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+					State: &ResponseState{
+						Status: ResponseStatus_CTRL_ERR_NVME,
 						Error: pciAddr + ": " +
 							msgBdevModelMismatch +
 							" want " + model + ", have UKNOWN1",
@@ -725,8 +725,8 @@ func TestUpdateNvme(t *testing.T) {
 			expResults: NvmeControllerResults{
 				{
 					Pciaddr: pciAddr,
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+					State: &ResponseState{
+						Status: ResponseStatus_CTRL_ERR_NVME,
 						Error: pciAddr + ": " +
 							msgBdevFwrevStartMismatch +
 							" want 1.0.0, have 2.0.0",
@@ -749,8 +749,8 @@ func TestUpdateNvme(t *testing.T) {
 			expResults: NvmeControllerResults{
 				{
 					Pciaddr: pciAddr,
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+					State: &ResponseState{
+						Status: ResponseStatus_CTRL_ERR_NVME,
 						Error: pciAddr + ": " +
 							"*server.mockSpdkNvme: " +
 							"spdk format failed",
@@ -768,8 +768,8 @@ func TestUpdateNvme(t *testing.T) {
 			expResults: NvmeControllerResults{
 				{
 					Pciaddr: pciAddr,
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+					State: &ResponseState{
+						Status: ResponseStatus_CTRL_ERR_NVME,
 						Error: pciAddr + ": " +
 							msgBdevFwrevEndMismatch,
 					},
@@ -786,8 +786,8 @@ func TestUpdateNvme(t *testing.T) {
 			expResults: NvmeControllerResults{
 				{
 					Pciaddr: pciAddr,
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+					State: &ResponseState{
+						Status: ResponseStatus_CTRL_ERR_NVME,
 						Error: pciAddr + ": " +
 							msgBdevFwrevEndMismatch,
 					},
@@ -809,19 +809,19 @@ func TestUpdateNvme(t *testing.T) {
 			expResults: NvmeControllerResults{
 				{
 					Pciaddr: pciAddr,
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+					State: &ResponseState{
+						Status: ResponseStatus_CTRL_ERR_NVME,
 						Error:  pciAddr + ": " + msgBdevNotFound,
 					},
 				},
 				{
 					Pciaddr: "0000:81:00.1",
-					State:   new(pb.ResponseState),
+					State:   new(ResponseState),
 				},
 				{
 					Pciaddr: "0000:aa:00.0",
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+					State: &ResponseState{
+						Status: ResponseStatus_CTRL_ERR_NVME,
 						Error: "0000:aa:00.0: " +
 							msgBdevFwrevStartMismatch +
 							" want 1.0.0, have 1.0.1",
@@ -829,8 +829,8 @@ func TestUpdateNvme(t *testing.T) {
 				},
 				{
 					Pciaddr: "0000:ab:00.0",
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+					State: &ResponseState{
+						Status: ResponseStatus_CTRL_ERR_NVME,
 						Error: "0000:ab:00.0: " +
 							msgBdevModelMismatch +
 							" want ABC, have UKN",
@@ -889,7 +889,7 @@ func TestUpdateNvme(t *testing.T) {
 		}
 
 		// create parameters message with desired model name & starting fwrev
-		req := &pb.UpdateNvmeReq{
+		req := &UpdateNvmeReq{
 			Startrev: startRev, Model: model, Path: "", Slot: 0,
 		}
 		// call with io_server index, req and results list to populate

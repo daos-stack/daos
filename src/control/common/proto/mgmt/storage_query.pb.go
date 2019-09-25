@@ -30,7 +30,7 @@ func (m *BioHealthReq) Reset()         { *m = BioHealthReq{} }
 func (m *BioHealthReq) String() string { return proto.CompactTextString(m) }
 func (*BioHealthReq) ProtoMessage()    {}
 func (*BioHealthReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_query_0c1ec0842ed4daa1, []int{0}
+	return fileDescriptor_storage_query_01fad71e3cc69a58, []int{0}
 }
 func (m *BioHealthReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BioHealthReq.Unmarshal(m, b)
@@ -88,7 +88,7 @@ func (m *BioHealthResp) Reset()         { *m = BioHealthResp{} }
 func (m *BioHealthResp) String() string { return proto.CompactTextString(m) }
 func (*BioHealthResp) ProtoMessage()    {}
 func (*BioHealthResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_query_0c1ec0842ed4daa1, []int{1}
+	return fileDescriptor_storage_query_01fad71e3cc69a58, []int{1}
 }
 func (m *BioHealthResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BioHealthResp.Unmarshal(m, b)
@@ -216,7 +216,7 @@ func (m *SmdDevReq) Reset()         { *m = SmdDevReq{} }
 func (m *SmdDevReq) String() string { return proto.CompactTextString(m) }
 func (*SmdDevReq) ProtoMessage()    {}
 func (*SmdDevReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_query_0c1ec0842ed4daa1, []int{2}
+	return fileDescriptor_storage_query_01fad71e3cc69a58, []int{2}
 }
 func (m *SmdDevReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SmdDevReq.Unmarshal(m, b)
@@ -248,7 +248,7 @@ func (m *SmdDevResp) Reset()         { *m = SmdDevResp{} }
 func (m *SmdDevResp) String() string { return proto.CompactTextString(m) }
 func (*SmdDevResp) ProtoMessage()    {}
 func (*SmdDevResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_query_0c1ec0842ed4daa1, []int{3}
+	return fileDescriptor_storage_query_01fad71e3cc69a58, []int{3}
 }
 func (m *SmdDevResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SmdDevResp.Unmarshal(m, b)
@@ -294,7 +294,7 @@ func (m *SmdDevResp_Device) Reset()         { *m = SmdDevResp_Device{} }
 func (m *SmdDevResp_Device) String() string { return proto.CompactTextString(m) }
 func (*SmdDevResp_Device) ProtoMessage()    {}
 func (*SmdDevResp_Device) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_query_0c1ec0842ed4daa1, []int{3, 0}
+	return fileDescriptor_storage_query_01fad71e3cc69a58, []int{3, 0}
 }
 func (m *SmdDevResp_Device) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SmdDevResp_Device.Unmarshal(m, b)
@@ -336,9 +336,9 @@ func init() {
 	proto.RegisterType((*SmdDevResp_Device)(nil), "mgmt.SmdDevResp.Device")
 }
 
-func init() { proto.RegisterFile("storage_query.proto", fileDescriptor_storage_query_0c1ec0842ed4daa1) }
+func init() { proto.RegisterFile("storage_query.proto", fileDescriptor_storage_query_01fad71e3cc69a58) }
 
-var fileDescriptor_storage_query_0c1ec0842ed4daa1 = []byte{
+var fileDescriptor_storage_query_01fad71e3cc69a58 = []byte{
 	// 425 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x7c, 0x92, 0xcd, 0x8e, 0xd3, 0x30,
 	0x14, 0x85, 0x95, 0xb6, 0x49, 0x9b, 0x9b, 0x76, 0x10, 0xe6, 0x67, 0xcc, 0x20, 0x44, 0x28, 0x0b,
