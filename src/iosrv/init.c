@@ -315,6 +315,7 @@ dss_topo_init()
 		return -DER_INVAL;
 	}
 
+	D_PRINT("Using NUMA core allocation algorithm\n");
 	return 0;
 }
 
