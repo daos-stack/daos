@@ -89,7 +89,7 @@ func TestMergeEnvVars(t *testing.T) {
 }
 
 func TestConstructedConfig(t *testing.T) {
-	var numaNode uint = 0
+	var numaNode uint = 8
 	goldenPath := "testdata/full.golden"
 
 	// just set all values regardless of validity

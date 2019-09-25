@@ -196,8 +196,8 @@ func TestConstructedConfig(t *testing.T) {
 	uncommentServerConfig(t, testFile)
 	defaultCfg := mockConfigFromFile(t, defaultMockExt(), testFile)
 
-	var numaNode0 uint = 8
-	var numaNode1 uint = 9
+	var numaNode0 uint = 0
+	var numaNode1 uint = 1
 
 	// Next, construct a config to compare against the first one. It should be
 	// possible to construct an identical configuration with the helpers.
