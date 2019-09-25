@@ -441,9 +441,8 @@ to support server failure. See the orterun(1) man page for additional options.
 
 To start the DAOS server, run:
 ```
-orterun --map-by node --mca btl tcp,self --mca oob tcp -np &lt;num\_servers&gt;
--H &lt;server_list&gt; --enable-recovery daos\_server -a &lt;shared\_dir&gt; -o
-&lt;config_file&gt;
+orterun --map-by node --mca btl tcp,self --mca oob tcp -np <num_servers>
+-H <server_list> --enable-recovery daos_server -a <shared_dir> -o <config_file>
 ```
 The --enable-recovery is required for fault tolerance to guarantee that
 the fault of one server does not cause the others to be stopped.
@@ -461,8 +460,8 @@ and a few examples are [available](/src/utils/config/examples).
 Client processes (i.e. utilities, applications, ...) should have the
 following environment variables set to connect to the DAOS servers:
 ```
-export DAOS\_SINGLETON\_CLI=1
-export CRT\_ATTACH\_INFO\_PATH=shared\_dir
+export DAOS_SINGLETON_CLI=1
+export CRT_ATTACH_INFO_PATH=/path/to/shared/dir
 ```
 
 ### Systemd Integration
@@ -759,14 +758,13 @@ journalctl --unit daos-agent
 
 ## System Validation
 
-To validate that the DAOS system is properly installed, the daos\_test
+To validate that the DAOS system is properly installed, the daos_test
 suite can be executed. Ensure the DAOS Agent is configured and running before
-running daos\_test and that the DAOS_SINGLETON_CLI and CRT_ATTACH_INFO_PATH
-environment variables are properly set:
+running daos_test and that the DAOS_SINGLETON_CLI and CRT_ATTACH_INFO_PATH
+environment variables are properly set as described [here](#server-startup).
 
 ```
-orterun -np
-&lt;num\_clients&gt; --hostfile \${hostfile} ./daos\_test
+orterun -np <num_clients> --hostfile <hostfile> ./daos_test
 ```
 
 daos\_test requires at least 8GB of SCM (or DRAM with tmpfs) storage on
