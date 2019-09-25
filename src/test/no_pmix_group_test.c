@@ -558,6 +558,21 @@ int main(int argc, char **argv)
 	/* TODO: This will be replaced by proper sync when CART-715 is done */
 	sleep(10);
 
+	rc = crt_group_ranks_get(grp, &rank_list);
+	if (rc != 0) {
+		D_ERROR("crt_group_ranks_get() failed; rc=%d\n", rc);
+		assert(0);
+	}
+
+	rc = wait_for_ranks(crt_ctx[0], grp, rank_list, 0,
+			NUM_SERVER_CTX, 10, 100.0);
+	if (rc != 0) {
+		D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
+		assert(0);
+	}
+
+	D_FREE(rank_list->rl_ranks);
+	D_FREE(rank_list);
 	/* This section only executes for my_rank == 0 */
 
 	DBG_PRINT("------------------------------------\n");
