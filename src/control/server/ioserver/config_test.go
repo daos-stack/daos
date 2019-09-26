@@ -179,6 +179,7 @@ func TestConfigToCmdVals(t *testing.T) {
 		targetCount    = 4
 		helperCount    = 1
 		serviceCore    = 8
+		index          = 2
 		pinnedNumaNode = uint(1)
 	)
 	cfg := NewConfig().
@@ -199,6 +200,8 @@ func TestConfigToCmdVals(t *testing.T) {
 		WithBdevConfigPath(cfgPath).
 		WithSystemName(systemName)
 
+	cfg.Index = uint32(index)
+
 	wantArgs := []string{
 		"-x", strconv.Itoa(helperCount),
 		"-t", strconv.Itoa(targetCount),
@@ -210,6 +213,7 @@ func TestConfigToCmdVals(t *testing.T) {
 		"-d", socketDir,
 		"-i", strconv.Itoa(shmId),
 		"-n", cfgPath,
+		"-I", strconv.Itoa(index),
 		"-p", strconv.FormatUint(uint64(pinnedNumaNode), 10),
 	}
 	wantEnv := []string{

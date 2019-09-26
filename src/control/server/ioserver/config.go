@@ -145,7 +145,7 @@ type Config struct {
 	Storage           StorageConfig `yaml:",inline"`
 	Fabric            FabricConfig  `yaml:",inline"`
 	EnvVars           []string      `yaml:"env_vars,omitempty"`
-	Index             int           `yaml:"-"`
+	Index             uint32        `yaml:"-" cmdLongFlag:"--instance_idx" cmdShortFlag:"-I"`
 }
 
 // NewConfig returns an I/O server config.
