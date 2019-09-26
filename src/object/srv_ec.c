@@ -42,24 +42,22 @@ static bool
 ec_is_one_cell(daos_iod_t *iod, struct daos_oclass_attr *oca,
 	       unsigned int tgt_idx)
 {
-	unsigned int    len = oca->u.ec.e_len;
+	unsigned int    rpc = ec_rs2cs(iod->iod_size, oca->u.ec.e_len);
 	unsigned int    k = oca->u.ec.e_k;
 	bool		rc;
 	unsigned int	j;
 
 	for (j = 0; j < iod->iod_nr; j++) {
 		daos_recx_t     *this_recx = &iod->iod_recxs[j];
-		uint64_t         recx_start_offset = this_recx->rx_idx *
-						     iod->iod_size;
-		uint64_t         recx_end_offset =
-					(this_recx->rx_nr * iod->iod_size) +
-					recx_start_offset;
+		uint64_t         recx_start_offset = this_recx->rx_idx;
+		uint64_t         recx_end_offset = this_recx->rx_nr +
+						   recx_start_offset;
 
 		if (recx_start_offset & PARITY_INDICATOR) {
 			rc = false;
 			break;
-		} else if (recx_start_offset/len == recx_end_offset/len &&
-			(recx_start_offset % (len * k)) / len == tgt_idx) {
+		} else if (recx_start_offset/rpc == recx_end_offset/rpclen &&
+			(recx_start_offset % (rpc * k)) / len == tgt_idx) {
 			rc = true;
 		} else {
 			rc = false;
@@ -91,12 +89,12 @@ int
 ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 	       struct daos_oclass_attr *oca, struct ec_bulk_spec **skip_list)
 {
-	unsigned long	ss = oca->u.ec.e_len * oca->u.ec.e_k;
 	unsigned int	i, j, idx;
 	int		rc = 0;
 
 	for (i = 0; i < nr; i++) {
 		daos_iod_t	*iod = &iods[i];
+		unsigned int	 ss, rpc, len; 
 		unsigned int	 loop_bound = iod->iod_nr;
 		int		 sl_idx = 0;
 
@@ -110,31 +108,31 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 		D_ALLOC_ARRAY(skip_list[i], 3 * iod->iod_nr + 1);
 		if (skip_list[i] == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
+		rpc = ec_rs2cs(iod->iod_size, oca->u.ec.e_cell_size);
+		ss = oca->u.ec.e_cell_size * rpc;
+		len = rpc * iod->iod_size;
 		for (idx = 0, j = 0; j < loop_bound; j++) {
 			daos_recx_t	*this_recx = &iod->iod_recxs[idx];
-			uint64_t	so =
-				(this_recx->rx_idx * iod->iod_size) % ss;
-			unsigned int	cell = so / oca->u.ec.e_len;
-			uint64_t	recx_size = iod->iod_size *
+			uint64_t	so = this_recx->rx_idx % ss;
+			unsigned int	new_len, cell = so / rpc;
+			uint64_t	recx_len = iod->iod_size *
 						 this_recx->rx_nr;
 
 
 			if (iod->iod_recxs[idx].rx_idx & PARITY_INDICATOR) {
-				ec_bulk_spec_set(oca->u.ec.e_len, true,
-						 sl_idx++, &skip_list[i]);
+				ec_bulk_spec_set(len, true, sl_idx++,
+						 &skip_list[i]);
 				ec_del_recx(iod, idx);
 				continue;
 			}
 			if (cell == dtgt_idx) {
-				uint32_t new_len = (cell + 1) *
-							oca->u.ec.e_len - so;
-
-				this_recx->rx_nr = new_len / iod->iod_size;
-				ec_bulk_spec_set(new_len, false,
-						 sl_idx++, &skip_list[i]);
-				ec_bulk_spec_set(recx_size - new_len, true,
+				this_recx->rx_nr = (cell + 1) * rpc - so;
+				new_len = this_recx->rx_nr * iod->iod_size;
+				ec_bulk_spec_set(new_len, false, sl_idx++,
+						 &skip_list[i]);
+				ec_bulk_spec_set(recx_len - new_len, true,
 						 sl_idx++, skip_list);
-			} else if ((dtgt_idx + 1) * oca->u.ec.e_len <= so) {
+			} else if ((dtgt_idx + 1) * rpc <= so) {
 				/* this recx doesn't map to this target
 				 * so we need to remove the recx
 				 */
@@ -144,25 +142,23 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 						 &skip_list[i]);
 				continue;
 			} else {
-				int cell_start = dtgt_idx *
-							  oca->u.ec.e_len - so;
+				int cell_start = dtgt_idx * rpc - so;
 
-				if (cell_start >= recx_size) {
+				if (cell_start >= this_recx->rx_nr) {
 					/* this recx doesn't map to this target
 					 * so we need to remove the recx
 					 */
 					ec_del_recx(iod, idx);
-					ec_bulk_spec_set(this_recx->rx_nr *
-						 iod->iod_size, true, sl_idx++,
+					ec_bulk_spec_set(recx_len, true, sl_idx++,
 						 &skip_list[i]);
 					continue;
 				}
-				ec_bulk_spec_set(cell_start, true, sl_idx++,
-						 &skip_list[i]);
-				this_recx->rx_idx += cell_start / iod->iod_size;
-				if (cell_start + oca->u.ec.e_len < recx_size) {
-					this_recx->rx_nr =
-						oca->u.ec.e_len / iod->iod_size;
+				ec_bulk_spec_set(cell_start * iod->iod_size,
+						 true, sl_idx++, &skip_list[i]);
+				this_recx->rx_idx += cell_start;
+				if (cell_start + rpc < this_recx->rx_nr) {
+					this_recx->rx_nr = rpc;
+					/* here */
 					ec_bulk_spec_set(oca->u.ec.e_len, false,
 							 sl_idx++,
 							 &skip_list[i]);
@@ -275,8 +271,6 @@ ec_parity_target(unsigned int ptgt_idx, unsigned int nr, daos_iod_t *iods,
 out:
 	return rc;
 }
-
-
 
 /* Free the memory allocated for copy of the IOD array
  */

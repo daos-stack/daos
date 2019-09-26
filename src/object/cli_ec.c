@@ -64,13 +64,13 @@ static bool
 ec_has_full_stripe(daos_iod_t *iod, struct daos_oclass_attr *oca,
 		   uint64_t *tgt_set)
 {
-	unsigned int	ss = oca->u.ec.e_k * oca->u.ec.e_len;
 	unsigned int	i;
 
 	for (i = 0; i < iod->iod_nr; i++) {
 		if (iod->iod_type == DAOS_IOD_ARRAY) {
-			int start = iod->iod_recxs[i].rx_idx * iod->iod_size;
-			int length = iod->iod_recxs[i].rx_nr * iod->iod_size;
+			unsigned int	ss = oca->u.ec.e_k * oca->u.ec.e_cs;
+			int start = iod->iod_recxs[i].rx_idx;
+			int length = iod->iod_recxs[i].rx_nr;
 
 			if (length < ss) {
 				continue;
@@ -175,7 +175,7 @@ ec_array_encode(struct ec_params *params, daos_obj_id_t oid, daos_iod_t *iod,
 		int recx_idx, unsigned int *sg_idx, size_t *sg_off)
 {
 	uint64_t	 s_cur;
-	unsigned int	 len = oca->u.ec.e_len;
+	unsigned int	 len = iod->iod_size * oca->u.ec.e_cs;
 	unsigned int	 k = oca->u.ec.e_k;
 	unsigned int	 p = oca->u.ec.e_p;
 	daos_recx_t     *this_recx = &iod->iod_recxs[recx_idx];
@@ -203,7 +203,7 @@ ec_array_encode(struct ec_params *params, daos_obj_id_t oid, daos_iod_t *iod,
 					params->niod.iod_nr);
 		if (rc != 0)
 			return rc;
-		rc = obj_encode_full_stripe(oid, sgl, sg_idx, sg_off,
+		rc = obj_encode_full_stripe(oid, len, sgl, sg_idx, sg_off,
 					    &(params->p_segs),
 					    params->niod.iod_nr);
 		if (rc != 0)
@@ -220,7 +220,7 @@ ec_array_encode(struct ec_params *params, daos_obj_id_t oid, daos_iod_t *iod,
 			params->niod.iod_recxs[params->niod.iod_nr].rx_idx =
 			PARITY_INDICATOR | (s_cur+i*len)/params->niod.iod_size;
 			params->niod.iod_recxs[params->niod.iod_nr++].rx_nr =
-				len / params->niod.iod_size;
+				oca->u.ec.e_cs;
 		}
 	}
 	return rc;
@@ -238,7 +238,8 @@ ec_update_params(struct ec_params *params, daos_iod_t *iod, d_sg_list_t *sgl,
 {
 	daos_recx_t	*nrecx;			/*new recx */
 	daos_iod_t	*niod = &params->niod;	/* new iod  */
-	unsigned int	 len = ec_attr.e_len;
+	unsigned int	 recs_pc = ec_attr.e_cs;
+	unsigned int	 len = recs_pc * iod->iod_size;
 	unsigned short	 k = ec_attr.e_k;
 	unsigned int	 i;
 	int		 rc = 0;
@@ -248,11 +249,11 @@ ec_update_params(struct ec_params *params, daos_iod_t *iod, d_sg_list_t *sgl,
 		return -DER_NOMEM;
 	niod->iod_recxs = nrecx;
 	for (i = 0; i < iod->iod_nr; i++) {
-		uint64_t rem = iod->iod_recxs[i].rx_nr * iod->iod_size;
+		uint64_t rem = iod->iod_recxs[i].rx_nr;
 		uint64_t start = iod->iod_recxs[i].rx_idx;
-		uint32_t stripe_cnt = rem / (len * k);
+		uint32_t stripe_cnt = rem / (recs_pc * k);
 
-		if (rem % (len*k)) {
+		if (rem % (recs_pc * k)) {
 			stripe_cnt++;
 		}
 		/* can't have more than one stripe in a recx entry */
@@ -268,21 +269,21 @@ ec_update_params(struct ec_params *params, daos_iod_t *iod, d_sg_list_t *sgl,
 			niod->iod_recxs = nrecx;
 		}
 		while (rem) {
-			uint32_t stripe_len = (len * k) / iod->iod_size;
+			uint32_t stripe_len = recs_pc * k;
 
-			if (rem <= len * k) {
+			if (rem <= recs_pc * k) {
 				niod->iod_recxs[params->niod.iod_nr].
-				rx_nr = rem/iod->iod_size;
+				rx_nr = rem;
 				niod->iod_recxs[params->niod.iod_nr++].
 				rx_idx = start;
 				rem = 0;
 			} else {
 				niod->iod_recxs[params->niod.iod_nr].
-				rx_nr = (len * k) / iod->iod_size;
+				rx_nr = recs_pc * k;
 				niod->iod_recxs[params->niod.iod_nr++].
 				rx_idx = start;
 				start += stripe_len;
-				rem -= len * k;
+				rem -= stripe_len * k;
 			}
 		}
 	}
@@ -341,10 +342,8 @@ void
 ec_get_tgt_set(daos_iod_t *iods, unsigned int nr, struct daos_oclass_attr *oca,
 	       bool parity_include, uint64_t *tgt_set)
 {
-	unsigned int    len = oca->u.ec.e_len;
 	unsigned int    k = oca->u.ec.e_k;
 	unsigned int    p = oca->u.ec.e_p;
-	uint64_t	ss = k * len;
 	uint64_t	par_only = (1UL << p) - 1;
 	uint64_t	full;
 	unsigned int	i, j;
@@ -357,21 +356,22 @@ ec_get_tgt_set(daos_iod_t *iods, unsigned int nr, struct daos_oclass_attr *oca,
 		full = (1UL << k) - 1;
 	}
 	for (i = 0; i < nr; i++) {
-		if (iods->iod_type != DAOS_IOD_ARRAY)
+		unsigned int recs_pc = oca->u.ec.e_cs;
+
+		if (iods[i].iod_type != DAOS_IOD_ARRAY)
 			continue;
 		for (j = 0; j < iods[i].iod_nr; j++) {
 			uint64_t ext_idx;
-			uint64_t rs = iods[i].iod_recxs[j].rx_idx *
-						iods[i].iod_size;
-			uint64_t re = iods[i].iod_recxs[j].rx_nr *
-						iods[i].iod_size + rs - 1;
+			uint64_t rs = iods[i].iod_recxs[j].rx_idx;
+			uint64_t re = iods[i].iod_recxs[j].rx_nr + rs - 1;
+			uint64_t	ss = k * recs_pc;
 
 			/* No partial-parity updates, so this function won't be
 			 * called if parity is present.
 			 */
 			D_ASSERT(!(PARITY_INDICATOR & rs));
-			for (ext_idx = rs; ext_idx <= re; ext_idx += len) {
-				unsigned int cell = (ext_idx % ss)/len;
+			for (ext_idx = rs; ext_idx <= re; ext_idx += recs_pc) {
+				unsigned int cell = (ext_idx % ss)/recs_pc;
 
 				*tgt_set |= 1UL << (cell+p);
 				if (*tgt_set == full && parity_include) {
