@@ -13,7 +13,7 @@ storage pools from the command line.
 
 **To create a pool:**
 ```
-dmg create --size=xxG --nvme=yyT
+$ dmg create --size=xxG --nvme=yyT
 ```
 
 This command creates a pool distributed across the DAOS servers with a
@@ -25,7 +25,7 @@ located (referred as ${svcl}).
 The typical output of this command is as follows:
 
 ```
-dmg create --size=xxG --nvme=yyT
+$ dmg create --size=xxG --nvme=yyT
 4056fb6d-9fca-4f2d-af8a-cfd57d92a92d 1:2
 ```
 
@@ -35,7 +35,7 @@ two pool service replica on rank 1 and 2.
 **To destroy a pool:**
 
 ```
-dmg destroy --pool=${puuid}
+$ dmg destroy --pool=${puuid}
 ```
 
 ## Pool Properties
@@ -77,7 +77,7 @@ is integrated into the dmg utility.
 **To query a pool:**
 
 ```
-dmg query --svc=${svcl} --pool=${puuid}
+$ dmg query --svc=${svcl} --pool=${puuid}
 ```
 
 Below is the output for a pool created with SCM space only.
@@ -122,7 +122,7 @@ the management API and tool and will be documented here once available.
 **To exclude a target from a pool:**
 
 ```
-dmg exclude --svc=${svcl} --pool=${puuid} --target=${rank}
+$ dmg exclude --svc=${svcl} --pool=${puuid} --target=${rank}
 ```
 
 ### Pool Extension
