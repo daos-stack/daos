@@ -246,10 +246,11 @@ out:
 
 static int
 crt_opc_reg(struct crt_opc_info *opc_info, crt_opcode_t opc, uint32_t flags,
-	    struct crt_req_format *crf, size_t input_size,
-	    size_t output_size, crt_rpc_cb_t rpc_cb,
+	    struct crt_req_format *crf, crt_rpc_cb_t rpc_cb,
 	    struct crt_corpc_ops *co_ops)
 {
+	size_t	size_in  = 0;
+	size_t	size_out = 0;
 	int	rc = 0;
 
 	if (opc_info->coi_inited == 1) {
@@ -260,8 +261,6 @@ crt_opc_reg(struct crt_opc_info *opc_info, crt_opcode_t opc, uint32_t flags,
 
 	opc_info->coi_opc = opc;
 	opc_info->coi_crf = crf;
-	opc_info->coi_input_size = input_size;
-	opc_info->coi_output_size = output_size;
 	opc_info->coi_proc_init = 1;
 	if (rpc_cb != NULL) {
 		opc_info->coi_rpc_cb = rpc_cb;
@@ -270,6 +269,10 @@ crt_opc_reg(struct crt_opc_info *opc_info, crt_opcode_t opc, uint32_t flags,
 	if (co_ops != NULL) {
 		opc_info->coi_co_ops = co_ops;
 		opc_info->coi_coops_init = 1;
+	}
+	if (opc_info->coi_crf != NULL) {
+		size_in  = opc_info->coi_crf->crf_size_in;
+		size_out = opc_info->coi_crf->crf_size_out;
 	}
 
 	opc_info->coi_inited = 1;
@@ -281,12 +284,11 @@ crt_opc_reg(struct crt_opc_info *opc_info, crt_opcode_t opc, uint32_t flags,
 	 * bytes only if forward is set.
 	 */
 	opc_info->coi_output_offset = D_ALIGNUP(sizeof(struct crt_rpc_priv),
-					64);
-	opc_info->coi_input_offset = D_ALIGNUP(opc_info->coi_output_offset +
-						opc_info->coi_output_size, 64);
+						64);
+	opc_info->coi_input_offset  = D_ALIGNUP(opc_info->coi_output_offset +
+						size_out, 64);
 	opc_info->coi_rpc_size = sizeof(struct crt_rpc_priv) +
-		opc_info->coi_input_offset +
-		opc_info->coi_input_size;
+				 opc_info->coi_input_offset + size_in;
 
 	/* set RPC features */
 	opc_info->coi_no_reply = D_BIT_IS_SET(flags, CRT_RPC_FEAT_NO_REPLY);
@@ -310,44 +312,22 @@ crt_opc_reg_internal(struct crt_opc_info *opc_info, crt_opcode_t opc,
 		struct crt_proto_rpc_format *prf)
 {
 	struct crt_req_format	*crf = prf->prf_req_fmt;
-	size_t			 input_size = 0;
-	size_t			 output_size = 0;
-	struct crt_msg_field	*cmf;
 	int			 rc = 0;
-	int			 i;
 
 	/* when no input/output parameter needed, the crf can be NULL */
 	if (crf == NULL)
 		D_GOTO(reg_opc, rc);
 
-	/* calculate the total input size and output size */
-	for (i = 0; i < crf->crf_in.crf_count; i++) {
-		cmf = crf->crf_in.crf_msg[i];
-		D_ASSERT(cmf->cmf_size > 0);
-		if (cmf->cmf_flags & CMF_ARRAY_FLAG)
-			input_size += sizeof(struct crt_array);
-		else
-			input_size += cmf->cmf_size;
-	}
-	for (i = 0; i < crf->crf_out.crf_count; i++) {
-		cmf = crf->crf_out.crf_msg[i];
-		D_ASSERT(cmf->cmf_size > 0);
-		if (cmf->cmf_flags & CMF_ARRAY_FLAG)
-			output_size += sizeof(struct crt_array);
-		else
-			output_size += cmf->cmf_size;
-	}
-
-	if (input_size > CRT_MAX_INPUT_SIZE ||
-	    output_size > CRT_MAX_OUTPUT_SIZE) {
+	if (crf->crf_size_in > CRT_MAX_INPUT_SIZE ||
+	    crf->crf_size_out > CRT_MAX_OUTPUT_SIZE) {
 		D_ERROR("input_size "DF_U64" or output_size "DF_U64" "
-			"too large.\n", input_size, output_size);
+			"too large.\n", crf->crf_size_in, crf->crf_size_out);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 reg_opc:
-	rc = crt_opc_reg(opc_info, opc, prf->prf_flags, crf, input_size,
-			 output_size, prf->prf_hdlr, prf->prf_co_ops);
+	rc = crt_opc_reg(opc_info, opc, prf->prf_flags, crf, prf->prf_hdlr,
+			 prf->prf_co_ops);
 	if (rc != 0)
 		D_ERROR("rpc (opc: %#x) register failed, rc: %d.\n", opc, rc);
 

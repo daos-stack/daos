@@ -61,37 +61,12 @@
 #define CRT_OSEQ_RPC_SWIM	/* output fields */
 
 static int
-crt_proc_struct_swim_member_state(crt_proc_t proc,
-				  struct swim_member_state *data)
-{
-	int rc;
-
-	rc = crt_proc_uint64_t(proc, &data->sms_incarnation);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint32_t(proc, &data->sms_status);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_uint32_t(proc, &data->sms_padding);
-	if (rc != 0)
-		return -DER_HG;
-
-	return 0;
-}
-
-static int
 crt_proc_struct_swim_member_update(crt_proc_t proc,
 				   struct swim_member_update *data)
 {
 	int rc;
 
-	rc = crt_proc_uint64_t(proc, &data->smu_id);
-	if (rc != 0)
-		return -DER_HG;
-
-	rc = crt_proc_struct_swim_member_state(proc, &data->smu_state);
+	rc = crt_proc_memcpy(proc, data, sizeof(*data));
 	if (rc != 0)
 		return -DER_HG;
 

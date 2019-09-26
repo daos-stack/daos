@@ -905,10 +905,10 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	}
 
 	D_ASSERT(rpc_priv->crp_srv != 0);
-	D_ASSERT(opc_info->coi_input_size == rpc_pub->cr_input_size);
 	if (rpc_pub->cr_input_size > 0) {
 		D_ASSERT(rpc_pub->cr_input != NULL);
 		D_ASSERT(opc_info->coi_crf != NULL);
+		D_ASSERT(opc_info->coi_crf->crf_size_in == rpc_pub->cr_input_size);
 		/* corresponding to HG_Free_input in crt_hg_req_destroy */
 		rc = crt_hg_unpack_body(rpc_priv, proc);
 		if (rc == 0) {

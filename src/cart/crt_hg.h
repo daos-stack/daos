@@ -155,7 +155,6 @@ int crt_hg_get_addr(hg_class_t *hg_class, char *addr_str, size_t *str_size);
 int crt_rpc_handler_common(hg_handle_t hg_hdl);
 
 /* crt_hg_proc.c */
-int crt_proc_corpc_hdr(crt_proc_t proc, struct crt_corpc_hdr *hdr);
 int crt_hg_unpack_header(hg_handle_t hg_hdl, struct crt_rpc_priv *rpc_priv,
 			 crt_proc_t *proc);
 void crt_hg_header_copy(struct crt_rpc_priv *in, struct crt_rpc_priv *out);

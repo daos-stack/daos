@@ -57,7 +57,7 @@ else
     echo "checking libcart.so"
     nm -g "${SL_PREFIX}/lib/libcart.so" |
         grep -v " U " |  grep -v " w " |  grep -v " crt_" | grep -v " swim_" |
-        grep -v "D CMF_" | grep -v "D CQF_" |
+        grep -v " D CQF_" |
         grep -v " D _edata" | grep -v " T _fini" | grep -v " T _init" |
         grep -v " B __bss_start" | grep -v " B _end";
     if [ $? -ne 1 ]; then RC=1; fi

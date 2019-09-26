@@ -230,12 +230,6 @@ crt_proc_uuid_t(crt_proc_t proc, uuid_t *data)
 }
 
 int
-crt_proc_d_rank_list_ptr_t(crt_proc_t proc, d_rank_list_t **data)
-{
-	return crt_proc_d_rank_list_t(proc, data);
-}
-
-int
 crt_proc_d_rank_list_t(crt_proc_t proc, d_rank_list_t **data)
 {
 	d_rank_list_t		*rank_list;
@@ -380,25 +374,7 @@ crt_proc_d_iov_t(crt_proc_t proc, d_iov_t *div)
 	return 0;
 }
 
-/**
- * CMF_OF_xxx is used to obtain the CMF name of a data type in the RPC
- * registration macro
- */
-#define CRT_DEFINE_ONE_FIELD(cmf_name, flags, type, proc_base)	\
-	struct crt_msg_field cmf_name =					\
-		DEFINE_CRT_MSG(flags, sizeof(type),			\
-				BOOST_PP_CAT(crt_proc_, proc_base));	\
-	struct crt_msg_field BOOST_PP_CAT(CMF_OF_, type) =		\
-		DEFINE_CRT_MSG(flags, sizeof(type),			\
-				BOOST_PP_CAT(crt_proc_, proc_base));
-
-#define CRT_DEFINE_MSG_FIELDS(list)					\
-	list(CRT_DEFINE_ONE_FIELD)
-
-CRT_DEFINE_MSG_FIELDS(CRT_CMF_LIST)
-
-
-int
+static inline int
 crt_proc_corpc_hdr(crt_proc_t proc, struct crt_corpc_hdr *hdr)
 {
 	hg_proc_t     hg_proc;
@@ -419,12 +395,12 @@ crt_proc_corpc_hdr(crt_proc_t proc, struct crt_corpc_hdr *hdr)
 		D_ERROR("crt proc error, rc: %d.\n", rc);
 		D_GOTO(out, rc);
 	}
-	rc = crt_proc_d_rank_list_ptr_t(hg_proc, &hdr->coh_filter_ranks);
+	rc = crt_proc_d_rank_list_t(hg_proc, &hdr->coh_filter_ranks);
 	if (rc != 0) {
 		D_ERROR("crt proc error, rc: %d.\n", rc);
 		D_GOTO(out, rc);
 	}
-	rc = crt_proc_d_rank_list_ptr_t(hg_proc, &hdr->coh_inline_ranks);
+	rc = crt_proc_d_rank_list_t(hg_proc, &hdr->coh_inline_ranks);
 	if (rc != 0) {
 		D_ERROR("crt proc error, rc: %d.\n", rc);
 		D_GOTO(out, rc);
@@ -454,7 +430,7 @@ out:
 	return rc;
 }
 
-int
+static inline int
 crt_proc_common_hdr(crt_proc_t proc, struct crt_common_hdr *hdr)
 {
 	hg_proc_t     hg_proc;
@@ -469,40 +445,10 @@ crt_proc_common_hdr(crt_proc_t proc, struct crt_common_hdr *hdr)
 		D_GOTO(out, rc = -DER_INVAL);
 
 	hg_proc = proc;
-	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->cch_opc);
+	hg_ret = hg_proc_memcpy(hg_proc, hdr, sizeof(*hdr));
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
 		D_GOTO(out, rc = -DER_HG);
-	}
-	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->cch_flags);
-	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
-		D_GOTO(out, rc = -DER_HG);
-	}
-	hg_ret = hg_proc_hg_uint64_t(hg_proc, &hdr->cch_hlc);
-	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
-		D_GOTO(out, rc = -DER_HG);
-	}
-	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->cch_rank);
-	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
-		D_GOTO(out, rc = -DER_HG);
-	}
-	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->cch_tag);
-	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
-		D_GOTO(out, rc = -DER_HG);
-	}
-	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->cch_xid);
-	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
-		rc = -DER_HG;
-	}
-	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->cch_rc);
-	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
-		rc = -DER_HG;
 	}
 
 out:
@@ -597,95 +543,22 @@ crt_hg_unpack_cleanup(crt_proc_t proc)
 		hg_proc_free(proc);
 }
 
-static int
-crt_proc_internal(struct crf_field *crf,
-			 crt_proc_t proc, void *data)
-{
-	int rc = 0;
-	void *ptr = data;
-	int i;
-	int j;
-
-	for (i = 0; i < crf->crf_count; i++) {
-		if (crf->crf_msg[i]->cmf_flags & CMF_ARRAY_FLAG) {
-			struct crt_array *array = ptr;
-			hg_proc_op_t	 proc_op;
-			hg_return_t	 hg_ret;
-			void		*array_ptr;
-
-			/* retrieve the count of array first */
-			hg_ret = hg_proc_hg_uint64_t(proc, &array->ca_count);
-			if (hg_ret != HG_SUCCESS) {
-				rc = -DER_HG;
-				break;
-			}
-
-			proc_op = hg_proc_get_op(proc);
-			if (array->ca_count == 0) {
-				if (proc_op == HG_DECODE)
-					array->ca_arrays = NULL;
-				ptr = (char *)ptr + sizeof(struct crt_array);
-				continue;
-			}
-
-			if (proc_op == HG_DECODE) {
-				D_ASSERT(array->ca_count > 0);
-				D_ALLOC(array->ca_arrays, array->ca_count *
-						crf->crf_msg[i]->cmf_size);
-				if (array->ca_arrays == NULL) {
-					rc = -DER_NOMEM;
-					break;
-				}
-			}
-			array_ptr = array->ca_arrays;
-			for (j = 0; j < array->ca_count; j++) {
-				rc = crf->crf_msg[i]->cmf_proc(proc, array_ptr);
-				if (rc != 0) {
-					D_ERROR("cmf_proc failed, i %d, "
-						"rc %d.\n", i, rc);
-					D_GOTO(out, rc);
-				}
-
-				array_ptr = (char *)array_ptr +
-					    crf->crf_msg[i]->cmf_size;
-			}
-
-			if (proc_op == HG_FREE)
-				D_FREE(array->ca_arrays);
-
-			ptr = (char *)ptr + sizeof(struct crt_array);
-		} else {
-			rc = crf->crf_msg[i]->cmf_proc(proc, ptr);
-
-			ptr = (char *)ptr + crf->crf_msg[i]->cmf_size;
-		}
-
-		if (rc < 0)
-			break;
-	}
-
-out:
-	return rc;
-}
-
-static int
+static inline int
 crt_proc_input(struct crt_rpc_priv *rpc_priv, crt_proc_t proc)
 {
 	struct crt_req_format *crf = rpc_priv->crp_opc_info->coi_crf;
 
 	D_ASSERT(crf != NULL);
-	return crt_proc_internal(&crf->crf_in,
-				 proc, rpc_priv->crp_pub.cr_input);
+	return crf->crf_proc_in(proc, rpc_priv->crp_pub.cr_input);
 }
 
-static int
+static inline int
 crt_proc_output(struct crt_rpc_priv *rpc_priv, crt_proc_t proc)
 {
 	struct crt_req_format *crf = rpc_priv->crp_opc_info->coi_crf;
 
 	D_ASSERT(crf != NULL);
-	return crt_proc_internal(&crf->crf_out,
-				 proc, rpc_priv->crp_pub.cr_output);
+	return crf->crf_proc_out(proc, rpc_priv->crp_pub.cr_output);
 }
 
 int

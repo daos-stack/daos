@@ -218,15 +218,16 @@ struct crt_rpc_priv {
 		0, &CQF_crt_grp_create,					\
 		crt_hdlr_grp_create, &crt_grp_create_co_ops),		\
 	X(CRT_OPC_GRP_DESTROY,						\
-		0,  &CQF_crt_grp_destroy,				\
+		0, &CQF_crt_grp_destroy,				\
 		crt_hdlr_grp_destroy, &crt_grp_destroy_co_ops),		\
 	X(CRT_OPC_URI_LOOKUP,						\
 		0, &CQF_crt_uri_lookup,					\
 		crt_hdlr_uri_lookup, NULL),				\
 	X(CRT_OPC_SELF_TEST_BOTH_EMPTY,					\
-		0, NULL, crt_self_test_msg_handler, NULL),		\
+		0, NULL,						\
+		crt_self_test_msg_handler, NULL),			\
 	X(CRT_OPC_SELF_TEST_SEND_ID_REPLY_IOV,				\
-		0,  &CQF_crt_st_send_id_reply_iov,			\
+		0, &CQF_crt_st_send_id_reply_iov,			\
 		crt_self_test_msg_handler, NULL),			\
 	X(CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY,			\
 		0, &CQF_crt_st_send_iov_reply_empty,			\
@@ -256,9 +257,11 @@ struct crt_rpc_priv {
 		0, &CQF_crt_st_status_req,				\
 		crt_self_test_status_req_handler, NULL),		\
 	X(CRT_OPC_IV_FETCH,						\
-		0, &CQF_crt_iv_fetch, crt_hdlr_iv_fetch, NULL),		\
+		0, &CQF_crt_iv_fetch,					\
+		crt_hdlr_iv_fetch, NULL),				\
 	X(CRT_OPC_IV_UPDATE,						\
-		0, &CQF_crt_iv_update, crt_hdlr_iv_update, NULL),	\
+		0, &CQF_crt_iv_update,					\
+		crt_hdlr_iv_update, NULL),				\
 	X(CRT_OPC_IV_SYNC,						\
 		0, &CQF_crt_iv_sync,					\
 		crt_hdlr_iv_sync, &crt_iv_sync_co_ops),			\
@@ -278,21 +281,23 @@ struct crt_rpc_priv {
 		0, &CQF_crt_ctl_get_uri_cache,				\
 		crt_hdlr_ctl_get_uri_cache, NULL),			\
 	X(CRT_OPC_CTL_LS,						\
-		0, &CQF_crt_ctl_ep_ls, crt_hdlr_ctl_ls, NULL),		\
+		0, &CQF_crt_ctl_ep_ls,					\
+		crt_hdlr_ctl_ls, NULL),					\
 	X(CRT_OPC_CTL_GET_HOSTNAME,					\
 		0, &CQF_crt_ctl_get_host,				\
 		crt_hdlr_ctl_get_hostname, NULL),			\
 	X(CRT_OPC_CTL_GET_PID,						\
-		0, &CQF_crt_ctl_get_pid, crt_hdlr_ctl_get_pid, NULL),	\
+		0, &CQF_crt_ctl_get_pid,				\
+		crt_hdlr_ctl_get_pid, NULL),				\
 	X(CRT_OPC_PROTO_QUERY,						\
-		0, &CQF_crt_proto_query, crt_hdlr_proto_query, NULL),	\
+		0, &CQF_crt_proto_query,				\
+		crt_hdlr_proto_query, NULL),				\
 	X(CRT_OPC_CTL_FI_TOGGLE,					\
 		0, &CQF_crt_ctl_fi_toggle,				\
 		crt_hdlr_ctl_fi_toggle, NULL),				\
 	X(CRT_OPC_CTL_FI_SET_ATTR,					\
-		0, &CQF_crt_ctl_fi_attr_set, crt_hdlr_ctl_fi_attr_set,	\
-		NULL)
-
+		0, &CQF_crt_ctl_fi_attr_set,				\
+		crt_hdlr_ctl_fi_attr_set, NULL)
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a
@@ -582,24 +587,6 @@ CRT_RPC_DECLARE(crt_ctl_fi_attr_set, CRT_ISEQ_CTL_FI_ATTR_SET,
 
 CRT_RPC_DECLARE(crt_ctl_fi_toggle,
 		CRT_ISEQ_CTL_FI_TOGGLE, CRT_OSEQ_CTL_FI_TOGGLE)
-
-/* CRT internal RPC format definitions */
-struct crt_internal_rpc {
-	/* Name of the RPC */
-	const char		*ir_name;
-	/* Operation code associated with the RPC */
-	crt_opcode_t		 ir_opc;
-	/* RPC version */
-	int			 ir_ver;
-	/* Operation flags, TBD */
-	int			 ir_flags;
-	/* RPC request format */
-	struct crt_req_format	*ir_req_fmt;
-	/* RPC handler */
-	crt_rpc_cb_t		 ir_hdlr;
-	/* collective ops */
-	struct crt_corpc_ops	*ir_co_ops;
-};
 
 /* Internal macros for crt_req_(add|dec)ref from within cart.  These take
  * a crt_internal_rpc pointer and provide better logging than the public

@@ -196,7 +196,7 @@ CRT_RPC_DEFINE(crt_ctl_fi_toggle,
 	.prf_co_ops = e,	\
 }
 
-struct crt_proto_rpc_format crt_internal_rpcs[] = {
+static struct crt_proto_rpc_format crt_internal_rpcs[] = {
 	CRT_INTERNAL_RPCS_LIST,
 };
 
@@ -209,11 +209,11 @@ crt_internal_rpc_register(void)
 	struct crt_proto_format	cpf;
 	int			rc;
 
-	cpf.cpf_name = "internal-proto";
-	cpf.cpf_ver = 0;
+	cpf.cpf_name  = "internal-proto";
+	cpf.cpf_ver   = 0;
 	cpf.cpf_count = ARRAY_SIZE(crt_internal_rpcs);
-	cpf.cpf_prf = crt_internal_rpcs;
-	cpf.cpf_base = CRT_OPC_INTERNAL_BASE;
+	cpf.cpf_prf   = crt_internal_rpcs;
+	cpf.cpf_base  = CRT_OPC_INTERNAL_BASE;
 
 	rc = crt_proto_register_internal(&cpf);
 	if (rc != 0)
@@ -238,8 +238,14 @@ crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 		D_ERROR("opc: %#x, lookup failed.\n", opc);
 		D_GOTO(out, rc = -DER_UNREG);
 	}
-	D_ASSERT(opc_info->coi_input_size <= CRT_MAX_INPUT_SIZE &&
-		 opc_info->coi_output_size <= CRT_MAX_OUTPUT_SIZE);
+	if (opc_info->coi_crf != NULL &&
+	    (opc_info->coi_crf->crf_size_in > CRT_MAX_INPUT_SIZE ||
+	     opc_info->coi_crf->crf_size_out > CRT_MAX_OUTPUT_SIZE)) {
+		D_ERROR("opc: %#x, input_size "DF_U64" or output_size "DF_U64" "
+			"too large.\n", opc, opc_info->coi_crf->crf_size_in,
+			opc_info->coi_crf->crf_size_out);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
 
 	if (forward)
 		D_ALLOC(rpc_priv, opc_info->coi_input_offset);
@@ -1354,20 +1360,23 @@ crt_rpc_inout_buff_init(struct crt_rpc_priv *rpc_priv)
 	opc_info = rpc_priv->crp_opc_info;
 	D_ASSERT(opc_info != NULL);
 
+	if (opc_info->coi_crf == NULL)
+		return;
+
 	/*
 	 * for forward request, need not allocate memory here, instead it will
 	 * reuse the original input buffer of parent RPC.
 	 * See crt_corpc_req_hdlr().
 	 */
-	if (opc_info->coi_input_size > 0 && !rpc_priv->crp_forward) {
+	if (opc_info->coi_crf->crf_size_in > 0 && !rpc_priv->crp_forward) {
 		rpc_pub->cr_input = ((void *)rpc_priv) +
 			opc_info->coi_input_offset;
-		rpc_pub->cr_input_size = opc_info->coi_input_size;
+		rpc_pub->cr_input_size = opc_info->coi_crf->crf_size_in;
 	}
-	if (opc_info->coi_output_size > 0) {
+	if (opc_info->coi_crf->crf_size_out > 0) {
 		rpc_pub->cr_output = ((void *)rpc_priv) +
 			opc_info->coi_output_offset;
-		rpc_pub->cr_output_size = opc_info->coi_output_size;
+		rpc_pub->cr_output_size = opc_info->coi_crf->crf_size_out;
 	}
 }
 

@@ -54,14 +54,6 @@
 
 using namespace std;
 
-struct crt_msg_field *linkage_test_rpc_in[] = {
-	&CMF_UINT32,
-};
-
-struct crt_msg_field *linkage_test_rpc_out[] = {
-	&CMF_UINT32,
-};
-
 #define TEST_LINKAGE_BASE 0x010000000
 #define TEST_LINKAGE_VER  0
 

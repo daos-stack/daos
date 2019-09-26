@@ -533,6 +533,7 @@ crt_ep_abort(crt_endpoint_t *ep);
 #define CRT_VAR   0
 #define CRT_PTR   1
 #define CRT_ARRAY 2
+#define CRT_RAW   3
 
 #define CRT_GEN_GET_TYPE(seq) BOOST_PP_SEQ_HEAD(seq)
 #define CRT_GEN_GET_NAME(seq) BOOST_PP_SEQ_ELEM(1, seq)
@@ -541,7 +542,7 @@ crt_ep_abort(crt_endpoint_t *ep);
 #define CRT_GEN_STRUCT_FIELD(r, data, seq)				\
 	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_ARRAY, CRT_GEN_GET_KIND(seq)),	\
 		struct {						\
-			uint64_t		ca_count;		\
+			uint64_t		 ca_count;		\
 			CRT_GEN_GET_TYPE(seq)	*ca_arrays;		\
 		},							\
 		CRT_GEN_GET_TYPE(seq))					\
@@ -598,34 +599,26 @@ crt_ep_abort(crt_endpoint_t *ep);
 			D_FREE(e_ptr);					\
 	}								\
 	next_field_##r:,						\
+	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_RAW, CRT_GEN_GET_KIND(seq)),	\
+	rc = crt_proc_memcpy(proc, &ptr->CRT_GEN_GET_NAME(seq),		\
+			     sizeof(CRT_GEN_GET_TYPE(seq)));		\
+	if (rc)								\
+		D_GOTO(out, rc);,					\
 	rc = CRT_GEN_GET_FUNC(seq)(proc, &ptr->CRT_GEN_GET_NAME(seq));	\
 	if (rc)								\
 		D_GOTO(out, rc);					\
-	)
+	))
 
 #define CRT_GEN_PROC_FUNC(type_name, seq)				\
 	static int crt_proc_struct_##type_name(crt_proc_t proc,		\
 					       struct type_name *ptr) {	\
 		int rc = 0;						\
+		if (proc == NULL || ptr == NULL)			\
+			D_GOTO(out, rc = -DER_INVAL);			\
 		BOOST_PP_SEQ_FOR_EACH(CRT_GEN_PROC_FIELD, ptr, seq)	\
 	out:								\
 		return rc;						\
 	}
-
-#define CRT_GEN_PROC(type_name, seq)					\
-	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(seq),				\
-	CRT_GEN_PROC_FUNC(type_name, seq)				\
-	static struct crt_msg_field CMF_##type_name = {			\
-		.cmf_flags = 0,)					\
-	BOOST_PP_COMMA_IF(BOOST_PP_SEQ_SIZE(seq))			\
-	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(seq),				\
-		.cmf_size  = sizeof(struct type_name),)			\
-	BOOST_PP_COMMA_IF(BOOST_PP_SEQ_SIZE(seq))			\
-	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(seq),				\
-		.cmf_proc  = (crt_proc_cb_t)crt_proc_struct_##type_name	\
-	};								\
-	static struct crt_msg_field *crt_##type_name##_fields[] =	\
-		{ &CMF_##type_name };,)
 
 #define CRT_RPC_DECLARE(rpc_name, fields_in, fields_out)		\
 	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in),			\
@@ -643,15 +636,26 @@ crt_ep_abort(crt_endpoint_t *ep);
 #endif /* warning is available */
 
 #define CRT_RPC_DEFINE(rpc_name, fields_in, fields_out)			\
-	CRT_GEN_PROC(rpc_name##_in, fields_in)				\
-	CRT_GEN_PROC(rpc_name##_out, fields_out)			\
+	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in),			\
+		CRT_GEN_PROC_FUNC(rpc_name##_in, fields_in), )		\
+	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_out),			\
+		CRT_GEN_PROC_FUNC(rpc_name##_out, fields_out), )	\
 	_Pragma("GCC diagnostic push")					\
 	CRT_DISABLE_SIZEOF_POINTER_DIV					\
-	struct crt_req_format CQF_##rpc_name = DEFINE_CRT_REQ_FMT(	\
+	struct crt_req_format CQF_##rpc_name = {			\
+		.crf_proc_in  = (crt_proc_cb_t)				\
 		BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in),		\
-			crt_##rpc_name##_in_fields, NULL),		\
+			crt_proc_struct_##rpc_name##_in, NULL),		\
+		.crf_proc_out = (crt_proc_cb_t)				\
 		BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_out),		\
-			crt_##rpc_name##_out_fields, NULL));		\
+			crt_proc_struct_##rpc_name##_out, NULL),	\
+		.crf_size_in  =						\
+		BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in),		\
+			sizeof(struct rpc_name##_in), 0),		\
+		.crf_size_out =						\
+		BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_out),		\
+			sizeof(struct rpc_name##_out), 0)		\
+	};								\
 	_Pragma("GCC diagnostic pop")
 
 #define CRT_RPC_CORPC_REGISTER(opcode, rpc_name, rpc_handler, co_ops)	\

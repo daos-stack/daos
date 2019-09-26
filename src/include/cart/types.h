@@ -94,7 +94,7 @@ typedef struct crt_init_options {
 	int		cio_ep_credits;
 } crt_init_options_t;
 
-typedef int		 crt_status_t;
+typedef int		crt_status_t;
 /**
  * CRT uses a string as the group ID
  * This string can only contain ASCII printable characters between 0x20 and 0x7E
@@ -115,13 +115,13 @@ typedef d_string_t	crt_group_id_t;
 
 typedef struct crt_group {
 	/** the group ID of this group */
-	crt_group_id_t		cg_grpid;
+	crt_group_id_t	cg_grpid;
 } crt_group_t;
 
 /** transport endpoint identifier */
 typedef struct {
 	/** group handle, NULL means the primary group */
-	crt_group_t	 *ep_grp;
+	crt_group_t	*ep_grp;
 	/** rank number within the group */
 	d_rank_t	 ep_rank;
 	/** tag, now used as the context ID of the target rank */
@@ -142,7 +142,7 @@ typedef d_string_t crt_phy_addr_t;
  * expected.
  */
 typedef uint32_t crt_opcode_t;
-#define CRT_OPC_INTERNAL_BASE		0xFF000000UL
+#define CRT_OPC_INTERNAL_BASE	0xFF000000UL
 
 /**
  * Check if the opcode is reserved by CRT internally.
@@ -159,7 +159,7 @@ typedef void *crt_rpc_output_t;
 typedef void *crt_bulk_t; /**< abstract bulk handle */
 typedef void *crt_bulk_array_t; /**< abstract bulk array handle */
 
-#define CRT_BULK_NULL            (NULL)
+#define CRT_BULK_NULL		(NULL)
 /**
  * max size of input/output parameters defined as 64M bytes, for larger length
  * the user should transfer by bulk.
@@ -198,53 +198,12 @@ typedef void *crt_proc_t;
 /** Proc callback for pack/unpack parameters */
 typedef int (*crt_proc_cb_t)(crt_proc_t proc, void *data);
 
-/** RPC message layout definitions */
-enum cmf_flags {
-	CMF_ARRAY_FLAG	= 1 << 0,
-};
-
-struct crt_msg_field {
-	const uint32_t		cmf_flags;
-	const uint32_t		cmf_size;
-	crt_proc_cb_t		cmf_proc;
-};
-
-struct crf_field {
-	uint32_t		crf_count;
-	struct crt_msg_field	**crf_msg;
-};
-
 struct crt_req_format {
-	struct crf_field	 crf_in;
-	struct crf_field	 crf_out;
+	crt_proc_cb_t		crf_proc_in;
+	crt_proc_cb_t		crf_proc_out;
+	const size_t		crf_size_in;
+	const size_t		crf_size_out;
 };
-
-struct crt_array {
-	uint64_t	 ca_count;
-	void		*ca_arrays;
-};
-
-#define DEFINE_CRT_REQ_FMT_ARRAY(crt_in, in_size,			\
-				crt_out, out_size) {			\
-	crf_in : {		crf_count :	(in_size),		\
-				crf_msg :	(crt_in)		\
-				},					\
-	crf_out: {		crf_count :	(out_size),		\
-				crf_msg :	(crt_out)		\
-				}					\
-	}								\
-
-#define DEFINE_CRT_REQ_FMT(crt_in, crt_out)				\
-DEFINE_CRT_REQ_FMT_ARRAY((crt_in),					\
-			 ((crt_in) == NULL) ? 0 : ARRAY_SIZE(crt_in),	\
-			 (crt_out),					\
-			 ((crt_out) == NULL) ? 0 : ARRAY_SIZE(crt_out))
-
-#define DEFINE_CRT_MSG(flags, size, proc) {				\
-	cmf_flags :	(flags),					\
-	cmf_size :	(size),						\
-	cmf_proc :	(crt_proc_cb_t)(proc)				\
-}
 
 /** server-side RPC handler */
 typedef void (*crt_rpc_cb_t)(crt_rpc_t *rpc);
@@ -275,7 +234,7 @@ struct crt_proto_format {
 	/** Array of RPC definitions */
 	struct crt_proto_rpc_format	*cpf_prf;
 	/** protocol base opcode */
-	crt_opcode_t			cpf_base;
+	crt_opcode_t			 cpf_base;
 
 };
 
@@ -307,83 +266,6 @@ struct crt_proto_query_cb_info {
  * The completion callback to crt_proto_query().
  */
 typedef void (*crt_proto_query_cb_t)(struct crt_proto_query_cb_info *cb_info);
-
-/**
- * Macros to automatically generate CMF definitions for a list of types.
- * To generate CMF definitions for a list of types:
- *
- * 1, create a list of types:
- *	\#define MY_LIST(ACTION)					\
- *	TYPE_ACTION(ACTION, CMF_MY_TYPE, 0, my_type)			\
- *	STURCT_ACTION(ACTION, CMF_MY_FOO, 0, my_foo)
- *
- * 2, call:
- *	CRT_DEFINE_MSG_FIELDS(MY_LIST)
- *
- * 3, to make CMF definitions available in current scope:
- *	CRT_DEFINE_MSG_FIELDS(MY_LIST)
- *
- */
-
-/** This is for STRUCT_ACTION to remove the keyword struct */
-#define __cart_type_struct
-
-/**
- * specify entry for a type.
- *
- * \param[in] ACTION		Wrapper macro
- * \param[in] cmf_name		name of the CMF
- * \param[in] flags		flags of the CMF
- * \param[in] type		the type which the CMF will describe. type must
- *				be a single word,  it can't be in the form of:
- *				struct foo
- */
-#define TYPE_ACTION(ACTION, cmf_name, flags, type)		\
-	ACTION(cmf_name, flags, type, type)			\
-
-/**
- * specify entry for a struct.
- * \param[in] ACTION		Wrapper macro
- * \param[in] cmf_name		name of the CMF
- * \param[in] flags		flags of the CMF
- * \param[in] type		the struct which the CMF will describe.
- *				type is expected to be in the form of:
- *				struct foo.
- */
-#define STRUCT_ACTION(ACTION, cmf_name, flags, type)		\
-	ACTION(cmf_name, flags, type, BOOST_PP_CAT(__cart_type_, type))
-
-/**
- * List of types to generate CMF definitions for. Entries in this list should
- * be eigher TYPE_ACTION or STRUCT_ACTION
- */
-#define CRT_CMF_LIST(ACTION)						\
-	TYPE_ACTION(ACTION, CMF_UUID, 0, uuid_t)			\
-	TYPE_ACTION(ACTION, CMF_GRP_ID, 0, crt_group_id_t)		\
-	TYPE_ACTION(ACTION, CMF_UINT8, 0, uint8_t)			\
-	TYPE_ACTION(ACTION, CMF_INT, 0, int32_t)			\
-	TYPE_ACTION(ACTION, CMF_UINT32, 0, uint32_t)			\
-	TYPE_ACTION(ACTION, CMF_UINT64, 0, uint64_t)			\
-	TYPE_ACTION(ACTION, CMF_BULK, 0, crt_bulk_t)			\
-	TYPE_ACTION(ACTION, CMF_BOOL, 0, bool)				\
-	ACTION(CMF_STRING, 0, d_string_t, d_string_t)			\
-	TYPE_ACTION(ACTION, CMF_PHY_ADDR, 0, crt_phy_addr_t)		\
-	ACTION(CMF_RANK, 0, d_rank_t, uint32_t)				\
-	TYPE_ACTION(ACTION, CMF_RANK_LIST, 0, d_rank_list_ptr_t)	\
-	ACTION(CMF_BULK_ARRAY, CMF_ARRAY_FLAG, crt_bulk_array_t,	\
-	       crt_bulk_t)						\
-	TYPE_ACTION(ACTION, CMF_IOVEC, 0, d_iov_t)
-
-#define CRT_DECLARE_ONE_FIELD(cmf_name, flags, type, proc_base)		\
-	extern struct crt_msg_field cmf_name;				\
-	extern struct crt_msg_field BOOST_PP_CAT(CMF_OF_, type);
-
-#define CRT_DECLARE_MSG_FIELDS(list)					\
-	list(CRT_DECLARE_ONE_FIELD)
-
-/* Common request format type */
-CRT_DECLARE_MSG_FIELDS(CRT_CMF_LIST)
-
 
 /** Bulk transfer modes */
 typedef enum {
@@ -459,14 +341,14 @@ struct crt_cb_info {
 	 * -DER_TIMEDOUT         for timed out request,
 	 * other negative value  for other possible failure.
 	 */
-	int			cci_rc;
+	int			 cci_rc;
 };
 
 /** Bulk callback info structure */
 struct crt_bulk_cb_info {
 	struct crt_bulk_desc	*bci_bulk_desc; /**< bulk descriptor */
 	void			*bci_arg; /**< User passed in arg */
-	int			bci_rc; /**< return code */
+	int			 bci_rc; /**< return code */
 };
 
 /**
@@ -512,7 +394,7 @@ typedef void (*crt_lm_attach_cb_t)(const struct crt_lm_attach_cb_info *cb_info);
 
 struct crt_barrier_cb_info {
 	void	*bci_arg;  /**< optional argument passed by user */
-	int	bci_rc;    /**< return code for barrier */
+	int	 bci_rc;    /**< return code for barrier */
 };
 
 /**
