@@ -417,7 +417,6 @@ To start the DAOS server, run:
 ```
 orterun --map-by node --mca btl tcp,self --mca oob tcp -np <num_servers>
 -H <server_list> --enable-recovery daos_server -a <shared_dir> -o <config_file>
->>>>>>> master
 ```
 The --enable-recovery is required for fault tolerance to guarantee that
 the fault of one server does not cause the others to be stopped.
