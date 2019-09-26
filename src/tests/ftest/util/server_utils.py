@@ -91,7 +91,7 @@ class ServerCommand(DaosCommand):
             """Return if SCM (ram) is provided in the configuration."""
             return self.scm
 
-        def _create_yaml(self, basepath, log_filename):
+        def create_yaml(self, basepath, log_filename):
             """Create the DAOS server config YAML file based on Avocado test
                 Yaml file.
 
@@ -150,11 +150,21 @@ class ServerCommand(DaosCommand):
                             new_value_set['server_config'][key]
 
             # Check if nvme is enabled
-            if default_value_set['servers'][0]['bdev_class'] == "nvme":
-                self.nvme = True
+            if (new_value_set['server_config']['server'][0]['bdev_class'] ==
+                "nvme"):
+                    self.nvme = True
+                    default_value_set['servers'][0]['bdev_class'] =  'nvme'
+                    default_value_set['servers'][0]['bdev_list'] = \
+                        ['0000:81:00.0']
+                    if 'bdev_list' in (new_value_set
+                        ['server_config']['server'][0]):
+                        default_value_set['servers'][0]['bdev_list'] = \
+                            (new_value_set
+                                ['server_config']['server'][0]['bdev_list'])
 
-            if default_value_set['servers'][0]['scm_class'] == "ram":
-                self.scm = True
+            if (new_value_set['server_config']['server'][0]['scm_class'] ==
+                "dcpm"):
+                    self.scm = True
 
             # if sepcific log file name specified use that
             if log_filename:
@@ -201,7 +211,7 @@ class ServerManager(ExecutableCommand):
 
         # Setup orterun command defaults
         self.runner = Orterun(
-            ServerCommand(os.path.join(basepath, "bin")), runnerpath, True)
+            ServerCommand(os.path.join(self.basepath, "bin")), runnerpath, True)
         self.runner.enable_recovery.value = True
         if enable_path:
             self.runner.export.value = ["PATH"]
