@@ -39,6 +39,8 @@
 #include "daos_checksum_tests.h"
 #include "misc_tests.h"
 
+static bool verbose;
+
 /**
  * -----------------------------------------------------------------------------
  * Setup some fake functions and veriables to track how the functions are
@@ -433,23 +435,45 @@ static void test_compare_checksums(void **state)
 	daos_csummer_destroy(&csummer);
 }
 
+static void
+print_checksum(struct daos_csummer *csummer, daos_csum_buf_t *csum)
+{
+	uint32_t i, c;
+
+	D_PRINT("Type: %d\n", csum->cs_type);
+	D_PRINT("Name: %s\n", daos_csummer_get_name(csummer));
+	D_PRINT("Count: %d\n", csum->cs_nr);
+	D_PRINT("Len: %d\n", csum->cs_len);
+	D_PRINT("Buf Len: %d\n", csum->cs_buf_len);
+	D_PRINT("Chunk: %d\n", csum->cs_chunksize);
+	for (c = 0; c < csum->cs_nr; c++) {
+		uint8_t *csum_bytes = dcb_idx2csum(csum, c);
+
+		D_PRINT("Checksum[%02d]: 0x", c);
+		for (i = 0; i < csum->cs_len; i++)
+			D_PRINT("%02x", csum_bytes[i]);
+		D_PRINT("\n");
+	}
+	D_PRINT("\n");
+}
+
 /**
  * -----------------------------------------------------------------------------
  * Loop through and verify all the different checksum algorithms supporting
  * -----------------------------------------------------------------------------
  */
-static void test_all_checksum_types(void **state)
+static void
+test_all_checksum_types(void **state)
 {
 	d_sg_list_t		 sgl;
 	daos_recx_t		 recxs;
-	enum DAOS_CSUM_TYPE	 type = CSUM_TYPE_UNKNOWN + 1;
-	int			 c;
-	int			 i;
+	enum DAOS_CSUM_TYPE	 type;
 	struct daos_csummer	*csummer = NULL;
-	daos_csum_buf_t	*csums = NULL;
+	daos_csum_buf_t		*csums = NULL;
+	int			 csum_lens[CSUM_TYPE_END];
 	int			 rc;
-	int csum_lens[CSUM_TYPE_END]; /** expected checksum lengths */
 
+	/** expected checksum lengths */
 	csum_lens[CSUM_TYPE_ISAL_CRC16_T10DIF]	= 2;
 	csum_lens[CSUM_TYPE_ISAL_CRC32_ISCSI]	= 4;
 	csum_lens[CSUM_TYPE_ISAL_CRC64_REFL]	= 8;
@@ -465,7 +489,7 @@ static void test_all_checksum_types(void **state)
 	recxs.rx_idx = 0;
 	recxs.rx_nr = daos_sgl_buf_size(&sgl);
 
-	for (; type < CSUM_TYPE_END; type++) {
+	for (type = CSUM_TYPE_UNKNOWN + 1; type < CSUM_TYPE_END; type++) {
 		rc = daos_csummer_init(&csummer,
 			daos_csum_type2algo(type), 128);
 		assert_int_equal(0, rc);
@@ -476,22 +500,8 @@ static void test_all_checksum_types(void **state)
 		assert_int_equal(csum_lens[type],
 				 daos_csummer_get_size(csummer));
 
-		D_PRINT("Type: %d\n", csums->cs_type);
-		D_PRINT("Name: %s\n", daos_csummer_get_name(csummer));
-		D_PRINT("Count: %d\n", csums->cs_nr);
-		D_PRINT("Len: %d\n", csums->cs_len);
-		D_PRINT("Buf Len: %d\n", csums->cs_buf_len);
-		D_PRINT("Chunk: %d\n", csums->cs_chunksize);
-
-		for (c = 0; c < csums->cs_nr; c++) {
-			uint8_t *csum = dcb_idx2csum(csums, c);
-
-			D_PRINT("Checksum[%02d]: 0x", c);
-			for (i = 0; i < csums->cs_len; i++)
-				D_PRINT("%02x", csum[i]);
-			D_PRINT("\n");
-		}
-		D_PRINT("\n");
+		if (verbose)
+			print_checksum(csummer, &csums[0]);
 
 		daos_csummer_destroy_csum_buf(csummer, 1, &csums);
 		daos_csummer_destroy(&csummer);
@@ -617,6 +627,7 @@ static const struct CMUnitTest tests[] = {
 int
 daos_checksum_tests_run()
 {
+	verbose = false;
 	return cmocka_run_group_tests_name("DAOS Checksum Tests", tests,
 					   NULL, NULL);
 }

@@ -33,7 +33,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	log "github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
@@ -69,7 +69,7 @@ func (mod *mgmtModule) ID() int32 {
 }
 
 func (mod *mgmtModule) handleGetAttachInfo(reqb []byte) ([]byte, error) {
-	req := &pb.GetAttachInfoReq{}
+	req := &mgmtpb.GetAttachInfoReq{}
 	if err := proto.Unmarshal(reqb, req); err != nil {
 		return nil, errors.Wrap(err, "unmarshal GetAttachInfo request")
 	}
@@ -88,17 +88,17 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte) ([]byte, error) {
 	}
 	defer conn.Close()
 
-	client := pb.NewMgmtSvcClient(conn)
+	client := mgmtpb.NewMgmtSvcClient(conn)
 
 	resp, err := client.GetAttachInfo(context.Background(), req)
 	if err != nil {
 		return nil, errors.Wrapf(err, "GetAttachInfo %s %v", mod.ap, *req)
 	}
 
-	respb, err := proto.Marshal(resp)
+	resmgmtpb, err := proto.Marshal(resp)
 	if err != nil {
 		return nil, errors.Wrap(err, "marshal GetAttachInfo response")
 	}
 
-	return respb, nil
+	return resmgmtpb, nil
 }

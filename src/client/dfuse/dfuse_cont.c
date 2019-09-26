@@ -63,11 +63,11 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	uuid_copy(dfs->dfs_pool, parent->ie_dfs->dfs_pool);
 
 	if (create) {
-		rc = daos_cont_create(parent->ie_dfs->dfs_poh, dfs->dfs_cont,
-				      NULL, NULL);
-		if (rc != -DER_SUCCESS) {
-			DFUSE_LOG_ERROR("daos_cont_create() failed: (%d)", rc);
-			D_GOTO(err, rc = daos_der2errno(rc));
+		rc = dfs_cont_create(parent->ie_dfs->dfs_poh, dfs->dfs_cont,
+				     NULL, NULL, NULL);
+		if (rc) {
+			DFUSE_LOG_ERROR("dfs_cont_create() failed: (%d)", rc);
+			D_GOTO(err, rc);
 		}
 	} else {
 		rc = dfuse_check_for_inode(fs_handle, dfs, &ie);

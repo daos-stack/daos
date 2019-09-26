@@ -31,14 +31,14 @@ import (
 	. "google.golang.org/grpc/connectivity"
 
 	. "github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	. "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	. "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func connectSetup(
 	log logging.Logger,
-	state State, features []*pb.Feature, ctrlrs NvmeControllers,
+	state State, features []*Feature, ctrlrs NvmeControllers,
 	ctrlrResults NvmeControllerResults, modules ScmModules,
 	moduleResults ScmModuleResults, pmems PmemDevices, mountResults ScmMountResults,
 	scanRet error, formatRet error, updateRet error, burninRet error,
@@ -252,7 +252,7 @@ func TestStorageUpdate(t *testing.T) {
 			MockModuleResults, MockPmemDevices, MockMountResults, nil, nil, tt.updateRet, nil,
 			nil, nil)
 
-		cNvmeMap, cModuleMap := cc.StorageUpdate(new(pb.StorageUpdateReq))
+		cNvmeMap, cModuleMap := cc.StorageUpdate(new(StorageUpdateReq))
 
 		if tt.updateRet != nil {
 			for _, addr := range MockServers {

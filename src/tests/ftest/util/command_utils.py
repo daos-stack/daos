@@ -196,7 +196,7 @@ class CommandWithParameters(ObjectWithParameters):
         # Join all the parameters that have been assigned a value with the
         # command to create the command string
         params = []
-        for name in self.get_param_names():
+        for name in self.get_str_param_names():
             value = str(getattr(self, name))
             if value != "":
                 params.append(value)
@@ -208,6 +208,16 @@ class CommandWithParameters(ObjectWithParameters):
 
         # Return the command and its parameters
         return " ".join(command_list + params)
+
+    def get_str_param_names(self):
+        """Get a sorted list of the names of the command attributes.
+
+        Returns:
+            list: a list of class attribute names used to define parameters
+                for the command.
+
+        """
+        return self.get_param_names()
 
 
 class ExecutableCommand(CommandWithParameters):
@@ -243,8 +253,8 @@ class ExecutableCommand(CommandWithParameters):
         """
         if self.run_as_subprocess:
             self._run_subprocess()
-        else:
-            self._run_process()
+            return None
+        return self._run_process()
 
     def _run_process(self):
         """Run the command as a foreground process.
@@ -265,7 +275,7 @@ class ExecutableCommand(CommandWithParameters):
         }
         try:
             # Block until the command is complete or times out
-            process.run(**kwargs)
+            return process.run(**kwargs)
 
         except process.CmdError as error:
             # Command failed or possibly timed out
@@ -350,6 +360,56 @@ class ExecutableCommand(CommandWithParameters):
                 # Indicate an error if the process required a SIGKILL
                 raise CommandFailure("Error stopping '{}'".format(self))
             self._process = None
+
+
+class DaosCommand(ExecutableCommand):
+    """A class for similar daos command line tools."""
+
+    def __init__(self, namespace, command, path=""):
+        """Create DaosCommand object.
+        Specific type of command object built so command str returns:
+            <command> <options> <request> <action/subcommand> <options>
+        Args:
+            namespace (str): yaml namespace (path to parameters)
+            command (str): string of the command to be executed.
+            path (str): path to location of daos command binary.
+        """
+        super(DaosCommand, self).__init__(namespace, command, path)
+        self.request = BasicParameter(None)
+        self.action = BasicParameter(None)
+        self.action_command = None
+
+    def get_action_command(self):
+        """Assign a command object for the specified request and action."""
+        self.action_command = None
+
+    def get_param_names(self):
+        """Get a sorted list of DaosCommand parameter names."""
+        names = self.get_attribute_names(FormattedParameter)
+        names.extend(["request", "action"])
+        return names
+
+    def get_params(self, test):
+        """Get values for all of the command params from the yaml file.
+
+        Args:
+            test (Test): avocado Test object
+        """
+        super(DaosCommand, self).get_params(test)
+        self.get_action_command()
+
+    def get_str_param_names(self):
+        """Get a sorted list of the names of the command attributes.
+
+        Returns:
+            list: a list of class attribute names used to define parameters
+                for the command.
+
+        """
+        names = self.get_param_names()
+        if self.action_command is not None:
+            names[-1] = "action_command"
+        return names
 
 
 class EnvironmentVariables(dict):
