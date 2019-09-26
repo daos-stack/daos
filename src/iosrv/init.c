@@ -210,7 +210,7 @@ dss_tgt_nr_get(int ncores, int nr)
 	 * dss_tgt_offload_xs_nr offload XS. Calculate the nr_default
 	 * as the number of main XS based on number of cores.
 	 */
-	if (dss_numa_node == -1 || numa_node_nr <= 0)
+	if (dss_numa_node == -1)
 		nr_default = (ncores - dss_sys_xs_nr) / DSS_XS_NR_PER_TGT;
 	else
 		nr_default = (((ncores - dss_sys_xs_nr) - dss_core_offset) /
