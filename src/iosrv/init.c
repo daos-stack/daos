@@ -653,8 +653,6 @@ Options:\n\
       Number of helper XS -per vos target (default 1)\n\
   --firstcore=firstcore, -f firstcore\n\
       index of first core for service thread (default 0)\n\
-  --pinned_numa_node=numanode, -p numanode\n\
-      Bind to cores within the specified NUMA node\n\
   --group=group, -g group\n\
       Server group name (default \"%s\")\n\
   --storage=path, -s path\n\
@@ -667,11 +665,12 @@ Options:\n\
       Shared segment ID (enable multi-process mode in SPDK, default none)\n\
   --attach_info=path, -apath\n\
       Attach info patch (to support non-PMIx client, default \"/tmp\")\n\
+  --pinned_numa_node=numanode, -p numanode\n\
+      Bind to cores within the specified NUMA node\n\
   --help, -h\n\
       Print this description\n",
 		prog, prog, modules, daos_sysname, dss_storage_path,
 		dss_socket_dir, dss_nvme_conf);
-	exit(0);
 }
 
 static int
