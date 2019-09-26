@@ -58,7 +58,7 @@ func DefaultStorageControlService(log logging.Logger, cfg *Configuration) (*Stor
 	}
 
 	return NewStorageControlService(log,
-		newNvmeStorage(log, cfg.NvmeShmID, spdkScript, cfg.ext),
+		newNvmeStorage(log, cfg.NvmeShmID, cfg.NrHugepages, spdkScript, cfg.ext),
 		newScmStorage(log, cfg.ext), cfg.Servers,
 		getDrpcClientConnection(cfg.SocketDir)), nil
 }

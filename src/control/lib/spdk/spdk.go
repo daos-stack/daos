@@ -42,7 +42,7 @@ import (
 
 // ENV is the interface that provides SPDK environment management.
 type ENV interface {
-	InitSPDKEnv(int) error
+	InitSPDKEnv(EnvOptions) error
 }
 
 // Env is a simple ENV implementation.
@@ -64,22 +64,36 @@ func Rc2err(label string, rc C.int) error {
 	return nil
 }
 
+type EnvOptions struct {
+	MemSize int // memory size in MB for DPDK
+	ShmID   int
+}
+
+func (o EnvOptions) toC() *C.struct_spdk_env_opts {
+	opts := &C.struct_spdk_env_opts{}
+
+	C.spdk_env_opts_init(opts)
+
+	// ShmID 0 will be ignored
+	if o.ShmID > 0 {
+		opts.shm_id = C.int(o.ShmID)
+	}
+
+	if o.MemSize > 0 {
+		opts.mem_size = C.int(o.MemSize)
+	}
+
+	return opts
+}
+
 // InitSPDKEnv initializes the SPDK environment.
 //
 // SPDK relies on an abstraction around the local environment
 // named env that handles memory allocation and PCI device operations.
 // The library must be initialized first.
-func (e *Env) InitSPDKEnv(shmID int) (err error) {
-	opts := &C.struct_spdk_env_opts{}
-
-	C.spdk_env_opts_init(opts)
-
-	// shmID 0 will be ignored
-	if shmID > 0 {
-		opts.shm_id = C.int(shmID)
-	}
-
-	rc := C.spdk_env_init(opts)
+func (e *Env) InitSPDKEnv(opts EnvOptions) (err error) {
+	fmt.Printf("SPDK opts: %#v\n", opts)
+	rc := C.spdk_env_init(opts.toC())
 	if err = Rc2err("spdk_env_opts_init", rc); err != nil {
 		return
 	}

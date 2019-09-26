@@ -142,6 +142,7 @@ type nvmeStorage struct {
 	nvme        spdk.NVME // SPDK NVMe interface
 	spdk        SpdkSetup // SPDK shell configuration interface
 	shmID       int
+	spdkMem     int
 	controllers types.NvmeControllers
 	initialized bool
 	formatted   bool
@@ -208,8 +209,13 @@ func (n *nvmeStorage) Discover() error {
 		return nil
 	}
 
-	// specify shmID to be set as opt in SPDK env init
-	if err := n.env.InitSPDKEnv(n.shmID); err != nil {
+	opts := spdk.EnvOptions{
+		// specify shmID to be set as opt in SPDK env init
+		ShmID: n.shmID,
+		// memory, in MB, for DCPM
+		MemSize: n.spdkMem,
+	}
+	if err := n.env.InitSPDKEnv(opts); err != nil {
 		return errors.WithMessage(err, msgSpdkInitFail)
 	}
 
@@ -521,13 +527,14 @@ func loadHealthStats(health []spdk.DeviceHealth) (_health types.NvmeHealthstats)
 }
 
 // newNvmeStorage creates a new instance of nvmeStorage struct.
-func newNvmeStorage(log logging.Logger, shmID int, spdkScript *spdkSetup, ext External) *nvmeStorage {
+func newNvmeStorage(log logging.Logger, shmID, spdkMem int, spdkScript *spdkSetup, ext External) *nvmeStorage {
 	return &nvmeStorage{
-		log:   log,
-		ext:   ext,
-		spdk:  spdkScript,
-		env:   &spdk.Env{},
-		nvme:  &spdk.Nvme{},
-		shmID: shmID,
+		log:     log,
+		ext:     ext,
+		spdk:    spdkScript,
+		env:     &spdk.Env{},
+		nvme:    &spdk.Nvme{},
+		shmID:   shmID,
+		spdkMem: spdkMem,
 	}
 }

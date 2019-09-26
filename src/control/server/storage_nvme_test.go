@@ -99,7 +99,7 @@ type mockSpdkEnv struct {
 	initRet error // ENV interface InitSPDKEnv() return value
 }
 
-func (m *mockSpdkEnv) InitSPDKEnv(int) error { return m.initRet }
+func (m *mockSpdkEnv) InitSPDKEnv(EnvOptions) error { return m.initRet }
 
 func newMockSpdkEnv(initRet error) ENV { return &mockSpdkEnv{initRet} }
 
