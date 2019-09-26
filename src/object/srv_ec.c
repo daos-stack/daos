@@ -133,7 +133,7 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 				ec_bulk_spec_set(new_len, false,
 						 sl_idx++, &skip_list[i]);
 				ec_bulk_spec_set(recx_size - new_len, true,
-						 sl_idx++, skip_list);
+						 sl_idx++, &skip_list[i]);
 			} else if ((dtgt_idx + 1) * oca->u.ec.e_len <= so) {
 				/* this recx doesn't map to this target
 				 * so we need to remove the recx
