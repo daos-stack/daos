@@ -11,11 +11,6 @@ The DAOS transaction model relies on timestamps and requires time to be
 synchronized across all the storage and client nodes. This can be done
 using NTP or any other equivalent protocol.
 
-### Users and Groups
-
-DAOS requires users and groups to be synchronized on both storage and
-client nodes.
-
 ### Runtime Directory Setup
 
 DAOS uses a series of Unix Domain Sockets to communicate between its
@@ -27,8 +22,8 @@ the necessary directories are setup.
 A sign that this step may have been missed is when starting daos\_server
 or daos\_agent, you may see the message:
 ```
-mkdir /var/run/daos\_server: permission denied
-Unable to create socket directory: /var/run/daos\_server
+$ mkdir /var/run/daos_server: permission denied
+Unable to create socket directory: /var/run/daos_server
 ```
 #### Non-default Directory
 
@@ -49,16 +44,16 @@ required directories manually. To do this execute the following commands.
 
 daos\_server:
 ```
-mkdir /var/run/daos\_server
-chmod 0755 /var/run/daos\_server
-chown user:user /var/run/daos\_server (where user is the user you
+$ mkdir /var/run/daos_server
+$ chmod 0755 /var/run/daos_server
+$ chown user:user /var/run/daos_server (where user is the user you
     will run daos\_server as)
 ```
 daos\_agent:
 ```
-mkdir /var/run/daos\_agent
-chmod 0755 /var/run/daos\_agent
-chown user:user /var/run/daos\_agent (where user is the user you
+$ mkdir /var/run/daos_agent
+$ chmod 0755 /var/run/daos_agent
+$ chown user:user /var/run/daos_agent (where user is the user you
     will run daos\_agent as)
 ```
 
@@ -275,77 +270,56 @@ section of the server configuration file for best performance.
 
 To display the supported OFI provider, use the following command:
 ```
- /scratch/standan/daos\_m/opt/ofi/bin/fi\_info -l
-```
-
-```
+$ fi_info -l
 psm2:
-
 version: 1.7
 
 ofi\_rxm:
-
 version: 1.0
 
 ofi\_rxd:
-
 version: 1.0
 
 verbs:
-
 version: 1.0
 
 UDP:
-
 version: 1.1
 
 sockets:
-
 version: 2.0
 
 tcp:
-
 version: 0.1
 
-ofi\_perf\_hook:
-
+ofi_perf_hook:
 version: 1.0
 
-ofi\_noop\_hook:
-
+ofi_noop_hook:
 version: 1.0
 
 shm:
-
 version: 1.0
 
-ofi\_mrail:
-
+ofi_mrail:
 version: 1.0
 ```
 The fi\_pingpong test (delivered as part of OFI/libfabric) can be used
 to verify that the targeted OFI provider works fine:
 ```
-node1\$ fi\_pingpong -p psm2
+node1$ fi_pingpong -p psm2
 
-node2\$ fi\_pingpong -p psm2 \${IP\_ADDRESS\_NODE1}
+node2$ fi_pingpong -p psm2 ${IP_ADDRESS_NODE1}
 
-bytes \#sent \#ack total time MB/sec usec/xfer Mxfers/sec
-
-64 10 =10 1.2k 0.00s 21.69 2.95 0.34
-
-256 10 =10 5k 0.00s 116.36 2.20 0.45
-
-1k 10 =10 20k 0.00s 379.26 2.70 0.37
-
-4k 10 =10 80k 0.00s 1077.89 3.80 0.26
-
-64k 10 =10 1.2m 0.00s 2145.20 30.55 0.03
-
-1m 10 =10 20m 0.00s 8867.45 118.25 0.01
-
-Further details will be added to this section in a future revision.
+bytes #sent #ack total time  MB/sec  usec/xfer Mxfers/sec
+64    10    =10  1.2k  0.00s 21.69   2.95      0.34
+256   10    =10  5k    0.00s 116.36  2.20      0.45
+1k    10    =10  20k   0.00s 379.26  2.70      0.37
+4k    10    =10  80k   0.00s 1077.89 3.80      0.26
+64k   10    =10  1.2m  0.00s 2145.20 30.55     0.03
+1m    10    =10  20m   0.00s 8867.45 118.25    0.01
 ```
+
 ### Storage Firmware Upgrade
 
 Firmware on an NVMe controller can be updated from an image on local
@@ -461,7 +435,7 @@ Client processes (i.e. utilities, applications, ...) should have the
 following environment variables set to connect to the DAOS servers:
 ```
 export DAOS_SINGLETON_CLI=1
-export CRT_ATTACH_INFO_PATH=/path/to/shared/dir
+export CRT_ATTACH_INFO_PATH=/path/to/shared_dir
 ```
 
 ### Systemd Integration
@@ -480,20 +454,20 @@ Once the service file is installed you can start daos_server
 with the following commands:
 
 ```bash
-systemctl enable daos-server
-systemctl start daos-server
+$ systemctl enable daos-server
+$ systemctl start daos-server
 ```
 
 To check the component status use:
 
 ```bash
-systemctl status daos-server
+$ systemctl status daos-server
 ```
 
 If DAOS Server failed to start, check the logs with:
 
 ```bash
-journalctl --unit daos-server
+$ journalctl --unit daos-server
 ```
 
 ### Kubernetes Pod
@@ -522,7 +496,7 @@ The daos\_shell is a transitory tool used to exercise the management api
 and can be used to verify that the DAOS servers are up and running. It
 is to be run as a standard, unprivileged user as follows:
 ```
-\$ daos\_shell -l storagenode1:10001,storagenode2:10001 storage scan
+$ daos_shell -l storagenode1:10001,storagenode2:10001 storage scan
 ```
 "storagenode" should be replaced with the actual hostname of each
 storage node. This command will show whether the DAOS server is properly
@@ -530,9 +504,7 @@ running and initialized on each storage node. A more comprehensive and
 user-friendly tool built over the management API is under development. A
 first version will be available for DAOS v1.0.
 
-## DAOS Storage & Server Formatting
-
-### Storage Format
+## Storage Formatting
 
 When 'daos_server' is started for the first time (and no SCM directory exists),
 it enters "maintenance mode" and waits for a `daos_shell storage format` call to
@@ -544,7 +516,7 @@ the host for use with DAOS using the parameters defined in the server config fil
 node specifying a hostlist (`-l <host:port>[,...]`) of storage nodes with SCM/DCPM
 modules and NVMe SSDs installed and prepared.
 
-#### SCM Format
+### SCM Format
 
 When the command is run, the pmem kernel devices created on SCM/DCPM regions are
 formatted and mounted based on the parameters provided in the server config file.
@@ -554,7 +526,7 @@ formatted and mounted based on the parameters provided in the server config file
 is available (scm_size dictates the size of tmpfs in GB), when set to `dcpm` the device
 specified under `scm_list` will be mounted at `scm_mount` path.
 
-#### NVMe Format
+### NVMe Format
 
 When the command is run, NVMe SSDs are formatted and set up to be used by DAOS
 based on the parameters provided in the server config file.
@@ -649,7 +621,7 @@ requires a subsequent restart of `daos_server`)
 <p>
 
 ```bash
-[tanabarr@<hostname> daos_m]# daos_shell -i -l <hostname>:10001 -i storage format -f
+$ daos_shell -i -l <hostname>:10001 -i storage format -f
 Active connections: [<hostname):10001]
 This is a destructive operation and storage devices specified in the server config file will be erased.
 Please be patient as it may take several minutes.
@@ -667,9 +639,6 @@ SCM storage format results:
 </p>
 </details>
 </div>
-
-8. Create Pool (DAOS I/O - data plane - should now be running)
-TODO: add instructions
 
 ## Agent Configuration
 
@@ -727,7 +696,7 @@ incomplete integration of certificate support as of the 0.6 release.
 To start the DAOS Agent from the command line, run:
 
 ```bash
-daos_agent -i
+$ daos_agent -i
 ```
 
 Alternatively, the DAOS Agent can be started as a systemd service. The DAOS Agent
@@ -740,20 +709,20 @@ Once the service file is installed, you can start daos_agent
 with the following commands:
 
 ```bash
-systemctl enable daos-agent
-systemctl start daos-agent
+$ systemctl enable daos-agent
+$ systemctl start daos-agent
 ```
 
 To check the component status use:
 
 ```bash
-systemctl status daos-agent
+$ systemctl status daos-agent
 ```
 
 If DAOS Agent failed to start check the logs with:
 
 ```bash
-journalctl --unit daos-agent
+$ journalctl --unit daos-agent
 ```
 
 ## System Validation
