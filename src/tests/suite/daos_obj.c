@@ -36,7 +36,7 @@
 int dts_obj_class	= OC_RP_2G1;
 int dts_obj_replica_cnt	= 2;
 
-int dts_ec_obj_class	= OC_EC_2P2G1;
+int dts_ec_obj_class	= OC_EC_M2P2G1;
 int dts_ec_grp_size	= 4;
 
 void

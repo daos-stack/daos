@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 201 << 16-2018 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ struct daos_obj_class {
 #define ca_rp_nr	u.rp.r_num
 #define ca_ec_k		u.ec.e_k
 #define ca_ec_p		u.ec.e_p
-#define ca_ec_cell	u.ec.e_len
+#define ca_ec_cs	u.ec.e_cs
 
 /** predefined object classes */
 static struct daos_obj_class daos_obj_classes[] = {
@@ -277,39 +277,219 @@ static struct daos_obj_class daos_obj_classes[] = {
 		},
 	},
 	{
-		.oc_name	= "EC_2P1G1",
-		.oc_id		= OC_EC_2P1G1,
+		.oc_name	= "EC_S2P1G1",
+		.oc_id		= OC_EC_S2P1G1,
 		{
 			.ca_schema		= DAOS_OS_SINGLE,
 			.ca_resil		= DAOS_RES_EC,
 			.ca_grp_nr		= 1,
 			.ca_ec_k		= 2,
 			.ca_ec_p		= 1,
-			.ca_ec_cell		= 1 << 15,
+			.ca_ec_cs		= 1 << 14,
 		},
 	},
 	{
-		.oc_name	= "EC_2P2G1",
-		.oc_id		= OC_EC_2P2G1,
+		.oc_name	= "EC_M2P1G1",
+		.oc_id		= OC_EC_M2P1G1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.ca_ec_k		= 2,
+			.ca_ec_p		= 1,
+			.ca_ec_cs		= 1 << 16,
+		},
+	},
+	{
+		.oc_name	= "EC_L2P1G1",
+		.oc_id		= OC_EC_L2P1G1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.ca_ec_k		= 2,
+			.ca_ec_p		= 1,
+			.ca_ec_cs		= 1 << 19,
+		},
+	},
+	{
+		.oc_name	= "EC_S2P2G1",
+		.oc_id		= OC_EC_S2P2G1,
 		{
 			.ca_schema		= DAOS_OS_SINGLE,
 			.ca_resil		= DAOS_RES_EC,
 			.ca_grp_nr		= 1,
 			.ca_ec_k		= 2,
 			.ca_ec_p		= 2,
-			.ca_ec_cell		= 1 << 15,
+			.ca_ec_cs		= 1 << 14,
 		},
 	},
 	{
-		.oc_name	= "EC_8P2G1",
-		.oc_id		= OC_EC_8P2G1,
+		.oc_name	= "EC_M2P2G1",
+		.oc_id		= OC_EC_M2P2G1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.ca_ec_k		= 2,
+			.ca_ec_p		= 2,
+			.ca_ec_cs		= 1 << 16,
+		},
+	},
+	{
+		.oc_name	= "EC_L2P2G1",
+		.oc_id		= OC_EC_L2P2G1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.ca_ec_k		= 2,
+			.ca_ec_p		= 2,
+			.ca_ec_cs		= 1 << 19,
+		},
+	},
+	{
+		.oc_name	= "EC_S4P1G1",
+		.oc_id		= OC_EC_S4P1G1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.ca_ec_k		= 4,
+			.ca_ec_p		= 1,
+			.ca_ec_cs		= 1 << 14,
+		},
+	},
+	{
+		.oc_name	= "EC_M4P1G1",
+		.oc_id		= OC_EC_M4P1G1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.ca_ec_k		= 4,
+			.ca_ec_p		= 1,
+			.ca_ec_cs		= 1 << 16,
+		},
+	},
+	{
+		.oc_name	= "EC_L4P1G1",
+		.oc_id		= OC_EC_L4P1G1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.ca_ec_k		= 4,
+			.ca_ec_p		= 1,
+			.ca_ec_cs		= 1 << 19,
+		},
+	},
+	{
+		.oc_name	= "EC_S4P2G1",
+		.oc_id		= OC_EC_S4P2G1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.ca_ec_k		= 4,
+			.ca_ec_p		= 2,
+			.ca_ec_cs		= 1 << 14,
+		},
+	},
+	{
+		.oc_name	= "EC_M4P2G1",
+		.oc_id		= OC_EC_M4P2G1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.ca_ec_k		= 4,
+			.ca_ec_p		= 2,
+			.ca_ec_cs		= 1 << 16,
+		},
+	},
+	{
+		.oc_name	= "EC_L4P2G1",
+		.oc_id		= OC_EC_L4P2G1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.ca_ec_k		= 4,
+			.ca_ec_p		= 2,
+			.ca_ec_cs		= 1 << 19,
+		},
+	},
+	{
+		.oc_name	= "EC_S8P1G1",
+		.oc_id		= OC_EC_S8P1G1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.ca_ec_k		= 8,
+			.ca_ec_p		= 1,
+			.ca_ec_cs		= 1 << 14,
+		},
+	},
+	{
+		.oc_name	= "EC_M8P1G1",
+		.oc_id		= OC_EC_M8P1G1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.ca_ec_k		= 8,
+			.ca_ec_p		= 1,
+			.ca_ec_cs		= 1 << 16,
+		},
+	},
+	{
+		.oc_name	= "EC_L8P1G1",
+		.oc_id		= OC_EC_L8P1G1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.ca_ec_k		= 8,
+			.ca_ec_p		= 1,
+			.ca_ec_cs		= 1 << 19,
+		},
+	},
+	{
+		.oc_name	= "EC_S8P2G1",
+		.oc_id		= OC_EC_S8P2G1,
 		{
 			.ca_schema		= DAOS_OS_SINGLE,
 			.ca_resil		= DAOS_RES_EC,
 			.ca_grp_nr		= 1,
 			.ca_ec_k		= 8,
 			.ca_ec_p		= 2,
-			.ca_ec_cell		= 1 << 20,
+			.ca_ec_cs		= 1 << 14,
+		},
+	},
+	{
+		.oc_name	= "EC_M8P2G1",
+		.oc_id		= OC_EC_M8P2G1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.ca_ec_k		= 8,
+			.ca_ec_p		= 2,
+			.ca_ec_cs		= 1 << 16,
+		},
+	},
+	{
+		.oc_name	= "EC_L8P2G1",
+		.oc_id		= OC_EC_L8P2G1,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_EC,
+			.ca_grp_nr		= 1,
+			.ca_ec_k		= 8,
+			.ca_ec_p		= 2,
+			.ca_ec_cs		= 1 << 19,
 		},
 	},
 	{
@@ -422,8 +602,10 @@ daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr, struct daos_obj_md *md)
 
 /** a structure to map EC object class to EC codec structure */
 struct daos_oc_ec_codec {
-	/** object class id */
-	daos_oclass_id_t	 ec_oc_id;
+	/** data cells */
+	unsigned int		ec_k;
+	/** parity cells */
+	unsigned int		ec_p;
 	/** pointer to EC codec */
 	struct obj_ec_codec	 ec_codec;
 };
@@ -443,7 +625,9 @@ obj_ec_codec_fini(void)
 		return;
 
 	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
-		if (oc->oc_attr.ca_resil == DAOS_RES_EC)
+		if (oc->oc_attr.ca_resil == DAOS_RES_EC &&
+		    oc->oc_attr.ca_grp_nr == 1 &&
+		    oc->oc_attr.ca_schema == DAOS_OS_SINGLE)
 			ocnr++;
 	}
 	D_ASSERTF(oc_ec_codec_nr == ocnr,
@@ -479,7 +663,9 @@ obj_ec_codec_init()
 
 	ocnr = 0;
 	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
-		if (oc->oc_attr.ca_resil == DAOS_RES_EC)
+		if (oc->oc_attr.ca_resil == DAOS_RES_EC &&
+		    oc->oc_attr.ca_grp_nr == 1 &&
+		    oc->oc_attr.ca_schema == DAOS_OS_SINGLE)
 			ocnr++;
 	}
 	if (ocnr == 0)
@@ -492,10 +678,14 @@ obj_ec_codec_init()
 
 	i = 0;
 	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
-		if (oc->oc_attr.ca_resil != DAOS_RES_EC)
+		if (oc->oc_attr.ca_resil != DAOS_RES_EC ||
+		    oc->oc_attr.ca_grp_nr != 1 ||
+		    oc->oc_attr.ca_schema != DAOS_OS_SINGLE)
 			continue;
 
-		oc_ec_codecs[i].ec_oc_id = oc->oc_id;
+		oc_ec_codecs[i].ec_k = oc->oc_attr.ca_ec_k;
+		oc_ec_codecs[i].ec_p = oc->oc_attr.ca_ec_p;
+
 		ec_codec = &oc_ec_codecs[i++].ec_codec;
 		k = oc->oc_attr.ca_ec_k;
 		p = oc->oc_attr.ca_ec_p;
@@ -517,7 +707,6 @@ obj_ec_codec_init()
 			       ec_codec->ec_gftbls);
 	}
 
-	D_ASSERT(i == ocnr);
 	return 0;
 
 failed:
@@ -526,7 +715,7 @@ failed:
 }
 
 struct obj_ec_codec *
-obj_ec_codec_get(daos_oclass_id_t oc_id)
+obj_ec_codec_get(unsigned int k, unsigned int p)
 {
 	struct daos_oc_ec_codec *oc_ec_codec;
 	int			 i;
@@ -539,7 +728,7 @@ obj_ec_codec_get(daos_oclass_id_t oc_id)
 		oc_ec_codec = &oc_ec_codecs[i];
 		D_ASSERT(oc_ec_codec->ec_codec.ec_en_matrix != NULL);
 		D_ASSERT(oc_ec_codec->ec_codec.ec_gftbls != NULL);
-		if (oc_ec_codec->ec_oc_id == oc_id)
+		if (oc_ec_codec->ec_k == k && oc_ec_codec->ec_p == p)
 			return &oc_ec_codec->ec_codec;
 	}
 
@@ -557,15 +746,14 @@ obj_ec_codec_get(daos_oclass_id_t oc_id)
  * p_idx	[IN]		Index into parity p_bufs array.
  */
 int
-obj_encode_full_stripe(daos_obj_id_t oid, d_sg_list_t *sgl, uint32_t *sg_idx,
-		       size_t *sg_off, struct obj_ec_parity *parity, int p_idx)
+obj_encode_full_stripe(daos_obj_id_t oid, uint32_t len, d_sg_list_t *sgl,
+		       uint32_t *sg_idx, size_t *sg_off,
+		       struct obj_ec_parity *parity, int p_idx)
 {
-	struct obj_ec_codec		*codec = obj_ec_codec_get(
-							daos_obj_id2class(oid));
 	struct daos_oclass_attr		*oca = daos_oclass_attr_find(oid);
-	unsigned int			 len = oca->ca_ec_cell;
 	unsigned int			 k = oca->ca_ec_k;
 	unsigned int			 p = oca->ca_ec_p;
+	struct obj_ec_codec		*codec = obj_ec_codec_get(k, p);
 	unsigned char			*data[k];
 	unsigned char			*ldata[k];
 	int				 i, lcnt = 0;

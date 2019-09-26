@@ -240,6 +240,20 @@ ec_bulk_spec_get_skip(int index, struct ec_bulk_spec *skip_list)
 {
 	return skip_list[index].is_skip;
 }
+
+static inline uint32_t
+ec_rs2cs(uint64_t rs, unsigned short cs_exp)
+{
+	int msb;
+
+	D_ASSERT(rs);
+	if (rs == 1)
+		return 1 << cs_exp;
+	__asm__ ("bsr %[rs], %[msb]":[msb] "=r" (msb):[rs] "mr" (rs));
+	return msb >= cs_exp ? 1 :
+		1 << ((cs_exp - msb - (((1 << (msb-1)) & rs) ? 1 : 0)));
+}
+
 struct shard_sync_args {
 	struct shard_auxi_args	 sa_auxi;
 	daos_epoch_t		*sa_epoch;
@@ -370,8 +384,9 @@ void obj_utils_fini(void);
 /* obj_class.c */
 int obj_ec_codec_init(void);
 void obj_ec_codec_fini(void);
-struct obj_ec_codec *obj_ec_codec_get(daos_oclass_id_t oc_id);
-int obj_encode_full_stripe(daos_obj_id_t oid, d_sg_list_t *sgl,
+
+struct obj_ec_codec *obj_ec_codec_get(unsigned int k, unsigned int p);
+int obj_encode_full_stripe(daos_obj_id_t oid, uint32_t len, d_sg_list_t *sgl,
 			   uint32_t *sg_idx, size_t *sg_off,
 			   struct obj_ec_parity *parity, int p_idx);
 bool
@@ -392,7 +407,7 @@ ec_copy_iods(daos_iod_t *in, int nr, daos_iod_t **out);
 /* cli_ec.c */
 void
 ec_get_tgt_set(daos_iod_t *iods, unsigned int nr, struct daos_oclass_attr *oca,
-	       bool parify_include, uint64_t *tgt_set);
+	       bool parity_include, uint64_t *tgt_set);
 
 void
 ec_free_iods(daos_iod_t *iods, int nr);
