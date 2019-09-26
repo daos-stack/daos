@@ -57,8 +57,14 @@ func DefaultStorageControlService(log logging.Logger, cfg *Configuration) (*Stor
 		nrHugePages: cfg.NrHugepages,
 	}
 
+	opts := spdkOpts{
+		shmID:        cfg.NvmeShmID,
+		memSize:      cfg.NrHugepages,
+		pciBlacklist: cfg.BdevExclude,
+		pciWhitelist: cfg.BdevInclude,
+	}
 	return NewStorageControlService(log,
-		newNvmeStorage(log, cfg.NvmeShmID, cfg.NrHugepages, spdkScript, cfg.ext),
+		newNvmeStorage(log, opts, spdkScript, cfg.ext),
 		newScmStorage(log, cfg.ext), cfg.Servers,
 		getDrpcClientConnection(cfg.SocketDir)), nil
 }

@@ -37,7 +37,9 @@ package spdk
 import "C"
 
 import (
+	"errors"
 	"fmt"
+	"unsafe"
 )
 
 // ENV is the interface that provides SPDK environment management.
@@ -65,11 +67,35 @@ func Rc2err(label string, rc C.int) error {
 }
 
 type EnvOptions struct {
-	MemSize int // memory size in MB for DPDK
-	ShmID   int
+	MemSize      int // memory size in MB for DPDK
+	ShmID        int
+	PciWhitelist []string
+	PciBlacklist []string
 }
 
-func (o EnvOptions) toC() *C.struct_spdk_env_opts {
+func convertPciList(in []string, out **C.struct_spdk_pci_addr) error {
+	inLen := len(in)
+	tmp := (*C.struct_spdk_pci_addr)(C.calloc(C.size_t(inLen), C.sizeof_struct_spdk_pci_addr))
+	if tmp == nil {
+		return errors.New("failed to alloc memory for pci list")
+	}
+	tmpSlice := (*[1 << 30]C.struct_spdk_pci_addr)(unsafe.Pointer(tmp))[:inLen:inLen]
+
+	for i, bdf := range in {
+		addr := tmpSlice[i]
+		rc := C.spdk_pci_addr_parse(&addr, C.CString(bdf))
+		if rc < 0 {
+			C.free(unsafe.Pointer(tmp))
+			return fmt.Errorf("failed to parse %q as pci addr: %s", bdf, C.GoString(C.strerror(rc)))
+		}
+		tmpSlice[i] = addr
+	}
+
+	*out = tmp
+	return nil
+}
+
+func (o EnvOptions) toC() (*C.struct_spdk_env_opts, error) {
 	opts := &C.struct_spdk_env_opts{}
 
 	C.spdk_env_opts_init(opts)
@@ -83,7 +109,19 @@ func (o EnvOptions) toC() *C.struct_spdk_env_opts {
 		opts.mem_size = C.int(o.MemSize)
 	}
 
-	return opts
+	if len(o.PciWhitelist) > 0 {
+		if err := convertPciList(o.PciWhitelist, &opts.pci_whitelist); err != nil {
+			return nil, err
+		}
+	}
+
+	if len(o.PciBlacklist) > 0 {
+		if err := convertPciList(o.PciBlacklist, &opts.pci_blacklist); err != nil {
+			return nil, err
+		}
+	}
+
+	return opts, nil
 }
 
 // InitSPDKEnv initializes the SPDK environment.
@@ -91,12 +129,23 @@ func (o EnvOptions) toC() *C.struct_spdk_env_opts {
 // SPDK relies on an abstraction around the local environment
 // named env that handles memory allocation and PCI device operations.
 // The library must be initialized first.
-func (e *Env) InitSPDKEnv(opts EnvOptions) (err error) {
-	fmt.Printf("SPDK opts: %#v\n", opts)
-	rc := C.spdk_env_init(opts.toC())
-	if err = Rc2err("spdk_env_opts_init", rc); err != nil {
-		return
+func (e *Env) InitSPDKEnv(opts EnvOptions) error {
+	cOpts, err := opts.toC()
+	if err != nil {
+		return err
 	}
 
-	return
+	rc := C.spdk_env_init(cOpts)
+	if err := Rc2err("spdk_env_opts_init", rc); err != nil {
+		return err
+	}
+
+	if len(opts.PciWhitelist) > 0 {
+		C.free(unsafe.Pointer(cOpts.pci_whitelist))
+	}
+	if len(opts.PciBlacklist) > 0 {
+		C.free(unsafe.Pointer(cOpts.pci_blacklist))
+	}
+
+	return nil
 }
