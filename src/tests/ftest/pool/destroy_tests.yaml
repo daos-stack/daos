@@ -9,19 +9,22 @@ hosts:
   test_clients:
     - boro-G
 server_config:
-   name: daos_server
+  name: daos_server
 timeout: 400
 pool:
-   createmode:
-     mode: 146
-   createset:
-     name: daos_server
-   createsize:
-     scm_size: 1073741824
+  mode: 146
+  name: daos_server
+  scm_size: 1073741824
+container:
+  object_qty: 1
+  record_qty: 1
+  akey_size: 4
+  dkey_size: 4
+  data_size: 9
 setnames:
-   validsetname:
-     setname: daos_server
-   badsetname:
-     setname: complete_rubbish
-   othersetname:
-     setname: other_server
+  validsetname:
+    setname: daos_server
+  badsetname:
+    setname: complete_rubbish
+  othersetname:
+    setname: other_server

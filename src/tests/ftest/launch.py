@@ -360,8 +360,9 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
                     yaml_file, ", ".join(missing_replacements)))
             return None
 
-        # Write the modified yaml file into a temporary file
-        yaml_name = os.path.basename(os.path.splitext(yaml_file)[0])
+        # Write the modified yaml file into a temporary file.  Use the path to
+        # ensure unique yaml files for tests with the same filename.
+        yaml_name = get_test_category(yaml_file)
         yaml_file = os.path.join(tmp_dir.name, "{}.yaml".format(yaml_name))
         print("Creating {}".format(yaml_file))
         with open(yaml_file, "w") as yaml_buffer:
@@ -409,7 +410,7 @@ def run_tests(test_files, tag_filter, args):
             # Optionally clean the log files before running this test on the
             # servers and clients specified for this test
             if args.clean:
-                if not clean_logs(test_file["yaml"]):
+                if not clean_logs(test_file["yaml"], args):
                     return 128
 
             # Execute this test
@@ -422,7 +423,7 @@ def run_tests(test_files, tag_filter, args):
             # Optionally store all of the doas server and client log files
             # along with the test results
             if args.archive:
-                archive_logs(avocado_logs_dir, test_file["yaml"])
+                archive_logs(avocado_logs_dir, test_file["yaml"], args)
 
             # Optionally rename the test results directory for this test
             if args.rename:
@@ -518,7 +519,7 @@ def find_yaml_hosts(test_yaml):
     return find_values(get_yaml_data(test_yaml), SERVER_KEYS + CLIENT_KEYS)
 
 
-def get_hosts_from_yaml(test_yaml):
+def get_hosts_from_yaml(test_yaml, args):
     """Extract the list of hosts from the test yaml file.
 
     This host will be included in the list if no clients are explicitly called
@@ -526,12 +527,15 @@ def get_hosts_from_yaml(test_yaml):
 
     Args:
         test_yaml (str): test yaml file
+        args (argparse.Namespace): command line arguments for this program
 
     Returns:
         list: a unique list of hosts specified in the test's yaml file
 
     """
     host_set = set()
+    if args.include_localhost:
+        host_set.add(socket.gethostname().split(".")[0])
     found_client_key = False
     for key, value in find_yaml_hosts(test_yaml).items():
         host_set.update(value)
@@ -545,17 +549,18 @@ def get_hosts_from_yaml(test_yaml):
     return sorted(list(host_set))
 
 
-def clean_logs(test_yaml):
+def clean_logs(test_yaml, args):
     """Remove the test log files on each test host.
 
     Args:
         test_yaml (str): yaml file containing host names
+        args (argparse.Namespace): command line arguments for this program
     """
     # Use the default server yaml and then the test yaml to update the default
     # DAOS log file locations.  This should simulate how the test defines which
     # log files it will use when it is run.
     log_files = get_log_files(test_yaml, get_log_files(BASE_LOG_FILE_YAML))
-    host_list = get_hosts_from_yaml(test_yaml)
+    host_list = get_hosts_from_yaml(test_yaml, args)
     command = "ssh {{host}} \"rm -fr {}\"".format(" ".join(log_files.values()))
     print("Cleaning logs on {}".format(host_list))
     if not spawn_commands(host_list, command):
@@ -565,16 +570,17 @@ def clean_logs(test_yaml):
     return True
 
 
-def archive_logs(avocado_logs_dir, test_yaml):
+def archive_logs(avocado_logs_dir, test_yaml, args):
     """Copy all of the host test log files to the avocado results directory.
 
     Args:
         avocado_logs_dir ([type]): [description]
         test_yaml (str): yaml file containing host names
+        args (argparse.Namespace): command line arguments for this program
     """
     this_host = socket.gethostname().split(".")[0]
     log_files = get_log_files(TEST_LOG_FILE_YAML)
-    host_list = get_hosts_from_yaml(test_yaml)
+    host_list = get_hosts_from_yaml(test_yaml, args)
     doas_logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs")
 
     # Create a subdirectory in the avocado logs directory for this test
@@ -698,6 +704,10 @@ def main():
         action="store_true",
         help="when replacing server/client yaml file placeholders, discard "
              "any placeholders that do not end up with a replacement value")
+    parser.add_argument(
+        "-i", "--include_localhost",
+        action="store_true",
+        help="include the local host when cleaning and archiving")
     parser.add_argument(
         "-l", "--list",
         action="store_true",

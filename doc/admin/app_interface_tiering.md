@@ -12,7 +12,7 @@ provided to manage containers.
 
 To create a container:
 ```
-$ orterun -np 1 --ompi-server file:~/uri.txt daos container create --pool=a171434a-05a5-4671-8fe2-615aa0d05094 --svc=0
+$ daos container create --pool=a171434a-05a5-4671-8fe2-615aa0d05094 --svc=0
 Successfully created container 008123fc-6b6c-4768-a88a-a2a5ef34a1a2
 ```
 
@@ -23,7 +23,7 @@ Then subsequent invocations of the daos tools need to reference the path
 to the POSIX file or directory.
 
 ```
-$ orterun -np 1 --ompi-server file:~/uri.txt daos container create --pool=a171434a-05a5-4671-8fe2-615aa0d05094 --svc=0 --path=/tmp/mycontainer --type=POSIX --oclass=large --chunk_size=4K
+$ daos container create --pool=a171434a-05a5-4671-8fe2-615aa0d05094 --svc=0 --path=/tmp/mycontainer --type=POSIX --oclass=large --chunk_size=4K
 Successfully created container 419b7562-5bb8-453f-bd52-917c8f5d80d1 type POSIX
 $ daos container query --svc=0 --path=/tmp/mycontainer
 Pool UUID:      a171434a-05a5-4671-8fe2-615aa0d05094
@@ -154,8 +154,7 @@ is granted access to the pool and container).
 To mount an existing POSIX container with dfuse, run the following command:
 
 ```
-$ orterun -np 1 --ompi-server file:~/uri.txt dfuse -p a171434a-05a5-4671-8fe2-615aa0d05094 -s 0 -c 464e68ca-0a30-4a5f-8829-238e890899d2 -m /tmp/daos -S &
-[1] 157981
+$ dfuse -p a171434a-05a5-4671-8fe2-615aa0d05094 -s 0 -c 464e68ca-0a30-4a5f-8829-238e890899d2 -m /tmp/daos -S
 ```
 
 The UUID after -p and -c should be replaced with respectively the pool and
@@ -181,6 +180,34 @@ Support for libioil is currently planned for DAOS v1.2.
 The DAOS tier can be tightly integrated with the Lustre parallel filesystem in
 which DAOS containers will be represented through the Lustre namespace. This
 capability is under development and is scheduled for DAOS v1.2.
+
+Current state of work can be summarized as follow :
+
+-   DAOS integration with Lustre uses the Lustre foreign file/dir feature
+    (from LU-11376 and associated patches)
+ 
+-   each time a DAOS POSIX container is created, using `daos` utility and its
+    '--path' UNS option, a Lustre foreign file/dir of 'daos' type is being
+    created with a specific LOV/LMV EA content that will allow to store the
+    DAOS pool and containers UUIDs. 
+
+-   Lustre Client patch for LU-12682, adds DAOS specific support to the Lustre
+    foreign file/dir feature. It allows for foreign file/dir of `daos` type
+    to be presented and act as `<absolute-prefix>/<pool-uuid>/<container-uuid>`
+    a symlink to the Linux Kernel/VFS.
+
+-   the <absolute-prefix> can be specified as the new `daos=<absolute-prefix>`
+    Lustre Client mount option, or also thru the new `llite.*.daos_prefix`
+    Lustre dynamic tuneable. And both <pool-uuid> and <container-uuid> are
+    extracted from foreign file/dir LOV/LMV EA.
+ 
+-   to allow for symlink resolution and transparent access to DAOS concerned
+    container content, it is expected that a DFuse/DFS instance/mount, of
+    DAOS Server root, exists on <absolute-prefix> presenting all served
+    pools/containers as `<pool-uuid>/<container-uuid>` relative paths.
+
+-   `daos` foreign support is enabled at mount time with `daos=` option
+    present, or dynamically thru `llite.*.daos_enable` setting.
 
 ## HPC I/O Middleware Support
 
