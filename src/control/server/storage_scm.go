@@ -25,6 +25,7 @@ package server
 
 import (
 	"fmt"
+	"os/exec"
 	"strconv"
 
 	"github.com/pkg/errors"
@@ -107,13 +108,16 @@ func (s *scmStorage) Discover() error {
 	}
 	s.modules = loadModules(mms)
 
+	// set after modules have been discovered, don't depend on retrieving
+	// PMEM device files through external tool (fails w/out ndctl runtime
+	// dep, whose presence is only enforced when installed via RPM).
+	s.initialized = true
+
 	pmems, err := s.prep.GetNamespaces()
 	if err != nil {
 		return errors.WithMessage(err, msgIpmctlDiscoverFail)
 	}
 	s.pmemDevs = translatePmemDevices(pmems)
-
-	s.initialized = true
 
 	return nil
 }
@@ -322,6 +326,6 @@ func newScmStorage(log logging.Logger, ext External) *scmStorage {
 		log:    log,
 		ext:    ext,
 		ipmctl: &ipmctl.NvmMgmt{},
-		prep:   newPrepScm(log, run),
+		prep:   newPrepScm(log, run, exec.LookPath),
 	}
 }

@@ -277,6 +277,7 @@ func (srv *IOServerInstance) SetRank(ctx context.Context, ready *srvpb.NotifyRea
 			Rank:  uint32(r),
 			Uri:   ready.Uri,
 			Nctxs: ready.Nctxs,
+			// Addr member populated in msClient
 		})
 		if err != nil {
 			return err
