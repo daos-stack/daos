@@ -208,12 +208,14 @@ dss_tgt_nr_get(int ncores, int nr)
 	D_ASSERT(ncores >= 1);
 	/* Each system XS uses one core, and each main XS with
 	 * dss_tgt_offload_xs_nr offload XS. Calculate the nr_default
-	 * as the number of main XS based on number of cores available
-	 * Reduce the number of cores available
-	 * by the starting core offset.
+	 * as the number of main XS based on number of cores.
 	 */
-	nr_default = (((ncores - dss_sys_xs_nr) - dss_core_offset) /
-		      DSS_XS_NR_PER_TGT);
+	if (dss_numa_node == -1)
+		nr_default = (ncores - dss_sys_xs_nr) / DSS_XS_NR_PER_TGT;
+	else
+		nr_default = (((ncores - dss_sys_xs_nr) - dss_core_offset) /
+			      DSS_XS_NR_PER_TGT);
+
 	if (nr_default == 0)
 		nr_default = 1;
 
@@ -576,9 +578,9 @@ server_init(int argc, char *argv[])
 	gethostname(hostname, 255);
 	D_PRINT("DAOS I/O server (v%s) process %u started on rank %u "
 		"(out of %u) with %u target, %d helper XS per target, "
-		"firstcore %d, host %s.\n", DAOS_VERSION,
-		getpid(), rank, size, dss_tgt_nr, dss_tgt_offload_xs_nr,
-		dss_core_offset, hostname);
+		"firstcore %d, host %s.\n", DAOS_VERSION, getpid(), rank,
+		size, dss_tgt_nr, dss_tgt_offload_xs_nr, dss_core_offset,
+		hostname);
 
 	if (numa_obj)
 		D_PRINT("Using NUMA node: %d", dss_numa_node);
