@@ -1134,20 +1134,24 @@ done:
 	return rc;
 }
 
+#define VOS_SMALL_IO_SZ		(64UL << 10)	/* 64k */
 /*
  * A simple media selection policy embedded in VOS, which select media by
  * akey type and record size.
  */
 uint16_t
 vos_media_select(struct vos_container *cont, daos_iod_type_t type,
-		 daos_size_t size)
+		 daos_size_t size, enum vos_io_stream ios)
 {
 	struct vea_space_info *vsi = cont->vc_pool->vp_vea_info;
 
 	if (vsi == NULL)
 		return DAOS_MEDIA_SCM;
-	else
+	else if (ios == VOS_IOS_AGGREGATION)
 		return (size >= VOS_BLK_SZ) ? DAOS_MEDIA_NVME : DAOS_MEDIA_SCM;
+	else
+		return (size >= VOS_SMALL_IO_SZ) ?
+			DAOS_MEDIA_NVME : DAOS_MEDIA_SCM;
 }
 
 static int
@@ -1168,7 +1172,8 @@ akey_update_begin(struct vos_io_context *ioc)
 		size = (iod->iod_type == DAOS_IOD_SINGLE) ? iod->iod_size :
 				iod->iod_recxs[i].rx_nr * iod->iod_size;
 
-		media = vos_media_select(ioc->ic_cont, iod->iod_type, size);
+		media = vos_media_select(ioc->ic_cont, iod->iod_type, size,
+					 VOS_IOS_GENERIC);
 
 		if (iod->iod_type == DAOS_IOD_SINGLE)
 			rc = vos_reserve_single(ioc, media, size);

@@ -599,7 +599,8 @@ reserve_segment(struct vos_object *obj, struct agg_io_context *io,
 	int			 rc;
 
 	memset(addr, 0, sizeof(*addr));
-	media = vos_media_select(obj->obj_cont, DAOS_IOD_ARRAY, size);
+	media = vos_media_select(obj->obj_cont, DAOS_IOD_ARRAY, size,
+				 VOS_IOS_AGGREGATION);
 
 	if (media == DAOS_MEDIA_SCM) {
 		struct pobj_action	*scm_ext;
