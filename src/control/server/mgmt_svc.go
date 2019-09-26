@@ -208,9 +208,11 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 
 	// if join successful, record membership
 	if resp.GetStatus() == 0 && resp.GetState() == mgmtpb.JoinResp_IN {
+		svc.mutex.Lock()
 		svc.members = append(svc.members, &SystemMember{
 			Addr: req.GetAddr(), Uuid: req.GetUuid(), Rank: resp.GetRank(),
 		})
+		svc.mutex.Unlock()
 
 		svc.log.Debugf("MgmtSvc.members: %+v\n", svc.members)
 	}
