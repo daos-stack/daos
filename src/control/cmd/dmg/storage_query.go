@@ -25,27 +25,29 @@ package main
 
 import (
 	"github.com/daos-stack/daos/src/control/client"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // storageQueryCmd is the struct representing the query storage subcommand
 type storageQueryCmd struct {
-	NVMe   nvmeHealthQueryCmd `command:"nvme-health" alias:"d" description:"Query raw NVMe SPDK device statistics."`
-	BS     bsHealthQueryCmd   `command:"blobstore-health" alias:"b" description:"Query internal blobstore health data."`
-	Smd    smdQueryCmd        `command:"smd" alias:"s" description:"Query per-server metadata."`
+	NVMe nvmeHealthQueryCmd `command:"nvme-health" alias:"d" description:"Query raw NVMe SPDK device statistics."`
+	BS   bsHealthQueryCmd   `command:"blobstore-health" alias:"b" description:"Query internal blobstore health data."`
+	Smd  smdQueryCmd        `command:"smd" alias:"s" description:"Query per-server metadata."`
 }
 
 // nvmeHealthQueryCmd is the struct representing the "storage query health" subcommand
+//
+// Command is issued across all connected hosts (calls client.StorageScan and is
+// an alias for "storage scan").
 type nvmeHealthQueryCmd struct {
 	logCmd
-	broadcastCmd
 	connectedCmd
 }
 
 // Query the SPDK NVMe device health stats from all devices on all hosts
 func nvmeHealthQuery(log logging.Logger, conns client.Connect) {
-	cCtrlrs, _ := conns.StorageScan()
+	cCtrlrs, _, _ := conns.StorageScan()
 	log.Infof("NVMe SSD Device Health Stats:\n%s", cCtrlrs)
 }
 
@@ -56,11 +58,13 @@ func (h *nvmeHealthQueryCmd) Execute(args []string) error {
 }
 
 // bsHealthQueryCmd is the struct representing the "storage query bio" subcommand
+//
+// Command is issued to the management service access point.
 type bsHealthQueryCmd struct {
 	logCmd
 	connectedCmd
-	Devuuid	string `short:"u" long:"devuuid" description:"Device/Blobstore UUID to query"`
-	Tgtid	string `short:"t" long:"tgtid" description:"VOS target ID to query"`
+	Devuuid string `short:"u" long:"devuuid" description:"Device/Blobstore UUID to query"`
+	Tgtid   string `short:"t" long:"tgtid" description:"VOS target ID to query"`
 }
 
 // Query the BIO health and error stats of the given device
@@ -73,7 +77,7 @@ func bsHealthQuery(log logging.Logger, conns client.Connect, uuid string, tgtid 
 		return
 	}
 
-	req := &pb.BioHealthReq{DevUuid: uuid, TgtId: tgtid}
+	req := &mgmtpb.BioHealthReq{DevUuid: uuid, TgtId: tgtid}
 
 	log.Infof("Blobstore Health Data:\n%s\n", conns.BioHealthQuery(req))
 }
@@ -85,6 +89,8 @@ func (b *bsHealthQueryCmd) Execute(args []string) error {
 }
 
 // smdQueryCmd is the struct representing the "storage query smd" subcommand
+//
+// Command is issued to the management service access point.
 type smdQueryCmd struct {
 	logCmd
 	connectedCmd
@@ -105,7 +111,7 @@ func smdQuery(log logging.Logger, conns client.Connect, devices bool, pools bool
 		log.Infof("--pools option not implemented yet\n")
 	}
 	if devices {
-		req := &pb.SmdDevReq{}
+		req := &mgmtpb.SmdDevReq{}
 		log.Infof("SMD Device List:\n%s\n", conns.SmdListDevs(req))
 	}
 }

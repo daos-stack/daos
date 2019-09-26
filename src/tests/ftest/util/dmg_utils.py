@@ -23,44 +23,186 @@
 """
 from __future__ import print_function
 
-from command_utils import ExecutableCommand
-from command_utils import BasicParameter, FormattedParameter
+import getpass
+
+from command_utils import DaosCommand, CommandWithParameters, CommandFailure
+from command_utils import FormattedParameter
+from general_utils import get_file_path
 
 
-class DmgCommand(ExecutableCommand):
+class DmgCommand(DaosCommand):
     """Defines a object representing a dmg (or daos_shell) command."""
 
     def __init__(self, path):
         """Create a dmg Command object."""
         super(DmgCommand, self).__init__("/run/dmg/*", "daos_shell", path)
 
-        self.request = BasicParameter("{}")
-        self.action = BasicParameter("{}")
-
-        # daos_shell options
         self.hostlist = FormattedParameter("-l {}")
         self.hostfile = FormattedParameter("-f {}")
         self.configpath = FormattedParameter("-o {}")
-        self.insecure = FormattedParameter("-i", None)
+        self.insecure = FormattedParameter("-i", True)
+        self.debug = FormattedParameter("-d", False)
+        self.json = FormattedParameter("-j", False)
 
-        # dmg options
-        self.gid = FormattedParameter("--gid={}")
-        self.uid = FormattedParameter("--uid={}")
-        self.group = FormattedParameter("--group={}")
-        self.mode = FormattedParameter("--mode={}")
-        self.size = FormattedParameter("--size={}")
-        self.nvme = FormattedParameter("--nvme={}")
-        self.svcn = FormattedParameter("--svcn={}")
-        self.target = FormattedParameter("--target={}")
-        self.force = FormattedParameter("--force", False)
-        self.pool = FormattedParameter("--pool={}")
-        self.svc = FormattedParameter("--svc={}")
-        self.rank = FormattedParameter("--rank={}")
-        self.cont = FormattedParameter("--cont={}")
-        self.oid = FormattedParameter("--oid={}")
+    def get_action_command(self):
+        """Assign a command object for the specified request and action."""
+        # pylint: disable=redefined-variable-type
+        if self.action.value == "format":
+            self.action_command = self.DmgFormatSubCommand()
+            self.action_command.get_params()
+        elif self.action.value == "prepare":
+            self.action_command = self.DmgPrepareSubCommand()
+            self.action_command.get_params()
+        else:
+            self.action_command = None
 
-    def get_param_names(self):
-        """Get a sorted list of dmg command parameter names."""
-        names = self.get_attribute_names(FormattedParameter)
-        names.extend(["request", "action"])
-        return names
+    class DmgFormatSubCommand(CommandWithParameters):
+        """Defines an object representing a format sub dmg command."""
+
+        def __init__(self):
+            """Create a dmg Command object."""
+            super(DmgCommand.DmgFormatSubCommand, self).__init__(
+                "/run/dmg/format/*", "format")
+            self.force = FormattedParameter("-f", False)
+
+    class DmgPrepareSubCommand(CommandWithParameters):
+        """Defines a object representing a prepare sub dmg command."""
+
+        def __init__(self):
+            """Create a dmg Command object."""
+            super(DmgCommand.DmgPrepareSubCommand, self).__init__(
+                "/run/dmg/prepare/*", "prepare")
+            self.pci_wl = FormattedParameter("-w {}")
+            self.hugepages = FormattedParameter("-p {}")
+            self.targetuser = FormattedParameter("-u {}")
+            self.nvmeonly = FormattedParameter("-n", False)
+            self.scmonly = FormattedParameter("-s", False)
+            self.force = FormattedParameter("-f", False)
+            self.reset = FormattedParameter("--reset", False)
+
+
+def storage_scan(hosts, insecure=True):
+    """ Execute scan command through dmg tool to servers provided.
+
+    Args:
+        hosts (list): list of servers to run scan on.
+
+    Returns:
+        Avocado CmdResult object that contains exit status, stdout information.
+
+    """
+    # Create and setup the command
+    dmg = DmgCommand(get_file_path("bin/daos_shell"))
+    dmg.request.value = "storage"
+    dmg.action.value = "scan"
+    dmg.insecure.value = insecure
+    dmg.hostlist.value = hosts
+
+    try:
+        result = dmg.run()
+    except CommandFailure as details:
+        print("<dmg> command failed: {}".format(details))
+        return None
+
+    return result
+
+
+def storage_format(hosts, insecure=True):
+    """ Execute format command through dmg tool to servers provided.
+
+    Args:
+        hosts (list): list of servers to run format on.
+
+    Returns:
+        Avocado CmdResult object that contains exit status, stdout information.
+
+    """
+    # Create and setup the command
+    dmg = DmgCommand(get_file_path("bin/daos_shell"))
+    dmg.insecure.value = insecure
+    dmg.hostlist.value = hosts
+    dmg.request.value = "storage"
+    dmg.action.value = "format"
+    dmg.get_action_command()
+    dmg.action_command.force.value = True
+
+    try:
+        result = dmg.run(sudo=True)
+    except CommandFailure as details:
+        print("<dmg> command failed: {}".format(details))
+        return None
+
+    return result
+
+
+def storage_prep(hosts, user=False, hugepages="4096", nvme=False,
+                 scm=False, insecure=True):
+    """Execute prepare command through dmg tool to servers provided.
+
+    Args:
+        hosts (list): list of servers to run prepare on.
+        user (str, optional): User with priviledges. Defaults to False.
+        hugepages (str, optional): Hugepages to allocate. Defaults to "4096".
+        nvme (bool, optional): Perform prep on nvme. Defaults to False.
+        scm (bool, optional): Perform prep on scm. Defaults to False.
+
+    Returns:
+        Avocado CmdResult object that contains exit status, stdout information.
+
+    """
+    # Create and setup the command
+    dmg = DmgCommand(get_file_path("bin/daos_shell"))
+    dmg.insecure.value = insecure
+    dmg.hostlist.value = hosts
+    dmg.request.value = "storage"
+    dmg.action.value = "prepare"
+    dmg.get_action_command()
+    dmg.action_command.nvmeonly.value = nvme
+    dmg.action_command.scmonly.value = scm
+    dmg.action_command.targetuser.value = getpass.getuser() \
+        if user is None else user
+    dmg.action_command.hugepages.value = hugepages
+    dmg.action_command.force.value = True
+
+    try:
+        result = dmg.run()
+    except CommandFailure as details:
+        print("<dmg> command failed: {}".format(details))
+        return None
+
+    return result
+
+
+def storage_reset(hosts, user=None, hugepages="4096", insecure=True):
+    """Execute prepare reset command through dmg tool to servers provided.
+
+    Args:
+        hosts (list): list of servers to run prepare on.
+        user (str, optional): User with priviledges. Defaults to False.
+        hugepages (str, optional): Hugepages to allocate. Defaults to "4096".
+
+    Returns:
+        Avocado CmdResult object that contains exit status, stdout information.
+
+    """
+    # Create and setup the command
+    dmg = DmgCommand(get_file_path("bin/daos_shell"))
+    dmg.insecure.value = insecure
+    dmg.hostlist.value = hosts
+    dmg.request.value = "storage"
+    dmg.action.value = "prepare"
+    dmg.get_action_command()
+    dmg.action_command.nvmeonly.value = True
+    dmg.action_command.targetuser.value = getpass.getuser() \
+        if user is None else user
+    dmg.action_command.hugepages.value = hugepages
+    dmg.action_command.reset.value = True
+    dmg.action_command.force.value = True
+
+    try:
+        result = dmg.run()
+    except CommandFailure as details:
+        print("<dmg> command failed: {}".format(details))
+        return None
+
+    return result

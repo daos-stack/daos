@@ -30,7 +30,8 @@ import (
 	"time"
 
 	"github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 )
@@ -61,8 +62,8 @@ func (cr ClientResult) String() string {
 // query client requests.
 type ClientBioResult struct {
 	Address string
-	Stats	*pb.BioHealthResp
-	Err	error
+	Stats   *mgmtpb.BioHealthResp
+	Err     error
 }
 
 func (cr ClientBioResult) String() string {
@@ -123,8 +124,8 @@ func (cr ClientBioResult) String() string {
 // query client requests.
 type ClientSmdResult struct {
 	Address string
-	Devs	*pb.SmdDevResp
-	Err	error
+	Devs    *mgmtpb.SmdDevResp
+	Err     error
 }
 
 func (cr ClientSmdResult) String() string {
@@ -238,18 +239,18 @@ type Connect interface {
 	// GetActiveConns verifies states and removes inactive conns
 	GetActiveConns(ResultMap) ResultMap
 	ClearConns() ResultMap
-	StoragePrepare(*pb.StoragePrepareReq) ResultMap
-	StorageScan() (ClientCtrlrMap, ClientModuleMap)
+	StoragePrepare(*ctlpb.StoragePrepareReq) ResultMap
+	StorageScan() (ClientCtrlrMap, ClientModuleMap, ClientPmemMap)
 	StorageFormat() (ClientCtrlrMap, ClientMountMap)
-	StorageUpdate(*pb.StorageUpdateReq) (ClientCtrlrMap, ClientModuleMap)
+	StorageUpdate(*ctlpb.StorageUpdateReq) (ClientCtrlrMap, ClientModuleMap)
 	// TODO: implement Burnin client features
 	//StorageBurnIn() (ClientCtrlrMap, ClientModuleMap)
 	ListFeatures() ClientFeatureMap
 	KillRank(uuid string, rank uint32) ResultMap
 	PoolCreate(*PoolCreateReq) (*PoolCreateResp, error)
 	PoolDestroy(*PoolDestroyReq) error
-	BioHealthQuery(*pb.BioHealthReq) ResultQueryMap
-	SmdListDevs(*pb.SmdDevReq) ResultSmdMap
+	BioHealthQuery(*mgmtpb.BioHealthReq) ResultQueryMap
+	SmdListDevs(*mgmtpb.SmdDevReq) ResultSmdMap
 }
 
 // connList is an implementation of Connect and stores controllers

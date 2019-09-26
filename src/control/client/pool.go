@@ -24,24 +24,23 @@
 package client
 
 import (
+	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 // chooseServiceLeader will decide which connection to send request on.
 //
 // Currently expect only one connection to be available and return that.
 func chooseServiceLeader(cs []Control) (Control, error) {
-	switch len(cs) {
-	case 1:
-		return cs[0], nil
-	default:
-		return nil, errors.Errorf("unexpected number of connections, "+
-			"want 1, have %d", len(cs))
+	if len(cs) == 0 {
+		return nil, errors.New("no active connections")
 	}
 
+	// just return the first connection, expected to be the service leader
+	return cs[0], nil
 }
 
 // PoolCreateReq struct contains request
@@ -54,6 +53,7 @@ type PoolCreateReq struct {
 	Usr        string
 	Grp        string
 	Acl        []string
+	Uuid       string
 }
 
 // PoolCreateResp struct contains response
@@ -62,8 +62,9 @@ type PoolCreateResp struct {
 	SvcReps string
 }
 
-// PoolCreate will create a DAOS pool using provided parameters and return
-// uuid, list of service replicas and error (including any DER code from DAOS).
+// PoolCreate will create a DAOS pool using provided parameters and generated
+// UUID. Return values will be UUID, list of service replicas and error
+// (including any DER code from DAOS).
 //
 // Isolate protobuf encapsulation in client and don't expose to calling code.
 func (c *connList) PoolCreate(req *PoolCreateReq) (*PoolCreateResp, error) {
@@ -72,10 +73,16 @@ func (c *connList) PoolCreate(req *PoolCreateReq) (*PoolCreateResp, error) {
 		return nil, err
 	}
 
-	rpcReq := &pb.PoolCreateReq{
-		Scmbytes: req.ScmBytes, Nvmebytes: req.NvmeBytes,
-		Ranks: req.RankList, Numsvcreps: req.NumSvcReps, Sys: req.Sys,
-		User: req.Usr, Usergroup: req.Grp, Acl: req.Acl,
+	poolUUID, err := uuid.NewRandom()
+	if err != nil {
+		return nil, errors.Wrap(err, "generating pool uuid")
+	}
+	poolUUIDStr := poolUUID.String()
+
+	rpcReq := &mgmtpb.PoolCreateReq{
+		Scmbytes: req.ScmBytes, Nvmebytes: req.NvmeBytes, Ranks: req.RankList,
+		Numsvcreps: req.NumSvcReps, Sys: req.Sys, User: req.Usr,
+		Usergroup: req.Grp, Acl: req.Acl, Uuid: poolUUIDStr,
 	}
 
 	c.log.Debugf("Create DAOS pool request: %s\n", rpcReq)
@@ -92,7 +99,7 @@ func (c *connList) PoolCreate(req *PoolCreateReq) (*PoolCreateResp, error) {
 			rpcResp.GetStatus())
 	}
 
-	return &PoolCreateResp{Uuid: rpcResp.GetUuid(), SvcReps: rpcResp.GetSvcreps()}, nil
+	return &PoolCreateResp{Uuid: poolUUIDStr, SvcReps: rpcResp.GetSvcreps()}, nil
 }
 
 // PoolDestroyReq struct contains request
@@ -113,7 +120,7 @@ func (c *connList) PoolDestroy(req *PoolDestroyReq) error {
 		return err
 	}
 
-	rpcReq := &pb.PoolDestroyReq{Uuid: req.Uuid, Force: req.Force}
+	rpcReq := &mgmtpb.PoolDestroyReq{Uuid: req.Uuid, Force: req.Force}
 
 	c.log.Debugf("Destroy DAOS pool request: %s\n", rpcReq)
 
