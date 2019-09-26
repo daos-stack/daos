@@ -130,20 +130,13 @@ type devStateQueryCmd struct {
 	Devuuid string `short:"u" long:"devuuid" description:"Device/Blobstore UUID to query" required:"1"`
 }
 
-// Query the SMD device state of the given device
-func devStateQuery(log logging.Logger, conns client.Connect, uuid string) {
-	if uuid == "" {
-		log.Infof("Device UUID needs to be specified\n")
-		return
-	}
-
-	req := &mgmtpb.DevStateReq{DevUuid: uuid}
-
-	log.Infof("Device State Info:\n%s\n", conns.DevStateQuery(req))
-}
-
 // Execute is run when devStateQueryCmd activates
+// Query the SMD device state of the given device
 func (d *devStateQueryCmd) Execute(args []string) error {
-	devStateQuery(d.log, d.conns, d.Devuuid)
+	// Devuuid is a required command parameter
+	req := &mgmtpb.DevStateReq{DevUuid: d.Devuuid}
+
+	d.log.Infof("Device State Info:\n%s\n", d.conns.DevStateQuery(req))
+
 	return nil
 }

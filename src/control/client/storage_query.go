@@ -69,7 +69,12 @@ func (c *connList) SmdListDevs(req *mgmtpb.SmdDevReq) ResultSmdMap {
 // DevStateQuery will print the state of the given device UUID
 func (c *connList) DevStateQuery(req *mgmtpb.DevStateReq) ResultStateMap {
 	results := make(ResultStateMap)
-	mc := c.controllers[0] // connect to first AP only for now
+
+	mc, err := chooseServiceLeader(c.controllers)
+	if err != nil {
+		results[""] = ClientStateResult{"", nil, err}
+		return results
+	}
 
 	resp, err := mc.getSvcClient().DevStateQuery(context.Background(), req)
 
@@ -82,7 +87,12 @@ func (c *connList) DevStateQuery(req *mgmtpb.DevStateReq) ResultStateMap {
 // StorageSetFaulty will set the state of the given device UUID to FAULTY
 func (c *connList) StorageSetFaulty(req *mgmtpb.DevStateReq) ResultStateMap {
 	results := make(ResultStateMap)
-	mc := c.controllers[0] // connect to first AP only for now
+
+	mc, err := chooseServiceLeader(c.controllers)
+	if err != nil {
+		results[""] = ClientStateResult{"", nil, err}
+		return results
+	}
 
 	resp, err := mc.getSvcClient().StorageSetFaulty(context.Background(), req)
 

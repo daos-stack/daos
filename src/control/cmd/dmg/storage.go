@@ -277,20 +277,13 @@ type storageSetFaultyCmd struct {
 	Devuuid string `short:"u" long:"devuuid" description:"Device/Blobstore UUID to query" required:"1"`
 }
 
-// Set the SMD device state of the given device to "FAULTY"
-func storageSetFaulty(log logging.Logger, conns client.Connect, uuid string) {
-	if uuid == "" {
-		log.Infof("Device UUID needs to be specified\n")
-		return
-	}
-
-	req := &mgmtpb.DevStateReq{DevUuid: uuid}
-
-	log.Infof("Device State Info:\n%s\n", conns.StorageSetFaulty(req))
-}
-
 // Execute is run when storageSetFaultyCmd activates
+// Set the SMD device state of the given device to "FAULTY"
 func (s *storageSetFaultyCmd) Execute(args []string) error {
-	storageSetFaulty(s.log, s.conns, s.Devuuid)
+	// Devuuid is a required command parameter
+	req := &mgmtpb.DevStateReq{DevUuid: s.Devuuid}
+
+	s.log.Infof("Device State Info:\n%s\n", s.conns.StorageSetFaulty(req))
+
 	return nil
 }
