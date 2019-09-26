@@ -95,7 +95,6 @@ enum {
 	COMMITTED = 0,
 	COMMITTABLE,
 	PREPARED,
-	ABORTED,
 };
 
 static int		current_status;
@@ -109,22 +108,20 @@ struct fake_tx_entry {
 
 static D_LIST_HEAD(fake_tx_list);
 
-static enum ilog_status
-fake_tx_status_get(struct umem_instance *umm, umem_off_t tx_id, uint32_t intent)
+static enum vos_tx_flags
+fake_tx_status_get(struct umem_instance *umm, umem_off_t tx_id)
 {
 	struct fake_tx_entry	*entry = (struct fake_tx_entry *)tx_id;
 
 	if (entry == NULL)
-		return ILOG_VISIBLE;
+		return VOS_TX_COMMITTED;
 
 	switch (entry->status) {
 	case COMMITTED:
 	case COMMITTABLE:
-		return ILOG_VISIBLE;
+		return VOS_TX_COMMITTED;
 	case PREPARED:
-		return ILOG_INVISIBLE;
-	case ABORTED:
-		return ILOG_REMOVED;
+		return VOS_TX_UNCOMMITTED;
 	}
 	D_ASSERT(0);
 	return 0;
@@ -304,7 +301,7 @@ entries_check(daos_handle_t loh, const daos_epoch_range_t *epr,
 
 	ilog_fetch_init(&ilog_entries);
 
-	rc = ilog_fetch(loh, DAOS_INTENT_DEFAULT, epr, &ilog_entries);
+	rc = ilog_fetch(loh, epr, &ilog_entries);
 	if (rc != expected_rc) {
 		print_message("Unexpected fetch rc: %s\n", d_errstr(rc));
 		if (rc == 0)
@@ -383,8 +380,7 @@ do_update(daos_handle_t loh, daos_epoch_t epoch,
 		return rc;
 	}
 
-	if (current_status != ABORTED &&
-	    (punch || *prior_punch || *prior_status == PREPARED)) {
+	if (punch || *prior_punch || *prior_status == PREPARED) {
 		rc = entries_set(entries, ENTRY_APPEND, epoch,
 				 punch, ENTRIES_END);
 		if (rc != 0) {
@@ -509,7 +505,7 @@ ilog_test_update(void **state)
 	prior_punch = true;
 	prior_status = PREPARED;
 	for (idx = 0; idx < NUM_REC; idx++) {
-		current_status = 1 + idx % 3;
+		current_status = 1 + idx % 2;
 		rc = do_update(loh, epoch,
 			       (((idx + 1) % 10) == 0) ? true : false,
 			       &prior_punch, &prior_status, entries);

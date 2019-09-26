@@ -40,6 +40,15 @@ enum vos_oi_attr {
 	/** TODO: Additional attributes to support metadata storage for SR */
 };
 
+enum vos_tx_flags {
+	/** Associated transaction is committed */
+	VOS_TX_COMMITTED	= (1U << 0),
+	/** Associated transaction is not committed locally */
+	VOS_TX_UNCOMMITTED	= (1U << 1),
+	/** Set if local state is known to match the global state */
+	VOS_TX_DEFINITIVE	= (1U << 2),
+};
+
 /**
  * VOS garbage collector statistics
  */

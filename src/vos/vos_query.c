@@ -54,18 +54,24 @@ check_key(struct open_query *query, struct vos_krec_df *krec, bool *visible)
 	struct ilog_entry	*entry;
 	daos_epoch_range_t	 epr = query->qt_epr;
 	int			 rc;
+	umem_off_t		 current = vos_dtx_get();
 
 	*visible = false;
 
-	rc = key_ilog_fetch(vos_pool2umm(query->qt_pool), DAOS_INTENT_DEFAULT,
-			    &epr, krec, &query->qt_entries);
+	rc = key_ilog_fetch(vos_pool2umm(query->qt_pool), &epr, krec,
+			    &query->qt_entries);
 	if (rc != 0)
 		return rc;
 
 	ilog_foreach_entry_reverse(&query->qt_entries, entry) {
-		if (entry->ie_status == ILOG_INVISIBLE)
+		if (entry->ie_status & VOS_TX_UNCOMMITTED) {
+			if (current && entry->ie_id.id_tx_id == current)
+				goto check_punch; /* Allow same tx to read */
+			if (entry->ie_status & VOS_TX_DEFINITIVE)
+				continue; /* skip the known uncommitted data */
 			return -DER_INPROGRESS;
-
+		}
+check_punch:
 		if (entry->ie_punch) {
 			if ((entry->ie_id.id_epoch + 1) > epr.epr_lo)
 				epr.epr_lo = entry->ie_id.id_epoch + 1;

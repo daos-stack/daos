@@ -1114,25 +1114,10 @@ obj_tree_find_attr(unsigned tree_class)
 	}
 }
 
-static enum ilog_status
-vos_ilog_status_get(struct umem_instance *umm, umem_off_t tx_id,
-		    uint32_t intent)
+static enum vos_tx_flags
+vos_ilog_state_get(struct umem_instance *umm, umem_off_t tx_id)
 {
-	int	rc;
-
-	rc = vos_dtx_check_availability(umm, DAOS_HDL_INVAL, tx_id, UMOFF_NULL,
-					intent, DTX_RT_ILOG);
-	if (rc < 0)
-		return rc;
-
-	switch (rc) {
-	case ALB_UNAVAILABLE:
-		return ILOG_INVISIBLE;
-	case ALB_AVAILABLE_CLEAN:
-		return ILOG_VISIBLE;
-	}
-
-	return ILOG_REMOVED;
+	return vos_dtx_state_get(umm, tx_id);
 }
 
 static int
@@ -1164,7 +1149,7 @@ vos_ilog_deregister(struct umem_instance *umm, umem_off_t ilog_off,
 }
 
 static struct ilog_callbacks ilog_cbs = {
-	.dc_status_get = vos_ilog_status_get,
+	.dc_status_get = vos_ilog_state_get,
 	.dc_is_same_tx = vos_ilog_is_same_tx,
 	.dc_register = vos_ilog_register,
 	.dc_deregister = vos_ilog_deregister,

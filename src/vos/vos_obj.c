@@ -269,7 +269,7 @@ key_check_existence(struct vos_obj_iter *oiter, struct ilog_entries *entries,
 			continue;
 		}
 
-		if (entry->ie_status == ILOG_INVISIBLE) {
+		if (entry->ie_status & VOS_TX_UNCOMMITTED) {
 			if (entry->ie_punch)
 				return -DER_INPROGRESS;
 			/* NB: Save in_progress epoch.  If there are no
@@ -354,8 +354,7 @@ key_ilog_prepare(struct vos_obj_iter *oiter, daos_handle_t toh, int key_type,
 		return rc;
 	}
 
-	rc = key_ilog_fetch(vos_obj2umm(obj), vos_iter_intent(&oiter->it_iter),
-			    &range, krec, entries);
+	rc = key_ilog_fetch(vos_obj2umm(obj), &range, krec, entries);
 	if (rc != 0) {
 		D_ERROR("Cannot fetch ilog for key tree: "DF_RC"\n", DP_RC(rc));
 		goto fail;
@@ -416,7 +415,7 @@ key_record_punch(struct vos_obj_iter *oiter, struct ilog_entries *entries,
 		if (entry->ie_id.id_epoch < oiter->it_epr.epr_lo)
 			continue; /* skip historical punches */
 
-		if (entry->ie_status == ILOG_INVISIBLE)
+		if (entry->ie_status & VOS_TX_UNCOMMITTED)
 			continue; /* Skip any uncommited, punches */
 
 		if (entry->ie_punch) {
@@ -458,9 +457,8 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 	}
 
 	krec = rbund.rb_krec;
-	rc = key_ilog_fetch(vos_obj2umm(obj),
-			    vos_iter_intent(&oiter->it_iter), &epr,
-			    krec, &oiter->it_ilog_entries);
+	rc = key_ilog_fetch(vos_obj2umm(obj), &epr, krec,
+			    &oiter->it_ilog_entries);
 
 	if (rc != 0)
 		return rc;

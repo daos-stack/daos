@@ -30,6 +30,7 @@
 #ifndef __ILOG_H__
 #define __ILOG_H__
 #include <daos_types.h>
+#include <daos_srv/vos_types.h>
 
 struct ilog_id {
 	/** DTX of entry */
@@ -45,20 +46,11 @@ struct  ilog_df {
 
 struct umem_instance;
 
-enum ilog_status {
-	/** Log entry has been logically removed */
-	ILOG_REMOVED,
-	/** Log entry is visible to caller */
-	ILOG_VISIBLE,
-	/** Log entry is not yet visible */
-	ILOG_INVISIBLE,
-};
-
 /** Near term hack to hook things up with existing DTX */
 struct ilog_callbacks {
 	/** Retrieve the status of a log entry */
-	enum ilog_status (*dc_status_get)(struct umem_instance *umm,
-					  umem_off_t tx_id, uint32_t intent);
+	enum vos_tx_flags (*dc_status_get)(struct umem_instance *umm,
+					  umem_off_t tx_id);
 	/** Check if the log entry was created by current transaction */
 	int (*dc_is_same_tx)(struct umem_instance *umm, umem_off_t tx_id,
 			     bool *same);
@@ -178,7 +170,7 @@ struct ilog_entry {
 	struct ilog_id		ie_id;
 	/** If true, entry is a punch, otherwise, it's a creation */
 	bool			ie_punch;
-	/** The status of the incarnation log entry.  See enum ilog_status */
+	/** The status of the incarnation log entry.  See enum vos_tx_flags */
 	uint32_t		ie_status;
 };
 
@@ -203,15 +195,14 @@ void ilog_fetch_init(struct ilog_entries *entries);
 /** Fetch the ilog within the epr range
  *
  *  \param	loh[in]		Open log handle
- *  \param	intent[in]	Intent of the fetch operation
  *  \param	epr[in]		Epoch range for the fetch
  *  \param	entries[in,out]	Allocated structure passed in will be filled
  *				with incarnation log entries in the range.
  *
  *  \return 0 on success, error code on failure
  */
-int ilog_fetch(daos_handle_t loh, uint32_t intent,
-	       const daos_epoch_range_t *epr, struct ilog_entries *entries);
+int ilog_fetch(daos_handle_t loh, const daos_epoch_range_t *epr,
+	       struct ilog_entries *entries);
 
 /** Deallocate any memory associated with an ilog_entries struct for fetch
  *

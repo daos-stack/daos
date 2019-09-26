@@ -186,17 +186,16 @@ ilog_is_same_tx(struct ilog_context *lctx, umem_off_t tx_id, bool *same)
 	return ilog_cbs.dc_is_same_tx(&lctx->ic_umm, tx_id, same);
 }
 
-static inline enum ilog_status
-ilog_status_get(struct ilog_context *lctx, umem_off_t tx_id,
-		uint32_t intent)
+static inline enum vos_tx_flags
+ilog_status_get(struct ilog_context *lctx, umem_off_t tx_id)
 {
 	if (tx_id == UMOFF_NULL)
-		return ILOG_VISIBLE;
+		return VOS_TX_COMMITTED;
 
 	if (!ilog_cbs.dc_status_get)
-		return ILOG_VISIBLE;
+		return VOS_TX_COMMITTED;
 
-	return ilog_cbs.dc_status_get(&lctx->ic_umm, tx_id, intent);
+	return ilog_cbs.dc_status_get(&lctx->ic_umm, tx_id);
 }
 
 static inline int
@@ -776,7 +775,6 @@ consolidate_tree(struct ilog_context *lctx, const daos_epoch_range_t *epr,
 	struct ilog_id		 id = *id_in;
 	d_iov_t			 key_iov;
 	d_iov_t			 val_iov;
-	enum ilog_status	 visibility;
 	int			 rc = 0;
 	int			 probe_opc = BTR_PROBE_GT;
 	bool			 punch = 0;
@@ -814,12 +812,6 @@ consolidate_tree(struct ilog_context *lctx, const daos_epoch_range_t *epr,
 			goto done;
 		}
 
-		visibility = ilog_status_get(lctx, key.id_tx_id,
-					     DAOS_INTENT_UPDATE);
-		if (visibility == ILOG_REMOVED) {
-			type = "aborted";
-			goto abort;
-		}
 		if (opc == ILOG_OP_PERSIST) {
 			if (punch)
 				break;
@@ -833,7 +825,7 @@ consolidate_tree(struct ilog_context *lctx, const daos_epoch_range_t *epr,
 
 		if (epr->epr_hi < key.id_epoch || epr->epr_lo > key.id_epoch)
 			break;
-abort:
+
 		rc = remove_from_tree(lctx, type, &key, ih);
 		if (rc != 0)
 			goto done;
@@ -857,7 +849,7 @@ ilog_tree_modify(struct ilog_context *lctx, const struct ilog_id *id_in,
 	daos_handle_t		 ih = DAOS_HDL_INVAL;
 	d_iov_t			 key_iov;
 	d_iov_t			 val_iov;
-	int			 visibility = ILOG_VISIBLE;
+	int			 visibility = VOS_TX_COMMITTED;
 	struct umem_attr	 uma;
 	int			 rc = 0;
 
@@ -905,15 +897,7 @@ ilog_tree_modify(struct ilog_context *lctx, const struct ilog_id *id_in,
 		punchp = (bool *)val_iov.iov_buf;
 		keyp = (struct ilog_id *)key_iov.iov_buf;
 
-		visibility = ilog_status_get(lctx, keyp->id_tx_id,
-					     DAOS_INTENT_UPDATE);
-
-		if (visibility == ILOG_REMOVED) {
-			rc = remove_from_tree(lctx, "aborted", keyp, &ih);
-			if (rc != 0)
-				goto done;
-			continue;
-		}
+		visibility = ilog_status_get(lctx, keyp->id_tx_id);
 
 		rc = update_inplace(lctx, keyp, punchp, id_in, opc, punch,
 				    &is_equal);
@@ -935,7 +919,7 @@ ilog_tree_modify(struct ilog_context *lctx, const struct ilog_id *id_in,
 			goto done;
 		}
 
-		if (punch || visibility == ILOG_INVISIBLE || *punchp)
+		if (punch || (visibility & VOS_TX_UNCOMMITTED) || *punchp)
 			break; /* handle entry */
 		/* the new update is "covered" by a previous one */
 		goto done;
@@ -982,7 +966,7 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 	struct ilog_root	 tmp = {0};
 	struct ilog_id		 old_id = {0};
 	int			 rc = 0;
-	int			 visibility = ILOG_INVISIBLE;
+	int			 visibility = VOS_TX_UNCOMMITTED;
 
 	D_DEBUG(DB_IO, "%s in incarnation log: epoch:" DF_U64"\n", opc_str[opc],
 		id_in->id_epoch);
@@ -997,25 +981,13 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 	root = lctx->ic_root;
 
 	if (root->lr_tree.it_embedded)
-		visibility = ilog_status_get(lctx, root->lr_id.id_tx_id,
-					     DAOS_INTENT_UPDATE);
+		visibility = ilog_status_get(lctx, root->lr_id.id_tx_id);
 
-	if (visibility == ILOG_REMOVED || ilog_empty(root)) {
+	if (ilog_empty(root)) {
 		if (opc != ILOG_OP_UPDATE) {
 			D_DEBUG(DB_IO, "ilog entry "DF_U64" not found\n",
 				id_in->id_epoch);
 			goto done;
-		}
-
-		if (visibility == ILOG_REMOVED) {
-			D_DEBUG(DB_IO, "Removing aborted "DF_U64
-				" from ilog root\n", root->lr_id.id_epoch);
-			old_id = root->lr_id;
-			tmp.lr_magic = ILOG_MAGIC;
-			if (opc != ILOG_OP_UPDATE) {
-				rc = ilog_ptr_set(lctx, root, &tmp);
-				goto remove;
-			}
 		}
 
 		D_DEBUG(DB_IO, "Inserting "DF_U64" at ilog root\n",
@@ -1029,7 +1001,7 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 		rc = ilog_register_tx(lctx, &root->lr_id);
 		if (rc != 0)
 			goto done;
-remove:
+
 		/** Remove the aborted tx_id record */
 		rc = ilog_deregister_tx(lctx, &old_id);
 	} else if (root->lr_tree.it_embedded) {
@@ -1058,7 +1030,7 @@ remove:
 
 		if (!punch && !root->lr_punch &&
 		    id_in->id_epoch > root->lr_id.id_epoch &&
-		    visibility == ILOG_VISIBLE) {
+		    visibility == VOS_TX_COMMITTED) {
 			D_DEBUG(DB_IO, "No update needed\n");
 			goto done;
 		}
@@ -1148,9 +1120,8 @@ ilog_aggregate(daos_handle_t loh, const daos_epoch_range_t *epr)
 		return 1; /* indicate empty tree */
 
 	if (root->lr_tree.it_embedded) {
-		visibility = ilog_status_get(lctx, root->lr_id.id_tx_id,
-					     DAOS_INTENT_PURGE);
-		if (visibility == ILOG_VISIBLE) {
+		visibility = ilog_status_get(lctx, root->lr_id.id_tx_id);
+		if (visibility == VOS_TX_COMMITTED) {
 			if (!root->lr_punch)
 				return 0;
 			epoch = root->lr_id.id_epoch;
@@ -1220,9 +1191,8 @@ reprobe:
 			break;
 
 		if (!punch_found) {
-			visibility = ilog_status_get(lctx, keyp->id_tx_id,
-						     DAOS_INTENT_PURGE);
-			if (visibility == ILOG_VISIBLE) {
+			visibility = ilog_status_get(lctx, keyp->id_tx_id);
+			if (visibility == VOS_TX_COMMITTED) {
 				punch_found = *punchp;
 				if (!punch_found)
 					goto next;
@@ -1383,7 +1353,7 @@ set_entry(struct ilog_entries *entries, const struct ilog_id *id, bool punch,
 }
 
 int
-ilog_fetch(daos_handle_t loh, uint32_t intent, const daos_epoch_range_t *epr,
+ilog_fetch(daos_handle_t loh, const daos_epoch_range_t *epr,
 	   struct ilog_entries *entries)
 {
 	struct ilog_context	*lctx;
@@ -1415,7 +1385,7 @@ ilog_fetch(daos_handle_t loh, uint32_t intent, const daos_epoch_range_t *epr,
 		return -DER_NONEXIST;
 
 	if (root->lr_tree.it_embedded) {
-		status = ilog_status_get(lctx, root->lr_id.id_tx_id, intent);
+		status = ilog_status_get(lctx, root->lr_id.id_tx_id);
 		rc = set_entry(entries, &root->lr_id, root->lr_punch, status);
 		return rc;
 	}
@@ -1451,7 +1421,7 @@ ilog_fetch(daos_handle_t loh, uint32_t intent, const daos_epoch_range_t *epr,
 		if (id_out->id_epoch > range.epr_hi)
 			break;
 
-		status = ilog_status_get(lctx, id_out->id_tx_id, intent);
+		status = ilog_status_get(lctx, id_out->id_tx_id);
 
 		rc = set_entry(entries, id_out,
 			       *(bool *)val_iov.iov_buf, status);

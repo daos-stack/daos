@@ -973,6 +973,29 @@ vos_dtx_check_shares(struct umem_instance *umm, daos_handle_t coh,
 	return ALB_AVAILABLE_CLEAN;
 }
 
+enum vos_tx_flags
+vos_dtx_state_get(struct umem_instance *umm, umem_off_t entry)
+{
+	struct vos_dtx_entry_df		*dtx = NULL;
+
+	if (dtx_is_null(entry))
+		return VOS_TX_COMMITTED;
+
+	D_ASSERT(!dtx_is_aborted(entry) && !dtx_is_unknown(entry));
+
+	dtx = umem_off2ptr(umm, entry);
+	D_ASSERTF(dtx != NULL, "Invalid pointer address passed "DF_U64"\n",
+		  entry);
+
+	if (dtx->te_state == DTX_ST_COMMITTED)
+		return VOS_TX_COMMITTED;
+
+	if (dtx->te_flags & DTX_EF_LEADER)
+		return VOS_TX_UNCOMMITTED | VOS_TX_DEFINITIVE;
+
+	return VOS_TX_UNCOMMITTED;
+}
+
 int
 vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 			   umem_off_t entry, umem_off_t record, uint32_t intent,

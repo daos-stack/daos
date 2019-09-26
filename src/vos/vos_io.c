@@ -478,9 +478,8 @@ ioc_trim_tail_holes(struct vos_io_context *ioc)
 }
 
 int
-key_ilog_fetch(struct umem_instance *umm, uint32_t intent,
-	       const daos_epoch_range_t *epr, struct vos_krec_df *krec,
-	       struct ilog_entries *entries)
+key_ilog_fetch(struct umem_instance *umm, const daos_epoch_range_t *epr,
+	       struct vos_krec_df *krec, struct ilog_entries *entries)
 {
 	daos_handle_t		 loh;
 	int			 rc;
@@ -492,7 +491,7 @@ key_ilog_fetch(struct umem_instance *umm, uint32_t intent,
 		return rc;
 	}
 
-	rc = ilog_fetch(loh, intent, epr, entries);
+	rc = ilog_fetch(loh, epr, entries);
 	if (rc == -DER_NONEXIST)
 		goto out;
 	if (rc != 0)
@@ -515,7 +514,7 @@ key_ilog_update_range(struct vos_io_context *ioc, struct ilog_entries *entries,
 			continue; /* skip newer entries */
 
 		if (entry->ie_punch) {
-			if (entry->ie_status == ILOG_INVISIBLE)
+			if (entry->ie_status & VOS_TX_UNCOMMITTED)
 				/* A key punch is in-flight */
 				return -DER_INPROGRESS;
 
@@ -600,8 +599,7 @@ akey_fetch(struct vos_io_context *ioc, const daos_epoch_range_t *epr,
 			      DAOS_INTENT_DEFAULT, &krec, &toh);
 
 	if (rc == 0)
-		rc = key_ilog_fetch(vos_ioc2umm(ioc), DAOS_INTENT_DEFAULT, epr,
-				    krec, &entries);
+		rc = key_ilog_fetch(vos_ioc2umm(ioc), epr, krec, &entries);
 
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
@@ -728,8 +726,8 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 			      &toh);
 
 	if (rc == 0)
-		rc = key_ilog_fetch(vos_ioc2umm(ioc), DAOS_INTENT_DEFAULT, &epr,
-				    ioc->ic_dkey_krec, &ioc->ic_dkey_entries);
+		rc = key_ilog_fetch(vos_ioc2umm(ioc), &epr, ioc->ic_dkey_krec,
+				    &ioc->ic_dkey_entries);
 
 	if (rc == -DER_NONEXIST) {
 		for (i = 0; i < ioc->ic_iod_nr; i++)

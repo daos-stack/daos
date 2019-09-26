@@ -47,7 +47,6 @@
 #define VOS_SVT_ORDER		5	/* order of single value tree */
 #define VOS_EVT_ORDER		23	/* evtree order */
 
-
 #define DAOS_VOS_VERSION 1
 
 extern struct dss_module_key vos_module_key;
@@ -325,6 +324,21 @@ vos_dtx_table_destroy(struct vos_pool *pool, struct vos_dtx_table_df *dtab_df);
  */
 int
 vos_dtx_table_register(void);
+
+/**
+ * Return commit status for a transaction
+ *
+ * \param umm		[IN]	Instance of an unified memory class.
+ * \param entry		[IN]	Address (offset) of the DTX to be checked.
+ *
+ * \return	VOS_TX_COMMITTED	if committed
+ *		DTX_TX_UNCOMMITTED	if uncommitted but global state is
+ *					unknown
+ *		DTX_TX_UNCOMMITTED |
+ *		DTX_TX_DEFINITIVE	if known globally to be uncommitted
+ */
+enum vos_tx_flags
+vos_dtx_state_get(struct umem_instance *umm, umem_off_t entry);
 
 /**
  * Check whether the record (to be accessible) is available to outside or not.
@@ -913,9 +927,8 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 
 /* vos_io.c */
 int
-key_ilog_fetch(struct umem_instance *umm, uint32_t intent,
-	       const daos_epoch_range_t *epr, struct vos_krec_df *krec,
-	       struct ilog_entries *entries);
+key_ilog_fetch(struct umem_instance *umm, const daos_epoch_range_t *epr,
+	       struct vos_krec_df *krec, struct ilog_entries *entries);
 uint16_t
 vos_media_select(struct vos_container *cont, daos_iod_type_t type,
 		 daos_size_t size);
