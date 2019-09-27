@@ -26,7 +26,18 @@ package server
 import (
 	"net"
 	"strconv"
+	"strings"
+	"sync"
 	"testing"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
 
 func TestHasPort(t *testing.T) {
@@ -129,4 +140,175 @@ func TestCheckMgmtSvcReplica(t *testing.T) {
 				test.expectedIsReplica, test.expectedBootstrap, test.expectedErr)
 		}
 	}
+}
+
+// mockDrpcClient is a mock of the DomainSocketClient interface
+type mockDrpcClient struct {
+	sync.Mutex
+	ConnectOutputError    error
+	CloseOutputError      error
+	CloseCallCount        int
+	SendMsgInputCall      *drpc.Call
+	SendMsgOutputResponse *drpc.Response
+	SendMsgOutputError    error
+}
+
+func (c *mockDrpcClient) IsConnected() bool {
+	return false
+}
+
+func (c *mockDrpcClient) Connect() error {
+	return c.ConnectOutputError
+}
+
+func (c *mockDrpcClient) Close() error {
+	c.CloseCallCount++
+	return c.CloseOutputError
+}
+
+func (c *mockDrpcClient) SendMsg(call *drpc.Call) (*drpc.Response, error) {
+	c.SendMsgInputCall = call
+	return c.SendMsgOutputResponse, c.SendMsgOutputError
+}
+
+func (c *mockDrpcClient) setSendMsgResponse(status drpc.Status, body []byte) {
+	c.SendMsgOutputResponse = &drpc.Response{
+		Status: status,
+		Body:   body,
+	}
+}
+
+func newTestMgmtSvc(log logging.Logger) *mgmtSvc {
+	r := ioserver.NewRunner(log, ioserver.NewConfig())
+
+	var msCfg mgmtSvcClientCfg
+	msCfg.AccessPoints = append(msCfg.AccessPoints, "localhost")
+
+	srv := NewIOServerInstance(log, nil, nil, newMgmtSvcClient(nil, log, msCfg), r)
+	srv.setSuperblock(&Superblock{
+		MS: true,
+	})
+
+	harness := NewIOServerHarness(log)
+	harness.instances = append(harness.instances, srv)
+
+	return newMgmtSvc(harness)
+}
+
+func setupMockDrpcClientBytes(svc *mgmtSvc, respBytes []byte, err error) {
+	mi, _ := svc.harness.GetMSLeaderInstance()
+	client := &mockDrpcClient{}
+	client.setSendMsgResponse(drpc.Status_SUCCESS, respBytes)
+	client.SendMsgOutputError = err
+	mi.setDrpcClient(client)
+}
+
+func setupMockDrpcClient(svc *mgmtSvc, resp proto.Message, err error) {
+	respBytes, _ := proto.Marshal(resp)
+	setupMockDrpcClientBytes(svc, respBytes, err)
+}
+
+func newTestGetACLReq() *mgmtpb.GetACLReq {
+	return &mgmtpb.GetACLReq{
+		Uuid: "testUUID",
+	}
+}
+
+func TestPoolGetACL_NoMS(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)()
+
+	svc := newMgmtSvc(NewIOServerHarness(log))
+
+	resp, err := svc.PoolGetACL(nil, newTestGetACLReq())
+
+	if resp != nil {
+		t.Errorf("Expected no response, got: %+v", resp)
+	}
+
+	if err == nil {
+		t.Fatal("Expected an error, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "no managed instances") {
+		t.Errorf("Expected an error about the access point, got: %v", err)
+	}
+}
+
+func TestPoolGetACL_DrpcFailed(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)()
+
+	svc := newTestMgmtSvc(log)
+	setupMockDrpcClient(svc, nil, errors.New("mock error"))
+
+	resp, err := svc.PoolGetACL(nil, newTestGetACLReq())
+
+	if resp != nil {
+		t.Errorf("Expected no response, got: %+v", resp)
+	}
+
+	if err == nil {
+		t.Fatal("Expected an error, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "mock error") {
+		t.Errorf("Expected our mock error, got: %v", err)
+	}
+}
+
+func TestPoolGetACL_BadDrpcResp(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)()
+
+	svc := newTestMgmtSvc(log)
+	// dRPC call returns junk in the message body
+	badBytes := make([]byte, 12)
+	for i := range badBytes {
+		badBytes[i] = byte(i)
+	}
+
+	setupMockDrpcClientBytes(svc, badBytes, nil)
+
+	resp, err := svc.PoolGetACL(nil, newTestGetACLReq())
+
+	if resp != nil {
+		t.Errorf("Expected no response, got: %+v", resp)
+	}
+
+	if err == nil {
+		t.Fatal("Expected an error, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "unmarshal") {
+		t.Errorf("Expected our mock error, got: %v", err)
+	}
+}
+
+func TestPoolGetACL_Success(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)()
+
+	svc := newTestMgmtSvc(log)
+
+	expectedResp := &mgmtpb.GetACLResp{
+		Status: 0,
+		ACL:    []string{"A::OWNER@:rw", "A:g:GROUP@:r"},
+	}
+	setupMockDrpcClient(svc, expectedResp, nil)
+
+	resp, err := svc.PoolGetACL(nil, newTestGetACLReq())
+
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+
+	if resp == nil {
+		t.Fatal("Expected a response, got nil")
+	}
+
+	common.AssertEqual(t, resp.Status, expectedResp.Status,
+		"response Status didn't match")
+	common.AssertEqual(t, resp.ACL, expectedResp.ACL,
+		"response ACL didn't match")
 }

@@ -256,6 +256,10 @@ func (m *mockMgmtSvcClient) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDes
 	return &mgmtpb.PoolDestroyResp{}, nil
 }
 
+func (m *mockMgmtSvcClient) PoolGetACL(ctx context.Context, req *mgmtpb.GetACLReq, o ...grpc.CallOption) (*mgmtpb.GetACLResp, error) {
+	return &mgmtpb.GetACLResp{}, nil
+}
+
 func (m *mockMgmtSvcClient) BioHealthQuery(
 	ctx context.Context,
 	req *mgmtpb.BioHealthReq,

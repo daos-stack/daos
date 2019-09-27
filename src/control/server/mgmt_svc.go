@@ -311,6 +311,30 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	return resp, nil
 }
 
+// PoolGetACL forwards a request to the IO server to fetch a pool's Access Control List
+func (svc *mgmtSvc) PoolGetACL(ctx context.Context, req *mgmtpb.GetACLReq) (*mgmtpb.GetACLResp, error) {
+	svc.log.Debugf("MgmtSvc.PoolGetACL dispatch, req:%+v\n", *req)
+
+	mi, err := svc.harness.GetMSLeaderInstance()
+	if err != nil {
+		return nil, err
+	}
+
+	dresp, err := mi.CallDrpc(mgmtModuleID, poolGetACL, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.GetACLResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal PoolGetACL response")
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolGetACL dispatch, resp:%+v\n", *resp)
+
+	return resp, nil
+}
+
 // BioHealthQuery implements the method defined for the Management Service.
 func (svc *mgmtSvc) BioHealthQuery(ctx context.Context, req *mgmtpb.BioHealthReq) (*mgmtpb.BioHealthResp, error) {
 	svc.log.Debugf("MgmtSvc.BioHealthQuery dispatch, req:%+v\n", *req)
