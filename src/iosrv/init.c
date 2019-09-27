@@ -35,6 +35,7 @@
 
 #include <daos/btree_class.h>
 #include <daos/common.h>
+#include <daos/placement.h>
 #include "srv_internal.h"
 #include "drpc_internal.h"
 
@@ -66,6 +67,9 @@ const char	       *dss_socket_dir = "/var/run/daos_server";
 
 /** NVMe shm_id for enabling SPDK multi-process mode */
 int			dss_nvme_shm_id = DAOS_NVME_SHMID_NONE;
+
+/** IO server instance index */
+unsigned int		dss_instance_idx;
 
 /** attach_info path to support singleton client */
 static bool	        save_attach_info;
@@ -373,6 +377,7 @@ server_init(int argc, char *argv[])
 	uint32_t	flags = CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_LM_DISABLE;
 	d_rank_t	rank = -1;
 	uint32_t	size = -1;
+	char		hostname[256] = { 0 };
 
 	rc = daos_debug_init(NULL);
 	if (rc != 0)
@@ -440,7 +445,12 @@ server_init(int argc, char *argv[])
 			D_ERROR("daos_hhash_init failed, rc: %d.\n", rc);
 			D_GOTO(exit_srv_init, rc);
 		}
-		D_INFO("daos handle hash-table initialized\n");
+		rc = pl_init();
+		if (rc != 0) {
+			daos_hhash_fini();
+			goto exit_srv_init;
+		}
+		D_INFO("handle hash table and placement initialized\n");
 	}
 	/* server-side uses D_HTYPE_PTR handle */
 	d_hhash_set_ptrtype(daos_ht.dht_hhash);
@@ -489,11 +499,12 @@ server_init(int argc, char *argv[])
 		goto exit_drpc_fini;
 	D_INFO("Modules successfully set up\n");
 
+	gethostname(hostname, 255);
 	D_PRINT("DAOS I/O server (v%s) process %u started on rank %u "
-		"(out of %u) with %u target xstream set(s), %d helper XS "
-		"per target, firstcore %d.\n",
-		DAOS_VERSION, getpid(), rank, size, dss_tgt_nr,
-		dss_tgt_offload_xs_nr, dss_core_offset);
+		"(out of %u) with %u target, %d helper XS per target, "
+		"firstcore %d, host %s.\n", DAOS_VERSION, getpid(), rank,
+		size, dss_tgt_nr, dss_tgt_offload_xs_nr, dss_core_offset,
+		hostname);
 
 	return 0;
 
@@ -502,10 +513,12 @@ exit_drpc_fini:
 exit_init_state:
 	server_init_state_fini();
 exit_daos_fini:
-	if (dss_mod_facs & DSS_FAC_LOAD_CLI)
+	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		daos_fini();
-	else
+	} else {
+		pl_fini();
 		daos_hhash_fini();
+	}
 exit_srv_init:
 	dss_srv_fini(true);
 exit_mod_loaded:
@@ -528,10 +541,12 @@ server_fini(bool force)
 	dss_module_cleanup_all();
 	drpc_fini();
 	server_init_state_fini();
-	if (dss_mod_facs & DSS_FAC_LOAD_CLI)
+	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		daos_fini();
-	else
+	} else {
+		pl_fini();
 		daos_hhash_fini();
+	}
 	dss_srv_fini(force);
 	dss_module_unload_all();
 	ds_iv_fini();
@@ -571,10 +586,12 @@ Options:\n\
       Shared segment ID (enable multi-process mode in SPDK, default none)\n\
   --attach_info=path, -apath\n\
       Attach info patch (to support non-PMIx client, default \"/tmp\")\n\
+  --instance_idx=idx, -I idx\n\
+      Identifier for this server instance (default %u)\n\
   --help, -h\n\
       Print this description\n",
 		prog, prog, modules, daos_sysname, dss_storage_path,
-		dss_socket_dir, dss_nvme_conf);
+		dss_socket_dir, dss_nvme_conf, dss_instance_idx);
 }
 
 static int
@@ -593,6 +610,7 @@ parse(int argc, char **argv)
 		{ "targets",		required_argument,	NULL,	't' },
 		{ "storage",		required_argument,	NULL,	's' },
 		{ "xshelpernr",		required_argument,	NULL,	'x' },
+		{ "instance_idx",	required_argument,	NULL,	'I' },
 		{ NULL,			0,			NULL,	0}
 	};
 	int	rc = 0;
@@ -600,7 +618,7 @@ parse(int argc, char **argv)
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "a:c:d:f:g:hi:m:n:t:s:x:", opts,
+	while ((c = getopt_long(argc, argv, "a:c:d:f:g:hi:m:n:t:s:x:I:", opts,
 				NULL)) != -1) {
 		unsigned int	 nr;
 		char		*end;
@@ -675,6 +693,9 @@ parse(int argc, char **argv)
 		case 'a':
 			save_attach_info = true;
 			attach_info_path = optarg;
+			break;
+		case 'I':
+			dss_instance_idx = atoi(optarg);
 			break;
 		default:
 			usage(argv[0], stderr);

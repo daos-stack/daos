@@ -55,6 +55,8 @@ extern const char      *dss_socket_dir;
 /** NVMe shm_id for enabling SPDK multi-process mode */
 extern int		dss_nvme_shm_id;
 
+/** IO server instance index */
+extern unsigned int	dss_instance_idx;
 
 /**
  * Stackable Module API
@@ -335,7 +337,9 @@ enum dss_ult_type {
 	/** aggregation ULT */
 	DSS_ULT_AGGREGATE,
 	/** drpc listener ULT */
-	DSS_ULT_DRPC,
+	DSS_ULT_DRPC_LISTENER,
+	/** drpc handler ULT */
+	DSS_ULT_DRPC_HANDLER,
 	/** miscellaneous ULT */
 	DSS_ULT_MISC,
 };
@@ -411,6 +415,8 @@ struct dss_coll_args {
 	/** Arguments for dss_collective func (Mandatory) */
 	void				*ca_func_args;
 	void				*ca_aggregator;
+	int				*ca_exclude_tgts;
+	int				ca_exclude_tgts_cnt;
 	/** Stream arguments for all streams */
 	struct dss_coll_stream_args	ca_stream_args;
 };

@@ -99,30 +99,6 @@ class Snapshot(TestWithServers):
                 self.container.info.ci_uuid):
             self.fail("##Container UUID did not match the one in info.")
 
-    def tearDown(self):
-        """
-        tear down method
-        """
-        try:
-            if self.container:
-                self.container.close()
-
-            if self.container:
-                self.container.destroy()
-
-            # cleanup the pool
-            if self.pool:
-                self.pool.disconnect()
-                self.pool.destroy(1)
-
-        except DaosApiError as excep:
-            self.log.info(excep)
-            self.log.info(traceback.format_exc())
-            self.fail("##Snapshot test failed on cleanUp.")
-
-        finally:
-            super(Snapshot, self).tearDown()
-
     def display_snapshot(self, snapshot):
         """
         To display the snapshot information.

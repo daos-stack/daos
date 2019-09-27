@@ -34,6 +34,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
@@ -92,13 +93,11 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		if err := harness.AddInstance(srv); err != nil {
 			return err
 		}
+	}
 
-		// FIXME: Pretty sure each instance is going to need its own
-		// set of socket files -- probably need to do some work in IOServer
-		// to allow us to pass that information via flag.
-		if err := drpcSetup(srvCfg.SocketDir, srv, cfg.TransportConfig); err != nil {
-			return errors.WithMessage(err, "dRPC setup")
-		}
+	// Single daos_server dRPC server to handle all iosrv requests
+	if err := drpcSetup(cfg.SocketDir, harness.Instances(), cfg.TransportConfig); err != nil {
+		return errors.WithMessage(err, "dRPC setup")
 	}
 
 	// Create and setup control service.
@@ -124,7 +123,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}
 
 	grpcServer := grpc.NewServer(tcOpt)
-	mgmtpb.RegisterMgmtCtlServer(grpcServer, controlService)
+	ctlpb.RegisterMgmtCtlServer(grpcServer, controlService)
 
 	// If running as root and user name specified in config file, respawn proc.
 	needsRespawn := syscall.Getuid() == 0 && cfg.UserName != ""
@@ -165,8 +164,8 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 			return err
 		}
 	}
-	reformat := false // TODO: make this configurable
-	if err := harness.CreateSuperblocks(reformat); err != nil {
+	recreate := false // TODO: make this configurable
+	if err := harness.CreateSuperblocks(recreate); err != nil {
 		return err
 	}
 

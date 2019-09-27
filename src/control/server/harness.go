@@ -79,8 +79,8 @@ func (h *IOServerHarness) AddInstance(srv *IOServerInstance) error {
 	h.Lock()
 	defer h.Unlock()
 	srvIdx := len(h.instances)
-	srv.Index = srvIdx
-	srv.runner.Config.Index = srvIdx
+	srv.Index = uint32(srvIdx)
+	srv.runner.Config.Index = uint32(srvIdx)
 
 	h.instances = append(h.instances, srv)
 	return nil
@@ -166,6 +166,7 @@ func (h *IOServerHarness) AwaitStorageReady(ctx context.Context) error {
 		}
 
 		if !needsScmFormat {
+			h.log.Debug("no SCM format required; checking for superblock")
 			needsSuperblock, err := instance.NeedsSuperblock()
 			if err != nil {
 				return errors.Wrap(err, "failed to check instance superblock")
@@ -174,6 +175,7 @@ func (h *IOServerHarness) AwaitStorageReady(ctx context.Context) error {
 				continue
 			}
 		}
+		h.log.Debug("SCM format required")
 		instance.AwaitStorageReady(ctx)
 	}
 	return ctx.Err()

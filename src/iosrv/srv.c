@@ -84,12 +84,14 @@
  * 2) dss_ult_xs() to query the XS id of the xstream for specific ULT task.
  */
 
+/** Number of dRPC xstreams */
+#define	DRPC_XS_NR	(1)
 /** Number of offload XS per target [0, 2] */
 unsigned int	dss_tgt_offload_xs_nr = 2;
 /** number of target (XS set) per server */
 unsigned int	dss_tgt_nr;
 /** number of system XS */
-unsigned int	dss_sys_xs_nr = DAOS_TGT0_OFFSET;
+unsigned int	dss_sys_xs_nr = DAOS_TGT0_OFFSET + DRPC_XS_NR;
 
 unsigned int
 dss_ctx_nr_get(void)
@@ -402,13 +404,14 @@ dss_srv_handler(void *arg)
 		} else {
 			if (dx->dx_main_xs)
 				D_ASSERTF(dx->dx_ctx_id ==
-					  dx->dx_tgt_id + dss_sys_xs_nr,
+					  dx->dx_tgt_id + dss_sys_xs_nr -
+					  DRPC_XS_NR,
 					  "incorrect ctx_id %d for xs_id %d\n",
 					  dx->dx_ctx_id, dx->dx_xs_id);
 			else
 				D_ASSERTF(dx->dx_ctx_id ==
 					  (dss_sys_xs_nr + dss_tgt_nr +
-					   dx->dx_tgt_id),
+					   dx->dx_tgt_id - DRPC_XS_NR),
 					  "incorrect ctx_id %d for xs_id %d\n",
 					  dx->dx_ctx_id, dx->dx_xs_id);
 		}
@@ -616,7 +619,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	 * as it is only for EC/checksum/compress offloading.
 	 */
 	xs_offset = xs_id < dss_sys_xs_nr ? -1 : DSS_XS_OFFSET_IN_TGT(xs_id);
-	comm = (xs_id < dss_sys_xs_nr) || xs_offset == 0 || xs_offset == 1;
+	comm = (xs_id == 0) || xs_offset == 0 || xs_offset == 1;
 	dx->dx_tgt_id	= dss_xs2tgt(xs_id);
 	if (xs_id < dss_sys_xs_nr) {
 		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_SYS_XS_NAME_FMT,
@@ -779,11 +782,21 @@ dss_start_xs_id(int xs_id)
 {
 	hwloc_obj_t	obj;
 	int		rc;
+	int		xs_core_offset;
+
+	/*
+	 * System XS all use the first core
+	 */
+	if (xs_id < dss_sys_xs_nr)
+		xs_core_offset = 0;
+	else
+		xs_core_offset = xs_id - (dss_sys_xs_nr - DRPC_XS_NR);
 
 	obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth,
-				     (xs_id + dss_core_offset) % dss_core_nr);
+				     (xs_core_offset + dss_core_offset)
+				     % dss_core_nr);
 	if (obj == NULL) {
-		D_ERROR("Null core returned by hwloc\n");
+		D_ERROR("Null core returned by hwloc for XS %d\n", xs_id);
 		return -DER_INVAL;
 	}
 
@@ -1218,6 +1231,21 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 		stream			= &stream_args->csa_streams[tid];
 		stream->st_coll_args	= &carg;
 
+		if (args->ca_exclude_tgts_cnt) {
+			int i;
+
+			for (i = 0; i < args->ca_exclude_tgts_cnt; i++)
+				if (args->ca_exclude_tgts[i] == tid)
+					break;
+
+			if (i < args->ca_exclude_tgts_cnt) {
+				D_DEBUG(DB_TRACE, "Skip tgt %d\n", tid);
+				rc = ABT_future_set(future, (void *)stream);
+				D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+				continue;
+			}
+		}
+
 		dx = dss_xstream_get(DSS_MAIN_XS_ID(tid));
 		if (create_ult)
 			rc = ABT_thread_create(dx->dx_pools[DSS_POOL_SHARE],
@@ -1228,9 +1256,8 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 					     collective_func, stream, NULL);
 
 		if (rc != ABT_SUCCESS) {
-			aggregator.at_args.st_rc = dss_abterr2der(rc);
-			rc = ABT_future_set(future,
-					    (void *)&aggregator);
+			stream->st_rc = dss_abterr2der(rc);
+			rc = ABT_future_set(future, (void *)stream);
 			D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 		}
 	}
@@ -1300,12 +1327,8 @@ static int
 dss_collective_internal(int (*func)(void *), void *arg, bool thread, int flag)
 {
 	int				rc;
-	struct dss_coll_ops		coll_ops;
-	struct dss_coll_args		coll_args;
-
-
-	memset(&coll_ops, 0, sizeof(coll_ops));
-	memset(&coll_args, 0, sizeof(coll_args));
+	struct dss_coll_ops		coll_ops = { 0 };
+	struct dss_coll_args		coll_args = { 0 };
 
 	coll_ops.co_func	= func;
 	coll_args.ca_func_args	= arg;

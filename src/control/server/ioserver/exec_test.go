@@ -147,7 +147,7 @@ func TestRunnerNormalExit(t *testing.T) {
 	}
 
 	// Light integration testing of arg/env generation; unit tests elsewhere.
-	wantArgs := "-t 42 -x 1"
+	wantArgs := "-t 42 -x 1 -I 0"
 	var gotArgs string
 	wantEnv := "OFI_INTERFACE=qib0"
 	var gotEnv string

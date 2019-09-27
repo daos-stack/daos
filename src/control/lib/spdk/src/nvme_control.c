@@ -30,9 +30,11 @@
 
 struct ctrlr_entry {
 	struct spdk_nvme_ctrlr	*ctrlr;
-	struct spdk_pci_addr	pci_addr;
-	int 			socket_id;
+	struct spdk_pci_addr	 pci_addr;
+	struct dev_health_entry	*dev_health;
 	struct ctrlr_entry	*next;
+	int			 socket_id;
+
 };
 
 struct ns_entry {
@@ -40,6 +42,12 @@ struct ns_entry {
 	struct spdk_nvme_ns	*ns;
 	struct ns_entry		*next;
 	struct spdk_nvme_qpair	*qpair;
+};
+
+struct dev_health_entry {
+	struct spdk_nvme_health_information_page health_page;
+	struct spdk_nvme_error_information_entry error_page[256];
+	int					 inflight;
 };
 
 static struct ctrlr_entry	*g_controllers;
@@ -106,6 +114,7 @@ attach_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
 		exit(1);
 	}
 	entry->ctrlr = ctrlr;
+	entry->dev_health = NULL;
 	entry->next = g_controllers;
 	g_controllers = entry;
 
@@ -152,6 +161,44 @@ check_size(int written, int max, char *msg, struct ret_t *ret)
 	return NVMEC_SUCCESS;
 }
 
+static int
+collect_health_stats(struct dev_health_entry *entry, struct ctrlr_t *ctrlr)
+{
+	struct dev_health_t			 *h_tmp;
+	struct spdk_nvme_health_information_page health_pg;
+	union spdk_nvme_critical_warning_state	 cwarn;
+
+	h_tmp = malloc(sizeof(struct dev_health_t));
+	if (h_tmp == NULL) {
+		perror("dev_health_t malloc");
+		return -ENOMEM;
+	}
+
+	health_pg = entry->health_page;
+	h_tmp->temperature = health_pg.temperature;
+	h_tmp->warn_temp_time = health_pg.warning_temp_time;
+	h_tmp->crit_temp_time = health_pg.critical_temp_time;
+	h_tmp->ctrl_busy_time = health_pg.controller_busy_time[0];
+	h_tmp->power_cycles = health_pg.power_cycles[0];
+	h_tmp->power_on_hours = health_pg.power_on_hours[0];
+	h_tmp->unsafe_shutdowns = health_pg.unsafe_shutdowns[0];
+	h_tmp->media_errors = health_pg.media_errors[0];
+	h_tmp->error_log_entries = health_pg.num_error_info_log_entries[0];
+	/* Critical warnings */
+	cwarn = entry->health_page.critical_warning;
+	h_tmp->temp_warning = cwarn.bits.temperature ? true : false;
+	h_tmp->avail_spare_warning = cwarn.bits.available_spare ? true : false;
+	h_tmp->dev_reliabilty_warning = cwarn.bits.device_reliability ?
+					true : false;
+	h_tmp->read_only_warning = cwarn.bits.read_only ? true : false;
+	h_tmp->volatile_mem_warning = cwarn.bits.volatile_memory_backup ?
+					true : false;
+
+	ctrlr->dev_health = h_tmp;
+
+	return 0;
+}
+
 static void
 collect(struct ret_t *ret)
 {
@@ -159,11 +206,11 @@ collect(struct ret_t *ret)
 	struct ctrlr_entry			*ctrlr_entry;
 	const struct spdk_nvme_ctrlr_data	*cdata;
 	struct spdk_pci_device			*pci_dev;
-	struct spdk_pci_addr			pci_addr;
+	struct spdk_pci_addr			 pci_addr;
 	struct ctrlr_t				*ctrlr_tmp;
 	struct ns_t				*ns_tmp;
-	int					written;
-	int					rc;
+	int					 written;
+	int					 rc;
 
 	ns_entry = g_namespaces;
 	ctrlr_entry = g_controllers;
@@ -260,6 +307,14 @@ collect(struct ret_t *ret)
 		// populate numa socket id
 		ctrlr_tmp->socket_id = spdk_pci_device_get_socket_id(pci_dev);
 
+		/*
+		 * Alloc device health stats per controller only if device
+		 * health stats are queried, not by default for discovery.
+		 */
+		if (ctrlr_entry->dev_health != NULL)
+			ret->rc = collect_health_stats(ctrlr_entry->dev_health,
+						       ctrlr_tmp);
+
 		// cdata->cntlid is not unique per host, only per subsystem
 		ctrlr_tmp->next = ret->ctrlrs;
 		ret->ctrlrs = ctrlr_tmp;
@@ -289,17 +344,58 @@ cleanup(void)
 	while (ctrlr_entry) {
 		struct ctrlr_entry *next = ctrlr_entry->next;
 
+		if (ctrlr_entry->dev_health != NULL)
+			free(ctrlr_entry->dev_health);
 		spdk_nvme_detach(ctrlr_entry->ctrlr);
 		free(ctrlr_entry);
 		ctrlr_entry = next;
 	}
 }
 
+static void
+get_spdk_log_page_completion(void *cb_arg, const struct spdk_nvme_cpl *cpl)
+{
+	struct dev_health_entry *entry = cb_arg;
+
+	if (spdk_nvme_cpl_is_error(cpl))
+		fprintf(stderr, "Error with SPDK health log page\n");
+
+	entry->inflight--;
+}
+
+static int
+get_dev_health_logs(struct spdk_nvme_ctrlr *ctrlr,
+		    struct dev_health_entry *entry)
+{
+	struct spdk_nvme_health_information_page health_page;
+	int					 rc = 0;
+
+	entry->inflight++;
+	rc = spdk_nvme_ctrlr_cmd_get_log_page(ctrlr,
+					      SPDK_NVME_LOG_HEALTH_INFORMATION,
+					      SPDK_NVME_GLOBAL_NS_TAG,
+					      &health_page,
+					      sizeof(health_page),
+					      0, get_spdk_log_page_completion,
+					      entry);
+	if (rc != 0)
+		return rc;
+
+	while (entry->inflight)
+		spdk_nvme_ctrlr_process_admin_completions(ctrlr);
+
+	entry->health_page = health_page;
+	return rc;
+}
+
 struct ret_t *
 nvme_discover(void)
 {
-	int 		rc;
-	struct ret_t	*ret;
+	int			 rc;
+	struct ret_t		*ret;
+	struct ctrlr_entry	*ctrlr_entry;
+	struct dev_health_entry	*health_entry;
+
 
 	ret = init_ret();
 
@@ -322,6 +418,32 @@ nvme_discover(void)
 		fprintf(stderr, "no NVMe controllers found\n");
 		cleanup();
 		return ret;
+	}
+
+	/*
+	 * Collect NVMe SSD health stats for each probed controller.
+	 */
+	ctrlr_entry = g_controllers;
+
+	while (ctrlr_entry) {
+		health_entry = malloc(sizeof(struct dev_health_entry));
+		if (health_entry == NULL) {
+			fprintf(stderr, "health_entry malloc failed");
+			cleanup();
+			return ret;
+		}
+
+		rc = get_dev_health_logs(ctrlr_entry->ctrlr, health_entry);
+		if (rc != 0) {
+			fprintf(stderr,
+				"Unable to get SPDK ctrlr health logs\n");
+			free(health_entry);
+			cleanup();
+			return ret;
+		}
+
+		ctrlr_entry->dev_health = health_entry;
+		ctrlr_entry = ctrlr_entry->next;
 	}
 
 	collect(ret);

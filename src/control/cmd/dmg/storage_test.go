@@ -28,7 +28,7 @@ import (
 	"strings"
 	"testing"
 
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	. "github.com/daos-stack/daos/src/control/common/proto/ctl"
 )
 
 func TestStorageCommands(t *testing.T) {
@@ -66,8 +66,8 @@ func TestStorageCommands(t *testing.T) {
 			"storage fwupdate --force --nvme-model foo --nvme-fw-path bar --nvme-fw-rev 123",
 			strings.Join([]string{
 				"ConnectClients",
-				fmt.Sprintf("StorageUpdate-%s", &pb.StorageUpdateReq{
-					Nvme: &pb.UpdateNvmeReq{
+				fmt.Sprintf("StorageUpdate-%s", &StorageUpdateReq{
+					Nvme: &UpdateNvmeReq{
 						Model:    "foo",
 						Startrev: "123",
 						Path:     "bar",

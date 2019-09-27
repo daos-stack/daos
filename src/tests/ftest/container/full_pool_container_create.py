@@ -27,6 +27,7 @@ import string
 from apricot import TestWithServers, skipForTicket
 from daos_api import DaosPool, DaosContainer, DaosApiError
 
+
 class FullPoolContainerCreate(TestWithServers):
     """
     Class for test to create a container in a pool with no remaining free space.
@@ -36,17 +37,6 @@ class FullPoolContainerCreate(TestWithServers):
         super(FullPoolContainerCreate, self).__init__(*args, **kwargs)
         self.cont = None
         self.cont2 = None
-
-    def tearDown(self):
-        # shut 'er down
-        """
-        wrap pool destroy in a try; in case pool create didn't succeed, we
-        still need the server to be shut down in any case
-        """
-        try:
-            self.pool.destroy(1)
-        finally:
-            super(FullPoolContainerCreate, self).tearDown()
 
     @skipForTicket("DAOS-3142")
     def test_no_space_cont_create(self):
