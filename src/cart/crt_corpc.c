@@ -429,7 +429,7 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 	/* grp_root is logical rank number in this group */
 
 	grp_root = grp_priv->gp_self;
-	pri_root = grp_priv_get_primary_rank(grp_priv, grp_root);
+	pri_root = crt_grp_priv_get_primary_rank(grp_priv, grp_root);
 
 	tobe_filter_ranks = filter_ranks;
 	/*

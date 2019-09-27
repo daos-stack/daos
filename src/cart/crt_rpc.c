@@ -1317,8 +1317,8 @@ crt_req_abort(crt_rpc_t *req)
 
 	rc = crt_hg_req_cancel(rpc_priv);
 	if (rc != 0) {
-		D_ERROR("crt_hg_req_cancel failed, rc: %d, opc: %#x.\n",
-			rc, rpc_priv->crp_pub.cr_opc);
+		RPC_ERROR(rpc_priv, "crt_hg_req_cancel failed, rc: %d, "
+			  "opc: %#x.\n", rc, rpc_priv->crp_pub.cr_opc);
 		crt_rpc_complete(rpc_priv, rc);
 		D_GOTO(out, rc = 0);
 	}

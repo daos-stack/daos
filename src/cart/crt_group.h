@@ -242,7 +242,7 @@ grp_priv_get_failed_ranks(struct crt_grp_priv *priv)
 }
 
 d_rank_t
-grp_priv_get_primary_rank(struct crt_grp_priv *priv, d_rank_t rank);
+crt_grp_priv_get_primary_rank(struct crt_grp_priv *priv, d_rank_t rank);
 
 /*
  * This call is currently called only when group is created.

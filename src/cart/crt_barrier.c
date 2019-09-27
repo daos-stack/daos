@@ -134,7 +134,7 @@ crt_barrier_update_master(struct crt_grp_priv *grp_priv)
 		for (i = info->bi_master_idx + 1;
 		     i < membs->rl_nr; i++) {
 
-			rank = grp_priv_get_primary_rank(grp_priv,
+			rank = crt_grp_priv_get_primary_rank(grp_priv,
 							membs->rl_ranks[i]);
 			if (d_rank_in_rank_list(live_ranks, rank))
 				break;

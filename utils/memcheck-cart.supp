@@ -115,6 +115,22 @@
    fun:clone
 }
 {
+   FI leak 5
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:malloc
+   fun:strdup
+   fun:fi_param_define@@FABRIC_1.0
+   fun:ofi_hook_init
+   fun:fi_ini
+   fun:fi_getinfo@@FABRIC_1.2
+   fun:na_ofi_getinfo
+   fun:na_ofi_check_protocol
+   fun:NA_Initialize_opt
+   fun:crt_hg_init
+   fun:crt_init_opt
+}
+{
     CRYPTO leaks malloc
     Memcheck:Leak
     match-leak-kinds: reachable

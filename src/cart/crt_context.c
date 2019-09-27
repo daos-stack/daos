@@ -836,7 +836,7 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	}
 
 	grp_priv = crt_grp_pub2priv(rpc_priv->crp_pub.cr_ep.ep_grp);
-	ep_rank = grp_priv_get_primary_rank(grp_priv,
+	ep_rank = crt_grp_priv_get_primary_rank(grp_priv,
 				rpc_priv->crp_pub.cr_ep.ep_rank);
 
 	/* lookup the crt_ep_inflight (create one if not found) */

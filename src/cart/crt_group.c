@@ -541,7 +541,7 @@ crt_grp_lc_uri_remove(struct crt_grp_priv *passed_grp_priv, int ctx_idx,
 		else
 			grp_priv = passed_grp_priv->gp_priv_prim;
 
-		rank = grp_priv_get_primary_rank(passed_grp_priv, rank);
+		rank = crt_grp_priv_get_primary_rank(passed_grp_priv, rank);
 	}
 
 	ctx = crt_context_lookup(ctx_idx);
@@ -678,7 +678,7 @@ crt_grp_lc_uri_insert(struct crt_grp_priv *passed_grp_priv, int ctx_idx,
 		else
 			grp_priv = passed_grp_priv->gp_priv_prim;
 
-		rank = grp_priv_get_primary_rank(passed_grp_priv, rank);
+		rank = crt_grp_priv_get_primary_rank(passed_grp_priv, rank);
 	}
 
 	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
@@ -848,7 +848,7 @@ crt_grp_lc_addr_insert(struct crt_grp_priv *passed_grp_priv,
 		else
 			grp_priv = passed_grp_priv->gp_priv_prim;
 
-		rank = grp_priv_get_primary_rank(passed_grp_priv, rank);
+		rank = crt_grp_priv_get_primary_rank(passed_grp_priv, rank);
 	}
 
 	ctx_idx = crt_ctx->cc_idx;
@@ -927,7 +927,7 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 		}
 
 		/* convert subgroup rank to primary group rank */
-		rank = grp_priv_get_primary_rank(grp_priv, rank);
+		rank = crt_grp_priv_get_primary_rank(grp_priv, rank);
 	}
 
 	if (CRT_PMIX_ENABLED())
@@ -2002,7 +2002,7 @@ crt_group_rank_s2p(crt_group_t *subgrp, d_rank_t rank_in, d_rank_t *rank_out)
 	}
 
 	grp_priv = container_of(subgrp, struct crt_grp_priv, gp_pub);
-	*rank_out = grp_priv_get_primary_rank(grp_priv, rank_in);
+	*rank_out = crt_grp_priv_get_primary_rank(grp_priv, rank_in);
 
 	return rc;
 }
@@ -2411,7 +2411,7 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 	}
 
 	/* convert the requested rank to global rank */
-	g_rank = grp_priv_get_primary_rank(grp_priv, ul_in->ul_rank);
+	g_rank = crt_grp_priv_get_primary_rank(grp_priv, ul_in->ul_rank);
 
 	/* step 0, if I am the final target, reply with URI */
 	if (g_rank == grp_priv_primary->gp_self) {
@@ -4542,7 +4542,7 @@ out:
 }
 
 d_rank_t
-grp_priv_get_primary_rank(struct crt_grp_priv *priv, d_rank_t rank)
+crt_grp_priv_get_primary_rank(struct crt_grp_priv *priv, d_rank_t rank)
 {
 	d_list_t		*rlink;
 	struct crt_rank_mapping	*rm;
