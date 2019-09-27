@@ -36,15 +36,6 @@ import (
 
 const sockFileName = "daos_server.sock"
 
-func getDrpcClientSocket(sockDir string) string {
-	return filepath.Join(sockDir, "daos_io_server.sock")
-}
-
-func getDrpcClientConnection(sockDir string) *drpc.ClientConnection {
-	clientSock := getDrpcClientSocket(sockDir)
-	return drpc.NewClientConnection(clientSock)
-}
-
 func checkDrpcClientSocketPath(socketPath string) error {
 	if socketPath == "" {
 		return errors.New("socket path empty")
