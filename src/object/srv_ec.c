@@ -56,8 +56,8 @@ ec_is_one_cell(daos_iod_t *iod, struct daos_oclass_attr *oca,
 		if (recx_start_offset & PARITY_INDICATOR) {
 			rc = false;
 			break;
-		} else if (recx_start_offset/recs_pc == recx_end_offset/recs_p
-			   && (recx_start_offset % (recs_pc * k)) / len
+		} else if (recx_start_offset/recs_pc == recx_end_offset/recs_pc
+			   && (recx_start_offset % (recs_pc * k)) / recs_pc
 			   == tgt_idx) {
 			rc = true;
 		} else {
@@ -92,7 +92,7 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 {
 	unsigned int	i, j, idx;
 	unsigned int	recs_pc = oca->u.ec.e_cs;
-	unsigned int	ss = oca>u.ec.e_k * recs_pc;
+	unsigned int	ss = oca->u.ec.e_k * recs_pc;
 	int		rc = 0;
 
 	for (i = 0; i < nr; i++) {
@@ -126,54 +126,54 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 				continue;
 			}
 			if (cell == dtgt_idx) {
-				this_recx->rx_nr = (cell + 1) *;
-					this_recx->rx_nr - so;
-				ec_bulk_spec_set(this_recx->rx_nr * iod->size,
-						 false, sl_idx++,
+				this_recx->rx_nr = (cell + 1) * recs_pc - so;
+				printf("this_recx->rx_nr == %u\n", this_recx->rx_nr);
+				ec_bulk_spec_set(this_recx->rx_nr *
+						 iod->iod_size, false, sl_idx++,
 						 &skip_list[i]);
 				ec_bulk_spec_set(recx_len - this_recx->rx_nr *
-						 iod->size, true, sl_idx++,
+						 iod->iod_size, true, sl_idx++,
 						 &skip_list[i]);
-			} else if ((dtgt_idx + 1) * rpc <= so
+			} else if ((dtgt_idx + 1) * recs_pc <= so ) {
 				/* this recx doesn't map to this target
 				 * so we need to remove the recx
 				 */
 				ec_del_recx(iod, idx);
-				ec_bulk_spec_set(this_recx->rx_nr *
-						 iod->iod_size, true, sl_idx++,
-						 &skip_list[i]);
+				ec_bulk_spec_set(recx_len, true,
+						 sl_idx++, &skip_list[i]);
 				continue;
 			} else {
-				int cell_start = dtgt_idx * rpc - so;
+				int cell_start = dtgt_idx * recs_pc - so;
 
 				if (cell_start >= this_recx->rx_nr) {
 					/* this recx doesn't map to this target
 					 * so we need to remove the recx
 					 */
 					ec_del_recx(iod, idx);
-					ec_bulk_spec_set(recx_len, true, sl_idx++,
-						 &skip_list[i]);
+					ec_bulk_spec_set(recx_len, true,
+							 sl_idx++,
+							 &skip_list[i]);
 					continue;
 				}
 				ec_bulk_spec_set(cell_start * iod->iod_size,
 						 true, sl_idx++, &skip_list[i]);
 				this_recx->rx_idx += cell_start;
-				if (cell_start + rpc < this_recx->rx_nr) {
-					this_recx->rx_nr = rpc;
-					/* here */
-					ec_bulk_spec_set(oca->u.ec.e_len, false,
+				if (cell_start + recs_pc < this_recx->rx_nr) {
+					this_recx->rx_nr = recs_pc;
+					ec_bulk_spec_set(recx_len, false,
 							 sl_idx++,
 							 &skip_list[i]);
-					ec_bulk_spec_set(recx_size -
+					ec_bulk_spec_set(recx_len -
 							 (cell_start +
-							  oca->u.ec.e_len),
-							 true, sl_idx++,
+							  oca->u.ec.e_cs) *
+							 iod->iod_size, true,
+							 sl_idx++,
 							 &skip_list[i]);
 				} else {
-					this_recx->rx_nr = (recx_size -
-						cell_start) / iod->iod_size;
-					ec_bulk_spec_set(recx_size - cell_start,
-							 false, sl_idx++,
+					this_recx->rx_nr -= cell_start;
+					ec_bulk_spec_set(this_recx->rx_nr *
+							 iod->iod_size, false,
+							 sl_idx++,
 							 &skip_list[i]);
 				}
 			}
@@ -186,7 +186,7 @@ out:
 
 /* Determines if parity exists for the specified stripe:
  * - stripe is the index of the stripe, zero relative.
- * - pss is the size of the parity stripe (p * len);
+ * - pss is the size of the parity stripe (p * cs);
  */
 static bool
 ec_has_parity_srv(daos_recx_t *recxs, uint64_t stripe, uint32_t pss,
@@ -195,9 +195,8 @@ ec_has_parity_srv(daos_recx_t *recxs, uint64_t stripe, uint32_t pss,
 	unsigned int j;
 
 	for (j = 0; recxs[j].rx_idx & PARITY_INDICATOR; j++) {
-		uint64_t p_stripe = (~PARITY_INDICATOR &
-					(recxs[j].rx_idx * iod_size)) / pss;
-
+		uint64_t p_stripe = (~PARITY_INDICATOR & recxs[j].rx_idx) /
+									pss;
 		if (p_stripe == stripe)
 			return true;
 	}
@@ -212,8 +211,8 @@ int
 ec_parity_target(unsigned int ptgt_idx, unsigned int nr, daos_iod_t *iods,
 		 struct daos_oclass_attr *oca, struct ec_bulk_spec **skip_list)
 {
-	unsigned long	ss = oca->u.ec.e_len * oca->u.ec.e_k;
-	uint32_t	pss = oca->u.ec.e_len * oca->u.ec.e_p;
+	unsigned long	ss = oca->u.ec.e_cs * oca->u.ec.e_k;
+	uint32_t	pss = oca->u.ec.e_cs * oca->u.ec.e_p;
 	unsigned int	i, j, idx;
 	int		rc = 0;
 
@@ -232,33 +231,33 @@ ec_parity_target(unsigned int ptgt_idx, unsigned int nr, daos_iod_t *iods,
 
 			if (iod->iod_recxs[idx].rx_idx & PARITY_INDICATOR) {
 				uint64_t	p_address = ~PARITY_INDICATOR &
-					this_recx->rx_idx * iod->iod_size;
+							this_recx->rx_idx;
 				unsigned int	so = p_address % pss;
-				unsigned int	pcell = so / oca->u.ec.e_len;
+				unsigned int	pcell = so / oca->u.ec.e_cs;
 
 				if (pcell == ptgt_idx) {
-					ec_bulk_spec_set(oca->u.ec.e_len, false,
+					ec_bulk_spec_set(oca->u.ec.e_cs *
+							 iod->iod_size, false,
 							 sl_idx++,
 							 &skip_list[i]);
 				} else {
 					ec_del_recx(iod, idx);
-					ec_bulk_spec_set(oca->u.ec.e_len, true,
+					ec_bulk_spec_set(oca->u.ec.e_cs *
+							 iod->iod_size, true,
 							 sl_idx++,
 							 &skip_list[i]);
 					continue;
 				}
 			} else {
-				uint64_t stripe = (this_recx->rx_idx *
-						iod->iod_size) / ss;
+				uint64_t stripe = this_recx->rx_idx / ss;
 
 				if (ec_has_parity_srv(iod->iod_recxs, stripe,
 						      pss, iod->iod_size)) {
-
-					ec_del_recx(iod, idx);
 					ec_bulk_spec_set(this_recx->rx_nr *
 							 iod->iod_size, true,
 							 sl_idx++,
 							 &skip_list[i]);
+					ec_del_recx(iod, idx);
 					continue;
 				} else {
 					ec_bulk_spec_set(this_recx->rx_nr *
@@ -318,3 +317,56 @@ ec_copy_iods(daos_iod_t *in_iod, int nr, daos_iod_t **out_iod)
 out:
 	return rc;
 }
+
+
+#ifdef UNIT_TEST
+struct daos_oclass_attr oca =
+	{
+		.ca_schema		= DAOS_OS_SINGLE,
+		.ca_resil		= DAOS_RES_EC,
+		.ca_grp_nr		= 1,
+		.u.ec			= {
+			.e_k		= 2,
+			.e_p		= 2,
+			.e_cs		= 1 << 15,
+		},
+	};
+
+int main(int argc, char* argv[])
+{
+	struct ec_bulk_spec* skip_list[1];
+        daos_handle_t oh = {0L};
+        daos_handle_t th = {1L};
+        daos_key_t dkey;
+        dkey.iov_buf = "42";
+        dkey.iov_buf_len = 3L;
+        dkey.iov_len = 2L;
+
+	skip_list[0] = NULL;
+        //daos_recx_t recx[1] = {{0, 1 << 15}};
+        //daos_recx_t recx[1] = {{(1 << 18) + (1 << 15) + 16384, (1 << 18) - (1 << 16)}};
+        daos_recx_t recx[3] = {{PARITY_INDICATOR, 32768L},
+			       {0, 1 << 16}, {1 << 16, 1 << 15}};
+		//{(unsigned long)PARITY_INDICATOR | 32768L, 32768L}, {0, 1 << 18}};
+
+        daos_iod_t iod = { dkey,
+			   .iod_kcsum = { NULL, 0, 0, 0, 0, 0},
+                           DAOS_IOD_ARRAY, 1, 3, recx,
+                           NULL, NULL};
+	int i;
+	for (i = 0; i < iod.iod_nr; i++)
+		printf("recxs[%d].rx_idx: %lu, recxs[%d].rx_nr: %lu\n", 
+			i, iod.iod_recxs[i].rx_idx,i, iod.iod_recxs[i].rx_nr);
+
+	printf("\nstart\n");
+	int ret = ec_parity_target(0, 1, &iod, &oca, skip_list);
+	for (i = 0; skip_list[0][i].len; i++)
+		printf("%d -> %s, %ld\n", i, skip_list[0][i].is_skip ? "true" : "false" ,
+		       skip_list[0][i].len);
+	printf("iod.iod_nr == %u\n", iod.iod_nr);
+	for (i = 0; i < iod.iod_nr; i++)
+	printf("recxs[%d].rx_idx: %lu, recxs[%d].rx_nr: %lu\n", 
+	       i, iod.iod_recxs[i].rx_idx,i, iod.iod_recxs[i].rx_nr);
+
+}
+#endif
