@@ -65,8 +65,6 @@ extern unsigned int	srv_io_mode;
 
 /** client object shard */
 struct dc_obj_shard {
-	/* Metadata for this shard */
-	uint64_t		do_attr;
 	/** refcount */
 	unsigned int		do_ref;
 	/** object id */

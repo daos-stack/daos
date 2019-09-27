@@ -71,19 +71,6 @@ ds_obj_rw_complete(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		}
 	}
 
-	if (cont_hdl != NULL && cont_hdl->sch_cont != NULL) {
-		struct obj_rw_out	*orwo = crt_reply_get(rpc);
-
-		rc = vos_oi_get_attr(cont_hdl->sch_cont->sc_hdl, orwi->orw_oid,
-				     orwi->orw_epoch, dth, &orwo->orw_attr);
-		if (rc) {
-			D_ERROR(DF_UOID" can not get status: rc %d\n",
-				DP_UOID(orwi->orw_oid), rc);
-			if (status == 0)
-				status = rc;
-		}
-	}
-
 	return status;
 }
 
