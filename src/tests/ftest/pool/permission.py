@@ -67,8 +67,7 @@ class Permission(Test):
         # starting server
         self.agent_sessions = agent_utils.run_agent(self.basepath,
                                                     self.hostlist_servers)
-        server_utils.run_server(self.hostfile_servers, self.server_group,
-                                self.basepath)
+        server_utils.run_server(self, self.hostfile_servers, self.server_group)
 
     def tearDown(self):
         try:
