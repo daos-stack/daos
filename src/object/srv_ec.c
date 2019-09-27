@@ -127,7 +127,6 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 			}
 			if (cell == dtgt_idx) {
 				this_recx->rx_nr = (cell + 1) * recs_pc - so;
-				printf("this_recx->rx_nr == %u\n", this_recx->rx_nr);
 				ec_bulk_spec_set(this_recx->rx_nr *
 						 iod->iod_size, false, sl_idx++,
 						 &skip_list[i]);
