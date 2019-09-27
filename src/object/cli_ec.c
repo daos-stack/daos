@@ -489,7 +489,6 @@ ec_obj_update_encode(tse_task_t *task, daos_obj_id_t oid,
 	if (rc != 0 && head != NULL) {
 		ec_free_params(head);
 	} else if (head != NULL) {
-		for (i = 0; i < head->nr; i++)
 		args->iods = head->iods;
 		args->sgls = head->sgls;
 		tse_task_register_comp_cb(task, ec_free_params_cb, &head,
