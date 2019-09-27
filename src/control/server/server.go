@@ -150,6 +150,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 			select {
 			case sig := <-sigChan:
 				log.Debugf("Caught signal: %s", sig)
+				drpcCleanup(cfg.SocketDir)
 				shutdown()
 			}
 		}
