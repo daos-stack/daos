@@ -45,6 +45,7 @@ const (
 	cmdScmListNamespaces   = "ndctl list -N"          // returns json ns info
 	cmdScmDisableNamespace = "ndctl disable-namespace %s"
 	cmdScmDestroyNamespace = "ndctl destroy-namespace %s"
+	msgNdctlNotFound       = "ndctl package not found, please install in your OS"
 )
 
 type pmemDev struct {
@@ -87,25 +88,42 @@ func run(cmd string) (string, error) {
 	return string(out), nil
 }
 
+type lookPathFn func(string) (string, error)
+
 // PrepScm interface provides capability to prepare SCM storage
 type PrepScm interface {
+	GetNamespaces() ([]pmemDev, error)
+	GetState() (types.ScmState, error)
 	Prep(types.ScmState) (bool, []pmemDev, error)
 	PrepReset(types.ScmState) (bool, error)
-	GetState() (types.ScmState, error)
-	GetNamespaces() ([]pmemDev, error)
 }
 
 type prepScm struct {
-	log    logging.Logger
-	runCmd runCmdFn
+	log      logging.Logger
+	runCmd   runCmdFn
+	lookPath lookPathFn
 }
 
-func newPrepScm(log logging.Logger, myRun runCmdFn) PrepScm {
-	return &prepScm{runCmd: myRun, log: log}
+func newPrepScm(log logging.Logger, myRun runCmdFn, myLookPath lookPathFn) PrepScm {
+	return &prepScm{log: log, runCmd: myRun, lookPath: myLookPath}
 }
 
-// getState establishes state of SCM regions and namespaces on local server.
+// checkNdctl verifies ndctl application is installed.
+func (ps *prepScm) checkNdctl() error {
+	_, err := ps.lookPath("ndctl")
+	if err != nil {
+		return errors.New(msgNdctlNotFound)
+	}
+
+	return nil
+}
+
+// GetState establishes state of SCM regions and namespaces on local server.
 func (ps *prepScm) GetState() (types.ScmState, error) {
+	if err := ps.checkNdctl(); err != nil {
+		return types.ScmStateUnknown, err
+	}
+
 	// TODO: discovery should provide SCM region details
 	out, err := ps.runCmd(cmdScmShowRegions)
 	if err != nil {
@@ -141,8 +159,10 @@ func (ps *prepScm) GetState() (types.ScmState, error) {
 // * regions exist but no free capacity -> no-op, return namespaces
 //
 // Command output from external tools will be returned. State will be passed in.
-func (ps *prepScm) Prep(state types.ScmState) (needsReboot bool, pmemDevs []pmemDev,
-	err error) {
+func (ps *prepScm) Prep(state types.ScmState) (needsReboot bool, pmemDevs []pmemDev, err error) {
+	if err = ps.checkNdctl(); err != nil {
+		return
+	}
 
 	ps.log.Debugf("scm in state %s\n", state)
 
@@ -175,6 +195,10 @@ func (ps *prepScm) Prep(state types.ScmState) (needsReboot bool, pmemDevs []pmem
 // Returns indication of whether a reboot is required alongside error.
 // Command output from external tools will be returned. State will be passed in.
 func (ps *prepScm) PrepReset(state types.ScmState) (bool, error) {
+	if err := ps.checkNdctl(); err != nil {
+		return false, nil
+	}
+
 	ps.log.Debugf("scm in state %s\n", state)
 
 	switch state {
@@ -320,7 +344,11 @@ func (ps *prepScm) createNamespaces() ([]pmemDev, error) {
 	}
 }
 
-func (ps prepScm) GetNamespaces() (devs []pmemDev, err error) {
+func (ps *prepScm) GetNamespaces() ([]pmemDev, error) {
+	if err := ps.checkNdctl(); err != nil {
+		return nil, err
+	}
+
 	out, err := ps.runCmd(cmdScmListNamespaces)
 	if err != nil {
 		return nil, err

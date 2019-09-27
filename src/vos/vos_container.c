@@ -487,6 +487,34 @@ vos_cont_query(daos_handle_t coh, vos_cont_info_t *cont_info)
 }
 
 /**
+ * Set container state
+ */
+int
+vos_cont_ctl(daos_handle_t coh, enum vos_cont_opc opc)
+{
+	struct vos_container	*cont;
+
+	cont = vos_hdl2cont(coh);
+	if (cont == NULL) {
+		D_ERROR("Empty container handle for ctl\n");
+		return -DER_NO_HDL;
+	}
+
+	switch (opc) {
+	case VOS_CO_CTL_RESET_HAE:
+		cont->vc_cont_df->cd_hae = 0;
+		break;
+	case VOS_CO_CTL_ABORT_AGG:
+		cont->vc_abort_aggregation = 1;
+		break;
+	default:
+		return -DER_NOSYS;
+	}
+
+	return 0;
+}
+
+/**
  * Destroy a container
  */
 int
