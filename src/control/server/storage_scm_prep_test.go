@@ -32,6 +32,7 @@ import (
 	. "github.com/daos-stack/daos/src/control/common/storage"
 	. "github.com/daos-stack/daos/src/control/lib/ipmctl"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/pkg/errors"
 )
 
 // MockPmemDevice returns a mock pmem device file.
@@ -122,6 +123,7 @@ func TestGetState(t *testing.T) {
 		expRebootRequired bool
 		expPmemDevs       []pmemDev
 		expCommands       []string
+		lookPathErrMsg    string
 	}{
 		{
 			desc:              "modules but no regions",
@@ -171,6 +173,10 @@ func TestGetState(t *testing.T) {
 			expCommands: []string{cmdScmShowRegions, cmdScmListNamespaces},
 			expPmemDevs: twoPmems,
 		},
+		{
+			desc:           "ndctl not installed",
+			lookPathErrMsg: msgNdctlNotFound,
+		},
 	}
 
 	for _, tt := range tests {
@@ -178,13 +184,25 @@ func TestGetState(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)()
 
+			mockLookPath := func(string) (s string, err error) {
+				if tt.lookPathErrMsg != "" {
+					err = errors.New(tt.lookPathErrMsg)
+				}
+				return
+			}
+
 			// not using mockPrepScm because we want to exercise
 			// prepScm
 			ss := newMockScmStorage(log, defaultMockExt(), nil, []DeviceDiscovery{MockModule()},
-				false, newPrepScm(log, mockRun))
+				false, newPrepScm(log, mockRun, mockLookPath))
 
 			if err := ss.Discover(); err != nil {
-				t.Fatal(err)
+				// if GetNamespaces fails, init should still be set
+				if tt.lookPathErrMsg != "" {
+					AssertEqual(t, ss.initialized, true, tt.desc+": expected SCM to be initialized even if ndctl is not installed")
+				} else {
+					t.Fatal(err)
+				}
 			}
 
 			// reset to initial values between tests
@@ -194,7 +212,11 @@ func TestGetState(t *testing.T) {
 
 			scmState, err := ss.prep.GetState()
 			if err != nil {
-				t.Fatal(tt.desc + " GetState: " + err.Error())
+				if tt.lookPathErrMsg != "" {
+					ExpectError(t, err, tt.lookPathErrMsg, tt.desc)
+					return
+				}
+				t.Fatal(tt.desc + ": GetState: " + err.Error())
 			}
 
 			needsReboot, pmemDevs, err := ss.Prep(scmState)
@@ -208,6 +230,110 @@ func TestGetState(t *testing.T) {
 
 			AssertEqual(t, commands, tt.expCommands, tt.desc+": unexpected list of commands run")
 			AssertEqual(t, needsReboot, tt.expRebootRequired, tt.desc+": unexpected value for is reboot required")
+			AssertEqual(t, pmemDevs, tt.expPmemDevs, tt.desc+": unexpected list of pmem device file names")
+		})
+	}
+}
+
+// TestGetNamespaces tests the internals of prepScm, pass in mock runCmd to verify
+// behaviour. Don't use mockPrepScm as we want to test prepScm logic.
+func TestGetNamespaces(t *testing.T) {
+	commands := []string{} // external commands issued
+	// ndctl create-namespace command return json format
+	pmemOut := `{
+   "dev":"namespace%d.0",
+   "mode":"fsdax",
+   "map":"dev",
+   "size":"2964.94 GiB (3183.58 GB)",
+   "uuid":"842fc847-28e0-4bb6-8dfc-d24afdba1528",
+   "raw_uuid":"dedb4b28-dc4b-4ccd-b7d1-9bd475c91264",
+   "sector_size":512,
+   "blockdev":"pmem%d",
+   "numa_node":%d
+}
+`
+	onePmem, _ := parsePmemDevs(fmt.Sprintf(pmemOut, 1, 1, 0))
+	twoPmemsJson := "[" + fmt.Sprintf(pmemOut, 1, 1, 0) + "," + fmt.Sprintf(pmemOut, 2, 2, 1) + "]"
+	twoPmems, _ := parsePmemDevs(twoPmemsJson)
+
+	tests := []struct {
+		desc           string
+		errMsg         string
+		cmdOut         string
+		expPmemDevs    []pmemDev
+		expCommands    []string
+		lookPathErrMsg string
+	}{
+		{
+			desc:        "no namespaces",
+			cmdOut:      "",
+			expCommands: []string{cmdScmListNamespaces, cmdScmListNamespaces},
+			expPmemDevs: []pmemDev{},
+		},
+		{
+			desc:        "single pmem device",
+			cmdOut:      fmt.Sprintf(pmemOut, 1, 1, 0),
+			expCommands: []string{cmdScmListNamespaces, cmdScmListNamespaces},
+			expPmemDevs: onePmem,
+		},
+		{
+			desc:        "two pmem device",
+			cmdOut:      twoPmemsJson,
+			expCommands: []string{cmdScmListNamespaces, cmdScmListNamespaces},
+			expPmemDevs: twoPmems,
+		},
+		{
+			desc:           "ndctl not installed",
+			lookPathErrMsg: msgNdctlNotFound,
+			errMsg:         msgNdctlNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)()
+
+			mockLookPath := func(string) (s string, err error) {
+				if tt.lookPathErrMsg != "" {
+					err = errors.New(tt.lookPathErrMsg)
+				}
+				return
+			}
+
+			mockRun := func(in string) (string, error) {
+				commands = append(commands, in)
+				return tt.cmdOut, nil
+			}
+
+			commands = nil // reset to initial values between tests
+
+			// not using mockPrepScm because we want to exercise
+			// prepScm
+			ss := newMockScmStorage(log, defaultMockExt(), nil, []DeviceDiscovery{MockModule()},
+				false, newPrepScm(log, mockRun, mockLookPath))
+
+			AssertEqual(t, ss.initialized, false, tt.desc+": expected SCM to start un-initialized")
+
+			if err := ss.Discover(); err != nil {
+				// if GetNamespaces fails, init should still be set
+				if tt.lookPathErrMsg != "" {
+					AssertEqual(t, ss.initialized, true, tt.desc+": expected SCM to be initialized even if ndctl is not installed")
+				} else {
+					t.Fatal(err)
+				}
+			}
+
+			pmemDevs, err := ss.prep.GetNamespaces()
+			if err != nil {
+				if tt.lookPathErrMsg != "" {
+					ExpectError(t, err, tt.lookPathErrMsg, tt.desc)
+					return
+				}
+				t.Fatal(tt.desc + ": GetNamespaces: " + err.Error())
+			}
+
+			AssertEqual(t, commands, tt.expCommands, tt.desc+": unexpected list of commands run")
 			AssertEqual(t, pmemDevs, tt.expPmemDevs, tt.desc+": unexpected list of pmem device file names")
 		})
 	}

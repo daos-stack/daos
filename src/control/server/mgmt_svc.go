@@ -38,6 +38,14 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
+// SystemMember refers to a data-plane instance that is a member of this DAOS
+// system running on host with the control-plane listening at "Addr".
+type SystemMember struct {
+	Addr string
+	Uuid string
+	Rank uint32
+}
+
 // CheckReplica verifies if this server is supposed to host an MS replica,
 // only performing the check and printing the result for now.
 func CheckReplica(lis net.Listener, accessPoints []string, srv *exec.Cmd) (msReplicaCheck string, err error) {
@@ -149,6 +157,7 @@ type mgmtSvc struct {
 	log     logging.Logger
 	mutex   sync.Mutex
 	harness *IOServerHarness
+	members []*SystemMember // if MS leader, system membership list
 }
 
 func newMgmtSvc(h *IOServerHarness) *mgmtSvc {
@@ -195,6 +204,17 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 	resp := &mgmtpb.JoinResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal Join response")
+	}
+
+	// if join successful, record membership
+	if resp.GetStatus() == 0 && resp.GetState() == mgmtpb.JoinResp_IN {
+		svc.mutex.Lock()
+		svc.members = append(svc.members, &SystemMember{
+			Addr: req.GetAddr(), Uuid: req.GetUuid(), Rank: resp.GetRank(),
+		})
+		svc.mutex.Unlock()
+
+		svc.log.Debugf("MgmtSvc.members: %+v\n", svc.members)
 	}
 
 	return resp, nil

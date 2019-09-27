@@ -83,8 +83,6 @@ struct cont {
 	uuid_t			c_uuid;
 	struct cont_svc	       *c_svc;
 	rdb_path_t		c_prop;		/* container properties KVS */
-	rdb_path_t		c_lres;		/* LRE KVS */
-	rdb_path_t		c_lhes;		/* LHE KVS */
 	rdb_path_t		c_snaps;	/* Snapshots KVS */
 	rdb_path_t		c_user;		/* user attributes KVS */
 };
@@ -207,6 +205,9 @@ int ds_cont_tgt_epoch_discard_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 void ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc);
 int ds_cont_tgt_epoch_aggregate_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 					   void *priv);
+void ds_cont_tgt_snapshot_notify_handler(crt_rpc_t *rpc);
+int ds_cont_tgt_snapshot_notify_aggregator(crt_rpc_t *source, crt_rpc_t *result,
+					   void *priv);
 int ds_cont_child_cache_create(struct daos_lru_cache **cache);
 void ds_cont_child_cache_destroy(struct daos_lru_cache *cache);
 int ds_cont_hdl_hash_create(struct d_hash_table *hash);
@@ -219,9 +220,14 @@ struct ds_cont *ds_cont_lookup(const uuid_t uuid);
 void ds_cont_put(struct ds_cont *cont);
 int ds_cont_cache_init(void);
 void ds_cont_cache_fini(void);
+void ds_cont_aggregate_ult(void *arg);
 
 int ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		     uuid_t cont_uuid, uint64_t capas);
+int ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
+				 uint64_t *snapshots, int snap_count);
+int ds_cont_tgt_snapshots_refresh(uuid_t pool_uuid, uuid_t cont_uuid);
+
 /**
  * oid_iv.c
  */
