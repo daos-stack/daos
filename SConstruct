@@ -272,9 +272,11 @@ def scons():
 
     set_defaults(env)
 
+    build_prefix = prereqs.get_src_build_dir()
+
     # generate targets in specific build dir to avoid polluting the source code
-    VariantDir('build', '.', duplicate=0)
-    SConscript('build/src/SConscript')
+    VariantDir(build_prefix, '.', duplicate=0)
+    SConscript('{}/src/SConscript'.format(build_prefix))
 
     buildinfo = prereqs.get_build_info()
     buildinfo.gen_script('.build_vars.sh')
@@ -291,8 +293,8 @@ def scons():
     # install certificate generation files
     SConscript('utils/certs/SConscript')
 
-    Default('build')
-    Depends('install', 'build')
+    Default(build_prefix)
+    Depends('install', build_prefix)
 
     try:
         #if using SCons 2.4+, provide a more complete help
