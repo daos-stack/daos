@@ -984,7 +984,7 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 		/* lookup through PMIx */
 		grp_id = default_grp_priv->gp_pub.cg_grpid;
 		rc = crt_pmix_uri_lookup(grp_id,
-				grp_priv_get_primary_rank(grp_priv, rank),
+				crt_grp_priv_get_primary_rank(grp_priv, rank),
 				&uri);
 		if (rc != 0) {
 			D_ERROR("crt_pmix_uri_lookup() failed, rc %d.\n", rc);
