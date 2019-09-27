@@ -139,8 +139,7 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 				 * so we need to remove the recx
 				 */
 				ec_del_recx(iod, idx);
-				ec_bulk_spec_set(this_recx->rx_nr *
-						 iod->iod_size, true, sl_idx++,
+				ec_bulk_spec_set(recx_size, true, sl_idx++,
 						 &skip_list[i]);
 				continue;
 			} else {
@@ -152,9 +151,9 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 					 * so we need to remove the recx
 					 */
 					ec_del_recx(iod, idx);
-					ec_bulk_spec_set(this_recx->rx_nr *
-						 iod->iod_size, true, sl_idx++,
-						 &skip_list[i]);
+					ec_bulk_spec_set(recx_size, true,
+							 sl_idx++,
+							 &skip_list[i]);
 					continue;
 				}
 				ec_bulk_spec_set(cell_start, true, sl_idx++,
@@ -256,11 +255,11 @@ ec_parity_target(unsigned int ptgt_idx, unsigned int nr, daos_iod_t *iods,
 				if (ec_has_parity_srv(iod->iod_recxs, stripe,
 						      pss, iod->iod_size)) {
 
-					ec_del_recx(iod, idx);
 					ec_bulk_spec_set(this_recx->rx_nr *
 							 iod->iod_size, true,
 							 sl_idx++,
 							 &skip_list[i]);
+					ec_del_recx(iod, idx);
 					continue;
 				} else {
 					ec_bulk_spec_set(this_recx->rx_nr *
