@@ -766,8 +766,12 @@ class PreReqComponent(object):
                       PathVariable('GOPATH',
                                    'Location of your GOPATH for the build',
                                    "%s/go" % self.__build_dir,
-                                   PathVariable.PathIsDirCreate))
+                                   PathVariable.PathIsDirCreate),
+                      PathVariable('BUILD_DIR',
+                                   'Location of temporary build files',
+                                   'build', PathVariable.PathIsDirCreate))
         self.setup_path_var('PREFIX')
+        self.setup_path_var('BUILD_DIR')
         self.setup_path_var('PREBUILT_PREFIX', True)
         self.setup_path_var('TARGET_PREFIX')
         self.setup_path_var('SRC_PREFIX', True)
@@ -1226,6 +1230,11 @@ class PreReqComponent(object):
             return (target_prefix, prefix)
         self.save_component_prefix(comp_prefix, prefix)
         return (prefix, prefix)
+
+    def get_src_build_dir(self):
+        """Get the location of a temporary directory for hosting
+           intermediate build files"""
+        return self.__env.get('BUILD_DIR')
 
     def get_src_path(self, name):
         """Get the location of the sources for an external component"""
