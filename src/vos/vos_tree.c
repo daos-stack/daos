@@ -1118,7 +1118,7 @@ obj_tree_find_attr(unsigned tree_class)
 	}
 }
 
-static enum ilog_status
+static int
 vos_ilog_status_get(struct umem_instance *umm, umem_off_t tx_id,
 		    uint32_t intent, void *args)
 {
@@ -1134,14 +1134,14 @@ vos_ilog_status_get(struct umem_instance *umm, umem_off_t tx_id,
 
 	switch (rc) {
 	case ALB_UNAVAILABLE:
-		return ILOG_INVISIBLE;
+		return ILOG_UNCOMMITTED;
 	case ALB_AVAILABLE_CLEAN:
-		return ILOG_VISIBLE;
+		return ILOG_COMMITTED;
 	default:
 		D_ASSERTF(0, "Unexpected availability\n");
 	}
 
-	return ILOG_INVISIBLE;
+	return ILOG_UNCOMMITTED;
 }
 
 static int

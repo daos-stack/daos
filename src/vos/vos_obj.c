@@ -269,7 +269,7 @@ key_check_existence(struct vos_obj_iter *oiter, struct ilog_entries *entries,
 			continue;
 		}
 
-		if (entry->ie_status == ILOG_INVISIBLE) {
+		if (entry->ie_status == ILOG_UNCOMMITTED) {
 			if (entry->ie_punch)
 				return -DER_INPROGRESS;
 			/* NB: Save in_progress epoch.  If there are no
@@ -416,7 +416,7 @@ key_record_punch(struct vos_obj_iter *oiter, struct ilog_entries *entries,
 		if (entry->ie_id.id_epoch < oiter->it_epr.epr_lo)
 			continue; /* skip historical punches */
 
-		if (entry->ie_status == ILOG_INVISIBLE)
+		if (entry->ie_status == ILOG_UNCOMMITTED)
 			continue; /* Skip any uncommited, punches */
 
 		if (entry->ie_punch) {
@@ -460,7 +460,6 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 	krec = rbund.rb_krec;
 	rc = key_ilog_fetch(obj, vos_iter_intent(&oiter->it_iter), &epr, krec,
 			    &oiter->it_ilog_entries);
-
 	if (rc != 0)
 		return rc;
 
@@ -1575,123 +1574,3 @@ struct vos_iter_ops	vos_obj_iter_ops = {
 /**
  * @} vos_obj_iters
  */
-
-static int
-vos_oi_set_attr_helper(daos_handle_t coh, daos_unit_oid_t oid,
-		       daos_epoch_t epoch, uint64_t attr, bool set)
-{
-	struct umem_instance	*umm;
-	struct vos_object	*obj = NULL;
-	struct vos_container	*cont;
-	daos_epoch_range_t	 epr = {epoch, epoch};
-	int			 rc;
-
-	cont = vos_hdl2cont(coh);
-	umm = vos_cont2umm(cont);
-	rc = vos_tx_begin(umm);
-	if (rc != 0)
-		goto exit;
-
-	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), oid,
-			  epoch, false, DAOS_INTENT_UPDATE, &obj);
-	if (rc != 0)
-		goto end;
-
-	rc = umem_tx_add_ptr(vos_obj2umm(obj), &obj->obj_df->vo_oi_attr,
-			     sizeof(obj->obj_df->vo_oi_attr));
-	if (rc != 0)
-		goto end;
-
-	if (set) {
-		obj->obj_df->vo_oi_attr |= attr;
-	} else {
-		/* Only clear bits that are set */
-		uint64_t to_clear = attr & obj->obj_df->vo_oi_attr;
-
-		obj->obj_df->vo_oi_attr ^= to_clear;
-	}
-
-	rc = vos_df_ts_update(obj, &obj->obj_df->vo_latest, &epr);
-end:
-	rc = vos_tx_end(umm, rc);
-exit:
-	if (rc != 0)
-		D_DEBUG(DB_IO, "Failed to set attributes on object: %d\n", rc);
-
-	vos_obj_release(vos_obj_cache_current(), obj);
-	return rc;
-}
-
-int
-vos_oi_set_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		uint64_t attr)
-{
-	if (attr & VOS_OI_PUNCHED) {
-		D_ERROR("Setting punched flag not allowed\n");
-		return -DER_INVAL;
-	}
-
-	if (attr & VOS_OI_REMOVED) {
-		D_ERROR("Setting removed flag not allowed\n");
-		return -DER_INVAL;
-	}
-
-	D_DEBUG(DB_IO, "Set attributes "DF_UOID", epoch "DF_U64", attributes "
-		 DF_X64"\n", DP_UOID(oid), epoch, attr);
-
-	return vos_oi_set_attr_helper(coh, oid, epoch, attr, true);
-}
-
-int
-vos_oi_clear_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		uint64_t attr)
-{
-	if (attr & VOS_OI_PUNCHED) {
-		D_ERROR("Reset of punched flag not allowed\n");
-		return -DER_INVAL;
-	}
-
-	if (attr & VOS_OI_REMOVED) {
-		D_ERROR("Reset of removed flag not allowed\n");
-		return -DER_INVAL;
-	}
-
-	D_DEBUG(DB_IO, "Clear attributes "DF_UOID", epoch "DF_U64
-		 ", attributes "DF_X64"\n", DP_UOID(oid), epoch, attr);
-
-	return vos_oi_set_attr_helper(coh, oid, epoch, attr, false);
-}
-
-int
-vos_oi_get_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		struct dtx_handle *dth, uint64_t *attr)
-{
-	struct vos_object *obj;
-	int		   rc = 0;
-
-	D_DEBUG(DB_IO, "Get attributes "DF_UOID", epoch "DF_U64"\n",
-		 DP_UOID(oid), epoch);
-
-	if (attr == NULL) {
-		D_ERROR("Invalid attribute argument\n");
-		return -DER_INVAL;
-	}
-
-	vos_dth_set(dth);
-	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), oid,
-			  epoch, true, DAOS_INTENT_DEFAULT, &obj);
-	vos_dth_set(NULL);
-	if (rc != 0)
-		return rc;
-
-	*attr = 0;
-
-	if (obj->obj_df == NULL) /* nothing to do */
-		D_GOTO(out, rc = 0);
-
-	*attr = obj->obj_df->vo_oi_attr;
-
-out:
-	vos_obj_release(vos_obj_cache_current(), obj);
-	return rc;
-}

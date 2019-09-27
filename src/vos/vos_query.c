@@ -64,7 +64,7 @@ check_key(struct open_query *query, struct vos_krec_df *krec, bool *visible)
 		return rc;
 
 	ilog_foreach_entry_reverse(&query->qt_entries, entry) {
-		if (entry->ie_status == ILOG_INVISIBLE)
+		if (entry->ie_status == ILOG_UNCOMMITTED)
 			return -DER_INPROGRESS;
 
 		if (entry->ie_punch) {

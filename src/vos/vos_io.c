@@ -504,7 +504,7 @@ key_ilog_fetch(struct vos_object *obj, uint32_t intent,
 		return rc;
 	}
 
-	rc = ilog_fetch(loh, intent, epr, entries);
+	rc = ilog_fetch(loh, intent, entries);
 	if (rc == -DER_NONEXIST)
 		goto out;
 	if (rc != 0)
@@ -527,7 +527,7 @@ key_ilog_update_range(struct vos_io_context *ioc, struct ilog_entries *entries,
 			continue; /* skip newer entries */
 
 		if (entry->ie_punch) {
-			if (entry->ie_status == ILOG_INVISIBLE)
+			if (entry->ie_status == ILOG_UNCOMMITTED)
 				/* A key punch is in-flight */
 				return -DER_INPROGRESS;
 
