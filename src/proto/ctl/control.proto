@@ -45,8 +45,4 @@ service MgmtCtl {
     rpc FetchFioConfigPaths(EmptyReq) returns(stream FilePath) {};
     // List features supported on remote storage server/DAOS system
     rpc ListFeatures(EmptyReq) returns(stream Feature) {};
-    // Start DAOS system (start IO service instances)
-    rpc SystemStart(SystemStartReq) returns(SystemStartResp) {};
-    // Stop DAOS system (shutdown IO service instances)
-    rpc SystemStop(SystemStopReq) returns(SystemStopResp) {};
 }

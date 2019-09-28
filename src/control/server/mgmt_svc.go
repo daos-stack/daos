@@ -212,9 +212,9 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 		svc.members = append(svc.members, &SystemMember{
 			Addr: req.GetAddr(), Uuid: req.GetUuid(), Rank: resp.GetRank(),
 		})
-		svc.mutex.Unlock()
 
 		svc.log.Debugf("MgmtSvc.members: %+v\n", svc.members)
+		svc.mutex.Unlock()
 	}
 
 	return resp, nil
@@ -375,19 +375,25 @@ func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.DaosRank) (*mgmtpb
 	return resp, nil
 }
 
-// newSysMembersPB converts internal member structs to protobuf equivalents.
-func newSysMembersPB(members []*SysMember) []*mgmtpb.SystemMember {
-	_ := make([]*mgmtpb.SystemStopResp, 0)
+// newMembersPB converts internal member structs to protobuf equivalents.
+func newMembersPB(members []*SystemMember) []*mgmtpb.SystemMember {
+	pbMembers := make([]*mgmtpb.SystemMember, 0)
 
-	// TODO: iterate through input parameter and populates response
-	return resp
+	// iterate through input parameter and populates response
+	for _, m := range members {
+		pbMembers = append(pbMembers, &mgmtpb.SystemMember{
+			Addr: m.Addr, Uuid: m.Uuid, Rank: m.Rank,
+		})
+	}
+
+	return pbMembers
 }
 
 // SystemQuery implements the method defined for the Management Service.
 //
 // Return system membership list including member state.
 func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq) (*mgmtpb.SystemQueryResp, error) {
-	resp := &mgmtpb.SystemStopResp{}
+	resp := &mgmtpb.SystemQueryResp{}
 
 	mi, err := svc.harness.GetManagementInstance()
 	if err != nil {
@@ -397,14 +403,14 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 		return nil, err
 	}
 
-	c.log.Debug("received SystemQuery RPC; proceeding to shutdown DAOS system")
+	svc.log.Debug("received SystemQuery RPC; reporting DAOS system members")
 
-	if err := svc.systemQuery(); err != nil {
-		return nil, err
-	}
-	resp.Members = newSysMembersPB(svc.getMembers())
+	// TODO: consider whether lock here is practical (read-only)
+	svc.mutex.Lock()
+	resp.Members = newMembersPB(svc.systemQuery())
+	svc.mutex.Unlock()
 
-	c.log.Debug("responding to SystemQuery RPC")
+	svc.log.Debug("responding to SystemQuery RPC")
 
 	return resp, nil
 }
@@ -423,19 +429,18 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (
 		return nil, err
 	}
 
-	c.log.Debug("received SystemStop RPC; proceeding to shutdown DAOS system")
+	svc.log.Debug("received SystemStop RPC; proceeding to shutdown DAOS system")
 
 	// perform controlled shutdown (synchronous)
-	if results, err := svc.systemStop(); err != nil {
+	if err := svc.systemStop(); err != nil {
 		return nil, err
 	}
-	// fetch current membership details
-	if err := svc.systemQuery(); err != nil {
-		return nil, err
-	}
-	resp.Members = newSysMembersPB(svc.getMembers())
+	// TODO: consider whether lock here is practical (read-only)
+	svc.mutex.Lock()
+	resp.Members = newMembersPB(svc.systemQuery())
+	svc.mutex.Unlock()
 
-	c.log.Debug("responding to SystemStop RPC")
+	svc.log.Debug("responding to SystemStop RPC")
 
 	return resp, nil
 }

@@ -31,21 +31,12 @@ import (
 )
 
 // SystemStopReq struct contains request
-type SystemStopReq struct {
-	ScmBytes   uint64
-	NvmeBytes  uint64
-	RankList   string
-	NumSvcReps uint32
-	Sys        string
-	Usr        string
-	Grp        string
-	Acl        []string
-}
+type SystemStopReq struct{}
 
 // SystemStopResp struct contains response
 type SystemStopResp struct {
-	Uuid    string
-	SvcReps string
+	// TODO: process any remaining members
+	//members types.SystemMember
 }
 
 // SystemStop will create a DAOS pool using provided parameters and return
@@ -58,25 +49,61 @@ func (c *connList) SystemStop(req *SystemStopReq) (*SystemStopResp, error) {
 		return nil, err
 	}
 
-	rpcReq := &mgmtpb.SystemStopReq{
-		Scmbytes: req.ScmBytes, Nvmebytes: req.NvmeBytes,
-		Ranks: req.RankList, Numsvcreps: req.NumSvcReps, Sys: req.Sys,
-		User: req.Usr, Usergroup: req.Grp, Acl: req.Acl,
-	}
+	rpcReq := &mgmtpb.SystemStopReq{}
 
-	c.log.Debugf("Create DAOS pool request: %s\n", rpcReq)
+	c.log.Debugf("DAOS system shutdown request: %s\n", rpcReq)
 
 	rpcResp, err := mc.getSvcClient().SystemStop(context.Background(), rpcReq)
 	if err != nil {
 		return nil, err
 	}
 
-	c.log.Debugf("Create DAOS pool response: %s\n", rpcResp)
+	c.log.Debugf("DAOS system shutdown response: %s\n", rpcResp)
 
 	if rpcResp.GetStatus() != 0 {
 		return nil, errors.Errorf("DAOS returned error code: %d\n",
 			rpcResp.GetStatus())
 	}
 
-	return &SystemStopResp{Uuid: rpcResp.GetUuid(), SvcReps: rpcResp.GetSvcreps()}, nil
+	// TODO: process any remaining members
+	return &SystemStopResp{}, nil
+}
+
+// SystemQueryReq struct contains request
+type SystemQueryReq struct{}
+
+// SystemQueryResp struct contains response
+type SystemQueryResp struct {
+	// TODO: process any remaining members
+	//members types.SystemMember
+}
+
+// SystemQuery will create a DAOS pool using provided parameters and return
+// uuid, list of service replicas and error (including any DER code from DAOS).
+//
+// Isolate protobuf encapsulation in client and don't expose to calling code.
+func (c *connList) SystemQuery(req *SystemQueryReq) (*SystemQueryResp, error) {
+	mc, err := chooseServiceLeader(c.controllers)
+	if err != nil {
+		return nil, err
+	}
+
+	rpcReq := &mgmtpb.SystemQueryReq{}
+
+	c.log.Debugf("DAOS system query request: %s\n", rpcReq)
+
+	rpcResp, err := mc.getSvcClient().SystemQuery(context.Background(), rpcReq)
+	if err != nil {
+		return nil, err
+	}
+
+	c.log.Debugf("DAOS system query response: %s\n", rpcResp)
+
+	if rpcResp.GetStatus() != 0 {
+		return nil, errors.Errorf("DAOS returned error code: %d\n",
+			rpcResp.GetStatus())
+	}
+
+	// TODO: process any remaining members
+	return &SystemQueryResp{}, nil
 }
