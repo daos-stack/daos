@@ -15,19 +15,19 @@ endif
 endif
 sl42_REPOS      = https://download.opensuse.org/repositories/science:/HPC/openSUSE_Leap_42.3/        \
 	          http://download.opensuse.org/repositories/devel:/languages:/go/openSUSE_Leap_42.3/
-ifneq ($(REPOSITORY_URL),)
-ifneq ($(DAOS_STACK_$(DISTRO_BASE)_GROUP_REPO),)
+#ifneq ($(REPOSITORY_URL),)
+#ifneq ($(DAOS_STACK_$(DISTRO_BASE)_GROUP_REPO),)
 sl42_REPOS     += https://download.opensuse.org/repositories/home:/jhli/SLE_15/
-endif
-endif
+#endif
+#endif
 sle12_REPOS     = https://download.opensuse.org/repositories/science:/HPC/openSUSE_Leap_42.3/           \
 	          https://download.opensuse.org/repositories/devel:libraries:c_c++/SLE_12_SP3/          \
 	          http://download.opensuse.org/repositories/devel:/languages:/go/SLE_12_SP3_Backports/
-ifneq ($(REPOSITORY_URL),)
-ifneq ($(DAOS_STACK_$(DISTRO_BASE)_GROUP_REPO),)
+#ifneq ($(REPOSITORY_URL),)
+#ifneq ($(DAOS_STACK_$(DISTRO_BASE)_GROUP_REPO),)
 sle12_REPOS     += https://download.opensuse.org/repositories/home:/jhli/SLE_15/
-endif
-endif
+#endif
+#endif
 sle12_REPOS     += https://download.opensuse.org/repositories/science:/HPC:/SLE12SP3_Missing/SLE_12_SP3/ \
 	          https://download.opensuse.org/repositories/devel:libraries:c_c++/SLE_12_SP3/
 
