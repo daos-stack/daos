@@ -30,12 +30,15 @@ ifeq ($(ID_LIKE),debian)
 UBUNTU_VERS := $(shell . /etc/os-release; echo $$VERSION)
 ifeq ($(VERSION_ID),19.04)
 # Bug - distribution is set to "devel"
-DISTRO_ID = --distribution disco
+DISTRO_ID_OPT = --distribution disco
 endif
+DISTRO_ID := ubuntu$(VERSION_ID)
+DISTRO_BASE = $(basename UBUNTU_$(VERSION_ID))
 VERSION_ID_STR := $(subst $(DOT),_,$(VERSION_ID))
 endif
 ifeq ($(ID),centos)
 DISTRO_ID := el$(VERSION_ID)
+DISTRO_BASE := $(basename EL_$(VERSION_ID))
 define install_repo
 	if yum-config-manager --add-repo=$(1); then                  \
 	    repo_file=$$(ls -tar /etc/yum.repos.d/*.repo | tail -1); \
@@ -48,11 +51,13 @@ endif
 ifeq ($(findstring opensuse,$(ID)),opensuse)
 ID_LIKE := suse
 DISTRO_ID := sl$(VERSION_ID)
+DISTRO_BASE := $(basename LEAP_$(VERSION_ID))
 endif
 ifeq ($(ID),sles)
 # SLES-12 or 15 detected.
 ID_LIKE := suse
 DISTRO_ID := sle$(VERSION_ID)
+DISTRO_BASE := $(basename SLES_$(VERSION_ID))
 endif
 ifeq ($(ID_LIKE),suse)
 define install_repo
@@ -178,15 +183,15 @@ $(DEB_TARBASE).orig.tar.$(SRC_EXT) : $(DEB_BUILD).tar.$(SRC_EXT)
 	rm -f $(DEB_TOP)/*.orig.tar.*
 	ln -f $< $@
 
-$(DEB_TOP)/.detar: $(notdir $(SOURCE)) $(DEB_TARBASE).orig.tar.$(SRC_EXT)
+deb_detar: $(notdir $(SOURCE)) $(DEB_TARBASE).orig.tar.$(SRC_EXT)
 	# Unpack tarball
-	rm -rf ./$(DEB_BUILD)/*
+	rm -rf ./$(DEB_TOP)/.patched ./$(DEB_TOP)/.detar
+	rm -rf ./$(DEB_BUILD)/* ./$(DEB_BUILD)/.pc
 	mkdir -p $(DEB_BUILD)
 	tar -C $(DEB_BUILD) --strip-components=1 -xpf $<
-	touch $@
 
 # Extract patches for Debian
-$(DEB_TOP)/.patched: $(PATCHES) check-env $(DEB_TOP)/.detar | \
+$(DEB_TOP)/.patched: $(PATCHES) check-env deb_detar | \
 	$(DEB_BUILD)/debian/
 	mkdir -p ${DEB_BUILD}/debian/patches
 	mkdir -p $(DEB_TOP)/patches
@@ -217,8 +222,7 @@ $(DEB_TOP)/.patched: $(PATCHES) check-env $(DEB_TOP)/.detar | \
 
 # Move the debian files into the Debian directory.
 ifeq ($(ID_LIKE),debian)
-$(DEB_TOP)/.deb_files : $(shell find debian -type f) \
-	  $(DEB_TOP)/.detar | \
+$(DEB_TOP)/.deb_files : $(shell find debian -type f) deb_detar | \
 	  $(DEB_BUILD)/debian/
 	find debian -maxdepth 1 -type f -exec cp '{}' '$(DEB_BUILD)/{}' ';'
 	if [ -e debian/source ]; then \
@@ -243,7 +247,7 @@ $(subst rpm,%,$(RPMS)): $(SPEC) $(SOURCES)
 	rpmbuild -bb $(COMMON_RPM_ARGS) $(RPM_BUILD_OPTIONS) $(SPEC)
 
 $(subst deb,%,$(DEBS)): $(DEB_BUILD).tar.$(SRC_EXT) \
-	  $(DEB_TOP)/.deb_files $(DEB_TOP)/.detar $(DEB_TOP)/.patched
+	  deb_detar $(DEB_TOP)/.deb_files $(DEB_TOP)/.patched
 	rm -f $(DEB_TOP)/*.deb $(DEB_TOP)/*.ddeb $(DEB_TOP)/*.dsc \
 	      $(DEB_TOP)/*.dsc $(DEB_TOP)/*.build* $(DEB_TOP)/*.changes \
 	      $(DEB_TOP)/*.debian.tar.*
@@ -267,7 +271,7 @@ $(subst deb,%,$(DEBS)): $(DEB_BUILD).tar.$(SRC_EXT) \
 	  echo $$f; dpkg -c $$f; done
 
 $(DEB_TOP)/$(DEB_DSC): $(CALLING_MAKEFILE) $(DEB_BUILD).tar.$(SRC_EXT) \
-          $(DEB_TOP)/.deb_files $(DEB_TOP)/.detar $(DEB_TOP)/.patched
+          deb_detar $(DEB_TOP)/.deb_files $(DEB_TOP)/.patched
 	rm -f $(DEB_TOP)/*.deb $(DEB_TOP)/*.ddeb $(DEB_TOP)/*.dsc \
 	  $(DEB_TOP)/*.dsc $(DEB_TOP)/*.build* $(DEB_TOP)/*.changes \
 	  $(DEB_TOP)/*.debian.tar.*
@@ -290,26 +294,26 @@ debs: $(DEBS)
 ls: $(TARGETS)
 	ls -ld $^
 
+# *_LOCAL_* repos are locally built packages.
+# *_GROUP_* repos are a local mirror of a group of upstream repos.
+# *_GROUP_* repos may not supply a repomd.xml.key.
 ifneq ($(REPOSITORY_URL),)
-ifneq ($(DAOS_STACK_EL_7_LOCAL_REPO),)
-el7_LOCAL_REPOS   := $(REPOSITORY_URL)/$(DAOS_STACK_EL_7_LOCAL_REPO)/
+ifneq ($(DAOS_STACK_$(DISTRO_BASE)_LOCAL_REPO),)
+$(DISTRO_BASE)_LOCAL_REPOS  := $(REPOSITORY_URL)$(DAOS_STACK_$(DISTRO_BASE)_LOCAL_REPO)/
 endif
-ifneq ($(DAOS_STACK_SLES_12_LOCAL_REPO),)
-sle12_LOCAL_REPOS := $(REPOSITORY_URL)/$(DAOS_STACK_SLES_12_LOCAL_REPO)/
+ifneq ($(DAOS_STACK_$(DISTRO_BASE)_GROUP_REPO),)
+$(DISTRO_BASE)_LOCAL_REPOS  += $(REPOSITORY_URL)$(DAOS_STACK_$(DISTRO_BASE)_GROUP_REPO)/
 endif
-ifneq ($(DAOS_STACK_LEAP_42_LOCAL_REPO),)
-sl42_LOCAL_REPOS  := $(REPOSITORY_URL)/$(DAOS_STACK_LEAP_42_LOCAL_REPO)/
-endif
-ifneq ($(DAOS_STACK_LEAP_15_LOCAL_REPO),)
-sl15_LOCAL_REPOS  := $(REPOSITORY_URL)/$(DAOS_STACK_LEAP_15_LOCAL_REPO)/
-endif
+SUSE_REPO_KEYS := $(OPENSUSE_MIRROR)/repositories/home:/jhli/SLE_15/repodata/repomd.xml.key
+# Only needed for LEAP 42.3
+SUSE_REPO_KEYS += $(OPENSUSE_MIRROR)/repositories/science:/HPC/openSUSE_Leap_42.3/repodata/repomd.xml.key
 endif
 
 ifeq ($(ID_LIKE),rhel fedora)
 chrootbuild: $(SRPM) $(CALLING_MAKEFILE)
 	if [ -w /etc/mock/default.cfg ]; then                                        \
 	    echo -e "config_opts['yum.conf'] += \"\"\"\n" >> /etc/mock/default.cfg;  \
-	    for repo in $(el7_PR_REPOS) $(PR_REPOS); do                              \
+	    for repo in $($(DISTRO_ID)_PR_REPOS) $(PR_REPOS); do                   \
 	        branch="master";                                                     \
 	        build_number="lastSuccessfulBuild";                                  \
 	        if [[ $$repo = *@* ]]; then                                          \
@@ -326,7 +330,7 @@ baseurl=$${JENKINS_URL:-https://build.hpdd.intel.com/}job/daos-stack/job/$$repo/
 enabled=1\n\
 gpgcheck = False\n" >> /etc/mock/default.cfg;                                        \
 	    done;                                                                    \
-	    for repo in $(el7_LOCAL_REPOS) $(el7_REPOS); do                          \
+	    for repo in $($(DISTRO_BASE)_LOCAL_REPOS) $($(DISTRO_BASE)_REPOS); do  \
 	        repo_name=$${repo##*://};                                            \
 	        repo_name=$${repo_name//\//_};                                       \
 	        echo -e "[$$repo_name]\n\
@@ -344,14 +348,14 @@ else ifeq ($(ID_LIKE),debian)
 ifneq ($(DAOS_STACK_REPO_SUPPORT),)
 TEST_STR := $(DAOS_STACK_REPO_UBUNTU_$(VERSION_ID_STR)_LIST)
 ifneq ($(TEST_STR),)
-ubuntu_REPOS := $(shell curl $(DAOS_STACK_REPO_SUPPORT)$(TEST_STR))
+UBUNTU_REPOS := $(shell curl $(DAOS_STACK_REPO_SUPPORT)$(TEST_STR))
 # Additional repos can be added but must be separated by a | character.
-UBUNTU_ADD_REPOS = --othermirror "$(ubuntu_REPOS)"
+UBUNTU_ADD_REPOS = --othermirror "$(UBUNTU_REPOS)"
 else
 ifneq ($(DAOS_STACK_REPO_UBUNTU_ROLLING_LIST),)
-ubuntu_REPOS := $(shell curl $(DAOS_STACK_REPO_SUPPORT)$(DAOS_STACK_REPO_UBUNTU_ROLLING_LIST))
+UBUNTU_REPOS := $(shell curl $(DAOS_STACK_REPO_SUPPORT)$(DAOS_STACK_REPO_UBUNTU_ROLLING_LIST))
 # Additional repos can be added but must be separated by a | character.
-UBUNTU_ADD_REPOS = --othermirror "$(ubuntu_REPOS)"
+UBUNTU_ADD_REPOS = --othermirror "$(UBUNTU_REPOS)"
 endif
 endif
 # Need to figure out how to support multiple keys, such as for IPMCTL
@@ -360,34 +364,41 @@ HAVE_DAOS_STACK_KEY := TRUE
 
 $(DAOS_STACK_REPO_PUB_KEY):
 	curl -f -L -O '$(DAOS_STACK_REPO_SUPPORT)$(DAOS_STACK_REPO_PUB_KEY)'
-
 endif
 endif
 
 chrootbuild: $(DEB_TOP)/$(DEB_DSC) $(DAOS_STACK_REPO_PUB_KEY)
-	sudo pbuilder create --extrapackages "gnupg ca-certificates" $(DISTRO_ID)
+	sudo pbuilder create \
+	    --extrapackages "gnupg ca-certificates" $(DISTRO_ID_OPT)
 ifneq ($(HAVE_DAOS_STACK_KEY),)
 	printf "apt-key add - <<EOF\n$$(cat $(DAOS_STACK_REPO_PUB_KEY))\nEOF" \
 	       | sudo pbuilder --login --save-after-login
 endif
 	cd $(DEB_TOP); sudo pbuilder --update --override-config $(UBUNTU_ADD_REPOS)
-	cd $(DEB_TOP); sudo pbuilder --build $(DEB_DSC)
+	cd $(DEB_TOP); sudo pbuilder build $(DEB_DSC)
 else
-sle12_REPOS += http://cobbler/cobbler/repo_mirror/sdkupdate-sles12.3-x86_64/         \
+SLES_12_REPOS += http://cobbler/cobbler/repo_mirror/sdkupdate-sles12.3-x86_64/   \
 	       http://cobbler/cobbler/repo_mirror/sdk-sles12.3-x86_64                \
 	       $(OPENSUSE_MIRROR)/repositories/openSUSE:/Backports:/SLE-12/standard/ \
 	       http://cobbler/cobbler/repo_mirror/updates-sles12.3-x86_64            \
 	       http://cobbler/cobbler/pub/SLES-12.3-x86_64/
 
-sl42_REPOS += $(OPENSUSE_MIRROR)/update/leap/42.3/oss/                 \
+LEAP_42_REPOS += $(OPENSUSE_MIRROR)/update/leap/42.3/oss/                         \
 	      $(OPENSUSE_MIRROR)/distribution/leap/42.3/repo/oss/suse/
 
-sl15_REPOS += $(OPENSUSE_MIRROR)/update/leap/15.1/oss/            \
+LEAP_15_REPOS += $(OPENSUSE_MIRROR)/update/leap/15.1/oss/                         \
 	      $(OPENSUSE_MIRROR)/distribution/leap/15.1/repo/oss/
+
+define install_gpg_key
+	curl -L -f -O "$(1)";                         \
+	if ! sudo rpm --import repomd.xml.key; then   \
+	    cat repomd.xml.key;                       \
+	fi
+endef
 
 chrootbuild: $(SRPM) $(CALLING_MAKEFILE)
 	add_repos="";                                                       \
-	for repo in $($(basename $(DISTRO_ID))_PR_REPOS) $(PR_REPOS); do    \
+	for repo in $($(DISTRO_BASE)_PR_REPOS) $(PR_REPOS); do              \
 	    branch="master";                                                \
 	    build_number="lastSuccessfulBuild";                             \
 	    if [[ $$repo = *@* ]]; then                                     \
@@ -409,15 +420,15 @@ chrootbuild: $(SRPM) $(CALLING_MAKEFILE)
 	    baseurl=$${JENKINS_URL:-https://build.hpdd.intel.com/}job/daos-stack/job/$$repo/job/$$branch/; \
 	    baseurl+=$$build_number/artifact/artifacts/$$distro/;           \
             add_repos+=" --repo $$baseurl";                                 \
-    done;                                                                   \
+        done;                                                               \
 	distro_repos="";                                                    \
-	for repo in $($(basename $(DISTRO_ID))_LOCAL_REPOS)                 \
-	            $($(basename $(DISTRO_ID))_REPOS); do                   \
+	for repo_key in $(SUSE_REPO_KEYS); do                               \
+	    $(call install_gpg_key,$$repo_key);                             \
+	done;                                                               \
+	for repo in $($(DISTRO_BASE)_LOCAL_REPOS)                           \
+	            $($(DISTRO_BASE)_REPOS); do                             \
 		distro_repos+=" --repo $$repo";                             \
-	    curl -L -f -O "$$repo"/repodata/repomd.xml.key;                 \
-	    if ! sudo rpm --import repomd.xml.key; then                     \
-	        cat repomd.xml.key;                                         \
-	    fi;                                                             \
+	    $(call install_gpg_key,$$repo/repodata/repomd.xml.key);         \
 	done;                                                               \
 	sudo build $(BUILD_OPTIONS) $$add_repos                             \
 	     $$distro_repos                                                 \
@@ -488,6 +499,6 @@ show_makefiles:
 show_calling_makefile:
 	@echo $(CALLING_MAKEFILE)
 
-.PHONY: srpm rpms debs ls chrootbuild rpmlint FORCE \
+.PHONY: srpm rpms debs deb_detar ls chrootbuild rpmlint FORCE        \
         show_version show_release show_rpms show_source show_sources \
         show_targets check-env

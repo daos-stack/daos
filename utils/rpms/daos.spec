@@ -28,13 +28,15 @@ BuildRequires: spdk-devel, spdk-tools
 BuildRequires: fio < 3.4
 BuildRequires: libisa-l-devel
 BuildRequires: raft-devel <= 0.5.0
-BuildRequires: mercury-devel
+BuildRequires: mercury-devel < 1.0.1-12
+# vvvvvv these can be removed when cart#226 lands and we update to use it
 BuildRequires: openpa-devel
 BuildRequires: libfabric-devel
-BuildRequires: openssl-devel
 BuildRequires: ompi-devel
 BuildRequires: pmix-devel
+# ^^^^^^ these can be removed when cart#226 lands
 BuildRequires: hwloc-devel
+BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
 BuildRequires: libcmocka-devel
@@ -42,7 +44,7 @@ BuildRequires: readline-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
 %if (0%{?rhel} >= 7)
-BuildRequires:  numactl-devel
+BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
 BuildRequires: golang-bin
 BuildRequires: libipmctl-devel
