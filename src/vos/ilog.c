@@ -828,9 +828,6 @@ consolidate_tree(struct ilog_context *lctx, const daos_epoch_range_t *epr,
 			type = "punched";
 		}
 
-		if (punch && opc == ILOG_OP_PERSIST)
-			break;
-
 		if (epr->epr_hi < key.id_epoch || epr->epr_lo > key.id_epoch)
 			break;
 abort:
@@ -964,7 +961,7 @@ done:
 	if (!daos_handle_is_inval(toh))
 		dbtree_close(toh);
 
-	return 0;
+	return rc;
 }
 
 const char *opc_str[] = {

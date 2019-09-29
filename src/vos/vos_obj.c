@@ -91,11 +91,9 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 
 		umm = vos_obj2umm(obj);
 
-		/** It's not clear whether the ilog update is needed here
-		 *  but depending on how we do MVCC checks, it might be
-		 *  useful to have it to detect conflicts.  Since the
-		 *  ilog is only updated internally if necessary,
-		 *  this may normally be a noop.
+		/* A punch to the akey is an update on a DKEY so update the
+		 * incarnation log.  This will normally be a noop but the
+		 * log entry is needed because an existing dkey is implied.
 		 */
 		rc = ilog_open(umm, &krec->kr_ilog, &loh);
 		if (rc != 0) {
@@ -1408,18 +1406,6 @@ vos_obj_iter_fini(struct vos_iterator *iter)
 	    (iter->it_type == VOS_ITER_DKEY || !iter->it_from_parent))
 		vos_obj_release(vos_obj_cache_current(), oiter->it_obj);
 
-	switch (iter->it_type) {
-	case VOS_ITER_SINGLE:
-	case VOS_ITER_RECX:
-		if (iter->it_from_parent)
-			break;
-	case VOS_ITER_AKEY:
-		if (iter->it_from_parent)
-			break;
-	case VOS_ITER_DKEY:
-	default:
-		break;
-	};
 	ilog_fetch_finish(&oiter->it_ilog_entries);
 	D_FREE(oiter);
 	return 0;

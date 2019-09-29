@@ -171,17 +171,6 @@ gc_drain_key(struct vos_gc *gc, struct vos_pool *pool,
 	int		    creds = *credits;
 	int		    rc;
 
-	if (key->kr_bmap & KREC_BF_ILOG_FREE)
-		goto drain;
-
-	rc = umem_tx_add_ptr(&pool->vp_umm, &key->kr_bmap,
-			     sizeof(key->kr_bmap));
-	if (rc != 0)
-		goto error;
-
-	key->kr_bmap |= KREC_BF_ILOG_FREE;
-
-drain:
 	if (key->kr_bmap & KREC_BF_BTR) {
 		rc = gc_drain_btr(gc, pool, &key->kr_btr, credits, empty);
 
@@ -193,7 +182,7 @@ drain:
 		*empty = true;
 		return 0;
 	}
-error:
+
 	if (rc) {
 		D_ERROR("%s drain failed: "DF_RC"\n", gc->gc_name, DP_RC(rc));
 		return rc;

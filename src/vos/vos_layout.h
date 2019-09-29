@@ -301,8 +301,6 @@ enum vos_krec_bf {
 	KREC_BF_BTR			= (1 << 1),
 	/* it's a dkey, otherwise is akey */
 	KREC_BF_DKEY			= (1 << 2),
-	/* The incarnation log has already been freed */
-	KREC_BF_ILOG_FREE		= (1 << 3),
 };
 
 /**
