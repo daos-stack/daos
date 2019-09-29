@@ -538,7 +538,7 @@ cont_child_destroy_one(void *vin)
 		cont_child_put(tls->dt_cont_cache, cont);
 
 		retry_cnt++;
-		if (retry_cnt > 2) {
+		if (retry_cnt > 1) {
 			D_ERROR("container is still in-use\n");
 			D_GOTO(out_pool, rc = -DER_BUSY);
 		} /* else: resync should have completed, try again */
@@ -1327,7 +1327,13 @@ ds_cont_tgt_snapshots_refresh(uuid_t pool_uuid, uuid_t cont_uuid)
 	return rc;
 }
 
-#define DAOS_AGG_THRESHOLD	10 /* seconds */
+/*
+ * DTX batched commit may delay the commit for at most 60 seconds,
+ * so we have to use a larger threshold to ensure that all transactions
+ * within the aggregation epoch range are either committed or to be
+ * aborted.
+ */
+#define DAOS_AGG_THRESHOLD	90 /* seconds */
 
 int
 cont_child_aggregate(struct ds_cont_child *cont)
@@ -1366,7 +1372,6 @@ cont_child_aggregate(struct ds_cont_child *cont)
 		return 0;
 
 	/* Cap the aggregation upper bound to the snapshot in creating */
-	D_ASSERT(cont->sc_aggregation_max > 0);
 	if (epoch_max >= cont->sc_aggregation_max)
 		epoch_max = cont->sc_aggregation_max - 1;
 

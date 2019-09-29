@@ -2255,6 +2255,7 @@ tx_discard(void **state)
 	 * new transaction model.
 	 */
 	print_message("Skip obsolete test\n");
+	skip();
 #if 0
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
@@ -2433,6 +2434,7 @@ tx_commit(void **state)
 	 * new transaction model.
 	 */
 	print_message("Skip obsolete test\n");
+	skip();
 #if 0
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
@@ -3126,6 +3128,7 @@ blob_unmap_trigger(void **state)
 	 * anymore, need to figure out a new way to trigger blob unmap.
 	 */
 	print_message("Skip obsolete test\n");
+	skip();
 #if 0
 	daos_obj_id_t	 oid;
 	test_arg_t	*arg = *state;

@@ -564,10 +564,9 @@ cont_iv_snapshots_refresh(void *ns, uuid_t cont_uuid)
 		goto out;
 	}
 	rc = cont_iv_fetch(ns, IV_CONT_SNAP, cont_uuid, iv_entry, entry_size);
-	if (rc != 0)
-		goto out_free;
-	D_ASSERT(iv_entry->iv_snap.snap_cnt <= MAX_SNAP_CNT);
-out_free:
+	if (rc == 0)
+		D_ASSERT(iv_entry->iv_snap.snap_cnt <= MAX_SNAP_CNT);
+
 	D_FREE(iv_entry);
 out:
 	return rc;
