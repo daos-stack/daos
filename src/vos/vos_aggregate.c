@@ -1539,7 +1539,7 @@ static int
 aggregate_enter(struct vos_container *cont, bool discard)
 {
 	if (cont->vc_in_aggregation) {
-		D_ERROR(DF_CONT": Already in agregation. discard:%d\n",
+		D_ERROR(DF_CONT": Already in aggregation. discard:%d\n",
 			DP_CONT(cont->vc_pool->vp_id, cont->vc_id), discard);
 		return -DER_BUSY;
 	}
@@ -1607,8 +1607,10 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr)
 	iter_param.ip_flags |= VOS_IT_FOR_PURGE;
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
 			 vos_aggregate_cb, &agg_param);
-	if (rc != 0)
+	if (rc != 0) {
+		close_merge_window(&agg_param.ap_window, rc);
 		goto exit;
+	}
 
 	/*
 	 * Update LAE, when aggregating for snapshot deletion, the
