@@ -30,9 +30,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// SystemStopReq struct contains request
-type SystemStopReq struct{}
-
 // SystemStopResp struct contains response
 type SystemStopResp struct {
 	// TODO: process any remaining members
@@ -43,7 +40,7 @@ type SystemStopResp struct {
 // uuid, list of service replicas and error (including any DER code from DAOS).
 //
 // Isolate protobuf encapsulation in client and don't expose to calling code.
-func (c *connList) SystemStop(req *SystemStopReq) (*SystemStopResp, error) {
+func (c *connList) SystemStop() (*SystemStopResp, error) {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
 		return nil, err
@@ -69,9 +66,6 @@ func (c *connList) SystemStop(req *SystemStopReq) (*SystemStopResp, error) {
 	return &SystemStopResp{}, nil
 }
 
-// SystemQueryReq struct contains request
-type SystemQueryReq struct{}
-
 // SystemQueryResp struct contains response
 type SystemQueryResp struct {
 	// TODO: process any remaining members
@@ -82,7 +76,7 @@ type SystemQueryResp struct {
 // uuid, list of service replicas and error (including any DER code from DAOS).
 //
 // Isolate protobuf encapsulation in client and don't expose to calling code.
-func (c *connList) SystemQuery(req *SystemQueryReq) (*SystemQueryResp, error) {
+func (c *connList) SystemQuery() (*SystemQueryResp, error) {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
 		return nil, err

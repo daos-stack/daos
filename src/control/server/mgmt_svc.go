@@ -38,14 +38,6 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-// SystemMember refers to a data-plane instance that is a member of this DAOS
-// system running on host with the control-plane listening at "Addr".
-type SystemMember struct {
-	Addr string
-	Uuid string
-	Rank uint32
-}
-
 // CheckReplica verifies if this server is supposed to host an MS replica,
 // only performing the check and printing the result for now.
 func CheckReplica(lis net.Listener, accessPoints []string, srv *exec.Cmd) (msReplicaCheck string, err error) {
@@ -173,9 +165,7 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 		return nil, err
 	}
 
-	svc.mutex.Lock()
-	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, getAttachInfo, req)
-	svc.mutex.Unlock()
+	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, getAttachInfo, req, svc.mutex)
 	if err != nil {
 		return nil, err
 	}
@@ -194,9 +184,7 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 		return nil, err
 	}
 
-	svc.mutex.Lock()
-	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, join, req)
-	svc.mutex.Unlock()
+	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, join, req, svc.mutex)
 	if err != nil {
 		return nil, err
 	}
@@ -342,105 +330,6 @@ func (svc *mgmtSvc) SmdListDevs(ctx context.Context, req *mgmtpb.SmdDevReq) (*mg
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal SmdListDevs response")
 	}
-
-	return resp, nil
-}
-
-// KillRank implements the method defined for the Management Service.
-func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.DaosRank) (*mgmtpb.DaosResp, error) {
-	mi, err := svc.harness.GetManagementInstance()
-	if err != nil {
-		return nil, err
-	}
-	if err := checkIsMSReplica(mi); err != nil {
-		return nil, err
-	}
-
-	svc.log.Debugf("MgmtSvc.KillRank dispatch, req:%+v\n", *req)
-
-	svc.mutex.Lock()
-	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, killRank, req)
-	svc.mutex.Unlock()
-	if err != nil {
-		return nil, err
-	}
-
-	resp := &mgmtpb.DaosResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal DAOS response")
-	}
-
-	svc.log.Debugf("MgmtSvc.KillRank dispatch, resp:%+v\n", *resp)
-
-	return resp, nil
-}
-
-// newMembersPB converts internal member structs to protobuf equivalents.
-func newMembersPB(members []*SystemMember) []*mgmtpb.SystemMember {
-	pbMembers := make([]*mgmtpb.SystemMember, 0)
-
-	// iterate through input parameter and populates response
-	for _, m := range members {
-		pbMembers = append(pbMembers, &mgmtpb.SystemMember{
-			Addr: m.Addr, Uuid: m.Uuid, Rank: m.Rank,
-		})
-	}
-
-	return pbMembers
-}
-
-// SystemQuery implements the method defined for the Management Service.
-//
-// Return system membership list including member state.
-func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq) (*mgmtpb.SystemQueryResp, error) {
-	resp := &mgmtpb.SystemQueryResp{}
-
-	mi, err := svc.harness.GetManagementInstance()
-	if err != nil {
-		return nil, err
-	}
-	if err := checkIsMSReplica(mi); err != nil {
-		return nil, err
-	}
-
-	svc.log.Debug("received SystemQuery RPC; reporting DAOS system members")
-
-	// TODO: consider whether lock here is practical (read-only)
-	svc.mutex.Lock()
-	resp.Members = newMembersPB(svc.systemQuery())
-	svc.mutex.Unlock()
-
-	svc.log.Debug("responding to SystemQuery RPC")
-
-	return resp, nil
-}
-
-// SystemStop implements the method defined for the Management Service.
-//
-// Initiate controlled shutdown of DAOS system.
-func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (*mgmtpb.SystemStopResp, error) {
-	resp := &mgmtpb.SystemStopResp{}
-
-	mi, err := svc.harness.GetManagementInstance()
-	if err != nil {
-		return nil, err
-	}
-	if err := checkIsMSReplica(mi); err != nil {
-		return nil, err
-	}
-
-	svc.log.Debug("received SystemStop RPC; proceeding to shutdown DAOS system")
-
-	// perform controlled shutdown (synchronous)
-	if err := svc.systemStop(); err != nil {
-		return nil, err
-	}
-	// TODO: consider whether lock here is practical (read-only)
-	svc.mutex.Lock()
-	resp.Members = newMembersPB(svc.systemQuery())
-	svc.mutex.Unlock()
-
-	svc.log.Debug("responding to SystemStop RPC")
 
 	return resp, nil
 }

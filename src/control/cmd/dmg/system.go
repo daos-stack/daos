@@ -23,22 +23,37 @@
 
 package main
 
-// SvcCmd is the struct representing the top-level service subcommand.
-type SvcCmd struct {
-	KillRank KillRankSvcCmd `command:"kill-rank" alias:"kr" description:"Terminate server running as specific rank on a DAOS pool"`
+import (
+	"fmt"
+
+	"github.com/pkg/errors"
+)
+
+// SystemCmd is the struct representing the top-level system subcommand.
+type SystemCmd struct {
+	SystemQuery SystemQueryCmd `command:"query" alias:"q" description:"Retrieve DAOS system membership"`
+	SystemStop  SystemStopCmd  `command:"stop" alias:"s" description:"Perform controlled shutdown of DAOS system"`
 }
 
-// KillRankSvcCmd is the struct representing the command to kill server
-// identified by rank on given pool identified by uuid.
-type KillRankSvcCmd struct {
+// SystemStopCmdCmd is the struct representing the command to shutdown system.
+type SystemStopCmdCmd struct {
 	logCmd
 	connectedCmd
-	Rank     uint32 `short:"r" long:"rank" description:"Rank identifying DAOS server" required:"1"`
-	PoolUUID string `short:"p" long:"pool-uuid" description:"Pool uuid that rank relates to" required:"1"`
 }
 
-// Execute is run when KillRankSvcCmd activates
-func (k *KillRankSvcCmd) Execute(args []string) error {
-	k.log.Infof("Kill Rank command results:\n%s", k.conns.KillRank(k.PoolUUID, k.Rank))
+// Execute is run when SystemStopCmdCmd activates
+func (cmd *SystemStopCmd) Execute(args []string) error {
+	msg := "SUCCEEDED: "
+
+	resp, err := conns.SystemStop()
+	if err != nil {
+		msg = errors.WithMessagef(err, "FAILED").Error()
+	}
+	if resp.Members != nil && len(resp.Members) > 0 {
+		msg += fmt.Sprintf(": %+v", resp)
+	}
+
+	log.Infof("System-stop command %s\n", msg)
+
 	return nil
 }
