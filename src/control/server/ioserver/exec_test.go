@@ -120,6 +120,7 @@ func TestRunnerContextExit(t *testing.T) {
 }
 
 func TestRunnerNormalExit(t *testing.T) {
+	var numaNode uint = 1
 	createFakeBinary(t)
 
 	// set this to control the behavior in TestMain()
@@ -133,7 +134,8 @@ func TestRunnerNormalExit(t *testing.T) {
 	cfg := NewConfig().
 		WithTargetCount(42).
 		WithHelperStreamCount(1).
-		WithFabricInterface("qib0")
+		WithFabricInterface("qib0").
+		WithPinnedNumaNode(&numaNode)
 	runner := NewRunner(log, cfg)
 	errOut := make(chan error)
 
@@ -147,7 +149,7 @@ func TestRunnerNormalExit(t *testing.T) {
 	}
 
 	// Light integration testing of arg/env generation; unit tests elsewhere.
-	wantArgs := "-t 42 -x 1 -I 0"
+	wantArgs := "-t 42 -x 1 -p 1 -I 0"
 	var gotArgs string
 	wantEnv := "OFI_INTERFACE=qib0"
 	var gotEnv string

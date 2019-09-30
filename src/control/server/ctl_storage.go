@@ -29,7 +29,6 @@ import (
 	"github.com/pkg/errors"
 
 	types "github.com/daos-stack/daos/src/control/common/storage"
-	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
@@ -39,7 +38,6 @@ type StorageControlService struct {
 	log             logging.Logger
 	nvme            *nvmeStorage
 	scm             *scmStorage
-	drpc            drpc.DomainSocketClient
 	instanceStorage []ioserver.StorageConfig
 }
 
@@ -59,13 +57,12 @@ func DefaultStorageControlService(log logging.Logger, cfg *Configuration) (*Stor
 
 	return NewStorageControlService(log,
 		newNvmeStorage(log, cfg.NvmeShmID, spdkScript, cfg.ext),
-		newScmStorage(log, cfg.ext), cfg.Servers,
-		getDrpcClientConnection(cfg.SocketDir)), nil
+		newScmStorage(log, cfg.ext), cfg.Servers), nil
 }
 
 // NewStorageControlService returns an initialized *StorageControlService
 func NewStorageControlService(log logging.Logger, nvme *nvmeStorage, scm *scmStorage,
-	srvCfgs []*ioserver.Config, drpc drpc.DomainSocketClient) *StorageControlService {
+	srvCfgs []*ioserver.Config) *StorageControlService {
 
 	instanceStorage := []ioserver.StorageConfig{}
 	for _, srvCfg := range srvCfgs {
@@ -76,7 +73,6 @@ func NewStorageControlService(log logging.Logger, nvme *nvmeStorage, scm *scmSto
 		log:             log,
 		nvme:            nvme,
 		scm:             scm,
-		drpc:            drpc,
 		instanceStorage: instanceStorage,
 	}
 }

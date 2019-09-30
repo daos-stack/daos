@@ -42,26 +42,27 @@ func TestParseTopology(t *testing.T) {
 	}{
 		// boro-84 has two NUMA nodes, with eth0, eth1, ib0 on NUMA 0,
 		// and no ib1 in the topology
+		// The format for the expected string is "device:cpuset:nodeset:numa"
 		{[]string{""}, "testdata/boro-84.xml", []string{}},
-		{[]string{"eth0"}, "testdata/boro-84.xml", []string{"eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
-		{[]string{"eth1"}, "testdata/boro-84.xml", []string{"eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
-		{[]string{"ib0"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
-		{[]string{"eth0", "eth1"}, "testdata/boro-84.xml", []string{"eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
-		{[]string{"eth0", "eth1", "ib0"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
-		{[]string{"ib0", "eth0", "ib1", "eth1"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
-		{[]string{"eth0", "eth1", "ib0"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
-		{[]string{"eth0", "eth1", "ib0"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
-		{[]string{"eth0", "eth1", "ib0"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
+		{[]string{"eth0"}, "testdata/boro-84.xml", []string{"eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
+		{[]string{"eth1"}, "testdata/boro-84.xml", []string{"eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
+		{[]string{"ib0"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
+		{[]string{"eth0", "eth1"}, "testdata/boro-84.xml", []string{"eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
+		{[]string{"eth0", "eth1", "ib0"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
+		{[]string{"ib0", "eth0", "ib1", "eth1"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
+		{[]string{"eth0", "eth1", "ib0"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
+		{[]string{"eth0", "eth1", "ib0"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
+		{[]string{"eth0", "eth1", "ib0"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
 		// wolf-133 has two NUMA nodes, with eth0, eth1, ib0 on NUMA 0,
 		// and ib1 on NUMA 1.  Notice that the cpuset and nodeset for ib1
 		// reflect that they are on a different node
-		{[]string{"eth0"}, "testdata/wolf-133.xml", []string{"eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
-		{[]string{"eth1"}, "testdata/wolf-133.xml", []string{"eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
-		{[]string{"ib0"}, "testdata/wolf-133.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
-		{[]string{"ib1"}, "testdata/wolf-133.xml", []string{"ib1:0xffffff00,0x0000ffff,0xff000000:0x00000002"}},
-		{[]string{"eth0", "eth1"}, "testdata/wolf-133.xml", []string{"eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
-		{[]string{"ib0", "eth0", "eth1"}, "testdata/wolf-133.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001"}},
-		{[]string{"ib0", "eth0", "ib1", "eth1"}, "testdata/wolf-133.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001", "ib1:0xffffff00,0x0000ffff,0xff000000:0x00000002"}},
+		{[]string{"eth0"}, "testdata/wolf-133.xml", []string{"eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
+		{[]string{"eth1"}, "testdata/wolf-133.xml", []string{"eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
+		{[]string{"ib0"}, "testdata/wolf-133.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
+		{[]string{"ib1"}, "testdata/wolf-133.xml", []string{"ib1:0xffffff00,0x0000ffff,0xff000000:0x00000002:1"}},
+		{[]string{"eth0", "eth1"}, "testdata/wolf-133.xml", []string{"eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
+		{[]string{"ib0", "eth0", "eth1"}, "testdata/wolf-133.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
+		{[]string{"ib0", "eth0", "ib1", "eth1"}, "testdata/wolf-133.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "ib1:0xffffff00,0x0000ffff,0xff000000:0x00000002:1"}},
 	}
 
 	for _, tt := range tests {
@@ -78,5 +79,46 @@ func TestParseTopology(t *testing.T) {
 			AssertEqual(t, i.String(), tt.expected[j],
 				"unexpected mismatch with device and topology")
 		}
+	}
+}
+
+// TestScanFabric scans the fabric on the test system.  Even though we don't know how the test system is configured,
+// we do expect that libfabric is installed and will report at least one provider,device,numa record.
+// If we get at least one record and no errors, the test is successful.
+func TestScanFabric(t *testing.T) {
+
+	provider := "" // an empty provider string is a search for 'all'
+	results, err := ScanFabric(provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(results) == 0 {
+		t.Fatal(err)
+	}
+}
+
+// TestValidateNetworkConfig runs in a basic loopback mode with ScanFabric.  ScanFabric
+// is used to generate data found on the actual test system, which is then fed back to the
+// ValidateProviderConfig and  ValidateNUMAConfig functions to make sure it matches.  Each record from ScanFabric is
+// examined.  We expect that libfabric is installed and will report at least one provider, device, numa record.
+func TestValidateNetworkConfig(t *testing.T) {
+
+	provider := "" // an empty provider string is a search for 'all'
+	results, err := ScanFabric(provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(results) == 0 {
+		t.Fatal(err)
+	}
+
+	for _, sf := range results {
+		err := ValidateProviderConfig(sf.DeviceName, sf.Provider)
+		AssertEqual(t, err, nil, "Network device configuration is invalid - provider not supported")
+
+		err = ValidateNUMAConfig(sf.DeviceName, sf.NUMANode)
+		AssertEqual(t, err, nil, "Network device configuration is invalid - NUMA node does not match")
 	}
 }
