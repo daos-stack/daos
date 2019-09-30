@@ -605,6 +605,9 @@ evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
 		d_list_add_tail(next, &covered);
 	}
 
+	if (d_list_empty(&covered))
+		return 0;
+
 	/* Now uncover entries */
 	current = covered.next;
 	/* Some compilers can't tell that this_ent will be initialized */
