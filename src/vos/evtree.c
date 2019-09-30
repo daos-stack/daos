@@ -586,11 +586,14 @@ evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
 	daos_epoch_t		 punched_epoch = filter ? filter->fr_punch : 0;
 	int			 rc = 0;
 
-	/* reset the linked list.  We'll reconstruct it */
 	D_INIT_LIST_HEAD(&covered);
 	*num_visible = 0;
 
-	/* Now place all entries sorted in covered list */
+	/* Some of the entries may be punched by a key.  We don't need to
+	 * consider such entries for the visibility algorithm and can mark them
+	 * covered to start.   All other entries are placed into the sorted list
+	 * to be considered in the visibility algorithm.
+	 */
 	evt_ent_array_for_each(this_ent, ent_array) {
 		next = evt_array_entry2link(this_ent);
 

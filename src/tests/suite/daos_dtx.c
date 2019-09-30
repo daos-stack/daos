@@ -213,17 +213,15 @@ dtx_4(void **state)
 static int
 dtx_check_replicas_v2(const char *dkey, const char *akey, const char *msg,
 		      const char *update_buf, daos_size_t size,
-		      struct ioreq *req)
+		      bool punch, struct ioreq *req)
 {
 	char	*fetch_buf = NULL;
 	int	 count = 0;
 	int	 i;
 
-	if (size != 0) {
-		assert_non_null(update_buf);
-		D_ALLOC(fetch_buf, size);
-		assert_non_null(fetch_buf);
-	}
+	assert_non_null(update_buf);
+	D_ALLOC(fetch_buf, size);
+	assert_non_null(fetch_buf);
 
 	for (i = 0; i < dts_dtx_replica_cnt; i++) {
 		memset(fetch_buf, 0, size);
@@ -241,10 +239,8 @@ dtx_check_replicas_v2(const char *dkey, const char *akey, const char *msg,
 		 */
 		if (req->result == 0) {
 			count++;
-			assert_true(req->iod[0].iod_size <= size);
-			if (fetch_buf != NULL)
-				assert_memory_equal(update_buf, fetch_buf,
-						    size);
+			assert_true(req->iod[0].iod_size == punch ? 0 : size);
+			assert_memory_equal(update_buf, fetch_buf, size);
 		} else {
 			assert_int_equal(req->result, -DER_INPROGRESS);
 		}
@@ -309,7 +305,7 @@ dtx_fetch_committable(void **state, bool punch)
 
 	rc = dtx_check_replicas_v2(dkey, akey, "fetch_committable_1",
 				   punch ? zero_buf : update_buf2,
-				   dts_dtx_iosize / 2, &req);
+				   dts_dtx_iosize / 2, punch, &req);
 	/* At least leader will return the latest data. */
 	assert_true(rc >= 1);
 
@@ -322,7 +318,7 @@ dtx_fetch_committable(void **state, bool punch)
 
 	rc = dtx_check_replicas_v2(dkey, akey, "fetch_committable_2",
 				   punch ? zero_buf : update_buf2,
-				   dts_dtx_iosize / 2, &req);
+				   dts_dtx_iosize / 2, punch, &req);
 	assert_int_equal(rc, dts_dtx_replica_cnt);
 
 	D_FREE(zero_buf);
@@ -468,7 +464,7 @@ dtx_batched_commit(void **state, int count)
 	for (i = 0; i < DTX_THRESHOLD_COUNT && i < count; i += 30) {
 		ptr = &update_buf[i * 8];
 		rc = dtx_check_replicas_v2(dkey, ptr, "batched_commit",
-					   ptr, 8, &req);
+					   ptr, 8, false, &req);
 		assert_int_equal(rc, dts_dtx_replica_cnt);
 	}
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,9 +23,9 @@
 /**
  * This file is part of vos/tests/
  *
- * vos/tests/vts_io.c
+ * vos/tests/vts_ilog.c
  *
- * Author: Vishwanath Venkatesan <vishwanath.venaktesan@intel.com>
+ * Author: Jeffrey Olivier <jeffrey.v.olivier@intel.com>
  */
 #define D_LOGFAC	DD_FAC(tests)
 
@@ -37,16 +37,6 @@
 #define DP_BOOL(punch) ((punch) ? "true" : "false")
 
 static bool verbose;
-
-static int
-ilog_tst_teardown(void **state)
-{
-	struct io_test_args	*arg = *state;
-	void			*custom = arg->custom;
-
-	arg->custom = custom;
-	return 0;
-}
 
 static struct ilog_df *
 ilog_alloc_root(struct umem_instance *umm)
@@ -63,7 +53,7 @@ ilog_alloc_root(struct umem_instance *umm)
 	ilog_off = umem_zalloc(umm, sizeof(struct ilog_df));
 	if (ilog_off == UMOFF_NULL) {
 		print_message("Allocation failed\n");
-		rc = -DER_NOMEM;
+		rc = -DER_NOSPACE;
 	}
 
 	rc = vos_tx_end(umm, rc);
@@ -916,13 +906,13 @@ ilog_test_aggregate(void **state)
 
 static const struct CMUnitTest inc_tests[] = {
 	{ "VOS500.1: VOS incarnation log UPDATE", ilog_test_update, NULL,
-		ilog_tst_teardown},
+		NULL},
 	{ "VOS500.2: VOS incarnation log ABORT test", ilog_test_abort, NULL,
-		ilog_tst_teardown},
+		NULL},
 	{ "VOS500.3: VOS incarnation log PERSIST test", ilog_test_persist, NULL,
-		ilog_tst_teardown},
+		NULL},
 	{ "VOS500.3: VOS incarnation log AGGREGATE test", ilog_test_aggregate,
-		NULL, ilog_tst_teardown},
+		NULL, NULL},
 };
 
 static struct ilog_callbacks ilog_callbacks = {

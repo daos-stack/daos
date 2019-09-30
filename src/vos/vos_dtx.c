@@ -1234,8 +1234,7 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 	}
 
 	if (dth == NULL) {
-		if (entry != NULL)
-			*entry = UMOFF_NULL;
+		*entry = UMOFF_NULL;
 		if (shares != NULL)
 			*shares = 0;
 
