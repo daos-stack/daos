@@ -167,8 +167,9 @@ class DaosServer(DaosCommand):
             super(DaosServer.DaosServerConfig, self). get_params(test)
             # Read the baseline conf file data/daos_server_baseline.yml
             try:
-                with open('{}/{}'.format(test.prefix, DEFAULT_FILE), 'r') as rf:
-                    self.data = yaml.safe_load(rf)
+                with open('{}/{}'.format(test.prefix, DEFAULT_FILE), 'r') \
+                as rfile:
+                    self.data = yaml.safe_load(rfile)
             except Exception as err:
                 print("<SERVER> Exception occurred: {0}".format(str(err)))
                 traceback.print_exception(

@@ -368,6 +368,7 @@ class ExecutableCommand(CommandWithParameters):
 
 
 class DaosCommand(ExecutableCommand):
+    # pylint: disable=pylint-unused-argument
     """A class for similar daos command line tools."""
 
     def __init__(self, namespace, command, path=""):
@@ -386,7 +387,6 @@ class DaosCommand(ExecutableCommand):
 
     def get_action_command(self, test):
         """Assign a command object for the specified request and action."""
-        # pylint: disable=pylint-unused-argument
         self.action_command = None
 
     def get_param_names(self):
