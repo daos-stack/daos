@@ -105,6 +105,13 @@ static void dss_gc_ult(void *args);
 #define REBUILD_DEFAULT_SCHEDULE_RATIO	30
 unsigned int	dss_rebuild_res_percentage = REBUILD_DEFAULT_SCHEDULE_RATIO;
 unsigned int	dss_first_res_percentage = FIRST_DEFAULT_SCHEDULE_RATIO;
+bool		dss_agg_disabled;
+
+bool
+dss_aggregation_disabled(void)
+{
+	return dss_agg_disabled;
+}
 
 #define DSS_SYS_XS_NAME_FMT	"daos_sys_%d"
 #define DSS_TGT_XS_NAME_FMT	"daos_tgt_%d_xs_%d"
@@ -1466,6 +1473,11 @@ dss_parameters_set(unsigned int key_id, uint64_t value)
 		}
 		D_WARN("set rebuild percentage to "DF_U64"\n", value);
 		dss_rebuild_res_percentage = value;
+		break;
+	case DSS_DISABLE_AGGREGATION:
+		dss_agg_disabled = (value != 0);
+		D_WARN("online aggregation is %s\n",
+		       value != 0 ? "disabled" : "enabled");
 		break;
 	default:
 		D_ERROR("invalid key_id %d\n", key_id);
