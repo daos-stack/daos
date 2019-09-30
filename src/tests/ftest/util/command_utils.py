@@ -386,8 +386,9 @@ class DaosCommand(ExecutableCommand):
         self.action_command = None
 
     def get_action_command(self, test):
-        """Assign a command object for the specified request and action."""
-        self.action_command = None
+        """Get the action command params from yaml. Used to be overriden."""
+        if self.action_command is not None:
+            self.action_command.get_params(test)
 
     def get_param_names(self):
         """Get a sorted list of DaosCommand parameter names."""

@@ -57,8 +57,7 @@ class DmgCommand(DaosCommand):
     def get_action_command(self, test):
         """Get action command object parameters from the yaml."""
         self.set_action_command()
-        if self.action_command is not None:
-            self.action_command.get_params(test)
+        super(DmgCommand, self).get_action_command(test)
 
     class DmgFormatSubCommand(CommandWithParameters):
         """Defines an object representing a format sub dmg command."""
