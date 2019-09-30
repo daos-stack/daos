@@ -34,15 +34,6 @@ import (
 	"github.com/daos-stack/daos/src/control/security"
 )
 
-func getDrpcClientSocket(sockDir string) string {
-	return filepath.Join(sockDir, "daos_io_server.sock")
-}
-
-func getDrpcClientConnection(sockDir string) *drpc.ClientConnection {
-	clientSock := getDrpcClientSocket(sockDir)
-	return drpc.NewClientConnection(clientSock)
-}
-
 func getDrpcServerSocketPath(sockDir string) string {
 	return filepath.Join(sockDir, "daos_server.sock")
 }

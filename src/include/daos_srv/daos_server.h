@@ -608,4 +608,6 @@ bool dss_pmixless(void);
 
 void dss_gc_run(int credits);
 
+bool dss_aggregation_disabled(void);
+
 #endif /* __DSS_API_H__ */

@@ -38,7 +38,6 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
-	"github.com/daos-stack/daos/src/control/security/acl"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -132,8 +131,6 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	// otherwise, only provide gRPC mgmt control service for hardware provisioning.
 	if !needsRespawn {
 		mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(harness))
-		secServer := newSecurityService(getDrpcClientConnection(cfg.SocketDir))
-		acl.RegisterAccessControlServer(grpcServer, secServer)
 	}
 
 	go func() {

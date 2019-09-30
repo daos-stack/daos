@@ -64,7 +64,7 @@ merge_free_ext(struct vea_space_info *vsi, struct vea_free_extent *ext_in,
 repeat:
 	d_iov_set(&val, NULL, 0);
 
-	rc = dbtree_fetch(btr_hdl, opc, DAOS_INTENT_PUNCH, &key, &key_out,
+	rc = dbtree_fetch(btr_hdl, opc, DAOS_INTENT_DEFAULT, &key, &key_out,
 			  &val);
 	if (rc == -DER_NONEXIST && opc == BTR_PROBE_LE) {
 		opc = BTR_PROBE_GE;
@@ -291,8 +291,8 @@ aggregated_free(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 		     sizeof(dummy.ve_ext.vfe_blk_off));
 	d_iov_set(&val, NULL, 0);
 
-	rc = dbtree_fetch(btr_hdl, BTR_PROBE_EQ, DAOS_INTENT_PURGE, &key, NULL,
-			  &val);
+	rc = dbtree_fetch(btr_hdl, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT, &key,
+			  NULL, &val);
 	D_ASSERT(rc != -DER_NONEXIST);
 	if (rc)
 		return rc;
