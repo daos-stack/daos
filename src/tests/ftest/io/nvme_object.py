@@ -23,11 +23,38 @@
 """
 from __future__ import print_function
 
+#from pathos.multiprocessing import ProcessingPool
+from multiprocessing import Pool
+import threading
+import concurrent.futures
 import avocado
+import ctypes
+import pickle
 
 from daos_api import DaosApiError
 from test_utils import TestPool, TestContainer
 from apricot import TestWithServers
+
+
+def container_write(container, record):
+    """Method to write to a container"""
+    print("{}\n".format(record))
+#    record = 1
+#    for record in record_size:
+    container.record_qty.update(record)
+    print(container.record_qty)
+    # write multiple objects
+    container.write_objects()
+
+    # read written objects and verify
+    container.read_objects()
+
+#    # invoke pool query after write
+#    self.pool.get_info()
+
+    # destroy container
+#    if self.container is not None:
+#        self.container.destroy()
 
 class NvmeObject(TestWithServers):
     """Test class for NVMe storage by creating/Updating/Fetching
@@ -59,6 +86,29 @@ class NvmeObject(TestWithServers):
             # Stop the servers and agents
             super(NvmeObject, self).tearDown()
 
+#    def __getstate__(self):
+#        pass
+
+#    def __getstate__(self):
+#        pass
+    def container_write(self, record):
+        print(record_size)
+#    for record in record_size:
+        self.container.record_qty.update(record)
+        print(self.container.record_qty)
+        # write multiple objects
+        self.container.write_objects()
+
+        # read written objects and verify
+        self.container.read_objects()
+
+#    # invoke pool query after write
+#    self.pool.get_info()
+
+    # destroy container
+#    if self.container is not None:
+#        self.container.destroy()
+    
     @avocado.fail_on(DaosApiError)
     def test_nvme_object_single_pool(self):
         """Jira ID: DAOS-2087.
@@ -77,9 +127,9 @@ class NvmeObject(TestWithServers):
         # Test Params
         self.pool = TestPool(self.context, self.log)
         self.pool.get_params(self)
-        self.container = TestContainer(self.pool)
-        self.container.get_params(self)
-
+        container = TestContainer(self.pool)
+        container.get_params(self)
+        
         # set pool size
         self.pool.nvme_size.update(self.pool_size[0])
         # Create a pool
@@ -90,16 +140,38 @@ class NvmeObject(TestWithServers):
         self.pool.get_info()
 
         # create container
-        self.container.create()
-        print(self.record_size[:-1])
-        for record in self.record_size[:-1]:
-            self.container.record_qty.update(record)
-            print(self.container.record_qty)
-            # write multiple objects
-            self.container.write_objects()
+        container.create()
+        #with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        #    executor.map(container_write, [self.container, self.record_size[0]])
+#        threads = []
+#        for t in range(2):
+#            thread = threading.Thread(target=container_write, args=(self.container, self.record_size[2]))
+#            threads.append(thread)
+#            thread.start()
+#            thread.join()
 
-        # read written objects and verify
-        self.container.read_objects()
+#        for job in threads:
+#            job.start()
+#
+#        for job in threads:
+#            job.join()
+
+#        thread.start()
+#        thread.join()
+#        print(self.record_size[:-1])
+#        print("***{}***".format(ctypes.cast(ctypes.addressof(self.container)).contents))
+        print("***{}***".format(container))
+        mp = Pool(processes=2)
+        mp.apply_async(container_write, (container, self.record_size[2]))
+#        container_write(self.container, self.record_size[:-1])
+#        for record in self.record_size[:-1]:
+#            self.container.record_qty.update(record)
+#            print(self.container.record_qty)
+#            # write multiple objects
+#            self.container.write_objects()
+
+#        # read written objects and verify
+#        self.container.read_objects()
 
         # invoke pool query after write
         self.pool.get_info()

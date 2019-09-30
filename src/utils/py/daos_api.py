@@ -65,6 +65,43 @@ class DaosPool(object):
         self.pool_info = None
         self.target_info = None
 
+    def __getstate__(self):
+        # Copy the object's state from self.__dict__ which contains
+        # all our instance attributes. Always use the dict.copy()
+        # method to avoid modifying the original state.
+        state = self.__dict__.copy()
+        
+        # Remove the unpicklable entries.
+        del state["uuid"]
+        del state['pool_info']
+        del state['handle']
+        del state['group']
+        del state['attached']
+        del state['connected']
+        del state['context']
+        del state['glob']
+        del state['svc']
+        del state['target_info']
+
+        # Convert unpickable items to pickable data structures
+#        state["_uuid_str"] = self.get_uuid_str()
+#        state["_pool_info"] = self.pool_info.contents
+
+        return state
+
+    def __setstate__(self, state):
+        pass
+        # Remove converted unpickalble items
+#        uuid_str = state.pop("_uuid_str")
+#        pool_info = state.pop("_pool_info")
+
+        # Restore instance attributes (i.e., filename and lineno).
+#        self.__dict__.update(state)
+
+        # Restore unpickalble items
+#        self.set_uuid_str(uuid_str)
+#        self.pool_info = pool_info 
+        
     def get_uuid_str(self):
         """Retrieve pool's UUID as Python string."""
         return conversion.c_uuid_to_str(self.uuid)
@@ -706,6 +743,30 @@ class DaosObj(object):
                 raise DaosApiError("Object close returned non-zero. RC: {0} "
                                    "handle: {1}".format(ret, self.obj_handle))
             self.obj_handle = None
+
+    def __getstate__(self):
+        # Copy the object's state from self.__dict__ which contains
+        # all our instance attributes. Always use the dict.copy()
+        # method to avoid modifying the original state.
+        state = self.__dict__.copy()
+
+        # Remove the unpicklable entries.
+        del state["container"]
+        del state['c_oid']
+        del state['c_tgts']
+        del state['attr']
+        del state['obj_handle']
+        del state['tgt_rank_list']
+        del state['context']
+
+        # Convert unpickable items to pickable data structures
+#        state["_uuid_str"] = self.get_uuid_str()
+#        state["_pool_info"] = self.pool_info.contents
+
+        return state
+
+    def __setstate__(self, state):
+        pass
 
     def create(self, rank=None, objcls=None):
         """Create a DAOS object by generating an oid.
@@ -1376,9 +1437,45 @@ class DaosContainer(object):
         self.poh = ctypes.c_uint64(0)
         self.info = daos_cref.ContInfo()
 
+    def __getstate__(self):
+        # Copy the object's state from self.__dict__ which contains
+        # all our instance attributes. Always use the dict.copy()
+        # method to avoid modifying the original state.
+        state = self.__dict__.copy()
+        
+        # Remove the unpicklable entries.
+        del state["uuid"]
+        del state['info']
+        del state['poh']
+        del state['coh']
+        del state['context']
+
+        # Convert unpickable items to pickable data structures
+#        state["_uuid_str"] = self.get_uuid_str()
+#        state["_info"] = self.info.contents
+
+        return state
+
+    def __setstate__(self, state):
+        pass
+        # Remove converted unpickalble items
+#        uuid_str = state.pop("_uuid_str")
+#        info = state.pop("_info")
+
+        # Restore instance attributes (i.e., filename and lineno).
+#        self.__dict__.update(state)
+
+        # Restore unpickalble items
+#        self.set_uuid_str(uuid_str)
+#        self.info = info
+
     def get_uuid_str(self):
         """Return C representation of Python string."""
         return conversion.c_uuid_to_str(self.uuid)
+
+    def set_uuid_str(self, uuidstr):
+        """Set pool UUID to a given string."""
+        self.uuid = conversion.str_to_c_uuid(uuidstr)
 
     def create(self, poh, con_uuid=None, cb_func=None):
         """Send a container creation request to the daos server group."""
