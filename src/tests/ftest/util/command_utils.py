@@ -386,6 +386,7 @@ class DaosCommand(ExecutableCommand):
 
     def get_action_command(self, test):
         """Assign a command object for the specified request and action."""
+        # pylint: disable=pylint-unused-argument
         self.action_command = None
 
     def get_param_names(self):

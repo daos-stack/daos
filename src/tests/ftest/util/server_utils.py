@@ -390,7 +390,7 @@ class ServerManager(ExecutableCommand):
             servers_with_ports = [
                 "{}:{}".format(host, self.runner.job.yaml_params.port)
                 for host in self._hosts]
-            storage_reset((
+            storage_reset(
                 os.path.join(self.basepath, "bin"),
                 ",".join(servers_with_ports))
 
