@@ -656,7 +656,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *cont_hdl,
 	}
 
 fail:
-	if (result < 0)
+	if (result < 0 && !daos_is_zero_dti(&dth->dth_xid))
 		dtx_abort(cont_hdl->sch_pool->spc_uuid, cont->sc_uuid,
 			  dth->dth_epoch, &dth->dth_dte, 1,
 			  cont_hdl->sch_pool->spc_map_version);

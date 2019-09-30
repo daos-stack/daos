@@ -36,13 +36,23 @@ import (
 
 const sockFileName = "daos_server.sock"
 
-func getDrpcClientSocket(sockDir string) string {
-	return filepath.Join(sockDir, "daos_io_server.sock")
-}
+func checkDrpcClientSocketPath(socketPath string) error {
+	if socketPath == "" {
+		return errors.New("socket path empty")
+	}
 
-func getDrpcClientConnection(sockDir string) *drpc.ClientConnection {
-	clientSock := getDrpcClientSocket(sockDir)
-	return drpc.NewClientConnection(clientSock)
+	f, err := os.Stat(socketPath)
+	if err != nil {
+		return errors.Errorf("socket path %q could not be accessed: %s",
+			socketPath, err.Error())
+	}
+
+	if (f.Mode() & os.ModeSocket) == 0 {
+		return errors.Errorf("path %q is not a socket",
+			socketPath)
+	}
+
+	return nil
 }
 
 // checkSocketDir verifies socket directory exists, has appropriate permissions
@@ -68,7 +78,7 @@ func checkSocketDir(sockDir string) error {
 }
 
 // drpcSetup checks socket directory exists, specifies socket path and starts drpc server.
-func drpcSetup(sockDir string, iosrv *IOServerInstance, tc *security.TransportConfig) error {
+func drpcSetup(sockDir string, iosrvs []*IOServerInstance, tc *security.TransportConfig) error {
 	if err := checkSocketDir(sockDir); err != nil {
 		return err
 	}
@@ -82,7 +92,7 @@ func drpcSetup(sockDir string, iosrv *IOServerInstance, tc *security.TransportCo
 	// Create and add our modules
 	drpcServer.RegisterRPCModule(NewSecurityModule(tc))
 	drpcServer.RegisterRPCModule(&mgmtModule{})
-	drpcServer.RegisterRPCModule(&srvModule{iosrv})
+	drpcServer.RegisterRPCModule(&srvModule{iosrvs})
 
 	if err := drpcServer.Start(); err != nil {
 		return errors.Wrapf(err, "unable to start socket server on %s", sockPath)

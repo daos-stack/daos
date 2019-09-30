@@ -25,42 +25,49 @@ package server
 
 import (
 	"testing"
+	"time"
 
+	"github.com/daos-stack/daos/src/control/common"
+	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
-	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-func defaultMockControlService(t *testing.T, log logging.Logger) *ControlService {
-	c := defaultMockConfig(t)
-	return mockControlService(t, log, c)
+func getTestIOServerInstance(logger logging.Logger) *IOServerInstance {
+	runner := ioserver.NewRunner(logger, &ioserver.Config{})
+	return NewIOServerInstance(nil, logger,
+		nil, nil, runner)
 }
 
-func mockControlService(t *testing.T, log logging.Logger, cfg *Configuration) *ControlService {
-	t.Helper()
+func getTestNotifyReadyReq(t *testing.T, sockPath string, idx uint32) *srvpb.NotifyReadyReq {
+	return &srvpb.NotifyReadyReq{
+		DrpcListenerSock: sockPath,
+		InstanceIdx:      idx,
+	}
+}
 
-	cs := ControlService{
-		StorageControlService: *NewStorageControlService(log,
-			defaultMockNvmeStorage(log, cfg.ext),
-			defaultMockScmStorage(log, cfg.ext),
-			cfg.Servers,
-		),
-		harness: &IOServerHarness{
-			log: log,
-		},
+func waitForIosrvReady(t *testing.T, instance *IOServerInstance) {
+	select {
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("IO server never became ready!")
+	case <-instance.AwaitReady():
+		return
+	}
+}
+
+func TestIOServerInstance_NotifyReady(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)()
+
+	instance := getTestIOServerInstance(log)
+
+	req := getTestNotifyReadyReq(t, "/tmp/instance_test.sock", 0)
+
+	instance.NotifyReady(req)
+
+	if instance.drpcClient == nil {
+		t.Fatal("Expected a dRPC client connection")
 	}
 
-	for _, srvCfg := range cfg.Servers {
-		bp, err := storage.NewBdevProvider(log, "", &srvCfg.Storage.Bdev)
-		if err != nil {
-			t.Fatal(err)
-		}
-		runner := ioserver.NewRunner(log, srvCfg)
-		instance := NewIOServerInstance(cfg.ext, log, bp, nil, runner)
-		if err := cs.harness.AddInstance(instance); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	return &cs
+	waitForIosrvReady(t, instance)
 }
