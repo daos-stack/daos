@@ -45,6 +45,10 @@ type mockDrpcClient struct {
 	SendMsgOutputError    error
 }
 
+func (c *mockDrpcClient) Lock() {}
+
+func (c *mockDrpcClient) Unlock() {}
+
 func (c *mockDrpcClient) IsConnected() bool {
 	return false
 }

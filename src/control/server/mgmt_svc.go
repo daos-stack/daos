@@ -34,6 +34,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
+	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -149,7 +150,7 @@ type mgmtSvc struct {
 	log     logging.Logger
 	mutex   sync.Mutex
 	harness *IOServerHarness
-	members []*SystemMember // if MS leader, system membership list
+	members []*common.SystemMember // if MS leader, system membership list
 }
 
 func newMgmtSvc(h *IOServerHarness) *mgmtSvc {
@@ -165,7 +166,7 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 		return nil, err
 	}
 
-	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, getAttachInfo, req, svc.mutex)
+	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, getAttachInfo, req)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +185,7 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 		return nil, err
 	}
 
-	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, join, req, svc.mutex)
+	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, join, req)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +198,7 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 	// if join successful, record membership
 	if resp.GetStatus() == 0 && resp.GetState() == mgmtpb.JoinResp_IN {
 		svc.mutex.Lock()
-		svc.members = append(svc.members, &SystemMember{
+		svc.members = append(svc.members, &common.SystemMember{
 			Addr: req.GetAddr(), Uuid: req.GetUuid(), Rank: resp.GetRank(),
 		})
 

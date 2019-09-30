@@ -29,23 +29,23 @@ import (
 	"github.com/pkg/errors"
 )
 
-// SystemCmd is the struct representing the top-level system subcommand.
-type SystemCmd struct {
-	SystemQuery SystemQueryCmd `command:"query" alias:"q" description:"Retrieve DAOS system membership"`
-	SystemStop  SystemStopCmd  `command:"stop" alias:"s" description:"Perform controlled shutdown of DAOS system"`
+// systemCmd is the struct representing the top-level system subcommand.
+type systemCmd struct {
+	systemQuery systemQueryCmd `command:"query" alias:"q" description:"Retrieve DAOS system membership"`
+	systemStop  systemStopCmd  `command:"stop" alias:"s" description:"Perform controlled shutdown of DAOS system"`
 }
 
-// SystemStopCmdCmd is the struct representing the command to shutdown system.
-type SystemStopCmdCmd struct {
+// systemStopCmd is the struct representing the command to shutdown system.
+type systemStopCmd struct {
 	logCmd
 	connectedCmd
 }
 
-// Execute is run when SystemStopCmdCmd activates
-func (cmd *SystemStopCmd) Execute(args []string) error {
+// Execute is run when systemStopCmd activates
+func (cmd *systemStopCmd) Execute(args []string) error {
 	msg := "SUCCEEDED: "
 
-	resp, err := conns.SystemStop()
+	resp, err := cmd.conns.SystemStop()
 	if err != nil {
 		msg = errors.WithMessagef(err, "FAILED").Error()
 	}
@@ -54,6 +54,29 @@ func (cmd *SystemStopCmd) Execute(args []string) error {
 	}
 
 	log.Infof("System-stop command %s\n", msg)
+
+	return nil
+}
+
+// systemQueryCmd is the struct representing the command to shutdown system.
+type systemQueryCmd struct {
+	logCmd
+	connectedCmd
+}
+
+// Execute is run when systemQueryCmd activates
+func (cmd *systemQueryCmd) Execute(args []string) error {
+	msg := "SUCCEEDED: "
+
+	resp, err := cmd.conns.SystemQuery()
+	if err != nil {
+		msg = errors.WithMessagef(err, "FAILED").Error()
+	}
+	if resp.Members != nil && len(resp.Members) > 0 {
+		msg += fmt.Sprintf(": %+v", resp)
+	}
+
+	log.Infof("System-query command %s\n", msg)
 
 	return nil
 }

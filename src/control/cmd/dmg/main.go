@@ -75,7 +75,7 @@ type cliOptions struct {
 	HostFile   string     `short:"f" long:"host-file" description:"path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList"`
 	ConfigPath string     `short:"o" long:"config-path" description:"Client config file path"`
 	Storage    storageCmd `command:"storage" alias:"st" description:"Perform tasks related to storage attached to remote servers"`
-	Service    SvcCmd     `command:"service" alias:"sv" description:"Perform distributed tasks related to DAOS system"`
+	System     systemCmd  `command:"system" alias:"sy" description:"Perform distributed tasks related to DAOS system"`
 	Network    NetCmd     `command:"network" alias:"n" description:"Perform tasks related to network devices attached to remote servers"`
 	Pool       PoolCmd    `command:"pool" alias:"p" description:"Perform tasks related to DAOS pools"`
 }

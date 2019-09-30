@@ -26,7 +26,6 @@ package server
 import (
 	"os"
 	"path/filepath"
-	"sync"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -148,11 +147,10 @@ func newDrpcCall(module int32, method int32, bodyMessage proto.Message) (*drpc.C
 // protobuf message marshalled in the body, and closes the connection.
 // drpc response is returned after basic checks.
 func makeDrpcCall(client drpc.DomainSocketClient, module int32, method int32,
-	body proto.Message, mutex *sync.Mutex) (drpcResp *drpc.Response, err error) {
+	body proto.Message) (drpcResp *drpc.Response, err error) {
 
-	if mutex != nil {
-		mutex.Lock()
-	}
+	client.Lock()
+	defer client.Unlock()
 
 	drpcCall, err := newDrpcCall(module, method, body)
 	if err != nil {
@@ -171,10 +169,6 @@ func makeDrpcCall(client drpc.DomainSocketClient, module int32, method int32,
 
 	if err = checkDrpcResponse(drpcResp); err != nil {
 		return drpcResp, errors.Wrap(err, "validate response")
-	}
-
-	if mutex != nil {
-		mutex.Unlock()
 	}
 
 	return
