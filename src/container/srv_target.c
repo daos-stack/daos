@@ -326,12 +326,22 @@ ds_cont_hdl_put(struct ds_cont_hdl *hdl)
 
 int cont_hdl_csummer_init(struct ds_cont_hdl *hdl)
 {
-	struct ds_pool	*pool = ds_pool_lookup(hdl->sch_pool->spc_uuid);
-	daos_prop_t	*props = daos_prop_alloc(2);
+	struct ds_pool	*pool;
+	daos_prop_t	*props;
 	uint32_t	 csum_val;
 	int		 rc;
 
-	/** Get the container csum related properties */
+	/** Get the container csum related properties
+	 * Need the pool for the IV namespace
+	 */
+	pool = ds_pool_lookup(hdl->sch_pool->spc_uuid);
+	if (pool == NULL)
+		return -DER_NONEXIST;
+	props = daos_prop_alloc(2);
+	if (props == NULL) {
+		ds_pool_put(pool);
+		return -DER_NOMEM;
+	}
 	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM;
 	props->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
 	rc = cont_iv_prop_fetch(pool->sp_iv_ns, hdl->sch_uuid, props);
@@ -346,6 +356,7 @@ int cont_hdl_csummer_init(struct ds_cont_hdl *hdl)
 					    daos_cont_prop2chunksize(props));
 done:
 	daos_prop_free(props);
+	ds_pool_put(pool);
 
 	return rc;
 }

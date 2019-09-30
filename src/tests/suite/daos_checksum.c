@@ -102,6 +102,7 @@ io_with_server_side_verify(void **state)
 
 	/** Container props for checksum (default chunksize is good) */
 	props = daos_prop_alloc(2);
+	assert_non_null(props);
 	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM;
 	props->dpp_entries[0].dpe_val = DAOS_PROP_CO_CSUM_CRC64;
 	props->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;

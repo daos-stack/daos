@@ -2024,11 +2024,16 @@ ds_csum_verify_bio(crt_rpc_t *rpc, struct bio_desc *biod,
 		return 0;
 
 	pool = ds_pool_lookup(orw->orw_pool_uuid);
+	if (pool == NULL)
+		return -DER_NONEXIST;
+
 	is_update =	opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE ||
 			opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_UPDATE;
 	if (!is_update ||
-	    !cont_prop_srv_verify(pool->sp_iv_ns, orw->orw_co_hdl))
+	    !cont_prop_srv_verify(pool->sp_iv_ns, orw->orw_co_hdl)) {
+		ds_pool_put(pool);
 		return 0;
+	}
 
 	for (i = 0; i < iods_nr && rc == 0; i++) {
 		daos_iod_t		*iod = &iods[i];
@@ -2049,5 +2054,6 @@ ds_csum_verify_bio(crt_rpc_t *rpc, struct bio_desc *biod,
 		daos_sgl_fini(&sgl, false);
 	}
 
+	ds_pool_put(pool);
 	return rc;
 }

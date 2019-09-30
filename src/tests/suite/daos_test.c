@@ -43,6 +43,13 @@
 static const char *all_tests = TESTS;
 static const char *all_tests_defined = TESTS EXPLICIT_TESTS;
 
+enum {
+	CHECKSUM_ARG_VAL_TYPE		= 0x2713,
+	CHECKSUM_ARG_VAL_CHUNKSIZE		= 0x2714,
+	CHECKSUM_ARG_VAL_SERVERVERIFY	= 0x2715,
+};
+
+
 static void
 print_usage(int rank)
 {
@@ -265,9 +272,12 @@ main(int argc, char **argv)
 		{"degraded",	no_argument,		NULL,	'd'},
 		{"rebuild",	no_argument,		NULL,	'r'},
 		{"group",	required_argument,	NULL,	'g'},
-		{"csum_type",	required_argument,	NULL,	0x2713},
-		{"csum_cs",	required_argument,	NULL,	0x2714},
-		{"csum_sv",	no_argument,		NULL,	0x2715},
+		{"csum_type",	required_argument,	NULL,
+						CHECKSUM_ARG_VAL_TYPE},
+		{"csum_cs",	required_argument,	NULL,
+						CHECKSUM_ARG_VAL_CHUNKSIZE},
+		{"csum_sv",	no_argument,		NULL,
+						CHECKSUM_ARG_VAL_SERVERVERIFY},
 		{"svcn",	required_argument,	NULL,	's'},
 		{"subtests",	required_argument,	NULL,	'u'},
 		{"exclude",	required_argument,	NULL,	'E'},
@@ -327,13 +337,13 @@ main(int argc, char **argv)
 			D_STRNDUP(test_io_dir, optarg, PATH_MAX);
 			if (test_io_dir == NULL)
 				return -1;
-		case 0x2713:
+		case CHECKSUM_ARG_VAL_TYPE:
 			dt_csum_type = atoi(optarg);
 			break;
-		case 0x2714:
+		case CHECKSUM_ARG_VAL_CHUNKSIZE:
 			dt_csum_chunksize = atoi(optarg);
 			break;
-		case 0x2715:
+		case CHECKSUM_ARG_VAL_SERVERVERIFY:
 			dt_csum_server_verify = true;
 			break;
 		default:
