@@ -161,8 +161,8 @@ def scons():
     # CGO shell env vars.
     denv.AppendENVPath(
         "CGO_LDFLAGS",
-        denv.subst("-L%s -L$SPDK_PREFIX/lib -L$HWLOC_PREFIX/lib -L$OFI_PREFIX"
-                   " $_RPATH" % gopath))
+        denv.subst("-L%s -L$SPDK_PREFIX/lib -L$HWLOC_PREFIX/lib"
+                   " -L$OFI_PREFIX/lib $_RPATH" % gopath))
     denv.AppendENVPath(
         "CGO_CFLAGS",
         denv.subst("-I$SPDK_PREFIX/include -I$HWLOC_PREFIX/include"
