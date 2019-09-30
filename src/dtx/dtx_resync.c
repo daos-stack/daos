@@ -116,7 +116,7 @@ dtx_resync_commit(uuid_t po_uuid, struct ds_cont_child *cont,
 					true : false);
 		if (rc == -DER_NONEXIST) {
 			rc = vos_dtx_add_cos(cont->sc_hdl, &dre->dre_oid,
-				&dre->dre_xid, dre->dre_hash, dre->dre_epoch,
+				&dre->dre_xid, dre->dre_hash, dre->dre_epoch, 0,
 				dre->dre_intent == DAOS_INTENT_PUNCH ?
 				true : false, false);
 			if (rc < 0)
@@ -289,10 +289,6 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	struct dtx_resync_args		*dra = args;
 	struct dtx_resync_entry		*dre;
 
-	/* Ignore new DTX after the rebuild/recovery start. */
-	if (ent->ie_dtx_time > dra->cont->sc_dtx_resync_time)
-		return 0;
-
 	/* We commit the DTXs periodically, there will be not too many DTXs
 	 * to be checked when resync. So we can load all those uncommitted
 	 * DTXs in RAM firstly, then check the state one by one. That avoid
@@ -352,7 +348,9 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 	cont->sc_dtx_resyncing = 1;
 	ABT_mutex_unlock(cont->sc_mutex);
 
-	cont->sc_dtx_resync_time = crt_hlc_get();
+	rc = vos_dtx_update_resync_gen(cont->sc_hdl);
+	if (rc != 0)
+		goto fail;
 
 	dra.cont = cont;
 	uuid_copy(dra.po_uuid, po_uuid);
@@ -375,6 +373,7 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 	if (rc >= 0)
 		rc = rc1;
 
+fail:
 	D_DEBUG(DB_TRACE, "resync DTX scan "DF_UUID"/"DF_UUID" stop: rc = %d\n",
 		DP_UUID(po_uuid), DP_UUID(co_uuid), rc);
 

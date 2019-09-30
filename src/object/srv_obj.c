@@ -1044,7 +1044,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 			 * that it can be aborted.
 			 */
 			rc = vos_dtx_abort(cont->sc_hdl, DAOS_EPOCH_MAX,
-					   &orw->orw_dti, 1, true);
+					   &orw->orw_dti, 1);
 
 		if (rc != 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
@@ -1156,7 +1156,11 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		orw->orw_map_ver, map_ver, DP_DTI(&orw->orw_dti));
 	/* FIXME: until distributed transaction. */
 	if (orw->orw_epoch == DAOS_EPOCH_MAX) {
-		orw->orw_epoch = crt_hlc_get();
+		if (daos_is_zero_dti(&orw->orw_dti) ||
+		    orw->orw_flags & ORF_RESEND)
+			orw->orw_epoch = crt_hlc_get();
+		else
+			orw->orw_epoch = orw->orw_dti.dti_hlc;
 		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", orw->orw_epoch);
 	}
 
@@ -1657,7 +1661,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 			 * that it can be aborted.
 			 */
 			rc = vos_dtx_abort(cont->sc_hdl, DAOS_EPOCH_MAX,
-					   &opi->opi_dti, 1, true);
+					   &opi->opi_dti, 1);
 
 		if (rc != 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
@@ -1745,7 +1749,11 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 
 	/* FIXME: until distributed transaction. */
 	if (opi->opi_epoch == DAOS_EPOCH_MAX) {
-		opi->opi_epoch = crt_hlc_get();
+		if (daos_is_zero_dti(&opi->opi_dti) ||
+		    opi->opi_flags & ORF_RESEND)
+			opi->opi_epoch = crt_hlc_get();
+		else
+			opi->opi_epoch = opi->opi_dti.dti_hlc;
 		D_DEBUG(DB_IO, "overwrite epoch "DF_U64"\n", opi->opi_epoch);
 	}
 
