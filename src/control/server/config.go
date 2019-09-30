@@ -308,8 +308,8 @@ func newDefaultConfiguration(ext External) *Configuration {
 		NvmeShmID:          0,
 		ControlLogMask:     ControlLogLevel(logging.LogLevelInfo),
 		ext:                ext,
-		validateProviderFn: netdetect.ValidateProviderConfig,
-		validateNUMAFn:     netdetect.ValidateNUMAConfig,
+		validateProviderFn: netdetect.ValidateProviderStub,
+		validateNUMAFn:     netdetect.ValidateNUMAStub,
 	}
 }
 
