@@ -99,6 +99,21 @@ cleanup:
 	return false;
 }
 
+static void
+show_help(char *name)
+{
+	printf("usage: %s -m <mountpoint>\n"
+		"\n"
+		"	-m --mountpoint <path>	Mount point to use\n"
+		"	-s --svcl <svcl>	DAOS svcl\n"
+		"	-p --pool <uuid>	Connect to pool\n"
+		"	-c --container <uuid>	Connect to container\n"
+		"	-g --group <group name>	CaRT group\n"
+		"	-S --singlethreaded	Single threaded\n"
+		"	-f --foreground		Run in foreground\n",
+		name);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -118,7 +133,6 @@ main(int argc, char **argv)
 		{"singlethread",	no_argument,	   0, 'S'},
 		{"foreground",		no_argument,	   0, 'f'},
 		{"help",		no_argument,	   0, 'h'},
-		{"prefix",		required_argument, 0, 'p'},
 		{0, 0, 0, 0}
 	};
 
@@ -158,9 +172,11 @@ main(int argc, char **argv)
 			dfuse_info->di_foreground = true;
 			break;
 		case 'h':
+			show_help(argv[0]);
 			exit(0);
 			break;
 		case '?':
+			show_help(argv[0]);
 			exit(1);
 			break;
 		}
@@ -172,16 +188,18 @@ main(int argc, char **argv)
 	}
 
 	if (!dfuse_info->di_mountpoint) {
-		DFUSE_LOG_ERROR("Mountpoint is required");
-		D_GOTO(out_dfuse, ret = -DER_INVAL);
+		printf("Mountpoint is required\n");
+		show_help(argv[0]);
+		exit(1);
 	}
 
 	/* Is this required, or can we assume some kind of default for
 	 * this.
 	 */
 	if (!svcl) {
-		DFUSE_LOG_ERROR("Svcl is required");
-		D_GOTO(out_dfuse, ret = -DER_INVAL);
+		printf("Svcl is required\n");
+		show_help(argv[0]);
+		exit(1);
 	}
 
 	DFUSE_TRA_ROOT(dfuse_info, "dfuse_info");
