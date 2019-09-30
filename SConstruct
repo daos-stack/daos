@@ -8,6 +8,7 @@ import errno
 from SCons.Script import BUILD_TARGETS
 
 sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils'))
+import daos_build
 
 DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-missing-braces',
@@ -279,13 +280,11 @@ def scons():
     buildinfo = prereqs.get_build_info()
     buildinfo.gen_script('.build_vars.sh')
     buildinfo.save('.build_vars.json')
-    env.InstallAs("$PREFIX/lib/daos/TESTING/.build_vars.sh", ".build_vars.sh")
-    env.InstallAs("$PREFIX/lib/daos/TESTING/.build_vars.json",
-                  ".build_vars.json")
+    daos_build.install(env, "lib/daos/TESTING/",
+                       ['.build_vars.sh', '.build_vars.json'])
     # also install to $PREFIX/lib to work with existing avocado test code
-    env.InstallAs("$PREFIX/lib/.build_vars.sh", ".build_vars.sh")
-    env.InstallAs("$PREFIX/lib/.build_vars.json", ".build_vars.json")
-    env.InstallAs("$PREFIX/lib64/daos/VERSION", "VERSION")
+    daos_build.install(env, "lib/", ['.build_vars.sh', '.build_vars.json'])
+    env.Install("$PREFIX/lib64/daos", "VERSION")
 
     env.Install('$PREFIX/etc', ['utils/memcheck-daos-client.supp'])
 

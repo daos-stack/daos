@@ -18,3 +18,9 @@ def test(env, *args, **kwargs):
     denv = env.Clone()
     denv.AppendUnique(RPATH=["$PREFIX/lib64"])
     return denv.Program(*args, **kwargs)
+
+def install(env, subdir, files):
+    """install file to the subdir"""
+    denv = env.Clone()
+    path = "$PREFIX/%s" % subdir
+    denv.Install(path, files)
