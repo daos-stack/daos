@@ -150,13 +150,14 @@ type mgmtSvc struct {
 	log     logging.Logger
 	mutex   sync.Mutex
 	harness *IOServerHarness
-	members []*common.SystemMember // if MS leader, system membership list
+	members *common.Membership // if MS leader, system membership list
 }
 
 func newMgmtSvc(h *IOServerHarness) *mgmtSvc {
 	return &mgmtSvc{
 		log:     h.log,
 		harness: h,
+		members: common.NewMembership(h.log),
 	}
 }
 
@@ -197,13 +198,9 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 
 	// if join successful, record membership
 	if resp.GetStatus() == 0 && resp.GetState() == mgmtpb.JoinResp_IN {
-		svc.mutex.Lock()
-		svc.members = append(svc.members, &common.SystemMember{
+		svc.members.Add(common.SystemMember{
 			Addr: req.GetAddr(), Uuid: req.GetUuid(), Rank: resp.GetRank(),
 		})
-
-		svc.log.Debugf("MgmtSvc.members: %+v\n", svc.members)
-		svc.mutex.Unlock()
 	}
 
 	return resp, nil

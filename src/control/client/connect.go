@@ -251,6 +251,8 @@ type Connect interface {
 	PoolDestroy(*PoolDestroyReq) error
 	BioHealthQuery(*mgmtpb.BioHealthReq) ResultQueryMap
 	SmdListDevs(*mgmtpb.SmdDevReq) ResultSmdMap
+	SystemQuery() ([]*common.SystemMember, error)
+	SystemStop() ([]*common.SystemMember, error)
 }
 
 // connList is an implementation of Connect and stores controllers

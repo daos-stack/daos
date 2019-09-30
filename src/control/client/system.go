@@ -26,21 +26,16 @@ package client
 import (
 	"golang.org/x/net/context"
 
+	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/pkg/errors"
 )
-
-// SystemStopResp struct contains response
-type SystemStopResp struct {
-	// TODO: process any remaining members
-	//members types.SystemMember
-}
 
 // SystemStop will create a DAOS pool using provided parameters and return
 // uuid, list of service replicas and error (including any DER code from DAOS).
 //
 // Isolate protobuf encapsulation in client and don't expose to calling code.
-func (c *connList) SystemStop() (*SystemStopResp, error) {
+func (c *connList) SystemStop() ([]*common.SystemMember, error) {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
 		return nil, err
@@ -62,21 +57,14 @@ func (c *connList) SystemStop() (*SystemStopResp, error) {
 			rpcResp.GetStatus())
 	}
 
-	// TODO: process any remaining members
-	return &SystemStopResp{}, nil
-}
-
-// SystemQueryResp struct contains response
-type SystemQueryResp struct {
-	// TODO: process any remaining members
-	//members types.SystemMember
+	return common.MembersFromPB(rpcResp.Members), nil
 }
 
 // SystemQuery will create a DAOS pool using provided parameters and return
 // uuid, list of service replicas and error (including any DER code from DAOS).
 //
 // Isolate protobuf encapsulation in client and don't expose to calling code.
-func (c *connList) SystemQuery() (*SystemQueryResp, error) {
+func (c *connList) SystemQuery() ([]*common.SystemMember, error) {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
 		return nil, err
@@ -98,6 +86,5 @@ func (c *connList) SystemQuery() (*SystemQueryResp, error) {
 			rpcResp.GetStatus())
 	}
 
-	// TODO: process any remaining members
-	return &SystemQueryResp{}, nil
+	return common.MembersFromPB(rpcResp.Members), nil
 }

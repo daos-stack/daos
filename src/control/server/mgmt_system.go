@@ -28,20 +28,13 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
-	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
-
-// systemQuery retrieves system membership list.
-func (svc *mgmtSvc) systemQuery() []*common.SystemMember {
-	// return list of hosts registered through gRPC join requests
-	return svc.members
-}
 
 // systemStop sends multicast KillRank gRPC requests to system membership list.
 func (svc *mgmtSvc) systemStop(ctx context.Context, leader *IOServerInstance) error {
 	// TODO: inhibit rebuild on pool services, parallelise and make async.
-	for _, member := range svc.members {
+	for _, member := range svc.members.GetMembers() {
 		svc.log.Debugf("MgmtSvc.systemStop murder member %+v\n", *member)
 		resp, err := leader.msClient.Stop(ctx, member.Addr, &mgmtpb.DaosRank{
 			Rank: member.Rank,
@@ -53,6 +46,7 @@ func (svc *mgmtSvc) systemStop(ctx context.Context, leader *IOServerInstance) er
 		}
 
 		svc.log.Debugf("MgmtSvc.systemStop response %+v\n", *resp)
+		svc.members.Remove(member.Uuid)
 	}
 
 	return nil
@@ -99,8 +93,7 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 
 	svc.log.Debug("received SystemQuery RPC; reporting DAOS system members")
 
-	// no lock as we are just taking a read-only snapshot
-	resp.Members = common.SystemMembersToPB(svc.systemQuery())
+	resp.Members = svc.members.GetMembersPB()
 
 	svc.log.Debug("responding to SystemQuery RPC")
 
@@ -126,8 +119,7 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (
 	if err := svc.systemStop(ctx, mi); err != nil {
 		return nil, err
 	}
-	// no lock as we are just taking a read-only snapshot
-	resp.Members = common.SystemMembersToPB(svc.systemQuery())
+	resp.Members = svc.members.GetMembersPB()
 
 	svc.log.Debug("responding to SystemStop RPC")
 

@@ -147,6 +147,16 @@ func (tc *testConn) SmdListDevs(req *mgmtpb.SmdDevReq) client.ResultSmdMap {
 	return nil
 }
 
+func (tc *testConn) SystemQuery() ([]*common.SystemMember, error) {
+	tc.appendInvocation("SystemQuery")
+	return make([]*common.SystemMember, 0), nil
+}
+
+func (tc *testConn) SystemStop() ([]*common.SystemMember, error) {
+	tc.appendInvocation("SystemStop")
+	return make([]*common.SystemMember, 0), nil
+}
+
 func (tc *testConn) SetTransportConfig(cfg *security.TransportConfig) {
 	tc.appendInvocation("SetTransportConfig")
 }
