@@ -39,7 +39,7 @@ import fault_config_utils
 import agent_utils
 import write_host_file
 from daos_api import DaosContext, DaosLog, DaosApiError
-from server_utils import ServerManager
+from server_utils import ServerManager, ServerFailed
 
 
 # pylint: disable=invalid-name
@@ -389,18 +389,31 @@ class TestWithServers(TestWithoutServers):
             # different server group
             for group, hosts in server_groups.items():
                 self.server_manager = ServerManager(
-                    self.basepath, os.path.join(self.ompi_prefix, "bin"))
+                    self.prefix, os.path.join(self.ompi_prefix, "bin"))
+                self.server_manager.get_params(self)
+                self.server_manager.runner.job.yaml_params.name = group
                 self.log.info(
                     "Starting servers: group=%s, hosts=%s", group, hosts)
                 self.server_manager.hosts = (
                     hosts, self.workdir, self.hostfile_servers_slots)
-                self.server_manager.start(log_file=self.server_log)
+                try:
+                    self.server_manager.start(log_file=self.server_log)
+                except ServerFailed as error:
+                    self.multi_log("  {}".format(error))
+                    self.fail("Error starting server: {}".format(error))
+
         else:
             self.server_manager = ServerManager(
-                self.basepath, os.path.join(self.ompi_prefix, "bin"))
+                self.prefix, os.path.join(self.ompi_prefix, "bin"))
+            self.server_manager.get_params(self)
             self.server_manager.hosts = (
-                hosts, self.workdir, self.hostfile_servers_slots)
-            self.server_manager.start(log_file=self.server_log)
+                self.hostlist_servers, self.workdir, \
+                self.hostfile_servers_slots)
+            try:
+                self.server_manager.start(log_file=self.server_log)
+            except ServerFailed as error:
+                self.multi_log("  {}".format(error))
+                self.fail("Error starting server: {}".format(error))
 
     def get_partition_hosts(self, partition_key, host_list):
         """[summary].

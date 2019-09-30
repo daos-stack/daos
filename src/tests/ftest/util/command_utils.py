@@ -244,6 +244,10 @@ class ExecutableCommand(CommandWithParameters):
         self.env = None
         self.sudo = False
 
+    @property
+    def process(self):
+        return self._process
+
     def run(self):
         """Run the command.
 
@@ -396,7 +400,7 @@ class DaosCommand(ExecutableCommand):
             test (Test): avocado Test object
         """
         super(DaosCommand, self).get_params(test)
-        self.get_action_command()
+        self.get_action_command(test)
 
     def get_str_param_names(self):
         """Get a sorted list of the names of the command attributes.

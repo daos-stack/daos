@@ -44,17 +44,21 @@ class DmgCommand(DaosCommand):
         self.debug = FormattedParameter("-d", False)
         self.json = FormattedParameter("-j", False)
 
-    def get_action_command(self):
-        """Assign a command object for the specified request and action."""
+    def set_action_command(self):
+        """Set the action command object based on the yaml provided value."""
         # pylint: disable=redefined-variable-type
         if self.action.value == "format":
             self.action_command = self.DmgFormatSubCommand()
-            self.action_command.get_params()
         elif self.action.value == "prepare":
             self.action_command = self.DmgPrepareSubCommand()
-            self.action_command.get_params()
         else:
             self.action_command = None
+
+    def get_action_command(self, test):
+        """Get action command object parameters from the yaml."""
+        self.set_action_command()
+        if self.action_command is not None:
+            self.action_command.get_params(test)
 
     class DmgFormatSubCommand(CommandWithParameters):
         """Defines an object representing a format sub dmg command."""
@@ -81,20 +85,20 @@ class DmgCommand(DaosCommand):
             self.reset = FormattedParameter("--reset", False)
 
 
-def storage_scan(hosts, insecure=True):
+def storage_scan(path, hosts, insecure=True):
     """ Execute scan command through dmg tool to servers provided.
 
     Args:
+        path (str): path to tool's binary
         hosts (list): list of servers to run scan on.
+        insecure (bool): toggle insecure mode
 
     Returns:
         Avocado CmdResult object that contains exit status, stdout information.
 
     """
-    # Get binary path
-    daos_shell_path = get_file_path("bin/daos_shell")
     # Create and setup the command
-    dmg = DmgCommand(daos_shell_path[0])
+    dmg = DmgCommand(path)
     dmg.request.value = "storage"
     dmg.action.value = "scan"
     dmg.insecure.value = insecure
@@ -109,29 +113,30 @@ def storage_scan(hosts, insecure=True):
     return result
 
 
-def storage_format(hosts, insecure=True):
+def storage_format(path, hosts, insecure=True):
     """ Execute format command through dmg tool to servers provided.
 
     Args:
+        path (str): path to tool's binary
         hosts (list): list of servers to run format on.
+        insecure (bool): toggle insecure mode
 
     Returns:
         Avocado CmdResult object that contains exit status, stdout information.
 
     """
-    # Get binary path
-    daos_shell_path = get_file_path("bin/daos_shell")
     # Create and setup the command
-    dmg = DmgCommand(daos_shell_path[0])
+    dmg = DmgCommand(path)
+    dmg.sudo = True
     dmg.insecure.value = insecure
     dmg.hostlist.value = hosts
     dmg.request.value = "storage"
     dmg.action.value = "format"
-    dmg.get_action_command()
+    dmg.set_action_command()
     dmg.action_command.force.value = True
 
     try:
-        result = dmg.run(sudo=True)
+        result = dmg.run()
     except CommandFailure as details:
         print("<dmg> command failed: {}".format(details))
         return None
@@ -139,30 +144,31 @@ def storage_format(hosts, insecure=True):
     return result
 
 
-def storage_prep(hosts, user=False, hugepages="4096", nvme=False,
+def storage_prep(path, hosts, user=None, hugepages="4096", nvme=False,
                  scm=False, insecure=True):
     """Execute prepare command through dmg tool to servers provided.
 
     Args:
+        path (str): path to tool's binary
         hosts (list): list of servers to run prepare on.
         user (str, optional): User with priviledges. Defaults to False.
         hugepages (str, optional): Hugepages to allocate. Defaults to "4096".
         nvme (bool, optional): Perform prep on nvme. Defaults to False.
         scm (bool, optional): Perform prep on scm. Defaults to False.
+        insecure (bool): toggle insecure mode
 
     Returns:
         Avocado CmdResult object that contains exit status, stdout information.
 
     """
-    # Get binary path
-    daos_shell_path = get_file_path("bin/daos_shell")
     # Create and setup the command
-    dmg = DmgCommand(daos_shell_path[0])
+    dmg = DmgCommand(path)
+    dmg.sudo = True
     dmg.insecure.value = insecure
     dmg.hostlist.value = hosts
     dmg.request.value = "storage"
     dmg.action.value = "prepare"
-    dmg.get_action_command()
+    dmg.set_action_command()
     dmg.action_command.nvmeonly.value = nvme
     dmg.action_command.scmonly.value = scm
     dmg.action_command.targetuser.value = getpass.getuser() \
@@ -179,27 +185,28 @@ def storage_prep(hosts, user=False, hugepages="4096", nvme=False,
     return result
 
 
-def storage_reset(hosts, user=None, hugepages="4096", insecure=True):
+def storage_reset(path, hosts, user=None, hugepages="4096", insecure=True):
     """Execute prepare reset command through dmg tool to servers provided.
 
     Args:
+        path (str): path to tool's binary
         hosts (list): list of servers to run prepare on.
         user (str, optional): User with priviledges. Defaults to False.
         hugepages (str, optional): Hugepages to allocate. Defaults to "4096".
+        insecure (bool): toggle insecure mode
 
     Returns:
         Avocado CmdResult object that contains exit status, stdout information.
 
     """
-    # Get binary path
-    daos_shell_path = get_file_path("bin/daos_shell")
     # Create and setup the command
-    dmg = DmgCommand(daos_shell_path[0])
+    dmg = DmgCommand(path)
+    dmg.sudo = True
     dmg.insecure.value = insecure
     dmg.hostlist.value = hosts
     dmg.request.value = "storage"
     dmg.action.value = "prepare"
-    dmg.get_action_command()
+    dmg.set_action_command()
     dmg.action_command.nvmeonly.value = True
     dmg.action_command.targetuser.value = getpass.getuser() \
         if user is None else user
