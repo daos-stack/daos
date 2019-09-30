@@ -124,12 +124,9 @@ if ${TEARDOWN_ONLY:-false}; then
     exit 0
 fi
 
-mv src/tests/ftest src/tests/ftest_camp
 # let's output to a dir in the tree
 rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
-#rm -rf src/tests/ftest/avocado ./*_results.xml
 mkdir -p install/lib/daos/TESTING/ftest/avocado/job-results
-#mkdir -p src/tests/ftest/avocado/job-results
 
 trap 'set +e; cleanup' EXIT
 
@@ -297,7 +294,6 @@ wq
 EOF
 fi
 
-#pushd src/tests/ftest
 pushd install/lib/daos/TESTING/ftest
 
 # make sure no lingering corefiles or junit files exist
@@ -359,7 +355,5 @@ else
     fi
     rc=0
 fi
-
-mv src/tests/ftest_camp src/tests/ftest
 
 exit "$rc"
