@@ -271,19 +271,21 @@ ec_update_params(struct ec_params *params, daos_iod_t *iod, d_sg_list_t *sgl,
 		while (rem) {
 			uint32_t stripe_len = recs_pc * k;
 
-			if (rem <= recs_pc * k) {
-				niod->iod_recxs[params->niod.iod_nr].
-				rx_nr = rem;
-				niod->iod_recxs[params->niod.iod_nr++].
-				rx_idx = start;
+			if (rem <= stripe_len) {
+				niod->iod_recxs[params->niod.iod_nr].rx_nr =
+					rem;
+				niod->iod_recxs[params->niod.iod_nr++].rx_idx =
+					start;
+				/* exit loop */
 				rem = 0;
 			} else {
-				niod->iod_recxs[params->niod.iod_nr].
-				rx_nr = recs_pc * k;
-				niod->iod_recxs[params->niod.iod_nr++].
-				rx_idx = start;
+				niod->iod_recxs[params->niod.iod_nr].rx_nr =
+					stripe_len;
+				niod->iod_recxs[params->niod.iod_nr++].rx_idx =
+					start;
 				start += stripe_len;
-				rem -= stripe_len * k;
+				rem -= stripe_len;
+				D_ASSERT(rem >= 0);
 			}
 		}
 	}
@@ -344,6 +346,7 @@ ec_get_tgt_set(daos_iod_t *iods, unsigned int nr, struct daos_oclass_attr *oca,
 {
 	unsigned int    k = oca->u.ec.e_k;
 	unsigned int    p = oca->u.ec.e_p;
+	unsigned int	recs_pc = oca->u.ec.e_cs;
 	uint64_t	par_only = (1UL << p) - 1;
 	uint64_t	full;
 	unsigned int	i, j;
@@ -356,7 +359,6 @@ ec_get_tgt_set(daos_iod_t *iods, unsigned int nr, struct daos_oclass_attr *oca,
 		full = (1UL << k) - 1;
 	}
 	for (i = 0; i < nr; i++) {
-		unsigned int recs_pc = oca->u.ec.e_cs;
 
 		if (iods[i].iod_type != DAOS_IOD_ARRAY)
 			continue;
