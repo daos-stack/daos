@@ -397,7 +397,7 @@ class TestWithServers(TestWithoutServers):
                 self.server_manager.hosts = (
                     hosts, self.workdir, self.hostfile_servers_slots)
                 try:
-                    self.server_manager.start(log_file=self.server_log)
+                    self.server_manager.start()
                 except ServerFailed as error:
                     self.multi_log("  {}".format(error))
                     self.fail("Error starting server: {}".format(error))
@@ -410,7 +410,7 @@ class TestWithServers(TestWithoutServers):
                 self.hostlist_servers, self.workdir, \
                 self.hostfile_servers_slots)
             try:
-                self.server_manager.start(log_file=self.server_log)
+                self.server_manager.start()
             except ServerFailed as error:
                 self.multi_log("  {}".format(error))
                 self.fail("Error starting server: {}".format(error))

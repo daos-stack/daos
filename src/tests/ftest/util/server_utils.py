@@ -34,7 +34,7 @@ import getpass
 from command_utils import BasicParameter, FormattedParameter, ExecutableCommand
 from command_utils import ObjectWithParameters, CommandFailure
 from command_utils import DaosCommand, Orterun
-from general_utils import pcmd, check_file_exists, get_file_path
+from general_utils import pcmd, get_file_path
 from dmg_utils import storage_format, storage_reset
 from write_host_file import write_host_file
 
@@ -63,6 +63,7 @@ class DaosServer(DaosCommand):
         self.yaml_params = self.DaosServerConfig()
         self.timeout = 30
         self.server_cnt = 1
+        self.mode = "normal"
 
         self.debug = FormattedParameter("-b", None)
         self.targets = FormattedParameter("-t {}")
@@ -83,6 +84,7 @@ class DaosServer(DaosCommand):
         self.yaml_params.get_params(test)
 
     def set_config(self, basepath):
+        """Set the config value of the parameters in server command."""
         self.config.value = self.yaml_params.create_yaml(basepath)
         self.mode = "normal"
         if self.yaml_params.is_nvme() or self.yaml_params.is_scm():
@@ -129,23 +131,27 @@ class DaosServer(DaosCommand):
 
         @property
         def name(self):
+            """Get the name from the server config."""
             if self.data and "name" in self.data:
                 return self.data["name"]
             return None
 
         @name.setter
         def name(self, value):
+            """Set the server config name attribute."""
             if self.data and "name" in self.data:
                 self.data["name"] = value
 
         @property
         def port(self):
+            """Get the port from the server config."""
             if self.data and "port" in self.data:
                 return self.data["port"]
             return None
 
         @port.setter
         def port(self, value):
+            """Set the port config attribute."""
             if self.data and "port" in self.data:
                 self.data["port"] = value
 
@@ -161,8 +167,8 @@ class DaosServer(DaosCommand):
             super(DaosServer.DaosServerConfig, self). get_params(test)
             # Read the baseline conf file data/daos_server_baseline.yml
             try:
-                with open('{}/{}'.format(test.prefix, DEFAULT_FILE), 'r') as rfile:
-                    self.data = yaml.safe_load(rfile)
+                with open('{}/{}'.format(test.prefix, DEFAULT_FILE), 'r') as rf:
+                    self.data = yaml.safe_load(rf)
             except Exception as err:
                 print("<SERVER> Exception occurred: {0}".format(str(err)))
                 traceback.print_exception(
@@ -342,7 +348,7 @@ class ServerManager(ExecutableCommand):
         """Execute the runner subprocess."""
         return self.runner.run()
 
-    def start(self, log_file=None):
+    def start(self):
         """Start the server through the runner."""
 
         self.runner.job.set_config(self.basepath)
@@ -379,8 +385,14 @@ class ServerManager(ExecutableCommand):
 
     def stop(self):
         """Stop the server through the runner."""
-        if self.runner.job.mode == "format":
-            storage_reset(self._hosts)
+        if self.runner.job.yaml_params.is_nvme() or \
+            self.runner.job.yaml_params.is_scm():
+            servers_with_ports = [
+                "{}:{}".format(host, self.runner.job.yaml_params.port)
+                for host in self._hosts]
+            storage_reset((
+                os.path.join(self.basepath, "bin"),
+                ",".join(servers_with_ports))
 
         print("Stopping servers")
         error_list = []
@@ -421,8 +433,7 @@ class ServerManager(ExecutableCommand):
 
         if self.runner.job.yaml_params.is_nvme() or \
             self.runner.job.yaml_params.is_scm():
-                clean_cmds.append(
-                    "sudo umount /mnt/daos; sudo rm -rf /mnt/daos")
+            clean_cmds.append("sudo umount /mnt/daos; sudo rm -rf /mnt/daos")
 
         # Intentionally ignoring the exit status of the command
         pcmd(self._hosts, "; ".join(clean_cmds), False, None, None)

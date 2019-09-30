@@ -246,6 +246,7 @@ class ExecutableCommand(CommandWithParameters):
 
     @property
     def process(self):
+        """Getter for process attribute of the ExecutableCommand class."""
         return self._process
 
     def run(self):
@@ -383,7 +384,7 @@ class DaosCommand(ExecutableCommand):
         self.action = BasicParameter(None)
         self.action_command = None
 
-    def get_action_command(self):
+    def get_action_command(self, test):
         """Assign a command object for the specified request and action."""
         self.action_command = None
 
