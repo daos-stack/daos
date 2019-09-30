@@ -238,9 +238,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 
 	svc.log.Debugf("MgmtSvc.PoolCreate dispatch, req:%+v\n", *req)
 
-	svc.mutex.Lock()
 	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, poolCreate, req)
-	svc.mutex.Unlock()
 	if err != nil {
 		return nil, err
 	}
@@ -267,9 +265,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 
 	svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, req:%+v\n", *req)
 
-	svc.mutex.Lock()
 	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, poolDestroy, req)
-	svc.mutex.Unlock()
 	if err != nil {
 		return nil, err
 	}
@@ -293,9 +289,7 @@ func (svc *mgmtSvc) BioHealthQuery(ctx context.Context, req *mgmtpb.BioHealthReq
 
 	svc.log.Debugf("MgmtSvc.BioHealthQuery dispatch, req:%+v\n", *req)
 
-	svc.mutex.Lock()
 	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, bioHealth, req)
-	svc.mutex.Unlock()
 	if err != nil {
 		return nil, err
 	}
@@ -317,9 +311,7 @@ func (svc *mgmtSvc) SmdListDevs(ctx context.Context, req *mgmtpb.SmdDevReq) (*mg
 
 	svc.log.Debugf("MgmtSvc.SmdListDevs dispatch, req:%+v\n", *req)
 
-	svc.mutex.Lock()
 	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, smdDevs, req)
-	svc.mutex.Unlock()
 	if err != nil {
 		return nil, err
 	}

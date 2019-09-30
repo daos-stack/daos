@@ -149,13 +149,13 @@ func newDrpcCall(module int32, method int32, bodyMessage proto.Message) (*drpc.C
 func makeDrpcCall(client drpc.DomainSocketClient, module int32, method int32,
 	body proto.Message) (drpcResp *drpc.Response, err error) {
 
-	client.Lock()
-	defer client.Unlock()
-
 	drpcCall, err := newDrpcCall(module, method, body)
 	if err != nil {
 		return drpcResp, errors.Wrap(err, "build drpc call")
 	}
+
+	client.Lock()
+	defer client.Unlock()
 
 	// Forward the request to the I/O server via dRPC
 	if err = client.Connect(); err != nil {
