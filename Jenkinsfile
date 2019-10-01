@@ -279,7 +279,7 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            false
+                            expression { false }
                             environment name: 'SLES12_3_DOCKER', value: 'true'
                             not { branch 'weekly-testing' }
                             expression { env.CHANGE_TARGET != 'weekly-testing' }
@@ -352,7 +352,7 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            false
+                            expression { false }
                             not { branch 'weekly-testing' }
                             expression { env.CHANGE_TARGET != 'weekly-testing' }
                         }
@@ -1304,7 +1304,7 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            false
+                            expression { false }
                             not { branch 'weekly-testing' }
                             expression { env.CHANGE_TARGET != 'weekly-testing' }
                             expression { return env.QUICKBUILD == '1' }
