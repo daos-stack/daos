@@ -471,7 +471,7 @@ prepare_segments(struct agg_merge_window *mw)
 	struct evt_entry_in	*ent_in;
 	struct evt_extent	 ext;
 	unsigned int		 i, seg_max;
-	bool			 hole, coalesce;
+	bool			 hole = false, coalesce;
 
 	/*
 	 * Allocate large enough segments array to hold all the coalesced
@@ -1061,8 +1061,6 @@ flush_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 		   unsigned int *acts)
 {
 	int	rc;
-
-	D_ASSERT(merge_window_status(mw) == MW_OPENED);
 
 	/*
 	 * If no new updates in an already aggregated window, window flush will
