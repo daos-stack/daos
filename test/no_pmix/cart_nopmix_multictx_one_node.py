@@ -76,7 +76,6 @@ class CartNoPmixOneNodeTest(Test):
         p = subprocess.Popen([cmd], env=test_env, stdout=subprocess.PIPE)
 
         rc = self.utils.wait_process(p, 10)
-
         if rc != 0:
             self.utils.print("Error waiting for process. returning {}".format(rc))
             self.fail("Test failed.\n")

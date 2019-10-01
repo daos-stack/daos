@@ -176,6 +176,7 @@ struct crt_rpc_priv {
 	crt_rpc_t		*crp_ul_req; /* uri lookup request */
 	uint32_t		crp_ul_retry; /* uri lookup retry counter */
 
+	struct crt_grp_priv	*crp_grp_priv; /* group private pointer */
 	/*
 	 * RPC request flag, see enum crt_rpc_flags/crt_rpc_flags_internal,
 	 * match with crp_req_hdr.cch_flags.

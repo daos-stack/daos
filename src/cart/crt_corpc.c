@@ -426,6 +426,8 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 		D_GOTO(out, rc);
 	}
 
+	rpc_priv->crp_grp_priv = grp_priv;
+
 	/* grp_root is logical rank number in this group */
 
 	grp_root = grp_priv->gp_self;
@@ -938,6 +940,8 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 		child_rpc_priv = container_of(child_rpc, struct crt_rpc_priv,
 					      crp_pub);
 		corpc_add_child_rpc(rpc_priv, child_rpc_priv);
+
+		child_rpc_priv->crp_grp_priv = co_info->co_grp_priv;
 
 		rc = crt_req_send(child_rpc, crt_corpc_reply_hdlr, rpc_priv);
 		if (rc != 0) {

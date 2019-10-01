@@ -121,7 +121,9 @@
 	/** user-provided RPC handler didn't send reply back */		\
 	ACTION(DER_NOREPLY,		(DER_ERR_GURT_BASE + 33))	\
 	/** denial-of-service */					\
-	ACTION(DER_DOS,			(DER_ERR_GURT_BASE + 34))
+	ACTION(DER_DOS,			(DER_ERR_GURT_BASE + 34))       \
+	/** Incorrect target for the RPC  */				\
+	ACTION(DER_BAD_TARGET,		(DER_ERR_GURT_BASE + 35))
 	/** TODO: add more error numbers */
 
 #define D_FOREACH_DAOS_ERR(ACTION)					\

@@ -617,6 +617,10 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 			hdr = &rpc_priv->crp_req_hdr;
 
 			hdr->cch_flags = rpc_priv->crp_flags;
+			hdr->cch_rank = crt_grp_priv_get_primary_rank(
+						rpc_priv->crp_grp_priv,
+						rpc_priv->crp_pub.cr_ep.ep_rank
+						);
 			hdr->cch_tag = rpc_priv->crp_pub.cr_ep.ep_tag;
 			hdr->cch_hlc = crt_hlc_get();
 		}
