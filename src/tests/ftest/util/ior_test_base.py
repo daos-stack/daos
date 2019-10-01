@@ -22,13 +22,15 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 import os
+import subprocess
 
 from apricot import TestWithServers
 from ior_utils import IorCommand
 from command_utils import Mpirun, CommandFailure
 from mpio_utils import MpioUtils
-from test_utils import TestPool, TestContainer
+from test_utils import TestPool
 from dfuse_utils import DfuseCommand
+import write_host_file
 
 class IorTestBase(TestWithServers):
     """Base IOR test class.
@@ -56,6 +58,14 @@ class IorTestBase(TestWithServers):
         self.ior_cmd = IorCommand()
         self.ior_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/ior/client_processes/*')
+        # Until DAOS-3320 is resolved run IOR for POSIX
+        # with single client node
+        if self.ior_cmd.api.value == "POSIX":
+            self.hostlist_clients = [self.hostlist_clients[0]]
+            self.hostfile_clients = write_host_file.write_host_file(
+                self.hostlist_clients, self.workdir,
+                self.hostfile_clients_slots)
+
     def tearDown(self):
         """Tear down each test case."""
         try:
@@ -76,12 +86,27 @@ class IorTestBase(TestWithServers):
 
     def create_cont(self):
         """Create a TestContainer object to be used to create container."""
+        # TO-DO: Enable container using TestContainer object,
+        # once DAOS-3355 is resolved.
         # Get Container params
-        self.container = TestContainer(self.pool)
-        self.container.get_params(self)
+        #self.container = TestContainer(self.pool)
+        #self.container.get_params(self)
 
         # create container
-        self.container.create()
+        # self.container.create()
+        env = DfuseCommand.get_default_env(self.tmp)
+        # command to create container of posix type
+        cmd = env + "daos cont create --pool={} --svc={} --type=POSIX".format(
+            self.ior_cmd.daos_pool.value, self.ior_cmd.daos_svcl.value)
+        try:
+            container = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                         shell=True)
+            (output, err) = container.communicate()
+
+        except subprocess.CalledProcessError as err:
+            self.fail("Container create failed:{}".format(err))
+
+        return output.split()[3]
 
     def start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
@@ -91,8 +116,7 @@ class IorTestBase(TestWithServers):
 
         # update dfuse params
         self.dfuse.set_dfuse_params(self.pool)
-        if self.container:
-            self.dfuse.set_dfuse_cont_param(self.container)
+        self.dfuse.set_dfuse_cont_param(self.create_cont())
 
         try:
             # start dfuse
@@ -120,8 +144,9 @@ class IorTestBase(TestWithServers):
         # start dfuse if api is POSIX
         if self.ior_cmd.api.value == "POSIX":
             # Connect to the pool, create container and then start dfuse
-            self.pool.connect()
-            self.create_cont()
+            # Uncomment below two lines once DAOS-3355 is resolved
+            # self.pool.connect()
+            # self.create_cont()
             self.start_dfuse()
             self.ior_cmd.test_file.update(self.dfuse.mount_dir.value
                                           + "/testfile")

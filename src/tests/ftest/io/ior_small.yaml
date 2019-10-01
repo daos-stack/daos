@@ -42,9 +42,8 @@ ior:
               api: DAOS
             mpiio:
               api: MPIIO
-# Uncomment once DAOS-3320 is resolved
-#            posix:
-#              api: POSIX
+            posix:
+              api: POSIX
           transfersize_blocksize: !mux
             256B:
               transfer_size: '256B'

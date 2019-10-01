@@ -22,10 +22,10 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from __future__ import print_function
+import general_utils
 
 from command_utils import ExecutableCommand, EnvironmentVariables
 from command_utils import CommandFailure, FormattedParameter
-import general_utils
 
 
 class DfuseCommand(ExecutableCommand):
@@ -87,7 +87,7 @@ class DfuseCommand(ExecutableCommand):
             cont (TestContainer): Daos test container object
             display (bool, optional): print updated params. Defaults to True.
         """
-        self.cuuid.update(cont.uuid, "cuuid" if display else None)
+        self.cuuid.update(cont, "cuuid" if display else None)
 
     def create_dfuse_dir(self, hosts):
         """Create dfuse directory
