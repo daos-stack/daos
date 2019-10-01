@@ -59,8 +59,11 @@ func newMgmtSvcClient(ctx context.Context, log logging.Logger, cfg mgmtSvcClient
 	}
 }
 
-func (msc *mgmtSvcClient) withConnection(ctx context.Context, ap string,
-	fn func(context.Context, mgmtpb.MgmtSvcClient) error) error {
+func (msc *mgmtSvcClient) withConnection(ctx context.Context, fn func(context.Context, string, mgmtpb.MgmtSvcClient) error) error {
+	ap, err := msc.LeaderAddress()
+	if err != nil {
+		return err
+	}
 
 	var opts []grpc.DialOption
 	authDialOption, err := security.DialOptionForTransportConfig(msc.cfg.TransportConfig)
@@ -77,7 +80,7 @@ func (msc *mgmtSvcClient) withConnection(ctx context.Context, ap string,
 	}
 	defer conn.Close()
 
-	return fn(ctx, mgmtpb.NewMgmtSvcClient(conn))
+	return fn(ctx, ap, mgmtpb.NewMgmtSvcClient(conn))
 }
 
 func (msc *mgmtSvcClient) LeaderAddress() (string, error) {
@@ -91,89 +94,43 @@ func (msc *mgmtSvcClient) LeaderAddress() (string, error) {
 }
 
 func (msc *mgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq) (resp *mgmtpb.JoinResp, joinErr error) {
-	ap, err := msc.LeaderAddress()
-	if err != nil {
-		return nil, err
-	}
+	joinErr = msc.withConnection(ctx, func(ctx context.Context, ap string, pbClient mgmtpb.MgmtSvcClient) error {
+		prefix := fmt.Sprintf("join(%s, %+v)", ap, *req)
+		msc.log.Debugf(prefix + " begin")
+		defer msc.log.Debugf(prefix + " end")
 
-	joinErr = msc.withConnection(ctx, ap,
-		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) error {
+		if req.Addr == "" {
+			req.Addr = msc.cfg.ControlAddr.String()
+		}
 
-			prefix := fmt.Sprintf("join(%s, %+v)", ap, *req)
-			msc.log.Debugf(prefix + " begin")
-			defer msc.log.Debugf(prefix + " end")
-
-			if req.Addr == "" {
-				req.Addr = msc.cfg.ControlAddr.String()
+		for {
+			select {
+			case <-ctx.Done():
+				return errors.Wrap(ctx.Err(), prefix)
+			default:
 			}
 
-			for {
-				select {
-				case <-ctx.Done():
-					return errors.Wrap(ctx.Err(), prefix)
-				default:
-				}
-
-				resp, err := pbClient.Join(ctx, req)
-				if err != nil {
-					msc.log.Debugf(prefix+": %v", err)
+			resp, err := pbClient.Join(ctx, req)
+			if err != nil {
+				msc.log.Debugf(prefix+": %v", err)
+			} else {
+				// TODO: Stop retrying upon certain errors (e.g., "not
+				// MS", "rank unavailable", and "excluded").
+				if resp.Status != 0 {
+					msc.log.Debugf(prefix+": %d", resp.Status)
 				} else {
-					// TODO: Stop retrying upon certain errors (e.g., "not
-					// MS", "rank unavailable", and "excluded").
-					if resp.Status != 0 {
-						msc.log.Debugf(prefix+": %d", resp.Status)
-					} else {
-						return nil
-					}
+					return nil
 				}
-
-				// Delay next retry.
-				delayCtx, cancelDelayCtx := context.WithTimeout(ctx, retryDelay)
-				select {
-				case <-delayCtx.Done():
-				}
-				cancelDelayCtx()
 			}
-		})
 
-	return
-}
-
-func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb.DaosRank) (resp *mgmtpb.DaosResp, stopErr error) {
-	stopErr = msc.withConnection(ctx, destAddr,
-		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) error {
-
-			prefix := fmt.Sprintf("stop(%s, %+v)", destAddr, *req)
-			msc.log.Debugf(prefix + " begin")
-			defer msc.log.Debugf(prefix + " end")
-
-			for {
-				select {
-				case <-ctx.Done():
-					return errors.Wrap(ctx.Err(), prefix)
-				default:
-				}
-
-				resp, err := pbClient.KillRank(ctx, req)
-				if err != nil {
-					msc.log.Debugf(prefix+": %v", err)
-				} else {
-					// TODO: Stop retrying upon certain errors
-					if resp.Status != 0 {
-						msc.log.Debugf(prefix+": %d", resp.Status)
-					} else {
-						return nil
-					}
-				}
-
-				// Delay next retry.
-				delayCtx, cancelDelayCtx := context.WithTimeout(ctx, retryDelay)
-				select {
-				case <-delayCtx.Done():
-				}
-				cancelDelayCtx()
+			// Delay next retry.
+			delayCtx, cancelDelayCtx := context.WithTimeout(ctx, retryDelay)
+			select {
+			case <-delayCtx.Done():
 			}
-		})
+			cancelDelayCtx()
+		}
+	})
 
 	return
 }

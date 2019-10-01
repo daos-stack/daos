@@ -53,6 +53,7 @@ const (
 	notifyReady = C.DRPC_METHOD_SRV_NOTIFY_READY
 )
 
+// mgmtModule is the management drpc module struct
 // mgmtModule represents the daos_server mgmt dRPC module. It sends dRPCs to
 // the daos_io_server iosrv module (src/iosrv).
 type mgmtModule struct{}

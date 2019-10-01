@@ -25,7 +25,6 @@ package drpc
 
 import (
 	"net"
-	"sync"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -38,8 +37,6 @@ type DomainSocketClient interface {
 	Connect() error
 	Close() error
 	SendMsg(call *Call) (*Response, error)
-	Lock()
-	Unlock()
 }
 
 // domainSocketConn is an interface representing a connection to a Unix Domain
@@ -57,7 +54,6 @@ type domainSocketDialer interface {
 
 // ClientConnection represents a client connection to a dRPC server
 type ClientConnection struct {
-	sync.Mutex
 	socketPath string             // Filesystem location of dRPC socket
 	dialer     domainSocketDialer // Interface to connect to the socket
 	conn       domainSocketConn   // UDS connection
