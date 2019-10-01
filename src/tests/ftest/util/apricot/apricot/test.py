@@ -389,7 +389,7 @@ class TestWithServers(TestWithoutServers):
             # different server group
             for group, hosts in server_groups.items():
                 self.server_manager = ServerManager(
-                    self.prefix, os.path.join(self.ompi_prefix, "bin"))
+                    self.basepath, os.path.join(self.ompi_prefix, "bin"))
                 self.server_manager.get_params(self)
                 self.server_manager.runner.job.yaml_params.name = group
                 self.log.info(
@@ -404,7 +404,7 @@ class TestWithServers(TestWithoutServers):
 
         else:
             self.server_manager = ServerManager(
-                self.prefix, os.path.join(self.ompi_prefix, "bin"))
+                self.basepath, os.path.join(self.ompi_prefix, "bin"))
             self.server_manager.get_params(self)
             self.server_manager.hosts = (
                 self.hostlist_servers, self.workdir, \
