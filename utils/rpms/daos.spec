@@ -5,7 +5,7 @@
 
 Name:          daos
 Version:       0.6.0
-Release:       5%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -14,8 +14,13 @@ Source0:       %{name}-%{version}.tar.gz
 Source1:       scons_local-%{version}.tar.gz
 
 BuildRequires: scons
+BuildRequires: gcc-c++
 BuildRequires: cart-devel
+%if (0%{?rhel} >= 7)
 BuildRequires: argobots-devel >= 1.0rc1
+%else
+BuildRequires: libabt-devel >= 1.0rc1
+%endif
 BuildRequires: libpmem-devel, libpmemobj-devel
 BuildRequires: fuse-devel >= 3.4.2
 BuildRequires: protobuf-c-devel
@@ -23,13 +28,15 @@ BuildRequires: spdk-devel, spdk-tools
 BuildRequires: fio < 3.4
 BuildRequires: libisa-l-devel
 BuildRequires: raft-devel <= 0.5.0
-BuildRequires: mercury-devel
+BuildRequires: mercury-devel < 1.0.1-12
+# vvvvvv these can be removed when cart#226 lands and we update to use it
 BuildRequires: openpa-devel
 BuildRequires: libfabric-devel
-BuildRequires: openssl-devel
 BuildRequires: ompi-devel
 BuildRequires: pmix-devel
+# ^^^^^^ these can be removed when cart#226 lands
 BuildRequires: hwloc-devel
+BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
 BuildRequires: libcmocka-devel
@@ -37,28 +44,46 @@ BuildRequires: readline-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
 %if (0%{?rhel} >= 7)
-BuildRequires:  numactl-devel
+BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
 BuildRequires: golang-bin
 BuildRequires: libipmctl-devel
 BuildRequires: python-devel python36-devel
 %else
 %if (0%{?suse_version} >= 1315)
-BuildRequires:  libnuma-devel
+# see src/client/dfs/SConscript for why we need /etc/os-release
+# that code should be rewritten to use the python libraries provided for
+# os detection
+BuildRequires: distribution-release
+BuildRequires: libnuma-devel
 BuildRequires: cunit-devel
 BuildRequires: go1.10
 BuildRequires: ipmctl-devel
 BuildRequires: python-devel python3-devel
-%endif
-%endif
-Requires: cart
-Requires: argobots >= 1.0rc1
+%if 0%{?is_opensuse}
+# have choice for boost-devel needed by cart-devel: boost-devel boost_1_58_0-devel
+BuildRequires: boost-devel
+%else
+# have choice for libcurl.so.4()(64bit) needed by systemd: libcurl4 libcurl4-mini
+# have choice for libcurl.so.4()(64bit) needed by cmake: libcurl4 libcurl4-mini
+BuildRequires: libcurl4
+# have choice for libpsm_infinipath.so.1()(64bit) needed by libfabric1: libpsm2-compat libpsm_infinipath1
+# have choice for libpsm_infinipath.so.1()(64bit) needed by openmpi-libs: libpsm2-compat libpsm_infinipath1
+BuildRequires: libpsm_infinipath1
+%endif # 0%{?is_opensuse}
+# have choice for libpmemblk.so.1(LIBPMEMBLK_1.0)(64bit) needed by fio: libpmemblk libpmemblk1
+# have choice for libpmemblk.so.1()(64bit) needed by fio: libpmemblk libpmemblk1
+BuildRequires: libpmemblk1
+%endif # (0%{?suse_version} >= 1315)
+%endif # (0%{?rhel} >= 7)
 Requires: libpmem, libpmemobj
 Requires: fuse >= 3.4.2
 Requires: protobuf-c
 Requires: spdk
 Requires: fio < 3.4
 Requires: openssl
+
+
 
 %description
 The Distributed Asynchronous Object Storage (DAOS) is an open-source
@@ -168,12 +193,14 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_bindir}/rdbt
 %{_bindir}/vos_size.py
 %{_libdir}/libvos.so
+%dir %{_prefix}%{_sysconfdir}
 %{_prefix}%{_sysconfdir}/vos_dfs_sample.yaml
 %{_prefix}%{_sysconfdir}/vos_size_input.yaml
 %{_libdir}/libdaos_common.so
 # TODO: this should move to %{_libdir}/daos/libplacement.so
 %{_libdir}/daos_srv/libplacement.so
 # Certificate generation files
+%dir %{daoshome}
 %{daoshome}/certgen/
 %{daoshome}/VERSION
 %doc
@@ -183,6 +210,7 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_bindir}/daos_server
 %{_bindir}/daos_io_server
+%dir %{_libdir}/daos_srv
 %{_libdir}/daos_srv/libcont.so
 %{_libdir}/daos_srv/libdtx.so
 %{_libdir}/daos_srv/libmgmt.so
@@ -195,6 +223,7 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/daos_srv/libsecurity.so
 %{_libdir}/daos_srv/libvos_srv.so
 %{_datadir}/%{name}
+%exclude %{_datadir}/%{name}/ioil-ld-opts
 %{_unitdir}/daos-server.service
 
 %files client
@@ -213,6 +242,8 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
 %{_libdir}/python2.7/site-packages/pydaos_shim_27.so
+%dir %{_libdir}/python3
+%dir %{_libdir}/python3/site-packages
 %{_libdir}/python3/site-packages/pydaos_shim_3.so
 %{_datadir}/%{name}/ioil-ld-opts
 %{_prefix}%{_sysconfdir}/daos.yml
@@ -220,12 +251,11 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_unitdir}/daos-agent.service
 
 %files tests
+%dir %{daoshome}/utils
 %{daoshome}/utils/py
 %{daoshome}/TESTING
 %{_bindir}/hello_drpc
 %{_bindir}/*_test*
-%{_bindir}/io_conf/daos_io_conf_1
-%{_bindir}/io_conf/daos_io_conf_2
 %{_bindir}/smd_ut
 %{_bindir}/vea_ut
 %{_bindir}/daosbench
@@ -241,6 +271,10 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/*.a
 
 %changelog
+* Sat Sep 21 2019 Brian J. Murrell <brian.murrell@intel.com>
+- Remove Requires: {argobots, cart}
+  - autodependencies should take care of these
+
 * Thu Sep 19 2019 Jeff Olivier <jeffrey.v.olivier@intel.com>
 - Add valgrind-devel requirement for argobots change
 

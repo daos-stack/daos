@@ -26,7 +26,6 @@ package server
 import (
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -44,7 +43,7 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *Configuration) *C
 		StorageControlService: *NewStorageControlService(log,
 			defaultMockNvmeStorage(log, cfg.ext),
 			defaultMockScmStorage(log, cfg.ext),
-			cfg.Servers, &drpc.ClientConnection{},
+			cfg.Servers,
 		),
 		harness: &IOServerHarness{
 			log: log,
