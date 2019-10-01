@@ -167,7 +167,7 @@ class DaosServer(DaosCommand):
             super(DaosServer.DaosServerConfig, self). get_params(test)
             # Read the baseline conf file data/daos_server_baseline.yml
             try:
-                with open('{}/{}'.format(test.prefix, DEFAULT_FILE), 'r') \
+                with open('{}/{}'.format(test.basepath, DEFAULT_FILE), 'r') \
                 as rfile:
                     self.data = yaml.safe_load(rfile)
             except Exception as err:
@@ -175,7 +175,7 @@ class DaosServer(DaosCommand):
                 traceback.print_exception(
                     err.__class__, err, sys.exc_info()[2])
                 raise ServerFailed(
-                    "Failed to Read {}/{}".format(test.prefix, DEFAULT_FILE))
+                    "Failed to Read {}/{}".format(test.basepath, DEFAULT_FILE))
 
             # Read the values from avocado_testcase.yaml file if test ran
             # with Avocado.
@@ -247,7 +247,8 @@ class DaosServer(DaosCommand):
             # Write self.data dictionary in to AVOCADO_FILE
             # This will be used to start with daos_server -o option.
             try:
-                with open('{}/{}'.format(basepath, AVOCADO_FILE), 'w') as wfile:
+                with open('{}/{}'.format(test.basepath, AVOCADO_FILE), 'w') \
+                    as wfile:
                     yaml.dump(
                         self.data, wfile, default_flow_style=False)
             except Exception as err:
@@ -257,7 +258,7 @@ class DaosServer(DaosCommand):
                 raise ServerFailed("Failed to Write {}/{}".format(
                     basepath, AVOCADO_FILE))
 
-            return os.path.join(basepath, AVOCADO_FILE)
+            return os.path.join(test.basepath, AVOCADO_FILE)
 
 
 class ServerManager(ExecutableCommand):
