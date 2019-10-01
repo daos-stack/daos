@@ -385,8 +385,8 @@ class TestWithServers(TestWithoutServers):
             server_groups (dict, optional): [description]. Defaults to None.
         """
         set_path_orte = True
-            if self.prefix == "/usr":
-                set_path_orte = False
+        if self.prefix == "/usr":
+            set_path_orte = False
         if isinstance(server_groups, dict):
             # Optionally start servers on a different subset of hosts with a
             # different server group
