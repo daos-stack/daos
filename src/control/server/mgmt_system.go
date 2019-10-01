@@ -35,12 +35,18 @@ import (
 func (svc *mgmtSvc) systemStop(ctx context.Context, leader *IOServerInstance) error {
 	// TODO: inhibit rebuild on pool services, parallelise and make async.
 	for _, member := range svc.members.GetMembers() {
-		svc.log.Debugf("MgmtSvc.systemStop murder member %+v (not implemented)\n",
-			*member)
+		svc.log.Debugf("MgmtSvc.systemStop murder member %+v\n", *member)
+		resp, err := leader.msClient.Stop(ctx, member.Addr, &mgmtpb.DaosRank{
+			Rank: member.Rank,
+		})
+		if err != nil {
+			svc.log.Debugf("MgmtSvc.systemStop error %s\n", err)
+			// TODO: record errors and continue
+			return err
+		}
 
-		// TODO: call mgmtSvcClient to stop instances over gRPC
-
-		//svc.members.Remove(member.Uuid)
+		svc.log.Debugf("MgmtSvc.systemStop response %+v\n", *resp)
+		svc.members.Remove(member.Uuid)
 	}
 
 	return nil
