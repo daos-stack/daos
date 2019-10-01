@@ -189,11 +189,16 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
         if build_vars["PREFIX"] != "/usr":
             server_cmd.extend(["-x", "PATH"])
 
+        # if TMPDIR env variable is not set, default it to PREFIX
+        tmpdir = os.getenv("TMPDIR")
+        if tmpdir is None:
+            tmpdir = build_vars["PREFIX"]
+
         # Run server in insecure mode until Certificate tests are in place
         server_cmd.extend([daos_srv_bin, "--debug", "--config",
                            '{}/{}'.format(build_vars["PREFIX"], AVOCADO_FILE),
                            "start", "-i", "-a",
-                           os.path.join(build_vars["PREFIX"], "tmp")])
+                           os.path.join(tmpdir, "tmp")])
 
         print("Start CMD>>>>{0}".format(' '.join(server_cmd)))
 
