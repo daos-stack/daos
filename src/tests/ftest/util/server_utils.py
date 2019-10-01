@@ -188,11 +188,9 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
         # PATH along to the remote
         if build_vars["PREFIX"] != "/usr":
             server_cmd.extend(["-x", "PATH"])
-
-        # if TMPDIR env variable is not set, default it to PREFIX
-        tmpdir = os.getenv("TMPDIR")
-        if tmpdir is None:
             tmpdir = build_vars["PREFIX"]
+        else:
+            tmpdir = '/'
 
         # Run server in insecure mode until Certificate tests are in place
         server_cmd.extend([daos_srv_bin, "--debug", "--config",

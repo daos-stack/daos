@@ -157,10 +157,10 @@ scons %{?no_smp_mflags}              \
       PREFIX=%{?buildroot}%{_prefix}
 BUILDROOT="%{?buildroot}"
 PREFIX="%{?_prefix}"
-sed -i -e s/${BUILDROOT//\//\\/}[^\"]\*/${PREFIX//\//\\/}/g %{?buildroot}%{daoshome}/TESTING/.build_vars.*
+# sed -i -e s/${BUILDROOT//\//\\/}[^\"]\*/${PREFIX//\//\\/}/g %{?buildroot}%{daoshome}/TESTING/.build_vars.*
 sed -i -e s/${BUILDROOT//\//\\/}[^\"]\*/${PREFIX//\//\\/}/g %{?buildroot}%{_prefix}/lib/.build_vars.*
-mkdir -p %{?buildroot}/%{_exec_prefix}/lib64/%{name}
-mkdir -p %{?buildroot}/%{_exec_prefix}/lib64/%{name}/certgen
+# mkdir -p %{?buildroot}/%{_exec_prefix}/lib64/%{name}
+# mkdir -p %{?buildroot}/%{_exec_prefix}/lib64/%{name}/certgen
 mkdir -p %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{?buildroot}/%{_unitdir}
@@ -191,6 +191,7 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 # TODO: this should move to %{_libdir}/daos/libplacement.so
 %{_libdir}/daos_srv/libplacement.so
 # Certificate generation files
+%dir %{_libdir}/%{name}
 %{_libdir}/%{name}/certgen/
 %{_libdir}/%{name}/VERSION
 %doc
@@ -241,8 +242,10 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_unitdir}/daos-agent.service
 
 %files tests
-%dir %{daoshome}/utils
-%{daoshome}/utils/py
+%dir %{_prefix}/lib
+%dir %{_prefix}/lib/daos
+%dir %{_prefix}/lib/daos/utils
+%{_prefix}/lib/utils/py
 %{daoshome}/TESTING
 %{_bindir}/hello_drpc
 %{_bindir}/*_test*
@@ -255,8 +258,11 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
 # For avocado tests
+%dir %{_prefix}/lib 
 %{_prefix}/lib/.build_vars.json
 %{_prefix}/lib/.build_vars.sh
+%dir %{_prefix}/etc
+%dir %{_prefix}/etc/daos
 %{_prefix}/etc/daos/daos_server_baseline.yaml
 
 %files devel
