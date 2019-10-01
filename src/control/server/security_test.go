@@ -25,6 +25,7 @@ package server
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
@@ -37,6 +38,7 @@ import (
 
 // mockDrpcClient is a mock of the DomainSocketClient interface
 type mockDrpcClient struct {
+	sync.Mutex
 	ConnectOutputError    error
 	CloseOutputError      error
 	CloseCallCount        int
