@@ -247,8 +247,7 @@ class DaosServer(DaosCommand):
             # Write self.data dictionary in to AVOCADO_FILE
             # This will be used to start with daos_server -o option.
             try:
-                with open('{}/{}'.format(test.basepath, AVOCADO_FILE), 'w') \
-                    as wfile:
+                with open('{}/{}'.format(basepath, AVOCADO_FILE), 'w') as wfile:
                     yaml.dump(
                         self.data, wfile, default_flow_style=False)
             except Exception as err:
@@ -258,7 +257,7 @@ class DaosServer(DaosCommand):
                 raise ServerFailed("Failed to Write {}/{}".format(
                     basepath, AVOCADO_FILE))
 
-            return os.path.join(test.basepath, AVOCADO_FILE)
+            return os.path.join(basepath, AVOCADO_FILE)
 
 
 class ServerManager(ExecutableCommand):
