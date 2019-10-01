@@ -258,7 +258,7 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
 # For avocado tests
-%dir %{_prefix}/lib 
+%dir %{_prefix}/lib
 %{_prefix}/lib/.build_vars.json
 %{_prefix}/lib/.build_vars.sh
 %dir %{_prefix}/etc
