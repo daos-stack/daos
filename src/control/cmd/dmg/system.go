@@ -31,8 +31,8 @@ import (
 
 // systemCmd is the struct representing the top-level system subcommand.
 type SystemCmd struct {
-	SystemQuery systemQueryCmd `command:"query" alias:"q" description:"Retrieve DAOS system membership"`
-	SystemStop  systemStopCmd  `command:"stop" alias:"s" description:"Perform controlled shutdown of DAOS system"`
+	Query systemQueryCmd `command:"query" alias:"q" description:"Retrieve DAOS system membership"`
+	Stop  systemStopCmd  `command:"stop" alias:"s" description:"Perform controlled shutdown of DAOS system"`
 }
 
 // systemStopCmd is the struct representing the command to shutdown system.

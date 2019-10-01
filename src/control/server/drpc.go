@@ -171,17 +171,19 @@ func makeDrpcCall(client drpc.DomainSocketClient, module int32, method int32,
 	}
 
 	client.Lock()
-	defer client.Unlock()
 
 	// Forward the request to the I/O server via dRPC
 	if err = client.Connect(); err != nil {
+		client.Unlock()
 		return drpcResp, errors.Wrap(err, "connect to client")
 	}
 	defer client.Close()
 
 	if drpcResp, err = client.SendMsg(drpcCall); err != nil {
+		client.Unlock()
 		return drpcResp, errors.Wrap(err, "send message")
 	}
+	client.Unlock()
 
 	if err = checkDrpcResponse(drpcResp); err != nil {
 		return drpcResp, errors.Wrap(err, "validate response")

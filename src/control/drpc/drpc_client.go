@@ -57,21 +57,11 @@ type domainSocketDialer interface {
 
 // ClientConnection represents a client connection to a dRPC server
 type ClientConnection struct {
+	sync.Mutex
 	socketPath string             // Filesystem location of dRPC socket
 	dialer     domainSocketDialer // Interface to connect to the socket
 	conn       domainSocketConn   // UDS connection
 	sequence   int64              // Increment each time we send
-	mutex      sync.Mutex
-}
-
-// Lock locks ClientConnection
-func (c *ClientConnection) Lock() {
-	c.mutex.Lock()
-}
-
-// Unlock unlocks ClientConnection
-func (c *ClientConnection) Unlock() {
-	c.mutex.Unlock()
 }
 
 // IsConnected indicates whether the client connection is currently active

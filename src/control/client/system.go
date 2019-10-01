@@ -31,8 +31,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-// SystemStop will create a DAOS pool using provided parameters and return
-// uuid, list of service replicas and error (including any DER code from DAOS).
+// SystemStop will perform a controlled shutdown of DAOS system and a list
+// of remaining system members on failure.
 //
 // Isolate protobuf encapsulation in client and don't expose to calling code.
 func (c *connList) SystemStop() ([]*common.SystemMember, error) {
@@ -60,8 +60,7 @@ func (c *connList) SystemStop() ([]*common.SystemMember, error) {
 	return common.MembersFromPB(rpcResp.Members), nil
 }
 
-// SystemQuery will create a DAOS pool using provided parameters and return
-// uuid, list of service replicas and error (including any DER code from DAOS).
+// SystemQuery will return the list of members joined to DAOS system.
 //
 // Isolate protobuf encapsulation in client and don't expose to calling code.
 func (c *connList) SystemQuery() ([]*common.SystemMember, error) {
@@ -87,4 +86,19 @@ func (c *connList) SystemQuery() ([]*common.SystemMember, error) {
 	}
 
 	return common.MembersFromPB(rpcResp.Members), nil
+}
+
+// KillRank Will terminate server running at given rank on pool specified by
+// uuid. Request will only be issued to a single access point.
+func (c *connList) KillRank(uuid string, rank uint32) ResultMap {
+	results := make(ResultMap)
+	mc := c.controllers[0]
+
+	resp, err := mc.getSvcClient().KillRank(context.Background(),
+		&mgmtpb.DaosRank{PoolUuid: uuid, Rank: rank})
+
+	result := ClientResult{mc.getAddress(), resp, err}
+	results[result.Address] = result
+
+	return results
 }
