@@ -92,7 +92,14 @@ func (c *connList) SystemQuery() ([]*common.SystemMember, error) {
 // uuid. Request will only be issued to a single access point.
 func (c *connList) KillRank(uuid string, rank uint32) ResultMap {
 	results := make(ResultMap)
-	mc := c.controllers[0]
+
+	mc, err := chooseServiceLeader(c.controllers)
+	if err != nil {
+		result := ClientResult{mc.getAddress(), nil, err}
+		results[result.Address] = result
+
+		return results
+	}
 
 	resp, err := mc.getSvcClient().KillRank(context.Background(),
 		&mgmtpb.DaosRank{PoolUuid: uuid, Rank: rank})
