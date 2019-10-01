@@ -78,7 +78,7 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
 
     denv = env.Clone()
-    prereqs.require(denv, 'spdk')
+    prereqs.require(denv, 'spdk', 'hwloc', 'ofi')
 
     # if SPDK_PREFIX differs from PREFIX, copy dir so files can be accessed at
     # runtime
@@ -165,10 +165,12 @@ def scons():
     # CGO shell env vars.
     denv.AppendENVPath(
         "CGO_LDFLAGS",
-        denv.subst("-L%s -L$SPDK_PREFIX/lib $_RPATH" % gopath))
+        denv.subst("-L%s -L$SPDK_PREFIX/lib -L$HWLOC_PREFIX/lib"
+                   " -L$OFI_PREFIX/lib $_RPATH" % gopath))
     denv.AppendENVPath(
         "CGO_CFLAGS",
-        denv.subst("-I$SPDK_PREFIX/include"))
+        denv.subst("-I$SPDK_PREFIX/include -I$HWLOC_PREFIX/include"
+                   " -I$OFI_PREFIX/include"))
 
     # copy server init files to be used at runtime, explicitly
     # remove first because recursive Delete() on dir fails.
