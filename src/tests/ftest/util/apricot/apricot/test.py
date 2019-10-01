@@ -387,9 +387,14 @@ class TestWithServers(TestWithoutServers):
         if isinstance(server_groups, dict):
             # Optionally start servers on a different subset of hosts with a
             # different server group
+            set_path_orte = True
+            if self.prefix == "/usr":
+                set_path_orte = False
             for group, hosts in server_groups.items():
                 self.server_manager = ServerManager(
-                    self.basepath, os.path.join(self.ompi_prefix, "bin"))
+                    self.basepath,
+                    os.path.join(self.ompi_prefix, "bin"),
+                    enable_path=set_path_orte)
                 self.server_manager.get_params(self)
                 self.server_manager.runner.job.yaml_params.name = group
                 self.log.info(
@@ -404,7 +409,9 @@ class TestWithServers(TestWithoutServers):
 
         else:
             self.server_manager = ServerManager(
-                self.basepath, os.path.join(self.ompi_prefix, "bin"))
+                self.basepath,
+                os.path.join(self.ompi_prefix, "bin"),
+                enable_path=set_path_orte)
             self.server_manager.get_params(self)
             self.server_manager.hosts = (
                 self.hostlist_servers, self.workdir, \

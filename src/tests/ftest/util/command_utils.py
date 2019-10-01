@@ -517,8 +517,8 @@ class Orterun(JobManager):
             "/run/orterun", "orterun", job, path, subprocess)
 
         self.hostfile = FormattedParameter("--hostfile {}", None)
-        self.processes = FormattedParameter("-np {}", 1)
-        self.display_map = FormattedParameter("--display-map", True)
+        self.processes = FormattedParameter("--np {}", 1)
+        self.display_map = FormattedParameter("--display-map", False)
         self.map_by = FormattedParameter("--map-by {}", "node")
         self.export = FormattedParameter("-x {}", None)
         self.enable_recovery = FormattedParameter("--enable-recovery", True)
