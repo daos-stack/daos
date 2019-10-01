@@ -27,5 +27,10 @@ def scons():
                      '../drpc_listener.c'],
                     LIBS=['daos_common', 'protobuf-c', 'gurt', 'cmocka'])
 
+    daos_build.test(unit_env, 'drpc_client_tests',
+                    ['drpc_client_tests.c', common_test_utils,
+                     '../drpc_client.c', '../srv.pb-c.c'],
+                    LIBS=['daos_common', 'protobuf-c', 'gurt', 'cmocka'])
+
 if __name__ == "SCons.Script":
     scons()

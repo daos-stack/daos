@@ -6,6 +6,7 @@ servers:
   first_core: 1
   fabric_iface: qib0
   fabric_iface_port: 20000
+  pinned_numa_node: 0
   log_mask: WARN
   log_file: /tmp/daos_server1.log
   env_vars:
@@ -25,8 +26,9 @@ servers:
   targets: 20
   nr_xs_helpers: 1
   first_core: 22
-  fabric_iface: qib0
+  fabric_iface: qib1
   fabric_iface_port: 20000
+  pinned_numa_node: 1
   log_mask: WARN
   log_file: /tmp/daos_server2.log
   env_vars:
