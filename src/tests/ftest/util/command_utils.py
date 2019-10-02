@@ -77,7 +77,7 @@ class BasicParameter(object):
         """
         self.value = value
         if name is not None:
-            self.log.info("Updated param {} => {}".format(name, self.value))
+            self.log.info("Updated param %s => %s" % (name, self.value))
 
 
 class FormattedParameter(BasicParameter):
@@ -319,14 +319,14 @@ class ExecutableCommand(CommandWithParameters):
         else:
             self.log.info("Process is already running")
 
-    def check_subprocess_status(self, subprocess):
+    def check_subprocess_status(self, sub_process):
         """Verify command status when called in a subprocess.
 
         Optional method to provide a means for detecting successful command
         execution when running the command as a subprocess.
 
         Args:
-            subprocess (process.SubProcess): subprocess used to run the command
+            sub_process (process.SubProcess): subprocess used to run the command
 
         Returns:
             bool: whether or not the command progress has been detected
@@ -334,7 +334,7 @@ class ExecutableCommand(CommandWithParameters):
         """
         self.log.info(
             "Checking status of the {} command in {}".format(
-                self._command, subprocess))
+                self._command, sub_process))
         return True
 
     def stop(self):

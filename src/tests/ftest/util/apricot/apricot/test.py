@@ -406,8 +406,8 @@ class TestWithServers(TestWithoutServers):
                 self.server_manager.hosts = (
                     hosts, self.workdir, self.hostfile_servers_slots)
                 try:
-                    AVOCADO_FILE = "src/tests/ftest/data/daos_avocado_test.yaml"
-                    yamlfile = "{}/{}".format(self.basepath, AVOCADO_FILE)
+                    avocado_file = "src/tests/ftest/data/daos_avocado_test.yaml"
+                    yamlfile = "{}/{}".format(self.basepath, avocado_file)
                     self.server_manager.start(yamlfile)
                 except ServerFailed as error:
                     self.multi_log("  {}".format(error))
