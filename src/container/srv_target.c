@@ -383,6 +383,7 @@ int cont_hdl_csummer_init(struct ds_cont_hdl *hdl)
 	/** Get the container csum related properties
 	 * Need the pool for the IV namespace
 	 */
+	hdl->csummer = NULL;
 	pool = ds_pool_lookup(hdl->sch_pool->spc_uuid);
 	if (pool == NULL)
 		return -DER_NONEXIST;
