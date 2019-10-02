@@ -270,12 +270,12 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
                             [str(result[key]) for key in result if key != 0])))
 
         # Pile of build time variables
-        with open(os.path.join(test.basepath, ".build_vars.json")) as buffer:
-            build_vars = json.load(buffer)
-        orterun_bin = os.path.join(build_vars["OMPI_PREFIX"], "bin", "orterun")
-        daos_srv_bin = os.path.join(build_vars["PREFIX"], "bin", "daos_server")
+        with open(os.path.join(test.basepath, ".build_vars.json")) as json_vars:
+            build_vars = json.load(json_vars)
 
-        server_cmd = [orterun_bin, "--np", str(server_count)]
+        server_cmd = [
+            os.path.join(build_vars["OMPI_PREFIX"], "bin", "orterun"),
+            "--np", str(server_count)]
         if uri_path is not None:
             server_cmd.extend(["--report-uri", uri_path])
         server_cmd.extend(["--hostfile", hostfile, "--enable-recovery"])
@@ -295,7 +295,7 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
 
         # Run server in insecure mode until Certificate tests are in place
         server_cmd.extend(
-            [daos_srv_bin,
+            [os.path.join(build_vars["PREFIX"], "bin", "daos_server"),
              "--debug",
              "--config", server_yaml,
              "start", "-i",

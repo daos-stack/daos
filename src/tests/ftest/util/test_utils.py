@@ -25,6 +25,7 @@ from __future__ import print_function
 
 import os
 from time import sleep, time
+from logging import getLogger
 
 from avocado import fail_on
 from avocado.utils import process
@@ -92,6 +93,7 @@ class TestDaosApiBase(ObjectWithParameters):
         """
         super(TestDaosApiBase, self).__init__(namespace)
         self.cb_handler = cb_handler
+        self.log = getLogger(__name__)
 
     def _call_method(self, method, kwargs):
         """Call the DAOS API class method with the optional callback method.
@@ -111,8 +113,10 @@ class TestDaosApiBase(ObjectWithParameters):
 class TestPool(TestDaosApiBase):
     """A class for functional testing of DaosPools objects."""
 
-    def __init__(self, context, log, cb_handler=None):
-        """[summary].
+    def __init__(self, context, log=None, cb_handler=None):
+        """Initialize a TestPool object.
+
+        Note: 'log' is now a defunct argument and will be removed in the future
 
         Args:
             context (DaosContext): [description]
@@ -122,7 +126,6 @@ class TestPool(TestDaosApiBase):
         """
         super(TestPool, self).__init__("/run/pool/*", cb_handler)
         self.context = context
-        self.log = log
         self.uid = os.geteuid()
         self.gid = os.getegid()
 
@@ -729,7 +732,6 @@ class TestContainer(TestDaosApiBase):
         """
         super(TestContainer, self).__init__("/run/container/*", cb_handler)
         self.pool = pool
-        self.log = self.pool.log
 
         self.object_qty = BasicParameter(None)
         self.record_qty = BasicParameter(None)

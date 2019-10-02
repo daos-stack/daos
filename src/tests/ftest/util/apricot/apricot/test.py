@@ -95,8 +95,6 @@ class Test(avocadoTest):
         self.d_log = None
         self.uri_file = None
         self.fault_file = None
-        self.server_log = None
-        self.client_log = None
         self.debug = False
         self.config = None
 
@@ -181,11 +179,12 @@ class TestWithServers(TestWithoutServers):
         self.nvme_parameter = None
         self.setup_start_servers = True
         self.setup_start_agents = True
+        self.server_log = None
+        self.client_log = None
         self.log_dir = os.path.split(
             os.getenv("D_LOG_FILE", "/tmp/server.log"))[0]
         self.test_id = "{}-{}".format(
             os.path.split(self.filename)[1], self.name.str_uid)
-        self.config = Configuration(self, self.debug)
 
     def setUp(self):
         """Set up each test case."""
@@ -226,7 +225,9 @@ class TestWithServers(TestWithoutServers):
         self.log.info("hostlist_clients:  %s", self.hostlist_clients)
 
         # Find a configuration that meets the test requirements
-        self.config.set_config(self.hostlist_servers)
+        self.config = Configuration(self.params, self.debug)
+        if not self.config.set_config(self, self.hostlist_servers):
+            self.cancel("Test requirements not met!")
 
         # If a specific count is specified, verify enough servers/clients are
         # specified to satisy the count

@@ -21,8 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from __future__ import print_function
-
+from logging import getLogger
 import time
 import os
 import signal
@@ -46,6 +45,7 @@ class BasicParameter(object):
         """
         self.value = value if value is not None else default
         self._default = default
+        self.log = getLogger(__name__)
 
     def __str__(self):
         """Convert this BasicParameter into a string.
@@ -79,7 +79,7 @@ class BasicParameter(object):
         """
         self.value = value
         if name is not None:
-            print("Updated param {} => {}".format(name, self.value))
+            self.log.debug("Updated param %s => %s", name, self.value)
 
 
 class FormattedParameter(BasicParameter):
@@ -126,6 +126,7 @@ class ObjectWithParameters(object):
             namespace (str): yaml namespace (path to parameters)
         """
         self.namespace = namespace
+        self.log = getLogger(__name__)
 
     def get_attribute_names(self, attr_type=None):
         """Get a sorted list of the names of the attr_type attributes.
@@ -286,7 +287,7 @@ class ExecutableCommand(CommandWithParameters):
         except process.CmdError as error:
             # Command failed or possibly timed out
             msg = "Error occurred running '{}': {}".format(command, error)
-            print(msg)
+            self.log.error(msg)
             raise CommandFailure(msg)
 
     def _run_subprocess(self):
@@ -313,10 +314,10 @@ class ExecutableCommand(CommandWithParameters):
             # check_subprocess_status() method.
             if not self.check_subprocess_status(self._process):
                 msg = "Command '{}' did not launch correctly".format(self)
-                print(msg)
+                self.log.error(msg)
                 raise CommandFailure(msg)
         else:
-            print("Process is already running")
+            self.log.info("Process is already running")
 
     def check_subprocess_status(self, subprocess):
         """Verify command status when called in a subprocess.
@@ -331,9 +332,9 @@ class ExecutableCommand(CommandWithParameters):
             bool: whether or not the command progress has been detected
 
         """
-        print(
-            "Checking status of the {} command in {}".format(
-                self._command, subprocess))
+        self.log.info(
+            "Checking status of the %s command in %s",
+            self._command, subprocess)
         return True
 
     def stop(self):
