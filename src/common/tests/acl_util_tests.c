@@ -1310,9 +1310,9 @@ test_ace_from_str_and_back_again(void **state)
 static void
 test_acl_from_strs_bad_input(void **state)
 {
-	struct daos_acl	*acl = NULL;
-	char		*valid_aces[] = {"A::OWNER@:rw", "L:F:EVERYONE@:rw"};
-	char		*garbage[] = {"ABCD:E:FGH:IJ"};
+	struct daos_acl		*acl = NULL;
+	static const char	*valid_aces[] = {"A::OWNER@:rw"};
+	static const char	*garbage[] = {"ABCD:E:FGH:IJ"};
 
 	assert_int_equal(daos_acl_from_strs(NULL, 1, &acl), -DER_INVAL);
 	assert_int_equal(daos_acl_from_strs(valid_aces, 0, &acl),
@@ -1324,7 +1324,7 @@ static void
 test_acl_from_strs_success(void **state)
 {
 	struct daos_acl			*acl = NULL;
-	char				*aces[] = {"A::OWNER@:rw",
+	static const char		*aces[] = {"A::OWNER@:rw",
 						   "L:F:EVERYONE@:rw"};
 	enum daos_acl_principal_type	expected[] = { DAOS_ACL_OWNER,
 						       DAOS_ACL_EVERYONE };

@@ -472,7 +472,7 @@ daos_ace_to_str(struct daos_ace *ace, char *buf, size_t buf_len);
  *		-DER_NOMEM	Could not allocate memory
  */
 int
-daos_acl_from_strs(char **ace_strs, size_t ace_nr, struct daos_acl **acl);
+daos_acl_from_strs(const char **ace_strs, size_t ace_nr, struct daos_acl **acl);
 
 #if defined(__cplusplus)
 }

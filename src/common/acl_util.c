@@ -745,7 +745,7 @@ daos_ace_to_str(struct daos_ace *ace, char *buf, size_t buf_len)
 }
 
 int
-daos_acl_from_strs(char **ace_strs, size_t ace_nr, struct daos_acl **acl)
+daos_acl_from_strs(const char **ace_strs, size_t ace_nr, struct daos_acl **acl)
 {
 	struct daos_ace	**tmp_aces;
 	struct daos_acl	*tmp_acl;

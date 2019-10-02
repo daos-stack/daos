@@ -375,7 +375,7 @@ out:
 
 static int
 create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
-		  char **ace_list, size_t ace_nr)
+		  const char **ace_list, size_t ace_nr)
 {
 	char		*out_owner = NULL;
 	char		*out_owner_grp = NULL;
@@ -514,8 +514,8 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(pool_uuid));
 
-	rc = create_pool_props(&prop, req->user, req->usergroup, req->acl,
-			       req->n_acl);
+	rc = create_pool_props(&prop, req->user, req->usergroup,
+			       (const char **)req->acl, req->n_acl);
 	if (rc != 0)
 		goto out;
 
