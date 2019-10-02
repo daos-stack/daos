@@ -27,7 +27,6 @@ import getpass
 
 from command_utils import DaosCommand, CommandWithParameters, CommandFailure
 from command_utils import FormattedParameter
-from general_utils import get_file_path
 
 
 class DmgCommand(DaosCommand):
@@ -184,12 +183,15 @@ def storage_prep(path, hosts, user=None, hugepages="4096", nvme=False,
     return result
 
 
-def storage_reset(path, hosts, user=None, hugepages="4096", insecure=True):
+def storage_reset(path, hosts, nvme=False, scm=False, user=None,
+                  hugepages="4096", insecure=True):
     """Execute prepare reset command through dmg tool to servers provided.
 
     Args:
-        path (str): path to tool's binary
+        path (str): path to tool's binary.
         hosts (list): list of servers to run prepare on.
+        nvme (bool): if true, nvme flag will be appended to command.
+        scm (bool): if true, scm flag will be appended to command.
         user (str, optional): User with priviledges. Defaults to False.
         hugepages (str, optional): Hugepages to allocate. Defaults to "4096".
         insecure (bool): toggle insecure mode
@@ -206,7 +208,8 @@ def storage_reset(path, hosts, user=None, hugepages="4096", insecure=True):
     dmg.request.value = "storage"
     dmg.action.value = "prepare"
     dmg.set_action_command()
-    dmg.action_command.nvmeonly.value = True
+    dmg.action_command.nvmeonly.value = nvme
+    dmg.action_command.scmonly.value = scm
     dmg.action_command.targetuser.value = getpass.getuser() \
         if user is None else user
     dmg.action_command.hugepages.value = hugepages

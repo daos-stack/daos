@@ -119,9 +119,10 @@ class TestWithoutServers(Test):
         self.prefix = build_paths['PREFIX']
         self.ompi_prefix = build_paths["OMPI_PREFIX"]
         self.tmp = os.path.join(self.prefix, 'tmp')
-        self.daos_test = os.path.join(self.prefix, 'bin', 'daos_test')
+        self.bin = os.path.join(self.prefix, 'bin')
+        self.daos_test = os.path.join(self.bin, 'daos_test')
         self.orterun = os.path.join(self.ompi_prefix, "bin", "orterun")
-        self.daosctl = os.path.join(self.prefix, 'bin', 'daosctl')
+        self.daosctl = os.path.join(self.bin, 'daosctl')
 
         # setup fault injection, this MUST be before API setup
         fault_list = self.params.get("fault_list", '/run/faults/*/')
@@ -373,9 +374,11 @@ class TestWithServers(TestWithoutServers):
 
         """
         error_list = []
-        if self.hostfile_servers:
-            error = self.server_manager.stop()
-            error_list.append(error)
+        if self.server_managers:
+            for server_manager in self.server_managers:
+                error = server_manager.stop()
+                error_list.append(error)
+
         return error_list
 
     def start_servers(self, server_groups=None):
@@ -384,17 +387,18 @@ class TestWithServers(TestWithoutServers):
         Args:
             server_groups (dict, optional): [description]. Defaults to None.
         """
-        set_path_orte = True
-        if self.prefix == "/usr":
-            set_path_orte = False
+        if server_groups is None:
+            server_groups = {"daos_server": self.hostlist_servers}
         if isinstance(server_groups, dict):
             # Optionally start servers on a different subset of hosts with a
             # different server group
+            self.server_managers = []
             for group, hosts in server_groups.items():
                 self.server_manager = ServerManager(
-                    self.basepath,
+                    self.bin,
                     os.path.join(self.ompi_prefix, "bin"),
-                    enable_path=set_path_orte)
+                    enable_path=True if self.prefix != "/usr" else False)
+                self.server_managers.append(self.server_manager)
                 self.server_manager.get_params(self)
                 self.server_manager.runner.job.yaml_params.name = group
                 self.log.info(
@@ -402,25 +406,12 @@ class TestWithServers(TestWithoutServers):
                 self.server_manager.hosts = (
                     hosts, self.workdir, self.hostfile_servers_slots)
                 try:
-                    self.server_manager.start()
+                    AVOCADO_FILE = "src/tests/ftest/data/daos_avocado_test.yaml"
+                    yamlfile = "{}/{}".format(self.basepath, AVOCADO_FILE)
+                    self.server_manager.start(yamlfile)
                 except ServerFailed as error:
                     self.multi_log("  {}".format(error))
                     self.fail("Error starting server: {}".format(error))
-
-        else:
-            self.server_manager = ServerManager(
-                self.basepath,
-                os.path.join(self.ompi_prefix, "bin"),
-                enable_path=set_path_orte)
-            self.server_manager.get_params(self)
-            self.server_manager.hosts = (
-                self.hostlist_servers, self.workdir, \
-                self.hostfile_servers_slots)
-            try:
-                self.server_manager.start()
-            except ServerFailed as error:
-                self.multi_log("  {}".format(error))
-                self.fail("Error starting server: {}".format(error))
 
     def get_partition_hosts(self, partition_key, host_list):
         """[summary].

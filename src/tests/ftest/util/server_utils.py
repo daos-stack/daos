@@ -31,6 +31,16 @@ import time
 import yaml
 import getpass
 
+# Remove below imports when depricating run_server and stop_server functions.
+import subprocess
+import json
+import resource
+import signal
+import fcntl
+import errno
+from avocado.utils import genio
+# Remove above imports when depricating run_server and stop_server functions.
+
 from command_utils import BasicParameter, FormattedParameter, ExecutableCommand
 from command_utils import ObjectWithParameters, CommandFailure
 from command_utils import DaosCommand, Orterun
@@ -83,9 +93,9 @@ class DaosServer(DaosCommand):
         super(DaosServer, self).get_params(test)
         self.yaml_params.get_params(test)
 
-    def set_config(self, basepath):
+    def set_config(self, yamlfile):
         """Set the config value of the parameters in server command."""
-        self.config.value = self.yaml_params.create_yaml(basepath)
+        self.config.value = self.yaml_params.create_yaml(yamlfile)
         self.mode = "normal"
         if self.yaml_params.is_nvme() or self.yaml_params.is_scm():
             self.mode = "format"
@@ -108,10 +118,10 @@ class DaosServer(DaosCommand):
             err_msg = "{} detected. Only {}/{} messages received".format(
                 "Time out" if timed_out else "Error",
                 start_msgs, self.server_cnt)
-            print("{}:\n{}".format(err_msg, subprocess.get_stdout()))
+            self.log.info("{}:\n{}".format(err_msg, subprocess.get_stdout()))
             return False
 
-        print("  Started server in <{}> mode in {} seconds".format(
+        self.log.info("  Started server in <{}> mode in {} seconds".format(
             self.mode, time.time() - start_time))
         return True
 
@@ -171,7 +181,7 @@ class DaosServer(DaosCommand):
                 as rfile:
                     self.data = yaml.safe_load(rfile)
             except Exception as err:
-                print("<SERVER> Exception occurred: {0}".format(str(err)))
+                self.log.info("<SERVER> Exception occurred:{}".format(str(err)))
                 traceback.print_exception(
                     err.__class__, err, sys.exc_info()[2])
                 raise ServerFailed(
@@ -192,7 +202,8 @@ class DaosServer(DaosCommand):
                     new_value_set = yaml.safe_load(
                         filedata.replace('!mux', ''))
                 except Exception as err:
-                    print("<SERVER> Exception occurred: {0}".format(str(err)))
+                    self.log.info("<SERVER> Exception occurred: {0}".format(
+                        str(err)))
                     traceback.print_exception(
                         err.__class__, err, sys.exc_info()[2])
                     raise ServerFailed(
@@ -229,13 +240,12 @@ class DaosServer(DaosCommand):
             """Return if SCM (ram) is provided in the configuration."""
             return self.scm is not None
 
-        def create_yaml(self, basepath):
+        def create_yaml(self, yamlfile):
             """Create the DAOS server config YAML file based on Avocado test
                 Yaml file.
 
             Args:
-                basepath (str): DAOS install basepath
-                log_filename (str): Set a specific logfile name
+                yamlfile (str): full path and name of yaml file
 
             Raises:
                 ServerFailed: if there is an reading/writing yaml files
@@ -247,29 +257,27 @@ class DaosServer(DaosCommand):
             # Write self.data dictionary in to AVOCADO_FILE
             # This will be used to start with daos_server -o option.
             try:
-                with open('{}/{}'.format(basepath, AVOCADO_FILE), 'w') as wfile:
-                    yaml.dump(
-                        self.data, wfile, default_flow_style=False)
+                with open(yamlfile, 'w') as wfile:
+                    yaml.dump(self.data, wfile, default_flow_style=False)
             except Exception as err:
-                print("<SERVER> Exception occurred: {0}".format(str(err)))
+                self.log.info("<SERVER> Exception occurred:{}".format(str(err)))
                 traceback.print_exception(
                     err.__class__, err, sys.exc_info()[2])
-                raise ServerFailed("Failed to Write {}/{}".format(
-                    basepath, AVOCADO_FILE))
+                raise ServerFailed("Failed to Write {}".format(yamlfile))
 
-            return os.path.join(basepath, AVOCADO_FILE)
+            return os.path.join(yamlfile)
 
 
 class ServerManager(ExecutableCommand):
     """Defines object to manage server functions and launch server command."""
-    # pylint: disable=pylint-no-self-use, pylint-protected-access
+    # pylint: disable=pylint-no-self-use
 
-    def __init__(self, basepath, runnerpath, attach="/tmp", timeout=30,
+    def __init__(self, daosbinpath, runnerpath, attach="/tmp", timeout=30,
                  enable_path=False):
         """Create a ServerManager object.
 
         Args:
-            basepath (str): Path to daos install
+            daosbinpath (str): Path to daos bin
             runnerpath (str): Path to Orterun binary.
             attach (str, optional): Defaults to "/tmp".
             timeout (int, optional): Time for the server to start.
@@ -278,12 +286,12 @@ class ServerManager(ExecutableCommand):
         """
         super(ServerManager, self).__init__("/run/server_manager/*", "", "")
 
-        self.basepath = basepath
+        self.daosbinpath = daosbinpath
         self._hosts = None
 
         # Setup orterun command defaults
         self.runner = Orterun(
-            DaosServer(os.path.join(self.basepath, "bin")), runnerpath, True)
+            DaosServer(self.daosbinpath), runnerpath, True)
         self.runner.enable_recovery.value = True
         if enable_path:
             self.runner.export.value = ["PATH"]
@@ -349,53 +357,55 @@ class ServerManager(ExecutableCommand):
         """Execute the runner subprocess."""
         return self.runner.run()
 
-    def start(self):
+    def start(self, yamlfile):
         """Start the server through the runner."""
-
-        self.runner.job.set_config(self.basepath)
+        self.runner.job.set_config(yamlfile)
         self.server_clean()
 
         # Prepare nvme storage in servers
-        if self.runner.job.mode == "format":
+        if self.runner.job.yaml_params.is_nvme():
+            self.log.info("Performing nvme storage prepare in <format> mode")
             storage_prepare(self._hosts)
 
         try:
             self.run()
         except CommandFailure as details:
-            print("<SERVER> Exception occurred: {}".format(details))
+            self.log.info("<SERVER> Exception occurred: {}".format(details))
             # Kill the subprocess, anything that might have started
+            self.kill()
             raise ServerFailed(
                 "Failed to start server in {} mode.".format(
                     self.runner.job.mode))
 
-        if self.runner.job.mode == "format":
+        if self.runner.job.yaml_params.is_nvme() or \
+           self.runner.job.yaml_params.is_scm():
+            # Setup the hostlist to pass to dmg command
             servers_with_ports = [
                 "{}:{}".format(host, self.runner.job.yaml_params.port)
                 for host in self._hosts]
 
-            storage_format(
-                os.path.join(self.basepath, "bin"),
-                ",".join(servers_with_ports))
+            self.log.info("Formatting hosts: <{}>".format(self._hosts))
+            storage_format(self.daosbinpath, ",".join(servers_with_ports))
             self.runner.job.mode = "normal"
             try:
                 self.runner.job.check_subprocess_status(self.runner.process)
-            except CommandFailure as details:
-                print("Failed to start after format: {}".format(details))
+            except CommandFailure as error:
+                self.log.info("Failed to start after format: {}".format(error))
 
         return True
 
     def stop(self):
         """Stop the server through the runner."""
         if self.runner.job.yaml_params.is_nvme() or \
-            self.runner.job.yaml_params.is_scm():
+           self.runner.job.yaml_params.is_scm():
+            # Setup the hostlist to pass to dmg command
             servers_with_ports = [
                 "{}:{}".format(host, self.runner.job.yaml_params.port)
                 for host in self._hosts]
             storage_reset(
-                os.path.join(self.basepath, "bin"),
-                ",".join(servers_with_ports))
+                self.daosbinpath, ",".join(servers_with_ports), nvme=True)
 
-        print("Stopping servers")
+        self.log.info("Stopping servers")
         error_list = []
         try:
             self.runner.stop()
@@ -424,6 +434,7 @@ class ServerManager(ExecutableCommand):
             "pkill '(daos_server|daos_io_server)' --signal KILL",
         ]
         # Intentionally ignoring the exit status of the command
+        self.log.info("Killing any server processes")
         pcmd(self._hosts, "; ".join(kill_cmds), False, None, None)
 
     def clean_files(self):
@@ -433,10 +444,11 @@ class ServerManager(ExecutableCommand):
         ]
 
         if self.runner.job.yaml_params.is_nvme() or \
-            self.runner.job.yaml_params.is_scm():
+           self.runner.job.yaml_params.is_scm():
             clean_cmds.append("sudo umount /mnt/daos; sudo rm -rf /mnt/daos")
 
         # Intentionally ignoring the exit status of the command
+        self.log.info("Cleanup of /mnt/daos directory.")
         pcmd(self._hosts, "; ".join(clean_cmds), False, None, None)
 
 
@@ -454,3 +466,304 @@ def storage_prepare(hosts):
     result = pcmd(hosts, cmd, timeout=120)
     if len(result) > 1 or 0 not in result:
         raise ServerFailed("Error preparing NVMe storage")
+
+
+"""
+The following code should be taken out once the following tests have been
+ported over to use apricot TestWithServers, TestWithoutServers:
+
+basic_snapshot.py, romio.py, cart_self_test.py, object_integrity.py
+bad_connect.py, bad_create.py, bad_evict.py, bad_exclude.py, bad_query.py
+mutli_server_create_delete_test.py, multiple_creates_test.py, permission.py
+metadata.py
+"""
+
+SESSIONS = {}
+
+
+def create_server_yaml(basepath, log_filename):
+    """Create the DAOS server config YAML file based on Avocado test Yaml file.
+
+    Args:
+        basepath (str): DAOS install basepath
+        log_filename (str): log file name
+    Raises:
+        ServerFailed: if there is an reading/writing yaml files
+
+    """
+    # Read the baseline conf file data/daos_server_baseline.yml
+    try:
+        with open('{}/{}'.format(basepath, DEFAULT_FILE), 'r') as read_file:
+            default_value_set = yaml.safe_load(read_file)
+    except Exception as excpn:
+        print("<SERVER> Exception occurred: {0}".format(str(excpn)))
+        traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
+        raise ServerFailed(
+            "Failed to Read {}/{}".format(basepath, DEFAULT_FILE))
+
+    # Read the values from avocado_testcase.yaml file if test ran with Avocado.
+    new_value_set = {}
+    if "AVOCADO_TEST_DATADIR" in os.environ:
+        avocado_yaml_file = str(os.environ["AVOCADO_TEST_DATADIR"]).\
+                                split(".")[0] + ".yaml"
+
+        # Read avocado test yaml file.
+        try:
+            with open(avocado_yaml_file, 'r') as rfile:
+                filedata = rfile.read()
+            # Remove !mux for yaml load
+            new_value_set = yaml.safe_load(filedata.replace('!mux', ''))
+        except Exception as excpn:
+            print("<SERVER> Exception occurred: {0}".format(str(excpn)))
+            traceback.print_exception(
+                excpn.__class__, excpn, sys.exc_info()[2])
+            raise ServerFailed(
+                "Failed to Read {}".format('{}.tmp'.format(avocado_yaml_file)))
+
+    # Update values from avocado_testcase.yaml in DAOS yaml variables.
+    if new_value_set:
+        if 'server' in new_value_set['server_config']:
+            for key in new_value_set['server_config']['server']:
+                default_value_set['servers'][0][key] = \
+                        new_value_set['server_config']['server'][key]
+        for key in new_value_set['server_config']:
+            if 'server' not in key:
+                default_value_set[key] = new_value_set['server_config'][key]
+
+    # if sepcific log file name specified use that
+    if log_filename:
+        default_value_set['servers'][0]['log_file'] = log_filename
+
+    # Write default_value_set dictionary in to AVOCADO_FILE
+    # This will be used to start with daos_server -o option.
+    try:
+        with open('{}/{}'.format(basepath,
+                                 AVOCADO_FILE), 'w') as write_file:
+            yaml.dump(default_value_set, write_file, default_flow_style=False)
+    except Exception as excpn:
+        print("<SERVER> Exception occurred: {0}".format(str(excpn)))
+        traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
+        raise ServerFailed("Failed to Write {}/{}".format(basepath,
+                                                          AVOCADO_FILE))
+
+
+def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
+               clean=True, log_filename=None):
+    """Launch DAOS servers in accordance with the supplied hostfile.
+
+    Args:
+        hostfile (str): hostfile defining on which hosts to start servers
+        setname (str): session name
+        basepath (str): DAOS install basepath
+        uri_path (str, optional): path to uri file. Defaults to None.
+        env_dict (dict, optional): dictionary on env variable names and values.
+            Defaults to None.
+        clean (bool, optional): clean the mount point. Defaults to True.
+        log_filename (str): log file name
+    Raises:
+        ServerFailed: if there is an error starting the servers
+
+    """
+    global SESSIONS    # pylint: disable=global-variable-not-assigned
+    try:
+        servers = (
+            [line.split(' ')[0] for line in genio.read_all_lines(hostfile)])
+        server_count = len(servers)
+
+        # Create the DAOS server configuration yaml file to pass
+        # with daos_server -o <FILE_NAME>
+        print("Creating the server yaml file")
+        create_server_yaml(basepath, log_filename)
+
+        # first make sure there are no existing servers running
+        print("Removing any existing server processes")
+        kill_server(servers)
+
+        # clean the tmpfs on the servers
+        if clean:
+            print("Cleaning the server tmpfs directories")
+            result = pcmd(
+                servers,
+                "find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | "
+                "xargs -0r rm -rf",
+                verbose=False)
+            if len(result) > 1 or 0 not in result:
+                raise ServerFailed(
+                    "Error cleaning tmpfs on servers: {}".format(
+                        ", ".join(
+                            [str(result[key]) for key in result if key != 0])))
+
+        # Pile of build time variables
+        with open(os.path.join(basepath, ".build_vars.json")) as json_vars:
+            build_vars = json.load(json_vars)
+        orterun_bin = os.path.join(build_vars["OMPI_PREFIX"], "bin", "orterun")
+        daos_srv_bin = os.path.join(build_vars["PREFIX"], "bin", "daos_server")
+
+        server_cmd = [orterun_bin, "--np", str(server_count)]
+        if uri_path is not None:
+            server_cmd.extend(["--report-uri", uri_path])
+        server_cmd.extend(["--hostfile", hostfile, "--enable-recovery"])
+
+        # Add any user supplied environment
+        if env_dict is not None:
+            for key, value in env_dict.items():
+                os.environ[key] = value
+                server_cmd.extend(["-x", "{}={}".format(key, value)])
+
+        # the remote orte needs to know where to find daos, in the
+        # case that it's not in the system prefix
+        # but it should already be in our PATH, so just pass our
+        # PATH along to the remote
+        if build_vars["PREFIX"] != "/usr":
+            server_cmd.extend(["-x", "PATH"])
+
+        # Run server in insecure mode until Certificate tests are in place
+        server_cmd.extend([daos_srv_bin,
+                           "--debug",
+                           "--config", '{}/{}'.format(basepath, AVOCADO_FILE),
+                           "start", "-i",
+                           "-a", os.path.join(basepath, "install", "tmp")])
+
+        print("Start CMD>>>>{0}".format(' '.join(server_cmd)))
+
+        resource.setrlimit(
+            resource.RLIMIT_CORE,
+            (resource.RLIM_INFINITY, resource.RLIM_INFINITY))
+
+        SESSIONS[setname] = subprocess.Popen(server_cmd,
+                                             stdout=subprocess.PIPE,
+                                             stderr=subprocess.PIPE)
+        fdesc = SESSIONS[setname].stdout.fileno()
+        fstat = fcntl.fcntl(fdesc, fcntl.F_GETFL)
+        fcntl.fcntl(fdesc, fcntl.F_SETFL, fstat | os.O_NONBLOCK)
+        timeout = 600
+        start_time = time.time()
+        matches = 0
+        pattern = "DAOS I/O server.*started"
+        expected_data = "Starting Servers\n"
+        while True:
+            output = ""
+            try:
+                output = SESSIONS[setname].stdout.read()
+            except IOError as excpn:
+                if excpn.errno != errno.EAGAIN:
+                    raise ServerFailed("Server didn't start: {}".format(excpn))
+                continue
+            match = re.findall(pattern, output)
+            expected_data += output
+            matches += len(match)
+            if not output or matches == server_count or \
+               time.time() - start_time > timeout:
+                print("<SERVER>: {}".format(expected_data))
+                if matches != server_count:
+                    raise ServerFailed("Server didn't start!")
+                break
+        print(
+            "<SERVER> server started and took {} seconds to start".format(
+                time.time() - start_time))
+
+    except Exception as error:
+        print("<SERVER> Exception occurred: {0}".format(str(error)))
+        traceback.print_exception(error.__class__, error, sys.exc_info()[2])
+        # We need to end the session now -- exit the shell
+        try:
+            SESSIONS[setname].send_signal(signal.SIGINT)
+            time.sleep(5)
+            # get the stderr
+            error = SESSIONS[setname].stderr.read()
+            if SESSIONS[setname].poll() is None:
+                SESSIONS[setname].kill()
+            retcode = SESSIONS[setname].wait()
+            print(
+                "<SERVER> server start return code: {}\nstderr:\n{}".format(
+                    retcode, error))
+        except KeyError:
+            pass
+        raise ServerFailed("Server didn't start!")
+
+
+def stop_server(setname=None, hosts=None):
+    """Stop the daos servers.
+
+    Attempt to initiate an orderly shutdown of all orterun processes it has
+    spawned by sending a ctrl-c to the process matching the setname (or all
+    processes if no setname is provided).
+
+    If a list of hosts is provided, verify that all daos server processes are
+    dead.  Report an error if any processes are found and attempt to forcably
+    kill the processes.
+
+    Args:
+        setname (str, optional): server group name used to match the session
+            used to start the server. Defaults to None.
+        hosts (list, optional): list of hosts running the server processes.
+            Defaults to None.
+
+    Raises:
+        ServerFailed: if there was an error attempting to send a signal to stop
+            the processes running the servers or after sending the signal if
+            there are processes stiull running.
+
+    """
+    global SESSIONS    # pylint: disable=global-variable-not-assigned
+    try:
+        if setname is None:
+            for _key, val in SESSIONS.items():
+                val.send_signal(signal.SIGINT)
+                time.sleep(5)
+                if val.poll() is None:
+                    val.kill()
+                val.wait()
+        else:
+            SESSIONS[setname].send_signal(signal.SIGINT)
+            time.sleep(5)
+            if SESSIONS[setname].poll() is None:
+                SESSIONS[setname].kill()
+            SESSIONS[setname].wait()
+        print("<SERVER> server stopped")
+
+    except Exception as error:
+        print("<SERVER> Exception occurred: {0}".format(str(error)))
+        raise ServerFailed("Server didn't stop!")
+
+    if not hosts:
+        return
+
+    # Make sure the servers actually stopped.  Give them time to stop first
+    # pgrep exit status:
+    #   0 - One or more processes matched the criteria.
+    #   1 - No processes matched.
+    #   2 - Syntax error in the command line.
+    #   3 - Fatal error: out of memory etc.
+    time.sleep(5)
+    result = pcmd(
+        hosts, "pgrep '(daos_server|daos_io_server)'", False, expect_rc=1)
+    if len(result) > 1 or 1 not in result:
+        bad_hosts = [
+            node for key in result if key != 1 for node in list(result[key])]
+        kill_server(bad_hosts)
+        raise ServerFailed(
+            "DAOS server processes detected after attempted stop on {}".format(
+                ", ".join([str(result[key]) for key in result if key != 1])))
+
+    # we can also have orphaned ssh processes that started an orted on a
+    # remote node but never get cleaned up when that remote node spontaneiously
+    # reboots
+    subprocess.call(["pkill", "^ssh$"])
+
+
+def kill_server(hosts):
+    """Forcably kill any daos server processes running on the specified hosts.
+
+    Sometimes stop doesn't get everything.  Really whack everything with this.
+
+    Args:
+        hosts (list): list of host names where servers are running
+    """
+    kill_cmds = [
+        "pkill '(daos_server|daos_io_server)' --signal INT",
+        "sleep 5",
+        "pkill '(daos_server|daos_io_server)' --signal KILL",
+    ]
+    # Intentionally ignoring the exit status of the command
+    pcmd(hosts, "; ".join(kill_cmds), False, None, None)
