@@ -5,7 +5,7 @@
 
 Name:          daos
 Version:       0.6.0
-Release:       8%{?relval}%{?dist}
+Release:       9%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -18,7 +18,7 @@ BuildRequires: gcc-c++
 %if %{defined cart_sha1}
 BuildRequires: cart-devel-%{cart_sha1}
 %else
-BuildRequires: cart-devel <= 1.0.0
+BuildRequires: cart-devel
 %endif
 %if (0%{?rhel} >= 7)
 BuildRequires: argobots-devel >= 1.0rc1
@@ -30,7 +30,11 @@ BuildRequires: fuse-devel >= 3.4.2
 BuildRequires: protobuf-c-devel
 BuildRequires: spdk-devel, spdk-tools
 BuildRequires: fio < 3.4
+%if (0%{?suse_version} >= 1315)
+BuildRequires: libisal-devel
+%else
 BuildRequires: libisa-l-devel
+%endif
 BuildRequires: raft-devel <= 0.5.0
 BuildRequires: hwloc-devel
 BuildRequires: openssl-devel
@@ -268,6 +272,9 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/*.a
 
 %changelog
+* Mon Oct 07 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-9
+- Update cart version used
+
 * Mon Oct 07 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-8
 - Use BR: cart-devel-%{cart_sha1} if available
 - Remove cart's BRs as it's -devel Requires them now

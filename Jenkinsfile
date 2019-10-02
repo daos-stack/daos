@@ -260,6 +260,7 @@ pipeline {
                         unsuccessful {
                             sh label: "Collect artifacts",
                                script: '''mockroot=/var/lib/mock/epel-7-x86_64
+                                          cat mockroot/results/{root,build}.log
                                           artdir=$PWD/artifacts/centos7
                                           if srpms=$(ls _topdir/SRPMS/*); then
                                               cp -af $srpms $artdir
