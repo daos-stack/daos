@@ -126,7 +126,7 @@ class DaosServer(DaosCommand):
             return False
 
         self.log.info("Started server in <%s> mode in %d seconds", self.mode,
-            time.time() - start_time)
+                      time.time() - start_time)
         return True
 
     class DaosServerConfig(ObjectWithParameters):

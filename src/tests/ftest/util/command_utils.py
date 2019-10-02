@@ -333,7 +333,7 @@ class ExecutableCommand(CommandWithParameters):
 
         """
         self.log.info("Checking status of the %s command in %s",
-            self._command, sub_process)
+                      self._command, sub_process)
         return True
 
     def stop(self):
