@@ -106,7 +106,7 @@ show_help(char *name)
 		"\n"
 		"	-m --mountpoint=PATHSTR	Mount point to use\n"
 		"	-s --svc=RANKS		pool service replicas like 1,2,3\n"
-		"	-p --pool=UUID 		pool UUID\n"
+		"	-p --pool=UUID		pool UUID\n"
 		"	-c --container=UUID	container UUID\n"
 		"	-G --sys-name=STR	DAOS system name context for servers\n"
 		"	-S --singlethreaded	Single threaded\n"
