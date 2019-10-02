@@ -43,7 +43,7 @@ from avocado.utils import genio
 
 from command_utils import BasicParameter, FormattedParameter, ExecutableCommand
 from command_utils import ObjectWithParameters, CommandFailure
-from command_utils import DaosCommand, Orterun
+from command_utils import DaosCommand, Orterun, CommandWithParameters
 from general_utils import pcmd, get_file_path
 from dmg_utils import storage_format, storage_reset
 from write_host_file import write_host_file
@@ -75,23 +75,27 @@ class DaosServer(DaosCommand):
         self.server_cnt = 1
         self.mode = "normal"
 
-        self.debug = FormattedParameter("-b", None)
-        self.targets = FormattedParameter("-t {}")
+        self.debug = FormattedParameter("-b", True)
+        self.json = FormattedParameter("-j", False)
         self.config = FormattedParameter("-o {}")
-        self.port = FormattedParameter("-p {}")
-        self.storage = FormattedParameter("-s {}")
-        self.modules = FormattedParameter("-m {}")
-        self.xshelpernr = FormattedParameter("-x {}")
-        self.firstcore = FormattedParameter("-f {}")
-        self.group = FormattedParameter("-g {}")
-        self.attach = FormattedParameter("-a {}")
-        self.sock_dir = FormattedParameter("-d {}")
-        self.insecure = FormattedParameter("-i", None)
 
     def get_params(self, test):
         """Get params for Server object and server configuration."""
         super(DaosServer, self).get_params(test)
         self.yaml_params.get_params(test)
+
+    def set_action_command(self):
+        """Set the action command object based on the yaml provided value."""
+        # pylint: disable=redefined-variable-type
+        if self.action.value == "start":
+            self.action_command = self.ServerStartSubCommand()
+        else:
+            self.action_command = None
+
+    def get_action_command(self, test):
+        """Get action command object parameters from the yaml."""
+        self.set_action_command()
+        super(DaosServer, self).get_action_command(test)
 
     def set_config(self, yamlfile):
         """Set the config value of the parameters in server command."""
@@ -128,6 +132,24 @@ class DaosServer(DaosCommand):
         self.log.info("Started server in <%s> mode in %d seconds", self.mode,
                       time.time() - start_time)
         return True
+
+    class ServerStartSubCommand(CommandWithParameters):
+        """Defines an object representing a daos_server start sub command."""
+
+        def __init__(self):
+            """Create a start subcommand object."""
+            super(DaosServer.ServerStartSubCommand, self).__init__(
+                "/run/daos_server/start/*", "start")
+            self.port = FormattedParameter("-p {}")
+            self.storage = FormattedParameter("-s {}")
+            self.modules = FormattedParameter("-m {}")
+            self.targets = FormattedParameter("-t {}")
+            self.xshelpernr = FormattedParameter("-x {}")
+            self.firstcore = FormattedParameter("-f {}")
+            self.group = FormattedParameter("-g {}")
+            self.attach = FormattedParameter("-a {}")
+            self.sock_dir = FormattedParameter("-d {}")
+            self.insecure = FormattedParameter("-i", True)
 
     class DaosServerConfig(ObjectWithParameters):
         """Object to manage the configuration of the server command."""
@@ -237,11 +259,11 @@ class DaosServer(DaosCommand):
 
         def is_nvme(self):
             """Return if NVMe is provided in the configuration."""
-            return self.nvme is not None
+            return self.nvme if self.nvme is not None else False
 
         def is_scm(self):
-            """Return if SCM (ram) is provided in the configuration."""
-            return self.scm is not None
+            """Return if SCM is provided in the configuration."""
+            return self.scm if self.scm is not None else False
 
         def create_yaml(self, yamlfile):
             """Create the DAOS server config YAML file based on Avocado test
@@ -275,8 +297,7 @@ class ServerManager(ExecutableCommand):
     """Defines object to manage server functions and launch server command."""
     # pylint: disable=pylint-no-self-use
 
-    def __init__(self, daosbinpath, runnerpath, attach="/tmp", timeout=30,
-                 enable_path=False):
+    def __init__(self, daosbinpath, runnerpath, attach="/tmp", timeout=30):
         """Create a ServerManager object.
 
         Args:
@@ -285,7 +306,6 @@ class ServerManager(ExecutableCommand):
             attach (str, optional): Defaults to "/tmp".
             timeout (int, optional): Time for the server to start.
                 Defaults to 30.
-            enable_path (bool): If true, add PATH to orterun export.
         """
         super(ServerManager, self).__init__("/run/server_manager/*", "", "")
 
@@ -295,26 +315,20 @@ class ServerManager(ExecutableCommand):
         # Setup orterun command defaults
         self.runner = Orterun(
             DaosServer(self.daosbinpath), runnerpath, True)
-        self.runner.enable_recovery.value = True
-        if enable_path:
-            self.runner.export.value = ["PATH"]
 
         # Setup server command defaults
-        self.runner.job.attach.value = attach
-        self.runner.job.debug.value = True
-        self.runner.job.insecure.value = True
-        self.runner.job.request.value = "start"
-        self.runner.job.sudo = True
         self.runner.job.timeout = timeout
+        self.runner.job.action.value = "start"
+        self.runner.job.set_action_command()
 
         # Parameters that user can specify in the test yaml to modify behavior.
-        self.debug = BasicParameter(None)           # ServerCommand param
-        self.insecure = BasicParameter(None, True)  # ServerCommand param
-        self.sudo = BasicParameter(None, True)      # ServerCommand param
-        self.report_uri = BasicParameter(None)      # Orterun param
-        self.export = BasicParameter(None)          # Orterun param
-        self.processes = BasicParameter(None)       # Orterun param
-        self.env = BasicParameter(None)             # Orterun param
+        self.debug = BasicParameter(None, True)       # ServerCommand param
+        self.attach = BasicParameter(None, attach)    # ServerCommand param
+        self.insecure = BasicParameter(None, True)    # ServerCommand param
+        self.sudo = BasicParameter(None, True)        # ServerCommand param
+        self.report_uri = BasicParameter(None)             # Orterun param
+        self.enable_recovery = BasicParameter(None, True)  # Orterun param
+        self.export = BasicParameter(None)                 # Orterun param
 
     @property
     def hosts(self):
@@ -341,8 +355,9 @@ class ServerManager(ExecutableCommand):
         Args:
             test (Test): avocado Test object
         """
-        server_params = ["attach", "debug", "insecure", "sudo"]
-        runner_params = ["enable_recovery", "export"]
+        server_params = ["debug", "sudo"]
+        server_start_params = ["attach", "insecure"]
+        runner_params = ["enable_recovery", "export", "report_uri"]
         super(ServerManager, self).get_params(test)
         self.runner.job.yaml_params.get_params(test)
         self.runner.get_params(test)
@@ -353,6 +368,9 @@ class ServerManager(ExecutableCommand):
                 else:
                     getattr(
                         self.runner.job, name).value = getattr(self, name).value
+            if name in server_start_params:
+                getattr(self.runner.job.action_command, name).value = \
+                    getattr(self, name).value
             if name in runner_params:
                 getattr(self.runner, name).value = getattr(self, name).value
 
@@ -409,13 +427,10 @@ class ServerManager(ExecutableCommand):
                 self.daosbinpath, ",".join(servers_with_ports), nvme=True)
 
         self.log.info("Stopping servers")
-        error_list = []
         try:
             self.runner.stop()
         except CommandFailure as error:
-            error_list.append("Error stopping servers: {}".format(error))
-
-        return error_list
+            raise ServerFailed("Failed to stop servers:{}".format(error))
 
     def server_clean(self):
         """Prepare the hosts before starting daos server."""
@@ -452,7 +467,7 @@ class ServerManager(ExecutableCommand):
 
         # Intentionally ignoring the exit status of the command
         self.log.info("Cleanup of /mnt/daos directory.")
-        pcmd(self._hosts, "; ".join(clean_cmds), False, None, None)
+        pcmd(self._hosts, "; ".join(clean_cmds), False)
 
 
 def storage_prepare(hosts):

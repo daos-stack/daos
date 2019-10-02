@@ -173,6 +173,7 @@ class TestWithServers(TestWithoutServers):
         """Initialize a TestWithServers object."""
         super(TestWithServers, self).__init__(*args, **kwargs)
 
+        self.server_managers = []
         self.agent_sessions = None
         self.setup_start_servers = True
         self.setup_start_agents = True
@@ -376,9 +377,12 @@ class TestWithServers(TestWithoutServers):
         error_list = []
         if self.server_managers:
             for server_manager in self.server_managers:
-                error = server_manager.stop()
-                error_list.append(error)
-
+                try:
+                    server_manager.stop()
+                except ServerFailed as error:
+                    self.multi_log("  {}".format(error))
+                    error_list.append(
+                        "Error stopping servers: {}".format(error))
         return error_list
 
     def start_servers(self, server_groups=None):
@@ -392,19 +396,22 @@ class TestWithServers(TestWithoutServers):
         if isinstance(server_groups, dict):
             # Optionally start servers on a different subset of hosts with a
             # different server group
-            self.server_managers = []
             for group, hosts in server_groups.items():
+                self.log.info(
+                    "Starting servers: group=%s, hosts=%s", group, hosts)
                 self.server_manager = ServerManager(
                     self.bin,
                     os.path.join(self.ompi_prefix, "bin"),
-                    enable_path=True if self.prefix != "/usr" else False)
+                    attach=os.path.join(self.prefix, "tmp"))
                 self.server_managers.append(self.server_manager)
                 self.server_manager.get_params(self)
                 self.server_manager.runner.job.yaml_params.name = group
-                self.log.info(
-                    "Starting servers: group=%s, hosts=%s", group, hosts)
                 self.server_manager.hosts = (
                     hosts, self.workdir, self.hostfile_servers_slots)
+                if self.prefix != "/usr":
+                    if self.server_manager.runner.export.value is None:
+                        self.server_manager.runner.export.value = []
+                    self.server_manager.runner.export.value.extend(["PATH"])
                 try:
                     avocado_file = "src/tests/ftest/data/daos_avocado_test.yaml"
                     yamlfile = "{}/{}".format(self.basepath, avocado_file)
