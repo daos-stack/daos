@@ -1907,6 +1907,9 @@ handle_ivsync_response(const struct crt_cb_info *cb_info)
 					iv_sync->isc_class_id);
 		D_ASSERT(iv_ops != NULL);
 
+		if (cb_info->cci_rc != 0)
+			iv_sync->isc_update_rc = cb_info->cci_rc;
+
 		iv_sync->isc_update_comp_cb(iv_sync->isc_ivns_internal,
 					iv_sync->isc_class_id,
 					&iv_sync->isc_iv_key,
@@ -2272,6 +2275,9 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 			child_output->rc = output->rc;
 		}
 
+		if (cb_info->cci_rc != 0)
+			child_output->rc = cb_info->cci_rc;
+
 		/* Fatal if reply send fails */
 		rc = crt_reply_send(iv_info->uci_child_rpc);
 		D_ASSERT(rc == 0);
@@ -2286,6 +2292,11 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 		else
 			tmp_iv_value = &iv_info->uci_iv_value;
 
+		rc = output->rc;
+
+		if (cb_info->cci_rc != 0)
+			rc = cb_info->cci_rc;
+
 		crt_ivsync_rpc_issue(iv_info->uci_ivns_internal,
 					iv_info->uci_class_id,
 					&input->ivu_key, 0,
@@ -2296,7 +2307,7 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 					iv_info->uci_comp_cb,
 					iv_info->uci_cb_arg,
 					iv_info->uci_user_priv,
-					output->rc);
+					rc);
 
 	}
 
