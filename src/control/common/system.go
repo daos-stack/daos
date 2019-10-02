@@ -26,9 +26,10 @@ package common
 import (
 	"sync"
 
+	"github.com/pkg/errors"
+
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/pkg/errors"
 )
 
 // SystemMember refers to a data-plane instance that is a member of this DAOS
@@ -57,39 +58,46 @@ func (m *Membership) Add(member SystemMember) error {
 	}
 
 	m.Lock()
+	defer m.Unlock()
+
 	m.members[member.Uuid] = member
-	m.Unlock()
 
 	return nil
 }
 
-// Remove removes member from membership.
-func (m *Membership) Remove(uuid string) error {
+// Remove removes member from membership, idenpotent.
+//
+// Avoid taking a RW lock where possible.
+func (m *Membership) Remove(uuid string) {
 	m.RLock()
 	_, found := m.members[uuid]
 	m.RUnlock()
 	if !found {
-		return errors.Errorf("member %s doesn't exist", uuid)
+		return
 	}
 
 	m.Lock()
-	delete(m.members, uuid)
-	m.Unlock()
+	defer m.Unlock()
 
-	return nil
+	delete(m.members, uuid)
 }
 
 // GetMember retrieves member from membership based on UUID.
-func (m *Membership) GetMember(uuid string) SystemMember {
+func (m *Membership) GetMember(uuid string) (*SystemMember, error) {
 	m.RLock()
 	defer m.RUnlock()
 
-	return m.members[uuid]
+	member, found := m.members[uuid]
+	if !found {
+		return nil, errors.Errorf("member %s not found", uuid)
+	}
+
+	return &member, nil
 }
 
 // GetMembers returns internal member structs as a sequence.
 func (m *Membership) GetMembers() []*SystemMember {
-	members := make([]*SystemMember, len(m.members))
+	members := make([]*SystemMember, 0, len(m.members))
 
 	m.RLock()
 	defer m.RUnlock()
@@ -103,7 +111,7 @@ func (m *Membership) GetMembers() []*SystemMember {
 
 // GetMembersPB converts internal member structs to protobuf equivalents.
 func (m *Membership) GetMembersPB() []*mgmtpb.SystemMember {
-	pbMembers := make([]*mgmtpb.SystemMember, len(m.members))
+	pbMembers := make([]*mgmtpb.SystemMember, 0, len(m.members))
 
 	m.RLock()
 	defer m.RUnlock()

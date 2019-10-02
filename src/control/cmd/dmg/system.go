@@ -50,7 +50,7 @@ func (cmd *systemStopCmd) Execute(args []string) error {
 		msg = errors.WithMessagef(err, "FAILED").Error()
 	}
 	if len(members) > 0 {
-		msg += fmt.Sprintf(": %+v", members)
+		msg += fmt.Sprintf(": still %d active members", len(members))
 	}
 
 	cmd.log.Infof("System-stop command %s\n", msg)
@@ -73,10 +73,10 @@ func (cmd *systemMemberQueryCmd) Execute(args []string) error {
 		msg = errors.WithMessagef(err, "FAILED").Error()
 	}
 	if len(members) > 0 {
-		msg += fmt.Sprintf(": %+v", members)
+		msg += fmt.Sprintf(": %v", members)
 	}
 
-	cmd.log.Infof("System-query command %s\n", msg)
+	cmd.log.Infof("System-member-query command %s\n", msg)
 
 	return nil
 }
