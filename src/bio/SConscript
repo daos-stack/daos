@@ -9,7 +9,7 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
 
     denv = env.Clone()
-    prereqs.require(denv, 'pmdk', 'spdk', 'argobots', 'protobufc')
+    prereqs.require(denv, 'pmdk', 'spdk', 'argobots', 'protobufc', 'hwloc')
 
     SConscript('smd/SConscript')
     denv.AppendUnique(LIBPATH=['smd'])

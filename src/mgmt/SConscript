@@ -9,7 +9,7 @@ def scons():
 
     denv = env.Clone()
 
-    prereqs.require(denv, 'argobots', 'protobufc')
+    prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
 
     common = denv.SharedObject(['rpc.c', 'mgmt.pb-c.c', 'pool.pb-c.c',
                                 'srv.pb-c.c', 'storage_query.pb-c.c'])

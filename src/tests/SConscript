@@ -15,7 +15,7 @@ def scons():
     denv.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../lib64/daos_srv')])
 
     denv.Append(CPPPATH=[Dir('suite').srcnode()])
-    prereqs.require(denv, 'ompi', 'argobots')
+    prereqs.require(denv, 'ompi', 'argobots', 'hwloc')
 
     daos_build.program(denv, 'simple_array', 'simple_array.c', LIBS=libs)
     daosbench = daos_build.program(denv, 'daosbench', 'daosbench.c', LIBS=libs)
