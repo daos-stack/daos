@@ -743,3 +743,46 @@ daos_ace_to_str(struct daos_ace *ace, char *buf, size_t buf_len)
 
 	return rc;
 }
+
+int
+daos_acl_from_strs(char **ace_strs, size_t ace_nr, struct daos_acl **acl)
+{
+	struct daos_ace	**tmp_aces;
+	struct daos_acl	*tmp_acl;
+	size_t		i;
+	int		rc;
+
+	if (ace_strs == NULL || ace_nr == 0) {
+		D_ERROR("No ACE strings provided\n");
+		return -DER_INVAL;
+	}
+
+	D_ALLOC_ARRAY(tmp_aces, ace_nr);
+	if (tmp_aces == NULL)
+		return -DER_NOMEM;
+
+	for (i = 0; i < ace_nr; i++) {
+		rc = daos_ace_from_str(ace_strs[i], &(tmp_aces[i]));
+		if (rc != 0) {
+			D_ERROR("Failed to convert string '%s' to ACE, "
+				"err=%d\n", ace_strs[i], rc);
+			D_GOTO(out, rc);
+		}
+	}
+
+	tmp_acl = daos_acl_create(tmp_aces, ace_nr);
+	if (tmp_acl == NULL) {
+		D_ERROR("Failed to allocate ACL\n");
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	*acl = tmp_acl;
+	rc = 0;
+
+out:
+	for (i = 0; i < ace_nr; i++)
+		daos_ace_free(tmp_aces[i]);
+	D_FREE(tmp_aces);
+	return rc;
+}
+
