@@ -236,9 +236,9 @@ add_ds_shard(d_list_t *ds_list, struct pool_target *target)
 }
 
 /**
- * Free all elements in the remap list
+ * Free all elements in the down shard list
  *
- * \param[in] The remap list to be freed.
+ * \param[in] The ds list to be freed.
  */
 void
 ds_list_free_all(d_list_t *used_targets_list)
