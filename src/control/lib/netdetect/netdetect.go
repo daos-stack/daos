@@ -672,6 +672,11 @@ func convertLibFabricToMercury(provider string) (string, error) {
 // validation depends upon physical hardware resources and configuration on the target machine
 // that are either not known or static in the test environment
 func ValidateProviderStub(provider string, device string) error {
+	// Call the full function to get the results without generating any hard errors
+	err := ValidateProviderConfig(provider, device)
+	if err != nil {
+		log.Debugf("ValidateProviderConfig (device: %s, provider %s) returned error: %v", device, provider, err)
+	}
 	return nil
 }
 
@@ -746,6 +751,11 @@ func ValidateProviderConfig(device string, provider string) error {
 // validation depends upon physical hardware resources and configuration on the target machine
 // that are either not known or static in the test environment
 func ValidateNUMAStub(device string, numaNode uint) error {
+
+	err := ValidateNUMAConfig(device, numaNode)
+	if err != nil {
+		log.Debugf("ValidateNUMAConfig (device: %s, NUMA: %d) returned error: %v", device, numaNode, err)
+	}
 	return nil
 }
 
