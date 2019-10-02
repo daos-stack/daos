@@ -108,7 +108,7 @@ show_help(char *name)
 		"	-s --svc=RANKS		pool service replicas like 1,2,3\n"
 		"	-p --pool=UUID 		pool UUID\n"
 		"	-c --container=UUID	container UUID\n"
-		"	-n --sys-name=STR	DAOS system name context for servers\n"
+		"	-G --sys-name=STR	DAOS system name context for servers\n"
 		"	-S --singlethreaded	Single threaded\n"
 		"	-f --foreground		Run in foreground\n",
 		name);
@@ -127,7 +127,7 @@ main(int argc, char **argv)
 	/* The 'daos' command uses -m as an alias for --scv however
 	 * dfuse uses -m for --mountpoint so this is inconsistent
 	 * but probably better than changing the meaning of the -m
-	 * option here.
+	 * option here.h
 	 */
 	struct option long_options[] = {
 		{"pool",		required_argument, 0, 'p'},
