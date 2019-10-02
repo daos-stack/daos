@@ -77,7 +77,7 @@ class BasicParameter(object):
         """
         self.value = value
         if name is not None:
-            self.log.info("Updated param %s => %s" % (name, self.value))
+            self.log.info("Updated param %s => %s", name, self.value)
 
 
 class FormattedParameter(BasicParameter):
@@ -332,9 +332,8 @@ class ExecutableCommand(CommandWithParameters):
             bool: whether or not the command progress has been detected
 
         """
-        self.log.info(
-            "Checking status of the {} command in {}".format(
-                self._command, sub_process))
+        self.log.info("Checking status of the %s command in %s",
+            self._command, sub_process)
         return True
 
     def stop(self):

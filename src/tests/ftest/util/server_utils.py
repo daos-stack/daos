@@ -122,11 +122,11 @@ class DaosServer(DaosCommand):
             err_msg = "{} detected. Only {}/{} messages received".format(
                 "Time out" if timed_out else "Error",
                 start_msgs, self.server_cnt)
-            self.log.info("%s:\n%s" % (err_msg, sub_process.get_stdout()))
+            self.log.info("%s:\n%s", err_msg, sub_process.get_stdout())
             return False
 
-        self.log.info("Started server in <%s> mode in %d seconds" % (self.mode,
-            time.time() - start_time))
+        self.log.info("Started server in <%s> mode in %d seconds", self.mode,
+            time.time() - start_time)
         return True
 
     class DaosServerConfig(ObjectWithParameters):
@@ -185,7 +185,7 @@ class DaosServer(DaosCommand):
                 as rfile:
                     self.data = yaml.safe_load(rfile)
             except Exception as err:
-                self.log.info("<SERVER> Exception occurred: %s" % str(err))
+                self.log.info("<SERVER> Exception occurred: %s", str(err))
                 traceback.print_exception(
                     err.__class__, err, sys.exc_info()[2])
                 raise ServerFailed(
@@ -206,7 +206,7 @@ class DaosServer(DaosCommand):
                     new_value_set = yaml.safe_load(
                         filedata.replace('!mux', ''))
                 except Exception as err:
-                    self.log.info("<SERVER> Exception occurred: %s" % str(err))
+                    self.log.info("<SERVER> Exception occurred: %s", str(err))
                     traceback.print_exception(
                         err.__class__, err, sys.exc_info()[2])
                     raise ServerFailed(
@@ -263,7 +263,7 @@ class DaosServer(DaosCommand):
                 with open(yamlfile, 'w') as wfile:
                     yaml.dump(self.data, wfile, default_flow_style=False)
             except Exception as err:
-                self.log.info("<SERVER> Exception occurred:%s" % str(err))
+                self.log.info("<SERVER> Exception occurred:%s", str(err))
                 traceback.print_exception(
                     err.__class__, err, sys.exc_info()[2])
                 raise ServerFailed("Failed to Write {}".format(yamlfile))
@@ -373,7 +373,7 @@ class ServerManager(ExecutableCommand):
         try:
             self.run()
         except CommandFailure as details:
-            self.log.info("<SERVER> Exception occurred: %s" % details)
+            self.log.info("<SERVER> Exception occurred: %s", details)
             # Kill the subprocess, anything that might have started
             self.kill()
             raise ServerFailed(
@@ -387,13 +387,13 @@ class ServerManager(ExecutableCommand):
                 "{}:{}".format(host, self.runner.job.yaml_params.port)
                 for host in self._hosts]
 
-            self.log.info("Formatting hosts: <%s>" % self._hosts)
+            self.log.info("Formatting hosts: <%s>", self._hosts)
             storage_format(self.daosbinpath, ",".join(servers_with_ports))
             self.runner.job.mode = "normal"
             try:
                 self.runner.job.check_subprocess_status(self.runner.process)
             except CommandFailure as error:
-                self.log.info("Failed to start after format: %s" % error)
+                self.log.info("Failed to start after format: %s", error)
 
         return True
 
