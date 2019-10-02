@@ -57,7 +57,7 @@ func (c *connList) SystemStop() ([]*common.SystemMember, error) {
 			rpcResp.GetStatus())
 	}
 
-	return common.MembersFromPB(rpcResp.Members), nil
+	return common.MembersFromPB(c.log, rpcResp.Members), nil
 }
 
 // SystemMemberQuery will return the list of members joined to DAOS system.
@@ -85,7 +85,7 @@ func (c *connList) SystemMemberQuery() ([]*common.SystemMember, error) {
 			rpcResp.GetStatus())
 	}
 
-	return common.MembersFromPB(rpcResp.Members), nil
+	return common.MembersFromPB(c.log, rpcResp.Members), nil
 }
 
 // KillRank Will terminate server running at given rank on pool specified by

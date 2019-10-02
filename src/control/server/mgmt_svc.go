@@ -33,6 +33,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/peer"
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -180,6 +181,22 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 	return resp, nil
 }
 
+// getPeerListenAddr combines peer ip from supplied context with input port.
+func getPeerListenAddr(ctx context.Context, inPort int) (net.Addr, error) {
+	p, ok := peer.FromContext(ctx)
+	if !ok {
+		return nil, errors.New("peer details not found in context")
+	}
+
+	tcpAddr, ok := p.Addr.(*net.TCPAddr)
+	if !ok {
+		return nil, errors.Errorf("peer address (%v) not tcp", p.Addr)
+	}
+
+	return net.ResolveTCPAddr(p.Addr.Network(),
+		net.JoinHostPort(tcpAddr.IP.String(), strconv.Itoa(inPort)))
+}
+
 func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.JoinResp, error) {
 	mi, err := svc.harness.GetManagementInstance()
 	if err != nil {
@@ -198,9 +215,26 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 
 	// if join successful, record membership
 	if resp.GetStatus() == 0 && resp.GetState() == mgmtpb.JoinResp_IN {
-		svc.members.Add(common.SystemMember{
-			Addr: req.GetAddr(), Uuid: req.GetUuid(), Rank: resp.GetRank(),
-		})
+		newMember := common.SystemMember{Uuid: req.GetUuid(), Rank: resp.GetRank()}
+
+		reqAddr, err := net.ResolveTCPAddr("tcp", req.GetAddr())
+		if err != nil {
+			// leave newMember.Addr uninitialised
+			svc.log.Errorf("resolving request address: %s", err)
+			svc.members.Add(newMember)
+			return resp, nil
+		}
+		newMember.Addr = reqAddr
+
+		if addr, err := getPeerListenAddr(ctx, reqAddr.Port); err == nil {
+			newMember.Addr = addr
+		} else {
+			// leave newMember.Addr as address in request (not from context)
+			svc.log.Errorf("combining peer addr with listener port: %s", err)
+		}
+
+		svc.members.Add(newMember)
+
 		svc.log.Debugf("system has %d members\n", len(svc.members.GetMembers()))
 	}
 
