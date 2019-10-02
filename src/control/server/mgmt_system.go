@@ -57,9 +57,7 @@ func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.DaosRank) (*mgmtpb
 
 	svc.log.Debugf("MgmtSvc.KillRank dispatch, req:%+v\n", *req)
 
-	svc.mutex.Lock()
 	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, killRank, req)
-	svc.mutex.Unlock()
 	if err != nil {
 		return nil, err
 	}
