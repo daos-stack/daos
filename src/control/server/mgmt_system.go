@@ -35,7 +35,7 @@ import (
 func (svc *mgmtSvc) systemStop(ctx context.Context, leader *IOServerInstance) error {
 	// TODO: inhibit rebuild on pool services, parallelise and make async.
 	for _, member := range svc.members.GetMembers() {
-		svc.log.Debugf("MgmtSvc.systemStop murder member %+v\n", *member)
+		svc.log.Debugf("MgmtSvc.systemStop kill member %+v\n", *member)
 		resp, err := leader.msClient.Stop(ctx, member.Addr.String(),
 			&mgmtpb.DaosRank{Rank: member.Rank})
 		if err != nil {
@@ -62,9 +62,7 @@ func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.DaosRank) (*mgmtpb
 
 	svc.log.Debugf("MgmtSvc.KillRank dispatch, req:%+v\n", *req)
 
-	svc.mutex.Lock()
 	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, killRank, req)
-	svc.mutex.Unlock()
 	if err != nil {
 		return nil, err
 	}
@@ -79,11 +77,11 @@ func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.DaosRank) (*mgmtpb
 	return resp, nil
 }
 
-// SystemQuery implements the method defined for the Management Service.
+// SystemMemberQuery implements the method defined for the Management Service.
 //
 // Return system membership list including member state.
-func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq) (*mgmtpb.SystemQueryResp, error) {
-	resp := &mgmtpb.SystemQueryResp{}
+func (svc *mgmtSvc) SystemMemberQuery(ctx context.Context, req *mgmtpb.SystemMemberQueryReq) (*mgmtpb.SystemMemberQueryResp, error) {
+	resp := &mgmtpb.SystemMemberQueryResp{}
 
 	// verify we are running on a host with the MS leader and therefore will
 	// have membership list.
@@ -92,11 +90,11 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 		return nil, err
 	}
 
-	svc.log.Debug("received SystemQuery RPC; reporting DAOS system members")
+	svc.log.Debug("received SystemMemberQuery RPC; reporting DAOS system members")
 
 	resp.Members = svc.members.GetMembersPB()
 
-	svc.log.Debug("responding to SystemQuery RPC")
+	svc.log.Debug("responding to SystemMemberQuery RPC")
 
 	return resp, nil
 }

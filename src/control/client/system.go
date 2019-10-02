@@ -24,11 +24,11 @@
 package client
 
 import (
+	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/pkg/errors"
 )
 
 // SystemStop will perform a controlled shutdown of DAOS system and a list
@@ -57,23 +57,23 @@ func (c *connList) SystemStop() ([]*common.SystemMember, error) {
 			rpcResp.GetStatus())
 	}
 
-	return common.MembersFromPB(rpcResp.Members), nil
+	return common.MembersFromPB(c.log, rpcResp.Members), nil
 }
 
-// SystemQuery will return the list of members joined to DAOS system.
+// SystemMemberQuery will return the list of members joined to DAOS system.
 //
 // Isolate protobuf encapsulation in client and don't expose to calling code.
-func (c *connList) SystemQuery() ([]*common.SystemMember, error) {
+func (c *connList) SystemMemberQuery() ([]*common.SystemMember, error) {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
 		return nil, err
 	}
 
-	rpcReq := &mgmtpb.SystemQueryReq{}
+	rpcReq := &mgmtpb.SystemMemberQueryReq{}
 
 	c.log.Debugf("DAOS system query request: %s\n", rpcReq)
 
-	rpcResp, err := mc.getSvcClient().SystemQuery(context.Background(), rpcReq)
+	rpcResp, err := mc.getSvcClient().SystemMemberQuery(context.Background(), rpcReq)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func (c *connList) SystemQuery() ([]*common.SystemMember, error) {
 			rpcResp.GetStatus())
 	}
 
-	return common.MembersFromPB(rpcResp.Members), nil
+	return common.MembersFromPB(c.log, rpcResp.Members), nil
 }
 
 // KillRank Will terminate server running at given rank on pool specified by

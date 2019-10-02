@@ -27,10 +27,10 @@ import (
 	"net"
 	"sync"
 
+	"github.com/pkg/errors"
+
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
-	log "github.com/daos-stack/daos/src/control/logging"
-	"github.com/pkg/errors"
 )
 
 // SystemMember refers to a data-plane instance that is a member of this DAOS
@@ -43,55 +43,65 @@ type SystemMember struct {
 
 // Membership tracks details of system members.
 type Membership struct {
-	sync.Mutex
+	sync.RWMutex
 	log     logging.Logger
 	members map[string]SystemMember
 }
 
 // Add adds member to membership.
 func (m *Membership) Add(member SystemMember) error {
-	m.Lock()
-	defer m.Unlock()
-
-	if value, found := m.members[member.Uuid]; found {
-		return errors.Errorf("member %s already exists at %+v",
+	m.RLock()
+	value, found := m.members[member.Uuid]
+	m.RUnlock()
+	if found {
+		return errors.Errorf("member %s already exists (%+v)",
 			member.Uuid, value)
 	}
 
+	m.Lock()
+	defer m.Unlock()
+
 	m.members[member.Uuid] = member
-	m.log.Debugf("system membership: %+v\n", m.members)
 
 	return nil
 }
 
-// Remove removes member from membership.
-func (m *Membership) Remove(uuid string) error {
+// Remove removes member from membership, idenpotent.
+//
+// Avoid taking a RW lock where possible.
+func (m *Membership) Remove(uuid string) {
+	m.RLock()
+	_, found := m.members[uuid]
+	m.RUnlock()
+	if !found {
+		return
+	}
+
 	m.Lock()
 	defer m.Unlock()
 
-	if _, found := m.members[uuid]; !found {
-		return errors.Errorf("member %s doesn't exist", uuid)
-	}
-
 	delete(m.members, uuid)
-
-	return nil
 }
 
 // GetMember retrieves member from membership based on UUID.
-func (m *Membership) GetMember(uuid string) SystemMember {
-	m.Lock()
-	defer m.Unlock()
+func (m *Membership) GetMember(uuid string) (*SystemMember, error) {
+	m.RLock()
+	defer m.RUnlock()
 
-	return m.members[uuid]
+	member, found := m.members[uuid]
+	if !found {
+		return nil, errors.Errorf("member %s not found", uuid)
+	}
+
+	return &member, nil
 }
 
 // GetMembers returns internal member structs as a sequence.
 func (m *Membership) GetMembers() []*SystemMember {
-	members := make([]*SystemMember, len(m.members))
+	members := make([]*SystemMember, 0, len(m.members))
 
-	m.Lock()
-	defer m.Unlock()
+	m.RLock()
+	defer m.RUnlock()
 
 	for _, m := range m.members {
 		members = append(members, &m)
@@ -102,10 +112,10 @@ func (m *Membership) GetMembers() []*SystemMember {
 
 // GetMembersPB converts internal member structs to protobuf equivalents.
 func (m *Membership) GetMembersPB() []*mgmtpb.SystemMember {
-	pbMembers := make([]*mgmtpb.SystemMember, len(m.members))
+	pbMembers := make([]*mgmtpb.SystemMember, 0, len(m.members))
 
-	m.Lock()
-	defer m.Unlock()
+	m.RLock()
+	defer m.RUnlock()
 
 	for _, m := range m.members {
 		pbMembers = append(pbMembers, &mgmtpb.SystemMember{
@@ -119,7 +129,7 @@ func (m *Membership) GetMembersPB() []*mgmtpb.SystemMember {
 // MembersFromPB converts to member slice from protobuf format.
 //
 // Don't populate member Addr field if it can't be resolved.
-func MembersFromPB(pbMembers []*mgmtpb.SystemMember) []*SystemMember {
+func MembersFromPB(log logging.Logger, pbMembers []*mgmtpb.SystemMember) []*SystemMember {
 	members := make([]*SystemMember, len(pbMembers))
 
 	for _, m := range pbMembers {

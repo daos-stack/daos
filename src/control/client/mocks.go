@@ -291,8 +291,8 @@ func (m *mockMgmtSvcClient) KillRank(ctx context.Context, req *mgmtpb.DaosRank, 
 	return &mgmtpb.DaosResp{}, nil
 }
 
-func (m *mockMgmtSvcClient) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq, o ...grpc.CallOption) (*mgmtpb.SystemQueryResp, error) {
-	return &mgmtpb.SystemQueryResp{}, nil
+func (m *mockMgmtSvcClient) SystemMemberQuery(ctx context.Context, req *mgmtpb.SystemMemberQueryReq, o ...grpc.CallOption) (*mgmtpb.SystemMemberQueryResp, error) {
+	return &mgmtpb.SystemMemberQueryResp{}, nil
 }
 
 func (m *mockMgmtSvcClient) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq, o ...grpc.CallOption) (*mgmtpb.SystemStopResp, error) {

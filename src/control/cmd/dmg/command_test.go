@@ -147,8 +147,8 @@ func (tc *testConn) SmdListDevs(req *mgmtpb.SmdDevReq) client.ResultSmdMap {
 	return nil
 }
 
-func (tc *testConn) SystemQuery() ([]*common.SystemMember, error) {
-	tc.appendInvocation("SystemQuery")
+func (tc *testConn) SystemMemberQuery() ([]*common.SystemMember, error) {
+	tc.appendInvocation("SystemMemberQuery")
 	return make([]*common.SystemMember, 0), nil
 }
 
