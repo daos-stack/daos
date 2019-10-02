@@ -90,21 +90,22 @@ func (c *connList) SystemQuery() ([]*common.SystemMember, error) {
 
 // KillRank Will terminate server running at given rank on pool specified by
 // uuid. Request will only be issued to a single access point.
+//
+// Currently this is not exposed by control/cmd/dmg as a user command.
+// TODO: consider usage model.
 func (c *connList) KillRank(uuid string, rank uint32) ResultMap {
+	var resp *mgmtpb.DaosResp
+	var addr string
 	results := make(ResultMap)
 
 	mc, err := chooseServiceLeader(c.controllers)
-	if err != nil {
-		result := ClientResult{mc.getAddress(), nil, err}
-		results[result.Address] = result
-
-		return results
+	if err == nil {
+		resp, err = mc.getSvcClient().KillRank(context.Background(),
+			&mgmtpb.DaosRank{PoolUuid: uuid, Rank: rank})
+		addr = mc.getAddress()
 	}
 
-	resp, err := mc.getSvcClient().KillRank(context.Background(),
-		&mgmtpb.DaosRank{PoolUuid: uuid, Rank: rank})
-
-	result := ClientResult{mc.getAddress(), resp, err}
+	result := ClientResult{addr, resp, err}
 	results[result.Address] = result
 
 	return results

@@ -34,6 +34,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -227,6 +228,19 @@ func (c *controllerFactory) create(address string, cfg *security.TransportConfig
 	err := controller.connect(address, cfg)
 
 	return controller, err
+}
+
+// chooseServiceLeader will decide which connection to send request on.
+//
+// Currently expect only one connection to be available and return that.
+// TODO: this should probably be implemented on the Connect interface.
+func chooseServiceLeader(cs []Control) (Control, error) {
+	if len(cs) == 0 {
+		return nil, errors.New("no active connections")
+	}
+
+	// just return the first connection, expected to be the service leader
+	return cs[0], nil
 }
 
 // Connect is an external interface providing functionality across multiple
