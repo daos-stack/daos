@@ -125,8 +125,8 @@ class DaosServer(DaosCommand):
             self.log.info("%s:\n%s" % (err_msg, sub_process.get_stdout()))
             return False
 
-        self.log.info("  Started server in <%s> mode in %d seconds" % (
-            self.mode, time.time() - start_time))
+        self.log.info("Started server in <%s> mode in %d seconds" % (self.mode,
+            time.time() - start_time))
         return True
 
     class DaosServerConfig(ObjectWithParameters):
