@@ -236,6 +236,22 @@ add_ds_shard(d_list_t *ds_list, struct pool_target *target)
 }
 
 /**
+ * Free all elements in the remap list
+ *
+ * \param[in] The remap list to be freed.
+ */
+void
+ds_list_free_all(d_list_t *used_targets_list)
+{
+	struct down_shard *d_shard, *d_tmp;
+
+	d_list_for_each_entry_safe(d_shard, d_tmp, used_targets_list, ds_list) {
+		d_list_del_init(&d_shard->ds_list);
+		D_FREE(d_shard);
+	}
+}
+
+/**
  * This function initializes the bit map that is used to determine if a target
  * that is down was previously selected as a fallback target. This is used to
  * differentiate between targets that were fallback targets but have since
@@ -805,6 +821,7 @@ out:
 	if (dom_used)
 		D_FREE(dom_used);
 
+	ds_list_free_all(&used_targets_list);
 	return rc;
 }
 
