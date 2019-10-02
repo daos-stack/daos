@@ -323,4 +323,3 @@ func (svc *mgmtSvc) SmdListDevs(ctx context.Context, req *mgmtpb.SmdDevReq) (*mg
 
 	return resp, nil
 }
-}
