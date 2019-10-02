@@ -17,7 +17,7 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
 
-    prereqs.require(denv, 'protobufc', 'argobots')
+    prereqs.require(denv, 'protobufc', 'argobots', 'hwloc')
 
     # Populate the object cache
     cache = {}
