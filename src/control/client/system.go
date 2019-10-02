@@ -60,20 +60,20 @@ func (c *connList) SystemStop() ([]*common.SystemMember, error) {
 	return common.MembersFromPB(rpcResp.Members), nil
 }
 
-// SystemQuery will return the list of members joined to DAOS system.
+// SystemMemberQuery will return the list of members joined to DAOS system.
 //
 // Isolate protobuf encapsulation in client and don't expose to calling code.
-func (c *connList) SystemQuery() ([]*common.SystemMember, error) {
+func (c *connList) SystemMemberQuery() ([]*common.SystemMember, error) {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
 		return nil, err
 	}
 
-	rpcReq := &mgmtpb.SystemQueryReq{}
+	rpcReq := &mgmtpb.SystemMemberQueryReq{}
 
 	c.log.Debugf("DAOS system query request: %s\n", rpcReq)
 
-	rpcResp, err := mc.getSvcClient().SystemQuery(context.Background(), rpcReq)
+	rpcResp, err := mc.getSvcClient().SystemMemberQuery(context.Background(), rpcReq)
 	if err != nil {
 		return nil, err
 	}

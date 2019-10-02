@@ -45,11 +45,11 @@ message SystemStopResp {
 	repeated SystemMember members = 2;
 }
 
-// SystemQueryReq supplies system query parameters.
-message SystemQueryReq {}
+// SystemMemberQueryReq supplies system query parameters.
+message SystemMemberQueryReq {}
 
-// SystemQueryResp returns system members.
-message SystemQueryResp {
+// SystemMemberQueryResp returns system members.
+message SystemMemberQueryResp {
 	int32 status = 1; // DAOS error code
 	repeated SystemMember members = 2;
 }

@@ -72,11 +72,11 @@ func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.DaosRank) (*mgmtpb
 	return resp, nil
 }
 
-// SystemQuery implements the method defined for the Management Service.
+// SystemMemberQuery implements the method defined for the Management Service.
 //
 // Return system membership list including member state.
-func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq) (*mgmtpb.SystemQueryResp, error) {
-	resp := &mgmtpb.SystemQueryResp{}
+func (svc *mgmtSvc) SystemMemberQuery(ctx context.Context, req *mgmtpb.SystemMemberQueryReq) (*mgmtpb.SystemMemberQueryResp, error) {
+	resp := &mgmtpb.SystemMemberQueryResp{}
 
 	// verify we are running on a host with the MS leader and therefore will
 	// have membership list.
@@ -85,11 +85,11 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 		return nil, err
 	}
 
-	svc.log.Debug("received SystemQuery RPC; reporting DAOS system members")
+	svc.log.Debug("received SystemMemberQuery RPC; reporting DAOS system members")
 
 	resp.Members = svc.members.GetMembersPB()
 
-	svc.log.Debug("responding to SystemQuery RPC")
+	svc.log.Debug("responding to SystemMemberQuery RPC")
 
 	return resp, nil
 }

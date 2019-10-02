@@ -46,7 +46,7 @@ service MgmtSvc {
 	// Get SMD device list
 	rpc SmdListDevs(SmdDevReq) returns (SmdDevResp) {}
 	// Query DAOS system (query system member data-plane instances)
-	rpc SystemQuery(SystemQueryReq) returns(SystemQueryResp) {};
+	rpc SystemMemberQuery(SystemMemberQueryReq) returns(SystemMemberQueryResp) {};
 	// Stop DAOS system (shutdown data-plane instances)
 	rpc SystemStop(SystemStopReq) returns(SystemStopResp) {};
 	// Kill a given rank associated with a given pool
