@@ -33,6 +33,23 @@
 /* Used to preallocate buffer to query error log pages from SPDK health info */
 #define DAOS_MAX_ERROR_LOG_PAGES 256
 
+/* See DAOS-3319 on this.  We should generally try to avoid reading unaligned
+ * variables directly as it results in more than one instruction for each such
+ * access.  The instances of these possible unaligned accesses happen with
+ * default gcc on Fedora 30.
+ */
+#if !defined(__has_warning)  /* gcc */
+#if __GNUC__ >= 9
+	#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
+#endif /* warning only defined in version 9 or later */
+#else /* __has_warning is defined */
+#if __has_warning("-Waddress-of-packed-member") /* valid clang warning */
+	#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
+#endif /* Warning is defined in clang */
+#endif /* __has_warning not defined */
+
+
+
 /*
  * Used for getting bio device state, which requires exclusive access from
  * the device owner xstream.
@@ -82,118 +99,19 @@ bio_get_dev_state(struct bio_dev_state *dev_state, struct bio_xs_context *xs)
 }
 
 static void
-dprint_uint128_hex(uint64_t *v)
-{
-	unsigned long long lo = v[0], hi = v[1];
-
-	if (hi)
-		D_PRINT("0x%llX%016llX", hi, lo);
-	else
-		D_PRINT("0x%llX", lo);
-}
-
-static void
-dprint_uint128_dec(uint64_t *v)
-{
-	unsigned long long lo = v[0], hi = v[1];
-
-	if (hi)
-		/* can't handle large (>64-bit) decimal values */
-		dprint_uint128_hex(v);
-	else
-		D_PRINT("%llu", (unsigned long long)lo);
-}
-static void
-dprint_ascii_string(const void *buf, size_t size)
-{
-	const uint8_t *str = buf;
-
-	/* Trim trailing spaces */
-	while (size > 0 && str[size - 1] == ' ')
-		size--;
-
-	while (size--) {
-		if (*str >= 0x20 && *str <= 0x7E)
-			D_PRINT("%c", *str);
-		else
-			D_PRINT(".");
-
-		str++;
-	}
-}
-
-static void
 get_spdk_err_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 				 void *cb_arg)
 {
 	struct bio_dev_health			 *dev_health = cb_arg;
-	struct bio_dev_state			 *dev_state;
-	struct spdk_nvme_error_information_entry *error_entries;
-	struct spdk_nvme_error_information_entry *error_entry;
-	struct spdk_nvme_ctrlr_data		 *cdata;
-	struct spdk_bdev			 *bdev;
-	uint32_t				  i;
 	int					  sc, sct;
 
 	D_ASSERT(dev_health->bdh_inflights == 1);
 
 	/* Additional NVMe status information */
 	spdk_bdev_io_get_nvme_status(bdev_io, &sct, &sc);
-	if (sc) {
+	if (sc)
 		D_ERROR("NVMe status code/type: %d/%d\n", sc, sct);
-		goto out;
-	}
 
-	dev_state = &dev_health->bdh_health_state;
-
-	bdev = spdk_bdev_desc_get_bdev(dev_health->bdh_desc);
-
-	D_ASSERT(bdev != NULL);
-
-	cdata = dev_health->bdh_ctrlr_buf;
-	error_entries = dev_health->bdh_error_buf;
-
-	if (getenv("PRINT_HEALTH_INFO") != NULL) {
-		D_PRINT("==================================================\n");
-		D_PRINT("SPDK Device Error Logs [%s]:\n",
-			spdk_bdev_get_name(bdev));
-		D_PRINT("==================================================\n");
-	}
-
-	for (i = 0; i < cdata->elpe; i++) {
-		error_entry = &error_entries[i];
-		dev_state->bds_error_count = error_entry->error_count;
-		if (error_entry->error_count == 0) {
-			if (getenv("PRINT_HEALTH_INFO") != NULL)
-				D_PRINT("No errors found!\n");
-			goto out;
-		}
-		if (i != 0)
-			D_PRINT("-------------\n");
-
-		/* Only print device error logs to console if env is set */
-		if (getenv("PRINT_HEALTH_INFO") == NULL)
-			goto out;
-
-		D_PRINT("Entry: %u\n", i);
-		D_PRINT("Error count:         0x%"PRIx64"\n",
-			error_entry->error_count);
-		D_PRINT("Submission queue ID: 0x%x\n", error_entry->sqid);
-		D_PRINT("Command ID:          0x%x\n", error_entry->cid);
-		D_PRINT("Phase bit:           %x\n", error_entry->status.p);
-		D_PRINT("Status code:         0x%x\n", error_entry->status.sc);
-		D_PRINT("Status code type:    0x%x\n", error_entry->status.sct);
-		D_PRINT("Do not retry:        %x\n", error_entry->status.dnr);
-		D_PRINT("Error location:      0x%x\n",
-			error_entry->error_location);
-		D_PRINT("LBA:                 0x%"PRIx64"\n", error_entry->lba);
-		D_PRINT("Namespace:           0x%x\n", error_entry->nsid);
-		D_PRINT("Vendor log page:     0x%x\n",
-			error_entry->vendor_specific);
-		D_PRINT("\n");
-	}
-
-out:
 	/* Free I/O request in the competion callback */
 	spdk_bdev_free_io(bdev_io);
 	/*Decrease inflights on error or successful callback completion chain*/
@@ -229,28 +147,6 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 	D_ASSERT(bdev != NULL);
 	cdata = dev_health->bdh_ctrlr_buf;
 
-	/* Only print device controller data to console if env is set */
-	if (getenv("PRINT_HEALTH_INFO") == NULL)
-		goto prep_cmd;
-
-	/*TODO Add additional relevant controller data */
-	D_PRINT("==========================================================\n");
-	D_PRINT("SPDK Device Controller Data [%s]:\n",
-		spdk_bdev_get_name(bdev));
-	D_PRINT("==========================================================\n");
-	D_PRINT("Vendor ID: %04x\n", cdata->vid);
-	D_PRINT("Serial Number: ");
-	dprint_ascii_string(cdata->sn, sizeof(cdata->sn));
-	D_PRINT("\n");
-	D_PRINT("Model Number: ");
-	dprint_ascii_string(cdata->mn, sizeof(cdata->mn));
-	D_PRINT("\n");
-	D_PRINT("Firmware Version: ");
-	dprint_ascii_string(cdata->fr, sizeof(cdata->fr));
-	D_PRINT("\n");
-	D_PRINT("Error log page entries supported: %d\n", cdata->elpe + 1);
-
-prep_cmd:
 	/* Prep NVMe command to get device error log pages */
 	ep_sz = sizeof(struct spdk_nvme_error_information_entry);
 	numd = ep_sz / sizeof(uint32_t) - 1u;
@@ -335,69 +231,6 @@ get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 	dev_state->bds_volatile_mem_warning = crit_warn;
 	dev_state->bds_media_errors = hp->media_errors;
 
-	/* Only print device health info to console if env is set */
-	if (getenv("PRINT_HEALTH_INFO") == NULL)
-		goto prep_cmd;
-
-	D_PRINT("==========================================================\n");
-	D_PRINT("SPDK Device Health Information [%s]:\n",
-		spdk_bdev_get_name(bdev));
-	D_PRINT("==========================================================\n");
-	D_PRINT("Critical Warnings:\n");
-	D_PRINT("  Available Spare Space:     %s\n",
-		hp->critical_warning.bits.available_spare ? "WARNING" : "OK");
-	D_PRINT("  Temperature:               %s\n",
-		hp->critical_warning.bits.temperature ? "WARNING" : "OK");
-	D_PRINT("  Device Reliability:        %s\n",
-		hp->critical_warning.bits.device_reliability ?
-		"WARNING" : "OK");
-	D_PRINT("  Read Only:                 %s\n",
-		hp->critical_warning.bits.read_only ? "Yes" : "No");
-	D_PRINT("  Volatile Memory Backup:    %s\n",
-		hp->critical_warning.bits.volatile_memory_backup ?
-		"WARNING" : "OK");
-	D_PRINT("  Current Temperature:       %u Kelvin (%d Celsius)\n",
-		hp->temperature, (int)hp->temperature - 273);
-	D_PRINT("Available Spare:             %u%%\n", hp->available_spare);
-	D_PRINT("Available Spare Threshold:   %u%%\n",
-		hp->available_spare_threshold);
-	D_PRINT("Life Percentage Used:        %u%%\n", hp->percentage_used);
-	D_PRINT("Data Units Read:             ");
-	dprint_uint128_dec(hp->data_units_read);
-	D_PRINT("\n");
-	D_PRINT("Data Units Written:          ");
-	dprint_uint128_dec(hp->data_units_written);
-	D_PRINT("\n");
-	D_PRINT("Host Read Commands:          ");
-	dprint_uint128_dec(hp->host_read_commands);
-	D_PRINT("\n");
-	D_PRINT("Host Write Commands:         ");
-	dprint_uint128_dec(hp->host_write_commands);
-	D_PRINT("\n");
-	D_PRINT("Controller Busy Time:        ");
-	dprint_uint128_dec(hp->controller_busy_time);
-	D_PRINT(" minutes\n");
-	D_PRINT("Power Cycles:                ");
-	dprint_uint128_dec(hp->power_cycles);
-	D_PRINT("\n");
-	D_PRINT("Power On Hours:              ");
-	dprint_uint128_dec(hp->power_on_hours);
-	D_PRINT(" hours\n");
-	D_PRINT("Unsafe Shutdowns:	     ");
-	dprint_uint128_dec(hp->unsafe_shutdowns);
-	D_PRINT("\n");
-	D_PRINT("Unrecoverable Media Errors:  ");
-	dprint_uint128_dec(hp->media_errors);
-	D_PRINT("\n");
-	D_PRINT("Lifetime Error Log Entries:  ");
-	dprint_uint128_dec(hp->num_error_info_log_entries);
-	D_PRINT("\n");
-	D_PRINT("Warning Temperature Time:    %u minutes\n",
-		hp->warning_temp_time);
-	D_PRINT("Critical Temperature Time:   %u minutes\n",
-		hp->critical_temp_time);
-
-prep_cmd:
 	/* Prep NVMe command to get controller data */
 	cp_sz = sizeof(struct spdk_nvme_ctrlr_data);
 	memset(&cmd, 0, sizeof(cmd));

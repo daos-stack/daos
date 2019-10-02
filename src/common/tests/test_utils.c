@@ -101,3 +101,17 @@ new_drpc_response(void)
 
 	return resp;
 }
+
+void
+mock_valid_drpc_resp_in_recvmsg(Drpc__Status status)
+{
+	Drpc__Response *resp = new_drpc_response();
+
+	resp->status = status;
+
+	/* Mock a valid DRPC response coming in */
+	recvmsg_return = drpc__response__get_packed_size(resp);
+	drpc__response__pack(resp, recvmsg_msg_content);
+
+	drpc__response__free_unpacked(resp, NULL);
+}

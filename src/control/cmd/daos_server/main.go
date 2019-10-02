@@ -29,6 +29,7 @@ import (
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -43,6 +44,7 @@ type mainOpts struct {
 	// Define subcommands
 	Storage storageCmd `command:"storage" description:"Perform tasks related to locally-attached storage"`
 	Start   startCmd   `command:"start" description:"Start daos_server"`
+	Network networkCmd `command:"network" description:"Perform network device scan based on fabric provider"`
 }
 
 type cmdLogger interface {
@@ -55,6 +57,8 @@ type logCmd struct {
 
 func (c *logCmd) setLog(log *logging.LeveledLogger) {
 	c.log = log
+	// Initialize the netdetect logger
+	netdetect.SetLogger(log)
 }
 
 func exitWithError(log *logging.LeveledLogger, err error) {
