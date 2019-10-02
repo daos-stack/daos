@@ -41,45 +41,48 @@ type SystemMember struct {
 
 // Membership tracks details of system members.
 type Membership struct {
-	sync.Mutex
+	sync.RWMutex
 	log     logging.Logger
 	members map[string]SystemMember
 }
 
 // Add adds member to membership.
 func (m *Membership) Add(member SystemMember) error {
-	m.Lock()
-	defer m.Unlock()
-
-	if value, found := m.members[member.Uuid]; found {
-		return errors.Errorf("member %s already exists at %+v",
+	m.RLock()
+	value, found := m.members[member.Uuid]
+	m.RUnlock()
+	if found {
+		return errors.Errorf("member %s already exists (%+v)",
 			member.Uuid, value)
 	}
 
+	m.Lock()
 	m.members[member.Uuid] = member
-	m.log.Debugf("system membership: %+v\n", m.members)
+	m.Unlock()
 
 	return nil
 }
 
 // Remove removes member from membership.
 func (m *Membership) Remove(uuid string) error {
-	m.Lock()
-	defer m.Unlock()
-
-	if _, found := m.members[uuid]; !found {
+	m.RLock()
+	_, found := m.members[uuid]
+	m.RUnlock()
+	if !found {
 		return errors.Errorf("member %s doesn't exist", uuid)
 	}
 
+	m.Lock()
 	delete(m.members, uuid)
+	m.Unlock()
 
 	return nil
 }
 
 // GetMember retrieves member from membership based on UUID.
 func (m *Membership) GetMember(uuid string) SystemMember {
-	m.Lock()
-	defer m.Unlock()
+	m.RLock()
+	defer m.RUnlock()
 
 	return m.members[uuid]
 }
@@ -88,8 +91,8 @@ func (m *Membership) GetMember(uuid string) SystemMember {
 func (m *Membership) GetMembers() []*SystemMember {
 	members := make([]*SystemMember, len(m.members))
 
-	m.Lock()
-	defer m.Unlock()
+	m.RLock()
+	defer m.RUnlock()
 
 	for _, m := range m.members {
 		members = append(members, &m)
@@ -102,8 +105,8 @@ func (m *Membership) GetMembers() []*SystemMember {
 func (m *Membership) GetMembersPB() []*mgmtpb.SystemMember {
 	pbMembers := make([]*mgmtpb.SystemMember, len(m.members))
 
-	m.Lock()
-	defer m.Unlock()
+	m.RLock()
+	defer m.RUnlock()
 
 	for _, m := range m.members {
 		pbMembers = append(pbMembers, &mgmtpb.SystemMember{

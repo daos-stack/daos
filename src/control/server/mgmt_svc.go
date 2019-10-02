@@ -201,6 +201,7 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 		svc.members.Add(common.SystemMember{
 			Addr: req.GetAddr(), Uuid: req.GetUuid(), Rank: resp.GetRank(),
 		})
+		svc.log.Debugf("system has %d members\n", len(svc.members.GetMembers()))
 	}
 
 	return resp, nil
