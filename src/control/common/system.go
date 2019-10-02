@@ -24,17 +24,19 @@
 package common
 
 import (
+	"net"
 	"sync"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
+	log "github.com/daos-stack/daos/src/control/logging"
 	"github.com/pkg/errors"
 )
 
 // SystemMember refers to a data-plane instance that is a member of this DAOS
 // system running on host with the control-plane listening at "Addr".
 type SystemMember struct {
-	Addr string
+	Addr net.Addr
 	Uuid string
 	Rank uint32
 }
@@ -107,7 +109,7 @@ func (m *Membership) GetMembersPB() []*mgmtpb.SystemMember {
 
 	for _, m := range m.members {
 		pbMembers = append(pbMembers, &mgmtpb.SystemMember{
-			Addr: m.Addr, Uuid: m.Uuid, Rank: m.Rank,
+			Addr: m.Addr.String(), Uuid: m.Uuid, Rank: m.Rank,
 		})
 	}
 
@@ -115,12 +117,22 @@ func (m *Membership) GetMembersPB() []*mgmtpb.SystemMember {
 }
 
 // MembersFromPB converts to member slice from protobuf format.
+//
+// Don't populate member Addr field if it can't be resolved.
 func MembersFromPB(pbMembers []*mgmtpb.SystemMember) []*SystemMember {
 	members := make([]*SystemMember, len(pbMembers))
 
 	for _, m := range pbMembers {
+		var addr net.Addr
+
+		addr, err := net.ResolveTCPAddr("tcp", m.Addr)
+		if err != nil {
+			// leave addr as zero net.Addr value
+			log.Errorf("resolving tcp address %s: %s", m.Addr, err)
+		}
+
 		members = append(members, &SystemMember{
-			Addr: m.Addr, Uuid: m.Uuid, Rank: m.Rank,
+			Addr: addr, Uuid: m.Uuid, Rank: m.Rank,
 		})
 	}
 
