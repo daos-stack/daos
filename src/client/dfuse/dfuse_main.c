@@ -102,13 +102,13 @@ cleanup:
 static void
 show_help(char *name)
 {
-	printf("usage: %s -m <mountpoint>\n"
+	printf("usage: %s -m=PATHSTR -s=RANKS\n"
 		"\n"
-		"	-m --mountpoint <path>	Mount point to use\n"
-		"	-s --svcl <svcl>	DAOS svcl\n"
-		"	-p --pool <uuid>	Connect to pool\n"
-		"	-c --container <uuid>	Connect to container\n"
-		"	-g --group <group name>	CaRT group\n"
+		"	-m --mountpoint=PATHSTR	Mount point to use\n"
+		"	-s --svc=RANKS		pool service replicas like 1,2,3\n"
+		"	-p --pool=UUID 		pool UUID\n"
+		"	-c --container=UUID	container UUID\n"
+		"	-n --sys-name=STR	DAOS system name context for servers\n"
 		"	-S --singlethreaded	Single threaded\n"
 		"	-f --foreground		Run in foreground\n",
 		name);
@@ -124,11 +124,16 @@ main(int argc, char **argv)
 	int			ret = -DER_SUCCESS;
 	int			rc;
 
+	/* The 'daos' command uses -m as an alias for --scv however
+	 * dfuse uses -m for --mountpoint so this is inconsistent
+	 * but probably better than changing the meaning of the -m
+	 * option here.
+	 */
 	struct option long_options[] = {
 		{"pool",		required_argument, 0, 'p'},
 		{"container",		required_argument, 0, 'c'},
-		{"svcl",		required_argument, 0, 's'},
-		{"group",		required_argument, 0, 'g'},
+		{"svc",			required_argument, 0, 's'},
+		{"sys-name",		required_argument, 0, 'G'},
 		{"mountpoint",		required_argument, 0, 'm'},
 		{"singlethread",	no_argument,	   0, 'S'},
 		{"foreground",		no_argument,	   0, 'f'},
@@ -159,7 +164,7 @@ main(int argc, char **argv)
 		case 's':
 			svcl = optarg;
 			break;
-		case 'g':
+		case 'G':
 			dfuse_info->di_group = optarg;
 			break;
 		case 'm':
