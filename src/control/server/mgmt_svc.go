@@ -33,6 +33,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/peer"
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -202,6 +203,9 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 
 	// if join successful, record membership
 	if resp.GetStatus() == 0 && resp.GetState() == mgmtpb.JoinResp_IN {
+		p, err := peer.FromContext(ctx)
+		svc.log.Debugf("peer %+v, err %s", p, err)
+
 		svc.members.Add(common.SystemMember{
 			Addr: req.GetAddr(), Uuid: req.GetUuid(), Rank: resp.GetRank(),
 		})

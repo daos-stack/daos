@@ -98,14 +98,13 @@ func (msc *mgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq) (resp *
 
 	joinErr = msc.withConnection(ctx, ap,
 		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) error {
+			if req.Addr == "" {
+				req.Addr = msc.cfg.ControlAddr.String()
+			}
 
 			prefix := fmt.Sprintf("join(%s, %+v)", ap, *req)
 			msc.log.Debugf(prefix + " begin")
 			defer msc.log.Debugf(prefix + " end")
-
-			if req.Addr == "" {
-				req.Addr = msc.cfg.ControlAddr.String()
-			}
 
 			for {
 				select {
