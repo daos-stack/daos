@@ -108,7 +108,6 @@ df_ll_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*parent_inode;
 	d_list_t			*rlink;
-	bool				keep_ref;
 	int				rc;
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &parent, sizeof(parent));
@@ -124,11 +123,10 @@ df_ll_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 		D_GOTO(err, rc = ENOTSUP);
 	}
 
-	keep_ref = parent_inode->ie_dfs->dfs_ops->create(req, parent_inode,
-							  name, mode, fi);
-	keep_ref = false;
-	if (!keep_ref)
-		d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+	parent_inode->ie_dfs->dfs_ops->create(req, parent_inode, name, mode,
+					      fi);
+
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	return;
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
@@ -219,7 +217,6 @@ df_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*parent_inode;
 	d_list_t			*rlink;
-	bool				keep_ref;
 	int rc;
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &parent, sizeof(parent));
@@ -230,12 +227,9 @@ df_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 
 	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	keep_ref = parent_inode->ie_dfs->dfs_ops->lookup(req, parent_inode,
-							 name);
+	parent_inode->ie_dfs->dfs_ops->lookup(req, parent_inode, name);
 
-	keep_ref = false;
-	if (!keep_ref)
-		d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	return;
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
@@ -247,7 +241,6 @@ df_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*parent_inode;
 	d_list_t			*rlink;
-	bool				keep_ref;
 	int				rc;
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &parent, sizeof(parent));
@@ -262,11 +255,9 @@ df_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 		D_GOTO(decref, rc = ENOTSUP);
 	}
 
-	keep_ref = parent_inode->ie_dfs->dfs_ops->mkdir(req, parent_inode,
-							name, mode);
-	keep_ref = false;
-	if (!keep_ref)
-		d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+	parent_inode->ie_dfs->dfs_ops->mkdir(req, parent_inode,	name, mode);
+
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	return;
 decref:
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);

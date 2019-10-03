@@ -27,7 +27,7 @@
 #include "daos_api.h"
 
 /* Lookup a container within a pool */
-static bool
+static void
 dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 		const char *name, bool create)
 {
@@ -58,7 +58,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 		DFUSE_LOG_ERROR("Invalid container uuid");
 		DFUSE_REPLY_ENTRY(req, entry);
 		D_FREE(dfs);
-		return false;
+		return;
 	}
 	uuid_copy(dfs->dfs_pool, parent->ie_dfs->dfs_pool);
 
@@ -94,7 +94,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 			entry.ino = entry.attr.st_ino;
 			DFUSE_REPLY_ENTRY(req, entry);
 			D_FREE(dfs);
-			return true;
+			return;
 		}
 	}
 
@@ -147,7 +147,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	dfs->dfs_ops = &dfuse_dfs_ops;
 
 	dfuse_reply_entry(fs_handle, ie, NULL, req);
-	return true;
+	return;
 
 release:
 	dfs_release(ie->ie_obj);
@@ -157,19 +157,19 @@ close:
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	D_FREE(dfs);
-	return false;
+	return;
 }
 
-bool
+void
 dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		  const char *name)
 {
-	return dfuse_cont_open(req, parent, name, false);
+	dfuse_cont_open(req, parent, name, false);
 }
 
-bool
+void
 dfuse_cont_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
 		 const char *name, mode_t mode)
 {
-	return dfuse_cont_open(req, parent, name, true);
+	dfuse_cont_open(req, parent, name, true);
 }
