@@ -112,7 +112,7 @@ class DaosServer(DaosCommand):
         """
         patterns = {
             "format": "SCM format required",
-            "normal": "I/O server instance.*storage ready",
+            "normal": "DAOS I/O server.*started",
         }
         start_time = time.time()
         start_msgs = 0
