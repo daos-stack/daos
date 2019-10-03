@@ -19,6 +19,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 """Simple script wrapper for checking SCons files"""
+from __future__ import print_function
 
 import re
 import os
@@ -33,7 +34,7 @@ from distutils.spawn import find_executable
 #pylint: enable=import-error
 #pylint: enable=no-name-in-module
 
-class WrapScript(object):
+class WrapScript():
     """Create a wrapper for a scons file and maintain a line mapping"""
 
     def __init__(self, fname):
@@ -195,7 +196,7 @@ def find_pylint(version):
     if python and pylint:
         return "%s %s" % (python, pylint)
 
-    print "No python%d pylint found" % version
+    print("No python%d pylint found" % version)
     return None
 
 def create_rc(src_name):
@@ -228,14 +229,10 @@ def check_script(fname, *args, **kw):
     else:
         pylint_path = "{path}"
 
-    if not kw.get("P3", False):
-        pycmd = find_pylint(2)
-        rc_file = "tmp_pylint.rc"
-    else:
-        pycmd = find_pylint(3)
-        rc_file = "tmp_pylint3.rc"
+    pycmd = find_pylint(3)
+    rc_file = "tmp_pylint3.rc"
     if pycmd is None:
-        print "Required pylint isn't installed on this machine"
+        print("Required pylint isn't installed on this machine")
         return 0
 
     rc_dir = os.path.dirname(os.path.realpath(__file__))
@@ -248,15 +245,15 @@ def check_script(fname, *args, **kw):
            tmp_fname]
 
     if os.environ.get("DEBUG_CHECK_SCRIPT", 0):
-        print " ".join(cmd)
+        print(" ".join(cmd))
 
     log_file = tempfile.TemporaryFile()
 
     try:
         subprocess.check_call(cmd, stdout=log_file)
-    except OSError, exception:
+    except OSError as exception:
         if exception.errno == errno.ENOENT:
-            print "pylint could not be found"
+            print("pylint could not be found")
             return 1
         raise
     except subprocess.CalledProcessError:
@@ -265,7 +262,7 @@ def check_script(fname, *args, **kw):
     if wrap:
         log_file = wrapper.fix_log(log_file, fname)
     error_count = parse_report(log_file)
-    print ""
+    print("")
     return error_count
 #pylint: enable=too-many-branches
 
@@ -289,25 +286,25 @@ def main():
     pylint3_rc = create_rc("pylint3.rc")
 
     if args.self_check:
-        print "Checking SCons"
+        print("Checking SCons")
         error_count += check_script("SCons",
                                     "-d", "too-few-public-methods",
                                     "-d", "too-many-public-methods",
                                     "-d", "invalid-name",
                                     "-d", "unused-argument",
                                     "-d", "no-self-use")
-        print "Checking prereq_tools"
+        print("Checking prereq_tools")
         error_count += check_script("prereq_tools",
                                     "-d", "too-many-lines",
                                     "-d", "unused-argument")
-        print "Checking components"
+        print("Checking components")
         error_count += check_script("components")
-        print "Checking build_info"
+        print("Checking build_info")
         error_count += check_script("build_info")
-        print "Checking test/build_info validation.py"
+        print("Checking test/build_info validation.py")
         error_count += check_script("test/validate_build_info.py",
                                     "-d", "wrong-import-position")
-        print "Checking check_script.py"
+        print("Checking check_script.py")
         error_count += check_script("check_script.py")
 
     if args.fname:

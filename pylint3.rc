@@ -1,9 +1,16 @@
 [MESSAGES CONTROL]
 disable=locally-disabled,locally-enabled,star-args,wrong-import-order,
-        unused-wildcard-import,invalid-name,global-statement,bad-option-value
+        unused-wildcard-import,invalid-name,global-statement,bad-option-value,
+        wrong-import-position
 
 [FORMAT]
 max-line-length=80
+max-locals=30
+max-args=10
+min-similarity-lines=10
+max-branches=25
+max-statements=200
+max-attributes=30
 
 [MISCELLANEOUS]
 # List of note tags to take in consideration, separated by a comma.

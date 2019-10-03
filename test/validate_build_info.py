@@ -18,7 +18,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 """A simple script to exercise the BuildInfo module"""
-
+from __future__ import print_function
 import sys
 import os
 
@@ -33,28 +33,28 @@ INFO = BuildInfo(FILENAME)
 
 PREFIX = INFO.get("PREFIX")
 if not os.path.exists(PREFIX):
-    print "PREFIX doesn't exist"
+    print("PREFIX doesn't exist")
     os.unlink(FILENAME)
     sys.exit(-1)
 
 if SCRIPT_DIR not in PREFIX:
-    print "PREFIX not at expected location"
+    print("PREFIX not at expected location")
     os.unlink(FILENAME)
     sys.exit(-1)
 
 if not os.path.exists(INFO.get("HWLOC_PREFIX")):
-    print "No hwloc directory"
+    print("No hwloc directory")
     os.unlink(FILENAME)
     sys.exit(-1)
 
 PREFIX = INFO.get("HWLOC2_PREFIX")
 if not os.path.exists(PREFIX):
-    print "HWLOC2_PREFIX doesn't exist"
+    print("HWLOC2_PREFIX doesn't exist")
     os.unlink(FILENAME)
     sys.exit(-1)
 
 if SCRIPT_DIR not in PREFIX:
-    print "HWLOC2_PREFIX not at expected location"
+    print("HWLOC2_PREFIX not at expected location")
     os.unlink(FILENAME)
     sys.exit(-1)
 

@@ -19,6 +19,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 """SCons extra features"""
+from __future__ import print_function
 
 import os
 
@@ -36,16 +37,18 @@ def supports_custom_format(clang_exe):
     import re
 
     try:
-        output = subprocess.check_output([clang_exe, "-version"])
+        rawbytes = subprocess.check_output([clang_exe, "-version"])
+        output = rawbytes.decode('utf-8')
     except subprocess.CalledProcessError:
-        print "Unsupported clang-format for custom style.  Using Mozilla style."
+        print("Unsupported clang-format for custom style.  "
+              "Using Mozilla style.")
         return False
 
     match = re.search(r"version (\d+)\.", output)
     if match and int(match.group(1)) >= 7:
         return True
 
-    print "Custom .clang-format wants version 7+. Using Mozilla style."
+    print("Custom .clang-format wants version 7+. Using Mozilla style.")
     return False
 
 def find_indent():

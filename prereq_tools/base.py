@@ -27,20 +27,12 @@
 # pylint: disable=bare-except
 # pylint: disable=exec-used
 # pylint: disable=too-many-statements
-
+from __future__ import absolute_import, division, print_function
 import os
 import traceback
 import hashlib
 import time
-import subprocess
-try:
-    from subprocess import DEVNULL
-except ImportError:
-    DEVNULL = open(os.devnull, "wb")
-import tarfile
-import re
-import copy
-import ConfigParser
+import sys
 from build_info import BuildInfo
 from SCons.Variables import PathVariable
 from SCons.Variables import EnumVariable
@@ -57,6 +49,20 @@ from SCons.Errors import UserError
 # pylint: enable=no-name-in-module
 # pylint: enable=import-error
 from prereq_tools import mocked_tests
+import subprocess
+try:
+    from subprocess import DEVNULL
+except ImportError:
+    DEVNULL = open(os.devnull, "wb")
+import tarfile
+import re
+import copy
+if sys.version_info < (3, 0):
+# pylint: disable=import-error
+    import ConfigParser
+# pylint: enable=import-error
+else:
+    import configparser as ConfigParser
 
 
 class DownloadFailure(Exception):
@@ -248,7 +254,7 @@ class BuildRequired(Exception):
         return "%s needs to be built, use --build-deps=yes" % self.component
 
 
-class Runner(object):
+class Runner():
     """Runs commands in a specified environment"""
     def __init__(self):
         self.env = None
@@ -267,18 +273,18 @@ class Runner(object):
         old = os.getcwd()
         if subdir:
             if self.__dry_run:
-                print 'Would change dir to %s' % subdir
+                print('Would change dir to %s' % subdir)
             else:
                 os.chdir(subdir)
 
-        print 'Running commands in %s' % os.getcwd()
+        print('Running commands in %s' % os.getcwd())
         for command in commands:
             command = self.env.subst(command)
             if self.__dry_run:
-                print 'Would RUN: %s' % command
+                print('Would RUN: %s' % command)
                 retval = True
             else:
-                print 'RUN: %s' % command
+                print('RUN: %s' % command)
                 if subprocess.call(command, shell=True,
                                    env=self.env['ENV']) != 0:
                     retval = False
@@ -318,7 +324,7 @@ the issues causing the TESTS to fail.
 """ % target[0].path
                 break
         fobj.close()
-    if mode == "memcheck" or mode == "helgrind":
+    if mode in ("memcheck", "helgrind"):
         from xml.etree import ElementTree
         for fname in target:
             if str(fname).endswith(".xml"):
@@ -336,10 +342,10 @@ Valgrind %s check failed.  See %s:""" % (mode, str(fname))
                     for err in error_types:
                         val_str += "\n%-3d %s errors" % (error_types[err], err)
     if val_str != "":
-        print """
+        print("""
 #########################################################%s
 #########################################################
-""" % val_str
+""" % val_str)
 
     if error_str:
         return """
@@ -389,7 +395,7 @@ def run_test(source, target, env, for_signature, mode=None):
 def modify_targets(target, source, env, mode=None):
     """Emit the target list for the unit test builder"""
     target = ["test_output"]
-    if mode == "memcheck" or mode == "helgrind":
+    if mode in ("memcheck", "helgrind"):
         for src in source:
             basename = os.path.basename(str(src))
             xml = "valgrind-%s-%s.xml" % (mode, basename)
@@ -412,7 +418,7 @@ def define_modify_targets(mode=None):
                                                       env, mode)
 
 
-class GitRepoRetriever(object):
+class GitRepoRetriever():
     """Identify a git repository from which to download sources"""
 
     def __init__(self, url, has_submodules=False, branch=None):
@@ -433,7 +439,7 @@ class GitRepoRetriever(object):
     def apply_patch(self, subdir):
         """ git-apply a certain hash """
         if self.patch is not None:
-            print "Applying patch %s" % (self.patch)
+            print("Applying patch %s" % (self.patch))
             commands = ['git apply %s' % (self.patch)]
             if not RUNNER.run_commands(commands, subdir=subdir):
                 raise DownloadFailure(self.url, subdir)
@@ -485,7 +491,7 @@ class GitRepoRetriever(object):
         self.get_specific(subdir, **kw)
 
 
-class WebRetriever(object):
+class WebRetriever():
     """Identify a location from where to download a source package"""
 
     def __init__(self, url, md5):
@@ -502,17 +508,17 @@ class WebRetriever(object):
         if not os.path.exists(filename):
             return False
 
-        with open(filename, "r") as src:
+        with open(filename, "rb") as src:
             hexdigest = hashlib.md5(src.read()).hexdigest()
 
         if hexdigest != self.md5:
-            print "Removing exising file %s: md5 %s != %s" % (filename,
+            print("Removing exising file %s: md5 %s != %s" % (filename,
                                                               self.md5,
-                                                              hexdigest)
+                                                              hexdigest))
             os.remove(filename)
             return False
 
-        print "File %s matches md5 %s" % (filename, self.md5)
+        print("File %s matches md5 %s" % (filename, self.md5))
         return True
 
     def download(self, basename):
@@ -526,13 +532,13 @@ class WebRetriever(object):
             failure_reason = "Download command failed"
             if RUNNER.run_commands(command):
                 if self.check_md5(basename):
-                    print "Successfully downloaded %s" % self.url
+                    print("Successfully downloaded %s" % self.url)
                     return True
 
                 failure_reason = "md5 mismatch"
 
-            print "Try #%d to get %s failed: %s" % (i + 1, self.url,
-                                                    failure_reason)
+            print("Try #%d to get %s failed: %s" % (i + 1, self.url,
+                                                    failure_reason))
 
             if i != retries:
                 time.sleep(initial_sleep)
@@ -554,7 +560,7 @@ class WebRetriever(object):
 
         if self.url.endswith('.tar.gz') or self.url.endswith('.tgz'):
             if self.__dry_run:
-                print 'Would unpack gziped tar file: %s' % basename
+                print('Would unpack gziped tar file: %s' % basename)
                 return
             try:
                 tfile = tarfile.open(basename, 'r:gz')
@@ -564,7 +570,7 @@ class WebRetriever(object):
                 if not RUNNER.run_commands(['mv %s %s' % (prefix, subdir)]):
                     raise ExtractionError(subdir)
             except (IOError, tarfile.TarError):
-                print traceback.format_exc()
+                print(traceback.format_exc())
                 raise ExtractionError(subdir)
         else:
             raise UnsupportedCompression(subdir)
@@ -631,7 +637,7 @@ def append_if_supported(env, **kwargs):
     cenv = env.Clone()
     config = Configure(cenv, custom_tests={'CheckFlag' : check_flag,
                                            'CheckFlagCC' : check_flag_cc})
-    for key, value in kwargs.iteritems():
+    for key, value in kwargs.items():
         if key not in ["CFLAGS", "CXXFLAGS", "CCFLAGS"]:
             env.AppendUnique(**{key : value})
             continue
@@ -639,7 +645,7 @@ def append_if_supported(env, **kwargs):
 
     config.Finish()
 
-class ProgramBinary(object):
+class ProgramBinary():
     """Define possible names for a required executable"""
     def __init__(self, name, possible_names):
         """ Define a binary allowing for unique names on various platforms """
@@ -656,7 +662,7 @@ class ProgramBinary(object):
         return False
 
 # pylint: disable=too-many-public-methods
-class PreReqComponent(object):
+class PreReqComponent():
     """A class for defining and managing external components required
        by a project.
 
@@ -738,7 +744,7 @@ class PreReqComponent(object):
                                                          build_dir_name))
         try:
             if self.__dry_run:
-                print 'Would mkdir -p %s' % self.__build_dir
+                print('Would mkdir -p %s' % self.__build_dir)
             else:
                 os.makedirs(self.__build_dir)
 
@@ -843,9 +849,10 @@ class PreReqComponent(object):
             # Have to temporarily turn off dry run to allow this check.
             env.SetOption('no_exec', False)
 
-        for name, prog in compiler_map[compiler].iteritems():
+        for name, prog in compiler_map[compiler].items():
             if not config.CheckProg(prog):
-                print "%s must be installed when COMPILER=%s" % (prog, compiler)
+                print("%s must be installed when COMPILER=%s" %
+                      (prog, compiler))
                 if self.__check_only:
                     continue
                 config.Finish()
@@ -1142,6 +1149,7 @@ class PreReqComponent(object):
             except Exception as error:
                 # Save the exception in case the component is requested again
                 self.__errors[comp] = error
+                print(traceback.format_exc())
                 raise error
 
         return changes
@@ -1283,11 +1291,11 @@ class PreReqComponent(object):
         if config_path is None:
             return
         full_path = self.__env.subst("$%s/%s" % (src_opt, config_path))
-        print "Reading config file for %s from %s" % (comp, full_path)
+        print("Reading config file for %s from %s" % (comp, full_path))
         self.configs.read(full_path)
 # pylint: enable=too-many-public-methods
 
-class _Component(object):
+class _Component():
     """A class to define attributes of an external component
 
     Args:
@@ -1358,14 +1366,14 @@ class _Component(object):
         """delete the old file"""
         if os.path.exists(path):
             if self.__dry_run:
-                print 'Would unlink %s' % path
+                print('Would unlink %s' % path)
             else:
                 os.unlink(path)
 
     def get(self):
         """Download the component sources, if necessary"""
         if self.prebuilt_path:
-            print 'Using prebuilt binaries for %s' % self.name
+            print('Using prebuilt binaries for %s' % self.name)
             return
         branch = self.prereqs.get_config("branches", self.name)
         commit_sha = self.prereqs.get_config("commit_versions", self.name)
@@ -1374,8 +1382,8 @@ class _Component(object):
             patch = self.patch
         if self.src_exists():
             self.prereqs.update_src_path(self.name, self.src_path)
-            print 'Using existing sources at %s for %s' \
-                % (self.src_path, self.name)
+            print('Using existing sources at %s for %s' \
+                % (self.src_path, self.name))
             if self.update:
                 defpath = os.path.join(self.prereqs.get_build_dir(), self.name)
                 # only do this if the source was checked out by this script
@@ -1384,7 +1392,7 @@ class _Component(object):
                                           patch=patch, branch=branch)
             elif self.prereqs.build_deps and self.patch is not None:
                 # Apply patch to existing source.
-                print "Applying patch %s" % (self.patch)
+                print("Applying patch %s" % (self.patch))
                 commands = ['patch -p 1 -N -t < %s ; if [ $? -gt 1 ]; then '
                             'false; else true; fi;' % (self.patch)]
                 if not RUNNER.run_commands(commands, subdir=self.src_path):
@@ -1392,7 +1400,7 @@ class _Component(object):
             return
 
         if not self.retriever:
-            print 'Using installed version of %s' % self.name
+            print('Using installed version of %s' % self.name)
             return
 
         # Source code is retrieved using retriever
@@ -1400,7 +1408,7 @@ class _Component(object):
         if not self.prereqs.download_deps:
             raise DownloadRequired(self.name)
 
-        print 'Downloading source for %s' % self.name
+        print('Downloading source for %s' % self.name)
         self._delete_old_file(self.crc_file)
         self.retriever.get(self.src_path, commit_sha=commit_sha, patch=patch,
                            branch=branch)
@@ -1426,8 +1434,10 @@ class _Component(object):
                            '.ac',
                            '.in',
                            '.py']:
-                    with open(os.path.join(root, fname), 'r') as src:
-                        new_crc += hashlib.md5(src.read()).hexdigest()
+                    with open(os.path.join(root, fname), 'rb') as src:
+                        src_read = src.read()
+                        md5 = hashlib.md5(src_read)
+                        new_crc += md5.hexdigest()
         return new_crc
 
     def has_changes(self):
@@ -1443,7 +1453,7 @@ class _Component(object):
             return True
         # only do CRC check if the sources have been updated
         if self.update:
-            print 'Checking %s sources for changes' % self.name
+            print('Checking %s sources for changes' % self.name)
             if old_crc != self.calculate_crc():
                 return True
         return False
@@ -1457,7 +1467,7 @@ class _Component(object):
 
         if env.GetOption('no_exec'):
             # Can not override no-check in the command line.
-            print 'Would check for missing system libraries'
+            print('Would check for missing system libraries')
             return False
 
         config = Configure(env)
@@ -1501,7 +1511,7 @@ class _Component(object):
 
         if env.GetOption('no_exec'):
             # Can not turn off dry run set by command line.
-            print "Would check for missing build targets"
+            print("Would check for missing build targets")
             return True
 
         config = Configure(env)
@@ -1563,7 +1573,7 @@ class _Component(object):
                              % self.name)
             try:
                 if self.__dry_run:
-                    print 'Would mkdir -p %s' % self.build_path
+                    print('Would mkdir -p %s' % self.build_path)
                 else:
                     os.makedirs(self.build_path)
             except:
@@ -1610,14 +1620,14 @@ class _Component(object):
         if self.has_missing_targets(env):
             if self.__dry_run:
                 if self.package is None:
-                    print 'Missing %s' % self.name
+                    print('Missing %s' % self.name)
                 else:
-                    print 'Missing package %s %s' % (self.package, self.name)
+                    print('Missing package %s %s' % (self.package, self.name))
                 return
             if self.package is None:
                 raise MissingTargets(self.name, self.name)
-            else:
-                raise MissingTargets(self.name, self.package)
+
+            raise MissingTargets(self.name, self.package)
 
     def check_user_options(self, env, needed_libs):
         """check help and clean options"""
@@ -1634,7 +1644,7 @@ class _Component(object):
     def _rm_old_dir(self, path):
         """remove the old dir"""
         if self.__dry_run:
-            print 'Would empty %s' % path
+            print('Would empty %s' % path)
         else:
             os.system("rm -rf %s" % path)
             os.mkdir(path)
@@ -1656,7 +1666,7 @@ class _Component(object):
         """check for build dependencies"""
         if not self.prereqs.build_deps:
             if self.__dry_run:
-                print 'Would do required build of %s' % self.name
+                print('Would do required build of %s' % self.name)
             else:
                 raise BuildRequired(self.name)
 
@@ -1664,7 +1674,7 @@ class _Component(object):
         """update the crc"""
         new_crc = self.calculate_crc()
         if self.__dry_run:
-            print 'Would create a new crc file % s' % self.crc_file
+            print('Would create a new crc file % s' % self.crc_file)
         else:
             with open(self.crc_file, 'w') as crcfile:
                 crcfile.write(new_crc)

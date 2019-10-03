@@ -30,7 +30,7 @@ from collections import namedtuple
 
 # pylint: disable=too-few-public-methods
 
-class TestFunction(object):
+class TestFunction():
     """
     A simple store for tracking information about a specific test. Tied heavily
     to cmocka the function stores

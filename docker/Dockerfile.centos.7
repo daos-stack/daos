@@ -81,8 +81,8 @@ RUN yum -y copr enable jhli/safeclib
 RUN yum -y  install libipmctl-devel
 
 RUN yum -y install librdmacm-devel valgrind valgrind-devel libibverbs-devel \
-           python-jwt python-virtualenv python2-pip python34-pip            \
-           python34-pygithub
+           python-jwt python-virtualenv python2-pip python36-pip            \
+           python36-pygithub python36-pylint
 
 ARG OPENPA=unknown
 ARG LIBFABRIC=unknown

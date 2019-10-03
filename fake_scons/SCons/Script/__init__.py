@@ -25,18 +25,18 @@ import sys
 import copy
 
 
-class SConscript(object):
+class SConscript():
     """Fake SConscript"""
 
     def __init__(self, *args, **kw):
-        pass
+        """init function"""
 
 
-class DefaultEnvironment(object):
+class DefaultEnvironment():
     """Default environment"""
 
     def __init__(self, *args, **kwargs):
-        pass
+        """constructor"""
 
     def RunTests(self, *args, **kw):
         """Fake tests builder (defined by prereq_tools)"""
@@ -188,7 +188,6 @@ class DefaultEnvironment(object):
 
     def Install(self, *args, **kw):
         """Fake Install"""
-        pass
 
     def SharedLibrary(self, *args, **kw):
         """Fake SharedLibrary"""
@@ -204,7 +203,6 @@ class DefaultEnvironment(object):
 
     def Replace(self, *args, **kw):
         """Fake Replace"""
-        pass
 
     def Clone(self, *args, **kw):
         """Fake Replace"""
@@ -212,15 +210,12 @@ class DefaultEnvironment(object):
 
     def Append(self, *args, **kw):
         """Fake Append"""
-        pass
 
     def AppendUnique(self, *args, **kw):
         """Fake Append Unique"""
-        pass
 
     def AppendIfSupported(self, *args, **kw):
         """Fake AppendIfSupported"""
-        pass
 
     def subst(self, val):
         """Fake subst"""
@@ -235,37 +230,32 @@ class DefaultEnvironment(object):
         return []
 
 
-class Variables(object):
+class Variables():
     """Fake variables"""
 
     def __init__(self, *args, **kw):
-        pass
+        """constructor"""
 
     def Add(self, *args, **kw):
         """Fake Add function"""
-        pass
 
     def Update(self, *args, **kw):
         """Fake Update function"""
-        pass
 
     def GenerateHelpText(self, *args, **kw):
         """Fake GenerateHelpText"""
-        pass
 
     def UnknownVariables(self, *args, **kw):
         """Fake UnknownVariables"""
-        pass
 
     def Save(self, *args, **kw):
         """Fake Save"""
-        pass
 
 
-class Configure(object):
+class Configure():
     """Fake Configure"""
     def __init__(self, *args, **kw):
-        pass
+        """constructor"""
 
     def CheckHeader(self, *args, **kw):
         """Fake CheckHeader"""
@@ -285,17 +275,15 @@ class Configure(object):
 
     def Finish(self):
         """Fake finish"""
-        pass
 
 
-class Literal(object):
+class Literal():
     """Fake Literal"""
 
     def __init__(self, *args, **kw):
-        pass
+        """constructor"""
 
-
-class Dir(object):
+class Dir():
     """Fake Dir"""
     def __init__(self, *args, **kw):
         self.abspath = os.getcwd()
@@ -308,7 +296,6 @@ class Dir(object):
 
 def VariantDir(*args, **kw):
     """Fake VariantDir"""
-    pass
 
 
 def AddOption(*args, **kw):
@@ -326,10 +313,10 @@ def SetOption(*args, **kw):
     return True
 
 
-class Help(object):
+class Help():
     """Fake Help"""
     def __init__(self, *args, **kw):
-        pass
+        """constructor"""
 
 
 def Glob(*args):
@@ -344,17 +331,14 @@ def Exit(status):
 
 def Import(*args):
     """Fake Import"""
-    pass
 
 
 def Export(*args):
     """Fake Export"""
-    pass
 
 
 def Default(*args):
     """Fake Default"""
-    pass
 
 def Delete(*args, **kw):
     """Fake Delete"""
@@ -362,7 +346,6 @@ def Delete(*args, **kw):
 
 def AlwaysBuild(*args):
     """Fake AlwaysBuild"""
-    pass
 
 def Copy(*args, **kw):
     """Fake Copy"""
@@ -385,7 +368,6 @@ def Platform():
 
 def Depends(*args, **kw):
     """Fake Depends"""
-    pass
 
 
 COMMAND_LINE_TARGETS = []

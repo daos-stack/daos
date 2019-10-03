@@ -20,7 +20,7 @@
 """Fake Variables class"""
 
 
-class PathVariable(object):
+class PathVariable():
     """Fake PathVariable"""
     PathIsDirCreate = 1
     PathIsDir = 2
@@ -30,21 +30,21 @@ class PathVariable(object):
         pass
 
 
-class ListVariable(object):
+class ListVariable():
     """Fake ListVariable"""
 
     def __init__(self, *args, **kw):
         pass
 
 
-class BoolVariable(object):
+class BoolVariable():
     """Fake BoolVariable"""
 
     def __init__(self, *args, **kw):
         pass
 
 
-class EnumVariable(object):
+class EnumVariable():
     """Fake EnumVariable"""
 
     def __init__(self, *args, **kw):
