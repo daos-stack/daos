@@ -106,9 +106,9 @@ show_help(char *name)
 		"\n"
 		"	-m --mountpoint=PATHSTR	Mount point to use\n"
 		"	-s --svc=RANKS		pool service replicas like 1,2,3\n"
-		"	-p --pool=UUID		pool UUID\n"
-		"	-c --container=UUID	container UUID\n"
-		"	-G --sys-name=STR	DAOS system name context for servers\n"
+		"	   --pool=UUID		pool UUID\n"
+		"	   --container=UUID	container UUID\n"
+		"	   --sys-name=STR	DAOS system name context for servers\n"
 		"	-S --singlethreaded	Single threaded\n"
 		"	-f --foreground		Run in foreground\n",
 		name);
@@ -148,7 +148,7 @@ main(int argc, char **argv)
 	dfuse_info->di_threaded = true;
 
 	while (1) {
-		c = getopt_long(argc, argv, "p:c:s:g:m:Sfh",
+		c = getopt_long(argc, argv, "s:m:Sfh",
 				long_options, NULL);
 
 		if (c == -1)
@@ -309,5 +309,8 @@ out:
 	 * DAOS error numbers.
 	 */
 	DFUSE_LOG_INFO("Exiting with status %d", ret);
-	return -(ret + DER_ERR_GURT_BASE);
+	if (ret)
+		return -(ret + DER_ERR_GURT_BASE);
+	else
+		return 0;
 }
