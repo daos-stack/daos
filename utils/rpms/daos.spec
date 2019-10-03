@@ -233,8 +233,6 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
 %{_libdir}/python2.7/site-packages/pydaos_shim_27.so
-%dir %{_libdir}/python3
-%dir %{_libdir}/python3/site-packages
 %{_libdir}/python3/site-packages/pydaos_shim_3.so
 %{_datadir}/%{name}/ioil-ld-opts
 %{_prefix}%{_sysconfdir}/daos.yml
@@ -242,7 +240,6 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_unitdir}/daos-agent.service
 
 %files tests
-%dir %{_prefix}/lib
 %dir %{_prefix}/lib/daos
 %dir %{_prefix}/lib/daos/utils
 %{_prefix}/lib/daos/utils/py
@@ -258,7 +255,6 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
 # For avocado tests
-%dir %{_prefix}/lib
 %{_prefix}/lib/.build_vars.json
 %{_prefix}/lib/.build_vars.sh
 %dir %{_prefix}/etc
