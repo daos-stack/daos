@@ -102,6 +102,7 @@ class IorTestBase(TestWithServers):
             container = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                          shell=True)
             (output, err) = container.communicate()
+            self.log.info("Container created with UUID %s", output.split()[3])
 
         except subprocess.CalledProcessError as err:
             self.fail("Container create failed:{}".format(err))
@@ -120,7 +121,7 @@ class IorTestBase(TestWithServers):
 
         try:
             # start dfuse
-            self.dfuse.run_dfuse(self.hostlist_clients, self.tmp)
+            self.dfuse.run_dfuse(self.hostlist_clients, self.tmp, self.basepath)
         except CommandFailure as error:
             self.log.error("Dfuse Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")

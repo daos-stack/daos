@@ -28,6 +28,11 @@ from command_utils import ExecutableCommand, EnvironmentVariables
 from command_utils import CommandFailure, FormattedParameter
 
 
+AVOCADO_FILE = "src/tests/ftest/data/daos_avocado_test.yaml"
+
+class DfuseFailed(Exception):
+    """Dfuse Failed """
+
 class DfuseCommand(ExecutableCommand):
     """Defines a object representing a dfuse command."""
 
@@ -127,12 +132,13 @@ class DfuseCommand(ExecutableCommand):
                     raise CommandFailure("DfuseFailure: Error deleting: "
                                          "{}".format(self.mount_dir.value))
 
-    def run_dfuse(self, hosts, attach_info):
+    def run_dfuse(self, hosts, attach_info, basepath):
         """ Run the dfuse command.
 
         Args:
             hosts: list of hosts where dfuse needs to be started
-
+            attach_info (str): CART attach info path
+            basepath: path for daos install dir
         Raises:
             CommandFailure: In case dfuse run command fails
         """
@@ -140,7 +146,7 @@ class DfuseCommand(ExecutableCommand):
         # create dfuse dir if does not exist
         self.create_dfuse_dir(hosts)
         # obtain env export string
-        env = self.get_default_env(attach_info)
+        env = self.get_default_env(attach_info, basepath)
 
         # run dfuse command
         ret_code = general_utils.pcmd(hosts, env + self.__str__(), timeout=30)
@@ -180,12 +186,12 @@ class DfuseCommand(ExecutableCommand):
 
 
     @classmethod
-    def get_default_env(cls, attach_info):
+    def get_default_env(cls, attach_info, basepath=None):
         """Get the default enviroment settings for running Dfuse.
 
         Args:
             attach_info (str): CART attach info path
-
+            basepath: path for daos install dir
         Returns:
             env_export: a single string of all env vars to be
                                   exported
@@ -196,6 +202,28 @@ class DfuseCommand(ExecutableCommand):
         env = EnvironmentVariables()
         env["CRT_ATTACH_INFO_PATH"] = attach_info
         env["DAOS_SINGLETON_CLI"] = 1
+
+        if basepath is not None:
+            try:
+                with open('{}/{}'.format(basepath, AVOCADO_FILE),
+                          'r') as read_file:
+                    for line in read_file:
+                        if ("provider" in line) or ("fabric_iface" in line):
+                            items = line.split()
+                            key, values = items[0][:-1], items[1]
+                            env[key] = values
+                        #for key in env_dict.keys():
+                        #    if key not in ["provider", "fabric_iface"]:
+                        #        del env_dict[key]
+
+                print("***env_dict:{}***".format(env))
+                env['OFI_INTERFACE'] = env.pop('fabric_iface')
+                env['OFI_PORT'] = env.pop('fabric_iface_port')
+                env['CRT_PHY_ADDR_STR'] = env.pop('provider')
+                print("***env_dict:{}***".format(env))
+            except Exception as err:
+                raise DfuseFailed("Failed to read yaml file:{}".format(err))
+
         env_export = env.get_export_str()
 
         return env_export
