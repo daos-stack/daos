@@ -212,15 +212,10 @@ class DfuseCommand(ExecutableCommand):
                             items = line.split()
                             key, values = items[0][:-1], items[1]
                             env[key] = values
-                        #for key in env_dict.keys():
-                        #    if key not in ["provider", "fabric_iface"]:
-                        #        del env_dict[key]
 
-                print("***env_dict:{}***".format(env))
                 env['OFI_INTERFACE'] = env.pop('fabric_iface')
                 env['OFI_PORT'] = env.pop('fabric_iface_port')
                 env['CRT_PHY_ADDR_STR'] = env.pop('provider')
-                print("***env_dict:{}***".format(env))
             except Exception as err:
                 raise DfuseFailed("Failed to read yaml file:{}".format(err))
 
