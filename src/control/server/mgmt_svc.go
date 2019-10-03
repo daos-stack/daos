@@ -334,6 +334,30 @@ func (svc *mgmtSvc) SmdListDevs(ctx context.Context, req *mgmtpb.SmdDevReq) (*mg
 	return resp, nil
 }
 
+// SmdListPools implements the method defined for the Management Service.
+func (svc *mgmtSvc) SmdListPools(ctx context.Context, req *mgmtpb.SmdPoolReq) (*mgmtpb.SmdPoolResp, error) {
+	mi, err := svc.harness.GetManagementInstance()
+	if err != nil {
+		return nil, err
+	}
+
+	svc.log.Debugf("MgmtSvc.SmdListPools dispatch, req:%+v\n", *req)
+
+	svc.mutex.Lock()
+	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, smdPools, req)
+	svc.mutex.Unlock()
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.SmdPoolResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal SmdListPools response")
+	}
+
+	return resp, nil
+}
+
 // KillRank implements the method defined for the Management Service.
 func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.DaosRank) (*mgmtpb.DaosResp, error) {
 	mi, err := svc.harness.GetManagementInstance()
