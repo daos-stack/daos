@@ -786,6 +786,10 @@ process_smdlistdevs_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	mgmt__smd_dev_req__free_unpacked(req, NULL);
 
+	/* all devs should already be freed upon error */
+	if (rc != 0)
+		goto out;
+
 	for (i = 0; i < resp->n_devices; i++) {
 		if (resp->devices[i] != NULL) {
 			if (resp->devices[i]->uuid != NULL)
@@ -795,6 +799,78 @@ process_smdlistdevs_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			D_FREE(resp->devices[i]);
 		}
 	}
+	D_FREE(resp->devices);
+out:
+	D_FREE(resp);
+}
+
+static void
+process_smdlistpools_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__SmdPoolReq	*req = NULL;
+	Mgmt__SmdPoolResp	*resp = NULL;
+	uint8_t			*body;
+	size_t			 len;
+	int			 i;
+	int			 rc = 0;
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__smd_pool_req__unpack(
+		NULL, drpc_req->body.len, drpc_req->body.data);
+
+	if (req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to unpack req (smd list pools)\n");
+		return;
+	}
+
+	D_INFO("Received request to list SMD pools\n");
+
+	D_ALLOC_PTR(resp);
+	if (resp == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to allocate daos response ref\n");
+		mgmt__smd_pool_req__free_unpacked(req, NULL);
+		return;
+	}
+
+	/* Response status is populated with SUCCESS on init. */
+	mgmt__smd_pool_resp__init(resp);
+
+	rc = ds_mgmt_smd_list_pools(resp);
+	if (rc != 0)
+		D_ERROR("Failed to list SMD pools :%d\n", rc);
+
+	resp->status = rc;
+	len = mgmt__smd_pool_resp__get_packed_size(resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to allocate drpc response body\n");
+	} else {
+		mgmt__smd_pool_resp__pack(resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__smd_pool_req__free_unpacked(req, NULL);
+
+	/* all pools should already be freed upon error */
+	if (rc != 0)
+		goto out;
+	for (i = 0; i < resp->n_pools; i++) {
+		if (resp->pools[i] != NULL) {
+			if (resp->pools[i]->uuid != NULL)
+				D_FREE(resp->pools[i]->uuid);
+			if (resp->pools[i]->tgt_ids != NULL)
+				D_FREE(resp->pools[i]->tgt_ids);
+			if (resp->pools[i]->blobs != NULL)
+				D_FREE(resp->pools[i]->blobs);
+			D_FREE(resp->pools[i]);
+		}
+	}
+	D_FREE(resp->pools);
+out:
 	D_FREE(resp);
 }
 
@@ -962,6 +1038,9 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		break;
 	case DRPC_METHOD_MGMT_SMD_LIST_DEVS:
 		process_smdlistdevs_request(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_SMD_LIST_POOLS:
+		process_smdlistpools_request(drpc_req, drpc_resp);
 		break;
 	default:
 		drpc_resp->status = DRPC__STATUS__UNKNOWN_METHOD;
