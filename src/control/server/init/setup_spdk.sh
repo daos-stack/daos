@@ -17,9 +17,11 @@ else
 	PCI_WHITELIST="$_PCI_WHITELIST" NRHUGE="$_NRHUGE" \
 	TARGET_USER="$_TARGET_USER" "$scriptpath"
 
-	chmod 777 /dev/hugepages
-	chmod 666 /dev/uio*
-	chmod 666 /sys/class/uio/uio*/device/config
-	chmod 666 /sys/class/uio/uio*/device/resource*
+	if [[ "$_TARGET_USER" != "root" ]]; then
+		chmod 777 /dev/hugepages
+		chmod 666 /dev/uio*
+		chmod 666 /sys/class/uio/uio*/device/config
+		chmod 666 /sys/class/uio/uio*/device/resource*
+	fi
 fi
 
