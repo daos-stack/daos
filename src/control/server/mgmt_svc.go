@@ -190,7 +190,7 @@ func getPeerListenAddr(ctx context.Context, inPort int) (net.Addr, error) {
 
 	tcpAddr, ok := p.Addr.(*net.TCPAddr)
 	if !ok {
-		return nil, errors.Errorf("peer address (%v) not tcp", p.Addr)
+		return nil, errors.Errorf("peer address (%s) not tcp", p.Addr)
 	}
 
 	return net.ResolveTCPAddr(p.Addr.Network(),

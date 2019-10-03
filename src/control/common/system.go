@@ -24,7 +24,9 @@
 package common
 
 import (
+	"fmt"
 	"net"
+	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -41,6 +43,22 @@ type SystemMember struct {
 	Rank uint32
 }
 
+func (sm SystemMember) String() string {
+	return fmt.Sprintf("%s/%s/%d", sm.Addr, sm.Uuid, sm.Rank)
+}
+
+type SystemMembers []*SystemMember
+
+func (sms SystemMembers) String() string {
+	var sb strings.Builder
+
+	for _, m := range sms {
+		sb.WriteString(m.String() + " ")
+	}
+
+	return sb.String()
+}
+
 // Membership tracks details of system members.
 type Membership struct {
 	sync.RWMutex
@@ -54,8 +72,7 @@ func (m *Membership) Add(member SystemMember) error {
 	value, found := m.members[member.Uuid]
 	m.RUnlock()
 	if found {
-		return errors.Errorf("member %s already exists (%+v)",
-			member.Uuid, value)
+		return errors.Errorf("member %s already exists", value)
 	}
 
 	m.Lock()
@@ -90,14 +107,14 @@ func (m *Membership) GetMember(uuid string) (*SystemMember, error) {
 
 	member, found := m.members[uuid]
 	if !found {
-		return nil, errors.Errorf("member %s not found", uuid)
+		return nil, errors.Errorf("member with uuid %s not found", uuid)
 	}
 
 	return &member, nil
 }
 
 // GetMembers returns internal member structs as a sequence.
-func (m *Membership) GetMembers() []*SystemMember {
+func (m *Membership) GetMembers() SystemMembers {
 	members := make([]*SystemMember, 0, len(m.members))
 
 	m.RLock()
@@ -129,7 +146,7 @@ func (m *Membership) GetMembersPB() []*mgmtpb.SystemMember {
 // MembersFromPB converts to member slice from protobuf format.
 //
 // Don't populate member Addr field if it can't be resolved.
-func MembersFromPB(log logging.Logger, pbMembers []*mgmtpb.SystemMember) []*SystemMember {
+func MembersFromPB(log logging.Logger, pbMembers []*mgmtpb.SystemMember) SystemMembers {
 	members := make([]*SystemMember, len(pbMembers))
 
 	for _, m := range pbMembers {

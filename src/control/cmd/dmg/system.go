@@ -73,7 +73,7 @@ func (cmd *systemMemberQueryCmd) Execute(args []string) error {
 		msg = errors.WithMessagef(err, "FAILED").Error()
 	}
 	if len(members) > 0 {
-		msg += fmt.Sprintf(": %v", members)
+		msg += fmt.Sprintf(": %s", members)
 	}
 
 	cmd.log.Infof("System-member-query command %s\n", msg)
