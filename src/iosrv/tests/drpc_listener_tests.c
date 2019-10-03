@@ -191,10 +191,18 @@ test_drpc_listener_init_cant_create_socket(void **state)
 static void
 test_drpc_listener_init_success(void **state)
 {
+	char expected_socket_path[256];
+
 	assert_int_equal(drpc_listener_init(), DER_SUCCESS);
 
 	/* Created a valid mutex */
 	assert_non_null(ABT_mutex_create_newmutex_ptr);
+
+	/* Initialized unique socket path based on PID */
+	assert_non_null(drpc_listener_socket_path);
+	snprintf(expected_socket_path, sizeof(expected_socket_path),
+		 "%s/daos_io_server_%d.sock", dss_socket_dir, getpid());
+	assert_string_equal(drpc_listener_socket_path, expected_socket_path);
 
 	/* called unlink on socket */
 	assert_int_equal(unlink_call_count, 1);
