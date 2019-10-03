@@ -30,6 +30,9 @@ from command_utils import ObjectWithParameters, BasicParameter
 from general_utils import run_task
 
 
+DATA_ERROR = "[ERROR]"
+
+
 class ConfigurationData(object):
     """Defines requirement data for a set of hosts."""
 
@@ -48,15 +51,15 @@ class ConfigurationData(object):
         # Defines the methods used to obtain the host data for each
         # ConfigurationParameters BasicParameter attribute (requirement)
         self._data_key_map = {
-            "mem_size": self._get_host_mem_data,
-            "nvme_size": self._get_host_nvme_data,
-            "scm_size": self._get_host_scm_data
+            "mem_size": self.get_host_mem_data,
+            "nvme_size": self.get_host_nvme_data,
+            "scm_size": self.get_host_scm_data
         }
 
         # Stores the data from each host for each requirement name
         self._data = {}
 
-    def _get_host_mem_data(self):
+    def get_host_mem_data(self):
         """Get the total non-swap memory in bytes for each host.
 
         Returns:
@@ -66,9 +69,9 @@ class ConfigurationData(object):
         cmd = r"free -b | sed -En 's/Mem:\s+([0-9]+).*/\1/p'"
         text = "memory"
         error = "Error obtaining total memory size"
-        return self._get_host_data(cmd, text, error)
+        return self.get_host_data(cmd, text, error)
 
-    def _get_host_nvme_data(self):
+    def get_host_nvme_data(self):
         """Get the largest NVMe capacity in bytes for each host.
 
         Returns:
@@ -78,9 +81,9 @@ class ConfigurationData(object):
         cmd = "lsblk -b -o SIZE,NAME | grep nvme"
         text = "NVMe"
         error = "No NVMe drives bound to the kernel driver detected"
-        return self._get_host_data(cmd, text, error)
+        return self.get_host_data(cmd, text, error)
 
-    def _get_host_scm_data(self):
+    def get_host_scm_data(self):
         """Get the total SCM capacity in bytes for each host.
 
         Returns:
@@ -94,10 +97,10 @@ class ConfigurationData(object):
         cmd = " | ".join(cmd_list)
         text = "SCM"
         error = "No SCM devices detected"
-        return self._get_host_data(cmd, text, error)
+        return self.get_host_data(cmd, text, error)
 
-    def _get_host_data(self, command, text, error):
-        """Get the command output from each host specified.
+    def get_host_data(self, command, text, error):
+        """Get the data requested for each host using the specified command.
 
         Args:
             command (str): command used to obtain the data on each server
@@ -142,8 +145,8 @@ class ConfigurationData(object):
                 "    %s on the following hosts:\n      %s",
                 error, "\n      ".join(messages))
 
-            # Return an empty data set for all of the hosts
-            host_data = {NodeSet.fromlist(hosts): "[ERROR]"}
+            # Return an error data set for all of the hosts
+            host_data = {NodeSet.fromlist(self.hosts): DATA_ERROR}
 
         else:
             # The command completed successfully on all servers.
@@ -152,6 +155,10 @@ class ConfigurationData(object):
                 # this group of hosts as only one needs to meet the minimum
                 nodes = NodeSet.fromlist(hosts)
                 try:
+                    # The assumption here is that each line of command output
+                    # will begin with a number and that for the purposes of
+                    # checking this requirement the maximum of these numbers is
+                    # needed
                     int_host_values = [
                         int(line.split()[0])
                         for line in str(output).splitlines()]
@@ -164,8 +171,8 @@ class ConfigurationData(object):
                         "unexpected output:\n      %s",
                         nodes, text, "\n      ".join(str(output).splitlines()))
 
-                    # Return an empty data set for all of the hosts
-                    host_data = {NodeSet.fromlist(hosts): "[ERROR]"}
+                    # Return an error data set for all of the hosts
+                    host_data = {NodeSet.fromlist(hosts): DATA_ERROR}
                     break
 
         return host_data
@@ -250,7 +257,7 @@ class ConfigurationParameters(ObjectWithParameters):
                 # hosts with the same values
                 requirement_data = self._config_data.get_data(requirement)
                 for group, data in requirement_data.items():
-                    status = data != "[ERROR]" and data >= value
+                    status = data != DATA_ERROR and data >= value
                     self.log.debug(
                         "  %s: Verifying the maximum %s meets the requirememt: "
                         "%s >= %s: %s",

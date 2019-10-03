@@ -152,10 +152,11 @@ class TestPool(TestDaosApiBase):
         self.uuid.
         """
         self.destroy()
-        self.log.info(
-            "Creating a pool{}".format(
-                " on targets {}".format(self.target_list.value)
-                if self.target_list.value else ""))
+        if self.target_list.value is not None:
+            self.log.info(
+                "Creating a pool on targets %s", self.target_list.value)
+        else:
+            self.log.info("Creating a pool")
         self.pool = DaosPool(self.context)
         kwargs = {
             "mode": self.mode.value, "uid": self.uid, "gid": self.gid,
@@ -169,8 +170,9 @@ class TestPool(TestDaosApiBase):
         self.svc_ranks = [
             int(self.pool.svc.rl_ranks[index])
             for index in range(self.pool.svc.rl_nr)]
-        self.log.info("  Pool created with uuid {} and svc ranks {}".format(
-            self.uuid, self.svc_ranks))
+        self.log.info(
+            "  Pool created with uuid %s and svc ranks %s",
+            self.uuid, self.svc_ranks)
 
     @fail_on(DaosApiError)
     def connect(self, permission=1):
@@ -537,7 +539,7 @@ class TestPool(TestDaosApiBase):
             process.CmdResult: command execution result
 
         """
-        self.log.info("Writing {} bytes to pool {}".format(size, self.uuid))
+        self.log.info("Writing %s bytes to pool %s", size, self.uuid)
         env = {
             "DAOS_POOL": self.uuid,
             "DAOS_SVCL": "1",
@@ -762,7 +764,7 @@ class TestContainer(TestDaosApiBase):
             kwargs["con_uuid"] = uuid
         self._call_method(self.container.create, kwargs)
         self.uuid = self.container.get_uuid_str()
-        self.log.info("  Container created with uuid {}".format(self.uuid))
+        self.log.info("  Container created with uuid %s", self.uuid)
 
     @fail_on(DaosApiError)
     def open(self):
@@ -935,6 +937,5 @@ class TestContainer(TestDaosApiBase):
         """
         count = sum([ranks.count(rank) for ranks in target_rank_list])
         self.log.info(
-            "Occurrences of rank {} in the target rank list: {}".format(
-                rank, count))
+            "Occurrences of rank %s in the target rank list: %s", rank, count)
         return count
