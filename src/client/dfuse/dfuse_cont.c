@@ -77,8 +77,6 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 			DFUSE_TRA_INFO(ie, "Reusing existing container entry "
 				       "without reconnect");
 
-			D_FREE(dfs);
-
 			/* Update the stat information, but copy in the
 			 * inode value afterwards.
 			 */
@@ -87,6 +85,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 			if (rc) {
 				DFUSE_TRA_ERROR(ie, "dfs_ostat() failed: (%s)",
 						strerror(rc));
+				d_hash_rec_decref(&fs_handle->dpi_iet, &ie->ie_htl);
 				D_GOTO(err, rc);
 			}
 
@@ -94,6 +93,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 			entry.generation = 1;
 			entry.ino = entry.attr.st_ino;
 			DFUSE_REPLY_ENTRY(req, entry);
+			D_FREE(dfs);
 			return true;
 		}
 	}
@@ -101,7 +101,10 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	rc = daos_cont_open(parent->ie_dfs->dfs_poh, dfs->dfs_cont,
 			    DAOS_COO_RW, &dfs->dfs_coh, &dfs->dfs_co_info,
 			    NULL);
-	if (rc != -DER_SUCCESS) {
+	if (rc == -DER_NONEXIST) {
+		DFUSE_LOG_INFO("daos_cont_open() failed: (%d)", rc);
+		D_GOTO(err, rc = daos_der2errno(rc));
+	} else if (rc != -DER_SUCCESS) {
 		DFUSE_LOG_ERROR("daos_cont_open() failed: (%d)", rc);
 		D_GOTO(err, rc = daos_der2errno(rc));
 	}

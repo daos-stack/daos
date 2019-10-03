@@ -351,6 +351,22 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 		rcp = EINVAL;
 	}
 
+	DFUSE_TRA_INFO(fs_handle, "Draining inode record table");
+	do {
+		struct dfuse_inode_record *ir;
+
+		rlink = d_hash_rec_first(&fs_handle->dpi_irt);
+
+		if (!rlink)
+			break;
+
+		ir = container_of(rlink, struct dfuse_inode_record, ir_htl);
+
+		d_hash_rec_delete_at(&fs_handle->dpi_irt, rlink);
+
+		D_FREE(ir);
+	} while (rlink);
+
 	rc = d_hash_table_destroy_inplace(&fs_handle->dpi_irt, true);
 	if (rc) {
 		DFUSE_TRA_WARNING(fs_handle, "Failed to close inode handles");

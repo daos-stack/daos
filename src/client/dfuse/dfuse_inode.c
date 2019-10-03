@@ -110,6 +110,7 @@ dfuse_check_for_inode(struct dfuse_projection_info *fs_handle,
 	return -DER_SUCCESS;
 };
 
+#if 0
 static void
 drop_ino_ref(struct dfuse_projection_info *fs_handle, ino_t ino)
 {
@@ -123,6 +124,7 @@ drop_ino_ref(struct dfuse_projection_info *fs_handle, ino_t ino)
 	}
 	d_hash_rec_ndecref(&fs_handle->dpi_iet, 2, rlink);
 }
+#endif
 
 void
 ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
@@ -135,9 +137,11 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 
 	D_ASSERT(ref == 0);
 
-	if (ie->ie_parent != 0) {
+#if 0
+	if (ie->ie_stat.st_ino != ie->ie_parent && ie->ie_parent != 0) {
 		drop_ino_ref(fs_handle, ie->ie_parent);
 	}
+#endif
 
 	if (ie->ie_obj) {
 		rc = dfs_release(ie->ie_obj);
