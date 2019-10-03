@@ -173,9 +173,7 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 		return nil, err
 	}
 
-	svc.mutex.Lock()
 	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, getAttachInfo, req)
-	svc.mutex.Unlock()
 	if err != nil {
 		return nil, err
 	}
@@ -194,9 +192,7 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 		return nil, err
 	}
 
-	svc.mutex.Lock()
 	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, join, req)
-	svc.mutex.Unlock()
 	if err != nil {
 		return nil, err
 	}
@@ -252,9 +248,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 
 	svc.log.Debugf("MgmtSvc.PoolCreate dispatch, req:%+v\n", *req)
 
-	svc.mutex.Lock()
 	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, poolCreate, req)
-	svc.mutex.Unlock()
 	if err != nil {
 		return nil, err
 	}
@@ -281,9 +275,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 
 	svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, req:%+v\n", *req)
 
-	svc.mutex.Lock()
 	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, poolDestroy, req)
-	svc.mutex.Unlock()
 	if err != nil {
 		return nil, err
 	}
@@ -307,9 +299,7 @@ func (svc *mgmtSvc) BioHealthQuery(ctx context.Context, req *mgmtpb.BioHealthReq
 
 	svc.log.Debugf("MgmtSvc.BioHealthQuery dispatch, req:%+v\n", *req)
 
-	svc.mutex.Lock()
 	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, bioHealth, req)
-	svc.mutex.Unlock()
 	if err != nil {
 		return nil, err
 	}
@@ -331,9 +321,7 @@ func (svc *mgmtSvc) SmdListDevs(ctx context.Context, req *mgmtpb.SmdDevReq) (*mg
 
 	svc.log.Debugf("MgmtSvc.SmdListDevs dispatch, req:%+v\n", *req)
 
-	svc.mutex.Lock()
 	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, smdDevs, req)
-	svc.mutex.Unlock()
 	if err != nil {
 		return nil, err
 	}
@@ -341,6 +329,30 @@ func (svc *mgmtSvc) SmdListDevs(ctx context.Context, req *mgmtpb.SmdDevReq) (*mg
 	resp := &mgmtpb.SmdDevResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal SmdListDevs response")
+	}
+
+	return resp, nil
+}
+
+// SmdListPools implements the method defined for the Management Service.
+func (svc *mgmtSvc) SmdListPools(ctx context.Context, req *mgmtpb.SmdPoolReq) (*mgmtpb.SmdPoolResp, error) {
+	mi, err := svc.harness.GetManagementInstance()
+	if err != nil {
+		return nil, err
+	}
+
+	svc.log.Debugf("MgmtSvc.SmdListPools dispatch, req:%+v\n", *req)
+
+	svc.mutex.Lock()
+	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, smdPools, req)
+	svc.mutex.Unlock()
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.SmdPoolResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal SmdListPools response")
 	}
 
 	return resp, nil
@@ -358,9 +370,7 @@ func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.DaosRank) (*mgmtpb
 
 	svc.log.Debugf("MgmtSvc.KillRank dispatch, req:%+v\n", *req)
 
-	svc.mutex.Lock()
 	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, killRank, req)
-	svc.mutex.Unlock()
 	if err != nil {
 		return nil, err
 	}
