@@ -325,7 +325,7 @@ class ServerManager(ExecutableCommand):
         self.debug = BasicParameter(None, True)       # ServerCommand param
         self.attach = BasicParameter(None, attach)    # ServerCommand param
         self.insecure = BasicParameter(None, True)    # ServerCommand param
-        self.sudo = BasicParameter(None, True)        # ServerCommand param
+        self.sudo = BasicParameter(None, False)       # ServerCommand param
         self.report_uri = BasicParameter(None)             # Orterun param
         self.enable_recovery = BasicParameter(None, True)  # Orterun param
         self.export = BasicParameter(None)                 # Orterun param
@@ -387,6 +387,7 @@ class ServerManager(ExecutableCommand):
         if self.runner.job.yaml_params.is_nvme():
             self.log.info("Performing nvme storage prepare in <format> mode")
             storage_prepare(self._hosts)
+            self.runner.job.sudo = True
 
         try:
             self.run()
