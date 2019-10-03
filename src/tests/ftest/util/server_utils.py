@@ -482,7 +482,7 @@ def storage_prepare(hosts):
     """
     daos_srv_bin = get_file_path("bin/daos_server")
     cmd = ("sudo {} storage prepare -n -u \"root\" --hugepages=4096 -f"
-           .format(daos_srv_bin[0], getpass.getuser()))
+           .format(daos_srv_bin[0]))
     result = pcmd(hosts, cmd, timeout=120)
     if len(result) > 1 or 0 not in result:
         raise ServerFailed("Error preparing NVMe storage")
