@@ -36,22 +36,35 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
+func connectSetupServers(
+	servers Addresses, log logging.Logger,
+	state State, features []*Feature, ctrlrs NvmeControllers,
+	ctrlrResults NvmeControllerResults, modules ScmModules,
+	moduleResults ScmModuleResults, pmems PmemDevices, mountResults ScmMountResults,
+	scanRet error, formatRet error, updateRet error, burninRet error,
+	killRet error, connectRet error, getACLRet *mockGetACLResult) Connect {
+
+	connect := newMockConnect(
+		log, state, features, ctrlrs, ctrlrResults, modules,
+		moduleResults, pmems, mountResults, scanRet, formatRet,
+		updateRet, burninRet, killRet, connectRet, getACLRet)
+
+	_ = connect.ConnectClients(servers)
+
+	return connect
+}
+
 func connectSetup(
 	log logging.Logger,
 	state State, features []*Feature, ctrlrs NvmeControllers,
 	ctrlrResults NvmeControllerResults, modules ScmModules,
 	moduleResults ScmModuleResults, pmems PmemDevices, mountResults ScmMountResults,
 	scanRet error, formatRet error, updateRet error, burninRet error,
-	killRet error, connectRet error) Connect {
+	killRet error, connectRet error, getACLRet *mockGetACLResult) Connect {
 
-	connect := newMockConnect(
-		log, state, features, ctrlrs, ctrlrResults, modules,
-		moduleResults, pmems, mountResults, scanRet, formatRet,
-		updateRet, burninRet, killRet, connectRet)
-
-	_ = connect.ConnectClients(MockServers)
-
-	return connect
+	return connectSetupServers(MockServers, log, state, features, ctrlrs,
+		ctrlrResults, modules, moduleResults, pmems, mountResults, scanRet,
+		formatRet, updateRet, burninRet, killRet, connectRet, getACLRet)
 }
 
 func defaultClientSetup(log logging.Logger) Connect {
@@ -97,8 +110,8 @@ func TestConnectClients(t *testing.T) {
 	for _, tt := range conntests {
 		cc := newMockConnect(
 			log, tt.state, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
-			MockModuleResults, MockPmemDevices, MockMountResults, nil, nil, nil, nil, nil,
-			tt.connRet)
+			MockModuleResults, MockPmemDevices, MockMountResults,
+			nil, nil, nil, nil, nil, tt.connRet, nil)
 
 		results := cc.ConnectClients(tt.addrsIn)
 
@@ -202,8 +215,8 @@ func TestStorageFormat(t *testing.T) {
 	for _, tt := range tests {
 		cc := connectSetup(
 			log, Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
-			MockModuleResults, MockPmemDevices, MockMountResults, nil, tt.formatRet, nil, nil,
-			nil, nil)
+			MockModuleResults, MockPmemDevices, MockMountResults, nil,
+			tt.formatRet, nil, nil, nil, nil, MockACL)
 
 		cNvmeMap, cMountMap := cc.StorageFormat()
 
@@ -249,8 +262,8 @@ func TestStorageUpdate(t *testing.T) {
 	for _, tt := range tests {
 		cc := connectSetup(
 			log, Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
-			MockModuleResults, MockPmemDevices, MockMountResults, nil, nil, tt.updateRet, nil,
-			nil, nil)
+			MockModuleResults, MockPmemDevices, MockMountResults, nil,
+			nil, tt.updateRet, nil, nil, nil, MockACL)
 
 		cNvmeMap, cModuleMap := cc.StorageUpdate(new(StorageUpdateReq))
 
@@ -292,10 +305,83 @@ func TestKillRank(t *testing.T) {
 
 	for _, tt := range tests {
 		cc := connectSetup(log, Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
-			MockModuleResults, MockPmemDevices, MockMountResults, nil, nil, nil, nil, tt.killRet, nil)
+			MockModuleResults, MockPmemDevices, MockMountResults, nil, nil, nil,
+			nil, tt.killRet, nil, MockACL)
 
 		resultMap := cc.KillRank("acd", 0)
 
 		checkResults(t, Addresses{MockServers[0]}, resultMap, tt.killRet)
+	}
+}
+
+func TestPoolGetACL(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer ShowBufferOnFailure(t, buf)()
+
+	tests := []struct {
+		desc             string
+		addr             Addresses
+		getACLRespStatus int32
+		getACLErr        error
+		expectedACL      []string
+		expectedErr      string
+	}{
+		{
+			desc:        "no service leader",
+			addr:        nil,
+			expectedACL: nil,
+			expectedErr: "no active connections",
+		},
+		{
+			desc:        "gRPC call failed",
+			addr:        MockServers,
+			getACLErr:   MockErr,
+			expectedACL: nil,
+			expectedErr: MockErr.Error(),
+		},
+		{
+			desc:             "gRPC resp bad status",
+			addr:             MockServers,
+			getACLRespStatus: -5000,
+			expectedACL:      nil,
+			expectedErr:      "DAOS returned error code: -5000",
+		},
+		{
+			desc:             "success",
+			addr:             MockServers,
+			getACLRespStatus: 0,
+			expectedACL:      MockACL.acl,
+			expectedErr:      "",
+		},
+	}
+
+	for _, tt := range tests {
+		aclResult := &mockGetACLResult{
+			acl:    tt.expectedACL,
+			status: tt.getACLRespStatus,
+			err:    tt.getACLErr,
+		}
+		cc := connectSetupServers(tt.addr, log, Ready, MockFeatures,
+			MockCtrlrs, MockCtrlrResults, MockModules,
+			MockModuleResults, MockPmemDevices, MockMountResults,
+			nil, nil, nil, nil, nil, nil,
+			aclResult)
+
+		acl, err := cc.PoolGetACL("TestUUID")
+
+		if tt.expectedErr != "" {
+			ExpectError(t, err, tt.expectedErr, tt.desc)
+		} else if err != nil {
+			t.Fatalf("expected nil error, got %v", err)
+		}
+
+		if tt.expectedACL != nil {
+			if acl == nil {
+				t.Fatal("expected an ACL, got nil")
+			}
+			AssertStringsEqual(t, acl, tt.expectedACL, tt.desc)
+		} else if acl != nil {
+			t.Fatalf("expected no ACL, got %v", acl)
+		}
 	}
 }
