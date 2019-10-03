@@ -36,7 +36,7 @@ func (m *NvmeController) Reset()         { *m = NvmeController{} }
 func (m *NvmeController) String() string { return proto.CompactTextString(m) }
 func (*NvmeController) ProtoMessage()    {}
 func (*NvmeController) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_cce56f378c6b8ed7, []int{0}
+	return fileDescriptor_storage_nvme_94f89cea95676563, []int{0}
 }
 func (m *NvmeController) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_NvmeController.Unmarshal(m, b)
@@ -118,7 +118,7 @@ func (m *NvmeController_Namespace) Reset()         { *m = NvmeController_Namespa
 func (m *NvmeController_Namespace) String() string { return proto.CompactTextString(m) }
 func (*NvmeController_Namespace) ProtoMessage()    {}
 func (*NvmeController_Namespace) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_cce56f378c6b8ed7, []int{0, 0}
+	return fileDescriptor_storage_nvme_94f89cea95676563, []int{0, 0}
 }
 func (m *NvmeController_Namespace) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_NvmeController_Namespace.Unmarshal(m, b)
@@ -177,7 +177,7 @@ func (m *NvmeController_Health) Reset()         { *m = NvmeController_Health{} }
 func (m *NvmeController_Health) String() string { return proto.CompactTextString(m) }
 func (*NvmeController_Health) ProtoMessage()    {}
 func (*NvmeController_Health) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_cce56f378c6b8ed7, []int{0, 1}
+	return fileDescriptor_storage_nvme_94f89cea95676563, []int{0, 1}
 }
 func (m *NvmeController_Health) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_NvmeController_Health.Unmarshal(m, b)
@@ -308,7 +308,7 @@ func (m *NvmeControllerResult) Reset()         { *m = NvmeControllerResult{} }
 func (m *NvmeControllerResult) String() string { return proto.CompactTextString(m) }
 func (*NvmeControllerResult) ProtoMessage()    {}
 func (*NvmeControllerResult) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_cce56f378c6b8ed7, []int{1}
+	return fileDescriptor_storage_nvme_94f89cea95676563, []int{1}
 }
 func (m *NvmeControllerResult) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_NvmeControllerResult.Unmarshal(m, b)
@@ -356,7 +356,7 @@ func (m *PrepareNvmeReq) Reset()         { *m = PrepareNvmeReq{} }
 func (m *PrepareNvmeReq) String() string { return proto.CompactTextString(m) }
 func (*PrepareNvmeReq) ProtoMessage()    {}
 func (*PrepareNvmeReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_cce56f378c6b8ed7, []int{2}
+	return fileDescriptor_storage_nvme_94f89cea95676563, []int{2}
 }
 func (m *PrepareNvmeReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PrepareNvmeReq.Unmarshal(m, b)
@@ -415,7 +415,7 @@ func (m *PrepareNvmeResp) Reset()         { *m = PrepareNvmeResp{} }
 func (m *PrepareNvmeResp) String() string { return proto.CompactTextString(m) }
 func (*PrepareNvmeResp) ProtoMessage()    {}
 func (*PrepareNvmeResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_cce56f378c6b8ed7, []int{3}
+	return fileDescriptor_storage_nvme_94f89cea95676563, []int{3}
 }
 func (m *PrepareNvmeResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PrepareNvmeResp.Unmarshal(m, b)
@@ -452,7 +452,7 @@ func (m *ScanNvmeReq) Reset()         { *m = ScanNvmeReq{} }
 func (m *ScanNvmeReq) String() string { return proto.CompactTextString(m) }
 func (*ScanNvmeReq) ProtoMessage()    {}
 func (*ScanNvmeReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_cce56f378c6b8ed7, []int{4}
+	return fileDescriptor_storage_nvme_94f89cea95676563, []int{4}
 }
 func (m *ScanNvmeReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ScanNvmeReq.Unmarshal(m, b)
@@ -484,7 +484,7 @@ func (m *ScanNvmeResp) Reset()         { *m = ScanNvmeResp{} }
 func (m *ScanNvmeResp) String() string { return proto.CompactTextString(m) }
 func (*ScanNvmeResp) ProtoMessage()    {}
 func (*ScanNvmeResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_cce56f378c6b8ed7, []int{5}
+	return fileDescriptor_storage_nvme_94f89cea95676563, []int{5}
 }
 func (m *ScanNvmeResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ScanNvmeResp.Unmarshal(m, b)
@@ -528,7 +528,7 @@ func (m *FormatNvmeReq) Reset()         { *m = FormatNvmeReq{} }
 func (m *FormatNvmeReq) String() string { return proto.CompactTextString(m) }
 func (*FormatNvmeReq) ProtoMessage()    {}
 func (*FormatNvmeReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_cce56f378c6b8ed7, []int{6}
+	return fileDescriptor_storage_nvme_94f89cea95676563, []int{6}
 }
 func (m *FormatNvmeReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_FormatNvmeReq.Unmarshal(m, b)
@@ -562,7 +562,7 @@ func (m *UpdateNvmeReq) Reset()         { *m = UpdateNvmeReq{} }
 func (m *UpdateNvmeReq) String() string { return proto.CompactTextString(m) }
 func (*UpdateNvmeReq) ProtoMessage()    {}
 func (*UpdateNvmeReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_cce56f378c6b8ed7, []int{7}
+	return fileDescriptor_storage_nvme_94f89cea95676563, []int{7}
 }
 func (m *UpdateNvmeReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_UpdateNvmeReq.Unmarshal(m, b)
@@ -622,7 +622,7 @@ func (m *BurninNvmeReq) Reset()         { *m = BurninNvmeReq{} }
 func (m *BurninNvmeReq) String() string { return proto.CompactTextString(m) }
 func (*BurninNvmeReq) ProtoMessage()    {}
 func (*BurninNvmeReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_nvme_cce56f378c6b8ed7, []int{8}
+	return fileDescriptor_storage_nvme_94f89cea95676563, []int{8}
 }
 func (m *BurninNvmeReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BurninNvmeReq.Unmarshal(m, b)
@@ -663,9 +663,9 @@ func init() {
 	proto.RegisterType((*BurninNvmeReq)(nil), "ctl.BurninNvmeReq")
 }
 
-func init() { proto.RegisterFile("storage_nvme.proto", fileDescriptor_storage_nvme_cce56f378c6b8ed7) }
+func init() { proto.RegisterFile("storage_nvme.proto", fileDescriptor_storage_nvme_94f89cea95676563) }
 
-var fileDescriptor_storage_nvme_cce56f378c6b8ed7 = []byte{
+var fileDescriptor_storage_nvme_94f89cea95676563 = []byte{
 	// 681 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x54, 0x4d, 0x8b, 0xdb, 0x3c,
 	0x10, 0xc6, 0x9b, 0x8f, 0x4d, 0x26, 0x71, 0x16, 0xf4, 0x2e, 0x2f, 0x22, 0xbc, 0x6f, 0x09, 0x39,
