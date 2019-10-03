@@ -112,6 +112,7 @@ class DaosServer(DaosCommand):
         """
         patterns = {
             "format": "SCM format required",
+            "postformat": "I/O server instance.*storage ready",
             "normal": "DAOS I/O server.*started",
         }
         start_time = time.time()
@@ -408,7 +409,7 @@ class ServerManager(ExecutableCommand):
 
             self.log.info("Formatting hosts: <%s>", self._hosts)
             storage_format(self.daosbinpath, ",".join(servers_with_ports))
-            self.runner.job.mode = "normal"
+            self.runner.job.mode = "postformat"
             try:
                 self.runner.job.check_subprocess_status(self.runner.process)
             except CommandFailure as error:
