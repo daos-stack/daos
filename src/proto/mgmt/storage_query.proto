@@ -62,6 +62,19 @@ message SmdDevResp {
 	repeated Device devices = 2;
 }
 
+message SmdPoolReq {
+}
+
+message SmdPoolResp {
+	message Pool {
+		string uuid = 1; // UUID of VOS pool
+		repeated int32 tgt_ids = 2; // VOS target IDs
+		repeated uint64 blobs = 3; // SPDK blobs
+	}
+	int32 status = 1;
+	repeated Pool pools = 2;
+}
+
 message DevStateReq {
 	string dev_uuid = 1; // UUID of blobstore
 }

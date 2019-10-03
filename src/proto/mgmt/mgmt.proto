@@ -45,6 +45,8 @@ service MgmtSvc {
 	rpc BioHealthQuery(BioHealthReq) returns (BioHealthResp) {}
 	// Get SMD device list
 	rpc SmdListDevs(SmdDevReq) returns (SmdDevResp) {}
+	// Get SMD pool list
+	rpc SmdListPools(SmdPoolReq) returns (SmdPoolResp) {}
 	// Kill a given rank associated with a given pool
 	rpc KillRank(DaosRank) returns (DaosResp) {};
 	// Get the current state of the device

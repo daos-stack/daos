@@ -515,7 +515,7 @@ const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__descriptor =
   (ProtobufCMessageInit) mgmt__get_attach_info_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCMethodDescriptor mgmt__mgmt_svc__method_descriptors[9] =
+static const ProtobufCMethodDescriptor mgmt__mgmt_svc__method_descriptors[10] =
 {
   { "Join", &mgmt__join_req__descriptor, &mgmt__join_resp__descriptor },
   { "PoolCreate", &mgmt__pool_create_req__descriptor, &mgmt__pool_create_resp__descriptor },
@@ -523,20 +523,22 @@ static const ProtobufCMethodDescriptor mgmt__mgmt_svc__method_descriptors[9] =
   { "GetAttachInfo", &mgmt__get_attach_info_req__descriptor, &mgmt__get_attach_info_resp__descriptor },
   { "BioHealthQuery", &mgmt__bio_health_req__descriptor, &mgmt__bio_health_resp__descriptor },
   { "SmdListDevs", &mgmt__smd_dev_req__descriptor, &mgmt__smd_dev_resp__descriptor },
+  { "SmdListPools", &mgmt__smd_pool_req__descriptor, &mgmt__smd_pool_resp__descriptor },
   { "KillRank", &mgmt__daos_rank__descriptor, &mgmt__daos_resp__descriptor },
   { "DevStateQuery", &mgmt__dev_state_req__descriptor, &mgmt__dev_state_resp__descriptor },
   { "StorageSetFaulty", &mgmt__dev_state_req__descriptor, &mgmt__dev_state_resp__descriptor },
 };
 const unsigned mgmt__mgmt_svc__method_indices_by_name[] = {
   4,        /* BioHealthQuery */
-  7,        /* DevStateQuery */
+  8,        /* DevStateQuery */
   3,        /* GetAttachInfo */
   0,        /* Join */
-  6,        /* KillRank */
+  7,        /* KillRank */
   1,        /* PoolCreate */
   2,        /* PoolDestroy */
   5,        /* SmdListDevs */
-  8         /* StorageSetFaulty */
+  6,        /* SmdListPools */
+  9         /* StorageSetFaulty */
 };
 const ProtobufCServiceDescriptor mgmt__mgmt_svc__descriptor =
 {
@@ -545,7 +547,7 @@ const ProtobufCServiceDescriptor mgmt__mgmt_svc__descriptor =
   "MgmtSvc",
   "Mgmt__MgmtSvc",
   "mgmt",
-  9,
+  10,
   mgmt__mgmt_svc__method_descriptors,
   mgmt__mgmt_svc__method_indices_by_name
 };
@@ -597,13 +599,21 @@ void mgmt__mgmt_svc__smd_list_devs(ProtobufCService *service,
   assert(service->descriptor == &mgmt__mgmt_svc__descriptor);
   service->invoke(service, 5, (const ProtobufCMessage *) input, (ProtobufCClosure) closure, closure_data);
 }
+void mgmt__mgmt_svc__smd_list_pools(ProtobufCService *service,
+                                    const Mgmt__SmdPoolReq *input,
+                                    Mgmt__SmdPoolResp_Closure closure,
+                                    void *closure_data)
+{
+  assert(service->descriptor == &mgmt__mgmt_svc__descriptor);
+  service->invoke(service, 6, (const ProtobufCMessage *) input, (ProtobufCClosure) closure, closure_data);
+}
 void mgmt__mgmt_svc__kill_rank(ProtobufCService *service,
                                const Mgmt__DaosRank *input,
                                Mgmt__DaosResp_Closure closure,
                                void *closure_data)
 {
   assert(service->descriptor == &mgmt__mgmt_svc__descriptor);
-  service->invoke(service, 6, (const ProtobufCMessage *) input, (ProtobufCClosure) closure, closure_data);
+  service->invoke(service, 7, (const ProtobufCMessage *) input, (ProtobufCClosure) closure, closure_data);
 }
 void mgmt__mgmt_svc__dev_state_query(ProtobufCService *service,
                                      const Mgmt__DevStateReq *input,
@@ -611,7 +621,7 @@ void mgmt__mgmt_svc__dev_state_query(ProtobufCService *service,
                                      void *closure_data)
 {
   assert(service->descriptor == &mgmt__mgmt_svc__descriptor);
-  service->invoke(service, 7, (const ProtobufCMessage *) input, (ProtobufCClosure) closure, closure_data);
+  service->invoke(service, 8, (const ProtobufCMessage *) input, (ProtobufCClosure) closure, closure_data);
 }
 void mgmt__mgmt_svc__storage_set_faulty(ProtobufCService *service,
                                         const Mgmt__DevStateReq *input,
@@ -619,7 +629,7 @@ void mgmt__mgmt_svc__storage_set_faulty(ProtobufCService *service,
                                         void *closure_data)
 {
   assert(service->descriptor == &mgmt__mgmt_svc__descriptor);
-  service->invoke(service, 8, (const ProtobufCMessage *) input, (ProtobufCClosure) closure, closure_data);
+  service->invoke(service, 9, (const ProtobufCMessage *) input, (ProtobufCClosure) closure, closure_data);
 }
 void mgmt__mgmt_svc__init (Mgmt__MgmtSvc_Service *service,
                            Mgmt__MgmtSvc_ServiceDestroy destroy)

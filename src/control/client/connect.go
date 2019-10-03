@@ -125,6 +125,7 @@ func (cr ClientBioResult) String() string {
 type ClientSmdResult struct {
 	Address string
 	Devs    *mgmtpb.SmdDevResp
+	Pools   *mgmtpb.SmdPoolResp
 	Err     error
 }
 
@@ -135,18 +136,53 @@ func (cr ClientSmdResult) String() string {
 		return fmt.Sprintf("error: " + cr.Err.Error())
 	}
 
-	if cr.Devs.Status != 0 {
-		return fmt.Sprintf("error: %v\n", cr.Devs.Status)
+	if cr.Devs != nil {
+		if cr.Devs.Status != 0 {
+			return fmt.Sprintf("error: %v\n", cr.Devs.Status)
+		}
+
+		if len(cr.Devs.Devices) == 0 {
+			fmt.Fprintf(&buf, "No Devices Found\n")
+		}
+
+		for i, d := range cr.Devs.Devices {
+			if i != 0 {
+				fmt.Fprintf(&buf, "\n\t")
+			}
+			fmt.Fprintf(&buf, "Device:\n")
+			fmt.Fprintf(&buf, "\t\tUUID: %+v\n", d.Uuid)
+			fmt.Fprintf(&buf, "\t\tVOS Target IDs: ")
+			for _, t := range d.TgtIds {
+				fmt.Fprintf(&buf, "%d ", t)
+			}
+		}
 	}
 
-	for _, d := range cr.Devs.Devices {
-		fmt.Fprintf(&buf, "Device:\n")
-		fmt.Fprintf(&buf, "\t\tUUID: %+v\n", d.Uuid)
-		fmt.Fprintf(&buf, "\t\tVOS Target IDs: ")
-		for _, t := range d.TgtIds {
-			fmt.Fprintf(&buf, "%d ", t)
+	if cr.Pools != nil {
+		if cr.Pools.Status != 0 {
+			return fmt.Sprintf("error: %v\n", cr.Pools.Status)
 		}
-		fmt.Fprintf(&buf, "\n")
+
+		if len(cr.Pools.Pools) == 0 {
+			fmt.Fprintf(&buf, "No Pools Found\n")
+		}
+
+		for i, p := range cr.Pools.Pools {
+			if i != 0 {
+				fmt.Fprintf(&buf, "\n\t")
+			}
+			fmt.Fprintf(&buf, "Pool:\n")
+			fmt.Fprintf(&buf, "\t\tUUID: %+v\n", p.Uuid)
+			fmt.Fprintf(&buf, "\t\tVOS Target IDs: ")
+			for _, t := range p.TgtIds {
+				fmt.Fprintf(&buf, "%d ", t)
+			}
+			fmt.Fprintf(&buf, "\n")
+			fmt.Fprintf(&buf, "\t\tSPDK Blobs: ")
+			for _, b := range p.Blobs {
+				fmt.Fprintf(&buf, "%v ", b)
+			}
+		}
 	}
 
 	return buf.String()
@@ -292,6 +328,7 @@ type Connect interface {
 	PoolDestroy(*PoolDestroyReq) error
 	BioHealthQuery(*mgmtpb.BioHealthReq) ResultQueryMap
 	SmdListDevs(*mgmtpb.SmdDevReq) ResultSmdMap
+	SmdListPools(*mgmtpb.SmdPoolReq) ResultSmdMap
 	DevStateQuery(*mgmtpb.DevStateReq) ResultStateMap
 	StorageSetFaulty(*mgmtpb.DevStateReq) ResultStateMap
 }

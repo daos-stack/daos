@@ -79,8 +79,8 @@ func (h *IOServerHarness) AddInstance(srv *IOServerInstance) error {
 	h.Lock()
 	defer h.Unlock()
 	srvIdx := len(h.instances)
-	srv.Index = srvIdx
-	srv.runner.Config.Index = srvIdx
+	srv.Index = uint32(srvIdx)
+	srv.runner.Config.Index = uint32(srvIdx)
 
 	h.instances = append(h.instances, srv)
 	return nil

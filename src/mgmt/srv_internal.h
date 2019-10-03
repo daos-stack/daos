@@ -107,6 +107,7 @@ struct mgmt_bio_health {
 int ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid,
 			     char *tgt_id);
 int ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp);
+int ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp);
 int ds_mgmt_dev_state_query(uuid_t uuid, Mgmt__DevStateResp *resp,
 			    bool set_state);
 

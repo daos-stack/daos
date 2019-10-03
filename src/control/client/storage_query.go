@@ -54,13 +54,31 @@ func (c *connList) SmdListDevs(req *mgmtpb.SmdDevReq) ResultSmdMap {
 
 	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
-		results[""] = ClientSmdResult{"", nil, err}
+		results[""] = ClientSmdResult{"", nil, nil, err}
 		return results
 	}
 
 	resp, err := mc.getSvcClient().SmdListDevs(context.Background(), req)
 
-	result := ClientSmdResult{mc.getAddress(), resp, err}
+	result := ClientSmdResult{mc.getAddress(), resp, nil, err}
+	results[result.Address] = result
+
+	return results
+}
+
+// SmdListPools will list all VOS pools in SMD pool table
+func (c *connList) SmdListPools(req *mgmtpb.SmdPoolReq) ResultSmdMap {
+	results := make(ResultSmdMap)
+
+	mc, err := chooseServiceLeader(c.controllers)
+	if err != nil {
+		results[""] = ClientSmdResult{"", nil, nil, err}
+		return results
+	}
+
+	resp, err := mc.getSvcClient().SmdListPools(context.Background(), req)
+
+	result := ClientSmdResult{mc.getAddress(), nil, resp, err}
 	results[result.Address] = result
 
 	return results
