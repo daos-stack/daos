@@ -29,7 +29,6 @@ import os
 import re
 import time
 import yaml
-import getpass
 
 # Remove below imports when depricating run_server and stop_server functions.
 import subprocess
