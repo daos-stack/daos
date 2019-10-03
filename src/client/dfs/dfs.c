@@ -2240,8 +2240,8 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf)
 
 	if (name == NULL) {
 		if (strcmp(parent->name, "/") != 0) {
-			D_ERROR("Invalid path %s and entry name %s)\n",
-				parent->name, name);
+			D_ERROR("Invalid path %s and entry name is NULL)\n",
+				parent->name);
 			return EINVAL;
 		}
 		name = parent->name;
@@ -2299,8 +2299,8 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 		return ENOTDIR;
 	if (name == NULL) {
 		if (strcmp(parent->name, "/") != 0) {
-			D_ERROR("Invalid path %s and entry name %s\n",
-				parent->name, name);
+			D_ERROR("Invalid path %s and entry name is NULL\n",
+				parent->name);
 			return EINVAL;
 		}
 		name = parent->name;
@@ -2372,8 +2372,8 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 		return ENOTDIR;
 	if (name == NULL) {
 		if (strcmp(parent->name, "/") != 0) {
-			D_ERROR("Invalid path %s and entry name %s)\n",
-				parent->name, name);
+			D_ERROR("Invalid path %s and entry name is NULL)\n",
+				parent->name);
 			return EINVAL;
 		}
 		name = parent->name;

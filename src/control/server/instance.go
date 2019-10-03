@@ -47,7 +47,7 @@ import (
 // be used with IOServerHarness to manage and monitor multiple instances
 // per node.
 type IOServerInstance struct {
-	Index int
+	Index uint32
 
 	ext           External
 	log           logging.Logger
@@ -78,7 +78,6 @@ func NewIOServerInstance(ext External, log logging.Logger,
 		runner:        r,
 		bdevProvider:  bp,
 		msClient:      msc,
-		drpcClient:    getDrpcClientConnection(r.Config.SocketDir),
 		instanceReady: make(chan *srvpb.NotifyReadyReq),
 		storageReady:  make(chan struct{}),
 	}
@@ -228,6 +227,9 @@ func (srv *IOServerInstance) Start(ctx context.Context, errChan chan<- error) er
 func (srv *IOServerInstance) NotifyReady(msg *srvpb.NotifyReadyReq) {
 	srv.log.Debugf("I/O server instance %d ready: %v", srv.Index, msg)
 
+	// Activate the dRPC client connection to this iosrv
+	srv.drpcClient = drpc.NewClientConnection(msg.DrpcListenerSock)
+
 	go func() {
 		srv.instanceReady <- msg
 	}()
@@ -277,6 +279,7 @@ func (srv *IOServerInstance) SetRank(ctx context.Context, ready *srvpb.NotifyRea
 			Rank:  uint32(r),
 			Uri:   ready.Uri,
 			Nctxs: ready.Nctxs,
+			// Addr member populated in msClient
 		})
 		if err != nil {
 			return err

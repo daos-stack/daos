@@ -89,7 +89,7 @@ def preload_prereqs(prereqs):
     prereqs.define('cmocka', libs=['cmocka'], package='libcmocka-devel')
     prereqs.define('readline', libs=['readline', 'history'],
                    package='readline')
-    reqs = ['cart', 'argobots', 'pmdk', 'cmocka',
+    reqs = ['cart', 'argobots', 'pmdk', 'cmocka', 'ofi', 'hwloc',
             'uuid', 'crypto', 'fuse', 'protobufc']
     if not is_platform_arm():
         reqs.extend(['spdk', 'isal'])

@@ -1147,11 +1147,17 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 		}
 
 		rc = dc_mgmt_sys_attach(args->grp, &state->sys);
-		if (rc != 0)
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to sys attach, rc %d.\n",
+				DP_UUID(args->uuid), rc);
 			D_GOTO(out_state, rc);
+		}
 		rc = rsvc_client_init(&state->client, args->svc);
-		if (rc != 0)
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to rsvc_client_init, rc %d.\n",
+				DP_UUID(args->uuid), rc);
 			D_GOTO(out_group, rc);
+		}
 
 		daos_task_set_priv(task, state);
 	}
@@ -1169,6 +1175,8 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 
 	rc = pool_target_addr_list_alloc(args->tgts->tl_nr, &list);
 	if (rc) {
+		D_ERROR(DF_UUID": pool_target_addr_list_alloc failed, rc %d.\n",
+			DP_UUID(args->uuid), rc);
 		crt_req_decref(rpc);
 		D_GOTO(out_client, rc);
 	}
