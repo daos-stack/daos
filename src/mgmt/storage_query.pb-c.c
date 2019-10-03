@@ -193,6 +193,102 @@ void   mgmt__smd_dev_resp__free_unpacked
   assert(message->base.descriptor == &mgmt__smd_dev_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   mgmt__smd_pool_req__init
+                     (Mgmt__SmdPoolReq         *message)
+{
+  static const Mgmt__SmdPoolReq init_value = MGMT__SMD_POOL_REQ__INIT;
+  *message = init_value;
+}
+size_t mgmt__smd_pool_req__get_packed_size
+                     (const Mgmt__SmdPoolReq *message)
+{
+  assert(message->base.descriptor == &mgmt__smd_pool_req__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__smd_pool_req__pack
+                     (const Mgmt__SmdPoolReq *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__smd_pool_req__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__smd_pool_req__pack_to_buffer
+                     (const Mgmt__SmdPoolReq *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__smd_pool_req__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__SmdPoolReq *
+       mgmt__smd_pool_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__SmdPoolReq *)
+     protobuf_c_message_unpack (&mgmt__smd_pool_req__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__smd_pool_req__free_unpacked
+                     (Mgmt__SmdPoolReq *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__smd_pool_req__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   mgmt__smd_pool_resp__pool__init
+                     (Mgmt__SmdPoolResp__Pool         *message)
+{
+  static const Mgmt__SmdPoolResp__Pool init_value = MGMT__SMD_POOL_RESP__POOL__INIT;
+  *message = init_value;
+}
+void   mgmt__smd_pool_resp__init
+                     (Mgmt__SmdPoolResp         *message)
+{
+  static const Mgmt__SmdPoolResp init_value = MGMT__SMD_POOL_RESP__INIT;
+  *message = init_value;
+}
+size_t mgmt__smd_pool_resp__get_packed_size
+                     (const Mgmt__SmdPoolResp *message)
+{
+  assert(message->base.descriptor == &mgmt__smd_pool_resp__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__smd_pool_resp__pack
+                     (const Mgmt__SmdPoolResp *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__smd_pool_resp__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__smd_pool_resp__pack_to_buffer
+                     (const Mgmt__SmdPoolResp *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__smd_pool_resp__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__SmdPoolResp *
+       mgmt__smd_pool_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__SmdPoolResp *)
+     protobuf_c_message_unpack (&mgmt__smd_pool_resp__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__smd_pool_resp__free_unpacked
+                     (Mgmt__SmdPoolResp *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__smd_pool_resp__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 static const ProtobufCFieldDescriptor mgmt__bio_health_req__field_descriptors[2] =
 {
   {
@@ -569,5 +665,138 @@ const ProtobufCMessageDescriptor mgmt__smd_dev_resp__descriptor =
   mgmt__smd_dev_resp__field_indices_by_name,
   1,  mgmt__smd_dev_resp__number_ranges,
   (ProtobufCMessageInit) mgmt__smd_dev_resp__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+#define mgmt__smd_pool_req__field_descriptors NULL
+#define mgmt__smd_pool_req__field_indices_by_name NULL
+#define mgmt__smd_pool_req__number_ranges NULL
+const ProtobufCMessageDescriptor mgmt__smd_pool_req__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.SmdPoolReq",
+  "SmdPoolReq",
+  "Mgmt__SmdPoolReq",
+  "mgmt",
+  sizeof(Mgmt__SmdPoolReq),
+  0,
+  mgmt__smd_pool_req__field_descriptors,
+  mgmt__smd_pool_req__field_indices_by_name,
+  0,  mgmt__smd_pool_req__number_ranges,
+  (ProtobufCMessageInit) mgmt__smd_pool_req__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__smd_pool_resp__pool__field_descriptors[3] =
+{
+  {
+    "uuid",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__SmdPoolResp__Pool, uuid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "tgt_ids",
+    2,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_INT32,
+    offsetof(Mgmt__SmdPoolResp__Pool, n_tgt_ids),
+    offsetof(Mgmt__SmdPoolResp__Pool, tgt_ids),
+    NULL,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "blobs",
+    3,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT64,
+    offsetof(Mgmt__SmdPoolResp__Pool, n_blobs),
+    offsetof(Mgmt__SmdPoolResp__Pool, blobs),
+    NULL,
+    NULL,
+    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__smd_pool_resp__pool__field_indices_by_name[] = {
+  2,   /* field[2] = blobs */
+  1,   /* field[1] = tgt_ids */
+  0,   /* field[0] = uuid */
+};
+static const ProtobufCIntRange mgmt__smd_pool_resp__pool__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 3 }
+};
+const ProtobufCMessageDescriptor mgmt__smd_pool_resp__pool__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.SmdPoolResp.Pool",
+  "Pool",
+  "Mgmt__SmdPoolResp__Pool",
+  "mgmt",
+  sizeof(Mgmt__SmdPoolResp__Pool),
+  3,
+  mgmt__smd_pool_resp__pool__field_descriptors,
+  mgmt__smd_pool_resp__pool__field_indices_by_name,
+  1,  mgmt__smd_pool_resp__pool__number_ranges,
+  (ProtobufCMessageInit) mgmt__smd_pool_resp__pool__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor mgmt__smd_pool_resp__field_descriptors[2] =
+{
+  {
+    "status",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__SmdPoolResp, status),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "pools",
+    2,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(Mgmt__SmdPoolResp, n_pools),
+    offsetof(Mgmt__SmdPoolResp, pools),
+    &mgmt__smd_pool_resp__pool__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__smd_pool_resp__field_indices_by_name[] = {
+  1,   /* field[1] = pools */
+  0,   /* field[0] = status */
+};
+static const ProtobufCIntRange mgmt__smd_pool_resp__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor mgmt__smd_pool_resp__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.SmdPoolResp",
+  "SmdPoolResp",
+  "Mgmt__SmdPoolResp",
+  "mgmt",
+  sizeof(Mgmt__SmdPoolResp),
+  2,
+  mgmt__smd_pool_resp__field_descriptors,
+  mgmt__smd_pool_resp__field_indices_by_name,
+  1,  mgmt__smd_pool_resp__number_ranges,
+  (ProtobufCMessageInit) mgmt__smd_pool_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
