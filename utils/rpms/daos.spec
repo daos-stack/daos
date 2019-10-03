@@ -15,7 +15,7 @@ Source1:       scons_local-%{version}.tar.gz
 
 BuildRequires: scons
 BuildRequires: gcc-c++
-BuildRequires: cart-devel <= 1.0.0
+BuildRequires: cart-devel <= 1.1.0
 %if (0%{?rhel} >= 7)
 BuildRequires: argobots-devel >= 1.0rc1
 %else
@@ -29,7 +29,7 @@ BuildRequires: fio < 3.4
 BuildRequires: libisa-l-devel
 BuildRequires: raft-devel <= 0.5.0
 # vvvvvv these can be removed when cart#226 lands and we update to use it
-BuildRequires: mercury-devel < 1.0.1-12
+BuildRequires: mercury-devel <= 2.0.0
 BuildRequires: openpa-devel
 BuildRequires: libfabric-devel
 BuildRequires: ompi-devel
