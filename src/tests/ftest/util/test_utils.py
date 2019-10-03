@@ -114,6 +114,7 @@ class TestPool(TestDaosApiBase):
     """A class for functional testing of DaosPools objects."""
 
     def __init__(self, context, log=None, cb_handler=None):
+        # pylint: disable=unused-argument
         """Initialize a TestPool object.
 
         Note: 'log' is now a defunct argument and will be removed in the future

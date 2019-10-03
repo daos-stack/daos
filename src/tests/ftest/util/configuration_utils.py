@@ -21,7 +21,6 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from ast import literal_eval
 from logging import getLogger
 import re
 
@@ -31,194 +30,253 @@ from command_utils import ObjectWithParameters, BasicParameter
 from general_utils import run_task
 
 
+class ConfigurationData(object):
+    """Defines requirement data for a set of hosts."""
+
+    def __init__(self, hosts, timeout=120):
+        """Initialize a ConfigurationData object.
+
+        Args:
+            hosts (list): list of hosts from which to obtain data
+            timeout (int, optional): timeout used when obtaining host data.
+                Defaults to 120 seconds.
+        """
+        self.log = getLogger(__name__)
+        self.hosts = hosts
+        self.timeout = timeout
+
+        # Defines the methods used to obtain the host data for each
+        # ConfigurationParameters BasicParameter attribute (requirement)
+        self._data_key_map = {
+            "mem_size": self._get_host_mem_data,
+            "nvme_size": self._get_host_nvme_data,
+            "scm_size": self._get_host_scm_data
+        }
+
+        # Stores the data from each host for each requirement name
+        self._data = {}
+
+    def _get_host_mem_data(self):
+        """Get the total non-swap memory in bytes for each host.
+
+        Returns:
+            dict: a dictionary of data values for each NodeSet key
+
+        """
+        cmd = r"free -b | sed -En 's/Mem:\s+([0-9]+).*/\1/p'"
+        text = "memory"
+        error = "Error obtaining total memory size"
+        return self._get_host_data(cmd, text, error)
+
+    def _get_host_nvme_data(self):
+        """Get the largest NVMe capacity in bytes for each host.
+
+        Returns:
+            dict: a dictionary of data values for each NodeSet key
+
+        """
+        cmd = "lsblk -b -o SIZE,NAME | grep nvme"
+        text = "NVMe"
+        error = "No NVMe drives bound to the kernel driver detected"
+        return self._get_host_data(cmd, text, error)
+
+    def _get_host_scm_data(self):
+        """Get the total SCM capacity in bytes for each host.
+
+        Returns:
+            dict: a dictionary of data values for each NodeSet key
+
+        """
+        cmd_list = [
+            "sudo -n ipmctl show -units B -memoryresources",
+            r"sed -En 's/^Capacity\=([0-9+]).*/\1/p'",
+        ]
+        cmd = " | ".join(cmd_list)
+        text = "SCM"
+        error = "No SCM devices detected"
+        return self._get_host_data(cmd, text, error)
+
+    def _get_host_data(self, command, text, error):
+        """Get the command output from each host specified.
+
+        Args:
+            command (str): command used to obtain the data on each server
+            text (str): data identification string
+            error (str): data error string
+
+        Returns:
+            dict: a dictionary of data values for each NodeSet key
+
+        """
+        # Find the data for each specified servers
+        self.log.info("  Obtaining %s data on %s", text, self.hosts)
+        task = run_task(self.hosts, command, self.timeout)
+        host_data = {}
+
+        # Create a list of NodeSets with the same return code
+        data = {code: hosts for code, hosts in task.iter_retcodes()}
+
+        # Multiple return codes or a single non-zero return code
+        # indicate at least one error obtaining the data
+        if len(data) > 1 or 0 not in data:
+            # Report the errors
+            messages = []
+            for code, hosts in data.items():
+                if code != 0:
+                    output_data = list(task.iter_buffers(hosts))
+                    if len(output_data) == 0:
+                        messages.append(
+                            "{}: rc={}, command=\"{}\"".format(
+                                NodeSet.fromlist(hosts), code, command))
+                    else:
+                        for output, o_hosts in output_data:
+                            lines = str(output).splitlines()
+                            info = "rc={}{}".format(
+                                code,
+                                ", {}".format(output) if len(lines) < 2 else
+                                "\n  {}".format("\n  ".join(lines)))
+                            messages.append(
+                                "{}: {}".format(
+                                    NodeSet.fromlist(o_hosts), info))
+            self.log.error(
+                "    %s on the following hosts:\n      %s",
+                error, "\n      ".join(messages))
+
+            # Return an empty data set for all of the hosts
+            host_data = {NodeSet.fromlist(hosts): "[ERROR]"}
+
+        else:
+            # The command completed successfully on all servers.
+            for output, hosts in task.iter_buffers(data[0]):
+                # Find the maximum size of the all the devices reported by
+                # this group of hosts as only one needs to meet the minimum
+                nodes = NodeSet.fromlist(hosts)
+                try:
+                    int_host_values = [
+                        int(line.split()[0])
+                        for line in str(output).splitlines()]
+                    host_data[nodes] = max(int_host_values)
+
+                except (IndexError, ValueError):
+                    # Log the error
+                    self.log.error(
+                        "    %s: Unable to obtain the maximum %s size due to "
+                        "unexpected output:\n      %s",
+                        nodes, text, "\n      ".join(str(output).splitlines()))
+
+                    # Return an empty data set for all of the hosts
+                    host_data = {NodeSet.fromlist(hosts): "[ERROR]"}
+                    break
+
+        return host_data
+
+    def get_data(self, requirememt):
+        """Get the specified requirement data.
+
+        Args:
+            requirememt (str): requirememt name
+
+        Raises:
+            AttributeError: if the requirement key is invalid
+
+        Returns:
+            dict: a dictionary of the requested data keyed by the NodeSet of
+                hosts with the same data value
+
+        """
+        if requirememt in self._data:
+            # Return the previously stored requested data
+            return self._data[requirememt]
+        elif requirememt in self._data_key_map:
+            # Obtain, store (for future requests), and return the data
+            self._data[requirememt] = self._data_key_map[requirememt]()
+            return self._data[requirememt]
+        else:
+            # No known method for obtaining this data
+            raise AttributeError(
+                "Unknown data requirememt for ConfigurationData object: "
+                "{}".format(requirememt))
+
+
 class ConfigurationParameters(ObjectWithParameters):
     """Defines a configuration with a set of requirement parameters."""
 
-    def __init__(self, namespace, name, timeout=120):
+    def __init__(self, namespace, name, data):
         """Create a ConfigurationParameters object.
 
         Args:
             name (str): configuration name; used to define param namespace
+            data (ConfigurationData): object retaining the host data needed to
+                verify the configuration requirement
         """
         super(ConfigurationParameters, self).__init__(namespace + name + "/*")
         self.name = name
-        self.timeout = timeout
+        self._config_data = data
         self.log = getLogger(__name__)
 
         # Define the yaml entries that define the configuration
+        #  - Make sure to add any new parameter names defined here in the
+        #    ConfigurationData._data_key_map dictionary
         self.mem_size = BasicParameter(0, 0)
         self.nvme_size = BasicParameter(0, 0)
         self.scm_size = BasicParameter(0, 0)
-        self.network = BasicParameter(None)
 
-    def _check_size_requirements(self, servers, value, command, text, error):
-        """Determine if the list of hosts meet the specified requirement.
-
-        Args:
-            servers (list): list of hosts for which to verify the requirement
-            value (int): requirment size
-            command (str): command used to obtain the value on each server
-            text (str): requirement identification string
-            error (str): requirement error string
-
-        Returns:
-            bool: True if all of the hosts meet the specified requirement
-
-        """
-        # Only check for the requirement if a minimum size is requested
-        status = value == 0
-        if not status:
-            self.log.info(
-                "  Verifying %s size is at least %s on %s",
-                text, value, servers)
-            # Find the requirement on the specified servers
-            task = run_task(servers, command, self.timeout)
-
-            # Create a list of NodeSets with the same return code
-            data = {code: hosts for code, hosts in task.iter_retcodes()}
-
-            # Multiple return codes or a single non-zero return code
-            # indicate at least one error detecting the requirement
-            status = len(data) == 1 and 0 in data
-            if not status:
-                # Report the errors
-                messages = []
-                for code, hosts in data.items():
-                    if code != 0:
-                        output_data = list(task.iter_buffers(hosts))
-                        if len(output_data) == 0:
-                            messages.append(
-                                "{}: rc={}, command=\"{}\"".format(
-                                    NodeSet.fromlist(hosts), code, command))
-                        else:
-                            for output, o_hosts in output_data:
-                                lines = str(output).splitlines()
-                                info = "rc={}{}".format(
-                                    code,
-                                    ", {}".format(output) if len(lines) < 2 else
-                                    "\n  {}".format("\n  ".join(lines)))
-                                messages.append(
-                                    "{}: {}".format(
-                                        NodeSet.fromlist(o_hosts), info))
-                self.log.error(
-                    "    %s on the following hosts:\n      %s",
-                    error, "\n      ".join(messages))
-            else:
-                # The command completed successfully on all servers.  Verify
-                # that the current value meets or exceeds the required value.
-                for output, hosts in task.iter_buffers(data[0]):
-                    # Find the maximum size of the all the devices reported by
-                    # this group of hosts as only one needs to meet the minimum
-                    nodes = NodeSet.fromlist(hosts)
-                    try:
-                        int_host_values = [
-                            int(line.split()[0])
-                            for line in str(output).splitlines()]
-                        max_host_value = max(int_host_values)
-                        status &= max_host_value >= value
-                    except (IndexError, ValueError):
-                        self.log.error(
-                            "    Unable to verify the maximum %s size due to "
-                            "unexpected output:\n      %s",
-                            text, "\n      ".join(str(output).splitlines()))
-                        max_host_value = "[ERROR]"
-                        status = False
-                    self.log.debug(
-                        "    %s: verifying the maximum %s size meets the "
-                        "requirement: %s >= %s: %s",
-                        str(nodes), text, max_host_value, value, str(status))
-                    if not status:
-                        break
-        else:
-            self.log.info(
-                "  No %s size requirement for %s", text, servers)
-
-        return status
-
-    def verify(self, servers):
+    def verify(self):
         """Determine if the list of hosts meet the configuration requirements.
 
-        Args:
-            servers (list): list of hosts for which to verify against the
-                configuration requirements
+        Raises:
+            AttributeError: if one of the requirements is not defined with an
+                integer value
 
         Returns:
             bool: True if all of the hosts meet the configuration requirements
 
         """
-        self.log.info("Verifying the %s configuration requirements", self.name)
-        status = self.check_mem_requirements(servers)
-        status &= self.check_nvme_requirements(servers)
-        status &= self.check_scm_requirements(servers)
+        # Verify each requirement against the list of hosts defined in the
+        # ConfigurationData object
+        for requirement in self.get_param_names():
+            # Get the required minimum value for this requirement
+            value = getattr(self, requirement).value
+            try:
+                value = int(value)
+            except ValueError:
+                raise AttributeError(
+                    "Invalid '{}' attribute - must be an int: {}".format(
+                        requirement, value))
+
+            # Only verify requirements with a minimum
+            if value != 0:
+                # Retrieve the data for all of the hosts which is grouped by
+                # hosts with the same values
+                requirement_data = self._config_data.get_data(requirement)
+                for group, data in requirement_data.items():
+                    status = data != "[ERROR]" and data >= value
+                    self.log.debug(
+                        "  %s: Verifying the maximum %s meets the requirememt: "
+                        "%s >= %s: %s",
+                        group, requirement.replace("_", " "), data, value,
+                        str(status))
+                    if not status:
+                        break
+
         return status
-
-    def check_mem_requirements(self, servers):
-        """Determine if the list of hosts meet the memory requirements.
-
-        Args:
-            servers (list): list of hosts for which to verify mem requirements
-
-        Returns:
-            bool: True if all of the hosts meet the memory requirements
-
-        """
-        # Get the total available memory in bytes
-        cmd = r"free -b | sed -En 's/Mem:\s+([0-9]+).*/\1/p'"
-        text = "memory"
-        error = "Error obtaining total memory size"
-        value = int(self.mem_size.value)
-        return self._check_size_requirements(servers, value, cmd, text, error)
-
-    def check_nvme_requirements(self, servers):
-        """Determine if the list of hosts meet the nvme requirements.
-
-        Args:
-            servers (list): list of hosts for which to verify nvme requirements
-
-        Returns:
-            bool: True if all of the hosts meet the nvme requirements
-
-        """
-        # Find the byte capacity of the nvme devices bound to the kernel driver
-        cmd = "lsblk -b -o SIZE,NAME | grep nvme"
-        text = "NVMe"
-        error = "No NVMe drives bound to the kernel driver detected"
-        value = int(self.nvme_size.value)
-        return self._check_size_requirements(servers, value, cmd, text, error)
-
-    def check_scm_requirements(self, servers):
-        """Determine if the list of hosts meet the scm requirements.
-
-        Args:
-            servers (list): list of hosts for which to verify scm requirements
-
-        Returns:
-            bool: True if all of the hosts meet the scm requirements
-
-        """
-        cmds = [
-            "sudo -n ipmctl show -units B -memoryresources",
-            r"sed -En 's/^Capacity\=([0-9+]).*/\1/p'",
-        ]
-        text = "SCM"
-        error = "No SCM devices detected"
-        value = int(self.scm_size.value)
-        return self._check_size_requirements(
-            servers, value, " | ".join(cmds), text, error)
 
 
 class Configuration(object):
     """Defines a means of obtaining configuration-specific test parameters."""
 
-    def __init__(self, test_params, debug=True):
+    def __init__(self, test_params, hosts, timeout=120, debug=True):
         """Initialize a RequirementsManager object.
 
         Args:
             test_params (AvocadoParams): avocado Test parameters
+            timeout (int, optional): timeout in seconds for host data gathering.
+                Defaults to 120 seconds.
             debug (bool, optional): display debug messages. Defaults to False.
         """
         self.log = getLogger(__name__)
         self.namespace = "/run/configurations/"
+        self._data = ConfigurationData(hosts, timeout)
         self.debug = debug
 
         # All of the current test parameters as a dictionary of list of tuples
@@ -344,7 +402,7 @@ class Configuration(object):
             # or are specific to the active configuration
             return path.split("/")[-1] not in self._inactive_names
 
-    def _set_available_names(self, test, hosts):
+    def _set_available_names(self, test):
         """Set the list of available configuration names.
 
         Configuration names are listed as available if all of the specified
@@ -352,19 +410,28 @@ class Configuration(object):
 
         Args:
             test (Test): avocado Test object
-            hosts (list): list of hosts used to verify each configuration's
-                requirements to determine if the configuration is valid
         """
         self.available_names = []
         for name in self._all_names:
             # Get each configuration's requirements and determine its viablity
-            config_params = ConfigurationParameters(self.namespace, name)
+            self.log.info("Verifying the %s configuration", name)
+            config_params = ConfigurationParameters(
+                self.namespace, name, self._data)
             config_params.get_params(test)
-            if config_params.verify(hosts):
+            if config_params.verify():
                 # Add valid configurations to the available config list
                 self.available_names.append(name)
 
-    def set_config(self, test, hosts):
+    def _log_debug(self, msg, *args, **kwargs):
+        """Log a debug message if enabled.
+
+        Args:
+            message (str): debug message to log
+        """
+        if self.debug:
+            self.log.debug(msg, *args, **kwargs)
+
+    def set_config(self, test):
         """Set the configuration whose requirements pass on the hosts.
 
         If multiple configuration's requirements pass on the specified list of
@@ -372,7 +439,6 @@ class Configuration(object):
 
         Args:
             test (Test): avocado Test object
-            hosts (list): list of hosts used to verify each configuration
 
         Returns:
             bool: True if at least one configuration passes its requirements on
@@ -389,7 +455,7 @@ class Configuration(object):
 
         # Reset the available, active, and inactive configuration names
         self.active_name = None
-        self._set_available_names(test, hosts)
+        self._set_available_names(test)
 
         # Select the first available (sorted by name) configuration
         status = True
@@ -408,15 +474,6 @@ class Configuration(object):
         )
 
         return status
-
-    def _log_debug(self, msg, *args, **kwargs):
-        """Log a debug message if enabled.
-
-        Args:
-            message (str): debug message to log
-        """
-        if self.debug:
-            self.log.debug(msg, *args, **kwargs)
 
     def get(self, key, path=None, default=None):
         """Get the value associated with key from the parameters.

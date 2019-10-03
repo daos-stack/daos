@@ -225,8 +225,9 @@ class TestWithServers(TestWithoutServers):
         self.log.info("hostlist_clients:  %s", self.hostlist_clients)
 
         # Find a configuration that meets the test requirements
-        self.config = Configuration(self.params, self.debug)
-        if not self.config.set_config(self, self.hostlist_servers):
+        self.config = Configuration(
+            self.params, self.hostlist_servers, debug=self.debug)
+        if not self.config.set_config(self):
             self.cancel("Test requirements not met!")
 
         # If a specific count is specified, verify enough servers/clients are
