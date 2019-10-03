@@ -147,14 +147,19 @@ func (tc *testConn) SmdListDevs(req *mgmtpb.SmdDevReq) client.ResultSmdMap {
 	return nil
 }
 
-func (tc *testConn) SystemMemberQuery() ([]*common.SystemMember, error) {
-	tc.appendInvocation("SystemMemberQuery")
-	return make([]*common.SystemMember, 0), nil
+func (tc *testConn) SmdListPools(req *mgmtpb.SmdPoolReq) client.ResultSmdMap {
+	tc.appendInvocation(fmt.Sprintf("SmdListPools-%s", req))
+	return nil
 }
 
-func (tc *testConn) SystemStop() ([]*common.SystemMember, error) {
+func (tc *testConn) SystemMemberQuery() (common.SystemMembers, error) {
+	tc.appendInvocation("SystemMemberQuery")
+	return make(common.SystemMembers, 0), nil
+}
+
+func (tc *testConn) SystemStop() (common.SystemMembers, error) {
 	tc.appendInvocation("SystemStop")
-	return make([]*common.SystemMember, 0), nil
+	return make(common.SystemMembers, 0), nil
 }
 
 func (tc *testConn) SetTransportConfig(cfg *security.TransportConfig) {

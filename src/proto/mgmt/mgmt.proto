@@ -45,6 +45,8 @@ service MgmtSvc {
 	rpc BioHealthQuery(BioHealthReq) returns (BioHealthResp) {}
 	// Get SMD device list
 	rpc SmdListDevs(SmdDevReq) returns (SmdDevResp) {}
+	// Get SMD pool list
+	rpc SmdListPools(SmdPoolReq) returns (SmdPoolResp) {}
 	// Query DAOS system (query system member data-plane instances)
 	rpc SystemMemberQuery(SystemMemberQueryReq) returns(SystemMemberQueryResp) {};
 	// Stop DAOS system (shutdown data-plane instances)

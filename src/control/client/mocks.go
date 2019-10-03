@@ -278,6 +278,17 @@ func (m *mockMgmtSvcClient) SmdListDevs(
 	return &mgmtpb.SmdDevResp{}, nil
 }
 
+func (m *mockMgmtSvcClient) SmdListPools(
+	ctx context.Context,
+	req *mgmtpb.SmdPoolReq,
+	o ...grpc.CallOption,
+) (*mgmtpb.SmdPoolResp, error) {
+
+	// return successful SMD pool list
+	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	return &mgmtpb.SmdPoolResp{}, nil
+}
+
 func (m *mockMgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq, o ...grpc.CallOption) (*mgmtpb.JoinResp, error) {
 
 	return &mgmtpb.JoinResp{}, nil

@@ -35,7 +35,7 @@ import (
 // of remaining system members on failure.
 //
 // Isolate protobuf encapsulation in client and don't expose to calling code.
-func (c *connList) SystemStop() ([]*common.SystemMember, error) {
+func (c *connList) SystemStop() (common.SystemMembers, error) {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
 		return nil, err
@@ -63,7 +63,7 @@ func (c *connList) SystemStop() ([]*common.SystemMember, error) {
 // SystemMemberQuery will return the list of members joined to DAOS system.
 //
 // Isolate protobuf encapsulation in client and don't expose to calling code.
-func (c *connList) SystemMemberQuery() ([]*common.SystemMember, error) {
+func (c *connList) SystemMemberQuery() (common.SystemMembers, error) {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
 		return nil, err
