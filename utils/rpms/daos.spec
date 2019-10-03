@@ -29,7 +29,7 @@ BuildRequires: fio < 3.4
 BuildRequires: libisa-l-devel
 BuildRequires: raft-devel <= 0.5.0
 # vvvvvv these can be removed when cart#226 lands and we update to use it
-BuildRequires: mercury-devel < 1.0.1-12
+BuildRequires: mercury-devel < 1.0.1-14
 BuildRequires: openpa-devel
 BuildRequires: libfabric-devel
 BuildRequires: ompi-devel
