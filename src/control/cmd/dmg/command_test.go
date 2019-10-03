@@ -147,6 +147,11 @@ func (tc *testConn) SmdListDevs(req *mgmtpb.SmdDevReq) client.ResultSmdMap {
 	return nil
 }
 
+func (tc *testConn) SmdListPools(req *mgmtpb.SmdPoolReq) client.ResultSmdMap {
+	tc.appendInvocation(fmt.Sprintf("SmdListPools-%s", req))
+	return nil
+}
+
 func (tc *testConn) SetTransportConfig(cfg *security.TransportConfig) {
 	tc.appendInvocation("SetTransportConfig")
 }

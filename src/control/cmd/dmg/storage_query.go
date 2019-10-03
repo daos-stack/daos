@@ -105,14 +105,15 @@ func smdQuery(log logging.Logger, conns client.Connect, devices bool, pools bool
 		pools = true
 		devices = true
 	}
-	if pools {
-		// TODO implement query pool table
-		log.Infof("SMD Pool List:\n")
-		log.Infof("--pools option not implemented yet\n")
-	}
+
 	if devices {
-		req := &mgmtpb.SmdDevReq{}
-		log.Infof("SMD Device List:\n%s\n", conns.SmdListDevs(req))
+		req_dev := &mgmtpb.SmdDevReq{}
+		log.Infof("SMD Device List:\n%s\n", conns.SmdListDevs(req_dev))
+	}
+
+	if pools {
+		req_pool := &mgmtpb.SmdPoolReq{}
+		log.Infof("SMD Pool List:\n%s\n", conns.SmdListPools(req_pool))
 	}
 }
 
