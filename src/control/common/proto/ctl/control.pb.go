@@ -443,9 +443,9 @@ var _MgmtCtl_serviceDesc = grpc.ServiceDesc{
 	Metadata: "control.proto",
 }
 
-func init() { proto.RegisterFile("control.proto", fileDescriptor_control_979ec655edfd177b) }
+func init() { proto.RegisterFile("control.proto", fileDescriptor_control_d9568fdaa36d56d8) }
 
-var fileDescriptor_control_979ec655edfd177b = []byte{
+var fileDescriptor_control_d9568fdaa36d56d8 = []byte{
 	// 258 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0x91, 0xc1, 0x4a, 0x03, 0x31,
 	0x10, 0x40, 0x95, 0x82, 0x42, 0xdc, 0xed, 0x21, 0xd5, 0x0a, 0x7b, 0xf4, 0x03, 0x56, 0xd1, 0x83,
