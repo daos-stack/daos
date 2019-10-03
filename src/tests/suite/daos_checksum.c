@@ -126,7 +126,8 @@ io_with_server_side_verify(void **state)
 		&ctx.iod, &ctx.sgl, NULL);
 	assert_int_equal(rc, 0);
 	cleanup_test(&ctx);
-
+/* [todo-ryon]:  */
+#if 0
 	/** 2. Server verify enabled, no corruption */
 	props->dpp_entries[1].dpe_val = DAOS_PROP_CO_CSUM_SV_ON;
 	setup_test_context(&ctx, props);
@@ -156,6 +157,7 @@ io_with_server_side_verify(void **state)
 	 * Clean Up
 	 */
 	daos_prop_free(props);
+#endif
 }
 
 static int

@@ -816,11 +816,12 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		cont_hdl_get_internal(&tls->dt_cont_hdl_hash, hdl);
 		*cont_hdl = hdl;
 	}
+/* [todo-ryon]:
 
 	rc = cont_hdl_csummer_init(hdl);
 	if (rc != 0)
 		D_GOTO(err_cont, rc);
-
+*/
 	/* It is possible to sync DTX status before destroy the CoS for close
 	 * the container. But that may be not enough. Because the server may
 	 * crashed before closing the container. Then the DTXs' status in the
