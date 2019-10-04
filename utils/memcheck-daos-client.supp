@@ -104,13 +104,3 @@
    fun:dc_task_schedule
    fun:daos_cont_open
 }
-{
-   add_ds_shared
-   Memcheck:Leak
-   fun:calloc
-   fun:add_ds_shard
-   fun:get_object_layout
-   fun:jump_map_obj_place
-   fun:obj_layout_create
-   fun:dc_obj_open
-}
