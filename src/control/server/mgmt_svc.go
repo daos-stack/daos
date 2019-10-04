@@ -234,12 +234,12 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 			Addr: replyAddr, Uuid: req.GetUuid(), Rank: resp.GetRank(),
 		}
 
-		svc.mutex.Lock()
-		svc.members.Add(newMember)
+		count, err := svc.members.Add(newMember)
+		if err != nil {
+			return nil, errors.WithMessage(err, "adding to membership")
+		}
 
-		svc.log.Debugf("new system member: %s (total %d)\n", newMember,
-			len(svc.members.GetMembers()))
-		svc.mutex.Unlock()
+		svc.log.Debugf("new system member: %s (total %d)\n", newMember, count)
 	}
 
 	return resp, nil

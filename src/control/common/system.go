@@ -67,17 +67,17 @@ type Membership struct {
 }
 
 // Add adds member to membership.
-func (m *Membership) Add(member SystemMember) error {
+func (m *Membership) Add(member SystemMember) (int, error) {
 	m.Lock()
 	defer m.Unlock()
 
 	if value, found := m.members[member.Uuid]; found {
-		return errors.Errorf("member %s already exists", value)
+		return -1, errors.Errorf("member %s already exists", value)
 	}
 
 	m.members[member.Uuid] = member
 
-	return nil
+	return len(m.members), nil
 }
 
 // Remove removes member from membership, idenpotent.
