@@ -244,6 +244,7 @@ static inline void
 ds_list_free_all(d_list_t *used_targets_list)
 {
 	struct down_shard *d_shard;
+
 	while ((d_shard = d_list_pop_entry(used_targets_list, struct down_shard,
 				       ds_list)) != NULL)
 		D_FREE(d_shard);
