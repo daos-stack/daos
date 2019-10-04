@@ -435,7 +435,7 @@ daos_acl_principal_to_gid(const char *principal, gid_t *gid);
  * \param[in]	str	String defining an ACE
  * \param[out]	ace	Newly allocated ACE structure
  *
- * @return	0		Success
+ * \return	0		Success
  *		-DER_INVAL	Invalid input
  *		-DER_NOMEM	Could not allocate memory
  */
@@ -458,6 +458,21 @@ daos_ace_from_str(const char *str, struct daos_ace **ace);
  */
 int
 daos_ace_to_str(struct daos_ace *ace, char *buf, size_t buf_len);
+
+/**
+ * Convert a list of Access Control Entries formatted as strings to a daos_acl
+ * structure.
+ *
+ * \param[in]	ace_strs	Array of strings defining ACEs
+ * \param[in]	ace_nr		Length of ace_strs
+ * \param[out]	acl		Newly allocated ACL structure
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ *		-DER_NOMEM	Could not allocate memory
+ */
+int
+daos_acl_from_strs(const char **ace_strs, size_t ace_nr, struct daos_acl **acl);
 
 #if defined(__cplusplus)
 }
