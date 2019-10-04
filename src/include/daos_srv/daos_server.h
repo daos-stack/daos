@@ -55,6 +55,8 @@ extern const char      *dss_socket_dir;
 /** NVMe shm_id for enabling SPDK multi-process mode */
 extern int		dss_nvme_shm_id;
 
+/** IO server instance index */
+extern unsigned int	dss_instance_idx;
 
 /**
  * Stackable Module API
@@ -335,7 +337,9 @@ enum dss_ult_type {
 	/** aggregation ULT */
 	DSS_ULT_AGGREGATE,
 	/** drpc listener ULT */
-	DSS_ULT_DRPC,
+	DSS_ULT_DRPC_LISTENER,
+	/** drpc handler ULT */
+	DSS_ULT_DRPC_HANDLER,
 	/** miscellaneous ULT */
 	DSS_ULT_MISC,
 };
@@ -603,5 +607,7 @@ bool dss_pmixless(void);
 #define	DSS_GC_CREDS	256
 
 void dss_gc_run(int credits);
+
+bool dss_aggregation_disabled(void);
 
 #endif /* __DSS_API_H__ */

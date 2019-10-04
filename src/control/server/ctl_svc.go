@@ -28,19 +28,17 @@ import (
 	"io/ioutil"
 
 	"github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/drpc"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 var jsonDBRelPath = "share/daos/control/mgmtinit_db.json"
 
 // ControlService implements the control plane control service, satisfying
-// pb.MgmtCtlServer, and is the data container for the service.
+// ctlpb.MgmtCtlServer, and is the data container for the service.
 type ControlService struct {
 	StorageControlService
 	harness           *IOServerHarness
-	drpc              drpc.DomainSocketClient
 	supportedFeatures FeatureMap
 }
 
@@ -58,7 +56,6 @@ func NewControlService(l logging.Logger, h *IOServerHarness, cfg *Configuration)
 	return &ControlService{
 		StorageControlService: *scs,
 		harness:               h,
-		drpc:                  scs.drpc,
 		supportedFeatures:     fMap,
 	}, nil
 }
@@ -77,7 +74,7 @@ func loadInitData(relPath string) (m FeatureMap, err error) {
 		return
 	}
 
-	var features []*pb.Feature
+	var features []*ctlpb.Feature
 	if err = json.Unmarshal(file, &features); err != nil {
 		return
 	}

@@ -154,20 +154,33 @@ out:
 int
 cont_create_hdlr(struct cmd_args_s *ap)
 {
-	int	rc;
+	int		rc;
 
-	rc = daos_cont_create(ap->pool, ap->c_uuid, NULL, NULL);
-	if (rc != 0)
+	/** allow creating a POSIX container without a link in the UNS path */
+	if (ap->type == DAOS_PROP_CO_LAYOUT_POSIX) {
+		dfs_attr_t attr;
+
+		attr.da_id = 0;
+		attr.da_oclass_id = ap->oclass;
+		attr.da_chunk_size = ap->chunk_size;
+		rc = dfs_cont_create(ap->pool, ap->c_uuid, &attr, NULL, NULL);
+	} else {
+		rc = daos_cont_create(ap->pool, ap->c_uuid, NULL, NULL);
+	}
+
+	if (rc != 0) {
 		fprintf(stderr, "failed to create container: %d\n", rc);
-	else
-		fprintf(stdout, "Successfully created container "DF_UUIDF"\n",
-				DP_UUID(ap->c_uuid));
+		return rc;
+	}
+
+	fprintf(stdout, "Successfully created container "DF_UUIDF"\n",
+		DP_UUID(ap->c_uuid));
 
 	return rc;
 }
 
 /* cont_create_uns_hdlr() - create container and link to
- * POSIX filesystem directory or HDF 5 file.
+ * POSIX filesystem directory or HDF5 file.
  */
 int
 cont_create_uns_hdlr(struct cmd_args_s *ap)
@@ -185,12 +198,12 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 	uuid_copy(dattr.da_puuid, ap->p_uuid);
 	uuid_copy(dattr.da_cuuid, ap->c_uuid);
 	dattr.da_type = ap->type;
-	dattr.da_oclass = ap->oclass;
+	dattr.da_oclass_id = ap->oclass;
 	dattr.da_chunk_size = ap->chunk_size;
 
-	rc = duns_link_path(ap->path, ap->sysname, ap->mdsrv, &dattr);
+	rc = duns_create_path(ap->pool, ap->path, &dattr);
 	if (rc) {
-		fprintf(stderr, "duns_link_path() error: rc=%d\n", rc);
+		fprintf(stderr, "duns_create_path() error: rc=%d\n", rc);
 		D_GOTO(err_rc, rc);
 	}
 
@@ -230,13 +243,14 @@ cont_query_hdlr(struct cmd_args_s *ap)
 		 * all resulting fields should be populated
 		 */
 		assert(ap->type != DAOS_PROP_CO_LAYOUT_UNKOWN);
-		assert(ap->oclass != OC_UNKNOWN);
-		assert(ap->chunk_size != 0);
 
 		printf("DAOS Unified Namespace Attributes on path %s:\n",
 			ap->path);
 		daos_unparse_ctype(ap->type, type);
-		daos_oclass_id2name(ap->oclass, oclass);
+		if (ap->oclass == OC_UNKNOWN)
+			strcpy(oclass, "UNKNOWN");
+		else
+			daos_oclass_id2name(ap->oclass, oclass);
 		printf("Container Type:\t%s\n", type);
 		printf("Object Class:\t%s\n", oclass);
 		printf("Chunk Size:\t%zu\n", ap->chunk_size);
@@ -252,6 +266,17 @@ int
 cont_destroy_hdlr(struct cmd_args_s *ap)
 {
 	int	rc;
+
+	if (ap->path) {
+		rc = duns_destroy_path(ap->pool, ap->path);
+		if (rc)
+			fprintf(stderr, "duns_destroy_path() failed %s (%d)\n",
+				ap->path, rc);
+		else
+			fprintf(stdout, "Successfully destroyed path %s\n",
+				ap->path);
+		return rc;
+	}
 
 	/* TODO: when API supports, change arg 3 to ap->force_destroy. */
 	rc = daos_cont_destroy(ap->pool, ap->c_uuid, 1, NULL);

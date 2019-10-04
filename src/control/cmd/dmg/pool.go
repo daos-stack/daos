@@ -73,7 +73,8 @@ func (c *PoolCreateCmd) Execute(args []string) error {
 type PoolDestroyCmd struct {
 	logCmd
 	connectedCmd
-	Uuid  string `short:"u" long:"uuid" required:"1" description:"UUID of DAOS pool to destroy"`
+	// TODO: implement --sys & --svc options (currently unsupported server side)
+	Uuid  string `long:"pool" required:"1" description:"UUID of DAOS pool to destroy"`
 	Force bool   `short:"f" long:"force" description:"Force removal of DAOS pool"`
 }
 
@@ -223,10 +224,10 @@ func poolCreate(log logging.Logger, conns client.Connect, scmSize string,
 }
 
 // poolDestroy identified by UUID.
-func poolDestroy(log logging.Logger, conns client.Connect, uuid string, force bool) error {
+func poolDestroy(log logging.Logger, conns client.Connect, poolUUID string, force bool) error {
 	msg := "succeeded"
 
-	req := &client.PoolDestroyReq{Uuid: uuid, Force: force}
+	req := &client.PoolDestroyReq{Uuid: poolUUID, Force: force}
 
 	err := conns.PoolDestroy(req)
 	if err != nil {

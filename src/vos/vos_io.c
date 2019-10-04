@@ -28,9 +28,11 @@
 #define D_LOGFAC	DD_FAC(vos)
 
 #include <daos/common.h>
+#include <daos/checksum.h>
 #include <daos/btree.h>
 #include <daos_types.h>
 #include <daos_srv/vos.h>
+#include <daos.h>
 #include "vos_internal.h"
 #include "evt_priv.h"
 
@@ -162,9 +164,15 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	       bool size_fetch, struct vos_io_context **ioc_pp)
 {
 	struct vos_container *cont;
-	struct vos_io_context *ioc;
+	struct vos_io_context *ioc = NULL;
 	struct bio_io_context *bioc;
 	int i, rc;
+
+	if (iod_nr == 0) {
+		D_ERROR("Invalid iod_nr (0).\n");
+		rc = -DER_IO_INVAL;
+		goto error;
+	}
 
 	D_ALLOC_PTR(ioc);
 	if (ioc == NULL)
@@ -201,8 +209,10 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 		int iov_nr = iods[i].iod_nr;
 		struct bio_sglist *bsgl;
 
-		if (iods[i].iod_type == DAOS_IOD_SINGLE && iov_nr != 1) {
-			D_ERROR("Invalid sv iod_nr=%d\n", iov_nr);
+		if ((iods[i].iod_type == DAOS_IOD_SINGLE && iov_nr != 1) ||
+		    (iov_nr == 0 && iods[i].iod_recxs != NULL)) {
+			D_ERROR("Invalid iod_nr=%d, iod_type %d.\n",
+				iov_nr, iods[i].iod_type);
 			rc = -DER_IO_INVAL;
 			goto error;
 		}
@@ -220,7 +230,8 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	*ioc_pp = ioc;
 	return 0;
 error:
-	vos_ioc_destroy(ioc);
+	if (ioc != NULL)
+		vos_ioc_destroy(ioc);
 	return rc;
 }
 
@@ -396,8 +407,8 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 			daos_size_t  csum_nr;
 
 			D_ASSERT(lo >= recx->rx_idx);
-			csum_ptr = daos_csum_from_offset(csum,
-						((lo - recx->rx_idx) * rsize));
+			csum_ptr = dcb_off2csum(csum,
+				(uint32_t)((lo - recx->rx_idx) * rsize));
 			csum_nr = csum_chunk_count(csum->cs_chunksize,
 						   lo, hi, rsize);
 
@@ -708,16 +719,16 @@ akey_update_single(daos_handle_t toh, daos_epoch_t epoch, uint32_t pm_ver,
 	struct vos_key_bundle	 kbund;
 	struct vos_rec_bundle	 rbund;
 	daos_csum_buf_t		 csum;
-	d_iov_t		 kiov, riov;
+	d_iov_t			 kiov, riov;
 	struct bio_iov		*biov;
 	umem_off_t		 umoff;
 	daos_iod_t		*iod = &ioc->ic_iods[ioc->ic_sgl_at];
 	int			 rc;
 
+	dcb_set_null(&csum);
 	tree_key_bundle2iov(&kbund, &kiov);
 	kbund.kb_epoch	= epoch;
 
-	daos_csum_set(&csum, NULL, 0);
 
 	umoff = iod_update_umoff(ioc);
 	D_ASSERT(!UMOFF_IS_NULL(umoff));
@@ -770,7 +781,7 @@ akey_update_recx(daos_handle_t toh, daos_epoch_t epoch, uint32_t pm_ver,
 	ent.ei_ver = pm_ver;
 	ent.ei_inob = rsize;
 
-	if (daos_csum_isvalid(iod_csum)) {
+	if (dcb_is_valid(iod_csum)) {
 		ent.ei_csum = *iod_csum;
 		/* change the checksum for fault injection*/
 		if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_FAIL))

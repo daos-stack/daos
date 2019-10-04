@@ -37,19 +37,6 @@ import (
 
 type (
 	// this interface decorates a command which
-	// should be broadcast rather than unicast
-	// to a single access point
-	broadcaster interface {
-		isBroadcast()
-	}
-	broadcastCmd struct{}
-)
-
-// implement the interface
-func (broadcastCmd) isBroadcast() {}
-
-type (
-	// this interface decorates a command which
 	// requires a connection to the control
 	// plane and therefore must have an
 	// implementation of client.Connect
@@ -88,13 +75,13 @@ type cliOptions struct {
 	HostFile   string     `short:"f" long:"host-file" description:"path of hostfile specifying list of addresses <ipv4addr/hostname:port>, if specified takes preference over HostList"`
 	ConfigPath string     `short:"o" long:"config-path" description:"Client config file path"`
 	Storage    storageCmd `command:"storage" alias:"st" description:"Perform tasks related to storage attached to remote servers"`
-	Service    SvcCmd     `command:"service" alias:"sv" description:"Perform distributed tasks related to DAOS system"`
+	System     SystemCmd  `command:"system" alias:"sy" description:"Perform distributed tasks related to DAOS system"`
 	Network    NetCmd     `command:"network" alias:"n" description:"Perform tasks related to network devices attached to remote servers"`
 	Pool       PoolCmd    `command:"pool" alias:"p" description:"Perform tasks related to DAOS pools"`
 }
 
 // appSetup loads config file, processes cli overrides and connects clients.
-func appSetup(log logging.Logger, broadcast bool, opts *cliOptions, conns client.Connect) error {
+func appSetup(log logging.Logger, opts *cliOptions, conns client.Connect) error {
 	config, err := client.GetConfig(log, opts.ConfigPath)
 	if err != nil {
 		return errors.WithMessage(err, "processing config file")
@@ -118,14 +105,7 @@ func appSetup(log logging.Logger, broadcast bool, opts *cliOptions, conns client
 	}
 	conns.SetTransportConfig(config.TransportConfig)
 
-	// broadcast app requests to host list by default
-	addresses := config.HostList
-	if !broadcast {
-		// send app requests to first access point only
-		addresses = []string{config.AccessPoints[0]}
-	}
-
-	ok, out := hasConns(conns.ConnectClients(addresses))
+	ok, out := hasConns(conns.ConnectClients(config.HostList))
 	if !ok {
 		return errors.New(out) // no active connections
 	}
@@ -160,8 +140,7 @@ func parseOpts(args []string, opts *cliOptions, conns client.Connect, log *loggi
 			logCmd.setLog(log)
 		}
 
-		_, shouldBroadcast := cmd.(broadcaster)
-		if err := appSetup(log, shouldBroadcast, opts, conns); err != nil {
+		if err := appSetup(log, opts, conns); err != nil {
 			return err
 		}
 		if wantsConn, ok := cmd.(connector); ok {

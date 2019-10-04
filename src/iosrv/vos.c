@@ -32,17 +32,6 @@
 #include <daos_srv/vos.h>
 #include <daos/object.h>
 
-/* obj_enum_rec.rec_flags */
-#define RECX_INLINE	(1U << 0)
-
-struct obj_enum_rec {
-	daos_recx_t		rec_recx;
-	daos_epoch_range_t	rec_epr;
-	uint64_t		rec_size;
-	uint32_t		rec_version;
-	uint32_t		rec_flags;
-};
-
 static int
 fill_recxs(daos_handle_t ih, vos_iter_entry_t *key_ent,
 	   struct dss_enum_arg *arg, vos_iter_type_t type)

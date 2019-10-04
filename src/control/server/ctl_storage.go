@@ -29,7 +29,6 @@ import (
 	"github.com/pkg/errors"
 
 	types "github.com/daos-stack/daos/src/control/common/storage"
-	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
@@ -39,7 +38,6 @@ type StorageControlService struct {
 	log             logging.Logger
 	nvme            *nvmeStorage
 	scm             *scmStorage
-	drpc            drpc.DomainSocketClient
 	instanceStorage []ioserver.StorageConfig
 }
 
@@ -59,13 +57,12 @@ func DefaultStorageControlService(log logging.Logger, cfg *Configuration) (*Stor
 
 	return NewStorageControlService(log,
 		newNvmeStorage(log, cfg.NvmeShmID, spdkScript, cfg.ext),
-		newScmStorage(log, cfg.ext), cfg.Servers,
-		getDrpcClientConnection(cfg.SocketDir)), nil
+		newScmStorage(log, cfg.ext), cfg.Servers), nil
 }
 
 // NewStorageControlService returns an initialized *StorageControlService
 func NewStorageControlService(log logging.Logger, nvme *nvmeStorage, scm *scmStorage,
-	srvCfgs []*ioserver.Config, drpc drpc.DomainSocketClient) *StorageControlService {
+	srvCfgs []*ioserver.Config) *StorageControlService {
 
 	instanceStorage := []ioserver.StorageConfig{}
 	for _, srvCfg := range srvCfgs {
@@ -76,11 +73,11 @@ func NewStorageControlService(log logging.Logger, nvme *nvmeStorage, scm *scmSto
 		log:             log,
 		nvme:            nvme,
 		scm:             scm,
-		drpc:            drpc,
 		instanceStorage: instanceStorage,
 	}
 }
 
+// canAccessBdevs evaluates if any specified Bdevs are not accessible.
 func (c *StorageControlService) canAccessBdevs() (missing []string, ok bool) {
 	for _, storageCfg := range c.instanceStorage {
 		_missing, _ok := c.nvme.hasControllers(storageCfg.Bdev.GetNvmeDevs())
@@ -190,7 +187,7 @@ func (c *StorageControlService) GetScmState() (types.ScmState, error) {
 }
 
 // PrepareScm preps locally attached modules and returns need to reboot message,
-// list of pmem kernel devices and error directly.
+// list of pmem device files and error directly.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
 func (c *StorageControlService) PrepareScm(req PrepareScmRequest, state types.ScmState,
@@ -220,10 +217,10 @@ func (c *StorageControlService) ScanNvme() (types.NvmeControllers, error) {
 // ScanScm scans locally attached modules and returns list directly.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
-func (c *StorageControlService) ScanScm() (types.ScmModules, error) {
+func (c *StorageControlService) ScanScm() (types.ScmModules, types.PmemDevices, error) {
 	if err := c.scm.Discover(); err != nil {
-		return nil, errors.Wrap(err, "SCM storage scan")
+		return nil, nil, errors.Wrap(err, "SCM storage scan")
 	}
 
-	return c.scm.modules, nil
+	return c.scm.modules, c.scm.pmemDevs, nil
 }

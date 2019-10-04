@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2019 Intel Corporation.
+  (C) Copyright 2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -47,7 +47,6 @@ class RebuldTestBase(TestWithServers):
         super(RebuldTestBase, self).__init__(*args, **kwargs)
         self.inputs = RebuildTestParams()
         self.targets = None
-        self.container = None
         self.server_count = 0
         self.info_checks = None
         self.rebuild_checks = None
@@ -64,21 +63,6 @@ class RebuldTestBase(TestWithServers):
         self.targets = self.params.get("targets", "/run/server_config/*")
 
         self.server_count = len(self.hostlist_servers)
-
-    def tearDown(self):
-        """Tear down each test case."""
-        try:
-            # Destroy the containers - assuming a TestContainer object
-            if self.container is not None:
-                self.container.destroy(1)
-
-            # Destroy the pools - assuming a TestPool object
-            if self.pool is not None:
-                self.pool.destroy(1)
-
-        finally:
-            # Stop the servers and agents
-            super(RebuldTestBase, self).tearDown()
 
     def setup_test_pool(self):
         """Define a TestPool object."""
@@ -135,30 +119,36 @@ class RebuldTestBase(TestWithServers):
 
     def create_test_container(self):
         """Create a container and write objects."""
-        self.container.create()
-        self.container.write_objects(
-            self.inputs.rank.value, self.inputs.object_class.value)
+        if self.container is not None:
+            self.container.create()
+            self.container.write_objects(
+                self.inputs.rank.value, self.inputs.object_class.value)
 
     def verify_rank_has_objects(self):
         """Verify the rank to be excluded has at least one object."""
-        rank = self.inputs.rank.value
-        rank_list = self.container.get_target_rank_lists(" before rebuild")
-        qty = self.container.get_target_rank_count(rank, rank_list)
-        self.assertGreater(
-            qty, 0, "No objects written to rank {}".format(rank))
+        if self.container is not None:
+            rank = self.inputs.rank.value
+            rank_list = self.container.get_target_rank_lists(" before rebuild")
+            qty = self.container.get_target_rank_count(rank, rank_list)
+            self.assertGreater(
+                qty, 0, "No objects written to rank {}".format(rank))
 
     def verify_rank_has_no_objects(self):
         """Verify the excluded rank has zero objects."""
-        rank = self.inputs.rank.value
-        rank_list = self.container.get_target_rank_lists(" after rebuild")
-        qty = self.container.get_target_rank_count(rank, rank_list)
-        self.assertEqual(
-            qty, 0, "Excluded rank {} still has objects".format(rank))
+        if self.container is not None:
+            rank = self.inputs.rank.value
+            rank_list = self.container.get_target_rank_lists(" after rebuild")
+            qty = self.container.get_target_rank_count(rank, rank_list)
+            self.assertEqual(
+                qty, 0, "Excluded rank {} still has objects".format(rank))
 
     def start_rebuild(self):
         """Start the rebuild process."""
         # Exclude the rank from the pool to initiate rebuild
-        self.pool.start_rebuild(self.inputs.rank.value, self.d_log)
+        if isinstance(self.inputs.rank.value, list):
+            self.pool.start_rebuild(self.inputs.rank.value, self.d_log)
+        else:
+            self.pool.start_rebuild([self.inputs.rank.value], self.d_log)
 
         # Wait for rebuild to start
         self.pool.wait_for_rebuild(True, 1)
@@ -174,11 +164,17 @@ class RebuldTestBase(TestWithServers):
                 self.container.read_objects(),
                 "Error verifying contianer data")
 
-    def execute_rebuild_test(self):
-        """Execute the rebuild test steps."""
+    def execute_rebuild_test(self, create_container=True):
+        """Execute the rebuild test steps.
+
+        Args:
+            create_container (bool, optional): should the test create a
+                container. Defaults to True.
+        """
         # Get the test params
         self.setup_test_pool()
-        self.setup_test_container()
+        if create_container:
+            self.setup_test_container()
 
         # Create a pool and verify the pool information before rebuild
         self.create_test_pool()

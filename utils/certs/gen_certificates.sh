@@ -136,7 +136,7 @@ function cleanup () {
 
 function fixup_permissions() {
 	chmod 0400 $CERTS/*.key
-	chmod 0644 $CERTS/*.crt
+	chmod 0664 $CERTS/*.crt
 }
 
 function main () {

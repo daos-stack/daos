@@ -506,6 +506,7 @@ static int
 svt_rec_store(struct btr_instance *tins, struct btr_record *rec,
 	      struct vos_key_bundle *kbund, struct vos_rec_bundle *rbund)
 {
+	struct dtx_handle	*dth	= vos_dth_get();
 	struct vos_irec_df	*irec	= vos_rec2irec(tins, rec);
 	daos_csum_buf_t		*csum	= rbund->rb_csum;
 	struct bio_iov		*biov	= rbund->rb_biov;
@@ -526,7 +527,18 @@ svt_rec_store(struct btr_instance *tins, struct btr_record *rec,
 	/** at this point, it's assumed that enough was allocated for the irec
 	 *  to hold a checksum of length csum->cs_len
 	 */
-	memcpy(vos_irec2csum(irec), csum->cs_csum, csum->cs_len);
+	if (dth != NULL && dth->dth_leader &&
+	    irec->ir_ex_addr.ba_type == DAOS_MEDIA_SCM &&
+	    DAOS_FAIL_CHECK(DAOS_VC_DIFF_REC)) {
+		void	*addr;
+
+		irec->ir_cs_size = 0;
+		irec->ir_cs_type = 0;
+		addr = vos_irec2data(irec);
+		*((int *)addr) = rand();
+	} else {
+		memcpy(vos_irec2csum(irec), csum->cs_csum, csum->cs_len);
+	}
 
 	return 0;
 }

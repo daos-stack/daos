@@ -432,3 +432,17 @@ The following animation illustrates starting the control server and using the ma
 #### NVMe Controller Burn-in Validation
 
 Burn-in validation is performed using the [fio tool](https://github.com/axboe/fio) which executes workloads over the SPDK framework using the [fio plugin](https://github.com/spdk/spdk/tree/v18.04.1/examples/nvme/fio_plugin).
+
+## Bootstrapping and DAOS system membership
+
+When starting a data-plane instance, we look at the superblock to determine whether it should be a MS (management service) replica.
+The `daos_server.yml`'s `access_points` parameter is used (only during format) to determine whether an instance is to be a MS replica or not.
+
+When the starting instance is identified as an MS replica, it performs bootstrap and starts.
+If the DAOS system has only one replica (as specified by `access_points` parameter), the host of the bootstrapped instance is now the MS leader.
+Whereas if there are multiple replicas, elections will happen in the background and eventually a leader will be elected.
+
+When the starting instance is not identified as an MS replica, the instance's host calls Join on MgmtSvcClient over gRPC including the instance's host ControlAddress (address that the gRPC server is listening on) in the request addressed to the MS leader.
+
+MgmtSvc running on the MS leader handles the Join request received by gRPC server and forwards request over dRPC to the MS leader instance.
+If the Join request is successful then the MS leader MgmtSvc records the address contained in the request as a new system member.
