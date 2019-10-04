@@ -89,6 +89,16 @@ func (m *mgmtCtlListFeaturesClient) Recv() (*ctlpb.Feature, error) {
 	return m.features[0], nil
 }
 
+type mgmtCtlRequestDeviceScanStreamerClient struct {
+	grpc.ClientStream
+}
+
+func (m *mgmtCtlRequestDeviceScanStreamerClient) Recv() (*ctlpb.DeviceScanReply, error) {
+	return &ctlpb.DeviceScanReply{}, nil
+}
+
+
+
 type mgmtCtlStorageFormatClient struct {
 	grpc.ClientStream
 	ctrlrResults  NvmeControllerResults
@@ -176,6 +186,15 @@ type mockMgmtCtlClient struct {
 
 func (m *mockMgmtCtlClient) ListFeatures(ctx context.Context, req *ctlpb.EmptyReq, o ...grpc.CallOption) (ctlpb.MgmtCtl_ListFeaturesClient, error) {
 	return &mgmtCtlListFeaturesClient{features: m.features}, nil
+}
+
+func (m* mockMgmtCtlClient) RequestDeviceScanStreamer(ctx context.Context, in *ctlpb.DeviceScanRequest, o ...grpc.CallOption) (ctlpb.MgmtCtl_RequestDeviceScanStreamerClient, error) {
+	// undefined: mgmtCtlRequestDeviceScanStreamerClient, but it is defined in src/control/common/proto/ctl/control.pb.go
+	return &mgmtCtlRequestDeviceScanStreamerClient{}, nil
+}
+
+func (m* mockMgmtCtlClient) RequestProviderList(ctx context.Context, in *ctlpb.ProviderListRequest, o ...grpc.CallOption) (*ctlpb.ProviderListReply, error) {
+	return &ctlpb.ProviderListReply{}, nil
 }
 
 func (m *mockMgmtCtlClient) StoragePrepare(ctx context.Context, req *ctlpb.StoragePrepareReq, o ...grpc.CallOption) (*ctlpb.StoragePrepareResp, error) {
@@ -278,17 +297,6 @@ func (m *mockMgmtSvcClient) SmdListDevs(
 	return &mgmtpb.SmdDevResp{}, nil
 }
 
-func (m *mockMgmtSvcClient) SmdListPools(
-	ctx context.Context,
-	req *mgmtpb.SmdPoolReq,
-	o ...grpc.CallOption,
-) (*mgmtpb.SmdPoolResp, error) {
-
-	// return successful SMD pool list
-	// initialise with zero values indicating mgmt.CTRL_SUCCESS
-	return &mgmtpb.SmdPoolResp{}, nil
-}
-
 func (m *mockMgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq, o ...grpc.CallOption) (*mgmtpb.JoinResp, error) {
 
 	return &mgmtpb.JoinResp{}, nil
@@ -300,14 +308,6 @@ func (c *mockMgmtSvcClient) GetAttachInfo(ctx context.Context, in *mgmtpb.GetAtt
 
 func (m *mockMgmtSvcClient) KillRank(ctx context.Context, req *mgmtpb.DaosRank, o ...grpc.CallOption) (*mgmtpb.DaosResp, error) {
 	return &mgmtpb.DaosResp{}, nil
-}
-
-func (m *mockMgmtSvcClient) SystemMemberQuery(ctx context.Context, req *mgmtpb.SystemMemberQueryReq, o ...grpc.CallOption) (*mgmtpb.SystemMemberQueryResp, error) {
-	return &mgmtpb.SystemMemberQueryResp{}, nil
-}
-
-func (m *mockMgmtSvcClient) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq, o ...grpc.CallOption) (*mgmtpb.SystemStopResp, error) {
-	return &mgmtpb.SystemStopResp{}, nil
 }
 
 func newMockMgmtSvcClient() mgmtpb.MgmtSvcClient {

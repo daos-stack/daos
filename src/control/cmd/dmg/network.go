@@ -23,7 +23,101 @@
 
 package main
 
-// TODO: provide implementation to this placeholder
+import (
+	"io"
+//	"github.com/daos-stack/daos/src/control/client"
+//	"github.com/daos-stack/daos/src/control/common"
+	pb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+//	"github.com/daos-stack/daos/src/control/logging"
+)
 
 // NetCmd is the struct representing the top-level network subcommand.
-type NetCmd struct{}
+type NetCmd struct {
+	Scan networkScanCmd `command:"scan" description:"Scan for network interface devices on remote servers"`
+	List networkListCmd `command:"list" description:"List all known OFI providers on remote servers that are understood by 'scan'"`
+}
+
+// networkScanCmd is the struct representing the command to scan the machine for network interface devices
+// that match the given fabric provider.
+type networkScanCmd struct {
+//	cfgCmd
+	logCmd
+	connectedCmd
+	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider (default is the provider specified in daos_server.yml)"`
+	AllProviders   bool   `short:"a" long:"all" description:"Specify 'all' to see all devices on all providers.  Overrides --provider"`
+}
+
+func (cmd *networkScanCmd) Execute(args []string) error {
+	var provider string
+
+	if len(args) > 0 {
+		cmd.log.Debugf("An invalid argument was provided: %+v", args)
+		return nil
+		//errors.WithMessage(nil, "failed to execute the fabric and device scan.  An invalid argument was provided.")
+	}
+
+	switch {
+	case cmd.AllProviders:
+		cmd.log.Info("Scanning fabric for all providers")
+	case len(cmd.FabricProvider) > 0:
+		provider = cmd.FabricProvider
+		cmd.log.Infof("Scanning fabric for cmdline specified provider: %s", provider)
+//	case len(cmd.config.Fabric.Provider) > 0:
+//		provider = cmd.config.Fabric.Provider
+//		cmd.log.Infof("Scanning fabric for YML specified provider: %s", provider)
+	default:
+		// all providers case
+		cmd.log.Info("Scanning fabric for all providers")
+	}
+
+	// for test //
+	searchprovider := "ofi+sockets"
+
+	dss, err_dss := cmd.conns.RequestDeviceScanStreamer(&pb.DeviceScanRequest{Provider: searchprovider})
+	if err_dss != nil {
+		//log.Fatalf("error received from RequestDeviceScanStreamer")
+		return nil
+	}
+	for {
+		resp, err := dss.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			cmd.log.Infof("Error during stream receive: %v", err)
+			break
+		}
+		cmd.log.Infof("provider: %s", resp.GetProvider())
+		cmd.log.Infof("fabric_iface: %s", resp.GetDevice())
+		cmd.log.Infof("pinned_numa_node: %d", resp.GetNumanode())
+	}
+
+	return nil
+}
+
+type networkListCmd struct {
+	//cfgCmd
+	logCmd
+	connectedCmd
+}
+
+// List the supported providers and show the example text
+func (cmd *networkListCmd) Execute(args []string) error {
+
+	rpl, err_rpl := cmd.conns.RequestProviderList(&pb.ProviderListRequest{})
+	if err_rpl != nil {
+		cmd.log.Infof("could not complete device scan: %v", err_rpl)
+		return nil
+	}
+	cmd.log.Infof("Provider List Provider: %s", rpl.GetProvider())
+
+// rework this to make the gRPC
+/*
+	providers := netdetect.GetSupportedProviders()
+	cmd.log.Info("Supported providers:\n\n")
+	for _, p := range providers {
+		cmd.log.Infof("\t%s", p)
+	}
+*/
+	return nil
+}
