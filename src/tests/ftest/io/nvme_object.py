@@ -24,7 +24,8 @@
 from __future__ import print_function
 
 #from pathos.multiprocessing import ProcessingPool
-from multiprocessing import Pool
+# from multiprocessing import Pool
+import multiprocessing
 import threading
 import concurrent.futures
 import avocado
@@ -38,8 +39,7 @@ from apricot import TestWithServers
 
 def container_write(container, record):
     """Method to write to a container"""
-    print("{}\n".format(record))
-#    record = 1
+    print("***cotainer.opened:{}".format(container.opened))
 #    for record in record_size:
     container.record_qty.update(record)
     print(container.record_qty)
@@ -127,8 +127,8 @@ class NvmeObject(TestWithServers):
         # Test Params
         self.pool = TestPool(self.context, self.log)
         self.pool.get_params(self)
-        container = TestContainer(self.pool)
-        container.get_params(self)
+        self.container = TestContainer(self.pool)
+        self.container.get_params(self)
         
         # set pool size
         self.pool.nvme_size.update(self.pool_size[0])
@@ -140,30 +140,39 @@ class NvmeObject(TestWithServers):
         self.pool.get_info()
 
         # create container
-        container.create()
+        self.container.create()
+        self.container.open()
         #with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
         #    executor.map(container_write, [self.container, self.record_size[0]])
-#        threads = []
-#        for t in range(2):
-#            thread = threading.Thread(target=container_write, args=(self.container, self.record_size[2]))
-#            threads.append(thread)
+        threads = []
+        for rec in self.record_size[:-1]:
+            for t in range(3):
+                thread = threading.Thread(target=container_write, args=(self.container, rec))
+                threads.append(thread)
 #            thread.start()
 #            thread.join()
 
-#        for job in threads:
-#            job.start()
+        for job in threads:
+            job.start()
 #
-#        for job in threads:
-#            job.join()
+        for job in threads:
+            job.join()
 
 #        thread.start()
 #        thread.join()
 #        print(self.record_size[:-1])
 #        print("***{}***".format(ctypes.cast(ctypes.addressof(self.container)).contents))
-        print("***{}***".format(container))
-        mp = Pool(processes=2)
-        mp.apply_async(container_write, (container, self.record_size[2]))
-#        container_write(self.container, self.record_size[:-1])
+#        mp = Pool(processes=2)
+#        mp.apply_async(container_write, (container, self.record_size[2]))
+#        jobs = []
+#        for i in range(1):
+#            process = multiprocessing.Process(target=container_write, args=(self.container, self.record_size[0]))
+#            jobs.append(process)
+#        for j in jobs:
+#            j.start()
+#        for j in jobs:
+#            j.join()
+#        container_write(container, self.record_size[1])
 #        for record in self.record_size[:-1]:
 #            self.container.record_qty.update(record)
 #            print(self.container.record_qty)
