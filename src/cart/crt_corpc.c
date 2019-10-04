@@ -792,7 +792,7 @@ aggregate_done:
 		RPC_ADDREF(parent_rpc_priv);
 		crt_corpc_complete(parent_rpc_priv);
 
-		if (co_ops->co_post_reply)
+		if (co_ops && co_ops->co_post_reply)
 			co_ops->co_post_reply(&parent_rpc_priv->crp_pub,
 					co_info->co_priv);
 		RPC_DECREF(parent_rpc_priv);

@@ -79,9 +79,14 @@ progress_fn(void *data)
 		crt_progress(*p_ctx, 1000, NULL, NULL);
 
 	rc = drain_queue(*p_ctx);
+	if (rc != 0) {
+		D_ERROR("drain_queue() failed with rc=%d\n", rc);
+		assert(0);
+	}
 
-	if (crt_context_destroy(*p_ctx, 0) != 0) {
-		D_ERROR("Failed to destroy context\n");
+	rc = crt_context_destroy(*p_ctx, 0);
+	if (rc != 0) {
+		D_ERROR("Failed to destroy context rc=%d\n", rc);
 		assert(0);
 	}
 
