@@ -9,8 +9,8 @@ PR_REPOS         := pmix spdk isa-l fio dpdk protobuf-c fuse pmdk raft \
 	            cart@daos_devel1
 ifneq ($(REPOSITORY_URL),)
 ifneq ($(DAOS_STACK_$(DISTRO_BASE)_GROUP_REPO),)
-EL_7_REPOS       = https://copr-be.cloud.fedoraproject.org/results/jhli/ipmctl/epel-7-x86_64/   \
-	           https://copr-be.cloud.fedoraproject.org/results/jhli/safeclib/epel-7-x86_64/
+EL_7_REPOS     = https://copr-be.cloud.fedoraproject.org/results/jhli/ipmctl/epel-7-x86_64/   \
+	         https://copr-be.cloud.fedoraproject.org/results/jhli/safeclib/epel-7-x86_64/
 endif
 endif
 LEAP_42_REPOS  = https://download.opensuse.org/repositories/science:/HPC/openSUSE_Leap_42.3/        \
@@ -35,15 +35,16 @@ include packaging/Makefile_packaging.mk
 
 PACKAGING_CHECK_DIR ?= ../../../rpm/packaging
 
-scons_local-$(VERSION).tar.gz:
+scons_local-$(VERSION).tar.gz: $(shell git ls-files :/:)
+	echo Creating $@
 	cd ../../scons_local &&                        \
 	git archive --format tar --prefix scons_local/ \
 	            -o $$OLDPWD/$(basename $@) HEAD ./
 	rm -f $@
 	gzip $(basename $@)
 
-$(NAME)-$(VERSION).tar.gz:
-	echo $@
+$(NAME)-$(VERSION).tar.gz: $(shell git ls-files :/:)
+	echo Creating $@
 	echo $(basename $@)
 	cd ../../ &&                                          \
 	git archive --format tar --prefix $(NAME)-$(VERSION)/ \

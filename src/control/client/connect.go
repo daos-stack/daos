@@ -29,6 +29,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -125,6 +127,7 @@ func (cr ClientBioResult) String() string {
 type ClientSmdResult struct {
 	Address string
 	Devs    *mgmtpb.SmdDevResp
+	Pools   *mgmtpb.SmdPoolResp
 	Err     error
 }
 
@@ -135,18 +138,53 @@ func (cr ClientSmdResult) String() string {
 		return fmt.Sprintf("error: " + cr.Err.Error())
 	}
 
-	if cr.Devs.Status != 0 {
-		return fmt.Sprintf("error: %v\n", cr.Devs.Status)
+	if cr.Devs != nil {
+		if cr.Devs.Status != 0 {
+			return fmt.Sprintf("error: %v\n", cr.Devs.Status)
+		}
+
+		if len(cr.Devs.Devices) == 0 {
+			fmt.Fprintf(&buf, "No Devices Found\n")
+		}
+
+		for i, d := range cr.Devs.Devices {
+			if i != 0 {
+				fmt.Fprintf(&buf, "\n\t")
+			}
+			fmt.Fprintf(&buf, "Device:\n")
+			fmt.Fprintf(&buf, "\t\tUUID: %+v\n", d.Uuid)
+			fmt.Fprintf(&buf, "\t\tVOS Target IDs: ")
+			for _, t := range d.TgtIds {
+				fmt.Fprintf(&buf, "%d ", t)
+			}
+		}
 	}
 
-	for _, d := range cr.Devs.Devices {
-		fmt.Fprintf(&buf, "Device:\n")
-		fmt.Fprintf(&buf, "\t\tUUID: %+v\n", d.Uuid)
-		fmt.Fprintf(&buf, "\t\tVOS Target IDs: ")
-		for _, t := range d.TgtIds {
-			fmt.Fprintf(&buf, "%d ", t)
+	if cr.Pools != nil {
+		if cr.Pools.Status != 0 {
+			return fmt.Sprintf("error: %v\n", cr.Pools.Status)
 		}
-		fmt.Fprintf(&buf, "\n")
+
+		if len(cr.Pools.Pools) == 0 {
+			fmt.Fprintf(&buf, "No Pools Found\n")
+		}
+
+		for i, p := range cr.Pools.Pools {
+			if i != 0 {
+				fmt.Fprintf(&buf, "\n\t")
+			}
+			fmt.Fprintf(&buf, "Pool:\n")
+			fmt.Fprintf(&buf, "\t\tUUID: %+v\n", p.Uuid)
+			fmt.Fprintf(&buf, "\t\tVOS Target IDs: ")
+			for _, t := range p.TgtIds {
+				fmt.Fprintf(&buf, "%d ", t)
+			}
+			fmt.Fprintf(&buf, "\n")
+			fmt.Fprintf(&buf, "\t\tSPDK Blobs: ")
+			for _, b := range p.Blobs {
+				fmt.Fprintf(&buf, "%v ", b)
+			}
+		}
 	}
 
 	return buf.String()
@@ -229,6 +267,19 @@ func (c *controllerFactory) create(address string, cfg *security.TransportConfig
 	return controller, err
 }
 
+// chooseServiceLeader will decide which connection to send request on.
+//
+// Currently expect only one connection to be available and return that.
+// TODO: this should probably be implemented on the Connect interface.
+func chooseServiceLeader(cs []Control) (Control, error) {
+	if len(cs) == 0 {
+		return nil, errors.New("no active connections")
+	}
+
+	// just return the first connection, expected to be the service leader
+	return cs[0], nil
+}
+
 // Connect is an external interface providing functionality across multiple
 // connected clients (controllers).
 type Connect interface {
@@ -254,6 +305,9 @@ type Connect interface {
 // this is just a guess.  I'm not sure how these two functions should be defined
 	RequestProviderList(*ctlpb.ProviderListRequest) (*ctlpb.ProviderListReply, error)
 	RequestDeviceScanStreamer(*ctlpb.DeviceScanRequest, *ctlpb.MgmtCtl_RequestDeviceScanStreamerServer) error
+	SmdListPools(*mgmtpb.SmdPoolReq) ResultSmdMap
+	SystemMemberQuery() (common.SystemMembers, error)
+	SystemStop() (common.SystemMembers, error)
 }
 
 // connList is an implementation of Connect and stores controllers

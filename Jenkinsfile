@@ -244,7 +244,7 @@ pipeline {
                             publishToRepository product: 'daos',
                                                 format: 'yum',
                                                 maturity: 'stable',
-                                                tech: 'centos-7',
+                                                tech: 'el-7',
                                                 repo_dir: 'artifacts/centos7/'
                             stepResult name: env.STAGE_NAME, context: "build",
                                        result: "SUCCESS"
@@ -279,6 +279,7 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
+                            expression { false }
                             environment name: 'SLES12_3_DOCKER', value: 'true'
                             not { branch 'weekly-testing' }
                             expression { env.CHANGE_TARGET != 'weekly-testing' }
@@ -351,6 +352,7 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
+                            expression { false }
                             not { branch 'weekly-testing' }
                             expression { env.CHANGE_TARGET != 'weekly-testing' }
                         }
@@ -1302,6 +1304,7 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
+                            expression { false }
                             not { branch 'weekly-testing' }
                             expression { env.CHANGE_TARGET != 'weekly-testing' }
                             expression { return env.QUICKBUILD == '1' }

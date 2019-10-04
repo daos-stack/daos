@@ -34,7 +34,9 @@ import (
 	"github.com/daos-stack/daos/src/control/security"
 )
 
-const sockFileName = "daos_server.sock"
+func getDrpcServerSocketPath(sockDir string) string {
+	return filepath.Join(sockDir, "daos_server.sock")
+}
 
 func checkDrpcClientSocketPath(socketPath string) error {
 	if socketPath == "" {
@@ -77,13 +79,14 @@ func checkSocketDir(sockDir string) error {
 	return nil
 }
 
-// drpcSetup checks socket directory exists, specifies socket path and starts drpc server.
+// drpcSetup specifies socket path and starts drpc server.
 func drpcSetup(sockDir string, iosrvs []*IOServerInstance, tc *security.TransportConfig) error {
-	if err := checkSocketDir(sockDir); err != nil {
+	// Clean up any previous execution's sockets before we create any new sockets
+	if err := drpcCleanup(sockDir); err != nil {
 		return err
 	}
 
-	sockPath := filepath.Join(sockDir, sockFileName)
+	sockPath := getDrpcServerSocketPath(sockDir)
 	drpcServer, err := drpc.NewDomainSocketServer(sockPath)
 	if err != nil {
 		return errors.Wrap(err, "unable to create socket server")
@@ -96,6 +99,28 @@ func drpcSetup(sockDir string, iosrvs []*IOServerInstance, tc *security.Transpor
 
 	if err := drpcServer.Start(); err != nil {
 		return errors.Wrapf(err, "unable to start socket server on %s", sockPath)
+	}
+
+	return nil
+}
+
+// drpcCleanup deletes any DAOS sockets in the socket directory
+func drpcCleanup(sockDir string) error {
+	if err := checkSocketDir(sockDir); err != nil {
+		return err
+	}
+
+	srvSock := getDrpcServerSocketPath(sockDir)
+	os.Remove(srvSock)
+
+	pattern := filepath.Join(sockDir, "daos_io_server*.sock")
+	iosrvSocks, err := filepath.Glob(pattern)
+	if err != nil {
+		return errors.WithMessage(err, "couldn't get list of iosrv sockets")
+	}
+
+	for _, s := range iosrvSocks {
+		os.Remove(s)
 	}
 
 	return nil
@@ -137,14 +162,16 @@ func newDrpcCall(module int32, method int32, bodyMessage proto.Message) (*drpc.C
 // makeDrpcCall opens a drpc connection, sends a message with the
 // protobuf message marshalled in the body, and closes the connection.
 // drpc response is returned after basic checks.
-func makeDrpcCall(
-	client drpc.DomainSocketClient, module int32, method int32,
+func makeDrpcCall(client drpc.DomainSocketClient, module int32, method int32,
 	body proto.Message) (drpcResp *drpc.Response, err error) {
 
 	drpcCall, err := newDrpcCall(module, method, body)
 	if err != nil {
 		return drpcResp, errors.Wrap(err, "build drpc call")
 	}
+
+	client.Lock()
+	defer client.Unlock()
 
 	// Forward the request to the I/O server via dRPC
 	if err = client.Connect(); err != nil {
