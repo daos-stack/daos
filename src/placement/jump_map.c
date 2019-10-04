@@ -240,15 +240,13 @@ add_ds_shard(d_list_t *ds_list, struct pool_target *target)
  *
  * \param[in] The ds list to be freed.
  */
-void
+static inline void
 ds_list_free_all(d_list_t *used_targets_list)
 {
-	struct down_shard *d_shard, *d_tmp;
-
-	d_list_for_each_entry_safe(d_shard, d_tmp, used_targets_list, ds_list) {
-		d_list_del_init(&d_shard->ds_list);
+	struct down_shard *d_shard;
+	while ((d_shard = d_list_pop_entry(used_targets_list, struct down_shard,
+				       ds_list)) != NULL)
 		D_FREE(d_shard);
-	}
 }
 
 /**
