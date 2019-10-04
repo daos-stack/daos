@@ -223,6 +223,7 @@ func (m *mockMgmtCtlClient) FetchFioConfigPaths(ctx context.Context, req *ctlpb.
 	return &mgmtCtlFetchFioConfigPathsClient{}, nil
 }
 
+// More guesses.  Not sure what these four functions need to look like to fit in.
 type mgmtCtlRequestDeviceScanStreamerClient struct {
 	grpc.ClientStream
 }

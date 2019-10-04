@@ -35,6 +35,7 @@ import (
 
 func (c *NetworkScanService) RequestProviderList(ctx context.Context, in *pb.ProviderListRequest) (*pb.ProviderListReply, error) {
 	c.log.Debugf("RequestProviderList() Received")
+	// Just a quick test to see that we can return a string
 	return &pb.ProviderListReply{Provider: "joel's provider list provider"}, nil
 }
 
@@ -46,12 +47,11 @@ func (c *NetworkScanService) RequestDeviceScanStreamer(in *pb.DeviceScanRequest,
 		return errors.WithMessage(err, "failed to execute the fabric and device scan")
 	}
 	for _, sr := range results {
+		// TBD fill in a reply and stream the results here
 		c.log.Infof("\n%v\n\n", sr)
 	}
 
-
-	//resp := &ctlpb.DeviceScanReply{}
-
+	// For testing, just hard code two replies.
 	err1 := stream.Send(&pb.DeviceScanReply{Provider: "joel's device scan provider - item 1", Device: "Eth0", Numanode: 2})
 	if err1 != nil {
 		return err1

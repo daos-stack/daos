@@ -46,11 +46,6 @@ type networkScanCmd struct {
 func (cmd *networkScanCmd) Execute(args []string) error {
 	var provider string
 
-	svc, err := server.DefaultNetworkScanService(cmd.log, cmd.config)
-	if err != nil {
-		return errors.WithMessage(err, "failed to init NetworkScanService")
-	}
-
 	if len(args) > 0 {
 		cmd.log.Debugf("An invalid argument was provided: %+v", args)
 		return errors.WithMessage(nil, "failed to execute the fabric and device scan.  An invalid argument was provided.")

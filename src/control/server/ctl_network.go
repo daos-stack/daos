@@ -52,6 +52,7 @@ func NewNetworkScanService(log logging.Logger, srvCfgs []*ioserver.Config) *Netw
 	}
 }
 
+// An example how I might call into netdetect.ScanFabric to get the results
 func (c *NetworkScanService) TestFunction() error {
 	c.log.Debugf("NetworkScanService::TestFunction was called\n")
 	results, err := netdetect.ScanFabric("ofi+sockets")
@@ -60,6 +61,7 @@ func (c *NetworkScanService) TestFunction() error {
 		return err
 	}
 	for _, sr := range results {
+		// fill in the reply message and stream the results back
 		c.log.Infof("\n%v\n\n", sr)
 	}
 	return nil

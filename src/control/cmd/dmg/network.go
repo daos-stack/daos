@@ -89,7 +89,7 @@ func (cmd *networkScanCmd) Execute(args []string) error {
 		}
 		cmd.log.Infof("provider: %s", resp.GetProvider())
 		cmd.log.Infof("fabric_iface: %s", resp.GetDevice())
-		cmd.log.Infof("pinned_numa_node: %d", resp.GetNumanode())
+		cmd.log.Infof("pinned_numa_node: %d\n", resp.GetNumanode())
 	}
 
 	return nil
@@ -104,17 +104,17 @@ type networkListCmd struct {
 // List the supported providers and show the example text
 func (cmd *networkListCmd) Execute(args []string) error {
 
-	rpl, err_rpl := cmd.conns.RequestProviderList(&pb.ProviderListRequest{})
-	if err_rpl != nil {
-		cmd.log.Infof("could not complete device scan: %v", err_rpl)
+	// For now, the provider list is a single string, non-streamed.
+	// Formatting of the output won't be correct yet, but it's a place holder
+	// until the gRPC is functioning.
+	rpl, err := cmd.conns.RequestProviderList(&pb.ProviderListRequest{})
+	if err != nil {
+		cmd.log.Infof("could not complete device scan: %v", err)
 		return nil
 	}
-	cmd.log.Infof("Provider List Provider: %s", rpl.GetProvider())
-
-// rework this to make the gRPC
+	cmd.log.Infof("Supported providers: %s", rpl.GetProvider())
 /*
-	providers := netdetect.GetSupportedProviders()
-	cmd.log.Info("Supported providers:\n\n")
+	// daos_server processes the string this way:
 	for _, p := range providers {
 		cmd.log.Infof("\t%s", p)
 	}
