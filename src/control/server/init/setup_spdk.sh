@@ -17,14 +17,12 @@ else
 	PCI_WHITELIST="$_PCI_WHITELIST" NRHUGE="$_NRHUGE" \
 	TARGET_USER="$_TARGET_USER" "$scriptpath"
 
-	if [[ "$_TARGET_USER" != "root" ]]; then
-		set -e
+	set -e
 
-		chown -R $_TARGET_USER /dev/hugepages /dev/uio* \
-			/sys/class/uio/uio*/device/config \
-			/sys/class/uio/uio*/device/resource*
+	chown -R $_TARGET_USER /dev/hugepages /dev/uio* \
+		/sys/class/uio/uio*/device/config \
+		/sys/class/uio/uio*/device/resource*
 
-		set e
-	fi
+	set e
 fi
 
