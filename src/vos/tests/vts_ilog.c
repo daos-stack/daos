@@ -85,7 +85,6 @@ enum {
 	COMMITTED = 0,
 	COMMITTABLE,
 	PREPARED,
-	ABORTED,
 };
 
 static int		current_status;
@@ -100,7 +99,8 @@ struct fake_tx_entry {
 static D_LIST_HEAD(fake_tx_list);
 
 static enum ilog_status
-fake_tx_status_get(struct umem_instance *umm, umem_off_t tx_id, uint32_t intent)
+fake_tx_status_get(struct umem_instance *umm, umem_off_t tx_id, uint32_t intent,
+		   void *args)
 {
 	struct fake_tx_entry	*entry = (struct fake_tx_entry *)tx_id;
 
@@ -113,8 +113,6 @@ fake_tx_status_get(struct umem_instance *umm, umem_off_t tx_id, uint32_t intent)
 		return ILOG_VISIBLE;
 	case PREPARED:
 		return ILOG_INVISIBLE;
-	case ABORTED:
-		return ILOG_REMOVED;
 	}
 	D_ASSERT(0);
 	return 0;
@@ -137,7 +135,8 @@ fake_tx_remove(void)
 }
 
 static int
-fake_tx_is_same_tx(struct umem_instance *umm, umem_off_t tx_id, bool *same)
+fake_tx_is_same_tx(struct umem_instance *umm, umem_off_t tx_id, bool *same,
+		   void *args)
 {
 	if (tx_id == current_tx_id)
 		*same = true;
@@ -148,8 +147,8 @@ fake_tx_is_same_tx(struct umem_instance *umm, umem_off_t tx_id, bool *same)
 }
 
 static int
-fake_tx_register(struct umem_instance *umm, umem_off_t offset,
-		 umem_off_t *tx_id)
+fake_tx_log_add(struct umem_instance *umm, umem_off_t offset, umem_off_t *tx_id,
+		void *args)
 {
 	struct fake_tx_entry	*entry;
 
@@ -167,8 +166,8 @@ fake_tx_register(struct umem_instance *umm, umem_off_t offset,
 }
 
 static int
-fake_tx_deregister(struct umem_instance *umm, umem_off_t offset,
-		   umem_off_t tx_id)
+fake_tx_log_del(struct umem_instance *umm, umem_off_t offset, umem_off_t tx_id,
+		void *args)
 {
 	struct fake_tx_entry	*entry;
 
@@ -188,6 +187,13 @@ fake_tx_deregister(struct umem_instance *umm, umem_off_t offset,
 
 	return 0;
 }
+
+static struct ilog_desc_cbs ilog_callbacks = {
+	.dc_log_status_cb	= fake_tx_status_get,
+	.dc_is_same_tx_cb	= fake_tx_is_same_tx,
+	.dc_log_add_cb		= fake_tx_log_add,
+	.dc_log_del_cb		= fake_tx_log_del,
+};
 
 struct desc {
 	daos_epoch_t	epoch;
@@ -373,8 +379,7 @@ do_update(daos_handle_t loh, daos_epoch_t epoch,
 		return rc;
 	}
 
-	if (current_status != ABORTED &&
-	    (punch || *prior_punch || *prior_status == PREPARED)) {
+	if (punch || *prior_punch || *prior_status == PREPARED) {
 		rc = entries_set(entries, ENTRY_APPEND, epoch,
 				 punch, ENTRIES_END);
 		if (rc != 0) {
@@ -423,7 +428,7 @@ ilog_test_update(void **state)
 		assert(0);
 	}
 
-	rc = ilog_open(umm, ilog, &loh);
+	rc = ilog_open(umm, ilog, &ilog_callbacks, &loh);
 	if (rc != 0) {
 		print_message("Failed to open incarnation log: %s\n",
 			      d_errstr(rc));
@@ -499,7 +504,7 @@ ilog_test_update(void **state)
 	prior_punch = true;
 	prior_status = PREPARED;
 	for (idx = 0; idx < NUM_REC; idx++) {
-		current_status = 1 + idx % 3;
+		current_status = 1 + idx % 2;
 		rc = do_update(loh, epoch,
 			       (((idx + 1) % 10) == 0) ? true : false,
 			       &prior_punch, &prior_status, entries);
@@ -524,7 +529,7 @@ ilog_test_update(void **state)
 	rc = entries_check(loh, NULL, 0, entries);
 	assert_int_equal(rc, 0);
 	ilog_close(loh);
-	rc = ilog_destroy(umm, ilog);
+	rc = ilog_destroy(umm, &ilog_callbacks, ilog);
 	assert_int_equal(rc, 0);
 
 	assert_true(d_list_empty(&fake_tx_list));
@@ -565,7 +570,7 @@ ilog_test_abort(void **state)
 		assert(0);
 	}
 
-	rc = ilog_open(umm, ilog, &loh);
+	rc = ilog_open(umm, ilog, &ilog_callbacks, &loh);
 	if (rc != 0) {
 		print_message("Failed to open incarnation log: %s\n",
 			      d_errstr(rc));
@@ -661,7 +666,7 @@ ilog_test_abort(void **state)
 	assert_int_equal(rc, 0);
 
 	ilog_close(loh);
-	rc = ilog_destroy(umm, ilog);
+	rc = ilog_destroy(umm, &ilog_callbacks, ilog);
 	assert_int_equal(rc, 0);
 
 	assert_true(d_list_empty(&fake_tx_list));
@@ -695,7 +700,7 @@ ilog_test_persist(void **state)
 		assert(0);
 	}
 
-	rc = ilog_open(umm, ilog, &loh);
+	rc = ilog_open(umm, ilog, &ilog_callbacks, &loh);
 	if (rc != 0) {
 		print_message("Failed to open incarnation log: %s\n",
 			      d_errstr(rc));
@@ -765,7 +770,7 @@ ilog_test_persist(void **state)
 	assert_int_equal(rc, 0);
 
 	ilog_close(loh);
-	rc = ilog_destroy(umm, ilog);
+	rc = ilog_destroy(umm, &ilog_callbacks, ilog);
 	assert_int_equal(rc, 0);
 	assert_true(d_list_empty(&fake_tx_list));
 	ilog_free_root(umm, ilog);
@@ -798,7 +803,7 @@ ilog_test_aggregate(void **state)
 		assert(0);
 	}
 
-	rc = ilog_open(umm, ilog, &loh);
+	rc = ilog_open(umm, ilog, &ilog_callbacks, &loh);
 	if (rc != 0) {
 		print_message("Failed to open incarnation log: %s\n",
 			      d_errstr(rc));
@@ -898,7 +903,7 @@ ilog_test_aggregate(void **state)
 	assert_true(d_list_empty(&fake_tx_list));
 
 	ilog_close(loh);
-	rc = ilog_destroy(umm, ilog);
+	rc = ilog_destroy(umm, &ilog_callbacks, ilog);
 	assert_int_equal(rc, 0);
 
 	ilog_free_root(umm, ilog);
@@ -913,13 +918,6 @@ static const struct CMUnitTest inc_tests[] = {
 		NULL},
 	{ "VOS500.3: VOS incarnation log AGGREGATE test", ilog_test_aggregate,
 		NULL, NULL},
-};
-
-static struct ilog_callbacks ilog_callbacks = {
-	.dc_status_get	= fake_tx_status_get,
-	.dc_is_same_tx	= fake_tx_is_same_tx,
-	.dc_register	= fake_tx_register,
-	.dc_deregister	= fake_tx_deregister,
 };
 
 int
@@ -937,8 +935,6 @@ setup_ilog(void **state)
 		return -DER_NOMEM;
 
 	arg->custom = entries;
-
-	ilog_set_callbacks(&ilog_callbacks);
 
 	return entries_init(entries);
 }

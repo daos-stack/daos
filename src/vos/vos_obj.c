@@ -54,6 +54,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 	struct vos_rec_bundle	 rbund;
 	daos_csum_buf_t		 csum;
 	d_iov_t			 riov;
+	struct ilog_desc_cbs	 cbs;
 	int			 rc;
 
 	rc = obj_tree_init(obj);
@@ -95,7 +96,8 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 		 * incarnation log.  This will normally be a noop but the
 		 * log entry is needed because an existing dkey is implied.
 		 */
-		rc = ilog_open(umm, &krec->kr_ilog, &loh);
+		vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(obj->obj_cont));
+		rc = ilog_open(umm, &krec->kr_ilog, &cbs, &loh);
 		if (rc != 0) {
 			D_ERROR("Error opening dkey ilog: rc="DF_RC"\n",
 				DP_RC(rc));
@@ -352,8 +354,8 @@ key_ilog_prepare(struct vos_obj_iter *oiter, daos_handle_t toh, int key_type,
 		return rc;
 	}
 
-	rc = key_ilog_fetch(vos_obj2umm(obj), vos_iter_intent(&oiter->it_iter),
-			    &range, krec, entries);
+	rc = key_ilog_fetch(obj, vos_iter_intent(&oiter->it_iter), &range, krec,
+			    entries);
 	if (rc != 0) {
 		D_ERROR("Cannot fetch ilog for key tree: "DF_RC"\n", DP_RC(rc));
 		goto fail;
@@ -456,9 +458,8 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 	}
 
 	krec = rbund.rb_krec;
-	rc = key_ilog_fetch(vos_obj2umm(obj),
-			    vos_iter_intent(&oiter->it_iter), &epr,
-			    krec, &oiter->it_ilog_entries);
+	rc = key_ilog_fetch(obj, vos_iter_intent(&oiter->it_iter), &epr, krec,
+			    &oiter->it_ilog_entries);
 
 	if (rc != 0)
 		return rc;

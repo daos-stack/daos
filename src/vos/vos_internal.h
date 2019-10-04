@@ -913,7 +913,7 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 
 /* vos_io.c */
 int
-key_ilog_fetch(struct umem_instance *umm, uint32_t intent,
+key_ilog_fetch(struct vos_object *obj, uint32_t intent,
 	       const daos_epoch_range_t *epr, struct vos_krec_df *krec,
 	       struct ilog_entries *entries);
 uint16_t
@@ -1030,5 +1030,8 @@ gc_add_item(struct vos_pool *pool, enum vos_gc_type type, umem_off_t item_off,
 /** Initialize the incarnation log globals */
 int
 vos_ilog_init(void);
+/** Initialize callbacks for vos incarnation log */
+void
+vos_ilog_desc_cbs_init(struct ilog_desc_cbs *cbs, daos_handle_t coh);
 
 #endif /* __VOS_INTERNAL_H__ */

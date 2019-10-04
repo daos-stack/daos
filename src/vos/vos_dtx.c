@@ -385,12 +385,14 @@ dtx_ilog_rec_release(struct umem_instance *umm,
 {
 	struct ilog_df		*ilog;
 	daos_handle_t		 loh;
+	struct ilog_desc_cbs	 cbs;
 	struct ilog_id		 id;
 	int			 rc;
 
 	ilog = umem_off2ptr(umm, rec->tr_record);
 
-	rc = ilog_open(umm, ilog, &loh);
+	vos_ilog_desc_cbs_init(&cbs, DAOS_HDL_INVAL);
+	rc = ilog_open(umm, ilog, &cbs, &loh);
 	if (rc != 0)
 		return rc;
 
@@ -1319,7 +1321,6 @@ vos_dtx_register_ilog(struct umem_instance *umm, umem_off_t record,
 	}
 
 	/* Incarnation log entry implies a share */
-	dtx->te_flags |= DTX_EF_SHARES;
 	*tx_id = dth->dth_ent;
 
 	return rc;

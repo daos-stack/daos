@@ -347,6 +347,7 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
 	struct vos_krec_df	*krec;
 	struct umem_attr	 uma;
+	struct ilog_desc_cbs	 cbs;
 	int			 gc;
 	int			 rc;
 
@@ -356,7 +357,8 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	krec = vos_rec2krec(tins, rec);
 	umem_attr_get(&tins->ti_umm, &uma);
 
-	rc = ilog_destroy(&tins->ti_umm, &krec->kr_ilog);
+	vos_ilog_desc_cbs_init(&cbs, DAOS_HDL_INVAL);
+	rc = ilog_destroy(&tins->ti_umm, &cbs, &krec->kr_ilog);
 	if (rc != 0)
 		return rc;
 
@@ -963,6 +965,7 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	struct vos_rec_bundle	*rbund;
 	struct vos_krec_df	*krec;
 	struct umem_instance	*umm;
+	struct ilog_desc_cbs	 cbs;
 	daos_handle_t		 loh = DAOS_HDL_INVAL;
 	int			 rc;
 
@@ -989,7 +992,8 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	krec = rbund->rb_krec;
 	umm = vos_obj2umm(obj);
 
-	rc = ilog_open(umm, &krec->kr_ilog, &loh);
+	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(obj->obj_cont));
+	rc = ilog_open(umm, &krec->kr_ilog, &cbs, &loh);
 	if (rc != 0) {
 		D_ERROR("Failed to open incarnation log: rc = %s\n",
 			d_errstr(rc));
@@ -1116,11 +1120,14 @@ obj_tree_find_attr(unsigned tree_class)
 
 static enum ilog_status
 vos_ilog_status_get(struct umem_instance *umm, umem_off_t tx_id,
-		    uint32_t intent)
+		    uint32_t intent, void *args)
 {
 	int	rc;
+	daos_handle_t coh;
 
-	rc = vos_dtx_check_availability(umm, DAOS_HDL_INVAL, tx_id, UMOFF_NULL,
+	coh.cookie = (unsigned long)args;
+
+	rc = vos_dtx_check_availability(umm, coh, tx_id, UMOFF_NULL,
 					intent, DTX_RT_ILOG);
 	if (rc < 0)
 		return rc;
@@ -1130,13 +1137,16 @@ vos_ilog_status_get(struct umem_instance *umm, umem_off_t tx_id,
 		return ILOG_INVISIBLE;
 	case ALB_AVAILABLE_CLEAN:
 		return ILOG_VISIBLE;
+	default:
+		D_ASSERTF(0, "Unexpected availability\n");
 	}
 
-	return ILOG_REMOVED;
+	return ILOG_INVISIBLE;
 }
 
 static int
-vos_ilog_is_same_tx(struct umem_instance *umm, umem_off_t tx_id, bool *same)
+vos_ilog_is_same_tx(struct umem_instance *umm, umem_off_t tx_id, bool *same,
+		    void *args)
 {
 	umem_off_t dtx = vos_dtx_get();
 
@@ -1149,26 +1159,32 @@ vos_ilog_is_same_tx(struct umem_instance *umm, umem_off_t tx_id, bool *same)
 }
 
 static int
-vos_ilog_register(struct umem_instance *umm, umem_off_t ilog_off,
-		  umem_off_t *tx_id)
+vos_ilog_add(struct umem_instance *umm, umem_off_t ilog_off, umem_off_t *tx_id,
+	     void *args)
 {
 	return vos_dtx_register_ilog(umm, ilog_off, tx_id);
 }
 
 static int
-vos_ilog_deregister(struct umem_instance *umm, umem_off_t ilog_off,
-		  umem_off_t tx_id)
+vos_ilog_del(struct umem_instance *umm, umem_off_t ilog_off, umem_off_t tx_id,
+	     void *args)
 {
 	vos_dtx_deregister_record(umm, tx_id, ilog_off, DTX_RT_ILOG);
 	return 0;
 }
 
-static struct ilog_callbacks ilog_cbs = {
-	.dc_status_get = vos_ilog_status_get,
-	.dc_is_same_tx = vos_ilog_is_same_tx,
-	.dc_register = vos_ilog_register,
-	.dc_deregister = vos_ilog_deregister,
-};
+void
+vos_ilog_desc_cbs_init(struct ilog_desc_cbs *cbs, daos_handle_t coh)
+{
+	cbs->dc_log_status_cb	= vos_ilog_status_get;
+	cbs->dc_log_status_args	= (void *)(unsigned long)coh.cookie;
+	cbs->dc_is_same_tx_cb = vos_ilog_is_same_tx;
+	cbs->dc_is_same_tx_args = NULL;
+	cbs->dc_log_add_cb = vos_ilog_add;
+	cbs->dc_log_add_args = NULL;
+	cbs->dc_log_del_cb = vos_ilog_del;
+	cbs->dc_log_del_args = NULL;
+}
 
 int
 vos_ilog_init(void)
@@ -1180,8 +1196,6 @@ vos_ilog_init(void)
 		D_ERROR("Failed to initialize incarnation log globals\n");
 		return rc;
 	}
-
-	ilog_set_callbacks(&ilog_cbs);
 
 	return 0;
 }

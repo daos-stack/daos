@@ -36,6 +36,7 @@
 #include "vos_internal.h"
 
 struct open_query {
+	struct vos_object	*qt_obj;
 	daos_epoch_range_t	 qt_epr;
 	struct ilog_entries	 qt_entries;
 	struct btr_root		*qt_dkey_root;
@@ -57,7 +58,7 @@ check_key(struct open_query *query, struct vos_krec_df *krec, bool *visible)
 
 	*visible = false;
 
-	rc = key_ilog_fetch(vos_pool2umm(query->qt_pool), DAOS_INTENT_DEFAULT,
+	rc = key_ilog_fetch(query->qt_obj, DAOS_INTENT_DEFAULT,
 			    &epr, krec, &query->qt_entries);
 	if (rc != 0)
 		return rc;
@@ -368,6 +369,7 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 	}
 
 	ilog_fetch_init(&query.qt_entries);
+	query.qt_obj = obj;
 	query.qt_dkey_toh   = DAOS_HDL_INVAL;
 	query.qt_akey_toh   = DAOS_HDL_INVAL;
 	query.qt_epr.epr_lo = 0;

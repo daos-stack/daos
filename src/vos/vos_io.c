@@ -487,14 +487,17 @@ ioc_trim_tail_holes(struct vos_io_context *ioc)
 }
 
 int
-key_ilog_fetch(struct umem_instance *umm, uint32_t intent,
+key_ilog_fetch(struct vos_object *obj, uint32_t intent,
 	       const daos_epoch_range_t *epr, struct vos_krec_df *krec,
 	       struct ilog_entries *entries)
 {
 	daos_handle_t		 loh;
+	struct ilog_desc_cbs	 cbs;
+	struct umem_instance	*umm = vos_obj2umm(obj);
 	int			 rc;
 
-	rc = ilog_open(umm, &krec->kr_ilog, &loh);
+	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(obj->obj_cont));
+	rc = ilog_open(umm, &krec->kr_ilog, &cbs, &loh);
 
 	if (rc != 0) {
 		D_ERROR("Could not open ilog: "DF_RC"\n", DP_RC(rc));
@@ -609,7 +612,7 @@ akey_fetch(struct vos_io_context *ioc, const daos_epoch_range_t *epr,
 			      DAOS_INTENT_DEFAULT, &krec, &toh);
 
 	if (rc == 0)
-		rc = key_ilog_fetch(vos_ioc2umm(ioc), DAOS_INTENT_DEFAULT, epr,
+		rc = key_ilog_fetch(ioc->ic_obj, DAOS_INTENT_DEFAULT, epr,
 				    krec, &entries);
 
 	if (rc != 0) {
@@ -737,7 +740,7 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 			      &toh);
 
 	if (rc == 0)
-		rc = key_ilog_fetch(vos_ioc2umm(ioc), DAOS_INTENT_DEFAULT, &epr,
+		rc = key_ilog_fetch(ioc->ic_obj, DAOS_INTENT_DEFAULT, &epr,
 				    ioc->ic_dkey_krec, &ioc->ic_dkey_entries);
 
 	if (rc == -DER_NONEXIST) {
@@ -971,6 +974,7 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver,
 	bool			 is_array = (iod->iod_type == DAOS_IOD_ARRAY);
 	int			 flags = SUBTR_CREATE;
 	daos_epoch_t		 epoch = 0;
+	struct ilog_desc_cbs	 cbs;
 	daos_epoch_range_t	 akey_epr = {ioc->ic_epoch, ioc->ic_epoch};
 	daos_handle_t		 toh = DAOS_HDL_INVAL;
 	int			 i;
@@ -989,7 +993,8 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver,
 	if (rc != 0)
 		return rc;
 
-	rc = ilog_open(vos_ioc2umm(ioc), &krec->kr_ilog, &loh);
+	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(ioc->ic_obj->obj_cont));
+	rc = ilog_open(vos_ioc2umm(ioc), &krec->kr_ilog, &cbs, &loh);
 	if (rc != 0)
 		return rc;
 
@@ -1051,6 +1056,7 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey)
 	struct vos_obj_df	*obj_df;
 	daos_epoch_range_t	 dkey_epr = {ioc->ic_epoch, ioc->ic_epoch};
 	daos_handle_t		 ak_toh;
+	struct ilog_desc_cbs	 cbs;
 	bool			 subtr_created = false;
 	int			 i, rc;
 
@@ -1067,7 +1073,8 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey)
 	}
 	subtr_created = true;
 
-	rc = ilog_open(vos_ioc2umm(ioc), &ioc->ic_dkey_krec->kr_ilog,
+	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(ioc->ic_obj->obj_cont));
+	rc = ilog_open(vos_ioc2umm(ioc), &ioc->ic_dkey_krec->kr_ilog, &cbs,
 		       &ioc->ic_dkey_loh);
 	if (rc != 0) {
 		D_ERROR("Error opening dkey ilog: rc="DF_RC"\n", DP_RC(rc));

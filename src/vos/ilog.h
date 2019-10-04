@@ -46,8 +46,6 @@ struct  ilog_df {
 struct umem_instance;
 
 enum ilog_status {
-	/** Log entry has been logically removed */
-	ILOG_REMOVED,
 	/** Log entry is visible to caller */
 	ILOG_VISIBLE,
 	/** Log entry is not yet visible */
@@ -55,31 +53,29 @@ enum ilog_status {
 };
 
 /** Near term hack to hook things up with existing DTX */
-struct ilog_callbacks {
+struct ilog_desc_cbs {
 	/** Retrieve the status of a log entry */
-	enum ilog_status (*dc_status_get)(struct umem_instance *umm,
-					  umem_off_t tx_id, uint32_t intent);
+	enum ilog_status (*dc_log_status_cb)(struct umem_instance *umm,
+					     umem_off_t tx_id, uint32_t intent,
+					     void *args);
+	void	*dc_log_status_args;
 	/** Check if the log entry was created by current transaction */
-	int (*dc_is_same_tx)(struct umem_instance *umm, umem_off_t tx_id,
-			     bool *same);
+	int (*dc_is_same_tx_cb)(struct umem_instance *umm, umem_off_t tx_id,
+				bool *same, void *args);
+	void	*dc_is_same_tx_args;
 	/** Register the log entry with the transaction log */
-	int (*dc_register)(struct umem_instance *umm, umem_off_t ilog_off,
-			   umem_off_t *tx_id);
+	int (*dc_log_add_cb)(struct umem_instance *umm, umem_off_t ilog_off,
+			     umem_off_t *tx_id, void *args);
+	void	*dc_log_add_args;
 	/** Remove the log entry from the transaction log */
-	int (*dc_deregister)(struct umem_instance *umm, umem_off_t ilog_off,
-			     umem_off_t tx_id);
+	int (*dc_log_del_cb)(struct umem_instance *umm, umem_off_t ilog_off,
+			     umem_off_t tx_id, void *args);
+	void	*dc_log_del_args;
 };
 
 /** Globally initialize incarnation log */
 int
 ilog_init(void);
-
-/** Register a set of custom callbacks for txn state
- *
- * \param	cbs[IN]		Global incarnation log callbacks
- */
-void
-ilog_set_callbacks(const struct ilog_callbacks *cbs);
 
 /** Create a new incarnation log in place
  *
@@ -96,13 +92,14 @@ ilog_create(struct umem_instance *umm, struct ilog_df *root);
  *
  *  \param	umm[IN]		The umem instance
  *  \param	root[IN]	A pointer to the allocated root
+ *  \param	cbs[in]		Incarnation log transaction log callbacks
  *  \param	loh[OUT]	Returned open log handle
  *
  *  \return 0 on success, error code on failure
  */
 int
 ilog_open(struct umem_instance *umm, struct ilog_df *root,
-	      daos_handle_t *loh);
+	  const struct ilog_desc_cbs *cbs, daos_handle_t *loh);
 
 /** Close an open incarnation log handle
  *
@@ -116,12 +113,14 @@ ilog_close(daos_handle_t loh);
 /** Destroy an incarnation log
  *
  *  \param	umm[in]		The umem instance
+ *  \param	cbs[in]		Incarnation log transaction log callbacks
  *  \param	root[IN]	A pointer to an initialized incarnation log
  *
  *  \return 0 on success, error code on failure
  */
 int
-ilog_destroy(struct umem_instance *umm, struct ilog_df *root);
+ilog_destroy(struct umem_instance *umm, struct ilog_desc_cbs *cbs,
+	     struct ilog_df *root);
 
 /** Logs or updates an entry in the incaration log identified by the epoch
  *  and the currently executing transaction.  If a visible creation entry
