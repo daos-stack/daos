@@ -73,8 +73,8 @@ func (cmd *networkScanCmd) Execute(args []string) error {
 	// for test //
 	searchprovider := "ofi+sockets"
 
-	dss, err_dss := cmd.conns.RequestDeviceScanStreamer(&pb.DeviceScanRequest{Provider: searchprovider})
-	if err_dss != nil {
+	dss, err := cmd.conns.RequestDeviceScanStreamer(&pb.DeviceScanRequest{Provider: searchprovider})
+	if err != nil {
 		//log.Fatalf("error received from RequestDeviceScanStreamer")
 		return nil
 	}
