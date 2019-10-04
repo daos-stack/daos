@@ -1340,7 +1340,7 @@ evt_root_empty(struct evt_context *tcx)
 static int
 evt_root_tx_add(struct evt_context *tcx)
 {
-	void	*root;
+	struct evt_root	*root;
 
 	if (!evt_has_tx(tcx))
 		return 0;
