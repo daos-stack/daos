@@ -297,7 +297,7 @@ class ServerManager(ExecutableCommand):
     """Defines object to manage server functions and launch server command."""
     # pylint: disable=pylint-no-self-use
 
-    def __init__(self, daosbinpath, runnerpath, attach="/tmp", timeout=180):
+    def __init__(self, daosbinpath, runnerpath, attach="/tmp", timeout=300):
         """Create a ServerManager object.
 
         Args:
@@ -305,7 +305,7 @@ class ServerManager(ExecutableCommand):
             runnerpath (str): Path to Orterun binary.
             attach (str, optional): Defaults to "/tmp".
             timeout (int, optional): Time for the server to start.
-                Defaults to 30.
+                Defaults to 300.
         """
         super(ServerManager, self).__init__("/run/server_manager/*", "", "")
 
