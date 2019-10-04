@@ -18,10 +18,13 @@ else
 	TARGET_USER="$_TARGET_USER" "$scriptpath"
 
 	if [[ "$_TARGET_USER" != "root" ]]; then
-		chmod 777 /dev/hugepages
-		chmod 666 /dev/uio*
-		chmod 666 /sys/class/uio/uio*/device/config
-		chmod 666 /sys/class/uio/uio*/device/resource*
+		set -e
+
+		chown -R $_TARGET_USER /dev/hugepages /dev/uio* \
+			/sys/class/uio/uio*/device/config \
+			/sys/class/uio/uio*/device/resource*
+
+		set e
 	fi
 fi
 
