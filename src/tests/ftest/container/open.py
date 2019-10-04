@@ -26,6 +26,7 @@ from __future__ import print_function
 import time
 import traceback
 import uuid
+import os
 
 from avocado import main
 from apricot import TestWithServers
@@ -47,85 +48,73 @@ class OpenContainerTest(TestWithServers):
 
         :avocado: tags=all,container,tiny,full_regression,containeropen
         """
-        self.pool = []
-        self.container = []
+        self.result_pass = "PASS"
+        self.result_fail = "FAIL"
+        self.pool = None
+        self.container = None
 
         # common parameters used in pool create
         mode = self.params.get("mode", '/run/createtests/createmode/')
         name = self.params.get("setname", '/run/createtests/createset/')
         size = self.params.get("size", '/run/createtests/createsize/')
-
-        # pool UIDs & GIDs
-        uid = [
-            self.params.get("uid", "/run/createtests/createuid1/"),
-            self.params.get("uid", "/run/createtests/createuid2/"),
-        ]
-        gid = [
-            self.params.get("gid", "/run/createtests/creategid1/"),
-            self.params.get("gid", "/run/createtests/creategid2/"),
-        ]
-
-        container_uuid = None
-        expected_for_param = []
         uuidlist = self.params.get("uuid", '/run/createtests/uuids/*/')
-        container_uuid = uuidlist[0]
-        expected_for_param.append(uuidlist[1])
-
         pohlist = self.params.get("poh", '/run/createtests/handles/*/')
-        poh = pohlist[0]
-        expected_for_param.append(pohlist[1])
 
-        expected_result = 'PASS'
+        # Find out the overall expected test result
+        expected_for_param = []
+        expected_for_param.append(uuidlist[1])
+        expected_for_param.append(pohlist[1])
+        expected_result = self.result_pass
         for result in expected_for_param:
-            if result == 'FAIL':
-                expected_result = 'FAIL'
+            if result == self.result_fail:
+                expected_result = self.result_fail
                 break
 
+        pool_uuid = uuidlist[0]
+        pool_gid = uuidlist[0]
+        if uuidlist[1] == self.result_pass:
+            # Use system UID if we're testing with good UID
+            pool_uuid = os.geteuid()
+            pool_gid = os.getegid()
+
         try:
-            # Create and connect to two pools
-            for index in range(2):
-                self.pool.append(DaosPool(self.context))
-                self.pool[index].create(
-                    mode, uid[index], gid[index], size, name, None)
-                self.pool[index].connect(1 << 1)
+            # Create and connect to the pool
+            self.pool = DaosPool(self.context)
+            self.pool.create(mode, pool_uuid, pool_gid, size, name, None)
+            self.pool.connect(1 << 1)
 
-            # defines pool handle for container open
-            if pohlist[0] == 'pool1':
-                poh = self.pool[0].handle
+            # Define pool handle for container open
+            if pohlist[1] == self.result_pass:
+                poh = self.pool.handle
             else:
-                poh = self.pool[1].handle
+                poh = pohlist[0]
 
-            # Create a container in the first pool
-            self.container.append(DaosContainer(self.context))
-            self.container[0].create(self.pool[0].handle)
+            # Create a container with the pool
+            self.container = DaosContainer(self.context)
+            self.container.create(poh)
 
-            # defines test UUID for container open
-            if uuidlist[0] == 'pool1':
-                struuid = self.container[0].get_uuid_str()
-                container_uuid = uuid.UUID(struuid)
-            else:
-                container_uuid = uuid.uuid4()   # random uuid
+            # Define test UUID for container open
+            struuid = self.container.get_uuid_str()
+            container_uuid = uuid.UUID(struuid)
 
-            # Try to open the first container
-            # open should be ok only if poh = pool1.handle &&
-            #                           containerUUID = container1.uuid
-            self.container[0].open(poh, container_uuid)
+            # Try to open the container
+            self.container.open(poh, container_uuid)
 
-            # wait a few seconds and then destroy containers
+            # wait a few seconds and then destroy the container
             time.sleep(5)
             self.destroy_containers(self.container)
 
-            # cleanup the pools
+            # cleanup the pool
             self.destroy_pools(self.pool)
 
-            if expected_result in ['FAIL']:
-                self.fail("Test was expected to fail but it passed.\n")
+            if expected_result == self.result_fail:
+                self.fail("DAOS API error was expected, but never thrown.\n")
 
         except DaosApiError as excep:
             print(excep)
             print(traceback.format_exc())
-            if expected_result == 'PASS':
-                self.fail("Test was expected to pass but it failed.\n")
+            if expected_result == self.result_pass:
+                self.fail("Test was expected to pass but DAOS API error was thrown.\n")
 
 
 if __name__ == "__main__":

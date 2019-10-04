@@ -9,14 +9,6 @@ server_config:
 createtests:
   createmode:
     mode: 511
-  createuid1:
-    uid: 11374638
-  creategid1:
-    gid: 11374638
-  createuid2:
-     uid: 11374639
-  creategid2:
-     gid: 11374639
   createset:
     setname: daos_server
   createsize:
@@ -24,22 +16,18 @@ createtests:
   uuids: !mux
     gooduuid:
       uuid:
-        - POOL1
+        - -1
         - PASS
     baduuid:
       uuid:
-        - POOL2
-        - FAIL
-    nulluuid:
-      uuid:
-        - NULL
+        - -1
         - FAIL
   handles: !mux
     goodpoh:
       poh:
-        - POOL1
+        - -1
         - PASS
     badpoh:
       poh:
-        - POOL2
+        - -1
         - FAIL
