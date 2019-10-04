@@ -10,7 +10,7 @@ hosts:
             - boro-F
             - boro-G
             - boro-H
-timeout: 1200
+timeout: 3000
 server_config:
     name: daos_server
     server:
