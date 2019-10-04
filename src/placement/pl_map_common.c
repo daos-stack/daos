@@ -102,7 +102,7 @@ remap_list_free_all(d_list_t *remap_list)
 	struct failed_shard *f_shard;
 
 	while ((f_shard = d_list_pop_entry(remap_list, struct failed_shard,
-			fs_list)) != NULL)
+			fs_list)))
 		D_FREE(f_shard);
 }
 
