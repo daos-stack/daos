@@ -297,7 +297,7 @@ class ServerManager(ExecutableCommand):
     """Defines object to manage server functions and launch server command."""
     # pylint: disable=pylint-no-self-use
 
-    def __init__(self, daosbinpath, runnerpath, attach="/tmp", timeout=180):
+    def __init__(self, daosbinpath, runnerpath, attach="/tmp", timeout=2500):
         """Create a ServerManager object.
 
         Args:
@@ -317,7 +317,7 @@ class ServerManager(ExecutableCommand):
             DaosServer(self.daosbinpath), runnerpath, True)
 
         # Setup server command defaults
-        self.runner.job.timeout = timeout
+        self.runner.timeout = timeout
         self.runner.job.action.value = "start"
         self.runner.job.get_action_command()
 
