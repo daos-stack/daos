@@ -49,7 +49,7 @@ print_usage(int rank)
 	print_message("daos_test -i|--daos_io_tests\n");
 	print_message("daos_test -x|--epoch_io\n");
 	print_message("daos_test -A|--array\n");
-	print_message("daos_test -B|--bigio\n");	
+	print_message("daos_test -B|--bigio\n");
 	print_message("daos_test -D|--daos_array\n");
 	print_message("daos_test -K|--daos_kv\n");
 	print_message("daos_test -d|--degraded\n");
@@ -135,7 +135,7 @@ run_specified_tests(const char *tests, int rank, int size,
 			daos_test_print(rank, "DAOS Bigio test..");
 			daos_test_print(rank, "=================");
 			nr_failed += run_daos_bigio_test(rank, size);
-			break;			
+			break;
 		case 'D':
 			daos_test_print(rank, "\n\n=================");
 			daos_test_print(rank, "DAOS 1-D Array test..");
@@ -240,7 +240,7 @@ main(int argc, char **argv)
 		{"epoch_io",	no_argument,		NULL,	'x'},
 		{"obj_array",	no_argument,		NULL,	'A'},
 		{"array",	no_argument,		NULL,	'D'},
-		{"bigio",	no_argument,		NULL,	'B'},	
+		{"bigio",	no_argument,		NULL,	'B'},
 		{"daos_kv",	no_argument,		NULL,	'K'},
 		{"epoch",	no_argument,		NULL,	'e'},
 		{"erecov",	no_argument,		NULL,	'o'},

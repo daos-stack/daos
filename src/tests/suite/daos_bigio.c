@@ -87,7 +87,7 @@ bcast:
 		buf[i] = i+1;
 
 	/** open object */
-	oid = dts_oid_gen(OC_LARGE, 0, arg->myrank);
+	oid = dts_oid_gen(OC_S1, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
@@ -238,7 +238,7 @@ bcast:
 	}
 
 	/** open object */
-	oid = dts_oid_gen(OC_LARGE, 0, arg->myrank);
+	oid = dts_oid_gen(OC_S1, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
@@ -262,8 +262,8 @@ bcast:
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update record */
-	print_message("writing %d records of %lu bytes each at "
-		      "non contig offsets\n", arg->nr, iod.iod_size);
+	print_message("writing %d records %lu bytes each non contig offsets\n",
+		arg->nr, iod.iod_size);
 	rc = daos_obj_update(oh, DAOS_TX_NONE, &dkey, 1, &iod, &sgl, NULL);
 	print_message("daos_obj_update() returns %d\n", rc);
 	assert_int_equal(rc, 0);
@@ -374,7 +374,7 @@ bcast:
 	dts_buf_render(buf, arg->nr * 2 * arg->size);
 
 	/** open object */
-	oid = dts_oid_gen(OC_LARGE, 0, arg->myrank);
+	oid = dts_oid_gen(OC_S1, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
@@ -487,7 +487,8 @@ static const struct CMUnitTest bigio_tests[] = {
 int
 bigio_setup(void **state)
 {
-	return test_setup(state, SETUP_CONT_CONNECT, false, DEFAULT_POOL_SIZE, NULL);
+	return test_setup(state, SETUP_CONT_CONNECT, false,
+		DEFAULT_POOL_SIZE, NULL);
 }
 
 int
