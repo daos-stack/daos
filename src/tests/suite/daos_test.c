@@ -30,8 +30,8 @@
 #include "daos_test.h"
 
 /** All tests in default order (tests that kill nodes must be last) */
-static const char *all_tests = "mpceXViADKCoROdr";
-static const char *all_tests_defined = "mpceXVixADKCoROdr";
+static const char *all_tests = "mpceXViABDKCoROdr";
+static const char *all_tests_defined = "mpceXVixABDKCoROdr";
 
 static void
 print_usage(int rank)
@@ -49,6 +49,7 @@ print_usage(int rank)
 	print_message("daos_test -i|--daos_io_tests\n");
 	print_message("daos_test -x|--epoch_io\n");
 	print_message("daos_test -A|--array\n");
+	print_message("daos_test -B|--bigio\n");	
 	print_message("daos_test -D|--daos_array\n");
 	print_message("daos_test -K|--daos_kv\n");
 	print_message("daos_test -d|--degraded\n");
@@ -129,6 +130,12 @@ run_specified_tests(const char *tests, int rank, int size,
 			daos_test_print(rank, "=================");
 			nr_failed += run_daos_obj_array_test(rank, size);
 			break;
+		case 'B':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS Bigio test..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_bigio_test(rank, size);
+			break;			
 		case 'D':
 			daos_test_print(rank, "\n\n=================");
 			daos_test_print(rank, "DAOS 1-D Array test..");
@@ -233,6 +240,7 @@ main(int argc, char **argv)
 		{"epoch_io",	no_argument,		NULL,	'x'},
 		{"obj_array",	no_argument,		NULL,	'A'},
 		{"array",	no_argument,		NULL,	'D'},
+		{"bigio",	no_argument,		NULL,	'B'},	
 		{"daos_kv",	no_argument,		NULL,	'K'},
 		{"epoch",	no_argument,		NULL,	'e'},
 		{"erecov",	no_argument,		NULL,	'o'},
@@ -259,7 +267,7 @@ main(int argc, char **argv)
 	memset(tests, 0, sizeof(tests));
 
 	while ((opt = getopt_long(argc, argv,
-				  "ampcCdXVixADKeoROg:s:u:E:f:w:W:hr",
+				  "ampcCdXVixABDKeoROg:s:u:E:f:w:W:hr",
 				  long_options, &index)) != -1) {
 		if (strchr(all_tests_defined, opt) != NULL) {
 			tests[ntests] = opt;
