@@ -43,8 +43,8 @@ class DmgCommand(DaosCommand):
         self.debug = FormattedParameter("-d", False)
         self.json = FormattedParameter("-j", False)
 
-    def set_action_command(self):
-        """Set the action command object based on the yaml provided value."""
+    def get_action_command(self):
+        """Get the action command object based on the yaml provided value."""
         # pylint: disable=redefined-variable-type
         if self.action.value == "format":
             self.action_command = self.DmgFormatSubCommand()
@@ -52,11 +52,6 @@ class DmgCommand(DaosCommand):
             self.action_command = self.DmgPrepareSubCommand()
         else:
             self.action_command = None
-
-    def get_action_command(self, test):
-        """Get action command object parameters from the yaml."""
-        self.set_action_command()
-        super(DmgCommand, self).get_action_command(test)
 
     class DmgFormatSubCommand(CommandWithParameters):
         """Defines an object representing a format sub dmg command."""
@@ -130,7 +125,7 @@ def storage_format(path, hosts, insecure=True):
     dmg.hostlist.value = hosts
     dmg.request.value = "storage"
     dmg.action.value = "format"
-    dmg.set_action_command()
+    dmg.get_action_command()
     dmg.action_command.force.value = True
 
     try:
@@ -166,7 +161,7 @@ def storage_prep(path, hosts, user=None, hugepages="4096", nvme=False,
     dmg.hostlist.value = hosts
     dmg.request.value = "storage"
     dmg.action.value = "prepare"
-    dmg.set_action_command()
+    dmg.get_action_command()
     dmg.action_command.nvmeonly.value = nvme
     dmg.action_command.scmonly.value = scm
     dmg.action_command.targetuser.value = getpass.getuser() \
@@ -207,7 +202,7 @@ def storage_reset(path, hosts, nvme=False, scm=False, user=None,
     dmg.hostlist.value = hosts
     dmg.request.value = "storage"
     dmg.action.value = "prepare"
-    dmg.set_action_command()
+    dmg.get_action_command()
     dmg.action_command.nvmeonly.value = nvme
     dmg.action_command.scmonly.value = scm
     dmg.action_command.targetuser.value = getpass.getuser() \

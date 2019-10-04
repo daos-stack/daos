@@ -287,7 +287,7 @@ class ExecutableCommand(CommandWithParameters):
         except process.CmdError as error:
             # Command failed or possibly timed out
             msg = "Error occurred running '{}': {}".format(command, error)
-            self.log.info(msg)
+            self.log.error(msg)
             raise CommandFailure(msg)
 
     def _run_subprocess(self):
@@ -314,7 +314,7 @@ class ExecutableCommand(CommandWithParameters):
             # check_subprocess_status() method.
             if not self.check_subprocess_status(self._process):
                 msg = "Command '{}' did not launch correctly".format(self)
-                self.log.info(msg)
+                self.log.error(msg)
                 raise CommandFailure(msg)
         else:
             self.log.info("Process is already running")
@@ -385,10 +385,9 @@ class DaosCommand(ExecutableCommand):
         self.action = BasicParameter(None)
         self.action_command = None
 
-    def get_action_command(self, test):
-        """Get the action command params from yaml. Used to be overriden."""
-        if self.action_command is not None:
-            self.action_command.get_params(test)
+    def get_action_command(self):
+        """Assign a command object for the specified request and action."""
+        self.action_command = None
 
     def get_param_names(self):
         """Get a sorted list of DaosCommand parameter names."""
@@ -403,7 +402,9 @@ class DaosCommand(ExecutableCommand):
             test (Test): avocado Test object
         """
         super(DaosCommand, self).get_params(test)
-        self.get_action_command(test)
+        self.get_action_command()
+        if isinstance(self.action_command, ObjectWithParameters):
+            self.action_command.get_params(test)
 
     def get_str_param_names(self):
         """Get a sorted list of the names of the command attributes.

@@ -29,6 +29,7 @@ import os
 import re
 import time
 import yaml
+import getpass
 
 # Remove below imports when depricating run_server and stop_server functions.
 import subprocess
@@ -83,18 +84,13 @@ class DaosServer(DaosCommand):
         super(DaosServer, self).get_params(test)
         self.yaml_params.get_params(test)
 
-    def set_action_command(self):
+    def get_action_command(self):
         """Set the action command object based on the yaml provided value."""
         # pylint: disable=redefined-variable-type
         if self.action.value == "start":
             self.action_command = self.ServerStartSubCommand()
         else:
             self.action_command = None
-
-    def get_action_command(self, test):
-        """Get action command object parameters from the yaml."""
-        self.set_action_command()
-        super(DaosServer, self).get_action_command(test)
 
     def set_config(self, yamlfile):
         """Set the config value of the parameters in server command."""
@@ -111,7 +107,8 @@ class DaosServer(DaosCommand):
         """
         patterns = {
             "format": "SCM format required",
-            "postformat": "I/O server instance.*storage ready",
+            "postformat": "Starting I/O server instance",
+            "chowner": "formatting complete and file ownership changed",
             "normal": "DAOS I/O server.*started",
         }
         start_time = time.time()
@@ -250,11 +247,13 @@ class DaosServer(DaosCommand):
             srv_cfg = self.data['servers'][0]
             if 'bdev_class' in srv_cfg and srv_cfg['bdev_class'] == "nvme":
                 self.nvme = True
+                self.data['user_name'] = getpass.getuser()
             if 'scm_class' in srv_cfg and srv_cfg['scm_class'] == "dcpm":
                 self.scm = True
+                self.data['user_name'] = getpass.getuser()
 
             # if specific log file name specified use that
-            if test.server_log:
+            if hasattr(test, "server_log") and test.server_log is not None:
                 self.data['servers'][0]['log_file'] = test.server_log
 
         def is_nvme(self):
@@ -281,6 +280,7 @@ class DaosServer(DaosCommand):
             """
             # Write self.data dictionary in to AVOCADO_FILE
             # This will be used to start with daos_server -o option.
+            self.log.info("Creating the server yaml file: %s", yamlfile)
             try:
                 with open(yamlfile, 'w') as wfile:
                     yaml.dump(self.data, wfile, default_flow_style=False)
@@ -297,7 +297,7 @@ class ServerManager(ExecutableCommand):
     """Defines object to manage server functions and launch server command."""
     # pylint: disable=pylint-no-self-use
 
-    def __init__(self, daosbinpath, runnerpath, attach="/tmp", timeout=30):
+    def __init__(self, daosbinpath, runnerpath, attach="/tmp", timeout=180):
         """Create a ServerManager object.
 
         Args:
@@ -319,7 +319,7 @@ class ServerManager(ExecutableCommand):
         # Setup server command defaults
         self.runner.job.timeout = timeout
         self.runner.job.action.value = "start"
-        self.runner.job.set_action_command()
+        self.runner.job.get_action_command()
 
         # Parameters that user can specify in the test yaml to modify behavior.
         self.debug = BasicParameter(None, True)       # ServerCommand param
@@ -376,6 +376,7 @@ class ServerManager(ExecutableCommand):
 
     def run(self):
         """Execute the runner subprocess."""
+        self.log.info("Start CMD>>> %s", str(self.runner))
         return self.runner.run()
 
     def start(self, yamlfile):
@@ -392,7 +393,7 @@ class ServerManager(ExecutableCommand):
         try:
             self.run()
         except CommandFailure as details:
-            self.log.info("<SERVER> Exception occurred: %s", details)
+            self.log.info("<SERVER> Exception occurred: %s", str(details))
             # Kill the subprocess, anything that might have started
             self.kill()
             raise ServerFailed(
@@ -406,13 +407,34 @@ class ServerManager(ExecutableCommand):
                 "{}:{}".format(host, self.runner.job.yaml_params.port)
                 for host in self._hosts]
 
+            # Format storage and wait for server to be ready
             self.log.info("Formatting hosts: <%s>", self._hosts)
             storage_format(self.daosbinpath, ",".join(servers_with_ports))
-            self.runner.job.mode = "postformat"
+            self.runner.job.mode = "chowner"
             try:
                 self.runner.job.check_subprocess_status(self.runner.process)
             except CommandFailure as error:
-                self.log.info("Failed to start after format: %s", error)
+                self.log.info("Failed to start after format: %s", str(error))
+
+            self.log.info("Stopping servers started as sudo")
+            try:
+                self.runner.stop()
+            except CommandFailure as error:
+                raise ServerFailed("Failed to stop servers:{}".format(error))
+
+            # Restart server as non root user and check if started
+            self.log.info("Starting server as non-root user: <%s>", self._hosts)
+            self.runner.job.sudo = False
+            self.runner.job.mode = "postformat"
+            try:
+                self.run()
+            except CommandFailure as details:
+                self.log.info("<SERVER> Exception occurred: %s", str(details))
+                # Kill the subprocess, anything that might have started
+                self.kill()
+                raise ServerFailed(
+                    "Failed to start server in {} mode.".format(
+                        self.runner.job.mode))
 
         return True
 
@@ -452,7 +474,6 @@ class ServerManager(ExecutableCommand):
             "sleep 5",
             "pkill '(daos_server|daos_io_server)' --signal KILL",
         ]
-        # Intentionally ignoring the exit status of the command
         self.log.info("Killing any server processes")
         pcmd(self._hosts, "; ".join(kill_cmds), False, None, None)
 
@@ -464,9 +485,8 @@ class ServerManager(ExecutableCommand):
 
         if self.runner.job.yaml_params.is_nvme() or \
            self.runner.job.yaml_params.is_scm():
-            clean_cmds.append("sudo umount /mnt/daos; sudo rm -rf /mnt/daos")
+            clean_cmds.append("sudo rm -rf /mnt/daos; sudo umount /mnt/daos")
 
-        # Intentionally ignoring the exit status of the command
         self.log.info("Cleanup of /mnt/daos directory.")
         pcmd(self._hosts, "; ".join(clean_cmds), False)
 
