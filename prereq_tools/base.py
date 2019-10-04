@@ -1149,7 +1149,6 @@ class PreReqComponent():
             except Exception as error:
                 # Save the exception in case the component is requested again
                 self.__errors[comp] = error
-                print(traceback.format_exc())
                 raise error
 
         return changes

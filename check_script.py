@@ -229,6 +229,7 @@ def check_script(fname, *args, **kw):
     else:
         pylint_path = "{path}"
 
+    #Python 2 checking is no longer supported
     pycmd = find_pylint(3)
     rc_file = "tmp_pylint3.rc"
     if pycmd is None:
@@ -276,7 +277,7 @@ def main():
     parser.add_argument("-s", dest='self_check', action='store_true',
                         help='Perform a self check')
     parser.add_argument("-p3", dest='P3', action='store_true',
-                        help='Perform check using python3.4')
+                        help='Perform check using python3 (default)')
 
     args = parser.parse_args()
 
