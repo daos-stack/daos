@@ -543,7 +543,8 @@ daos_csum_check_sgl(daos_iod_t *iod, d_sg_list_t *sgl)
 				    (enum DAOS_CSUM_TYPE) csum->cs_type,
 				    csum->cs_chunksize);
 	if (rc != 0) {
-		D_ERROR("Issue initializing csummer. Unable to check data.");
+		D_ERROR("Issue initializing csummer. Unable to check data. "
+			"Error: %d", rc);
 		return -DER_MISC;
 	}
 
