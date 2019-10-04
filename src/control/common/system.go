@@ -68,15 +68,12 @@ type Membership struct {
 
 // Add adds member to membership.
 func (m *Membership) Add(member SystemMember) error {
-	m.RLock()
-	value, found := m.members[member.Uuid]
-	m.RUnlock()
-	if found {
-		return errors.Errorf("member %s already exists", value)
-	}
-
 	m.Lock()
 	defer m.Unlock()
+
+	if value, found := m.members[member.Uuid]; found {
+		return errors.Errorf("member %s already exists", value)
+	}
 
 	m.members[member.Uuid] = member
 
@@ -87,13 +84,6 @@ func (m *Membership) Add(member SystemMember) error {
 //
 // Avoid taking a RW lock where possible.
 func (m *Membership) Remove(uuid string) {
-	m.RLock()
-	_, found := m.members[uuid]
-	m.RUnlock()
-	if !found {
-		return
-	}
-
 	m.Lock()
 	defer m.Unlock()
 
@@ -154,8 +144,8 @@ func MembersFromPB(log logging.Logger, pbMembers []*mgmtpb.SystemMember) SystemM
 
 		addr, err := net.ResolveTCPAddr("tcp", m.Addr)
 		if err != nil {
-			// leave addr as zero net.Addr value
-			log.Errorf("resolving tcp address %s: %s", m.Addr, err)
+			log.Errorf("cannot resolve member address %s: %s", m, err)
+			continue
 		}
 
 		members = append(members, &SystemMember{
