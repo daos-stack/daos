@@ -25,7 +25,6 @@ import os
 import random
 
 from apricot import TestWithServers
-from test_utils import TestPool, TestContainer
 from daos_api import DaosPool, DaosContainer, DaosSnapshot, DaosApiError
 from general_utils import get_random_string
 
@@ -130,48 +129,50 @@ class BasicSnapshot(TestWithServers):
                     new_data, size, dkey, akey, obj_cls=obj_cls)
                 new_obj.close()
                 more_transactions -= 1
-        except Exception as error:
+        except DaosApiError as error:
             self.fail(
                 "Test failed during the write of 500 objects.\n{0}".format(
                     error))
 
-        # List the snapshot and make sure it reflects the original epoch
+        # List the snapshot
         try:
             reported_epoch = self.snapshot.list(self.container.coh)
-            if self.snapshot.epoch != reported_epoch:
-                raise Exception(
-                    "The snapshot epoch returned from snapshot list is not "
-                    "the same as the original epoch snapshotted.")
-            self.log.info(
-                "After 500 additional commits the snapshot is still available")
-
-        except Exception as error:
+        except DaosApiError as error:
             self.fail(
                 "Test was unable to list the snapshot\n{0}".format(error))
 
+        # Make sure the snapshot reflects the original epoch
+        if self.snapshot.epoch != reported_epoch:
+            self.fail(
+                "The snapshot epoch returned from snapshot list is not the "
+                "same as the original epoch snapshotted.")
+
+        self.log.info(
+            "After 500 additional commits the snapshot is still available")
+
         # Make sure the data in the snapshot is the original data.
         # Get a handle for the snapshot and read the object at dkey, akey.
-        # Compare it to the originally written data.
         try:
             obj.open()
             snap_handle = self.snapshot.open(self.container.coh)
-            thedata2 = self.container.read_an_obj(datasize, dkey, akey, obj,
-                                                  snap_handle.value)
-            if thedata2.value != thedata:
-                raise Exception(
-                    "The data in the snapshot is not the same as the "
-                    "original data")
-            self.log.info(
-                "The snapshot data matches the data originally written.")
-
-        except Exception as error:
+            thedata2 = self.container.read_an_obj(
+                datasize, dkey, akey, obj, snap_handle.value)
+        except DaosApiError as error:
             self.fail(
                 "Error when retrieving the snapshot data.\n{0}".format(error))
+
+        # Compare the snapshot to the originally written data.
+        if thedata2.value != thedata:
+            self.fail(
+                "The data in the snapshot is not the same as the original data")
+
+        self.log.info(
+            "The snapshot data matches the data originally written.")
 
         # Now destroy the snapshot
         try:
             self.snapshot.destroy(self.container.coh)
             self.log.info("Snapshot successfully destroyed")
 
-        except Exception as error:
-            self.fail("{0}".format(error))
+        except DaosApiError as error:
+            self.fail(str(error))

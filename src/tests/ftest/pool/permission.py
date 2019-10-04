@@ -22,10 +22,9 @@
   portions thereof marked with this legend must also reproduce the markings.
 '''
 import os
-import json
 
 from apricot import TestWithServers
-from daos_api import DaosContext, DaosPool, DaosContainer, DaosLog, DaosApiError
+from daos_api import DaosPool, DaosContainer, DaosApiError
 
 
 class Permission(TestWithServers):
