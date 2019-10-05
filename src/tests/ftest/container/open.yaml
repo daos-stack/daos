@@ -13,21 +13,17 @@ createtests:
     setname: daos_server
   createsize:
     size: 1073741824
-  uuids: !mux
+  container_uuid_states: !mux
     gooduuid:
       uuid:
-        - -1
         - PASS
     baduuid:
       uuid:
-        - -1
         - FAIL
-  handles: !mux
+  handle_states: !mux
     goodpoh:
       poh:
-        - -1
         - PASS
     badpoh:
       poh:
-        - -1
         - FAIL

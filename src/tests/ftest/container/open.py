@@ -33,89 +33,138 @@ from apricot import TestWithServers
 
 from daos_api import DaosPool, DaosContainer, DaosApiError
 
+def create_pool_and_connect(pool_mode, pool_size, pool_name, pool_context):
+    """
+    Create a pool, call its create function, and return the created pool
+    """
+        new_pool = DaosPool(pool_context)
+        new_pool.create(pool_mode, os.geteuid(), os.getegid(), pool_size,
+            pool_name, None)
+        new_pool.connect(1 << 1)
+        return new_pool
 
 class OpenContainerTest(TestWithServers):
     """
-    Tests DAOS container bad create (non existing pool handle, bad uuid)
-    and close.
+    Tests container's open function. Create 2 pool-container pairs and test
+    the following.
+    1. Use valid pool handle and container UUID. Expected to pass
+    container1.open(pool1.handle, container1_uuid)
+    container2.open(pool2.handle, container2_uuid)
+    2. Use the other container's UUID. Expected to fail
+    container1.open(pool1.handle, container2_uuid)
+    container2.open(pool2.handle, container1_uuid)
+    3. Use the other pool's handle. Expected to fail
+    container1.open(pool2.handle, container1_uuid)
+    container2.open(pool1.handle, container2_uuid)
+    4. Use the other container's UUID and the other pool's handle.
+    Expected to fail
+    container1.open(pool2.handle, container2_uuid)
+    container2.open(pool1.handle, container1_uuid)
 
     :avocado: recursive
     """
 
     def test_container_open(self):
         """
-        Test basic container bad create.
+        Test container's open function as described above
 
         :avocado: tags=all,container,tiny,full_regression,containeropen
         """
-        self.result_pass = "PASS"
-        self.result_fail = "FAIL"
-        self.pool = None
-        self.container = None
+        result_pass = "PASS"
+        result_fail = "FAIL"
 
-        # common parameters used in pool create
+        # Get parameters from open.yaml
         mode = self.params.get("mode", '/run/createtests/createmode/')
         name = self.params.get("setname", '/run/createtests/createset/')
         size = self.params.get("size", '/run/createtests/createsize/')
-        uuidlist = self.params.get("uuid", '/run/createtests/uuids/*/')
-        pohlist = self.params.get("poh", '/run/createtests/handles/*/')
-
-        # Find out the overall expected test result
-        expected_for_param = []
-        expected_for_param.append(uuidlist[1])
-        expected_for_param.append(pohlist[1])
-        expected_result = self.result_pass
-        for result in expected_for_param:
-            if result == self.result_fail:
-                expected_result = self.result_fail
-                break
-
-        pool_uuid = uuidlist[0]
-        pool_gid = uuidlist[0]
-        if uuidlist[1] == self.result_pass:
-            # Use system UID if we're testing with good UID
-            pool_uuid = os.geteuid()
-            pool_gid = os.getegid()
+        uuid_states = self.params.get("uuid",
+            '/run/createtests/container_uuid_states/*/')
+        poh_states = self.params.get("poh", '/run/createtests/handle_states/*/')
 
         try:
-            # Create and connect to the pool
-            self.pool = DaosPool(self.context)
-            self.pool.create(mode, pool_uuid, pool_gid, size, name, None)
-            self.pool.connect(1 << 1)
-
-            # Define pool handle for container open
-            if pohlist[1] == self.result_pass:
-                poh = self.pool.handle
-            else:
-                poh = pohlist[0]
-
-            # Create a container with the pool
-            self.container = DaosContainer(self.context)
-            self.container.create(poh)
-
-            # Define test UUID for container open
-            struuid = self.container.get_uuid_str()
-            container_uuid = uuid.UUID(struuid)
-
-            # Try to open the container
-            self.container.open(poh, container_uuid)
-
-            # wait a few seconds and then destroy the container
-            time.sleep(5)
-            self.destroy_containers(self.container)
-
-            # cleanup the pool
-            self.destroy_pools(self.pool)
-
-            if expected_result == self.result_fail:
-                self.fail("DAOS API error was expected, but never thrown.\n")
-
+            # Prepare 2 pools and 2 containers. Also prepare the 2 container
+            # UUIDs
+            pool1 = create_pool_and_connect(mode, size, name, self.context)
+            pool2 = create_pool_and_connect(mode, size, name, self.context)
+            container1 = DaosContainer(self.context)
+            container1.create(pool1.handle)
+            str_uuid = container1.get_uuid_str()
+            container1_uuid = uuid.UUID(str_uuid)
+            container2 = DaosContainer(self.context)
+            container2.create(pool2.handle)
+            str_uuid = container2.get_uuid_str()
+            container2_uuid = uuid.UUID(str_uuid)
         except DaosApiError as excep:
             print(excep)
             print(traceback.format_exc())
-            if expected_result == self.result_pass:
-                self.fail("Test was expected to pass but DAOS API error was thrown.\n")
+            self.fail("Error while creating pool or container")
 
+        if uuid_states[0] == result_pass and poh_states[0] == result_pass:
+            # Test 1: Use valid pool handle and container UUID
+            try:
+                # Case 1
+                container1.open(pool1.handle, container1_uuid)
+                # Case 2
+                container2.open(pool2.handle, container2_uuid)
+            except DaosApiError as excep:
+                print(excep)
+                print(traceback.format_exc())
+                self.fail("Error while opening the container with valid " +
+                    "pool handle and container UUID")
+        elif uuid_states[0] == result_pass and poh_states[0] == result_fail:
+            # Test 2: Use the other container's UUID
+            try:
+                # Case 1
+                container1.open(pool1.handle, container2_uuid)
+                self.fail("No error occurred from using container 2's UUID " +
+                    "while opening container 1")
+            except DaosApiError as excep:
+                print(excep)
+                print(traceback.format_exc())
+            try:
+                # Case 2
+                container2.open(pool2.handle, container1_uuid)
+                self.fail("No error occurred from using container 1's UUID " +
+                    "while opening container 2")
+            except DaosApiError as excep:
+                print(excep)
+                print(traceback.format_exc())
+        elif uuid_states[0] == result_fail and poh_states[0] == result_pass:
+            # Test 3: Use the other pool's handle
+            try:
+                # Case 1
+                container1.open(pool2.handle, container1_uuid)
+                self.fail("No error occurred from using pool 2's handle " +
+                    "while opening container 1")
+            except DaosApiError as excep:
+                print(excep)
+                print(traceback.format_exc())
+            try:
+                # Case 2
+                container2.open(pool1.handle, container2_uuid)
+                self.fail("No error occurred from using pool1's handle " +
+                    "while opening container 2")
+            except DaosApiError as excep:
+                print(excep)
+                print(traceback.format_exc())
+        else:
+            # Test 4: Use the other container's UUID and the other pool's handle
+            try:
+                # Case 1
+                container1.open(pool2.handle, container2_uuid)
+                self.fail("No error occurred from using pool 2's handle " +
+                    "and container 2's UUID while opening container 1")
+            except DaosApiError as excep:
+                print(excep)
+                print(traceback.format_exc())
+            try:
+                # Case 2
+                container2.open(pool1.handle, container1_uuid)
+                self.fail("No error occurred from using pool1's handle " +
+                    "and container 1's UUID while opening container 2")
+            except DaosApiError as excep:
+                print(excep)
+                print(traceback.format_exc())
 
 if __name__ == "__main__":
     main()
