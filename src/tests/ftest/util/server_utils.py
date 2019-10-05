@@ -108,7 +108,7 @@ class DaosServer(DaosCommand):
         patterns = {
             "format": "SCM format required",
             "postformat": "Starting I/O server instance",
-            "chowner": "formatting complete and file ownership changed",
+            "chowner": "running as root, changing file ownership",
             "normal": "DAOS I/O server.*started",
         }
         start_time = time.time()
@@ -387,7 +387,7 @@ class ServerManager(ExecutableCommand):
         # Prepare nvme storage in servers
         if self.runner.job.yaml_params.is_nvme():
             self.log.info("Performing nvme storage prepare in <format> mode")
-            storage_prepare(self._hosts)
+            storage_prepare(self._hosts, "root")
             self.runner.job.sudo = True
 
         try:
@@ -407,7 +407,7 @@ class ServerManager(ExecutableCommand):
                 "{}:{}".format(host, self.runner.job.yaml_params.port)
                 for host in self._hosts]
 
-            # Format storage and wait for server to be ready
+            # Format storage and wait for server to change ownership
             self.log.info("Formatting hosts: <%s>", self._hosts)
             storage_format(self.daosbinpath, ",".join(servers_with_ports))
             self.runner.job.mode = "chowner"
@@ -416,14 +416,9 @@ class ServerManager(ExecutableCommand):
             except CommandFailure as error:
                 self.log.info("Failed to start after format: %s", str(error))
 
-            self.log.info("Stopping servers started as sudo")
-            try:
-                self.runner.stop()
-            except CommandFailure as error:
-                raise ServerFailed("Failed to stop servers:{}".format(error))
-
             # Restart server as non root user and check if started
             self.log.info("Starting server as non-root user: <%s>", self._hosts)
+            storage_prepare(self._hosts, getpass.getuser())
             self.runner.job.sudo = False
             self.runner.job.mode = "postformat"
             try:
@@ -491,7 +486,7 @@ class ServerManager(ExecutableCommand):
         pcmd(self._hosts, "; ".join(clean_cmds), False)
 
 
-def storage_prepare(hosts):
+def storage_prepare(hosts, user):
     """
     Prepare the storage on servers using the DAOS server's yaml settings file.
     Args:
@@ -500,8 +495,8 @@ def storage_prepare(hosts):
         ServerFailed: if server failed to prepare storage
     """
     daos_srv_bin = get_file_path("bin/daos_server")
-    cmd = ("sudo {} storage prepare -n -u \"root\" --hugepages=4096 -f"
-           .format(daos_srv_bin[0]))
+    cmd = ("sudo {} storage prepare -n -u \"{}\" --hugepages=4096 -f"
+           .format(daos_srv_bin[0], user))
     result = pcmd(hosts, cmd, timeout=120)
     if len(result) > 1 or 0 not in result:
         raise ServerFailed("Error preparing NVMe storage")
