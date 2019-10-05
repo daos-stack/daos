@@ -23,22 +23,30 @@
 
 package main
 
-// SvcCmd is the struct representing the top-level service subcommand.
-type SvcCmd struct {
-	KillRank KillRankSvcCmd `command:"kill-rank" alias:"kr" description:"Terminate server running as specific rank on a DAOS pool"`
-}
+import (
+	"fmt"
+	"testing"
+)
 
-// KillRankSvcCmd is the struct representing the command to kill server
-// identified by rank on given pool identified by uuid.
-type KillRankSvcCmd struct {
-	logCmd
-	connectedCmd
-	Rank     uint32 `short:"r" long:"rank" description:"Rank identifying DAOS server" required:"1"`
-	PoolUUID string `short:"p" long:"pool-uuid" description:"Pool uuid that rank relates to" required:"1"`
-}
-
-// Execute is run when KillRankSvcCmd activates
-func (k *KillRankSvcCmd) Execute(args []string) error {
-	k.log.Infof("Kill Rank command results:\n%s", k.conns.KillRank(k.PoolUUID, k.Rank))
-	return nil
+func TestSystemCommands(t *testing.T) {
+	runCmdTests(t, []cmdTest{
+		{
+			"system member query with no arguments",
+			"system member-query",
+			"ConnectClients SystemMemberQuery",
+			nil,
+		},
+		{
+			"system stop with no arguments",
+			"system stop",
+			"ConnectClients SystemStop",
+			nil,
+		},
+		{
+			"Nonexistent subcommand",
+			"system quack",
+			"",
+			fmt.Errorf("Unknown command"),
+		},
+	})
 }

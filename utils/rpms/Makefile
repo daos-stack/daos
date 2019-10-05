@@ -35,15 +35,16 @@ include packaging/Makefile_packaging.mk
 
 PACKAGING_CHECK_DIR ?= ../../../rpm/packaging
 
-scons_local-$(VERSION).tar.gz:
+scons_local-$(VERSION).tar.gz: $(shell git ls-files :/:)
+	echo Creating $@
 	cd ../../scons_local &&                        \
 	git archive --format tar --prefix scons_local/ \
 	            -o $$OLDPWD/$(basename $@) HEAD ./
 	rm -f $@
 	gzip $(basename $@)
 
-$(NAME)-$(VERSION).tar.gz:
-	echo $@
+$(NAME)-$(VERSION).tar.gz: $(shell git ls-files :/:)
+	echo Creating $@
 	echo $(basename $@)
 	cd ../../ &&                                          \
 	git archive --format tar --prefix $(NAME)-$(VERSION)/ \
