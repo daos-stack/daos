@@ -44,6 +44,7 @@ GO_CONTROL_FILES = common/proto/mgmt/mgmt.pb.go\
 		   common/proto/mgmt/pool.pb.go\
 		   common/proto/mgmt/srv.pb.go\
 		   common/proto/mgmt/storage_query.pb.go\
+		   common/proto/mgmt/system.pb.go\
 		   common/proto/ctl/features.pb.go\
 		   common/proto/ctl/storage.pb.go\
 		   common/proto/ctl/common.pb.go\
