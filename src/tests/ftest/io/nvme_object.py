@@ -23,14 +23,8 @@
 """
 from __future__ import print_function
 
-#from pathos.multiprocessing import ProcessingPool
-# from multiprocessing import Pool
-import multiprocessing
 import threading
-import concurrent.futures
 import avocado
-import ctypes
-import pickle
 
 from daos_api import DaosApiError
 from test_utils import TestPool, TestContainer
@@ -38,27 +32,76 @@ from apricot import TestWithServers
 
 
 def container_write(container, record):
-    """Method to write to a container"""
-    print("***cotainer.opened:{}".format(container.opened))
-#    for record in record_size:
+    """Method to write to a container
+
+       Args:
+         container: instance of TestContainer
+         record: record size to be written
+    """
+    # update record qty
     container.record_qty.update(record)
-    print(container.record_qty)
+    print("\nRecord Size:{}".format(container.record_qty))
+
     # write multiple objects
     container.write_objects()
 
     # read written objects and verify
     container.read_objects()
 
-#    # invoke pool query after write
-#    self.pool.get_info()
+def test_runner(self, size, record_size):
+    """Method to perform simultaneous writes of varying
+       record size to a container in a pool
+
+       Args:
+         self: avocado test object
+         size: pool size to be created
+         record_size (list): list of different record sizes to be written
+    """
+    # pool initialization
+    pool = TestPool(self.context, self.log)
+    pool.get_params(self)
+    # set pool size
+    pool.nvme_size.update(size)
+    # Create a pool
+    pool.create()
+    pool.connect()
+
+    # invoke pool query before write
+    pool.get_info()
+
+    # create container
+    container = TestContainer(pool)
+    container.get_params(self)
+    container.create()
+    container.open()
+
+    threads = []
+    for rec in record_size:
+        for thread in range(2):
+            thread = threading.Thread(target=container_write,
+                                      args=(container, rec))
+            threads.append(thread)
+
+    for job in threads:
+        job.start()
+
+    for job in threads:
+        job.join()
+
+    # invoke pool query after write
+    pool.get_info()
 
     # destroy container
-#    if self.container is not None:
-#        self.container.destroy()
+    if container is not None:
+        container.destroy()
+
+    # destroy pool
+    if pool is not None:
+        pool.destroy(1)
 
 class NvmeObject(TestWithServers):
     """Test class for NVMe storage by creating/Updating/Fetching
-       large number of objects.
+       large number of objects simultaneously.
 
     Test Class Description:
         Test the general functional operations of objects on nvme storage
@@ -75,40 +118,6 @@ class NvmeObject(TestWithServers):
         self.record_size = self.params.get("record_size", "/run/container/*")
         self.pool_size = self.params.get("size", "/run/pool/createsize/*")
 
-    def tearDown(self):
-        """Tear Down each test case."""
-        try:
-            if self.container is not None:
-                self.container.destroy()
-            if self.pool is not None:
-                self.pool.destroy(1)
-        finally:
-            # Stop the servers and agents
-            super(NvmeObject, self).tearDown()
-
-#    def __getstate__(self):
-#        pass
-
-#    def __getstate__(self):
-#        pass
-    def container_write(self, record):
-        print(record_size)
-#    for record in record_size:
-        self.container.record_qty.update(record)
-        print(self.container.record_qty)
-        # write multiple objects
-        self.container.write_objects()
-
-        # read written objects and verify
-        self.container.read_objects()
-
-#    # invoke pool query after write
-#    self.pool.get_info()
-
-    # destroy container
-#    if self.container is not None:
-#        self.container.destroy()
-    
     @avocado.fail_on(DaosApiError)
     def test_nvme_object_single_pool(self):
         """Jira ID: DAOS-2087.
@@ -121,73 +130,11 @@ class NvmeObject(TestWithServers):
         Use Cases:
             Verify the objects are being created and the data is not
             corrupted.
-        :avocado: tags=nvme,pr,hw,nvme_object_single_pool,small
+        :avocado: tags=nvme,pr,hw,nvme_object_single_pool,small,nvme_object
         """
 
-        # Test Params
-        self.pool = TestPool(self.context, self.log)
-        self.pool.get_params(self)
-        self.container = TestContainer(self.pool)
-        self.container.get_params(self)
-        
-        # set pool size
-        self.pool.nvme_size.update(self.pool_size[0])
-        # Create a pool
-        self.pool.create()
-        self.pool.connect()
-
-        # invoke pool query before write
-        self.pool.get_info()
-
-        # create container
-        self.container.create()
-        self.container.open()
-        #with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-        #    executor.map(container_write, [self.container, self.record_size[0]])
-        threads = []
-        for rec in self.record_size[:-1]:
-            for t in range(3):
-                thread = threading.Thread(target=container_write, args=(self.container, rec))
-                threads.append(thread)
-#            thread.start()
-#            thread.join()
-
-        for job in threads:
-            job.start()
-#
-        for job in threads:
-            job.join()
-
-#        thread.start()
-#        thread.join()
-#        print(self.record_size[:-1])
-#        print("***{}***".format(ctypes.cast(ctypes.addressof(self.container)).contents))
-#        mp = Pool(processes=2)
-#        mp.apply_async(container_write, (container, self.record_size[2]))
-#        jobs = []
-#        for i in range(1):
-#            process = multiprocessing.Process(target=container_write, args=(self.container, self.record_size[0]))
-#            jobs.append(process)
-#        for j in jobs:
-#            j.start()
-#        for j in jobs:
-#            j.join()
-#        container_write(container, self.record_size[1])
-#        for record in self.record_size[:-1]:
-#            self.container.record_qty.update(record)
-#            print(self.container.record_qty)
-#            # write multiple objects
-#            self.container.write_objects()
-
-#        # read written objects and verify
-#        self.container.read_objects()
-
-        # invoke pool query after write
-        self.pool.get_info()
-
-        # destroy container
-        if self.container is not None:
-            self.container.destroy()
+        # perform multiple object writes to a single pool
+        test_runner(self, self.pool_size[0], self.record_size[:-1])
 
     @avocado.fail_on(DaosApiError)
     def test_nvme_object_multiple_pools(self):
@@ -202,43 +149,26 @@ class NvmeObject(TestWithServers):
             Verify the objects are being created and the data is not
             corrupted.
         :avocado: tags=nvme,full_regression,hw,nvme_object_multiple_pools,small
+        :avocado: tags=nvme_object
         """
 
-        for size in self.pool_size:
-            # Test Params
-            self.pool = TestPool(self.context, self.log)
-            self.pool.get_params(self)
-            self.container = TestContainer(self.pool)
-            self.container.get_params(self)
+        # thread to perform simulatneous object writes to multiple pools
+        threads = []
+        for size in self.pool_size[:-1]:
+            # excluding last record size in the list if size is
+            # self.pool_size[0] to not over write a pool with less space
+            # available.
+            # pylint: disable=pointless-statement
+            if size == self.pool_size[0]:
+                self.record_size[:-1]
+            thread = threading.Thread(target=test_runner,
+                                      args=(self, size, self.record_size))
+            threads.append(thread)
 
-            # set pool size
-            self.pool.nvme_size.update(size)
-            # Create a pool
-            self.pool.create()
-            self.pool.connect()
+        # starting all the threads
+        for job in threads:
+            job.start()
 
-            # invoke pool query before write
-            self.pool.get_info()
-
-            # create container
-            self.container.create()
-            print(self.record_size)
-            for record in self.record_size:
-                self.container.record_qty.update(record)
-                print(self.container.record_qty)
-                # write multiple objects
-                self.container.write_objects()
-
-            # read written objects and verify
-            self.container.read_objects()
-
-            # invoke pool query after write
-            self.pool.get_info()
-
-            # destroy container
-            if self.container is not None:
-                self.container.destroy()
-
-            # destroy pool
-            if self.pool is not None:
-                self.pool.destroy(1)
+        # waiting for all threads to finish
+        for job in threads:
+            job.join()

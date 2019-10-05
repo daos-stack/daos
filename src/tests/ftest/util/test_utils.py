@@ -742,23 +742,6 @@ class TestContainer(TestDaosApiBase):
         self.opened = False
         self.written_data = []
 
-#    def __getstate__(self):
-#        pass
-#        state = self.__dict__.copy()
-#        del state['pool']
-#        del state['container']
-#        del state['written_data']
-        
-#        return state
-
-#    def __setstate__(self):
-#        pass
-#        self.__dict__.update(state)
-#        file = open(self.filename)
-#        for _ in range(self.lineno):
-#            file.readline()
-#        self.file = file
-
     @fail_on(DaosApiError)
     def create(self, uuid=None):
         """Create a container.
@@ -788,12 +771,10 @@ class TestContainer(TestDaosApiBase):
 
         """
         if self.container and not self.opened:
-            print(1.1)
             self.log.info("Opening container %s", self.uuid)
             self._call_method(self.container.open, {})
             self.opened = True
             return True
-        print(1.2)
         return False
 
     @fail_on(DaosApiError)
@@ -846,9 +827,7 @@ class TestContainer(TestDaosApiBase):
             DaosTestError: if there was an error writing the object
 
         """
-        print(1)
         self.open()
-        print(2)
         self.log.info(
             "Writing objects in container %s%s%s", self.uuid,
             " on rank {}".format(
