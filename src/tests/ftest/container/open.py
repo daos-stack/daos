@@ -37,11 +37,11 @@ def create_pool_and_connect(pool_mode, pool_size, pool_name, pool_context):
     """
     Create a pool, call its create function, and return the created pool
     """
-        new_pool = DaosPool(pool_context)
-        new_pool.create(pool_mode, os.geteuid(), os.getegid(), pool_size,
-            pool_name, None)
-        new_pool.connect(1 << 1)
-        return new_pool
+    new_pool = DaosPool(pool_context)
+    new_pool.create(pool_mode, os.geteuid(), os.getegid(), pool_size,
+        pool_name, None)
+    new_pool.connect(1 << 1)
+    return new_pool
 
 class OpenContainerTest(TestWithServers):
     """
