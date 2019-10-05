@@ -1380,10 +1380,6 @@ class DaosContainer(object):
         """Return C representation of Python string."""
         return conversion.c_uuid_to_str(self.uuid)
 
-    def set_uuid_str(self, uuidstr):
-        """Set pool UUID to a given string."""
-        self.uuid = conversion.str_to_c_uuid(uuidstr)
-
     def create(self, poh, con_uuid=None, cb_func=None):
         """Send a container creation request to the daos server group."""
         # create a random uuid if none is provided
