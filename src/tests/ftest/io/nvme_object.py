@@ -82,9 +82,11 @@ def test_runner(self, size, record_size):
                                       args=(container, rec))
             threads.append(thread)
 
+    # start all the threads
     for job in threads:
         job.start()
 
+    # wait for all threads to finish
     for job in threads:
         job.join()
 
