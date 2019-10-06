@@ -325,7 +325,7 @@ class ServerManager(ExecutableCommand):
         self.attach = BasicParameter(None, attach)    # ServerCommand param
         self.insecure = BasicParameter(None, True)    # ServerCommand param
         self.sudo = BasicParameter(None, False)       # ServerCommand param
-        self.timeout = BasicParameter(None, timeout)  # ServerCommand param
+        self.srv_timeout = BasicParameter(None, timeout)   # ServerCommand param
         self.report_uri = BasicParameter(None)             # Orterun param
         self.enable_recovery = BasicParameter(None, True)  # Orterun param
         self.export = BasicParameter(None)                 # Orterun param
@@ -355,7 +355,7 @@ class ServerManager(ExecutableCommand):
         Args:
             test (Test): avocado Test object
         """
-        server_params = ["debug", "sudo", "timeout"]
+        server_params = ["debug", "sudo", "srv_timeout"]
         server_start_params = ["attach", "insecure"]
         runner_params = ["enable_recovery", "export", "report_uri"]
         super(ServerManager, self).get_params(test)
@@ -365,7 +365,7 @@ class ServerManager(ExecutableCommand):
             if name in server_params:
                 if name == "sudo":
                     setattr(self.runner.job, name, getattr(self, name).value)
-                elif name == "timeout":
+                elif name == "srv_timeout":
                     setattr(self.runner.job, name, getattr(self, name).value)
                 else:
                     getattr(
