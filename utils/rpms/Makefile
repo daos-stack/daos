@@ -6,7 +6,7 @@ PATCHES  = scons_local-$(VERSION).tar.$(SRC_EXT)
 SLES_12_PR_REPOS := scons
 LEAP_42_PR_REPOS := scons
 PR_REPOS         := pmix spdk isa-l fio dpdk protobuf-c fuse pmdk raft \
-	            cart@daos_devel1
+	            cart@PR-229:11
 ifneq ($(REPOSITORY_URL),)
 ifneq ($(DAOS_STACK_$(DISTRO_BASE)_GROUP_REPO),)
 EL_7_REPOS     = https://copr-be.cloud.fedoraproject.org/results/jhli/ipmctl/epel-7-x86_64/   \
