@@ -1,3 +1,5 @@
+server_manager:
+    timeout: 500
 hosts:
    test_machines:
         test_servers:

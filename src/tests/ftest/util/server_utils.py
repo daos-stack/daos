@@ -317,7 +317,6 @@ class ServerManager(ExecutableCommand):
             DaosServer(self.daosbinpath), runnerpath, True)
 
         # Setup server command defaults
-        self.runner.job.timeout = timeout
         self.runner.job.action.value = "start"
         self.runner.job.get_action_command()
 
@@ -326,6 +325,7 @@ class ServerManager(ExecutableCommand):
         self.attach = BasicParameter(None, attach)    # ServerCommand param
         self.insecure = BasicParameter(None, True)    # ServerCommand param
         self.sudo = BasicParameter(None, False)       # ServerCommand param
+        self.timeout = BasicParameter(None, timeout)  # ServerCommand param
         self.report_uri = BasicParameter(None)             # Orterun param
         self.enable_recovery = BasicParameter(None, True)  # Orterun param
         self.export = BasicParameter(None)                 # Orterun param
@@ -355,7 +355,7 @@ class ServerManager(ExecutableCommand):
         Args:
             test (Test): avocado Test object
         """
-        server_params = ["debug", "sudo"]
+        server_params = ["debug", "sudo", "timeout"]
         server_start_params = ["attach", "insecure"]
         runner_params = ["enable_recovery", "export", "report_uri"]
         super(ServerManager, self).get_params(test)
@@ -364,6 +364,8 @@ class ServerManager(ExecutableCommand):
         for name in self.get_param_names():
             if name in server_params:
                 if name == "sudo":
+                    setattr(self.runner.job, name, getattr(self, name).value)
+                elif name == "timeout":
                     setattr(self.runner.job, name, getattr(self, name).value)
                 else:
                     getattr(
@@ -415,6 +417,12 @@ class ServerManager(ExecutableCommand):
                 self.runner.job.check_subprocess_status(self.runner.process)
             except CommandFailure as error:
                 self.log.info("Failed to start after format: %s", str(error))
+
+            try:
+                self.log.info("Stopping servers started as root")
+                self.runner.stop()
+            except CommandFailure as error:
+                raise ServerFailed("Failed to stop servers:{}".format(error))
 
             # Restart server as non root user and check if started
             self.log.info("Starting server as non-root user: <%s>", self._hosts)
