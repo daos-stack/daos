@@ -78,7 +78,8 @@ class OpenContainerTest(TestWithServers):
         name = self.params.get("setname", '/run/createtests/createset/')
         size = self.params.get("size", '/run/createtests/createsize/')
         uuid_states = self.params.get("uuid",
-                                      '/run/createtests/container_uuid_states/*/')
+                                      '/run/createtests' +
+                                      '/container_uuid_states/*/')
         poh_states = self.params.get("poh", '/run/createtests/handle_states/*/')
 
         try:
@@ -116,8 +117,8 @@ class OpenContainerTest(TestWithServers):
             try:
                 # Case 1
                 container1.open(pool1.handle, container2_uuid)
-                self.fail("No error occurred from using container 2's UUID while " +
-                          "opening container 1")
+                self.fail("No error occurred from using container " +
+                          "2's UUID while opening container 1")
             except DaosApiError as excep:
                 print(excep)
                 print(traceback.format_exc())
