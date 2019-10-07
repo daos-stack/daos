@@ -454,15 +454,15 @@ generate_io_conf_rec(int fd, struct current_status *status)
 	eph = status->cur_tx;
 	inject_fail_idx = rand() % epoch_times;
 	tgt = rand() % tgt_size;
-	if ( tgt_size != -1 ) {
+	if (tgt_size != -1) {
 		tgt = rand() % tgt_size;
 	} else {
 		tgt = tgt_size;
 	}
 
-        if ( rank_size != -1 ) {
-            status->cur_rank = rand() % rank_size;
-        }
+	if (rank_size != -1) {
+		status->cur_rank = rand() % rank_size;
+	}
 	record_type = rand() % 2;
 
 	for (i = 0; i < epoch_times; i++) {
