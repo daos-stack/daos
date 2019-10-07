@@ -1221,22 +1221,22 @@ pipeline {
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
                                            ./ftest.sh "$test_tag" $tnodes''',
-                                junit_files: "$SL_PREFIX/lib/daos/TESTING/ftest/avocado/*/*/*.xml $SL_PREFIX/lib/daos/TESTING/ftest/*_results.xml",
+                                junit_files: "/tmp/ftest/avocado/*/*/*.xml /tmp/ftest/*_results.xml",
                                 failure_artifacts: env.STAGE_NAME
                     }
                     post {
                         always {
-                            sh '''rm -rf $SL_PREFIX/lib/daos/TESTING/ftest/avocado/*/*/html/
+                            sh '''rm -rf /tmp/ftest/avocado/*/*/html/
                                   if [ -n "$STAGE_NAME" ]; then
                                       rm -rf "$STAGE_NAME/"
                                       mkdir "$STAGE_NAME/"
                                       # compress those potentially huge DAOS logs
-                                      if daos_logs=$(ls $SL_PREFIX/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/*); then
+                                      if daos_logs=$(ls /tmp/ftest/avocado/job-results/*/daos_logs/*); then
                                           lbzip2 $daos_logs
                                       fi
                                       arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
-                                      arts="$arts$(ls -d $SL_PREFIX/lib/daos/TESTING/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
-                                      arts="$arts$(ls $SL_PREFIX/lib/daos/TESTING/ftest/*.stacktrace 2>/dev/null || true)"
+                                      arts="$arts$(ls -d /ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
+                                      arts="$arts$(ls /tmp/ftest/*.stacktrace 2>/dev/null || true)"
                                       if [ -n "$arts" ]; then
                                           mv $(echo $arts | tr '\n' ' ') "$STAGE_NAME/"
                                       fi
@@ -1245,7 +1245,7 @@ pipeline {
                                       false
                                   fi'''
                             archiveArtifacts artifacts: env.STAGE_NAME + '/**'
-                            junit env.STAGE_NAME + '/*/results.xml, $SL_PREFIX/lib/daos/TESTING/ftest/*_results.xml'
+                            junit env.STAGE_NAME + '/*/results.xml, /tmp/ftest/*_results.xml'
                         }
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
                         success {

@@ -117,6 +117,7 @@ cleanup() {
 pre_clean
 
 # shellcheck disable=SC1091
+# shellcheck disable=SC2086
 . .build_vars.sh
 
 if ${TEARDOWN_ONLY:-false}; then
@@ -125,15 +126,20 @@ if ${TEARDOWN_ONLY:-false}; then
 fi
 
 # let's output to a dir in the tree
-rm -rf $SL_PREFIX/lib/daos/TESTING/ftest/avocado ./*_results.xml
-mkdir -p $SL_PREFIX/lib/daos/TESTING/ftest/avocado/job-results
-
+if [ $SL_PREFIX == /usr ]; then
+    rm -rf /tmp/ftest/avocado ./*_results.xml
+    mkdir -p /tmp/ftest/avocado/job-results
+else
+    rm -rf install/tmp/ftest/avocado ./*_results.xml
+    mkdir -p install/tmp/ftest/avocado/job-results
+fi
 trap 'set +e; cleanup' EXIT
 
 CLUSH_ARGS=($CLUSH_ARGS)
 
-if [ $SL_PREFIX == "/usr" ]; then
-    DAOS_BASE = '/'
+if [ $SL_PREFIX == /usr ]; then
+    # not sure should be /usr or / here
+    DAOS_BASE='/'
 else
     DAOS_BASE=${SL_PREFIX%/install}
 fi
@@ -170,14 +176,18 @@ fi
 mkdir /var/run/daos_{agent,server}
 chown \$current_username -R /var/run/daos_{agent,server}
 chmod 0755 /var/run/daos_{agent,server}
-mkdir -p $DAOS_BASE
+if [ $SL_PREFIX != /usr ]; then
+    mkdir -p $DAOS_BASE
+fi
 ed <<EOF /etc/fstab
 \\\\\\\$a
 $NFS_SERVER:$PWD $DAOS_BASE nfs defaults 0 0 # added by ftest.sh
 .
 wq
 EOF
-mount \\\"$DAOS_BASE\\\"\"
+if [ $SL_PREFIX != /usr ]; then
+    mount \\\"$DAOS_BASE\\\"\"
+fi
 
 rm -rf \"${TEST_TAG_DIR:?}/\"
 mkdir -p \"$TEST_TAG_DIR/\"
@@ -193,11 +203,10 @@ shift || true
 args+=" $*"
 
 # shellcheck disable=SC2029
-# shellcheck disable=SC2086
 if ! ssh $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" "set -ex
 ulimit -c unlimited
-if [ $SL_PREFIX == "/usr" ]; then
-    rm -rf /tmp
+if [ $SL_PREFIX == /usr ]; then
+    rm -rf /tmp/ftest
 else
     rm -rf $DAOS_BASE/install/tmp
     mkdir -p $DAOS_BASE/install/tmp
@@ -213,10 +222,10 @@ export D_LOG_FILE=\"$TEST_TAG_DIR/daos.log\"
 mkdir -p ~/.config/avocado/
 cat <<EOF > ~/.config/avocado/avocado.conf
 [datadir.paths]
-if [ $SL_PREFIX == "/usr" ]; then
-    logs_dir = /tmp/job-results
+if [ $SL_PREFIX == /usr ]; then
+    logs_dir = /tmp/ftest/avocado/job-results
 else
-    logs_dir = $DAOS_BASE/install/lib/daos/TESTING/ftest/avocado/job-results
+    logs_dir = $DAOS_BASE/install/tmp/ftest/avocado/job-results
 fi
 
 [sysinfo.collectibles]
@@ -333,9 +342,9 @@ fi
 # Remove the latest avocado symlink directory to avoid inclusion in the
 # jenkins build artifacts
 if [ $SL_PREFIX == "/usr" ]; then
-    unlink /tmp/job-results/latest
+    unlink /tmp/ftest/avocado/job-results/latest
 else
-    unlink $DAOS_BASE/install/lib/daos/TESTING/ftest/avocado/job-results/latest
+    unlink $DAOS_BASE/install/tmp/ftest/avocado/job-results/latest
 fi
 # get stacktraces for the core files
 if ls core.*; then
