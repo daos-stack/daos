@@ -706,7 +706,7 @@ rdb_raft_exec_unpack_io(struct dss_enum_unpack_io *io, void *arg)
 #endif
 
 	return vos_obj_update(*slc, io->ui_oid, 0 /* epoch */, io->ui_version,
-			      &io->ui_dkey, io->ui_iods_len, io->ui_iods,
+			      &io->ui_dkey, io->ui_iods_size, io->ui_iods,
 			      io->ui_sgls);
 }
 
