@@ -70,15 +70,18 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 
 		/* Update the existing object with the new name/parent */
 
-		DFUSE_TRA_INFO(inode, "Maybe updating parent %lu %lu",
-			entry.ino, ie->ie_dfs->dfs_root);
+		DFUSE_TRA_INFO(inode,
+			       "Maybe updating parent %lu %lu",
+			       entry.ino, ie->ie_dfs->dfs_root);
 
 		if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_root) {
 			DFUSE_TRA_INFO(inode, "Not updating parent");
 		} else {
-			rc = dfs_update_parent(inode->ie_obj, ie->ie_obj, ie->ie_name);
+			rc = dfs_update_parent(inode->ie_obj, ie->ie_obj,
+					       ie->ie_name);
 			if (rc != -DER_SUCCESS)
-				DFUSE_TRA_ERROR(inode, "dfs_update_parent() failed %d",
+				DFUSE_TRA_ERROR(inode,
+						"dfs_update_parent() failed %d",
 						rc);
 		}
 		inode->ie_parent = ie->ie_parent;
@@ -112,7 +115,6 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	size_t			cont_size = 40;
 	struct dfuse_dfs	*dfs;
 
-
 	rc = dfs_getxattr(ie->ie_dfs->dfs_ns, ie->ie_obj, "user.uns.pool",
 			  &pool, &pool_size);
 
@@ -122,7 +124,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		return rc;
 
 	rc = dfs_getxattr(ie->ie_dfs->dfs_ns, ie->ie_obj, "user.uns.container",
-			&cont, &cont_size);
+			  &cont, &cont_size);
 	if (rc == ENODATA)
 		return 0;
 	if (rc)
@@ -146,9 +148,9 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 
 	/** Connect to DAOS pool */
 	rc = daos_pool_connect(dfs->dfs_pool, fs_handle->dpi_info->di_group,
-			fs_handle->dpi_info->di_svcl, DAOS_PC_RW,
-			&dfs->dfs_poh, &dfs->dfs_pool_info,
-			NULL);
+			       fs_handle->dpi_info->di_svcl, DAOS_PC_RW,
+			       &dfs->dfs_poh, &dfs->dfs_pool_info,
+			       NULL);
 	if (rc != -DER_SUCCESS) {
 		DFUSE_LOG_ERROR("Failed to connect to pool (%d)", rc);
 		D_GOTO(out_dfs, 0);
@@ -156,8 +158,8 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 
 	/** Try to open the DAOS container (the mountpoint) */
 	rc = daos_cont_open(dfs->dfs_poh, dfs->dfs_cont, DAOS_COO_RW,
-			&dfs->dfs_coh, &dfs->dfs_co_info,
-			NULL);
+			    &dfs->dfs_coh, &dfs->dfs_co_info,
+			    NULL);
 	if (rc) {
 		DFUSE_LOG_ERROR("Failed container open (%d)",
 				rc);
@@ -165,7 +167,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	}
 
 	rc = dfs_mount(dfs->dfs_poh, dfs->dfs_coh, O_RDWR,
-		&dfs->dfs_ns);
+		       &dfs->dfs_ns);
 	if (rc) {
 		daos_cont_close(dfs->dfs_coh, NULL);
 		DFUSE_LOG_ERROR("dfs_mount failed (%d)", rc);
@@ -241,7 +243,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		if (rc) {
 			D_GOTO(err, 0);
 			DFUSE_TRA_INFO(ie,
-				"check_for_uns_ep() returned %d", rc);
+				       "check_for_uns_ep() returned %d", rc);
 		}
 	}
 

@@ -586,8 +586,8 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	/* All container operations require a pool handle, connect here.
 	 * Take specified pool UUID or look up through unified namespace.
 	 */
-	if ((op != CONT_CREATE) && (op != CONT_UNS_INSERT)
-		&& (ap->path != NULL)) {
+	if ((op != CONT_CREATE) && (op != CONT_UNS_INSERT) &&
+	    (ap->path != NULL)) {
 		struct duns_attr_t dattr = {0};
 
 		ARGS_VERIFY_PATH_NON_CREATE(ap, out, rc = RC_PRINT_HELP);
