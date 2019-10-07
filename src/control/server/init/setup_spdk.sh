@@ -17,12 +17,9 @@ else
 	PCI_WHITELIST="$_PCI_WHITELIST" NRHUGE="$_NRHUGE" \
 	TARGET_USER="$_TARGET_USER" "$scriptpath"
 
-	eet -e
-
+	# ignore and suppress errors from missing UIO related files
 	chown -R "$_TARGET_USER" /dev/hugepages /dev/uio* \
 		/sys/class/uio/uio*/device/config \
-		/sys/class/uio/uio*/device/resource*
-
-	set e
+		/sys/class/uio/uio*/device/resource* 2>/dev/null || true
 fi
 
