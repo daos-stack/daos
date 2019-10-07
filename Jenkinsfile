@@ -43,7 +43,7 @@
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
-def component_repos = "spdk fio dpdk pmdk raft cart@PR-236;1"
+def component_repos = "spdk fio dpdk pmdk raft cart@PR-236:1"
 def daos_repo = "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
 def daos_repos = component_repos + ' ' + daos_repo
 def ior_repos = "mpich@daos_adio-rpm ior-hpc@daos"
