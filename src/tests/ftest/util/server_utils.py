@@ -91,12 +91,12 @@ def create_server_yaml(basepath, log_filename):
 
     # Update values from avocado_testcase.yaml in DAOS yaml variables.
     if new_value_set:
-        if 'servers' in new_value_set['server_config']:
-            for key in new_value_set['server_config']['servers']:
+        if 'server' in new_value_set['server_config']:
+            for key in new_value_set['server_config']['server']:
                 default_value_set['servers'][0][key] = \
-                        new_value_set['server_config']['servers'][key]
+                        new_value_set['server_config']['server'][key]
         for key in new_value_set['server_config']:
-            if 'servers' not in key:
+            if 'server' not in key:
                 default_value_set[key] = new_value_set['server_config'][key]
 
     # if sepcific log file name specified use that
