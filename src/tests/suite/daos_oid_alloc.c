@@ -244,7 +244,7 @@ oid_allocator_checker(void **state)
 
 		/** Kill 2 servers at different times */
 		if (i && i % (NUM_RGS/3 + 1) == 0) {
-			daos_pool_info_t info;
+			daos_pool_info_t info = {0};
 
 			MPI_Barrier(MPI_COMM_WORLD);
 			rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL,
@@ -267,7 +267,6 @@ check:
 			      MPI_COMM_WORLD);
 		rc = rc_reduce;
 	}
-	assert(rc == 0);
 	assert_int_equal(rc, 0);
 	if (arg->myrank == 0)
 		print_message("Allocation done. Verifying no overlaps...\n");

@@ -21,10 +21,10 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from rebuild_test_base import RebuldTestBase
+from rebuild_test_base import RebuildTestBase
 
 
-class RebuildDeleteObjects(RebuldTestBase):
+class RebuildDeleteObjects(RebuildTestBase):
     """Test class for deleting objects during pool rebuild.
 
     Test Class Description:

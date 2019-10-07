@@ -3,10 +3,12 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('env')
+    Import('env', 'prereqs')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
+
+    prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
 
     denv.Append(CCFLAGS=['-Wframe-larger-than=131072'])
     # rebuild

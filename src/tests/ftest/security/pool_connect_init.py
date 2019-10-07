@@ -36,20 +36,6 @@ class PoolSecurityTest(TestWithServers):
     :avocado: recursive
     """
 
-    def tearDown(self):
-        """
-        tear down method
-        """
-        try:
-            if self.pool is not None:
-                self.pool.destroy()
-        except DaosApiError as exc:
-            self.log.info(exc)
-            self.log.info(traceback.format_exc())
-            self.fail("##Pool destroy failed in tearDown.\n")
-        finally:
-            super(PoolSecurityTest, self).tearDown()
-
     def test_poolconnect(self):
         """
         Test basic pool security in pool creation and connect.
@@ -62,7 +48,7 @@ class PoolSecurityTest(TestWithServers):
                                       (permission denied with error -1001)
            Above 3 testcases are defined in the yaml file.
 
-        :avocado: tags=all,pr,medium,pool,security_basic,security
+        :avocado: tags=all,pr,full_regression,small,pool,sec_basic,security
         """
         der_no_permission = "RC: -1001"
         user_uid = os.geteuid()

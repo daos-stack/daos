@@ -149,6 +149,14 @@ crt_proc_daos_csum_buf_t(crt_proc_t proc, daos_csum_buf_t *csum)
 	if (rc != 0)
 		return -DER_HG;
 
+	rc = crt_proc_uint32_t(proc, &csum->cs_nr);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint32_t(proc, &csum->cs_chunksize);
+	if (rc != 0)
+		return -DER_HG;
+
 	rc = crt_proc_uint16_t(proc, &csum->cs_type);
 	if (rc != 0)
 		return -DER_HG;
@@ -175,7 +183,7 @@ crt_proc_daos_csum_buf_t(crt_proc_t proc, daos_csum_buf_t *csum)
 		D_FREE(csum->cs_csum);
 	}
 
-	if (csum->cs_len > 0) {
+	if (csum->cs_len > 0 && proc_op != CRT_PROC_FREE) {
 		rc = crt_proc_memcpy(proc, csum->cs_csum, csum->cs_len);
 		if (rc != 0) {
 			if (proc_op == CRT_PROC_DECODE)
@@ -232,7 +240,7 @@ crt_proc_daos_iod_t(crt_proc_t proc, daos_iod_t *dvi)
 	if (rc != 0)
 		return -DER_HG;
 
-	if (proc_op == CRT_PROC_ENCODE) {
+	if (proc_op == CRT_PROC_ENCODE || proc_op == CRT_PROC_FREE) {
 		if (dvi->iod_type == DAOS_IOD_ARRAY && dvi->iod_recxs != NULL)
 			existing_flags |= IOD_REC_EXIST;
 		if (dvi->iod_csums != NULL)
@@ -397,6 +405,7 @@ CRT_RPC_DEFINE(obj_fetch, DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 CRT_RPC_DEFINE(obj_key_enum, DAOS_ISEQ_OBJ_KEY_ENUM, DAOS_OSEQ_OBJ_KEY_ENUM)
 CRT_RPC_DEFINE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
 CRT_RPC_DEFINE(obj_query_key, DAOS_ISEQ_OBJ_QUERY_KEY, DAOS_OSEQ_OBJ_QUERY_KEY)
+CRT_RPC_DEFINE(obj_sync, DAOS_ISEQ_OBJ_SYNC, DAOS_OSEQ_OBJ_SYNC)
 
 /* Define for cont_rpcs[] array population below.
  * See OBJ_PROTO_*_RPC_LIST macro definition
@@ -451,6 +460,9 @@ obj_reply_set_status(crt_rpc_t *rpc, int status)
 	case DAOS_OBJ_RPC_QUERY_KEY:
 		((struct obj_query_key_out *)reply)->okqo_ret = status;
 		break;
+	case DAOS_OBJ_RPC_SYNC:
+		((struct obj_sync_out *)reply)->oso_ret = status;
+		break;
 	default:
 		D_ASSERT(0);
 	}
@@ -480,6 +492,8 @@ obj_reply_get_status(crt_rpc_t *rpc)
 		return ((struct obj_punch_out *)reply)->opo_ret;
 	case DAOS_OBJ_RPC_QUERY_KEY:
 		return ((struct obj_query_key_out *)reply)->okqo_ret;
+	case DAOS_OBJ_RPC_SYNC:
+		return ((struct obj_sync_out *)reply)->oso_ret;
 	default:
 		D_ASSERT(0);
 	}
@@ -516,6 +530,9 @@ obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version)
 		((struct obj_query_key_out *)reply)->okqo_map_version =
 			map_version;
 		break;
+	case DAOS_OBJ_RPC_SYNC:
+		((struct obj_sync_out *)reply)->oso_map_version = map_version;
+		break;
 	default:
 		D_ASSERT(0);
 	}
@@ -545,6 +562,8 @@ obj_reply_map_version_get(crt_rpc_t *rpc)
 		return ((struct obj_punch_out *)reply)->opo_map_version;
 	case DAOS_OBJ_RPC_QUERY_KEY:
 		return ((struct obj_query_key_out *)reply)->okqo_map_version;
+	case DAOS_OBJ_RPC_SYNC:
+		return ((struct obj_sync_out *)reply)->oso_map_version;
 	default:
 		D_ASSERT(0);
 	}

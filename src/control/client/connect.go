@@ -29,8 +29,12 @@ import (
 	"sort"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 )
 
@@ -56,10 +60,174 @@ func (cr ClientResult) String() string {
 	return fmt.Sprintf("%+v", cr.Value)
 }
 
+// ClientBioResult is a container for output of BIO health
+// query client requests.
+type ClientBioResult struct {
+	Address string
+	Stats   *mgmtpb.BioHealthResp
+	Err     error
+}
+
+func (cr ClientBioResult) String() string {
+	var buf bytes.Buffer
+
+	if cr.Err != nil {
+		return fmt.Sprintf("error: " + cr.Err.Error())
+	}
+
+	if cr.Stats.Status != 0 {
+		return fmt.Sprintf("error: %v\n", cr.Stats.Status)
+	}
+
+	fmt.Fprintf(&buf, "Device UUID: %v\n", cr.Stats.DevUuid)
+	fmt.Fprintf(&buf, "\tRead errors: %v\n", cr.Stats.ReadErrs)
+	fmt.Fprintf(&buf, "\tWrite errors: %v\n", cr.Stats.WriteErrs)
+	fmt.Fprintf(&buf, "\tUnmap errors: %v\n", cr.Stats.UnmapErrs)
+	fmt.Fprintf(&buf, "\tChecksum errors: %v\n", cr.Stats.ChecksumErrs)
+	fmt.Fprintf(&buf, "\tDevice Health:\n")
+	fmt.Fprintf(&buf, "\t\tError log entries: %v\n", cr.Stats.ErrorCount)
+	fmt.Fprintf(&buf, "\t\tMedia errors: %v\n", cr.Stats.MediaErrors)
+	fmt.Fprintf(&buf, "\t\tTemperature: %v\n", cr.Stats.Temperature)
+	fmt.Fprintf(&buf, "\t\tTemperature: ")
+	if cr.Stats.Temp {
+		fmt.Fprintf(&buf, "WARNING\n")
+	} else {
+		fmt.Fprintf(&buf, "OK\n")
+	}
+	fmt.Fprintf(&buf, "\t\tAvailable Spare: ")
+	if cr.Stats.Spare {
+		fmt.Fprintf(&buf, "WARNING\n")
+	} else {
+		fmt.Fprintf(&buf, "OK\n")
+	}
+	fmt.Fprintf(&buf, "\t\tDevice Reliability: ")
+	if cr.Stats.DeviceReliability {
+		fmt.Fprintf(&buf, "WARNING\n")
+	} else {
+		fmt.Fprintf(&buf, "OK\n")
+	}
+	fmt.Fprintf(&buf, "\t\tRead Only: ")
+	if cr.Stats.Readonly {
+		fmt.Fprintf(&buf, "WARNING\n")
+	} else {
+		fmt.Fprintf(&buf, "OK\n")
+	}
+	fmt.Fprintf(&buf, "\t\tVolatile Memory Backup: ")
+	if cr.Stats.VolatileMemory {
+		fmt.Fprintf(&buf, "WARNING\n")
+	} else {
+		fmt.Fprintf(&buf, "OK\n")
+	}
+
+	return buf.String()
+}
+
+// ClientSmdResult is a container for output of SMD dev list
+// query client requests.
+type ClientSmdResult struct {
+	Address string
+	Devs    *mgmtpb.SmdDevResp
+	Pools   *mgmtpb.SmdPoolResp
+	Err     error
+}
+
+func (cr ClientSmdResult) String() string {
+	var buf bytes.Buffer
+
+	if cr.Err != nil {
+		return fmt.Sprintf("error: " + cr.Err.Error())
+	}
+
+	if cr.Devs != nil {
+		if cr.Devs.Status != 0 {
+			return fmt.Sprintf("error: %v\n", cr.Devs.Status)
+		}
+
+		if len(cr.Devs.Devices) == 0 {
+			fmt.Fprintf(&buf, "No Devices Found\n")
+		}
+
+		for i, d := range cr.Devs.Devices {
+			if i != 0 {
+				fmt.Fprintf(&buf, "\n\t")
+			}
+			fmt.Fprintf(&buf, "Device:\n")
+			fmt.Fprintf(&buf, "\t\tUUID: %+v\n", d.Uuid)
+			fmt.Fprintf(&buf, "\t\tVOS Target IDs: ")
+			for _, t := range d.TgtIds {
+				fmt.Fprintf(&buf, "%d ", t)
+			}
+		}
+	}
+
+	if cr.Pools != nil {
+		if cr.Pools.Status != 0 {
+			return fmt.Sprintf("error: %v\n", cr.Pools.Status)
+		}
+
+		if len(cr.Pools.Pools) == 0 {
+			fmt.Fprintf(&buf, "No Pools Found\n")
+		}
+
+		for i, p := range cr.Pools.Pools {
+			if i != 0 {
+				fmt.Fprintf(&buf, "\n\t")
+			}
+			fmt.Fprintf(&buf, "Pool:\n")
+			fmt.Fprintf(&buf, "\t\tUUID: %+v\n", p.Uuid)
+			fmt.Fprintf(&buf, "\t\tVOS Target IDs: ")
+			for _, t := range p.TgtIds {
+				fmt.Fprintf(&buf, "%d ", t)
+			}
+			fmt.Fprintf(&buf, "\n")
+			fmt.Fprintf(&buf, "\t\tSPDK Blobs: ")
+			for _, b := range p.Blobs {
+				fmt.Fprintf(&buf, "%v ", b)
+			}
+		}
+	}
+
+	return buf.String()
+}
+
 // ResultMap map client addresses to method call ClientResults
 type ResultMap map[string]ClientResult
+type ResultQueryMap map[string]ClientBioResult
+type ResultSmdMap map[string]ClientSmdResult
 
 func (rm ResultMap) String() string {
+	var buf bytes.Buffer
+	servers := make([]string, 0, len(rm))
+
+	for server := range rm {
+		servers = append(servers, server)
+	}
+	sort.Strings(servers)
+
+	for _, server := range servers {
+		fmt.Fprintf(&buf, "%s:\n\t%s\n", server, rm[server])
+	}
+
+	return buf.String()
+}
+
+func (rm ResultQueryMap) String() string {
+	var buf bytes.Buffer
+	servers := make([]string, 0, len(rm))
+
+	for server := range rm {
+		servers = append(servers, server)
+	}
+	sort.Strings(servers)
+
+	for _, server := range servers {
+		fmt.Fprintf(&buf, "%s:\n\t%s\n", server, rm[server])
+	}
+
+	return buf.String()
+}
+
+func (rm ResultSmdMap) String() string {
 	var buf bytes.Buffer
 	servers := make([]string, 0, len(rm))
 
@@ -84,15 +252,32 @@ type ControllerFactory interface {
 }
 
 // controllerFactory as an implementation of ControllerFactory.
-type controllerFactory struct{}
+type controllerFactory struct {
+	log logging.Logger
+}
 
 // create instantiates and connects a client to server at given address.
 func (c *controllerFactory) create(address string, cfg *security.TransportConfig) (Control, error) {
-	controller := &control{}
+	controller := &control{
+		log: c.log,
+	}
 
 	err := controller.connect(address, cfg)
 
 	return controller, err
+}
+
+// chooseServiceLeader will decide which connection to send request on.
+//
+// Currently expect only one connection to be available and return that.
+// TODO: this should probably be implemented on the Connect interface.
+func chooseServiceLeader(cs []Control) (Control, error) {
+	if len(cs) == 0 {
+		return nil, errors.New("no active connections")
+	}
+
+	// just return the first connection, expected to be the service leader
+	return cs[0], nil
 }
 
 // Connect is an external interface providing functionality across multiple
@@ -105,21 +290,27 @@ type Connect interface {
 	// GetActiveConns verifies states and removes inactive conns
 	GetActiveConns(ResultMap) ResultMap
 	ClearConns() ResultMap
-	StoragePrepare(*pb.StoragePrepareReq) ResultMap
-	StorageScan() (ClientCtrlrMap, ClientModuleMap)
+	StoragePrepare(*ctlpb.StoragePrepareReq) ResultMap
+	StorageScan() (ClientCtrlrMap, ClientModuleMap, ClientPmemMap)
 	StorageFormat() (ClientCtrlrMap, ClientMountMap)
-	StorageUpdate(*pb.StorageUpdateReq) (ClientCtrlrMap, ClientModuleMap)
+	StorageUpdate(*ctlpb.StorageUpdateReq) (ClientCtrlrMap, ClientModuleMap)
 	// TODO: implement Burnin client features
 	//StorageBurnIn() (ClientCtrlrMap, ClientModuleMap)
 	ListFeatures() ClientFeatureMap
 	KillRank(uuid string, rank uint32) ResultMap
-	CreatePool(*pb.CreatePoolReq) ResultMap
-	DestroyPool(*pb.DestroyPoolReq) ResultMap
+	PoolCreate(*PoolCreateReq) (*PoolCreateResp, error)
+	PoolDestroy(*PoolDestroyReq) error
+	BioHealthQuery(*mgmtpb.BioHealthReq) ResultQueryMap
+	SmdListDevs(*mgmtpb.SmdDevReq) ResultSmdMap
+	SmdListPools(*mgmtpb.SmdPoolReq) ResultSmdMap
+	SystemMemberQuery() (common.SystemMembers, error)
+	SystemStop() (common.SystemMembers, error)
 }
 
 // connList is an implementation of Connect and stores controllers
 // (connections to clients, one per DAOS server).
 type connList struct {
+	log             logging.Logger
 	transportConfig *security.TransportConfig
 	factory         ControllerFactory
 	controllers     []Control
@@ -260,10 +451,13 @@ func (c *connList) makeRequests(
 
 // NewConnect is a factory for Connect interface to operate over
 // multiple clients.
-func NewConnect() Connect {
+func NewConnect(log logging.Logger) Connect {
 	return &connList{
+		log:             log,
 		transportConfig: nil,
-		factory:         &controllerFactory{},
-		controllers:     []Control{},
+		factory: &controllerFactory{
+			log: log,
+		},
+		controllers: []Control{},
 	}
 }

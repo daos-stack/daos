@@ -33,7 +33,7 @@ import (
 	yaml "gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
-	log "github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 )
 
@@ -98,7 +98,7 @@ func newDefaultConfiguration(ext External) *Configuration {
 // GetConfig loads a configuration file from the path given,
 // or from the default location if none is provided.  It returns a populated
 // Configuration struct based upon the default values and any config file overrides.
-func GetConfig(ConfigPath string) (*Configuration, error) {
+func GetConfig(log logging.Logger, ConfigPath string) (*Configuration, error) {
 	config := NewConfiguration()
 	if ConfigPath != "" {
 		log.Debugf("Overriding default config path with: %s", ConfigPath)

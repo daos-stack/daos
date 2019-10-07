@@ -406,6 +406,21 @@ int
 daos_array_punch(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
 		 daos_event_t *ev);
 
+/**
+ * Retrieve array cell and chunk size from an open handle.
+ *
+ * \param[in]	oh	Array object open handle.
+ * \param[out]	chunk_size
+ *			Chunk size of the array.
+ * \param[out]	cell_size
+ *			Cell size of the array.
+ *
+ * \return		0 on Success, negative on failure.
+ */
+int
+daos_array_get_attr(daos_handle_t oh, daos_size_t *chunk_size,
+		    daos_size_t *cell_size);
+
 #if defined(__cplusplus)
 }
 #endif

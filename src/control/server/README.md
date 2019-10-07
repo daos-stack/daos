@@ -111,21 +111,21 @@ TODO: examples for both DCPM and RAM (emulation) SCM classes including config fi
 
 `daos_server` supports various subcommands (see `daos_server --help` for available subcommands) which will perform stand-alone tasks as opposed to launching as a daemon (default operation if launched without subcommand).
 
-### storage prep-nvme
+### storage prepare --nvme-only
 
 This subcommand requires elevated permissions (sudo).
 
-NVMe access through SPDK as an unprivileged user can be enabled by first running `sudo daos_server storage prep-nvme -w 0000:81:00.0 -p 4096 -u bob`. This will perform the required setup in order for `daos_server` to be run by user "bob" who will own the hugepage mountpoint directory and vfio groups as needed in SPDK operations. If the `target-user` is unspecified (`-u` short option), the target user will be the issuer of the sudo command (or root if not using sudo). The specification of `hugepages` (`-p` short option) defines the number of huge pages to allocate for use by SPDK. The specification of `pci-whitelist` (`-w` short option) allows user to optionally specify which PCI devices to unbind from the Kernel driver for use with SPDK, as opposed to unbinding all devices by default. Multiple devices can be specified as a whitespace separated list of full PCI addresses (-w \"0000:81:00.0 000:2\"). If one of the addresses is non-valid (for example 000:2), then that device will be skipped, unless it is the only address listed in which case all PCI devices will be blacklisted. A use for all device blacklisting could involve the need to only set up hugepages and skip all device unbindings.
+NVMe access through SPDK as an unprivileged user can be enabled by first running `sudo daos_server storage prepare --nvme-only -w 0000:81:00.0 -p 4096 -u bob`. This will perform the required setup in order for `daos_server` to be run by user "bob" who will own the hugepage mountpoint directory and vfio groups as needed in SPDK operations. If the `target-user` is unspecified (`-u` short option), the target user will be the issuer of the sudo command (or root if not using sudo). The specification of `hugepages` (`-p` short option) defines the number of huge pages to allocate for use by SPDK. The specification of `pci-whitelist` (`-w` short option) allows user to optionally specify which PCI devices to unbind from the Kernel driver for use with SPDK, as opposed to unbinding all devices by default. Multiple devices can be specified as a whitespace separated list of full PCI addresses (-w \"0000:81:00.0 000:2\"). If one of the addresses is non-valid (for example 000:2), then that device will be skipped, unless it is the only address listed in which case all PCI devices will be blacklisted. A use for all device blacklisting could involve the need to only set up hugepages and skip all device unbindings.
 
 The configuration commands that require elevated permissions are in `src/control/server/init/setup_spdk.sh` (script is installed as `install/share/control/setup_spdk.sh`).
 
 The sudoers file can be accessed with command `visudo` and permissions can be granted to a user to execute a specific command pattern (requires prior knowledge of `daos_server` binary location):
 
 ```bash
-linuxuser ALL=/home/linuxuser/projects/daos_m/install/bin/daos_server prep-nvme*
+linuxuser ALL=/home/linuxuser/projects/daos_m/install/bin/daos_server prepare --nvme-only*
 ```
 
-See `daos_server storage prep-nvme --help` for usage.
+See `daos_server storage prepare --help` for usage.
 
 ### storage scan
 
@@ -432,3 +432,17 @@ The following animation illustrates starting the control server and using the ma
 #### NVMe Controller Burn-in Validation
 
 Burn-in validation is performed using the [fio tool](https://github.com/axboe/fio) which executes workloads over the SPDK framework using the [fio plugin](https://github.com/spdk/spdk/tree/v18.04.1/examples/nvme/fio_plugin).
+
+## Bootstrapping and DAOS system membership
+
+When starting a data-plane instance, we look at the superblock to determine whether it should be a MS (management service) replica.
+The `daos_server.yml`'s `access_points` parameter is used (only during format) to determine whether an instance is to be a MS replica or not.
+
+When the starting instance is identified as an MS replica, it performs bootstrap and starts.
+If the DAOS system has only one replica (as specified by `access_points` parameter), the host of the bootstrapped instance is now the MS leader.
+Whereas if there are multiple replicas, elections will happen in the background and eventually a leader will be elected.
+
+When the starting instance is not identified as an MS replica, the instance's host calls Join on MgmtSvcClient over gRPC including the instance's host ControlAddress (address that the gRPC server is listening on) in the request addressed to the MS leader.
+
+MgmtSvc running on the MS leader handles the Join request received by gRPC server and forwards request over dRPC to the MS leader instance.
+If the Join request is successful then the MS leader MgmtSvc records the address contained in the request as a new system member.

@@ -135,8 +135,9 @@ ut_device(void **state)
 	smd_free_dev_info(dev_info);
 
 	D_INIT_LIST_HEAD(&dev_list);
-	rc = smd_dev_list(&dev_list);
+	rc = smd_dev_list(&dev_list, &dev_cnt);
 	assert_int_equal(rc, 0);
+	assert_int_equal(dev_cnt, 2);
 
 	d_list_for_each_entry_safe(dev_info, tmp, &dev_list, sdi_link) {
 		if (uuid_compare(dev_info->sdi_id, id1) == 0)
@@ -146,12 +147,9 @@ ut_device(void **state)
 		else
 			assert_true(false);
 
-		dev_cnt++;
-
 		d_list_del(&dev_info->sdi_link);
 		smd_free_dev_info(dev_info);
 	}
-	assert_int_equal(dev_cnt, 2);
 }
 
 static void
@@ -215,8 +213,9 @@ ut_pool(void **state)
 	assert_int_equal(rc, -DER_NONEXIST);
 
 	D_INIT_LIST_HEAD(&pool_list);
-	rc = smd_pool_list(&pool_list);
+	rc = smd_pool_list(&pool_list, &pool_cnt);
 	assert_int_equal(rc, 0);
+	assert_int_equal(pool_cnt, 2);
 
 	d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {
 		if (uuid_compare(pool_info->spi_id, id1) == 0)
@@ -226,12 +225,9 @@ ut_pool(void **state)
 		else
 			assert_true(false);
 
-		pool_cnt++;
-
 		d_list_del(&pool_info->spi_link);
 		smd_free_pool_info(pool_info);
 	}
-	assert_int_equal(pool_cnt, 2);
 
 	rc = smd_pool_unassign(id1, 5);
 	assert_int_equal(rc, -DER_NONEXIST);

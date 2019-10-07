@@ -44,15 +44,18 @@
  * \param oid		[IN]	The target object (shard) ID.
  * \param dti		[IN]	The DTX identifier.
  * \param dkey_hash	[IN]	The hashed dkey.
- * \param time		[IN]	Timestamp of handling the DTX on server.
+ * \param epoch		[IN]	The DTX epoch.
  * \param punch		[IN]	For punch DTX or not.
+ * \param check		[IN]	Check whether the DTX need restart because
+ *				of sync epoch or not.
  *
- * \return		Zero on success and need not additional actions.
- * \return		Negative value if error.
+ * \return		Zero on success.
+ * \return		-DER_INPROGRESS	retry with newer epoch.
+ * \return		Other negative value if error.
  */
 int
 vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
-		uint64_t dkey_hash, uint64_t time, bool punch);
+		uint64_t dkey_hash, daos_epoch_t epoch, bool punch, bool check);
 
 /**
  * Search the specified DTX is in the CoS cache or not.
@@ -91,15 +94,21 @@ vos_dtx_list_cos(daos_handle_t coh, daos_unit_oid_t *oid, uint64_t dkey_hash,
 /**
  * Fetch the list of the DTXs that can be committed.
  *
- * \param coh	[IN]	Container open handle.
- * \param max	[IN]	The max size of the array for DTX entries.
- * \param dtes	[OUT]	The array for DTX entries can be committed.
+ * \param coh		[IN]	Container open handle.
+ * \param max_cnt	[IN]	The max size of the array for DTX entries.
+ * \param oid		[IN]	Only return the DTXs belong to the specified
+ *				object if it is non-NULL.
+ * \param epoch		[IN]	Only return the DTXs that is not newer than
+ *				the specified epoch.
+ * \param dtes		[OUT]	The array for DTX entries can be committed.
  *
  * \return		Positve value for the @dtes array size.
  *			Negative value on failure.
  */
 int
-vos_dtx_fetch_committable(daos_handle_t coh, int max, struct dtx_entry **dtes);
+vos_dtx_fetch_committable(daos_handle_t coh, uint32_t max_cnt,
+			  daos_unit_oid_t *oid, daos_epoch_t epoch,
+			  struct dtx_entry **dtes);
 
 /**
  * Check whether the given DTX is resent one or not.
@@ -196,6 +205,18 @@ vos_dtx_aggregate(daos_handle_t coh, uint64_t max, uint64_t age);
  */
 void
 vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat);
+
+/**
+ * Mark the object has been synced at the specified epoch.
+ *
+ * \param coh	[IN]	Container open handle.
+ * \param oid	[IN]	The object ID.
+ * \param epoch	[IN]	The epoch against that we sync DTXs for the object.
+ *
+ * \return	Zero on success, negative value if error.
+ */
+int
+vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch);
 
 /**
  * Initialize the environment for a VOS instance
@@ -919,6 +940,8 @@ vos_pool_get_scm_cutoff(void);
 enum vos_pool_opc {
 	/** reset pool GC statistics */
 	VOS_PO_CTL_RESET_GC,
+	/** force VEA flush */
+	VOS_PO_CTL_VEA_FLUSH,
 };
 
 /**
@@ -930,5 +953,18 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc);
 
 int
 vos_gc_run(int *credits);
+
+enum vos_cont_opc {
+	/** reset HAE (Highest Aggregated Epoch) **/
+	VOS_CO_CTL_RESET_HAE,
+	/** abort VOS aggregation **/
+	VOS_CO_CTL_ABORT_AGG,
+};
+
+/**
+ * Set various vos container state, see \a vos_cont_opc.
+ */
+int
+vos_cont_ctl(daos_handle_t coh, enum vos_cont_opc opc);
 
 #endif /* __VOS_API_H */

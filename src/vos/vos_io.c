@@ -28,9 +28,11 @@
 #define D_LOGFAC	DD_FAC(vos)
 
 #include <daos/common.h>
+#include <daos/checksum.h>
 #include <daos/btree.h>
 #include <daos_types.h>
 #include <daos_srv/vos.h>
+#include <daos.h>
 #include "vos_internal.h"
 #include "evt_priv.h"
 
@@ -44,6 +46,10 @@ struct vos_io_context {
 	struct vos_object	*ic_obj;
 	/** BIO descriptor, has ic_iod_nr SGLs */
 	struct bio_desc		*ic_biod;
+	/** current dkey info */
+	struct vos_krec_df	*ic_dkey_krec;
+	daos_handle_t		 ic_dkey_loh;
+	struct ilog_entries	 ic_dkey_entries;
 	/** cursor of SGL & IOV in BIO descriptor */
 	unsigned int		 ic_sgl_at;
 	unsigned int		 ic_iov_at;
@@ -152,6 +158,7 @@ vos_ioc_destroy(struct vos_io_context *ioc)
 		vos_obj_release(vos_obj_cache_current(), ioc->ic_obj);
 
 	vos_ioc_reserve_fini(ioc);
+	ilog_fetch_finish(&ioc->ic_dkey_entries);
 	vos_cont_decref(ioc->ic_cont);
 	D_FREE(ioc);
 }
@@ -162,9 +169,15 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	       bool size_fetch, struct vos_io_context **ioc_pp)
 {
 	struct vos_container *cont;
-	struct vos_io_context *ioc;
+	struct vos_io_context *ioc = NULL;
 	struct bio_io_context *bioc;
 	int i, rc;
+
+	if (iod_nr == 0) {
+		D_ERROR("Invalid iod_nr (0).\n");
+		rc = -DER_IO_INVAL;
+		goto error;
+	}
 
 	D_ALLOC_PTR(ioc);
 	if (ioc == NULL)
@@ -181,6 +194,9 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_actv = NULL;
 	ioc->ic_actv_cnt = ioc->ic_actv_at = 0;
 	ioc->ic_umoffs_cnt = ioc->ic_umoffs_at = 0;
+	ioc->ic_dkey_krec = NULL;
+	ioc->ic_dkey_loh = DAOS_HDL_INVAL;
+	ilog_fetch_init(&ioc->ic_dkey_entries);
 	D_INIT_LIST_HEAD(&ioc->ic_blk_exts);
 
 	rc = vos_ioc_reserve_init(ioc);
@@ -201,8 +217,10 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 		int iov_nr = iods[i].iod_nr;
 		struct bio_sglist *bsgl;
 
-		if (iods[i].iod_type == DAOS_IOD_SINGLE && iov_nr != 1) {
-			D_ERROR("Invalid sv iod_nr=%d\n", iov_nr);
+		if ((iods[i].iod_type == DAOS_IOD_SINGLE && iov_nr != 1) ||
+		    (iov_nr == 0 && iods[i].iod_recxs != NULL)) {
+			D_ERROR("Invalid iod_nr=%d, iod_type %d.\n",
+				iov_nr, iods[i].iod_type);
 			rc = -DER_IO_INVAL;
 			goto error;
 		}
@@ -220,7 +238,8 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	*ioc_pp = ioc;
 	return 0;
 error:
-	vos_ioc_destroy(ioc);
+	if (ioc != NULL)
+		vos_ioc_destroy(ioc);
 	return rc;
 }
 
@@ -268,8 +287,8 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 {
 	struct vos_key_bundle	 kbund;
 	struct vos_rec_bundle	 rbund;
-	d_iov_t		 kiov; /* iov to carry key bundle */
-	d_iov_t		 riov; /* iov to carray record bundle */
+	d_iov_t			 kiov; /* iov to carry key bundle */
+	d_iov_t			 riov; /* iov to carray record bundle */
 	struct bio_iov		 biov; /* iov to return data buffer */
 	int			 rc;
 	daos_iod_t		*iod = &ioc->ic_iods[ioc->ic_sgl_at];
@@ -396,8 +415,8 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 			daos_size_t  csum_nr;
 
 			D_ASSERT(lo >= recx->rx_idx);
-			csum_ptr = daos_csum_from_offset(csum,
-						((lo - recx->rx_idx) * rsize));
+			csum_ptr = dcb_off2csum(csum,
+				(uint32_t)((lo - recx->rx_idx) * rsize));
 			csum_nr = csum_chunk_count(csum->cs_chunksize,
 						   lo, hi, rsize);
 
@@ -467,82 +486,196 @@ ioc_trim_tail_holes(struct vos_io_context *ioc)
 		iod_empty_sgl(ioc, ioc->ic_sgl_at);
 }
 
-static int
-akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
+int
+key_ilog_fetch(struct vos_object *obj, uint32_t intent,
+	       const daos_epoch_range_t *epr, struct vos_krec_df *krec,
+	       struct ilog_entries *entries)
 {
-	daos_iod_t	*iod = &ioc->ic_iods[ioc->ic_sgl_at];
-	struct vos_krec_df *krec = NULL;
-	daos_handle_t	 toh = DAOS_HDL_INVAL;
-	daos_epoch_range_t	val_epr = {0, ioc->ic_epoch};
-	int		 i, rc;
-	int		 flags = 0;
+	daos_handle_t		 loh;
+	struct ilog_desc_cbs	 cbs;
+	struct umem_instance	*umm = vos_obj2umm(obj);
+	int			 rc;
+
+	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(obj->obj_cont));
+	rc = ilog_open(umm, &krec->kr_ilog, &cbs, &loh);
+
+	if (rc != 0) {
+		D_ERROR("Could not open ilog: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	rc = ilog_fetch(loh, intent, epr, entries);
+	if (rc == -DER_NONEXIST)
+		goto out;
+	if (rc != 0)
+		D_ERROR("Could not fetch ilog: "DF_RC"\n", DP_RC(rc));
+out:
+	ilog_close(loh);
+
+	return 0;
+}
+
+static int
+key_ilog_update_range(struct vos_io_context *ioc, struct ilog_entries *entries,
+		      daos_epoch_range_t *epr)
+{
+	struct ilog_entry	*entry;
+	bool			 has_updates = false;
+
+	ilog_foreach_entry_reverse(entries, entry) {
+		if (entry->ie_id.id_epoch > epr->epr_hi)
+			continue; /* skip newer entries */
+
+		if (entry->ie_punch) {
+			if (entry->ie_status == ILOG_INVISIBLE)
+				/* A key punch is in-flight */
+				return -DER_INPROGRESS;
+
+			if (entry->ie_id.id_epoch < epr->epr_lo)
+				break; /* entry is outside of range */
+
+			/* Add 1 to ignore the punched epoch */
+			epr->epr_lo = entry->ie_id.id_epoch + 1;
+			break;
+		}
+
+		/* Even if the key is unavailable, we still don't know if the
+		 * value is in progress or non-existent so let it continue
+		 */
+		has_updates = true;
+
+		if (entry->ie_id.id_epoch < epr->epr_lo)
+			break; /* entry is outside of range */
+	}
+
+	if (!has_updates)
+		return -DER_NONEXIST;
+
+	return 0;
+}
+
+static int
+key_ilog_check(struct vos_io_context *ioc, int prior_rc,
+	       const daos_epoch_range_t *orig_epr, struct vos_krec_df *krec,
+	       struct ilog_entries *entries, daos_epoch_range_t *update_epr,
+	       daos_epoch_range_t *iod_eprs, int idx)
+{
+	daos_epoch_t		 hi;
+	int			 rc;
+
+	hi = ioc->ic_epoch;
+	if (iod_eprs && iod_eprs[idx].epr_lo != 0)
+		hi = iod_eprs[idx].epr_lo;
+
+	if (update_epr->epr_hi == hi)
+		return prior_rc;
+
+	*update_epr = *orig_epr;
+	/* This checks to make sure we always stay in range */
+	D_ASSERT(orig_epr->epr_hi >= hi);
+	update_epr->epr_hi = hi;
+
+	rc = key_ilog_update_range(ioc, &ioc->ic_dkey_entries,
+				   update_epr);
+	if (rc == 0)
+		rc = key_ilog_update_range(ioc, entries, update_epr);
+
+	return rc;
+}
+
+static int
+akey_fetch(struct vos_io_context *ioc, const daos_epoch_range_t *epr,
+	   daos_handle_t ak_toh)
+{
+	daos_iod_t		*iod = &ioc->ic_iods[ioc->ic_sgl_at];
+	struct vos_krec_df	*krec = NULL;
+	struct	ilog_entries	 entries;
+	daos_epoch_range_t	 val_epr = {0};
+	daos_handle_t		 toh = DAOS_HDL_INVAL;
+	int			 i, rc;
+	int			 flags = 0;
+	int			 prior_rc;
+	bool			 is_array = (iod->iod_type == DAOS_IOD_ARRAY);
 
 	D_DEBUG(DB_IO, "akey "DF_KEY" fetch %s eph "DF_U64"\n",
 		DP_KEY(&iod->iod_name),
 		iod->iod_type == DAOS_IOD_ARRAY ? "array" : "single",
 		ioc->ic_epoch);
 
-	if (iod->iod_type == DAOS_IOD_ARRAY)
+	if (is_array)
 		flags |= SUBTR_EVT;
 
-	if (iod->iod_type == DAOS_IOD_SINGLE) {
-		if (iod->iod_eprs && iod->iod_eprs[0].epr_lo != 0)
-			val_epr.epr_hi = iod->iod_eprs[0].epr_lo;
+	ilog_fetch_init(&entries);
 
-		rc = key_tree_prepare(ioc->ic_obj, val_epr.epr_hi, ak_toh,
-				      VOS_BTR_AKEY, &iod->iod_name, flags,
-				      DAOS_INTENT_DEFAULT, NULL, &toh);
+	rc = key_tree_prepare(ioc->ic_obj, ak_toh,
+			      VOS_BTR_AKEY, &iod->iod_name, flags,
+			      DAOS_INTENT_DEFAULT, &krec, &toh);
+
+	if (rc == 0)
+		rc = key_ilog_fetch(ioc->ic_obj, DAOS_INTENT_DEFAULT, epr,
+				    krec, &entries);
+
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST) {
+			D_DEBUG(DB_IO, "Nonexistent akey %.*s\n",
+				(int)iod->iod_name.iov_len,
+				(char *)iod->iod_name.iov_buf);
+			iod_empty_sgl(ioc, ioc->ic_sgl_at);
+			rc = 0;
+		}
+		goto out;
+	}
+
+	if (iod->iod_type == DAOS_IOD_SINGLE) {
+		rc = key_ilog_check(ioc, 0, epr, krec, &entries, &val_epr,
+				    iod->iod_eprs, 0);
+
 		if (rc != 0) {
 			if (rc == -DER_NONEXIST) {
-				D_DEBUG(DB_IO, "Nonexistent akey "DF_KEY"\n",
-					DP_KEY(&iod->iod_name));
+				D_DEBUG(DB_IO, "Nonexistent akey %.*s\n",
+					(int)iod->iod_name.iov_len,
+					(char *)iod->iod_name.iov_buf);
 				iod_empty_sgl(ioc, ioc->ic_sgl_at);
 				rc = 0;
 			}
-			return rc;
+
+			if (rc == -DER_INPROGRESS)
+				D_DEBUG(DB_TRACE, "Cannot fetch akey because of"
+					" conflicting modification\n");
+			else
+				D_ERROR("Fetch akey failed: rc="DF_RC"\n",
+					DP_RC(rc));
+			goto out;
 		}
 
 		rc = akey_fetch_single(toh, &val_epr, &iod->iod_size, ioc);
 
-		key_tree_release(toh, false);
-
-		return rc;
+		goto out;
 	}
 
 	iod->iod_size = 0;
+	prior_rc = 0;
 	for (i = 0; i < iod->iod_nr; i++) {
 		daos_size_t rsize;
-		if (iod->iod_eprs && iod->iod_eprs[i].epr_lo)
-			val_epr.epr_hi = iod->iod_eprs[i].epr_lo;
+		prior_rc = rc = key_ilog_check(ioc, prior_rc, epr, krec,
+					       &entries, &val_epr,
+					       iod->iod_eprs, i);
+		if (rc == -DER_NONEXIST) {
+			D_DEBUG(DB_IO, "Nonexistent akey %.*s\n",
+				(int)iod->iod_name.iov_len,
+				(char *)iod->iod_name.iov_buf);
+			rc = 0;
+			continue;
+		}
 
-		/* If epoch on each iod_eprs are out of boundary, then it needs
-		 * to re-prepare the key tree.
-		 */
-		if (daos_handle_is_inval(toh) ||
-		    (val_epr.epr_hi  > krec->kr_latest ||
-		     val_epr.epr_hi < krec->kr_earliest)) {
-			if (!daos_handle_is_inval(toh)) {
-				key_tree_release(toh, true);
-				toh = DAOS_HDL_INVAL;
-			}
-
-			D_DEBUG(DB_IO,
-				"prepare the key tree for eph "DF_U64"\n",
-				val_epr.epr_hi);
-			rc = key_tree_prepare(ioc->ic_obj, val_epr.epr_hi,
-					      ak_toh, VOS_BTR_AKEY,
-					      &iod->iod_name, flags,
-					      DAOS_INTENT_DEFAULT, &krec, &toh);
-			if (rc != 0) {
-				if (rc == -DER_NONEXIST) {
-					D_DEBUG(DB_IO,
-						"Nonexist akey "DF_KEY"\n",
-						DP_KEY(&iod->iod_name));
-					rc = 0;
-					continue;
-				}
-				return rc;
-			}
+		if (rc != 0) {
+			if (rc == -DER_INPROGRESS)
+				D_DEBUG(DB_TRACE, "Cannot fetch akey because"
+					" of conflicting modification\n");
+			else
+				D_ERROR("Fetch akey failed: rc="DF_RC"\n",
+					DP_RC(rc));
+			goto out;
 		}
 
 		D_DEBUG(DB_IO, "fetch %d eph "DF_U64"\n", i, val_epr.epr_hi);
@@ -574,7 +707,9 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 	ioc_trim_tail_holes(ioc);
 out:
 	if (!daos_handle_is_inval(toh))
-		key_tree_release(toh, true);
+		key_tree_release(toh, is_array);
+
+	ilog_fetch_finish(&entries);
 	return rc;
 }
 
@@ -591,40 +726,46 @@ iod_set_cursor(struct vos_io_context *ioc, unsigned int sgl_at)
 static int
 dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 {
-	struct vos_object *obj = ioc->ic_obj;
-	daos_handle_t	   toh;
-	int		   i, rc;
+	struct vos_object	*obj = ioc->ic_obj;
+	daos_handle_t		 toh = DAOS_HDL_INVAL;
+	daos_epoch_range_t	 epr = {0, ioc->ic_epoch};
+	int			 i, rc;
 
 	rc = obj_tree_init(obj);
 	if (rc != 0)
 		return rc;
 
-	rc = key_tree_prepare(obj, ioc->ic_epoch, obj->obj_toh, VOS_BTR_DKEY,
-			      dkey, 0, DAOS_INTENT_DEFAULT, NULL, &toh);
+	rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY,
+			      dkey, 0, DAOS_INTENT_DEFAULT, &ioc->ic_dkey_krec,
+			      &toh);
+
+	if (rc == 0)
+		rc = key_ilog_fetch(ioc->ic_obj, DAOS_INTENT_DEFAULT, &epr,
+				    ioc->ic_dkey_krec, &ioc->ic_dkey_entries);
+
 	if (rc == -DER_NONEXIST) {
 		for (i = 0; i < ioc->ic_iod_nr; i++)
 			iod_empty_sgl(ioc, i);
 		D_DEBUG(DB_IO, "Nonexistent dkey\n");
-		return 0;
+		rc = 0;
+		goto out;
 	}
 
 	if (rc != 0) {
-		if (rc == -DER_INPROGRESS)
-			D_DEBUG(DB_TRACE, "Cannot prepare subtree because "
-				"of conflict modification: %d\n", rc);
-		else
-			D_ERROR("Failed to prepare subtree: %d\n", rc);
-		return rc;
+		D_ERROR("Failed to prepare subtree: %d\n", rc);
+		goto out;
 	}
 
 	for (i = 0; i < ioc->ic_iod_nr; i++) {
 		iod_set_cursor(ioc, i);
-		rc = akey_fetch(ioc, toh);
+		rc = akey_fetch(ioc, &epr, toh);
 		if (rc != 0)
 			break;
 	}
 
-	key_tree_release(toh, false);
+out:
+	if (!daos_handle_is_inval(toh))
+		key_tree_release(toh, false);
 	return rc;
 }
 
@@ -708,16 +849,16 @@ akey_update_single(daos_handle_t toh, daos_epoch_t epoch, uint32_t pm_ver,
 	struct vos_key_bundle	 kbund;
 	struct vos_rec_bundle	 rbund;
 	daos_csum_buf_t		 csum;
-	d_iov_t		 kiov, riov;
+	d_iov_t			 kiov, riov;
 	struct bio_iov		*biov;
 	umem_off_t		 umoff;
 	daos_iod_t		*iod = &ioc->ic_iods[ioc->ic_sgl_at];
 	int			 rc;
 
+	dcb_set_null(&csum);
 	tree_key_bundle2iov(&kbund, &kiov);
 	kbund.kb_epoch	= epoch;
 
-	daos_csum_set(&csum, NULL, 0);
 
 	umoff = iod_update_umoff(ioc);
 	D_ASSERT(!UMOFF_IS_NULL(umoff));
@@ -770,7 +911,7 @@ akey_update_recx(daos_handle_t toh, daos_epoch_t epoch, uint32_t pm_ver,
 	ent.ei_ver = pm_ver;
 	ent.ei_inob = rsize;
 
-	if (daos_csum_isvalid(iod_csum)) {
+	if (dcb_is_valid(iod_csum)) {
 		ent.ei_csum = *iod_csum;
 		/* change the checksum for fault injection*/
 		if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_FAIL))
@@ -803,19 +944,41 @@ update_bounds(daos_epoch_range_t *epr_bound,
 }
 
 static int
-akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
-	    daos_epoch_range_t *dkey_epr)
+key_ilog_update(struct vos_io_context *ioc, daos_handle_t loh,
+		daos_epoch_t *epoch, const daos_epoch_range_t *eprs, int idx,
+		daos_epoch_range_t *max_epr)
 {
-	struct vos_object  *obj = ioc->ic_obj;
-	struct vos_krec_df *krec = NULL;
-	daos_iod_t	   *iod = &ioc->ic_iods[ioc->ic_sgl_at];
-	bool		    is_array = (iod->iod_type == DAOS_IOD_ARRAY);
-	int		    flags = SUBTR_CREATE;
-	daos_epoch_t	    epoch = ioc->ic_epoch;
-	daos_epoch_range_t  akey_epr = {DAOS_EPOCH_MAX, 0};
-	daos_handle_t	    toh = DAOS_HDL_INVAL;
-	int		    i;
-	int		    rc = 0;
+	int			 rc;
+
+	if (!eprs || eprs[idx].epr_lo == 0 || *epoch == eprs[idx].epr_lo)
+		return 0;
+
+	*epoch = eprs[idx].epr_lo;
+	update_bounds(max_epr, &eprs[idx]);
+
+	rc =  ilog_update(loh, *epoch, false);
+	if (rc == 0)
+		rc = ilog_update(ioc->ic_dkey_loh, *epoch, false);
+
+	return rc;
+}
+
+static int
+akey_update(struct vos_io_context *ioc, uint32_t pm_ver,
+	    daos_handle_t ak_toh, daos_epoch_range_t *dkey_epr)
+{
+	struct vos_object	*obj = ioc->ic_obj;
+	struct vos_krec_df	*krec = NULL;
+	daos_iod_t		*iod = &ioc->ic_iods[ioc->ic_sgl_at];
+	daos_handle_t		 loh = DAOS_HDL_INVAL;
+	bool			 is_array = (iod->iod_type == DAOS_IOD_ARRAY);
+	int			 flags = SUBTR_CREATE;
+	daos_epoch_t		 epoch = 0;
+	struct ilog_desc_cbs	 cbs;
+	daos_epoch_range_t	 akey_epr = {ioc->ic_epoch, ioc->ic_epoch};
+	daos_handle_t		 toh = DAOS_HDL_INVAL;
+	int			 i;
+	int			 rc = 0;
 
 	D_DEBUG(DB_TRACE, "akey "DF_KEY" update %s value eph "DF_U64"\n",
 		DP_KEY(&iod->iod_name), is_array ? "array" : "single",
@@ -824,19 +987,32 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 	if (is_array)
 		flags |= SUBTR_EVT;
 
-	if (iod->iod_eprs == NULL || iod->iod_eprs[0].epr_lo == 0)
-		akey_epr.epr_hi = akey_epr.epr_lo = epoch;
+	rc = key_tree_prepare(obj, ak_toh, VOS_BTR_AKEY,
+			      &iod->iod_name, flags, DAOS_INTENT_UPDATE,
+			      &krec, &toh);
+	if (rc != 0)
+		return rc;
+
+	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(ioc->ic_obj->obj_cont));
+	rc = ilog_open(vos_ioc2umm(ioc), &krec->kr_ilog, &cbs, &loh);
+	if (rc != 0)
+		return rc;
+
+	rc = key_ilog_update(ioc, loh, &epoch, &akey_epr, 0, &akey_epr);
+	if (rc != 0) {
+		D_ERROR("Failed to update ilog: rc = %s\n",
+			d_errstr(rc));
+		goto out;
+	}
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
-		if (iod->iod_eprs && iod->iod_eprs[0].epr_lo != 0) {
-			epoch = iod->iod_eprs[0].epr_lo;
-			update_bounds(&akey_epr, &iod->iod_eprs[0]);
+		rc = key_ilog_update(ioc, loh, &epoch, iod->iod_eprs, 0,
+				     &akey_epr);
+		if (rc != 0) {
+			D_ERROR("Failed to update ilog: rc = %s\n",
+				d_errstr(rc));
+			goto out;
 		}
-		rc = key_tree_prepare(obj, epoch, ak_toh, VOS_BTR_AKEY,
-				      &iod->iod_name, flags, DAOS_INTENT_UPDATE,
-				      &krec, &toh);
-		if (rc != 0)
-			return rc;
 
 		D_DEBUG(DB_IO, "Single update eph "DF_U64"\n", epoch);
 		rc = akey_update_single(toh, epoch, pm_ver, iod->iod_size, ioc);
@@ -846,24 +1022,12 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 	} /* else: array */
 
 	for (i = 0; i < iod->iod_nr; i++) {
-		if (iod->iod_eprs && iod->iod_eprs[i].epr_lo != 0) {
-			update_bounds(&akey_epr, &iod->iod_eprs[i]);
-			epoch = iod->iod_eprs[i].epr_lo;
-		}
-
-		if (daos_handle_is_inval(toh) ||
-		    (epoch > krec->kr_latest || epoch < krec->kr_earliest)) {
-			if (!daos_handle_is_inval(toh)) {
-				key_tree_release(toh, is_array);
-				toh = DAOS_HDL_INVAL;
-			}
-
-			/* re-prepare the tree if epoch is different */
-			rc = key_tree_prepare(obj, epoch, ak_toh, VOS_BTR_AKEY,
-					      &iod->iod_name, flags,
-					      DAOS_INTENT_UPDATE, &krec, &toh);
-			if (rc != 0)
-				return rc;
+		rc = key_ilog_update(ioc, loh, &epoch, iod->iod_eprs, i,
+				     &akey_epr);
+		if (rc != 0) {
+			D_ERROR("Failed to update ilog: rc = %s\n",
+				d_errstr(rc));
+			goto out;
 		}
 
 		D_DEBUG(DB_IO, "Array update %d eph "DF_U64"\n", i, epoch);
@@ -874,9 +1038,11 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 			goto failed;
 	}
 out:
-	rc = vos_df_ts_update(ioc->ic_obj, &krec->kr_latest, &akey_epr);
 	update_bounds(dkey_epr, &akey_epr);
 failed:
+	if (!daos_handle_is_inval(loh))
+		ilog_close(loh);
+
 	if (!daos_handle_is_inval(toh))
 		key_tree_release(toh, is_array);
 
@@ -888,9 +1054,9 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey)
 {
 	struct vos_object	*obj = ioc->ic_obj;
 	struct vos_obj_df	*obj_df;
-	struct vos_krec_df	*krec = NULL;
 	daos_epoch_range_t	 dkey_epr = {ioc->ic_epoch, ioc->ic_epoch};
 	daos_handle_t		 ak_toh;
+	struct ilog_desc_cbs	 cbs;
 	bool			 subtr_created = false;
 	int			 i, rc;
 
@@ -898,26 +1064,25 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey)
 	if (rc != 0)
 		return rc;
 
+	rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY, dkey,
+			      SUBTR_CREATE, DAOS_INTENT_UPDATE,
+			      &ioc->ic_dkey_krec, &ak_toh);
+	if (rc != 0) {
+		D_ERROR("Error preparing dkey tree: rc="DF_RC"\n", DP_RC(rc));
+		goto out;
+	}
+	subtr_created = true;
+
+	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(ioc->ic_obj->obj_cont));
+	rc = ilog_open(vos_ioc2umm(ioc), &ioc->ic_dkey_krec->kr_ilog, &cbs,
+		       &ioc->ic_dkey_loh);
+	if (rc != 0) {
+		D_ERROR("Error opening dkey ilog: rc="DF_RC"\n", DP_RC(rc));
+		goto out;
+	}
+
 	for (i = 0; i < ioc->ic_iod_nr; i++) {
 		iod_set_cursor(ioc, i);
-
-		if (!subtr_created) {
-			rc = key_tree_prepare(obj, ioc->ic_epoch, obj->obj_toh,
-					      VOS_BTR_DKEY, dkey, SUBTR_CREATE,
-					      DAOS_INTENT_UPDATE,
-					      &krec, &ak_toh);
-			if (rc != 0) {
-				if (rc == -DER_INPROGRESS)
-					D_DEBUG(DB_TRACE, "Cannot preparing "
-						"dkey tree because of conflict "
-						"modification: %d\n", rc);
-				else
-					D_ERROR("Error preparing dkey tree: "
-						"%d\n", rc);
-				goto out;
-			}
-			subtr_created = true;
-		}
 
 		rc = akey_update(ioc, pm_ver, ak_toh, &dkey_epr);
 		if (rc != 0)
@@ -928,15 +1093,14 @@ out:
 	if (!subtr_created)
 		return rc;
 
+	if (!daos_handle_is_inval(ioc->ic_dkey_loh))
+		ilog_close(ioc->ic_dkey_loh);
+
 	if (rc != 0)
 		goto release;
 
 	obj_df = obj->obj_df;
-	D_ASSERT(krec != NULL);
 	D_ASSERT(obj_df != NULL);
-	rc = vos_df_ts_update(obj, &krec->kr_latest, &dkey_epr);
-	if (rc != 0)
-		goto release;
 	rc = vos_df_ts_update(obj, &obj_df->vo_latest, &dkey_epr);
 release:
 	key_tree_release(ak_toh, false);

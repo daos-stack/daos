@@ -222,7 +222,7 @@ tx_close_cb(tse_task_t *task, void *data)
 {
 	daos_handle_t *th = (daos_handle_t *)data;
 
-	dc_tx_rebuild_close(*th);
+	dc_tx_local_close(*th);
 	return task->dt_result;
 }
 
@@ -236,7 +236,7 @@ dsc_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	int		rc;
 
 	coh = dc_obj_hdl2cont_hdl(oh);
-	rc = dc_tx_rebuild_open(coh, epoch, &th);
+	rc = dc_tx_local_open(coh, epoch, &th);
 	if (rc)
 		return rc;
 
@@ -264,7 +264,7 @@ dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	int		rc;
 
 	coh = dc_obj_hdl2cont_hdl(oh);
-	rc = dc_tx_rebuild_open(coh, epoch, &th);
+	rc = dc_tx_local_open(coh, epoch, &th);
 	if (rc)
 		return rc;
 
@@ -286,8 +286,7 @@ dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 int
 dsc_obj_list_obj(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		 daos_key_t *akey, daos_size_t *size, uint32_t *nr,
-		 daos_key_desc_t *kds, daos_epoch_range_t *eprs,
-		 d_sg_list_t *sgl, daos_anchor_t *anchor,
+		 daos_key_desc_t *kds, d_sg_list_t *sgl, daos_anchor_t *anchor,
 		 daos_anchor_t *dkey_anchor, daos_anchor_t *akey_anchor)
 {
 	tse_task_t	*task;
@@ -295,12 +294,12 @@ dsc_obj_list_obj(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	int		rc;
 
 	coh = dc_obj_hdl2cont_hdl(oh);
-	rc = dc_tx_rebuild_open(coh, epoch, &th);
+	rc = dc_tx_local_open(coh, epoch, &th);
 	if (rc)
 		return rc;
 
 	rc = dc_obj_list_obj_task_create(oh, th, dkey, akey, size, nr, kds,
-					 eprs, sgl, anchor, dkey_anchor,
+					 sgl, anchor, dkey_anchor,
 					 akey_anchor, true, NULL,
 					 dsc_scheduler(), &task);
 	if (rc)
