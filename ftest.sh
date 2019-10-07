@@ -117,7 +117,6 @@ cleanup() {
 pre_clean
 
 # shellcheck disable=SC1091
-# shellcheck disable=SC2086
 . .build_vars.sh
 
 if ${TEARDOWN_ONLY:-false}; then
@@ -126,7 +125,8 @@ if ${TEARDOWN_ONLY:-false}; then
 fi
 
 # let's output to a dir in the tree
-if [ $SL_PREFIX == /usr ]; then
+# shellcheck disable=SC2086
+if [ ${SL_PREFIX} == /usr ]; then
     rm -rf /tmp/ftest/avocado ./*_results.xml
     mkdir -p /tmp/ftest/avocado/job-results
 else
@@ -137,7 +137,8 @@ trap 'set +e; cleanup' EXIT
 
 CLUSH_ARGS=($CLUSH_ARGS)
 
-if [ $SL_PREFIX == /usr ]; then
+# shellcheck disable=SC2086
+if [ ${SL_PREFIX} == /usr ]; then
     # not sure should be /usr or / here
     DAOS_BASE='/'
 else
@@ -176,7 +177,7 @@ fi
 mkdir /var/run/daos_{agent,server}
 chown \$current_username -R /var/run/daos_{agent,server}
 chmod 0755 /var/run/daos_{agent,server}
-if [ $SL_PREFIX != /usr ]; then
+if [ ${SL_PREFIX} != /usr ]; then
     mkdir -p $DAOS_BASE
 fi
 ed <<EOF /etc/fstab
@@ -185,7 +186,7 @@ $NFS_SERVER:$PWD $DAOS_BASE nfs defaults 0 0 # added by ftest.sh
 .
 wq
 EOF
-if [ $SL_PREFIX != /usr ]; then
+if [ ${SL_PREFIX} != /usr ]; then
     mount \\\"$DAOS_BASE\\\"\"
 fi
 
@@ -203,9 +204,10 @@ shift || true
 args+=" $*"
 
 # shellcheck disable=SC2029
+# shellcheck disable=SC2086
 if ! ssh $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" "set -ex
 ulimit -c unlimited
-if [ $SL_PREFIX == /usr ]; then
+if [ ${SL_PREFIX} == /usr ]; then
     rm -rf /tmp/ftest
 else
     rm -rf $DAOS_BASE/install/tmp
@@ -222,7 +224,7 @@ export D_LOG_FILE=\"$TEST_TAG_DIR/daos.log\"
 mkdir -p ~/.config/avocado/
 cat <<EOF > ~/.config/avocado/avocado.conf
 [datadir.paths]
-if [ $SL_PREFIX == /usr ]; then
+if [ ${SL_PREFIX} == /usr ]; then
     logs_dir = /tmp/ftest/avocado/job-results
 else
     logs_dir = $DAOS_BASE/install/tmp/ftest/avocado/job-results
@@ -315,7 +317,7 @@ wq
 EOF
 fi
 
-pushd $SL_PREFIX/lib/daos/TESTING/ftest
+pushd ${SL_PREFIX}/lib/daos/TESTING/ftest
 
 # make sure no lingering corefiles or junit files exist
 rm -f core.* *_results.xml
@@ -331,7 +333,7 @@ launch_py_vers=\$(\$launch_py -c 'import sys; \
 print(\"{}.{}\".format(sys.version_info[0], sys.version_info[1]))')
 
 export PYTHONPATH=./util:../../utils/py/:./util/apricot:\
-$SL_PREFIX/lib/python\$launch_py_vers/site-packages
+${SL_PREFIX}/lib/python\$launch_py_vers/site-packages
 
 if ! ./launch.py -c -a -r -i -s -ts ${TEST_NODES} ${TEST_TAG_ARR[*]}; then
     rc=\${PIPESTATUS[0]}
@@ -341,7 +343,7 @@ fi
 
 # Remove the latest avocado symlink directory to avoid inclusion in the
 # jenkins build artifacts
-if [ $SL_PREFIX == "/usr" ]; then
+if [ ${SL_PREFIX} == /usr ]; then
     unlink /tmp/ftest/avocado/job-results/latest
 else
     unlink $DAOS_BASE/install/tmp/ftest/avocado/job-results/latest
