@@ -199,7 +199,7 @@ class TestWithServers(TestWithoutServers):
         server_count = self.params.get("server_count", "/run/hosts/*")
         client_count = self.params.get("client_count", "/run/hosts/*")
         self.nvme_parameter = self.params.get(
-            "bdev_class", '/server_config/server/')
+            "bdev_class", '/server_config/servers/')
         # If server or client host list are defined through valid slurm
         # partition names override any hosts specified through lists.
         test_servers, self.partition_servers = self.get_partition_hosts(
@@ -271,7 +271,7 @@ class TestWithServers(TestWithoutServers):
         # Stop the servers
         errors.extend(self.stop_servers())
 
-        # Disable fault injection, if enabled
+        # Complete tear down actions from the inherited class
         try:
             super(TestWithServers, self).tearDown()
         except OSError as error:
