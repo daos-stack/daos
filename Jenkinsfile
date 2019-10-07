@@ -182,8 +182,13 @@ pipeline {
                     }
                 }
                 stage('Build RPM on SLES 12.3') {
-                    when { beforeAgent true
-                           environment name: 'SLES12_3_DOCKER', value: 'true' }
+                    when {
+                        beforeAgent true
+                        allOf {
+                            expression { false }
+                            environment name: 'SLES12_3_DOCKER', value: 'true'
+                        }
+                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile-rpmbuild.sles.12.3'
@@ -236,6 +241,10 @@ pipeline {
                     }
                 }
                 stage('Build RPM on Leap 42.3') {
+                    when {
+                        beforeAgent true
+                        expression { false }
+                    }
                     agent {
                         dockerfile {
                             filename 'Dockerfile-rpmbuild.leap.42.3'
