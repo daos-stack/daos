@@ -89,7 +89,7 @@ func applyCmdLineOverrides(log logging.Logger, c *client.Configuration, opts *cl
 func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
 	log.Info("Starting daos_agent:")
 
-	p := flags.NewParser(opts, flags.Default)
+	p := flags.NewParser(opts, flags.HelpFlag|flags.PassDoubleDash)
 
 	_, err := p.Parse()
 	if err != nil {

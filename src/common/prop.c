@@ -29,6 +29,7 @@
 #include <daos/common.h>
 #include <daos/dtx.h>
 #include <daos_security.h>
+#include <daos/checksum.h>
 
 daos_prop_t *
 daos_prop_alloc(uint32_t entries_nr)
@@ -250,13 +251,21 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			break;
 		case DAOS_PROP_CO_CSUM:
 			val = prop->dpp_entries[i].dpe_val;
-			if (val != DAOS_PROP_CO_CSUM_OFF &&
-			    val != DAOS_PROP_CO_CSUM_CRC16 &&
-			    val != DAOS_PROP_CO_CSUM_CRC32 &&
-			    val != DAOS_PROP_CO_CSUM_SHA1 &&
-			    val != DAOS_PROP_CO_CSUM_SHA2) {
+			if (!daos_cont_csum_prop_is_valid(val)) {
 				D_ERROR("invalid checksum type "DF_U64".\n",
 					val);
+				return false;
+			}
+			break;
+		case DAOS_PROP_CO_CSUM_CHUNK_SIZE:
+			/** Accepting anything right now */
+			break;
+		case DAOS_PROP_CO_CSUM_SERVER_VERIFY:
+			val = prop->dpp_entries[i].dpe_val;
+			if (val != DAOS_PROP_CO_CSUM_SV_OFF &&
+			    val != DAOS_PROP_CO_CSUM_SV_ON) {
+				D_ERROR("invalid csum Server Verify Property"
+						DF_U64".\n", val);
 				return false;
 			}
 			break;

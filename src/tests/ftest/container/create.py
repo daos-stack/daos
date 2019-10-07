@@ -31,9 +31,11 @@ from apricot import TestWithServers
 
 from daos_api import DaosPool, DaosContainer, DaosApiError
 
+
 class CreateContainerTest(TestWithServers):
     """
     Tests DAOS container create.
+
     :avocado: recursive
     """
 
@@ -45,7 +47,6 @@ class CreateContainerTest(TestWithServers):
 
         :avocado: tags=all,container,tiny,smoke,full_regression,containercreate
         """
-
         pool = None
         contuuid = None
         expected_results = []
@@ -108,7 +109,3 @@ class CreateContainerTest(TestWithServers):
             print(traceback.format_exc())
             if not should_fail:
                 self.fail("Test was expected to pass but it failed.\n")
-        finally:
-            if pool is not None:
-                pool.disconnect()
-                pool.destroy(1)

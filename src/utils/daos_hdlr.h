@@ -133,12 +133,9 @@ struct cmd_args_s {
 
 #define ARGS_VERIFY_PATH_CREATE(ap, label, rcexpr)			\
 	do {								\
-		if (((ap)->type == DAOS_PROP_CO_LAYOUT_UNKOWN) ||	\
-		    ((ap)->oclass == OC_UNKNOWN)	||		\
-		    ((ap)->chunk_size == 0)) {				\
+		if (((ap)->type == DAOS_PROP_CO_LAYOUT_UNKOWN)) {	\
 			fprintf(stderr, "create by --path : must also "	\
-					"specify --type, --oclass, "	\
-					"and --chunk_size\n");		\
+					"specify --type\n");		\
 			D_GOTO(label, (rcexpr));			\
 		}							\
 	} while (0)

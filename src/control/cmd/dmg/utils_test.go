@@ -28,7 +28,7 @@ import (
 
 	. "github.com/daos-stack/daos/src/control/client"
 	. "github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	. "github.com/daos-stack/daos/src/control/common/proto/ctl"
 )
 
 func TestHasConnection(t *testing.T) {
@@ -83,7 +83,7 @@ func TestCheckSprint(t *testing.T) {
 		},
 		{
 			NewClientNvme(MockCtrlrs, MockServers).String(),
-			"1.2.3.4:10000:\n\tPCI Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:E2010413 Socket:0\n\t\tNamespace: id:12345 capacity:99999 \n\n1.2.3.5:10001:\n\tPCI Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:E2010413 Socket:0\n\t\tNamespace: id:12345 capacity:99999 \n\n",
+			"1.2.3.4:10000:\n\tPCI Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:E2010413 Socket:0\n\t\tNamespace: id:12345 capacity:99999 \n\tHealth Stats:\n\t\tTemperature:300K(27C)\n\t\tController Busy Time:0 minutes\n\t\tPower Cycles:99\n\t\tPower On Hours:9999 hours\n\t\tUnsafe Shutdowns:1\n\t\tMedia Errors:0\n\t\tError Log Entries:0\n\t\tCritical Warnings:\n\t\t\tTemperature: OK\n\t\t\tAvailable Spare: OK\n\t\t\tDevice Reliability: OK\n\t\t\tRead Only: OK\n\t\t\tVolatile Memory Backup: OK\n\n1.2.3.5:10001:\n\tPCI Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:E2010413 Socket:0\n\t\tNamespace: id:12345 capacity:99999 \n\tHealth Stats:\n\t\tTemperature:300K(27C)\n\t\tController Busy Time:0 minutes\n\t\tPower Cycles:99\n\t\tPower On Hours:9999 hours\n\t\tUnsafe Shutdowns:1\n\t\tMedia Errors:0\n\t\tError Log Entries:0\n\t\tCritical Warnings:\n\t\t\tTemperature: OK\n\t\t\tAvailable Spare: OK\n\t\t\tDevice Reliability: OK\n\t\t\tRead Only: OK\n\t\t\tVolatile Memory Backup: OK\n\n",
 		},
 		{
 			NewClientScm(MockModules, MockServers).String(),
@@ -99,11 +99,11 @@ func TestCheckSprint(t *testing.T) {
 		},
 		{
 			NewClientNvmeResults(
-				[]*pb.NvmeControllerResult{
+				[]*NvmeControllerResult{
 					{
 						Pciaddr: "0000:81:00.0",
-						State: &pb.ResponseState{
-							Status: pb.ResponseStatus_CTRL_ERR_APP,
+						State: &ResponseState{
+							Status: ResponseStatus_CTRL_ERR_APP,
 							Error:  "example application error",
 						},
 					},
@@ -112,11 +112,11 @@ func TestCheckSprint(t *testing.T) {
 		},
 		{
 			NewClientScmResults(
-				[]*pb.ScmModuleResult{
+				[]*ScmModuleResult{
 					{
 						Loc: MockModulePB().Loc,
-						State: &pb.ResponseState{
-							Status: pb.ResponseStatus_CTRL_ERR_APP,
+						State: &ResponseState{
+							Status: ResponseStatus_CTRL_ERR_APP,
 							Error:  "example application error",
 						},
 					},
@@ -125,11 +125,11 @@ func TestCheckSprint(t *testing.T) {
 		},
 		{
 			NewClientScmMountResults(
-				[]*pb.ScmMountResult{
+				[]*ScmMountResult{
 					{
 						Mntpoint: "/mnt/daos",
-						State: &pb.ResponseState{
-							Status: pb.ResponseStatus_CTRL_ERR_APP,
+						State: &ResponseState{
+							Status: ResponseStatus_CTRL_ERR_APP,
 							Error:  "example application error",
 						},
 					},

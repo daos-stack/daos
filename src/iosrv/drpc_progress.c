@@ -32,6 +32,7 @@
 #include <stdlib.h>
 #include <poll.h>
 #include <errno.h>
+#include <daos_srv/daos_server.h>
 #include "drpc_internal.h"
 
 /**
@@ -82,7 +83,7 @@ drpc_progress_context_close(struct drpc_progress_context *ctx)
 	}
 
 	d_list_for_each_entry_safe(current, next, &ctx->session_ctx_list,
-			link) {
+				   link) {
 		d_list_del(&current->link);
 		drpc_close(current->ctx);
 		D_FREE(current);
@@ -272,6 +273,105 @@ destroy_session_node(struct drpc_list *session_node)
 	D_FREE(session_node);
 }
 
+static void
+free_call_ctx(struct drpc_call_ctx *ctx)
+{
+	drpc_close(ctx->session);
+	drpc_call_free(ctx->call);
+	drpc_response_free(ctx->resp);
+	D_FREE(ctx);
+}
+
+/**
+ * ULT to execute the dRPC handler and send the response back
+ */
+static void
+drpc_handler_ult(void *call_ctx)
+{
+	int			rc;
+	struct drpc_call_ctx	*ctx = (struct drpc_call_ctx *)call_ctx;
+
+	D_INFO("dRPC handler ULT for module=%u method=%u\n",
+	       ctx->call->module, ctx->call->method);
+
+	ctx->session->handler(ctx->call, ctx->resp);
+
+	rc = drpc_send_response(ctx->session, ctx->resp);
+	if (rc != 0)
+		D_ERROR("Failed to send dRPC response (module=%u method=%u)\n",
+			ctx->call->module, ctx->call->method);
+
+	/*
+	 * We are responsible for cleaning up the call ctx.
+	 */
+	free_call_ctx(ctx);
+}
+
+static struct drpc_call_ctx *
+create_call_ctx(struct drpc *session_ctx, Drpc__Call *call,
+		Drpc__Response *resp)
+{
+	struct drpc_call_ctx	*call_ctx;
+	int			rc;
+
+	D_ALLOC_PTR(call_ctx);
+	if (call_ctx == NULL)
+		return NULL;
+
+	rc = drpc_add_ref(session_ctx);
+	D_ASSERTF(rc == 0, "Couldn't add ref to dRPC session context");
+
+	call_ctx->session = session_ctx;
+	call_ctx->call = call;
+	call_ctx->resp = resp;
+
+	return call_ctx;
+}
+
+static int
+handle_incoming_call(struct drpc *session_ctx)
+{
+	int			rc;
+	Drpc__Call		*call = NULL;
+	Drpc__Response		*resp;
+	struct drpc_call_ctx	*call_ctx;
+
+	rc = drpc_recv_call(session_ctx, &call);
+	if (rc != 0)
+		return rc;
+
+	resp = drpc_response_create(call);
+	if (resp == NULL) {
+		D_ERROR("Could not allocate Drpc__Response\n");
+		drpc_call_free(call);
+		return -DER_NOMEM;
+	}
+
+	/*
+	 * Call and response become part of the call context - freeing will
+	 * be handled by the ULT.
+	 */
+	call_ctx = create_call_ctx(session_ctx, call, resp);
+	if (call_ctx == NULL) {
+		drpc_call_free(call);
+		drpc_response_free(resp);
+		return -DER_NOMEM;
+	}
+
+	/*
+	 * Ownership of the call context is passed on to the handler ULT.
+	 */
+	rc = dss_ult_create(drpc_handler_ult, (void *)call_ctx,
+			    DSS_ULT_DRPC_HANDLER, 0, 0, NULL);
+	if (rc != 0) {
+		D_ERROR("Failed to create drpc handler ULT: %d\n", rc);
+		free_call_ctx(call_ctx);
+		return rc;
+	}
+
+	return 0;
+}
+
 static int
 process_session_activity(struct drpc_list *session_node,
 		struct unixcomm_poll *session_comm)
@@ -282,7 +382,7 @@ process_session_activity(struct drpc_list *session_node,
 
 	switch (session_comm->activity) {
 	case UNIXCOMM_ACTIVITY_DATA_IN:
-		rc = drpc_recv(session_node->ctx);
+		rc = handle_incoming_call(session_node->ctx);
 		if (rc != 0 && rc != -DER_AGAIN) {
 			D_ERROR("Error processing incoming session %u data\n",
 				session_comm->comm->fd);

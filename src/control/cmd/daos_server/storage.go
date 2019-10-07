@@ -42,7 +42,7 @@ type storageScanCmd struct {
 }
 
 func (cmd *storageScanCmd) Execute(args []string) error {
-	svc, err := server.NewStorageControlService(cmd.log, server.NewConfiguration())
+	svc, err := server.DefaultStorageControlService(cmd.log, server.NewConfiguration())
 	if err != nil {
 		return errors.WithMessage(err, "failed to init ControlService")
 	}
@@ -58,11 +58,11 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 		cmd.log.Infof("NVMe SSD controller and constituent namespaces:\n%s", controllers)
 	}
 
-	modules, err := svc.ScanScm()
+	modules, pmems, err := svc.ScanScm()
 	if err != nil {
 		scanErrors = append(scanErrors, err)
 	} else {
-		cmd.log.Infof("SCM modules:\n%s", modules)
+		cmd.log.Infof("SCM modules:\n%s\nPMEM device files:\n%s", modules, pmems)
 	}
 
 	if len(scanErrors) > 0 {
@@ -100,9 +100,10 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		return err
 	}
 
-	svc, err := server.NewStorageControlService(cmd.log, server.NewConfiguration())
+	cfg := server.NewConfiguration()
+	svc, err := server.DefaultStorageControlService(cmd.log, cfg)
 	if err != nil {
-		return errors.WithMessage(err, "initialising ControlService")
+		return errors.WithMessage(err, "init control service")
 	}
 
 	op := "Preparing"
@@ -138,7 +139,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 			return concatErrors(scanErrors, err)
 		}
 
-		// Prepare SCM modules to be presented as pmem kernel devices.
+		// Prepare SCM modules to be presented as pmem device files.
 		// Pass evaluated state to avoid running GetScmState() twice.
 		needsReboot, devices, err := svc.PrepareScm(server.PrepareScmRequest{
 			Reset: cmd.Reset,
@@ -149,9 +150,9 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		if needsReboot {
 			cmd.log.Info(server.MsgScmRebootRequired)
 		} else if len(devices) > 0 {
-			cmd.log.Infof("persistent memory kernel devices:\n\t%+v\n", devices)
+			cmd.log.Infof("persistent memory device files:\n\t%+v\n", devices)
 		} else {
-			cmd.log.Info("no persistent memory kernel devices")
+			cmd.log.Info("no persistent memory device files")
 		}
 	}
 

@@ -40,11 +40,11 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *Configuration) *C
 	t.Helper()
 
 	cs := ControlService{
-		StorageControlService: StorageControlService{
-			log:  log,
-			nvme: defaultMockNvmeStorage(log, cfg.ext),
-			scm:  defaultMockScmStorage(log, cfg.ext),
-		},
+		StorageControlService: *NewStorageControlService(log,
+			defaultMockNvmeStorage(log, cfg.ext),
+			defaultMockScmStorage(log, cfg.ext),
+			cfg.Servers,
+		),
 		harness: &IOServerHarness{
 			log: log,
 		},

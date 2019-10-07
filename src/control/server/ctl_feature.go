@@ -27,15 +27,15 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 )
 
 // FeatureMap is a type alias
-type FeatureMap map[string]*pb.Feature
+type FeatureMap map[string]*ctlpb.Feature
 
 // GetFeature returns the feature from feature name.
 func (s *ControlService) GetFeature(
-	ctx context.Context, name *pb.FeatureName) (*pb.Feature, error) {
+	ctx context.Context, name *ctlpb.FeatureName) (*ctlpb.Feature, error) {
 	f, exists := s.supportedFeatures[name.Name]
 	if !exists {
 		return nil, errors.Errorf("no feature with name %s", name.Name)
@@ -45,7 +45,7 @@ func (s *ControlService) GetFeature(
 
 // ListFeatures lists all features supported by the management server.
 func (s *ControlService) ListFeatures(
-	empty *pb.EmptyReq, stream pb.MgmtCtl_ListFeaturesServer) error {
+	empty *ctlpb.EmptyReq, stream ctlpb.MgmtCtl_ListFeaturesServer) error {
 	for _, feature := range s.supportedFeatures {
 		if err := stream.Send(feature); err != nil {
 			return err

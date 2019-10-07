@@ -37,6 +37,7 @@ import (
 	"github.com/pkg/errors"
 
 	. "github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
@@ -73,7 +74,13 @@ func uncommentServerConfig(t *testing.T, outFile string) {
 	}
 }
 
-// defaultMoc2kConfig returns configuration populated from blank config file
+// emptyMockConfig returns unpopulated configuration with a default mock
+// external interfacing implementation.
+func emptyMockConfig(t *testing.T) *Configuration {
+	return newDefaultConfiguration(defaultMockExt())
+}
+
+// defaultMockConfig returns configuration populated from blank config file
 // with mocked external interface.
 func defaultMockConfig(t *testing.T) *Configuration {
 	return mockConfigFromFile(t, defaultMockExt(), socketsExample)
@@ -82,7 +89,9 @@ func defaultMockConfig(t *testing.T) *Configuration {
 // supply mock external interface, populates config from given file path
 func mockConfigFromFile(t *testing.T, e External, path string) *Configuration {
 	t.Helper()
-	c := newDefaultConfiguration(e)
+	c := newDefaultConfiguration(e).
+		WithProviderValidator(netdetect.ValidateProviderStub).
+		WithNUMAValidator(netdetect.ValidateNUMAStub)
 	c.Path = path
 
 	if err := c.Load(); err != nil {
@@ -137,7 +146,9 @@ func TestConfigMarshalUnmarshal(t *testing.T) {
 				uncommentServerConfig(t, tt.inPath)
 			}
 
-			configA := newDefaultConfiguration(tt.inExt)
+			configA := newDefaultConfiguration(tt.inExt).
+				WithProviderValidator(netdetect.ValidateProviderStub).
+				WithNUMAValidator(netdetect.ValidateNUMAStub)
 			configA.Path = tt.inPath
 			err = configA.Load()
 			if tt.errMsg != "" {
@@ -149,7 +160,9 @@ func TestConfigMarshalUnmarshal(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			configB := newDefaultConfiguration(tt.inExt)
+			configB := newDefaultConfiguration(tt.inExt).
+				WithProviderValidator(netdetect.ValidateProviderStub).
+				WithNUMAValidator(netdetect.ValidateNUMAStub)
 			if err := configB.SetPath(testFile); err != nil {
 				t.Fatal(err)
 			}
@@ -183,6 +196,9 @@ func TestConstructedConfig(t *testing.T) {
 	uncommentServerConfig(t, testFile)
 	defaultCfg := mockConfigFromFile(t, defaultMockExt(), testFile)
 
+	var numaNode0 uint = 0
+	var numaNode1 uint = 1
+
 	// Next, construct a config to compare against the first one. It should be
 	// possible to construct an identical configuration with the helpers.
 	constructed := NewConfiguration().
@@ -197,10 +213,12 @@ func TestConstructedConfig(t *testing.T) {
 		WithSystemName("daos").
 		WithSocketDir("./.daos/daos_server").
 		WithFabricProvider("ofi+verbs;ofi_rxm").
-		WithAccessPoints("hostname1", "hostname2", "hostname3").
+		WithAccessPoints("hostname1:10001").
 		WithFaultCb("./.daos/fd_callback").
 		WithFaultPath("/vcdu0/rack1/hostname").
 		WithHyperthreads(true).
+		WithProviderValidator(netdetect.ValidateProviderStub).
+		WithNUMAValidator(netdetect.ValidateNUMAStub).
 		WithServers(
 			ioserver.NewConfig().
 				WithRank(0).
@@ -214,6 +232,7 @@ func TestConstructedConfig(t *testing.T) {
 				WithBdevDeviceList("0000:81:00.0").
 				WithFabricInterface("qib0").
 				WithFabricInterfacePort(20000).
+				WithPinnedNumaNode(&numaNode0).
 				WithEnvVars("CRT_TIMEOUT=30").
 				WithLogFile("/tmp/daos_server1.log").
 				WithLogMask("WARN"),
@@ -231,6 +250,7 @@ func TestConstructedConfig(t *testing.T) {
 				WithBdevFileSize(16).
 				WithFabricInterface("qib0").
 				WithFabricInterfacePort(20000).
+				WithPinnedNumaNode(&numaNode1).
 				WithEnvVars("CRT_TIMEOUT=100").
 				WithLogFile("/tmp/daos_server2.log").
 				WithLogMask("WARN"),
@@ -245,5 +265,63 @@ func TestConstructedConfig(t *testing.T) {
 	}
 	if diff := cmp.Diff(defaultCfg, constructed, cmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got): %s", diff)
+	}
+}
+
+func TestConfigValidation(t *testing.T) {
+	noopExtra := func(c *Configuration) *Configuration { return c }
+
+	for name, tt := range map[string]struct {
+		extraConfig func(c *Configuration) *Configuration
+		errMsg      string
+	}{
+		"example config": {
+			noopExtra,
+			"",
+		},
+		"single access point": {
+			func(c *Configuration) *Configuration {
+				return c.WithAccessPoints("1.2.3.4:1234")
+			},
+			"",
+		},
+		"multiple access points": {
+			func(c *Configuration) *Configuration {
+				return c.WithAccessPoints("1.2.3.4:1234", "5.6.7.8:5678")
+			},
+			msgBadConfig + relConfExamplesPath + ": " + msgConfigBadAccessPoints,
+		},
+		"no access points": {
+			func(c *Configuration) *Configuration {
+				return c.WithAccessPoints()
+			},
+			msgBadConfig + relConfExamplesPath + ": " + msgConfigBadAccessPoints,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
+			defer os.RemoveAll(testDir)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// First, load a config based on the server config with all options uncommented.
+			testFile := filepath.Join(testDir, sConfigUncomment)
+			uncommentServerConfig(t, testFile)
+			config := mockConfigFromFile(t, defaultMockExt(), testFile)
+
+			// Apply extra config test case
+			config = tt.extraConfig(config)
+
+			err = config.Validate()
+			if tt.errMsg != "" {
+				ExpectError(t, err, tt.errMsg, name)
+				return
+			}
+
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }

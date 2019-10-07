@@ -39,6 +39,7 @@
 #include <daos_srv/bio.h>
 #include <daos_srv/daos_server.h>
 #include <daos_srv/dtx_srv.h>
+#include <daos.h>
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
@@ -455,7 +456,7 @@ ds_obj_update_nrs_in_reply(crt_rpc_t *rpc, daos_handle_t ioh,
 
 /**
  * Lookup and return the container handle, if it is a rebuild handle, which
- * will never associate a particular container, then the contaier structure
+ * will never associate a particular container, then the container structure
  * will be returned to \a contp.
  */
 static int
@@ -782,45 +783,45 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	       orw->orw_bulks.ca_count != 0);
 	oca = daos_oclass_attr_find(orw->orw_oid.id_pub);
 
+	if (oca->ca_resil == DAOS_RES_EC) {
+		unsigned int	tgt_idx = orw->orw_oid.id_shard -
+					  orw->orw_start_shard;
+
+		D_ALLOC_ARRAY(skip_list, orw->orw_nr);
+		if (skip_list == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		if (tgt_idx >= oca->u.ec.e_p) {
+			rc = ec_data_target(tgt_idx - oca->u.ec.e_p,
+					    orw->orw_nr, tmp_iods,
+					    oca, skip_list);
+		} else {
+			if (tgt_idx == 0) {
+				rc = ec_copy_iods(tmp_iods,
+						    orw->orw_nr,
+						    &cpy_iods);
+				if (rc) {
+					D_ERROR(
+					DF_UOID"EC update failed: %d\n",
+					DP_UOID(orw->orw_oid), rc);
+					goto out;
+				}
+				tmp_iods = cpy_iods;
+			}
+			rc = ec_parity_target(tgt_idx,
+					      orw->orw_nr, tmp_iods,
+					      oca, skip_list);
+		}
+		if (rc) {
+			D_ERROR(DF_UOID"EC update failed: %d\n",
+			DP_UOID(orw->orw_oid), rc);
+			goto out;
+		}
+	}
+
 	/* Prepare IO descriptor */
 	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE ||
 	    opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_UPDATE) {
 		bulk_op = CRT_BULK_GET;
-		if (oca->ca_resil == DAOS_RES_EC) {
-			unsigned int	tgt_idx = orw->orw_oid.id_shard -
-							orw->orw_start_shard;
-
-			D_ALLOC_ARRAY(skip_list, orw->orw_nr);
-			if (skip_list == NULL) {
-				D_GOTO(out, rc = -DER_NOMEM);
-			}
-			if (tgt_idx >= oca->u.ec.e_p) {
-				rc = ec_data_target(tgt_idx - oca->u.ec.e_p,
-						    orw->orw_nr, tmp_iods,
-						    oca, skip_list);
-			} else {
-				if (tgt_idx == 0) {
-					rc = ec_copy_iods(tmp_iods,
-							    orw->orw_nr,
-							    &cpy_iods);
-					if (rc) {
-						D_ERROR(
-						DF_UOID"EC update failed: %d\n",
-						DP_UOID(orw->orw_oid), rc);
-						goto out;
-					}
-					tmp_iods = cpy_iods;
-				}
-				rc = ec_parity_target(tgt_idx,
-						      orw->orw_nr, tmp_iods,
-						      oca, skip_list);
-			}
-			if (rc) {
-				D_ERROR(DF_UOID"EC update failed: %d\n",
-				DP_UOID(orw->orw_oid), rc);
-				goto out;
-			}
-		}
 		rc = vos_update_begin(cont->sc_hdl, orw->orw_oid,
 				      orw->orw_epoch, &orw->orw_dkey,
 				      orw->orw_nr, tmp_iods,
@@ -836,7 +837,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		bulk_op = CRT_BULK_PUT;
 		rc = vos_fetch_begin(cont->sc_hdl, orw->orw_oid, orw->orw_epoch,
 				     &orw->orw_dkey, orw->orw_nr,
-				     orw->orw_iods.ca_arrays, size_fetch, &ioh);
+				     tmp_iods, size_fetch, &ioh);
 		if (rc) {
 			D_ERROR(DF_UOID" Fetch begin failed: %d\n",
 				DP_UOID(orw->orw_oid), rc);
@@ -871,7 +872,8 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	if (rma) {
 		bulk_bind = orw->orw_flags & ORF_BULK_BIND;
 		if ((opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE ||
-			opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_UPDATE) &&
+		     opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_UPDATE ||
+		     opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH) &&
 			oca->ca_resil == DAOS_RES_EC) {
 			rc = ec_update_bulk_transfer(rpc, bulk_bind,
 						     orw->orw_bulks.ca_arrays,
@@ -1007,6 +1009,14 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 
 	D_ASSERT(cont_hdl->sch_pool != NULL);
 
+	if (DAOS_FAIL_CHECK(DAOS_VC_DIFF_DKEY)) {
+		daos_key_t	*dkey = &orw->orw_dkey;
+		unsigned char	*buf = dkey->iov_buf;
+
+		buf[0] += 1;
+		orw->orw_dkey_hash = obj_dkey2hash(&orw->orw_dkey);
+	}
+
 	D_DEBUG(DB_TRACE, "rpc %p opc %d "DF_UOID" dkey %d %s tag/xs %d/%d eph "
 		DF_U64", pool ver %u/%u with "DF_DTI".\n",
 		rpc, opc, DP_UOID(orw->orw_oid),
@@ -1038,6 +1048,17 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 
 		if (rc != 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
+	}
+
+	/* Inject failure for test to simulate the case of lost some
+	 * record/akey/dkey on some non-leader.
+	 */
+	if (DAOS_FAIL_CHECK(DAOS_VC_LOST_DATA)) {
+		if (orw->orw_dti_cos.ca_count > 0)
+			vos_dtx_commit(cont->sc_hdl, orw->orw_dti_cos.ca_arrays,
+				       orw->orw_dti_cos.ca_count);
+
+		D_GOTO(out, rc = 0);
 	}
 
 	rc = dtx_begin(&orw->orw_dti, &orw->orw_oid, cont->sc_hdl,
@@ -1321,11 +1342,18 @@ ds_iter_vos(crt_rpc_t *rpc, struct vos_iter_anchors *anchors,
 	} else if (opc == DAOS_OBJ_AKEY_RPC_ENUMERATE) {
 		type = VOS_ITER_AKEY;
 	} else {
-		/* object iteration for rebuild */
+		/* object iteration for rebuild or consistency verification. */
 		D_ASSERT(opc == DAOS_OBJ_RPC_ENUMERATE);
 		type = VOS_ITER_DKEY;
+		if (daos_anchor_get_flags(&anchors->ia_dkey) &
+		      DIOF_WITH_SPEC_EPOCH) {
+			/* For obj verification case. */
+			param.ip_flags = VOS_IT_RECX_VISIBLE;
+			param.ip_epc_expr = VOS_IT_EPC_RR;
+		} else {
+			param.ip_epc_expr = VOS_IT_EPC_RE;
+		}
 		param.ip_epr.epr_lo = 0;
-		param.ip_epc_expr = VOS_IT_EPC_RE;
 		recursive = true;
 		enum_arg->chk_key2big = true;
 	}
@@ -1341,6 +1369,9 @@ ds_iter_vos(crt_rpc_t *rpc, struct vos_iter_anchors *anchors,
 	 */
 	if (type == VOS_ITER_SINGLE)
 		anchors->ia_sv = anchors->ia_ev;
+	else if (oei->oei_oid.id_shard % 2 == 0 &&
+		DAOS_FAIL_CHECK(DAOS_VC_LOST_REPLICA))
+		D_GOTO(out_cont_hdl, rc =  -DER_NONEXIST);
 
 	rc = dss_enum_pack(&param, type, recursive, anchors, enum_arg);
 
@@ -1447,8 +1478,7 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	/* TODO: Transfer the inline_thres from enumerate RPC */
 	enum_arg.inline_thres = 32;
 
-	if (opc == DAOS_OBJ_RECX_RPC_ENUMERATE ||
-	    opc == DAOS_OBJ_RPC_ENUMERATE) {
+	if (opc == DAOS_OBJ_RECX_RPC_ENUMERATE) {
 		oeo->oeo_eprs.ca_count = 0;
 		D_ALLOC(oeo->oeo_eprs.ca_arrays,
 			oei->oei_nr * sizeof(daos_epoch_range_t));

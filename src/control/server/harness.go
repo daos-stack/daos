@@ -79,8 +79,8 @@ func (h *IOServerHarness) AddInstance(srv *IOServerInstance) error {
 	h.Lock()
 	defer h.Unlock()
 	srvIdx := len(h.instances)
-	srv.Index = srvIdx
-	srv.runner.Config.Index = srvIdx
+	srv.Index = uint32(srvIdx)
+	srv.runner.Config.Index = uint32(srvIdx)
 
 	h.instances = append(h.instances, srv)
 	return nil
@@ -102,6 +102,25 @@ func (h *IOServerHarness) GetManagementInstance() (*IOServerInstance, error) {
 
 	// Just pick one for now.
 	return h.instances[defaultManagementInstance], nil
+}
+
+// GetMSLeaderInstance returns a managed IO Server instance to be used as a
+// management target and fails if selected instance is not MS Leader.
+func (h *IOServerHarness) GetMSLeaderInstance() (*IOServerInstance, error) {
+	h.RLock()
+	defer h.RUnlock()
+
+	mi, err := h.GetManagementInstance()
+	if err != nil {
+		return nil, err
+	}
+	// currently, as there is only one access point, the only replica will
+	// also be the leader.
+	if err := checkIsMSReplica(mi); err != nil {
+		return nil, err
+	}
+
+	return mi, nil
 }
 
 // CreateSuperblocks creates instance superblocks as needed.
@@ -166,6 +185,7 @@ func (h *IOServerHarness) AwaitStorageReady(ctx context.Context) error {
 		}
 
 		if !needsScmFormat {
+			h.log.Debug("no SCM format required; checking for superblock")
 			needsSuperblock, err := instance.NeedsSuperblock()
 			if err != nil {
 				return errors.Wrap(err, "failed to check instance superblock")
@@ -174,6 +194,7 @@ func (h *IOServerHarness) AwaitStorageReady(ctx context.Context) error {
 				continue
 			}
 		}
+		h.log.Debug("SCM format required")
 		instance.AwaitStorageReady(ctx)
 	}
 	return ctx.Err()

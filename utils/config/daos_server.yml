@@ -19,8 +19,7 @@
 ## assumed if not specified.
 #
 ## default: hostname of this node at port 10000 for local testing
-#access_points: ['hostname1:10001','hostname2:10001','hostname3:10001']
-#access_points: [hostname1,hostname2,hostname3]
+#access_points: ['hostname1:10001']
 #
 #
 ## Force default port
@@ -218,6 +217,7 @@
 #
 #  fabric_iface: qib0
 #  fabric_iface_port: 20000
+#  pinned_numa_node: 0
 #
 #  # Force specific debug mask (D_LOG_MASK) at start up time.
 #  # By default, just use the default debug mask used by DAOS.
@@ -311,6 +311,7 @@
 #
 #  fabric_iface: qib0
 #  fabric_iface_port: 20000
+#  pinned_numa_node: 1
 #
 #  # Force specific debug mask (D_LOG_MASK) at start up time.
 #  # By default, just use the default debug mask used by DAOS.

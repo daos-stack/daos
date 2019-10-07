@@ -250,13 +250,14 @@ out:
 }
 
 int
-smd_dev_list(d_list_t *dev_list)
+smd_dev_list(d_list_t *dev_list, int *devs)
 {
 	struct smd_dev_info	*info;
 	struct smd_dev_entry	 entry = { 0 };
 	daos_handle_t		 iter_hdl;
 	struct d_uuid		 key_dev;
 	d_iov_t			 key, val;
+	int			 dev_cnt = 0;
 	int			 rc;
 
 	D_ASSERT(dev_list && d_list_empty(dev_list));
@@ -298,6 +299,8 @@ smd_dev_list(d_list_t *dev_list)
 		}
 		d_list_add_tail(&info->sdi_link, dev_list);
 
+		dev_cnt++;
+
 		rc = dbtree_iter_next(iter_hdl);
 		if (rc) {
 			if (rc != -DER_NONEXIST)
@@ -311,5 +314,9 @@ done:
 	dbtree_iter_finish(iter_hdl);
 out:
 	smd_unlock(&smd_store);
+
+	/* return device count along with dev list */
+	*devs = dev_cnt;
+
 	return rc;
 }

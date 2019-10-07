@@ -83,6 +83,7 @@ struct io_test_args {
 	unsigned long		 ta_flags;
 	const char		*dkey;
 	const char		*akey;
+	void			*custom;
 	int			 ofeat;
 	int			 akey_size;
 	int			 dkey_size;
