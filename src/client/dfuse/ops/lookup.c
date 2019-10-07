@@ -103,19 +103,29 @@ err:
 	dfs_release(ie->ie_obj);
 }
 
+/* Check for and set a unified namespace entry point.
+ *
+ * This function will check for and configure a inode as
+ * a new entry point of possible, and modify the inode
+ * as required.
+ *
+ * On failure it will return error.
+ *
+ */
 static int
 check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		 struct dfuse_inode_entry *ie)
 {
 	daos_obj_id_t		oid;
 	int			rc;
-	char			pool[40];
+	char			pool[40] = {};
 	size_t			pool_size = 40;
-	char			cont[40];
+	char			cont[40] = {};
 	size_t			cont_size = 40;
-	struct dfuse_dfs	*dfs;
+	struct dfuse_dfs	*dfs = NULL;
+	int ret;
 
-	rc = dfs_getxattr(ie->ie_dfs->dfs_ns, ie->ie_obj, "user.uns.pool",
+	rc = dfs_getxattr(ie->ie_dfs->dfs_ns, ie->ie_obj, DFUSE_UNS_POOL_ATTR,
 			  &pool, &pool_size);
 
 	if (rc == ENODATA)
@@ -123,47 +133,55 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	if (rc)
 		return rc;
 
-	rc = dfs_getxattr(ie->ie_dfs->dfs_ns, ie->ie_obj, "user.uns.container",
-			  &cont, &cont_size);
+	if (pool_size != 36)
+		return EINVAL;
+
+	rc = dfs_getxattr(ie->ie_dfs->dfs_ns, ie->ie_obj,
+			  DFUSE_UNS_CONTAINER_ATTR, &cont, &cont_size);
 	if (rc == ENODATA)
 		return 0;
 	if (rc)
 		return rc;
 
+	if (cont_size != 36)
+		return EINVAL;
+
 	DFUSE_TRA_DEBUG(ie, "'%s' '%s'", pool, cont);
 
 	D_ALLOC_PTR(dfs);
-
-	dfs->dfs_ops = ie->ie_dfs->dfs_ops;
+	if (dfs == NULL)
+		return ENOMEM;
 
 	if (uuid_parse(pool, dfs->dfs_pool) < 0) {
 		DFUSE_LOG_ERROR("Invalid pool uuid");
-		D_GOTO(out_dfuse, rc = -DER_INVAL);
+		D_GOTO(out_err, ret = EINVAL);
 	}
 
 	if (uuid_parse(cont, dfs->dfs_cont) < 0) {
 		DFUSE_LOG_ERROR("Invalid container uuid");
-		D_GOTO(out_dfuse, rc = -DER_INVAL);
+		D_GOTO(out_err, ret = EINVAL);
 	}
 
-	/** Connect to DAOS pool */
+	dfs->dfs_ops = ie->ie_dfs->dfs_ops;
+
+	/* Connect to DAOS pool */
 	rc = daos_pool_connect(dfs->dfs_pool, fs_handle->dpi_info->di_group,
 			       fs_handle->dpi_info->di_svcl, DAOS_PC_RW,
 			       &dfs->dfs_poh, &dfs->dfs_pool_info,
 			       NULL);
 	if (rc != -DER_SUCCESS) {
 		DFUSE_LOG_ERROR("Failed to connect to pool (%d)", rc);
-		D_GOTO(out_dfs, 0);
+		D_GOTO(out_err, ret = rc);
 	}
 
-	/** Try to open the DAOS container (the mountpoint) */
+	/* Try to open the DAOS container (the mountpoint) */
 	rc = daos_cont_open(dfs->dfs_poh, dfs->dfs_cont, DAOS_COO_RW,
 			    &dfs->dfs_coh, &dfs->dfs_co_info,
 			    NULL);
 	if (rc) {
 		DFUSE_LOG_ERROR("Failed container open (%d)",
 				rc);
-		D_GOTO(out_pool, 0);
+		D_GOTO(out_pool, ret = rc);
 	}
 
 	rc = dfs_mount(dfs->dfs_poh, dfs->dfs_coh, O_RDWR,
@@ -171,7 +189,14 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	if (rc) {
 		daos_cont_close(dfs->dfs_coh, NULL);
 		DFUSE_LOG_ERROR("dfs_mount failed (%d)", rc);
-		D_GOTO(out_pool, 0);
+		D_GOTO(out_cont, ret = rc);
+	}
+
+	rc = dfs_release(ie->ie_obj);
+	if (rc) {
+		DFUSE_TRA_ERROR(ie, "dfs_release() failed: (%s)",
+				strerror(rc));
+		D_GOTO(out_umount, ret = rc);
 	}
 
 	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDONLY, &ie->ie_obj,
@@ -179,18 +204,18 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	if (rc) {
 		DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: (%s)",
 				strerror(rc));
-		D_GOTO(err, 0);
+		D_GOTO(out_umount, ret = rc);
 	}
 
 	ie->ie_dfs = dfs;
 
 	rc = dfs_obj2id(ie->ie_obj, &oid);
 	if (rc)
-		D_GOTO(err, rc);
+		D_GOTO(out_umount, ret = rc);
 	rc = dfuse_lookup_inode(fs_handle, dfs, &oid,
 				&ie->ie_stat.st_ino);
 	if (rc)
-		D_GOTO(err, rc);
+		D_GOTO(out_umount, ret = rc);
 
 	dfs->dfs_root = ie->ie_stat.st_ino;
 
@@ -199,11 +224,21 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 
 	return 0;
 
-out_dfuse:
-out_dfs:
+out_umount:
+	rc = dfs_umount(dfs->dfs_ns);
+	if (rc)
+		DFUSE_TRA_ERROR(dfs, "dfs_umount() failed %d", rc);
+out_cont:
+	rc = daos_cont_close(dfs->dfs_coh, NULL);
+	if (rc)
+		DFUSE_TRA_ERROR(dfs, "daos_cont_close() failed %d", rc);
 out_pool:
-err:
-	return rc;
+	rc = daos_pool_disconnect(dfs->dfs_poh, NULL);
+	if (rc)
+		DFUSE_TRA_ERROR(dfs, "daos_pool_disconnect() failed %d", rc);
+out_err:
+	D_FREE(dfs);
+	return ret;
 }
 
 bool

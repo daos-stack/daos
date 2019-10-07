@@ -29,37 +29,41 @@
 static bool
 check_uuid(const char *value, size_t size)
 {
-	uuid_t uuid = {};
-
-	DFUSE_TRA_DEBUG(NULL, "%zi '%s'", size, value);
+	char uuid_str[40] = {};
+	uuid_t uuid;
 
 	if (size != 36)
 		return false;
 
-	if (uuid_parse(value, uuid) < 0)
+	/* Make a copy of the string so it's NULL terminated otherwise
+	 * uuid_parse will throw an error because of the missing \0
+	 */
+	strncpy(uuid_str, value, size);
+
+	DFUSE_TRA_DEBUG(NULL, "%zi '%s'", size, uuid_str);
+
+	if (uuid_parse(uuid_str, uuid) < 0)
 		return false;
 
 	return true;
 }
 
-/* Check if pool uuid is set correctly */
+/* Check if pool uuid is set correctly
+ *
+ * To do this check the size of the pool attr, then check
+ * it's a valid uuid.
+ */
 static bool
 check_uns_attr(struct dfuse_inode_entry *inode)
 {
 	char uuid_str[40] = {};
-	size_t size = 0;
+	size_t size = 40;
 	int rc;
 
-	rc = dfs_getxattr(inode->ie_dfs->dfs_ns, inode->ie_obj, "user.uns.pool",
-			  NULL, &size);
+	rc = dfs_getxattr(inode->ie_dfs->dfs_ns, inode->ie_obj,
+			  DFUSE_UNS_POOL_ATTR, &uuid_str, &size);
 
 	if (rc || size != 36)
-		return false;
-
-	rc = dfs_getxattr(inode->ie_dfs->dfs_ns, inode->ie_obj, "user.uns.pool",
-			  &uuid_str, &size);
-
-	if (rc)
 		return false;
 
 	if (!check_uuid(uuid_str, size)) {
@@ -75,41 +79,30 @@ dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 		  const char *name, const char *value, size_t size,
 		  int flags)
 {
-	char *v2;
 	int rc;
-
-	/* Make a copy of the string so it's NULL terminated otherwise
-	 * uuid_parse will throw an error because of the missing \0
-	 */
-	D_STRNDUP(v2, value, size);
-	if (!v2) {
-		D_GOTO(err, rc = ENOMEM);
-	}
 
 	DFUSE_TRA_DEBUG(inode, "Attribute '%s'", name);
 
-	if (strcmp(name, "user.uns.pool") == 0) {
-		if (!check_uuid(v2, size))
+	if (strcmp(name, DFUSE_UNS_POOL_ATTR) == 0) {
+		if (!check_uuid(value, size))
 			D_GOTO(err, rc = EINVAL);
 	}
 
-	if (strcmp(name, "user.uns.container") == 0) {
-		if (!check_uuid(v2, size))
+	if (strcmp(name, DFUSE_UNS_CONTAINER_ATTR) == 0) {
+		if (!check_uuid(value, size))
 			D_GOTO(err, rc = EINVAL);
 
 		if (!check_uns_attr(inode))
 			D_GOTO(err, rc = EINVAL);
 	}
 
-	rc = dfs_setxattr(inode->ie_dfs->dfs_ns, inode->ie_obj, name, v2,
+	rc = dfs_setxattr(inode->ie_dfs->dfs_ns, inode->ie_obj, name, value,
 			  size, flags);
 	if (rc == 0) {
 		DFUSE_REPLY_ZERO(req);
-		D_FREE(v2);
 		return;
 	}
 err:
 
 	DFUSE_REPLY_ERR_RAW(inode, req, rc);
-	D_FREE(v2);
 }
