@@ -45,6 +45,8 @@ def build_shim_module(py_env, svars, lib_prefix, version):
     new_env.Install(install_path, base)
     # install new wrappers too
     new_env.Install(install_path, "pydaos.py")
+    new_env.Install(install_path, "pydaos.pyc")
+    new_env.Install(install_path, "pydaos.pyo")
 
 def scons():
     """Execute build"""

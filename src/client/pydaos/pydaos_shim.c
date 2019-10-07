@@ -149,7 +149,7 @@ cont_open(int ret, uuid_t puuid, uuid_t cuuid, int flags)
 		daos_pool_disconnect(poh, NULL);
 out:
 	if (svcl)
-		 d_rank_list_free(svcl);
+		d_rank_list_free(svcl);
 	/* Populate return list */
 	return_list = PyList_New(3);
 	PyList_SetItem(return_list, 0, PyInt_FromLong(rc));
