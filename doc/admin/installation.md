@@ -127,6 +127,8 @@ specified through PREFIX.
 
 This section describes how to build and run the DAOS service in a Docker
 container. A minimum of 5GB of DRAM and 16GB of disk space will be required.
+On Mac, please make sure that the Docker settings under
+"Preferences/{Disk,Memory}" are configured accordingly.
 
 ### Building from GitHub
 
@@ -187,8 +189,21 @@ $ docker exec server scons --build-deps=yes install PREFIX=/usr
 
 ### Running DAOS Service in Docker
 
-First, SPDK should be initialized in this newly created container.
-This can be done by running the following command:
+Please first make sure that the uio_pci_generic module is loaded:
+
+```
+$ ls /sys/bus/pci/drivers/uio_pci_generic
+ls: cannot access /sys/bus/pci/drivers/uio_pci_generic: No such file or director
+
+$ sudo modprobe uio_pci_generic
+
+$ ls /sys/bus/pci/drivers/uio_pci_generic
+0000:00:04.0  0000:00:04.3  0000:00:04.6  0000:5f:00.0  0000:80:04.2  0000:80:04.5  0000:81:00.0  module     uevent
+0000:00:04.1  0000:00:04.4  0000:00:04.7  0000:80:04.0  0000:80:04.3  0000:80:04.6  0000:da:00.0  new_id     unbind
+0000:00:04.2  0000:00:04.5  0000:5e:00.0  0000:80:04.1  0000:80:04.4  0000:80:04.7  bind          remove_id
+```
+
+SCM and NVMe storage can then be configured by running the follow command:
 
 ```
 $ docker exec server daos_server storage prepare -n -f
@@ -221,31 +236,6 @@ $ docker exec server daos_shell -i storage format -f
 
 Upon successful completion of the format, the storage engine is started, and pools
 can be created using the daos admin tool (see next section).
-
-### Troubleshooting running DAOS in a Docker container
-
-A common problem is that the UIO driver is not loaded, resolve using the following commands:
-
-```
-    $ ls /sys/bus/pci/drivers/uio_pci_generic
-ls: cannot access /sys/bus/pci/drivers/uio_pci_generic: No such file or director
-
-    $ sudo modprobe uio_pci_generic
-
-    $ ls /sys/bus/pci/drivers/uio_pci_generic
-0000:00:04.0  0000:00:04.3  0000:00:04.6  0000:5f:00.0  0000:80:04.2  0000:80:04.5  0000:81:00.0  module     uevent
-0000:00:04.1  0000:00:04.4  0000:00:04.7  0000:80:04.0  0000:80:04.3  0000:80:04.6  0000:da:00.0  new_id     unbind
-0000:00:04.2  0000:00:04.5  0000:5e:00.0  0000:80:04.1  0000:80:04.4  0000:80:04.7  bind          remove_id
-
-    $ sudo docker run -it -d --privileged --name server -v /tmp/uri:/tmp/uri -v /dev/hugepages:/dev/hugepages daos
-d60a2424d38bed55f8638b3a043dfc28b213edc0e4f6624e75abfcd1dd287309
-
-    $ sudo docker exec server daos_server storage prepare -n -f
-Preparing locally-attached NVMe storage...
-
-    $ sudo docker exec server daos_server storage scan
-...
-```
 
 ## DAOS for Development
 
