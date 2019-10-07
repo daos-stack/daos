@@ -36,7 +36,9 @@
 #include "vos_internal.h"
 
 struct open_query {
-	daos_epoch_t		 qt_epoch;
+	struct vos_object	*qt_obj;
+	daos_epoch_range_t	 qt_epr;
+	struct ilog_entries	 qt_entries;
 	struct btr_root		*qt_dkey_root;
 	daos_handle_t		 qt_dkey_toh;
 	struct btr_root		*qt_akey_root;
@@ -48,19 +50,51 @@ struct open_query {
 };
 
 static int
+check_key(struct open_query *query, struct vos_krec_df *krec, bool *visible)
+{
+	struct ilog_entry	*entry;
+	daos_epoch_range_t	 epr = query->qt_epr;
+	int			 rc;
+
+	*visible = false;
+
+	rc = key_ilog_fetch(query->qt_obj, DAOS_INTENT_DEFAULT,
+			    &epr, krec, &query->qt_entries);
+	if (rc != 0)
+		return rc;
+
+	ilog_foreach_entry_reverse(&query->qt_entries, entry) {
+		if (entry->ie_status == ILOG_INVISIBLE)
+			return -DER_INPROGRESS;
+
+		if (entry->ie_punch) {
+			if ((entry->ie_id.id_epoch + 1) > epr.epr_lo)
+				epr.epr_lo = entry->ie_id.id_epoch + 1;
+			break;
+		}
+
+		*visible = true;
+	}
+
+	if (*visible)
+		query->qt_epr = epr;
+
+	return 0;
+}
+
+static int
 find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 	 daos_anchor_t *anchor)
 {
 	daos_handle_t		 ih;
-	struct vos_key_bundle	 kbund;
 	struct vos_rec_bundle	 rbund;
 	d_iov_t			 kiov;
-	d_iov_t			 kbund_kiov;
 	d_iov_t			 riov;
 	daos_csum_buf_t		 csum;
-	daos_epoch_range_t	 epr;
+	daos_epoch_range_t	 epr = query->qt_epr;
 	int			 rc = 0;
 	int			 fini_rc;
+	bool			 visible;
 	int			 opc;
 
 	rc = dbtree_iter_prepare(toh, BTR_ITER_EMBEDDED, &ih);
@@ -82,9 +116,8 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 	if (rc != 0)
 		goto out;
 
-	tree_key_bundle2iov(&kbund, &kiov);
 	tree_rec_bundle2iov(&rbund, &riov);
-	kbund.kb_key = &kbund_kiov;
+	d_iov_set(&kiov, NULL, 0);
 
 	rbund.rb_iov = key;
 	rbund.rb_csum = &csum;
@@ -97,28 +130,26 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 		if (rc != 0)
 			break;
 
-		epr.epr_lo = rbund.rb_krec->kr_earliest;
-		if (rbund.rb_krec->kr_bmap & KREC_BF_PUNCHED)
-			epr.epr_hi = rbund.rb_krec->kr_latest;
-		else
-			epr.epr_hi = DAOS_EPOCH_MAX;
+		rc = check_key(query, rbund.rb_krec, &visible);
+		if (rc != 0)
+			break;
 
-		if (query->qt_epoch >= epr.epr_lo &&
-		    query->qt_epoch < epr.epr_hi)
+		if (visible)
 			break;
 
 		if (query->qt_flags & DAOS_GET_MAX)
-			rc = dbtree_iter_prev_with_intent(ih,
-						DAOS_INTENT_DEFAULT);
+			rc = dbtree_iter_prev(ih);
 		else
-			rc = dbtree_iter_next_with_intent(ih,
-						DAOS_INTENT_DEFAULT);
+			rc = dbtree_iter_next(ih);
 	} while (rc == 0);
 out:
 	fini_rc = dbtree_iter_finish(ih);
 
 	if (rc == 0)
 		rc = fini_rc;
+
+	if (rc == 0)
+		query->qt_epr = epr;
 
 	return rc;
 }
@@ -150,8 +181,7 @@ query_recx(struct open_query *query, daos_recx_t *recx)
 
 	filter.fr_ex.ex_lo = 0;
 	filter.fr_ex.ex_hi = ~(uint64_t)0;
-	filter.fr_epr.epr_lo = 0;
-	filter.fr_epr.epr_hi = query->qt_epoch;
+	filter.fr_epr = query->qt_epr;
 
 
 	rc = evt_iter_prepare(toh, opc, &filter, &ih);
@@ -191,12 +221,12 @@ open_and_query_key(struct open_query *query, daos_key_t *key,
 	daos_handle_t		*toh;
 	struct btr_root		*to_open;
 	daos_csum_buf_t		 csum = {0};
-	struct vos_key_bundle	 kbund;
 	struct vos_rec_bundle	 rbund;
-	d_iov_t			 kiov;
 	d_iov_t			 riov;
 	enum vos_tree_class	 tclass;
 	int			 rc = 0;
+	bool			 check = true;
+	bool			 visible = true;
 
 	if (tree_type == DAOS_GET_DKEY) {
 		toh = &query->qt_dkey_toh;
@@ -221,21 +251,27 @@ open_and_query_key(struct open_query *query, daos_key_t *key,
 
 		if (rc != 0)
 			return rc;
-	}
 
-	tree_key_bundle2iov(&kbund, &kiov);
-	kbund.kb_key	= key;
-	kbund.kb_epoch	= query->qt_epoch;
+		check = false; /* Already checked the key */
+	}
 
 	tree_rec_bundle2iov(&rbund, &riov);
 	rbund.rb_off	= UMOFF_NULL;
 	rbund.rb_csum = &csum;
 	rbund.rb_tclass = tclass;
 
-	rc = dbtree_fetch(*toh, BTR_PROBE_GE | BTR_PROBE_MATCHED,
-			  DAOS_INTENT_DEFAULT, &kiov, NULL, &riov);
+	rc = dbtree_fetch(*toh, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT, key, NULL,
+			  &riov);
 	if (rc != 0)
 		return rc;
+
+	if (check) {
+		rc = check_key(query, rbund.rb_krec, &visible);
+		if (rc != 0)
+			return rc;
+		if (visible == false)
+			return -DER_NONEXIST;
+	}
 
 	if (tree_type == DAOS_GET_DKEY)
 		query->qt_akey_root = &rbund.rb_krec->kr_btr;
@@ -332,13 +368,16 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		goto out;
 	}
 
-	query.qt_dkey_toh = DAOS_HDL_INVAL;
-	query.qt_akey_toh = DAOS_HDL_INVAL;
-	query.qt_epoch	  = epoch;
-	query.qt_flags	  = flags;
-	query.qt_dkey_root = &obj->obj_df->vo_tree;
-	query.qt_coh	  = coh;
-	query.qt_pool	  = vos_obj2pool(obj);
+	ilog_fetch_init(&query.qt_entries);
+	query.qt_obj = obj;
+	query.qt_dkey_toh   = DAOS_HDL_INVAL;
+	query.qt_akey_toh   = DAOS_HDL_INVAL;
+	query.qt_epr.epr_lo = 0;
+	query.qt_epr.epr_hi = epoch;
+	query.qt_flags	    = flags;
+	query.qt_dkey_root  = &obj->obj_df->vo_tree;
+	query.qt_coh	    = coh;
+	query.qt_pool	    = vos_obj2pool(obj);
 
 	for (;;) {
 		rc = open_and_query_key(&query, dkey, DAOS_GET_DKEY,
@@ -388,6 +427,8 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		}
 		break;
 	}
+
+	ilog_fetch_finish(&query.qt_entries);
 out:
 	if (daos_handle_is_inval(query.qt_akey_toh))
 		dbtree_close(query.qt_akey_toh);
