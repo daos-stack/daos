@@ -102,6 +102,25 @@ func (h *IOServerHarness) GetManagementInstance() (*IOServerInstance, error) {
 	return h.instances[defaultManagementInstance], nil
 }
 
+// GetMSLeaderInstance returns a managed IO Server instance to be used as a
+// management target and fails if selected instance is not MS Leader.
+func (h *IOServerHarness) GetMSLeaderInstance() (*IOServerInstance, error) {
+	h.RLock()
+	defer h.RUnlock()
+
+	mi, err := h.GetManagementInstance()
+	if err != nil {
+		return nil, err
+	}
+	// currently, as there is only one access point, the only replica will
+	// also be the leader.
+	if err := checkIsMSReplica(mi); err != nil {
+		return nil, err
+	}
+
+	return mi, nil
+}
+
 // CreateSuperblocks creates instance superblocks as needed.
 func (h *IOServerHarness) CreateSuperblocks(recreate bool) error {
 	if h.IsStarted() {

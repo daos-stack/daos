@@ -554,7 +554,6 @@ struct obj_enum_args {
 	struct dc_obj_shard	*eaa_obj;
 	d_sg_list_t		*eaa_sgl;
 	daos_recx_t		*eaa_recxs;
-	daos_epoch_range_t	*eaa_eprs;
 	daos_size_t		*eaa_size;
 	unsigned int		*eaa_map_ver;
 };
@@ -613,13 +612,6 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 		memcpy(enum_args->eaa_kds, oeo->oeo_kds.ca_arrays,
 		       sizeof(*enum_args->eaa_kds) *
 		       oeo->oeo_kds.ca_count);
-
-	if (enum_args->eaa_eprs && oeo->oeo_eprs.ca_count > 0) {
-		D_ASSERT(*enum_args->eaa_nr >= oeo->oeo_eprs.ca_count);
-		memcpy(enum_args->eaa_eprs, oeo->oeo_eprs.ca_arrays,
-		       sizeof(*enum_args->eaa_eprs) *
-		       oeo->oeo_eprs.ca_count);
-	}
 
 	if (enum_args->eaa_recxs && oeo->oeo_recxs.ca_count > 0) {
 		D_ASSERT(*enum_args->eaa_nr >= oeo->oeo_recxs.ca_count);
@@ -774,7 +766,6 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	enum_args.eaa_sgl = sgl;
 	enum_args.eaa_map_ver = &args->la_auxi.map_ver;
 	enum_args.eaa_recxs = obj_args->recxs;
-	enum_args.eaa_eprs = obj_args->eprs;
 	rc = tse_task_register_comp_cb(task, dc_enumerate_cb, &enum_args,
 				       sizeof(enum_args));
 	if (rc != 0)
