@@ -46,8 +46,7 @@
 #include <unistd.h>
 #include <assert.h>
 #include <sys/stat.h>
-#include <gurt/common.h>
-#include <cart/api.h>
+#include "tests_common.h"
 
 static bool pre_forward_called;
 static bool hdlr_called;
@@ -151,7 +150,6 @@ int main(void)
 	d_rank_t	excluded_ranks = {0};
 	crt_rpc_t	*rpc;
 	d_rank_t	my_rank;
-	int		i;
 
 	excluded_membs.rl_nr = 1;
 	excluded_membs.rl_ranks = &excluded_ranks;
@@ -190,9 +188,7 @@ int main(void)
 
 	D_DEBUG(DB_TEST, "Shutting down\n");
 
-	/* Progress for a while to make sure we forward to all children */
-	for (i = 0; i < 1000; i++)
-		crt_progress(g_main_ctx, 1000, NULL, NULL);
+	tc_drain_queue(g_main_ctx);
 
 	rc = crt_context_destroy(g_main_ctx, true);
 	assert(rc == 0);

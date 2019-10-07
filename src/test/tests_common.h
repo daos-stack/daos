@@ -47,7 +47,7 @@
 
 int g_shutdown;
 
-static inline int drain_queue(crt_context_t ctx)
+static inline int tc_drain_queue(crt_context_t ctx)
 {
 	int	rc;
 	/* Drain the queue. Progress until 1 second timeout.  We need
@@ -56,7 +56,7 @@ static inline int drain_queue(crt_context_t ctx)
 	do {
 		rc = crt_progress(ctx, 1000000, NULL, NULL);
 		if (rc != 0 && rc != -DER_TIMEDOUT) {
-			printf("crt_progress failed rc: %d.\n", rc);
+			D_ERROR("crt_progress failed rc: %d.\n", rc);
 			return rc;
 		}
 
@@ -64,7 +64,7 @@ static inline int drain_queue(crt_context_t ctx)
 			break;
 	} while (1);
 
-	printf("Done draining queue\n");
+	D_DEBUG(DB_TEST, "Done draining queue\n");
 	return 0;
 }
 
@@ -78,9 +78,9 @@ progress_fn(void *data)
 	while (g_shutdown == 0)
 		crt_progress(*p_ctx, 1000, NULL, NULL);
 
-	rc = drain_queue(*p_ctx);
+	rc = tc_drain_queue(*p_ctx);
 	if (rc != 0) {
-		D_ERROR("drain_queue() failed with rc=%d\n", rc);
+		D_ERROR("tc_drain_queue() failed with rc=%d\n", rc);
 		assert(0);
 	}
 

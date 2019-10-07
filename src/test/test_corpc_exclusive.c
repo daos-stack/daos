@@ -46,8 +46,7 @@
 #include <unistd.h>
 #include <assert.h>
 #include <sys/stat.h>
-#include <gurt/common.h>
-#include <cart/api.h>
+#include "tests_common.h"
 
 static int	g_do_shutdown;
 static d_rank_t my_rank;
@@ -128,7 +127,6 @@ int main(void)
 	d_rank_t	memb_ranks[] = {1, 2, 4};
 	crt_rpc_t	*rpc;
 	uint32_t	grp_size;
-	int		i;
 
 	membs.rl_nr = 3;
 	membs.rl_ranks = memb_ranks;
@@ -172,19 +170,15 @@ int main(void)
 	}
 
 	/* rank=3 is not sent shutdown sequence */
-	if (my_rank == 3) {
-		sleep(5);
+	if (my_rank == 3)
 		g_do_shutdown = 1;
-	}
 
 	while (!g_do_shutdown)
 		crt_progress(g_main_ctx, 1000, NULL, NULL);
 
 	D_DEBUG(DB_TEST, "Shutting down\n");
 
-	/* Progress for a while to make sure we forward to all children */
-	for (i = 0; i < 1000; i++)
-		crt_progress(g_main_ctx, 1000, NULL, NULL);
+	tc_drain_queue(g_main_ctx);
 
 	rc = crt_context_destroy(g_main_ctx, true);
 	assert(rc == 0);
