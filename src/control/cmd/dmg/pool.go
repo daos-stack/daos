@@ -73,7 +73,8 @@ func (c *PoolCreateCmd) Execute(args []string) error {
 type PoolDestroyCmd struct {
 	logCmd
 	connectedCmd
-	Uuid  string `short:"u" long:"uuid" required:"1" description:"UUID of DAOS pool to destroy"`
+	// TODO: implement --sys & --svc options (currently unsupported server side)
+	Uuid  string `long:"pool" required:"1" description:"UUID of DAOS pool to destroy"`
 	Force bool   `short:"f" long:"force" description:"Force removal of DAOS pool"`
 }
 
