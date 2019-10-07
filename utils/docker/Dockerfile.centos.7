@@ -58,14 +58,13 @@ RUN yum -y install epel-release; \
            libaio-devel libcmocka-devel libevent-devel libiscsi-devel     \
            libtool libtool-ltdl-devel libuuid-devel libyaml-devel         \
            make meson nasm ninja-build numactl-devel openssl-devel        \
-           pandoc patch                                                   \
-           pylint python python-pep8 python-requests python2-pygithub     \
-           readline-devel scons sg3_utils ShellCheck yasm
+           pandoc patch python-requests python2-pygithub                  \
+           python36-pylint python36-pep8 python36-requests                \
+           python36-pygithub readline-devel sg3_utils ShellCheck yasm     \
+           python36-scons
 
 # CaRT specific
-RUN yum -y install \
-           python2-paramiko python36 python36-pylint python36-PyYAML \
-           python36-paramiko PyYAML rsync valgrind
+RUN yum -y install python36-paramiko python36-PyYAML rsync valgrind
 
 # Add CaRT user
 ENV USER cart
@@ -86,7 +85,7 @@ WORKDIR /home/$USER/cart
 
 # Build CaRT & dependencies
 RUN if [ "x$NOBUILD" = "x" ] ; then git submodule init && git submodule update; fi
-RUN if [ "x$NOBUILD" = "x" ] ; then scons --build-deps=yes USE_INSTALLED=all install; fi
+RUN if [ "x$NOBUILD" = "x" ] ; then scons-3 --build-deps=yes USE_INSTALLED=all install; fi
 
 # Set environment variables
 ENV PATH=/home/cart/cart/install/bin:$PATH

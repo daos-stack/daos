@@ -41,7 +41,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
 RUN curl -sS -f -L -O ${OFI_ART}/libfabric1_1.8.0-1_amd64.deb; \
     curl -sS -f -L -O ${OFI_ART}/libfabric-dev_1.8.0-1_amd64.deb; \
     apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
-      ./libfabric*_amd64.deb
+      ./libfabric1_1.8.0-1_amd64.deb ./libfabric-dev_1.8.0-1_amd64.deb
 
 # CaRT
 
