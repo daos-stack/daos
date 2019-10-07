@@ -37,8 +37,8 @@ var jsonDBRelPath = "share/daos/control/mgmtinit_db.json"
 // ControlService implements the control plane control service, satisfying
 // ctlpb.MgmtCtlServer, and is the data container for the service.
 type ControlService struct {
-	StorageControlService
-	NetworkScanService
+	scs               StorageControlService
+	nss               NetworkScanService
 	harness           *IOServerHarness
 	supportedFeatures FeatureMap
 }
@@ -60,8 +60,8 @@ func NewControlService(l logging.Logger, h *IOServerHarness, cfg *Configuration)
 	}
 
 	return &ControlService{
-		StorageControlService: *scs,
-		NetworkScanService:    *nss,
+		scs:                   *scs,
+		nss:                   *nss,
 		harness:               h,
 		supportedFeatures:     fMap,
 	}, nil

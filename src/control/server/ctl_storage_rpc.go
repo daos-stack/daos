@@ -170,7 +170,7 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 func (c *ControlService) doFormat(i *IOServerInstance, resp *ctlpb.StorageFormatResp) error {
 	hasSuperblock := false
 
-	c.log.Infof("formatting storage for I/O server instance %d", i.Index)
+	c.scs.log.Infof("formatting storage for I/O server instance %d", i.Index)
 
 	needsScmFormat, err := i.NeedsScmFormat()
 	if err != nil {
@@ -187,8 +187,8 @@ func (c *ControlService) doFormat(i *IOServerInstance, resp *ctlpb.StorageFormat
 
 	if hasSuperblock {
 		// server already formatted, populate response appropriately
-		c.nvme.formatted = true
-		c.scm.formatted = true
+		c.scs.nvme.formatted = true
+		c.scs.scm.formatted = true
 	}
 
 	var formatFailed bool
@@ -201,7 +201,7 @@ func (c *ControlService) doFormat(i *IOServerInstance, resp *ctlpb.StorageFormat
 	ctrlrResults := types.NvmeControllerResults{}
 	// A config with SCM and no block devices is valid, apparently.
 	if len(bdevConfig.DeviceList) > 0 {
-		c.nvme.Format(bdevConfig, &ctrlrResults)
+		c.scs.nvme.Format(bdevConfig, &ctrlrResults)
 		resp.Crets = ctrlrResults
 		formatFailed = ctrlrResults.HasErrors()
 	}
@@ -211,19 +211,19 @@ func (c *ControlService) doFormat(i *IOServerInstance, resp *ctlpb.StorageFormat
 		return err
 	}
 	mountResults := types.ScmMountResults{}
-	c.scm.Format(scmConfig, &mountResults)
+	c.scs.scm.Format(scmConfig, &mountResults)
 	resp.Mrets = mountResults
 	formatFailed = formatFailed || mountResults.HasErrors()
 
-	c.log.Debugf("nvme formatted: %t, scm formatted: %t, has superblock: %t",
-		c.nvme.formatted, c.scm.formatted, hasSuperblock)
+	c.scs.log.Debugf("nvme formatted: %t, scm formatted: %t, has superblock: %t",
+		c.scs.nvme.formatted, c.scs.scm.formatted, hasSuperblock)
 
-	if c.nvme.formatted && c.scm.formatted {
+	if c.scs.nvme.formatted && c.scs.scm.formatted {
 		// Use this an indicator for whether storage format was requested and completed
 		// vs. storage was already formatted and skipped.
 		// TODO: Rework this logic to be less convoluted.
 		if !hasSuperblock {
-			c.log.Infof("storage format successful on server %d\n", i.runner.Config.Index)
+			c.scs.log.Infof("storage format successful on server %d\n", i.runner.Config.Index)
 		}
 	}
 
@@ -246,7 +246,7 @@ func (c *ControlService) doFormat(i *IOServerInstance, resp *ctlpb.StorageFormat
 func (c *ControlService) StorageFormat(req *ctlpb.StorageFormatReq, stream ctlpb.MgmtCtl_StorageFormatServer) error {
 	resp := new(ctlpb.StorageFormatResp)
 
-	c.log.Debug("received StorageFormat RPC; proceeding to instance storage format")
+	c.scs.log.Debug("received StorageFormat RPC; proceeding to instance storage format")
 
 	// TODO: We may want to ease this restriction at some point, but having this
 	// here for now should help to cut down on shenanigans which might result
@@ -278,7 +278,7 @@ func (c *ControlService) StorageFormat(req *ctlpb.StorageFormatReq, stream ctlpb
 func (c *ControlService) StorageUpdate(req *ctlpb.StorageUpdateReq, stream ctlpb.MgmtCtl_StorageUpdateServer) error {
 	resp := new(ctlpb.StorageUpdateResp)
 
-	c.log.Debug("received StorageUpdate RPC; proceeding to instance storage update")
+	c.scs.log.Debug("received StorageUpdate RPC; proceeding to instance storage update")
 
 	// TODO: We may want to ease this restriction at some point, but having this
 	// here for now should help to cut down on shenanigans which might result
@@ -291,11 +291,11 @@ func (c *ControlService) StorageUpdate(req *ctlpb.StorageUpdateReq, stream ctlpb
 	for _, i := range c.harness.Instances() {
 		stCfg := i.runner.Config.Storage
 		ctrlrResults := types.NvmeControllerResults{}
-		c.nvme.Update(stCfg.Bdev, req.Nvme, &ctrlrResults)
+		c.scs.nvme.Update(stCfg.Bdev, req.Nvme, &ctrlrResults)
 		resp.Crets = ctrlrResults
 
 		moduleResults := types.ScmModuleResults{}
-		c.scm.Update(stCfg.SCM, req.Scm, &moduleResults)
+		c.scs.scm.Update(stCfg.SCM, req.Scm, &moduleResults)
 		resp.Mrets = moduleResults
 	}
 
@@ -314,7 +314,7 @@ func (c *ControlService) StorageUpdate(req *ctlpb.StorageUpdateReq, stream ctlpb
 // and nvme controllers.
 func (c *ControlService) StorageBurnIn(req *ctlpb.StorageBurnInReq, stream ctlpb.MgmtCtl_StorageBurnInServer) error {
 
-	c.log.Debug("received StorageBurnIn RPC; proceeding to instance storage burnin")
+	c.scs.log.Debug("received StorageBurnIn RPC; proceeding to instance storage burnin")
 
 	return errors.New("StorageBurnIn not implemented")
 	//	for i := range c.config.Servers {

@@ -104,10 +104,10 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	if err != nil {
 		return errors.Wrap(err, "init control service")
 	}
-	if err := controlService.Setup(); err != nil {
+	if err := controlService.scs.Setup(); err != nil {
 		return errors.Wrap(err, "setup control service")
 	}
-	defer controlService.Teardown()
+	defer controlService.scs.Teardown()
 
 	// Create and start listener on management network.
 	lis, err := net.Listen("tcp4", controlAddr.String())

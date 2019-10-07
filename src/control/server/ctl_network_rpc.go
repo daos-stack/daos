@@ -38,9 +38,10 @@ func (c *NetworkScanService) RequestProviderList(ctx context.Context, in *pb.Pro
 	// Just a quick test to see that we can return a string
 	return &pb.ProviderListReply{Provider: "joel's provider list provider"}, nil
 }
+
 /*
 func (c *NetworkScanService) RequestDeviceScanStreamer(in *pb.DeviceScanRequest, stream pb.MgmtCtl_RequestDeviceScanStreamerServer) error {
-	c.log.Debugf("RequestDeviceScanStreamer() Received request: %s", in.GetProvider())
+	c.nss.log.Debugf("RequestDeviceScanStreamer() Received request: %s", in.GetProvider())
 
 	results, err := netdetect.ScanFabric(in.GetProvider())
 	if err != nil {
