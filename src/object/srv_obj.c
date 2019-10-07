@@ -787,15 +787,6 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		unsigned int	tgt_idx = orw->orw_oid.id_shard -
 					  orw->orw_start_shard;
 
-		for (i = 0; i < orw->orw_nr; i++) {
-			int j;
-			if (tmp_iods[i].iod_type == DAOS_IOD_ARRAY)
-				for (j = 0; j < tmp_iods[i].iod_nr; j++)
-					D_INFO("before: %d, %d, idx: %lu, nr: %lu\n",
-					       i, j,
-					       tmp_iods[i].iod_recxs[j].rx_idx,
-					       tmp_iods[i].iod_recxs[j].rx_nr);
-		}
 		D_ALLOC_ARRAY(skip_list, orw->orw_nr);
 		if (skip_list == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
@@ -819,25 +810,6 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 			rc = ec_parity_target(tgt_idx,
 					      orw->orw_nr, tmp_iods,
 					      oca, skip_list);
-		}
-		D_INFO("tgt_idx is: %u\n", tgt_idx);
-		for (i = 0; i < orw->orw_nr; i++) {
-			int j;
-			if (tmp_iods[i].iod_type == DAOS_IOD_ARRAY)
-				for (j = 0; j < tmp_iods[i].iod_nr; j++)
-					D_INFO("rx: %d, %d, idx: %lu, nr: %lu\n",
-					       i, j,
-					       tmp_iods[i].iod_recxs[j].rx_idx,
-					       tmp_iods[i].iod_recxs[j].rx_nr);
-			if (skip_list[i] != NULL) 
-				for (j = 0; skip_list[i][j].len != 0; j++) {
-					uint64_t len = skip_list[i][j].len;
-					int is_skip = skip_list[i][j].is_skip;
-
-					D_INFO("sl: %d, %d, is_skip: %d, len: %lu\n",
-					       i, j,is_skip,len);
-				}
-
 		}
 		if (rc) {
 			D_ERROR(DF_UOID"EC update failed: %d\n",
