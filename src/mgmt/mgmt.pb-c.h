@@ -16,6 +16,7 @@ PROTOBUF_C__BEGIN_DECLS
 
 #include "pool.pb-c.h"
 #include "srv.pb-c.h"
+#include "system.pb-c.h"
 #include "storage_query.pb-c.h"
 
 typedef struct _Mgmt__JoinReq Mgmt__JoinReq;
@@ -267,6 +268,14 @@ struct _Mgmt__MgmtSvc_Service
                          const Mgmt__SmdPoolReq *input,
                          Mgmt__SmdPoolResp_Closure closure,
                          void *closure_data);
+  void (*system_member_query)(Mgmt__MgmtSvc_Service *service,
+                              const Mgmt__SystemMemberQueryReq *input,
+                              Mgmt__SystemMemberQueryResp_Closure closure,
+                              void *closure_data);
+  void (*system_stop)(Mgmt__MgmtSvc_Service *service,
+                      const Mgmt__SystemStopReq *input,
+                      Mgmt__SystemStopResp_Closure closure,
+                      void *closure_data);
   void (*kill_rank)(Mgmt__MgmtSvc_Service *service,
                     const Mgmt__DaosRank *input,
                     Mgmt__DaosResp_Closure closure,
@@ -294,6 +303,8 @@ void mgmt__mgmt_svc__init (Mgmt__MgmtSvc_Service *service,
       function_prefix__ ## bio_health_query,\
       function_prefix__ ## smd_list_devs,\
       function_prefix__ ## smd_list_pools,\
+      function_prefix__ ## system_member_query,\
+      function_prefix__ ## system_stop,\
       function_prefix__ ## kill_rank,\
       function_prefix__ ## dev_state_query,\
       function_prefix__ ## storage_set_faulty  }
@@ -325,6 +336,14 @@ void mgmt__mgmt_svc__smd_list_pools(ProtobufCService *service,
                                     const Mgmt__SmdPoolReq *input,
                                     Mgmt__SmdPoolResp_Closure closure,
                                     void *closure_data);
+void mgmt__mgmt_svc__system_member_query(ProtobufCService *service,
+                                         const Mgmt__SystemMemberQueryReq *input,
+                                         Mgmt__SystemMemberQueryResp_Closure closure,
+                                         void *closure_data);
+void mgmt__mgmt_svc__system_stop(ProtobufCService *service,
+                                 const Mgmt__SystemStopReq *input,
+                                 Mgmt__SystemStopResp_Closure closure,
+                                 void *closure_data);
 void mgmt__mgmt_svc__kill_rank(ProtobufCService *service,
                                const Mgmt__DaosRank *input,
                                Mgmt__DaosResp_Closure closure,

@@ -160,6 +160,16 @@ func (tc *testConn) DevStateQuery(req *mgmtpb.DevStateReq) client.ResultStateMap
 func (tc *testConn) StorageSetFaulty(req *mgmtpb.DevStateReq) client.ResultStateMap {
 	tc.appendInvocation(fmt.Sprintf("StorageSetFaulty-%s", req))
 	return nil
+{
+
+func (tc *testConn) SystemMemberQuery() (common.SystemMembers, error) {
+	tc.appendInvocation("SystemMemberQuery")
+	return make(common.SystemMembers, 0), nil
+}
+
+func (tc *testConn) SystemStop() (common.SystemMembers, error) {
+	tc.appendInvocation("SystemStop")
+	return make(common.SystemMembers, 0), nil
 }
 
 func (tc *testConn) SetTransportConfig(cfg *security.TransportConfig) {

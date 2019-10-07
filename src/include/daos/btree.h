@@ -121,6 +121,8 @@ struct btr_root {
 
 /** btree attributes returned by query function. */
 struct btr_attr {
+	/** Estimate of entries in tree.  Exact for tree depth <= 1 */
+	int				ba_count;
 	/** tree order */
 	unsigned int			ba_order;
 	/** tree depth */

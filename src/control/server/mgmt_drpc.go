@@ -79,7 +79,7 @@ type srvModule struct {
 	iosrvs []*IOServerInstance
 }
 
-// HandleCall is the handler for calls to the srvModule
+// HandleCall is the handler for calls to the srvModule.
 func (mod *srvModule) HandleCall(cli *drpc.Client, method int32, req []byte) ([]byte, error) {
 	switch method {
 	case notifyReady:
