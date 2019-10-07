@@ -39,7 +39,7 @@ def create_pool_and_connect(pool_mode, pool_size, pool_name, pool_context):
     """
     new_pool = DaosPool(pool_context)
     new_pool.create(pool_mode, os.geteuid(), os.getegid(), pool_size,
-        pool_name, None)
+                    pool_name, None)
     new_pool.connect(1 << 1)
     return new_pool
 
@@ -78,7 +78,7 @@ class OpenContainerTest(TestWithServers):
         name = self.params.get("setname", '/run/createtests/createset/')
         size = self.params.get("size", '/run/createtests/createsize/')
         uuid_states = self.params.get("uuid",
-            '/run/createtests/container_uuid_states/*/')
+                                      '/run/createtests/container_uuid_states/*/')
         poh_states = self.params.get("poh", '/run/createtests/handle_states/*/')
 
         try:
@@ -109,14 +109,15 @@ class OpenContainerTest(TestWithServers):
             except DaosApiError as excep:
                 print(excep)
                 print(traceback.format_exc())
-                self.fail("Error while opening the container with valid "
-                "pool handle and container UUID")
+                self.fail("Error while opening the container with valid " +
+                          "pool handle and container UUID")
         elif uuid_states[0] == result_pass and poh_states[0] == result_fail:
             # Test 2: Use the other container's UUID
             try:
                 # Case 1
                 container1.open(pool1.handle, container2_uuid)
-                self.fail("No error occurred from using container 2's UUID while opening container 1")
+                self.fail("No error occurred from using container 2's UUID while " +
+                          "opening container 1")
             except DaosApiError as excep:
                 print(excep)
                 print(traceback.format_exc())
@@ -124,7 +125,7 @@ class OpenContainerTest(TestWithServers):
                 # Case 2
                 container2.open(pool2.handle, container1_uuid)
                 self.fail("No error occurred from using container 1's UUID " +
-                "while opening container 2")
+                          "while opening container 2")
             except DaosApiError as excep:
                 print(excep)
                 print(traceback.format_exc())
@@ -134,7 +135,7 @@ class OpenContainerTest(TestWithServers):
                 # Case 1
                 container1.open(pool2.handle, container1_uuid)
                 self.fail("No error occurred from using pool 2's handle " +
-                "while opening container 1")
+                          "while opening container 1")
             except DaosApiError as excep:
                 print(excep)
                 print(traceback.format_exc())
@@ -142,7 +143,7 @@ class OpenContainerTest(TestWithServers):
                 # Case 2
                 container2.open(pool1.handle, container2_uuid)
                 self.fail("No error occurred from using pool1's handle " +
-                "while opening container 2")
+                          "while opening container 2")
             except DaosApiError as excep:
                 print(excep)
                 print(traceback.format_exc())
@@ -151,8 +152,8 @@ class OpenContainerTest(TestWithServers):
             try:
                 # Case 1
                 container1.open(pool2.handle, container2_uuid)
-                self.fail("""No error occurred from using pool 2's handle \
-and container 2's UUID while opening container 1""")
+                self.fail("No error occurred from using pool 2's handle " +
+                          "and container 2's UUID while opening container 1")
             except DaosApiError as excep:
                 print(excep)
                 print(traceback.format_exc())
@@ -160,7 +161,7 @@ and container 2's UUID while opening container 1""")
                 # Case 2
                 container2.open(pool1.handle, container1_uuid)
                 self.fail("No error occurred from using pool1's handle " +
-                "and container 1's UUID while opening container 2")
+                          "and container 1's UUID while opening container 2")
             except DaosApiError as excep:
                 print(excep)
                 print(traceback.format_exc())
