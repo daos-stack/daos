@@ -1207,7 +1207,7 @@ pipeline {
                                        node_count: 1,
                                        snapshot: true,
                                        inst_repos: daos_repos + ' ' + ior_repos,
-                                       inst_rpms: "ior-hpc mpich-autoload"
+                                       inst_rpms: "ior-hpc mpich-autoload daos_tests"
                         // Then just reboot the physical nodes
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
