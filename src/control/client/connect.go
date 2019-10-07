@@ -302,8 +302,7 @@ type Connect interface {
 	PoolDestroy(*PoolDestroyReq) error
 	BioHealthQuery(*mgmtpb.BioHealthReq) ResultQueryMap
 	SmdListDevs(*mgmtpb.SmdDevReq) ResultSmdMap
-// this is just a guess.  I'm not sure how these two functions should be defined
-	RequestProviderList(*ctlpb.ProviderListRequest) (*ctlpb.ProviderListReply, error)
+	GetProviderList(*ctlpb.ProviderListRequest) ResultMap
 //	RequestDeviceScanStreamer(*ctlpb.DeviceScanRequest, *ctlpb.MgmtCtl_RequestDeviceScanStreamerServer) error
 	SmdListPools(*mgmtpb.SmdPoolReq) ResultSmdMap
 	SystemMemberQuery() (common.SystemMembers, error)

@@ -24,10 +24,10 @@
 package main
 
 import (
-	"io"
+//	"io"
 //	"github.com/daos-stack/daos/src/control/client"
 //	"github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 //	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -101,23 +101,8 @@ type networkListCmd struct {
 	connectedCmd
 }
 
-// List the supported providers and show the example text
+// List the supported providers
 func (cmd *networkListCmd) Execute(args []string) error {
-
-	// For now, the provider list is a single string, non-streamed.
-	// Formatting of the output won't be correct yet, but it's a place holder
-	// until the gRPC is functioning.
-	rpl, err := cmd.conns.RequestProviderList(&pb.ProviderListRequest{})
-	if err != nil {
-		cmd.log.Infof("could not complete device scan: %v", err)
-		return nil
-	}
-	cmd.log.Infof("Supported providers: %s", rpl.GetProvider())
-/*
-	// daos_server processes the string this way:
-	for _, p := range providers {
-		cmd.log.Infof("\t%s", p)
-	}
-*/
+	cmd.conns.GetProviderList(&ctlpb.ProviderListRequest{})
 	return nil
 }
