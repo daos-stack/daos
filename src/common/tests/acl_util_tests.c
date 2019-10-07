@@ -1307,6 +1307,50 @@ test_ace_from_str_and_back_again(void **state)
 	check_ace_turns_back_to_same_str("UL:F:EVERYONE@:rw");
 }
 
+static void
+test_acl_from_strs_bad_input(void **state)
+{
+	struct daos_acl		*acl = NULL;
+	static const char	*valid_aces[] = {"A::OWNER@:rw"};
+	static const char	*garbage[] = {"ABCD:E:FGH:IJ"};
+
+	assert_int_equal(daos_acl_from_strs(NULL, 1, &acl), -DER_INVAL);
+	assert_int_equal(daos_acl_from_strs(valid_aces, 0, &acl),
+			 -DER_INVAL);
+	assert_int_equal(daos_acl_from_strs(garbage, 1, &acl), -DER_INVAL);
+}
+
+static void
+test_acl_from_strs_success(void **state)
+{
+	struct daos_acl			*acl = NULL;
+	static const char		*aces[] = {"A::OWNER@:rw",
+						   "L:F:EVERYONE@:rw"};
+	enum daos_acl_principal_type	expected[] = { DAOS_ACL_OWNER,
+						       DAOS_ACL_EVERYONE };
+	size_t				aces_nr = 2;
+	size_t				actual_count = 0;
+	struct daos_ace			*current;
+
+	assert_int_equal(daos_acl_from_strs(aces, aces_nr, &acl), 0);
+
+	assert_non_null(acl);
+
+	current = daos_acl_get_next_ace(acl, NULL);
+	while (current != NULL && actual_count < aces_nr) {
+		assert_int_equal(current->dae_principal_type,
+				 expected[actual_count]);
+
+		actual_count++;
+		current = daos_acl_get_next_ace(acl, current);
+	}
+
+	assert_int_equal(actual_count, aces_nr);
+	assert_null(current);
+
+	daos_acl_free(acl);
+}
+
 int
 main(void)
 {
@@ -1385,7 +1429,9 @@ main(void)
 		cmocka_unit_test(test_ace_to_str_no_perms),
 		cmocka_unit_test(test_ace_to_str_truncated),
 		cmocka_unit_test(test_ace_to_str_different_perms),
-		cmocka_unit_test(test_ace_from_str_and_back_again)
+		cmocka_unit_test(test_ace_from_str_and_back_again),
+		cmocka_unit_test(test_acl_from_strs_bad_input),
+		cmocka_unit_test(test_acl_from_strs_success)
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);

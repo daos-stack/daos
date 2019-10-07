@@ -18,8 +18,7 @@
    match-leak-kinds: possible
    fun:malloc
    fun:strndup
-   fun:grp_li_uri_set.isra.24
-   fun:grp_lc_uri_insert_internal_locked
+   ...
    fun:crt_grp_lc_uri_insert
 }
 {
@@ -62,7 +61,7 @@
    Memcheck:Leak
    match-leak-kinds: indirect
    fun:calloc
-   fun:dfuse_cont_open
+   fun:dfuse_cont_open*
 }
 {
    pool-connect-leak
@@ -70,10 +69,10 @@
    match-leak-kinds: reachable
    fun:calloc
    fun:d_hash_table_create_inplace
-   fun:pl_htable_init
+   ...
    fun:pl_map_update
    fun:pool_map_update
-   fun:process_query_reply
+   ...
    fun:pool_connect_cp
 }
 {
@@ -91,6 +90,17 @@
    match-leak-kinds: indirect
    fun:calloc
    ...
-   fun:process_query_reply
+   fun:process_query_reply*
    fun:pool_query_cb
+}
+{
+   cont-open-leak
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:calloc
+   fun:dc_cont_alloc
+   fun:dc_cont_open
+   fun:tse_task_schedule
+   fun:dc_task_schedule
+   fun:daos_cont_open
 }
