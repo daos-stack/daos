@@ -592,6 +592,10 @@ func TestStorageFormat(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+
+			// Hack to deal with creating the mountpoint in test.
+			// FIXME (DAOS-3471): The tests in this layer really shouldn't be
+			// reaching down far enough to actually interact with the filesystem.
 			tt.sMount = filepath.Join(testDir, tt.sMount)
 			if len(tt.expResults) == 1 && len(tt.expResults[0].Mrets) == 1 {
 				if strings.HasSuffix(tt.sMount, tt.expResults[0].Mrets[0].Mntpoint) {

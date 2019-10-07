@@ -51,14 +51,14 @@ const (
 	miMajorMinor
 	_
 	miMountPoint
-	miLastField
+	miNumFields
 )
 
 func scanMountInfo(input io.Reader, target string, scanField int) (bool, error) {
 	scn := bufio.NewScanner(input)
 	for scn.Scan() {
 		fields := strings.Fields(scn.Text())
-		if len(fields) < miLastField {
+		if len(fields) < miNumFields {
 			continue
 		}
 		if fields[scanField] == target {
