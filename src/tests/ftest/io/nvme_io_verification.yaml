@@ -3,15 +3,21 @@
 
 hosts:
  test_servers:
-   - boro-A
+   - boro-14
+#   - boro-B
+#   - boro-C
+#   - boro-D
+#   - boro-E
+#   - boro-F
+#   - boro-G
  test_clients:
-   - boro-B
+   - boro-61
 timeout: 1200
 server_config:
  name: daos_server
  server:
    bdev_class: nvme
-   bdev_list: ["0000:81:00.0","0000:da:00.0"]
+   bdev_list: ["0000:81:00.0"]
    targets: 1
 pool:
  createmode:
@@ -22,8 +28,8 @@ pool:
   svcn: 1
 ior:
  client_processes:
-   np: 1
- flags: "-w -r -k -vv"
+   np: 2 
+ flags: "-w -W -r -R -k -vv"
  repetitions: 1
  api: MPIIO
  transfersize: !mux
@@ -35,14 +41,14 @@ ior:
        - 220000
        - 1100000
        - 33000000
-   case2:
-     block_size: 1000000000
-     tsize:
-       - 500000
-       - 1000000
-       - 20000000
-       - 100000000
-       - 1000000000
+#   case2:
+#     block_size: 1000000000
+#     tsize:
+#       - 500000
+#       - 1000000
+#       - 20000000
+#       - 100000000
+#       - 1000000000
  ior_sequence:
 #   - [scmsize, nvmesize]
     - [500000000, 1073741824]        #[500M, 1G]
