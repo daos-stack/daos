@@ -30,7 +30,7 @@ func (m *BioHealthReq) Reset()         { *m = BioHealthReq{} }
 func (m *BioHealthReq) String() string { return proto.CompactTextString(m) }
 func (*BioHealthReq) ProtoMessage()    {}
 func (*BioHealthReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_query_bc943847309257df, []int{0}
+	return fileDescriptor_storage_query_422b005f713e2402, []int{0}
 }
 func (m *BioHealthReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BioHealthReq.Unmarshal(m, b)
@@ -88,7 +88,7 @@ func (m *BioHealthResp) Reset()         { *m = BioHealthResp{} }
 func (m *BioHealthResp) String() string { return proto.CompactTextString(m) }
 func (*BioHealthResp) ProtoMessage()    {}
 func (*BioHealthResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_query_bc943847309257df, []int{1}
+	return fileDescriptor_storage_query_422b005f713e2402, []int{1}
 }
 func (m *BioHealthResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BioHealthResp.Unmarshal(m, b)
@@ -216,7 +216,7 @@ func (m *SmdDevReq) Reset()         { *m = SmdDevReq{} }
 func (m *SmdDevReq) String() string { return proto.CompactTextString(m) }
 func (*SmdDevReq) ProtoMessage()    {}
 func (*SmdDevReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_query_bc943847309257df, []int{2}
+	return fileDescriptor_storage_query_422b005f713e2402, []int{2}
 }
 func (m *SmdDevReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SmdDevReq.Unmarshal(m, b)
@@ -248,7 +248,7 @@ func (m *SmdDevResp) Reset()         { *m = SmdDevResp{} }
 func (m *SmdDevResp) String() string { return proto.CompactTextString(m) }
 func (*SmdDevResp) ProtoMessage()    {}
 func (*SmdDevResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_query_bc943847309257df, []int{3}
+	return fileDescriptor_storage_query_422b005f713e2402, []int{3}
 }
 func (m *SmdDevResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SmdDevResp.Unmarshal(m, b)
@@ -294,7 +294,7 @@ func (m *SmdDevResp_Device) Reset()         { *m = SmdDevResp_Device{} }
 func (m *SmdDevResp_Device) String() string { return proto.CompactTextString(m) }
 func (*SmdDevResp_Device) ProtoMessage()    {}
 func (*SmdDevResp_Device) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_query_bc943847309257df, []int{3, 0}
+	return fileDescriptor_storage_query_422b005f713e2402, []int{3, 0}
 }
 func (m *SmdDevResp_Device) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SmdDevResp_Device.Unmarshal(m, b)
@@ -338,7 +338,7 @@ func (m *SmdPoolReq) Reset()         { *m = SmdPoolReq{} }
 func (m *SmdPoolReq) String() string { return proto.CompactTextString(m) }
 func (*SmdPoolReq) ProtoMessage()    {}
 func (*SmdPoolReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_query_bc943847309257df, []int{4}
+	return fileDescriptor_storage_query_422b005f713e2402, []int{4}
 }
 func (m *SmdPoolReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SmdPoolReq.Unmarshal(m, b)
@@ -370,7 +370,7 @@ func (m *SmdPoolResp) Reset()         { *m = SmdPoolResp{} }
 func (m *SmdPoolResp) String() string { return proto.CompactTextString(m) }
 func (*SmdPoolResp) ProtoMessage()    {}
 func (*SmdPoolResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_query_bc943847309257df, []int{5}
+	return fileDescriptor_storage_query_422b005f713e2402, []int{5}
 }
 func (m *SmdPoolResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SmdPoolResp.Unmarshal(m, b)
@@ -417,7 +417,7 @@ func (m *SmdPoolResp_Pool) Reset()         { *m = SmdPoolResp_Pool{} }
 func (m *SmdPoolResp_Pool) String() string { return proto.CompactTextString(m) }
 func (*SmdPoolResp_Pool) ProtoMessage()    {}
 func (*SmdPoolResp_Pool) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_query_bc943847309257df, []int{5, 0}
+	return fileDescriptor_storage_query_422b005f713e2402, []int{5, 0}
 }
 func (m *SmdPoolResp_Pool) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_SmdPoolResp_Pool.Unmarshal(m, b)
@@ -469,9 +469,9 @@ func init() {
 	proto.RegisterType((*SmdPoolResp_Pool)(nil), "mgmt.SmdPoolResp.Pool")
 }
 
-func init() { proto.RegisterFile("storage_query.proto", fileDescriptor_storage_query_bc943847309257df) }
+func init() { proto.RegisterFile("storage_query.proto", fileDescriptor_storage_query_422b005f713e2402) }
 
-var fileDescriptor_storage_query_bc943847309257df = []byte{
+var fileDescriptor_storage_query_422b005f713e2402 = []byte{
 	// 483 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x93, 0xc1, 0x8e, 0xd3, 0x30,
 	0x10, 0x86, 0x95, 0x6d, 0x92, 0xb6, 0x93, 0x76, 0x11, 0x06, 0x76, 0x4d, 0x11, 0x22, 0x94, 0x03,

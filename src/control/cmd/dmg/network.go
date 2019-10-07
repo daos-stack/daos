@@ -69,7 +69,7 @@ func (cmd *networkScanCmd) Execute(args []string) error {
 		// all providers case
 		cmd.log.Info("Scanning fabric for all providers")
 	}
-
+/*
 	// for test //
 	searchprovider := "ofi+sockets"
 
@@ -91,7 +91,7 @@ func (cmd *networkScanCmd) Execute(args []string) error {
 		cmd.log.Infof("fabric_iface: %s", resp.GetDevice())
 		cmd.log.Infof("pinned_numa_node: %d\n", resp.GetNumanode())
 	}
-
+*/
 	return nil
 }
 

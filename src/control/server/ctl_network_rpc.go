@@ -24,13 +24,13 @@
 package server
 
 import (
-	"github.com/pkg/errors"
+//	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
 //	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 //	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+//	"github.com/daos-stack/daos/src/control/lib/netdetect"
 )
 
 func (c *NetworkScanService) RequestProviderList(ctx context.Context, in *pb.ProviderListRequest) (*pb.ProviderListReply, error) {
@@ -38,7 +38,7 @@ func (c *NetworkScanService) RequestProviderList(ctx context.Context, in *pb.Pro
 	// Just a quick test to see that we can return a string
 	return &pb.ProviderListReply{Provider: "joel's provider list provider"}, nil
 }
-
+/*
 func (c *NetworkScanService) RequestDeviceScanStreamer(in *pb.DeviceScanRequest, stream pb.MgmtCtl_RequestDeviceScanStreamerServer) error {
 	c.log.Debugf("RequestDeviceScanStreamer() Received request: %s", in.GetProvider())
 
@@ -62,3 +62,4 @@ func (c *NetworkScanService) RequestDeviceScanStreamer(in *pb.DeviceScanRequest,
 	}
 	return nil
 }
+*/
