@@ -48,12 +48,12 @@ const (
 	bioHealth     = C.DRPC_METHOD_MGMT_BIO_HEALTH_QUERY
 	setUp         = C.DRPC_METHOD_MGMT_SET_UP
 	smdDevs       = C.DRPC_METHOD_MGMT_SMD_LIST_DEVS
+	smdPools      = C.DRPC_METHOD_MGMT_SMD_LIST_POOLS
 
 	srvModuleID = C.DRPC_MODULE_SRV
 	notifyReady = C.DRPC_METHOD_SRV_NOTIFY_READY
 )
 
-// mgmtModule is the management drpc module struct
 // mgmtModule represents the daos_server mgmt dRPC module. It sends dRPCs to
 // the daos_io_server iosrv module (src/iosrv).
 type mgmtModule struct{}
@@ -74,10 +74,10 @@ func (m *mgmtModule) ID() int32 {
 // srvModule represents the daos_server dRPC module. It handles dRPCs sent by
 // the daos_io_server iosrv module (src/iosrv).
 type srvModule struct {
-	iosrv *IOServerInstance
+	iosrvs []*IOServerInstance
 }
 
-// HandleCall is the handler for calls to the srvModule
+// HandleCall is the handler for calls to the srvModule.
 func (mod *srvModule) HandleCall(cli *drpc.Client, method int32, req []byte) ([]byte, error) {
 	switch method {
 	case notifyReady:
@@ -99,7 +99,16 @@ func (mod *srvModule) handleNotifyReady(reqb []byte) error {
 		return errors.Wrap(err, "unmarshal NotifyReady request")
 	}
 
-	mod.iosrv.NotifyReady(req)
+	if req.InstanceIdx >= uint32(len(mod.iosrvs)) {
+		return errors.Errorf("instance index %v is out of range (%v instances)",
+			req.InstanceIdx, len(mod.iosrvs))
+	}
+
+	if err := checkDrpcClientSocketPath(req.DrpcListenerSock); err != nil {
+		return errors.Wrap(err, "check NotifyReady request socket path")
+	}
+
+	mod.iosrvs[req.InstanceIdx].NotifyReady(req)
 
 	return nil
 }

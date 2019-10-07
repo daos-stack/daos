@@ -20,6 +20,9 @@ typedef struct _Mgmt__BioHealthResp Mgmt__BioHealthResp;
 typedef struct _Mgmt__SmdDevReq Mgmt__SmdDevReq;
 typedef struct _Mgmt__SmdDevResp Mgmt__SmdDevResp;
 typedef struct _Mgmt__SmdDevResp__Device Mgmt__SmdDevResp__Device;
+typedef struct _Mgmt__SmdPoolReq Mgmt__SmdPoolReq;
+typedef struct _Mgmt__SmdPoolResp Mgmt__SmdPoolResp;
+typedef struct _Mgmt__SmdPoolResp__Pool Mgmt__SmdPoolResp__Pool;
 
 
 /* --- enums --- */
@@ -106,6 +109,50 @@ struct  _Mgmt__SmdDevResp
     , 0, 0,NULL }
 
 
+struct  _Mgmt__SmdPoolReq
+{
+  ProtobufCMessage base;
+};
+#define MGMT__SMD_POOL_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__smd_pool_req__descriptor) \
+     }
+
+
+struct  _Mgmt__SmdPoolResp__Pool
+{
+  ProtobufCMessage base;
+  /*
+   * UUID of VOS pool
+   */
+  char *uuid;
+  /*
+   * VOS target IDs
+   */
+  size_t n_tgt_ids;
+  int32_t *tgt_ids;
+  /*
+   * SPDK blobs
+   */
+  size_t n_blobs;
+  uint64_t *blobs;
+};
+#define MGMT__SMD_POOL_RESP__POOL__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__smd_pool_resp__pool__descriptor) \
+    , (char *)protobuf_c_empty_string, 0,NULL, 0,NULL }
+
+
+struct  _Mgmt__SmdPoolResp
+{
+  ProtobufCMessage base;
+  int32_t status;
+  size_t n_pools;
+  Mgmt__SmdPoolResp__Pool **pools;
+};
+#define MGMT__SMD_POOL_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__smd_pool_resp__descriptor) \
+    , 0, 0,NULL }
+
+
 /* Mgmt__BioHealthReq methods */
 void   mgmt__bio_health_req__init
                      (Mgmt__BioHealthReq         *message);
@@ -185,6 +232,47 @@ Mgmt__SmdDevResp *
 void   mgmt__smd_dev_resp__free_unpacked
                      (Mgmt__SmdDevResp *message,
                       ProtobufCAllocator *allocator);
+/* Mgmt__SmdPoolReq methods */
+void   mgmt__smd_pool_req__init
+                     (Mgmt__SmdPoolReq         *message);
+size_t mgmt__smd_pool_req__get_packed_size
+                     (const Mgmt__SmdPoolReq   *message);
+size_t mgmt__smd_pool_req__pack
+                     (const Mgmt__SmdPoolReq   *message,
+                      uint8_t             *out);
+size_t mgmt__smd_pool_req__pack_to_buffer
+                     (const Mgmt__SmdPoolReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__SmdPoolReq *
+       mgmt__smd_pool_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__smd_pool_req__free_unpacked
+                     (Mgmt__SmdPoolReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__SmdPoolResp__Pool methods */
+void   mgmt__smd_pool_resp__pool__init
+                     (Mgmt__SmdPoolResp__Pool         *message);
+/* Mgmt__SmdPoolResp methods */
+void   mgmt__smd_pool_resp__init
+                     (Mgmt__SmdPoolResp         *message);
+size_t mgmt__smd_pool_resp__get_packed_size
+                     (const Mgmt__SmdPoolResp   *message);
+size_t mgmt__smd_pool_resp__pack
+                     (const Mgmt__SmdPoolResp   *message,
+                      uint8_t             *out);
+size_t mgmt__smd_pool_resp__pack_to_buffer
+                     (const Mgmt__SmdPoolResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__SmdPoolResp *
+       mgmt__smd_pool_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__smd_pool_resp__free_unpacked
+                     (Mgmt__SmdPoolResp *message,
+                      ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
 typedef void (*Mgmt__BioHealthReq_Closure)
@@ -202,6 +290,15 @@ typedef void (*Mgmt__SmdDevResp__Device_Closure)
 typedef void (*Mgmt__SmdDevResp_Closure)
                  (const Mgmt__SmdDevResp *message,
                   void *closure_data);
+typedef void (*Mgmt__SmdPoolReq_Closure)
+                 (const Mgmt__SmdPoolReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__SmdPoolResp__Pool_Closure)
+                 (const Mgmt__SmdPoolResp__Pool *message,
+                  void *closure_data);
+typedef void (*Mgmt__SmdPoolResp_Closure)
+                 (const Mgmt__SmdPoolResp *message,
+                  void *closure_data);
 
 /* --- services --- */
 
@@ -213,6 +310,9 @@ extern const ProtobufCMessageDescriptor mgmt__bio_health_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__smd_dev_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__smd_dev_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__smd_dev_resp__device__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__smd_pool_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__smd_pool_resp__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__smd_pool_resp__pool__descriptor;
 
 PROTOBUF_C__END_DECLS
 

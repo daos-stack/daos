@@ -33,7 +33,9 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/peer"
 
+	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -149,12 +151,14 @@ type mgmtSvc struct {
 	log     logging.Logger
 	mutex   sync.Mutex
 	harness *IOServerHarness
+	members *common.Membership // if MS leader, system membership list
 }
 
 func newMgmtSvc(h *IOServerHarness) *mgmtSvc {
 	return &mgmtSvc{
 		log:     h.log,
 		harness: h,
+		members: common.NewMembership(h.log),
 	}
 }
 
@@ -164,9 +168,7 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 		return nil, err
 	}
 
-	svc.mutex.Lock()
 	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, getAttachInfo, req)
-	svc.mutex.Unlock()
 	if err != nil {
 		return nil, err
 	}
@@ -179,15 +181,44 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 	return resp, nil
 }
 
+// getPeerListenAddr combines peer ip from supplied context with input port.
+func getPeerListenAddr(ctx context.Context, listenAddrStr string) (net.Addr, error) {
+	p, ok := peer.FromContext(ctx)
+	if !ok {
+		return nil, errors.New("peer details not found in context")
+	}
+
+	tcpAddr, ok := p.Addr.(*net.TCPAddr)
+	if !ok {
+		return nil, errors.Errorf("peer address (%s) not tcp", p.Addr)
+	}
+
+	// what port is the input address listening on?
+	_, portStr, err := net.SplitHostPort(listenAddrStr)
+	if err != nil {
+		return nil, errors.Wrap(err, "get listening port")
+	}
+
+	// resolve combined IP/port address
+	return net.ResolveTCPAddr(p.Addr.Network(),
+		net.JoinHostPort(tcpAddr.IP.String(), portStr))
+}
+
 func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.JoinResp, error) {
+	// combine peer (sender) IP (from context) with listening port (from
+	// joining instance's host addr, in request params) as addr to reply to.
+	replyAddr, err := getPeerListenAddr(ctx, req.GetAddr())
+	if err != nil {
+		return nil, errors.WithMessage(err,
+			"combining peer addr with listener port")
+	}
+
 	mi, err := svc.harness.GetManagementInstance()
 	if err != nil {
 		return nil, err
 	}
 
-	svc.mutex.Lock()
 	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, join, req)
-	svc.mutex.Unlock()
 	if err != nil {
 		return nil, err
 	}
@@ -195,6 +226,20 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 	resp := &mgmtpb.JoinResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal Join response")
+	}
+
+	// if join successful, record membership
+	if resp.GetStatus() == 0 && resp.GetState() == mgmtpb.JoinResp_IN {
+		newMember := common.SystemMember{
+			Addr: replyAddr, Uuid: req.GetUuid(), Rank: resp.GetRank(),
+		}
+
+		count, err := svc.members.Add(newMember)
+		if err != nil {
+			return nil, errors.WithMessage(err, "adding to membership")
+		}
+
+		svc.log.Debugf("new system member: %s (total %d)\n", newMember, count)
 	}
 
 	return resp, nil
@@ -232,9 +277,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 
 	svc.log.Debugf("MgmtSvc.PoolCreate dispatch, req:%+v\n", *req)
 
-	svc.mutex.Lock()
 	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, poolCreate, req)
-	svc.mutex.Unlock()
 	if err != nil {
 		return nil, err
 	}
@@ -261,9 +304,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 
 	svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, req:%+v\n", *req)
 
-	svc.mutex.Lock()
 	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, poolDestroy, req)
-	svc.mutex.Unlock()
 	if err != nil {
 		return nil, err
 	}
@@ -287,9 +328,7 @@ func (svc *mgmtSvc) BioHealthQuery(ctx context.Context, req *mgmtpb.BioHealthReq
 
 	svc.log.Debugf("MgmtSvc.BioHealthQuery dispatch, req:%+v\n", *req)
 
-	svc.mutex.Lock()
 	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, bioHealth, req)
-	svc.mutex.Unlock()
 	if err != nil {
 		return nil, err
 	}
@@ -311,9 +350,7 @@ func (svc *mgmtSvc) SmdListDevs(ctx context.Context, req *mgmtpb.SmdDevReq) (*mg
 
 	svc.log.Debugf("MgmtSvc.SmdListDevs dispatch, req:%+v\n", *req)
 
-	svc.mutex.Lock()
 	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, smdDevs, req)
-	svc.mutex.Unlock()
 	if err != nil {
 		return nil, err
 	}
@@ -326,31 +363,26 @@ func (svc *mgmtSvc) SmdListDevs(ctx context.Context, req *mgmtpb.SmdDevReq) (*mg
 	return resp, nil
 }
 
-// KillRank implements the method defined for the Management Service.
-func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.DaosRank) (*mgmtpb.DaosResp, error) {
+// SmdListPools implements the method defined for the Management Service.
+func (svc *mgmtSvc) SmdListPools(ctx context.Context, req *mgmtpb.SmdPoolReq) (*mgmtpb.SmdPoolResp, error) {
 	mi, err := svc.harness.GetManagementInstance()
 	if err != nil {
 		return nil, err
 	}
-	if err := checkIsMSReplica(mi); err != nil {
-		return nil, err
-	}
 
-	svc.log.Debugf("MgmtSvc.KillRank dispatch, req:%+v\n", *req)
+	svc.log.Debugf("MgmtSvc.SmdListPools dispatch, req:%+v\n", *req)
 
 	svc.mutex.Lock()
-	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, killRank, req)
+	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, smdPools, req)
 	svc.mutex.Unlock()
 	if err != nil {
 		return nil, err
 	}
 
-	resp := &mgmtpb.DaosResp{}
+	resp := &mgmtpb.SmdPoolResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal DAOS response")
+		return nil, errors.Wrap(err, "unmarshal SmdListPools response")
 	}
-
-	svc.log.Debugf("MgmtSvc.KillRank dispatch, resp:%+v\n", *resp)
 
 	return resp, nil
 }

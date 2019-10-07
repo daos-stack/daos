@@ -21,25 +21,36 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package client
+syntax = "proto3";
+package mgmt;
 
-import (
-	"golang.org/x/net/context"
+// Management Service Protobuf Definitions related to interactions between
+// DAOS control server and DAOS system.
 
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-)
-
-// KillRank Will terminate server running at given rank on pool specified by
-// uuid. Request will only be issued to a single access point.
-func (c *connList) KillRank(uuid string, rank uint32) ResultMap {
-	results := make(ResultMap)
-	mc := c.controllers[0]
-
-	resp, err := mc.getSvcClient().KillRank(context.Background(),
-		&mgmtpb.DaosRank{PoolUuid: uuid, Rank: rank})
-
-	result := ClientResult{mc.getAddress(), resp, err}
-	results[result.Address] = result
-
-	return results
+// SystemMember refers to a data-plane instance that is a member of DAOS
+// system running on host with the control-plane listening at "Addr".
+message SystemMember {
+	string addr = 1;
+	string uuid = 2;
+	uint32 rank = 3;
 }
+
+
+// SystemStopReq supplies system shutdown parameters.
+message SystemStopReq {}
+
+// SystemStopResp returns status of shutdown attempt and any remaining members.
+message SystemStopResp {
+	int32 status = 1; // DAOS error code
+	repeated SystemMember members = 2;
+}
+
+// SystemMemberQueryReq supplies system query parameters.
+message SystemMemberQueryReq {}
+
+// SystemMemberQueryResp returns system members.
+message SystemMemberQueryResp {
+	int32 status = 1; // DAOS error code
+	repeated SystemMember members = 2;
+}
+
