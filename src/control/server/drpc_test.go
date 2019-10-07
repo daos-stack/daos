@@ -129,3 +129,139 @@ func TestCheckDrpcClientSocketPath_Success(t *testing.T) {
 		t.Fatalf("Expected no error, got error: %v", err)
 	}
 }
+
+func TestGetDrpcServerSocketPath_EmptyString(t *testing.T) {
+	expectedPath := "daos_server.sock"
+
+	path := getDrpcServerSocketPath("")
+
+	if path != expectedPath {
+		t.Errorf("Expected %q, got %q", expectedPath, path)
+	}
+}
+
+func TestGetDrpcServerSocketPath(t *testing.T) {
+	dirPath := "/some/server/dir"
+	expectedPath := filepath.Join(dirPath, "daos_server.sock")
+
+	path := getDrpcServerSocketPath(dirPath)
+
+	if path != expectedPath {
+		t.Errorf("Expected %q, got %q", expectedPath, path)
+	}
+}
+
+func TestDrpcCleanup_BadSocketDir(t *testing.T) {
+	badDir := "/some/fake/path"
+
+	err := drpcCleanup(badDir)
+
+	if err == nil {
+		t.Fatal("Expected error, got nil")
+	}
+}
+
+func TestDrpcCleanup_EmptyDir(t *testing.T) {
+	tmpDir := createTestDir(t)
+	defer os.Remove(tmpDir)
+
+	err := drpcCleanup(tmpDir)
+
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+}
+
+func expectDoesNotExist(t *testing.T, path string) {
+	if _, err := os.Stat(path); err == nil || !os.IsNotExist(err) {
+		t.Errorf("expected %q to no longer exist, but got error: %v",
+			path, err)
+	}
+}
+
+func TestDrpcCleanup_Single(t *testing.T) {
+	tmpDir := createTestDir(t)
+	defer os.Remove(tmpDir)
+
+	for _, sockName := range []string{
+		"daos_server.sock",
+		"daos_io_server.sock",
+		"daos_io_server0.sock",
+		"daos_io_server_2345.sock",
+	} {
+		sockPath := filepath.Join(tmpDir, sockName)
+		sock := createTestSocket(t, sockPath)
+		defer cleanupTestSocket(sockPath, sock)
+
+		err := drpcCleanup(tmpDir)
+
+		if err != nil {
+			t.Fatalf("%q: Expected no error, got: %v", sockPath, err)
+		}
+
+		expectDoesNotExist(t, sockPath)
+	}
+}
+
+func TestDrpcCleanup_DoesNotDeleteNonDaosSocketFiles(t *testing.T) {
+	tmpDir := createTestDir(t)
+	defer os.Remove(tmpDir)
+
+	for _, sockName := range []string{
+		"someone_else.sock",
+		"12345.sock",
+		"myfile",
+		"daos_server",
+		"daos_io_server",
+	} {
+		sockPath := filepath.Join(tmpDir, sockName)
+		sock := createTestSocket(t, sockPath)
+		defer cleanupTestSocket(sockPath, sock)
+
+		err := drpcCleanup(tmpDir)
+
+		if err != nil {
+			t.Fatalf("%q: Expected no error, got: %v", sockPath, err)
+		}
+
+		if _, err := os.Stat(sockPath); err != nil {
+			t.Errorf("expected %q to exist, but got error: %v",
+				sockPath, err)
+		}
+	}
+}
+
+func TestDrpcCleanup_Multiple(t *testing.T) {
+	tmpDir := createTestDir(t)
+	defer os.Remove(tmpDir)
+
+	sockNames := []string{
+		"daos_server.sock",
+		"daos_io_server.sock",
+		"daos_io_server12.sock",
+		"daos_io_serverF.sock",
+		"daos_io_server_5678.sock",
+		"daos_io_server_256.sock",
+		"daos_io_server_abc.sock",
+	}
+
+	var sockPaths []string
+
+	for _, sockName := range sockNames {
+		path := filepath.Join(tmpDir, sockName)
+		sockPaths = append(sockPaths, path)
+
+		sock := createTestSocket(t, path)
+		defer cleanupTestSocket(path, sock)
+	}
+
+	err := drpcCleanup(tmpDir)
+
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	for _, path := range sockPaths {
+		expectDoesNotExist(t, path)
+	}
+}

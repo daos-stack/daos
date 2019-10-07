@@ -1311,7 +1311,6 @@ test_evt_find_internal(void **state)
 {
 	struct test_arg		*arg = *state;
 	daos_handle_t		 toh;
-	daos_handle_t		 ih;
 	struct evt_entry_in	 entry = {0};
 	struct evt_entry	 *ent;
 	struct evt_extent	 extent;
@@ -1366,11 +1365,6 @@ test_evt_find_internal(void **state)
 			assert_int_equal(rc, 0);
 		}
 	}
-	/*Prepare and Probe the tree. Iteration flags not set */
-	rc = evt_iter_prepare(toh, 0, NULL, &ih);
-	assert_int_equal(rc, 0);
-	rc = evt_iter_probe(ih, EVT_ITER_FIRST, NULL, NULL);
-	assert_int_equal(rc, 0);
 	/*
 	 * Delete each record from last and run evt_find
 	 * you get deadbeef, d (2-records). Covered records
@@ -1436,7 +1430,6 @@ test_evt_find_internal(void **state)
 	/* Destroy the tree */
 	rc = evt_destroy(toh);
 	assert_int_equal(rc, 0);
-
 }
 /*
 *   10: EVT_ITER_VISIBLE|EVT_ITER_SKIP_HOLES

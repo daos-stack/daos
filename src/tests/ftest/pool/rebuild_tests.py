@@ -96,9 +96,9 @@ class RebuildTests(TestWithServers):
         # Manually exclude the specified rank
         for index in range(pool_quantity):
             if index == 0:
-                pools[index].start_rebuild(self.server_group, rank, self.d_log)
+                pools[index].start_rebuild([rank], self.d_log)
             else:
-                pools[index].exclude(rank, self.d_log)
+                pools[index].exclude([rank], self.d_log)
 
         # Wait for recovery to start
         for index in range(pool_quantity):
