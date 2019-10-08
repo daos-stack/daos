@@ -265,18 +265,25 @@ configuration from before. For automated environment setup, source
 scons_local/utils/setup_local.sh.
 
 ```
-ARGOBOTS=${daos_prefix_path}/opt/argobots
-CART=${daos_prefix_path}/opt/cart
-HWLOC=${daos_prefix_path}/opt/hwloc
-MERCURY=${daos_prefix_path}/opt/mercury
-PMDK=${daos_prefix_path}/opt/pmdk
-OMPI=${daos_prefix_path}/opt/ompi
-OPA=${daos_prefix_path}/opt/openpa
-PMIX=${daos_prefix_path}/opt/pmix
+ARGOBOTS=${daos_prefix_path}/opt/argobots                          
+CART=${daos_prefix_path}/opt/cart        
 FIO=${daos_prefix_path}/opt/fio
+FUSE=${daos_prefix_path}/opt/fuse
+HWLOC=${daos_prefix_path}/opt/hwloc
+ISAL=${daos_prefix_path}/opt/isal
+MERCURY=${daos_prefix_path}/opt/mercury
+OFI=${daos_prefix_path}/opt/ofi
+OMPI=${daos_prefix_path}/opt/ompi
+OPENPA=${daos_prefix_path}/opt/openpa
+PMDK=${daos_prefix_path}/opt/pmdk
+PMIX=${daos_prefix_path}/opt/pmix
+PROTOBUFC=${daos_prefix_path}/opt/protobufc
 SPDK=${daos_prefix_path}/opt/spdk
 
-PATH=$CART/bin/:$OMPI/bin/:${daos_prefix_path}/bin/:$PATH
+
+LD_LIBRARY_PATH=${daos_prefix_path}/opt/spdk/lib:${daos_prefix_path}/opt/protobufc/lib:${daos_prefix_path}/opt/pmix/lib:${daos_prefix_path}/opt/pmdk/lib:${daos_prefix_path}/opt/openpa/lib:${daos_prefix_path}/opt/ompi/lib:${daos_prefix_path}/opt/ofi/lib:${daos_prefix_path}/opt/mercury/lib:${daos_prefix_path}/opt/isal/lib:${daos_prefix_path}/opt/hwloc/lib:${daos_prefix_path}/opt/fuse/lib64:${daos_prefix_path}/opt/cart/lib:${daos_prefix_path}/opt/argobots/lib
+PATH=${daos_prefix_path}/opt/spdk/bin:${daos_prefix_path}/opt/pmdk/bin:${daos_prefix_path}/opt/ompi/bin:${daos_prefix_path}/opt/ofi/bin:${daos_prefix_path}/opt/isal/bin:${daos_prefix_path}/opt/hwloc/bin:${daos_prefix_path}/opt/fio/bin:${daos_prefix_path}/opt/cart/bin
+
 ```
 
 With this approach, DAOS would get built using the prebuilt dependencies in
