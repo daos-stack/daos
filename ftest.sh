@@ -177,18 +177,14 @@ fi
 mkdir /var/run/daos_{agent,server}
 chown \$current_username -R /var/run/daos_{agent,server}
 chmod 0755 /var/run/daos_{agent,server}
-if [ ${SL_PREFIX} != /usr ]; then
-    mkdir -p $DAOS_BASE
-fi
+mkdir -p $DAOS_BASE
 ed <<EOF /etc/fstab
 \\\\\\\$a
 $NFS_SERVER:$PWD $DAOS_BASE nfs defaults 0 0 # added by ftest.sh
 .
 wq
 EOF
-if [ ${SL_PREFIX} != /usr ]; then
-    mount \\\"$DAOS_BASE\\\"\"
-fi
+mount \\\"$DAOS_BASE\\\"\"
 
 rm -rf \"${TEST_TAG_DIR:?}/\"
 mkdir -p \"$TEST_TAG_DIR/\"
@@ -209,6 +205,7 @@ if ! ssh $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" "set -ex
 ulimit -c unlimited
 if [ ${SL_PREFIX} == /usr ]; then
     rm -rf /tmp/ftest
+    mkdir -p /tmp/ftest
 else
     rm -rf $DAOS_BASE/install/tmp
     mkdir -p $DAOS_BASE/install/tmp
