@@ -162,7 +162,7 @@ inc_cntr(unsigned long op_flags)
 }
 
 static daos_ofeat_t init_ofeats;
-static int init_num_keys = VTS_IO_KEYS;
+static int init_num_keys;
 
 void
 test_args_init(struct io_test_args *args,
@@ -2583,6 +2583,8 @@ run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators)
 	const char *dkey = "hashed";
 	vts_nest_iterators = nest_iterators;
 	int rc = 0;
+
+	init_num_keys = VTS_IO_KEYS;
 
 	feats = feats & DAOS_OF_MASK;
 	if ((feats & DAOS_OF_DKEY_UINT64) && (feats & DAOS_OF_DKEY_LEXICAL)) {

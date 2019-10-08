@@ -26,6 +26,7 @@
 #include "evt_priv.h"
 #include "vos_internal.h"
 
+#define VOS_TRACE
 #ifdef VOS_TRACE
 #define V_TRACE(...) D_DEBUG(__VA_ARGS__)
 #else

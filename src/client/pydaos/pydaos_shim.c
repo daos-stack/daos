@@ -711,7 +711,7 @@ __shim_handle__kv_iter(PyObject *self, PyObject *args)
 	char		*enum_buf = NULL;
 	daos_size_t	 size;
 	char		*ptr;
-	int		 i;
+	uint32_t	 i;
 	int		 rc = 0;
 
 	/** Parse arguments */
@@ -801,7 +801,7 @@ __shim_handle__kv_iter(PyObject *self, PyObject *args)
 	} while (!daos_anchor_is_eof(anchor) && nr == 0);
 
 	/** Populate python list with entries */
-	for (ptr = enum_buf, i = 0; i < nr; i++) {
+	for (ptr = enum_buf, i = 0; i != nr; i++) {
 		Py_ssize_t len = kds[i].kd_key_len;
 
 		rc = PyList_Append(entries,

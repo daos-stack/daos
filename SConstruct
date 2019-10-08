@@ -76,7 +76,7 @@ def set_defaults(env):
 
     env.Append(CCFLAGS=['-g', '-Wshadow', '-Wall', '-Wno-missing-braces',
                         '-fpic', '-D_GNU_SOURCE', '-DD_LOG_V2'])
-    env.Append(CCFLAGS=['-O2', '-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
+    env.Append(CCFLAGS=['-O0', '-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
     env.Append(CCFLAGS=['-DCMOCKA_FILTER_SUPPORTED=0'])
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
     if GetOption("preprocess"):
@@ -260,6 +260,8 @@ def scons():
 
     prereqs = PreReqComponent(env, opts, commits_file)
     preload_prereqs(prereqs)
+    if prereqs.check_component('valgrind_devel'):
+        env.AppendUnique(CPPDEFINES=["DAOS_HAS_VALGRIND"])
     opts.Save(opts_file, env)
 
     env.Alias('install', '$PREFIX')

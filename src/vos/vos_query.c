@@ -238,6 +238,11 @@ open_and_query_key(struct open_query *query, daos_key_t *key,
 		tclass = VOS_BTR_AKEY;
 	}
 
+	if (!daos_handle_is_inval(*toh)) {
+		dbtree_close(*toh);
+		*toh = DAOS_HDL_INVAL;
+	}
+
 	if (to_open->tr_class == 0)
 		return -DER_NONEXIST;
 
@@ -369,9 +374,9 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 	}
 
 	ilog_fetch_init(&query.qt_entries);
-	query.qt_obj = obj;
 	query.qt_dkey_toh   = DAOS_HDL_INVAL;
 	query.qt_akey_toh   = DAOS_HDL_INVAL;
+	query.qt_obj = obj;
 	query.qt_epr.epr_lo = 0;
 	query.qt_epr.epr_hi = epoch;
 	query.qt_flags	    = flags;
@@ -412,8 +417,6 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 				       d_errstr(rc));
 				if (rc == -DER_NONEXIST &&
 				    query.qt_flags & DAOS_GET_AKEY) {
-					dbtree_close(query.qt_akey_toh);
-					query.qt_akey_toh = DAOS_HDL_INVAL;
 					continue;
 				}
 			}
@@ -421,19 +424,17 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		}
 		if (rc == -DER_NONEXIST &&
 		    query.qt_flags & DAOS_GET_DKEY) {
-			dbtree_close(query.qt_dkey_toh);
-			query.qt_dkey_toh = DAOS_HDL_INVAL;
 			continue;
 		}
 		break;
 	}
 
 	ilog_fetch_finish(&query.qt_entries);
-out:
-	if (daos_handle_is_inval(query.qt_akey_toh))
+	if (!daos_handle_is_inval(query.qt_akey_toh))
 		dbtree_close(query.qt_akey_toh);
-	if (daos_handle_is_inval(query.qt_dkey_toh))
+	if (!daos_handle_is_inval(query.qt_dkey_toh))
 		dbtree_close(query.qt_dkey_toh);
+out:
 	if (obj)
 		vos_obj_release(vos_obj_cache_current(), obj);
 	return rc;
