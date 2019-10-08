@@ -45,6 +45,13 @@ def container_write(container, record):
     # write multiple objects
     container.write_objects()
 
+def container_read(container):
+    """Method to read and verify the written data
+
+       Args:
+         container: instance of TestContainer
+    """
+
     # read written objects and verify
     container.read_objects()
 
@@ -68,6 +75,11 @@ def test_runner(self, size, record_size):
 
     # invoke pool query before write
     pool.get_info()
+    for index in range(2):
+        self.log.info("Pool Total Space [%d]: %s", index,
+                      (getattr(pool.info.pi_space.ps_space, 's_total')[index]))
+        self.log.info("Pool Free Space [%d]: %s", index,
+                      (getattr(pool.info.pi_space.ps_space, 's_free')[index]))
 
     # create container
     container = TestContainer(pool)
@@ -75,23 +87,39 @@ def test_runner(self, size, record_size):
     container.create()
     container.open()
 
-    threads = []
+    threads_write = []
+    threads_read = []
     for rec in record_size:
-        for thread in range(2):
-            thread = threading.Thread(target=container_write,
-                                      args=(container, rec))
-            threads.append(thread)
+        for thread_write in range(16):
+            thread_write = threading.Thread(target=container_write,
+                                            args=(container, rec))
+            thread_read = threading.Thread(target=container_read,
+                                           args=(container,))
+            threads_write.append(thread_write)
+            threads_read.append(thread_read)
 
-    # start all the threads
-    for job in threads:
+    # start all the write threads
+    for job in threads_write:
         job.start()
 
-    # wait for all threads to finish
-    for job in threads:
+    # wait for all write threads to finish
+    for job in threads_write:
+        job.join()
+
+    # start read threads
+    for job in threads_read:
+        job.start()
+
+    # wait for all read threads to complete
+    for job in threads_read:
         job.join()
 
     # invoke pool query after write
-    pool.get_info()
+    for idx in range(2):
+        self.log.info("Pool Total Space [%d]: %s", idx,
+                      (getattr(pool.info.pi_space.ps_space, 's_total')[idx]))
+        self.log.info("Pool Free Space [%d]: %s", idx,
+                      (getattr(pool.info.pi_space.ps_space, 's_free')[idx]))
 
     # destroy container
     if container is not None:
@@ -132,7 +160,7 @@ class NvmeObject(TestWithServers):
         Use Cases:
             Verify the objects are being created and the data is not
             corrupted.
-        :avocado: tags=nvme,pr,hw,nvme_object_single_pool,small,nvme_object
+        :avocado: tags=nvme,pr,hw,nvme_object_single_pool,medium,nvme_object
         """
 
         # perform multiple object writes to a single pool
@@ -150,8 +178,8 @@ class NvmeObject(TestWithServers):
         Use Cases:
             Verify the objects are being created and the data is not
             corrupted.
-        :avocado: tags=nvme,full_regression,hw,nvme_object_multiple_pools,small
-        :avocado: tags=nvme_object
+        :avocado: tags=nvme,full_regression,hw,nvme_object_multiple_pools
+        :avocado: tags=medium,nvme_object
         """
 
         # thread to perform simulatneous object writes to multiple pools
@@ -174,3 +202,9 @@ class NvmeObject(TestWithServers):
         # waiting for all threads to finish
         for job in threads:
             job.join()
+
+        # run the test_runner after cleaning up all the pools for
+        # very large nvme_pool size
+        # Uncomment the below line after DAOS-3339 is resolved
+
+        #test_runner(self, self.pool_size[2], self.record_size)
