@@ -757,6 +757,11 @@ daos_acl_from_strs(const char **ace_strs, size_t ace_nr, struct daos_acl **acl)
 		return -DER_INVAL;
 	}
 
+	if (acl == NULL) {
+		D_ERROR("NULL ACL pointer\n");
+		return -DER_INVAL;
+	}
+
 	D_ALLOC_ARRAY(tmp_aces, ace_nr);
 	if (tmp_aces == NULL)
 		return -DER_NOMEM;
@@ -786,3 +791,92 @@ out:
 	return rc;
 }
 
+static int
+alloc_str_for_ace(struct daos_ace *current, char **result)
+{
+	int	rc;
+	char	buf[DAOS_ACL_MAX_ACE_STR_LEN];
+
+	rc = daos_ace_to_str(current, buf, sizeof(buf));
+	if (rc != 0) {
+		D_ERROR("Couldn't convert ACE to string: %d\n", rc);
+		return rc;
+	}
+
+	D_ASPRINTF(*result, "%s", buf);
+	if (*result == NULL)
+		return -DER_NOMEM;
+
+	return 0;
+}
+
+static void
+free_strings(char **str, size_t str_count)
+{
+	int i;
+
+	for (i = 0; i < str_count; i++)
+		D_FREE(str[i]);
+}
+
+static int
+convert_aces_to_strs(struct daos_acl *acl, size_t ace_nr, char **result)
+{
+	struct daos_ace	*current = NULL;
+	size_t		i;
+	int		rc;
+
+	for (i = 0; i < ace_nr; i++) {
+		current = daos_acl_get_next_ace(acl, current);
+		rc = alloc_str_for_ace(current, &(result[i]));
+		if (rc != 0) {
+			free_strings(result, i);
+			return rc;
+		}
+	}
+
+	return 0;
+}
+
+int
+daos_acl_to_strs(struct daos_acl *acl, char ***ace_strs, size_t *ace_nr)
+{
+	size_t		ace_count = 0;
+	char		**result = NULL;
+	struct daos_ace *current;
+	int		rc;
+
+	if (ace_strs == NULL || ace_nr == NULL) {
+		D_ERROR("Null output params: ace_strs=%p, ace_nr=%p\n",
+			ace_strs, ace_nr);
+		return -DER_INVAL;
+	}
+
+	if (daos_acl_validate(acl) != 0) {
+		D_ERROR("ACL is not valid\n");
+		return -DER_INVAL;
+	}
+
+	current = daos_acl_get_next_ace(acl, NULL);
+	while (current != NULL) {
+		ace_count++;
+		current = daos_acl_get_next_ace(acl, current);
+	}
+
+	if (ace_count > 0) {
+		D_ALLOC_ARRAY(result, ace_count);
+		if (result == NULL)
+			return -DER_NOMEM;
+
+		rc = convert_aces_to_strs(acl, ace_count, result);
+		if (rc != 0) {
+			D_FREE(result);
+			return rc;
+		}
+	}
+
+	*ace_strs = result;
+	*ace_nr = ace_count;
+
+	return 0;
+}

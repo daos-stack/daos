@@ -35,22 +35,26 @@ message SystemMember {
 	uint32 rank = 3;
 }
 
-
 // SystemStopReq supplies system shutdown parameters.
 message SystemStopReq {}
 
-// SystemStopResp returns status of shutdown attempt and any remaining members.
+// SystemStopResp returns status of shutdown attempt and results
+// of attempts to stop system members.
 message SystemStopResp {
-	int32 status = 1; // DAOS error code
-	repeated SystemMember members = 2;
+	message Result {
+		string id = 1;
+		string action = 2;
+		bool errored = 3;
+		string msg = 4;
+	}
+	repeated Result results = 1;
 }
 
 // SystemMemberQueryReq supplies system query parameters.
 message SystemMemberQueryReq {}
 
-// SystemMemberQueryResp returns system members.
+// SystemMemberQueryResp returns active system members.
 message SystemMemberQueryResp {
-	int32 status = 1; // DAOS error code
-	repeated SystemMember members = 2;
+	repeated SystemMember members = 1;
 }
 

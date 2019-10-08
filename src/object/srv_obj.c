@@ -1478,8 +1478,7 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	/* TODO: Transfer the inline_thres from enumerate RPC */
 	enum_arg.inline_thres = 32;
 
-	if (opc == DAOS_OBJ_RECX_RPC_ENUMERATE ||
-	    opc == DAOS_OBJ_RPC_ENUMERATE) {
+	if (opc == DAOS_OBJ_RECX_RPC_ENUMERATE) {
 		oeo->oeo_eprs.ca_count = 0;
 		D_ALLOC(oeo->oeo_eprs.ca_arrays,
 			oei->oei_nr * sizeof(daos_epoch_range_t));
