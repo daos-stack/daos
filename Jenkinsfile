@@ -1220,7 +1220,6 @@ pipeline {
                                                test_tag=pr,hw
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
-                                           cd /usr/lib/daos/TESTING
                                            ./ftest.sh "$test_tag" $tnodes''',
                                 junit_files: "/tmp/ftest/avocado/*/*/*.xml /tmp/ftest/*_results.xml",
                                 failure_artifacts: env.STAGE_NAME
@@ -1236,7 +1235,7 @@ pipeline {
                                           lbzip2 $daos_logs
                                       fi
                                       arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
-                                      arts="$arts$(ls -d /ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
+                                      arts="$arts$(ls -d /tmp/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
                                       arts="$arts$(ls /tmp/ftest/*.stacktrace 2>/dev/null || true)"
                                       if [ -n "$arts" ]; then
                                           mv $(echo $arts | tr '\n' ' ') "$STAGE_NAME/"
