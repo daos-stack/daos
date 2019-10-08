@@ -35,7 +35,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
-	common "github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	. "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/lib/ipmctl"
