@@ -585,10 +585,9 @@ oi_iter_match_probe(struct vos_iterator *iter)
  out:
 	return 0;
  failed:
-	if (rc == -DER_NONEXIST)
-		return 0; /* end of iteration, not a failure */
+	if (rc != -DER_NONEXIST)
+		D_ERROR("iterator %s failed, rc=%d\n", str, rc);
 
-	D_ERROR("iterator %s failed, rc=%d\n", str, rc);
 	return rc;
 }
 

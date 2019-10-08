@@ -101,6 +101,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	dfs_release(ie->ie_obj);
+	d_hash_rec_decref(&fs_handle->dpi_iet, &ie->ie_htl);
 }
 
 /* Check for and set a unified namespace entry point.
@@ -283,10 +284,10 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	}
 
 	dfuse_reply_entry(fs_handle, ie, NULL, req);
-	return true;
+	return;
 
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	D_FREE(ie);
-	return false;
+	return;
 }

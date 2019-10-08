@@ -24,7 +24,7 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-bool
+void
 dfuse_cb_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
 	       const char *name, mode_t mode)
 {
@@ -59,12 +59,12 @@ dfuse_cb_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
 	/* Return the new inode data, and keep the parent ref */
 	dfuse_reply_entry(fs_handle, ie, NULL, req);
 
-	return true;
+	return;
 release:
 	dfs_release(ie->ie_obj);
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	D_FREE(ie);
 
-	return false;
+	return;
 }
