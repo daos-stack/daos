@@ -140,7 +140,8 @@ class BadEvictTest(Test):
             # trash the pool group value
             if evictset is None:
                 savedgroup = pool.group
-                pool.group = None
+                #DAOS-3224 default group will be set for an empty pool.group
+                pool.group = 'None'
 
             # trash the UUID value in various ways
             if excludeuuid is None:
