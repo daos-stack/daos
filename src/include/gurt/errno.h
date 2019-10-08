@@ -166,7 +166,9 @@
 	/** Not applicable. */						\
 	ACTION(DER_NOTAPPLICABLE,	(DER_ERR_DAOS_BASE + 19))	\
 	/** Not a service replica */					\
-	ACTION(DER_NOTREPLICA,		(DER_ERR_DAOS_BASE + 20))
+	ACTION(DER_NOTREPLICA,		(DER_ERR_DAOS_BASE + 20))	\
+	/** Checksum error */						\
+	ACTION(DER_CSUM,		(DER_ERR_DAOS_BASE + 21))
 
 #define D_FOREACH_ERR_RANGE(ACTION)	\
 	ACTION(GURT,	1000)		\

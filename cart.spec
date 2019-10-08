@@ -1,7 +1,7 @@
 %define carthome %{_exec_prefix}/lib/%{name}
 
 Name:          cart
-Version:       1.3.0
+Version:       1.4.0
 Release:       1%{?relval}%{?dist}
 Summary:       CaRT
 
@@ -122,6 +122,9 @@ ln %{?buildroot}%{carthome}/{TESTING/.build_vars,.build_vars-Linux}.sh
 %{carthome}/.build_vars-Linux.sh
 
 %changelog
+* Mon Oct 07 2019 Ryon Jensen  <ryon.jensen@intel.com>
+- Libcart version 1.4.0
+
 * Wed Sep 25 2019 Dmitry Eremin <dmitry.eremin@intel.com>
 - Libcart version 1.3.0
 
