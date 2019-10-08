@@ -32,6 +32,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
 
 const stopTimeout = 10 * retryDelay
@@ -77,14 +78,26 @@ func (svc *mgmtSvc) systemStop(ctx context.Context, leader *IOServerInstance) co
 //
 // Stop data-plane instance managed by control-plane identified by unique rank.
 func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.DaosRank) (*mgmtpb.DaosResp, error) {
-	mi, err := svc.harness.GetManagementInstance()
+	svc.log.Debugf("MgmtSvc.KillRank dispatch, req:%+v\n", *req)
+
+	var mi *IOServerInstance
+	for _, i := range svc.harness.Instances() {
+		if i.hasSuperblock() && i.getSuperblock().Rank.Equals(ioserver.NewRankPtr(req.Rank)) {
+			mi = i
+			break
+		}
+	}
+
+	if mi == nil {
+		return nil, errors.Errorf("rank %d not found on this server", req.Rank)
+	}
+
+	dc, err := mi.getDrpcClient()
 	if err != nil {
 		return nil, err
 	}
 
-	svc.log.Debugf("MgmtSvc.KillRank dispatch, req:%+v\n", *req)
-
-	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, killRank, req)
+	dresp, err := makeDrpcCall(dc, mgmtModuleID, killRank, req)
 	if err != nil {
 		return nil, err
 	}

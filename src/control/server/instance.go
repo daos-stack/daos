@@ -53,7 +53,6 @@ type IOServerInstance struct {
 	log           logging.Logger
 	runner        *ioserver.Runner
 	bdevProvider  *storage.BdevProvider
-	drpcClient    drpc.DomainSocketClient
 	msClient      *mgmtSvcClient
 	instanceReady chan *srvpb.NotifyReadyReq
 	storageReady  chan struct{}
@@ -62,6 +61,7 @@ type IOServerInstance struct {
 	sync.RWMutex
 	// these must be protected by a mutex in order to
 	// avoid racy access.
+	_drpcClient   drpc.DomainSocketClient
 	_scmStorageOk bool // cache positive result of NeedsStorageFormat()
 	_superblock   *Superblock
 }
@@ -105,6 +105,21 @@ func (srv *IOServerInstance) bdevConfig() (storage.BdevConfig, error) {
 		return nullCfg, errors.New("no ioserver config set on runner")
 	}
 	return srv.runner.Config.Storage.Bdev, nil
+}
+
+func (srv *IOServerInstance) setDrpcClient(c drpc.DomainSocketClient) {
+	srv.Lock()
+	defer srv.Unlock()
+	srv._drpcClient = c
+}
+
+func (srv *IOServerInstance) getDrpcClient() (drpc.DomainSocketClient, error) {
+	srv.RLock()
+	defer srv.RUnlock()
+	if srv._drpcClient == nil {
+		return nil, errors.New("no dRPC client set (data plane not started?)")
+	}
+	return srv._drpcClient, nil
 }
 
 // MountScmDevice mounts the configured SCM device (DCPM or ramdisk emulation)
@@ -228,7 +243,7 @@ func (srv *IOServerInstance) NotifyReady(msg *srvpb.NotifyReadyReq) {
 	srv.log.Debugf("I/O server instance %d ready: %v", srv.Index, msg)
 
 	// Activate the dRPC client connection to this iosrv
-	srv.drpcClient = drpc.NewClientConnection(msg.DrpcListenerSock)
+	srv.setDrpcClient(drpc.NewClientConnection(msg.DrpcListenerSock))
 
 	go func() {
 		srv.instanceReady <- msg
@@ -307,7 +322,12 @@ func (srv *IOServerInstance) SetRank(ctx context.Context, ready *srvpb.NotifyRea
 }
 
 func (srv *IOServerInstance) callSetRank(rank ioserver.Rank) error {
-	dresp, err := makeDrpcCall(srv.drpcClient, mgmtModuleID, setRank, &mgmtpb.SetRankReq{Rank: uint32(rank)})
+	dc, err := srv.getDrpcClient()
+	if err != nil {
+		return err
+	}
+
+	dresp, err := makeDrpcCall(dc, mgmtModuleID, setRank, &mgmtpb.SetRankReq{Rank: uint32(rank)})
 	if err != nil {
 		return err
 	}
@@ -382,7 +402,12 @@ func (srv *IOServerInstance) callCreateMS(superblock *Superblock) error {
 		req.Addr = msAddr
 	}
 
-	dresp, err := makeDrpcCall(srv.drpcClient, mgmtModuleID, createMS, req)
+	dc, err := srv.getDrpcClient()
+	if err != nil {
+		return err
+	}
+
+	dresp, err := makeDrpcCall(dc, mgmtModuleID, createMS, req)
 	if err != nil {
 		return err
 	}
@@ -399,7 +424,12 @@ func (srv *IOServerInstance) callCreateMS(superblock *Superblock) error {
 }
 
 func (srv *IOServerInstance) callStartMS() error {
-	dresp, err := makeDrpcCall(srv.drpcClient, mgmtModuleID, startMS, nil)
+	dc, err := srv.getDrpcClient()
+	if err != nil {
+		return err
+	}
+
+	dresp, err := makeDrpcCall(dc, mgmtModuleID, startMS, nil)
 	if err != nil {
 		return err
 	}
@@ -416,7 +446,12 @@ func (srv *IOServerInstance) callStartMS() error {
 }
 
 func (srv *IOServerInstance) callSetUp() error {
-	dresp, err := makeDrpcCall(srv.drpcClient, mgmtModuleID, setUp, nil)
+	dc, err := srv.getDrpcClient()
+	if err != nil {
+		return err
+	}
+
+	dresp, err := makeDrpcCall(dc, mgmtModuleID, setUp, nil)
 	if err != nil {
 		return err
 	}

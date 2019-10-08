@@ -147,7 +147,9 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 			select {
 			case sig := <-sigChan:
 				log.Debugf("Caught signal: %s", sig)
-				drpcCleanup(cfg.SocketDir)
+				if err := drpcCleanup(cfg.SocketDir); err != nil {
+					log.Errorf("error during dRPC cleanup: %s", err)
+				}
 				shutdown()
 			}
 		}

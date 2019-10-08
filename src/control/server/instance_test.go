@@ -65,7 +65,8 @@ func TestIOServerInstance_NotifyReady(t *testing.T) {
 
 	instance.NotifyReady(req)
 
-	if instance.drpcClient == nil {
+	dc, err := instance.getDrpcClient()
+	if err != nil || dc == nil {
 		t.Fatal("Expected a dRPC client connection")
 	}
 

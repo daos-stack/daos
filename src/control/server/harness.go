@@ -31,6 +31,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
@@ -84,6 +85,17 @@ func (h *IOServerHarness) AddInstance(srv *IOServerInstance) error {
 
 	h.instances = append(h.instances, srv)
 	return nil
+}
+
+// GetManagementClient returns a dRPC client for the IO Server instance to
+// be used as a management target.
+func (h *IOServerHarness) GetManagementClient() (drpc.DomainSocketClient, error) {
+	li, err := h.GetMSLeaderInstance()
+	if err != nil {
+		return nil, err
+	}
+
+	return li.getDrpcClient()
 }
 
 // GetManagementInstance returns a managed IO Server instance
