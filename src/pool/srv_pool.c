@@ -2145,6 +2145,56 @@ out:
 	return rc;
 }
 
+int
+ds_pool_svc_get_acl(uuid_t pool_uuid, struct daos_acl **acl)
+{
+	int			rc;
+	struct pool_svc		*svc;
+	struct rdb_tx		tx;
+	daos_prop_t		*prop = NULL;
+	struct daos_prop_entry	*entry;
+
+	rc = pool_svc_lookup_leader(pool_uuid, &svc, NULL);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
+
+	ABT_rwlock_rdlock(svc->ps_lock);
+
+	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ACL, &prop);
+
+	/* Done with locked activities - cleanup regardless of result */
+	ABT_rwlock_unlock(svc->ps_lock);
+	rdb_tx_end(&tx);
+
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
+	if (entry == NULL) {
+		D_ERROR("ACL prop entry requested but not returned\n");
+		D_GOTO(out_svc, rc = -DER_NONEXIST);
+	}
+
+	if (entry->dpe_val_ptr == NULL) {
+		D_ERROR("ACL prop was NULL\n");
+		D_GOTO(out_svc, rc = -DER_NONEXIST);
+	}
+
+	*acl = daos_acl_dup(entry->dpe_val_ptr);
+	if (*acl == NULL)
+		D_GOTO(out_svc, rc = -DER_NOMEM);
+
+out_svc:
+	pool_svc_put_leader(svc);
+out:
+	daos_prop_free(prop);
+	return rc;
+}
+
 void
 ds_pool_query_handler(crt_rpc_t *rpc)
 {
@@ -2155,8 +2205,8 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	uint32_t		map_version;
 	struct pool_svc	       *svc;
 	struct rdb_tx		tx;
-	d_iov_t		key;
-	d_iov_t		value;
+	d_iov_t			key;
+	d_iov_t			value;
 	struct pool_hdl		hdl;
 	int			rc;
 

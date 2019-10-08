@@ -27,6 +27,7 @@
 #define D_LOGFAC	DD_FAC(mgmt)
 
 #include <daos_srv/daos_server.h>
+#include <daos_srv/pool.h>
 #include <daos_api.h>
 #include <daos_security.h>
 
@@ -656,6 +657,84 @@ out:
 
 	mgmt__pool_destroy_req__free_unpacked(req, NULL);
 	D_FREE(resp);
+}
+
+static void
+free_ace_list(char **list, size_t len)
+{
+	size_t i;
+
+	if (list == NULL)
+		return; /* nothing to do */
+
+	for (i = 0; i < len; i++)
+		D_FREE(list[i]);
+
+	D_FREE(list);
+}
+
+void
+ds_mgmt_drpc_pool_get_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__GetACLReq		*req = NULL;
+	Mgmt__GetACLResp	resp = MGMT__GET_ACLRESP__INIT;
+	int			rc;
+	uuid_t			pool_uuid;
+	struct daos_acl		*acl = NULL;
+	char			**ace_list = NULL;
+	size_t			ace_nr = 0;
+	size_t			len;
+	uint8_t			*body;
+
+	req = mgmt__get_aclreq__unpack(NULL, drpc_req->body.len,
+				       drpc_req->body.data);
+	if (req == NULL) {
+		D_ERROR("Failed to unpack GetACLReq\n");
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		return;
+	}
+
+	D_INFO("Received request to get ACL for pool pool %s\n",
+		req->uuid);
+
+	if (uuid_parse(req->uuid, pool_uuid) != 0) {
+		D_ERROR("Couldn't parse '%s' to UUID\n", req->uuid);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = ds_pool_svc_get_acl(pool_uuid, &acl);
+	if (rc != 0) {
+		D_ERROR("Couldn't get pool ACL, rc=%d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = daos_acl_to_strs(acl, &ace_list, &ace_nr);
+	if (rc != 0) {
+		D_ERROR("Couldn't convert ACL to string list, rc=%d", rc);
+		D_GOTO(out_acl, rc);
+	}
+
+	resp.acl = ace_list;
+	resp.n_acl = ace_nr;
+
+out_acl:
+	daos_acl_free(acl);
+out:
+	resp.status = rc;
+
+	len = mgmt__get_aclresp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to allocate buffer for packed GetACLResp\n");
+	} else {
+		mgmt__get_aclresp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__get_aclreq__free_unpacked(req, NULL);
+	free_ace_list(ace_list, ace_nr);
 }
 
 void

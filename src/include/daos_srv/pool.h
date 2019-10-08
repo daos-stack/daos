@@ -36,6 +36,7 @@
 #include <daos/rpc.h>
 #include <daos/placement.h>
 #include <daos_srv/vos_types.h>
+#include <daos_security.h>
 
 /*
  * Pool object
@@ -141,6 +142,7 @@ int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets,
 		       const int *domains, daos_prop_t *prop,
 		       d_rank_list_t *svc_addrs);
 int ds_pool_svc_destroy(const uuid_t pool_uuid);
+int ds_pool_svc_get_acl(uuid_t pool_uuid, struct daos_acl **acl);
 
 /*
  * Called by dmg on the pool service leader to list all pool handles of a pool.
