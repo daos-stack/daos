@@ -92,12 +92,7 @@ func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.DaosRank) (*mgmtpb
 		return nil, errors.Errorf("rank %d not found on this server", req.Rank)
 	}
 
-	dc, err := mi.getDrpcClient()
-	if err != nil {
-		return nil, err
-	}
-
-	dresp, err := makeDrpcCall(dc, mgmtModuleID, killRank, req)
+	dresp, err := mi.CallDrpc(mgmtModuleID, killRank, req)
 	if err != nil {
 		return nil, err
 	}

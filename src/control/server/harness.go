@@ -31,7 +31,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
@@ -87,20 +86,9 @@ func (h *IOServerHarness) AddInstance(srv *IOServerInstance) error {
 	return nil
 }
 
-// GetManagementClient returns a dRPC client for the IO Server instance to
-// be used as a management target.
-func (h *IOServerHarness) GetManagementClient() (drpc.DomainSocketClient, error) {
-	li, err := h.GetMSLeaderInstance()
-	if err != nil {
-		return nil, err
-	}
-
-	return li.getDrpcClient()
-}
-
-// GetManagementInstance returns a managed IO Server instance
-// to be used as a management target.
-func (h *IOServerHarness) GetManagementInstance() (*IOServerInstance, error) {
+// GetMSLeaderInstance returns a managed IO Server instance to be used as a
+// management target and fails if selected instance is not MS Leader.
+func (h *IOServerHarness) GetMSLeaderInstance() (*IOServerInstance, error) {
 	h.RLock()
 	defer h.RUnlock()
 
@@ -108,31 +96,15 @@ func (h *IOServerHarness) GetManagementInstance() (*IOServerInstance, error) {
 		return nil, errors.New("harness has no managed instances")
 	}
 
-	if defaultManagementInstance > len(h.instances) {
-		return nil, errors.Errorf("no instance index %d", defaultManagementInstance)
+	var err error
+	for _, mi := range h.Instances() {
+		// try each instance, returning the first one that is a replica (if any are)
+		if err = checkIsMSReplica(mi); err == nil {
+			return mi, nil
+		}
 	}
 
-	// Just pick one for now.
-	return h.instances[defaultManagementInstance], nil
-}
-
-// GetMSLeaderInstance returns a managed IO Server instance to be used as a
-// management target and fails if selected instance is not MS Leader.
-func (h *IOServerHarness) GetMSLeaderInstance() (*IOServerInstance, error) {
-	h.RLock()
-	defer h.RUnlock()
-
-	mi, err := h.GetManagementInstance()
-	if err != nil {
-		return nil, err
-	}
-	// currently, as there is only one access point, the only replica will
-	// also be the leader.
-	if err := checkIsMSReplica(mi); err != nil {
-		return nil, err
-	}
-
-	return mi, nil
+	return nil, err
 }
 
 // CreateSuperblocks creates instance superblocks as needed.

@@ -161,12 +161,12 @@ func newMgmtSvc(h *IOServerHarness) *mgmtSvc {
 }
 
 func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
-	dc, err := svc.harness.GetManagementClient()
+	mi, err := svc.harness.GetMSLeaderInstance()
 	if err != nil {
 		return nil, err
 	}
 
-	dresp, err := makeDrpcCall(dc, mgmtModuleID, getAttachInfo, req)
+	dresp, err := mi.CallDrpc(mgmtModuleID, getAttachInfo, req)
 	if err != nil {
 		return nil, err
 	}
@@ -211,12 +211,12 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 			"combining peer addr with listener port")
 	}
 
-	dc, err := svc.harness.GetManagementClient()
+	mi, err := svc.harness.GetMSLeaderInstance()
 	if err != nil {
 		return nil, err
 	}
 
-	dresp, err := makeDrpcCall(dc, mgmtModuleID, join, req)
+	dresp, err := mi.CallDrpc(mgmtModuleID, join, req)
 	if err != nil {
 		return nil, err
 	}
@@ -267,12 +267,12 @@ func checkIsMSReplica(mi *IOServerInstance) error {
 func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (*mgmtpb.PoolCreateResp, error) {
 	svc.log.Debugf("MgmtSvc.PoolCreate dispatch, req:%+v\n", *req)
 
-	dc, err := svc.harness.GetManagementClient()
+	mi, err := svc.harness.GetMSLeaderInstance()
 	if err != nil {
 		return nil, err
 	}
 
-	dresp, err := makeDrpcCall(dc, mgmtModuleID, poolCreate, req)
+	dresp, err := mi.CallDrpc(mgmtModuleID, poolCreate, req)
 	if err != nil {
 		return nil, err
 	}
@@ -291,12 +291,12 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq) (*mgmtpb.PoolDestroyResp, error) {
 	svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, req:%+v\n", *req)
 
-	dc, err := svc.harness.GetManagementClient()
+	mi, err := svc.harness.GetMSLeaderInstance()
 	if err != nil {
 		return nil, err
 	}
 
-	dresp, err := makeDrpcCall(dc, mgmtModuleID, poolDestroy, req)
+	dresp, err := mi.CallDrpc(mgmtModuleID, poolDestroy, req)
 	if err != nil {
 		return nil, err
 	}
@@ -315,12 +315,12 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 func (svc *mgmtSvc) BioHealthQuery(ctx context.Context, req *mgmtpb.BioHealthReq) (*mgmtpb.BioHealthResp, error) {
 	svc.log.Debugf("MgmtSvc.BioHealthQuery dispatch, req:%+v\n", *req)
 
-	dc, err := svc.harness.GetManagementClient()
+	mi, err := svc.harness.GetMSLeaderInstance()
 	if err != nil {
 		return nil, err
 	}
 
-	dresp, err := makeDrpcCall(dc, mgmtModuleID, bioHealth, req)
+	dresp, err := mi.CallDrpc(mgmtModuleID, bioHealth, req)
 	if err != nil {
 		return nil, err
 	}
@@ -337,12 +337,12 @@ func (svc *mgmtSvc) BioHealthQuery(ctx context.Context, req *mgmtpb.BioHealthReq
 func (svc *mgmtSvc) SmdListDevs(ctx context.Context, req *mgmtpb.SmdDevReq) (*mgmtpb.SmdDevResp, error) {
 	svc.log.Debugf("MgmtSvc.SmdListDevs dispatch, req:%+v\n", *req)
 
-	dc, err := svc.harness.GetManagementClient()
+	mi, err := svc.harness.GetMSLeaderInstance()
 	if err != nil {
 		return nil, err
 	}
 
-	dresp, err := makeDrpcCall(dc, mgmtModuleID, smdDevs, req)
+	dresp, err := mi.CallDrpc(mgmtModuleID, smdDevs, req)
 	if err != nil {
 		return nil, err
 	}
@@ -357,12 +357,12 @@ func (svc *mgmtSvc) SmdListDevs(ctx context.Context, req *mgmtpb.SmdDevReq) (*mg
 
 // SmdListPools implements the method defined for the Management Service.
 func (svc *mgmtSvc) SmdListPools(ctx context.Context, req *mgmtpb.SmdPoolReq) (*mgmtpb.SmdPoolResp, error) {
-	dc, err := svc.harness.GetManagementClient()
+	mi, err := svc.harness.GetMSLeaderInstance()
 	if err != nil {
 		return nil, err
 	}
 
-	dresp, err := makeDrpcCall(dc, mgmtModuleID, smdPools, req)
+	dresp, err := mi.CallDrpc(mgmtModuleID, smdPools, req)
 	if err != nil {
 		return nil, err
 	}

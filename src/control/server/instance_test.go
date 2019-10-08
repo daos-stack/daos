@@ -27,8 +27,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/common"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
@@ -71,4 +75,36 @@ func TestIOServerInstance_NotifyReady(t *testing.T) {
 	}
 
 	waitForIosrvReady(t, instance)
+}
+
+func TestIOServerInstance_CallDrpc(t *testing.T) {
+	for name, tc := range map[string]struct {
+		notReady bool
+		resp     *drpc.Response
+		expErr   error
+	}{
+		"not ready": {
+			notReady: true,
+			expErr:   errors.New("no dRPC client set"),
+		},
+		"success": {
+			resp: &drpc.Response{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)()
+
+			instance := getTestIOServerInstance(log)
+			if !tc.notReady {
+				mc := &mockDrpcClient{
+					SendMsgOutputResponse: tc.resp,
+				}
+				instance.setDrpcClient(mc)
+			}
+
+			_, err := instance.CallDrpc(mgmtModuleID, poolCreate, &mgmtpb.PoolCreateReq{})
+			cmpErr(t, tc.expErr, err)
+		})
+	}
 }

@@ -29,13 +29,30 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
+
+func cmpErr(t *testing.T, want, got error) {
+	t.Helper()
+
+	if want == got {
+		return
+	}
+	if want == nil || got == nil {
+		t.Fatalf("unexpected error (wanted: %v, got: %v)", want, got)
+	}
+	if want.Error() != got.Error() && !strings.Contains(got.Error(), want.Error()) {
+		t.Fatalf("unexpected error (wanted: %s, got: %s)", want, got)
+	}
+}
 
 func TestHarnessCreateSuperblocks(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
@@ -47,6 +64,8 @@ func TestHarnessCreateSuperblocks(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	defaultApList := []string{"1.2.3.4:5"}
+	ctrlAddrs := []string{"1.2.3.4:5", "6.7.8.9:10"}
 	ext := &mockExt{
 		isMountPointRet: true,
 	}
@@ -61,23 +80,45 @@ func TestHarnessCreateSuperblocks(t *testing.T) {
 			WithScmClass("ram").
 			WithScmMountPoint(mnt)
 		r := ioserver.NewRunner(log, cfg)
-		m := newMgmtSvcClient(
-			context.Background(), log, mgmtSvcClientCfg{
-				ControlAddr: &net.TCPAddr{},
-			},
-		)
-		i := NewIOServerInstance(ext, log, nil, m, r)
-		i.fsRoot = testDir
-		if err := h.AddInstance(i); err != nil {
+		ctrlAddr, err := net.ResolveTCPAddr("tcp", ctrlAddrs[idx])
+		if err != nil {
 			t.Fatal(err)
 		}
+		m := newMgmtSvcClient(
+			context.Background(), log, mgmtSvcClientCfg{
+				ControlAddr:  ctrlAddr,
+				AccessPoints: defaultApList,
+			},
+		)
+		srv := NewIOServerInstance(ext, log, nil, m, r)
+		srv.fsRoot = testDir
+		if err := h.AddInstance(srv); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// ugh, this isn't ideal
+	oldGetAddrFn := getInterfaceAddrs
+	defer func() {
+		getInterfaceAddrs = oldGetAddrFn
+	}()
+	getInterfaceAddrs = func() ([]net.Addr, error) {
+		addrs := make([]net.Addr, len(ctrlAddrs))
+		var err error
+		for i, ca := range ctrlAddrs {
+			addrs[i], err = net.ResolveTCPAddr("tcp", ca)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return addrs, nil
 	}
 
 	if err := h.CreateSuperblocks(false); err != nil {
 		t.Fatal(err)
 	}
 
-	mi, err := h.GetManagementInstance()
+	mi, err := h.GetMSLeaderInstance()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,5 +139,107 @@ func TestHarnessCreateSuperblocks(t *testing.T) {
 		if i._superblock.UUID == mi._superblock.UUID {
 			t.Fatal("second instance has same superblock as first")
 		}
+	}
+}
+
+func TestHarnessGetMSLeaderInstance(t *testing.T) {
+	defaultApList := []string{"1.2.3.4:5", "6.7.8.9:10"}
+	defaultCtrlList := []string{"6.3.1.2:5", "1.2.3.4:5"}
+	for name, tc := range map[string]struct {
+		instanceCount int
+		hasSuperblock bool
+		apList        []string
+		ctrlAddrs     []string
+		expError      error
+	}{
+		"zero instances": {
+			apList:   defaultApList,
+			expError: errors.New("harness has no managed instances"),
+		},
+		"empty AP list": {
+			instanceCount: 2,
+			apList:        nil,
+			ctrlAddrs:     defaultApList,
+			expError:      errors.New("no access points defined"),
+		},
+		"not MS leader": {
+			instanceCount: 1,
+			apList:        defaultApList,
+			ctrlAddrs:     []string{"4.3.2.1:10"},
+			expError:      errors.New("not an access point"),
+		},
+		"is MS leader, but no superblock": {
+			instanceCount: 2,
+			apList:        defaultApList,
+			ctrlAddrs:     defaultCtrlList,
+			expError:      errors.New("not an access point"),
+		},
+		"is MS leader": {
+			instanceCount: 2,
+			hasSuperblock: true,
+			apList:        defaultApList,
+			ctrlAddrs:     defaultCtrlList,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)()
+
+			// ugh, this isn't ideal
+			oldGetAddrFn := getInterfaceAddrs
+			defer func() {
+				getInterfaceAddrs = oldGetAddrFn
+			}()
+			getInterfaceAddrs = func() ([]net.Addr, error) {
+				addrs := make([]net.Addr, len(tc.ctrlAddrs))
+				var err error
+				for i, ca := range tc.ctrlAddrs {
+					addrs[i], err = net.ResolveTCPAddr("tcp", ca)
+					if err != nil {
+						return nil, err
+					}
+				}
+				return addrs, nil
+			}
+
+			ext := &ext{}
+			h := NewIOServerHarness(ext, log)
+			for i := 0; i < tc.instanceCount; i++ {
+				cfg := ioserver.NewConfig().
+					WithRank(uint32(i)).
+					WithSystemName(t.Name()).
+					WithScmClass("ram").
+					WithScmMountPoint(strconv.Itoa(i))
+				r := ioserver.NewRunner(log, cfg)
+
+				m := newMgmtSvcClient(
+					context.Background(), log, mgmtSvcClientCfg{
+						ControlAddr:  &net.TCPAddr{},
+						AccessPoints: tc.apList,
+					},
+				)
+
+				isAP := func(ca string) bool {
+					for _, ap := range tc.apList {
+						if ca == ap {
+							return true
+						}
+					}
+					return false
+				}
+				srv := NewIOServerInstance(ext, log, nil, m, r)
+				if tc.hasSuperblock {
+					srv.setSuperblock(&Superblock{
+						MS: isAP(tc.ctrlAddrs[i]),
+					})
+				}
+				if err := h.AddInstance(srv); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			_, err := h.GetMSLeaderInstance()
+			cmpErr(t, tc.expError, err)
+		})
 	}
 }

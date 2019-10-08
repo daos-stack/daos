@@ -322,12 +322,7 @@ func (srv *IOServerInstance) SetRank(ctx context.Context, ready *srvpb.NotifyRea
 }
 
 func (srv *IOServerInstance) callSetRank(rank ioserver.Rank) error {
-	dc, err := srv.getDrpcClient()
-	if err != nil {
-		return err
-	}
-
-	dresp, err := makeDrpcCall(dc, mgmtModuleID, setRank, &mgmtpb.SetRankReq{Rank: uint32(rank)})
+	dresp, err := srv.CallDrpc(mgmtModuleID, setRank, &mgmtpb.SetRankReq{Rank: uint32(rank)})
 	if err != nil {
 		return err
 	}
@@ -402,12 +397,7 @@ func (srv *IOServerInstance) callCreateMS(superblock *Superblock) error {
 		req.Addr = msAddr
 	}
 
-	dc, err := srv.getDrpcClient()
-	if err != nil {
-		return err
-	}
-
-	dresp, err := makeDrpcCall(dc, mgmtModuleID, createMS, req)
+	dresp, err := srv.CallDrpc(mgmtModuleID, createMS, req)
 	if err != nil {
 		return err
 	}
@@ -424,12 +414,7 @@ func (srv *IOServerInstance) callCreateMS(superblock *Superblock) error {
 }
 
 func (srv *IOServerInstance) callStartMS() error {
-	dc, err := srv.getDrpcClient()
-	if err != nil {
-		return err
-	}
-
-	dresp, err := makeDrpcCall(dc, mgmtModuleID, startMS, nil)
+	dresp, err := srv.CallDrpc(mgmtModuleID, startMS, nil)
 	if err != nil {
 		return err
 	}
@@ -446,12 +431,7 @@ func (srv *IOServerInstance) callStartMS() error {
 }
 
 func (srv *IOServerInstance) callSetUp() error {
-	dc, err := srv.getDrpcClient()
-	if err != nil {
-		return err
-	}
-
-	dresp, err := makeDrpcCall(dc, mgmtModuleID, setUp, nil)
+	dresp, err := srv.CallDrpc(mgmtModuleID, setUp, nil)
 	if err != nil {
 		return err
 	}
@@ -467,6 +447,17 @@ func (srv *IOServerInstance) callSetUp() error {
 	return nil
 }
 
+// IsMSReplica indicates whether or not this instance is a management service replica.
 func (srv *IOServerInstance) IsMSReplica() bool {
 	return srv.hasSuperblock() && srv.getSuperblock().MS
+}
+
+// CallDrpc makes the supplied dRPC call via this instance's dRPC client.
+func (srv *IOServerInstance) CallDrpc(module, method int32, body proto.Message) (*drpc.Response, error) {
+	dc, err := srv.getDrpcClient()
+	if err != nil {
+		return nil, err
+	}
+
+	return makeDrpcCall(dc, module, method, body)
 }
