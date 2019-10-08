@@ -31,7 +31,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -54,6 +53,35 @@ func (sms SystemMembers) String() string {
 
 	for _, m := range sms {
 		sb.WriteString(m.String() + " ")
+	}
+
+	return sb.String()
+}
+
+// SystemMemberResult refers to the result of an action on a SystemMember
+// identified by string representation "address/uuid/rank".
+type SystemMemberResult struct {
+	ID     string
+	Action string
+	Err    error
+}
+
+func (smr SystemMemberResult) String() string {
+	msgResult := "OK"
+	if smr.Err != nil {
+		msgResult = "FAIL, " + smr.Err.Error()
+	}
+
+	return fmt.Sprintf("%s %s: %s", smr.ID, smr.Action, msgResult)
+}
+
+type SystemMemberResults []*SystemMemberResult
+
+func (smrs SystemMemberResults) String() string {
+	var sb strings.Builder
+
+	for _, smr := range smrs {
+		sb.WriteString(smr.String() + ", ")
 	}
 
 	return sb.String()
@@ -112,45 +140,6 @@ func (m *Membership) GetMembers() SystemMembers {
 
 	for _, m := range m.members {
 		members = append(members, &m)
-	}
-
-	return members
-}
-
-// GetMembersPB converts internal member structs to protobuf equivalents.
-func (m *Membership) GetMembersPB() []*mgmtpb.SystemMember {
-	pbMembers := make([]*mgmtpb.SystemMember, 0, len(m.members))
-
-	m.RLock()
-	defer m.RUnlock()
-
-	for _, m := range m.members {
-		pbMembers = append(pbMembers, &mgmtpb.SystemMember{
-			Addr: m.Addr.String(), Uuid: m.Uuid, Rank: m.Rank,
-		})
-	}
-
-	return pbMembers
-}
-
-// MembersFromPB converts to member slice from protobuf format.
-//
-// Don't populate member Addr field if it can't be resolved.
-func MembersFromPB(log logging.Logger, pbMembers []*mgmtpb.SystemMember) SystemMembers {
-	members := make([]*SystemMember, len(pbMembers))
-
-	for _, m := range pbMembers {
-		var addr net.Addr
-
-		addr, err := net.ResolveTCPAddr("tcp", m.Addr)
-		if err != nil {
-			log.Errorf("cannot resolve member address %s: %s", m, err)
-			continue
-		}
-
-		members = append(members, &SystemMember{
-			Addr: addr, Uuid: m.Uuid, Rank: m.Rank,
-		})
 	}
 
 	return members
