@@ -24,7 +24,7 @@
 import os
 import random
 
-from apricot import TestWithServers
+from apricot import TestWithServers, skipForTicket
 from daos_api import DaosPool, DaosContainer, DaosSnapshot, DaosApiError
 from general_utils import get_random_string
 
@@ -51,6 +51,7 @@ class BasicSnapshot(TestWithServers):
         super(BasicSnapshot, self).__init__(*args, **kwargs)
         self.snapshot = None
 
+    @skipForTicket("DAOS-2484")
     def test_basic_snapshot(self):
         """Test ID: DAOS-1370.
 
