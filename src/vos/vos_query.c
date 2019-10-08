@@ -130,6 +130,8 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 		if (rc != 0)
 			break;
 
+		/* Reset the epr */
+		query->qt_epr = epr;
 		rc = check_key(query, rbund.rb_krec, &visible);
 		if (rc != 0)
 			break;
@@ -147,9 +149,6 @@ out:
 
 	if (rc == 0)
 		rc = fini_rc;
-
-	if (rc == 0)
-		query->qt_epr = epr;
 
 	return rc;
 }
@@ -304,6 +303,7 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 {
 	struct vos_object	*obj;
 	struct open_query	 query;
+	daos_epoch_range_t	 dkey_epr;
 	daos_anchor_t		 dkey_anchor;
 	daos_anchor_t		 akey_anchor;
 	daos_ofeat_t		 obj_feats;
@@ -377,14 +377,15 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 	query.qt_dkey_toh   = DAOS_HDL_INVAL;
 	query.qt_akey_toh   = DAOS_HDL_INVAL;
 	query.qt_obj = obj;
-	query.qt_epr.epr_lo = 0;
-	query.qt_epr.epr_hi = epoch;
 	query.qt_flags	    = flags;
 	query.qt_dkey_root  = &obj->obj_df->vo_tree;
 	query.qt_coh	    = coh;
 	query.qt_pool	    = vos_obj2pool(obj);
 
 	for (;;) {
+		/* Reset the epoch range */
+		query.qt_epr.epr_lo = 0;
+		query.qt_epr.epr_hi = epoch;
 		rc = open_and_query_key(&query, dkey, DAOS_GET_DKEY,
 					&dkey_anchor);
 		if (rc != 0) {
@@ -398,7 +399,10 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		if (query.qt_flags & DAOS_GET_AKEY)
 			daos_anchor_set_zero(&akey_anchor);
 
+		dkey_epr = query.qt_epr;
 		for (;;) {
+			/* Reset the epoch range to the dkey range */
+			query.qt_epr = dkey_epr;
 			rc = open_and_query_key(&query, akey, DAOS_GET_AKEY,
 						&akey_anchor);
 			if (rc != 0) {
