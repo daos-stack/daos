@@ -13,24 +13,15 @@ createtests:
              - 473
              - PASS
    uids: !mux
-      # We'll override the UID with the valid one in the test
       gooduid:
          uid:
-             - -1
+             - 12374638
              - PASS
-      baduid:
-         uid:
-             - -1
-             - FAIL
    gids: !mux
       goodgid:
          gid:
-             - -1
+             - 12374638
              - PASS
-      badgid:
-         gid:
-             - -1
-             - FAIL
    setnames: !mux
       badstring:
           setname:
