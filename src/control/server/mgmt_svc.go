@@ -151,14 +151,12 @@ type mgmtSvc struct {
 	log     logging.Logger
 	mutex   sync.Mutex
 	harness *IOServerHarness
-	members *common.Membership // if MS leader, system membership list
 }
 
 func newMgmtSvc(h *IOServerHarness) *mgmtSvc {
 	return &mgmtSvc{
 		log:     h.log,
 		harness: h,
-		members: common.NewMembership(h.log),
 	}
 }
 
@@ -234,7 +232,7 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 			Addr: replyAddr, Uuid: req.GetUuid(), Rank: resp.GetRank(),
 		}
 
-		count, err := svc.members.Add(newMember)
+		count, err := svc.harness.members.Add(newMember)
 		if err != nil {
 			return nil, errors.WithMessage(err, "adding to membership")
 		}
@@ -383,6 +381,32 @@ func (svc *mgmtSvc) SmdListPools(ctx context.Context, req *mgmtpb.SmdPoolReq) (*
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal SmdListPools response")
 	}
+
+	return resp, nil
+}
+
+// KillRank implements the method defined for the Management Service.
+//
+// Stop data-plane instance managed by control-plane identified by unique rank.
+func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.DaosRank) (*mgmtpb.DaosResp, error) {
+	mi, err := svc.harness.GetManagementInstance()
+	if err != nil {
+		return nil, err
+	}
+
+	svc.log.Debugf("MgmtSvc.KillRank dispatch, req:%+v\n", *req)
+
+	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, killRank, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.DaosResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal DAOS response")
+	}
+
+	svc.log.Debugf("MgmtSvc.KillRank dispatch, resp:%+v\n", *resp)
 
 	return resp, nil
 }

@@ -31,6 +31,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
@@ -46,6 +47,7 @@ type IOServerHarness struct {
 	log       logging.Logger
 	ext       External
 	instances []*IOServerInstance
+	members   *common.Membership // if MS leader, system membership list
 	started   bool
 }
 
@@ -55,6 +57,7 @@ func NewIOServerHarness(ext External, log logging.Logger) *IOServerHarness {
 		ext:       ext,
 		log:       log,
 		instances: make([]*IOServerInstance, 0, 2),
+		members:   common.NewMembership(log),
 	}
 }
 

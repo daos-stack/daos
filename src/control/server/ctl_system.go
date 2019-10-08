@@ -24,23 +24,19 @@
 package server
 
 import (
-	"net"
-
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
 	"github.com/daos-stack/daos/src/control/common"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 const stopTimeout = 10 * retryDelay
 
-type addrErrors map[net.Addr]error
-
 // systemStop sends multicast KillRank gRPC requests to system membership list.
-func (svc *mgmtSvc) systemStop(ctx context.Context, leader *IOServerInstance) common.SystemMemberResults {
-	members := svc.members.GetMembers()
+func (svc *ControlService) systemStop(ctx context.Context, leader *IOServerInstance) common.SystemMemberResults {
+	members := svc.harness.members.GetMembers()
 	results := make(common.SystemMemberResults, 0, len(members))
 
 	// total retry timeout, allows for 10 retries
@@ -62,7 +58,7 @@ func (svc *mgmtSvc) systemStop(ctx context.Context, leader *IOServerInstance) co
 		}
 
 		if result.Err == nil {
-			svc.members.Remove(member.Uuid)
+			svc.harness.members.Remove(member.Uuid)
 		} else {
 			svc.log.Debugf("MgmtSvc.systemStop error %s\n", result.Err)
 		}
@@ -73,37 +69,11 @@ func (svc *mgmtSvc) systemStop(ctx context.Context, leader *IOServerInstance) co
 	return results
 }
 
-// KillRank implements the method defined for the Management Service.
-//
-// Stop data-plane instance managed by control-plane identified by unique rank.
-func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.DaosRank) (*mgmtpb.DaosResp, error) {
-	mi, err := svc.harness.GetManagementInstance()
-	if err != nil {
-		return nil, err
-	}
-
-	svc.log.Debugf("MgmtSvc.KillRank dispatch, req:%+v\n", *req)
-
-	dresp, err := makeDrpcCall(mi.drpcClient, mgmtModuleID, killRank, req)
-	if err != nil {
-		return nil, err
-	}
-
-	resp := &mgmtpb.DaosResp{}
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal DAOS response")
-	}
-
-	svc.log.Debugf("MgmtSvc.KillRank dispatch, resp:%+v\n", *resp)
-
-	return resp, nil
-}
-
 // SystemMemberQuery implements the method defined for the Management Service.
 //
 // Return system membership list including member state.
-func (svc *mgmtSvc) SystemMemberQuery(ctx context.Context, req *mgmtpb.SystemMemberQueryReq) (*mgmtpb.SystemMemberQueryResp, error) {
-	resp := &mgmtpb.SystemMemberQueryResp{}
+func (svc *ControlService) SystemMemberQuery(ctx context.Context, req *ctlpb.SystemMemberQueryReq) (*ctlpb.SystemMemberQueryResp, error) {
+	resp := &ctlpb.SystemMemberQueryResp{}
 
 	// verify we are running on a host with the MS leader and therefore will
 	// have membership list.
@@ -114,7 +84,7 @@ func (svc *mgmtSvc) SystemMemberQuery(ctx context.Context, req *mgmtpb.SystemMem
 
 	svc.log.Debug("received SystemMemberQuery RPC; reporting DAOS system members")
 
-	resp.Members = common.MembersToPB(svc.members.GetMembers())
+	resp.Members = common.MembersToPB(svc.harness.members.GetMembers())
 
 	svc.log.Debug("responding to SystemMemberQuery RPC")
 
@@ -124,8 +94,8 @@ func (svc *mgmtSvc) SystemMemberQuery(ctx context.Context, req *mgmtpb.SystemMem
 // SystemStop implements the method defined for the Management Service.
 //
 // Initiate controlled shutdown of DAOS system.
-func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (*mgmtpb.SystemStopResp, error) {
-	resp := &mgmtpb.SystemStopResp{}
+func (svc *ControlService) SystemStop(ctx context.Context, req *ctlpb.SystemStopReq) (*ctlpb.SystemStopResp, error) {
+	resp := &ctlpb.SystemStopResp{}
 
 	// verify we are running on a host with the MS leader and therefore will
 	// have membership list.

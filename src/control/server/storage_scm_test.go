@@ -29,7 +29,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	. "github.com/daos-stack/daos/src/control/common"
+	common "github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	. "github.com/daos-stack/daos/src/control/common/storage"
 	. "github.com/daos-stack/daos/src/control/lib/ipmctl"
@@ -39,7 +39,7 @@ import (
 
 // MockModule returns a mock SCM module of type exported from ipmctl.
 func MockModule() DeviceDiscovery {
-	m := MockModulePB()
+	m := common.MockModulePB()
 	dd := DeviceDiscovery{}
 	dd.Physical_id = uint16(m.Physicalid)
 	dd.Channel_id = uint16(m.Loc.Channel)
@@ -80,7 +80,7 @@ func defaultMockScmStorage(log logging.Logger, ext External) *scmStorage {
 }
 
 func TestDiscoverScm(t *testing.T) {
-	mPB := MockModulePB()
+	mPB := common.MockModulePB()
 	m := MockModule()
 
 	tests := map[string]struct {
@@ -118,20 +118,20 @@ func TestDiscoverScm(t *testing.T) {
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)()
 
 			ss := newMockScmStorage(log, nil, tt.ipmctlDiscoverRet,
 				[]DeviceDiscovery{m}, tt.inited, newMockPrepScm())
 
 			if err := ss.Discover(); err != nil {
 				if tt.errMsg != "" {
-					AssertEqual(t, err.Error(), tt.errMsg, "")
+					common.AssertEqual(t, err.Error(), tt.errMsg, "")
 					return
 				}
 				t.Fatal(err)
 			}
 
-			AssertEqual(t, ss.modules, tt.expModules, "unexpected list of modules")
+			common.AssertEqual(t, ss.modules, tt.expModules, "unexpected list of modules")
 		})
 	}
 }
@@ -358,7 +358,7 @@ func TestFormatScm(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)()
 
 			config := newMockStorageConfig(tt.mountRet, tt.unmountRet,
 				tt.mkdirRet, tt.removeRet, tt.mount, tt.class, tt.devs,
@@ -381,7 +381,7 @@ func TestFormatScm(t *testing.T) {
 				// format as in normal program execution.
 				if err := ss.Discover(); err != nil {
 					if tt.expErrMsg != "" {
-						ExpectError(t, err, tt.expErrMsg, tt.desc)
+						common.ExpectError(t, err, tt.expErrMsg, tt.desc)
 					} else {
 						// unexpected failure
 						t.Fatal(tt.desc + ": " + err.Error())
@@ -393,33 +393,33 @@ func TestFormatScm(t *testing.T) {
 			ss.Format(scmCfg, &results)
 
 			// only ocm result in response for the moment
-			AssertEqual(
+			common.AssertEqual(
 				t, len(results), 1,
 				"unexpected number of response results, "+tt.desc)
 
 			result := results[0]
 
-			AssertEqual(
+			common.AssertEqual(
 				t, result.State.Error, tt.expResults[0].State.Error,
 				"unexpected result error message, "+tt.desc)
-			AssertEqual(
+			common.AssertEqual(
 				t, result.State.Status, tt.expResults[0].State.Status,
 				"unexpected response status, "+tt.desc)
-			AssertEqual(
+			common.AssertEqual(
 				t, result.Mntpoint, tt.expResults[0].Mntpoint,
 				"unexpected mntpoint, "+tt.desc)
 
 			if result.State.Status == ResponseStatus_CTRL_SUCCESS {
-				AssertEqual(
+				common.AssertEqual(
 					t, ss.formatted,
 					true, "expect formatted state, "+tt.desc)
 			}
 
 			cmds := config.ext.getHistory()
-			AssertEqual(
+			common.AssertEqual(
 				t, len(cmds), len(tt.expCmds), "number of cmds, "+tt.desc)
 			for i, s := range cmds {
-				AssertEqual(
+				common.AssertEqual(
 					t, s, tt.expCmds[i],
 					fmt.Sprintf("commands don't match (%s)", tt.desc))
 			}
@@ -453,7 +453,7 @@ func TestUpdateScm(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)()
 
 			config := defaultMockConfig(t)
 			ss := newMockScmStorage(log, config.ext, nil, []DeviceDiscovery{},
@@ -466,19 +466,19 @@ func TestUpdateScm(t *testing.T) {
 			ss.Update(scmCfg, req, &results)
 
 			// only ocm result in response for the moment
-			AssertEqual(
+			common.AssertEqual(
 				t, len(results), 1,
 				"unexpected number of response results, "+tt.desc)
 
 			result := results[0]
 
-			AssertEqual(
+			common.AssertEqual(
 				t, result.State.Error, tt.expResults[0].State.Error,
 				"unexpected result error message, "+tt.desc)
-			AssertEqual(
+			common.AssertEqual(
 				t, result.State.Status, tt.expResults[0].State.Status,
 				"unexpected response status, "+tt.desc)
-			AssertEqual(
+			common.AssertEqual(
 				t, result.Loc, tt.expResults[0].Loc,
 				"unexpected module location, "+tt.desc)
 		})

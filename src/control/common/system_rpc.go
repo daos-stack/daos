@@ -27,16 +27,16 @@ import (
 	"errors"
 	"net"
 
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // MembersToPB converts internal member structs to protobuf equivalents.
-func MembersToPB(members SystemMembers) []*mgmtpb.SystemMember {
-	pbMembers := make([]*mgmtpb.SystemMember, 0, len(members))
+func MembersToPB(members SystemMembers) []*ctlpb.SystemMember {
+	pbMembers := make([]*ctlpb.SystemMember, 0, len(members))
 
 	for _, m := range members {
-		pbMembers = append(pbMembers, &mgmtpb.SystemMember{
+		pbMembers = append(pbMembers, &ctlpb.SystemMember{
 			Addr: m.Addr.String(), Uuid: m.Uuid, Rank: m.Rank,
 		})
 	}
@@ -47,7 +47,7 @@ func MembersToPB(members SystemMembers) []*mgmtpb.SystemMember {
 // MembersFromPB converts to member slice from protobuf format.
 //
 // Don't populate member Addr field if it can't be resolved.
-func MembersFromPB(log logging.Logger, pbMembers []*mgmtpb.SystemMember) SystemMembers {
+func MembersFromPB(log logging.Logger, pbMembers []*ctlpb.SystemMember) SystemMembers {
 	members := make(SystemMembers, 0, len(pbMembers))
 
 	for _, m := range pbMembers {
@@ -68,11 +68,11 @@ func MembersFromPB(log logging.Logger, pbMembers []*mgmtpb.SystemMember) SystemM
 }
 
 // MemberResultsToPB converts SystemMemberResults to equivalent protobuf format.
-func MemberResultsToPB(results SystemMemberResults) []*mgmtpb.SystemStopResp_Result {
-	pbResults := make([]*mgmtpb.SystemStopResp_Result, 0, len(results))
+func MemberResultsToPB(results SystemMemberResults) []*ctlpb.SystemStopResp_Result {
+	pbResults := make([]*ctlpb.SystemStopResp_Result, 0, len(results))
 
 	for _, mr := range results {
-		pbResults = append(pbResults, &mgmtpb.SystemStopResp_Result{
+		pbResults = append(pbResults, &ctlpb.SystemStopResp_Result{
 			Id: mr.ID, Action: mr.Action, Errored: mr.Err == nil, Msg: mr.Err.Error(),
 		})
 	}
@@ -82,7 +82,7 @@ func MemberResultsToPB(results SystemMemberResults) []*mgmtpb.SystemStopResp_Res
 
 // MemberResultsFromPB converts results from member actions (protobuf format) to
 // SystemMemberResults.
-func MemberResultsFromPB(log logging.Logger, pbResults []*mgmtpb.SystemStopResp_Result) SystemMemberResults {
+func MemberResultsFromPB(log logging.Logger, pbResults []*ctlpb.SystemStopResp_Result) SystemMemberResults {
 	results := make(SystemMemberResults, 0, len(pbResults))
 
 	for _, mr := range pbResults {
