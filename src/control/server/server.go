@@ -34,6 +34,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
+	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -71,6 +72,10 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		return errors.Wrap(err, "unable to resolve daos_server control address")
 	}
 
+	// If this daos_server instance ends up being the MS leader,
+	// this will record the DAOS system membership.
+	membership := common.NewMembership(log)
+
 	harness := NewIOServerHarness(&ext{}, log)
 	for i, srvCfg := range cfg.Servers {
 		if i+1 > maxIoServers {
@@ -100,7 +105,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}
 
 	// Create and setup control service.
-	controlService, err := NewControlService(log, harness, cfg)
+	controlService, err := NewControlService(log, harness, cfg, membership)
 	if err != nil {
 		return errors.Wrap(err, "init control service")
 	}
@@ -130,7 +135,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	// Only provide IO/Agent communication if not attempting to respawn after format,
 	// otherwise, only provide gRPC mgmt control service for hardware provisioning.
 	if !needsRespawn {
-		mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(harness))
+		mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(harness, membership))
 	}
 
 	go func() {

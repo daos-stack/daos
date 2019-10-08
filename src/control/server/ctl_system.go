@@ -36,7 +36,7 @@ const stopTimeout = 10 * retryDelay
 
 // systemStop sends multicast KillRank gRPC requests to system membership list.
 func (svc *ControlService) systemStop(ctx context.Context, leader *IOServerInstance) common.SystemMemberResults {
-	members := svc.harness.members.GetMembers()
+	members := svc.membership.GetMembers()
 	results := make(common.SystemMemberResults, 0, len(members))
 
 	// total retry timeout, allows for 10 retries
@@ -58,7 +58,7 @@ func (svc *ControlService) systemStop(ctx context.Context, leader *IOServerInsta
 		}
 
 		if result.Err == nil {
-			svc.harness.members.Remove(member.Uuid)
+			svc.membership.Remove(member.Uuid)
 		} else {
 			svc.log.Debugf("MgmtSvc.systemStop error %s\n", result.Err)
 		}
@@ -84,7 +84,7 @@ func (svc *ControlService) SystemMemberQuery(ctx context.Context, req *ctlpb.Sys
 
 	svc.log.Debug("received SystemMemberQuery RPC; reporting DAOS system members")
 
-	resp.Members = common.MembersToPB(svc.harness.members.GetMembers())
+	resp.Members = common.MembersToPB(svc.membership.GetMembers())
 
 	svc.log.Debug("responding to SystemMemberQuery RPC")
 

@@ -148,15 +148,17 @@ func getListenIPs(listenAddr *net.TCPAddr) (listenIPs []net.IP, err error) {
 // mgmtSvc implements (the Go portion of) Management Service, satisfying
 // mgmtpb.MgmtSvcServer.
 type mgmtSvc struct {
-	log     logging.Logger
-	mutex   sync.Mutex
-	harness *IOServerHarness
+	log        logging.Logger
+	mutex      sync.Mutex
+	harness    *IOServerHarness
+	membership *common.Membership
 }
 
-func newMgmtSvc(h *IOServerHarness) *mgmtSvc {
+func newMgmtSvc(h *IOServerHarness, m *common.Membership) *mgmtSvc {
 	return &mgmtSvc{
-		log:     h.log,
-		harness: h,
+		log:        h.log,
+		harness:    h,
+		membership: m,
 	}
 }
 
@@ -232,7 +234,7 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 			Addr: replyAddr, Uuid: req.GetUuid(), Rank: resp.GetRank(),
 		}
 
-		count, err := svc.harness.members.Add(newMember)
+		count, err := svc.membership.Add(newMember)
 		if err != nil {
 			return nil, errors.WithMessage(err, "adding to membership")
 		}
