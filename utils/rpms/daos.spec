@@ -157,7 +157,8 @@ scons %{?no_smp_mflags}              \
       PREFIX=%{?buildroot}%{_prefix}
 BUILDROOT="%{?buildroot}"
 PREFIX="%{?_prefix}"
-# sed -i -e s/${BUILDROOT//\//\\/}[^\"]\*/${PREFIX//\//\\/}/g %{?buildroot}%{daoshome}/TESTING/.build_vars.*
+cp -al ftest.sh %{?buildroot}%{daoshome}/TESTING
+sed -i -e s/${BUILDROOT//\//\\/}[^\"]\*/${PREFIX//\//\\/}/g %{?buildroot}%{daoshome}/TESTING/.build_vars.*
 sed -i -e s/${BUILDROOT//\//\\/}[^\"]\*/${PREFIX//\//\\/}/g %{?buildroot}%{_prefix}/lib/.build_vars.*
 # mkdir -p %{?buildroot}/%{_exec_prefix}/lib64/%{name}
 # mkdir -p %{?buildroot}/%{_exec_prefix}/lib64/%{name}/certgen

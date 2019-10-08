@@ -280,8 +280,8 @@ def scons():
     buildinfo = prereqs.get_build_info()
     buildinfo.gen_script('.build_vars.sh')
     buildinfo.save('.build_vars.json')
-    # daos_build.install(env, "lib/daos/TESTING/",
-    #                   ['.build_vars.sh', '.build_vars.json'])
+    daos_build.install(env, "lib/daos/TESTING/",
+                       ['.build_vars.sh', '.build_vars.json'])
     # also install to $PREFIX/lib to work with existing avocado test code
     daos_build.install(env, "lib/", ['.build_vars.sh', '.build_vars.json'])
     env.Install("$PREFIX/lib64/daos", "VERSION")

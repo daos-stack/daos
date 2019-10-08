@@ -1220,6 +1220,7 @@ pipeline {
                                                test_tag=pr,hw
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
+                                           cd /usr/lib/daos/TESTING
                                            ./ftest.sh "$test_tag" $tnodes''',
                                 junit_files: "/tmp/ftest/avocado/*/*/*.xml /tmp/ftest/*_results.xml",
                                 failure_artifacts: env.STAGE_NAME
