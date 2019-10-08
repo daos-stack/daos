@@ -275,6 +275,7 @@ vos_iter_probe(daos_handle_t ih, daos_anchor_t *anchor)
 	struct vos_iterator *iter = vos_hdl2iter(ih);
 	int		     rc;
 
+	D_DEBUG(DB_IO, "probing iterator\n");
 	D_ASSERT(iter->it_ops != NULL);
 	rc = iter->it_ops->iop_probe(iter, anchor);
 	if (rc == 0)
@@ -283,6 +284,7 @@ vos_iter_probe(daos_handle_t ih, daos_anchor_t *anchor)
 		iter->it_state = VOS_ITS_END;
 	else
 		iter->it_state = VOS_ITS_NONE;
+	D_DEBUG(DB_IO, "done probing iterator rc = %d\n", rc);
 
 	return rc;
 }

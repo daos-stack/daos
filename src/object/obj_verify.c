@@ -47,7 +47,6 @@ dc_obj_verify_list(struct dc_obj_verify_args *dova)
 	D_ASSERT(!dova->eof);
 
 	memset(dova->kds, 0, sizeof(daos_key_desc_t) * DOVA_NUM);
-	memset(dova->eprs, 0, sizeof(daos_epoch_range_t) * DOVA_NUM);
 	memset(dova->list_buf, 0, dova->list_buf_len);
 
 	dova->list_sgl.sg_nr = 1;
@@ -67,8 +66,8 @@ again:
 
 	rc = dc_obj_list_obj_task_create(dova->oh, dova->th, NULL, NULL,
 					 &dova->size, &dova->num, dova->kds,
-					 dova->eprs, &dova->list_sgl,
-					 &dova->anchor, &dova->dkey_anchor,
+					 &dova->list_sgl, &dova->anchor,
+					 &dova->dkey_anchor,
 					 &dova->akey_anchor, true, NULL, NULL,
 					 &task);
 	if (rc != 0)
@@ -178,7 +177,7 @@ dc_obj_verify_check_eof(struct dc_obj_verify_args *dova,
 	int	i;
 
 	for (i = 1; i < reps; i++) {
-		if (dova[i].cursor.type == VOS_ITER_NONE)
+		if (dova[i].cursor.type == OBJ_ITER_NONE)
 			continue;
 
 		D_INFO(DF_OID" (reps %d, inconsistent) "
@@ -222,7 +221,7 @@ dc_obj_verify_parse_dkey(struct dc_obj_verify_args *dova, daos_obj_id_t oid,
 	}
 
 	cursor->gen++;
-	cursor->type = VOS_ITER_DKEY;
+	cursor->type = OBJ_ITER_DKEY;
 	return 0;
 }
 
@@ -243,9 +242,9 @@ dc_obj_verify_parse_akey(struct dc_obj_verify_args *dova, daos_obj_id_t oid,
 	akey.iov_len = dova->kds[idx].kd_key_len;
 
 	if (gen == cursor->gen) {
-		if (cursor->type == VOS_ITER_RECX ||
-		    cursor->type == VOS_ITER_SINGLE ||
-		    cursor->type == VOS_ITER_AKEY)
+		if (cursor->type == OBJ_ITER_RECX ||
+		    cursor->type == OBJ_ITER_SINGLE ||
+		    cursor->type == OBJ_ITER_AKEY)
 			return 1;
 	} else {
 		cursor->gen++;
@@ -257,7 +256,7 @@ dc_obj_verify_parse_akey(struct dc_obj_verify_args *dova, daos_obj_id_t oid,
 		daos_iov_copy(&cursor->iod.iod_name, &akey);
 	}
 
-	cursor->type = VOS_ITER_AKEY;
+	cursor->type = OBJ_ITER_AKEY;
 	return 0;
 }
 
@@ -277,12 +276,12 @@ dc_obj_verify_parse_sv(struct dc_obj_verify_args *dova, daos_obj_id_t oid,
 	}
 
 	if (gen == cursor->gen) {
-		if (cursor->type == VOS_ITER_RECX) {
+		if (cursor->type == OBJ_ITER_RECX) {
 			/* The value is either SV or EV, cannot be both. */
 			D_ERROR(DF_OID" akey %s contains both SV and EV.\n",
 				DP_OID(oid), (char *)iod->iod_name.iov_buf);
 			return -DER_IO;
-		} else if (cursor->type == VOS_ITER_SINGLE) {
+		} else if (cursor->type == OBJ_ITER_SINGLE) {
 			/* We have already specified the epoch when enumerate,
 			 * so there will be at most one SV rec can be returned
 			 * for an akey.
@@ -335,7 +334,7 @@ dc_obj_verify_parse_sv(struct dc_obj_verify_args *dova, daos_obj_id_t oid,
 		return -DER_IO;
 	}
 
-	cursor->type = VOS_ITER_SINGLE;
+	cursor->type = OBJ_ITER_SINGLE;
 	return 0;
 }
 
@@ -358,7 +357,7 @@ dc_obj_verify_parse_ev(struct dc_obj_verify_args *dova, daos_obj_id_t oid,
 	}
 
 	if (gen == cursor->gen) {
-		if (cursor->type == VOS_ITER_SINGLE) {
+		if (cursor->type == OBJ_ITER_SINGLE) {
 			/* The value is either SV or EV, cannot be both. */
 			D_ERROR(DF_OID" akey %s contains both SV and EV.\n",
 				DP_OID(oid), (char *)iod->iod_name.iov_buf);
@@ -368,7 +367,7 @@ dc_obj_verify_parse_ev(struct dc_obj_verify_args *dova, daos_obj_id_t oid,
 		cursor->gen++;
 	}
 
-	cursor->type = VOS_ITER_RECX;
+	cursor->type = OBJ_ITER_RECX;
 	iod->iod_type = DAOS_IOD_ARRAY;
 	data = cursor->ptr + cursor->iod_off;
 	while (data < cursor->ptr + dova->kds[idx].kd_key_len) {
@@ -449,7 +448,7 @@ dc_obj_verify_move_cursor(struct dc_obj_verify_args *dova, daos_obj_id_t oid)
 	iod->iod_type = DAOS_IOD_NONE;
 	iod->iod_size = DAOS_SIZE_MAX;
 	memset(iod->iod_recxs, 0, sizeof(*iod->iod_recxs));
-	cursor->type = VOS_ITER_NONE;
+	cursor->type = OBJ_ITER_NONE;
 	if (cursor->kds_idx == dova->num) {
 		if (dova->eof)
 			return 1;
@@ -466,17 +465,20 @@ again:
 	for (i = cursor->kds_idx; i < dova->num;
 	     cursor->ptr += dova->kds[i++].kd_key_len, cursor->kds_idx++) {
 		switch (dova->kds[i].kd_val_type) {
-		case VOS_ITER_DKEY:
+		case OBJ_ITER_DKEY:
 			rc = dc_obj_verify_parse_dkey(dova, oid, gen, i);
 			break;
-		case VOS_ITER_AKEY:
+		case OBJ_ITER_AKEY:
 			rc = dc_obj_verify_parse_akey(dova, oid, gen, i);
 			break;
-		case VOS_ITER_SINGLE:
+		case OBJ_ITER_SINGLE:
 			rc = dc_obj_verify_parse_sv(dova, oid, gen, i);
 			break;
-		case VOS_ITER_RECX:
+		case OBJ_ITER_RECX:
 			rc = dc_obj_verify_parse_ev(dova, oid, gen, i);
+			break;
+		case OBJ_ITER_DKEY_EPOCH:
+		case OBJ_ITER_AKEY_EPOCH:
 			break;
 		default:
 			D_ERROR(DF_OID" invalid type %d\n",
@@ -490,7 +492,7 @@ again:
 
 list:
 	if (dova->eof)
-		return cursor->type == VOS_ITER_NONE ? 1 : 0;
+		return cursor->type == OBJ_ITER_NONE ? 1 : 0;
 
 	dc_obj_verify_reset_cursor(cursor);
 	rc = dc_obj_verify_list(dova);
@@ -520,16 +522,18 @@ dc_obj_verify_cmp(struct dc_obj_verify_args *dova_a,
 	}
 
 	switch (cur_a->type) {
-	case VOS_ITER_NONE:
+	case OBJ_ITER_NONE:
 		/* The end. */
 		break;
-	case VOS_ITER_DKEY:
+	case OBJ_ITER_DKEY_EPOCH:
+	case OBJ_ITER_DKEY:
 		/* Punched dkey, do nothing. */
 		break;
-	case VOS_ITER_AKEY:
+	case OBJ_ITER_AKEY_EPOCH:
+	case OBJ_ITER_AKEY:
 		/* Punched akey, do nothing. */
 		break;
-	case VOS_ITER_RECX:
+	case OBJ_ITER_RECX:
 		if (cur_a->iod.iod_recxs->rx_idx !=
 		    cur_b->iod.iod_recxs->rx_idx) {
 			D_INFO(DF_OID" (reps %u, inconsistent) "
@@ -553,7 +557,7 @@ dc_obj_verify_cmp(struct dc_obj_verify_args *dova_a,
 		}
 
 		/* Fall through. */
-	case VOS_ITER_SINGLE:
+	case OBJ_ITER_SINGLE:
 		if (cur_a->iod.iod_size != cur_b->iod.iod_size) {
 			D_INFO(DF_OID" (reps %u, inconsistent) "
 			       "type %u, shard %u has rec size %lu, "
@@ -661,7 +665,7 @@ dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 			if (rc != 0)
 				goto out;
 		}
-	} while (dova[0].cursor.type != VOS_ITER_NONE);
+	} while (dova[0].cursor.type != OBJ_ITER_NONE);
 
 	rc = dc_obj_verify_check_eof(dova, oid, start, reps);
 

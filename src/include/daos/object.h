@@ -388,6 +388,20 @@ enum daos_io_flags {
 	DIOF_WITH_SPEC_EPOCH	= 0x4,
 };
 
+/**
+ * The type of the packing data for serialization
+ */
+enum {
+	OBJ_ITER_NONE,
+	OBJ_ITER_OBJ,
+	OBJ_ITER_DKEY,
+	OBJ_ITER_AKEY,
+	OBJ_ITER_SINGLE,
+	OBJ_ITER_RECX,
+	OBJ_ITER_DKEY_EPOCH,
+	OBJ_ITER_AKEY_EPOCH,
+};
+
 #define RECX_INLINE	(1U << 0)
 
 struct obj_enum_rec {

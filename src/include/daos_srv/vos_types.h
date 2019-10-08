@@ -117,6 +117,29 @@ typedef enum {
 	VOS_ITER_DTX,
 } vos_iter_type_t;
 
+static inline int
+vos_iter_type_2pack_type(int vos_type)
+{
+	switch (vos_type) {
+	case VOS_ITER_NONE:
+		return OBJ_ITER_NONE;
+	case VOS_ITER_OBJ:
+		return OBJ_ITER_OBJ;
+	case VOS_ITER_DKEY:
+		return OBJ_ITER_DKEY;
+	case VOS_ITER_AKEY:
+		return OBJ_ITER_AKEY;
+	case VOS_ITER_SINGLE:
+		return OBJ_ITER_SINGLE;
+	case VOS_ITER_RECX:
+		return OBJ_ITER_RECX;
+	default:
+		D_ASSERTF(0, "Invalid type %d\n", vos_type);
+	}
+
+	return 0;
+}
+
 /** epoch logic expression for the single value iterator */
 typedef enum {
 	VOS_IT_EPC_LE		= 0,
@@ -151,6 +174,8 @@ enum {
 	VOS_IT_FOR_PURGE	= (1 << 4),
 	/** The iterator is for rebuild scan */
 	VOS_IT_FOR_REBUILD	= (1 << 5),
+	/** Iterate only show punched records in interval */
+	VOS_IT_PUNCHED		= (1 << 6),
 };
 
 /**
@@ -181,15 +206,15 @@ typedef struct {
 
 enum {
 	/** It is unknown if the extent is covered or visible */
-	VOS_RECX_FLAG_UNKNOWN = 0,
+	VOS_VIS_FLAG_UNKNOWN = 0,
 	/** The extent is not visible at at the requested epoch (epr_hi) */
-	VOS_RECX_FLAG_COVERED = (1 << 0),
+	VOS_VIS_FLAG_COVERED = (1 << 0),
 	/** The extent is not visible at at the requested epoch (epr_hi) */
-	VOS_RECX_FLAG_VISIBLE = (1 << 1),
+	VOS_VIS_FLAG_VISIBLE = (1 << 1),
 	/** The extent represents only a portion of the in-tree extent */
-	VOS_RECX_FLAG_PARTIAL = (1 << 2),
+	VOS_VIS_FLAG_PARTIAL = (1 << 2),
 	/** In sorted iterator, marks final entry */
-	VOS_RECX_FLAG_LAST    = (1 << 3),
+	VOS_VIS_FLAG_LAST    = (1 << 3),
 };
 
 /**
@@ -207,13 +232,19 @@ typedef struct {
 	union {
 		/** Returned entry for container UUID iterator */
 		uuid_t				ie_couuid;
-		/** dkey or akey */
-		daos_key_t			ie_key;
+		struct {
+			/** dkey or akey */
+			daos_key_t		ie_key;
+			/** Non-zero if punched */
+			daos_epoch_t		ie_key_punch;
+		};
 		struct {
 			/** The DTX identifier. */
 			struct dtx_id		ie_xid;
 			/** oid */
 			daos_unit_oid_t		ie_oid;
+			/** Non-zero if punched */
+			daos_epoch_t		ie_obj_punch;
 			/* The DTX dkey hash for DTX iteration. */
 			uint64_t		ie_dtx_hash;
 			/* The DTX intent for DTX iteration. */
@@ -232,10 +263,10 @@ typedef struct {
 			daos_csum_buf_t		ie_csum;
 			/** pool map version */
 			uint32_t		ie_ver;
-			/** Flags to describe the extent */
-			uint32_t		ie_recx_flags;
 		};
 	};
+	/* Flags to describe the entry */
+	uint32_t		ie_vis_flags;
 	/** Child iterator type */
 	vos_iter_type_t		ie_child_type;
 } vos_iter_entry_t;

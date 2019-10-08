@@ -98,6 +98,7 @@ vts_pool_fallocate(char **fname)
 		goto exit;
 	}
 	ret = fallocate(fd, 0, 0, VPOOL_16M);
+
 exit:
 	return ret;
 }
@@ -131,8 +132,8 @@ vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
 
 	rc = vos_pool_open(tcx->tc_po_name, tcx->tc_po_uuid, &tcx->tc_po_hdl);
 	if (rc) {
-		print_error("vos pool open %s error: %d\n",
-			    tcx->tc_po_name, rc);
+		print_error("vos pool open %s "DF_UUIDF" error: %d\n",
+			    tcx->tc_po_name, DP_UUID(tcx->tc_po_uuid), rc);
 		goto failed;
 	}
 	tcx->tc_step = TCX_PO_OPEN;
@@ -185,6 +186,7 @@ vts_ctx_fini(struct vos_test_ctx *tcx)
 		rc = vos_pool_destroy(tcx->tc_po_name, tcx->tc_po_uuid);
 		assert_int_equal(rc, 0);
 		/* fallthrough */
+		free(tcx->tc_po_name);
 	}
 	memset(tcx, 0, sizeof(*tcx));
 }
