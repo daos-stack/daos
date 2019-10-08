@@ -508,11 +508,12 @@ key_ilog_fetch(struct vos_object *obj, uint32_t intent,
 	if (rc == -DER_NONEXIST)
 		goto out;
 	if (rc != 0)
-		D_ERROR("Could not fetch ilog: "DF_RC"\n", DP_RC(rc));
+		D_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR,
+			 "Could not fetch ilog: "DF_RC"\n", DP_RC(rc));
 out:
 	ilog_close(loh);
 
-	return 0;
+	return rc;
 }
 
 static int

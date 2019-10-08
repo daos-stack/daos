@@ -1592,4 +1592,7 @@ ilog_fetch_finish(struct ilog_entries *entries)
 
 	if (!daos_handle_is_inval(priv->ip_ih))
 		dbtree_iter_finish(priv->ip_ih);
+
+	if (priv->ip_lctx)
+		ilog_decref(priv->ip_lctx);
 }
