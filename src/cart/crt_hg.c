@@ -852,8 +852,8 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	D_ASSERT(proc != NULL);
 	opc = rpc_tmp.crp_req_hdr.cch_opc;
 
-	/* Set the opcode in the temp RPC so that it can be correctly logged on
-	 * failure
+	/**
+	 * Set the opcode in the temp RPC so that it can be correctly logged.
 	 */
 	rpc_tmp.crp_pub.cr_opc = opc;
 
@@ -890,6 +890,8 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 
 	rpc_priv->crp_opc_info = opc_info;
 	rpc_pub->cr_opc = rpc_tmp.crp_pub.cr_opc;
+	rpc_pub->cr_ep.ep_rank = rpc_priv->crp_req_hdr.cch_rank;
+	rpc_pub->cr_ep.ep_tag = rpc_priv->crp_req_hdr.cch_tag;
 
 	RPC_TRACE(DB_TRACE, rpc_priv,
 		  "(opc: %#x rpc_pub: %p) allocated per RPC request received.\n",
@@ -913,8 +915,6 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		rc = crt_hg_unpack_body(rpc_priv, proc);
 		if (rc == 0) {
 			rpc_priv->crp_input_got = 1;
-			rpc_pub->cr_ep.ep_rank = rpc_priv->crp_req_hdr.cch_rank;
-			rpc_pub->cr_ep.ep_tag = rpc_priv->crp_req_hdr.cch_tag;
 			rpc_pub->cr_ep.ep_grp = NULL;
 			/* TODO lookup by rpc_priv->crp_req_hdr.cch_grp_id */
 		} else {

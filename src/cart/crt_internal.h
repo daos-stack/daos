@@ -65,24 +65,24 @@
 /* A wrapper around D_TRACE_DEBUG that ensures the ptr option is a RPC */
 #define RPC_TRACE(mask, rpc, fmt, ...)					\
 	do {								\
-		D_TRACE_DEBUG(mask, rpc,				\
-			" [opc=0x%x rank:xid=%d:0x%x tag=%d] " fmt,	\
-			rpc->crp_pub.cr_opc,				\
-			rpc->crp_pub.cr_ep.ep_rank,			\
-			rpc->crp_req_hdr.cch_xid,			\
-			rpc->crp_pub.cr_ep.ep_tag,			\
+		D_TRACE_DEBUG(mask, (rpc),				\
+			" [opc=0x%x xid=0x%x rank:tag=%d:%d] " fmt,	\
+			(rpc)->crp_pub.cr_opc,				\
+			(rpc)->crp_req_hdr.cch_xid,			\
+			(rpc)->crp_pub.cr_ep.ep_rank,			\
+			(rpc)->crp_pub.cr_ep.ep_tag,			\
 			## __VA_ARGS__);				\
 	} while (0)
 
 /* Log an error with a RPC descriptor */
 #define RPC_ERROR(rpc, fmt, ...)					\
 	do {								\
-		D_TRACE_ERROR(rpc,					\
-			" [opc=0x%x rank:xid=%d:0x%x tag=%d] " fmt,	\
-			rpc->crp_pub.cr_opc,				\
-			rpc->crp_pub.cr_ep.ep_rank,			\
-			rpc->crp_req_hdr.cch_xid,			\
-			rpc->crp_pub.cr_ep.ep_tag,			\
+		D_TRACE_ERROR((rpc),					\
+			" [opc=0x%x xid=0x%x rank:tag=%d:%d] " fmt,	\
+			(rpc)->crp_pub.cr_opc,				\
+			(rpc)->crp_req_hdr.cch_xid,			\
+			(rpc)->crp_pub.cr_ep.ep_rank,			\
+			(rpc)->crp_pub.cr_ep.ep_tag,			\
 			## __VA_ARGS__);				\
 	} while (0)
 

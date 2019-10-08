@@ -251,6 +251,7 @@ crt_context_create(crt_context_t *crt_ctx)
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
 	*crt_ctx = (crt_context_t)ctx;
+	D_DEBUG(DB_TRACE, "created context (idx %d)\n", ctx->cc_idx);
 
 out:
 	return rc;
@@ -497,6 +498,8 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
 	D_MUTEX_DESTROY(&ctx->cc_mutex);
+	D_DEBUG(DB_TRACE, "destroyed context (idx %d, force %d)\n",
+		ctx->cc_idx, force);
 	D_FREE(ctx);
 
 out:

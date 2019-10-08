@@ -307,7 +307,7 @@ class LogTest():
             print('DEBUG not enabled, No log consistency checking possible')
 
         total_lines = trace_lines + non_trace_lines
-        p_trace = trace_lines / total_lines * 100
+        p_trace = trace_lines * 1.0 / total_lines * 100
 
         print("Pid {}, {} lines total, {} trace ({:.2f}%)".format(pid,
                                                                   total_lines,
