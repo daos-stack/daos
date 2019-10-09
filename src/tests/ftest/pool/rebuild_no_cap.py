@@ -81,7 +81,7 @@ class RebuildNoCap(TestWithServers):
         self.assertTrue(status, "Error confirming pool info after rebuild")
 
         # Kill the server
-        self.pool.start_rebuild(self.server_group, rank, self.d_log)
+        self.pool.start_rebuild([rank], self.d_log)
 
         # Wait for rebuild to start
         self.pool.wait_for_rebuild(True)
