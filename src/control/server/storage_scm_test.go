@@ -31,7 +31,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 
 	. "github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common/proto/ctl"
@@ -81,81 +80,23 @@ func testScmProvider(log logging.Logger, mockIpmctl mockIpmctl, prep PrepScm, ms
 
 // ScmStorage factory with mocked interfaces for testing
 func newMockScmStorage(log logging.Logger, ext External, discoverModulesRet error,
-	mms []scm.Module, inited bool, prep PrepScm, msc *scm.MockSysConfig) *scmStorage {
+	mms []scm.Module, prep PrepScm, msc *scm.MockSysConfig) *scmStorage {
 
 	mic := mockIpmctl{
 		discoverModulesRet: discoverModulesRet,
 		modules:            mms,
 	}
 	return &scmStorage{
-		ext:         ext,
-		provider:    testScmProvider(log, mic, prep, msc),
-		log:         log,
-		initialized: inited,
+		ext:      ext,
+		provider: testScmProvider(log, mic, prep, msc),
+		log:      log,
 	}
 }
 
 func defaultMockScmStorage(log logging.Logger, ext External, msc *scm.MockSysConfig) *scmStorage {
 	m := MockModule()
 
-	return newMockScmStorage(log, ext, nil, []scm.Module{m}, false, newMockPrepScm(), msc)
-}
-
-func TestDiscoverScm(t *testing.T) {
-	mPB := MockModulePB()
-	m := MockModule()
-
-	tests := map[string]struct {
-		inited            bool
-		ipmctlDiscoverRet error
-		errMsg            string
-		expModules        ScmModules
-	}{
-		"already initialized": {
-			true,
-			nil,
-			"",
-			ScmModules(nil),
-		},
-		"normal run": {
-			false,
-			nil,
-			"",
-			ScmModules{mPB},
-		},
-		"results in error": {
-			false,
-			errors.New("ipmctl example failure"),
-			msgIpmctlDiscoverFail + ": ipmctl example failure",
-			ScmModules{mPB},
-		},
-		"discover succeeds but get pmem fails": {
-			false,
-			nil,
-			msgIpmctlDiscoverFail,
-			ScmModules{mPB},
-		},
-	}
-
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)()
-
-			ss := newMockScmStorage(log, nil, tt.ipmctlDiscoverRet,
-				[]scm.Module{m}, tt.inited, newMockPrepScm(), nil)
-
-			if err := ss.Discover(); err != nil {
-				if tt.errMsg != "" {
-					AssertEqual(t, err.Error(), tt.errMsg, "")
-					return
-				}
-				t.Fatal(err)
-			}
-
-			AssertEqual(t, ss.modules, tt.expModules, "unexpected list of modules")
-		})
-	}
+	return newMockScmStorage(log, ext, nil, []scm.Module{m}, defaultMockPrepScm(), msc)
 }
 
 func TestFormatScm(t *testing.T) {
@@ -185,22 +126,6 @@ func TestFormatScm(t *testing.T) {
 		desc       string
 	}{
 		{
-			inited: false,
-			mount:  "/mnt/daos",
-			class:  storage.ScmClassRAM,
-			expResults: ScmMountResults{
-				{
-					Mntpoint: "/mnt/daos",
-					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_APP,
-						Error:  msgScmNotInited,
-					},
-				},
-			},
-			desc: "not initialised",
-		},
-		{
-			inited:    true,
 			mount:     "/mnt/daos",
 			class:     storage.ScmClassRAM,
 			formatted: true,
@@ -216,8 +141,7 @@ func TestFormatScm(t *testing.T) {
 			desc: "already formatted",
 		},
 		{
-			inited: true,
-			class:  storage.ScmClassRAM,
+			class: storage.ScmClassRAM,
 			expResults: ScmMountResults{
 				{
 					Mntpoint: "",
@@ -230,8 +154,7 @@ func TestFormatScm(t *testing.T) {
 			desc: "missing mount point",
 		},
 		{
-			inited: true,
-			mount:  "/mnt/daos",
+			mount: "/mnt/daos",
 			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
@@ -244,10 +167,9 @@ func TestFormatScm(t *testing.T) {
 			desc: "no class",
 		},
 		{
-			inited: true,
-			mount:  "/mnt/daos",
-			class:  storage.ScmClassRAM,
-			size:   6,
+			mount: "/mnt/daos",
+			class: storage.ScmClassRAM,
+			size:  6,
 			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
@@ -257,7 +179,6 @@ func TestFormatScm(t *testing.T) {
 			desc: "ram success",
 		},
 		{
-			inited:    true,
 			mount:     "/mnt/daos",
 			class:     storage.ScmClassRAM,
 			size:      6,
@@ -272,10 +193,9 @@ func TestFormatScm(t *testing.T) {
 			desc: "ram no ndctl installed",
 		},
 		{
-			inited: true,
-			mount:  "/mnt/daos",
-			class:  storage.ScmClassDCPM,
-			devs:   []string{"/dev/pmem0"},
+			mount: "/mnt/daos",
+			class: storage.ScmClassDCPM,
+			devs:  []string{"/dev/pmem0"},
 			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
@@ -285,7 +205,6 @@ func TestFormatScm(t *testing.T) {
 			desc: "dcpm success",
 		},
 		{
-			inited:    true,
 			mount:     "/mnt/daos",
 			class:     storage.ScmClassDCPM,
 			devs:      []string{"/dev/pmem0"},
@@ -300,10 +219,9 @@ func TestFormatScm(t *testing.T) {
 			desc: "dcpm no ndctl installed",
 		},
 		{
-			inited: true,
-			mount:  "/mnt/daos",
-			class:  storage.ScmClassDCPM,
-			devs:   []string{},
+			mount: "/mnt/daos",
+			class: storage.ScmClassDCPM,
+			devs:  []string{},
 			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
@@ -316,10 +234,9 @@ func TestFormatScm(t *testing.T) {
 			desc: "dcpm missing dev",
 		},
 		{
-			inited: true,
-			mount:  "/mnt/daos",
-			class:  storage.ScmClassDCPM,
-			devs:   []string(nil),
+			mount: "/mnt/daos",
+			class: storage.ScmClassDCPM,
+			devs:  []string(nil),
 			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
@@ -332,10 +249,9 @@ func TestFormatScm(t *testing.T) {
 			desc: "dcpm nil devs",
 		},
 		{
-			inited: true,
-			mount:  "/mnt/daos",
-			class:  storage.ScmClassDCPM,
-			devs:   []string{""},
+			mount: "/mnt/daos",
+			class: storage.ScmClassDCPM,
+			devs:  []string{""},
 			expResults: ScmMountResults{
 				{
 					Mntpoint: "/mnt/daos",
@@ -386,7 +302,7 @@ func TestFormatScm(t *testing.T) {
 
 			mockPrep := tt.prep
 			if mockPrep == nil {
-				mockPrep = newMockPrepScm()
+				mockPrep = defaultMockPrepScm()
 			}
 
 			getFsRetStr := "none"
@@ -399,22 +315,19 @@ func TestFormatScm(t *testing.T) {
 				GetfsStr:   getFsRetStr,
 			}
 			ss := newMockScmStorage(log, config.ext, nil, []scm.Module{},
-				false, mockPrep, msc)
+				mockPrep, msc)
 			ss.formatted = tt.formatted
 
 			results := ScmMountResults{}
 
-			if tt.inited {
-				// Discovery is run in SCS.Setup() and is not
-				// fatal, continue with expected errors to
-				// format as in normal program execution.
-				if err := ss.Discover(); err != nil {
-					if tt.expErrMsg != "" {
-						ExpectError(t, err, tt.expErrMsg, tt.desc)
-					} else {
-						// unexpected failure
-						t.Fatal(tt.desc + ": " + err.Error())
-					}
+			// Provider scan is not fatal, continue with expected
+			// errors to format as in normal program execution.
+			if _, err := ss.provider.Scan(scm.ScanRequest{Rescan: true}); err != nil {
+				if tt.expErrMsg != "" {
+					ExpectError(t, err, tt.expErrMsg, tt.desc)
+				} else {
+					// unexpected failure
+					t.Fatal(tt.desc + ": " + err.Error())
 				}
 			}
 
@@ -458,7 +371,7 @@ func TestUpdateScm(t *testing.T) {
 
 			config := defaultMockConfig(t)
 			ss := newMockScmStorage(log, config.ext, nil, []scm.Module{},
-				false, newMockPrepScm(), nil)
+				defaultMockPrepScm(), nil)
 
 			results := ScmModuleResults{}
 

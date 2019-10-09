@@ -24,6 +24,8 @@
 package server
 
 import (
+	"fmt"
+
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
@@ -50,6 +52,38 @@ func newState(log logging.Logger, status ctlpb.ResponseStatus, errMsg string, in
 	return state
 }
 
+func modulesToPB(mms []scm.Module) (pbMms types.ScmModules) {
+	for _, c := range mms {
+		pbMms = append(
+			pbMms,
+			&ctlpb.ScmModule{
+				Loc: &ctlpb.ScmModule_Location{
+					Channel:    c.ChannelID,
+					Channelpos: c.ChannelPosition,
+					Memctrlr:   c.ControllerID,
+					Socket:     c.SocketID,
+				},
+				Physicalid: c.PhysicalID,
+				Capacity:   c.Capacity,
+			})
+	}
+	return
+}
+
+func namespacesToPB(nss []scm.Namespace) (pbNss types.PmemDevices) {
+	for _, ns := range nss {
+		pbNss = append(pbNss,
+			&ctlpb.PmemDevice{
+				Uuid:     ns.UUID,
+				Blockdev: ns.BlockDevice,
+				Dev:      ns.Name,
+				Numanode: ns.NumaNode,
+			})
+	}
+
+	return
+}
+
 func (c *StorageControlService) doNvmePrepare(req *ctlpb.PrepareNvmeReq) (resp *ctlpb.PrepareNvmeResp) {
 	resp = &ctlpb.PrepareNvmeResp{}
 	msg := "Storage Prepare NVMe"
@@ -66,20 +100,6 @@ func (c *StorageControlService) doNvmePrepare(req *ctlpb.PrepareNvmeReq) (resp *
 	}
 
 	resp.State = newState(c.log, ctlpb.ResponseStatus_CTRL_SUCCESS, "", "", msg)
-	return
-}
-
-func translateNamespaces(inDevs []scm.Namespace) (outDevs types.PmemDevices) {
-	for _, dev := range inDevs {
-		outDevs = append(outDevs,
-			&ctlpb.PmemDevice{
-				Uuid:     dev.UUID,
-				Blockdev: dev.BlockDevice,
-				Dev:      dev.Name,
-				Numanode: dev.NumaNode,
-			})
-	}
-
 	return
 }
 
@@ -106,7 +126,7 @@ func (c *StorageControlService) doScmPrepare(req *ctlpb.PrepareScmReq) (resp *ct
 	}
 
 	resp.State = newState(c.log, ctlpb.ResponseStatus_CTRL_SUCCESS, "", info, msg)
-	resp.Pmems = translateNamespaces(pmemDevs)
+	resp.Pmems = namespacesToPB(pmemDevs)
 
 	return
 }
@@ -151,16 +171,20 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 		}
 	}
 
-	modules, pmemDevs, err := c.ScanScm()
+	result, err := c.scm.provider.Scan(scm.ScanRequest{})
 	if err != nil {
 		resp.Scm = &ctlpb.ScanScmResp{
 			State: newState(c.log, ctlpb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg+"SCM"),
 		}
 	} else {
+		msg += fmt.Sprintf("SCM (%s)", result.State)
 		resp.Scm = &ctlpb.ScanScmResp{
-			State:   newState(c.log, ctlpb.ResponseStatus_CTRL_SUCCESS, "", "", msg+"SCM"),
-			Modules: modules,
-			Pmems:   pmemDevs,
+			State: newState(c.log, ctlpb.ResponseStatus_CTRL_SUCCESS, "", "", msg),
+		}
+		if len(result.Namespaces) > 0 {
+			resp.Scm.Pmems = namespacesToPB(result.Namespaces)
+		} else {
+			resp.Scm.Modules = modulesToPB(result.Modules)
 		}
 	}
 

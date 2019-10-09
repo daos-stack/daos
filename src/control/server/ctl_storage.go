@@ -102,8 +102,8 @@ func (c *StorageControlService) Setup() error {
 		return errors.Errorf("%s: missing %v", msgBdevNotFound, missing)
 	}
 
-	if err := c.scm.Setup(); err != nil {
-		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, SCM Setup"))
+	if _, err := c.scm.provider.Scan(scm.ScanRequest{Rescan: true}); err != nil {
+		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, SCM Scan"))
 	}
 
 	return nil
@@ -115,9 +115,8 @@ func (c *StorageControlService) Teardown() {
 		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, NVMe Teardown"))
 	}
 
-	if err := c.scm.Teardown(); err != nil {
-		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, SCM Teardown"))
-	}
+	// TODO: implement provider Reset()
+	//c.scm.provider.scanCompleted = false
 }
 
 type PrepareNvmeRequest struct {
@@ -172,16 +171,8 @@ func (c *StorageControlService) GetScmState() (types.ScmState, error) {
 		return state, errors.Errorf("%s must be run as root or sudo", os.Args[0])
 	}
 
-	if err := c.scm.Setup(); err != nil {
-		return state, errors.WithMessage(err, "SCM setup")
-	}
-
-	if !c.scm.initialized {
-		return state, errors.New(msgScmNotInited)
-	}
-
-	if len(c.scm.modules) == 0 {
-		return state, errors.New(msgScmNoModules)
+	if _, err := c.scm.provider.Scan(scm.ScanRequest{Rescan: true}); err != nil {
+		return state, errors.WithMessage(err, "SCM Scan")
 	}
 
 	return c.scm.provider.GetState()
@@ -213,13 +204,9 @@ func (c *StorageControlService) ScanNvme() (types.NvmeControllers, error) {
 	return c.nvme.controllers, nil
 }
 
-// ScanScm scans locally attached modules and returns list directly.
+// ScanScm scans locally attached modules, namespaces and state of DCPM config.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
-func (c *StorageControlService) ScanScm() (types.ScmModules, types.PmemDevices, error) {
-	if err := c.scm.Discover(); err != nil {
-		return nil, nil, errors.Wrap(err, "SCM storage scan")
-	}
-
-	return c.scm.modules, c.scm.pmemDevs, nil
+func (c *StorageControlService) ScanScm() (*scm.ScanResponse, error) {
+	return c.scm.provider.Scan(scm.ScanRequest{Rescan: true})
 }

@@ -38,7 +38,7 @@ func MockPmemDevice() scm.Namespace {
 
 // mock implementation of PrepScm interface for external testing
 type mockPrepScm struct {
-	pmemDevs         []scm.Namespace
+	namespaces       []scm.Namespace
 	prepNeedsReboot  bool
 	resetNeedsReboot bool
 	prepRet          error
@@ -49,20 +49,33 @@ type mockPrepScm struct {
 }
 
 func (mp *mockPrepScm) Prep(ScmState) (bool, []scm.Namespace, error) {
-	return mp.prepNeedsReboot, mp.pmemDevs, mp.prepRet
+	return mp.prepNeedsReboot, mp.namespaces, mp.prepRet
 }
 func (mp *mockPrepScm) PrepReset(ScmState) (bool, error) {
-	return mp.resetNeedsReboot, mp.resetRet
+	if mp.resetRet != nil {
+		return false, mp.resetRet
+	}
+	return mp.resetNeedsReboot, nil
 }
 func (mp *mockPrepScm) GetState() (ScmState, error) {
-	return mp.currentState, mp.getStateRet
+	if mp.getStateRet != nil {
+		return ScmStateUnknown, mp.getStateRet
+	}
+	return mp.currentState, nil
 }
 func (mp *mockPrepScm) GetNamespaces() ([]scm.Namespace, error) {
-	return mp.pmemDevs, mp.getNamespacesRet
+	if mp.getNamespacesRet != nil {
+		return nil, mp.getNamespacesRet
+	}
+	return mp.namespaces, nil
 }
 
-func newMockPrepScm() PrepScm {
-	return &mockPrepScm{}
+func newMockPrepScm(nss []scm.Namespace, getNsRet error) PrepScm {
+	return &mockPrepScm{namespaces: nss, getNamespacesRet: getNsRet}
+}
+
+func defaultMockPrepScm() PrepScm {
+	return newMockPrepScm([]scm.Namespace{MockPmemDevice()}, nil)
 }
 
 // tests moved to storage/scm/ipmctl_test.go

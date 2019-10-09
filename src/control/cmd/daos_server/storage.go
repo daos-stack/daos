@@ -58,11 +58,16 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 		cmd.log.Infof("NVMe SSD controller and constituent namespaces:\n%s", controllers)
 	}
 
-	modules, pmems, err := svc.ScanScm()
+	scmRes, err := svc.ScanScm()
 	if err != nil {
 		scanErrors = append(scanErrors, err)
 	} else {
-		cmd.log.Infof("SCM modules:\n%s\nPMEM device files:\n%s", modules, pmems)
+		cmd.log.Infof("SCM (%s):")
+		if len(scmRes.Namespaces) > 0 {
+			cmd.log.Infof("PMEM device files:\n%s", scmRes.Namespaces)
+		} else {
+			cmd.log.Infof("Modules:\n%s", scmRes.Modules)
+		}
 	}
 
 	if len(scanErrors) > 0 {

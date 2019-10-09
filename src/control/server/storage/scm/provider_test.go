@@ -68,6 +68,20 @@ func TestProviderScan(t *testing.T) {
 		getStateErr     error
 		expResponse     *ScanResponse
 	}{
+		"no modules": {
+			discoverRes: []Module{},
+			expResponse: &ScanResponse{
+				Modules: []Module{},
+			},
+		},
+		"no namespaces": {
+			discoverRes:     []Module{defaultModule},
+			getNamespaceRes: []Namespace{},
+			expResponse: &ScanResponse{
+				Modules:    []Module{defaultModule},
+				Namespaces: []Namespace{},
+			},
+		},
 		"ok": {
 			expResponse: &ScanResponse{
 				Modules:    []Module{defaultModule},
