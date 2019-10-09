@@ -156,7 +156,6 @@ def storage_prep(path, hosts, user=None, hugepages="4096", nvme=False,
     """
     # Create and setup the command
     dmg = DmgCommand(path)
-    dmg.sudo = True
     dmg.insecure.value = insecure
     dmg.hostlist.value = hosts
     dmg.request.value = "storage"
@@ -197,7 +196,6 @@ def storage_reset(path, hosts, nvme=False, scm=False, user=None,
     """
     # Create and setup the command
     dmg = DmgCommand(path)
-    dmg.sudo = True
     dmg.insecure.value = insecure
     dmg.hostlist.value = hosts
     dmg.request.value = "storage"
@@ -205,8 +203,7 @@ def storage_reset(path, hosts, nvme=False, scm=False, user=None,
     dmg.get_action_command()
     dmg.action_command.nvmeonly.value = nvme
     dmg.action_command.scmonly.value = scm
-    dmg.action_command.targetuser.value = getpass.getuser() \
-        if user is None else user
+    dmg.action_command.targetuser.value = user
     dmg.action_command.hugepages.value = hugepages
     dmg.action_command.reset.value = True
     dmg.action_command.force.value = True

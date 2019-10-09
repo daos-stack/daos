@@ -45,7 +45,7 @@ from command_utils import BasicParameter, FormattedParameter, ExecutableCommand
 from command_utils import ObjectWithParameters, CommandFailure
 from command_utils import DaosCommand, Orterun, CommandWithParameters
 from general_utils import pcmd, get_file_path
-from dmg_utils import storage_format, storage_reset
+from dmg_utils import storage_format
 from write_host_file import write_host_file
 
 SESSIONS = {}
@@ -107,7 +107,6 @@ class DaosServer(DaosCommand):
         """
         patterns = {
             "format": "SCM format required",
-            "postformat": "Starting I/O server instance",
             "chowner": "running as root, changing file ownership",
             "normal": "DAOS I/O server.*started",
         }
@@ -412,23 +411,33 @@ class ServerManager(ExecutableCommand):
             # Format storage and wait for server to change ownership
             self.log.info("Formatting hosts: <%s>", self._hosts)
             storage_format(self.daosbinpath, ",".join(servers_with_ports))
+
+            # Check for server to have changed ownership.
             self.runner.job.mode = "chowner"
             try:
                 self.runner.job.check_subprocess_status(self.runner.process)
             except CommandFailure as error:
                 self.log.info("Failed to start after format: %s", str(error))
 
+            # Stop the server in case it didn't finish after chowner
             try:
                 self.log.info("Stopping servers started as root")
                 self.runner.stop()
             except CommandFailure as error:
-                raise ServerFailed("Failed to stop servers:{}".format(error))
+                raise ServerFailed(
+                    "Failed to stop servers after format: {}".format(error))
 
-            # Restart server as non root user and check if started
+            # Setup server for run as non-root user
             self.log.info("Starting server as non-root user: <%s>", self._hosts)
             storage_prepare(self._hosts, getpass.getuser())
             self.runner.job.sudo = False
-            self.runner.job.mode = "postformat"
+            self.runner.job.mode = "normal"
+
+            # Clean spdk pci lock file
+            self.log.info("Cleanup of /tmp/spdk_pci_lock file")
+            pcmd(self._hosts, "sudo rm -f /tmp/spdk_pci_lock_0000\\:*", False)
+
+            # Restart server as non root user and check if started
             try:
                 self.run()
             except CommandFailure as details:
@@ -443,18 +452,12 @@ class ServerManager(ExecutableCommand):
 
     def stop(self):
         """Stop the server through the runner."""
-        if self.runner.job.yaml_params.is_nvme() or \
-           self.runner.job.yaml_params.is_scm():
-            # Setup the hostlist to pass to dmg command
-            servers_with_ports = [
-                "{}:{}".format(host, self.runner.job.yaml_params.port)
-                for host in self._hosts]
-            storage_reset(
-                self.daosbinpath, ",".join(servers_with_ports), nvme=True)
-
         self.log.info("Stopping servers")
         try:
             self.runner.stop()
+            if self.runner.job.yaml_params.is_nvme() or \
+               self.runner.job.yaml_params.is_scm():
+                storage_reset(self._hosts)
         except CommandFailure as error:
             raise ServerFailed("Failed to stop servers:{}".format(error))
 
@@ -508,6 +511,21 @@ def storage_prepare(hosts, user):
     result = pcmd(hosts, cmd, timeout=120)
     if len(result) > 1 or 0 not in result:
         raise ServerFailed("Error preparing NVMe storage")
+
+
+def storage_reset(hosts):
+    """
+    Reset the Storage on servers using the DAOS server's yaml settings file.
+    Args:
+        hosts (str): a string of comma-separated host names
+    Raises:
+        ServerFailed: if server failed to reset storage
+    """
+    daos_srv_bin = get_file_path("bin/daos_server")
+    cmd = "sudo {} storage prepare -n --reset -f".format(daos_srv_bin[0])
+    result = pcmd(hosts, cmd)
+    if len(result) > 1 or 0 not in result:
+        raise ServerFailed("Error resetting NVMe storage")
 
 
 SESSIONS = {}
