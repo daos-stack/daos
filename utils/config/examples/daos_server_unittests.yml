@@ -28,7 +28,7 @@ servers:
   first_core: 0             # offset of the first core for service xstreams
   nr_xs_helpers: 0          # count of offload/helper xstreams per target
   fabric_iface: lo          # map to OFI_INTERFACE=lo
-  log_mask: DEBUG,RPC=ERR,MEM=ERR
+  log_mask: INFO #DEBUG,RPC=ERR,MEM=ERR
   log_file: /tmp/server.log # map to D_LOG_FILE=/tmp/server.log
 
   # Environment variable values should be supplied without encapsulating quotes.

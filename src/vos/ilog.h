@@ -130,13 +130,15 @@ ilog_destroy(struct umem_instance *umm, struct ilog_desc_cbs *cbs,
  *  exists, nothing will be logged and the function will succeed.
  *
  *  \param	loh[in]		Open log handle
+ *  \param	epr[in]		Limiting range
  *  \param	epoch[in]	Epoch of update
  *  \param	punch[in]	Punch if true, update otherwise
  *
  *  \return 0 on success, error code on failure
  */
 int
-ilog_update(daos_handle_t loh, daos_epoch_t epoch, bool punch);
+ilog_update(daos_handle_t loh, const daos_epoch_range_t *epr,
+	    daos_epoch_t epoch, bool punch);
 
 /** Updates specified log entry to mark it as persistent (remove
  * the transaction identifier from the entry.   Additionally, this will
@@ -175,14 +177,14 @@ ilog_aggregate(daos_handle_t loh, const daos_epoch_range_t *epr);
 /** Incarnation log entry description */
 struct ilog_entry {
 	/** The epoch and tx_id for the log entry */
-	struct ilog_id		ie_id;
+	struct ilog_id	ie_id;
 	/** If true, entry is a punch, otherwise, it's a creation */
-	bool			ie_punch;
+	bool		ie_punch;
 	/** The status of the incarnation log entry.  See enum ilog_status */
-	uint32_t		ie_status;
+	int32_t		ie_status;
 };
 
-#define ILOG_PRIV_SIZE 224
+#define ILOG_PRIV_SIZE 240
 /** Structure for storing the full incarnation log for ilog_fetch.  The
  * fields shouldn't generally be accessed directly but via the iteration
  * APIs below.
@@ -200,27 +202,33 @@ struct ilog_entries {
  *
  *  \param	entries[in]	Allocated structure where entries are stored
  */
-void ilog_fetch_init(struct ilog_entries *entries);
+void
+ilog_fetch_init(struct ilog_entries *entries);
 
 /** Fetch the entire incarnation log.  This function will refresh only when
  * the underlying log or the intent has changed.  If the struct is shared
  * between multiple ULT's fetch should be done after every yield.
  *
- *  \param	loh[in]		Open log handle
+ *  \param	umm[in]		The umem instance
+ *  \param	root[in]	Pointer to log root
+ *  \param	cbs[in]		Incarnation log transaction log callbacks
  *  \param	intent[in]	The intent of the operation
  *  \param	entries[in,out]	Allocated structure passed in will be filled
  *				with incarnation log entries in the range.
  *
  *  \return 0 on success, error code on failure
  */
-int ilog_fetch(daos_handle_t loh, uint32_t intent,
-	       struct ilog_entries *entries);
+int
+ilog_fetch(struct umem_instance *umm, struct ilog_df *root,
+	   const struct ilog_desc_cbs *cbs, uint32_t intent,
+	   struct ilog_entries *entries);
 
 /** Deallocate any memory associated with an ilog_entries struct for fetch
  *
  *  \param	entries[in]	Allocated structure to be finalized
  */
-void ilog_fetch_finish(struct ilog_entries *entries);
+void
+ilog_fetch_finish(struct ilog_entries *entries);
 
 /** Iterator for fetched incarnation log entries
  *

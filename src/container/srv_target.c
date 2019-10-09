@@ -1677,7 +1677,15 @@ ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, ds_iter_cb_t callback,
 			break;
 		}
 
-		vos_iter_next(iter_h);
+		rc = vos_iter_next(iter_h);
+		if (rc != 0) {
+			/* reach to the end of the container */
+			if (rc == -DER_NONEXIST)
+				rc = 0;
+			else
+				D_ERROR("Fetch obj failed: %d\n", rc);
+			break;
+		}
 	}
 
 iter_fini:
