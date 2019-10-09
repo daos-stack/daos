@@ -27,7 +27,6 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"path/filepath"
 
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
@@ -98,37 +97,29 @@ func newDefaultConfiguration(ext External) *Configuration {
 // GetConfig loads a configuration file from the path given,
 // or from the default location if none is provided.  It returns a populated
 // Configuration struct based upon the default values and any config file overrides.
-func GetConfig(log logging.Logger, ConfigPath string) (*Configuration, error) {
-	config := NewConfiguration()
+func GetConfig(log logging.Logger, ConfigPath string) (config *Configuration, err error) {
+	config = NewConfiguration()
 	if ConfigPath != "" {
 		log.Debugf("Overriding default config path with: %s", ConfigPath)
 		config.Path = ConfigPath
 	}
 
-	if !filepath.IsAbs(config.Path) {
-		newPath, err := common.GetAbsInstallPath(config.Path)
-		if err != nil {
-			return nil, errors.Wrap(err, "resolving install path")
-		}
-
-		config.Path = newPath
-	}
-
-	_, err := os.Stat(config.Path)
+	config.Path, err = common.ResolvePath(config.Path)
 	if err != nil {
 		if os.IsNotExist(err) && ConfigPath == "" {
-			log.Debugf("No configuration file found; using default values")
+			log.Debugf("No config file supplied; using default values")
+			config.Path = ""
 			return config, nil
 		}
-		return nil, errors.Wrapf(err, "failed to stat config file %s", config.Path)
+		return nil, errors.Wrap(err, "resolving config file path")
 	}
 
-	if err := config.LoadConfig(); err != nil {
+	if err = config.LoadConfig(); err != nil {
 		return nil, errors.Wrapf(err, "parsing config file %s", config.Path)
 	}
 	log.Debugf("DAOS Client config read from %s", config.Path)
 
-	return config, nil
+	return
 }
 
 // LoadConfig reads the configuration file specified by Configuration.Path

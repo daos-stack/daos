@@ -46,13 +46,43 @@ const (
 	UtilLogDepth = 4
 )
 
-// GetAbsInstallPath retrieves absolute path of files in daos install dir
-func GetAbsInstallPath(relPath string) (string, error) {
+// CurrentExecPath retrieves absolute path of this executable.
+func CurrentExecPath() (string, error) {
 	ex, err := os.Executable()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(filepath.Dir(ex), "..", relPath), nil
+	return filepath.Dir(ex), nil
+}
+
+// GetAbsPath retrieves absolute from relative path.
+func GetAbsPath(path string) (string, error) {
+	if filepath.IsAbs(path) {
+		return path, nil
+	}
+	curDir, err := CurrentExecPath()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(curDir, path), nil
+}
+
+// ResolvePath retrieves absolute if relative and verifies existence.
+func ResolvePath(path string) (string, error) {
+	path, err := GetAbsPath(path)
+	if err != nil {
+		return "", errors.Wrapf(err, "lookup absolute path")
+	}
+
+	_, err = os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			log.Debugf("Config file %s could not be found!", path)
+		}
+		return "", err
+	}
+
+	return path, nil
 }
 
 // GetFilePaths return full file paths in given directory with

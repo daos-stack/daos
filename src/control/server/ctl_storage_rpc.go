@@ -335,12 +335,7 @@ func (c *ControlService) StorageBurnIn(req *ctlpb.StorageBurnInReq, stream ctlpb
 func (c *ControlService) FetchFioConfigPaths(
 	empty *ctlpb.EmptyReq, stream ctlpb.MgmtCtl_FetchFioConfigPathsServer) error {
 
-	pluginDir, err := common.GetAbsInstallPath(spdkFioPluginDir)
-	if err != nil {
-		return err
-	}
-
-	paths, err := common.GetFilePaths(pluginDir, "fio")
+	paths, err := common.GetFilePaths(c.nvme.fioPluginDir, "fio")
 	if err != nil {
 		return err
 	}

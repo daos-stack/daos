@@ -63,7 +63,8 @@ type External interface {
 	mkdir(string) error
 	remove(string) error
 	exists(string) (bool, error)
-	getAbsInstallPath(string) (string, error)
+	getAbsPath(string) (string, error)
+	resolvePath(string) (string, error)
 	lookupUser(string) (*user.User, error)
 	lookupGroup(string) (*user.Group, error)
 	listGroups(*user.User) ([]string, error)
@@ -239,8 +240,12 @@ func (e *ext) exists(path string) (bool, error) {
 	return false, nil
 }
 
-func (e *ext) getAbsInstallPath(path string) (string, error) {
-	return common.GetAbsInstallPath(path)
+func (e *ext) getAbsPath(path string) (string, error) {
+	return common.GetAbsPath(path)
+}
+
+func (e *ext) resolvePath(path string) (string, error) {
+	return common.ResolvePath(path)
 }
 
 func (e *ext) lookupUser(userName string) (*user.User, error) {

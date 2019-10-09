@@ -39,7 +39,7 @@ func getDefaultConfig(t *testing.T) *client.Configuration {
 	t.Helper()
 
 	defaultConfig := client.NewConfiguration()
-	absPath, err := common.GetAbsInstallPath(defaultConfig.Path)
+	absPath, err := common.GetAbsPath(defaultConfig.Path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,6 +64,7 @@ func TestLoadConfigDefaultsNoFile(t *testing.T) {
 	defer common.ShowBufferOnFailure(t, buf)()
 
 	defaultConfig := getDefaultConfig(t)
+	defaultConfig.Path = "" // resultant path should be empty if not parsed
 
 	cfg, err := client.GetConfig(log, "")
 	if err != nil {

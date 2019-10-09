@@ -41,7 +41,7 @@ import (
 
 const (
 	configOut                = ".daos_server.active.yml"
-	relConfExamplesPath      = "utils/config/examples/"
+	relConfExamplesPath      = "../utils/config/examples/"
 	msgBadConfig             = "insufficient config file, see examples in "
 	msgConfigNoProvider      = "provider not specified in config"
 	msgConfigNoPath          = "no config path set"
@@ -369,20 +369,12 @@ func (c *Configuration) SetNvmeShmID(base string) {
 }
 
 // SetPath sets the default path to the configuration file.
-func (c *Configuration) SetPath(path string) error {
+func (c *Configuration) SetPath(path string) (err error) {
 	if path != "" {
-		c.Path = path
+		c.Path, err = c.ext.resolvePath(path)
 	}
 
-	if !filepath.IsAbs(c.Path) {
-		newPath, err := c.ext.getAbsInstallPath(c.Path)
-		if err != nil {
-			return err
-		}
-		c.Path = newPath
-	}
-
-	return nil
+	return
 }
 
 // saveActiveConfig saves read-only active config, tries config dir then /tmp/
@@ -410,7 +402,7 @@ func (c *Configuration) Validate() (err error) {
 	// TODO: use a fault/resolution
 	defer func() {
 		if err != nil {
-			examplesPath, _ := c.ext.getAbsInstallPath(relConfExamplesPath)
+			examplesPath, _ := c.ext.getAbsPath(relConfExamplesPath)
 			err = errors.WithMessage(err, msgBadConfig+examplesPath)
 		}
 	}()

@@ -33,7 +33,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
-var jsonDBRelPath = "share/daos/control/mgmtinit_db.json"
+var jsonDBRelPath = "../share/daos/control/mgmtinit_db.json"
 
 // ControlService implements the control plane control service, satisfying
 // ctlpb.MgmtCtlServer, and is the data container for the service.
@@ -64,7 +64,7 @@ func NewControlService(l logging.Logger, h *IOServerHarness, sp *scm.Provider, c
 
 // loadInitData retrieves initial data from relative file path.
 func loadInitData(relPath string) (m FeatureMap, err error) {
-	absPath, err := common.GetAbsInstallPath(relPath)
+	absPath, err := common.GetAbsPath(relPath)
 	if err != nil {
 		return
 	}

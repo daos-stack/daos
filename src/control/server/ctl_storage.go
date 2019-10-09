@@ -34,6 +34,8 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
+const spdkSetupPath = "../share/daos/control/setup_spdk.sh"
+
 // StorageControlService encapsulates the storage part of the control service
 type StorageControlService struct {
 	log             logging.Logger
@@ -45,7 +47,7 @@ type StorageControlService struct {
 // DefaultStorageControlService returns a initialized *StorageControlService
 // with default behaviour
 func DefaultStorageControlService(log logging.Logger, cfg *Configuration) (*StorageControlService, error) {
-	scriptPath, err := cfg.ext.getAbsInstallPath(spdkSetupPath)
+	scriptPath, err := cfg.ext.getAbsPath(spdkSetupPath)
 	if err != nil {
 		return nil, err
 	}

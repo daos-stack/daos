@@ -41,9 +41,8 @@ import (
 )
 
 const (
-	spdkSetupPath      = "share/daos/control/setup_spdk.sh"
-	spdkFioPluginDir   = "share/daos/spdk/fio_plugin"
-	fioExecPath        = "bin/fio"
+	spdkFioPluginDir   = "../share/daos/spdk/fio_plugin"
+	fioExecPath        = "../bin/fio"
 	defaultNrHugepages = 1024
 	nrHugepagesEnv     = "_NRHUGE"
 	targetUserEnv      = "_TARGET_USER"
@@ -136,15 +135,16 @@ func (s *spdkSetup) reset() error {
 // for accessing Nvme devices (API) as well as storing device
 // details.
 type nvmeStorage struct {
-	log         logging.Logger
-	ext         External
-	env         spdk.ENV  // SPDK ENV interface
-	nvme        spdk.NVME // SPDK NVMe interface
-	spdk        SpdkSetup // SPDK shell configuration interface
-	shmID       int
-	controllers types.NvmeControllers
-	initialized bool
-	formatted   bool
+	log          logging.Logger
+	ext          External
+	env          spdk.ENV  // SPDK ENV interface
+	nvme         spdk.NVME // SPDK NVMe interface
+	spdk         SpdkSetup // SPDK shell configuration interface
+	shmID        int
+	fioPluginDir string // SPDK FIO plugin directory path
+	controllers  types.NvmeControllers
+	initialized  bool
+	formatted    bool
 }
 
 func (n *nvmeStorage) hasControllers(pciAddrs []string) (missing []string, ok bool) {
@@ -421,19 +421,18 @@ func (n *nvmeStorage) BurnIn(pciAddr string, nsID int32, configPath string) (
 		return
 	}
 
-	pluginDir := ""
-	pluginDir, err = n.ext.getAbsInstallPath(spdkFioPluginDir)
+	n.fioPluginDir, err = n.ext.getAbsPath(spdkFioPluginDir)
 	if err != nil {
 		return
 	}
 
-	fioPath, err = n.ext.getAbsInstallPath(fioExecPath)
+	fioPath, err = n.ext.getAbsPath(fioExecPath)
 	if err != nil {
 		return
 	}
 
 	// run fio with spdk plugin specified in LD_PRELOAD env
-	env = fmt.Sprintf("LD_PRELOAD=%s/fio_plugin", pluginDir)
+	env = fmt.Sprintf("LD_PRELOAD=%s/fio_plugin", n.fioPluginDir)
 	// limitation of fio_plugin for spdk is that traddr needs
 	// to not contain colon chars, convert to full-stops
 	// https://github.com/spdk/spdk/tree/master/examples/nvme/fio_plugin .
