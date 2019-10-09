@@ -89,8 +89,8 @@ RUN chown daos.daos /mnt/daos
 ARG JENKINS_URL=""
 ARG QUICKBUILD=1
 RUN if [ $QUICKBUILD -eq 0 ]; then                                               \
-        for repo in openpa libfabric pmix ompi mercury spdk isa-l fio dpdk       \
-                    protobuf-c fuse pmdk argobots raft cart@daos_devel1; do      \
+        for repo in openpa libfabric pmix ompi mercury spdk@PR-9 isa-l fio dpdk@PR-6       \
+                    protobuf-c fuse pmdk@PR-6 argobots raft cart@daos_devel1; do      \
             branch="master";                                                     \
             build_number="lastSuccessfulBuild";                                  \
             if [[ $repo = *@* ]]; then                                           \
