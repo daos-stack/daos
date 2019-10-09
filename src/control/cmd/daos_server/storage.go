@@ -143,7 +143,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		// Pass evaluated state to avoid running GetScmState() twice.
 		needsReboot, devices, err := svc.PrepareScm(server.PrepareScmRequest{
 			Reset: cmd.Reset,
-		}, state)
+		})
 		if err != nil {
 			return concatErrors(scanErrors, err)
 		}
