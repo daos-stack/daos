@@ -242,7 +242,7 @@ out_err:
 	return ret;
 }
 
-bool
+void
 dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		const char *name)
 {
