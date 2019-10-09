@@ -78,7 +78,7 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
 
     denv = env.Clone()
-    prereqs.require(denv, 'pmdk', 'fio', 'spdk')
+    prereqs.require(denv, 'spdk', 'hwloc', 'ofi')
 
     # if SPDK_PREFIX differs from PREFIX, copy dir so files can be accessed at
     # runtime
@@ -142,8 +142,7 @@ def scons():
 
     install_go_bin(denv, gosrc, gopath, None, "agent", "daos_agent")
 
-    gospdkpath = join(gosrc, "vendor", "github.com", "daos-stack", "go-spdk",
-                      "spdk")
+    gospdkpath = join(gosrc, "lib", "spdk")
 
     # CGO prerequisite libs for go-spdk bindings
     denv.AppendUnique(CPPPATH=[join(gospdkpath, "include")])
@@ -180,16 +179,17 @@ def scons():
 
     senv.AppendENVPath(
         "CGO_LDFLAGS",
-        senv.subst("-L%s -L$SPDK_PREFIX/lib -L$PREFIX/opt/isal/lib "
-                   " $_RPATH" % gopath) + \
+        denv.subst("-L%s -L$SPDK_PREFIX/lib -L$HWLOC_PREFIX/lib"
+                   " -L$OFI_PREFIX/lib $_RPATH" % gopath) + \
                    " -lspdk -lspdk_env_dpdk -lspdk_nvme -lspdk_util " + \
                    " -lspdk_sock -lspdk_log " + \
                    " -lrte_mempool -lrte_mempool_ring -lrte_bus_pci" + \
                    " -lrte_pci -lrte_ring -lrte_mbuf -lrte_eal -lrte_kvargs" + \
                    " -lnuma -ldl -lisal")
-    senv.AppendENVPath(
+    denv.AppendENVPath(
         "CGO_CFLAGS",
-        senv.subst("-I$SPDK_PREFIX/include"))
+        denv.subst("-I$SPDK_PREFIX/include -I$HWLOC_PREFIX/include"
+                   " -I$OFI_PREFIX/include"))
 
     # copy server init files to be used at runtime, explicitly
     # remove first because recursive Delete() on dir fails.

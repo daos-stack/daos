@@ -72,6 +72,7 @@ struct bio_desc;
 struct bio_io_context;
 /* Opaque per-xstream context */
 struct bio_xs_context;
+struct bio_blobstore;
 
 /**
  * Header for SPDK blob per VOS pool
@@ -98,6 +99,7 @@ struct bio_dev_state {
 	uint32_t	 bds_bio_read_errs;
 	uint32_t	 bds_bio_write_errs;
 	uint32_t	 bds_bio_unmap_errs;
+	uint32_t	 bds_checksum_errs;
 	uint16_t	 bds_temperature; /* in Kelvin */
 	/* Critical warnings */
 	uint8_t		 bds_temp_warning	: 1;
@@ -438,5 +440,18 @@ bio_yield(void)
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
 	ABT_thread_yield();
 }
+
+/*
+ * Helper function to get the device health state for a given xstream.
+ * Used for querying the BIO health information from the control plane command.
+ *
+ * \param dev_state	[OUT]	BIO device health state
+ * \param xs		[IN]	xstream context
+ *
+ * \return			Zero on success, negative value on error
+ */
+int bio_get_dev_state(struct bio_dev_state *dev_state,
+		      struct bio_xs_context *xs);
+
 
 #endif /* __BIO_API_H__ */

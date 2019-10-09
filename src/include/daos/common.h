@@ -47,7 +47,6 @@
 #include <cart/api.h>
 #include <daos_types.h>
 #include <daos_prop.h>
-#include <daos/checksum.h>
 
 #define DF_OID		DF_U64"."DF_U64
 #define DP_OID(o)	(o).hi, (o).lo
@@ -78,6 +77,12 @@ struct daos_tree_overhead {
 	int				to_record_msize;
 };
 
+/** Points to a byte in an iov, in an sgl */
+struct daos_sgl_idx {
+	uint32_t	iov_idx;
+	daos_off_t	iov_offset;
+};
+
 /*
  * Each thread has DF_UUID_MAX number of thread-local buffers for UUID strings.
  * Each debug message can have at most this many DP_UUIDs.
@@ -94,6 +99,11 @@ char *DP_UUID(const void *uuid);
 /* For prefixes of error messages about a container */
 #define DF_CONT			DF_UUID"/"DF_UUID
 #define DP_CONT(puuid, cuuid)	DP_UUID(puuid), DP_UUID(cuuid)
+
+char *daos_key2str(daos_key_t *key);
+
+#define DF_KEY			"[%d] %s"
+#define DP_KEY(key)		(int)(key)->iov_len, daos_key2str(key)
 
 static inline uint64_t
 daos_u64_hash(uint64_t val, unsigned int bits)
@@ -198,6 +208,46 @@ daos_size_t daos_sgl_buf_size(d_sg_list_t *sgl);
 daos_size_t daos_sgls_buf_size(d_sg_list_t *sgls, int nr);
 daos_size_t daos_sgls_packed_size(d_sg_list_t *sgls, int nr,
 				  daos_size_t *buf_size);
+
+/**
+ * Request a buffer of length \a bytes_needed from the sgl starting at
+ * index \a idx. The length of the resulting buffer will be the number
+ * of requested bytes if available in the indexed I/O vector or the max bytes
+ * that can be taken from the indexed I/O vector. The index will be incremented
+ * to point to just after the buffer returned. If the end of an I/O vector is
+ * reached then the index will point to the beginning of the next. It is
+ * possible for the index reach past the SGL. In this case the function will
+ * return true, meaning the end was reached.
+ *
+ * @param[in]		sgl		sgl to be read from
+ * @param[in/out]	idx		index into the sgl to start reading from
+ * @param[in]		buf_len_req	number of bytes requested
+ * @param[out]		buf		resulting pointer to buffer
+ * @param[out]		buf_len		length of buffer
+ *
+ * @return		true if end of SGL was reached
+ */
+bool daos_sgl_get_bytes(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
+			size_t buf_len_req,
+			uint8_t **buf, size_t *buf_len);
+
+typedef int (*daos_sgl_process_cb)(uint8_t *buf, size_t len, void *args);
+/**
+ * Process bytes of an SGL. The process callback will be called for
+ * each contiguous set of bytes provided in the SGL's I/O vectors.
+ *
+ * @param sgl		sgl to process
+ * @param idx		index to keep track of what's been processed
+ * @param requested_bytes		number of bytes to process
+ * @param process_cb	callback function for the processing
+ * @param cb_args	arguments for the callback function
+ *
+ * @return		Result of the callback function.
+ *			Expectation is 0 is success.
+ */
+int daos_sgl_processor(d_sg_list_t *sgl, struct daos_sgl_idx *idx,
+		       size_t requested_bytes,
+		       daos_sgl_process_cb process_cb, void *cb_args);
 
 char *daos_str_trimwhite(char *str);
 int daos_iov_copy(d_iov_t *dst, d_iov_t *src);
@@ -370,6 +420,7 @@ enum {
 	DSS_KEY_FAIL_VALUE,
 	DSS_KEY_FAIL_NUM,
 	DSS_REBUILD_RES_PERCENTAGE,
+	DSS_DISABLE_AGGREGATION,
 	DSS_KEY_NUM,
 };
 
@@ -391,7 +442,7 @@ daos_fail_value_get(void);
 int
 daos_fail_init(void);
 void
-daos_fail_fini();
+daos_fail_fini(void);
 
 /**
  * DAOS FAIL Mask
@@ -470,6 +521,11 @@ enum {
 #define DAOS_DTX_LOST_RPC_REQUEST	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x33)
 #define DAOS_DTX_LOST_RPC_REPLY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x34)
 #define DAOS_DTX_LONG_TIME_RESEND	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x35)
+
+#define DAOS_VC_DIFF_REC		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x40)
+#define DAOS_VC_DIFF_DKEY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x41)
+#define DAOS_VC_LOST_DATA		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x42)
+#define DAOS_VC_LOST_REPLICA		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x43)
 
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
 

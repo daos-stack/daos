@@ -719,7 +719,7 @@ out_client:
 out_creation:
 	if (rc != 0)
 		ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, &psid, ranks,
-				  true /* destroy */);
+				  NULL, true /* destroy */);
 out_ranks:
 	d_rank_list_free(ranks);
 out:
@@ -730,14 +730,20 @@ int
 ds_pool_svc_destroy(const uuid_t pool_uuid)
 {
 	char		id[DAOS_UUID_STR_SIZE];
-	d_iov_t	psid;
+	d_iov_t		psid;
+	d_rank_list_t	excluded = { 0 };
 	crt_group_t    *group;
 	int		rc;
 
 	ds_rebuild_leader_stop(pool_uuid, -1);
+	rc = ds_pool_get_ranks(pool_uuid, MAP_RANKS_DOWN, &excluded);
+	if (rc)
+		return rc;
+
 	d_iov_set(&psid, (void *)pool_uuid, sizeof(uuid_t));
 	rc = ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, &psid, NULL /* ranks */,
-			       true /* destroy */);
+			       &excluded, true /* destroy */);
+	map_ranks_fini(&excluded);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to destroy pool service: %d\n",
 			DP_UUID(pool_uuid), rc);
@@ -1734,7 +1740,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	struct pool_connect_in	       *in = crt_req_get(rpc);
 	struct pool_connect_out	       *out = crt_reply_get(rpc);
 	struct pool_svc		       *svc;
-	struct pool_buf			*map_buf;
+	struct pool_buf		       *map_buf;
 	uint32_t			map_version;
 	struct rdb_tx			tx;
 	d_iov_t				key;
@@ -1845,18 +1851,6 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 		D_GOTO(out_pool_prop, rc = -DER_NO_PERM);
 	}
 
-	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to read pool map: %d\n",
-			DP_UUID(svc->ps_uuid), rc);
-		D_GOTO(out, rc);
-	}
-
-	rc = transfer_map_buf(map_buf, map_version, svc, rpc, in->pci_map_bulk,
-			      &out->pco_map_buf_size);
-	if (rc != 0)
-		D_GOTO(out_map_version, rc);
-
 	/*
 	 * Transfer the pool map to the client before adding the pool handle,
 	 * so that we don't need to worry about rolling back the transaction
@@ -1865,6 +1859,17 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	 * completes, then we simply return the error and the client will throw
 	 * its pool_buf away.
 	 */
+	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to read pool map: %d\n",
+			DP_UUID(svc->ps_uuid), rc);
+		D_GOTO(out_pool_prop, rc);
+	}
+	rc = transfer_map_buf(map_buf, map_version, svc, rpc, in->pci_map_bulk,
+			      &out->pco_map_buf_size);
+	if (rc != 0)
+		D_GOTO(out_pool_prop, rc);
+
 	if (skip_update)
 		D_GOTO(out_pool_prop, rc = 0);
 

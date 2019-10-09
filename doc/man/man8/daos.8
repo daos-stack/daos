@@ -1,0 +1,174 @@
+.\" (C) Copyright 2015-2019 Intel Corporation.
+.\"
+.\" Licensed under the Apache License, Version 2.0 (the "License");
+.\" you may not use this file except in compliance with the License.
+.\" You may obtain a copy of the License at
+.\"
+.\"    http://www.apache.org/licenses/LICENSE-2.0
+.\"
+.\" Unless required by applicable law or agreed to in writing, software
+.\" distributed under the License is distributed on an "AS IS" BASIS,
+.\" WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+.\" See the License for the specific language governing permissions and
+.\" limitations under the License.
+.\"
+.\" GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+.\" The Government's rights to use, modify, reproduce, release, perform, display,
+.\" or disclose this software are subject to the terms of the Apache License as
+.\" provided in Contract No. B609815.
+.\" Any reproduction of computer software, computer software documentation, or
+.\" portions thereof marked with this legend must also reproduce the markings.
+.\"
+.TH daos 8 2019-09-17 "0.0.1" "DAOS Utilities"
+.SH NAME
+daos \- command to manage DAOS pool/container/object
+.SH SYNOPSIS
+.br
+.B daos RESOURCE COMMAND \fR[\fBOPTION\fRs]
+.SH DESCRIPTION
+.B daos
+can be used to manage/query a pool content, create/query/manage/destroy a
+container inside a pool or query/manage an object inside a container.
+.br
+The \fBRESOURCE\fRs, respective \fBCOMMAND\fRs and \fBOPTION\fRs supported by \fBdaos\fR are listed below.
+.SH RESOURCE\fRs/\fBCOMMAND\fRs/\fBOPTION\fRs
+.br
+.TP
+.B RESOURCE\fRs:
+	  \fBpool\fR             pool
+.br
+	  \fBcontainer \fR(\fBcont\fR) container in a pool
+.br
+	  \fBobject \fR(\fBobj\fR)     object in a container
+.br
+	  \fBhelp\fR             print this message and exit
+.TP
+.I pool \fBCOMMAND\fRs:
+	  \fBlist-containers\fR  list all containers in pool
+.br
+	  \fBlist-cont\fR
+.br
+	  \fBquery\fR            query a pool
+.br
+	  \fBstat\fR             get pool statistics
+.br
+	  \fBlist-attrs\fR       list pool user-defined attributes
+.br
+	  \fBget-attr\fR         get pool user-defined attribute
+.br
+.TP
+.I pool \fBOPTION\fRs:
+	  \fB--pool=\fRUUID        pool UUID
+.br
+	  \fB--sys-name=\fRSTR     DAOS system name context for servers ("daos_server")
+.br
+	  \fB--sys=\fRSTR
+.br
+	  \fB--svc=\fRRANKS        pool service replicas like 1,2,3
+.br
+	  \fB--attr=\fRNAME        pool attribute name to get
+.br
+.TP
+.I container \fR(\fIcont\fR) \fBCOMMAND\fRs:
+	  \fBcreate\fR           create a container
+.br
+	  \fBdestroy\fR          destroy a container
+.br
+	  \fBlist-objects\fR     list all objects in container
+.br
+	  \fBlist-obj\fR
+.br
+	  \fBquery\fR            query a container
+.br
+	  \fBstat\fR             get container statistics
+.br
+	  \fBlist-attrs\fR       list container user-defined attributes
+.br
+	  \fBdel-attr\fR         delete container user-defined attribute
+.br
+	  \fBget-attr\fR         get container user-defined attribute
+.br
+	  \fBset-attr\fR         set container user-defined attribute
+.br
+	  \fBcreate-snap\fR      create container snapshot (optional name)
+.br
+				    at most recent committed epoch
+.br
+	  \fBlist-snaps\fR       list container snapshots taken
+.br
+	  \fBdestroy-snap\fR     destroy container snapshots
+.br
+				    by name, epoch or range
+.br
+	  \fBrollback\fR         roll back container to specified snapshot
+.TP
+.I container \fBOPTION\fRs (create by UUID):
+	  <\fIpool\fR options>   (\fB--pool\fR, \fB--sys-name\fR, \fB--svc\fR)
+.br
+	  \fB--cont=\fRUUID      (optional) container UUID (or generated)
+.TP
+.I container \fBOPTION\fRs (create and link to namespace path):
+	  <\fIpool\fR/\fIcont\fR opts>   (\fB--pool\fR, \fB--sys-name\fR, \fB--svc\fR, \fB--cont\fR [optional])
+.br
+	  \fB--path=\fRPATHSTR     container namespace path to be created and provide a direct link to new DAOS container
+.br
+	  \fB--type=\fRCTYPESTR    container type (HDF5, POSIX)
+.br
+	  \fB--oclass=\fROCLSSTR   container object class
+.br
+				      (ex: S{1,2,4,X}, RP_2G{1,2,4,X}, RP_3G{1,2,4,X}, RP_4G{1,2,4,X}, RP_XSF)
+.br
+	  \fB--chunk_size=\fRBYTES chunk size of files created. Supports suffixes:
+.br
+				      K (KB), M (MB), G (GB), T (TB), P (PB), E (EB)
+.TP
+.I container \fBOPTION\fRs (destroy):
+	  \fB--force\fR            destroy container regardless of state
+.TP
+.I container \fBOPTION\fRs (query, and all commands except create):
+	  <\fIpool\fR options>   with \fB--cont\fR use: (\fB--pool\fR, \fB--sys-name\fR, \fB--svc\fR)
+.br
+	  <\fIpool\fR options>   with \fB--path\fR use: (\fB--sys-name\fR, \fB--svc\fR)
+.br
+	  \fB--cont=\fRUUID        (mandatory, or use \fB--path\fR)
+.br
+	  \fB--path=\fRPATHSTR     (mandatory, or use \fB--cont\fR)
+.br
+                        namespace path must provide direct link to DAOS container
+.TP
+.I container \fBOPTION\fRs (attribute-related):
+	  \fB--attr=\fRNAME        container attribute name to set, get, del
+.br
+	  \fB--value=\fRVALUESTR   container attribute value to set
+.TP
+.I container \fBOPTION\fRs (snapshot and rollback-related):
+	  \fB--snap=\fRNAME        container snapshot (create/destroy-snap, rollback)
+.br
+	  \fB--epc=\fREPOCHNUM     container epoch (destroy-snap, rollback)
+.br
+	  \fB--eprange=\fRB-E      container epoch range (destroy-snap)
+.TP
+.I object \fR(\fIobj\fR) \fBCOMMAND\fRs:
+	  \fBquery\fR            query an object's layout
+.br
+	  \fBlist-keys\fR        list an object's keys
+.br
+	  \fBdump\fR             dump an object's contents
+.TP
+.I object \fR(\fIobj\fR) \fBOPTION\fRs:
+	  <\fIpool\fR options>   (\fB--pool\fR, \fB--sys-name\fR, \fB--svc\fR)
+.br
+	  <\fIcont\fR options>   (\fB--cont\fR)
+.br
+	  \fB--oid=\fRHI.LO        object ID
+
+.SH COLOPHON
+This page is part of the Distributed Asynchronous Object Storage (DAOS)
+exascale storage project.
+.br
+The project git reposity
+can be found at:
+\%https://github.com/daos-stack/daos.git .
+.br
+Bugs can be reported at:
+\%https://jira.hpdd.intel.com/projects/DAOS/.

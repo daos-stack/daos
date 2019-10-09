@@ -29,7 +29,7 @@
 #include <daos/object.h>	/* for daos_unit_oid_compare() */
 #include "vos_internal.h"
 
-#define AGG_CREDITS_MAX		80000
+#define AGG_CREDITS_MAX		256
 /*
  * EV tree sorted iterator returns logical entry in extent start order, and
  * the information like: physical entry it belongs to, visibility, is it the
@@ -239,6 +239,14 @@ vos_agg_obj(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	if (agg_param->ap_discard) {
+		if (agg_param->ap_sub_tree_empty) {
+			rc = vos_obj_evict_by_oid(vos_obj_cache_current(),
+						vos_hdl2cont(agg_param->ap_coh),
+						entry->ie_oid);
+			if (rc != 0)
+				return rc;
+		}
+
 		rc = agg_discard_parent(ih, entry, agg_param, acts);
 		agg_param->ap_sub_tree_empty = 0;
 		return rc;
@@ -265,8 +273,8 @@ vos_agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 		agg_param->ap_dkey = entry->ie_key;
 		memset(&agg_param->ap_akey, 0, sizeof(agg_param->ap_akey));
 	} else if (!agg_param->ap_discard) {
-		D_DEBUG(DB_EPC, "Skip dkey:[%s] aggregation on re-probe\n",
-			(char *)entry->ie_key.iov_buf);
+		D_DEBUG(DB_EPC, "Skip dkey: "DF_KEY" aggregation on re-probe\n",
+			DP_KEY(&entry->ie_key));
 		*acts |= VOS_ITER_CB_SKIP;
 	}
 
@@ -385,8 +393,8 @@ vos_agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 	if (vos_agg_key_compare(agg_param->ap_akey, entry->ie_key)) {
 		agg_param->ap_akey = entry->ie_key;
 	} else if (!agg_param->ap_discard) {
-		D_DEBUG(DB_EPC, "Skip akey:[%s] aggregation on re-probe\n",
-			(char *)entry->ie_key.iov_buf);
+		D_DEBUG(DB_EPC, "Skip akey: "DF_KEY" aggregation on re-probe\n",
+			DP_KEY(&entry->ie_key));
 		*acts |= VOS_ITER_CB_SKIP;
 	}
 
@@ -1496,7 +1504,6 @@ vos_aggregate_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	if (cont->vc_abort_aggregation) {
 		D_DEBUG(DB_EPC, "VOS aggregation aborted\n");
 		cont->vc_abort_aggregation = 0;
-		cont->vc_in_aggregation = 0;
 		return 1;
 	}
 
@@ -1528,17 +1535,8 @@ static int
 aggregate_enter(struct vos_container *cont, bool discard)
 {
 	if (cont->vc_in_aggregation) {
-		D_ERROR(DF_CONT": Already in ggregation. discard:%d\n",
+		D_ERROR(DF_CONT": Already in aggregation. discard:%d\n",
 			DP_CONT(cont->vc_pool->vp_id, cont->vc_id), discard);
-
-		/*
-		 * The container will be eventually aggregated on next time
-		 * when the aggregation being triggered by metadata server.
-		 *
-		 * TODO: This can be improved by tracking the new requested
-		 * aggregation epoch range in vos_container, and start new
-		 * aggregation immediately after current one is done.
-		 */
 		return -DER_BUSY;
 	}
 
@@ -1604,8 +1602,10 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr)
 	iter_param.ip_flags |= VOS_IT_FOR_PURGE;
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
 			 vos_aggregate_cb, &agg_param);
-	if (rc != 0)
+	if (rc != 0) {
+		close_merge_window(&agg_param.ap_window, rc);
 		goto exit;
+	}
 
 	/*
 	 * Update LAE, when aggregating for snapshot deletion, the

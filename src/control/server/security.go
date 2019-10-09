@@ -38,7 +38,7 @@ import (
 
 const moduleID int32 = C.DRPC_MODULE_SECURITY_AGENT
 
-// TODO: Get Method IDs from the IO server header file, when it exists
+// TODO: Get Method IDs from the IO server header file, when it Exists
 const (
 	methodSetAcl     int32 = 104
 	methodGetAcl     int32 = 105

@@ -44,6 +44,7 @@
 #include <tests_lib.h>
 #include <daos_mgmt.h>
 #include <daos/common.h>
+#include <daos/checksum.h>
 
 #include "common_utils.h"
 
@@ -102,7 +103,7 @@ struct ioreq {
 	daos_event_t		ev;
 	daos_key_t		dkey;
 	daos_key_t		akey;
-	d_iov_t		val_iov[IOREQ_SG_IOD_NR][IOREQ_SG_NR];
+	d_iov_t			val_iov[IOREQ_SG_IOD_NR][IOREQ_SG_NR];
 	d_sg_list_t		sgl[IOREQ_SG_IOD_NR];
 	daos_csum_buf_t		csum;
 	char			csum_buf[UPDATE_CSUM_SIZE];
@@ -176,7 +177,8 @@ ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
 	}
 
 	/* init csum */
-	daos_csum_set(&req->csum, &req->csum_buf[0], UPDATE_CSUM_SIZE);
+	dcb_set(&req->csum, &req->csum_buf[0], UPDATE_CSUM_SIZE,
+		UPDATE_CSUM_SIZE, 1, 0);
 
 	/* init record extent */
 	for (i = 0; i < IOREQ_SG_IOD_NR; i++) {
@@ -237,7 +239,7 @@ open_container(struct container_info *oc_info)
 {
 	int              rc;
 	unsigned int     flag = DAOS_PC_EX;
-	daos_pool_info_t pinfo;
+	daos_pool_info_t pinfo = {0};
 	daos_cont_info_t cinfo;
 
 	rc = daos_pool_connect(oc_info->pool_uuid, oc_info->server_group,

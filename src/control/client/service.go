@@ -26,7 +26,7 @@ package client
 import (
 	"golang.org/x/net/context"
 
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 // KillRank Will terminate server running at given rank on pool specified by
@@ -35,9 +35,8 @@ func (c *connList) KillRank(uuid string, rank uint32) ResultMap {
 	results := make(ResultMap)
 	mc := c.controllers[0]
 
-	resp, err := mc.getCtlClient().KillRank(
-		context.Background(),
-		&pb.DaosRank{PoolUuid: uuid, Rank: rank})
+	resp, err := mc.getSvcClient().KillRank(context.Background(),
+		&mgmtpb.DaosRank{PoolUuid: uuid, Rank: rank})
 
 	result := ClientResult{mc.getAddress(), resp, err}
 	results[result.Address] = result

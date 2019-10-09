@@ -1148,6 +1148,8 @@ main(int argc, char **argv)
 	int		opt;
 	int		rc;
 
+	d_register_alt_assert(mock_assert);
+
 	gettimeofday(&tv, NULL);
 	srand(tv.tv_usec);
 

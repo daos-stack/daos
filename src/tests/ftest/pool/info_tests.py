@@ -62,7 +62,7 @@ class InfoTests(TestWithServers):
         # Verify the pool information
         checks = {
             "pi_uuid": self.pool.uuid,
-            # "pi_ntargets": len(self.hostlist_servers) * targets,  DAOS-2799
+            "pi_ntargets": len(self.hostlist_servers) * targets,
             "pi_nnodes": len(self.hostlist_servers),
             "pi_ndisabled": 0,
             "pi_map_ver": 1,
@@ -73,7 +73,7 @@ class InfoTests(TestWithServers):
         self.assertTrue(status, "Invlaid pool information detected prior")
         checks = {
             "s_total": (self.pool.scm_size.value, 0),
-            "s_free": (self.pool.scm_size.value - (256 * pool_targets), 0),
+            #"s_free": (self.pool.scm_size.value - (256 * pool_targets), 0),
         }
         status = self.pool.check_pool_daos_space(**checks)
         self.assertTrue(status, "Invlaid pool space information detected")
