@@ -122,6 +122,7 @@ func TestStorageScan(t *testing.T) {
 				},
 				Scm: &ScanScmResp{
 					Modules: ScmModules{pbModule},
+					Pmems:   PmemDevices{MockPmemDevicePB()},
 					State:   new(ResponseState),
 				},
 			}, "", "",
@@ -174,6 +175,7 @@ func TestStorageScan(t *testing.T) {
 				},
 				Scm: &ScanScmResp{
 					Modules: ScmModules{pbModule},
+					Pmems:   PmemDevices{MockPmemDevicePB()},
 					State:   new(ResponseState),
 				},
 			}, "", "",
@@ -191,6 +193,7 @@ func TestStorageScan(t *testing.T) {
 				},
 				Scm: &ScanScmResp{
 					Modules: ScmModules{pbModule},
+					Pmems:   PmemDevices{MockPmemDevicePB()},
 					State:   new(ResponseState),
 				},
 			}, "", "",
@@ -208,6 +211,7 @@ func TestStorageScan(t *testing.T) {
 				},
 				Scm: &ScanScmResp{
 					Modules: ScmModules{pbModule},
+					Pmems:   PmemDevices{MockPmemDevicePB()},
 					State:   new(ResponseState),
 				},
 			}, "", "",
@@ -260,7 +264,7 @@ func TestStorageScan(t *testing.T) {
 			config := tt.config
 			cs := mockControlService(t, log, config, nil)
 			cs.scm = newMockScmStorage(log, config.ext, tt.ipmctlDiscoverRet,
-				[]scm.Module{module}, false, newMockPrepScm(), nil)
+				[]scm.Module{module}, false, defaultMockPrepScm(), nil)
 			cs.nvme = newMockNvmeStorage(
 				log, config.ext,
 				newMockSpdkEnv(tt.spdkInitEnvRet),
@@ -407,7 +411,7 @@ func TestStoragePrepare(t *testing.T) {
 			cs := defaultMockControlService(t, log)
 			cs.scm = newMockScmStorage(log, config.ext, nil,
 				[]scm.Module{module}, false,
-				&mockPrepScm{pmemDevs: tt.outPmems}, nil)
+				&mockPrepScm{namespaces: tt.outPmems}, nil)
 			cs.nvme = newMockNvmeStorage(log, config.ext, newMockSpdkEnv(nil),
 				newMockSpdkNvme(log, "", "", []spdk.Controller{ctrlr},
 					[]spdk.Namespace{MockNamespace(&ctrlr)},

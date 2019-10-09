@@ -98,42 +98,36 @@ func newMockScmStorage(log logging.Logger, ext External, discoverModulesRet erro
 func defaultMockScmStorage(log logging.Logger, ext External, msc *scm.MockSysConfig) *scmStorage {
 	m := MockModule()
 
-	return newMockScmStorage(log, ext, nil, []scm.Module{m}, false, newMockPrepScm(), msc)
+	return newMockScmStorage(log, ext, nil, []scm.Module{m}, false, defaultMockPrepScm(), msc)
 }
 
 func TestDiscoverScm(t *testing.T) {
-	mPB := MockModulePB()
 	m := MockModule()
+	n := MockPmemDevice()
 
 	tests := map[string]struct {
 		inited            bool
 		ipmctlDiscoverRet error
-		errMsg            string
-		expModules        ScmModules
+		getNsRet          error
+		expErr            error
+		expModules        []scm.Module
+		expNamespaces     []scm.Namespace
 	}{
 		"already initialized": {
-			true,
-			nil,
-			"",
-			ScmModules(nil),
+			inited: true,
 		},
 		"normal run": {
-			false,
-			nil,
-			"",
-			ScmModules{mPB},
+			expModules:    []scm.Module{m},
+			expNamespaces: []scm.Namespace{n},
 		},
 		"results in error": {
-			false,
-			errors.New("ipmctl example failure"),
-			msgIpmctlDiscoverFail + ": ipmctl example failure",
-			ScmModules{mPB},
+			ipmctlDiscoverRet: errors.New("ipmctl example failure"),
+			expErr:            errors.New(msgIpmctlDiscoverFail + ": ipmctl example failure"),
 		},
 		"discover succeeds but get pmem fails": {
-			false,
-			nil,
-			msgIpmctlDiscoverFail,
-			ScmModules{mPB},
+			getNsRet:   errors.New("ipmctl example failure"),
+			expErr:     errors.New(msgIpmctlDiscoverFail + ": ipmctl example failure"),
+			expModules: []scm.Module{m},
 		},
 	}
 
@@ -142,18 +136,20 @@ func TestDiscoverScm(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)()
 
+			prep := newMockPrepScm([]scm.Namespace{n}, tt.getNsRet)
 			ss := newMockScmStorage(log, nil, tt.ipmctlDiscoverRet,
-				[]scm.Module{m}, tt.inited, newMockPrepScm(), nil)
+				[]scm.Module{m}, tt.inited, prep, nil)
 
 			if err := ss.Discover(); err != nil {
-				if tt.errMsg != "" {
-					AssertEqual(t, err.Error(), tt.errMsg, "")
+				if tt.expErr != nil {
+					ExpectError(t, err, tt.expErr.Error(), "different error in discover")
 					return
 				}
 				t.Fatal(err)
 			}
 
 			AssertEqual(t, ss.modules, tt.expModules, "unexpected list of modules")
+			AssertEqual(t, ss.namespaces, tt.expNamespaces, "unexpected list of namespaces")
 		})
 	}
 }
@@ -386,7 +382,7 @@ func TestFormatScm(t *testing.T) {
 
 			mockPrep := tt.prep
 			if mockPrep == nil {
-				mockPrep = newMockPrepScm()
+				mockPrep = defaultMockPrepScm()
 			}
 
 			getFsRetStr := "none"
@@ -458,7 +454,7 @@ func TestUpdateScm(t *testing.T) {
 
 			config := defaultMockConfig(t)
 			ss := newMockScmStorage(log, config.ext, nil, []scm.Module{},
-				false, newMockPrepScm(), nil)
+				false, defaultMockPrepScm(), nil)
 
 			results := ScmModuleResults{}
 

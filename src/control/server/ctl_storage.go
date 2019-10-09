@@ -216,10 +216,12 @@ func (c *StorageControlService) ScanNvme() (types.NvmeControllers, error) {
 // ScanScm scans locally attached modules and returns list directly.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
-func (c *StorageControlService) ScanScm() (types.ScmModules, types.PmemDevices, error) {
+func (c *StorageControlService) ScanScm() ([]scm.Module, []scm.Namespace, error) {
 	if err := c.scm.Discover(); err != nil {
 		return nil, nil, errors.Wrap(err, "SCM storage scan")
 	}
 
-	return c.scm.modules, c.scm.pmemDevs, nil
+	c.log.Debugf("pmem namesmaces: %#v\n", c.scm.namespaces)
+
+	return c.scm.modules, c.scm.namespaces, nil
 }

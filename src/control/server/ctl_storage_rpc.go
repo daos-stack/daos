@@ -50,6 +50,38 @@ func newState(log logging.Logger, status ctlpb.ResponseStatus, errMsg string, in
 	return state
 }
 
+func translateModules(mms []scm.Module) (pbMms types.ScmModules) {
+	for _, c := range mms {
+		pbMms = append(
+			pbMms,
+			&ctlpb.ScmModule{
+				Loc: &ctlpb.ScmModule_Location{
+					Channel:    c.ChannelID,
+					Channelpos: c.ChannelPosition,
+					Memctrlr:   c.ControllerID,
+					Socket:     c.SocketID,
+				},
+				Physicalid: c.PhysicalID,
+				Capacity:   c.Capacity,
+			})
+	}
+	return
+}
+
+func translateNamespaces(nss []scm.Namespace) (pbNss types.PmemDevices) {
+	for _, ns := range nss {
+		pbNss = append(pbNss,
+			&ctlpb.PmemDevice{
+				Uuid:     ns.UUID,
+				Blockdev: ns.BlockDevice,
+				Dev:      ns.Name,
+				Numanode: ns.NumaNode,
+			})
+	}
+
+	return
+}
+
 func (c *StorageControlService) doNvmePrepare(req *ctlpb.PrepareNvmeReq) (resp *ctlpb.PrepareNvmeResp) {
 	resp = &ctlpb.PrepareNvmeResp{}
 	msg := "Storage Prepare NVMe"
@@ -66,20 +98,6 @@ func (c *StorageControlService) doNvmePrepare(req *ctlpb.PrepareNvmeReq) (resp *
 	}
 
 	resp.State = newState(c.log, ctlpb.ResponseStatus_CTRL_SUCCESS, "", "", msg)
-	return
-}
-
-func translateNamespaces(inDevs []scm.Namespace) (outDevs types.PmemDevices) {
-	for _, dev := range inDevs {
-		outDevs = append(outDevs,
-			&ctlpb.PmemDevice{
-				Uuid:     dev.UUID,
-				Blockdev: dev.BlockDevice,
-				Dev:      dev.Name,
-				Numanode: dev.NumaNode,
-			})
-	}
-
 	return
 }
 
@@ -131,9 +149,7 @@ func (c *StorageControlService) StoragePrepare(ctx context.Context, req *ctlpb.S
 }
 
 // StorageScan discovers non-volatile storage hardware on node.
-func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScanReq) (
-	*ctlpb.StorageScanResp, error) {
-
+func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScanReq) (*ctlpb.StorageScanResp, error) {
 	c.log.Debug("received StorageScan RPC")
 
 	msg := "Storage Scan "
@@ -151,7 +167,7 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 		}
 	}
 
-	modules, pmemDevs, err := c.ScanScm()
+	modules, namespaces, err := c.ScanScm()
 	if err != nil {
 		resp.Scm = &ctlpb.ScanScmResp{
 			State: newState(c.log, ctlpb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg+"SCM"),
@@ -159,8 +175,8 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 	} else {
 		resp.Scm = &ctlpb.ScanScmResp{
 			State:   newState(c.log, ctlpb.ResponseStatus_CTRL_SUCCESS, "", "", msg+"SCM"),
-			Modules: modules,
-			Pmems:   pmemDevs,
+			Modules: translateModules(modules),
+			Pmems:   translateNamespaces(namespaces),
 		}
 	}
 

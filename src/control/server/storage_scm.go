@@ -54,8 +54,8 @@ type scmStorage struct {
 	log         logging.Logger
 	provider    *scm.Provider
 	ext         External
-	modules     types.ScmModules
-	pmemDevs    types.PmemDevices
+	modules     []scm.Module
+	namespaces  []scm.Namespace
 	initialized bool
 	formatted   bool
 }
@@ -78,7 +78,7 @@ func (s *scmStorage) Teardown() error {
 }
 
 // Prep configures pmem device files for SCM
-func (s *scmStorage) Prep() (needsReboot bool, pmemDevs []scm.Namespace, err error) {
+func (s *scmStorage) Prep() (needsReboot bool, namespaces []scm.Namespace, err error) {
 	res, err := s.provider.Prepare(scm.PrepareRequest{})
 	if err != nil {
 		return
@@ -110,33 +110,15 @@ func (s *scmStorage) Discover() error {
 		// dep, whose presence is only enforced when installed via RPM).
 		s.initialized = true
 
-		s.modules = loadModules(res.Modules)
+		s.modules = res.Modules
 		// noop if ndctl failed
-		s.pmemDevs = translateNamespaces(res.Namespaces)
+		s.namespaces = res.Namespaces
 	}
 	if err != nil {
 		return errors.WithMessage(err, msgIpmctlDiscoverFail)
 	}
 
 	return nil
-}
-
-func loadModules(mms []scm.Module) (pbMms types.ScmModules) {
-	for _, c := range mms {
-		pbMms = append(
-			pbMms,
-			&ctlpb.ScmModule{
-				Loc: &ctlpb.ScmModule_Location{
-					Channel:    c.ChannelID,
-					Channelpos: c.ChannelPosition,
-					Memctrlr:   c.ControllerID,
-					Socket:     c.SocketID,
-				},
-				Physicalid: c.PhysicalID,
-				Capacity:   c.Capacity,
-			})
-	}
-	return
 }
 
 // newMntRet creates and populates NVMe ctrlr result and logs error through
