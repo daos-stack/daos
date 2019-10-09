@@ -57,6 +57,7 @@ TEST_RPC_ERR_SRC = 'test_rpc_error.c'
 CRT_RPC_TESTS = ['rpc_test_cli.c', 'rpc_test_srv.c', 'rpc_test_srv2.c']
 SWIM_TESTS = ['test_swim.c', 'test_swim_net.c']
 HLC_TESTS = ['test_hlc_net.c']
+TEST_GROUP_NP_TESTS = ['test_group_np_srv.c', 'test_group_np_cli.c']
 
 def scons():
     """scons function"""
@@ -98,6 +99,11 @@ def scons():
 
     for test in HLC_TESTS:
         target = tenv.Program(test)
+        tenv.Requires(target, [cart_lib, gurt_lib])
+        tenv.Install(os.path.join("$PREFIX", 'TESTING', 'tests'), target)
+
+    for test in TEST_GROUP_NP_TESTS:
+        target = tenv.Program([test, COMMON_SRC])
         tenv.Requires(target, [cart_lib, gurt_lib])
         tenv.Install(os.path.join("$PREFIX", 'TESTING', 'tests'), target)
 

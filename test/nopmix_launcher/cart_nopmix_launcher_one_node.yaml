@@ -23,3 +23,12 @@ tests: !mux
     cli_bin: ../bin/crt_launch
     cli_arg: "-c -e tests/no_pmix_launcher_client"
     cli_ppn: "1"
+  test_group_np:
+    name: test_group_basic
+    srv_bin: ../bin/crt_launch
+    srv_arg: "-e tests/test_group_np_srv --name server_grp"
+    srv_ppn: "1"
+    srv_slt: "2"
+    cli_bin: ../bin/crt_launch
+    cli_arg: "-c -e tests/test_group_np_cli --name client_grp --attach_to server_grp"
+    cli_ppn: "1"

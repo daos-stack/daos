@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2019 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,98 +35,90 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * This file is a simple test of the crt_barrier API
+ * This is a simple example of cart test_group server, running with no pmix.
  */
-#include <pthread.h>
-#include <cart/api.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <stdint.h>
+#include <assert.h>
+#include <getopt.h>
+#include <semaphore.h>
 
 #include "tests_common.h"
+#include "test_group_rpc.h"
+#include "test_group_np_common.h"
 
-#define NUM_BARRIERS 20
-
-static int g_barrier_count;
-
-struct proc_info {
-	d_rank_t	rank;
-	d_rank_t	grp_rank;
-	int		barrier_num;
-	int		complete;
-};
-
-static void
-barrier_complete_cb(struct crt_barrier_cb_info *cb_info)
+void
+test_run(void)
 {
-	struct proc_info	*info;
+	crt_group_t	*grp = NULL;
+	uint32_t	 grp_size;
+	int		i;
+	int		rc = 0;
 
-	info = (struct proc_info *)cb_info->bci_arg;
+	tc_srv_start_basic(test_g.t_local_group_name, &test_g.t_crt_ctx[0],
+			   &test_g.t_tid[0], grp, &grp_size);
 
-	D_ASSERTF(cb_info->bci_rc == 0, "Barrier failed %d\n", cb_info->bci_rc);
+	rc = sem_init(&test_g.t_token_to_proceed, 0, 0);
+	D_ASSERTF(rc == 0, "sem_init() failed.\n");
 
-	D_ASSERTF(info->barrier_num == g_barrier_count,
-		  "Out of order barrier completion, %d != %d\n",
-		  info->barrier_num, g_barrier_count);
-	g_barrier_count++;
-	info->complete = 1;
-	printf("Hello from rank %d (%d), num %d\n", info->rank,
-	       info->grp_rank, info->barrier_num);
-	fflush(stdout);
+	test_g.t_fault_attr_1000 = d_fault_attr_lookup(1000);
+	test_g.t_fault_attr_5000 = d_fault_attr_lookup(5000);
+
+	rc = crt_proto_register(&my_proto_fmt_test_group1);
+	D_ASSERTF(rc == 0, "crt_proto_register() failed. rc: %d\n",
+			rc);
+
+	for (i = 1; i < test_g.t_srv_ctx_num; i++) {
+		rc = crt_context_create(&test_g.t_crt_ctx[i]);
+		D_ASSERTF(rc == 0, "crt_context_create() failed. rc: %d\n", rc);
+		rc = pthread_create(&test_g.t_tid[i], NULL, tc_progress_fn,
+				    &test_g.t_crt_ctx[i]);
+		D_ASSERTF(rc == 0, "pthread_create() failed. rc: %d\n", rc);
+	}
+
+	if (test_g.t_hold)
+		sleep(test_g.t_hold_time);
+
+	for (i = 0; i < test_g.t_srv_ctx_num; i++) {
+		rc = pthread_join(test_g.t_tid[i], NULL);
+	if (rc != 0)
+		fprintf(stderr, "pthread_join failed. rc: %d\n", rc);
+		D_DEBUG(DB_TEST, "joined progress thread.\n");
+	}
+
+	rc = sem_destroy(&test_g.t_token_to_proceed);
+	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");
+
+	rc = crt_finalize();
+	D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
+
+	d_log_fini();
+
+	D_DEBUG(DB_TEST, "exiting.\n");
 }
 
 int main(int argc, char **argv)
 {
-	struct proc_info	*info;
-	void			*check_ret;
-	crt_context_t		 crt_ctx;
-	d_rank_t		 my_rank;
-	int			 i;
-	pthread_t		 tid;
-	crt_group_t		*grp = NULL;
-	uint32_t		 grp_size;
-	int			 rc = 0;
+	char		*env_self_rank;
+	d_rank_t	 my_rank;
+	int		 rc;
 
-	tc_srv_start_basic("server_grp", &crt_ctx, &tid, grp, &grp_size);
-
-	info = (struct proc_info *)malloc(sizeof(struct proc_info) *
-					  NUM_BARRIERS);
-	D_ASSERTF(info != NULL,
-		  "Could not allocate space for test");
-
-	crt_group_rank(NULL, &my_rank);
-
-	for (i = 0; i < NUM_BARRIERS; i++) {
-		info[i].rank = my_rank;
-		info[i].grp_rank = my_rank;
-		info[i].barrier_num = i;
-		info[i].complete = 0;
-		for (;;) {
-			rc = crt_barrier(NULL, barrier_complete_cb, &info[i]);
-			if (rc != -DER_BUSY)
-				break;
-			sched_yield();
-		}
-		D_ASSERTF(rc == 0, "crt_barrier_create rank=%d, barrier = %d,"
-			  " rc = %d\n", my_rank, i, rc);
+	rc = test_parse_args(argc, argv);
+	if (rc != 0) {
+		fprintf(stderr, "test_parse_args() failed, rc: %d.\n", rc);
+		return rc;
 	}
-	for (i = 0; i < NUM_BARRIERS; i++)
-		while (info[i].complete == 0)
-			sched_yield();
 
-	D_ASSERTF(g_barrier_count == NUM_BARRIERS,
-		  "Not all barriers completed\n");
+	env_self_rank = getenv("CRT_L_RANK");
+	my_rank = atoi(env_self_rank);
 
-	g_barrier_count = 0;
+	opts.self_rank = my_rank;
+	opts.mypid = getpid();
+	opts.is_server = 1;
 
-	g_shutdown = 1;
-
-	pthread_join(tid, &check_ret);
-	D_ASSERTF(check_ret == NULL, "Progress thread failed\n");
-
-	rc = crt_finalize();
-	D_ASSERTF(rc == 0, "Failed in crt_finalize, rc = %d\n", rc);
-
-	d_log_fini();
-
-	free(info);
+	test_run();
 
 	return rc;
 }

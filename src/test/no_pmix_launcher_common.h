@@ -38,27 +38,6 @@
 #ifndef __NO_PMIX_LAUNCHER_COMMON_H__
 #define __NO_PMIX_LAUNCHER_COMMON_H__
 
-struct test_options {
-	int		self_rank;
-	int		mypid;
-	int		is_server;
-};
-
-static struct test_options opts;
-
-#define DBG_PRINT(x...)							\
-	do {								\
-		if (opts.is_server)					\
-			fprintf(stderr, "SRV [rank=%d pid=%d]\t",	\
-			opts.self_rank,					\
-			opts.mypid);					\
-		else							\
-			fprintf(stderr, "CLI [rank=%d pid=%d]\t",	\
-			opts.self_rank,					\
-			opts.mypid);					\
-		fprintf(stderr, x);					\
-	} while (0)
-
 #define MY_BASE 0x010000000
 #define MY_VER  0
 
@@ -152,6 +131,7 @@ int handler_set_group_info(crt_rpc_t *rpc)
 {
 	return 0;
 }
+
 static int g_do_shutdown;
 
 int handler_shutdown(crt_rpc_t *rpc)

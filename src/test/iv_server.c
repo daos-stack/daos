@@ -55,8 +55,6 @@
 #define _SERVER
 #include "iv_common.h"
 
-static char g_hostname[100];
-
 static d_rank_t g_my_rank;
 static uint32_t g_group_size;
 
@@ -75,14 +73,6 @@ static void wait_for_namespace(void)
 		__sync_synchronize();
 	}
 }
-
-#define DBG_PRINT(x...)							\
-	do {								\
-		printf("[%s:%d:SERV]\t", g_hostname, g_my_rank);	\
-		printf(x);						\
-	} while (0)
-
-
 
 /* Verbose mode:
  * 0 - disabled
@@ -364,8 +354,6 @@ print_key_value(char *hdr, crt_iv_key_t *iv_key, d_sg_list_t *iv_value)
 {
 	struct iv_key_struct *key_struct;
 	struct iv_value_struct *value_struct;
-
-	printf("[%s:%d:SERV]\t", g_hostname, g_my_rank);
 
 	printf("%s", hdr);
 
@@ -1183,8 +1171,6 @@ int main(int argc, char **argv)
 	}
 
 	my_rank = atoi(env_self_rank);
-
-	init_hostname(g_hostname, sizeof(g_hostname));
 
 	rc = crt_init(IV_GRP_NAME, CRT_FLAG_BIT_SERVER |
 			CRT_FLAG_BIT_PMIX_DISABLE);

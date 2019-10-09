@@ -50,21 +50,7 @@
 
 #include "tests_common.h"
 
-struct test_options {
-	int		self_rank;
-	int		mypid;
-};
-
-static struct test_options opts;
 static int g_do_shutdown;
-
-#define DBG_PRINT(x...)							\
-	do {								\
-		fprintf(stderr, "SRV [rank=%d pid=%d]\t",		\
-			opts.self_rank,					\
-			opts.mypid);					\
-		fprintf(stderr, x);					\
-	} while (0)
 
 #define MY_BASE 0x010000000
 #define MY_VER  0
@@ -564,7 +550,7 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
-	rc = wait_for_ranks(crt_ctx[0], grp, rank_list, 0,
+	rc = tc_wait_for_ranks(crt_ctx[0], grp, rank_list, 0,
 			NUM_SERVER_CTX, 10, 100.0);
 	if (rc != 0) {
 		D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);

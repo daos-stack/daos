@@ -210,18 +210,6 @@ int send_rpc_request(crt_context_t crt_ctx, crt_rpc_t *rpc_req, void **output)
 	return rc;
 }
 
-static inline void
-init_hostname(char *hname, int max_size)
-{
-	char	*ptr;
-
-	gethostname(hname, max_size);
-	ptr = strchr(hname, '.');
-
-	if (ptr)
-		*ptr = 0;
-}
-
 /** Prints a buffer as hex to a file without any newlines/spaces/etc */
 static inline void
 print_hex(void *buf, size_t len, FILE *log_file)
