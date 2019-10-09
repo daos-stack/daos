@@ -504,15 +504,16 @@ key_ilog_fetch(struct vos_object *obj, uint32_t intent,
 		return rc;
 	}
 
-	rc = ilog_fetch(loh, intent, epr, entries);
+	rc = ilog_fetch(loh, intent, entries);
 	if (rc == -DER_NONEXIST)
 		goto out;
 	if (rc != 0)
-		D_ERROR("Could not fetch ilog: "DF_RC"\n", DP_RC(rc));
+		D_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR,
+			 "Could not fetch ilog: "DF_RC"\n", DP_RC(rc));
 out:
 	ilog_close(loh);
 
-	return 0;
+	return rc;
 }
 
 static int
@@ -523,11 +524,14 @@ key_ilog_update_range(struct vos_io_context *ioc, struct ilog_entries *entries,
 	bool			 has_updates = false;
 
 	ilog_foreach_entry_reverse(entries, entry) {
+		if (entry->ie_status == ILOG_REMOVED)
+			continue;
+
 		if (entry->ie_id.id_epoch > epr->epr_hi)
 			continue; /* skip newer entries */
 
 		if (entry->ie_punch) {
-			if (entry->ie_status == ILOG_INVISIBLE)
+			if (entry->ie_status == ILOG_UNCOMMITTED)
 				/* A key punch is in-flight */
 				return -DER_INPROGRESS;
 

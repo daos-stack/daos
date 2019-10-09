@@ -47,17 +47,20 @@ struct umem_instance;
 
 enum ilog_status {
 	/** Log entry is visible to caller */
-	ILOG_VISIBLE,
+	ILOG_COMMITTED,
 	/** Log entry is not yet visible */
-	ILOG_INVISIBLE,
+	ILOG_UNCOMMITTED,
+	/** Log entry can be removed */
+	ILOG_REMOVED,
 };
 
 /** Near term hack to hook things up with existing DTX */
 struct ilog_desc_cbs {
-	/** Retrieve the status of a log entry */
-	enum ilog_status (*dc_log_status_cb)(struct umem_instance *umm,
-					     umem_off_t tx_id, uint32_t intent,
-					     void *args);
+	/** Retrieve the status of a log entry (See enum ilog_status). On error
+	 *  return error code < 0.
+	 */
+	int (*dc_log_status_cb)(struct umem_instance *umm, umem_off_t tx_id,
+				uint32_t intent, void *args);
 	void	*dc_log_status_args;
 	/** Check if the log entry was created by current transaction */
 	int (*dc_is_same_tx_cb)(struct umem_instance *umm, umem_off_t tx_id,
@@ -169,8 +172,6 @@ ilog_abort(daos_handle_t loh, const struct ilog_id *id);
 int
 ilog_aggregate(daos_handle_t loh, const daos_epoch_range_t *epr);
 
-#define ILOG_NUM_EMBEDDED 8
-
 /** Incarnation log entry description */
 struct ilog_entry {
 	/** The epoch and tx_id for the log entry */
@@ -181,16 +182,18 @@ struct ilog_entry {
 	uint32_t		ie_status;
 };
 
+#define ILOG_PRIV_SIZE 224
 /** Structure for storing the full incarnation log for ilog_fetch.  The
  * fields shouldn't generally be accessed directly but via the iteration
  * APIs below.
  */
 struct ilog_entries {
+	/** Array of log entries */
 	struct ilog_entry	*ie_entries;
-	int			 ie_num_entries;
-	int			 ie_alloc_size;
-	daos_handle_t		 ie_ih;
-	struct ilog_entry	 ie_embedded[ILOG_NUM_EMBEDDED];
+	/** Number of entries in the log */
+	int64_t			 ie_num_entries;
+	/** Private log data */
+	uint8_t			 ie_priv[ILOG_PRIV_SIZE];
 };
 
 /** Initialize an ilog_entries struct for fetch
@@ -199,18 +202,19 @@ struct ilog_entries {
  */
 void ilog_fetch_init(struct ilog_entries *entries);
 
-/** Fetch the ilog within the epr range
+/** Fetch the entire incarnation log.  This function will refresh only when
+ * the underlying log or the intent has changed.  If the struct is shared
+ * between multiple ULT's fetch should be done after every yield.
  *
  *  \param	loh[in]		Open log handle
- *  \param	intent[in]	Intent of the fetch operation
- *  \param	epr[in]		Epoch range for the fetch
+ *  \param	intent[in]	The intent of the operation
  *  \param	entries[in,out]	Allocated structure passed in will be filled
  *				with incarnation log entries in the range.
  *
  *  \return 0 on success, error code on failure
  */
 int ilog_fetch(daos_handle_t loh, uint32_t intent,
-	       const daos_epoch_range_t *epr, struct ilog_entries *entries);
+	       struct ilog_entries *entries);
 
 /** Deallocate any memory associated with an ilog_entries struct for fetch
  *
