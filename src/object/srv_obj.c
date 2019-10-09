@@ -618,14 +618,13 @@ out:
 
 
 static int
-ec_update_bulk_transfer(crt_rpc_t *rpc, bool bulk_bind,
+ec_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		 crt_bulk_t *remote_bulks, daos_handle_t ioh,
 		 struct ec_bulk_spec **skip_list,
 		 int sgl_nr)
 {
 	struct ds_bulk_async_args arg = { 0 };
 	crt_bulk_opid_t		bulk_opid;
-	crt_bulk_op_t		bulk_op = CRT_BULK_GET;
 	crt_bulk_perm_t		bulk_perm = CRT_BULK_RW;
 	int			i, rc, *status, ret;
 
@@ -875,10 +874,9 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		     opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_UPDATE ||
 		     opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH) &&
 			oca->ca_resil == DAOS_RES_EC) {
-			rc = ec_update_bulk_transfer(rpc, bulk_bind,
-						     orw->orw_bulks.ca_arrays,
-						     ioh, skip_list,
-						     orw->orw_nr);
+			rc = ec_bulk_transfer(rpc, bulk_op, bulk_bind,
+					      orw->orw_bulks.ca_arrays, ioh,
+					      skip_list, orw->orw_nr);
 			for (i = 0; i < orw->orw_nr; i++)
 				D_FREE(skip_list[i]);
 			D_FREE(skip_list);
