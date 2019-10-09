@@ -39,6 +39,7 @@ var jsonDBRelPath = "share/daos/control/mgmtinit_db.json"
 // ctlpb.MgmtCtlServer, and is the data container for the service.
 type ControlService struct {
 	StorageControlService
+	NetworkScanService
 	harness           *IOServerHarness
 	supportedFeatures FeatureMap
 }
@@ -50,6 +51,11 @@ func NewControlService(l logging.Logger, h *IOServerHarness, sp *scm.Provider, c
 	}
 	scs.scm.provider = sp
 
+	nss, err := DefaultNetworkScanService(l, cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	fMap, err := loadInitData(jsonDBRelPath)
 	if err != nil {
 		return nil, err
@@ -57,6 +63,7 @@ func NewControlService(l logging.Logger, h *IOServerHarness, sp *scm.Provider, c
 
 	return &ControlService{
 		StorageControlService: *scs,
+		NetworkScanService:    *nss,
 		harness:               h,
 		supportedFeatures:     fMap,
 	}, nil

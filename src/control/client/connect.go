@@ -79,6 +79,8 @@ type Connect interface {
 	SmdListPools(*mgmtpb.SmdPoolReq) ResultSmdMap
 	SystemMemberQuery() (common.SystemMembers, error)
 	SystemStop() (common.SystemMemberResults, error)
+	GetProviderList(*ctlpb.ProviderListRequest) ResultMap
+	//RequestDeviceScanStreamer(*ctlpb.DeviceScanRequest, *ctlpb.MgmtCtl_RequestDeviceScanStreamerServer) error
 }
 
 // connList is an implementation of Connect and stores controllers
