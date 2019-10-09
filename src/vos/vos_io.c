@@ -524,6 +524,9 @@ key_ilog_update_range(struct vos_io_context *ioc, struct ilog_entries *entries,
 	bool			 has_updates = false;
 
 	ilog_foreach_entry_reverse(entries, entry) {
+		if (entry->ie_status == ILOG_REMOVED)
+			continue;
+
 		if (entry->ie_id.id_epoch > epr->epr_hi)
 			continue; /* skip newer entries */
 

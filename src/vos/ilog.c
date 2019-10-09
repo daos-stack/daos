@@ -1572,7 +1572,6 @@ ilog_fetch(daos_handle_t loh, uint32_t intent, struct ilog_entries *entries)
 		rc = dbtree_iter_next(priv->ip_ih);
 		if (rc == -DER_NONEXIST)
 			break;
-
 	}
 
 	if (entries->ie_num_entries == 0)

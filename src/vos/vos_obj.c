@@ -258,6 +258,8 @@ key_check_existence(struct vos_obj_iter *oiter, struct ilog_entries *entries,
 	bool				 skipped = false;
 
 	ilog_foreach_entry_reverse(entries, entry) {
+		if (entry->ie_status == ILOG_REMOVED)
+			continue;
 		if (entry->ie_id.id_epoch > epr->epr_hi) {
 			/* skip records outside of our range but remember
 			 * that they exist in case this key has no
@@ -413,6 +415,8 @@ key_record_punch(struct vos_obj_iter *oiter, struct ilog_entries *entries,
 	ent->ie_key_punch = 0;
 
 	ilog_foreach_entry(entries, entry) {
+		if (entry->ie_status == ILOG_REMOVED)
+			continue;
 		if (entry->ie_id.id_epoch < oiter->it_epr.epr_lo)
 			continue; /* skip historical punches */
 

@@ -50,6 +50,8 @@ enum ilog_status {
 	ILOG_COMMITTED,
 	/** Log entry is not yet visible */
 	ILOG_UNCOMMITTED,
+	/** Log entry can be removed */
+	ILOG_REMOVED,
 };
 
 /** Near term hack to hook things up with existing DTX */

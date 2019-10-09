@@ -1137,11 +1137,13 @@ vos_ilog_status_get(struct umem_instance *umm, umem_off_t tx_id,
 		return ILOG_UNCOMMITTED;
 	case ALB_AVAILABLE_CLEAN:
 		return ILOG_COMMITTED;
+	case ALB_AVAILABLE_DIRTY:
+		break;
 	default:
 		D_ASSERTF(0, "Unexpected availability\n");
 	}
 
-	return ILOG_UNCOMMITTED;
+	return ILOG_REMOVED;
 }
 
 static int
