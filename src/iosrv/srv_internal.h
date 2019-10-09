@@ -174,9 +174,9 @@ dss_ult_pool(int ult_type)
 	case DSS_ULT_RDB:
 	case DSS_ULT_MISC:
 	case DSS_ULT_DRPC_HANDLER:
+	case DSS_ULT_AGGREGATE:
 		return DSS_POOL_SHARE;
 	case DSS_ULT_REBUILD:
-	case DSS_ULT_AGGREGATE:
 		return DSS_POOL_REBUILD;
 	default:
 		D_ASSERTF(0, "bad ult_type %d.\n", ult_type);
