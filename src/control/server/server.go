@@ -41,6 +41,7 @@ import (
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
 // define supported maximum number of I/O servers
@@ -75,8 +76,8 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	// If this daos_server instance ends up being the MS leader,
 	// this will record the DAOS system membership.
 	membership := common.NewMembership(log)
-
-	harness := NewIOServerHarness(&ext{}, log)
+	scmProvider := scm.DefaultProvider(log)
+	harness := NewIOServerHarness(log)
 	for i, srvCfg := range cfg.Servers {
 		if i+1 > maxIoServers {
 			break
@@ -93,7 +94,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 			TransportConfig: cfg.TransportConfig,
 		})
 
-		srv := NewIOServerInstance(harness.ext, log, bp, msClient, ioserver.NewRunner(log, srvCfg))
+		srv := NewIOServerInstance(log, bp, scmProvider, msClient, ioserver.NewRunner(log, srvCfg))
 		if err := harness.AddInstance(srv); err != nil {
 			return err
 		}
@@ -105,7 +106,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}
 
 	// Create and setup control service.
-	controlService, err := NewControlService(log, harness, cfg, membership)
+	controlService, err := NewControlService(log, harness, scmProvider, cfg, membership)
 	if err != nil {
 		return errors.Wrap(err, "init control service")
 	}
