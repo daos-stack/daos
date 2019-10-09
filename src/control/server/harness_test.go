@@ -38,6 +38,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
 func cmpErr(t *testing.T, want, got error) {
@@ -66,10 +67,7 @@ func TestHarnessCreateSuperblocks(t *testing.T) {
 
 	defaultApList := []string{"1.2.3.4:5"}
 	ctrlAddrs := []string{"1.2.3.4:5", "6.7.8.9:10"}
-	ext := &mockExt{
-		isMountPointRet: true,
-	}
-	h := NewIOServerHarness(ext, log)
+	h := NewIOServerHarness(log)
 	for idx, mnt := range []string{"one", "two"} {
 		if err := os.MkdirAll(filepath.Join(testDir, mnt), 0777); err != nil {
 			t.Fatal(err)
@@ -78,19 +76,25 @@ func TestHarnessCreateSuperblocks(t *testing.T) {
 			WithRank(uint32(idx)).
 			WithSystemName(t.Name()).
 			WithScmClass("ram").
+			WithScmRamdiskSize(1).
 			WithScmMountPoint(mnt)
 		r := ioserver.NewRunner(log, cfg)
 		ctrlAddr, err := net.ResolveTCPAddr("tcp", ctrlAddrs[idx])
 		if err != nil {
 			t.Fatal(err)
 		}
-		m := newMgmtSvcClient(
+		ms := newMgmtSvcClient(
 			context.Background(), log, mgmtSvcClientCfg{
 				ControlAddr:  ctrlAddr,
 				AccessPoints: defaultApList,
 			},
 		)
-		srv := NewIOServerInstance(ext, log, nil, m, r)
+		mb := scm.DefaultMockBackend()
+		sys := scm.NewMockSysProvider(&scm.MockSysConfig{
+			IsMountedBool: true,
+		})
+		mp := scm.NewProvider(log, mb, sys)
+		srv := NewIOServerInstance(log, nil, mp, ms, r)
 		srv.fsRoot = testDir
 		if err := h.AddInstance(srv); err != nil {
 			t.Fatal(err)
@@ -202,8 +206,7 @@ func TestHarnessGetMSLeaderInstance(t *testing.T) {
 				return addrs, nil
 			}
 
-			ext := &ext{}
-			h := NewIOServerHarness(ext, log)
+			h := NewIOServerHarness(log)
 			for i := 0; i < tc.instanceCount; i++ {
 				cfg := ioserver.NewConfig().
 					WithRank(uint32(i)).
@@ -227,7 +230,7 @@ func TestHarnessGetMSLeaderInstance(t *testing.T) {
 					}
 					return false
 				}
-				srv := NewIOServerInstance(ext, log, nil, m, r)
+				srv := NewIOServerInstance(log, nil, nil, m, r)
 				if tc.hasSuperblock {
 					srv.setSuperblock(&Superblock{
 						MS: isAP(tc.ctrlAddrs[i]),

@@ -27,7 +27,7 @@
 #include "daos_api.h"
 
 /* Lookup a container within a pool */
-static bool
+static void
 dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 		const char *name, bool create)
 {
@@ -58,7 +58,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 		DFUSE_LOG_ERROR("Invalid container uuid");
 		DFUSE_REPLY_ENTRY(req, entry);
 		D_FREE(dfs);
-		return false;
+		return;
 	}
 	uuid_copy(dfs->dfs_pool, parent->ie_dfs->dfs_pool);
 
@@ -77,8 +77,6 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 			DFUSE_TRA_INFO(ie, "Reusing existing container entry "
 				       "without reconnect");
 
-			D_FREE(dfs);
-
 			/* Update the stat information, but copy in the
 			 * inode value afterwards.
 			 */
@@ -87,6 +85,8 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 			if (rc) {
 				DFUSE_TRA_ERROR(ie, "dfs_ostat() failed: (%s)",
 						strerror(rc));
+				d_hash_rec_decref(&fs_handle->dpi_iet,
+						  &ie->ie_htl);
 				D_GOTO(err, rc);
 			}
 
@@ -94,14 +94,18 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 			entry.generation = 1;
 			entry.ino = entry.attr.st_ino;
 			DFUSE_REPLY_ENTRY(req, entry);
-			return true;
+			D_FREE(dfs);
+			return;
 		}
 	}
 
 	rc = daos_cont_open(parent->ie_dfs->dfs_poh, dfs->dfs_cont,
 			    DAOS_COO_RW, &dfs->dfs_coh, &dfs->dfs_co_info,
 			    NULL);
-	if (rc != -DER_SUCCESS) {
+	if (rc == -DER_NONEXIST) {
+		DFUSE_LOG_INFO("daos_cont_open() failed: (%d)", rc);
+		D_GOTO(err, rc = daos_der2errno(rc));
+	} else if (rc != -DER_SUCCESS) {
 		DFUSE_LOG_ERROR("daos_cont_open() failed: (%d)", rc);
 		D_GOTO(err, rc = daos_der2errno(rc));
 	}
@@ -144,7 +148,7 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	dfs->dfs_ops = &dfuse_dfs_ops;
 
 	dfuse_reply_entry(fs_handle, ie, NULL, req);
-	return true;
+	return;
 
 release:
 	dfs_release(ie->ie_obj);
@@ -154,19 +158,19 @@ close:
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	D_FREE(dfs);
-	return false;
+	return;
 }
 
-bool
+void
 dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		  const char *name)
 {
-	return dfuse_cont_open(req, parent, name, false);
+	dfuse_cont_open(req, parent, name, false);
 }
 
-bool
+void
 dfuse_cont_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
 		 const char *name, mode_t mode)
 {
-	return dfuse_cont_open(req, parent, name, true);
+	dfuse_cont_open(req, parent, name, true);
 }

@@ -44,15 +44,13 @@ const (
 type IOServerHarness struct {
 	sync.RWMutex
 	log       logging.Logger
-	ext       External
 	instances []*IOServerInstance
 	started   bool
 }
 
 // NewHarness returns an initialized *IOServerHarness
-func NewIOServerHarness(ext External, log logging.Logger) *IOServerHarness {
+func NewIOServerHarness(log logging.Logger) *IOServerHarness {
 	return &IOServerHarness{
-		ext:       ext,
 		log:       log,
 		instances: make([]*IOServerInstance, 0, 2),
 	}

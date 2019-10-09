@@ -637,6 +637,7 @@ akey_fetch(struct vos_io_context *ioc, const daos_epoch_range_t *epr,
 					(char *)iod->iod_name.iov_buf);
 				iod_empty_sgl(ioc, ioc->ic_sgl_at);
 				rc = 0;
+				goto out;
 			}
 
 			if (rc == -DER_INPROGRESS)
