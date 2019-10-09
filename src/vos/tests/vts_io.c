@@ -2546,6 +2546,98 @@ io_query_key(void **state)
 }
 
 static void
+update_dkey(void **state, daos_unit_oid_t oid, daos_epoch_t epoch,
+	    uint64_t dkey_value, const char *val)
+{
+	struct io_test_args	*arg = *state;
+	daos_iod_t		iod = {0};
+	d_sg_list_t		sgl = {0};
+	daos_key_t		dkey;
+	daos_key_t		akey;
+	d_iov_t			val_iov;
+	daos_recx_t		recx;
+	uint64_t		akey_value = 0;
+	int			rc = 0;
+
+	d_iov_set(&dkey, &dkey_value, sizeof(dkey_value));
+	d_iov_set(&akey, &akey_value, sizeof(akey_value));
+
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_name = akey;
+	iod.iod_recxs = &recx;
+	iod.iod_nr = 1;
+
+	/* Attach buffer to sgl */
+	d_iov_set(&val_iov, &val, strnlen(val, 32) + 1);
+	sgl.sg_iovs = &val_iov;
+	sgl.sg_nr = 1;
+
+	iod.iod_size = 1;
+	/* Set up rexs */
+	recx.rx_idx = 0;
+	recx.rx_nr = val_iov.iov_len;
+
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, epoch++, 0,
+			    &dkey, 1, &iod, &sgl);
+	assert_int_equal(rc, 0);
+}
+
+static void
+io_query_key_punch_update(void **state)
+{
+	struct io_test_args	*arg = *state;
+	int			rc = 0;
+	daos_epoch_t		epoch = 1;
+	daos_key_t		dkey;
+	daos_key_t		akey;
+	daos_recx_t		recx_read;
+	daos_unit_oid_t		oid;
+	uint64_t		dkey_value;
+	uint64_t		akey_value = 0;
+
+	d_iov_set(&akey, &akey_value, sizeof(akey_value));
+
+	oid = gen_oid(arg->ofeat);
+
+	update_dkey(state, oid, epoch++, 0, "World");
+	update_dkey(state, oid, epoch++, 12, "Goodbye");
+
+	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid,
+			       DAOS_GET_MAX | DAOS_GET_DKEY | DAOS_GET_RECX,
+			       epoch++, &dkey, &akey, &recx_read);
+	assert_int_equal(rc, 0);
+	assert_int_equal(recx_read.rx_idx, 0);
+	assert_int_equal(recx_read.rx_nr, sizeof("Goodbye"));
+	assert_int_equal(*(uint64_t *)dkey.iov_buf, 12);
+
+	/* Now punch the last dkey */
+	dkey_value = 12;
+	d_iov_set(&dkey, &dkey_value, sizeof(dkey_value));
+	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, epoch++, 0, 0, &dkey, 0,
+			   NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid,
+			       DAOS_GET_MAX | DAOS_GET_DKEY | DAOS_GET_RECX,
+			       epoch++, &dkey, &akey, &recx_read);
+	assert_int_equal(rc, 0);
+	assert_int_equal(recx_read.rx_idx, 0);
+	assert_int_equal(recx_read.rx_nr, sizeof("World"));
+	assert_int_equal(*(uint64_t *)dkey.iov_buf, 0);
+
+	/* Ok, now update the last one again */
+	update_dkey(state, oid, epoch++, 12, "Hello");
+
+	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid,
+			       DAOS_GET_MAX | DAOS_GET_DKEY | DAOS_GET_RECX,
+			       epoch++, &dkey, &akey, &recx_read);
+	assert_int_equal(rc, 0);
+	assert_int_equal(recx_read.rx_nr, sizeof("Hello"));
+	assert_int_equal(recx_read.rx_idx, 0);
+	assert_int_equal(*(uint64_t *)dkey.iov_buf, 12);
+}
+
+static void
 io_query_key_negative(void **state)
 {
 	struct io_test_args	*arg = *state;
@@ -2673,8 +2765,10 @@ static const struct CMUnitTest io_tests[] = {
 };
 
 static const struct CMUnitTest int_tests[] = {
-	{ "VOS300.1: Key query test", io_query_key, NULL, NULL},
-	{ "VOS300.2: Key query negative test",
+	{ "VOS300.1: Test key query punch with subsequent update",
+		io_query_key_punch_update, NULL, NULL},
+	{ "VOS300.2: Key query test", io_query_key, NULL, NULL},
+	{ "VOS300.3: Key query negative test",
 		io_query_key_negative, NULL, NULL},
 };
 
