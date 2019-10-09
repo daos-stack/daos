@@ -34,7 +34,7 @@ import (
 
 // NetworkScanService encapsulates the network part of the control service
 type NetworkScanService struct {
-	log             logging.Logger
+	nsslog          logging.Logger
 	srvCfgs         []*ioserver.Config
 }
 
@@ -47,14 +47,14 @@ func DefaultNetworkScanService(log logging.Logger, cfg *Configuration) (*Network
 // NewStorageControlService returns an initialized *StorageControlService
 func NewNetworkScanService(log logging.Logger, srvCfgs []*ioserver.Config) *NetworkScanService {
 	return &NetworkScanService{
-		log:             log,
+		nsslog:          log,
 		srvCfgs:         srvCfgs,
 	}
 }
 
 // An example how I might call into netdetect.ScanFabric to get the results
 func (c *NetworkScanService) TestFunction() error {
-	c.log.Debugf("NetworkScanService::TestFunction was called\n")
+	c.nsslog.Debugf("NetworkScanService::TestFunction was called\n")
 	results, err := netdetect.ScanFabric("ofi+sockets")
 	if err != nil {
 		//return errors.WithMessage(err, "failed to execute the fabric and device scan")
@@ -62,7 +62,7 @@ func (c *NetworkScanService) TestFunction() error {
 	}
 	for _, sr := range results {
 		// fill in the reply message and stream the results back
-		c.log.Infof("\n%v\n\n", sr)
+		c.nsslog.Infof("\n%v\n\n", sr)
 	}
 	return nil
 }

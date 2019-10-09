@@ -55,6 +55,6 @@ func providerListRequest(mc Control, req interface{}, ch chan ClientResult) {
 		ch <- ClientResult{mc.getAddress(), nil, err} // return comms error
 		return
 	}
-
+	mc.logger().Debugf("[Client] Provider string is: %s", resp.GetProvider())
 	ch <- ClientResult{mc.getAddress(), resp.GetProvider(), nil}
 }

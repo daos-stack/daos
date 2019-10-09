@@ -27,20 +27,20 @@ import (
 //	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
-//	"github.com/daos-stack/daos/src/control/common"
 	pb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-//	"github.com/daos-stack/daos/src/control/logging"
-//	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 )
 
 func (c *NetworkScanService) RequestProviderList(ctx context.Context, in *pb.ProviderListRequest) (*pb.ProviderListReply, error) {
-	c.log.Debugf("RequestProviderList() Received")
-	// Just a quick test to see that we can return a string
-	return &pb.ProviderListReply{Provider: "joel's provider list provider"}, nil
+	c.nsslog.Debugf("RequestProviderList() Received")
+	results := netdetect.GetSupportedProviderString()
+	c.nsslog.Debugf("The DAOS system supports the following providers: %s", results)
+	return &pb.ProviderListReply{Provider: results}, nil
 }
+
 /*
 func (c *NetworkScanService) RequestDeviceScanStreamer(in *pb.DeviceScanRequest, stream pb.MgmtCtl_RequestDeviceScanStreamerServer) error {
-	c.log.Debugf("RequestDeviceScanStreamer() Received request: %s", in.GetProvider())
+	c.nss.log.Debugf("RequestDeviceScanStreamer() Received request: %s", in.GetProvider())
 
 	results, err := netdetect.ScanFabric(in.GetProvider())
 	if err != nil {

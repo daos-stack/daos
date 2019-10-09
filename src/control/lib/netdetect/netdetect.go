@@ -569,9 +569,14 @@ func GetDeviceNames() ([]string, error) {
 	return netNames, nil
 }
 
-// GetSupportedProviders returns a string containing all supported Mercury providers
+// GetSupportedProviders returns a []string containing all supported Mercury providers
 func GetSupportedProviders() []string {
 	return []string{"ofi+gni", "ofi+psm2", "ofi+tcp", "ofi+sockets", "ofi+verbs", "ofi_rxm"}
+}
+
+// GetSupportedProviders returns a string containing all supported Mercury providers
+func GetSupportedProviderString() string {
+	return "ofi+gni ofi+psm2 ofi+tcp ofi+sockets ofi+verbs ofi_rxm"
 }
 
 // mercuryToLibFabric converts a single Mercury fabric provider string into a libfabric compatible provider string
