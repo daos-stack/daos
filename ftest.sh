@@ -221,6 +221,7 @@ export D_LOG_FILE=\"$TEST_TAG_DIR/daos.log\"
 mkdir -p ~/.config/avocado/
 cat <<EOF > ~/.config/avocado/avocado.conf
 [datadir.paths]
+# log files
 if [ ${SL_PREFIX} == /usr ]; then
     logs_dir = /tmp/ftest/avocado/job-results
 else
