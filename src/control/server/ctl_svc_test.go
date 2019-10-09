@@ -29,20 +29,21 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
 func defaultMockControlService(t *testing.T, log logging.Logger) *ControlService {
 	c := defaultMockConfig(t)
-	return mockControlService(t, log, c)
+	return mockControlService(t, log, c, nil)
 }
 
-func mockControlService(t *testing.T, log logging.Logger, cfg *Configuration) *ControlService {
+func mockControlService(t *testing.T, log logging.Logger, cfg *Configuration, msc *scm.MockSysConfig) *ControlService {
 	t.Helper()
 
 	cs := ControlService{
 		StorageControlService: *NewStorageControlService(log,
 			defaultMockNvmeStorage(log, cfg.ext),
-			defaultMockScmStorage(log, cfg.ext),
+			defaultMockScmStorage(log, cfg.ext, msc),
 			cfg.Servers,
 		),
 		harness: &IOServerHarness{
@@ -50,13 +51,14 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *Configuration) *C
 		},
 	}
 
+	scmProvider := cs.StorageControlService.scm.provider
 	for _, srvCfg := range cfg.Servers {
 		bp, err := storage.NewBdevProvider(log, "", &srvCfg.Storage.Bdev)
 		if err != nil {
 			t.Fatal(err)
 		}
 		runner := ioserver.NewRunner(log, srvCfg)
-		instance := NewIOServerInstance(cfg.ext, log, bp, nil, runner)
+		instance := NewIOServerInstance(log, bp, scmProvider, nil, runner)
 		if err := cs.harness.AddInstance(instance); err != nil {
 			t.Fatal(err)
 		}
