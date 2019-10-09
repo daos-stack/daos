@@ -493,6 +493,7 @@ pipeline {
                             */
                         }
                         unsuccessful {
+                            sh 'ls install/include/spdk/ install/include/hwloc.h || true'
                             sh """if [ -f config${arch}.log ]; then
                                       mv config${arch}.log config.log-centos7-gcc
                                   fi"""
