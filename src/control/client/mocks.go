@@ -223,18 +223,19 @@ func (m *mockMgmtCtlClient) FetchFioConfigPaths(ctx context.Context, req *ctlpb.
 	return &mgmtCtlFetchFioConfigPathsClient{}, nil
 }
 
-/*
-type mgmtCtlRequestDeviceScanStreamerClient struct {
+
+type mgmtCtlRequestDeviceScanClient struct {
 	grpc.ClientStream
 }
 
-func (m *mgmtCtlRequestDeviceScanStreamerClient) Recv() (*ctlpb.DeviceScanReply, error) {
+func (m *mgmtCtlRequestDeviceScanClient) Recv() (*ctlpb.DeviceScanReply, error) {
 	return &ctlpb.DeviceScanReply{}, nil
 }
-func (m* mockMgmtCtlClient) RequestDeviceScanStreamer(ctx context.Context, in *ctlpb.DeviceScanRequest, o ...grpc.CallOption) (ctlpb.MgmtCtl_RequestDeviceScanStreamerClient, error) {
-	return &mgmtCtlRequestDeviceScanStreamerClient{}, nil
+
+func (m* mockMgmtCtlClient) RequestDeviceScan(ctx context.Context, in *ctlpb.DeviceScanRequest, o ...grpc.CallOption) (ctlpb.MgmtCtl_RequestDeviceScanClient, error) {
+	return &mgmtCtlRequestDeviceScanClient{}, nil
 }
-*/
+
 func (m* mockMgmtCtlClient) RequestProviderList(ctx context.Context, in *ctlpb.ProviderListRequest, o ...grpc.CallOption) (*ctlpb.ProviderListReply, error) {
 	return &ctlpb.ProviderListReply{}, nil
 }

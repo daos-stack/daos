@@ -24,7 +24,7 @@
 package server
 
 import (
-//	"github.com/pkg/errors"
+	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
 	pb "github.com/daos-stack/daos/src/control/common/proto/ctl"
@@ -38,9 +38,8 @@ func (c *NetworkScanService) RequestProviderList(ctx context.Context, in *pb.Pro
 	return &pb.ProviderListReply{Provider: results}, nil
 }
 
-/*
-func (c *NetworkScanService) RequestDeviceScanStreamer(in *pb.DeviceScanRequest, stream pb.MgmtCtl_RequestDeviceScanStreamerServer) error {
-	c.nss.log.Debugf("RequestDeviceScanStreamer() Received request: %s", in.GetProvider())
+func (c *NetworkScanService) RequestDeviceScan(in *pb.DeviceScanRequest, stream pb.MgmtCtl_RequestDeviceScanServer) error {
+	c.nsslog.Debugf("RequestDeviceScan() Received request: %s", in.GetProvider())
 
 	results, err := netdetect.ScanFabric(in.GetProvider())
 	if err != nil {
@@ -48,7 +47,7 @@ func (c *NetworkScanService) RequestDeviceScanStreamer(in *pb.DeviceScanRequest,
 	}
 	for _, sr := range results {
 		// TBD fill in a reply and stream the results here
-		c.log.Infof("\n%v\n\n", sr)
+		c.nsslog.Infof("\n%v\n\n", sr)
 	}
 
 	// For testing, just hard code two replies.
@@ -62,4 +61,3 @@ func (c *NetworkScanService) RequestDeviceScanStreamer(in *pb.DeviceScanRequest,
 	}
 	return nil
 }
-*/

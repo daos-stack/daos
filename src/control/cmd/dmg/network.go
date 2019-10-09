@@ -27,7 +27,7 @@ import (
 //	"io"
 //	"github.com/daos-stack/daos/src/control/client"
 //	"github.com/daos-stack/daos/src/control/common"
-	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+//	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 //	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -53,7 +53,6 @@ func (cmd *networkScanCmd) Execute(args []string) error {
 	if len(args) > 0 {
 		cmd.log.Debugf("An invalid argument was provided: %+v", args)
 		return nil
-		//errors.WithMessage(nil, "failed to execute the fabric and device scan.  An invalid argument was provided.")
 	}
 
 	switch {
@@ -62,14 +61,14 @@ func (cmd *networkScanCmd) Execute(args []string) error {
 	case len(cmd.FabricProvider) > 0:
 		provider = cmd.FabricProvider
 		cmd.log.Infof("Scanning fabric for cmdline specified provider: %s", provider)
-//	case len(cmd.config.Fabric.Provider) > 0:
-//		provider = cmd.config.Fabric.Provider
-//		cmd.log.Infof("Scanning fabric for YML specified provider: %s", provider)
 	default:
 		// all providers case
 		cmd.log.Info("Scanning fabric for all providers")
 	}
-/*
+
+	cmd.log.Infof("Network scan results:\n%s\n", cmd.conns.NetworkDeviceScanRequest(provider))
+
+	/*
 	// for test //
 	searchprovider := "ofi+sockets"
 
@@ -103,6 +102,6 @@ type networkListCmd struct {
 
 // List the supported providers
 func (cmd *networkListCmd) Execute(args []string) error {
-	cmd.conns.GetProviderList(&ctlpb.ProviderListRequest{})
+	cmd.log.Infof("Supported Providers:\n%s\n", cmd.conns.GetProviderList())
 	return nil
 }
