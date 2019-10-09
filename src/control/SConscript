@@ -180,7 +180,7 @@ def scons():
     senv.AppendENVPath(
         "CGO_LDFLAGS",
         denv.subst("-L%s -L$SPDK_PREFIX/lib -L$HWLOC_PREFIX/lib"
-                   " -L$OFI_PREFIX/lib $_RPATH" % gopath) + \
+                   " -L$OFI_PREFIX/lib -L$ISAL_PREFIX/lib $_RPATH" % gopath) + \
                    " -lspdk -lspdk_env_dpdk -lspdk_nvme -lspdk_util " + \
                    " -lspdk_sock -lspdk_log " + \
                    " -lrte_mempool -lrte_mempool_ring -lrte_bus_pci" + \
