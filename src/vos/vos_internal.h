@@ -39,6 +39,7 @@
 #include <daos_srv/bio.h>
 #include <vos_layout.h>
 #include <vos_obj.h>
+#include <ilog.h>
 
 #define VOS_CONT_ORDER		20	/* Order of container tree */
 #define VOS_OBJ_ORDER		20	/* Order of object tree */
@@ -367,6 +368,23 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 			uint32_t type, uint32_t flags);
 
 /**
+ * Register an incarnation log entry
+ *
+ * \param umm		[IN]	Instance of an unified memory class.
+ * \param ilog_off	[IN]	The offset of incarnation log
+ * \param dtx		[OUT]	dtx offset is returned
+ *
+ * \return		0 on success and negative on failure.
+ */
+int
+vos_dtx_register_ilog(struct umem_instance *umm, umem_off_t ilog_off,
+		      umem_off_t *dtx);
+
+/** Return the already active dtx id, if any */
+umem_off_t
+vos_dtx_get(void);
+
+/**
  * Deregister the record from the DTX entry.
  *
  * \param umm		[IN]	Instance of an unified memory class.
@@ -442,6 +460,8 @@ enum vos_tree_class {
 	VOS_BTR_DTX_TABLE	= (VOS_BTR_BEGIN + 5),
 	/** The objects with committable DTXs in DRAM */
 	VOS_BTR_DTX_COS		= (VOS_BTR_BEGIN + 6),
+	/** The VOS incarnation log tree */
+	VOS_BTR_ILOG		= (VOS_BTR_BEGIN + 7),
 	/** the last reserved tree class */
 	VOS_BTR_END,
 };
@@ -494,14 +514,12 @@ struct vos_rec_bundle {
  * Inline data structure for embedding the key bundle and key into an anchor
  * for serialization.
  */
-#define	EMBEDDED_KEY_MAX	80
+#define	EMBEDDED_KEY_MAX	96
 struct vos_embedded_key {
-	/** The kbund of the current iterator */
-	struct vos_key_bundle	ek_kbund;
 	/** Inlined iov kbund references */
 	d_iov_t		ek_kiov;
 	/** Inlined buffer the kiov references*/
-	unsigned char		ek_key[EMBEDDED_KEY_MAX];
+	unsigned char	ek_key[EMBEDDED_KEY_MAX];
 };
 D_CASSERT(sizeof(struct vos_embedded_key) == DAOS_ANCHOR_BUF_MAX);
 
@@ -748,6 +766,8 @@ struct vos_iter_info {
 	struct vos_object	*ii_obj;
 	d_iov_t			*ii_akey; /* conditional akey */
 	daos_epoch_range_t	 ii_epr;
+	/** highest epoch where parent obj/key was punched */
+	daos_epoch_t		 ii_punched;
 	/** epoch logic expression for the iterator. */
 	vos_it_epc_expr_t	 ii_epc_expr;
 	/** iterator flags */
@@ -814,6 +834,8 @@ vos_hdl2iter(daos_handle_t hdl)
 struct vos_obj_iter {
 	/* public part of the iterator */
 	struct vos_iterator	 it_iter;
+	/** Incarnation log entries for current iterator */
+	struct ilog_entries	 it_ilog_entries;
 	/** handle of iterator */
 	daos_handle_t		 it_hdl;
 	/** condition of the iterator: epoch logic expression */
@@ -822,6 +844,8 @@ struct vos_obj_iter {
 	uint32_t		 it_flags;
 	/** condition of the iterator: epoch range */
 	daos_epoch_range_t	 it_epr;
+	/** highest epoch where parent obj/key was punched */
+	daos_epoch_t		 it_punched;
 	/** condition of the iterator: attribute key */
 	daos_key_t		 it_akey;
 	/* reference on the object */
@@ -877,17 +901,21 @@ vos_evt_desc_cbs_init(struct evt_desc_cbs *cbs, struct vos_pool *pool,
 
 /* vos_obj.c */
 int
-key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
-		 daos_handle_t toh, enum vos_tree_class tclass,
-		 daos_key_t *key, int flags, uint32_t intent,
-		 struct vos_krec_df **krec, daos_handle_t *sub_toh);
+key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
+		 enum vos_tree_class tclass, daos_key_t *key, int flags,
+		 uint32_t intent, struct vos_krec_df **krecp,
+		 daos_handle_t *sub_toh);
 void
 key_tree_release(daos_handle_t toh, bool is_array);
 int
-key_tree_punch(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov,
-	       d_iov_t *val_iov, int flags);
+key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
+	       d_iov_t *key_iov, d_iov_t *val_iov, int flags);
 
 /* vos_io.c */
+int
+key_ilog_fetch(struct vos_object *obj, uint32_t intent,
+	       const daos_epoch_range_t *epr, struct vos_krec_df *krec,
+	       struct ilog_entries *entries);
 uint16_t
 vos_media_select(struct vos_container *cont, daos_iod_type_t type,
 		 daos_size_t size);
@@ -946,19 +974,31 @@ out:
 	return rc;
 }
 
-static inline int
-vos_tx_begin(struct vos_pool *vpool)
+static inline struct umem_instance *
+vos_pool2umm(struct vos_pool *pool)
 {
-	return umem_tx_begin(&vpool->vp_umm, NULL);
+	return &pool->vp_umm;
+}
+
+static inline struct umem_instance *
+vos_cont2umm(struct vos_container *cont)
+{
+	return vos_pool2umm(cont->vc_pool);
 }
 
 static inline int
-vos_tx_end(struct vos_pool *vpool, int rc)
+vos_tx_begin(struct umem_instance *umm)
+{
+	return umem_tx_begin(umm, NULL);
+}
+
+static inline int
+vos_tx_end(struct umem_instance *umm, int rc)
 {
 	if (rc != 0)
-		return umem_tx_abort(&vpool->vp_umm, rc);
+		return umem_tx_abort(umm, rc);
 
-	return umem_tx_commit(&vpool->vp_umm);
+	return umem_tx_commit(umm);
 
 }
 
@@ -987,5 +1027,11 @@ gc_init_pool(struct umem_instance *umm, struct vos_pool_df *pd);
 int
 gc_add_item(struct vos_pool *pool, enum vos_gc_type type, umem_off_t item_off,
 	    uint64_t args);
+/** Initialize the incarnation log globals */
+int
+vos_ilog_init(void);
+/** Initialize callbacks for vos incarnation log */
+void
+vos_ilog_desc_cbs_init(struct ilog_desc_cbs *cbs, daos_handle_t coh);
 
 #endif /* __VOS_INTERNAL_H__ */
