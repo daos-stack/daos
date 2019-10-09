@@ -170,11 +170,9 @@ struct vos_pool_df {
  * array value that is changed in the transaction (DTX).
  */
 enum vos_dtx_record_types {
-	DTX_RT_OBJ	= 1,
-	DTX_RT_KEY	= 2,
-	DTX_RT_SVT	= 3,
-	DTX_RT_EVT	= 4,
-	DTX_RT_ILOG	= 5,
+	DTX_RT_ILOG	= 1,
+	DTX_RT_SVT	= 2,
+	DTX_RT_EVT	= 3,
 };
 
 enum vos_dtx_record_flags {
@@ -214,12 +212,10 @@ struct vos_dtx_record_df {
 };
 
 enum vos_dtx_entry_flags {
-	/* The DTX contains exchange of some record(s). */
-	DTX_EF_EXCHANGE_PENDING		= (1 << 0),
 	/* The DTX shares something with other DTX(s). */
-	DTX_EF_SHARES			= (1 << 1),
+	DTX_EF_SHARES			= (1 << 0),
 	/* The DTX is the leader */
-	DTX_EF_LEADER			= (1 << 2),
+	DTX_EF_LEADER			= (1 << 1),
 };
 
 /**
@@ -368,25 +364,12 @@ struct vos_obj_df {
 	daos_epoch_t			vo_sync;
 	/** Attributes of object.  See vos_oi_attr */
 	uint64_t			vo_oi_attr;
-	/** Latest known update timestamp or punched timestamp */
-	daos_epoch_t			vo_latest;
-	/** Earliest known update timestamp */
-	daos_epoch_t			vo_earliest;
+	/** Incarnation log for the object */
+	struct ilog_df			vo_ilog;
 	/** The DTX entry in SCM. */
 	umem_off_t			vo_dtx;
-	/** The count of uncommitted DTXs that share the object. */
-	uint32_t			vo_dtx_shares;
-	/** Incarnation of the object, it's increased each time it's punched. */
-	uint32_t			vo_incarnation;
 	/** VOS dkey btree root */
 	struct btr_root			vo_tree;
 };
-
-/* Assumptions made about relative placement of these fields so
- * assert that they are true
- */
-D_CASSERT(offsetof(struct vos_obj_df, vo_earliest) ==
-	  offsetof(struct vos_obj_df, vo_latest) +
-	  sizeof(((struct vos_obj_df *)0)->vo_latest));
 
 #endif

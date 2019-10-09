@@ -287,7 +287,8 @@ entries_set(struct entries *entries, enum entries_op op, ...)
 }
 
 static int
-entries_check(daos_handle_t loh, const daos_epoch_range_t *epr,
+entries_check(struct umem_instance *umm, struct ilog_df *root,
+	      const struct ilog_desc_cbs *cbs, const daos_epoch_range_t *epr,
 	      int expected_rc, struct entries *entries)
 {
 	struct ilog_entry	*entry;
@@ -300,7 +301,7 @@ entries_check(daos_handle_t loh, const daos_epoch_range_t *epr,
 
 	ilog_fetch_init(&ilog_entries);
 
-	rc = ilog_fetch(loh, 0, &ilog_entries);
+	rc = ilog_fetch(umm, root, cbs, 0, &ilog_entries);
 	if (rc != expected_rc) {
 		print_message("Unexpected fetch rc: %s\n", d_errstr(rc));
 		if (rc == 0)
@@ -445,7 +446,7 @@ ilog_test_update(void **state)
 
 	rc = entries_set(entries, ENTRY_NEW, 1, false, ENTRIES_END);
 	assert_int_equal(rc, 0);
-	rc = entries_check(loh, NULL, 0, entries);
+	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
 	assert_int_equal(rc, 0);
 
 	/* Test upgrade to punch in root */
@@ -457,7 +458,7 @@ ilog_test_update(void **state)
 
 	rc = entries_set(entries, ENTRY_REPLACE, 1, true, ENTRIES_END);
 	assert_int_equal(rc, 0);
-	rc = entries_check(loh, NULL, 0, entries);
+	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
 	assert_int_equal(rc, 0);
 
 	/** Same epoch, different DTX */
@@ -471,7 +472,7 @@ ilog_test_update(void **state)
 	}
 
 	/** no change */
-	rc = entries_check(loh, NULL, 0, entries);
+	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
 	assert_int_equal(rc, 0);
 
 	/** New epoch, creation */
@@ -484,7 +485,7 @@ ilog_test_update(void **state)
 
 	rc = entries_set(entries, ENTRY_APPEND, 2, false, ENTRIES_END);
 	assert_int_equal(rc, 0);
-	rc = entries_check(loh, NULL, 0, entries);
+	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
 	assert_int_equal(rc, 0);
 
 	/** New epoch, upgrade to punch */
@@ -496,7 +497,7 @@ ilog_test_update(void **state)
 
 	rc = entries_set(entries, ENTRY_REPLACE, 2, true, ENTRIES_END);
 	assert_int_equal(rc, 0);
-	rc = entries_check(loh, NULL, 0, entries);
+	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
 	assert_int_equal(rc, 0);
 
 
@@ -526,7 +527,7 @@ ilog_test_update(void **state)
 		assert(0);
 	}
 
-	rc = entries_check(loh, NULL, 0, entries);
+	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
 	assert_int_equal(rc, 0);
 	ilog_close(loh);
 	rc = ilog_destroy(umm, &ilog_callbacks, ilog);
@@ -587,7 +588,7 @@ ilog_test_abort(void **state)
 
 	rc = entries_set(entries, ENTRY_NEW, 1, false, ENTRIES_END);
 	assert_int_equal(rc, 0);
-	rc = entries_check(loh, NULL, 0, entries);
+	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
 	assert_int_equal(rc, 0);
 
 	id.id_tx_id = current_tx_id;
@@ -600,7 +601,8 @@ ilog_test_abort(void **state)
 
 	rc = entries_set(entries, ENTRY_NEW, ENTRIES_END);
 	assert_int_equal(rc, 0);
-	rc = entries_check(loh, NULL, -DER_NONEXIST, entries);
+	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, -DER_NONEXIST,
+			   entries);
 	assert_int_equal(rc, 0);
 
 	rc = ilog_update(loh, id.id_epoch, false);
@@ -612,7 +614,8 @@ ilog_test_abort(void **state)
 	for (iter = 0; iter < 5; iter++) {
 		rc = entries_set(entries, ENTRY_NEW, 1, false, ENTRIES_END);
 		assert_int_equal(rc, 0);
-		rc = entries_check(loh, NULL, 0, entries);
+		rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0,
+				   entries);
 		assert_int_equal(rc, 0);
 
 		id.id_epoch = 2 + NUM_REC * iter;
@@ -636,7 +639,8 @@ ilog_test_abort(void **state)
 			id.id_epoch++;
 		}
 
-		rc = entries_check(loh, NULL, 0, entries);
+		rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0,
+				   entries);
 		assert_int_equal(rc, 0);
 
 		/* delete the same entries, leaving the one entry in the tree */
@@ -662,7 +666,7 @@ ilog_test_abort(void **state)
 
 	rc = entries_set(entries, ENTRY_NEW, 1, false, ENTRIES_END);
 	assert_int_equal(rc, 0);
-	rc = entries_check(loh, NULL, 0, entries);
+	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
 	assert_int_equal(rc, 0);
 
 	ilog_close(loh);
@@ -751,7 +755,7 @@ ilog_test_persist(void **state)
 	rc = entries_set(entries, ENTRY_NEW, 1, false, 2, false, 4, true,
 			 ENTRIES_END);
 	assert_int_equal(rc, 0);
-	rc = entries_check(loh, NULL, 0, entries);
+	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
 	assert_int_equal(rc, 0);
 
 	id.id_epoch = 1;
@@ -766,7 +770,7 @@ ilog_test_persist(void **state)
 
 	rc = entries_set(entries, ENTRY_NEW, 1, false, 4, true, ENTRIES_END);
 	assert_int_equal(rc, 0);
-	rc = entries_check(loh, NULL, 0, entries);
+	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
 	assert_int_equal(rc, 0);
 
 	ilog_close(loh);
@@ -851,7 +855,7 @@ ilog_test_aggregate(void **state)
 
 	rc = entries_set(entries, ENTRY_NEW, 1, false, ENTRIES_END);
 	assert_int_equal(rc, 0);
-	rc = entries_check(loh, NULL, 0, entries);
+	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
 	assert_int_equal(rc, 0);
 
 	id.id_epoch = 5;
@@ -878,7 +882,7 @@ ilog_test_aggregate(void **state)
 	}
 	rc = entries_set(entries, ENTRY_NEW, 6, false, ENTRIES_END);
 	assert_int_equal(rc, 0);
-	rc = entries_check(loh, NULL, 0, entries);
+	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
 	assert_int_equal(rc, 0);
 
 	id.id_epoch = 7;
@@ -898,7 +902,8 @@ ilog_test_aggregate(void **state)
 
 	rc = entries_set(entries, ENTRY_NEW, ENTRIES_END);
 	assert_int_equal(rc, 0);
-	rc = entries_check(loh, NULL, -DER_NONEXIST, entries);
+	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, -DER_NONEXIST,
+			   entries);
 	assert_int_equal(rc, 0);
 	assert_true(d_list_empty(&fake_tx_list));
 

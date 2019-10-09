@@ -203,11 +203,13 @@ phy_recs_nr(struct io_test_args *arg, daos_unit_oid_t oid,
 static int
 lookup_object(struct io_test_args *arg, daos_unit_oid_t oid)
 {
-	struct vos_obj_df	*obj_df = NULL;
+	struct vos_object	*obj = NULL;
 	int			 rc;
+	daos_epoch_range_t	 epr = {0, DAOS_EPOCH_MAX};
 
-	rc = vos_oi_find(vos_hdl2cont(arg->ctx.tc_co_hdl), oid, 1,
-			 DAOS_INTENT_DEFAULT, &obj_df);
+	rc = vos_obj_hold(vos_obj_cache_current(),
+			  vos_hdl2cont(arg->ctx.tc_co_hdl), oid, &epr, true,
+			  DAOS_INTENT_DEFAULT, true, &obj);
 	return rc;
 }
 

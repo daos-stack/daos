@@ -567,6 +567,7 @@ svt_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 {
 	struct vos_rec_bundle	*rbund;
 	struct vos_key_bundle	*kbund;
+	struct vos_irec_df	*irec;
 	int			 rc = 0;
 
 	kbund = iov2key_bundle(key_iov);
@@ -584,8 +585,9 @@ svt_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 		rbund->rb_off = UMOFF_NULL; /* taken over by btree */
 	}
 
+	irec	= vos_rec2irec(tins, rec);
 	rc = vos_dtx_register_record(&tins->ti_umm, rec->rec_off,
-				     DTX_RT_SVT, 0);
+				     DTX_RT_SVT, &irec->ir_dtx);
 	if (rc != 0)
 		/* It is unnecessary to free the PMEM that will be dropped
 		 * automatically when the PMDK transaction is aborted.
@@ -746,8 +748,8 @@ evt_dop_log_status(struct umem_instance *umm, struct evt_desc *desc,
 int
 evt_dop_log_add(struct umem_instance *umm, struct evt_desc *desc, void *args)
 {
-	return vos_dtx_register_record(umm, umem_ptr2off(umm, desc),
-				       DTX_RT_EVT, 0);
+	return vos_dtx_register_record(umm, umem_ptr2off(umm, desc), DTX_RT_EVT,
+				       &desc->dc_dtx);
 }
 
 int
@@ -970,14 +972,14 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	int			 rc;
 
 	rc = dbtree_fetch(toh, BTR_PROBE_GE | BTR_PROBE_MATCHED,
-			  DAOS_INTENT_PUNCH, key_iov, NULL, val_iov);
+			  DAOS_INTENT_UPDATE, key_iov, NULL, val_iov);
 	if (rc != 0) {
 		if (rc == -DER_INPROGRESS)
 			return rc;
 
 		D_ASSERT(rc == -DER_NONEXIST);
 		/* use BTR_PROBE_BYPASS to avoid probe again */
-		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, DAOS_INTENT_PUNCH,
+		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, DAOS_INTENT_UPDATE,
 				   key_iov, val_iov);
 		if (rc) {
 			D_ERROR("Failed to add new punch, rc=%d\n", rc);
@@ -1116,88 +1118,4 @@ obj_tree_find_attr(unsigned tree_class)
 		if (ta->ta_class == VOS_BTR_END)
 			return NULL;
 	}
-}
-
-static int
-vos_ilog_status_get(struct umem_instance *umm, umem_off_t tx_id,
-		    uint32_t intent, void *args)
-{
-	int	rc;
-	daos_handle_t coh;
-
-	coh.cookie = (unsigned long)args;
-
-	rc = vos_dtx_check_availability(umm, coh, tx_id, UMOFF_NULL,
-					intent, DTX_RT_ILOG);
-	if (rc < 0)
-		return rc;
-
-	switch (rc) {
-	case ALB_UNAVAILABLE:
-		return ILOG_UNCOMMITTED;
-	case ALB_AVAILABLE_CLEAN:
-		return ILOG_COMMITTED;
-	case ALB_AVAILABLE_DIRTY:
-		break;
-	default:
-		D_ASSERTF(0, "Unexpected availability\n");
-	}
-
-	return ILOG_REMOVED;
-}
-
-static int
-vos_ilog_is_same_tx(struct umem_instance *umm, umem_off_t tx_id, bool *same,
-		    void *args)
-{
-	umem_off_t dtx = vos_dtx_get();
-
-	if (dtx == tx_id)
-		*same = true;
-	else
-		*same = false;
-
-	return 0;
-}
-
-static int
-vos_ilog_add(struct umem_instance *umm, umem_off_t ilog_off, umem_off_t *tx_id,
-	     void *args)
-{
-	return vos_dtx_register_ilog(umm, ilog_off, tx_id);
-}
-
-static int
-vos_ilog_del(struct umem_instance *umm, umem_off_t ilog_off, umem_off_t tx_id,
-	     void *args)
-{
-	vos_dtx_deregister_record(umm, tx_id, ilog_off, DTX_RT_ILOG);
-	return 0;
-}
-
-void
-vos_ilog_desc_cbs_init(struct ilog_desc_cbs *cbs, daos_handle_t coh)
-{
-	cbs->dc_log_status_cb	= vos_ilog_status_get;
-	cbs->dc_log_status_args	= (void *)(unsigned long)coh.cookie;
-	cbs->dc_is_same_tx_cb = vos_ilog_is_same_tx;
-	cbs->dc_is_same_tx_args = NULL;
-	cbs->dc_log_add_cb = vos_ilog_add;
-	cbs->dc_log_add_args = NULL;
-	cbs->dc_log_del_cb = vos_ilog_del;
-	cbs->dc_log_del_args = NULL;
-}
-
-int
-vos_ilog_init(void)
-{
-	int	rc;
-
-	rc = ilog_init();
-	if (rc != 0) {
-		D_ERROR("Failed to initialize incarnation log globals\n");
-		return rc;
-	}
-
-	return 0;
 }

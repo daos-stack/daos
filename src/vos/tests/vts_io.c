@@ -336,7 +336,11 @@ io_akey_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 	}
 
 	rc = vos_iter_probe(ih, NULL);
-	if (rc != 0 && rc != -DER_NONEXIST) {
+	if (rc == -DER_NONEXIST) {
+		rc = 0;
+		goto out;
+	}
+	if (rc != 0) {
 		print_error("Failed to set iterator cursor: %d\n", rc);
 		goto out;
 	}
@@ -415,13 +419,13 @@ io_obj_iter_test(struct io_test_args *arg, daos_epoch_range_t *epr,
 	}
 
 	rc = vos_iter_probe(ih, NULL);
-	if (rc != 0) {
+	if (rc != 0 && rc != -DER_NONEXIST) {
 		print_error("Failed to set iterator cursor: %d\n",
 			    rc);
 		goto out;
 	}
 
-	while (1) {
+	while (rc == 0) {
 		vos_iter_entry_t	ent;
 		daos_anchor_t		anchor;
 
@@ -445,8 +449,10 @@ io_obj_iter_test(struct io_test_args *arg, daos_epoch_range_t *epr,
 
 		nr++;
 		rc = vos_iter_next(ih);
-		if (rc == -DER_NONEXIST)
+		if (rc == -DER_NONEXIST) {
+			print_message("Finishing d-key iteration\n");
 			break;
+		}
 
 		if (rc != 0) {
 			print_error("Failed to move cursor: %d\n", rc);
@@ -472,6 +478,7 @@ io_obj_iter_test(struct io_test_args *arg, daos_epoch_range_t *epr,
 			goto out;
 		}
 	}
+	rc = 0;
  out:
 	vos_iter_finish(ih);
 	*num_dkeys = nr;
@@ -742,17 +749,21 @@ exit:
 
 static inline int
 hold_objects(struct vos_object **objs, struct daos_lru_cache *occ,
-	     daos_handle_t *coh, daos_unit_oid_t *oid, int start, int end)
+	     daos_handle_t *coh, daos_unit_oid_t *oid, int start, int end,
+	     bool no_create, int exp_rc)
 {
-	int i = 0, rc = 0;
+	int			i = 0, rc = 0;
+	daos_epoch_range_t	epr = {0, 1};
 
 	for (i = start; i < end; i++) {
-		rc = vos_obj_hold(occ, vos_hdl2cont(*coh), *oid, 1, true,
-				  DAOS_INTENT_DEFAULT, &objs[i]);
-		assert_int_equal(rc, 0);
+		rc = vos_obj_hold(occ, vos_hdl2cont(*coh), *oid, &epr,
+				  no_create, no_create ? DAOS_INTENT_DEFAULT :
+				  DAOS_INTENT_UPDATE, true, &objs[i]);
+		if (rc != exp_rc)
+			return 1;
 	}
 
-	return rc;
+	return 0;
 }
 
 static void
@@ -769,10 +780,10 @@ io_oi_test(void **state)
 	cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
 	assert_ptr_not_equal(cont, NULL);
 
-	rc = vos_oi_find_alloc(cont, oid, 1, DAOS_INTENT_UPDATE, &obj[0]);
+	rc = vos_oi_find_alloc(cont, oid, 1, &obj[0]);
 	assert_int_equal(rc, 0);
 
-	rc = vos_oi_find_alloc(cont, oid, 1, DAOS_INTENT_UPDATE, &obj[1]);
+	rc = vos_oi_find_alloc(cont, oid, 1, &obj[1]);
 	assert_int_equal(rc, 0);
 }
 
@@ -783,6 +794,7 @@ io_obj_cache_test(void **state)
 	struct vos_test_ctx	*ctx = &arg->ctx;
 	struct daos_lru_cache	*occ = NULL;
 	struct vos_object	*objs[20];
+	daos_epoch_range_t	 epr = {0, 1};
 	daos_unit_oid_t		 oids[2];
 	char			*po_name;
 	uuid_t			 pool_uuid;
@@ -811,15 +823,29 @@ io_obj_cache_test(void **state)
 	oids[0] = gen_oid(arg->ofeat);
 	oids[1] = gen_oid(arg->ofeat);
 
-	rc = hold_objects(objs, occ, &ctx->tc_co_hdl, &oids[0], 0, 10);
+	rc = vos_obj_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0], &epr,
+			  false, DAOS_INTENT_DEFAULT, true, &objs[0]);
+	assert_int_equal(rc, 0);
+	vos_obj_release(occ, objs[0]);
+
+	rc = vos_obj_hold(occ, vos_hdl2cont(l_coh), oids[1], &epr, false,
+			  DAOS_INTENT_DEFAULT, true, &objs[0]);
+	assert_int_equal(rc, 0);
+	vos_obj_release(occ, objs[0]);
+
+	rc = hold_objects(objs, occ, &ctx->tc_co_hdl, &oids[0], 0, 10, true, 0);
 	assert_int_equal(rc, 0);
 
-	rc = hold_objects(objs, occ, &ctx->tc_co_hdl, &oids[1], 10, 15);
+	rc = hold_objects(objs, occ, &ctx->tc_co_hdl, &oids[1], 10, 15, true,
+			  -DER_NONEXIST);
 	assert_int_equal(rc, 0);
 
-	rc = vos_obj_hold(occ, vos_hdl2cont(l_coh), oids[1], 1, true,
-			  DAOS_INTENT_DEFAULT, &objs[16]);
+	rc = hold_objects(objs, occ, &l_coh, &oids[1], 10, 15, true, 0);
 	assert_int_equal(rc, 0);
+	rc = vos_obj_hold(occ, vos_hdl2cont(l_coh), oids[1], &epr, true,
+			  DAOS_INTENT_DEFAULT, true, &objs[16]);
+	assert_int_equal(rc, 0);
+
 	vos_obj_release(occ, objs[16]);
 
 	for (i = 0; i < 5; i++)
@@ -827,7 +853,7 @@ io_obj_cache_test(void **state)
 	for (i = 10; i < 15; i++)
 		vos_obj_release(occ, objs[i]);
 
-	rc = hold_objects(objs, occ, &ctx->tc_co_hdl, &oids[1], 15, 20);
+	rc = hold_objects(objs, occ, &l_coh, &oids[1], 15, 20, true, 0);
 	assert_int_equal(rc, 0);
 
 	for (i = 5; i < 10; i++)
@@ -1646,9 +1672,10 @@ punch_model_test(void **state)
 	struct counts		counts = {0};
 	daos_unit_oid_t		oid;
 
+	test_args_reset(arg, VPOOL_SIZE);
+
 	memset(&rex, 0, sizeof(rex));
 	memset(&iod, 0, sizeof(iod));
-	D_INFO("punch model test\n");
 
 	/* Set up dkey and akey */
 	oid = gen_oid(arg->ofeat);
@@ -1730,6 +1757,18 @@ punch_model_test(void **state)
 			    &sgl);
 	assert_int_equal(rc, 0);
 
+	/* Punch the object at 10 */
+	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, 10, 0, 0, NULL, 0, NULL,
+			   NULL);
+	assert_int_equal(rc, 0);
+
+	/* Write one more at 11 */
+	rex.rx_nr = strlen(expected);
+	d_iov_set(&sgl.sg_iovs[0], (void *)under, strlen(under));
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, 11, 0, &dkey, 1, &iod,
+			    &sgl);
+	assert_int_equal(rc, 0);
+
 	/** read old one for sanity */
 	memset(buf, 0, sizeof(buf));
 	rex.rx_nr = strlen(under);
@@ -1784,10 +1823,64 @@ punch_model_test(void **state)
 	assert_int_equal(rc, 0);
 	assert_int_equal(counts.akey_nr, 1);
 	assert_int_equal(counts.dkey_nr, 1);
-	assert_int_equal(counts.akey_punch_nr, 1);
-	assert_int_equal(counts.dkey_punch_nr, 1);
+	assert_int_equal(counts.akey_punch_nr, 0);
+	assert_int_equal(counts.dkey_punch_nr, 0);
 	/* Five total extents but we are reading at epoch 8 */
 	assert_int_equal(counts.recx_nr, 4);
+
+	/* Now recurse after punch, not including punched entries */
+	memset(&counts, 0, sizeof(counts));
+	param.ip_hdl = arg->ctx.tc_co_hdl;
+	param.ip_flags = 0;
+	param.ip_ih = DAOS_HDL_INVAL;
+	param.ip_epr.epr_hi = 10;
+	param.ip_epr.epr_lo = 0;
+	memset(&anchors, 0, sizeof(anchors));
+	rc = vos_iterate(&param, VOS_ITER_OBJ, true, &anchors, count_cb,
+			 &counts);
+	assert_int_equal(rc, 0);
+	assert_int_equal(counts.akey_nr, 0);
+	assert_int_equal(counts.dkey_nr, 0);
+	assert_int_equal(counts.akey_punch_nr, 0);
+	assert_int_equal(counts.dkey_punch_nr, 0);
+	/* Five total extents but all punched */
+	assert_int_equal(counts.recx_nr, 0);
+
+	/* Now recurse including punched entries after object punch */
+	memset(&counts, 0, sizeof(counts));
+	param.ip_hdl = arg->ctx.tc_co_hdl;
+	param.ip_flags = VOS_IT_PUNCHED;
+	param.ip_ih = DAOS_HDL_INVAL;
+	param.ip_epr.epr_hi = 10;
+	param.ip_epr.epr_lo = 0;
+	memset(&anchors, 0, sizeof(anchors));
+	rc = vos_iterate(&param, VOS_ITER_OBJ, true, &anchors, count_cb,
+			 &counts);
+	assert_int_equal(rc, 0);
+	assert_int_equal(counts.akey_nr, 1);
+	assert_int_equal(counts.dkey_nr, 1);
+	assert_int_equal(counts.akey_punch_nr, 0);
+	assert_int_equal(counts.dkey_punch_nr, 0);
+	/* Five total extents */
+	assert_int_equal(counts.recx_nr, 5);
+
+	/* Now recurse visible entries at 11 */
+	memset(&counts, 0, sizeof(counts));
+	param.ip_hdl = arg->ctx.tc_co_hdl;
+	param.ip_flags = 0;
+	param.ip_ih = DAOS_HDL_INVAL;
+	param.ip_epr.epr_hi = 11;
+	param.ip_epr.epr_lo = 0;
+	memset(&anchors, 0, sizeof(anchors));
+	rc = vos_iterate(&param, VOS_ITER_OBJ, true, &anchors, count_cb,
+			 &counts);
+	assert_int_equal(rc, 0);
+	assert_int_equal(counts.akey_nr, 1);
+	assert_int_equal(counts.dkey_nr, 1);
+	assert_int_equal(counts.akey_punch_nr, 0);
+	assert_int_equal(counts.dkey_punch_nr, 0);
+	/* Five total extents */
+	assert_int_equal(counts.recx_nr, 1);
 
 	daos_sgl_fini(&sgl, false);
 	D_INFO("done punch model test\n");
@@ -2131,8 +2224,7 @@ oid_iter_test_setup(void **state)
 	for (i = 0; i < VTS_IO_OIDS; i++) {
 		oids[i] = gen_oid(arg->ofeat);
 
-		rc = vos_oi_find_alloc(cont, oids[i], 1, DAOS_INTENT_UPDATE,
-				       &obj_df);
+		rc = vos_oi_find_alloc(cont, oids[i], 1, &obj_df);
 		assert_int_equal(rc, 0);
 	}
 	return 0;
