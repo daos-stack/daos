@@ -64,7 +64,9 @@ check_key(struct open_query *query, struct vos_krec_df *krec, bool *visible)
 		return rc;
 
 	ilog_foreach_entry_reverse(&query->qt_entries, entry) {
-		if (entry->ie_status == ILOG_INVISIBLE)
+		if (entry->ie_status == ILOG_REMOVED)
+			continue;
+		if (entry->ie_status == ILOG_UNCOMMITTED)
 			return -DER_INPROGRESS;
 
 		if (entry->ie_punch) {
@@ -375,16 +377,16 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 	}
 
 	ilog_fetch_init(&query.qt_entries);
-	query.qt_obj = obj;
 	query.qt_dkey_toh   = DAOS_HDL_INVAL;
 	query.qt_akey_toh   = DAOS_HDL_INVAL;
+	query.qt_obj = obj;
 	query.qt_flags	    = flags;
 	query.qt_dkey_root  = &obj->obj_df->vo_tree;
 	query.qt_coh	    = coh;
 	query.qt_pool	    = vos_obj2pool(obj);
 
 	for (;;) {
-		/* Reset the epr */
+		/* Reset the epoch range */
 		query.qt_epr.epr_lo = 0;
 		query.qt_epr.epr_hi = epoch;
 		rc = open_and_query_key(&query, dkey, DAOS_GET_DKEY,
@@ -420,6 +422,7 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 				       d_errstr(rc));
 				if (rc == -DER_NONEXIST &&
 				    query.qt_flags & DAOS_GET_AKEY) {
+					/* Reset the epoch range to last dkey */
 					query.qt_epr = dkey_epr;
 					continue;
 				}

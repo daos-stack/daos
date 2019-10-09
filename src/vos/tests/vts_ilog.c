@@ -98,21 +98,21 @@ struct fake_tx_entry {
 
 static D_LIST_HEAD(fake_tx_list);
 
-static enum ilog_status
+static int
 fake_tx_status_get(struct umem_instance *umm, umem_off_t tx_id, uint32_t intent,
 		   void *args)
 {
 	struct fake_tx_entry	*entry = (struct fake_tx_entry *)tx_id;
 
 	if (entry == NULL)
-		return ILOG_VISIBLE;
+		return ILOG_COMMITTED;
 
 	switch (entry->status) {
 	case COMMITTED:
 	case COMMITTABLE:
-		return ILOG_VISIBLE;
+		return ILOG_COMMITTED;
 	case PREPARED:
-		return ILOG_INVISIBLE;
+		return ILOG_UNCOMMITTED;
 	}
 	D_ASSERT(0);
 	return 0;
@@ -300,7 +300,7 @@ entries_check(daos_handle_t loh, const daos_epoch_range_t *epr,
 
 	ilog_fetch_init(&ilog_entries);
 
-	rc = ilog_fetch(loh, DAOS_INTENT_DEFAULT, epr, &ilog_entries);
+	rc = ilog_fetch(loh, 0, &ilog_entries);
 	if (rc != expected_rc) {
 		print_message("Unexpected fetch rc: %s\n", d_errstr(rc));
 		if (rc == 0)
