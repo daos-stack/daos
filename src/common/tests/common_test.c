@@ -21,19 +21,14 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#include <stdlib.h>
 #include <stddef.h>
-#include <stdarg.h>
-
 #include <getopt.h>
-#include <setjmp.h>
-
+#include <setjmp.h> /** For cmocka.h */
+#include <stdarg.h>
+#include <stddef.h>
 #include <cmocka.h>
 #include <gurt/debug.h>
-
-#include "misc_tests.h"
-#include "daos_checksum_tests.h"
-
+#include "common_test.h"
 
 static void
 print_usage(char *name)
