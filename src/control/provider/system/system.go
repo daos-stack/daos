@@ -21,40 +21,22 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-syntax = "proto3";
-package mgmt;
+package system
 
-// Management Service Protobuf Definitions related to interactions between
-// DAOS control server and DAOS system.
-
-// SystemMember refers to a data-plane instance that is a member of DAOS
-// system running on host with the control-plane listening at "Addr".
-message SystemMember {
-	string addr = 1;
-	string uuid = 2;
-	uint32 rank = 3;
-}
-
-// SystemStopReq supplies system shutdown parameters.
-message SystemStopReq {}
-
-// SystemStopResp returns status of shutdown attempt and results
-// of attempts to stop system members.
-message SystemStopResp {
-	message Result {
-		string id = 1;
-		string action = 2;
-		bool errored = 3;
-		string msg = 4;
+type (
+	// IsMountedProvider is the interface that wraps the IsMounted method,
+	// which can be provided by a system-specific implementation or a mock.
+	IsMountedProvider interface {
+		IsMounted(target string) (bool, error)
 	}
-	repeated Result results = 1;
-}
-
-// SystemMemberQueryReq supplies system query parameters.
-message SystemMemberQueryReq {}
-
-// SystemMemberQueryResp returns active system members.
-message SystemMemberQueryResp {
-	repeated SystemMember members = 1;
-}
-
+	// MountProvider is the interface that wraps the Mount method, which
+	// can be provided by a system-specific implementation or a mock.
+	MountProvider interface {
+		Mount(source, target, fstype string, flags uintptr, data string) error
+	}
+	// UnmountProvider is the interface that wraps the Unmount method, which
+	// can be provided by a system-specific implementation or a mock.
+	UnmountProvider interface {
+		Unmount(target string, flags int) error
+	}
+)

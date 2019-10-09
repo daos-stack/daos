@@ -24,7 +24,6 @@
 package client
 
 import (
-	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -35,7 +34,7 @@ import (
 // of remaining system members on failure.
 //
 // Isolate protobuf encapsulation in client and don't expose to calling code.
-func (c *connList) SystemStop() (common.SystemMembers, error) {
+func (c *connList) SystemStop() (common.SystemMemberResults, error) {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
 		return nil, err
@@ -52,12 +51,7 @@ func (c *connList) SystemStop() (common.SystemMembers, error) {
 
 	c.log.Debugf("DAOS system shutdown response: %s\n", rpcResp)
 
-	if rpcResp.GetStatus() != 0 {
-		return nil, errors.Errorf("DAOS returned error code: %d\n",
-			rpcResp.GetStatus())
-	}
-
-	return common.MembersFromPB(c.log, rpcResp.Members), nil
+	return common.MemberResultsFromPB(c.log, rpcResp.Results), nil
 }
 
 // SystemMemberQuery will return the list of members joined to DAOS system.
@@ -79,11 +73,6 @@ func (c *connList) SystemMemberQuery() (common.SystemMembers, error) {
 	}
 
 	c.log.Debugf("DAOS system query response: %s\n", rpcResp)
-
-	if rpcResp.GetStatus() != 0 {
-		return nil, errors.Errorf("DAOS returned error code: %d\n",
-			rpcResp.GetStatus())
-	}
 
 	return common.MembersFromPB(c.log, rpcResp.Members), nil
 }

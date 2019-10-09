@@ -24,31 +24,53 @@
 package server
 
 import (
+	"net"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
+	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
+const stopTimeout = 10 * retryDelay
+
+type addrErrors map[net.Addr]error
+
 // systemStop sends multicast KillRank gRPC requests to system membership list.
-func (svc *mgmtSvc) systemStop(ctx context.Context, leader *IOServerInstance) error {
+func (svc *mgmtSvc) systemStop(ctx context.Context, leader *IOServerInstance) common.SystemMemberResults {
+	members := svc.members.GetMembers()
+	results := make(common.SystemMemberResults, 0, len(members))
+
+	// total retry timeout, allows for 10 retries
+	ctx, _ = context.WithTimeout(ctx, stopTimeout)
+
 	// TODO: inhibit rebuild on pool services, parallelise and make async.
-	for _, member := range svc.members.GetMembers() {
+	for _, member := range members {
 		svc.log.Debugf("MgmtSvc.systemStop kill member %+v\n", *member)
+
+		result := common.SystemMemberResult{ID: member.String(), Action: "stop"}
+
 		resp, err := leader.msClient.Stop(ctx, member.Addr.String(),
 			&mgmtpb.DaosRank{Rank: member.Rank})
 		if err != nil {
-			svc.log.Debugf("MgmtSvc.systemStop error %s\n", err)
-			// TODO: record errors and continue
-			return err
+			result.Err = err
+		} else if resp.GetStatus() != 0 {
+			result.Err = errors.Errorf("DAOS returned error code: %d\n",
+				resp.GetStatus())
 		}
 
-		svc.log.Debugf("MgmtSvc.systemStop response %+v\n", *resp)
-		svc.members.Remove(member.Uuid)
+		if result.Err == nil {
+			svc.members.Remove(member.Uuid)
+		} else {
+			svc.log.Debugf("MgmtSvc.systemStop error %s\n", result.Err)
+		}
+
+		results = append(results, &result)
 	}
 
-	return nil
+	return results
 }
 
 // KillRank implements the method defined for the Management Service.
@@ -92,7 +114,7 @@ func (svc *mgmtSvc) SystemMemberQuery(ctx context.Context, req *mgmtpb.SystemMem
 
 	svc.log.Debug("received SystemMemberQuery RPC; reporting DAOS system members")
 
-	resp.Members = svc.members.GetMembersPB()
+	resp.Members = common.MembersToPB(svc.members.GetMembers())
 
 	svc.log.Debug("responding to SystemMemberQuery RPC")
 
@@ -114,11 +136,8 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (
 
 	svc.log.Debug("received SystemStop RPC; proceeding to shutdown DAOS system")
 
-	// perform controlled shutdown (synchronous)
-	if err := svc.systemStop(ctx, mi); err != nil {
-		return nil, err
-	}
-	resp.Members = svc.members.GetMembersPB()
+	// perform controlled shutdown and populate response with results
+	resp.Results = common.MemberResultsToPB(svc.systemStop(ctx, mi))
 
 	svc.log.Debug("responding to SystemStop RPC")
 

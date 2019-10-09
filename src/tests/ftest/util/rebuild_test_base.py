@@ -43,7 +43,7 @@ class RebuildTestBase(TestWithServers):
     """
 
     def __init__(self, *args, **kwargs):
-        """Initialize a RebuldTestBase object."""
+        """Initialize a RebuildTestBase object."""
         super(RebuildTestBase, self).__init__(*args, **kwargs)
         self.inputs = RebuildTestParams()
         self.targets = None
