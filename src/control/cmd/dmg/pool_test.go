@@ -232,7 +232,9 @@ func TestPoolCommands(t *testing.T) {
 			"pool get-acl --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 			strings.Join([]string{
 				"ConnectClients",
-				"PoolGetACL-031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				fmt.Sprintf("PoolGetACL-%+v", &client.PoolGetACLReq{
+					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
 			}, " "),
 			nil,
 		},

@@ -127,15 +127,24 @@ func (c *connList) PoolDestroy(req *PoolDestroyReq) error {
 	return nil
 }
 
-// PoolGetACL gets the Access Control List for the pool with a given UUID.
-// The ACL is returned as a list of Access Control Entries in string format.
-func (c *connList) PoolGetACL(uuid string) ([]string, error) {
+// PoolGetACLReq contains the input parameters for PoolGetACL
+type PoolGetACLReq struct {
+	UUID string // pool UUID
+}
+
+// PoolGetACLResp contains the output results for PoolGetACL
+type PoolGetACLResp struct {
+	ACL []string // Access Control Entries in string format
+}
+
+// PoolGetACL gets the Access Control List for the pool.
+func (c *connList) PoolGetACL(req *PoolGetACLReq) (*PoolGetACLResp, error) {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
 		return nil, err
 	}
 
-	pbReq := &mgmtpb.GetACLReq{Uuid: uuid}
+	pbReq := &mgmtpb.GetACLReq{Uuid: req.UUID}
 
 	c.log.Debugf("Get DAOS pool ACL request: %v", pbReq)
 
@@ -151,5 +160,7 @@ func (c *connList) PoolGetACL(uuid string) ([]string, error) {
 			pbResp.GetStatus())
 	}
 
-	return pbResp.ACL, nil
+	return &PoolGetACLResp{
+		ACL: pbResp.ACL,
+	}, nil
 }

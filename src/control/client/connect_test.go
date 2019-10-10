@@ -367,7 +367,11 @@ func TestPoolGetACL(t *testing.T) {
 			nil, nil, nil, nil, nil, nil,
 			aclResult)
 
-		acl, err := cc.PoolGetACL("TestUUID")
+		req := &PoolGetACLReq{
+			UUID: "TestUUID",
+		}
+
+		resp, err := cc.PoolGetACL(req)
 
 		if tt.expectedErr != "" {
 			ExpectError(t, err, tt.expectedErr, tt.desc)
@@ -376,12 +380,12 @@ func TestPoolGetACL(t *testing.T) {
 		}
 
 		if tt.expectedACL != nil {
-			if acl == nil {
+			if resp == nil || resp.ACL == nil {
 				t.Fatal("expected an ACL, got nil")
 			}
-			AssertStringsEqual(t, acl, tt.expectedACL, tt.desc)
-		} else if acl != nil {
-			t.Fatalf("expected no ACL, got %v", acl)
+			AssertStringsEqual(t, resp.ACL, tt.expectedACL, tt.desc)
+		} else if resp != nil {
+			t.Fatalf("expected no ACL, got %v", resp.ACL)
 		}
 	}
 }

@@ -254,13 +254,17 @@ func poolDestroy(log logging.Logger, conns client.Connect, poolUUID string, forc
 }
 
 func poolGetACL(log logging.Logger, conns client.Connect, poolUUID string) error {
-	acl, err := conns.PoolGetACL(poolUUID)
+	req := &client.PoolGetACLReq{UUID: poolUUID}
+
+	resp, err := conns.PoolGetACL(req)
 	if err != nil {
 		log.Infof("Pool-get-ACL command failed: %s\n", err.Error())
 		return err
 	}
 
 	log.Infof("Pool-get-ACL command succeeded, UUID: %s\n", poolUUID)
+	acl := resp.ACL
+
 	log.Info("Entries:\n")
 	if len(acl) == 0 {
 		log.Info("None\n")
