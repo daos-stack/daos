@@ -271,7 +271,7 @@ class TestWithServers(TestWithoutServers):
         # Stop the servers
         errors.extend(self.stop_servers())
 
-        # Disable fault injection, if enabled
+        # Complete tear down actions from the inherited class
         try:
             super(TestWithServers, self).tearDown()
         except OSError as error:

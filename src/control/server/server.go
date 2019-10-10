@@ -38,9 +38,9 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
-	"github.com/daos-stack/daos/src/control/security/acl"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
 // define supported maximum number of I/O servers
@@ -72,7 +72,8 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		return errors.Wrap(err, "unable to resolve daos_server control address")
 	}
 
-	harness := NewIOServerHarness(&ext{}, log)
+	scmProvider := scm.DefaultProvider(log)
+	harness := NewIOServerHarness(log)
 	for i, srvCfg := range cfg.Servers {
 		if i+1 > maxIoServers {
 			break
@@ -89,7 +90,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 			TransportConfig: cfg.TransportConfig,
 		})
 
-		srv := NewIOServerInstance(harness.ext, log, bp, msClient, ioserver.NewRunner(log, srvCfg))
+		srv := NewIOServerInstance(log, bp, scmProvider, msClient, ioserver.NewRunner(log, srvCfg))
 		if err := harness.AddInstance(srv); err != nil {
 			return err
 		}
@@ -101,7 +102,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}
 
 	// Create and setup control service.
-	controlService, err := NewControlService(log, harness, cfg)
+	controlService, err := NewControlService(log, harness, scmProvider, cfg)
 	if err != nil {
 		return errors.Wrap(err, "init control service")
 	}
@@ -132,8 +133,6 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	// otherwise, only provide gRPC mgmt control service for hardware provisioning.
 	if !needsRespawn {
 		mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(harness))
-		secServer := newSecurityService(getDrpcClientConnection(cfg.SocketDir))
-		acl.RegisterAccessControlServer(grpcServer, secServer)
 	}
 
 	go func() {
@@ -150,6 +149,9 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 			select {
 			case sig := <-sigChan:
 				log.Debugf("Caught signal: %s", sig)
+				if err := drpcCleanup(cfg.SocketDir); err != nil {
+					log.Errorf("error during dRPC cleanup: %s", err)
+				}
 				shutdown()
 			}
 		}

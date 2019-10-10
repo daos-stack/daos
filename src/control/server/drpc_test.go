@@ -30,6 +30,11 @@ import (
 	"path/filepath"
 	"syscall"
 	"testing"
+
+	"github.com/pkg/errors"
+
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/drpc"
 )
 
 func createTestDir(t *testing.T) string {
@@ -127,5 +132,183 @@ func TestCheckDrpcClientSocketPath_Success(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("Expected no error, got error: %v", err)
+	}
+}
+
+func TestGetDrpcServerSocketPath_EmptyString(t *testing.T) {
+	expectedPath := "daos_server.sock"
+
+	path := getDrpcServerSocketPath("")
+
+	if path != expectedPath {
+		t.Errorf("Expected %q, got %q", expectedPath, path)
+	}
+}
+
+func TestGetDrpcServerSocketPath(t *testing.T) {
+	dirPath := "/some/server/dir"
+	expectedPath := filepath.Join(dirPath, "daos_server.sock")
+
+	path := getDrpcServerSocketPath(dirPath)
+
+	if path != expectedPath {
+		t.Errorf("Expected %q, got %q", expectedPath, path)
+	}
+}
+
+func TestDrpcCleanup_BadSocketDir(t *testing.T) {
+	badDir := "/some/fake/path"
+
+	err := drpcCleanup(badDir)
+
+	if err == nil {
+		t.Fatal("Expected error, got nil")
+	}
+}
+
+func TestDrpcCleanup_EmptyDir(t *testing.T) {
+	tmpDir := createTestDir(t)
+	defer os.Remove(tmpDir)
+
+	err := drpcCleanup(tmpDir)
+
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+}
+
+func expectDoesNotExist(t *testing.T, path string) {
+	if _, err := os.Stat(path); err == nil || !os.IsNotExist(err) {
+		t.Errorf("expected %q to no longer exist, but got error: %v",
+			path, err)
+	}
+}
+
+func TestDrpcCleanup_Single(t *testing.T) {
+	tmpDir := createTestDir(t)
+	defer os.Remove(tmpDir)
+
+	for _, sockName := range []string{
+		"daos_server.sock",
+		"daos_io_server.sock",
+		"daos_io_server0.sock",
+		"daos_io_server_2345.sock",
+	} {
+		sockPath := filepath.Join(tmpDir, sockName)
+		sock := createTestSocket(t, sockPath)
+		defer cleanupTestSocket(sockPath, sock)
+
+		err := drpcCleanup(tmpDir)
+
+		if err != nil {
+			t.Fatalf("%q: Expected no error, got: %v", sockPath, err)
+		}
+
+		expectDoesNotExist(t, sockPath)
+	}
+}
+
+func TestDrpcCleanup_DoesNotDeleteNonDaosSocketFiles(t *testing.T) {
+	tmpDir := createTestDir(t)
+	defer os.Remove(tmpDir)
+
+	for _, sockName := range []string{
+		"someone_else.sock",
+		"12345.sock",
+		"myfile",
+		"daos_server",
+		"daos_io_server",
+	} {
+		sockPath := filepath.Join(tmpDir, sockName)
+		sock := createTestSocket(t, sockPath)
+		defer cleanupTestSocket(sockPath, sock)
+
+		err := drpcCleanup(tmpDir)
+
+		if err != nil {
+			t.Fatalf("%q: Expected no error, got: %v", sockPath, err)
+		}
+
+		if _, err := os.Stat(sockPath); err != nil {
+			t.Errorf("expected %q to exist, but got error: %v",
+				sockPath, err)
+		}
+	}
+}
+
+func TestDrpcCleanup_Multiple(t *testing.T) {
+	tmpDir := createTestDir(t)
+	defer os.Remove(tmpDir)
+
+	sockNames := []string{
+		"daos_server.sock",
+		"daos_io_server.sock",
+		"daos_io_server12.sock",
+		"daos_io_serverF.sock",
+		"daos_io_server_5678.sock",
+		"daos_io_server_256.sock",
+		"daos_io_server_abc.sock",
+	}
+
+	var sockPaths []string
+
+	for _, sockName := range sockNames {
+		path := filepath.Join(tmpDir, sockName)
+		sockPaths = append(sockPaths, path)
+
+		sock := createTestSocket(t, path)
+		defer cleanupTestSocket(path, sock)
+	}
+
+	err := drpcCleanup(tmpDir)
+
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	for _, path := range sockPaths {
+		expectDoesNotExist(t, path)
+	}
+}
+
+func TestDrpc_Errors(t *testing.T) {
+	for name, tc := range map[string]struct {
+		notReady     bool
+		connectError error
+		sendError    error
+		resp         *drpc.Response
+		expErr       error
+	}{
+		"connect fails": {
+			connectError: errors.New("connect"),
+			expErr:       errors.New("connect"),
+		},
+		"send msg fails": {
+			sendError: errors.New("send"),
+			expErr:    errors.New("send"),
+		},
+		"nil resp": {
+			expErr: errors.New("no response"),
+		},
+		"failed status": {
+			resp: &drpc.Response{
+				Status: drpc.Status_FAILURE,
+			},
+			expErr: errors.New("status: FAILURE"),
+		},
+		"success": {
+			resp: &drpc.Response{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			mc := &mockDrpcClient{
+				SendMsgOutputError:    tc.sendError,
+				SendMsgOutputResponse: tc.resp,
+				ConnectOutputError:    tc.connectError,
+			}
+
+			_, err := makeDrpcCall(mc, mgmtModuleID, poolCreate, &mgmtpb.PoolCreateReq{})
+			cmpErr(t, tc.expErr, err)
+		})
 	}
 }

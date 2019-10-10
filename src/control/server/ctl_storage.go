@@ -29,9 +29,9 @@ import (
 	"github.com/pkg/errors"
 
 	types "github.com/daos-stack/daos/src/control/common/storage"
-	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
 // StorageControlService encapsulates the storage part of the control service
@@ -39,7 +39,6 @@ type StorageControlService struct {
 	log             logging.Logger
 	nvme            *nvmeStorage
 	scm             *scmStorage
-	drpc            drpc.DomainSocketClient
 	instanceStorage []ioserver.StorageConfig
 }
 
@@ -59,13 +58,12 @@ func DefaultStorageControlService(log logging.Logger, cfg *Configuration) (*Stor
 
 	return NewStorageControlService(log,
 		newNvmeStorage(log, cfg.NvmeShmID, spdkScript, cfg.ext),
-		newScmStorage(log, cfg.ext), cfg.Servers,
-		getDrpcClientConnection(cfg.SocketDir)), nil
+		newScmStorage(log, cfg.ext), cfg.Servers), nil
 }
 
 // NewStorageControlService returns an initialized *StorageControlService
 func NewStorageControlService(log logging.Logger, nvme *nvmeStorage, scm *scmStorage,
-	srvCfgs []*ioserver.Config, drpc drpc.DomainSocketClient) *StorageControlService {
+	srvCfgs []*ioserver.Config) *StorageControlService {
 
 	instanceStorage := []ioserver.StorageConfig{}
 	for _, srvCfg := range srvCfgs {
@@ -76,7 +74,6 @@ func NewStorageControlService(log logging.Logger, nvme *nvmeStorage, scm *scmSto
 		log:             log,
 		nvme:            nvme,
 		scm:             scm,
-		drpc:            drpc,
 		instanceStorage: instanceStorage,
 	}
 }
@@ -187,24 +184,22 @@ func (c *StorageControlService) GetScmState() (types.ScmState, error) {
 		return state, errors.New(msgScmNoModules)
 	}
 
-	return c.scm.prep.GetState()
+	return c.scm.provider.GetState()
 }
 
 // PrepareScm preps locally attached modules and returns need to reboot message,
 // list of pmem device files and error directly.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
-func (c *StorageControlService) PrepareScm(req PrepareScmRequest, state types.ScmState,
-) (needsReboot bool, pmemDevs []pmemDev, err error) {
-
+func (c *StorageControlService) PrepareScm(req PrepareScmRequest) (needsReboot bool, pmemDevs []scm.Namespace, err error) {
 	if req.Reset {
 		// run reset to remove namespaces and clear regions
-		needsReboot, err = c.scm.PrepReset(state)
+		needsReboot, err = c.scm.PrepReset()
 		return
 	}
 
 	// transition to the next state in SCM preparation
-	return c.scm.Prep(state)
+	return c.scm.Prep()
 }
 
 // ScanNvme scans locally attached SSDs and returns list directly.

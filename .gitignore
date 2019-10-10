@@ -2,6 +2,8 @@
 .sconf_temp
 .build_vars.json
 .build_vars.sh
+.vagrant/
+utils/rpms/_topdir/
 /build/
 tags
 daos_m.conf
@@ -27,3 +29,5 @@ Gopkg.lock
 utils/certs/daosCA/**
 vos_size.yaml
 site/
+src/tests/ftest/avocado/
+conftest_*.c

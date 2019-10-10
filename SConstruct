@@ -89,7 +89,7 @@ def preload_prereqs(prereqs):
     prereqs.define('cmocka', libs=['cmocka'], package='libcmocka-devel')
     prereqs.define('readline', libs=['readline', 'history'],
                    package='readline')
-    reqs = ['cart', 'argobots', 'pmdk', 'cmocka',
+    reqs = ['cart', 'argobots', 'pmdk', 'cmocka', 'ofi', 'hwloc',
             'uuid', 'crypto', 'fuse', 'protobufc']
     if not is_platform_arm():
         reqs.extend(['spdk', 'isal'])
@@ -260,6 +260,8 @@ def scons():
 
     prereqs = PreReqComponent(env, opts, commits_file)
     preload_prereqs(prereqs)
+    if prereqs.check_component('valgrind_devel'):
+        env.AppendUnique(CPPDEFINES=["DAOS_HAS_VALGRIND"])
     opts.Save(opts_file, env)
 
     env.Alias('install', '$PREFIX')
@@ -272,9 +274,11 @@ def scons():
 
     set_defaults(env)
 
+    build_prefix = prereqs.get_src_build_dir()
+
     # generate targets in specific build dir to avoid polluting the source code
-    VariantDir('build', '.', duplicate=0)
-    SConscript('build/src/SConscript')
+    VariantDir(build_prefix, '.', duplicate=0)
+    SConscript('{}/src/SConscript'.format(build_prefix))
 
     buildinfo = prereqs.get_build_info()
     buildinfo.gen_script('.build_vars.sh')
@@ -291,8 +295,8 @@ def scons():
     # install certificate generation files
     SConscript('utils/certs/SConscript')
 
-    Default('build')
-    Depends('install', 'build')
+    Default(build_prefix)
+    Depends('install', build_prefix)
 
     try:
         #if using SCons 2.4+, provide a more complete help
