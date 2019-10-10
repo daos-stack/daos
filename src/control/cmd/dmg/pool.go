@@ -89,7 +89,7 @@ func (d *PoolDestroyCmd) Execute(args []string) error {
 type PoolGetACLCmd struct {
 	logCmd
 	connectedCmd
-	UUID string `short:"p" long:"pool" required:"1" description:"UUID of DAOS pool"`
+	UUID string `long:"pool" required:"1" description:"UUID of DAOS pool"`
 }
 
 // Execute is run when the PoolGetACLCmd subcommand is activated
