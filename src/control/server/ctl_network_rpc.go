@@ -46,18 +46,12 @@ func (c *NetworkScanService) RequestDeviceScan(in *pb.DeviceScanRequest, stream 
 		return errors.WithMessage(err, "failed to execute the fabric and device scan")
 	}
 	for _, sr := range results {
-		// TBD fill in a reply and stream the results here
-		c.nsslog.Infof("\n%v\n\n", sr)
+		c.nsslog.Infof("\n******* Sending this item ******* \n%v\n\n", sr)
+		err := stream.Send(&pb.DeviceScanReply{Provider: sr.Provider, Device: sr.DeviceName, Numanode: uint32(sr.NUMANode)})
+		if err != nil {
+			return err
+		}
 	}
-
-	// For testing, just hard code two replies.
-	err1 := stream.Send(&pb.DeviceScanReply{Provider: "joel's device scan provider - item 1", Device: "Eth0", Numanode: 2})
-	if err1 != nil {
-		return err1
-	}
-	err2 := stream.Send(&pb.DeviceScanReply{Provider: "joel's device scan provider - item 2", Device: "Eth1", Numanode: 3})
-	if err2 != nil {
-		return err2
-	}
+	c.nsslog.Infof("\n******* Done sending items ******* \n\n")
 	return nil
 }

@@ -24,10 +24,10 @@
 package client
 
 import (
-//	"bytes"
-//	"fmt"
+	"bytes"
+	"fmt"
 	"io"
-//	"sort"
+	"sort"
 	"time"
 
 	"github.com/pkg/errors"
@@ -38,6 +38,36 @@ import (
 
 type ProviderListResult struct {
 	providerList	string
+}
+
+type NetworkScanResult struct {
+	provider	string
+	device		string
+	numanode	uint
+	err		error
+}
+
+type NetworkScanResultMap map[string][]NetworkScanResult
+
+func (nsrm NetworkScanResultMap) String() string {
+	var buf bytes.Buffer
+	servers := make([]string, 0, len(nsrm))
+
+	for server := range nsrm {
+		servers = append(servers, server)
+	}
+	sort.Strings(servers)
+
+	for _, server := range servers {
+		fmt.Fprintf(&buf, "%s:\n%s\n", server, nsrm[server])
+	}
+
+	return buf.String()
+}
+func (nsr NetworkScanResult) String() string {
+	var buf bytes.Buffer
+	fmt.Fprintf(&buf, "\n\tfabric_iface: %s\n\tprovider: %s\n\tpinned_numa_node: %d\n", nsr.device, nsr.provider, nsr.numanode)
+	return buf.String()
 }
 
 func (c *connList) GetProviderList() ResultMap {
@@ -66,44 +96,39 @@ func providerListRequest(mc Control, req interface{}, ch chan ClientResult) {
 	ch <- ClientResult{mc.getAddress(), sRes.providerList, nil}
 }
 
-
-type NetworkScanResult struct {
-	provider	string
-	device		string
-	numanode	uint
-}
-
-func (c *connList) NetworkDeviceScanRequest(searchProvider string) ResultMap {
+func (c *connList) NetworkDeviceScanRequest(searchProvider string) NetworkScanResultMap {
 	c.log.Debugf("NetworkDeviceScanRequest() Received for provider: %s", searchProvider)
 	cResults := c.makeRequests(&ctlpb.DeviceScanRequest{Provider: searchProvider}, networkScanRequest)
-	cCtrlrResults := make(ResultMap)
+	cScanResults := make(NetworkScanResultMap)
 
+	c.log.Debugf("\nNetworkDeviceScanRequest() Results:\n")
 	for _, res := range cResults {
-		if res.Err != nil {
-			//cCtrlrResults[res.Address] = res.Err
-			continue
-		}
-/*
-		storageRes, ok := res.Value.(StorageResult)
-		if !ok {
-			err := fmt.Errorf(msgBadType, StorageResult{}, res.Value)
 
-			cCtrlrResults[res.Address] = types.CtrlrResults{Err: err}
-			cMountResults[res.Address] = types.MountResults{Err: err}
+		if res.Err != nil {
+			cScanResults[res.Address] = append(cScanResults[res.Address], NetworkScanResult{err: res.Err})
 			continue
 		}
-*/
-		//cCtrlrResults[res.Address] = "My results from the network scan"
+		c.log.Debugf("cResults has this:  Address %s, Value: %v, Err: %v\n", res.Address, res.Value, res.Err)
+
+		results, ok := res.Value.(NetworkScanResult)
+		if !ok {
+			err := fmt.Errorf(msgBadType, NetworkScanResult{}, res.Value)
+			cScanResults[res.Address] = append(cScanResults[res.Address], NetworkScanResult{err: err})
+			continue
+		}
+		cScanResults[res.Address] = append(cScanResults[res.Address], results)
+
+//		cScanResults[res.Address] = append(cScanResults[res.Address], NetworkScanResult{provider: "test provider A", device: "test device 1", numanode: 3})
+//		cScanResults[res.Address] = append(cScanResults[res.Address], NetworkScanResult{provider: "test provider B", device: "test device 2", numanode: 4})
 	}
 
-	return cCtrlrResults
+	return cScanResults
 }
 
 func networkScanRequest(mc Control, parms interface{}, ch chan ClientResult) {
 	sRes := NetworkScanResult{}
 
-	// TODO revisit this timeout
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	stream, err := mc.getCtlClient().RequestDeviceScan(ctx, &ctlpb.DeviceScanRequest{})
@@ -114,7 +139,10 @@ func networkScanRequest(mc Control, parms interface{}, ch chan ClientResult) {
 
 	mc.logger().Debugf("networkScanRequest checking for responses")
 
+	responseID := 1
 	for {
+		mc.logger().Debugf("\nResponse %d received\n", responseID)
+		responseID = responseID + 1
 		resp, err := stream.Recv()
 		if err == io.EOF {
 			break
@@ -129,7 +157,8 @@ func networkScanRequest(mc Control, parms interface{}, ch chan ClientResult) {
 		sRes.provider = resp.GetProvider()
 		sRes.device = resp.GetDevice()
 		sRes.numanode = uint(resp.GetNumanode())
-		mc.logger().Debugf("scan results: %v", sRes)
+		mc.logger().Debugf("\n\tfabric_iface: %s\n\tprovider: %s\n\tpinned_numa_node: %d\n", sRes.device, sRes.provider, sRes.numanode)
 		ch <- ClientResult{mc.getAddress(), sRes, nil}
 	}
+	mc.logger().Debugf("\nNormal exit networkScanRequest()\n")
 }

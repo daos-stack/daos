@@ -80,7 +80,7 @@ type Connect interface {
 	SystemMemberQuery() (common.SystemMembers, error)
 	SystemStop() (common.SystemMemberResults, error)
 	GetProviderList() ResultMap
-	NetworkDeviceScanRequest(searchProvider string) ResultMap
+	NetworkDeviceScanRequest(searchProvider string) NetworkScanResultMap
 }
 
 // connList is an implementation of Connect and stores controllers

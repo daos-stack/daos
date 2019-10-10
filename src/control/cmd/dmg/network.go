@@ -66,31 +66,7 @@ func (cmd *networkScanCmd) Execute(args []string) error {
 		cmd.log.Info("Scanning fabric for all providers")
 	}
 
-	cmd.log.Infof("Network scan results:\n%s\n", cmd.conns.NetworkDeviceScanRequest(provider))
-
-	/*
-	// for test //
-	searchprovider := "ofi+sockets"
-
-	dss, err := cmd.conns.RequestDeviceScanStreamer(&pb.DeviceScanRequest{Provider: searchprovider})
-	if err != nil {
-		//log.Fatalf("error received from RequestDeviceScanStreamer")
-		return nil
-	}
-	for {
-		resp, err := dss.Recv()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			cmd.log.Infof("Error during stream receive: %v", err)
-			break
-		}
-		cmd.log.Infof("provider: %s", resp.GetProvider())
-		cmd.log.Infof("fabric_iface: %s", resp.GetDevice())
-		cmd.log.Infof("pinned_numa_node: %d\n", resp.GetNumanode())
-	}
-*/
+	cmd.log.Infof("Network scan results:\n%v\n", cmd.conns.NetworkDeviceScanRequest(provider))
 	return nil
 }
 
