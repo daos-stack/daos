@@ -107,7 +107,7 @@ class DaosServer(DaosCommand):
         """
         patterns = {
             "format": "SCM format required",
-            "chowner": "running as root, changing file ownership",
+            "chowner": "formatting complete and file ownership changed",
             "normal": "DAOS I/O server.*started",
         }
         start_time = time.time()
@@ -411,6 +411,14 @@ class ServerManager(ExecutableCommand):
             # Format storage and wait for server to change ownership
             self.log.info("Formatting hosts: <%s>", self._hosts)
             storage_format(self.daosbinpath, ",".join(servers_with_ports))
+
+            # Make sure log file has been created
+            data_dict = self.runner.job.yaml_params.data
+            if data_dict and "log_file" in data_dict['servers'][0]:
+                self.log.info("Creating log file: {}".format(
+                    data_dict['servers'][0]['log_file']))
+                c_log = "touch {}".format(data_dict['servers'][0]['log_file'])
+                pcmd(self._hosts, c_log, False)
 
             # Check for server to have changed ownership.
             self.runner.job.mode = "chowner"
