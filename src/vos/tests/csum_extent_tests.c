@@ -399,13 +399,13 @@ csum_multiple_extents_tests(void **state)
 
 		uint32_t csums_count_total, csum_count_per_extent, csum_len;
 
-		rc = update(&test, update_extents, i);
+		rc = update(&test, update_extents, i + 1);
 		if (!SUCCESS(rc))
 			fail_msg("Error updating extent with csum: %s\n",
 				 d_errstr(rc));
 
 		rc = fetch(&test, fetch_extents, &csum_count_per_extent,
-			   &csum_len, &csums_count_total, i);
+			   &csum_len, &csums_count_total, i + 1);
 		if (!SUCCESS(rc))
 			fail_msg("Error fetching extent with csum: %s\n",
 				 d_errstr(rc));
@@ -439,7 +439,7 @@ void csum_test_csum_buffer_of_0_during_fetch(void **state)
 
 	csum_test_setup(&test, state, &params);
 
-	daos_epoch_t epoch = 0;
+	daos_epoch_t epoch = 1;
 
 	update(&test, 1, epoch);
 
@@ -943,14 +943,14 @@ csum_fault_injection_multiple_extents_tests(void **state)
 		       update_extents, fetch_extents);
 
 		daos_fail_loc_set(DAOS_CHECKSUM_UPDATE_FAIL | DAOS_FAIL_ALWAYS);
-		rc = update(&test, update_extents, i);
+		rc = update(&test, update_extents, i + 1);
 		if (!SUCCESS(rc))
 			fail_msg("Error updating extent with csum: %s\n",
 				 d_errstr(rc));
 
 		daos_fail_loc_set(DAOS_CHECKSUM_FETCH_FAIL | DAOS_FAIL_ALWAYS);
 		rc = fetch(&test, fetch_extents, &csum_count_per_extent,
-			   &csum_len, &csums_count_total, i);
+			   &csum_len, &csums_count_total, i + 1);
 		if (!SUCCESS(rc))
 			fail_msg("Error fetching extent with csum: %s\n",
 				 d_errstr(rc));

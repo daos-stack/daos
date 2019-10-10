@@ -21,23 +21,22 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package server
+package system
 
-import (
-	types "github.com/daos-stack/daos/src/control/common/storage"
-	"github.com/daos-stack/daos/src/control/server/storage/scm"
+type (
+	// IsMountedProvider is the interface that wraps the IsMounted method,
+	// which can be provided by a system-specific implementation or a mock.
+	IsMountedProvider interface {
+		IsMounted(target string) (bool, error)
+	}
+	// MountProvider is the interface that wraps the Mount method, which
+	// can be provided by a system-specific implementation or a mock.
+	MountProvider interface {
+		Mount(source, target, fstype string, flags uintptr, data string) error
+	}
+	// UnmountProvider is the interface that wraps the Unmount method, which
+	// can be provided by a system-specific implementation or a mock.
+	UnmountProvider interface {
+		Unmount(target string, flags int) error
+	}
 )
-
-// PrepScm interface provides capability to prepare SCM storage
-//
-// TODO: Update tests in this layer to use a mock scm.Provider
-// implementation rather than requiring so much knowledge about
-// low-level details.
-type PrepScm interface {
-	GetNamespaces() ([]scm.Namespace, error)
-	GetState() (types.ScmState, error)
-	Prep(types.ScmState) (bool, []scm.Namespace, error)
-	PrepReset(types.ScmState) (bool, error)
-}
-
-// core scm prep code moved to storage/scm/ipmctl.go
