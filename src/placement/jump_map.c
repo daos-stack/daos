@@ -339,20 +339,20 @@ set_used_targets(d_list_t *down_targets, struct pool_domain *selected_dom,
 static void
 get_target(struct pool_domain *curr_dom, struct pool_target **target,
 	   uint64_t obj_key, uint8_t *dom_used, struct pl_obj_layout *layout,
-	   int shard_num)
+	   int shard_num, int bottom_level_doms)
 {
 	uint8_t                 found_target = 0;
-	uint8_t                 top = 0;
 	uint32_t                fail_num = 0;
 	uint32_t                selected_dom;
-	uint32_t                tgt_id;
+	uint64_t		t_key;
 	struct pool_domain      *root_pos;
 
+	t_key = obj_key;
+	obj_key = crc(obj_key, shard_num);
 	root_pos = curr_dom;
 
 	do {
 		uint32_t        num_doms;
-		uint64_t        key;
 
 		/* Retrieve number of nodes in this domain */
 		if (curr_dom->do_children == NULL)
@@ -360,53 +360,29 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 		else
 			num_doms = curr_dom->do_child_nr;
 
-		key = obj_key;
-		/* If choosing target in lowest fault domain level */
-
+		/* If choosing target (lowest fault domain level) */
 		if (curr_dom->do_children == NULL) {
-			uint32_t dom_id;
-			uint32_t        i;
+			uint32_t tgt_order;
+			/* Largest 64-bit prime number */
+			const uint64_t PRIME = 0xFFFFFFFFFFFFFFC5;
 
-			do {
-				/*
-				 * Must crc key because jump consistent hash
-				 * requires an even distribution or it will
-				 * not work
-				 */
-				key = crc(key, fail_num++);
+			/* order of shard for this particular node */
+			tgt_order = shard_num / bottom_level_doms;
 
-				/* Get target for shard */
-				selected_dom = jump_consistent_hash(key,
-								    num_doms);
+			obj_key = crc(t_key, curr_dom->do_comp.co_id);
+			selected_dom = (t_key + (PRIME * tgt_order)) % num_doms;
 
-				/* Retrieve actual target using index */
-				*target = &curr_dom->do_targets[selected_dom];
-
-				/* Get target id to check if target used */
-				dom_id = (*target)->ta_comp.co_id;
-
-				/*
-				 * Check to see if this target is valid to use.
-				 * You can reuse targets as long as there are
-				 * fewer targets than shards and all targets
-				 * have already been used
-				 */
-
-				for (i = 0; i < layout->ol_nr; ++i) {
-
-					tgt_id = layout->ol_shards[i].po_target;
-
-					if (tgt_id == dom_id)
-						break;
-				}
-			} while (i < shard_num);
+			/* Retrieve actual target using index */
+			*target = &curr_dom->do_targets[selected_dom];
 
 			/* Found target (which may be available or not) */
 			found_target = 1;
 		} else {
 			int             range_set;
 			uint64_t        child_pos;
+			uint64_t        key;
 
+			key = obj_key;
 			child_pos = (curr_dom->do_children) - root_pos;
 
 			/*
@@ -427,7 +403,6 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 			 * not been used is found
 			 */
 			do {
-
 				selected_dom = jump_consistent_hash(key,
 								    num_doms);
 				key = crc(key, fail_num++);
@@ -435,12 +410,10 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 			/* Mark this domain as used */
 			setbit(dom_used, (selected_dom + child_pos));
 
-			top++;
 			curr_dom = &(curr_dom->do_children[selected_dom]);
-			obj_key = crc(obj_key, top);
+			obj_key = crc(obj_key, curr_dom->do_comp.co_id);
 		}
 	} while (!found_target);
-
 }
 
 /**
@@ -716,6 +689,7 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 	uint8_t                 *dom_used;
 	uint32_t                dom_used_length;
 	uint64_t                key;
+	uint64_t		bottom_level_doms;
 	int i, j, k, rc;
 
 	/* Set the pool map version */
@@ -729,6 +703,12 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 	rc = 0;
 	target = NULL;
 
+	bottom_level_doms = pool_map_find_domain(jmap->jmp_map.pl_poolmap,
+			PO_COMP_TP_NODE, PO_COMP_ID_ALL, &root);
+	if (bottom_level_doms == 0) {
+		D_ERROR("Could not find any bottom level nodes in pool map.");
+		return -DER_NONEXIST;
+	}
 
 	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_ROOT,
 				  PO_COMP_ID_ALL, &root);
@@ -787,8 +767,8 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 			uint32_t tgt_id;
 			uint32_t fseq;
 
-			get_target(root, &target, crc(key, k), dom_used,
-				   layout, k);
+			get_target(root, &target, key, dom_used,
+				   layout, k, bottom_level_doms);
 
 			tgt_id = target->ta_comp.co_id;
 			fseq = target->ta_comp.co_fseq;
