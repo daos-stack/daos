@@ -176,11 +176,11 @@ func (c *StorageControlService) GetScmState() (types.ScmState, error) {
 		return state, errors.WithMessage(err, "SCM setup")
 	}
 
-	if !c.scm.initialized {
+	if c.scm.scanResults == nil {
 		return state, errors.New(msgScmNotInited)
 	}
 
-	if len(c.scm.modules) == 0 {
+	if len(c.scm.scanResults.Modules) == 0 {
 		return state, errors.New(msgScmNoModules)
 	}
 
@@ -211,17 +211,4 @@ func (c *StorageControlService) ScanNvme() (types.NvmeControllers, error) {
 	}
 
 	return c.nvme.controllers, nil
-}
-
-// ScanScm scans locally attached modules and returns list directly.
-//
-// Suitable for commands invoked directly on server, not over gRPC.
-func (c *StorageControlService) ScanScm() ([]scm.Module, []scm.Namespace, error) {
-	if err := c.scm.Discover(); err != nil {
-		return nil, nil, errors.Wrap(err, "SCM storage scan")
-	}
-
-	c.log.Debugf("pmem namesmaces: %#v\n", c.scm.namespaces)
-
-	return c.scm.modules, c.scm.namespaces, nil
 }

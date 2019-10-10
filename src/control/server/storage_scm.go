@@ -54,9 +54,7 @@ type scmStorage struct {
 	log         logging.Logger
 	provider    *scm.Provider
 	ext         External
-	modules     []scm.Module
-	namespaces  []scm.Namespace
-	initialized bool
+	scanResults *scm.ScanResponse
 	formatted   bool
 }
 
@@ -73,7 +71,7 @@ func (s *scmStorage) Setup() error {
 
 // Teardown implementation for scmStorage
 func (s *scmStorage) Teardown() error {
-	s.initialized = false
+	s.scanResults = nil
 	return nil
 }
 
@@ -99,8 +97,8 @@ func (s *scmStorage) PrepReset() (needsReboot bool, err error) {
 
 // Discover method implementation for scmStorage
 func (s *scmStorage) Discover() error {
-	if s.initialized {
-		return nil
+	if s.scanResults != nil {
+		return nil // already initialised
 	}
 
 	res, err := s.provider.Scan(scm.ScanRequest{})
@@ -108,11 +106,7 @@ func (s *scmStorage) Discover() error {
 		// set after modules have been discovered, don't depend on retrieving
 		// PMEM device files through external tool (fails w/out ndctl runtime
 		// dep, whose presence is only enforced when installed via RPM).
-		s.initialized = true
-
-		s.modules = res.Modules
-		// noop if ndctl failed
-		s.namespaces = res.Namespaces
+		s.scanResults = res
 	}
 	if err != nil {
 		return errors.WithMessage(err, msgIpmctlDiscoverFail)

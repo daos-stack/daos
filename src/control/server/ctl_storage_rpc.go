@@ -24,6 +24,8 @@
 package server
 
 import (
+	"fmt"
+
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
@@ -50,7 +52,7 @@ func newState(log logging.Logger, status ctlpb.ResponseStatus, errMsg string, in
 	return state
 }
 
-func translateModules(mms []scm.Module) (pbMms types.ScmModules) {
+func modulesToPB(mms []scm.Module) (pbMms types.ScmModules) {
 	for _, c := range mms {
 		pbMms = append(
 			pbMms,
@@ -68,7 +70,7 @@ func translateModules(mms []scm.Module) (pbMms types.ScmModules) {
 	return
 }
 
-func translateNamespaces(nss []scm.Namespace) (pbNss types.PmemDevices) {
+func namespacesToPB(nss []scm.Namespace) (pbNss types.PmemDevices) {
 	for _, ns := range nss {
 		pbNss = append(pbNss,
 			&ctlpb.PmemDevice{
@@ -167,16 +169,20 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 		}
 	}
 
-	modules, namespaces, err := c.ScanScm()
+	result, err := c.ScanScm()
 	if err != nil {
 		resp.Scm = &ctlpb.ScanScmResp{
 			State: newState(c.log, ctlpb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg+"SCM"),
 		}
 	} else {
+		msg += fmt.Sprintf("SCM (%s)", result.State)
 		resp.Scm = &ctlpb.ScanScmResp{
-			State:   newState(c.log, ctlpb.ResponseStatus_CTRL_SUCCESS, "", "", msg+"SCM"),
-			Modules: translateModules(modules),
-			Pmems:   translateNamespaces(namespaces),
+			State: newState(c.log, ctlpb.ResponseStatus_CTRL_SUCCESS, "", "", msg),
+		}
+		if len(result.Namespaces) > 0 {
+			resp.Scm.Pmems = namespacesToPB(result.Namespaces)
+		} else {
+			resp.Scm.Modules = modulesToPB(result.Modules)
 		}
 	}
 

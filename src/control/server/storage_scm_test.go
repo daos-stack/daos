@@ -107,6 +107,8 @@ func TestDiscoverScm(t *testing.T) {
 
 	tests := map[string]struct {
 		inited            bool
+		inModules         []scm.Module
+		inNamespaces      []scm.Namespace
 		ipmctlDiscoverRet error
 		getNsRet          error
 		expErr            error
@@ -116,17 +118,25 @@ func TestDiscoverScm(t *testing.T) {
 		"already initialized": {
 			inited: true,
 		},
-		"normal run": {
-			expModules:    []scm.Module{m},
+		"no modules": {},
+		"no namespaces": {
+			inModules:  []scm.Module{m},
+			expModules: []scm.Module{m},
+		},
+		"with namespaces shouldnt display modules": {
+			inModules:     []scm.Module{m},
+			inNamespaces:  []scm.Namespace{n},
 			expNamespaces: []scm.Namespace{n},
 		},
-		"results in error": {
+		"module discovery error": {
+			inNamespaces:      []scm.Namespace{n},
 			ipmctlDiscoverRet: errors.New("ipmctl example failure"),
 			expErr:            errors.New(msgIpmctlDiscoverFail + ": ipmctl example failure"),
 		},
 		"discover succeeds but get pmem fails": {
-			getNsRet:   errors.New("ipmctl example failure"),
-			expErr:     errors.New(msgIpmctlDiscoverFail + ": ipmctl example failure"),
+			inModules:  []scm.Module{m},
+			getNsRet:   errors.New("ndctl example failure"),
+			expErr:     errors.New(msgIpmctlDiscoverFail + ": ndctl example failure"),
 			expModules: []scm.Module{m},
 		},
 	}
@@ -136,9 +146,9 @@ func TestDiscoverScm(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)()
 
-			prep := newMockPrepScm([]scm.Namespace{n}, tt.getNsRet)
+			prep := newMockPrepScm(tt.inNamespaces, tt.getNsRet)
 			ss := newMockScmStorage(log, nil, tt.ipmctlDiscoverRet,
-				[]scm.Module{m}, tt.inited, prep, nil)
+				tt.inModules, tt.inited, prep, nil)
 
 			if err := ss.Discover(); err != nil {
 				if tt.expErr != nil {
