@@ -86,7 +86,7 @@ struct ds_cont_hdl {
 	uint64_t		sch_capas;
 	struct ds_pool_child	*sch_pool;
 	struct ds_cont_child	*sch_cont;
-	struct daos_csummer	*csummer;
+	struct daos_csummer	*sch_csummer;
 	int			sch_ref;
 	uint32_t		sch_dtx_registered:1,
 				sch_deleted:1;
