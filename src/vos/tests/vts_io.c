@@ -162,7 +162,7 @@ inc_cntr(unsigned long op_flags)
 }
 
 static daos_ofeat_t init_ofeats;
-static int init_num_keys = VTS_IO_KEYS;
+static int init_num_keys;
 
 void
 test_args_init(struct io_test_args *args,
@@ -1318,107 +1318,6 @@ out:
 	assert_int_equal(nr, vts_cntr.cn_oids);
 	vos_iter_finish(ih);
 	return rc;
-}
-
-static int
-io_set_attribute_setup(void **state)
-{
-	struct io_test_args	*arg = *state;
-	struct vos_obj_df	*obj_df;
-	struct vos_container	*cont;
-	int			 rc;
-
-	cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
-	assert_ptr_not_equal(cont, NULL);
-
-	arg->oid = gen_oid(arg->ofeat);
-
-	rc = vos_oi_find_alloc(cont, arg->oid, 1, DAOS_INTENT_UPDATE, &obj_df);
-	assert_int_equal(rc, 0);
-
-	return 0;
-}
-
-static void
-io_set_attribute_test(void **state)
-{
-	struct io_test_args	*arg = *state;
-	int rc;
-	uint64_t attr;
-	uint64_t i, expected;
-	daos_unit_oid_t oid;
-
-	oid = gen_oid(arg->ofeat);
-	rc = vos_oi_get_attr(arg->ctx.tc_co_hdl, oid, vts_epoch_gen + 1,
-			     NULL, &attr);
-	assert_int_equal(rc, 0);
-	assert_int_equal(attr, 0);
-
-	rc = vos_oi_set_attr(arg->ctx.tc_co_hdl, oid, vts_epoch_gen + 1,
-			     VOS_OI_FAILED);
-	assert_int_equal(rc, 0);
-
-	rc = vos_oi_get_attr(arg->ctx.tc_co_hdl, oid, vts_epoch_gen + 1,
-			     NULL, &attr);
-	assert_int_equal(rc, 0);
-	assert_int_equal(attr, VOS_OI_FAILED);
-
-	rc = vos_oi_get_attr(arg->ctx.tc_co_hdl, arg->oid, vts_epoch_gen + 1,
-			     NULL, &attr);
-	assert_int_equal(rc, 0);
-	assert_int_equal(attr, 0);
-
-	rc = vos_oi_set_attr(arg->ctx.tc_co_hdl, arg->oid, vts_epoch_gen + 1,
-			     VOS_OI_FAILED);
-	assert_int_equal(rc, 0);
-
-	rc = vos_oi_get_attr(arg->ctx.tc_co_hdl, arg->oid, vts_epoch_gen + 1,
-			     NULL, &attr);
-	assert_int_equal(rc, 0);
-	assert_int_equal(attr, VOS_OI_FAILED);
-
-	rc = vos_oi_clear_attr(arg->ctx.tc_co_hdl, arg->oid, vts_epoch_gen + 1,
-			       VOS_OI_FAILED);
-	assert_int_equal(rc, 0);
-
-	rc = vos_oi_get_attr(arg->ctx.tc_co_hdl, arg->oid, vts_epoch_gen + 1,
-			     NULL, &attr);
-	assert_int_equal(rc, 0);
-	assert_int_equal(attr, 0);
-
-	expected = 0;
-	for (i = 0x20; i > 0; i >>= 1) {
-		rc = vos_oi_set_attr(arg->ctx.tc_co_hdl, arg->oid,
-				     vts_epoch_gen + 1, i);
-		if (i == VOS_OI_PUNCHED || i == VOS_OI_REMOVED) {
-			assert_int_equal(rc, -DER_INVAL);
-			continue;
-		}
-		assert_int_equal(rc, 0);
-		expected |= i;
-
-		rc = vos_oi_get_attr(arg->ctx.tc_co_hdl, arg->oid,
-				     vts_epoch_gen + 1, NULL, &attr);
-		assert_int_equal(rc, 0);
-		assert_int_equal(attr, expected);
-	}
-
-	for (i = 0x20; i > 0; i >>= 1) {
-		rc = vos_oi_clear_attr(arg->ctx.tc_co_hdl, arg->oid,
-				       vts_epoch_gen + 1, i);
-		if (i == VOS_OI_PUNCHED || i == VOS_OI_REMOVED) {
-			assert_int_equal(rc, -DER_INVAL);
-			continue;
-		}
-		assert_int_equal(rc, 0);
-		if (expected & i)
-			expected ^= i;
-
-		rc = vos_oi_get_attr(arg->ctx.tc_co_hdl, arg->oid,
-				     vts_epoch_gen + 1, NULL, &attr);
-		assert_int_equal(rc, 0);
-		assert_int_equal(attr, expected);
-	}
 }
 
 static void
@@ -2635,8 +2534,6 @@ static const struct CMUnitTest io_tests[] = {
 		oid_iter_test, oid_iter_test_setup, NULL},
 	{ "VOS245.1: Object iter test with anchor (for oid)",
 		oid_iter_test_with_anchor, oid_iter_test_setup, NULL},
-	{ "VOS250: VOS Set attribute test", io_set_attribute_test,
-		io_set_attribute_setup, NULL},
 	{ "VOS280: Same Obj ID on two containers (obj_cache test)",
 		io_simple_one_key_cross_container, NULL, NULL},
 	{ "VOS281.0: Fetch from non existent object",
@@ -2686,6 +2583,8 @@ run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators)
 	const char *dkey = "hashed";
 	vts_nest_iterators = nest_iterators;
 	int rc = 0;
+
+	init_num_keys = VTS_IO_KEYS;
 
 	feats = feats & DAOS_OF_MASK;
 	if ((feats & DAOS_OF_DKEY_UINT64) && (feats & DAOS_OF_DKEY_LEXICAL)) {
