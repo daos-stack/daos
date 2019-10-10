@@ -40,6 +40,7 @@
 
 #include <daos_srv/container.h>
 
+#include <daos/checksum.h>
 #include <daos/rpc.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/vos.h>
@@ -370,6 +371,44 @@ ds_cont_hdl_put(struct ds_cont_hdl *hdl)
 	struct d_hash_table *hash = &dsm_tls_get()->dt_cont_hdl_hash;
 
 	cont_hdl_put_internal(hash, hdl);
+}
+
+int cont_hdl_csummer_init(struct ds_cont_hdl *hdl)
+{
+	struct ds_pool	*pool;
+	daos_prop_t	*props;
+	uint32_t	 csum_val;
+	int		 rc;
+
+	/** Get the container csum related properties
+	 * Need the pool for the IV namespace
+	 */
+	hdl->csummer = NULL;
+	pool = ds_pool_lookup(hdl->sch_pool->spc_uuid);
+	if (pool == NULL)
+		return -DER_NONEXIST;
+	props = daos_prop_alloc(2);
+	if (props == NULL) {
+		ds_pool_put(pool);
+		return -DER_NOMEM;
+	}
+	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM;
+	props->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
+	rc = cont_iv_prop_fetch(pool->sp_iv_ns, hdl->sch_uuid, props);
+	if (rc != 0)
+		goto done;
+	csum_val = daos_cont_prop2csum(props);
+
+	/** If enabled, initialize the csummer for the container */
+	if (daos_cont_csum_prop_is_enabled(csum_val))
+		rc = daos_csummer_type_init(&hdl->csummer,
+					    daos_contprop2csumtype(csum_val),
+					    daos_cont_prop2chunksize(props));
+done:
+	daos_prop_free(props);
+	ds_pool_put(pool);
+
+	return rc;
 }
 
 /**
@@ -833,6 +872,12 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 			D_GOTO(err_cont, rc);
 		}
 
+		rc = cont_hdl_csummer_init(hdl);
+		if (rc != 0) {
+			ds_pool_child_put(hdl->sch_pool);
+			D_FREE(ddra);
+			D_GOTO(err_cont, rc);
+		}
 	}
 
 	return 0;
@@ -920,6 +965,9 @@ cont_close_one_rec(struct cont_tgt_close_rec *rec)
 	struct ds_cont_hdl     *hdl;
 
 	hdl = cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash, rec->tcr_hdl);
+
+	daos_csummer_destroy(&hdl->csummer);
+
 	if (hdl == NULL) {
 		D_DEBUG(DF_DSMS, DF_CONT": already closed: hdl="DF_UUID" hce="
 			DF_U64"\n", DP_CONT(NULL, NULL), DP_UUID(rec->tcr_hdl),

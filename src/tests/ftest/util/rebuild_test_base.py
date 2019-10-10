@@ -36,15 +36,15 @@ class RebuildTestParams(ObjectWithParameters):
         self.rank = BasicParameter(None)
 
 
-class RebuldTestBase(TestWithServers):
+class RebuildTestBase(TestWithServers):
     """Base rebuild test class.
 
     :avocado: recursive
     """
 
     def __init__(self, *args, **kwargs):
-        """Initialize a RebuldTestBase object."""
-        super(RebuldTestBase, self).__init__(*args, **kwargs)
+        """Initialize a RebuildTestBase object."""
+        super(RebuildTestBase, self).__init__(*args, **kwargs)
         self.inputs = RebuildTestParams()
         self.targets = None
         self.server_count = 0
@@ -54,7 +54,7 @@ class RebuldTestBase(TestWithServers):
     def setUp(self):
         """Set up each test case."""
         # Start the servers and agents
-        super(RebuldTestBase, self).setUp()
+        super(RebuildTestBase, self).setUp()
 
         # Get the test parameters
         self.inputs.get_params(self)
