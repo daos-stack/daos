@@ -1087,14 +1087,16 @@ class PreReqComponent():
         """Overwrite the prefix in cases where we may be using the default"""
         prebuilt1 = os.path.join(env.subst("$PREBUILT_PREFIX"),
                                  comp_def.name)
-        opt_name = "%s_PREBUILT" % comp_def.name.upper()
         # prebuilt2 can be None so add a default
-        prebuilt2 = self.__env.get(opt_name, "/__fake__")
+        prebuilt2 = self.__env.get('{}_PREBUILT'.format(comp_def.name.upper()),
+                                   "/__fake__")
+        prebuilt3 = self.__env.get('{}_PREFIX'.format(comp_def.name.upper()))
 
         if comp_def.src_path and \
            not os.path.exists(comp_def.src_path) and \
            not os.path.exists(prebuilt1) and \
-           not os.path.exists(prebuilt2):
+           not os.path.exists(prebuilt2) and \
+           not os.path.exists(prebuilt3):
             self.save_component_prefix('%s_PREFIX' %
                                        comp_def.name.upper(),
                                        "/usr")
