@@ -108,25 +108,19 @@ func (c *connList) NetworkDeviceScanRequest(searchProvider string) NetworkScanRe
 			cScanResults[res.Address] = append(cScanResults[res.Address], NetworkScanResult{err: res.Err})
 			continue
 		}
-		c.log.Debugf("cResults has this:  Address %s, Value: %v, Err: %v\n", res.Address, res.Value, res.Err)
+		//c.log.Debugf("cResults has this:  Address %s, Value: %v, Err: %v\n", res.Address, res.Value, res.Err)
 
-		results, ok := res.Value.(NetworkScanResult)
-		if !ok {
-			err := fmt.Errorf(msgBadType, NetworkScanResult{}, res.Value)
-			cScanResults[res.Address] = append(cScanResults[res.Address], NetworkScanResult{err: err})
-			continue
+		for _, results := range res.Value.([]NetworkScanResult) {
+			//c.log.Debugf("\nresults has this: %v\n", results)
+			cScanResults[res.Address] = append(cScanResults[res.Address], results)
 		}
-		cScanResults[res.Address] = append(cScanResults[res.Address], results)
-
-//		cScanResults[res.Address] = append(cScanResults[res.Address], NetworkScanResult{provider: "test provider A", device: "test device 1", numanode: 3})
-//		cScanResults[res.Address] = append(cScanResults[res.Address], NetworkScanResult{provider: "test provider B", device: "test device 2", numanode: 4})
 	}
 
 	return cScanResults
 }
 
 func networkScanRequest(mc Control, parms interface{}, ch chan ClientResult) {
-	sRes := NetworkScanResult{}
+	sRes := []NetworkScanResult{}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -138,11 +132,7 @@ func networkScanRequest(mc Control, parms interface{}, ch chan ClientResult) {
 	}
 
 	mc.logger().Debugf("networkScanRequest checking for responses")
-
-	responseID := 1
 	for {
-		mc.logger().Debugf("\nResponse %d received\n", responseID)
-		responseID = responseID + 1
 		resp, err := stream.Recv()
 		if err == io.EOF {
 			break
@@ -154,11 +144,12 @@ func networkScanRequest(mc Control, parms interface{}, ch chan ClientResult) {
 			return // recv err
 		}
 
-		sRes.provider = resp.GetProvider()
-		sRes.device = resp.GetDevice()
-		sRes.numanode = uint(resp.GetNumanode())
-		mc.logger().Debugf("\n\tfabric_iface: %s\n\tprovider: %s\n\tpinned_numa_node: %d\n", sRes.device, sRes.provider, sRes.numanode)
-		ch <- ClientResult{mc.getAddress(), sRes, nil}
+		provider := resp.GetProvider()
+		device := resp.GetDevice()
+		numanode := uint(resp.GetNumanode())
+		mc.logger().Debugf("\nServer address: %s\n\tfabric_iface: %s\n\tprovider: %s\n\tpinned_numa_node: %d\n", mc.getAddress(), device, provider, numanode)
+		sRes = append(sRes, NetworkScanResult{provider: provider, device: device, numanode: numanode})
 	}
+	ch <- ClientResult{mc.getAddress(), sRes, nil}
 	mc.logger().Debugf("\nNormal exit networkScanRequest()\n")
 }
