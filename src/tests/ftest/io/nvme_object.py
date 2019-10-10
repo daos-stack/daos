@@ -136,6 +136,13 @@ def test_runner(self, size, record_size, index, array_size, thread_per_size=4):
     # display free space after reads and writes
     self.pool[index].display_pool_daos_space("after writes and reads")
 
+    # destroy container
+    if self.container[index] is not None:
+        self.container[index].destroy()
+
+    # destroy pool
+    if self.pool[index] is not None:
+        self.pool[index].destroy(1)
 
 class NvmeObject(TestWithServers):
     """Test class for NVMe storage by creating/Updating/Fetching
