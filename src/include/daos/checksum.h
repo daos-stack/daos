@@ -40,6 +40,9 @@ uint64_t
 daos_cont_prop2chunksize(daos_prop_t *props);
 
 bool
+daos_cont_prop2serververify(daos_prop_t *props);
+
+bool
 daos_cont_csum_prop_is_valid(uint16_t val);
 
 bool
@@ -120,6 +123,20 @@ int
 daos_csummer_init(struct daos_csummer **obj, struct csum_ft *ft,
 		  size_t chunk_bytes);
 
+/**
+ * Initialize the daos_csummer with a known DAOS_CSUM_TYPE
+ *
+ * @param obj		daos_csummer to be initialized. Memory will be allocated
+ *			for it.
+ * @param type		Type of the checksum algorithm that will be used
+ * @param chunk_bytes	Chunksize, typically from the container configuration
+ *
+ * @return		0 for success, or an error code
+ */
+int
+daos_csummer_type_init(struct daos_csummer **obj, enum DAOS_CSUM_TYPE type,
+		  size_t chunk_bytes);
+
 /** Destroy the daos_csummer */
 void
 daos_csummer_destroy(struct daos_csummer **obj);
@@ -189,6 +206,25 @@ int
 daos_csummer_calc_csum(struct daos_csummer *obj, d_sg_list_t *sgl,
 		       size_t rec_len, daos_recx_t *recxs, size_t nr,
 		       daos_csum_buf_t **pcsum_bufs);
+
+/**
+ * Using the data from the sgl, calculates the checksums for each extent and
+ * then compare the calculated checksum with the checksum held in the iod to
+ * verify the data is still valid. If a difference in checksum is found, an
+ * error is returned.
+ *
+ * @param obj		the daos_csummer obj
+ * @param iod		The IOD that holds the already calculated checksums
+ * @param sgl		Scatter Gather List with the data to be used
+ *			for the extents \a recxs. The total data
+ *			length of the sgl should be the same as the sum
+ *			of the lengths of all recxs
+ *
+ * @return		0 for success, -DER_IO if corruption is detected
+ */
+int
+daos_csummer_verify_data(struct daos_csummer *obj,
+			 daos_iod_t *iod, d_sg_list_t *sgl);
 
 /**
  * Allocate memory for the daos_csum_buf_t structures and the memory buffer for
@@ -265,6 +301,18 @@ daos_recx_calc_chunks(daos_recx_t extent, uint32_t record_size,
 uint32_t
 csum_chunk_count(uint32_t chunk_size, uint64_t lo_idx, uint64_t hi_idx,
 		 uint64_t rec_size);
+
+/**
+ * A facade for verifying data (represented by an sgl) is not corrupt. Uses the
+ * checksums stored in the iod to compare against calculated checksums.
+ *
+ * @param iod	I/O Descriptor which contains checksums
+ * @param sgl	Scatter Gather List pointing to the data to be verified
+ *
+ * @return	0 for success, -DER_IO if corruption is detected
+ */
+int
+daos_csum_check_sgl(daos_iod_t *iod, d_sg_list_t *sgl);
 
 #endif /** __DAOS_CHECKSUM_H */
 

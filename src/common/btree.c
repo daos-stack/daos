@@ -3304,7 +3304,7 @@ dbtree_iter_prepare(daos_handle_t toh, unsigned int options, daos_handle_t *ih)
 		/* use the iterator embedded in btr_context */
 		if (tcx->tc_ref != 1) { /* don't screw up others */
 			D_DEBUG(DB_TRACE,
-				"The embedded iterator is in using\n");
+				"The embedded iterator is in use\n");
 			return -DER_BUSY;
 		}
 
