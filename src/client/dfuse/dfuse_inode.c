@@ -110,20 +110,6 @@ dfuse_check_for_inode(struct dfuse_projection_info *fs_handle,
 	return -DER_SUCCESS;
 };
 
-static void
-drop_ino_ref(struct dfuse_projection_info *fs_handle, ino_t ino)
-{
-	d_list_t *rlink;
-
-	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
-
-	if (!rlink) {
-		DFUSE_TRA_ERROR(fs_handle, "Could not find entry %lu", ino);
-		return;
-	}
-	d_hash_rec_ndecref(&fs_handle->dpi_iet, 2, rlink);
-}
-
 void
 ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 {
@@ -134,10 +120,6 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 			ie->ie_stat.st_ino, ref, ie->ie_name, ie->ie_parent);
 
 	D_ASSERT(ref == 0);
-
-	if (ie->ie_parent != 0) {
-		drop_ino_ref(fs_handle, ie->ie_parent);
-	}
 
 	if (ie->ie_obj) {
 		rc = dfs_release(ie->ie_obj);
