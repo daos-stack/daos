@@ -2176,7 +2176,6 @@ obj_update_csums(const struct dc_object *obj, const daos_obj_update_t *args) {
 	if (!daos_csummer_initialized(csummer)) /** Not configured */
 		return;
 
-
 	for (i = 0; i < args->nr; i++) {
 		/**
 		 * TODO: Turn this into an assert after csums are
@@ -2193,6 +2192,8 @@ obj_update_csums(const struct dc_object *obj, const daos_obj_update_t *args) {
 				       args->iods[i].iod_recxs,
 				       args->iods[i].iod_nr,
 				       &args->iods[i].iod_csums);
+		if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_FAIL))
+			((char *)args->iods[i].iod_csums->cs_csum)[0]++;
 	}
 }
 

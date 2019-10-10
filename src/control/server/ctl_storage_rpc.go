@@ -31,6 +31,7 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
 // newState creates, populates and returns ResponseState in addition
@@ -68,14 +69,14 @@ func (c *StorageControlService) doNvmePrepare(req *ctlpb.PrepareNvmeReq) (resp *
 	return
 }
 
-func translatePmemDevices(inDevs []pmemDev) (outDevs types.PmemDevices) {
+func translateNamespaces(inDevs []scm.Namespace) (outDevs types.PmemDevices) {
 	for _, dev := range inDevs {
 		outDevs = append(outDevs,
 			&ctlpb.PmemDevice{
 				Uuid:     dev.UUID,
-				Blockdev: dev.Blockdev,
-				Dev:      dev.Dev,
-				Numanode: uint32(dev.NumaNode),
+				Blockdev: dev.BlockDevice,
+				Dev:      dev.Name,
+				Numanode: dev.NumaNode,
 			})
 	}
 
@@ -91,8 +92,9 @@ func (c *StorageControlService) doScmPrepare(req *ctlpb.PrepareScmReq) (resp *ct
 		resp.State = newState(c.log, ctlpb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg)
 		return
 	}
+	c.log.Debugf("SCM state before prep: %s", scmState)
 
-	needsReboot, pmemDevs, err := c.PrepareScm(PrepareScmRequest{Reset: req.GetReset_()}, scmState)
+	needsReboot, pmemDevs, err := c.PrepareScm(PrepareScmRequest{Reset: req.GetReset_()})
 	if err != nil {
 		resp.State = newState(c.log, ctlpb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg)
 		return
@@ -104,7 +106,7 @@ func (c *StorageControlService) doScmPrepare(req *ctlpb.PrepareScmReq) (resp *ct
 	}
 
 	resp.State = newState(c.log, ctlpb.ResponseStatus_CTRL_SUCCESS, "", info, msg)
-	resp.Pmems = translatePmemDevices(pmemDevs)
+	resp.Pmems = translateNamespaces(pmemDevs)
 
 	return
 }
@@ -199,7 +201,7 @@ func (c *ControlService) doFormat(i *IOServerInstance, resp *ctlpb.StorageFormat
 		return err
 	}
 	ctrlrResults := types.NvmeControllerResults{}
-	// A config with SCM and no block devices is valid, apparently.
+	// A config with SCM and no block devices is valid.
 	if len(bdevConfig.DeviceList) > 0 {
 		c.nvme.Format(bdevConfig, &ctrlrResults)
 		resp.Crets = ctrlrResults
