@@ -42,6 +42,7 @@
 #include <setjmp.h>
 #include <time.h>
 #include <linux/limits.h>
+#include <sys/types.h>
 #include <sys/stat.h>
 #include <dirent.h>
 
@@ -68,6 +69,7 @@
 #include <daos/mgmt.h>
 #include <daos/tests_lib.h>
 #include <daos.h>
+#include <daos_fs.h>
 
 /** Server crt group ID */
 extern const char *server_group;
@@ -122,6 +124,13 @@ struct epoch_io_args {
 				op_ec:1; /* true for EC, false for replica */
 };
 
+struct dfs_test_args {
+	dfs_t			*dfs;
+	char			*name;
+	daos_size_t		 total_size;
+	daos_size_t		 stride;
+};
+
 typedef struct {
 	bool			multi_rank;
 	int			myrank;
@@ -134,6 +143,7 @@ typedef struct {
 	unsigned int		gid;
 	daos_handle_t		eq;
 	daos_handle_t		coh;
+	bool			cont_for_dfs; /* flag of dfs container */
 	daos_cont_info_t	co_info;
 	int			setup_state;
 	bool			async;
@@ -168,6 +178,7 @@ typedef struct {
 	void			*rebuild_post_cb_arg;
 	/* epoch IO OP queue */
 	struct epoch_io_args	eio_args;
+	struct dfs_test_args	dfs_args;
 } test_arg_t;
 
 enum {
@@ -276,6 +287,7 @@ int run_daos_rebuild_test(int rank, int size, int *tests, int test_size);
 int run_daos_dtx_test(int rank, int size, int *tests, int test_size);
 int run_daos_vc_test(int rank, int size, int *tests, int test_size);
 int run_daos_checksum_test(int rank, int size);
+int run_dfs_test(int rank, int size, int *tests, int test_size);
 
 void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 		      d_rank_list_t *svc, d_rank_t rank);

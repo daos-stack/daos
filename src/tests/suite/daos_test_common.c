@@ -27,9 +27,10 @@
  */
 #define D_LOGFAC	DD_FAC(tests)
 
-#include <daos.h>
-#include <daos_prop.h>
 #include "daos_test.h"
+#include <daos.h>
+#include <daos_fs.h>
+#include <daos_prop.h>
 
 /** Server crt group ID */
 const char *server_group;
@@ -214,9 +215,16 @@ test_setup_cont_open(void **state)
 	int rc;
 
 	if (arg->myrank == 0) {
-		print_message("setup: opening container\n");
-		rc = daos_cont_open(arg->pool.poh, arg->co_uuid, DAOS_COO_RW,
-				    &arg->coh, &arg->co_info, NULL);
+		if (!arg->cont_for_dfs) {
+			print_message("setup: opening container\n");
+			rc = daos_cont_open(arg->pool.poh, arg->co_uuid,
+					    DAOS_COO_RW, &arg->coh,
+					    &arg->co_info, NULL);
+		} else {
+			print_message("setup: opening dfs container\n");
+			rc = dfs_cont_create(arg->pool.poh, arg->co_uuid,
+					     NULL, &arg->coh, NULL);
+		}
 		if (rc)
 			print_message("daos_cont_open failed, rc: %d\n", rc);
 	}

@@ -667,8 +667,10 @@ open_file(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 
 	/* Check if parent has the filename entry */
 	rc = fetch_entry(parent->oh, th, file->name, false, &exists, &entry);
-	if (rc)
+	if (rc) {
+		D_ERROR("fetch_entry %s failed %d.\n", file->name, rc);
 		return rc;
+	}
 
 	if (flags & O_CREAT) {
 		if (exists) {
@@ -736,8 +738,10 @@ open_file:
 
 	rc = check_access(dfs, geteuid(), getegid(), entry.mode,
 			  (daos_mode == DAOS_OO_RO) ? R_OK : R_OK | W_OK);
-	if (rc)
+	if (rc) {
+		D_ERROR("check_access failed %d\n", rc);
 		return rc;
+	}
 
 	file->mode = entry.mode;
 	rc = daos_array_open_with_attr(dfs->coh, entry.oid, th, daos_mode, 1,
@@ -2132,7 +2136,7 @@ io_internal(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t sgl, daos_off_t off,
 		rc = daos_array_read(obj->oh, DAOS_TX_NONE, &iod, &sgl, NULL,
 				     NULL);
 		if (rc)
-			D_ERROR("daos_array_write() failed (%d)\n", rc);
+			D_ERROR("daos_array_read() failed (%d)\n", rc);
 	} else {
 		rc = -DER_INVAL;
 	}
