@@ -63,7 +63,7 @@ ior:
           objectclass: !mux
             oclass_SX:
               daos_oclass: "SX"
-# Commenting it out until DAOS-3097/3143 is resolved.
+# Commenting it out until DAOS-3097/3143 is resolved .
 #            oclass_RP_2GX:
 #              daos_oclass: "RP_2GX"
         fpp:
