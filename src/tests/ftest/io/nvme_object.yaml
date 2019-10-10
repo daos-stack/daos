@@ -33,7 +33,7 @@ pool:
  createsvc:
   svcn: 1
 container:
-  object_qty: 20
+  object_qty: 10
   record_size:
     - 1
     - 50

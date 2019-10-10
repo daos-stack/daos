@@ -96,40 +96,41 @@ def test_runner(self, size, record_size, index, array_size, thread_per_size=4):
     self.container[index].open()
 
     # initialise dicts to hold threads
-    write = []
-    read = []
+    jobs = {"write": [], "read": []}
 
     # create read/write threads.
     for rec in record_size:
         for _ in range(thread_per_size):
             # create threads using single value type
-            write.append(threading.Thread(target=container_write,
-                                          args=(self.container[index], rec)))
-            read.append(threading.Thread(target=container_read,
-                                         args=(self.container[index], None)))
+            jobs["write"].append(threading.Thread(target=container_write,
+                                                  args=(self.container[index],
+                                                        rec)))
+            jobs["read"].append(threading.Thread(target=container_read,
+                                                 args=(self.container[index],
+                                                       None)))
 
             # create threads using array value type
-            write.append(threading.Thread(target=container_write,
-                                          args=(self.container[index], rec,
-                                                array_size)))
-            read.append(threading.Thread(target=container_read,
-                                         args=(self.container[index],
-                                               array_size)))
+            jobs["write"].append(threading.Thread(target=container_write,
+                                                  args=(self.container[index],
+                                                        rec, array_size)))
+            jobs["read"].append(threading.Thread(target=container_read,
+                                                 args=(self.container[index],
+                                                       array_size)))
 
     # start all the write threads
-    for job in write:
+    for job in jobs["write"]:
         job.start()
 
    # wait for all write threads to finish
-    for job in write:
+    for job in jobs["write"]:
         job.join()
 
     # start read threads
-    for job in read:
+    for job in jobs["read"]:
         job.start()
 
     # wait for all read threads to complete
-    for job in read:
+    for job in jobs["read"]:
         job.join()
 
     # display free space after reads and writes
