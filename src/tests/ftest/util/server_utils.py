@@ -394,8 +394,7 @@ class ServerManager(ExecutableCommand):
             # Make sure log file has been created for ownership change
             data_dict = self.runner.job.yaml_params.data
             if data_dict and "log_file" in data_dict['servers'][0]:
-                self.log.info("Creating log file: {}".format(
-                    data_dict['servers'][0]['log_file']))
+                self.log.info("Creating log file")
                 c_log = "touch {}".format(data_dict['servers'][0]['log_file'])
                 pcmd(self._hosts, c_log, False)
 
