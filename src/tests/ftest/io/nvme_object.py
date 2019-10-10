@@ -31,13 +31,17 @@ from test_utils import TestPool, TestContainer
 from apricot import TestWithServers
 
 
-def container_write(container, record):
+def container_write(container, record, array_size=None):
     """Method to write to a container
 
        Args:
          container: instance of TestContainer
          record: record size to be written
+         array_size (optional): size of array value to be written
     """
+    # update data_array_size to use array value type
+    if array_size:
+        container.data_array_size.update(array_size)
     # update record qty
     container.record_qty.update(record)
     print("\nRecord Size:{}".format(container.record_qty))
@@ -45,17 +49,20 @@ def container_write(container, record):
     # write multiple objects
     container.write_objects()
 
-def container_read(container):
+def container_read(container, array_size=None):
     """Method to read and verify the written data
 
        Args:
          container: instance of TestContainer
+         array_size (optional): size of array value to be written
     """
-
+    # update data_array_size to use array value type
+    if array_size:
+        container.data_array_size.update(array_size)
     # read written objects and verify
     container.read_objects()
 
-def test_runner(self, size, record_size):
+def test_runner(self, size, record_size, index, array_size, thread_per_size=4):
     """Method to perform simultaneous writes of varying
        record size to a container in a pool
 
@@ -63,71 +70,71 @@ def test_runner(self, size, record_size):
          self: avocado test object
          size: pool size to be created
          record_size (list): list of different record sizes to be written
+         index (int): pool/container object index
+         array_size (optional): size of array value to be written
+         thread_per_size (int): threads per rec size
     """
-    # pool initialization
-    pool = TestPool(self.context, self.log)
-    pool.get_params(self)
-    # set pool size
-    pool.nvme_size.update(size)
-    # Create a pool
-    pool.create()
-    pool.connect()
 
-    # invoke pool query before write
-    pool.get_info()
-    for index in range(2):
-        self.log.info("Pool Total Space [%d]: %s", index,
-                      (getattr(pool.info.pi_space.ps_space, 's_total')[index]))
-        self.log.info("Pool Free Space [%d]: %s", index,
-                      (getattr(pool.info.pi_space.ps_space, 's_free')[index]))
+    # pool initialization
+    self.pool.append(TestPool(self.context, self.log))
+    self.pool[index].get_params(self)
+
+    # set pool size
+    self.pool[index].nvme_size.update(size)
+
+    # Create a pool
+    self.pool[index].create()
+
+    # display available space before write
+    self.pool[index].display_pool_daos_space("before writes")
+    self.pool[index].connect()
 
     # create container
-    container = TestContainer(pool)
-    container.get_params(self)
-    container.create()
-    container.open()
+    self.container.append(TestContainer(self.pool[index]))
+    self.container[index].get_params(self)
+    self.container[index].create()
+    self.container[index].open()
 
-    threads_write = []
-    threads_read = []
+    # initialise dicts to hold threads
+    write = []
+    read = []
+
+    # create read/write threads.
     for rec in record_size:
-        for thread_write in range(16):
-            thread_write = threading.Thread(target=container_write,
-                                            args=(container, rec))
-            thread_read = threading.Thread(target=container_read,
-                                           args=(container,))
-            threads_write.append(thread_write)
-            threads_read.append(thread_read)
+        for _ in range(thread_per_size):
+            # create threads using single value type
+            write.append(threading.Thread(target=container_write,
+                                          args=(self.container[index], rec)))
+            read.append(threading.Thread(target=container_read,
+                                         args=(self.container[index], None)))
+
+            # create threads using array value type
+            write.append(threading.Thread(target=container_write,
+                                          args=(self.container[index], rec,
+                                                array_size)))
+            read.append(threading.Thread(target=container_read,
+                                         args=(self.container[index],
+                                               array_size)))
 
     # start all the write threads
-    for job in threads_write:
+    for job in write:
         job.start()
 
-    # wait for all write threads to finish
-    for job in threads_write:
+   # wait for all write threads to finish
+    for job in write:
         job.join()
 
     # start read threads
-    for job in threads_read:
+    for job in read:
         job.start()
 
     # wait for all read threads to complete
-    for job in threads_read:
+    for job in read:
         job.join()
 
-    # invoke pool query after write
-    for idx in range(2):
-        self.log.info("Pool Total Space [%d]: %s", idx,
-                      (getattr(pool.info.pi_space.ps_space, 's_total')[idx]))
-        self.log.info("Pool Free Space [%d]: %s", idx,
-                      (getattr(pool.info.pi_space.ps_space, 's_free')[idx]))
+    # display free space after reads and writes
+    self.pool[index].display_pool_daos_space("after writes and reads")
 
-    # destroy container
-    if container is not None:
-        container.destroy()
-
-    # destroy pool
-    if pool is not None:
-        pool.destroy(1)
 
 class NvmeObject(TestWithServers):
     """Test class for NVMe storage by creating/Updating/Fetching
@@ -144,9 +151,13 @@ class NvmeObject(TestWithServers):
         """Set Up nodes for each test case"""
         super(NvmeObject, self).setUp()
 
+        # initialise self.pool and self.container as lists
+        self.pool = []
+        self.container = []
         # set common params
         self.record_size = self.params.get("record_size", "/run/container/*")
         self.pool_size = self.params.get("size", "/run/pool/createsize/*")
+        self.array_size = self.params.get("array_size", "/run/container/*")
 
     @avocado.fail_on(DaosApiError)
     def test_nvme_object_single_pool(self):
@@ -164,7 +175,8 @@ class NvmeObject(TestWithServers):
         """
 
         # perform multiple object writes to a single pool
-        test_runner(self, self.pool_size[0], self.record_size[:-1])
+        test_runner(self, self.pool_size[0], self.record_size[:-1], 0,
+                    self.array_size)
 
     @avocado.fail_on(DaosApiError)
     def test_nvme_object_multiple_pools(self):
@@ -184,16 +196,13 @@ class NvmeObject(TestWithServers):
 
         # thread to perform simulatneous object writes to multiple pools
         threads = []
+        index = 0
         for size in self.pool_size[:-1]:
-            # excluding last record size in the list if size is
-            # self.pool_size[0] to not over write a pool with less space
-            # available.
-            # pylint: disable=pointless-statement
-            if size == self.pool_size[0]:
-                self.record_size[:-1]
             thread = threading.Thread(target=test_runner,
-                                      args=(self, size, self.record_size))
+                                      args=(self, size, self.record_size,
+                                            index, self.array_size))
             threads.append(thread)
+            index += 1
 
         # starting all the threads
         for job in threads:
@@ -207,4 +216,5 @@ class NvmeObject(TestWithServers):
         # very large nvme_pool size
         # Uncomment the below line after DAOS-3339 is resolved
 
-        #test_runner(self, self.pool_size[2], self.record_size)
+        #test_runner(self, self.pool_size[2], self.record_size, index,
+        #            self.array_size)

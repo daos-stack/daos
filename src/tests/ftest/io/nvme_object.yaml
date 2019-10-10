@@ -11,7 +11,7 @@ hosts:
   - boro-F
   - boro-G
  test_clients:
-  - boro-H
+  - boro-B
 timeout: 9000
 server_config:
  name: daos_server
@@ -27,13 +27,13 @@ pool:
  createsize:
   scm_size: 1000000000
   size:
-   - 10000000000
+   - 20000000000
    - 100000000000
    - 800000000000
  createsvc:
   svcn: 1
 container:
-  object_qty: 100
+  object_qty: 20
   record_size:
     - 1
     - 50
@@ -42,3 +42,4 @@ container:
   akey_size: 10
   dkey_size: 10
   data_size: 4096
+  array_size: 1
