@@ -33,8 +33,7 @@ from apricot import Test
 import agent_utils
 import server_utils
 import write_host_file
-from daos_api import DaosContext, DaosPool, DaosApiError
-from daos_cref import RankList
+from pydaos.raw import DaosContext, DaosPool, DaosApiError, RankList
 
 class BadConnectTest(Test):
     """

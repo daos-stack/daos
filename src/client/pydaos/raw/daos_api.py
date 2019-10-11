@@ -34,20 +34,10 @@ import enum
 import daos_cref
 import conversion
 
-DAOS_MAGIC = 0x7A89
-
-# pylint: disable=import-error
-if sys.version_info < (3, 0):
-    import pydaos_shim_27 as pydaos_shim
-else:
-    import pydaos_shim_3 as pydaos_shim
-# pylint: enable=import-error
-
 DaosObjClass = enum.Enum(
     "DaosObjClass",
     {key: value for key, value in pydaos_shim.__dict__.items()
      if key.startswith("OC_")})
-
 
 class DaosPool(object):
     """A python object representing a DAOS pool."""
@@ -2136,7 +2126,6 @@ class DaosContext(object):
 
         self.libtest = ctypes.CDLL(path+"libdaos_tests.so",
                                    mode=ctypes.DEFAULT_MODE)
-        self.libdaos.daos_init()
         # Note: action-subject format
         self.ftable = {
             'add-target':      self.libdaos.daos_pool_add_tgt,
@@ -2194,10 +2183,6 @@ class DaosContext(object):
             'test-event':      self.libdaos.daos_event_test,
             'update-obj':      self.libdaos.daos_obj_update}
 
-    def __del__(self):
-        """Cleanup the DAOS API."""
-        self.libdaos.daos_fini()
-
     def get_function(self, function):
         """Call a function through the API."""
         return self.ftable[function]
@@ -2245,164 +2230,3 @@ class DaosLog:
 
 class DaosApiError(Exception):
     """DAOS API exception class."""
-
-
-if __name__ == '__main__':
-    # this file is not intended to be run in normal circumstances
-    # this is strictly unit test code here in main, there is a lot
-    # of rubbish but it makes it easy to try stuff out as we expand
-    # this interface.  Will eventially be removed or formalized.
-
-    # try:
-    #     # this works so long as this file is in its usual place
-    #     with open('../../../.build_vars.json') as f:
-    #         data = json.load(f)
-
-    #     CONTEXT = DaosContext(data['PREFIX'] + '/lib/')
-    #     print ("initialized!!!\n")
-
-    #     POOL = DaosPool(CONTEXT)
-    #     tgt_list = [1]
-    #     POOL.create(448, os.getuid(), os.getgid(), 1024 * 1024 * 1024,
-    #                 b'daos_server')
-    #     time.sleep(2)
-    #     print ("Pool create called\n")
-    #     print ("uuid is " + POOL.get_uuid_str())
-
-    #     #time.sleep(5)
-    #     print ("handle before connect {0}\n".format(POOL.handle))
-
-    #     POOL.connect(1 << 1)
-
-    #     print ("Main: handle after connect {0}\n".format(POOL.handle))
-
-    #     CONTAINER = DaosContainer(CONTEXT)
-    #     CONTAINER.create(POOL.handle)
-
-    #     print ("container created {}".format(CONTAINER.get_uuid_str()))
-
-    #     #POOL.pool_svc_stop()
-    #     pool_info = POOL.pool_query()
-    #     print c_uuid_to_str(pool_info.pi_uuid)
-    #     print pool_info.pi_ntargets
-    #     print pool_info.pi_nnodes
-    #     print pool_info.pi_ndisabled
-    #     print pool_info.pi_gid
-    #     print pool_info.pi_mode
-    #     print pool_info.pi_leader
-
-    #     print "Storage Pool Space information"
-    #     for i in range(2):
-    #         print "-----------------{}".format(i)
-    #         print "Total size: {}".format(
-    #            pool_info.pi_space.ps_space.s_total[i])
-    #         print "Free:{}, min:{}, max:{}, mean:{}".format(
-    #            pool_info.pi_space.ps_space.s_free[i],
-    #            pool_info.pi_space.ps_free_min[i],
-    #            pool_info.pi_space.ps_free_max[i],
-    #            pool_info.pi_space.ps_free_mean[i])
-
-    #     time.sleep(5)
-
-    #     CONTAINER.open()
-    #     print ("container opened {}".format(CONTAINER.get_uuid_str()))
-
-    #     time.sleep(5)
-
-    #     CONTAINER.query()
-    #     print ("Epoch highest committed: {}".format(CONTAINER.info.es_hce))
-
-    #     thedata = "a string that I want to stuff into an object"
-    #     size = 45
-    #     dkey = "this is the dkey"
-    #     akey = "this is the akey"
-
-    #     obj, epoch = CONTAINER.write_an_obj(thedata, size, dkey, akey, None,
-    #                                         5)
-    #     print ("data write finished with epoch {}".format(epoch))
-
-    #     obj.get_layout()
-    #     for i in obj.tgt_rank_list:
-    #         print ("rank for obj:{}".format(i))
-
-    #     time.sleep(5)
-
-    #     thedata2 = CONTAINER.read_an_obj(size, dkey, akey, obj, epoch)
-    #     print (repr(thedata2.value))
-
-    #     thedata3 = "a different string that I want to stuff into an object"
-    #     size = 55
-    #     dkey2 = "this is the dkey"
-    #     akey2 = "this is the akey"
-
-    #     obj2, epoch2 = CONTAINER.write_an_obj(thedata3, size, dkey2,
-    #                                           akey2, obj, 4)
-    #     print ("data write finished, in epoch {}".format(epoch2))
-
-    #     obj2.get_layout()
-
-    #     time.sleep(5)
-
-    #     thedata4 = CONTAINER.read_an_obj(size, dkey2, akey2, obj2, epoch2)
-    #     print (repr(thedata4.value))
-
-    #     thedata5 = CONTAINER.read_an_obj(size, dkey2, akey2, obj, epoch)
-    #     print (repr(thedata5.value))
-
-    #     data = {"First":  "1111111111",
-    #             "Second": "22222222222222222222",
-    #             "Third":  "333333333333333333333333333333"}
-    #     print ("=====Set Attr =====")
-    #     CONTAINER.set_attr(data = data)
-    #     print ("=====List Attr =====")
-    #     # commenting out below line, list_attr has no data param
-    #     # size, buf = CONTAINER.list_attr(data = data)
-    #     # print size, buf
-    #     print ("=====Get Attr =====")
-    #     val = CONTAINER.get_attr(data = data)
-    #     for i in range(0, len(data)):
-    #         print(val[i])
-
-    #     CONTAINER.close()
-    #     print ("container closed {}".format(CONTAINER.get_uuid_str()))
-
-    #     time.sleep(15)
-
-    #     CONTAINER.destroy(1)
-
-    #     print ("container destroyed")
-
-    #     #POOL.disconnect(rubbish)
-    #     #POOL.disconnect()
-    #     #print ("Main past disconnect\n")
-
-    #     #time.sleep(5)
-
-    #     #tgts = [2]
-    #     #POOL.exclude(tgts, rubbish)
-    #     #POOL.exclude_out(tgts, rubbish)
-    #     #POOL.exclude_out(tgts)
-    #     #print ("Main past exclude\n")
-
-    #     #POOL.evict(rubbish)
-
-    #     #time.sleep(5)
-
-    #     #POOL.tgt_add(tgts, rubbish)
-
-    #     #print ("Main past tgt_add\n")
-
-    #     #POOL.destroy(1)
-    #     #print ("Pool destroyed")
-
-    #     #SERVICE = DaosServer(CONTEXT, b'daos_server', 5)
-    #     #SERVICE.kill(1)
-    #     #print ("server killed!\n")
-
-    # except Exception as EXCEP:
-    #     print ("Something horrible happened\n")
-    #     print (traceback.format_exc())
-    #     print (EXCEP)
-
-    print("running")
-    raise DaosApiError("hit error, all good")

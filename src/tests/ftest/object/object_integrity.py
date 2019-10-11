@@ -33,8 +33,8 @@ import agent_utils
 import server_utils
 import write_host_file
 
-from daos_api import (DaosContext, DaosPool, DaosContainer, IORequest, DaosObj,
-                      DaosApiError, DaosLog)
+from pydaos.raw import (DaosContext, DaosPool, DaosContainer, IORequest, DaosObj,
+                        DaosApiError, DaosLog)
 from apricot import skipForTicket
 
 class ObjectDataValidation(avocado.Test):

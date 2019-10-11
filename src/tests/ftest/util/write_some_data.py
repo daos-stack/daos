@@ -26,7 +26,7 @@ from __future__ import print_function
 import sys
 import numpy as np
 
-from daos_io import DaosFile
+from pydaos.raw import DaosFile
 
 class DaosIOFailed(Exception):
     """ DAOS I/O failure of some sort. """

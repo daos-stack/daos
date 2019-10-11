@@ -32,8 +32,7 @@ from multiprocessing import sharedctypes
 from apricot import TestWithServers
 
 import check_for_pool
-from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
-from daos_cref import IOV
+from pydaos.raw import DaosContext, DaosPool, DaosContainer, DaosApiError, IOR
 
 def check_handle(pool_glob_handle, uuidstr, cont_glob_handle, rank):
     """

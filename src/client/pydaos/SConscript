@@ -9,12 +9,12 @@ def build_shim_module(py_env, svars, lib_prefix, version):
     extra_flags = ""
 
     if version == "2.7":
-        tgt_name = 'pydaos_shim_27'
-        base_name = 'pydaos_shim_27'
+        tgt_name = '_pydaos_shim_27'
+        base_name = '_pydaos_shim_27'
         new_env.ParseConfig("pkg-config --cflags --libs python2")
     elif version == "3":
-        tgt_name = 'pydaos_shim_3'
-        base_name = 'pydaos_shim_3'
+        tgt_name = '_pydaos_shim_3'
+        base_name = '_pydaos_shim_3'
         extra_flags = " -D__USE_PYTHON3__==1"
         new_env.ParseConfig("pkg-config --cflags --libs python3")
     else:
@@ -41,10 +41,18 @@ def build_shim_module(py_env, svars, lib_prefix, version):
                               SHLIBSUFFIX=svars["SO"],
                               CPPFLAGS=svars["BASECFLAGS"] + " " + \
                               svars["OPT"] + " " + extra_flags)
-    install_path = lib_prefix + "/python" + version + "/site-packages"
+    install_path = lib_prefix + "/python" + version + "/site-packages/pydaos"
     new_env.Install(install_path, base)
     # install new wrappers too
-    new_env.Install(install_path, "pydaos.py")
+    new_env.Install(install_path, "__init__.py")
+    new_env.Install(install_path, "pydaos_core.py")
+    # install raw wrappers
+    install_path += "/raw"
+    new_env.Install(install_path, "__init__.py")
+    new_env.Install(install_path, "daos_api.py")
+    new_env.Install(install_path, "daos_io.py")
+    new_env.Install(install_path, "conversion.py")
+    new_env.Install(install_path, "daos_cref.py")
 
 def scons():
     """Execute build"""

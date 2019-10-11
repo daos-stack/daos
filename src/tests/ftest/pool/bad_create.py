@@ -32,7 +32,7 @@ from apricot import Test
 import agent_utils
 import server_utils
 import write_host_file
-from daos_api import DaosContext, DaosPool, DaosApiError
+from pydaos.raw import DaosContext, DaosPool, DaosApiError
 
 class BadCreateTest(Test):
     """

@@ -29,7 +29,7 @@ import uuid
 
 from apricot import TestWithServers
 
-from daos_api import DaosPool, DaosApiError, DaosContainer
+from pydaos.raw import DaosPool, DaosApiError, DaosContainer
 
 class DeleteContainerTest(TestWithServers):
     """

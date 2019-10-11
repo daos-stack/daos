@@ -32,7 +32,7 @@ import avocado
 
 from apricot import TestWithServers, skipForTicket
 from agent_utils import run_agent, stop_agent
-from daos_api import DaosContainer, DaosApiError
+from pydaos.raw import DaosContainer, DaosApiError
 from ior_utils import IorCommand
 from command_utils import Orterun, CommandFailure
 from server_utils import run_server, stop_server
