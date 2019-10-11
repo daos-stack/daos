@@ -226,8 +226,8 @@ typedef struct {
 	union {
 		/** Returned earliest update epoch for a key */
 		daos_epoch_t			ie_earliest;
-		/** Return the DTX handled time for DTX iteration. */
-		uint64_t			ie_dtx_time;
+		/** record size */
+		daos_size_t			ie_rsize;
 	};
 	union {
 		/** Returned entry for container UUID iterator */
@@ -251,8 +251,6 @@ typedef struct {
 			uint32_t		ie_dtx_intent;
 		};
 		struct {
-			/** record size */
-			daos_size_t		ie_rsize;
 			/** record extent */
 			daos_recx_t		ie_recx;
 			/* original in-tree extent */
