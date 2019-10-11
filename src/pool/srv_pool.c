@@ -36,7 +36,6 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <daos_api.h> /* for daos_prop_alloc/_free() */
-#include <daos_security.h>
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
 #include <daos/rsvc.h>
@@ -2145,56 +2144,6 @@ out:
 	return rc;
 }
 
-int
-ds_pool_svc_get_acl(uuid_t pool_uuid, struct daos_acl **acl)
-{
-	int			rc;
-	struct pool_svc		*svc;
-	struct rdb_tx		tx;
-	daos_prop_t		*prop = NULL;
-	struct daos_prop_entry	*entry;
-
-	rc = pool_svc_lookup_leader(pool_uuid, &svc, NULL);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
-	if (rc != 0)
-		D_GOTO(out_svc, rc);
-
-	ABT_rwlock_rdlock(svc->ps_lock);
-
-	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ACL, &prop);
-
-	/* Done with locked activities - cleanup regardless of result */
-	ABT_rwlock_unlock(svc->ps_lock);
-	rdb_tx_end(&tx);
-
-	if (rc != 0)
-		D_GOTO(out_svc, rc);
-
-	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
-	if (entry == NULL) {
-		D_ERROR("ACL prop entry requested but not returned\n");
-		D_GOTO(out_svc, rc = -DER_NONEXIST);
-	}
-
-	if (entry->dpe_val_ptr == NULL) {
-		D_ERROR("ACL prop was NULL\n");
-		D_GOTO(out_svc, rc = -DER_NONEXIST);
-	}
-
-	*acl = daos_acl_dup(entry->dpe_val_ptr);
-	if (*acl == NULL)
-		D_GOTO(out_svc, rc = -DER_NOMEM);
-
-out_svc:
-	pool_svc_put_leader(svc);
-out:
-	daos_prop_free(prop);
-	return rc;
-}
-
 void
 ds_pool_query_handler(crt_rpc_t *rpc)
 {
@@ -2345,6 +2294,125 @@ out:
 	daos_prop_free(prop);
 }
 
+/**
+ * Query a pool's ACL property without having a handle for the pool
+ */
+void
+ds_pool_get_acl_handler(crt_rpc_t *rpc)
+{
+	struct pool_get_acl_in	*in = crt_req_get(rpc);
+	struct pool_get_acl_out	*out = crt_reply_get(rpc);
+	struct pool_svc		*svc;
+	struct rdb_tx		tx;
+	int			rc;
+	daos_prop_t		*prop = NULL;
+
+	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
+		DP_UUID(in->pgi_op.pi_uuid), rpc);
+
+	rc = pool_svc_lookup_leader(in->pgi_op.pi_uuid, &svc,
+				    &out->pgo_op.po_hint);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
+
+	ABT_rwlock_rdlock(svc->ps_lock);
+
+	/* read ACL prop only */
+	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ACL, &prop);
+	if (rc != 0)
+		D_GOTO(out_lock, rc);
+	out->pgo_prop = prop;
+
+out_lock:
+	ABT_rwlock_unlock(svc->ps_lock);
+	rdb_tx_end(&tx);
+out_svc:
+	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pgo_op.po_hint);
+	pool_svc_put_leader(svc);
+out:
+	out->pgo_op.po_rc = rc;
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
+		DP_UUID(in->pgi_op.pi_uuid), rpc, rc);
+	crt_reply_send(rpc);
+	daos_prop_free(prop);
+}
+
+/**
+ * Send a CaRT message to the pool svc to get the ACL pool property.
+ *
+ * \param[in]	pool_uuid	UUID of the pool
+ * \param[in]	ranks		Pool service replicas
+ * \param[out]	prop		ACL pool prop
+ *
+ * \return	0		Success
+ *
+ */
+int
+ds_pool_svc_get_acl_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
+			 daos_prop_t **prop)
+{
+	int			rc;
+	struct rsvc_client	client;
+	crt_endpoint_t		ep;
+	struct dss_module_info	*info = dss_get_module_info();
+	crt_rpc_t		*rpc;
+	struct pool_get_acl_in	*in;
+	struct pool_get_acl_out	*out;
+
+	D_DEBUG(DB_MGMT, "Getting ACL prop for pool "DF_UUID"\n",
+		DP_UUID(pool_uuid));
+
+	rc = rsvc_client_init(&client, ranks);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	ep.ep_grp = NULL; /* Is it OK for this to be NULL? */
+	/* If not: how do we get the cart group for the pool? */
+	rsvc_client_choose(&client, &ep);
+
+	rc = pool_req_create(info->dmi_ctx, &ep, POOL_GET_ACL, &rpc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create pool get ACL rpc: %d\n",
+			DP_UUID(pool_uuid), rc);
+		D_GOTO(out_client, rc);
+	}
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->pgi_op.pi_uuid, pool_uuid);
+	uuid_clear(in->pgi_op.pi_hdl);
+
+	rc = dss_rpc_send(rpc);
+	if (rc != 0)
+		D_GOTO(out_rpc, rc);
+
+	out = crt_reply_get(rpc);
+	D_ASSERT(out != NULL);
+
+	rc = rsvc_client_complete_rpc(&client, &ep, rc,
+				      out->pgo_op.po_rc,
+				      &out->pgo_op.po_hint);
+	if (rc != 0)
+		D_GOTO(out_rpc, rc);
+
+	rc = out->pgo_op.po_rc;
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to query pool: %d\n",
+			DP_UUID(pool_uuid), rc);
+		D_GOTO(out_rpc, rc);
+	}
+
+	*prop = daos_prop_dup(out->pgo_prop, true);
+out_rpc:
+	crt_req_decref(rpc);
+out_client:
+	rsvc_client_fini(&client);
+out:
+	return rc;
+}
 
 static int
 replace_failed_replicas(struct pool_svc *svc, struct pool_map *map)

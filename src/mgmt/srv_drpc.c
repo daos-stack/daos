@@ -702,7 +702,7 @@ ds_mgmt_drpc_pool_get_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = ds_pool_svc_get_acl(pool_uuid, &acl);
+	rc = ds_mgmt_pool_get_acl(pool_uuid, &acl);
 	if (rc != 0) {
 		D_ERROR("Couldn't get pool ACL, rc=%d\n", rc);
 		D_GOTO(out, rc);

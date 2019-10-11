@@ -50,7 +50,7 @@ static const char	*TEST_ACES[] = {"A::OWNER@:rw",
 static int
 drpc_pool_get_acl_setup(void **state)
 {
-	mock_ds_pool_svc_get_acl_setup();
+	mock_ds_mgmt_pool_get_acl_setup();
 
 	return 0;
 }
@@ -58,7 +58,7 @@ drpc_pool_get_acl_setup(void **state)
 static int
 drpc_pool_get_acl_teardown(void **state)
 {
-	mock_ds_pool_svc_get_acl_teardown();
+	mock_ds_mgmt_pool_get_acl_teardown();
 
 	return 0;
 }
@@ -142,7 +142,7 @@ test_drpc_pool_get_acl_pool_svc_fails(void **state)
 	Mgmt__GetACLResp	*acl_resp = NULL;
 
 	setup_get_acl_drpc_call(&call, TEST_UUID);
-	ds_pool_svc_get_acl_return = -DER_UNKNOWN;
+	ds_mgmt_pool_get_acl_return = -DER_UNKNOWN;
 
 	ds_mgmt_drpc_pool_get_acl(&call, &resp);
 
@@ -152,7 +152,7 @@ test_drpc_pool_get_acl_pool_svc_fails(void **state)
 	acl_resp = mgmt__get_aclresp__unpack(NULL, resp.body.len,
 					     resp.body.data);
 	assert_non_null(acl_resp);
-	assert_int_equal(acl_resp->status, ds_pool_svc_get_acl_return);
+	assert_int_equal(acl_resp->status, ds_mgmt_pool_get_acl_return);
 	assert_int_equal(acl_resp->n_acl, 0);
 }
 
@@ -175,10 +175,10 @@ test_drpc_pool_get_acl_cant_translate_acl(void **state)
 	struct daos_ace		*ace;
 
 	setup_get_acl_drpc_call(&call, TEST_UUID);
-	ds_pool_svc_get_acl_return_acl = get_valid_acl();
+	ds_mgmt_pool_get_acl_return_acl = get_valid_acl();
 
 	/* Mangle an ACE so it can't be translated to a string */
-	ace = daos_acl_get_next_ace(ds_pool_svc_get_acl_return_acl, NULL);
+	ace = daos_acl_get_next_ace(ds_mgmt_pool_get_acl_return_acl, NULL);
 	ace->dae_access_types = 0xff; /* invalid bits */
 
 	ds_mgmt_drpc_pool_get_acl(&call, &resp);
@@ -202,7 +202,7 @@ test_drpc_pool_get_acl_success(void **state)
 	int			i;
 
 	setup_get_acl_drpc_call(&call, TEST_UUID);
-	ds_pool_svc_get_acl_return_acl = get_valid_acl();
+	ds_mgmt_pool_get_acl_return_acl = get_valid_acl();
 
 	ds_mgmt_drpc_pool_get_acl(&call, &resp);
 

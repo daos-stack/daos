@@ -32,14 +32,14 @@
 #include <daos_security.h>
 
 /*
- * Mock ds_pool_svc_get_acl
+ * Mock ds_mgmt_pool_get_acl
  */
-extern int		ds_pool_svc_get_acl_return;
-extern struct daos_acl	*ds_pool_svc_get_acl_return_acl;
-extern uuid_t		ds_pool_svc_get_acl_uuid;
-extern void		*ds_pool_svc_get_acl_acl_ptr;
+extern int		ds_mgmt_pool_get_acl_return;
+extern struct daos_acl	*ds_mgmt_pool_get_acl_return_acl;
+extern uuid_t		ds_mgmt_pool_get_acl_uuid;
+extern void		*ds_mgmt_pool_get_acl_acl_ptr;
 
-void mock_ds_pool_svc_get_acl_setup(void);
-void mock_ds_pool_svc_get_acl_teardown(void);
+void mock_ds_mgmt_pool_get_acl_setup(void);
+void mock_ds_mgmt_pool_get_acl_teardown(void);
 
 #endif /* __MGMT_TESTS_MOCKS_H__ */

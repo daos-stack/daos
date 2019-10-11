@@ -33,36 +33,36 @@
  * Mocks
  */
 
-int		ds_pool_svc_get_acl_return;
-struct daos_acl	*ds_pool_svc_get_acl_return_acl;
-uuid_t		ds_pool_svc_get_acl_uuid;
-void		*ds_pool_svc_get_acl_acl_ptr;
+int		ds_mgmt_pool_get_acl_return;
+struct daos_acl	*ds_mgmt_pool_get_acl_return_acl;
+uuid_t		ds_mgmt_pool_get_acl_uuid;
+void		*ds_mgmt_pool_get_acl_acl_ptr;
 int
-ds_pool_svc_get_acl(uuid_t pool_uuid, struct daos_acl **acl)
+ds_mgmt_pool_get_acl(uuid_t pool_uuid, struct daos_acl **acl)
 {
-	uuid_copy(ds_pool_svc_get_acl_uuid, pool_uuid);
-	ds_pool_svc_get_acl_acl_ptr = (void *)acl;
+	uuid_copy(ds_mgmt_pool_get_acl_uuid, pool_uuid);
+	ds_mgmt_pool_get_acl_acl_ptr = (void *)acl;
 
 	if (acl != NULL)
-		*acl = daos_acl_dup(ds_pool_svc_get_acl_return_acl);
+		*acl = daos_acl_dup(ds_mgmt_pool_get_acl_return_acl);
 
-	return ds_pool_svc_get_acl_return;
+	return ds_mgmt_pool_get_acl_return;
 }
 
 void
-mock_ds_pool_svc_get_acl_setup(void)
+mock_ds_mgmt_pool_get_acl_setup(void)
 {
-	ds_pool_svc_get_acl_return = 0;
-	ds_pool_svc_get_acl_return_acl = NULL;
-	uuid_clear(ds_pool_svc_get_acl_uuid);
-	ds_pool_svc_get_acl_acl_ptr = NULL;
+	ds_mgmt_pool_get_acl_return = 0;
+	ds_mgmt_pool_get_acl_return_acl = NULL;
+	uuid_clear(ds_mgmt_pool_get_acl_uuid);
+	ds_mgmt_pool_get_acl_acl_ptr = NULL;
 }
 
 void
-mock_ds_pool_svc_get_acl_teardown(void)
+mock_ds_mgmt_pool_get_acl_teardown(void)
 {
-	daos_acl_free(ds_pool_svc_get_acl_return_acl);
-	ds_pool_svc_get_acl_return_acl = NULL;
+	daos_acl_free(ds_mgmt_pool_get_acl_return_acl);
+	ds_mgmt_pool_get_acl_return_acl = NULL;
 }
 
 /*
