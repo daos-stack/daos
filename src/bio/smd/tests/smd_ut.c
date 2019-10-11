@@ -260,6 +260,9 @@ int main(int argc, char **argv)
 	}
 
 
-	return cmocka_run_group_tests_name("SMD unit tests", smd_uts,
-					   smd_ut_setup, smd_ut_teardown);
+	rc = cmocka_run_group_tests_name("SMD unit tests", smd_uts,
+					 smd_ut_setup, smd_ut_teardown);
+
+	ABT_finalize();
+	return rc;
 }
