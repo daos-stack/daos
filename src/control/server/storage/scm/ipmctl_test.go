@@ -35,29 +35,6 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-// MockDiscovery returns a mock SCM module of type exported from ipmctl.
-func MockDiscovery() ipmctl.DeviceDiscovery {
-	m := MockModulePB()
-
-	return ipmctl.DeviceDiscovery{
-		Physical_id:          uint16(m.Physicalid),
-		Channel_id:           uint16(m.Loc.Channel),
-		Channel_pos:          uint16(m.Loc.Channelpos),
-		Memory_controller_id: uint16(m.Loc.Memctrlr),
-		Socket_id:            uint16(m.Loc.Socket),
-		Capacity:             m.Capacity,
-	}
-}
-
-type mockCmdRunner struct {
-	discoverModulesRet error
-	modules            []ipmctl.DeviceDiscovery
-}
-
-func (m *mockCmdRunner) Discover() ([]ipmctl.DeviceDiscovery, error) {
-	return m.modules, m.discoverModulesRet
-}
-
 // TestGetState tests the internals of ipmCtlRunner, pass in mock runCmd to verify
 // behaviour. Don't use mockPrepScm as we want to test prepScm logic.
 func TestGetState(t *testing.T) {
@@ -170,12 +147,12 @@ func TestGetState(t *testing.T) {
 			mockLookPath := func(string) (s string, err error) {
 				return
 			}
-			mockBinding := &mockCmdRunner{
+			mockBinding := &mockIpmctl{
 				discoverModulesRet: nil,
 				modules:            []ipmctl.DeviceDiscovery{MockDiscovery()},
 			}
 			cr := newCmdRunner(log, mockBinding, mockRun, mockLookPath)
-			if _, err := cr.Discover(); err != nil {
+			if _, err := cr.GetModules(); err != nil {
 				t.Fatal(err)
 			}
 
@@ -284,7 +261,7 @@ func TestGetNamespaces(t *testing.T) {
 			}
 			cr := newCmdRunner(log, mockBinding, mockRun, mockLookPath)
 
-			if _, err := cr.Discover(); err != nil {
+			if _, err := cr.GetModules(); err != nil {
 				t.Fatal(err)
 			}
 

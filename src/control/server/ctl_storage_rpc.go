@@ -126,7 +126,7 @@ func (c *StorageControlService) doScmPrepare(req *ctlpb.PrepareScmReq) (resp *ct
 	}
 
 	resp.State = newState(c.log, ctlpb.ResponseStatus_CTRL_SUCCESS, "", info, msg)
-	resp.Pmems = translateNamespaces(pmemDevs)
+	resp.Pmems = namespacesToPB(pmemDevs)
 
 	return
 }

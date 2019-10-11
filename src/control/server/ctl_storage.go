@@ -212,3 +212,10 @@ func (c *StorageControlService) ScanNvme() (types.NvmeControllers, error) {
 
 	return c.nvme.controllers, nil
 }
+
+// ScanScm scans locally attached modules, namespaces and state of DCPM config.
+//
+// Suitable for commands invoked directly on server, not over gRPC.
+func (c *StorageControlService) ScanScm() (*scm.ScanResponse, error) {
+	return c.scm.Scan()
+}

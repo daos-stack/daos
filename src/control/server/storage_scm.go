@@ -26,8 +26,6 @@ package server
 import (
 	"fmt"
 
-	"github.com/pkg/errors"
-
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -66,7 +64,9 @@ type scmStorage struct {
 
 // Setup implementation for scmStorage providing initial device discovery
 func (s *scmStorage) Setup() error {
-	return s.Discover()
+	_, err := s.Scan()
+
+	return err
 }
 
 // Teardown implementation for scmStorage
@@ -95,24 +95,10 @@ func (s *scmStorage) PrepReset() (needsReboot bool, err error) {
 	return res.RebootRequired, nil
 }
 
-// Discover method implementation for scmStorage
-func (s *scmStorage) Discover() error {
-	if s.scanResults != nil {
-		return nil // already initialised
-	}
-
-	res, err := s.provider.Scan(scm.ScanRequest{})
-	if res != nil {
-		// set after modules have been discovered, don't depend on retrieving
-		// PMEM device files through external tool (fails w/out ndctl runtime
-		// dep, whose presence is only enforced when installed via RPM).
-		s.scanResults = res
-	}
-	if err != nil {
-		return errors.WithMessage(err, msgIpmctlDiscoverFail)
-	}
-
-	return nil
+// Scan method implementation for scmStorage, delegate to provider.
+func (s *scmStorage) Scan() (*scm.ScanResponse, error) {
+	// always scan by default
+	return s.provider.Scan(scm.ScanRequest{Rescan: true})
 }
 
 // newMntRet creates and populates NVMe ctrlr result and logs error through
@@ -142,7 +128,7 @@ func (s *scmStorage) Format(cfg storage.ScmConfig, results *(types.ScmMountResul
 		return
 	}
 
-	if !s.initialized {
+	if s.scanResults == nil {
 		addMretFormat(ctlpb.ResponseStatus_CTRL_ERR_APP, msgScmNotInited)
 		return
 	}

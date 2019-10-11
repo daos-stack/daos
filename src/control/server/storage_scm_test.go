@@ -31,7 +31,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 
 	. "github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common/proto/ctl"
@@ -55,113 +54,17 @@ func MockModule() scm.Module {
 	}
 }
 
-type mockIpmctl struct {
-	discoverModulesRet error
-	modules            []scm.Module
+func testScmProvider(log logging.Logger, mbc *scm.MockBackendConfig, msc *scm.MockSysConfig) *scm.Provider {
+	return scm.NewProvider(log, scm.NewMockBackend(mbc), scm.NewMockSysProvider(msc))
 }
 
-func (m *mockIpmctl) Discover() ([]scm.Module, error) {
-	return m.modules, m.discoverModulesRet
+func newMockScmStorage(log logging.Logger, ext External, mbc *scm.MockBackendConfig, msc *scm.MockSysConfig) *scmStorage {
+	provider := testScmProvider(log, mbc, msc)
+	return &scmStorage{ext: ext, provider: provider, log: log}
 }
 
-type mockScmBackend struct {
-	mockIpmctl
-	mockPrepScm
-}
-
-func testScmProvider(log logging.Logger, mockIpmctl mockIpmctl, prep PrepScm, msc *scm.MockSysConfig) *scm.Provider {
-	mbe := &mockScmBackend{
-		mockIpmctl: mockIpmctl,
-	}
-	if mp, ok := prep.(*mockPrepScm); ok {
-		mbe.mockPrepScm = *mp
-	}
-	return scm.NewProvider(log, mbe, scm.NewMockSysProvider(msc))
-}
-
-// ScmStorage factory with mocked interfaces for testing
-func newMockScmStorage(log logging.Logger, ext External, discoverModulesRet error,
-	mms []scm.Module, inited bool, prep PrepScm, msc *scm.MockSysConfig) *scmStorage {
-
-	mic := mockIpmctl{
-		discoverModulesRet: discoverModulesRet,
-		modules:            mms,
-	}
-	return &scmStorage{
-		ext:         ext,
-		provider:    testScmProvider(log, mic, prep, msc),
-		log:         log,
-		initialized: inited,
-	}
-}
-
-func defaultMockScmStorage(log logging.Logger, ext External, msc *scm.MockSysConfig) *scmStorage {
-	m := MockModule()
-
-	return newMockScmStorage(log, ext, nil, []scm.Module{m}, false, defaultMockPrepScm(), msc)
-}
-
-func TestDiscoverScm(t *testing.T) {
-	m := MockModule()
-	n := MockPmemDevice()
-
-	tests := map[string]struct {
-		inited            bool
-		inModules         []scm.Module
-		inNamespaces      []scm.Namespace
-		ipmctlDiscoverRet error
-		getNsRet          error
-		expErr            error
-		expModules        []scm.Module
-		expNamespaces     []scm.Namespace
-	}{
-		"already initialized": {
-			inited: true,
-		},
-		"no modules": {},
-		"no namespaces": {
-			inModules:  []scm.Module{m},
-			expModules: []scm.Module{m},
-		},
-		"with namespaces shouldnt display modules": {
-			inModules:     []scm.Module{m},
-			inNamespaces:  []scm.Namespace{n},
-			expNamespaces: []scm.Namespace{n},
-		},
-		"module discovery error": {
-			inNamespaces:      []scm.Namespace{n},
-			ipmctlDiscoverRet: errors.New("ipmctl example failure"),
-			expErr:            errors.New(msgIpmctlDiscoverFail + ": ipmctl example failure"),
-		},
-		"discover succeeds but get pmem fails": {
-			inModules:  []scm.Module{m},
-			getNsRet:   errors.New("ndctl example failure"),
-			expErr:     errors.New(msgIpmctlDiscoverFail + ": ndctl example failure"),
-			expModules: []scm.Module{m},
-		},
-	}
-
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)()
-
-			prep := newMockPrepScm(tt.inNamespaces, tt.getNsRet)
-			ss := newMockScmStorage(log, nil, tt.ipmctlDiscoverRet,
-				tt.inModules, tt.inited, prep, nil)
-
-			if err := ss.Discover(); err != nil {
-				if tt.expErr != nil {
-					ExpectError(t, err, tt.expErr.Error(), "different error in discover")
-					return
-				}
-				t.Fatal(err)
-			}
-
-			AssertEqual(t, ss.modules, tt.expModules, "unexpected list of modules")
-			AssertEqual(t, ss.namespaces, tt.expNamespaces, "unexpected list of namespaces")
-		})
-	}
+func defaultMockScmStorage(log logging.Logger, ext External) *scmStorage {
+	return newMockScmStorage(log, ext, defaultMockBackendConfig, defaultMockSysConfig)
 }
 
 func TestFormatScm(t *testing.T) {
@@ -405,16 +308,16 @@ func TestFormatScm(t *testing.T) {
 				GetfsStr:   getFsRetStr,
 			}
 			ss := newMockScmStorage(log, config.ext, nil, []scm.Module{},
-				false, mockPrep, msc)
+				mockPrep, msc)
 			ss.formatted = tt.formatted
 
 			results := ScmMountResults{}
 
 			if tt.inited {
-				// Discovery is run in SCS.Setup() and is not
+				// Discovery, when run in SCS.Setup() and is not
 				// fatal, continue with expected errors to
 				// format as in normal program execution.
-				if err := ss.Discover(); err != nil {
+				if _, err := ss.Discover(); err != nil {
 					if tt.expErrMsg != "" {
 						ExpectError(t, err, tt.expErrMsg, tt.desc)
 					} else {
@@ -464,7 +367,7 @@ func TestUpdateScm(t *testing.T) {
 
 			config := defaultMockConfig(t)
 			ss := newMockScmStorage(log, config.ext, nil, []scm.Module{},
-				false, defaultMockPrepScm(), nil)
+				defaultMockPrepScm(), nil)
 
 			results := ScmModuleResults{}
 

@@ -45,6 +45,36 @@ type (
 	}
 )
 
+// MockDiscovery returns a mock SCM module of type exported from ipmctl.
+func MockDiscovery() ipmctl.DeviceDiscovery {
+	m := MockModulePB()
+
+	return ipmctl.DeviceDiscovery{
+		Physical_id:          uint16(m.Physicalid),
+		Channel_id:           uint16(m.Loc.Channel),
+		Channel_pos:          uint16(m.Loc.Channelpos),
+		Memory_controller_id: uint16(m.Loc.Memctrlr),
+		Socket_id:            uint16(m.Loc.Socket),
+		Capacity:             m.Capacity,
+	}
+}
+
+type mockIpmctl struct {
+	discoverModulesRet error
+	modules            []ipmctl.DeviceDiscovery
+}
+
+func (m *mockIpmctl) Discover() ([]ipmctl.DeviceDiscovery, error) {
+	if m.discoverModulesRet != nil {
+		return nil, m.discoverModulesRet
+	}
+	return m.modules, nil
+}
+
+type mockCmdRunner struct {
+	binding ipmctl.Ipmctl
+}
+
 func (msp *MockSysProvider) IsMounted(target string) (bool, error) {
 	// hack... don't fail the format tests which also want
 	// to make sure that the device isn't already formatted.
@@ -90,8 +120,8 @@ func DefaultMockSysProvider() *MockSysProvider {
 }
 
 type MockBackendConfig struct {
-	DiscoverRes      []Module
-	DiscoverErr      error
+	GetModulesRes    []Module
+	GetModulesErr    error
 	GetNamespaceRes  []Namespace
 	GetNamespaceErr  error
 	GetStateErr      error
@@ -107,8 +137,8 @@ type MockBackend struct {
 	cfg      MockBackendConfig
 }
 
-func (mb *MockBackend) Discover() ([]Module, error) {
-	return mb.cfg.DiscoverRes, mb.cfg.DiscoverErr
+func (mb *MockBackend) GetModules() ([]Module, error) {
+	return mb.cfg.GetModulesRes, mb.cfg.GetModulesErr
 }
 
 func (mb *MockBackend) GetNamespaces() ([]Namespace, error) {

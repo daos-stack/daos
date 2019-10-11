@@ -77,6 +77,9 @@ func run(cmd string) (string, error) {
 	return string(out), nil
 }
 
+// cmdRunner provides the underlying ipmctl implementation of a provider
+// backend, binding external interface feeds Discover() results into
+// GetModules() Backend interface method.
 type cmdRunner struct {
 	log      logging.Logger
 	binding  ipmctl.IpmCtl
@@ -94,7 +97,7 @@ func (r *cmdRunner) checkNdctl() error {
 	return nil
 }
 
-func (r *cmdRunner) Discover() ([]Module, error) {
+func (r *cmdRunner) GetModules() ([]Module, error) {
 	discovery, err := r.binding.Discover()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to discover SCM modules")

@@ -145,7 +145,7 @@ type (
 
 	// Backend defines a set of methods to be implemented by a SCM backend.
 	Backend interface {
-		Discover() ([]Module, error)
+		GetModules() ([]Module, error)
 		Prep(types.ScmState) (bool, []Namespace, error)
 		PrepReset(types.ScmState) (bool, error)
 		GetState() (types.ScmState, error)
@@ -362,7 +362,7 @@ func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 		return p.createScanResponse(), nil
 	}
 
-	modules, err := p.backend.Discover()
+	modules, err := p.backend.GetModules()
 	if err != nil {
 		return nil, err
 	}

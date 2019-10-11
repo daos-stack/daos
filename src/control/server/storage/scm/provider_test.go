@@ -33,6 +33,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/build/src/control/src/github.com/daos-stack/daos/src/control/server/storage/scm"
 	"github.com/daos-stack/daos/src/control/common"
 	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/lib/ipmctl"
@@ -55,14 +56,74 @@ func MockModule(d *ipmctl.DeviceDiscovery) Module {
 	}
 }
 
+func TestDiscoverScm(t *testing.T) {
+	m := MockModule()
+	n := MockPmemDevice()
+
+	tests := map[string]struct {
+		inModules         []scm.Module
+		inNamespaces      []scm.Namespace
+		ipmctlDiscoverRet error
+		getNsRet          error
+		expErr            error
+		expResults        *scm.ScanResponse
+	}{
+		"no modules": {expResults: &scm.ScanResponse{}},
+		"no namespaces": {
+			inModules:  []scm.Module{m},
+			expResults: &scm.ScanResponse{Modules: []scm.Module{m}},
+		},
+		"with namespacesdules": {
+			inModules:    []scm.Module{m},
+			inNamespaces: []scm.Namespace{n},
+			expResults:   &scm.ScanResponse{Namespaces: []scm.Namespace{n}},
+		},
+		"module discovery error": {
+			inNamespaces:      []scm.Namespace{n},
+			ipmctlDiscoverRet: errors.New("ipmctl example failure"),
+			expErr:            errors.New(msgIpmctlDiscoverFail + ": ipmctl example failure"),
+		},
+		"discover succeeds but get pmem fails": {
+			inModules:  []scm.Module{m},
+			getNsRet:   errors.New("ndctl example failure"),
+			expErr:     errors.New(msgIpmctlDiscoverFail + ": ndctl example failure"),
+			expResults: &scm.ScanResponse{Modules: []scm.Module{m}},
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)()
+
+			prep := newMockPrepScm(tt.inNamespaces, tt.getNsRet)
+			ss := newMockScmStorage(log, nil, tt.ipmctlDiscoverRet,
+				tt.inModules, prep, nil)
+
+			results, err := ss.Discover()
+			if err != nil {
+				if tt.expErr != nil {
+					ExpectError(t, err, tt.expErr.Error(), "different error in discover")
+					return
+				}
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(tt.expResults, results); diff != "" {
+				t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestProviderScan(t *testing.T) {
 	defaultModule := MockModule(nil)
 	defaultNamespace := Namespace{}
 
 	for name, tc := range map[string]struct {
 		rescan          bool
-		discoverErr     error
-		discoverRes     []Module
+		getModulesErr   error
+		getModulesRes   []Module
 		getNamespaceErr error
 		getNamespaceRes []Namespace
 		getStateErr     error
@@ -88,8 +149,8 @@ func TestProviderScan(t *testing.T) {
 				Namespaces: nil,
 			},
 		},
-		"Discover fails": {
-			discoverErr: FaultDiscoveryFailed,
+		"GetModules fails": {
+			getModulesErr: FaultDiscoveryFailed,
 		},
 		"GetState fails": {
 			getStateErr: errors.New("getstate failed"),
@@ -99,15 +160,15 @@ func TestProviderScan(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)()
 
-			if tc.discoverRes == nil {
-				tc.discoverRes = []Module{defaultModule}
+			if tc.getModulesRes == nil {
+				tc.getModulesRes = []Module{defaultModule}
 			}
 			if tc.getNamespaceRes == nil {
 				tc.getNamespaceRes = []Namespace{defaultNamespace}
 			}
 			mb := NewMockBackend(&MockBackendConfig{
-				DiscoverRes:     tc.discoverRes,
-				DiscoverErr:     tc.discoverErr,
+				GetModulesRes:   tc.getModulesRes,
+				GetModulesErr:   tc.getModulesErr,
 				GetNamespaceRes: tc.getNamespaceRes,
 				GetNamespaceErr: tc.getNamespaceErr,
 				GetStateErr:     tc.getStateErr,
@@ -126,7 +187,7 @@ func TestProviderScan(t *testing.T) {
 				case FaultMissingNdctl:
 					cmpRes(t, tc.expResponse, res)
 					return
-				case tc.discoverErr, tc.getStateErr:
+				case tc.getModulesErr, tc.getStateErr:
 					return
 				default:
 					t.Fatal(err)
@@ -152,7 +213,7 @@ func TestProviderPrepare(t *testing.T) {
 		startInitialized bool
 		reset            bool
 		shouldReboot     bool
-		discoverErr      error
+		getModulesErr    error
 		getNamespaceErr  error
 		getNamespaceRes  []Namespace
 		getStateErr      error
@@ -162,7 +223,7 @@ func TestProviderPrepare(t *testing.T) {
 		expResponse      *PrepareResponse
 	}{
 		"init scan fails": {
-			discoverErr: FaultDiscoveryFailed,
+			getModulesErr: FaultDiscoveryFailed,
 		},
 		"noop": {
 			expResponse: &PrepareResponse{
@@ -228,8 +289,8 @@ func TestProviderPrepare(t *testing.T) {
 				tc.getNamespaceRes = []Namespace{defaultNamespace}
 			}
 			mb := NewMockBackend(&MockBackendConfig{
-				DiscoverErr:     tc.discoverErr,
-				DiscoverRes:     []Module{MockModule(nil)},
+				GetModulesErr:   tc.getModulesErr,
+				GetModulesRes:   []Module{MockModule(nil)},
 				GetNamespaceRes: tc.getNamespaceRes,
 				GetNamespaceErr: tc.getNamespaceErr,
 				GetStateErr:     tc.getStateErr,
@@ -253,7 +314,7 @@ func TestProviderPrepare(t *testing.T) {
 				case FaultMissingNdctl:
 					cmpRes(t, tc.expResponse, res)
 					return
-				case tc.discoverErr, tc.getStateErr, tc.prepErr:
+				case tc.getModulesErr, tc.getStateErr, tc.prepErr:
 					return
 				default:
 					t.Fatal(err)
@@ -267,13 +328,13 @@ func TestProviderPrepare(t *testing.T) {
 func TestProviderGetState(t *testing.T) {
 	for name, tc := range map[string]struct {
 		startInitialized bool
-		discoverErr      error
+		getModulesErr    error
 		getNamespaceErr  error
 		startState       types.ScmState
 		expEndState      types.ScmState
 	}{
 		"init scan fails": {
-			discoverErr: FaultDiscoveryFailed,
+			getModulesErr: FaultDiscoveryFailed,
 		},
 		"ndctl missing": {
 			getNamespaceErr: FaultMissingNdctl,
@@ -288,8 +349,8 @@ func TestProviderGetState(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)()
 
 			mb := NewMockBackend(&MockBackendConfig{
-				DiscoverErr:     tc.discoverErr,
-				DiscoverRes:     []Module{MockModule(nil)},
+				GetModulesErr:   tc.getModulesErr,
+				GetModulesRes:   []Module{MockModule(nil)},
 				GetNamespaceErr: tc.getNamespaceErr,
 				StartingState:   tc.startState,
 				NextState:       tc.expEndState,
@@ -306,7 +367,7 @@ func TestProviderGetState(t *testing.T) {
 			res, err := p.GetState()
 			if err != nil {
 				switch err {
-				case tc.discoverErr, tc.getNamespaceErr:
+				case tc.getModulesErr, tc.getNamespaceErr:
 					return
 				default:
 					t.Fatal(err)
@@ -325,7 +386,7 @@ func TestProviderCheckFormat(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		mountPoint      string
-		discoverErr     error
+		getModulesErr   error
 		getNamespaceErr error
 		alreadyMounted  bool
 		isMountedErr    error
@@ -336,7 +397,7 @@ func TestProviderCheckFormat(t *testing.T) {
 		expErr          error
 	}{
 		"init scan fails": {
-			discoverErr: FaultDiscoveryFailed,
+			getModulesErr: FaultDiscoveryFailed,
 		},
 		"missing ndctl": {
 			getNamespaceErr: FaultMissingNdctl,
@@ -431,8 +492,8 @@ func TestProviderCheckFormat(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)()
 
 			mb := NewMockBackend(&MockBackendConfig{
-				DiscoverErr:     tc.discoverErr,
-				DiscoverRes:     []Module{MockModule(nil)},
+				GetModulesErr:   tc.getModulesErr,
+				GetModulesRes:   []Module{MockModule(nil)},
 				GetNamespaceErr: tc.getNamespaceErr,
 			})
 			msp := NewMockSysProvider(&MockSysConfig{
@@ -461,7 +522,7 @@ func TestProviderCheckFormat(t *testing.T) {
 			res, err := p.CheckFormat(*req)
 			if err != nil {
 				switch errors.Cause(err) {
-				case tc.discoverErr, tc.getNamespaceErr, tc.isMountedErr, tc.getFsErr,
+				case tc.getModulesErr, tc.getNamespaceErr, tc.isMountedErr, tc.getFsErr,
 					tc.expErr:
 					return
 				default:
@@ -484,7 +545,7 @@ func TestProviderFormat(t *testing.T) {
 	// but tests are cheap and this encourages good coverage.
 	for name, tc := range map[string]struct {
 		mountPoint      string
-		discoverErr     error
+		getModulesErr   error
 		getNamespaceErr error
 		alreadyMounted  bool
 		isMountedErr    error
@@ -498,7 +559,7 @@ func TestProviderFormat(t *testing.T) {
 		expErr          error
 	}{
 		"init scan fails": {
-			discoverErr: FaultDiscoveryFailed,
+			getModulesErr: FaultDiscoveryFailed,
 		},
 		"missing ndctl": {
 			getNamespaceErr: FaultMissingNdctl,
@@ -733,8 +794,8 @@ func TestProviderFormat(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)()
 
 			mb := NewMockBackend(&MockBackendConfig{
-				DiscoverErr:     tc.discoverErr,
-				DiscoverRes:     []Module{MockModule(nil)},
+				GetModulesErr:   tc.getModulesErr,
+				GetModulesRes:   []Module{MockModule(nil)},
 				GetNamespaceErr: tc.getNamespaceErr,
 			})
 			msp := NewMockSysProvider(&MockSysConfig{
@@ -779,7 +840,7 @@ func TestProviderFormat(t *testing.T) {
 			res, err := p.Format(*req)
 			if err != nil {
 				switch errors.Cause(err) {
-				case tc.discoverErr, tc.getNamespaceErr, tc.getFsErr,
+				case tc.getModulesErr, tc.getNamespaceErr, tc.getFsErr,
 					tc.mkfsErr, tc.mountErr, tc.unmountErr, tc.expErr:
 					return
 				case tc.isMountedErr:

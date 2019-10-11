@@ -97,7 +97,6 @@ func TestStorageScan(t *testing.T) {
 	ctrlr := MockController("")
 	pbCtrlr := MockControllerPB("")
 	module := MockModule()
-	pbModule := MockModulePB()
 	errExample := errors.New("example failure")
 
 	tests := []struct {
@@ -121,9 +120,8 @@ func TestStorageScan(t *testing.T) {
 					State:  new(ResponseState),
 				},
 				Scm: &ScanScmResp{
-					Modules: ScmModules{pbModule},
-					Pmems:   PmemDevices{MockPmemDevicePB()},
-					State:   new(ResponseState),
+					Pmems: PmemDevices{MockPmemDevicePB()},
+					State: new(ResponseState),
 				},
 			}, "", "",
 		},
@@ -151,8 +149,7 @@ func TestStorageScan(t *testing.T) {
 				},
 				Scm: &ScanScmResp{
 					State: &ResponseState{
-						Error: "SCM storage scan: " + msgIpmctlDiscoverFail +
-							": example failure",
+						Error:  msgIpmctlDiscoverFail + ": example failure",
 						Status: ResponseStatus_CTRL_ERR_SCM,
 					},
 				},
@@ -174,9 +171,8 @@ func TestStorageScan(t *testing.T) {
 					State:  new(ResponseState),
 				},
 				Scm: &ScanScmResp{
-					Modules: ScmModules{pbModule},
-					Pmems:   PmemDevices{MockPmemDevicePB()},
-					State:   new(ResponseState),
+					Pmems: PmemDevices{MockPmemDevicePB()},
+					State: new(ResponseState),
 				},
 			}, "", "",
 		},
@@ -192,9 +188,8 @@ func TestStorageScan(t *testing.T) {
 					},
 				},
 				Scm: &ScanScmResp{
-					Modules: ScmModules{pbModule},
-					Pmems:   PmemDevices{MockPmemDevicePB()},
-					State:   new(ResponseState),
+					Pmems: PmemDevices{MockPmemDevicePB()},
+					State: new(ResponseState),
 				},
 			}, "", "",
 		},
@@ -210,9 +205,8 @@ func TestStorageScan(t *testing.T) {
 					},
 				},
 				Scm: &ScanScmResp{
-					Modules: ScmModules{pbModule},
-					Pmems:   PmemDevices{MockPmemDevicePB()},
-					State:   new(ResponseState),
+					Pmems: PmemDevices{MockPmemDevicePB()},
+					State: new(ResponseState),
 				},
 			}, "", "",
 		},
@@ -226,8 +220,7 @@ func TestStorageScan(t *testing.T) {
 				},
 				Scm: &ScanScmResp{
 					State: &ResponseState{
-						Error: "SCM storage scan: " + msgIpmctlDiscoverFail +
-							": example failure",
+						Error:  msgIpmctlDiscoverFail + ": example failure",
 						Status: ResponseStatus_CTRL_ERR_SCM,
 					},
 				},
@@ -237,18 +230,17 @@ func TestStorageScan(t *testing.T) {
 			"all discover fail empty config", nil, errExample, errExample, false, false,
 			emptyMockConfig(t),
 			StorageScanResp{
-				Scm: &ScanScmResp{
-					State: &ResponseState{
-						Error: "SCM storage scan: " + msgIpmctlDiscoverFail +
-							": example failure",
-						Status: ResponseStatus_CTRL_ERR_SCM,
-					},
-				},
 				Nvme: &ScanNvmeResp{
 					State: &ResponseState{
 						Error: "NVMe storage scan: " + msgSpdkDiscoverFail +
 							": example failure",
 						Status: ResponseStatus_CTRL_ERR_NVME,
+					},
+				},
+				Scm: &ScanScmResp{
+					State: &ResponseState{
+						Error:  msgIpmctlDiscoverFail + ": example failure",
+						Status: ResponseStatus_CTRL_ERR_SCM,
 					},
 				},
 			}, "", "",
@@ -264,7 +256,7 @@ func TestStorageScan(t *testing.T) {
 			config := tt.config
 			cs := mockControlService(t, log, config, nil)
 			cs.scm = newMockScmStorage(log, config.ext, tt.ipmctlDiscoverRet,
-				[]scm.Module{module}, false, defaultMockPrepScm(), nil)
+				[]scm.Module{module}, defaultMockPrepScm(), nil)
 			cs.nvme = newMockNvmeStorage(
 				log, config.ext,
 				newMockSpdkEnv(tt.spdkInitEnvRet),
@@ -298,7 +290,7 @@ func TestStorageScan(t *testing.T) {
 			}
 
 			AssertEqual(t, cs.nvme.initialized, tt.expNvmeInited, tt.desc)
-			AssertEqual(t, cs.scm.initialized, tt.expScmInited, tt.desc)
+			AssertEqual(t, cs.scm.scanResults != nil, tt.expScmInited, tt.desc)
 		})
 	}
 }
@@ -409,8 +401,7 @@ func TestStoragePrepare(t *testing.T) {
 				true, nil, nil, nil, tt.isRoot))
 
 			cs := defaultMockControlService(t, log)
-			cs.scm = newMockScmStorage(log, config.ext, nil,
-				[]scm.Module{module}, false,
+			cs.scm = newMockScmStorage(log, config.ext, nil, []scm.Module{module},
 				&mockPrepScm{namespaces: tt.outPmems}, nil)
 			cs.nvme = newMockNvmeStorage(log, config.ext, newMockSpdkEnv(nil),
 				newMockSpdkNvme(log, "", "", []spdk.Controller{ctrlr},
