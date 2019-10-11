@@ -99,10 +99,10 @@ func TestIOServerInstance_CallDrpc(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)()
 			instance := getTestIOServerInstance(log)
 			if !tc.notReady {
-				mc := &mockDrpcClient{
-					SendMsgOutputResponse: tc.resp,
+				cfg := &mockDrpcClientConfig{
+					SendMsgResponse: tc.resp,
 				}
-				instance.setDrpcClient(mc)
+				instance.setDrpcClient(newMockDrpcClient(cfg))
 			}
 
 			_, err := instance.CallDrpc(mgmtModuleID, poolCreate, &mgmtpb.PoolCreateReq{})

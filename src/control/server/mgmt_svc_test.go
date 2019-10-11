@@ -27,18 +27,14 @@ import (
 	"net"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
 
 func TestHasPort(t *testing.T) {
@@ -141,72 +137,6 @@ func TestCheckMgmtSvcReplica(t *testing.T) {
 				test.expectedIsReplica, test.expectedBootstrap, test.expectedErr)
 		}
 	}
-}
-
-// mockDrpcClient is a mock of the DomainSocketClient interface
-type mockDrpcClient struct {
-	sync.Mutex
-	ConnectOutputError    error
-	CloseOutputError      error
-	CloseCallCount        int
-	SendMsgInputCall      *drpc.Call
-	SendMsgOutputResponse *drpc.Response
-	SendMsgOutputError    error
-}
-
-func (c *mockDrpcClient) IsConnected() bool {
-	return false
-}
-
-func (c *mockDrpcClient) Connect() error {
-	return c.ConnectOutputError
-}
-
-func (c *mockDrpcClient) Close() error {
-	c.CloseCallCount++
-	return c.CloseOutputError
-}
-
-func (c *mockDrpcClient) SendMsg(call *drpc.Call) (*drpc.Response, error) {
-	c.SendMsgInputCall = call
-	return c.SendMsgOutputResponse, c.SendMsgOutputError
-}
-
-func (c *mockDrpcClient) setSendMsgResponse(status drpc.Status, body []byte) {
-	c.SendMsgOutputResponse = &drpc.Response{
-		Status: status,
-		Body:   body,
-	}
-}
-
-func newTestMgmtSvc(log logging.Logger) *mgmtSvc {
-	r := ioserver.NewRunner(log, ioserver.NewConfig())
-
-	var msCfg mgmtSvcClientCfg
-	msCfg.AccessPoints = append(msCfg.AccessPoints, "localhost")
-
-	srv := NewIOServerInstance(log, nil, nil, newMgmtSvcClient(nil, log, msCfg), r)
-	srv.setSuperblock(&Superblock{
-		MS: true,
-	})
-
-	harness := NewIOServerHarness(log)
-	harness.instances = append(harness.instances, srv)
-
-	return newMgmtSvc(harness)
-}
-
-func setupMockDrpcClientBytes(svc *mgmtSvc, respBytes []byte, err error) {
-	mi, _ := svc.harness.GetMSLeaderInstance()
-	client := &mockDrpcClient{}
-	client.setSendMsgResponse(drpc.Status_SUCCESS, respBytes)
-	client.SendMsgOutputError = err
-	mi.setDrpcClient(client)
-}
-
-func setupMockDrpcClient(svc *mgmtSvc, resp proto.Message, err error) {
-	respBytes, _ := proto.Marshal(resp)
-	setupMockDrpcClientBytes(svc, respBytes, err)
 }
 
 func newTestGetACLReq() *mgmtpb.GetACLReq {
