@@ -31,6 +31,7 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -226,13 +227,7 @@ func TestPoolGetACL_NoMS(t *testing.T) {
 		t.Errorf("Expected no response, got: %+v", resp)
 	}
 
-	if err == nil {
-		t.Fatal("Expected an error, got nil")
-	}
-
-	if !strings.Contains(err.Error(), "no managed instances") {
-		t.Errorf("Expected an error about the access point, got: %v", err)
-	}
+	cmpErr(t, errors.New("no managed instances"), err)
 }
 
 func TestPoolGetACL_DrpcFailed(t *testing.T) {
@@ -240,7 +235,8 @@ func TestPoolGetACL_DrpcFailed(t *testing.T) {
 	defer common.ShowBufferOnFailure(t, buf)()
 
 	svc := newTestMgmtSvc(log)
-	setupMockDrpcClient(svc, nil, errors.New("mock error"))
+	expectedErr := errors.New("mock error")
+	setupMockDrpcClient(svc, nil, expectedErr)
 
 	resp, err := svc.PoolGetACL(nil, newTestGetACLReq())
 
@@ -248,13 +244,7 @@ func TestPoolGetACL_DrpcFailed(t *testing.T) {
 		t.Errorf("Expected no response, got: %+v", resp)
 	}
 
-	if err == nil {
-		t.Fatal("Expected an error, got nil")
-	}
-
-	if !strings.Contains(err.Error(), "mock error") {
-		t.Errorf("Expected our mock error, got: %v", err)
-	}
+	cmpErr(t, expectedErr, err)
 }
 
 func TestPoolGetACL_BadDrpcResp(t *testing.T) {
@@ -276,13 +266,7 @@ func TestPoolGetACL_BadDrpcResp(t *testing.T) {
 		t.Errorf("Expected no response, got: %+v", resp)
 	}
 
-	if err == nil {
-		t.Fatal("Expected an error, got nil")
-	}
-
-	if !strings.Contains(err.Error(), "unmarshal") {
-		t.Errorf("Expected our mock error, got: %v", err)
-	}
+	cmpErr(t, errors.New("unmarshal"), err)
 }
 
 func TestPoolGetACL_Success(t *testing.T) {
@@ -303,12 +287,17 @@ func TestPoolGetACL_Success(t *testing.T) {
 		t.Errorf("Expected no error, got: %v", err)
 	}
 
-	if resp == nil {
-		t.Fatal("Expected a response, got nil")
+	// Avoid comparing the internal Protobuf fields
+	isHiddenPBField := func(path cmp.Path) bool {
+		if strings.HasPrefix(path.Last().String(), ".XXX_") {
+			return true
+		}
+		return false
 	}
-
-	common.AssertEqual(t, resp.Status, expectedResp.Status,
-		"response Status didn't match")
-	common.AssertEqual(t, resp.ACL, expectedResp.ACL,
-		"response ACL didn't match")
+	cmpOpts := []cmp.Option{
+		cmp.FilterPath(isHiddenPBField, cmp.Ignore()),
+	}
+	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
+		t.Fatalf("bad response (-want, +got): \n%s\n", diff)
+	}
 }

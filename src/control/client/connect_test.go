@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	. "google.golang.org/grpc/connectivity"
 
@@ -318,74 +319,68 @@ func TestPoolGetACL(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer ShowBufferOnFailure(t, buf)()
 
-	tests := []struct {
-		desc             string
+	for name, tt := range map[string]struct {
 		addr             Addresses
 		getACLRespStatus int32
 		getACLErr        error
-		expectedACL      []string
+		expectedResp     *PoolGetACLResp
 		expectedErr      string
 	}{
-		{
-			desc:        "no service leader",
-			addr:        nil,
-			expectedACL: nil,
-			expectedErr: "no active connections",
+		"no service leader": {
+			addr:         nil,
+			expectedResp: nil,
+			expectedErr:  "no active connections",
 		},
-		{
-			desc:        "gRPC call failed",
-			addr:        MockServers,
-			getACLErr:   MockErr,
-			expectedACL: nil,
-			expectedErr: MockErr.Error(),
+		"gRPC call failed": {
+			addr:         MockServers,
+			getACLErr:    MockErr,
+			expectedResp: nil,
+			expectedErr:  MockErr.Error(),
 		},
-		{
-			desc:             "gRPC resp bad status",
+		"gRPC resp bad status": {
 			addr:             MockServers,
 			getACLRespStatus: -5000,
-			expectedACL:      nil,
+			expectedResp:     nil,
 			expectedErr:      "DAOS returned error code: -5000",
 		},
-		{
-			desc:             "success",
+		"success": {
 			addr:             MockServers,
 			getACLRespStatus: 0,
-			expectedACL:      MockACL.acl,
+			expectedResp:     &PoolGetACLResp{ACL: MockACL.acl},
 			expectedErr:      "",
 		},
-	}
-
-	for _, tt := range tests {
-		aclResult := &mockGetACLResult{
-			acl:    tt.expectedACL,
-			status: tt.getACLRespStatus,
-			err:    tt.getACLErr,
-		}
-		cc := connectSetupServers(tt.addr, log, Ready, MockFeatures,
-			MockCtrlrs, MockCtrlrResults, MockModules,
-			MockModuleResults, MockPmemDevices, MockMountResults,
-			nil, nil, nil, nil, nil, nil,
-			aclResult)
-
-		req := &PoolGetACLReq{
-			UUID: "TestUUID",
-		}
-
-		resp, err := cc.PoolGetACL(req)
-
-		if tt.expectedErr != "" {
-			ExpectError(t, err, tt.expectedErr, tt.desc)
-		} else if err != nil {
-			t.Fatalf("expected nil error, got %v", err)
-		}
-
-		if tt.expectedACL != nil {
-			if resp == nil || resp.ACL == nil {
-				t.Fatal("expected an ACL, got nil")
+	} {
+		t.Run(name, func(t *testing.T) {
+			var expectedACL []string
+			if tt.expectedResp != nil {
+				expectedACL = tt.expectedResp.ACL
 			}
-			AssertStringsEqual(t, resp.ACL, tt.expectedACL, tt.desc)
-		} else if resp != nil {
-			t.Fatalf("expected no ACL, got %v", resp.ACL)
-		}
+			aclResult := &mockGetACLResult{
+				acl:    expectedACL,
+				status: tt.getACLRespStatus,
+				err:    tt.getACLErr,
+			}
+			cc := connectSetupServers(tt.addr, log, Ready, MockFeatures,
+				MockCtrlrs, MockCtrlrResults, MockModules,
+				MockModuleResults, MockPmemDevices, MockMountResults,
+				nil, nil, nil, nil, nil, nil,
+				aclResult)
+
+			req := &PoolGetACLReq{
+				UUID: "TestUUID",
+			}
+
+			resp, err := cc.PoolGetACL(req)
+
+			if tt.expectedErr != "" {
+				ExpectError(t, err, tt.expectedErr, name)
+			} else if err != nil {
+				t.Fatalf("expected nil error, got %v", err)
+			}
+
+			if diff := cmp.Diff(tt.expectedResp, resp); diff != "" {
+				t.Fatalf("unexpected ACL (-want, +got):\n%s\n", diff)
+			}
+		})
 	}
 }
