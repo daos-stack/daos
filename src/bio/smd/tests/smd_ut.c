@@ -49,7 +49,7 @@ smd_ut_setup(void **state)
 
 	rc = smd_init(SMD_STORAGE_PATH);
 	if (rc) {
-		print_error("Error initializing SMD store\n");
+		print_error("Error initializing SMD store: %d\n", rc);
 		daos_debug_fini();
 		return rc;
 	}
@@ -251,6 +251,15 @@ static const struct CMUnitTest smd_uts[] = {
 
 int main(int argc, char **argv)
 {
+	int	rc;
+
+	rc = ABT_init(0, NULL);
+	if (rc != 0) {
+		D_PRINT("Error initializing ABT\n");
+		return rc;
+	}
+
+
 	return cmocka_run_group_tests_name("SMD unit tests", smd_uts,
 					   smd_ut_setup, smd_ut_teardown);
 }
