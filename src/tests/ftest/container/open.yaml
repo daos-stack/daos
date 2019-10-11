@@ -6,24 +6,21 @@ hosts: !mux
         - boro-A
 server_config:
   name: daos_server
-createtests:
-  createmode:
-    mode: 511
-  createset:
-    setname: daos_server
-  createsize:
-    size: 1073741824
-  container_uuid_states: !mux
-    gooduuid:
-      uuid:
-        - PASS
-    baduuid:
-      uuid:
-        - FAIL
-  handle_states: !mux
-    goodpoh:
-      poh:
-        - PASS
-    badpoh:
-      poh:
-        - FAIL
+pool:
+  mode: 511
+  name: daos_server
+  scm_size: 1073741824
+container_uuid_states: !mux
+  gooduuid:
+    uuid:
+      - PASS
+  baduuid:
+    uuid:
+      - FAIL
+handle_states: !mux
+  goodpoh:
+    poh:
+      - PASS
+  badpoh:
+    poh:
+      - FAIL

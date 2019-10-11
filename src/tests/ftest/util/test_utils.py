@@ -760,19 +760,28 @@ class TestContainer(TestDaosApiBase):
         self._call_method(self.container.create, kwargs)
         self.uuid = self.container.get_uuid_str()
         self.log.info("  Container created with uuid {}".format(self.uuid))
-
+    
     @fail_on(DaosApiError)
-    def open(self):
-        """Open the container.
+    def open(self, pool_handle=None, container_uuid=None):
+        """Open the container with pool handle and container UUID if provided.
 
+        Args:
+            pool_handle (str, optional): Pool handle. Defaults to None.
+            If you created a TestPool instance and want to use its pool handle,
+            pass in self.pool[-1].pool.handle.value
+            container_uuid (hex, optional): Container UUID. Defaults to None.
+            If you want to use certain container's UUID, pass in
+            uuid.UUID(self.container[-1].uuid)
         Returns:
             bool: True if the container has been opened; False if the container
                 is already opened.
-
         """
         if self.container and not self.opened:
             self.log.info("Opening container %s", self.uuid)
-            self._call_method(self.container.open, {})
+            kwargs = {}
+            kwargs["poh"] = pool_handle
+            kwargs["cuuid"] = container_uuid
+            self._call_method(self.container.open, kwargs)
             self.opened = True
             return True
         return False

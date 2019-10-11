@@ -30,18 +30,12 @@ import os
 
 from avocado import main
 from apricot import TestWithServers
+from test_utils import TestPool, TestContainer
+from avocado.core.exceptions import TestFail
 
-from daos_api import DaosPool, DaosContainer, DaosApiError
-
-def create_pool_and_connect(pool_mode, pool_size, pool_name, pool_context):
-    """
-    Create a pool, call its create function, and return the created pool
-    """
-    new_pool = DaosPool(pool_context)
-    new_pool.create(pool_mode, os.geteuid(), os.getegid(), pool_size,
-                    pool_name, None)
-    new_pool.connect(1 << 1)
-    return new_pool
+RESULT_PASS = "PASS"
+RESULT_FAIL = "FAIL"
+RESULT_TO_NUM = {RESULT_PASS: 0, RESULT_FAIL: 1}
 
 class OpenContainerTest(TestWithServers):
     """
@@ -56,10 +50,6 @@ class OpenContainerTest(TestWithServers):
     3. Use the other pool's handle. Expected to fail
     container1.open(pool2.handle, container1_uuid)
     container2.open(pool1.handle, container2_uuid)
-    4. Use the other container's UUID and the other pool's handle.
-    Expected to fail
-    container1.open(pool2.handle, container2_uuid)
-    container2.open(pool1.handle, container1_uuid)
 
     :avocado: recursive
     """
@@ -70,102 +60,107 @@ class OpenContainerTest(TestWithServers):
 
         :avocado: tags=all,container,tiny,full_regression,containeropen
         """
-        result_pass = "PASS"
-        result_fail = "FAIL"
+        self.pool = []
+        self.container = []
 
         # Get parameters from open.yaml
-        mode = self.params.get("mode", '/run/createtests/createmode/')
-        name = self.params.get("setname", '/run/createtests/createset/')
-        size = self.params.get("size", '/run/createtests/createsize/')
-        uuid_states = self.params.get("uuid",
-                                      '/run/createtests' +
-                                      '/container_uuid_states/*/')
-        poh_states = self.params.get("poh", '/run/createtests/handle_states/*/')
+        poh_states = self.params.get("poh", '/run/handle_states/*/')
+        uuid_states = self.params.get("uuid",'/run/container_uuid_states/*/')
 
+        # Derive the test case number from the PASS/FAIL-PASS/FAIL combination
+        poh_state_num = RESULT_TO_NUM[poh_states[0]]
+        uuid_state_num = RESULT_TO_NUM[uuid_states[0]]
+        test_case = (poh_state_num << 1) + uuid_state_num
+        if test_case == 3:
+            # Passing in handle2 and UUID2 to open will overwrite the
+            # container's members, so container1 effectively becomes container2
+            # and that wouldn't be a good test, so skip
+            print("Skip the case with container1.open(pool_handle2, " +
+                  "container_uuid2)")
+            return
+
+        expected_for_param = []
+        expected_for_param.append(uuid_states[0])
+        expected_for_param.append(poh_states[0])
+        expected_result = RESULT_PASS
+        for result in expected_for_param:
+            if result == RESULT_FAIL:
+                expected_result = RESULT_FAIL
+                break
+
+        # Prepare the messages for the 3 test cases
+        # Test Bug! indicates that there's something wrong with the test since
+        # it shouldn't reach that point
+        messages_case_1 = [
+            "Case 1: Test Bug!",
+            "Error while opening the container with valid pool handle and " +
+            "container UUID",
+            "Case 1: Test Bug!",
+            "Error while opening the container with valid pool handle and " +
+            "container UUID"
+        ]
+        messages_case_2 = [
+            "No error occurred from using container 2's UUID while opening " +
+            "container 1",
+            "Case 2: Test Bug!",
+            "No error occurred from using container 1's UUID while opening " +
+            "container 2",
+            "Case 2: Test Bug!"
+        ]
+        messages_case_3 = [
+            "No error occurred from using pool 2's handle while opening " +
+            "container 1",
+            "Case 3: Test Bug!",
+            "No error occurred from using pool1's handle while opening " +
+            "container 2",
+            "Case 3: Test Bug!"
+        ]
+        result_messages = [messages_case_1, messages_case_2, messages_case_3]
+
+        # Create the pool and connect. Then create the container from the pool
+        # Add the pool and the container created into a list
+        container_uuids = []
+        for i in range(2):
+            self.pool.append(TestPool(self.context, self.log))
+            self.pool[-1].get_params(self)
+            self.pool[-1].create()
+            self.pool[-1].connect(1)
+            self.container.append(TestContainer(self.pool[-1]))
+            self.container[-1].get_params(self)
+            self.container[-1].create()
+            container_uuids.append(uuid.UUID(self.container[-1].uuid))
+
+        # Decide which pool handle and container UUID to use. The PASS/FAIL
+        # number corresponds to the index for self.pool and container_uuids
+        pool_handle_index = poh_state_num
+        container_uuid_index = uuid_state_num
+
+        # Case 1
         try:
-            # Prepare 2 pools and 2 containers. Also prepare the 2 container
-            # UUIDs
-            pool1 = create_pool_and_connect(mode, size, name, self.context)
-            pool2 = create_pool_and_connect(mode, size, name, self.context)
-            container1 = DaosContainer(self.context)
-            container1.create(pool1.handle)
-            str_uuid = container1.get_uuid_str()
-            container1_uuid = uuid.UUID(str_uuid)
-            container2 = DaosContainer(self.context)
-            container2.create(pool2.handle)
-            str_uuid = container2.get_uuid_str()
-            container2_uuid = uuid.UUID(str_uuid)
-        except DaosApiError as excep:
-            print(excep)
+            self.container[0].open(self.pool[pool_handle_index].pool
+                                   .handle.value,
+                                   container_uuids[container_uuid_index])
+            self.assertEqual(expected_result, RESULT_PASS, 
+                             result_messages[test_case][0])
+        except TestFail as result:
+            print(result)
             print(traceback.format_exc())
-            self.fail("Error while creating pool or container")
-
-        if uuid_states[0] == result_pass and poh_states[0] == result_pass:
-            # Test 1: Use valid pool handle and container UUID
-            try:
-                # Case 1
-                container1.open(pool1.handle, container1_uuid)
-                # Case 2
-                container2.open(pool2.handle, container2_uuid)
-            except DaosApiError as excep:
-                print(excep)
-                print(traceback.format_exc())
-                self.fail("Error while opening the container with valid " +
-                          "pool handle and container UUID")
-        elif uuid_states[0] == result_pass and poh_states[0] == result_fail:
-            # Test 2: Use the other container's UUID
-            try:
-                # Case 1
-                container1.open(pool1.handle, container2_uuid)
-                self.fail("No error occurred from using container " +
-                          "2's UUID while opening container 1")
-            except DaosApiError as excep:
-                print(excep)
-                print(traceback.format_exc())
-            try:
-                # Case 2
-                container2.open(pool2.handle, container1_uuid)
-                self.fail("No error occurred from using container 1's UUID " +
-                          "while opening container 2")
-            except DaosApiError as excep:
-                print(excep)
-                print(traceback.format_exc())
-        elif uuid_states[0] == result_fail and poh_states[0] == result_pass:
-            # Test 3: Use the other pool's handle
-            try:
-                # Case 1
-                container1.open(pool2.handle, container1_uuid)
-                self.fail("No error occurred from using pool 2's handle " +
-                          "while opening container 1")
-            except DaosApiError as excep:
-                print(excep)
-                print(traceback.format_exc())
-            try:
-                # Case 2
-                container2.open(pool1.handle, container2_uuid)
-                self.fail("No error occurred from using pool1's handle " +
-                          "while opening container 2")
-            except DaosApiError as excep:
-                print(excep)
-                print(traceback.format_exc())
-        else:
-            # Test 4: Use the other container's UUID and the other pool's handle
-            try:
-                # Case 1
-                container1.open(pool2.handle, container2_uuid)
-                self.fail("No error occurred from using pool 2's handle " +
-                          "and container 2's UUID while opening container 1")
-            except DaosApiError as excep:
-                print(excep)
-                print(traceback.format_exc())
-            try:
-                # Case 2
-                container2.open(pool1.handle, container1_uuid)
-                self.fail("No error occurred from using pool1's handle " +
-                          "and container 1's UUID while opening container 2")
-            except DaosApiError as excep:
-                print(excep)
-                print(traceback.format_exc())
+            self.assertEqual(expected_result, RESULT_FAIL,
+                             result_messages[test_case][1])
+        # Case 2. Symmetric to Case 1. Use the other handle and UUID
+        pool_handle_index = pool_handle_index ^ 1
+        container_uuid_index = container_uuid_index ^ 1
+        try:
+            self.container[1].open(self.pool[pool_handle_index].pool
+                                   .handle.value,
+                                   container_uuids[container_uuid_index])
+            self.assertEqual(expected_result, RESULT_PASS,
+                             result_messages[test_case][2])
+        except TestFail as result:
+            print(result)
+            print(traceback.format_exc())
+            self.assertEqual(expected_result, RESULT_FAIL,
+                             result_messages[test_case][3])
 
 if __name__ == "__main__":
     main()
