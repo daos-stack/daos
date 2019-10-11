@@ -80,9 +80,9 @@ struct ilog_context {
 };
 
 #define DF_ID		"epoch:"DF_U64" tx_id:0x"DF_X64
-#define DP_ID(id)	(id).id_epoch, (id).id_tx_id
-#define DF_VAL		"punch:%s"
-#define DP_VAL(punch)	punch ? " true" : "false"
+#define DP_ID(id)	(id)->id_epoch, (id)->id_tx_id
+#define DF_PUNCH	"%s"
+#define DP_PUNCH(punch)	(punch) ? "punch" : "create/punch"
 
 struct prec {
 	bool	p_punch;
@@ -223,9 +223,8 @@ ilog_log_add(struct ilog_context *lctx, struct ilog_id *id)
 		return rc;
 	}
 
-	D_DEBUG(DB_IO, "Registered ilog="DF_U64" epoch="DF_U64" tx_id="
-		DF_U64"\n", lctx->ic_root_off, id->id_epoch,
-		id->id_tx_id);
+	D_DEBUG(DB_IO, "Registered ilog="DF_U64" "DF_ID"\n", lctx->ic_root_off,
+		DP_ID(id));
 
 	return 0;
 }
@@ -242,14 +241,13 @@ ilog_log_del(struct ilog_context *lctx, const struct ilog_id *id)
 	rc = cbs->dc_log_del_cb(&lctx->ic_umm, lctx->ic_root_off, id->id_tx_id,
 				cbs->dc_log_del_args);
 	if (rc != 0) {
-		D_ERROR("Failed to deregister incarnation log entry: "DF_RC"\n",
-			DP_RC(rc));
+		D_ERROR("Failed to deregister incarnation log entry: "DF_ID" "
+			DF_RC"\n", DP_ID(id), DP_RC(rc));
 		return rc;
 	}
 
-	D_DEBUG(DB_IO, "De-registered ilog="DF_U64" epoch="DF_U64" tx_id="
-		DF_U64"\n", lctx->ic_root_off, id->id_epoch,
-		id->id_tx_id);
+	D_DEBUG(DB_IO, "De-registered ilog="DF_U64" "DF_ID"\n",
+		lctx->ic_root_off, DP_ID(id));
 
 	return 0;
 }
@@ -1037,8 +1035,8 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 	int			 rc = 0;
 	int			 visibility = ILOG_UNCOMMITTED;
 
-	D_DEBUG(DB_IO, "%s in incarnation log: epoch:" DF_U64"\n", opc_str[opc],
-		id_in->id_epoch);
+	D_DEBUG(DB_IO, "%s in incarnation log: "DF_PUNCH" in "DF_ID"\n",
+		opc_str[opc], DP_PUNCH(punch), DP_ID(id_in));
 	lctx = ilog_hdl2lctx(loh);
 	if (lctx == NULL) {
 		D_ERROR("Invalid log handle\n");
@@ -1060,13 +1058,11 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 
 	if (ilog_empty(root)) {
 		if (opc != ILOG_OP_UPDATE) {
-			D_DEBUG(DB_IO, "ilog entry "DF_U64" not found\n",
-				id_in->id_epoch);
+			D_DEBUG(DB_IO, "ilog entry "DF_ID" not found\n",
+				DP_ID(id_in));
 			goto done;
 		}
 
-		D_DEBUG(DB_IO, "Inserting "DF_U64" at ilog root\n",
-			id_in->id_epoch);
 		tmp.lr_magic = ilog_ver_inc(lctx);
 		tmp.lr_id.id_epoch = id_in->id_epoch;
 		tmp.lr_punch = punch;

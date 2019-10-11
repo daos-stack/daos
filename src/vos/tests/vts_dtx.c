@@ -388,10 +388,10 @@ vts_dtx_commit_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	assert_int_equal(rc, 0);
 
 	if (punch_obj)
-		rc = vos_obj_punch(args->ctx.tc_co_hdl, args->oid, ++epoch,
+		rc = vos_obj_punch(args->ctx.tc_co_hdl, args->oid, epoch,
 				   1, 0, NULL, 0, NULL, dth);
 	else
-		rc = vos_obj_punch(args->ctx.tc_co_hdl, args->oid, ++epoch,
+		rc = vos_obj_punch(args->ctx.tc_co_hdl, args->oid, epoch,
 				   1, 0, &dkey, 1, &akey, dth);
 	assert_int_equal(rc, 0);
 

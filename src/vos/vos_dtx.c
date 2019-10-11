@@ -420,6 +420,9 @@ dtx_ilog_rec_release(struct umem_instance *umm,
 
 	id.id_epoch = dtx->te_epoch;
 	id.id_tx_id = umoff;
+	D_DEBUG(DB_IO, "Calling %s for epoch "DF_U64" tx_id=0x"DF_X64"\n",
+		abort ? "ilog_abort" : "ilog_persist", id.id_epoch,
+		id.id_tx_id);
 
 	if (abort)
 		rc = ilog_abort(loh, &id);
@@ -1287,6 +1290,9 @@ vos_dtx_register_ilog(struct umem_instance *umm, umem_off_t record,
 		if (rc == 0)
 			/* Incarnation log entry implies a share */
 			*tx_id = dth->dth_ent;
+		D_DEBUG(DB_IO, "Registered for epoch "DF_U64" tx_id=0x"DF_X64
+			" alt="DF_U64"\n", dtx->te_epoch, dth->dth_ent,
+			dth->dth_epoch);
 	} else {
 		/* For single participator case, we only need the DTX entry
 		 * without DTX records for related targets to be modified.
