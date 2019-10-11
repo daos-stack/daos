@@ -224,8 +224,11 @@ destroy_hdlr(int argc, char *argv[])
 		{"sys-name",	required_argument,	NULL,	'G'},
 		{"group",	required_argument,	NULL,	'G'},
 		{"pool",	required_argument,	NULL,	'p'},
+		{"svc",		required_argument,	NULL,	's'},
 		{NULL,		0,			NULL,	0}
 	};
+	const char	       *svc_str = NULL;
+	d_rank_list_t	       *svc;
 	const char	       *sysname = default_sysname;
 	uuid_t			pool_uuid;
 	int			force = 0;
@@ -233,13 +236,16 @@ destroy_hdlr(int argc, char *argv[])
 
 	uuid_clear(pool_uuid);
 
-	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
+	while ((rc = getopt_long(argc, argv, "fG:s:p:", options, NULL)) != -1) {
 		switch (rc) {
 		case 'f':
 			force = 1;
 			break;
 		case 'G':
 			sysname = optarg;
+			break;
+		case 's':
+			svc_str = optarg;
 			break;
 		case 'p':
 			if (uuid_parse(optarg, pool_uuid) != 0) {
@@ -257,6 +263,28 @@ destroy_hdlr(int argc, char *argv[])
 	if (uuid_is_null(pool_uuid)) {
 		fprintf(stderr, "pool UUID required\n");
 		return 2;
+	}
+
+	if (force) {
+		/* TODO evict can be done with destory in a single RPC
+		 * once it send destory RPC to the pool leader.
+		 */
+		if (svc_str == NULL) {
+			fprintf(stderr, "Provide service --svc=xx with -f\n");
+			return 2;
+		}
+
+		svc = daos_rank_list_parse(svc_str, ":");
+		if (svc == NULL) {
+			fprintf(stderr, "failed to parse service ranks\n");
+			return 2;
+		}
+
+		rc = daos_pool_evict(pool_uuid, sysname, svc, NULL /* ev */);
+		if (rc != 0) {
+			fprintf(stderr, "failed to evict pool: %d\n", rc);
+			return rc;
+		}
 	}
 
 	rc = daos_pool_destroy(pool_uuid, sysname, force, NULL /* ev */);
