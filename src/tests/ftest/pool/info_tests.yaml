@@ -1,7 +1,6 @@
 hosts:
   test_servers:
-#    - boro-A
-    - wolf-70
+    - boro-A
 server_config:
   name: daos_server
   servers:
