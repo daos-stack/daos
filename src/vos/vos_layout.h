@@ -266,8 +266,12 @@ struct vos_cont_df {
 	daos_size_t			cd_used;
 	daos_epoch_t			cd_hae;
 	struct btr_root			cd_obj_root;
-	/** The DTXs table. */
-	struct btr_root			cd_dtx_root;
+	/** The active DTX table. */
+	struct btr_root			cd_dtx_active;
+	/** The committed DTXs blob head. */
+	umem_off_t			cd_dtx_committed_head;
+	/** The committed DTXs blob tail. */
+	umem_off_t			cd_dtx_committed_tail;
 	/** Allocation hints for block allocator. */
 	struct vea_hint_df		cd_hint_df[VOS_IOS_CNT];
 };

@@ -61,6 +61,8 @@ struct ds_cont_child {
 	void			*sc_dtx_flush_cbdata;
 	uint32_t		 sc_dtx_resyncing:1,
 				 sc_dtx_aggregating:1,
+				 sc_dtx_reindex:1,
+				 sc_dtx_reindex_abort:1,
 				 sc_vos_aggregating:1,
 				 sc_abort_vos_aggregating:1,
 				 sc_closing:1,

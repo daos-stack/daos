@@ -865,6 +865,7 @@ dtx_handle_resend(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
 		 */
 		return -DER_NONEXIST;
 
+again:
 	rc = vos_dtx_check_resend(coh, oid, dti, dkey_hash, punch, epoch);
 	switch (rc) {
 	case DTX_ST_PREPARED:
@@ -880,6 +881,12 @@ dtx_handle_resend(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
 			rc = -DER_EP_OLD;
 		}
 		return rc;
+	case -DER_AGAIN:
+		/* Re-index committed DTX table is not completed yet,
+		 * let's wait and retry.
+		 */
+		ABT_thread_yield();
+		goto again;
 	default:
 		return rc >= 0 ? -DER_INVAL : rc;
 	}

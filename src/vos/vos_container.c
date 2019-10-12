@@ -113,7 +113,7 @@ cont_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 
 	rc = dbtree_create_inplace_ex(VOS_BTR_DTX_ACTIVE_TABLE, 0,
 				      DTX_BTREE_ORDER, &pool->vp_uma,
-				      &cont_df->cd_dtx_root,
+				      &cont_df->cd_dtx_active,
 				      DAOS_HDL_INVAL, pool, &hdl);
 	if (rc) {
 		D_ERROR("Failed to create active DTX table: rc = %d\n", rc);
@@ -207,6 +207,7 @@ cont_free(struct d_ulink *ulink)
 	if (!daos_handle_is_inval(cont->vc_dtx_committed_hdl))
 		dbtree_destroy(cont->vc_dtx_committed_hdl, NULL);
 	D_ASSERT(d_list_empty(&cont->vc_dtx_committed_list));
+	D_ASSERT(d_list_empty(&cont->vc_dtx_committed_tmp_list));
 
 	dbtree_close(cont->vc_dtx_active_hdl);
 	dbtree_close(cont->vc_btr_hdl);
@@ -376,8 +377,10 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	cont->vc_dtx_cos_hdl = DAOS_HDL_INVAL;
 	D_INIT_LIST_HEAD(&cont->vc_dtx_committable_list);
 	D_INIT_LIST_HEAD(&cont->vc_dtx_committed_list);
+	D_INIT_LIST_HEAD(&cont->vc_dtx_committed_tmp_list);
 	cont->vc_dtx_committable_count = 0;
 	cont->vc_dtx_committed_count = 0;
+	cont->vc_dtx_committed_tmp_count = 0;
 	cont->vc_dtx_resync_gen = cont->vc_cont_df->cd_dtx_resync_gen;
 
 	/* Cache this btr object ID in container handle */
@@ -389,7 +392,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 		D_GOTO(exit, rc);
 	}
 
-	rc = dbtree_open_inplace(&cont->vc_cont_df->cd_dtx_root,
+	rc = dbtree_open_inplace(&cont->vc_cont_df->cd_dtx_active,
 				 &pool->vp_uma, &cont->vc_dtx_active_hdl);
 	if (rc) {
 		D_ERROR("Failed to open active DTX table: rc = %d\n", rc);
@@ -585,7 +588,7 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 		D_GOTO(exit, rc);
 	}
 
-	rc = dbtree_open_inplace(&args.ca_cont_df->cd_dtx_root,
+	rc = dbtree_open_inplace(&args.ca_cont_df->cd_dtx_active,
 				 &pool->vp_uma, &hdl);
 	if (rc == 0)
 		rc = dbtree_destroy(hdl, NULL);

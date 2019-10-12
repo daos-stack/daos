@@ -137,10 +137,14 @@ struct vos_container {
 	d_list_t		vc_dtx_committable_list;
 	/* The global list for committed DTXs. */
 	d_list_t		vc_dtx_committed_list;
+	/* The temporary list for committed DTXs during re-index. */
+	d_list_t		vc_dtx_committed_tmp_list;
 	/* The count of committable DTXs. */
 	uint32_t		vc_dtx_committable_count;
 	/* The count of committed DTXs. */
 	uint32_t		vc_dtx_committed_count;
+	/* The items count in vc_dtx_committed_tmp_list. */
+	uint32_t		vc_dtx_committed_tmp_count;
 	/** Direct pointer to the VOS container */
 	struct vos_cont_df	*vc_cont_df;
 	/**
@@ -150,7 +154,8 @@ struct vos_container {
 	struct vea_hint_context	*vc_hint_ctxt[VOS_IOS_CNT];
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
-				vc_abort_aggregation:1;
+				vc_abort_aggregation:1,
+				vc_reindex_dtx:1;
 	unsigned int		vc_open_count;
 	uint64_t		vc_dtx_resync_gen;
 };
@@ -376,7 +381,7 @@ vos_dtx_prepared(struct dtx_handle *dth);
 
 void
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
-			int count);
+			int count, umem_off_t umoff);
 
 /**
  * Register dbtree class for DTX CoS, it is called within vos_init().
