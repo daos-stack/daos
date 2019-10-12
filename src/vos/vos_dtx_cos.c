@@ -64,8 +64,6 @@ struct dtx_cos_rec_child {
 	struct dtx_id		 dcrc_dti;
 	/* The DTX epoch. */
 	daos_epoch_t		 dcrc_epoch;
-	/* Timestamp of handling the DTX on server. */
-	uint64_t		 dcrc_time;
 	/* Pointer to the dtx_cos_rec. */
 	struct dtx_cos_rec	*dcrc_ptr;
 };
@@ -139,7 +137,6 @@ dtx_cos_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 
 	dcrc->dcrc_dti = *rbund->dti;
 	dcrc->dcrc_epoch = rbund->epoch;
-	dcrc->dcrc_time = crt_hlc_get();
 	dcrc->dcrc_ptr = dcr;
 
 	d_list_add_tail(&dcrc->dcrc_committable,
@@ -220,7 +217,6 @@ dtx_cos_rec_update(struct btr_instance *tins, struct btr_record *rec,
 
 	dcrc->dcrc_dti = *rbund->dti;
 	dcrc->dcrc_epoch = rbund->epoch;
-	dcrc->dcrc_time = crt_hlc_get();
 	dcrc->dcrc_ptr = dcr;
 
 	d_list_add_tail(&dcrc->dcrc_committable,
@@ -360,7 +356,8 @@ out:
 
 int
 vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
-		uint64_t dkey_hash, daos_epoch_t epoch, bool punch, bool check)
+		uint64_t dkey_hash, daos_epoch_t epoch, uint64_t gen,
+		bool punch, bool check)
 {
 	struct vos_container		*cont;
 	struct dtx_cos_key		 key;
@@ -371,6 +368,41 @@ vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
 
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
+
+	/* If the DTX is started befoe DTX resync operation (for rebuild),
+	 * then it is possbile that the DTX resync ULT may have aborted
+	 * or committed the DTX during current ULT waiting for the reply.
+	 * let's check DTX status locally before marking as 'committable'.
+	 */
+	if (gen != 0 && gen < cont->vc_dtx_resync_gen) {
+		rc = vos_dtx_check(coh, dti);
+		switch (rc) {
+		case DTX_ST_PREPARED:
+			rc = vos_dtx_lookup_cos(coh, oid, dti,
+						dkey_hash, punch);
+			/* The resync ULT has already added it into the
+			 * CoS cache, current ULT needs to do nothing.
+			 */
+			if (rc == 0)
+				return -DER_ALREADY;
+
+			/* Normal case, then add it to CoS cache. */
+			if (rc == -DER_NONEXIST)
+				break;
+
+			return rc >= 0 ? -DER_INVAL : rc;
+		case DTX_ST_COMMITTED:
+			/* The DTX has been committed by resync ULT by race. */
+			return -DER_ALREADY;
+		case -DER_NONEXIST:
+			/* The DTX has been aborted by resync ULT, ask the
+			 * client to retry.
+			 */
+			return rc;
+		default:
+			return rc >= 0 ? -DER_INVAL : rc;
+		}
+	}
 
 	if (check) {
 		struct daos_lru_cache	*occ = vos_obj_cache_current();
@@ -564,5 +596,5 @@ vos_dtx_cos_oldest(struct vos_container *cont)
 
 	dcrc = d_list_entry(cont->vc_dtx_committable.next,
 			    struct dtx_cos_rec_child, dcrc_committable);
-	return dcrc->dcrc_time;
+	return dcrc->dcrc_epoch;
 }

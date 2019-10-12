@@ -60,6 +60,8 @@ struct dtx_handle {
 	daos_handle_t			 dth_coh;
 	/** The epoch# for the DTX. */
 	daos_epoch_t			 dth_epoch;
+	/* The generation when the DTX is handled on the server. */
+	uint64_t			 dth_gen;
 	/** The {obj/dkey/akey}-tree records that are created
 	 * by other DTXs, but not ready for commit yet.
 	 */
@@ -72,7 +74,8 @@ struct dtx_handle {
 	uint32_t			 dth_intent;
 	uint32_t			 dth_sync:1, /* commit synchronously. */
 					 dth_leader:1, /* leader replica. */
-					 dth_non_rep:1, /* non-replicated. */
+					 /* Only one participator in the DTX. */
+					 dth_single_participator:1,
 					 /* dti_cos has been committed. */
 					 dth_dti_cos_done:1;
 	/* The count the DTXs in the dth_dti_cos array. */
@@ -98,8 +101,6 @@ struct dtx_sub_status {
 struct dtx_leader_handle {
 	/* The dtx handle on the leader node */
 	struct dtx_handle		dlh_handle;
-	/* The time when the DTX is handled on the server. */
-	uint64_t			dlh_handled_time;
 	/* result for the distribute transaction */
 	int				dlh_result;
 

@@ -71,7 +71,7 @@ CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
 /* The count threshould for triggerring DTX aggregation.
  * This threshould should consider the real SCM size.
  */
-#define DTX_AGG_THRESHOLD_CNT		(1 << 27)
+#define DTX_AGG_THRESHOLD_CNT		(1 << 28)
 
 /* The time threshould for triggerring DTX aggregation. If the oldest
  * DTX in the DTX table exceeds such threshould, it will trigger DTX
@@ -84,7 +84,7 @@ CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
  */
 #define DTX_AGG_THRESHOLD_AGE_LOWER	3600
 
-#define DTX_AGG_YIELD_INTERVAL		DTX_THRESHOLD_COUNT
+#define DTX_YIELD_CYCLE			(DTX_THRESHOLD_COUNT >> 4)
 
 extern struct crt_proto_format dtx_proto_fmt;
 extern btr_ops_t dbtree_dtx_cf_ops;

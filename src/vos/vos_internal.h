@@ -46,6 +46,8 @@
 #define VOS_KTR_ORDER		23	/* order of d/a-key tree */
 #define VOS_SVT_ORDER		5	/* order of single value tree */
 #define VOS_EVT_ORDER		23	/* evtree order */
+#define DTX_BTREE_ORDER		23	/* Order for DTX tree */
+
 
 
 #define DAOS_VOS_VERSION 1
@@ -145,6 +147,7 @@ struct vos_container {
 	unsigned int		vc_in_aggregation:1,
 				vc_abort_aggregation:1;
 	unsigned int		vc_open_count;
+	uint64_t		vc_dtx_resync_gen;
 };
 
 struct vos_imem_strts {

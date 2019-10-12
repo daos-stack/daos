@@ -39,7 +39,11 @@ dtx_handler(crt_rpc_t *rpc)
 	struct dtx_in		*din = crt_req_get(rpc);
 	struct dtx_out		*dout = crt_reply_get(rpc);
 	struct ds_cont_child	*cont = NULL;
+	struct dtx_id		*dtis;
 	uint32_t		 opc = opc_get(rpc->cr_opc);
+	int			 count = DTX_YIELD_CYCLE;
+	int			 i = 0;
+	int			 rc1;
 	int			 rc;
 
 	rc = ds_cont_child_lookup(din->di_po_uuid, din->di_co_uuid, &cont);
@@ -52,13 +56,31 @@ dtx_handler(crt_rpc_t *rpc)
 
 	switch (opc) {
 	case DTX_COMMIT:
-		rc = vos_dtx_commit(cont->sc_hdl, din->di_dtx_array.ca_arrays,
-				    din->di_dtx_array.ca_count);
+		while (i < din->di_dtx_array.ca_count) {
+			if (i + count > din->di_dtx_array.ca_count)
+				count = din->di_dtx_array.ca_count - i;
+
+			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
+			rc1 = vos_dtx_commit(cont->sc_hdl, dtis, count);
+			if (rc == 0 && rc1 != 0)
+				rc = rc1;
+
+			i += count;
+		}
 		break;
 	case DTX_ABORT:
-		rc = vos_dtx_abort(cont->sc_hdl, din->di_epoch,
-				   din->di_dtx_array.ca_arrays,
-				   din->di_dtx_array.ca_count, true);
+		while (i < din->di_dtx_array.ca_count) {
+			if (i + count > din->di_dtx_array.ca_count)
+				count = din->di_dtx_array.ca_count - i;
+
+			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
+			rc1 = vos_dtx_abort(cont->sc_hdl, din->di_epoch,
+					    dtis, count, true);
+			if (rc == 0 && rc1 != 0)
+				rc = rc1;
+
+			i += count;
+		}
 		break;
 	case DTX_CHECK:
 		/* Currently, only support to check single DTX state. */

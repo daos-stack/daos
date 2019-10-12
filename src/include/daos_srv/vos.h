@@ -38,6 +38,17 @@
 #include <daos_srv/vos_types.h>
 
 /**
+ * Refresh the DTX resync generation.
+ *
+ * \param coh	[IN]	Container open handle.
+ *
+ * \return		Zero on success.
+ * \return		Negative value if error.
+ */
+int
+vos_dtx_update_resync_gen(daos_handle_t coh);
+
+/**
  * Add the given DTX to the Commit-on-Share (CoS) cache (in DRAM).
  *
  * \param coh		[IN]	Container open handle.
@@ -45,6 +56,7 @@
  * \param dti		[IN]	The DTX identifier.
  * \param dkey_hash	[IN]	The hashed dkey.
  * \param epoch		[IN]	The DTX epoch.
+ * \param gen		[IN]	The DTX generation.
  * \param punch		[IN]	For punch DTX or not.
  * \param check		[IN]	Check whether the DTX need restart because
  *				of sync epoch or not.
@@ -55,7 +67,8 @@
  */
 int
 vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
-		uint64_t dkey_hash, daos_epoch_t epoch, bool punch, bool check);
+		uint64_t dkey_hash, daos_epoch_t epoch, uint64_t gen,
+		bool punch, bool check);
 
 /**
  * Search the specified DTX is in the CoS cache or not.

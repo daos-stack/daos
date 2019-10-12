@@ -535,6 +535,7 @@ dtx_handle_resend(void **state, uint64_t fail_loc, uint16_t oclass)
 	ioreq_fini(&req);
 }
 
+#if 0
 static void
 dtx_12(void **state)
 {
@@ -550,6 +551,7 @@ dtx_13(void **state)
 	dtx_handle_resend(state, DAOS_DTX_LOST_RPC_REPLY | DAOS_FAIL_ALWAYS,
 			  OC_S1);
 }
+#endif
 
 static void
 dtx_14(void **state)
@@ -696,10 +698,12 @@ static const struct CMUnitTest dtx_tests[] = {
 	 dtx_10, NULL, test_case_teardown},
 	{"DTX11: DTX batched commit with over time threshold",
 	 dtx_11, NULL, test_case_teardown},
+#if 0
 	{"DTX12: Resend with lost single replicated obj request",
 	 dtx_12, NULL, test_case_teardown},
 	{"DTX13: Resend with lost single replicated obj reply",
 	 dtx_13, NULL, test_case_teardown},
+#endif
 	{"DTX14: Resend with lost multiple replicated obj request",
 	 dtx_14, NULL, test_case_teardown},
 	{"DTX15: Resend with lost multiple replicated obj reply",

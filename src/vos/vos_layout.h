@@ -237,37 +237,63 @@ struct vos_dtx_entry_df {
 	daos_epoch_t			te_epoch;
 	/** Pool map version. */
 	uint32_t			te_ver;
+	/** The intent of related modification. */
+	uint32_t			te_intent;
+	/** The server generation when handles the DTX. */
+	uint64_t			te_gen;
 	/** DTX status, see enum dtx_status. */
 	uint32_t			te_state;
 	/** DTX flags, see enum vos_dtx_entry_flags. */
 	uint32_t			te_flags;
-	/** The intent of related modification. */
-	uint32_t			te_intent;
-	/** The timestamp when handles the transaction. */
-	uint64_t			te_time;
 	/** The list of vos_dtx_record_df in SCM. */
 	umem_off_t			te_records;
-	/** The next committed DTX in global list. */
+	/** The next committed DTX in global committed DTX list. */
 	umem_off_t			te_next;
-	/** The prev committed DTX in global list. */
-	umem_off_t			te_prev;
 };
+
+D_CASSERT(offsetof(struct vos_dtx_entry_df, te_flags) ==
+	  offsetof(struct vos_dtx_entry_df, te_state) +
+	  sizeof(((struct vos_dtx_entry_df *)0)->te_state));
+
+D_CASSERT(offsetof(struct vos_dtx_entry_df, te_records) ==
+	  offsetof(struct vos_dtx_entry_df, te_flags) +
+	  sizeof(((struct vos_dtx_entry_df *)0)->te_flags));
+
+D_CASSERT(offsetof(struct vos_dtx_entry_df, te_next) ==
+	  offsetof(struct vos_dtx_entry_df, te_records) +
+	  sizeof(((struct vos_dtx_entry_df *)0)->te_records));
+
+#define DTX_ENT_STATE_OFF	offsetof(struct vos_dtx_entry_df, te_state)
+#define DTX_ENT_FULL_SIZE	sizeof(struct vos_dtx_entry_df)
+#define DTX_ENT_SIZE_PARTIAL	(DTX_ENT_FULL_SIZE - DTX_ENT_STATE_OFF)
 
 /**
  * DAOS two-phase commit transaction table.
  */
 struct vos_dtx_table_df {
+	/** The root of the B+ tree for committed DTXs. */
+	struct btr_root			tt_committed_btr;
+	/** The root of the B+ tree for active (prepared) DTXs. */
+	struct btr_root			tt_active_btr;
 	/** The count of committed DTXs in the table. */
 	uint64_t			tt_count;
 	/** The list head of committed DTXs. */
 	umem_off_t			tt_entry_head;
 	/** The list tail of committed DTXs. */
 	umem_off_t			tt_entry_tail;
-	/** The root of the B+ tree for committed DTXs. */
-	struct btr_root			tt_committed_btr;
-	/** The root of the B+ tree for active (prepared) DTXs. */
-	struct btr_root			tt_active_btr;
 };
+
+D_CASSERT(offsetof(struct vos_dtx_table_df, tt_entry_head) ==
+	  offsetof(struct vos_dtx_table_df, tt_count) +
+	  sizeof(((struct vos_dtx_table_df *)0)->tt_count));
+
+D_CASSERT(offsetof(struct vos_dtx_table_df, tt_entry_tail) ==
+	  offsetof(struct vos_dtx_table_df, tt_entry_head) +
+	  sizeof(((struct vos_dtx_table_df *)0)->tt_entry_head));
+
+#define DTX_TAB_COUNT_OFF	offsetof(struct vos_dtx_table_df, tt_count)
+#define DTX_TAB_SIZE_FULL	sizeof(struct vos_dtx_table_df)
+#define DTX_TAB_SIZE_PARTIAL	(DTX_TAB_SIZE_FULL - DTX_TAB_COUNT_OFF)
 
 enum vos_io_stream {
 	/**
@@ -284,6 +310,7 @@ enum vos_io_stream {
 struct vos_cont_df {
 	uuid_t				cd_id;
 	uint64_t			cd_nobjs;
+	uint64_t			cd_dtx_resync_gen;
 	daos_size_t			cd_used;
 	daos_epoch_t			cd_hae;
 	struct btr_root			cd_obj_root;
@@ -388,5 +415,13 @@ struct vos_obj_df {
 D_CASSERT(offsetof(struct vos_obj_df, vo_earliest) ==
 	  offsetof(struct vos_obj_df, vo_latest) +
 	  sizeof(((struct vos_obj_df *)0)->vo_latest));
+
+D_CASSERT(offsetof(struct vos_obj_df, vo_dtx_shares) ==
+	  offsetof(struct vos_obj_df, vo_dtx) +
+	  sizeof(((struct vos_obj_df *)0)->vo_dtx));
+
+#define VOS_OBJ_DTX_SIZE	sizeof(((struct vos_obj_df *)0)->vo_dtx)
+#define VOS_OBJ_SHARES_SIZE	sizeof(((struct vos_obj_df *)0)->vo_dtx_shares)
+#define VOS_OBJ_SIZE_PARTIAL	(VOS_OBJ_DTX_SIZE + VOS_OBJ_SHARES_SIZE)
 
 #endif
