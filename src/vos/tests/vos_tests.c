@@ -164,7 +164,7 @@ main(int argc, char **argv)
 	index = 0;
 	optind = 0;
 
-	while ((opt = getopt_long(argc, argv, "apcdnti:A:hf:e:",
+	while ((opt = getopt_long(argc, argv, "apcdntXi:A:hf:e:",
 				  long_options, &index)) != -1) {
 		switch (opt) {
 		case 'p':
