@@ -243,7 +243,7 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/libioil.so
 %dir  %{_libdir}/python2.7/site-packages/pydaos
 %{_libdir}/python2.7/site-packages/pydaos/__init__.py
-%{_libdir}/python2.7/site-packages/pydaos/_pydaos_shim_27.so
+%{_libdir}/python2.7/site-packages/pydaos/pydaos_shim_27.so
 %{_libdir}/python2.7/site-packages/pydaos/pydaos_core.py
 %{_libdir}/python2.7/site-packages/pydaos/pydaos_core.pyo
 %{_libdir}/python2.7/site-packages/pydaos/pydaos_core.pyc
@@ -257,7 +257,7 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %dir %{_libdir}/python3/site-packages
 %dir %{_libdir}/python3/site-packages/pydaos
 %{_libdir}/python3/site-packages/pydaos/__init__.py
-%{_libdir}/python3/site-packages/pydaos/_pydaos_shim_3.so
+%{_libdir}/python3/site-packages/pydaos/pydaos_shim_3.so
 %{_libdir}/python3/site-packages/pydaos/pydaos_core.py
 %{_libdir}/python3/site-packages/pydaos/pydaos_core.pyo
 %{_libdir}/python3/site-packages/pydaos/pydaos_core.pyc

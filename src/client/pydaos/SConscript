@@ -9,12 +9,12 @@ def build_shim_module(py_env, svars, lib_prefix, version):
     extra_flags = ""
 
     if version == "2.7":
-        tgt_name = '_pydaos_shim_27'
-        base_name = '_pydaos_shim_27'
+        tgt_name = 'pydaos_shim_27'
+        base_name = 'pydaos_shim_27'
         new_env.ParseConfig("pkg-config --cflags --libs python2")
     elif version == "3":
-        tgt_name = '_pydaos_shim_3'
-        base_name = '_pydaos_shim_3'
+        tgt_name = 'pydaos_shim_3'
+        base_name = 'pydaos_shim_3'
         extra_flags = " -D__USE_PYTHON3__==1"
         new_env.ParseConfig("pkg-config --cflags --libs python3")
     else:

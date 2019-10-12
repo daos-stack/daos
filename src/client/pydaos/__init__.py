@@ -31,12 +31,12 @@ DAOS_MAGIC = 0x7A89
 # pylint: disable=exec-used
 # pylint: disable=import-error
 if sys.version_info < (3, 0):
-    import _pydaos_shim_27 as pydaos_shim
+    import pydaos_shim_27 as pydaos_shim
 else:
-    import ._pydaos_shim_3 as pydaos_shim
+    import pydaos_shim_3 as pydaos_shim
 # pylint: enable=import-error
 
-from .pydaos_core import *
+from pydaos_core import *
 
 __all__ = ["pydaos_core"]
 
@@ -64,4 +64,5 @@ if _rc != pydaos_shim.DER_SUCCESS:
 @atexit.register
 def _cleanup():
     rc = pydaos_shim.daos_fini(DAOS_MAGIC)
-    raise PyDError("Failed to cleanup DAOS", rc)
+    if rc != pydaos_shim.DER_SUCCESS:
+        raise PyDError("Failed to cleanup DAOS", rc)
