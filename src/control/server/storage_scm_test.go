@@ -170,6 +170,7 @@ func TestFormatScm(t *testing.T) {
 	tests := []struct {
 		inited    bool
 		formatted bool
+		reformat  bool
 		mountRet  error
 		// log context should be stack layer registering result
 		unmountRet error
@@ -419,7 +420,7 @@ func TestFormatScm(t *testing.T) {
 			}
 
 			scmCfg := config.Servers[srvIdx].Storage.SCM
-			ss.Format(scmCfg, &results)
+			ss.Format(scmCfg, tt.reformat, &results)
 
 			if diff := cmp.Diff(tt.expResults, results); diff != "" {
 				t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)

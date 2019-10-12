@@ -200,6 +200,11 @@ func (h *IOServerHarness) Start(parent context.Context) error {
 		}
 	}
 
+	// Mark the harness as started to block any format/update requests.
+	h.Lock()
+	h.started = true
+	h.Unlock()
+
 	// ... wait until they say they've started
 	for _, instance := range instances {
 		select {
@@ -211,7 +216,7 @@ func (h *IOServerHarness) Start(parent context.Context) error {
 			}
 		case ready := <-instance.AwaitReady():
 			if pmixless() {
-				h.log.Debug("PMIx-less mode detected")
+				h.log.Debugf("PMIx-less mode detected (ready: %v)", ready)
 				if err := instance.SetRank(ctx, ready); err != nil {
 					return err
 				}
@@ -222,10 +227,6 @@ func (h *IOServerHarness) Start(parent context.Context) error {
 	if err := h.StartManagementService(ctx); err != nil {
 		return errors.Wrap(err, "failed to start management service")
 	}
-
-	h.Lock()
-	h.started = true
-	h.Unlock()
 
 	// now monitor them
 	for {

@@ -651,7 +651,7 @@ func TestStorageFormat(t *testing.T) {
 			go func() {
 				// should signal wait group in srv to unlock if
 				// successful once format completed
-				_ = cs.StorageFormat(nil, mock)
+				_ = cs.StorageFormat(&StorageFormatReq{}, mock)
 				mockWg.Done()
 			}()
 
