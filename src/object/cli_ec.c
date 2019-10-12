@@ -335,7 +335,12 @@ ec_free_params_cb(tse_task_t *task, void *data)
 }
 
 /* Identifies the applicable subset of forwarding targets for non-full-stripe
- * EC updates.
+ * EC updates. If called for EC fetch, the tgt_set is set to the addressed data
+ * targets.
+ *
+ * For single values, the tgt_set includes the first data target, and all parity
+ * targets for update. For fetch, the first data target is selected. (This will
+ * change once encoding of single values is supported).
  */
 void
 ec_get_tgt_set(daos_iod_t *iods, unsigned int nr, struct daos_oclass_attr *oca,
@@ -345,7 +350,6 @@ ec_get_tgt_set(daos_iod_t *iods, unsigned int nr, struct daos_oclass_attr *oca,
 	unsigned int    k = oca->u.ec.e_k;
 	unsigned int    p = oca->u.ec.e_p;
 	uint64_t	ss = k * len;
-	uint64_t	par_only = (1UL << p) - 1;
 	uint64_t	full;
 	unsigned int	i, j;
 
@@ -357,8 +361,10 @@ ec_get_tgt_set(daos_iod_t *iods, unsigned int nr, struct daos_oclass_attr *oca,
 		full = (1UL << k) - 1;
 	}
 	for (i = 0; i < nr; i++) {
-		if (iods->iod_type != DAOS_IOD_ARRAY)
+		if (iods->iod_type != DAOS_IOD_ARRAY) {
+			*tgt_set |= 1UL << p;
 			continue;
+		}
 		for (j = 0; j < iods[i].iod_nr; j++) {
 			uint64_t ext_idx;
 			uint64_t rs = iods[i].iod_recxs[j].rx_idx *
@@ -377,15 +383,13 @@ ec_get_tgt_set(daos_iod_t *iods, unsigned int nr, struct daos_oclass_attr *oca,
 				if (*tgt_set == full && parity_include) {
 					*tgt_set = 0;
 					return;
+				} else if (*tgt_set == full) {
+					return;
 				}
+
 			}
 		}
 	}
-	/* In case it's a single value, set the tgt_set to send to all.
-	 * These go everywhere for now.
-	 */
-	if (*tgt_set == par_only)
-		*tgt_set = 0;
 }
 
 static inline bool
