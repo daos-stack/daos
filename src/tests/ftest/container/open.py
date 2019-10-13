@@ -28,7 +28,6 @@ import traceback
 import uuid
 import os
 
-from avocado import main
 from apricot import TestWithServers
 from test_utils import TestPool, TestContainer
 from avocado.core.exceptions import TestFail
@@ -65,7 +64,7 @@ class OpenContainerTest(TestWithServers):
 
         # Get parameters from open.yaml
         poh_states = self.params.get("poh", '/run/handle_states/*/')
-        uuid_states = self.params.get("uuid",'/run/container_uuid_states/*/')
+        uuid_states = self.params.get("uuid", '/run/container_uuid_states/*/')
 
         # Derive the test case number from the PASS/FAIL-PASS/FAIL combination
         poh_state_num = RESULT_TO_NUM[poh_states[0]]
@@ -140,10 +139,10 @@ class OpenContainerTest(TestWithServers):
             self.container[0].open(self.pool[pool_handle_index].pool
                                    .handle.value,
                                    container_uuids[container_uuid_index])
-            self.assertEqual(expected_result, RESULT_PASS, 
+            self.assertEqual(expected_result, RESULT_PASS,
                              result_messages[test_case][0])
-        except TestFail as result:
-            print(result)
+        except TestFail as excep:
+            print(excep)
             print(traceback.format_exc())
             self.assertEqual(expected_result, RESULT_FAIL,
                              result_messages[test_case][1])
@@ -156,8 +155,8 @@ class OpenContainerTest(TestWithServers):
                                    container_uuids[container_uuid_index])
             self.assertEqual(expected_result, RESULT_PASS,
                              result_messages[test_case][2])
-        except TestFail as result:
-            print(result)
+        except TestFail as excep:
+            print(excep)
             print(traceback.format_exc())
             self.assertEqual(expected_result, RESULT_FAIL,
                              result_messages[test_case][3])

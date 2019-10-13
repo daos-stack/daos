@@ -760,7 +760,7 @@ class TestContainer(TestDaosApiBase):
         self._call_method(self.container.create, kwargs)
         self.uuid = self.container.get_uuid_str()
         self.log.info("  Container created with uuid {}".format(self.uuid))
-    
+
     @fail_on(DaosApiError)
     def open(self, pool_handle=None, container_uuid=None):
         """Open the container with pool handle and container UUID if provided.
