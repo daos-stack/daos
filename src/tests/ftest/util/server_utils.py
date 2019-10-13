@@ -59,8 +59,13 @@ def create_server_yaml(basepath, log_filename):
         ServerFailed: if there is an reading/writing yaml files
 
     """
-    with open(os.path.join(basepath, ".build_vars.json")) as json_vars:
+    with open("../../../.build_vars.json") as json_vars:
         build_vars = json.load(json_vars)
+
+    if build_vars["PREFIX"] == "/usr":
+        yaml_prefix = "/tmp/ftest"
+    else:
+        yaml_prefix = build_vars["PREFIX"]
 
     # Read the baseline conf file data/daos_server_baseline.yml
     try:
@@ -109,13 +114,13 @@ def create_server_yaml(basepath, log_filename):
     # Write default_value_set dictionary in to AVOCADO_FILE
     # This will be used to start with daos_server -o option.
     try:
-        with open('{}/{}'.format(build_vars["PREFIX"], AVOCADO_FILE), 'w')\
+        with open('{}/{}'.format(yaml_prefix, AVOCADO_FILE), 'w')\
             as write_file:
             yaml.dump(default_value_set, write_file, default_flow_style=False)
     except Exception as excpn:
         print("<SERVER> Exception occurred: {0}".format(str(excpn)))
         traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
-        raise ServerFailed("Failed to Write {}/{}".format(build_vars["PREFIX"],\
+        raise ServerFailed("Failed to Write {}/{}".format(yaml_prefix,\
                            AVOCADO_FILE))
 
 
@@ -166,7 +171,7 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
                             [str(result[key]) for key in result if key != 0])))
 
         # Pile of build time variables
-        with open(os.path.join(basepath, ".build_vars.json")) as json_vars:
+        with open("../../../.build_vars.json") as json_vars:
             build_vars = json.load(json_vars)
         orterun_bin = os.path.join(build_vars["OMPI_PREFIX"], "bin", "orterun")
         daos_srv_bin = os.path.join(build_vars["PREFIX"], "bin", "daos_server")
@@ -189,12 +194,13 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
         if build_vars["PREFIX"] != "/usr":
             server_cmd.extend(["-x", "PATH"])
             tmpdir = build_vars["PREFIX"]
+            yaml_prefix = build_vars["PREFIX"]
         else:
             tmpdir = '/'
-
+            yaml_prefix = "/tmp/ftest"
         # Run server in insecure mode until Certificate tests are in place
         server_cmd.extend([daos_srv_bin, "--debug", "--config",
-                           '{}/{}'.format(build_vars["PREFIX"], AVOCADO_FILE),
+                           '{}/{}'.format(yaml_prefix, AVOCADO_FILE),
                            "start", "-i", "-a",
                            os.path.join(tmpdir, "tmp")])
 

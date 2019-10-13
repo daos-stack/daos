@@ -125,25 +125,14 @@ if ${TEARDOWN_ONLY:-false}; then
 fi
 
 # let's output to a dir in the tree
-# shellcheck disable=SC2086
-if [ ${SL_PREFIX} == /usr ]; then
-    rm -rf /tmp/ftest/avocado ./*_results.xml
-    mkdir -p /tmp/ftest/avocado/job-results
-else
-    rm -rf install/tmp/ftest/avocado ./*_results.xml
-    mkdir -p install/tmp/ftest/avocado/job-results
-fi
+rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
+mkdir -p install/lib/daos/TESTING/ftest/avocado/job-results
+
 trap 'set +e; cleanup' EXIT
 
 CLUSH_ARGS=($CLUSH_ARGS)
 
-# shellcheck disable=SC2086
-if [ ${SL_PREFIX} == /usr ]; then
-    # not sure should be /usr or / here
-    DAOS_BASE='/'
-else
-    DAOS_BASE=${SL_PREFIX%/install}
-fi
+DAOS_BASE=${SL_PREFIX%/install}
 if ! clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
     -w "$(IFS=','; echo "${nodes[*]}")" "set -ex
 ulimit -c unlimited
@@ -203,13 +192,8 @@ args+=" $*"
 # shellcheck disable=SC2086
 if ! ssh $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" "set -ex
 ulimit -c unlimited
-if [ ${SL_PREFIX} == /usr ]; then
-    rm -rf /tmp/ftest
-    mkdir -p /tmp/ftest
-else
-    rm -rf $DAOS_BASE/install/tmp
-    mkdir -p $DAOS_BASE/install/tmp
-fi
+rm -rf $DAOS_BASE/install/tmp
+mkdir -p $DAOS_BASE/install/tmp
 cd $DAOS_BASE
 export CRT_PHY_ADDR_STR=ofi+sockets
 export OFI_INTERFACE=eth0
@@ -221,12 +205,7 @@ export D_LOG_FILE=\"$TEST_TAG_DIR/daos.log\"
 mkdir -p ~/.config/avocado/
 cat <<EOF > ~/.config/avocado/avocado.conf
 [datadir.paths]
-# log files
-if [ ${SL_PREFIX} == /usr ]; then
-    logs_dir = /tmp/ftest/avocado/job-results
-else
-    logs_dir = $DAOS_BASE/install/tmp/ftest/avocado/job-results
-fi
+logs_dir = $DAOS_BASE/install/lib/daos/TESTING/ftest/avocado/job-results
 
 [sysinfo.collectibles]
 # File with list of commands that will be executed and have their output
@@ -315,7 +294,7 @@ wq
 EOF
 fi
 
-pushd ${SL_PREFIX}/lib/daos/TESTING/ftest
+pushd install/lib/daos/TESTING/ftest
 
 # make sure no lingering corefiles or junit files exist
 rm -f core.* *_results.xml
@@ -331,7 +310,7 @@ launch_py_vers=\$(\$launch_py -c 'import sys; \
 print(\"{}.{}\".format(sys.version_info[0], sys.version_info[1]))')
 
 export PYTHONPATH=./util:../../utils/py/:./util/apricot:\
-${SL_PREFIX}/lib/python\$launch_py_vers/site-packages
+../../../install/lib/python\$launch_py_vers/site-packages
 
 if ! ./launch.py -c -a -r -i -s -ts ${TEST_NODES} ${TEST_TAG_ARR[*]}; then
     rc=\${PIPESTATUS[0]}
@@ -341,11 +320,8 @@ fi
 
 # Remove the latest avocado symlink directory to avoid inclusion in the
 # jenkins build artifacts
-if [ ${SL_PREFIX} == /usr ]; then
-    unlink /tmp/ftest/avocado/job-results/latest
-else
-    unlink $DAOS_BASE/install/tmp/ftest/avocado/job-results/latest
-fi
+unlink $DAOS_BASE/install/lib/daos/TESTING/ftest/avocado/job-results/latest
+
 # get stacktraces for the core files
 if ls core.*; then
     # this really should be a debuginfo-install command but our systems lag
