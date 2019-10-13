@@ -26,7 +26,6 @@ from __future__ import print_function
 import time
 import traceback
 import uuid
-import os
 
 from apricot import TestWithServers
 from test_utils import TestPool, TestContainer
@@ -119,7 +118,9 @@ class OpenContainerTest(TestWithServers):
         # Create the pool and connect. Then create the container from the pool
         # Add the pool and the container created into a list
         container_uuids = []
-        for i in range(2):
+        #for i in range(2):
+        i = 0
+        while i < 2:
             self.pool.append(TestPool(self.context, self.log))
             self.pool[-1].get_params(self)
             self.pool[-1].create()
@@ -128,6 +129,7 @@ class OpenContainerTest(TestWithServers):
             self.container[-1].get_params(self)
             self.container[-1].create()
             container_uuids.append(uuid.UUID(self.container[-1].uuid))
+            i += 1
 
         # Decide which pool handle and container UUID to use. The PASS/FAIL
         # number corresponds to the index for self.pool and container_uuids
