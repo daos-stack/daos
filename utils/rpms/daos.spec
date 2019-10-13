@@ -242,53 +242,25 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
 %dir  %{_libdir}/python2.7/site-packages/pydaos
-%{_libdir}/python2.7/site-packages/pydaos/__init__.py
-%{_libdir}/python2.7/site-packages/pydaos/__init__.pyo
-%{_libdir}/python2.7/site-packages/pydaos/__init__.pyc
+%{_libdir}/python2.7/site-packages/pydaos/*.py
+%{_libdir}/python2.7/site-packages/pydaos/*.pyc
+%{_libdir}/python2.7/site-packages/pydaos/*.pyo
 %{_libdir}/python2.7/site-packages/pydaos/pydaos_shim_27.so
-%{_libdir}/python2.7/site-packages/pydaos/pydaos_core.py
-%{_libdir}/python2.7/site-packages/pydaos/pydaos_core.pyo
-%{_libdir}/python2.7/site-packages/pydaos/pydaos_core.pyc
 %dir  %{_libdir}/python2.7/site-packages/pydaos/raw
-%{_libdir}/python2.7/site-packages/pydaos/raw/__init__.py
-%{_libdir}/python2.7/site-packages/pydaos/raw/__init__.pyo
-%{_libdir}/python2.7/site-packages/pydaos/raw/__init__.pyc
-%{_libdir}/python2.7/site-packages/pydaos/raw/conversion.py
-%{_libdir}/python2.7/site-packages/pydaos/raw/conversion.pyo
-%{_libdir}/python2.7/site-packages/pydaos/raw/conversion.pyc
-%{_libdir}/python2.7/site-packages/pydaos/raw/daos_cref.py
-%{_libdir}/python2.7/site-packages/pydaos/raw/daos_cref.pyo
-%{_libdir}/python2.7/site-packages/pydaos/raw/daos_cref.pyc
-%{_libdir}/python2.7/site-packages/pydaos/raw/daos_api.py
-%{_libdir}/python2.7/site-packages/pydaos/raw/daos_api.pyo
-%{_libdir}/python2.7/site-packages/pydaos/raw/daos_api.pyc
-%{_libdir}/python2.7/site-packages/pydaos/raw/daos_io.py
-%{_libdir}/python2.7/site-packages/pydaos/raw/daos_io.pyo
-%{_libdir}/python2.7/site-packages/pydaos/raw/daos_io.pyc
+%{_libdir}/python2.7/site-packages/pydaos/raw/*.py
+%{_libdir}/python2.7/site-packages/pydaos/raw/*.pyc
+%{_libdir}/python2.7/site-packages/pydaos/raw/*.pyo
 %dir %{_libdir}/python3
 %dir %{_libdir}/python3/site-packages
 %dir %{_libdir}/python3/site-packages/pydaos
-%{_libdir}/python3/site-packages/pydaos/__init__.py
-%{_libdir}/python3/site-packages/pydaos/__init__.pyo
-%{_libdir}/python3/site-packages/pydaos/__init__.pyc
+%{_libdir}/python3/site-packages/pydaos/*.py
+%{_libdir}/python3/site-packages/pydaos/*.pyc
+%{_libdir}/python3/site-packages/pydaos/*.pyo
 %{_libdir}/python3/site-packages/pydaos/pydaos_shim_3.so
-%{_libdir}/python3/site-packages/pydaos/pydaos_core.py
-%{_libdir}/python3/site-packages/pydaos/pydaos_core.pyo
-%{_libdir}/python3/site-packages/pydaos/pydaos_core.pyc
 %dir %{_libdir}/python3/site-packages/pydaos/raw
-%{_libdir}/python3/site-packages/pydaos/raw/__init__.py
-%{_libdir}/python3/site-packages/pydaos/raw/conversion.py
-%{_libdir}/python3/site-packages/pydaos/raw/conversion.pyo
-%{_libdir}/python3/site-packages/pydaos/raw/conversion.pyc
-%{_libdir}/python3/site-packages/pydaos/raw/daos_cref.py
-%{_libdir}/python3/site-packages/pydaos/raw/daos_cref.pyo
-%{_libdir}/python3/site-packages/pydaos/raw/daos_cref.pyc
-%{_libdir}/python3/site-packages/pydaos/raw/daos_api.py
-%{_libdir}/python3/site-packages/pydaos/raw/daos_api.pyo
-%{_libdir}/python3/site-packages/pydaos/raw/daos_api.pyc
-%{_libdir}/python3/site-packages/pydaos/raw/daos_io.py
-%{_libdir}/python3/site-packages/pydaos/raw/daos_io.pyo
-%{_libdir}/python3/site-packages/pydaos/raw/daos_io.pyc
+%{_libdir}/python3/site-packages/pydaos/raw/*.py
+%{_libdir}/python3/site-packages/pydaos/raw/*.pyc
+%{_libdir}/python3/site-packages/pydaos/raw/*.pyo
 %{_datadir}/%{name}/ioil-ld-opts
 %{_prefix}%{_sysconfdir}/daos.yml
 %{_prefix}%{_sysconfdir}/daos_agent.yml
