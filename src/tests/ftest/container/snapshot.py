@@ -311,18 +311,19 @@ class Snapshot(TestWithServers):
         """Display the snapshot test data.
 
         Args:
-            test_data: list of dictionary snapshot testdata keys:
-                coh: container handler
-                container_epoch: container epoch
-                snapshot:      snapshot handle
-                tst_obj:       test object
-                tst_data:      test data
-            ss_index: snapshot index to be displayed.
+            test_data: list of snapshot testdata
+                dictionary keys:
+                    coh: container handler
+                    container_epoch: container epoch
+                    snapshot:      snapshot handle
+                    tst_obj:       test object
+                    tst_data:      test data
+            ss_index: snapshot-list index to be displayed.
         """
         if len(test_data) < ss_index - 1:
             self.log.info("##Under to display test_data info, "
                           "index out of range.")
-        else:	
+        else:
             ind = ss_index - 1
             self.log.info("  =Snapshot number : %s", ss_index)
             self.log.info("  ==container_coh     =%s", test_data[ind]["coh"])
@@ -443,6 +444,7 @@ class Snapshot(TestWithServers):
                     self.container.coh, snapshot.epoch)
                 thedata3 = self.container.read_an_obj(
                     datasize, dkey, akey, obj, snap_handle.value)
+                obj.close()
             except Exception as error:
                 self.fail("##(3)Error when retrieving the snapshot data: {}"
                     .format(str(error)))
@@ -481,12 +483,14 @@ class Snapshot(TestWithServers):
             tst_data =   test_data[ind]["tst_data"]
             datasize = len(tst_data) + 1
             try:
+                obj.open()
                 snap_handle5 = snapshot.open(coh, current_ss.epoch)
+                thedata5 = self.container.read_an_obj(
+                    datasize, dkey, akey, obj, snap_handle5.value)
+                obj.close()
             except Exception as error:
                 self.fail("##(5)Error when retrieving the snapshot data: {}"
                     .format(str(error)))
-            thedata5 = self.container.read_an_obj(datasize, dkey, akey, obj,
-                                              snap_handle5.value)
             self.log.info("  ==snapshot tst_data =%s", thedata5.value)
             if thedata5.value != tst_data:
                 raise Exception("##(5)Snapshot #%s, test data Mis-matches"
@@ -508,9 +512,11 @@ class Snapshot(TestWithServers):
         #(7)Check if still able to Open the destroyed snapshot and
         #   Verify the snapshot removed from the snapshot list
         try:
+            obj.open()
             snap_handle7 = snapshot.open(coh, snapshot.epoch)
             thedata7 = self.container.read_an_obj(datasize, dkey, akey,
                                                   obj, snap_handle7.value)
+            obj.close()
         except Exception as error:
             self.fail("##(7)Error when retrieving the snapshot data: {}"
                 .format(str(error)))
@@ -525,7 +531,6 @@ class Snapshot(TestWithServers):
         except Exception as error:
             self.fail("##(7)Error when calling the snapshot list: {}"
                 .format(str(error)))
-        self.log.info("  =DAOS container SnapshotInfo test passed.")
 
         #(8)Destroy the snapshot on the container
         try:
@@ -534,3 +539,5 @@ class Snapshot(TestWithServers):
         except Exception as error:
             self.fail("##(8)Error on snapshot.destroy. {}"
                 .format(str(error)))
+        self.log.info("===DAOS container Multiple snapshots test passed.")
+
