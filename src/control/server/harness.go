@@ -189,6 +189,13 @@ func (h *IOServerHarness) Start(parent context.Context) error {
 		return errors.New("can't start: harness already started")
 	}
 
+	// Now we want to block any RPCs that might try to mess with storage
+	// (format, firmware update, etc) before attempting to start I/O servers
+	// which are using the storage.
+	h.Lock()
+	h.started = true
+	h.Unlock()
+
 	instances := h.Instances()
 	ctx, shutdown := context.WithCancel(parent)
 	defer shutdown()
@@ -199,11 +206,6 @@ func (h *IOServerHarness) Start(parent context.Context) error {
 			return err
 		}
 	}
-
-	// Mark the harness as started to block any format/update requests.
-	h.Lock()
-	h.started = true
-	h.Unlock()
 
 	// ... wait until they say they've started
 	for _, instance := range instances {
