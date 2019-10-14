@@ -307,6 +307,35 @@ class Snapshot(TestWithServers):
                 self.fail(
                     "##(7.1)Expecting error RC: -1002  did not show.")
 
+    def disaply_snapshot_test_data(self, test_data, ss_index):
+        """Display the snapshot test data.
+
+        Args:
+            test_data: list of dictionary snapshot testdata keys:
+                coh: container handler
+                container_epoch: container epoch
+                snapshot:      snapshot handle
+                tst_obj:       test object
+                tst_data:      test data
+            ss_index: snapshot index to be displayed.
+        """
+        if len(test_data) < ss_index - 1:
+            self.log.info("##Under to display test_data info, "
+                          "index out of range.")
+        else:	
+            ind = ss_index - 1
+            self.log.info("  =Snapshot number : %s", ss_index)
+            self.log.info("  ==container_coh     =%s", test_data[ind]["coh"])
+            self.log.info("  ==container_epoch   =%s",
+                test_data[ind]["container_epoch"])
+            self.log.info("  ==snapshot          =%s", test_data[ind]["snapshot"])
+            self.log.info("  ==snapshot.epoch    =%s",
+                test_data[ind]["snapshot"].epoch)
+            self.log.info("  ==data obj          =%s", test_data[ind]["tst_obj"])
+            self.log.info("  ==snapshot tst_data_size= %s",
+                len(test_data[ind]["tst_data"]) + 1)
+            self.log.info("  ==original tst_data =%s", test_data[ind]["tst_data"])
+        return
 
 
     def test_snapshots(self):
@@ -334,15 +363,11 @@ class Snapshot(TestWithServers):
         Use Cases: Require 1 client and 1 server to run snapshot test.
                    1 pool and 1 container is used, num_of_snapshot defined
                    in the snapshot.yaml will be performed and verified.
-        :avocado: tags=all,small,smoke,pr,snap,snapshots
+        :avocado: tags=all,small,smoke,pr,snap,snapshots,full_regression
         """
 
-        coh_list = []
-        container_epoch_list = []
-        obj_list = []
-        snapshot_list = []
         test_data = []
-        snapshot_index = 0
+        ss_number = 0
         obj_cls = self.params.get("obj_class", '/run/object_class/*')
         akey = self.params.get("akey", '/run/snapshot/*', default="akey")
         dkey = self.params.get("dkey", '/run/snapshot/*', default="dkey")
@@ -355,12 +380,11 @@ class Snapshot(TestWithServers):
         #
         #Test loop for creat, modify and snapshot object in the DAOS container.
         #
-        while snapshot_index < snapshot_loop:
+        while ss_number < snapshot_loop:
             #(1)Create an object, write some data into it, and take a snapshot
-            #size = random.randint(1, 100) + 1
-            snapshot_index += 1
+            ss_number += 1
             thedata = "--->>>Happy Daos Snapshot Testing " + \
-                str(snapshot_index) + \
+                str(ss_number) + \
                 "<<<---" + rand_str(random.randint(1, data_size))
             datasize = len(thedata) + 1
             try:
@@ -368,34 +392,34 @@ class Snapshot(TestWithServers):
                     thedata, datasize, dkey, akey, obj_cls=obj_cls)
                 obj.close()
             except DaosApiError as error:
-                self.fail(
-                    "##Test failed during the initial object write: %s"
-                    , str(error))
+                self.fail("##(1)Test failed during the initial object "
+                    "write: {}".format(str(error)))
             #Take a snapshot of the container
             snapshot = DaosSnapshot(self.context)
             snapshot.create(self.container.coh, epoch)
             self.log.info("==Wrote an object and created a snapshot")
 
             #Display snapshot
-            self.log.info("=(1)snapshot test loop: %s"
-                          , snapshot_index)
+            self.log.info("=(1.%s)snapshot test loop: %s"
+                          , ss_number, ss_number)
             self.log.info("  ==self.container epoch=     %s", epoch)
             self.log.info("  ==snapshot.epoch= %s"
                           , snapshot.epoch)
             self.display_snapshot(snapshot)
 
             #Save snapshot test data
-            coh_list.append(self.container.coh)
-            container_epoch_list.append(epoch)
-            obj_list.append(obj)
-            snapshot_list.append(snapshot)
-            test_data.append(thedata)
+            test_data.append(
+                {"coh": self.container.coh,
+                 "container_epoch": epoch,
+                 "tst_obj": obj,
+                 "snapshot": snapshot,
+                 "tst_data": thedata})
 
             #(2)Make changes to the data object. The write_an_obj function does
             #   a commit when the update is complete
-            more_transactions = 100
-            self.log.info("=(2)Committing %d additional transactions to "
-                          "the same KV.", more_transactions)
+            num_transactions = more_transactions = 200
+            self.log.info("=(2.%s)Committing %d additional transactions to "
+                          "the same KV.", ss_number, more_transactions)
             while more_transactions:
                 size = random.randint(1, 250) + 1
                 new_data = rand_str(size)
@@ -404,16 +428,15 @@ class Snapshot(TestWithServers):
                         new_data, size, dkey, akey, obj_cls=obj_cls)
                     new_obj.close()
                 except Exception as error:
-                    self.fail(
-                        "##Test failed during the write of multi-objects: %s"
-                        , str(error))
+                    self.fail("##(2)Test failed during the write of "
+                        "multi-objects: {}".format(str(error)))
                 more_transactions -= 1
 
             #(3)Verify the data in the snapshot is the original data.
             #   Get a handle for the snapshot and read the object at dkey, akey
             #   Compare it to the originally written data.
-            self.log.info("=(3)snapshot test loop: %s"
-                          , snapshot_index)
+            self.log.info("=(3.%s)snapshot test loop: %s"
+                          , ss_number, ss_number)
             try:
                 obj.open()
                 snap_handle = snapshot.open(
@@ -421,108 +444,93 @@ class Snapshot(TestWithServers):
                 thedata3 = self.container.read_an_obj(
                     datasize, dkey, akey, obj, snap_handle.value)
             except Exception as error:
-                self.fail(
-                    "##Error when retrieving the snapshot data: %s"
-                    , str(error))
-            self.log.info("  ==container_epoch= %s", epoch)
-            self.log.info("  ==snapshot_list[ind]=%s"
-                          , snapshot)
-            self.log.info("  ==snapshot.epoch=  %s"
-                          , snapshot.epoch)
-            self.log.info("  ==written thedata size= %s"
-                          , len(thedata)+1)
-            self.log.info("  ==written thedata=%s", thedata)
+                self.fail("##(3)Error when retrieving the snapshot data: {}"
+                    .format(str(error)))
+            self.disaply_snapshot_test_data(test_data, ss_number)
             self.log.info("  ==thedata3.value= %s", thedata3.value)
             if thedata3.value != thedata:
-                raise Exception("##The data in the snapshot is not the "
+                raise Exception("##(3)The data in the snapshot is not the "
                                 "same as the original data")
             self.log.info("  ==The snapshot data matches the data originally"
                           " written.")
 
             #(4)List the snapshot and make sure it reflects the original epoch
             try:
-                snapshot__list = snapshot.list(self.container.coh, epoch)
-                print("=(4)snapshot.list(self.container.coh)=", snapshot__list)
-                print("  ==snapshot.epoch=", snapshot.epoch)
-                print("  =container epoch=", epoch)
+                ss_list = snapshot.list(self.container.coh, epoch)
+                self.log.info("=(4.%s)snapshot.list(self.container.coh)= %s"
+                    , ss_number, ss_list)
+                self.log.info("  ==snapshot.epoch=  %s", snapshot.epoch)
+                self.log.info("  ==container epoch= %s", epoch)
 
             except Exception as error:
-                self.fail(
-                    "##Test was unable to list the snapshot: %s"
-                    , str(error))
+                self.fail("##(4)Test was unable to list the snapshot: {}"
+                    .format(str(error)))
             self.log.info("  ==After %s additional commits the snapshot is "
-                          "still available", more_transactions)
+                          "still available", num_transactions)
 
         #(5)Verify the snapshots data
-        for ss_number in range(1, len(container_epoch_list)+1):
-            ind = ss_number - 1
-            epoch = container_epoch_list[ind]
-            current_ss = snapshot_list[ind]
-            datasize = len(test_data[ind]) + 1
+        for ind in range(len(test_data)):
+            ss_number = ind + 1
+            self.log.info("=(5.%s)Verify the snapshot number %s:"
+                          , ss_number, ss_number)
+            self.disaply_snapshot_test_data(test_data, ss_number)
+            coh =        test_data[ind]["coh"]
+            epoch =      test_data[ind]["container_epoch"]
+            current_ss = test_data[ind]["snapshot"]
+            obj =        test_data[ind]["tst_obj"]
+            tst_data =   test_data[ind]["tst_data"]
+            datasize = len(tst_data) + 1
             try:
-                obj = obj_list[ind]
-                snap_handle5 = snapshot.open(
-                    self.container.coh, current_ss.epoch)
+                snap_handle5 = snapshot.open(coh, current_ss.epoch)
             except Exception as error:
-                self.fail(
-                    "##Error when retrieving the snapshot data: %s"
-                    , str(error))
+                self.fail("##(5)Error when retrieving the snapshot data: {}"
+                    .format(str(error)))
             thedata5 = self.container.read_an_obj(datasize, dkey, akey, obj,
                                               snap_handle5.value)
-            self.log.info("=(5.%s)snapshot test number %s:"
-                          , ss_number, ss_number)
-            self.log.info("  ==container_epoch    =%s", epoch)
-            self.log.info("  ==snapshot obj       =%s", snapshot_list[ind])
-            self.log.info("  ==snapshot_list.epoch=%s", current_ss.epoch)
-            self.log.info("  ==snapshot test_data_size= %s", datasize)
-            self.log.info("  ==snapshot test_data =%s", thedata5.value)
-            self.log.info("  ==original test_data =%s", test_data[ind])
-            if thedata5.value != test_data[ind]:
+            self.log.info("  ==snapshot tst_data =%s", thedata5.value)
+            if thedata5.value != tst_data:
                 raise Exception("##(5)Snapshot #%s, test data Mis-matches"
                                 "the original data written.", ss_number)
             self.log.info("  snapshot test number %s, test data matches"
                           " the original data written.", ss_number)
 
         #(6)Destroy the individual snapshot
-        for ss_number in range(1, len(container_epoch_list)+1):
-            ind = ss_number - 1
-            epoch = container_epoch_list[ind]
-            self.log.info("=(6.%s)Destroy snapshot  epoch: %s"
+            self.log.info("=(6.%s)Destroy the snapshot epoch: %s"
                            , ss_number, epoch)
-
             try:
-                snapshot.destroy(self.container.coh, epoch)
-                self.log.info("  ==snapshot epoch: %s successfully destroyed"
+                snapshot.destroy(coh, epoch)
+                self.log.info("  ==snapshot epoch %s successfully destroyed"
                                , epoch)
             except Exception as error:
-                self.fail(
-                    "##(6)Error on snapshot.destroy: %s", str(error))
+                self.fail("##(6)Error on snapshot.destroy: {}"
+                    .format(str(error)))
 
         #(7)Check if still able to Open the destroyed snapshot and
         #   Verify the snapshot removed from the snapshot list
         try:
-            obj.open()
-            snap_handle7 = snapshot.open(self.container.coh,
-                                         snapshot.epoch)
+            snap_handle7 = snapshot.open(coh, snapshot.epoch)
             thedata7 = self.container.read_an_obj(datasize, dkey, akey,
                                                   obj, snap_handle7.value)
         except Exception as error:
-            self.fail(
-                "##(7)Error when retrieving the snapshot data: %s"
-                , str(error))
-        self.log.info("  -->thedata_after_snapshot.destroyed.value= %s"
-                      , thedata3.value)
-        self.log.info("  ==>snapshot_epoch=     %s"
-                      , snapshot.epoch)
-        self.log.info("  -->snapshot.list(self.container.coh)=%s"
-                      , snapshot.list(self.container.coh, epoch))
+            self.fail("##(7)Error when retrieving the snapshot data: {}"
+                .format(str(error)))
+        self.log.info("=(7)=>thedata_after_snapshot.destroyed.value= %s"
+                      , thedata7.value)
+        self.log.info("  ==>snapshot.epoch=     %s", snapshot.epoch)
+
         #Still able to open the snapshot and read data after destroyed.
-        self.log.info("=(7)DAOS container SnapshotInfo test passed.")
+        try:
+            ss_list = snapshot.list(coh, epoch)
+            self.log.info("  -->snapshot.list(coh, epoch)= %s", ss_list)
+        except Exception as error:
+            self.fail("##(7)Error when calling the snapshot list: {}"
+                .format(str(error)))
+        self.log.info("  =DAOS container SnapshotInfo test passed.")
 
         #(8)Destroy the snapshot on the container
         try:
-            snapshot.destroy(self.container.coh)
+            snapshot.destroy(coh)
             self.log.info("=(8)Container snapshot destroyed successfully.")
         except Exception as error:
-            self.fail(
-                "##(8)Error on snapshot.destroy: %s", str(error))
+            self.fail("##(8)Error on snapshot.destroy. {}"
+                .format(str(error)))
