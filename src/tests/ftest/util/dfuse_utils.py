@@ -26,31 +26,28 @@ import general_utils
 
 from command_utils import ExecutableCommand, EnvironmentVariables
 from command_utils import CommandFailure, FormattedParameter
+from ClusterShell.NodeSet import NodeSet
+from server_utils import AVOCADO_FILE
 
-
-AVOCADO_FILE = "src/tests/ftest/data/daos_avocado_test.yaml"
-
-class DfuseFailed(Exception):
-    """Dfuse Failed """
 
 class DfuseCommand(ExecutableCommand):
     """Defines a object representing a dfuse command."""
 
-    def __init__(self):
+    def __init__(self, namespace, command, hosts):
         """Create a dfuse Command object."""
-        super(DfuseCommand, self).__init__("/run/dfuse/*", "dfuse")
+        super(DfuseCommand, self).__init__(namespace, command)
+
+        # assigning hosts
+        self.hosts = hosts
 
         # dfuse options
         self.puuid = FormattedParameter("-p {}")
         self.cuuid = FormattedParameter("-c {}")
         self.mount_dir = FormattedParameter("-m {}")
         self.svcl = FormattedParameter("-s {}", 0)
+        self.sys_name = FormattedParameter("-G {}")
+        self.singlethreaded = FormattedParameter("-S", False)
         self.foreground = FormattedParameter("-f", False)
-
-    def get_param_names(self):
-        """Get a sorted list of dfuse command parameter names."""
-        names = self.get_attribute_names(FormattedParameter)
-        return names
 
     def set_dfuse_params(self, pool, display=True):
         """Set the dfuse parameters for the DAOS group, pool, and container uuid
@@ -94,113 +91,122 @@ class DfuseCommand(ExecutableCommand):
         """
         self.cuuid.update(cont, "cuuid" if display else None)
 
-    def create_dfuse_dir(self, hosts):
+    def create_mount_point(self):
         """Create dfuse directory
-
-        Args:
-            hosts: list of hosts where dfuse directory needs to be created
 
         Raises:
             CommandFailure: In case of error creating directory
         """
-        for host in hosts:
-            if general_utils.check_file_exists(
-                    [host], self.mount_dir.value, directory=True)[0] is False:
-                ret_code = general_utils.pcmd(
-                    [host], "mkdir " + self.mount_dir.value, timeout=30)
-                for key in ret_code:
-                    if key is not 0:
-                        raise CommandFailure(
-                            "DfuseFailure: Error creating directory: "
-                            "{}".format(self.mount_dir.value))
 
-    def remove_dfuse_dir(self, hosts):
+        dir_exists, _ = general_utils.check_file_exists(
+            self.hosts, self.mount_dir.value, directory=True)
+        if not dir_exists:
+            cmd = "mkdir -p {}".format(self.mount_dir.value)
+            ret_code = general_utils.pcmd(self.hosts, cmd, timeout=30)
+            if 0 not in ret_code:
+                error_hosts = NodeSet(
+                    ",".join(
+                        [str(node_set) for code, node_set in ret_code.items()
+                         if code != 0]))
+                raise CommandFailure(
+                    "Error creating the {} dfuse mount point on the following "
+                    "hosts: {}".format(self.mount_dir.value, error_hosts))
+
+    def remove_mount_point(self):
         """Remove dfuse directory
-
-        Args:
-            hosts: list of hosts from where dfuse directory needs to be deleted
 
         Raises:
             CommandFailure: In case of error deleting directory
         """
-        if general_utils.check_file_exists(
-                hosts, self.mount_dir.value)[0] is True:
-            ret_code = general_utils.pcmd(
-                hosts, "rm -rf " + self.mount_dir.value, timeout=30)
-            for key in ret_code:
-                if key is not 0:
-                    raise CommandFailure("DfuseFailure: Error deleting: "
-                                         "{}".format(self.mount_dir.value))
 
-    def run_dfuse(self, hosts, attach_info, basepath):
+        dir_exists, _ = general_utils.check_file_exists(
+            self.hosts, self.mount_dir.value, directory=True)
+        if dir_exists:
+            cmd = "rm -rf {}".format(self.mount_dir.value)
+            ret_code = general_utils.pcmd(self.hosts, cmd, timeout=30)
+            if 0 not in ret_code:
+                error_hosts = NodeSet(
+                    ",".join(
+                        [str(node_set) for code, node_set in ret_code.items()
+                         if code != 0]))
+                raise CommandFailure(
+                    "Error removing the {} dfuse mount point on the following "
+                    "hosts: {}".format(self.mount_dir.value, error_hosts))
+
+class Dfuse(DfuseCommand):
+    """Class defining an object of type DfuseCommand"""
+
+    def __init__(self, hosts, attach_info):
+        """Create a dfuse object"""
+        super(Dfuse, self).__init__("/run/dfuse/*", "dfuse", hosts)
+
+        # assign attatch info path
+        self.attach_info = attach_info
+
+    def run_dfuse(self, basepath):
         """ Run the dfuse command.
 
         Args:
-            hosts: list of hosts where dfuse needs to be started
-            attach_info (str): CART attach info path
             basepath: path for daos install dir
         Raises:
             CommandFailure: In case dfuse run command fails
         """
 
         # create dfuse dir if does not exist
-        self.create_dfuse_dir(hosts)
+        self.create_mount_point()
         # obtain env export string
-        env = self.get_default_env(attach_info, basepath)
+        env = self.get_default_env(basepath)
 
         # run dfuse command
-        ret_code = general_utils.pcmd(hosts, env + self.__str__(), timeout=30)
+        ret_code = general_utils.pcmd(self.hosts, env + self.__str__(),
+                                      timeout=30)
 
         # check for any failures
-        for key in ret_code:
-            if key is not 0:
-                raise CommandFailure("DfuseFailure: Error starting dfuse. "
-                                     "RC:{}".format(ret_code))
+        if 0 not in ret_code:
+            error_hosts = NodeSet(
+                ",".join(
+                    [str(node_set) for code, node_set in ret_code.items()
+                     if code != 0]))
+            raise CommandFailure(
+                "Error starting dfuse on the following hosts: {}".format(
+                    error_hosts))
 
-    def stop_dfuse(self, hosts):
+    def stop_dfuse(self):
         """Stop dfuse
-
-        Args:
-            hosts: list of hosts where dfuse needs to be stopped
 
         Raises:
             CommandFailure: In case dfuse stop fails
         """
 
-        for host in hosts:
-            if 0 in general_utils.pcmd([host], "which fusermount"):
-                fuse_cmd = "fusermount -u {}".format(self.mount_dir.value)
-            elif 0 in general_utils.pcmd([host], "which fusermount3"):
-                fuse_cmd = "fusermount3 -u {}".format(self.mount_dir.value)
-            else:
-                raise CommandFailure("No Fuse on {}".format([host]))
+        cmd = "if [ -x '$(command -v fusermount)' ]; "
+        cmd += "then fusermount -u {0}; else fusermount3 -u {0}; fi".\
+               format(self.mount_dir.value)
+        ret_code = general_utils.pcmd(self.hosts, cmd, timeout=30)
+        self.remove_mount_point()
+        if 0 not in ret_code:
+            error_hosts = NodeSet(
+                ",".join(
+                    [str(node_set) for code, node_set in ret_code.items()
+                     if code != 0]))
+            raise CommandFailure(
+                "Error stopping dfuse on the following hosts: {}".format(
+                    error_hosts))
 
-            ret_code = general_utils.pcmd([host], fuse_cmd, timeout=30)
+    def get_default_env(self, basepath=None):
 
-            self.remove_dfuse_dir([host])
-
-            for key in ret_code:
-                if key is not 0:
-                    raise CommandFailure("DfuseFailure: Error stopping dfuse. "
-                                         "RC:{}".format(ret_code))
-
-
-    @classmethod
-    def get_default_env(cls, attach_info, basepath=None):
         """Get the default enviroment settings for running Dfuse.
 
         Args:
-            attach_info (str): CART attach info path
             basepath: path for daos install dir
         Returns:
-            env_export: a single string of all env vars to be
+            (str):  a single string of all env vars to be
                                   exported
 
         """
 
         # obtain any env variables to be exported
         env = EnvironmentVariables()
-        env["CRT_ATTACH_INFO_PATH"] = attach_info
+        env["CRT_ATTACH_INFO_PATH"] = self.attach_info
         env["DAOS_SINGLETON_CLI"] = 1
 
         if basepath is not None:
@@ -217,8 +223,6 @@ class DfuseCommand(ExecutableCommand):
                 env['OFI_PORT'] = env.pop('fabric_iface_port')
                 env['CRT_PHY_ADDR_STR'] = env.pop('provider')
             except Exception as err:
-                raise DfuseFailed("Failed to read yaml file:{}".format(err))
+                raise CommandFailure("Failed to read yaml file:{}".format(err))
 
-        env_export = env.get_export_str()
-
-        return env_export
+        return env.get_export_str()

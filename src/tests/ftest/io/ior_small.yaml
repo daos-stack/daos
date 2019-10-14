@@ -10,12 +10,12 @@ hosts:
             - boro-F
             - boro-G
             - boro-H
-timeout: 500
+timeout: 9000
 server_config:
     name: daos_server
     server:
         bdev_class: nvme
-        bdev_list: ["0000:81:00.0","0000:da:00.0"]
+        bdev_list: ["0000:81:00.0"]
 pool:
     createmode:
         mode_RW:

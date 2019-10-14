@@ -29,7 +29,7 @@ from ior_utils import IorCommand
 from command_utils import Mpirun, CommandFailure
 from mpio_utils import MpioUtils
 from test_utils import TestPool
-from dfuse_utils import DfuseCommand
+from dfuse_utils import Dfuse
 import write_host_file
 
 class IorTestBase(TestWithServers):
@@ -70,7 +70,7 @@ class IorTestBase(TestWithServers):
         """Tear down each test case."""
         try:
             if self.dfuse is not None:
-                self.dfuse.stop_dfuse(self.hostlist_clients)
+                self.dfuse.stop_dfuse()
         finally:
             # Stop the servers and agents
             super(IorTestBase, self).tearDown()
@@ -94,7 +94,7 @@ class IorTestBase(TestWithServers):
 
         # create container
         # self.container.create()
-        env = DfuseCommand.get_default_env(self.tmp)
+        env = Dfuse(self.hostlist_clients, self.tmp).get_default_env()
         # command to create container of posix type
         cmd = env + "daos cont create --pool={} --svc={} --type=POSIX".format(
             self.ior_cmd.daos_pool.value, self.ior_cmd.daos_svcl.value)
@@ -112,7 +112,7 @@ class IorTestBase(TestWithServers):
     def start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
         # Get Dfuse params
-        self.dfuse = DfuseCommand()
+        self.dfuse = Dfuse(self.hostlist_clients, self.tmp)
         self.dfuse.get_params(self)
 
         # update dfuse params
@@ -121,7 +121,7 @@ class IorTestBase(TestWithServers):
 
         try:
             # start dfuse
-            self.dfuse.run_dfuse(self.hostlist_clients, self.tmp, self.basepath)
+            self.dfuse.run_dfuse(self.basepath)
         except CommandFailure as error:
             self.log.error("Dfuse Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
@@ -148,6 +148,8 @@ class IorTestBase(TestWithServers):
             # Uncomment below two lines once DAOS-3355 is resolved
             # self.pool.connect()
             # self.create_cont()
+            if self.ior_cmd.transfer_size.value == "256B":
+                self.cancelForTicket("DAOS-3449")
             self.start_dfuse()
             self.ior_cmd.test_file.update(self.dfuse.mount_dir.value
                                           + "/testfile")
