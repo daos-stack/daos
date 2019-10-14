@@ -30,6 +30,11 @@ import (
 	"path/filepath"
 	"syscall"
 	"testing"
+
+	"github.com/pkg/errors"
+
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/drpc"
 )
 
 func createTestDir(t *testing.T) string {
@@ -263,5 +268,47 @@ func TestDrpcCleanup_Multiple(t *testing.T) {
 
 	for _, path := range sockPaths {
 		expectDoesNotExist(t, path)
+	}
+}
+
+func TestDrpc_Errors(t *testing.T) {
+	for name, tc := range map[string]struct {
+		notReady     bool
+		connectError error
+		sendError    error
+		resp         *drpc.Response
+		expErr       error
+	}{
+		"connect fails": {
+			connectError: errors.New("connect"),
+			expErr:       errors.New("connect"),
+		},
+		"send msg fails": {
+			sendError: errors.New("send"),
+			expErr:    errors.New("send"),
+		},
+		"nil resp": {
+			expErr: errors.New("no response"),
+		},
+		"failed status": {
+			resp: &drpc.Response{
+				Status: drpc.Status_FAILURE,
+			},
+			expErr: errors.New("status: FAILURE"),
+		},
+		"success": {
+			resp: &drpc.Response{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			mc := &mockDrpcClient{
+				SendMsgOutputError:    tc.sendError,
+				SendMsgOutputResponse: tc.resp,
+				ConnectOutputError:    tc.connectError,
+			}
+
+			_, err := makeDrpcCall(mc, mgmtModuleID, poolCreate, &mgmtpb.PoolCreateReq{})
+			cmpErr(t, tc.expErr, err)
+		})
 	}
 }

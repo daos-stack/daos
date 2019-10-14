@@ -21,25 +21,22 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package client
+package system
 
-import (
-	"golang.org/x/net/context"
-
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+type (
+	// IsMountedProvider is the interface that wraps the IsMounted method,
+	// which can be provided by a system-specific implementation or a mock.
+	IsMountedProvider interface {
+		IsMounted(target string) (bool, error)
+	}
+	// MountProvider is the interface that wraps the Mount method, which
+	// can be provided by a system-specific implementation or a mock.
+	MountProvider interface {
+		Mount(source, target, fstype string, flags uintptr, data string) error
+	}
+	// UnmountProvider is the interface that wraps the Unmount method, which
+	// can be provided by a system-specific implementation or a mock.
+	UnmountProvider interface {
+		Unmount(target string, flags int) error
+	}
 )
-
-// KillRank Will terminate server running at given rank on pool specified by
-// uuid. Request will only be issued to a single access point.
-func (c *connList) KillRank(uuid string, rank uint32) ResultMap {
-	results := make(ResultMap)
-	mc := c.controllers[0]
-
-	resp, err := mc.getSvcClient().KillRank(context.Background(),
-		&mgmtpb.DaosRank{PoolUuid: uuid, Rank: rank})
-
-	result := ClientResult{mc.getAddress(), resp, err}
-	results[result.Address] = result
-
-	return results
-}

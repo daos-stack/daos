@@ -153,5 +153,15 @@ struct dts_context {
 	int			 tsc_init;
 	/** OUTPUT END */
 };
+/** Initialize and SGL with a variable number of IOVs and set the IOV buffers
+ *  to the value of the strings passed
+ *
+ * @param sgl		Scatter gather list to initialize
+ * @param count		Number of IO Vectors that will be created in the SGL
+ * @param str		First string that will be used
+ * @param ...		Rest of strings, up to count
+ */
+void
+daos_sgl_init_with_strings(d_sg_list_t *sgl, uint32_t count, char *str, ...);
 
 #endif /* __DAOS_TESTS_LIB_H__ */

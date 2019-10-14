@@ -21,24 +21,40 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+syntax = "proto3";
+package mgmt;
 
-// SvcCmd is the struct representing the top-level service subcommand.
-type SvcCmd struct {
-	KillRank KillRankSvcCmd `command:"kill-rank" alias:"kr" description:"Terminate server running as specific rank on a DAOS pool"`
+// Management Service Protobuf Definitions related to interactions between
+// DAOS control server and DAOS system.
+
+// SystemMember refers to a data-plane instance that is a member of DAOS
+// system running on host with the control-plane listening at "Addr".
+message SystemMember {
+	string addr = 1;
+	string uuid = 2;
+	uint32 rank = 3;
 }
 
-// KillRankSvcCmd is the struct representing the command to kill server
-// identified by rank on given pool identified by uuid.
-type KillRankSvcCmd struct {
-	logCmd
-	connectedCmd
-	Rank     uint32 `short:"r" long:"rank" description:"Rank identifying DAOS server" required:"1"`
-	PoolUUID string `short:"p" long:"pool-uuid" description:"Pool uuid that rank relates to" required:"1"`
+// SystemStopReq supplies system shutdown parameters.
+message SystemStopReq {}
+
+// SystemStopResp returns status of shutdown attempt and results
+// of attempts to stop system members.
+message SystemStopResp {
+	message Result {
+		string id = 1;
+		string action = 2;
+		bool errored = 3;
+		string msg = 4;
+	}
+	repeated Result results = 1;
 }
 
-// Execute is run when KillRankSvcCmd activates
-func (k *KillRankSvcCmd) Execute(args []string) error {
-	k.log.Infof("Kill Rank command results:\n%s", k.conns.KillRank(k.PoolUUID, k.Rank))
-	return nil
+// SystemMemberQueryReq supplies system query parameters.
+message SystemMemberQueryReq {}
+
+// SystemMemberQueryResp returns active system members.
+message SystemMemberQueryResp {
+	repeated SystemMember members = 1;
 }
+

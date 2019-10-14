@@ -81,3 +81,40 @@ func TestRankYaml(t *testing.T) {
 		})
 	}
 }
+
+func TestRankEquals(t *testing.T) {
+	for name, tc := range map[string]struct {
+		a      *Rank
+		b      *Rank
+		equals bool
+	}{
+		"both nil": {
+			equals: false,
+		},
+		"a is nil": {
+			b:      NewRankPtr(1),
+			equals: false,
+		},
+		"b is nil": {
+			a:      NewRankPtr(1),
+			equals: false,
+		},
+		"a == b": {
+			a:      NewRankPtr(1),
+			b:      NewRankPtr(1),
+			equals: true,
+		},
+		"a != b": {
+			a:      NewRankPtr(1),
+			b:      NewRankPtr(2),
+			equals: false,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := tc.a.Equals(tc.b)
+			if got != tc.equals {
+				t.Fatalf("expected %v.Equals(%v) to be %t, but was %t", tc.a, tc.b, tc.equals, got)
+			}
+		})
+	}
+}
