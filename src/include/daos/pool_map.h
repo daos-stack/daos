@@ -243,7 +243,8 @@ static inline bool
 pool_target_unavail(struct pool_target *tgt)
 {
 	return tgt->ta_comp.co_status == PO_COMP_ST_DOWN ||
-	       tgt->ta_comp.co_status == PO_COMP_ST_DOWNOUT;
+	       tgt->ta_comp.co_status == PO_COMP_ST_DOWNOUT ||
+	       tgt->ta_comp.co_status == PO_COMP_ST_UP;
 }
 
 pool_comp_state_t pool_comp_str2state(const char *name);

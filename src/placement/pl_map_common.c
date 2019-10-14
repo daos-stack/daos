@@ -63,6 +63,50 @@ remap_add_one(d_list_t *remap_list, struct failed_shard *f_new)
 	d_list_add(&f_new->fs_list, remap_list);
 }
 
+void
+reint_add_one(d_list_t *remap_list, struct failed_shard *f_new)
+{
+	struct failed_shard     *f_shard;
+	d_list_t                *tmp;
+
+	D_DEBUG(DB_PL, "Reint target : fnew: %u", f_new->fs_shard_idx);
+
+	/* All failed shards are sorted by fseq in ascending order */
+	d_list_for_each_prev(tmp, remap_list) {
+		f_shard = d_list_entry(tmp, struct failed_shard, fs_list);
+
+		D_DEBUG(DB_PL, "fnew: %u, fshard: %u", f_new->fs_shard_idx,
+			f_shard->fs_shard_idx);
+
+		if (f_new->fs_shard_idx < f_shard->fs_shard_idx)
+			continue;
+		if (f_new->fs_shard_idx == f_shard->fs_shard_idx)
+			return;
+		d_list_add(&f_new->fs_list, tmp);
+		return;
+	}
+	d_list_add(&f_new->fs_list, remap_list);
+}
+
+int
+alloc_f_shard(struct failed_shard **f_new,  unsigned int shard_idx,
+	      struct pool_target *tgt)
+{
+	struct failed_shard *f_new_temp;
+
+	D_ALLOC_PTR(f_new_temp);
+	if (f_new == NULL)
+		return -DER_NOMEM;
+
+	D_INIT_LIST_HEAD(&f_new_temp->fs_list);
+	f_new_temp->fs_shard_idx = shard_idx;
+	f_new_temp->fs_fseq = tgt->ta_comp.co_fseq;
+	f_new_temp->fs_status = tgt->ta_comp.co_status;
+
+	*f_new = f_new_temp;
+	return 0;
+}
+
 /**
    * Allocate a new failed shard then add it into remap list
    *
@@ -76,21 +120,38 @@ remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
 		struct pool_target *tgt)
 {
 	struct failed_shard *f_new;
+	int rc;
 
-	D_ALLOC_PTR(f_new);
-	if (f_new == NULL)
-		return -DER_NOMEM;
-
-	D_INIT_LIST_HEAD(&f_new->fs_list);
-	f_new->fs_shard_idx = shard_idx;
-	f_new->fs_fseq = tgt->ta_comp.co_fseq;
-	f_new->fs_status = tgt->ta_comp.co_status;
-	f_new->fs_tgt_id = -1;
-
-	remap_add_one(remap_list, f_new);
-	return 0;
+	rc = alloc_f_shard(&f_new, shard_idx, tgt);
+	if (rc == 0) {
+		f_new->fs_tgt_id = -1;
+		remap_add_one(remap_list, f_new);
+	}
+	return rc;
 }
 
+/**
+   * Allocate a new failed shard then add it into remap list
+   *
+   * \param[in] remap_list        List for the failed shard to be added onto.
+   * \param[in] shard_idx         The shard number of the failed shard.
+   * \paramp[in] tgt              The failed target that will be added to the
+   *                              remap list.
+   */
+int
+reint_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
+		struct pool_target *tgt)
+{
+	struct failed_shard *f_new;
+	int rc;
+
+	rc = alloc_f_shard(&f_new, shard_idx, tgt);
+	if (rc == 0) {
+		f_new->fs_tgt_id = tgt->ta_comp.co_id;
+		reint_add_one(remap_list, f_new);
+	}
+	return rc;
+}
 /**
  * Free all elements in the remap list
  *
@@ -186,22 +247,24 @@ spec_place_rank_get(unsigned int *pos, daos_obj_id_t oid,
 
 int
 remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
-		struct daos_obj_shard_md *shard_md, uint32_t rebuild_ver,
+		struct daos_obj_shard_md *shard_md, uint32_t r_ver,
 		uint32_t *tgt_id, uint32_t *shard_idx,
 		unsigned int array_size, int myrank, int *idx,
-		struct pl_obj_layout *layout, d_list_t *remap_list)
+		struct pl_obj_layout *layout, d_list_t *r_list)
 {
 	struct failed_shard     *f_shard;
 	struct pl_obj_shard     *l_shard;
 	int                     rc = 0;
 
-	d_list_for_each_entry(f_shard, remap_list, fs_list) {
+	d_list_for_each_entry(f_shard, r_list, fs_list) {
+
 		l_shard = &layout->ol_shards[f_shard->fs_shard_idx];
 
-		if (f_shard->fs_fseq > rebuild_ver)
+		if (f_shard->fs_fseq > r_ver)
 			break;
 
-		if (f_shard->fs_status == PO_COMP_ST_DOWN) {
+		if (f_shard->fs_status == PO_COMP_ST_DOWN ||
+		    f_shard->fs_status == PO_COMP_ST_UP) {
 			/*
 			 * Target id is used for rw, but rank is used
 			 * for rebuild, perhaps they should be unified.
@@ -220,8 +283,8 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 					goto fill;
 
 				leader = pl_select_leader(md->omd_id,
-					l_shard->po_shard, layout->ol_nr,
-					true, pl_obj_get_shard, layout);
+							  l_shard->po_shard, layout->ol_nr,
+							  true, pl_obj_get_shard, layout);
 				if (leader < 0) {
 					D_WARN("Not sure whether current shard "
 					       "is leader or not for obj "
@@ -229,7 +292,7 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 					       "ver:%d, shard:%d, rc = %d\n",
 					       DP_OID(md->omd_id),
 					       f_shard->fs_fseq,
-					       f_shard->fs_status, rebuild_ver,
+					       f_shard->fs_status, r_ver,
 					       l_shard->po_shard, leader);
 					goto fill;
 				}
@@ -254,7 +317,7 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 						DP_OID(md->omd_id),
 						f_shard->fs_fseq,
 						f_shard->fs_status,
-						rebuild_ver, l_shard->po_shard);
+						r_ver, l_shard->po_shard);
 					continue;
 				}
 
@@ -264,7 +327,7 @@ fill:
 					"ver:%d, shard:%d, to be rebuilt.\n",
 					myrank, DP_OID(md->omd_id),
 					f_shard->fs_fseq,
-					rebuild_ver, l_shard->po_shard);
+					r_ver, l_shard->po_shard);
 				tgt_id[*idx] = f_shard->fs_tgt_id;
 				shard_idx[*idx] = l_shard->po_shard;
 				(*idx)++;
@@ -274,7 +337,7 @@ fill:
 			D_ERROR(""DF_OID" rebuild is done for "
 				"fseq:%d(status:%d)? rbd_ver:%d rc %d\n",
 				DP_OID(md->omd_id), f_shard->fs_fseq,
-				f_shard->fs_status, rebuild_ver, rc);
+				f_shard->fs_status, r_ver, rc);
 		}
 	}
 
@@ -283,16 +346,19 @@ fill:
 
 void
 determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
-		bool spare_avail, d_list_t **current, d_list_t *remap_list,
-		struct failed_shard *f_shard, struct pl_obj_shard *l_shard)
+		       bool spare_avail, d_list_t **current, d_list_t *remap_list,
+		       bool ignore_up, struct failed_shard *f_shard,
+		       struct pl_obj_shard *l_shard)
 {
 	struct failed_shard *f_tmp;
 
 	if (!spare_avail)
 		goto next_fail;
 
+
 	/* The selected spare target is down as well */
-	if (pool_target_unavail(spare_tgt)) {
+	if (pool_target_unavail(spare_tgt) && !(ignore_up == true &&
+			spare_tgt->ta_comp.co_status == PO_COMP_ST_UP)) {
 		D_ASSERTF(spare_tgt->ta_comp.co_fseq !=
 			  f_shard->fs_fseq, "same fseq %u!\n",
 			  f_shard->fs_fseq);
