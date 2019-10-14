@@ -27,8 +27,6 @@ import atexit
 
 DAOS_MAGIC = 0x7A89
 
-# pylint: disable=no-member
-# pylint: disable=exec-used
 # pylint: disable=import-error
 if sys.version_info < (3, 0):
     import pydaos_shim_27 as pydaos_shim
