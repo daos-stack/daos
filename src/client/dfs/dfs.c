@@ -28,6 +28,7 @@
 #include <sys/xattr.h>
 #include <daos/checksum.h>
 #include <daos/common.h>
+#include <daos/event.h>
 
 #include "daos.h"
 #include "daos_fs.h"
@@ -2101,8 +2102,8 @@ dfs_release(dfs_obj_t *obj)
 }
 
 static int
-io_internal(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t sgl, daos_off_t off,
-	    int flag)
+io_internal(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
+	    int flag, daos_size_t *io_size, daos_event_t *ev)
 {
 	daos_array_iod_t	iod;
 	daos_range_t		rg;
@@ -2111,8 +2112,16 @@ io_internal(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t sgl, daos_off_t off,
 	int			rc;
 
 	buf_size = 0;
-	for (i = 0; i < sgl.sg_nr; i++)
-		buf_size += sgl.sg_iovs[i].iov_len;
+	for (i = 0; i < sgl->sg_nr; i++)
+		buf_size += sgl->sg_iovs[i].iov_len;
+	if (buf_size == 0) {
+		*io_size = 0;
+		if (ev) {
+			daos_event_launch(ev);
+			daos_event_complete(ev, 0);
+		}
+		return 0;
+	}
 
 	/** set array location */
 	iod.arr_nr = 1;
@@ -2124,15 +2133,15 @@ io_internal(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t sgl, daos_off_t off,
 		flag, off, buf_size);
 
 	if (flag == DFS_WRITE) {
-		rc = daos_array_write(obj->oh, DAOS_TX_NONE, &iod, &sgl,
-				      NULL, NULL);
+		rc = daos_array_write(obj->oh, DAOS_TX_NONE, &iod, sgl,
+				      NULL, ev);
 		if (rc)
 			D_ERROR("daos_array_write() failed (%d)\n", rc);
 	} else if (flag == DFS_READ) {
-		rc = daos_array_read(obj->oh, DAOS_TX_NONE, &iod, &sgl, NULL,
-				     NULL);
+		rc = daos_array_read(obj->oh, DAOS_TX_NONE, &iod, sgl,
+				     NULL, ev);
 		if (rc)
-			D_ERROR("daos_array_write() failed (%d)\n", rc);
+			D_ERROR("daos_array_read() failed (%d)\n", rc);
 	} else {
 		rc = -DER_INVAL;
 	}
@@ -2141,61 +2150,23 @@ io_internal(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t sgl, daos_off_t off,
 }
 
 int
-dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t sgl, daos_off_t off,
-	 daos_size_t *read_size)
+dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
+	 daos_size_t *read_size, daos_event_t *ev)
 {
-	daos_size_t	array_size, max_read;
-	daos_size_t	bytes_to_read, rem;
-	int		i;
-	int		rc;
-
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
 	if (obj == NULL || !S_ISREG(obj->mode))
 		return EINVAL;
 
-	rc = daos_array_get_size(obj->oh, DAOS_TX_NONE, &array_size, NULL);
-	if (rc) {
-		D_ERROR("daos_array_get_size() failed (%d)\n", rc);
-		return daos_der2errno(rc);
-	}
-
-	if (off >= array_size) {
-		*read_size = 0;
-		return 0;
-	}
-
-	/* Update SGL in case we try to read beyond eof to not do that */
-	max_read = array_size - off;
-	bytes_to_read = 0;
-	for (i = 0; i < sgl.sg_nr; i++) {
-		if (bytes_to_read + sgl.sg_iovs[i].iov_len <= max_read) {
-			bytes_to_read += sgl.sg_iovs[i].iov_len;
-		} else {
-			rem = max_read - bytes_to_read;
-			if (rem) {
-				bytes_to_read += rem;
-				sgl.sg_iovs[i].iov_len = rem;
-				i++;
-				break;
-			}
-		}
-	}
-	sgl.sg_nr = i;
-
-	rc = io_internal(dfs, obj, sgl, off, DFS_READ);
-	if (rc) {
-		D_ERROR("daos_array_read() failed (%d)\n", rc);
-		return rc;
-	}
-
-	*read_size = bytes_to_read;
-	return 0;
+	return io_internal(dfs, obj, sgl, off, DFS_READ, read_size, ev);
 }
 
 int
-dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t sgl, daos_off_t off)
+dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
+	  daos_event_t *ev)
 {
+	daos_size_t size;
+
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
 	if (dfs->amode != O_RDWR)
@@ -2203,7 +2174,7 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t sgl, daos_off_t off)
 	if (obj == NULL || !S_ISREG(obj->mode))
 		return EINVAL;
 
-	return io_internal(dfs, obj, sgl, off, DFS_WRITE);
+	return io_internal(dfs, obj, sgl, off, DFS_WRITE, &size, ev);
 }
 
 int
