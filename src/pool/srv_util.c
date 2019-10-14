@@ -477,3 +477,55 @@ int ds_pool_get_ranks(const uuid_t pool_uuid, int status,
 	ds_pool_put(pool);
 	return rc;
 }
+
+/* Get failed target index on the current node */
+int ds_pool_get_failed_tgt_idx(const uuid_t pool_uuid, int **failed_tgts,
+			       unsigned int *failed_tgts_cnt)
+{
+	struct ds_pool		*pool;
+	struct pool_target	**tgts = NULL;
+	d_rank_t		myrank;
+	int			rc;
+
+	*failed_tgts_cnt = 0;
+	pool = ds_pool_lookup(pool_uuid);
+	if (pool == NULL || pool->sp_map == NULL)
+		return 0;
+
+	/* Check if we need excluded the failure targets, NB:
+	 * since the ranks in the pool map are ranks of primary
+	 * group, so we have to use primary group here.
+	 */
+	rc = crt_group_rank(NULL, &myrank);
+	if (rc) {
+		D_ERROR("Can not get rank %d\n", rc);
+		D_GOTO(output, rc);
+	}
+
+	rc = pool_map_find_failed_tgts_by_rank(pool->sp_map, &tgts,
+					       failed_tgts_cnt, myrank);
+	if (rc) {
+		D_ERROR("get failed tgts %d\n", rc);
+		D_GOTO(output, rc);
+	}
+
+	if (*failed_tgts_cnt != 0) {
+		int i;
+
+		D_ALLOC(*failed_tgts, *failed_tgts_cnt * sizeof(int));
+		if (*failed_tgts == NULL) {
+			D_FREE(tgts);
+			*failed_tgts_cnt = 0;
+			D_GOTO(output, rc = -DER_NOMEM);
+		}
+		for (i = 0; i < *failed_tgts_cnt; i++)
+			(*failed_tgts)[i] = tgts[i]->ta_comp.co_index;
+
+		D_FREE(tgts);
+	}
+
+output:
+	if (pool)
+		ds_pool_put(pool);
+	return rc;
+}
