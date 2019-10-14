@@ -101,10 +101,6 @@
 		0, &CQF_pool_tgt_disconnect,				\
 		ds_pool_tgt_disconnect_handler,				\
 		&ds_pool_tgt_disconnect_co_ops),			\
-	X(POOL_TGT_UPDATE_MAP,						\
-		0, &CQF_pool_tgt_update_map,				\
-		ds_pool_tgt_update_map_handler,				\
-		&ds_pool_tgt_update_map_co_ops),			\
 	X(POOL_TGT_QUERY,						\
 		0, &CQF_pool_tgt_query,					\
 		ds_pool_tgt_query_handler,				\
@@ -347,16 +343,6 @@ CRT_RPC_DECLARE(pool_tgt_disconnect, DAOS_ISEQ_POOL_TGT_DISCONNECT,
 
 CRT_RPC_DECLARE(pool_tgt_query, DAOS_ISEQ_POOL_TGT_QUERY,
 		DAOS_OSEQ_POOL_TGT_QUERY)
-
-#define DAOS_ISEQ_POOL_TGT_UPDATE_MAP /* input fields */	 \
-	((uuid_t)		(tui_uuid)		CRT_VAR) \
-	((uint32_t)		(tui_map_version)	CRT_VAR)
-
-#define DAOS_OSEQ_POOL_TGT_UPDATE_MAP /* output fields */	 \
-	((int32_t)		(tuo_rc)		CRT_VAR)
-
-CRT_RPC_DECLARE(pool_tgt_update_map, DAOS_ISEQ_POOL_TGT_UPDATE_MAP,
-		DAOS_OSEQ_POOL_TGT_UPDATE_MAP)
 
 #define DAOS_ISEQ_POOL_GET_ACL	/* input fields */		 \
 	((struct pool_op_in)	(pgi_op)		CRT_VAR)

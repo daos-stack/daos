@@ -978,60 +978,6 @@ out:
 }
 
 void
-ds_pool_tgt_update_map_handler(crt_rpc_t *rpc)
-{
-	struct pool_tgt_update_map_in  *in = crt_req_get(rpc);
-	struct pool_tgt_update_map_out *out = crt_reply_get(rpc);
-	struct ds_pool		       *pool;
-	struct pool_buf			*buf = NULL;
-	int				rc = 0;
-
-	D_DEBUG(DF_DSMS, DF_UUID": handling rpc %p: version=%u\n",
-		DP_UUID(in->tui_uuid), rpc, in->tui_map_version);
-
-	pool = ds_pool_lookup(in->tui_uuid);
-	if (pool == NULL) {
-		/* update the pool map w/o connection, just ignore it */
-		D_GOTO(out, rc = 0);
-	}
-
-	if (rpc->cr_co_bulk_hdl != NULL) {
-		d_iov_t	iov;
-		d_sg_list_t	sgl;
-
-		memset(&iov, 0, sizeof(iov));
-		sgl.sg_nr = 1;
-		sgl.sg_nr_out = 1;
-		sgl.sg_iovs = &iov;
-		rc = crt_bulk_access(rpc->cr_co_bulk_hdl, &sgl);
-		if (rc != 0)
-			D_GOTO(out_pool, rc);
-		buf = iov.iov_buf;
-	}
-
-	rc = ds_pool_tgt_map_update(pool, buf, in->tui_map_version);
-
-out_pool:
-	ds_pool_put(pool);
-out:
-	out->tuo_rc = (rc == 0 ? 0 : 1);
-	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d (%d)\n",
-		DP_UUID(in->tui_uuid), rpc, out->tuo_rc, rc);
-	crt_reply_send(rpc);
-}
-
-int
-ds_pool_tgt_update_map_aggregator(crt_rpc_t *source, crt_rpc_t *result,
-				  void *priv)
-{
-	struct pool_tgt_update_map_out *out_source = crt_reply_get(source);
-	struct pool_tgt_update_map_out *out_result = crt_reply_get(result);
-
-	out_result->tuo_rc += out_source->tuo_rc;
-	return 0;
-}
-
-void
 ds_pool_tgt_query_handler(crt_rpc_t *rpc)
 {
 	struct pool_tgt_query_in	*in = crt_req_get(rpc);
