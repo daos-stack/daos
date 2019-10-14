@@ -416,7 +416,7 @@ struct dss_coll_args {
 	void				*ca_func_args;
 	void				*ca_aggregator;
 	int				*ca_exclude_tgts;
-	int				ca_exclude_tgts_cnt;
+	unsigned int			ca_exclude_tgts_cnt;
 	/** Stream arguments for all streams */
 	struct dss_coll_stream_args	ca_stream_args;
 };
@@ -513,8 +513,7 @@ int dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
 		daos_iom_t *maps);
 int dsc_obj_list_obj(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		daos_key_t *akey, daos_size_t *size, uint32_t *nr,
-		daos_key_desc_t *kds, daos_epoch_range_t *eprs,
-		d_sg_list_t *sgl, daos_anchor_t *anchor,
+		daos_key_desc_t *kds, d_sg_list_t *sgl, daos_anchor_t *anchor,
 		daos_anchor_t *dkey_anchor, daos_anchor_t *akey_anchor);
 int dsc_pool_tgt_exclude(const uuid_t uuid, const char *grp,
 			 const d_rank_list_t *svc, struct d_tgt_list *tgts);
@@ -571,16 +570,18 @@ dss_enum_pack(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
  * data, then ui_sgls[i].sg_iovs[j] will be empty.
  */
 struct dss_enum_unpack_io {
-	daos_unit_oid_t	ui_oid;		/**< type <= OBJ */
-	daos_key_t	ui_dkey;	/**< type <= DKEY */
-	daos_iod_t     *ui_iods;
-	int		ui_iods_cap;
-	int		ui_iods_len;
-	int	       *ui_recxs_caps;
-	daos_epoch_t	ui_dkey_eph;
-	daos_epoch_t   *ui_akey_ephs;
-	d_sg_list_t *ui_sgls;	/**< optional */
-	uint32_t	ui_version;
+	daos_unit_oid_t		 ui_oid;	/**< type <= OBJ */
+	daos_key_t		 ui_dkey;	/**< type <= DKEY */
+	daos_iod_t		*ui_iods;
+	/* punched epochs per akey */
+	daos_epoch_t		*ui_akey_punch_ephs;
+	int			 ui_iods_cap;
+	int			 ui_iods_size;
+	int			*ui_recxs_caps;
+	/* punched epochs for dkey */
+	daos_epoch_t		ui_dkey_punch_eph;
+	d_sg_list_t		*ui_sgls;	/**< optional */
+	uint32_t		 ui_version;
 };
 
 typedef int (*dss_enum_unpack_cb_t)(struct dss_enum_unpack_io *io, void *arg);

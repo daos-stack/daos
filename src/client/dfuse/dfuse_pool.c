@@ -28,7 +28,7 @@
 #include "daos_security.h"
 
 /* Lookup a pool */
-bool
+void
 dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		  const char *name)
 {
@@ -63,7 +63,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		DFUSE_LOG_ERROR("Invalid container uuid");
 		DFUSE_REPLY_ENTRY(req, entry);
 		D_FREE(dfs);
-		return false;
+		return;
 	}
 
 	rc = dfuse_check_for_inode(fs_handle, dfs, &ie);
@@ -75,7 +75,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		entry.ino = entry.attr.st_ino;
 		DFUSE_REPLY_ENTRY(req, entry);
 		D_FREE(dfs);
-		return true;
+		return;
 	}
 
 	rc = daos_pool_connect(dfs->dfs_pool, dfuse_info->di_group,
@@ -156,7 +156,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	dfs->dfs_ops = &dfuse_cont_ops;
 
 	dfuse_reply_entry(fs_handle, ie, NULL, req);
-	return true;
+	return;
 close:
 	daos_pool_disconnect(dfs->dfs_poh, NULL);
 	D_FREE(ie);
@@ -164,5 +164,5 @@ close:
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	D_FREE(dfs);
-	return false;
+	return;
 }

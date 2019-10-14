@@ -305,3 +305,25 @@ dts_log(const char *msg, const char *file, const char *func, int line,
 	if (mask)
 		d_log(mask, "%s:%d %s() %s", file, line, func, msg);
 }
+
+void
+daos_sgl_init_with_strings(d_sg_list_t *sgl, uint32_t count, char *d, ...)
+{
+	int i;
+	va_list valist;
+	char *arg = d;
+
+	va_start(valist, d);
+
+	d_sgl_init(sgl, count);
+	for (i = 0; i < count; i++) {
+		size_t arg_len = strlen(arg) + 1;
+
+		D_ALLOC(sgl->sg_iovs[i].iov_buf, arg_len);
+		memcpy(sgl->sg_iovs[i].iov_buf, arg, arg_len);
+		sgl->sg_iovs[i].iov_buf_len = sgl->sg_iovs[i].iov_len = arg_len;
+		arg = va_arg(valist, char *);
+	}
+
+	va_end(valist);
+}
