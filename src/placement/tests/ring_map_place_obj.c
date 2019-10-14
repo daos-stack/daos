@@ -57,6 +57,7 @@ main(int argc, char **argv)
 	uint32_t		 spare_tgt_ranks[SPARE_MAX_NUM];
 	uint32_t		 shard_ids[SPARE_MAX_NUM];
 	uint32_t		 failed_tgts[SPARE_MAX_NUM];
+	uint32_t		 reint_tgts[SPARE_MAX_NUM];
 	static uint32_t		 po_ver;
 	unsigned int		 spare_cnt;
 	int			 rc;
@@ -174,6 +175,20 @@ main(int argc, char **argv)
 	D_ASSERT(spare_tgt_ranks[0] == spare_tgt_candidate[0]);
 	D_ASSERT(spare_tgt_ranks[1] == spare_tgt_candidate[1]);
 
+	/* test pl_obj_find_reint */
+	D_PRINT("\ntest pl_obj_find_reint to get correct reintegration "
+			"tagets ...\n");
+	reint_tgts[0] = lo_3->ol_shards[0].po_target;
+	failed_tgts[0] = lo_3->ol_shards[1].po_target;
+	plt_reint_tgts_get(pl_uuid, oid, failed_tgts, 1, reint_tgts , 1,
+			spare_tgt_ranks, shard_ids, &spare_cnt, PL_TYPE_RING,
+			SPARE_MAX_NUM, po_map, pl_map, &po_ver, pl_debug_msg);
+	D_PRINT("reintegrated target %d. expected target %d\n",
+			reint_tgts[0], lo_3->ol_shards[0].po_target);
+	D_ASSERT(spare_cnt == 1);
+	D_ASSERT(shard_ids[0] == 0);
+	D_ASSERT(spare_tgt_ranks[0] == lo_3->ol_shards[0].po_target);
+
 	/* fail the to-be-spare target and select correct next spare */
 	failed_tgts[0] = lo_3->ol_shards[1].po_target;
 	failed_tgts[1] = spare_tgt_candidate[0];
@@ -193,6 +208,24 @@ main(int argc, char **argv)
 	D_ASSERT(shard_ids[1] == 0);
 	D_ASSERT(spare_tgt_ranks[0] == spare_tgt_candidate[1]);
 	D_ASSERT(spare_tgt_ranks[1] == spare_tgt_candidate[2]);
+
+
+	/* test pl_obj_find_reint */
+	D_PRINT("\ntest pl_obj_find_reint to get correct reintregationi "
+			"tagets ...\n");
+	reint_tgts[0] = lo_3->ol_shards[0].po_target;
+	reint_tgts[1] = spare_tgt_candidate[0];
+	failed_tgts[0] = lo_3->ol_shards[1].po_target;
+	plt_reint_tgts_get(pl_uuid, oid, failed_tgts, 1, reint_tgts , 2,
+			spare_tgt_ranks, shard_ids, &spare_cnt, PL_TYPE_RING,
+			SPARE_MAX_NUM, po_map, pl_map, &po_ver, pl_debug_msg);
+	D_PRINT("reintegrated target %d and %d. expected target "
+		"%d and %d\n", reint_tgts[0], reint_tgts[1],
+		lo_3->ol_shards[0].po_target, spare_tgt_ranks[1]);
+	D_ASSERT(spare_cnt == 2);
+	D_ASSERT(shard_ids[0] == 0);
+	D_ASSERT(spare_tgt_ranks[0] == lo_3->ol_shards[0].po_target);
+	D_ASSERT(spare_tgt_ranks[1] == spare_tgt_candidate[0]);
 
 	failed_tgts[0] = spare_tgt_candidate[0];
 	failed_tgts[1] = spare_tgt_candidate[1];
