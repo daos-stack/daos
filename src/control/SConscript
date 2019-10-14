@@ -67,7 +67,7 @@ def install_go_bin(denv, gosrc, gopath, libs, name, install_name):
         src.extend(libs)
     denv.Command(bin_path, src,
                  cmd_build(path, gosrc,
-                           "go install -ldflags -v -v %s" % install_src))
+                           "go install %s" % install_src))
     denv.InstallAs(install_bin, bin_path)
 #pylint: enable=too-many-arguments
 
@@ -78,7 +78,6 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
 
     denv = env.Clone()
-    prereqs.require(denv, 'spdk', 'hwloc', 'ofi')
 
     # if SPDK_PREFIX differs from PREFIX, copy dir so files can be accessed at
     # runtime
@@ -155,7 +154,10 @@ def scons():
     drpcbin = get_bin_path(gopath, "drpc_test")
     AlwaysBuild([agentbin, shellbin, drpcbin])
 
+
     senv = denv.Clone()
+    prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
+
     # Link to DPDK static libs
     senv.AppendUnique(LINKFLAGS=['-Wl,--whole-archive', \
                       '-lrte_mempool', '-lrte_mempool_ring', '-lrte_bus_pci', \
@@ -177,18 +179,23 @@ def scons():
 
     # CGO shell env vars.
 
+    # explicitly link RTE & SPDK libs
     senv.AppendENVPath(
         "CGO_LDFLAGS",
         senv.subst("-L%s -L$SPDK_PREFIX/lib -L$HWLOC_PREFIX/lib"
                    " -L$OFI_PREFIX/lib -L$ISAL_PREFIX/lib $_RPATH" % gopath) + \
-                   " -lspdk -lspdk_env_dpdk -lspdk_nvme -lspdk_util " + \
-                   " -lspdk_sock -lspdk_log " + \
-                   " -lrte_mempool -lrte_mempool_ring -lrte_bus_pci" + \
+                   " -lspdk_env_dpdk -lspdk_thread -lspdk_bdev -lspdk_copy" + \
+                   " -lrte_mempool  -lrte_mempool_ring -lrte_bus_pci" + \
                    " -lrte_pci -lrte_ring -lrte_mbuf -lrte_eal -lrte_kvargs" + \
+                   " -lspdk_bdev_aio -lspdk_bdev_nvme -lspdk_bdev_malloc" + \
+                   " -lspdk_conf -lspdk_blob -lspdk_nvme -lspdk_util" + \
+                   " -lspdk_json -lspdk_jsonrpc -lspdk_rpc -lspdk_trace" + \
+                   " -lspdk_sock -lspdk_log -lspdk_notify -lspdk_blob_bdev " + \
                    " -lnuma -ldl -lisal")
-    denv.AppendENVPath(
+
+    senv.AppendENVPath(
         "CGO_CFLAGS",
-        denv.subst("-I$SPDK_PREFIX/include -I$HWLOC_PREFIX/include"
+        senv.subst("-I$SPDK_PREFIX/include -I$HWLOC_PREFIX/include"
                    " -I$OFI_PREFIX/include"))
 
     # copy server init files to be used at runtime, explicitly
