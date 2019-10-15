@@ -192,7 +192,7 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
             server_cmd.extend(["-x", "PATH"])
 
         # build shared dir for tmp amd yaml files
-        tmpdir = os.getenv('TMPDIR', os.path.join(build_vars["PREFIX"], 'tmp')) 
+        tmpdir = os.getenv('TMPDIR', os.path.join(build_vars["PREFIX"], 'tmp'))
         yaml_prefix = os.getenv('TMPDIR', build_vars["PREFIX"])
         # Run server in insecure mode until Certificate tests are in place
         server_cmd.extend([daos_srv_bin, "--debug", "--config",
