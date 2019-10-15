@@ -264,7 +264,6 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 
 %files tests
 %dir %{daoshome}/utils
-%{daoshome}/utils/py
 %{daoshome}/TESTING
 %{_bindir}/hello_drpc
 %{_bindir}/*_test*
