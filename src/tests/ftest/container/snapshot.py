@@ -307,7 +307,7 @@ class Snapshot(TestWithServers):
                 self.fail(
                     "##(7.1)Expecting error RC: -1002  did not show.")
 
-    def disaply_snapshot_test_data(self, test_data, ss_index):
+    def display_snapshot_test_data(self, test_data, ss_index):
         """Display the snapshot test data.
 
         Args:
@@ -364,7 +364,7 @@ class Snapshot(TestWithServers):
         Use Cases: Require 1 client and 1 server to run snapshot test.
                    1 pool and 1 container is used, num_of_snapshot defined
                    in the snapshot.yaml will be performed and verified.
-        :avocado: tags=all,small,smoke,pr,snap,snapshots,full_regression
+        :avocado: tags=all,small,smoke,snap,snapshots,full_regression
         """
 
         test_data = []
@@ -448,7 +448,7 @@ class Snapshot(TestWithServers):
             except Exception as error:
                 self.fail("##(3)Error when retrieving the snapshot data: {}"
                     .format(str(error)))
-            self.disaply_snapshot_test_data(test_data, ss_number)
+            self.display_snapshot_test_data(test_data, ss_number)
             self.log.info("  ==thedata3.value= %s", thedata3.value)
             if thedata3.value != thedata:
                 raise Exception("##(3)The data in the snapshot is not the "
@@ -475,7 +475,7 @@ class Snapshot(TestWithServers):
             ss_number = ind + 1
             self.log.info("=(5.%s)Verify the snapshot number %s:"
                           , ss_number, ss_number)
-            self.disaply_snapshot_test_data(test_data, ss_number)
+            self.display_snapshot_test_data(test_data, ss_number)
             coh =        test_data[ind]["coh"]
             epoch =      test_data[ind]["container_epoch"]
             current_ss = test_data[ind]["snapshot"]
