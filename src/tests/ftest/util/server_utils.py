@@ -42,8 +42,8 @@ from general_utils import pcmd, get_file_path
 
 SESSIONS = {}
 
-DEFAULT_FILE = "etc/daos/daos_server_baseline.yaml"
-AVOCADO_FILE = "etc/daos/daos_avocado_test.yaml"
+DEFAULT_FILE = "etc/daos_server_baseline.yaml"
+AVOCADO_FILE = "etc/daos_avocado_test.yaml"
 
 class ServerFailed(Exception):
     """Server didn't start/stop properly."""
@@ -62,21 +62,18 @@ def create_server_yaml(basepath, log_filename):
     with open("../../../.build_vars.json") as json_vars:
         build_vars = json.load(json_vars)
 
-    if build_vars["PREFIX"] == "/usr":
-        yaml_prefix = "/tmp/ftest"
-    else:
-        yaml_prefix = build_vars["PREFIX"]
+    yaml_prefix = os.getenv('TMPDIR', build_vars["PREFIX"])
 
     # Read the baseline conf file data/daos_server_baseline.yml
     try:
-        with open('{}/{}'.format(build_vars["PREFIX"], DEFAULT_FILE), 'r')\
+        with open('{}/{}'.format(yaml_prefix, DEFAULT_FILE), 'r')\
             as read_file:
             default_value_set = yaml.safe_load(read_file)
     except Exception as excpn:
         print("<SERVER> Exception occurred: {0}".format(str(excpn)))
         traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
         raise ServerFailed(
-            "Failed to Read {}/{}".format(build_vars["PREFIX"], DEFAULT_FILE))
+            "Failed to Read {}/{}".format(yaml_prefix, DEFAULT_FILE))
 
     # Read the values from avocado_testcase.yaml file if test ran with Avocado.
     new_value_set = {}
@@ -193,16 +190,14 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
         # PATH along to the remote
         if build_vars["PREFIX"] != "/usr":
             server_cmd.extend(["-x", "PATH"])
-            tmpdir = build_vars["PREFIX"]
-            yaml_prefix = build_vars["PREFIX"]
-        else:
-            tmpdir = '/'
-            yaml_prefix = "/tmp/ftest"
+
+        # build shared dir for tmp amd yaml files
+        tmpdir = os.getenv('TMPDIR', os.path.join(build_vars["PREFIX"], 'tmp')) 
+        yaml_prefix = os.getenv('TMPDIR', build_vars["PREFIX"])
         # Run server in insecure mode until Certificate tests are in place
         server_cmd.extend([daos_srv_bin, "--debug", "--config",
                            '{}/{}'.format(yaml_prefix, AVOCADO_FILE),
-                           "start", "-i", "-a",
-                           os.path.join(tmpdir, "tmp")])
+                           "start", "-i", "-a", tmpdir])
 
         print("Start CMD>>>>{0}".format(' '.join(server_cmd)))
 
