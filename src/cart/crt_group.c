@@ -3059,7 +3059,7 @@ crt_group_config_path_set(const char *path)
 int
 crt_group_config_save(crt_group_t *grp, bool forall)
 {
-	struct crt_grp_priv	*grp_priv;
+	struct crt_grp_priv	*grp_priv = NULL;
 	FILE			*fp = NULL;
 	char			*filename = NULL;
 	char			*tmp_name = NULL;
@@ -3067,6 +3067,9 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 	d_rank_t		 rank;
 	crt_phy_addr_t		 addr = NULL;
 	bool			 addr_free = false;
+	bool			 locked = false;
+	d_rank_list_t		*membs = NULL;
+	int			 i;
 	int			 rc = 0;
 
 
@@ -3077,7 +3080,7 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 
 	grp_priv = crt_grp_pub2priv(grp);
 	if (!grp_priv->gp_service || !grp_priv->gp_primary) {
-		D_ERROR("can-only save config info for primary service grp.\n");
+		D_ERROR("Can only save config info for primary service grp.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (grp_priv->gp_local) {
@@ -3138,10 +3141,21 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 		D_GOTO(done, rc);
 	}
 
-	for (rank = 0; rank < grp_priv->gp_size; rank++) {
+	if (!CRT_PMIX_ENABLED()) {
+		D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
+		membs = grp_priv_get_membs(grp_priv);
+		locked = true;
+	}
+
+	for (i = 0; i < grp_priv->gp_size; i++) {
 		char *uri;
 
 		uri = NULL;
+
+		if (CRT_PMIX_ENABLED())
+			rank = i;
+		else
+			rank = membs->rl_ranks[i];
 
 		if (CRT_PMIX_ENABLED()) {
 			rc = crt_pmix_uri_lookup(grpid, rank, &uri);
@@ -3160,6 +3174,7 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 		}
 
 		D_ASSERT(uri != NULL);
+
 		rc = fprintf(fp, "%d %s\n", rank, uri);
 
 		if (CRT_PMIX_ENABLED())
@@ -3190,6 +3205,10 @@ done:
 		rc = d_errno2der(errno);
 	}
 out:
+	/* For pmix disabled case. Lock taken above before loop start */
+	if (grp_priv && locked)
+		D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
+
 	D_FREE(filename);
 	if (tmp_name != NULL) {
 		if (rc != 0)
@@ -4057,11 +4076,6 @@ crt_rank_uri_get(crt_group_t *group, d_rank_t rank, int tag, char **uri_str)
 	struct crt_grp_priv	*grp_priv;
 	crt_phy_addr_t		uri;
 	hg_addr_t		hg_addr;
-
-	if (group == NULL) {
-		D_ERROR("Passed group is NULL\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
 
 	if (uri_str == NULL) {
 		D_ERROR("Passed uri_str is NULL\n");
