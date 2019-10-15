@@ -68,13 +68,18 @@ func delayRetry(ctx context.Context) {
 	cancelDelayCtx()
 }
 
-func (msc *mgmtSvcClient) shouldReturn(prefix string, status int32, err error) (ret bool) {
+func (msc *mgmtSvcClient) shouldReturn(prefix string, status *int32, err error) (ret bool) {
 	if err != nil {
 		msc.log.Debugf(prefix+": %v", err)
 		return
 	}
 
-	if status != 0 {
+	if status == nil {
+		msc.log.Errorf("unexpected nil response (%s)", prefix)
+		return
+	}
+
+	if *status != 0 {
 		msc.log.Debugf(prefix+": %d", status)
 		return
 	}
@@ -121,6 +126,7 @@ func (msc *mgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq) (resp *
 
 	joinErr = msc.withConnection(ctx, ap,
 		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) error {
+			fmt.Printf("check one\n")
 			if req.Addr == "" {
 				req.Addr = msc.cfg.ControlAddr.String()
 			}
@@ -130,15 +136,20 @@ func (msc *mgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq) (resp *
 			defer msc.log.Debugf(prefix + " end")
 
 			for {
+				var err error
+				var status *int32
+
 				select {
 				case <-ctx.Done():
 					return errors.Wrap(ctx.Err(), prefix)
 				default:
 				}
 
-				var err error
 				resp, err = pbClient.Join(ctx, req)
-				if msc.shouldReturn(prefix, resp.Status, err) {
+				if resp != nil {
+					status = &(resp.Status)
+				}
+				if msc.shouldReturn(prefix, status, err) {
 					return nil
 				}
 
@@ -160,15 +171,20 @@ func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb
 			defer msc.log.Debugf(prefix + " end")
 
 			for {
+				var err error
+				var status *int32
+
 				select {
 				case <-ctx.Done():
 					return errors.Wrap(ctx.Err(), prefix)
 				default:
 				}
 
-				var err error
 				resp, err = pbClient.KillRank(ctx, req)
-				if msc.shouldReturn(prefix, resp.Status, err) {
+				if resp != nil {
+					status = &(resp.Status)
+				}
+				if msc.shouldReturn(prefix, status, err) {
 					return nil
 				}
 
