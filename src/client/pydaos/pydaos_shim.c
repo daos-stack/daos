@@ -711,7 +711,7 @@ __shim_handle__kv_iter(PyObject *self, PyObject *args)
 	char		*enum_buf = NULL;
 	daos_size_t	 size;
 	char		*ptr;
-	int		 i;
+	uint32_t	 i;
 	int		 rc = 0;
 
 	/** Parse arguments */
