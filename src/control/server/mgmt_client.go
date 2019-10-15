@@ -113,7 +113,8 @@ func (msc *mgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq) (resp *
 				default:
 				}
 
-				resp, err := pbClient.Join(ctx, req)
+				var err error
+				resp, err = pbClient.Join(ctx, req)
 				if err != nil {
 					msc.log.Debugf(prefix+": %v", err)
 				} else {
@@ -153,7 +154,8 @@ func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb
 				default:
 				}
 
-				resp, err := pbClient.KillRank(ctx, req)
+				var err error
+				resp, err = pbClient.KillRank(ctx, req)
 				if err != nil {
 					msc.log.Debugf(prefix+": %v", err)
 				} else {
