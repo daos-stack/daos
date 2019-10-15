@@ -446,12 +446,12 @@ class Snapshot(TestWithServers):
                     datasize, dkey, akey, obj, snap_handle.value)
                 obj.close()
             except Exception as error:
-                self.fail("##(3)Error when retrieving the snapshot data: {}"
+                self.fail("##(3.1)Error when retrieving the snapshot data: {}"
                     .format(str(error)))
             self.display_snapshot_test_data(test_data, ss_number)
             self.log.info("  ==thedata3.value= %s", thedata3.value)
             if thedata3.value != thedata:
-                raise Exception("##(3)The data in the snapshot is not the "
+                raise Exception("##(3.2)The data in the snapshot is not the "
                                 "same as the original data")
             self.log.info("  ==The snapshot data matches the data originally"
                           " written.")
@@ -489,11 +489,11 @@ class Snapshot(TestWithServers):
                     datasize, dkey, akey, obj, snap_handle5.value)
                 obj.close()
             except Exception as error:
-                self.fail("##(5)Error when retrieving the snapshot data: {}"
+                self.fail("##(5.1)Error when retrieving the snapshot data: {}"
                     .format(str(error)))
             self.log.info("  ==snapshot tst_data =%s", thedata5.value)
             if thedata5.value != tst_data:
-                raise Exception("##(5)Snapshot #%s, test data Mis-matches"
+                raise Exception("##(5.2)Snapshot #%s, test data Mis-matches"
                                 "the original data written.", ss_number)
             self.log.info("  snapshot test number %s, test data matches"
                           " the original data written.", ss_number)
