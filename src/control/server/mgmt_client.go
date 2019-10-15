@@ -59,6 +59,29 @@ func newMgmtSvcClient(ctx context.Context, log logging.Logger, cfg mgmtSvcClient
 	}
 }
 
+// delayRetry delays next retry.
+func delayRetry(ctx context.Context) {
+	delayCtx, cancelDelayCtx := context.WithTimeout(ctx, retryDelay)
+	select {
+	case <-delayCtx.Done():
+	}
+	cancelDelayCtx()
+}
+
+func (msc *mgmtSvcClient) shouldReturn(prefix string, status int32, err error) (ret bool) {
+	if err != nil {
+		msc.log.Debugf(prefix+": %v", err)
+		return
+	}
+
+	if status != 0 {
+		msc.log.Debugf(prefix+": %d", status)
+		return
+	}
+
+	return true
+}
+
 func (msc *mgmtSvcClient) withConnection(ctx context.Context, ap string,
 	fn func(context.Context, mgmtpb.MgmtSvcClient) error) error {
 
@@ -115,24 +138,13 @@ func (msc *mgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq) (resp *
 
 				var err error
 				resp, err = pbClient.Join(ctx, req)
-				if err != nil {
-					msc.log.Debugf(prefix+": %v", err)
-				} else {
-					// TODO: Stop retrying upon certain errors (e.g., "not
-					// MS", "rank unavailable", and "excluded").
-					if resp.Status != 0 {
-						msc.log.Debugf(prefix+": %d", resp.Status)
-					} else {
-						return nil
-					}
+				if msc.shouldReturn(prefix, resp.Status, err) {
+					return nil
 				}
 
-				// Delay next retry.
-				delayCtx, cancelDelayCtx := context.WithTimeout(ctx, retryDelay)
-				select {
-				case <-delayCtx.Done():
-				}
-				cancelDelayCtx()
+				// TODO: Stop retrying upon certain errors (e.g., "not
+				// MS", "rank unavailable", and "excluded").
+				delayRetry(ctx)
 			}
 		})
 
@@ -156,23 +168,12 @@ func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb
 
 				var err error
 				resp, err = pbClient.KillRank(ctx, req)
-				if err != nil {
-					msc.log.Debugf(prefix+": %v", err)
-				} else {
-					// TODO: Stop retrying upon certain errors
-					if resp.Status != 0 {
-						msc.log.Debugf(prefix+": %d", resp.Status)
-					} else {
-						return nil
-					}
+				if msc.shouldReturn(prefix, resp.Status, err) {
+					return nil
 				}
 
-				// Delay next retry.
-				delayCtx, cancelDelayCtx := context.WithTimeout(ctx, retryDelay)
-				select {
-				case <-delayCtx.Done():
-				}
-				cancelDelayCtx()
+				// TODO: Stop retrying upon certain errors
+				delayRetry(ctx)
 			}
 		})
 
