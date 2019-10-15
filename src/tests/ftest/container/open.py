@@ -37,24 +37,31 @@ RESULT_TO_NUM = {RESULT_PASS: 0, RESULT_FAIL: 1}
 
 class OpenContainerTest(TestWithServers):
     """
-    Tests container's open function. Create 2 pool-container pairs and test
-    the following.
-    1. Use valid pool handle and container UUID. Expected to pass
-    container1.open(pool1.handle, container1_uuid)
-    container2.open(pool2.handle, container2_uuid)
-    2. Use the other container's UUID. Expected to fail
-    container1.open(pool1.handle, container2_uuid)
-    container2.open(pool2.handle, container1_uuid)
-    3. Use the other pool's handle. Expected to fail
-    container1.open(pool2.handle, container1_uuid)
-    container2.open(pool1.handle, container2_uuid)
+    Test Class Description:
+        Tests container's open function. Create 2 pool-container pairs
+        and test the following.
+        1. Use valid pool handle and container UUID. Expected to pass
+        container1.open(pool1.handle, container1_uuid)
+        container2.open(pool2.handle, container2_uuid)
+        2. Use the other container's UUID. Expected to fail
+        container1.open(pool1.handle, container2_uuid)
+        container2.open(pool2.handle, container1_uuid)
+        3. Use the other pool's handle. Expected to fail
+        container1.open(pool2.handle, container1_uuid)
+        container2.open(pool1.handle, container2_uuid)
 
     :avocado: recursive
     """
 
     def test_container_open(self):
-        """
-        Test container's open function as described above
+        """Jira ID: DAOS-3223
+
+        Test Description:
+            Test container's open function as described above
+
+        Use Cases:
+            Open container with valid and invalid pool handle and container
+            UUID
 
         :avocado: tags=all,container,tiny,full_regression,containeropen
         """
@@ -73,9 +80,8 @@ class OpenContainerTest(TestWithServers):
             # Passing in handle2 and UUID2 to open will overwrite the
             # container's members, so container1 effectively becomes container2
             # and that wouldn't be a good test, so skip
-            print("Skip the case with container1.open(pool_handle2, " +
-                  "container_uuid2)")
-            return
+            self.cancel("Skip the case with container1.open(pool_handle2, " +
+                        "container_uuid2)")
 
         expected_for_param = []
         expected_for_param.append(uuid_states[0])

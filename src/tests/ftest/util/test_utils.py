@@ -766,12 +766,15 @@ class TestContainer(TestDaosApiBase):
         """Open the container with pool handle and container UUID if provided.
 
         Args:
-            pool_handle (str, optional): Pool handle. Defaults to None.
-            If you created a TestPool instance and want to use its pool handle,
-            pass in self.pool[-1].pool.handle.value
+            pool_handle (TestPool.pool.handle, optional): Pool handle.
+            Defaults to None.
+                If you don't provide it, the default pool handle in
+                DaosContainer will be used.
+                If you created a TestPool instance and want to use its pool
+                handle, pass in something like self.pool[-1].pool.handle.value
             container_uuid (hex, optional): Container UUID. Defaults to None.
-            If you want to use certain container's UUID, pass in
-            uuid.UUID(self.container[-1].uuid)
+                If you want to use certain container's UUID, pass in
+                something like uuid.UUID(self.container[-1].uuid)
         Returns:
             bool: True if the container has been opened; False if the container
                 is already opened.
