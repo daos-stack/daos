@@ -60,7 +60,7 @@ func newMgmtSvcClient(ctx context.Context, log logging.Logger, cfg mgmtSvcClient
 }
 
 // delayRetry delays next retry.
-func delayRetry(ctx context.Context) {
+func (msc *mgmtSvcClient) delayRetry(ctx context.Context) {
 	delayCtx, cancelDelayCtx := context.WithTimeout(ctx, retryDelay)
 	select {
 	case <-delayCtx.Done():
@@ -68,23 +68,15 @@ func delayRetry(ctx context.Context) {
 	cancelDelayCtx()
 }
 
-func (msc *mgmtSvcClient) shouldReturn(prefix string, status *int32, err error) (ret bool) {
-	if err != nil {
+func (msc *mgmtSvcClient) logAttempt(prefix string, err error, status *int32) {
+	switch {
+	case err != nil:
 		msc.log.Debugf(prefix+": %v", err)
-		return
+	case *status != 0:
+		msc.log.Debugf(prefix+": %d", *status)
+	default:
+		msc.log.Error("expecting either error or non-zero response status")
 	}
-
-	if status == nil {
-		msc.log.Errorf("unexpected nil response (%s)", prefix)
-		return
-	}
-
-	if *status != 0 {
-		msc.log.Debugf(prefix+": %d", status)
-		return
-	}
-
-	return true
 }
 
 func (msc *mgmtSvcClient) withConnection(ctx context.Context, ap string,
@@ -146,16 +138,17 @@ func (msc *mgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq) (resp *
 				}
 
 				resp, err = pbClient.Join(ctx, req)
-				if resp != nil {
+				if err == nil {
 					status = &(resp.Status)
-				}
-				if msc.shouldReturn(prefix, status, err) {
-					return nil
+					if *status == 0 {
+						return nil
+					}
 				}
 
+				msc.logAttempt(prefix, err, status)
 				// TODO: Stop retrying upon certain errors (e.g., "not
 				// MS", "rank unavailable", and "excluded").
-				delayRetry(ctx)
+				msc.delayRetry(ctx)
 			}
 		})
 
@@ -181,15 +174,16 @@ func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb
 				}
 
 				resp, err = pbClient.KillRank(ctx, req)
-				if resp != nil {
+				if err == nil {
 					status = &(resp.Status)
-				}
-				if msc.shouldReturn(prefix, status, err) {
-					return nil
+					if *status == 0 {
+						return nil
+					}
 				}
 
+				msc.logAttempt(prefix, err, status)
 				// TODO: Stop retrying upon certain errors
-				delayRetry(ctx)
+				msc.delayRetry(ctx)
 			}
 		})
 
