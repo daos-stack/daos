@@ -33,12 +33,9 @@ from server_utils import AVOCADO_FILE
 class DfuseCommand(ExecutableCommand):
     """Defines a object representing a dfuse command."""
 
-    def __init__(self, namespace, command, hosts):
+    def __init__(self, namespace, command):
         """Create a dfuse Command object."""
         super(DfuseCommand, self).__init__(namespace, command)
-
-        # assigning hosts
-        self.hosts = hosts
 
         # dfuse options
         self.puuid = FormattedParameter("-p {}")
@@ -91,6 +88,19 @@ class DfuseCommand(ExecutableCommand):
         """
         self.cuuid.update(cont, "cuuid" if display else None)
 
+
+class Dfuse(DfuseCommand):
+    """Class defining an object of type DfuseCommand"""
+
+    def __init__(self, hosts, attach_info, basepath=None):
+        """Create a dfuse object"""
+        super(Dfuse, self).__init__("/run/dfuse/*", "dfuse")
+
+        # set params
+        self.hosts = hosts
+        self.attach_info = attach_info
+        self.basepath = basepath
+
     def create_mount_point(self):
         """Create dfuse directory
 
@@ -133,21 +143,9 @@ class DfuseCommand(ExecutableCommand):
                     "Error removing the {} dfuse mount point on the following "
                     "hosts: {}".format(self.mount_dir.value, error_hosts))
 
-class Dfuse(DfuseCommand):
-    """Class defining an object of type DfuseCommand"""
-
-    def __init__(self, hosts, attach_info):
-        """Create a dfuse object"""
-        super(Dfuse, self).__init__("/run/dfuse/*", "dfuse", hosts)
-
-        # assign attatch info path
-        self.attach_info = attach_info
-
-    def run_dfuse(self, basepath):
+    def run(self):
         """ Run the dfuse command.
 
-        Args:
-            basepath: path for daos install dir
         Raises:
             CommandFailure: In case dfuse run command fails
         """
@@ -155,7 +153,7 @@ class Dfuse(DfuseCommand):
         # create dfuse dir if does not exist
         self.create_mount_point()
         # obtain env export string
-        env = self.get_default_env(basepath)
+        env = self.get_default_env()
 
         # run dfuse command
         ret_code = general_utils.pcmd(self.hosts, env + self.__str__(),
@@ -171,7 +169,7 @@ class Dfuse(DfuseCommand):
                 "Error starting dfuse on the following hosts: {}".format(
                     error_hosts))
 
-    def stop_dfuse(self):
+    def stop(self):
         """Stop dfuse
 
         Raises:
@@ -192,12 +190,10 @@ class Dfuse(DfuseCommand):
                 "Error stopping dfuse on the following hosts: {}".format(
                     error_hosts))
 
-    def get_default_env(self, basepath=None):
+    def get_default_env(self):
 
         """Get the default enviroment settings for running Dfuse.
 
-        Args:
-            basepath: path for daos install dir
         Returns:
             (str):  a single string of all env vars to be
                                   exported
@@ -209,9 +205,9 @@ class Dfuse(DfuseCommand):
         env["CRT_ATTACH_INFO_PATH"] = self.attach_info
         env["DAOS_SINGLETON_CLI"] = 1
 
-        if basepath is not None:
+        if self.basepath is not None:
             try:
-                with open('{}/{}'.format(basepath, AVOCADO_FILE),
+                with open('{}/{}'.format(self.basepath, AVOCADO_FILE),
                           'r') as read_file:
                     for line in read_file:
                         if ("provider" in line) or ("fabric_iface" in line):

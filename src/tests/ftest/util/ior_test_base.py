@@ -24,6 +24,7 @@
 import os
 import subprocess
 
+from ClusterShell.NodeSet import NodeSet
 from apricot import TestWithServers
 from ior_utils import IorCommand
 from command_utils import Mpirun, CommandFailure
@@ -70,7 +71,7 @@ class IorTestBase(TestWithServers):
         """Tear down each test case."""
         try:
             if self.dfuse is not None:
-                self.dfuse.stop_dfuse()
+                self.dfuse.stop()
         finally:
             # Stop the servers and agents
             super(IorTestBase, self).tearDown()
@@ -112,7 +113,7 @@ class IorTestBase(TestWithServers):
     def start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
         # Get Dfuse params
-        self.dfuse = Dfuse(self.hostlist_clients, self.tmp)
+        self.dfuse = Dfuse(self.hostlist_clients, self.tmp, self.basepath)
         self.dfuse.get_params(self)
 
         # update dfuse params
@@ -121,9 +122,11 @@ class IorTestBase(TestWithServers):
 
         try:
             # start dfuse
-            self.dfuse.run_dfuse(self.basepath)
+            self.dfuse.run()
         except CommandFailure as error:
-            self.log.error("Dfuse Failed: %s", str(error))
+            self.log.error("Dfuse command %s failed on hosts %s",
+                           str(self.dfuse), str(NodeSet(self.dfuse.hosts)),
+                           exc_info=error)
             self.fail("Test was expected to pass but it failed.\n")
 
     def run_ior_with_pool(self):
