@@ -270,11 +270,11 @@ ec_update_params(struct ec_params *params, daos_iod_t *iod, d_sg_list_t *sgl,
 	for (i = 0; i < iod->iod_nr; i++) {
 		uint64_t rem = iod->iod_recxs[i].rx_nr * iod->iod_size;
 		uint64_t start = iod->iod_recxs[i].rx_idx;
-		uint64_t so = start /ss;
+		uint64_t so = start / ss;
 		uint32_t stripe_cnt = 0;
 		uint32_t partial_cnt = 0;
 
-		if (so && rem + so > ss ) {
+		if (so && rem + so > ss) {
 			unsigned long partial = (start/ss + 1) * ss - start;
 
 			D_REALLOC_ARRAY(nrecx,
@@ -501,7 +501,7 @@ ec_iod_stripe_cnt(daos_iod_t *iod, struct daos_ec_attr ec_attr)
 		uint64_t so = start % ss;
 		uint32_t stripe_cnt = 0;
 
-		if (so && rem + so > ss ) {
+		if (so && rem + so > ss) {
 			unsigned long partial = (start/ss + 1) * ss - start;
 
 			rem -= partial;
@@ -522,7 +522,7 @@ ec_update_fetch_params(struct ec_fetch_params *params, daos_iod_t *iod,
 {
 	unsigned int	 len = ec_attr.e_len;
 	unsigned short	 k = ec_attr.e_k;
-	unsigned int	 ss = len *k;
+	unsigned int	 ss = len * k;
 	unsigned int	 i;
 	int		 rc = 0;
 
@@ -534,7 +534,7 @@ ec_update_fetch_params(struct ec_fetch_params *params, daos_iod_t *iod,
 		uint64_t start = iod->iod_recxs[i].rx_idx;
 		uint64_t so = start % ss;
 
-		if (so && rem + so > ss ) {
+		if (so && rem + so > ss) {
 			unsigned long partial = (start/ss + 1) * ss - start;
 
 			params->niod.iod_recxs[params->niod.iod_nr].rx_nr
