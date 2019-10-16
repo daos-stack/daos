@@ -96,7 +96,7 @@ func setupMockDrpcClientBytes(svc *mgmtSvc, respBytes []byte, err error) {
 	mi.setDrpcClient(newMockDrpcClient(cfg))
 }
 
-// setupMockDrpcClientBytes sets up the dRPC client for the mgmtSvc to return
+// setupMockDrpcClient sets up the dRPC client for the mgmtSvc to return
 // a valid protobuf message as a response.
 func setupMockDrpcClient(svc *mgmtSvc, resp proto.Message, err error) {
 	respBytes, _ := proto.Marshal(resp)
