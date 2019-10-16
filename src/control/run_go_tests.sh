@@ -51,6 +51,23 @@ function setup_environment()
 	CGO_LDFLAGS=-L${SL_PREFIX}/lib
 	CGO_LDFLAGS+=" -L${SL_SPDK_PREFIX}/lib"
 	CGO_LDFLAGS+=" -L${SL_HWLOC_PREFIX}/lib"
+	# satisfy shared SPDK v19.x dependencies
+        CGO_LDFLAGS+=" -lspdk_env_dpdk -lspdk_thread -lspdk_bdev -lspdk_copy"
+	CGO_LDFLAGS+=" -lrte_mempool  -lrte_mempool_ring -lrte_bus_pci"
+	CGO_LDFLAGS+=" -lrte_pci -lrte_ring -lrte_mbuf -lrte_eal -lrte_kvargs"
+	CGO_LDFLAGS+=" -lspdk_bdev_aio -lspdk_bdev_nvme -lspdk_bdev_malloc"
+	CGO_LDFLAGS+=" -lspdk_conf -lspdk_blob -lspdk_nvme -lspdk_util"
+	CGO_LDFLAGS+=" -lspdk_json -lspdk_jsonrpc -lspdk_rpc -lspdk_trace"
+	CGO_LDFLAGS+=" -lspdk_sock -lspdk_log -lspdk_notify -lspdk_blob_bdev "
+	CGO_LDFLAGS+=" -lnuma -ldl -lisal"
+
+	#CGO_LDFLAGS+=" -lspdk_env_dpdk"
+	# satisfy static SPDK v19.x dependencies
+	# TODO: when we upgrade to a version where libspdk.so linker
+	#       script is fixed, use that instead of this ugliness.
+	#CGO_LDFLAGS+=" -lrte_mempool -lrte_mempool_ring"
+	#CGO_LDFLAGS+=" -lrte_bus_pci -lrte_pci -lrte_ring -lrte_mbuf"
+	#CGO_LDFLAGS+=" -lrte_eal -lrte_meter -lrte_kvargs -ldl -lnuma"
 	CGO_CFLAGS=-I${SL_PREFIX}/include
 	CGO_CFLAGS+=" -I${SL_SPDK_PREFIX}/include"
 	CGO_CFLAGS+=" -I${SL_HWLOC_PREFIX}/include"
