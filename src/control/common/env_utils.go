@@ -29,23 +29,20 @@ import (
 )
 
 // ScrubEnvironment modifies the environment variables set for
-// this process and any children which inherit its environment.
-//
-// The whitelist bool determines whether the supplied list of
-// variable names is a blacklist or whitelist. If it is a blacklist,
-// then each variable in the supplied list is unset. If it is a
-// whitelist, then all variables except those in the whitelist
-// are unset.
-func ScrubEnvironment(list []string, whitelist bool) {
-	if !whitelist {
-		for _, key := range list {
-			os.Unsetenv(key)
-		}
-		return
+// this process and any children which inherit its environment
+// by unsetting any variables supplied in the blacklist.
+func ScrubEnvironment(blacklist []string) {
+	for _, key := range blacklist {
+		os.Unsetenv(key)
 	}
+}
 
+// ScrubEnvironmentExcept modifies the environment variables set for
+// this process and any children which inherit its environment
+// by unsetting any variables that are not supplied in the whitelist.
+func ScrubEnvironmentExcept(whitelist []string) {
 	lookup := make(map[string]struct{})
-	for _, key := range list {
+	for _, key := range whitelist {
 		lookup[key] = struct{}{}
 	}
 
@@ -57,7 +54,20 @@ func ScrubEnvironment(list []string, whitelist bool) {
 	}
 }
 
-const DisableProxyScrubEnv = "DISABLE_PROXY_SCRUB"
+const DisableProxyScrubEnv = "DAOS_DISABLE_PROXY_SCRUB"
+
+func proxyScrubIsDisabled() bool {
+	val, set := os.LookupEnv(DisableProxyScrubEnv)
+	if !set {
+		return false
+	}
+
+	disabled, err := strconv.ParseBool(val)
+	if err != nil {
+		return false
+	}
+	return disabled
+}
 
 // ScrubProxyVariables removes proxy variables from the process environment.
 func ScrubProxyVariables() {
@@ -66,17 +76,7 @@ func ScrubProxyVariables() {
 		"HTTP_PROXY", "HTTPS_PROXY", "FTP_PROXY", "SOCKS_PROXY", "NO_PROXY",
 	}
 
-	val, set := os.LookupEnv(DisableProxyScrubEnv)
-	if !set {
-		ScrubEnvironment(proxyVars, false)
-		return
-	}
-
-	disable, err := strconv.ParseBool(val)
-	if err != nil {
-		return
-	}
-	if !disable {
-		ScrubEnvironment(proxyVars, false)
+	if !proxyScrubIsDisabled() {
+		ScrubEnvironment(proxyVars)
 	}
 }

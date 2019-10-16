@@ -30,6 +30,30 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
+func resetEnv(t *testing.T) func() {
+	t.Helper()
+
+	startEnv := os.Environ()
+	return func() {
+		os.Clearenv()
+		setEnv(t, startEnv)
+	}
+}
+
+func setEnv(t *testing.T, env []string) {
+	t.Helper()
+
+	for _, keyVal := range env {
+		fields := strings.SplitN(keyVal, "=", 2)
+		if len(fields) != 2 {
+			t.Fatalf("malformed env keyVal %q", keyVal)
+		}
+		if err := os.Setenv(fields[0], fields[1]); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func TestScrubEnvironment(t *testing.T) {
 	defaultSetup := []string{
 		"FOO=bar", "baz=quux", "COW=QUACK", "ANSWER=42",
@@ -64,6 +88,7 @@ func TestScrubEnvironment(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			defer resetEnv(t)()
 			os.Clearenv()
 
 			if tc.setup == nil {
@@ -72,15 +97,13 @@ func TestScrubEnvironment(t *testing.T) {
 			if tc.expected == nil {
 				tc.expected = defaultSetup
 			}
+			setEnv(t, tc.setup)
 
-			for _, keyVal := range tc.setup {
-				fields := strings.SplitN(keyVal, "=", 2)
-				if err := os.Setenv(fields[0], fields[1]); err != nil {
-					t.Fatal(err)
-				}
+			if tc.whitelist {
+				ScrubEnvironmentExcept(tc.list)
+			} else {
+				ScrubEnvironment(tc.list)
 			}
-
-			ScrubEnvironment(tc.list, tc.whitelist)
 
 			if diff := cmp.Diff(tc.expected, os.Environ()); diff != "" {
 				t.Fatalf("unexpected environment (-want, +got):\n%s\n", diff)
@@ -126,21 +149,21 @@ func TestScrubProxyVariables(t *testing.T) {
 			disable:  "0",
 			expected: cleanEnv,
 		},
+		"disabled set to bananas": {
+			setup:    proxyEnv,
+			disable:  "bananas",
+			expected: cleanEnv,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			defer resetEnv(t)()
 			os.Clearenv()
 
 			if tc.disable != "" {
 				os.Setenv(DisableProxyScrubEnv, tc.disable)
 				tc.expected = append([]string{DisableProxyScrubEnv + "=" + tc.disable}, tc.expected...)
 			}
-
-			for _, keyVal := range tc.setup {
-				fields := strings.SplitN(keyVal, "=", 2)
-				if err := os.Setenv(fields[0], fields[1]); err != nil {
-					t.Fatal(err)
-				}
-			}
+			setEnv(t, tc.setup)
 
 			ScrubProxyVariables()
 
