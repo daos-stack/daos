@@ -25,6 +25,7 @@ from __future__ import print_function
 
 import os
 from time import sleep, time
+from logging import getLogger
 
 from avocado import fail_on
 from avocado.utils import process
@@ -92,6 +93,7 @@ class TestDaosApiBase(ObjectWithParameters):
         """
         super(TestDaosApiBase, self).__init__(namespace)
         self.cb_handler = cb_handler
+        self.log = getLogger(__name__)
 
     def _call_method(self, method, kwargs):
         """Call the DAOS API class method with the optional callback method.
@@ -111,8 +113,11 @@ class TestDaosApiBase(ObjectWithParameters):
 class TestPool(TestDaosApiBase):
     """A class for functional testing of DaosPools objects."""
 
-    def __init__(self, context, log, cb_handler=None):
-        """[summary].
+    def __init__(self, context, log=None, cb_handler=None):
+        # pylint: disable=unused-argument
+        """Initialize a TestPool object.
+
+        Note: 'log' is now a defunct argument and will be removed in the future
 
         Args:
             context (DaosContext): [description]
@@ -122,7 +127,6 @@ class TestPool(TestDaosApiBase):
         """
         super(TestPool, self).__init__("/run/pool/*", cb_handler)
         self.context = context
-        self.log = log
         self.uid = os.geteuid()
         self.gid = os.getegid()
 
@@ -147,10 +151,11 @@ class TestPool(TestDaosApiBase):
         self.uuid.
         """
         self.destroy()
-        self.log.info(
-            "Creating a pool{}".format(
-                " on targets {}".format(self.target_list.value)
-                if self.target_list.value else ""))
+        if self.target_list.value is not None:
+            self.log.info(
+                "Creating a pool on targets %s", self.target_list.value)
+        else:
+            self.log.info("Creating a pool")
         self.pool = DaosPool(self.context)
         kwargs = {
             "mode": self.mode.value, "uid": self.uid, "gid": self.gid,
@@ -164,8 +169,9 @@ class TestPool(TestDaosApiBase):
         self.svc_ranks = [
             int(self.pool.svc.rl_ranks[index])
             for index in range(self.pool.svc.rl_nr)]
-        self.log.info("  Pool created with uuid {} and svc ranks {}".format(
-            self.uuid, self.svc_ranks))
+        self.log.info(
+            "  Pool created with uuid %s and svc ranks %s",
+            self.uuid, self.svc_ranks)
 
     @fail_on(DaosApiError)
     def connect(self, permission=1):
@@ -246,6 +252,11 @@ class TestPool(TestDaosApiBase):
         # pylint: disable=unused-argument
         """Check the pool info attributes.
 
+        Note:
+            Arguments may also be provided as a string with a number preceeded
+            by '<', '<=', '>', or '>=' for other comparisions besides the
+            default '=='.
+
         Args:
             pi_uuid (str, optional): pool uuid. Defaults to None.
             pi_ntargets (int, optional): number of targets. Defaults to None.
@@ -279,6 +290,11 @@ class TestPool(TestDaosApiBase):
                          ps_free_mean=None, ps_ntargets=None, ps_padding=None):
         # pylint: disable=unused-argument
         """Check the pool info space attributes.
+
+        Note:
+            Arguments may also be provided as a string with a number preceeded
+            by '<', '<=', '>', or '>=' for other comparisions besides the
+            default '=='.
 
         Args:
             ps_free_min (list, optional): minimum free space per device.
@@ -320,6 +336,11 @@ class TestPool(TestDaosApiBase):
         # pylint: disable=unused-argument
         """Check the pool info daos space attributes.
 
+        Note:
+            Arguments may also be provided as a string with a number preceeded
+            by '<', '<=', '>', or '>=' for other comparisions besides the
+            default '=='.
+
         Args:
             s_total (list, optional): total space per device. Defaults to None.
             s_free (list, optional): free space per device. Defaults to None.
@@ -350,6 +371,11 @@ class TestPool(TestDaosApiBase):
                              rs_rec_nr=None):
         # pylint: disable=unused-argument
         """Check the pool info rebuild attributes.
+
+        Note:
+            Arguments may also be provided as a string with a number preceeded
+            by '<', '<=', '>', or '>=' for other comparisions besides the
+            default '=='.
 
         Args:
             rs_version (int, optional): rebuild version. Defaults to None.
@@ -533,7 +559,7 @@ class TestPool(TestDaosApiBase):
             process.CmdResult: command execution result
 
         """
-        self.log.info("Writing {} bytes to pool {}".format(size, self.uuid))
+        self.log.info("Writing %s bytes to pool %s", size, self.uuid)
         env = {
             "DAOS_POOL": self.uuid,
             "DAOS_SVCL": "1",
@@ -792,7 +818,6 @@ class TestContainer(TestDaosApiBase):
         """
         super(TestContainer, self).__init__("/run/container/*", cb_handler)
         self.pool = pool
-        self.log = self.pool.log
 
         self.object_qty = BasicParameter(None)
         self.record_qty = BasicParameter(None)
@@ -823,7 +848,7 @@ class TestContainer(TestDaosApiBase):
             kwargs["con_uuid"] = uuid
         self._call_method(self.container.create, kwargs)
         self.uuid = self.container.get_uuid_str()
-        self.log.info("  Container created with uuid {}".format(self.uuid))
+        self.log.info("  Container created with uuid %s", self.uuid)
 
     @fail_on(DaosApiError)
     def open(self):
@@ -892,9 +917,10 @@ class TestContainer(TestDaosApiBase):
         """
         self.open()
         self.log.info(
-            "Writing objects in container %s%s%s", self.uuid,
-            " on rank {}".format(
-                rank) if not isinstance(rank, type(None)) else "",
+            "Writing %s objects in container %s%s%s",
+            self.object_qty.value,
+            self.uuid,
+            " on rank {}".format(rank) if rank is not None else "",
             " with object class {}".format(obj_class) if obj_class else "")
         for _ in range(self.object_qty.value):
             self.written_data.append(TestContainerData())
@@ -995,6 +1021,58 @@ class TestContainer(TestDaosApiBase):
         """
         count = sum([ranks.count(rank) for ranks in target_rank_list])
         self.log.info(
-            "Occurrences of rank {} in the target rank list: {}".format(
-                rank, count))
+            "Occurrences of rank %s in the target rank list: %s", rank, count)
+        return count
+
+    def punch_objects(self, indices):
+        """Punch committed objects from the container.
+
+        Args:
+            indices (list): list of index numbers indicating which written
+                objects to punch from the self.written_data list
+
+        Raises:
+            DaosTestError: if there is an error punching the object or
+                determining which objec to punch
+
+        Returns:
+            int: number of successfully punched objects
+
+        """
+        self.open()
+        self.log.info(
+            "Punching %s objects from container %s with %s written objects",
+            len(indices), self.uuid, len(self.written_data))
+        count = 0
+        if len(self.written_data) > 0:
+            for index in indices:
+                # Find the object to punch at the specified index
+                txn = 0
+                try:
+                    obj = self.written_data[index].obj
+                except IndexError:
+                    raise DaosTestError(
+                        "Invalid index {} for written data".format(index))
+
+                # Close the object
+                self.log.info(
+                    "Closing object (index: %s, txn: %s) in container %s",
+                    index, txn, self.uuid)
+                try:
+                    self._call_method(obj.close, {})
+                except DaosApiError as error:
+                    self.log.error("  Error: %s", str(error))
+                    continue
+
+                # Punch the object
+                self.log.info(
+                    "Punching object (index: %s, txn: %s) from container %s",
+                    index, txn, self.uuid)
+                try:
+                    self._call_method(obj.punch, {"txn": txn})
+                    count += 1
+                except DaosApiError as error:
+                    self.log.error("  Error: %s", str(error))
+
+        # Retutrn the number of punched objects
         return count
