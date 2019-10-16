@@ -182,8 +182,9 @@ gc_drain_key(struct vos_gc *gc, struct vos_pool *pool,
 		*empty = true;
 		return 0;
 	}
+
 	if (rc) {
-		D_ERROR("%s drain failed: %s\n", gc->gc_name, d_errstr(rc));
+		D_ERROR("%s drain failed: "DF_RC"\n", gc->gc_name, DP_RC(rc));
 		return rc;
 	}
 
@@ -565,7 +566,7 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 		return 0;
 	}
 
-	rc = vos_tx_begin(pool);
+	rc = vos_tx_begin(&pool->vp_umm);
 	if (rc) {
 		D_ERROR("Failed to start transacton for "DF_UUID": %s\n",
 			DP_UUID(pool->vp_id), d_errstr(rc));
@@ -622,7 +623,7 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 		"pool="DF_UUID", creds origin=%d, current=%d, rc=%s\n",
 		DP_UUID(pool->vp_id), *credits, creds, d_errstr(rc));
 
-	rc = vos_tx_end(pool, rc);
+	rc = vos_tx_end(&pool->vp_umm, rc);
 	if (rc == 0)
 		*credits = creds;
 

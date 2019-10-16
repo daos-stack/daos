@@ -28,24 +28,23 @@ import (
 	"testing"
 )
 
-func TestServiceCommands(t *testing.T) {
+func TestSystemCommands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
-		// FIXME: kill-rank should probably require these arguments
-		/*{
-			"Kill rank with missing arguments",
-			"service kill-rank",
-			"ConnectClients KillRank",
-			errMissingFlag,
-		},*/
 		{
-			"Kill rank",
-			"service kill-rank --pool-uuid 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 2",
-			"ConnectClients KillRank-uuid 031bcaf8-f0f5-42ef-b3c5-ee048676dceb, rank 2",
+			"system member query with no arguments",
+			"system member-query",
+			"ConnectClients SystemMemberQuery",
+			nil,
+		},
+		{
+			"system stop with no arguments",
+			"system stop",
+			"ConnectClients SystemStop",
 			nil,
 		},
 		{
 			"Nonexistent subcommand",
-			"service quack",
+			"system quack",
 			"",
 			fmt.Errorf("Unknown command"),
 		},

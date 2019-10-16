@@ -44,15 +44,13 @@ const (
 type IOServerHarness struct {
 	sync.RWMutex
 	log       logging.Logger
-	ext       External
 	instances []*IOServerInstance
 	started   bool
 }
 
 // NewHarness returns an initialized *IOServerHarness
-func NewIOServerHarness(ext External, log logging.Logger) *IOServerHarness {
+func NewIOServerHarness(log logging.Logger) *IOServerHarness {
 	return &IOServerHarness{
-		ext:       ext,
 		log:       log,
 		instances: make([]*IOServerInstance, 0, 2),
 	}
@@ -86,9 +84,9 @@ func (h *IOServerHarness) AddInstance(srv *IOServerInstance) error {
 	return nil
 }
 
-// GetManagementInstance returns a managed IO Server instance
-// to be used as a management target.
-func (h *IOServerHarness) GetManagementInstance() (*IOServerInstance, error) {
+// GetMSLeaderInstance returns a managed IO Server instance to be used as a
+// management target and fails if selected instance is not MS Leader.
+func (h *IOServerHarness) GetMSLeaderInstance() (*IOServerInstance, error) {
 	h.RLock()
 	defer h.RUnlock()
 
@@ -96,12 +94,15 @@ func (h *IOServerHarness) GetManagementInstance() (*IOServerInstance, error) {
 		return nil, errors.New("harness has no managed instances")
 	}
 
-	if defaultManagementInstance > len(h.instances) {
-		return nil, errors.Errorf("no instance index %d", defaultManagementInstance)
+	var err error
+	for _, mi := range h.Instances() {
+		// try each instance, returning the first one that is a replica (if any are)
+		if err = checkIsMSReplica(mi); err == nil {
+			return mi, nil
+		}
 	}
 
-	// Just pick one for now.
-	return h.instances[defaultManagementInstance], nil
+	return nil, err
 }
 
 // CreateSuperblocks creates instance superblocks as needed.

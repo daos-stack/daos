@@ -193,12 +193,10 @@ dc_kv_get(tse_task_t *task)
 	if (buf && *buf_size)
 		fetch_args->sgls = &params->sgl;
 
-	if (*buf_size == DAOS_REC_ANY) {
-		rc = tse_task_register_comp_cb(fetch_task, set_size_cb,
-					       &buf_size, sizeof(buf_size));
-		if (rc != 0)
-			D_GOTO(err_task, rc);
-	}
+	rc = tse_task_register_comp_cb(fetch_task, set_size_cb, &buf_size,
+					sizeof(buf_size));
+	if (rc != 0)
+		D_GOTO(err_task, rc);
 
 	rc = tse_task_register_comp_cb(task, free_io_params_cb, &params,
 				       sizeof(params));

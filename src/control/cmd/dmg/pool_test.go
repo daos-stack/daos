@@ -217,7 +217,7 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Destroy pool with force",
-			"pool destroy --uuid 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --force",
+			"pool destroy --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --force",
 			strings.Join([]string{
 				"ConnectClients",
 				fmt.Sprintf("PoolDestroy-%+v", &client.PoolDestroyReq{
