@@ -488,7 +488,7 @@ ec_iod_stripe_cnt(daos_iod_t *iod, struct daos_ec_attr ec_attr)
 {
 	unsigned int	len = ec_attr.e_len;
 	unsigned short	k = ec_attr.e_k;
-	unsigned int	ss = len *k;
+	unsigned int	ss = len * k;
 	unsigned int	i;
 	unsigned int	total_stripe_cnt = 0;
 
