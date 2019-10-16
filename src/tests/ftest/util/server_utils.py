@@ -355,6 +355,9 @@ class ServerManager(ExecutableCommand):
         self.runner.job.action.value = "start"
         self.runner.job.get_action_command()
 
+        # Set server environment
+        os.environ["CRT_ATTACH_INFO_PATH"] = attach
+
         # Parameters that user can specify in the test yaml to modify behavior.
         self.debug = BasicParameter(None, True)       # ServerCommand param
         self.attach = BasicParameter(None, attach)    # ServerCommand param
