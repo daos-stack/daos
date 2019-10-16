@@ -2363,15 +2363,13 @@ ds_pool_svc_get_acl_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
 	struct pool_get_acl_in	*in;
 	struct pool_get_acl_out	*out;
 
-	D_DEBUG(DB_MGMT, "Getting ACL prop for pool "DF_UUID"\n",
-		DP_UUID(pool_uuid));
+	D_DEBUG(DB_MGMT, DF_UUID": Getting ACL prop\n", DP_UUID(pool_uuid));
 
 	rc = rsvc_client_init(&client, ranks);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	ep.ep_grp = NULL; /* Is it OK for this to be NULL? */
-	/* If not: how do we get the cart group for the pool? */
+	ep.ep_grp = NULL; /* primary group */
 	rsvc_client_choose(&client, &ep);
 
 	rc = pool_req_create(info->dmi_ctx, &ep, POOL_GET_ACL, &rpc);
@@ -2400,7 +2398,7 @@ ds_pool_svc_get_acl_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
 
 	rc = out->pgo_op.po_rc;
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to query pool: %d\n",
+		D_ERROR(DF_UUID": failed to get ACL for pool: %d\n",
 			DP_UUID(pool_uuid), rc);
 		D_GOTO(out_rpc, rc);
 	}

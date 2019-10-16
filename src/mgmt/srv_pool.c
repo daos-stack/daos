@@ -683,7 +683,7 @@ pool_get_ranks(struct mgmt_svc *svc, uuid_t uuid, d_rank_list_t **ranks)
 	rc = rdb_tx_begin(svc->ms_rsvc.s_db, svc->ms_rsvc.s_term, &tx);
 	if (rc != 0)
 		D_GOTO(out, rc);
-	ABT_rwlock_wrlock(svc->ms_lock);
+	ABT_rwlock_rdlock(svc->ms_lock);
 
 	rc = pool_rec_lookup(&tx, svc, uuid, &rec);
 	if (rc != 0) {
