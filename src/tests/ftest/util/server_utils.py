@@ -295,8 +295,8 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
         # build shared dir for tmp amd yaml files
         tmpdir = os.getenv('DAOS_TEST_SHARED_DIR', os.path.join(build_vars["PREFIX"], 'tmp'))
 
-	# set env CRT_ATTACH_INFO_PATH 
-	os.environ["CRT_ATTACH_INFO_PATH"] = tmpdir
+        # set env CRT_ATTACH_INFO_PATH
+        os.environ["CRT_ATTACH_INFO_PATH"] = tmpdir
         # Run server in insecure mode until Certificate tests are in place
         server_cmd.extend(
             [os.path.join(build_vars["PREFIX"], "bin", "daos_server"),
