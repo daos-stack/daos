@@ -922,7 +922,9 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 	struct ds_pool		*pool = NULL;
 	struct ds_cont		*cont = NULL;
 	struct cont_tgt_open_arg arg;
-	int			 rc;
+	struct dss_coll_ops	coll_ops = { 0 };
+	struct dss_coll_args	coll_args = { 0 };
+	int			rc;
 
 	uuid_copy(arg.pool_uuid, pool_uuid);
 	uuid_copy(arg.cont_hdl_uuid, cont_hdl_uuid);
@@ -932,8 +934,35 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 	D_DEBUG(DB_TRACE, "open pool/cont/hdl "DF_UUID"/"DF_UUID"/"DF_UUID"\n",
 		DP_UUID(pool_uuid), DP_UUID(cont_uuid), DP_UUID(cont_hdl_uuid));
 
-	rc = dss_thread_collective(cont_open_one, &arg, 0);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	/* collective operations */
+	coll_ops.co_func = cont_open_one;
+	coll_args.ca_func_args	= &arg;
+
+	/* setting aggregator args */
+	rc = ds_pool_get_failed_tgt_idx(pool_uuid, &coll_args.ca_exclude_tgts,
+					&coll_args.ca_exclude_tgts_cnt);
+	if (rc) {
+		D_ERROR(DF_UUID "failed to get index : rc %d\n",
+			DP_UUID(pool_uuid), rc);
+		return rc;
+	}
+
+	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
+	if (coll_args.ca_exclude_tgts)
+		D_FREE(coll_args.ca_exclude_tgts);
+
+	if (rc != 0) {
+		/* Once it exclude the target from the pool, since the target
+		 * might still in the cart group, so IV cont open might still
+		 * come to this target, especially if cont open/close will be
+		 * done by IV asynchronously, so this cont_open_one might return
+		 * -DER_NO_HDL if it can not find pool handle. (DAOS-3185)
+		 */
+		D_ERROR("open "DF_UUID"/"DF_UUID"/"DF_UUID":%d\n",
+			DP_UUID(pool_uuid), DP_UUID(cont_uuid),
+			DP_UUID(cont_hdl_uuid), rc);
+		return rc;
+	}
 
 	pool = ds_pool_lookup(pool_uuid);
 	D_ASSERT(pool != NULL);
