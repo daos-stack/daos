@@ -251,5 +251,5 @@ class ObjectMetadata(TestWithServers):
 
                 # Start the servers
                 run_server(
-                    self.hostfile_servers, self.server_group, self.basepath,
+                    self, self.hostfile_servers, self.server_group,
                     clean=False)
