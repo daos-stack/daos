@@ -132,14 +132,15 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 		if (rc != 0)
 			break;
 
-		/* Reset the epr */
-		query->qt_epr = epr;
 		rc = check_key(query, rbund.rb_krec, &visible);
 		if (rc != 0)
 			break;
 
 		if (visible)
 			break;
+
+		/* Reset the epr */
+		query->qt_epr = epr;
 
 		if (query->qt_flags & DAOS_GET_MAX)
 			rc = dbtree_iter_prev(ih);
@@ -403,8 +404,6 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 
 		dkey_epr = query.qt_epr;
 		for (;;) {
-			/* Reset the epoch range to the dkey range */
-			query.qt_epr = dkey_epr;
 			rc = open_and_query_key(&query, akey, DAOS_GET_AKEY,
 						&akey_anchor);
 			if (rc != 0) {
@@ -423,6 +422,8 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 				       d_errstr(rc));
 				if (rc == -DER_NONEXIST &&
 				    query.qt_flags & DAOS_GET_AKEY) {
+					/* Reset the epoch range to last dkey */
+					query.qt_epr = dkey_epr;
 					continue;
 				}
 			}
