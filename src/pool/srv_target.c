@@ -621,7 +621,6 @@ pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
 {
 	struct dss_coll_ops		coll_ops;
 	struct dss_coll_args		coll_args = { 0 };
-	int				*excluded_tgts = NULL;
 	struct pool_query_xs_arg	agg_arg = { 0 };
 	int				rc;
 
@@ -641,48 +640,18 @@ pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
 	coll_args.ca_aggregator		= &agg_arg;
 	coll_args.ca_func_args		= &coll_args.ca_stream_args;
 
-	if (pool->sp_map) {
-		struct pool_target	**tgts = NULL;
-		d_rank_t		myrank;
-		unsigned int		tgt_cnt = 0;
-
-		/* Check if we need excluded the failure targets, NB:
-		 * since the ranks in the pool map are ranks of primary
-		 * group, so we have to use primary group here.
-		 */
-		rc = crt_group_rank(NULL, &myrank);
-		if (rc) {
-			D_ERROR("Can not get rank %d\n", rc);
-			return rc;
-		}
-
-		rc = pool_map_find_failed_tgts_by_rank(pool->sp_map, &tgts,
-						       &tgt_cnt, myrank);
-		if (rc) {
-			D_ERROR("get failed tgts %d\n", rc);
-			return rc;
-		}
-
-		if (tgt_cnt != 0) {
-			int i;
-
-			D_ALLOC(excluded_tgts, tgt_cnt * sizeof(int));
-			if (excluded_tgts == NULL) {
-				D_FREE(tgts);
-				return -DER_NOMEM;
-			}
-			for (i = 0; i < tgt_cnt; i++)
-				excluded_tgts[i] = tgts[i]->ta_comp.co_index;
-
-			D_FREE(tgts);
-			coll_args.ca_exclude_tgts = excluded_tgts;
-			coll_args.ca_exclude_tgts_cnt = tgt_cnt;
-		}
+	rc = ds_pool_get_failed_tgt_idx(pool->sp_uuid,
+					&coll_args.ca_exclude_tgts,
+					&coll_args.ca_exclude_tgts_cnt);
+	if (rc) {
+		D_ERROR(DF_UUID "failed to get index : rc %d\n",
+			DP_UUID(pool->sp_uuid), rc);
+		return rc;
 	}
 
 	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
-	if (excluded_tgts)
-		D_FREE(excluded_tgts);
+	if (coll_args.ca_exclude_tgts)
+		D_FREE(coll_args.ca_exclude_tgts);
 	if (rc) {
 		D_ERROR("Pool query on pool "DF_UUID" failed, rc:%d\n",
 			DP_UUID(pool->sp_uuid), rc);

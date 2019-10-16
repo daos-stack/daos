@@ -22,7 +22,6 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from logging import getLogger
-
 import time
 import os
 import signal
@@ -65,7 +64,10 @@ class BasicParameter(object):
             test (Test): avocado Test object to use to read the yaml file
             path (str): yaml path where the name is to be found
         """
-        self.value = test.params.get(name, path, self._default)
+        if hasattr(test, "config") and test.config is not None:
+            self.value = test.config.get(name, path, self._default)
+        else:
+            self.value = test.params.get(name, path, self._default)
 
     def update(self, value, name=None):
         """Update the value of the parameter.
@@ -77,7 +79,7 @@ class BasicParameter(object):
         """
         self.value = value
         if name is not None:
-            self.log.info("Updated param %s => %s", name, self.value)
+            self.log.debug("Updated param %s => %s", name, self.value)
 
 
 class FormattedParameter(BasicParameter):
@@ -144,6 +146,9 @@ class ObjectWithParameters(object):
 
     def get_param_names(self):
         """Get a sorted list of the names of the BasicParameter attributes.
+
+        Note: Override this method to change the order or inclusion of a
+            command parameter in the get_params() method.
 
         Returns:
             list: a list of class attribute names used to define parameters
@@ -332,8 +337,9 @@ class ExecutableCommand(CommandWithParameters):
             bool: whether or not the command progress has been detected
 
         """
-        self.log.info("Checking status of the %s command in %s",
-                      self._command, sub_process)
+        self.log.info(
+            "Checking status of the %s command in %s",
+            self._command, subprocess)
         return True
 
     def stop(self):
@@ -373,8 +379,10 @@ class DaosCommand(ExecutableCommand):
 
     def __init__(self, namespace, command, path=""):
         """Create DaosCommand object.
+
         Specific type of command object built so command str returns:
             <command> <options> <request> <action/subcommand> <options>
+
         Args:
             namespace (str): yaml namespace (path to parameters)
             command (str): string of the command to be executed.

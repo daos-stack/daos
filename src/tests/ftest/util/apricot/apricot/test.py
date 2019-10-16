@@ -40,6 +40,7 @@ import agent_utils
 import write_host_file
 from daos_api import DaosContext, DaosLog, DaosApiError
 from server_utils import ServerManager, ServerFailed
+from configuration_utils import Configuration
 
 
 # pylint: disable=invalid-name
@@ -94,6 +95,8 @@ class Test(avocadoTest):
         self.d_log = None
         self.uri_file = None
         self.fault_file = None
+        self.debug = False
+        self.config = None
 
     # pylint: disable=invalid-name
     def cancelForTicket(self, ticket):
@@ -219,6 +222,12 @@ class TestWithServers(TestWithoutServers):
             self.hostlist_servers = test_servers[:server_count]
         self.log.info("hostlist_servers:  %s", self.hostlist_servers)
         self.log.info("hostlist_clients:  %s", self.hostlist_clients)
+
+        # Find a configuration that meets the test requirements
+        self.config = Configuration(
+            self.params, self.hostlist_servers, debug=self.debug)
+        if not self.config.set_config(self):
+            self.cancel("Test requirements not met!")
 
         # If a specific count is specified, verify enough servers/clients are
         # specified to satisy the count
@@ -399,23 +408,22 @@ class TestWithServers(TestWithoutServers):
             for group, hosts in server_groups.items():
                 self.log.info(
                     "Starting servers: group=%s, hosts=%s", group, hosts)
-                self.server_manager = ServerManager(
+                self.server_managers.append(ServerManager(
                     self.bin,
                     os.path.join(self.ompi_prefix, "bin"),
-                    attach=os.path.join(self.prefix, "tmp"))
-                self.server_managers.append(self.server_manager)
-                self.server_manager.get_params(self)
-                self.server_manager.runner.job.yaml_params.name = group
-                self.server_manager.hosts = (
+                    attach=os.path.join(self.prefix, "tmp")))
+                self.server_managers[-1].get_params(self)
+                self.server_managers[-1].runner.job.yaml_params.name = group
+                self.server_managers[-1].hosts = (
                     hosts, self.workdir, self.hostfile_servers_slots)
                 if self.prefix != "/usr":
-                    if self.server_manager.runner.export.value is None:
-                        self.server_manager.runner.export.value = []
-                    self.server_manager.runner.export.value.extend(["PATH"])
+                    if self.server_managers[-1].runner.export.value is None:
+                        self.server_managers[-1].runner.export.value = []
+                    self.server_managers[-1].runner.export.value.extend(["PATH"])
                 try:
                     avocado_file = "src/tests/ftest/data/daos_avocado_test.yaml"
                     yamlfile = "{}/{}".format(self.basepath, avocado_file)
-                    self.server_manager.start(yamlfile)
+                    self.server_managers[-1].start(yamlfile)
                 except ServerFailed as error:
                     self.multi_log("  {}".format(error))
                     self.fail("Error starting server: {}".format(error))
