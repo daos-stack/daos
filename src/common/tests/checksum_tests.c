@@ -140,7 +140,7 @@ test_update_reset(void **state)
 	daos_csummer_set_buffer(csummer, (uint8_t *) &csum, sizeof(csum));
 
 	size_t len = 32;
-	uint8_t buf[len];
+	uint8_t buf[32];
 
 	memset(buf, 0, len);
 
@@ -169,7 +169,7 @@ test_update_with_multiple_buffers(void **state)
 	uint32_t		 csum = 0; /** buffer */
 	uint32_t		 csum2 = 0; /** buffer */
 	size_t			 len = 64;
-	uint8_t			 buf[len];
+	uint8_t			 buf[64];
 	struct daos_csummer	*csummer;
 
 	fake_get_size_result = sizeof(uint32_t); /** setup fake checksum */
