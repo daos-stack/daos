@@ -38,14 +38,12 @@ struct rebuild_one {
 	d_list_t	ro_list;
 	uuid_t		ro_cont_uuid;
 	daos_unit_oid_t	ro_oid;
-	daos_epoch_t	ro_max_eph;
+	daos_epoch_t	ro_dkey_punch_eph;
 	daos_epoch_t	ro_epoch;
 	daos_iod_t	*ro_iods;
 	daos_iod_t	*ro_punch_iods;
-	daos_epoch_t	*ro_ephs;
-	daos_key_t	*ro_ephs_keys;
+	daos_epoch_t	*ro_akey_punch_ephs;
 	d_sg_list_t	*ro_sgls;
-	unsigned int	ro_ephs_num;
 	unsigned int	ro_iod_num;
 	unsigned int	ro_punch_iod_num;
 	unsigned int	ro_iod_alloc_num;

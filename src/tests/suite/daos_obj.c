@@ -543,6 +543,13 @@ lookup_empty_single(const char *dkey, const char *akey, uint64_t idx,
 static void
 io_overwrite_small(void **state, daos_obj_id_t oid)
 {
+	/* This test is disabled because it doesn't work with the incarnation
+	 * log.  It's a happy accident that it works now.   We don't support
+	 * multiple updates in the same transaction because DTX allocates a
+	 * new DTX entry for the same epoch.  The incarnation log rejects this.
+	 * It will be fixed when distributed transactions are fully implemented.
+	 */
+#if 0
 	test_arg_t	*arg = *state;
 	struct ioreq	 req;
 	daos_size_t	 size;
@@ -582,6 +589,7 @@ io_overwrite_small(void **state, daos_obj_id_t oid)
 	daos_tx_close(th1, NULL);
 	daos_tx_close(th2, NULL);
 	ioreq_fini(&req);
+#endif
 }
 
 #define OW_IOD_SIZE	1024 /* used for mixed record overwrite */
@@ -3138,7 +3146,7 @@ blob_unmap_trigger(void **state)
 	char		*enum_buf;
 	char		 dkey[5] = "dkey";
 	char		 akey[20];
-	int		 nvme_recs = 2;
+	int		 nvme_recs = 1;
 	daos_handle_t	 th[3];
 	int		 i, t;
 	int		 rc;

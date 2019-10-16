@@ -40,8 +40,13 @@
 #include <daos_srv/daos_server.h>
 #include <daos_srv/dtx_srv.h>
 #include <daos.h>
+#include <daos/checksum.h>
 #include "obj_rpc.h"
 #include "obj_internal.h"
+
+static int
+ds_csum_verify_bio(crt_rpc_t *rpc, struct bio_desc *biod,
+		   struct daos_csummer *csummer);
 
 /**
  * After bulk finish, let's send reply, then release the resource.
@@ -66,19 +71,6 @@ ds_obj_rw_complete(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 			D_ERROR(DF_UOID "%s end failed: %d\n",
 				DP_UOID(orwi->orw_oid),
 				update ? "Update" : "Fetch", rc);
-			if (status == 0)
-				status = rc;
-		}
-	}
-
-	if (cont_hdl != NULL && cont_hdl->sch_cont != NULL) {
-		struct obj_rw_out	*orwo = crt_reply_get(rpc);
-
-		rc = vos_oi_get_attr(cont_hdl->sch_cont->sc_hdl, orwi->orw_oid,
-				     orwi->orw_epoch, dth, &orwo->orw_attr);
-		if (rc) {
-			D_ERROR(DF_UOID" can not get status: rc %d\n",
-				DP_UOID(orwi->orw_oid), rc);
 			if (status == 0)
 				status = rc;
 		}
@@ -894,8 +886,12 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		rc = -DER_REC2BIG;
 		D_ERROR(DF_UOID" ds_bulk_transfer/bio_iod_copy failed, rc %d",
 			DP_UOID(orw->orw_oid), rc);
+		goto post;
 	}
 
+	rc = ds_csum_verify_bio(rpc, biod, cont_hdl->csummer);
+
+post:
 	err = bio_iod_post(biod);
 	rc = rc ? : err;
 out:
@@ -1478,8 +1474,7 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	/* TODO: Transfer the inline_thres from enumerate RPC */
 	enum_arg.inline_thres = 32;
 
-	if (opc == DAOS_OBJ_RECX_RPC_ENUMERATE ||
-	    opc == DAOS_OBJ_RPC_ENUMERATE) {
+	if (opc == DAOS_OBJ_RECX_RPC_ENUMERATE) {
 		oeo->oeo_eprs.ca_count = 0;
 		D_ALLOC(oeo->oeo_eprs.ca_arrays,
 			oei->oei_nr * sizeof(daos_epoch_range_t));
@@ -1980,4 +1975,71 @@ ds_obj_abt_pool_choose_cb(crt_rpc_t *rpc, ABT_pool *pools)
 	};
 
 	return pool;
+}
+
+static bool
+cont_prop_srv_verify(struct ds_iv_ns *ns, uuid_t co_hdl)
+{
+	int			rc;
+	daos_prop_t		cont_prop = {0};
+	struct daos_prop_entry	entry = {0};
+
+	entry.dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
+	cont_prop.dpp_entries = &entry;
+	cont_prop.dpp_nr = 1;
+
+	rc = cont_iv_prop_fetch(ns, co_hdl, &cont_prop);
+	if (rc != 0)
+		return false;
+	return daos_cont_prop2serververify(&cont_prop);
+}
+
+static int
+ds_csum_verify_bio(crt_rpc_t *rpc, struct bio_desc *biod,
+		   struct daos_csummer *csummer)
+{
+	struct obj_rw_in	*orw = crt_req_get(rpc);
+	struct ds_pool		*pool;
+	daos_iod_t		*iods = orw->orw_iods.ca_arrays;
+	uint64_t		 iods_nr = orw->orw_iods.ca_count;
+	unsigned int		 i;
+	bool			 is_update;
+	int			 rc = 0;
+
+	if (!daos_csummer_initialized(csummer))
+		return 0;
+
+	pool = ds_pool_lookup(orw->orw_pool_uuid);
+	if (pool == NULL)
+		return -DER_NONEXIST;
+
+	is_update =	opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE ||
+			opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_UPDATE;
+	if (!is_update ||
+	    !cont_prop_srv_verify(pool->sp_iv_ns, orw->orw_co_hdl)) {
+		ds_pool_put(pool);
+		return 0;
+	}
+
+	for (i = 0; i < iods_nr && rc == 0; i++) {
+		daos_iod_t		*iod = &iods[i];
+		struct bio_sglist	*bsgl  = bio_iod_sgl(biod, i);
+		d_sg_list_t		 sgl;
+		/** Currently only supporting array types */
+		bool			 type_is_supported =
+						iod->iod_type == DAOS_IOD_ARRAY;
+
+		if (!type_is_supported || !dcb_is_valid(iod->iod_csums))
+			continue;
+
+		rc = bio_sgl_convert(bsgl, &sgl);
+
+		if (rc == 0)
+			rc = daos_csummer_verify_data(csummer, iod, &sgl);
+
+		daos_sgl_fini(&sgl, false);
+	}
+
+	ds_pool_put(pool);
+	return rc;
 }

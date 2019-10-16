@@ -1317,6 +1317,8 @@ test_acl_from_strs_bad_input(void **state)
 	assert_int_equal(daos_acl_from_strs(NULL, 1, &acl), -DER_INVAL);
 	assert_int_equal(daos_acl_from_strs(valid_aces, 0, &acl),
 			 -DER_INVAL);
+	assert_int_equal(daos_acl_from_strs(valid_aces, 1, NULL),
+			 -DER_INVAL);
 	assert_int_equal(daos_acl_from_strs(garbage, 1, &acl), -DER_INVAL);
 }
 
@@ -1348,6 +1350,85 @@ test_acl_from_strs_success(void **state)
 	assert_int_equal(actual_count, aces_nr);
 	assert_null(current);
 
+	daos_acl_free(acl);
+}
+
+static void
+test_acl_to_strs_bad_input(void **state)
+{
+	struct daos_acl	*acl;
+	char		**result = NULL;
+	size_t		len = 0;
+
+	acl = daos_acl_create(NULL, 0); /* empty is valid */
+
+	assert_int_equal(daos_acl_to_strs(NULL, &result, &len), -DER_INVAL);
+	assert_int_equal(daos_acl_to_strs(acl, NULL, &len), -DER_INVAL);
+	assert_int_equal(daos_acl_to_strs(acl, &result, NULL), -DER_INVAL);
+
+	/* mess up the length so the ACL is invalid */
+	acl->dal_len = 1;
+	assert_int_equal(daos_acl_to_strs(acl, &result, &len), -DER_INVAL);
+
+	daos_acl_free(acl);
+}
+
+static void
+test_acl_to_strs_empty(void **state)
+{
+	struct daos_acl	*acl;
+	char		**result = NULL;
+	size_t		len = 0;
+
+	acl = daos_acl_create(NULL, 0); /* empty is valid */
+
+	assert_int_equal(daos_acl_to_strs(acl, &result, &len), 0);
+
+	assert_null(result); /* no point in allocating if there's nothing */
+	assert_int_equal(len, 0);
+
+	daos_acl_free(acl);
+}
+
+static void
+test_acl_to_strs_success(void **state)
+{
+	struct daos_acl	*acl;
+	struct daos_ace	*ace = NULL;
+	char		**result = NULL;
+	size_t		len = 0;
+	char		*expected_result[] = {"A::OWNER@:rw",
+					      "A::user1@:rw",
+					      "A:G:readers@:r"};
+	size_t		expected_len = sizeof(expected_result) / sizeof(char *);
+	size_t		i;
+
+	/* Set up with direct conversion from expected results */
+	acl = daos_acl_create(NULL, 0);
+	for (i = 0; i < expected_len; i++) {
+		assert_int_equal(daos_ace_from_str(expected_result[i], &ace),
+				 0);
+		daos_acl_add_ace(&acl, ace);
+
+		daos_ace_free(ace);
+		ace = NULL;
+	}
+
+	assert_int_equal(daos_acl_to_strs(acl, &result, &len), 0);
+
+	assert_int_equal(len, expected_len);
+	assert_non_null(result);
+
+	for (i = 0; i < expected_len; i++) {
+		assert_non_null(result[i]);
+		assert_string_equal(result[i], expected_result[i]);
+	}
+
+	/* Free up dynamically allocated strings */
+	for (i = 0; i < len; i++) {
+		D_FREE(result[i]);
+	}
+	D_FREE(result);
 	daos_acl_free(acl);
 }
 
@@ -1431,7 +1512,10 @@ main(void)
 		cmocka_unit_test(test_ace_to_str_different_perms),
 		cmocka_unit_test(test_ace_from_str_and_back_again),
 		cmocka_unit_test(test_acl_from_strs_bad_input),
-		cmocka_unit_test(test_acl_from_strs_success)
+		cmocka_unit_test(test_acl_from_strs_success),
+		cmocka_unit_test(test_acl_to_strs_bad_input),
+		cmocka_unit_test(test_acl_to_strs_empty),
+		cmocka_unit_test(test_acl_to_strs_success),
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);
