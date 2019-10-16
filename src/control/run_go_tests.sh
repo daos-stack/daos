@@ -51,9 +51,12 @@ function setup_environment()
 	CGO_LDFLAGS=-L${SL_PREFIX}/lib
 	CGO_LDFLAGS+=" -L${SL_SPDK_PREFIX}/lib"
 	CGO_LDFLAGS+=" -L${SL_HWLOC_PREFIX}/lib"
+	CGO_LDFLAGS+=" -L${SL_ISAL_PREFIX}/lib"
+	CGO_LDFLAGS+=" -lnuma -ldl -lisal"
 	CGO_CFLAGS=-I${SL_PREFIX}/include
 	CGO_CFLAGS+=" -I${SL_SPDK_PREFIX}/include"
 	CGO_CFLAGS+=" -I${SL_HWLOC_PREFIX}/include"
+	CGO_CFLAGS+=" -I${SL_ISAL_PREFIX}/include"
 }
 
 function check_formatting()
