@@ -142,7 +142,7 @@ def check_file_exists(hosts, filename, user=None, directory=False):
 
     """
     missing_file = NodeSet()
-    command = "test -e {}".format(filename)
+    command = "test -e {0}".format(filename)
     if user is not None and not directory:
         command = "test -O {0}".format(filename)
     elif user is not None and directory:
