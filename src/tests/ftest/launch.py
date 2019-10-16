@@ -26,6 +26,7 @@ from __future__ import print_function
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 import json
 from multiprocessing import Process
+import sys
 import os
 import re
 import socket
@@ -102,15 +103,15 @@ def set_test_environment():
     os.environ["DAOS_SINGLETON_CLI"] = "1"
     os.environ["CRT_CTX_SHARE_ADDR"] = "1"
     os.environ["CRT_ATTACH_INFO_PATH"] = \
-        os.environ.get('TMPDIR', os.path.join(base_dir, "tmp"))
+        os.environ.get('DAOS_TEST_SHARED_DIR', os.path.join(base_dir, "tmp"))
 
     # Python paths required for functional testing
+    version = "python2.7" if sys.version_info < (3, 0) else "python3"
     required_python_paths = [
         os.path.abspath("util/apricot"),
         os.path.abspath("util"),
         os.path.abspath("../../utils/py"),
-        os.path.join(base_dir, "lib64", "python2.7", "site-packages"),
-        os.path.join(base_dir, "lib64", "python3", "site-packages"),
+        os.path.join(base_dir, "lib64", version, "site-packages"),
     ]
 
     # Check the PYTHONPATH env definition

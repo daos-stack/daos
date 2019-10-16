@@ -121,7 +121,7 @@ class TestWithoutServers(Test):
                                                       '..') + os.path.sep)
         self.prefix = build_paths['PREFIX']
         self.ompi_prefix = build_paths["OMPI_PREFIX"]
-        self.tmp = os.getenv('TMPDIR',
+        self.tmp = os.getenv('DAOS_TEST_SHARED_DIR',
                              os.path.join(build_paths["PREFIX"], 'tmp'))
         self.daos_test = os.path.join(self.prefix, 'bin', 'daos_test')
         self.orterun = os.path.join(self.ompi_prefix, "bin", "orterun")

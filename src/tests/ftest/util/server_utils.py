@@ -246,7 +246,7 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
         # Create the DAOS server configuration yaml file to pass
         # with daos_server -o <FILE_NAME>
         print("Creating the server yaml file")
-        yaml_prefix = os.getenv('TMPDIR', build_vars["PREFIX"])
+        yaml_prefix = os.getenv('DAOS_TEST_SHARED_DIR', build_vars["PREFIX"])
         server_yaml = os.path.join(yaml_prefix, AVOCADO_FILE)
         server_config = DaosServerConfig()
         server_config.get_params(test)
@@ -293,7 +293,10 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
             server_cmd.extend(["-x", "PATH"])
 
         # build shared dir for tmp amd yaml files
-        tmpdir = os.getenv('TMPDIR', os.path.join(build_vars["PREFIX"], 'tmp'))
+        tmpdir = os.getenv('DAOS_TEST_SHARED_DIR', os.path.join(build_vars["PREFIX"], 'tmp'))
+
+	# set env CRT_ATTACH_INFO_PATH 
+	os.environ["CRT_ATTACH_INFO_PATH"] = tmpdir
         # Run server in insecure mode until Certificate tests are in place
         server_cmd.extend(
             [os.path.join(build_vars["PREFIX"], "bin", "daos_server"),
