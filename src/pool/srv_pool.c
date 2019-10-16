@@ -2369,6 +2369,7 @@ ds_pool_svc_get_acl_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
+rechoose:
 	ep.ep_grp = NULL; /* primary group */
 	rsvc_client_choose(&client, &ep);
 
@@ -2384,17 +2385,17 @@ ds_pool_svc_get_acl_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
 	uuid_clear(in->pgi_op.pi_hdl);
 
 	rc = dss_rpc_send(rpc);
-	if (rc != 0)
-		D_GOTO(out_rpc, rc);
-
 	out = crt_reply_get(rpc);
 	D_ASSERT(out != NULL);
 
 	rc = rsvc_client_complete_rpc(&client, &ep, rc,
 				      out->pgo_op.po_rc,
 				      &out->pgo_op.po_hint);
-	if (rc != 0)
-		D_GOTO(out_rpc, rc);
+	if (rc == RSVC_CLIENT_RECHOOSE) {
+		crt_req_decref(rpc);
+		dss_sleep(1000 /* ms */);
+		D_GOTO(rechoose, rc);
+	}
 
 	rc = out->pgo_op.po_rc;
 	if (rc != 0) {
