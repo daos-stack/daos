@@ -33,6 +33,334 @@
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
+int
+obj_ec_recxs_init(struct obj_ec_recx_array *recxs, uint32_t recx_nr)
+{
+	if (recxs->oer_recxs != NULL) {
+		D_ERROR("oer_recxs non-NULL, cannot init again.\n");
+		return -DER_INVAL;
+	}
+
+	if (recx_nr == 0)
+		return 0;
+
+	D_ALLOC_ARRAY(recxs->oer_recxs, recx_nr);
+	if (recxs->oer_recxs == NULL)
+		return -DER_NOMEM;
+
+	return 0;
+}
+
+void
+obj_ec_recxs_fini(struct obj_ec_recx_array *recxs)
+{
+	if (recxs == NULL)
+		return;
+	if (recxs->oer_recxs != NULL)
+		D_FREE(recxs->oer_recxs);
+	recxs->oer_nr = 0;
+}
+
+void
+obj_ec_pcode_fini(struct obj_ec_pcode *pcode, uint32_t nr)
+{
+	int	i;
+
+	if (pcode == NULL)
+		return;
+	if (pcode->oep_ec_recxs != NULL) {
+		for (i = 0; i < nr; i++)
+			obj_ec_recxs_fini(&pcode->oep_ec_recxs[i]);
+		D_FREE(pcode->oep_ec_recxs);
+	}
+	if (pcode->oep_sgls != NULL) {
+		for (i = 0; i < nr; i++)
+			daos_sgl_fini(&pcode->oep_sgls[i], true);
+		D_FREE(pcode->oep_sgls);
+	}
+	if (pcode->oep_bulks != NULL) {
+		for (i = 0; i < nr; i++)
+			crt_bulk_free(&pcode->oep_bulks[i]);
+		D_FREE(pcode->oep_bulks);
+	}
+	memset(pcode, 0, sizeof(*pcode));
+}
+
+static int
+obj_ec_pcode_init(struct obj_ec_pcode *pcode, uint32_t nr)
+{
+	if (pcode->oep_ec_recxs != NULL) {
+		D_ASSERT(pcode->oep_sgls != NULL);
+		D_ASSERT(pcode->oep_bulks != NULL);
+		return -DER_ALREADY;
+	}
+	D_ALLOC_ARRAY(pcode->oep_ec_recxs, nr);
+	if (pcode->oep_ec_recxs == NULL)
+		return -DER_NOMEM;
+	D_ALLOC_ARRAY(pcode->oep_sgls, nr);
+	if (pcode->oep_sgls == NULL) {
+		obj_ec_pcode_fini(pcode, nr);
+		return -DER_NOMEM;
+	}
+	D_ALLOC_ARRAY(pcode->oep_bulks, nr);
+	if (pcode->oep_bulks == NULL) {
+		obj_ec_pcode_fini(pcode, nr);
+		return -DER_NOMEM;
+	}
+	return 0;
+}
+
+/** scan the iod to find the full_stripe recxs */
+static int
+obj_ec_recx_scan(daos_iod_t *iod, struct daos_oclass_attr *oca,
+		 struct obj_ec_recx_array *ec_recx_array)
+{
+	struct obj_ec_recx		*ec_recx = NULL;
+	daos_recx_t			*recx;
+	uint64_t			 stripe_rec_nr;
+	uint64_t			 start, end, rec_nr, rec_off;
+	int				 i, idx, rc;
+
+	D_ASSERT(iod->iod_type == DAOS_IOD_ARRAY);
+	stripe_rec_nr = obj_ec_stripe_rec_nr(iod, oca);
+
+	for (i = 0, idx = 0, rec_off = 0; i < iod->iod_nr; i++) {
+		recx = &iod->iod_recxs[i];
+		start = roundup(recx->rx_idx, stripe_rec_nr);
+		end = rounddown(recx->rx_idx + recx->rx_nr, stripe_rec_nr);
+		if (start >= end) {
+			rec_off += recx->rx_nr;
+			continue;
+		}
+
+		if (ec_recx_array->oer_recxs == NULL) {
+			rc = obj_ec_recxs_init(ec_recx_array, iod->iod_nr - i);
+			if (rc)
+				return rc;
+			ec_recx = ec_recx_array->oer_recxs;
+		}
+		ec_recx[idx].oer_idx = i;
+		rec_nr = end - start;
+		ec_recx[idx].oer_stripe_nr = rec_nr / stripe_rec_nr;
+		ec_recx[idx].oer_byte_off = (rec_off + start - recx->rx_idx) *
+					    iod->iod_size;
+		ec_recx[idx].oer_recx.rx_idx = start;
+		ec_recx[idx].oer_recx.rx_nr = rec_nr;
+		ec_recx_array->oer_stripe_total += ec_recx[idx].oer_stripe_nr;
+		idx++;
+		rec_off += recx->rx_nr;
+	}
+
+	if (ec_recx_array->oer_recxs != NULL) {
+		D_ASSERT(idx > 0 && idx <= iod->iod_nr);
+		ec_recx_array->oer_nr = idx;
+	} else {
+		D_ASSERT(ec_recx_array->oer_nr == 0);
+	}
+
+	return 0;
+}
+
+/** Encode one full stripe, the result parity buffer will be filled. */
+static int
+obj_ec_stripe_encode(daos_iod_t *iod, d_sg_list_t *sgl, uint32_t iov_idx,
+		     size_t iov_off, struct obj_ec_codec *codec,
+		     struct daos_oclass_attr *oca, unsigned char *parity_bufs[])
+{
+	uint64_t		 len = obj_ec_cell_bytes(iod, oca);
+	unsigned int		 k = oca->u.ec.e_k;
+	unsigned int		 p = oca->u.ec.e_p;
+	unsigned char		*data[k];
+	unsigned char		*c_data[k]; /* copied data */
+	unsigned char		*from;
+	int			 i, c_idx = 0;
+	int			 rc = 0;
+
+	for (i = 0; i < k; i++) {
+		c_data[i] = NULL;
+		if (daos_iov_left(sgl, iov_idx, iov_off) >= len) {
+			from = (unsigned char *)sgl->sg_iovs[iov_idx].iov_buf;
+			data[i] = &from[iov_off];
+			daos_sgl_move(sgl, iov_idx, iov_off, len);
+		} else {
+			uint64_t copied = 0;
+
+			D_ALLOC(c_data[c_idx], len);
+			if (c_data[c_idx] == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			while (copied < len) {
+				uint64_t left;
+				uint64_t cp_len;
+				uint64_t tobe_cp;
+
+				tobe_cp = len - copied;
+				left = daos_iov_left(sgl, iov_idx, iov_off);
+				cp_len = MIN(tobe_cp, left);
+				if (cp_len == 0) {
+					daos_sgl_next_iov(iov_idx, iov_off);
+				} else {
+					from = sgl->sg_iovs[iov_idx].iov_buf;
+					memcpy(&c_data[c_idx][copied],
+					       &from[iov_off], cp_len);
+					daos_sgl_move(sgl, iov_idx, iov_off,
+						      cp_len);
+					copied += cp_len;
+				}
+				if (copied < len && iov_idx >= sgl->sg_nr)
+					D_GOTO(out, rc = -DER_REC2BIG);
+			}
+			data[i] = c_data[c_idx++];
+		}
+	}
+
+	ec_encode_data(len, k, p, codec->ec_gftbls, data, parity_bufs);
+
+out:
+	for (i = 0; i < c_idx; i++)
+		D_FREE(c_data[i]);
+	return rc;
+}
+
+static int
+ec_parity_buf_init(unsigned int p, uint64_t parity_len, d_sg_list_t *ec_sgl)
+{
+	unsigned char	*parity_buf[OBJ_EC_MAX_P] = {0};
+	int		 i, rc;
+
+	rc = daos_sgl_init(ec_sgl, p);
+	if (rc)
+		goto out;
+	for (i = 0; i < p; i++) {
+		D_ALLOC(parity_buf[i], parity_len);
+		if (parity_buf[i] == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		d_iov_set(&ec_sgl->sg_iovs[i], parity_buf[i], parity_len);
+	}
+
+out:
+	if (rc)
+		daos_sgl_fini(ec_sgl, true);
+	return rc;
+}
+
+/**
+ * Encode the data in full stripe recx_array, the result parity stored in
+ * ec_sgl. Within the ec_sgl, one parity target with one separate iov for its
+ * parity code.
+ */
+static int
+obj_ec_recx_encode(daos_obj_id_t oid, daos_iod_t *iod, d_sg_list_t *sgl,
+		   struct daos_oclass_attr *oca,
+		   struct obj_ec_recx_array *recx_array, d_sg_list_t *ec_sgl)
+{
+	struct obj_ec_codec	*codec;
+	struct obj_ec_recx	*ec_recx;
+	unsigned int		 p = oca->u.ec.e_p;
+	unsigned char		*parity_buf[p];
+	uint64_t		 cell_bytes, stripe_bytes, parity_len;
+	uint32_t		 iov_idx = 0;
+	uint64_t		 iov_off = 0, last_off = 0;
+	uint32_t		 encoded_nr = 0;
+	int			 i, j, m, rc;
+
+	D_ASSERT(recx_array != NULL && ec_sgl != NULL);
+	if (recx_array->oer_nr == 0)
+		D_GOTO(out, rc = 0);
+	D_ASSERT(recx_array->oer_stripe_total > 0);
+	D_ASSERT(recx_array->oer_recxs != NULL);
+	codec = obj_ec_codec_get(daos_obj_id2class(oid));
+	if (codec == NULL) {
+		D_ERROR("failed to get ec codec.\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	cell_bytes = obj_ec_cell_bytes(iod, oca);
+	stripe_bytes = cell_bytes * oca->u.ec.e_k;
+	parity_len = recx_array->oer_stripe_total * cell_bytes;
+	rc = ec_parity_buf_init(p, parity_len, ec_sgl);
+	if (rc)
+		goto out;
+
+	/* calculate EC parity for each full_stripe */
+	for (i = 0; i < recx_array->oer_nr; i++) {
+		ec_recx = &recx_array->oer_recxs[i];
+		daos_sgl_move(sgl, iov_idx, iov_off,
+			      ec_recx->oer_byte_off - last_off);
+		last_off = ec_recx->oer_byte_off;
+		for (j = 0; j < ec_recx->oer_stripe_nr; j++) {
+			for (m = 0; m < p; m++)
+				parity_buf[m] = ec_sgl->sg_iovs[m].iov_buf +
+						encoded_nr * cell_bytes;
+			/*
+			 *D_PRINT("encode %d rec_offset "DF_U64", rec_nr "
+			 *	DF_U64".\n", j, iov_off / iod->iod_size,
+			 *	stripe_bytes / iod->iod_size);
+			 */
+			rc = obj_ec_stripe_encode(iod, sgl, iov_idx, iov_off,
+						  codec, oca, parity_buf);
+			if (rc) {
+				D_ERROR("stripe encoding failed rc %d.\n", rc);
+				goto out;
+			}
+			encoded_nr++;
+			daos_sgl_move(sgl, iov_idx, iov_off, stripe_bytes);
+			last_off += stripe_bytes;
+		}
+	}
+
+out:
+	if (rc)
+		daos_sgl_fini(ec_sgl, true);
+	return rc;
+}
+
+int
+obj_ec_update_encode(daos_obj_update_t *args, daos_obj_id_t oid,
+		     struct daos_oclass_attr *oca, struct obj_ec_pcode *pcode,
+		     uint64_t *tgt_set)
+{
+	daos_iod_t			*iods = args->iods;
+	d_sg_list_t			*sgls = args->sgls;
+	uint32_t			 nr = args->nr;
+	int				 i, rc;
+
+	rc = obj_ec_pcode_init(pcode, nr);
+	if (rc) {
+		if (rc != -DER_ALREADY)
+			goto out;
+
+		D_DEBUG(DB_TRACE, DF_OID" pcode already inited (retry case).\n",
+			DP_OID(oid));
+		ec_get_tgt_set(iods, nr, oca, true, tgt_set);
+		return 0;
+	}
+
+	for (i = 0; i < nr; i++) {
+		rc = obj_ec_recx_scan(&iods[i], oca, &pcode->oep_ec_recxs[i]);
+		if (rc) {
+			D_ERROR(DF_OID" obj_ec_recx_scan failed %d.\n",
+				DP_OID(oid), rc);
+			goto out;
+		}
+		/* obj_ec_recx_array_dump(&pcode->oep_ec_recxs[i]); */
+
+		rc = obj_ec_recx_encode(oid, &iods[i], &sgls[i], oca,
+					&pcode->oep_ec_recxs[i],
+					&pcode->oep_sgls[i]);
+		if (rc) {
+			D_ERROR(DF_OID" obj_ec_recx_encode failed %d.\n",
+				DP_OID(oid), rc);
+			goto out;
+		}
+	}
+
+	ec_get_tgt_set(iods, nr, oca, true, tgt_set);
+out:
+	if (rc)
+		obj_ec_pcode_fini(pcode, nr);
+	return rc;
+}
+
 /* EC struct used to save state during encoding and to drive resource recovery.
  */
 struct ec_params {
@@ -341,7 +669,7 @@ void
 ec_get_tgt_set(daos_iod_t *iods, unsigned int nr, struct daos_oclass_attr *oca,
 	       bool parity_include, uint64_t *tgt_set)
 {
-	unsigned int    len = oca->u.ec.e_len;
+	unsigned int    len = obj_ec_cell_bytes(iods, oca);
 	unsigned int    k = oca->u.ec.e_k;
 	unsigned int    p = oca->u.ec.e_p;
 	uint64_t	ss = k * len;

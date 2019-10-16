@@ -29,7 +29,7 @@
 #include <daos/event.h>
 #include <daos/rpc.h>
 #include <daos/object.h>
-#include "obj_rpc.h"
+#include "obj_internal.h"
 
 static int
 crt_proc_struct_dtx_id(crt_proc_t proc, struct dtx_id *dti)
@@ -193,6 +193,74 @@ crt_proc_daos_csum_buf_t(crt_proc_t proc, daos_csum_buf_t *csum)
 	}
 
 	return 0;
+}
+
+static int
+crt_proc_struct_obj_ec_recx(crt_proc_t proc, struct obj_ec_recx *ec_recx)
+{
+	int rc;
+
+	rc = crt_proc_uint32_t(proc, &ec_recx->oer_idx);
+	if (rc != 0)
+		return -DER_HG;
+	rc = crt_proc_uint32_t(proc, &ec_recx->oer_stripe_nr);
+	if (rc != 0)
+		return -DER_HG;
+	rc = crt_proc_uint64_t(proc, &ec_recx->oer_byte_off);
+	if (rc != 0)
+		return -DER_HG;
+	rc = crt_proc_daos_recx_t(proc, &ec_recx->oer_recx);
+	if (rc != 0)
+		return -DER_HG;
+
+	return 0;
+}
+
+static int
+crt_proc_struct_obj_ec_recx_array(crt_proc_t proc,
+				  struct obj_ec_recx_array *ec_recx_array)
+{
+	crt_proc_op_t		 proc_op;
+	int			 i;
+	int			 rc;
+
+	rc = crt_proc_uint32_t(proc, &ec_recx_array->oer_nr);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint32_t(proc, &ec_recx_array->oer_stripe_total);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_get_op(proc, &proc_op);
+	if (rc != 0)
+		return -DER_HG;
+
+	if (proc_op == CRT_PROC_DECODE && ec_recx_array->oer_nr > 0) {
+		rc = obj_ec_recxs_init(ec_recx_array, ec_recx_array->oer_nr);
+		if (rc)
+			return rc;
+	}
+
+	for (i = 0; i < ec_recx_array->oer_nr; i++) {
+		rc = crt_proc_struct_obj_ec_recx(proc,
+						 &ec_recx_array->oer_recxs[i]);
+		if (rc != 0) {
+			if (proc_op == CRT_PROC_DECODE)
+				obj_ec_recxs_fini(ec_recx_array);
+			return -DER_HG;
+		}
+		/*
+		 * D_PRINT("proc ec_recx %d, idx %d, offset %d\n",
+		 *	i, ec_recx_array->oer_recxs[i].oer_idx,
+		 *	(int)ec_recx_array->oer_recxs[i].oer_byte_off);
+		 */
+	}
+
+	if (proc_op == CRT_PROC_FREE && ec_recx_array->oer_recxs != NULL)
+		obj_ec_recxs_fini(ec_recx_array);
+
+	return rc;
 }
 
 #define IOD_REC_EXIST	(1 << 0)

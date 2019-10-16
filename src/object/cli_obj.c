@@ -522,7 +522,7 @@ out:
 	return rc;
 }
 
-#define OBJ_TGT_INLINE_NR	(32)
+#define OBJ_TGT_INLINE_NR	(31)
 struct obj_req_tgts {
 	/* to save memory allocation if #targets <= OBJ_TGT_INLINE_NR */
 	struct daos_shard_tgt	 ort_tgts_inline[OBJ_TGT_INLINE_NR];
@@ -1025,8 +1025,9 @@ struct obj_auxi_args {
 	/* request flags, now only with ORF_RESEND */
 	uint32_t			 flags;
 	struct obj_req_tgts		 req_tgts;
+	uint32_t			 iod_cnt;
 	crt_bulk_t			*bulks;
-	uint32_t			 bulk_nr;
+	struct obj_ec_pcode		 ec_pcode;
 	d_list_t			 shard_task_head;
 	/* one shard_args embedded to save one memory allocation if the obj
 	 * request only targets for one shard.
@@ -1120,6 +1121,24 @@ struct obj_list_arg {
 	daos_anchor_t		*akey_anchor;	/* anchor for akey */
 };
 
+#define obj_bulks_create(sgls, nr, bulks)				       \
+	for (; sgls != NULL && i < nr; i++) {				       \
+		if (sgls[i].sg_iovs != NULL &&				       \
+		    sgls[i].sg_iovs[0].iov_buf != NULL) {		       \
+			rc = crt_bulk_create(daos_task2ctx(task), &sgls[i],    \
+					     bulk_perm, &bulks[i]);	       \
+			if (rc < 0)					       \
+				D_GOTO(out, rc);			       \
+			if (!bulk_bind)					       \
+				continue;				       \
+			rc = crt_bulk_bind(bulks[i], daos_task2ctx(task));     \
+			if (rc != 0) {					       \
+				D_ERROR("crt_bulk_bind failed, rc: %d.\n", rc);\
+				D_GOTO(out, rc);			       \
+			}						       \
+		}							       \
+	}
+
 /* prepare the bulk handle(s) for obj request */
 static int
 obj_bulk_prep(d_sg_list_t *sgls, unsigned int nr, bool bulk_bind,
@@ -1133,37 +1152,30 @@ obj_bulk_prep(d_sg_list_t *sgls, unsigned int nr, bool bulk_bind,
 	D_ASSERTF(nr >= 1, "invalid nr %d.\n", nr);
 	D_ALLOC_ARRAY(bulks, nr);
 	if (bulks == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+		return -DER_NOMEM;
 
-	/* create bulk handles for sgls */
-	for (; sgls != NULL && i < nr; i++) {
-		if (sgls[i].sg_iovs != NULL &&
-		    sgls[i].sg_iovs[0].iov_buf != NULL) {
-			rc = crt_bulk_create(daos_task2ctx(task), &sgls[i],
-					     bulk_perm, &bulks[i]);
-			if (rc < 0)
-				D_GOTO(out, rc);
-			if (!bulk_bind)
-				continue;
-			rc = crt_bulk_bind(bulks[i], daos_task2ctx(task));
-			if (rc != 0) {
-				D_ERROR("crt_bulk_bind failed, rc: %d.\n", rc);
-				D_GOTO(out, rc);
-			}
-		}
-	}
+	/* create bulk handles for data sgls */
+	obj_bulks_create(sgls, nr, bulks);
+
+	/* create bulk handles for EC parity code */
+	if (obj_auxi->ec_pcode.oep_ec_recxs == NULL)
+		goto out;
+	D_ASSERT(obj_auxi->ec_pcode.oep_sgls != NULL);
+	D_ASSERT(obj_auxi->ec_pcode.oep_bulks != NULL);
+	obj_bulks_create(obj_auxi->ec_pcode.oep_sgls, nr,
+			 obj_auxi->ec_pcode.oep_bulks);
 
 out:
 	if (rc == 0) {
 		obj_auxi->bulks = bulks;
-		obj_auxi->bulk_nr = nr;
+		obj_auxi->iod_cnt = nr;
 	} else {
-		int j;
-
-		for (j = 0; j < i; j++)
-			crt_bulk_free(bulks[j]);
-
+		for (i = 0; i < nr; i++) {
+			if (bulks[i] != NULL)
+				crt_bulk_free(bulks[i]);
+		}
 		D_FREE(bulks);
+		obj_ec_pcode_fini(&obj_auxi->ec_pcode, nr);
 	}
 	return rc;
 }
@@ -1172,19 +1184,19 @@ static void
 obj_bulk_fini(struct obj_auxi_args *obj_auxi)
 {
 	crt_bulk_t	*bulks = obj_auxi->bulks;
-	unsigned int	 nr = obj_auxi->bulk_nr;
+	unsigned int	 nr = obj_auxi->iod_cnt;
 	int		 i;
 
-	if (bulks == NULL)
-		return;
+	if (bulks != NULL) {
+		for (i = 0; i < nr; i++)
+			if (bulks[i] != CRT_BULK_NULL)
+				crt_bulk_free(bulks[i]);
+		D_FREE(bulks);
+		obj_auxi->bulks = NULL;
+	}
 
-	for (i = 0; i < nr; i++)
-		if (bulks[i] != CRT_BULK_NULL)
-			crt_bulk_free(bulks[i]);
-
-	D_FREE(bulks);
-	obj_auxi->bulks = NULL;
-	obj_auxi->bulk_nr = 0;
+	obj_ec_pcode_fini(&obj_auxi->ec_pcode, nr);
+	obj_auxi->iod_cnt = 0;
 }
 
 static int
@@ -2164,6 +2176,8 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 			     srv_io_mode != DIM_DTX_FULL_ENABLED);
 	shard_arg->dkey_hash		= dkey_hash;
 	shard_arg->bulks		= obj_auxi->bulks;
+	shard_arg->ec_recxs		= obj_auxi->ec_pcode.oep_ec_recxs;
+	shard_arg->ec_bulks		= obj_auxi->ec_pcode.oep_bulks;
 
 	return 0;
 }
@@ -2312,21 +2326,22 @@ dc_obj_update(tse_task_t *task)
 		goto out_task;
 	}
 
-	is_ec = daos_oclass_is_ec(obj->cob_md.omd_id, &oca);
-	if (is_ec) {
-		rc = ec_obj_update_encode(task, obj->cob_md.omd_id, oca,
-					  &tgt_set);
-		if (rc != 0) {
-			obj_decref(obj);
-			goto out_task;
-		}
-	}
-
 	rc = obj_reg_comp_cb(task, DAOS_OBJ_RPC_UPDATE, map_ver, &obj_auxi,
 			     &obj, sizeof(obj));
 	if (rc != 0) {
 		obj_decref(obj);
 		goto out_task;
+	}
+
+	is_ec = daos_oclass_is_ec(obj->cob_md.omd_id, &oca);
+	if (is_ec) {
+		rc = obj_ec_update_encode(args, obj->cob_md.omd_id, oca,
+					  &obj_auxi->ec_pcode, &tgt_set);
+		if (rc != 0) {
+			D_ERROR(DF_OID" obj_ec_update_encode failed %d.\n",
+				DP_OID(obj->cob_md.omd_id), rc);
+			goto out_task;
+		}
 	}
 
 	dkey_hash = obj_dkey2hash(args->dkey);

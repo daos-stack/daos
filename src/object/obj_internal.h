@@ -41,6 +41,7 @@
 #include <daos_srv/dtx_srv.h>
 
 #include "obj_rpc.h"
+#include "obj_ec.h"
 
 /**
  * This environment is mostly for performance evaluation.
@@ -123,17 +124,6 @@ struct dc_object {
 	struct dc_obj_layout	*cob_shards;
 };
 
-/** EC codec for object EC encoding/decoding */
-struct obj_ec_codec {
-	/** encode matrix, can be used to generate decode matrix */
-	unsigned char		*ec_en_matrix;
-	/**
-	 * GF (galois field) tables, pointer to array of input tables generated
-	 * from coding coefficients. Needed for both encoding and decoding.
-	 */
-	unsigned char		*ec_gftbls;
-};
-
 static inline void
 enum_anchor_copy(daos_anchor_t *dst, daos_anchor_t *src)
 {
@@ -191,11 +181,13 @@ struct shard_auxi_args {
 };
 
 struct shard_rw_args {
-	struct shard_auxi_args	 auxi;
-	daos_obj_rw_t		*api_args;
-	struct dtx_id		 dti;
-	uint64_t		 dkey_hash;
-	crt_bulk_t		*bulks;
+	struct shard_auxi_args		 auxi;
+	daos_obj_rw_t			*api_args;
+	struct dtx_id			 dti;
+	uint64_t			 dkey_hash;
+	crt_bulk_t			*bulks;
+	struct obj_ec_recx_array	*ec_recxs;
+	crt_bulk_t			*ec_bulks;
 };
 
 struct shard_punch_args {
@@ -365,10 +357,6 @@ obj_dkey2hash(daos_key_t *dkey)
 int  obj_utils_init(void);
 void obj_utils_fini(void);
 
-/* obj_class.c */
-int obj_ec_codec_init(void);
-void obj_ec_codec_fini(void);
-struct obj_ec_codec *obj_ec_codec_get(daos_oclass_id_t oc_id);
 int obj_encode_full_stripe(daos_obj_id_t oid, d_sg_list_t *sgl,
 			   uint32_t *sg_idx, size_t *sg_off,
 			   struct obj_ec_parity *parity, int p_idx);

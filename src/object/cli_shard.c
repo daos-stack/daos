@@ -394,6 +394,14 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		orw->orw_bulks.ca_arrays = NULL;
 	}
 
+	if (args->ec_recxs != NULL) {
+		D_ASSERT(args->ec_bulks != NULL);
+		orw->orw_ec_recxs.ca_count = nr;
+		orw->orw_ec_recxs.ca_arrays = args->ec_recxs;
+		orw->orw_ec_bulks.ca_count = nr;
+		orw->orw_ec_bulks.ca_arrays = args->ec_bulks;
+	}
+
 	crt_req_addref(req);
 	rw_args.rpc = req;
 	rw_args.hdlp = (daos_handle_t *)pool;
