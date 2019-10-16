@@ -21,8 +21,11 @@ def build_shim_module(py_env, svars, lib_prefix, version):
         print("Unsupported python version %s" % version)
         return
 
+    new_env.AppendUnique(LIBS=['daos', 'duns'])
+    new_env.AppendUnique(LIBPATH=["../dfs"])
+    new_env.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../..')])
+
     obj = new_env.SharedObject(tgt_name, 'pydaos_shim.c',
-                               LIBS=['daos'],
                                CC=svars["CC"],
                                SHLINK=svars["LDSHARED"],
                                SHLINKFLAGS=[],
@@ -31,7 +34,6 @@ def build_shim_module(py_env, svars, lib_prefix, version):
                                CPPFLAGS=svars["BASECFLAGS"] + " " + \
                                svars["OPT"] + " " + extra_flags)
     base = daos_build.library(new_env, target=base_name, source=[obj],
-                              LIBS=['daos'],
                               CC=svars["CC"],
                               SHLINK=svars["LDSHARED"],
                               SHLINKFLAGS=[],
@@ -41,8 +43,8 @@ def build_shim_module(py_env, svars, lib_prefix, version):
                               svars["OPT"] + " " + extra_flags)
     install_path = lib_prefix + "/python" + version + "/site-packages"
     new_env.Install(install_path, base)
-    # For new wrappers, once available
-    # new_env.Install(install_path, "pydaos.py")
+    # install new wrappers too
+    new_env.Install(install_path, "pydaos.py")
 
 def scons():
     """Execute build"""

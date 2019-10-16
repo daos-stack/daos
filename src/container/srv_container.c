@@ -746,6 +746,8 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		D_GOTO(out, rc);
 
 	rc = rdb_tx_update(tx, &cont->c_svc->cs_hdls, &key, &value);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	/**
 	 * Put requested properties in output.

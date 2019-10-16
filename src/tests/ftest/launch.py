@@ -32,7 +32,6 @@ import socket
 import subprocess
 import time
 import yaml
-import shutil
 
 try:
     # For python versions >= 3.2
@@ -104,15 +103,6 @@ def set_test_environment():
     os.environ["CRT_CTX_SHARE_ADDR"] = "1"
     os.environ["CRT_ATTACH_INFO_PATH"] = \
         os.environ.get('TMPDIR', os.path.join(base_dir, "tmp"))
-
-    # copy the BASE_LOG_FILE_YAML to shared dir
-    tmpdir = os.getenv('TMPDIR')
-    if tmpdir is not None:
-        yaml_dir = os.path.join(tmpdir, "etc")
-        get_output("mkdir -p {}".format(yaml_dir))
-        shutil.copy(BASE_LOG_FILE_YAML, yaml_dir)
-    else:
-        shutil.copy(BASE_LOG_FILE_YAML, os.path.join(base_dir, "etc"))
 
     # Python paths required for functional testing
     required_python_paths = [

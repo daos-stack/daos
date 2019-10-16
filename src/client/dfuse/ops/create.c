@@ -24,7 +24,7 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-bool
+void
 dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 		const char *name, mode_t mode, struct fuse_file_info *fi)
 {
@@ -109,7 +109,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	/* Return the new inode data, and keep the parent ref */
 	dfuse_reply_entry(fs_handle, ie, &fi_out, req);
 
-	return true;
+	return;
 release2:
 	dfs_release(oh->doh_obj);
 release1:
@@ -118,5 +118,5 @@ err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	D_FREE(oh);
 	D_FREE(ie);
-	return false;
+	return;
 }
