@@ -238,6 +238,11 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
             [line.split(' ')[0] for line in genio.read_all_lines(hostfile)])
         server_count = len(servers)
 
+        # Pile of build time variables
+        with open("../../../.build_vars.json") as json_vars:
+        # TBD with open(os.path.join(test.basepath, ".build_vars.json")) as json_vars:
+            build_vars = json.load(json_vars)
+
         # Create the DAOS server configuration yaml file to pass
         # with daos_server -o <FILE_NAME>
         print("Creating the server yaml file")
@@ -266,11 +271,6 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
                     "Error cleaning tmpfs on servers: {}".format(
                         ", ".join(
                             [str(result[key]) for key in result if key != 0])))
-
-        # Pile of build time variables
-        with open("../../../.build_vars.json") as json_vars:
-        # TBD with open(os.path.join(test.basepath, ".build_vars.json")) as json_vars:
-            build_vars = json.load(json_vars)
 
         server_cmd = [
             os.path.join(build_vars["OMPI_PREFIX"], "bin", "orterun"),

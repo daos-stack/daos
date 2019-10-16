@@ -121,10 +121,8 @@ class TestWithoutServers(Test):
                                                       '..') + os.path.sep)
         self.prefix = build_paths['PREFIX']
         self.ompi_prefix = build_paths["OMPI_PREFIX"]
-        if self.prefix == "/usr":
-            self.tmp = "/tmp"
-        else:
-            self.tmp = os.path.join(self.prefix, 'tmp')
+        self.tmp = os.getenv('TMPDIR',
+                             os.path.join(build_paths["PREFIX"], 'tmp'))
         self.daos_test = os.path.join(self.prefix, 'bin', 'daos_test')
         self.orterun = os.path.join(self.ompi_prefix, "bin", "orterun")
         self.daosctl = os.path.join(self.prefix, 'bin', 'daosctl')
@@ -134,11 +132,7 @@ class TestWithoutServers(Test):
         if fault_list:
             # not using workdir because the huge path was messing up
             # orterun or something, could re-evaluate this later
-            if self.prefix == "/usr":
-                tmp = "/tmp"
-            else:
-                tmp = os.path.join(self.basepath, 'install', 'tmp')
-            self.fault_file = fault_config_utils.write_fault_file(tmp,
+            self.fault_file = fault_config_utils.write_fault_file(self.tmp,
                                                                   fault_list,
                                                                   None)
             os.environ["D_FI_CONFIG"] = self.fault_file
