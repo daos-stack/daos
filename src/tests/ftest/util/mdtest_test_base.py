@@ -88,7 +88,7 @@ class MdtestBase(TestWithServers):
 
         # Create a pool
         self.pool.create()
-    
+
     def create_cont(self):
         """Create a TestContainer object to be used to create container."""
         # TO-DO: Enable container using TestContainer object,
@@ -135,31 +135,24 @@ class MdtestBase(TestWithServers):
 
 
     def execute_mdtest(self):
-#        """Create a pool and execute Mdtest."""
-#        # Get the pool params
-#        self.pool = TestPool(self.context, self.log)
-#        self.pool.get_params(self)
-#
-#        # Create a pool
-#        self.pool.create()
+        """Runner method for Mdtest."""
 
         # Create a pool if one does not already exist
         if self.pool is None:
             self.create_pool()
         # set Mdtest params
         self.mdtest_cmd.set_daos_params(self.server_group, self.pool)
-        
+
         # start dfuse if api is POSIX
         if self.mdtest_cmd.api.value == "POSIX":
             # Connect to the pool, create container and then start dfuse
             # Uncomment below two lines once DAOS-3355 is resolved
             # self.pool.connect()
             # self.create_cont()
-#            if self.mdtest_cmd.transfer_size.value == "256B":
-#                self.cancelForTicket("DAOS-3449")
             self.start_dfuse()
             self.mdtest_cmd.test_dir.update(self.dfuse.mount_dir.value)
-        # Run Mdtest
+
+       # Run Mdtest
         self.run_mdtest(self.get_job_manager_command(self.manager),
                         self.processes)
 

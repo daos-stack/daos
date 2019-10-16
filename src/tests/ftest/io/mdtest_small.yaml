@@ -1,12 +1,12 @@
 hosts:
     test_servers:
-        - boro-60
-        - boro-62
-        - boro-64
-        - boro-61
+        - boro-A
+        - boro-B
+        - boro-C
+        - boro-D
     test_clients:
-        - boro-64
-        - boro-61
+        - boro-E
+        - boro-F
 timeout: 800
 server_config:
     name: daos_server
@@ -25,8 +25,8 @@ mdtest:
         np_8:
             np: 8
     mdtest_api: !mux
-#      dfs:
-#        api: 'DFS'
+      dfs:
+        api: 'DFS'
       posix:
         api: 'POSIX'
     test_dir: "/"
