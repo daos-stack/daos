@@ -46,7 +46,7 @@ const (
 type PoolCmd struct {
 	Create  PoolCreateCmd  `command:"create" alias:"c" description:"Create a DAOS pool"`
 	Destroy PoolDestroyCmd `command:"destroy" alias:"d" description:"Destroy a DAOS pool"`
-	GetACL  PoolGetACLCmd  `command:"get-acl" alias:"d" description:"Get a DAOS pool's Access Control List"`
+	GetACL  PoolGetACLCmd  `command:"get-acl" alias:"g" description:"Get a DAOS pool's Access Control List"`
 }
 
 // PoolCreateCmd is the struct representing the command to create a DAOS pool.
