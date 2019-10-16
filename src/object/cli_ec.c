@@ -61,7 +61,7 @@ struct ec_fetch_params {
 	daos_iod_t		*iods;	/* Replaces iod array in fetch. */
 	unsigned int		 nr;	/* number of records in iods    */
 	daos_iod_t			 niod;
-	struct ec_fetch_params		*next;	/* Pointer to next entry in list. */
+	struct ec_fetch_params		*next;/* Next entry in list */
 };
 
 /* Determines weather a given IOD contains a recx that is at least a full
@@ -259,7 +259,7 @@ ec_update_params(struct ec_params *params, daos_iod_t *iod, d_sg_list_t *sgl,
 	daos_iod_t	*niod = &params->niod;	/* new iod  */
 	unsigned int	 len = ec_attr.e_len;
 	unsigned short	 k = ec_attr.e_k;
-	unsigned int	 ss = len *k;
+	unsigned int	 ss = len * k;
 	unsigned int	 i;
 	int		 rc = 0;
 
