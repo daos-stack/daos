@@ -57,6 +57,13 @@ struct ec_params {
 	struct ec_params        *next;	/* Pointer to next entry in list. */
 };
 
+struct ec_fetch_params {
+	daos_iod_t		*iods;	/* Replaces iod array in fetch. */
+	unsigned int		 nr;	/* number of records in iods    */
+	daos_iod_t			 niod;
+	struct ec_fetch_params		*next;	/* Pointer to next entry in list. */
+};
+
 /* Determines weather a given IOD contains a recx that is at least a full
  * stripe's worth of data.
  */
@@ -71,6 +78,18 @@ ec_has_full_stripe(daos_iod_t *iod, struct daos_oclass_attr *oca,
 		if (iod->iod_type == DAOS_IOD_ARRAY) {
 			int start = iod->iod_recxs[i].rx_idx * iod->iod_size;
 			int length = iod->iod_recxs[i].rx_nr * iod->iod_size;
+
+			if (length < ss) {
+				continue;
+			}
+
+			if (start % ss) {
+				unsigned long partial =
+						(start/ss + 1) * ss - start;
+
+				start += partial;
+				length -= partial;
+			}
 
 			if (length < ss) {
 				continue;
@@ -240,6 +259,7 @@ ec_update_params(struct ec_params *params, daos_iod_t *iod, d_sg_list_t *sgl,
 	daos_iod_t	*niod = &params->niod;	/* new iod  */
 	unsigned int	 len = ec_attr.e_len;
 	unsigned short	 k = ec_attr.e_k;
+	unsigned int	 ss = len *k;
 	unsigned int	 i;
 	int		 rc = 0;
 
@@ -250,7 +270,33 @@ ec_update_params(struct ec_params *params, daos_iod_t *iod, d_sg_list_t *sgl,
 	for (i = 0; i < iod->iod_nr; i++) {
 		uint64_t rem = iod->iod_recxs[i].rx_nr * iod->iod_size;
 		uint64_t start = iod->iod_recxs[i].rx_idx;
-		uint32_t stripe_cnt = rem / (len * k);
+		uint64_t so = start /ss;
+		uint32_t stripe_cnt = 0;
+		uint32_t partial_cnt = 0;
+
+		if (so && rem + so > ss ) {
+			unsigned long partial = (start/ss + 1) * ss - start;
+
+			D_REALLOC_ARRAY(nrecx,
+					(niod->iod_recxs),
+					(niod->iod_nr +
+					iod->iod_nr + 1));
+			if (nrecx == NULL) {
+				D_FREE(niod->iod_recxs);
+				return -DER_NOMEM;
+			}
+			niod->iod_recxs = nrecx;
+			niod->iod_recxs[params->niod.iod_nr].rx_nr =
+						partial/iod->iod_size;
+			niod->iod_recxs[params->niod.iod_nr++].rx_idx =
+							start;
+
+			start += partial;
+			rem -= partial;
+			partial_cnt = 1;
+		}
+
+		stripe_cnt = rem / ss;
 
 		if (rem % (len*k)) {
 			stripe_cnt++;
@@ -259,30 +305,29 @@ ec_update_params(struct ec_params *params, daos_iod_t *iod, d_sg_list_t *sgl,
 		if (stripe_cnt > 1) {
 			D_REALLOC_ARRAY(nrecx,
 					(niod->iod_recxs),
-					(niod->iod_nr +
-					 iod->iod_nr + stripe_cnt - 1));
+					(niod->iod_nr + iod->iod_nr +
+					 partial_cnt + stripe_cnt - 1));
 			if (nrecx == NULL) {
 				D_FREE(niod->iod_recxs);
 				return -DER_NOMEM;
 			}
 			niod->iod_recxs = nrecx;
 		}
+		D_ASSERT(rem > 0);
 		while (rem) {
-			uint32_t stripe_len = (len * k) / iod->iod_size;
+			uint32_t stripe_len = ss / iod->iod_size;
 
-			if (rem <= len * k) {
+			if (rem <= ss) {
 				niod->iod_recxs[params->niod.iod_nr].
 				rx_nr = rem/iod->iod_size;
-				niod->iod_recxs[params->niod.iod_nr++].
-				rx_idx = start;
+				niod->iod_recxs[params->niod.iod_nr++].rx_idx =
+					start;
 				rem = 0;
 			} else {
-				niod->iod_recxs[params->niod.iod_nr].
-				rx_nr = (len * k) / iod->iod_size;
-				niod->iod_recxs[params->niod.iod_nr++].
-				rx_idx = start;
+				niod->iod_recxs[params->niod.iod_nr++].rx_idx =
+					start;
 				start += stripe_len;
-				rem -= len * k;
+				rem -= ss;
 			}
 		}
 	}
@@ -322,6 +367,18 @@ ec_free_params(struct ec_params *head)
 	}
 }
 
+static void
+ec_free_fetch_params(struct ec_fetch_params *head)
+{
+	D_FREE(head->iods);
+	while (head != NULL) {
+		struct ec_fetch_params *current = head;
+
+		D_FREE(current->niod.iod_recxs);
+		head = current->next;
+		D_FREE(current);
+	}
+}
 
 /* Call-back that recovers EC allocated memory  */
 static int
@@ -333,6 +390,18 @@ ec_free_params_cb(tse_task_t *task, void *data)
 	ec_free_params(head);
 	return rc;
 }
+
+/* Call-back that recovers EC allocated memory for fetch  */
+static int
+ec_free_fetch_params_cb(tse_task_t *task, void *data)
+{
+	struct ec_fetch_params *head = *((struct ec_fetch_params **)data);
+	int			rc = task->dt_result;
+
+	ec_free_fetch_params(head);
+	return rc;
+}
+
 
 /* Identifies the applicable subset of forwarding targets for non-full-stripe
  * EC updates. If called for EC fetch, the tgt_set is set to the addressed data
@@ -398,6 +467,166 @@ ec_has_parity_cli(daos_iod_t *iod)
 	return iod->iod_recxs[0].rx_idx & PARITY_INDICATOR;
 }
 
+static int
+ec_set_head_fetch_params(struct ec_fetch_params *head, daos_iod_t *iods,
+			 unsigned int nr, unsigned int cnt)
+{
+	unsigned int i;
+
+	D_ALLOC_ARRAY(head->iods, nr);
+	if (head->iods == NULL)
+		return -DER_NOMEM;
+	for (i = 0; i < cnt; i++) {
+		head->iods[i] = iods[i];
+		head->nr++;
+	}
+	return 0;
+}
+
+static int
+ec_iod_stripe_cnt(daos_iod_t *iod, struct daos_ec_attr ec_attr)
+{
+	unsigned int	len = ec_attr.e_len;
+	unsigned short	k = ec_attr.e_k;
+	unsigned int	ss = len *k;
+	unsigned int	i;
+	unsigned int	total_stripe_cnt = 0;
+
+	if (iod->iod_type == DAOS_IOD_SINGLE)
+		return iod->iod_nr;
+
+	for (i = 0; i < iod->iod_nr; i++) {
+		uint64_t start = iod->iod_recxs[i].rx_idx * iod->iod_size;
+		uint64_t rem = iod->iod_recxs[i].rx_nr * iod->iod_size;
+		uint64_t so = start % ss;
+		uint32_t stripe_cnt = 0;
+
+		if (so && rem + so > ss ) {
+			unsigned long partial = (start/ss + 1) * ss - start;
+
+			rem -= partial;
+			stripe_cnt = 1;
+		}
+		stripe_cnt += rem / ss;
+		if (rem % ss) {
+			stripe_cnt++;
+		}
+		total_stripe_cnt += stripe_cnt;
+	}
+	return total_stripe_cnt;
+}
+
+static int
+ec_update_fetch_params(struct ec_fetch_params *params, daos_iod_t *iod,
+		       struct daos_ec_attr ec_attr, int stripe_cnt)
+{
+	unsigned int	 len = ec_attr.e_len;
+	unsigned short	 k = ec_attr.e_k;
+	unsigned int	 ss = len *k;
+	unsigned int	 i;
+	int		 rc = 0;
+
+	D_ALLOC_ARRAY(params->niod.iod_recxs, stripe_cnt);
+	if (params->niod.iod_recxs == NULL)
+		return -DER_NOMEM;
+	for (i = 0; i < iod->iod_nr; i++) {
+		uint64_t rem = iod->iod_recxs[i].rx_nr * iod->iod_size;
+		uint64_t start = iod->iod_recxs[i].rx_idx;
+		uint64_t so = start % ss;
+
+		if (so && rem + so > ss ) {
+			unsigned long partial = (start/ss + 1) * ss - start;
+
+			params->niod.iod_recxs[params->niod.iod_nr].rx_nr
+				= partial/iod->iod_size;
+			params->niod.iod_recxs[params->niod.iod_nr++].rx_idx
+				= start;
+
+			start += partial;
+			rem -= partial;
+		}
+
+		/* can't have more than one stripe in a recx entry */
+		D_ASSERT(rem > 0);
+		while (rem) {
+			uint32_t stripe_len = ss / iod->iod_size;
+
+			if (rem <= len * k) {
+				params->niod.iod_recxs[params->niod.iod_nr].
+				rx_nr = rem/iod->iod_size;
+				params->niod.iod_recxs[params->niod.iod_nr++].
+				rx_idx = start;
+				rem = 0;
+			} else {
+				params->niod.iod_recxs[params->niod.iod_nr].
+				rx_nr = ss / iod->iod_size;
+				params->niod.iod_recxs[params->niod.iod_nr++].
+				rx_idx = start;
+				start += stripe_len;
+				rem -= ss;
+			}
+		}
+	}
+	return rc;
+}
+
+int
+ec_split_recxs(tse_task_t *task, struct daos_oclass_attr *oca)
+{
+	daos_obj_fetch_t	*args = dc_task_get_args(task);
+	struct ec_fetch_params	*head = NULL;
+	struct ec_fetch_params	*current = NULL;
+	unsigned int		 i;
+	int			 rc = 0;
+
+	for (i = 0; i < args->nr; i++) {
+		daos_iod_t	*iod = &args->iods[i];
+		unsigned int	 stripe_cnt = ec_iod_stripe_cnt(iod, oca->u.ec);
+
+		if (stripe_cnt > iod->iod_nr) {
+			struct ec_fetch_params *params;
+
+			D_ALLOC_PTR(params);
+			if (params == NULL) {
+				rc = -DER_NOMEM;
+				break;
+			}
+			params->niod            = *iod;
+			params->niod.iod_recxs  = NULL;
+			params->niod.iod_nr     = 0;
+			if (head == NULL) {
+				head = params;
+				current = head;
+				rc = ec_set_head_fetch_params(head, args->iods,
+							      args->nr, i);
+				if (rc != 0)
+					break;
+			} else {
+				current->next = params;
+				current = params;
+			}
+			rc = ec_update_fetch_params(params, iod, oca->u.ec,
+						    stripe_cnt);
+				head->iods[i] = params->niod;
+				D_ASSERT(head->nr == i);
+				head->nr++;
+		} else if (head != NULL) {
+			head->iods[i] = *iod;
+			D_ASSERT(head->nr == i);
+			head->nr++;
+		}
+	}
+	if (rc != 0 && head != NULL) {
+		ec_free_fetch_params(head);
+	} else if (head != NULL) {
+		args->iods = head->iods;
+		tse_task_register_comp_cb(task, ec_free_fetch_params_cb, &head,
+					  sizeof(head));
+	}
+	return rc;
+}
+
+
 /* Iterates over the IODs in the update, encoding all full stripes contained
  * within each recx.
  */
@@ -462,11 +691,13 @@ ec_obj_update_encode(tse_task_t *task, daos_obj_id_t oid,
 					 DAOS_IOD_SINGLE);
 				/* Encode single value */
 			}
-		} else if (head != NULL && &(head->sgls[i]) != NULL) {
+		} else if (head != NULL) {
+		/* } else if (head != NULL && &(head->sgls[i]) != NULL) { */
 			/* Add sgls[i] and iods[i] to head. Since we're
 			 * adding ec parity (head != NULL) and thus need to
 			 * replace the arrays in the update struct.
 			 */
+			D_ASSERT((&head->sgls[i]) != NULL);
 			head->iods[i] = *iod;
 			head->sgls[i] = *sgl;
 			D_ASSERT(head->nr == i);

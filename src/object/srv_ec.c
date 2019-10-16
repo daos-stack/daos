@@ -76,7 +76,6 @@ ec_del_recx(daos_iod_t *iod, unsigned int idx)
 {
 	int j;
 
-
 	D_ASSERT(iod->iod_nr >= 1 && idx < iod->iod_nr);
 
 	for (j = idx; j < iod->iod_nr - 1; j++)
@@ -115,6 +114,7 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 			uint64_t	so =
 				(this_recx->rx_idx * iod->iod_size) % ss;
 			unsigned int	cell = so / oca->u.ec.e_len;
+
 			uint64_t	recx_size = iod->iod_size *
 						 this_recx->rx_nr;
 
@@ -126,14 +126,21 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 				continue;
 			}
 			if (cell == dtgt_idx) {
-				uint32_t new_len = (cell + 1) *
+				uint32_t new_len = recx_size - so <
+							oca->u.ec.e_len ?
+							recx_size - so :
+							(cell + 1) *
 							oca->u.ec.e_len - so;
+
 
 				this_recx->rx_nr = new_len / iod->iod_size;
 				ec_bulk_spec_set(new_len, false,
 						 sl_idx++, &skip_list[i]);
-				ec_bulk_spec_set(recx_size - new_len, true,
-						 sl_idx++, &skip_list[i]);
+				if (recx_size > new_len) {
+					ec_bulk_spec_set(recx_size - new_len,
+							 true, sl_idx++,
+							 &skip_list[i]);
+				}
 			} else if ((dtgt_idx + 1) * oca->u.ec.e_len <= so) {
 				/* this recx doesn't map to this target
 				 * so we need to remove the recx
@@ -143,8 +150,8 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 						 &skip_list[i]);
 				continue;
 			} else {
-				int cell_start = dtgt_idx *
-							  oca->u.ec.e_len - so;
+				unsigned int cell_start = dtgt_idx *
+							oca->u.ec.e_len - so;
 
 				if (cell_start >= recx_size) {
 					/* this recx doesn't map to this target

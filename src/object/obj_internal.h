@@ -392,6 +392,9 @@ void
 ec_get_tgt_set(daos_iod_t *iods, unsigned int nr, struct daos_oclass_attr *oca,
 	       bool parify_include, uint64_t *tgt_set);
 
+int
+ec_split_recxs(tse_task_t *task, struct daos_oclass_attr *oca);
+
 void
 ec_free_iods(daos_iod_t *iods, int nr);
 
