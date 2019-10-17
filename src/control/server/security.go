@@ -36,7 +36,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-const moduleID int32 = C.DRPC_MODULE_SECURITY_AGENT
+const moduleID int32 = C.DRPC_MODULE_SEC
 
 // TODO: Get Method IDs from the IO server header file, when it Exists
 const (

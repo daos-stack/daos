@@ -23,6 +23,10 @@
 
 package server
 
+// #cgo CFLAGS: -I${SRCDIR}/../../include
+// #include <daos/drpc_modules.h>
+import "C"
+
 import (
 	"crypto"
 	"encoding/hex"
@@ -38,10 +42,10 @@ import (
 )
 
 // Module id for the Server security module
-const securityModuleID int32 = 1
+const securityModuleID int32 = C.DRPC_MODULE_SEC
 
 const (
-	methodValidateCredentials int32 = 101
+	methodValidateCredentials int32 = C.DRPC_METHOD_SEC_VALIDATE_CREDS
 )
 
 // SecurityModule is the security drpc module struct

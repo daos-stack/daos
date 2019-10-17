@@ -23,6 +23,10 @@
 
 package main
 
+// #cgo CFLAGS: -I${SRCDIR}/../../include
+// #include <daos/drpc_modules.h>
+import "C"
+
 import (
 	"os/user"
 	"strconv"
@@ -36,10 +40,10 @@ import (
 )
 
 // Module id for the Agent security module
-const securityModuleID int32 = 1
+const securityModuleID int32 = C.DRPC_MODULE_SEC_AGENT
 
 const (
-	methodRequestCredentials int32 = 101
+	methodRequestCredentials int32 = C.DRPC_METHOD_SEC_AGENT_REQUEST_CREDS
 )
 
 // userInfo is an internal implementation of the security.User interface
