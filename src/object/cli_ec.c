@@ -318,12 +318,14 @@ ec_update_params(struct ec_params *params, daos_iod_t *iod, d_sg_list_t *sgl,
 			uint32_t stripe_len = ss / iod->iod_size;
 
 			if (rem <= ss) {
-				niod->iod_recxs[params->niod.iod_nr].
-				rx_nr = rem/iod->iod_size;
+				niod->iod_recxs[params->niod.iod_nr].rx_nr =
+					rem/iod->iod_size;
 				niod->iod_recxs[params->niod.iod_nr++].rx_idx =
 					start;
 				rem = 0;
 			} else {
+				niod->iod_recxs[params->niod.iod_nr].rx_nr =
+					ss/iod->iod_size;
 				niod->iod_recxs[params->niod.iod_nr++].rx_idx =
 					start;
 				start += stripe_len;
@@ -620,6 +622,7 @@ ec_split_recxs(tse_task_t *task, struct daos_oclass_attr *oca)
 		ec_free_fetch_params(head);
 	} else if (head != NULL) {
 		args->iods = head->iods;
+
 		tse_task_register_comp_cb(task, ec_free_fetch_params_cb, &head,
 					  sizeof(head));
 	}
