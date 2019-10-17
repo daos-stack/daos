@@ -198,22 +198,25 @@ ec_array_encode(struct ec_params *params, daos_obj_id_t oid, daos_iod_t *iod,
 	unsigned int	 k = oca->u.ec.e_k;
 	unsigned int	 p = oca->u.ec.e_p;
 	daos_recx_t     *this_recx = &iod->iod_recxs[recx_idx];
+	uint64_t	 ss = len * k;
 	uint64_t	 recx_start_offset = this_recx->rx_idx * iod->iod_size;
 	uint64_t	 recx_end_offset = (this_recx->rx_nr * iod->iod_size) +
 					   recx_start_offset;
 	unsigned int	 i;
 	int		 rc = 0;
+	uint64_t	 so = recx_start_offset % ss ?
+						ss - recx_start_offset % ss : 0;
 
 	/* s_cur is the index (in bytes) into the recx where a full stripe
 	 * begins.
 	 */
-	s_cur = recx_start_offset + (recx_start_offset % (len * k));
+
+	s_cur = recx_start_offset + so;
 	if (s_cur != recx_start_offset)
 		/* if the start of stripe is not at beginning of recx, move
 		 * the sgl index to where the stripe begins).
 		 */
-		ec_move_sgl_cursors(sgl, recx_start_offset % (len * k), sg_idx,
-				    sg_off);
+		ec_move_sgl_cursors(sgl, so, sg_idx, sg_off);
 
 	for ( ; s_cur + len*k <= recx_end_offset; s_cur += len*k) {
 		daos_recx_t *nrecx;
@@ -269,14 +272,12 @@ ec_update_params(struct ec_params *params, daos_iod_t *iod, d_sg_list_t *sgl,
 	niod->iod_recxs = nrecx;
 	for (i = 0; i < iod->iod_nr; i++) {
 		uint64_t rem = iod->iod_recxs[i].rx_nr * iod->iod_size;
-		uint64_t start = iod->iod_recxs[i].rx_idx;
-		uint64_t so = start / ss;
+		uint64_t start = iod->iod_recxs[i].rx_idx * iod->iod_size;
+		uint64_t so = start % ss ? ss - start % ss : 0;
 		uint32_t stripe_cnt = 0;
 		uint32_t partial_cnt = 0;
 
 		if (so && rem + so > ss) {
-			unsigned long partial = (start/ss + 1) * ss - start;
-
 			D_REALLOC_ARRAY(nrecx,
 					(niod->iod_recxs),
 					(niod->iod_nr +
@@ -287,12 +288,11 @@ ec_update_params(struct ec_params *params, daos_iod_t *iod, d_sg_list_t *sgl,
 			}
 			niod->iod_recxs = nrecx;
 			niod->iod_recxs[params->niod.iod_nr].rx_nr =
-						partial/iod->iod_size;
+							so/iod->iod_size;
 			niod->iod_recxs[params->niod.iod_nr++].rx_idx =
-							start;
-
-			start += partial;
-			rem -= partial;
+							start/iod->iod_size;
+			start += so;
+			rem -= so;
 			partial_cnt = 1;
 		}
 
@@ -315,20 +315,18 @@ ec_update_params(struct ec_params *params, daos_iod_t *iod, d_sg_list_t *sgl,
 		}
 		D_ASSERT(rem > 0);
 		while (rem) {
-			uint32_t stripe_len = ss / iod->iod_size;
-
 			if (rem <= ss) {
 				niod->iod_recxs[params->niod.iod_nr].rx_nr =
 					rem/iod->iod_size;
 				niod->iod_recxs[params->niod.iod_nr++].rx_idx =
-					start;
+					start/iod->iod_size;
 				rem = 0;
 			} else {
 				niod->iod_recxs[params->niod.iod_nr].rx_nr =
 					ss/iod->iod_size;
 				niod->iod_recxs[params->niod.iod_nr++].rx_idx =
-					start;
-				start += stripe_len;
+					start/iod->iod_size;
+				start += ss;
 				rem -= ss;
 			}
 		}
@@ -500,13 +498,12 @@ ec_iod_stripe_cnt(daos_iod_t *iod, struct daos_ec_attr ec_attr)
 	for (i = 0; i < iod->iod_nr; i++) {
 		uint64_t start = iod->iod_recxs[i].rx_idx * iod->iod_size;
 		uint64_t rem = iod->iod_recxs[i].rx_nr * iod->iod_size;
-		uint64_t so = start % ss;
+		uint64_t so = start % ss ? ss - start % ss : 0;
 		uint32_t stripe_cnt = 0;
 
 		if (so && rem + so > ss) {
-			unsigned long partial = (start/ss + 1) * ss - start;
 
-			rem -= partial;
+			rem -= so;
 			stripe_cnt = 1;
 		}
 		stripe_cnt += rem / ss;
@@ -533,38 +530,33 @@ ec_update_fetch_params(struct ec_fetch_params *params, daos_iod_t *iod,
 		return -DER_NOMEM;
 	for (i = 0; i < iod->iod_nr; i++) {
 		uint64_t rem = iod->iod_recxs[i].rx_nr * iod->iod_size;
-		uint64_t start = iod->iod_recxs[i].rx_idx;
-		uint64_t so = start % ss;
+		uint64_t start = iod->iod_recxs[i].rx_idx * iod->iod_size;
+		uint64_t so = start % ss ? ss - start % ss : 0;
 
 		if (so && rem + so > ss) {
-			unsigned long partial = (start/ss + 1) * ss - start;
-
 			params->niod.iod_recxs[params->niod.iod_nr].rx_nr
-				= partial/iod->iod_size;
+				= so/iod->iod_size;
 			params->niod.iod_recxs[params->niod.iod_nr++].rx_idx
-				= start;
-
-			start += partial;
-			rem -= partial;
+				= start/iod->iod_size;
+			start += so;
+			rem -= so;
 		}
 
 		/* can't have more than one stripe in a recx entry */
 		D_ASSERT(rem > 0);
 		while (rem) {
-			uint32_t stripe_len = ss / iod->iod_size;
-
 			if (rem <= len * k) {
 				params->niod.iod_recxs[params->niod.iod_nr].
 				rx_nr = rem/iod->iod_size;
 				params->niod.iod_recxs[params->niod.iod_nr++].
-				rx_idx = start;
+				rx_idx = start/iod->iod_size;
 				rem = 0;
 			} else {
 				params->niod.iod_recxs[params->niod.iod_nr].
 				rx_nr = ss / iod->iod_size;
 				params->niod.iod_recxs[params->niod.iod_nr++].
-				rx_idx = start;
-				start += stripe_len;
+				rx_idx = start/iod->iod_size;
+				start += ss;
 				rem -= ss;
 			}
 		}
@@ -622,7 +614,6 @@ ec_split_recxs(tse_task_t *task, struct daos_oclass_attr *oca)
 		ec_free_fetch_params(head);
 	} else if (head != NULL) {
 		args->iods = head->iods;
-
 		tse_task_register_comp_cb(task, ec_free_fetch_params_cb, &head,
 					  sizeof(head));
 	}
