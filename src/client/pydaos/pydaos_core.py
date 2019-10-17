@@ -22,14 +22,10 @@
 PyDAOS Module allowing global access to the DAOS containers and objects.
 """
 
-import sys
 import enum
 import uuid
+import sys
 
-DAOS_MAGIC = 0x7A89
-
-# pylint: disable=no-member
-# pylint: disable=exec-used
 # pylint: disable=import-error
 if sys.version_info < (3, 0):
     import pydaos_shim_27 as pydaos_shim
@@ -42,27 +38,6 @@ ObjClassID = enum.Enum(
     "Enumeration of the DAOS object classes (OC).",
     {key: value for key, value in pydaos_shim.__dict__.items()
     if key.startswith("OC_")})
-
-class PyDError(Exception):
-    """
-    PyDAO exception when operation cannot be completed.
-    DER_* error code is printed in both integer and string format.
-    """
-    def __init__(self, message, rc):
-        self.message = message
-        self.rc = rc
-
-    def __str__(self):
-        err = pydaos_shim.err_to_str(DAOS_MAGIC, self.rc)
-        if err is not None:
-            return self.message + ": " + err
-        else:
-            return self.message
-
-# Initialize DAOS
-_rc = pydaos_shim.daos_init(DAOS_MAGIC)
-if _rc != pydaos_shim.DER_SUCCESS:
-    raise PyDError("Failed to initialize DAOS", _rc)
 
 class ObjID(object):
     """
