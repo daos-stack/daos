@@ -26,7 +26,7 @@ import traceback
 import json
 
 from apricot import TestWithServers
-from daos_api import DaosContext, DaosPool, DaosApiError
+from pydaos.raw import DaosContext, DaosPool, DaosApiError
 
 
 class BadQueryTest(TestWithServers):
