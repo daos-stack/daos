@@ -37,14 +37,14 @@ import (
 )
 
 type ProviderListResult struct {
-	providerList	string
+	providerList string
 }
 
 type NetworkScanResult struct {
-	provider	string
-	device		string
-	numanode	uint
-	err		error
+	provider string
+	device   string
+	numanode uint
+	err      error
 }
 
 type NetworkScanResultMap map[string][]NetworkScanResult
@@ -98,7 +98,7 @@ func providerListRequest(mc Control, req interface{}, ch chan ClientResult) {
 
 func (c *connList) NetworkDeviceScanRequest(searchProvider string) NetworkScanResultMap {
 	c.log.Debugf("NetworkDeviceScanRequest() Received for provider: %s", searchProvider)
-	cResults := c.makeRequests(&ctlpb.DeviceScanRequest{Provider: searchProvider}, networkScanRequest)
+	cResults := c.makeRequests(searchProvider, networkScanRequest)
 	cScanResults := make(NetworkScanResultMap)
 
 	c.log.Debugf("\nNetworkDeviceScanRequest() Results:\n")
@@ -108,10 +108,8 @@ func (c *connList) NetworkDeviceScanRequest(searchProvider string) NetworkScanRe
 			cScanResults[res.Address] = append(cScanResults[res.Address], NetworkScanResult{err: res.Err})
 			continue
 		}
-		//c.log.Debugf("cResults has this:  Address %s, Value: %v, Err: %v\n", res.Address, res.Value, res.Err)
 
 		for _, results := range res.Value.([]NetworkScanResult) {
-			//c.log.Debugf("\nresults has this: %v\n", results)
 			cScanResults[res.Address] = append(cScanResults[res.Address], results)
 		}
 	}
@@ -120,12 +118,27 @@ func (c *connList) NetworkDeviceScanRequest(searchProvider string) NetworkScanRe
 }
 
 func networkScanRequest(mc Control, parms interface{}, ch chan ClientResult) {
+	var provider string
 	sRes := []NetworkScanResult{}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	stream, err := mc.getCtlClient().RequestDeviceScan(ctx, &ctlpb.DeviceScanRequest{})
+	mc.logger().Debugf("parms has: %v", parms)
+
+	switch parms.(type) {
+	case string:
+		provider = parms.(string)
+	default:
+		err := errors.Errorf(
+			msgTypeAssert, ctlpb.DeviceScanRequest{}, parms)
+		mc.logger().Errorf(err.Error())
+		ch <- ClientResult{mc.getAddress(), nil, err}
+		return // type err
+	}
+
+	stream, err := mc.getCtlClient().RequestDeviceScan(ctx, &ctlpb.DeviceScanRequest{Provider: provider})
+
 	if err != nil {
 		ch <- ClientResult{mc.getAddress(), nil, err}
 		return // stream err

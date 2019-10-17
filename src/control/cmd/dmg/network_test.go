@@ -21,29 +21,49 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package server
+package main
 
 import (
-	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"testing"
 )
 
-// NetworkScanService encapsulates the network part of the control service
-type NetworkScanService struct {
-	nsslog  logging.Logger
-	srvCfgs []*ioserver.Config
-}
-
-// DefaultNetworkScanService returns a initialized *NetworkScanService
-// with default behaviour
-func DefaultNetworkScanService(log logging.Logger, cfg *Configuration) (*NetworkScanService, error) {
-	return NewNetworkScanService(log, cfg.Servers), nil
-}
-
-// NewStorageControlService returns an initialized *StorageControlService
-func NewNetworkScanService(log logging.Logger, srvCfgs []*ioserver.Config) *NetworkScanService {
-	return &NetworkScanService{
-		nsslog:  log,
-		srvCfgs: srvCfgs,
-	}
+func TestNetworkCommands(t *testing.T) {
+	runCmdTests(t, []cmdTest{
+		{
+			"Get network provider list",
+			"network list",
+			"ConnectClients GetProviderList",
+			nil,
+		},
+		{
+			"Perform network scan no provider",
+			"network scan",
+			"ConnectClients NetworkDeviceScanRequest",
+			nil,
+		},
+		{
+			"Perform network scan all providers long",
+			"network scan --all",
+			"ConnectClients NetworkDeviceScanRequest",
+			nil,
+		},
+		{
+			"Perform network scan all providers short",
+			"network scan -a",
+			"ConnectClients NetworkDeviceScanRequest",
+			nil,
+		},
+		{
+			"Perform network scan with provider ofi+sockets (short)",
+			"network scan -p 'ofi+sockets'",
+			"ConnectClients NetworkDeviceScanRequest",
+			nil,
+		},
+		{
+			"Perform network scan with provider ofi+sockets (long)",
+			"network scan --provider 'ofi+sockets'",
+			"ConnectClients NetworkDeviceScanRequest",
+			nil,
+		},
+	})
 }

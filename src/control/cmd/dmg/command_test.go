@@ -166,6 +166,16 @@ func (tc *testConn) SetTransportConfig(cfg *security.TransportConfig) {
 	tc.appendInvocation("SetTransportConfig")
 }
 
+func (tc *testConn) GetProviderList() client.ResultMap {
+	tc.appendInvocation("GetProviderList")
+	return nil
+}
+
+func (tc *testConn) NetworkDeviceScanRequest(searchProvider string) client.NetworkScanResultMap {
+	tc.appendInvocation("NetworkDeviceScanRequest")
+	return nil
+}
+
 func testExpectedError(t *testing.T, expected, actual error) {
 	t.Helper()
 
