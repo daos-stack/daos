@@ -39,7 +39,8 @@ import fault_config_utils
 import agent_utils
 import server_utils
 import write_host_file
-from daos_api import DaosContext, DaosLog, DaosApiError
+from pydaos.raw import DaosContext, DaosLog, DaosApiError
+from configuration_utils import Configuration
 
 
 # pylint: disable=invalid-name
@@ -94,6 +95,8 @@ class Test(avocadoTest):
         self.d_log = None
         self.uri_file = None
         self.fault_file = None
+        self.debug = False
+        self.config = None
 
     # pylint: disable=invalid-name
     def cancelForTicket(self, ticket):
@@ -221,6 +224,12 @@ class TestWithServers(TestWithoutServers):
         self.log.info("hostlist_servers:  %s", self.hostlist_servers)
         self.log.info("hostlist_clients:  %s", self.hostlist_clients)
 
+        # Find a configuration that meets the test requirements
+        self.config = Configuration(
+            self.params, self.hostlist_servers, debug=self.debug)
+        if not self.config.set_config(self):
+            self.cancel("Test requirements not met!")
+
         # If a specific count is specified, verify enough servers/clients are
         # specified to satisy the count
         host_count_checks = (
@@ -271,7 +280,7 @@ class TestWithServers(TestWithoutServers):
         # Stop the servers
         errors.extend(self.stop_servers())
 
-        # Disable fault injection, if enabled
+        # Complete tear down actions from the inherited class
         try:
             super(TestWithServers, self).tearDown()
         except OSError as error:
@@ -415,14 +424,11 @@ class TestWithServers(TestWithoutServers):
                 self.log.info(
                     "Starting servers: group=%s, hosts=%s", group, hosts)
                 hostfile = write_host_file.write_host_file(hosts, self.workdir)
-                server_utils.run_server(
-                    hostfile, group, self.basepath,
-                    log_filename=self.server_log)
+                server_utils.run_server(self, hostfile, group)
 
         else:
             server_utils.run_server(
-                self.hostfile_servers, self.server_group, self.basepath,
-                log_filename=self.server_log)
+                self, self.hostfile_servers, self.server_group)
 
     def get_partition_hosts(self, partition_key, host_list):
         """[summary].

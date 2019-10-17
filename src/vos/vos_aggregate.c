@@ -360,7 +360,7 @@ akey_empty(struct vos_agg_param *agg_param)
 	iter_param.ip_epr.epr_lo = 0;
 	iter_param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	iter_param.ip_epc_expr = VOS_IT_EPC_GE;
-	iter_param.ip_flags = VOS_IT_RECX_ALL;
+	iter_param.ip_flags = VOS_IT_PUNCHED | VOS_IT_RECX_ALL;
 
 	rc = vos_iter_prepare(VOS_ITER_SINGLE, &iter_param, &sub_ih);
 	if (rc == 0) {
@@ -431,6 +431,9 @@ vos_agg_sv(daos_handle_t ih, vos_iter_entry_t *entry,
 	if (agg_param->ap_discard)
 		goto delete;
 
+	/* If entry is covered, the key or object is punched */
+	if (entry->ie_vis_flags & VOS_VIS_FLAG_COVERED)
+		goto delete;
 	/*
 	 * Aggregate: preserve the first recx which has highest epoch, because
 	 * of re-probe, the highest epoch could be iterated multiple times.
@@ -468,7 +471,7 @@ prepare_segments(struct agg_merge_window *mw)
 	struct evt_entry_in	*ent_in;
 	struct evt_extent	 ext;
 	unsigned int		 i, seg_max;
-	bool			 hole, coalesce;
+	bool			 hole = false, coalesce;
 
 	/*
 	 * Allocate large enough segments array to hold all the coalesced
@@ -1059,8 +1062,6 @@ flush_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 {
 	int	rc;
 
-	D_ASSERT(merge_window_status(mw) == MW_OPENED);
-
 	/*
 	 * If no new updates in an already aggregated window, window flush will
 	 * be skipped, otherwise, all the data within the window will be
@@ -1261,7 +1262,7 @@ recx2ext(daos_recx_t *recx, struct evt_extent *ext)
 }
 
 static struct agg_phy_ent *
-lookup_phy_ent(struct agg_merge_window *mw, struct evt_extent *phy_ext,
+lookup_phy_ent(struct agg_merge_window *mw, const struct evt_extent *phy_ext,
 	       daos_epoch_t epoch)
 {
 	struct agg_phy_ent *phy_ent;
@@ -1287,15 +1288,15 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 	struct evt_extent	 phy_ext, lgc_ext;
 	struct agg_phy_ent	*phy_ent;
 	bool			 visible, partial, last;
-	int			 rc;
+	int			 rc = 0;
 
 	recx2ext(&entry->ie_recx, &lgc_ext);
 	recx2ext(&entry->ie_orig_recx, &phy_ext);
 	D_ASSERT(ext1_covers_ext2(&phy_ext, &lgc_ext));
 
-	visible = (entry->ie_recx_flags & VOS_RECX_FLAG_VISIBLE);
-	partial = (entry->ie_recx_flags & VOS_RECX_FLAG_PARTIAL);
-	last = (entry->ie_recx_flags & VOS_RECX_FLAG_LAST);
+	visible = (entry->ie_vis_flags & VOS_VIS_FLAG_VISIBLE);
+	partial = (entry->ie_vis_flags & VOS_VIS_FLAG_PARTIAL);
+	last = (entry->ie_vis_flags & VOS_VIS_FLAG_LAST);
 
 	/* Just delete the fully covered intact physical entry */
 	if (!visible && !partial) {
@@ -1305,7 +1306,7 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 			  lgc_ext.ex_hi == phy_ext.ex_hi,
 			  ""DF_EXT" != "DF_EXT"\n",
 			  DP_EXT(&lgc_ext), DP_EXT(&phy_ext));
-		D_ASSERT(entry->ie_recx_flags & VOS_RECX_FLAG_COVERED);
+		D_ASSERT(entry->ie_vis_flags & VOS_VIS_FLAG_COVERED);
 
 		rect.rc_ex = phy_ext;
 		rect.rc_epc = entry->ie_epoch;
@@ -1317,6 +1318,7 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 				DP_RECT(&rect), rc);
 			return rc;
 		}
+
 		goto out;
 	}
 
@@ -1417,7 +1419,7 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 {
 	struct agg_merge_window	*mw = &agg_param->ap_window;
 	struct evt_extent	 phy_ext, lgc_ext;
-	int			 rc;
+	int			 rc = 0;
 
 	D_ASSERT(agg_param != NULL);
 	D_ASSERT(acts != NULL);
@@ -1444,7 +1446,7 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 		"phy_ext:"DF_EXT", epoch:"DF_U64", flags: %x\n",
 		DP_UOID(agg_param->ap_oid), (char *)agg_param->ap_dkey.iov_buf,
 		(char *)agg_param->ap_akey.iov_buf, DP_EXT(&lgc_ext),
-		DP_EXT(&phy_ext), entry->ie_epoch, entry->ie_recx_flags);
+		DP_EXT(&phy_ext), entry->ie_epoch, entry->ie_vis_flags);
 
 	rc = set_window_size(mw, entry->ie_rsize);
 	if (rc)
@@ -1589,7 +1591,8 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr)
 	 */
 	iter_param.ip_epc_expr = VOS_IT_EPC_RR;
 	/* EV tree iterator returns all sorted logical rectangles */
-	iter_param.ip_flags = VOS_IT_RECX_VISIBLE | VOS_IT_RECX_COVERED;
+	iter_param.ip_flags = VOS_IT_PUNCHED | VOS_IT_RECX_VISIBLE |
+		VOS_IT_RECX_COVERED;
 
 	/* Set aggregation parameters */
 	agg_param.ap_umm = &cont->vc_pool->vp_umm;
@@ -1653,7 +1656,7 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr)
 	else
 		iter_param.ip_epc_expr = VOS_IT_EPC_GE;
 	/* EV tree iterator returns all unsorted physical rectangles */
-	iter_param.ip_flags = VOS_IT_RECX_ALL;
+	iter_param.ip_flags = VOS_IT_PUNCHED | VOS_IT_RECX_ALL;
 
 	/* Set aggregation parameters */
 	agg_param.ap_umm = &cont->vc_pool->vp_umm;

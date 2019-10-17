@@ -48,12 +48,12 @@ const (
 	bioHealth     = C.DRPC_METHOD_MGMT_BIO_HEALTH_QUERY
 	setUp         = C.DRPC_METHOD_MGMT_SET_UP
 	smdDevs       = C.DRPC_METHOD_MGMT_SMD_LIST_DEVS
+	smdPools      = C.DRPC_METHOD_MGMT_SMD_LIST_POOLS
 
 	srvModuleID = C.DRPC_MODULE_SRV
 	notifyReady = C.DRPC_METHOD_SRV_NOTIFY_READY
 )
 
-// mgmtModule is the management drpc module struct
 // mgmtModule represents the daos_server mgmt dRPC module. It sends dRPCs to
 // the daos_io_server iosrv module (src/iosrv).
 type mgmtModule struct{}
@@ -77,7 +77,7 @@ type srvModule struct {
 	iosrvs []*IOServerInstance
 }
 
-// HandleCall is the handler for calls to the srvModule
+// HandleCall is the handler for calls to the srvModule.
 func (mod *srvModule) HandleCall(cli *drpc.Client, method int32, req []byte) ([]byte, error) {
 	switch method {
 	case notifyReady:

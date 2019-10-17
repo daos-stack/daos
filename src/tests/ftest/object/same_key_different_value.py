@@ -28,8 +28,7 @@ import time
 import traceback
 from apricot import TestWithServers
 
-from daos_api import DaosPool, DaosContainer, DaosApiError
-
+from pydaos.raw import DaosPool, DaosContainer, DaosApiError
 
 class SameKeyDifferentValue(TestWithServers):
     """

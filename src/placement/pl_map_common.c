@@ -96,15 +96,14 @@ remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
  *
  * \param[in] The remap list to be freed.
  */
-void
+inline void
 remap_list_free_all(d_list_t *remap_list)
 {
-	struct failed_shard *f_shard, *f_tmp;
+	struct failed_shard *f_shard;
 
-	d_list_for_each_entry_safe(f_shard, f_tmp, remap_list, fs_list) {
-		d_list_del_init(&f_shard->fs_list);
+	while ((f_shard = d_list_pop_entry(remap_list, struct failed_shard,
+			fs_list)))
 		D_FREE(f_shard);
-	}
 }
 
 /** dump remap list, for debug only */

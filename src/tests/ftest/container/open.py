@@ -30,6 +30,7 @@ import uuid
 from apricot import TestWithServers
 from test_utils import TestPool, TestContainer
 from avocado.core.exceptions import TestFail
+from pydaos.raw import DaosPool, DaosContainer, DaosApiError
 
 RESULT_PASS = "PASS"
 RESULT_FAIL = "FAIL"
