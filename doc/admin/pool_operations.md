@@ -75,7 +75,7 @@ write access to the pool's owner-user and owner-group.
 
 ### Access Control Entries
 
-ACEs are designated by a colon-separated string format: 
+ACEs are designated by a colon-separated string format:
 `TYPE:FLAGS:IDENTITY:PERMISSIONS`
 
 Available values for these fields:
@@ -118,7 +118,7 @@ In general, enforcement will be based on the first match, ignoring
 lower-priority entries. For example, if the user has an ACE for their user
 identity, they will not receive the permissions for any of their groups, even if
 those group entries have broader permissions than the user entry does. The user
-is expected to match at most one user entry. 
+is expected to match at most one user entry.
 
 If no matching user entry is found, but entries match one or more of the user's
 groups, enforcement will be based on the union of the permissions of all
