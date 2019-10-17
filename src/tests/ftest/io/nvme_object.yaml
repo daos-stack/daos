@@ -12,7 +12,7 @@ hosts:
   - boro-G
  test_clients:
   - boro-H
-timeout: 9000
+timeout: 18000
 server_config:
  name: daos_server
  server:
@@ -38,7 +38,7 @@ container:
     - 1
     - 50
     - 100
-    - 1000
+    - 500
   akey_size: 10
   dkey_size: 10
   data_size: 4096
