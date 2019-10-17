@@ -32,6 +32,20 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
+func defaultMockScmStorage(log logging.Logger, ext External, msc *MockSysConfig) *scmStorage {
+	New&MockBackendConfig{
+				DiscoverRes:     tc.discoverRes,
+				DiscoverErr:     tc.discoverErr,
+				GetNamespaceRes: tc.getNamespaceRes,
+				GetNamespaceErr: tc.getNamespaceErr,
+				GetStateErr:     tc.getStateErr,
+			})
+	NewMockSysProvider(nil))
+	m := MockModule()
+
+	return newMockScmStorage(log, ext, nil, []Module{m}, defaultMockPrepScm(), msc)
+}
+
 func defaultMockControlService(t *testing.T, log logging.Logger) *ControlService {
 	c := defaultMockConfig(t)
 	return mockControlService(t, log, c, nil)

@@ -35,25 +35,8 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	types "github.com/daos-stack/daos/src/control/common/storage"
-	"github.com/daos-stack/daos/src/control/lib/ipmctl"
 	"github.com/daos-stack/daos/src/control/logging"
 )
-
-func MockModule(d *ipmctl.DeviceDiscovery) Module {
-	if d == nil {
-		md := MockDiscovery()
-		d = &md
-	}
-
-	return Module{
-		PhysicalID:      uint32(d.Physical_id),
-		ChannelID:       uint32(d.Channel_id),
-		ChannelPosition: uint32(d.Channel_pos),
-		ControllerID:    uint32(d.Memory_controller_id),
-		SocketID:        uint32(d.Socket_id),
-		Capacity:        d.Capacity,
-	}
-}
 
 func TestProviderScan(t *testing.T) {
 	defaultModule := MockModule(nil)

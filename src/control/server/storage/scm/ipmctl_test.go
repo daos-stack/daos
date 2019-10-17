@@ -49,12 +49,41 @@ func MockDiscovery() ipmctl.DeviceDiscovery {
 	}
 }
 
-type mockCmdRunner struct {
+func MockModule(d *ipmctl.DeviceDiscovery) Module {
+	if d == nil {
+		md := MockDiscovery()
+		d = &md
+	}
+
+	return Module{
+		PhysicalID:      uint32(d.Physical_id),
+		ChannelID:       uint32(d.Channel_id),
+		ChannelPosition: uint32(d.Channel_pos),
+		ControllerID:    uint32(d.Memory_controller_id),
+		SocketID:        uint32(d.Socket_id),
+		Capacity:        d.Capacity,
+	}
+}
+
+// MockPmemDevice returns a mock SCM namespace (PMEM device file),
+// which would normally be parsed from the output of ndctl cmdline tool.
+func MockPmemDevice() Namespace {
+	m := MockPmemDevicePB()
+
+	return Namespace{
+		UUID:     m.Uuid,
+		Blockdev: m.Blockdev,
+		Dev:      m.Dev,
+		NumaNode: m.Numanode,
+	}
+}
+
+type mockIpmctl struct {
 	discoverModulesRet error
 	modules            []ipmctl.DeviceDiscovery
 }
 
-func (m *mockCmdRunner) Discover() ([]ipmctl.DeviceDiscovery, error) {
+func (m *mockIpmctl) Discover() ([]ipmctl.DeviceDiscovery, error) {
 	return m.modules, m.discoverModulesRet
 }
 
@@ -170,7 +199,7 @@ func TestGetState(t *testing.T) {
 			mockLookPath := func(string) (s string, err error) {
 				return
 			}
-			mockBinding := &mockCmdRunner{
+			mockBinding := &mockIpmctl{
 				discoverModulesRet: nil,
 				modules:            []ipmctl.DeviceDiscovery{MockDiscovery()},
 			}
@@ -278,7 +307,7 @@ func TestGetNamespaces(t *testing.T) {
 
 			commands = nil // reset to initial values between tests
 
-			mockBinding := &mockCmdRunner{
+			mockBinding := &mockIpmctl{
 				discoverModulesRet: nil,
 				modules:            []ipmctl.DeviceDiscovery{MockDiscovery()},
 			}

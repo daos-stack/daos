@@ -40,65 +40,6 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
-// MockModule returns a mock SCM module of type exported from ipmctl.
-func MockModule() scm.Module {
-	m := MockModulePB()
-
-	return scm.Module{
-		PhysicalID:      m.Physicalid,
-		ChannelID:       m.Loc.Channel,
-		ChannelPosition: m.Loc.Channelpos,
-		ControllerID:    m.Loc.Memctrlr,
-		SocketID:        m.Loc.Socket,
-		Capacity:        m.Capacity,
-	}
-}
-
-type mockIpmctl struct {
-	discoverModulesRet error
-	modules            []scm.Module
-}
-
-func (m *mockIpmctl) Discover() ([]scm.Module, error) {
-	return m.modules, m.discoverModulesRet
-}
-
-type mockScmBackend struct {
-	mockIpmctl
-	mockPrepScm
-}
-
-func testScmProvider(log logging.Logger, mockIpmctl mockIpmctl, prep PrepScm, msc *scm.MockSysConfig) *scm.Provider {
-	mbe := &mockScmBackend{
-		mockIpmctl: mockIpmctl,
-	}
-	if mp, ok := prep.(*mockPrepScm); ok {
-		mbe.mockPrepScm = *mp
-	}
-	return scm.NewProvider(log, mbe, scm.NewMockSysProvider(msc))
-}
-
-// ScmStorage factory with mocked interfaces for testing
-func newMockScmStorage(log logging.Logger, ext External, discoverModulesRet error,
-	mms []scm.Module, prep PrepScm, msc *scm.MockSysConfig) *scmStorage {
-
-	mic := mockIpmctl{
-		discoverModulesRet: discoverModulesRet,
-		modules:            mms,
-	}
-	return &scmStorage{
-		ext:      ext,
-		provider: testScmProvider(log, mic, prep, msc),
-		log:      log,
-	}
-}
-
-func defaultMockScmStorage(log logging.Logger, ext External, msc *scm.MockSysConfig) *scmStorage {
-	m := MockModule()
-
-	return newMockScmStorage(log, ext, nil, []scm.Module{m}, defaultMockPrepScm(), msc)
-}
-
 func TestFormatScm(t *testing.T) {
 	err := scm.FaultMissingNdctl
 	noNdctlPrep := &mockPrepScm{

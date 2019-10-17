@@ -33,6 +33,7 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
@@ -171,7 +172,7 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 		}
 	}
 
-	result, err := c.scm.provider.Scan(scm.ScanRequest{})
+	result, err := c.scm.Scan(scm.ScanRequest{})
 	if err != nil {
 		resp.Scm = &ctlpb.ScanScmResp{
 			State: newState(c.log, ctlpb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg+"SCM"),
@@ -189,6 +190,88 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 	}
 
 	return resp, nil
+}
+
+// newMntRet creates and populates NVMe ctrlr result and logs error through newState.
+func newMntRet(log logging.Logger, op string, mntPoint string, status ctlpb.ResponseStatus, errMsg string, infoMsg string) *ctlpb.ScmMountResult {
+	return &ctlpb.ScmMountResult{
+		Mntpoint: mntPoint,
+		State:    newState(log, status, errMsg, infoMsg, "scm mount "+op),
+	}
+}
+
+// Format attempts to format (forcefully) SCM mounts on a given server as
+// specified in config file and populates resp ScmMountResult.
+func (s *scmStorage) Format(cfg storage.ScmConfig, results *(types.ScmMountResults)) {
+	c.log.Debug("performing SCM device reset, format and mount")
+
+	// wraps around addMret to provide format specific function, ignore infoMsg
+	addMretFormat := func(status ctlpb.ResponseStatus, errMsg string) {
+		*results = append(*results,
+			newMntRet(c.log, "format", cfg.MountPoint, status, errMsg, ""))
+	}
+
+	//if c.formatted {
+	//	addMretFormat(ctlpb.ResponseStatus_CTRL_ERR_APP, msgScmAlreadyFormatted)
+	//	return
+	//}
+
+	req := scm.FormatRequest{
+		Mountpoint: cfg.MountPoint,
+	}
+
+	switch cfg.Class {
+	case storage.ScmClassDCPM:
+		// FIXME (DAOS-3291): Clean up SCM configuration
+		if len(cfg.DeviceList) != 1 {
+			addMretFormat(ctlpb.ResponseStatus_CTRL_ERR_APP, scm.FaultFormatInvalidDeviceCount.Error())
+			return
+		}
+		req.Dcpm = &scm.DcpmParams{
+			Device: cfg.DeviceList[0],
+		}
+	case storage.ScmClassRAM:
+		req.Ramdisk = &scm.RamdiskParams{
+			Size: uint(cfg.RamdiskSize),
+		}
+	default:
+		addMretFormat(ctlpb.ResponseStatus_CTRL_ERR_CONF,
+			fmt.Sprintf("%s: %s", cfg.Class, msgScmClassNotSupported))
+		return
+	}
+
+	res, err := c.scm.CheckFormat(req)
+	if err != nil {
+		addMretFormat(ctlpb.ResponseStatus_CTRL_ERR_APP, err.Error())
+		return
+	}
+	if res.Formatted {
+		addMretFormat(ctlpb.ResponseStatus_CTRL_ERR_APP, msgScmAlreadyFormatted)
+		return
+	}
+
+	res, err = c.scm.Format(req)
+	if err != nil {
+		addMretFormat(ctlpb.ResponseStatus_CTRL_ERR_APP, err.Error())
+		return
+	}
+
+	addMretFormat(ctlpb.ResponseStatus_CTRL_SUCCESS, "")
+
+	c.log.Debug("SCM device reset, format and mount completed")
+	//c.formatted = res.Formatted
+}
+
+// Update is currently a placeholder method stubbing SCM module fw update.
+func (c *ControlService) Update(cfg storage.ScmConfig, req *ctlpb.UpdateScmReq, results *(types.ScmModuleResults)) {
+	// respond with single result indicating no implementation
+	*results = append(
+		*results,
+		&ctlpb.ScmModuleResult{
+			Loc: &ctlpb.ScmModule_Location{},
+			State: newState(c.log, ctlpb.ResponseStatus_CTRL_NO_IMPL,
+				msgScmUpdateNotImpl, "", "scm module update"),
+		})
 }
 
 // doFormat performs format on storage subsystems, populates response results

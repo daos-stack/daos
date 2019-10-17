@@ -38,7 +38,7 @@ import (
 type StorageControlService struct {
 	log             logging.Logger
 	nvme            *nvmeStorage
-	scm             *scmStorage
+	scm             *scm.Provider
 	instanceStorage []ioserver.StorageConfig
 }
 
@@ -58,7 +58,7 @@ func DefaultStorageControlService(log logging.Logger, cfg *Configuration) (*Stor
 
 	return NewStorageControlService(log,
 		newNvmeStorage(log, cfg.NvmeShmID, spdkScript, cfg.ext),
-		newScmStorage(log, cfg.ext), cfg.Servers), nil
+		scm.DefaultProvider(log), cfg.Servers), nil
 }
 
 // NewStorageControlService returns an initialized *StorageControlService
@@ -102,7 +102,7 @@ func (c *StorageControlService) Setup() error {
 		return errors.Errorf("%s: missing %v", msgBdevNotFound, missing)
 	}
 
-	if _, err := c.scm.provider.Scan(scm.ScanRequest{Rescan: true}); err != nil {
+	if _, err := c.scm.Scan(scm.ScanRequest{Rescan: true}); err != nil {
 		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, SCM Scan"))
 	}
 
@@ -116,7 +116,7 @@ func (c *StorageControlService) Teardown() {
 	}
 
 	// TODO: implement provider Reset()
-	//c.scm.provider.scanCompleted = false
+	//c.scm.scanCompleted = false
 }
 
 type PrepareNvmeRequest struct {
@@ -171,11 +171,11 @@ func (c *StorageControlService) GetScmState() (types.ScmState, error) {
 		return state, errors.Errorf("%s must be run as root or sudo", os.Args[0])
 	}
 
-	if _, err := c.scm.provider.Scan(scm.ScanRequest{Rescan: true}); err != nil {
+	if _, err := c.scm.Scan(scm.ScanRequest{Rescan: true}); err != nil {
 		return state, errors.WithMessage(err, "SCM Scan")
 	}
 
-	return c.scm.provider.GetState()
+	return c.scm.GetState()
 }
 
 // PrepareScm preps locally attached modules and returns need to reboot message,
@@ -208,5 +208,5 @@ func (c *StorageControlService) ScanNvme() (types.NvmeControllers, error) {
 //
 // Suitable for commands invoked directly on server, not over gRPC.
 func (c *StorageControlService) ScanScm() (*scm.ScanResponse, error) {
-	return c.scm.provider.Scan(scm.ScanRequest{Rescan: true})
+	return c.scm.Scan(scm.ScanRequest{Rescan: true})
 }

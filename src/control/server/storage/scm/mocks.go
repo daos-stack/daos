@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	types "github.com/daos-stack/daos/src/control/common/storage"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 type (
@@ -89,6 +90,9 @@ func DefaultMockSysProvider() *MockSysProvider {
 	return NewMockSysProvider(nil)
 }
 
+// MockBackendConfig specifies behaviour for a mock SCM backend
+// implementation providing capability to access and configure
+// SCM modules and namespaces.
 type MockBackendConfig struct {
 	DiscoverRes      []Module
 	DiscoverErr      error
@@ -148,4 +152,12 @@ func NewMockBackend(cfg *MockBackendConfig) *MockBackend {
 
 func DefaultMockBackend() *MockBackend {
 	return NewMockBackend(nil)
+}
+
+func NewMockProvider(log logging.Logger, mbc *MockBackendConfig, msc *MockSysConfig) *Provider {
+	return NewProvider(log, NewMockBackend(mbc), NewMockSysProvider(msc))
+}
+
+func DefaultMockProvider(log logging.Logger) *Provider {
+	return NewProvider(log, DefaultMockBackend(), DefaultMockSysProvider())
 }
