@@ -470,7 +470,7 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 	 * later, and the hard-coded method HG_CRC32 used below which maybe
 	 * different with future's mercury code change.
 	 */
-	void			*in_buf;
+	void			*in_buf = NULL;
 	hg_size_t		in_buf_size;
 	hg_return_t		hg_ret = HG_SUCCESS;
 	hg_class_t		*hg_class;
@@ -478,11 +478,20 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 	struct crt_hg_context	*hg_ctx;
 	hg_proc_t		hg_proc = HG_PROC_NULL;
 
-	/* Get input buffer */
-	hg_ret = HG_Get_input_buf(handle, &in_buf, &in_buf_size);
+	/* Get extra input buffer; if it's null, get regular input buffer */
+	hg_ret = HG_Get_input_extra_buf(handle, &in_buf, &in_buf_size);
 	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("Could not get input buffer, hg_ret: %d.", hg_ret);
+		D_ERROR("Could not get extra input buff, hg_ret: %d.", hg_ret);
 		D_GOTO(out, rc = -DER_HG);
+	}
+
+	/* If extra buffer is null, rpc can fit into a regular buffer */
+	if (in_buf == NULL) {
+		hg_ret = HG_Get_input_buf(handle, &in_buf, &in_buf_size);
+		if (hg_ret != HG_SUCCESS) {
+			D_ERROR("Could not get input buf, hg_ret: %d.", hg_ret);
+			D_GOTO(out, rc = -DER_HG);
+		}
 	}
 
 	/* Create a new decoding proc */

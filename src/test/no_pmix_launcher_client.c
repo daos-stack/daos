@@ -51,6 +51,7 @@
 #include "tests_common.h"
 #include "no_pmix_launcher_common.h"
 
+
 static void *
 progress_function(void *data)
 {
@@ -92,6 +93,7 @@ int main(int argc, char **argv)
 	uint32_t		grp_size;
 	d_rank_list_t		*rank_list;
 	d_rank_t		rank;
+	d_iov_t			iov;
 	int			tag;
 
 	/* Set up for DBG_PRINT */
@@ -180,6 +182,14 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
+	D_ALLOC(iov.iov_buf, TEST_IOV_SIZE_IN);
+	D_ASSERTF(iov.iov_buf != NULL, "Failed to allocate iov buf\n");
+
+	memset(iov.iov_buf, 'a', TEST_IOV_SIZE_IN);
+
+	iov.iov_buf_len = TEST_IOV_SIZE_IN;
+	iov.iov_len = TEST_IOV_SIZE_IN;
+
 	/* Cycle through all ranks and 8 tags and send rpc to each */
 	for (i = 0; i < rank_list->rl_nr; i++) {
 
@@ -202,12 +212,15 @@ int main(int argc, char **argv)
 
 			input = crt_req_get(rpc);
 			input->tag = tag;
+			input->test_data = iov;
 
 			rc = crt_req_send(rpc, rpc_handle_reply, &sem);
 			tc_sem_timedwait(&sem, 10, __LINE__);
 			DBG_PRINT("Ping response from %d:%d\n", rank, tag);
 		}
 	}
+
+	D_FREE(iov.iov_buf);
 
 	/* Send shutdown RPC to each server */
 	for (i = 0; i < rank_list->rl_nr; i++) {

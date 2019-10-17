@@ -1,3 +1,10 @@
+cart (1.4.0-2) unstable; urgency=medium
+
+  [ Alexander Oganezov ]
+  * 1.4.0-2 version of CaRT
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Wed, 16 Oct 2019 16:22:44 +0000
+
 cart (1.4.0-1) unstable; urgency=medium
 
   [ Ryon Jensen ]
