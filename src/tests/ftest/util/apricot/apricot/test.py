@@ -38,7 +38,8 @@ from ClusterShell.NodeSet import NodeSet, NodeSetParseError
 import fault_config_utils
 import agent_utils
 import write_host_file
-from daos_api import DaosContext, DaosLog, DaosApiError
+
+from pydaos.raw import DaosContext, DaosLog, DaosApiError
 from server_utils import ServerManager, ServerFailed
 from configuration_utils import Configuration
 
