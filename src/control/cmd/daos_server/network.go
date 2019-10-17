@@ -89,10 +89,18 @@ type networkListCmd struct {
 
 // List the supported providers and show the example text
 func (cmd *networkListCmd) Execute(args []string) error {
+	var providerList string
 	providers := netdetect.GetSupportedProviders()
 	cmd.log.Info("Supported providers:\n\n")
+
 	for _, p := range providers {
-		cmd.log.Infof("\t%s", p)
+		if len(providerList) == 0 {
+			providerList = p
+		} else {
+			providerList += ", " + p
+		}
 	}
+	cmd.log.Infof("\t%s", providerList)
+
 	return nil
 }

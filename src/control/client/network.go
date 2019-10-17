@@ -64,8 +64,13 @@ func (nsrm NetworkScanResultMap) String() string {
 
 	return buf.String()
 }
+
 func (nsr NetworkScanResult) String() string {
 	var buf bytes.Buffer
+	if nsr.err != nil {
+		fmt.Fprintf(&buf, "\n\tError: %v\n", nsr.err)
+		return buf.String()
+	}
 	fmt.Fprintf(&buf, "\n\tfabric_iface: %s\n\tprovider: %s\n\tpinned_numa_node: %d\n", nsr.device, nsr.provider, nsr.numanode)
 	return buf.String()
 }

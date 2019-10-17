@@ -32,10 +32,20 @@ import (
 )
 
 func (c *NetworkScanService) RequestProviderList(ctx context.Context, in *pb.ProviderListRequest) (*pb.ProviderListReply, error) {
+	var providerList string
 	c.nsslog.Debugf("RequestProviderList() Received")
-	results := netdetect.GetSupportedProviderString()
-	c.nsslog.Debugf("The DAOS system supports the following providers: %s", results)
-	return &pb.ProviderListReply{Provider: results}, nil
+	//results := netdetect.GetSupportedProviderString()
+	providers := netdetect.GetSupportedProviders()
+	for _, p := range providers {
+		if len(providerList) == 0 {
+			providerList = p
+		} else {
+			providerList += ", " + p
+		}
+	}
+
+	c.nsslog.Debugf("The DAOS system supports the following providers: %s", providerList)
+	return &pb.ProviderListReply{Provider: providerList}, nil
 }
 
 func (c *NetworkScanService) RequestDeviceScan(in *pb.DeviceScanRequest, stream pb.MgmtCtl_RequestDeviceScanServer) error {
