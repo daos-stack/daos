@@ -64,6 +64,28 @@ struct ec_fetch_params {
 	struct ec_fetch_params		*next;/* Next entry in list */
 };
 
+static bool
+ec_is_full_stripe(daos_iod_t *iod, struct daos_oclass_attr *oca,
+		  unsigned int recx_idx)
+{
+	unsigned int	ss = oca->u.ec.e_k * oca->u.ec.e_len;
+	unsigned int start = iod->iod_recxs[recx_idx].rx_idx * iod->iod_size;
+	unsigned int length = iod->iod_recxs[recx_idx].rx_nr * iod->iod_size;
+
+	if (length < ss)
+		return false;
+	if (start % ss) {
+		unsigned long so = ss - start % ss;
+
+		start += so;
+		length -= so;
+	}
+
+	if (length < ss)
+		return false;
+	return true;
+}
+
 /* Determines weather a given IOD contains a recx that is at least a full
  * stripe's worth of data.
  */
@@ -76,19 +98,20 @@ ec_has_full_stripe(daos_iod_t *iod, struct daos_oclass_attr *oca,
 
 	for (i = 0; i < iod->iod_nr; i++) {
 		if (iod->iod_type == DAOS_IOD_ARRAY) {
-			int start = iod->iod_recxs[i].rx_idx * iod->iod_size;
-			int length = iod->iod_recxs[i].rx_nr * iod->iod_size;
+			unsigned int start =
+				iod->iod_recxs[i].rx_idx * iod->iod_size;
+			unsigned int length =
+				iod->iod_recxs[i].rx_nr * iod->iod_size;
 
 			if (length < ss) {
 				continue;
 			}
 
 			if (start % ss) {
-				unsigned long partial =
-						(start/ss + 1) * ss - start;
+				unsigned long so = ss - start % ss;
 
-				start += partial;
-				length -= partial;
+				start += so;
+				length -= so;
 			}
 
 			if (length < ss) {
@@ -207,18 +230,25 @@ ec_array_encode(struct ec_params *params, daos_obj_id_t oid, daos_iod_t *iod,
 	uint64_t	 so = recx_start_offset % ss ?
 						ss - recx_start_offset % ss : 0;
 
+	/* This recx is not a full stripe, so move sgl cursors and return */
+	if (!ec_is_full_stripe(iod, oca, recx_idx)) {
+		ec_move_sgl_cursors(sgl, this_recx->rx_nr * iod->iod_size,
+				    sg_idx, sg_off);
+		return rc;
+	}
+
 	/* s_cur is the index (in bytes) into the recx where a full stripe
 	 * begins.
 	 */
-
 	s_cur = recx_start_offset + so;
+
 	if (s_cur != recx_start_offset)
 		/* if the start of stripe is not at beginning of recx, move
 		 * the sgl index to where the stripe begins).
 		 */
 		ec_move_sgl_cursors(sgl, so, sg_idx, sg_off);
 
-	for ( ; s_cur + len*k <= recx_end_offset; s_cur += len*k) {
+	for ( ; s_cur + ss <= recx_end_offset; s_cur += ss) {
 		daos_recx_t *nrecx;
 
 		rc = ec_allocate_parity(&(params->p_segs), len, p,
@@ -244,6 +274,10 @@ ec_array_encode(struct ec_params *params, daos_obj_id_t oid, daos_iod_t *iod,
 			params->niod.iod_recxs[params->niod.iod_nr++].rx_nr =
 				len / params->niod.iod_size;
 		}
+	}
+	if (s_cur - ss < recx_end_offset) {
+		s_cur -= ss;
+		ec_move_sgl_cursors(sgl, recx_end_offset-s_cur, sg_idx, sg_off);
 	}
 	return rc;
 }
@@ -671,8 +705,9 @@ ec_obj_update_encode(tse_task_t *task, daos_obj_id_t oid,
 					rc = ec_array_encode(params, oid, iod,
 							     sgl, oca, j,
 							     &sg_idx, &sg_off);
-					if (rc != 0)
+					if (rc != 0) {
 						break;
+					}
 				}
 				rc = ec_update_params(params, iod, sgl,
 						      oca->u.ec);
