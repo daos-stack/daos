@@ -22,22 +22,18 @@
  */
 #define D_LOGFAC        DD_FAC(tests)
 
-#include <daos/checksum.h>
-#include <daos.h>
 
 #include <string.h>
-#include <errno.h>
-#include <getopt.h>
 
 #include <stdarg.h>
 #include <stddef.h>
-#include <setjmp.h>
+#include <setjmp.h> /** For cmocka.h */
 #include <stdint.h>
 #include <cmocka.h>
 #include <gurt/types.h>
 #include <daos/common.h>
-#include "daos_checksum_tests.h"
-#include "misc_tests.h"
+#include <daos/checksum.h>
+#include <daos/tests_lib.h>
 
 static bool verbose;
 
@@ -49,14 +45,16 @@ static bool verbose;
  */
 #define FAKE_CSUM_TYPE 999
 static int fake_init_called;
-static int fake_init(struct daos_csummer *obj)
+static int
+fake_init(struct daos_csummer *obj)
 {
 	fake_init_called++;
 	return 0;
 }
 
 static int fake_fini_called;
-static void fake_fini(struct daos_csummer *obj)
+static void
+fake_fini(struct daos_csummer *obj)
 {
 	fake_fini_called++;
 }
@@ -65,7 +63,8 @@ static void fake_fini(struct daos_csummer *obj)
 static char fake_update_buf_copy[FAKE_UPDATE_BUF_LEN];
 static char *fake_update_buf = fake_update_buf_copy;
 static int fake_update_bytes_seen;
-static int fake_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
+static int
+fake_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 {
 	obj->dcs_csum_buf[0]++; /** Just increment the first byte */
 	fake_update_bytes_seen += buf_len;
@@ -75,12 +74,14 @@ static int fake_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 }
 
 static uint16_t fake_get_size_result;
-static uint16_t fake_get_size(struct daos_csummer *obj)
+static uint16_t
+fake_get_size(struct daos_csummer *obj)
 {
 	return fake_get_size_result;
 }
 
-void fake_reset(struct daos_csummer *obj)
+void
+fake_reset(struct daos_csummer *obj)
 {
 	obj->dcs_csum_buf[0] = 0;
 }
@@ -101,7 +102,8 @@ static struct csum_ft fake_algo = {
  * Test the CSUMMER initialize, destroy, and some other basic functions
  * -----------------------------------------------------------------------------
  */
-static void test_init_and_destroy(void **state)
+static void
+test_init_and_destroy(void **state)
 {
 	fake_init_called = 0;
 
@@ -127,7 +129,8 @@ static void test_init_and_destroy(void **state)
 	assert_null(csummer);
 }
 
-static void test_update_reset(void **state)
+static void
+test_update_reset(void **state)
 {
 	struct daos_csummer *csummer;
 	uint32_t csum = 0;
@@ -160,7 +163,8 @@ static void test_update_reset(void **state)
 	daos_csummer_destroy(&csummer);
 }
 
-static void test_update_with_multiple_buffers(void **state)
+static void
+test_update_with_multiple_buffers(void **state)
 {
 	uint32_t		 csum = 0; /** buffer */
 	uint32_t		 csum2 = 0; /** buffer */
@@ -190,7 +194,8 @@ static void test_update_with_multiple_buffers(void **state)
  * -----------------------------------------------------------------------------
  */
 
-static void test_checksummer_allocates_csum_buf(void **state)
+static void
+test_checksummer_allocates_csum_buf(void **state)
 {
 	struct daos_csummer	*csummer;
 	daos_recx_t		 recx;
@@ -214,7 +219,8 @@ static void test_checksummer_allocates_csum_buf(void **state)
 	daos_csummer_destroy(&csummer);
 }
 
-static void test_daos_checksummer_with_single_iov_single_chunk(void **state)
+static void
+test_daos_checksummer_with_single_iov_single_chunk(void **state)
 {
 	struct daos_csummer	*csummer;
 	d_sg_list_t		 sgl;
@@ -246,7 +252,8 @@ static void test_daos_checksummer_with_single_iov_single_chunk(void **state)
 	daos_csummer_destroy(&csummer);
 }
 
-static void test_daos_checksummer_with_mult_iov_single_chunk(void **state)
+static void
+test_daos_checksummer_with_mult_iov_single_chunk(void **state)
 {
 	struct daos_csummer	*csummer;
 	d_sg_list_t		 sgl;
@@ -281,7 +288,8 @@ static void test_daos_checksummer_with_mult_iov_single_chunk(void **state)
 	daos_csummer_destroy(&csummer);
 
 }
-static void test_daos_checksummer_with_multi_iov_multi_extents(void **state)
+static void
+test_daos_checksummer_with_multi_iov_multi_extents(void **state)
 {
 	struct daos_csummer	*csummer;
 	d_sg_list_t		 sgl;
@@ -323,7 +331,8 @@ static void test_daos_checksummer_with_multi_iov_multi_extents(void **state)
 }
 
 
-static void test_daos_checksummer_with_multiple_chunks(void **state)
+static void
+test_daos_checksummer_with_multiple_chunks(void **state)
 {
 	struct daos_csummer	*csummer;
 	d_sg_list_t		 sgl;
@@ -371,9 +380,10 @@ static void test_daos_checksummer_with_multiple_chunks(void **state)
 
 #define	setup_buf_for_test(csum, csum_buf) \
 	dcb_set(&(csum), csum_buf, sizeof(csum_buf), 1, \
-	sizeof(csum_buf), 1024)
+		sizeof(csum_buf), 1024)
 
-static void simple_test_compare_checksums(void **state)
+static void
+simple_test_compare_checksums(void **state)
 {
 	struct daos_csummer	*csummer;
 	uint8_t			 csum_buf[] = "checksum";
@@ -387,10 +397,10 @@ static void simple_test_compare_checksums(void **state)
 	daos_csum_buf_t		 two;
 
 	daos_csummer_init(&csummer, &fake_algo, 1024);
-
+	one.cs_type = FAKE_CSUM_TYPE;
+	two.cs_type = FAKE_CSUM_TYPE;
 
 	setup_buf_for_test(one, csum_buf);
-
 	setup_buf_for_test(two, csum_buf_same);
 	assert_true(daos_csummer_compare(csummer, &one, &two));
 
@@ -406,13 +416,14 @@ static void simple_test_compare_checksums(void **state)
 	daos_csummer_destroy(&csummer);
 }
 
-static void test_compare_checksums(void **state)
+static void
+test_compare_checksums(void **state)
 {
-	struct daos_csummer *csummer;
-	d_sg_list_t sgl;
-	daos_recx_t recx;
-	daos_csum_buf_t *one;
-	daos_csum_buf_t *two;
+	struct daos_csummer	*csummer;
+	daos_csum_buf_t		*one;
+	daos_csum_buf_t		*two;
+	d_sg_list_t		 sgl;
+	daos_recx_t		 recx;
 
 	fake_get_size_result = 4;
 
@@ -432,6 +443,54 @@ static void test_compare_checksums(void **state)
 	daos_sgl_fini(&sgl, true);
 	daos_csummer_destroy_csum_buf(csummer, 1, &one);
 	daos_csummer_destroy_csum_buf(csummer, 1, &two);
+	daos_csummer_destroy(&csummer);
+}
+
+static void
+test_verify_data(void **state)
+{
+	struct daos_csummer	*csummer;
+	daos_iod_t		 iod = {0};
+	d_sg_list_t		 sgl = {0};
+	daos_size_t		 sgl_buf_half;
+	daos_recx_t		 recxs[2] = {0};
+	int			 rc;
+
+	daos_sgl_init_with_strings(&sgl, 1, "0123456789");
+
+	recxs[0].rx_idx = 0;
+	sgl_buf_half = daos_sgl_buf_size(&sgl) / 2;
+	recxs[0].rx_nr = sgl_buf_half;
+	recxs[1].rx_idx = sgl_buf_half;
+	recxs[1].rx_nr = sgl_buf_half;
+
+	iod.iod_size = 1;
+	iod.iod_nr = 2;
+	iod.iod_recxs = recxs;
+
+	/** Checksum not set in iod should pass verify */
+	rc = daos_csum_check_sgl(&iod, &sgl);
+	assert_int_equal(0, rc);
+
+	daos_csummer_type_init(&csummer, CSUM_TYPE_ISAL_CRC64_REFL, 1024*1024);
+	daos_csummer_calc_csum(csummer, &sgl, iod.iod_size,
+			       recxs, 2, &iod.iod_csums);
+
+	rc = daos_csum_check_sgl(&iod, &sgl);
+	assert_int_equal(0, rc);
+
+	((char *)sgl.sg_iovs[0].iov_buf)[0]++; /** Corrupt the data */
+	rc = daos_csum_check_sgl(&iod, &sgl);
+	assert_int_equal(-DER_IO, rc);
+
+	((char *)sgl.sg_iovs[0].iov_buf)[0]--; /** Un-corrupt the data */
+	/** Corrupt data elsewhere*/
+	((char *)sgl.sg_iovs[0].iov_buf)[sgl_buf_half + 1]++;
+	rc = daos_csum_check_sgl(&iod, &sgl);
+	assert_int_equal(-DER_IO, rc);
+
+	/** Clean up */
+	daos_csummer_destroy_csum_buf(csummer, 1, &iod.iod_csums);
 	daos_csummer_destroy(&csummer);
 }
 
@@ -559,7 +618,8 @@ test_helper_functions(void **state)
  * Test some DAOS Container Property Knowledge
  * -----------------------------------------------------------------------------
  */
-static void test_container_prop_to_csum_type(void **state)
+static void
+test_container_prop_to_csum_type(void **state)
 {
 	assert_int_equal(CSUM_TYPE_ISAL_CRC16_T10DIF,
 			 daos_contprop2csumtype(DAOS_PROP_CO_CSUM_CRC16));
@@ -569,7 +629,8 @@ static void test_container_prop_to_csum_type(void **state)
 			 daos_contprop2csumtype(DAOS_PROP_CO_CSUM_CRC64));
 }
 
-static void test_is_valid_csum(void **state)
+static void
+test_is_valid_csum(void **state)
 {
 	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_OFF));
 	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_CRC16));
@@ -580,7 +641,8 @@ static void test_is_valid_csum(void **state)
 	assert_false(daos_cont_csum_prop_is_valid(99));
 }
 
-static void test_is_csum_enabled(void **state)
+static void
+test_is_csum_enabled(void **state)
 {
 	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_CRC16));
 	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_CRC32));
@@ -622,6 +684,8 @@ static const struct CMUnitTest tests[] = {
 		simple_test_compare_checksums, NULL, NULL },
 	{"CSUM15: Compare checksums after actual calculation",
 		test_compare_checksums, NULL, NULL },
+	{"CSUM15: Verify data represented by IOD and SGL. ",
+		test_verify_data, NULL, NULL },
 };
 
 int
