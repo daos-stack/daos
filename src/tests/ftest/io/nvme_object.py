@@ -26,7 +26,7 @@ from __future__ import print_function
 import threading
 import avocado
 
-from daos_api import DaosApiError
+from pydaos.raw import DaosApiError
 from test_utils import TestPool, TestContainer
 from apricot import TestWithServers
 
