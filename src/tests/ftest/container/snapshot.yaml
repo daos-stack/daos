@@ -22,7 +22,7 @@ snapshot:
     dkey: "dkey"
     akey: "akey"
     test_datasize: 200
-    num_of_snapshot: 10
+    num_of_snapshot: 50
 object_class: !mux
     OC_S1:
         obj_class: 200
