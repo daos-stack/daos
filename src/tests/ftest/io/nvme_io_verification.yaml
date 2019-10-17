@@ -27,7 +27,7 @@ pool:
   svcn: 1
 ior:
  client_processes:
-   np: 1 
+   np: 1
  flags: "-w -W -r -R -k -vv"
  repetitions: 1
  api: DAOS
