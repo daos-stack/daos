@@ -34,7 +34,6 @@ import (
 func (c *NetworkScanService) RequestProviderList(ctx context.Context, in *pb.ProviderListRequest) (*pb.ProviderListReply, error) {
 	var providerList string
 	c.nsslog.Debugf("RequestProviderList() Received")
-	//results := netdetect.GetSupportedProviderString()
 	providers := netdetect.GetSupportedProviders()
 	for _, p := range providers {
 		if len(providerList) == 0 {
@@ -56,12 +55,10 @@ func (c *NetworkScanService) RequestDeviceScan(in *pb.DeviceScanRequest, stream 
 		return errors.WithMessage(err, "failed to execute the fabric and device scan")
 	}
 	for _, sr := range results {
-		c.nsslog.Infof("\n******* Sending this item ******* \n%v\n\n", sr)
 		err := stream.Send(&pb.DeviceScanReply{Provider: sr.Provider, Device: sr.DeviceName, Numanode: uint32(sr.NUMANode)})
 		if err != nil {
 			return err
 		}
 	}
-	c.nsslog.Infof("\n******* Done sending items ******* \n\n")
 	return nil
 }

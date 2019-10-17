@@ -23,14 +23,6 @@
 
 package main
 
-import (
-//	"io"
-//	"github.com/daos-stack/daos/src/control/client"
-//	"github.com/daos-stack/daos/src/control/common"
-//	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-//	"github.com/daos-stack/daos/src/control/logging"
-)
-
 // NetCmd is the struct representing the top-level network subcommand.
 type NetCmd struct {
 	Scan networkScanCmd `command:"scan" description:"Scan for network interface devices on remote servers"`
@@ -40,7 +32,6 @@ type NetCmd struct {
 // networkScanCmd is the struct representing the command to scan the machine for network interface devices
 // that match the given fabric provider.
 type networkScanCmd struct {
-	//	cfgCmd
 	logCmd
 	connectedCmd
 	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider (default is the provider specified in daos_server.yml)"`
@@ -71,7 +62,6 @@ func (cmd *networkScanCmd) Execute(args []string) error {
 }
 
 type networkListCmd struct {
-	//cfgCmd
 	logCmd
 	connectedCmd
 }
