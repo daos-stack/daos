@@ -94,10 +94,11 @@ class DaosServer(DaosCommand):
 
     def set_config(self, yamlfile):
         """Set the config value of the parameters in server command."""
-        self.config.value = self.yaml_params.create_yaml(yamlfile)
-        self.mode = "normal"
         if self.yaml_params.is_nvme() or self.yaml_params.is_scm():
             self.mode = "format"
+            self.yaml_params.user_name.value = getpass.getuser()
+        self.config.value = self.yaml_params.create_yaml(yamlfile)
+        self.mode = "normal"
 
     def check_subprocess_status(self, sub_process):
         """Wait for message from command output.
@@ -429,10 +430,6 @@ class ServerManager(ExecutableCommand):
             self.log.info("Performing nvme storage prepare in <format> mode")
             storage_prepare(self._hosts, "root")
             self.runner.job.sudo = True
-
-            # Add non-root user to yaml file
-            self.runner.job.yaml_params.server_params.user_name.value = \
-                getpass.getuser()
 
             # Make sure log file has been created for ownership change
             logfile = self.runner.job.yaml_params.server_params.log_file.value
