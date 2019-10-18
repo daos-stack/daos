@@ -39,9 +39,9 @@ import fault_config_utils
 import agent_utils
 import write_host_file
 
-from pydaos.raw import DaosContext, DaosLog, DaosApiError
 from server_utils import ServerManager, ServerFailed
 from configuration_utils import Configuration
+from pydaos.raw import DaosContext, DaosLog, DaosApiError
 
 
 # pylint: disable=invalid-name
