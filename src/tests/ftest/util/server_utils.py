@@ -94,11 +94,10 @@ class DaosServer(DaosCommand):
 
     def set_config(self, yamlfile):
         """Set the config value of the parameters in server command."""
-        if self.yaml_params.is_nvme() or self.yaml_params.is_scm():
-            self.mode = "format"
-            self.yaml_params.user_name.value = getpass.getuser()
         self.config.value = self.yaml_params.create_yaml(yamlfile)
         self.mode = "normal"
+        if self.yaml_params.is_nvme() or self.yaml_params.is_scm():
+            self.mode = "format"
 
     def check_subprocess_status(self, sub_process):
         """Wait for message from command output.
@@ -309,6 +308,8 @@ class DaosServerConfig(ObjectWithParameters):
             value = getattr(self, name).value
             if value is not None and value is not False:
                 yaml_data[name] = getattr(self, name).value
+            if name == "bdev_class" and value == "nvme":
+                yaml_data[name] = getpass.getuser()
         for index in range(len(self.server_params)):
             yaml_data["servers"].append({})
             for name in self.server_params[index].get_param_names():
