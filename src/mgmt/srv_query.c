@@ -80,7 +80,7 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 		if (rc != 0) {
 			D_ERROR("Device UUID:"DF_UUID" not found\n",
 				DP_UUID(dev_uuid));
-			goto out;
+			return rc;
 		}
 		if (dev_info->sdi_tgts == NULL) {
 			D_ERROR("No targets mapped to device\n");
@@ -94,7 +94,7 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 		rc = smd_dev_get_by_tgt(tgt_id, &dev_info);
 		if (rc != 0) {
 			D_ERROR("Tgt_id:%d not found\n", tgt_id);
-			goto out;
+			return rc;
 		}
 		uuid_copy(dev_uuid, dev_info->sdi_id);
 	}
