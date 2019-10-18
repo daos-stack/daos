@@ -203,8 +203,8 @@ dfs_test_read_thread(void *arg)
 static void
 dfs_test_read_shared_file(void **state)
 {
-	daos_size_t		chunk_size = 512;
-	daos_size_t		file_size = 1048576;
+	daos_size_t		chunk_size = 64;
+	daos_size_t		file_size = 256000;
 	pthread_barrier_t	barrier;
 	char			*name = "MTA_file";
 	int			i;
@@ -219,7 +219,7 @@ dfs_test_read_shared_file(void **state)
 	pthread_barrier_init(&barrier, NULL, dfs_test_thread_nr + 1);
 	for (i = 0; i < dfs_test_thread_nr; i++) {
 		dfs_test_targ[i].thread_idx = i;
-		dfs_test_targ[i].stride = chunk_size;
+		dfs_test_targ[i].stride = 77;
 		dfs_test_targ[i].name = name;
 		dfs_test_targ[i].total_size = file_size;
 		dfs_test_targ[i].barrier = &barrier;
