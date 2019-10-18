@@ -308,14 +308,14 @@ class DaosServerConfig(ObjectWithParameters):
             value = getattr(self, name).value
             if value is not None and value is not False:
                 yaml_data[name] = getattr(self, name).value
-            if name == "bdev_class" and value == "nvme":
-                yaml_data[name] = getpass.getuser()
         for index in range(len(self.server_params)):
             yaml_data["servers"].append({})
             for name in self.server_params[index].get_param_names():
                 value = getattr(self.server_params[index], name).value
                 if value is not None and value is not False:
                     yaml_data["servers"][index][name] = value
+                if name == "bdev_class" and value == "nvme":
+                    yaml_data["user_name"] = getpass.getuser()
 
         # Write default_value_set dictionary in to AVOCADO_FILE
         # This will be used to start with daos_server -o option.
