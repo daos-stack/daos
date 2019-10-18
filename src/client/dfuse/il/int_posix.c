@@ -241,7 +241,7 @@ fetch_daos_handles(int fd)
 	struct dfuse_hs_reply	hs_reply;
 	d_iov_t			iov = {};
 	int			cmd;
-	int rc;
+	int			rc;
 
 	rc = ioctl(fd, DFUSE_IOCTL_IL_SIZE, &hs_reply);
 	if (rc != 0) {
@@ -250,8 +250,8 @@ fetch_daos_handles(int fd)
 	}
 
 	DFUSE_LOG_INFO("ioctl returned %zi %zi",
-		hs_reply.fsr_pool_size,
-		hs_reply.fsr_cont_size);
+		       hs_reply.fsr_pool_size,
+		       hs_reply.fsr_cont_size);
 
 	D_ALLOC(iov.iov_buf, hs_reply.fsr_pool_size);
 	if (!iov.iov_buf)
@@ -310,7 +310,7 @@ static int
 connect_daos_cont(int fd, struct dfuse_il_reply *il_reply)
 {
 	d_rank_list_t		*svcl;
-	int rc;
+	int			rc;
 
 	svcl = daos_rank_list_parse("0", ":");
 

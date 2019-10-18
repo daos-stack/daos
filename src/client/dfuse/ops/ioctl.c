@@ -143,9 +143,7 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 {
 	struct dfuse_obj_hdl	*oh = (struct dfuse_obj_hdl *)fi->fh;
 	int			rc;
-	const struct fuse_ctx	*fc = fuse_req_ctx(req);
-	uid_t			uid = getuid();
-	uid_t			gid = getgid();
+	const struct fuse_ctx	*fc;
 
 	DFUSE_TRA_INFO(oh, "ioctl cmd=%#x", cmd);
 
@@ -167,6 +165,10 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 		handle_il_ioctl(oh, req);
 		return;
 	}
+
+	fc = fuse_req_ctx(req);
+	uid = getuid();
+	gid = getgid()
 
 	if (fc->uid != uid || fc->gid != gid)
 		D_GOTO(out_err, rc = EPERM);
