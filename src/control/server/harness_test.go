@@ -41,20 +41,6 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
-func cmpErr(t *testing.T, want, got error) {
-	t.Helper()
-
-	if want == got {
-		return
-	}
-	if want == nil || got == nil {
-		t.Fatalf("unexpected error (wanted: %v, got: %v)", want, got)
-	}
-	if want.Error() != got.Error() && !strings.Contains(got.Error(), want.Error()) {
-		t.Fatalf("unexpected error (wanted: %s, got: %s)", want, got)
-	}
-}
-
 func TestHarnessCreateSuperblocks(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)()
@@ -242,7 +228,7 @@ func TestHarnessGetMSLeaderInstance(t *testing.T) {
 			}
 
 			_, err := h.GetMSLeaderInstance()
-			cmpErr(t, tc.expError, err)
+			common.CmpErr(t, tc.expError, err)
 		})
 	}
 }

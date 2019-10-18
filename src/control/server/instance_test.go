@@ -106,7 +106,7 @@ func TestIOServerInstance_CallDrpc(t *testing.T) {
 			}
 
 			_, err := instance.CallDrpc(mgmtModuleID, poolCreate, &mgmtpb.PoolCreateReq{})
-			cmpErr(t, tc.expErr, err)
+			common.CmpErr(t, tc.expErr, err)
 		})
 	}
 }
@@ -201,7 +201,7 @@ func TestIOServerInstance_MountScmDevice(t *testing.T) {
 			instance := NewIOServerInstance(log, nil, mp, nil, runner)
 
 			gotErr := instance.MountScmDevice()
-			cmpErr(t, tc.expErr, gotErr)
+			common.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }
@@ -329,7 +329,7 @@ func TestIOServerInstance_NeedsScmFormat(t *testing.T) {
 			instance := NewIOServerInstance(log, nil, mp, nil, runner)
 
 			gotNeedsFormat, gotErr := instance.NeedsScmFormat()
-			cmpErr(t, tc.expErr, gotErr)
+			common.CmpErr(t, tc.expErr, gotErr)
 			if diff := cmp.Diff(tc.expNeedsFormat, gotNeedsFormat); diff != "" {
 				t.Fatalf("unexpected needs format (-want, +got):\n%s\n", diff)
 			}
