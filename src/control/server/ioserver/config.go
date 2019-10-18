@@ -193,7 +193,7 @@ func (c *Config) CmdLineEnv() ([]string, error) {
 	// to the name of the device alias.  For example, a fabric_iface of "ib0"
 	// has a device alias of "hfi1_0", and "OFI_DOMAIN=hfi1_0" will be added
 	// to this I/O server's environment
-	if c.Fabric.Provider == "ofi+verbs" {
+	if strings.Contains(c.Fabric.Provider, "ofi+verbs") {
 		deviceAlias, err := netdetect.GetDeviceAlias(c.Fabric.Interface)
 		if err != nil {
 			return nil, err

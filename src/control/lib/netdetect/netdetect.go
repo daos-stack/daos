@@ -488,6 +488,11 @@ func GetAffinityForNetworkDevices(deviceNames []string) ([]DeviceAffinity, error
 	return affinity, nil
 }
 
+// GetDeviceAliasStub is used during unit testing to avoid calls to hwloc()
+func GetDeviceAliasStub(device string) (string, error) {
+	return "hfi1_0", nil
+}
+
 // GetDeviceAlias is a complete method to find an alias for the device name provided.
 // For example, the device alias for "ib0" is a sibling node in the hwloc topology
 // with the name "hfi1_0".
@@ -521,7 +526,6 @@ func GetDeviceAlias(device string) (string, error) {
 	log.Debugf("Device alias for %s is %s", device, C.GoString(node.name))
 	return C.GoString(node.name), nil
 }
-
 
 // GetAffinityForDevice searches the system topology reported by hwloc
 // for the device specified by netDeviceName and returns the corresponding
