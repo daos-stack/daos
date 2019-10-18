@@ -23,7 +23,7 @@ else
 		'/sys/class/uio/uio*/device/config'	\
 		'/sys/class/uio/uio*/device/resource*'; do
 
-		if list=$(ls $glob); then
+		if list=$(ls "$glob"); then
 			echo "$list" | xargs -r chown -R "$_TARGET_USER"
 		fi
 	done
