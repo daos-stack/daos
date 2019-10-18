@@ -27,9 +27,9 @@ from time import sleep, time
 
 from avocado import fail_on
 from avocado.utils import process
-from conversion import c_uuid_to_str
 from command_utils import BasicParameter, ObjectWithParameters
-from daos_api import DaosApiError, DaosServer, DaosContainer, DaosPool
+from pydaos.raw import (DaosApiError, DaosServer, DaosContainer, DaosPool,
+                        c_uuid_to_str)
 from general_utils import check_pool_files, get_random_string, DaosTestError
 
 
@@ -125,6 +125,7 @@ class TestPool(TestDaosApiBase):
     """A class for functional testing of DaosPools objects."""
 
     def __init__(self, context, log=None, cb_handler=None):
+        # pylint: disable=unused-argument
         """Initialize a TestPool object.
 
         Note: 'log' is now a defunct argument and will be removed in the future
@@ -262,6 +263,11 @@ class TestPool(TestDaosApiBase):
         # pylint: disable=unused-argument
         """Check the pool info attributes.
 
+        Note:
+            Arguments may also be provided as a string with a number preceeded
+            by '<', '<=', '>', or '>=' for other comparisions besides the
+            default '=='.
+
         Args:
             pi_uuid (str, optional): pool uuid. Defaults to None.
             pi_ntargets (int, optional): number of targets. Defaults to None.
@@ -295,6 +301,11 @@ class TestPool(TestDaosApiBase):
                          ps_free_mean=None, ps_ntargets=None, ps_padding=None):
         # pylint: disable=unused-argument
         """Check the pool info space attributes.
+
+        Note:
+            Arguments may also be provided as a string with a number preceeded
+            by '<', '<=', '>', or '>=' for other comparisions besides the
+            default '=='.
 
         Args:
             ps_free_min (list, optional): minimum free space per device.
@@ -336,6 +347,11 @@ class TestPool(TestDaosApiBase):
         # pylint: disable=unused-argument
         """Check the pool info daos space attributes.
 
+        Note:
+            Arguments may also be provided as a string with a number preceeded
+            by '<', '<=', '>', or '>=' for other comparisions besides the
+            default '=='.
+
         Args:
             s_total (list, optional): total space per device. Defaults to None.
             s_free (list, optional): free space per device. Defaults to None.
@@ -366,6 +382,11 @@ class TestPool(TestDaosApiBase):
                              rs_rec_nr=None):
         # pylint: disable=unused-argument
         """Check the pool info rebuild attributes.
+
+        Note:
+            Arguments may also be provided as a string with a number preceeded
+            by '<', '<=', '>', or '>=' for other comparisions besides the
+            default '=='.
 
         Args:
             rs_version (int, optional): rebuild version. Defaults to None.
@@ -1066,4 +1087,57 @@ class TestContainer(TestDaosApiBase):
         count = sum([ranks.count(rank) for ranks in target_rank_list])
         self.log.info(
             "Occurrences of rank %s in the target rank list: %s", rank, count)
+        return count
+
+    def punch_objects(self, indices):
+        """Punch committed objects from the container.
+
+        Args:
+            indices (list): list of index numbers indicating which written
+                objects to punch from the self.written_data list
+
+        Raises:
+            DaosTestError: if there is an error punching the object or
+                determining which objec to punch
+
+        Returns:
+            int: number of successfully punched objects
+
+        """
+        self.open()
+        self.log.info(
+            "Punching %s objects from container %s with %s written objects",
+            len(indices), self.uuid, len(self.written_data))
+        count = 0
+        if len(self.written_data) > 0:
+            for index in indices:
+                # Find the object to punch at the specified index
+                txn = 0
+                try:
+                    obj = self.written_data[index].obj
+                except IndexError:
+                    raise DaosTestError(
+                        "Invalid index {} for written data".format(index))
+
+                # Close the object
+                self.log.info(
+                    "Closing object (index: %s, txn: %s) in container %s",
+                    index, txn, self.uuid)
+                try:
+                    self._call_method(obj.close, {})
+                except DaosApiError as error:
+                    self.log.error("  Error: %s", str(error))
+                    continue
+
+                # Punch the object
+                self.log.info(
+                    "Punching object (index: %s, txn: %s) from container %s",
+                    index, txn, self.uuid)
+                try:
+                    self._call_method(obj.punch, {"txn": txn})
+                    count += 1
+                except DaosApiError as error:
+                    self.log.error("  Error: %s", str(error))
+
+        # Retutrn the number of punched objects
         return count

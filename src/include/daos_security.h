@@ -474,6 +474,24 @@ daos_ace_to_str(struct daos_ace *ace, char *buf, size_t buf_len);
 int
 daos_acl_from_strs(const char **ace_strs, size_t ace_nr, struct daos_acl **acl);
 
+/**
+ * Convert an Access Control List (daos_acl) to a list of Access Control Entries
+ * formatted as strings.
+ *
+ * Each entry in ace_strs is dynamically allocated. So is the array itself. It
+ * is the caller's responsibility to free all of them.
+ *
+ * \param[in]	acl		DAOS ACL
+ * \param[out]	ace_strs	Newly allocated array of strings
+ * \param[out]	ace_nr		Length of ace_strs
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ *		-DER_NOMEM	Could not allocate memory
+ */
+int
+daos_acl_to_strs(struct daos_acl *acl, char ***ace_strs, size_t *ace_nr);
+
 #if defined(__cplusplus)
 }
 #endif

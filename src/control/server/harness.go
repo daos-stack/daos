@@ -44,15 +44,13 @@ const (
 type IOServerHarness struct {
 	sync.RWMutex
 	log       logging.Logger
-	ext       External
 	instances []*IOServerInstance
 	started   bool
 }
 
 // NewHarness returns an initialized *IOServerHarness
-func NewIOServerHarness(ext External, log logging.Logger) *IOServerHarness {
+func NewIOServerHarness(log logging.Logger) *IOServerHarness {
 	return &IOServerHarness{
-		ext:       ext,
 		log:       log,
 		instances: make([]*IOServerInstance, 0, 2),
 	}
@@ -86,9 +84,9 @@ func (h *IOServerHarness) AddInstance(srv *IOServerInstance) error {
 	return nil
 }
 
-// GetManagementInstance returns a managed IO Server instance
-// to be used as a management target.
-func (h *IOServerHarness) GetManagementInstance() (*IOServerInstance, error) {
+// GetMSLeaderInstance returns a managed IO Server instance to be used as a
+// management target and fails if selected instance is not MS Leader.
+func (h *IOServerHarness) GetMSLeaderInstance() (*IOServerInstance, error) {
 	h.RLock()
 	defer h.RUnlock()
 
@@ -96,31 +94,15 @@ func (h *IOServerHarness) GetManagementInstance() (*IOServerInstance, error) {
 		return nil, errors.New("harness has no managed instances")
 	}
 
-	if defaultManagementInstance > len(h.instances) {
-		return nil, errors.Errorf("no instance index %d", defaultManagementInstance)
+	var err error
+	for _, mi := range h.Instances() {
+		// try each instance, returning the first one that is a replica (if any are)
+		if err = checkIsMSReplica(mi); err == nil {
+			return mi, nil
+		}
 	}
 
-	// Just pick one for now.
-	return h.instances[defaultManagementInstance], nil
-}
-
-// GetMSLeaderInstance returns a managed IO Server instance to be used as a
-// management target and fails if selected instance is not MS Leader.
-func (h *IOServerHarness) GetMSLeaderInstance() (*IOServerInstance, error) {
-	h.RLock()
-	defer h.RUnlock()
-
-	mi, err := h.GetManagementInstance()
-	if err != nil {
-		return nil, err
-	}
-	// currently, as there is only one access point, the only replica will
-	// also be the leader.
-	if err := checkIsMSReplica(mi); err != nil {
-		return nil, err
-	}
-
-	return mi, nil
+	return nil, err
 }
 
 // CreateSuperblocks creates instance superblocks as needed.
@@ -207,6 +189,13 @@ func (h *IOServerHarness) Start(parent context.Context) error {
 		return errors.New("can't start: harness already started")
 	}
 
+	// Now we want to block any RPCs that might try to mess with storage
+	// (format, firmware update, etc) before attempting to start I/O servers
+	// which are using the storage.
+	h.Lock()
+	h.started = true
+	h.Unlock()
+
 	instances := h.Instances()
 	ctx, shutdown := context.WithCancel(parent)
 	defer shutdown()
@@ -229,7 +218,7 @@ func (h *IOServerHarness) Start(parent context.Context) error {
 			}
 		case ready := <-instance.AwaitReady():
 			if pmixless() {
-				h.log.Debug("PMIx-less mode detected")
+				h.log.Debugf("PMIx-less mode detected (ready: %v)", ready)
 				if err := instance.SetRank(ctx, ready); err != nil {
 					return err
 				}
@@ -240,10 +229,6 @@ func (h *IOServerHarness) Start(parent context.Context) error {
 	if err := h.StartManagementService(ctx); err != nil {
 		return errors.Wrap(err, "failed to start management service")
 	}
-
-	h.Lock()
-	h.started = true
-	h.Unlock()
 
 	// now monitor them
 	for {

@@ -107,8 +107,8 @@ func (tc *testConn) StorageScan() (client.ClientCtrlrMap, client.ClientModuleMap
 	return nil, nil, nil
 }
 
-func (tc *testConn) StorageFormat() (client.ClientCtrlrMap, client.ClientMountMap) {
-	tc.appendInvocation("StorageFormat")
+func (tc *testConn) StorageFormat(reformat bool) (client.ClientCtrlrMap, client.ClientMountMap) {
+	tc.appendInvocation(fmt.Sprintf("StorageFormat-%t", reformat))
 	return nil, nil
 }
 
@@ -157,9 +157,9 @@ func (tc *testConn) SystemMemberQuery() (common.SystemMembers, error) {
 	return make(common.SystemMembers, 0), nil
 }
 
-func (tc *testConn) SystemStop() (common.SystemMembers, error) {
+func (tc *testConn) SystemStop() (common.SystemMemberResults, error) {
 	tc.appendInvocation("SystemStop")
-	return make(common.SystemMembers, 0), nil
+	return make(common.SystemMemberResults, 0), nil
 }
 
 func (tc *testConn) SetTransportConfig(cfg *security.TransportConfig) {

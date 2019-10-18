@@ -166,10 +166,7 @@ mv %{?buildroot}%{_prefix}/{TESTING,lib/%{name}/}
 cp -al ftest.sh src/tests/ftest %{?buildroot}%{daoshome}/TESTING
 find %{?buildroot}%{daoshome}/TESTING/ftest -name \*.py[co] -print0 | xargs -r0 rm -f
 #ln %{?buildroot}%{daoshome}/{TESTING/.build_vars,.build_vars-Linux}.sh
-mkdir -p %{?buildroot}%{daoshome}/utils/py
-cp -al src/utils/py/daos_api.py %{?buildroot}%{daoshome}/utils/py
-cp -al src/utils/py/daos_cref.py %{?buildroot}%{daoshome}/utils/py
-cp -al src/utils/py/conversion.py %{?buildroot}%{daoshome}/utils/py
+mkdir -p %{?buildroot}%{daoshome}/utils
 mkdir -p %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{?buildroot}/%{_unitdir}
@@ -241,10 +238,26 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/libduns.so
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
-%{_libdir}/python2.7/site-packages/pydaos_shim_27.so
+%dir  %{_libdir}/python2.7/site-packages/pydaos
+%{_libdir}/python2.7/site-packages/pydaos/*.py
+%{_libdir}/python2.7/site-packages/pydaos/*.pyc
+%{_libdir}/python2.7/site-packages/pydaos/*.pyo
+%{_libdir}/python2.7/site-packages/pydaos/pydaos_shim_27.so
+%dir  %{_libdir}/python2.7/site-packages/pydaos/raw
+%{_libdir}/python2.7/site-packages/pydaos/raw/*.py
+%{_libdir}/python2.7/site-packages/pydaos/raw/*.pyc
+%{_libdir}/python2.7/site-packages/pydaos/raw/*.pyo
 %dir %{_libdir}/python3
 %dir %{_libdir}/python3/site-packages
-%{_libdir}/python3/site-packages/pydaos_shim_3.so
+%dir %{_libdir}/python3/site-packages/pydaos
+%{_libdir}/python3/site-packages/pydaos/*.py
+%{_libdir}/python3/site-packages/pydaos/*.pyc
+%{_libdir}/python3/site-packages/pydaos/*.pyo
+%{_libdir}/python3/site-packages/pydaos/pydaos_shim_3.so
+%dir %{_libdir}/python3/site-packages/pydaos/raw
+%{_libdir}/python3/site-packages/pydaos/raw/*.py
+%{_libdir}/python3/site-packages/pydaos/raw/*.pyc
+%{_libdir}/python3/site-packages/pydaos/raw/*.pyo
 %{_datadir}/%{name}/ioil-ld-opts
 %{_prefix}%{_sysconfdir}/daos.yml
 %{_prefix}%{_sysconfdir}/daos_agent.yml
@@ -252,7 +265,6 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 
 %files tests
 %dir %{daoshome}/utils
-%{daoshome}/utils/py
 %{daoshome}/TESTING
 %{_bindir}/hello_drpc
 %{_bindir}/*_test*
@@ -260,6 +272,7 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_bindir}/vea_ut
 %{_bindir}/daosbench
 %{_bindir}/daos_perf
+%{_bindir}/daos_racer
 %{_bindir}/evt_ctl
 %{_bindir}/obj_ctl
 %{_bindir}/daos_gen_io_conf

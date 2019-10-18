@@ -27,7 +27,7 @@ from avocado.core.exceptions import TestFail
 from apricot import TestWithServers, skipForTicket
 from command_utils import CommandFailure, Mpirun
 from ior_utils import IorCommand
-from daos_api import DaosApiError
+from pydaos.raw import DaosApiError
 from test_utils import TestPool, TestContainer
 
 
