@@ -202,46 +202,45 @@ func TestStorageFormat(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer ShowBufferOnFailure(t, buf)()
 
-	tests := []struct {
+	for name, tt := range map[string]struct {
 		formatRet error
+		reformat  bool
 	}{
-		{
-			nil,
+		"ok": {},
+		"fails": {
+			formatRet: MockErr,
 		},
-		{
-			MockErr,
-		},
-	}
+	} {
+		t.Run(name, func(t *testing.T) {
+			cc := connectSetup(
+				log, Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
+				MockModuleResults, MockPmemDevices, MockMountResults, nil, tt.formatRet, nil, nil,
+				nil, nil, MockACL)
 
-	for _, tt := range tests {
-		cc := connectSetup(
-			log, Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
-			MockModuleResults, MockPmemDevices, MockMountResults, nil,
-			tt.formatRet, nil, nil, nil, nil, MockACL)
+			cNvmeMap, cMountMap := cc.StorageFormat(tt.reformat)
 
-		cNvmeMap, cMountMap := cc.StorageFormat()
-
-		if tt.formatRet != nil {
-			for _, addr := range MockServers {
-				AssertEqual(
-					t, cNvmeMap[addr],
-					CtrlrResults{Err: tt.formatRet},
-					"unexpected error for nvme result")
-				AssertEqual(
-					t, cMountMap[addr],
-					MountResults{Err: tt.formatRet},
-					"unexpected error for scm mount result")
+			if tt.formatRet != nil {
+				for _, addr := range MockServers {
+					AssertEqual(
+						t, cNvmeMap[addr],
+						CtrlrResults{Err: tt.formatRet},
+						"unexpected error for nvme result")
+					AssertEqual(
+						t, cMountMap[addr],
+						MountResults{Err: tt.formatRet},
+						"unexpected error for scm mount result")
+				}
+				return
 			}
-			continue
-		}
 
-		AssertEqual(
-			t, cNvmeMap, NewClientNvmeResults(MockCtrlrResults, MockServers),
-			"unexpected client NVMe SSD controller results returned")
+			AssertEqual(
+				t, cNvmeMap, NewClientNvmeResults(MockCtrlrResults, MockServers),
+				"unexpected client NVMe SSD controller results returned")
 
-		AssertEqual(
-			t, cMountMap, NewClientScmMountResults(MockMountResults, MockServers),
-			"unexpected client SCM Mount results returned")
+			AssertEqual(
+				t, cMountMap, NewClientScmMountResults(MockMountResults, MockServers),
+				"unexpected client SCM Mount results returned")
+		})
 	}
 }
 

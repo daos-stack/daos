@@ -66,7 +66,7 @@ type Connect interface {
 	ClearConns() ResultMap
 	StoragePrepare(*ctlpb.StoragePrepareReq) ResultMap
 	StorageScan() (ClientCtrlrMap, ClientModuleMap, ClientPmemMap)
-	StorageFormat() (ClientCtrlrMap, ClientMountMap)
+	StorageFormat(reformat bool) (ClientCtrlrMap, ClientMountMap)
 	StorageUpdate(*ctlpb.StorageUpdateReq) (ClientCtrlrMap, ClientModuleMap)
 	// TODO: implement Burnin client features
 	//StorageBurnIn() (ClientCtrlrMap, ClientModuleMap)

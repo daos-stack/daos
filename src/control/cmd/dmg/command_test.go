@@ -107,8 +107,8 @@ func (tc *testConn) StorageScan() (client.ClientCtrlrMap, client.ClientModuleMap
 	return nil, nil, nil
 }
 
-func (tc *testConn) StorageFormat() (client.ClientCtrlrMap, client.ClientMountMap) {
-	tc.appendInvocation("StorageFormat")
+func (tc *testConn) StorageFormat(reformat bool) (client.ClientCtrlrMap, client.ClientMountMap) {
+	tc.appendInvocation(fmt.Sprintf("StorageFormat-%t", reformat))
 	return nil, nil
 }
 
