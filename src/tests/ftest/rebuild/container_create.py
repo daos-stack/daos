@@ -22,7 +22,7 @@
 """
 from apricot import TestWithServers, skipForTicket
 from ior_utils import IorCommand, IorFailed
-from daos_api import DaosApiError
+from pydaos.raw import DaosApiError
 from test_utils import TestPool, TestContainer
 
 
