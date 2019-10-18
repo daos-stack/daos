@@ -181,8 +181,7 @@ struct bio_desc {
 	 * SPDK blob io completion could run on different xstream
 	 * when the NVMe device is shared by multiple xstreams.
 	 */
-	ABT_mutex		 bd_mutex;
-	ABT_cond		 bd_dma_done;
+	ABT_eventual		 bd_dma_done;
 	/* Inflight SPDK DMA transfers */
 	unsigned int		 bd_inflights;
 	int			 bd_result;
