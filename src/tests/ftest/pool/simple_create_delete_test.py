@@ -27,7 +27,7 @@ import os
 import traceback
 
 from apricot import TestWithServers
-from daos_api import DaosPool, DaosApiError
+from pydaos.raw import DaosPool, DaosApiError
 
 
 class SimpleCreateDeleteTest(TestWithServers):
