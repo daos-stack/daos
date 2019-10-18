@@ -4,9 +4,6 @@ hosts:
   test_servers:
     - boro-A
     - boro-B
-  test_clients:
-    - boro-C
-    - boro-D
 timeout: 100
 faults: !mux
 # commenting out the fault injection bit
