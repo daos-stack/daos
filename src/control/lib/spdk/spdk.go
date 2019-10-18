@@ -29,7 +29,7 @@ package spdk
 
 /*
 #cgo LDFLAGS: -lspdk_env_dpdk -lrte_mempool -lrte_mempool_ring -lrte_bus_pci
-#cgo LDFLAGS: -lrte_pci -lrte_ring -lrte_mbuf -lrte_eal -lrte_kvargs
+#cgo LDFLAGS: -lrte_pci -lrte_ring -lrte_mbuf -lrte_eal -lrte_kvargs -ldl -lnuma
 
 #include "stdlib.h"
 #include "spdk/stdinc.h"
