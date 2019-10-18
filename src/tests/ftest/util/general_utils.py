@@ -33,7 +33,7 @@ from errno import ENOENT
 from time import sleep
 
 from avocado import fail_on
-from daos_api import DaosApiError, DaosServer, DaosContainer, DaosPool
+from pydaos.raw import DaosApiError, DaosServer, DaosContainer, DaosPool
 from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet
 
