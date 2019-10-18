@@ -286,13 +286,13 @@ class DaosServerConfig(ObjectWithParameters):
 
     def is_nvme(self):
         """Return if NVMe is provided in the configuration."""
-        if self.server_params[-1].bdev_class == "nvme":
+        if self.server_params[-1].bdev_class.value == "nvme":
             return True
         return False
 
     def is_scm(self):
         """Return if SCM is provided in the configuration."""
-        if self.server_params[-1].scm_class == "dcpm":
+        if self.server_params[-1].scm_class.value == "dcpm":
             return True
         return False
 
