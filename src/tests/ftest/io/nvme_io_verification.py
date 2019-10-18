@@ -71,13 +71,12 @@ class NvmeIoVerification(IorTestBase):
         # Test params
         tests = self.params.get("ior_sequence", '/run/ior/*')
         transfer_size = self.params.get("tsize", '/run/ior/transfersize/*/')
+        block_size = self.ior_cmd.block_size.value
 
         # Loop for every IOR object type
         for ior_param in tests:
             # Create and connect to a pool
             self.pool = DaosPool(self.context)
-            print("***scm:{}".format(ior_param[0]))
-            print("***nvme:{}".format(ior_param[1]))
             self.pool.create(
                 pool_mode, pool_uid, pool_gid, ior_param[0], pool_group,
                 svcn=pool_svcn, nvme_size=ior_param[1])
@@ -90,6 +89,12 @@ class NvmeIoVerification(IorTestBase):
 
                 # Run ior with the parameters specified for this pass
                 self.ior_cmd.transfer_size.update(tsize)
+                # if transfer size is less thank 1K
+                # update block size to 32K to keep it small
+                if tsize <= 1000:
+                    self.ior_cmd.block_size.update(32000)
+                else:
+                    self.ior_cmd.block_size.update(block_size)
                 self.ior_cmd.set_daos_params(self.server_group, self.pool)
                 self.run_ior(self.get_job_manager_command())
 
