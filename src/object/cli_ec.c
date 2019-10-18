@@ -475,8 +475,13 @@ ec_get_tgt_set(daos_iod_t *iods, unsigned int nr, struct daos_oclass_attr *oca,
 			 * called if parity is present.
 			 */
 			D_ASSERT(!(PARITY_INDICATOR & rs));
+			/* Walk from start to end by len, except for the last
+			 * iteration. (could cross a cell boundary with less
+			 * than a cell's worth remaining)
+			 */
 			for (ext_idx = rs; ext_idx <= re;
-			     ext_idx += (re - ext_idx < len && ext_idx != re) ? re-ext_idx : len) {
+			     ext_idx += (re - ext_idx < len && ext_idx != re) ?
+			     re-ext_idx : len) {
 				unsigned int cell = (ext_idx % ss)/len;
 
 				*tgt_set |= 1UL << (cell+p);
