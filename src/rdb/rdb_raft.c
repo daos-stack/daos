@@ -2530,7 +2530,7 @@ rdb_requestvote_handler(crt_rpc_t *rpc)
 	struct rdb_requestvote_out     *out = crt_reply_get(rpc);
 	struct rdb		       *db;
 	struct rdb_raft_state		state;
-	d_rank_t			srcrank = -1;
+	d_rank_t			srcrank;
 	int				rc;
 
 	rc = crt_req_src_rank_get(rpc, &srcrank);
@@ -2575,7 +2575,7 @@ rdb_appendentries_handler(crt_rpc_t *rpc)
 	struct rdb_appendentries_out   *out = crt_reply_get(rpc);
 	struct rdb		       *db;
 	struct rdb_raft_state		state;
-	d_rank_t			srcrank = -1;
+	d_rank_t			srcrank;
 	int				rc;
 
 	rc = crt_req_src_rank_get(rpc, &srcrank);
@@ -2619,7 +2619,7 @@ rdb_installsnapshot_handler(crt_rpc_t *rpc)
 	struct rdb_installsnapshot_out *out = crt_reply_get(rpc);
 	struct rdb		       *db;
 	struct rdb_raft_state		state;
-	d_rank_t			srcrank = -1;
+	d_rank_t			srcrank;
 	int				rc;
 
 	rc = crt_req_src_rank_get(rpc, &srcrank);
@@ -2684,7 +2684,7 @@ rdb_raft_process_reply(struct rdb *db, crt_rpc_t *rpc)
 	struct rdb_requestvote_out     *out_rv;
 	struct rdb_appendentries_out   *out_ae;
 	struct rdb_installsnapshot_out *out_is;
-	d_rank_t			rank = -1;
+	d_rank_t			rank;
 	raft_node_t		       *node;
 	int				rc;
 
