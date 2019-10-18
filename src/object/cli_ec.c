@@ -105,7 +105,7 @@ ec_has_full_or_mult_stripe(daos_iod_t *iod, struct daos_oclass_attr *oca,
 				iod->iod_recxs[i].rx_nr * iod->iod_size;
 
 			if (length < ss && start/ss == (start+length)/ss) {
-					continue;
+				continue;
 			} else if (start % ss) {
 				unsigned long so = ss - start % ss;
 
