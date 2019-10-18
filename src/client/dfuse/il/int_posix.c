@@ -180,11 +180,11 @@ ioil_init(void)
 	struct rlimit rlimit;
 	int rc;
 
+	pthread_once(&init_links_flag, init_links);
+
 	rc = daos_init();
 	if (rc)
 		return;
-
-	pthread_once(&init_links_flag, init_links);
 
 	/* Get maximum number of file descriptors */
 	rc = getrlimit(RLIMIT_NOFILE, &rlimit);
