@@ -33,8 +33,8 @@ import agent_utils
 import server_utils
 import write_host_file
 
-from daos_api import (DaosContext, DaosPool, DaosContainer, IORequest, DaosObj,
-                      DaosApiError, DaosLog)
+from pydaos.raw import (DaosContext, DaosPool, DaosContainer, IORequest, DaosObj,
+                        DaosApiError, DaosLog)
 from apricot import skipForTicket
 
 class ObjectDataValidation(avocado.Test):
@@ -60,7 +60,7 @@ class ObjectDataValidation(avocado.Test):
 
         with open('../../../.build_vars.json') as json_f:
             build_paths = json.load(json_f)
-        basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
+        self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
         server_group = self.params.get("name",
                                        '/server_config/',
                                        'daos_server')
@@ -74,8 +74,9 @@ class ObjectDataValidation(avocado.Test):
         self.array_size = self.params.get("size", '/array_size/')
         self.record_length = self.params.get("length", '/run/record/*')
 
-        self.agent_sessions = agent_utils.run_agent(basepath, self.hostlist)
-        server_utils.run_server(self.hostfile, server_group, basepath)
+        self.agent_sessions = agent_utils.run_agent(
+            self.basepath, self.hostlist)
+        server_utils.run_server(self, self.hostfile, server_group)
 
         self.pool = DaosPool(self.context)
         self.pool.create(self.params.get("mode", '/run/pool/createmode/*'),

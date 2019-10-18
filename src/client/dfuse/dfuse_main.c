@@ -263,6 +263,8 @@ main(int argc, char **argv)
 
 	fuse_session_destroy(dfuse_info->di_session);
 
+	D_GOTO(out_dfs, 0);
+
 out_cont:
 	if (dfuse_info->di_cont) {
 		dfs_umount(dfs->dfs_ns);
