@@ -2534,8 +2534,7 @@ rdb_requestvote_handler(crt_rpc_t *rpc)
 	int				rc;
 
 	rc = crt_req_src_rank_get(rpc, &srcrank);
-	if (rc != 0)
-		D_GOTO(out, rc);
+	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	db = rdb_lookup(in->rvi_op.ri_uuid);
 	if (db == NULL)
@@ -2580,8 +2579,7 @@ rdb_appendentries_handler(crt_rpc_t *rpc)
 	int				rc;
 
 	rc = crt_req_src_rank_get(rpc, &srcrank);
-	if (rc != 0)
-		D_GOTO(out, rc);
+	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	db = rdb_lookup(in->aei_op.ri_uuid);
 	if (db == NULL)
@@ -2625,8 +2623,7 @@ rdb_installsnapshot_handler(crt_rpc_t *rpc)
 	int				rc;
 
 	rc = crt_req_src_rank_get(rpc, &srcrank);
-	if (rc != 0)
-		D_GOTO(out, rc);
+	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	db = rdb_lookup(in->isi_op.ri_uuid);
 	if (db == NULL) {
@@ -2695,11 +2692,7 @@ rdb_raft_process_reply(struct rdb *db, crt_rpc_t *rpc)
 	 * rank of this reply. This CaRT API is based on request hdr.
 	 */
 	rc = crt_req_dst_rank_get(rpc, &rank);
-	if (rc != 0) {
-		D_DEBUG(DB_MD, DF_DB": opc %u failed to get rank from CaRT\n",
-			DP_DB(db), opc);
-		return;
-	}
+	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	rc = ((struct rdb_op_out *)out)->ro_rc;
 	if (rc != 0) {
