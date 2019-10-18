@@ -157,7 +157,7 @@ func TestPoolGetACL_NoMS(t *testing.T) {
 		t.Errorf("Expected no response, got: %+v", resp)
 	}
 
-	cmpErr(t, errors.New("no managed instances"), err)
+	common.CmpErr(t, errors.New("no managed instances"), err)
 }
 
 func TestPoolGetACL_DrpcFailed(t *testing.T) {
@@ -174,7 +174,7 @@ func TestPoolGetACL_DrpcFailed(t *testing.T) {
 		t.Errorf("Expected no response, got: %+v", resp)
 	}
 
-	cmpErr(t, expectedErr, err)
+	common.CmpErr(t, expectedErr, err)
 }
 
 func TestPoolGetACL_BadDrpcResp(t *testing.T) {
@@ -196,7 +196,7 @@ func TestPoolGetACL_BadDrpcResp(t *testing.T) {
 		t.Errorf("Expected no response, got: %+v", resp)
 	}
 
-	cmpErr(t, errors.New("unmarshal"), err)
+	common.CmpErr(t, errors.New("unmarshal"), err)
 }
 
 func TestPoolGetACL_Success(t *testing.T) {
