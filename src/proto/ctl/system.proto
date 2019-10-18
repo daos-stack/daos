@@ -22,7 +22,7 @@
 //
 
 syntax = "proto3";
-package mgmt;
+package ctl;
 
 // Management Service Protobuf Definitions related to interactions between
 // DAOS control server and DAOS system.

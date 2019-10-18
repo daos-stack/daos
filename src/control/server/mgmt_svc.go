@@ -37,6 +37,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
 
 // CheckReplica verifies if this server is supposed to host an MS replica,
@@ -147,16 +148,16 @@ func getListenIPs(listenAddr *net.TCPAddr) (listenIPs []net.IP, err error) {
 // mgmtSvc implements (the Go portion of) Management Service, satisfying
 // mgmtpb.MgmtSvcServer.
 type mgmtSvc struct {
-	log     logging.Logger
-	harness *IOServerHarness
-	members *common.Membership // if MS leader, system membership list
+	log        logging.Logger
+	harness    *IOServerHarness
+	membership *common.Membership // if MS leader, system membership list
 }
 
-func newMgmtSvc(h *IOServerHarness) *mgmtSvc {
+func newMgmtSvc(h *IOServerHarness, m *common.Membership) *mgmtSvc {
 	return &mgmtSvc{
-		log:     h.log,
-		harness: h,
-		members: common.NewMembership(h.log),
+		log:        h.log,
+		harness:    h,
+		membership: m,
 	}
 }
 
@@ -232,7 +233,7 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 			Addr: replyAddr, Uuid: req.GetUuid(), Rank: resp.GetRank(),
 		}
 
-		count, err := svc.members.Add(newMember)
+		count, err := svc.membership.Add(newMember)
 		if err != nil {
 			return nil, errors.WithMessage(err, "adding to membership")
 		}
@@ -395,6 +396,39 @@ func (svc *mgmtSvc) SmdListPools(ctx context.Context, req *mgmtpb.SmdPoolReq) (*
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal SmdListPools response")
 	}
+
+	return resp, nil
+}
+
+// KillRank implements the method defined for the Management Service.
+//
+// Stop data-plane instance managed by control-plane identified by unique rank.
+func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.DaosRank) (*mgmtpb.DaosResp, error) {
+	svc.log.Debugf("MgmtSvc.KillRank dispatch, req:%+v\n", *req)
+
+	var mi *IOServerInstance
+	for _, i := range svc.harness.Instances() {
+		if i.hasSuperblock() && i.getSuperblock().Rank.Equals(ioserver.NewRankPtr(req.Rank)) {
+			mi = i
+			break
+		}
+	}
+
+	if mi == nil {
+		return nil, errors.Errorf("rank %d not found on this server", req.Rank)
+	}
+
+	dresp, err := mi.CallDrpc(mgmtModuleID, killRank, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.DaosResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal DAOS response")
+	}
+
+	svc.log.Debugf("MgmtSvc.KillRank dispatch, resp:%+v\n", *resp)
 
 	return resp, nil
 }
