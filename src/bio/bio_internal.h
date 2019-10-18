@@ -177,10 +177,7 @@ struct bio_desc {
 	struct bio_sglist	*bd_sgls;
 	/* DMA buffers reserved by this io descriptor */
 	struct bio_rsrvd_dma	 bd_rsrvd;
-	/*
-	 * SPDK blob io completion could run on different xstream
-	 * when the NVMe device is shared by multiple xstreams.
-	 */
+	/* Report blob i/o completion */
 	ABT_eventual		 bd_dma_done;
 	/* Inflight SPDK DMA transfers */
 	unsigned int		 bd_inflights;
