@@ -1,19 +1,15 @@
 #!/usr/bin/python
 """
   (C) Copyright 2019 Intel Corporation.
-
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
   You may obtain a copy of the License at
-
       http://www.apache.org/licenses/LICENSE-2.0
-
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
   See the License for the specific language governing permissions and
   limitations under the License.
-
   GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
   The Government's rights to use, modify, reproduce, release, perform, display,
   or disclose this software are subject to the terms of the Apache License as
@@ -48,7 +44,6 @@ class DfuseCommand(ExecutableCommand):
 
     def set_dfuse_params(self, pool, display=True):
         """Set the dfuse parameters for the DAOS group, pool, and container uuid
-
         Args:
             pool (TestPool): DAOS test pool object
             display (bool, optional): print updated params. Defaults to True.
@@ -57,7 +52,6 @@ class DfuseCommand(ExecutableCommand):
 
     def set_dfuse_pool_params(self, pool, display=True):
         """Set Dfuse params based on Daos Pool.
-
         Args:
             pool (TestPool): DAOS test pool object
             display (bool, optional): print updated params. Defaults to True.
@@ -67,7 +61,6 @@ class DfuseCommand(ExecutableCommand):
 
     def set_dfuse_svcl_param(self, pool, display=True):
         """Set the dfuse svcl param from the ranks of a DAOS pool object.
-
         Args:
             pool (TestPool): DAOS test pool object
             display (bool, optional): print updated params. Defaults to True.
@@ -81,7 +74,6 @@ class DfuseCommand(ExecutableCommand):
 
     def set_dfuse_cont_param(self, cont, display=True):
         """Set dfuse cont param from Container object
-
         Args:
             cont (TestContainer): Daos test container object
             display (bool, optional): print updated params. Defaults to True.
@@ -103,10 +95,13 @@ class Dfuse(DfuseCommand):
 
     def create_mount_point(self):
         """Create dfuse directory
-
         Raises:
             CommandFailure: In case of error creating directory
         """
+        # raise exception if mount point not specified
+        if self.mount_dir.value is None:
+            raise CommandFailure("Mount point not specified, "
+                                 "check test yaml file")
 
         dir_exists, _ = general_utils.check_file_exists(
             self.hosts, self.mount_dir.value, directory=True)
@@ -124,10 +119,13 @@ class Dfuse(DfuseCommand):
 
     def remove_mount_point(self):
         """Remove dfuse directory
-
         Raises:
             CommandFailure: In case of error deleting directory
         """
+        # raise exception if mount point not specified
+        if self.mount_dir.value is None:
+            raise CommandFailure("Mount point not specified, "
+                                 "check test yaml file")
 
         dir_exists, _ = general_utils.check_file_exists(
             self.hosts, self.mount_dir.value, directory=True)
@@ -145,7 +143,6 @@ class Dfuse(DfuseCommand):
 
     def run(self):
         """ Run the dfuse command.
-
         Raises:
             CommandFailure: In case dfuse run command fails
         """
@@ -171,7 +168,6 @@ class Dfuse(DfuseCommand):
 
     def stop(self):
         """Stop dfuse
-
         Raises:
             CommandFailure: In case dfuse stop fails
         """
@@ -193,11 +189,9 @@ class Dfuse(DfuseCommand):
     def get_default_env(self):
 
         """Get the default enviroment settings for running Dfuse.
-
         Returns:
             (str):  a single string of all env vars to be
                                   exported
-
         """
 
         # obtain any env variables to be exported
