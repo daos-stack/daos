@@ -313,11 +313,11 @@ class Snapshot(TestWithServers):
         Args:
             test_data: list of snapshot testdata
                 dictionary keys:
-                    coh: container handler
+                    coh:             container handle
                     container_epoch: container epoch
-                    snapshot:      snapshot handle
-                    tst_obj:       test object
-                    tst_data:      test data
+                    snapshot:        snapshot handle
+                    tst_obj:         test object
+                    tst_data:        test data
             ss_index: snapshot-list index to be displayed.
         """
         if len(test_data) < ss_index - 1:
