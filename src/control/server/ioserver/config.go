@@ -28,6 +28,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -186,6 +187,20 @@ func (c *Config) CmdLineEnv() ([]string, error) {
 		return nil, err
 	}
 
+	// Provide special handling for the ofi+verbs provider.
+	// When specified, perform a special lookup to find the alias
+	// of the given fabric_iface.  Then set a new environment variable "OFI_DOMAIN"
+	// to the name of the device alias.  For example, a fabric_iface of "ib0"
+	// has a device alias of "hfi1_0", and "OFI_DOMAIN=hfi1_0" will be added
+	// to this I/O server's environment
+	if c.Fabric.Provider == "ofi+verbs" {
+		deviceAlias, err := netdetect.GetDeviceAlias(c.Fabric.Interface)
+		if err != nil {
+			return nil, err
+		}
+		envVar := "OFI_DOMAIN=" + deviceAlias
+		tagEnv = append(tagEnv, envVar)
+	}
 	return mergeEnvVars(c.EnvVars, tagEnv), nil
 }
 

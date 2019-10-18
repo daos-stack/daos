@@ -297,6 +297,30 @@ func getNodeSibling(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 	return nil
 }
 
+// getNodeAlias finds a node object that is the sibling of the device being matched.
+// This function is less restrictive than getNodeSibling because it does not require that the search device
+// be a member of the systemDeviceNamesMap.
+func getNodeAlias(deviceScanCfg DeviceScan) C.hwloc_obj_t {
+
+	node := getNodeDirect(deviceScanCfg)
+	if node == nil || node.parent == nil {
+		return nil
+	}
+	// This node will have a sibling if its parent has more than one child (arity > 0)
+	// Search for the first sibling node that has a different name than the search node name.
+	if node.parent.arity > 0 {
+		count := C.uint(node.parent.arity)
+		log.Debugf("There are %d children of this parent node.", int(count))
+		children := (*[1 << 30]C.hwloc_obj_t)(unsafe.Pointer(node.parent.children))[:count:count]
+		for _, child := range children {
+			if C.GoString(node.name) != C.GoString(child.name) {
+				return child
+			}
+		}
+	}
+	return nil
+}
+
 // getNodeBestFit finds a node object that most closely matches the name of the target device being matched.
 // In order to succeed, one or more hwlocDeviceNames must be a subset of the target device name.
 // This allows us to find a decorated virtual device name such as "hfi1_0-dgram" which matches against one of the hwlocDeviceNames
@@ -463,6 +487,41 @@ func GetAffinityForNetworkDevices(deviceNames []string) ([]DeviceAffinity, error
 	}
 	return affinity, nil
 }
+
+// GetDeviceAlias is a complete method to find an alias for the device name provided.
+// For example, the device alias for "ib0" is a sibling node in the hwloc topology
+// with the name "hfi1_0".
+func GetDeviceAlias(device string) (string, error) {
+	var node C.hwloc_obj_t
+
+	log.Debugf("Searching for a device alias for: %s", device)
+
+	deviceScanCfg, err := initDeviceScan()
+	if err != nil {
+		return "", errors.Errorf("unable to initialize device scan:  Error: %v", err)
+	}
+	defer cleanUp(deviceScanCfg.topology)
+
+	if _, found := deviceScanCfg.systemDeviceNamesMap[device]; !found {
+		return "", errors.Errorf("device: %s is an invalid device name", device)
+	}
+
+	deviceScanCfg.targetDevice = device
+
+	// The loopback device isn't a physical device that hwloc will find in the topology
+	// If "lo" is specified, it is treated specially and be given NUMA node 0.
+	if deviceScanCfg.targetDevice == "lo" {
+		return "lo", nil
+	}
+
+	node = getNodeAlias(deviceScanCfg)
+	if node == nil {
+		return "", errors.Errorf("unable to find an alias for: %s", deviceScanCfg.targetDevice)
+	}
+	log.Debugf("Device alias for %s is %s", device, C.GoString(node.name))
+	return C.GoString(node.name), nil
+}
+
 
 // GetAffinityForDevice searches the system topology reported by hwloc
 // for the device specified by netDeviceName and returns the corresponding
