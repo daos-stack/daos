@@ -135,7 +135,7 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 				uint64_t c_offset = recx_start % len;
 				uint64_t new_len = recx_size + c_offset >= len ?
 							len - c_offset :
-							recx_size - c_offset;
+							recx_size;
 
 				this_recx->rx_nr = new_len / iod->iod_size;
 				ec_bulk_spec_set(new_len, false,
