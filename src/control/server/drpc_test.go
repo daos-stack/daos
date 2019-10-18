@@ -33,6 +33,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 )
@@ -309,7 +310,7 @@ func TestDrpc_Errors(t *testing.T) {
 			mc := newMockDrpcClient(cfg)
 
 			_, err := makeDrpcCall(mc, mgmtModuleID, poolCreate, &mgmtpb.PoolCreateReq{})
-			cmpErr(t, tc.expErr, err)
+			common.CmpErr(t, tc.expErr, err)
 		})
 	}
 }
