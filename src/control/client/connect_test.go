@@ -57,7 +57,7 @@ func connectSetupServers(
 
 func connectSetup(
 	log logging.Logger,
-	state State, features []*Feature, ctrlrs NvmeControllers,
+	state State, features []*ctlpb.Feature, ctrlrs NvmeControllers,
 	ctrlrResults NvmeControllerResults, modules ScmModules,
 	moduleResults ScmModuleResults, pmems PmemDevices, mountResults ScmMountResults,
 	scanRet error, formatRet error, updateRet error, burninRet error,

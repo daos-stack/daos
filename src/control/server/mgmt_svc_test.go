@@ -149,7 +149,7 @@ func TestPoolGetACL_NoMS(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)()
 
-	svc := newMgmtSvc(NewIOServerHarness(log))
+	svc := newMgmtSvc(NewIOServerHarness(log), nil)
 
 	resp, err := svc.PoolGetACL(nil, newTestGetACLReq())
 

@@ -265,7 +265,7 @@ func poolGetACL(log logging.Logger, conns client.Connect, poolUUID string) error
 	log.Infof("Pool-get-ACL command succeeded, UUID: %s\n", poolUUID)
 	acl := resp.ACL
 
-	log.Info("Entries:\n")
+	log.Info("# Entries:\n")
 	if len(acl) == 0 {
 		log.Info("None\n")
 	}

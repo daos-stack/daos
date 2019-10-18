@@ -119,5 +119,5 @@ func newTestMgmtSvc(log logging.Logger) *mgmtSvc {
 	harness := NewIOServerHarness(log)
 	harness.instances = append(harness.instances, srv)
 
-	return newMgmtSvc(harness)
+	return newMgmtSvc(harness, nil)
 }
