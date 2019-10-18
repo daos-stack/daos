@@ -30,7 +30,7 @@ import json
 from apricot import TestWithServers
 
 import check_for_pool
-from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
+from pydaos.raw import DaosContext, DaosPool, DaosContainer, DaosApiError
 
 def check_handle(buf_len, iov_len, buf, uuidstr, rank):
     """

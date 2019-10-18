@@ -29,9 +29,9 @@ from logging import getLogger
 
 from avocado import fail_on
 from avocado.utils import process
-from conversion import c_uuid_to_str
 from command_utils import BasicParameter, ObjectWithParameters
-from daos_api import DaosApiError, DaosServer, DaosContainer, DaosPool
+from pydaos.raw import (DaosApiError, DaosServer, DaosContainer, DaosPool,
+                        c_uuid_to_str)
 from general_utils import check_pool_files, get_random_string, DaosTestError
 
 

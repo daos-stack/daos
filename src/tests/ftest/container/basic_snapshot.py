@@ -25,7 +25,7 @@ import os
 import random
 
 from apricot import TestWithServers, skipForTicket
-from daos_api import DaosPool, DaosContainer, DaosSnapshot, DaosApiError
+from pydaos import DaosPool, DaosContainer, DaosSnapshot, DaosApiError
 from general_utils import get_random_string
 
 

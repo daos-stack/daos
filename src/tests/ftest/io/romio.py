@@ -38,7 +38,7 @@ import agent_utils
 import server_utils
 import write_host_file
 from mpio_utils import MpioUtils, MpioFailed
-from daos_api import DaosContext
+from pydaos.raw import DaosContext
 
 class Romio(Test):
     """
