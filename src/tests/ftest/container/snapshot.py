@@ -27,9 +27,8 @@ import traceback
 import random
 import string
 from apricot import TestWithServers
-from conversion import c_uuid_to_str
-from daos_api import (DaosPool, DaosContainer, DaosSnapshot,
-                      DaosApiError)
+from pydaos.raw import (DaosPool, DaosContainer, DaosSnapshot,
+                        DaosApiError, c_uuid_to_str)
 
 # pylint: disable=broad-except
 class Snapshot(TestWithServers):
