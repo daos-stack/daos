@@ -30,6 +30,22 @@
 
 #include "srv_internal.h"
 
+struct list_pools_iter_args {
+	/* Remaining pools in client buf, total pools in system */
+	uint64_t			avail_npools;
+	uint64_t			npools;
+
+	/* Service replicas / pool in client buf; max among pools in system */
+	uint64_t			avail_max_nsvc;
+	uint64_t			max_nsvc;
+
+	/* Storage / index for list of pools to return to client (rather - caller?) */
+	uint64_t			pools_index;
+	uint64_t			pools_len;
+	struct mgmt_list_pools_one	*pools;
+};
+
+
 static int
 ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid, crt_group_t *grp)
 {
@@ -302,8 +318,6 @@ out:
 	return rc;
 }
 
-static int ds_mgmt_pool_list(void);
-
 int
 ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 		    d_rank_list_t *targets, size_t scm_size, size_t nvme_size,
@@ -423,9 +437,6 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 		ds_pool_svc_destroy(pool_uuid);
 	}
 
-	/* TODO: Remove this in DAOS-2529. */
-	ds_mgmt_pool_list();
-
 out_svcp:
 	if (rc) {
 		d_rank_list_free(*svcp);
@@ -455,6 +466,7 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 	struct mgmt_pool_create_out	*pc_out;
 	int				 rc;
 
+	D_ERROR("kccain got pool create request from CaRT path - legacy dmg?\n");
 	pc_in = crt_req_get(rpc_req);
 	D_ASSERT(pc_in != NULL);
 	pc_out = crt_reply_get(rpc_req);
@@ -570,9 +582,6 @@ ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force)
 		goto out_svc;
 	}
 
-	/* TODO: Remove this in DAOS-2529. */
-	ds_mgmt_pool_list();
-
 	D_DEBUG(DB_MGMT, "Destroying pool "DF_UUID" succeed.\n",
 		DP_UUID(pool_uuid));
 out_svc:
@@ -602,11 +611,13 @@ ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 static int
 enum_pool_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 {
-	struct pool_rec	*rec;
-	char		*buf;
-	char		*p;
-	size_t		 size;
-	int		 i;
+	struct pool_rec			*rec;
+	char				*buf;
+	char				*p;
+	size_t				 size;
+	int				 i;
+	struct list_pools_iter_args	*ap = varg;
+	struct mgmt_list_pools_one	*pool = NULL;
 
 	if (key->iov_len != sizeof(uuid_t)) {
 		D_ERROR("invalid key size: key="DF_U64"\n", key->iov_len);
@@ -616,6 +627,37 @@ enum_pool_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		return -DER_IO;
 	rec = val->iov_buf;
 
+	ap->npools++;
+	if (rec->pr_nreplicas > ap->max_nsvc)
+		ap->max_nsvc = rec->pr_nreplicas;
+
+	/* Client doesn't have enough space for all pools */
+	if (ap->avail_npools > 0 && (ap->avail_npools < ap->npools))
+		return 0;
+
+	if (ap->pools_index == ap->pools_len) {
+		/* realloc pools */
+		void	*ptr;
+		size_t	realloc_bytes;
+
+		/* Start: alloc 1 structure, and double with each realloc */
+		realloc_bytes = ((1 << ap->pools_len) *
+				 sizeof(struct mgmt_list_pools_one));
+		D_REALLOC(ptr, ap->pools, realloc_bytes);
+		if (ptr == NULL)
+			return -DER_NOMEM;
+		ap->pools = ptr;
+		ap->pools_len = 1 << ap->pools_len;
+	}
+
+	pool = &ap->pools[ap->pools_index];
+	ap->pools_index++;
+	uuid_copy(pool->lp_puuid, key->iov_buf);
+	pool->lp_svc = d_rank_list_alloc(rec->pr_nreplicas);
+	if (pool->lp_svc == NULL)
+		return DER_NOMEM;
+
+	/* Temporary code below - just log print pool rec info */
 	size = 4096;
 	D_ALLOC(buf, size);
 	if (buf == NULL)
@@ -623,6 +665,7 @@ enum_pool_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	p = buf;
 	for (i = 0; i < rec->pr_nreplicas; i++) {
 		int n;
+		pool->lp_svc->rl_ranks[i] = rec->pr_replicas[i];
 
 		n = snprintf(p, buf + size - p, "%s%u", i == 0 ? "" : ",",
 			     rec->pr_replicas[i]);
@@ -640,13 +683,30 @@ enum_pool_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	return 0;
 }
 
-/* TODO: To be completed in DAOS-2529; currently only for testing purposes. */
-int
-ds_mgmt_pool_list(void)
+static int
+ds_mgmt_list_pools(const char *group, uint64_t *npools, uint64_t *max_nsvc,
+		   struct mgmt_list_pools_one **poolsp, size_t *pools_len)
 {
-	struct mgmt_svc	*svc;
-	struct rdb_tx	 tx;
-	int		 rc;
+	struct mgmt_svc			*svc;
+	struct rdb_tx			 tx;
+	struct list_pools_iter_args	 iter_args;
+	uint64_t			cli_npools;
+	uint64_t			cli_max_nsvc;
+	int				 rc;
+
+	/* TODO: attach to DAOS system based on group argument */
+
+	/* Temporary: return npools and max_nsvc (no records yet)
+	 * TODO: allocate space for pool info here, and realloc
+	 * as necessary in the iterator callback function.
+	 */
+	iter_args.avail_npools = cli_npools = *npools;
+	iter_args.npools = 0;
+	iter_args.avail_max_nsvc = cli_max_nsvc = *max_nsvc;
+	iter_args.max_nsvc = 0;
+	iter_args.pools_index = 0;
+	iter_args.pools_len = 0;
+	iter_args.pools = NULL;
 
 	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
 	if (rc != 0)
@@ -659,14 +719,56 @@ ds_mgmt_pool_list(void)
 
 	D_DEBUG(DB_MGMT, "pools:\n");
 	rc = rdb_tx_iterate(&tx, &svc->ms_pools, false /* !backward */,
-			    enum_pool_cb, NULL /* arg */);
+			    enum_pool_cb, &iter_args);
 
 	ABT_rwlock_unlock(svc->ms_lock);
 	rdb_tx_end(&tx);
+
 out_svc:
 	ds_mgmt_svc_put_leader(svc);
 out:
+	if (rc == 0) {
+		*npools = iter_args.npools;
+		*max_nsvc = iter_args.max_nsvc;
+		*poolsp = iter_args.pools;
+		*pools_len = iter_args.pools_index;
+	}
+
 	return rc;
+}
+
+void
+ds_mgmt_hdlr_list_pools(crt_rpc_t *rpc_req)
+{
+	struct mgmt_list_pools_in	*pc_in;
+	struct mgmt_list_pools_out	*pc_out;
+	struct mgmt_list_pools_one	*pools = NULL;
+	size_t				 pools_len = 0;
+	uint64_t			 npools;
+	uint64_t			 max_nsvc;
+	int				 rc;
+
+	D_ERROR("kccain got mgmt_list_pools request from CaRT path - legacy dmg?\n");
+	pc_in = crt_req_get(rpc_req);
+	D_ASSERT(pc_in != NULL);
+	pc_out = crt_reply_get(rpc_req);
+	D_ASSERT(pc_out != NULL);
+
+	npools = pc_in->lp_npools;
+	max_nsvc = pc_in->lp_max_nsvc;
+
+	rc = ds_mgmt_list_pools(pc_in->lp_grp, &npools, &max_nsvc, &pools,
+				&pools_len);
+
+	pc_out->lp_npools = npools;
+	pc_out->lp_max_nsvc = max_nsvc;
+	pc_out->lp_rc = rc;
+	pc_out->lp_pools.ca_arrays = pools;
+	pc_out->lp_pools.ca_count = pools_len;
+
+	rc = crt_reply_send(rpc_req);
+	if (rc != 0)
+		D_ERROR("crt_reply_send failed, rc: %d\n", rc);
 }
 
 /* Caller is responsible for freeing ranks */

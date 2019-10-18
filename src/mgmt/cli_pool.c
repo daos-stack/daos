@@ -37,6 +37,16 @@ struct pool_create_arg {
 	d_rank_list_t		*svc;
 };
 
+struct mgmt_list_pools_arg {
+	struct dc_mgmt_sys     *sys;
+	crt_rpc_t	       *rpc;
+	daos_mgmt_pool_info_t  *pools;
+	daos_size_t		req_npools;
+	daos_size_t		req_max_nsvc;
+	daos_size_t	       *npools;
+	daos_size_t	       *max_nsvc;
+};
+
 static int
 pool_create_cp(tse_task_t *task, void *data)
 {
@@ -351,5 +361,158 @@ out_group:
 	dc_mgmt_sys_detach(destroy_arg.sys);
 out:
 	tse_task_complete(task, rc);
+	return rc;
+}
+
+static int
+mgmt_list_pools_cp(tse_task_t *task, void *data)
+{
+	struct mgmt_list_pools_arg	*arg = (struct mgmt_list_pools_arg *)data;
+	struct mgmt_list_pools_out	*pc_out;
+	struct mgmt_list_pools_in	*pc_in;
+	uint64_t			 pidx;;
+	int				 rc = task->dt_result;
+
+	if (rc) {
+		D_ERROR("RPC error while listing pools: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	pc_out = crt_reply_get(arg->rpc);
+	D_ASSERT(pc_out != NULL);
+	rc = pc_out->lp_rc;
+	if (rc) {
+		D_ERROR("MGMT_POOL_CREATE replied failed, rc: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	pc_in = crt_req_get(arg->rpc);
+	D_ASSERT(pc_in != NULL);
+
+	*arg->max_nsvc = pc_out->lp_max_nsvc;
+	*arg->npools = pc_out->lp_npools;
+
+	D_ERROR("kccain RPC reply has %zu pools:\n", pc_out->lp_pools.ca_count);
+
+	/* copy RPC response pools info to client buffer, if provided */
+	if (arg->pools) {
+		/* Response ca_count expected <= client-specified npools */
+		for (pidx = 0; pidx < pc_out->lp_pools.ca_count; pidx++) {
+			struct mgmt_list_pools_one	*rpc_pool =
+					&pc_out->lp_pools.ca_arrays[pidx];
+			daos_mgmt_pool_info_t		*cli_pool =
+					&arg->pools[pidx];
+
+			uuid_copy(cli_pool->mgpi_uuid, rpc_pool->lp_puuid);
+
+			rc = d_rank_list_dup(&cli_pool->mgpi_svc,
+					     rpc_pool->lp_svc);
+			if (rc) {
+				D_ERROR("Copy RPC response svc list failed\n");
+				D_GOTO(out, rc);
+			}
+		}
+	}
+
+	for (pidx = 0; pidx < pc_out->lp_pools.ca_count; pidx++) {
+		int i;
+		struct mgmt_list_pools_one	*rpc_pool =
+				&pc_out->lp_pools.ca_arrays[pidx];
+
+		D_ERROR("kccain pool[%"PRIu64"] UUID: "DF_UUID", nsvc=%u\n",
+			pidx, DP_UUID(rpc_pool->lp_puuid),
+			rpc_pool->lp_svc->rl_nr);
+
+		for (i = 0; i < rpc_pool->lp_svc->rl_nr; i++) {
+			D_ERROR("kccain pool UUID: "DF_UUID", svc[%d]=%u\n",
+				DP_UUID(rpc_pool->lp_puuid), i,
+				rpc_pool->lp_svc->rl_ranks[i]);
+		}
+	}
+
+	if (*arg->npools > arg->req_npools) {
+		D_WARN("pool list contains only client-requested npools=%zu, "
+			"less than npools=%zu in system\n", arg->req_npools,
+			*arg->npools);
+	}
+
+out:
+	dc_mgmt_sys_detach(arg->sys);
+	crt_req_decref(arg->rpc);
+
+	return rc;
+}
+
+int
+dc_mgmt_list_pools(tse_task_t *task)
+{
+	daos_mgmt_list_pools_t	        *args;
+	crt_endpoint_t			svr_ep;
+	crt_rpc_t		       *rpc_req = NULL;
+	crt_opcode_t			opc;
+	struct mgmt_list_pools_in      *pc_in;
+	struct mgmt_list_pools_arg	cb_args;
+	int				rc = 0;
+
+	(void) cb_args;
+
+	args = dc_task_get_args(task);
+
+	if (args->npools == NULL || args->max_nsvc == NULL) {
+		D_ERROR("npools and max_nsvc must be non-NULL\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = dc_mgmt_sys_attach(args->grp, &cb_args.sys);
+	if (rc != 0) {
+		D_ERROR("cannot attach to DAOS system: %s\n", args->grp);
+		D_GOTO(out, rc);
+	}
+
+	svr_ep.ep_grp = cb_args.sys->sy_group;
+	svr_ep.ep_rank = 0;
+	svr_ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
+	opc = DAOS_RPC_OPCODE(MGMT_LIST_POOLS, DAOS_MGMT_MODULE,
+			      DAOS_MGMT_VERSION);
+
+	rc = crt_req_create(daos_task2ctx(task), &svr_ep, opc, &rpc_req);
+	if (rc != 0) {
+		D_ERROR("crt_req_create(MGMT_LIST_POOLS failed, rc: %d.\n",
+			rc);
+		D_GOTO(out_grp, rc);
+	}
+
+	D_ASSERT(rpc_req != NULL);
+	pc_in = crt_req_get(rpc_req);
+	D_ASSERT(pc_in != NULL);
+
+	/** fill in request buffer */
+	pc_in->lp_grp = (d_string_t)args->grp;
+	pc_in->lp_npools = *args->npools;
+	pc_in->lp_max_nsvc = *args->max_nsvc;
+
+	crt_req_addref(rpc_req);
+	cb_args.rpc = rpc_req;
+	cb_args.req_max_nsvc = *args->max_nsvc;
+	cb_args.req_npools = *args->npools;
+	cb_args.npools = args->npools;
+	cb_args.max_nsvc = args->max_nsvc;
+	cb_args.pools = args->pools;
+
+	rc = tse_task_register_comp_cb(task, mgmt_list_pools_cp, &cb_args,
+				       sizeof(cb_args));
+	if (rc != 0)
+		D_GOTO(out_put_req, rc);
+
+	/** send the request */
+	return daos_rpc_send(rpc_req, task);
+
+out_put_req:
+	crt_req_decref(rpc_req);
+	crt_req_decref(rpc_req);
+
+out_grp:
+	dc_mgmt_sys_detach(cb_args.sys);
+out:
 	return rc;
 }

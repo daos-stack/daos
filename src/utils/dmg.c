@@ -212,6 +212,77 @@ create_hdlr(int argc, char *argv[])
 		printf("%u:", svc.rl_ranks[i]);
 	printf("%u\n", svc.rl_ranks[svc.rl_nr - 1]);
 
+	/* kccain test new daos_mgmt_list_pools() API */
+	{
+		daos_size_t		 orig_npools = 15;
+		daos_size_t		 orig_max_nsvc = 5;
+		daos_size_t		 npools = orig_npools;
+		daos_size_t		 max_nsvc = orig_max_nsvc;
+		daos_size_t		 resp_npools;
+		daos_mgmt_pool_info_t	*pools;
+		daos_size_t		 pc;
+		daos_size_t		 sc;
+
+		D_ALLOC_ARRAY(pools, npools);
+		D_ASSERT(pools != NULL);
+
+		rc = daos_mgmt_list_pools(sysname, pools, &npools, &max_nsvc,
+					  NULL /* ev */);
+		if (rc != 0) {
+			fprintf(stderr, "failed to list pools\n");
+			return rc;
+		}
+		resp_npools = (npools <= orig_npools) ? npools : orig_npools;
+		printf("There are currently %zu pools (%zu returned) in %s\n",
+			npools, resp_npools, sysname);
+		printf("The largest pool service has %zu replica ranks\n",
+			max_nsvc);
+
+		for (pc = 0; pc < resp_npools; pc++) {
+			daos_mgmt_pool_info_t	*pool = &pools[pc];
+
+			printf("UUID: "DF_UUID", svc ranks: ",
+				DP_UUID(pool->mgpi_uuid));
+
+			for (sc = 0; sc < pool->mgpi_svc->rl_nr; sc++) {
+				printf("%s%u", (sc == 0) ? "" : ",",
+						pool->mgpi_svc->rl_ranks[sc]);
+			}
+			printf("\n");
+		}
+
+
+		/* Make a 2nd API call intentionally limiting client npools to
+		 * smaller than number in the system.
+		 */
+		orig_npools = npools = 3;
+		orig_max_nsvc = max_nsvc = 5;
+		rc = daos_mgmt_list_pools(sysname, pools, &npools, &max_nsvc,
+					  NULL /* ev */);
+		if (rc != 0) {
+			fprintf(stderr, "failed to list pools\n");
+			return rc;
+		}
+		resp_npools = (npools <= orig_npools) ? npools : orig_npools;
+		printf("There are currently %zu pools (%zu returned) in %s\n",
+			npools, resp_npools, sysname);
+		printf("The largest pool service has %zu replica ranks\n",
+			max_nsvc);
+
+		for (pc = 0; pc < resp_npools; pc++) {
+			daos_mgmt_pool_info_t	*pool = &pools[pc];
+
+			printf("UUID: "DF_UUID", svc ranks: ",
+				DP_UUID(pool->mgpi_uuid));
+
+			for (sc = 0; sc < pool->mgpi_svc->rl_nr; sc++) {
+				printf("%s%u", (sc == 0) ? "" : ",",
+						pool->mgpi_svc->rl_ranks[sc]);
+			}
+			printf("\n");
+		}
+
+	}
 	return 0;
 }
 

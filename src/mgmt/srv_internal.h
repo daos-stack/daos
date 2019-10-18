@@ -49,6 +49,7 @@ void ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc);
 void ds_mgmt_params_set_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_tgt_params_set_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_profile_hdlr(crt_rpc_t *rpc);
+void ds_mgmt_hdlr_list_pools(crt_rpc_t *rpc_req);
 
 /** srv_system.c */
 
