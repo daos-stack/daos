@@ -18,6 +18,7 @@ server_config:
  server:
    bdev_class: nvme
    bdev_list: ["0000:81:00.0"]
+   targets: 1
 pool:
  createmode:
   mode: 511
@@ -27,7 +28,7 @@ pool:
   svcn: 1
 ior:
  client_processes:
-   np: 1
+   np: 16
  flags: "-w -W -r -R -k -vv"
  repetitions: 1
  api: DAOS
@@ -35,15 +36,15 @@ ior:
  daos_destroy: False
  transfersize: !mux
    case1:
-     block_size: 33000000
+     block_size: 2000000
      tsize:
-       - 8
+       - 32
        - 1000
        - 220000
        - 1100000
        - 33000000
    case2:
-     block_size: 1000000000
+     block_size: 60000000
      tsize:
        - 500000
        - 1000000
