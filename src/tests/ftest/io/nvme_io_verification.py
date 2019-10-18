@@ -76,6 +76,8 @@ class NvmeIoVerification(IorTestBase):
         for ior_param in tests:
             # Create and connect to a pool
             self.pool = DaosPool(self.context)
+            print("***scm:{}".format(ior_param[0]))
+            print("***nvme:{}".format(ior_param[1]))
             self.pool.create(
                 pool_mode, pool_uid, pool_gid, ior_param[0], pool_group,
                 svcn=pool_svcn, nvme_size=ior_param[1])

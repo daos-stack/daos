@@ -3,22 +3,22 @@
 
 hosts:
  test_servers:
-   - boro-A
-   - boro-B
-   - boro-C
-   - boro-D
-   - boro-E
-   - boro-F
-   - boro-G
+   - boro-83
+#   - boro-82
+#   - boro-C
+#   - boro-D
+#   - boro-E
+#   - boro-F
+#   - boro-G
  test_clients:
-   - boro-H
+   - boro-61
 timeout: 12000
 server_config:
  name: daos_server
- server:
+ servers:
    bdev_class: nvme
    bdev_list: ["0000:81:00.0"]
-   targets: 1
+#   targets: 1
 pool:
  createmode:
   mode: 511
@@ -40,20 +40,20 @@ ior:
      tsize:
        - 32
        - 1000
-       - 220000
-       - 1100000
-       - 33000000
-   case2:
-     block_size: 60000000
-     tsize:
-       - 500000
-       - 1000000
-       - 20000000
-       - 100000000
-       - 1000000000
+       - 20000
+       - 100000
+       - 2000000
+#   case2:
+#     block_size: 60000000
+#     tsize:
+#       - 500000
+#       - 1000000
+#       - 20000000
+#       - 100000000
+#       - 1000000000
  ior_sequence:
 #   - [scmsize, nvmesize]
-    - [500000000, 1073741824]        #[500M, 1G]
-    - [500000000, 50000000000]       #[500M, 50G]
-    - [1000000000, 500000000000]      #[1G, 500G]
-    - [1000000000, 800000000000]     #[1G, 800G]
+#    - [3000000000, 2073741824]        #[500M, 1G]
+    - [3000000000, 50000000000]       #[500M, 50G]
+    - [3000000000, 500000000000]      #[1G, 500G]
+    - [3000000000, 800000000000]     #[1G, 800G]
