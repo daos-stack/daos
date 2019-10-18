@@ -34,13 +34,13 @@ class DfuseCommand(ExecutableCommand):
         super(DfuseCommand, self).__init__(namespace, command)
 
         # dfuse options
-        self.puuid = FormattedParameter("-p {}")
-        self.cuuid = FormattedParameter("-c {}")
-        self.mount_dir = FormattedParameter("-m {}")
-        self.svcl = FormattedParameter("-s {}", 0)
-        self.sys_name = FormattedParameter("-G {}")
-        self.singlethreaded = FormattedParameter("-S", False)
-        self.foreground = FormattedParameter("-f", False)
+        self.puuid = FormattedParameter("--pool {}")
+        self.cuuid = FormattedParameter("--container {}")
+        self.mount_dir = FormattedParameter("--mountpoint {}")
+        self.svcl = FormattedParameter("--svc {}", 0)
+        self.sys_name = FormattedParameter("--sys-name {}")
+        self.singlethreaded = FormattedParameter("--singlethreaded", False)
+        self.foreground = FormattedParameter("--foreground", False)
 
     def set_dfuse_params(self, pool, display=True):
         """Set the dfuse parameters for the DAOS group, pool, and container uuid
