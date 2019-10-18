@@ -1007,7 +1007,7 @@ class TestContainer(TestDaosApiBase):
             status &= data.read_object(self)
         return status
 
-    def execute_io(self, duration, rank=None, obj_class=None, debug=True):
+    def execute_io(self, duration, rank=None, obj_class=None, debug=False):
         """Execute writes and reads for the specified time period.
 
         Args:
@@ -1015,7 +1015,7 @@ class TestContainer(TestDaosApiBase):
             rank (int, optional): server rank. Defaults to None.
             obj_class (int, optional): daos object class. Defaults to None.
             debug (bool, optional): log the record write/read method calls.
-                Defaults to True.
+                Defaults to False.
 
         Returns:
             int: number of bytes written to the container
