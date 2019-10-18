@@ -122,3 +122,41 @@ func TestValidateNetworkConfig(t *testing.T) {
 		AssertEqual(t, err, nil, "Network device configuration is invalid - NUMA node does not match")
 	}
 }
+
+// TestDeviceAlias uses XML topology data to simulate real systems.
+// hwloc will use this topology for queries instead of the local system
+// running the test.
+// This test verifies that GetDeviceAlias() is capable of performing this lookup
+func TestDeviceAlias(t *testing.T) {
+
+	tests := []struct {
+		device   string
+		topology string
+		expected string
+	}{
+		// boro-84 has two NUMA nodes, with eth0, eth1, ib0 on NUMA 0,
+		// and no ib1 in the topology
+		{"lo", "testdata/boro-84.xml", "lo"},
+		{"eth0", "testdata/boro-84.xml", "i40iw1"},
+		{"eth1", "testdata/boro-84.xml", "i40iw0"},
+		{"ib0", "testdata/boro-84.xml", "hfi1_0"},
+		{"lo", "testdata/wolf-133.xml", "lo"},
+		{"eth0", "testdata/wolf-133.xml", "i40iw1"},
+		{"eth1", "testdata/wolf-133.xml", "i40iw0"},
+		{"ib0", "testdata/wolf-133.xml", "hfi1_0"},
+		{"ib1", "testdata/wolf-133.xml", "hfi1_1"},
+	}
+
+	for _, tt := range tests {
+		_, err := os.Stat(tt.topology)
+		AssertEqual(t, err, nil, "unable to load xmlTopology")
+		os.Setenv("HWLOC_XMLFILE", tt.topology)
+		deviceAlias, err := GetDeviceAlias(tt.device)
+		if err != nil {
+			t.Fatal(err)
+		}
+		os.Unsetenv("HWLOC_XMLFILE")
+		AssertEqual(t, deviceAlias, tt.expected,
+			"unexpected mismatch with device and topology")
+	}
+}
