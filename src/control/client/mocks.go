@@ -223,6 +223,14 @@ func (m *mockMgmtCtlClient) FetchFioConfigPaths(ctx context.Context, req *ctlpb.
 	return &mgmtCtlFetchFioConfigPathsClient{}, nil
 }
 
+func (m *mockMgmtCtlClient) SystemMemberQuery(ctx context.Context, req *ctlpb.SystemMemberQueryReq, o ...grpc.CallOption) (*ctlpb.SystemMemberQueryResp, error) {
+	return &ctlpb.SystemMemberQueryResp{}, nil
+}
+
+func (m *mockMgmtCtlClient) SystemStop(ctx context.Context, req *ctlpb.SystemStopReq, o ...grpc.CallOption) (*ctlpb.SystemStopResp, error) {
+	return &ctlpb.SystemStopResp{}, nil
+}
+
 func newMockMgmtCtlClient(
 	features []*ctlpb.Feature,
 	ctrlrs NvmeControllers,
@@ -300,14 +308,6 @@ func (c *mockMgmtSvcClient) GetAttachInfo(ctx context.Context, in *mgmtpb.GetAtt
 
 func (m *mockMgmtSvcClient) KillRank(ctx context.Context, req *mgmtpb.DaosRank, o ...grpc.CallOption) (*mgmtpb.DaosResp, error) {
 	return &mgmtpb.DaosResp{}, nil
-}
-
-func (m *mockMgmtSvcClient) SystemMemberQuery(ctx context.Context, req *mgmtpb.SystemMemberQueryReq, o ...grpc.CallOption) (*mgmtpb.SystemMemberQueryResp, error) {
-	return &mgmtpb.SystemMemberQueryResp{}, nil
-}
-
-func (m *mockMgmtSvcClient) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq, o ...grpc.CallOption) (*mgmtpb.SystemStopResp, error) {
-	return &mgmtpb.SystemStopResp{}, nil
 }
 
 func newMockMgmtSvcClient() mgmtpb.MgmtSvcClient {
