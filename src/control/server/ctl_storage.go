@@ -37,6 +37,7 @@ import (
 // StorageControlService encapsulates the storage part of the control service
 type StorageControlService struct {
 	log             logging.Logger
+	ext             External
 	nvme            *nvmeStorage
 	scm             *scm.Provider
 	instanceStorage []ioserver.StorageConfig
@@ -62,7 +63,7 @@ func DefaultStorageControlService(log logging.Logger, cfg *Configuration) (*Stor
 }
 
 // NewStorageControlService returns an initialized *StorageControlService
-func NewStorageControlService(log logging.Logger, nvme *nvmeStorage, scm *scmStorage,
+func NewStorageControlService(log logging.Logger, nvme *nvmeStorage, scm *scm.Provider,
 	srvCfgs []*ioserver.Config) *StorageControlService {
 
 	instanceStorage := []ioserver.StorageConfig{}
@@ -157,16 +158,12 @@ func (c *StorageControlService) PrepareNvme(req PrepareNvmeRequest) error {
 	)
 }
 
-type PrepareScmRequest struct {
-	Reset bool
-}
-
 // GetScmState performs required initialisation and returns current state
 // of SCM module preparation.
 func (c *StorageControlService) GetScmState() (types.ScmState, error) {
 	state := types.ScmStateUnknown
 
-	ok, _ := c.scm.ext.checkSudo()
+	ok, _ := c.ext.checkSudo()
 	if !ok {
 		return state, errors.Errorf("%s must be run as root or sudo", os.Args[0])
 	}
@@ -182,15 +179,9 @@ func (c *StorageControlService) GetScmState() (types.ScmState, error) {
 // list of pmem device files and error directly.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
-func (c *StorageControlService) PrepareScm(req PrepareScmRequest) (needsReboot bool, pmemDevs []scm.Namespace, err error) {
-	if req.Reset {
-		// run reset to remove namespaces and clear regions
-		needsReboot, err = c.scm.PrepReset()
-		return
-	}
-
+func (c *StorageControlService) PrepareScm(req scm.PrepareRequest) (*scm.PrepareResponse, error) {
 	// transition to the next state in SCM preparation
-	return c.scm.Prep()
+	return c.scm.Prepare(req)
 }
 
 // ScanNvme scans locally attached SSDs and returns list directly.

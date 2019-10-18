@@ -104,30 +104,30 @@ func (c *StorageControlService) doNvmePrepare(req *ctlpb.PrepareNvmeReq) (resp *
 	return
 }
 
-func (c *StorageControlService) doScmPrepare(req *ctlpb.PrepareScmReq) (resp *ctlpb.PrepareScmResp) {
-	resp = &ctlpb.PrepareScmResp{}
+func (c *StorageControlService) doScmPrepare(pbReq *ctlpb.PrepareScmReq) *ctlpb.PrepareScmResp {
+	pbResp := &ctlpb.PrepareScmResp{}
 	msg := "Storage Prepare SCM"
 
 	scmState, err := c.GetScmState()
 	if err != nil {
-		resp.State = newState(c.log, ctlpb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg)
+		pbResp.State = newState(c.log, ctlpb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg)
 		return
 	}
 	c.log.Debugf("SCM state before prep: %s", scmState)
 
-	needsReboot, pmemDevs, err := c.PrepareScm(PrepareScmRequest{Reset: req.GetReset_()})
+	resp, err := c.PrepareScm(scm.PrepareRequest{Reset: pbReq.Reset})
 	if err != nil {
-		resp.State = newState(c.log, ctlpb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg)
+		pbResp.State = newState(c.log, ctlpb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg)
 		return
 	}
 
 	info := ""
-	if needsReboot {
+	if resp.NeedsReboot {
 		info = MsgScmRebootRequired
 	}
 
-	resp.State = newState(c.log, ctlpb.ResponseStatus_CTRL_SUCCESS, "", info, msg)
-	resp.Pmems = namespacesToPB(pmemDevs)
+	pbResp.State = newState(c.log, ctlpb.ResponseStatus_CTRL_SUCCESS, "", info, msg)
+	pbResp.Pmems = namespacesToPB(resp.Namespaces)
 
 	return
 }
