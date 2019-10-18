@@ -113,7 +113,7 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 		for (idx = 0, j = 0; j < loop_bound; j++) {
 			daos_recx_t	*this_recx = &iod->iod_recxs[idx];
 			uint64_t	recx_start =
-						this_recx->rx_idx * iod->iod_size;
+					this_recx->rx_idx * iod->iod_size;
 			uint64_t	so = recx_start % ss;
 			unsigned int	cell = so / len;
 
@@ -130,7 +130,8 @@ ec_data_target(unsigned int dtgt_idx, unsigned int nr, daos_iod_t *iods,
 			/* recx starts in this cell */
 			if (cell == dtgt_idx) {
 				/* recx either extends beyond cell or
-				 * ends within cell */
+				 * ends within cell
+				 */
 				uint64_t c_offset = recx_start % len;
 				uint64_t new_len = recx_size + c_offset >= len ?
 							len - c_offset :
@@ -328,3 +329,73 @@ ec_copy_iods(daos_iod_t *in_iod, int nr, daos_iod_t **out_iod)
 out:
 	return rc;
 }
+
+
+#ifdef UNIT_TEST
+struct daos_oclass_attr oca =
+	{
+		.ca_schema		= DAOS_OS_SINGLE,
+		.ca_resil		= DAOS_RES_EC,
+		.ca_grp_nr		= 1,
+		.u.ec			= {
+			.e_k		= 2,
+			.e_p		= 2,
+			.e_len		= 1 << 15,
+		},
+	};
+
+int main(int argc, char* argv[])
+{
+	struct ec_bulk_spec* skip_list[1];
+        daos_handle_t oh = {0L};
+        daos_handle_t th = {1L};
+        daos_key_t dkey;
+        dkey.iov_buf = "42";
+        dkey.iov_buf_len = 3L;
+        dkey.iov_len = 2L;
+
+	skip_list[0] = NULL;
+        daos_recx_t recx[4] =
+		/*
+	{{(unsigned long)PARITY_INDICATOR | 65536L, 32768L},
+	 {(1 << 14) + (1 << 15), 1 << 14},
+	 {1 << 16, 1 << 16}, {1 << 17, 1 << 14}};
+		*/
+	{{1 << 14, (1 << 14) + (1 << 15)},
+	 {1 << 16, (1 << 15) + (1 << 14)}};
+
+        daos_iod_t iod = { dkey,
+			   .iod_kcsum = { NULL, 0, 0, 0, 0, 0},
+                           DAOS_IOD_ARRAY, 1, 2, recx,
+                           NULL, NULL};
+	int i;
+	for (i = 0; i < iod.iod_nr; i++)
+		printf("recxs[%d].rx_idx: %lu, recxs[%d].rx_nr: %lu\n", 
+			i, iod.iod_recxs[i].rx_idx,i, iod.iod_recxs[i].rx_nr);
+	/*
+
+	printf("\nstart D\n");
+	int ret = ec_data_target(1, 1, &iod, &oca, skip_list);
+	for (i = 0; skip_list[0][i].len; i++)
+		printf("%d -> %c, %ld\n", i, skip_list[0][i].is_skip ? '1' : '0',
+		       skip_list[0][i].len);
+	printf("iod.iod_nr == %u\n", iod.iod_nr);
+	for (i = 0; i < iod.iod_nr; i++)
+	printf("recxs[%d].rx_idx: %lu, recxs[%d].rx_nr: %lu\n", 
+	       i, iod.iod_recxs[i].rx_idx,i, iod.iod_recxs[i].rx_nr);
+
+	*/
+
+	printf("\nstart P\n");
+	int ret = ec_parity_target(0, 1, &iod, &oca, skip_list);
+	for (i = 0; skip_list[0][i].len; i++)
+		printf("%d -> %c, %ld\n", i, skip_list[0][i].is_skip ? '1' : '0',
+		       skip_list[0][i].len);
+	printf("iod.iod_nr == %u\n", iod.iod_nr);
+	for (i = 0; i < iod.iod_nr; i++)
+	printf("recxs[%d].rx_idx: %lu, recxs[%d].rx_nr: %lu\n", 
+	       i, iod.iod_recxs[i].rx_idx,i, iod.iod_recxs[i].rx_nr);
+
+
+}
+#endif

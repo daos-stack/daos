@@ -72,8 +72,9 @@ ec_is_full_stripe(daos_iod_t *iod, struct daos_oclass_attr *oca,
 	unsigned int start = iod->iod_recxs[recx_idx].rx_idx * iod->iod_size;
 	unsigned int length = iod->iod_recxs[recx_idx].rx_nr * iod->iod_size;
 
-	if (length < ss)
+	if (length < ss && start/ss == (start+length)/ss) {
 		return false;
+	}
 	if (start % ss) {
 		unsigned long so = ss - start % ss;
 
@@ -90,8 +91,8 @@ ec_is_full_stripe(daos_iod_t *iod, struct daos_oclass_attr *oca,
  * stripe's worth of data.
  */
 static bool
-ec_has_full_stripe(daos_iod_t *iod, struct daos_oclass_attr *oca,
-		   uint64_t *tgt_set)
+ec_has_full_or_mult_stripe(daos_iod_t *iod, struct daos_oclass_attr *oca,
+			   uint64_t *tgt_set)
 {
 	unsigned int	ss = oca->u.ec.e_k * oca->u.ec.e_len;
 	unsigned int	i;
@@ -103,23 +104,18 @@ ec_has_full_stripe(daos_iod_t *iod, struct daos_oclass_attr *oca,
 			unsigned int length =
 				iod->iod_recxs[i].rx_nr * iod->iod_size;
 
-			if (length < ss) {
-				continue;
-			}
-
-			if (start % ss) {
+			if (length < ss && start/ss == (start+length)/ss) {
+					continue;
+			} else if (start % ss) {
 				unsigned long so = ss - start % ss;
 
 				start += so;
 				length -= so;
+				if (length - (start % ss) >= ss) {
+					*tgt_set = ~0UL;
+				}
 			}
-
-			if (length < ss) {
-				continue;
-			} else if (length - (start % ss) >= ss) {
-				*tgt_set = ~0UL;
-				return true;
-			}
+			return true;
 		} else if (iod->iod_type == DAOS_IOD_SINGLE) {
 			*tgt_set = ~0UL;
 			return false;
@@ -307,11 +303,11 @@ ec_update_params(struct ec_params *params, daos_iod_t *iod, d_sg_list_t *sgl,
 	for (i = 0; i < iod->iod_nr; i++) {
 		uint64_t rem = iod->iod_recxs[i].rx_nr * iod->iod_size;
 		uint64_t start = iod->iod_recxs[i].rx_idx * iod->iod_size;
-		uint64_t so = start % ss ? ss - start % ss : 0;
+		uint64_t partial = start % ss ? ss - start % ss : 0;
 		uint32_t stripe_cnt = 0;
 		uint32_t partial_cnt = 0;
 
-		if (so && rem + so > ss) {
+		if (partial && partial < rem) {
 			D_REALLOC_ARRAY(nrecx,
 					(niod->iod_recxs),
 					(niod->iod_nr +
@@ -322,11 +318,11 @@ ec_update_params(struct ec_params *params, daos_iod_t *iod, d_sg_list_t *sgl,
 			}
 			niod->iod_recxs = nrecx;
 			niod->iod_recxs[params->niod.iod_nr].rx_nr =
-							so/iod->iod_size;
+							partial/iod->iod_size;
 			niod->iod_recxs[params->niod.iod_nr++].rx_idx =
 							start/iod->iod_size;
-			start += so;
-			rem -= so;
+			start += partial;
+			rem -= partial;
 			partial_cnt = 1;
 		}
 
@@ -532,13 +528,12 @@ ec_iod_stripe_cnt(daos_iod_t *iod, struct daos_ec_attr ec_attr)
 	for (i = 0; i < iod->iod_nr; i++) {
 		uint64_t start = iod->iod_recxs[i].rx_idx * iod->iod_size;
 		uint64_t rem = iod->iod_recxs[i].rx_nr * iod->iod_size;
-		uint64_t so = start % ss ? ss - start % ss : 0;
+		uint64_t partial = start % ss ? ss - start % ss : 0;
 		uint32_t stripe_cnt = 0;
 
-		if (so && rem + so > ss) {
-
-			rem -= so;
-			stripe_cnt = 1;
+		if (partial && partial < rem) {
+			rem -= partial;
+			stripe_cnt++;
 		}
 		stripe_cnt += rem / ss;
 		if (rem % ss) {
@@ -565,15 +560,15 @@ ec_update_fetch_params(struct ec_fetch_params *params, daos_iod_t *iod,
 	for (i = 0; i < iod->iod_nr; i++) {
 		uint64_t rem = iod->iod_recxs[i].rx_nr * iod->iod_size;
 		uint64_t start = iod->iod_recxs[i].rx_idx * iod->iod_size;
-		uint64_t so = start % ss ? ss - start % ss : 0;
+		uint64_t partial = start % ss ? ss - start % ss : 0;
 
-		if (so && rem + so > ss) {
+		if (partial && partial < rem) {
 			params->niod.iod_recxs[params->niod.iod_nr].rx_nr
-				= so/iod->iod_size;
+				= partial/iod->iod_size;
 			params->niod.iod_recxs[params->niod.iod_nr++].rx_idx
 				= start/iod->iod_size;
-			start += so;
-			rem -= so;
+			start += partial;
+			rem -= partial;
 		}
 
 		/* can't have more than one stripe in a recx entry */
@@ -672,7 +667,7 @@ ec_obj_update_encode(tse_task_t *task, daos_obj_id_t oid,
 		d_sg_list_t	*sgl = &args->sgls[i];
 		daos_iod_t	*iod = &args->iods[i];
 
-		if (ec_has_full_stripe(iod, oca, tgt_set)) {
+		if (ec_has_full_or_mult_stripe(iod, oca, tgt_set)) {
 			struct ec_params *params;
 
 			if (ec_has_parity_cli(iod)) {
