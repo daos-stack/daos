@@ -27,7 +27,6 @@ from avocado.core.exceptions import TestFail
 from apricot import TestWithServers, skipForTicket
 from command_utils import CommandFailure, Mpirun
 from ior_utils import IorCommand
-from pydaos.raw import DaosApiError
 from test_utils import TestPool, TestContainer
 
 
@@ -41,7 +40,7 @@ class ContainerCreate(TestWithServers):
     :avocado: recursive
     """
 
-    def add_containers_during_rebuild(self, loop_id, qty, pool1, pool2, objcls):
+    def add_containers_during_rebuild(self, loop_id, qty, pool1, pool2):
         """Add containers to a pool while rebuild is still in progress.
 
         Args:
@@ -49,7 +48,6 @@ class ContainerCreate(TestWithServers):
             qty (int): the number of containers to create
             pool1 (TestPool): pool used to determine if rebuild is complete
             pool2 (TestPool): pool used to add containers
-            objcls (str): daos object class
 
         """
         count = 0
@@ -247,7 +245,7 @@ class ContainerCreate(TestWithServers):
             # Create additional containers in the last pool
             start_index = len(self.container)
             self.add_containers_during_rebuild(
-                loop_id, cont_qty, self.pool[0], self.pool[-1], cont_obj_cls)
+                loop_id, cont_qty, self.pool[0], self.pool[-1])
 
             # Confirm rebuild completes
             self.pool[0].wait_for_rebuild(False, 1)

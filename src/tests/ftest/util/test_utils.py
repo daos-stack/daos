@@ -48,6 +48,7 @@ class CallbackHandler(object):
         self.ret_code = None
         self.obj = None
         self._called = False
+        self.log = getLogger(__name__)
 
     def callback(self, event):
         """Return an event from a DaosApi class method.
@@ -70,7 +71,7 @@ class CallbackHandler(object):
 
         # Wait for the callback() method to be called
         while not self._called:
-            print(" Waiting ...")
+            self.log.info(" Waiting ...")
             sleep(self.delay)
 
         # Reset the flag indicating that the callback() method was called
