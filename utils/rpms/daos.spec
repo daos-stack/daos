@@ -5,7 +5,7 @@
 
 Name:          daos
 Version:       0.6.0
-Release:       7%{?relval}%{?dist}
+Release:       8%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -15,7 +15,7 @@ Source1:       scons_local-%{version}.tar.gz
 
 BuildRequires: scons
 BuildRequires: gcc-c++
-BuildRequires: cart-devel <= 1.0.0
+BuildRequires: cart-devel >= 1.5.0
 %if (0%{?rhel} >= 7)
 BuildRequires: argobots-devel >= 1.0rc1
 %else
@@ -29,7 +29,7 @@ BuildRequires: fio < 3.4
 BuildRequires: libisa-l-devel
 BuildRequires: raft-devel <= 0.5.0
 # vvvvvv these can be removed when cart#226 lands and we update to use it
-BuildRequires: mercury-devel < 1.0.1-12
+BuildRequires: mercury-devel >= 1.0.1-16
 BuildRequires: openpa-devel
 BuildRequires: libfabric-devel
 BuildRequires: ompi-devel
@@ -283,6 +283,9 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/*.a
 
 %changelog
+* Fri Oct 18 2019 Ken Cain <kenneth.c.cain@intel.com> 0.6.0-8
+- Update to cart 1.5.0
+
 * Tue Oct 01 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-7
 - Constrain cart BR to <= 1.0.0
 
