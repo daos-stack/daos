@@ -26,6 +26,7 @@
  * tests/suite/daos_obj_array.c
  */
 
+#include <daos/checksum.h>
 #include "daos_test.h"
 
 #define STACK_BUF_LEN	24
@@ -63,7 +64,7 @@ byte_array_simple_stack(void **state)
 
 	/** init I/O descriptor */
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;
 	recx.rx_idx	= 0;
@@ -137,7 +138,7 @@ array_simple(void **state)
 
 	/** init I/O descriptor */
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= arg->size;
 	srand(time(NULL) + arg->size);
@@ -220,7 +221,7 @@ array_partial(void **state)
 
 	/** init I/O descriptor */
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= arg->size;
 	recx.rx_idx	= 0;
@@ -374,7 +375,7 @@ replicator(void **state)
 
 	/** init I/O descriptor */
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;
 	recx.rx_idx	= 27136;
@@ -452,7 +453,7 @@ read_empty(void **state)
 
 	/** init I/O descriptor */
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;
 	recx.rx_idx	= 0;
@@ -519,22 +520,28 @@ enumerate_key(daos_handle_t oh, int *total_nr, daos_key_t *dkey, int key_type)
 }
 
 #define SM_BUF_LEN 10
+/** Total number of keys to insert */
+#define KEYS 100
+/** Number of existing keys to punch */
+#define E_KEYS2PUNCH 10
+/** Number of non-existing keys to punch */
+#define NE_KEYS2PUNCH 10
 
 static void
 array_dkey_punch_enumerate(void **state)
 {
 	test_arg_t	*arg = *state;
-	daos_obj_id_t	 oid;
-	daos_handle_t	 oh;
-	d_iov_t	 dkey;
-	d_sg_list_t	 sgl;
-	d_iov_t	 sg_iov;
-	daos_iod_t	 iod;
-	daos_recx_t	 recx;
-	char		 buf[SM_BUF_LEN];
-	int		 total_nr;
-	int		 i;
-	int		 rc;
+	daos_obj_id_t	oid;
+	daos_handle_t	oh;
+	d_iov_t		dkey;
+	d_sg_list_t	sgl;
+	d_iov_t		sg_iov;
+	daos_iod_t	iod;
+	daos_recx_t	recx;
+	char		buf[SM_BUF_LEN];
+	int		total_nr;
+	int		i;
+	int		rc;
 
 	dts_buf_render(buf, SM_BUF_LEN);
 
@@ -551,7 +558,7 @@ array_dkey_punch_enumerate(void **state)
 
 	/** init I/O descriptor */
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;
 	recx.rx_nr	= SM_BUF_LEN;
@@ -561,8 +568,8 @@ array_dkey_punch_enumerate(void **state)
 	iod.iod_csums	= NULL;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
-	print_message("Inserting 100 dkeys...\n");
-	for (i = 0; i < 100; i++) {
+	print_message("Inserting %d dkeys...\n", KEYS);
+	for (i = 0; i < KEYS; i++) {
 		char dkey_str[10];
 
 		/** init dkey */
@@ -577,11 +584,12 @@ array_dkey_punch_enumerate(void **state)
 	print_message("Enumerating dkeys before punch...\n");
 	enumerate_key(oh, &total_nr, NULL, OBJ_DKEY);
 	print_message("DONE DKEY Enumeration (%d extents) -------\n", total_nr);
-	assert_int_equal(total_nr, 100);
+	assert_int_equal(total_nr, KEYS);
 
-	/** punch first 10 records */
-	print_message("Punching 10 dkeys...\n");
-	for (i = 0; i < 10; i++) {
+	/** punch last 10 dkeys, and another 10 non-existent dkeys */
+	print_message("Punching %d dkeys, and %d dkeys that don't exist.\n",
+		      E_KEYS2PUNCH, NE_KEYS2PUNCH);
+	for (i = KEYS - E_KEYS2PUNCH; i < KEYS + NE_KEYS2PUNCH; i++) {
 		char dkey_str[10];
 
 		/** init dkey */
@@ -595,7 +603,7 @@ array_dkey_punch_enumerate(void **state)
 	print_message("Enumerating dkeys after punch...\n");
 	enumerate_key(oh, &total_nr, NULL, OBJ_DKEY);
 	print_message("DONE DKEY Enumeration (%d extents) -------\n", total_nr);
-	assert_int_equal(total_nr, 90);
+	assert_int_equal(total_nr, KEYS - E_KEYS2PUNCH);
 
 	/** close object */
 	rc = daos_obj_close(oh, NULL);
@@ -607,17 +615,17 @@ static void
 array_akey_punch_enumerate(void **state)
 {
 	test_arg_t	*arg = *state;
-	daos_obj_id_t	 oid;
-	daos_handle_t	 oh;
-	d_iov_t	 dkey;
-	d_sg_list_t	 sgl;
-	d_iov_t	 sg_iov;
-	daos_iod_t	 iod;
-	daos_recx_t	 recx;
-	char		 buf[SM_BUF_LEN];
-	int		 total_nr;
-	int		 i;
-	int		 rc;
+	daos_obj_id_t	oid;
+	daos_handle_t	oh;
+	d_iov_t		dkey;
+	d_sg_list_t	sgl;
+	d_iov_t		sg_iov;
+	daos_iod_t	iod;
+	daos_recx_t	recx;
+	char		buf[SM_BUF_LEN];
+	int		total_nr;
+	int		i;
+	int		rc;
 
 	dts_buf_render(buf, SM_BUF_LEN);
 
@@ -636,7 +644,7 @@ array_akey_punch_enumerate(void **state)
 	d_iov_set(&dkey, "dkey", strlen("dkey"));
 
 	/** init I/O descriptor */
-	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;
 	recx.rx_nr	= SM_BUF_LEN;
@@ -646,8 +654,8 @@ array_akey_punch_enumerate(void **state)
 	iod.iod_csums	= NULL;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
-	print_message("Inserting 100 akeys...\n");
-	for (i = 0; i < 100; i++) {
+	print_message("Inserting %d akeys...\n", KEYS);
+	for (i = 0; i < KEYS; i++) {
 		char akey_str[10];
 
 		sprintf(akey_str, "akey_%d", i);
@@ -661,11 +669,12 @@ array_akey_punch_enumerate(void **state)
 	print_message("Enumerating akeys before punch...\n");
 	enumerate_key(oh, &total_nr, &dkey, OBJ_AKEY);
 	print_message("DONE AKEY Enumeration (%d extents) -------\n", total_nr);
-	assert_int_equal(total_nr, 100);
+	assert_int_equal(total_nr, KEYS);
 
-	/** punch first 10 akeys */
-	print_message("Punching 10 akeys...\n");
-	for (i = 0; i < 10; i++) {
+	/** punch last 10 akeys, and another 10 non-existent akeys */
+	print_message("Punching %d akeys, and %d akeys that don't exist.\n",
+		      E_KEYS2PUNCH, NE_KEYS2PUNCH);
+	for (i = KEYS - E_KEYS2PUNCH; i < KEYS + NE_KEYS2PUNCH; i++) {
 		char akey_str[10];
 		daos_key_t akey;
 
@@ -680,10 +689,10 @@ array_akey_punch_enumerate(void **state)
 	print_message("Enumerating akeys after punch...\n");
 	enumerate_key(oh, &total_nr, &dkey, OBJ_AKEY);
 	print_message("DONE AKEY Enumeration (%d extents) -------\n", total_nr);
-	assert_int_equal(total_nr, 90);
+	assert_int_equal(total_nr, KEYS - E_KEYS2PUNCH);
 
 	print_message("Fetch akeys after punch and verify size...\n");
-	for (i = 0; i < 100; i++) {
+	for (i = 0; i < KEYS; i++) {
 		char akey_str[10];
 
 		sprintf(akey_str, "akey_%d", i);
@@ -693,7 +702,7 @@ array_akey_punch_enumerate(void **state)
 		rc = daos_obj_fetch(oh, DAOS_TX_NONE, &dkey, 1, &iod,
 				    NULL, NULL, NULL);
 		assert_int_equal(rc, 0);
-		if (i < 10)
+		if (i >= KEYS - E_KEYS2PUNCH)
 			assert_int_equal(iod.iod_size, 0);
 		else
 			assert_int_equal(iod.iod_size, 1);
@@ -709,18 +718,18 @@ static void
 array_recx_punch_enumerate(void **state)
 {
 	test_arg_t	*arg = *state;
-	daos_obj_id_t	 oid;
-	daos_handle_t	 oh;
-	d_iov_t	 dkey;
-	d_sg_list_t	 sgl;
-	d_iov_t	 sg_iov;
-	daos_iod_t	 iod;
-	daos_recx_t	 recx;
-	char		 buf[SM_BUF_LEN];
-	daos_anchor_t	 anchor;
-	int		 total_nr = 0;
-	int		 i;
-	int		 rc;
+	daos_obj_id_t	oid;
+	daos_handle_t	oh;
+	d_iov_t		dkey;
+	d_sg_list_t	sgl;
+	d_iov_t		sg_iov;
+	daos_iod_t	iod;
+	daos_recx_t	recx;
+	char		buf[SM_BUF_LEN];
+	daos_anchor_t	anchor;
+	int		total_nr = 0;
+	int		i;
+	int		rc;
 
 	dts_buf_render(buf, SM_BUF_LEN);
 
@@ -740,7 +749,7 @@ array_recx_punch_enumerate(void **state)
 
 	/** init I/O descriptor */
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	dcb_set_null(&iod.iod_kcsum);
 	iod.iod_nr	= 1;
 	iod.iod_size	= 1;
 	recx.rx_nr	= SM_BUF_LEN;

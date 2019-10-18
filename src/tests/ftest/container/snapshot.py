@@ -27,9 +27,8 @@ import traceback
 import random
 import string
 from apricot import TestWithServers
-from conversion import c_uuid_to_str
-from daos_api import (DaosPool, DaosContainer, DaosSnapshot,
-                      DaosApiError)
+from pydaos.raw import (DaosPool, DaosContainer, DaosSnapshot,
+                        DaosApiError, c_uuid_to_str)
 
 # pylint: disable=broad-except
 class Snapshot(TestWithServers):
@@ -98,30 +97,6 @@ class Snapshot(TestWithServers):
         if self.container.get_uuid_str() != c_uuid_to_str(
                 self.container.info.ci_uuid):
             self.fail("##Container UUID did not match the one in info.")
-
-    def tearDown(self):
-        """
-        tear down method
-        """
-        try:
-            if self.container:
-                self.container.close()
-
-            if self.container:
-                self.container.destroy()
-
-            # cleanup the pool
-            if self.pool:
-                self.pool.disconnect()
-                self.pool.destroy(1)
-
-        except DaosApiError as excep:
-            self.log.info(excep)
-            self.log.info(traceback.format_exc())
-            self.fail("##Snapshot test failed on cleanUp.")
-
-        finally:
-            super(Snapshot, self).tearDown()
 
     def display_snapshot(self, snapshot):
         """
@@ -205,7 +180,8 @@ class Snapshot(TestWithServers):
                 (7)Verify snap_list bad parameter behavior.
 
         Use Cases: Combinations with minimun 1 client and 1 server.
-        :avocado: tags=snap,snapshot_negative,snapshotcreate_negative
+        :avocado: tags=all,small,smoke,pr,snap,snapshot_negative,
+        :avocado: tags=snapshotcreate_negative
         """
 
         #DAOS-1322 Create a new container, verify snapshot state as expected
@@ -356,7 +332,7 @@ class Snapshot(TestWithServers):
         Use Cases: Require 1 client and 1 server to run snapshot test.
                    1 pool and 1 container is used, num_of_snapshot defined
                    in the snapshot.yaml will be performed and verified.
-        :avocado: tags=snap,snapshots
+        :avocado: tags=all,small,smoke,pr,snap,snapshots
         """
 
         coh_list = []

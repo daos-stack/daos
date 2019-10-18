@@ -33,13 +33,122 @@ from errno import ENOENT
 from time import sleep
 
 from avocado import fail_on
-from daos_api import DaosApiError, DaosServer, DaosContainer, DaosPool
+from pydaos.raw import DaosApiError, DaosServer, DaosContainer, DaosPool
 from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet
 
 
 class DaosTestError(Exception):
     """DAOS API exception class."""
+
+
+def run_task(hosts, command, timeout=None):
+    """Create a task to run a command on each host in parallel.
+
+    Args:
+        hosts (list): list of hosts
+        command (str): the command to run in parallel
+        timeout (int, optional): command timeout in seconds. Defaults to None.
+
+    Returns:
+        Task: a ClusterShell.Task.Task object for the executed command
+
+    """
+    task = task_self()
+    kwargs = {"command": command, "nodes": NodeSet.fromlist(hosts)}
+    if timeout is not None:
+        kwargs["timeout"] = timeout
+    task.run(**kwargs)
+    return task
+
+
+def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
+    """Run a command on each host in parallel and get the return codes.
+
+    Args:
+        hosts (list): list of hosts
+        command (str): the command to run in parallel
+        verbose (bool, optional): display command output. Defaults to True.
+        timeout (int, optional): command timeout in seconds. Defaults to None.
+        expect_rc (int, optional): exepcted return code. Defaults to 0.
+
+    Returns:
+        dict: a dictionary of return codes keys and accompanying NodeSet
+            values indicating which hosts yielded the return code.
+
+    """
+    # Run the command on each host in parallel
+    task = run_task(hosts, command, timeout)
+
+    # Report any errors / display output if requested
+    retcode_dict = {}
+    for retcode, rc_nodes in task.iter_retcodes():
+        # Create a NodeSet for this list of nodes
+        nodeset = NodeSet.fromlist(rc_nodes)
+
+        # Include this NodeSet for this return code
+        if retcode not in retcode_dict:
+            retcode_dict[retcode] = NodeSet()
+        retcode_dict[retcode].add(nodeset)
+
+        # Display any errors or requested output
+        if retcode != expect_rc or verbose:
+            msg = "failure running" if retcode != expect_rc else "output from"
+            if len(list(task.iter_buffers(rc_nodes))) == 0:
+                print(
+                    "{}: {} '{}': rc={}".format(
+                        nodeset, msg, command, retcode))
+            else:
+                for output, nodes in task.iter_buffers(rc_nodes):
+                    nodeset = NodeSet.fromlist(nodes)
+                    lines = str(output).splitlines()
+                    output = "rc={}{}".format(
+                        retcode,
+                        ", {}".format(output) if len(lines) < 2 else
+                        "\n  {}".format("\n  ".join(lines)))
+                    print(
+                        "{}: {} '{}': {}".format(
+                            NodeSet.fromlist(nodes), msg, command, output))
+
+    # Report any timeouts
+    if timeout and task.num_timeout() > 0:
+        nodes = task.iter_keys_timeout()
+        print(
+            "{}: timeout detected running '{}' on {}/{} hosts".format(
+                NodeSet.fromlist(nodes),
+                command, task.num_timeout(), len(hosts)))
+        retcode = 255
+        if retcode not in retcode_dict:
+            retcode_dict[retcode] = NodeSet()
+        retcode_dict[retcode].add(NodeSet.fromlist(nodes))
+
+    return retcode_dict
+
+
+def check_file_exists(hosts, filename, user=None):
+    """Check if a specified file exist on each specified hosts.
+
+    If specified, verify that the file exists and is owned by the user.
+
+    Args:
+        hosts (list): list of hosts
+        filename (str): file to check for the existence of on each host
+        user (str, optional): owner of the file. Defaults to None.
+
+    Returns:
+        (bool, NodeSet): A tuple of:
+            - True if the file exists on each of the hosts; False otherwise
+            - A NodeSet of hosts on which the file does not exist
+
+    """
+    missing_file = NodeSet()
+    command = "test {} '{}'".format("-e" if user is None else "-O", filename)
+    task = run_task(hosts, command)
+    for ret_code, node_list in task.iter_retcodes():
+        if ret_code != 0:
+            missing_file.add(NodeSet.fromlist(node_list))
+
+    return len(missing_file) == 0, missing_file
 
 
 def get_file_path(bin_name, dir_path=""):
@@ -325,20 +434,12 @@ def check_pool_files(log, hosts, uuid):
             otherwise
 
     """
-    file_list = (uuid, "superblock")
-    expect = len(file_list) * len(hosts)
-    actual = 0
-    nodeset = NodeSet.fromlist(hosts)
-    task = task_self()
-
-    log.info("Checking for pool data on %s", nodeset)
-    for filename in file_list:
-        task.run(
-            "test -e /mnt/daos/{}; echo $?".format(filename), nodes=nodeset)
-        for output, node_list in task.iter_buffers():
-            if output == "0":
-                actual += len(node_list)
-            else:
-                nodes = NodeSet.fromlist(node_list)
-                log.error("%s: /mnt/daos/%s not found", nodes, filename)
-    return expect == actual
+    status = True
+    log.info("Checking for pool data on %s", NodeSet.fromlist(hosts))
+    pool_files = [uuid, "superblock"]
+    for filename in ["/mnt/daos/{}".format(item) for item in pool_files]:
+        result = check_file_exists(hosts, filename)
+        if not result[0]:
+            log.error("%s: %s not found", result[1], filename)
+            status = False
+    return status

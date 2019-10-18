@@ -27,6 +27,7 @@ import os
 import sys
 import json
 from avocado import Test
+from apricot import skipForTicket
 
 sys.path.append('./util')
 sys.path.append('../util')
@@ -37,7 +38,7 @@ import agent_utils
 import server_utils
 import write_host_file
 from mpio_utils import MpioUtils, MpioFailed
-from daos_api import DaosContext
+from pydaos.raw import DaosContext
 
 class Romio(Test):
     """
@@ -85,8 +86,7 @@ class Romio(Test):
         self.agent_sessions = agent_utils.run_agent(self.basepath,
                                                     self.hostlist_servers,
                                                     self.hostlist_clients)
-        server_utils.run_server(self.hostfile_servers, self.server_group,
-                                self.basepath)
+        server_utils.run_server(self, self.hostfile_servers, self.server_group)
 
         self.mpio = None
 
@@ -95,12 +95,13 @@ class Romio(Test):
             agent_utils.stop_agent(self.agent_sessions, self.hostlist_clients)
         server_utils.stop_server(hosts=self.hostlist_servers)
 
+    @skipForTicket("CORCI-635")
     def test_romio(self):
         """
         Test ID: DAOS-1994
         Run Romio test provided in mpich package
         Testing various I/O functions provided in romio test suite
-        :avocado: tags=mpio,romio
+        :avocado: tags=all,mpiio,pr,small,romio
         """
         # setting romio parameters
         romio_test_repo = self.params.get("romio_repo", '/run/romio/')

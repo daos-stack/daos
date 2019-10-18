@@ -34,7 +34,7 @@
 #include <daos/object.h>
 
 /** default placement map when none are specified */
-#define DEFAULT_PL_TYPE PL_TYPE_MAPLESS
+#define DEFAULT_PL_TYPE PL_TYPE_JUMP_MAP
 
 /** types of placement maps */
 typedef enum {
@@ -42,7 +42,7 @@ typedef enum {
 	/** only support ring map for the time being */
 	PL_TYPE_RING,
 	/**Prototype placement map*/
-	PL_TYPE_MAPLESS,
+	PL_TYPE_JUMP_MAP,
 	/** reserved */
 	PL_TYPE_PETALS,
 } pl_map_type_t;
@@ -54,9 +54,9 @@ struct pl_map_init_attr {
 			pool_comp_type_t	domain;
 			unsigned int		ring_nr;
 		} ia_ring;
-		struct pl_mapless_init_attr {
+		struct pl_jump_map_init_attr {
 			pool_comp_type_t	domain;
-		} ia_mapless;
+		} ia_jump_map;
 	};
 };
 
@@ -108,6 +108,9 @@ struct pl_map {
 	/** placement map operations */
 	struct pl_map_ops       *pl_ops;
 };
+
+int pl_init(void);
+void pl_fini(void);
 
 int pl_map_create(struct pool_map *pool_map, struct pl_map_init_attr *mia,
 		  struct pl_map **pl_mapp);

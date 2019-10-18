@@ -35,9 +35,6 @@ void
 csum_test_holes(void **state);
 
 void
-csum_helper_functions_tests(void **state);
-
-void
 csum_extent_not_starting_at_0(void **state);
 
 void

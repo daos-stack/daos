@@ -31,17 +31,21 @@ import random
 from apricot import TestWithServers
 
 from general_utils import DaosTestError
-from daos_api import DaosContext, DaosPool, DaosApiError
+from pydaos.raw import DaosPool, DaosApiError
+
+# pylint: disable=global-variable-not-assigned, global-statement
 
 GLOB_SIGNAL = None
 GLOB_RC = -99000000
 
+
 def cb_func(event):
-    "Callback Function for asynchronous mode"
+    """Callback Function for asynchronous mode."""
     global GLOB_SIGNAL
     global GLOB_RC
     GLOB_RC = event.event.ev_error
     GLOB_SIGNAL.set()
+
 
 def verify_list_attr(indata, size, buff):
     """
@@ -56,12 +60,13 @@ def verify_list_attr(indata, size, buff):
         raise DaosTestError("FAIL: Size is not matching for Names in list"
                             "attr, Expected len={0} and received len = {1}"
                             .format(aggregate_len, size))
-    #verify the Attributes names in list_attr retrieve
+    # verify the Attributes names in list_attr retrieve
     for key in indata.keys():
         if key not in buff:
             raise DaosTestError("FAIL: Name does not match after list attr,"
                                 " Expected buf={0} and received buf = {1}"
                                 .format(key, buff))
+
 
 def verify_get_attr(indata, outdata):
     """
@@ -73,11 +78,13 @@ def verify_get_attr(indata, outdata):
                                 " Expected val={0} and received val = {1}"
                                 .format(value, outdata[attr]))
 
+
 class PoolAttributeTest(TestWithServers):
     """
     Test class Description: Tests DAOS pool attribute get/set/list.
     :avocado: recursive
     """
+
     def setUp(self):
         super(PoolAttributeTest, self).setUp()
 
@@ -101,14 +108,6 @@ class PoolAttributeTest(TestWithServers):
             print("In the setup exception handler\n")
             print(excep)
             print(traceback.format_exc())
-
-    def tearDown(self):
-        try:
-            if self.pool is not None:
-                self.pool.disconnect()
-                self.pool.destroy(1)
-        finally:
-            super(PoolAttributeTest, self).tearDown()
 
     def create_data_set(self):
         """
@@ -151,7 +150,7 @@ class PoolAttributeTest(TestWithServers):
 
         Test description: Test basic pool attribute tests (sync).
 
-        :avocado: tags=regression,pool,pool_attr,attribute,sync_poolattribute
+        :avocado: tags=all,pool,pr,tiny,sync_poolattribute
         """
         expected_for_param = []
         name = self.params.get("name", '/run/attrtests/name_handles/*/')
@@ -165,7 +164,7 @@ class PoolAttributeTest(TestWithServers):
                 expected_result = 'FAIL'
                 break
 
-        attr_dict = {name[0]:value[0]}
+        attr_dict = {name[0]: value[0]}
         try:
             self.pool.set_attr(data=attr_dict)
             size, buf = self.pool.list_attr()
@@ -194,7 +193,7 @@ class PoolAttributeTest(TestWithServers):
 
         Test description: Test basic pool attribute tests (async).
 
-        :avocado: tags=regression,pool,pool_attr,attribute,async_poolattribute
+        :avocado: tags=all,pool,full_regression,tiny,async_poolattribute
         """
         global GLOB_SIGNAL
         global GLOB_RC
@@ -215,7 +214,7 @@ class PoolAttributeTest(TestWithServers):
                 expected_result = 'FAIL'
                 break
 
-        attr_dict = {name[0]:value[0]}
+        attr_dict = {name[0]: value[0]}
         try:
             GLOB_SIGNAL = threading.Event()
             self.pool.set_attr(attr_dict, None, cb_func)
@@ -228,7 +227,7 @@ class PoolAttributeTest(TestWithServers):
                           .format(GLOB_RC))
 
         except DaosApiError as excep:
-            print (excep)
-            print (traceback.format_exc())
+            print(excep)
+            print(traceback.format_exc())
             if expected_result == 'PASS':
                 self.fail("Test was expected to pass but it failed.\n")

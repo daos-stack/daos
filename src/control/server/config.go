@@ -29,26 +29,298 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
 
-	"github.com/daos-stack/daos/src/control/common"
-	log "github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/security"
+	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
 
 const (
-	configOut              = ".daos_server.active.yml"
-	relConfExamplesPath    = "utils/config/examples/"
-	msgBadConfig           = "insufficient config file, see examples in "
-	msgConfigNoProvider    = "provider not specified in config"
-	msgConfigNoPath        = "no config path set"
-	msgConfigNoServers     = "no servers specified in config"
-	msgConfigServerNoIface = "fabric interface not specified in config"
+	configOut                = ".daos_server.active.yml"
+	relConfExamplesPath      = "utils/config/examples/"
+	msgBadConfig             = "insufficient config file, see examples in "
+	msgConfigNoProvider      = "provider not specified in config"
+	msgConfigNoPath          = "no config path set"
+	msgConfigNoServers       = "no servers specified in config"
+	msgConfigBadAccessPoints = "only a single access point is currently supported"
 )
 
-func (c *configuration) loadConfig() error {
+type networkProviderValidation func(string, string) error
+type networkNUMAValidation func(string, uint) error
+
+// Configuration describes options for DAOS control plane.
+// See utils/config/daos_server.yml for parameter descriptions.
+type Configuration struct {
+	// control-specific
+	ControlPort     int                       `yaml:"port"`
+	TransportConfig *security.TransportConfig `yaml:"transport_config"`
+	Servers         []*ioserver.Config        `yaml:"servers"`
+	BdevInclude     []string                  `yaml:"bdev_include,omitempty"`
+	BdevExclude     []string                  `yaml:"bdev_exclude,omitempty"`
+	NrHugepages     int                       `yaml:"nr_hugepages"`
+	ControlLogMask  ControlLogLevel           `yaml:"control_log_mask"`
+	ControlLogFile  string                    `yaml:"control_log_file"`
+	ControlLogJSON  bool                      `yaml:"control_log_json,omitempty"`
+	UserName        string                    `yaml:"user_name"`
+	GroupName       string                    `yaml:"group_name"`
+
+	// duplicated in ioserver.Config
+	SystemName string                `yaml:"name"`
+	SocketDir  string                `yaml:"socket_dir"`
+	Fabric     ioserver.FabricConfig `yaml:",inline"`
+	Modules    string
+	Attach     string
+
+	AccessPoints []string `yaml:"access_points"`
+
+	// unused (?)
+	FaultPath    string `yaml:"fault_path"`
+	FaultCb      string `yaml:"fault_cb"`
+	Hyperthreads bool   `yaml:"hyperthreads"`
+
+	Path string   // path to config file
+	ext  External // interface to os utilities
+	// Shared memory segment ID to enable SPDK multiprocess mode,
+	// SPDK application processes can then access the same shared
+	// memory and therefore NVMe controllers.
+	// TODO: Is it also necessary to provide distinct coremask args?
+	NvmeShmID int
+
+	//a pointer to a function that validates the chosen provider
+	validateProviderFn networkProviderValidation
+
+	//a pointer to a function that validates the chosen numa node
+	validateNUMAFn networkNUMAValidation
+}
+
+// WithProviderValidator is used for unit testing configurations that are not necessarily valid on the test machine.
+// We use the stub function ValidateNetworkConfigStub to avoid unnecessary failures
+// in those tests that are not concerned with testing a truly valid configuration
+// for the test system
+func (c *Configuration) WithProviderValidator(fn networkProviderValidation) *Configuration {
+	c.validateProviderFn = fn
+	return c
+}
+
+// WithNUMAValidator is used for unit testing configurations that are not necessarily valid on the test machine.
+// We use the stub function ValidateNetworkConfigStub to avoid unnecessary failures
+// in those tests that are not concerned with testing a truly valid configuration
+// for the test system
+func (c *Configuration) WithNUMAValidator(fn networkNUMAValidation) *Configuration {
+	c.validateNUMAFn = fn
+	return c
+}
+
+// WithSystemName sets the system name.
+func (c *Configuration) WithSystemName(name string) *Configuration {
+	c.SystemName = name
+	for _, srv := range c.Servers {
+		srv.WithSystemName(name)
+	}
+	return c
+}
+
+// WithSocketDir sets the default socket directory.
+func (c *Configuration) WithSocketDir(sockDir string) *Configuration {
+	c.SocketDir = sockDir
+	for _, srv := range c.Servers {
+		srv.WithSocketDir(sockDir)
+	}
+	return c
+}
+
+// WithNvmeShmID sets the common shmID used for SPDK multiprocess mode.
+func (c *Configuration) WithNvmeShmID(id int) *Configuration {
+	c.NvmeShmID = id
+	for _, srv := range c.Servers {
+		srv.WithShmID(id)
+	}
+	return c
+}
+
+// WithModules sets a list of server modules to load.
+func (c *Configuration) WithModules(mList string) *Configuration {
+	c.Modules = mList
+	for _, srv := range c.Servers {
+		srv.WithModules(mList)
+	}
+	return c
+}
+
+// WithAttach sets attachment info path.
+func (c *Configuration) WithAttachInfo(aip string) *Configuration {
+	c.Attach = aip
+	// TODO: Should all instances share this? Thinking probably not...
+	for _, srv := range c.Servers {
+		srv.WithAttachInfoPath(aip)
+	}
+	return c
+}
+
+// WithFabricProvider sets the top-level fabric provider.
+func (c *Configuration) WithFabricProvider(provider string) *Configuration {
+	c.Fabric.Provider = provider
+	for _, srv := range c.Servers {
+		srv.Fabric.Update(c.Fabric)
+	}
+	return c
+}
+
+// NB: In order to ease maintenance, the set of chained config functions
+// which modify nested ioserver configurations should be kept above this
+// one as a reference for which things should be set/updated in the next
+// function.
+func (c *Configuration) updateServerConfig(srvCfg *ioserver.Config) {
+	srvCfg.Fabric.Update(c.Fabric)
+	srvCfg.SystemName = c.SystemName
+	srvCfg.WithShmID(c.NvmeShmID)
+	srvCfg.SocketDir = c.SocketDir
+	srvCfg.Modules = c.Modules
+	srvCfg.AttachInfoPath = c.Attach // TODO: Is this correct?
+}
+
+// WithServers sets the list of IOServer configurations.
+func (c *Configuration) WithServers(srvList ...*ioserver.Config) *Configuration {
+	c.Servers = srvList
+	for _, srvCfg := range c.Servers {
+		c.updateServerConfig(srvCfg)
+	}
+	return c
+}
+
+// WithScmMountPoint sets the SCM mountpoint for the first I/O Server.
+//
+// Deprecated: This function exists to ease transition away from
+// specifying the SCM mountpoint via daos_server CLI flag. Future
+// versions will require the mountpoint to be set via configuration.
+func (c *Configuration) WithScmMountPoint(mp string) *Configuration {
+	if len(c.Servers) > 0 {
+		c.Servers[0].WithScmMountPoint(mp)
+	}
+	return c
+}
+
+// WithAccessPoints sets the access point list.
+func (c *Configuration) WithAccessPoints(aps ...string) *Configuration {
+	c.AccessPoints = aps
+	return c
+}
+
+// WithControlPort sets the gRPC listener port.
+func (c *Configuration) WithControlPort(port int) *Configuration {
+	c.ControlPort = port
+	return c
+}
+
+// WithTransportConfig sets the gRPC transport configuration.
+func (c *Configuration) WithTransportConfig(cfg *security.TransportConfig) *Configuration {
+	c.TransportConfig = cfg
+	return c
+}
+
+// WithFaultPath sets the fault path (identification string e.g. rack/shelf/node).
+func (c *Configuration) WithFaultPath(fp string) *Configuration {
+	c.FaultPath = fp
+	return c
+}
+
+// WithFaultCb sets the path to the fault callback script.
+func (c *Configuration) WithFaultCb(cb string) *Configuration {
+	c.FaultCb = cb
+	return c
+}
+
+// WithBdevExclude sets the block device exclude list.
+func (c *Configuration) WithBdevExclude(bList ...string) *Configuration {
+	c.BdevExclude = bList
+	return c
+}
+
+// WithBdevInclude sets the block device include list.
+func (c *Configuration) WithBdevInclude(bList ...string) *Configuration {
+	c.BdevInclude = bList
+	return c
+}
+
+// WithHyperthreads enables or disables hyperthread support.
+func (c *Configuration) WithHyperthreads(enabled bool) *Configuration {
+	c.Hyperthreads = enabled
+	return c
+}
+
+// WithNrHugePages sets the number of huge pages to be used.
+func (c *Configuration) WithNrHugePages(nr int) *Configuration {
+	c.NrHugepages = nr
+	return c
+}
+
+// WithControlLogMask sets the daos_server log level.
+func (c *Configuration) WithControlLogMask(lvl ControlLogLevel) *Configuration {
+	c.ControlLogMask = lvl
+	return c
+}
+
+// WithControlLogFile sets the path to the daos_server logfile.
+func (c *Configuration) WithControlLogFile(filePath string) *Configuration {
+	c.ControlLogFile = filePath
+	return c
+}
+
+// WithControlLogJSON enables or disables JSON output.
+func (c *Configuration) WithControlLogJSON(enabled bool) *Configuration {
+	c.ControlLogJSON = enabled
+	return c
+}
+
+// WithUserName sets the user to run as.
+func (c *Configuration) WithUserName(name string) *Configuration {
+	c.UserName = name
+	return c
+}
+
+// WithGroupName sets the group to run as.
+func (c *Configuration) WithGroupName(name string) *Configuration {
+	c.GroupName = name
+	return c
+}
+
+// parse decodes YAML representation of configuration
+func (c *Configuration) parse(data []byte) error {
+	return yaml.Unmarshal(data, c)
+}
+
+// newDefaultConfiguration creates a new instance of configuration struct
+// populated with defaults.
+func newDefaultConfiguration(ext External) *Configuration {
+	return &Configuration{
+		SystemName:         "daos_server",
+		SocketDir:          "/var/run/daos_server",
+		AccessPoints:       []string{"localhost"},
+		ControlPort:        10000,
+		TransportConfig:    security.DefaultServerTransportConfig(),
+		Hyperthreads:       false,
+		NrHugepages:        1024,
+		Path:               "etc/daos_server.yml",
+		NvmeShmID:          0,
+		ControlLogMask:     ControlLogLevel(logging.LogLevelInfo),
+		ext:                ext,
+		validateProviderFn: netdetect.ValidateProviderStub,
+		validateNUMAFn:     netdetect.ValidateNUMAStub,
+	}
+}
+
+// NewConfiguration creates a new instance of configuration struct
+// populated with defaults and default external interface.
+func NewConfiguration() *Configuration {
+	return newDefaultConfiguration(&ext{})
+}
+
+// Load reads the serialized configuration from disk and validates it.
+func (c *Configuration) Load() error {
 	if c.Path == "" {
 		return errors.New(msgConfigNoPath)
 	}
@@ -63,10 +335,16 @@ func (c *configuration) loadConfig() error {
 			"parameters and may be out of date, see server config examples")
 	}
 
-	return nil
+	// propagate top-level settings to server configs
+	for _, srvCfg := range c.Servers {
+		c.updateServerConfig(srvCfg)
+	}
+
+	return c.Validate()
 }
 
-func (c *configuration) saveConfig(filename string) error {
+// SaveToFile serializes the configuration and saves it to the specified filename.
+func (c *Configuration) SaveToFile(filename string) error {
 	bytes, err := yaml.Marshal(c)
 
 	if err != nil {
@@ -76,7 +354,22 @@ func (c *configuration) saveConfig(filename string) error {
 	return ioutil.WriteFile(filename, bytes, 0644)
 }
 
-func (c *configuration) setPath(path string) error {
+// hash produces unique int from string, mask MSB on conversion to signed int
+func hash(s string) int {
+	h := fnv.New32a()
+	if _, err := h.Write([]byte(s)); err != nil {
+		panic(err) // should never happen
+	}
+
+	return int(h.Sum32() & 0x7FFFFFFF) // mask MSB of uint32 as this will be sign bit
+}
+
+func (c *Configuration) SetNvmeShmID(base string) {
+	c.WithNvmeShmID(hash(base + strconv.Itoa(os.Getpid())))
+}
+
+// SetPath sets the default path to the configuration file.
+func (c *Configuration) SetPath(path string) error {
 	if path != "" {
 		c.Path = path
 	}
@@ -92,54 +385,16 @@ func (c *configuration) setPath(path string) error {
 	return nil
 }
 
-// loadConfigOpts derives file location and parses configuration options
-// from both config file and commandline flags.
-func loadConfigOpts(cliOpts *cliOptions, host string) (*configuration, error) {
-	config := newConfiguration()
-
-	if err := config.setPath(cliOpts.ConfigPath); err != nil {
-		return nil, errors.WithMessage(err, "set path")
-	}
-
-	if err := config.loadConfig(); err != nil {
-		return nil, errors.WithMessagef(err, "loading %s", config.Path)
-	}
-	log.Debugf("DAOS config read from %s", config.Path)
-
-	// Override certificate support if specified in cliOpts
-	if cliOpts.Insecure {
-		config.TransportConfig.AllowInsecure = true
-	}
-
-	// get unique identifier to activate SPDK multiprocess mode
-	config.NvmeShmID = hash(host + strconv.Itoa(os.Getpid()))
-
-	if err := config.getIOParams(cliOpts); err != nil {
-		return nil, errors.Wrap(
-			err, "failed to retrieve I/O service params")
-	}
-
-	if len(config.Servers) == 0 {
-		return nil, errors.New("missing I/O service params")
-	}
-
-	for idx := range config.Servers {
-		config.Servers[idx].Hostname = host
-	}
-
-	return &config, nil
-}
-
 // saveActiveConfig saves read-only active config, tries config dir then /tmp/
-func saveActiveConfig(config *configuration) {
+func saveActiveConfig(log logging.Logger, config *Configuration) {
 	activeConfig := filepath.Join(filepath.Dir(config.Path), configOut)
 	eMsg := "Warning: active config could not be saved (%s)"
-	err := config.saveConfig(activeConfig)
+	err := config.SaveToFile(activeConfig)
 	if err != nil {
 		log.Debugf(eMsg, err)
 
 		activeConfig = filepath.Join("/tmp", configOut)
-		err = config.saveConfig(activeConfig)
+		err = config.SaveToFile(activeConfig)
 		if err != nil {
 			log.Debugf(eMsg, err)
 		}
@@ -149,123 +404,24 @@ func saveActiveConfig(config *configuration) {
 	}
 }
 
-// hash produces unique int from string, mask MSB on conversion to signed int
-func hash(s string) int {
-	h := fnv.New32a()
-	if _, err := h.Write([]byte(s)); err != nil {
-		panic(err) // should never happen
-	}
-
-	return int(h.Sum32() & 0x7FFFFFFF) // mask MSB of uint32 as this will be sign bit
-}
-
-// populateCliOpts populates options string slice for single I/O service
-func (c *configuration) populateCliOpts(i int) error {
-	// avoid mutating subject during iteration, instead access through
-	// config/parent object
-	srv := &c.Servers[i]
-
-	srv.CliOpts = append(
-		srv.CliOpts,
-		"-t", strconv.Itoa(srv.Targets),
-		"-g", c.SystemName,
-		"-s", srv.ScmMount)
-
-	if c.Modules != "" {
-		srv.CliOpts = append(srv.CliOpts, "-m", c.Modules)
-	}
-	if c.Attach != "" {
-		srv.CliOpts = append(srv.CliOpts, "-a", c.Attach)
-	}
-	if srv.NrXsHelpers > 2 {
-		log.Errorf(
-			"invalid NrXsHelpers %d exceed [0, 2], "+
-				"using default value of 2", srv.NrXsHelpers)
-		srv.NrXsHelpers = 2
-	} else if srv.NrXsHelpers != 2 {
-		srv.CliOpts = append(
-			srv.CliOpts, "-x", strconv.Itoa(srv.NrXsHelpers))
-	}
-	if srv.FirstCore > 0 {
-		srv.CliOpts = append(
-			srv.CliOpts, "-f", strconv.Itoa(srv.FirstCore))
-	}
-	if c.SocketDir != "" {
-		srv.CliOpts = append(srv.CliOpts, "-d", c.SocketDir)
-	}
-	if c.NvmeShmID > 0 {
-		// Add shm_id so I/O service can share spdk access to controllers
-		// with mgmtControlServer process. Currently not user
-		// configurable when starting daos_server, use default.
-		srv.CliOpts = append(
-			srv.CliOpts, "-i", strconv.Itoa(c.NvmeShmID))
-	}
-
-	return nil
-}
-
-// cmdlineOverride mutates configuration options based on commandline
-// options overriding those loaded from configuration file.
-//
-// Current cli opts for daos_server also specified in config:
-//   port, mount path, targets, group, rank, socket dir
-// Current cli opts to be passed to be stored by daos_server:
-//   modules, attach, map
-func (c *configuration) cmdlineOverride(opts *cliOptions) {
-	// Populate options that can be provided on both the commandline and config.
-	if opts.Port > 0 {
-		c.Port = int(opts.Port)
-	}
-	if opts.Insecure {
-		c.TransportConfig.AllowInsecure = true
-	}
-	// override each per-server config
-	for i := range c.Servers {
-		srv := &c.Servers[i]
-
-		if opts.MountPath != "" {
-			// override each per-server config in addition to global value
-			c.ScmMountPath = opts.MountPath
-			srv.ScmMount = opts.MountPath
-		} else if srv.ScmMount == "" {
-			// if scm not specified for server, apply global
-			srv.ScmMount = c.ScmMountPath
+// Validate asserts that config meets minimum requirements.
+func (c *Configuration) Validate() (err error) {
+	// append the user-friendly message to any error
+	// TODO: use a fault/resolution
+	defer func() {
+		if err != nil {
+			examplesPath, _ := c.ext.getAbsInstallPath(relConfExamplesPath)
+			err = errors.WithMessage(err, msgBadConfig+examplesPath)
 		}
-		if opts.Cores > 0 {
-			log.Debugf("-c option deprecated, please use -t instead")
-			srv.Targets = int(opts.Cores)
-		}
-		// Targets should override Cores if specified in cmdline or
-		// config file.
-		if opts.Targets > 0 {
-			srv.Targets = int(opts.Targets)
-		}
-		if opts.NrXsHelpers != nil {
-			srv.NrXsHelpers = int(*opts.NrXsHelpers)
-		}
-		if opts.FirstCore > 0 {
-			srv.FirstCore = int(opts.FirstCore)
-		}
-	}
+	}()
 
-	if opts.Group != "" {
-		c.SystemName = opts.Group
-	}
-	if opts.SocketDir != "" {
-		c.SocketDir = opts.SocketDir
-	}
-	if opts.Modules != nil {
-		c.Modules = *opts.Modules
-	}
-	if opts.Attach != nil {
-		c.Attach = *opts.Attach
-	}
-}
-
-// validateConfig asserts that config meets minimum requirements
-func (c *configuration) validateConfig() error {
-	if c.Provider == "" {
+	if c.Fabric.Provider == "" {
 		return errors.New(msgConfigNoProvider)
+	}
+
+	// only single access point valid for now
+	if len(c.AccessPoints) != 1 {
+		return errors.New(msgConfigBadAccessPoints)
 	}
 
 	if len(c.Servers) == 0 {
@@ -273,115 +429,29 @@ func (c *configuration) validateConfig() error {
 	}
 
 	for i, srv := range c.Servers {
-		if srv.FabricIface == "" {
-			return errors.Errorf(
-				msgConfigServerNoIface+" for I/O service %d", i)
-		}
-	}
-
-	return nil
-}
-
-// getIOParams builds commandline options and environment variables to provide
-// to forked I/O service
-func (c *configuration) getIOParams(cliOpts *cliOptions) error {
-	if err := c.validateConfig(); err != nil {
-		examplesPath, _ := c.ext.getAbsInstallPath(relConfExamplesPath)
-
-		return errors.WithMessagef(err, msgBadConfig+examplesPath)
-	}
-
-	// override config with commandline supplied options
-	c.cmdlineOverride(cliOpts)
-
-	for i := range c.Servers {
-		srv := &c.Servers[i]
-
-		if err := c.populateCliOpts(i); err != nil {
-			return errors.WithMessagef(
-				err,
-				"populating I/O service options")
+		srv.Fabric.Update(c.Fabric)
+		if err := srv.Validate(); err != nil {
+			return errors.Wrapf(err, "I/O server %d failed config validation", i)
 		}
 
-		// add to existing config file EnvVars
-		srv.EnvVars = append(
-			srv.EnvVars,
-			"CRT_PHY_ADDR_STR="+c.Provider,
-			"OFI_INTERFACE="+srv.FabricIface,
-			"D_LOG_MASK="+srv.LogMask,
-			"D_LOG_FILE="+srv.LogFile)
-
-		// populate only if non-zero
-		if srv.FabricIfacePort != 0 {
-			srv.EnvVars = append(
-				srv.EnvVars,
-				"OFI_PORT="+strconv.Itoa(srv.FabricIfacePort))
-		}
-	}
-
-	return nil
-}
-
-// populateEnv adds envs from config options to existing envs from user's shell
-// overwriting any existing values for given key
-func (c *configuration) populateEnv(i int, envs *[]string) {
-	for _, newEnv := range c.Servers[i].EnvVars {
-		key := strings.Split(newEnv, "=")[0]
-
-		// filter out any matching keys in envs then adds new value
-		*envs = common.Filter(
-			*envs,
-			func(s string) bool {
-				return key != strings.Split(s, "=")[0]
-			})
-		*envs = append(*envs, newEnv)
-	}
-}
-
-func (c *configuration) setLogging(name string, useJSON bool) (*os.File, error) {
-	// Set log level mask for default logger from config.
-	switch c.ControlLogMask {
-	case cLogDebug:
-		log.SetLevel(log.LogLevelDebug)
-		log.Debugf("Switching control log level to DEBUG")
-	case cLogError:
-		log.Debugf("Switching control log level to ERROR")
-		log.SetLevel(log.LogLevelError)
-	}
-
-	// Set log file for default logger if specified in config.
-	if c.ControlLogFile != "" {
-		f, err := common.AppendFile(c.ControlLogFile)
+		err := c.validateProviderFn(srv.Fabric.Interface, srv.Fabric.Provider)
 		if err != nil {
-			return nil, errors.WithMessage(
-				err, "create log file")
+			return errors.Wrapf(err, "Network device %s does not support provider %s.  The configuration is invalid.",
+				srv.Fabric.Interface, srv.Fabric.Provider)
 		}
 
-		log.Infof("%s logging to file %s", os.Args[0], c.ControlLogFile)
-		newLogger := log.NewCombinedLogger(name, f)
-		if useJSON {
-			newLogger = newLogger.WithJSONOutput()
-		}
-		log.SetLogger(newLogger)
-
-		return f, nil
-	}
-
-	log.Info("no control log file specified; logging to stdout")
-
-	// if no logfile specified, output from multiple hosts
-	// may get aggregated, prefix entries with hostname
-	newLogger := log.NewStdoutLogger(name)
-	if useJSON {
-		newLogger = newLogger.WithJSONOutput()
-	}
-	log.SetLogger(newLogger)
-
-	for i, srv := range c.Servers {
-		if srv.LogFile == "" {
-			log.Errorf("no daos log file specified for server %d", i)
+		// Check to see if the pinned NUMA node was provided in the configuration.
+		// If it was provided, validate that the NUMA node is correct for the given device.
+		// An error from srv.Fabric.GetNumaNode() means that no configuration was provided in the YML.
+		// Because this is an optional parameter, this is considered non-fatal.
+		numaNode, err := srv.Fabric.GetNumaNode()
+		if err == nil {
+			err = c.validateNUMAFn(srv.Fabric.Interface, numaNode)
+			if err != nil {
+				return errors.Wrapf(err, "Network device %s on NUMA node %d is an invalid configuration.",
+					srv.Fabric.Interface, numaNode)
+			}
 		}
 	}
-
-	return nil, nil
+	return nil
 }

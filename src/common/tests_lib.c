@@ -119,11 +119,7 @@ dts_buf_render_uppercase(char *buf, unsigned int buf_len)
 void
 dts_freeline(char *line)
 {
-#if HAVE_LIB_READLINE
 	D_FREE(line);
-#else
-	D_FREE(line);
-#endif
 }
 
 /**
@@ -132,9 +128,6 @@ dts_freeline(char *line)
 char *
 dts_readline(const char *prompt)
 {
-#if HAVE_LIB_READLINE
-	return readline(prompt);
-#else
 	char	*line;
 	char	*cur;
 	bool	 eof;
@@ -179,7 +172,6 @@ dts_readline(const char *prompt)
  out_free:
 	dts_freeline(line);
 	return NULL;
-#endif
 }
 
 int
@@ -206,7 +198,6 @@ dts_cmd_parser(struct option *opts, const char *prompt,
 			continue; /* empty line */
 
 		cmd = daos_str_trimwhite(line);
-		dts_add_history(cmd);
 
 		for (i = 0, opc = 0;; i++) {
 			struct option *opt;
@@ -313,4 +304,26 @@ dts_log(const char *msg, const char *file, const char *func, int line,
 
 	if (mask)
 		d_log(mask, "%s:%d %s() %s", file, line, func, msg);
+}
+
+void
+daos_sgl_init_with_strings(d_sg_list_t *sgl, uint32_t count, char *d, ...)
+{
+	int i;
+	va_list valist;
+	char *arg = d;
+
+	va_start(valist, d);
+
+	d_sgl_init(sgl, count);
+	for (i = 0; i < count; i++) {
+		size_t arg_len = strlen(arg) + 1;
+
+		D_ALLOC(sgl->sg_iovs[i].iov_buf, arg_len);
+		memcpy(sgl->sg_iovs[i].iov_buf, arg, arg_len);
+		sgl->sg_iovs[i].iov_buf_len = sgl->sg_iovs[i].iov_len = arg_len;
+		arg = va_arg(valist, char *);
+	}
+
+	va_end(valist);
 }

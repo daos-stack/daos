@@ -55,7 +55,7 @@ smd_pool_assign(uuid_t pool_id, int tgt_id, uint64_t blob_id)
 	D_ASSERT(!daos_handle_is_inval(smd_store.ss_pool_hdl));
 
 	uuid_copy(key_pool.uuid, pool_id);
-	D_RWLOCK_WRLOCK(&smd_store.ss_rwlock);
+	smd_lock(&smd_store);
 
 	/* Fetch pool if it's already existing */
 	d_iov_set(&key, &key_pool, sizeof(key_pool));
@@ -98,7 +98,7 @@ smd_pool_assign(uuid_t pool_id, int tgt_id, uint64_t blob_id)
 		goto out;
 	}
 out:
-	D_RWLOCK_UNLOCK(&smd_store.ss_rwlock);
+	smd_unlock(&smd_store);
 	return rc;
 }
 
@@ -115,7 +115,7 @@ smd_pool_unassign(uuid_t pool_id, int tgt_id)
 	D_ASSERT(!daos_handle_is_inval(smd_store.ss_pool_hdl));
 
 	uuid_copy(key_pool.uuid, pool_id);
-	D_RWLOCK_WRLOCK(&smd_store.ss_rwlock);
+	smd_lock(&smd_store);
 
 	d_iov_set(&key, &key_pool, sizeof(key_pool));
 	d_iov_set(&val, &entry, sizeof(entry));
@@ -162,7 +162,7 @@ smd_pool_unassign(uuid_t pool_id, int tgt_id)
 				DP_UUID(&key_pool.uuid), rc);
 	}
 out:
-	D_RWLOCK_UNLOCK(&smd_store.ss_rwlock);
+	smd_unlock(&smd_store);
 	return rc;
 }
 
@@ -211,7 +211,7 @@ smd_pool_get(uuid_t pool_id, struct smd_pool_info **pool_info)
 	D_ASSERT(!daos_handle_is_inval(smd_store.ss_pool_hdl));
 
 	uuid_copy(key_pool.uuid, pool_id);
-	D_RWLOCK_RDLOCK(&smd_store.ss_rwlock);
+	smd_lock(&smd_store);
 
 	d_iov_set(&key, &key_pool, sizeof(key_pool));
 	d_iov_set(&val, &entry, sizeof(entry));
@@ -230,7 +230,7 @@ smd_pool_get(uuid_t pool_id, struct smd_pool_info **pool_info)
 	}
 	*pool_info = info;
 out:
-	D_RWLOCK_UNLOCK(&smd_store.ss_rwlock);
+	smd_unlock(&smd_store);
 	return rc;
 }
 
@@ -245,45 +245,47 @@ smd_pool_get_blob(uuid_t pool_id, int tgt_id, uint64_t *blob_id)
 	D_ASSERT(!daos_handle_is_inval(smd_store.ss_pool_hdl));
 
 	uuid_copy(key_pool.uuid, pool_id);
-	D_RWLOCK_RDLOCK(&smd_store.ss_rwlock);
+	smd_lock(&smd_store);
 
 	d_iov_set(&key, &key_pool, sizeof(key_pool));
 	d_iov_set(&val, &entry, sizeof(entry));
 	rc = dbtree_fetch(smd_store.ss_pool_hdl, BTR_PROBE_EQ,
 			  DAOS_INTENT_DEFAULT, &key, NULL, &val);
 	if (rc) {
-		D_ERROR("Fetch pool "DF_UUID" failed. %d\n",
-			DP_UUID(&key_pool.uuid), rc);
+		D_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MGMT,
+			 "Fetch pool "DF_UUID" failed. %d\n",
+			 DP_UUID(&key_pool.uuid), rc);
 		goto out;
 	}
 
 	tgt_idx = get_tgt_idx(&entry, tgt_id);
 	if (tgt_idx == -1) {
-		D_ERROR("Pool "DF_UUID" target %d not found.\n",
+		D_DEBUG(DB_MGMT, "Pool "DF_UUID" target %d not found.\n",
 			DP_UUID(key_pool.uuid), tgt_id);
 		rc = -DER_NONEXIST;
 		goto out;
 	}
 	*blob_id = entry.spe_blobs[tgt_idx];
 out:
-	D_RWLOCK_UNLOCK(&smd_store.ss_rwlock);
+	smd_unlock(&smd_store);
 	return rc;
 }
 
 int
-smd_pool_list(d_list_t *pool_list)
+smd_pool_list(d_list_t *pool_list, int *pools)
 {
 	struct smd_pool_info	*info;
 	struct smd_pool_entry	 entry = { 0 };
 	daos_handle_t		 iter_hdl;
 	struct d_uuid		 key_pool;
 	d_iov_t			 key, val;
+	int			 pool_cnt = 0;
 	int			 rc;
 
 	D_ASSERT(pool_list && d_list_empty(pool_list));
 	D_ASSERT(!daos_handle_is_inval(smd_store.ss_pool_hdl));
 
-	D_RWLOCK_RDLOCK(&smd_store.ss_rwlock);
+	smd_lock(&smd_store);
 
 	rc = dbtree_iter_prepare(smd_store.ss_pool_hdl, 0, &iter_hdl);
 	if (rc) {
@@ -319,6 +321,7 @@ smd_pool_list(d_list_t *pool_list)
 		}
 		d_list_add_tail(&info->spi_link, pool_list);
 
+		pool_cnt++;
 		rc = dbtree_iter_next(iter_hdl);
 		if (rc) {
 			if (rc != -DER_NONEXIST)
@@ -331,6 +334,10 @@ smd_pool_list(d_list_t *pool_list)
 done:
 	dbtree_iter_finish(iter_hdl);
 out:
-	D_RWLOCK_UNLOCK(&smd_store.ss_rwlock);
+	smd_unlock(&smd_store);
+
+	/* return pool count along with the pool list */
+	*pools = pool_cnt;
+
 	return rc;
 }

@@ -30,8 +30,7 @@ import avocado
 from apricot import Test, skipForTicket
 
 
-from daos_api import DaosPool, DaosContainer, IORequest
-from daos_api import DaosApiError
+from pydaos.raw import DaosPool, DaosContainer, IORequest, DaosApiError
 
 class CreateManyDkeys(Test):
     """
@@ -70,7 +69,7 @@ class CreateManyDkeys(Test):
         self.container.open()
 
         ioreq = IORequest(self.context, self.container, None)
-        epoch = self.container.get_new_epoch()
+        epoch = self.container.get_new_tx()
         c_epoch = ctypes.c_uint64(epoch)
 
         print("Started Writing the Dataset-----------\n")
@@ -93,7 +92,7 @@ class CreateManyDkeys(Test):
                 sys.stdout.flush()
                 last_key = key + inc
 
-        self.container.commit_epoch(c_epoch)
+        self.container.commit_tx(c_epoch)
 
         print("Started Verification of the Dataset-----------\n")
         last_key = inc
@@ -132,7 +131,7 @@ class CreateManyDkeys(Test):
         Test Description: Test many of dkeys in same object.
         Use Cases: 1. large key counts
                    2. space reclaimation after destroy
-        :avocado: tags=object,vm,many_dkeys
+        :avocado: tags=all,full,small,object,many_dkeys
 
         """
 

@@ -451,3 +451,81 @@ ds_pool_check_failed_replicas(struct pool_map *map, d_rank_list_t *replicas,
 	}
 	return 0;
 }
+
+/** The caller are responsible for freeing the ranks */
+int ds_pool_get_ranks(const uuid_t pool_uuid, int status,
+		      d_rank_list_t *ranks)
+{
+	struct ds_pool	*pool;
+	int		rc;
+
+	pool = ds_pool_lookup(pool_uuid);
+	if (pool == NULL)
+		return 0;
+
+	/* This may not be the pool leader node, so down targets
+	 * may not be updated, then the following collective RPC
+	 * might be timeout. XXX
+	 */
+	ABT_rwlock_rdlock(pool->sp_lock);
+	rc = map_ranks_init(pool->sp_map, status, ranks);
+	ABT_rwlock_unlock(pool->sp_lock);
+	if (rc != 0)
+		D_ERROR(DF_UUID": failed to create rank list: %d\n",
+			DP_UUID(pool->sp_uuid), rc);
+
+	ds_pool_put(pool);
+	return rc;
+}
+
+/* Get failed target index on the current node */
+int ds_pool_get_failed_tgt_idx(const uuid_t pool_uuid, int **failed_tgts,
+			       unsigned int *failed_tgts_cnt)
+{
+	struct ds_pool		*pool;
+	struct pool_target	**tgts = NULL;
+	d_rank_t		myrank;
+	int			rc;
+
+	*failed_tgts_cnt = 0;
+	pool = ds_pool_lookup(pool_uuid);
+	if (pool == NULL || pool->sp_map == NULL)
+		return 0;
+
+	/* Check if we need excluded the failure targets, NB:
+	 * since the ranks in the pool map are ranks of primary
+	 * group, so we have to use primary group here.
+	 */
+	rc = crt_group_rank(NULL, &myrank);
+	if (rc) {
+		D_ERROR("Can not get rank %d\n", rc);
+		D_GOTO(output, rc);
+	}
+
+	rc = pool_map_find_failed_tgts_by_rank(pool->sp_map, &tgts,
+					       failed_tgts_cnt, myrank);
+	if (rc) {
+		D_ERROR("get failed tgts %d\n", rc);
+		D_GOTO(output, rc);
+	}
+
+	if (*failed_tgts_cnt != 0) {
+		int i;
+
+		D_ALLOC(*failed_tgts, *failed_tgts_cnt * sizeof(int));
+		if (*failed_tgts == NULL) {
+			D_FREE(tgts);
+			*failed_tgts_cnt = 0;
+			D_GOTO(output, rc = -DER_NOMEM);
+		}
+		for (i = 0; i < *failed_tgts_cnt; i++)
+			(*failed_tgts)[i] = tgts[i]->ta_comp.co_index;
+
+		D_FREE(tgts);
+	}
+
+output:
+	if (pool)
+		ds_pool_put(pool);
+	return rc;
+}

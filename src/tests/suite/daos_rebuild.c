@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -354,6 +354,10 @@ static void
 rebuild_pool_destroy(test_arg_t *arg)
 {
 	test_teardown((void **)&arg);
+	/* make sure IV and GC release refcount on pool and free space,
+	 * otherwise rebuild test might run into ENOSPACE
+	 */
+	sleep(1);
 }
 
 static void
@@ -1585,8 +1589,8 @@ rebuild_master_failure(void **state)
 {
 	test_arg_t		*arg = *state;
 	daos_obj_id_t		oids[OBJ_NR];
-	daos_pool_info_t	pinfo = { 0 };
-	daos_pool_info_t	pinfo_new = { 0 };
+	daos_pool_info_t	pinfo = {0};
+	daos_pool_info_t	pinfo_new = {0};
 	int			i;
 	int			rc;
 
@@ -1915,6 +1919,33 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_fail_all_replicas, rebuild_sub_setup, test_case_teardown},
 };
 
+/* TODO: Enable aggregation once stable view rebuild is done. */
+int
+rebuild_test_setup(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	if (arg && arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DSS_DISABLE_AGGREGATION,
+				     1, 0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+	return 0;
+}
+
+int
+rebuild_test_teardown(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	if (arg && arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DSS_DISABLE_AGGREGATION,
+				     0, 0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	test_teardown(state);
+	return 0;
+}
+
 int
 run_daos_rebuild_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
@@ -1928,7 +1959,7 @@ run_daos_rebuild_test(int rank, int size, int *sub_tests, int sub_tests_size)
 
 	rc = run_daos_sub_tests(rebuild_tests, ARRAY_SIZE(rebuild_tests),
 				REBUILD_POOL_SIZE, sub_tests, sub_tests_size,
-				NULL, NULL);
+				rebuild_test_setup, rebuild_test_teardown);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 

@@ -85,6 +85,9 @@
 	X(DAOS_OBJ_RPC_QUERY_KEY,					\
 		0, &CQF_obj_query_key,					\
 		ds_obj_query_key_handler, NULL),			\
+	X(DAOS_OBJ_RPC_SYNC,						\
+		0, &CQF_obj_sync,					\
+		ds_obj_sync_handler, NULL),				\
 	X(DAOS_OBJ_RPC_TGT_UPDATE,					\
 		0, &CQF_obj_update,					\
 		ds_obj_tgt_update_handler, NULL),			\
@@ -135,23 +138,22 @@ enum obj_rpc_flags {
 	((daos_key_t)		(orw_dkey)		CRT_VAR) \
 	((struct dtx_id)	(orw_dti_cos)		CRT_ARRAY) \
 	((daos_iod_t)		(orw_iods)		CRT_ARRAY) \
-	((d_sg_list_t)	(orw_sgls)		CRT_ARRAY) \
+	((d_sg_list_t)		(orw_sgls)		CRT_ARRAY) \
 	((crt_bulk_t)		(orw_bulks)		CRT_ARRAY) \
 	((struct daos_shard_tgt) (orw_shard_tgts)	CRT_ARRAY)
 
 #define DAOS_OSEQ_OBJ_RW	/* output fields */		 \
 	((int32_t)		(orw_ret)		CRT_VAR) \
 	((uint32_t)		(orw_map_version)	CRT_VAR) \
-	((uint64_t)		(orw_attr)		CRT_VAR) \
 	((uint64_t)		(orw_dkey_conflict)	CRT_VAR) \
 	((struct dtx_id)	(orw_dti_conflict)	CRT_VAR) \
 	((daos_size_t)		(orw_sizes)		CRT_ARRAY) \
-	((d_sg_list_t)	(orw_sgls)		CRT_ARRAY)	   \
+	((d_sg_list_t)		(orw_sgls)		CRT_ARRAY) \
 	((uint32_t)		(orw_nrs)		CRT_ARRAY)
 
-CRT_RPC_DECLARE(obj_rw, DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
-CRT_RPC_DECLARE(obj_update, DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
-CRT_RPC_DECLARE(obj_fetch, DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
+CRT_RPC_DECLARE(obj_rw,		DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
+CRT_RPC_DECLARE(obj_update,	DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
+CRT_RPC_DECLARE(obj_fetch,	DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 
 /* object Enumerate in/out */
 #define DAOS_ISEQ_OBJ_KEY_ENUM	/* input fields */		 \
@@ -169,7 +171,7 @@ CRT_RPC_DECLARE(obj_fetch, DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 	((daos_anchor_t)	(oei_anchor)		CRT_VAR) \
 	((daos_anchor_t)	(oei_dkey_anchor)	CRT_VAR) \
 	((daos_anchor_t)	(oei_akey_anchor)	CRT_VAR) \
-	((d_sg_list_t)	(oei_sgl)		CRT_VAR) \
+	((d_sg_list_t)		(oei_sgl)		CRT_VAR) \
 	((crt_bulk_t)		(oei_bulk)		CRT_VAR) \
 	((crt_bulk_t)		(oei_kds_bulk)		CRT_VAR)
 
@@ -234,6 +236,22 @@ CRT_RPC_DECLARE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
 	((daos_recx_t)		(okqo_recx)		CRT_VAR)
 
 CRT_RPC_DECLARE(obj_query_key, DAOS_ISEQ_OBJ_QUERY_KEY, DAOS_OSEQ_OBJ_QUERY_KEY)
+
+#define DAOS_ISEQ_OBJ_SYNC /* input fields */			 \
+	((uuid_t)		(osi_co_hdl)		CRT_VAR) \
+	((uuid_t)		(osi_pool_uuid)		CRT_VAR) \
+	((uuid_t)		(osi_co_uuid)		CRT_VAR) \
+	((daos_unit_oid_t)	(osi_oid)		CRT_VAR) \
+	((uint64_t)		(osi_epoch)		CRT_VAR) \
+	((uint32_t)		(osi_map_ver)		CRT_VAR) \
+	((uint32_t)		(osi_padding)		CRT_VAR)
+
+#define DAOS_OSEQ_OBJ_SYNC /* output fields */			 \
+	((int32_t)		(oso_ret)		CRT_VAR) \
+	((uint32_t)		(oso_map_version)	CRT_VAR) \
+	((uint64_t)		(oso_epoch)		CRT_VAR)
+
+CRT_RPC_DECLARE(obj_sync, DAOS_ISEQ_OBJ_SYNC, DAOS_OSEQ_OBJ_SYNC)
 
 static inline int
 obj_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,

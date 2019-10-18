@@ -49,8 +49,14 @@ type DefaultDebugLogger struct {
 
 // Debugf emits a formatted debug message.
 func (l *DefaultDebugLogger) Debugf(format string, args ...interface{}) {
+	depth := logOutputDepth
+	if len(args) == 0 {
+		// Adjust for the extra call to Debug()
+		depth += 1
+	}
+
 	out := fmt.Sprintf(format, args...)
-	if err := l.log.Output(logOutputDepth, out); err != nil {
+	if err := l.log.Output(depth, out); err != nil {
 		fmt.Fprintf(os.Stderr, "logger Debugf() failed: %s\n", err)
 	}
 }

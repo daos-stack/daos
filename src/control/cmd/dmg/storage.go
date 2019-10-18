@@ -25,67 +25,112 @@ package main
 
 import (
 	"github.com/daos-stack/daos/src/control/client"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	log "github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/common"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	types "github.com/daos-stack/daos/src/control/common/storage"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
-// StorCmd is the struct representing the top-level storage subcommand.
-type StorCmd struct {
-	Scan   ScanStorCmd   `command:"scan" alias:"s" description:"Scan SCM and NVMe storage attached to remote servers."`
-	Format FormatStorCmd `command:"format" alias:"f" description:"Format SCM and NVMe storage attached to remote servers."`
-	Update UpdateStorCmd `command:"fwupdate" alias:"u" description:"Update firmware on NVMe storage attached to remote servers."`
+// storageCmd is the struct representing the top-level storage subcommand.
+type storageCmd struct {
+	Prepare storagePrepareCmd `command:"prepare" alias:"p" description:"Prepare SCM and NVMe storage attached to remote servers."`
+	Scan    storageScanCmd    `command:"scan" alias:"s" description:"Scan SCM and NVMe storage attached to remote servers."`
+	Format  storageFormatCmd  `command:"format" alias:"f" description:"Format SCM and NVMe storage attached to remote servers."`
+	Update  storageUpdateCmd  `command:"fwupdate" alias:"u" description:"Update firmware on NVMe storage attached to remote servers."`
+	Query   storageQueryCmd   `command:"query" alias:"q" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
 }
 
-// ScanStorCmd is the struct representing the scan storage subcommand.
-type ScanStorCmd struct {
-	broadcastCmd
+// storagePrepareCmd is the struct representing the prep storage subcommand.
+type storagePrepareCmd struct {
+	logCmd
 	connectedCmd
+	types.StoragePrepareCmd
 }
 
-// run NVMe and SCM storage query on all connected servers
-func scanStor(conns client.Connect) {
-	cCtrlrs, cModules := conns.ScanStorage()
-	log.Infof("NVMe SSD controller and constituent namespaces:\n%s", cCtrlrs)
-	log.Infof("SCM modules:\n%s", cModules)
-}
+// Execute is run when storagePrepareCmd activates
+func (cmd *storagePrepareCmd) Execute(args []string) error {
+	var nReq *ctlpb.PrepareNvmeReq
+	var sReq *ctlpb.PrepareScmReq
 
-// Execute is run when ScanStorCmd activates
-func (s *ScanStorCmd) Execute(args []string) error {
-	scanStor(s.conns)
+	prepNvme, prepScm, err := cmd.Validate()
+	if err != nil {
+		return err
+	}
+
+	if prepNvme {
+		nReq = &ctlpb.PrepareNvmeReq{
+			Pciwhitelist: cmd.PCIWhiteList,
+			Nrhugepages:  int32(cmd.NrHugepages),
+			Targetuser:   cmd.TargetUser,
+			Reset_:       cmd.Reset,
+		}
+	}
+
+	if prepScm {
+		if err := cmd.Warn(cmd.log); err != nil {
+			return err
+		}
+
+		sReq = &ctlpb.PrepareScmReq{Reset_: cmd.Reset}
+	}
+
+	cmd.log.Infof("NVMe & SCM preparation:\n%s",
+		cmd.conns.StoragePrepare(&ctlpb.StoragePrepareReq{Nvme: nReq, Scm: sReq}))
+
 	return nil
 }
 
-// FormatStorCmd is the struct representing the format storage subcommand.
-type FormatStorCmd struct {
-	broadcastCmd
+// storageScanCmd is the struct representing the scan storage subcommand.
+type storageScanCmd struct {
+	logCmd
+	connectedCmd
+}
+
+// run NVMe and SCM storage and health query on all connected servers
+func storageScan(log logging.Logger, conns client.Connect) {
+	cCtrlrs, cModules, cPmems := conns.StorageScan()
+	log.Infof("NVMe SSD controllers and constituent namespaces:\n%s", cCtrlrs)
+	log.Infof("SCM modules:\n%s", cModules)
+	log.Infof("PMEM device files:\n%s", cPmems)
+}
+
+// Execute is run when storageScanCmd activates
+func (s *storageScanCmd) Execute(args []string) error {
+	storageScan(s.log, s.conns)
+	return nil
+}
+
+// storageFormatCmd is the struct representing the format storage subcommand.
+type storageFormatCmd struct {
+	logCmd
 	connectedCmd
 	Force bool `short:"f" long:"force" description:"Perform format without prompting for confirmation"`
 }
 
 // run NVMe and SCM storage format on all connected servers
-func formatStor(conns client.Connect, force bool) {
+func storageFormat(log logging.Logger, conns client.Connect, force bool) {
 	log.Info(
 		"This is a destructive operation and storage devices " +
 			"specified in the server config file will be erased.\n" +
 			"Please be patient as it may take several minutes.\n")
 
-	if force || getConsent() {
+	if force || common.GetConsent(log) {
 		log.Info("")
-		cCtrlrResults, cMountResults := conns.FormatStorage()
+		cCtrlrResults, cMountResults := conns.StorageFormat()
 		log.Infof("NVMe storage format results:\n%s", cCtrlrResults)
 		log.Infof("SCM storage format results:\n%s", cMountResults)
 	}
 }
 
-// Execute is run when FormatStorCmd activates
-func (s *FormatStorCmd) Execute(args []string) error {
-	formatStor(s.conns, s.Force)
+// Execute is run when storageFormatCmd activates
+func (s *storageFormatCmd) Execute(args []string) error {
+	storageFormat(s.log, s.conns, s.Force)
 	return nil
 }
 
-// UpdateStorCmd is the struct representing the update storage subcommand.
-type UpdateStorCmd struct {
-	broadcastCmd
+// storageUpdateCmd is the struct representing the update storage subcommand.
+type storageUpdateCmd struct {
+	logCmd
 	connectedCmd
 	Force        bool   `short:"f" long:"force" description:"Perform update without prompting for confirmation"`
 	NVMeModel    string `short:"m" long:"nvme-model" description:"Only update firmware on NVMe SSDs with this model name/number." required:"1"`
@@ -95,28 +140,29 @@ type UpdateStorCmd struct {
 }
 
 // run NVMe and SCM storage update on all connected servers
-func updateStor(conns client.Connect, req *pb.UpdateStorageReq, force bool) {
+func storageUpdate(log logging.Logger, conns client.Connect, req *ctlpb.StorageUpdateReq, force bool) {
 	log.Info(
 		"This could be a destructive operation and storage devices " +
 			"specified in the server config file will have firmware " +
 			"updated. Please check this is a supported upgrade path " +
 			"and be patient as it may take several minutes.\n")
 
-	if force || getConsent() {
+	if force || common.GetConsent(log) {
 		log.Info("")
-		cCtrlrResults, cModuleResults := conns.UpdateStorage(req)
+		cCtrlrResults, cModuleResults := conns.StorageUpdate(req)
 		log.Infof("NVMe storage update results:\n%s", cCtrlrResults)
 		log.Infof("SCM storage update results:\n%s", cModuleResults)
 	}
 }
 
-// Execute is run when UpdateStorCmd activates
-func (u *UpdateStorCmd) Execute(args []string) error {
+// Execute is run when storageUpdateCmd activates
+func (u *storageUpdateCmd) Execute(args []string) error {
 	// only populate nvme fwupdate params for the moment
-	updateStor(
+	storageUpdate(
+		u.log,
 		u.conns,
-		&pb.UpdateStorageReq{
-			Nvme: &pb.UpdateNvmeReq{
+		&ctlpb.StorageUpdateReq{
+			Nvme: &ctlpb.UpdateNvmeReq{
 				Model: u.NVMeModel, Startrev: u.NVMeStartRev,
 				Path: u.NVMeFwPath, Slot: int32(u.NVMeFwSlot),
 			},
@@ -171,7 +217,7 @@ func (u *UpdateStorCmd) Execute(args []string) error {
 //}
 
 //func nvmeTaskLookup(
-//	c *ishell.Context, ctrlrs []*pb.NvmeController, feature string) error {
+//	c *ishell.Context, ctrlrs []*ctlpb.NvmeController, feature string) error {
 //
 //	switch feature {
 //	case "nvme-fw-update":

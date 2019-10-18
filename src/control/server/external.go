@@ -68,6 +68,7 @@ type External interface {
 	lookupGroup(string) (*user.Group, error)
 	listGroups(*user.User) ([]string, error)
 	chownR(string, int, int) error
+	checkSudo() (bool, string)
 	getHistory() []string
 }
 
@@ -267,4 +268,13 @@ func (e *ext) chownR(root string, uid int, gid int) error {
 
 		return os.Chown(name, uid, gid)
 	})
+}
+
+func (e *ext) checkSudo() (bool, string) {
+	usr := os.Getenv("SUDO_USER")
+	if usr == "" {
+		usr = "root"
+	}
+
+	return (os.Geteuid() == 0), usr
 }

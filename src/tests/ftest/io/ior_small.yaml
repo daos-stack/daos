@@ -13,6 +13,9 @@ hosts:
 timeout: 500
 server_config:
     name: daos_server
+    server:
+        bdev_class: nvme
+        bdev_list: ["0000:81:00.0","0000:da:00.0"]
 pool:
     createmode:
         mode_RW:
@@ -29,6 +32,8 @@ ior:
             np: 16
     test_file: daos:testFile
     repetitions: 2
+# Remove the below line once DAOS-3143 is resolved
+    daos_destroy: False
     iorflags: !mux
         ssf:
           flags: "-v -W -w -r -R"
@@ -48,8 +53,9 @@ ior:
           objectclass: !mux
             oclass_SX:
               daos_oclass: "SX"
-            oclass_RP_2GX:
-              daos_oclass: "RP_2GX"
+# Commenting it out until DAOS-3097/3143 is resolved.
+#            oclass_RP_2GX:
+#              daos_oclass: "RP_2GX"
         fpp:
           flags: "-v -W -w -r -R -F"
           api: DAOS

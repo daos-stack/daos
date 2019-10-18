@@ -62,19 +62,13 @@ ir_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 		return true;
 	}
 
-	/* Now check the pool name */
-	if (strncmp(ir->ir_id.irid_dfs->dfs_pool,
-		    ir_id->irid_dfs->dfs_pool,
-		    NAME_MAX) != 0) {
+	if (uuid_compare(ir->ir_id.irid_dfs->dfs_pool,
+			 ir_id->irid_dfs->dfs_pool) != 0)
 		return false;
-	}
 
-	/* Now check the container name */
-	if (strncmp(ir->ir_id.irid_dfs->dfs_cont,
-		    ir_id->irid_dfs->dfs_cont,
-			NAME_MAX) != 0) {
+	if (uuid_compare(ir->ir_id.irid_dfs->dfs_cont,
+			 ir_id->irid_dfs->dfs_cont) != 0)
 		return false;
-	}
 
 	/* This case means it's the same container name, but a different dfs
 	 * struct which can happen with repeated lookups of already open
@@ -174,8 +168,8 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	/* Max read and max write are handled differently because of the way
 	 * the interception library handles reads vs writes
 	 */
-	fs_handle->dpi_max_read = 1024*1024*4;
-	fs_handle->dpi_proj.max_write = 1024*1024*4;
+	fs_handle->dpi_max_read = 1024 * 1024 * 4;
+	fs_handle->dpi_max_write = 1024 * 1024 * 4;
 
 	rc = d_hash_table_create_inplace(D_HASH_FT_RWLOCK | D_HASH_FT_EPHEMERAL,
 					 3, fs_handle, &ie_hops,
@@ -187,8 +181,6 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 					 &ir_hops, &fs_handle->dpi_irt);
 	if (rc != 0)
 		D_GOTO(err, 0);
-
-	fs_handle->dpi_proj.progress_thread = 1;
 
 	atomic_fetch_add(&fs_handle->dpi_ino_next, 2);
 
@@ -340,7 +332,6 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 		DFUSE_TRA_DEBUG(ie, "Dropping %d", ref);
 
 		refs += ref;
-		ie->ie_parent = 0;
 		d_hash_rec_ndecref(&fs_handle->dpi_iet, ref, rlink);
 		handles++;
 	} while (rlink);
@@ -359,7 +350,23 @@ dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle)
 		rcp = EINVAL;
 	}
 
-	rc = d_hash_table_destroy_inplace(&fs_handle->dpi_irt, true);
+	DFUSE_TRA_INFO(fs_handle, "Draining inode record table");
+	do {
+		struct dfuse_inode_record *ir;
+
+		rlink = d_hash_rec_first(&fs_handle->dpi_irt);
+
+		if (!rlink)
+			break;
+
+		ir = container_of(rlink, struct dfuse_inode_record, ir_htl);
+
+		d_hash_rec_delete_at(&fs_handle->dpi_irt, rlink);
+
+		D_FREE(ir);
+	} while (rlink);
+
+	rc = d_hash_table_destroy_inplace(&fs_handle->dpi_irt, false);
 	if (rc) {
 		DFUSE_TRA_WARNING(fs_handle, "Failed to close inode handles");
 		rcp = EINVAL;

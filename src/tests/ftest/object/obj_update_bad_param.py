@@ -30,7 +30,7 @@ from avocado import main
 from apricot import TestWithServers
 
 
-from daos_api import DaosPool, DaosContainer, DaosApiError
+from pydaos.raw import DaosPool, DaosContainer, DaosApiError
 
 class ObjUpdateBadParam(TestWithServers):
     """
@@ -48,7 +48,7 @@ class ObjUpdateBadParam(TestWithServers):
 
         Test Description: Pass a bogus object handle, should return bad handle.
 
-        :avocado: tags=object,objupdate,objbadhand,regression,vm,small
+        :avocado: tags=all,object,full_regression,small,objbadhand
         """
         try:
             # parameters used in pool create
@@ -116,7 +116,7 @@ class ObjUpdateBadParam(TestWithServers):
 
         Test Description: Pass a dkey and an akey that is null.
 
-        :avocado: tags=object,objupdate,objupdatenull,regression,vm,small
+        :avocado: tags=all,object,full_regression,small,objupdatenull
         """
         try:
             # parameters used in pool create
