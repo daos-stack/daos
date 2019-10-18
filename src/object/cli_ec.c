@@ -479,7 +479,7 @@ ec_get_tgt_set(daos_iod_t *iods, unsigned int nr, struct daos_oclass_attr *oca,
 				unsigned int cell = (ext_idx % ss)/len;
 
 				*tgt_set |= 1UL << (cell+p);
-				if (*tgt_set == full && parity_include) {
+				if ((*tgt_set == full) && parity_include) {
 					*tgt_set = 0;
 					return;
 				} else if (*tgt_set == full) {
@@ -736,12 +736,14 @@ ec_obj_update_encode(tse_task_t *task, daos_obj_id_t oid,
 		 * the update should go to all targets.
 		 */
 		*tgt_set = 0;
-	} else {
+	} else if (head) {
 		/* Called for updates with no full stripes.
 		 * Builds a bit map only if forwarding targets are
 		 * a proper subset. Sets tgt_set to zero if all targets
 		 * are addressed.
 		 */
+		ec_get_tgt_set(head->iods, args->nr, oca, true, tgt_set);
+	} else {
 		ec_get_tgt_set(args->iods, args->nr, oca, true, tgt_set);
 	}
 
