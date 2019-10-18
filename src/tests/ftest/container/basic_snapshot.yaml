@@ -1,5 +1,6 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
+timeout: 120
 hosts:
     test_machines:
         - boro-A
@@ -18,12 +19,12 @@ pool:
             size: 8489934592
 object_class: !mux
     OC_S1:
-        obj_class: 200
+        obj_class: OC_S1
     OC_S4:
-        obj_class: 202
+        obj_class: OC_S4
     OC_SX:
-        obj_class: 214
+        obj_class: OC_SX
     OC_RP_2G1:
-        obj_class: 220
+        obj_class: OC_RP_2G1
     OC_RP_2G2:
-        obj_class: 221
+        obj_class: OC_RP_2G2
