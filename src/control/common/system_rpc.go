@@ -71,10 +71,13 @@ func MembersFromPB(log logging.Logger, pbMembers []*ctlpb.SystemMember) SystemMe
 func MemberResultsToPB(results SystemMemberResults) []*ctlpb.SystemStopResp_Result {
 	pbResults := make([]*ctlpb.SystemStopResp_Result, 0, len(results))
 
-	for _, mr := range results {
-		pbResults = append(pbResults, &ctlpb.SystemStopResp_Result{
-			Id: mr.ID, Action: mr.Action, Errored: mr.Err == nil, Msg: mr.Err.Error(),
-		})
+	for _, r := range results {
+		pbResult := &ctlpb.SystemStopResp_Result{Id: r.ID, Action: r.Action}
+		if r.Err != nil {
+			pbResult.Errored = true
+			pbResult.Msg = r.Err.Error()
+		}
+		pbResults = append(pbResults, pbResult)
 	}
 
 	return pbResults
