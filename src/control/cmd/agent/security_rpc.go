@@ -23,10 +23,6 @@
 
 package main
 
-// #cgo CFLAGS: -I${SRCDIR}/../../include
-// #include <daos/drpc_modules.h>
-import "C"
-
 import (
 	"os/user"
 	"strconv"
@@ -37,13 +33,6 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/security/auth"
-)
-
-// Module id for the Agent security module
-const securityModuleID int32 = C.DRPC_MODULE_SEC_AGENT
-
-const (
-	methodRequestCredentials int32 = C.DRPC_METHOD_SEC_AGENT_REQUEST_CREDS
 )
 
 // userInfo is an internal implementation of the security.User interface
@@ -111,7 +100,7 @@ func NewSecurityModule(tc *security.TransportConfig) *SecurityModule {
 
 // HandleCall is the handler for calls to the SecurityModule
 func (m *SecurityModule) HandleCall(client *drpc.Client, method int32, body []byte) ([]byte, error) {
-	if method != methodRequestCredentials {
+	if method != drpc.MethodRequestCredentials {
 		return nil, errors.Errorf("Attempt to call unregistered function")
 	}
 
@@ -144,5 +133,5 @@ func (m *SecurityModule) InitModule(state drpc.ModuleState) {
 
 //ID will return Security module ID
 func (m *SecurityModule) ID() int32 {
-	return securityModuleID
+	return drpc.ModuleSecurityAgent
 }

@@ -32,6 +32,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
 
@@ -92,7 +93,7 @@ func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.DaosRank) (*mgmtpb
 		return nil, errors.Errorf("rank %d not found on this server", req.Rank)
 	}
 
-	dresp, err := mi.CallDrpc(mgmtModuleID, killRank, req)
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodKillRank, req)
 	if err != nil {
 		return nil, err
 	}

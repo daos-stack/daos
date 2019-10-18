@@ -36,6 +36,8 @@ import (
 	"github.com/daos-stack/daos/src/control/security/acl"
 )
 
+const moduleID int32 = drpc.ModuleSecurity
+
 // mockDrpcClient is a mock of the DomainSocketClient interface
 type mockDrpcClient struct {
 	sync.Mutex

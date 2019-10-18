@@ -36,6 +36,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -166,7 +167,7 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(mgmtModuleID, getAttachInfo, req)
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodGetAttachInfo, req)
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +217,7 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(mgmtModuleID, join, req)
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodJoin, req)
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +273,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(mgmtModuleID, poolCreate, req)
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolCreate, req)
 	if err != nil {
 		return nil, err
 	}
@@ -296,7 +297,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(mgmtModuleID, poolDestroy, req)
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolDestroy, req)
 	if err != nil {
 		return nil, err
 	}
@@ -320,7 +321,7 @@ func (svc *mgmtSvc) BioHealthQuery(ctx context.Context, req *mgmtpb.BioHealthReq
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(mgmtModuleID, bioHealth, req)
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodBioHealth, req)
 	if err != nil {
 		return nil, err
 	}
@@ -342,7 +343,7 @@ func (svc *mgmtSvc) SmdListDevs(ctx context.Context, req *mgmtpb.SmdDevReq) (*mg
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(mgmtModuleID, smdDevs, req)
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodSmdDevs, req)
 	if err != nil {
 		return nil, err
 	}
@@ -362,7 +363,7 @@ func (svc *mgmtSvc) SmdListPools(ctx context.Context, req *mgmtpb.SmdPoolReq) (*
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(mgmtModuleID, smdPools, req)
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodSmdPools, req)
 	if err != nil {
 		return nil, err
 	}

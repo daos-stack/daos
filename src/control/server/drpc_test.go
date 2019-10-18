@@ -308,7 +308,7 @@ func TestDrpc_Errors(t *testing.T) {
 				ConnectOutputError:    tc.connectError,
 			}
 
-			_, err := makeDrpcCall(mc, mgmtModuleID, poolCreate, &mgmtpb.PoolCreateReq{})
+			_, err := makeDrpcCall(mc, drpc.ModuleMgmt, drpc.MethodPoolCreate, &mgmtpb.PoolCreateReq{})
 			common.CmpErr(t, tc.expErr, err)
 		})
 	}

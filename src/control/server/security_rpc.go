@@ -23,10 +23,6 @@
 
 package server
 
-// #cgo CFLAGS: -I${SRCDIR}/../../include
-// #include <daos/drpc_modules.h>
-import "C"
-
 import (
 	"crypto"
 	"encoding/hex"
@@ -39,13 +35,6 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/security/auth"
-)
-
-// Module id for the Server security module
-const securityModuleID int32 = C.DRPC_MODULE_SEC
-
-const (
-	methodValidateCredentials int32 = C.DRPC_METHOD_SEC_VALIDATE_CREDS
 )
 
 // SecurityModule is the security drpc module struct
@@ -96,7 +85,7 @@ func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error)
 
 // HandleCall is the handler for calls to the SecurityModule
 func (m *SecurityModule) HandleCall(client *drpc.Client, method int32, body []byte) ([]byte, error) {
-	if method != methodValidateCredentials {
+	if method != drpc.MethodValidateCredentials {
 		return nil, errors.Errorf("Attempt to call unregistered function")
 	}
 
@@ -109,5 +98,5 @@ func (m *SecurityModule) InitModule(state drpc.ModuleState) {}
 
 // ID will return Security module ID
 func (m *SecurityModule) ID() int32 {
-	return securityModuleID
+	return drpc.ModuleSecurity
 }

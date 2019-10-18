@@ -23,10 +23,6 @@
 
 package server
 
-// #cgo CFLAGS: -I${SRCDIR}/../../include
-// #include <daos/drpc_modules.h>
-import "C"
-
 import (
 	"context"
 
@@ -35,8 +31,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
-
-const moduleID int32 = C.DRPC_MODULE_SEC
 
 // TODO: Get Method IDs from the IO server header file, when it Exists
 const (
@@ -81,7 +75,7 @@ func (s *SecurityService) newDrpcCall(method int32, bodyMessage proto.Message) (
 	}
 
 	return &drpc.Call{
-		Module: moduleID,
+		Module: drpc.ModuleSecurity,
 		Method: method,
 		Body:   bodyBytes,
 	}, nil
