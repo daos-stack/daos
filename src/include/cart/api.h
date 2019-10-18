@@ -396,6 +396,42 @@ crt_req_get(crt_rpc_t *rpc)
 }
 
 /**
+ * Return originator/source rank
+ *
+ * \param[in] req              Pointer to RPC request
+ * \param[out] rank            Returned rank
+ *
+ * \return                     DER_SUCCESS on success or error
+ *                             on failure
+ */
+int
+crt_req_src_rank_get(crt_rpc_t *req, d_rank_t *rank);
+
+/**
+ * Return destination rank
+ *
+ * \param[in] req              Pointer to RPC request
+ * \param[out] rank            Returned rank
+ *
+ * \return                     DER_SUCCESS on success or error
+ *                             on failure
+ */
+int
+crt_req_dst_rank_get(crt_rpc_t *req, d_rank_t *rank);
+
+/**
+ * Return destination tag
+ *
+ * \param[in] req              Pointer to RPC request
+ * \param[out] tag             Returned tag
+ *
+ * \return                     DER_SUCCESS on success or error
+ *                             on failure
+ */
+int
+crt_req_dst_tag_get(crt_rpc_t *req, uint32_t *tag);
+
+/**
  * Return reply buffer
  *
  * \param[in] req              pointer to RPC request

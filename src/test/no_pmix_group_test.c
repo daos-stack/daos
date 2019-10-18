@@ -94,7 +94,14 @@ RPC_DECLARE(CORPC_PING);
 static int
 handler_corpc_ping(crt_rpc_t *rpc)
 {
-	DBG_PRINT("CORPC_HANDLER called\n");
+	d_rank_t		hdr_src_rank;
+	int			rc;
+
+	rc = crt_req_src_rank_get(rpc, &hdr_src_rank);
+	D_ASSERTF(rc == 0, "crt_req_src_rank_get() failed; rc=%d\n", rc);
+
+	DBG_PRINT("CORPC_HANDLER called (src_rank=%d)\n", hdr_src_rank);
+
 	crt_reply_send(rpc);
 
 	return 0;
@@ -105,17 +112,32 @@ handler_ping(crt_rpc_t *rpc)
 {
 	struct RPC_PING_in	*input;
 	int			my_tag;
+	d_rank_t		hdr_dst_rank;
+	uint32_t		hdr_dst_tag;
+	d_rank_t		hdr_src_rank;
+	int			rc;
 
 	input = crt_req_get(rpc);
 
 	crt_context_idx(rpc->cr_ctx, &my_tag);
 
-	DBG_PRINT("Ping handler called on tag: %d\n", my_tag);
 	if (my_tag != input->tag) {
 		D_ERROR("Request was sent to wrong tag. Expected %lu got %d\n",
 			input->tag, my_tag);
 		assert(0);
 	}
+
+	rc = crt_req_src_rank_get(rpc, &hdr_src_rank);
+	D_ASSERTF(rc == 0, "crt_req_src_rank_get() failed; rc=%d\n", rc);
+
+	rc = crt_req_dst_rank_get(rpc, &hdr_dst_rank);
+	D_ASSERTF(rc == 0, "crt_req_dst_rank_get() failed; rc=%d\n", rc);
+
+	rc = crt_req_dst_tag_get(rpc, &hdr_dst_tag);
+	D_ASSERTF(rc == 0, "crt_req_dst_tag_get() failed; rc=%d\n", rc);
+
+	DBG_PRINT("Ping handler called on %d:%d (src=%d)\n",
+		hdr_dst_rank, hdr_dst_tag, hdr_src_rank);
 
 	crt_reply_send(rpc);
 	return 0;
@@ -348,6 +370,7 @@ int main(int argc, char **argv)
 	/* Set up for DBG_PRINT */
 	opts.self_rank = my_rank;
 	opts.mypid = getpid();
+	opts.is_server = 1;
 
 	rc = d_log_init();
 	assert(rc == 0);
@@ -537,7 +560,7 @@ int main(int argc, char **argv)
 
 
 	/* All ranks except for 0 wait for RPCs. rank=0 initiates test */
-	if (my_rank != 0)
+	if (my_rank != 1)
 		D_GOTO(join, 0);
 
 	/* Wait for all servers to load up */
@@ -628,9 +651,13 @@ int main(int argc, char **argv)
 
 	/* Send shutdown RPC to all nodes except for self */
 	DBG_PRINT("Senidng shutdown to all nodes\n");
-	/* Note rank at i=0 corresponds to 'self' */
-	for (i = 1; i < rank_list->rl_nr; i++) {
+
+	/* Note rank at i=1 corresponds to 'self' */
+	for (i = 0; i < rank_list->rl_nr; i++) {
 		rank = rank_list->rl_ranks[i];
+
+		if (i == 1)
+			continue;
 
 		server_ep.ep_rank = rank;
 		server_ep.ep_tag = 0;

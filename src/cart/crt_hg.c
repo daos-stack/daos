@@ -890,8 +890,8 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 
 	rpc_priv->crp_opc_info = opc_info;
 	rpc_pub->cr_opc = rpc_tmp.crp_pub.cr_opc;
-	rpc_pub->cr_ep.ep_rank = rpc_priv->crp_req_hdr.cch_rank;
-	rpc_pub->cr_ep.ep_tag = rpc_priv->crp_req_hdr.cch_tag;
+	rpc_pub->cr_ep.ep_rank = rpc_priv->crp_req_hdr.cch_dst_rank;
+	rpc_pub->cr_ep.ep_tag = rpc_priv->crp_req_hdr.cch_dst_tag;
 
 	RPC_TRACE(DB_TRACE, rpc_priv,
 		  "(opc: %#x rpc_pub: %p) allocated per RPC request received.\n",

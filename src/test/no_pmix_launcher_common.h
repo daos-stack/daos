@@ -120,16 +120,33 @@ int handler_ping(crt_rpc_t *rpc)
 	struct RPC_PING_out	*output;
 	d_iov_t			iov;
 	int			my_tag;
+	d_rank_t		hdr_dst_rank;
+	uint32_t		hdr_dst_tag;
+	d_rank_t		hdr_src_rank;
+	int			rc;
 
 	input = crt_req_get(rpc);
 	output = crt_reply_get(rpc);
 
+	rc = crt_req_src_rank_get(rpc, &hdr_src_rank);
+	D_ASSERTF(rc == 0, "crt_req_src_rank_get() failed; rc=%d\n", rc);
+
+	rc = crt_req_dst_rank_get(rpc, &hdr_dst_rank);
+	D_ASSERTF(rc == 0, "crt_req_dst_rank_get() failed; rc=%d\n", rc);
+
+	rc = crt_req_dst_tag_get(rpc, &hdr_dst_tag);
+	D_ASSERTF(rc == 0, "crt_req_dst_tag_get() failed; rc=%d\n", rc);
+
 	crt_context_idx(rpc->cr_ctx, &my_tag);
 
-	DBG_PRINT("Ping handler called on tag: %d\n", my_tag);
-	if (my_tag != input->tag) {
-		D_ERROR("Request was sent to wrong tag. Expected %lu got %d\n",
-			input->tag, my_tag);
+	if (my_tag != input->tag || my_tag != hdr_dst_tag) {
+		D_ERROR("Incorrect tag Expected %lu got %d (hdr=%d)\n",
+			input->tag, my_tag, hdr_dst_tag);
+		assert(0);
+	}
+
+	if (hdr_src_rank != CRT_NO_RANK) {
+		D_ERROR("Expected %d got %d\n", CRT_NO_RANK, hdr_src_rank);
 		assert(0);
 	}
 
