@@ -95,6 +95,21 @@ func ExpectError(
 	}
 }
 
+// CmpErr compares two errors for equality or at least close similarity in their messages.
+func CmpErr(t *testing.T, want, got error) {
+	t.Helper()
+
+	if want == got {
+		return
+	}
+	if want == nil || got == nil {
+		t.Fatalf("unexpected error (wanted: %v, got: %v)", want, got)
+	}
+	if !strings.Contains(got.Error(), want.Error()) {
+		t.Fatalf("unexpected error (wanted: %s, got: %s)", want, got)
+	}
+}
+
 // LoadTestFiles reads inputs and outputs from file and do basic sanity checks.
 // Both files contain entries of multiple lines separated by blank line.
 // Return inputs and outputs, both of which are slices of string slices.
