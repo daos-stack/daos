@@ -15,7 +15,7 @@ hosts:
 timeout: 18000
 server_config:
  name: daos_server
- server:
+ servers:
    bdev_class: nvme
    bdev_list: ["0000:81:00.0"]
    targets: 1
