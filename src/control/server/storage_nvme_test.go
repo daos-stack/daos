@@ -231,7 +231,7 @@ func TestDiscoverNvmeSingle(t *testing.T) {
 
 	for _, tt := range tests {
 		log, buf := logging.NewTestLogger(t.Name())
-		defer common.ShowBufferOnFailure(t, buf)()
+		defer common.ShowBufferOnFailure(t, buf)
 
 		c.SocketID = tt.numa
 		pbC.Socketid = tt.numa
@@ -326,7 +326,7 @@ func TestDiscoverNvmeMulti(t *testing.T) {
 
 	for _, tt := range tests {
 		log, buf := logging.NewTestLogger(t.Name())
-		defer common.ShowBufferOnFailure(t, buf)()
+		defer common.ShowBufferOnFailure(t, buf)
 
 		sn := newMockNvmeStorage(
 			log, &mockExt{},
@@ -554,7 +554,7 @@ func TestFormatNvme(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)
 
 			nvmeFormatCalls = []string{}
 
@@ -859,7 +859,7 @@ func TestUpdateNvme(t *testing.T) {
 
 	for _, tt := range tests {
 		log, buf := logging.NewTestLogger(t.Name())
-		defer common.ShowBufferOnFailure(t, buf)()
+		defer common.ShowBufferOnFailure(t, buf)
 
 		config := defaultMockConfig(t)
 		bdCfg := config.Servers[srvIdx].Storage.Bdev
@@ -960,7 +960,7 @@ func TestBurnInNvme(t *testing.T) {
 
 	for _, tt := range tests {
 		log, buf := logging.NewTestLogger(t.Name())
-		defer common.ShowBufferOnFailure(t, buf)()
+		defer common.ShowBufferOnFailure(t, buf)
 
 		sn := defaultMockNvmeStorage(log, &mockExt{})
 
