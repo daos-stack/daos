@@ -187,7 +187,7 @@ func (c *StorageControlService) PrepareScm(req scm.PrepareRequest) (*scm.Prepare
 // ScanNvme scans locally attached SSDs and returns list directly.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
-func (c *StorageControlService) ScanNvme() (types.NvmeControllers, error) {
+func (c *StorageControlService) NvmeScan() (types.NvmeControllers, error) {
 	if err := c.nvme.Discover(); err != nil {
 		return nil, errors.Wrap(err, "NVMe storage scan")
 	}
@@ -198,6 +198,6 @@ func (c *StorageControlService) ScanNvme() (types.NvmeControllers, error) {
 // ScanScm scans locally attached modules, namespaces and state of DCPM config.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
-func (c *StorageControlService) ScanScm() (*scm.ScanResponse, error) {
+func (c *StorageControlService) ScmScan() (*scm.ScanResponse, error) {
 	return c.scm.Scan(scm.ScanRequest{Rescan: true})
 }
