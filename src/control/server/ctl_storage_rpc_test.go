@@ -36,7 +36,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
-	. "github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	. "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/lib/spdk"
@@ -95,7 +95,7 @@ func newMockStorageConfig(
 
 func TestStorageScan(t *testing.T) {
 	ctrlr := MockController("")
-	pbCtrlr := MockControllerPB("")
+	pbCtrlr := common.MockControllerPB("")
 	module := MockModule()
 	errExample := errors.New("example failure")
 
@@ -250,7 +250,7 @@ func TestStorageScan(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)()
 
 			// test for both empty and default config cases
 			config := tt.config
@@ -273,23 +273,23 @@ func TestStorageScan(t *testing.T) {
 			// runs discovery for nvme & scm
 			err := cs.Setup()
 			if err != nil {
-				AssertEqual(t, err.Error(), tt.setupErrMsg, tt.desc)
+				common.AssertEqual(t, err.Error(), tt.setupErrMsg, tt.desc)
 				return
 			}
-			AssertEqual(t, "", tt.setupErrMsg, tt.desc)
+			common.AssertEqual(t, "", tt.setupErrMsg, tt.desc)
 
 			resp, err := cs.StorageScan(context.TODO(), &StorageScanReq{})
 			if err != nil {
-				AssertEqual(t, err.Error(), tt.scanErrMsg, tt.desc)
+				common.AssertEqual(t, err.Error(), tt.scanErrMsg, tt.desc)
 				return
 			}
-			AssertEqual(t, "", tt.scanErrMsg, tt.desc)
+			common.AssertEqual(t, "", tt.scanErrMsg, tt.desc)
 
 			if diff := cmp.Diff(tt.expResp, *resp); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 
-			AssertEqual(t, cs.nvme.initialized, tt.expNvmeInited, tt.desc)
+			common.AssertEqual(t, cs.nvme.initialized, tt.expNvmeInited, tt.desc)
 		})
 	}
 }
@@ -383,7 +383,7 @@ func TestStoragePrepare(t *testing.T) {
 				Nvme: &PrepareNvmeResp{State: new(ResponseState)},
 				Scm: &PrepareScmResp{
 					State: new(ResponseState),
-					Pmems: []*PmemDevice{MockPmemDevicePB()},
+					Pmems: []*PmemDevice{common.MockPmemDevicePB()},
 				},
 			},
 			true,
@@ -394,7 +394,7 @@ func TestStoragePrepare(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)()
 
 			config := newDefaultConfiguration(newMockExt(nil, true, nil,
 				true, nil, nil, nil, tt.isRoot))
@@ -415,20 +415,20 @@ func TestStoragePrepare(t *testing.T) {
 			}
 			resp, err := cs.StoragePrepare(context.TODO(), &tt.inReq)
 			if err != nil {
-				AssertEqual(t, err.Error(), tt.errMsg, tt.desc)
+				common.AssertEqual(t, err.Error(), tt.errMsg, tt.desc)
 			}
-			AssertEqual(t, "", tt.errMsg, tt.desc)
+			common.AssertEqual(t, "", tt.errMsg, tt.desc)
 
 			if resp.Nvme == nil {
-				AssertEqual(t, resp.Nvme, tt.expResp.Nvme, "unexpected nvme response, "+tt.desc)
+				common.AssertEqual(t, resp.Nvme, tt.expResp.Nvme, "unexpected nvme response, "+tt.desc)
 			} else {
-				AssertEqual(t, resp.Nvme.State, tt.expResp.Nvme.State, "unexpected nvme state in response, "+tt.desc)
+				common.AssertEqual(t, resp.Nvme.State, tt.expResp.Nvme.State, "unexpected nvme state in response, "+tt.desc)
 			}
 			if resp.Scm == nil {
-				AssertEqual(t, resp.Scm, tt.expResp.Scm, "unexpected scm response, "+tt.desc)
+				common.AssertEqual(t, resp.Scm, tt.expResp.Scm, "unexpected scm response, "+tt.desc)
 			} else {
-				AssertEqual(t, resp.Scm.State, tt.expResp.Scm.State, "unexpected scm state in response, "+tt.desc)
-				AssertEqual(t, resp.Scm.Pmems, tt.expResp.Scm.Pmems, "unexpected pmem devices in response, "+tt.desc)
+				common.AssertEqual(t, resp.Scm.State, tt.expResp.Scm.State, "unexpected scm state in response, "+tt.desc)
+				common.AssertEqual(t, resp.Scm.Pmems, tt.expResp.Scm.Pmems, "unexpected pmem devices in response, "+tt.desc)
 			}
 		})
 	}
@@ -579,7 +579,7 @@ func TestStorageFormat(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)()
 
 			testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
 			defer os.RemoveAll(testDir)
@@ -622,8 +622,8 @@ func TestStorageFormat(t *testing.T) {
 			mockWg := new(sync.WaitGroup)
 			mockWg.Add(1)
 
-			AssertEqual(t, cs.nvme.formatted, false, tt.desc)
-			AssertEqual(t, cs.scm.formatted, false, tt.desc)
+			common.AssertEqual(t, cs.nvme.formatted, false, tt.desc)
+			common.AssertEqual(t, cs.scm.formatted, false, tt.desc)
 
 			for _, i := range cs.harness.Instances() {
 				root := filepath.Dir(tt.sMount)
@@ -645,7 +645,7 @@ func TestStorageFormat(t *testing.T) {
 			go func() {
 				// should signal wait group in srv to unlock if
 				// successful once format completed
-				_ = cs.StorageFormat(nil, mock)
+				_ = cs.StorageFormat(&StorageFormatReq{}, mock)
 				mockWg.Done()
 			}()
 
@@ -660,8 +660,8 @@ func TestStorageFormat(t *testing.T) {
 				t.Fatalf("unexpected results: (-want, +got):\n%s\n", diff)
 			}
 
-			AssertEqual(t, cs.nvme.formatted, tt.expNvmeFormatted, tt.desc)
-			AssertEqual(t, cs.scm.formatted, tt.expScmFormatted, tt.desc)
+			common.AssertEqual(t, cs.nvme.formatted, tt.expNvmeFormatted, tt.desc)
+			common.AssertEqual(t, cs.scm.formatted, tt.expScmFormatted, tt.desc)
 		})
 	}
 }
@@ -761,7 +761,7 @@ func TestStorageUpdate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)()
 
 			config := defaultMockConfig(t)
 			cs := mockControlService(t, log, config, nil)
@@ -782,21 +782,21 @@ func TestStorageUpdate(t *testing.T) {
 				t.Fatal(err.Error() + tt.desc)
 			}
 
-			AssertEqual(
+			common.AssertEqual(
 				t, len(mock.Results), 1,
 				"unexpected number of responses sent, "+tt.desc)
 
 			for i, result := range mock.Results[0].Crets {
 				expected := tt.ctrlrRets[i]
-				AssertEqual(
+				common.AssertEqual(
 					t, result.State.Error,
 					expected.State.Error,
 					"unexpected result error message, "+tt.desc)
-				AssertEqual(
+				common.AssertEqual(
 					t, result.State.Status,
 					expected.State.Status,
 					"unexpected response status, "+tt.desc)
-				AssertEqual(
+				common.AssertEqual(
 					t, result.Pciaddr,
 					expected.Pciaddr,
 					"unexpected pciaddr, "+tt.desc)
@@ -804,15 +804,15 @@ func TestStorageUpdate(t *testing.T) {
 
 			for i, result := range mock.Results[0].Mrets {
 				expected := tt.moduleRets[i]
-				AssertEqual(
+				common.AssertEqual(
 					t, result.State.Error,
 					expected.State.Error,
 					"unexpected result error message, "+tt.desc)
-				AssertEqual(
+				common.AssertEqual(
 					t, result.State.Status,
 					expected.State.Status,
 					"unexpected response status, "+tt.desc)
-				AssertEqual(
+				common.AssertEqual(
 					t, result.Loc,
 					expected.Loc,
 					"unexpected mntpoint, "+tt.desc)

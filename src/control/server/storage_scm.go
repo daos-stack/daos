@@ -23,16 +23,6 @@
 
 package server
 
-import (
-	"fmt"
-
-	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	types "github.com/daos-stack/daos/src/control/common/storage"
-	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/daos-stack/daos/src/control/server/storage/scm"
-)
-
 const (
 	MsgScmRebootRequired   = "A reboot is required to process new memory allocation goals."
 	msgScmNoModules        = "no scm modules to prepare"
@@ -43,4 +33,3 @@ const (
 	msgIpmctlDiscoverFail   = "ipmctl module discovery"
 	msgScmUpdateNotImpl     = "scm firmware update not supported"
 )
-

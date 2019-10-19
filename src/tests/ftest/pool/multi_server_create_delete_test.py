@@ -53,17 +53,17 @@ class MultiServerCreateDeleteTest(Test):
         self.hostlist_servers = None
         with open('../../../.build_vars.json') as f_open:
             build_paths = json.load(f_open)
-        basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
+        self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
         self.hostlist_servers = self.params.get("test_machines", '/run/hosts/')
         self.hostfile = write_host_file.write_host_file(self.hostlist_servers,
                                                         self.workdir)
         server_group = self.params.get("name", '/server_config/',
                                        'daos_server')
 
-        self.agent_sessions = agent_utils.run_agent(basepath,
+        self.agent_sessions = agent_utils.run_agent(self.basepath,
                                                     self.hostlist_servers)
-        server_utils.run_server(self.hostfile, server_group, basepath)
-        self.dmg = basepath + '/install/bin/dmg'
+        server_utils.run_server(self, self.hostfile, server_group)
+        self.dmg = self.basepath + '/install/bin/dmg'
 
     def tearDown(self):
         if self.agent_sessions:
