@@ -272,6 +272,7 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_bindir}/vea_ut
 %{_bindir}/daosbench
 %{_bindir}/daos_perf
+%{_bindir}/daos_racer
 %{_bindir}/evt_ctl
 %{_bindir}/obj_ctl
 %{_bindir}/daos_gen_io_conf
