@@ -433,7 +433,7 @@ class ServerManager(ExecutableCommand):
             self.runner.job.sudo = True
 
             # Make sure log file has been created for ownership change
-            lfile = self.runner.job.yaml_params.server_params.log_file.value
+            lfile = self.runner.job.yaml_params.server_params[-1].log_file.value
             if lfile is not None:
                 self.log.info("Creating log file")
                 cmd_touch_log = "touch {}".format(lfile)
