@@ -137,6 +137,11 @@ func (tc *testConn) PoolDestroy(req *client.PoolDestroyReq) error {
 	return nil
 }
 
+func (tc *testConn) PoolGetACL(req *client.PoolGetACLReq) (*client.PoolGetACLResp, error) {
+	tc.appendInvocation(fmt.Sprintf("PoolGetACL-%+v", req))
+	return &client.PoolGetACLResp{}, nil
+}
+
 func (tc *testConn) BioHealthQuery(req *mgmtpb.BioHealthReq) client.ResultQueryMap {
 	tc.appendInvocation(fmt.Sprintf("BioHealthQuery-%s", req))
 	return nil
