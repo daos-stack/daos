@@ -93,9 +93,6 @@ echo "  CGO_CFLAGS: $CGO_CFLAGS"
 echo "  GOPATH: $GOPATH"
 echo
 
-echo "Checking for libnuma"
-echo $(ldconfig -p | grep libnuma)
-
 echo "Running all tests under $controldir..."
 pushd "$controldir" >/dev/null
 set +e
