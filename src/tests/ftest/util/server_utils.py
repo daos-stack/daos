@@ -29,7 +29,6 @@ import os
 import re
 import time
 import yaml
-import getpass
 
 # Remove below imports when depricating run_server and stop_server functions.
 import subprocess
@@ -107,7 +106,7 @@ class DaosServer(DaosCommand):
         """
         patterns = {
             "format": "SCM format required",
-            "chowner": "formatting complete and file ownership changed",
+            "postformat": "I/O server instance.*notifying storage ready",
             "normal": "DAOS I/O server.*started",
         }
         start_time = time.time()
@@ -314,8 +313,6 @@ class DaosServerConfig(ObjectWithParameters):
                 value = getattr(self.server_params[index], name).value
                 if value is not None and value is not False:
                     yaml_data["servers"][index][name] = value
-                if name == "bdev_class" and value == "nvme":
-                    yaml_data["user_name"] = getpass.getuser()
 
         # Write default_value_set dictionary in to AVOCADO_FILE
         # This will be used to start with daos_server -o option.
@@ -430,7 +427,8 @@ class ServerManager(ExecutableCommand):
         if self.runner.job.yaml_params.is_nvme():
             self.log.info("Performing nvme storage prepare in <format> mode")
             storage_prepare(self._hosts, "root")
-            self.runner.job.sudo = True
+            self.runner.sudo = True
+            self.runner.allow_run_as_root.value = True
 
             # Make sure log file has been created for ownership change
             lfile = self.runner.job.yaml_params.server_params[-1].log_file.value
@@ -459,42 +457,11 @@ class ServerManager(ExecutableCommand):
             # Format storage and wait for server to change ownership
             self.log.info("Formatting hosts: <%s>", self._hosts)
             storage_format(self.daosbinpath, ",".join(servers_with_ports))
-
-            # Check for server to have changed ownership.
-            self.runner.job.mode = "chowner"
+            self.runner.job.mode = "postformat"
             try:
                 self.runner.job.check_subprocess_status(self.runner.process)
             except CommandFailure as error:
                 self.log.info("Failed to start after format: %s", str(error))
-
-            # Stop the server in case it didn't finish after chowner
-            try:
-                self.log.info("Stopping servers started as root")
-                self.runner.stop()
-            except CommandFailure as error:
-                raise ServerFailed(
-                    "Failed to stop servers after format: {}".format(error))
-
-            # Setup server for run as non-root user
-            self.log.info("Starting server as non-root user: <%s>", self._hosts)
-            storage_prepare(self._hosts, getpass.getuser())
-            self.runner.job.sudo = False
-            self.runner.job.mode = "normal"
-
-            # Clean spdk pci lock file
-            self.log.info("Cleanup of /tmp/spdk_pci_lock file")
-            pcmd(self._hosts, "sudo rm -f /tmp/spdk_pci_lock_0000\\:*", False)
-
-            # Restart server as non root user and check if started
-            try:
-                self.run()
-            except CommandFailure as details:
-                self.log.info("<SERVER> Exception occurred: %s", str(details))
-                # Kill the subprocess, anything that might have started
-                self.kill()
-                raise ServerFailed(
-                    "Failed to start server in {} mode.".format(
-                        self.runner.job.mode))
 
         return True
 
