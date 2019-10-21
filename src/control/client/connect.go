@@ -74,6 +74,7 @@ type Connect interface {
 	KillRank(uuid string, rank uint32) ResultMap
 	PoolCreate(*PoolCreateReq) (*PoolCreateResp, error)
 	PoolDestroy(*PoolDestroyReq) error
+	PoolGetACL(*PoolGetACLReq) (*PoolGetACLResp, error)
 	BioHealthQuery(*mgmtpb.BioHealthReq) ResultQueryMap
 	SmdListDevs(*mgmtpb.SmdDevReq) ResultSmdMap
 	SmdListPools(*mgmtpb.SmdPoolReq) ResultSmdMap
