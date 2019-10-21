@@ -63,11 +63,10 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 	if err != nil {
 		scanErrors = append(scanErrors, err)
 	} else {
-		cmd.log.Infof("SCM (%s):")
 		if len(scmRes.Namespaces) > 0 {
-			cmd.log.Infof("PMEM device files:\n%s", scmRes.Namespaces)
+			cmd.log.Infof("SCM Namespaces:\n\t%s\n", scmRes.Namespaces)
 		} else {
-			cmd.log.Infof("Modules:\n%s", scmRes.Modules)
+			cmd.log.Infof("SCM Modules:\n\t%s\n", scmRes.Modules)
 		}
 	}
 
