@@ -247,7 +247,14 @@ func StorageFormatRequest(mc Control, parms interface{}, ch chan ClientResult) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Minute)
 	defer cancel()
 
-	stream, err := mc.getCtlClient().StorageFormat(ctx, &ctlpb.StorageFormatReq{})
+	req := &ctlpb.StorageFormatReq{}
+	if parms != nil {
+		if preq, ok := parms.(*ctlpb.StorageFormatReq); ok {
+			req = preq
+		}
+	}
+
+	stream, err := mc.getCtlClient().StorageFormat(ctx, req)
 	if err != nil {
 		ch <- ClientResult{mc.getAddress(), nil, err}
 		return // stream err
@@ -274,8 +281,9 @@ func StorageFormatRequest(mc Control, parms interface{}, ch chan ClientResult) {
 
 // StorageFormat prepares nonvolatile storage devices attached to each
 // remote server in the connection list for use with DAOS.
-func (c *connList) StorageFormat() (ClientCtrlrMap, ClientMountMap) {
-	cResults := c.makeRequests(nil, StorageFormatRequest)
+func (c *connList) StorageFormat(reformat bool) (ClientCtrlrMap, ClientMountMap) {
+	req := &ctlpb.StorageFormatReq{Reformat: reformat}
+	cResults := c.makeRequests(req, StorageFormatRequest)
 	cCtrlrResults := make(ClientCtrlrMap) // srv address:NVMe SSDs
 	cMountResults := make(ClientMountMap) // srv address:SCM mounts
 
