@@ -189,6 +189,13 @@ func (h *IOServerHarness) Start(parent context.Context) error {
 		return errors.New("can't start: harness already started")
 	}
 
+	// Now we want to block any RPCs that might try to mess with storage
+	// (format, firmware update, etc) before attempting to start I/O servers
+	// which are using the storage.
+	h.Lock()
+	h.started = true
+	h.Unlock()
+
 	instances := h.Instances()
 	ctx, shutdown := context.WithCancel(parent)
 	defer shutdown()
@@ -211,7 +218,7 @@ func (h *IOServerHarness) Start(parent context.Context) error {
 			}
 		case ready := <-instance.AwaitReady():
 			if pmixless() {
-				h.log.Debug("PMIx-less mode detected")
+				h.log.Debugf("PMIx-less mode detected (ready: %v)", ready)
 				if err := instance.SetRank(ctx, ready); err != nil {
 					return err
 				}
@@ -222,10 +229,6 @@ func (h *IOServerHarness) Start(parent context.Context) error {
 	if err := h.StartManagementService(ctx); err != nil {
 		return errors.Wrap(err, "failed to start management service")
 	}
-
-	h.Lock()
-	h.started = true
-	h.Unlock()
 
 	// now monitor them
 	for {
