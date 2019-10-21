@@ -1,0 +1,286 @@
+//
+// (C) Copyright 2019 Intel Corporation.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+// The Government's rights to use, modify, reproduce, release, perform, display,
+// or disclose this software are subject to the terms of the Apache License as
+// provided in Contract No. 8F-30005.
+// Any reproduction of computer software, computer software documentation, or
+// portions thereof marked with this legend must also reproduce the markings.
+
+package drpc
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/logging"
+)
+
+func TestNewSession(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	socket := newMockConn()
+	svc := NewModuleService(log)
+	s := NewSession(socket, svc)
+
+	if s == nil {
+		t.Fatal("session was nil!")
+	}
+
+	common.AssertEqual(t, s.Conn, socket, "UnixSocket wasn't set correctly")
+	common.AssertEqual(t, s.mod, svc, "ModuleService wasn't set correctly")
+}
+
+func TestSession_ProcessIncomingMessage_ReadError(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	socket := newMockConn()
+	socket.ReadOutputError = errors.New("mock read error")
+	s := NewSession(socket, NewModuleService(log))
+
+	err := s.ProcessIncomingMessage()
+
+	common.CmpErr(t, socket.ReadOutputError, err)
+}
+
+func TestSession_ProcessIncomingMessage_WriteError(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	socket := newMockConn()
+	socket.WriteOutputError = errors.New("mock write error")
+	s := NewSession(socket, NewModuleService(log))
+
+	err := s.ProcessIncomingMessage()
+
+	common.CmpErr(t, socket.WriteOutputError, err)
+}
+
+func TestSession_ProcessIncomingMessage_Success(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	socket := newMockConn()
+	call := &Call{
+		Sequence: 123,
+		Module:   1,
+		Method:   2,
+	}
+	callBytes, err := proto.Marshal(call)
+	if err != nil {
+		t.Fatalf("failed to create test call: %v", err)
+	}
+	socket.ReadOutputBytes = callBytes
+	socket.ReadOutputNumBytes = len(callBytes)
+
+	mod := newTestModule(call.Module)
+	svc := NewModuleService(log)
+	svc.RegisterModule(mod)
+
+	s := NewSession(socket, svc)
+
+	if err = s.ProcessIncomingMessage(); err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	resp := &Response{}
+	if err := proto.Unmarshal(socket.WriteInputBytes, resp); err != nil {
+		t.Fatalf("bytes written to socket weren't a Response: %v", err)
+	}
+
+	expectedResp := &Response{
+		Sequence: call.Sequence,
+	}
+	cmpOpts := common.GetProtobufCmpOpts()
+	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
+		t.Fatalf("(-want, +got)\n%s", diff)
+	}
+}
+
+func TestNewDomainSocketServer_NoSockFile(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	dss, err := NewDomainSocketServer(log, "")
+
+	common.CmpErr(t, errors.New("Missing Argument"), err)
+	common.AssertTrue(t, dss == nil, "expected no server created")
+}
+
+func TestNewDomainSocketServer(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	expectedSock := "test.sock"
+
+	dss, err := NewDomainSocketServer(log, expectedSock)
+
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if dss == nil {
+		t.Fatal("expected server created, got nil")
+	}
+
+	common.AssertEqual(t, dss.sockFile, expectedSock, "wrong sockfile")
+}
+
+func TestServer_Start_CantUnlinkSocket(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	tmpDir := common.CreateTestDir(t)
+	defer os.Remove(tmpDir)
+
+	path := filepath.Join(tmpDir, "test.sock")
+
+	// Forbid searching the directory
+	if err := os.Chmod(tmpDir, 0000); err != nil {
+		t.Fatalf("Couldn't change permissions on dir: %v", err)
+	}
+	defer os.Chmod(tmpDir, 0700)
+
+	dss, _ := NewDomainSocketServer(log, path)
+
+	err := dss.Start()
+
+	common.CmpErr(t, errors.New("unlink"), err)
+}
+
+func TestServer_Start_CantListen(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	tmpDir := common.CreateTestDir(t)
+	defer os.Remove(tmpDir)
+
+	path := filepath.Join(tmpDir, "test.sock")
+
+	// Forbid writing the directory
+	if err := os.Chmod(tmpDir, 0500); err != nil {
+		t.Fatalf("Couldn't change permissions on dir: %v", err)
+	}
+	defer os.Chmod(tmpDir, 0700)
+
+	dss, _ := NewDomainSocketServer(log, path)
+
+	err := dss.Start()
+
+	common.CmpErr(t, errors.New("listen"), err)
+}
+
+func TestServer_RegisterModule(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	mod := newTestModule(1234)
+	dss, _ := NewDomainSocketServer(log, "dontcare.sock")
+
+	dss.RegisterRPCModule(mod)
+
+	result, ok := dss.service.GetModule(mod.ID())
+
+	if !ok {
+		t.Fatal("registered module not found in service")
+	}
+
+	if diff := cmp.Diff(mod, result); diff != "" {
+		t.Fatalf("(-want, +got)\n%s", diff)
+	}
+}
+
+func TestServer_Listen_AcceptError(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	lis := newMockListener()
+	lis.acceptErr = errors.New("mock accept error")
+	dss, _ := NewDomainSocketServer(log, "dontcare.sock")
+	dss.listener = lis
+
+	dss.Listen() // should return instantly
+
+	common.AssertEqual(t, lis.acceptCallCount, 1, "should have returned after first error")
+}
+
+func TestServer_Listen_AcceptConnection(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	lis := newMockListener()
+	lis.setNumConnsToAccept(3)
+	dss, _ := NewDomainSocketServer(log, "dontcare.sock")
+	dss.listener = lis
+
+	dss.Listen() // will return when error is sent
+
+	common.AssertEqual(t, lis.acceptCallCount, lis.acceptNumConns+1,
+		"should have returned after listener errored")
+	common.AssertEqual(t, len(dss.sessions), lis.acceptNumConns,
+		"server should have made connections into sessions")
+}
+
+func TestServer_ListenSession_Error(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	dss, _ := NewDomainSocketServer(log, "dontcare.sock")
+	conn := newMockConn()
+	conn.ReadOutputError = errors.New("mock read error")
+	session := NewSession(conn, dss.service)
+	dss.sessions[conn] = session
+
+	dss.listenSession(session) // will return when error is sent
+
+	common.AssertEqual(t, conn.ReadCallCount, 1,
+		"should have only hit the error once")
+	common.AssertEqual(t, conn.CloseCallCount, 1, "should have closed connection")
+	if _, ok := dss.sessions[conn]; ok {
+		t.Fatal("session should have been removed but wasn't")
+	}
+}
+
+func TestServer_Shutdown(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	dss, _ := NewDomainSocketServer(log, "dontcare.sock")
+	lis := newMockListener()
+	dss.listener = lis
+
+	// Populate some initial sessions
+	for i := 0; i < 5; i++ {
+		conn := newMockConn()
+		dss.sessions[conn] = NewSession(conn, dss.service)
+	}
+
+	dss.Shutdown()
+
+	_, ok := <-dss.quit
+	common.AssertFalse(t, ok, "expected quit channel was closed")
+
+	common.AssertEqual(t, lis.closeCallCount, 1, "listener should have been closed")
+	common.AssertEqual(t, len(dss.sessions), 0, "sessions should have been cleaned up")
+}

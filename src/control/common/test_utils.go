@@ -25,10 +25,13 @@ package common
 
 import (
 	"fmt"
+	"io/ioutil"
 	"reflect"
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 // AssertTrue asserts b is true
@@ -140,4 +143,30 @@ func ShowBufferOnFailure(t *testing.T, buf fmt.Stringer) {
 	if t.Failed() {
 		fmt.Printf("captured log output:\n%s", buf.String())
 	}
+}
+
+// GetProtobufCmpOpts gets go-cmp comparison options that allow cmp.Diff to
+// ignore internal Protobuf struct fields
+func GetProtobufCmpOpts() []cmp.Option {
+	// Avoid comparing the internal Protobuf fields
+	isHiddenPBField := func(path cmp.Path) bool {
+		if strings.HasPrefix(path.Last().String(), ".XXX_") {
+			return true
+		}
+		return false
+	}
+	return []cmp.Option{
+		cmp.FilterPath(isHiddenPBField, cmp.Ignore()),
+	}
+}
+
+// CreateTestDir creates a temporary test directory
+func CreateTestDir(t *testing.T) string {
+	t.Helper()
+	tmpDir, err := ioutil.TempDir("", t.Name())
+	if err != nil {
+		t.Fatalf("Couldn't create temporary directory: %v", err)
+	}
+
+	return tmpDir
 }
