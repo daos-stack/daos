@@ -140,7 +140,7 @@ func TestDiscoverScm(t *testing.T) {
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)
 
 			ss := newMockScmStorage(log, nil, tt.ipmctlDiscoverRet,
 				[]scm.Module{m}, tt.inited, newMockPrepScm(), nil)
@@ -170,6 +170,7 @@ func TestFormatScm(t *testing.T) {
 	tests := []struct {
 		inited    bool
 		formatted bool
+		reformat  bool
 		mountRet  error
 		// log context should be stack layer registering result
 		unmountRet error
@@ -354,7 +355,7 @@ func TestFormatScm(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)
 
 			testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
 			defer os.RemoveAll(testDir)
@@ -419,7 +420,7 @@ func TestFormatScm(t *testing.T) {
 			}
 
 			scmCfg := config.Servers[srvIdx].Storage.SCM
-			ss.Format(scmCfg, &results)
+			ss.Format(scmCfg, tt.reformat, &results)
 
 			if diff := cmp.Diff(tt.expResults, results); diff != "" {
 				t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
@@ -454,7 +455,7 @@ func TestUpdateScm(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)
 
 			config := defaultMockConfig(t)
 			ss := newMockScmStorage(log, config.ext, nil, []scm.Module{},

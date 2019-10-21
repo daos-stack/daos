@@ -106,27 +106,20 @@ func (s *storageScanCmd) Execute(args []string) error {
 type storageFormatCmd struct {
 	logCmd
 	connectedCmd
-	Force bool `short:"f" long:"force" description:"Perform format without prompting for confirmation"`
+	Reformat bool `long:"reformat" description:"Always reformat storage (CAUTION: Potentially destructive)"`
 }
 
+// Execute is run when storageFormatCmd activates
 // run NVMe and SCM storage format on all connected servers
-func storageFormat(log logging.Logger, conns client.Connect, force bool) {
-	log.Info(
+func (s *storageFormatCmd) Execute(args []string) error {
+	s.log.Info(
 		"This is a destructive operation and storage devices " +
 			"specified in the server config file will be erased.\n" +
 			"Please be patient as it may take several minutes.\n")
 
-	if force || common.GetConsent(log) {
-		log.Info("")
-		cCtrlrResults, cMountResults := conns.StorageFormat()
-		log.Infof("NVMe storage format results:\n%s", cCtrlrResults)
-		log.Infof("SCM storage format results:\n%s", cMountResults)
-	}
-}
-
-// Execute is run when storageFormatCmd activates
-func (s *storageFormatCmd) Execute(args []string) error {
-	storageFormat(s.log, s.conns, s.Force)
+	cCtrlrResults, cMountResults := s.conns.StorageFormat(s.Reformat)
+	s.log.Infof("NVMe storage format results:\n%s", cCtrlrResults)
+	s.log.Infof("SCM storage format results:\n%s", cMountResults)
 	return nil
 }
 

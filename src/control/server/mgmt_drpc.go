@@ -23,7 +23,7 @@
 
 package server
 
-// #cgo CFLAGS: -I${SRCDIR}/../../../include
+// #cgo CFLAGS: -I${SRCDIR}/../../include
 // #include <daos/drpc_modules.h>
 import "C"
 
@@ -51,6 +51,7 @@ const (
 	smdPools      = C.DRPC_METHOD_MGMT_SMD_LIST_POOLS
 	devState      = C.DRPC_METHOD_MGMT_DEV_STATE_QUERY
 	setFaulty     = C.DRPC_METHOD_MGMT_SET_FAULTY_STATE
+	poolGetACL    = C.DRPC_METHOD_MGMT_POOL_GET_ACL
 
 	srvModuleID = C.DRPC_MODULE_SRV
 	notifyReady = C.DRPC_METHOD_SRV_NOTIFY_READY

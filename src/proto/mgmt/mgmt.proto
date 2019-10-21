@@ -27,6 +27,7 @@ package mgmt;
 import "pool.proto";
 import "srv.proto";
 import "storage_query.proto"; // storage query req/resp BIO data and SMD device list
+import "acl.proto"; // ACL-related requests
 
 // Management Service is replicated on a small number of servers in the system,
 // these requests will be processed on a host that is a member of the management
@@ -40,6 +41,8 @@ service MgmtSvc {
 	rpc PoolCreate(PoolCreateReq) returns (PoolCreateResp) {}
 	// Destroy a DAOS pool allocated across a number of ranks
 	rpc PoolDestroy(PoolDestroyReq) returns (PoolDestroyResp) {}
+	// Fetch the Access Control List for a DAOS pool
+	rpc PoolGetACL(GetACLReq) returns (GetACLResp) {}
 	// Get the information required by libdaos to attach to the system.
 	rpc GetAttachInfo(GetAttachInfoReq) returns (GetAttachInfoResp) {}
 	// Get BIO device health information

@@ -107,8 +107,8 @@ func (tc *testConn) StorageScan() (client.ClientCtrlrMap, client.ClientModuleMap
 	return nil, nil, nil
 }
 
-func (tc *testConn) StorageFormat() (client.ClientCtrlrMap, client.ClientMountMap) {
-	tc.appendInvocation("StorageFormat")
+func (tc *testConn) StorageFormat(reformat bool) (client.ClientCtrlrMap, client.ClientMountMap) {
+	tc.appendInvocation(fmt.Sprintf("StorageFormat-%t", reformat))
 	return nil, nil
 }
 
@@ -135,6 +135,11 @@ func (tc *testConn) PoolCreate(req *client.PoolCreateReq) (*client.PoolCreateRes
 func (tc *testConn) PoolDestroy(req *client.PoolDestroyReq) error {
 	tc.appendInvocation(fmt.Sprintf("PoolDestroy-%+v", req))
 	return nil
+}
+
+func (tc *testConn) PoolGetACL(req *client.PoolGetACLReq) (*client.PoolGetACLResp, error) {
+	tc.appendInvocation(fmt.Sprintf("PoolGetACL-%+v", req))
+	return &client.PoolGetACLResp{}, nil
 }
 
 func (tc *testConn) BioHealthQuery(req *mgmtpb.BioHealthReq) client.ResultQueryMap {
@@ -192,7 +197,7 @@ func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 		t.Run(st.name, func(t *testing.T) {
 			t.Helper()
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)
 
 			var opts cliOptions
 			conn := newTestConn(t)
@@ -217,7 +222,7 @@ func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 
 func TestBadCommand(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)()
+	defer common.ShowBufferOnFailure(t, buf)
 
 	var opts cliOptions
 	conn := newTestConn(t)
@@ -227,7 +232,7 @@ func TestBadCommand(t *testing.T) {
 
 func TestNoCommand(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)()
+	defer common.ShowBufferOnFailure(t, buf)
 
 	var opts cliOptions
 	conn := newTestConn(t)
