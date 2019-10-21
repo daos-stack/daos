@@ -100,7 +100,7 @@ func TestRunnerContextExit(t *testing.T) {
 	os.Setenv(testModeVar, "RunnerContextExit")
 
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)()
+	defer common.ShowBufferOnFailure(t, buf)
 
 	cfg := NewConfig()
 
@@ -129,7 +129,7 @@ func TestRunnerNormalExit(t *testing.T) {
 	os.Setenv("OFI_INTERFACE", "bob0")
 
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)()
+	defer common.ShowBufferOnFailure(t, buf)
 
 	cfg := NewConfig().
 		WithTargetCount(42).

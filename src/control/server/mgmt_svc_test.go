@@ -147,7 +147,7 @@ func newTestGetACLReq() *mgmtpb.GetACLReq {
 
 func TestPoolGetACL_NoMS(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)()
+	defer common.ShowBufferOnFailure(t, buf)
 
 	svc := newMgmtSvc(NewIOServerHarness(log), nil)
 
@@ -162,7 +162,7 @@ func TestPoolGetACL_NoMS(t *testing.T) {
 
 func TestPoolGetACL_DrpcFailed(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)()
+	defer common.ShowBufferOnFailure(t, buf)
 
 	svc := newTestMgmtSvc(log)
 	expectedErr := errors.New("mock error")
@@ -179,7 +179,7 @@ func TestPoolGetACL_DrpcFailed(t *testing.T) {
 
 func TestPoolGetACL_BadDrpcResp(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)()
+	defer common.ShowBufferOnFailure(t, buf)
 
 	svc := newTestMgmtSvc(log)
 	// dRPC call returns junk in the message body
@@ -201,7 +201,7 @@ func TestPoolGetACL_BadDrpcResp(t *testing.T) {
 
 func TestPoolGetACL_Success(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)()
+	defer common.ShowBufferOnFailure(t, buf)
 
 	svc := newTestMgmtSvc(log)
 
