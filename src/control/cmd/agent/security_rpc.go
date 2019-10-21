@@ -36,13 +36,6 @@ import (
 	"github.com/daos-stack/daos/src/control/security/auth"
 )
 
-// Module id for the Agent security module
-const securityModuleID int32 = 1
-
-const (
-	methodRequestCredentials int32 = 101
-)
-
 // userInfo is an internal implementation of the security.User interface
 type userInfo struct {
 	info *user.User
@@ -110,7 +103,7 @@ func NewSecurityModule(log logging.Logger, tc *security.TransportConfig) *Securi
 
 // HandleCall is the handler for calls to the SecurityModule
 func (m *SecurityModule) HandleCall(client *drpc.Client, method int32, body []byte) ([]byte, error) {
-	if method != methodRequestCredentials {
+	if method != drpc.MethodRequestCredentials {
 		return nil, errors.Errorf("Attempt to call unregistered function")
 	}
 
@@ -143,5 +136,5 @@ func (m *SecurityModule) InitModule(state drpc.ModuleState) {
 
 //ID will return Security module ID
 func (m *SecurityModule) ID() int32 {
-	return securityModuleID
+	return drpc.ModuleSecurityAgent
 }
