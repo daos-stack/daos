@@ -302,11 +302,12 @@ func TestDrpc_Errors(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			mc := &mockDrpcClient{
-				SendMsgOutputError:    tc.sendError,
-				SendMsgOutputResponse: tc.resp,
-				ConnectOutputError:    tc.connectError,
+			cfg := &mockDrpcClientConfig{
+				SendMsgError:    tc.sendError,
+				SendMsgResponse: tc.resp,
+				ConnectError:    tc.connectError,
 			}
+			mc := newMockDrpcClient(cfg)
 
 			_, err := makeDrpcCall(mc, drpc.ModuleMgmt, drpc.MethodPoolCreate, &mgmtpb.PoolCreateReq{})
 			common.CmpErr(t, tc.expErr, err)

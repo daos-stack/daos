@@ -62,6 +62,8 @@ const (
 	MethodSmdDevs = C.DRPC_METHOD_MGMT_SMD_LIST_DEVS
 	// MethodSmdPools is a ModuleMgmt method
 	MethodSmdPools = C.DRPC_METHOD_MGMT_SMD_LIST_POOLS
+	// MethodPoolGetACL is a ModuleMgmt method
+	MethodPoolGetACL = C.DRPC_METHOD_MGMT_POOL_GET_ACL
 
 	// ModuleSrv is the dRPC module for tasks relating to server setup
 	ModuleSrv = C.DRPC_MODULE_SRV

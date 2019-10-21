@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,44 +16,21 @@
 // GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
 // The Government's rights to use, modify, reproduce, release, perform, display,
 // or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
+// provided in Contract No. B609815.
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package server
+syntax = "proto3";
+package mgmt;
 
-import (
-	"context"
-	"testing"
+// Access Control List related protobuf structures
 
-	. "github.com/daos-stack/daos/src/control/common"
-	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	"github.com/daos-stack/daos/src/control/logging"
-)
+message GetACLReq {
+	string uuid = 1; // Target UUID
+}
 
-// TODO: add server side streaming test for list features
-
-func TestGetFeature(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer ShowBufferOnFailure(t, buf)()
-
-	cs := defaultMockControlService(t, log)
-
-	mockFeature := MockFeaturePB()
-	fMap := make(FeatureMap)
-	fMap[mockFeature.Fname.Name] = mockFeature
-	cs.supportedFeatures = fMap
-
-	feature, err := cs.GetFeature(context.TODO(), mockFeature.Fname)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	AssertEqual(t, feature, mockFeature, "")
-
-	_, err = cs.GetFeature(context.TODO(), &ctlpb.FeatureName{Name: "non-existent"})
-	if err == nil {
-		t.Fatal(err)
-	}
+message GetACLResp {
+	int32 status = 1; // DAOS error code
+	repeated string ACL = 2; // List of ACEs in short string format
 }

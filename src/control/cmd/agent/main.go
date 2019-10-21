@@ -45,6 +45,7 @@ const (
 )
 
 type cliOptions struct {
+	AllowProxy bool   `long:"allow-proxy" description:"Allow proxy configuration via environment"`
 	Debug      bool   `short:"d" long:"debug" description:"Enable debug output"`
 	JSON       bool   `short:"j" long:"json" description:"Enable JSON output"`
 	ConfigPath string `short:"o" long:"config-path" description:"Path to agent configuration file" default:"etc/daos_agent.yml"`
@@ -94,6 +95,10 @@ func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
 	_, err := p.Parse()
 	if err != nil {
 		return err
+	}
+
+	if !opts.AllowProxy {
+		common.ScrubProxyVariables()
 	}
 
 	if opts.JSON {
