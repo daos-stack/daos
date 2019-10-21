@@ -1,6 +1,6 @@
 # Unittests Name and Paramter to be mention in this file.
 hosts:
-  test_machines:
+  test_servers:
     - boro-A
 timeout: 600
 server_config:

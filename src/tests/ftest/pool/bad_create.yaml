@@ -1,7 +1,7 @@
 # if something is commented out it is because that test causes problems but it
 # should be addedded back when daos code is fixed
 hosts:
-  test_machines:
+  test_servers:
     - boro-A
 server_config:
    name: daos_server
