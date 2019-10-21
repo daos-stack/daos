@@ -194,8 +194,7 @@ bio_iod_alloc(struct bio_io_context *ctxt, unsigned int sgl_cnt, bool update)
 		return NULL;
 	}
 
-	biod->bd_mutex = ABT_MUTEX_NULL;
-	biod->bd_dma_done = ABT_COND_NULL;
+	biod->bd_dma_done = ABT_EVENTUAL_NULL;
 	return biod;
 }
 
@@ -206,10 +205,8 @@ bio_iod_free(struct bio_desc *biod)
 
 	D_ASSERT(!biod->bd_buffer_prep);
 
-	if (biod->bd_dma_done != ABT_COND_NULL)
-		ABT_cond_free(&biod->bd_dma_done);
-	if (biod->bd_mutex != ABT_MUTEX_NULL)
-		ABT_mutex_free(&biod->bd_mutex);
+	if (biod->bd_dma_done != ABT_EVENTUAL_NULL)
+		ABT_eventual_free(&biod->bd_dma_done);
 
 	for (i = 0; i < biod->bd_sgl_cnt; i++)
 		bio_sgl_fini(&biod->bd_sgls[i]);
@@ -632,8 +629,6 @@ rw_completion(void *cb_arg, int err)
 	struct bio_desc		*biod = cb_arg;
 	struct media_error_msg	*mem = NULL;
 
-	ABT_mutex_lock(biod->bd_mutex);
-
 	D_ASSERT(biod->bd_inflights > 0);
 	biod->bd_inflights--;
 
@@ -651,8 +646,7 @@ rw_completion(void *cb_arg, int err)
 
 skip_media_error:
 	if (biod->bd_inflights == 0 && biod->bd_dma_issued)
-		ABT_cond_broadcast(biod->bd_dma_done);
-	ABT_mutex_unlock(biod->bd_mutex);
+		ABT_eventual_set(biod->bd_dma_done, NULL, 0);
 }
 
 static void
@@ -709,9 +703,7 @@ dma_rw(struct bio_desc *biod, bool prep)
 			D_ASSERT(pg_cnt > pg_idx);
 			pg_cnt -= pg_idx;
 
-			ABT_mutex_lock(biod->bd_mutex);
 			biod->bd_inflights++;
-			ABT_mutex_unlock(biod->bd_mutex);
 
 			D_DEBUG(DB_IO, "%s blob:%p payload:%p, "
 				"pg_idx:"DF_U64", pg_cnt:"DF_U64"\n",
@@ -765,11 +757,9 @@ dma_rw(struct bio_desc *biod, bool prep)
 		D_DEBUG(DB_IO, "Self poll completion, blob:%p\n", blob);
 		xs_poll_completion(xs_ctxt, &biod->bd_inflights);
 	} else {
-		ABT_mutex_lock(biod->bd_mutex);
 		biod->bd_dma_issued = 1;
 		if (biod->bd_inflights != 0)
-			ABT_cond_wait(biod->bd_dma_done, biod->bd_mutex);
-		ABT_mutex_unlock(biod->bd_mutex);
+			ABT_eventual_wait(biod->bd_dma_done, NULL);
 	}
 
 	biod->bd_ctxt->bic_inflight_dmas--;
@@ -922,13 +912,7 @@ retry:
 	bdb = iod_dma_buf(biod);
 	bdb->bdb_active_iods++;
 
-	rc = ABT_mutex_create(&biod->bd_mutex);
-	if (rc != ABT_SUCCESS) {
-		rc = -DER_NOMEM;
-		goto failed;
-	}
-
-	rc = ABT_cond_create(&biod->bd_dma_done);
+	rc = ABT_eventual_create(0, &biod->bd_dma_done);
 	if (rc != ABT_SUCCESS) {
 		rc = -DER_NOMEM;
 		goto failed;

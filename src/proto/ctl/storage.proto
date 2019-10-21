@@ -53,6 +53,7 @@ message StorageScanResp {
 message StorageFormatReq {
 	FormatNvmeReq nvme = 1;
 	FormatScmReq scm = 2;
+	bool reformat = 3;
 }
 
 message StorageFormatResp {

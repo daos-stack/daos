@@ -43,7 +43,7 @@ const (
 	cmdScmRemoveRegions    = "ipmctl create -f -goal MemoryMode=100"
 	cmdScmDeleteGoal       = "ipmctl delete -goal"
 	cmdScmCreateNamespace  = "ndctl create-namespace" // returns json ns info
-	cmdScmListNamespaces   = "ndctl list -N"          // returns json ns info
+	cmdScmListNamespaces   = "ndctl list -N -v"       // returns json ns info
 	cmdScmDisableNamespace = "ndctl disable-namespace %s"
 	cmdScmDestroyNamespace = "ndctl destroy-namespace %s"
 )
@@ -235,7 +235,7 @@ func (r *cmdRunner) PrepReset(state types.ScmState) (bool, error) {
 }
 
 func (r *cmdRunner) removeNamespace(devName string) (err error) {
-	r.log.Infof("removing SCM namespace, may take a few minutes...\n")
+	r.log.Infof("removing SCM namespace %q, may take a few minutes...\n", devName)
 
 	_, err = r.runCmd(fmt.Sprintf(cmdScmDisableNamespace, devName))
 	if err != nil {
