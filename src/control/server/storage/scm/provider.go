@@ -52,6 +52,15 @@ const (
 	dcpmMountOpts = "dax"
 
 	ramFsType = fsTypeTmpfs
+
+	MsgScmRebootRequired   = "A reboot is required to process new memory allocation goals."
+	MsgScmNoModules        = "no scm modules to prepare"
+	MsgScmNotInited        = "scm storage could not be accessed"
+	MsgScmAlreadyFormatted = "scm storage has already been formatted and " +
+		"reformat not implemented"
+	MsgScmClassNotSupported = "operation unsupported on scm class"
+	MsgIpmctlDiscoverFail   = "ipmctl module discovery"
+	MsgScmUpdateNotImpl     = "scm firmware update not supported"
 )
 
 type (

@@ -154,7 +154,7 @@ func (srv *IOServerInstance) MountScmDevice() error {
 		}
 		res, err = srv.scmProvider.MountDcpm(scmCfg.DeviceList[0], scmCfg.MountPoint)
 	default:
-		err = errors.New(msgScmClassNotSupported)
+		err = errors.New(scm.MsgScmClassNotSupported)
 	}
 	if err != nil {
 		return errors.WithMessage(err, "mounting existing scm dir")
@@ -203,7 +203,7 @@ func (srv *IOServerInstance) NeedsScmFormat() (bool, error) {
 			Device: scmCfg.DeviceList[0],
 		}
 	default:
-		return false, errors.New(msgScmClassNotSupported)
+		return false, errors.New(scm.MsgScmClassNotSupported)
 	}
 
 	res, err := srv.scmProvider.CheckFormat(req)

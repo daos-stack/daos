@@ -30,6 +30,7 @@ import (
 
 	commands "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/server"
+	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
 type storageCmd struct {
@@ -51,14 +52,14 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 
 	scanErrors := make([]error, 0, 2)
 
-	controllers, err := svc.ScanNvme()
+	controllers, err := svc.NvmeScan()
 	if err != nil {
 		scanErrors = append(scanErrors, err)
 	} else {
 		cmd.log.Infof("NVMe SSD controller and constituent namespaces:\n%s", controllers)
 	}
 
-	scmRes, err := svc.ScanScm()
+	scmRes, err := svc.ScmScan()
 	if err != nil {
 		scanErrors = append(scanErrors, err)
 	} else {
@@ -122,7 +123,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		cmd.log.Info(op + " locally-attached NVMe storage...")
 
 		// Prepare NVMe access through SPDK
-		if err := svc.PrepareNvme(server.PrepareNvmeRequest{
+		if err := svc.NvmePrepare(server.NvmePrepareRequest{
 			HugePageCount: cmd.NrHugepages,
 			TargetUser:    cmd.TargetUser,
 			PCIWhitelist:  cmd.PCIWhiteList,
@@ -146,18 +147,16 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 
 		// Prepare SCM modules to be presented as pmem device files.
 		// Pass evaluated state to avoid running GetScmState() twice.
-		needsReboot, devices, err := svc.PrepareScm(server.PrepareScmRequest{
-			Reset: cmd.Reset,
-		})
+		resp, err := svc.ScmPrepare(scm.PrepareRequest{Reset: cmd.Reset})
 		if err != nil {
 			return concatErrors(scanErrors, err)
 		}
-		if needsReboot {
-			cmd.log.Info(server.MsgScmRebootRequired)
-		} else if len(devices) > 0 {
-			cmd.log.Infof("persistent memory device files:\n\t%+v\n", devices)
+		if resp.RebootRequired {
+			cmd.log.Info(scm.MsgScmRebootRequired)
+		} else if len(resp.Namespaces) > 0 {
+			cmd.log.Infof("SCM namespaces:\n\t%+v\n", resp.Namespaces)
 		} else {
-			cmd.log.Info("no persistent memory device files")
+			cmd.log.Info("no SCM namespaces")
 		}
 	}
 
