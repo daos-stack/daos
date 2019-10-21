@@ -30,7 +30,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 
-	log "github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // DomainInfo holds our socket credentials to be used by the DomainSocketServer
@@ -60,7 +60,7 @@ func InitDomainInfo(creds *syscall.Ucred, ctx string) *DomainInfo {
 }
 
 // DomainInfoFromUnixConn determines credentials from a unix socket.
-func DomainInfoFromUnixConn(sock *net.UnixConn) (*DomainInfo, error) {
+func DomainInfoFromUnixConn(log logging.Logger, sock *net.UnixConn) (*DomainInfo, error) {
 	f, err := sock.File()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to get socket file")
