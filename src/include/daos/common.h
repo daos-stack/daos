@@ -131,7 +131,7 @@ daos_u32_hash(uint64_t key, unsigned int bits)
 static inline uint8_t
 isset_range(uint8_t *bitmap, uint32_t start, uint32_t end)
 {
-	int index;
+	uint32_t index;
 
 	for (index = start; index <= end; ++index)
 		if (isclr(bitmap, index))
@@ -143,7 +143,7 @@ isset_range(uint8_t *bitmap, uint32_t start, uint32_t end)
 static inline void
 clrbit_range(uint8_t *bitmap, uint32_t start, uint32_t end)
 {
-	int index;
+	uint32_t index;
 
 	for (index = start; index <= end; ++index)
 		clrbit(bitmap, index);

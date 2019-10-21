@@ -61,6 +61,15 @@ func (r *Rank) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
+// Equals compares this rank to the given rank. If either value is
+// nil, the comparison is always false.
+func (r *Rank) Equals(other *Rank) bool {
+	if r == nil || other == nil {
+		return false
+	}
+	return *r == *other
+}
+
 func checkRank(r Rank) error {
 	if r == NilRank {
 		return errors.Errorf("rank %d out of range [0, %d]", r, MaxRank)
