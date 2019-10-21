@@ -33,11 +33,21 @@ const (
 	// ModuleSecurityAgent is the dRPC module for security tasks in the
 	// DAOS agent
 	ModuleSecurityAgent = C.DRPC_MODULE_SEC_AGENT
-	// MethodRequestCredentials is a ModuleSecurityAgent method
-	MethodRequestCredentials = C.DRPC_METHOD_SEC_AGENT_REQUEST_CREDS
-
 	// ModuleMgmt is the dRPC module for management service tasks
 	ModuleMgmt = C.DRPC_MODULE_MGMT
+	// ModuleSrv is the dRPC module for tasks relating to server setup
+	ModuleSrv = C.DRPC_MODULE_SRV
+	// ModuleSecurity is the dRPC module for security tasks in the DAOS
+	// server
+	ModuleSecurity = C.DRPC_MODULE_SEC
+)
+
+const (
+	// MethodRequestCredentials is a ModuleSecurityAgent method
+	MethodRequestCredentials = C.DRPC_METHOD_SEC_AGENT_REQUEST_CREDS
+)
+
+const (
 	// MethodKillRank is a ModuleMgmt method
 	MethodKillRank = C.DRPC_METHOD_MGMT_KILL_RANK
 	// MethodSetRank is a ModuleMgmt method
@@ -64,15 +74,14 @@ const (
 	MethodSmdPools = C.DRPC_METHOD_MGMT_SMD_LIST_POOLS
 	// MethodPoolGetACL is a ModuleMgmt method
 	MethodPoolGetACL = C.DRPC_METHOD_MGMT_POOL_GET_ACL
+)
 
-	// ModuleSrv is the dRPC module for tasks relating to server setup
-	ModuleSrv = C.DRPC_MODULE_SRV
+const (
 	// MethodNotifyReady is a ModuleSrv method
 	MethodNotifyReady = C.DRPC_METHOD_SRV_NOTIFY_READY
+)
 
-	// ModuleSecurity is the dRPC module for security tasks in the DAOS
-	// server
-	ModuleSecurity = C.DRPC_MODULE_SEC
+const (
 	// MethodValidateCredentials is a ModuleSecurity method
 	MethodValidateCredentials = C.DRPC_METHOD_SEC_VALIDATE_CREDS
 )
