@@ -30,6 +30,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 // mockReader is a mock used to represent a successful read of some text
@@ -237,5 +239,37 @@ func TestParseACL_ErrorReadingFile(t *testing.T) {
 	if !strings.Contains(err.Error(), expectedError) {
 		t.Errorf("Wrong error message '%s' (expected to contain '%s')",
 			err.Error(), expectedError)
+	}
+}
+
+func TestParseACL_MultiValidACEWithComment(t *testing.T) {
+	expectedACEs := []string{
+		"A:g:readers@:r",
+		"L:f:baduser@:rw",
+		"U:f:EVERYONE@:rw",
+	}
+
+	input := []string{
+		"# This is a comment",
+	}
+	input = append(input, expectedACEs...)
+	input = append(input, " #another comment here")
+
+	mockFile := &mockReader{
+		text: strings.Join(input, "\n"),
+	}
+
+	result, err := parseACL(mockFile)
+
+	if err != nil {
+		t.Errorf("Expected no error, got '%s'", err.Error())
+	}
+
+	if result == nil {
+		t.Error("Expected result, got nil")
+	}
+
+	if diff := cmp.Diff(result, expectedACEs); diff != "" {
+		t.Errorf("Unexpected ACE list: %v\n", diff)
 	}
 }
