@@ -35,7 +35,7 @@ import (
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
-	log "github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 )
 
@@ -48,6 +48,7 @@ const (
 // Management Service proxy, handling dRPCs sent by libdaos by forwarding them
 // to MS.
 type mgmtModule struct {
+	log logging.Logger
 	// The access point
 	ap   string
 	tcfg *security.TransportConfig
@@ -74,7 +75,7 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte) ([]byte, error) {
 		return nil, errors.Wrap(err, "unmarshal GetAttachInfo request")
 	}
 
-	log.Debugf("GetAttachInfo %s %v", mod.ap, *req)
+	mod.log.Debugf("GetAttachInfo %s %v", mod.ap, *req)
 
 	dialOpt, err := security.DialOptionForTransportConfig(mod.tcfg)
 	if err != nil {

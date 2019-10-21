@@ -94,7 +94,7 @@ func TestProviderScan(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)
 
 			if tc.discoverRes == nil {
 				tc.discoverRes = []Module{defaultModule}
@@ -219,7 +219,7 @@ func TestProviderPrepare(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)
 
 			if tc.getNamespaceRes == nil {
 				tc.getNamespaceRes = []Namespace{defaultNamespace}
@@ -282,7 +282,7 @@ func TestProviderGetState(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)
 
 			mb := NewMockBackend(&MockBackendConfig{
 				DiscoverErr:     tc.discoverErr,
@@ -425,7 +425,7 @@ func TestProviderCheckFormat(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)
 
 			mb := NewMockBackend(&MockBackendConfig{
 				DiscoverErr:     tc.discoverErr,
@@ -727,7 +727,7 @@ func TestProviderFormat(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)
 
 			mb := NewMockBackend(&MockBackendConfig{
 				DiscoverErr:     tc.discoverErr,
