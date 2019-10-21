@@ -46,6 +46,7 @@ const (
 type PoolCmd struct {
 	Create  PoolCreateCmd  `command:"create" alias:"c" description:"Create a DAOS pool"`
 	Destroy PoolDestroyCmd `command:"destroy" alias:"d" description:"Destroy a DAOS pool"`
+	GetACL  PoolGetACLCmd  `command:"get-acl" alias:"g" description:"Get a DAOS pool's Access Control List"`
 }
 
 // PoolCreateCmd is the struct representing the command to create a DAOS pool.
@@ -81,6 +82,19 @@ type PoolDestroyCmd struct {
 // Execute is run when PoolDestroyCmd subcommand is activated
 func (d *PoolDestroyCmd) Execute(args []string) error {
 	return poolDestroy(d.log, d.conns, d.Uuid, d.Force)
+}
+
+// PoolGetACLCmd represents the command to fetch an Access Control List of a
+// DAOS pool.
+type PoolGetACLCmd struct {
+	logCmd
+	connectedCmd
+	UUID string `long:"pool" required:"1" description:"UUID of DAOS pool"`
+}
+
+// Execute is run when the PoolGetACLCmd subcommand is activated
+func (d *PoolGetACLCmd) Execute(args []string) error {
+	return poolGetACL(d.log, d.conns, d.UUID)
 }
 
 // getSize retrieves number of bytes from human readable string representation
@@ -237,4 +251,27 @@ func poolDestroy(log logging.Logger, conns client.Connect, poolUUID string, forc
 	log.Infof("Pool-destroy command %s\n", msg)
 
 	return err
+}
+
+func poolGetACL(log logging.Logger, conns client.Connect, poolUUID string) error {
+	req := &client.PoolGetACLReq{UUID: poolUUID}
+
+	resp, err := conns.PoolGetACL(req)
+	if err != nil {
+		log.Infof("Pool-get-ACL command failed: %s\n", err.Error())
+		return err
+	}
+
+	log.Infof("Pool-get-ACL command succeeded, UUID: %s\n", poolUUID)
+	acl := resp.ACL
+
+	log.Info("# Entries:\n")
+	if len(acl) == 0 {
+		log.Info("None\n")
+	}
+	for _, ace := range acl {
+		log.Infof("%s\n", ace)
+	}
+
+	return nil
 }
