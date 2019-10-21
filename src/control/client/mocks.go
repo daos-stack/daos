@@ -70,6 +70,12 @@ var (
 			State:    &MockState,
 		},
 	}
+	MockACL = &mockGetACLResult{
+		acl: []string{
+			"A::OWNER@:rw",
+			"A::GROUP@:r",
+		},
+	}
 	MockErr = errors.New("unknown failure")
 )
 
@@ -237,6 +243,13 @@ func (m *mockMgmtCtlClient) RequestDeviceScan(ctx context.Context, in *ctlpb.Dev
 
 func (m *mockMgmtCtlClient) RequestProviderList(ctx context.Context, in *ctlpb.ProviderListRequest, o ...grpc.CallOption) (*ctlpb.ProviderListReply, error) {
 	return &ctlpb.ProviderListReply{}, nil
+
+func (m *mockMgmtCtlClient) SystemMemberQuery(ctx context.Context, req *ctlpb.SystemMemberQueryReq, o ...grpc.CallOption) (*ctlpb.SystemMemberQueryResp, error) {
+	return &ctlpb.SystemMemberQueryResp{}, nil
+}
+
+func (m *mockMgmtCtlClient) SystemStop(ctx context.Context, req *ctlpb.SystemStopReq, o ...grpc.CallOption) (*ctlpb.SystemStopResp, error) {
+	return &ctlpb.SystemStopResp{}, nil
 }
 
 func newMockMgmtCtlClient(
@@ -258,7 +271,15 @@ func newMockMgmtCtlClient(
 	}
 }
 
-type mockMgmtSvcClient struct{}
+type mockGetACLResult struct {
+	acl    []string
+	status int32
+	err    error
+}
+
+type mockMgmtSvcClient struct {
+	getACLRet *mockGetACLResult
+}
 
 func (m *mockMgmtSvcClient) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq, o ...grpc.CallOption) (*mgmtpb.PoolCreateResp, error) {
 	// return successful pool creation results
@@ -270,6 +291,13 @@ func (m *mockMgmtSvcClient) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDes
 	// return successful pool destroy results
 	// initialise with zero values indicating mgmt.CTRL_SUCCESS
 	return &mgmtpb.PoolDestroyResp{}, nil
+}
+
+func (m *mockMgmtSvcClient) PoolGetACL(ctx context.Context, req *mgmtpb.GetACLReq, o ...grpc.CallOption) (*mgmtpb.GetACLResp, error) {
+	if m.getACLRet.err != nil {
+		return nil, m.getACLRet.err
+	}
+	return &mgmtpb.GetACLResp{ACL: m.getACLRet.acl, Status: m.getACLRet.status}, nil
 }
 
 func (m *mockMgmtSvcClient) BioHealthQuery(
@@ -310,7 +338,7 @@ func (m *mockMgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq, o ...
 	return &mgmtpb.JoinResp{}, nil
 }
 
-func (c *mockMgmtSvcClient) GetAttachInfo(ctx context.Context, in *mgmtpb.GetAttachInfoReq, opts ...grpc.CallOption) (*mgmtpb.GetAttachInfoResp, error) {
+func (m *mockMgmtSvcClient) GetAttachInfo(ctx context.Context, in *mgmtpb.GetAttachInfoReq, opts ...grpc.CallOption) (*mgmtpb.GetAttachInfoResp, error) {
 	return &mgmtpb.GetAttachInfoResp{}, nil
 }
 
@@ -318,16 +346,10 @@ func (m *mockMgmtSvcClient) KillRank(ctx context.Context, req *mgmtpb.DaosRank, 
 	return &mgmtpb.DaosResp{}, nil
 }
 
-func (m *mockMgmtSvcClient) SystemMemberQuery(ctx context.Context, req *mgmtpb.SystemMemberQueryReq, o ...grpc.CallOption) (*mgmtpb.SystemMemberQueryResp, error) {
-	return &mgmtpb.SystemMemberQueryResp{}, nil
-}
-
-func (m *mockMgmtSvcClient) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq, o ...grpc.CallOption) (*mgmtpb.SystemStopResp, error) {
-	return &mgmtpb.SystemStopResp{}, nil
-}
-
-func newMockMgmtSvcClient() mgmtpb.MgmtSvcClient {
-	return &mockMgmtSvcClient{}
+func newMockMgmtSvcClient(getACLResult *mockGetACLResult) mgmtpb.MgmtSvcClient {
+	return &mockMgmtSvcClient{
+		getACLResult,
+	}
 }
 
 // implement mock/stub behaviour for Control
@@ -387,12 +409,13 @@ type mockControllerFactory struct {
 	mountResults  ScmMountResults
 	log           logging.Logger
 	// to provide error injection into Control objects
-	scanRet    error
-	formatRet  error
-	updateRet  error
-	burninRet  error
-	killRet    error
-	connectRet error
+	scanRet      error
+	formatRet    error
+	updateRet    error
+	burninRet    error
+	killRet      error
+	connectRet   error
+	getACLResult *mockGetACLResult
 }
 
 func (m *mockControllerFactory) create(address string, cfg *security.TransportConfig) (Control, error) {
@@ -402,7 +425,7 @@ func (m *mockControllerFactory) create(address string, cfg *security.TransportCo
 		m.modules, m.moduleResults, m.pmems, m.mountResults,
 		m.scanRet, m.formatRet, m.updateRet, m.burninRet)
 
-	sClient := newMockMgmtSvcClient()
+	sClient := newMockMgmtSvcClient(m.getACLResult)
 
 	controller := newMockControl(m.log, address, m.state, m.connectRet, cClient, sClient)
 
@@ -416,13 +439,15 @@ func newMockConnect(log logging.Logger,
 	ctrlrResults NvmeControllerResults, modules ScmModules,
 	moduleResults ScmModuleResults, pmems PmemDevices, mountResults ScmMountResults,
 	scanRet error, formatRet error, updateRet error, burninRet error,
-	killRet error, connectRet error) Connect {
+	killRet error, connectRet error, getACLRet *mockGetACLResult) Connect {
 
 	return &connList{
+		log: log,
 		factory: &mockControllerFactory{
 			state, MockFeatures, ctrlrs, ctrlrResults, modules,
-			moduleResults, pmems, mountResults, log, scanRet, formatRet,
-			updateRet, burninRet, killRet, connectRet,
+			moduleResults, pmems, mountResults, log, scanRet,
+			formatRet, updateRet, burninRet, killRet, connectRet,
+			getACLRet,
 		},
 	}
 }
@@ -430,7 +455,8 @@ func newMockConnect(log logging.Logger,
 func defaultMockConnect(log logging.Logger) Connect {
 	return newMockConnect(
 		log, connectivity.Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
-		MockModuleResults, MockPmemDevices, MockMountResults, nil, nil, nil, nil, nil, nil)
+		MockModuleResults, MockPmemDevices, MockMountResults,
+		nil, nil, nil, nil, nil, nil, nil)
 }
 
 // NewClientFM provides a mock ClientFeatureMap for testing.

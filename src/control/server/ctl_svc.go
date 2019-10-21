@@ -41,10 +41,13 @@ type ControlService struct {
 	StorageControlService
 	NetworkScanService
 	harness           *IOServerHarness
+	membership        *common.Membership
 	supportedFeatures FeatureMap
 }
 
-func NewControlService(l logging.Logger, h *IOServerHarness, sp *scm.Provider, cfg *Configuration) (*ControlService, error) {
+func NewControlService(l logging.Logger, h *IOServerHarness, sp *scm.Provider, cfg *Configuration,
+	m *common.Membership) (*ControlService, error) {
+
 	scs, err := DefaultStorageControlService(l, cfg)
 	if err != nil {
 		return nil, err
@@ -65,6 +68,7 @@ func NewControlService(l logging.Logger, h *IOServerHarness, sp *scm.Provider, c
 		StorageControlService: *scs,
 		NetworkScanService:    *nss,
 		harness:               h,
+		membership:            m,
 		supportedFeatures:     fMap,
 	}, nil
 }

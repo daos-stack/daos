@@ -96,6 +96,16 @@ __shim_handle__daos_init(PyObject *self, PyObject *args)
 }
 
 static PyObject *
+__shim_handle__daos_fini(PyObject *self, PyObject *args)
+{
+	int rc;
+
+	rc = daos_fini();
+
+	return PyInt_FromLong(rc);
+}
+
+static PyObject *
 __shim_handle__err_to_str(PyObject *self, PyObject *args)
 {
 	const char	*str;
@@ -711,7 +721,7 @@ __shim_handle__kv_iter(PyObject *self, PyObject *args)
 	char		*enum_buf = NULL;
 	daos_size_t	 size;
 	char		*ptr;
-	int		 i;
+	uint32_t	 i;
 	int		 rc = 0;
 
 	/** Parse arguments */
@@ -869,6 +879,7 @@ out:
 static PyMethodDef daosMethods[] = {
 	/** Generic methods */
 	EXPORT_PYTHON_METHOD(daos_init),
+	EXPORT_PYTHON_METHOD(daos_fini),
 	EXPORT_PYTHON_METHOD(err_to_str),
 
 	/** Container operations */

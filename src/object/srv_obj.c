@@ -76,19 +76,6 @@ ds_obj_rw_complete(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		}
 	}
 
-	if (cont_hdl != NULL && cont_hdl->sch_cont != NULL) {
-		struct obj_rw_out	*orwo = crt_reply_get(rpc);
-
-		rc = vos_oi_get_attr(cont_hdl->sch_cont->sc_hdl, orwi->orw_oid,
-				     orwi->orw_epoch, dth, &orwo->orw_attr);
-		if (rc) {
-			D_ERROR(DF_UOID" can not get status: rc %d\n",
-				DP_UOID(orwi->orw_oid), rc);
-			if (status == 0)
-				status = rc;
-		}
-	}
-
 	return status;
 }
 
@@ -221,6 +208,7 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 
 	D_DEBUG(DB_IO, "bulk_op:%d sgl_nr%d\n", bulk_op, sgl_nr);
 
+	arg.bulks_inflight++;
 	for (i = 0; i < sgl_nr; i++) {
 		d_sg_list_t		*sgl, tmp_sgl;
 		struct crt_bulk_desc	 bulk_desc;
@@ -333,7 +321,7 @@ next:
 			break;
 	}
 
-	if (arg.bulks_inflight == 0)
+	if (--arg.bulks_inflight == 0)
 		ABT_eventual_set(arg.eventual, &rc, sizeof(rc));
 
 	ret = ABT_eventual_wait(arg.eventual, (void **)&status);
@@ -640,6 +628,7 @@ ec_update_bulk_transfer(crt_rpc_t *rpc, bool bulk_bind,
 	if (rc != 0)
 		return dss_abterr2der(rc);
 
+	arg.bulks_inflight++;
 	for (i = 0; i < sgl_nr; i++) {
 		d_sg_list_t		*sgl, tmp_sgl;
 		struct crt_bulk_desc	 bulk_desc;
@@ -737,7 +726,7 @@ next:
 		D_FREE(skip_list[i]);
 	}
 
-	if (arg.bulks_inflight == 0)
+	if (--arg.bulks_inflight == 0)
 		ABT_eventual_set(arg.eventual, &rc, sizeof(rc));
 
 	ret = ABT_eventual_wait(arg.eventual, (void **)&status);

@@ -27,6 +27,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/daos-stack/daos/src/control/common"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
@@ -40,11 +41,11 @@ func (c *connList) SystemStop() (common.SystemMemberResults, error) {
 		return nil, err
 	}
 
-	rpcReq := &mgmtpb.SystemStopReq{}
+	rpcReq := &ctlpb.SystemStopReq{}
 
 	c.log.Debugf("DAOS system shutdown request: %s\n", rpcReq)
 
-	rpcResp, err := mc.getSvcClient().SystemStop(context.Background(), rpcReq)
+	rpcResp, err := mc.getCtlClient().SystemStop(context.Background(), rpcReq)
 	if err != nil {
 		return nil, err
 	}
@@ -63,11 +64,11 @@ func (c *connList) SystemMemberQuery() (common.SystemMembers, error) {
 		return nil, err
 	}
 
-	rpcReq := &mgmtpb.SystemMemberQueryReq{}
+	rpcReq := &ctlpb.SystemMemberQueryReq{}
 
 	c.log.Debugf("DAOS system query request: %s\n", rpcReq)
 
-	rpcResp, err := mc.getSvcClient().SystemMemberQuery(context.Background(), rpcReq)
+	rpcResp, err := mc.getCtlClient().SystemMemberQuery(context.Background(), rpcReq)
 	if err != nil {
 		return nil, err
 	}
