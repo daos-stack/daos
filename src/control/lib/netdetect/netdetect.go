@@ -301,7 +301,6 @@ func getNodeSibling(deviceScanCfg DeviceScan) C.hwloc_obj_t {
 // This function is less restrictive than getNodeSibling because it does not require that the search device
 // be a member of the systemDeviceNamesMap.
 func getNodeAlias(deviceScanCfg DeviceScan) C.hwloc_obj_t {
-
 	node := getNodeDirect(deviceScanCfg)
 	if node == nil || node.parent == nil {
 		return nil
@@ -502,14 +501,10 @@ func GetDeviceAlias(device string) (string, error) {
 	}
 	defer cleanUp(deviceScanCfg.topology)
 
-	if _, found := deviceScanCfg.systemDeviceNamesMap[device]; !found {
-		return "", errors.Errorf("device: %s is an invalid device name", device)
-	}
-
 	deviceScanCfg.targetDevice = device
 
 	// The loopback device isn't a physical device that hwloc will find in the topology
-	// If "lo" is specified, it is treated specially and be given NUMA node 0.
+	// If "lo" is specified, it is treated specially.
 	if deviceScanCfg.targetDevice == "lo" {
 		return "lo", nil
 	}

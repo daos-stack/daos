@@ -124,18 +124,16 @@ func TestValidateNetworkConfig(t *testing.T) {
 }
 
 // TestDeviceAlias uses XML topology data to simulate real systems.
-// hwloc will use this topology for queries instead of the local system
-// running the test.
+// hwloc will use this topology for queries instead of the local system running the test.
 // This test verifies that GetDeviceAlias() is capable of performing this lookup
+// This particular test verifies the expected lookup path that uses a device found
+// on the system device list, and expected to find the related sibling.
 func TestDeviceAlias(t *testing.T) {
-
 	tests := []struct {
 		device   string
 		topology string
 		expected string
 	}{
-		// boro-84 has two NUMA nodes, with eth0, eth1, ib0 on NUMA 0,
-		// and no ib1 in the topology
 		{"lo", "testdata/boro-84.xml", "lo"},
 		{"eth0", "testdata/boro-84.xml", "i40iw1"},
 		{"eth1", "testdata/boro-84.xml", "i40iw0"},
@@ -145,6 +143,15 @@ func TestDeviceAlias(t *testing.T) {
 		{"eth1", "testdata/wolf-133.xml", "i40iw0"},
 		{"ib0", "testdata/wolf-133.xml", "hfi1_0"},
 		{"ib1", "testdata/wolf-133.xml", "hfi1_1"},
+		// The following data set verifies that the sibling lookup functions properly
+		// even when the search device and expected target are swapped
+		{"i40iw1", "testdata/boro-84.xml", "eth0"},
+		{"i40iw0", "testdata/boro-84.xml", "eth1"},
+		{"hfi1_0", "testdata/boro-84.xml", "ib0"},
+		{"i40iw1", "testdata/wolf-133.xml", "eth0"},
+		{"i40iw0", "testdata/wolf-133.xml", "eth1"},
+		{"hfi1_0", "testdata/wolf-133.xml", "ib0"},
+		{"hfi1_1", "testdata/wolf-133.xml", "ib1"},
 	}
 
 	for _, tt := range tests {
@@ -158,5 +165,36 @@ func TestDeviceAlias(t *testing.T) {
 		os.Unsetenv("HWLOC_XMLFILE")
 		AssertEqual(t, deviceAlias, tt.expected,
 			"unexpected mismatch with device and topology")
+	}
+}
+
+// TestDeviceAliasErrors uses XML topology data to simulate real systems.
+// hwloc will use this topology for queries instead of the local system
+// running the test.
+// This test verifies that GetDeviceAlias() handles the error cases when a specified
+// device cannot be matched to a sibling.
+func TestDeviceAliasErrors(t *testing.T) {
+	tests := []struct {
+		device   string
+		topology string
+		expected string
+	}{
+		{"eth2", "testdata/boro-84.xml", ""},
+		{"ib2", "testdata/boro-84.xml", ""},
+		{"mlx15", "testdata/wolf-133.xml", ""},
+		{"hfi1_01", "testdata/wolf-133.xml", ""},
+		{"i40iw02", "testdata/wolf-133.xml", ""},
+	}
+
+	for _, tt := range tests {
+		_, err := os.Stat(tt.topology)
+		AssertEqual(t, err, nil, "unable to load xmlTopology")
+		os.Setenv("HWLOC_XMLFILE", tt.topology)
+		deviceAlias, err := GetDeviceAlias(tt.device)
+		AssertTrue(t, err != nil,
+			"an error was expected but not received")
+		os.Unsetenv("HWLOC_XMLFILE")
+		AssertEqual(t, deviceAlias, tt.expected,
+			"an unexpected sibling match was found in the topology")
 	}
 }
