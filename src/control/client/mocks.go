@@ -243,6 +243,7 @@ func (m *mockMgmtCtlClient) RequestDeviceScan(ctx context.Context, in *ctlpb.Dev
 
 func (m *mockMgmtCtlClient) RequestProviderList(ctx context.Context, in *ctlpb.ProviderListRequest, o ...grpc.CallOption) (*ctlpb.ProviderListReply, error) {
 	return &ctlpb.ProviderListReply{}, nil
+}
 
 func (m *mockMgmtCtlClient) SystemMemberQuery(ctx context.Context, req *ctlpb.SystemMemberQueryReq, o ...grpc.CallOption) (*ctlpb.SystemMemberQueryResp, error) {
 	return &ctlpb.SystemMemberQueryResp{}, nil
