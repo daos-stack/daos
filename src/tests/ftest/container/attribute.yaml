@@ -3,8 +3,6 @@
 hosts: !mux
   test_servers:
     - boro-A
-  test_clients:
-    - boro-A
 timeout: 50
 server_config:
   name: daos_server
