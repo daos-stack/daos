@@ -27,8 +27,7 @@ import json
 import ctypes
 
 from apricot import TestWithServers
-from daos_api import DaosContext, DaosPool, DaosApiError
-from daos_cref import RankList
+from pydaos.raw import DaosContext, DaosPool, DaosApiError, RankList
 
 
 class BadEvictTest(TestWithServers):
