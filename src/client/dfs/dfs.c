@@ -669,8 +669,10 @@ open_file(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 
 	/* Check if parent has the filename entry */
 	rc = fetch_entry(parent->oh, th, file->name, false, &exists, &entry);
-	if (rc)
+	if (rc) {
+		D_ERROR("fetch_entry %s failed %d.\n", file->name, rc);
 		return rc;
+	}
 
 	if (flags & O_CREAT) {
 		if (exists) {
@@ -738,8 +740,10 @@ open_file:
 
 	rc = check_access(dfs, geteuid(), getegid(), entry.mode,
 			  (daos_mode == DAOS_OO_RO) ? R_OK : R_OK | W_OK);
-	if (rc)
+	if (rc) {
+		D_ERROR("check_access failed %d\n", rc);
 		return rc;
+	}
 
 	file->mode = entry.mode;
 	rc = daos_array_open_with_attr(dfs->coh, entry.oid, th, daos_mode, 1,
@@ -1127,7 +1131,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	dfs_t			*dfs;
 	daos_pool_info_t	pool_info = {};
 	daos_prop_t		*prop;
-	struct daos_prop_entry	*prop_entry;
+	struct daos_prop_entry	*entry;
 	int			amode, obj_mode;
 	int			rc;
 
@@ -1135,6 +1139,26 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	obj_mode = get_daos_obj_mode(flags);
 	if (obj_mode == -1)
 		return EINVAL;
+
+	prop = daos_prop_alloc(0);
+	if (prop == NULL) {
+		D_ERROR("Failed to allocate prop.");
+		return ENOMEM;
+	}
+
+	rc = daos_cont_query(coh, NULL, prop, NULL);
+	if (rc) {
+		D_ERROR("daos_cont_query() Failed (%d)\n", rc);
+		daos_prop_free(prop);
+		return daos_der2errno(rc);
+	}
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_LAYOUT_TYPE);
+	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_LAYOUT_POSIX) {
+		daos_prop_free(prop);
+		return EINVAL;
+	}
+	daos_prop_free(prop);
 
 	D_ALLOC_PTR(dfs);
 	if (dfs == NULL)
@@ -1148,12 +1172,10 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	if (rc != 0)
 		return daos_der2errno(rc);
 
-	/* Fetch ownership props with the query */
 	prop = daos_prop_alloc(0);
 	if (prop == NULL) {
-		D_ERROR("Failed to allocate pool prop for query\n");
-		rc = -DER_NOMEM;
-		D_GOTO(err_dfs, rc);
+		D_ERROR("Failed to allocate prop.");
+		return ENOMEM;
 	}
 
 	rc = daos_pool_query(poh, NULL, &pool_info, prop, NULL);
@@ -1164,18 +1186,18 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	}
 
 	/* Convert the owner information to uid/gid */
-	prop_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER);
-	D_ASSERT(prop_entry != NULL);
-	rc = daos_acl_principal_to_uid(prop_entry->dpe_str, &dfs->uid);
+	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER);
+	D_ASSERT(entry != NULL);
+	rc = daos_acl_principal_to_uid(entry->dpe_str, &dfs->uid);
 	if (rc != 0) {
 		D_ERROR("Unable to convert owner to uid\n");
 		daos_prop_free(prop);
 		D_GOTO(err_dfs, rc = daos_der2errno(rc));
 	}
 
-	prop_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER_GROUP);
-	D_ASSERT(prop_entry != NULL);
-	rc = daos_acl_principal_to_gid(prop_entry->dpe_str, &dfs->gid);
+	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER_GROUP);
+	D_ASSERT(entry != NULL);
+	rc = daos_acl_principal_to_gid(entry->dpe_str, &dfs->gid);
 	if (rc != 0) {
 		D_ERROR("Unable to convert owner-group to gid\n");
 		daos_prop_free(prop);

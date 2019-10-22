@@ -34,18 +34,15 @@ import (
 func TestStorageCommands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
 		{
-			// FIXME: This arguably should result in an error,
-			// but we can't see the io.EOF error because it's
-			// swallowed in getConsent()
-			"Format without force",
+			"Format without reformat",
 			"storage format",
-			"ConnectClients",
+			"ConnectClients StorageFormat-false",
 			nil,
 		},
 		{
-			"Format with force",
-			"storage format --force",
-			"ConnectClients StorageFormat",
+			"Format with reformat",
+			"storage format --reformat",
+			"ConnectClients StorageFormat-true",
 			nil,
 		},
 		{

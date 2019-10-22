@@ -66,7 +66,7 @@ type Connect interface {
 	ClearConns() ResultMap
 	StoragePrepare(*ctlpb.StoragePrepareReq) ResultMap
 	StorageScan() (ClientCtrlrMap, ClientModuleMap, ClientPmemMap)
-	StorageFormat() (ClientCtrlrMap, ClientMountMap)
+	StorageFormat(reformat bool) (ClientCtrlrMap, ClientMountMap)
 	StorageUpdate(*ctlpb.StorageUpdateReq) (ClientCtrlrMap, ClientModuleMap)
 	// TODO: implement Burnin client features
 	//StorageBurnIn() (ClientCtrlrMap, ClientModuleMap)
@@ -74,6 +74,7 @@ type Connect interface {
 	KillRank(uuid string, rank uint32) ResultMap
 	PoolCreate(*PoolCreateReq) (*PoolCreateResp, error)
 	PoolDestroy(*PoolDestroyReq) error
+	PoolGetACL(*PoolGetACLReq) (*PoolGetACLResp, error)
 	BioHealthQuery(*mgmtpb.BioHealthReq) ResultQueryMap
 	SmdListDevs(*mgmtpb.SmdDevReq) ResultSmdMap
 	SmdListPools(*mgmtpb.SmdPoolReq) ResultSmdMap
