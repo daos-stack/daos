@@ -57,15 +57,13 @@ func DefaultStorageControlService(log logging.Logger, cfg *Configuration) (*Stor
 		nrHugePages: cfg.NrHugepages,
 	}
 
-	return NewStorageControlService(log,
+	return NewStorageControlService(log, cfg.ext,
 		newNvmeStorage(log, cfg.NvmeShmID, spdkScript, cfg.ext),
 		scm.DefaultProvider(log), cfg.Servers), nil
 }
 
 // NewStorageControlService returns an initialized *StorageControlService
-func NewStorageControlService(log logging.Logger, nvme *nvmeStorage, scm *scm.Provider,
-	srvCfgs []*ioserver.Config) *StorageControlService {
-
+func NewStorageControlService(log logging.Logger, ext External, nvme *nvmeStorage, scm *scm.Provider, srvCfgs []*ioserver.Config) *StorageControlService {
 	instanceStorage := []ioserver.StorageConfig{}
 	for _, srvCfg := range srvCfgs {
 		instanceStorage = append(instanceStorage, srvCfg.Storage)
@@ -73,6 +71,7 @@ func NewStorageControlService(log logging.Logger, nvme *nvmeStorage, scm *scm.Pr
 
 	return &StorageControlService{
 		log:             log,
+		ext:             ext,
 		nvme:            nvme,
 		scm:             scm,
 		instanceStorage: instanceStorage,

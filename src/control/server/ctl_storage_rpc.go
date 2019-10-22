@@ -152,9 +152,7 @@ func (c *StorageControlService) StoragePrepare(ctx context.Context, req *ctlpb.S
 }
 
 // StorageScan discovers non-volatile storage hardware on node.
-func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScanReq) (
-	*ctlpb.StorageScanResp, error) {
-
+func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScanReq) (*ctlpb.StorageScanResp, error) {
 	c.log.Debug("received StorageScan RPC")
 
 	msg := "Storage Scan "

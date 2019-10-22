@@ -51,6 +51,8 @@ func MockDiscovery() ipmctl.DeviceDiscovery {
 	}
 }
 
+// MockModule converts ipmctl type SCM module and returns storage/scm
+// internal type.
 func MockModule(d *ipmctl.DeviceDiscovery) Module {
 	if d == nil {
 		md := MockDiscovery()
@@ -64,19 +66,6 @@ func MockModule(d *ipmctl.DeviceDiscovery) Module {
 		ControllerID:    uint32(d.Memory_controller_id),
 		SocketID:        uint32(d.Socket_id),
 		Capacity:        d.Capacity,
-	}
-}
-
-// MockPmemDevice returns a mock SCM namespace (PMEM device file),
-// which would normally be parsed from the output of ndctl cmdline tool.
-func MockPmemDevice() Namespace {
-	m := MockPmemDevicePB()
-
-	return Namespace{
-		UUID:     m.Uuid,
-		Blockdev: m.Blockdev,
-		Dev:      m.Dev,
-		NumaNode: m.Numanode,
 	}
 }
 
