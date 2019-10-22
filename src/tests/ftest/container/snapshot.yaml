@@ -12,8 +12,6 @@ faults:
 server_config:
    name: daos_server
 poolparams:
-   createmode:
-     mode: 511
    createset:
      setname: daos_server
    createsize:

@@ -55,7 +55,8 @@ class Snapshot(TestWithServers):
         """
         super(Snapshot, self).setUp()
         # get parameters from yaml file
-        createmode = self.params.get("mode", '/run/poolparams/createmode/')
+        createmode = self.params.get("mode",
+                                     '/run/poolparams/createmode/', 511)
         createuid = os.geteuid()
         creategid = os.getegid()
         createsetid = self.params.get("setname",

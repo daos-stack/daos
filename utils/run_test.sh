@@ -93,6 +93,7 @@ if [ -d "/mnt/daos" ]; then
     run_test build/src/common/tests/sched
     run_test build/src/common/tests/drpc_tests
     run_test build/src/client/api/tests/eq_tests
+	run_test build/src/bio/smd/tests/smd_ut
     run_test src/vos/tests/evt_ctl.sh
     run_test src/vos/tests/evt_ctl.sh pmem
     run_test "${SL_PREFIX}/bin/vea_ut"
