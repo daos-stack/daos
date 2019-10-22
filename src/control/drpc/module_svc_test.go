@@ -80,9 +80,7 @@ func TestService_RegisterModule_Single_Success(t *testing.T) {
 	expectedID := defaultTestModID
 	testMod := newTestModule(expectedID)
 
-	err := service.RegisterModule(testMod)
-
-	if err != nil {
+	if err := service.RegisterModule(testMod); err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
 
@@ -109,9 +107,7 @@ func TestService_RegisterModule_Multiple_Success(t *testing.T) {
 		mod := newTestModule(id)
 		testMods = append(testMods, mod)
 
-		err := service.RegisterModule(mod)
-
-		if err != nil {
+		if err := service.RegisterModule(mod); err != nil {
 			t.Fatalf("expected no error, got: %v", err)
 		}
 	}
@@ -137,13 +133,11 @@ func TestService_RegisterModule_DuplicateID(t *testing.T) {
 	testMod := newTestModule(15)
 	dupMod := newTestModule(testMod.IDValue)
 
-	err := service.RegisterModule(testMod)
-	if err != nil {
-		t.Fatalf("expected no error for initial registration, got: %v",
-			err)
+	if err := service.RegisterModule(testMod); err != nil {
+		t.Fatalf("expected no error for initial registration, got: %v", err)
 	}
 
-	err = service.RegisterModule(dupMod)
+	err := service.RegisterModule(dupMod)
 
 	common.CmpErr(t, errors.New("already exists"), err)
 }
@@ -158,6 +152,8 @@ func getGarbageBytes() []byte {
 }
 
 func getCallBytes(t *testing.T, sequence int64, moduleID int32) []byte {
+	t.Helper()
+
 	call := &Call{
 		Sequence: sequence,
 		Module:   moduleID,
@@ -192,18 +188,15 @@ func TestService_ProcessMessage(t *testing.T) {
 			callBytes:    getGarbageBytes(),
 			expectedResp: getResponse(-1, Status_FAILURE, nil),
 		},
-
 		"module doesn't exist": {
 			callBytes:    getCallBytes(t, testSequenceNum, 256),
 			expectedResp: getResponse(testSequenceNum, Status_UNKNOWN_MODULE, nil),
 		},
-
 		"HandleCall fails": {
 			callBytes:     getCallBytes(t, testSequenceNum, defaultTestModID),
 			handleCallErr: errors.New("HandleCall error"),
 			expectedResp:  getResponse(testSequenceNum, Status_FAILURE, nil),
 		},
-
 		"HandleCall succeeds": {
 			callBytes:      getCallBytes(t, testSequenceNum, defaultTestModID),
 			handleCallResp: []byte("succeeded"),
