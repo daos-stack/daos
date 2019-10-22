@@ -234,6 +234,7 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 	   uint64_t obj_key, uint8_t *dom_used, uint8_t *tgts_used,
 	   struct pl_obj_layout *layout, int shard_num)
 {
+	int			range_set;
 	uint8_t                 found_target = 0;
 	uint32_t                selected_dom;
 	struct pool_domain      *root_pos;
@@ -255,6 +256,15 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 
 			uint32_t	fail_num = 0;
 			uint32_t	dom_id;
+			uint32_t	start_tgt;
+			uint32_t	end_tgt;
+
+			start_tgt = curr_dom->do_targets[0].ta_comp.co_id;
+			end_tgt = start_tgt + (num_doms-1);
+
+			range_set = isset_range(dom_used, start_tgt, end_tgt);
+			if (range_set)
+				clrbit_range(dom_used, start_tgt, end_tgt);
 
 			do {
 				/*
@@ -280,13 +290,12 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 			/* Found target (which may be available or not) */
 			found_target = 1;
 		} else {
-			int             range_set;
 			uint32_t	fail_num = 0;
-			uint64_t        child_pos;
+			uint32_t        start_dom;
+			uint32_t        end_dom;
 			uint64_t        key;
 
 			key = obj_key;
-			child_pos = (curr_dom->do_children) - root_pos;
 
 			/*
 			 * If all of the nodes in this domain have been used for
@@ -294,12 +303,12 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 			 * nodes as unused in bookkeeping array so duplicates
 			 * can be chosen
 			 */
-			range_set = isset_range(dom_used, child_pos, child_pos
-						+ num_doms - 1);
-			if (range_set  && curr_dom->do_children != NULL) {
-				clrbit_range(dom_used, child_pos,
-					     child_pos + (num_doms - 1));
-			}
+			start_dom = (curr_dom->do_children) - root_pos;
+			end_dom = start_dom + (num_doms - 1);
+
+			range_set = isset_range(dom_used, start_dom, end_dom);
+			if (range_set)
+				clrbit_range(dom_used, start_dom, end_dom);
 
 			/*
 			 * Keep choosing new domains until one that has
@@ -309,9 +318,10 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 				selected_dom = jump_consistent_hash(key,
 								    num_doms);
 				key = crc(key, fail_num++);
-			} while (isset(dom_used, selected_dom + child_pos));
+			} while (isset(dom_used, start_dom + selected_dom));
+
 			/* Mark this domain as used */
-			setbit(dom_used, (selected_dom + child_pos));
+			setbit(dom_used, start_dom + selected_dom);
 
 			curr_dom = &(curr_dom->do_children[selected_dom]);
 			obj_key = crc(obj_key, curr_dom->do_comp.co_id);
