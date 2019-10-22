@@ -37,13 +37,6 @@ import (
 	"github.com/daos-stack/daos/src/control/security/auth"
 )
 
-// Module id for the Server security module
-const securityModuleID int32 = 1
-
-const (
-	methodValidateCredentials int32 = 101
-)
-
 // SecurityModule is the security drpc module struct
 type SecurityModule struct {
 	config *security.TransportConfig
@@ -92,7 +85,7 @@ func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error)
 
 // HandleCall is the handler for calls to the SecurityModule
 func (m *SecurityModule) HandleCall(client *drpc.Client, method int32, body []byte) ([]byte, error) {
-	if method != methodValidateCredentials {
+	if method != drpc.MethodValidateCredentials {
 		return nil, errors.Errorf("Attempt to call unregistered function")
 	}
 
@@ -105,5 +98,5 @@ func (m *SecurityModule) InitModule(state drpc.ModuleState) {}
 
 // ID will return Security module ID
 func (m *SecurityModule) ID() int32 {
-	return securityModuleID
+	return drpc.ModuleSecurity
 }
