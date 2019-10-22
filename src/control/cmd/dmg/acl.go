@@ -44,6 +44,12 @@ func readACLFile(aclFile string) ([]string, error) {
 	return parseACL(file)
 }
 
+// isACLFileComment checks whether the line is formatted as a comment for an
+// ACL file.
+func isACLFileComment(line string) bool {
+	return strings.HasPrefix(line, "#")
+}
+
 // parseACL reads the content from io.Reader and puts the results into a list
 // of Access Control Entry strings.
 // Assumes that ACE strings are provided one per line.
@@ -56,7 +62,7 @@ func parseACL(reader io.Reader) ([]string, error) {
 		}
 
 		line := strings.TrimSpace(scanner.Text())
-		if line != "" {
+		if line != "" && !isACLFileComment(line) {
 			aceList = append(aceList, line)
 		}
 	}

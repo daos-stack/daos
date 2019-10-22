@@ -208,6 +208,7 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 
 	D_DEBUG(DB_IO, "bulk_op:%d sgl_nr%d\n", bulk_op, sgl_nr);
 
+	arg.bulks_inflight++;
 	for (i = 0; i < sgl_nr; i++) {
 		d_sg_list_t		*sgl, tmp_sgl;
 		struct crt_bulk_desc	 bulk_desc;
@@ -320,7 +321,7 @@ next:
 			break;
 	}
 
-	if (arg.bulks_inflight == 0)
+	if (--arg.bulks_inflight == 0)
 		ABT_eventual_set(arg.eventual, &rc, sizeof(rc));
 
 	ret = ABT_eventual_wait(arg.eventual, (void **)&status);
@@ -626,6 +627,7 @@ ec_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 	if (rc != 0)
 		return dss_abterr2der(rc);
 
+	arg.bulks_inflight++;
 	for (i = 0; i < sgl_nr; i++) {
 		d_sg_list_t		*sgl, tmp_sgl;
 		struct crt_bulk_desc	 bulk_desc;
@@ -723,7 +725,7 @@ next:
 		D_FREE(skip_list[i]);
 	}
 
-	if (arg.bulks_inflight == 0)
+	if (--arg.bulks_inflight == 0)
 		ABT_eventual_set(arg.eventual, &rc, sizeof(rc));
 
 	ret = ABT_eventual_wait(arg.eventual, (void **)&status);
