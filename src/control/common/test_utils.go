@@ -29,8 +29,6 @@ import (
 	"sort"
 	"strings"
 	"testing"
-
-	log "github.com/daos-stack/daos/src/control/logging"
 )
 
 // AssertTrue asserts b is true
@@ -134,25 +132,12 @@ func LoadTestFiles(inFile string, outFile string) (
 	return
 }
 
-// ShowLogOnFailure captures the log output in a buffer and displays it on test
-// failure. Returns a closure which should be run via defer in the test function.
-func ShowLogOnFailure(t *testing.T) func() {
+// ShowBufferOnFailure displays captured output on test failure. Should be run
+// via defer in the test function.
+func ShowBufferOnFailure(t *testing.T, buf fmt.Stringer) {
 	t.Helper()
 
-	var buf strings.Builder
-	log.SetLogger(log.NewCombinedLogger(t.Name(), &buf))
-
-	return ShowBufferOnFailure(t, &buf)
-}
-
-// ShowBufferOnFailure displays captured output on test failure. Returns a
-// closure which should be run via defer in the test function.
-func ShowBufferOnFailure(t *testing.T, buf fmt.Stringer) func() {
-	t.Helper()
-
-	return func() {
-		if t.Failed() {
-			fmt.Printf("captured log output:\n%s", buf.String())
-		}
+	if t.Failed() {
+		fmt.Printf("captured log output:\n%s", buf.String())
 	}
 }

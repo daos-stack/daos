@@ -43,7 +43,7 @@ import (
 
 func TestHarnessCreateSuperblocks(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)()
+	defer common.ShowBufferOnFailure(t, buf)
 
 	testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
 	defer os.RemoveAll(testDir)
@@ -173,7 +173,7 @@ func TestHarnessGetMSLeaderInstance(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)
 
 			// ugh, this isn't ideal
 			oldGetAddrFn := getInterfaceAddrs

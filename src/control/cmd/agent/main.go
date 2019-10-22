@@ -45,6 +45,7 @@ const (
 )
 
 type cliOptions struct {
+	AllowProxy bool   `long:"allow-proxy" description:"Allow proxy configuration via environment"`
 	Debug      bool   `short:"d" long:"debug" description:"Enable debug output"`
 	JSON       bool   `short:"j" long:"json" description:"Enable JSON output"`
 	ConfigPath string `short:"o" long:"config-path" description:"Path to agent configuration file" default:"etc/daos_agent.yml"`
@@ -94,6 +95,10 @@ func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
 	_, err := p.Parse()
 	if err != nil {
 		return err
+	}
+
+	if !opts.AllowProxy {
+		common.ScrubProxyVariables()
 	}
 
 	if opts.JSON {
@@ -151,14 +156,18 @@ func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
 	finish := make(chan bool, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
-	drpcServer, err := drpc.NewDomainSocketServer(sockPath)
+	drpcServer, err := drpc.NewDomainSocketServer(log, sockPath)
 	if err != nil {
 		log.Errorf("Unable to create socket server: %v", err)
 		return err
 	}
 
-	drpcServer.RegisterRPCModule(NewSecurityModule(config.TransportConfig))
-	drpcServer.RegisterRPCModule(&mgmtModule{config.AccessPoints[0], config.TransportConfig})
+	drpcServer.RegisterRPCModule(NewSecurityModule(log, config.TransportConfig))
+	drpcServer.RegisterRPCModule(&mgmtModule{
+		log:  log,
+		ap:   config.AccessPoints[0],
+		tcfg: config.TransportConfig,
+	})
 
 	err = drpcServer.Start()
 	if err != nil {
