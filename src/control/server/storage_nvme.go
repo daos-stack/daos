@@ -90,6 +90,8 @@ type spdkSetup struct {
 func (s *spdkSetup) prep(nrHugepages int, usr string, wlist string) error {
 	srv := exec.Command(s.scriptPath)
 	srv.Env = os.Environ()
+	var stdout bytes.Buffer
+	srv.Stdout = &stdout
 	var stderr bytes.Buffer
 	srv.Stderr = &stderr
 	var hPages, tUsr, whitelist string
@@ -111,10 +113,14 @@ func (s *spdkSetup) prep(nrHugepages int, usr string, wlist string) error {
 		s.log.Debugf("spdk setup with %s\n", whitelist)
 	}
 
-	return errors.Wrapf(
-		srv.Run(),
-		"spdk setup failed (%s, %s, %s, %s)",
-		hPages, tUsr, whitelist, stderr.String())
+	if err := srv.Run(); err != nil {
+		return errors.Wrapf(err, "spdk setup failed (%s, %s, %s, %s)",
+			hPages, tUsr, whitelist, stderr.String())
+	}
+
+	s.log.Debugf("spdk setup run:\n%s", stdout.String())
+
+	return nil
 }
 
 // reset executes setup script to deallocate hugepages & return PCI devices

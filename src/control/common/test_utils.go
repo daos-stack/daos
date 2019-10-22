@@ -29,8 +29,6 @@ import (
 	"sort"
 	"strings"
 	"testing"
-
-	log "github.com/daos-stack/daos/src/control/logging"
 )
 
 // AssertTrue asserts b is true
@@ -95,6 +93,21 @@ func ExpectError(
 	}
 }
 
+// CmpErr compares two errors for equality or at least close similarity in their messages.
+func CmpErr(t *testing.T, want, got error) {
+	t.Helper()
+
+	if want == got {
+		return
+	}
+	if want == nil || got == nil {
+		t.Fatalf("unexpected error (wanted: %v, got: %v)", want, got)
+	}
+	if !strings.Contains(got.Error(), want.Error()) {
+		t.Fatalf("unexpected error (wanted: %s, got: %s)", want, got)
+	}
+}
+
 // LoadTestFiles reads inputs and outputs from file and do basic sanity checks.
 // Both files contain entries of multiple lines separated by blank line.
 // Return inputs and outputs, both of which are slices of string slices.
@@ -119,25 +132,12 @@ func LoadTestFiles(inFile string, outFile string) (
 	return
 }
 
-// ShowLogOnFailure captures the log output in a buffer and displays it on test
-// failure. Returns a closure which should be run via defer in the test function.
-func ShowLogOnFailure(t *testing.T) func() {
+// ShowBufferOnFailure displays captured output on test failure. Should be run
+// via defer in the test function.
+func ShowBufferOnFailure(t *testing.T, buf fmt.Stringer) {
 	t.Helper()
 
-	var buf strings.Builder
-	log.SetLogger(log.NewCombinedLogger(t.Name(), &buf))
-
-	return ShowBufferOnFailure(t, &buf)
-}
-
-// ShowBufferOnFailure displays captured output on test failure. Returns a
-// closure which should be run via defer in the test function.
-func ShowBufferOnFailure(t *testing.T, buf fmt.Stringer) func() {
-	t.Helper()
-
-	return func() {
-		if t.Failed() {
-			fmt.Printf("captured log output:\n%s", buf.String())
-		}
+	if t.Failed() {
+		fmt.Printf("captured log output:\n%s", buf.String())
 	}
 }
