@@ -31,6 +31,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 )
 
@@ -80,14 +81,14 @@ func checkSocketDir(sockDir string) error {
 }
 
 // drpcSetup specifies socket path and starts drpc server.
-func drpcSetup(sockDir string, iosrvs []*IOServerInstance, tc *security.TransportConfig) error {
+func drpcSetup(log logging.Logger, sockDir string, iosrvs []*IOServerInstance, tc *security.TransportConfig) error {
 	// Clean up any previous execution's sockets before we create any new sockets
 	if err := drpcCleanup(sockDir); err != nil {
 		return err
 	}
 
 	sockPath := getDrpcServerSocketPath(sockDir)
-	drpcServer, err := drpc.NewDomainSocketServer(sockPath)
+	drpcServer, err := drpc.NewDomainSocketServer(log, sockPath)
 	if err != nil {
 		return errors.Wrap(err, "unable to create socket server")
 	}

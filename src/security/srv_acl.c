@@ -26,6 +26,7 @@
 #include <daos_errno.h>
 #include <daos/drpc.h>
 #include <daos/drpc.pb-c.h>
+#include <daos/drpc_modules.h>
 
 #include <daos_srv/pool.h>
 #include <daos_srv/security.h>
@@ -62,8 +63,8 @@ new_validation_request(struct drpc *ctx, d_iov_t *creds)
 	Drpc__Call	*request;
 
 	request = drpc_call_create(ctx,
-			DRPC_MODULE_SECURITY_SERVER,
-			DRPC_METHOD_SECURITY_SERVER_VALIDATE_CREDENTIALS);
+			DRPC_MODULE_SEC,
+			DRPC_METHOD_SEC_VALIDATE_CREDS);
 	if (request == NULL) {
 		D_ERROR("Could not allocate dRPC call\n");
 		return NULL;
