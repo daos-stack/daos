@@ -29,6 +29,7 @@
 #include <daos/checksum.h>
 #include <daos/common.h>
 #include <daos/event.h>
+#include <daos/array.h>
 
 #include "daos.h"
 #include "daos_fs.h"
@@ -2149,16 +2150,168 @@ io_internal(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 	return daos_der2errno(rc);
 }
 
+struct dfs_read_params {
+	dfs_t			*dfs;
+	dfs_obj_t		*obj;
+	d_sg_list_t		*sgl;
+	daos_size_t		*read_size;
+	daos_off_t		off;
+	daos_size_t		array_size;
+	daos_size_t		buf_size;
+	daos_array_iod_t	iod;
+	daos_range_t		rg;
+};
+
+static int
+read_cb(tse_task_t *task, void *data)
+{
+	struct dfs_read_params	*params;
+	daos_array_io_t		*read_args;
+	d_sg_list_t		*sgl;
+	daos_size_t		max_read;
+	daos_size_t		bytes_to_read, rem;
+	int			i;
+	int			rc = task->dt_result;
+
+	if (rc != 0) {
+		D_ERROR("Failed to get array size (%d)\n", rc);
+		return rc;
+	}
+
+	params = daos_task_get_priv(task);
+	D_ASSERT(params != NULL);
+
+	if (params->off >= params->array_size) {
+		*params->read_size = 0;
+		tse_task_complete(task, 0);
+		return 0;
+	}
+
+	/* Update SGL in case we try to read beyond eof to not do that */
+	sgl = params->sgl;
+	max_read = params->array_size - params->off;
+	bytes_to_read = 0;
+	for (i = 0; i < sgl->sg_nr; i++) {
+		if (bytes_to_read + sgl->sg_iovs[i].iov_len <= max_read) {
+			bytes_to_read += sgl->sg_iovs[i].iov_len;
+		} else {
+			rem = max_read - bytes_to_read;
+			if (rem) {
+				bytes_to_read += rem;
+				sgl->sg_iovs[i].iov_len = rem;
+				i++;
+				break;
+			}
+		}
+	}
+	sgl->sg_nr = i;
+
+	/** set array location */
+	params->iod.arr_nr = 1;
+	params->rg.rg_len = bytes_to_read;
+	params->rg.rg_idx = params->off;
+	params->iod.arr_rgs = &params->rg;
+	*params->read_size = bytes_to_read;
+
+	read_args = daos_task_get_args(task);
+	read_args->oh		= params->obj->oh;
+	read_args->th		= DAOS_TX_NONE;
+	read_args->iod		= &params->iod;
+	read_args->sgl		= sgl;
+	read_args->csums	= NULL;
+
+	return 0;
+}
+
+int
+dfs_read_int(tse_task_t *task)
+{
+	struct dfs_read_params	*params = daos_task_get_args(task);
+	tse_task_t		*size_task = NULL, *read_task = NULL;
+	daos_array_get_size_t	*size_args;
+	int			rc;
+
+	/** Create task to read from array */
+	rc = daos_task_create(DAOS_OPC_ARRAY_READ,
+			      tse_task2sched(task), 0, NULL, &read_task);
+	if (rc != 0)
+		D_GOTO(err, rc);
+
+	rc = daos_task_create(DAOS_OPC_ARRAY_GET_SIZE,
+			      tse_task2sched(task), 0, NULL, &size_task);
+	if (rc)
+		D_GOTO(err_rtask, rc);
+
+	size_args = daos_task_get_args(size_task);
+	size_args->oh	= params->obj->oh;
+	size_args->th	= DAOS_TX_NONE;
+	size_args->size	= &params->array_size;
+
+	daos_task_set_priv(read_task, params);
+	rc = tse_task_register_cbs(read_task, read_cb, NULL, 0, NULL, 0, 0);
+	if (rc)
+		D_GOTO(err_stask, rc);
+
+	rc = tse_task_register_deps(read_task, 1, &size_task);
+	if (rc)
+		D_GOTO(err_stask, rc);
+	rc = tse_task_register_deps(task, 1, &read_task);
+	if (rc != 0)
+		D_GOTO(err_stask, rc);
+
+	tse_task_schedule(size_task, false);
+	tse_task_schedule(read_task, false);
+	tse_sched_progress(tse_task2sched(task));
+	return rc;
+
+err_stask:
+	tse_task_complete(size_task, rc);
+err_rtask:
+	tse_task_complete(read_task, rc);
+err:
+	tse_task_complete(task, rc);
+	return rc;
+}
+
 int
 dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 	 daos_size_t *read_size, daos_event_t *ev)
 {
+	struct dfs_read_params	*args;
+	tse_task_t		*task;
+	daos_size_t		buf_size;
+	int			i, rc;
+
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
 	if (obj == NULL || !S_ISREG(obj->mode))
 		return EINVAL;
 
-	return io_internal(dfs, obj, sgl, off, DFS_READ, read_size, ev);
+	buf_size = 0;
+	for (i = 0; i < sgl->sg_nr; i++)
+		buf_size += sgl->sg_iovs[i].iov_len;
+	if (buf_size == 0) {
+		*read_size = 0;
+		if (ev) {
+			daos_event_launch(ev);
+			daos_event_complete(ev, 0);
+		}
+		return 0;
+	}
+
+	rc = dc_task_create(dfs_read_int, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->dfs	= dfs;
+	args->obj	= obj;
+	args->sgl	= sgl;
+	args->off	= off;
+	args->read_size	= read_size;
+	args->buf_size	= buf_size;
+
+	return dc_task_schedule(task, true);
 }
 
 int
