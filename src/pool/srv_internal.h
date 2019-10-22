@@ -93,6 +93,7 @@ void ds_pool_create_handler(crt_rpc_t *rpc);
 void ds_pool_connect_handler(crt_rpc_t *rpc);
 void ds_pool_disconnect_handler(crt_rpc_t *rpc);
 void ds_pool_query_handler(crt_rpc_t *rpc);
+void ds_pool_get_acl_handler(crt_rpc_t *rpc);
 void ds_pool_update_handler(crt_rpc_t *rpc);
 void ds_pool_evict_handler(crt_rpc_t *rpc);
 void ds_pool_svc_stop_handler(crt_rpc_t *rpc);

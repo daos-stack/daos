@@ -64,7 +64,7 @@ func waitForIosrvReady(t *testing.T, instance *IOServerInstance) {
 
 func TestIOServerInstance_NotifyReady(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)()
+	defer common.ShowBufferOnFailure(t, buf)
 
 	instance := getTestIOServerInstance(log)
 
@@ -96,16 +96,16 @@ func TestIOServerInstance_CallDrpc(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)
 			instance := getTestIOServerInstance(log)
 			if !tc.notReady {
-				mc := &mockDrpcClient{
-					SendMsgOutputResponse: tc.resp,
+				cfg := &mockDrpcClientConfig{
+					SendMsgResponse: tc.resp,
 				}
-				instance.setDrpcClient(mc)
+				instance.setDrpcClient(newMockDrpcClient(cfg))
 			}
 
-			_, err := instance.CallDrpc(mgmtModuleID, poolCreate, &mgmtpb.PoolCreateReq{})
+			_, err := instance.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolCreate, &mgmtpb.PoolCreateReq{})
 			common.CmpErr(t, tc.expErr, err)
 		})
 	}
@@ -189,7 +189,7 @@ func TestIOServerInstance_MountScmDevice(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)
 
 			if tc.ioCfg == nil {
 				tc.ioCfg = &ioserver.Config{}
@@ -316,7 +316,7 @@ func TestIOServerInstance_NeedsScmFormat(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)
 
 			if tc.ioCfg == nil {
 				tc.ioCfg = &ioserver.Config{}

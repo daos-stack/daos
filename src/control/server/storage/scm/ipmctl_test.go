@@ -167,7 +167,7 @@ func TestGetState(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)()
+			defer ShowBufferOnFailure(t, buf)
 
 			mockLookPath := func(string) (s string, err error) {
 				return
@@ -332,7 +332,7 @@ func TestGetNamespaces(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)()
+			defer ShowBufferOnFailure(t, buf)
 
 			mockLookPath := func(string) (s string, err error) {
 				if tt.lookPathErrMsg != "" {
