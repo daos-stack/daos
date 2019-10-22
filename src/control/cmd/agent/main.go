@@ -156,14 +156,18 @@ func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
 	finish := make(chan bool, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
-	drpcServer, err := drpc.NewDomainSocketServer(sockPath)
+	drpcServer, err := drpc.NewDomainSocketServer(log, sockPath)
 	if err != nil {
 		log.Errorf("Unable to create socket server: %v", err)
 		return err
 	}
 
-	drpcServer.RegisterRPCModule(NewSecurityModule(config.TransportConfig))
-	drpcServer.RegisterRPCModule(&mgmtModule{config.AccessPoints[0], config.TransportConfig})
+	drpcServer.RegisterRPCModule(NewSecurityModule(log, config.TransportConfig))
+	drpcServer.RegisterRPCModule(&mgmtModule{
+		log:  log,
+		ap:   config.AccessPoints[0],
+		tcfg: config.TransportConfig,
+	})
 
 	err = drpcServer.Start()
 	if err != nil {

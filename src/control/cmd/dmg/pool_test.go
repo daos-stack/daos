@@ -101,7 +101,7 @@ func TestCalcStorage(t *testing.T) {
 	for idx, tt := range tests {
 		t.Run(fmt.Sprintf("%s-%d", t.Name(), idx), func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)()
+			defer ShowBufferOnFailure(t, buf)
 
 			scmBytes, nvmeBytes, err := calcStorage(log, tt.scm, tt.nvme)
 			if tt.errMsg != "" {
