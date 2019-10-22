@@ -468,6 +468,7 @@ pipeline {
                                                  build/src/security/tests/srv_acl_tests,
                                                  build/src/vos/vea/tests/vea_ut,
                                                  build/src/common/tests/umem_test,
+                                                 build/src/bio/smd/tests/smd_ut,
                                                  scons_local/build_info/**,
                                                  src/common/tests/btree.sh,
                                                  src/control/run_go_tests.sh,
