@@ -48,7 +48,7 @@ type NvmMgmt struct{}
 // Discover queries number of SCM modules and retrieves device_discovery structs
 // for each.
 func (n *NvmMgmt) Discover() (devices []DeviceDiscovery, err error) {
-	err = fmt.Errorf("ipmctl lib not present\n")
+	fmt.Print("ipmctl lib not present\n")
 	return
 }
 
@@ -56,6 +56,6 @@ func (n *NvmMgmt) Discover() (devices []DeviceDiscovery, err error) {
 func (n *NvmMgmt) GetStatuses(devices []DeviceDiscovery) (
 	statuses []DeviceStatus, err error) {
 
-	err = fmt.Errorf("ipmctl lib not present\n")
+	fmt.Print("ipmctl lib not present\n")
 	return
 }
