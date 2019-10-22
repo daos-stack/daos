@@ -1,4 +1,4 @@
-/**
+/*
  * (C) Copyright 2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,16 +16,30 @@
  * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
  * The Government's rights to use, modify, reproduce, release, perform, display,
  * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
+ * provided in Contract No. 8F-30005.
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
- *
  */
 
-#ifndef DAOS_CHECKSUM_TESTS_H
-#define DAOS_CHECKSUM_TESTS_H
+/**
+ * Mocks for DAOS mgmt unit tests
+ */
 
-int
-daos_checksum_tests_run();
+#ifndef __MGMT_TESTS_MOCKS_H__
+#define __MGMT_TESTS_MOCKS_H__
 
-#endif /** DAOS_CHECKSUM_TESTS_H */
+#include <gurt/types.h>
+#include <daos_security.h>
+
+/*
+ * Mock ds_mgmt_pool_get_acl
+ */
+extern int		ds_mgmt_pool_get_acl_return;
+extern struct daos_acl	*ds_mgmt_pool_get_acl_return_acl;
+extern uuid_t		ds_mgmt_pool_get_acl_uuid;
+extern void		*ds_mgmt_pool_get_acl_acl_ptr;
+
+void mock_ds_mgmt_pool_get_acl_setup(void);
+void mock_ds_mgmt_pool_get_acl_teardown(void);
+
+#endif /* __MGMT_TESTS_MOCKS_H__ */

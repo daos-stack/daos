@@ -5,7 +5,7 @@
 
 Name:          daos
 Version:       0.6.0
-Release:       7%{?relval}%{?dist}
+Release:       8%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -15,7 +15,11 @@ Source1:       scons_local-%{version}.tar.gz
 
 BuildRequires: scons
 BuildRequires: gcc-c++
+%if %{defined cart_sha1}
+BuildRequires: cart-devel-%{cart_sha1}
+%else
 BuildRequires: cart-devel <= 1.0.0
+%endif
 %if (0%{?rhel} >= 7)
 BuildRequires: argobots-devel >= 1.0rc1
 %else
@@ -28,13 +32,6 @@ BuildRequires: spdk-devel, spdk-tools
 BuildRequires: fio < 3.4
 BuildRequires: libisa-l-devel
 BuildRequires: raft-devel <= 0.5.0
-# vvvvvv these can be removed when cart#226 lands and we update to use it
-BuildRequires: mercury-devel < 1.0.1-12
-BuildRequires: openpa-devel
-BuildRequires: libfabric-devel
-BuildRequires: ompi-devel
-BuildRequires: pmix-devel
-# ^^^^^^ these can be removed when cart#226 lands
 BuildRequires: hwloc-devel
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
@@ -82,7 +79,10 @@ Requires: protobuf-c
 Requires: spdk
 Requires: fio < 3.4
 Requires: openssl
-
+# ensure we get exactly the right cart RPM
+%if %{defined cart_sha1}
+Requires: cart-%{cart_sha1}
+%endif
 
 
 %description
@@ -104,6 +104,10 @@ Requires: ndctl
 Requires: ipmctl
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
+# ensure we get exactly the right cart RPM
+%if %{defined cart_sha1}
+Requires: cart-%{cart_sha1}
+%endif
 
 %description server
 This is the package needed to run a DAOS server
@@ -111,6 +115,10 @@ This is the package needed to run a DAOS server
 %package client
 Summary: The DAOS client
 Requires: %{name} = %{version}-%{release}
+# ensure we get exactly the right cart RPM
+%if %{defined cart_sha1}
+Requires: cart-%{cart_sha1}
+%endif
 
 %description client
 This is the package needed to run a DAOS client
@@ -121,6 +129,10 @@ Requires: %{name}-client = %{version}-%{release}
 Requires: python-pathlib
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
+%endif
+# ensure we get exactly the right cart RPM
+%if %{defined cart_sha1}
+Requires: cart-%{cart_sha1}
 %endif
 
 
@@ -166,10 +178,7 @@ mv %{?buildroot}%{_prefix}/{TESTING,lib/%{name}/}
 cp -al ftest.sh src/tests/ftest %{?buildroot}%{daoshome}/TESTING
 find %{?buildroot}%{daoshome}/TESTING/ftest -name \*.py[co] -print0 | xargs -r0 rm -f
 #ln %{?buildroot}%{daoshome}/{TESTING/.build_vars,.build_vars-Linux}.sh
-mkdir -p %{?buildroot}%{daoshome}/utils/py
-cp -al src/utils/py/daos_api.py %{?buildroot}%{daoshome}/utils/py
-cp -al src/utils/py/daos_cref.py %{?buildroot}%{daoshome}/utils/py
-cp -al src/utils/py/conversion.py %{?buildroot}%{daoshome}/utils/py
+mkdir -p %{?buildroot}%{daoshome}/utils
 mkdir -p %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{?buildroot}/%{_unitdir}
@@ -241,16 +250,26 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/libduns.so
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
-%{_libdir}/python2.7/site-packages/pydaos_shim_27.so
-%{_libdir}/python2.7/site-packages/pydaos.py
-%{_libdir}/python2.7/site-packages/pydaos.pyc
-%{_libdir}/python2.7/site-packages/pydaos.pyo
+%dir  %{_libdir}/python2.7/site-packages/pydaos
+%{_libdir}/python2.7/site-packages/pydaos/*.py
+%{_libdir}/python2.7/site-packages/pydaos/*.pyc
+%{_libdir}/python2.7/site-packages/pydaos/*.pyo
+%{_libdir}/python2.7/site-packages/pydaos/pydaos_shim_27.so
+%dir  %{_libdir}/python2.7/site-packages/pydaos/raw
+%{_libdir}/python2.7/site-packages/pydaos/raw/*.py
+%{_libdir}/python2.7/site-packages/pydaos/raw/*.pyc
+%{_libdir}/python2.7/site-packages/pydaos/raw/*.pyo
 %dir %{_libdir}/python3
 %dir %{_libdir}/python3/site-packages
-%{_libdir}/python3/site-packages/pydaos_shim_3.so
-%{_libdir}/python3/site-packages/pydaos.py
-%{_libdir}/python3/site-packages/pydaos.pyc
-%{_libdir}/python3/site-packages/pydaos.pyo
+%dir %{_libdir}/python3/site-packages/pydaos
+%{_libdir}/python3/site-packages/pydaos/*.py
+%{_libdir}/python3/site-packages/pydaos/*.pyc
+%{_libdir}/python3/site-packages/pydaos/*.pyo
+%{_libdir}/python3/site-packages/pydaos/pydaos_shim_3.so
+%dir %{_libdir}/python3/site-packages/pydaos/raw
+%{_libdir}/python3/site-packages/pydaos/raw/*.py
+%{_libdir}/python3/site-packages/pydaos/raw/*.pyc
+%{_libdir}/python3/site-packages/pydaos/raw/*.pyo
 %{_datadir}/%{name}/ioil-ld-opts
 %{_prefix}%{_sysconfdir}/daos.yml
 %{_prefix}%{_sysconfdir}/daos_agent.yml
@@ -258,7 +277,6 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 
 %files tests
 %dir %{daoshome}/utils
-%{daoshome}/utils/py
 %{daoshome}/TESTING
 %{_bindir}/hello_drpc
 %{_bindir}/*_test*
@@ -266,6 +284,7 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_bindir}/vea_ut
 %{_bindir}/daosbench
 %{_bindir}/daos_perf
+%{_bindir}/daos_racer
 %{_bindir}/evt_ctl
 %{_bindir}/obj_ctl
 %{_bindir}/daos_gen_io_conf
@@ -277,6 +296,10 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/*.a
 
 %changelog
+* Mon Oct 07 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-8
+- Use BR: cart-devel-%{cart_sha1} if available
+- Remove cart's BRs as it's -devel Requires them now
+
 * Tue Oct 01 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-7
 - Constrain cart BR to <= 1.0.0
 

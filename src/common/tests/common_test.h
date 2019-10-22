@@ -19,27 +19,13 @@
  * provided in Contract No. B609815.
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
- *
  */
 
+#ifndef __DAOS_COMMON_TEST_H
+#define __DAOS_COMMON_TEST_H
 
-#include <daos.h>
+/** Test Suite Function Declarations */
+int daos_checksum_tests_run(void);
+int misc_tests_run(void);
 
-#ifndef __DAOS_MISC_TESTS_H
-#define __DAOS_MISC_TESTS_H
-
-/** Initialize and SGL with a variable number of IOVs and set the IOV buffers
- *  to the value of the strings passed
- *
- * @param sgl		Scatter gather list to initialize
- * @param count		Number of IO Vectors that will be created in the SGL
- * @param str		First string that will be used
- * @param ...		Rest of strings, up to count
- */
-void
-daos_sgl_init_with_strings(d_sg_list_t *sgl, uint32_t count, char *str, ...);
-
-int
-misc_tests_run();
-
-#endif /** __DAOS_MISC_TESTS_H */
+#endif

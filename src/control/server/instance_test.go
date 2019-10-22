@@ -32,7 +32,9 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -62,7 +64,7 @@ func waitForIosrvReady(t *testing.T, instance *IOServerInstance) {
 
 func TestIOServerInstance_NotifyReady(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)()
+	defer common.ShowBufferOnFailure(t, buf)
 
 	instance := getTestIOServerInstance(log)
 
@@ -70,24 +72,42 @@ func TestIOServerInstance_NotifyReady(t *testing.T) {
 
 	instance.NotifyReady(req)
 
-	if instance.drpcClient == nil {
+	dc, err := instance.getDrpcClient()
+	if err != nil || dc == nil {
 		t.Fatal("Expected a dRPC client connection")
 	}
 
 	waitForIosrvReady(t, instance)
 }
 
-func cmpOpts() []cmp.Option {
-	return []cmp.Option{
-		cmp.Comparer(func(a, b error) bool {
-			if a == b {
-				return true
+func TestIOServerInstance_CallDrpc(t *testing.T) {
+	for name, tc := range map[string]struct {
+		notReady bool
+		resp     *drpc.Response
+		expErr   error
+	}{
+		"not ready": {
+			notReady: true,
+			expErr:   errors.New("no dRPC client set"),
+		},
+		"success": {
+			resp: &drpc.Response{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+			instance := getTestIOServerInstance(log)
+			if !tc.notReady {
+				cfg := &mockDrpcClientConfig{
+					SendMsgResponse: tc.resp,
+				}
+				instance.setDrpcClient(newMockDrpcClient(cfg))
 			}
-			if a == nil || b == nil {
-				return false
-			}
-			return a.Error() == b.Error()
-		}),
+
+			_, err := instance.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolCreate, &mgmtpb.PoolCreateReq{})
+			common.CmpErr(t, tc.expErr, err)
+		})
 	}
 }
 
@@ -169,7 +189,7 @@ func TestIOServerInstance_MountScmDevice(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)
 
 			if tc.ioCfg == nil {
 				tc.ioCfg = &ioserver.Config{}
@@ -181,9 +201,7 @@ func TestIOServerInstance_MountScmDevice(t *testing.T) {
 			instance := NewIOServerInstance(log, nil, mp, nil, runner)
 
 			gotErr := instance.MountScmDevice()
-			if diff := cmp.Diff(tc.expErr, errors.Cause(gotErr), cmpOpts()...); diff != "" {
-				t.Fatalf("unexpected error (-want, +got):\n%s\n", diff)
-			}
+			common.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }
@@ -298,7 +316,7 @@ func TestIOServerInstance_NeedsScmFormat(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)
 
 			if tc.ioCfg == nil {
 				tc.ioCfg = &ioserver.Config{}
@@ -311,9 +329,7 @@ func TestIOServerInstance_NeedsScmFormat(t *testing.T) {
 			instance := NewIOServerInstance(log, nil, mp, nil, runner)
 
 			gotNeedsFormat, gotErr := instance.NeedsScmFormat()
-			if diff := cmp.Diff(tc.expErr, errors.Cause(gotErr), cmpOpts()...); diff != "" {
-				t.Fatalf("unexpected error (-want, +got):\n%s\n", diff)
-			}
+			common.CmpErr(t, tc.expErr, gotErr)
 			if diff := cmp.Diff(tc.expNeedsFormat, gotNeedsFormat); diff != "" {
 				t.Fatalf("unexpected needs format (-want, +got):\n%s\n", diff)
 			}

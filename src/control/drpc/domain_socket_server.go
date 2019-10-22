@@ -28,6 +28,8 @@ import (
 	"syscall"
 
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // MAXMSGSIZE is the maximum drpc message size that may be sent.
@@ -167,11 +169,11 @@ func (d *DomainSocketServer) RegisterRPCModule(mod Module) {
 
 // NewDomainSocketServer returns a new unstarted instance of a
 // DomainSocketServer for the specified unix domain socket path.
-func NewDomainSocketServer(sock string) (*DomainSocketServer, error) {
+func NewDomainSocketServer(log logging.Logger, sock string) (*DomainSocketServer, error) {
 	if sock == "" {
 		return nil, errors.New("Missing Argument: sockFile")
 	}
-	service := NewRPCService()
+	service := NewRPCService(log)
 	quit := make(chan bool)
 	clients := make(map[*net.UnixConn]*Client)
 	return &DomainSocketServer{sock, quit, nil, service, clients}, nil

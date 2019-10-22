@@ -34,6 +34,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
+	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -48,14 +49,6 @@ const maxIoServers = 1
 
 // Start is the entry point for a daos_server instance.
 func Start(log *logging.LeveledLogger, cfg *Configuration) error {
-	// FIXME(mjmac): Temporarily set a global logger
-	// until we get the dependency injection correct.
-	level := log.Level()
-	logging.SetLogger(log)
-	// We have to set the global level because by default
-	// it's based on the previous logger's level.
-	logging.SetLevel(level)
-
 	log.Debugf("cfg: %#v", cfg)
 
 	// Backup active config.
@@ -72,6 +65,9 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 		return errors.Wrap(err, "unable to resolve daos_server control address")
 	}
 
+	// If this daos_server instance ends up being the MS leader,
+	// this will record the DAOS system membership.
+	membership := common.NewMembership(log)
 	scmProvider := scm.DefaultProvider(log)
 	harness := NewIOServerHarness(log)
 	for i, srvCfg := range cfg.Servers {
@@ -97,12 +93,12 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}
 
 	// Single daos_server dRPC server to handle all iosrv requests
-	if err := drpcSetup(cfg.SocketDir, harness.Instances(), cfg.TransportConfig); err != nil {
+	if err := drpcSetup(log, cfg.SocketDir, harness.Instances(), cfg.TransportConfig); err != nil {
 		return errors.WithMessage(err, "dRPC setup")
 	}
 
 	// Create and setup control service.
-	controlService, err := NewControlService(log, harness, scmProvider, cfg)
+	controlService, err := NewControlService(log, harness, scmProvider, cfg, membership)
 	if err != nil {
 		return errors.Wrap(err, "init control service")
 	}
@@ -132,7 +128,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	// Only provide IO/Agent communication if not attempting to respawn after format,
 	// otherwise, only provide gRPC mgmt control service for hardware provisioning.
 	if !needsRespawn {
-		mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(harness))
+		mgmtpb.RegisterMgmtSvcServer(grpcServer, newMgmtSvc(harness, membership))
 	}
 
 	go func() {
@@ -149,7 +145,9 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 			select {
 			case sig := <-sigChan:
 				log.Debugf("Caught signal: %s", sig)
-				drpcCleanup(cfg.SocketDir)
+				if err := drpcCleanup(cfg.SocketDir); err != nil {
+					log.Errorf("error during dRPC cleanup: %s", err)
+				}
 				shutdown()
 			}
 		}
