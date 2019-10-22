@@ -1013,7 +1013,7 @@ ds_mgmt_drpc_dev_state_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	/* Response status is populated with SUCCESS on init. */
 	mgmt__dev_state_resp__init(resp);
 
-	if (strlen(req->dev_uuid) != 0) { 
+	if (strlen(req->dev_uuid) != 0) {
 		if (uuid_parse(req->dev_uuid, uuid) != 0) {
 			D_ERROR("Unable to parse device UUID %s: %d\n",
 				req->dev_uuid, rc);
@@ -1083,7 +1083,7 @@ ds_mgmt_drpc_dev_set_faulty(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	/* Response status is populated with SUCCESS on init. */
 	mgmt__dev_state_resp__init(resp);
 
-	if (strlen(req->dev_uuid) != 0) { 
+	if (strlen(req->dev_uuid) != 0) {
 		if (uuid_parse(req->dev_uuid, uuid) != 0) {
 			D_ERROR("Unable to parse device UUID %s: %d\n",
 				req->dev_uuid, rc);
