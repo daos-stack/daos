@@ -19,11 +19,12 @@ else
 
 	# build arglist manually to filter missing directories/files
 	# so we don't error on non-existent entities
-	for glob in /dev/hugepages '/dev/uio*'		\
+	for glob in '/dev/hugepages' '/dev/uio*'		\
 		'/sys/class/uio/uio*/device/config'	\
 		'/sys/class/uio/uio*/device/resource*'; do
 
-		if list=$(ls "$glob"); then
+		if list=$(ls $glob); then
+			echo "RUN: ls $glob | xargs -r chown -R $_TARGET_USER"
 			echo "$list" | xargs -r chown -R "$_TARGET_USER"
 		fi
 	done
