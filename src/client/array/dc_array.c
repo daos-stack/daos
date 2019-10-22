@@ -1326,19 +1326,6 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 				D_ERROR("Failed to create sgl\n");
 				D_GOTO(err_task, rc);
 			}
-
-#if 0
-			daos_size_t s;
-
-			D_DEBUG(DB_IO, "DKEY SGL -----------------------\n");
-			D_DEBUG(DB_IO, "sg_nr = %u\n", sgl->sg_nr);
-			for (s = 0; s < sgl->sg_nr; s++) {
-				D_DEBUG(DB_IO, "%zu: length %zu, Buf %p\n",
-					s, sgl->sg_iovs[s].iov_len,
-					sgl->sg_iovs[s].iov_buf);
-			}
-			D_DEBUG(DB_IO, "--------------------------------\n");
-#endif
 		}
 
 		/* issue IO to DAOS */
