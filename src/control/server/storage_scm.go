@@ -152,7 +152,7 @@ func newMntRet(log logging.Logger, op string, mntPoint string, status ctlpb.Resp
 
 // Format attempts to format (forcefully) SCM mounts on a given server
 // as specified in config file and populates resp ScmMountResult.
-func (s *scmStorage) Format(cfg storage.ScmConfig, results *(types.ScmMountResults)) {
+func (s *scmStorage) Format(cfg storage.ScmConfig, reformat bool, results *(types.ScmMountResults)) {
 	s.log.Debug("performing SCM device reset, format and mount")
 
 	// wraps around addMret to provide format specific function, ignore infoMsg
@@ -161,7 +161,7 @@ func (s *scmStorage) Format(cfg storage.ScmConfig, results *(types.ScmMountResul
 			newMntRet(s.log, "format", cfg.MountPoint, status, errMsg, ""))
 	}
 
-	if s.formatted {
+	if !reformat && s.formatted {
 		addMretFormat(ctlpb.ResponseStatus_CTRL_ERR_APP, msgScmAlreadyFormatted)
 		return
 	}
@@ -172,6 +172,7 @@ func (s *scmStorage) Format(cfg storage.ScmConfig, results *(types.ScmMountResul
 	}
 
 	req := scm.FormatRequest{
+		Reformat:   reformat,
 		Mountpoint: cfg.MountPoint,
 	}
 
@@ -195,17 +196,7 @@ func (s *scmStorage) Format(cfg storage.ScmConfig, results *(types.ScmMountResul
 		return
 	}
 
-	res, err := s.provider.CheckFormat(req)
-	if err != nil {
-		addMretFormat(ctlpb.ResponseStatus_CTRL_ERR_APP, err.Error())
-		return
-	}
-	if res.Formatted {
-		addMretFormat(ctlpb.ResponseStatus_CTRL_ERR_APP, msgScmAlreadyFormatted)
-		return
-	}
-
-	res, err = s.provider.Format(req)
+	res, err := s.provider.Format(req)
 	if err != nil {
 		addMretFormat(ctlpb.ResponseStatus_CTRL_ERR_APP, err.Error())
 		return
