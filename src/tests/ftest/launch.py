@@ -102,8 +102,6 @@ def set_test_environment():
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, path])
     os.environ["DAOS_SINGLETON_CLI"] = "1"
     os.environ["CRT_CTX_SHARE_ADDR"] = "1"
-    os.environ["CRT_ATTACH_INFO_PATH"] = \
-        os.environ.get('DAOS_TEST_SHARED_DIR', os.path.join(base_dir, "tmp"))
 
     # Python paths required for functional testing
     version = "python2.7" if sys.version_info < (3, 0) else "python3"
