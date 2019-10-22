@@ -188,11 +188,9 @@ func (c *Config) CmdLineEnv() ([]string, error) {
 	}
 
 	// Provide special handling for the ofi+verbs provider.
-	// When specified, perform a special lookup to find the alias
-	// of the given fabric_iface.  Then set a new environment variable "OFI_DOMAIN"
-	// to the name of the device alias.  For example, a fabric_iface of "ib0"
-	// has a device alias of "hfi1_0", and "OFI_DOMAIN=hfi1_0" will be added
-	// to this I/O server's environment
+	// Mercury uses the interface name such as ib0, while OFI uses the device name such as hfi1_0
+	// CaRT and Mercury will now support the new OFI_DOMAIN environment variable so that we can
+	// specify the correct device for each.
 	if strings.Contains(c.Fabric.Provider, "ofi+verbs") {
 		deviceAlias, err := netdetect.GetDeviceAlias(c.Fabric.Interface)
 		if err != nil {

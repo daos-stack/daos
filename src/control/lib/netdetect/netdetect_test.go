@@ -34,52 +34,155 @@ import (
 // hwloc will use this topology for queries instead of the local system
 // running the test.
 func TestParseTopology(t *testing.T) {
+	/*
+	   	tests := []struct {
+	   		netDevsList []string
+	   		topology    string
+	   		expected    []string
+	   	}{
+	   		// boro-84 has two NUMA nodes, with eth0, eth1, ib0 on NUMA 0,
+	   		// and no ib1 in the topology
+	   		// The format for the expected string is "device:cpuset:nodeset:numa"
+	   		{[]string{""}, "testdata/boro-84.xml", []string{}},
+	   		{[]string{"eth0"}, "testdata/boro-84.xml", []string{"eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
+	   		{[]string{"eth1"}, "testdata/boro-84.xml", []string{"eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
+	   		{[]string{"ib0"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
+	   		{[]string{"eth0", "eth1"}, "testdata/boro-84.xml", []string{"eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
+	   		{[]string{"eth0", "eth1", "ib0"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
+	   		{[]string{"ib0", "eth0", "ib1", "eth1"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
+	   		{[]string{"eth0", "eth1", "ib0"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
+	   		{[]string{"eth0", "eth1", "ib0"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
+	   		{[]string{"eth0", "eth1", "ib0"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
+	   		// wolf-133 has two NUMA nodes, with eth0, eth1, ib0 on NUMA 0,
+	   		// and ib1 on NUMA 1.  Notice that the cpuset and nodeset for ib1
+	   		// reflect that they are on a different node
+	   		{[]string{"eth0"}, "testdata/wolf-133.xml", []string{"eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
+	   		{[]string{"eth1"}, "testdata/wolf-133.xml", []string{"eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
+	   		{[]string{"ib0"}, "testdata/wolf-133.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
+	   		{[]string{"ib1"}, "testdata/wolf-133.xml", []string{"ib1:0xffffff00,0x0000ffff,0xff000000:0x00000002:1"}},
+	   		{[]string{"eth0", "eth1"}, "testdata/wolf-133.xml", []string{"eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
+	   		{[]string{"ib0", "eth0", "eth1"}, "testdata/wolf-133.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
+	   		{[]string{"ib0", "eth0", "ib1", "eth1"}, "testdata/wolf-133.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "ib1:0xffffff00,0x0000ffff,0xff000000:0x00000002:1"}},
+	   	}
 
-	tests := []struct {
+	   	for _, tt := range tests {
+	   		_, err := os.Stat(tt.topology)
+	   		AssertEqual(t, err, nil, "unable to load xmlTopology")
+	   		os.Setenv("HWLOC_XMLFILE", tt.topology)
+	   		defer os.Unsetenv("HWLOC_XMLFILE")
+	   		netAdapterAffinity, err := GetAffinityForNetworkDevices(tt.netDevsList)
+	   		if err != nil {
+	   			t.Fatal(err)
+	   		}
+	   		AssertEqual(t, len(netAdapterAffinity), len(tt.expected), "number of devices expected vs found does not match")
+	   		for j, i := range netAdapterAffinity {
+	   			AssertEqual(t, i.String(), tt.expected[j],
+	   				"unexpected mismatch with device and topology")
+	   		}
+	   	}
+
+	   /////////////////////////
+	*/
+	// boro-84 has two NUMA nodes, with eth0, eth1, ib0 on NUMA 0,
+	// and no ib1 in the topology
+	// The format for the expected string is "device:cpuset:nodeset:numa"
+	// wolf-133 has two NUMA nodes, with eth0, eth1, ib0 on NUMA 0,
+	// and ib1 on NUMA 1.  Notice that the cpuset and nodeset for ib1
+	// reflect that they are on a different node
+
+	for name, tc := range map[string]struct {
 		netDevsList []string
 		topology    string
 		expected    []string
 	}{
-		// boro-84 has two NUMA nodes, with eth0, eth1, ib0 on NUMA 0,
-		// and no ib1 in the topology
-		// The format for the expected string is "device:cpuset:nodeset:numa"
-		{[]string{""}, "testdata/boro-84.xml", []string{}},
-		{[]string{"eth0"}, "testdata/boro-84.xml", []string{"eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
-		{[]string{"eth1"}, "testdata/boro-84.xml", []string{"eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
-		{[]string{"ib0"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
-		{[]string{"eth0", "eth1"}, "testdata/boro-84.xml", []string{"eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
-		{[]string{"eth0", "eth1", "ib0"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
-		{[]string{"ib0", "eth0", "ib1", "eth1"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
-		{[]string{"eth0", "eth1", "ib0"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
-		{[]string{"eth0", "eth1", "ib0"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
-		{[]string{"eth0", "eth1", "ib0"}, "testdata/boro-84.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
-		// wolf-133 has two NUMA nodes, with eth0, eth1, ib0 on NUMA 0,
-		// and ib1 on NUMA 1.  Notice that the cpuset and nodeset for ib1
-		// reflect that they are on a different node
-		{[]string{"eth0"}, "testdata/wolf-133.xml", []string{"eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
-		{[]string{"eth1"}, "testdata/wolf-133.xml", []string{"eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
-		{[]string{"ib0"}, "testdata/wolf-133.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
-		{[]string{"ib1"}, "testdata/wolf-133.xml", []string{"ib1:0xffffff00,0x0000ffff,0xff000000:0x00000002:1"}},
-		{[]string{"eth0", "eth1"}, "testdata/wolf-133.xml", []string{"eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
-		{[]string{"ib0", "eth0", "eth1"}, "testdata/wolf-133.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"}},
-		{[]string{"ib0", "eth0", "ib1", "eth1"}, "testdata/wolf-133.xml", []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "ib1:0xffffff00,0x0000ffff,0xff000000:0x00000002:1"}},
+		"no device given device affinity (boro 84 system topology)": {
+			netDevsList: []string{""},
+			topology:    "testdata/boro-84.xml",
+			expected:    []string{},
+		},
+		"eth0 device affinity (boro 84 system topology)": {
+			netDevsList: []string{"eth0"},
+			topology:    "testdata/boro-84.xml",
+			expected:    []string{"eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"},
+		},
+		"eth1 device affinity (boro 84 system topology)": {
+			netDevsList: []string{"eth1"},
+			topology:    "testdata/boro-84.xml",
+			expected:    []string{"eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"},
+		},
+		"ib0 device affinity (boro 84 system topology)": {
+			netDevsList: []string{"ib0"},
+			topology:    "testdata/boro-84.xml",
+			expected:    []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"},
+		},
+		"eth0 eth1 device affinity (boro 84 system topology)": {
+			netDevsList: []string{"eth0", "eth1"},
+			topology:    "testdata/boro-84.xml",
+			expected:    []string{"eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"},
+		},
+		"eth0 eth1 ib0 device affinity (boro 84 system topology)": {
+			netDevsList: []string{"eth0", "eth1", "ib0"},
+			topology:    "testdata/boro-84.xml",
+			expected:    []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"},
+		},
+		"ib0 eth0 ib1 eth1 device affinity (boro 84 system topology)": {
+			netDevsList: []string{"ib0", "eth0", "ib1", "eth1"},
+			topology:    "testdata/boro-84.xml",
+			expected:    []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"},
+		},
+		"eth0 device affinity (wolf 133 system topology)": {
+			netDevsList: []string{"eth0"},
+			topology:    "testdata/wolf-133.xml",
+			expected:    []string{"eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"},
+		},
+		"eth1 device affinity (wolf 133 system topology)": {
+			netDevsList: []string{"eth1"},
+			topology:    "testdata/wolf-133.xml",
+			expected:    []string{"eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"},
+		},
+		"ib0 device affinity (wolf 133 system topology)": {
+			netDevsList: []string{"ib0"},
+			topology:    "testdata/wolf-133.xml",
+			expected:    []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"},
+		},
+		"ib1 device affinity (wolf 133 system topology)": {
+			netDevsList: []string{"ib1"},
+			topology:    "testdata/wolf-133.xml",
+			expected:    []string{"ib1:0xffffff00,0x0000ffff,0xff000000:0x00000002:1"},
+		},
+		"eth0 eth1 device affinity (wolf-133 system topology)": {
+			netDevsList: []string{"eth0", "eth1"},
+			topology:    "testdata/wolf-133.xml",
+			expected:    []string{"eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"},
+		},
+		"ib0 eth0 eth1 device affinity (wolf 133 system topology)": {
+			netDevsList: []string{"ib0", "eth0", "eth1"},
+			topology:    "testdata/boro-84.xml",
+			expected:    []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0"},
+		},
+		"ib0 eth0 ib1 eth1 device affinity (wolf 133 system topology)": {
+			netDevsList: []string{"ib0", "eth0", "ib1", "eth1"},
+			topology:    "testdata/wolf-133.xml",
+			expected:    []string{"ib0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth0:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "eth1:0x000000ff,0xffff0000,0x00ffffff:0x00000001:0", "ib1:0xffffff00,0x0000ffff,0xff000000:0x00000002:1"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := os.Stat(tc.topology)
+			AssertEqual(t, err, nil, "unable to load xmlTopology")
+			os.Setenv("HWLOC_XMLFILE", tc.topology)
+			defer os.Unsetenv("HWLOC_XMLFILE")
+			netAdapterAffinity, err := GetAffinityForNetworkDevices(tc.netDevsList)
+			if err != nil {
+				t.Fatal(err)
+			}
+			AssertEqual(t, len(netAdapterAffinity), len(tc.expected), "number of devices expected vs found does not match")
+			for j, i := range netAdapterAffinity {
+				AssertEqual(t, i.String(), tc.expected[j],
+					"unexpected mismatch with device and topology")
+			}
+		})
 	}
 
-	for _, tt := range tests {
-		_, err := os.Stat(tt.topology)
-		AssertEqual(t, err, nil, "unable to load xmlTopology")
-		os.Setenv("HWLOC_XMLFILE", tt.topology)
-		netAdapterAffinity, err := GetAffinityForNetworkDevices(tt.netDevsList)
-		if err != nil {
-			t.Fatal(err)
-		}
-		os.Unsetenv("HWLOC_XMLFILE")
-		AssertEqual(t, len(netAdapterAffinity), len(tt.expected), "number of devices expected vs found does not match")
-		for j, i := range netAdapterAffinity {
-			AssertEqual(t, i.String(), tt.expected[j],
-				"unexpected mismatch with device and topology")
-		}
-	}
 }
 
 // TestScanFabric scans the fabric on the test system.  Even though we don't know how the test system is configured,
@@ -123,78 +226,149 @@ func TestValidateNetworkConfig(t *testing.T) {
 	}
 }
 
-// TestDeviceAlias uses XML topology data to simulate real systems.
-// hwloc will use this topology for queries instead of the local system running the test.
-// This test verifies that GetDeviceAlias() is capable of performing this lookup
-// This particular test verifies the expected lookup path that uses a device found
-// on the system device list, and expected to find the related sibling.
-func TestDeviceAlias(t *testing.T) {
-	tests := []struct {
-		device   string
-		topology string
-		expected string
-	}{
-		{"lo", "testdata/boro-84.xml", "lo"},
-		{"eth0", "testdata/boro-84.xml", "i40iw1"},
-		{"eth1", "testdata/boro-84.xml", "i40iw0"},
-		{"ib0", "testdata/boro-84.xml", "hfi1_0"},
-		{"lo", "testdata/wolf-133.xml", "lo"},
-		{"eth0", "testdata/wolf-133.xml", "i40iw1"},
-		{"eth1", "testdata/wolf-133.xml", "i40iw0"},
-		{"ib0", "testdata/wolf-133.xml", "hfi1_0"},
-		{"ib1", "testdata/wolf-133.xml", "hfi1_1"},
-		// The following data set verifies that the sibling lookup functions properly
-		// even when the search device and expected target are swapped
-		{"i40iw1", "testdata/boro-84.xml", "eth0"},
-		{"i40iw0", "testdata/boro-84.xml", "eth1"},
-		{"hfi1_0", "testdata/boro-84.xml", "ib0"},
-		{"i40iw1", "testdata/wolf-133.xml", "eth0"},
-		{"i40iw0", "testdata/wolf-133.xml", "eth1"},
-		{"hfi1_0", "testdata/wolf-133.xml", "ib0"},
-		{"hfi1_1", "testdata/wolf-133.xml", "ib1"},
-	}
-
-	for _, tt := range tests {
-		_, err := os.Stat(tt.topology)
-		AssertEqual(t, err, nil, "unable to load xmlTopology")
-		os.Setenv("HWLOC_XMLFILE", tt.topology)
-		deviceAlias, err := GetDeviceAlias(tt.device)
-		if err != nil {
-			t.Fatal(err)
-		}
-		os.Unsetenv("HWLOC_XMLFILE")
-		AssertEqual(t, deviceAlias, tt.expected,
-			"unexpected mismatch with device and topology")
-	}
-}
-
 // TestDeviceAliasErrors uses XML topology data to simulate real systems.
 // hwloc will use this topology for queries instead of the local system
 // running the test.
 // This test verifies that GetDeviceAlias() handles the error cases when a specified
 // device cannot be matched to a sibling.
 func TestDeviceAliasErrors(t *testing.T) {
-	tests := []struct {
+	for name, tc := range map[string]struct {
+		device   string
+		topology string
+	}{
+		"eth2 alias lookup (boro 84 system topology)": {
+			device:   "eth2",
+			topology: "testdata/boro-84.xml",
+		},
+		"ib2 alias lookup (boro 84 system topology)": {
+			device:   "ib2",
+			topology: "testdata/boro-84.xml",
+		},
+		"mlx15 alias lookup (boro 84 system topology)": {
+			device:   "mlx15",
+			topology: "testdata/boro-84.xml",
+		},
+		"hfi1_01 alias lookup (wolf-133 system topology)": {
+			device:   "hfi1_01",
+			topology: "testdata/wolf-133.xml",
+		},
+		"i40iw02 alias lookup (wolf-133 system topology)": {
+			device:   "i40iw02",
+			topology: "testdata/wolf-133.xml",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := os.Stat(tc.topology)
+			AssertEqual(t, err, nil, "unable to load xmlTopology")
+			os.Setenv("HWLOC_XMLFILE", tc.topology)
+			defer os.Unsetenv("HWLOC_XMLFILE")
+			deviceAlias, err := GetDeviceAlias(tc.device)
+			AssertTrue(t, err != nil,
+				"an error was expected but not received")
+			AssertEqual(t, deviceAlias, "",
+				"an unexpected sibling match was found in the topology")
+		})
+	}
+}
+
+// TestDeviceAlias uses XML topology data to simulate real systems.
+// hwloc will use this topology for queries instead of the local system running the test.
+// This test verifies that GetDeviceAlias() is capable of performing this lookup
+// This particular test verifies the expected lookup path that uses a device found
+// on the system device list, and expected to find the related sibling.
+func TestDeviceAlias(t *testing.T) {
+	for name, tc := range map[string]struct {
 		device   string
 		topology string
 		expected string
 	}{
-		{"eth2", "testdata/boro-84.xml", ""},
-		{"ib2", "testdata/boro-84.xml", ""},
-		{"mlx15", "testdata/wolf-133.xml", ""},
-		{"hfi1_01", "testdata/wolf-133.xml", ""},
-		{"i40iw02", "testdata/wolf-133.xml", ""},
-	}
-
-	for _, tt := range tests {
-		_, err := os.Stat(tt.topology)
-		AssertEqual(t, err, nil, "unable to load xmlTopology")
-		os.Setenv("HWLOC_XMLFILE", tt.topology)
-		deviceAlias, err := GetDeviceAlias(tt.device)
-		AssertTrue(t, err != nil,
-			"an error was expected but not received")
-		os.Unsetenv("HWLOC_XMLFILE")
-		AssertEqual(t, deviceAlias, tt.expected,
-			"an unexpected sibling match was found in the topology")
+		"loopback alias lookup (boro 84 system topology)": {
+			device:   "lo",
+			topology: "testdata/boro-84.xml",
+			expected: "lo",
+		},
+		"eth0 alias lookup (boro 84 system topology)": {
+			device:   "eth0",
+			topology: "testdata/boro-84.xml",
+			expected: "i40iw1",
+		},
+		"eth1 alias lookup (boro 84 system topology)": {
+			device:   "eth1",
+			topology: "testdata/boro-84.xml",
+			expected: "i40iw0",
+		},
+		"ib0 alias lookup (boro 84 system topology)": {
+			device:   "ib0",
+			topology: "testdata/boro-84.xml",
+			expected: "hfi1_0",
+		},
+		"eth0 alias lookup (wolf-133 system topology)": {
+			device:   "eth0",
+			topology: "testdata/wolf-133.xml",
+			expected: "i40iw1",
+		},
+		"eth1 alias lookup (wolf-133 system topology)": {
+			device:   "eth1",
+			topology: "testdata/wolf-133.xml",
+			expected: "i40iw0",
+		},
+		"ib0 alias lookup (wolf-133 system topology)": {
+			device:   "ib0",
+			topology: "testdata/wolf-133.xml",
+			expected: "hfi1_0",
+		},
+		"ib1 alias lookup (wolf-133 system topology)": {
+			device:   "ib1",
+			topology: "testdata/wolf-133.xml",
+			expected: "hfi1_1",
+		},
+		"i40iw1 alias reverse lookup (boro 84 system topology)": {
+			device:   "i40iw1",
+			topology: "testdata/boro-84.xml",
+			expected: "eth0",
+		},
+		"i40iw0 alias reverse lookup (boro 84 system topology)": {
+			device:   "i40iw0",
+			topology: "testdata/boro-84.xml",
+			expected: "eth1",
+		},
+		"hfi1_0 alias reverse lookup (boro 84 system topology)": {
+			device:   "hfi1_0",
+			topology: "testdata/boro-84.xml",
+			expected: "ib0",
+		},
+		"i40iw1 alias reverse lookup (wolf 133 system topology)": {
+			device:   "i40iw1",
+			topology: "testdata/wolf-133.xml",
+			expected: "eth0",
+		},
+		"i40iw0 alias reverse lookup (wolf 133 system topology)": {
+			device:   "i40iw0",
+			topology: "testdata/wolf-133.xml",
+			expected: "eth1",
+		},
+		"hfi1_0 alias reverse lookup (wolf 133 system topology)": {
+			device:   "hfi1_0",
+			topology: "testdata/wolf-133.xml",
+			expected: "ib0",
+		},
+		"hfi1_1 alias reverse lookup (wolf 133 system topology)": {
+			device:   "hfi1_1",
+			topology: "testdata/wolf-133.xml",
+			expected: "ib1",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := os.Stat(tc.topology)
+			AssertEqual(t, err, nil, "unable to load xmlTopology")
+			os.Setenv("HWLOC_XMLFILE", tc.topology)
+			defer os.Unsetenv("HWLOC_XMLFILE")
+			deviceAlias, err := GetDeviceAlias(tc.device)
+			if err != nil {
+				t.Fatal(err)
+			}
+			AssertEqual(t, deviceAlias, tc.expected,
+				"unexpected mismatch with device and topology")
+		})
 	}
 }
