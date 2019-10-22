@@ -274,8 +274,8 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %files tests
 #<<<<<<< HEAD
 %dir %{_prefix}/lib/daos
-%dir %{_prefix}/lib/daos/utils
-%{_prefix}/lib/daos/utils/py
+#%dir %{_prefix}/lib/daos/utils
+#%{_prefix}/lib/daos/utils/py
 %{_prefix}/lib/daos/TESTING
 #=======
 #%dir %{daoshome}/utils
