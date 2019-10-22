@@ -36,7 +36,7 @@ import (
 
 func TestGetFeature(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer ShowBufferOnFailure(t, buf)()
+	defer ShowBufferOnFailure(t, buf)
 
 	cs := defaultMockControlService(t, log)
 

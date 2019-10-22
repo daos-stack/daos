@@ -254,7 +254,7 @@ func TestStorageScan(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)
 
 			// test for both empty and default config cases
 			config := tt.config
@@ -399,7 +399,7 @@ func TestStoragePrepare(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)
 
 			config := newDefaultConfiguration(newMockExt(nil, true, nil,
 				true, nil, nil, nil, tt.isRoot))
@@ -585,7 +585,7 @@ func TestStorageFormat(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)
 
 			testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
 			defer os.RemoveAll(testDir)
@@ -767,7 +767,7 @@ func TestStorageUpdate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)
 
 			config := defaultMockConfig(t)
 			cs := mockControlService(t, log, config, nil)
