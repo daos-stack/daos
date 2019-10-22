@@ -696,6 +696,17 @@ pool_tree_count(struct pool_domain *tree, struct pool_comp_cntr *cntr)
 	}
 }
 
+int
+pool_map_comp_cnt(struct pool_map *map)
+{
+	struct pool_comp_cntr cntr = {0};
+
+	D_ASSERT(map->po_tree != NULL);
+	pool_tree_count(&map->po_tree[1], &cntr);
+
+	return cntr.cc_domains + cntr.cc_targets;
+}
+
 /**
  * Calculate memory size of the component tree.
  */
