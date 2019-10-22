@@ -2124,54 +2124,6 @@ dfs_release(dfs_obj_t *obj)
 	return 0;
 }
 
-static int
-io_internal(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
-	    int flag, daos_size_t *io_size, daos_event_t *ev)
-{
-	daos_array_iod_t	iod;
-	daos_range_t		rg;
-	daos_size_t		buf_size;
-	int			i;
-	int			rc;
-
-	buf_size = 0;
-	for (i = 0; i < sgl->sg_nr; i++)
-		buf_size += sgl->sg_iovs[i].iov_len;
-	if (buf_size == 0) {
-		*io_size = 0;
-		if (ev) {
-			daos_event_launch(ev);
-			daos_event_complete(ev, 0);
-		}
-		return 0;
-	}
-
-	/** set array location */
-	iod.arr_nr = 1;
-	rg.rg_len = buf_size;
-	rg.rg_idx = off;
-	iod.arr_rgs = &rg;
-
-	D_DEBUG(DB_TRACE, "IO OP %d, Off %"PRIu64", Len %zu\n",
-		flag, off, buf_size);
-
-	if (flag == DFS_WRITE) {
-		rc = daos_array_write(obj->oh, DAOS_TX_NONE, &iod, sgl,
-				      NULL, ev);
-		if (rc)
-			D_ERROR("daos_array_write() failed (%d)\n", rc);
-	} else if (flag == DFS_READ) {
-		rc = daos_array_read(obj->oh, DAOS_TX_NONE, &iod, sgl,
-				     NULL, ev);
-		if (rc)
-			D_ERROR("daos_array_read() failed (%d)\n", rc);
-	} else {
-		rc = -DER_INVAL;
-	}
-
-	return daos_der2errno(rc);
-}
-
 struct dfs_read_params {
 	dfs_t			*dfs;
 	dfs_obj_t		*obj;
@@ -2321,6 +2273,8 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 		return 0;
 	}
 
+	D_DEBUG(DB_TRACE, "DFS Read: Off %"PRIu64", Len %zu\n", off, buf_size);
+
 	rc = dc_task_create(dfs_read_int, NULL, ev, &task);
 	if (rc)
 		return rc;
@@ -2340,7 +2294,11 @@ int
 dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 	  daos_event_t *ev)
 {
-	daos_size_t size;
+	daos_array_iod_t	iod;
+	daos_range_t		rg;
+	daos_size_t		buf_size;
+	int			i;
+	int			rc;
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
@@ -2349,7 +2307,30 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 	if (obj == NULL || !S_ISREG(obj->mode))
 		return EINVAL;
 
-	return io_internal(dfs, obj, sgl, off, DFS_WRITE, &size, ev);
+	buf_size = 0;
+	for (i = 0; i < sgl->sg_nr; i++)
+		buf_size += sgl->sg_iovs[i].iov_len;
+	if (buf_size == 0) {
+		if (ev) {
+			daos_event_launch(ev);
+			daos_event_complete(ev, 0);
+		}
+		return 0;
+	}
+
+	/** set array location */
+	iod.arr_nr = 1;
+	rg.rg_len = buf_size;
+	rg.rg_idx = off;
+	iod.arr_rgs = &rg;
+
+	D_DEBUG(DB_TRACE, "DFS Write: Off %"PRIu64", Len %zu\n", off, buf_size);
+
+	rc = daos_array_write(obj->oh, DAOS_TX_NONE, &iod, sgl, NULL, ev);
+	if (rc)
+		D_ERROR("daos_array_write() failed (%d)\n", rc);
+
+	return daos_der2errno(rc);
 }
 
 int
