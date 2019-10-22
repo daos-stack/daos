@@ -26,7 +26,7 @@ import os
 import traceback
 from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
-from daos_api import DaosApiError
+from pydaos.raw import DaosApiError
 from test_utils import TestPool
 
 class PoolSecurityTest(TestWithServers):
@@ -35,20 +35,6 @@ class PoolSecurityTest(TestWithServers):
 
     :avocado: recursive
     """
-
-    def tearDown(self):
-        """
-        tear down method
-        """
-        try:
-            if self.pool is not None:
-                self.pool.destroy()
-        except DaosApiError as exc:
-            self.log.info(exc)
-            self.log.info(traceback.format_exc())
-            self.fail("##Pool destroy failed in tearDown.\n")
-        finally:
-            super(PoolSecurityTest, self).tearDown()
 
     def test_poolconnect(self):
         """

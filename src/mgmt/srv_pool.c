@@ -26,6 +26,7 @@
 #define D_LOGFAC	DD_FAC(mgmt)
 
 #include <daos_srv/pool.h>
+#include <daos/rpc.h>
 
 #include "srv_internal.h"
 
@@ -662,6 +663,90 @@ ds_mgmt_pool_list(void)
 
 	ABT_rwlock_unlock(svc->ms_lock);
 	rdb_tx_end(&tx);
+out_svc:
+	ds_mgmt_svc_put_leader(svc);
+out:
+	return rc;
+}
+
+/* Caller is responsible for freeing ranks */
+static int
+pool_get_ranks(struct mgmt_svc *svc, uuid_t uuid, d_rank_list_t **ranks)
+{
+	struct rdb_tx	tx;
+	struct pool_rec	*rec;
+	int		rc;
+	uint32_t	i;
+	uint32_t	nr_ranks;
+	d_rank_list_t	*pool_ranks;
+
+	rc = rdb_tx_begin(svc->ms_rsvc.s_db, svc->ms_rsvc.s_term, &tx);
+	if (rc != 0)
+		D_GOTO(out, rc);
+	ABT_rwlock_rdlock(svc->ms_lock);
+
+	rc = pool_rec_lookup(&tx, svc, uuid, &rec);
+	if (rc != 0) {
+		D_GOTO(out_lock, rc);
+	} else if (!(rec->pr_state & POOL_READY)) {
+		D_ERROR("Pool not ready\n");
+		D_GOTO(out_lock, rc = -DER_AGAIN);
+	}
+
+	nr_ranks = rec->pr_nreplicas;
+	pool_ranks = d_rank_list_alloc(nr_ranks);
+	if (pool_ranks == NULL)
+		D_GOTO(out_lock, rc = -DER_NOMEM);
+
+	for (i = 0; i < nr_ranks; i++) {
+		pool_ranks->rl_ranks[i] = rec->pr_replicas[i];
+	}
+
+	*ranks = pool_ranks;
+
+out_lock:
+	ABT_rwlock_unlock(svc->ms_lock);
+	rdb_tx_end(&tx);
+out:
+	return rc;
+}
+
+int
+ds_mgmt_pool_get_acl(uuid_t pool_uuid, struct daos_acl **acl)
+{
+	int			rc;
+	struct mgmt_svc		*svc;
+	d_rank_list_t		*ranks;
+	daos_prop_t		*prop;
+	struct daos_prop_entry	*entry;
+
+	D_DEBUG(DB_MGMT, "Getting ACL for pool "DF_UUID"\n",
+		DP_UUID(pool_uuid));
+
+	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
+	if (rc != 0)
+		goto out;
+
+	rc = pool_get_ranks(svc, pool_uuid, &ranks);
+	if (rc != 0)
+		goto out_svc;
+
+	rc = ds_pool_svc_get_acl_prop(pool_uuid, ranks, &prop);
+	if (rc != 0)
+		goto out_ranks;
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
+	if (entry == NULL || entry->dpe_val_ptr == NULL) {
+		D_ERROR("No ACL entry in prop list!\n");
+		D_GOTO(out_prop, rc = -DER_NONEXIST);
+	}
+
+	*acl = daos_acl_dup(entry->dpe_val_ptr);
+
+out_prop:
+	daos_prop_free(prop);
+out_ranks:
+	d_rank_list_free(ranks);
 out_svc:
 	ds_mgmt_svc_put_leader(svc);
 out:

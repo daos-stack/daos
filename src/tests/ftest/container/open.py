@@ -30,9 +30,9 @@ import uuid
 from avocado import main
 from apricot import TestWithServers
 
-from daos_api import DaosPool, DaosContainer, DaosApiError
+from pydaos.raw import DaosPool, DaosContainer, DaosApiError
 
-# pylint: disable=too-many-instance-attributes
+
 class OpenContainerTest(TestWithServers):
     """
     Tests DAOS container bad create (non existing pool handle, bad uuid)
@@ -40,44 +40,6 @@ class OpenContainerTest(TestWithServers):
 
     :avocado: recursive
     """
-    def __init__(self, *args, **kwargs):
-        super(OpenContainerTest, self).__init__(*args, **kwargs)
-        self.pool1 = None
-        self.pool2 = None
-        self.container1 = None
-        self.container2 = None
-
-    def setUp(self):
-        super(OpenContainerTest, self).setUp()
-
-        # common parameters used in pool create
-        self.createmode = self.params.get("mode",
-                                          '/run/createtests/createmode/')
-        self.createsetid = self.params.get("setname",
-                                           '/run/createtests/createset/')
-        self.createsize = self.params.get("size",
-                                          '/run/createtests/createsize/')
-
-        # pool 1 UID GID
-        self.createuid1 = self.params.get("uid", '/run/createtests/createuid1/')
-        self.creategid1 = self.params.get("gid", '/run/createtests/creategid1/')
-
-        # pool 2 UID GID
-        self.createuid2 = self.params.get("uid", '/run/createtests/createuid2/')
-        self.creategid2 = self.params.get("gid", '/run/createtests/creategid2/')
-
-    def tearDown(self):
-        try:
-            if self.container1 is not None:
-                self.container1.destroy()
-            if self.container2 is not None:
-                self.container2.destroy()
-            if self.pool1 is not None and self.pool1.attached:
-                self.pool1.destroy(1)
-            if self.pool2 is not None and self.pool2.attached:
-                self.pool2.destroy(1)
-        finally:
-            super(OpenContainerTest, self).tearDown()
 
     def test_container_open(self):
         """
@@ -85,6 +47,24 @@ class OpenContainerTest(TestWithServers):
 
         :avocado: tags=all,container,tiny,full_regression,containeropen
         """
+        self.pool = []
+        self.container = []
+
+        # common parameters used in pool create
+        mode = self.params.get("mode", '/run/createtests/createmode/')
+        name = self.params.get("setname", '/run/createtests/createset/')
+        size = self.params.get("size", '/run/createtests/createsize/')
+
+        # pool UIDs & GIDs
+        uid = [
+            self.params.get("uid", "/run/createtests/createuid1/"),
+            self.params.get("uid", "/run/createtests/createuid2/"),
+        ]
+        gid = [
+            self.params.get("gid", "/run/createtests/creategid1/"),
+            self.params.get("gid", "/run/createtests/creategid2/"),
+        ]
+
         container_uuid = None
         expected_for_param = []
         uuidlist = self.params.get("uuid", '/run/createtests/uuids/*/')
@@ -102,54 +82,41 @@ class OpenContainerTest(TestWithServers):
                 break
 
         try:
-            # create two pools and try to create containers in these pools
-            self.pool1 = DaosPool(self.context)
-            self.pool1.create(self.createmode, self.createuid1, self.creategid1,
-                              self.createsize, self.createsetid, None)
-
-            self.pool2 = DaosPool(self.context)
-            self.pool2.create(self.createmode, self.createuid2, self.creategid2,
-                              self.createsize, None, None)
-
-            # Connect to the pools
-            self.pool1.connect(1 << 1)
-            self.pool2.connect(1 << 1)
+            # Create and connect to two pools
+            for index in range(2):
+                self.pool.append(DaosPool(self.context))
+                self.pool[index].create(
+                    mode, uid[index], gid[index], size, name, None)
+                self.pool[index].connect(1 << 1)
 
             # defines pool handle for container open
             if pohlist[0] == 'pool1':
-                poh = self.pool1.handle
+                poh = self.pool[0].handle
             else:
-                poh = self.pool2.handle
+                poh = self.pool[1].handle
 
-            # Create a container in pool1
-            self.container1 = DaosContainer(self.context)
-            self.container1.create(self.pool1.handle)
+            # Create a container in the first pool
+            self.container.append(DaosContainer(self.context))
+            self.container[0].create(self.pool[0].handle)
 
             # defines test UUID for container open
             if uuidlist[0] == 'pool1':
-                struuid = self.container1.get_uuid_str()
+                struuid = self.container[0].get_uuid_str()
                 container_uuid = uuid.UUID(struuid)
             else:
-                container_uuid = uuid.uuid4() # random uuid
+                container_uuid = uuid.uuid4()   # random uuid
 
-            # tries to open the container1
+            # Try to open the first container
             # open should be ok only if poh = pool1.handle &&
             #                           containerUUID = container1.uuid
-            self.container1.open(poh, container_uuid)
+            self.container[0].open(poh, container_uuid)
 
             # wait a few seconds and then destroy containers
             time.sleep(5)
-            self.container1.close()
-            self.container1.destroy()
-            self.container1 = None
+            self.destroy_containers(self.container)
 
             # cleanup the pools
-            self.pool1.disconnect()
-            self.pool1.destroy(1)
-            self.pool1 = None
-            self.pool2.disconnect()
-            self.pool2.destroy(1)
-            self.pool2 = None
+            self.destroy_pools(self.pool)
 
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
@@ -159,6 +126,7 @@ class OpenContainerTest(TestWithServers):
             print(traceback.format_exc())
             if expected_result == 'PASS':
                 self.fail("Test was expected to pass but it failed.\n")
+
 
 if __name__ == "__main__":
     main()

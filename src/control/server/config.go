@@ -33,19 +33,24 @@ import (
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
 
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
 
 const (
-	configOut           = ".daos_server.active.yml"
-	relConfExamplesPath = "utils/config/examples/"
-	msgBadConfig        = "insufficient config file, see examples in "
-	msgConfigNoProvider = "provider not specified in config"
-	msgConfigNoPath     = "no config path set"
-	msgConfigNoServers  = "no servers specified in config"
+	configOut                = ".daos_server.active.yml"
+	relConfExamplesPath      = "utils/config/examples/"
+	msgBadConfig             = "insufficient config file, see examples in "
+	msgConfigNoProvider      = "provider not specified in config"
+	msgConfigNoPath          = "no config path set"
+	msgConfigNoServers       = "no servers specified in config"
+	msgConfigBadAccessPoints = "only a single access point is currently supported"
 )
+
+type networkProviderValidation func(string, string) error
+type networkNUMAValidation func(string, uint) error
 
 // Configuration describes options for DAOS control plane.
 // See utils/config/daos_server.yml for parameter descriptions.
@@ -70,7 +75,6 @@ type Configuration struct {
 	Modules    string
 	Attach     string
 
-	// deprecated
 	AccessPoints []string `yaml:"access_points"`
 
 	// unused (?)
@@ -85,6 +89,30 @@ type Configuration struct {
 	// memory and therefore NVMe controllers.
 	// TODO: Is it also necessary to provide distinct coremask args?
 	NvmeShmID int
+
+	//a pointer to a function that validates the chosen provider
+	validateProviderFn networkProviderValidation
+
+	//a pointer to a function that validates the chosen numa node
+	validateNUMAFn networkNUMAValidation
+}
+
+// WithProviderValidator is used for unit testing configurations that are not necessarily valid on the test machine.
+// We use the stub function ValidateNetworkConfigStub to avoid unnecessary failures
+// in those tests that are not concerned with testing a truly valid configuration
+// for the test system
+func (c *Configuration) WithProviderValidator(fn networkProviderValidation) *Configuration {
+	c.validateProviderFn = fn
+	return c
+}
+
+// WithNUMAValidator is used for unit testing configurations that are not necessarily valid on the test machine.
+// We use the stub function ValidateNetworkConfigStub to avoid unnecessary failures
+// in those tests that are not concerned with testing a truly valid configuration
+// for the test system
+func (c *Configuration) WithNUMAValidator(fn networkNUMAValidation) *Configuration {
+	c.validateNUMAFn = fn
+	return c
 }
 
 // WithSystemName sets the system name.
@@ -269,17 +297,19 @@ func (c *Configuration) parse(data []byte) error {
 // populated with defaults.
 func newDefaultConfiguration(ext External) *Configuration {
 	return &Configuration{
-		SystemName:      "daos_server",
-		SocketDir:       "/var/run/daos_server",
-		AccessPoints:    []string{"localhost"},
-		ControlPort:     10000,
-		TransportConfig: security.DefaultServerTransportConfig(),
-		Hyperthreads:    false,
-		NrHugepages:     1024,
-		Path:            "etc/daos_server.yml",
-		NvmeShmID:       0,
-		ControlLogMask:  ControlLogLevel(logging.LogLevelInfo),
-		ext:             ext,
+		SystemName:         "daos_server",
+		SocketDir:          "/var/run/daos_server",
+		AccessPoints:       []string{"localhost"},
+		ControlPort:        10000,
+		TransportConfig:    security.DefaultServerTransportConfig(),
+		Hyperthreads:       false,
+		NrHugepages:        1024,
+		Path:               "etc/daos_server.yml",
+		NvmeShmID:          0,
+		ControlLogMask:     ControlLogLevel(logging.LogLevelInfo),
+		ext:                ext,
+		validateProviderFn: netdetect.ValidateProviderStub,
+		validateNUMAFn:     netdetect.ValidateNUMAStub,
 	}
 }
 
@@ -389,6 +419,11 @@ func (c *Configuration) Validate() (err error) {
 		return errors.New(msgConfigNoProvider)
 	}
 
+	// only single access point valid for now
+	if len(c.AccessPoints) != 1 {
+		return errors.New(msgConfigBadAccessPoints)
+	}
+
 	if len(c.Servers) == 0 {
 		return errors.New(msgConfigNoServers)
 	}
@@ -398,7 +433,25 @@ func (c *Configuration) Validate() (err error) {
 		if err := srv.Validate(); err != nil {
 			return errors.Wrapf(err, "I/O server %d failed config validation", i)
 		}
-	}
 
+		err := c.validateProviderFn(srv.Fabric.Interface, srv.Fabric.Provider)
+		if err != nil {
+			return errors.Wrapf(err, "Network device %s does not support provider %s.  The configuration is invalid.",
+				srv.Fabric.Interface, srv.Fabric.Provider)
+		}
+
+		// Check to see if the pinned NUMA node was provided in the configuration.
+		// If it was provided, validate that the NUMA node is correct for the given device.
+		// An error from srv.Fabric.GetNumaNode() means that no configuration was provided in the YML.
+		// Because this is an optional parameter, this is considered non-fatal.
+		numaNode, err := srv.Fabric.GetNumaNode()
+		if err == nil {
+			err = c.validateNUMAFn(srv.Fabric.Interface, numaNode)
+			if err != nil {
+				return errors.Wrapf(err, "Network device %s on NUMA node %d is an invalid configuration.",
+					srv.Fabric.Interface, numaNode)
+			}
+		}
+	}
 	return nil
 }

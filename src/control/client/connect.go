@@ -24,13 +24,14 @@
 package client
 
 import (
-	"bytes"
 	"fmt"
-	"sort"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 )
@@ -40,64 +41,17 @@ const (
 	msgConnInactive = "socket connection is not active (%s)"
 )
 
-// Addresses is an alias for a slice of <ipv4/hostname>:<port> addresses.
-type Addresses []string
-
-// ClientResult is a container for output of any type of client request.
-type ClientResult struct {
-	Address string
-	Value   interface{}
-	Err     error
-}
-
-func (cr ClientResult) String() string {
-	if cr.Err != nil {
-		return fmt.Sprintf("error: " + cr.Err.Error())
-	}
-	return fmt.Sprintf("%+v", cr.Value)
-}
-
-// ResultMap map client addresses to method call ClientResults
-type ResultMap map[string]ClientResult
-
-func (rm ResultMap) String() string {
-	var buf bytes.Buffer
-	servers := make([]string, 0, len(rm))
-
-	for server := range rm {
-		servers = append(servers, server)
-	}
-	sort.Strings(servers)
-
-	for _, server := range servers {
-		fmt.Fprintf(&buf, "%s:\n\t%s\n", server, rm[server])
+// chooseServiceLeader will decide which connection to send request on.
+//
+// Currently expect only one connection to be available and return that.
+// TODO: this should probably be implemented on the Connect interface.
+func chooseServiceLeader(cs []Control) (Control, error) {
+	if len(cs) == 0 {
+		return nil, errors.New("no active connections")
 	}
 
-	return buf.String()
-}
-
-// ScmModules is an alias for protobuf ScmModule message slice representing
-// a number of SCM modules installed on a storage node.
-
-// ControllerFactory is an interface providing capability to connect clients.
-type ControllerFactory interface {
-	create(string, *security.TransportConfig) (Control, error)
-}
-
-// controllerFactory as an implementation of ControllerFactory.
-type controllerFactory struct {
-	log logging.Logger
-}
-
-// create instantiates and connects a client to server at given address.
-func (c *controllerFactory) create(address string, cfg *security.TransportConfig) (Control, error) {
-	controller := &control{
-		log: c.log,
-	}
-
-	err := controller.connect(address, cfg)
-
-	return controller, err
+	// just return the first connection, expected to be the service leader
+	return cs[0], nil
 }
 
 // Connect is an external interface providing functionality across multiple
@@ -110,16 +64,22 @@ type Connect interface {
 	// GetActiveConns verifies states and removes inactive conns
 	GetActiveConns(ResultMap) ResultMap
 	ClearConns() ResultMap
-	StoragePrepare(*pb.StoragePrepareReq) ResultMap
-	StorageScan() (ClientCtrlrMap, ClientModuleMap)
-	StorageFormat() (ClientCtrlrMap, ClientMountMap)
-	StorageUpdate(*pb.StorageUpdateReq) (ClientCtrlrMap, ClientModuleMap)
+	StoragePrepare(*ctlpb.StoragePrepareReq) ResultMap
+	StorageScan() (ClientCtrlrMap, ClientModuleMap, ClientPmemMap)
+	StorageFormat(reformat bool) (ClientCtrlrMap, ClientMountMap)
+	StorageUpdate(*ctlpb.StorageUpdateReq) (ClientCtrlrMap, ClientModuleMap)
 	// TODO: implement Burnin client features
 	//StorageBurnIn() (ClientCtrlrMap, ClientModuleMap)
 	ListFeatures() ClientFeatureMap
 	KillRank(uuid string, rank uint32) ResultMap
-	CreatePool(*pb.CreatePoolReq) ResultMap
-	DestroyPool(*pb.DestroyPoolReq) ResultMap
+	PoolCreate(*PoolCreateReq) (*PoolCreateResp, error)
+	PoolDestroy(*PoolDestroyReq) error
+	PoolGetACL(*PoolGetACLReq) (*PoolGetACLResp, error)
+	BioHealthQuery(*mgmtpb.BioHealthReq) ResultQueryMap
+	SmdListDevs(*mgmtpb.SmdDevReq) ResultSmdMap
+	SmdListPools(*mgmtpb.SmdPoolReq) ResultSmdMap
+	SystemMemberQuery() (common.SystemMembers, error)
+	SystemStop() (common.SystemMemberResults, error)
 }
 
 // connList is an implementation of Connect and stores controllers

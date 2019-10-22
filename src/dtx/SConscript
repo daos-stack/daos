@@ -3,10 +3,12 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('env')
+    Import('env', 'prereqs')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
+
+    prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
 
     # dtx
     dtx = daos_build.library(denv, 'dtx',

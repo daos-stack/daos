@@ -28,6 +28,8 @@ const (
 	ScmClassNone ScmClass = ""
 	ScmClassDCPM ScmClass = "dcpm"
 	ScmClassRAM  ScmClass = "ram"
+
+	MaxScmDeviceLen = 1
 )
 
 // ScmClass specifies device type for Storage Class Memory
@@ -68,6 +70,9 @@ func (sc *ScmConfig) Validate() error {
 	}
 	if sc.Class == "" {
 		return errors.New("no scm_class set")
+	}
+	if len(sc.DeviceList) > MaxScmDeviceLen {
+		return errors.Errorf("scm_list may have at most %d devices", MaxScmDeviceLen)
 	}
 	return nil
 }
@@ -119,6 +124,14 @@ type BdevConfig struct {
 	Hostname    string    `yaml:"-"` // used when generating templates
 }
 
-func (nc *BdevConfig) Validate() error {
+func (bc *BdevConfig) Validate() error {
 	return nil
+}
+
+func (bc *BdevConfig) GetNvmeDevs() []string {
+	if bc.Class == BdevClassNvme {
+		return bc.DeviceList
+	}
+
+	return []string{}
 }

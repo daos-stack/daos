@@ -21,9 +21,17 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from __future__ import print_function
-
+from logging import getLogger
+import time
 import os
+import signal
+
+from avocado.utils import process
+
+
+class CommandFailure(Exception):
+    """Base exception for this module."""
+
 
 class BasicParameter(object):
     """A class for parameters whose values are read from a yaml file."""
@@ -37,6 +45,7 @@ class BasicParameter(object):
         """
         self.value = value if value is not None else default
         self._default = default
+        self.log = getLogger(__name__)
 
     def __str__(self):
         """Convert this BasicParameter into a string.
@@ -55,7 +64,10 @@ class BasicParameter(object):
             test (Test): avocado Test object to use to read the yaml file
             path (str): yaml path where the name is to be found
         """
-        self.value = test.params.get(name, path, self._default)
+        if hasattr(test, "config") and test.config is not None:
+            self.value = test.config.get(name, path, self._default)
+        else:
+            self.value = test.params.get(name, path, self._default)
 
     def update(self, value, name=None):
         """Update the value of the parameter.
@@ -67,7 +79,7 @@ class BasicParameter(object):
         """
         self.value = value
         if name is not None:
-            print("Updated param {} => {}".format(name, self.value))
+            self.log.debug("Updated param %s => %s", name, self.value)
 
 
 class FormattedParameter(BasicParameter):
@@ -95,13 +107,26 @@ class FormattedParameter(BasicParameter):
         if isinstance(self._default, bool) and self.value:
             return self._str_format
         elif not isinstance(self._default, bool) and self.value is not None:
-            return self._str_format.format(self.value)
+            if isinstance(self.value, (list, tuple)):
+                return " ".join(
+                    [self._str_format.format(value) for value in self.value])
+            else:
+                return self._str_format.format(self.value)
         else:
             return ""
 
 
 class ObjectWithParameters(object):
     """A class for an object with parameters."""
+
+    def __init__(self, namespace):
+        """Create a ObjectWithParameters object.
+
+        Args:
+            namespace (str): yaml namespace (path to parameters)
+        """
+        self.namespace = namespace
+        self.log = getLogger(__name__)
 
     def get_attribute_names(self, attr_type=None):
         """Get a sorted list of the names of the attr_type attributes.
@@ -122,13 +147,16 @@ class ObjectWithParameters(object):
     def get_param_names(self):
         """Get a sorted list of the names of the BasicParameter attributes.
 
+        Note: Override this method to change the order or inclusion of a
+            command parameter in the get_params() method.
+
         Returns:
             list: a list of class attribute names used to define parameters
 
         """
         return self.get_attribute_names(BasicParameter)
 
-    def get_params(self, test, path):
+    def get_params(self, test):
         """Get values for all of the command params from the yaml file.
 
         Sets each BasicParameter object's value to the yaml key that matches
@@ -141,26 +169,29 @@ class ObjectWithParameters(object):
 
         Args:
             test (Test): avocado Test object
-            path (str): yaml namespace.
         """
         for name in self.get_param_names():
-            getattr(self, name).get_yaml_value(name, test, path)
+            getattr(self, name).get_yaml_value(name, test, self.namespace)
 
 
 class CommandWithParameters(ObjectWithParameters):
     """A class for command with paramaters."""
 
-    def __init__(self, command, path=""):
+    def __init__(self, namespace, command, path=""):
         """Create a CommandWithParameters object.
 
         Uses Avocado's utils.process module to run a command str provided.
 
         Args:
-            path (str): path to location of command binary file
+            namespace (str): yaml namespace (path to parameters)
             command (str): string of the command to be executed.
+            path (str, optional): path to location of command binary file.
+                Defaults to "".
         """
+        super(CommandWithParameters, self).__init__(namespace)
         self._command = command
         self._path = path
+        self._pre_command = None
 
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
@@ -172,8 +203,422 @@ class CommandWithParameters(ObjectWithParameters):
         # Join all the parameters that have been assigned a value with the
         # command to create the command string
         params = []
-        for name in self.get_param_names():
+        for name in self.get_str_param_names():
             value = str(getattr(self, name))
             if value != "":
                 params.append(value)
-        return " ".join([os.path.join(self._path, self._command)] + params)
+
+        # Append the path to the command and preceed it with any other
+        # specified commands
+        command_list = [] if self._pre_command is None else [self._pre_command]
+        command_list.append(os.path.join(self._path, self._command))
+
+        # Return the command and its parameters
+        return " ".join(command_list + params)
+
+    def get_str_param_names(self):
+        """Get a sorted list of the names of the command attributes.
+
+        Returns:
+            list: a list of class attribute names used to define parameters
+                for the command.
+
+        """
+        return self.get_param_names()
+
+
+class ExecutableCommand(CommandWithParameters):
+    """A class for command with paramaters."""
+
+    def __init__(self, namespace, command, path="", subprocess=False):
+        """Create a ExecutableCommand object.
+
+        Uses Avocado's utils.process module to run a command str provided.
+
+        Args:
+            namespace (str): yaml namespace (path to parameters)
+            command (str): string of the command to be executed.
+            path (str, optional): path to location of command binary file.
+                Defaults to "".
+            subprocess (bool, optional): whether the command is run as a
+                subprocess. Defaults to False.
+        """
+        super(ExecutableCommand, self).__init__(namespace, command, path)
+        self._process = None
+        self.run_as_subprocess = subprocess
+        self.timeout = None
+        self.verbose = True
+        self.env = None
+        self.sudo = False
+
+    def run(self):
+        """Run the command.
+
+        Raises:
+            CommandFailure: if there is an error running the command
+
+        """
+        if self.run_as_subprocess:
+            self._run_subprocess()
+            return None
+        return self._run_process()
+
+    def _run_process(self):
+        """Run the command as a foreground process.
+
+        Raises:
+            CommandFailure: if there is an error running the command
+
+        """
+        command = self.__str__()
+        kwargs = {
+            "cmd": command,
+            "timeout": self.timeout,
+            "verbose": self.verbose,
+            "allow_output_check": "combined",
+            "shell": True,
+            "env": self.env,
+            "sudo": self.sudo,
+        }
+        try:
+            # Block until the command is complete or times out
+            return process.run(**kwargs)
+
+        except process.CmdError as error:
+            # Command failed or possibly timed out
+            msg = "Error occurred running '{}': {}".format(command, error)
+            self.log.error(msg)
+            raise CommandFailure(msg)
+
+    def _run_subprocess(self):
+        """Run the command as a sub process.
+
+        Raises:
+            CommandFailure: if there is an error running the command
+
+        """
+        if self._process is None:
+            # Start the job manager command as a subprocess
+            kwargs = {
+                "cmd": self.__str__(),
+                "verbose": self.verbose,
+                "allow_output_check": "combined",
+                "shell": True,
+                "env": self.env,
+                "sudo": self.sudo,
+            }
+            self._process = process.SubProcess(**kwargs)
+            self._process.start()
+
+            # Deterime if the command has launched correctly using its
+            # check_subprocess_status() method.
+            if not self.check_subprocess_status(self._process):
+                msg = "Command '{}' did not launch correctly".format(self)
+                self.log.error(msg)
+                raise CommandFailure(msg)
+        else:
+            self.log.info("Process is already running")
+
+    def check_subprocess_status(self, subprocess):
+        """Verify command status when called in a subprocess.
+
+        Optional method to provide a means for detecting successful command
+        execution when running the command as a subprocess.
+
+        Args:
+            subprocess (process.SubProcess): subprocess used to run the command
+
+        Returns:
+            bool: whether or not the command progress has been detected
+
+        """
+        self.log.info(
+            "Checking status of the %s command in %s",
+            self._command, subprocess)
+        return True
+
+    def stop(self):
+        """Stop the subprocess command.
+
+        Raises:
+            CommandFailure: if unable to stop
+
+        """
+        if self._process is not None:
+            # Use a list to send signals to the process with one second delays:
+            #   Interupt + wait 3 seconds
+            #   Terminate + wait 2 seconds
+            #   Quit + wait 1 second
+            #   Kill
+            signal_list = [
+                signal.SIGINT, None, None, None,
+                signal.SIGTERM, None, None,
+                signal.SIGQUIT, None,
+                signal.SIGKILL]
+
+            # Keep sending signals and or waiting while the process is alive
+            while self._process.poll() is None and signal_list:
+                signal_type = signal_list.pop(0)
+                if signal_type is not None:
+                    self._process.send_signal(signal_type)
+                if signal_list:
+                    time.sleep(1)
+            if not signal_list:
+                # Indicate an error if the process required a SIGKILL
+                raise CommandFailure("Error stopping '{}'".format(self))
+            self._process = None
+
+
+class DaosCommand(ExecutableCommand):
+    """A class for similar daos command line tools."""
+
+    def __init__(self, namespace, command, path=""):
+        """Create DaosCommand object.
+
+        Specific type of command object built so command str returns:
+            <command> <options> <request> <action/subcommand> <options>
+
+        Args:
+            namespace (str): yaml namespace (path to parameters)
+            command (str): string of the command to be executed.
+            path (str): path to location of daos command binary.
+        """
+        super(DaosCommand, self).__init__(namespace, command, path)
+        self.request = BasicParameter(None)
+        self.action = BasicParameter(None)
+        self.action_command = None
+
+    def get_action_command(self):
+        """Assign a command object for the specified request and action."""
+        self.action_command = None
+
+    def get_param_names(self):
+        """Get a sorted list of DaosCommand parameter names."""
+        names = self.get_attribute_names(FormattedParameter)
+        names.extend(["request", "action"])
+        return names
+
+    def get_params(self, test):
+        """Get values for all of the command params from the yaml file.
+
+        Args:
+            test (Test): avocado Test object
+        """
+        super(DaosCommand, self).get_params(test)
+        self.get_action_command()
+
+    def get_str_param_names(self):
+        """Get a sorted list of the names of the command attributes.
+
+        Returns:
+            list: a list of class attribute names used to define parameters
+                for the command.
+
+        """
+        names = self.get_param_names()
+        if self.action_command is not None:
+            names[-1] = "action_command"
+        return names
+
+
+class EnvironmentVariables(dict):
+    """Dictionary of environment variable keys and values."""
+
+    def get_list(self):
+        """Get a list of environment variable assignments.
+
+        Returns:
+            list: a list of environment variable assignment (key=value) strings
+
+        """
+        return ["{}={}".format(key, value) for key, value in self.items()]
+
+    def get_export_str(self, separator=";"):
+        """Get the command to export all of the environment variables.
+
+        Args:
+            separator (str, optional): export command separtor.
+                Defaults to ";".
+
+        Returns:
+            str: a string of export commands for each environment variable
+
+        """
+        join_str = "{} export ".format(separator)
+        return "export {}{}".format(join_str.join(self.get_list()), separator)
+
+
+class JobManager(ExecutableCommand):
+    """A class for commands with parameters that manage other commands."""
+
+    def __init__(self, namespace, command, job, path="", subprocess=False):
+        """Create a JobManager object.
+
+        Args:
+            namespace (str): yaml namespace (path to parameters)
+            command (str): string of the command to be executed.
+            job (ExecutableCommand): command object to manage.
+            path (str, optional): path to location of command binary file.
+                Defaults to "".
+            subprocess (bool, optional): whether the command is run as a
+                subprocess. Defaults to False.
+        """
+        super(JobManager, self).__init__(namespace, command, path, subprocess)
+        self.job = job
+
+    def __str__(self):
+        """Return the command with all of its defined parameters as a string.
+
+        Returns:
+            str: the command with all the defined parameters
+
+        """
+        # Join the job manager command with the command to manage
+        job_manager_command = super(JobManager, self).__str__()
+        return "{} {}".format(job_manager_command, self.job)
+
+    def check_subprocess_status(self, subprocess):
+        """Verify command status when called in a subprocess.
+
+        Args:
+            subprocess (process.SubProcess): subprocess used to run the command
+
+        Returns:
+            bool: whether or not the command progress has been detected
+
+        """
+        return self.job.check_subprocess_status(subprocess)
+
+    def setup_command(self, env, hostfile, processes):
+        """Set up the job manager command with common inputs.
+
+        Args:
+            env (EnvironmentVariables): the environment variables to use with
+                the launch command
+            hostfile (str): file defining host names and slots
+            processes (int): number of host processes
+        """
+        pass
+
+
+class Orterun(JobManager):
+    """A class for the orterun job manager command."""
+
+    def __init__(self, job, path="", subprocess=False):
+        """Create a Orterun object.
+
+        Args:
+            job (ExecutableCommand): command object to manage.
+            path (str, optional): path to location of command binary file.
+                Defaults to "".
+            subprocess (bool, optional): whether the command is run as a
+                subprocess. Defaults to False.
+        """
+        super(Orterun, self).__init__(
+            "/run/orterun", "orterun", job, path, subprocess)
+
+        self.hostfile = FormattedParameter("--hostfile {}", None)
+        self.processes = FormattedParameter("-np {}", 1)
+        self.display_map = FormattedParameter("--display-map", True)
+        self.map_by = FormattedParameter("--map-by {}", "node")
+        self.export = FormattedParameter("-x {}", None)
+        self.enable_recovery = FormattedParameter("--enable-recovery", True)
+        self.report_uri = FormattedParameter("--report-uri {}", None)
+
+    def setup_command(self, env, hostfile, processes):
+        """Set up the orterun command with common inputs.
+
+        Args:
+            env (EnvironmentVariables): the environment variables to use with
+                the launch command
+            hostfile (str): file defining host names and slots
+            processes (int): number of host processes
+        """
+        # Setup the env for the job to export with the orterun command
+        if self.export.value is None:
+            self.export.value = []
+        self.export.value.extend(env.get_list())
+
+        # Setup the orterun command
+        self.hostfile.value = hostfile
+        self.processes.value = processes
+
+
+class Mpirun(JobManager):
+    """A class for the mpirun job manager command."""
+
+    def __init__(self, job, path="", subprocess=False):
+        """Create a Mpirun object.
+
+        Args:
+            job (ExecutableCommand): command object to manage.
+            path (str, optional): path to location of command binary file.
+                Defaults to "".
+            subprocess (bool, optional): whether the command is run as a
+                subprocess. Defaults to False.
+        """
+        super(Mpirun, self).__init__(
+            "/run/mpirun", "mpirun", job, path, subprocess)
+
+        self.hostfile = FormattedParameter("-hostfile {}", None)
+        self.processes = FormattedParameter("-np {}", 1)
+
+    def setup_command(self, env, hostfile, processes):
+        """Set up the mpirun command with common inputs.
+
+        Args:
+            env (EnvironmentVariables): the environment variables to use with
+                the launch command
+            hostfile (str): file defining host names and slots
+            processes (int): number of host processes
+        """
+        # Setup the env for the job to export with the mpirun command
+        self._pre_command = env.get_export_str()
+
+        # Setup the orterun command
+        self.hostfile.value = hostfile
+        self.processes.value = processes
+
+
+class Srun(JobManager):
+    """A class for the srun job manager command."""
+
+    def __init__(self, job, path="", subprocess=False):
+        """Create a Srun object.
+
+        Args:
+            job (ExecutableCommand): command object to manage.
+            path (str, optional): path to location of command binary file.
+                Defaults to "".
+            subprocess (bool, optional): whether the command is run as a
+                subprocess. Defaults to False.
+        """
+        super(Srun, self).__init__("/run/srun", "srun", job, path, subprocess)
+
+        self.label = FormattedParameter("--label", False)
+        self.mpi = FormattedParameter("--mpi={}", None)
+        self.export = FormattedParameter("--export={}", None)
+        self.ntasks = FormattedParameter("--ntasks={}", None)
+        self.distribution = FormattedParameter("--distribution={}", None)
+        self.nodefile = FormattedParameter("--nodefile={}", None)
+
+    def setup_command(self, env, hostfile, processes):
+        """Set up the srun command with common inputs.
+
+        Args:
+            env (EnvironmentVariables): the environment variables to use with
+                the launch command
+            hostfile (str): file defining host names and slots
+            processes (int): number of host processes
+        """
+        # Setup the env for the job to export with the srun command
+        self.export.value = ",".join(["ALL"] + env.get_list())
+
+        # Setup the srun command
+        self.label.value = True
+        self.mpi.value = "pmi2"
+        if processes is not None:
+            self.ntasks.value = processes
+            self.distribution.value = "cyclic"
+        if hostfile is not None:
+            self.nodefile.value = hostfile

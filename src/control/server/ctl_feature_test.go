@@ -28,7 +28,7 @@ import (
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -36,7 +36,7 @@ import (
 
 func TestGetFeature(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer ShowBufferOnFailure(t, buf)()
+	defer ShowBufferOnFailure(t, buf)
 
 	cs := defaultMockControlService(t, log)
 
@@ -52,7 +52,7 @@ func TestGetFeature(t *testing.T) {
 
 	AssertEqual(t, feature, mockFeature, "")
 
-	_, err = cs.GetFeature(context.TODO(), &pb.FeatureName{Name: "non-existent"})
+	_, err = cs.GetFeature(context.TODO(), &ctlpb.FeatureName{Name: "non-existent"})
 	if err == nil {
 		t.Fatal(err)
 	}

@@ -32,7 +32,6 @@
 #include <daos_errno.h>
 #include <daos/btree.h>
 #include <daos/dtx.h>
-#include <daos_srv/vos_types.h>
 
 /**
  * Tree node types.
@@ -1845,7 +1844,7 @@ btr_insert(struct btr_context *tcx, d_iov_t *key, d_iov_t *val)
 	struct btr_record *rec;
 	char		  *rec_str;
 	char		   str[BTR_PRINT_BUF];
-	union btr_rec_buf  rec_buf;
+	union btr_rec_buf  rec_buf = {0};
 	int		   rc;
 
 	rec = &rec_buf.rb_rec;
@@ -2800,6 +2799,32 @@ btr_tree_stat(struct btr_context *tcx, struct btr_stat *stat)
 	return 0;
 }
 
+/* Estimates the number of elements in a btree.  If the depth is 1,
+ * the count is exact.  Otherwise, it's an estimate based on the
+ * depth of the tree.  The primary existing use case is to know
+ * when to collapse the incarnation log so we can reduce space
+ * usage when only 1 entry exists.
+ */
+static int
+btr_tree_count(struct btr_context *tcx, struct btr_root *root)
+{
+	int	i;
+	int	total;
+
+	if (root->tr_depth == 0)
+		return 0;
+	if (root->tr_depth == 1) {
+		struct btr_node *node = btr_off2ptr(tcx, root->tr_node);
+
+		return node->tn_keyn;
+	}
+
+	total = 1;
+	for (i = 0; i < root->tr_depth; i++)
+		total *= root->tr_order;
+	return total / 2;
+}
+
 /**
  * Query attributes and/or gather nodes and records statistics of btree.
  *
@@ -2824,6 +2849,7 @@ dbtree_query(daos_handle_t toh, struct btr_attr *attr, struct btr_stat *stat)
 		attr->ba_class	= root->tr_class;
 		attr->ba_feats	= root->tr_feats;
 		umem_attr_get(&tcx->tc_tins.ti_umm, &attr->ba_uma);
+		attr->ba_count = btr_tree_count(tcx, root);
 	}
 
 	if (stat != NULL)
@@ -3278,7 +3304,7 @@ dbtree_iter_prepare(daos_handle_t toh, unsigned int options, daos_handle_t *ih)
 		/* use the iterator embedded in btr_context */
 		if (tcx->tc_ref != 1) { /* don't screw up others */
 			D_DEBUG(DB_TRACE,
-				"The embedded iterator is in using\n");
+				"The embedded iterator is in use\n");
 			return -DER_BUSY;
 		}
 

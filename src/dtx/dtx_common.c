@@ -222,14 +222,7 @@ dtx_handle_init(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 	dth->dth_conflict = conflict;
 	dth->dth_ent = UMOFF_NULL;
 	dth->dth_obj = UMOFF_NULL;
-	/**
-	 * XXX, for EC obj, now works in synchronous commit mode, to simplify
-	 * the EC fetch handling. Can refine it as async commit later.
-	 */
-	if (leader && daos_oclass_is_ec(oid->id_pub, NULL))
-		dth->dth_sync = 1;
-	else
-		dth->dth_sync = 0;
+	dth->dth_sync = 0;
 }
 
 static inline void
@@ -663,7 +656,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *cont_hdl,
 	}
 
 fail:
-	if (result < 0)
+	if (result < 0 && !daos_is_zero_dti(&dth->dth_xid))
 		dtx_abort(cont_hdl->sch_pool->spc_uuid, cont->sc_uuid,
 			  dth->dth_epoch, &dth->dth_dte, 1,
 			  cont_hdl->sch_pool->spc_map_version);

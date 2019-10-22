@@ -27,49 +27,43 @@ import (
 	"encoding/json"
 	"io/ioutil"
 
-	"github.com/pkg/errors"
-
 	"github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/drpc"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
 var jsonDBRelPath = "share/daos/control/mgmtinit_db.json"
 
 // ControlService implements the control plane control service, satisfying
-// pb.MgmtCtlServer, and is the data container for the service.
+// ctlpb.MgmtCtlServer, and is the data container for the service.
 type ControlService struct {
 	StorageControlService
 	harness           *IOServerHarness
-	drpc              drpc.DomainSocketClient
+	membership        *common.Membership
 	supportedFeatures FeatureMap
 }
 
-// Setup delegates to Storage implementation's Setup methods.
-func (c *StorageControlService) Setup() {
-	if err := c.nvme.Setup(); err != nil {
-		c.log.Debugf(
-			"%s\n", errors.Wrap(err, "Warning, NVMe Setup"))
+func NewControlService(l logging.Logger, h *IOServerHarness, sp *scm.Provider, cfg *Configuration,
+	m *common.Membership) (*ControlService, error) {
+
+	scs, err := DefaultStorageControlService(l, cfg)
+	if err != nil {
+		return nil, err
+	}
+	scs.scm.provider = sp
+
+	fMap, err := loadInitData(jsonDBRelPath)
+	if err != nil {
+		return nil, err
 	}
 
-	if err := c.scm.Setup(); err != nil {
-		c.log.Debugf(
-			"%s\n", errors.Wrap(err, "Warning, SCM Setup"))
-	}
-}
-
-// Teardown delegates to Storage implementation's Teardown methods.
-func (c *StorageControlService) Teardown() {
-	if err := c.nvme.Teardown(); err != nil {
-		c.log.Debugf(
-			"%s\n", errors.Wrap(err, "Warning, NVMe Teardown"))
-	}
-
-	if err := c.scm.Teardown(); err != nil {
-		c.log.Debugf(
-			"%s\n", errors.Wrap(err, "Warning, SCM Teardown"))
-	}
+	return &ControlService{
+		StorageControlService: *scs,
+		harness:               h,
+		membership:            m,
+		supportedFeatures:     fMap,
+	}, nil
 }
 
 // loadInitData retrieves initial data from relative file path.
@@ -86,7 +80,7 @@ func loadInitData(relPath string) (m FeatureMap, err error) {
 		return
 	}
 
-	var features []*pb.Feature
+	var features []*ctlpb.Feature
 	if err = json.Unmarshal(file, &features); err != nil {
 		return
 	}
@@ -96,23 +90,4 @@ func loadInitData(relPath string) (m FeatureMap, err error) {
 	}
 
 	return
-}
-
-func NewControlService(l logging.Logger, h *IOServerHarness, cfg *Configuration) (*ControlService, error) {
-	scs, err := NewStorageControlService(l, cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	fMap, err := loadInitData(jsonDBRelPath)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ControlService{
-		StorageControlService: *scs,
-		harness:               h,
-		drpc:                  scs.drpc,
-		supportedFeatures:     fMap,
-	}, nil
 }

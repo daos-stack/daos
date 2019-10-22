@@ -84,12 +84,14 @@
  * 2) dss_ult_xs() to query the XS id of the xstream for specific ULT task.
  */
 
+/** Number of dRPC xstreams */
+#define	DRPC_XS_NR	(1)
 /** Number of offload XS per target [0, 2] */
 unsigned int	dss_tgt_offload_xs_nr = 2;
 /** number of target (XS set) per server */
 unsigned int	dss_tgt_nr;
 /** number of system XS */
-unsigned int	dss_sys_xs_nr = DAOS_TGT0_OFFSET;
+unsigned int	dss_sys_xs_nr = DAOS_TGT0_OFFSET + DRPC_XS_NR;
 
 unsigned int
 dss_ctx_nr_get(void)
@@ -103,6 +105,13 @@ static void dss_gc_ult(void *args);
 #define REBUILD_DEFAULT_SCHEDULE_RATIO	30
 unsigned int	dss_rebuild_res_percentage = REBUILD_DEFAULT_SCHEDULE_RATIO;
 unsigned int	dss_first_res_percentage = FIRST_DEFAULT_SCHEDULE_RATIO;
+bool		dss_agg_disabled;
+
+bool
+dss_aggregation_disabled(void)
+{
+	return dss_agg_disabled;
+}
 
 #define DSS_SYS_XS_NAME_FMT	"daos_sys_%d"
 #define DSS_TGT_XS_NAME_FMT	"daos_tgt_%d_xs_%d"
@@ -402,13 +411,14 @@ dss_srv_handler(void *arg)
 		} else {
 			if (dx->dx_main_xs)
 				D_ASSERTF(dx->dx_ctx_id ==
-					  dx->dx_tgt_id + dss_sys_xs_nr,
+					  dx->dx_tgt_id + dss_sys_xs_nr -
+					  DRPC_XS_NR,
 					  "incorrect ctx_id %d for xs_id %d\n",
 					  dx->dx_ctx_id, dx->dx_xs_id);
 			else
 				D_ASSERTF(dx->dx_ctx_id ==
 					  (dss_sys_xs_nr + dss_tgt_nr +
-					   dx->dx_tgt_id),
+					   dx->dx_tgt_id - DRPC_XS_NR),
 					  "incorrect ctx_id %d for xs_id %d\n",
 					  dx->dx_ctx_id, dx->dx_xs_id);
 		}
@@ -616,7 +626,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	 * as it is only for EC/checksum/compress offloading.
 	 */
 	xs_offset = xs_id < dss_sys_xs_nr ? -1 : DSS_XS_OFFSET_IN_TGT(xs_id);
-	comm = (xs_id < dss_sys_xs_nr) || xs_offset == 0 || xs_offset == 1;
+	comm = (xs_id == 0) || xs_offset == 0 || xs_offset == 1;
 	dx->dx_tgt_id	= dss_xs2tgt(xs_id);
 	if (xs_id < dss_sys_xs_nr) {
 		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_SYS_XS_NAME_FMT,
@@ -779,12 +789,50 @@ dss_start_xs_id(int xs_id)
 {
 	hwloc_obj_t	obj;
 	int		rc;
+	int		xs_core_offset;
+	unsigned	idx;
+	char		*cpuset;
 
-	obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth,
-				     (xs_id + dss_core_offset) % dss_core_nr);
-	if (obj == NULL) {
-		D_ERROR("Null core returned by hwloc\n");
-		return -DER_INVAL;
+	D_DEBUG(DB_TRACE, "start xs_id called for %d.  ", xs_id);
+	/* if we are NUMA aware, use the NUMA information */
+	if (numa_obj) {
+		idx = hwloc_bitmap_first(core_allocation_bitmap);
+		if (idx == -1) {
+			D_DEBUG(DB_TRACE,
+				"No core available for XS: %d", xs_id);
+			return -DER_INVAL;
+		}
+		D_DEBUG(DB_TRACE,
+			"Choosing next available core index %d.", idx);
+		hwloc_bitmap_clr(core_allocation_bitmap, idx);
+
+		obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, idx);
+		if (obj == NULL) {
+			D_PRINT("Null core returned by hwloc\n");
+			return -DER_INVAL;
+		}
+
+		hwloc_bitmap_asprintf(&cpuset, obj->allowed_cpuset);
+		D_DEBUG(DB_TRACE, "Using CPU set %s\n", cpuset);
+		free(cpuset);
+	} else {
+		D_DEBUG(DB_TRACE, "Using non-NUMA aware core allocation\n");
+		/*
+		* System XS all use the first core
+		*/
+		if (xs_id < dss_sys_xs_nr)
+			xs_core_offset = 0;
+		else
+			xs_core_offset = xs_id - (dss_sys_xs_nr - DRPC_XS_NR);
+
+		obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth,
+					     (xs_core_offset + dss_core_offset)
+					     % dss_core_nr);
+		if (obj == NULL) {
+			D_ERROR("Null core returned by hwloc for XS %d\n",
+				xs_id);
+			return -DER_INVAL;
+		}
 	}
 
 	rc = dss_start_one_xstream(obj->allowed_cpuset, xs_id);
@@ -812,8 +860,16 @@ dss_xstreams_init()
 	}
 
 	/* start the execution streams */
-	D_DEBUG(DB_TRACE, "%d cores detected, starting %d main xstreams\n",
+	D_DEBUG(DB_TRACE,
+		"%d cores total detected "
+		"starting %d main xstreams\n",
 		dss_core_nr, dss_tgt_nr);
+
+	if (dss_numa_node != -1) {
+		D_DEBUG(DB_TRACE,
+			"Detected %d cores on NUMA node %d\n",
+			dss_num_cores_numa_node, dss_numa_node);
+	}
 
 	xstream_data.xd_xs_nr = DSS_XS_NR_TOTAL;
 	/* start system service XS */
@@ -1218,6 +1274,21 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 		stream			= &stream_args->csa_streams[tid];
 		stream->st_coll_args	= &carg;
 
+		if (args->ca_exclude_tgts_cnt) {
+			int i;
+
+			for (i = 0; i < args->ca_exclude_tgts_cnt; i++)
+				if (args->ca_exclude_tgts[i] == tid)
+					break;
+
+			if (i < args->ca_exclude_tgts_cnt) {
+				D_DEBUG(DB_TRACE, "Skip tgt %d\n", tid);
+				rc = ABT_future_set(future, (void *)stream);
+				D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+				continue;
+			}
+		}
+
 		dx = dss_xstream_get(DSS_MAIN_XS_ID(tid));
 		if (create_ult)
 			rc = ABT_thread_create(dx->dx_pools[DSS_POOL_SHARE],
@@ -1228,9 +1299,8 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 					     collective_func, stream, NULL);
 
 		if (rc != ABT_SUCCESS) {
-			aggregator.at_args.st_rc = dss_abterr2der(rc);
-			rc = ABT_future_set(future,
-					    (void *)&aggregator);
+			stream->st_rc = dss_abterr2der(rc);
+			rc = ABT_future_set(future, (void *)stream);
 			D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 		}
 	}
@@ -1300,12 +1370,8 @@ static int
 dss_collective_internal(int (*func)(void *), void *arg, bool thread, int flag)
 {
 	int				rc;
-	struct dss_coll_ops		coll_ops;
-	struct dss_coll_args		coll_args;
-
-
-	memset(&coll_ops, 0, sizeof(coll_ops));
-	memset(&coll_args, 0, sizeof(coll_args));
+	struct dss_coll_ops		coll_ops = { 0 };
+	struct dss_coll_args		coll_args = { 0 };
 
 	coll_ops.co_func	= func;
 	coll_args.ca_func_args	= arg;
@@ -1443,6 +1509,11 @@ dss_parameters_set(unsigned int key_id, uint64_t value)
 		}
 		D_WARN("set rebuild percentage to "DF_U64"\n", value);
 		dss_rebuild_res_percentage = value;
+		break;
+	case DSS_DISABLE_AGGREGATION:
+		dss_agg_disabled = (value != 0);
+		D_WARN("online aggregation is %s\n",
+		       value != 0 ? "disabled" : "enabled");
 		break;
 	default:
 		D_ERROR("invalid key_id %d\n", key_id);
@@ -1693,7 +1764,6 @@ dss_gc_run(int credits)
 		}
 		total -= creds; /* subtract the remainded credits */
 		if (creds != 0) {
-			D_DEBUG(DB_TRACE, "GC consumed %d credits\n", total);
 			break;
 		}
 
@@ -1704,6 +1774,10 @@ dss_gc_run(int credits)
 			break;
 
 		ABT_thread_yield();
+	}
+
+	if (total != 0) {
+		D_DEBUG(DB_TRACE, "GC consumed %d credits\n", total);
 	}
 }
 

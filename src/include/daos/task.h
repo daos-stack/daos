@@ -74,8 +74,8 @@ dc_obj_query_key_task_create(daos_handle_t oh, daos_handle_t th,
 			     daos_recx_t *recx, daos_event_t *ev,
 			     tse_sched_t *tse, tse_task_t **task);
 int
-dc_obj_sync_task_create(daos_handle_t oh, daos_handle_t th,
-			daos_epoch_t **epoch, int *nr, daos_event_t *ev,
+dc_obj_sync_task_create(daos_handle_t oh, daos_epoch_t epoch,
+			daos_epoch_t **epochs_p, int *nr, daos_event_t *ev,
 			tse_sched_t *tse, tse_task_t **task);
 int
 dc_obj_fetch_shard_task_create(daos_handle_t oh, daos_handle_t th,
@@ -121,8 +121,7 @@ int
 dc_obj_list_obj_task_create(daos_handle_t oh, daos_handle_t th,
 			    daos_key_t *dkey, daos_key_t *akey,
 			    daos_size_t *size, uint32_t *nr,
-			    daos_key_desc_t *kds, daos_epoch_range_t *eprs,
-			    d_sg_list_t *sgl,
+			    daos_key_desc_t *kds, d_sg_list_t *sgl,
 			    daos_anchor_t *anchor,
 			    daos_anchor_t *dkeay_anchor,
 			    daos_anchor_t *akey_anchor,

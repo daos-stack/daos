@@ -24,17 +24,6 @@
 #ifndef __DAOS_TESTS_LIB_H__
 #define __DAOS_TESTS_LIB_H__
 
-#define HAVE_LIB_READLINE	1
-
-#if HAVE_LIB_READLINE
-# include <readline/history.h>
-# include <readline/readline.h>
-
-#define dts_add_history(s)	add_history(s)
-#else /* HAVE_LIB_READLINE */
-# define dts_add_history(s)	do {} while (0)
-#endif /* HAVE_LIB_READLINE */
-
 #include <getopt.h>
 #include <daos_types.h>
 #include <daos/object.h>
@@ -164,5 +153,15 @@ struct dts_context {
 	int			 tsc_init;
 	/** OUTPUT END */
 };
+/** Initialize and SGL with a variable number of IOVs and set the IOV buffers
+ *  to the value of the strings passed
+ *
+ * @param sgl		Scatter gather list to initialize
+ * @param count		Number of IO Vectors that will be created in the SGL
+ * @param str		First string that will be used
+ * @param ...		Rest of strings, up to count
+ */
+void
+daos_sgl_init_with_strings(d_sg_list_t *sgl, uint32_t count, char *str, ...);
 
 #endif /* __DAOS_TESTS_LIB_H__ */

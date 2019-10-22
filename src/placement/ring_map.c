@@ -487,6 +487,9 @@ ring_create(struct pl_ring_map *rimap, unsigned int index,
 		return -DER_NOMEM;
 
 	first = pool_map_targets(rimap->rmp_map.pl_poolmap);
+	if (first == NULL)
+		return DER_INVAL;
+
 	for (plt = &ring->ri_targets[0], i = 0;
 	     plt < &ring->ri_targets[rimap->rmp_target_nr]; i++) {
 		for (j = 0; j < buf->rb_domain_nr; j++) {
@@ -524,6 +527,7 @@ ring_print(struct pl_ring_map *rimap, int index)
 
 	D_PRINT("ring[%d]\n", index);
 	targets = pool_map_targets(rimap->rmp_map.pl_poolmap);
+	D_ASSERT(targets != NULL);
 
 	for (i = j = period = 0; i < rimap->rmp_target_nr; i++) {
 		int pos = ring->ri_targets[i].pt_pos;
@@ -947,6 +951,8 @@ ring_map_dump(struct pl_map *map, bool dump_rings)
 		return;
 
 	targets = pool_map_targets(rimap->rmp_map.pl_poolmap);
+	D_ASSERT(targets != NULL);
+
 	for (index = 0; index < rimap->rmp_ring_nr; index++) {
 		ring = &rimap->rmp_rings[index];
 
@@ -975,7 +981,7 @@ ring_map_dump(struct pl_map *map, bool dump_rings)
  * @layout if the remap succeed, otherwise, corresponding shard id
  * and target id in @layout will be cleared as -1.
  */
-static void
+static int
 ring_obj_remap_shards(struct pl_ring_map *rimap, struct daos_obj_md *md,
 		      struct pl_obj_layout *layout,
 		      struct ring_obj_placement *rop, d_list_t *remap_list)
@@ -993,7 +999,11 @@ ring_obj_remap_shards(struct pl_ring_map *rimap, struct daos_obj_md *md,
 	remap_dump(remap_list, md, "before remap:");
 
 	plts = ring_oid2ring(rimap, md->omd_id)->ri_targets;
+
 	tgts = pool_map_targets(map);
+	if (tgts == NULL)
+		return -DER_INVAL;
+
 	current = remap_list->next;
 	spare_idx = rop->rop_begin;
 
@@ -1020,6 +1030,7 @@ ring_obj_remap_shards(struct pl_ring_map *rimap, struct daos_obj_md *md,
 	}
 
 	remap_dump(remap_list, md, "after remap:");
+	return 0;
 }
 
 static int
@@ -1042,6 +1053,11 @@ ring_obj_layout_fill(struct pl_map *map, struct daos_obj_md *md,
 	grp_dist = rop->rop_grp_size * rop->rop_dist;
 	grp_start = rop->rop_begin;
 	tgts = pool_map_targets(map->pl_poolmap);
+	if (tgts == NULL) {
+		rc = DER_INVAL;
+		goto out;
+	}
+
 	ring_map_dump(map, true);
 
 	for (i = 0, k = 0; i < rop->rop_grp_nr; i++) {
@@ -1075,9 +1091,10 @@ ring_obj_layout_fill(struct pl_map *map, struct daos_obj_md *md,
 		grp_start += grp_dist;
 	}
 
-	ring_obj_remap_shards(rimap, md, layout, rop, remap_list);
+	rc = ring_obj_remap_shards(rimap, md, layout, rop, remap_list);
 
-	obj_layout_dump(md->omd_id, layout);
+	if (rc == 0)
+		obj_layout_dump(md->omd_id, layout);
 out:
 	if (rc) {
 		D_ERROR("ring_obj_layout_fill failed, rc %d.\n", rc);

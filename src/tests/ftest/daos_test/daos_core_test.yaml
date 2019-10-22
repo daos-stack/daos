@@ -40,6 +40,10 @@ daos_tests:
     test_X:
       daos_test: X
       test_name: DAOS DTX tests
+    test_V:
+      daos_test: V
+      test_name: DAOS verify consistency tests
+      test_timeout: 900
     test_i:
       daos_test: i
       test_name: IO test
@@ -53,6 +57,9 @@ daos_tests:
     test_K:
       daos_test: K
       test_name: DAOS KV tests
+    test_F:
+      daos_test: F
+      test_name: DAOS File System tests
     test_C:
       daos_test: C
       test_name: DAOS capability tests

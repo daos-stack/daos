@@ -27,8 +27,7 @@ import os
 import traceback
 from apricot import TestWithServers
 
-from daos_api import DaosPool, DaosContainer, DaosApiError
-from daos_cref import DaosObjId
+from pydaos.raw import DaosPool, DaosContainer, DaosApiError, DaosObjId
 
 class ObjOpenBadParam(TestWithServers):
     """
@@ -92,15 +91,6 @@ class ObjOpenBadParam(TestWithServers):
             print(excep)
             print(traceback.format_exc())
             self.fail("Test failed during the initial setup.")
-
-    def tearDown(self):
-        try:
-            self.container.close()
-            self.container.destroy()
-            self.pool.disconnect()
-            self.pool.destroy(1)
-        finally:
-            super(ObjOpenBadParam, self).tearDown()
 
     def test_bad_obj_handle(self):
         """
