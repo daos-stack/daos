@@ -61,11 +61,6 @@ struct mgmt_svc {
 	rdb_path_t		ms_servers;
 	rdb_path_t		ms_uuids;
 	rdb_path_t		ms_pools;
-	ABT_mutex		ms_mutex;
-	bool			ms_step_down;
-	bool			ms_distribute;
-	ABT_cond		ms_distribute_cv;
-	ABT_thread		ms_distributord;
 	uint32_t		ms_map_version;
 	uint32_t		ms_rank_next;
 };
