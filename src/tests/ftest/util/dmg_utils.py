@@ -60,7 +60,7 @@ class DmgCommand(DaosCommand):
             """Create a dmg Command object."""
             super(DmgCommand.DmgFormatSubCommand, self).__init__(
                 "/run/dmg/format/*", "format")
-            self.force = FormattedParameter("-f", False)
+            self.reformat = FormattedParameter("--reformat", False)
 
     class DmgPrepareSubCommand(CommandWithParameters):
         """Defines a object representing a prepare sub dmg command."""
@@ -126,7 +126,6 @@ def storage_format(path, hosts, insecure=True):
     dmg.request.value = "storage"
     dmg.action.value = "format"
     dmg.get_action_command()
-    dmg.action_command.force.value = True
 
     try:
         result = dmg.run()

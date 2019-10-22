@@ -29,6 +29,7 @@ import os
 import re
 import time
 import yaml
+import getpass
 
 # Remove below imports when depricating run_server and stop_server functions.
 import subprocess
@@ -106,7 +107,6 @@ class DaosServer(DaosCommand):
         """
         patterns = {
             "format": "SCM format required",
-            "postformat": "I/O server instance.*notifying storage ready",
             "normal": "DAOS I/O server.*started",
         }
         start_time = time.time()
@@ -454,10 +454,17 @@ class ServerManager(ExecutableCommand):
                 "{}:{}".format(host, self.runner.job.yaml_params.port)
                 for host in self._hosts]
 
+            # Change ownership of attach info file
+            chmod_cmds = [
+            "chmod -R 777 {}/daos_server.attach_info_tmp".format(
+                self.attach.value),
+            ]
+            pcmd(self._hosts, chmod_cmds, False)
+
             # Format storage and wait for server to change ownership
             self.log.info("Formatting hosts: <%s>", self._hosts)
             storage_format(self.daosbinpath, ",".join(servers_with_ports))
-            self.runner.job.mode = "postformat"
+            self.runner.job.mode = "normal"
             try:
                 self.runner.job.check_subprocess_status(self.runner.process)
             except CommandFailure as error:
@@ -468,13 +475,20 @@ class ServerManager(ExecutableCommand):
     def stop(self):
         """Stop the server through the runner."""
         self.log.info("Stopping servers")
-        try:
-            self.runner.stop()
+        if self.runner.sudo:
+            self.kill()
             if self.runner.job.yaml_params.is_nvme() or \
                self.runner.job.yaml_params.is_scm():
                 storage_reset(self._hosts)
-        except CommandFailure as error:
-            raise ServerFailed("Failed to stop servers:{}".format(error))
+            # Make sure the mount directory belongs to non-root user
+            self.log.info("Changing ownership of mount to non-root user")
+            cmd = "sudo chown -R {0}:{0} /mnt/daos*".format(getpass.getuser())
+            pcmd(self._hosts, cmd, False)
+        else:
+            try:
+                self.runner.stop()
+            except CommandFailure as error:
+                raise ServerFailed("Failed to stop servers:{}".format(error))
 
     def server_clean(self):
         """Prepare the hosts before starting daos server."""
