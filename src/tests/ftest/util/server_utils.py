@@ -427,8 +427,7 @@ class ServerManager(ExecutableCommand):
         if self.runner.job.yaml_params.is_nvme():
             self.log.info("Performing nvme storage prepare in <format> mode")
             storage_prepare(self._hosts, "root")
-            self.runner.sudo = True
-            self.runner.allow_run_as_root.value = True
+            self.runner.mca.value = {"plm_rsh_args": "-i ci_key -l root"}
 
             # Make sure log file has been created for ownership change
             lfile = self.runner.job.yaml_params.server_params[-1].log_file.value

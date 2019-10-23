@@ -107,7 +107,11 @@ class FormattedParameter(BasicParameter):
         if isinstance(self._default, bool) and self.value:
             return self._str_format
         elif not isinstance(self._default, bool) and self.value is not None:
-            if isinstance(self.value, (list, tuple)):
+            if isinstance(self.value, dict):
+                return " ".join(
+                    [self._str_format.format("{} \"{}\"".format(key, value))
+                     for key, value in self.value.items()])
+            elif isinstance(self.value, (list, tuple)):
                 return " ".join(
                     [self._str_format.format(value) for value in self.value])
             else:
@@ -534,6 +538,7 @@ class Orterun(JobManager):
         self.enable_recovery = FormattedParameter("--enable-recovery", True)
         self.report_uri = FormattedParameter("--report-uri {}", None)
         self.allow_run_as_root = FormattedParameter("--allow-run-as-root", None)
+        self.mca = FormattedParameter("--mca", None)
 
     def setup_command(self, env, hostfile, processes):
         """Set up the orterun command with common inputs.
