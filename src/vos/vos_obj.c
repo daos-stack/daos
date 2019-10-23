@@ -57,6 +57,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 	struct ilog_desc_cbs	 cbs;
 	int			 rc;
 
+	D_INFO("PUNCH DKEY "DF_U64"\n", *(uint64_t *)dkey->iov_buf);
 	rc = obj_tree_init(obj);
 	if (rc)
 		D_GOTO(out, rc);

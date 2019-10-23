@@ -33,6 +33,7 @@
 #include "csum_extent_tests.h"
 #include <daos_api.h>
 #include <daos/checksum.h>
+#include "vts_array.h"
 
 #define NO_FLAGS	    (0)
 
@@ -1664,6 +1665,7 @@ punch_model_test(void **state)
 	d_sg_list_t		sgl;
 	const char		*expected = "HelloWorld";
 	const char		*under = "HelloLonelyWorld";
+	const char		*latest = "Goodbye";
 	char			buf[32] = {0};
 	char			dkey_buf[UPDATE_DKEY_SIZE];
 	char			akey_buf[UPDATE_AKEY_SIZE];
@@ -1763,8 +1765,8 @@ punch_model_test(void **state)
 	assert_int_equal(rc, 0);
 
 	/* Write one more at 11 */
-	rex.rx_nr = strlen(expected);
-	d_iov_set(&sgl.sg_iovs[0], (void *)under, strlen(under));
+	rex.rx_nr = strlen(latest);
+	d_iov_set(&sgl.sg_iovs[0], (void *)latest, strlen(latest));
 	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, 11, 0, &dkey, 1, &iod,
 			    &sgl);
 	assert_int_equal(rc, 0);
@@ -1882,8 +1884,24 @@ punch_model_test(void **state)
 	/* Five total extents */
 	assert_int_equal(counts.recx_nr, 1);
 
+	/** Read the value at 11 */
+	memset(buf, 0, sizeof(buf));
+	rex.rx_nr = strlen(under);
+	d_iov_set(&sgl.sg_iovs[0], (void *)buf, strlen(under));
+	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, 11, &dkey, 1, &iod, &sgl);
+	assert_int_equal(rc, 0);
+	assert_int_equal(sgl.sg_iovs[0].iov_len, strlen(latest));
+	assert_int_equal(strncmp(buf, latest, strlen(latest)), 0);
+
 	daos_sgl_fini(&sgl, false);
 	D_INFO("done punch model test\n");
+
+	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid,
+			       DAOS_GET_RECX | DAOS_GET_MAX,
+			       11, &dkey, &akey, &rex);
+	assert_int_equal(rc, 0);
+	assert_int_equal(rex.rx_idx, 0);
+	assert_int_equal(rex.rx_nr, strlen(latest));
 }
 
 static void
@@ -2750,7 +2768,7 @@ static const struct CMUnitTest io_tests[] = {
 		csum_fault_injection_multiple_extents_tests, NULL, NULL},
 	{ "VOS351: Checksum fault injection test : Single Value",
 		io_csum_fault_injection_single_value, NULL, NULL},
-	{ "VOS351: Simple punch model test", punch_model_test, NULL, NULL},
+	{ "VOS380: Simple punch model test", punch_model_test, NULL, NULL},
 };
 
 static const struct CMUnitTest int_tests[] = {
