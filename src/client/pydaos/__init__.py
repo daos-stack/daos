@@ -51,8 +51,7 @@ class PyDError(Exception):
         err = pydaos_shim.err_to_str(DAOS_MAGIC, self.rc)
         if err is not None:
             return self.message + ": " + err
-        else:
-            return self.message
+        return self.message
 
 # Initialize DAOS
 _rc = pydaos_shim.daos_init(DAOS_MAGIC)

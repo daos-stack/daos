@@ -126,7 +126,7 @@ def scons():
         try:
             version = env['RELEASE']
         except KeyError:
-            print ("Usage: scons RELEASE=x.y.z release")
+            print("Usage: scons RELEASE=x.y.z release")
             exit(1)
 
         # create a branch for the PR
@@ -242,9 +242,9 @@ def scons():
         try:
             sys.path.insert(0, os.path.join(Dir('#').abspath, 'scons_local'))
             from prereq_tools import PreReqComponent
-            print ('Using scons_local build')
+            print('Using scons_local build')
         except ImportError:
-            print ('Using traditional build')
+            print('Using traditional build')
 
     env = Environment(TOOLS=['extra', 'default'])
 

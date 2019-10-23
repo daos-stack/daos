@@ -97,7 +97,7 @@ class Cont(object):
     __str__
         print pool and container UUIDs
     """
-    def __init__(self, puuid = None, cuuid = None, path = None):
+    def __init__(self, puuid=None, cuuid=None, path=None):
         if path == None and (puuid == None or cuuid == None):
             raise PyDError("invalid pool or container UUID",
                            -pydaos_shim.DER_INVAL)
@@ -124,14 +124,14 @@ class Cont(object):
             raise PyDError("failed to generate object identifier", ret)
         return ObjID(hi, lo)
 
-    def newkv(self, cid = ObjClassID.OC_SX):
+    def newkv(self, cid=ObjClassID.OC_SX):
         oid = self.genoid(cid)
         return KVObj(self.coh, oid, self)
 
     def kv(self, oid):
         return KVObj(self.coh, oid, self)
 
-    def rootkv(self, cid = ObjClassID.OC_SX):
+    def rootkv(self, cid=ObjClassID.OC_SX):
         (ret, hi, lo) = pydaos_shim.obj_idroot(DAOS_MAGIC, cid.value)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to generate root object identifier", ret)
@@ -218,7 +218,7 @@ class KVObj(_Obj):
         Fetch all the key-value pairs and return them in a python dictionary.
     """
     def get(self, key):
-        d = { key : None }
+        d = {key : None}
         self.bget(d)
         return d[key]
 
@@ -226,7 +226,7 @@ class KVObj(_Obj):
         return self.get(key)
 
     def put(self, key, val):
-        d = { key : val }
+        d = {key : val}
         self.bput(d)
 
     def __setitem__(self, key, val):
@@ -255,18 +255,18 @@ class KVObj(_Obj):
         # Not efficient for now. Fetch all keys and count them.
         i = 0
         for key in self:
-	    i += 1
-	return i
+            i += 1
+        return i
 
     def __bool__(self):
         for key in self:
             return True
-	return False
+        return False
 
     def __contains__(self, key):
         if self.get(key) == None:
-	    return False
-	return True
+            return False
+        return True
 
     def __iter__(self):
         self.entries = []

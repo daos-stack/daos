@@ -43,7 +43,7 @@ if [ ! -d "scons_local" ];then
 fi
 PYTHONPATH=$PWD/utils:$PWD/src/tests/ftest/util/
 PYTHONPATH=$PYTHONPATH:$PWD/src/tests/ftest/util/apricot/
-PYTHONPATH=$PYTHONPATH:$PWD/src/utils/py:${PYTHONPATH}
+PYTHONPATH=$PYTHONPATH:$PWD/src/client/
 export PYTHONPATH
 
 if [ -z "$*" ]; then
@@ -52,11 +52,11 @@ if [ -z "$*" ]; then
   scripts=$(find . -name SConscript | grep -v scons_local| grep -v raft | \
            grep -v _build.external)
   for file in $scripts; do
-    flist+=" -s $file"
+    flist+=" -s $file "
   done
   # the functional test code
   flist+=$(find src/tests/ftest/ -name \*.py)
-  flist+=$(find src/utils/py/ -name \*.py)
+  flist+=$(find src/client/pydaos/ -name \*.py)
 else
   flist=$*
 fi
