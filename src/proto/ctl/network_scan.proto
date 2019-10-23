@@ -34,9 +34,7 @@ message DeviceScanReply {
   uint32 numanode = 3;
 }
 
-message ProviderListRequest {
-  string removethiseventually = 1;
-}
+message ProviderListRequest {}
 
 message ProviderListReply {
   string provider = 1;

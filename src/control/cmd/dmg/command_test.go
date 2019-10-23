@@ -171,13 +171,13 @@ func (tc *testConn) SetTransportConfig(cfg *security.TransportConfig) {
 	tc.appendInvocation("SetTransportConfig")
 }
 
-func (tc *testConn) GetProviderList() client.ResultMap {
-	tc.appendInvocation("GetProviderList")
+func (tc *testConn) NetworkListProviders() client.ResultMap {
+	tc.appendInvocation("NetworkListProviders")
 	return nil
 }
 
-func (tc *testConn) NetworkDeviceScanRequest(searchProvider string) client.NetworkScanResultMap {
-	tc.appendInvocation("NetworkDeviceScanRequest")
+func (tc *testConn) NetworkScanDevices(searchProvider string) client.NetworkScanResultMap {
+	tc.appendInvocation(fmt.Sprintf("NetworkScanDevices-%s", searchProvider))
 	return nil
 }
 

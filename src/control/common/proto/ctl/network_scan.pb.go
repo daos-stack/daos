@@ -29,7 +29,7 @@ func (m *DeviceScanRequest) Reset()         { *m = DeviceScanRequest{} }
 func (m *DeviceScanRequest) String() string { return proto.CompactTextString(m) }
 func (*DeviceScanRequest) ProtoMessage()    {}
 func (*DeviceScanRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_network_scan_ab8cd302ffe41f43, []int{0}
+	return fileDescriptor_network_scan_cf58143dbdf2060c, []int{0}
 }
 func (m *DeviceScanRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DeviceScanRequest.Unmarshal(m, b)
@@ -69,7 +69,7 @@ func (m *DeviceScanReply) Reset()         { *m = DeviceScanReply{} }
 func (m *DeviceScanReply) String() string { return proto.CompactTextString(m) }
 func (*DeviceScanReply) ProtoMessage()    {}
 func (*DeviceScanReply) Descriptor() ([]byte, []int) {
-	return fileDescriptor_network_scan_ab8cd302ffe41f43, []int{1}
+	return fileDescriptor_network_scan_cf58143dbdf2060c, []int{1}
 }
 func (m *DeviceScanReply) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DeviceScanReply.Unmarshal(m, b)
@@ -111,7 +111,6 @@ func (m *DeviceScanReply) GetNumanode() uint32 {
 }
 
 type ProviderListRequest struct {
-	Removethiseventually string   `protobuf:"bytes,1,opt,name=removethiseventually,proto3" json:"removethiseventually,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -121,7 +120,7 @@ func (m *ProviderListRequest) Reset()         { *m = ProviderListRequest{} }
 func (m *ProviderListRequest) String() string { return proto.CompactTextString(m) }
 func (*ProviderListRequest) ProtoMessage()    {}
 func (*ProviderListRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_network_scan_ab8cd302ffe41f43, []int{2}
+	return fileDescriptor_network_scan_cf58143dbdf2060c, []int{2}
 }
 func (m *ProviderListRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ProviderListRequest.Unmarshal(m, b)
@@ -141,13 +140,6 @@ func (m *ProviderListRequest) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ProviderListRequest proto.InternalMessageInfo
 
-func (m *ProviderListRequest) GetRemovethiseventually() string {
-	if m != nil {
-		return m.Removethiseventually
-	}
-	return ""
-}
-
 type ProviderListReply struct {
 	Provider             string   `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -159,7 +151,7 @@ func (m *ProviderListReply) Reset()         { *m = ProviderListReply{} }
 func (m *ProviderListReply) String() string { return proto.CompactTextString(m) }
 func (*ProviderListReply) ProtoMessage()    {}
 func (*ProviderListReply) Descriptor() ([]byte, []int) {
-	return fileDescriptor_network_scan_ab8cd302ffe41f43, []int{3}
+	return fileDescriptor_network_scan_cf58143dbdf2060c, []int{3}
 }
 func (m *ProviderListReply) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ProviderListReply.Unmarshal(m, b)
@@ -193,10 +185,10 @@ func init() {
 	proto.RegisterType((*ProviderListReply)(nil), "ctl.ProviderListReply")
 }
 
-func init() { proto.RegisterFile("network_scan.proto", fileDescriptor_network_scan_ab8cd302ffe41f43) }
+func init() { proto.RegisterFile("network_scan.proto", fileDescriptor_network_scan_cf58143dbdf2060c) }
 
-var fileDescriptor_network_scan_ab8cd302ffe41f43 = []byte{
-	// 186 bytes of a gzipped FileDescriptorProto
+var fileDescriptor_network_scan_cf58143dbdf2060c = []byte{
+	// 159 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x12, 0xca, 0x4b, 0x2d, 0x29,
 	0xcf, 0x2f, 0xca, 0x8e, 0x2f, 0x4e, 0x4e, 0xcc, 0xd3, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62,
 	0x4e, 0x2e, 0xc9, 0x51, 0xd2, 0xe7, 0x12, 0x74, 0x49, 0x2d, 0xcb, 0x4c, 0x4e, 0x0d, 0x4e, 0x4e,
@@ -204,9 +196,7 @@ var fileDescriptor_network_scan_ab8cd302ffe41f43 = []byte{
 	0xcb, 0x4c, 0x49, 0x2d, 0x92, 0x60, 0x54, 0x60, 0xd4, 0xe0, 0x0c, 0x82, 0xf3, 0x95, 0x12, 0xb9,
 	0xf8, 0x91, 0x35, 0x14, 0xe4, 0x54, 0xe2, 0x53, 0x2e, 0x24, 0xc6, 0xc5, 0x96, 0x02, 0x56, 0x2e,
 	0xc1, 0x04, 0x96, 0x81, 0xf2, 0x40, 0x7a, 0xf2, 0x4a, 0x73, 0x13, 0xf3, 0xf2, 0x53, 0x52, 0x25,
-	0x98, 0x15, 0x18, 0x35, 0x78, 0x83, 0xe0, 0x7c, 0x25, 0x4f, 0x2e, 0xe1, 0x00, 0xa8, 0x7e, 0x9f,
-	0xcc, 0xe2, 0x12, 0x98, 0xab, 0x8c, 0xb8, 0x44, 0x8a, 0x52, 0x73, 0xf3, 0xcb, 0x52, 0x4b, 0x32,
-	0x32, 0x8b, 0x53, 0xcb, 0x52, 0xf3, 0x4a, 0x4a, 0x13, 0x73, 0x72, 0x2a, 0xa1, 0x56, 0x62, 0x95,
-	0x03, 0x79, 0x0f, 0xd5, 0x28, 0x02, 0xee, 0x4d, 0x62, 0x03, 0x87, 0x8d, 0x31, 0x20, 0x00, 0x00,
-	0xff, 0xff, 0xf5, 0x54, 0xcf, 0x20, 0x31, 0x01, 0x00, 0x00,
+	0x98, 0x15, 0x18, 0x35, 0x78, 0x83, 0xe0, 0x7c, 0x25, 0x51, 0x2e, 0xe1, 0x00, 0xa8, 0x7e, 0x9f,
+	0xcc, 0xe2, 0x12, 0xa8, 0xab, 0x40, 0x4e, 0x45, 0x15, 0x26, 0x60, 0x77, 0x12, 0x1b, 0xd8, 0x9f,
+	0xc6, 0x80, 0x00, 0x00, 0x00, 0xff, 0xff, 0xad, 0x8f, 0x1f, 0x65, 0xfd, 0x00, 0x00, 0x00,
 }

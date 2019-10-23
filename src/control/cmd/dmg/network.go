@@ -57,7 +57,7 @@ func (cmd *networkScanCmd) Execute(args []string) error {
 		cmd.log.Info("Scanning fabric for all providers")
 	}
 
-	cmd.log.Infof("Network scan results:\n%v\n", cmd.conns.NetworkDeviceScanRequest(provider))
+	cmd.log.Infof("Network scan results:\n%v\n", cmd.conns.NetworkScanDevices(provider))
 	return nil
 }
 
@@ -68,6 +68,6 @@ type networkListCmd struct {
 
 // List the supported providers
 func (cmd *networkListCmd) Execute(args []string) error {
-	cmd.log.Infof("Supported Providers:\n%s\n", cmd.conns.GetProviderList())
+	cmd.log.Infof("Supported Providers:\n%s\n", cmd.conns.NetworkListProviders())
 	return nil
 }

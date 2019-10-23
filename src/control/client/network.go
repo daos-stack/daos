@@ -36,6 +36,10 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 )
 
+const (
+	networkScanTimeout = 10 * time.Second
+)
+
 type ProviderListResult struct {
 	providerList string
 }
@@ -75,8 +79,8 @@ func (nsr NetworkScanResult) String() string {
 	return buf.String()
 }
 
-func (c *connList) GetProviderList() ResultMap {
-	c.log.Debugf("RequestProviderList() Received")
+func (c *connList) NetworkListProviders() ResultMap {
+	c.log.Debugf("NetworkListProviders() Received")
 	return c.makeRequests(&ctlpb.ProviderListRequest{}, providerListRequest)
 }
 
@@ -86,12 +90,11 @@ func providerListRequest(mc Control, req interface{}, ch chan ClientResult) {
 	listReq, ok := req.(*ctlpb.ProviderListRequest)
 	if !ok {
 		err := errors.Errorf(msgTypeAssert, &ctlpb.ProviderListRequest{}, req)
-		mc.logger().Errorf(err.Error())
 		ch <- ClientResult{mc.getAddress(), nil, err}
 		return // type err
 	}
 
-	resp, err := mc.getCtlClient().RequestProviderList(context.Background(), listReq)
+	resp, err := mc.getCtlClient().NetworkListProviders(context.Background(), listReq)
 	if err != nil {
 		ch <- ClientResult{mc.getAddress(), nil, err} // return comms error
 		return
@@ -101,14 +104,13 @@ func providerListRequest(mc Control, req interface{}, ch chan ClientResult) {
 	ch <- ClientResult{mc.getAddress(), sRes.providerList, nil}
 }
 
-func (c *connList) NetworkDeviceScanRequest(searchProvider string) NetworkScanResultMap {
-	c.log.Debugf("NetworkDeviceScanRequest() Received for provider: %s", searchProvider)
+func (c *connList) NetworkScanDevices(searchProvider string) NetworkScanResultMap {
+	c.log.Debugf("NetworkScanDevices() Received for provider: %s", searchProvider)
 	cResults := c.makeRequests(searchProvider, networkScanRequest)
 	cScanResults := make(NetworkScanResultMap)
 
-	c.log.Debugf("\nNetworkDeviceScanRequest() Results:\n")
+	c.log.Debugf("\nNetworkScanDevices() Results:\n")
 	for _, res := range cResults {
-
 		if res.Err != nil {
 			cScanResults[res.Address] = append(cScanResults[res.Address], NetworkScanResult{err: res.Err})
 			continue
@@ -126,7 +128,7 @@ func networkScanRequest(mc Control, parms interface{}, ch chan ClientResult) {
 	var provider string
 	sRes := []NetworkScanResult{}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), networkScanTimeout)
 	defer cancel()
 
 	mc.logger().Debugf("parms has: %v", parms)
@@ -137,12 +139,11 @@ func networkScanRequest(mc Control, parms interface{}, ch chan ClientResult) {
 	default:
 		err := errors.Errorf(
 			msgTypeAssert, ctlpb.DeviceScanRequest{}, parms)
-		mc.logger().Errorf(err.Error())
 		ch <- ClientResult{mc.getAddress(), nil, err}
 		return // type err
 	}
 
-	stream, err := mc.getCtlClient().RequestDeviceScan(ctx, &ctlpb.DeviceScanRequest{Provider: provider})
+	stream, err := mc.getCtlClient().NetworkScanDevices(ctx, &ctlpb.DeviceScanRequest{Provider: provider})
 
 	if err != nil {
 		ch <- ClientResult{mc.getAddress(), nil, err}
@@ -157,7 +158,6 @@ func networkScanRequest(mc Control, parms interface{}, ch chan ClientResult) {
 		}
 		if err != nil {
 			err := errors.Wrapf(err, msgStreamRecv, stream)
-			mc.logger().Errorf(err.Error())
 			ch <- ClientResult{mc.getAddress(), nil, err}
 			return // recv err
 		}

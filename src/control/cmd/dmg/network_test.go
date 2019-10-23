@@ -32,37 +32,37 @@ func TestNetworkCommands(t *testing.T) {
 		{
 			"Get network provider list",
 			"network list",
-			"ConnectClients GetProviderList",
+			"ConnectClients NetworkListProviders",
 			nil,
 		},
 		{
 			"Perform network scan no provider",
 			"network scan",
-			"ConnectClients NetworkDeviceScanRequest",
+			"ConnectClients NetworkScanDevices-",
 			nil,
 		},
 		{
 			"Perform network scan all providers long",
 			"network scan --all",
-			"ConnectClients NetworkDeviceScanRequest",
+			"ConnectClients NetworkScanDevices-",
 			nil,
 		},
 		{
 			"Perform network scan all providers short",
 			"network scan -a",
-			"ConnectClients NetworkDeviceScanRequest",
+			"ConnectClients NetworkScanDevices-",
 			nil,
 		},
 		{
 			"Perform network scan with provider ofi+sockets (short)",
 			"network scan -p 'ofi+sockets'",
-			"ConnectClients NetworkDeviceScanRequest",
+			"ConnectClients NetworkScanDevices-'ofi+sockets'",
 			nil,
 		},
 		{
 			"Perform network scan with provider ofi+sockets (long)",
 			"network scan --provider 'ofi+sockets'",
-			"ConnectClients NetworkDeviceScanRequest",
+			"ConnectClients NetworkScanDevices-'ofi+sockets'",
 			nil,
 		},
 	})

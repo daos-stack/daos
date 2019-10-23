@@ -31,9 +31,9 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 )
 
-func (c *NetworkScanService) RequestProviderList(ctx context.Context, in *pb.ProviderListRequest) (*pb.ProviderListReply, error) {
+func (c *ControlService) NetworkListProviders(ctx context.Context, in *pb.ProviderListRequest) (*pb.ProviderListReply, error) {
 	var providerList string
-	c.nsslog.Debugf("RequestProviderList() Received")
+	c.log.Debugf("NetworkListProviders() Received")
 	providers := netdetect.GetSupportedProviders()
 	for _, p := range providers {
 		if len(providerList) == 0 {
@@ -43,12 +43,12 @@ func (c *NetworkScanService) RequestProviderList(ctx context.Context, in *pb.Pro
 		}
 	}
 
-	c.nsslog.Debugf("The DAOS system supports the following providers: %s", providerList)
+	c.log.Debugf("The DAOS system supports the following providers: %s", providerList)
 	return &pb.ProviderListReply{Provider: providerList}, nil
 }
 
-func (c *NetworkScanService) RequestDeviceScan(in *pb.DeviceScanRequest, stream pb.MgmtCtl_RequestDeviceScanServer) error {
-	c.nsslog.Debugf("RequestDeviceScan() Received request: %s", in.GetProvider())
+func (c *ControlService) NetworkScanDevices(in *pb.DeviceScanRequest, stream pb.MgmtCtl_NetworkScanDevicesServer) error {
+	c.log.Debugf("NetworkScanDevices() Received request: %s", in.GetProvider())
 
 	results, err := netdetect.ScanFabric(in.GetProvider())
 	if err != nil {
