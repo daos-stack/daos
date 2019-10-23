@@ -198,10 +198,14 @@ func newMntRet(log logging.Logger, op string, mntPoint string, status ctlpb.Resp
 	}
 }
 
-func (c *ControlService) scmFormat(mountpoint string) *ctlpb.ScmMountResult {
-	ret := newMntRet(c.log, "format", mountpoint, ctlpb.ResponseStatus_CTRL_SUCCESS, "", "")
+func (c *ControlService) scmFormat(scmCfg storage.ScmConfig, reformat bool) (*ctlpb.ScmMountResult, error) {
+	ret := newMntRet(c.log, "format", scmCfg.MountPoint, ctlpb.ResponseStatus_CTRL_SUCCESS, "", "")
 
-	res, err := c.scm.Format(scm.FormatRequest{Mountpoint: mountpoint})
+	req, err := scm.CreateFormatRequest(scmCfg, reformat)
+	if err != nil {
+		return nil, err
+	}
+	res, err := c.scm.Format(*req)
 	if err != nil {
 		ret.State.Error = err.Error()
 		ret.State.Status = ctlpb.ResponseStatus_CTRL_ERR_APP
@@ -210,7 +214,7 @@ func (c *ControlService) scmFormat(mountpoint string) *ctlpb.ScmMountResult {
 		ret.State.Status = ctlpb.ResponseStatus_CTRL_ERR_APP
 	}
 
-	return ret
+	return ret, nil
 }
 
 // in storage subsystem routines and broadcasts (closes channel) if successful.
@@ -221,6 +225,11 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 
 	c.log.Infof("formatting storage for I/O server instance %d (reformat: %t)", i.Index, reformat)
 
+	scmConfig, err := i.scmConfig()
+	if err != nil {
+		return errors.Wrap(err, "get scm config")
+	}
+
 	// If not reformatting, check if we need to format SCM.
 	if !reformat {
 		needsScmFormat, err = i.NeedsScmFormat()
@@ -228,7 +237,7 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 			return errors.Wrap(err, "unable to check storage formatting")
 		}
 		if !needsScmFormat {
-			resp.Mrets = append(resp.Mrets, newMntRet(c.log, "format", "",
+			resp.Mrets = append(resp.Mrets, newMntRet(c.log, "format", scmConfig.MountPoint,
 				ctlpb.ResponseStatus_CTRL_ERR_APP, scm.MsgScmAlreadyFormatted, ""))
 		}
 	}
@@ -236,11 +245,11 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 	// When SCM format is required, populate mount response with the result.
 	if needsScmFormat {
 		results := types.ScmMountResults{}
-		scmConfig, err := i.scmConfig()
+		result, err := c.scmFormat(scmConfig, true)
 		if err != nil {
 			return err
 		}
-		results = append(results, c.scmFormat(scmConfig.MountPoint))
+		results = append(results, result)
 		formatFailed = results.HasErrors()
 		resp.Mrets = results
 	} else {

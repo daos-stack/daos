@@ -34,6 +34,7 @@ import (
 	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/provider/system"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 const (
@@ -189,6 +190,32 @@ type (
 		sys     SystemProvider
 	}
 )
+
+func CreateFormatRequest(scmCfg storage.ScmConfig, reformat bool) (*FormatRequest, error) {
+	req := FormatRequest{
+		Mountpoint: scmCfg.MountPoint,
+		Reformat:   reformat,
+	}
+
+	switch scmCfg.Class {
+	case storage.ScmClassRAM:
+		req.Ramdisk = &RamdiskParams{
+			Size: uint(scmCfg.RamdiskSize),
+		}
+	case storage.ScmClassDCPM:
+		// FIXME (DAOS-3291): Clean up SCM configuration
+		if len(scmCfg.DeviceList) != 1 {
+			return nil, FaultFormatInvalidDeviceCount
+		}
+		req.Dcpm = &DcpmParams{
+			Device: scmCfg.DeviceList[0],
+		}
+	default:
+		return nil, errors.New(MsgScmClassNotSupported)
+	}
+
+	return &req, nil
+}
 
 // Validate checks the request for validity.
 func (fr FormatRequest) Validate() error {

@@ -186,27 +186,12 @@ func (srv *IOServerInstance) NeedsScmFormat() (bool, error) {
 	srv.Lock()
 	defer srv.Unlock()
 
-	req := scm.FormatRequest{
-		Mountpoint: scmCfg.MountPoint,
-	}
-	switch scmCfg.Class {
-	case storage.ScmClassRAM:
-		req.Ramdisk = &scm.RamdiskParams{
-			Size: uint(scmCfg.RamdiskSize),
-		}
-	case storage.ScmClassDCPM:
-		// FIXME (DAOS-3291): Clean up SCM configuration
-		if len(scmCfg.DeviceList) != 1 {
-			return false, scm.FaultFormatInvalidDeviceCount
-		}
-		req.Dcpm = &scm.DcpmParams{
-			Device: scmCfg.DeviceList[0],
-		}
-	default:
-		return false, errors.New(scm.MsgScmClassNotSupported)
+	req, err := scm.CreateFormatRequest(scmCfg, false)
+	if err != nil {
+		return false, err
 	}
 
-	res, err := srv.scmProvider.CheckFormat(req)
+	res, err := srv.scmProvider.CheckFormat(*req)
 	if err != nil {
 		return false, err
 	}

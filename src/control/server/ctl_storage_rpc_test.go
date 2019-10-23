@@ -470,9 +470,10 @@ func TestStorageFormat(t *testing.T) {
 		isRoot           bool
 	}{
 		"ram success": {
-			sMount: "/mnt/daos",
-			sClass: storage.ScmClassRAM,
-			sSize:  6,
+			sMount:           "/mnt/daos",
+			sClass:           storage.ScmClassRAM,
+			sSize:            6,
+			expNvmeFormatted: true,
 			expResults: []*StorageFormatResp{
 				{
 					Crets: []*NvmeControllerResult{},
@@ -486,11 +487,13 @@ func TestStorageFormat(t *testing.T) {
 			},
 		},
 		"dcpm success": {
-			sMount: "/mnt/daos",
-			sClass: storage.ScmClassDCPM,
-			sDevs:  []string{"/dev/pmem1"},
+			sMount:           "/mnt/daos",
+			sClass:           storage.ScmClassDCPM,
+			sDevs:            []string{"/dev/pmem1"},
+			expNvmeFormatted: true,
 			expResults: []*StorageFormatResp{
 				{
+					Crets: []*NvmeControllerResult{},
 					Mrets: []*ScmMountResult{
 						{
 							Mntpoint: "/mnt/daos",
@@ -560,15 +563,6 @@ func TestStorageFormat(t *testing.T) {
 			expNvmeFormatted: true,
 			expResults: []*StorageFormatResp{
 				{
-					Crets: []*NvmeControllerResult{
-						{
-							Pciaddr: "",
-							State: &ResponseState{
-								Status: ResponseStatus_CTRL_ERR_APP,
-								Error:  msgBdevAlreadyFormatted,
-							},
-						},
-					},
 					Mrets: []*ScmMountResult{
 						{
 							Mntpoint: "/mnt/daos",
@@ -597,8 +591,11 @@ func TestStorageFormat(t *testing.T) {
 			// reaching down far enough to actually interact with the filesystem.
 			tc.sMount = filepath.Join(testDir, tc.sMount)
 			if len(tc.expResults) == 1 && len(tc.expResults[0].Mrets) == 1 {
-				if strings.HasSuffix(tc.sMount, tc.expResults[0].Mrets[0].Mntpoint) {
-					tc.expResults[0].Mrets[0].Mntpoint = tc.sMount
+				mp := &(tc.expResults[0].Mrets[0].Mntpoint)
+				if *mp != "" {
+					if strings.HasSuffix(tc.sMount, *mp) {
+						*mp = tc.sMount
+					}
 				}
 			}
 
