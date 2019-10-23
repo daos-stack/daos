@@ -71,7 +71,7 @@ type Connect interface {
 	// TODO: implement Burnin client features
 	//StorageBurnIn() (ClientCtrlrMap, ClientModuleMap)
 	ListFeatures() ClientFeatureMap
-	KillRank(uuid string, rank uint32) ResultMap
+	KillRank(rank uint32) ResultMap
 	PoolCreate(*PoolCreateReq) (*PoolCreateResp, error)
 	PoolDestroy(*PoolDestroyReq) error
 	PoolGetACL(*PoolGetACLReq) (*PoolGetACLResp, error)

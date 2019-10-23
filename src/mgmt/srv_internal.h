@@ -40,7 +40,7 @@
 #include <daos_srv/smd.h>
 #include <daos_security.h>
 
-#include "mgmt.pb-c.h"
+#include "srv.pb-c.h"
 #include "rpc.h"
 #include "srv_layout.h"
 

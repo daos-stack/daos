@@ -122,8 +122,8 @@ func (tc *testConn) ListFeatures() client.ClientFeatureMap {
 	return nil
 }
 
-func (tc *testConn) KillRank(uuid string, rank uint32) client.ResultMap {
-	tc.appendInvocation(fmt.Sprintf("KillRank-uuid %s, rank %d", uuid, rank))
+func (tc *testConn) KillRank(rank uint32) client.ResultMap {
+	tc.appendInvocation(fmt.Sprintf("KillRank-rank %d", rank))
 	return nil
 }
 
