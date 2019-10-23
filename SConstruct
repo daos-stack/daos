@@ -52,7 +52,7 @@ DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-gnu-zero-variadic-macro-arguments',
                  '-Wno-tautological-constant-out-of-range-compare']
 
-CART_VERSION = "1.5.0"
+CART_VERSION = "1.6.0"
 
 def save_build_info(env, prereqs, platform):
     """Save the build information"""
