@@ -1,0 +1,69 @@
+hosts:
+  test_servers:
+    - boro-A
+    - boro-B
+    - boro-C
+    - boro-D
+    - boro-E
+    - boro-F
+    - boro-G
+    - boro-H
+  test_clients:
+    - boro-I
+timeout: 900
+server_config:
+  name: daos_server
+  targets: 8
+  #Enabled to use NVMe Drives
+  #server:
+  #  bdev_class: nvme
+  #  bdev_list: ["0000:81:00.0","0000:da:00.0"]  
+pool:
+  scm_size: 14G
+daos_io_conf_run:
+  no_of_ranks: !mux
+    default_single_rank:
+      ranks: ""
+    #Disabled because of DAOS-3510
+    #all_rank:
+    #  ranks: "-g 8"
+  tgts: !mux
+    remove_all_targets:
+      targets: ""
+    #Disabled because of DAOS-3510
+    #remove_single_target: 
+    #  targets: "-t 8"
+  no_of_dkeys: !mux
+    small_no_dkeys:
+      dkeys: "-d 1"
+    #Need NVMe to use for large number of size
+    #large_no_dkeys:
+    #  dkeys: "-d 10" 
+  no_of_akeys: !mux
+    small_no_akeys:
+      akeys: "-a 1"
+    #Need NVMe to use for large number of size
+    #large_no_akeys:
+    #  akeys: "-a 10"
+  record_size: !mux
+    small_record_no:
+      re_size: "-s 1"
+    large_record_no:
+      re_size: "-s 50"
+  no_of_objects: !mux
+    small_no_objects:
+      obj_num: "-o 1"
+    #Need NVMe to use for large number of size
+    #large_no_objects:
+    #  obj_num: "-o 10"
+  object_class: !mux
+    replica2_group1:
+      obj_class: "-O RP_2G1"
+    replica2_group2:
+      obj_class: "-O RP_2G2"
+    replica3_group1:
+      obj_class: "-O RP_3G1"
+    replica3_group2:
+      obj_class: "-O RP_3G2"
+    replica4_group1:
+      obj_class: "-O RP_4G1"
