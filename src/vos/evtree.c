@@ -222,13 +222,6 @@ evt_ent_array_fini(struct evt_entry_array *ent_array)
 /** When we go over the embedded limit, set a minimum allocation */
 #define EVT_MIN_ALLOC 4096
 
-static void
-ent_array_reset(struct evt_context *tcx, struct evt_entry_array *ent_array)
-{
-	ent_array->ea_ent_nr = 0;
-	ent_array->ea_inob = tcx->tc_inob;
-}
-
 static bool
 ent_array_resize(struct evt_context *tcx, struct evt_entry_array *ent_array,
 		 uint32_t new_size)
@@ -1921,8 +1914,6 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 	if (tcx->tc_root->tr_depth == 0)
 		return 0; /* empty tree */
 
-	if (ent_array == &tcx->tc_iter.it_entries)
-		ent_array_reset(tcx, ent_array);
 	evt_tcx_reset_trace(tcx);
 
 	level = at = 0;
