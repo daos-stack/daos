@@ -131,7 +131,7 @@ By default, if a user matches no ACEs in the list, access will be denied.
 To create a pool with a custom ACL:
 
 ```
-$ daos_shell pool create --scm-size <size> --acl-file <path>
+$ dmg pool create --scm-size <size> --acl-file <path>
 ```
 
 The ACL file is expected to be a text file with one ACE listed on each line. For
@@ -147,7 +147,7 @@ A:G:GROUP@:rw
 To view a pool's ACL:
 
 ```
-$ daos_shell pool get-acl --pool <UUID>
+$ dmg pool get-acl --pool <UUID>
 ```
 
 The output is in the same string format used in the ACL file during creation,

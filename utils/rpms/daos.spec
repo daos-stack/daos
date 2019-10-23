@@ -4,8 +4,8 @@
 %define daoshome %{_exec_prefix}/lib/%{name}
 
 Name:          daos
-Version:       0.6.0
-Release:       8%{?relval}%{?dist}
+Version:       0.6.1
+Release:       0%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -237,12 +237,12 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 
 %files client
 %{_prefix}/etc/memcheck-daos-client.supp
-%{_bindir}/daos_shell
+%{_bindir}/dmg
+%{_bindir}/dmg_old
 %{_bindir}/daosctl
 %{_bindir}/dcont
 %{_bindir}/daos_agent
 %{_bindir}/dfuse
-%{_bindir}/dmg_old
 %{_bindir}/daos
 %{_bindir}/dfuse_hl
 %{_libdir}/*.so.*
@@ -296,6 +296,9 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/*.a
 
 %changelog
+* Wed Oct 23 2019 Tom Nabarro <tom.nabarro@intel.com> 0.6.1-0
+- Rename binaries dmg->dmg_old and daos_shell->dmg
+
 * Mon Oct 07 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-8
 - Use BR: cart-devel-%{cart_sha1} if available
 - Remove cart's BRs as it's -devel Requires them now

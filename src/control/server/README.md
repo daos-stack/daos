@@ -190,16 +190,16 @@ See `daos_server storage scan --help` for usage.
 
 ## Management Tool (client) Usage
 
-[`daos_shell`](../cmd/dmg/README.md) is a management tool which exercises the client api and can be run on login nodes by an unprivileged user.
+[`dmg`](../cmd/dmg/README.md) is a management tool which exercises the client api and can be run on login nodes by an unprivileged user.
 The tool is lightweight and doesn't depend on storage libraries.
 Implemented as a gRPC client application it connects and interacts with multiple gRPC servers concurrently, connecting to specified ports.
 
 In order to run the tool to perform administrative tasks from non-storage nodes (e.g. login nodes) over an out-of-band management network;
 
  1. build and run the `daos_server` as per the [quickstart guide](https://github.com/daos-stack/daos/blob/master/doc/quickstart.md) on the storage nodes
- 2. run `daos_shell` from a login node
+ 2. run `dmg` from a login node
 
-See `daos_shell --help` for usage and [here](../cmd/dmg) for package details.
+See `dmg --help` for usage and [here](../cmd/dmg) for package details.
 
 ## Storage management
 
@@ -225,7 +225,7 @@ The DAOS control plane will provide SCM storage management capabilities enabling
 
 #### SCM module discovery
 
-Device details for any discovered (Intel) data-centre persistent memory modules (DCPM modules) on the storage server will be returned when running `storage scan` subcommand on [`daos_shell`](../cmd/dmg/README.md#-subcommands) or [`daos_server`](#storage-list) executables.
+Device details for any discovered (Intel) data-centre persistent memory modules (DCPM modules) on the storage server will be returned when running `storage scan` subcommand on [`dmg`](../cmd/dmg/README.md#-subcommands) or [`daos_server`](#storage-list) executables.
 
 TODO: return details of AppDirect memory regions
 
@@ -402,7 +402,7 @@ The DAOS control plane will provide NVMe storage management capabilities enablin
 
 #### NVMe Controller and Namespace Discovery
 
-Device details for any discovered NVMe SSDs accessible through SPDK on the storage server will be returned when running `storage scan` subcommand on [`daos_shell`](../cmd/dmg/README.md#subcommands) or [`daos_server`](#storage-list) executables.
+Device details for any discovered NVMe SSDs accessible through SPDK on the storage server will be returned when running `storage scan` subcommand on [`dmg`](../cmd/dmg/README.md#subcommands) or [`daos_server`](#storage-list) executables.
 
 The following animation illustrates starting the control server and using the management shell to view the NVMe Namespaces discovered on a locally available NVMe Controller (assuming the quickstart guide instructions have already been performed):
 
