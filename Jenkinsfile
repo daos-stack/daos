@@ -43,9 +43,12 @@
 def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
-def component_repos = "openpa libfabric pmix ompi mercury spdk isa-l fio dpdk protobuf-c fuse pmdk argobots raft cart"
+def el7_component_repos = ""
+def sle12_component_repos = ""
+def component_repos = "spdk fio dpdk pmdk raft"
 def daos_repo = "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
-def daos_repos = component_repos + ' ' + daos_repo
+def el7_daos_repos = el7_component_repos + ' ' + component_repos + ' ' + daos_repo
+def sle12_daos_repos = sle12_component_repos + ' ' + component_repos + ' ' + daos_repo
 def ior_repos = "mpich@daos_adio-rpm ior-hpc@daos"
 
 def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
@@ -110,8 +113,9 @@ pipeline {
                     "--build-arg CACHEBUST=${currentBuild.startTimeInMillis}"
         QUICKBUILD = sh(script: "git show -s --format=%B | grep \"^Quick-build: true\"",
                         returnStatus: true)
-        SSH_KEY_ARGS="-ici_key"
-        CLUSH_ARGS="-o$SSH_KEY_ARGS"
+        SSH_KEY_ARGS = "-ici_key"
+        CLUSH_ARGS = "-o$SSH_KEY_ARGS"
+        CART_COMMIT = sh(script: "sed -ne 's/CART *= *\\(.*\\)/\\1/p' utils/build.config", returnStdout: true).trim()
     }
 
     options {
@@ -238,9 +242,11 @@ pipeline {
                     post {
                         success {
                             sh label: "Collect artifacts",
-                               script: '''(cd /var/lib/mock/epel-7-x86_64/result/ &&
+                               script: '''mockroot=/var/lib/mock/epel-7-x86_64
+                                          (cd $mockroot/result/ &&
                                            cp -r . $OLDPWD/artifacts/centos7/)
-                                          createrepo artifacts/centos7/'''
+                                          createrepo artifacts/centos7/
+                                          cat $mockroot/result/{root,build}.log'''
                             publishToRepository product: 'daos',
                                                 format: 'yum',
                                                 maturity: 'stable',
@@ -434,7 +440,9 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " +
                                                 '$BUILDARGS ' +
-                                                "--build-arg QUICKBUILD=" + env.QUICKBUILD
+                                                '--build-arg QUICKBUILD=' + env.QUICKBUILD +
+                                                ' --build-arg CART_COMMIT=-' + env.CART_COMMIT +
+                                                ' --build-arg REPOS="' + component_repos + '"'
                         }
                     }
                     steps {
@@ -460,11 +468,13 @@ pipeline {
                                                  build/src/security/tests/srv_acl_tests,
                                                  build/src/vos/vea/tests/vea_ut,
                                                  build/src/common/tests/umem_test,
+                                                 build/src/bio/smd/tests/smd_ut,
                                                  scons_local/build_info/**,
                                                  src/common/tests/btree.sh,
                                                  src/control/run_go_tests.sh,
                                                  src/rdb/raft_tests/raft_tests.py,
-                                                 src/vos/tests/evt_ctl.sh'''
+                                                 src/vos/tests/evt_ctl.sh
+                                                 src/control/lib/netdetect/netdetect.go'''
                     }
                     post {
                         always {
@@ -1027,8 +1037,8 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 1,
                                        snapshot: true,
-                                       inst_repos: component_repos,
-                                       inst_rpms: "argobots cart fuse3-libs hwloc-devel libisa-l libpmem libpmemobj protobuf-c spdk-devel"
+                                       inst_repos: el7_component_repos + ' ' + component_repos,
+                                       inst_rpms: "argobots cart-${env.CART_COMMIT} fuse3-libs hwloc-devel libisa-l libpmem libpmemobj protobuf-c spdk-devel libfabric-devel pmix"
                         runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''# JENKINS-52781 tar function is breaking symlinks
                                            rm -rf test_results
@@ -1140,8 +1150,9 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
                                        snapshot: true,
-                                       inst_repos: daos_repos + ' ' + ior_repos,
-                                       inst_rpms: "ior-hpc mpich-autoload"
+                                       inst_repos: el7_daos_repos + ' ' + ior_repos,
+                                       inst_rpms: 'cart-' + env.CART_COMMIT + ' ' +
+                                                  'ior-hpc mpich-autoload'
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
@@ -1206,14 +1217,16 @@ pipeline {
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 1,
                                        snapshot: true,
-                                       inst_repos: daos_repos + ' ' + ior_repos,
-                                       inst_rpms: "ior-hpc mpich-autoload"
+                                       inst_repos: el7_daos_repos + ' ' + ior_repos,
+                                       inst_rpms: 'cart-' + env.CART_COMMIT + ' ' +
+                                                  'ior-hpc mpich-autoload'
                         // Then just reboot the physical nodes
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
                                        power_only: true,
-                                       inst_repos: daos_repos + ' ' + ior_repos,
-                                       inst_rpms: "ior-hpc mpich-autoload"
+                                       inst_repos: el7_daos_repos + ' ' + ior_repos,
+                                       inst_rpms: 'cart-' + env.CART_COMMIT + ' ' +
+                                                  'ior-hpc mpich-autoload'
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
@@ -1283,11 +1296,9 @@ pipeline {
                     }
                     steps {
                         provisionNodes NODELIST: env.NODELIST,
-                                       distro: 'el7.6',
                                        node_count: 1,
                                        snapshot: true,
-                                       inst_repos: daos_repos + ' ' + ior_repos,
-                                       inst_rpms: "ior-hpc mpich-autoload"
+                                       inst_repos: el7_daos_repos + ' ' + ior_repos
                         catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
                             runTest script: "${rpm_test_pre}" +
                                          '''sudo yum -y install daos-client
@@ -1318,7 +1329,7 @@ pipeline {
                                        distro: 'sles12sp3',
                                        node_count: 1,
                                        snapshot: true,
-                                       inst_repos: daos_repos + " python-pathlib"
+                                       inst_repos: sle12_daos_repos + " python-pathlib"
                         catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
                             runTest script: "${rpm_test_pre}" +
                                          '''sudo zypper --non-interactive ar -f https://download.opensuse.org/repositories/science:/HPC:/SLE12SP3_Missing/SLE_12_SP3/ hwloc

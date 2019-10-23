@@ -31,15 +31,9 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/security/auth"
-)
-
-// Module id for the Agent security module
-const securityModuleID int32 = 1
-
-const (
-	methodRequestCredentials int32 = 101
 )
 
 // userInfo is an internal implementation of the security.User interface
@@ -92,13 +86,15 @@ func (e *external) LookupGroupID(gid uint32) (*user.Group, error) {
 
 // SecurityModule is the security drpc module struct
 type SecurityModule struct {
+	log    logging.Logger
 	ext    auth.UserExt
 	config *security.TransportConfig
 }
 
 //NewSecurityModule creates a new module with the given initialized TransportConfig
-func NewSecurityModule(tc *security.TransportConfig) *SecurityModule {
+func NewSecurityModule(log logging.Logger, tc *security.TransportConfig) *SecurityModule {
 	mod := SecurityModule{
+		log:    log,
 		config: tc,
 	}
 	mod.InitModule(nil)
@@ -107,11 +103,11 @@ func NewSecurityModule(tc *security.TransportConfig) *SecurityModule {
 
 // HandleCall is the handler for calls to the SecurityModule
 func (m *SecurityModule) HandleCall(client *drpc.Client, method int32, body []byte) ([]byte, error) {
-	if method != methodRequestCredentials {
+	if method != drpc.MethodRequestCredentials {
 		return nil, errors.Errorf("Attempt to call unregistered function")
 	}
 
-	info, err := security.DomainInfoFromUnixConn(client.Conn)
+	info, err := security.DomainInfoFromUnixConn(m.log, client.Conn)
 	if err != nil {
 		return nil, errors.WithMessage(err, "Unable to get credentials for client socket")
 	}
@@ -140,5 +136,5 @@ func (m *SecurityModule) InitModule(state drpc.ModuleState) {
 
 //ID will return Security module ID
 func (m *SecurityModule) ID() int32 {
-	return securityModuleID
+	return drpc.ModuleSecurityAgent
 }

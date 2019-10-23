@@ -202,9 +202,9 @@ test_request_credentials_calls_drpc_call(void **state)
 
 	/* Make sure it's the correct method call */
 	assert_int_equal(drpc_call_msg_content.module,
-			DRPC_MODULE_SECURITY_AGENT);
+			DRPC_MODULE_SEC_AGENT);
 	assert_int_equal(drpc_call_msg_content.method,
-			DRPC_METHOD_SECURITY_AGENT_REQUEST_CREDENTIALS);
+			DRPC_METHOD_SEC_AGENT_REQUEST_CREDS);
 
 	/* Check that the body has no content */
 	assert_int_equal(drpc_call_msg_content.body.len, 0);

@@ -36,26 +36,6 @@
 
 extern char *ds_sec_server_socket_path;
 
-/**
- * Definitions for DAOS server dRPC modules and their methods.
- * These numeric designations are used in dRPC communications in the Drpc__Call
- * structure.
- */
-
-/**
- *  Module: Security Server
- *
- *  The server module that deals with client security requests.
- */
-#define DRPC_MODULE_SECURITY_SERVER				1
-
-/**
- * Method: Validate Security Credential
- *
- * Requests validation of the security credential.
- */
-#define DRPC_METHOD_SECURITY_SERVER_VALIDATE_CREDENTIALS	101
-
 int ds_sec_validate_credentials(d_iov_t *creds, Auth__Token **token);
 
 #endif /* __SECURITY_SRV_INTERNAL_H__ */
