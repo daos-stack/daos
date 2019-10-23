@@ -413,31 +413,33 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 			rsize = ent_array.ea_inob;
 		D_ASSERT(rsize == ent_array.ea_inob);
 
-		if (csum && csum_copied < csum->cs_buf_len &&
+		if (dcb_is_valid(csum) &&
+		    csum_copied * ent->en_csum.cs_len < csum->cs_buf_len &&
 		    csum->cs_chunksize > 0) {
 			uint8_t	    *csum_ptr;
 			daos_size_t  csum_nr;
 
 			D_ASSERT(lo >= recx->rx_idx);
+			/** Make sure the entity csum matches expected csum */
+			D_ASSERT(csum->cs_len == ent->en_csum.cs_len);
+			D_ASSERT(csum->cs_type == ent->en_csum.cs_type);
+			D_ASSERT(csum->cs_chunksize ==
+				 ent->en_csum.cs_chunksize);
+
+			/** Note: only need checksums for requested data, not
+			 * necessarily all checksums from the entire recx entry
+			 */
 			csum_ptr = dcb_off2csum(csum,
 				(uint32_t)((lo - recx->rx_idx) * rsize));
 			csum_nr = csum_chunk_count(csum->cs_chunksize,
 						   lo, hi, rsize);
-
 			memcpy(csum_ptr, ent->en_csum.cs_csum,
 			       csum_nr * ent->en_csum.cs_len);
 			if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_FAIL))
 				csum_ptr[0] += 2; /* poison the checksum */
 
-			csum_copied += csum_nr * ent->en_csum.cs_len;
-			csum->cs_nr += csum_nr;
-
-			/** These should all be the same for each entry,
-			 * so it's okay to copy over previously written
-			 * value
-			 */
-			csum->cs_len = ent->en_csum.cs_len;
-			csum->cs_type = ent->en_csum.cs_type;
+			csum_copied += csum_nr;
+			D_ASSERT(csum_copied <= csum->cs_nr);
 		}
 
 		biov.bi_data_len = nr * ent_array.ea_inob;
