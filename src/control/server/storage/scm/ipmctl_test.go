@@ -28,8 +28,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/ipmctl"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -165,7 +167,7 @@ func TestGetState(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)()
+			defer ShowBufferOnFailure(t, buf)
 
 			mockLookPath := func(string) (s string, err error) {
 				return
@@ -201,6 +203,74 @@ func TestGetState(t *testing.T) {
 			AssertEqual(t, commands, tt.expCommands, tt.desc+": unexpected list of commands run")
 			AssertEqual(t, needsReboot, tt.expRebootRequired, tt.desc+": unexpected value for is reboot required")
 			AssertEqual(t, namespaces, tt.expNamespaces, tt.desc+": unexpected list of pmem device file names")
+		})
+	}
+}
+
+func TestParseNamespaces(t *testing.T) {
+	// template for `ndctl list -N` output
+	listTmpl := `{
+   "dev":"namespace%d.0",
+   "mode":"fsdax",
+   "map":"dev",
+   "size":"2964.94 GiB (3183.58 GB)",
+   "uuid":"842fc847-28e0-4bb6-8dfc-d24afdba1528",
+   "raw_uuid":"dedb4b28-dc4b-4ccd-b7d1-9bd475c91264",
+   "sector_size":512,
+   "blockdev":"pmem%d",
+   "numa_node":%d
+}`
+
+	for name, tc := range map[string]struct {
+		in            string
+		expNamespaces []Namespace
+		expErr        error
+	}{
+		"empty": {
+			expNamespaces: []Namespace{},
+		},
+		"single": {
+			in: fmt.Sprintf(listTmpl, 0, 0, 0),
+			expNamespaces: []Namespace{
+				{
+					Name:        "namespace0.0",
+					BlockDevice: "pmem0",
+					NumaNode:    0,
+					UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1528",
+				},
+			},
+		},
+		"double": {
+			in: strings.Join([]string{
+				"[", fmt.Sprintf(listTmpl, 0, 0, 0), ",",
+				fmt.Sprintf(listTmpl, 1, 1, 1), "]"}, ""),
+			expNamespaces: []Namespace{
+				{
+					Name:        "namespace0.0",
+					BlockDevice: "pmem0",
+					NumaNode:    0,
+					UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1528",
+				},
+				{
+					Name:        "namespace1.0",
+					BlockDevice: "pmem1",
+					NumaNode:    1,
+					UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1528",
+				},
+			},
+		},
+		"malformed": {
+			in:     `{"dev":"foo`,
+			expErr: errors.New("JSON input"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotNamespaces, gotErr := parseNamespaces(tc.in)
+
+			common.CmpErr(t, tc.expErr, gotErr)
+			if diff := cmp.Diff(tc.expNamespaces, gotNamespaces); diff != "" {
+				t.Fatalf("unexpected namespace result (-want, +got):\n%s\n", diff)
+			}
 		})
 	}
 }
@@ -262,7 +332,7 @@ func TestGetNamespaces(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)()
+			defer ShowBufferOnFailure(t, buf)
 
 			mockLookPath := func(string) (s string, err error) {
 				if tt.lookPathErrMsg != "" {

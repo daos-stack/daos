@@ -62,21 +62,4 @@ extern char *dc_agent_sockpath;
 #define DEFAULT_DAOS_AGENT_DRPC_SOCK	(DAOS_AGENT_DRPC_DIR \
 					DAOS_AGENT_DRPC_SOCK_NAME)
 
-/**
- * dRPC definitions for DAOS agent.
- */
-
-/**
- *  Module: Security Agent
- *
- *  The agent module that deals with client security requests.
- */
-
-/**
- * Method: Request Credentials
- *
- * Requests authentication credentials for the current user.
- */
-#define DRPC_METHOD_SECURITY_AGENT_REQUEST_CREDENTIALS		101
-
 #endif /* __DAOS_AGENT_H__ */

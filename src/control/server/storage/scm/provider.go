@@ -69,9 +69,9 @@ type (
 
 	// Namespace represents a mapping between AppDirect regions and block device files.
 	Namespace struct {
-		UUID        string
-		BlockDevice string
-		Name        string
+		UUID        string `json:"uuid"`
+		BlockDevice string `json:"blockdev"`
+		Name        string `json:"dev"`
 		NumaNode    uint32 `json:"numa_node"`
 	}
 )
