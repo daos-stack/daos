@@ -17,7 +17,7 @@ server_config:
   #Enabled to use NVMe Drives
   #server:
   #  bdev_class: nvme
-  #  bdev_list: ["0000:81:00.0","0000:da:00.0"]  
+  #  bdev_list: ["0000:81:00.0","0000:da:00.0"]
 pool:
   scm_size: 14G
 daos_io_conf_run:
@@ -31,14 +31,14 @@ daos_io_conf_run:
     remove_all_targets:
       targets: ""
     #Disabled because of DAOS-3510
-    #remove_single_target: 
+    #remove_single_target:
     #  targets: "-t 8"
   no_of_dkeys: !mux
     small_no_dkeys:
       dkeys: "-d 1"
     #Need NVMe to use for large number of size
     #large_no_dkeys:
-    #  dkeys: "-d 10" 
+    #  dkeys: "-d 10"
   no_of_akeys: !mux
     small_no_akeys:
       akeys: "-a 1"
