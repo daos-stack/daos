@@ -117,7 +117,7 @@ run_timings(struct csum_ft *fts[], const int types_count,
 			args.buf = buf;
 			args.len = len;
 
-			csum_size = daos_csummer_get_size(csummer);
+			csum_size = daos_csummer_get_csum_len(csummer);
 			csum_buf = calloc(csum_size, 1);
 
 			daos_csummer_set_buffer(csummer, csum_buf, csum_size);
