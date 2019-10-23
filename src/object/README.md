@@ -42,8 +42,12 @@ object data based on algorithm descriptions of this class.
 
 ## Data Protection Method
 
-Two types data protection methods supported by DAOS - replication and erasure
-coding.
+Two types data protection methods supported by DAOS - replication
+and erasure coding.
+In addition, checksums can be used with both methods to ensure
+end-to-end data integrity. If checksums discovers silent data corruption,
+the data protection method (replication or erasure codes) might be able
+to recover the data.
 
 ### Replication
 
@@ -129,6 +133,62 @@ efficiency.
 
 Erasure codes may be used to improve resilience, with lower space overhead. This
 feature is still working in progress.
+
+### Checksum
+#### Checksum Container Setup
+End-to-end checksums are enabled and configured while creating a
+container using the following container properties.
+
+- `DAOS_PROP_CO_CSUM`: Type of checksum algorithm to use (Default is
+none). The current plan is to support the CRC32 and CRC64 algorithms as
+the different checksum types. These are supported by the ISA-L library
+so that hardware acceleration might be available. Additional checksum
+types can be added later.
+
+- `DAOS_PROP_CO_CSUM_CHUNK_SIZE`: Checksums will be calculated for a
+subset of the data. The size of this subset will be configured as the
+"Chunksize". Special care is required, so that chunk sizes align well
+with record sizes and erasure code alignments.
+
+- `DAOS_PROP_CO_CSUM_SERVER_VERIFY`: Because of the probable decrease to
+IOPS, in most cases, it is not desired to verify checksums on an object
+update on the server side. It is sufficient for the client to verify on
+a fetch because any data corruption, whether on the object update,
+storage, or fetch, will be caught. However, there is an advantage to
+knowing if corruption happens on an update. The update would fail
+right away, indicating to the client to retry the RPC or report an
+error to upper levels.
+
+When a client opens a container, the checksum properties will be queried
+automatically, and, if enabled, both the server and client will init and
+hold a reference to a [daos_csummer](src/common/README.md) in
+ds_cont_hdl and dc_cont respectively.
+
+#### Object Update
+On an object update (`dc_obj_update`) the client will calculate checksums
+using the data in the sgl as described by an iod (`daos_csummer_calc`).
+Memory will be allocated for the checksums and the daos_csum_buf_t
+structures that represent the checksums. The checksums will be sent to
+the server as part of the IOD and the server will store in [VOS]
+(src/vos/README.md).
+
+#### Object Fetch
+On handling an object fetch (ds_obj_rw_handler), the server will allocate
+memory for the checksums and daos_csum_buf_t structures. Then during the
+`vos_fetch_begin` stage, the checksums will be fetched from [VOS]
+(src/vos/README.md).
+
+In the client RPC callback, the client will calculate checksums for the
+data fetched and compare to the checksums fetched
+(`daos_csummer_verify`).
+
+#### Note!
+Currently the I/O Descriptor (`daos_iod_t`), which is part of the public
+API, is used to contain the checksums along with other info about the
+data. It is expected that in the future this will go away, but for now it
+should be understood that the checksum fields are for internal use only.
+If they are set by a caller, a warning will be logged and the values
+will be overwritten.
 
 ## Object Sharding
 
