@@ -242,7 +242,7 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_bindir}/dcont
 %{_bindir}/daos_agent
 %{_bindir}/dfuse
-%{_bindir}/dmg
+%{_bindir}/dmg_old
 %{_bindir}/daos
 %{_bindir}/dfuse_hl
 %{_libdir}/*.so.*

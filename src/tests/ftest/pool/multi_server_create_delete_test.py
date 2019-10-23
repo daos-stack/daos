@@ -63,7 +63,7 @@ class MultiServerCreateDeleteTest(Test):
         self.agent_sessions = agent_utils.run_agent(self.basepath,
                                                     self.hostlist_servers)
         server_utils.run_server(self, self.hostfile, server_group)
-        self.dmg = self.basepath + '/install/bin/dmg'
+        self.dmg = self.basepath + '/install/bin/dmg_old'
 
     def tearDown(self):
         if self.agent_sessions:
