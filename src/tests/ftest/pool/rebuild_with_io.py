@@ -82,7 +82,7 @@ class RebuildWithIO(TestWithServers):
         container.get_target_rank_lists(" prior to rebuild")
 
         # Trigger rebuild
-        pool.start_rebuild(self.server_group, rank, self.d_log)
+        pool.start_rebuild([rank], self.d_log)
 
         # Wait for recovery to start
         pool.wait_for_rebuild(True)

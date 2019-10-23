@@ -40,6 +40,7 @@
 
 #include <daos_srv/container.h>
 
+#include <daos/checksum.h>
 #include <daos/rpc.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/vos.h>
@@ -370,6 +371,44 @@ ds_cont_hdl_put(struct ds_cont_hdl *hdl)
 	struct d_hash_table *hash = &dsm_tls_get()->dt_cont_hdl_hash;
 
 	cont_hdl_put_internal(hash, hdl);
+}
+
+int cont_hdl_csummer_init(struct ds_cont_hdl *hdl)
+{
+	struct ds_pool	*pool;
+	daos_prop_t	*props;
+	uint32_t	 csum_val;
+	int		 rc;
+
+	/** Get the container csum related properties
+	 * Need the pool for the IV namespace
+	 */
+	hdl->csummer = NULL;
+	pool = ds_pool_lookup(hdl->sch_pool->spc_uuid);
+	if (pool == NULL)
+		return -DER_NONEXIST;
+	props = daos_prop_alloc(2);
+	if (props == NULL) {
+		ds_pool_put(pool);
+		return -DER_NOMEM;
+	}
+	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM;
+	props->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
+	rc = cont_iv_prop_fetch(pool->sp_iv_ns, hdl->sch_uuid, props);
+	if (rc != 0)
+		goto done;
+	csum_val = daos_cont_prop2csum(props);
+
+	/** If enabled, initialize the csummer for the container */
+	if (daos_cont_csum_prop_is_enabled(csum_val))
+		rc = daos_csummer_type_init(&hdl->csummer,
+					    daos_contprop2csumtype(csum_val),
+					    daos_cont_prop2chunksize(props));
+done:
+	daos_prop_free(props);
+	ds_pool_put(pool);
+
+	return rc;
 }
 
 /**
@@ -833,6 +872,12 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 			D_GOTO(err_cont, rc);
 		}
 
+		rc = cont_hdl_csummer_init(hdl);
+		if (rc != 0) {
+			ds_pool_child_put(hdl->sch_pool);
+			D_FREE(ddra);
+			D_GOTO(err_cont, rc);
+		}
 	}
 
 	return 0;
@@ -882,7 +927,9 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 	struct ds_pool		*pool = NULL;
 	struct ds_cont		*cont = NULL;
 	struct cont_tgt_open_arg arg;
-	int			 rc;
+	struct dss_coll_ops	coll_ops = { 0 };
+	struct dss_coll_args	coll_args = { 0 };
+	int			rc;
 
 	uuid_copy(arg.pool_uuid, pool_uuid);
 	uuid_copy(arg.cont_hdl_uuid, cont_hdl_uuid);
@@ -892,8 +939,35 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 	D_DEBUG(DB_TRACE, "open pool/cont/hdl "DF_UUID"/"DF_UUID"/"DF_UUID"\n",
 		DP_UUID(pool_uuid), DP_UUID(cont_uuid), DP_UUID(cont_hdl_uuid));
 
-	rc = dss_thread_collective(cont_open_one, &arg, 0);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	/* collective operations */
+	coll_ops.co_func = cont_open_one;
+	coll_args.ca_func_args	= &arg;
+
+	/* setting aggregator args */
+	rc = ds_pool_get_failed_tgt_idx(pool_uuid, &coll_args.ca_exclude_tgts,
+					&coll_args.ca_exclude_tgts_cnt);
+	if (rc) {
+		D_ERROR(DF_UUID "failed to get index : rc %d\n",
+			DP_UUID(pool_uuid), rc);
+		return rc;
+	}
+
+	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
+	if (coll_args.ca_exclude_tgts)
+		D_FREE(coll_args.ca_exclude_tgts);
+
+	if (rc != 0) {
+		/* Once it exclude the target from the pool, since the target
+		 * might still in the cart group, so IV cont open might still
+		 * come to this target, especially if cont open/close will be
+		 * done by IV asynchronously, so this cont_open_one might return
+		 * -DER_NO_HDL if it can not find pool handle. (DAOS-3185)
+		 */
+		D_ERROR("open "DF_UUID"/"DF_UUID"/"DF_UUID":%d\n",
+			DP_UUID(pool_uuid), DP_UUID(cont_uuid),
+			DP_UUID(cont_hdl_uuid), rc);
+		return rc;
+	}
 
 	pool = ds_pool_lookup(pool_uuid);
 	D_ASSERT(pool != NULL);
@@ -920,6 +994,9 @@ cont_close_one_rec(struct cont_tgt_close_rec *rec)
 	struct ds_cont_hdl     *hdl;
 
 	hdl = cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash, rec->tcr_hdl);
+
+	daos_csummer_destroy(&hdl->csummer);
+
 	if (hdl == NULL) {
 		D_DEBUG(DF_DSMS, DF_CONT": already closed: hdl="DF_UUID" hce="
 			DF_U64"\n", DP_CONT(NULL, NULL), DP_UUID(rec->tcr_hdl),

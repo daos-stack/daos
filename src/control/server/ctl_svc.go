@@ -30,6 +30,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
 var jsonDBRelPath = "share/daos/control/mgmtinit_db.json"
@@ -39,14 +40,18 @@ var jsonDBRelPath = "share/daos/control/mgmtinit_db.json"
 type ControlService struct {
 	StorageControlService
 	harness           *IOServerHarness
+	membership        *common.Membership
 	supportedFeatures FeatureMap
 }
 
-func NewControlService(l logging.Logger, h *IOServerHarness, cfg *Configuration) (*ControlService, error) {
+func NewControlService(l logging.Logger, h *IOServerHarness, sp *scm.Provider, cfg *Configuration,
+	m *common.Membership) (*ControlService, error) {
+
 	scs, err := DefaultStorageControlService(l, cfg)
 	if err != nil {
 		return nil, err
 	}
+	scs.scm.provider = sp
 
 	fMap, err := loadInitData(jsonDBRelPath)
 	if err != nil {
@@ -56,6 +61,7 @@ func NewControlService(l logging.Logger, h *IOServerHarness, cfg *Configuration)
 	return &ControlService{
 		StorageControlService: *scs,
 		harness:               h,
+		membership:            m,
 		supportedFeatures:     fMap,
 	}, nil
 }

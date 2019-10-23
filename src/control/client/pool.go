@@ -31,18 +31,6 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
-// chooseServiceLeader will decide which connection to send request on.
-//
-// Currently expect only one connection to be available and return that.
-func chooseServiceLeader(cs []Control) (Control, error) {
-	if len(cs) == 0 {
-		return nil, errors.New("no active connections")
-	}
-
-	// just return the first connection, expected to be the service leader
-	return cs[0], nil
-}
-
 // PoolCreateReq struct contains request
 type PoolCreateReq struct {
 	ScmBytes   uint64
@@ -137,4 +125,42 @@ func (c *connList) PoolDestroy(req *PoolDestroyReq) error {
 	}
 
 	return nil
+}
+
+// PoolGetACLReq contains the input parameters for PoolGetACL
+type PoolGetACLReq struct {
+	UUID string // pool UUID
+}
+
+// PoolGetACLResp contains the output results for PoolGetACL
+type PoolGetACLResp struct {
+	ACL []string // Access Control Entries in string format
+}
+
+// PoolGetACL gets the Access Control List for the pool.
+func (c *connList) PoolGetACL(req *PoolGetACLReq) (*PoolGetACLResp, error) {
+	mc, err := chooseServiceLeader(c.controllers)
+	if err != nil {
+		return nil, err
+	}
+
+	pbReq := &mgmtpb.GetACLReq{Uuid: req.UUID}
+
+	c.log.Debugf("Get DAOS pool ACL request: %v", pbReq)
+
+	pbResp, err := mc.getSvcClient().PoolGetACL(context.Background(), pbReq)
+	if err != nil {
+		return nil, err
+	}
+
+	c.log.Debugf("Get DAOS pool ACL response: %v", pbResp)
+
+	if pbResp.GetStatus() != 0 {
+		return nil, errors.Errorf("DAOS returned error code: %d",
+			pbResp.GetStatus())
+	}
+
+	return &PoolGetACLResp{
+		ACL: pbResp.ACL,
+	}, nil
 }

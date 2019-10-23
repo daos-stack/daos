@@ -37,6 +37,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
 // IOServerInstance encapsulates control-plane specific configuration
@@ -49,11 +50,10 @@ import (
 type IOServerInstance struct {
 	Index uint32
 
-	ext           External
 	log           logging.Logger
 	runner        *ioserver.Runner
 	bdevProvider  *storage.BdevProvider
-	drpcClient    drpc.DomainSocketClient
+	scmProvider   *scm.Provider
 	msClient      *mgmtSvcClient
 	instanceReady chan *srvpb.NotifyReadyReq
 	storageReady  chan struct{}
@@ -62,21 +62,23 @@ type IOServerInstance struct {
 	sync.RWMutex
 	// these must be protected by a mutex in order to
 	// avoid racy access.
+	_drpcClient   drpc.DomainSocketClient
 	_scmStorageOk bool // cache positive result of NeedsStorageFormat()
 	_superblock   *Superblock
 }
 
 // NewIOServerInstance returns an *IOServerInstance initialized with
 // its dependencies.
-func NewIOServerInstance(ext External, log logging.Logger,
-	bp *storage.BdevProvider, msc *mgmtSvcClient, r *ioserver.Runner) *IOServerInstance {
+func NewIOServerInstance(log logging.Logger,
+	bp *storage.BdevProvider, sp *scm.Provider,
+	msc *mgmtSvcClient, r *ioserver.Runner) *IOServerInstance {
 
 	return &IOServerInstance{
 		Index:         r.Config.Index,
-		ext:           ext,
 		log:           log,
 		runner:        r,
 		bdevProvider:  bp,
+		scmProvider:   sp,
 		msClient:      msc,
 		instanceReady: make(chan *srvpb.NotifyReadyReq),
 		storageReady:  make(chan struct{}),
@@ -107,6 +109,21 @@ func (srv *IOServerInstance) bdevConfig() (storage.BdevConfig, error) {
 	return srv.runner.Config.Storage.Bdev, nil
 }
 
+func (srv *IOServerInstance) setDrpcClient(c drpc.DomainSocketClient) {
+	srv.Lock()
+	defer srv.Unlock()
+	srv._drpcClient = c
+}
+
+func (srv *IOServerInstance) getDrpcClient() (drpc.DomainSocketClient, error) {
+	srv.RLock()
+	defer srv.RUnlock()
+	if srv._drpcClient == nil {
+		return nil, errors.New("no dRPC client set (data plane not started?)")
+	}
+	return srv._drpcClient, nil
+}
+
 // MountScmDevice mounts the configured SCM device (DCPM or ramdisk emulation)
 // at the mountpoint specified in the configuration. If the device is already
 // mounted, the function returns nil, indicating success.
@@ -116,25 +133,33 @@ func (srv *IOServerInstance) MountScmDevice() error {
 		return err
 	}
 
-	isMount, err := srv.ext.isMountPoint(scmCfg.MountPoint)
+	isMount, err := srv.scmProvider.IsMounted(scmCfg.MountPoint)
 	if err != nil && !os.IsNotExist(errors.Cause(err)) {
 		return errors.WithMessage(err, "failed to check SCM mount")
 	}
 	if isMount {
-		srv.log.Debugf("%s already mounted", scmCfg.MountPoint)
 		return nil
 	}
 
 	srv.log.Debugf("attempting to mount existing SCM dir %s\n", scmCfg.MountPoint)
-	mntType, devPath, mntOpts, err := getMntParams(scmCfg)
-	if err != nil {
-		return errors.WithMessage(err, "getting scm mount params")
-	}
 
-	srv.log.Debugf("mounting scm %s at %s (%s)...", devPath, scmCfg.MountPoint, mntType)
-	if err := srv.ext.mount(devPath, scmCfg.MountPoint, mntType, uintptr(0), mntOpts); err != nil {
+	var res *scm.MountResponse
+	switch scmCfg.Class {
+	case storage.ScmClassRAM:
+		res, err = srv.scmProvider.MountRamdisk(scmCfg.MountPoint, uint(scmCfg.RamdiskSize))
+	case storage.ScmClassDCPM:
+		if len(scmCfg.DeviceList) != 1 {
+			err = scm.FaultFormatInvalidDeviceCount
+			break
+		}
+		res, err = srv.scmProvider.MountDcpm(scmCfg.DeviceList[0], scmCfg.MountPoint)
+	default:
+		err = errors.New(msgScmClassNotSupported)
+	}
+	if err != nil {
 		return errors.WithMessage(err, "mounting existing scm dir")
 	}
+	srv.log.Debugf("%s mounted: %t", res.Target, res.Mounted)
 
 	return nil
 }
@@ -161,46 +186,33 @@ func (srv *IOServerInstance) NeedsScmFormat() (bool, error) {
 	srv.Lock()
 	defer srv.Unlock()
 
-	// TODO: More thorough probing of storage. For now, rely on
-	// existing methods.
-
-	// First, check to see if the mount point even exists.
-	isMounted, err := srv.ext.isMountPoint(scmCfg.MountPoint)
-	if err != nil {
-		// In theory, the only possible error is ENOENT. In practice,
-		// test that assumption and return an error if we get something else.
-		if !os.IsNotExist(errors.Cause(err)) {
-			return false, err
+	req := scm.FormatRequest{
+		Mountpoint: scmCfg.MountPoint,
+	}
+	switch scmCfg.Class {
+	case storage.ScmClassRAM:
+		req.Ramdisk = &scm.RamdiskParams{
+			Size: uint(scmCfg.RamdiskSize),
 		}
-		// If there's no mount point, then we need to let our format
-		// operation create it.
-		srv.log.Debugf("%s: needs format (mountpoint doesn't exist)", scmCfg.MountPoint)
-		return true, nil
+	case storage.ScmClassDCPM:
+		// FIXME (DAOS-3291): Clean up SCM configuration
+		if len(scmCfg.DeviceList) != 1 {
+			return false, scm.FaultFormatInvalidDeviceCount
+		}
+		req.Dcpm = &scm.DcpmParams{
+			Device: scmCfg.DeviceList[0],
+		}
+	default:
+		return false, errors.New(msgScmClassNotSupported)
 	}
 
-	// If it's mounted, then we can assume it doesn't need to be formatted.
-	if isMounted {
-		srv._scmStorageOk = true
-		return false, nil
+	res, err := srv.scmProvider.CheckFormat(req)
+	if err != nil {
+		return false, err
 	}
 
-	// If we're using ramdisk, then we should stop here and return true,
-	// as an umounted ramdisk is by definition unformatted.
-	if scmCfg.Class == storage.ScmClassRAM {
-		srv.log.Debugf("%s: needs format (unmounted ramdisk)", scmCfg.MountPoint)
-		return true, nil
-	}
-
-	// Next, try to mount the SCM device. If that succeeds, then we shouldn't
-	// try to format it.
-	if err := srv.MountScmDevice(); err == nil {
-		srv._scmStorageOk = true
-		return false, nil
-	}
-
-	// At this point we can be pretty sure that the device needs to be formatted.
-	srv.log.Debugf("%s: needs format (mount failed)", scmCfg.MountPoint)
-	return true, nil
+	srv.log.Debugf("%s (%s) needs format: %t", scmCfg.MountPoint, scmCfg.Class, !res.Formatted)
+	return !res.Formatted, nil
 }
 
 // Start checks to make sure that the instance has a valid superblock before
@@ -228,7 +240,7 @@ func (srv *IOServerInstance) NotifyReady(msg *srvpb.NotifyReadyReq) {
 	srv.log.Debugf("I/O server instance %d ready: %v", srv.Index, msg)
 
 	// Activate the dRPC client connection to this iosrv
-	srv.drpcClient = drpc.NewClientConnection(msg.DrpcListenerSock)
+	srv.setDrpcClient(drpc.NewClientConnection(msg.DrpcListenerSock))
 
 	go func() {
 		srv.instanceReady <- msg
@@ -307,7 +319,7 @@ func (srv *IOServerInstance) SetRank(ctx context.Context, ready *srvpb.NotifyRea
 }
 
 func (srv *IOServerInstance) callSetRank(rank ioserver.Rank) error {
-	dresp, err := makeDrpcCall(srv.drpcClient, mgmtModuleID, setRank, &mgmtpb.SetRankReq{Rank: uint32(rank)})
+	dresp, err := srv.CallDrpc(drpc.ModuleMgmt, drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: uint32(rank)})
 	if err != nil {
 		return err
 	}
@@ -382,7 +394,7 @@ func (srv *IOServerInstance) callCreateMS(superblock *Superblock) error {
 		req.Addr = msAddr
 	}
 
-	dresp, err := makeDrpcCall(srv.drpcClient, mgmtModuleID, createMS, req)
+	dresp, err := srv.CallDrpc(drpc.ModuleMgmt, drpc.MethodCreateMS, req)
 	if err != nil {
 		return err
 	}
@@ -399,7 +411,7 @@ func (srv *IOServerInstance) callCreateMS(superblock *Superblock) error {
 }
 
 func (srv *IOServerInstance) callStartMS() error {
-	dresp, err := makeDrpcCall(srv.drpcClient, mgmtModuleID, startMS, nil)
+	dresp, err := srv.CallDrpc(drpc.ModuleMgmt, drpc.MethodStartMS, nil)
 	if err != nil {
 		return err
 	}
@@ -416,7 +428,7 @@ func (srv *IOServerInstance) callStartMS() error {
 }
 
 func (srv *IOServerInstance) callSetUp() error {
-	dresp, err := makeDrpcCall(srv.drpcClient, mgmtModuleID, setUp, nil)
+	dresp, err := srv.CallDrpc(drpc.ModuleMgmt, drpc.MethodSetUp, nil)
 	if err != nil {
 		return err
 	}
@@ -432,6 +444,17 @@ func (srv *IOServerInstance) callSetUp() error {
 	return nil
 }
 
+// IsMSReplica indicates whether or not this instance is a management service replica.
 func (srv *IOServerInstance) IsMSReplica() bool {
 	return srv.hasSuperblock() && srv.getSuperblock().MS
+}
+
+// CallDrpc makes the supplied dRPC call via this instance's dRPC client.
+func (srv *IOServerInstance) CallDrpc(module, method int32, body proto.Message) (*drpc.Response, error) {
+	dc, err := srv.getDrpcClient()
+	if err != nil {
+		return nil, err
+	}
+
+	return makeDrpcCall(dc, module, method, body)
 }

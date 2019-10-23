@@ -2176,7 +2176,6 @@ obj_update_csums(const struct dc_object *obj, const daos_obj_update_t *args) {
 	if (!daos_csummer_initialized(csummer)) /** Not configured */
 		return;
 
-
 	for (i = 0; i < args->nr; i++) {
 		/**
 		 * TODO: Turn this into an assert after csums are
@@ -2193,6 +2192,8 @@ obj_update_csums(const struct dc_object *obj, const daos_obj_update_t *args) {
 				       args->iods[i].iod_recxs,
 				       args->iods[i].iod_nr,
 				       &args->iods[i].iod_csums);
+		if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_FAIL))
+			((char *)args->iods[i].iod_csums->cs_csum)[0]++;
 	}
 }
 
@@ -2790,8 +2791,10 @@ dc_obj_query_key(tse_task_t *api_task)
 
 	rc = check_query_flags(obj->cob_md.omd_id, api_args->flags,
 			       api_args->dkey, api_args->akey, api_args->recx);
-	if (rc)
+	if (rc) {
+		obj_decref(obj);
 		D_GOTO(out_task, rc);
+	}
 
 	obj_auxi = tse_task_stack_push(api_task, sizeof(*obj_auxi));
 	obj_auxi->opc = DAOS_OBJ_RPC_QUERY_KEY;

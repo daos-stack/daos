@@ -38,6 +38,7 @@
 #include <daos_srv/rdb.h>
 #include <daos_srv/rsvc.h>
 #include <daos_srv/smd.h>
+#include <daos_security.h>
 
 #include "mgmt.pb-c.h"
 #include "rpc.h"
@@ -95,6 +96,7 @@ int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 int ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force);
 void ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req);
 void ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req);
+int ds_mgmt_pool_get_acl(uuid_t pool_uuid, struct daos_acl **acl);
 
 /** srv_query.c */
 
@@ -107,6 +109,7 @@ struct mgmt_bio_health {
 int ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid,
 			     char *tgt_id);
 int ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp);
+int ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp);
 
 /** srv_target.c */
 int ds_mgmt_tgt_init(void);

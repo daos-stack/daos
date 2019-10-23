@@ -31,6 +31,7 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
 // newState creates, populates and returns ResponseState in addition
@@ -68,14 +69,14 @@ func (c *StorageControlService) doNvmePrepare(req *ctlpb.PrepareNvmeReq) (resp *
 	return
 }
 
-func translatePmemDevices(inDevs []pmemDev) (outDevs types.PmemDevices) {
+func translateNamespaces(inDevs []scm.Namespace) (outDevs types.PmemDevices) {
 	for _, dev := range inDevs {
 		outDevs = append(outDevs,
 			&ctlpb.PmemDevice{
 				Uuid:     dev.UUID,
-				Blockdev: dev.Blockdev,
-				Dev:      dev.Dev,
-				Numanode: uint32(dev.NumaNode),
+				Blockdev: dev.BlockDevice,
+				Dev:      dev.Name,
+				Numanode: dev.NumaNode,
 			})
 	}
 
@@ -91,8 +92,9 @@ func (c *StorageControlService) doScmPrepare(req *ctlpb.PrepareScmReq) (resp *ct
 		resp.State = newState(c.log, ctlpb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg)
 		return
 	}
+	c.log.Debugf("SCM state before prep: %s", scmState)
 
-	needsReboot, pmemDevs, err := c.PrepareScm(PrepareScmRequest{Reset: req.GetReset_()}, scmState)
+	needsReboot, pmemDevs, err := c.PrepareScm(PrepareScmRequest{Reset: req.GetReset_()})
 	if err != nil {
 		resp.State = newState(c.log, ctlpb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg)
 		return
@@ -104,7 +106,7 @@ func (c *StorageControlService) doScmPrepare(req *ctlpb.PrepareScmReq) (resp *ct
 	}
 
 	resp.State = newState(c.log, ctlpb.ResponseStatus_CTRL_SUCCESS, "", info, msg)
-	resp.Pmems = translatePmemDevices(pmemDevs)
+	resp.Pmems = translateNamespaces(pmemDevs)
 
 	return
 }
@@ -167,14 +169,18 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 
 // doFormat performs format on storage subsystems, populates response results
 // in storage subsystem routines and broadcasts (closes channel) if successful.
-func (c *ControlService) doFormat(i *IOServerInstance, resp *ctlpb.StorageFormatResp) error {
+func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlpb.StorageFormatResp) error {
 	hasSuperblock := false
+	needsScmFormat := reformat
 
-	c.log.Infof("formatting storage for I/O server instance %d", i.Index)
+	c.log.Infof("formatting storage for I/O server instance %d (reformat: %t)", i.Index, reformat)
 
-	needsScmFormat, err := i.NeedsScmFormat()
-	if err != nil {
-		return errors.Wrap(err, "unable to check storage formatting")
+	if !reformat {
+		var err error
+		needsScmFormat, err = i.NeedsScmFormat()
+		if err != nil {
+			return errors.Wrap(err, "unable to check storage formatting")
+		}
 	}
 
 	if !needsScmFormat {
@@ -199,7 +205,7 @@ func (c *ControlService) doFormat(i *IOServerInstance, resp *ctlpb.StorageFormat
 		return err
 	}
 	ctrlrResults := types.NvmeControllerResults{}
-	// A config with SCM and no block devices is valid, apparently.
+	// A config with SCM and no block devices is valid.
 	if len(bdevConfig.DeviceList) > 0 {
 		c.nvme.Format(bdevConfig, &ctrlrResults)
 		resp.Crets = ctrlrResults
@@ -211,14 +217,14 @@ func (c *ControlService) doFormat(i *IOServerInstance, resp *ctlpb.StorageFormat
 		return err
 	}
 	mountResults := types.ScmMountResults{}
-	c.scm.Format(scmConfig, &mountResults)
+	c.scm.Format(scmConfig, reformat, &mountResults)
 	resp.Mrets = mountResults
 	formatFailed = formatFailed || mountResults.HasErrors()
 
 	c.log.Debugf("nvme formatted: %t, scm formatted: %t, has superblock: %t",
 		c.nvme.formatted, c.scm.formatted, hasSuperblock)
 
-	if c.nvme.formatted && c.scm.formatted {
+	if c.nvme.formatted && c.scm.formatted && !formatFailed {
 		// Use this an indicator for whether storage format was requested and completed
 		// vs. storage was already formatted and skipped.
 		// TODO: Rework this logic to be less convoluted.
@@ -246,7 +252,7 @@ func (c *ControlService) doFormat(i *IOServerInstance, resp *ctlpb.StorageFormat
 func (c *ControlService) StorageFormat(req *ctlpb.StorageFormatReq, stream ctlpb.MgmtCtl_StorageFormatServer) error {
 	resp := new(ctlpb.StorageFormatResp)
 
-	c.log.Debug("received StorageFormat RPC; proceeding to instance storage format")
+	c.log.Debugf("received StorageFormat RPC %v; proceeding to instance storage format", req)
 
 	// TODO: We may want to ease this restriction at some point, but having this
 	// here for now should help to cut down on shenanigans which might result
@@ -257,7 +263,7 @@ func (c *ControlService) StorageFormat(req *ctlpb.StorageFormatReq, stream ctlpb
 
 	// temporary scaffolding
 	for _, i := range c.harness.Instances() {
-		if err := c.doFormat(i, resp); err != nil {
+		if err := c.doFormat(i, req.Reformat, resp); err != nil {
 			return errors.WithMessage(err, "formatting storage")
 		}
 	}

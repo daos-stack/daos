@@ -29,9 +29,26 @@
 #include <getopt.h>
 #include "daos_test.h"
 
-/** All tests in default order (tests that kill nodes must be last) */
-static const char *all_tests = "mpceXViADKCoROdr";
-static const char *all_tests_defined = "mpceXVixADKCoROdr";
+/**
+ * Tests can be run by specifying the appropriate argument for a test or
+ * all will be run if no test is specified. Tests will be run in order
+ * so tests that kill nodes must be last.
+ */
+#define TESTS "mpceXVizADKCoROdrF"
+/**
+ * These tests will only be run if explicity specified. They don't get
+ * run if no test is specified.
+ */
+#define EXPLICIT_TESTS "x"
+static const char *all_tests = TESTS;
+static const char *all_tests_defined = TESTS EXPLICIT_TESTS;
+
+enum {
+	CHECKSUM_ARG_VAL_TYPE		= 0x2713,
+	CHECKSUM_ARG_VAL_CHUNKSIZE	= 0x2714,
+	CHECKSUM_ARG_VAL_SERVERVERIFY	= 0x2715,
+};
+
 
 static void
 print_usage(int rank)
@@ -40,7 +57,7 @@ print_usage(int rank)
 		return;
 
 	print_message("\n\nDAOS TESTS\n=============================\n");
-	print_message("Use one of these options(s) for specific test\n");
+	print_message("Tests: Use one of these arg(s) for specific test\n");
 	print_message("daos_test -m|--mgmt\n");
 	print_message("daos_test -p|--daos_pool_tests\n");
 	print_message("daos_test -c|--daos_container_tests\n");
@@ -59,12 +76,19 @@ print_usage(int rank)
 	print_message("daos_test -O|--oid_alloc\n");
 	print_message("daos_test -r|--rebuild\n");
 	print_message("daos_test -a|--daos_all_tests\n");
+	print_message("Default <daos_tests> runs all tests\n=============\n");
+	print_message("Options: Use one of these arg(s) to modify the "
+			"tests that are run\n");
 	print_message("daos_test -g|--group GROUP\n");
 	print_message("daos_test -s|--svcn NSVCREPLICAS\n");
 	print_message("daos_test -E|--exclude TESTS\n");
 	print_message("daos_test -f|--filter TESTS\n");
 	print_message("daos_test -h|--help\n");
-	print_message("Default <daos_tests> runs all tests\n=============\n");
+	print_message("daos_test -u|--subtests\n");
+	print_message("daos_test --csum_type CSUM_TYPE\n");
+	print_message("daos_test --csum_cs CHUNKSIZE\n");
+	print_message("daos_test --csum_sv\n");
+	print_message("\n=============================\n");
 }
 
 static int
@@ -115,6 +139,12 @@ run_specified_tests(const char *tests, int rank, int size,
 			daos_test_print(rank, "=================");
 			nr_failed += run_daos_io_test(rank, size, sub_tests,
 						      sub_tests_size);
+			break;
+		case 'z':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS checksum tests..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_checksum_test(rank, size);
 			break;
 		case 'x':
 			daos_test_print(rank, "\n\n=================");
@@ -186,6 +216,13 @@ run_specified_tests(const char *tests, int rank, int size,
 							   sub_tests,
 							   sub_tests_size);
 			break;
+		case 'F':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS FileSystem (DFS) test..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_fs_test(rank, size, sub_tests,
+						      sub_tests_size);
+			break;
 		default:
 			D_ASSERT(0);
 		}
@@ -230,6 +267,7 @@ main(int argc, char **argv)
 		{"dtx",		no_argument,		NULL,	'X'},
 		{"verify",	no_argument,		NULL,	'V'},
 		{"io",		no_argument,		NULL,	'i'},
+		{"checksum",	no_argument,		NULL,	'z'},
 		{"epoch_io",	no_argument,		NULL,	'x'},
 		{"obj_array",	no_argument,		NULL,	'A'},
 		{"array",	no_argument,		NULL,	'D'},
@@ -241,13 +279,21 @@ main(int argc, char **argv)
 		{"degraded",	no_argument,		NULL,	'd'},
 		{"rebuild",	no_argument,		NULL,	'r'},
 		{"group",	required_argument,	NULL,	'g'},
+		{"csum_type",	required_argument,	NULL,
+						CHECKSUM_ARG_VAL_TYPE},
+		{"csum_cs",	required_argument,	NULL,
+						CHECKSUM_ARG_VAL_CHUNKSIZE},
+		{"csum_sv",	no_argument,		NULL,
+						CHECKSUM_ARG_VAL_SERVERVERIFY},
 		{"svcn",	required_argument,	NULL,	's'},
 		{"subtests",	required_argument,	NULL,	'u'},
 		{"exclude",	required_argument,	NULL,	'E'},
 		{"filter",	required_argument,	NULL,	'f'},
+		{"dfs",		no_argument,		NULL,	'F'},
 		{"work_dir",	required_argument,	NULL,	'W'},
 		{"workload_file", required_argument,	NULL,	'w'},
-		{"help",	no_argument,		NULL,	'h'}
+		{"help",	no_argument,		NULL,	'h'},
+		{NULL,		0,			NULL,	0}
 	};
 
 	rc = daos_init();
@@ -259,7 +305,7 @@ main(int argc, char **argv)
 	memset(tests, 0, sizeof(tests));
 
 	while ((opt = getopt_long(argc, argv,
-				  "ampcCdXVixADKeoROg:s:u:E:f:w:W:hr",
+				  "ampcCdXVizxADKeoROg:s:u:E:f:Fw:W:hr",
 				  long_options, &index)) != -1) {
 		if (strchr(all_tests_defined, opt) != NULL) {
 			tests[ntests] = opt;
@@ -299,6 +345,14 @@ main(int argc, char **argv)
 			D_STRNDUP(test_io_dir, optarg, PATH_MAX);
 			if (test_io_dir == NULL)
 				return -1;
+		case CHECKSUM_ARG_VAL_TYPE:
+			dt_csum_type = atoi(optarg);
+			break;
+		case CHECKSUM_ARG_VAL_CHUNKSIZE:
+			dt_csum_chunksize = atoi(optarg);
+			break;
+		case CHECKSUM_ARG_VAL_SERVERVERIFY:
+			dt_csum_server_verify = true;
 			break;
 		default:
 			daos_test_print(rank, "Unknown Option\n");

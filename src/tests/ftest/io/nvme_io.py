@@ -26,7 +26,7 @@ from __future__ import print_function
 import os
 import avocado
 
-from daos_api import DaosPool, DaosApiError
+from pydaos.raw import DaosPool, DaosApiError
 from ior_test_base import IorTestBase
 
 

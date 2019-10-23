@@ -5,8 +5,7 @@ PATCHES  = scons_local-$(VERSION).tar.$(SRC_EXT)
 
 SLES_12_PR_REPOS := scons
 LEAP_42_PR_REPOS := scons
-PR_REPOS         := pmix spdk isa-l fio dpdk protobuf-c fuse pmdk raft \
-	            cart@daos_devel1
+PR_REPOS         := spdk fio dpdk pmdk raft
 ifneq ($(REPOSITORY_URL),)
 ifneq ($(DAOS_STACK_$(DISTRO_BASE)_GROUP_REPO),)
 EL_7_REPOS     = https://copr-be.cloud.fedoraproject.org/results/jhli/ipmctl/epel-7-x86_64/   \
@@ -25,8 +24,9 @@ SLES_12_REPOS += https://download.opensuse.org/repositories/science:/HPC:/SLE12S
 
 GIT_SHORT       := $(shell git rev-parse --short HEAD)
 GIT_NUM_COMMITS := $(shell git rev-list HEAD --count)
+CART_SHA1       := $(shell sed -ne 's/CART *= *\(.*\)/\1/p' ../../utils/build.config)
 
-BUILD_DEFINES := --define "%relval .$(GIT_NUM_COMMITS).g$(GIT_SHORT)"
+BUILD_DEFINES     := --define "%relval .$(GIT_NUM_COMMITS).g$(GIT_SHORT)" --define "%cart_sha1 $(CART_SHA1)"
 RPM_BUILD_OPTIONS := $(BUILD_DEFINES)
 
 dist: $(SOURCES)
@@ -35,15 +35,16 @@ include packaging/Makefile_packaging.mk
 
 PACKAGING_CHECK_DIR ?= ../../../rpm/packaging
 
-scons_local-$(VERSION).tar.gz:
+scons_local-$(VERSION).tar.gz: $(shell git ls-files :/:)
+	echo Creating $@
 	cd ../../scons_local &&                        \
 	git archive --format tar --prefix scons_local/ \
 	            -o $$OLDPWD/$(basename $@) HEAD ./
 	rm -f $@
 	gzip $(basename $@)
 
-$(NAME)-$(VERSION).tar.gz:
-	echo $@
+$(NAME)-$(VERSION).tar.gz: $(shell git ls-files :/:)
+	echo Creating $@
 	echo $(basename $@)
 	cd ../../ &&                                          \
 	git archive --format tar --prefix $(NAME)-$(VERSION)/ \
