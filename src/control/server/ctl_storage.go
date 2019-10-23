@@ -102,7 +102,7 @@ func (c *StorageControlService) Setup() error {
 		return errors.Errorf("%s: missing %v", msgBdevNotFound, missing)
 	}
 
-	if _, err := c.scm.Scan(scm.ScanRequest{Rescan: true}); err != nil {
+	if _, err := c.scm.Scan(scm.ScanRequest{}); err != nil {
 		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, SCM Scan"))
 	}
 
