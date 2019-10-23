@@ -120,6 +120,48 @@ struct rw_cb_args {
 	unsigned int		*map_ver;
 };
 
+int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
+{
+	struct daos_csummer	*csummer;
+	d_sg_list_t		*sgls;
+	struct obj_rw_in	*orw;
+	struct obj_rw_out	*orwo;
+	daos_iod_t		*iods;
+	int			 i;
+	int			 rc = 0;
+
+	csummer = dc_cont_hdl2csummer(rw_args->dobj->do_co_hdl);
+	if (!daos_csummer_initialized(csummer))
+		return 0;
+
+	orw = crt_req_get(rw_args->rpc);
+	orwo = crt_reply_get(rw_args->rpc);
+	sgls = rw_args->rwaa_sgls;
+	iods = orw->orw_iods.ca_arrays;
+
+	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_FAIL))
+		/** Got csum successfully from server. Now poison it!! */
+		orwo->orw_csum.ca_arrays->cs_csum[0]++;
+
+	/** Link the checksums returned from the server to the iods to make
+	 *  verifying the data the iod describes easier
+	 */
+	daos_iods_link_dcbs(
+		iods, orw->orw_nr,
+		orwo->orw_csum.ca_arrays,
+		orwo->orw_csum.ca_count);
+
+	for (i = 0; i < orw->orw_nr && rc == 0; i++)
+		rc = daos_csummer_verify(csummer, &iods[i],
+					 &sgls[i]);
+
+	/** Remove the extra link to the checksum memory to prevent duplicate
+	 * freeing
+	 */
+	daos_iods_unlink_dcbs(iods, orw->orw_nr);
+	return rc;
+}
+
 static int
 dc_rw_cb(tse_task_t *task, void *arg)
 {
@@ -250,6 +292,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 				}
 			}
 		}
+		rc = dc_rw_cb_csum_verify(rw_args);
 	}
 out:
 	crt_req_decref(rw_args->rpc);
