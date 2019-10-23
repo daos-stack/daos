@@ -89,7 +89,7 @@ func checkResults(t *testing.T, addrs Addresses, results ResultMap, e error) {
 
 func TestConnectClients(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer ShowBufferOnFailure(t, buf)()
+	defer ShowBufferOnFailure(t, buf)
 
 	eMsg := "socket connection is not active (%s)"
 
@@ -137,7 +137,7 @@ func TestConnectClients(t *testing.T) {
 
 func TestDuplicateConns(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer ShowBufferOnFailure(t, buf)()
+	defer ShowBufferOnFailure(t, buf)
 
 	cc := defaultMockConnect(log)
 	results := cc.ConnectClients(append(MockServers, MockServers...))
@@ -147,7 +147,7 @@ func TestDuplicateConns(t *testing.T) {
 
 func TestGetClearConns(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer ShowBufferOnFailure(t, buf)()
+	defer ShowBufferOnFailure(t, buf)
 
 	cc := defaultClientSetup(log)
 
@@ -169,7 +169,7 @@ func TestGetClearConns(t *testing.T) {
 
 func TestListFeatures(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer ShowBufferOnFailure(t, buf)()
+	defer ShowBufferOnFailure(t, buf)
 
 	cc := defaultClientSetup(log)
 
@@ -182,7 +182,7 @@ func TestListFeatures(t *testing.T) {
 
 func TestStorageScan(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer ShowBufferOnFailure(t, buf)()
+	defer ShowBufferOnFailure(t, buf)
 
 	cc := defaultClientSetup(log)
 
@@ -200,7 +200,7 @@ func TestStorageScan(t *testing.T) {
 
 func TestStorageFormat(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer ShowBufferOnFailure(t, buf)()
+	defer ShowBufferOnFailure(t, buf)
 
 	for name, tt := range map[string]struct {
 		formatRet error
@@ -246,7 +246,7 @@ func TestStorageFormat(t *testing.T) {
 
 func TestStorageUpdate(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer ShowBufferOnFailure(t, buf)()
+	defer ShowBufferOnFailure(t, buf)
 
 	tests := []struct {
 		updateRet error
@@ -293,7 +293,7 @@ func TestStorageUpdate(t *testing.T) {
 
 func TestKillRank(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer ShowBufferOnFailure(t, buf)()
+	defer ShowBufferOnFailure(t, buf)
 
 	tests := []struct {
 		killRet error
@@ -316,7 +316,7 @@ func TestKillRank(t *testing.T) {
 
 func TestPoolGetACL(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer ShowBufferOnFailure(t, buf)()
+	defer ShowBufferOnFailure(t, buf)
 
 	for name, tt := range map[string]struct {
 		addr             Addresses
