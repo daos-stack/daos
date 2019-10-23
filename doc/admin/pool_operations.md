@@ -8,12 +8,12 @@ management interface.
 ## Pool Creation/Destroy
 
 A DAOS pool can be created and destroyed through the DAOS management API
-(see daos_mgmt.h). DAOS also provides a utility called dmg to manage
+(see daos_mgmt.h). DAOS also provides a utility called dmg_old to manage
 storage pools from the command line.
 
 **To create a pool:**
 ```
-$ dmg create --size=xxG --nvme=yyT
+$ dmg_old create --size=xxG --nvme=yyT
 ```
 
 This command creates a pool distributed across the DAOS servers with a
@@ -25,7 +25,7 @@ located (referred as ${svcl}).
 The typical output of this command is as follows:
 
 ```
-$ dmg create --size=xxG --nvme=yyT
+$ dmg_old create --size=xxG --nvme=yyT
 4056fb6d-9fca-4f2d-af8a-cfd57d92a92d 1:2
 ```
 
@@ -35,7 +35,7 @@ two pool service replica on rank 1 and 2.
 **To destroy a pool:**
 
 ```
-$ dmg destroy --pool=${puuid}
+$ dmg_old destroy --pool=${puuid}
 ```
 
 ## Pool Properties
@@ -160,12 +160,12 @@ TODO
 ## Pool Query
 The pool query operation retrieves information (i.e., the number of targets,
 space usage, rebuild status, property list, and more) about a created pool. It
-is integrated into the dmg utility.
+is integrated into the dmg_old utility.
 
 **To query a pool:**
 
 ```
-$ dmg query --svc=${svcl} --pool=${puuid}
+$ dmg_old query --svc=${svcl} --pool=${puuid}
 ```
 
 Below is the output for a pool created with SCM space only.
@@ -210,7 +210,7 @@ the management API and tool and will be documented here once available.
 **To exclude a target from a pool:**
 
 ```
-$ dmg exclude --svc=${svcl} --pool=${puuid} --target=${rank}
+$ dmg_old exclude --svc=${svcl} --pool=${puuid} --target=${rank}
 ```
 
 ### Pool Extension
