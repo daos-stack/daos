@@ -94,15 +94,15 @@ func DefaultMockSysProvider() *MockSysProvider {
 // implementation providing capability to access and configure
 // SCM modules and namespaces.
 type MockBackendConfig struct {
-	DiscoverRes      []Module
+	DiscoverRes      Modules
 	DiscoverErr      error
-	GetNamespaceRes  []Namespace
+	GetNamespaceRes  Namespaces
 	GetNamespaceErr  error
 	GetStateErr      error
 	StartingState    types.ScmState
 	NextState        types.ScmState
 	PrepNeedsReboot  bool
-	PrepNamespaceRes []Namespace
+	PrepNamespaceRes Namespaces
 	PrepErr          error
 }
 
@@ -111,11 +111,11 @@ type MockBackend struct {
 	cfg      MockBackendConfig
 }
 
-func (mb *MockBackend) Discover() ([]Module, error) {
+func (mb *MockBackend) Discover() (Modules, error) {
 	return mb.cfg.DiscoverRes, mb.cfg.DiscoverErr
 }
 
-func (mb *MockBackend) GetNamespaces() ([]Namespace, error) {
+func (mb *MockBackend) GetNamespaces() (Namespaces, error) {
 	return mb.cfg.GetNamespaceRes, mb.cfg.GetNamespaceErr
 }
 
@@ -126,7 +126,7 @@ func (mb *MockBackend) GetState() (types.ScmState, error) {
 	return mb.curState, nil
 }
 
-func (mb *MockBackend) Prep(_ types.ScmState) (bool, []Namespace, error) {
+func (mb *MockBackend) Prep(_ types.ScmState) (bool, Namespaces, error) {
 	if mb.cfg.PrepErr == nil {
 		mb.curState = mb.cfg.NextState
 	}

@@ -128,7 +128,7 @@ func TestGetState(t *testing.T) {
 		errMsg            string
 		showRegionOut     string
 		expRebootRequired bool
-		expNamespaces     []Namespace
+		expNamespaces     Namespaces
 		expCommands       []string
 		lookPathErrMsg    string
 	}{
@@ -241,15 +241,15 @@ func TestParseNamespaces(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		in            string
-		expNamespaces []Namespace
+		expNamespaces Namespaces
 		expErr        error
 	}{
 		"empty": {
-			expNamespaces: []Namespace{},
+			expNamespaces: Namespaces{},
 		},
 		"single": {
 			in: fmt.Sprintf(listTmpl, 0, 0, 0),
-			expNamespaces: []Namespace{
+			expNamespaces: Namespaces{
 				{
 					Name:        "namespace0.0",
 					BlockDevice: "pmem0",
@@ -262,7 +262,7 @@ func TestParseNamespaces(t *testing.T) {
 			in: strings.Join([]string{
 				"[", fmt.Sprintf(listTmpl, 0, 0, 0), ",",
 				fmt.Sprintf(listTmpl, 1, 1, 1), "]"}, ""),
-			expNamespaces: []Namespace{
+			expNamespaces: Namespaces{
 				{
 					Name:        "namespace0.0",
 					BlockDevice: "pmem0",
@@ -318,7 +318,7 @@ func TestGetNamespaces(t *testing.T) {
 		desc           string
 		errMsg         string
 		cmdOut         string
-		expNamespaces  []Namespace
+		expNamespaces  Namespaces
 		expCommands    []string
 		lookPathErrMsg string
 	}{
@@ -326,7 +326,7 @@ func TestGetNamespaces(t *testing.T) {
 			desc:          "no namespaces",
 			cmdOut:        "",
 			expCommands:   []string{cmdScmListNamespaces},
-			expNamespaces: []Namespace{},
+			expNamespaces: Namespaces{},
 		},
 		{
 			desc:          "single pmem device",

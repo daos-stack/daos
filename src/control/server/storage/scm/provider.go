@@ -23,6 +23,7 @@
 package scm
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -77,6 +78,8 @@ type (
 		Capacity        uint64
 	}
 
+	Modules []Module
+
 	// Namespace represents a mapping between AppDirect regions and block device files.
 	Namespace struct {
 		UUID        string `json:"uuid"`
@@ -84,7 +87,39 @@ type (
 		Name        string `json:"dev"`
 		NumaNode    uint32 `json:"numa_node"`
 	}
+
+	Namespaces []Namespace
 )
+
+func (m Module) String() string {
+	return fmt.Sprintf("PhysicalID:%d Capacity:%d Location:(socket:%d memctrlr:%d "+
+		"chan:%d pos:%d)\n", m.PhysicalID, m.Capacity, m.SocketID,
+		m.ControllerID, m.ChannelID, m.ChannelPosition)
+}
+
+func (ms Modules) String() string {
+	var buf bytes.Buffer
+
+	for _, m := range ms {
+		fmt.Fprintf(&buf, "\t%s\n", m)
+	}
+
+	return buf.String()
+}
+
+func (n Namespace) String() string {
+	return fmt.Sprintf("%s/%s/%s (NUMA %d)", n.Name, n.BlockDevice, n.UUID, n.NumaNode)
+}
+
+func (ns Namespaces) String() string {
+	var buf bytes.Buffer
+
+	for _, n := range ns {
+		fmt.Fprintf(&buf, "\t%s\n", n)
+	}
+
+	return buf.String()
+}
 
 type (
 	// PrepareRequest defines the parameters for a Prepare opration.
@@ -96,7 +131,7 @@ type (
 	PrepareResponse struct {
 		State          types.ScmState
 		RebootRequired bool
-		Namespaces     []Namespace
+		Namespaces     Namespaces
 	}
 
 	// DcpmParams defines the sub-parameters of a Format operation that
@@ -149,17 +184,17 @@ type (
 	// a successful Scan operation.
 	ScanResponse struct {
 		State      types.ScmState
-		Modules    []Module
-		Namespaces []Namespace
+		Modules    Modules
+		Namespaces Namespaces
 	}
 
 	// Backend defines a set of methods to be implemented by a SCM backend.
 	Backend interface {
-		Discover() ([]Module, error)
-		Prep(types.ScmState) (bool, []Namespace, error)
+		Discover() (Modules, error)
+		Prep(types.ScmState) (bool, Namespaces, error)
 		PrepReset(types.ScmState) (bool, error)
 		GetState() (types.ScmState, error)
-		GetNamespaces() ([]Namespace, error)
+		GetNamespaces() (Namespaces, error)
 	}
 
 	// SystemProvider defines a set of methods to be implemented by a provider
@@ -182,8 +217,8 @@ type (
 		sync.RWMutex
 		scanCompleted bool
 		lastState     types.ScmState
-		modules       []Module
-		namespaces    []Namespace
+		modules       Modules
+		namespaces    Namespaces
 
 		log     logging.Logger
 		backend Backend

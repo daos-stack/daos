@@ -194,5 +194,5 @@ func (c *StorageControlService) NvmeScan() (types.NvmeControllers, error) {
 //
 // Suitable for commands invoked directly on server, not over gRPC.
 func (c *StorageControlService) ScmScan() (*scm.ScanResponse, error) {
-	return c.scm.Scan(scm.ScanRequest{Rescan: true})
+	return c.scm.Scan(scm.ScanRequest{})
 }

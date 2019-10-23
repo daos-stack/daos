@@ -45,43 +45,43 @@ func TestProviderScan(t *testing.T) {
 	for name, tc := range map[string]struct {
 		rescan          bool
 		discoverErr     error
-		discoverRes     []Module
+		discoverRes     Modules
 		getNamespaceErr error
-		getNamespaceRes []Namespace
+		getNamespaceRes Namespaces
 		getStateErr     error
 		expResponse     *ScanResponse
 	}{
 		"no modules": {
-			discoverRes: []Module{},
+			discoverRes: Modules{},
 			expResponse: &ScanResponse{
-				Modules: []Module{},
+				Modules: Modules{},
 			},
 		},
 		"no namespaces": {
-			discoverRes:     []Module{defaultModule},
-			getNamespaceRes: []Namespace{},
+			discoverRes:     Modules{defaultModule},
+			getNamespaceRes: Namespaces{},
 			expResponse: &ScanResponse{
-				Modules:    []Module{defaultModule},
-				Namespaces: []Namespace{},
+				Modules:    Modules{defaultModule},
+				Namespaces: Namespaces{},
 			},
 		},
 		"ok": {
 			expResponse: &ScanResponse{
-				Modules:    []Module{defaultModule},
-				Namespaces: []Namespace{defaultNamespace},
+				Modules:    Modules{defaultModule},
+				Namespaces: Namespaces{defaultNamespace},
 			},
 		},
 		"rescan": {
 			rescan: true,
 			expResponse: &ScanResponse{
-				Modules:    []Module{defaultModule},
-				Namespaces: []Namespace{defaultNamespace},
+				Modules:    Modules{defaultModule},
+				Namespaces: Namespaces{defaultNamespace},
 			},
 		},
 		"ndctl missing": {
 			getNamespaceErr: FaultMissingNdctl,
 			expResponse: &ScanResponse{
-				Modules:    []Module{defaultModule},
+				Modules:    Modules{defaultModule},
 				Namespaces: nil,
 			},
 		},
@@ -97,10 +97,10 @@ func TestProviderScan(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			if tc.discoverRes == nil {
-				tc.discoverRes = []Module{defaultModule}
+				tc.discoverRes = Modules{defaultModule}
 			}
 			if tc.getNamespaceRes == nil {
-				tc.getNamespaceRes = []Namespace{defaultNamespace}
+				tc.getNamespaceRes = Namespaces{defaultNamespace}
 			}
 			mb := NewMockBackend(&MockBackendConfig{
 				DiscoverRes:     tc.discoverRes,
@@ -151,7 +151,7 @@ func TestProviderPrepare(t *testing.T) {
 		shouldReboot     bool
 		discoverErr      error
 		getNamespaceErr  error
-		getNamespaceRes  []Namespace
+		getNamespaceRes  Namespaces
 		getStateErr      error
 		prepErr          error
 		startState       types.ScmState
@@ -222,11 +222,11 @@ func TestProviderPrepare(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			if tc.getNamespaceRes == nil {
-				tc.getNamespaceRes = []Namespace{defaultNamespace}
+				tc.getNamespaceRes = Namespaces{defaultNamespace}
 			}
 			mb := NewMockBackend(&MockBackendConfig{
 				DiscoverErr:     tc.discoverErr,
-				DiscoverRes:     []Module{MockModule(nil)},
+				DiscoverRes:     Modules{MockModule(nil)},
 				GetNamespaceRes: tc.getNamespaceRes,
 				GetNamespaceErr: tc.getNamespaceErr,
 				GetStateErr:     tc.getStateErr,
@@ -286,7 +286,7 @@ func TestProviderGetState(t *testing.T) {
 
 			mb := NewMockBackend(&MockBackendConfig{
 				DiscoverErr:     tc.discoverErr,
-				DiscoverRes:     []Module{MockModule(nil)},
+				DiscoverRes:     Modules{MockModule(nil)},
 				GetNamespaceErr: tc.getNamespaceErr,
 				StartingState:   tc.startState,
 				NextState:       tc.expEndState,
@@ -429,7 +429,7 @@ func TestProviderCheckFormat(t *testing.T) {
 
 			mb := NewMockBackend(&MockBackendConfig{
 				DiscoverErr:     tc.discoverErr,
-				DiscoverRes:     []Module{MockModule(nil)},
+				DiscoverRes:     Modules{MockModule(nil)},
 				GetNamespaceErr: tc.getNamespaceErr,
 			})
 			msp := NewMockSysProvider(&MockSysConfig{
@@ -731,7 +731,7 @@ func TestProviderFormat(t *testing.T) {
 
 			mb := NewMockBackend(&MockBackendConfig{
 				DiscoverErr:     tc.discoverErr,
-				DiscoverRes:     []Module{MockModule(nil)},
+				DiscoverRes:     Modules{MockModule(nil)},
 				GetNamespaceErr: tc.getNamespaceErr,
 			})
 			msp := NewMockSysProvider(&MockSysConfig{
