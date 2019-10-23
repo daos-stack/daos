@@ -64,9 +64,9 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 		scanErrors = append(scanErrors, err)
 	} else {
 		if len(scmRes.Namespaces) > 0 {
-			cmd.log.Infof("SCM Namespaces:\n\t%s\n", scmRes.Namespaces)
+			cmd.log.Infof("SCM Namespaces:\n%s\n", scmRes.Namespaces)
 		} else {
-			cmd.log.Infof("SCM Modules:\n\t%s\n", scmRes.Modules)
+			cmd.log.Infof("SCM Modules:\n%s\n", scmRes.Modules)
 		}
 	}
 

@@ -93,7 +93,7 @@ type (
 
 func (m Module) String() string {
 	return fmt.Sprintf("PhysicalID:%d Capacity:%d Location:(socket:%d memctrlr:%d "+
-		"chan:%d pos:%d)\n", m.PhysicalID, m.Capacity, m.SocketID,
+		"chan:%d pos:%d)", m.PhysicalID, m.Capacity, m.SocketID,
 		m.ControllerID, m.ChannelID, m.ChannelPosition)
 }
 
