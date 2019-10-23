@@ -217,6 +217,7 @@ func (c *ControlService) scmFormat(scmCfg storage.ScmConfig, reformat bool) (*ct
 	return ret, nil
 }
 
+// doFormat performs format on storage subsystems, populates response results
 // in storage subsystem routines and broadcasts (closes channel) if successful.
 func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlpb.StorageFormatResp) (err error) {
 	var formatFailed bool
