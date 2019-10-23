@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 
-	log "github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // ModuleState is an interface to allow a module to pass in private
@@ -46,13 +46,17 @@ type Module interface {
 // Service is the type representing the collection of Modules used by
 // DomainSocketServer to be used to process messages.
 type Service struct {
+	log     logging.Logger
 	modules map[int32]Module
 }
 
 // NewRPCService creates an initialized Service instance
-func NewRPCService() *Service {
+func NewRPCService(log logging.Logger) *Service {
 	modules := make(map[int32]Module)
-	return &Service{modules}
+	return &Service{
+		log:     log,
+		modules: modules,
+	}
 }
 
 // RegisterModule will take in a type that implements the rpcModule interface
@@ -118,7 +122,7 @@ func (r *Service) ProcessMessage(client *Client, callBytes []byte) ([]byte, erro
 	}
 	respBody, err := module.HandleCall(client, rpcMsg.GetMethod(), rpcMsg.GetBody())
 	if err != nil {
-		log.Errorf("HandleCall for %d:%d failed:%s\n", module.ID(), rpcMsg.GetMethod(), err)
+		r.log.Errorf("HandleCall for %d:%d failed:%s\n", module.ID(), rpcMsg.GetMethod(), err)
 		return marshalResponse(rpcMsg.GetSequence(), Status_FAILURE, nil)
 	}
 

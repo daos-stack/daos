@@ -125,8 +125,6 @@ func cmpEnv(t *testing.T, wantConfig, gotConfig *ioserver.Config) {
 }
 
 func TestStartOptions(t *testing.T) {
-	defer common.ShowLogOnFailure(t)()
-
 	insecureTransport := server.NewConfiguration().TransportConfig
 	insecureTransport.AllowInsecure = true
 
@@ -276,10 +274,8 @@ func TestStartOptions(t *testing.T) {
 		},
 	} {
 		t.Run(desc, func(t *testing.T) {
-			var logBuf bytes.Buffer
-			log := logging.NewCombinedLogger(t.Name(), &logBuf).
-				WithLogLevel(logging.LogLevelDebug)
-			defer showBufOnFailure(t, logBuf)
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
 
 			var gotConfig *server.Configuration
 			var opts mainOpts
