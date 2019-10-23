@@ -8,13 +8,14 @@ CART_DIR := /home/mschaara/install/deps_daos/cart
 
 SRC := daos_fio.c
 BIN := daos_fio
+SRC2 := daos_fio_async.c
+BIN2 := daos_fio_async
 
 CC := gcc
 FLAGS := -rdynamic -Wl,-z,nodelete -fPIC
 LDFLAGS := -shared -L${CART_DIR}/lib -L${DAOS_DIR}/lib -ldl -ldaos -ldfs -ldaos_common -lgurt -luuid
 INCLUDES := -I${FIO_DIR} -include ${FIO_DIR}/config-host.h -I${DAOS_DIR}/include -I${CART_DIR}/include
 DEFINES := -D_GNU_SOURCE
-
 
 build_sync: 
 	${CC} -c ${FLAGS} ${INCLUDES} ${DEFINES} ${SRC} -o ${BIN}.o

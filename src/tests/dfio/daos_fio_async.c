@@ -45,11 +45,23 @@ do {                                                                    \
 
 bool daos_initialized;
 
+struct daos_iou {
+	struct io_u	*io_u;
+	d_sg_list_t	sgl;
+	d_iov_t		iov;
+	daos_event_t	ev;
+	bool		complete;
+};
+
 struct daos_data {
 	dfs_t		*dfs;
-	daos_handle_t	poh, coh;
+	daos_handle_t	poh, coh, eqh;
+	//daos_event_t	*events;
+	//d_sg_list_t	*sgls;
 	dfs_obj_t	*obj;
-	struct io_u	**io_us; /** Queue for Async io - not supported */
+	struct io_u	**io_us;
+	int		queued;
+	int		num_ios;
 };
 
 struct daos_fio_options {
@@ -122,16 +134,16 @@ daos_fio_init(struct thread_data *td)
    
 	/* Allocate space for DAOS-related data */
 	dd = malloc(sizeof(*dd));
-	dd->dfs = NULL;
-	dd->obj = NULL;
-	dd->io_us = calloc(td->o.iodepth, sizeof(struct io_u *));
+	dd->queued = 0;
+	dd->num_ios = td->o.iodepth;
+	dd->io_us = calloc(dd->num_ios, sizeof(struct io_u *));
 	if (dd->io_us == NULL)
 		ERR("Failed to allocate IO queue\n");
 
 	rc = daos_init(); 
 	if (rc != -DER_ALREADY && rc)
 		DCHECK(rc, "Failed to initialize daos");
-	
+
 	rc = uuid_parse(eo->pool, pool_uuid);
 	DCHECK(rc, "Failed to parse 'Pool uuid': %s", eo->pool);
     
@@ -217,37 +229,117 @@ daos_fio_invalidate(struct thread_data *td, struct fio_file *f)
 	return 0;
 }
 
+static void
+daos_fio_io_u_free(struct thread_data *td, struct io_u *io_u)
+{
+	struct daos_iou *io = io_u->engine_data;
+
+	if (io) {
+		io_u->engine_data = NULL;
+		free(io);
+	}
+}
+
+static int
+daos_fio_io_u_init(struct thread_data *td, struct io_u *io_u)
+{
+	struct daos_iou *io;
+
+	io = malloc(sizeof(struct daos_iou));
+	if (!io) {
+		td_verror(td, errno, "malloc");
+		return 1;
+	}
+	io->io_u = io_u;
+	io_u->engine_data = io;
+	return 0;
+}
+
+static struct io_u *
+daos_fio_event(struct thread_data *td, int event)
+{
+	struct daos_data *dd = td->io_ops_data;
+
+	return dd->io_us[event];
+}
+
+static int daos_fio_getevents(struct thread_data *td, unsigned int min,
+			      unsigned int max, const struct timespec *t)
+{
+	struct daos_data *dd = td->io_ops_data;
+	unsigned int events = 0;
+	struct io_u *io_u;
+	int i;
+
+	do {
+		io_u_qiter(&td->io_u_all, io_u, i) {
+			struct daos_iou *io = io_u->engine_data;
+			bool ev_flag;
+
+			if (io->complete)
+				continue;
+
+			daos_event_test(&io->ev, DAOS_EQ_NOWAIT, &ev_flag);
+			if (!ev_flag)
+				continue;
+
+			dd->io_us[events] = io_u;
+			dd->queued--;
+			daos_event_fini(&io->ev);
+			io->complete = true;
+			events++;
+			io_u->resid = 0;
+			io_u->error = 0;
+		}
+		if (events < min)
+			continue;
+		break;
+	} while (1);
+
+	return events;
+}
+
 static int
 daos_fio_queue(struct thread_data *td, struct io_u *io_u)
 {
 	struct daos_data *dd = td->io_ops_data;
 	d_iov_t iov;
-	d_sg_list_t sgl;
+	struct daos_iou *io = io_u->engine_data;
 	daos_off_t offset = io_u->offset;
 	daos_size_t ret;
 	int rc;
 
-	sgl.sg_nr = 1; 
-	sgl.sg_nr_out = 0; 
-	d_iov_set(&iov, io_u->xfer_buf, io_u->xfer_buflen);
-	sgl.sg_iovs = &iov;
+	if (dd->queued == td->o.iodepth)
+		return FIO_Q_BUSY;
+
+	io->sgl.sg_nr = 1; 
+	io->sgl.sg_nr_out = 0; 
+	d_iov_set(&io->iov, io_u->xfer_buf, io_u->xfer_buflen);
+	io->sgl.sg_iovs = &io->iov;
+
+	io->complete = false;
+	rc = daos_event_init(&io->ev, DAOS_HDL_INVAL, NULL);
+	DCHECK(rc, "daos_event_init() failed.");
 
 	switch (io_u->ddir) {
 	case DDIR_WRITE:
-		//printf("WRITE offset %llu, size %zu\n", offset, io_u->xfer_buflen);
-		rc = dfs_write(dd->dfs, dd->obj, &sgl, offset, NULL);
+		//printf("WRITE offset %llu, size %zu, event %p\n",
+		//offset, io_u->xfer_buflen, &io->ev);
+		rc = dfs_write(dd->dfs, dd->obj, &io->sgl, offset, &io->ev);
 		DCHECK(rc, "dfs_write() failed.");
 		break;
 	case DDIR_READ:
-		//printf("READ offset %llu, size %zu\n", offset, io_u->xfer_buflen);
-		rc = dfs_read(dd->dfs, dd->obj, &sgl, offset, &ret, NULL);
+		//printf("READ offset %llu, size %zu, event %p\n",
+		//offset, io_u->xfer_buflen, &io->ev);
+		rc = dfs_read(dd->dfs, dd->obj, &io->sgl, offset, &ret, &io->ev);
 		DCHECK(rc, "dfs_read() failed.");
 		break;
-	default:    
+	default:
 		ERR("Invalid IO type\n");
 	}
 
-	return FIO_Q_COMPLETED;
+	dd->queued++;
+	return FIO_Q_QUEUED;
 }
 
 static int
@@ -290,13 +382,17 @@ daos_fio_prep(struct thread_data fio_unused *td, struct io_u *io_u)
 struct ioengine_ops ioengine = {
 	.name			= "daos_dfs",
 	.version		= FIO_IOOPS_VERSION, 
-	.flags			= FIO_DISKLESSIO | FIO_NODISKUTIL | FIO_RAWIO | FIO_SYNCIO,
+	.flags			= FIO_DISKLESSIO | FIO_NODISKUTIL | FIO_RAWIO,
 	.init			= daos_fio_init,
 	.prep			= daos_fio_prep,
 	.cleanup		= daos_fio_cleanup,
 	.open_file		= daos_fio_open,
 	.invalidate		= daos_fio_invalidate,
 	.queue			= daos_fio_queue,
+	.getevents		= daos_fio_getevents,
+	.event			= daos_fio_event,
+	.io_u_init		= daos_fio_io_u_init,
+	.io_u_free		= daos_fio_io_u_free,
 	.close_file		= daos_fio_close,
 	.unlink_file		= daos_fio_unlink,
 	.get_file_size		= daos_fio_get_file_size,
