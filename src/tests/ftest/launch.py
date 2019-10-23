@@ -107,7 +107,6 @@ def set_test_environment():
     required_python_paths = [
         os.path.abspath("util/apricot"),
         os.path.abspath("util"),
-        os.path.abspath("../../utils/py"),
         os.path.join(base_dir, "lib", "python2.7", "site-packages"),
         os.path.join(base_dir, "lib", "python3", "site-packages"),
     ]

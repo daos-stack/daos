@@ -29,12 +29,12 @@ DAOS_MAGIC = 0x7A89
 
 # pylint: disable=import-error
 if sys.version_info < (3, 0):
-    import pydaos_shim_27 as pydaos_shim
+    import pydaos.pydaos_shim_27 as pydaos_shim
 else:
-    import pydaos_shim_3 as pydaos_shim
+    import pydaos.pydaos_shim_3 as pydaos_shim
 # pylint: enable=import-error
 
-from pydaos_core import *
+from pydaos.pydaos_core import *
 
 __all__ = ["pydaos_core"]
 

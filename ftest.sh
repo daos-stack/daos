@@ -309,7 +309,8 @@ launch_py=\$(sed -ne '1s/^#!//'p launch.py)
 launch_py_vers=\$(\$launch_py -c 'import sys; \
 print(\"{}.{}\".format(sys.version_info[0], sys.version_info[1]))')
 
-export PYTHONPATH=./util:../../utils/py/:./util/apricot:\
+# TODO: Is this needed as launch.py does some of this.
+export PYTHONPATH=./util:./util/apricot:\
 ../../../install/lib/python\$launch_py_vers/site-packages
 
 if ! ./launch.py -c -a -r -i -s -ts ${TEST_NODES} ${TEST_TAG_ARR[*]}; then
