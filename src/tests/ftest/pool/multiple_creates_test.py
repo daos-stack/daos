@@ -34,6 +34,7 @@ import agent_utils
 import server_utils
 import check_for_pool
 import write_host_file
+from apricot import TestWithServers
 
 # pylint: disable = broad-except
 class MultipleCreatesTest(Test):
@@ -52,7 +53,7 @@ class MultipleCreatesTest(Test):
             build_paths = json.load(build_file)
         self.basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
 
-        self.hostlist_servers = self.params.get("test_machines", '/run/hosts/')
+        self.hostlist_servers = self.params.get("test_servers", '/run/hosts/')
         self.hostfile_servers = write_host_file.write_host_file(
             self.hostlist_servers, self.workdir)
 
