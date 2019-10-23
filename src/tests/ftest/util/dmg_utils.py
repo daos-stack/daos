@@ -335,7 +335,7 @@ def pool_destroy(path, test_object, host_port, pool_uuid, insecure=True,
 
 def get_pool_uuid_from_stdout(stdout_str):
     """Get Pool UUID from stdout.
-    
+
     stdout_str is something like:
     Active connections: [wolf-3:10001]
     Creating DAOS pool with 100MB SCM and 0B NvMe storage (1.000 ratio)
