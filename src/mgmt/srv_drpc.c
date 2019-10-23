@@ -32,9 +32,11 @@
 #include <daos_api.h>
 #include <daos_security.h>
 
+#include "srv.pb-c.h"
+#include "acl.pb-c.h"
+#include "pool.pb-c.h"
 #include "srv_internal.h"
 #include "drpc_internal.h"
-#include "srv.pb-c.h"
 
 static void
 pack_daos_response(Mgmt__DaosResp *daos_resp, Drpc__Response *drpc_resp)
@@ -69,7 +71,7 @@ ds_mgmt_drpc_kill_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	int			 sig;
 
 	/* Unpack the inner request from the drpc call body */
-	req = mgmt__daos_rank__unpack(
+	req = mgmt__kill_rank_req__unpack(
 		NULL, drpc_req->body.len, drpc_req->body.data);
 	if (req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
@@ -84,7 +86,7 @@ ds_mgmt_drpc_kill_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (resp == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
 		D_ERROR("Failed to allocate daos response ref\n");
-		mgmt__daos_rank__free_unpacked(req, NULL);
+		mgmt__kill_rank_req__free_unpacked(req, NULL);
 		return;
 	}
 
@@ -99,8 +101,8 @@ ds_mgmt_drpc_kill_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_INFO("Service rank %d is being killed by signal %d\n",
 		req->rank, sig);
 	kill(getpid(), sig);
-}
-	mgmt__daos_rank__free_unpacked(req, NULL);
+
+	mgmt__kill_rank_req__free_unpacked(req, NULL);
 	pack_daos_response(resp, drpc_resp);
 	D_FREE(resp);
 }

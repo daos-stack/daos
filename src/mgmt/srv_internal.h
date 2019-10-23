@@ -41,6 +41,7 @@
 #include <daos_security.h>
 
 #include "srv.pb-c.h"
+#include "storage_query.pb-c.h"
 #include "rpc.h"
 #include "srv_layout.h"
 
