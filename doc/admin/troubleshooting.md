@@ -2,8 +2,8 @@
 
 ## DAOS Errors
 
-DAOS has its own error numbering that starts at 1000. The most common
-errors are documented in the table below.
+DAOS has its error numbering that starts at 1000. The table below documents the most common
+errors.
 
 |DAOS Error|Value|Description
 |-|-|-|
@@ -77,7 +77,7 @@ default in DAOS (specific to the project), this is set to CRIT
 will dump to stderr. This, however, is separate from the priority of
 logging to "/tmp/daos.log". The priority level of logging can be set
 with D_LOG_MASK, which by default is set to INFO
-("D_LOG_MASK=INFO"), which will result in all messages excluding DEBUG
+("D_LOG_MASK=INFO"), which will result in all messages, excluding DEBUG
 messages being logged. D_LOG_MASK can also be used to specify the
 level of logging on a per-subsystem basis as well
 ("D_LOG_MASK=DEBUG,MEM=ERR").
@@ -131,7 +131,7 @@ are enabled by default ("DD_MASK=all").
 -   Disable all logs for performance tuning
 
         $ D_LOG_MASK=ERR -> will only log error messages from all facilities
-        $ D_LOG_MASK=FATAL -> will only log system fatal messages
+        $ D_LOG_MASK=FATAL -> will only log fatal system messages
 
 -   Disable a noisy debug logging subsystem
 

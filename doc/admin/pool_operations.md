@@ -39,20 +39,20 @@ At creation time, a list of pool properties can be specified through the
 API (not supported by the tool yet):
 
 -   DAOS_PROP_CO_LABEL is a string that the administrator can
-    associated with a pool. e.g. “project A”, “project B”, “IO500 test
+    associate with a pool. (e.g., “project A”, “project B”, “IO500 test
     pool”
 
--   DAOS_PROP_PO_ACL are access control list (ACL) associated with
+-   DAOS_PROP_PO_ACL is the access control list (ACL) associated with
     the pool
 
 -   DAOS_PROP_PO_SPACE_RB is the space to be reserved on each target
-    for rebuild purpose.
+    for rebuild purposes.
 
 -   DAOS_PROP_PO_SELF_HEAL defines whether the pool wants
-    automatically-trigger or manually-triggered self-healing.
+    automatically-triggered or manually-triggered self-healing.
 
 -   DAOS_PROP_PO_RECLAIM is used to tune the space reclaim strategy
-    based on time interval, batched commits or snapshot creation.
+    based on time interval, batched commits, or snapshot creation.
 
 While those pool properties are currently stored persistently with pool
 metadata, many of them are still under development. Moreover, the
@@ -65,8 +65,8 @@ Support for per-pool Access Control Lists (ACLs) is under development
 and is scheduled for DAOS v1.0. DAOS ACLs will implement a subset of the
 NFSv4 ACL standard. This feature will be documented here once available.
 
-The pool query operation retrieves information (i.e. number of targets,
-space usage, rebuild status, property list, …) about a created pool. It
+The pool query operation retrieves information (i.e., the number of targets,
+space usage, rebuild status, property list, and others) about a created pool. It
 is integrated into the dmg utility.
 
 **To query a pool:**
@@ -88,7 +88,7 @@ Below is the output for a pool created with SCM space only.
         Free: 0, min:0, max:0, mean:0
     Rebuild done, 10 objs, 1026 recs
 
-The total and free sizes are the sum across all the targets whereas
+The total and free sizes are the sum across all the targets, whereas
 min/max/mean gives information about individual targets. A min value
 close to 0 means that one target is running out of space.
 
@@ -137,7 +137,7 @@ managed by PMDK and SPDK blobs on SSDs. Tools to verify and repair this
 persistent data is scheduled for DAOS v2.4 and will be documented here
 once available.
 
-Meanwhile, PMDK provides a recovery tool (i.e. pmempool check) to verify
-and possibly repair a pmemobj file. As show in the previous section, the
+Meanwhile, PMDK provides a recovery tool (i.e., pmempool check) to verify
+and possibly repair a pmemobj file. As shown in the previous section, the
 rebuild status can be consulted via the pool query and will be expanded
 with more information.

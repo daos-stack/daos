@@ -20,7 +20,7 @@ The following terms and abbreviations are used in this document.
 |----|----|
 |ACLs|Access Control Lists|
 |CaRT|Collective and RPC Transport (CaRT) library. A software library built on top of the Mercury Function Shipping library to support distributed communication functionality.|
-|CGO|Go tools that enable creation of Go packages that call C code|
+|CGO|Go tools that enable the creation of Go packages that call C code|
 |CN|Compute Node|
 |CPU|Central Processing Unit|
 |COTS|Commercial off-the-shelf|

@@ -19,7 +19,7 @@ client nodes.
 ### Runtime Directory Setup
 
 DAOS uses a series of Unix Domain Sockets to communicate between its
-various components. On modern Linux systems Unix Domain Sockets are
+various components. On modern Linux systems, Unix Domain Sockets are
 typically stored under /run or /var/run (usually a symlink to /run) and
 are a mounted tmpfs file system. There are several methods for ensuring
 the necessary directories are setup.
@@ -44,9 +44,9 @@ location can be passed on the command line using the -runtime\_dir flag.
 #### Default Directory (non-persistent)
 
 Files and directories created in /run and /var/run only survive until
-the next reboot. However if reboots are infrequent an easy solution
+the next reboot. However, if reboots are infrequent, an easy solution
 while still utilizing the default locations is to manually create the
-required directories. To do this execute the following commands.
+required directories. To do this, execute the following commands.
 
 daos\_server:
 
@@ -86,7 +86,7 @@ To tell systemd to create the necessary directories for DAOS:
 
 ### Elevated Privileges
 
-Several tasks (e.g. storage access, hugepages configuration) performed
+Several tasks (e.g., storage access, hugepages configuration) performed
 by the DAOS server require elevated permissions on the storage nodes
 (requiring certain commands to be run as root or with sudo).
 
@@ -99,7 +99,7 @@ by the DAOS server require elevated permissions on the storage nodes
 This section addresses how to verify that Optane DC Persistent memory
 (DCPM) is correctly installed on the storage nodes and how to configure
 it in interleaved mode to be used by DAOS in AppDirect mode.
-Instructions for other type of SCM may be covered in the future.
+Instructions for other types of SCM may be covered in the future.
 
 Provisioning SCM occurs by configuring DCPM modules in AppDirect memory regions
 (interleaved mode) in groups of modules local to a specific socket (NUMA) and
@@ -107,7 +107,7 @@ resultant nvdimm namespaces are defined a device identifier (e.g. /dev/pmem0).
 
 DCPM can be configured and managed through the
 [ipmctl](https://github.com/intel/ipmctl) library and associated tool. The
-ipmctl command just be run as root and has pretty detailed man pages and
+ipmctl command may be run as root and has detailed man pages and
 help output (use "ipmctl help" to display it).
 
 The list of NVDIMMs can be displayed as follows:
@@ -125,7 +125,7 @@ Moreover, DAOS requires DCPM to be configured in interleaved mode. A
 storage subcommand (prepare --scm-only) can be used as a "command mode"
 invocation of *daos\_server* and must be run as root. SCM modules will
 be configured into interleaved regions with memory mode set to
-"AppDirect" mode with one set per socket (each module is assigned to socket
+"AppDirect" mode with one set per socket (each module is assigned to a socket
 and reports this via its NUMA rating).
 
 `sudo daos_server [<app_opts>] storage prepare [--scm-only|-s] [<cmd_opts>]`
@@ -133,17 +133,17 @@ The first time the command is run, SCM AppDirect regions will be created as
 resource allocations on any available DCPM modules (one region per NUMA
 node/socket). The regions are activated after BIOS reads the new resource
 allocations and therefore after initial completion the command prints a
-message to ask for a reboot (the command will not a initiate reboot itself).
+message to ask for a reboot (the command will not initiate a reboot itself).
 
 'sudo daos_server storage prepare --scm-only' should be run for a second time after
-system reboot in order to create the pmem kernel devices (/dev/pmemX
+system reboot to create the pmem kernel devices (/dev/pmemX
 namespaces created on the new SCM regions).
 
-One namespace per region is created, each namespace may take up to a few
+One namespace per region is created; each namespace may take up to a few
 minutes to create. Details of pmem devices will be displayed in JSON format
 on command completion.
 
-Example output from initial call (with SCM modules set to default MemoryMode):
+Example output from the initial call (with SCM modules set to default MemoryMode):
 
 ```bash
 Memory allocation goals for SCM will be changed and namespaces modified, this
@@ -154,7 +154,7 @@ yes
 A reboot is required to process new memory allocation goals.
 ```
 
-Example output from subsequent call (SCM modules configured to AppDirect
+Example output from a subsequent call (SCM modules configured to AppDirect
 mode and host rebooted):
 
 ```bash
@@ -174,10 +174,10 @@ Persistent memory kernel devices:
 All namespaces are disabled and destroyed. SCM regions are removed by
 resetting modules into "MemoryMode" through resource allocations.
 
-Note, undefined behaviour may result if the namespaces/pmem kernel
+Note that undefined behavior may result if the namespaces/pmem kernel
 devices are mounted prior to running reset (as per the printed warning).
 
-Subsequent reboot is required in order for BIOS to read the new resource
+A subsequent reboot is required for BIOS to read the new resource
 allocations.
 
 Example output when resetting SCM modules:
@@ -203,7 +203,7 @@ NVMe access through SPDK as an unprivileged user can be enabled by
 running the example command
 `sudo daos_server storage prepare --nvme-only -p 4096 -u bob`.
 
-This will perform the required setup in order for `daos_server` to be run
+This will perform the required setup for `daos_server` to be run
 by user "bob" who will own the hugepage mountpoint directory and vfio
 groups as needed in SPDK operations.
 
@@ -235,7 +235,7 @@ While the DAOS server will eventually auto-detect all the usable
 storage, the administrator will still be provided the ability through
 the configuration file (see next section) to whitelist or blacklist the
 storage devices to be (or not) used. This section covers how to manually
-detect the storage devices potentially usable by DAOS in order to
+detect the storage devices potentially usable by DAOS to
 populate the configuration file when the administrator wants to have
 finer control over the storage selection.
 
@@ -271,7 +271,7 @@ The pciaddr field above is what should be used in the server
 configuration file to identified NVMe SSDs.
 
 Devices with the same NUMA node/socket should be used in the same per-server
-section of the server configuration file for best performance.
+section of the server configuration file for the best performance.
 
 ### Network Interface Detection & Selection
 
@@ -353,10 +353,10 @@ storage (initially installing from a local path on the host that is
 running *daos\_server* but to be extended to downloading remotely from
 central storage location).
 
-When the controller is selected and an update firmware task runs,
+When the controller is selected, and an update firmware task runs,
 controller data is accessed through an existing linked list through the
 binding fwupdate call and a raw command specifying firmware update with
-local image (specified by filepath) and slot identifier. The firmware
+the local image (specified by filepath) and slot identifier. The firmware
 update is followed by a hard reset on the controller.
 
 ### Storage Burn in
@@ -370,8 +370,8 @@ meantime.
 
 The fio repo is to be built and needs to be referenced when building the
 SPDK fio\_plugin. The plug-in can then be run by fio to exercise the
-NVMe device through SPDK. Currently the output of the burn-in is
-displayed in the shell and control is returned to the user after
+NVMe device through SPDK. Currently, the output of the burn-in is
+displayed in the shell, and control is returned to the user after
 completion. Future iterations may perform this as a background task.
 
 ## Server Configuration
@@ -385,7 +385,7 @@ The DAOS security framework relies on certificates to authenticate
 administrators. The security infrastructure is currently under
 development and will be delivered in DAOS v1.0. Initial support for certificates
 has been added to DAOS and can be disabled either via the command line or in the
-DAOS server configuration file. Currently the easiest way to disable certificate
+DAOS server configuration file. Currently, the easiest way to disable certificate
 support is to pass the -i flag to daos\_server.
 
 ### Server Configuration File
@@ -400,7 +400,7 @@ and example configurations files in the [examples](https://github.com/daos-stack
 directory.
 
 Any option supplied to `daos_server` as a commandline option or flag will
-take precedence over equivalent configuration file parameter.
+take precedence over the equivalent configuration file parameter.
 
 For convenience, active parsed config values are written to a temporary
 file for reference, location will be written to the log.
@@ -415,7 +415,7 @@ options (living documentation of the config file). Live examples are
 available at
 <https://github.com/daos-stack/daos/tree/master/utils/config>
 
-The Location of this configuration file is determined by first checking
+The location of this configuration file is determined by first checking
 for the path specified through the -o option of the daos\_server command
 line. Otherwise, /etc/daos\_server.conf is used.
 
@@ -488,7 +488,7 @@ fault\_path: /vcdu0/rack1/hostname
 
 **Fault domain callback**
 
-Path to executable which will return fault domain string.
+Path to the executable which, will return the fault domain string.
 
 Immutable after reformat.
 
@@ -527,7 +527,7 @@ auto-detect NVDIMMs, configure them in interleave mode, format with ext4
 and mount with the DAX extension creating a subdirectory within
 scm\_mount\_path.
 
-This option allows to specify a preferred path where the mountpoints
+This option allows specifying a preferred path where the mountpoints
 will be created. Either the specified directory or its parent must be a
 mount point.
 

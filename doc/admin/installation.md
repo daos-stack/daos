@@ -11,7 +11,7 @@ Moreover, the DAOS stack leverages the following open source projects:
 -   [*CaRT*](https://github.com/daos-stack/cart) for high-performance
     communication leveraging advanced network capabilities.
 
--   [*gRPC*](https://grpc.io/) provides an secured out-of-band channel for
+-   [*gRPC*](https://grpc.io/) provides a secured out-of-band channel for
     DAOS administration.
 
 -   [*PMDK*](https://github.com/pmem/pmdk.git) for persistent memory
@@ -56,7 +56,7 @@ below). Then initialize the submodules with:
 
 ## DAOS from Scratch
 
-The below instructions have been verified with CentOS. Installations on other
+The instructions below have been verified with CentOS. Installations on other
 Linux distributions might be similar with some variations.
 Developers of DAOS may want to check additional sections below before beginning
 for suggestions related specifically to development. Please contact us in our
@@ -75,7 +75,7 @@ appropriate versions (or above):
 Moreover, a Go version of at least 1.10 is required.
 
 To build DAOS and its dependencies, several software packages must be installed
-on the system. This includes scons, libuuid, cmocka, ipmctl and several other
+on the system. This includes scons, libuuid, cmocka, ipmctl, and several other
 packages usually available on all the Linux distributions.
 
 A exhaustive list of packages for each supported Linux distribution is
