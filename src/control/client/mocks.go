@@ -229,6 +229,22 @@ func (m *mockMgmtCtlClient) FetchFioConfigPaths(ctx context.Context, req *ctlpb.
 	return &mgmtCtlFetchFioConfigPathsClient{}, nil
 }
 
+type mgmtCtlNetworkScanDevicesClient struct {
+	grpc.ClientStream
+}
+
+func (m *mgmtCtlNetworkScanDevicesClient) Recv() (*ctlpb.DeviceScanReply, error) {
+	return &ctlpb.DeviceScanReply{}, nil
+}
+
+func (m *mockMgmtCtlClient) NetworkScanDevices(ctx context.Context, in *ctlpb.DeviceScanRequest, o ...grpc.CallOption) (ctlpb.MgmtCtl_NetworkScanDevicesClient, error) {
+	return &mgmtCtlNetworkScanDevicesClient{}, nil
+}
+
+func (m *mockMgmtCtlClient) NetworkListProviders(ctx context.Context, in *ctlpb.ProviderListRequest, o ...grpc.CallOption) (*ctlpb.ProviderListReply, error) {
+	return &ctlpb.ProviderListReply{}, nil
+}
+
 func (m *mockMgmtCtlClient) SystemMemberQuery(ctx context.Context, req *ctlpb.SystemMemberQueryReq, o ...grpc.CallOption) (*ctlpb.SystemMemberQueryResp, error) {
 	return &ctlpb.SystemMemberQueryResp{}, nil
 }
