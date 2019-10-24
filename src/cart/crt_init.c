@@ -281,6 +281,8 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 		crt_gdata.cg_server = server;
 
+		D_DEBUG(DB_ALL, "Server bit set to %d\n", server);
+
 		if ((flags & CRT_FLAG_BIT_SINGLETON) != 0)
 			crt_gdata.cg_singleton = true;
 

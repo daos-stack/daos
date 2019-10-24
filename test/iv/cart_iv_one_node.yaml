@@ -7,8 +7,8 @@ defaultENV:
   D_LOG_MASK: "DEBUG,MEM=ERR"
   CRT_PHY_ADDR_STR: "ofi+sockets"
   OFI_INTERFACE: "eth0"
-  srv_CRT_CTX_NUM: "16"
-  cli_CRT_CTX_NUM: "16"
+  srv_CRT_CTX_NUM: "2"
+  cli_CRT_CTX_NUM: "2"
 env_CRT_CTX_SHARE_ADDR: !mux
   sep:
     env: sep
@@ -28,10 +28,10 @@ tests: !mux
     name: iv_basic
     srv_bin: crt_launch
     srv_arg: "-e tests/iv_server -v 3"
-    srv_env: "-x CRT_ALLOW_SINGLETON=1"
-    srv_ppn: "2"
+    srv_env: ""
+    srv_ppn: "5"
 
     cli_bin: tests/iv_client
     cli_arg: ""
-    cli_env: "-x CRT_ALLOW_SINGLETON=1"
+    cli_env: ""
     cli_ppn: "1"

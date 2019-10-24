@@ -1138,6 +1138,7 @@ int main(int argc, char **argv)
 	char		*env_self_rank;
 	char		*grp_cfg_file;
 	crt_group_t	*grp;
+	d_rank_list_t	*rank_list;
 	d_rank_t	my_rank;
 	int		c;
 	int		rc;
@@ -1188,7 +1189,11 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
+	rc = crt_proto_register(&my_proto_fmt_iv);
+	assert(rc == 0);
+
 	init_work_contexts();
+
 	grp_cfg_file = getenv("CRT_L_GRP_CFG");
 	if (grp_cfg_file == NULL) {
 		D_ERROR("CRT_L_GRP_CFG was not set\n");
@@ -1204,14 +1209,19 @@ int main(int argc, char **argv)
 
 	DBG_PRINT("Server starting, self_rank=%d\n", my_rank);
 
-	rc = crt_proto_register(&my_proto_fmt_iv);
-	assert(rc == 0);
-
 	rc = crt_group_rank(NULL, &g_my_rank);
 	assert(rc == 0);
 
 	rc = crt_group_size(NULL, &g_group_size);
 	assert(rc == 0);
+
+	rc = crt_group_ranks_get(grp, &rank_list);
+	assert(rc == 0);
+
+	rc = tc_wait_for_ranks(g_main_ctx, grp, rank_list, 0, 1, 5, 120);
+	assert(rc == 0);
+
+	d_rank_list_free(rank_list);
 
 	init_iv();
 
@@ -1221,8 +1231,10 @@ int main(int argc, char **argv)
 	 */
 	wait_for_namespace();
 
-	rc = crt_group_config_save(grp, true);
-	assert(rc == 0);
+	if (g_my_rank == 0) {
+		rc = crt_group_config_save(grp, true);
+		assert(rc == 0);
+	}
 
 	while (!g_do_shutdown)
 		sleep(1);
