@@ -262,9 +262,9 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 			start_tgt = curr_dom->do_targets[0].ta_comp.co_id;
 			end_tgt = start_tgt + (num_doms-1);
 
-			range_set = isset_range(dom_used, start_tgt, end_tgt);
+			range_set = isset_range(tgts_used, start_tgt, end_tgt);
 			if (range_set)
-				clrbit_range(dom_used, start_tgt, end_tgt);
+				clrbit_range(tgts_used, start_tgt, end_tgt);
 
 			do {
 				/*
