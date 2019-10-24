@@ -97,11 +97,11 @@ func (c *StorageControlService) doNvmePrepare(req *ctlpb.PrepareNvmeReq) (resp *
 	})
 
 	if err != nil {
-		resp.State = newState(c.log, ctlpb.ResponseStatus_CTRL_ERR_NVME, err.Error(), "", msg)
+		resp.State = newState(c.log, ctlpb.ResponseStatus_CTL_ERR_NVME, err.Error(), "", msg)
 		return
 	}
 
-	resp.State = newState(c.log, ctlpb.ResponseStatus_CTRL_SUCCESS, "", "", msg)
+	resp.State = newState(c.log, ctlpb.ResponseStatus_CTL_SUCCESS, "", "", msg)
 	return
 }
 
@@ -111,14 +111,14 @@ func (c *StorageControlService) doScmPrepare(pbReq *ctlpb.PrepareScmReq) (pbResp
 
 	scmState, err := c.GetScmState()
 	if err != nil {
-		pbResp.State = newState(c.log, ctlpb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg)
+		pbResp.State = newState(c.log, ctlpb.ResponseStatus_CTL_ERR_SCM, err.Error(), "", msg)
 		return
 	}
 	c.log.Debugf("SCM state before prep: %s", scmState)
 
 	resp, err := c.ScmPrepare(scm.PrepareRequest{Reset: pbReq.Reset_})
 	if err != nil {
-		pbResp.State = newState(c.log, ctlpb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg)
+		pbResp.State = newState(c.log, ctlpb.ResponseStatus_CTL_ERR_SCM, err.Error(), "", msg)
 		return
 	}
 
@@ -127,7 +127,7 @@ func (c *StorageControlService) doScmPrepare(pbReq *ctlpb.PrepareScmReq) (pbResp
 		info = scm.MsgScmRebootRequired
 	}
 
-	pbResp.State = newState(c.log, ctlpb.ResponseStatus_CTRL_SUCCESS, "", info, msg)
+	pbResp.State = newState(c.log, ctlpb.ResponseStatus_CTL_SUCCESS, "", info, msg)
 	pbResp.Pmems = namespacesToPB(resp.Namespaces)
 
 	return
@@ -162,11 +162,11 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 	controllers, err := c.NvmeScan()
 	if err != nil {
 		resp.Nvme = &ctlpb.ScanNvmeResp{
-			State: newState(c.log, ctlpb.ResponseStatus_CTRL_ERR_NVME, err.Error(), "", msg+"NVMe"),
+			State: newState(c.log, ctlpb.ResponseStatus_CTL_ERR_NVME, err.Error(), "", msg+"NVMe"),
 		}
 	} else {
 		resp.Nvme = &ctlpb.ScanNvmeResp{
-			State:  newState(c.log, ctlpb.ResponseStatus_CTRL_SUCCESS, "", "", msg+"NVMe"),
+			State:  newState(c.log, ctlpb.ResponseStatus_CTL_SUCCESS, "", "", msg+"NVMe"),
 			Ctrlrs: controllers,
 		}
 	}
@@ -174,12 +174,12 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 	result, err := c.scm.Scan(scm.ScanRequest{})
 	if err != nil {
 		resp.Scm = &ctlpb.ScanScmResp{
-			State: newState(c.log, ctlpb.ResponseStatus_CTRL_ERR_SCM, err.Error(), "", msg+"SCM"),
+			State: newState(c.log, ctlpb.ResponseStatus_CTL_ERR_SCM, err.Error(), "", msg+"SCM"),
 		}
 	} else {
 		msg += fmt.Sprintf("SCM (%s)", result.State)
 		resp.Scm = &ctlpb.ScanScmResp{
-			State: newState(c.log, ctlpb.ResponseStatus_CTRL_SUCCESS, "", "", msg),
+			State: newState(c.log, ctlpb.ResponseStatus_CTL_SUCCESS, "", "", msg),
 		}
 		if len(result.Namespaces) > 0 {
 			resp.Scm.Pmems = namespacesToPB(result.Namespaces)
@@ -201,7 +201,7 @@ func newMntRet(log logging.Logger, op string, mntPoint string, status ctlpb.Resp
 
 func (c *ControlService) scmFormat(scmCfg storage.ScmConfig, reformat bool) (*ctlpb.ScmMountResult, error) {
 	var eMsg, iMsg string
-	status := ctlpb.ResponseStatus_CTRL_SUCCESS
+	status := ctlpb.ResponseStatus_CTL_SUCCESS
 
 	req, err := scm.CreateFormatRequest(scmCfg, reformat)
 	if err != nil {
@@ -211,12 +211,12 @@ func (c *ControlService) scmFormat(scmCfg storage.ScmConfig, reformat bool) (*ct
 	if err != nil {
 		eMsg = err.Error()
 		iMsg = fault.ShowResolutionFor(err)
-		status = ctlpb.ResponseStatus_CTRL_ERR_APP
+		status = ctlpb.ResponseStatus_CTL_ERR_SCM
 	} else if !res.Formatted {
 		err = scm.FaultUnknown
 		eMsg = errors.WithMessage(err, "is still unformatted").Error()
 		iMsg = fault.ShowResolutionFor(err)
-		status = ctlpb.ResponseStatus_CTRL_ERR_APP
+		status = ctlpb.ResponseStatus_CTL_ERR_SCM
 	}
 
 	return newMntRet(c.log, "format", scmCfg.MountPoint, status, eMsg, iMsg), nil
@@ -228,6 +228,10 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 	const msgFormatErr = "failure formatting storage, check RPC response for details"
 	needsSuperblock := true
 	needsScmFormat := reformat
+	// placeholder result indicating NVMe not yet formatted
+	resp.Crets = types.NvmeControllerResults{
+		newCret(c.log, "format", "", ctlpb.ResponseStatus_CTL_ERR_NVME, msgBdevScmNotReady, ""),
+	}
 
 	c.log.Infof("formatting storage for I/O server instance %d (reformat: %t)",
 		i.Index, reformat)
@@ -248,7 +252,7 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 			err = scm.FaultFormatNoReformat
 			resp.Mrets = append(resp.Mrets,
 				newMntRet(c.log, "format", scmConfig.MountPoint,
-					ctlpb.ResponseStatus_CTRL_ERR_APP, err.Error(),
+					ctlpb.ResponseStatus_CTL_ERR_SCM, err.Error(),
 					fault.ShowResolutionFor(err)))
 			return nil // don't continue if formatted and no reformat opt
 		}
@@ -276,9 +280,10 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 		}
 	}
 
+	results := types.NvmeControllerResults{} // init actual NVMe format results
+
 	// If no superblock exists, populate NVMe response with format results.
 	if needsSuperblock {
-		results := types.NvmeControllerResults{}
 		bdevConfig, err := i.bdevConfig()
 		if err != nil {
 			return errors.Wrap(err, "get bdev config")
@@ -290,17 +295,17 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 			// TODO: return result to be in line with scmFormat
 			c.nvme.Format(bdevConfig, &results)
 		}
-		resp.Crets = results
-
-		if results.HasErrors() {
-			c.log.Error(msgFormatErr)
-			return nil // don't continue if we can't format NVMe
-		}
 	}
 
-	// TODO: remove use of nvme formatted flag to be consistent with scm
-	c.nvme.formatted = true
-	i.NotifyStorageReady()
+	resp.Crets = results // overwrite with actual results
+
+	if results.HasErrors() {
+		c.log.Error(msgFormatErr)
+	} else {
+		// TODO: remove use of nvme formatted flag to be consistent with scm
+		c.nvme.formatted = true
+		i.NotifyStorageReady()
+	}
 
 	return nil
 }
@@ -346,7 +351,7 @@ func (c *ControlService) ScmUpdate(cfg storage.ScmConfig, req *ctlpb.UpdateScmRe
 		*results,
 		&ctlpb.ScmModuleResult{
 			Loc: &ctlpb.ScmModule_Location{},
-			State: newState(c.log, ctlpb.ResponseStatus_CTRL_NO_IMPL,
+			State: newState(c.log, ctlpb.ResponseStatus_CTL_NO_IMPL,
 				scm.MsgScmUpdateNotImpl, "", "scm module update"),
 		})
 }

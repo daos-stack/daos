@@ -171,7 +171,7 @@ func storageScanRequest(mc Control, req interface{}, ch chan ClientResult) {
 
 	// process storage subsystem responses
 	nState := resp.Nvme.GetState()
-	if nState.GetStatus() != ctlpb.ResponseStatus_CTRL_SUCCESS {
+	if nState.GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
 		msg := nState.GetError()
 		if msg == "" {
 			msg = fmt.Sprintf("nvme %+v", nState.GetStatus())
@@ -182,7 +182,7 @@ func storageScanRequest(mc Control, req interface{}, ch chan ClientResult) {
 	}
 
 	sState := resp.Scm.GetState()
-	if sState.GetStatus() != ctlpb.ResponseStatus_CTRL_SUCCESS {
+	if sState.GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
 		msg := sState.GetError()
 		if msg == "" {
 			msg = fmt.Sprintf("scm %+v", sState.GetStatus())

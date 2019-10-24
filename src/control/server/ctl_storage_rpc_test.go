@@ -172,7 +172,7 @@ func TestStorageScan(t *testing.T) {
 					State: &ResponseState{
 						Error: "NVMe storage scan: " + msgSpdkInitFail +
 							": example failure",
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 					},
 				},
 				Scm: &ScanScmResp{
@@ -190,7 +190,7 @@ func TestStorageScan(t *testing.T) {
 					State: &ResponseState{
 						Error: "NVMe storage scan: " + msgSpdkDiscoverFail +
 							": example failure",
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 					},
 				},
 				Scm: &ScanScmResp{
@@ -210,7 +210,7 @@ func TestStorageScan(t *testing.T) {
 				Scm: &ScanScmResp{
 					State: &ResponseState{
 						Error:  "example failure",
-						Status: ResponseStatus_CTRL_ERR_SCM,
+						Status: ResponseStatus_CTL_ERR_SCM,
 					},
 				},
 			},
@@ -224,13 +224,13 @@ func TestStorageScan(t *testing.T) {
 					State: &ResponseState{
 						Error: "NVMe storage scan: " + msgSpdkDiscoverFail +
 							": example failure",
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 					},
 				},
 				Scm: &ScanScmResp{
 					State: &ResponseState{
 						Error:  "example failure",
-						Status: ResponseStatus_CTRL_ERR_SCM,
+						Status: ResponseStatus_CTL_ERR_SCM,
 					},
 				},
 			},
@@ -335,13 +335,13 @@ func TestStoragePrepare(t *testing.T) {
 			StoragePrepareResp{
 				Nvme: &PrepareNvmeResp{
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 						Error:  os.Args[0] + " must be run as root or sudo",
 					},
 				},
 				Scm: &PrepareScmResp{
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_SCM,
+						Status: ResponseStatus_CTL_ERR_SCM,
 						Error:  os.Args[0] + " must be run as root or sudo",
 					},
 				},
@@ -401,7 +401,7 @@ func TestStoragePrepare(t *testing.T) {
 				Nvme: &PrepareNvmeResp{State: new(ResponseState)},
 				Scm: &PrepareScmResp{
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_SCM,
+						Status: ResponseStatus_CTL_ERR_SCM,
 						Error:  errExample.Error(),
 					},
 				},
@@ -563,11 +563,19 @@ func TestStorageFormat(t *testing.T) {
 			bDevs:            []string{"0000:81:00.0"},
 			expResults: []*StorageFormatResp{
 				{
+					Crets: []*NvmeControllerResult{
+						{
+							State: &ResponseState{
+								Status: ResponseStatus_CTL_ERR_NVME,
+								Error:  msgBdevScmNotReady,
+							},
+						},
+					},
 					Mrets: []*ScmMountResult{
 						{
 							Mntpoint: "/mnt/daos",
 							State: &ResponseState{
-								Status: ResponseStatus_CTRL_ERR_APP,
+								Status: ResponseStatus_CTL_ERR_SCM,
 								Error:  scm.FaultFormatNoReformat.Error(),
 								Info:   fault.ShowResolutionFor(scm.FaultFormatNoReformat),
 							},
@@ -611,11 +619,19 @@ func TestStorageFormat(t *testing.T) {
 			bDevs:            []string{"0000:81:00.0"},
 			expResults: []*StorageFormatResp{
 				{
+					Crets: []*NvmeControllerResult{
+						{
+							State: &ResponseState{
+								Status: ResponseStatus_CTL_ERR_NVME,
+								Error:  msgBdevScmNotReady,
+							},
+						},
+					},
 					Mrets: []*ScmMountResult{
 						{
 							Mntpoint: "/mnt/daos",
 							State: &ResponseState{
-								Status: ResponseStatus_CTRL_ERR_APP,
+								Status: ResponseStatus_CTL_ERR_SCM,
 								Error:  scm.FaultFormatNoReformat.Error(),
 								Info:   fault.ShowResolutionFor(scm.FaultFormatNoReformat),
 							},
@@ -769,7 +785,7 @@ func TestStorageFormat(t *testing.T) {
 //				{
 //					Loc: &ScmModule_Location{},
 //					State: &ResponseState{
-//						Status: ResponseStatus_CTRL_NO_IMPL,
+//						Status: ResponseStatus_CTL_NO_IMPL,
 //						Error:  msgScmUpdateNotImpl,
 //					},
 //				},
@@ -786,7 +802,7 @@ func TestStorageFormat(t *testing.T) {
 //				{
 //					Pciaddr: pciAddr,
 //					State: &ResponseState{
-//						Status: ResponseStatus_CTRL_ERR_NVME,
+//						Status: ResponseStatus_CTL_ERR_NVME,
 //						Error: pciAddr + ": " +
 //							msgBdevModelMismatch +
 //							" want AB, have ABC",
@@ -797,7 +813,7 @@ func TestStorageFormat(t *testing.T) {
 //				{
 //					Loc: &ScmModule_Location{},
 //					State: &ResponseState{
-//						Status: ResponseStatus_CTRL_NO_IMPL,
+//						Status: ResponseStatus_CTL_NO_IMPL,
 //						Error:  msgScmUpdateNotImpl,
 //					},
 //				},
@@ -814,7 +830,7 @@ func TestStorageFormat(t *testing.T) {
 //				{
 //					Pciaddr: pciAddr,
 //					State: &ResponseState{
-//						Status: ResponseStatus_CTRL_ERR_NVME,
+//						Status: ResponseStatus_CTL_ERR_NVME,
 //						Error: pciAddr + ": " +
 //							msgBdevFwrevStartMismatch +
 //							" want 2.0.0, have 1.0.0",
@@ -825,7 +841,7 @@ func TestStorageFormat(t *testing.T) {
 //				{
 //					Loc: &ScmModule_Location{},
 //					State: &ResponseState{
-//						Status: ResponseStatus_CTRL_NO_IMPL,
+//						Status: ResponseStatus_CTL_NO_IMPL,
 //						Error:  msgScmUpdateNotImpl,
 //					},
 //				},
