@@ -167,6 +167,9 @@ cmd_connect_pool(int argc, const char **argv, void *ctx)
 	 */
 	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &cp_options);
 
+	if (cp_options.uuid == NULL)
+		return EINVAL;
+
 	if (cp_options.read)
 		flag = DAOS_PC_RO;
 	else if (cp_options.write)
