@@ -23,10 +23,6 @@
 
 package main
 
-// #cgo CFLAGS: -I${SRCDIR}/../../../include
-// #include <daos/drpc_modules.h>
-import "C"
-
 import (
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -35,19 +31,15 @@ import (
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
-	log "github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
-)
-
-const (
-	mgmtModuleID  = C.DRPC_MODULE_MGMT
-	getAttachInfo = C.DRPC_METHOD_MGMT_GET_ATTACH_INFO
 )
 
 // mgmtModule represents the daos_agent dRPC module. It acts mostly as a
 // Management Service proxy, handling dRPCs sent by libdaos by forwarding them
 // to MS.
 type mgmtModule struct {
+	log logging.Logger
 	// The access point
 	ap   string
 	tcfg *security.TransportConfig
@@ -55,7 +47,7 @@ type mgmtModule struct {
 
 func (mod *mgmtModule) HandleCall(cli *drpc.Client, method int32, req []byte) ([]byte, error) {
 	switch method {
-	case getAttachInfo:
+	case drpc.MethodGetAttachInfo:
 		return mod.handleGetAttachInfo(req)
 	default:
 		return nil, errors.Errorf("unknown dRPC %d", method)
@@ -65,7 +57,7 @@ func (mod *mgmtModule) HandleCall(cli *drpc.Client, method int32, req []byte) ([
 func (mod *mgmtModule) InitModule(state drpc.ModuleState) {}
 
 func (mod *mgmtModule) ID() int32 {
-	return mgmtModuleID
+	return drpc.ModuleMgmt
 }
 
 func (mod *mgmtModule) handleGetAttachInfo(reqb []byte) ([]byte, error) {
@@ -74,7 +66,7 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte) ([]byte, error) {
 		return nil, errors.Wrap(err, "unmarshal GetAttachInfo request")
 	}
 
-	log.Debugf("GetAttachInfo %s %v", mod.ap, *req)
+	mod.log.Debugf("GetAttachInfo %s %v", mod.ap, *req)
 
 	dialOpt, err := security.DialOptionForTransportConfig(mod.tcfg)
 	if err != nil {

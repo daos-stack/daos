@@ -35,7 +35,7 @@ import (
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
 
-	log "github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 const (
@@ -262,7 +262,7 @@ func SyncDir(path string) (err error) {
 }
 
 // Run executes command in os and builds useful error message.
-func Run(cmd string) error {
+func Run(log logging.Logger, cmd string) error {
 	log.Debugf("exec '%s'\n", cmd)
 
 	// executing as subshell enables pipes in cmd string

@@ -81,7 +81,8 @@ ds_obj_rw_complete(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 
 static void
 ds_obj_rw_reply(crt_rpc_t *rpc, int status, uint32_t map_version,
-		struct dtx_conflict_entry *dce)
+		struct dtx_conflict_entry *dce,
+		struct ds_cont_hdl *cont_hdl)
 {
 	int rc;
 
@@ -109,8 +110,11 @@ ds_obj_rw_reply(crt_rpc_t *rpc, int status, uint32_t map_version,
 			D_FREE(orwo->orw_nrs.ca_arrays);
 			orwo->orw_nrs.ca_count = 0;
 		}
-	}
 
+		daos_csummer_free_dcbs(cont_hdl->sch_csummer,
+				       &orwo->orw_csum.ca_arrays);
+		orwo->orw_csum.ca_count = 0;
+	}
 }
 
 struct ds_bulk_async_args {
@@ -208,6 +212,7 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 
 	D_DEBUG(DB_IO, "bulk_op:%d sgl_nr%d\n", bulk_op, sgl_nr);
 
+	arg.bulks_inflight++;
 	for (i = 0; i < sgl_nr; i++) {
 		d_sg_list_t		*sgl, tmp_sgl;
 		struct crt_bulk_desc	 bulk_desc;
@@ -320,7 +325,7 @@ next:
 			break;
 	}
 
-	if (arg.bulks_inflight == 0)
+	if (--arg.bulks_inflight == 0)
 		ABT_eventual_set(arg.eventual, &rc, sizeof(rc));
 
 	ret = ABT_eventual_wait(arg.eventual, (void **)&status);
@@ -627,6 +632,7 @@ ec_update_bulk_transfer(crt_rpc_t *rpc, bool bulk_bind,
 	if (rc != 0)
 		return dss_abterr2der(rc);
 
+	arg.bulks_inflight++;
 	for (i = 0; i < sgl_nr; i++) {
 		d_sg_list_t		*sgl, tmp_sgl;
 		struct crt_bulk_desc	 bulk_desc;
@@ -724,7 +730,7 @@ next:
 		D_FREE(skip_list[i]);
 	}
 
-	if (arg.bulks_inflight == 0)
+	if (--arg.bulks_inflight == 0)
 		ABT_eventual_set(arg.eventual, &rc, sizeof(rc));
 
 	ret = ABT_eventual_wait(arg.eventual, (void **)&status);
@@ -733,6 +739,60 @@ next:
 
 	ABT_eventual_free(&arg.eventual);
 	return rc;
+}
+
+/** Link the list dcbs from the output to the iod structures of the input so
+ * they are easily associated by VOS to the recxs the checksums are
+ * derived from. After VOS has populated the checksums \obj_fetch_csums_unlink
+ * should be called to avoid double freeing of the csum resources.
+ */
+static void
+obj_fetch_csums_link(const struct obj_rw_in *orw, const struct obj_rw_out *orwo)
+{
+	daos_iods_link_dcbs(orw->orw_iods.ca_arrays, orw->orw_iods.ca_count,
+			    orwo->orw_csum.ca_arrays, orwo->orw_csum.ca_count);
+}
+static void
+obj_fetch_csums_unlink(struct obj_rw_in *orw)
+{
+	daos_iods_unlink_dcbs(orw->orw_iods.ca_arrays, orw->orw_iods.ca_count);
+}
+
+/** if checksums are enabled, fetch needs to allocate the memory that will be
+ * used for the dcb structures and actual checksums. The RPC output
+ * structure will hold the reference to the list of dcbs allocated, so the RPC
+ * input iod strctures will need to be linked to these before VOS can use them
+ */
+static void
+obj_fetch_csum_init(struct ds_cont_hdl *cont_hdl,
+			 struct obj_rw_in *orw,
+			 struct obj_rw_out *orwo)
+{
+	daos_csum_buf_t	*csums;
+	uint32_t	 csum_nr;
+	int		 rc;
+
+	/**
+	 * Allocate memory for the input iod's daos_csum_buf_t structures.
+	 * This memory and information will be used by VOS to put the checksums
+	 * in as it fetches the data's metadata from the btree/evtree.
+	 *
+	 * The memory will be freed in ds_obj_rw_reply
+	 */
+	rc = daos_csummer_alloc_dcbs(cont_hdl->sch_csummer,
+				     orw->orw_iods.ca_arrays,
+				     (uint32_t) orw->orw_iods.ca_count,
+				     &csums,
+				     &csum_nr);
+
+	if (rc == 0) {
+		/** Set the output csums to the memory allocated. This way
+		 * when VOS populates the csums it's already available by the
+		 * output/return structures.
+		 */
+		orwo->orw_csum.ca_arrays = csums;
+		orwo->orw_csum.ca_count = csum_nr;
+	}
 }
 
 static int
@@ -825,11 +885,18 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		}
 	} else {
 		bool size_fetch = (!rma && orw->orw_sgls.ca_arrays == NULL);
-
 		bulk_op = CRT_BULK_PUT;
+
+		/** don't need checksum if just fetching size */
+		if (!size_fetch)
+			obj_fetch_csum_init(cont_hdl, orw, orwo);
+
+		obj_fetch_csums_link(orw, orwo);
 		rc = vos_fetch_begin(cont->sc_hdl, orw->orw_oid, orw->orw_epoch,
 				     &orw->orw_dkey, orw->orw_nr,
 				     tmp_iods, size_fetch, &ioh);
+		obj_fetch_csums_unlink(orw);
+
 		if (rc) {
 			D_ERROR(DF_UOID" Fetch begin failed: %d\n",
 				DP_UOID(orw->orw_oid), rc);
@@ -889,7 +956,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		goto post;
 	}
 
-	rc = ds_csum_verify_bio(rpc, biod, cont_hdl->csummer);
+	rc = ds_csum_verify_bio(rpc, biod, cont_hdl->sch_csummer);
 
 post:
 	err = bio_iod_post(biod);
@@ -1080,7 +1147,7 @@ out:
 		rc = -DER_IO;
 
 	rc = dtx_end(handle, cont_hdl, cont, rc);
-	ds_obj_rw_reply(rpc, rc, map_ver, &conflict);
+	ds_obj_rw_reply(rpc, rc, map_ver, &conflict, cont_hdl);
 
 	if (cont_hdl)
 		ds_cont_hdl_put(cont_hdl);
@@ -1131,7 +1198,6 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	D_ASSERT(orw != NULL);
 	D_ASSERT(orwo != NULL);
-
 	rc = ds_pre_check(orw->orw_oid, orw->orw_map_ver, orw->orw_pool_uuid,
 			  orw->orw_co_hdl, orw->orw_co_uuid,
 			  opc_get(rpc->cr_opc), &cont_hdl, &cont, &map_ver);
@@ -1240,7 +1306,7 @@ out:
 		goto cleanup;
 
 reply:
-	ds_obj_rw_reply(rpc, rc, map_ver, NULL);
+	ds_obj_rw_reply(rpc, rc, map_ver, NULL, cont_hdl);
 
 cleanup:
 	D_TIME_END(tls->ot_sp, time_start, OBJ_PF_UPDATE);
@@ -2035,7 +2101,7 @@ ds_csum_verify_bio(crt_rpc_t *rpc, struct bio_desc *biod,
 		rc = bio_sgl_convert(bsgl, &sgl);
 
 		if (rc == 0)
-			rc = daos_csummer_verify_data(csummer, iod, &sgl);
+			rc = daos_csummer_verify(csummer, iod, &sgl);
 
 		daos_sgl_fini(&sgl, false);
 	}

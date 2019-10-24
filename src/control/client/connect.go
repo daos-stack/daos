@@ -80,6 +80,8 @@ type Connect interface {
 	SmdListPools(*mgmtpb.SmdPoolReq) ResultSmdMap
 	SystemMemberQuery() (common.SystemMembers, error)
 	SystemStop() (common.SystemMemberResults, error)
+	NetworkListProviders() ResultMap
+	NetworkScanDevices(searchProvider string) NetworkScanResultMap
 }
 
 // connList is an implementation of Connect and stores controllers

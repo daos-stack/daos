@@ -63,6 +63,7 @@ const (
 	msgBdevModelMismatch      = "controller model unexpected"
 	msgBdevNoDevs             = "no controllers specified"
 	msgBdevClassIsFile        = "nvme emulation initialized with backend file"
+	msgBdevScmNotReady        = "nvme format not performed because scm not ready"
 )
 
 // SpdkSetup is an interface to configure spdk prerequisites via a
@@ -89,6 +90,8 @@ type spdkSetup struct {
 func (s *spdkSetup) prep(nrHugepages int, usr string, wlist string) error {
 	srv := exec.Command(s.scriptPath)
 	srv.Env = os.Environ()
+	var stdout bytes.Buffer
+	srv.Stdout = &stdout
 	var stderr bytes.Buffer
 	srv.Stderr = &stderr
 	var hPages, tUsr, whitelist string
@@ -110,10 +113,14 @@ func (s *spdkSetup) prep(nrHugepages int, usr string, wlist string) error {
 		s.log.Debugf("spdk setup with %s\n", whitelist)
 	}
 
-	return errors.Wrapf(
-		srv.Run(),
-		"spdk setup failed (%s, %s, %s, %s)",
-		hPages, tUsr, whitelist, stderr.String())
+	if err := srv.Run(); err != nil {
+		return errors.Wrapf(err, "spdk setup failed (%s, %s, %s, %s)",
+			hPages, tUsr, whitelist, stderr.String())
+	}
+
+	s.log.Debugf("spdk setup run:\n%s", stdout.String())
+
+	return nil
 }
 
 // reset executes setup script to deallocate hugepages & return PCI devices
@@ -251,31 +258,31 @@ func (n *nvmeStorage) Format(cfg storage.BdevConfig, results *(types.NvmeControl
 	}
 
 	if n.formatted {
-		addCretFormat(ctlpb.ResponseStatus_CTRL_ERR_APP, msgBdevAlreadyFormatted, "")
+		addCretFormat(ctlpb.ResponseStatus_CTL_ERR_APP, msgBdevAlreadyFormatted, "")
 		return
 	}
 
 	switch cfg.Class {
 	case storage.BdevClassMalloc:
 		n.log.Debugf("malloc bdev format successful (%s)\n", pciAddr)
-		addCretFormat(ctlpb.ResponseStatus_CTRL_SUCCESS, "", "")
+		addCretFormat(ctlpb.ResponseStatus_CTL_SUCCESS, "", "")
 	case storage.BdevClassKdev:
 		n.log.Debugf("kernel bdev format successful (%s)\n", pciAddr)
-		addCretFormat(ctlpb.ResponseStatus_CTRL_SUCCESS, "", "")
+		addCretFormat(ctlpb.ResponseStatus_CTL_SUCCESS, "", "")
 	case storage.BdevClassFile:
 		n.log.Debugf("bdev file format successful (%s)\n", pciAddr)
-		addCretFormat(ctlpb.ResponseStatus_CTRL_SUCCESS, "", msgBdevClassIsFile)
+		addCretFormat(ctlpb.ResponseStatus_CTL_SUCCESS, "", msgBdevClassIsFile)
 	case storage.BdevClassNvme:
 		for _, pciAddr = range cfg.DeviceList {
 			if pciAddr == "" {
-				addCretFormat(ctlpb.ResponseStatus_CTRL_ERR_CONF,
+				addCretFormat(ctlpb.ResponseStatus_CTL_ERR_CONF,
 					msgBdevEmpty, "")
 				continue
 			}
 
 			ctrlr := n.getController(pciAddr)
 			if ctrlr == nil {
-				addCretFormat(ctlpb.ResponseStatus_CTRL_ERR_NVME,
+				addCretFormat(ctlpb.ResponseStatus_CTL_ERR_NVME,
 					pciAddr+": "+msgBdevNotFound, "")
 				continue
 			}
@@ -285,25 +292,25 @@ func (n *nvmeStorage) Format(cfg storage.BdevConfig, results *(types.NvmeControl
 
 			cs, ns, err := n.nvme.Format(pciAddr)
 			if err != nil {
-				addCretFormat(ctlpb.ResponseStatus_CTRL_ERR_NVME,
+				addCretFormat(ctlpb.ResponseStatus_CTL_ERR_NVME,
 					pciAddr+": "+err.Error(), "")
 				continue
 			}
 
 			n.log.Debugf("controller format successful (%s)\n", pciAddr)
 
-			addCretFormat(ctlpb.ResponseStatus_CTRL_SUCCESS, "", "")
+			addCretFormat(ctlpb.ResponseStatus_CTL_SUCCESS, "", "")
 			n.controllers = loadControllers(cs, ns, nil)
 		}
 	default:
-		addCretFormat(ctlpb.ResponseStatus_CTRL_ERR_CONF,
+		addCretFormat(ctlpb.ResponseStatus_CTL_ERR_CONF,
 			fmt.Sprintf("%s: %s", cfg.Class, msgBdevClassNotSupported), "")
 		return
 	}
 
 	// add info to result if no controllers have been formatted
 	if len(*results) == 0 && len(cfg.DeviceList) == 0 {
-		addCretFormat(ctlpb.ResponseStatus_CTRL_SUCCESS,
+		addCretFormat(ctlpb.ResponseStatus_CTL_SUCCESS,
 			"", "no controllers specified")
 	}
 
@@ -334,7 +341,7 @@ func (n *nvmeStorage) Update(cfg storage.BdevConfig, req *ctlpb.UpdateNvmeReq, r
 	}
 
 	if !n.initialized {
-		addCretUpdate(ctlpb.ResponseStatus_CTRL_ERR_APP, msgBdevNotInited)
+		addCretUpdate(ctlpb.ResponseStatus_CTL_ERR_APP, msgBdevNotInited)
 		return
 	}
 
@@ -342,26 +349,26 @@ func (n *nvmeStorage) Update(cfg storage.BdevConfig, req *ctlpb.UpdateNvmeReq, r
 	case storage.BdevClassNvme:
 		for _, pciAddr = range cfg.DeviceList {
 			if pciAddr == "" {
-				addCretUpdate(ctlpb.ResponseStatus_CTRL_ERR_CONF, msgBdevEmpty)
+				addCretUpdate(ctlpb.ResponseStatus_CTL_ERR_CONF, msgBdevEmpty)
 				continue
 			}
 
 			ctrlr := n.getController(pciAddr)
 			if ctrlr == nil {
-				addCretUpdate(ctlpb.ResponseStatus_CTRL_ERR_NVME,
+				addCretUpdate(ctlpb.ResponseStatus_CTL_ERR_NVME,
 					pciAddr+": "+msgBdevNotFound)
 				continue
 			}
 
 			if strings.TrimSpace(ctrlr.Model) != req.Model {
-				addCretUpdate(ctlpb.ResponseStatus_CTRL_ERR_NVME,
+				addCretUpdate(ctlpb.ResponseStatus_CTL_ERR_NVME,
 					fmt.Sprintf(pciAddr+": "+msgBdevModelMismatch+
 						" want %s, have %s", req.Model, ctrlr.Model))
 				continue
 			}
 
 			if strings.TrimSpace(ctrlr.Fwrev) != req.Startrev {
-				addCretUpdate(ctlpb.ResponseStatus_CTRL_ERR_NVME,
+				addCretUpdate(ctlpb.ResponseStatus_CTL_ERR_NVME,
 					fmt.Sprintf(pciAddr+": "+msgBdevFwrevStartMismatch+
 						" want %s, have %s", req.Startrev, ctrlr.Fwrev))
 				continue
@@ -374,7 +381,7 @@ func (n *nvmeStorage) Update(cfg storage.BdevConfig, req *ctlpb.UpdateNvmeReq, r
 
 			cs, ns, err := n.nvme.Update(pciAddr, req.Path, req.Slot)
 			if err != nil {
-				addCretUpdate(ctlpb.ResponseStatus_CTRL_ERR_NVME,
+				addCretUpdate(ctlpb.ResponseStatus_CTL_ERR_NVME,
 					fmt.Sprintf(pciAddr+": %T: "+err.Error(), n.nvme))
 				// TODO: verify controller responsive after
 				//       error, return fatal response to stop
@@ -385,14 +392,14 @@ func (n *nvmeStorage) Update(cfg storage.BdevConfig, req *ctlpb.UpdateNvmeReq, r
 
 			ctrlr = n.getController(pciAddr)
 			if ctrlr == nil {
-				addCretUpdate(ctlpb.ResponseStatus_CTRL_ERR_NVME,
+				addCretUpdate(ctlpb.ResponseStatus_CTL_ERR_NVME,
 					pciAddr+": "+msgBdevNotFound+" (after update)")
 				continue
 			}
 
 			// verify controller is reporting an updated rev
 			if ctrlr.Fwrev == req.Startrev || ctrlr.Fwrev == "" {
-				addCretUpdate(ctlpb.ResponseStatus_CTRL_ERR_NVME,
+				addCretUpdate(ctlpb.ResponseStatus_CTL_ERR_NVME,
 					fmt.Sprintf(pciAddr+": "+msgBdevFwrevEndMismatch))
 				continue
 			}
@@ -400,10 +407,10 @@ func (n *nvmeStorage) Update(cfg storage.BdevConfig, req *ctlpb.UpdateNvmeReq, r
 			n.log.Debugf("controller fwupdate successful (%s: %s->%s)\n",
 				pciAddr, req.Startrev, ctrlr.Fwrev)
 
-			addCretUpdate(ctlpb.ResponseStatus_CTRL_SUCCESS, "")
+			addCretUpdate(ctlpb.ResponseStatus_CTL_SUCCESS, "")
 		}
 	default:
-		addCretUpdate(ctlpb.ResponseStatus_CTRL_ERR_CONF,
+		addCretUpdate(ctlpb.ResponseStatus_CTL_ERR_CONF,
 			fmt.Sprintf("%s: %s", cfg.Class, msgBdevClassNotSupported))
 		return
 	}

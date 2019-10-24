@@ -78,17 +78,29 @@ code [here](/src/include/daos/tse.h).
 
 ## dRPC C API
 
-For a general overview of dRPC concepts and the corresponding Go API, see [here](/src/control/drpc/README.md).
+For a general overview of dRPC concepts and the corresponding Go API, see
+[here](/src/control/drpc/README.md).
 
-In the C API, an active dRPC connection is represented by a pointer to a context object (`struct drpc`). The context supplies all the state information required to communicate over the Unix Domain Socket. When finished with a context, the object should be freed by using `drpc_close()`.
+In the C API, an active dRPC connection is represented by a pointer to a context
+object (`struct drpc`). The context supplies all the state information
+required to communicate over the Unix Domain Socket.
 
-dRPC calls and responses are represented by the Protobuf-generated structures `Drpc__Call` and `Drpc__Response`.
+By default a context starts with one reference to it. You can add references to
+a given context with `drpc_add_ref()`. When finished with a context, the
+object should be released by using `drpc_close()`.  When the last reference is
+released, the object is freed.
+
+dRPC calls and responses are represented by the Protobuf-generated structures
+`Drpc__Call` and `Drpc__Response`.
 
 ### C Client
 
-Connecting to a valid Unix Domain Socket returns a dRPC context, which can be used to execute any number of dRPC calls to the server that set up the socket.
+Connecting to a valid Unix Domain Socket returns a dRPC context, which can be
+used to execute any number of dRPC calls to the server that set up the socket.
 
-**Note:** Currently synchronous calls (using flag `R_SYNC`) are the only type supported. Asynchronous calls receive an instantaneous response but are never truly processed.
+**Note:** Currently synchronous calls (using flag `R_SYNC`) are the only type
+supported. Asynchronous calls receive an instantaneous response but are never
+truly processed.
 
 #### Basic Client Workflow
 
@@ -103,46 +115,89 @@ Connecting to a valid Unix Domain Socket returns a dRPC context, which can be us
     Drpc__Response *resp = NULL; /* Response will be allocated by drpc_call */
     int result = drpc_call(ctx, R_SYNC, call, &resp);
     ```
-    An error code returned from `drpc_call()` indicates that the message could not be sent, or there was no response. If `drpc_call()` returned success, the content of the response still needs to be checked for errors returned from the server.
+    An error code returned from `drpc_call()` indicates that the message could
+    not be sent, or there was no response. If `drpc_call()` returned success,
+    the content of the response still needs to be checked for errors returned
+    from the server.
 3. Send as many dRPC calls as desired.
 4. When finished with the connection, close it: `drpc_close(ctx);`
-    **Note**: After `drpc_close()` is called, the dRPC context pointer has been freed and is no longer valid.
+    **Note**: After `drpc_close()` is called, the dRPC context pointer has
+    been freed and is no longer valid.
 
 ### C Server
 
-The dRPC server sets up a Unix Domain Socket and begins listening on it for client connections. In general, this means creating a listening dRPC context to detect any incoming connections. Then, when a client connects, a new dRPC context is generated for that specific session. The session context is the one that actually sends and receives data. It is possible to have multiple session contexts open at the same time.
+The dRPC server sets up a Unix Domain Socket and begins listening on it for
+client connections. In general, this means creating a listening dRPC context to
+detect any incoming connections. Then, when a client connects, a new dRPC
+context is generated for that specific session. The session context is the one
+that actually sends and receives data. It is possible to have multiple session
+contexts open at the same time.
 
-The socket is always set up as non-blocking, so it is necessary to poll for activity on the context's file descriptor (`ctx->comm->fd`) using a system call like `poll()` or `select()` on POSIX-compliant systems. This applies not only to the listening dRPC context, but also to any dRPC context generated for a specific client session.
+The socket is always set up as non-blocking, so it is necessary to poll for
+activity on the context's file descriptor (`ctx->comm->fd`) using a system
+call like `poll()` or `select()` on POSIX-compliant systems. This applies not
+only to the listening dRPC context, but also to any dRPC context generated for a
+specific client session.
 
-The server flow is dependent on a custom handler function, whose job is to dispatch incoming `Drpc__Call` messages appropriately. The handler function should inspect the module and method IDs, ensure that the desired method is executed, and create a `Drpc__Response` based on the results.
+The server flow is dependent on a custom handler function, whose job is to
+dispatch incoming `Drpc__Call` messages appropriately. The handler function
+should inspect the module and method IDs, ensure that the desired method is
+executed, and create a `Drpc__Response` based on the results.
 
 #### Basic Server Workflow
 
-1. Set up the Unix Domain Socket at a given path and create a listening context using a custom handler function:
+1. Set up the Unix Domain Socket at a given path and create a listening context
+using a custom handler function:
     ```
     void my_handler(Drpc__Call *call, Drpc__Response **resp) {
         /* Handle the message based on module/method IDs */
     }
     ...
-    struct drpc *listener_ctx = drpc_listen("/var/run/drpc_socket.sock", my_handler);
+    struct drpc *listener_ctx = drpc_listen("/var/run/drpc_socket.sock",
+                                            my_handler);
     ```
 2. Poll on the listener context's file descriptor (`listener_ctx->comm->fd`).
 3. On incoming activity, accept the connection:
     ```
     struct drpc *session_ctx = drpc_accept(listener_ctx);
     ```
-    This creates a session context for the specific client. All of that client's communications will come over the session context.
-4. Poll on the session context's file descriptor (`session_ctx->comm->fd`) for incoming data.
-5. On incoming data, handle the message:
+    This creates a session context for the specific client. All of that client's
+    communications will come over the session context.
+4. Poll on the session context's file descriptor (`session_ctx->comm->fd`)
+for incoming data.
+5. On incoming data, receive the message:
     ```
-    int result = drpc_recv(session_ctx);
+    Drpc__Call *incoming;
+    int result = drpc_recv_call(session_ctx, &incoming);
+    if (result != 0) {
+        /* process errors */
+    }
     ```
-    This unmarshals the incoming `Drpc__Call`, calls the handler function defined when the listener context was created, and sends the `Drpc__Response` back over the channel to the client. An error will only be returned if the incoming data is not a `Drpc__Call` or the handler failed to allocate a response (for example, if the system is out of memory).
-6. If the client has closed the connection, close the session context to free the pointer:
+    This unmarshals the incoming data into a `Drpc__Call`. If the data isn't
+    a `Drpc__Call`, it returns an error.
+6. Allocate a Drpc__Response and pass it into the session handler.
+    ```
+    Drpc__Response *resp = drpc_response_create(call);
+    session_ctx->handler(call, resp);
+    ```
+    Your session handler should fill out the response with any errors or
+    payloads.
+7. Send the response to the caller and clean up:
+    ```
+    int result = drpc_send_response(session_ctx, resp);
+    if (result != 0) {
+        /* process errors */
+    }
+    drpc_response_free(resp);
+    drpc_call_free(call);
+    ```
+8. If the client has closed the connection, close the session context to free
+the pointer:
     ```
     drpc_close(session_ctx);
     ```
-7. When it's time to shut down the server, close any open session contexts, as noted above. Then `drpc_close()` the listener context.
+9. When it's time to shut down the server, close any open session contexts, as
+noted above. Then `drpc_close()` the listener context.
 
 ## Checksum
 
@@ -154,7 +209,7 @@ A "Checksummer" is used to create checksums from a scatter gather list. The
  algorithm.
  Currently the isa-l and isa-l_crypto libraries are used to support crc16,
  crc32, crc64, and sha1. All of the function tables to support these
- algorithms are in [src/common/daos_checksum.c](src/common/daos_checksum.c).
+ algorithms are in [src/common/checksum.c](src/common/checksum.c).
  These function tables
  are not made public, but there is a helper function (daos_csum_type2algo) that
  will return the appropriate function table given a DAOS_CSUM_TYPE. There is
@@ -173,10 +228,11 @@ A "Checksummer" is used to create checksums from a scatter gather list. The
  need the chunk size. When done with a checksummer, daos_csummer_destroy should
  be called to free allocated resources.
  Most checksummer functions are simple passthroughs to the function table if
- implemented. The main exception is daos_csummer_calc_csum which, using the
+ implemented. The main exception is daos_csummer_calc which, using the
  other checksummer functions, creates a checksum from the appropriate memory
  represented by the scatter gather list (d_sg_list_t) and the extents
- (daos_recx_t). The checksums are put into a collection of checksum buffers
+ (daos_recx_t) of an I/O descriptor (daos_iod_t).
+ The checksums are put into a collection of checksum buffers
  (daos_csum_buf_t), each containing multiple checksums. The memory for the
  daos_csum_buf_t's and the checksums will be allocated. Therefore, when done
  with the checksums, daos_csummer_destroy_csum_buf should be called to free

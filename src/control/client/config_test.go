@@ -61,7 +61,7 @@ func getTestFile(t *testing.T) *os.File {
 
 func TestLoadConfigDefaultsNoFile(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)()
+	defer common.ShowBufferOnFailure(t, buf)
 
 	defaultConfig := getDefaultConfig(t)
 	defaultConfig.Path = "" // resultant path should be empty if not parsed
@@ -77,7 +77,7 @@ func TestLoadConfigDefaultsNoFile(t *testing.T) {
 
 func TestLoadConfigFromDefaultFile(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)()
+	defer common.ShowBufferOnFailure(t, buf)
 
 	defaultConfig := getDefaultConfig(t)
 	if err := os.MkdirAll(path.Dir(defaultConfig.Path), 0755); err != nil {
@@ -107,7 +107,7 @@ func TestLoadConfigFromDefaultFile(t *testing.T) {
 
 func TestLoadConfigFromFile(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)()
+	defer common.ShowBufferOnFailure(t, buf)
 
 	testFile := getTestFile(t)
 	defer os.Remove(testFile.Name())
@@ -129,7 +129,7 @@ func TestLoadConfigFromFile(t *testing.T) {
 
 func TestLoadConfigFailures(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)()
+	defer common.ShowBufferOnFailure(t, buf)
 
 	testFile := getTestFile(t)
 	defer os.Remove(testFile.Name())
