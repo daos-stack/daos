@@ -492,7 +492,7 @@ the process to act as a primary in multi-process mode. From there,
 the main process can respond to requests over the client API for
 information through the SPDK interface.
 
-The dmg is a tool built on top of the management api and can be used
+dmg is a tool built on top of the management api and can be used
 to verify that the DAOS servers are up and running. It is to be run
 as a standard, unprivileged user as follows:
 ```
@@ -569,11 +569,10 @@ enabling users to perform provisioning operations on network and storage
 hardware remotely on storage nodes (from for example a login node).
 
 When `daos_server` instances have been started on each storage node
-for the first time, calling
-`dmg -l <host:port>,... storage format -f` formats persistent
-storage on the server node (skipping confirmation) on devices specified
-in the server configuration file, then writes the superblock and
-starts the data plane.
+for the first time, calling `dmg -l <host:port>,... storage format`
+formats persistent storage on the server node on devices specified in
+the server configuration file, then writes the superblock and starts
+the data plane.
 
 ![../graph/server_format_flow.png](../graph/server_format_flow.png "Server Format Diagram")
 
@@ -609,8 +608,9 @@ requires a subsequent restart of `daos_server`)
 
 7. Format Storage (from any node)
     - When `daos_server` is started for the first time (and no SCM directory exists),
-`daos_server` enters "maintenance mode" and waits for a `dmg storage format` call to be issued from the management tool. This remote call will trigger the formatting of the locally attached storage on the host for use with DAOS using the parameters defined in the server config file.
-    - `dmg -i -l <host:port>,... storage format -f`
+`daos_server` enters "maintenance mode" and waits for a `dmg storage format` call to be
+issued from the management tool.
+    - `dmg -i -l <host:port>,... storage format`
 [management tool details](/src/control/cmd/dmg/README.md#storage-format)
     - [SCM specific details](/src/control/server/README.md#scm-format)
     - [NVMe specific details](/src/control/server/README.md#nvme-format)
@@ -621,7 +621,7 @@ requires a subsequent restart of `daos_server`)
 <p>
 
 ```bash
-$ dmg -i -l <hostname>:10001 -i storage format -f
+$ dmg -i -l <hostname>:10001 -i storage format
 Active connections: [<hostname):10001]
 This is a destructive operation and storage devices specified in the server config file will be erased.
 Please be patient as it may take several minutes.

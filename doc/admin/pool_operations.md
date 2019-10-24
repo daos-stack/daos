@@ -8,12 +8,12 @@ management interface.
 ## Pool Creation/Destroy
 
 A DAOS pool can be created and destroyed through the DAOS management API
-(see daos_mgmt.h). DAOS also provides a utility called dmg_old to manage
+(see daos_mgmt.h). DAOS also provides a utility called dmg to manage
 storage pools from the command line.
 
 **To create a pool:**
 ```
-$ dmg_old create --size=xxG --nvme=yyT
+$ dmg pool create --scm-size=xxG --nvme-size=yyT
 ```
 
 This command creates a pool distributed across the DAOS servers with a
@@ -22,20 +22,37 @@ The UUID allocated to the newly created pool is printed to stdout
 (referred as ${puuid}) as well as the rank where the pool service is
 located (referred as ${svcl}).
 
+```
+$ dmg pool create --help
+...
+[create command options]
+      -g, --group=     DAOS pool to be owned by given group, format name@domain
+      -u, --user=      DAOS pool to be owned by given user, format name@domain
+      -a, --acl-file=  Access Control List file path for DAOS pool
+      -s, --scm-size=  Size of SCM component of DAOS pool
+      -n, --nvme-size= Size of NVMe component of DAOS pool
+      -r, --ranks=     Storage server unique identifiers (ranks) for DAOS pool
+      -v, --nsvc=      Number of pool service replicas (default: 1)
+      -S, --sys=       DAOS system that pool is to be a part of (default: daos_server)
+```
+
 The typical output of this command is as follows:
 
 ```
-$ dmg_old create --size=xxG --nvme=yyT
-4056fb6d-9fca-4f2d-af8a-cfd57d92a92d 1:2
+g -i pool create -s 1G -n 10G -g root -u root -S daos
+Active connections: [localhost:10001]
+Creating DAOS pool with 1GB SCM and 10GB NvMe storage (0.100 ratio)
+Pool-create command SUCCEEDED: UUID: 5d6fa7bf-637f-4dba-bcd2-480ad251cdc7,
+Service replicas: 0,1
 ```
 
-This created a pool with UUID 4056fb6d-9fca-4f2d-af8a-cfd57d92a92d with
-two pool service replica on rank 1 and 2.
+This created a pool with UUID 5d6fa7bf-637f-4dba-bcd2-480ad251cdc7,
+two pool service replica on rank 0 and 1.
 
 **To destroy a pool:**
 
 ```
-$ dmg_old destroy --pool=${puuid}
+$ dmg pool destroy --pool=${puuid}
 ```
 
 ## Pool Properties

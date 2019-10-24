@@ -63,7 +63,7 @@ class MultiServerCreateDeleteTest(Test):
         self.agent_sessions = agent_utils.run_agent(self.basepath,
                                                     self.hostlist_servers)
         server_utils.run_server(self, self.hostfile, server_group)
-        self.dmg = self.basepath + '/install/bin/dmg_old'
+        self.dmg = self.basepath + '/install/bin/dmg'
 
     def tearDown(self):
         if self.agent_sessions:
@@ -80,28 +80,23 @@ class MultiServerCreateDeleteTest(Test):
         # expected result of the test
         expected_for_param = []
 
-        modelist = self.params.get("mode", '/run/tests/modes/*')
-        mode = modelist[0]
-
-        expected_for_param.append(modelist[1])
-
-        uidlist = self.params.get("uid", '/run/tests/uids/*')
-        if uidlist[0] == 'valid':
-            uid = os.geteuid()
-        elif uidlist[0] == 'other_user':
-            uid = getpwnam('nfsnobody')[2]
+        userlist = self.params.get("user", '/run/tests/users/*')
+        if userlist[0] == 'valid':
+            user = os.getlogin()
+        elif userlist[0] == 'other_user':
+            user = 'nfsnobody'
         else:
-            uid = uidlist[0]
-        expected_for_param.append(uidlist[1])
+            user = userlist[0]
+        expected_for_param.append(userlist[1])
 
-        gidlist = self.params.get("gid", '/run/tests/gids/*')
-        if gidlist[0] == 'valid':
-            gid = os.getegid()
-        elif gidlist[0] == 'other_group':
-            gid = getgrnam('nfsnobody')[2]
+        grouplist = self.params.get("group", '/run/tests/groups/*')
+        if grouplist[0] == 'valid':
+            group = os.getlogin()
+        elif grouplist[0] == 'other_group':
+            group = 'nfsnobody'
         else:
-            gid = gidlist[0]
-        expected_for_param.append(gidlist[1])
+            group = grouplist[0]
+        expected_for_param.append(grouplist[1])
 
         setidlist = self.params.get("setname", '/run/tests/setnames/*')
         setid = setidlist[0]
@@ -123,12 +118,11 @@ class MultiServerCreateDeleteTest(Test):
 
         try:
             cmd = (
-                "{} create "
-                "--mode={} "
-                "--uid={} "
-                "--gid={} "
+                "{} pool create "
+                "--user={} "
                 "--group={} "
-                "--target={}".format(self.dmg, mode, uid, gid, setid, tgtlist))
+                "--sys={} "
+                "--ranks={}".format(self.dmg, user, group, setid, tgtlist))
 
             uuid_str = (
                 """{0}""".format(process.system_output(cmd)).split(" ")[0])
@@ -146,10 +140,10 @@ class MultiServerCreateDeleteTest(Test):
                               .format(uuid_str, host2))
 
             delete_cmd = (
-                "{0} destroy "
-                "--pool={1} "
-                "--group={2} "
-                "--force".format(self.dmg, uuid_str, setid))
+                "{} pool destroy "
+                "--pool={} "
+                #"--group={2} " # TODO: should this be implemented
+                "--force".format(self.dmg, uuid_str)) #, setid))
 
             process.system(delete_cmd)
 
