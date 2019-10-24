@@ -34,16 +34,18 @@ import (
 
 func defaultMockControlService(t *testing.T, log logging.Logger) *ControlService {
 	c := defaultMockConfig(t)
-	return mockControlService(t, log, c, nil)
+	return mockControlService(t, log, c, nil, nil)
 }
 
-func mockControlService(t *testing.T, log logging.Logger, cfg *Configuration, msc *scm.MockSysConfig) *ControlService {
+// mockControlService takes cfgs for tuneable scm and sys provider behaviour but
+// default nvmeStorage behaviour (cs.nvoe can be subsequently replaced in test).
+func mockControlService(t *testing.T, log logging.Logger, cfg *Configuration, mbc *scm.MockBackendConfig, msc *scm.MockSysConfig) *ControlService {
 	t.Helper()
 
 	cs := ControlService{
-		StorageControlService: *NewStorageControlService(log,
+		StorageControlService: *NewStorageControlService(log, cfg.ext,
 			defaultMockNvmeStorage(log, cfg.ext),
-			defaultMockScmStorage(log, cfg.ext, msc),
+			scm.NewMockProvider(log, mbc, msc),
 			cfg.Servers,
 		),
 		harness: &IOServerHarness{
@@ -51,7 +53,7 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *Configuration, ms
 		},
 	}
 
-	scmProvider := cs.StorageControlService.scm.provider
+	scmProvider := cs.StorageControlService.scm
 	for _, srvCfg := range cfg.Servers {
 		bp, err := storage.NewBdevProvider(log, "", &srvCfg.Storage.Bdev)
 		if err != nil {

@@ -218,7 +218,7 @@ boro-45:10001:
   state:
     status: 0
     error: ""
-    info: status=CTRL_SUCCESS
+    info: status=CTL_SUCCESS
 ```
 
 </p>
