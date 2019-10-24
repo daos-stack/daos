@@ -24,6 +24,7 @@
 from __future__ import print_function
 
 import getpass
+import re
 
 from command_utils import DaosCommand, CommandWithParameters, CommandFailure
 from command_utils import FormattedParameter
@@ -341,14 +342,8 @@ def get_pool_uuid_from_stdout(stdout_str):
     Returns:
         str: Pool UUID.
     """
-    # Convert the output to a list, parse it to search UUID:, then get the
-    # next element, which contains UUID.
-    stdout_list = stdout_str.split()
-    pool_uuid = None
-    for i in range(len(stdout_list)):
-        if stdout_list[i] == "UUID:":
-            uuid = stdout_list[i + 1]
-            break
-    # Remove the last comma.
-    pool_uuid = uuid[:-1]
-    return pool_uuid
+    # Find the following with regex. One or more of whitespace after "UUID:"
+    # followed by one of more of number, alphabets, or -. Use parenthesis to
+    # get the returned value.
+    matches = re.findall(r"UUID:\s+([0-9a-f-]+)", stdout_str)
+    return matches[0]
