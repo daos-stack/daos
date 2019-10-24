@@ -538,7 +538,7 @@ class Orterun(JobManager):
         self.enable_recovery = FormattedParameter("--enable-recovery", True)
         self.report_uri = FormattedParameter("--report-uri {}", None)
         self.allow_run_as_root = FormattedParameter("--allow-run-as-root", None)
-        self.mca = FormattedParameter("--mca", None)
+        self.mca = FormattedParameter("--mca {}", None)
 
     def setup_command(self, env, hostfile, processes):
         """Set up the orterun command with common inputs.
