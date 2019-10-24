@@ -45,7 +45,7 @@ def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll(
 
 def el7_component_repos = ""
 def sle12_component_repos = ""
-def component_repos = "spdk fio dpdk pmdk raft"
+def component_repos = ""
 def daos_repo = "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
 def el7_daos_repos = el7_component_repos + ' ' + component_repos + ' ' + daos_repo
 def sle12_daos_repos = sle12_component_repos + ' ' + component_repos + ' ' + daos_repo
@@ -444,7 +444,6 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            expression { false }
                             not { branch 'weekly-testing' }
                             expression { env.CHANGE_TARGET != 'weekly-testing' }
                         }

@@ -5,7 +5,7 @@
 
 Name:          daos
 Version:       0.6.0
-Release:       9%{?relval}%{?dist}
+Release:       10%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -251,29 +251,48 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_bindir}/dfuse_hl
 %{_libdir}/*.so.*
 %{_libdir}/libdfs.so
+%if (0%{?suse_version} >= 1500)
+/lib/libdfs.so
+%endif
 %{_libdir}/libduns.so
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
 %dir  %{_libdir}/python2.7/site-packages/pydaos
 %{_libdir}/python2.7/site-packages/pydaos/*.py
+%if (0%{?rhel} >= 7)
 %{_libdir}/python2.7/site-packages/pydaos/*.pyc
 %{_libdir}/python2.7/site-packages/pydaos/*.pyo
+%endif
+%if (0%{?rhel} >= 7)
 %{_libdir}/python2.7/site-packages/pydaos/pydaos_shim_27.so
+%else
+%{_libdir}/python2.7/site-packages/pydaos/pydaos_shim_27.cpython-36m-x86_64-linux-gnu.so
+%endif
 %dir  %{_libdir}/python2.7/site-packages/pydaos/raw
 %{_libdir}/python2.7/site-packages/pydaos/raw/*.py
+%if (0%{?rhel} >= 7)
 %{_libdir}/python2.7/site-packages/pydaos/raw/*.pyc
 %{_libdir}/python2.7/site-packages/pydaos/raw/*.pyo
+%endif
 %dir %{_libdir}/python3
 %dir %{_libdir}/python3/site-packages
 %dir %{_libdir}/python3/site-packages/pydaos
 %{_libdir}/python3/site-packages/pydaos/*.py
+%if (0%{?rhel} >= 7)
 %{_libdir}/python3/site-packages/pydaos/*.pyc
 %{_libdir}/python3/site-packages/pydaos/*.pyo
+%endif
+%if (0%{?rhel} >= 7)
 %{_libdir}/python3/site-packages/pydaos/pydaos_shim_3.so
+%else
+%{_libdir}/python3/site-packages/pydaos/pydaos_shim_3.cpython-36m-x86_64-linux-gnu.so
+%endif
 %dir %{_libdir}/python3/site-packages/pydaos/raw
 %{_libdir}/python3/site-packages/pydaos/raw/*.py
+%if (0%{?rhel} >= 7)
 %{_libdir}/python3/site-packages/pydaos/raw/*.pyc
 %{_libdir}/python3/site-packages/pydaos/raw/*.pyo
+%endif
 %{_datadir}/%{name}/ioil-ld-opts
 %{_prefix}%{_sysconfdir}/daos.yml
 %{_prefix}%{_sysconfdir}/daos_agent.yml
@@ -300,6 +319,9 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/*.a
 
 %changelog
+* Fri Oct 25 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-10
+- Handle differences in Leap 15 Python packaging
+
 * Wed Oct 23 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-9
 - Update BR: libisal-devel for Leap
 
