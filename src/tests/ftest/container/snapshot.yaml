@@ -5,7 +5,7 @@ hosts:
       test_machines:
         - boro-A
         - boro-B
-timeout: 500
+timeout: 1500
 faults:
     no_faults:
       fault_list: []
