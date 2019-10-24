@@ -44,25 +44,17 @@ class DmgCommand(DaosCommand):
         self.debug = FormattedParameter("-d", False)
         self.json = FormattedParameter("-j", False)
 
-    def get_action_command(self, test_object=None):
-        """Assign a command object for the specified request and action.
-
-        Args:
-            test_object (TestWithServers): Test object that calls this method.
-        """
+    def get_action_command(self):
+        """Assign a command object for the specified request and action."""
         # pylint: disable=redefined-variable-type
         if self.action.value == "format":
             self.action_command = self.DmgFormatSubCommand()
-            self.action_command.get_params(test_object)
         elif self.action.value == "prepare":
             self.action_command = self.DmgPrepareSubCommand()
-            self.action_command.get_params(test_object)
         elif self.action.value == "create":
             self.action_command = self.DmgCreateSubCommand()
-            self.action_command.get_params(test_object)
         elif self.action.value == "destroy":
             self.action_command = self.DmgDestroySubCommand()
-            self.action_command.get_params(test_object)
         else:
             self.action_command = None
 
@@ -243,14 +235,13 @@ def storage_reset(hosts, user=None, hugepages="4096", insecure=True):
     return result
 
 
-def pool_create(path, test_object, host_port, scm_size, insecure=True,
-                group=None, user=None, acl_file=None, nvme_size=None,
-                ranks=None, nsvc=None, sys=None):
+def pool_create(path, host_port, scm_size, insecure=True, group=None,
+                user=None, acl_file=None, nvme_size=None, ranks=None,
+                nsvc=None, sys=None):
     """Execute pool create command through dmg tool to servers provided.
 
     Args:
         path (str): Path to the directory of dmg binary.
-        test_object (TestWithServers): Test object that calls this method.
         host_port (list of str): List of Host:Port where daos_server runs.
             Use 10001 for the default port number. This number is defined in
             daos_avocado_test.yaml
@@ -270,7 +261,8 @@ def pool_create(path, test_object, host_port, scm_size, insecure=True,
             default.
 
     Returns:
-        Avocado CmdResult object that contains exit status, stdout information.
+        CmdResult: Object that contains exit status, stdout, and other
+            information.
     """
     # Create and setup the command
     dmg = DmgCommand(path)
@@ -278,7 +270,7 @@ def pool_create(path, test_object, host_port, scm_size, insecure=True,
     dmg.hostlist.value = host_port
     dmg.request.value = "pool"
     dmg.action.value = "create"
-    dmg.get_action_command(test_object)
+    dmg.get_action_command()
     dmg.action_command.group.value = group
     dmg.action_command.user.value = user
     dmg.action_command.acl_file.value = acl_file
@@ -297,13 +289,11 @@ def pool_create(path, test_object, host_port, scm_size, insecure=True,
     return result
 
 
-def pool_destroy(path, test_object, host_port, pool_uuid, insecure=True,
-                 force=True):
+def pool_destroy(path, host_port, pool_uuid, insecure=True, force=True):
     """ Execute pool destroy command through dmg tool to servers provided.
 
     Args:
         path (str): Path to the directory of dmg binary.
-        test_object (TestWithServers): Test object that calls this method.
         host_port (list of str): List of Host:Port where daos_server runs.
             Use 10001 for the default port number. This number is defined in
             daos_avocado_test.yaml
@@ -312,7 +302,8 @@ def pool_destroy(path, test_object, host_port, pool_uuid, insecure=True,
         foce (bool, optional): Force removal of DAOS pool. Defaults to True.
 
     Returns:
-        Avocado CmdResult object that contains exit status, stdout information.
+        CmdResult: Object that contains exit status, stdout, and other
+            information.
     """
     # Create and setup the command
     dmg = DmgCommand(path)
@@ -320,7 +311,7 @@ def pool_destroy(path, test_object, host_port, pool_uuid, insecure=True,
     dmg.hostlist.value = host_port
     dmg.request.value = "pool"
     dmg.action.value = "destroy"
-    dmg.get_action_command(test_object)
+    dmg.get_action_command()
     dmg.action_command.pool.value = pool_uuid
     dmg.action_command.force.value = force
 
@@ -348,7 +339,7 @@ def get_pool_uuid_from_stdout(stdout_str):
         stdout_str (str): Output of pool create command.
 
     Returns:
-        Pool UUID.
+        str: Pool UUID.
     """
     # Convert the output to a list, parse it to search UUID:, then get the
     # next element, which contains UUID.
