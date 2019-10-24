@@ -21,11 +21,9 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from __future__ import print_function
-
+from logging import getLogger
 import os
 from time import sleep, time
-from logging import getLogger
 
 from avocado import fail_on
 from avocado.utils import process
@@ -50,6 +48,7 @@ class CallbackHandler(object):
         self.ret_code = None
         self.obj = None
         self._called = False
+        self.log = getLogger(__name__)
 
     def callback(self, event):
         """Return an event from a DaosApi class method.
@@ -72,7 +71,7 @@ class CallbackHandler(object):
 
         # Wait for the callback() method to be called
         while not self._called:
-            print(" Waiting ...")
+            self.log.info(" Waiting ...")
             sleep(self.delay)
 
         # Reset the flag indicating that the callback() method was called
@@ -104,7 +103,20 @@ class TestDaosApiBase(ObjectWithParameters):
         """
         if self.cb_handler:
             kwargs["cb_func"] = self.cb_handler.callback
-        method(**kwargs)
+
+        try:
+            method(**kwargs)
+        except DaosApiError as error:
+            # Log the exception to obtain additional trace information
+            self.log.debug(
+                "Exception raised by %s.%s(%s)",
+                method.__module__, method.__name__,
+                ", ".join(
+                    ["{}={}".format(key, val) for key, val in kwargs.items()]),
+                exc_info=error)
+            # Raise the exception so it can be handled by the caller
+            raise error
+
         if self.cb_handler:
             # Wait for the call back if one is provided
             self.cb_handler.wait()
@@ -465,7 +477,7 @@ class TestPool(TestDaosApiBase):
             bool: True if pool rebuild is complete; False otherwise
 
         """
-        self.get_info()
+        self.display_pool_rebuild_status()
         return self.info.pi_rebuild_st.rs_done == 1
 
     def wait_for_rebuild(self, to_start, interval=1):
@@ -506,7 +518,7 @@ class TestPool(TestDaosApiBase):
         daos_log.info(msg)
         for rank in ranks:
             server = DaosServer(self.context, self.name.value, rank)
-            server.kill(1)
+            self._call_method(server.kill, {"force": 1})
         return self.exclude(ranks, daos_log)
 
     @fail_on(DaosApiError)
@@ -599,6 +611,27 @@ class TestPool(TestDaosApiBase):
             "Pool %s space%s:\n  %s", self.uuid,
             " " + msg if isinstance(msg, str) else "", "\n  ".join(sizes))
 
+    def get_pool_rebuild_status(self):
+        """Get the pool info rebuild status attributes as a dictionary.
+
+        Returns:
+            dict: a dictionary of lists of the rebuild status attributes
+
+        """
+        self.get_info()
+        keys = (
+            "rs_version", "rs_pad_32", "rs_errno", "rs_done",
+            "rs_toberb_obj_nr", "rs_obj_nr", "rs_rec_nr")
+        return {key: getattr(self.info.pi_rebuild_st, key) for key in keys}
+
+    def display_pool_rebuild_status(self):
+        """Display the pool info rebuild status attributes."""
+        status = self.get_pool_rebuild_status()
+        self.log.info(
+            "Pool rebuild status: %s",
+            ", ".join(
+                ["{}={}".format(key, status[key]) for key in sorted(status)]))
+
     def read_data_during_rebuild(self, container):
         """Read data from the container while rebuild is active.
 
@@ -639,11 +672,18 @@ class TestPool(TestDaosApiBase):
 class TestContainerData(object):
     """A class for storing data written to DaosContainer objects."""
 
-    def __init__(self):
-        """Create a TestContainerData object."""
+    def __init__(self, debug=False):
+        """Create a TestContainerData object.
+
+        Args:
+            debug (bool, optional): if set log the write/read_record calls.
+                Defaults to False.
+        """
         self.obj = None
         self.txn = None
         self.records = []
+        self.log = getLogger(__name__)
+        self.debug = debug
 
     def get_akeys(self):
         """Get a list of all the akeys currently being used.
@@ -662,6 +702,18 @@ class TestContainerData(object):
 
         """
         return [record["dkey"] for record in self.records]
+
+    def _log_method(self, name, kwargs):
+        """Log the method call with its arguments.
+
+        Args:
+            name (str): method name
+            kwargs (dict): dictionary of method arguments
+        """
+        if self.debug:
+            args = ", ".join(
+                ["{}={}".format(key, kwargs[key]) for key in sorted(kwargs)])
+            self.log.debug("  %s(%s)", name, args)
 
     def write_record(self, container, akey, dkey, data, rank=None,
                      obj_class=None):
@@ -686,11 +738,13 @@ class TestContainerData(object):
         try:
             if isinstance(data, list):
                 kwargs["datalist"] = data
+                self._log_method("write_an_array_value", kwargs)
                 (self.obj, self.txn) = \
                     container.container.write_an_array_value(**kwargs)
             else:
                 kwargs["thedata"] = data
                 kwargs["size"] = len(data)
+                self._log_method("write_an_obj", kwargs)
                 (self.obj, self.txn) = \
                     container.container.write_an_obj(**kwargs)
         except DaosApiError as error:
@@ -754,9 +808,11 @@ class TestContainerData(object):
             if data_count:
                 kwargs["rec_count"] = data_count
                 kwargs["rec_size"] = data_size
+                self._log_method("read_an_array", kwargs)
                 read_data = container.container.read_an_array(**kwargs)
             else:
                 kwargs["size"] = data_size
+                self._log_method("read_an_obj", kwargs)
                 read_data = container.container.read_an_obj(**kwargs)
         except DaosApiError as error:
             raise DaosTestError(
@@ -771,7 +827,7 @@ class TestContainerData(object):
         """Read an object from the container.
 
         Args:
-            container (TestContainer): container in which to write the object
+            container (TestContainer): container from which to read the object
 
         Returns:
             bool: True if ll the records where read successfully and matched
@@ -902,12 +958,14 @@ class TestContainer(TestDaosApiBase):
         return False
 
     @fail_on(DaosTestError)
-    def write_objects(self, rank=None, obj_class=None):
+    def write_objects(self, rank=None, obj_class=None, debug=False):
         """Write objects to the container.
 
         Args:
             rank (int, optional): server rank. Defaults to None.
             obj_class (int, optional): daos object class. Defaults to None.
+            debug (bool, optional): log the record write/read method calls.
+                Defaults to False.
 
         Raises:
             DaosTestError: if there was an error writing the object
@@ -915,39 +973,49 @@ class TestContainer(TestDaosApiBase):
         """
         self.open()
         self.log.info(
-            "Writing %s objects in container %s%s%s",
-            self.object_qty.value,
-            self.uuid,
-            " on rank {}".format(rank) if rank is not None else "",
-            " with object class {}".format(obj_class) if obj_class else "")
+            "Writing %s object(s), with %s record(s) of %s bytes(s) each, in "
+            "container %s%s%s",
+            self.object_qty.value, self.record_qty.value, self.data_size.value,
+            self.uuid, " on rank {}".format(rank) if rank is not None else "",
+            " with object class {}".format(obj_class)
+            if obj_class is not None else "")
         for _ in range(self.object_qty.value):
-            self.written_data.append(TestContainerData())
+            self.written_data.append(TestContainerData(debug))
             self.written_data[-1].write_object(
                 self, self.record_qty.value, self.akey_size.value,
                 self.dkey_size.value, self.data_size.value, rank, obj_class)
 
     @fail_on(DaosTestError)
-    def read_objects(self):
+    def read_objects(self, debug=False):
         """Read the objects from the container and verify they match.
+
+        Args:
+            debug (bool, optional): log the record read method calls. Defaults
+                to False.
 
         Returns:
             bool: True if
 
         """
         self.open()
-        self.log.info("Reading objects in container %s", self.uuid)
+        self.log.info(
+            "Reading %s object(s) in container %s",
+            len(self.written_data), self.uuid)
         status = len(self.written_data) > 0
         for data in self.written_data:
+            data.debug = debug
             status &= data.read_object(self)
         return status
 
-    def execute_io(self, duration, rank=None, obj_class=None):
+    def execute_io(self, duration, rank=None, obj_class=None, debug=False):
         """Execute writes and reads for the specified time period.
 
         Args:
             duration (int): how long, in seconds, to write and read data
             rank (int, optional): server rank. Defaults to None.
             obj_class (int, optional): daos object class. Defaults to None.
+            debug (bool, optional): log the record write/read method calls.
+                Defaults to False.
 
         Returns:
             int: number of bytes written to the container
@@ -965,7 +1033,7 @@ class TestContainer(TestDaosApiBase):
         total_bytes_written = 0
         finish_time = time() + duration
         while time() < finish_time:
-            self.written_data.append(TestContainerData())
+            self.written_data.append(TestContainerData(debug))
             self.written_data[-1].write_object(
                 self, 1, self.akey_size.value, self.dkey_size.value,
                 self.data_size.value, rank, obj_class)
