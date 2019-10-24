@@ -9,14 +9,14 @@ hosts:
     - server-G
     - server-H
   test_clients:
-    - server-I
-    - server-J
-    - server-K
-    - server-L
-    - server-M
-    - server-N
-    - server-O
-    - server-P
+    - client-I
+    - client-J
+    - client-K
+    - client-L
+    - client-M
+    - client-N
+    - client-O
+    - client-P
 timeout: 2000
 server_config:
     name: daos_server
