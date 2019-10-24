@@ -39,6 +39,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	. "github.com/daos-stack/daos/src/control/common/storage"
+	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
@@ -468,6 +469,7 @@ func TestStorageFormat(t *testing.T) {
 		expNvmeFormatted bool
 		expResults       []*StorageFormatResp
 		isRoot           bool
+		reformat         bool
 	}{
 		"ram success": {
 			sMount:           "/mnt/daos",
@@ -552,15 +554,13 @@ func TestStorageFormat(t *testing.T) {
 				},
 			},
 		},
-		"already formatted": {
-			// if superblock exists should set storage formatted
-			superblockExists: true,
+		"ram already mounted no reformat": {
+			superblockExists: true, // if superblockExists we emulate ext4 fs is mounted
 			sMount:           "/mnt/daos",
 			sClass:           storage.ScmClassRAM,
 			sSize:            6,
 			bClass:           storage.BdevClassNvme,
 			bDevs:            []string{"0000:81:00.0"},
-			expNvmeFormatted: true,
 			expResults: []*StorageFormatResp{
 				{
 					Mrets: []*ScmMountResult{
@@ -569,7 +569,82 @@ func TestStorageFormat(t *testing.T) {
 							State: &ResponseState{
 								Status: ResponseStatus_CTRL_ERR_APP,
 								Error:  scm.FaultFormatNoReformat.Error(),
+								Info:   fault.ShowResolutionFor(scm.FaultFormatNoReformat),
 							},
+						},
+					},
+				},
+			},
+		},
+		"ram already mounted and reformat set": {
+			superblockExists: true, // if superblockExists we emulate ext4 fs is mounted
+			reformat:         true,
+			sMount:           "/mnt/daos",
+			sClass:           storage.ScmClassRAM,
+			sSize:            6,
+			bClass:           storage.BdevClassNvme,
+			bDevs:            []string{"0000:81:00.0"},
+			expNvmeFormatted: true,
+			expResults: []*StorageFormatResp{
+				{
+					Crets: []*NvmeControllerResult{
+						{
+							Pciaddr: "0000:81:00.0",
+							State:   new(ResponseState),
+						},
+					},
+					Mrets: []*ScmMountResult{
+						{
+							Mntpoint: "/mnt/daos",
+							State:    new(ResponseState),
+						},
+					},
+				},
+			},
+		},
+		"dcpm already mounted no reformat": {
+			superblockExists: true, // if superblockExists we emulate ext4 fs is mounted
+			sMount:           "/mnt/daos",
+			sClass:           storage.ScmClassDCPM,
+			sDevs:            []string{"/dev/pmem1"},
+			bClass:           storage.BdevClassNvme,
+			bDevs:            []string{"0000:81:00.0"},
+			expResults: []*StorageFormatResp{
+				{
+					Mrets: []*ScmMountResult{
+						{
+							Mntpoint: "/mnt/daos",
+							State: &ResponseState{
+								Status: ResponseStatus_CTRL_ERR_APP,
+								Error:  scm.FaultFormatNoReformat.Error(),
+								Info:   fault.ShowResolutionFor(scm.FaultFormatNoReformat),
+							},
+						},
+					},
+				},
+			},
+		},
+		"dcpm already mounted and reformat set": {
+			superblockExists: true, // if superblockExists we emulate ext4 fs is mounted
+			reformat:         true,
+			sMount:           "/mnt/daos",
+			sClass:           storage.ScmClassDCPM,
+			sDevs:            []string{"/dev/pmem1"},
+			bClass:           storage.BdevClassNvme,
+			bDevs:            []string{"0000:81:00.0"},
+			expNvmeFormatted: true,
+			expResults: []*StorageFormatResp{
+				{
+					Crets: []*NvmeControllerResult{
+						{
+							Pciaddr: "0000:81:00.0",
+							State:   new(ResponseState),
+						},
+					},
+					Mrets: []*ScmMountResult{
+						{
+							Mntpoint: "/mnt/daos",
+							State:    new(ResponseState),
 						},
 					},
 				},
@@ -646,7 +721,7 @@ func TestStorageFormat(t *testing.T) {
 			go func() {
 				// should signal wait group in srv to unlock if
 				// successful once format completed
-				_ = cs.StorageFormat(&StorageFormatReq{}, mock)
+				_ = cs.StorageFormat(&StorageFormatReq{Reformat: tc.reformat}, mock)
 				mockWg.Done()
 			}()
 
