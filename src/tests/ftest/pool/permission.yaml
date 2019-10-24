@@ -7,9 +7,9 @@
 # 146             222
 # 73              111
 hosts:
-    test_machines:
-        - boro-A
-        - boro-B
+  test_servers:
+    - server-A
+    - server-B
 timeout: 300
 server_config:
     name: daos_server

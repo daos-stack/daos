@@ -1,16 +1,15 @@
 hosts:
-   test_machines:
-        test_servers:
-            - boro-A
-        test_clients:
-                - boro-B
-                - boro-C
-                - boro-D
-                - boro-E
-                - boro-F
-                - boro-G
-                - boro-H
-                - boro-I
+    test_servers:
+      - server-A
+    test_clients:
+      - client-B
+      - client-C
+      - client-D
+      - client-E
+      - client-F
+      - client-G
+      - client-H
+      - client-I
 
 # some run can take long to run, but needs to be verified
 # by running consecutively for accurate time.

@@ -2,9 +2,9 @@
 # required quantity is indicated by the placeholders
 timeout: 120
 hosts:
-    test_machines:
-        - boro-A
-        - boro-B
+  test_servers:
+    - server-A
+    - server-B
 server_config:
     name: daos_server
 pool:

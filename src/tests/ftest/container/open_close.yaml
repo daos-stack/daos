@@ -1,6 +1,6 @@
 hosts:
-    test_servers:
-        - boro-A
+  test_servers:
+    - server-A
 timeout: 40
 server_config:
     name: daos_server

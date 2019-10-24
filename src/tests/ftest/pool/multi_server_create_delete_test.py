@@ -54,7 +54,7 @@ class MultiServerCreateDeleteTest(Test):
         with open('../../../.build_vars.json') as f_open:
             build_paths = json.load(f_open)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        self.hostlist_servers = self.params.get("test_machines", '/run/hosts/')
+        self.hostlist_servers = self.params.get("test_servers", '/run/hosts/')
         self.hostfile = write_host_file.write_host_file(self.hostlist_servers,
                                                         self.workdir)
         server_group = self.params.get("name", '/server_config/',

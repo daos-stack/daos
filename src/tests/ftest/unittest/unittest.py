@@ -40,7 +40,7 @@ def unittest_runner(self, unit_testname):
     """
     name = self.params.get("testname", '/run/UnitTest/{0}/'
                            .format(unit_testname))
-    server = self.params.get("test_machines", "/run/hosts/*")
+    server = self.params.get("test_servers", "/run/hosts/*")
     bin_path = get_file_path(name, "install/bin")
 
     cmd = ("ssh {} {}".format(server[0], bin_path[0]))

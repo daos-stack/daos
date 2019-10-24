@@ -1,7 +1,7 @@
 # Unittests Name and Paramter to be mention in this file.
 hosts:
-  test_machines:
-    - boro-A
+  test_servers:
+    - server-A
 timeout: 600
 server_config:
   name: daos_server
