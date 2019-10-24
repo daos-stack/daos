@@ -67,6 +67,7 @@ vos_ilog_fetch_finish(struct vos_ilog_info *info);
  * \param	intent[IN]	Intent of the operation
  * \param	ilog[IN]	The incarnation log root
  * \param	epoch[IN]	Epoch to fetch
+ * \param	punch[IN]	Upper layer punch epoch
  * \param	entries[IN,OUT]	incarnation log entries
  *
  * \return	-DER_NONEXIST	Nothing in the log
@@ -76,7 +77,7 @@ vos_ilog_fetch_finish(struct vos_ilog_info *info);
  */
 int
 vos_ilog_fetch(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
-	       struct ilog_df *ilog, daos_epoch_t epoch,
+	       struct ilog_df *ilog, daos_epoch_t epoch, daos_epoch_t punch,
 	       struct vos_ilog_info *info);
 
 /**
@@ -96,6 +97,17 @@ vos_ilog_fetch(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
 int
 vos_ilog_check(struct vos_ilog_info *info, const daos_epoch_range_t *epr_in,
 	       daos_epoch_range_t *epr_out, bool visible_only);
+
+/**
+ * Prepare update range by scanning the log for in-flight punches
+ *
+ * \param	info[IN]	Parsed incarnation log information
+ * \param	epoch[IN]	Update epoch
+ * \param	epr[IN, OUT]	Initialized epr in, updated epr out
+ */
+void
+vos_ilog_update_prepare(struct vos_ilog_info *info, daos_epoch_t epoch,
+			daos_epoch_range_t *epr);
 
 /** Initialize callbacks for vos incarnation log */
 void

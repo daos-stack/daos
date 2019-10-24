@@ -100,7 +100,8 @@ vos_ilog_desc_cbs_init(struct ilog_desc_cbs *cbs, daos_handle_t coh)
 }
 
 static void
-vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch)
+vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
+	       daos_epoch_t punch)
 {
 	struct ilog_entry	*entry;
 
@@ -108,6 +109,7 @@ vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch)
 	info->ii_prior_punch = 0;
 	info->ii_next_punch = 0;
 	info->ii_empty = true;
+	D_ASSERT(punch <= epoch);
 
 	ilog_foreach_entry_reverse(&info->ii_entries, entry) {
 		if (entry->ie_status == ILOG_REMOVED)
@@ -115,13 +117,20 @@ vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch)
 
 		info->ii_empty = false;
 
+		/** If a punch epoch is passed in, and it is later than any
+		 * punch in this log, treat it as a prior punch
+		 */
+		if (entry->ie_id.id_epoch <= punch) {
+			info->ii_prior_punch = punch;
+			break;
+		}
+
 		if (entry->ie_id.id_epoch > epoch) {
 			if (entry->ie_punch &&
 			    entry->ie_status == ILOG_COMMITTED)
 				info->ii_next_punch = entry->ie_id.id_epoch;
 			continue;
 		}
-
 
 		if (entry->ie_status == ILOG_UNCOMMITTED) {
 			/** Key is not visible at current entry but may be yet
@@ -131,22 +140,22 @@ vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch)
 		}
 
 		D_ASSERT(entry->ie_status == ILOG_COMMITTED);
+
 		if (entry->ie_punch) {
-			if (info->ii_prior_punch == 0)
-				info->ii_prior_punch =
-					entry->ie_id.id_epoch;
-			continue;
+			info->ii_prior_punch = entry->ie_id.id_epoch;
+			break;
 		}
 
-		if (!info->ii_prior_punch)
-			info->ii_create = entry->ie_id.id_epoch;
+		info->ii_create = entry->ie_id.id_epoch;
 	}
-}
 
+	if (punch > info->ii_prior_punch)
+		info->ii_prior_punch = punch;
+}
 
 int
 vos_ilog_fetch(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
-	       struct ilog_df *ilog, daos_epoch_t epoch,
+	       struct ilog_df *ilog, daos_epoch_t epoch, daos_epoch_t punch,
 	       struct vos_ilog_info *info)
 {
 	struct ilog_desc_cbs	 cbs;
@@ -162,7 +171,7 @@ vos_ilog_fetch(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
 		return rc;
 	}
 
-	vos_parse_ilog(info, epoch);
+	vos_parse_ilog(info, epoch, punch);
 
 	return 0;
 }
@@ -205,6 +214,35 @@ vos_ilog_check(struct vos_ilog_info *info, const daos_epoch_range_t *epr_in,
 	 */
 
 	return 0;
+}
+
+void
+vos_ilog_update_prepare(struct vos_ilog_info *info, daos_epoch_t epoch,
+			daos_epoch_range_t *epr)
+{
+	struct ilog_entry	*entry;
+
+	ilog_foreach_entry_reverse(&info->ii_entries, entry) {
+		if (entry->ie_status == ILOG_REMOVED)
+			continue;
+
+		if (entry->ie_id.id_epoch > epr->epr_hi)
+			continue;
+
+		if (entry->ie_id.id_epoch <= epr->epr_lo)
+			break;
+
+		if (!entry->ie_punch)
+			continue;
+
+		if (entry->ie_id.id_epoch >= epoch)
+			epr->epr_hi = entry->ie_id.id_epoch;
+
+		if (entry->ie_id.id_epoch <= epoch) {
+			epr->epr_lo = entry->ie_id.id_epoch;
+			break;
+		}
+	}
 }
 
 void

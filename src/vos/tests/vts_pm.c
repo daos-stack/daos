@@ -30,14 +30,15 @@
 #include "vts_io.h"
 #include "vts_array.h"
 
-#define MAX_ELEM 200
+#define BUF_SIZE 2000
+static int buf_size = BUF_SIZE;
 struct pm_info {
 	daos_unit_oid_t	pi_oid;
 	daos_handle_t	pi_aoh;
 	daos_epoch_t	pi_epoch;
-	int32_t		pi_fetch_buf[MAX_ELEM];
-	int32_t		pi_update_buf[MAX_ELEM];
-	int32_t		pi_fill_buf[MAX_ELEM];
+	char		pi_fetch_buf[BUF_SIZE];
+	char		pi_update_buf[BUF_SIZE];
+	char		pi_fill_buf[BUF_SIZE];
 };
 
 
@@ -56,9 +57,12 @@ pm_setup(void **state)
 
 	info->pi_epoch = 1;
 
-	rc = vts_array_alloc(arg->ctx.tc_co_hdl, info->pi_epoch, &info->pi_oid);
+	rc = vts_array_alloc(arg->ctx.tc_co_hdl, info->pi_epoch,
+			     sizeof(int32_t), 0, 0, &info->pi_oid);
 	if (rc != 0)
 		goto fail;
+
+	memset(info->pi_fill_buf, 0xa, sizeof(info->pi_fill_buf));
 
 	rc = vts_array_open(arg->ctx.tc_co_hdl, info->pi_oid, &info->pi_aoh);
 	if (rc == 0) {
@@ -81,7 +85,171 @@ pm_teardown(void **state)
 	vts_array_close(info->pi_aoh);
 	vts_array_free(arg->ctx.tc_co_hdl, info->pi_oid);
 
+	D_FREE(info);
+
 	return 0;
+}
+
+struct counts {
+	int num_objs;
+	int num_punched_objs;
+	int num_dkeys;
+	int num_punched_dkeys;
+	int num_akeys;
+	int num_punched_akeys;
+	int num_recx;
+	int num_punched_recx;
+};
+
+static int
+count_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+	 vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+{
+	struct counts	*counts = cb_arg;
+
+	switch (type) {
+	default:
+		break;
+	case VOS_ITER_DKEY:
+		counts->num_dkeys++;
+		if (entry->ie_key_punch)
+			counts->num_punched_dkeys++;
+		break;
+	case VOS_ITER_AKEY:
+		counts->num_akeys++;
+		if (entry->ie_key_punch)
+			counts->num_punched_akeys++;
+		break;
+	case VOS_ITER_RECX:
+		counts->num_recx++;
+		if (bio_addr_is_hole(&entry->ie_biov.bi_addr))
+			counts->num_punched_recx++;
+		break;
+	case VOS_ITER_OBJ:
+		counts->num_objs++;
+		if (entry->ie_obj_punch)
+			counts->num_punched_objs++;
+		break;
+	}
+
+	return 0;
+}
+
+static void
+vos_check(void **state, vos_iter_param_t *param, vos_iter_type_t type,
+	  const struct counts *expected)
+{
+	struct counts		 counts = {0};
+	struct vos_iter_anchors	 anchors = {0};
+	int			 rc;
+
+	rc = vos_iterate(param, type, true, &anchors, count_cb, &counts);
+	assert_int_equal(rc, 0);
+	assert_int_equal(expected->num_objs, counts.num_objs);
+	assert_int_equal(expected->num_dkeys, counts.num_dkeys);
+	assert_int_equal(expected->num_akeys, counts.num_akeys);
+	assert_int_equal(expected->num_recx, counts.num_recx);
+	assert_int_equal(expected->num_punched_objs, counts.num_punched_objs);
+	assert_int_equal(expected->num_punched_dkeys, counts.num_punched_dkeys);
+	assert_int_equal(expected->num_punched_akeys, counts.num_punched_akeys);
+	assert_int_equal(expected->num_punched_recx, counts.num_punched_recx);
+}
+
+static void
+vos_check_obj(void **state, daos_epoch_t epoch, int flags, int objs,
+	      int punched_objs, int dkeys, int punched_dkeys, int akeys,
+	      int punched_akeys, int recxs, int punched_recx)
+{
+	struct io_test_args	*arg = *state;
+	vos_iter_param_t	 param = {0};
+	struct counts		 counts = {0};
+
+	param.ip_hdl = arg->ctx.tc_co_hdl;
+	param.ip_flags = flags;
+	param.ip_ih = DAOS_HDL_INVAL;
+	param.ip_epr.epr_hi = epoch;
+	param.ip_epr.epr_lo = 0;
+	counts.num_objs = objs;
+	counts.num_dkeys = dkeys;
+	counts.num_akeys = akeys;
+	counts.num_recx = recxs;
+	counts.num_punched_objs = punched_objs;
+	counts.num_punched_dkeys = punched_dkeys;
+	counts.num_punched_akeys = punched_akeys;
+	counts.num_punched_recx = punched_recx;
+
+	vos_check(state, &param, VOS_ITER_OBJ, &counts);
+}
+
+static void
+vos_check_dkey(void **state, daos_epoch_t epoch, int flags, daos_unit_oid_t oid,
+	       int dkeys, int punched_dkeys, int akeys, int punched_akeys,
+	       int recxs, int punched_recx)
+{
+	struct io_test_args	*arg = *state;
+	vos_iter_param_t	 param = {0};
+	struct counts		 counts = {0};
+
+	param.ip_hdl = arg->ctx.tc_co_hdl;
+	param.ip_flags = flags;
+	param.ip_ih = DAOS_HDL_INVAL;
+	param.ip_epr.epr_hi = epoch;
+	param.ip_epr.epr_lo = 0;
+	param.ip_oid = oid;
+	counts.num_dkeys = dkeys;
+	counts.num_akeys = akeys;
+	counts.num_recx = recxs;
+	counts.num_punched_dkeys = punched_dkeys;
+	counts.num_punched_akeys = punched_akeys;
+	counts.num_punched_recx = punched_recx;
+
+	vos_check(state, &param, VOS_ITER_DKEY, &counts);
+}
+
+static void
+vos_check_akey(void **state, daos_epoch_t epoch, int flags, daos_unit_oid_t oid,
+	       daos_key_t *dkey, int akeys, int punched_akeys, int recxs,
+	       int punched_recx)
+{
+	struct io_test_args	*arg = *state;
+	vos_iter_param_t	 param = {0};
+	struct counts		 counts = {0};
+
+	param.ip_hdl = arg->ctx.tc_co_hdl;
+	param.ip_flags = flags;
+	param.ip_ih = DAOS_HDL_INVAL;
+	param.ip_epr.epr_hi = epoch;
+	param.ip_epr.epr_lo = 0;
+	param.ip_oid = oid;
+	param.ip_dkey = *dkey;
+	counts.num_akeys = akeys;
+	counts.num_recx = recxs;
+	counts.num_punched_akeys = punched_akeys;
+	counts.num_punched_recx = punched_recx;
+
+	vos_check(state, &param, VOS_ITER_AKEY, &counts);
+}
+
+static void
+vos_check_recx(void **state, daos_epoch_t epoch, int flags, daos_unit_oid_t oid,
+	       daos_key_t *dkey, daos_key_t *akey, int recxs, int punched_recx)
+{
+	struct io_test_args	*arg = *state;
+	vos_iter_param_t	 param = {0};
+	struct counts		 counts = {0};
+
+	param.ip_hdl = arg->ctx.tc_co_hdl;
+	param.ip_flags = flags;
+	param.ip_ih = DAOS_HDL_INVAL;
+	param.ip_epr.epr_hi = epoch;
+	param.ip_epr.epr_lo = 0;
+	param.ip_oid = oid;
+	param.ip_dkey = *dkey;
+	param.ip_akey = *akey;
+	counts.num_recx = recxs;
+	counts.num_punched_recx = punched_recx;
+
+	vos_check(state, &param, VOS_ITER_RECX, &counts);
 }
 
 static void
@@ -92,12 +260,12 @@ array_set_get_size(void **state)
 	size_t			 size;
 	int			 rc;
 
-	rc = vts_array_set_size(info->pi_aoh, 2, MAX_ELEM);
+	rc = vts_array_set_size(info->pi_aoh, 2, 1000);
 	assert_int_equal(rc, 0);
 
 	rc = vts_array_get_size(info->pi_aoh, 3, &size);
 	assert_int_equal(rc, 0);
-	assert_int_equal(size, MAX_ELEM);
+	assert_int_equal(size, 1000);
 
 	rc = vts_array_set_size(info->pi_aoh, 4, 5);
 	assert_int_equal(rc, 0);
@@ -106,79 +274,349 @@ array_set_get_size(void **state)
 	assert_int_equal(rc, 0);
 	assert_int_equal(size, 5);
 
-	rc = vts_array_reset(info->pi_aoh, 6, 7);
+	rc = vts_array_reset(info->pi_aoh, 6, 7, 1, 0, 0);
 	assert_int_equal(rc, 0);
 
 	rc = vts_array_get_size(info->pi_aoh, 8, &size);
 	assert_int_equal(rc, 0);
 	assert_int_equal(size, 0);
+
+	vos_check_obj(state, 9, VOS_IT_RECX_VISIBLE, 1, 0, 1, 0, 1, 0, 1, 0);
+	vos_check_obj(state, 3, VOS_IT_RECX_VISIBLE, 1, 1, 2, 1, 2, 0, 2, 0);
+	vos_check_obj(state, 5, VOS_IT_RECX_VISIBLE, 1, 1, 2, 0, 2, 0, 3, 1);
 }
 
+/* User fills update buffer, after finished, fetch buffer should have identical
+ * contents.
+ */
 static void
-array_read_write_punch(void **state)
+array_read_write_punch_size(void **state, daos_epoch_t epc_in,
+			    daos_epoch_t *epc_out, bool punch, int iter,
+			    size_t rec_size, size_t max_elem)
 {
 	struct io_test_args	*arg = *state;
 	struct pm_info		*info = arg->custom;
-	daos_epoch_t		 epoch = 2;
+	daos_epoch_t		 epoch = epc_in;
 	daos_size_t		 size;
+	uint64_t		 per_key = 5;
+	uint64_t		 akey_size = 1;
+	uint64_t		 new_size = 7;
 	int			 rc;
 	int			 i;
 
-	for (i = 0; i < MAX_ELEM; i++)
-		info->pi_update_buf[i] = i;
-	memset(info->pi_fill_buf, 0xa, sizeof(info->pi_fill_buf));
+	rc = vts_array_reset(info->pi_aoh, epoch, epoch + 1, rec_size,
+			     per_key++, akey_size++);
+	assert_int_equal(rc, 0);
+	epoch += 2;
 
-	for (i = 0; i < 5; i++) {
-		rc = vts_array_write(info->pi_aoh, epoch++, 0, MAX_ELEM,
+	for (i = 0; i < iter; i++) {
+		rc = vts_array_write(info->pi_aoh, epoch++, 0, max_elem,
 				     info->pi_update_buf);
 		assert_int_equal(rc, 0);
 
 		rc = vts_array_get_size(info->pi_aoh, epoch++, &size);
 		assert_int_equal(rc, 0);
-		assert_int_equal(size, MAX_ELEM);
+		assert_int_equal(size, max_elem);
 
-		memset(info->pi_fetch_buf, 0xa, sizeof(info->pi_fetch_buf));
-		rc = vts_array_read(info->pi_aoh, epoch++, 0, MAX_ELEM,
+		memset(info->pi_fetch_buf, 0xa, max_elem * rec_size);
+		rc = vts_array_read(info->pi_aoh, epoch++, 0, max_elem,
 				    info->pi_fetch_buf);
 		assert_int_equal(rc, 0);
 		assert_memory_equal(info->pi_update_buf, info->pi_fetch_buf,
-				    sizeof(info->pi_fetch_buf));
+				    max_elem * rec_size);
 
-		rc = vts_array_set_size(info->pi_aoh, epoch++, 5);
+		rc = vts_array_set_size(info->pi_aoh, epoch++, new_size);
 		assert_int_equal(rc, 0);
 
-		memset(info->pi_fetch_buf, 0xa, sizeof(info->pi_fetch_buf));
-		rc = vts_array_read(info->pi_aoh, epoch++, 0, MAX_ELEM,
+		memset(info->pi_fetch_buf, 0xa, max_elem * rec_size);
+		rc = vts_array_read(info->pi_aoh, epoch++, 0, max_elem,
 				    info->pi_fetch_buf);
 		assert_int_equal(rc, 0);
-		assert_memory_equal(info->pi_update_buf, info->pi_fetch_buf, 5);
-		assert_memory_equal(info->pi_fetch_buf + 5, info->pi_fill_buf,
-				    MAX_ELEM - 5);
+		assert_memory_equal(info->pi_update_buf, info->pi_fetch_buf,
+				    new_size * rec_size);
+		assert_memory_equal(info->pi_fetch_buf + (rec_size * new_size),
+				    info->pi_fill_buf,
+				    (max_elem - new_size) * rec_size);
 
 		rc = vts_array_get_size(info->pi_aoh, epoch++, &size);
 		assert_int_equal(rc, 0);
-		assert_int_equal(size, 5);
+		assert_int_equal(size, new_size);
 
-		rc = vts_array_reset(info->pi_aoh, epoch, epoch+1);
+		new_size++;
+		if (!punch)
+			continue;
+
+		per_key++;
+		akey_size++;
+		rc = vts_array_reset(info->pi_aoh, epoch, epoch + 1,
+				     rec_size, per_key, akey_size);
 		assert_int_equal(rc, 0);
 		epoch += 2;
 
 		rc = vts_array_get_size(info->pi_aoh, epoch++, &size);
 		assert_int_equal(rc, 0);
 		assert_int_equal(size, 0);
+
 	}
+
+	/* Now make sure fetch buf == update buf by writing again and reading */
+	rc = vts_array_write(info->pi_aoh, epoch++, 0, max_elem,
+			     info->pi_update_buf);
+	assert_int_equal(rc, 0);
+
+	memset(info->pi_fetch_buf, 0xa, max_elem * rec_size);
+	rc = vts_array_read(info->pi_aoh, epoch++, 0, max_elem,
+			    info->pi_fetch_buf);
+	assert_int_equal(rc, 0);
+
+	*epc_out = epoch;
 }
+
+static void
+array_1(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct pm_info		*info = arg->custom;
+	int32_t			*fetch_buf = (int32_t *)info->pi_fetch_buf;
+	int32_t			*update_buf = (int32_t *)info->pi_update_buf;
+	daos_epoch_t		 epoch = 0;
+	int			 max_elem = buf_size / sizeof(int32_t);
+	int			 i;
+
+	/** Setup initial input */
+	for (i = 0; i < max_elem; i++)
+		update_buf[i] = i;
+
+	array_read_write_punch_size(state, 2, &epoch, true, 10,
+				    sizeof(int32_t), max_elem);
+
+	assert_memory_equal(update_buf, fetch_buf,
+			    sizeof(update_buf[0]) * max_elem);
+
+	/** Change up the input array */
+	for (i = 0; i < max_elem; i++)
+		update_buf[i] = i + 1;
+
+	/* Run it again without the punches */
+	array_read_write_punch_size(state, epoch, &epoch, false, 10,
+				    sizeof(int32_t), max_elem);
+
+	assert_memory_equal(update_buf, fetch_buf,
+			    sizeof(update_buf[0]) * max_elem);
+}
+
+static void
+array_2(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct pm_info		*info = arg->custom;
+	char			*fetch_buf = (char *)info->pi_fetch_buf;
+	char			*update_buf = (char *)info->pi_update_buf;
+	daos_epoch_t		 epoch = 0;
+	int			 max_elem = buf_size / sizeof(char);
+	int			 i;
+
+	/** Setup initial input */
+	for (i = 0; i < max_elem; i++)
+		update_buf[i] = i % 26 + 'a';
+
+	array_read_write_punch_size(state, 2, &epoch, true, 10,
+				    sizeof(char), max_elem);
+
+	assert_memory_equal(update_buf, fetch_buf,
+			    sizeof(update_buf[0]) * max_elem);
+
+	/** Change up the input array */
+	for (i = 0; i < max_elem; i++)
+		update_buf[i] = (i + 1) % 26 + 'a';
+
+	/* Run it again without the punches */
+	array_read_write_punch_size(state, epoch, &epoch, false, 10,
+				    sizeof(char), max_elem);
+
+	assert_memory_equal(update_buf, fetch_buf,
+			    sizeof(update_buf[0]) * max_elem);
+}
+
+static void
+punch_model_test(void **state)
+{
+	struct io_test_args	*arg = *state;
+	int			rc = 0;
+	daos_key_t		dkey;
+	daos_key_t		akey;
+	daos_recx_t		rex;
+	daos_iod_t		iod;
+	d_sg_list_t		sgl;
+	const char		*expected = "HelloWorld";
+	const char		*under = "HelloLonelyWorld";
+	const char		*latest = "Goodbye";
+	char			buf[32] = {0};
+	char			dkey_buf[UPDATE_DKEY_SIZE];
+	char			akey_buf[UPDATE_AKEY_SIZE];
+	daos_unit_oid_t		oid;
+
+	test_args_reset(arg, VPOOL_SIZE);
+
+	memset(&rex, 0, sizeof(rex));
+	memset(&iod, 0, sizeof(iod));
+
+	/* Set up dkey and akey */
+	oid = gen_oid(arg->ofeat);
+	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
+	vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);
+	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
+	set_iov(&akey, &akey_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
+
+	rex.rx_idx = 0;
+	rex.rx_nr = strlen(under);
+
+	iod.iod_type = DAOS_IOD_ARRAY;
+	iod.iod_size = 1;
+	iod.iod_name = akey;
+	iod.iod_recxs = &rex;
+	iod.iod_nr = 1;
+
+	/* Allocate memory for the scatter-gather list */
+	rc = daos_sgl_init(&sgl, 1);
+	assert_int_equal(rc, 0);
+
+	d_iov_set(&sgl.sg_iovs[0], (void *)under, strlen(under));
+
+	/* Write the original value (under) */
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, 1, 0, &dkey, 1, &iod,
+			    &sgl);
+	assert_int_equal(rc, 0);
+	/* Punch the akey */
+	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, 2, 0, 0, &dkey, 1, &akey,
+			   NULL);
+	assert_int_equal(rc, 0);
+
+	/* Write the new value (expected) */
+	rex.rx_nr = strlen(expected);
+	d_iov_set(&sgl.sg_iovs[0], (void *)expected, strlen(expected));
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, 3, 0, &dkey, 1, &iod,
+			    &sgl);
+	assert_int_equal(rc, 0);
+
+	/* Now read back original # of bytes */
+	rex.rx_nr = strlen(under);
+	d_iov_set(&sgl.sg_iovs[0], (void *)buf, strlen(under));
+	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, 4, &dkey, 1, &iod, &sgl);
+	assert_int_equal(rc, 0);
+
+	assert_int_equal(strncmp(buf, expected, strlen(under)), 0);
+
+	/* Write the original value at latest epoch (under) */
+	d_iov_set(&sgl.sg_iovs[0], (void *)under, strlen(under));
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, 5, 0, &dkey, 1, &iod,
+			    &sgl);
+	assert_int_equal(rc, 0);
+	/* Punch the dkey */
+	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, 6, 0, 0, &dkey, 0, NULL,
+			   NULL);
+	assert_int_equal(rc, 0);
+
+	/* Write the new value (expected) at latest epoch*/
+	rex.rx_nr = strlen(expected);
+	d_iov_set(&sgl.sg_iovs[0], (void *)expected, strlen(expected));
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, 7, 0, &dkey, 1, &iod,
+			    &sgl);
+	assert_int_equal(rc, 0);
+
+	memset(buf, 0, sizeof(buf));
+	/* Now read back original # of bytes */
+	rex.rx_nr = strlen(under);
+	d_iov_set(&sgl.sg_iovs[0], (void *)buf, strlen(under));
+	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, 8, &dkey, 1, &iod, &sgl);
+	assert_int_equal(rc, 0);
+
+	D_INFO("checking punch model test\n");
+	assert_int_equal(strncmp(buf, expected, strlen(under)), 0);
+
+	/* Write one more at 9 */
+	rex.rx_nr = strlen(expected);
+	d_iov_set(&sgl.sg_iovs[0], (void *)expected, strlen(expected));
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, 9, 0, &dkey, 1, &iod,
+			    &sgl);
+	assert_int_equal(rc, 0);
+
+	/* Punch the object at 10 */
+	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, 10, 0, 0, NULL, 0, NULL,
+			   NULL);
+	assert_int_equal(rc, 0);
+
+	/* Write one more at 11 */
+	rex.rx_nr = strlen(latest);
+	d_iov_set(&sgl.sg_iovs[0], (void *)latest, strlen(latest));
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, 11, 0, &dkey, 1, &iod,
+			    &sgl);
+	assert_int_equal(rc, 0);
+
+	/** read old one for sanity */
+	memset(buf, 0, sizeof(buf));
+	rex.rx_nr = strlen(under);
+	d_iov_set(&sgl.sg_iovs[0], (void *)buf, strlen(under));
+	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, 5, &dkey, 1, &iod, &sgl);
+	assert_int_equal(rc, 0);
+	assert_int_equal(strncmp(buf, under, strlen(under)), 0);
+
+	/* Non recursive iteration first */
+	vos_check_recx(state, 8, 0, oid, &dkey, &akey, 1, 0);
+
+	(void)vos_check_akey; /* For now, unused. Reference to avoid warning */
+
+	/* Now recurse at an epoch prior to punches */
+	vos_check_dkey(state, 1, 0, oid, 1, 1, 1, 1, 1, 0);
+
+	/* Now recurse including punched entries */
+	vos_check_dkey(state, 8, VOS_IT_PUNCHED, oid, 1, 0, 1, 0, 4, 0);
+
+	/* Now recurse after punch, not including punched entries */
+	vos_check_obj(state, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+
+	/* Now recurse including punched entries after object punch */
+	vos_check_obj(state, 10, VOS_IT_PUNCHED, 1, 0, 1, 0, 1, 0, 5, 0);
+
+	/* Now recurse visible entries at 11 */
+	vos_check_obj(state, 11, 0, 1, 0, 1, 0, 1, 0, 1, 0);
+
+	/** Read the value at 11 */
+	memset(buf, 0, sizeof(buf));
+	rex.rx_nr = strlen(under);
+	d_iov_set(&sgl.sg_iovs[0], (void *)buf, strlen(under));
+	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, 11, &dkey, 1, &iod, &sgl);
+	assert_int_equal(rc, 0);
+	assert_int_equal(sgl.sg_iovs[0].iov_len, strlen(latest));
+	assert_int_equal(strncmp(buf, latest, strlen(latest)), 0);
+
+	daos_sgl_fini(&sgl, false);
+	D_INFO("done punch model test\n");
+
+	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid,
+			       DAOS_GET_RECX | DAOS_GET_MAX,
+			       11, &dkey, &akey, &rex);
+	assert_int_equal(rc, 0);
+	assert_int_equal(rex.rx_idx, 0);
+	assert_int_equal(rex.rx_nr, strlen(latest));
+}
+
 
 static const struct CMUnitTest punch_model_tests[] = {
 	{ "VOS800: VOS punch model array set/get size",
 	  array_set_get_size, pm_setup, pm_teardown },
-	{ "VOS801: VOS punch model array read/write/punch",
-	  array_read_write_punch, pm_setup, pm_teardown },
+	{ "VOS801: VOS punch model array read/write/punch int32_t",
+	  array_1, pm_setup, pm_teardown },
+	{ "VOS802: VOS punch model array read/write/punch char",
+	  array_2, pm_setup, pm_teardown },
+	{ "VOS380: Simple punch model test", punch_model_test, NULL, NULL},
 };
 
 int
 run_pm_tests(void)
 {
+	if (RUNNING_ON_VALGRIND)
+		buf_size = 100;
 	return cmocka_run_group_tests_name("VOS Punch Model tests",
 					   punch_model_tests, setup_io,
 					   teardown_io);

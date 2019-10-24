@@ -176,6 +176,7 @@ vos_oi_update_metadata(daos_handle_t coh, daos_unit_oid_t oid);
  * \param cont	[IN]	Open container
  * \param oid	[IN]	DAOS object ID
  * \param epoch [IN]	Epoch for the lookup
+ * \param log   [IN]	Add entry to ilog
  * \param obj	[OUT]	Direct pointer to VOS object
  *
  * \return		0 on success and negative on
@@ -183,7 +184,7 @@ vos_oi_update_metadata(daos_handle_t coh, daos_unit_oid_t oid);
  */
 int
 vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
-		  daos_epoch_t epoch, struct vos_obj_df **obj);
+		  daos_epoch_t epoch, bool log, struct vos_obj_df **obj);
 
 /**
  * Find an enty in the obj_index by @oid

@@ -30,20 +30,27 @@
 #include "vts_io.h"
 #include "vts_array.h"
 
+struct vts_metadata {
+	uint64_t	 vm_magic;
+	uint64_t	 vm_record_size;
+	uint64_t	 vm_per_key;
+	uint64_t	 vm_akey_size;
+};
+
 struct vts_array {
-	daos_unit_oid_t	va_oid;
-	daos_handle_t	va_coh;
-	daos_iod_t	va_iod;
-	d_iov_t		va_dkey;
-	daos_recx_t	va_recx;
-	uint64_t	va_dkey_value;
-	d_sg_list_t	va_sgl;
-	uint32_t	va_akey_value;
-	int32_t		va_magic;
+	daos_unit_oid_t		 va_oid;
+	daos_handle_t		 va_coh;
+	daos_iod_t		 va_iod;
+	d_iov_t			 va_dkey;
+	daos_recx_t		 va_recx;
+	uint64_t		 va_dkey_value;
+	d_sg_list_t		 va_sgl;
+	struct vts_metadata	 va_meta;
+	uint8_t			*va_akey_value;
+	uint8_t			*va_zero;
 };
 
 #define ARRAY_MAGIC 0xdeadbeef
-static int32_t	array_magic = ARRAY_MAGIC;
 
 static daos_handle_t
 vts_array2hdl(struct vts_array *array)
@@ -60,9 +67,51 @@ vts_hdl2array(daos_handle_t aoh)
 {
 	struct vts_array	*array = (struct vts_array *)aoh.cookie;
 
-	D_ASSERT(array != NULL && array->va_magic == ARRAY_MAGIC);
+	D_ASSERT(array != NULL && array->va_meta.vm_magic == ARRAY_MAGIC);
 
 	return array;
+}
+
+static int
+array_open(struct vts_array *array)
+{
+	D_ALLOC_ARRAY(array->va_akey_value, array->va_meta.vm_akey_size);
+	if (array->va_akey_value == NULL)
+		return -DER_NOMEM;
+
+	D_ALLOC_ARRAY(array->va_zero, array->va_meta.vm_record_size);
+	if (array->va_zero == NULL)
+		return -DER_NOMEM;
+
+	return 0;
+}
+
+static int
+array_reset(struct vts_array *array, const struct vts_metadata *meta)
+{
+	uint8_t	*scratch;
+
+	if (array->va_meta.vm_akey_size != meta->vm_akey_size) {
+		D_REALLOC_ARRAY(scratch, array->va_akey_value,
+				(int)meta->vm_akey_size);
+		if (scratch == NULL)
+			return -DER_NOMEM;
+		array->va_akey_value = scratch;
+		memset(scratch, 0, meta->vm_akey_size);
+	}
+
+	if (array->va_meta.vm_record_size != meta->vm_record_size) {
+		D_REALLOC_ARRAY(scratch, array->va_zero,
+				(int)meta->vm_record_size);
+		if (scratch == NULL)
+			return -DER_NOMEM;
+		array->va_zero = scratch;
+		memset(scratch, 0, meta->vm_record_size);
+	}
+
+	array->va_meta = *meta;
+
+	return 0;
 }
 
 static int
@@ -94,15 +143,11 @@ array_init(struct vts_array *in, daos_handle_t coh, daos_unit_oid_t oid,
 		*out = in;
 
 	d_iov_set(&in->va_dkey, &in->va_dkey_value, sizeof(in->va_dkey_value));
-	in->va_akey_value = 0;
-	d_iov_set(&in->va_iod.iod_name, &in->va_akey_value,
-		  sizeof(in->va_akey_value));
 	in->va_iod.iod_type = DAOS_IOD_ARRAY;
 	in->va_iod.iod_recxs = &in->va_recx;
 	in->va_iod.iod_nr = 1;
 	in->va_coh = coh;
 	in->va_oid = oid;
-	in->va_magic = array_magic;
 
 	return 0;
 }
@@ -111,56 +156,78 @@ static void
 array_fini(struct vts_array *in, bool free_array)
 {
 	daos_sgl_fini(&in->va_sgl, false);
-	in->va_magic = 0;
+	in->va_meta.vm_magic = 0;
 	if (!free_array)
 		return;
 
+	D_FREE(in->va_zero);
+	D_FREE(in->va_akey_value);
 	D_FREE(in);
 }
 
 static int
 update_array(struct vts_array *array, daos_epoch_t epoch, uint64_t dkey,
-	     uint64_t offset, uint64_t nr, int32_t *values)
+	     uint64_t rec_size, uint64_t offset, uint64_t nr, void *values)
 {
 	d_sg_list_t	*sgl = NULL;
+	uint8_t		 akey = 0;
 
 	array->va_recx.rx_idx = offset;
 	array->va_recx.rx_nr = nr;
-	array->va_iod.iod_size = 0;
 	array->va_dkey_value = dkey;
+	array->va_iod.iod_size = rec_size;
 	if (values) {
 		d_iov_set(&array->va_sgl.sg_iovs[0], values,
-			  nr * sizeof(*values));
-		array->va_iod.iod_size = sizeof(*values);
+			  nr * rec_size);
 		sgl = &array->va_sgl;
 	}
+	if (dkey == 0) {
+		d_iov_set(&array->va_iod.iod_name, &akey, sizeof(akey));
+	} else {
+		d_iov_set(&array->va_iod.iod_name, array->va_akey_value,
+			  array->va_meta.vm_akey_size);
+	}
 
+	D_DEBUG(DB_IO, "Writing "DF_U64" records of size "DF_U64" at offset "
+		DF_U64"\n", nr, rec_size, offset);
 	return vos_obj_update(array->va_coh, array->va_oid, epoch, 0,
 			      &array->va_dkey, 1, &array->va_iod, sgl);
 }
 
 static int
 fetch_array(struct vts_array *array, daos_epoch_t epoch, uint64_t dkey,
-	    uint64_t offset, uint64_t nr, int32_t *values)
+	    uint64_t rec_size, uint64_t offset, uint64_t nr, void *values)
 {
 	d_sg_list_t	*sgl = &array->va_sgl;
+	uint8_t		 akey = 0;
 
 	array->va_recx.rx_idx = offset;
 	array->va_recx.rx_nr = nr;
 	d_iov_set(&array->va_sgl.sg_iovs[0], values,
-		  nr * sizeof(*values));
-	array->va_iod.iod_size = sizeof(*values);
+		  nr * rec_size);
+	array->va_iod.iod_size = rec_size;
 	array->va_dkey_value = dkey;
+	if (dkey == 0) {
+		d_iov_set(&array->va_iod.iod_name, &akey, sizeof(akey));
+	} else {
+		d_iov_set(&array->va_iod.iod_name, array->va_akey_value,
+			  array->va_meta.vm_akey_size);
+	}
 
+	D_DEBUG(DB_IO, "Reading "DF_U64" records of size "DF_U64" at offset "
+		DF_U64"\n", nr, rec_size, offset);
 	return vos_obj_fetch(array->va_coh, array->va_oid, epoch,
 			     &array->va_dkey, 1, &array->va_iod, sgl);
 }
 
 
 int
-vts_array_alloc(daos_handle_t coh, daos_epoch_t epoch, daos_unit_oid_t *oid)
+vts_array_alloc(daos_handle_t coh, daos_epoch_t epoch, daos_size_t record_size,
+		daos_size_t nr_per_key, daos_size_t akey_size,
+		daos_unit_oid_t *oid)
 {
 	struct vts_array	 array;
+	struct vts_metadata	 meta;
 	int			 rc = 0;
 
 	*oid = dts_unit_oid_gen(0, DAOS_OF_DKEY_UINT64, 0);
@@ -168,9 +235,17 @@ vts_array_alloc(daos_handle_t coh, daos_epoch_t epoch, daos_unit_oid_t *oid)
 	if (rc != 0)
 		return rc;
 
-	rc = update_array(&array, epoch, 0, 0, 1, &array_magic);
+	meta.vm_magic = ARRAY_MAGIC;
+	meta.vm_record_size = record_size;
+	meta.vm_per_key = nr_per_key ? nr_per_key : 8;
+	meta.vm_akey_size = akey_size ? akey_size : 1;
+	rc = update_array(&array, epoch, 0, sizeof(meta), 0, 1,
+			  &meta);
 
 	array_fini(&array, false);
+
+	if (rc != 0)
+		D_ERROR("Failed to create array: "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -185,28 +260,39 @@ int
 vts_array_open(daos_handle_t coh, daos_unit_oid_t oid, daos_handle_t *aoh)
 {
 	struct vts_array	*array;
-	int32_t			 fetch_magic;
 	int			 rc;
 
 	rc = array_init(NULL, coh, oid, &array);
 	if (rc != 0)
 		return rc;
 
-	rc = fetch_array(array, DAOS_EPOCH_MAX, 0, 0, 1, &fetch_magic);
-	if (rc != 0 || fetch_magic != ARRAY_MAGIC) {
+	rc = fetch_array(array, DAOS_EPOCH_MAX, 0, sizeof(array->va_meta), 0, 1,
+			 &array->va_meta);
+	if (rc != 0 || array->va_meta.vm_magic != ARRAY_MAGIC) {
+		if (rc == 0)
+			rc = -DER_INVAL;
 		array_fini(array, true);
 		return rc;
 	}
 
+	rc = array_open(array);
+	if (rc != 0) {
+		array_fini(array, true);
+		return rc;
+	}
+
+	D_ASSERT(array->va_meta.vm_magic == ARRAY_MAGIC);
 	*aoh = vts_array2hdl(array);
 	return 0;
 }
 
 int
 vts_array_reset(daos_handle_t aoh, daos_epoch_t punch_epoch,
-		daos_epoch_t create_epoch)
+		daos_epoch_t create_epoch, daos_size_t record_size,
+		daos_size_t nr_per_key, daos_size_t akey_size)
 {
 	struct vts_array	*array = vts_hdl2array(aoh);
+	struct vts_metadata	 meta;
 	int			 rc;
 
 	D_ASSERT(punch_epoch < create_epoch);
@@ -216,7 +302,16 @@ vts_array_reset(daos_handle_t aoh, daos_epoch_t punch_epoch,
 	if (rc != 0)
 		return rc;
 
-	return update_array(array, create_epoch, 0, 0, 1, &array_magic);
+	meta.vm_magic = ARRAY_MAGIC;
+	meta.vm_record_size = record_size;
+	meta.vm_per_key = nr_per_key ? nr_per_key : 8;
+	meta.vm_akey_size = akey_size ? akey_size : 1;
+	rc = update_array(array, create_epoch, 0, sizeof(meta), 0, 1,
+			  &meta);
+	if (rc != 0)
+		return rc;
+
+	return array_reset(array, &meta);
 }
 
 void
@@ -230,9 +325,9 @@ vts_array_close(daos_handle_t aoh)
 int
 vts_array_set_size(daos_handle_t aoh, daos_epoch_t epoch, daos_size_t new_size)
 {
-	daos_size_t	old_size;
-	int32_t		element = 0;
-	int		rc;
+	struct vts_array	*array = vts_hdl2array(aoh);
+	daos_size_t		 old_size;
+	int			 rc;
 
 	/* Should probably put this in vos transaction but keep it simple for
 	 * now.
@@ -259,12 +354,8 @@ vts_array_set_size(daos_handle_t aoh, daos_epoch_t epoch, daos_size_t new_size)
 		return 0;
 
 	D_DEBUG(DB_IO, "Writing one entry at "DF_U64"\n", new_size - 1);
-	return vts_array_write(aoh, epoch, new_size - 1, 1, &element);
+	return vts_array_write(aoh, epoch, new_size - 1, 1, array->va_zero);
 }
-
-#define ENTRIES_LOG2	3
-#define ENTRIES_PER_KEY	(1 << ENTRIES_LOG2)
-#define ENTRIES_MASK	(ENTRIES_PER_KEY - 1)
 
 int
 vts_array_get_size(daos_handle_t aoh, daos_epoch_t epoch, daos_size_t *size)
@@ -276,11 +367,18 @@ vts_array_get_size(daos_handle_t aoh, daos_epoch_t epoch, daos_size_t *size)
 	uint64_t		 val;
 
 	d_iov_set(&dkey, NULL, 0);
+	d_iov_set(&array->va_iod.iod_name, array->va_akey_value,
+		  array->va_meta.vm_akey_size);
 
 	rc = vos_obj_query_key(array->va_coh, array->va_oid,
 			       DAOS_GET_DKEY | DAOS_GET_RECX | DAOS_GET_MAX,
 			       epoch, &dkey, &array->va_iod.iod_name,
 			       &recx);
+
+	if (rc == -DER_NONEXIST) {
+		*size = 0;
+		return 0;
+	}
 
 	if (rc != 0)
 		return rc;
@@ -291,51 +389,57 @@ vts_array_get_size(daos_handle_t aoh, daos_epoch_t epoch, daos_size_t *size)
 		return 0;
 	}
 
-	*size = (val - 1) * ENTRIES_PER_KEY + recx.rx_idx + recx.rx_nr;
+	*size = (val - 1) * array->va_meta.vm_per_key + recx.rx_idx +
+		recx.rx_nr;
 
 	return 0;
 }
 
 int
 vts_array_write(daos_handle_t aoh, daos_epoch_t epoch, uint64_t offset,
-		uint64_t count, int32_t *elements)
+		uint64_t count, void *elements)
 {
 	struct vts_array	*array = vts_hdl2array(aoh);
-	int32_t			*cursor = elements;
-	uint64_t		 first = offset >> ENTRIES_LOG2;
-	uint64_t		 last = (offset + count - 1) >> ENTRIES_LOG2;
+	void			*cursor = elements;
+	uint64_t		 first;
+	uint64_t		 last;
 	uint64_t		 stripe;
 	uint64_t		 stripe_offset;
 	uint64_t		 nr;
 	int			 rc = 0;
+
+	first = offset / array->va_meta.vm_per_key;
+	last = (offset + count - 1) / array->va_meta.vm_per_key;
 
 	D_ASSERT(last >= first);
 	for (stripe = first; stripe <= last; stripe++) {
 		uint64_t	tmp;
 
 		stripe_offset = 0;
-		nr = ENTRIES_PER_KEY;
+		nr = array->va_meta.vm_per_key;
 
-		tmp = offset & ENTRIES_MASK;
+		tmp = offset % array->va_meta.vm_per_key;
 		if (stripe == first && tmp != 0) {
 			stripe_offset = tmp;
-			nr = ENTRIES_PER_KEY - stripe_offset;
+			nr = array->va_meta.vm_per_key - stripe_offset;
 		}
 		if (stripe == last) {
-			tmp = (count + offset) & ENTRIES_MASK;
+			tmp = (count + offset) % array->va_meta.vm_per_key;
 			if (tmp == 0)
-				tmp = ENTRIES_PER_KEY;
+				tmp = array->va_meta.vm_per_key;
 			nr = tmp - stripe_offset;
 		}
 
-		rc = update_array(array, epoch, stripe + 1, stripe_offset, nr,
-				  cursor);
+		rc = update_array(array, epoch, stripe + 1,
+				  array->va_meta.vm_record_size, stripe_offset,
+				  nr, cursor);
 		if (rc != 0)
 			break;
-		cursor += nr;
+		cursor += nr * array->va_meta.vm_record_size;
 	}
 
-	D_ASSERT(cursor == (elements + count));
+	D_ASSERT(cursor ==
+		 (elements + (count * array->va_meta.vm_record_size)));
 
 	return rc;
 }
@@ -345,35 +449,39 @@ vts_array_punch(daos_handle_t aoh, daos_epoch_t epoch, uint64_t offset,
 		uint64_t count)
 {
 	struct vts_array	*array = vts_hdl2array(aoh);
-	uint64_t		 first = offset >> ENTRIES_LOG2;
-	uint64_t		 last = (offset + count - 1) >> ENTRIES_LOG2;
+	uint64_t		 first;
+	uint64_t		 last;
 	uint64_t		 stripe;
 	uint64_t		 stripe_offset;
 	uint64_t		 nr;
 	int			 rc = 0;
+
+	first = offset / array->va_meta.vm_per_key;
+	last = (offset + count - 1) / array->va_meta.vm_per_key;
 
 	D_ASSERT(last >= first);
 	for (stripe = first; stripe <= last; stripe++) {
 		uint64_t	tmp;
 
 		stripe_offset = 0;
-		nr = ENTRIES_PER_KEY;
+		nr = array->va_meta.vm_per_key;
 
-		tmp = offset & ENTRIES_MASK;
+		tmp = offset % array->va_meta.vm_per_key;
 		if (stripe == first && tmp != 0) {
 			stripe_offset = tmp;
-			nr = ENTRIES_PER_KEY - stripe_offset;
+			nr = array->va_meta.vm_per_key - stripe_offset;
 		}
 		if (stripe == last) {
-			tmp = (count + offset) & ENTRIES_MASK;
+			tmp = (count + offset) % array->va_meta.vm_per_key;
 			if (tmp == 0)
-				tmp = ENTRIES_PER_KEY;
+				tmp = array->va_meta.vm_per_key;
 			nr = tmp - stripe_offset;
 		}
 
-		if (nr != ENTRIES_PER_KEY) {
+		if (nr != array->va_meta.vm_per_key) {
 			rc = update_array(array, epoch, stripe + 1,
-					  stripe_offset, nr, NULL);
+					  0 /* punch */, stripe_offset, nr,
+					  NULL);
 		} else {
 			array->va_dkey_value = stripe + 1;
 			rc = vos_obj_punch(array->va_coh, array->va_oid, epoch,
@@ -389,42 +497,49 @@ vts_array_punch(daos_handle_t aoh, daos_epoch_t epoch, uint64_t offset,
 
 int
 vts_array_read(daos_handle_t aoh, daos_epoch_t epoch, uint64_t offset,
-	       uint64_t count, int32_t *elements)
+	       uint64_t count, void *elements)
 {
 	struct vts_array	*array = vts_hdl2array(aoh);
-	int32_t			*cursor = elements;
-	uint64_t		 first = offset >> ENTRIES_LOG2;
-	uint64_t		 last = (offset + count - 1) >> ENTRIES_LOG2;
+	void			*cursor = elements;
+	uint64_t		 first;
+	uint64_t		 last;
 	uint64_t		 stripe;
 	uint64_t		 stripe_offset;
 	uint64_t		 nr;
 	int			 rc = 0;
+
+	first = offset / array->va_meta.vm_per_key;
+	last = (offset + count - 1) / array->va_meta.vm_per_key;
 
 	D_ASSERT(last >= first);
 	for (stripe = first; stripe <= last; stripe++) {
 		uint64_t	tmp;
 
 		stripe_offset = 0;
-		nr = ENTRIES_PER_KEY;
+		nr = array->va_meta.vm_per_key;
 
-		tmp = offset & ENTRIES_MASK;
+		tmp = offset % array->va_meta.vm_per_key;
 		if (stripe == first && tmp != 0) {
 			stripe_offset = tmp;
-			nr = ENTRIES_PER_KEY - stripe_offset;
+			nr = array->va_meta.vm_per_key - stripe_offset;
 		}
 		if (stripe == last) {
-			tmp = (count + offset) & ENTRIES_MASK;
+			tmp = (count + offset) % array->va_meta.vm_per_key;
 			if (tmp == 0)
-				tmp = ENTRIES_PER_KEY;
+				tmp = array->va_meta.vm_per_key;
 			nr = tmp - stripe_offset;
 		}
 
-		rc = fetch_array(array, epoch, stripe + 1, stripe_offset, nr,
-				 cursor);
+		rc = fetch_array(array, epoch, stripe + 1,
+				 array->va_meta.vm_record_size, stripe_offset,
+				 nr, cursor);
 		if (rc != 0)
 			break;
-		cursor += nr;
+		cursor += nr * array->va_meta.vm_record_size;
 	}
+
+	D_ASSERT(cursor ==
+		 (elements + (count * array->va_meta.vm_record_size)));
 
 	return rc;
 }

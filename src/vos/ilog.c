@@ -200,7 +200,8 @@ ilog_status_get(struct ilog_context *lctx, umem_off_t tx_id,
 	rc = cbs->dc_log_status_cb(&lctx->ic_umm, tx_id, intent,
 				   cbs->dc_log_status_args);
 
-	if (intent == DAOS_INTENT_UPDATE && rc == -DER_INPROGRESS)
+	if ((intent == DAOS_INTENT_UPDATE || intent == DAOS_INTENT_PUNCH)
+	    && rc == -DER_INPROGRESS)
 		return ILOG_UNCOMMITTED;
 
 	return rc;
@@ -968,11 +969,16 @@ ilog_tree_modify(struct ilog_context *lctx, const struct ilog_id *id_in,
 		punchp = (bool *)val_iov.iov_buf;
 		keyp = (struct ilog_id *)key_iov.iov_buf;
 
-		visibility = ilog_status_get(lctx, keyp->id_tx_id,
-					     DAOS_INTENT_UPDATE);
-		if (visibility < 0) {
-			rc = visibility;
-			goto done;
+		visibility = ILOG_UNCOMMITTED;
+
+		if (keyp->id_epoch <= epr->epr_hi &&
+		    keyp->id_epoch >= epr->epr_lo) {
+			visibility = ilog_status_get(lctx, keyp->id_tx_id,
+						     DAOS_INTENT_UPDATE);
+			if (visibility < 0) {
+				rc = visibility;
+				goto done;
+			}
 		}
 
 		rc = update_inplace(lctx, keyp, punchp, id_in, opc, punch,
@@ -1057,7 +1063,8 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 		" tree_version: %d\n", opc_str[opc], id_in->id_epoch,
 		ilog_mag2ver(root->lr_magic));
 
-	if (root->lr_tree.it_embedded) {
+	if (root->lr_tree.it_embedded && root->lr_id.id_epoch <= epr->epr_hi
+	    && root->lr_id.id_epoch >= epr->epr_lo) {
 		visibility = ilog_status_get(lctx, root->lr_id.id_tx_id,
 					     DAOS_INTENT_UPDATE);
 		if (visibility < 0) {
@@ -1132,10 +1139,14 @@ done:
 }
 
 int
-ilog_update(daos_handle_t loh, daos_epoch_t epoch, bool punch)
+ilog_update(daos_handle_t loh, const daos_epoch_range_t *epr,
+	    daos_epoch_t epoch, bool punch)
 {
 	daos_epoch_range_t	 range = {0, DAOS_EPOCH_MAX};
 	struct ilog_id		 id = {0, epoch};
+
+	if (epr)
+		range = *epr;
 
 	return ilog_modify(loh, &id, punch, &range, ILOG_OP_UPDATE);
 
@@ -1147,7 +1158,7 @@ ilog_update(daos_handle_t loh, daos_epoch_t epoch, bool punch)
 int
 ilog_persist(daos_handle_t loh, const struct ilog_id *id)
 {
-	daos_epoch_range_t	 range = {0, DAOS_EPOCH_MAX};
+	daos_epoch_range_t	 range = {id->id_epoch, id->id_epoch};
 
 	return ilog_modify(loh, id, false, &range, ILOG_OP_PERSIST);
 }

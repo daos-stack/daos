@@ -201,6 +201,8 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 {
 	struct vos_object	*obj;
 	struct daos_llink	*lret;
+	struct ilog_desc_cbs	 cbs;
+	daos_handle_t		 loh;
 	struct obj_lru_key	 lkey;
 	int			 rc = 0;
 
@@ -241,9 +243,10 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 			goto out; /* Ok to delete */
 	}
 
-	if (obj->obj_df) /* newly cached object */
+	if (obj->obj_df)
 		goto check_object;
 
+	 /* newly cached object */
 	D_DEBUG(DB_TRACE, "%s Got empty obj "DF_UOID" epr="DF_U64"-"DF_U64"\n",
 		no_create ? "find" : "find/create", DP_UOID(oid), epr->epr_lo,
 		epr->epr_hi);
@@ -259,7 +262,8 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 			obj->obj_sync_epoch = obj->obj_df->vo_sync;
 		}
 	} else {
-		rc = vos_oi_find_alloc(cont, oid, epr->epr_hi, &obj->obj_df);
+		rc = vos_oi_find_alloc(cont, oid, epr->epr_hi, false,
+				       &obj->obj_df);
 		D_ASSERT(rc || obj->obj_df);
 	}
 
@@ -273,19 +277,35 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 		goto out;
 	}
 check_object:
-	if (no_create == false || intent == DAOS_INTENT_KILL)
+	if (intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH)
 		goto out;
 
-	if (no_create) {
-		rc = vos_ilog_fetch(vos_cont2umm(cont), vos_cont2hdl(cont),
-				    intent, &obj->obj_df->vo_ilog, epr->epr_hi,
-				    &obj->obj_ilog_info);
-		if (rc != 0) {
-			D_DEBUG(DB_TRACE, "Object "DF_UOID" not found at "
-				DF_U64"\n", DP_UOID(oid), epr->epr_hi);
-			goto failed;
-		}
+	if (no_create)
+		goto log_fetch;
+
+	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
+	rc = ilog_open(vos_cont2umm(cont), &obj->obj_df->vo_ilog, &cbs, &loh);
+	if (rc != 0)
+		goto failed;
+
+	rc = ilog_update(loh, NULL, epr->epr_hi, false);
+
+	ilog_close(loh);
+	if (rc != 0)
+		goto failed;
+log_fetch:
+	/** We need to fetch the ilog for creation case as well */
+	rc = vos_ilog_fetch(vos_cont2umm(cont), vos_cont2hdl(cont),
+			    intent, &obj->obj_df->vo_ilog, epr->epr_hi,
+			    0, &obj->obj_ilog_info);
+	if (rc != 0) {
+		D_DEBUG(DB_TRACE, "Object "DF_UOID" not found at "
+			DF_U64"\n", DP_UOID(oid), epr->epr_hi);
+		goto failed;
 	}
+
+	if (no_create == false)
+		goto out;
 
 	rc = vos_ilog_check(&obj->obj_ilog_info, epr, epr, visible_only);
 	if (rc != 0) {

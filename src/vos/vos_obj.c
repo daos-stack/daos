@@ -54,10 +54,8 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 	struct vos_rec_bundle	 rbund;
 	daos_csum_buf_t		 csum;
 	d_iov_t			 riov;
-	struct ilog_desc_cbs	 cbs;
 	int			 rc;
 
-	D_INFO("PUNCH DKEY "DF_U64"\n", *(uint64_t *)dkey->iov_buf);
 	rc = obj_tree_init(obj);
 	if (rc)
 		D_GOTO(out, rc);
@@ -78,12 +76,11 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 			D_GOTO(out, rc);
 
 	} else {
-		struct umem_instance	*umm;
-		daos_handle_t		 toh, loh;
+		daos_handle_t		 toh;
 		int			 i;
 
 		rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY,
-				      dkey, SUBTR_CREATE, DAOS_INTENT_UPDATE,
+				      dkey, SUBTR_CREATE, DAOS_INTENT_PUNCH,
 				      &krec, &toh);
 		if (rc) {
 			D_ERROR("Error preparing dkey: rc="DF_RC"\n",
@@ -91,26 +88,11 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 			D_GOTO(out, rc);
 		}
 
-		umm = vos_obj2umm(obj);
-
-		/* A punch to the akey is an update on a DKEY so update the
-		 * incarnation log.  This will normally be a noop but the
-		 * log entry is needed because an existing dkey is implied.
+		/* We do not need to add an incarnation log entry in parent tree
+		 * on punch.   If the subtree has nothing but punches, no need
+		 * to track that.  If it has updates, the parent tree will have
+		 * updates
 		 */
-		vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(obj->obj_cont));
-		rc = ilog_open(umm, &krec->kr_ilog, &cbs, &loh);
-		if (rc != 0) {
-			D_ERROR("Error opening dkey ilog: rc="DF_RC"\n",
-				DP_RC(rc));
-			goto dkey_release;
-		}
-
-		rc = ilog_update(loh, epoch, false);
-		if (rc != 0) {
-			D_ERROR("Error updating ilog: rc="DF_RC"\n", DP_RC(rc));
-			goto ilog_done;
-		}
-
 		rbund.rb_tclass	= VOS_BTR_AKEY;
 		for (i = 0; i < akey_nr; i++) {
 			rbund.rb_iov = &akeys[i];
@@ -122,9 +104,6 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, uint32_t pm_ver,
 				break;
 			}
 		}
-ilog_done:
-		ilog_close(loh);
-dkey_release:
 		key_tree_release(toh, 0);
 	}
  out:
@@ -184,7 +163,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	/* NB: punch always generate a new incarnation of the object */
 	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), oid, &epr,
-			  false, DAOS_INTENT_UPDATE, true, &obj);
+			  false, DAOS_INTENT_PUNCH, true, &obj);
 	if (rc == 0) {
 		if (dkey) /* key punch */
 			rc = key_punch(obj, epoch, pm_ver, dkey,
@@ -259,7 +238,8 @@ key_iter_ilog_check(struct vos_krec_df *krec, struct vos_obj_iter *oiter,
 	umm = vos_obj2umm(oiter->it_obj);
 	rc = vos_ilog_fetch(umm, vos_cont2hdl(oiter->it_obj->obj_cont),
 			    vos_iter_intent(&oiter->it_iter), &krec->kr_ilog,
-			    oiter->it_epr.epr_hi, &oiter->it_ilog_info);
+			    oiter->it_epr.epr_hi, oiter->it_punched,
+			    &oiter->it_ilog_info);
 
 	if (rc != 0)
 		goto out;

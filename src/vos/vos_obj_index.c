@@ -207,7 +207,7 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
  */
 int
 vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
-		  daos_epoch_t epoch, struct vos_obj_df **obj_p)
+		  daos_epoch_t epoch, bool log, struct vos_obj_df **obj_p)
 {
 	struct vos_obj_df	*obj = NULL;
 	d_iov_t			 key_iov;
@@ -221,7 +221,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 
 	rc = vos_oi_find(cont, oid, &obj);
 	if (rc == 0)
-		goto update_log;
+		goto do_log;
 	if (rc != -DER_NONEXIST)
 		return rc;
 
@@ -238,17 +238,19 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 		D_ERROR("Failed to update Key for Object index\n");
 		return rc;
 	}
-
 	obj = val_iov.iov_buf;
-update_log:
+do_log:
+	if (!log)
+		goto skip_log;
 	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
 	rc = ilog_open(vos_cont2umm(cont), &obj->vo_ilog, &cbs, &loh);
 	if (rc != 0)
 		return rc;
 
-	rc = ilog_update(loh, epoch, false);
+	rc = ilog_update(loh, NULL, epoch, false);
 
 	ilog_close(loh);
+skip_log:
 	if (rc == 0)
 		*obj_p = obj;
 
@@ -276,7 +278,7 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 	if (rc != 0)
 		return rc;
 
-	rc = ilog_update(loh, epoch, true);
+	rc = ilog_update(loh, NULL, epoch, true);
 
 	ilog_close(loh);
 
@@ -358,7 +360,7 @@ oi_iter_ilog_check(struct vos_obj_df *obj, struct vos_oi_iter *oiter,
 	umm = vos_cont2umm(oiter->oit_cont);
 	rc = vos_ilog_fetch(umm, vos_cont2hdl(oiter->oit_cont),
 			    vos_iter_intent(&oiter->oit_iter), &obj->vo_ilog,
-			    oiter->oit_epr.epr_hi, &oiter->oit_ilog_info);
+			    oiter->oit_epr.epr_hi, 0, &oiter->oit_ilog_info);
 	if (rc != 0)
 		goto out;
 

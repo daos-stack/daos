@@ -130,13 +130,15 @@ ilog_destroy(struct umem_instance *umm, struct ilog_desc_cbs *cbs,
  *  exists, nothing will be logged and the function will succeed.
  *
  *  \param	loh[in]		Open log handle
+ *  \param	epr[in]		Limiting range
  *  \param	epoch[in]	Epoch of update
  *  \param	punch[in]	Punch if true, update otherwise
  *
  *  \return 0 on success, error code on failure
  */
 int
-ilog_update(daos_handle_t loh, daos_epoch_t epoch, bool punch);
+ilog_update(daos_handle_t loh, const daos_epoch_range_t *epr,
+	    daos_epoch_t epoch, bool punch);
 
 /** Updates specified log entry to mark it as persistent (remove
  * the transaction identifier from the entry.   Additionally, this will

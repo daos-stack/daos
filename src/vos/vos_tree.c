@@ -987,9 +987,7 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 		}
 	}
 
-	/* Need to update the incarnation log regardless if we found a match
-	 * or inserted a new key.
-	 */
+	/** Punch always adds a log entry */
 	rbund = iov2rec_bundle(val_iov);
 	krec = rbund->rb_krec;
 	umm = vos_obj2umm(obj);
@@ -1001,7 +999,7 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 			d_errstr(rc));
 		return rc;
 	}
-	rc = ilog_update(loh, epoch, true);
+	rc = ilog_update(loh, NULL, epoch, true);
 	if (rc != 0)
 		D_ERROR("Failed to update incarnation log entry:"
 			" %s\n", d_errstr(rc));
