@@ -57,9 +57,7 @@ class CartCtlFiveNodeTest(Test):
         :avocado: tags=all,ctl,five_node
         """
 
-        urifile = self.utils.create_uri_file()
-
-        srvcmd = self.utils.build_cmd(self, self.env, "srv", True, urifile)
+        srvcmd = self.utils.build_cmd(self, self.env, "srv", True)
 
         try:
             srv_rtn = self.utils.launch_cmd_bg(self, srvcmd)
@@ -75,9 +73,9 @@ class CartCtlFiveNodeTest(Test):
 
         time.sleep(5)
 
-        clicmd = self.utils.build_cmd(self, self.env, "cli1", False, urifile)
+        clicmd = self.utils.build_cmd(self, self.env, "cli1", False)
         self.utils.launch_test(self, clicmd, srv_rtn)
-        clicmd = self.utils.build_cmd(self, self.env, "cli2", False, urifile)
+        clicmd = self.utils.build_cmd(self, self.env, "cli2", False)
         self.utils.launch_test(self, clicmd, srv_rtn)
 
         self.utils.stop_process(srv_rtn)

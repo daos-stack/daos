@@ -59,14 +59,29 @@
 	} while (0)
 
 struct test_options {
-	int	self_rank;
-	int	mypid;
-	int	is_server;
+	bool		is_initialized;
+	d_rank_t	self_rank;
+	int		mypid;
+	int		num_attach_retries;
+	bool		is_server;
+	bool		assert_on_error;
 };
 
-struct test_options opts;
+static struct test_options opts = { .is_initialized = false };
 
 int g_shutdown;
+
+void
+tc_test_init(d_rank_t rank, int num_attach_retries, bool is_server,
+	     bool assert_on_error)
+{
+	opts.is_initialized	= true;
+	opts.self_rank		= rank;
+	opts.mypid		= getpid();
+	opts.is_server		= is_server;
+	opts.num_attach_retries	= num_attach_retries;
+	opts.assert_on_error		= assert_on_error;
+}
 
 static inline int
 tc_drain_queue(crt_context_t ctx)
@@ -94,6 +109,8 @@ void *
 tc_progress_fn(void *data)
 {
 	int rc;
+
+	D_ASSERTF(opts.is_initialized == true, "tc_test_init not called.\n");
 
 	crt_context_t *p_ctx = (crt_context_t *)data;
 
@@ -177,6 +194,8 @@ tc_wait_for_ranks(crt_context_t ctx, crt_group_t *grp, d_rank_list_t *rank_list,
 	double				time_s = 0;
 	int				i = 0;
 	int				rc = 0;
+
+	D_ASSERTF(opts.is_initialized == true, "tc_test_init not called.\n");
 
 	/* This is needed until hg cancel is fully working.
 	 * RPCs in wait_for_ranks are expected to fail
@@ -275,6 +294,8 @@ tc_load_group_from_file(const char *grp_cfg_file,
 	char		parsed_addr[255];
 	int		rc = 0;
 
+	D_ASSERTF(opts.is_initialized == true, "tc_test_init not called.\n");
+
 	f = fopen(grp_cfg_file, "r");
 	if (!f) {
 		D_ERROR("Failed to open %s for reading\n", grp_cfg_file);
@@ -310,31 +331,47 @@ out:
 	return rc;
 }
 
-static inline void
+static inline int
 tc_sem_timedwait(sem_t *sem, int sec, int line_number)
 {
 	struct timespec	deadline;
 	int		rc;
 
 	rc = clock_gettime(CLOCK_REALTIME, &deadline);
-	D_ASSERTF(rc == 0, "clock_gettime() failed at line %d rc: %d\n",
-		  line_number, rc);
+	if (rc != 0) {
+		if (opts.assert_on_error)
+			D_ASSERTF(rc == 0, "clock_gettime() failed at "
+				  "line %d rc: %d\n", line_number, rc);
+		D_ERROR("clock_gettime() failed, rc = %d\n", rc);
+		D_GOTO(out, rc);
+	}
 
 	deadline.tv_sec += sec;
 	rc = sem_timedwait(sem, &deadline);
-	D_ASSERTF(rc == 0, "sem_timedwait() failed at line %d rc: %d\n",
-		  line_number, rc);
+	if (rc != 0) {
+		if (opts.assert_on_error)
+			D_ASSERTF(rc == 0, "sem_timedwait() failed at "
+				  "line %d rc: %d\n", line_number, rc);
+		D_ERROR("sem_timedwait() failed, rc = %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+out:
+	return rc;
 }
 
 void
 tc_cli_start_basic(char *local_group_name, char *srv_group_name,
 		   crt_group_t **grp, d_rank_list_t **rank_list,
 		   crt_context_t *crt_ctx, pthread_t *progress_thread,
-		   unsigned int total_srv_ctx)
+		   unsigned int total_srv_ctx, int use_cfg)
 {
 	char		*grp_cfg_file;
 	uint32_t	 grp_size;
+	int		 attach_retries = opts.num_attach_retries;
 	int		 rc = 0;
+
+	D_ASSERTF(opts.is_initialized == true, "tc_test_init not called.\n");
 
 	rc = d_log_init();
 	D_ASSERTF(rc == 0, "d_log_init failed, rc=%d\n", rc);
@@ -343,23 +380,38 @@ tc_cli_start_basic(char *local_group_name, char *srv_group_name,
 		      CRT_FLAG_BIT_PMIX_DISABLE | CRT_FLAG_BIT_LM_DISABLE);
 	D_ASSERTF(rc == 0, "crt_init() failed; rc=%d\n", rc);
 
-	rc = crt_group_view_create(srv_group_name, grp);
-	if (!*grp || rc != 0) {
-		D_ERROR("Failed to create group view; rc=%d\n", rc);
-		assert(0);
-	}
-
 	rc = crt_context_create(crt_ctx);
 	D_ASSERTF(rc == 0, "crt_context_create() failed; rc=%d\n", rc);
 
 	rc = pthread_create(progress_thread, NULL, tc_progress_fn, crt_ctx);
 	D_ASSERTF(rc == 0, "pthread_create() failed; rc=%d\n", rc);
 
-	grp_cfg_file = getenv("CRT_L_GRP_CFG");
+	if (use_cfg) {
+		while (attach_retries-- > 0) {
+			rc = crt_group_attach(srv_group_name, grp);
+			if (rc == 0)
+				break;
+			sleep(1);
+		}
+		D_ASSERTF(rc == 0, "crt_group_attach failed, rc: %d\n", rc);
+		D_ASSERTF(*grp != NULL, "NULL attached remote grp\n");
+	} else {
+		rc = crt_group_view_create(srv_group_name, grp);
+		if (!*grp || rc != 0) {
+			D_ERROR("Failed to create group view; rc=%d\n", rc);
+			assert(0);
+		}
 
-	/* load group info from a config file and delete file upon return */
-	rc = tc_load_group_from_file(grp_cfg_file, *crt_ctx, *grp, -1, true);
-	D_ASSERTF(rc == 0, "tc_load_group_from_file() failed; rc=%d\n", rc);
+		grp_cfg_file = getenv("CRT_L_GRP_CFG");
+
+		/* load group info from a config file and
+		 * delete file upon return
+		 */
+		rc = tc_load_group_from_file(grp_cfg_file, *crt_ctx, *grp, -1,
+					     true);
+		D_ASSERTF(rc == 0, "tc_load_group_from_file() failed; rc=%d\n",
+			  rc);
+	}
 
 	rc = crt_group_size(*grp, &grp_size);
 	D_ASSERTF(rc == 0, "crt_group_size() failed; rc=%d\n", rc);
@@ -392,6 +444,8 @@ tc_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 	char		*my_uri;
 	d_rank_t	 my_rank;
 	int		 rc = 0;
+
+	D_ASSERTF(opts.is_initialized == true, "tc_test_init not called.\n");
 
 	env_self_rank = getenv("CRT_L_RANK");
 	my_rank = atoi(env_self_rank);

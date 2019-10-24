@@ -30,17 +30,17 @@ hosts: !mux
 tests: !mux
   ctl:
     name: ctl_basic
-    srv_bin: tests/test_group
-    srv_arg: "--name service-group --is_service"
+    srv_bin: ../bin/crt_launch
+    srv_arg: "-e tests/test_group_np_srv --name server_grp --cfg_path=/tmp"
     srv_env: ""
     srv_ppn: "1"
 
     cli1_bin: ../bin/cart_ctl
-    cli1_arg: "get_uri_cache --group-name service-group --rank 0,2-3,4"
+    cli1_arg: "get_uri_cache --group-name server_grp --rank 0,2-3,4 --cfg_path=/tmp"
     cli1_env: ""
     cli1_ppn: "1"
 
     cli2_bin: ../bin/cart_ctl
-    cli2_arg: "list_ctx --group-name service-group --rank 0,2-3,4"
+    cli2_arg: "list_ctx --group-name server_grp --rank 0,2-3,4 --cfg_path=/tmp"
     cli2_env: ""
     cli2_ppn: "1"

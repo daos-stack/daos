@@ -41,19 +41,16 @@
  */
 #define D_LOGFAC	DD_FAC(ctl)
 
-#include "crt_internal.h"
-#include <gurt/common.h>
-#include <cart/api.h>
-
 #include <stdio.h>
 #include <pthread.h>
 #include <getopt.h>
 #include <semaphore.h>
 
-/* max number of ranks that can be queried at once */
-#define CRT_CTL_MAX 1024
-#define CRT_CTL_MAX_ARG_STR_LEN (1 << 16)
+#include "tests_common.h"
 
+/* max number of ranks that can be queried at once */
+#define CRT_CTL_MAX		1024
+#define CRT_CTL_MAX_ARG_STR_LEN (1 << 16)
 
 int crt_ctl_logfac;
 
@@ -125,40 +122,14 @@ struct ctl_g {
 	crt_context_t			 cg_crt_ctx;
 	pthread_t			 cg_tid;
 	int				 cg_complete;
+	int				 cg_save_cfg;
+	char				*cg_cfg_path;
 	sem_t				 cg_num_reply;
 	struct crt_ctl_fi_attr_set_in	 cg_fi_attr;
 	int				 cg_fi_attr_inited;
 };
 
 static struct ctl_g ctl_gdata;
-
-static void *
-progress_thread(void *arg)
-{
-	int			rc;
-	crt_context_t		crt_ctx;
-
-	crt_ctx = (crt_context_t) arg;
-	/* progress loop */
-	do {
-		rc = crt_progress(crt_ctx, 1, NULL, NULL);
-		if (rc != 0 && rc != -DER_TIMEDOUT) {
-			D_ERROR("crt_progress failed rc: %d.\n", rc);
-			break;
-		}
-
-
-		if (ctl_gdata.cg_complete == 1) {
-			D_DEBUG(DB_TRACE, "ctl_gdata.cg_complete %d.\n",
-				ctl_gdata.cg_complete);
-			break;
-		}
-	} while (1);
-
-	D_DEBUG(DB_TRACE, "progress_thread: progress thread exit ...\n");
-
-	pthread_exit(NULL);
-}
 
 static void
 parse_rank_string(char *arg_str, d_rank_t *ranks, int *num_ranks)
@@ -277,8 +248,7 @@ print_usage_msg(const char *msg)
 	if (msg)
 		printf("\nERROR: %s\n", msg);
 	printf("Usage: cart_ctl <cmd> --group-name name --rank "
-	       "start-end,start-end,rank,rank\n"
-	       "--path path-to-attach-info\n");
+	       "start-end,start-end,rank,rank\n");
 	printf("\ncmds: get_uri_cache, list_ctx, get_hostname, get_pid\n");
 	printf("\nget_uri_cache:\n");
 	printf("\tPrint rank, tag and uri from uri cache\n");
@@ -296,10 +266,10 @@ print_usage_msg(const char *msg)
 	printf("\noptions:\n");
 	printf("--group-name name\n");
 	printf("\tspecify the name of the remote group\n");
+	printf("--cfg_path\n");
+	printf("\tPath to group config file\n");
 	printf("--rank start-end,start-end,rank,rank\n");
 	printf("\tspecify target ranks\n");
-	printf("--path path-to-attach-info\n");
-	printf("\tspecify the location of the attach info file\n");
 }
 
 static int
@@ -334,16 +304,18 @@ parse_args(int argc, char **argv)
 	}
 
 	optind = 2;
-	while (1) {
-		static struct option long_options[] = {
-			{"group-name", required_argument, 0, 'g'},
-			{"rank", required_argument, 0, 'r'},
-			{"attr", required_argument, 0, 'a'},
-			{"path", required_argument, 0, 'p'},
-			{0, 0, 0, 0},
-		};
 
-		opt = getopt_long(argc, argv, "g:r:a:p:", long_options, NULL);
+	static struct option long_options[] = {
+		{"group-name", required_argument, 0, 'g'},
+		{"rank", required_argument, 0, 'r'},
+		{"attr", required_argument, 0, 'a'},
+		{"cfg_path", required_argument, 0, 's'},
+		{0, 0, 0, 0},
+	};
+
+	while (1) {
+		opt = getopt_long(argc, argv, "g:r:a:p:", long_options,
+				  &option_index);
 		if (opt == -1)
 			break;
 		switch (opt) {
@@ -361,12 +333,9 @@ parse_args(int argc, char **argv)
 			ctl_parse_fi_attr(optarg, &ctl_gdata.cg_fi_attr);
 			ctl_gdata.cg_fi_attr_inited = 1;
 			break;
-		case 'p':
-			rc = crt_group_config_path_set(optarg);
-			if (rc != 0) {
-				printf("Bad attach prefix: %s\n", optarg);
-				exit(-1);
-			}
+		case 's':
+			ctl_gdata.cg_save_cfg = 1;
+			ctl_gdata.cg_cfg_path = optarg;
 			break;
 		default:
 			break;
@@ -386,7 +355,7 @@ out:
 static void
 print_uri_cache(struct crt_ctl_get_uri_cache_out *out_uri_cache_args)
 {
-	struct crt_grp_cache    *grp_cache;
+	struct crt_grp_cache	*grp_cache;
 	int			 count;
 	int			 i;
 
@@ -402,7 +371,7 @@ print_uri_cache(struct crt_ctl_get_uri_cache_out *out_uri_cache_args)
 }
 
 static void
-ctl_client_cb(const struct crt_cb_info *cb_info)
+ctl_cli_cb(const struct crt_cb_info *cb_info)
 {
 	struct crt_ctl_ep_ls_in			*in_args;
 	struct crt_ctl_get_uri_cache_out	*out_uri_cache_args;
@@ -483,6 +452,7 @@ ctl_client_cb(const struct crt_cb_info *cb_info)
  *                               the target, 1 means the RPc will enable fault
  *                               injection on the target.
  */
+
 static void
 ctl_fill_fi_toggle_rpc_args(crt_rpc_t *rpc_req, int op)
 {
@@ -523,20 +493,42 @@ ctl_fill_rpc_args(crt_rpc_t *rpc_req, int index)
 }
 
 static int
-ctl_issue_cmd(void)
+ctl_init()
 {
-	int				 i;
-	crt_rpc_t			*rpc_req;
-	crt_endpoint_t			 ep;
-	struct cb_info			 info;
-	int				 rc = 0;
+	int		 i;
+	crt_rpc_t	*rpc_req;
+	crt_endpoint_t	 ep;
+	struct cb_info	 info;
+	crt_group_t	*grp = NULL;
+	d_rank_list_t	*rank_list = NULL;
+	int		 rc = 0;
 
-	D_DEBUG(DB_TRACE, "num requested ranks %d\n", ctl_gdata.cg_num_ranks);
+	tc_cli_start_basic("crt_ctl", ctl_gdata.cg_group_name, &grp,
+			    &rank_list, &ctl_gdata.cg_crt_ctx,
+			    &ctl_gdata.cg_tid, 1, ctl_gdata.cg_save_cfg);
+
+	rc = sem_init(&ctl_gdata.cg_num_reply, 0, 0);
+	D_ASSERTF(rc == 0, "Could not initialize semaphore. rc %d\n", rc);
+
+	/* waiting to sync with the following parameters
+	 * 0 - tag 0
+	 * 1 - total ctx
+	 * 5 - ping timeout
+	 * 150 - total timeout
+	 */
+	rc = tc_wait_for_ranks(ctl_gdata.cg_crt_ctx, grp, rank_list,
+			       0, 1, 5, 150);
+	if (rc != 0) {
+		D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	ctl_gdata.cg_target_group = grp;
 
 	info.cmd = ctl_gdata.cg_cmd_code;
 
 	for (i = 0; i < ctl_gdata.cg_num_ranks; i++) {
-		ep.ep_grp = ctl_gdata.cg_target_group;
+		ep.ep_grp = grp;
 		ep.ep_rank = ctl_gdata.cg_ranks[i];
 		ep.ep_tag = 0;
 		rc = crt_req_create(ctl_gdata.cg_crt_ctx, &ep,
@@ -546,7 +538,6 @@ ctl_issue_cmd(void)
 			D_GOTO(out, rc);
 		}
 
-		/* fill RPC arguments depending on the opcode */
 		switch (info.cmd) {
 		case (CMD_ENABLE_FI):
 			ctl_fill_fi_toggle_rpc_args(rpc_req, 1);
@@ -564,84 +555,46 @@ ctl_issue_cmd(void)
 		D_DEBUG(DB_NET, "rpc_req %p rank %d tag %d seq %d\n",
 			rpc_req, ep.ep_rank, ep.ep_tag, i);
 
-		rc = crt_req_send(rpc_req, ctl_client_cb, &info);
+		rc = crt_req_send(rpc_req, ctl_cli_cb, &info);
 		if (rc != 0) {
-			D_ERROR("crt_req_send() failed. rpc_req %p rank %d tag "
-				"%d rc %d.\n",
-				rpc_req, ep.ep_rank, ep.ep_tag, rc);
+			D_ERROR("crt_req_send() failed. rpc_req %p rank %d "
+				"tag %d rc %d.\n", rpc_req, ep.ep_rank,
+				 ep.ep_tag, rc);
+			D_GOTO(out, rc);
+		}
+
+		rc = tc_sem_timedwait(&ctl_gdata.cg_num_reply, 61, __LINE__);
+		if (rc != 0) {
+			D_ERROR("tc_sem_timedwait failed, rc = %d\n", rc);
 			D_GOTO(out, rc);
 		}
 	}
-	for (i = 0; i < ctl_gdata.cg_num_ranks; i++)
-		sem_wait(&ctl_gdata.cg_num_reply);
 
-out:
-	return rc;
-}
+	d_rank_list_free(rank_list);
 
-
-#define NUM_ATTACH_RETRIES 20
-
-static int
-ctl_init()
-{
-	int rc;
-	int attach_retries = NUM_ATTACH_RETRIES;
-
-	rc = crt_init("crt_ctl", CRT_FLAG_BIT_SINGLETON);
-	D_ASSERTF(rc == 0, "crt_init() failed, rc: %d\n", rc);
-
-	rc = d_log_init();
-	D_ASSERTF(rc == 0, "d_log_init() failed. rc: %d\n", rc);
-
-	rc = crt_context_create(&ctl_gdata.cg_crt_ctx);
-	D_ASSERTF(rc == 0, "crt_context_create() failed. rc: %d\n", rc);
-
-	ctl_gdata.cg_complete = 0;
-	rc = sem_init(&ctl_gdata.cg_num_reply, 0, 0);
-	D_ASSERTF(rc == 0, "Could not initialize semaphore. rc %d\n", rc);
-	rc = pthread_create(&ctl_gdata.cg_tid, NULL, progress_thread,
-			    ctl_gdata.cg_crt_ctx);
-	D_ASSERTF(rc == 0, "pthread_create() failed. rc: %d\n", rc);
-
-	/* Attempt to attach up to NUM_ATTACH_RETRIES in case servers
-	 * have not started up yet
-	 */
-	while (attach_retries-- > 0) {
-		rc = crt_group_attach(ctl_gdata.cg_group_name,
-			      &ctl_gdata.cg_target_group);
-		if (rc == 0)
-			break;
-
-		D_DEBUG(DB_TEST, "Attach failed, retries left=%d\n",
-			attach_retries);
-		sleep(1);
+	if (ctl_gdata.cg_save_cfg) {
+		rc = crt_group_detach(grp);
+		D_ASSERTF(rc == 0, "crt_group_detach failed, rc: %d\n", rc);
+	} else {
+		rc = crt_group_view_destroy(grp);
+		D_ASSERTF(rc == 0,
+			  "crt_group_view_destroy() failed; rc=%d\n", rc);
 	}
 
-	D_ASSERTF(rc == 0, "crt_group_attach failed, tgt_group: %s rc: %d\n",
-		  ctl_gdata.cg_group_name, rc);
-	D_ASSERTF(ctl_gdata.cg_target_group != NULL,
-		  "NULL attached target_group\n");
+	g_shutdown = 1;
 
-	return rc;
-}
-
-static int
-ctl_finalize()
-{
-	int		rc;
-
-	rc = crt_group_detach(ctl_gdata.cg_target_group);
-	D_ASSERTF(rc == 0, "crt_group_detach failed, rc: %d\n", rc);
-	ctl_gdata.cg_complete = 1;
 	rc = pthread_join(ctl_gdata.cg_tid, NULL);
 	D_ASSERTF(rc == 0, "pthread_join failed. rc: %d\n", rc);
-	rc = crt_context_destroy(ctl_gdata.cg_crt_ctx, 0);
-	D_ASSERTF(rc == 0, "crt_context_destroy() failed. rc: %d\n", rc);
-	d_log_fini();
+
+	rc = sem_destroy(&ctl_gdata.cg_num_reply);
+	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");
+
 	rc = crt_finalize();
 	D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
 
+	d_log_fini();
+
+out:
 	return rc;
 }
 
@@ -651,31 +604,13 @@ main(int argc, char **argv)
 	int		rc = 0;
 
 	rc = parse_args(argc, argv);
-	if (rc != 0) {
-		D_ERROR("parse_args() failed. rc %d\n", rc);
-		D_GOTO(out, rc);
-	}
+	D_ASSERTF(rc == 0, "parse_args() failed. rc %d\n", rc);
+
+	/* rank, num_attach_retries, is_server, assert_on_error */
+	tc_test_init(0, 20, false, false);
+
 	rc = ctl_init();
-	if (rc != 0) {
-		D_ERROR("ctl_init() failed, rc %d\n", rc);
-		D_GOTO(out, rc);
-	}
+	D_ASSERTF(rc == 0, "ctl_init() failed, rc %d\n", rc);
 
-	rc = ctl_issue_cmd();
-
-	if (rc != 0) {
-		D_ERROR("Command '%s' failed with rc=%d\n",
-			cmd2str(ctl_gdata.cg_cmd_code), rc);
-		D_GOTO(out, rc);
-	}
-
-	D_DEBUG(DB_TRACE, "cart_ctl exiting\n");
-	rc = ctl_finalize();
-	if (rc != 0) {
-		D_ERROR("ctl_finalize() failed, rc %d\n", rc);
-		D_GOTO(out, rc);
-	}
-
-out:
 	return rc;
 }

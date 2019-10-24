@@ -367,10 +367,8 @@ int main(int argc, char **argv)
 	env_self_rank = getenv("CRT_L_RANK");
 	my_rank = atoi(env_self_rank);
 
-	/* Set up for DBG_PRINT */
-	opts.self_rank = my_rank;
-	opts.mypid = getpid();
-	opts.is_server = 1;
+	/* rank, num_attach_retries, is_server, assert_on_error */
+	tc_test_init(my_rank, 20, true, true);
 
 	rc = d_log_init();
 	assert(rc == 0);

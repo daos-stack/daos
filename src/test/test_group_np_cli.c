@@ -61,10 +61,16 @@ test_run(void)
 	int		 i;
 	int		 rc = 0;
 
+	if (test_g.t_save_cfg) {
+		rc = crt_group_config_path_set(test_g.t_cfg_path);
+		D_ASSERTF(rc == 0, "crt_group_config_path_set failed %d\n", rc);
+	}
+
 	tc_cli_start_basic(test_g.t_local_group_name,
 			   test_g.t_remote_group_name,
 			   &grp, &rank_list, &test_g.t_crt_ctx[0],
-			   &test_g.t_tid[0], test_g.t_srv_ctx_num);
+			   &test_g.t_tid[0], test_g.t_srv_ctx_num,
+			   test_g.t_save_cfg);
 
 	rc = sem_init(&test_g.t_token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
@@ -123,8 +129,14 @@ test_run(void)
 	D_FREE(rank_list->rl_ranks);
 	D_FREE(rank_list);
 
-	rc = crt_group_view_destroy(grp);
-	D_ASSERTF(rc == 0, "crt_group_view_destroy() failed; rc=%d\n", rc);
+	if (test_g.t_save_cfg) {
+		rc = crt_group_detach(grp);
+		D_ASSERTF(rc == 0, "crt_group_detach failed, rc: %d\n", rc);
+	} else {
+		rc = crt_group_view_destroy(grp);
+		D_ASSERTF(rc == 0,
+			  "crt_group_view_destroy() failed; rc=%d\n", rc);
+	}
 
 	g_shutdown = 1;
 
@@ -146,8 +158,6 @@ test_run(void)
 
 int main(int argc, char **argv)
 {
-	char		*env_self_rank;
-	d_rank_t	 my_rank;
 	int		 rc;
 
 	rc = test_parse_args(argc, argv);
@@ -156,12 +166,8 @@ int main(int argc, char **argv)
 		return rc;
 	}
 
-	env_self_rank = getenv("CRT_L_RANK");
-	my_rank = atoi(env_self_rank);
-
-	opts.self_rank = my_rank;
-	opts.mypid = getpid();
-	opts.is_server = 0;
+	/* rank, num_attach_retries, is_server, assert_on_error */
+	tc_test_init(0, 20, false, true);
 
 	test_run();
 

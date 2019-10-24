@@ -497,6 +497,9 @@ int main(int argc, char **argv)
 		}
 	}
 
+	/* rank, num_attach_retries, is_server, assert_on_error */
+	tc_test_init(0, 20, false, true);
+
 	rc = crt_init(IV_GRP_NAME, CRT_FLAG_BIT_SINGLETON |
 			CRT_FLAG_BIT_PMIX_DISABLE | CRT_FLAG_BIT_LM_DISABLE);
 	assert(rc == 0);

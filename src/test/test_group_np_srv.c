@@ -50,7 +50,7 @@
 #include "test_group_np_common.h"
 
 void
-test_run(void)
+test_run(d_rank_t my_rank)
 {
 	crt_group_t	*grp = NULL;
 	uint32_t	 grp_size;
@@ -65,6 +65,15 @@ test_run(void)
 
 	test_g.t_fault_attr_1000 = d_fault_attr_lookup(1000);
 	test_g.t_fault_attr_5000 = d_fault_attr_lookup(5000);
+
+	if (test_g.t_save_cfg && my_rank == 0) {
+		rc = crt_group_config_path_set(test_g.t_cfg_path);
+		D_ASSERTF(rc == 0, "crt_group_config_path_set failed %d\n", rc);
+
+		rc = crt_group_config_save(NULL, true);
+		D_ASSERTF(rc == 0,
+			  "crt_group_config_save() failed. rc: %d\n", rc);
+	}
 
 	rc = crt_proto_register(&my_proto_fmt_test_group1);
 	D_ASSERTF(rc == 0, "crt_proto_register() failed. rc: %d\n",
@@ -83,13 +92,19 @@ test_run(void)
 
 	for (i = 0; i < test_g.t_srv_ctx_num; i++) {
 		rc = pthread_join(test_g.t_tid[i], NULL);
-	if (rc != 0)
-		fprintf(stderr, "pthread_join failed. rc: %d\n", rc);
+		if (rc != 0)
+			fprintf(stderr, "pthread_join failed. rc: %d\n", rc);
 		D_DEBUG(DB_TEST, "joined progress thread.\n");
 	}
 
 	rc = sem_destroy(&test_g.t_token_to_proceed);
 	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");
+
+	if (test_g.t_save_cfg) {
+		rc = crt_group_config_remove(NULL);
+		D_ASSERTF(rc == 0,
+			  "crt_group_config_remove() failed. rc: %d\n", rc);
+	}
 
 	rc = crt_finalize();
 	D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
@@ -114,11 +129,10 @@ int main(int argc, char **argv)
 	env_self_rank = getenv("CRT_L_RANK");
 	my_rank = atoi(env_self_rank);
 
-	opts.self_rank = my_rank;
-	opts.mypid = getpid();
-	opts.is_server = 1;
+	/* rank, num_attach_retries, is_server, assert_on_error */
+	tc_test_init(my_rank, 20, true, true);
 
-	test_run();
+	test_run(my_rank);
 
 	return rc;
 }

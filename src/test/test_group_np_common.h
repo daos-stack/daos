@@ -51,6 +51,8 @@ struct test_t {
 	char			*t_remote_group_name;
 	int			 t_hold;
 	int			 t_shut_only;
+	int			 t_save_cfg;
+	char			*t_cfg_path;
 	uint32_t		 t_hold_time;
 	unsigned int		 t_srv_ctx_num;
 	crt_context_t		 t_crt_ctx[TEST_CTX_MAX_NUM];
@@ -93,10 +95,10 @@ test_checkin_handler(crt_rpc_t *rpc_req)
 	D_ASSERTF(e_req != NULL, "crt_req_get() failed. e_req: %p\n", e_req);
 
 	DBG_PRINT("tier1 test_server recv'd checkin, opc: %#x.\n",
-	       rpc_req->cr_opc);
+		   rpc_req->cr_opc);
 	DBG_PRINT("tier1 checkin input - age: %d, name: %s, days: %d, "
-	       "bool_val %d.\n",
-	       e_req->age, e_req->name, e_req->days, e_req->bool_val);
+		  "bool_val %d.\n", e_req->age, e_req->name, e_req->days,
+		   e_req->bool_val);
 
 	e_reply = crt_reply_get(rpc_req);
 	D_ASSERTF(e_reply != NULL, "crt_reply_get() failed. e_reply: %p\n",
@@ -130,10 +132,10 @@ test_ping_delay_handler(crt_rpc_t *rpc_req)
 	D_ASSERTF(p_req != NULL, "crt_req_get() failed. p_req: %p\n", p_req);
 
 	DBG_PRINT("tier1 test_server recv'd checkin, opc: %#x.\n",
-	       rpc_req->cr_opc);
+		  rpc_req->cr_opc);
 	DBG_PRINT("tier1 checkin input - age: %d, name: %s, days: %d, "
-	       "delay: %u.\n",
-	       p_req->age, p_req->name, p_req->days, p_req->delay);
+		  "delay: %u.\n", p_req->age, p_req->name, p_req->days,
+		   p_req->delay);
 
 	p_reply = crt_reply_get(rpc_req);
 	D_ASSERTF(p_reply != NULL, "crt_reply_get() failed. p_reply: %p\n",
@@ -208,29 +210,29 @@ test_shutdown_handler(crt_rpc_t *rpc_req)
 
 static struct crt_proto_rpc_format my_proto_rpc_fmt_test_group1[] = {
 	{
-		.prf_flags      = 0,
-		.prf_req_fmt    = &CQF_test_ping_check,
-		.prf_hdlr       = test_checkin_handler,
-		.prf_co_ops     = NULL,
+		.prf_flags	= 0,
+		.prf_req_fmt	= &CQF_test_ping_check,
+		.prf_hdlr	= test_checkin_handler,
+		.prf_co_ops	= NULL,
 	}, {
-		.prf_flags      = CRT_RPC_FEAT_NO_REPLY,
-		.prf_req_fmt    = NULL,
-		.prf_hdlr       = test_shutdown_handler,
-		.prf_co_ops     = NULL,
+		.prf_flags	= CRT_RPC_FEAT_NO_REPLY,
+		.prf_req_fmt	= NULL,
+		.prf_hdlr	= test_shutdown_handler,
+		.prf_co_ops	= NULL,
 	}, {
-		.prf_flags      = CRT_RPC_FEAT_NO_TIMEOUT,
-		.prf_req_fmt    = &CQF_crt_test_ping_delay,
-		.prf_hdlr       = test_ping_delay_handler,
-		.prf_co_ops     = NULL,
+		.prf_flags	= CRT_RPC_FEAT_NO_TIMEOUT,
+		.prf_req_fmt	= &CQF_crt_test_ping_delay,
+		.prf_hdlr	= test_ping_delay_handler,
+		.prf_co_ops	= NULL,
 	}
 };
 
 struct crt_proto_format my_proto_fmt_test_group1 = {
-	.cpf_name = "my-proto-test-group1",
-	.cpf_ver = TEST_GROUP_VER,
-	.cpf_count = ARRAY_SIZE(my_proto_rpc_fmt_test_group1),
-	.cpf_prf = &my_proto_rpc_fmt_test_group1[0],
-	.cpf_base = TEST_GROUP_BASE,
+	.cpf_name	= "my-proto-test-group1",
+	.cpf_ver	= TEST_GROUP_VER,
+	.cpf_count	= ARRAY_SIZE(my_proto_rpc_fmt_test_group1),
+	.cpf_prf	= &my_proto_rpc_fmt_test_group1[0],
+	.cpf_base	= TEST_GROUP_BASE,
 };
 
 static struct crt_proto_rpc_format my_proto_rpc_fmt_test_group2[] = {
@@ -248,11 +250,11 @@ static struct crt_proto_rpc_format my_proto_rpc_fmt_test_group2[] = {
 };
 
 struct crt_proto_format my_proto_fmt_test_group2 = {
-	.cpf_name = "my-proto-test-group2",
-	.cpf_ver = TEST_GROUP_VER,
-	.cpf_count = ARRAY_SIZE(my_proto_rpc_fmt_test_group2),
-	.cpf_prf = &my_proto_rpc_fmt_test_group2[0],
-	.cpf_base = TEST_GROUP_BASE,
+	.cpf_name	= "my-proto-test-group2",
+	.cpf_ver	= TEST_GROUP_VER,
+	.cpf_count	= ARRAY_SIZE(my_proto_rpc_fmt_test_group2),
+	.cpf_prf	= &my_proto_rpc_fmt_test_group2[0],
+	.cpf_base	= TEST_GROUP_BASE,
 };
 
 void
@@ -311,6 +313,7 @@ test_parse_args(int argc, char **argv)
 		{"hold", no_argument, &test_g.t_hold, 1},
 		{"srv_ctx_num", required_argument, 0, 'c'},
 		{"shut_only", no_argument, &test_g.t_shut_only, 1},
+		{"cfg_path", required_argument, 0, 's'},
 		{0, 0, 0, 0}
 	};
 
@@ -348,6 +351,10 @@ test_parse_args(int argc, char **argv)
 		case 'h':
 			test_g.t_hold = 1;
 			test_g.t_hold_time = atoi(optarg);
+			break;
+		case 's':
+			test_g.t_save_cfg = 1;
+			test_g.t_cfg_path = optarg;
 			break;
 		case '?':
 			return 1;

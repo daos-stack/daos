@@ -96,10 +96,8 @@ int main(int argc, char **argv)
 	d_iov_t			iov;
 	int			tag;
 
-	/* Set up for DBG_PRINT */
-	opts.self_rank = 0;
-	opts.mypid = getpid();
-	opts.is_server = 0;
+	/* rank, num_attach_retries, is_server, assert_on_error */
+	tc_test_init(0, 20, false, true);
 
 	rc = d_log_init();
 	assert(rc == 0);

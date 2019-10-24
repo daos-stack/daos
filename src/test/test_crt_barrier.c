@@ -78,11 +78,18 @@ int main(int argc, char **argv)
 	void			*check_ret;
 	crt_context_t		 crt_ctx;
 	d_rank_t		 my_rank;
+	char			*env_self_rank;
 	int			 i;
 	pthread_t		 tid;
 	crt_group_t		*grp = NULL;
 	uint32_t		 grp_size;
 	int			 rc = 0;
+
+	env_self_rank = getenv("CRT_L_RANK");
+	my_rank = atoi(env_self_rank);
+
+	/* rank, num_attach_retries, is_server, assert_on_error */
+	tc_test_init(my_rank, 20, true, true);
 
 	tc_srv_start_basic("server_grp", &crt_ctx, &tid, grp, &grp_size);
 

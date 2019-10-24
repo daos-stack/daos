@@ -56,9 +56,7 @@ class CartCtlOneNodeTest(Test):
         :avocado: tags=all,ctl,one_node
         """
 
-        urifile = self.utils.create_uri_file()
-
-        srvcmd = self.utils.build_cmd(self, self.env, "srv", True, urifile)
+        srvcmd = self.utils.build_cmd(self, self.env, "srv", True)
 
         try:
             srv_rtn = self.utils.launch_cmd_bg(self, srvcmd)
@@ -72,17 +70,17 @@ class CartCtlOneNodeTest(Test):
             self.fail("Server did not launch, return code %s" \
                        % procrtn)
 
-        clicmd = self.utils.build_cmd(self, self.env, "cli1", False, urifile)
+        clicmd = self.utils.build_cmd(self, self.env, "cli1", False)
         self.utils.launch_test(self, clicmd, srv_rtn)
-        clicmd = self.utils.build_cmd(self, self.env, "cli2", False, urifile)
+        clicmd = self.utils.build_cmd(self, self.env, "cli2", False)
         self.utils.launch_test(self, clicmd, srv_rtn)
-        clicmd = self.utils.build_cmd(self, self.env, "cli3", False, urifile)
+        clicmd = self.utils.build_cmd(self, self.env, "cli3", False)
         self.utils.launch_test(self, clicmd, srv_rtn)
-        clicmd = self.utils.build_cmd(self, self.env, "cli4", False, urifile)
+        clicmd = self.utils.build_cmd(self, self.env, "cli4", False)
         self.utils.launch_test(self, clicmd, srv_rtn)
-        clicmd = self.utils.build_cmd(self, self.env, "cli5", False, urifile)
+        clicmd = self.utils.build_cmd(self, self.env, "cli5", False)
         self.utils.launch_test(self, clicmd, srv_rtn)
-        clicmd = self.utils.build_cmd(self, self.env, "cli6", False, urifile)
+        clicmd = self.utils.build_cmd(self, self.env, "cli6", False)
         self.utils.launch_test(self, clicmd, srv_rtn)
 
 if __name__ == "__main__":
