@@ -32,6 +32,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	types "github.com/daos-stack/daos/src/control/common/storage"
+	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
@@ -199,60 +200,74 @@ func newMntRet(log logging.Logger, op string, mntPoint string, status ctlpb.Resp
 }
 
 func (c *ControlService) scmFormat(scmCfg storage.ScmConfig, reformat bool) (*ctlpb.ScmMountResult, error) {
-	ret := newMntRet(c.log, "format", scmCfg.MountPoint, ctlpb.ResponseStatus_CTRL_SUCCESS, "", "")
+	var eMsg, iMsg string
+	status := ctlpb.ResponseStatus_CTRL_SUCCESS
 
 	req, err := scm.CreateFormatRequest(scmCfg, reformat)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "generate format request")
 	}
 	res, err := c.scm.Format(*req)
 	if err != nil {
-		ret.State.Error = err.Error()
-		ret.State.Status = ctlpb.ResponseStatus_CTRL_ERR_APP
+		eMsg = err.Error()
+		iMsg = fault.ShowResolutionFor(err)
+		status = ctlpb.ResponseStatus_CTRL_ERR_APP
 	} else if !res.Formatted {
-		ret.State.Error = fmt.Sprintf("%s didn't get formatted", res.Mountpoint)
-		ret.State.Status = ctlpb.ResponseStatus_CTRL_ERR_APP
+		err = scm.FaultUnknown
+		eMsg = errors.WithMessage(err, "is still unformatted").Error()
+		iMsg = fault.ShowResolutionFor(err)
+		status = ctlpb.ResponseStatus_CTRL_ERR_APP
 	}
 
-	return ret, nil
+	return newMntRet(c.log, "format", scmCfg.MountPoint, status, eMsg, iMsg), nil
 }
 
 // doFormat performs format on storage subsystems, populates response results
 // in storage subsystem routines and broadcasts (closes channel) if successful.
-func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlpb.StorageFormatResp) (err error) {
-	var formatFailed bool
+func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlpb.StorageFormatResp) error {
+	const msgFormatErr = "failure formatting storage, check RPC response for details"
 	needsSuperblock := true
 	needsScmFormat := reformat
 
-	c.log.Infof("formatting storage for I/O server instance %d (reformat: %t)", i.Index, reformat)
+	c.log.Infof("formatting storage for I/O server instance %d (reformat: %t)",
+		i.Index, reformat)
 
 	scmConfig, err := i.scmConfig()
 	if err != nil {
 		return errors.Wrap(err, "get scm config")
 	}
 
-	// If not reformatting, check if we need to format SCM.
+	// If not reformatting, check if SCM is already formatted.
 	if !reformat {
+		var err error
 		needsScmFormat, err = i.NeedsScmFormat()
 		if err != nil {
 			return errors.Wrap(err, "unable to check storage formatting")
 		}
 		if !needsScmFormat {
-			resp.Mrets = append(resp.Mrets, newMntRet(c.log, "format", scmConfig.MountPoint,
-				ctlpb.ResponseStatus_CTRL_ERR_APP, scm.MsgScmAlreadyFormatted, ""))
+			err = scm.FaultFormatNoReformat
+			resp.Mrets = append(resp.Mrets,
+				newMntRet(c.log, "format", scmConfig.MountPoint,
+					ctlpb.ResponseStatus_CTRL_ERR_APP, err.Error(),
+					fault.ShowResolutionFor(err)))
+			return nil // don't continue if formatted and no reformat opt
 		}
 	}
 
-	// When SCM format is required, populate mount response with the result.
+	// When SCM format is required, format and populate response with result.
 	if needsScmFormat {
 		results := types.ScmMountResults{}
 		result, err := c.scmFormat(scmConfig, true)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "scm format") // return unexpected errors
 		}
 		results = append(results, result)
-		formatFailed = results.HasErrors()
 		resp.Mrets = results
+
+		if results.HasErrors() {
+			c.log.Error(msgFormatErr)
+			return nil // don't continue if we can't format SCM
+		}
 	} else {
 		// If SCM was already formatted, verify if superblock exists.
 		needsSuperblock, err = i.NeedsSuperblock()
@@ -266,20 +281,21 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 		results := types.NvmeControllerResults{}
 		bdevConfig, err := i.bdevConfig()
 		if err != nil {
-			return err
+			return errors.Wrap(err, "get bdev config")
 		}
+
 		// A config with SCM and no block devices is valid.
 		// TODO: pull protobuf specifics out of c.nvme into this file.
 		if len(bdevConfig.DeviceList) > 0 {
+			// TODO: return result to be in line with scmFormat
 			c.nvme.Format(bdevConfig, &results)
-			formatFailed = formatFailed || results.HasErrors()
 		}
 		resp.Crets = results
-	}
 
-	if formatFailed {
-		c.log.Error("failure when formatting storage, check RPC response for details")
-		return nil
+		if results.HasErrors() {
+			c.log.Error(msgFormatErr)
+			return nil // don't continue if we can't format NVMe
+		}
 	}
 
 	// TODO: remove use of nvme formatted flag to be consistent with scm

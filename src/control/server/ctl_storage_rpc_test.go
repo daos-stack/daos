@@ -568,7 +568,7 @@ func TestStorageFormat(t *testing.T) {
 							Mntpoint: "/mnt/daos",
 							State: &ResponseState{
 								Status: ResponseStatus_CTRL_ERR_APP,
-								Error:  scm.MsgScmAlreadyFormatted,
+								Error:  scm.FaultFormatNoReformat.Error(),
 							},
 						},
 					},
