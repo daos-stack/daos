@@ -98,7 +98,7 @@ func (e *ext) getHistory() []string {
 func (e *ext) runCommand(cmd string) error {
 	e.history = append(e.history, fmt.Sprintf(msgCmd, cmd))
 
-	return common.Run(e.log, cmd)
+	return common.Run(cmd)
 }
 
 // writeToFile wraps around common.WriteString and writes input string to given
