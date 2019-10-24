@@ -8,8 +8,6 @@ hosts:
     - boro-F
     - boro-G
     - boro-H
-  test_clients:
-    - boro-I
 timeout: 900
 server_config:
   name: daos_server
