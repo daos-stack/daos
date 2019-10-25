@@ -51,7 +51,7 @@ func NewControlService(l logging.Logger, h *IOServerHarness, sp *scm.Provider, c
 	if err != nil {
 		return nil, err
 	}
-	scs.scm.provider = sp
+	scs.scm = sp
 
 	fMap, err := loadInitData(jsonDBRelPath)
 	if err != nil {
