@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	types "github.com/daos-stack/daos/src/control/common/storage"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 type (
@@ -89,16 +90,19 @@ func DefaultMockSysProvider() *MockSysProvider {
 	return NewMockSysProvider(nil)
 }
 
+// MockBackendConfig specifies behaviour for a mock SCM backend
+// implementation providing capability to access and configure
+// SCM modules and namespaces.
 type MockBackendConfig struct {
-	DiscoverRes      []Module
+	DiscoverRes      Modules
 	DiscoverErr      error
-	GetNamespaceRes  []Namespace
+	GetNamespaceRes  Namespaces
 	GetNamespaceErr  error
 	GetStateErr      error
 	StartingState    types.ScmState
 	NextState        types.ScmState
 	PrepNeedsReboot  bool
-	PrepNamespaceRes []Namespace
+	PrepNamespaceRes Namespaces
 	PrepErr          error
 }
 
@@ -107,11 +111,11 @@ type MockBackend struct {
 	cfg      MockBackendConfig
 }
 
-func (mb *MockBackend) Discover() ([]Module, error) {
+func (mb *MockBackend) Discover() (Modules, error) {
 	return mb.cfg.DiscoverRes, mb.cfg.DiscoverErr
 }
 
-func (mb *MockBackend) GetNamespaces() ([]Namespace, error) {
+func (mb *MockBackend) GetNamespaces() (Namespaces, error) {
 	return mb.cfg.GetNamespaceRes, mb.cfg.GetNamespaceErr
 }
 
@@ -122,7 +126,7 @@ func (mb *MockBackend) GetState() (types.ScmState, error) {
 	return mb.curState, nil
 }
 
-func (mb *MockBackend) Prep(_ types.ScmState) (bool, []Namespace, error) {
+func (mb *MockBackend) Prep(_ types.ScmState) (bool, Namespaces, error) {
 	if mb.cfg.PrepErr == nil {
 		mb.curState = mb.cfg.NextState
 	}
@@ -148,4 +152,12 @@ func NewMockBackend(cfg *MockBackendConfig) *MockBackend {
 
 func DefaultMockBackend() *MockBackend {
 	return NewMockBackend(nil)
+}
+
+func NewMockProvider(log logging.Logger, mbc *MockBackendConfig, msc *MockSysConfig) *Provider {
+	return NewProvider(log, NewMockBackend(mbc), NewMockSysProvider(msc))
+}
+
+func DefaultMockProvider(log logging.Logger) *Provider {
+	return NewProvider(log, DefaultMockBackend(), DefaultMockSysProvider())
 }
