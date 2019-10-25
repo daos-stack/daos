@@ -50,6 +50,11 @@ typedef struct {
 	daos_size_t		arr_nr;
 	/** Array of ranges; each range defines a starting index and length. */
 	daos_range_t	       *arr_rgs;
+	/*
+	 * On read only: return the number of records read. If this is less
+	 * than the number of records that has been asked for, then there are
+	 * holes in the array, or the read has gone beyond the array extent. */
+	daos_size_t		arr_nr;
 } daos_array_iod_t;
 
 /**

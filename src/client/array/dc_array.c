@@ -960,7 +960,7 @@ dc_array_get_attr(daos_handle_t oh, daos_size_t *chunk_size,
 
 static bool
 io_extent_same(daos_array_iod_t *iod, d_sg_list_t *sgl,
-	       daos_size_t cell_size)
+	       daos_size_t cell_size, daos_size_t *extent)
 {
 	daos_size_t rgs_len;
 	daos_size_t sgl_len;
@@ -989,6 +989,7 @@ io_extent_same(daos_array_iod_t *iod, d_sg_list_t *sgl,
 			sgl->sg_iovs[u].iov_len, sgl->sg_iovs[u].iov_buf);
 	}
 
+	*extent = rgs_len;
 	return (rgs_len * cell_size == sgl_len);
 }
 
@@ -1081,10 +1082,50 @@ create_sgl(d_sg_list_t *user_sgl, daos_size_t cell_size,
 }
 
 static int
-dc_array_io(daos_handle_t array_oh, daos_handle_t th,
-	    daos_array_iod_t *rg_iod, d_sg_list_t *user_sgl,
-	    daos_opc_t op_type, tse_task_t *task)
+set_short_read_cb(tse_task_t *task, void *data)
 {
+	struct	io_params *io_list = *((struct io_params **)data);
+	int	rc = task->dt_result;
+
+	while (io_list) {
+		struct io_params *current = io_list;
+
+		/** if the sgl is empty in the first place, then continue */
+		if (current->sgl.sg_nr == 0)
+			continue;
+
+		/** if no DAOS "short-fetch" detected, continue */
+		if (current->sgl.sg_nr == current->sgl.sg_nr_out &&
+		    current->sgl.sg_iovs[current->sgl.sg_nr].iov_buf_len ==
+		    current->sgl.sg_iovs[current->sgl.sg_nr].iov_len)
+			continue;
+
+		/** if dkey is smaller than dkey already handled, skip */
+		if (dkey_val > current->dkey_val)
+			continue;
+
+		D_ASSERT(dkey_val != current->dkey_val);
+
+		for (i = current->sgl.sg_nr_out; i < current->sgl.sg_nr; i++) {
+			len += current->sgl.sg_iovs[i].iov_buf_len -
+				current->sgl.sg_iovs[i].iov_len;
+		}
+
+		dkey_val = current->dkey_val;
+		args->last_valid_idx =
+			current->sgl.sg_iovs[current->sgl.sg_nr].iov_len;
+		io_list = current->next;
+	}
+
+	return rc;
+}
+
+static int
+dc_array_io(daos_opc_t op_type, tse_task_t *task)
+{
+	daos_array_io_t *args = daos_task_get_args(task);
+	daos_array_iod_t *rg_iod = args->iod;
+	d_sg_list_t	*user_sgl = args->sgl;
 	struct dc_array *array = NULL;
 	daos_handle_t	oh;
 	daos_off_t	cur_off; /* offset into user buf to track current pos */
@@ -1096,7 +1137,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	daos_off_t	record_i;
 	daos_csum_buf_t	null_csum;
 	struct io_params *head, *current = NULL;
-	daos_size_t	num_ios;
+	daos_size_t	num_ios, io_extent;
 	d_list_t	io_task_list;
 	int		rc;
 
@@ -1105,7 +1146,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 		D_GOTO(err_task, rc = -DER_INVAL);
 	}
 
-	array = array_hdl2ptr(array_oh);
+	array = array_hdl2ptr(args->oh);
 	if (array == NULL)
 		D_GOTO(err_task, rc = -DER_NO_HDL);
 
@@ -1114,7 +1155,8 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	} else if (user_sgl == NULL) {
 		D_ERROR("NULL scatter-gather list passed\n");
 		D_GOTO(err_task, rc = -DER_INVAL);
-	} else if (!io_extent_same(rg_iod, user_sgl, array->cell_size)) {
+	} else if (!io_extent_same(rg_iod, user_sgl, array->cell_size,
+				   &rg_iod->io_extent)) {
 		D_ERROR("Unequal extents of memory and array descriptors\n");
 		D_GOTO(err_task, rc = -DER_INVAL);
 	}
@@ -1131,13 +1173,13 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 
 	head = NULL;
 	D_INIT_LIST_HEAD(&io_task_list);
+
 	/*
 	 * Loop over every range, but at the same time combine consecutive
 	 * ranges that belong to the same dkey. If the user gives ranges that
 	 * are not increasing in offset, they probably won't be combined unless
 	 * the separating ranges also belong to the same dkey.
 	 */
-
 	while (u < rg_iod->arr_nr) {
 		daos_iod_t	*iod;
 		d_sg_list_t	*sgl;
@@ -1353,7 +1395,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			}
 			io_arg = daos_task_get_args(io_task);
 			io_arg->oh	= oh;
-			io_arg->th	= th;
+			io_arg->th	= args->th;
 			io_arg->dkey	= dkey;
 			io_arg->nr	= 1;
 			io_arg->iods	= iod;
@@ -1373,7 +1415,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			}
 			io_arg = daos_task_get_args(io_task);
 			io_arg->oh	= oh;
-			io_arg->th	= th;
+			io_arg->th	= args->th;
 			io_arg->dkey	= dkey;
 			io_arg->nr	= 1;
 			io_arg->iods	= iod;
@@ -1388,6 +1430,9 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 
 	tse_task_list_sched(&io_task_list, false);
 	array_decref(array);
+	if (op_type == DAOS_OPC_ARRAY_READ)
+		tse_task_register_comp_cb(task, set_fetch_size_cb,
+					  &head, sizeof(head));
 	tse_sched_progress(tse_task2sched(task));
 	return 0;
 
