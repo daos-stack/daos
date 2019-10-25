@@ -103,6 +103,8 @@ if [ -d "/mnt/daos" ]; then
     export LD_LIBRARY_PATH
     export CGO_LDFLAGS="-L${SL_SPDK_PREFIX}/lib -L${SL_PREFIX}/lib"
     export CGO_CFLAGS="-I${SL_SPDK_PREFIX}/include"
+    export D_LOG_MASK=DEBUG
+    export DD_MASK=all
     run_test src/control/run_go_tests.sh
     # Environment variables specific to the rdb tests
     export PATH="${SL_PREFIX}/bin:${PATH}"

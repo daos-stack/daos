@@ -884,17 +884,24 @@ akey_update_recx(daos_handle_t toh, daos_epoch_t epoch, uint32_t pm_ver,
 }
 
 static int
-key_ilog_update(struct vos_io_context *ioc, daos_handle_t loh,
+key_ilog_update(struct vos_io_context *ioc, daos_handle_t loh, bool first,
 		daos_epoch_t *epochp, daos_epoch_t epoch)
 {
-	int			 rc;
+	int			 rc = 0;
 	daos_epoch_range_t	 max_epr = ioc->ic_epr;
 
-	if (*epochp == epoch)
-		return 0;
+	if (*epochp == epoch) {
+		if (!first)
+			return 0;
 
-	vos_ilog_update_prepare(&ioc->ic_obj->obj_ilog_info, epoch, &max_epr);
+		goto skip_dkey;
+	}
+
+	vos_ilog_update_prepare(&ioc->ic_obj->obj_ilog_info, epoch,
+				&max_epr);
 	rc = ilog_update(ioc->ic_dkey_loh, &max_epr, epoch, false);
+
+skip_dkey:
 	if (rc == 0) {
 		rc = vos_ilog_fetch(vos_ioc2umm(ioc),
 				    vos_cont2hdl(ioc->ic_cont),
@@ -954,7 +961,7 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver,
 		else
 			epoch_in = ioc->ic_epr.epr_hi;
 
-		rc = key_ilog_update(ioc, loh, epoch, epoch_in);
+		rc = key_ilog_update(ioc, loh, true, epoch, epoch_in);
 		if (rc != 0) {
 			D_ERROR("Failed to update ilog: "DF_RC"\n", DP_RC(rc));
 			goto out;
@@ -972,7 +979,7 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver,
 		else
 			epoch_in = ioc->ic_epr.epr_hi;
 
-		rc = key_ilog_update(ioc, loh, epoch, epoch_in);
+		rc = key_ilog_update(ioc, loh, i == 0, epoch, epoch_in);
 		if (rc != 0) {
 			D_ERROR("Failed to update ilog: rc = %s\n",
 				d_errstr(rc));

@@ -68,7 +68,7 @@ int
 vts_array_open(daos_handle_t coh, daos_unit_oid_t oid, daos_handle_t *aoh);
 
 /** Punches the vos test array object and recreates it.  Handle remains open
- * \param	aoh[in]			Open array handle
+ * \param	aoh[in,out]		Open array handle, returns new handle
  * \param	punch_epoch[in]		punch epoch
  * \param	create_epoch[in]	creation epoch (must be > punch_epoch)
  * \param	record_size[in]		Size of each record
@@ -78,7 +78,7 @@ vts_array_open(daos_handle_t coh, daos_unit_oid_t oid, daos_handle_t *aoh);
  * \return 0 or error code
  */
 int
-vts_array_reset(daos_handle_t aoh, daos_epoch_t punch_epoch,
+vts_array_reset(daos_handle_t *aoh, daos_epoch_t punch_epoch,
 		daos_epoch_t create_epoch, daos_size_t record_size,
 		daos_size_t nr_per_key, daos_size_t akey_size);
 
