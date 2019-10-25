@@ -94,14 +94,14 @@ func (r *cmdRunner) checkNdctl() error {
 	return nil
 }
 
-func (r *cmdRunner) Discover() ([]Module, error) {
+func (r *cmdRunner) Discover() (Modules, error) {
 	discovery, err := r.binding.Discover()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to discover SCM modules")
 	}
 	r.log.Debugf("discovered %d DCPM modules", len(discovery))
 
-	modules := make([]Module, 0, len(discovery))
+	modules := make(Modules, 0, len(discovery))
 	for _, d := range discovery {
 		modules = append(modules, Module{
 			ChannelID:       uint32(d.Channel_id),
@@ -157,7 +157,7 @@ func (r *cmdRunner) GetState() (types.ScmState, error) {
 // * regions exist but no free capacity -> no-op, return namespaces
 //
 // Command output from external tools will be returned. State will be passed in.
-func (r *cmdRunner) Prep(state types.ScmState) (needsReboot bool, pmemDevs []Namespace, err error) {
+func (r *cmdRunner) Prep(state types.ScmState) (needsReboot bool, pmemDevs Namespaces, err error) {
 	if err = r.checkNdctl(); err != nil {
 		return
 	}
@@ -298,8 +298,8 @@ func hasFreeCapacity(text string) (hasCapacity bool, err error) {
 }
 
 // createNamespaces runs create until no free capacity.
-func (r *cmdRunner) createNamespaces() ([]Namespace, error) {
-	devs := make([]Namespace, 0)
+func (r *cmdRunner) createNamespaces() (Namespaces, error) {
+	devs := make(Namespaces, 0)
 
 	for {
 		r.log.Infof("creating SCM namespace, may take a few minutes...\n")
@@ -331,7 +331,7 @@ func (r *cmdRunner) createNamespaces() ([]Namespace, error) {
 	}
 }
 
-func (r *cmdRunner) GetNamespaces() ([]Namespace, error) {
+func (r *cmdRunner) GetNamespaces() (Namespaces, error) {
 	if err := r.checkNdctl(); err != nil {
 		return nil, err
 	}
@@ -350,7 +350,7 @@ func (r *cmdRunner) GetNamespaces() ([]Namespace, error) {
 	return nss, nil
 }
 
-func parseNamespaces(jsonData string) (nss []Namespace, err error) {
+func parseNamespaces(jsonData string) (nss Namespaces, err error) {
 	// turn single entries into arrays
 	if !strings.HasPrefix(jsonData, "[") {
 		jsonData = "[" + jsonData + "]"
