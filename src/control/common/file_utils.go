@@ -53,26 +53,20 @@ func CurrentExecPath() (string, error) {
 	return filepath.Dir(ex), nil
 }
 
-// GetAbsPath retrieves absolute from relative path.
-func GetAbsPath(path string) (string, error) {
-	if filepath.IsAbs(path) {
-		return path, nil
-	}
-	curDir, err := CurrentExecPath()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(curDir, path), nil
-}
-
-// ResolvePath retrieves absolute if relative and verifies existence.
+// ResolvePath, if given relative path, prepends executable parent
+// directory path to input relative path. Resultant path has
+// existence verified.
 func ResolvePath(path string) (string, error) {
-	path, err := GetAbsPath(path)
-	if err != nil {
-		return "", errors.Wrapf(err, "lookup absolute path")
+	if !filepath.IsAbs(path) {
+		curDir, err := CurrentExecPath()
+		if err != nil {
+			return "", err
+		}
+
+		path = filepath.Join(curDir, path)
 	}
 
-	_, err = os.Stat(path)
+	_, err := os.Stat(path)
 	if err != nil {
 		return "", err
 	}

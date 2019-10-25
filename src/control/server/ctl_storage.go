@@ -48,7 +48,7 @@ type StorageControlService struct {
 // DefaultStorageControlService returns a initialized *StorageControlService
 // with default behaviour
 func DefaultStorageControlService(log logging.Logger, cfg *Configuration) (*StorageControlService, error) {
-	scriptPath, err := cfg.ext.getAbsPath(spdkSetupPath)
+	scriptPath, err := cfg.ext.resolvePath(spdkSetupPath)
 	if err != nil {
 		return nil, err
 	}

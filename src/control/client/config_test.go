@@ -28,6 +28,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"path/filepath"
 	"testing"
 
 	"github.com/daos-stack/daos/src/control/client"
@@ -39,11 +40,13 @@ func getDefaultConfig(t *testing.T) *client.Configuration {
 	t.Helper()
 
 	defaultConfig := client.NewConfiguration()
-	absPath, err := common.GetAbsPath(defaultConfig.Path)
+
+	curDir, err := common.CurrentExecPath()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defaultConfig.Path = absPath
+
+	defaultConfig.Path = filepath.Join(curDir, defaultConfig.Path)
 
 	return defaultConfig
 }

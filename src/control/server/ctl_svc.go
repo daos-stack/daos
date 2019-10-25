@@ -68,7 +68,7 @@ func NewControlService(l logging.Logger, h *IOServerHarness, sp *scm.Provider, c
 
 // loadInitData retrieves initial data from relative file path.
 func loadInitData(relPath string) (m FeatureMap, err error) {
-	absPath, err := common.GetAbsPath(relPath)
+	absPath, err := common.ResolvePath(relPath)
 	if err != nil {
 		return
 	}

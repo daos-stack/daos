@@ -402,7 +402,7 @@ func (c *Configuration) Validate() (err error) {
 	// TODO: use a fault/resolution
 	defer func() {
 		if err != nil {
-			examplesPath, _ := c.ext.getAbsPath(relConfExamplesPath)
+			examplesPath, _ := c.ext.resolvePath(relConfExamplesPath)
 			err = errors.WithMessage(err, msgBadConfig+examplesPath)
 		}
 	}()

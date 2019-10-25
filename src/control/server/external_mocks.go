@@ -138,10 +138,6 @@ func (m *mockExt) exists(string) (bool, error) {
 	return m.existsRet, nil
 }
 
-func (m *mockExt) getAbsPath(path string) (string, error) {
-	return path, nil
-}
-
 func (m *mockExt) resolvePath(path string) (string, error) {
 	return path, nil
 }

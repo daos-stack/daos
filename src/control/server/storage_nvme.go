@@ -428,12 +428,12 @@ func (n *nvmeStorage) BurnIn(pciAddr string, nsID int32, configPath string) (
 		return
 	}
 
-	n.fioPluginDir, err = n.ext.getAbsPath(spdkFioPluginDir)
+	n.fioPluginDir, err = n.ext.resolvePath(spdkFioPluginDir)
 	if err != nil {
 		return
 	}
 
-	fioPath, err = n.ext.getAbsPath(fioExecPath)
+	fioPath, err = n.ext.resolvePath(fioExecPath)
 	if err != nil {
 		return
 	}
