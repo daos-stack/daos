@@ -31,11 +31,12 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	types "github.com/daos-stack/daos/src/control/common/storage"
+	pb_types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	scm_types "github.com/daos-stack/daos/src/control/server/storage/scm/types"
 )
 
 // newState creates, populates and returns ResponseState in addition
@@ -54,7 +55,7 @@ func newState(log logging.Logger, status ctlpb.ResponseStatus, errMsg string, in
 	return state
 }
 
-func modulesToPB(mms []scm.Module) (pbMms types.ScmModules) {
+func scmModulesToPB(mms []scm_types.Module) (pbMms pb_types.ScmModules) {
 	for _, c := range mms {
 		pbMms = append(
 			pbMms,
@@ -72,7 +73,7 @@ func modulesToPB(mms []scm.Module) (pbMms types.ScmModules) {
 	return
 }
 
-func namespacesToPB(nss []scm.Namespace) (pbNss types.PmemDevices) {
+func scmNamespacesToPB(nss []scm_types.Namespace) (pbNss pb_types.ScmNamespaces) {
 	for _, ns := range nss {
 		pbNss = append(pbNss,
 			&ctlpb.PmemDevice{
@@ -128,7 +129,7 @@ func (c *StorageControlService) doScmPrepare(pbReq *ctlpb.PrepareScmReq) (pbResp
 	}
 
 	pbResp.State = newState(c.log, ctlpb.ResponseStatus_CTL_SUCCESS, "", info, msg)
-	pbResp.Pmems = namespacesToPB(resp.Namespaces)
+	pbResp.Pmems = scmNamespacesToPB(resp.Namespaces)
 
 	return
 }
@@ -171,7 +172,7 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 		}
 	}
 
-	result, err := c.scm.Scan(scm.ScanRequest{})
+	result, err := c.scm.Scan(scm_types.ScanRequest{})
 	if err != nil {
 		resp.Scm = &ctlpb.ScanScmResp{
 			State: newState(c.log, ctlpb.ResponseStatus_CTL_ERR_SCM, err.Error(), "", msg+"SCM"),
@@ -181,11 +182,8 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 		resp.Scm = &ctlpb.ScanScmResp{
 			State: newState(c.log, ctlpb.ResponseStatus_CTL_SUCCESS, "", "", msg),
 		}
-		if len(result.Namespaces) > 0 {
-			resp.Scm.Pmems = namespacesToPB(result.Namespaces)
-		} else {
-			resp.Scm.Modules = modulesToPB(result.Modules)
-		}
+		resp.Scm.Pmems = scmNamespacesToPB(result.Namespaces)
+		resp.Scm.Modules = scmModulesToPB(result.Modules)
 	}
 
 	return resp, nil
@@ -229,7 +227,7 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 	needsSuperblock := true
 	needsScmFormat := reformat
 	// placeholder result indicating NVMe not yet formatted
-	resp.Crets = types.NvmeControllerResults{
+	resp.Crets = pb_types.NvmeControllerResults{
 		newCret(c.log, "format", "", ctlpb.ResponseStatus_CTL_ERR_NVME, msgBdevScmNotReady, ""),
 	}
 
@@ -260,7 +258,7 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 
 	// When SCM format is required, format and populate response with result.
 	if needsScmFormat {
-		results := types.ScmMountResults{}
+		results := pb_types.ScmMountResults{}
 		result, err := c.scmFormat(scmConfig, true)
 		if err != nil {
 			return errors.Wrap(err, "scm format") // return unexpected errors
@@ -280,7 +278,7 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 		}
 	}
 
-	results := types.NvmeControllerResults{} // init actual NVMe format results
+	results := pb_types.NvmeControllerResults{} // init actual NVMe format results
 
 	// If no superblock exists, populate NVMe response with format results.
 	if needsSuperblock {
@@ -345,7 +343,7 @@ func (c *ControlService) StorageFormat(req *ctlpb.StorageFormatReq, stream ctlpb
 }
 
 // Update is currently a placeholder method stubbing SCM module fw update.
-func (c *ControlService) ScmUpdate(cfg storage.ScmConfig, req *ctlpb.UpdateScmReq, results *(types.ScmModuleResults)) {
+func (c *ControlService) ScmUpdate(cfg storage.ScmConfig, req *ctlpb.UpdateScmReq, results *(pb_types.ScmModuleResults)) {
 	// respond with single result indicating no implementation
 	*results = append(
 		*results,
@@ -377,11 +375,11 @@ func (c *ControlService) StorageUpdate(req *ctlpb.StorageUpdateReq, stream ctlpb
 	// temporary scaffolding
 	for _, i := range c.harness.Instances() {
 		stCfg := i.runner.Config.Storage
-		ctrlrResults := types.NvmeControllerResults{}
+		ctrlrResults := pb_types.NvmeControllerResults{}
 		c.nvme.Update(stCfg.Bdev, req.Nvme, &ctrlrResults)
 		resp.Crets = ctrlrResults
 
-		moduleResults := types.ScmModuleResults{}
+		moduleResults := pb_types.ScmModuleResults{}
 		c.ScmUpdate(stCfg.SCM, req.Scm, &moduleResults)
 		resp.Mrets = moduleResults
 	}

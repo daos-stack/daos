@@ -45,13 +45,14 @@ import (
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	scm_types "github.com/daos-stack/daos/src/control/server/storage/scm/types"
 )
 
 // MockScmModule returns a mock SCM module of type storage/scm.Module.
-func MockScmModule() scm.Module {
+func MockScmModule() scm_types.Module {
 	m := common.MockModulePB()
 
-	return scm.Module{
+	return scm_types.Module{
 		PhysicalID:      uint32(m.Physicalid),
 		ChannelID:       uint32(m.Loc.Channel),
 		ChannelPosition: uint32(m.Loc.Channelpos),
@@ -63,10 +64,10 @@ func MockScmModule() scm.Module {
 
 // MockScmNamespace returns a mock SCM namespace (PMEM device file),
 // which would normally be parsed from the output of ndctl cmdline tool.
-func MockScmNamespace() scm.Namespace {
+func MockScmNamespace() scm_types.Namespace {
 	m := common.MockPmemDevicePB()
 
-	return scm.Namespace{
+	return scm_types.Namespace{
 		UUID:        m.Uuid,
 		BlockDevice: m.Blockdev,
 		Name:        m.Dev,
@@ -131,9 +132,9 @@ func TestStorageScan(t *testing.T) {
 	for name, tc := range map[string]struct {
 		spdkInitEnvRet      error
 		spdkDiscoverRet     error
-		scmDiscoverRes      []scm.Module
+		scmDiscoverRes      []scm_types.Module
 		scmDiscoverErr      error
-		scmGetNamespacesRes []scm.Namespace
+		scmGetNamespacesRes []scm_types.Namespace
 		scmGetNamespacesErr error
 		expSetupErr         error
 		expResp             StorageScanResp
@@ -146,13 +147,14 @@ func TestStorageScan(t *testing.T) {
 					State:  new(ResponseState),
 				},
 				Scm: &ScanScmResp{
-					Pmems: PmemDevices{common.MockPmemDevicePB()},
-					State: new(ResponseState),
+					Modules: ScmModules{common.MockModulePB()},
+					Pmems:   ScmNamespaces{common.MockPmemDevicePB()},
+					State:   new(ResponseState),
 				},
 			},
 		},
 		"successful scan no scm namespaces": {
-			scmGetNamespacesRes: []scm.Namespace{},
+			scmGetNamespacesRes: []scm_types.Namespace{},
 			expResp: StorageScanResp{
 				Nvme: &ScanNvmeResp{
 					Ctrlrs: NvmeControllers{pbCtrlr},
@@ -176,8 +178,9 @@ func TestStorageScan(t *testing.T) {
 					},
 				},
 				Scm: &ScanScmResp{
-					Pmems: PmemDevices{common.MockPmemDevicePB()},
-					State: new(ResponseState),
+					Modules: ScmModules{common.MockModulePB()},
+					Pmems:   ScmNamespaces{common.MockPmemDevicePB()},
+					State:   new(ResponseState),
 				},
 			},
 			expNvmeFailedInit: true,
@@ -194,8 +197,9 @@ func TestStorageScan(t *testing.T) {
 					},
 				},
 				Scm: &ScanScmResp{
-					Pmems: PmemDevices{common.MockPmemDevicePB()},
-					State: new(ResponseState),
+					Modules: ScmModules{common.MockModulePB()},
+					Pmems:   ScmNamespaces{common.MockPmemDevicePB()},
+					State:   new(ResponseState),
 				},
 			},
 			expNvmeFailedInit: true,
@@ -248,10 +252,10 @@ func TestStorageScan(t *testing.T) {
 				GetNamespaceErr: tc.scmGetNamespacesErr,
 			}
 			if mbc.DiscoverRes == nil {
-				mbc.DiscoverRes = []scm.Module{MockScmModule()}
+				mbc.DiscoverRes = []scm_types.Module{MockScmModule()}
 			}
 			if mbc.GetNamespaceRes == nil {
-				mbc.GetNamespaceRes = []scm.Namespace{MockScmNamespace()}
+				mbc.GetNamespaceRes = []scm_types.Namespace{MockScmNamespace()}
 			}
 
 			// test for both empty and default config cases
@@ -307,7 +311,7 @@ func TestStoragePrepare(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		inReq               StoragePrepareReq
-		prepScmNamespaceRes []scm.Namespace
+		prepScmNamespaceRes []scm_types.Namespace
 		prepScmErr          error
 		expResp             StoragePrepareResp
 		isRoot              bool
@@ -317,7 +321,7 @@ func TestStoragePrepare(t *testing.T) {
 				Nvme: &PrepareNvmeReq{},
 				Scm:  &PrepareScmReq{},
 			},
-			[]scm.Namespace{},
+			[]scm_types.Namespace{},
 			nil,
 			StoragePrepareResp{
 				Nvme: &PrepareNvmeResp{State: new(ResponseState)},
@@ -330,7 +334,7 @@ func TestStoragePrepare(t *testing.T) {
 				Nvme: &PrepareNvmeReq{},
 				Scm:  &PrepareScmReq{},
 			},
-			[]scm.Namespace{},
+			[]scm_types.Namespace{},
 			nil,
 			StoragePrepareResp{
 				Nvme: &PrepareNvmeResp{
@@ -353,7 +357,7 @@ func TestStoragePrepare(t *testing.T) {
 				Nvme: nil,
 				Scm:  &PrepareScmReq{},
 			},
-			[]scm.Namespace{},
+			[]scm_types.Namespace{},
 			nil,
 			StoragePrepareResp{
 				Nvme: nil,
@@ -366,7 +370,7 @@ func TestStoragePrepare(t *testing.T) {
 				Nvme: &PrepareNvmeReq{},
 				Scm:  nil,
 			},
-			[]scm.Namespace{},
+			[]scm_types.Namespace{},
 			nil,
 			StoragePrepareResp{
 				Nvme: &PrepareNvmeResp{State: new(ResponseState)},
@@ -379,7 +383,7 @@ func TestStoragePrepare(t *testing.T) {
 				Nvme: &PrepareNvmeReq{},
 				Scm:  &PrepareScmReq{},
 			},
-			[]scm.Namespace{MockScmNamespace()},
+			[]scm_types.Namespace{MockScmNamespace()},
 			nil,
 			StoragePrepareResp{
 				Nvme: &PrepareNvmeResp{State: new(ResponseState)},
@@ -395,7 +399,7 @@ func TestStoragePrepare(t *testing.T) {
 				Nvme: &PrepareNvmeReq{},
 				Scm:  &PrepareScmReq{},
 			},
-			[]scm.Namespace{MockScmNamespace()},
+			[]scm_types.Namespace{MockScmNamespace()},
 			errExample,
 			StoragePrepareResp{
 				Nvme: &PrepareNvmeResp{State: new(ResponseState)},

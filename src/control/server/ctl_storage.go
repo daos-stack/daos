@@ -28,10 +28,11 @@ import (
 
 	"github.com/pkg/errors"
 
-	types "github.com/daos-stack/daos/src/control/common/storage"
+	pb_types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	scm_types "github.com/daos-stack/daos/src/control/server/storage/scm/types"
 )
 
 // StorageControlService encapsulates the storage part of the control service
@@ -102,7 +103,7 @@ func (c *StorageControlService) Setup() error {
 		return errors.Errorf("%s: missing %v", msgBdevNotFound, missing)
 	}
 
-	if _, err := c.scm.Scan(scm.ScanRequest{}); err != nil {
+	if _, err := c.scm.Scan(scm_types.ScanRequest{}); err != nil {
 		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, SCM Scan"))
 	}
 
@@ -159,8 +160,8 @@ func (c *StorageControlService) NvmePrepare(req NvmePrepareRequest) error {
 
 // GetScmState performs required initialisation and returns current state
 // of SCM module preparation.
-func (c *StorageControlService) GetScmState() (types.ScmState, error) {
-	state := types.ScmStateUnknown
+func (c *StorageControlService) GetScmState() (scm_types.ScmState, error) {
+	state := scm_types.ScmStateUnknown
 
 	ok, _ := c.ext.checkSudo()
 	if !ok {
@@ -182,7 +183,7 @@ func (c *StorageControlService) ScmPrepare(req scm.PrepareRequest) (*scm.Prepare
 // ScanNvme scans locally attached SSDs and returns list directly.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
-func (c *StorageControlService) NvmeScan() (types.NvmeControllers, error) {
+func (c *StorageControlService) NvmeScan() (pb_types.NvmeControllers, error) {
 	if err := c.nvme.Discover(); err != nil {
 		return nil, errors.Wrap(err, "NVMe storage scan")
 	}
@@ -193,6 +194,6 @@ func (c *StorageControlService) NvmeScan() (types.NvmeControllers, error) {
 // ScanScm scans locally attached modules, namespaces and state of DCPM config.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
-func (c *StorageControlService) ScmScan() (*scm.ScanResponse, error) {
-	return c.scm.Scan(scm.ScanRequest{})
+func (c *StorageControlService) ScmScan() (*scm_types.ScanResponse, error) {
+	return c.scm.Scan(scm_types.ScanRequest{})
 }

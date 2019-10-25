@@ -23,7 +23,6 @@
 package scm
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -32,10 +31,10 @@ import (
 
 	"github.com/pkg/errors"
 
-	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	types "github.com/daos-stack/daos/src/control/server/storage/scm/types"
 )
 
 const (
@@ -64,62 +63,6 @@ const (
 )
 
 type (
-	// Module represents a SCM DIMM.
-	//
-	// This is a simplified representation of the raw struct used in the ipmctl package.
-	Module struct {
-		ChannelID       uint32
-		ChannelPosition uint32
-		ControllerID    uint32
-		SocketID        uint32
-		PhysicalID      uint32
-		Capacity        uint64
-	}
-
-	Modules []Module
-
-	// Namespace represents a mapping between AppDirect regions and block device files.
-	Namespace struct {
-		UUID        string `json:"uuid"`
-		BlockDevice string `json:"blockdev"`
-		Name        string `json:"dev"`
-		NumaNode    uint32 `json:"numa_node"`
-	}
-
-	Namespaces []Namespace
-)
-
-func (m Module) String() string {
-	return fmt.Sprintf("PhysicalID:%d Capacity:%d Location:(socket:%d memctrlr:%d "+
-		"chan:%d pos:%d)", m.PhysicalID, m.Capacity, m.SocketID,
-		m.ControllerID, m.ChannelID, m.ChannelPosition)
-}
-
-func (ms Modules) String() string {
-	var buf bytes.Buffer
-
-	for _, m := range ms {
-		fmt.Fprintf(&buf, "\t%s\n", m)
-	}
-
-	return buf.String()
-}
-
-func (n Namespace) String() string {
-	return fmt.Sprintf("%s/%s/%s (NUMA %d)", n.Name, n.BlockDevice, n.UUID, n.NumaNode)
-}
-
-func (ns Namespaces) String() string {
-	var buf bytes.Buffer
-
-	for _, n := range ns {
-		fmt.Fprintf(&buf, "\t%s\n", n)
-	}
-
-	return buf.String()
-}
-
-type (
 	// PrepareRequest defines the parameters for a Prepare opration.
 	PrepareRequest struct {
 		// Reset indicates that the operation should reset (clear) DCPM namespaces.
@@ -129,7 +72,7 @@ type (
 	PrepareResponse struct {
 		State          types.ScmState
 		RebootRequired bool
-		Namespaces     Namespaces
+		Namespaces     types.Namespaces
 	}
 
 	// DcpmParams defines the sub-parameters of a Format operation that
@@ -174,25 +117,13 @@ type (
 	// UpdateResponse contains the results of a successful Update operation.
 	UpdateResponse struct{}
 
-	// ScanRequest defines the parameters for a Scan operation.
-	ScanRequest struct {
-		Rescan bool
-	}
-	// ScanResponse contains information gleaned during
-	// a successful Scan operation.
-	ScanResponse struct {
-		State      types.ScmState
-		Modules    Modules
-		Namespaces Namespaces
-	}
-
 	// Backend defines a set of methods to be implemented by a SCM backend.
 	Backend interface {
-		Discover() (Modules, error)
-		Prep(types.ScmState) (bool, Namespaces, error)
+		Discover() (types.Modules, error)
+		Prep(types.ScmState) (bool, types.Namespaces, error)
 		PrepReset(types.ScmState) (bool, error)
 		GetState() (types.ScmState, error)
-		GetNamespaces() (Namespaces, error)
+		GetNamespaces() (types.Namespaces, error)
 	}
 
 	// SystemProvider defines a set of methods to be implemented by a provider
@@ -215,8 +146,8 @@ type (
 		sync.RWMutex
 		scanCompleted bool
 		lastState     types.ScmState
-		modules       Modules
-		namespaces    Namespaces
+		modules       types.Modules
+		namespaces    types.Namespaces
 
 		log     logging.Logger
 		backend Backend
@@ -406,7 +337,7 @@ func (p *Provider) updateState() (state types.ScmState, err error) {
 // GetState returns the current state of DCPM namespaces, if available.
 func (p *Provider) GetState() (types.ScmState, error) {
 	if !p.isInitialized() {
-		if _, err := p.Scan(ScanRequest{}); err != nil {
+		if _, err := p.Scan(types.ScanRequest{}); err != nil {
 			return p.lastState, err
 		}
 	}
@@ -414,11 +345,11 @@ func (p *Provider) GetState() (types.ScmState, error) {
 	return p.currentState(), nil
 }
 
-func (p *Provider) createScanResponse() *ScanResponse {
+func (p *Provider) createScanResponse() *types.ScanResponse {
 	p.RLock()
 	defer p.RUnlock()
 
-	return &ScanResponse{
+	return &types.ScanResponse{
 		State:      p.lastState,
 		Modules:    p.modules,
 		Namespaces: p.namespaces,
@@ -426,7 +357,7 @@ func (p *Provider) createScanResponse() *ScanResponse {
 }
 
 // Scan attempts to scan the system for SCM storage components.
-func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
+func (p *Provider) Scan(req types.ScanRequest) (*types.ScanResponse, error) {
 	if p.isInitialized() && !req.Rescan {
 		return p.createScanResponse(), nil
 	}
@@ -467,7 +398,7 @@ func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 // Prepare attempts to fulfill a SCM Prepare request.
 func (p *Provider) Prepare(req PrepareRequest) (res *PrepareResponse, err error) {
 	if !p.isInitialized() {
-		if _, err := p.Scan(ScanRequest{}); err != nil {
+		if _, err := p.Scan(types.ScanRequest{}); err != nil {
 			return nil, err
 		}
 	}
@@ -504,7 +435,7 @@ func (p *Provider) Prepare(req PrepareRequest) (res *PrepareResponse, err error)
 // filesystem.
 func (p *Provider) CheckFormat(req FormatRequest) (*FormatResponse, error) {
 	if !p.isInitialized() {
-		if _, err := p.Scan(ScanRequest{}); err != nil {
+		if _, err := p.Scan(types.ScanRequest{}); err != nil {
 			return nil, err
 		}
 	}

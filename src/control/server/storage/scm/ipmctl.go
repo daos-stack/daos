@@ -30,9 +30,9 @@ import (
 
 	"github.com/pkg/errors"
 
-	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/lib/ipmctl"
 	"github.com/daos-stack/daos/src/control/logging"
+	types "github.com/daos-stack/daos/src/control/server/storage/scm/types"
 )
 
 const (
@@ -94,16 +94,16 @@ func (r *cmdRunner) checkNdctl() error {
 	return nil
 }
 
-func (r *cmdRunner) Discover() (Modules, error) {
+func (r *cmdRunner) Discover() (types.Modules, error) {
 	discovery, err := r.binding.Discover()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to discover SCM modules")
 	}
 	r.log.Debugf("discovered %d DCPM modules", len(discovery))
 
-	modules := make(Modules, 0, len(discovery))
+	modules := make(types.Modules, 0, len(discovery))
 	for _, d := range discovery {
-		modules = append(modules, Module{
+		modules = append(modules, types.Module{
 			ChannelID:       uint32(d.Channel_id),
 			ChannelPosition: uint32(d.Channel_pos),
 			ControllerID:    uint32(d.Memory_controller_id),
@@ -157,7 +157,7 @@ func (r *cmdRunner) GetState() (types.ScmState, error) {
 // * regions exist but no free capacity -> no-op, return namespaces
 //
 // Command output from external tools will be returned. State will be passed in.
-func (r *cmdRunner) Prep(state types.ScmState) (needsReboot bool, pmemDevs Namespaces, err error) {
+func (r *cmdRunner) Prep(state types.ScmState) (needsReboot bool, pmemDevs types.Namespaces, err error) {
 	if err = r.checkNdctl(); err != nil {
 		return
 	}
@@ -298,8 +298,8 @@ func hasFreeCapacity(text string) (hasCapacity bool, err error) {
 }
 
 // createNamespaces runs create until no free capacity.
-func (r *cmdRunner) createNamespaces() (Namespaces, error) {
-	devs := make(Namespaces, 0)
+func (r *cmdRunner) createNamespaces() (types.Namespaces, error) {
+	devs := make(types.Namespaces, 0)
 
 	for {
 		r.log.Infof("creating SCM namespace, may take a few minutes...\n")
@@ -331,7 +331,7 @@ func (r *cmdRunner) createNamespaces() (Namespaces, error) {
 	}
 }
 
-func (r *cmdRunner) GetNamespaces() (Namespaces, error) {
+func (r *cmdRunner) GetNamespaces() (types.Namespaces, error) {
 	if err := r.checkNdctl(); err != nil {
 		return nil, err
 	}
@@ -350,7 +350,7 @@ func (r *cmdRunner) GetNamespaces() (Namespaces, error) {
 	return nss, nil
 }
 
-func parseNamespaces(jsonData string) (nss Namespaces, err error) {
+func parseNamespaces(jsonData string) (nss types.Namespaces, err error) {
 	// turn single entries into arrays
 	if !strings.HasPrefix(jsonData, "[") {
 		jsonData = "[" + jsonData + "]"

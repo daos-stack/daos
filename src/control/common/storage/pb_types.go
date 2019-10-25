@@ -30,16 +30,6 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 )
 
-//go:generate stringer -type=ScmState
-type ScmState int
-
-const (
-	ScmStateUnknown ScmState = iota
-	ScmStateNoRegions
-	ScmStateFreeCapacity
-	ScmStateNoCapacity
-)
-
 // NvmeControllers is an alias for protobuf NvmeController message slice
 // representing a number of NVMe SSD controllers installed on a storage node.
 type NvmeControllers []*ctlpb.NvmeController
@@ -184,11 +174,11 @@ func (cr CtrlrResults) String() string {
 	return "no controllers found"
 }
 
-// PmemDevices is an alias for protobuf PmemDeviceice message slice representing
-// a number of mounted SCM regions on a storage node.
-type PmemDevices []*ctlpb.PmemDevice
+// ScmNamespaces is an alias for protobuf PmemDevice message slice representing
+// a number of PMEM device files created on SCM namespaces on a storage node.
+type ScmNamespaces []*ctlpb.PmemDevice
 
-func (pds PmemDevices) String() string {
+func (pds ScmNamespaces) String() string {
 	var buf bytes.Buffer
 
 	for _, pd := range pds {
@@ -200,13 +190,12 @@ func (pds PmemDevices) String() string {
 
 // PmemResults contains PMEM device file details created on SCM regions.
 type PmemResults struct {
-	Devices PmemDevices
+	Devices ScmNamespaces
 	Err     error
 }
 
-// ScmMountResults is an alias for protobuf ScmMountResult message slice
-// ScmMounts is an alias for protobuf ScmMount message slice representing
-// a number of mounted SCM regions on a storage node.
+// ScmMounts are protobuf representations of mounted SCM namespaces identified
+// by mount points
 type ScmMounts []*ctlpb.ScmMount
 
 func (sm ScmMounts) String() string {

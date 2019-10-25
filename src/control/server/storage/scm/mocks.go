@@ -26,8 +26,8 @@ import (
 	"os"
 	"strings"
 
-	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/logging"
+	types "github.com/daos-stack/daos/src/control/server/storage/scm/types"
 )
 
 type (
@@ -94,15 +94,15 @@ func DefaultMockSysProvider() *MockSysProvider {
 // implementation providing capability to access and configure
 // SCM modules and namespaces.
 type MockBackendConfig struct {
-	DiscoverRes      Modules
+	DiscoverRes      types.Modules
 	DiscoverErr      error
-	GetNamespaceRes  Namespaces
+	GetNamespaceRes  types.Namespaces
 	GetNamespaceErr  error
 	GetStateErr      error
 	StartingState    types.ScmState
 	NextState        types.ScmState
 	PrepNeedsReboot  bool
-	PrepNamespaceRes Namespaces
+	PrepNamespaceRes types.Namespaces
 	PrepErr          error
 }
 
@@ -111,11 +111,11 @@ type MockBackend struct {
 	cfg      MockBackendConfig
 }
 
-func (mb *MockBackend) Discover() (Modules, error) {
+func (mb *MockBackend) Discover() (types.Modules, error) {
 	return mb.cfg.DiscoverRes, mb.cfg.DiscoverErr
 }
 
-func (mb *MockBackend) GetNamespaces() (Namespaces, error) {
+func (mb *MockBackend) GetNamespaces() (types.Namespaces, error) {
 	return mb.cfg.GetNamespaceRes, mb.cfg.GetNamespaceErr
 }
 
@@ -126,7 +126,7 @@ func (mb *MockBackend) GetState() (types.ScmState, error) {
 	return mb.curState, nil
 }
 
-func (mb *MockBackend) Prep(_ types.ScmState) (bool, Namespaces, error) {
+func (mb *MockBackend) Prep(_ types.ScmState) (bool, types.Namespaces, error) {
 	if mb.cfg.PrepErr == nil {
 		mb.curState = mb.cfg.NextState
 	}

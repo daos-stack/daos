@@ -85,10 +85,10 @@ func TestCheckSprint(t *testing.T) {
 			NewClientNvme(MockCtrlrs, MockServers).String(),
 			"1.2.3.4:10000:\n\tPCI Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:E2010413 Socket:0\n\t\tNamespace: id:12345 capacity:99999 \n\tHealth Stats:\n\t\tTemperature:300K(27C)\n\t\tController Busy Time:0 minutes\n\t\tPower Cycles:99\n\t\tPower On Hours:9999 hours\n\t\tUnsafe Shutdowns:1\n\t\tMedia Errors:0\n\t\tError Log Entries:0\n\t\tCritical Warnings:\n\t\t\tTemperature: OK\n\t\t\tAvailable Spare: OK\n\t\t\tDevice Reliability: OK\n\t\t\tRead Only: OK\n\t\t\tVolatile Memory Backup: OK\n\n1.2.3.5:10001:\n\tPCI Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:E2010413 Socket:0\n\t\tNamespace: id:12345 capacity:99999 \n\tHealth Stats:\n\t\tTemperature:300K(27C)\n\t\tController Busy Time:0 minutes\n\t\tPower Cycles:99\n\t\tPower On Hours:9999 hours\n\t\tUnsafe Shutdowns:1\n\t\tMedia Errors:0\n\t\tError Log Entries:0\n\t\tCritical Warnings:\n\t\t\tTemperature: OK\n\t\t\tAvailable Spare: OK\n\t\t\tDevice Reliability: OK\n\t\t\tRead Only: OK\n\t\t\tVolatile Memory Backup: OK\n\n",
 		},
-		{
-			NewClientScm(MockModules, MockServers).String(),
-			"1.2.3.4:10000:\n\tPhysicalID:12345 Capacity:12345 Location:(socket:4 memctrlr:3 chan:1 pos:2)\n\n1.2.3.5:10001:\n\tPhysicalID:12345 Capacity:12345 Location:(socket:4 memctrlr:3 chan:1 pos:2)\n\n",
-		},
+		//		{
+		//			NewClientScm(MockModules, MockServers).String(),
+		//			"1.2.3.4:10000:\n\tPhysicalID:12345 Capacity:12345 Location:(socket:4 memctrlr:3 chan:1 pos:2)\n\n1.2.3.5:10001:\n\tPhysicalID:12345 Capacity:12345 Location:(socket:4 memctrlr:3 chan:1 pos:2)\n\n",
+		//		},
 		{
 			NewClientScmMount(MockMounts, MockServers).String(),
 			"1.2.3.4:10000:\n\tmntpoint:\"/mnt/daos\" \n\n1.2.3.5:10001:\n\tmntpoint:\"/mnt/daos\" \n\n",
@@ -110,19 +110,19 @@ func TestCheckSprint(t *testing.T) {
 				}, MockServers).String(),
 			"1.2.3.4:10000:\n\tPCI Addr:0000:81:00.0 Status:CTL_ERR_APP Error:example application error\n\n1.2.3.5:10001:\n\tPCI Addr:0000:81:00.0 Status:CTL_ERR_APP Error:example application error\n\n",
 		},
-		{
-			NewClientScmResults(
-				[]*ctlpb.ScmModuleResult{
-					{
-						Loc: MockModulePB().Loc,
-						State: &ctlpb.ResponseState{
-							Status: ctlpb.ResponseStatus_CTL_ERR_APP,
-							Error:  "example application error",
-						},
-					},
-				}, MockServers).String(),
-			"1.2.3.4:10000:\n\tModule Location:(socket:4 memctrlr:3 chan:1 pos:2) Status:CTL_ERR_APP Error:example application error\n\n1.2.3.5:10001:\n\tModule Location:(socket:4 memctrlr:3 chan:1 pos:2) Status:CTL_ERR_APP Error:example application error\n\n",
-		},
+		//		{
+		//			NewClientScmResults(
+		//				[]*ctlpb.ScmModuleResult{
+		//					{
+		//						Loc: MockModulePB().Loc,
+		//						State: &ctlpb.ResponseState{
+		//							Status: ctlpb.ResponseStatus_CTL_ERR_APP,
+		//							Error:  "example application error",
+		//						},
+		//					},
+		//				}, MockServers).String(),
+		//			"1.2.3.4:10000:\n\tModule Location:(socket:4 memctrlr:3 chan:1 pos:2) Status:CTL_ERR_APP Error:example application error\n\n1.2.3.5:10001:\n\tModule Location:(socket:4 memctrlr:3 chan:1 pos:2) Status:CTL_ERR_APP Error:example application error\n\n",
+		//		},
 		{
 			NewClientScmMountResults(
 				[]*ctlpb.ScmMountResult{

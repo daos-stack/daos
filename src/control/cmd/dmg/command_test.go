@@ -102,9 +102,9 @@ func (tc *testConn) StoragePrepare(req *ctlpb.StoragePrepareReq) client.ResultMa
 	return nil
 }
 
-func (tc *testConn) StorageScan() (client.ClientCtrlrMap, client.ClientModuleMap, client.ClientPmemMap) {
+func (tc *testConn) StorageScan() (client.NvmeScanResults, client.ScmScanResults) {
 	tc.appendInvocation("StorageScan")
-	return nil, nil, nil
+	return nil, nil
 }
 
 func (tc *testConn) StorageFormat(reformat bool) (client.ClientCtrlrMap, client.ClientMountMap) {
@@ -112,10 +112,11 @@ func (tc *testConn) StorageFormat(reformat bool) (client.ClientCtrlrMap, client.
 	return nil, nil
 }
 
-func (tc *testConn) StorageUpdate(req *ctlpb.StorageUpdateReq) (client.ClientCtrlrMap, client.ClientModuleMap) {
-	tc.appendInvocation(fmt.Sprintf("StorageUpdate-%s", req))
-	return nil, nil
-}
+// TODO: re-enable when update feature is supported
+//func (tc *testConn) StorageUpdate(req *ctlpb.StorageUpdateReq) (client.ClientCtrlrMap, client.ClientModuleMap) {
+//	tc.appendInvocation(fmt.Sprintf("StorageUpdate-%s", req))
+//	return nil, nil
+//}
 
 func (tc *testConn) ListFeatures() client.ClientFeatureMap {
 	tc.appendInvocation("ListFeatures")
