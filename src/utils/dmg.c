@@ -282,13 +282,16 @@ list_pools_hdlr(int argc, char *argv[])
 	daos_size_t		 orig_npools;
 	daos_size_t		 npools;
 	daos_size_t		 max_nsvc;
-	daos_size_t		 cli_npools;;
+	daos_size_t		 cli_npools;
 	daos_mgmt_pool_info_t	*pools;
 	daos_size_t		 pc;
 	daos_size_t		 sc;
 	int			 rc;
 
-	/* TODO: possible verbose option, return full pool query results */
+	/* TODOs:
+	 * verbose option, return full pool query results
+	 * accept npools option, exercise subset responses
+	 */
 	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
 		switch (rc) {
 		case 'G':
@@ -308,6 +311,7 @@ list_pools_hdlr(int argc, char *argv[])
 		return rc;
 	}
 
+	/* Allocate pools[]. Note: svc ranks per pool allocated by API */
 	D_ALLOC_ARRAY(pools, npools);
 	D_ASSERT(pools != NULL);
 
@@ -317,54 +321,23 @@ list_pools_hdlr(int argc, char *argv[])
 				  NULL /* ev */);
 	if (rc != 0) {
 		fprintf(stderr, "failed to list pools\n");
+		D_FREE(pools);
 		return rc;
 	}
 
-	/* npools in response may be larger than our buffer */
+	/* npools in response (in system) could be larger than our buffer */
 	cli_npools = (npools <= orig_npools) ? npools : orig_npools;
-	printf("There are currently %lu pools in %s (printing %lu records)\n",
-		npools, sysname, cli_npools);
-	printf("The largest pool service has %lu replica ranks\n",
-		max_nsvc);
-
 	for (pc = 0; pc < cli_npools; pc++) {
 		daos_mgmt_pool_info_t	*pool = &pools[pc];
 
 		printf(DF_UUIDF" ", DP_UUID(pool->mgpi_uuid));
 
-		for (sc = 0; sc < pool->mgpi_svc->rl_nr -1; sc++)
+		for (sc = 0; sc < pool->mgpi_svc->rl_nr - 1; sc++)
 			printf("%u:", pool->mgpi_svc->rl_ranks[sc]);
 		printf("%u\n", pool->mgpi_svc->rl_ranks[sc]);
 	}
 
-#if 0
-	/* Test: make an API call intentionally limiting client npools to
-	 * smaller than number in the system.
-	 */
-	orig_npools = npools = 3;
-	rc = daos_mgmt_list_pools(sysname, pools, &npools, &max_nsvc,
-				  NULL /* ev */);
-	if (rc != 0) {
-		fprintf(stderr, "failed to list pools\n");
-		return rc;
-	}
-	cli_npools = (npools <= orig_npools) ? npools : orig_npools;
-	printf("There are currently %lu pools (%lu returned) in %s\n",
-		npools, cli_npools, sysname);
-	printf("The largest pool service has %lu replica ranks\n",
-		max_nsvc);
-
-	for (pc = 0; pc < cli_npools; pc++) {
-		daos_mgmt_pool_info_t	*pool = &pools[pc];
-
-		printf(DF_UUIDF" ", DP_UUID(pool->mgpi_uuid));
-
-		for (sc = 0; sc < pool->mgpi_svc->rl_nr -1; sc++)
-			printf("%u:", pool->mgpi_svc->rl_ranks[sc]);
-		printf("%u\n", pool->mgpi_svc->rl_ranks[sc]);
-	}
-#endif
-
+	D_FREE(pools);
 	return 0;
 }
 

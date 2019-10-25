@@ -392,8 +392,6 @@ mgmt_list_pools_cp(tse_task_t *task, void *data)
 	*arg->max_nsvc = pc_out->lp_max_nsvc;
 	*arg->npools = pc_out->lp_npools;
 
-	D_ERROR("kccain RPC reply has %zu pools:\n", pc_out->lp_pools.ca_count);
-
 	/* copy RPC response pools info to client buffer, if provided */
 	if (arg->pools) {
 		/* Response ca_count expected <= client-specified npools */
@@ -405,19 +403,36 @@ mgmt_list_pools_cp(tse_task_t *task, void *data)
 
 			uuid_copy(cli_pool->mgpi_uuid, rpc_pool->lp_puuid);
 
+			/* allocate rank list for caller (simplifies API) */
 			rc = d_rank_list_dup(&cli_pool->mgpi_svc,
 					     rpc_pool->lp_svc);
 			if (rc) {
 				D_ERROR("Copy RPC response svc list failed\n");
-				D_GOTO(out, rc);
+				D_GOTO(out_free_svcranks, rc);
+			}
+			{
+				int sc;
+				for (sc = 0; sc < rpc_pool->lp_svc->rl_nr; sc++) {
+					D_ERROR("kccain lp_svc.rl_ranks[%d]=%u\n",
+						sc, rpc_pool->lp_svc->rl_ranks[sc]);
+				}
 			}
 		}
 	}
 
-	if (*arg->npools > arg->req_npools) {
-		D_WARN("pool list contains only client-requested npools=%zu, "
-			"less than npools=%zu in system\n", arg->req_npools,
+	if (arg->pools && (*arg->npools > arg->req_npools)) {
+		D_WARN("pool list contains only client-requested npools=%lu, "
+			"less than npools=%lu in system\n", arg->req_npools,
 			*arg->npools);
+	}
+
+out_free_svcranks:
+	if (arg->pools && (rc != 0)) {
+		for (pidx = 0; pidx < pc_out->lp_pools.ca_count; pidx++) {
+			daos_mgmt_pool_info_t *pool = &arg->pools[pidx];
+			if (pool->mgpi_svc)
+				d_rank_list_free(pool->mgpi_svc);
+		}
 	}
 
 out:

@@ -466,7 +466,6 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 	struct mgmt_pool_create_out	*pc_out;
 	int				 rc;
 
-	D_ERROR("kccain got pool create request from CaRT path - legacy dmg?\n");
 	pc_in = crt_req_get(rpc_req);
 	D_ASSERT(pc_in != NULL);
 	pc_out = crt_reply_get(rpc_req);
@@ -614,6 +613,7 @@ enum_pool_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	struct pool_rec			*rec;
 	struct list_pools_iter_args	*ap = varg;
 	struct mgmt_list_pools_one	*pool = NULL;
+	uint32_t			 ri;
 
 	if (key->iov_len != sizeof(uuid_t)) {
 		D_ERROR("invalid key size: key="DF_U64"\n", key->iov_len);
@@ -625,14 +625,11 @@ enum_pool_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 
 	ap->npools++;
 
-	/* TODO: is max_nsvc necessary? d_rank_list_t.rl_ranks
-	 * are being dynamically allocated on this(server) and client sides.
-	 */
 	if (rec->pr_nreplicas > ap->max_nsvc)
 		ap->max_nsvc = rec->pr_nreplicas;
 
-	/* Client doesn't have enough space for all pools */
-	if (ap->avail_npools > 0 && (ap->avail_npools < ap->npools))
+	/* Client didn't provide buffer or not enough space */
+	if (ap->avail_npools < ap->npools)
 		return 0;
 
 	/* Realloc pools[] if needed (double each time starting with 1) */
@@ -655,7 +652,8 @@ enum_pool_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	pool->lp_svc = d_rank_list_alloc(rec->pr_nreplicas);
 	if (pool->lp_svc == NULL)
 		return DER_NOMEM;
-
+	for(ri = 0; ri < rec->pr_nreplicas; ri++)
+		pool->lp_svc->rl_ranks[ri] = rec->pr_replicas[ri];
 	return 0;
 }
 
@@ -702,12 +700,20 @@ out:
 		*max_nsvc = iter_args.max_nsvc;
 		*poolsp = iter_args.pools;
 		*pools_len = iter_args.pools_index;
+	} else {
+		if (iter_args.pools) {
+			int pc;
+			for(pc = 0; pc < iter_args.pools_index; pc++)
+				d_rank_list_free(iter_args.pools[pc].lp_svc);
+			D_FREE(iter_args.pools);
+		}
 	}
 
 	return rc;
 }
 
 /* TODO: dRPC handler for mgmt service list pools (daos_shell / golang) */
+
 /* CaRT RPC handler for management service "list pools" (dmg / C API) */
 void
 ds_mgmt_hdlr_list_pools(crt_rpc_t *rpc_req)
