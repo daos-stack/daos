@@ -19,3 +19,6 @@ __pycache__
 /valgrind_results/
 pylint.log
 .checkpatch-camelcase.git.
+tags
+*.code-workspace
+utils/rpms/_topdir/

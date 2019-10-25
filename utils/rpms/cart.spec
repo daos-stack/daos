@@ -2,15 +2,15 @@
 
 Name:          cart
 Version:       1.6.0
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       CaRT
 
 License:       Apache
-URL:           https//github.com/daos-stack/cart
+URL:           https://github.com/daos-stack/cart
 Source0:       %{name}-%{version}.tar.gz
 Source1:       scons_local-%{version}.tar.gz
 
-BuildRequires: scons
+BuildRequires: scons >= 2.4
 BuildRequires: libfabric-devel
 BuildRequires: pmix-devel
 BuildRequires: openpa-devel
@@ -23,23 +23,17 @@ BuildRequires: hwloc-devel
 BuildRequires: openssl-devel
 BuildRequires: libcmocka-devel
 BuildRequires: libyaml-devel
-Requires: libfabric
-Requires: pmix
-Requires: openpa
-Requires: mercury >= 1.0.1-19
-Requires: ompi
-Requires: libevent
-%if (0%{?rhel} >= 7)
-Requires:libuuid
-Requires: libyaml
-%else
 %if (0%{?suse_version} >= 1315)
-Requires: libuuid1
-Requires: libyaml-0-2
+# these are needed to prefer packages that both provide the same requirement
+# prefer over libpsm2-compat
+BuildRequires: libpsm_infinipath1
+# prefer over libcurl4-mini
+BuildRequires: libcurl4
 %endif
+BuildRequires: gcc-c++
+%if %{defined sha1}
+Provides: %{name}-%{sha1}
 %endif
-Requires: hwloc
-Requires: openssl
 
 %description
 Collective and RPC Transport (CaRT)
@@ -55,10 +49,18 @@ Summary: CaRT devel
 # since the so is unversioned, it only exists in the main package
 # at this time
 Requires: %{name} = %{version}-%{release}
-
 Requires: libuuid-devel
 Requires: libyaml-devel
 Requires: boost-devel
+Requires: mercury-devel
+Requires: openpa-devel
+Requires: libfabric-devel
+Requires: ompi-devel
+Requires: pmix-devel
+Requires: hwloc-devel
+%if %{defined sha1}
+Provides: %{name}-devel-%{sha1}
+%endif
 
 %description devel
 CaRT devel
@@ -67,12 +69,14 @@ CaRT devel
 Summary: CaRT tests
 
 Requires: %{name} = %{version}-%{release}
+%if %{defined sha1}
+Provides: %{name}-tests-%{sha1}
+%endif
 
 %description tests
 CaRT tests
 
 %prep
-%setup -q
 %setup -q -a 1
 
 
@@ -103,11 +107,21 @@ cp -al multi-node-test.sh utils %{?buildroot}%{carthome}/
 mv %{?buildroot}%{_prefix}/{TESTING,lib/cart/}
 ln %{?buildroot}%{carthome}/{TESTING/.build_vars,.build_vars-Linux}.sh
 
+#%if 0%{?suse_version} >= 01315
+#%post -n %{suse_libname} -p /sbin/ldconfig
+#%postun -n %{suse_libname} -p /sbin/ldconfig
+#%else
+%post -p /sbin/ldconfig
+%postun -p /sbin/ldconfig
+#%endif
+
 %files
 %defattr(-, root, root, -)
 %{_bindir}/*
 %{_libdir}/*.so.*
+%dir %{carthome}
 %{carthome}/utils
+%dir %{_prefix}%{_sysconfdir}
 %{_prefix}%{_sysconfdir}/*
 %doc
 
@@ -122,6 +136,12 @@ ln %{?buildroot}%{carthome}/{TESTING/.build_vars,.build_vars-Linux}.sh
 %{carthome}/.build_vars-Linux.sh
 
 %changelog
+* Thu Oct 24 2019 Brian J. Murrell <brian.murrell@intel.com> - 1.6.0-2
+- Add BRs to prefer packages that have choices
+- Add BR for scons >= 2.4 and gcc-c++
+- Add some dirs to %files so they are owned by a package
+- Don't unpack the cart tarball twice
+
 * Wed Oct 23 2019 Alexander Oganezov <alexander.a.oganezov@intel.com>
 - Libcart version 1.6.0
 
