@@ -291,8 +291,8 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 			found_target = 1;
 		} else {
 			uint32_t	fail_num = 0;
-			uint32_t        start_dom;
-			uint32_t        end_dom;
+			uint64_t        start_dom;
+			uint64_t        end_dom;
 			uint64_t        key;
 
 			key = obj_key;
