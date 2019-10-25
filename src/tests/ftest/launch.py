@@ -30,6 +30,7 @@ import os
 import re
 import socket
 import subprocess
+from sys import version_info
 import time
 import yaml
 
@@ -104,12 +105,13 @@ def set_test_environment():
     os.environ["CRT_ATTACH_INFO_PATH"] = os.path.join(base_dir, "tmp")
 
     # Python paths required for functional testing
+    python_version = "python{}{}".format(
+        version_info.major,
+        "" if version_info.major > 2 else ".{}".format(version_info.minor))
     required_python_paths = [
         os.path.abspath("util/apricot"),
         os.path.abspath("util"),
-        os.path.abspath("../../utils/py"),
-        os.path.join(base_dir, "lib", "python2.7", "site-packages"),
-        os.path.join(base_dir, "lib", "python3", "site-packages"),
+        os.path.join(base_dir, "lib", python_version, "site-packages"),
     ]
 
     # Check the PYTHONPATH env definition
