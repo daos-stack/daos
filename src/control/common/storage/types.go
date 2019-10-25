@@ -192,7 +192,7 @@ func (pds PmemDevices) String() string {
 	var buf bytes.Buffer
 
 	for _, pd := range pds {
-		fmt.Fprintf(&buf, "\t%+v\n", pd)
+		fmt.Fprintf(&buf, "\t%s\n", pd)
 	}
 
 	return buf.String()
