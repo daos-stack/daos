@@ -94,8 +94,8 @@ write_map_buf(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_buf *buf,
  * version into "map_buf" and "map_version", respectively.
  */
 static int
-read_map_buf(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_buf **buf,
-	     uint32_t *version)
+locate_map_buf(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_buf **buf,
+	       uint32_t *version)
 {
 	uint32_t	ver;
 	d_iov_t	value;
@@ -120,6 +120,26 @@ read_map_buf(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_buf **buf,
 	return 0;
 }
 
+/* Callers are responsible for freeing buf with D_FREE. */
+static int
+read_map_buf(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_buf **buf,
+	     uint32_t *version)
+{
+	struct pool_buf	       *b;
+	size_t			size;
+	int			rc;
+
+	rc = locate_map_buf(tx, kvs, &b, version);
+	if (rc != 0)
+		return rc;
+	size = pool_buf_size(b->pb_nr);
+	D_ALLOC(*buf, size);
+	if (*buf == NULL)
+		return -DER_NOMEM;
+	memcpy(*buf, b, size);
+	return 0;
+}
+
 /* Callers are responsible for destroying the object via pool_map_decref(). */
 static int
 read_map(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_map **map)
@@ -128,7 +148,7 @@ read_map(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_map **map)
 	uint32_t		version;
 	int			rc;
 
-	rc = read_map_buf(tx, kvs, &buf, &version);
+	rc = locate_map_buf(tx, kvs, &buf, &version);
 	if (rc != 0)
 		return rc;
 
@@ -1858,7 +1878,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	 * completes, then we simply return the error and the client will throw
 	 * its pool_buf away.
 	 */
-	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
+	rc = locate_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to read pool map: %d\n",
 			DP_UUID(svc->ps_uuid), rc);
@@ -2261,7 +2281,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 		}
 	}
 
-	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
+	rc = locate_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to read pool map: %d\n",
 			DP_UUID(svc->ps_uuid), rc);
@@ -2879,8 +2899,9 @@ ds_pool_svc_stop_handler(crt_rpc_t *rpc)
 }
 
 /**
- * update pool map to all servers.
- **/
+ * Get a copy of the latest pool map buffer. Callers are responsible for
+ * freeing iov->iov_buf with D_FREE.
+ */
 int
 ds_pool_map_buf_get(uuid_t uuid, d_iov_t *iov, uint32_t *map_version)
 {
