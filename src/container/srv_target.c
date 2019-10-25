@@ -591,8 +591,7 @@ cont_child_destroy_one(void *vin)
 	/* XXX there might be a race between GC and pool destroy, let's do
 	 * synchronous GC for now.
 	 */
-	dss_gc_run(-1);
-
+	dss_gc_run(pool->spc_hdl, -1);
 	/*
 	 * Force VEA to expire all the just freed extents and make them
 	 * available for allocation immediately.
@@ -603,7 +602,6 @@ cont_child_destroy_one(void *vin)
 			DP_CONT(pool->spc_uuid, in->tdi_uuid), rc);
 		goto out_pool;
 	}
-
 out_pool:
 	ds_pool_child_put(pool);
 out:
