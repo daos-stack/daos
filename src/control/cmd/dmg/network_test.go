@@ -21,23 +21,49 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package server
+package main
 
 import (
-	types "github.com/daos-stack/daos/src/control/common/storage"
-	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	"testing"
 )
 
-// PrepScm interface provides capability to prepare SCM storage
-//
-// TODO: Update tests in this layer to use a mock scm.Provider
-// implementation rather than requiring so much knowledge about
-// low-level details.
-type PrepScm interface {
-	GetNamespaces() ([]scm.Namespace, error)
-	GetState() (types.ScmState, error)
-	Prep(types.ScmState) (bool, []scm.Namespace, error)
-	PrepReset(types.ScmState) (bool, error)
+func TestNetworkCommands(t *testing.T) {
+	runCmdTests(t, []cmdTest{
+		{
+			"Get network provider list",
+			"network list",
+			"ConnectClients NetworkListProviders",
+			nil,
+		},
+		{
+			"Perform network scan no provider",
+			"network scan",
+			"ConnectClients NetworkScanDevices-",
+			nil,
+		},
+		{
+			"Perform network scan all providers long",
+			"network scan --all",
+			"ConnectClients NetworkScanDevices-",
+			nil,
+		},
+		{
+			"Perform network scan all providers short",
+			"network scan -a",
+			"ConnectClients NetworkScanDevices-",
+			nil,
+		},
+		{
+			"Perform network scan with provider ofi+sockets (short)",
+			"network scan -p 'ofi+sockets'",
+			"ConnectClients NetworkScanDevices-'ofi+sockets'",
+			nil,
+		},
+		{
+			"Perform network scan with provider ofi+sockets (long)",
+			"network scan --provider 'ofi+sockets'",
+			"ConnectClients NetworkScanDevices-'ofi+sockets'",
+			nil,
+		},
+	})
 }
-
-// core scm prep code moved to storage/scm/ipmctl.go
