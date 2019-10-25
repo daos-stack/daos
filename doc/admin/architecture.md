@@ -91,7 +91,7 @@ DAOS aims at delivering:
 ## DAOS Components
 
 A data center may have hundreds of thousands of compute nodes
-interconnected via a scalable high-performance fabric, where all, or a
+interconnected via a scalable, high-performance fabric, where all, or a
 subset of the nodes called storage nodes, have direct access to NVM
 storage. A DAOS installation involves several components that can be
 either collocated or distributed.
@@ -99,7 +99,7 @@ either collocated or distributed.
 ### DAOS Target, Server and System
 
 The DAOS server is a multi-tenant daemon running on a Linux instance
-(i.e. natively on the physical node or in a VM or container) of each
+(i.e., natively on the physical node or in a VM or container) of each
 storage node and exporting through the network the locally-attached NVM
 storage. It listens to a management port, addressed by an IP address and
 a TCP port number, plus one or more fabric endpoints, addressed by
@@ -116,8 +116,8 @@ servers and do not coordinate with each other.
 
 Inside a DAOS server, the storage is statically partitioned across
 multiple targets to optimize concurrency. To avoid contention, each
-target has its private storage, own pool of service threads and
-dedicated network context that can be directly addressed over the fabric
+target has its private storage, own pool of service threads, and
+a dedicated network context that can be directly addressed over the fabric
 independently of the other targets hosted on the same storage node. A
 target is typically associated with a single-ported SCM module and NVMe
 SSD attached to a single storage node. Moreover, a target does not
@@ -132,7 +132,7 @@ network, have limited capability and capacity.
 
 The number of targets exported by a DAOS server instance is configurable
 and depends on the underlying hardware (i.e., the number of SCM modules,
-CPUs, NVMe SSDs ...). A target is the unit of fault.
+CPUs, NVMe SSDs, and others). A target is the unit of fault.
 
 ### Storage API, Application Interface and Tools
 
@@ -141,14 +141,15 @@ through two different client APIs. The management API offers the ability
 to administrate a DAOS system. It is intended to be integrated with
 different vendor-specific storage management or open-source
 orchestration frameworks. A CLI tool is built over the DAOS management
-API. On the other hand, the DAOS library (i.e., libdaos) implements the
+API. 
+On the other hand, the DAOS library (i.e., libdaos) implements the
 DAOS storage model and is primarily targeted at application and I/O
 middleware developers who want to store datasets in a DAOS system. User
 utilities are also built over the API to allow users to manage datasets
 from a CLI.
 
 Applications can access datasets stored in DAOS either directly through
-the native DAOS API or an I/O middleware libraries (e.g. POSIX
+the native DAOS API or an I/O middleware libraries (e.g., POSIX
 emulation, MPI-IO, HDF5) or frameworks (e.g., Spark, TensorFlow) already
 integrated with the native DAOS storage model.
 
@@ -178,7 +179,7 @@ stored in the same pool. A container is the unit of snapshot and data
 management. DAOS objects belonging to a container can be distributed
 across any target of the pool for both performance and resilience and
 can be accessed through different APIs to represent
-structured, semi-structured and unstructured data efficiently.
+structured, semi-structured, and unstructured data efficiently.
 
 Figure 2‑2 illustrates the different DAOS abstractions.
 
@@ -202,14 +203,14 @@ Scalability
 
 ### DAOS Pool
 
-A Pool is identified by a unique UUID and maintains target memberships in the pool map stored in persistent memory. The pool map not only records the list of active targets, it also contains the storage topology under the form of a tree that is used to identify targets sharing common hardware components. For instance, the first level of the tree can represent targets sharing the same motherboard, and then the second level can represent all motherboards sharing the same rack and finally the third level can represent all racks in the same cage. This framework effectively represents hierarchical fault domains, which are then used to avoid placing redundant data on targets subject to correlated failures. At any point in time, new targets can be added to the pool map, and failed ones can be excluded. Moreover, the pool map is fully versioned, which effectively assigns a unique sequence to each modification of the map, more particularly for failed node removal.
+A Pool is identified by a unique UUID and maintains target memberships in the pool map stored in persistent memory. The pool map not only records the list of active targets but it also contains the storage topology under the form of a tree that is used to identify targets sharing common hardware components. For instance, the first level of the tree can represent targets sharing the same motherboard, and then the second level can represent all motherboards sharing the same rack, and finally, the third level can represent all racks in the same cage. This framework effectively represents hierarchical fault domains, which are then used to avoid placing redundant data on targets subject to correlated failures. At any point in time, new targets can be added to the pool map, and failed ones can be excluded. Moreover, the pool map is fully versioned, which effectively assigns a unique sequence to each modification of the map, more particularly for failed node removal.
 
 A pool shard is a reservation of NVM storage (i.e., SCM optionally
 combined with a pre-allocated space on NVMe storage) on a specific
 target. It has a fixed capacity and fails operations when full. Current
 space usage can be queried at any time and reports the total amount of
 bytes used by any data type stored in the pool shard. Space consumed on
-the different type of storage is reported separately.
+the different types of storage is reported separately.
 
 Upon target failure and exclusion from the pool map, data redundancy
 inside the pool is automatically restored while the pool remains online.
@@ -224,8 +225,8 @@ distributed to achieve horizontal scalability, and replicated or
 erasure-coded to ensure durability and availability.
 
 When creating a pool, a set of system properties must be defined to
-configure the different features supported by the pool. In addition,
-the user can define their own attributes that will be stored persistently.
+configure the different features supported by the pool. Also,
+the user can define their attributes that will be stored persistently.
 
 A pool is only accessible to authenticated and authorized applications.
 Multiple security frameworks could be supported, from NFSv4 access
@@ -238,7 +239,7 @@ A pool stores many different sorts of persistent metadata, such as the
 pool map, authentication, and authorization information, user attributes,
 properties, and rebuild logs. Such metadata are critical and require the
 highest level of resiliency. Therefore, the pool metadata are replicated
-on a few nodes from distinct high-level fault domains. For very large
+on a few nodes from distinct, high-level fault domains. For very large
 configurations with hundreds of thousands of storage nodes, only a very
 small fraction of those nodes (in the order of tens) run the pool
 metadata service. With a limited number of storage nodes, DAOS can
@@ -260,7 +261,7 @@ different features like checksums.
 
 Objects in a container are identified by a unique 128-bit object address
 and may have different schemas for data distribution and redundancy over
-targets. Dynamic or static striping, replication or erasure code are
+targets. Dynamic or static striping, replication, or erasure code are
 some parameters required to define the object schema. The object class
 defines common schema attributes for a set of objects. Each object class
 is assigned a unique identifier and is associated with a given schema at
@@ -284,8 +285,8 @@ Pre-defined Object Classes
 |Unknown size & RM|Erasure code|SC+PC (e.g. 4+2 initially and grows)
 
 A container is the unit of transaction and snapshot. Container metadata
-(i.e. list of snapshots, container open handles, object class, user
-attributes, properties, etc.) are stored in persistent memory and
+(i.e., list of snapshots, container open handles, object class, user
+attributes, properties, and others) are stored in persistent memory and
 maintained by a dedicated container metadata service that either uses
 the same replicated engine as the parent metadata pool service, or has
 its own engine.
@@ -295,7 +296,7 @@ its own engine.
 To avoid scaling problems and overhead common to a traditional storage
 system, DAOS objects are intentionally simple. No default object
 metadata beyond the type and schema are provided. This means that the
-system does not maintain time, size, owner, permissions or even track
+system does not maintain time, size, owner, permissions, or even track
 openers. To achieve high availability and horizontal scalability, many
 object schemas (replication/erasure code, static/dynamic striping, and others)
 are provided. The schema framework is flexible and easily expandable to

@@ -64,8 +64,8 @@ rebuild process is configured to consume up to 30% of the CPU cycles,
 leaving the other 70% for regular I/O operations.
 
 During the rebuild process, the user can set the throttle to guarantee the
-rebuild will not use more resource than the user setting. The user can
-only set the CPU cycle for now. For example, if the user set the
+rebuild will not use more resources than the user setting. The user can
+only set the CPU cycle for now. For example, if the user sets the
 throttle to 50, then the rebuild will at most use 50% of the CPU cycle to do
 the rebuild job. The default rebuild throttle for CPU cycle is 30. This
 parameter can be changed via the daos_mgmt_set_params() API call and
@@ -89,7 +89,7 @@ Version compatibility checks will be performed to verify that:
 
 If a protocol version mismatch is detected among storage targets in the
 same pool, the entire DAOS system will fail to start up and will report
-failure to the control API. Similarly, the connection from clients
+a failure to the control API. Similarly, the connection from clients
 running a protocol version incompatible with the targets will return an
 error.
 

@@ -51,13 +51,13 @@ API (not supported by the tool yet):
     the pool
 
 -   DAOS_PROP_PO_SPACE_RB is the space to be reserved on each target
-    for rebuild purpose.
+    for rebuild purposes.
 
 -   DAOS_PROP_PO_SELF_HEAL defines whether the pool wants
     automatically-trigger, or manually-triggered self-healing.
 
 -   DAOS_PROP_PO_RECLAIM is used to tune the space reclaim strategy
-    based on time interval, batched commits or snapshot creation.
+    based on time interval, batched commits, or snapshot creation.
 
 While those pool properties are currently stored persistently with pool
 metadata, many of them are still under development. Moreover, the
@@ -66,7 +66,7 @@ be provided in a future release.
 
 ## Pool Access Control Lists
 
-User and group access for pools is controlled by Access Control Lists (ACLs).
+User and group access for pools are controlled by Access Control Lists (ACLs).
 A DAOS ACL is a list of zero or more Access Control Entries (ACEs). ACEs are
 the individual rules applied to each access decision.
 

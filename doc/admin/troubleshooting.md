@@ -131,7 +131,7 @@ are enabled by default ("DD_MASK=all").
 -   Disable all logs for performance tuning
 
         $ D_LOG_MASK=ERR -> will only log error messages from all facilities
-        $ D_LOG_MASK=FATAL -> will only log system fatal messages
+        $ D_LOG_MASK=FATAL -> will only log fatal system messages
 
 -   Disable a noisy debug logging subsystem
 

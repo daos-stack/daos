@@ -1,0 +1,25 @@
+var searchData=
+[
+  ['s_5fdb',['s_db',['../structds__rsvc.html#a8366486b184054dbeca348743bdc1544',1,'ds_rsvc']]],
+  ['s_5fid',['s_id',['../structds__rsvc.html#a06d4b0061a83d85fd4766106ba00b8ca',1,'ds_rsvc']]],
+  ['s_5fname',['s_name',['../structds__rsvc.html#a6c480a00c7475fce44b4175337e1bd6b',1,'ds_rsvc']]],
+  ['s_5fterm',['s_term',['../structds__rsvc.html#a01832567d4f1b460e486bc79fff12087',1,'ds_rsvc']]],
+  ['sc_5falloc',['sc_alloc',['../structds__rsvc__class.html#a2648b8c0f27790d9b12e44f04faebe4c',1,'ds_rsvc_class']]],
+  ['sc_5fbootstrap',['sc_bootstrap',['../structds__rsvc__class.html#a524c0aa6f0422ca7de02dcd6074af4e5',1,'ds_rsvc_class']]],
+  ['sc_5fdelete_5fuuid',['sc_delete_uuid',['../structds__rsvc__class.html#a6d218439a2b41ee150922c1f1fc477ad',1,'ds_rsvc_class']]],
+  ['sc_5fdrain',['sc_drain',['../structds__rsvc__class.html#ad8060a8f981d580f168fc99d3cdabc18',1,'ds_rsvc_class']]],
+  ['sc_5ffree',['sc_free',['../structds__rsvc__class.html#a3d5beb797efc127f95f68c9a3c62c507',1,'ds_rsvc_class']]],
+  ['sc_5fload_5fuuid',['sc_load_uuid',['../structds__rsvc__class.html#a0d57a88fae93eef618d93b25451be90c',1,'ds_rsvc_class']]],
+  ['sc_5flocate',['sc_locate',['../structds__rsvc__class.html#a4ba96842260a850e8386d3532291fc36',1,'ds_rsvc_class']]],
+  ['sc_5fname',['sc_name',['../structds__rsvc__class.html#a7275759d8abec60f66e60159555d1048',1,'ds_rsvc_class']]],
+  ['sc_5fstep_5fdown',['sc_step_down',['../structds__rsvc__class.html#ab78ed76dc6c797ed310c08b4ba30af4f',1,'ds_rsvc_class']]],
+  ['sc_5fstep_5fup',['sc_step_up',['../structds__rsvc__class.html#af4ffba0f7394f50d0efa2c03c82521e9',1,'ds_rsvc_class']]],
+  ['sc_5fstore_5fuuid',['sc_store_uuid',['../structds__rsvc__class.html#ac0b49b2c8db757e787de07c670a12995',1,'ds_rsvc_class']]],
+  ['sequence',['sequence',['../structdrpc.html#acc80722d9dd9349cbba06c72d6fb5972',1,'drpc']]],
+  ['smd_5fid',['smd_id',['../structdaos__obj__shard__md.html#a4aba110c5cede1a95e93a79b24cc92a1',1,'daos_obj_shard_md']]],
+  ['so_5fcmp',['so_cmp',['../structdaos__sort__ops__t.html#afc2a337d1c0442555c517d6e43d0028d',1,'daos_sort_ops_t']]],
+  ['so_5fcmp_5fkey',['so_cmp_key',['../structdaos__sort__ops__t.html#a84ae243b7b4717bd047fcb2588c1dbef',1,'daos_sort_ops_t']]],
+  ['st_5farg',['st_arg',['../structdss__stream__arg__type.html#a67cdc3a4bf921596ef2cd3ff2111c6f1',1,'dss_stream_arg_type']]],
+  ['st_5fcoll_5fargs',['st_coll_args',['../structdss__stream__arg__type.html#ad92ae0a9dba1106369428069472b69b7',1,'dss_stream_arg_type']]],
+  ['st_5frc',['st_rc',['../structdss__stream__arg__type.html#ae1b8d3b8c0356cb298a24653a3b7e2b8',1,'dss_stream_arg_type']]]
+];

@@ -40,7 +40,7 @@ location can be passed on the command line using the -runtime_dir flag.
 Files and directories created in /run and /var/run only survive until
 the next reboot. However, if reboots are infrequent, an easy solution
 while still utilizing the default locations is to create the
-required directories manually. To do this execute the following commands.
+required directories manually. To do this, execute the following commands.
 
 daos_server:
 ```
@@ -151,8 +151,8 @@ Example output from the subsequent call (SCM modules configured to AppDirect
 mode, and host rebooted):
 
 ```bash
-Memory allocation goals for SCM will be changed and namespaces modified. This
-will be a destructive operation. Ensure namespaces are unmounted and the SCM
+Memory allocation goals for SCM will be changed, and namespaces modified. This
+will be a destructive operation. Ensure namespaces are unmounted, and the SCM
 is otherwise unused.
 Are you sure you want to continue? (yes/no)
 yes
@@ -196,7 +196,7 @@ NVMe access through SPDK as an unprivileged user can be enabled by
 running the example command
 `sudo daos_server storage prepare --nvme-only -p 4096 -u bob`.
 
-This will perform the required setup in order for `daos_server` to be run
+This will perform the required setup for `daos_server` to be run
 by user "bob" who will own the hugepage mountpoint directory and vfio
 groups as needed in SPDK operations.
 
@@ -264,7 +264,7 @@ The pciaddr field above is what should be used in the server
 configuration file to identified NVMe SSDs.
 
 Devices with the same NUMA node/socket should be used in the same per-server
-section of the server configuration file for best performance.
+section of the server configuration file for the best performance.
 
 ### Network Interface Detection and Selection
 
@@ -374,7 +374,7 @@ and example configuration files in the [examples](https://github.com/daos-stack/
 directory.
 
 Any option supplied to `daos_server` as a command line option or flag will
-take precedence over equivalent configuration file parameter.
+take precedence over the equivalent configuration file parameter.
 
 For convenience, active parsed configuration values are written to a temporary
 file for reference, and the location will be written to the log.
@@ -391,7 +391,7 @@ for the path specified through the -o option of the daos_server command
 line. Otherwise, /etc/daos_server.conf is used.
 
 Refer to the example configuration file ([daos_server.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml))
-for latest information and examples.
+for the latest information and examples.
 
 ## Server Startup
 
@@ -400,8 +400,8 @@ server connection. As a result, the DAOS servers can only be started via
 orterun (part of OpenMPI). A new bootstrap procedure is under
 implementation and will be available for DAOS v1.0. This will remove the
 dependency on PMIx and will allow the DAOS servers to be started
-individually (e.g. independently on each storage node via systemd) or
-collectively (e.g. pdsh, mpirun or as a Kubernetes Pod).
+individually (e.g., independently on each storage node via systemd) or
+collectively (e.g., pdsh, mpirun or as a Kubernetes Pod).
 
 ### Parallel Launcher
 
@@ -431,7 +431,7 @@ to storage format).
 The content of the configuration file is documented in the next section
 and a few examples are [available](/src/utils/config/examples).
 
-Client processes (i.e. utilities, applications, ...) should have the
+Client processes (i.e., utilities, applications, and others) should have the
 following environment variables set to connect to the DAOS servers:
 ```
 export DAOS_SINGLETON_CLI=1
@@ -623,7 +623,7 @@ requires a subsequent restart of `daos_server`)
 ```bash
 $ daos_shell -i -l <hostname>:10001 -i storage format -f
 Active connections: [<hostname):10001]
-This is a destructive operation and storage devices specified in the server config file will be erased.
+This is a destructive operation, and storage devices specified in the server config file will be erased.
 Please be patient as it may take several minutes.
 
 NVMe storage format results:
@@ -664,7 +664,7 @@ on the command line (`daos_agent -h` for usage) or default location
 Parameter descriptions are specified in [daos_agent.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_agent.yml).
 
 Any option supplied to `daos_agent` as a command line option or flag will
-take precedence over equivalent configuration file parameter.
+take precedence over the equivalent configuration file parameter.
 
 For convenience, active parsed config values are written to a temporary
 file for reference, and the location will be written to the log.
@@ -683,7 +683,7 @@ The location of this configuration file is determined by first checking
 for the path specified through the -o option of the daos_agent command
 line. Otherwise, /etc/daos_agent.conf is used.
 
-Refer to the example configuration file ([daos_server.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)) for latest information and examples.
+Refer to the example configuration file ([daos_server.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)) for the latest information and examples.
 
 ## Agent Startup
 
