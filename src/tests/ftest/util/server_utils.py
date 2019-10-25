@@ -71,7 +71,7 @@ class DaosServer(DaosCommand):
             "/run/daos_server/*", "daos_server", path)
 
         self.yaml_params = DaosServerConfig()
-        self.timeout = 30
+        self.timeout = 120
         self.server_cnt = 1
         self.mode = "normal"
 
