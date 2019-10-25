@@ -154,7 +154,7 @@ func (srv *IOServerInstance) CreateSuperblock(msInfo *mgmtInfo) error {
 	}
 	srv.setSuperblock(superblock)
 	srv.log.Debugf("creating %s: (rank: %d, uuid: %s)",
-		srv.superblockPath(), *superblock.Rank, superblock.UUID)
+		srv.superblockPath(), superblock.Rank, superblock.UUID)
 
 	return srv.WriteSuperblock()
 }
