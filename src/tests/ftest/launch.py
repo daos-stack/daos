@@ -186,33 +186,33 @@ def spawn_commands(host_list, command, timeout=120):
     # Create a ClusterShell Task to run the command in parallel on the hosts
     nodes = NodeSet.fromlist(host_list)
     task = task_self()
+    # task.set_info('debug', True)
+    # Enable forwarding of the ssh authentication agent connection
+    task.set_info("ssh_options", "-oForwardAgent=yes")
     print("Running on {}: {}".format(nodes, command))
     task.run(command=command, nodes=nodes, timeout=timeout)
 
-    # Create a dictionary of hosts where the command's return code was non-zero
-    errors = {code: hosts for code, hosts in task.iter_retcodes() if code != 0}
+    # Create a dictionary of hosts for each unique return code
+    results = {code: hosts for code, hosts in task.iter_retcodes()}
 
     # Determine if the command completed successfully across all the hosts
-    status = len(errors) > 0
-
-    # Display the command output for any unsuccessful commands
+    status = len(results) == 1 and 0 in results
     if not status:
-        print("Errors detected running \"{}\":".format(command))
-        for code, e_hosts in errors.items():
-            if code != 0:
-                output_data = list(task.iter_buffers(e_hosts))
-                if len(output_data) == 0:
-                    err_nodes = NodeSet.fromlist(e_hosts)
-                    print("  {}: rc={}, output: NONE".format(err_nodes, code))
-                else:
-                    for output, o_hosts in output_data:
-                        err_nodes = NodeSet.fromlist(o_hosts)
-                        lines = str(output).splitlines()
-                        print(
-                            "  {}: rc={}, output: {}".format(
-                                err_nodes, code,
-                                output if len(lines) < 2 else "\n    {}".format(
-                                    "\n    ".join(lines))))
+        print("  Errors detected running \"{}\":".format(command))
+
+    # Display the command output
+    for code in sorted(results):
+        output_data = list(task.iter_buffers(results[code]))
+        if len(output_data) == 0:
+            err_nodes = NodeSet.fromlist(results[code])
+            print("    {}: rc={}, output: <NONE>".format(err_nodes, code))
+        else:
+            for output, o_hosts in output_data:
+                n_set = NodeSet.fromlist(o_hosts)
+                lines = str(output).splitlines()
+                if len(lines) > 1:
+                    output = "\n      {}".format("\n      ".join(lines))
+                print("    {}: rc={}, output: {}".format(n_set, code, output))
 
     return status
 
@@ -568,7 +568,7 @@ def clean_logs(test_yaml, args):
     # log files it will use when it is run.
     log_files = get_log_files(test_yaml, get_log_files(BASE_LOG_FILE_YAML))
     host_list = get_hosts_from_yaml(test_yaml, args)
-    command = "ssh {{host}} \"rm -fr {}\"".format(" ".join(log_files.values()))
+    command = "rm -fr {}".format(" ".join(log_files.values()))
     print("Cleaning logs on {}".format(host_list))
     if not spawn_commands(host_list, command):
         print("Error cleaning logs, aborting")
@@ -600,11 +600,11 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
         if os.path.splitext(os.path.basename(log_file))[1] != ""]
 
     # Copy any log files that exist on the test hosts and remove them from the
-    # test host if the copy is successful
-    command = "ssh {{host}} 'set -e; {}'".format(
-        "for file in {}; do if [ -e $file ]; then "
-        "scp $file {}:{}/${{{{file##*/}}}}-{{host}} && rm -fr $file; fi; "
-        "done".format(" ".join(non_dir_files), this_host, doas_logs_dir))
+    # test host if the copy is successful.  Log any executed scp commands.
+    command = "set -Eeu; {}".format(
+        "for file in {}; do if [ -e $file ]; then set -x; "
+        "scp $file {}:{}/${{file##*/}}-$(hostname -s) && rm -fr $file; set +x; "
+        "fi; done".format(" ".join(non_dir_files), this_host, doas_logs_dir))
     spawn_commands(host_list, command)
 
 
