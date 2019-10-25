@@ -25,7 +25,6 @@ from __future__ import print_function
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 import json
-from multiprocessing import Process
 import os
 import re
 import socket
@@ -33,6 +32,9 @@ import subprocess
 from sys import version_info
 import time
 import yaml
+
+from ClusterShell.NodeSet import NodeSet
+from ClusterShell.Task import task_self
 
 try:
     # For python versions >= 3.2
@@ -176,40 +178,43 @@ def spawn_commands(host_list, command, timeout=120):
         command (str): command to run on each host
         timeout (int): number of seconds to wait for all jobs to complete
 
+    Returns:
+        bool: True if the command completed successfully (rc=0) on each
+            specified host; False otherwise
+
     """
-    # Create a job to run the command on each host
-    jobs = []
-    for host in host_list:
-        host_command = command.format(host=host)
-        jobs.append(Process(target=get_output, args=(host_command,)))
+    # Create a ClusterShell Task to run the command in parallel on the hosts
+    nodes = NodeSet.fromlist(host_list)
+    task = task_self()
+    print("Running on {}: {}".format(nodes, command))
+    task.run(command=command, nodes=nodes, timeout=timeout)
 
-    # Start the background jobs
-    for job in jobs:
-        job.start()
+    # Create a dictionary of hosts where the command's return code was non-zero
+    errors = {code: hosts for code, hosts in task.iter_retcodes() if code != 0}
 
-    # Block until each job is complete or the overall timeout is reached
-    elapsed = 0
-    for job in jobs:
-        # Update the join timeout to account for previously joined jobs
-        join_timeout = timeout - elapsed if elapsed <= timeout else 0
+    # Determine if the command completed successfully across all the hosts
+    status = len(errors) > 0
 
-        # Block until this job completes or the overall timeout is reached
-        start_time = int(time.time())
-        job.join(join_timeout)
+    # Display the command output for any unsuccessful commands
+    if not status:
+        print("Errors detected running \"{}\":".format(command))
+        for code, e_hosts in errors.items():
+            if code != 0:
+                output_data = list(task.iter_buffers(e_hosts))
+                if len(output_data) == 0:
+                    err_nodes = NodeSet.fromlist(e_hosts)
+                    print("  {}: rc={}, output: NONE".format(err_nodes, code))
+                else:
+                    for output, o_hosts in output_data:
+                        err_nodes = NodeSet.fromlist(o_hosts)
+                        lines = str(output).splitlines()
+                        print(
+                            "  {}: rc={}, output: {}".format(
+                                err_nodes, code,
+                                output if len(lines) < 2 else "\n    {}".format(
+                                    "\n    ".join(lines))))
 
-        # Update the amount of time that has elapsed since waiting for jobs
-        elapsed += int(time.time()) - start_time
-
-    # Terminate any processes that may still be running after timeout
-    return_value = True
-    for job in jobs:
-        if job.is_alive():
-            print("Terminating job {}".format(job.pid))
-            job.terminate()
-        if job.exitcode != 0:
-            return_value = False
-
-    return return_value
+    return status
 
 
 def find_values(obj, keys, key=None, val_type=list):
