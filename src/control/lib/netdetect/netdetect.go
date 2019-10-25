@@ -569,7 +569,7 @@ func GetDeviceNames() ([]string, error) {
 	return netNames, nil
 }
 
-// GetSupportedProviders returns a string containing all supported Mercury providers
+// GetSupportedProviders returns a []string containing all supported Mercury providers
 func GetSupportedProviders() []string {
 	return []string{"ofi+gni", "ofi+psm2", "ofi+tcp", "ofi+sockets", "ofi+verbs", "ofi_rxm"}
 }
