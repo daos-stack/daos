@@ -597,6 +597,37 @@ ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 	return 0;
 }
 
+static int
+ivc_pre_sync(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
+	     d_sg_list_t *iv_value, void *arg)
+{
+	struct ds_iv_ns		*ns;
+	struct ds_iv_entry	*entry;
+	struct ds_iv_key	key;
+	struct iv_priv_entry	*priv_entry = arg;
+	struct ds_iv_class	*class;
+	int			rc = 0;
+
+	ns = iv_ns_lookup_by_ivns(ivns);
+	D_ASSERT(ns != NULL);
+
+	iv_key_unpack(&key, iv_key);
+	if (priv_entry == NULL || priv_entry->entry == NULL) {
+		/* find and prepare entry */
+		rc = iv_entry_lookup_or_create(ns, &key, &entry);
+		if (rc < 0)
+			return rc;
+	} else {
+		entry = priv_entry->entry;
+	}
+
+	class = entry->iv_class;
+	if (class->iv_class_ops && class->iv_class_ops->ivc_pre_sync)
+		rc = class->iv_class_ops->ivc_pre_sync(entry, &key, iv_value);
+
+	return rc;
+}
+
 struct crt_iv_ops iv_cache_ops = {
 	.ivo_pre_fetch		= ivc_pre_cb,
 	.ivo_on_fetch		= ivc_on_fetch,
@@ -607,6 +638,7 @@ struct crt_iv_ops iv_cache_ops = {
 	.ivo_on_hash		= ivc_on_hash,
 	.ivo_on_get		= ivc_on_get,
 	.ivo_on_put		= ivc_on_put,
+	.ivo_pre_sync		= ivc_pre_sync
 };
 
 static void

@@ -254,6 +254,9 @@ typedef int (*ds_iv_value_alloc_t)(struct ds_iv_entry *ent,
 typedef bool (*ds_iv_ent_valid_t)(struct ds_iv_entry *ent,
 				 struct ds_iv_key *key);
 
+typedef int (*ds_iv_pre_sync_t)(struct ds_iv_entry *entry,
+				struct ds_iv_key *key, d_sg_list_t *value);
+
 struct ds_iv_class_ops {
 	ds_iv_key_pack_t	ivc_key_pack;
 	ds_iv_key_unpack_t	ivc_key_unpack;
@@ -267,6 +270,7 @@ struct ds_iv_class_ops {
 	ds_iv_ent_refresh_t	ivc_ent_refresh;
 	ds_iv_value_alloc_t	ivc_value_alloc;
 	ds_iv_ent_valid_t	ivc_ent_valid;
+	ds_iv_pre_sync_t	ivc_pre_sync;
 };
 
 extern struct crt_iv_ops iv_cache_ops;

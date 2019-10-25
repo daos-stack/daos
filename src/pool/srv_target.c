@@ -840,6 +840,39 @@ ds_pool_tgt_disconnect_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 	return 0;
 }
 
+static int
+update_pool_group(struct ds_pool *pool, struct pool_map *map)
+{
+	uint32_t	version;
+	d_rank_list_t	ranks;
+	int		rc;
+
+	rc = crt_group_version(pool->sp_group, &version);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_DEBUG(DB_MD, DF_UUID": %u -> %u\n", DP_UUID(pool->sp_uuid), version,
+		pool_map_get_version(map));
+
+	rc = map_ranks_init(map, MAP_RANKS_UP, &ranks);
+	if (rc != 0)
+		return rc;
+
+	/* Let secondary rank == primary rank. */
+	rc = crt_group_secondary_modify(pool->sp_group, &ranks, &ranks,
+					CRT_GROUP_MOD_OP_REPLACE,
+					pool_map_get_version(map));
+	if (rc != 0) {
+		if (rc == -DER_OOG)
+			D_DEBUG(DB_MD, DF_UUID": SG and PG out of sync: %d\n",
+				DP_UUID(pool->sp_uuid), rc);
+		else
+			D_ERROR(DF_UUID": failed to update group: %d\n",
+				DP_UUID(pool->sp_uuid), rc);
+	}
+
+	map_ranks_fini(&ranks);
+	return rc;
+}
+
 /*
  * Called via dss_collective() to update the pool map version in the
  * ds_pool_child object.
@@ -883,6 +916,12 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		if (map != NULL) {
 			struct pool_map *tmp = pool->sp_map;
 
+			rc = update_pool_group(pool, map);
+			if (rc != 0) {
+				ABT_rwlock_unlock(pool->sp_lock);
+				goto out;
+			}
+
 			rc = pl_map_update(pool->sp_uuid, map,
 					   pool->sp_map != NULL ? false : true,
 					   DEFAULT_PL_TYPE);
@@ -911,6 +950,12 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		   map != NULL) {
 		struct pool_map *tmp = pool->sp_map;
 
+		rc = update_pool_group(pool, map);
+		if (rc != 0) {
+			ABT_rwlock_unlock(pool->sp_lock);
+			goto out;
+		}
+
 		rc = pl_map_update(pool->sp_uuid, map,
 				   pool->sp_map != NULL ? false : true,
 				   DEFAULT_PL_TYPE);
@@ -930,10 +975,9 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 	}
 	ABT_rwlock_unlock(pool->sp_lock);
 
-	if (map)
-		pool_map_decref(map);
-
 out:
+	if (map != NULL)
+		pool_map_decref(map);
 	return rc;
 }
 

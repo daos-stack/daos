@@ -253,15 +253,46 @@ pool_iv_value_alloc(struct ds_iv_entry *entry, d_sg_list_t *sgl)
 	return pool_iv_value_alloc_internal(entry->iv_class->iv_class_id, sgl);
 }
 
+static int
+pool_iv_pre_sync(struct ds_iv_entry *entry, struct ds_iv_key *key,
+		 d_sg_list_t *value)
+{
+	struct pool_iv_entry	*v = value->sg_iovs[0].iov_buf;
+	struct ds_pool		*pool;
+	struct pool_buf		*map_buf = NULL;
+	int			 rc;
+
+	/* This function is only for IV_POOL_MAP. */
+	if (entry->iv_class->iv_class_id != IV_POOL_MAP)
+		return 0;
+
+	pool = ds_pool_lookup(v->piv_pool_uuid);
+	if (pool == NULL) {
+		D_DEBUG(DB_TRACE, DF_UUID": pool not found\n",
+			DP_UUID(v->piv_pool_uuid));
+		/* Return 0 to keep forwarding this sync request. */
+		return 0;
+	}
+
+	if (v->piv_map.piv_pool_buf.pb_nr > 0)
+		map_buf = &v->piv_map.piv_pool_buf;
+
+	rc = ds_pool_tgt_map_update(pool, map_buf, v->piv_pool_map_ver);
+
+	ds_pool_put(pool);
+	return rc;
+}
+
 struct ds_iv_class_ops pool_iv_ops = {
-	.ivc_ent_init	= pool_iv_ent_init,
-	.ivc_ent_get	= pool_iv_ent_get,
-	.ivc_ent_put	= pool_iv_ent_put,
-	.ivc_ent_destroy = pool_iv_ent_destroy,
-	.ivc_ent_fetch	= pool_iv_ent_fetch,
-	.ivc_ent_update	= pool_iv_ent_update,
-	.ivc_ent_refresh = pool_iv_ent_refresh,
-	.ivc_value_alloc = pool_iv_value_alloc,
+	.ivc_ent_init		= pool_iv_ent_init,
+	.ivc_ent_get		= pool_iv_ent_get,
+	.ivc_ent_put		= pool_iv_ent_put,
+	.ivc_ent_destroy	= pool_iv_ent_destroy,
+	.ivc_ent_fetch		= pool_iv_ent_fetch,
+	.ivc_ent_update		= pool_iv_ent_update,
+	.ivc_ent_refresh	= pool_iv_ent_refresh,
+	.ivc_value_alloc	= pool_iv_value_alloc,
+	.ivc_pre_sync		= pool_iv_pre_sync
 };
 
 int
