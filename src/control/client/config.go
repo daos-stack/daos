@@ -28,7 +28,6 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"path/filepath"
 
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
@@ -41,7 +40,7 @@ import (
 const (
 	defaultRuntimeDir = "/var/run/daos_agent"
 	defaultLogFile    = "/tmp/daos_agent.log"
-	defaultConfigPath = "etc/daos.yml"
+	defaultConfigPath = "../etc/daos.yml"
 	defaultSystemName = "daos_server"
 	defaultPort       = 10001
 )
@@ -106,23 +105,17 @@ func GetConfig(log logging.Logger, ConfigPath string) (*Configuration, error) {
 		config.Path = ConfigPath
 	}
 
-	if !filepath.IsAbs(config.Path) {
-		newPath, err := common.GetAbsInstallPath(config.Path)
-		if err != nil {
-			return nil, errors.Wrap(err, "resolving install path")
-		}
-
-		config.Path = newPath
-	}
-
-	_, err := os.Stat(config.Path)
+	log.Debugf("config: %s", config.Path)
+	newPath, err := common.FindFile(config.Path)
 	if err != nil {
 		if os.IsNotExist(err) && ConfigPath == "" {
 			log.Debugf("No configuration file found; using default values")
+			config.Path = ""
 			return config, nil
 		}
-		return nil, errors.Wrapf(err, "failed to stat config file %s", config.Path)
+		return nil, err
 	}
+	config.Path = newPath
 
 	if err := config.LoadConfig(); err != nil {
 		return nil, errors.Wrapf(err, "parsing config file %s", config.Path)

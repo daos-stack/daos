@@ -41,15 +41,6 @@ import (
 // log message context refers to caller not callee.
 const UtilLogDepth = 4
 
-// GetAbsInstallPath retrieves absolute path of files in daos install dir
-func GetAbsInstallPath(relPath string) (string, error) {
-	ex, err := os.Executable()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(filepath.Dir(ex), "..", relPath), nil
-}
-
 // GetFilePaths return full file paths in given directory with
 // matching file extensions
 func GetFilePaths(dir string, ext string) ([]string, error) {
@@ -238,26 +229,47 @@ func Run(cmd string) error {
 	return err
 }
 
-// FindBinary attempts to locate the named binary by checking
-// $PATH first. If the binary is not found in $PATH, then
-// it looks in the directory containing the binary for
+// GetAdjacentPath retrieves path relative to the binary used to launch the
+// currently running process.
+func GetAdjacentPath(relPath string) (string, error) {
+	if path.IsAbs(relPath) {
+		return "", FaultUnexpectedAbsPath
+	}
+
+	selfPath, err := os.Readlink("/proc/self/exe")
+	if err != nil {
+		return "", errors.Wrap(err, "unable to determine path to self")
+	}
+
+	return path.Join(path.Dir(selfPath), relPath), nil
+}
+
+// FindFile looks for a file path. If the path is not absolute, look in the
+// directory containing the binary for the running process.
+func FindFile(filePath string) (string, error) {
+	if !path.IsAbs(filePath) {
+		absPath, err := GetAdjacentPath(filePath)
+		if err != nil {
+			return "", err
+		}
+		filePath = absPath
+	}
+
+	if _, err := os.Stat(filePath); err != nil {
+		return "", err
+	}
+
+	return filePath, nil
+}
+
+// FindBinary attempts to locate the named binary by checking $PATH first.
+// If the binary is not found in $PATH, then look in the directory of
 // the running process.
 func FindBinary(binName string) (string, error) {
-	// Try the direct route first
 	binPath, err := exec.LookPath(binName)
 	if err == nil {
 		return binPath, nil
 	}
 
-	// If that fails, look to see if it's adjacent to
-	// this binary
-	selfPath, err := os.Readlink("/proc/self/exe")
-	if err != nil {
-		return "", errors.Wrap(err, "unable to determine path to self")
-	}
-	binPath = path.Join(path.Dir(selfPath), binName)
-	if _, err := os.Stat(binPath); err != nil {
-		return "", errors.Errorf("unable to locate %s", binName)
-	}
-	return binPath, nil
+	return FindFile(binName)
 }

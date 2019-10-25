@@ -30,6 +30,8 @@ import (
 	"path"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -39,7 +41,7 @@ func getDefaultConfig(t *testing.T) *client.Configuration {
 	t.Helper()
 
 	defaultConfig := client.NewConfiguration()
-	absPath, err := common.GetAbsInstallPath(defaultConfig.Path)
+	absPath, err := common.GetAdjacentPath(defaultConfig.Path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,14 +66,18 @@ func TestLoadConfigDefaultsNoFile(t *testing.T) {
 	defer common.ShowBufferOnFailure(t, buf)
 
 	defaultConfig := getDefaultConfig(t)
+	defaultConfig.Path = ""
 
 	cfg, err := client.GetConfig(log, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	common.AssertEqual(t, cfg, defaultConfig,
-		"loaded config doesn't match default config")
+	if diff := cmp.Diff(fmt.Sprintf("%+v", defaultConfig),
+		fmt.Sprintf("%+v", cfg)); diff != "" {
+
+		t.Fatalf("loaded config doesn't match default config (-want, +got):\n%s\n", diff)
+	}
 }
 
 func TestLoadConfigFromDefaultFile(t *testing.T) {
@@ -100,8 +106,11 @@ func TestLoadConfigFromDefaultFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	common.AssertEqual(t, cfg, defaultConfig,
-		"loaded config doesn't match written config")
+	if diff := cmp.Diff(fmt.Sprintf("%+v", defaultConfig),
+		fmt.Sprintf("%+v", cfg)); diff != "" {
+
+		t.Fatalf("loaded config doesn't match default config (-want, +got):\n%s\n", diff)
+	}
 }
 
 func TestLoadConfigFromFile(t *testing.T) {

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,40 +20,26 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+package common
 
-package code
-
-// Code represents a stable fault code.
-//
-// NB: All control plane errors should register their codes in the
-// following block in order to avoid conflicts.
-type Code int
-
-const (
-	// general fault codes
-	Unknown Code = iota
-	MissingSoftwareDependency
-
-	// generic storage fault codes
-	StorageUnknown Code = iota + 100
-	StorageAlreadyFormatted
-	StorageFilesystemAlreadyMounted
-	StorageDeviceAlreadyMounted
-
-	// SCM fault codes
-	ScmUnknown Code = iota + 200
-	ScmFormatBadParam
-
-	// Bdev fault codes
-	BdevUnknown Code = iota + 300
-	BdevFormatBadParam
-	BdevFormatFailure
-	BdevFormatBadPciAddress
-
-	// common fault codes
-	CommonUnknown Code = iota + 400
-	CommonBadPath
-
-	// security fault codes
-	SecurityUnknown Code = iota + 900
+import (
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 )
+
+var (
+	FaultUnexpectedAbsPath = commonFault(
+		code.CommonBadPath,
+		"unexpected absolute path provided",
+		"provide a relative path instead",
+	)
+)
+
+func commonFault(code code.Code, desc, res string) *fault.Fault {
+	return &fault.Fault{
+		Domain:      "common",
+		Code:        code,
+		Description: desc,
+		Resolution:  res,
+	}
+}
