@@ -5,17 +5,13 @@
 #
 
 # Pull base image
-FROM centos:7
+FROM fedora:latest
 MAINTAINER daos-stack <daos@daos.groups.io>
 
 # use same UID as host and default value of 1000 if not specified
 ARG UID=1000
 
-# Update distribution
-#Nothing to do for CentOS
-
 # Install basic tools
-RUN yum install -y epel-release
 RUN yum install -y mock make rpm-build curl createrepo rpmlint redhat-lsb-core \
                    git python-srpm-macros
 
@@ -31,4 +27,4 @@ RUN usermod -a -G mock $USER
 RUN grep use_nspawn || \
     echo "config_opts['use_nspawn'] = False" >> /etc/mock/site-defaults.cfg
 
-RUN chmod g+w /etc/mock/default.cfg
+RUN chmod g+w /etc/mock/*
