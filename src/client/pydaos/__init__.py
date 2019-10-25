@@ -29,28 +29,30 @@ DAOS_MAGIC = 0x7A89
 
 # pylint: disable=import-error
 if sys.version_info < (3, 0):
-    import pydaos.pydaos_shim_27 as pydaos_shim
+    from . import pydaos_shim_27 as pydaos_shim
 else:
-    import pydaos.pydaos_shim_3 as pydaos_shim
+    from . import pydaos_shim_3 as pydaos_shim
 # pylint: enable=import-error
 
-from pydaos.pydaos_core import *
+from .pydaos_core import *
 
 __all__ = ["pydaos_core"]
 
 class PyDError(Exception):
-    """
-    PyDAOS exception when operation cannot be completed.
-    DER_* error code is printed in both integer and string format.
-    """
+    """PyDAOS exception when operation cannot be completed."""
+
+    # DER_* error code is printed in both integer and string format where
+    # possible.  There is an odd effect with daos_init() errors that
+    # pydaos_shim is valid during __init__ but None during __str__ so format
+    # the string early and just report it later on.
     def __init__(self, message, rc):
-        self.message = message
-        self.rc = rc
+        err = pydaos_shim.err_to_str(DAOS_MAGIC, rc)
+        if err:
+            self.message = '{}: {}'.format(message, err)
+        else:
+            self.message = '{}: {}'.format(message, rc)
 
     def __str__(self):
-        err = pydaos_shim.err_to_str(DAOS_MAGIC, self.rc)
-        if err is not None:
-            return self.message + ": " + err
         return self.message
 
 # Initialize DAOS
