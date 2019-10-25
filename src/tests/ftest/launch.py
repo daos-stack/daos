@@ -104,16 +104,11 @@ def set_test_environment():
     os.environ["CRT_ATTACH_INFO_PATH"] = os.path.join(base_dir, "tmp")
 
     # Python paths required for functional testing
-    if sys.version_info.major < 3:
-        pydir = "python{}.{}".format(sys.version_info.major,
-                                     sys.version_info.minor)
-    else:
-        pydir = "python{}".format(sys.version_info.major)
-
     required_python_paths = [
         os.path.abspath("util/apricot"),
         os.path.abspath("util"),
-        os.path.join(base_dir, "lib", pydir, "site-packages"),
+        os.path.join(base_dir, "lib", "python2.7", "site-packages"),
+        os.path.join(base_dir, "lib", "python3", "site-packages"),
     ]
 
     # Check the PYTHONPATH env definition
