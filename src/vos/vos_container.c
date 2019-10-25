@@ -580,7 +580,8 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 		D_ERROR("Failed to end pmdk transaction: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(exit, rc);
 	}
-	gc_wait_pool(pool);
+	gc_wait();
+
 	return 0;
 exit:
 	return rc;
