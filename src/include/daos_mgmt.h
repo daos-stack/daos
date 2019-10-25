@@ -329,18 +329,18 @@ daos_pool_remove_replicas(const uuid_t uuid, const char *group,
  *
  * \param group	[IN]		Name of DAOS system managing the service.
  * \param pools	[OUT]		Array of pool mgmt information structures.
- * 				NULL is permitted in which case only the
- * 				number of pools and largest number of service
- 				replica ranks will be returned in \a npools
- * 				and \a max_nsvc.
+ *				NULL is permitted in which case only the
+ *				number of pools and largest number of service
+ *				replica ranks will be returned in \a npools
+ *				and \a max_nsvc.
  * \param npools
- * 		[IN,OUT]	[in] \a pools length in items.
- * 				[out] Number of pools in the DAOS system.
+ *		[IN,OUT]	[in] \a pools length in items.
+ *				[out] Number of pools in the DAOS system.
  * \param max_nsvc
- * 		[IN,OUT]	[in] common length of service ranks list
+ *		[IN,OUT]	[in] common length of service ranks list
  *				within every item in the \a pools array.
- * 				[out] largest number of service ranks
- * 				of any pool in the DAOS system.
+ *				[out] largest number of service ranks
+ *				of any pool in the DAOS system.
  */
 int
 daos_mgmt_list_pools(const char *group, daos_mgmt_pool_info_t *pools,

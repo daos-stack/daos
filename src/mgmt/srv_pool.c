@@ -652,7 +652,7 @@ enum_pool_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	pool->lp_svc = d_rank_list_alloc(rec->pr_nreplicas);
 	if (pool->lp_svc == NULL)
 		return DER_NOMEM;
-	for(ri = 0; ri < rec->pr_nreplicas; ri++)
+	for (ri = 0; ri < rec->pr_nreplicas; ri++)
 		pool->lp_svc->rl_ranks[ri] = rec->pr_replicas[ri];
 	return 0;
 }
@@ -703,7 +703,8 @@ out:
 	} else {
 		if (iter_args.pools) {
 			int pc;
-			for(pc = 0; pc < iter_args.pools_index; pc++)
+
+			for (pc = 0; pc < iter_args.pools_index; pc++)
 				d_rank_list_free(iter_args.pools[pc].lp_svc);
 			D_FREE(iter_args.pools);
 		}

@@ -367,11 +367,13 @@ out:
 static int
 mgmt_list_pools_cp(tse_task_t *task, void *data)
 {
-	struct mgmt_list_pools_arg	*arg = (struct mgmt_list_pools_arg *)data;
+	struct mgmt_list_pools_arg	*arg;
 	struct mgmt_list_pools_out	*pc_out;
 	struct mgmt_list_pools_in	*pc_in;
-	uint64_t			 pidx;;
+	uint64_t			 pidx;
 	int				 rc = task->dt_result;
+
+	arg = (struct mgmt_list_pools_arg *)data;
 
 	if (rc) {
 		D_ERROR("RPC error while listing pools: %d\n", rc);
@@ -407,15 +409,8 @@ mgmt_list_pools_cp(tse_task_t *task, void *data)
 			rc = d_rank_list_dup(&cli_pool->mgpi_svc,
 					     rpc_pool->lp_svc);
 			if (rc) {
-				D_ERROR("Copy RPC response svc list failed\n");
+				D_ERROR("Copy RPC reply svc list failed\n");
 				D_GOTO(out_free_svcranks, rc);
-			}
-			{
-				int sc;
-				for (sc = 0; sc < rpc_pool->lp_svc->rl_nr; sc++) {
-					D_ERROR("kccain lp_svc.rl_ranks[%d]=%u\n",
-						sc, rpc_pool->lp_svc->rl_ranks[sc]);
-				}
 			}
 		}
 	}
@@ -430,6 +425,7 @@ out_free_svcranks:
 	if (arg->pools && (rc != 0)) {
 		for (pidx = 0; pidx < pc_out->lp_pools.ca_count; pidx++) {
 			daos_mgmt_pool_info_t *pool = &arg->pools[pidx];
+
 			if (pool->mgpi_svc)
 				d_rank_list_free(pool->mgpi_svc);
 		}

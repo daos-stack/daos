@@ -208,9 +208,9 @@ CRT_RPC_DECLARE(mgmt_tgt_map_update, DAOS_ISEQ_MGMT_TGT_MAP_UPDATE,
 		DAOS_OSEQ_MGMT_TGT_MAP_UPDATE)
 
 /* List pools: returns an array of mgmt_list_pools_one */
-#define DAOS_SEQ_MGMT_LIST_POOLS_ONE	/* output fields */	 \
-	((uuid_t)		(lp_puuid)		CRT_VAR) \
-	((d_rank_list_t)	(lp_svc)		CRT_PTR)
+#define DAOS_SEQ_MGMT_LIST_POOLS_ONE \
+	((uuid_t)		(lp_puuid)	CRT_VAR) \
+	((d_rank_list_t)	(lp_svc)	CRT_PTR)
 
 CRT_GEN_STRUCT(mgmt_list_pools_one, DAOS_SEQ_MGMT_LIST_POOLS_ONE);
 
