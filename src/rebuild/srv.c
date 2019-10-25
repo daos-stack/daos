@@ -1156,6 +1156,7 @@ rebuild_leader_start(struct ds_pool *pool, uint32_t rebuild_ver,
 	/* broadcast scan RPC to all targets */
 	rc = rebuild_scan_broadcast(pool, *p_rgt, tgts_failed, svc_list,
 				    map_ver, &map_buf_iov);
+	D_FREE(map_buf_iov.iov_buf);
 	if (rc) {
 		D_ERROR("object scan failed: rc %d\n", rc);
 		D_GOTO(out, rc);
