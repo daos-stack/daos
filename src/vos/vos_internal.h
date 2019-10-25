@@ -948,8 +948,6 @@ vos_iter_intent(struct vos_iterator *iter)
 
 void
 gc_wait(void);
-void
-gc_wait_pool(struct vos_pool *pool);
 int
 gc_add_pool(struct vos_pool *pool);
 void

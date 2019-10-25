@@ -221,7 +221,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 		goto out;
 
 	/* NB: noop for full-stack mode */
-	gc_wait_pool(vos_obj2pool(obj));
+	gc_wait();
 out:
 	vos_obj_release(occ, obj);
 	return rc;
