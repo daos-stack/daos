@@ -1014,6 +1014,13 @@ out_lock:
 	if (rc != 0)
 		goto out;
 
+	/*
+	 * Just in case the previous leader didn't complete distributing the
+	 * latest pool map. This doesn't need to be undone if we encounter an
+	 * error below.
+	 */
+	ds_rsvc_request_map_dist(&svc->ps_rsvc);
+
 	ds_cont_svc_step_up(svc->ps_cont_svc);
 	cont_svc_up = true;
 
@@ -1063,6 +1070,40 @@ pool_svc_drain_cb(struct ds_rsvc *rsvc)
 	ds_rebuild_leader_stop(svc->ps_uuid, -1);
 }
 
+static int
+pool_svc_map_dist_cb(struct ds_rsvc *rsvc)
+{
+	struct pool_svc	       *svc = pool_svc_obj(rsvc);
+	struct rdb_tx		tx;
+	struct pool_buf	       *map_buf = NULL;
+	uint32_t		map_version;
+	int			rc;
+
+	/* Read the pool map into map_buf and map_version. */
+	rc = rdb_tx_begin(rsvc->s_db, rsvc->s_term, &tx);
+	if (rc != 0)
+		goto out;
+	ABT_rwlock_rdlock(svc->ps_lock);
+	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
+	ABT_rwlock_unlock(svc->ps_lock);
+	rdb_tx_end(&tx);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to read pool map buffer: %d\n",
+			DP_UUID(svc->ps_uuid), rc);
+		goto out;
+	}
+
+	rc = pool_iv_map_update(svc->ps_pool, map_buf, map_version);
+	if (rc != 0)
+		D_ERROR(DF_UUID": failed to distribute pool map %u: %d\n",
+			DP_UUID(svc->ps_uuid), map_version, rc);
+
+out:
+	if (map_buf != NULL)
+		D_FREE(map_buf);
+	return rc;
+}
+
 static struct ds_rsvc_class pool_svc_rsvc_class = {
 	.sc_name	= pool_svc_name_cb,
 	.sc_load_uuid	= pool_svc_load_uuid_cb,
@@ -1073,7 +1114,8 @@ static struct ds_rsvc_class pool_svc_rsvc_class = {
 	.sc_free	= pool_svc_free_cb,
 	.sc_step_up	= pool_svc_step_up_cb,
 	.sc_step_down	= pool_svc_step_down_cb,
-	.sc_drain	= pool_svc_drain_cb
+	.sc_drain	= pool_svc_drain_cb,
+	.sc_map_dist	= pool_svc_map_dist_cb
 };
 
 void
@@ -3051,7 +3093,6 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 	uint32_t		map_version = 0;
 	struct pool_buf	       *map_buf = NULL;
 	bool			updated = false;
-	struct dss_module_info *info = dss_get_module_info();
 	int			rc;
 
 	rc = pool_svc_lookup_leader(pool_uuid, &svc, hint);
@@ -3099,6 +3140,23 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 	}
 
 	updated = true;
+
+	/* Update svc->ps_pool to match the new pool map. */
+	rc = ds_pool_tgt_map_update(svc->ps_pool, map_buf, map_version);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to update pool map cache: %d\n",
+			DP_UUID(svc->ps_uuid), rc);
+		/*
+		 * We must resign to avoid handling future requests with a
+		 * stale pool map cache.
+		 */
+		rdb_resign(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term);
+		rc = 0;
+		goto out_replicas;
+	}
+
+	ds_rsvc_request_map_dist(&svc->ps_rsvc);
+
 	replace_failed_replicas(svc, map);
 
 out_replicas:
@@ -3117,14 +3175,6 @@ out_replicas:
 	rdb_tx_end(&tx);
 	if (map)
 		pool_map_decref(map);
-
-	/*
-	 * Distribute pool map to other targets, and ignore the return code
-	 * as we are more about committing a pool map change than its
-	 * dissemination.
-	 */
-	if (updated)
-		rc = pool_map_update(info->dmi_ctx, svc, map_version, map_buf);
 
 	if (map_buf != NULL)
 		pool_buf_free(map_buf);

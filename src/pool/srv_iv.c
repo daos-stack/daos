@@ -360,6 +360,9 @@ pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf, uint32_t map_ver)
 	uint32_t		 size;
 	int			 rc;
 
+	D_DEBUG(DB_TRACE, DF_UUID": map_ver=%u\n", DP_UUID(pool->sp_uuid),
+		map_ver);
+
 	size = pool_iv_map_ent_size(buf->pb_nr);
 	D_ALLOC(iv_entry, size);
 	if (iv_entry == NULL)
@@ -376,15 +379,11 @@ pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf, uint32_t map_ver)
 	 */
 	rc = pool_iv_update(pool->sp_iv_ns, IV_POOL_MAP, iv_entry, size,
 			    CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_EAGER);
-
-	/* Some nodes ivns does not exist, might because of the disconnection,
-	 * let's ignore it
-	 */
-	if (rc == -DER_NONEXIST)
-		rc = 0;
+	if (rc != 0)
+		D_DEBUG(DB_TRACE, DF_UUID": map_ver=%u: %d\n",
+			DP_UUID(pool->sp_uuid), map_ver, rc);
 
 	D_FREE(iv_entry);
-
 	return rc;
 }
 
