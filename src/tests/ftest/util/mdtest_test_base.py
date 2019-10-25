@@ -80,7 +80,7 @@ class MdtestBase(TestWithServers):
             # Stop the servers and agents
             super(MdtestBase, self).tearDown()
 
-    def create_pool(self):
+    def _create_pool(self):
         """Create a pool and execute Mdtest."""
         # Get the pool params
         self.pool = TestPool(self.context, self.log)
@@ -89,7 +89,7 @@ class MdtestBase(TestWithServers):
         # Create a pool
         self.pool.create()
 
-    def create_cont(self):
+    def _create_cont(self):
         """Create a TestContainer object to be used to create container."""
         # TO-DO: Enable container using TestContainer object,
         # once DAOS-3355 is resolved.
@@ -114,7 +114,7 @@ class MdtestBase(TestWithServers):
 
         return output.split()[3]
 
-    def start_dfuse(self):
+    def _start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
         # Get Dfuse params
         self.dfuse = Dfuse(self.hostlist_clients, self.tmp, self.basepath)
@@ -122,7 +122,7 @@ class MdtestBase(TestWithServers):
 
         # update dfuse params
         self.dfuse.set_dfuse_params(self.pool)
-        self.dfuse.set_dfuse_cont_param(self.create_cont())
+        self.dfuse.set_dfuse_cont_param(self._create_cont())
 
         try:
             # start dfuse
@@ -139,7 +139,7 @@ class MdtestBase(TestWithServers):
 
         # Create a pool if one does not already exist
         if self.pool is None:
-            self.create_pool()
+            self._create_pool()
         # set Mdtest params
         self.mdtest_cmd.set_daos_params(self.server_group, self.pool)
 
@@ -149,7 +149,7 @@ class MdtestBase(TestWithServers):
             # Uncomment below two lines once DAOS-3355 is resolved
             # self.pool.connect()
             # self.create_cont()
-            self.start_dfuse()
+            self._start_dfuse()
             self.mdtest_cmd.test_dir.update(self.dfuse.mount_dir.value)
 
        # Run Mdtest
