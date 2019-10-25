@@ -5,7 +5,7 @@
 
 Name:          daos
 Version:       0.6.0
-Release:       7%{?relval}%{?dist}
+Release:       9%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -15,7 +15,11 @@ Source1:       scons_local-%{version}.tar.gz
 
 BuildRequires: scons
 BuildRequires: gcc-c++
+%if %{defined cart_sha1}
+BuildRequires: cart-devel-%{cart_sha1}
+%else
 BuildRequires: cart-devel <= 1.0.0
+%endif
 %if (0%{?rhel} >= 7)
 BuildRequires: argobots-devel >= 1.0rc1
 %else
@@ -26,15 +30,12 @@ BuildRequires: fuse-devel >= 3.4.2
 BuildRequires: protobuf-c-devel
 BuildRequires: spdk-devel, spdk-tools
 BuildRequires: fio < 3.4
+%if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
+%else
+BuildRequires: libisal-devel
+%endif
 BuildRequires: raft-devel <= 0.5.0
-# vvvvvv these can be removed when cart#226 lands and we update to use it
-BuildRequires: mercury-devel < 1.0.1-12
-BuildRequires: openpa-devel
-BuildRequires: libfabric-devel
-BuildRequires: ompi-devel
-BuildRequires: pmix-devel
-# ^^^^^^ these can be removed when cart#226 lands
 BuildRequires: hwloc-devel
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
@@ -82,7 +83,10 @@ Requires: protobuf-c
 Requires: spdk
 Requires: fio < 3.4
 Requires: openssl
-
+# ensure we get exactly the right cart RPM
+%if %{defined cart_sha1}
+Requires: cart-%{cart_sha1}
+%endif
 
 
 %description
@@ -104,6 +108,10 @@ Requires: ndctl
 Requires: ipmctl
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
+# ensure we get exactly the right cart RPM
+%if %{defined cart_sha1}
+Requires: cart-%{cart_sha1}
+%endif
 
 %description server
 This is the package needed to run a DAOS server
@@ -111,6 +119,10 @@ This is the package needed to run a DAOS server
 %package client
 Summary: The DAOS client
 Requires: %{name} = %{version}-%{release}
+# ensure we get exactly the right cart RPM
+%if %{defined cart_sha1}
+Requires: cart-%{cart_sha1}
+%endif
 
 %description client
 This is the package needed to run a DAOS client
@@ -121,6 +133,10 @@ Requires: %{name}-client = %{version}-%{release}
 Requires: python-pathlib
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
+%endif
+# ensure we get exactly the right cart RPM
+%if %{defined cart_sha1}
+Requires: cart-%{cart_sha1}
 %endif
 
 
@@ -284,6 +300,13 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/*.a
 
 %changelog
+* Wed Oct 23 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-9
+- Update BR: libisal-devel for Leap
+
+* Mon Oct 07 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-8
+- Use BR: cart-devel-%{cart_sha1} if available
+- Remove cart's BRs as it's -devel Requires them now
+
 * Tue Oct 01 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-7
 - Constrain cart BR to <= 1.0.0
 

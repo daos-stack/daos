@@ -171,6 +171,16 @@ func (tc *testConn) SetTransportConfig(cfg *security.TransportConfig) {
 	tc.appendInvocation("SetTransportConfig")
 }
 
+func (tc *testConn) NetworkListProviders() client.ResultMap {
+	tc.appendInvocation("NetworkListProviders")
+	return nil
+}
+
+func (tc *testConn) NetworkScanDevices(searchProvider string) client.NetworkScanResultMap {
+	tc.appendInvocation(fmt.Sprintf("NetworkScanDevices-%s", searchProvider))
+	return nil
+}
+
 func testExpectedError(t *testing.T, expected, actual error) {
 	t.Helper()
 
@@ -187,7 +197,7 @@ func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 		t.Run(st.name, func(t *testing.T) {
 			t.Helper()
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)
 
 			var opts cliOptions
 			conn := newTestConn(t)
@@ -212,7 +222,7 @@ func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 
 func TestBadCommand(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)()
+	defer common.ShowBufferOnFailure(t, buf)
 
 	var opts cliOptions
 	conn := newTestConn(t)
@@ -222,7 +232,7 @@ func TestBadCommand(t *testing.T) {
 
 func TestNoCommand(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)()
+	defer common.ShowBufferOnFailure(t, buf)
 
 	var opts cliOptions
 	conn := newTestConn(t)

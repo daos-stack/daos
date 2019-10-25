@@ -49,14 +49,6 @@ const maxIoServers = 1
 
 // Start is the entry point for a daos_server instance.
 func Start(log *logging.LeveledLogger, cfg *Configuration) error {
-	// FIXME(mjmac): Temporarily set a global logger
-	// until we get the dependency injection correct.
-	level := log.Level()
-	logging.SetLogger(log)
-	// We have to set the global level because by default
-	// it's based on the previous logger's level.
-	logging.SetLevel(level)
-
 	log.Debugf("cfg: %#v", cfg)
 
 	// Backup active config.
@@ -101,7 +93,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}
 
 	// Single daos_server dRPC server to handle all iosrv requests
-	if err := drpcSetup(cfg.SocketDir, harness.Instances(), cfg.TransportConfig); err != nil {
+	if err := drpcSetup(log, cfg.SocketDir, harness.Instances(), cfg.TransportConfig); err != nil {
 		return errors.WithMessage(err, "dRPC setup")
 	}
 

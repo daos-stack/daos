@@ -231,7 +231,7 @@ func TestDiscoverNvmeSingle(t *testing.T) {
 
 	for _, tt := range tests {
 		log, buf := logging.NewTestLogger(t.Name())
-		defer common.ShowBufferOnFailure(t, buf)()
+		defer common.ShowBufferOnFailure(t, buf)
 
 		c.SocketID = tt.numa
 		pbC.Socketid = tt.numa
@@ -326,7 +326,7 @@ func TestDiscoverNvmeMulti(t *testing.T) {
 
 	for _, tt := range tests {
 		log, buf := logging.NewTestLogger(t.Name())
-		defer common.ShowBufferOnFailure(t, buf)()
+		defer common.ShowBufferOnFailure(t, buf)
 
 		sn := newMockNvmeStorage(
 			log, &mockExt{},
@@ -414,7 +414,7 @@ func TestFormatNvme(t *testing.T) {
 				{
 					Pciaddr: "",
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_SUCCESS,
+						Status: ResponseStatus_CTL_SUCCESS,
 						Info:   msgBdevNoDevs,
 					},
 				},
@@ -430,7 +430,7 @@ func TestFormatNvme(t *testing.T) {
 				{
 					Pciaddr: "",
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_APP,
+						Status: ResponseStatus_CTL_ERR_APP,
 						Error:  msgBdevAlreadyFormatted,
 					},
 				},
@@ -446,7 +446,7 @@ func TestFormatNvme(t *testing.T) {
 				{
 					Pciaddr: "",
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_CONF,
+						Status: ResponseStatus_CTL_ERR_CONF,
 						Error:  msgBdevEmpty,
 					},
 				},
@@ -475,7 +475,7 @@ func TestFormatNvme(t *testing.T) {
 				{
 					Pciaddr: "0000:83:00.0",
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 						Error:  "0000:83:00.0: " + msgBdevNotFound,
 					},
 				},
@@ -495,7 +495,7 @@ func TestFormatNvme(t *testing.T) {
 				{
 					Pciaddr: "0000:83:00.0",
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 						Error:  "0000:83:00.0: " + msgBdevNotFound,
 					},
 				},
@@ -511,7 +511,7 @@ func TestFormatNvme(t *testing.T) {
 				{
 					Pciaddr: "0000:83:00.0",
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 						Error:  "0000:83:00.0: " + msgBdevNotFound,
 					},
 				},
@@ -531,14 +531,14 @@ func TestFormatNvme(t *testing.T) {
 				{
 					Pciaddr: "0000:83:00.0",
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 						Error:  "0000:83:00.0: " + msgBdevNotFound,
 					},
 				},
 				{
 					Pciaddr: "0000:81:00.0",
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 						Error: "0000:81:00.0: " +
 							"example format failure",
 					},
@@ -554,7 +554,7 @@ func TestFormatNvme(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)
 
 			nvmeFormatCalls = []string{}
 
@@ -600,7 +600,7 @@ func TestFormatNvme(t *testing.T) {
 					t, result.Pciaddr, tt.expResults[i].Pciaddr,
 					"unexpected pciaddr, "+tt.desc)
 
-				if result.State.Status == ResponseStatus_CTRL_SUCCESS {
+				if result.State.Status == ResponseStatus_CTL_SUCCESS {
 					if result.State.Info != msgBdevNoDevs {
 						successPciaddrs = append(successPciaddrs, result.Pciaddr)
 					}
@@ -655,7 +655,7 @@ func TestUpdateNvme(t *testing.T) {
 				{
 					Pciaddr: "",
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_CONF,
+						Status: ResponseStatus_CTL_ERR_CONF,
 						Error:  msgBdevEmpty,
 					},
 				},
@@ -683,7 +683,7 @@ func TestUpdateNvme(t *testing.T) {
 				{
 					Pciaddr: "0000:aa:00.0",
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 						Error:  "0000:aa:00.0: " + msgBdevNotFound,
 					},
 				},
@@ -701,7 +701,7 @@ func TestUpdateNvme(t *testing.T) {
 				{
 					Pciaddr: pciAddr,
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 						Error: pciAddr + ": " +
 							msgBdevModelMismatch +
 							" want " + model + ", have UKNOWN1",
@@ -726,7 +726,7 @@ func TestUpdateNvme(t *testing.T) {
 				{
 					Pciaddr: pciAddr,
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 						Error: pciAddr + ": " +
 							msgBdevFwrevStartMismatch +
 							" want 1.0.0, have 2.0.0",
@@ -750,7 +750,7 @@ func TestUpdateNvme(t *testing.T) {
 				{
 					Pciaddr: pciAddr,
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 						Error: pciAddr + ": " +
 							"*server.mockSpdkNvme: " +
 							"spdk format failed",
@@ -769,7 +769,7 @@ func TestUpdateNvme(t *testing.T) {
 				{
 					Pciaddr: pciAddr,
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 						Error: pciAddr + ": " +
 							msgBdevFwrevEndMismatch,
 					},
@@ -787,7 +787,7 @@ func TestUpdateNvme(t *testing.T) {
 				{
 					Pciaddr: pciAddr,
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 						Error: pciAddr + ": " +
 							msgBdevFwrevEndMismatch,
 					},
@@ -810,7 +810,7 @@ func TestUpdateNvme(t *testing.T) {
 				{
 					Pciaddr: pciAddr,
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 						Error:  pciAddr + ": " + msgBdevNotFound,
 					},
 				},
@@ -821,7 +821,7 @@ func TestUpdateNvme(t *testing.T) {
 				{
 					Pciaddr: "0000:aa:00.0",
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 						Error: "0000:aa:00.0: " +
 							msgBdevFwrevStartMismatch +
 							" want 1.0.0, have 1.0.1",
@@ -830,7 +830,7 @@ func TestUpdateNvme(t *testing.T) {
 				{
 					Pciaddr: "0000:ab:00.0",
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 						Error: "0000:ab:00.0: " +
 							msgBdevModelMismatch +
 							" want ABC, have UKN",
@@ -859,7 +859,7 @@ func TestUpdateNvme(t *testing.T) {
 
 	for _, tt := range tests {
 		log, buf := logging.NewTestLogger(t.Name())
-		defer common.ShowBufferOnFailure(t, buf)()
+		defer common.ShowBufferOnFailure(t, buf)
 
 		config := defaultMockConfig(t)
 		bdCfg := config.Servers[srvIdx].Storage.Bdev
@@ -960,7 +960,7 @@ func TestBurnInNvme(t *testing.T) {
 
 	for _, tt := range tests {
 		log, buf := logging.NewTestLogger(t.Name())
-		defer common.ShowBufferOnFailure(t, buf)()
+		defer common.ShowBufferOnFailure(t, buf)
 
 		sn := defaultMockNvmeStorage(log, &mockExt{})
 
