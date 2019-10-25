@@ -18,8 +18,7 @@ def build_shim_module(py_env, svars, lib_prefix, version):
         extra_flags = " -D__USE_PYTHON3__==1"
         new_env.ParseConfig("pkg-config --cflags --libs python3")
     else:
-        print("Unsupported python version %s" % version)
-        return
+        raise Exception("Unsupported python version %s" % version)
 
     new_env.AppendUnique(LIBS=['daos', 'duns'])
     new_env.AppendUnique(LIBPATH=["../dfs"])
@@ -66,8 +65,9 @@ def scons():
 
     py_env = env.Clone()
 
-    build_shim_module(py_env, svars, '$PREFIX/lib/', "2.7")
     build_shim_module(py_env, svars, '$PREFIX/lib/', "3")
+    py_env['SO'] = '.so'
+    build_shim_module(py_env, svars, '$PREFIX/lib/', "2.7")
 
 if __name__ == "SCons.Script":
     scons()

@@ -31,8 +31,8 @@ import inspect
 import sys
 import enum
 
-import daos_cref
-import conversion
+from . import daos_cref
+from . import conversion
 
 # pylint: disable=import-error
 if sys.version_info < (3, 0):

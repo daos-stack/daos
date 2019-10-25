@@ -22,8 +22,8 @@
 ctypes-based DAOS wrapper used mostly for testing
 """
 
-from conversion import *
-from daos_cref import *
-from daos_api import *
+from .conversion import *
+from .daos_cref import *
+from .daos_api import *
 
 __all__ = ["daos_api", "conversion", "daos_cref"]
