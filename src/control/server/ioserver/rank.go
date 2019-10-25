@@ -46,6 +46,9 @@ func NewRankPtr(in uint32) *Rank {
 }
 
 func (r Rank) String() string {
+	if r == NilRank {
+		return "nil"
+	}
 	return strconv.FormatUint(uint64(r), 10)
 }
 
