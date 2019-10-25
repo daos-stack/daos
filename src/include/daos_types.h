@@ -273,8 +273,9 @@ typedef struct {
 	uint32_t			pi_leader;
 	/** pool info bits, see daos_pool_info_bit */
 	uint64_t			pi_bits;
-	/** FIXME(existing RPCs) number of pool service replicas */
-	/* uint32_t			pi_nsvc; */
+	/** Possible TODO - add number of pool service replicas?
+	 *  uint32_t			pi_nvc;
+	 */
 	/** Space usage */
 	struct daos_pool_space		pi_space;
 	/** rebuild status */
@@ -285,10 +286,10 @@ typedef struct {
  * DAOS management pool information
  */
 typedef struct {
-#if 0 /* maybe in future - would require back-end RPC to each pool service */
-	/** Pool information structure */
-	daos_pool_info_t		 mgpi_info;
-#endif
+	/* TODO? same pool info structure as a pool query?
+	 * requires back-end RPC to each pool service.
+	 * daos_pool_info_t		 mgpi_info;
+	 */
 	uuid_t				 mgpi_uuid;
 	/** List of current pool service replica ranks */
 	d_rank_list_t			*mgpi_svc;

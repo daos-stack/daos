@@ -39,7 +39,7 @@ struct list_pools_iter_args {
 	uint64_t			avail_max_nsvc;
 	uint64_t			max_nsvc;
 
-	/* Storage / index for list of pools to return to client (rather - caller?) */
+	/* Storage / index for list of pools to return to caller */
 	uint64_t			pools_index;
 	uint64_t			pools_len;
 	struct mgmt_list_pools_one	*pools;
@@ -612,10 +612,6 @@ static int
 enum_pool_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 {
 	struct pool_rec			*rec;
-	char				*buf;
-	char				*p;
-	size_t				 size;
-	int				 i;
 	struct list_pools_iter_args	*ap = varg;
 	struct mgmt_list_pools_one	*pool = NULL;
 
@@ -628,6 +624,10 @@ enum_pool_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	rec = val->iov_buf;
 
 	ap->npools++;
+
+	/* TODO: is max_nsvc necessary? d_rank_list_t.rl_ranks
+	 * are being dynamically allocated on this(server) and client sides.
+	 */
 	if (rec->pr_nreplicas > ap->max_nsvc)
 		ap->max_nsvc = rec->pr_nreplicas;
 
@@ -635,12 +635,11 @@ enum_pool_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	if (ap->avail_npools > 0 && (ap->avail_npools < ap->npools))
 		return 0;
 
+	/* Realloc pools[] if needed (double each time starting with 1) */
 	if (ap->pools_index == ap->pools_len) {
-		/* realloc pools */
 		void	*ptr;
 		size_t	realloc_bytes;
 
-		/* Start: alloc 1 structure, and double with each realloc */
 		realloc_bytes = ((1 << ap->pools_len) *
 				 sizeof(struct mgmt_list_pools_one));
 		D_REALLOC(ptr, ap->pools, realloc_bytes);
@@ -657,29 +656,6 @@ enum_pool_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	if (pool->lp_svc == NULL)
 		return DER_NOMEM;
 
-	/* Temporary code below - just log print pool rec info */
-	size = 4096;
-	D_ALLOC(buf, size);
-	if (buf == NULL)
-		return -DER_NOMEM;
-	p = buf;
-	for (i = 0; i < rec->pr_nreplicas; i++) {
-		int n;
-		pool->lp_svc->rl_ranks[i] = rec->pr_replicas[i];
-
-		n = snprintf(p, buf + size - p, "%s%u", i == 0 ? "" : ",",
-			     rec->pr_replicas[i]);
-		if (n < 0 || n >= buf + size - p) {
-			D_FREE(buf);
-			return -DER_OVERFLOW;
-		}
-		p += n;
-	}
-
-	D_DEBUG(DB_MGMT, "  "DF_UUID": state=%u svc=%s\n",
-		DP_UUID(key->iov_buf), rec->pr_state, buf);
-
-	D_FREE(buf);
 	return 0;
 }
 
@@ -690,23 +666,17 @@ ds_mgmt_list_pools(const char *group, uint64_t *npools, uint64_t *max_nsvc,
 	struct mgmt_svc			*svc;
 	struct rdb_tx			 tx;
 	struct list_pools_iter_args	 iter_args;
-	uint64_t			cli_npools;
-	uint64_t			cli_max_nsvc;
 	int				 rc;
 
 	/* TODO: attach to DAOS system based on group argument */
 
-	/* Temporary: return npools and max_nsvc (no records yet)
-	 * TODO: allocate space for pool info here, and realloc
-	 * as necessary in the iterator callback function.
-	 */
-	iter_args.avail_npools = cli_npools = *npools;
+	iter_args.avail_npools = *npools;
 	iter_args.npools = 0;
-	iter_args.avail_max_nsvc = cli_max_nsvc = *max_nsvc;
+	iter_args.avail_max_nsvc = *max_nsvc;
 	iter_args.max_nsvc = 0;
-	iter_args.pools_index = 0;
-	iter_args.pools_len = 0;
-	iter_args.pools = NULL;
+	iter_args.pools_index = 0;		/* num pools in pools[] */
+	iter_args.pools_len = 0;		/* alloc length of pools[] */
+	iter_args.pools = NULL;			/* realloc in enum_pool_cb() */
 
 	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
 	if (rc != 0)
@@ -737,6 +707,8 @@ out:
 	return rc;
 }
 
+/* TODO: dRPC handler for mgmt service list pools (daos_shell / golang) */
+/* CaRT RPC handler for management service "list pools" (dmg / C API) */
 void
 ds_mgmt_hdlr_list_pools(crt_rpc_t *rpc_req)
 {
@@ -748,7 +720,6 @@ ds_mgmt_hdlr_list_pools(crt_rpc_t *rpc_req)
 	uint64_t			 max_nsvc;
 	int				 rc;
 
-	D_ERROR("kccain got mgmt_list_pools request from CaRT path - legacy dmg?\n");
 	pc_in = crt_req_get(rpc_req);
 	D_ASSERT(pc_in != NULL);
 	pc_out = crt_reply_get(rpc_req);
@@ -766,6 +737,7 @@ ds_mgmt_hdlr_list_pools(crt_rpc_t *rpc_req)
 	pc_out->lp_pools.ca_arrays = pools;
 	pc_out->lp_pools.ca_count = pools_len;
 
+	/* TODO: something different for larger RPC replies? */
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
 		D_ERROR("crt_reply_send failed, rc: %d\n", rc);

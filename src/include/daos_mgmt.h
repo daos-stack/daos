@@ -323,6 +323,7 @@ daos_pool_remove_replicas(const uuid_t uuid, const char *group,
 			  d_rank_list_t *svc, d_rank_list_t *targets,
 			  d_rank_list_t *failed, daos_event_t *ev);
 
+/* TODO: get rid of max_nsvc - is it really needed? */
 /**
  * List all pools created in the specified DAOS system.
  *

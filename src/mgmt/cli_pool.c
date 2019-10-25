@@ -414,22 +414,6 @@ mgmt_list_pools_cp(tse_task_t *task, void *data)
 		}
 	}
 
-	for (pidx = 0; pidx < pc_out->lp_pools.ca_count; pidx++) {
-		int i;
-		struct mgmt_list_pools_one	*rpc_pool =
-				&pc_out->lp_pools.ca_arrays[pidx];
-
-		D_ERROR("kccain pool[%"PRIu64"] UUID: "DF_UUID", nsvc=%u\n",
-			pidx, DP_UUID(rpc_pool->lp_puuid),
-			rpc_pool->lp_svc->rl_nr);
-
-		for (i = 0; i < rpc_pool->lp_svc->rl_nr; i++) {
-			D_ERROR("kccain pool UUID: "DF_UUID", svc[%d]=%u\n",
-				DP_UUID(rpc_pool->lp_puuid), i,
-				rpc_pool->lp_svc->rl_ranks[i]);
-		}
-	}
-
 	if (*arg->npools > arg->req_npools) {
 		D_WARN("pool list contains only client-requested npools=%zu, "
 			"less than npools=%zu in system\n", arg->req_npools,

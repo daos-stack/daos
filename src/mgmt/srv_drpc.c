@@ -484,7 +484,6 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 
 	D_INFO("Received request to create pool\n");
-	D_ERROR("kccain got pool create request from dRPC path - daos_shell?\n");
 
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
