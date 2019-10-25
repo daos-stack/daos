@@ -1,12 +1,12 @@
 hosts:
     test_servers:
-        - boro-60
-        - boro-62
-#        - boro-C
-#        - boro-D
+        - boro-A
+        - boro-B
+        - boro-C
+        - boro-D
     test_clients:
-        - boro-64
-        - boro-61
+        - boro-E
+        - boro-F
 timeout: 800
 server_config:
     name: daos_server
@@ -25,8 +25,8 @@ mdtest:
         np_8:
             np: 8
     mdtest_api: !mux
-#      dfs:
-#        api: 'DFS'
+      dfs:
+        api: 'DFS'
       posix:
         api: 'POSIX'
     test_dir: "/"
@@ -36,28 +36,28 @@ mdtest:
         zero:
             write_bytes: 0
             read_bytes: 0
-#        4K:
-#            write_bytes: 4096
-#            read_bytes: 4096
+        4K:
+            write_bytes: 4096
+            read_bytes: 4096
     branch: !mux
         zero:
             branching_factor: 1
-            num_of_files_dirs: 1000
+            num_of_files_dirs: 1
             diff_flags: !mux
                 flags_ssf:
                     flags: " "
-#                flags_fpp:
-#                    flags: "-u"
+                flags_fpp:
+                    flags: "-u"
             directory_depth: !mux
                 depth_0:
                     depth: 0
-#                depth_20:
-#                    depth: 20
-#        two:
-#            branching_factor: 2
-#            items: 10
-#            flags: " "
-#            depth: 5
+                depth_20:
+                    depth: 20
+        two:
+            branching_factor: 2
+            items: 10
+            flags: " "
+            depth: 5
     manager: "MPICH"
 dfuse:
   mount_dir: "/tmp/daos_dfuse"

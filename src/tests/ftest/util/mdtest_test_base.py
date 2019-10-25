@@ -74,8 +74,7 @@ class MdtestBase(TestWithServers):
     def tearDown(self):
         """Tear down each test case."""
         try:
-            if self.dfuse is not None:
-                self.dfuse.stop()
+            self.dfuse = None
         finally:
             # Stop the servers and agents
             super(MdtestBase, self).tearDown()
@@ -131,7 +130,7 @@ class MdtestBase(TestWithServers):
             self.log.error("Dfuse command %s failed on hosts %s",
                            str(self.dfuse), str(NodeSet(self.dfuse.hosts)),
                            exc_info=error)
-            self.fail("Test was expected to pass but it failed.\n")
+            self.fail("Unable to launch Dfuse.\n")
 
 
     def execute_mdtest(self):
