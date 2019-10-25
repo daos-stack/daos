@@ -154,7 +154,7 @@ func (srv *IOServerInstance) MountScmDevice() error {
 		}
 		res, err = srv.scmProvider.MountDcpm(scmCfg.DeviceList[0], scmCfg.MountPoint)
 	default:
-		err = errors.New(msgScmClassNotSupported)
+		err = errors.New(scm.MsgScmClassNotSupported)
 	}
 	if err != nil {
 		return errors.WithMessage(err, "mounting existing scm dir")
@@ -186,27 +186,12 @@ func (srv *IOServerInstance) NeedsScmFormat() (bool, error) {
 	srv.Lock()
 	defer srv.Unlock()
 
-	req := scm.FormatRequest{
-		Mountpoint: scmCfg.MountPoint,
-	}
-	switch scmCfg.Class {
-	case storage.ScmClassRAM:
-		req.Ramdisk = &scm.RamdiskParams{
-			Size: uint(scmCfg.RamdiskSize),
-		}
-	case storage.ScmClassDCPM:
-		// FIXME (DAOS-3291): Clean up SCM configuration
-		if len(scmCfg.DeviceList) != 1 {
-			return false, scm.FaultFormatInvalidDeviceCount
-		}
-		req.Dcpm = &scm.DcpmParams{
-			Device: scmCfg.DeviceList[0],
-		}
-	default:
-		return false, errors.New(msgScmClassNotSupported)
+	req, err := scm.CreateFormatRequest(scmCfg, false)
+	if err != nil {
+		return false, err
 	}
 
-	res, err := srv.scmProvider.CheckFormat(req)
+	res, err := srv.scmProvider.CheckFormat(*req)
 	if err != nil {
 		return false, err
 	}
