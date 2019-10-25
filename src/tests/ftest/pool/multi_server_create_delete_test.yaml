@@ -17,8 +17,8 @@ tests:
         - root
         - PASS
     anotheruser:
-      uid:
-        - other_user
+      user:
+        - nfsnobody
         - PASS
   groups: !mux
     validgroup:
@@ -31,7 +31,7 @@ tests:
         - PASS
     anothergroup:
       group:
-        - other_group
+        - nfsnobody
         - PASS
   setnames: !mux
     validsetname:

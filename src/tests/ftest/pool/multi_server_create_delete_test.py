@@ -1,5 +1,5 @@
 #!/usr/bin/python
-'''
+"""
   (C) Copyright 2017-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,14 +20,12 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
+"""
 from __future__ import print_function
 
 import os
 import traceback
 import json
-from grp import getgrnam
-from pwd import getpwnam
 
 from avocado.utils import process
 from apricot import Test
@@ -36,6 +34,7 @@ import agent_utils
 import server_utils
 import check_for_pool
 import write_host_file
+
 
 #pylint: disable=broad-except
 class MultiServerCreateDeleteTest(Test):
@@ -53,7 +52,7 @@ class MultiServerCreateDeleteTest(Test):
         self.hostlist_servers = None
         with open('../../../.build_vars.json') as f_open:
             build_paths = json.load(f_open)
-        self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
+        self.basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
         self.hostlist_servers = self.params.get("test_machines", '/run/hosts/')
         self.hostfile = write_host_file.write_host_file(self.hostlist_servers,
                                                         self.workdir)
@@ -81,21 +80,11 @@ class MultiServerCreateDeleteTest(Test):
         expected_for_param = []
 
         userlist = self.params.get("user", '/run/tests/users/*')
-        if userlist[0] == 'valid':
-            user = os.getlogin()
-        elif userlist[0] == 'other_user':
-            user = 'nfsnobody'
-        else:
-            user = userlist[0]
+        user = os.getlogin() if userlist[0] == 'valid' else userlist[0]
         expected_for_param.append(userlist[1])
 
         grouplist = self.params.get("group", '/run/tests/groups/*')
-        if grouplist[0] == 'valid':
-            group = os.getlogin()
-        elif grouplist[0] == 'other_group':
-            group = 'nfsnobody'
-        else:
-            group = grouplist[0]
+        group = os.getlogin() if grouplist[0] == 'valid' else grouplist[0]
         expected_for_param.append(grouplist[1])
 
         setidlist = self.params.get("setname", '/run/tests/setnames/*')
@@ -142,8 +131,8 @@ class MultiServerCreateDeleteTest(Test):
             delete_cmd = (
                 "{} pool destroy "
                 "--pool={} "
-                #"--group={2} " # TODO: should this be implemented
-                "--force".format(self.dmg, uuid_str)) #, setid))
+                # "--group={2} "  # TODO: should this be implemented?
+                "--force".format(self.dmg, uuid_str))  # , setid))
 
             process.system(delete_cmd)
 
