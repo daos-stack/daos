@@ -372,6 +372,9 @@ func (c *Configuration) SetNvmeShmID(base string) {
 func (c *Configuration) SetPath(path string) (err error) {
 	if path != "" {
 		c.Path, err = c.ext.resolvePath(path)
+		if err != nil {
+			c.Path = path
+		}
 	}
 
 	return
