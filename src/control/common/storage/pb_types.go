@@ -170,11 +170,11 @@ func (cr CtrlrResults) String() string {
 	return "no controllers found"
 }
 
-// PmemDevices is an alias for protobuf PmemDeviceice message slice representing
-// a number of mounted SCM regions on a storage node.
-type PmemDevices []*ctlpb.PmemDevice
+// ScmNamespaces is an alias for protobuf PmemDevice message slice representing
+// a number of PMEM device files created on SCM namespaces on a storage node.
+type ScmNamespaces []*ctlpb.PmemDevice
 
-func (pds PmemDevices) String() string {
+func (pds ScmNamespaces) String() string {
 	var buf bytes.Buffer
 
 	for _, pd := range pds {
@@ -184,15 +184,8 @@ func (pds PmemDevices) String() string {
 	return buf.String()
 }
 
-// PmemResults contains PMEM device file details created on SCM regions.
-type PmemResults struct {
-	Devices PmemDevices
-	Err     error
-}
-
-// ScmMountResults is an alias for protobuf ScmMountResult message slice
-// ScmMounts is an alias for protobuf ScmMount message slice representing
-// a number of mounted SCM regions on a storage node.
+// ScmMounts are protobuf representations of mounted SCM namespaces identified
+// by mount points
 type ScmMounts []*ctlpb.ScmMount
 
 func (sm ScmMounts) String() string {
@@ -303,26 +296,4 @@ func (smr ScmModuleResults) String() string {
 	}
 
 	return buf.String()
-}
-
-// ModuleResults contains scm modules and/or results of operations on modules
-// and an error signifying a problem in making the request.
-type ModuleResults struct {
-	Modules   ScmModules
-	Responses ScmModuleResults
-	Err       error
-}
-
-func (mr ModuleResults) String() string {
-	if mr.Err != nil {
-		return mr.Err.Error()
-	}
-	if len(mr.Modules) > 0 {
-		return mr.Modules.String()
-	}
-	if len(mr.Responses) > 0 {
-		return mr.Responses.String()
-	}
-
-	return "no scm modules found"
 }

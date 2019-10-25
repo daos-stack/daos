@@ -45,15 +45,11 @@ type nvmeHealthQueryCmd struct {
 	connectedCmd
 }
 
-// Query the SPDK NVMe device health stats from all devices on all hosts
-func nvmeHealthQuery(log logging.Logger, conns client.Connect) {
-	cCtrlrs, _, _ := conns.StorageScan()
-	log.Infof("NVMe SSD Device Health Stats:\n%s", cCtrlrs)
-}
-
-// Execute is run when nvmeHealthQueryCmd activates
+// Execute queries the SPDK NVMe device health stats from all devices on all hosts
+// when nvmeHealthQueryCmd activates.
 func (h *nvmeHealthQueryCmd) Execute(args []string) error {
-	nvmeHealthQuery(h.log, h.conns)
+	cNvmeScan, _ := h.conns.StorageScan()
+	h.log.Infof("NVMe SSD Device Health Stats:\n%s", cNvmeScan)
 	return nil
 }
 

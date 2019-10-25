@@ -30,7 +30,7 @@ import (
 	"golang.org/x/net/context"
 
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	types "github.com/daos-stack/daos/src/control/common/storage"
+	pb_types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -53,7 +53,7 @@ func newState(log logging.Logger, status ctlpb.ResponseStatus, errMsg string, in
 	return state
 }
 
-func modulesToPB(mms []storage.ScmModule) (pbMms types.ScmModules) {
+func modulesToPB(mms []storage.ScmModule) (pbMms pb_types.ScmModules) {
 	for _, c := range mms {
 		pbMms = append(
 			pbMms,
@@ -71,7 +71,7 @@ func modulesToPB(mms []storage.ScmModule) (pbMms types.ScmModules) {
 	return
 }
 
-func namespacesToPB(nss []storage.ScmNamespace) (pbNss types.PmemDevices) {
+func namespacesToPB(nss []storage.ScmNamespace) (pbNss pb_types.ScmNamespaces) {
 	for _, ns := range nss {
 		pbNss = append(pbNss,
 			&ctlpb.PmemDevice{
@@ -170,7 +170,7 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 		}
 	}
 
-	result, err := c.scm.Scan(scm.ScanRequest{})
+	result, err := c.scm.Scan(storage.ScmScanRequest{})
 	if err != nil {
 		resp.Scm = &ctlpb.ScanScmResp{
 			State: newState(c.log, ctlpb.ResponseStatus_CTL_ERR_SCM, err.Error(), "", msg+"SCM"),
@@ -228,7 +228,7 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 	needsSuperblock := true
 	needsScmFormat := reformat
 	// placeholder result indicating NVMe not yet formatted
-	resp.Crets = types.NvmeControllerResults{
+	resp.Crets = pb_types.NvmeControllerResults{
 		newCret(c.log, "format", "", ctlpb.ResponseStatus_CTL_ERR_NVME, msgBdevScmNotReady, ""),
 	}
 
@@ -256,7 +256,7 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 
 	// When SCM format is required, format and populate response with result.
 	if needsScmFormat {
-		results := types.ScmMountResults{}
+		results := pb_types.ScmMountResults{}
 		result, err := c.scmFormat(scmConfig, true)
 		if err != nil {
 			return errors.Wrap(err, "scm format") // return unexpected errors
@@ -277,7 +277,7 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 		}
 	}
 
-	results := types.NvmeControllerResults{} // init actual NVMe format results
+	results := pb_types.NvmeControllerResults{} // init actual NVMe format results
 
 	// If no superblock exists, populate NVMe response with format results.
 	if needsSuperblock {

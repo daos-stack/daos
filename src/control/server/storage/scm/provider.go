@@ -110,18 +110,6 @@ type (
 		Mounted bool
 	}
 
-	// ScanRequest defines the parameters for a Scan operation.
-	ScanRequest struct {
-		Rescan bool
-	}
-	// ScanResponse contains information gleaned during
-	// a successful Scan operation.
-	ScanResponse struct {
-		State      storage.ScmState
-		Modules    storage.ScmModules
-		Namespaces storage.ScmNamespaces
-	}
-
 	// Backend defines a set of methods to be implemented by a SCM backend.
 	Backend interface {
 		Discover() (storage.ScmModules, error)
@@ -342,7 +330,7 @@ func (p *Provider) updateState() (state storage.ScmState, err error) {
 // GetState returns the current state of DCPM namespaces, if available.
 func (p *Provider) GetState() (storage.ScmState, error) {
 	if !p.isInitialized() {
-		if _, err := p.Scan(ScanRequest{}); err != nil {
+		if _, err := p.Scan(storage.ScmScanRequest{}); err != nil {
 			return p.lastState, err
 		}
 	}
@@ -350,11 +338,11 @@ func (p *Provider) GetState() (storage.ScmState, error) {
 	return p.currentState(), nil
 }
 
-func (p *Provider) createScanResponse() *ScanResponse {
+func (p *Provider) createScanResponse() *storage.ScmScanResponse {
 	p.RLock()
 	defer p.RUnlock()
 
-	return &ScanResponse{
+	return &storage.ScmScanResponse{
 		State:      p.lastState,
 		Modules:    p.modules,
 		Namespaces: p.namespaces,
@@ -362,7 +350,7 @@ func (p *Provider) createScanResponse() *ScanResponse {
 }
 
 // Scan attempts to scan the system for SCM storage components.
-func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
+func (p *Provider) Scan(req storage.ScmScanRequest) (*storage.ScmScanResponse, error) {
 	if p.isInitialized() && !req.Rescan {
 		return p.createScanResponse(), nil
 	}
@@ -403,7 +391,7 @@ func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 // Prepare attempts to fulfill a SCM Prepare request.
 func (p *Provider) Prepare(req PrepareRequest) (res *PrepareResponse, err error) {
 	if !p.isInitialized() {
-		if _, err := p.Scan(ScanRequest{}); err != nil {
+		if _, err := p.Scan(storage.ScmScanRequest{}); err != nil {
 			return nil, err
 		}
 	}
@@ -440,7 +428,7 @@ func (p *Provider) Prepare(req PrepareRequest) (res *PrepareResponse, err error)
 // filesystem.
 func (p *Provider) CheckFormat(req FormatRequest) (*FormatResponse, error) {
 	if !p.isInitialized() {
-		if _, err := p.Scan(ScanRequest{}); err != nil {
+		if _, err := p.Scan(storage.ScmScanRequest{}); err != nil {
 			return nil, err
 		}
 	}

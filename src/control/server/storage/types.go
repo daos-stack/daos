@@ -71,33 +71,62 @@ type (
 
 	// ScmNamespaces is a type alias for []ScmNamespace that provides a fmt.Stringer implementation.
 	ScmNamespaces []ScmNamespace
+
+	// ScanRequest defines the parameters for a Scan operation.
+	ScmScanRequest struct {
+		Rescan bool
+	}
+
+	// ScanResponse contains information gleaned during a successful Scan operation.
+	ScmScanResponse struct {
+		State      ScmState
+		Modules    ScmModules
+		Namespaces ScmNamespaces
+	}
 )
 
-func (m ScmModule) String() string {
+func (m *ScmModule) String() string {
 	return fmt.Sprintf("PhysicalID:%d Capacity:%d Location:(socket:%d memctrlr:%d "+
-		"chan:%d pos:%d)", m.PhysicalID, m.Capacity, m.SocketID,
-		m.ControllerID, m.ChannelID, m.ChannelPosition)
+		"chan:%d pos:%d)", m.PhysicalID, m.Capacity, m.SocketID, m.ControllerID,
+		m.ChannelID, m.ChannelPosition)
 }
 
-func (ms ScmModules) String() string {
+func (ms *ScmModules) String() string {
 	var buf bytes.Buffer
 
-	for _, m := range ms {
-		fmt.Fprintf(&buf, "\t%s\n", m)
+	for _, m := range *ms {
+		fmt.Fprintf(&buf, "\t%s\n", &m)
 	}
 
 	return buf.String()
 }
 
-func (n ScmNamespace) String() string {
+func (n *ScmNamespace) String() string {
 	return fmt.Sprintf("%s/%s/%s (NUMA %d)", n.Name, n.BlockDevice, n.UUID, n.NumaNode)
 }
 
-func (ns ScmNamespaces) String() string {
+func (ns *ScmNamespaces) String() string {
 	var buf bytes.Buffer
 
-	for _, n := range ns {
-		fmt.Fprintf(&buf, "\t%s\n", n)
+	for _, n := range *ns {
+		fmt.Fprintf(&buf, "\t%s\n", &n)
+	}
+
+	return buf.String()
+}
+
+func (sr *ScmScanResponse) String() string {
+	var buf bytes.Buffer
+
+	// Zero uninitialised value is Unknown (0)
+	if sr.State != ScmStateUnknown {
+		fmt.Fprintf(&buf, "SCM State: %s\n", sr.State.String())
+	}
+
+	if len(sr.Namespaces) > 0 {
+		fmt.Fprintf(&buf, "SCM Namespaces:\n%s\n", &sr.Namespaces)
+	} else {
+		fmt.Fprintf(&buf, "SCM Modules:\n%s\n", &sr.Modules)
 	}
 
 	return buf.String()

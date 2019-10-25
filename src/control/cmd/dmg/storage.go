@@ -86,10 +86,9 @@ type storageScanCmd struct {
 
 // run NVMe and SCM storage and health query on all connected servers
 func storageScan(log logging.Logger, conns client.Connect) {
-	cCtrlrs, cModules, cPmems := conns.StorageScan()
-	log.Infof("NVMe SSD controllers and constituent namespaces:\n%s", cCtrlrs)
-	log.Infof("SCM modules:\n%s", cModules)
-	log.Infof("PMEM device files:\n%s", cPmems)
+	cNvmeScan, cScmScan := conns.StorageScan()
+	log.Infof("NVMe SSD controllers and constituent namespaces:\n%s", cNvmeScan)
+	log.Info(cScmScan.String())
 }
 
 // Execute is run when storageScanCmd activates

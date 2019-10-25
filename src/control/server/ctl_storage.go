@@ -103,7 +103,7 @@ func (c *StorageControlService) Setup() error {
 		return errors.Errorf("%s: missing %v", msgBdevNotFound, missing)
 	}
 
-	if _, err := c.scm.Scan(scm.ScanRequest{}); err != nil {
+	if _, err := c.scm.Scan(storage.ScmScanRequest{}); err != nil {
 		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, SCM Scan"))
 	}
 
@@ -194,6 +194,6 @@ func (c *StorageControlService) NvmeScan() (types.NvmeControllers, error) {
 // ScanScm scans locally attached modules, namespaces and state of DCPM config.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
-func (c *StorageControlService) ScmScan() (*scm.ScanResponse, error) {
-	return c.scm.Scan(scm.ScanRequest{})
+func (c *StorageControlService) ScmScan() (*storage.ScmScanResponse, error) {
+	return c.scm.Scan(storage.ScmScanRequest{})
 }
