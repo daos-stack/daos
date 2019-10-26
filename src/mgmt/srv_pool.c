@@ -35,10 +35,6 @@ struct list_pools_iter_args {
 	uint64_t			avail_npools;
 	uint64_t			npools;
 
-	/* Service replicas / pool in client buf; max among pools in system */
-	uint64_t			avail_max_nsvc;
-	uint64_t			max_nsvc;
-
 	/* Storage / index for list of pools to return to caller */
 	uint64_t			pools_index;
 	uint64_t			pools_len;
@@ -625,9 +621,6 @@ enum_pool_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 
 	ap->npools++;
 
-	if (rec->pr_nreplicas > ap->max_nsvc)
-		ap->max_nsvc = rec->pr_nreplicas;
-
 	/* Client didn't provide buffer or not enough space */
 	if (ap->avail_npools < ap->npools)
 		return 0;
@@ -658,7 +651,7 @@ enum_pool_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 }
 
 static int
-ds_mgmt_list_pools(const char *group, uint64_t *npools, uint64_t *max_nsvc,
+ds_mgmt_list_pools(const char *group, uint64_t *npools,
 		   struct mgmt_list_pools_one **poolsp, size_t *pools_len)
 {
 	struct mgmt_svc			*svc;
@@ -670,8 +663,6 @@ ds_mgmt_list_pools(const char *group, uint64_t *npools, uint64_t *max_nsvc,
 
 	iter_args.avail_npools = *npools;
 	iter_args.npools = 0;
-	iter_args.avail_max_nsvc = *max_nsvc;
-	iter_args.max_nsvc = 0;
 	iter_args.pools_index = 0;		/* num pools in pools[] */
 	iter_args.pools_len = 0;		/* alloc length of pools[] */
 	iter_args.pools = NULL;			/* realloc in enum_pool_cb() */
@@ -697,7 +688,6 @@ out_svc:
 out:
 	if (rc == 0) {
 		*npools = iter_args.npools;
-		*max_nsvc = iter_args.max_nsvc;
 		*poolsp = iter_args.pools;
 		*pools_len = iter_args.pools_index;
 	} else {
@@ -724,7 +714,6 @@ ds_mgmt_hdlr_list_pools(crt_rpc_t *rpc_req)
 	struct mgmt_list_pools_one	*pools = NULL;
 	size_t				 pools_len = 0;
 	uint64_t			 npools;
-	uint64_t			 max_nsvc;
 	int				 rc;
 
 	pc_in = crt_req_get(rpc_req);
@@ -733,13 +722,11 @@ ds_mgmt_hdlr_list_pools(crt_rpc_t *rpc_req)
 	D_ASSERT(pc_out != NULL);
 
 	npools = pc_in->lp_npools;
-	max_nsvc = pc_in->lp_max_nsvc;
 
-	rc = ds_mgmt_list_pools(pc_in->lp_grp, &npools, &max_nsvc, &pools,
+	rc = ds_mgmt_list_pools(pc_in->lp_grp, &npools, &pools,
 				&pools_len);
 
 	pc_out->lp_npools = npools;
-	pc_out->lp_max_nsvc = max_nsvc;
 	pc_out->lp_rc = rc;
 	pc_out->lp_pools.ca_arrays = pools;
 	pc_out->lp_pools.ca_count = pools_len;

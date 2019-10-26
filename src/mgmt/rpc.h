@@ -216,13 +216,11 @@ CRT_GEN_STRUCT(mgmt_list_pools_one, DAOS_SEQ_MGMT_LIST_POOLS_ONE);
 
 #define DAOS_ISEQ_MGMT_LIST_POOLS /* input fields */		 \
 	((d_string_t)		(lp_grp)		CRT_VAR) \
-	((uint64_t)		(lp_npools)		CRT_VAR) \
-	((uint64_t)		(lp_max_nsvc)		CRT_VAR)
+	((uint64_t)		(lp_npools)		CRT_VAR)
 
 #define DAOS_OSEQ_MGMT_LIST_POOLS /* output fields */			   \
 	((struct mgmt_list_pools_one)		(lp_pools)	CRT_ARRAY) \
 	((uint64_t)				(lp_npools)	CRT_VAR)   \
-	((uint64_t)				(lp_max_nsvc)	CRT_VAR)   \
 	((int32_t)				(lp_rc)		CRT_VAR)
 
 CRT_RPC_DECLARE(mgmt_list_pools, DAOS_ISEQ_MGMT_LIST_POOLS,

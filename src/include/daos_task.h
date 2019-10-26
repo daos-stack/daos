@@ -246,7 +246,6 @@ typedef struct {
 	const char		*grp;
 	daos_mgmt_pool_info_t	*pools;
 	daos_size_t		*npools;
-	daos_size_t		*max_nsvc;
 } daos_mgmt_list_pools_t;
 
 typedef struct {

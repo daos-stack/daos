@@ -281,7 +281,6 @@ list_pools_hdlr(int argc, char *argv[])
 	const char		*sysname = default_sysname;
 	daos_size_t		 orig_npools;
 	daos_size_t		 npools;
-	daos_size_t		 max_nsvc;
 	daos_size_t		 cli_npools;
 	daos_mgmt_pool_info_t	*pools;
 	daos_size_t		 pc;
@@ -304,7 +303,7 @@ list_pools_hdlr(int argc, char *argv[])
 
 	/* First: request number of pools (to size our buffer) */
 	rc = daos_mgmt_list_pools(sysname, NULL /* pools */,
-			&npools, &max_nsvc, NULL /* ev */);
+			&npools, NULL /* ev */);
 	if (rc != 0) {
 		fprintf(stderr, "failed to get number of pools in %s\n",
 				sysname);
@@ -317,7 +316,7 @@ list_pools_hdlr(int argc, char *argv[])
 
 	/* Second: request list of pools */
 	orig_npools = npools;
-	rc = daos_mgmt_list_pools(sysname, pools, &npools, &max_nsvc,
+	rc = daos_mgmt_list_pools(sysname, pools, &npools,
 				  NULL /* ev */);
 	if (rc != 0) {
 		fprintf(stderr, "failed to list pools\n");

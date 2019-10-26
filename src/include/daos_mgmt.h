@@ -323,29 +323,23 @@ daos_pool_remove_replicas(const uuid_t uuid, const char *group,
 			  d_rank_list_t *svc, d_rank_list_t *targets,
 			  d_rank_list_t *failed, daos_event_t *ev);
 
-/* TODO: get rid of max_nsvc - is it really needed? */
 /**
  * List all pools created in the specified DAOS system.
  *
  * \param group	[IN]		Name of DAOS system managing the service.
  * \param pools	[OUT]		Array of pool mgmt information structures.
  *				NULL is permitted in which case only the
- *				number of pools and largest number of service
- *				replica ranks will be returned in \a npools
- *				and \a max_nsvc.
+ *				number of pools will be returned in \a npools.
  * \param npools
  *		[IN,OUT]	[in] \a pools length in items.
  *				[out] Number of pools in the DAOS system.
- * \param max_nsvc
- *		[IN,OUT]	[in] common length of service ranks list
- *				within every item in the \a pools array.
- *				[out] largest number of service ranks
- *				of any pool in the DAOS system.
+ * \param ev	[IN]		Completion event. Optional and can be NULL.
+ *				The function will run in blocking mode
+ *				if \a ev is NULL.
  */
 int
 daos_mgmt_list_pools(const char *group, daos_mgmt_pool_info_t *pools,
-		     daos_size_t *npools, daos_size_t *max_nsvc,
-		     daos_event_t *ev);
+		     daos_size_t *npools, daos_event_t *ev);
 
 #if defined(__cplusplus)
 }

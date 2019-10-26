@@ -42,9 +42,7 @@ struct mgmt_list_pools_arg {
 	crt_rpc_t	       *rpc;
 	daos_mgmt_pool_info_t  *pools;
 	daos_size_t		req_npools;
-	daos_size_t		req_max_nsvc;
 	daos_size_t	       *npools;
-	daos_size_t	       *max_nsvc;
 };
 
 static int
@@ -391,7 +389,6 @@ mgmt_list_pools_cp(tse_task_t *task, void *data)
 	pc_in = crt_req_get(arg->rpc);
 	D_ASSERT(pc_in != NULL);
 
-	*arg->max_nsvc = pc_out->lp_max_nsvc;
 	*arg->npools = pc_out->lp_npools;
 
 	/* copy RPC response pools info to client buffer, if provided */
@@ -453,8 +450,8 @@ dc_mgmt_list_pools(tse_task_t *task)
 
 	args = dc_task_get_args(task);
 
-	if (args->npools == NULL || args->max_nsvc == NULL) {
-		D_ERROR("npools and max_nsvc must be non-NULL\n");
+	if (args->npools == NULL) {
+		D_ERROR("npools must be non-NULL\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -484,14 +481,11 @@ dc_mgmt_list_pools(tse_task_t *task)
 	/** fill in request buffer */
 	pc_in->lp_grp = (d_string_t)args->grp;
 	pc_in->lp_npools = *args->npools;
-	pc_in->lp_max_nsvc = *args->max_nsvc;
 
 	crt_req_addref(rpc_req);
 	cb_args.rpc = rpc_req;
-	cb_args.req_max_nsvc = *args->max_nsvc;
 	cb_args.req_npools = *args->npools;
 	cb_args.npools = args->npools;
-	cb_args.max_nsvc = args->max_nsvc;
 	cb_args.pools = args->pools;
 
 	rc = tse_task_register_comp_cb(task, mgmt_list_pools_cp, &cb_args,

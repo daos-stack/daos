@@ -279,8 +279,7 @@ daos_pool_remove_replicas(const uuid_t uuid, const char *group,
 
 int
 daos_mgmt_list_pools(const char *group, daos_mgmt_pool_info_t *pools,
-		     daos_size_t *npools, daos_size_t *max_nsvc,
-		     daos_event_t *ev)
+		     daos_size_t *npools, daos_event_t *ev)
 {
 	daos_mgmt_list_pools_t	*args;
 	tse_task_t		*task;
@@ -294,7 +293,6 @@ daos_mgmt_list_pools(const char *group, daos_mgmt_pool_info_t *pools,
 	args->grp = group;
 	args->pools = pools;
 	args->npools = npools;
-	args->max_nsvc = max_nsvc;
 
 	return dc_task_schedule(task, true);
 }
