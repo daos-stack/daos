@@ -1498,6 +1498,8 @@ pool_evict_cp(tse_task_t *task, void *data)
 
 	rc = out->pvo_op.po_rc;
 	if (rc != 0) {
+		if (rc == -DER_NOTREPLICA)
+			rc = -DER_NONEXIST;
 		D_ERROR("failed to evict pool handles: %d\n", rc);
 		D_GOTO(out, rc);
 	}
