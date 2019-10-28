@@ -149,6 +149,9 @@ This is the package needed to run the DAOS test suite
 # Requires: libdaos.so.0()(64bit)
 %if (0%{?suse_version} >= 1500)
 Requires: daos-client
+Requires: daos
+Requires: libpmem
+Requires: libpmemobj
 %endif
 Summary: The DAOS development libraries and headers
 %if %{defined cart_sha1}
