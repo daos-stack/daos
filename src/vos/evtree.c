@@ -222,13 +222,6 @@ evt_ent_array_fini(struct evt_entry_array *ent_array)
 /** When we go over the embedded limit, set a minimum allocation */
 #define EVT_MIN_ALLOC 4096
 
-static void
-ent_array_reset(struct evt_context *tcx, struct evt_entry_array *ent_array)
-{
-	ent_array->ea_ent_nr = 0;
-	ent_array->ea_inob = tcx->tc_inob;
-}
-
 static bool
 ent_array_resize(struct evt_context *tcx, struct evt_entry_array *ent_array,
 		 uint32_t new_size)
@@ -570,8 +563,8 @@ evt_truncate_next(struct evt_context *tcx, struct evt_entry_array *ent_array,
 }
 
 static int
-evt_find_visible(struct evt_context *tcx, struct evt_entry_array *ent_array,
-		 int *num_visible)
+evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
+		 struct evt_entry_array *ent_array, int *num_visible)
 {
 	struct evt_extent	*this_ext;
 	struct evt_extent	*next_ext;
@@ -583,17 +576,30 @@ evt_find_visible(struct evt_context *tcx, struct evt_entry_array *ent_array,
 	d_list_t		*current;
 	d_list_t		*next;
 	bool			 insert;
+	daos_epoch_t		 punched_epoch = filter ? filter->fr_punch : 0;
 	int			 rc = 0;
 
-	/* reset the linked list.  We'll reconstruct it */
 	D_INIT_LIST_HEAD(&covered);
 	*num_visible = 0;
 
-	/* Now place all entries sorted in covered list */
+	/* Some of the entries may be punched by a key.  We don't need to
+	 * consider such entries for the visibility algorithm and can mark them
+	 * covered to start.   All other entries are placed into the sorted list
+	 * to be considered in the visibility algorithm.
+	 */
 	evt_ent_array_for_each(this_ent, ent_array) {
 		next = evt_array_entry2link(this_ent);
+
+		if (punched_epoch >= this_ent->en_epoch) {
+			this_ent->en_visibility = EVT_COVERED;
+			continue;
+		}
+
 		d_list_add_tail(next, &covered);
 	}
+
+	if (d_list_empty(&covered))
+		return 0;
 
 	/* Now uncover entries */
 	current = covered.next;
@@ -720,8 +726,13 @@ evt_ent_array_sort(struct evt_context *tcx, struct evt_entry_array *ent_array,
 
 	if (ent_array->ea_ent_nr == 1) {
 		ent = evt_ent_array_get(ent_array, 0);
-		ent->en_visibility = EVT_VISIBLE;
-		num_visible = 1;
+		num_visible = 0;
+		if (filter && filter->fr_punch >= ent->en_epoch) {
+			ent->en_visibility = EVT_COVERED;
+		} else {
+			num_visible = 1;
+			ent->en_visibility = EVT_VISIBLE;
+		}
 		goto re_sort;
 	}
 
@@ -733,7 +744,7 @@ evt_ent_array_sort(struct evt_context *tcx, struct evt_entry_array *ent_array,
 		      evt_ent_list_cmp);
 
 		/* Now separate entries into covered and visible */
-		rc = evt_find_visible(tcx, ent_array, &num_visible);
+		rc = evt_find_visible(tcx, filter, ent_array, &num_visible);
 
 		if (rc != 0) {
 			if (rc == -DER_AGAIN)
@@ -744,20 +755,6 @@ evt_ent_array_sort(struct evt_context *tcx, struct evt_entry_array *ent_array,
 	}
 
 re_sort:
-	if (filter && filter->fr_punch != 0) {
-		/** If items are punched by outer layer, mark them covered */
-		evt_ent_array_for_each(ent, ent_array) {
-			if (ent->en_epoch > filter->fr_punch)
-				continue;
-			if (evt_flags_get(ent->en_visibility) == EVT_COVERED)
-				continue;
-			ent->en_visibility ^= EVT_VISIBLE;
-			ent->en_visibility |= EVT_COVERED;
-			D_ASSERT(evt_flags_equal(ent->en_visibility,
-						 EVT_COVERED));
-		}
-	}
-
 	ents = ent_array->ea_ents;
 	total = ent_array->ea_ent_nr;
 	compar = evt_ent_list_cmp;
@@ -1336,7 +1333,7 @@ evt_root_empty(struct evt_context *tcx)
 static int
 evt_root_tx_add(struct evt_context *tcx)
 {
-	void	*root;
+	struct evt_root	*root;
 
 	if (!evt_has_tx(tcx))
 		return 0;
@@ -1917,8 +1914,6 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 	if (tcx->tc_root->tr_depth == 0)
 		return 0; /* empty tree */
 
-	if (ent_array == &tcx->tc_iter.it_entries)
-		ent_array_reset(tcx, ent_array);
 	evt_tcx_reset_trace(tcx);
 
 	level = at = 0;
@@ -2126,6 +2121,8 @@ evt_find(daos_handle_t toh, const daos_epoch_range_t *epr,
 	struct evt_filter	 filter;
 	struct evt_rect		 rect;
 	int			 rc;
+
+	D_ASSERT(epr != NULL || extent != NULL);
 
 	tcx = evt_hdl2tcx(toh);
 	if (tcx == NULL)

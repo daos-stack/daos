@@ -182,8 +182,9 @@ gc_drain_key(struct vos_gc *gc, struct vos_pool *pool,
 		*empty = true;
 		return 0;
 	}
+
 	if (rc) {
-		D_ERROR("%s drain failed: %s\n", gc->gc_name, d_errstr(rc));
+		D_ERROR("%s drain failed: "DF_RC"\n", gc->gc_name, DP_RC(rc));
 		return rc;
 	}
 
@@ -565,7 +566,7 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 		return 0;
 	}
 
-	rc = vos_tx_begin(pool);
+	rc = vos_tx_begin(&pool->vp_umm);
 	if (rc) {
 		D_ERROR("Failed to start transacton for "DF_UUID": %s\n",
 			DP_UUID(pool->vp_id), d_errstr(rc));
@@ -622,7 +623,7 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 		"pool="DF_UUID", creds origin=%d, current=%d, rc=%s\n",
 		DP_UUID(pool->vp_id), *credits, creds, d_errstr(rc));
 
-	rc = vos_tx_end(pool, rc);
+	rc = vos_tx_end(&pool->vp_umm, rc);
 	if (rc == 0)
 		*credits = creds;
 
@@ -815,38 +816,34 @@ gc_wait(void)
 #endif
 }
 
-/**
- * Function for VOS standalone mode, it reclaims all the delete items for @pool
- */
-void
-gc_wait_pool(struct vos_pool *pool)
+/** public API to reclaim space for a opened pool */
+int
+vos_gc_pool(daos_handle_t poh, int *credits)
 {
-#if VOS_STANDALONE
-	int total = 0;
+	struct vos_pool *pool = vos_hdl2pool(poh);
+	bool		 empty;
+	int		 total;
+	int		 rc;
 
-	while (1) {
-		int	creds = GC_CREDS_PRIV;
-		int	rc;
-		bool	empty;
+	if (!credits || *credits <= 0)
+		return -DER_INVAL;
 
-		if (d_list_empty(&pool->vp_gc_link)) {
-			D_DEBUG(DB_IO, "Nothing to reclaim for this pool\n");
-			return;
-		}
+	if (!pool)
+		return -DER_NO_HDL;
 
-		total += creds;
-		rc = gc_reclaim_pool(pool, &creds, &empty);
-		if (rc) {
-			D_CRIT("GC failed %s\n", d_errstr(rc));
-			return;
-		}
+	if (d_list_empty(&pool->vp_gc_link))
+		return 0; /* nothing to reclaim for this pool */
 
-		if (creds != 0) {
-			D_ASSERT(empty);
-			D_DEBUG(DB_IO, "Consumed %d credits\n", total - creds);
-			gc_log_pool(pool);
-			return;
-		}
+	total = *credits;
+	rc = gc_reclaim_pool(pool, credits, &empty);
+	if (rc) {
+		D_CRIT("GC failed %s\n", d_errstr(rc));
+		return 0; /* caller can't do anything for it */
 	}
-#endif
+	total -= *credits; /* substract the remained credits */
+
+	if (empty && total != 0) /* did something */
+		gc_log_pool(pool);
+
+	return 0;
 }

@@ -28,7 +28,7 @@ import (
 
 	. "github.com/daos-stack/daos/src/control/client"
 	. "github.com/daos-stack/daos/src/control/common"
-	. "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 )
 
 func TestHasConnection(t *testing.T) {
@@ -99,42 +99,42 @@ func TestCheckSprint(t *testing.T) {
 		},
 		{
 			NewClientNvmeResults(
-				[]*NvmeControllerResult{
+				[]*ctlpb.NvmeControllerResult{
 					{
 						Pciaddr: "0000:81:00.0",
-						State: &ResponseState{
-							Status: ResponseStatus_CTRL_ERR_APP,
+						State: &ctlpb.ResponseState{
+							Status: ctlpb.ResponseStatus_CTL_ERR_APP,
 							Error:  "example application error",
 						},
 					},
 				}, MockServers).String(),
-			"1.2.3.4:10000:\n\tPCI Addr:0000:81:00.0 Status:CTRL_ERR_APP Error:example application error\n\n1.2.3.5:10001:\n\tPCI Addr:0000:81:00.0 Status:CTRL_ERR_APP Error:example application error\n\n",
+			"1.2.3.4:10000:\n\tPCI Addr:0000:81:00.0 Status:CTL_ERR_APP Error:example application error\n\n1.2.3.5:10001:\n\tPCI Addr:0000:81:00.0 Status:CTL_ERR_APP Error:example application error\n\n",
 		},
 		{
 			NewClientScmResults(
-				[]*ScmModuleResult{
+				[]*ctlpb.ScmModuleResult{
 					{
 						Loc: MockModulePB().Loc,
-						State: &ResponseState{
-							Status: ResponseStatus_CTRL_ERR_APP,
+						State: &ctlpb.ResponseState{
+							Status: ctlpb.ResponseStatus_CTL_ERR_APP,
 							Error:  "example application error",
 						},
 					},
 				}, MockServers).String(),
-			"1.2.3.4:10000:\n\tModule Location:(socket:4 memctrlr:3 chan:1 pos:2) Status:CTRL_ERR_APP Error:example application error\n\n1.2.3.5:10001:\n\tModule Location:(socket:4 memctrlr:3 chan:1 pos:2) Status:CTRL_ERR_APP Error:example application error\n\n",
+			"1.2.3.4:10000:\n\tModule Location:(socket:4 memctrlr:3 chan:1 pos:2) Status:CTL_ERR_APP Error:example application error\n\n1.2.3.5:10001:\n\tModule Location:(socket:4 memctrlr:3 chan:1 pos:2) Status:CTL_ERR_APP Error:example application error\n\n",
 		},
 		{
 			NewClientScmMountResults(
-				[]*ScmMountResult{
+				[]*ctlpb.ScmMountResult{
 					{
 						Mntpoint: "/mnt/daos",
-						State: &ResponseState{
-							Status: ResponseStatus_CTRL_ERR_APP,
+						State: &ctlpb.ResponseState{
+							Status: ctlpb.ResponseStatus_CTL_ERR_APP,
 							Error:  "example application error",
 						},
 					},
 				}, MockServers).String(),
-			"1.2.3.4:10000:\n\tMntpoint:/mnt/daos Status:CTRL_ERR_APP Error:example application error\n\n1.2.3.5:10001:\n\tMntpoint:/mnt/daos Status:CTRL_ERR_APP Error:example application error\n\n",
+			"1.2.3.4:10000:\n\tMntpoint:/mnt/daos Status:CTL_ERR_APP Error:example application error\n\n1.2.3.5:10001:\n\tMntpoint:/mnt/daos Status:CTL_ERR_APP Error:example application error\n\n",
 		},
 	}
 	for _, tt := range shelltests {

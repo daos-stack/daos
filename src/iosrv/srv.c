@@ -105,6 +105,13 @@ static void dss_gc_ult(void *args);
 #define REBUILD_DEFAULT_SCHEDULE_RATIO	30
 unsigned int	dss_rebuild_res_percentage = REBUILD_DEFAULT_SCHEDULE_RATIO;
 unsigned int	dss_first_res_percentage = FIRST_DEFAULT_SCHEDULE_RATIO;
+bool		dss_agg_disabled;
+
+bool
+dss_aggregation_disabled(void)
+{
+	return dss_agg_disabled;
+}
 
 #define DSS_SYS_XS_NAME_FMT	"daos_sys_%d"
 #define DSS_TGT_XS_NAME_FMT	"daos_tgt_%d_xs_%d"
@@ -783,21 +790,49 @@ dss_start_xs_id(int xs_id)
 	hwloc_obj_t	obj;
 	int		rc;
 	int		xs_core_offset;
+	unsigned	idx;
+	char		*cpuset;
 
-	/*
-	 * System XS all use the first core
-	 */
-	if (xs_id < dss_sys_xs_nr)
-		xs_core_offset = 0;
-	else
-		xs_core_offset = xs_id - (dss_sys_xs_nr - DRPC_XS_NR);
+	D_DEBUG(DB_TRACE, "start xs_id called for %d.  ", xs_id);
+	/* if we are NUMA aware, use the NUMA information */
+	if (numa_obj) {
+		idx = hwloc_bitmap_first(core_allocation_bitmap);
+		if (idx == -1) {
+			D_DEBUG(DB_TRACE,
+				"No core available for XS: %d", xs_id);
+			return -DER_INVAL;
+		}
+		D_DEBUG(DB_TRACE,
+			"Choosing next available core index %d.", idx);
+		hwloc_bitmap_clr(core_allocation_bitmap, idx);
 
-	obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth,
-				     (xs_core_offset + dss_core_offset)
-				     % dss_core_nr);
-	if (obj == NULL) {
-		D_ERROR("Null core returned by hwloc for XS %d\n", xs_id);
-		return -DER_INVAL;
+		obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, idx);
+		if (obj == NULL) {
+			D_PRINT("Null core returned by hwloc\n");
+			return -DER_INVAL;
+		}
+
+		hwloc_bitmap_asprintf(&cpuset, obj->allowed_cpuset);
+		D_DEBUG(DB_TRACE, "Using CPU set %s\n", cpuset);
+		free(cpuset);
+	} else {
+		D_DEBUG(DB_TRACE, "Using non-NUMA aware core allocation\n");
+		/*
+		* System XS all use the first core
+		*/
+		if (xs_id < dss_sys_xs_nr)
+			xs_core_offset = 0;
+		else
+			xs_core_offset = xs_id - (dss_sys_xs_nr - DRPC_XS_NR);
+
+		obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth,
+					     (xs_core_offset + dss_core_offset)
+					     % dss_core_nr);
+		if (obj == NULL) {
+			D_ERROR("Null core returned by hwloc for XS %d\n",
+				xs_id);
+			return -DER_INVAL;
+		}
 	}
 
 	rc = dss_start_one_xstream(obj->allowed_cpuset, xs_id);
@@ -825,8 +860,16 @@ dss_xstreams_init()
 	}
 
 	/* start the execution streams */
-	D_DEBUG(DB_TRACE, "%d cores detected, starting %d main xstreams\n",
+	D_DEBUG(DB_TRACE,
+		"%d cores total detected "
+		"starting %d main xstreams\n",
 		dss_core_nr, dss_tgt_nr);
+
+	if (dss_numa_node != -1) {
+		D_DEBUG(DB_TRACE,
+			"Detected %d cores on NUMA node %d\n",
+			dss_num_cores_numa_node, dss_numa_node);
+	}
 
 	xstream_data.xd_xs_nr = DSS_XS_NR_TOTAL;
 	/* start system service XS */
@@ -1467,6 +1510,11 @@ dss_parameters_set(unsigned int key_id, uint64_t value)
 		D_WARN("set rebuild percentage to "DF_U64"\n", value);
 		dss_rebuild_res_percentage = value;
 		break;
+	case DSS_DISABLE_AGGREGATION:
+		dss_agg_disabled = (value != 0);
+		D_WARN("online aggregation is %s\n",
+		       value != 0 ? "disabled" : "enabled");
+		break;
 	default:
 		D_ERROR("invalid key_id %d\n", key_id);
 		rc = -DER_INVAL;
@@ -1563,8 +1611,7 @@ dss_srv_init()
 	dss_register_key(&daos_srv_modkey);
 	xstream_data.xd_init_step = XD_INIT_REG_KEY;
 
-	rc = bio_nvme_init(dss_storage_path, dss_nvme_conf, dss_nvme_shm_id,
-			   NULL);
+	rc = bio_nvme_init(dss_storage_path, dss_nvme_conf, dss_nvme_shm_id);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_NVME;
@@ -1696,7 +1743,7 @@ dss_dump_ABT_state()
 }
 
 void
-dss_gc_run(int credits)
+dss_gc_run(daos_handle_t poh, int credits)
 {
 	struct dss_xstream *dxs	 = dss_get_xstream();
 	int		    total = 0;
@@ -1709,18 +1756,21 @@ dss_gc_run(int credits)
 			creds = credits - total;
 
 		total += creds;
-		rc = vos_gc_run(&creds);
+		if (daos_handle_is_inval(poh))
+			rc = vos_gc_run(&creds);
+		else
+			rc = vos_gc_pool(poh, &creds);
+
 		if (rc) {
 			D_ERROR("GC run failed: %s\n", d_errstr(rc));
 			break;
 		}
 		total -= creds; /* subtract the remainded credits */
-		if (creds != 0) {
-			break;
-		}
+		if (creds != 0)
+			break; /* reclaimed everything */
 
 		if (credits > 0 && total >= credits)
-			break;
+			break; /* consumed all credits */
 
 		if (dss_xstream_exiting(dxs))
 			break;
@@ -1728,9 +1778,8 @@ dss_gc_run(int credits)
 		ABT_thread_yield();
 	}
 
-	if (total != 0) {
+	if (total != 0) /* did something */
 		D_DEBUG(DB_TRACE, "GC consumed %d credits\n", total);
-	}
 }
 
 static void
@@ -1740,7 +1789,7 @@ dss_gc_ult(void *args)
 
 	 while (!dss_xstream_exiting(dxs)) {
 		/* -1 means GC will run until there is nothing to do */
-		dss_gc_run(-1);
+		dss_gc_run(DAOS_HDL_INVAL, -1);
 		ABT_thread_yield();
 	 }
 }

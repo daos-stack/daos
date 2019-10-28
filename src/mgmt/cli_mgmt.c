@@ -452,10 +452,12 @@ detach_group(bool server, bool pmixless, crt_group_t *group)
 {
 	int rc = 0;
 
-	if (!pmixless)
-		rc = crt_group_detach(group);
-	else if (!server)
-		rc = crt_group_view_destroy(group);
+	if (!server) {
+		if (!pmixless)
+			rc = crt_group_detach(group);
+		else
+			rc = crt_group_view_destroy(group);
+	}
 	D_ASSERTF(rc == 0, "%d\n", rc);
 }
 
@@ -563,7 +565,7 @@ sys_attach(const char *name, int npsrbs, struct psr_buf *psrbs,
 	   struct dc_mgmt_sys **sysp)
 {
 	struct dc_mgmt_sys     *sys;
-	int			rc;
+	int			rc = 0;
 
 	if (name == NULL)
 		name = DAOS_DEFAULT_SYS_NAME;

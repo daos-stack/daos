@@ -36,7 +36,6 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <daos_api.h> /* for daos_prop_alloc/_free() */
-#include <daos_security.h>
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
 #include <daos/rsvc.h>
@@ -95,8 +94,8 @@ write_map_buf(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_buf *buf,
  * version into "map_buf" and "map_version", respectively.
  */
 static int
-read_map_buf(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_buf **buf,
-	     uint32_t *version)
+locate_map_buf(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_buf **buf,
+	       uint32_t *version)
 {
 	uint32_t	ver;
 	d_iov_t	value;
@@ -121,6 +120,26 @@ read_map_buf(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_buf **buf,
 	return 0;
 }
 
+/* Callers are responsible for freeing buf with D_FREE. */
+static int
+read_map_buf(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_buf **buf,
+	     uint32_t *version)
+{
+	struct pool_buf	       *b;
+	size_t			size;
+	int			rc;
+
+	rc = locate_map_buf(tx, kvs, &b, version);
+	if (rc != 0)
+		return rc;
+	size = pool_buf_size(b->pb_nr);
+	D_ALLOC(*buf, size);
+	if (*buf == NULL)
+		return -DER_NOMEM;
+	memcpy(*buf, b, size);
+	return 0;
+}
+
 /* Callers are responsible for destroying the object via pool_map_decref(). */
 static int
 read_map(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_map **map)
@@ -129,7 +148,7 @@ read_map(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_map **map)
 	uint32_t		version;
 	int			rc;
 
-	rc = read_map_buf(tx, kvs, &buf, &version);
+	rc = locate_map_buf(tx, kvs, &buf, &version);
 	if (rc != 0)
 		return rc;
 
@@ -1740,7 +1759,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	struct pool_connect_in	       *in = crt_req_get(rpc);
 	struct pool_connect_out	       *out = crt_reply_get(rpc);
 	struct pool_svc		       *svc;
-	struct pool_buf			*map_buf;
+	struct pool_buf		       *map_buf;
 	uint32_t			map_version;
 	struct rdb_tx			tx;
 	d_iov_t				key;
@@ -1851,18 +1870,6 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 		D_GOTO(out_pool_prop, rc = -DER_NO_PERM);
 	}
 
-	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to read pool map: %d\n",
-			DP_UUID(svc->ps_uuid), rc);
-		D_GOTO(out, rc);
-	}
-
-	rc = transfer_map_buf(map_buf, map_version, svc, rpc, in->pci_map_bulk,
-			      &out->pco_map_buf_size);
-	if (rc != 0)
-		D_GOTO(out_map_version, rc);
-
 	/*
 	 * Transfer the pool map to the client before adding the pool handle,
 	 * so that we don't need to worry about rolling back the transaction
@@ -1871,6 +1878,17 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	 * completes, then we simply return the error and the client will throw
 	 * its pool_buf away.
 	 */
+	rc = locate_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to read pool map: %d\n",
+			DP_UUID(svc->ps_uuid), rc);
+		D_GOTO(out_pool_prop, rc);
+	}
+	rc = transfer_map_buf(map_buf, map_version, svc, rpc, in->pci_map_bulk,
+			      &out->pco_map_buf_size);
+	if (rc != 0)
+		D_GOTO(out_pool_prop, rc);
+
 	if (skip_update)
 		D_GOTO(out_pool_prop, rc = 0);
 
@@ -2156,8 +2174,8 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	uint32_t		map_version;
 	struct pool_svc	       *svc;
 	struct rdb_tx		tx;
-	d_iov_t		key;
-	d_iov_t		value;
+	d_iov_t			key;
+	d_iov_t			value;
 	struct pool_hdl		hdl;
 	int			rc;
 
@@ -2263,7 +2281,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 		}
 	}
 
-	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
+	rc = locate_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to read pool map: %d\n",
 			DP_UUID(svc->ps_uuid), rc);
@@ -2296,6 +2314,124 @@ out:
 	daos_prop_free(prop);
 }
 
+/**
+ * Query a pool's ACL property without having a handle for the pool
+ */
+void
+ds_pool_get_acl_handler(crt_rpc_t *rpc)
+{
+	struct pool_get_acl_in	*in = crt_req_get(rpc);
+	struct pool_get_acl_out	*out = crt_reply_get(rpc);
+	struct pool_svc		*svc;
+	struct rdb_tx		tx;
+	int			rc;
+	daos_prop_t		*prop = NULL;
+
+	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
+		DP_UUID(in->pgi_op.pi_uuid), rpc);
+
+	rc = pool_svc_lookup_leader(in->pgi_op.pi_uuid, &svc,
+				    &out->pgo_op.po_hint);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
+
+	ABT_rwlock_rdlock(svc->ps_lock);
+
+	/* read ACL prop only */
+	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ACL, &prop);
+	if (rc != 0)
+		D_GOTO(out_lock, rc);
+	out->pgo_prop = prop;
+
+out_lock:
+	ABT_rwlock_unlock(svc->ps_lock);
+	rdb_tx_end(&tx);
+out_svc:
+	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pgo_op.po_hint);
+	pool_svc_put_leader(svc);
+out:
+	out->pgo_op.po_rc = rc;
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
+		DP_UUID(in->pgi_op.pi_uuid), rpc, rc);
+	crt_reply_send(rpc);
+	daos_prop_free(prop);
+}
+
+/**
+ * Send a CaRT message to the pool svc to get the ACL pool property.
+ *
+ * \param[in]	pool_uuid	UUID of the pool
+ * \param[in]	ranks		Pool service replicas
+ * \param[out]	prop		ACL pool prop
+ *
+ * \return	0		Success
+ *
+ */
+int
+ds_pool_svc_get_acl_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
+			 daos_prop_t **prop)
+{
+	int			rc;
+	struct rsvc_client	client;
+	crt_endpoint_t		ep;
+	struct dss_module_info	*info = dss_get_module_info();
+	crt_rpc_t		*rpc;
+	struct pool_get_acl_in	*in;
+	struct pool_get_acl_out	*out;
+
+	D_DEBUG(DB_MGMT, DF_UUID": Getting ACL prop\n", DP_UUID(pool_uuid));
+
+	rc = rsvc_client_init(&client, ranks);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+rechoose:
+	ep.ep_grp = NULL; /* primary group */
+	rsvc_client_choose(&client, &ep);
+
+	rc = pool_req_create(info->dmi_ctx, &ep, POOL_GET_ACL, &rpc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create pool get ACL rpc: %d\n",
+			DP_UUID(pool_uuid), rc);
+		D_GOTO(out_client, rc);
+	}
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->pgi_op.pi_uuid, pool_uuid);
+	uuid_clear(in->pgi_op.pi_hdl);
+
+	rc = dss_rpc_send(rpc);
+	out = crt_reply_get(rpc);
+	D_ASSERT(out != NULL);
+
+	rc = rsvc_client_complete_rpc(&client, &ep, rc,
+				      out->pgo_op.po_rc,
+				      &out->pgo_op.po_hint);
+	if (rc == RSVC_CLIENT_RECHOOSE) {
+		crt_req_decref(rpc);
+		dss_sleep(1000 /* ms */);
+		D_GOTO(rechoose, rc);
+	}
+
+	rc = out->pgo_op.po_rc;
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to get ACL for pool: %d\n",
+			DP_UUID(pool_uuid), rc);
+		D_GOTO(out_rpc, rc);
+	}
+
+	*prop = daos_prop_dup(out->pgo_prop, true);
+out_rpc:
+	crt_req_decref(rpc);
+out_client:
+	rsvc_client_fini(&client);
+out:
+	return rc;
+}
 
 static int
 replace_failed_replicas(struct pool_svc *svc, struct pool_map *map)
@@ -2765,8 +2901,9 @@ ds_pool_svc_stop_handler(crt_rpc_t *rpc)
 }
 
 /**
- * update pool map to all servers.
- **/
+ * Get a copy of the latest pool map buffer. Callers are responsible for
+ * freeing iov->iov_buf with D_FREE.
+ */
 int
 ds_pool_map_buf_get(uuid_t uuid, d_iov_t *iov, uint32_t *map_version)
 {

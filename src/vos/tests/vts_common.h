@@ -35,8 +35,15 @@
 #include <daos/object.h>
 #include <daos/tests_lib.h>
 #include <daos_srv/vos.h>
+
 #if D_HAS_WARNING(4, "-Wframe-larger-than")
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="
+#endif
+
+#ifdef DAOS_HAS_VALGRIND
+#include <valgrind/valgrind.h>
+#else
+#define RUNNING_ON_VALGRIND 0
 #endif
 
 #define VPOOL_16M	(16ULL << 20)
@@ -120,5 +127,7 @@ int run_aggregate_tests(bool slow);
 int run_dtx_tests(void);
 int run_gc_tests(void);
 int run_io_test(daos_ofeat_t feats, int keys, bool nest_iterators);
+
+int run_ilog_tests(void);
 
 #endif

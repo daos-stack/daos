@@ -6,20 +6,12 @@
    fun:dc_pool_connect
 }
 {
-   dfuse-htable-not-closed
-   Memcheck:Leak
-   match-leak-kinds: definite
-   fun:calloc
-   fun:dfuse_lookup_inode
-}
-{
    crt_progress_leak
    Memcheck:Leak
    match-leak-kinds: possible
    fun:malloc
    fun:strndup
-   fun:grp_li_uri_set.isra.24
-   fun:grp_lc_uri_insert_internal_locked
+   ...
    fun:crt_grp_lc_uri_insert
 }
 {
@@ -36,21 +28,10 @@
    access-0
    Memcheck:Param
    socketcall.sendto(msg)
+   ...
    fun:send
    fun:sock_comm_send_socket.isra.3
-   fun:sock_pe_progress_tx_entry
-   fun:sock_pe_progress_tx_ctx
-   fun:sock_pe_progress_thread
-   fun:start_thread
-   fun:clone
-}
-{
-   access-2
-   Memcheck:Param
-   socketcall.sendto(msg)
-   fun:send
-   fun:sock_comm_send_socket.isra.3
-   fun:sock_comm_flush
+   ...
    fun:sock_pe_progress_tx_entry
    fun:sock_pe_progress_tx_ctx
    fun:sock_pe_progress_thread
@@ -60,9 +41,8 @@
 {
    dfuse-cont-dfs-leak
    Memcheck:Leak
-   match-leak-kinds: indirect
    fun:calloc
-   fun:dfuse_cont_open
+   fun:dfuse_cont_open*
 }
 {
    pool-connect-leak
@@ -70,16 +50,15 @@
    match-leak-kinds: reachable
    fun:calloc
    fun:d_hash_table_create_inplace
-   fun:pl_htable_init
+   ...
    fun:pl_map_update
    fun:pool_map_update
-   fun:process_query_reply
+   ...
    fun:pool_connect_cp
 }
 {
    dfuse-dfs-leak
    Memcheck:Leak
-   match-leak-kinds: indirect
    fun:calloc
    fun:dfuse_pool_lookup
    fun:df_ll_lookup
@@ -91,6 +70,17 @@
    match-leak-kinds: indirect
    fun:calloc
    ...
-   fun:process_query_reply
+   fun:process_query_reply*
    fun:pool_query_cb
+}
+{
+   cont-open-leak
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:calloc
+   fun:dc_cont_alloc
+   fun:dc_cont_open
+   fun:tse_task_schedule
+   fun:dc_task_schedule
+   fun:daos_cont_open
 }

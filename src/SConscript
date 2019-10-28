@@ -25,9 +25,6 @@ def scons():
         env.Install(os.path.join('$PREFIX', 'include', 'daos_srv'),
                     'include/daos_srv/%s' % header)
 
-    # Add hwloc requires
-    prereqs.require(env, 'hwloc')
-
     # Generate the common libraries used by more than one component
     SConscript('common/SConscript')
     SConscript('bio/SConscript')

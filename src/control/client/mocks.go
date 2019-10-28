@@ -44,9 +44,9 @@ var (
 	MockServers      = Addresses{"1.2.3.4:10000", "1.2.3.5:10001"}
 	MockFeatures     = []*ctlpb.Feature{MockFeaturePB()}
 	MockCtrlrs       = NvmeControllers{MockControllerPB("E2010413")}
-	MockSuccessState = ctlpb.ResponseState{Status: ctlpb.ResponseStatus_CTRL_SUCCESS}
+	MockSuccessState = ctlpb.ResponseState{Status: ctlpb.ResponseStatus_CTL_SUCCESS}
 	MockState        = ctlpb.ResponseState{
-		Status: ctlpb.ResponseStatus_CTRL_ERR_APP,
+		Status: ctlpb.ResponseStatus_CTL_ERR_APP,
 		Error:  "example application error",
 	}
 	MockCtrlrResults = NvmeControllerResults{
@@ -68,6 +68,12 @@ var (
 		&ctlpb.ScmMountResult{
 			Mntpoint: "/mnt/daos",
 			State:    &MockState,
+		},
+	}
+	MockACL = &mockGetACLResult{
+		acl: []string{
+			"A::OWNER@:rw",
+			"A::GROUP@:r",
 		},
 	}
 	MockErr = errors.New("unknown failure")
@@ -180,7 +186,7 @@ func (m *mockMgmtCtlClient) ListFeatures(ctx context.Context, req *ctlpb.EmptyRe
 
 func (m *mockMgmtCtlClient) StoragePrepare(ctx context.Context, req *ctlpb.StoragePrepareReq, o ...grpc.CallOption) (*ctlpb.StoragePrepareResp, error) {
 	// return successful prepare results, state member messages
-	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
 	return &ctlpb.StoragePrepareResp{
 		Nvme: &ctlpb.PrepareNvmeResp{
 			State: &MockSuccessState,
@@ -193,7 +199,7 @@ func (m *mockMgmtCtlClient) StoragePrepare(ctx context.Context, req *ctlpb.Stora
 
 func (m *mockMgmtCtlClient) StorageScan(ctx context.Context, req *ctlpb.StorageScanReq, o ...grpc.CallOption) (*ctlpb.StorageScanResp, error) {
 	// return successful query results, state member messages
-	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
 	return &ctlpb.StorageScanResp{
 		Nvme: &ctlpb.ScanNvmeResp{
 			State:  &MockSuccessState,
@@ -223,6 +229,30 @@ func (m *mockMgmtCtlClient) FetchFioConfigPaths(ctx context.Context, req *ctlpb.
 	return &mgmtCtlFetchFioConfigPathsClient{}, nil
 }
 
+type mgmtCtlNetworkScanDevicesClient struct {
+	grpc.ClientStream
+}
+
+func (m *mgmtCtlNetworkScanDevicesClient) Recv() (*ctlpb.DeviceScanReply, error) {
+	return &ctlpb.DeviceScanReply{}, nil
+}
+
+func (m *mockMgmtCtlClient) NetworkScanDevices(ctx context.Context, in *ctlpb.DeviceScanRequest, o ...grpc.CallOption) (ctlpb.MgmtCtl_NetworkScanDevicesClient, error) {
+	return &mgmtCtlNetworkScanDevicesClient{}, nil
+}
+
+func (m *mockMgmtCtlClient) NetworkListProviders(ctx context.Context, in *ctlpb.ProviderListRequest, o ...grpc.CallOption) (*ctlpb.ProviderListReply, error) {
+	return &ctlpb.ProviderListReply{}, nil
+}
+
+func (m *mockMgmtCtlClient) SystemMemberQuery(ctx context.Context, req *ctlpb.SystemMemberQueryReq, o ...grpc.CallOption) (*ctlpb.SystemMemberQueryResp, error) {
+	return &ctlpb.SystemMemberQueryResp{}, nil
+}
+
+func (m *mockMgmtCtlClient) SystemStop(ctx context.Context, req *ctlpb.SystemStopReq, o ...grpc.CallOption) (*ctlpb.SystemStopResp, error) {
+	return &ctlpb.SystemStopResp{}, nil
+}
+
 func newMockMgmtCtlClient(
 	features []*ctlpb.Feature,
 	ctrlrs NvmeControllers,
@@ -242,18 +272,33 @@ func newMockMgmtCtlClient(
 	}
 }
 
-type mockMgmtSvcClient struct{}
+type mockGetACLResult struct {
+	acl    []string
+	status int32
+	err    error
+}
+
+type mockMgmtSvcClient struct {
+	getACLRet *mockGetACLResult
+}
 
 func (m *mockMgmtSvcClient) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq, o ...grpc.CallOption) (*mgmtpb.PoolCreateResp, error) {
 	// return successful pool creation results
-	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
 	return &mgmtpb.PoolCreateResp{}, nil
 }
 
 func (m *mockMgmtSvcClient) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq, o ...grpc.CallOption) (*mgmtpb.PoolDestroyResp, error) {
 	// return successful pool destroy results
-	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
 	return &mgmtpb.PoolDestroyResp{}, nil
+}
+
+func (m *mockMgmtSvcClient) PoolGetACL(ctx context.Context, req *mgmtpb.GetACLReq, o ...grpc.CallOption) (*mgmtpb.GetACLResp, error) {
+	if m.getACLRet.err != nil {
+		return nil, m.getACLRet.err
+	}
+	return &mgmtpb.GetACLResp{ACL: m.getACLRet.acl, Status: m.getACLRet.status}, nil
 }
 
 func (m *mockMgmtSvcClient) BioHealthQuery(
@@ -263,7 +308,7 @@ func (m *mockMgmtSvcClient) BioHealthQuery(
 ) (*mgmtpb.BioHealthResp, error) {
 
 	// return successful bio health results
-	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
 	return &mgmtpb.BioHealthResp{}, nil
 }
 
@@ -274,8 +319,19 @@ func (m *mockMgmtSvcClient) SmdListDevs(
 ) (*mgmtpb.SmdDevResp, error) {
 
 	// return successful SMD device list
-	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
 	return &mgmtpb.SmdDevResp{}, nil
+}
+
+func (m *mockMgmtSvcClient) SmdListPools(
+	ctx context.Context,
+	req *mgmtpb.SmdPoolReq,
+	o ...grpc.CallOption,
+) (*mgmtpb.SmdPoolResp, error) {
+
+	// return successful SMD pool list
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
+	return &mgmtpb.SmdPoolResp{}, nil
 }
 
 func (m *mockMgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq, o ...grpc.CallOption) (*mgmtpb.JoinResp, error) {
@@ -283,7 +339,7 @@ func (m *mockMgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq, o ...
 	return &mgmtpb.JoinResp{}, nil
 }
 
-func (c *mockMgmtSvcClient) GetAttachInfo(ctx context.Context, in *mgmtpb.GetAttachInfoReq, opts ...grpc.CallOption) (*mgmtpb.GetAttachInfoResp, error) {
+func (m *mockMgmtSvcClient) GetAttachInfo(ctx context.Context, in *mgmtpb.GetAttachInfoReq, opts ...grpc.CallOption) (*mgmtpb.GetAttachInfoResp, error) {
 	return &mgmtpb.GetAttachInfoResp{}, nil
 }
 
@@ -291,8 +347,10 @@ func (m *mockMgmtSvcClient) KillRank(ctx context.Context, req *mgmtpb.DaosRank, 
 	return &mgmtpb.DaosResp{}, nil
 }
 
-func newMockMgmtSvcClient() mgmtpb.MgmtSvcClient {
-	return &mockMgmtSvcClient{}
+func newMockMgmtSvcClient(getACLResult *mockGetACLResult) mgmtpb.MgmtSvcClient {
+	return &mockMgmtSvcClient{
+		getACLResult,
+	}
 }
 
 // implement mock/stub behaviour for Control
@@ -352,12 +410,13 @@ type mockControllerFactory struct {
 	mountResults  ScmMountResults
 	log           logging.Logger
 	// to provide error injection into Control objects
-	scanRet    error
-	formatRet  error
-	updateRet  error
-	burninRet  error
-	killRet    error
-	connectRet error
+	scanRet      error
+	formatRet    error
+	updateRet    error
+	burninRet    error
+	killRet      error
+	connectRet   error
+	getACLResult *mockGetACLResult
 }
 
 func (m *mockControllerFactory) create(address string, cfg *security.TransportConfig) (Control, error) {
@@ -367,7 +426,7 @@ func (m *mockControllerFactory) create(address string, cfg *security.TransportCo
 		m.modules, m.moduleResults, m.pmems, m.mountResults,
 		m.scanRet, m.formatRet, m.updateRet, m.burninRet)
 
-	sClient := newMockMgmtSvcClient()
+	sClient := newMockMgmtSvcClient(m.getACLResult)
 
 	controller := newMockControl(m.log, address, m.state, m.connectRet, cClient, sClient)
 
@@ -381,13 +440,15 @@ func newMockConnect(log logging.Logger,
 	ctrlrResults NvmeControllerResults, modules ScmModules,
 	moduleResults ScmModuleResults, pmems PmemDevices, mountResults ScmMountResults,
 	scanRet error, formatRet error, updateRet error, burninRet error,
-	killRet error, connectRet error) Connect {
+	killRet error, connectRet error, getACLRet *mockGetACLResult) Connect {
 
 	return &connList{
+		log: log,
 		factory: &mockControllerFactory{
 			state, MockFeatures, ctrlrs, ctrlrResults, modules,
-			moduleResults, pmems, mountResults, log, scanRet, formatRet,
-			updateRet, burninRet, killRet, connectRet,
+			moduleResults, pmems, mountResults, log, scanRet,
+			formatRet, updateRet, burninRet, killRet, connectRet,
+			getACLRet,
 		},
 	}
 }
@@ -395,7 +456,8 @@ func newMockConnect(log logging.Logger,
 func defaultMockConnect(log logging.Logger) Connect {
 	return newMockConnect(
 		log, connectivity.Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
-		MockModuleResults, MockPmemDevices, MockMountResults, nil, nil, nil, nil, nil, nil)
+		MockModuleResults, MockPmemDevices, MockMountResults,
+		nil, nil, nil, nil, nil, nil, nil)
 }
 
 // NewClientFM provides a mock ClientFeatureMap for testing.

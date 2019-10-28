@@ -101,7 +101,7 @@ func TestCalcStorage(t *testing.T) {
 	for idx, tt := range tests {
 		t.Run(fmt.Sprintf("%s-%d", t.Name(), idx), func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)()
+			defer ShowBufferOnFailure(t, buf)
 
 			scmBytes, nvmeBytes, err := calcStorage(log, tt.scm, tt.nvme)
 			if tt.errMsg != "" {
@@ -217,12 +217,23 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Destroy pool with force",
-			"pool destroy --uuid 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --force",
+			"pool destroy --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --force",
 			strings.Join([]string{
 				"ConnectClients",
 				fmt.Sprintf("PoolDestroy-%+v", &client.PoolDestroyReq{
 					Uuid:  "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 					Force: true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Get pool ACL",
+			"pool get-acl --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("PoolGetACL-%+v", &client.PoolGetACLReq{
+					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 				}),
 			}, " "),
 			nil,

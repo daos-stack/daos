@@ -65,8 +65,6 @@ extern unsigned int	srv_io_mode;
 
 /** client object shard */
 struct dc_obj_shard {
-	/* Metadata for this shard */
-	uint64_t		do_attr;
 	/** refcount */
 	unsigned int		do_ref;
 	/** object id */
@@ -268,7 +266,6 @@ struct dc_obj_verify_args {
 					 non_exist:1,
 					 data_fetched:1;
 	daos_key_desc_t			 kds[DOVA_NUM];
-	daos_epoch_range_t		 eprs[DOVA_NUM];
 	d_sg_list_t			 list_sgl;
 	d_sg_list_t			 fetch_sgl;
 	daos_anchor_t			 anchor;

@@ -48,6 +48,11 @@
 #include <daos_types.h>
 #include <daos_prop.h>
 
+#ifndef DF_RC
+#define DF_RC "%s(%d)"
+#define DP_RC(rc) d_errstr(rc), rc
+#endif /* DF_RC */
+
 #define DF_OID		DF_U64"."DF_U64
 #define DP_OID(o)	(o).hi, (o).lo
 
@@ -126,7 +131,7 @@ daos_u32_hash(uint64_t key, unsigned int bits)
 static inline uint8_t
 isset_range(uint8_t *bitmap, uint32_t start, uint32_t end)
 {
-	int index;
+	uint32_t index;
 
 	for (index = start; index <= end; ++index)
 		if (isclr(bitmap, index))
@@ -138,7 +143,7 @@ isset_range(uint8_t *bitmap, uint32_t start, uint32_t end)
 static inline void
 clrbit_range(uint8_t *bitmap, uint32_t start, uint32_t end)
 {
-	int index;
+	uint32_t index;
 
 	for (index = start; index <= end; ++index)
 		clrbit(bitmap, index);
@@ -420,6 +425,7 @@ enum {
 	DSS_KEY_FAIL_VALUE,
 	DSS_KEY_FAIL_NUM,
 	DSS_REBUILD_RES_PERCENTAGE,
+	DSS_DISABLE_AGGREGATION,
 	DSS_KEY_NUM,
 };
 
@@ -525,6 +531,8 @@ enum {
 #define DAOS_VC_DIFF_DKEY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x41)
 #define DAOS_VC_LOST_DATA		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x42)
 #define DAOS_VC_LOST_REPLICA		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x43)
+
+#define DAOS_NVME_FAULTY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x50)
 
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
 

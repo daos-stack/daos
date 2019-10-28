@@ -237,6 +237,11 @@ vos_mod_init(void)
 	if (rc)
 		D_ERROR("Failed to register vos trees\n");
 
+	rc = vos_ilog_init();
+	if (rc)
+		D_ERROR("Failed to initialize incarnation log capability\n");
+
+
 	return rc;
 }
 
@@ -285,8 +290,7 @@ vos_nvme_init(void)
 	if (rc != 0 && rc != -DER_EXIST)
 		return rc;
 
-	rc = bio_nvme_init(VOS_STORAGE_PATH, VOS_NVME_CONF, VOS_NVME_SHM_ID,
-			   NULL);
+	rc = bio_nvme_init(VOS_STORAGE_PATH, VOS_NVME_CONF, VOS_NVME_SHM_ID);
 	if (rc)
 		return rc;
 	vsa_nvme_init = true;
@@ -311,6 +315,11 @@ vos_fini_locked(void)
 void
 vos_fini(void)
 {
+	/* Clean up things left behind in standalone mode.
+	 * NB: this function is only defined for standalone mode.
+	 */
+	gc_wait();
+
 	D_MUTEX_LOCK(&mutex);
 
 	D_ASSERT(vos_inited > 0);

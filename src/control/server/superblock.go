@@ -28,8 +28,8 @@ import (
 	"os"
 	"path/filepath"
 
+	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
-	uuid "github.com/satori/go.uuid"
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -126,7 +126,7 @@ func (srv *IOServerInstance) CreateSuperblock(msInfo *mgmtInfo) error {
 		return err
 	}
 
-	u, err := uuid.NewV4()
+	u, err := uuid.NewRandom()
 	if err != nil {
 		return errors.Wrap(err, "Failed to generate instance UUID")
 	}
@@ -153,6 +153,8 @@ func (srv *IOServerInstance) CreateSuperblock(msInfo *mgmtInfo) error {
 		}
 	}
 	srv.setSuperblock(superblock)
+	srv.log.Debugf("creating %s: (rank: %d, uuid: %s)",
+		srv.superblockPath(), superblock.Rank, superblock.UUID)
 
 	return srv.WriteSuperblock()
 }
