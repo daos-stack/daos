@@ -95,6 +95,7 @@ evt_iter_prepare(daos_handle_t toh, unsigned int options,
 	iter->it_filter.fr_ex.ex_lo = 0;
 	iter->it_filter.fr_epr.epr_lo = 0;
 	iter->it_filter.fr_epr.epr_hi = DAOS_EPOCH_MAX;
+	iter->it_filter.fr_punch = 0;
 	if (filter)
 		iter->it_filter = *filter;
  out:
@@ -328,7 +329,7 @@ evt_iter_probe_sorted(struct evt_context *tcx, struct evt_iterator *iter,
 	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, intent, &iter->it_filter,
 				&rtmp, enta);
 	if (rc == 0)
-		rc = evt_ent_array_sort(tcx, enta, flags);
+		rc = evt_ent_array_sort(tcx, enta, &iter->it_filter, flags);
 
 	if (rc != 0)
 		return rc;
@@ -363,6 +364,13 @@ out:
 	return evt_iter_skip_holes(tcx, iter);
 }
 
+static void
+ent_array_reset(struct evt_context *tcx, struct evt_entry_array *ent_array)
+{
+	ent_array->ea_ent_nr = 0;
+	ent_array->ea_inob = tcx->tc_inob;
+}
+
 int
 evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc,
 	       const struct evt_rect *rect, const daos_anchor_t *anchor)
@@ -384,6 +392,7 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc,
 		D_GOTO(out, rc = -DER_NO_HDL);
 
 	enta = &iter->it_entries;
+	ent_array_reset(tcx, enta);
 
 	if (evt_iter_is_sorted(iter))
 		return evt_iter_probe_sorted(tcx, iter, opc, rect, anchor);
@@ -591,6 +600,12 @@ evt_iter_fetch(daos_handle_t ih, unsigned int *inob, struct evt_entry *entry,
 	if (entry)
 		evt_entry_fill(tcx, node, trace->tr_at, NULL,
 			       evt_iter_intent(iter), entry);
+
+	/* There is no visiblity flag for sorted entries but go ahead and set it
+	 * EVT_COVERED if user has specified a punch epoch in the filter
+	 */
+	if (entry->en_epoch <= iter->it_filter.fr_punch)
+		entry->en_visibility = EVT_COVERED;
 set_anchor:
 	*inob = tcx->tc_inob;
 

@@ -26,6 +26,9 @@
  * tests/suite/daos_test_common
  */
 #define D_LOGFAC	DD_FAC(tests)
+
+#include <daos.h>
+#include <daos_prop.h>
 #include "daos_test.h"
 
 /** Server crt group ID */
@@ -33,6 +36,11 @@ const char *server_group;
 
 /** Pool service replicas */
 unsigned int svc_nreplicas = 1;
+
+/** Checksum Config */
+unsigned int	dt_csum_type;
+unsigned int	dt_csum_chunksize;
+bool		dt_csum_server_verify;
 
 static int
 test_setup_pool_create(void **state, struct test_pool *pool, daos_prop_t *prop)
@@ -131,7 +139,7 @@ test_setup_pool_connect(void **state, struct test_pool *pool)
 	}
 
 	if (arg->myrank == 0) {
-		daos_pool_info_t	info;
+		daos_pool_info_t info = {0};
 
 		print_message("setup: connecting to pool\n");
 		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
@@ -252,10 +260,13 @@ int
 test_setup(void **state, unsigned int step, bool multi_rank,
 	   daos_size_t pool_size, struct test_pool *pool)
 {
-	test_arg_t	*arg = *state;
-	struct timeval	 now;
-	unsigned int	 seed;
-	int		 rc = 0;
+	test_arg_t		*arg = *state;
+	struct timeval		 now;
+	unsigned int		 seed;
+	int			 rc = 0;
+	daos_prop_t		 co_props = {0};
+	struct daos_prop_entry	 csum_entry[3] = {0};
+	struct daos_prop_entry	*entry;
 
 	/* feed a seed for pseudo-random number generator */
 	gettimeofday(&now, NULL);
@@ -296,10 +307,40 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		arg->pool.destroyed = false;
 	}
 
-	while (!rc && step != arg->setup_state)
-		rc = test_setup_next_step(state, pool, NULL, NULL);
+	/** Look at variables set by test arguments and setup container props */
+	if (dt_csum_type) {
+		printf("\n-------\nChecksum enabled in test!\n-------\n");
+		entry = &csum_entry[co_props.dpp_nr];
+		entry->dpe_type = DAOS_PROP_CO_CSUM;
+		entry->dpe_val = dt_csum_type;
 
-	 if (rc) {
+		co_props.dpp_nr++;
+	}
+
+	if (dt_csum_chunksize) {
+		entry = &csum_entry[co_props.dpp_nr];
+		entry->dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
+		entry->dpe_val = dt_csum_chunksize;
+		co_props.dpp_nr++;
+	}
+
+	if (dt_csum_server_verify) {
+		entry = &csum_entry[co_props.dpp_nr];
+		entry->dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
+		entry->dpe_val = dt_csum_server_verify ?
+			DAOS_PROP_CO_CSUM_SV_ON :
+			DAOS_PROP_CO_CSUM_SERVER_VERIFY;
+
+		co_props.dpp_nr++;
+	}
+
+	if (co_props.dpp_nr > 0)
+		co_props.dpp_entries = csum_entry;
+
+	while (!rc && step != arg->setup_state)
+		rc = test_setup_next_step(state, pool, NULL, &co_props);
+
+	if (rc) {
 		D_FREE(arg);
 		*state = NULL;
 	}
@@ -309,16 +350,16 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 static int
 pool_destroy_safe(test_arg_t *arg)
 {
-	daos_pool_info_t		 pinfo;
-	daos_handle_t			 poh = arg->pool.poh;
-	int				 rc;
+	daos_pool_info_t	 pinfo = {0};
+	daos_handle_t		 poh = arg->pool.poh;
+	int			 rc;
 
 	if (daos_handle_is_inval(poh)) {
 		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
 				       &arg->pool.svc, DAOS_PC_RW,
 				       &poh, &arg->pool.pool_info,
 				       NULL /* ev */);
-		if (rc != 0) { /* destory straightaway */
+		if (rc != 0) { /* destroy straightaway */
 			print_message("failed to connect pool: %d\n", rc);
 			poh = DAOS_HDL_INVAL;
 		}
@@ -494,7 +535,7 @@ test_runable(test_arg_t *arg, unsigned int required_nodes)
 			ranks_to_kill[i] = arg->srv_nnodes -
 					   disable_nodes - i - 1;
 
-		arg->hce = daos_ts2epoch();
+		arg->hce = crt_hlc_get();
 	}
 
 	MPI_Bcast(&runable, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -540,7 +581,7 @@ test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo)
 static bool
 rebuild_pool_wait(test_arg_t *arg)
 {
-	daos_pool_info_t	   pinfo = { 0 };
+	daos_pool_info_t	   pinfo = {0};
 	struct daos_rebuild_status *rst;
 	int			   rc;
 	bool			   done = false;
@@ -570,7 +611,7 @@ rebuild_pool_wait(test_arg_t *arg)
 int
 test_get_leader(test_arg_t *arg, d_rank_t *rank)
 {
-	daos_pool_info_t	pinfo = { 0 };
+	daos_pool_info_t	pinfo = {0};
 	int			rc;
 
 	rc = test_pool_get_info(arg, &pinfo);

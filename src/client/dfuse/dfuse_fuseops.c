@@ -69,9 +69,7 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 {
 	struct dfuse_projection_info *fs_handle = arg;
 
-	DFUSE_TRA_INFO(fs_handle,
-		       "Fuse configuration for projection id:%d",
-		       fs_handle->dpi_proj.cli_fs_id);
+	DFUSE_TRA_INFO(fs_handle, "Fuse configuration");
 
 	DFUSE_TRA_INFO(fs_handle, "Proto %d %d", conn->proto_major,
 		       conn->proto_minor);
@@ -81,7 +79,7 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	 * set it before reporting the value.
 	 */
 	conn->max_read = fs_handle->dpi_max_read;
-	conn->max_write = fs_handle->dpi_proj.max_write;
+	conn->max_write = fs_handle->dpi_max_read;
 
 	DFUSE_TRA_INFO(fs_handle, "max read %#x", conn->max_read);
 	DFUSE_TRA_INFO(fs_handle, "max write %#x", conn->max_write);
@@ -110,7 +108,6 @@ df_ll_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*parent_inode;
 	d_list_t			*rlink;
-	bool				keep_ref;
 	int				rc;
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &parent, sizeof(parent));
@@ -126,10 +123,10 @@ df_ll_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 		D_GOTO(err, rc = ENOTSUP);
 	}
 
-	keep_ref = parent_inode->ie_dfs->dfs_ops->create(req, parent_inode,
-							  name, mode, fi);
-	if (!keep_ref)
-		d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+	parent_inode->ie_dfs->dfs_ops->create(req, parent_inode, name, mode,
+					      fi);
+
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	return;
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
@@ -220,7 +217,6 @@ df_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*parent_inode;
 	d_list_t			*rlink;
-	bool				keep_ref;
 	int rc;
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &parent, sizeof(parent));
@@ -231,11 +227,9 @@ df_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 
 	parent_inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	keep_ref = parent_inode->ie_dfs->dfs_ops->lookup(req, parent_inode,
-							 name);
+	parent_inode->ie_dfs->dfs_ops->lookup(req, parent_inode, name);
 
-	if (!keep_ref)
-		d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	return;
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
@@ -247,7 +241,6 @@ df_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*parent_inode;
 	d_list_t			*rlink;
-	bool				keep_ref;
 	int				rc;
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &parent, sizeof(parent));
@@ -262,10 +255,9 @@ df_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 		D_GOTO(decref, rc = ENOTSUP);
 	}
 
-	keep_ref = parent_inode->ie_dfs->dfs_ops->mkdir(req, parent_inode,
-							name, mode);
-	if (!keep_ref)
-		d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+	parent_inode->ie_dfs->dfs_ops->mkdir(req, parent_inode,	name, mode);
+
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 	return;
 decref:
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
@@ -682,6 +674,7 @@ struct fuse_lowlevel_ops
 	fuse_ops->write		= dfuse_cb_write;
 	fuse_ops->read		= dfuse_cb_read;
 	fuse_ops->readlink	= dfuse_cb_readlink;
+	fuse_ops->ioctl		= dfuse_cb_ioctl;
 
 	return fuse_ops;
 }

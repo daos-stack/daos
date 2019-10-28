@@ -5,7 +5,7 @@
 
 Name:          daos
 Version:       0.6.0
-Release:       3%{?relval}%{?dist}
+Release:       9%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -14,49 +14,80 @@ Source0:       %{name}-%{version}.tar.gz
 Source1:       scons_local-%{version}.tar.gz
 
 BuildRequires: scons
-BuildRequires: cart-devel
+BuildRequires: gcc-c++
+%if %{defined cart_sha1}
+BuildRequires: cart-devel-%{cart_sha1}
+%else
+BuildRequires: cart-devel <= 1.0.0
+%endif
+%if (0%{?rhel} >= 7)
 BuildRequires: argobots-devel >= 1.0rc1
+%else
+BuildRequires: libabt-devel >= 1.0rc1
+%endif
 BuildRequires: libpmem-devel, libpmemobj-devel
 BuildRequires: fuse-devel >= 3.4.2
 BuildRequires: protobuf-c-devel
 BuildRequires: spdk-devel, spdk-tools
 BuildRequires: fio < 3.4
+%if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
-BuildRequires: raft-devel
-BuildRequires: mercury-devel
-BuildRequires: openpa-devel
-BuildRequires: libfabric-devel
-BuildRequires: openssl-devel
-BuildRequires: ompi-devel
-BuildRequires: pmix-devel
+%else
+BuildRequires: libisal-devel
+%endif
+BuildRequires: raft-devel <= 0.5.0
 BuildRequires: hwloc-devel
+BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
 BuildRequires: libcmocka-devel
 BuildRequires: readline-devel
+BuildRequires: valgrind-devel
+BuildRequires: systemd
 %if (0%{?rhel} >= 7)
-BuildRequires:  numactl-devel
+BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
 BuildRequires: golang-bin
 BuildRequires: libipmctl-devel
 BuildRequires: python-devel python36-devel
 %else
 %if (0%{?suse_version} >= 1315)
-BuildRequires:  libnuma-devel
+# see src/client/dfs/SConscript for why we need /etc/os-release
+# that code should be rewritten to use the python libraries provided for
+# os detection
+BuildRequires: distribution-release
+BuildRequires: libnuma-devel
 BuildRequires: cunit-devel
 BuildRequires: go1.10
 BuildRequires: ipmctl-devel
 BuildRequires: python-devel python3-devel
-%endif
-%endif
-Requires: cart
-Requires: argobots >= 1.0rc1
+%if 0%{?is_opensuse}
+# have choice for boost-devel needed by cart-devel: boost-devel boost_1_58_0-devel
+BuildRequires: boost-devel
+%else
+# have choice for libcurl.so.4()(64bit) needed by systemd: libcurl4 libcurl4-mini
+# have choice for libcurl.so.4()(64bit) needed by cmake: libcurl4 libcurl4-mini
+BuildRequires: libcurl4
+# have choice for libpsm_infinipath.so.1()(64bit) needed by libfabric1: libpsm2-compat libpsm_infinipath1
+# have choice for libpsm_infinipath.so.1()(64bit) needed by openmpi-libs: libpsm2-compat libpsm_infinipath1
+BuildRequires: libpsm_infinipath1
+%endif # 0%{?is_opensuse}
+# have choice for libpmemblk.so.1(LIBPMEMBLK_1.0)(64bit) needed by fio: libpmemblk libpmemblk1
+# have choice for libpmemblk.so.1()(64bit) needed by fio: libpmemblk libpmemblk1
+BuildRequires: libpmemblk1
+%endif # (0%{?suse_version} >= 1315)
+%endif # (0%{?rhel} >= 7)
 Requires: libpmem, libpmemobj
 Requires: fuse >= 3.4.2
 Requires: protobuf-c
 Requires: spdk
 Requires: fio < 3.4
 Requires: openssl
+# ensure we get exactly the right cart RPM
+%if %{defined cart_sha1}
+Requires: cart-%{cart_sha1}
+%endif
+
 
 %description
 The Distributed Asynchronous Object Storage (DAOS) is an open-source
@@ -73,8 +104,14 @@ to optimize performance and cost.
 Summary: The DAOS server
 Requires: %{name} = %{version}-%{release}
 Requires: spdk-tools
+Requires: ndctl
+Requires: ipmctl
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
+# ensure we get exactly the right cart RPM
+%if %{defined cart_sha1}
+Requires: cart-%{cart_sha1}
+%endif
 
 %description server
 This is the package needed to run a DAOS server
@@ -82,6 +119,10 @@ This is the package needed to run a DAOS server
 %package client
 Summary: The DAOS client
 Requires: %{name} = %{version}-%{release}
+# ensure we get exactly the right cart RPM
+%if %{defined cart_sha1}
+Requires: cart-%{cart_sha1}
+%endif
 
 %description client
 This is the package needed to run a DAOS client
@@ -92,6 +133,10 @@ Requires: %{name}-client = %{version}-%{release}
 Requires: python-pathlib
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
+%endif
+# ensure we get exactly the right cart RPM
+%if %{defined cart_sha1}
+Requires: cart-%{cart_sha1}
 %endif
 
 
@@ -137,12 +182,12 @@ mv %{?buildroot}%{_prefix}/{TESTING,lib/%{name}/}
 cp -al ftest.sh src/tests/ftest %{?buildroot}%{daoshome}/TESTING
 find %{?buildroot}%{daoshome}/TESTING/ftest -name \*.py[co] -print0 | xargs -r0 rm -f
 #ln %{?buildroot}%{daoshome}/{TESTING/.build_vars,.build_vars-Linux}.sh
-mkdir -p %{?buildroot}%{daoshome}/utils/py
-cp -al src/utils/py/daos_api.py %{?buildroot}%{daoshome}/utils/py
-cp -al src/utils/py/daos_cref.py %{?buildroot}%{daoshome}/utils/py
-cp -al src/utils/py/conversion.py %{?buildroot}%{daoshome}/utils/py
+mkdir -p %{?buildroot}%{daoshome}/utils
 mkdir -p %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
+mkdir -p %{?buildroot}/%{_unitdir}
+install -m 644 utils/systemd/daos-server.service %{?buildroot}/%{_unitdir}
+install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 
 %post server -p /sbin/ldconfig
 %postun server -p /sbin/ldconfig
@@ -161,13 +206,16 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_bindir}/rdbt
 %{_bindir}/vos_size.py
 %{_libdir}/libvos.so
+%dir %{_prefix}%{_sysconfdir}
 %{_prefix}%{_sysconfdir}/vos_dfs_sample.yaml
 %{_prefix}%{_sysconfdir}/vos_size_input.yaml
 %{_libdir}/libdaos_common.so
 # TODO: this should move to %{_libdir}/daos/libplacement.so
 %{_libdir}/daos_srv/libplacement.so
 # Certificate generation files
+%dir %{daoshome}
 %{daoshome}/certgen/
+%{daoshome}/VERSION
 %doc
 
 %files server
@@ -175,6 +223,7 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_bindir}/daos_server
 %{_bindir}/daos_io_server
+%dir %{_libdir}/daos_srv
 %{_libdir}/daos_srv/libcont.so
 %{_libdir}/daos_srv/libdtx.so
 %{_libdir}/daos_srv/libmgmt.so
@@ -187,8 +236,11 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_libdir}/daos_srv/libsecurity.so
 %{_libdir}/daos_srv/libvos_srv.so
 %{_datadir}/%{name}
+%exclude %{_datadir}/%{name}/ioil-ld-opts
+%{_unitdir}/daos-server.service
 
 %files client
+%{_prefix}/etc/memcheck-daos-client.supp
 %{_bindir}/daos_shell
 %{_bindir}/daosctl
 %{_bindir}/dcont
@@ -202,23 +254,41 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_libdir}/libduns.so
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
-%{_libdir}/python2.7/site-packages/pydaos_shim_27.so
-%{_libdir}/python3/site-packages/pydaos_shim_3.so
+%dir  %{_libdir}/python2.7/site-packages/pydaos
+%{_libdir}/python2.7/site-packages/pydaos/*.py
+%{_libdir}/python2.7/site-packages/pydaos/*.pyc
+%{_libdir}/python2.7/site-packages/pydaos/*.pyo
+%{_libdir}/python2.7/site-packages/pydaos/pydaos_shim_27.so
+%dir  %{_libdir}/python2.7/site-packages/pydaos/raw
+%{_libdir}/python2.7/site-packages/pydaos/raw/*.py
+%{_libdir}/python2.7/site-packages/pydaos/raw/*.pyc
+%{_libdir}/python2.7/site-packages/pydaos/raw/*.pyo
+%dir %{_libdir}/python3
+%dir %{_libdir}/python3/site-packages
+%dir %{_libdir}/python3/site-packages/pydaos
+%{_libdir}/python3/site-packages/pydaos/*.py
+%{_libdir}/python3/site-packages/pydaos/*.pyc
+%{_libdir}/python3/site-packages/pydaos/*.pyo
+%{_libdir}/python3/site-packages/pydaos/pydaos_shim_3.so
+%dir %{_libdir}/python3/site-packages/pydaos/raw
+%{_libdir}/python3/site-packages/pydaos/raw/*.py
+%{_libdir}/python3/site-packages/pydaos/raw/*.pyc
+%{_libdir}/python3/site-packages/pydaos/raw/*.pyo
 %{_datadir}/%{name}/ioil-ld-opts
 %{_prefix}%{_sysconfdir}/daos.yml
 %{_prefix}%{_sysconfdir}/daos_agent.yml
+%{_unitdir}/daos-agent.service
 
 %files tests
-%{daoshome}/utils/py
+%dir %{daoshome}/utils
 %{daoshome}/TESTING
 %{_bindir}/hello_drpc
 %{_bindir}/*_test*
-%{_bindir}/io_conf/daos_io_conf_1
-%{_bindir}/io_conf/daos_io_conf_2
 %{_bindir}/smd_ut
 %{_bindir}/vea_ut
 %{_bindir}/daosbench
 %{_bindir}/daos_perf
+%{_bindir}/daos_racer
 %{_bindir}/evt_ctl
 %{_bindir}/obj_ctl
 %{_bindir}/daos_gen_io_conf
@@ -230,6 +300,29 @@ echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 %{_libdir}/*.a
 
 %changelog
+* Wed Oct 23 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-9
+- Update BR: libisal-devel for Leap
+
+* Mon Oct 07 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-8
+- Use BR: cart-devel-%{cart_sha1} if available
+- Remove cart's BRs as it's -devel Requires them now
+
+* Tue Oct 01 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-7
+- Constrain cart BR to <= 1.0.0
+
+* Sat Sep 21 2019 Brian J. Murrell <brian.murrell@intel.com>
+- Remove Requires: {argobots, cart}
+  - autodependencies should take care of these
+
+* Thu Sep 19 2019 Jeff Olivier <jeffrey.v.olivier@intel.com>
+- Add valgrind-devel requirement for argobots change
+
+* Tue Sep 10 2019 Tom Nabarro <tom.nabarro@intel.com>
+- Add requires ndctl as runtime dep for control plane.
+
+* Thu Aug 15 2019 David Quigley <david.quigley@intel.com>
+- Add systemd unit files to packaging.
+
 * Thu Jul 25 2019 Brian J. Murrell <brian.murrell@intel.com>
 - Add git hash and commit count to release
 

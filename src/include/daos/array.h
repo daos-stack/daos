@@ -32,6 +32,8 @@ int dc_array_create(tse_task_t *task);
 int dc_array_open(tse_task_t *task);
 int dc_array_close(tse_task_t *task);
 int dc_array_destroy(tse_task_t *task);
+int dc_array_get_attr(daos_handle_t oh, daos_size_t *chunk_size,
+		      daos_size_t *cell_size);
 int dc_array_read(tse_task_t *task);
 int dc_array_write(tse_task_t *task);
 int dc_array_punch(tse_task_t *task);

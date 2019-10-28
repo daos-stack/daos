@@ -37,6 +37,7 @@
 #include <daos/kv.h>
 #include <daos/btree.h>
 #include <daos/btree_class.h>
+#include <daos/placement.h>
 #include "task_internal.h"
 #include <pthread.h>
 
@@ -44,6 +45,7 @@ static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;
 static bool		module_initialized;
 
 const struct daos_task_api dc_funcs[] = {
+	/** Managment */
 	{dc_mgmt_svc_rip, sizeof(daos_svc_rip_t)},
 	{dc_pool_create, sizeof(daos_pool_create_t)},
 	{dc_pool_destroy, sizeof(daos_pool_destroy_t)},
@@ -52,6 +54,8 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_mgmt_set_params, sizeof(daos_set_params_t)},
 	{dc_pool_add_replicas, sizeof(daos_pool_replicas_t)},
 	{dc_pool_remove_replicas, sizeof(daos_pool_replicas_t)},
+
+	/** Pool */
 	{dc_pool_connect, sizeof(daos_pool_connect_t)},
 	{dc_pool_disconnect, sizeof(daos_pool_disconnect_t)},
 	{dc_pool_exclude, sizeof(daos_pool_update_t)},
@@ -63,6 +67,8 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_pool_get_attr, sizeof(daos_pool_get_attr_t)},
 	{dc_pool_set_attr, sizeof(daos_pool_set_attr_t)},
 	{dc_pool_stop_svc, sizeof(daos_pool_stop_svc_t)},
+
+	/** Container */
 	{dc_cont_create, sizeof(daos_cont_create_t)},
 	{dc_cont_open, sizeof(daos_cont_open_t)},
 	{dc_cont_close, sizeof(daos_cont_close_t)},
@@ -78,11 +84,15 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_cont_list_snap, sizeof(daos_cont_list_snap_t)},
 	{dc_cont_create_snap, sizeof(daos_cont_create_snap_t)},
 	{dc_cont_destroy_snap, sizeof(daos_cont_destroy_snap_t)},
+
+	/** Transaction */
 	{dc_tx_open, sizeof(daos_tx_open_t)},
 	{dc_tx_commit, sizeof(daos_tx_commit_t)},
 	{dc_tx_abort, sizeof(daos_tx_abort_t)},
 	{dc_tx_open_snap, sizeof(daos_tx_open_snap_t)},
 	{dc_tx_close, sizeof(daos_tx_close_t)},
+
+	/** Object */
 	{dc_obj_register_class, sizeof(daos_obj_register_class_t)},
 	{dc_obj_query_class, sizeof(daos_obj_query_class_t)},
 	{dc_obj_list_class, sizeof(daos_obj_list_class_t)},
@@ -93,19 +103,27 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_obj_punch_akeys, sizeof(daos_obj_punch_t)},
 	{dc_obj_query, sizeof(daos_obj_query_t)},
 	{dc_obj_query_key, sizeof(daos_obj_query_key_t)},
+	{dc_obj_sync, sizeof(struct daos_obj_sync_args)},
 	{dc_obj_fetch_shard, sizeof(struct daos_obj_fetch_shard)},
 	{dc_obj_fetch, sizeof(daos_obj_fetch_t)},
 	{dc_obj_update, sizeof(daos_obj_update_t)},
 	{dc_obj_list_dkey, sizeof(daos_obj_list_dkey_t)},
 	{dc_obj_list_akey, sizeof(daos_obj_list_akey_t)},
 	{dc_obj_list_rec, sizeof(daos_obj_list_recx_t)},
+	{dc_obj_list_obj, sizeof(daos_obj_list_obj_t)},
+
+	/** Array */
 	{dc_array_create, sizeof(daos_array_create_t)},
 	{dc_array_open, sizeof(daos_array_open_t)},
 	{dc_array_close, sizeof(daos_array_close_t)},
+	{dc_array_destroy, sizeof(daos_array_destroy_t)},
 	{dc_array_read, sizeof(daos_array_io_t)},
 	{dc_array_write, sizeof(daos_array_io_t)},
+	{dc_array_punch, sizeof(daos_array_io_t)},
 	{dc_array_get_size, sizeof(daos_array_get_size_t)},
 	{dc_array_set_size, sizeof(daos_array_set_size_t)},
+
+	/** HL */
 	{dc_kv_get, sizeof(daos_kv_get_t)},
 	{dc_kv_put, sizeof(daos_kv_put_t)},
 	{dc_kv_remove, sizeof(daos_kv_remove_t)},
@@ -140,10 +158,15 @@ daos_init(void)
 		D_GOTO(out_hhash, rc);
 	}
 
+	/** set up placement */
+	rc = pl_init();
+	if (rc != 0)
+		goto out_eq;
+
 	/** set up management interface */
 	rc = dc_mgmt_init();
 	if (rc != 0)
-		D_GOTO(out_eq, rc);
+		D_GOTO(out_pl, rc);
 
 	/** set up pool */
 	rc = dc_pool_init();
@@ -176,6 +199,8 @@ out_pool:
 	dc_pool_fini();
 out_mgmt:
 	dc_mgmt_fini();
+out_pl:
+	pl_fini();
 out_eq:
 	daos_eq_lib_fini();
 out_hhash:
@@ -211,6 +236,7 @@ daos_fini(void)
 	dc_mgmt_fini();
 	dc_agent_fini();
 
+	pl_fini();
 	daos_hhash_fini();
 	daos_debug_fini();
 	module_initialized = false;

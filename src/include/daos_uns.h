@@ -45,9 +45,11 @@ struct duns_attr_t {
 	/** Container layout (POSIX, HDF5) */
 	daos_cont_layout_t	da_type;
 	/** Default Object Class for all objects in the container */
-	daos_oclass_id_t	da_oclass;
+	daos_oclass_id_t	da_oclass_id;
 	/** Default Chunks size for all files in container */
 	daos_size_t		da_chunk_size;
+	/** Path is on Lustre */
+	bool			da_on_lustre;
 };
 
 /**
@@ -59,10 +61,8 @@ struct duns_attr_t {
  * container. This is to be used in a unified namespace solution to be able to
  * map a path in the unified namespace to a location in the DAOS tier.
  *
+ * \param[in]	poh	Pool handle
  * \param[in]	path	Valid path in an existing namespace.
- * \param[in]	sysname	DAOS system name.
- * \param[in]	svcl	DAOS pool service ranks list.
- *			NOTE: svcl is temporary and will be removed.
  * \param[in/out]
  *		attr	Struct containing the attributes. The uuid of the
  *			container created is returned in da_cuuid.
@@ -70,8 +70,8 @@ struct duns_attr_t {
  * \return		0 on Success. Negative on Failure.
  */
 int
-duns_link_path(const char *path, const char *sysname,
-	       d_rank_list_t *svcl, struct duns_attr_t *attrp);
+duns_create_path(daos_handle_t poh, const char *path,
+		 struct duns_attr_t *attrp);
 
 /**
  * Retrieve the extended attributes on a path corresponding to DAOS location and
@@ -85,6 +85,27 @@ duns_link_path(const char *path, const char *sysname,
 int
 duns_resolve_path(const char *path, struct duns_attr_t *attr);
 
+/**
+ * Destroy a container and remove the path associated with it in the UNS.
+ *
+ * \param[in]	poh	Pool handle
+ * \param[in]	path	Valid path in an existing namespace.
+ *
+ * \return		0 on Success. Negative on Failure.
+ */
+int
+duns_destroy_path(daos_handle_t poh, const char *path);
+
+/**
+ * If dynamicaly resolved, will point to the llapi_unlink_foreign() Lustre
+ * API, which needs to be used to remove foreign DAOS file/dir.
+ *
+ * \param[in]	path	Valid path in an existing Lustre namespace.
+ *
+ * \return		0 on Success. Negative on Failure.
+ */
+extern int
+(*unlink_foreign)(char *);
 
 #if defined(__cplusplus)
 }

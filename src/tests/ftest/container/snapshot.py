@@ -27,9 +27,8 @@ import traceback
 import random
 import string
 from apricot import TestWithServers
-from conversion import c_uuid_to_str
-from daos_api import (DaosPool, DaosContainer, DaosSnapshot,
-                      DaosApiError)
+from pydaos.raw import (DaosPool, DaosContainer, DaosSnapshot,
+                        DaosApiError, c_uuid_to_str)
 
 # pylint: disable=broad-except
 class Snapshot(TestWithServers):
@@ -98,30 +97,6 @@ class Snapshot(TestWithServers):
         if self.container.get_uuid_str() != c_uuid_to_str(
                 self.container.info.ci_uuid):
             self.fail("##Container UUID did not match the one in info.")
-
-    def tearDown(self):
-        """
-        tear down method
-        """
-        try:
-            if self.container:
-                self.container.close()
-
-            if self.container:
-                self.container.destroy()
-
-            # cleanup the pool
-            if self.pool:
-                self.pool.disconnect()
-                self.pool.destroy(1)
-
-        except DaosApiError as excep:
-            self.log.info(excep)
-            self.log.info(traceback.format_exc())
-            self.fail("##Snapshot test failed on cleanUp.")
-
-        finally:
-            super(Snapshot, self).tearDown()
 
     def display_snapshot(self, snapshot):
         """

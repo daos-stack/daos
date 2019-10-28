@@ -166,6 +166,28 @@ dc_obj_query_key_task_create(daos_handle_t oh, daos_handle_t th,
 	return 0;
 }
 
+int
+dc_obj_sync_task_create(daos_handle_t oh, daos_epoch_t epoch,
+			daos_epoch_t **epochs_p, int *nr, daos_event_t *ev,
+			tse_sched_t *tse, tse_task_t **task)
+{
+	struct daos_obj_sync_args	*args;
+	int				 rc;
+
+	DAOS_API_ARG_ASSERT(*args, OBJ_SYNC);
+	rc = dc_task_create(dc_obj_sync, tse, ev, task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(*task);
+	args->oh	= oh;
+	args->epoch	= epoch;
+	args->epochs_p	= epochs_p;
+	args->nr	= nr;
+
+	return 0;
+}
+
 static void
 dc_obj_fetch_task_fill_args(daos_obj_fetch_t *args, daos_handle_t oh,
 			    daos_handle_t th, daos_key_t *dkey, unsigned int nr,
@@ -348,7 +370,7 @@ int
 dc_obj_list_obj_task_create(daos_handle_t oh, daos_handle_t th,
 			    daos_key_t *dkey, daos_key_t *akey,
 			    daos_size_t *size, uint32_t *nr,
-			    daos_key_desc_t *kds, daos_epoch_range_t *eprs,
+			    daos_key_desc_t *kds,
 			    d_sg_list_t *sgl, daos_anchor_t *anchor,
 			    daos_anchor_t *dkey_anchor,
 			    daos_anchor_t *akey_anchor,
@@ -370,7 +392,6 @@ dc_obj_list_obj_task_create(daos_handle_t oh, daos_handle_t th,
 	args->size	= size;
 	args->nr	= nr;
 	args->kds	= kds;
-	args->eprs	= eprs;
 	args->sgl	= sgl;
 	args->anchor	= anchor;
 	args->dkey_anchor = dkey_anchor;

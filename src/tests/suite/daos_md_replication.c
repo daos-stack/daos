@@ -34,7 +34,7 @@ mdr_stop_pool_svc(void **argv)
 	test_arg_t	       *arg = *argv;
 	uuid_t			uuid;
 	daos_handle_t		poh;
-	daos_pool_info_t	info;
+	daos_pool_info_t	info = {0};
 	bool			skip = false;
 	int			rc;
 

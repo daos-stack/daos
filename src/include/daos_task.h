@@ -101,6 +101,7 @@ typedef enum {
 	DAOS_OPC_OBJ_PUNCH_AKEYS,
 	DAOS_OPC_OBJ_QUERY,
 	DAOS_OPC_OBJ_QUERY_KEY,
+	DAOS_OPC_OBJ_SYNC,
 	DAOS_OPC_OBJ_FETCH_SHARD,
 	DAOS_OPC_OBJ_FETCH,
 	DAOS_OPC_OBJ_UPDATE,
@@ -435,6 +436,13 @@ struct daos_obj_fetch_shard {
 	daos_obj_fetch_t	base;
 	unsigned int		flags;
 	unsigned int		shard;
+};
+
+struct daos_obj_sync_args {
+	daos_handle_t		oh;
+	daos_epoch_t		epoch;
+	daos_epoch_t		**epochs_p;
+	int			*nr;
 };
 
 typedef struct {

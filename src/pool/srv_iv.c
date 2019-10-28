@@ -334,8 +334,12 @@ pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf, uint32_t map_ver)
 	iv_entry->piv_pool_map_ver = map_ver;
 	memcpy(&iv_entry->piv_map.piv_pool_buf, buf, pool_buf_size(buf->pb_nr));
 
+	/* FIXME: Let's update the pool map synchronously for the moment,
+	 * since there is no easy way to free the iv_entry buffer. Needs
+	 * to revisit here once pool/cart_group/IV is upgraded.
+	 */
 	rc = pool_iv_update(pool->sp_iv_ns, IV_POOL_MAP, iv_entry, size,
-			    CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_LAZY);
+			    CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_EAGER);
 
 	/* Some nodes ivns does not exist, might because of the disconnection,
 	 * let's ignore it

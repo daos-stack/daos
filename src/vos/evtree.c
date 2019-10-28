@@ -22,6 +22,7 @@
  */
 #define D_LOGFAC	DD_FAC(vos)
 
+#include <daos/checksum.h>
 #include "evt_priv.h"
 #include "vos_internal.h"
 
@@ -220,13 +221,6 @@ evt_ent_array_fini(struct evt_entry_array *ent_array)
 
 /** When we go over the embedded limit, set a minimum allocation */
 #define EVT_MIN_ALLOC 4096
-
-static void
-ent_array_reset(struct evt_context *tcx, struct evt_entry_array *ent_array)
-{
-	ent_array->ea_ent_nr = 0;
-	ent_array->ea_inob = tcx->tc_inob;
-}
 
 static bool
 ent_array_resize(struct evt_context *tcx, struct evt_entry_array *ent_array,
@@ -569,8 +563,8 @@ evt_truncate_next(struct evt_context *tcx, struct evt_entry_array *ent_array,
 }
 
 static int
-evt_find_visible(struct evt_context *tcx, struct evt_entry_array *ent_array,
-		 int *num_visible)
+evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
+		 struct evt_entry_array *ent_array, int *num_visible)
 {
 	struct evt_extent	*this_ext;
 	struct evt_extent	*next_ext;
@@ -582,17 +576,30 @@ evt_find_visible(struct evt_context *tcx, struct evt_entry_array *ent_array,
 	d_list_t		*current;
 	d_list_t		*next;
 	bool			 insert;
+	daos_epoch_t		 punched_epoch = filter ? filter->fr_punch : 0;
 	int			 rc = 0;
 
-	/* reset the linked list.  We'll reconstruct it */
 	D_INIT_LIST_HEAD(&covered);
 	*num_visible = 0;
 
-	/* Now place all entries sorted in covered list */
+	/* Some of the entries may be punched by a key.  We don't need to
+	 * consider such entries for the visibility algorithm and can mark them
+	 * covered to start.   All other entries are placed into the sorted list
+	 * to be considered in the visibility algorithm.
+	 */
 	evt_ent_array_for_each(this_ent, ent_array) {
 		next = evt_array_entry2link(this_ent);
+
+		if (punched_epoch >= this_ent->en_epoch) {
+			this_ent->en_visibility = EVT_COVERED;
+			continue;
+		}
+
 		d_list_add_tail(next, &covered);
 	}
+
+	if (d_list_empty(&covered))
+		return 0;
 
 	/* Now uncover entries */
 	current = covered.next;
@@ -705,7 +712,7 @@ evt_find_visible(struct evt_context *tcx, struct evt_entry_array *ent_array,
  */
 int
 evt_ent_array_sort(struct evt_context *tcx, struct evt_entry_array *ent_array,
-		   int flags)
+		   const struct evt_filter *filter, int flags)
 {
 	struct evt_list_entry	*ents;
 	struct evt_entry	*ent;
@@ -719,8 +726,13 @@ evt_ent_array_sort(struct evt_context *tcx, struct evt_entry_array *ent_array,
 
 	if (ent_array->ea_ent_nr == 1) {
 		ent = evt_ent_array_get(ent_array, 0);
-		ent->en_visibility = EVT_VISIBLE;
-		num_visible = 1;
+		num_visible = 0;
+		if (filter && filter->fr_punch >= ent->en_epoch) {
+			ent->en_visibility = EVT_COVERED;
+		} else {
+			num_visible = 1;
+			ent->en_visibility = EVT_VISIBLE;
+		}
 		goto re_sort;
 	}
 
@@ -732,7 +744,7 @@ evt_ent_array_sort(struct evt_context *tcx, struct evt_entry_array *ent_array,
 		      evt_ent_list_cmp);
 
 		/* Now separate entries into covered and visible */
-		rc = evt_find_visible(tcx, ent_array, &num_visible);
+		rc = evt_find_visible(tcx, filter, ent_array, &num_visible);
 
 		if (rc != 0) {
 			if (rc == -DER_AGAIN)
@@ -899,7 +911,7 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 		D_ERROR("Bad sort policy specified: 0x%x\n", policy);
 		D_GOTO(failed, rc = -DER_INVAL);
 	}
-	D_DEBUG(DB_IO, "EVTree sort policy is 0x%x\n", policy);
+	D_DEBUG(DB_TRACE, "EVTree sort policy is 0x%x\n", policy);
 
 	/* Initialize the embedded iterator entry array.  This is a minor
 	 * optimization if the iterator is used more than once
@@ -1321,7 +1333,7 @@ evt_root_empty(struct evt_context *tcx)
 static int
 evt_root_tx_add(struct evt_context *tcx)
 {
-	void	*root;
+	struct evt_root	*root;
 
 	if (!evt_has_tx(tcx))
 		return 0;
@@ -1398,7 +1410,7 @@ evt_root_activate(struct evt_context *tcx, const struct evt_entry_in *ent)
 	root->tr_depth = 1;
 	if (inob != 0)
 		tcx->tc_inob = root->tr_inob = inob;
-	if (daos_csum_isvalid(csum)) {
+	if (dcb_is_valid(csum)) {
 		/**
 		 * csum len, type, and chunksize will be a configuration stored
 		 * in the container meta data. for now trust the entity checksum
@@ -1786,6 +1798,7 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry)
 	filter.fr_ex = entry->ei_rect.rc_ex;
 	filter.fr_epr.epr_lo = entry->ei_rect.rc_epc;
 	filter.fr_epr.epr_hi = entry->ei_rect.rc_epc;
+	filter.fr_punch = 0;
 	/* Phase-1: Check for overwrite */
 	rc = evt_ent_array_fill(tcx, EVT_FIND_OVERWRITE, DAOS_INTENT_UPDATE,
 				&filter, &entry->ei_rect, &ent_array);
@@ -1831,9 +1844,9 @@ out:
 
 /** Fill the entry with the extent at the specified position of \a node */
 void
-evt_entry_fill(struct evt_context *tcx, struct evt_node *node,
-	       unsigned int at, const struct evt_rect *rect_srch,
-	       uint32_t intent, struct evt_entry *entry)
+evt_entry_fill(struct evt_context *tcx, struct evt_node *node, unsigned int at,
+	       const struct evt_rect *rect_srch, uint32_t intent,
+	       struct evt_entry *entry)
 {
 	struct evt_desc	   *desc;
 	struct evt_rect	   *rect;
@@ -1901,8 +1914,6 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 	if (tcx->tc_root->tr_depth == 0)
 		return 0; /* empty tree */
 
-	if (ent_array == &tcx->tc_iter.it_entries)
-		ent_array_reset(tcx, ent_array);
 	evt_tcx_reset_trace(tcx);
 
 	level = at = 0;
@@ -2111,6 +2122,8 @@ evt_find(daos_handle_t toh, const daos_epoch_range_t *epr,
 	struct evt_rect		 rect;
 	int			 rc;
 
+	D_ASSERT(epr != NULL || extent != NULL);
+
 	tcx = evt_hdl2tcx(toh);
 	if (tcx == NULL)
 		return -DER_NO_HDL;
@@ -2118,12 +2131,13 @@ evt_find(daos_handle_t toh, const daos_epoch_range_t *epr,
 	evt_ent_array_init(ent_array);
 	rect.rc_ex = filter.fr_ex = *extent;
 	filter.fr_epr = *epr;
+	filter.fr_punch = 0;
 	rect.rc_epc = epr->epr_hi;
 
 	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, DAOS_INTENT_DEFAULT,
 				&filter, &rect, ent_array);
 	if (rc == 0)
-		rc = evt_ent_array_sort(tcx, ent_array, EVT_VISIBLE);
+		rc = evt_ent_array_sort(tcx, ent_array, NULL, EVT_VISIBLE);
 	if (rc != 0)
 		evt_ent_array_fini(ent_array);
 	return rc;
@@ -2189,8 +2203,8 @@ evt_open(struct evt_root *root, struct umem_attr *uma,
 	int		    rc;
 
 	if (root->tr_order == 0) {
-		V_TRACE(DB_TRACE, "Tree order is zero\n");
-		return -DER_INVAL;
+		V_TRACE(DB_TRACE, "Nonexistent tree.\n");
+		return -DER_NONEXIST;
 	}
 
 	rc = evt_tcx_create(root, -1, -1, uma, cbs, &tcx);
@@ -2953,6 +2967,7 @@ int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
 	filter.fr_ex = rect->rc_ex;
 	filter.fr_epr.epr_lo = rect->rc_epc;
 	filter.fr_epr.epr_hi = rect->rc_epc;
+	filter.fr_punch = 0;
 	rc = evt_ent_array_fill(tcx, EVT_FIND_SAME, DAOS_INTENT_PUNCH,
 				&filter, rect, &ent_array);
 	if (rc != 0)
@@ -2985,23 +3000,6 @@ int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
 }
 
 daos_size_t
-csum_chunk_count(uint32_t chunk_size, daos_off_t lo, daos_off_t hi,
-		 daos_off_t inob)
-{
-	if (chunk_size == 0)
-		return 0;
-	lo *= inob;
-	hi *= inob;
-
-	/** Align to chunk size */
-	lo = lo - lo % chunk_size;
-	hi = hi + chunk_size - hi % chunk_size;
-	daos_off_t width = hi - lo;
-
-	return width / chunk_size;
-}
-
-daos_size_t
 evt_csum_count(const struct evt_context *tcx,
 	       const struct evt_extent *extent)
 {
@@ -3023,11 +3021,20 @@ void
 evt_desc_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 		   const struct evt_entry_in *ent)
 {
-	const daos_csum_buf_t *csum = &ent->ei_csum;
-	daos_size_t csum_buf_len = evt_csum_buf_len(tcx, &ent->ei_rect.rc_ex);
+	const daos_csum_buf_t	*csum = &ent->ei_csum;
+	daos_size_t		 csum_buf_len;
 
-	D_ASSERT(csum->cs_buf_len >= csum_buf_len);
-	memcpy(desc->pt_csum, csum->cs_csum, csum_buf_len);
+	if (!dcb_is_valid(csum))
+		return;
+
+	csum_buf_len = evt_csum_buf_len(tcx, &ent->ei_rect.rc_ex);
+	if (csum->cs_buf_len < csum_buf_len) {
+		D_ERROR("Issue copying checksum. Source (%d) is "
+			"larger than destination (%"PRIu64")",
+			csum->cs_buf_len, csum_buf_len);
+	} else {
+		memcpy(desc->pt_csum, csum->cs_csum, csum_buf_len);
+	}
 }
 
 void

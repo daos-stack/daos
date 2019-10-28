@@ -66,8 +66,7 @@ def run_agent(basepath, server_list, client_list=None):
     user = getpass.getuser()
 
     # if empty client list, 'self' is effectively client
-    if client_list is None:
-        client_list = [socket.gethostname().split('.', 1)[0]]
+    client_list = include_local_host(client_list)
 
     # Verify the domain socket directory is present and owned by this user
     file_checks = (
@@ -88,13 +87,14 @@ def run_agent(basepath, server_list, client_list=None):
 
     for client in client_list:
         sessions[client] = subprocess.Popen(
-            ["ssh", client, "{} -i".format(daos_agent_bin)],
+            ["ssh", client, "-o ConnectTimeout=10",
+             "{} -i".format(daos_agent_bin)],
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            stderr=subprocess.STDOUT
         )
 
     # double check agent launched successfully
-    timeout = 5
+    timeout = 15
     started_clients = []
     for client in client_list:
         file_desc = sessions[client].stdout.fileno()
@@ -139,6 +139,24 @@ def run_agent(basepath, server_list, client_list=None):
     return sessions
 
 
+def include_local_host(hosts):
+    """Ensure the local host is included in the specified host list.
+
+    Args:
+        hosts (list): list of hosts
+
+    Returns:
+        list: list of hosts including the local host
+
+    """
+    local_host = socket.gethostname().split('.', 1)[0]
+    if hosts is None:
+        hosts = [local_host]
+    elif local_host not in hosts:
+        hosts.append(local_host)
+    return hosts
+
+
 def stop_agent(sessions, client_list=None):
     """Kill ssh and the agent.
 
@@ -155,8 +173,7 @@ def stop_agent(sessions, client_list=None):
 
     """
     # if empty client list, 'self' is effectively client
-    if client_list is None:
-        client_list = [socket.gethostname().split('.', 1)[0]]
+    client_list = include_local_host(client_list)
 
     # Kill the agents processes
     pcmd(client_list, "pkill daos_agent", False)

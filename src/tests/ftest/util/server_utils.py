@@ -35,9 +35,11 @@ import signal
 import fcntl
 import errno
 import yaml
+import getpass
 
 from avocado.utils import genio
-from general_utils import pcmd
+from general_utils import pcmd, get_file_path
+from command_utils import ObjectWithParameters, BasicParameter
 
 SESSIONS = {}
 
@@ -49,100 +51,185 @@ class ServerFailed(Exception):
     """Server didn't start/stop properly."""
 
 
-def set_nvme_mode(default_value_set, bdev, enabled=False):
-    """Enable/Disable NVMe Mode.
+class DaosServerConfig(ObjectWithParameters):
+    """Defines the daos_server configuration yaml parameters."""
 
-    NVMe is enabled by default in yaml file.So disable it for CI runs.
+    class SingleServerConfig(ObjectWithParameters):
+        """Defines the configuration yaml parameters for a single server."""
 
-    Args:
-        default_value_set (dict): dictionary of default values
-        bdev (str): block device name
-        enabled (bool, optional): enable NVMe. Defaults to False.
-    """
-    if 'bdev_class' in default_value_set['servers'][0]:
-        if (default_value_set['servers'][0]['bdev_class'] == bdev and
-                not enabled):
-            del default_value_set['servers'][0]['bdev_class']
-    if enabled:
-        default_value_set['servers'][0]['bdev_class'] = bdev
+        def __init__(self):
+            """Create a SingleServerConfig object."""
+            super(DaosServerConfig.SingleServerConfig, self).__init__(
+                "/run/server_config/servers/*")
 
+            # Parameters
+            #   targets:                count of VOS targets
+            #   first_core:             starting index for targets
+            #   nr_xs_helpers:          offload helpers per target
+            #   fabric_iface:           map to OFI_INTERFACE=eth0
+            #   fabric_iface_port:      map to OFI_PORT=31416
+            #   log_mask:               map to D_LOG_MASK env
+            #   log_file:               map to D_LOG_FILE env
+            #   env_vars:               influences DAOS IO Server behaviour
+            #       Add to enable scalable endpoint:
+            #           - CRT_CREDIT_EP_CTX=0
+            #           - CRT_CTX_SHARE_ADDR=1
+            #           - CRT_CTX_NUM=8
+            #       nvme options:
+            #           - IO_STAT_PERIOD=10
+            self.targets = BasicParameter(None, 8)
+            self.first_core = BasicParameter(None, 0)
+            self.nr_xs_helpers = BasicParameter(None, 2)
+            self.fabric_iface = BasicParameter(None, "eth0")
+            self.fabric_iface_port = BasicParameter(None, 31416)
+            self.log_mask = BasicParameter(None, "DEBUG,RPC=ERR,MEM=ERR")
+            self.log_file = BasicParameter(None, "/tmp/server.log")
+            self.env_vars = BasicParameter(
+                None,
+                ["ABT_ENV_MAX_NUM_XSTREAMS=100",
+                 "ABT_MAX_NUM_XSTREAMS=100",
+                 "DAOS_MD_CAP=1024",
+                 "CRT_CTX_SHARE_ADDR=0",
+                 "CRT_TIMEOUT=30",
+                 "FI_SOCKETS_MAX_CONN_RETRY=1",
+                 "FI_SOCKETS_CONN_TIMEOUT=2000"]
+            )
 
-def create_server_yaml(basepath):
-    """Create the DAOS server config YAML file based on Avocado test Yaml file.
+            # Storage definition parameters:
+            #
+            # When scm_class is set to ram, tmpfs will be used to emulate SCM.
+            #   scm_mount: /mnt/daos        - map to -s /mnt/daos
+            #   scm_class: ram
+            #   scm_size: 6                 - size in GB units
+            #
+            # When scm_class is set to dcpm, scm_list is the list of device
+            # paths for AppDirect pmem namespaces (currently only one per
+            # server supported).
+            #   scm_class: dcpm
+            #   scm_list: [/dev/pmem0]
+            #
+            # If using NVMe SSD (will write /mnt/daos/daos_nvme.conf and start
+            # I/O service with -n <path>)
+            #   bdev_class: nvme
+            #   bdev_list: ["0000:81:00.0"] - generate regular nvme.conf
+            #
+            # If emulating NVMe SSD with malloc devices
+            #   bdev_class: malloc          - map to VOS_BDEV_CLASS=MALLOC
+            #   bdev_size: 4                - malloc size of each device in GB.
+            #   bdev_number: 1              - generate nvme.conf as follows:
+            #       [Malloc]
+            #       NumberOfLuns 1
+            #       LunSizeInMB 4000
+            #
+            # If emulating NVMe SSD over kernel block device
+            #   bdev_class: kdev            - map to VOS_BDEV_CLASS=AIO
+            #   bdev_list: [/dev/sdc]       - generate nvme.conf as follows:
+            #       [AIO]
+            #       AIO /dev/sdc AIO2
+            #
+            # If emulating NVMe SSD with backend file
+            #   bdev_class: file            - map to VOS_BDEV_CLASS=AIO
+            #   bdev_size: 16               - file size in GB. Create file if
+            #                                 it does not exist.
+            #   bdev_list: [/tmp/daos-bdev] - generate nvme.conf as follows:
+            #       [AIO]
+            #       AIO /tmp/aiofile AIO1 4096
+            self.scm_mount = BasicParameter(None, "/mnt/daos")
+            self.scm_class = BasicParameter(None, "ram")
+            self.scm_size = BasicParameter(None, 6)
+            self.scm_list = BasicParameter(None)
+            self.bdev_class = BasicParameter(None)
+            self.bdev_list = BasicParameter(None)
+            self.bdev_size = BasicParameter(None)
+            self.bdev_number = BasicParameter(None)
 
-    Args:
-        basepath (str): DAOS install basepath
+    def __init__(self):
+        """Create a DaosServerConfig object."""
+        super(DaosServerConfig, self).__init__("/run/server_config/*")
 
-    Raises:
-        ServerFailed: if there is an reading/writing yaml files
+        # Parameters
+        self.name = BasicParameter(None, "daos_server")
+        self.port = BasicParameter(None, 10001)
+        self.provider = BasicParameter(None, "ofi+sockets")
+        self.socket_dir = BasicParameter(None)          # /tmp/daos_sockets
+        self.nr_hugepages = BasicParameter(None, 4096)
+        self.control_log_mask = BasicParameter(None, "DEBUG")
+        self.control_log_file = BasicParameter(None, "/tmp/daos_control.log")
 
-    """
-    # Read the baseline conf file data/daos_server_baseline.yml
-    try:
-        with open('{}/{}'.format(basepath, DEFAULT_FILE), 'r') as read_file:
-            default_value_set = yaml.safe_load(read_file)
-    except Exception as excpn:
-        print("<SERVER> Exception occurred: {0}".format(str(excpn)))
-        traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
-        raise ServerFailed(
-            "Failed to Read {}/{}".format(basepath, DEFAULT_FILE))
+        # Used to drop privileges before starting data plane
+        # (if started as root to perform hardware provisioning)
+        self.user_name = BasicParameter(None)           # e.g. 'daosuser'
+        self.group_name = BasicParameter(None)          # e.g. 'daosgroup'
 
-    # Read the values from avocado_testcase.yaml file if test ran with Avocado.
-    new_value_set = {}
-    if "AVOCADO_TEST_DATADIR" in os.environ:
-        avocado_yaml_file = str(os.environ["AVOCADO_TEST_DATADIR"]).\
-                                split(".")[0] + ".yaml"
+        # Single server config parameters
+        self.server_params = [self.SingleServerConfig()]
 
-        # Read avocado test yaml file.
+    def get_params(self, test):
+        """Get values for all of the command params from the yaml file.
+
+        If no key matches are found in the yaml file the BasicParameter object
+        will be set to its default value.
+
+        Args:
+            test (Test): avocado Test object
+        """
+        super(DaosServerConfig, self).get_params(test)
+        for server_params in self.server_params:
+            server_params.get_params(test)
+
+    def update_log_file(self, name, index=0):
+        """Update the logfile parameter for the daos server.
+
+        Args:
+            name (str): new log file name and path
+            index (int, optional): server parameter index to update.
+                Defaults to 0.
+        """
+        self.server_params[index].log_file.update(name, "log_file")
+
+    def create_yaml(self, filename):
+        """Create a yaml file from the parameter values.
+
+        Args:
+            filename (str): the yaml file to create
+        """
+        # Convert the parameters into a dictionary to write a yaml file
+        yaml_data = {"servers": []}
+        for name in self.get_param_names():
+            value = getattr(self, name).value
+            if value is not None and value is not False:
+                yaml_data[name] = getattr(self, name).value
+        for index in range(len(self.server_params)):
+            yaml_data["servers"].append({})
+            for name in self.server_params[index].get_param_names():
+                value = getattr(self.server_params[index], name).value
+                if value is not None and value is not False:
+                    yaml_data["servers"][index][name] = value
+
+        # Write default_value_set dictionary in to AVOCADO_FILE
+        # This will be used to start with daos_server -o option.
         try:
-            with open(avocado_yaml_file, 'r') as rfile:
-                filedata = rfile.read()
-            # Remove !mux for yaml load
-            new_value_set = yaml.safe_load(filedata.replace('!mux', ''))
-        except Exception as excpn:
-            print("<SERVER> Exception occurred: {0}".format(str(excpn)))
-            traceback.print_exception(
-                excpn.__class__, excpn, sys.exc_info()[2])
+            with open(filename, 'w') as write_file:
+                yaml.dump(yaml_data, write_file, default_flow_style=False)
+        except Exception as error:
+            print("<SERVER> Exception occurred: {0}".format(error))
             raise ServerFailed(
-                "Failed to Read {}".format('{}.tmp'.format(avocado_yaml_file)))
-
-    # Update values from avocado_testcase.yaml in DAOS yaml variables.
-    if new_value_set:
-        for key in new_value_set['server_config']:
-            if key in default_value_set['servers'][0]:
-                default_value_set['servers'][0][key] = \
-                    new_value_set['server_config'][key]
-            elif key in default_value_set:
-                default_value_set[key] = new_value_set['server_config'][key]
-
-    # Disable NVMe from baseline data/daos_server_baseline.yml
-    set_nvme_mode(default_value_set, "nvme")
-
-    # Write default_value_set dictionary in to AVOCADO_FILE
-    # This will be used to start with daos_server -o option.
-    try:
-        with open('{}/{}'.format(basepath,
-                                 AVOCADO_FILE), 'w') as write_file:
-            yaml.dump(default_value_set, write_file, default_flow_style=False)
-    except Exception as excpn:
-        print("<SERVER> Exception occurred: {0}".format(str(excpn)))
-        traceback.print_exception(excpn.__class__, excpn, sys.exc_info()[2])
-        raise ServerFailed("Failed to Write {}/{}".format(basepath,
-                                                          AVOCADO_FILE))
+                "Error writing daos_server command yaml file {}: {}".format(
+                    filename, error))
 
 
-def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
+def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
                clean=True):
     """Launch DAOS servers in accordance with the supplied hostfile.
 
     Args:
+        test (Test): avocado Test object
         hostfile (str): hostfile defining on which hosts to start servers
         setname (str): session name
-        basepath (str): DAOS install basepath
         uri_path (str, optional): path to uri file. Defaults to None.
         env_dict (dict, optional): dictionary on env variable names and values.
             Defaults to None.
-        clean (bool, optional): remove files in /mnt/daos. Defaults to True.
+        clean (bool, optional): clean the mount point. Defaults to True.
 
     Raises:
         ServerFailed: if there is an error starting the servers
@@ -157,54 +244,62 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
         # Create the DAOS server configuration yaml file to pass
         # with daos_server -o <FILE_NAME>
         print("Creating the server yaml file")
-        create_server_yaml(basepath)
+        server_yaml = os.path.join(test.basepath, AVOCADO_FILE)
+        server_config = DaosServerConfig()
+        server_config.get_params(test)
+        if hasattr(test, "server_log"):
+            server_config.update_log_file(test.server_log)
+        server_config.create_yaml(server_yaml)
 
         # first make sure there are no existing servers running
         print("Removing any existing server processes")
         kill_server(servers)
 
         # clean the tmpfs on the servers
-        print("Cleaning the server tmpfs directories")
-        result = pcmd(
-            servers,
-            "find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | "
-            "xargs -0r rm -rf",
-            verbose=False)
-        if len(result) > 1 or 0 not in result:
-            raise ServerFailed(
-                "Error cleaning tmpfs on servers: {}".format(
-                    ", ".join(
-                        [str(result[key]) for key in result if key != 0])))
+        if clean:
+            print("Cleaning the server tmpfs directories")
+            result = pcmd(
+                servers,
+                "find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | "
+                "xargs -0r rm -rf",
+                verbose=False)
+            if len(result) > 1 or 0 not in result:
+                raise ServerFailed(
+                    "Error cleaning tmpfs on servers: {}".format(
+                        ", ".join(
+                            [str(result[key]) for key in result if key != 0])))
 
         # Pile of build time variables
-        with open(os.path.join(basepath, ".build_vars.json")) as json_vars:
+        with open(os.path.join(test.basepath, ".build_vars.json")) as json_vars:
             build_vars = json.load(json_vars)
-        orterun_bin = os.path.join(build_vars["OMPI_PREFIX"], "bin", "orterun")
-        daos_srv_bin = os.path.join(build_vars["PREFIX"], "bin", "daos_server")
 
-        env_args = []
+        server_cmd = [
+            os.path.join(build_vars["OMPI_PREFIX"], "bin", "orterun"),
+            "--np", str(server_count)]
+        if uri_path is not None:
+            server_cmd.extend(["--report-uri", uri_path])
+        server_cmd.extend(["--hostfile", hostfile, "--enable-recovery"])
+
         # Add any user supplied environment
         if env_dict is not None:
             for key, value in env_dict.items():
                 os.environ[key] = value
-                env_args.extend(["-x", "{}={}".format(key, value)])
+                server_cmd.extend(["-x", "{}={}".format(key, value)])
+
         # the remote orte needs to know where to find daos, in the
         # case that it's not in the system prefix
         # but it should already be in our PATH, so just pass our
         # PATH along to the remote
         if build_vars["PREFIX"] != "/usr":
-            env_args.extend(["-x", "PATH"])
-
-        server_cmd = [orterun_bin, "--np", str(server_count)]
-        if uri_path is not None:
-            server_cmd.extend(["--report-uri", uri_path])
-        server_cmd.extend(["--hostfile", hostfile, "--enable-recovery"])
-        server_cmd.extend(env_args)
+            server_cmd.extend(["-x", "PATH"])
 
         # Run server in insecure mode until Certificate tests are in place
-        server_cmd.extend([daos_srv_bin, "-i",
-                           "-a", os.path.join(basepath, "install", "tmp"),
-                           "-o", '{}/{}'.format(basepath, AVOCADO_FILE)])
+        server_cmd.extend(
+            [os.path.join(build_vars["PREFIX"], "bin", "daos_server"),
+             "--debug",
+             "--config", server_yaml,
+             "start", "-i",
+             "-a", os.path.join(test.basepath, "install", "tmp")])
 
         print("Start CMD>>>>{0}".format(' '.join(server_cmd)))
 
@@ -220,8 +315,8 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
         fcntl.fcntl(fdesc, fcntl.F_SETFL, fstat | os.O_NONBLOCK)
         timeout = 600
         start_time = time.time()
-        result = 0
-        pattern = "DAOS I/O server"
+        matches = 0
+        pattern = "DAOS I/O server.*started"
         expected_data = "Starting Servers\n"
         while True:
             output = ""
@@ -233,11 +328,11 @@ def run_server(hostfile, setname, basepath, uri_path=None, env_dict=None,
                 continue
             match = re.findall(pattern, output)
             expected_data += output
-            result += len(match)
-            if not output or result == server_count or \
+            matches += len(match)
+            if not output or matches == server_count or \
                time.time() - start_time > timeout:
                 print("<SERVER>: {}".format(expected_data))
-                if result != server_count:
+                if matches != server_count:
                     raise ServerFailed("Server didn't start!")
                 break
         print(
@@ -349,3 +444,34 @@ def kill_server(hosts):
     ]
     # Intentionally ignoring the exit status of the command
     pcmd(hosts, "; ".join(kill_cmds), False, None, None)
+
+
+def storage_prepare(hosts):
+    """
+    Prepare the storage on servers using the DAOS server's yaml settings file.
+    Args:
+        hosts (str): a string of comma-separated host names
+    Raises:
+        ServerFailed: if server failed to prepare storage
+    """
+    daos_srv_bin = get_file_path("bin/daos_server")
+    cmd = ("sudo {} storage prepare -n --target-user=\"{}\" --hugepages=4096 -f"
+           .format(daos_srv_bin[0], getpass.getuser()))
+    result = pcmd(hosts, cmd, timeout=120)
+    if len(result) > 1 or 0 not in result:
+        raise ServerFailed("Error preparing NVMe storage")
+
+
+def storage_reset(hosts):
+    """
+    Reset the Storage on servers using the DAOS server's yaml settings file.
+    Args:
+        hosts (str): a string of comma-separated host names
+    Raises:
+        ServerFailed: if server failed to reset storage
+    """
+    daos_srv_bin = get_file_path("bin/daos_server")
+    cmd = "sudo {} storage prepare -n --reset -f".format(daos_srv_bin[0])
+    result = pcmd(hosts, cmd)
+    if len(result) > 1 or 0 not in result:
+        raise ServerFailed("Error resetting NVMe storage")

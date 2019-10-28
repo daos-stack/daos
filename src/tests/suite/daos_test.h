@@ -75,6 +75,11 @@ extern const char *server_group;
 /** Pool service replicas */
 extern unsigned int svc_nreplicas;
 
+/** Checksum Type & info*/
+extern unsigned int dt_csum_type;
+extern unsigned int dt_csum_chunksize;
+extern bool dt_csum_server_verify;
+
 /* the temporary IO dir*/
 extern char *test_io_dir;
 /* the IO conf file*/
@@ -113,7 +118,8 @@ struct epoch_io_args {
 	/* cached dkey/akey used last time, so need not specify it every time */
 	char			*op_dkey;
 	char			*op_akey;
-	int			op_no_verify:1;
+	int			op_no_verify:1,
+				op_ec:1; /* true for EC, false for replica */
 };
 
 typedef struct {
@@ -268,6 +274,11 @@ int run_daos_oid_alloc_test(int rank, int size);
 int run_daos_degraded_test(int rank, int size);
 int run_daos_rebuild_test(int rank, int size, int *tests, int test_size);
 int run_daos_dtx_test(int rank, int size, int *tests, int test_size);
+int run_daos_vc_test(int rank, int size, int *tests, int test_size);
+int run_daos_checksum_test(int rank, int size);
+int run_daos_fs_test(int rank, int size, int *tests, int test_size);
+int run_daos_nvme_recov_test(int rank, int size, int *sub_tests,
+			     int sub_tests_size);
 
 void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 		      d_rank_list_t *svc, d_rank_t rank);

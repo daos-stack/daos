@@ -2,7 +2,7 @@
 
 A DAOS pool is a storage reservation that can span any storage nodes and
 is managed by the administrator. The amount of space allocated to a pool
-is decided at creation time and can be eventually expanded through the
+is decided at creation time and can eventually be expanded through the
 management interface.
 
 ## Pool Creation/Destroy
@@ -12,8 +12,9 @@ A DAOS pool can be created and destroyed through the DAOS management API
 storage pools from the command line.
 
 **To create a pool:**
-
-    orterun --ompi-server file:${urifile} dmg create --size=xxG –nvme=yyT
+```
+$ dmg create --size=xxG --nvme=yyT
+```
 
 This command creates a pool distributed across the DAOS servers with a
 target size on each server with xxGB of SCM and yyTB of NVMe storage.
@@ -23,15 +24,19 @@ located (referred as ${svcl}).
 
 The typical output of this command is as follows:
 
-    orterun --ompi-server file:${urifile} dmg create --size=xxG –nvme=yyT
-    4056fb6d-9fca-4f2d-af8a-cfd57d92a92d 1:2
+```
+$ dmg create --size=xxG --nvme=yyT
+4056fb6d-9fca-4f2d-af8a-cfd57d92a92d 1:2
+```
 
 This created a pool with UUID 4056fb6d-9fca-4f2d-af8a-cfd57d92a92d with
 two pool service replica on rank 1 and 2.
 
 **To destroy a pool:**
 
-    orterun --ompi-server file:${urifile} dmg destroy --pool=${puuid}
+```
+$ dmg destroy --pool=${puuid}
+```
 
 ## Pool Properties
 
@@ -39,17 +44,17 @@ At creation time, a list of pool properties can be specified through the
 API (not supported by the tool yet):
 
 -   DAOS_PROP_CO_LABEL is a string that the administrator can
-    associated with a pool. e.g. “project A”, “project B”, “IO500 test
-    pool”
+    associate with a pool. e.g., project A, project B, IO500 test
+    pool
 
--   DAOS_PROP_PO_ACL are access control list (ACL) associated with
+-   DAOS_PROP_PO_ACL is the access control list (ACL) associated with
     the pool
 
 -   DAOS_PROP_PO_SPACE_RB is the space to be reserved on each target
     for rebuild purpose.
 
 -   DAOS_PROP_PO_SELF_HEAL defines whether the pool wants
-    automatically-trigger or manually-triggered self-healing.
+    automatically-trigger, or manually-triggered self-healing.
 
 -   DAOS_PROP_PO_RECLAIM is used to tune the space reclaim strategy
     based on time interval, batched commits or snapshot creation.
@@ -57,22 +62,111 @@ API (not supported by the tool yet):
 While those pool properties are currently stored persistently with pool
 metadata, many of them are still under development. Moreover, the
 ability to modify some of those properties on an existing pool will also
-be eventually provided.
+be provided in a future release.
 
-## Pool ACLs
+## Pool Access Control Lists
 
-Support for per-pool Access Control Lists (ACLs) is under development
-and is scheduled for DAOS v1.0. DAOS ACLs will implement a subset of the
-NFSv4 ACL standard. This feature will be documented here once available.
+User and group access for pools is controlled by Access Control Lists (ACLs).
+A DAOS ACL is a list of zero or more Access Control Entries (ACEs). ACEs are
+the individual rules applied to each access decision.
 
-The pool query operation retrieves information (i.e. number of targets,
-space usage, rebuild status, property list, …) about a created pool. It
+If no ACL is provided when creating the pool, the default ACL grants read and
+write access to the pool's owner-user and owner-group.
+
+### Access Control Entries
+
+ACEs are designated by a colon-separated string format:
+`TYPE:FLAGS:IDENTITY:PERMISSIONS`
+
+Available values for these fields:
+
+* TYPE: Allow (A)
+* FLAGS: Group (G)
+* IDENTITY: See below
+* PERMISSIONS: Read (r), Write (w)
+
+#### Identity
+
+The identity (also called the principal) is specified in the name@domain format.
+The domain should be left off if the name is a user/group on the local domain.
+Currently, this is the only case supported by DAOS.
+
+There are three special identities, `OWNER@`, `GROUP@` and `EVERYONE@`,
+which align with User, Group, and Other from traditional POSIX permission bits.
+When providing them in the ACE string format, they must be spelled exactly as
+written here, in uppercase with no domain appended.
+
+#### Examples
+
+* `A::daos_user@:rw`
+  * Allow the UNIX user named daos_user to have read-write access
+* `A:G:project_users@:r`
+  * Allow anyone in the UNIX group project_users to have read-only access
+* `A::EVERYONE@:r`
+  * Allow any user not covered by other rules to have read-only access
+
+### Enforcement
+
+Access Control Entries (ACEs) will be enforced in the following order:
+
+* Owner-User
+* Named users
+* Owner-Group and named groups
+* Everyone
+
+In general, enforcement will be based on the first match, ignoring
+lower-priority entries. For example, if the user has an ACE for their user
+identity, they will not receive the permissions for any of their groups, even if
+those group entries have broader permissions than the user entry does. The user
+is expected to match at most one user entry.
+
+If no matching user entry is found, but entries match one or more of the user's
+groups, enforcement will be based on the union of the permissions of all
+matching groups.
+
+By default, if a user matches no ACEs in the list, access will be denied.
+
+### Creating a pool with a custom ACL
+
+To create a pool with a custom ACL:
+
+```
+$ daos_shell pool create --scm-size <size> --acl-file <path>
+```
+
+The ACL file is expected to be a text file with one ACE listed on each line. For
+example:
+
+```
+A::OWNER@:rw
+A:G:GROUP@:rw
+```
+
+### Displaying a pool's ACL
+
+To view a pool's ACL:
+
+```
+$ daos_shell pool get-acl --pool <UUID>
+```
+
+The output is in the same string format used in the ACL file during creation,
+with one ACE per line.
+
+### Modifying a pool's ACL
+
+TODO
+
+## Pool Query
+The pool query operation retrieves information (i.e., the number of targets,
+space usage, rebuild status, property list, and more) about a created pool. It
 is integrated into the dmg utility.
 
 **To query a pool:**
 
-    orterun --ompi-server file:${urifile} dmg query --svc=${svcl}
-    --pool=${puuid}
+```
+$ dmg query --svc=${svcl} --pool=${puuid}
+```
 
 Below is the output for a pool created with SCM space only.
 
@@ -111,12 +205,13 @@ the management API and tool and will be documented here once available.
 
 ## Pool Modifications
 
-### Target Exclusion & Self-Healing
+### Target Exclusion and Self-Healing
 
 **To exclude a target from a pool:**
 
-    orterun --ompi-server file:${urifile} dmg exclude --svc=${svcl}
-    --pool=${puuid} –target=${rank}
+```
+$ dmg exclude --svc=${svcl} --pool=${puuid} --target=${rank}
+```
 
 ### Pool Extension
 
@@ -137,7 +232,7 @@ managed by PMDK and SPDK blobs on SSDs. Tools to verify and repair this
 persistent data is scheduled for DAOS v2.4 and will be documented here
 once available.
 
-Meanwhile, PMDK provides a recovery tool (i.e. pmempool check) to verify
-and possibly repair a pmemobj file. As show in the previous section, the
+Meanwhile, PMDK provides a recovery tool (i.e., pmempool check) to verify
+and possibly repair a pmemobj file. As discussed in the previous section, the
 rebuild status can be consulted via the pool query and will be expanded
 with more information.

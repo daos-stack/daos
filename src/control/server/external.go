@@ -38,7 +38,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
-	log "github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 const (
@@ -68,6 +68,7 @@ type External interface {
 	lookupGroup(string) (*user.Group, error)
 	listGroups(*user.User) ([]string, error)
 	chownR(string, int, int) error
+	checkSudo() (bool, string)
 	getHistory() []string
 }
 
@@ -83,6 +84,7 @@ func errPermsAnnotate(err error) (e error) {
 }
 
 type ext struct {
+	log     logging.Logger
 	history []string
 }
 
@@ -95,7 +97,7 @@ func (e *ext) getHistory() []string {
 func (e *ext) runCommand(cmd string) error {
 	e.history = append(e.history, fmt.Sprintf(msgCmd, cmd))
 
-	return common.Run(cmd)
+	return common.Run(e.log, cmd)
 }
 
 // writeToFile wraps around common.WriteString and writes input string to given
@@ -123,10 +125,10 @@ func (e *ext) createEmpty(path string, size int64) error {
 	defer file.Close()
 
 	if err := syscall.Fallocate(int(file.Fd()), 0, 0, size); err != nil {
-		e, ok := err.(syscall.Errno)
-		if ok && (e == syscall.ENOSYS || e == syscall.EOPNOTSUPP) {
-			log.Debugf(
-				"Warning: Fallocate not supported, attempting Truncate: ", e)
+		errno, ok := err.(syscall.Errno)
+		if ok && (errno == syscall.ENOSYS || errno == syscall.EOPNOTSUPP) {
+			e.log.Debugf(
+				"Warning: Fallocate not supported, attempting Truncate: %s", errno)
 
 			if err := file.Truncate(size); err != nil {
 				return err
@@ -143,7 +145,7 @@ func (e *ext) mount(
 
 	op := fmt.Sprintf(msgMount, dev, mount, mntType, fmt.Sprint(flags), opts)
 
-	log.Debugf(op)
+	e.log.Debug(op)
 	e.history = append(e.history, op)
 
 	if flags == 0 {
@@ -159,7 +161,7 @@ func (e *ext) mount(
 
 // isMountPoint checks if path is likely to be a mount point.straiowhotenoul
 func (e *ext) isMountPoint(path string) (bool, error) {
-	log.Debugf(msgIsMountPoint, path)
+	e.log.Debugf(msgIsMountPoint, path)
 	e.history = append(e.history, fmt.Sprintf(msgIsMountPoint, path))
 
 	pStat, err := os.Stat(path)
@@ -183,7 +185,7 @@ func (e *ext) isMountPoint(path string) (bool, error) {
 // NOTE: requires elevated privileges, lazy unmount, mntpoint may not be
 //       available immediately after
 func (e *ext) unmount(path string) error {
-	log.Debugf(msgUnmount, path)
+	e.log.Debugf(msgUnmount, path)
 	e.history = append(e.history, fmt.Sprintf(msgUnmount, path))
 
 	// ignore NOENT errors, treat as success
@@ -203,7 +205,7 @@ func (e *ext) unmount(path string) error {
 
 // NOTE: may require elevated privileges
 func (e *ext) mkdir(path string) error {
-	log.Debugf(msgMkdir, path)
+	e.log.Debugf(msgMkdir, path)
 	e.history = append(e.history, fmt.Sprintf(msgMkdir, path))
 
 	if err := os.MkdirAll(path, 0777); err != nil {
@@ -214,7 +216,7 @@ func (e *ext) mkdir(path string) error {
 
 // NOTE: may require elevated privileges
 func (e *ext) remove(path string) error {
-	log.Debugf(msgRemove, path)
+	e.log.Debugf(msgRemove, path)
 	e.history = append(e.history, fmt.Sprintf(msgRemove, path))
 
 	// ignore NOENT errors, treat as success
@@ -225,7 +227,7 @@ func (e *ext) remove(path string) error {
 }
 
 func (e *ext) exists(path string) (bool, error) {
-	log.Debugf(msgExists, path)
+	e.log.Debugf(msgExists, path)
 	e.history = append(e.history, fmt.Sprintf(msgExists, path))
 
 	if _, err := os.Stat(path); err == nil {
@@ -257,7 +259,7 @@ func (e *ext) listGroups(usr *user.User) ([]string, error) {
 func (e *ext) chownR(root string, uid int, gid int) error {
 	op := fmt.Sprintf(msgChownR, root, uid, gid)
 
-	log.Debugf(op)
+	e.log.Debug(op)
 	e.history = append(e.history, op)
 
 	return filepath.Walk(root, func(name string, info os.FileInfo, err error) error {
@@ -267,4 +269,13 @@ func (e *ext) chownR(root string, uid int, gid int) error {
 
 		return os.Chown(name, uid, gid)
 	})
+}
+
+func (e *ext) checkSudo() (bool, string) {
+	usr := os.Getenv("SUDO_USER")
+	if usr == "" {
+		usr = "root"
+	}
+
+	return (os.Geteuid() == 0), usr
 }

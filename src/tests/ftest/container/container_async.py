@@ -30,11 +30,12 @@ import threading
 
 from apricot import TestWithServers
 
-from daos_api import  DaosPool, DaosContainer, DaosApiError
+from pydaos.raw import  DaosPool, DaosContainer, DaosApiError
 
 # pylint: disable=global-variable-not-assigned, global-statement
 GLOB_SIGNAL = None
 GLOB_RC = -99000000
+
 
 def cb_func(event):
     """
@@ -46,6 +47,7 @@ def cb_func(event):
 
     GLOB_RC = event.event.ev_error
     GLOB_SIGNAL.set()
+
 
 class ContainerAsync(TestWithServers):
     """
@@ -60,14 +62,6 @@ class ContainerAsync(TestWithServers):
         self.container1 = None
         self.container2 = None
         self.pool = None
-
-    def tearDown(self):
-        try:
-            if self.pool is not None and self.pool.attached:
-                self.pool.destroy(1)
-        finally:
-            time.sleep(5)
-            super(ContainerAsync, self).tearDown()
 
     def test_createasync(self):
         """
