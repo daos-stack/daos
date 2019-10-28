@@ -71,14 +71,12 @@ class DaosClient():
     def _close(self):
         if not self.connected:
             return
-        print('Closing DAOS')
         rc = pydaos_shim.daos_fini(DAOS_MAGIC)
         if rc != pydaos_shim.DER_SUCCESS:
             raise PyDError("Failed to cleanup DAOS", rc)
         self.connected = False
 
     def __del__(self):
-        print(type(pydaos_shim))
         if not pydaos_shim or not self.connected:
             return
         self._close()

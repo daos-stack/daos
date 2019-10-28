@@ -166,7 +166,6 @@ class _Obj(object):
     def __del__(self):
         if self.oh is None:
             return
-        print('Closing object')
         ret = pydaos_shim.obj_close(DAOS_MAGIC, self.oh)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to close object", ret)
