@@ -342,6 +342,7 @@ daos_csummer_set_dcbs(struct daos_csummer *obj, daos_csum_buf_t *dcbs,
 
 		dcb = &dcbs[cd_idx];
 		iod = &iods[iod_idx];
+		D_ASSERT(recx_idx < iod->iod_nr);
 		recx = &iod->iod_recxs[recx_idx];
 
 		csum_nr = daos_recx_calc_chunks(*recx,
@@ -351,8 +352,8 @@ daos_csummer_set_dcbs(struct daos_csummer *obj, daos_csum_buf_t *dcbs,
 		buf_len = csum_len * csum_nr;
 
 		dcb->cs_type = daos_csummer_get_type(obj);
-		dcb->cs_chunksize = daos_csummer_get_chunksize(obj);
-		dcb->cs_len = daos_csummer_get_csum_len(obj);
+		dcb->cs_chunksize = chunksize;
+		dcb->cs_len = csum_len;
 
 		dcb->cs_nr = csum_nr;
 		dcb->cs_buf_len = buf_len;
@@ -363,7 +364,7 @@ daos_csummer_set_dcbs(struct daos_csummer *obj, daos_csum_buf_t *dcbs,
 
 		/** go to the next recx/iod as needed */
 		recx_idx++;
-		if (recx_idx > iod->iod_nr) {
+		if (recx_idx == iod->iod_nr) {
 			recx_idx = 0;
 			iod_idx++;
 			D_ASSERT(iod_idx < iods_nr);
@@ -454,7 +455,7 @@ calc_csum(struct daos_csummer *obj, d_sg_list_t *sgl,
 	size_t			 bytes_for_csum;
 	size_t			 csum_nr;
 	uint64_t		 bytes;
-	uint32_t		 chunk_size = (uint32_t)obj->dcs_chunk_size;
+	uint32_t		 chunk_size = daos_csummer_get_chunksize(obj);
 	uint32_t		 i;
 	uint32_t		 j;
 	struct daos_sgl_idx	 idx = {0};
