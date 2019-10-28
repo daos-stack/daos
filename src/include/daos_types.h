@@ -381,7 +381,10 @@ typedef enum {
 	DAOS_EVS_ABORTED,
 } daos_ev_status_t;
 
-/* rank/target list for target */
+/**
+ * Pool target list, each target is identified by rank & target
+ * index within the rank
+ */
 struct d_tgt_list {
 	d_rank_t	*tl_ranks;
 	int32_t		*tl_tgts;
