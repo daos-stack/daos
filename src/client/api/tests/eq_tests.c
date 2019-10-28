@@ -40,7 +40,7 @@
 #include <gurt/list.h>
 #include <gurt/hash.h>
 
-#if D_HAS_WARNING(4, "-Wframe-larger-than")
+#if D_HAS_WARNING(4, "-Wframe-larger-than=")
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="
 #endif
 
