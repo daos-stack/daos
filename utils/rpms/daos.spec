@@ -18,7 +18,7 @@ BuildRequires: gcc-c++
 %if %{defined cart_sha1}
 BuildRequires: cart-devel-%{cart_sha1}
 %else
-BuildRequires: cart-devel <= 1.0.0
+BuildRequires: cart-devel
 %endif
 %if (0%{?rhel} >= 7)
 BuildRequires: argobots-devel >= 1.0rc1
@@ -145,6 +145,11 @@ This is the package needed to run the DAOS test suite
 
 %package devel
 Summary: The DAOS development libraries and headers
+%if %{defined cart_sha1}
+Requires: cart-devel-%{cart_sha1}
+%else
+Requires: cart-devel
+%endif
 
 %description devel
 This is the package needed to build software with the DAOS library.
