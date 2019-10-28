@@ -134,7 +134,7 @@ class Soak(TestWithServers):
         """
         command = []
         iteration = self.test_iteration
-        ior_params = "/run/" + job_spec + "/"
+        ior_params = "/run/" + job_spec + "/*"
 
         ior_cmd = IorCommand()
         ior_cmd.namespace = ior_params
@@ -453,7 +453,7 @@ class Soak(TestWithServers):
         self.pool = self.create_pool(["pool_reserved"])
         self.pool[0].connect()
         self.container = TestContainer(self.pool[0])
-        self.container.namespace = "/run/container_reserved/"
+        self.container.namespace = "/run/container_reserved"
         self.container.get_params(self)
         self.container.create()
         self.container.write_objects(rank, obj_class)

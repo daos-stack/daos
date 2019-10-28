@@ -304,6 +304,18 @@ if ${SETUP_ONLY:-false}; then
     exit 0
 fi
 
+# check if slurm needs to be configured for soak
+
+if [[ $TEST_TAG_ARG == *soak* ]]; then
+    IFS="," read -r -a CONTROL_NODE <<< "$TEST_NODES"
+    if ! ./slurm_setup.py -c ${CONTROL_NODE[0]} -n ${TEST_NODES} -s -i; then
+        rc=\${PIPESTATUS[0]}
+        exit rc
+    else
+        rc=0
+    fi
+fi
+
 # now run it!
 if ! ./launch.py -c -a -r -i -s -ts ${TEST_NODES} ${TEST_TAG_ARR[*]}; then
     rc=\${PIPESTATUS[0]}
