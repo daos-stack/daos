@@ -576,7 +576,7 @@ struct dss_enum_unpack_io {
 	/* punched epochs per akey */
 	daos_epoch_t		*ui_akey_punch_ephs;
 	int			 ui_iods_cap;
-	int			 ui_iods_size;
+	int			 ui_iods_top;
 	int			*ui_recxs_caps;
 	/* punched epochs for dkey */
 	daos_epoch_t		ui_dkey_punch_eph;
@@ -607,7 +607,10 @@ bool dss_pmixless(void);
 /* default credits */
 #define	DSS_GC_CREDS	256
 
-void dss_gc_run(int credits);
+/**
+ * Run GC for an opened pool, it run GC for all pools if @poh is DAOS_HDL_INVAL
+ */
+void dss_gc_run(daos_handle_t poh, int credits);
 
 bool dss_aggregation_disabled(void);
 
