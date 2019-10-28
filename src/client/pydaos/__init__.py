@@ -34,10 +34,8 @@ else:
     from . import pydaos_shim_3 as pydaos_shim
 # pylint: enable=import-error
 
-from .pydaos_core import *
-
-__all__ = ["pydaos_core"]
-
+# Define the PyDError class here before doing the pydaos_core import so that
+# it's accessible from within the module.
 class PyDError(Exception):
     """PyDAOS exception when operation cannot be completed."""
 
@@ -54,6 +52,10 @@ class PyDError(Exception):
 
     def __str__(self):
         return self.message
+
+from .pydaos_core import *
+
+__all__ = ["pydaos_core"]
 
 # Initialize DAOS
 _rc = pydaos_shim.daos_init(DAOS_MAGIC)

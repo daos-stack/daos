@@ -28,10 +28,13 @@ import sys
 
 # pylint: disable=import-error
 if sys.version_info < (3, 0):
-    import pydaos.pydaos_shim_27 as pydaos_shim
+    from . import pydaos_shim_27 as pydaos_shim
 else:
-    import pydaos.pydaos_shim_3 as pydaos_shim
+    from . import pydaos_shim_3 as pydaos_shim
 # pylint: enable=import-error
+
+from . import DAOS_MAGIC
+from . import PyDError
 
 # Import Object class as an enumeration
 ObjClassID = enum.Enum(
@@ -146,14 +149,17 @@ class _Obj(object):
 
     def __init__(self, coh, oid, cont):
         self.oid = oid
+        # Set self.oh to Null here so it's defined in __dell__ if there's
+        # a problem with the obj_open() call.
+        self.oh = None
+        # keep container around until all objects are gone
+        self.cont = cont
         # Open to the object
         (ret, oh) = pydaos_shim.obj_open(DAOS_MAGIC, coh, self.oid.hi,
                                          self.oid.lo, 0)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to open object", ret)
         self.oh = oh
-        # keep container around until all objects are gone
-        self.cont = cont
 
     def __del__(self):
         if self.oh is None:
