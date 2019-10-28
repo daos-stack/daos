@@ -144,6 +144,12 @@ Requires: cart-%{cart_sha1}
 This is the package needed to run the DAOS test suite
 
 %package devel
+# Leap 15 doesn't seem to be creating dependencies as richly as EL7
+# for example, EL7 automatically adds:
+# Requires: libdaos.so.0()(64bit)
+%if (0%{?suse_version} >= 1500)
+Requires: daos-client
+%endif
 Summary: The DAOS development libraries and headers
 %if %{defined cart_sha1}
 Requires: cart-devel-%{cart_sha1}
