@@ -71,7 +71,8 @@ func (sb *Superblock) Unmarshal(raw []byte) error {
 }
 
 func (srv *IOServerInstance) superblockPath() string {
-	storagePath := srv.runner.Config.Storage.SCM.MountPoint
+	scmConfig := srv.scmConfig()
+	storagePath := scmConfig.MountPoint
 	if storagePath == "" {
 		storagePath = defaultStoragePath
 	}
@@ -101,13 +102,11 @@ func (srv *IOServerInstance) NeedsSuperblock() (bool, error) {
 		return false, nil
 	}
 
-	scmCfg, err := srv.scmConfig()
-	if err != nil {
-		return false, err
-	}
+	scmCfg := srv.scmConfig()
+
 	srv.log.Debugf("%s: checking superblock", scmCfg.MountPoint)
 
-	err = srv.ReadSuperblock()
+	err := srv.ReadSuperblock()
 	if os.IsNotExist(errors.Cause(err)) {
 		srv.log.Debugf("%s: needs superblock (doesn't exist)", scmCfg.MountPoint)
 		return true, nil
@@ -131,7 +130,8 @@ func (srv *IOServerInstance) CreateSuperblock(msInfo *mgmtInfo) error {
 		return errors.Wrap(err, "Failed to generate instance UUID")
 	}
 
-	systemName := srv.runner.Config.SystemName
+	cfg := srv.runner.GetConfig()
+	systemName := cfg.SystemName
 	if systemName == "" {
 		systemName = defaultGroupName
 	}
@@ -146,14 +146,14 @@ func (srv *IOServerInstance) CreateSuperblock(msInfo *mgmtInfo) error {
 		BootstrapMS: msInfo.shouldBootstrap,
 	}
 
-	if srv.runner.Config.Rank != nil || msInfo.isReplica && msInfo.shouldBootstrap {
+	if cfg.Rank != nil || msInfo.isReplica && msInfo.shouldBootstrap {
 		superblock.Rank = new(ioserver.Rank)
-		if srv.runner.Config.Rank != nil {
-			*superblock.Rank = *srv.runner.Config.Rank
+		if cfg.Rank != nil {
+			*superblock.Rank = *cfg.Rank
 		}
 	}
 	srv.setSuperblock(superblock)
-	srv.log.Debugf("creating %s: (rank: %d, uuid: %s)",
+	srv.log.Debugf("creating %s: (rank: %s, uuid: %s)",
 		srv.superblockPath(), superblock.Rank, superblock.UUID)
 
 	return srv.WriteSuperblock()

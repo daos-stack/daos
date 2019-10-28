@@ -111,7 +111,7 @@ dfs_test_file_gen(const char *name, daos_size_t chunk_size,
 
 		sgl.sg_iovs[0].iov_len = io_size;
 		dts_buf_render(buf, io_size);
-		rc = dfs_write(dfs, obj, sgl, size);
+		rc = dfs_write(dfs, obj, &sgl, size, NULL);
 		assert_int_equal(rc, 0);
 		size += io_size;
 	}
@@ -182,7 +182,7 @@ dfs_test_read_thread(void *arg)
 		if (count % 10 == 0)
 		print_message("thread %d try to read off %d, size %d......\n",
 			      targ->thread_idx, (int)off, (int)read_size);
-		rc = dfs_read(dfs, obj, sgl, off, &got_size);
+		rc = dfs_read(dfs, obj, &sgl, off, &got_size, NULL);
 		if (count++ % 10 == 0)
 		print_message("thread %d read done rc %d, got_size %d.\n",
 			      targ->thread_idx, rc, (int)got_size);
