@@ -25,6 +25,8 @@ PyDAOS Module allowing global access to the DAOS containers and objects.
 import sys
 import atexit
 
+dc = None
+
 DAOS_MAGIC = 0x7A89
 
 # pylint: disable=import-error
@@ -53,17 +55,41 @@ class PyDError(Exception):
     def __str__(self):
         return self.message
 
-from .pydaos_core import *
+class DaosClient():
+    """DaosClient object"""
 
-__all__ = ["pydaos_core"]
+    # Created automatically as module is imported, and the
+    # local ref is droped when it's unloaded.
+    def __init__(self):
+        # Initialize DAOS
+        self.connected = False
+        _rc = pydaos_shim.daos_init(DAOS_MAGIC)
+        if _rc != pydaos_shim.DER_SUCCESS:
+            raise PyDError("Failed to initialize DAOS", _rc)
+        self.connected = True
 
-# Initialize DAOS
-_rc = pydaos_shim.daos_init(DAOS_MAGIC)
-if _rc != pydaos_shim.DER_SUCCESS:
-    raise PyDError("Failed to initialize DAOS", _rc)
+    def _close(self):
+        if not self.connected:
+            return
+        print('Closing DAOS')
+        rc = pydaos_shim.daos_fini(DAOS_MAGIC)
+        if rc != pydaos_shim.DER_SUCCESS:
+            raise PyDError("Failed to cleanup DAOS", rc)
+        self.connected = False
+
+    def __del__(self):
+        print(type(pydaos_shim))
+        if not pydaos_shim or not self.connected:
+            return
+        self._close()
+
+dc = DaosClient()
 
 @atexit.register
 def _cleanup():
-    rc = pydaos_shim.daos_fini(DAOS_MAGIC)
-    if rc != pydaos_shim.DER_SUCCESS:
-        raise PyDError("Failed to cleanup DAOS", rc)
+    global dc
+    dc = None;
+
+from .pydaos_core import *
+
+__all__ = ["pydaos_core"]

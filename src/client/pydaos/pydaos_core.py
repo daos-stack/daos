@@ -35,6 +35,7 @@ else:
 
 from . import DAOS_MAGIC
 from . import PyDError
+from . import dc
 
 # Import Object class as an enumeration
 ObjClassID = enum.Enum(
@@ -115,6 +116,7 @@ class Cont(object):
             raise PyDError("failed to access container", ret)
         self.poh = poh
         self.coh = coh
+        self._dc = dc
 
     def __del__(self):
         ret = pydaos_shim.cont_close(DAOS_MAGIC, self.poh, self.coh)
@@ -164,6 +166,7 @@ class _Obj(object):
     def __del__(self):
         if self.oh is None:
             return
+        print('Closing object')
         ret = pydaos_shim.obj_close(DAOS_MAGIC, self.oh)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to close object", ret)

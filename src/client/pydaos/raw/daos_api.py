@@ -2116,7 +2116,6 @@ class DaosServer(object):
             raise DaosApiError("Server kill returned non-zero. RC: {0}"
                                .format(ret))
 
-
 class DaosContext(object):
     # pylint: disable=too-few-public-methods
     """Provides environment and other info for a DAOS client."""
@@ -2235,7 +2234,6 @@ class DaosLog:
         c_level = ctypes.c_uint64(level)
 
         func(c_msg, c_filename, c_caller_func, c_line, c_level)
-
 
 class DaosApiError(Exception):
     """DAOS API exception class."""
