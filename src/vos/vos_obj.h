@@ -39,14 +39,34 @@
 
 #define LRU_CACHE_BITS 16
 
-/**
- * Reference of a cached object.
- * NB: DRAM data structure.
- */
-struct vos_object;
-
 /* Internal container handle structure */
 struct vos_container;
+
+/**
+ * A cached object (DRAM data structure).
+ */
+struct vos_object {
+	/** llink for daos lru cache */
+	struct daos_llink		obj_llink;
+	/** Key for searching, object ID within a container */
+	daos_unit_oid_t			obj_id;
+	/** dkey tree open handle of the object */
+	daos_handle_t			obj_toh;
+	/** btree iterator handle */
+	daos_handle_t			obj_ih;
+	/** epoch when the object(cache) is initialized */
+	daos_epoch_t			obj_epoch;
+	/** The latest sync epoch */
+	daos_epoch_t			obj_sync_epoch;
+	/** cached vos_obj_df::vo_incarnation, for revalidation. */
+	uint32_t			obj_incarnation;
+	/** nobody should access this object */
+	bool				obj_zombie;
+	/** Persistent memory address of the object */
+	struct vos_obj_df		*obj_df;
+	/** backref to container */
+	struct vos_container		*obj_cont;
+};
 
 /**
  * Find an object in the cache \a occ and take its reference. If the object is
@@ -54,7 +74,7 @@ struct vos_container;
  * add it to the cache.
  *
  * \param occ	[IN]	Object cache, it could be a percpu data structure.
- * \param coh	[IN]	Container open handle.
+ * \param cont	[IN]	Open container.
  * \param oid	[IN]	VOS object ID.
  * \param no_create [IN]
  *			Do not allocate object if it's not there yet.
@@ -62,7 +82,7 @@ struct vos_container;
  * \param obj_p [OUT]	Returned object cache reference.
  */
 int
-vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
+vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	     daos_unit_oid_t oid, daos_epoch_t epoch,
 	     bool no_create, uint32_t intent, struct vos_object **obj_p);
 
@@ -74,18 +94,17 @@ vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 void
 vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj);
 
-/**
- * Varify if the object reference is still valid, and refresh it if it's
- * invalide (evicted)
- */
-int vos_obj_revalidate(struct daos_lru_cache *occ, daos_epoch_t epoch,
-		       struct vos_object **obj_p);
+static inline int
+vos_obj_refcount(struct vos_object *obj)
+{
+	return obj->obj_llink.ll_ref;
+}
 
 /** Evict an object reference from the cache */
 void vos_obj_evict(struct vos_object *obj);
 
-/** Check if an object reference has been evicted from the cache */
-bool vos_obj_evicted(struct vos_object *obj);
+int vos_obj_evict_by_oid(struct daos_lru_cache *occ, struct vos_container *cont,
+			 daos_unit_oid_t oid);
 
 /**
  * Create an object cache.
@@ -140,7 +159,7 @@ vos_oi_update_metadata(daos_handle_t coh, daos_unit_oid_t oid);
  * If the object is not found, create a new object for the @oid and return
  * the direct pointer of the new allocated object.
  *
- * \param coh	[IN]	Container handle
+ * \param cont	[IN]	Open container
  * \param oid	[IN]	DAOS object ID
  * \param intent [IN]	The request intent
  * \param obj	[OUT]	Direct pointer to VOS object
@@ -158,7 +177,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
  * Created to us in tests for checking sanity of obj index
  * after deletion
  *
- * \param coh	[IN]	Container handle
+ * \param cont	[IN]	Open container
  * \param oid	[IN]	DAOS object ID
  * \param intent [IN]	The operation intent
  * \param obj	[OUT]	Direct pointer to VOS object
@@ -176,5 +195,10 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
 int
 vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 	     daos_epoch_t epoch, uint32_t flags, struct vos_obj_df *obj);
+
+
+/** delete an object from OI table */
+int
+vos_oi_delete(struct vos_container *cont, daos_unit_oid_t oid);
 
 #endif

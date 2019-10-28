@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,28 +27,25 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
-
-	"github.com/daos-stack/daos/src/control/log"
 )
-
-// UtilLogDepth signifies stack depth, set calldepth on calls to logger so
-// log message context refers to caller not callee.
-const UtilLogDepth = 4
 
 // AssertTrue asserts b is true
 func AssertTrue(t *testing.T, b bool, message string) {
+	t.Helper()
+
 	if !b {
-		log.Errordf(UtilLogDepth, message)
-		t.FailNow()
+		t.Fatal(message)
 	}
 }
 
 // AssertFalse asserts b is false
 func AssertFalse(t *testing.T, b bool, message string) {
+	t.Helper()
+
 	if b {
-		log.Errordf(UtilLogDepth, message)
-		t.FailNow()
+		t.Fatal(message)
 	}
 }
 
@@ -59,6 +56,7 @@ func AssertFalse(t *testing.T, b bool, message string) {
 // then be used but will introduce a third party dep.
 func AssertEqual(
 	t *testing.T, a interface{}, b interface{}, message string) {
+	t.Helper()
 
 	if reflect.DeepEqual(a, b) {
 		return
@@ -66,40 +64,47 @@ func AssertEqual(
 	if len(message) > 0 {
 		message += ", "
 	}
-	log.Errordf(UtilLogDepth, message+"%#v != %#v", a, b)
-	t.FailNow()
+
+	t.Fatalf(message+"%#v != %#v", a, b)
 }
 
 // AssertStringsEqual sorts string slices before comparing.
 func AssertStringsEqual(
 	t *testing.T, a []string, b []string, message string) {
+	t.Helper()
 
 	sort.Strings(a)
 	sort.Strings(b)
 
-	if reflect.DeepEqual(a, b) {
-		return
-	}
-	if len(message) > 0 {
-		message += ", "
-	}
-	log.Errordf(UtilLogDepth, "%#v != %#v", a, b)
-	t.FailNow()
+	AssertEqual(t, a, b, message)
 }
 
 // ExpectError asserts error contains expected message
 func ExpectError(
 	t *testing.T, actualErr error, expectedMessage string, desc interface{}) {
+	t.Helper()
 
 	if actualErr == nil {
-		log.Errordf(UtilLogDepth, "Expected a non-nil error: %v", desc)
-		t.FailNow()
+		t.Fatalf("Expected a non-nil error: %v", desc)
 	} else if actualErr.Error() != expectedMessage {
-		log.Errordf(
-			UtilLogDepth,
+		t.Fatalf(
 			"Wrong error message. Expected: %s, Actual: %s (%v)",
 			expectedMessage, actualErr.Error(), desc)
-		t.FailNow()
+	}
+}
+
+// CmpErr compares two errors for equality or at least close similarity in their messages.
+func CmpErr(t *testing.T, want, got error) {
+	t.Helper()
+
+	if want == got {
+		return
+	}
+	if want == nil || got == nil {
+		t.Fatalf("unexpected error (wanted: %v, got: %v)", want, got)
+	}
+	if !strings.Contains(got.Error(), want.Error()) {
+		t.Fatalf("unexpected error (wanted: %s, got: %s)", want, got)
 	}
 }
 
@@ -125,4 +130,14 @@ func LoadTestFiles(inFile string, outFile string) (
 	}
 
 	return
+}
+
+// ShowBufferOnFailure displays captured output on test failure. Should be run
+// via defer in the test function.
+func ShowBufferOnFailure(t *testing.T, buf fmt.Stringer) {
+	t.Helper()
+
+	if t.Failed() {
+		fmt.Printf("captured log output:\n%s", buf.String())
+	}
 }

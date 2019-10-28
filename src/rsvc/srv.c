@@ -77,7 +77,7 @@ state_str(enum ds_rsvc_state state)
 
 /* Allocate and initialize a ds_rsvc object. */
 static int
-alloc_init(enum ds_rsvc_class_id class, daos_iov_t *id, uuid_t db_uuid,
+alloc_init(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 	   struct ds_rsvc **svcp)
 {
 	struct ds_rsvc *svc;
@@ -249,7 +249,7 @@ rsvc_hash_fini(void)
  * \param[out]	svc	replicated service
  */
 int
-ds_rsvc_lookup(enum ds_rsvc_class_id class, daos_iov_t *id,
+ds_rsvc_lookup(enum ds_rsvc_class_id class, d_iov_t *id,
 	       struct ds_rsvc **svc)
 {
 	d_list_t       *entry;
@@ -344,7 +344,7 @@ put_leader(struct ds_rsvc *svc)
  * the replicated service is not up, hint is filled.
  */
 int
-ds_rsvc_lookup_leader(enum ds_rsvc_class_id class, daos_iov_t *id,
+ds_rsvc_lookup_leader(enum ds_rsvc_class_id class, d_iov_t *id,
 		      struct ds_rsvc **svcp, struct rsvc_hint *hint)
 {
 	struct ds_rsvc *svc;
@@ -537,7 +537,7 @@ self_only(d_rank_list_t *replicas)
 }
 
 static int
-start(enum ds_rsvc_class_id class, daos_iov_t *id, uuid_t db_uuid, bool create,
+start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
       size_t size, d_rank_list_t *replicas, void *arg, struct ds_rsvc **svcp)
 {
 	struct ds_rsvc *svc;
@@ -598,7 +598,7 @@ err:
  * \retval -DER_CANCELED	replicated service stopping
  */
 int
-ds_rsvc_start(enum ds_rsvc_class_id class, daos_iov_t *id, uuid_t db_uuid,
+ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 	      bool create, size_t size, d_rank_list_t *replicas, void *arg)
 {
 	uuid_t			 db_uuid_buf;
@@ -702,24 +702,18 @@ stop(struct ds_rsvc *svc, bool destroy)
  * \retval -DER_CANCELED	replicated service stopping
  */
 int
-ds_rsvc_stop(enum ds_rsvc_class_id class, daos_iov_t *id, bool destroy)
+ds_rsvc_stop(enum ds_rsvc_class_id class, d_iov_t *id, bool destroy)
 {
 	struct ds_rsvc		*svc;
-	struct ds_rsvc_class	*impl;
-	d_list_t		*entry;
 	int			 rc;
 
-	impl = rsvc_class(class);
-	entry = d_hash_rec_find(&rsvc_hash, id->iov_buf, id->iov_len);
-	if (entry == NULL)
+	rc = ds_rsvc_lookup(class, id, &svc);
+	if (rc != 0)
 		return -DER_ALREADY;
-	svc = rsvc_obj(entry);
-
 	d_hash_rec_delete_at(&rsvc_hash, &svc->s_entry);
-
 	rc = stop(svc, destroy);
 	if (!rc && destroy)
-		rc = impl->sc_delete_uuid(id);
+		rc = rsvc_class(class)->sc_delete_uuid(id);
 	return rc;
 }
 
@@ -800,7 +794,7 @@ ds_rsvc_stop_all(enum ds_rsvc_class_id class)
  * \param[out]	hint	rsvc hint
  */
 int
-ds_rsvc_stop_leader(enum ds_rsvc_class_id class, daos_iov_t *id,
+ds_rsvc_stop_leader(enum ds_rsvc_class_id class, d_iov_t *id,
 		    struct rsvc_hint *hint)
 {
 	struct ds_rsvc *svc;
@@ -817,6 +811,80 @@ ds_rsvc_stop_leader(enum ds_rsvc_class_id class, daos_iov_t *id,
 	return stop(svc, false /* destroy */);
 }
 
+int
+ds_rsvc_add_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks, size_t size)
+{
+	int	rc;
+
+	rc = ds_rsvc_dist_start(svc->s_class, &svc->s_id, svc->s_db_uuid, ranks,
+				true /* create */, false /* bootstrap */, size);
+
+	/* TODO: Attempt to only add replicas that were successfully started */
+	if (rc != 0)
+		goto out_stop;
+	rc = rdb_add_replicas(svc->s_db, ranks);
+out_stop:
+	/* Clean up ranks that were not added */
+	if (ranks->rl_nr > 0) {
+		D_ASSERT(rc != 0);
+		ds_rsvc_dist_stop(svc->s_class, &svc->s_id, ranks,
+				  NULL, true /* destroy */);
+	}
+	return rc;
+}
+
+int
+ds_rsvc_add_replicas(enum ds_rsvc_class_id class, d_iov_t *id,
+		     d_rank_list_t *ranks, size_t size, struct rsvc_hint *hint)
+{
+	struct ds_rsvc	*svc;
+	int		 rc;
+
+	rc = ds_rsvc_lookup_leader(class, id, &svc, hint);
+	if (rc != 0)
+		return rc;
+	rc = ds_rsvc_add_replicas_s(svc, ranks, size);
+	ds_rsvc_set_hint(svc, hint);
+	put_leader(svc);
+	return rc;
+}
+
+int
+ds_rsvc_remove_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks)
+{
+	d_rank_list_t	*stop_ranks;
+	int		 rc;
+
+	rc = daos_rank_list_dup(&stop_ranks, ranks);
+	if (rc != 0)
+		return rc;
+	rc = rdb_remove_replicas(svc->s_db, ranks);
+
+	/* filter out failed ranks */
+	daos_rank_list_filter(ranks, stop_ranks, true /* exclude */);
+	if (stop_ranks->rl_nr > 0)
+		ds_rsvc_dist_stop(svc->s_class, &svc->s_id, stop_ranks,
+				  NULL, true /* destroy */);
+	d_rank_list_free(stop_ranks);
+	return rc;
+}
+
+int
+ds_rsvc_remove_replicas(enum ds_rsvc_class_id class, d_iov_t *id,
+			d_rank_list_t *ranks, struct rsvc_hint *hint)
+{
+	struct ds_rsvc	*svc;
+	int		 rc;
+
+	rc = ds_rsvc_lookup_leader(class, id, &svc, hint);
+	if (rc != 0)
+		return rc;
+	rc = ds_rsvc_remove_replicas_s(svc, ranks);
+	ds_rsvc_set_hint(svc, hint);
+	put_leader(svc);
+	return rc;
+}
+
 /*************************** Distributed Operations ***************************/
 
 enum rdb_start_flag {
@@ -829,14 +897,15 @@ enum rdb_stop_flag {
 };
 
 static int
-bcast_create(crt_opcode_t opc, crt_group_t *group, crt_rpc_t **rpc)
+bcast_create(crt_opcode_t opc, crt_group_t *group, d_rank_list_t *excluded,
+	     crt_rpc_t **rpc)
 {
 	struct dss_module_info *info = dss_get_module_info();
 	crt_opcode_t		opc_full;
 
 	opc_full = DAOS_RPC_OPCODE(opc, DAOS_RSVC_MODULE, DAOS_RSVC_VERSION);
 	return crt_corpc_req_create(info->dmi_ctx, group,
-				    NULL /* excluded_ranks */, opc_full,
+				    excluded /* excluded_ranks */, opc_full,
 				    NULL /* co_bulk_hdl */, NULL /* priv */,
 				    0 /* flags */,
 				    crt_tree_topo(CRT_TREE_FLAT, 0), rpc);
@@ -856,7 +925,7 @@ bcast_create(crt_opcode_t opc, crt_group_t *group, crt_rpc_t **rpc)
  * \param[in]	size		size of each replica in bytes if \a create
  */
 int
-ds_rsvc_dist_start(enum ds_rsvc_class_id class, daos_iov_t *id,
+ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id,
 		   const uuid_t dbid, const d_rank_list_t *ranks, bool create,
 		   bool bootstrap, size_t size)
 {
@@ -873,7 +942,7 @@ ds_rsvc_dist_start(enum ds_rsvc_class_id class, daos_iov_t *id,
 	 * If ranks doesn't include myself, creating a group with ranks will
 	 * fail; bcast to the primary group instead.
 	 */
-	rc = bcast_create(RSVC_START, NULL /* group */, &rpc);
+	rc = bcast_create(RSVC_START, NULL /* group */, NULL, &rpc);
 	if (rc != 0)
 		goto out;
 	in = crt_req_get(rpc);
@@ -898,7 +967,7 @@ ds_rsvc_dist_start(enum ds_rsvc_class_id class, daos_iov_t *id,
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to start%s %d replicas\n",
 			DP_UUID(dbid), create ? "/create" : "", rc);
-		ds_rsvc_dist_stop(class, id, ranks, create);
+		ds_rsvc_dist_stop(class, id, ranks, NULL, create);
 		rc = -DER_IO;
 	}
 
@@ -960,14 +1029,21 @@ ds_rsvc_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
  * all replicas of a database spanning \a ranks. This method can be called on
  * any rank. \a ranks may be NULL.
  *
+ * XXX excluded and ranks are a bit duplicate here, since this function only
+ * suppose to send RPC to @ranks list, but cart does not have such interface
+ * for collective RPC, so we have to use both ranks and exclued for the moment,
+ * and it should be simplied once cart can provide rank list collective RPC.
+ *
  * \param[in]	class		replicated service class
  * \param[in]	id		replicated service ID
  * \param[in]	ranks		list of \a ranks->rl_nr replica ranks
+ * \param[in]	excluded	excluded rank list.
  * \param[in]	destroy		destroy after close
  */
 int
-ds_rsvc_dist_stop(enum ds_rsvc_class_id class, daos_iov_t *id,
-		  const d_rank_list_t *ranks, bool destroy)
+ds_rsvc_dist_stop(enum ds_rsvc_class_id class, d_iov_t *id,
+		  const d_rank_list_t *ranks, d_rank_list_t *excluded,
+		  bool destroy)
 {
 	crt_rpc_t		*rpc;
 	struct rsvc_stop_in	*in;
@@ -978,7 +1054,7 @@ ds_rsvc_dist_stop(enum ds_rsvc_class_id class, daos_iov_t *id,
 	 * If ranks doesn't include myself, creating a group with ranks will
 	 * fail; bcast to the primary group instead.
 	 */
-	rc = bcast_create(RSVC_STOP, NULL /* group */, &rpc);
+	rc = bcast_create(RSVC_STOP, NULL /* group */,  excluded, &rpc);
 	if (rc != 0)
 		goto out;
 	in = crt_req_get(rpc);

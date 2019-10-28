@@ -44,7 +44,7 @@ update_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 	     daos_recx_t *recx, char *buf)
 {
 	daos_iod_t	iod = { 0 };
-	daos_sg_list_t	sgl = { 0 };
+	d_sg_list_t	sgl = { 0 };
 	daos_key_t	dkey_iov, akey_iov;
 	daos_size_t	buf_len;
 	int		rc;
@@ -54,8 +54,8 @@ update_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 	assert_true(!(arg->ta_flags & TF_ZERO_COPY));
 
 	arg->oid = oid;
-	daos_iov_set(&dkey_iov, dkey, strlen(dkey));
-	daos_iov_set(&akey_iov, akey, strlen(akey));
+	d_iov_set(&dkey_iov, dkey, strlen(dkey));
+	d_iov_set(&akey_iov, akey, strlen(akey));
 
 	rc = daos_sgl_init(&sgl, 1);
 	assert_int_equal(rc, 0);
@@ -85,7 +85,7 @@ update_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 			arg->ta_flags |= TF_ZERO_COPY;
 	}
 
-	rc = io_test_obj_update(arg, epoch, &dkey_iov, &iod, &sgl, true);
+	rc = io_test_obj_update(arg, epoch, &dkey_iov, &iod, &sgl, NULL, true);
 	assert_int_equal(rc, 0);
 
 	daos_sgl_fini(&sgl, false);
@@ -98,7 +98,7 @@ fetch_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 	    daos_recx_t *recx, char *buf)
 {
 	daos_iod_t	iod = { 0 };
-	daos_sg_list_t	sgl = { 0 };
+	d_sg_list_t	sgl = { 0 };
 	daos_key_t	dkey_iov, akey_iov;
 	daos_size_t	buf_len;
 	int		rc;
@@ -108,8 +108,8 @@ fetch_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 	assert_true(!(arg->ta_flags & TF_ZERO_COPY));
 
 	arg->oid = oid;
-	daos_iov_set(&dkey_iov, dkey, strlen(dkey));
-	daos_iov_set(&akey_iov, akey, strlen(akey));
+	d_iov_set(&dkey_iov, dkey, strlen(dkey));
+	d_iov_set(&akey_iov, akey, strlen(akey));
 
 	rc = daos_sgl_init(&sgl, 1);
 	assert_int_equal(rc, 0);
@@ -174,8 +174,8 @@ phy_recs_nr(struct io_test_args *arg, daos_unit_oid_t oid,
 
 	assert_true(dkey != NULL && akey != NULL);
 	assert_true(strlen(dkey) && strlen(akey));
-	daos_iov_set(&dkey_iov, dkey, strlen(dkey));
-	daos_iov_set(&akey_iov, akey, strlen(akey));
+	d_iov_set(&dkey_iov, dkey, strlen(dkey));
+	d_iov_set(&akey_iov, akey, strlen(akey));
 
 	iter_param.ip_hdl = arg->ctx.tc_co_hdl;
 	iter_param.ip_oid = oid;
@@ -1598,29 +1598,29 @@ agg_tst_teardown(void **state)
 }
 
 static const struct CMUnitTest discard_tests[] = {
-	{ "VOS301: Discard SV with specified epoch",
+	{ "VOS451: Discard SV with specified epoch",
 	  discard_1, NULL, agg_tst_teardown },
-	{ "VOS302: Discard SV with confined epr",
+	{ "VOS452: Discard SV with confined epr",
 	  discard_2, NULL, agg_tst_teardown },
-	{ "VOS303: Discard SV with epr [0, DAOS_EPOCH_MAX]",
+	{ "VOS453: Discard SV with epr [0, DAOS_EPOCH_MAX]",
 	  discard_3, NULL, agg_tst_teardown },
-	{ "VOS304: Discard SV with punch records",
+	{ "VOS454: Discard SV with punch records",
 	  discard_4, NULL, agg_tst_teardown },
-	{ "VOS305: Discard SV with random punch, random yield",
+	{ "VOS455: Discard SV with random punch, random yield",
 	  discard_5, NULL, agg_tst_teardown },
-	{ "VOS306: Discard SV, multiple objects, keys",
+	{ "VOS456: Discard SV, multiple objects, keys",
 	  discard_6, NULL, agg_tst_teardown },
-	{ "VOS307: Discard EV with specified epoch",
+	{ "VOS457: Discard EV with specified epoch",
 	  discard_7, NULL, agg_tst_teardown },
-	{ "VOS308: Discard EV with confined epr",
+	{ "VOS458: Discard EV with confined epr",
 	  discard_8, NULL, agg_tst_teardown },
-	{ "VOS309: Discard EV with epr [0, DAOS_EPOCH_MAX]",
+	{ "VOS459: Discard EV with epr [0, DAOS_EPOCH_MAX]",
 	  discard_9, NULL, agg_tst_teardown },
-	{ "VOS310: Discard EV with punch records",
+	{ "VOS460: Discard EV with punch records",
 	  discard_10, NULL, agg_tst_teardown },
-	{ "VOS311: Discard EV with random punch, random yield",
+	{ "VOS461: Discard EV with random punch, random yield",
 	  discard_11, NULL, agg_tst_teardown },
-	{ "VOS312: Discard EV, multiple objects, keys",
+	{ "VOS462: Discard EV, multiple objects, keys",
 	  discard_12, NULL, agg_tst_teardown },
 };
 

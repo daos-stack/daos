@@ -395,14 +395,14 @@ cmd_evict_pool(int argc, const char **argv, void *ctx)
 int
 cmd_query_pool_status(int argc, const char **argv, void *ctx)
 {
-	uuid_t uuid;
-	int rc;
-	unsigned int flag = DAOS_PC_RO;
-	daos_pool_info_t  info;
-	daos_handle_t poh;
-	struct pool_cmd_options qp_options = {"daos_server", NULL, NULL, NULL,
+	uuid_t			uuid;
+	int			rc;
+	unsigned int		flag = DAOS_PC_RO;
+	daos_pool_info_t	info = {0};
+	daos_handle_t		poh;
+	struct pool_cmd_options	qp_options = {"daos_server", NULL, NULL, NULL,
 					      0, 0, 0, 0, 0, 0, 0};
-	d_rank_list_t pool_service_list = {NULL, 0};
+	d_rank_list_t		pool_service_list = {NULL, 0};
 
 	struct argp_option options[] = {
 		{"server-group",   's',   "SERVER-GROUP",   0,
@@ -436,6 +436,7 @@ cmd_query_pool_status(int argc, const char **argv, void *ctx)
 	printf("server group is %s\n", qp_options.server_group);
 	printf("rank %u\n", pool_service_list.rl_ranks[0]);
 
+	info.pi_bits = DPI_ALL;
 	rc = daos_pool_connect(uuid, qp_options.server_group,
 			       &pool_service_list,
 			       flag, &poh, &info, NULL);

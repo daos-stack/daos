@@ -1,746 +1,512 @@
 #!/usr/bin/python2
-'''
-  (C) Copyright 2018-2019 Intel Corporation.
+"""
+(C) Copyright 2018-2019 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-     http://www.apache.org/licenses/LICENSE-2.0
+    http://www.apache.org/licenses/LICENSE-2.0
 
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
-'''
+GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+The Government's rights to use, modify, reproduce, release, perform, display,
+or disclose this software are subject to the terms of the Apache License as
+provided in Contract No. B609815.
+Any reproduction of computer software, computer software documentation, or
+portions thereof marked with this legend must also reproduce the markings.
+"""
 from __future__ import print_function
 
-import os
-import time
-import traceback
-import json
-import threading
-from avocado.utils import process
-from apricot import Test
-
-
-import agent_utils
 import server_utils
-import check_for_pool
-import write_host_file
-from daos_api import DaosContainer, DaosContext, DaosPool, DaosApiError
-from conversion import c_uuid_to_str
+from apricot import TestWithServers, skipForTicket
+from avocado.core.exceptions import TestFail
+from test_utils import TestPool, CallbackHandler, TestContainer
+from pydaos.raw import DaosApiError
+import ctypes
 
-GLOB_SIGNAL = None
-GLOB_RC = -99000000
 
-def cb_func(event):
-    """
-    Callback function for asynchronous pool destroy.
-    """
-    global GLOB_SIGNAL
-    global GLOB_RC
+class DestroyTests(TestWithServers):
+    """Tests DAOS pool removal.
 
-    GLOB_RC = event.event.ev_error
-    GLOB_SIGNAL.set()
-
-class DestroyTests(Test):
-    """
-    Tests DAOS pool removal
     :avocado: recursive
     """
-    # super wasteful since its doing this for every variation
+
     def setUp(self):
-        self.agent_sessions = None
-        self.agent_sessions2 = None
-        # there is a presumption that this test lives in a specific
-        # spot in the repo
-        with open('../../../.build_vars.json') as build_file:
-            build_paths = json.load(build_file)
-        self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
-        self.tmp = build_paths['PREFIX'] + '/tmp'
+        """Set up for destroy."""
+        self.setup_start_servers = False
+        super(DestroyTests, self).setUp()
 
-        self.server_group = self.params.get("name",
-                                            '/server_config/',
-                                            'daos_server')
+    def execute_test(self, hosts, group_name, case, exception_expected=False):
+        """Execute the pool destroy test.
 
-        # setup the DAOS python API
-        self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
-
-        self.hostlist_servers = None
-        self.hostlist_servers1 = None
-        self.hostlist_servers2 = None
-
-    def test_simple_delete(self):
+        Args:
+            hosts (list): hosts running servers serving the pool
+            group_name (str): server group name
+            case (str): pool description message
+            exception_expected (bool, optional): is an exception expected to be
+                raised when destroying the pool. Defaults to False.
         """
-        Test destroying a pool created on a single server, nobody is using
-        the pool, force is not needed.
+        # Start servers with the server group
+        self.start_servers({group_name: hosts})
 
-        :avocado: tags=pool,pooldestroy,quick
+        # Validate the creation of a pool
+        self.validate_pool_creation(hosts, group_name)
+
+        # Validate pool destruction
+        self.validate_pool_destroy(hosts, case, exception_expected)
+
+    def validate_pool_creation(self, hosts, group_name):
+        """Validate the creation of a pool on the specified list of hosts.
+
+        Args:
+            hosts (list): hosts running servers serving the pool
+            group_name (str): server group name
         """
-        self.hostlist_servers = self.params.get("test_machines1", '/run/hosts/')
-        hostfile_servers = write_host_file.write_host_file(
-            self.hostlist_servers, self.tmp)
+        # Create a pool
+        self.log.info("Create a pool")
+        self.pool = TestPool(self.context, self.log)
+        self.pool.get_params(self)
+        self.pool.name.value = group_name
+        self.pool.create()
+        self.log.info("Pool UUID is %s", self.pool.uuid)
 
-        self.agent_sessions = agent_utils.run_agent(self.basepath,
-                                                    self.hostlist_servers)
-        server_utils.run_server(hostfile_servers, self.server_group,
-                                self.basepath)
+        # Check that the pool was created
+        self.assertTrue(
+            self.pool.check_files(hosts),
+            "Pool data not detected on servers before destroy")
 
-        setid = self.params.get("setname",
-                                '/run/setnames/validsetname/')
+    def validate_pool_destroy(self, hosts, case, exception_expected=False):
+        """Validate a pool destroy.
 
+        Args:
+            hosts (list): hosts running servers serving the pool
+            case (str): pool description message
+            exception_expected (bool, optional): is an exception expected to be
+                raised when destroying the pool. Defaults to False.
+        """
+        exception_detected = False
+        saved_uuid = self.pool.uuid
+        self.log.info("Attempting to destroy pool %s", case)
         try:
-            # use the uid/gid of the user running the test, these should
-            # be perfectly valid
-            uid = os.geteuid()
-            gid = os.getegid()
+            self.pool.destroy(0)
+        except TestFail as result:
+            exception_detected = True
+            if exception_expected:
+                self.log.info(
+                    "Expected exception - destroying pool %s: %s",
+                    case, str(result))
+            else:
+                self.log.error(
+                    "Unexpected exception - destroying pool %s: %s",
+                    case, str(result))
 
-            # TODO make these params in the yaml
-            daosctl = self.basepath + '/install/bin/daosctl'
+        if not exception_detected and exception_expected:
+            # The pool-destroy did not raise an exception as expected
+            self.log.error(
+                "Exception did not occur - destroying pool %s", case)
 
-            create_cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4}'
-                          .format(daosctl, 0x731, uid, gid, setid))
+        # Restore the valid server group and check if valid pool still exists
+        self.pool.uuid = saved_uuid
+        if exception_detected:
+            self.log.info(
+                "Check pool data still exists after a failed pool destroy")
+            self.assertTrue(
+                self.pool.check_files(hosts),
+                "Pool data was not detected on servers after "
+                "failing to destroy a pool {}".format(case))
+        else:
+            self.log.info(
+                "Check pool data does not exist after the pool destroy")
+            self.assertFalse(
+                self.pool.check_files(hosts),
+                "Pool data was detected on servers after "
+                "destroying a pool {}".format(case))
 
-            uuid_str = """{0}""".format(process.system_output(create_cmd))
-            print ("uuid is {0}\n".format(uuid_str))
+        self.assertEqual(
+            exception_detected, exception_expected,
+            "No exception when deleting a pool with invalid server group")
 
-            host = self.hostlist_servers[0]
-            exists = check_for_pool.check_for_pool(host, uuid_str)
-            if exists != 0:
-                self.fail("Pool {0} not found on host {1}.\n"
-                          .format(uuid_str, host))
+    def test_destroy_single(self):
+        """Test destroying a pool created on a single server.
 
-            delete_cmd = ('{0} destroy-pool -i {1} -s {2}'
-                          .format(daosctl, uuid_str, setid))
-            process.system(delete_cmd)
-
-            exists = check_for_pool.check_for_pool(host, uuid_str)
-            if exists == 0:
-                self.fail("Pool {0} found on host {1} when not expected.\n"
-                          .format(uuid_str, host))
-
-        except Exception as excep:
-            print(excep)
-            print(traceback.format_exc())
-            self.fail("Expecting to pass but test has failed.\n")
-
-        # no matter what happens shutdown the server
-        finally:
-            try:
-                os.remove(hostfile_servers)
-            finally:
-                if self.agent_sessions:
-                    agent_utils.stop_agent(self.agent_sessions)
-                server_utils.stop_server(hosts=self.hostlist_servers)
-
-    def test_delete_doesnt_exist(self):
+        :avocado: tags=all,medium,pr
+        :avocado: tags=pool,destroy,destroysingle
         """
-        Test destroying a pool uuid that doesn't exist.
+        hostlist_servers = self.hostlist_servers[:1]
+        setid = self.params.get("setname", '/run/setnames/validsetname/')
 
-        :avocado: tags=pool,pooldestroy
+        # Attempt to destroy a pool
+        self.execute_test(hostlist_servers, setid, "with a single server")
+
+    def test_destroy_multi(self):
+        """Test destroying a pool created on two servers.
+
+        :avocado: tags=all,medium,pr
+        :avocado: tags=pool,destroy,destroymutli
         """
-        self.hostlist_servers = self.params.get("test_machines1", '/run/hosts/')
-        hostfile_servers = write_host_file.write_host_file(
-            self.hostlist_servers, self.tmp)
+        hostlist_servers = self.hostlist_servers[:2]
+        setid = self.params.get("setname", '/run/setnames/validsetname/')
 
-        self.agent_sessions = agent_utils.run_agent(self.basepath,
-                                                    self.hostlist_servers)
-        server_utils.run_server(hostfile_servers, self.server_group,
-                                self.basepath)
+        # Attempt to destroy a pool
+        self.execute_test(hostlist_servers, setid, "with multiple servers")
 
-        setid = self.params.get("setname",
-                                '/run/setnames/validsetname/')
-        host = self.hostlist_servers[0]
-        try:
-            # randomly selected uuid, that is exceptionally unlikely to exist
-            bogus_uuid = '81ef94d7-a59d-4a5e-935b-abfbd12f2105'
+    def test_destroy_single_loop(self):
+        """Destroy and recreate pool multiple times.
 
-            # TODO make these params in the yaml
-            daosctl = self.basepath + '/install/bin/daosctl'
+        Test destroy and recreate one right after the other multiple times
+        Should fail.
 
-            delete_cmd = ('{0} destroy-pool -i {1} -s {2}'.format(daosctl,
-                                                                  bogus_uuid,
-                                                                  setid))
-
-            process.system(delete_cmd)
-
-            # the above command should fail resulting in an exception so if
-            # we get here the test has failed
-            self.fail("Pool {0} found on host {1} when not expected.\n"
-                      .format(bogus_uuid, host))
-
-        except Exception as _excep:
-            # expecting an exception so catch and pass the test
-            pass
-
-        # no matter what happens shutdown the server
-        finally:
-            if self.agent_sessions:
-                agent_utils.stop_agent(self.agent_sessions)
-            server_utils.stop_server(hosts=self.hostlist_servers)
-            os.remove(hostfile_servers)
-
-
-    def test_delete_wrong_servers(self):
+        :avocado: tags=all,medium,full_regression
+        :avocado: tags=pool,destroy,destroysingleloop
         """
-        Test destroying a pool valid pool but use the wrong server group.
+        hostlist_servers = self.hostlist_servers[:1]
 
-        :avocado: tags=pool,pooldestroy
+        # Start servers
+        self.start_servers({self.server_group: hostlist_servers})
+
+        counter = 0
+        while counter < 10:
+            counter += 1
+
+            # Create a pool
+            self.validate_pool_creation(hostlist_servers, self.server_group)
+
+            # Attempt to destroy the pool
+            self.validate_pool_destroy(
+                hostlist_servers,
+                "with a single server - pass {}".format(counter))
+
+    def test_destroy_multi_loop(self):
+        """Test destroy on a large (relative) number of servers.
+
+        :avocado: tags=all,medium,full_regression
+        :avocado: tags=pool,destroy,destroymutliloop
         """
+        hostlist_servers = self.hostlist_servers[:6]
 
-        self.hostlist_servers = self.params.get("test_machines1", '/run/hosts/')
-        hostfile_servers = write_host_file.write_host_file(
-            self.hostlist_servers, self.tmp)
+        # Start servers
+        self.start_servers({self.server_group: hostlist_servers})
 
-        self.agent_sessions = agent_utils.run_agent(self.basepath,
-                                                    self.hostlist_servers)
-        server_utils.run_server(hostfile_servers, self.server_group,
-                                self.basepath)
+        counter = 0
+        while counter < 10:
+            counter += 1
 
-        # need both a good and bad set
-        goodsetid = self.params.get("setname",
-                                    '/run/setnames/validsetname/')
+            # Create a pool
+            self.validate_pool_creation(hostlist_servers, self.server_group)
 
-        badsetid = self.params.get("setname",
-                                   '/run/setnames/badsetname/')
+            # Attempt to destroy the pool
+            self.validate_pool_destroy(
+                hostlist_servers,
+                "with multiple servers - pass {}".format(counter))
 
-        uuid_str = ""
-        host = self.hostlist_servers[0]
-        # TODO make these params in the yaml
-        daosctl = self.basepath + '/install/bin/daosctl'
+    @skipForTicket("DAOS-2739")
+    def test_destroy_invalid_uuid(self):
+        """Test destroying a pool uuid that doesn't exist.
 
-        try:
-            # use the uid/gid of the user running the test, these should
-            # be perfectly valid
-            uid = os.geteuid()
-            gid = os.getegid()
-
-            create_cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4}'
-                          .format(daosctl, 0x731, uid, gid, goodsetid))
-            uuid_str = """{0}""".format(process.system_output(create_cmd))
-            print ("uuid is {0}\n".format(uuid_str))
-
-            exists = check_for_pool.check_for_pool(host, uuid_str)
-            if exists != 0:
-                self.fail("Pool {0} not found on host {1}.\n"
-                          .format(uuid_str, host))
-
-            delete_cmd = ('{0} destroy-pool -i {1} -s {2}'.format(daosctl,
-                                                                  uuid_str,
-                                                                  badsetid))
-
-            process.system(delete_cmd)
-
-            # the above command should fail resulting in an exception so if
-            # we get here the test has failed
-            self.fail("Pool {0} found on host {1} when not expected.\n"
-                      .format(uuid_str, host))
-
-        except Exception as _excep:
-            # expecting an exception, but now need to
-            # clean up the pool for real
-            delete_cmd = ('{0} destroy-pool -i {1} -s {2}'
-                          .format(daosctl, uuid_str, goodsetid))
-            process.system(delete_cmd)
-
-        # no matter what happens shutdown the server
-        finally:
-            if self.agent_sessions:
-                agent_utils.stop_agent(self.agent_sessions)
-            server_utils.stop_server(hosts=self.hostlist_servers)
-            os.remove(hostfile_servers)
-
-
-    def test_multi_server_delete(self):
+        :avocado: tags=all,medium,full_regression
+        :avocado: tags=pool,destroy,destroyinvaliduuid
         """
-        Test destroying a pool created on two servers, nobody is using
-        the pool, force is not needed.  This is accomplished by switching
-        hostfile_serverss.
+        hostlist_servers = self.hostlist_servers[:1]
+        setid = self.params.get("setname", '/run/setnames/validsetname/')
 
-        :avocado: tags=pool,pooldestroy,multiserver
+        # Start servers
+        self.start_servers({setid: hostlist_servers})
+
+        # Create a pool
+        self.validate_pool_creation(hostlist_servers, setid)
+
+        # Change the pool uuid
+        valid_uuid = self.pool.pool.uuid
+        self.pool.pool.set_uuid_str("81ef94d7-a59d-4a5e-935b-abfbd12f2105")
+
+        # Attempt to destroy the pool with an invalid UUID
+        self.validate_pool_destroy(
+            hostlist_servers,
+            "with an invalid UUID {}".format(self.pool.pool.get_uuid_str()),
+            True)
+
+        # Restore th valid uuid to allow tearDown() to pass
+        self.log.info(
+            "Restoring the pool's valid uuid: %s", str(valid_uuid.value))
+        self.pool.pool.uuid = valid_uuid
+
+    def test_destroy_invalid_group(self):
+        """Test destroying a valid pool but use the wrong server group.
+
+        :avocado: tags=all,medium,full_regression
+        :avocado: tags=pool,destroy,destroyinvalidgroup
         """
-        self.hostlist_servers = self.params.get("test_machines2", '/run/hosts/')
-        hostfile_servers = write_host_file.write_host_file(
-            self.hostlist_servers, self.tmp)
+        hostlist_servers = self.hostlist_servers[:1]
+        setid = self.params.get("setname", '/run/setnames/validsetname/')
+        badsetid = self.params.get("setname", '/run/setnames/badsetname/')
 
-        self.agent_sessions = agent_utils.run_agent(self.basepath,
-                                                    self.hostlist_servers)
+        # Start servers
+        self.start_servers({setid: hostlist_servers})
 
-        server_utils.run_server(hostfile_servers, self.server_group,
-                                self.basepath)
+        # Create a pool
+        self.validate_pool_creation(hostlist_servers, setid)
 
-        setid = self.params.get("setname",
-                                '/run/setnames/validsetname/')
+        # Change the pool server group name
+        valid_group = self.pool.pool.group
+        self.pool.pool.group = ctypes.create_string_buffer(badsetid)
 
-        # TODO make these params in the yaml
-        daosctl = self.basepath + '/install/bin/daosctl'
+        # Attempt to destroy the pool with an invald server group name
+        self.validate_pool_destroy(
+            hostlist_servers,
+            "with an invalid server group name {}".format(badsetid),
+            True)
 
-        try:
-            # use the uid/gid of the user running the test, these should
-            # be perfectly valid
-            uid = os.geteuid()
-            gid = os.getegid()
+        # Restore the valid pool server group name to allow tearDown() to pass
+        self.log.info(
+            "Restoring the pool's valid server group name: %s",
+            str(valid_group.value))
+        self.pool.pool.group = valid_group
 
-            create_cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4}'
-                          .format(daosctl, 0x731, uid, gid, setid))
-            uuid_str = """{0}""".format(process.system_output(create_cmd))
-            print ("uuid is {0}\n".format(uuid_str))
+    @skipForTicket("DAOS-2742")
+    def test_destroy_wrong_group(self):
+        """Test destroying a pool.
 
-            exists = check_for_pool.check_for_pool(self.hostlist_servers[0],
-                                                   uuid_str)
-            if exists != 0:
-                self.fail("Pool {0} not found on host {1}.\n"
-                          .format(uuid_str, self.hostlist_servers[0]))
-                exists = check_for_pool.check_for_pool(self.hostlist_servers[1],
-                                                       uuid_str)
-                if exists != 0:
-                    self.fail("Pool {0} not found on host {1}.\n"
-                              .format(uuid_str, self.hostlist_servers[1]))
+         Destroy a pool on group A that was created on server group B,
+         should fail.
 
-                delete_cmd = ('{0} destroy-pool -i {1} -s {2}'
-                              .format(daosctl, uuid_str, setid))
-                process.system(delete_cmd)
-
-                exists = check_for_pool.check_for_pool(self.hostlist_servers[0],
-                                                       uuid_str)
-                if exists == 0:
-                    self.fail("Pool {0} found on host {1} when not"
-                              " expected.\n".format(uuid_str,
-                                                    self.hostlist_servers[0]))
-                exists = check_for_pool.check_for_pool(self.hostlist_servers[1],
-                                                       uuid_str)
-                if exists == 0:
-                    self.fail("Pool {0} found on host {1} when not "
-                              "expected.\n".format(uuid_str,
-                                                   self.hostlist_servers[1]))
-
-        except Exception as excep:
-            print(excep)
-            print(traceback.format_exc())
-            self.fail("Expecting to pass but test has failed.\n")
-
-        # no matter what happens shutdown the server
-        finally:
-            if self.agent_sessions:
-                agent_utils.stop_agent(self.agent_sessions)
-            server_utils.stop_server(hosts=self.hostlist_servers)
-            os.remove(hostfile_servers)
-
-    def test_bad_server_group(self):
+        :avocado: tags=all,medium,full_regression
+        :avocado: tags=pool,destroy,destroywronggroup
         """
-        Test destroying a pool created on server group A by passing
-        in server group B, should fail.
+        group_names = [self.server_group + "_a", self.server_group + "_b"]
+        group_hosts = {
+            group_names[0]: self.hostlist_servers[:1],
+            group_names[1]: self.hostlist_servers[1:2],
+        }
+        self.start_servers(group_hosts)
 
-        :avocado: tags=pool,pooldestroy
-        """
-        setid2 = self.basepath + self.params.get("setname",
-                                                 '/run/setnames/othersetname/')
+        self.log.info("Create a pool in server group %s", group_names[0])
+        self.pool = TestPool(self.context, self.log)
+        self.pool.get_params(self)
+        self.pool.name.value = group_names[0]
+        self.pool.create()
+        self.log.info("Pool UUID is %s", self.pool.uuid)
 
-        self.hostlist_servers1 = self.params.get("test_machines1",
-                                                 '/run/hosts/')
-        hostfile_servers1 = write_host_file.write_host_file(
-            self.hostlist_servers1, self.tmp)
+        self.assertTrue(
+            self.pool.check_files(group_hosts[group_names[0]]),
+            "Pool UUID {} not dected in server group {}".format(
+                self.pool.uuid, group_names[0]))
+        self.assertFalse(
+            self.pool.check_files(group_hosts[group_names[1]]),
+            "Pool UUID {} detected in server group {}".format(
+                self.pool.uuid, group_names[1]))
 
-        self.hostlist_servers2 = self.params.get("test_machines2a",
-                                                 '/run/hosts/')
-        hostfile_servers2 = write_host_file.write_host_file(
-            self.hostlist_servers2, self.tmp)
+        # Attempt to delete the pool from the wrong server group - should fail
+        self.pool.pool.group = ctypes.create_string_buffer(group_names[1])
+        self.validate_pool_destroy(
+            group_hosts[group_names[0]],
+            "{} from the wrong server group {}".format(
+                self.pool.uuid, group_names[1]),
+            True)
 
+        # Attempt to delete the pool from the right server group - should pass
+        self.pool.pool.group = ctypes.create_string_buffer(group_names[0])
+        self.validate_pool_destroy(
+            group_hosts[group_names[1]],
+            "{} from the right server group {}".format(
+                self.pool.uuid, group_names[0]),
+            False)
 
-        # TODO make these params in the yaml
-        daosctl = self.basepath + '/install/bin/daosctl'
+    @skipForTicket("DAOS-2741")
+    def test_destroy_connected(self):
+        """Destroy pool with connected client.
 
-        # start 2 different sets of servers,
-        self.agent_sessions = agent_utils.run_agent(self.basepath,
-                                                    self.hostlist_servers1)
-        self.agent_sessions2 = agent_utils.run_agent(self.basepath,
-                                                     self.hostlist_servers2)
-        server_utils.run_server(hostfile_servers1, self.server_group,
-                                self.basepath)
-        server_utils.run_server(hostfile_servers2, setid2, self.basepath)
-
-        host = self.hostlist_servers1[0]
-
-        uuid_str = ""
-
-        try:
-            # use the uid/gid of the user running the test, these should
-            # be perfectly valid
-            uid = os.geteuid()
-            gid = os.getegid()
-
-            create_cmd = ('{0} create-pool -m {1} -u {2} -g {3} -s {4}'
-                          .format(daosctl, 0x731, uid, gid,
-                                  self.server_group))
-            uuid_str = """{0}""".format(process.system_output(create_cmd))
-            print ("uuid is {0}\n".format(uuid_str))
-
-            exists = check_for_pool.check_for_pool(host, uuid_str)
-            if exists != 0:
-                self.fail("Pool {0} not found on host {1}.\n"
-                          .format(uuid_str, host))
-
-            # try and delete it using the wrong group
-            delete_cmd = ('{0} destroy-pool -i {1} -s {2}'
-                          .format(daosctl, uuid_str, setid2))
-
-            process.system(delete_cmd)
-
-            exists = check_for_pool.check_for_pool(host, uuid_str)
-            if exists != 0:
-                self.fail("Pool {0} not found on host {1} but delete "
-                          "should have failed.\n".format(uuid_str, host))
-
-        except Exception as _excep:
-            # now issue a good delete command so we clean-up after this test
-            delete_cmd = ('{0} destroy-pool -i {1} -s {2}'
-                          .format(daosctl, uuid_str, self.server_group))
-
-            process.system(delete_cmd)
-
-            exists = check_for_pool.check_for_pool(host, uuid_str)
-            if exists == 0:
-                self.fail("Pool {0} ound on host {1} but delete"
-                          "should have removed it.\n"
-                          .format(uuid_str, host))
-
-        # no matter what happens shutdown the server
-        finally:
-            if self.agent_sessions:
-                agent_utils.stop_agent(self.agent_sessions)
-            if self.agent_sessions2:
-                agent_utils.stop_agent(self.agent_sessions2)
-            server_utils.stop_server(hosts=self.hostlist_servers)
-            os.remove(hostfile_servers1)
-            os.remove(hostfile_servers2)
-
-    def test_destroy_connect(self):
-        """
         Test destroying a pool that has a connected client with force == false.
         Should fail.
 
-        :avocado: tags=pool,pooldestroy,x
+        :avocado: tags=all,medium,pr
+        :avocado: tags=pool,destroy,destroyconnected
         """
-        host = self.hostlist_servers[0]
+        hostlist_servers = self.hostlist_servers[:1]
+
+        # Start servers
+        self.start_servers({self.server_group: hostlist_servers})
+
+        # Create the pool
+        self.validate_pool_creation(hostlist_servers, self.server_group)
+
+        # Connect to the pool
+        self.assertTrue(
+            self.pool.connect(1), "Pool connect failed before destroy")
+
+        # Destroy pool with direct API call (no disconnect)
+        self.log.info("Attempting to destroy a connected pool")
+        exception_detected = False
         try:
+            self.pool.pool.destroy(0)
+        except DaosApiError as result:
+            exception_detected = True
+            self.log.info(
+                "Expected exception - destroying connected pool: %s",
+                str(result))
 
-            # write out a hostfile_servers and start the servers with it
-            self.hostlist_servers = self.params.get("test_machines1",
-                                                    '/run/hosts/')
-            hostfile_servers = write_host_file.write_host_file(
-                self.hostlist_servers, self.tmp)
+        if not exception_detected:
+            # The pool-destroy did not raise an exception as expected
+            self.log.error(
+                "Exception did not occur - destroying connected pool")
 
-            self.agent_sessions = agent_utils.run_agent(self.basepath,
-                                                        self.hostlist_servers)
-            server_utils.run_server(hostfile_servers, self.server_group,
-                                    self.basepath)
+            # Prevent attempting to delete the pool in tearDown()
+            self.pool.pool = None
 
-            # parameters used in pool create
-            createmode = self.params.get("mode", '/run/poolparams/createmode/')
-            createuid = self.params.get("uid", '/run/poolparams/createuid/')
-            creategid = self.params.get("gid", '/run/poolparams/creategid/')
-            createsetid = self.params.get("setname",
-                                          '/run/poolparams/createset/')
-            createsize = self.params.get("size", '/run/poolparams/createsize/')
+        self.log.info("Check if files still exist")
+        self.assertTrue(
+            self.pool.check_files(hostlist_servers),
+            "Pool UUID {} should not be removed when connected".format(
+                self.pool.uuid))
 
-            # initialize a python pool object then create the underlying
-            # daos storage
-            pool = DaosPool(self.context)
-            pool.create(createmode, createuid, creategid,
-                        createsize, createsetid, None)
+        self.assertTrue(
+            exception_detected, "No exception when deleting a connected pool")
 
-            # need a connection to create container
-            pool.connect(1 << 1)
-
-            # destroy pool with connection open
-            pool.destroy(0)
-
-            # should throw an exception and not hit this
-            self.fail("Shouldn't hit this line.\n")
-
-        except DaosApiError as excep:
-            print("got exception which is expected so long as it is BUSY")
-            print(excep)
-            print(traceback.format_exc())
-            # pool should still be there
-            exists = check_for_pool.check_for_pool(host, pool.get_uuid_str)
-            if exists != 0:
-                self.fail("Pool gone, but destroy should have failed.\n")
-
-        # no matter what happens cleanup
-        finally:
-            if self.agent_sessions:
-                agent_utils.stop_agent(self.agent_sessions)
-            server_utils.stop_server(hosts=self.hostlist_servers)
-            os.remove(hostfile_servers)
-
-    def test_destroy_recreate(self):
-        """
-        Test destroy and recreate one right after the other multiple times
-        Should fail.
-
-        :avocado: tags=pool,pooldestroy,destroyredo
-        """
-
-        try:
-            # write out a hostfile_servers and start the servers with it
-            self.hostlist_servers = self.params.get("test_machines1",
-                                                    '/run/hosts/')
-            hostfile_servers = write_host_file.write_host_file(
-                self.hostlist_servers, self.tmp)
-
-            self.agent_sessions = agent_utils.run_agent(self.basepath,
-                                                        self.hostlist_servers)
-            server_utils.run_server(hostfile_servers, self.server_group,
-                                    self.basepath)
-
-            # parameters used in pool create
-            createmode = self.params.get("mode", '/run/poolparams/createmode/')
-            createuid = self.params.get("uid", '/run/poolparams/createuid/')
-            creategid = self.params.get("gid", '/run/poolparams/creategid/')
-            createsetid = self.params.get("setname",
-                                          '/run/poolparams/createset/')
-            createsize = self.params.get("size", '/run/poolparams/createsize/')
-
-            # initialize a python pool object then create the underlying
-            # daos storage
-            pool = DaosPool(self.context)
-            pool.create(createmode, createuid, creategid,
-                        createsize, createsetid, None)
-
-            # blow it away immediately
-            pool.destroy(1)
-
-            # now recreate
-            pool.create(createmode, createuid, creategid,
-                        createsize, createsetid, None)
-
-            # blow it away immediately
-            pool.destroy(1)
-
-            # now recreate
-            pool.create(createmode, createuid, creategid,
-                        createsize, createsetid, None)
-
-            # blow it away immediately
-            pool.destroy(1)
-
-        except DaosApiError as excep:
-            print(excep)
-            print(traceback.format_exc())
-            self.fail("create/destroy/create/destroy test failed.\n")
-
-        except Exception as excep:
-            self.fail("Daos code segfaulted most likely.  Error: %s" % excep)
-
-        # no matter what happens cleanup
-        finally:
-            if self.agent_sessions:
-                agent_utils.stop_agent(self.agent_sessions)
-            server_utils.stop_server(hosts=self.hostlist_servers)
-            os.remove(hostfile_servers)
-
-    def test_many_servers(self):
-        """
-        Test destroy on a large (relative) number of servers.
-
-        :avocado: tags=pool,pooldestroy,destroybig
-        """
-        try:
-            # write out a hostfile_servers and start the servers with it
-            self.hostlist_servers = self.params.get("test_machines6",
-                                                    '/run/hosts/')
-            hostfile_servers = write_host_file.write_host_file(
-                self.hostlist_servers, self.tmp)
-
-            self.agent_sessions = agent_utils.run_agent(self.basepath,
-                                                        self.hostlist_servers)
-            server_utils.run_server(hostfile_servers, self.server_group,
-                                    self.basepath)
-
-            # parameters used in pool create
-            createmode = self.params.get("mode", '/run/poolparams/createmode/')
-            createuid = self.params.get("uid", '/run/poolparams/createuid/')
-            creategid = self.params.get("gid", '/run/poolparams/creategid/')
-            createsetid = self.params.get("setname",
-                                          '/run/poolparams/createset/')
-            createsize = self.params.get("size", '/run/poolparams/createsize/')
-
-            # initialize a python pool object then create the underlying
-            # daos storage
-            pool = DaosPool(self.context)
-            pool.create(createmode, createuid, creategid,
-                        createsize, createsetid, None)
-
-            time.sleep(1)
-
-            # okay, get rid of it
-            pool.destroy(1)
-
-        except DaosApiError as excep:
-            print(excep)
-            print(traceback.format_exc())
-            self.fail("6 server test failed.\n")
-
-        except Exception as excep:
-            self.fail("Daos code segfaulted most likely.  Error: %s" % excep)
-
-        # no matter what happens cleanup
-        finally:
-            if self.agent_sessions:
-                agent_utils.stop_agent(self.agent_sessions)
-            server_utils.stop_server(hosts=self.hostlist_servers)
-            os.remove(hostfile_servers)
-
+    @skipForTicket("DAOS-2741")
     def test_destroy_withdata(self):
-        """
+        """Destroy Pool with data.
+
         Test destroy and recreate one right after the other multiple times
         Should fail.
 
-        :avocado: tags=pool,pooldestroy,destroydata
+        :avocado: tags=all,medium,pr
+        :avocado: tags=pool,destroy,destroywithdata
         """
+        hostlist_servers = self.hostlist_servers[:1]
+
+        # Start servers
+        self.start_servers({self.server_group: hostlist_servers})
+
+        # Attempt to destroy the pool with an invald server group name
+        self.validate_pool_creation(hostlist_servers, self.server_group)
+
+        # Connect to the pool
+        self.assertTrue(
+            self.pool.connect(1), "Pool connect failed before destroy")
+
+        # Create a container
+        self.container = TestContainer(self.pool)
+        self.container.get_params(self)
+        self.container.create()
+        self.log.info(
+            "Writing 4096 bytes to the container %s", self.container.uuid)
+        self.container.write_objects(obj_class="OC_S1")
+
+        # Attempt to destroy a connected pool with a container with data
+        self.log.info("Attempting to destroy a connected pool with data")
+        exception_detected = False
         try:
-            # write out a hostfile_servers and start the servers with it
-            self.hostlist_servers = self.params.get("test_machines1",
-                                                    '/run/hosts/')
-            hostfile_servers = write_host_file.write_host_file(
-                self.hostlist_servers, self.tmp)
+            self.pool.pool.destroy(0)
+        except DaosApiError as result:
+            exception_detected = True
+            self.log.info(
+                "Expected exception - destroying connected pool with data: %s",
+                str(result))
 
-            self.agent_sessions = agent_utils.run_agent(self.basepath,
-                                                        self.hostlist_servers)
-            server_utils.run_server(hostfile_servers, self.server_group,
-                                    self.basepath)
+        if not exception_detected:
+            # The pool-destroy did not raise an exception as expected
+            self.log.error(
+                "Exception did not occur - destroying connected pool with "
+                "data")
 
-            # parameters used in pool create
-            createmode = self.params.get("mode", '/run/poolparams/createmode/')
-            createuid = self.params.get("uid", '/run/poolparams/createuid/')
-            creategid = self.params.get("gid", '/run/poolparams/creategid/')
-            createsetid = self.params.get("setname",
-                                          '/run/poolparams/createset/')
-            createsize = self.params.get("size", '/run/poolparams/createsize/')
+            # Prevent attempting to delete the pool in tearDown()
+            self.pool.pool = None
 
-            # initialize a python pool object then create the underlying
-            # daos storage
-            pool = DaosPool(self.context)
-            pool.create(createmode, createuid, creategid,
-                        createsize, createsetid, None)
+        self.log.info("Check if files still exist")
+        self.assertTrue(
+            self.pool.check_files(hostlist_servers),
+            "Pool UUID {} should not be removed when connected".format(
+                self.pool.uuid))
 
-            # need a connection to create container
-            pool.connect(1 << 1)
+        self.assertTrue(
+            exception_detected,
+            "No exception when deleting a connected pool with data")
 
-            # create a container
-            container = DaosContainer(self.context)
-            container.create(pool.handle)
-
-            pool.disconnect()
-
-            daosctl = self.basepath + '/install/bin/daosctl'
-
-            write_cmd = ('{0} write-pattern -i {1} -l 0 -c {2} -p sequential'.
-                         format(daosctl, c_uuid_to_str(pool.uuid),
-                                c_uuid_to_str(container.uuid)))
-
-            process.system_output(write_cmd)
-
-            # blow it away
-            pool.destroy(1)
-
-        except DaosApiError as excep:
-            print(excep)
-            print(traceback.format_exc())
-            self.fail("create/destroy/create/destroy test failed.\n")
-
-        except Exception as excep:
-            self.fail("Daos code segfaulted most likely.  Error: %s" % excep)
-
-        # no matter what happens cleanup
-        finally:
-            if self.agent_sessions:
-                agent_utils.stop_agent(self.agent_sessions)
-            server_utils.stop_server(hosts=self.hostlist_servers)
-            os.remove(hostfile_servers)
-
+    @skipForTicket("DAOS-2742")
     def test_destroy_async(self):
+        """Destroy pool asynchronously.
+
+        Create two server groups. Perform destroy asynchronously
+        Expect the destroy to work on the server group where the pool was
+        created and expect the destroy pool to fail on the second server.
+
+        :avocado: tags=all,medium,full_regression
+        :avocado: tags=pool,destroy,destroyasync
         """
-        Performn destroy asynchronously, successful and failed.
+        # Start two server groups
+        group_names = [self.server_group + "_a", self.server_group + "_b"]
+        group_hosts = {
+            group_names[0]: self.hostlist_servers[:1],
+            group_names[1]: self.hostlist_servers[1:2]
+        }
+        self.start_servers(group_hosts)
 
-        :avocado: tags=pool,pooldestroy,destroyasync
-        """
+        self.pool = TestPool(self.context, self.log)
+        self.pool.get_params(self)
+        self.pool.name.value = group_names[0]
+        self.pool.create()
+        self.log.info("Pool UUID is %s on server_group %s",
+                      self.pool.uuid, group_names[0])
 
-        global GLOB_SIGNAL
-        global GLOB_RC
+        # Check that the pool was created on server_group_a
+        self.assertTrue(
+            self.pool.check_files(group_hosts[group_names[0]]),
+            "Pool data not detected on servers before destroy")
 
-        try:
-            # write out a hostfile_servers and start the servers with it
-            self.hostlist_servers = self.params.get("test_machines1",
-                                                    '/run/hosts/')
-            hostfile_servers = write_host_file.write_host_file(
-                self.hostlist_servers, self.tmp)
+        # Check that the pool was not created on server_group_b
+        self.assertFalse(
+            self.pool.check_files(group_hosts[group_names[1]]),
+            "Pool data detected on servers before destroy")
 
-            self.agent_sessions = agent_utils.run_agent(self.basepath,
-                                                        self.hostlist_servers)
-            server_utils.run_server(hostfile_servers, self.server_group,
-                                    self.basepath)
+        # Create callback handler
+        cb_handler = CallbackHandler()
 
-            # parameters used in pool create
-            createmode = self.params.get("mode", '/run/poolparams/createmode/')
-            createuid = self.params.get("uid", '/run/poolparams/createuid/')
-            creategid = self.params.get("gid", '/run/poolparams/creategid/')
-            createsetid = self.params.get("setname",
-                                          '/run/poolparams/createset/')
-            createsize = self.params.get("size", '/run/poolparams/createsize/')
+        # Destroy pool on server_group_a with callback
+        self.log.info("Attempting to destroy pool")
+        self.pool.pool.destroy(0, cb_handler.callback)
+        cb_handler.wait()
+        if cb_handler.ret_code != 0:
+            self.fail("destroy-pool was expected to PASS")
 
-            # initialize a python pool object then create the underlying
-            # daos storage
-            pool = DaosPool(self.context)
-            pool.create(createmode, createuid, creategid,
-                        createsize, createsetid, None)
+        self.assertFalse(
+            self.pool.check_files(group_hosts[group_names[0]]),
+            "Pool data detected on {} after destroy".format(group_names[0]))
 
-            # allow the callback to tell us when its been called
-            GLOB_SIGNAL = threading.Event()
+        # Destroy pool with callback while stopping other server
+        # Create new pool on server_group_a
+        self.pool = TestPool(self.context, self.log)
+        self.pool.get_params(self)
+        self.pool.name.value = group_names[0]
+        self.pool.create()
+        self.log.info("Pool UUID is %s on server_group %s",
+                      self.pool.uuid, group_names[0])
 
-            # blow it away but this time get return code via callback function
-            pool.destroy(1, cb_func)
+        # Check that the pool was created on server_group_a
+        self.assertTrue(
+            self.pool.check_files(group_hosts[group_names[0]]),
+            "Pool data not detected on servers before destroy")
 
-            # wait for callback
-            GLOB_SIGNAL.wait()
-            if GLOB_RC != 0:
-                self.fail("RC not as expected in async test")
+        # Check that the pool was not created on server_group_b
+        self.assertFalse(
+            self.pool.check_files(group_hosts[group_names[1]]),
+            "Pool data detected on servers before destroy")
 
-            # recreate the pool, reset the signal, shutdown the
-            # servers so call will fail and then check rc in the callback
-            pool.create(createmode, createuid, creategid,
-                        createsize, createsetid, None)
-            GLOB_SIGNAL = threading.Event()
-            GLOB_RC = -9900000
-            server_utils.stop_server(hosts=self.hostlist_servers)
-            pool.destroy(1, cb_func)
+        self.log.info("Stopping one server")
+        server_utils.stop_server(hosts=group_hosts[group_names[1]])
 
-            # wait for callback, expecting a timeout since servers are down
-            GLOB_SIGNAL.wait()
-            if GLOB_RC != -1011:
-                self.fail("RC not as expected in async test")
+        self.log.info("Attempting to destroy pool")
+        self.pool.pool.destroy(0, cb_handler.callback)
+        cb_handler.wait()
+        if cb_handler.ret_code != 0:
+            # Avoid attempting to destroy the pool again in tearDown()
+            self.pool.pool = None
+            self.fail("destroy-pool was expected to PASS")
 
-        except DaosApiError as excep:
-            print(excep)
-            print(traceback.format_exc())
-            self.fail("destroy async test failed.\n")
-
-        except Exception as excep:
-            self.fail("Daos code segfaulted most likely. Error: %s" % excep)
-
-        # no matter what happens cleanup
-        finally:
-            if self.agent_sessions:
-                agent_utils.stop_agent(self.agent_sessions)
-            server_utils.stop_server(hosts=self.hostlist_servers)
-            os.remove(hostfile_servers)
+        self.assertFalse(
+            self.pool.check_files(group_hosts[group_names[1]]),
+            "Pool data detected on servers after destroy")

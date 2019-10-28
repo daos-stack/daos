@@ -2,7 +2,7 @@
 
 DAOS operates over two, closely integrated planes, Control and Data. The Data plane handles the heavy lifting transport operations while the Control plane orchestrates process and storage management, facilitating the operation of the Data plane.
 
-[DAOS Server](server) implements the DAOS Control Plane and is written in Golang. It is tasked with network and storage hardware provisioning and allocation in addition to instantiation and management of the DAOS IO Servers (Data Plane written in C) running on the same host. Users of DAOS will interact directly only with the Control Plane in the form of the DAOS Server and associated tools.
+[DAOS Server](server) implements the DAOS Control Plane and is written in Go. It is tasked with network and storage hardware provisioning and allocation in addition to instantiation and management of the DAOS IO Servers (Data Plane written in C) running on the same host. Users of DAOS will interact directly only with the Control Plane in the form of the DAOS Server and associated tools.
 
 The DAOS Server implements the [gRPC protocol](https://grpc.io/) to communicate with client gRPC applications and interacts with DAOS IO Servers through Unix domain sockets.
 
@@ -10,7 +10,7 @@ Multiple gRPC server modules are loaded by the control server. Currently include
 
 The Control Plane implements a replicated management service as part of the DAOS Server, responsible for handling distributed operations across the DAOS System.
 
-The [management tool](dmg) is an example client application which can connect to both the [agent](agent) to perform security functions (such as providing credentials and retrieving security contexts) and to the local management server to perform management functions (such as storage device discovery).
+The [management tool](cmd/dmg) is an example client application which can connect to both the [agent](cmd/agent) to perform security functions (such as providing credentials and retrieving security contexts) and to the local management server to perform management functions (such as storage device discovery).
 
 ## Documentation
 
@@ -20,7 +20,7 @@ The [management tool](dmg) is an example client application which can connect to
 - [Agent internals](https://godoc.org/github.com/daos-stack/daos/src/control/security)
 - [dRPC](https://godoc.org/github.com/daos-stack/daos/src/control/drpc)
 - [server package](server/README.md)
-- [management tool package](dmg/README.md)
+- [management tool package](cmd/dmg/README.md)
 - [client package](client/README.md)
 - [common package](common/README.md)
 
@@ -30,9 +30,19 @@ First a view of software component architecture:
 
 ![Architecture diagram](/doc/graph/system_architecture.png)
 
+There are operations that will be performed on individual nodes in parallel, such as hardware provisioning, which will execute through storage or network libraries.
+
+Such broadcast commands (which will connect to a list of hosts) will usually be issued by the [management tool](dmg), a gRPC client, and handled by the gRPC [MgmtCtlServer](server/mgmt.go) running in `daos_server`.
+These commands will not traverse dRPC but will perform node-local functions such as hardware (network and storage) provisioning.
+
+Other operations which will interact with the DAOS data plane through the replicated management service.
+Such operations will be triggered via a single control plane instance (access point) and use the replicated management service (running in the data plane) to perform a distributed operation such as creating a storage pool.
+
+Commands which require connection to an access point will be forwarded to the data plane ([iosrv](/src/iosrv)), redirected by gRPC [MgmtSvc](server/mgmt_svc.go) over dRPC channel and handled by the [mgmt](/src/mgmt/srv.c) module.
+
 ## Development Requirements
 
-- [Golang](https://golang.org/) 1.9 or higher
+- [Go](https://golang.org/) 1.10 or higher
 - [gRPC](https://grpc.io/)
 - [Protocol Buffers](https://developers.google.com/protocol-buffers/)
 - [Dep](https://github.com/golang/dep/) for managing dependencies in vendor directory.
@@ -69,15 +79,15 @@ Setup environment variables:
 ```bash
 DAOS_REPO="/path/to/daos_repo"
 SPDK_REPO="/path/to/spdk_repo"
-export CGO_LDFLAGS="-L${SPDK_REPO}/build/lib"
-export CGO_CFLAGS=-I${SPDK_REPO}/include
-export LD_LIBRARY_PATH="${SPDK_REPO}/build/lib:${DAOS_REPO}/src/control/vendor/github.com/daos-stack/go-spdk/spdk"
+export CGO_LDFLAGS="-L${SPDK_REPO}/build/lib:${DAOS_REPO}/src/control/lib/spdk/src"
+export CGO_CFLAGS="-I${SPDK_REPO}/include:${DAOS_REPO}/src/control/lib/spdk/include"
+export LD_LIBRARY_PATH="${SPDK_REPO}/build/lib:${DAOS_REPO}/src/control/lib/spdk"
 ```
 
 Build NVME libs:
 
 ```bash
-cd ${DAOS_REPO}/src/control/vendor/github.com/daos-stack/go-spdk/spdk
+cd ${DAOS_REPO}/src/control/lib/spdk
 gcc ${CGO_LDFLAGS} ${CGO_CFLAGS} -Werror -g -Wshadow -Wall -Wno-missing-braces -c -fpic -Iinclude src/*.c -lspdk
 gcc ${CGO_LDFLAGS} ${CGO_CFLAGS} -shared -o libnvme_control.so *.o
 ```
@@ -89,10 +99,10 @@ cd ${DAOS_REPO}/src/control
 ./run_go_tests.sh
 ```
 
-To run go-spdk tests:
+To run the go-spdk tests:
 
 ```base
-cd ${DAOS_REPO}/src/control/vendor/github.com/daos-stack/go-spdk/spdk
+cd ${DAOS_REPO}/src/control/lib/spdk
 go test -v
 ```
 

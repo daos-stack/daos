@@ -23,11 +23,13 @@
 package drpc
 
 import (
-	"errors"
-	"fmt"
 	"net"
 	"os"
 	"syscall"
+
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // MAXMSGSIZE is the maximum drpc message size that may be sent.
@@ -113,7 +115,7 @@ func ConnReceiver(d *DomainSocketServer) error {
 				}
 				return nil
 			default:
-				return fmt.Errorf("Unable to accept connection on unix socket %s: %s", d.sockFile, err)
+				return errors.Wrapf(err, "Unable to accept connection on unix socket %s", d.sockFile)
 			}
 		}
 
@@ -128,22 +130,22 @@ func ConnReceiver(d *DomainSocketServer) error {
 // go routine.
 func (d *DomainSocketServer) Start() error {
 
-	addr := &net.UnixAddr{d.sockFile, "unixpacket"}
+	addr := &net.UnixAddr{Name: d.sockFile, Net: "unixpacket"}
 
 	// Setup our unix domain socket for our socket server to listen on
 	err := syscall.Unlink(d.sockFile)
 	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("Unable to unlink %s: %s", d.sockFile, err)
+		return errors.Wrapf(err, "Unable to unlink %s", d.sockFile)
 	}
 
 	lis, err := net.ListenUnix("unixpacket", addr)
 	if err != nil {
-		return fmt.Errorf("Unable to listen on unix socket %s: %s", d.sockFile, err)
+		return errors.Wrapf(err, "Unable to listen on unix socket %s", d.sockFile)
 	}
 
 	err = os.Chmod(d.sockFile, 0777)
 	if err != nil {
-		return fmt.Errorf("Unable to set permissions on %s: %s", d.sockFile, err)
+		return errors.Wrapf(err, "Unable to set permissions on %s", d.sockFile)
 	}
 
 	d.listener = lis
@@ -167,11 +169,11 @@ func (d *DomainSocketServer) RegisterRPCModule(mod Module) {
 
 // NewDomainSocketServer returns a new unstarted instance of a
 // DomainSocketServer for the specified unix domain socket path.
-func NewDomainSocketServer(sock string) (*DomainSocketServer, error) {
+func NewDomainSocketServer(log logging.Logger, sock string) (*DomainSocketServer, error) {
 	if sock == "" {
 		return nil, errors.New("Missing Argument: sockFile")
 	}
-	service := NewRPCService()
+	service := NewRPCService(log)
 	quit := make(chan bool)
 	clients := make(map[*net.UnixConn]*Client)
 	return &DomainSocketServer{sock, quit, nil, service, clients}, nil

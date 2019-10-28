@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -101,13 +101,14 @@ CRT_RPC_DEFINE(cont_snap_create, DAOS_ISEQ_CONT_EPOCH_OP,
 CRT_RPC_DEFINE(cont_snap_destroy, DAOS_ISEQ_CONT_EPOCH_OP,
 		DAOS_OSEQ_CONT_EPOCH_OP)
 CRT_RPC_DEFINE(cont_tgt_destroy, DAOS_ISEQ_TGT_DESTROY, DAOS_OSEQ_TGT_DESTROY)
-CRT_RPC_DEFINE(cont_tgt_open, DAOS_ISEQ_TGT_OPEN, DAOS_OSEQ_TGT_OPEN)
 CRT_RPC_DEFINE(cont_tgt_close, DAOS_ISEQ_TGT_CLOSE, DAOS_OSEQ_TGT_CLOSE)
 CRT_RPC_DEFINE(cont_tgt_query, DAOS_ISEQ_TGT_QUERY, DAOS_OSEQ_TGT_QUERY)
 CRT_RPC_DEFINE(cont_tgt_epoch_discard, DAOS_ISEQ_CONT_TGT_EPOCH_DISCARD,
 		DAOS_OSEQ_CONT_TGT_EPOCH_DISCARD)
 CRT_RPC_DEFINE(cont_tgt_epoch_aggregate, DAOS_ISEQ_CONT_TGT_EPOCH_AGGREGATE,
 		DAOS_OSEQ_CONT_TGT_EPOCH_AGGREGATE)
+CRT_RPC_DEFINE(cont_tgt_snapshot_notify, DAOS_ISEQ_CONT_TGT_SNAPSHOT_NOTIFY,
+		DAOS_OSEQ_CONT_TGT_SNAPSHOT_NOTIFY)
 
 /* Define for cont_rpcs[] array population below.
  * See CONT_PROTO_*_RPC_LIST macro definition

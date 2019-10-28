@@ -21,12 +21,20 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package main
+package server
 
 import (
 	"net"
 	"strconv"
+	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func TestHasPort(t *testing.T) {
@@ -48,8 +56,7 @@ func TestHasPort(t *testing.T) {
 }
 
 func TestCheckMgmtSvcReplica(t *testing.T) {
-	defaultPort := strconv.Itoa(
-		mockConfigFromFile(t, defaultMockExt(), defaultConfig).Port)
+	defaultPort := strconv.Itoa(NewConfiguration().ControlPort)
 
 	tests := []struct {
 		self              string
@@ -129,5 +136,98 @@ func TestCheckMgmtSvcReplica(t *testing.T) {
 				i, ta, test.accessPoints, isReplica, bootstrap, err != nil,
 				test.expectedIsReplica, test.expectedBootstrap, test.expectedErr)
 		}
+	}
+}
+
+func newTestGetACLReq() *mgmtpb.GetACLReq {
+	return &mgmtpb.GetACLReq{
+		Uuid: "testUUID",
+	}
+}
+
+func TestPoolGetACL_NoMS(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	svc := newMgmtSvc(NewIOServerHarness(log), nil)
+
+	resp, err := svc.PoolGetACL(nil, newTestGetACLReq())
+
+	if resp != nil {
+		t.Errorf("Expected no response, got: %+v", resp)
+	}
+
+	common.CmpErr(t, errors.New("no managed instances"), err)
+}
+
+func TestPoolGetACL_DrpcFailed(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	svc := newTestMgmtSvc(log)
+	expectedErr := errors.New("mock error")
+	setupMockDrpcClient(svc, nil, expectedErr)
+
+	resp, err := svc.PoolGetACL(nil, newTestGetACLReq())
+
+	if resp != nil {
+		t.Errorf("Expected no response, got: %+v", resp)
+	}
+
+	common.CmpErr(t, expectedErr, err)
+}
+
+func TestPoolGetACL_BadDrpcResp(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	svc := newTestMgmtSvc(log)
+	// dRPC call returns junk in the message body
+	badBytes := make([]byte, 12)
+	for i := range badBytes {
+		badBytes[i] = byte(i)
+	}
+
+	setupMockDrpcClientBytes(svc, badBytes, nil)
+
+	resp, err := svc.PoolGetACL(nil, newTestGetACLReq())
+
+	if resp != nil {
+		t.Errorf("Expected no response, got: %+v", resp)
+	}
+
+	common.CmpErr(t, errors.New("unmarshal"), err)
+}
+
+func TestPoolGetACL_Success(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	svc := newTestMgmtSvc(log)
+
+	expectedResp := &mgmtpb.GetACLResp{
+		Status: 0,
+		ACL:    []string{"A::OWNER@:rw", "A:g:GROUP@:r"},
+	}
+	setupMockDrpcClient(svc, expectedResp, nil)
+
+	resp, err := svc.PoolGetACL(nil, newTestGetACLReq())
+
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+
+	// Avoid comparing the internal Protobuf fields
+	isHiddenPBField := func(path cmp.Path) bool {
+		if strings.HasPrefix(path.Last().String(), ".XXX_") {
+			return true
+		}
+		return false
+	}
+	cmpOpts := []cmp.Option{
+		cmp.FilterPath(isHiddenPBField, cmp.Ignore()),
+	}
+	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
+		t.Fatalf("bad response (-want, +got): \n%s\n", diff)
 	}
 }

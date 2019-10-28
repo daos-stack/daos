@@ -6,7 +6,7 @@ features that DAOS exposes:
 - Pool Client API: pool access
 - Container API: container management and access, container snapshots
 - Transaction API: transaction model and concurrency control
-- Object API: object and data management and access
+- Object, Array and KV APIs: object and data management and access
 - Event, Event Queue, and Task API: non-blocking operations
 - Addons API: array and KV operations built over the DAOS object API
 - DFS API: DAOS file system API to emulate a POSIX namespace over DAOS

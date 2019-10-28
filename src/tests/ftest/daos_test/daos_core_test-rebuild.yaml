@@ -1,0 +1,52 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+  test_machines:
+    - boro-A
+    - boro-B
+    - boro-C
+    - boro-D
+    - boro-E
+    - boro-F
+    - boro-G
+    - boro-H
+timeout: 600
+server_config:
+  name: daos_server
+daos_tests:
+  num_clients:
+    num_clients: 1
+  num_replicas:
+    num_replicas: 1
+  Tests: !mux
+    test_r_0-16:
+      daos_test: r
+      test_name: rebuild tests 0-16
+      args: -s3 -u subtests="0-16"
+      test_timeout: 1500
+    test_r_18-24:
+      daos_test: r
+      test_name: rebuild tests 18-24
+      args: -s3 -u subtests="18-24"
+      test_timeout: 1500
+    test_r_25:
+      daos_test: r
+      test_name: rebuild tests 25
+      args: -s3 -u subtests="25"
+    test_r_26:
+      daos_test: r
+      test_name: rebuild tests 26
+      args: -s3 -u subtests="26"
+    test_r_27:
+      daos_test: r
+      test_name: rebuild tests 27
+      args: -s3 -u subtests="27"
+    test_r_28:
+      daos_test: r
+      test_name: rebuild tests 28
+      args: -s3 -u subtests="28"
+    test_r_31:
+      daos_test: r
+      test_name: rebuild tests 31
+      args: -s3 -u subtests="31"
+      test_timeout: 1500

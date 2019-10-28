@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018 Intel Corporation.
+// (C) Copyright 2018-2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,9 +23,10 @@
 package drpc
 
 import (
-	"fmt"
-
 	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // ModuleState is an interface to allow a module to pass in private
@@ -45,13 +46,17 @@ type Module interface {
 // Service is the type representing the collection of Modules used by
 // DomainSocketServer to be used to process messages.
 type Service struct {
+	log     logging.Logger
 	modules map[int32]Module
 }
 
 // NewRPCService creates an initialized Service instance
-func NewRPCService() *Service {
+func NewRPCService(log logging.Logger) *Service {
 	modules := make(map[int32]Module)
-	return &Service{modules}
+	return &Service{
+		log:     log,
+		modules: modules,
+	}
 }
 
 // RegisterModule will take in a type that implements the rpcModule interface
@@ -60,7 +65,7 @@ func NewRPCService() *Service {
 func (r *Service) RegisterModule(mod Module) error {
 	_, ok := r.modules[mod.ID()]
 	if ok == true {
-		return fmt.Errorf("module with Id %d already exists", mod.ID())
+		return errors.Errorf("module with Id %d already exists", mod.ID())
 	}
 	r.modules[mod.ID()] = mod
 	return nil
@@ -94,7 +99,7 @@ func marshalResponse(sequence int64, status Status, body []byte) ([]byte, error)
 
 	responseBytes, mErr := proto.Marshal(&response)
 	if mErr != nil {
-		return nil, mErr
+		return nil, errors.Wrap(mErr, "Failed to marshal response")
 	}
 	return responseBytes, nil
 }
@@ -112,11 +117,12 @@ func (r *Service) ProcessMessage(client *Client, callBytes []byte) ([]byte, erro
 	}
 	module, ok := r.modules[rpcMsg.GetModule()]
 	if !ok {
-		err = fmt.Errorf("Attempted to call unregistered module")
+		err = errors.Errorf("Attempted to call unregistered module")
 		return marshalResponse(rpcMsg.GetSequence(), Status_FAILURE, nil)
 	}
 	respBody, err := module.HandleCall(client, rpcMsg.GetMethod(), rpcMsg.GetBody())
 	if err != nil {
+		r.log.Errorf("HandleCall for %d:%d failed:%s\n", module.ID(), rpcMsg.GetMethod(), err)
 		return marshalResponse(rpcMsg.GetSequence(), Status_FAILURE, nil)
 	}
 

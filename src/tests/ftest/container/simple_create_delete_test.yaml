@@ -1,26 +1,13 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
-hosts: !mux
-    test_machines1:
-      test_machines:
-        - boro-A
-    test_machines6:
-      test_machines:
-        - boro-A
-        - boro-B
-        - boro-C
-        - boro-D
-        - boro-E
-        - boro-F
+hosts:
+    test_machines:
+      - boro-A
 server_config:
    name: daos_server
-conttests:
+pool:
    createmode:
      mode: 511
-   createuid:
-     uid: 11374638
-   creategid:
-     gid: 11374638
    createset:
      setname: daos_server
    createsize:

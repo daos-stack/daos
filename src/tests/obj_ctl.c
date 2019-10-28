@@ -240,7 +240,7 @@ ctl_daos_list(struct dts_io_credit *cred)
 	memset(&anchor, 0, sizeof(anchor));
 	while (!daos_anchor_is_eof(&anchor)) {
 		memset(kbuf, 0, CTL_BUF_LEN);
-		daos_iov_set(&cred->tc_val, kbuf, CTL_BUF_LEN);
+		d_iov_set(&cred->tc_val, kbuf, CTL_BUF_LEN);
 
 		if (!(ctl_abits & CTL_ARG_OID)) {
 			fprintf(stderr, "Cannot list object for now\n");
@@ -344,7 +344,7 @@ ctl_cmd_run(char opc, char *args)
 				break;
 
 			daos_obj_generate_id(&ctl_oid.id_pub, 0,
-					     DAOS_OC_TINY_RW);
+					     OC_S1, 0);
 			break;
 		case 'd':
 		case 'D':
@@ -372,13 +372,13 @@ ctl_cmd_run(char opc, char *args)
 
 	if (ctl_abits & CTL_ARG_DKEY) {
 		strcpy(cred->tc_dbuf, dkey);
-		daos_iov_set(&cred->tc_dkey, cred->tc_dbuf,
+		d_iov_set(&cred->tc_dkey, cred->tc_dbuf,
 			     strlen(cred->tc_dbuf) + 1);
 	}
 
 	if (ctl_abits & CTL_ARG_AKEY) {
 		strcpy(cred->tc_abuf, akey);
-		daos_iov_set(&cred->tc_iod.iod_name, cred->tc_abuf,
+		d_iov_set(&cred->tc_iod.iod_name, cred->tc_abuf,
 			     strlen(cred->tc_abuf) + 1);
 
 		cred->tc_iod.iod_type	= DAOS_IOD_SINGLE;
@@ -391,11 +391,11 @@ ctl_cmd_run(char opc, char *args)
 	if (ctl_abits & CTL_ARG_VAL) {
 		cred->tc_iod.iod_size = strlen(val) + 1;
 		strcpy(cred->tc_vbuf, val);
-		daos_iov_set(&cred->tc_val, cred->tc_vbuf,
+		d_iov_set(&cred->tc_val, cred->tc_vbuf,
 			     strlen(cred->tc_vbuf) + 1);
 	} else {
 		memset(cred->tc_vbuf, 0, ctl_ctx.tsc_cred_vsize);
-		daos_iov_set(&cred->tc_val, cred->tc_vbuf,
+		d_iov_set(&cred->tc_val, cred->tc_vbuf,
 			     ctl_ctx.tsc_cred_vsize);
 	}
 	cred->tc_sgl.sg_nr = 1;

@@ -135,13 +135,15 @@ int ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 int ds_pool_create(const uuid_t pool_uuid, const char *path,
 		   uuid_t target_uuid);
 
-int ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid,
-		       unsigned int gid, unsigned int mode, int ntargets,
+int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets,
 		       uuid_t target_uuids[], const char *group,
 		       const d_rank_list_t *target_addrs, int ndomains,
 		       const int *domains, daos_prop_t *prop,
 		       d_rank_list_t *svc_addrs);
 int ds_pool_svc_destroy(const uuid_t pool_uuid);
+
+int ds_pool_svc_get_acl_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
+			     daos_prop_t **prop);
 
 /*
  * Called by dmg on the pool service leader to list all pool handles of a pool.
@@ -179,4 +181,22 @@ int
 ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc);
 int
 ds_pool_child_map_refresh_async(struct ds_pool_child *dpc);
+
+enum map_ranks_class {
+	MAP_RANKS_UP,
+	MAP_RANKS_DOWN
+};
+
+int
+map_ranks_init(const struct pool_map *map, enum map_ranks_class class,
+	       d_rank_list_t *ranks);
+
+void
+map_ranks_fini(d_rank_list_t *ranks);
+
+int ds_pool_get_ranks(const uuid_t pool_uuid, int status,
+		      d_rank_list_t *ranks);
+
+int ds_pool_get_failed_tgt_idx(const uuid_t pool_uuid, int **failed_tgts,
+			       unsigned int *failed_tgts_cnt);
 #endif /* __DAOS_SRV_POOL_H__ */

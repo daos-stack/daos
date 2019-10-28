@@ -44,6 +44,7 @@
 #include <tests_lib.h>
 #include <daos_mgmt.h>
 #include <daos/common.h>
+#include <daos/checksum.h>
 
 #include "common_utils.h"
 
@@ -58,7 +59,7 @@
  * at present.
  */
 
-static int dts_obj_class = DAOS_OC_TINY_RW;
+static int dts_obj_class = OC_S1;
 
 struct io_cmd_options {
 	char          *server_group;
@@ -102,8 +103,8 @@ struct ioreq {
 	daos_event_t		ev;
 	daos_key_t		dkey;
 	daos_key_t		akey;
-	daos_iov_t		val_iov[IOREQ_SG_IOD_NR][IOREQ_SG_NR];
-	daos_sg_list_t		sgl[IOREQ_SG_IOD_NR];
+	d_iov_t			val_iov[IOREQ_SG_IOD_NR][IOREQ_SG_NR];
+	d_sg_list_t		sgl[IOREQ_SG_IOD_NR];
 	daos_csum_buf_t		csum;
 	char			csum_buf[UPDATE_CSUM_SIZE];
 	daos_recx_t		rex[IOREQ_SG_IOD_NR][IOREQ_IOD_NR];
@@ -176,7 +177,8 @@ ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
 	}
 
 	/* init csum */
-	daos_csum_set(&req->csum, &req->csum_buf[0], UPDATE_CSUM_SIZE);
+	dcb_set(&req->csum, &req->csum_buf[0], UPDATE_CSUM_SIZE,
+		UPDATE_CSUM_SIZE, 1, 0);
 
 	/* init record extent */
 	for (i = 0; i < IOREQ_SG_IOD_NR; i++) {
@@ -214,7 +216,7 @@ ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
 static void
 ioreq_dkey_set(struct ioreq *req, const char *dkey)
 {
-	daos_iov_set(&req->dkey, (void *)dkey, strlen(dkey));
+	d_iov_set(&req->dkey, (void *)dkey, strlen(dkey));
 }
 
 static void
@@ -228,7 +230,7 @@ ioreq_io_akey_set(struct ioreq *req, const char **akey, int nr)
 	}
 	/** akey */
 	for (i = 0; i < nr; i++)
-		daos_iov_set(&req->iod[i].iod_name, (void *)akey[i],
+		d_iov_set(&req->iod[i].iod_name, (void *)akey[i],
 			     strlen(akey[i]));
 }
 
@@ -237,7 +239,7 @@ open_container(struct container_info *oc_info)
 {
 	int              rc;
 	unsigned int     flag = DAOS_PC_EX;
-	daos_pool_info_t pinfo;
+	daos_pool_info_t pinfo = {0};
 	daos_cont_info_t cinfo;
 
 	rc = daos_pool_connect(oc_info->pool_uuid, oc_info->server_group,
@@ -271,7 +273,7 @@ ioreq_fini(struct ioreq *req)
 
 /* no wait for async insert, for sync insert it still will block */
 static int
-insert_internal_nowait(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
+insert_internal_nowait(daos_key_t *dkey, int nr, d_sg_list_t *sgls,
 		       daos_iod_t *iods, daos_handle_t th, struct ioreq *req)
 {
 	int rc;
@@ -283,7 +285,7 @@ insert_internal_nowait(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
 }
 
 static void
-lookup_internal(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
+lookup_internal(daos_key_t *dkey, int nr, d_sg_list_t *sgls,
 		daos_iod_t *iods, daos_handle_t th, struct ioreq *req,
 		bool empty)
 {
@@ -309,7 +311,7 @@ static void
 ioreq_sgl_simple_set(struct ioreq *req, void **value,
 		     daos_size_t *size, int nr)
 {
-	daos_sg_list_t *sgl = req->sgl;
+	d_sg_list_t *sgl = req->sgl;
 	int i;
 
 	if (nr < 1 || nr > IOREQ_SG_IOD_NR) {
@@ -319,7 +321,7 @@ ioreq_sgl_simple_set(struct ioreq *req, void **value,
 	for (i = 0; i < nr; i++) {
 		sgl[i].sg_nr = 1;
 		sgl[i].sg_nr_out = 1;
-		daos_iov_set(&sgl[i].sg_iovs[0], value[i], size[i]);
+		d_iov_set(&sgl[i].sg_iovs[0], value[i], size[i]);
 	}
 }
 

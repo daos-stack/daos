@@ -35,26 +35,23 @@
 /**
  * Swtich of enable DTX or not, enabled by default.
  */
-bool srv_enable_dtx = true;
-
 static int
 obj_mod_init(void)
 {
-	uint32_t	mode = DIM_DTX_FULL_ENABLED;
-	int		rc;
+	int	rc;
 
-	d_getenv_int("DAOS_IO_MODE", &mode);
-	if (mode != DIM_DTX_FULL_ENABLED) {
-		srv_enable_dtx = false;
-		D_DEBUG(DB_IO, "DTX is disabled.\n");
-	} else {
-		D_DEBUG(DB_IO, "DTX is enabled.\n");
-	}
+	rc = obj_utils_init();
+	if (rc)
+		goto out;
 
 	rc = obj_ec_codec_init();
-	if (rc != 0)
-		D_ERROR("failed to obj_ec_codec_init: %d\n", rc);
-
+	if (rc != 0) {
+		D_ERROR("failed to obj_ec_codec_init\n");
+		goto out;
+	}
+	return 0;
+out:
+	D_ERROR("Object module init error: %s\n", d_errstr(rc));
 	return rc;
 }
 
@@ -62,6 +59,7 @@ static int
 obj_mod_fini(void)
 {
 	obj_ec_codec_fini();
+	obj_utils_fini();
 	return 0;
 }
 
@@ -108,8 +106,10 @@ obj_tls_fini(const struct dss_thread_local_storage *dtls,
 
 char *profile_op_names[] = {
 	[OBJ_PF_UPDATE_PREP] = "update_prep",
+	[OBJ_PF_UPDATE_DISPATCH] = "update_dispatch",
 	[OBJ_PF_UPDATE_LOCAL] = "update_local",
 	[OBJ_PF_UPDATE_END] = "update_end",
+	[OBJ_PF_UPDATE_WAIT] = "update_end",
 	[OBJ_PF_UPDATE_REPLY] = "update_repl",
 	[OBJ_PF_UPDATE] = "update",
 };

@@ -27,13 +27,16 @@
 #include <daos.h>
 
 #define DOM_NR		8
-#define	TARGET_PER_DOM	4
-#define VOS_PER_TARGET	8
+#define	NODE_PER_DOM	1
+#define VOS_PER_TARGET	4
 #define SPARE_MAX_NUM	(DOM_NR * 3)
+
+#define COMPONENT_NR	(DOM_NR + DOM_NR * NODE_PER_DOM + \
+			 DOM_NR * NODE_PER_DOM * VOS_PER_TARGET)
 
 static struct pool_map		*po_map;
 static struct pl_map		*pl_map;
-static struct pool_component	 comps[DOM_NR + DOM_NR * TARGET_PER_DOM];
+static struct pool_component	 comps[COMPONENT_NR];
 static uint32_t			 po_ver = 1;
 static bool			 pl_debug_msg;
 
@@ -131,7 +134,7 @@ static void
 plt_add_tgt(uint32_t id)
 {
 	po_ver++;
-	plt_set_tgt_status(id, PO_COMP_ST_UP, po_ver);
+	plt_set_tgt_status(id, PO_COMP_ST_UPIN, po_ver);
 }
 
 static void
@@ -146,7 +149,7 @@ plt_spare_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 	for (i = 0; i < failed_cnt; i++)
 		plt_fail_tgt(failed_tgts[i]);
 
-	rc = pl_map_update(pl_uuid, po_map, false);
+	rc = pl_map_update(pl_uuid, po_map, false, PL_TYPE_RING);
 	D_ASSERT(rc == 0);
 	pl_map = pl_map_find(pl_uuid, oid);
 	D_ASSERT(pl_map != NULL);
@@ -190,6 +193,12 @@ main(int argc, char **argv)
 	if (rc != 0)
 		return rc;
 
+	rc = pl_init();
+	if (rc != 0) {
+		daos_debug_fini();
+		return rc;
+	}
+
 	uuid_generate(pl_uuid);
 	srand(time(NULL));
 	oid.lo = rand();
@@ -199,20 +208,29 @@ main(int argc, char **argv)
 	/* fake the pool map */
 	for (i = 0; i < DOM_NR; i++, comp++) {
 		comp->co_type   = PO_COMP_TP_RACK;
-		comp->co_status = PO_COMP_ST_UP;
+		comp->co_status = PO_COMP_ST_UPIN;
 		comp->co_id	= i;
 		comp->co_rank   = i;
 		comp->co_ver    = 1;
-		comp->co_nr	= TARGET_PER_DOM;
+		comp->co_nr	= NODE_PER_DOM;
 	}
 
-	for (i = 0; i < DOM_NR * TARGET_PER_DOM; i++, comp++) {
-		comp->co_type   = PO_COMP_TP_TARGET;
-		comp->co_status = PO_COMP_ST_UP;
+	for (i = 0; i < DOM_NR * NODE_PER_DOM; i++, comp++) {
+		comp->co_type   = PO_COMP_TP_NODE;
+		comp->co_status = PO_COMP_ST_UPIN;
 		comp->co_id	= i;
 		comp->co_rank   = i;
 		comp->co_ver    = 1;
 		comp->co_nr	= VOS_PER_TARGET;
+	}
+
+	for (i = 0; i < DOM_NR * NODE_PER_DOM * VOS_PER_TARGET; i++, comp++) {
+		comp->co_type   = PO_COMP_TP_TARGET;
+		comp->co_status = PO_COMP_ST_UPIN;
+		comp->co_id	= i;
+		comp->co_rank   = i;
+		comp->co_ver    = 1;
+		comp->co_nr	= 1;
 	}
 
 	nr = ARRAY_SIZE(comps);
@@ -237,7 +255,7 @@ main(int argc, char **argv)
 	pl_map_print(pl_map);
 
 	/* initial placement when all nodes alive */
-	daos_obj_generate_id(&oid, 0, DAOS_OC_R4_RW);
+	daos_obj_generate_id(&oid, 0, OC_RP_4G2, 0);
 	D_PRINT("\ntest initial placement when no failed shard ...\n");
 	plt_obj_place(oid, &lo_1);
 	plt_obj_layout_check(lo_1);
@@ -326,6 +344,7 @@ main(int argc, char **argv)
 
 	pool_map_decref(po_map);
 	pool_buf_free(buf);
+	pl_fini();
 	daos_debug_fini();
 	D_PRINT("\nall tests passed!\n");
 	return 0;

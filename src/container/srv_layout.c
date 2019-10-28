@@ -40,6 +40,8 @@ RDB_STRING_KEY(ds_cont_prop_, label);
 RDB_STRING_KEY(ds_cont_prop_, layout_type);
 RDB_STRING_KEY(ds_cont_prop_, layout_ver);
 RDB_STRING_KEY(ds_cont_prop_, csum);
+RDB_STRING_KEY(ds_cont_prop_, csum_chunk_size);
+RDB_STRING_KEY(ds_cont_prop_, csum_server_verify);
 RDB_STRING_KEY(ds_cont_prop_, redun_fac);
 RDB_STRING_KEY(ds_cont_prop_, redun_lvl);
 RDB_STRING_KEY(ds_cont_prop_, snapshot_max);
@@ -51,7 +53,6 @@ RDB_STRING_KEY(ds_cont_prop_, snapshots);
 RDB_STRING_KEY(ds_cont_attr_, user);
 
 /** default properties, should cover all optional container properties */
-#define CONT_PROP_NUM	(DAOS_PROP_CO_MAX - DAOS_PROP_CO_MIN - 1)
 struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
 	{
 		.dpe_type	= DAOS_PROP_CO_LABEL,
@@ -65,6 +66,12 @@ struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
 	}, {
 		.dpe_type	= DAOS_PROP_CO_CSUM,
 		.dpe_val	= DAOS_PROP_CO_CSUM_OFF,
+	}, {
+		.dpe_type	= DAOS_PROP_CO_CSUM_CHUNK_SIZE,
+		.dpe_val	= 32 * 1024, /** 32K */
+	}, {
+		.dpe_type	= DAOS_PROP_CO_CSUM_SERVER_VERIFY,
+		.dpe_val	= DAOS_PROP_CO_CSUM_SV_OFF,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_REDUN_FAC,
 		.dpe_val	= DAOS_PROP_CO_REDUN_RF1,

@@ -21,94 +21,84 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
-from __future__ import print_function
+from apricot import TestWithServers, skipForTicket
+from test_utils import TestPool
 
-import time
-import traceback
-import subprocess
-from apricot import TestWithServers
-
-from daos_api import DaosPool, DaosServer, DaosApiError
 
 class RebuildNoCap(TestWithServers):
+    """Test class for failed pool rebuild.
 
-    """
     Test Class Description:
-    This class contains tests for pool rebuild.
+        This class contains tests for pool rebuild.
 
     :avocado: recursive
     """
 
-    def setUp(self):
-        super(RebuildNoCap, self).setUp()
-        # create a pool to test with
-        createmode = self.params.get("mode", '/run/pool/createmode/')
-        createuid = self.params.get("uid", '/run/pool/createuid/')
-        creategid = self.params.get("gid", '/run/pool/creategid/')
-        createsetid = self.params.get("setname", '/run/pool/createset/')
-        createsize = self.params.get("size", '/run/pool/createsize/')
-        self.pool = DaosPool(self.context)
-        self.pool.create(createmode, createuid, creategid, createsize,
-                         createsetid)
-        uuid = self.pool.get_uuid_str()
-
-        time.sleep(2)
-
-        # stuff some bogus data into the pool
-        how_many_bytes = long(self.params.get("datasize",
-                                              '/run/testparams/datatowrite/'))
-        exepath = self.prefix +\
-                 "/../src/tests/ftest/util/write_some_data.py"
-        cmd = "export DAOS_POOL={0}; export DAOS_SVCL=1; mpirun"\
-              " --np 1 --host {1} {2} {3} testfile".format(
-                  uuid, self.hostlist_servers[0], exepath, how_many_bytes)
-        subprocess.call(cmd, shell=True)
-
-    def tearDown(self):
-        """ cleanup after the test """
-
-        try:
-            if self.pool:
-                self.pool.destroy(1)
-        finally:
-            super(RebuildNoCap, self).tearDown()
-
-
+    @skipForTicket("DAOS-2845")
     def test_rebuild_no_capacity(self):
+        """Jira ID: DAOS-xxxx.
+
+        Test Description:
+            Create and connect to a pool.  Verify the pool information returned
+            from the pool query matches the values used to create the pool.
+
+        Use Cases:
+            Verify pool query.
+
+        :avocado: tags=all,medium,pr,pool,rebuild,nocap
         """
-        :avocado: tags=pool,rebuild,nocap
-        """
-        try:
-            print("\nsetup complete, starting test\n")
+        # Get the test params
+        self.pool = TestPool(self.context, self.log)
+        self.pool.get_params(self)
+        targets = self.params.get("targets", "/run/server_config/*")
+        rank = self.params.get("rank_to_kill", "/run/testparams/*")
 
-            # create a server object that references on of our pool target hosts
-            # and then kill it
-            svr_to_kill = int(self.params.get("rank_to_kill",
-                                              '/run/testparams/ranks/'))
-            d_server = DaosServer(self.context, bytes(self.server_group),
-                                  svr_to_kill)
+        # Create a pool
+        self.pool.create()
 
-            time.sleep(1)
-            d_server.kill(1)
+        # Display pool size before write
+        self.pool.display_pool_daos_space("before write")
 
-            # exclude the target from the dead server
-            self.pool.exclude([svr_to_kill])
+        # Write enough data to the pool that will not be able to be rebuilt
+        data = self.pool.scm_size.value * (targets - 1)
+        self.pool.write_file(
+            self.orterun, len(self.hostlist_clients), self.hostfile_clients,
+            data)
 
-            # exclude should trigger rebuild, check
-            self.pool.connect(1 << 1)
-            status = self.pool.pool_query()
-            if not status.pi_ntargets == len(self.hostlist_servers):
-                self.fail("target count wrong.\n")
-            if not status.pi_ndisabled == 1:
-                self.fail("disabled target count wrong.\n")
+        # Display pool size after write
+        self.pool.display_pool_daos_space("after write")
 
-            # the pool should be too full to start a rebuild so
-            # expecting an error
-            # not sure yet specifically what error
-            if status.pi_rebuild_st.rs_errno == 0:
-                self.fail("expecting rebuild to fail but it didn't.\n")
+        # Verify the pool information before starting rebuild
 
-        except DaosApiError as excep:
-            print(excep)
-            print(traceback.format_exc())
-            self.fail("Expecting to pass but test has failed.\n")
+        # Check the pool information after the rebuild
+        server_count = len(self.hostlist_servers)
+        status = self.pool.check_pool_info(
+            pi_nnodes=server_count,
+            # pi_ntargets=(server_count * targets),  # DAOS-2799
+            pi_ndisabled=0
+        )
+        status &= self.pool.check_rebuild_status(rs_errno=0)
+        self.assertTrue(status, "Error confirming pool info after rebuild")
+
+        # Kill the server
+        self.pool.start_rebuild([rank], self.d_log)
+
+        # Wait for rebuild to start
+        self.pool.wait_for_rebuild(True)
+
+        # Wait for rebuild to complete
+        self.pool.wait_for_rebuild(False)
+
+        # Display pool size after rebuild
+        self.pool.display_pool_daos_space("after rebuild")
+
+        # Verify the pool information after rebuild
+        status = self.pool.check_pool_info(
+            pi_nnodes=server_count,
+            # pi_ntargets=(server_count * targets),  # DAOS-2799
+            # pi_ndisabled=targets                   # DAOS-2799
+        )
+        status &= self.pool.check_rebuild_status(rs_errno=-1007)
+        self.assertTrue(status, "Error confirming pool info after rebuild")
+
+        self.log.info("Test Passed")

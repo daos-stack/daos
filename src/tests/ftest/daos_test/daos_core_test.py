@@ -22,52 +22,14 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 
-import os
-import subprocess
-from avocado.utils import process
-from apricot import TestWithServers
+from daos_core_base import DaosCoreBase
 
-CLIENT_LOG = "client_daos.log"
-
-class DaosCoreTest(TestWithServers):
+class DaosCoreTest(DaosCoreBase):
     """
-    Runs the daos_test subtests with multiple servers.
+    Runs just the non-rebuild daos_test tests
+
     :avocado: recursive
     """
-    subtest_name = None
-
-    def setUp(self):
-        super(DaosCoreTest, self).setUp()
-        self.subtest_name = self.params.get("test_name",
-                                            '/run/daos_tests/Tests/*')
-        self.subtest_name = self.subtest_name.replace(" ", "_")
-        logfile_env = os.environ['D_LOG_FILE']
-        self.log_dir, self.server_log = os.path.split(logfile_env)
-        self.client_log = os.path.join(self.log_dir,
-                                       self.subtest_name + "_" + CLIENT_LOG)
-        #To generate the seperate client log file
-        self.orterun_env = '-x D_LOG_FILE={}'.format(self.client_log)
-
-    def tearDown(self):
-        super(DaosCoreTest, self).tearDown()
-
-        # collect up a debug log so that we have a separate one for each
-        # subtest
-        if self.subtest_name:
-            try:
-                new_logfile = os.path.join(self.log_dir,
-                                           self.subtest_name + "_" + \
-                                           self.server_log)
-                # rename on each of the servers
-                for host in self.hostlist_servers:
-                    subprocess.check_call(['ssh', host,
-                                           '[ -f \"{0}\" ] && '
-                                           ' mv \"{0}\" '
-                                           ' \"{1}\"'.format("/tmp/server.log",
-                                                             new_logfile)])
-            except KeyError:
-                pass
-
     def test_subtest(self):
         """
         Test ID: DAOS-1568
@@ -76,46 +38,6 @@ class DaosCoreTest(TestWithServers):
 
         Use Cases: core tests for daos_test
 
-        :avocado: tags=daos_test,multiserver,vm,regression
+        :avocado: tags=all,pr,medium,daos_test
         """
-
-        subtest = self.params.get("daos_test", '/run/daos_tests/Tests/*')
-        num_clients = self.params.get("num_clients",
-                                      '/run/daos_tests/num_clients/*')
-        num_replicas = self.params.get("num_replicas",
-                                       '/run/daos_tests/num_replicas/*')
-        args = self.params.get("args", '/run/daos_tests/Tests/*')
-        if not args:
-            args = ""
-
-        cmd = "{} -n {} {} {} -s {} -{} {}".format(self.orterun, num_clients,
-                                                   self.orterun_env,
-                                                   self.daos_test,
-                                                   num_replicas, subtest, args)
-
-        env = {}
-        env['CMOCKA_XML_FILE'] = "%g_results.xml"
-        env['CMOCKA_MESSAGE_OUTPUT'] = "xml"
-
-        try:
-            process.run(cmd, env=env)
-        except process.CmdError as result:
-            if result.result.exit_status is not 0:
-                # fake a JUnit failure output
-                with open(self.subtest_name +
-                          "_results.xml", "w") as results_xml:
-                    results_xml.write('''<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="{0}" errors="1" failures="0" skipped="0" tests="1" time="0.0">
-  <testcase name="ALL" time="0.0" >
-    <error message="Test failed to start up"/>
-    <system-out>
-<![CDATA[{1}]]>
-    </system-out>
-    <system-err>
-<![CDATA[{2}]]>
-    </system-err>
-  </testcase>
-</testsuite>'''.format(self.subtest_name, result.result.stdout,
-                       result.result.stderr))
-                self.fail("{0} failed with return code={1}.\n"
-                          .format(cmd, result.result.exit_status))
+        DaosCoreBase.run_subtest(self)

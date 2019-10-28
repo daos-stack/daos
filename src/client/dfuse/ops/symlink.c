@@ -24,44 +24,42 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-#define REQ_NAME request
-#define POOL_NAME symlink_da
-#define TYPE_NAME entry_req
-#include "dfuse_ops.h"
-
-static const struct dfuse_request_api api;
-
 void
-dfuse_cb_symlink(fuse_req_t req, const char *link, fuse_ino_t parent,
+dfuse_cb_symlink(fuse_req_t req, const char *link,
+		 struct dfuse_inode_entry *parent,
 		 const char *name)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct entry_req		*desc = NULL;
+	struct dfuse_inode_entry	*ie = NULL;
 	int rc;
 
-	DFUSE_TRA_INFO(fs_handle, "Parent:%lu '%s'", parent, name);
-	DFUSE_REQ_INIT_REQ(desc, fs_handle, api, req, rc);
+	D_ALLOC_PTR(ie);
+	if (!ie)
+		D_GOTO(err, rc = ENOMEM);
+
+	rc = dfs_open(parent->ie_dfs->dfs_ns, parent->ie_obj, name, S_IFLNK,
+		      O_CREAT, 0, 0, link, &ie->ie_obj);
+	if (rc != 0)
+		D_GOTO(err, rc);
+
+	DFUSE_TRA_INFO(ie, "obj is %p", ie->ie_obj);
+
+	strncpy(ie->ie_name, name, NAME_MAX);
+	ie->ie_name[NAME_MAX] = '\0';
+	ie->ie_parent = parent->ie_stat.st_ino;
+	ie->ie_dfs = parent->ie_dfs;
+	atomic_fetch_add(&ie->ie_ref, 1);
+
+	rc = dfs_ostat(parent->ie_dfs->dfs_ns, ie->ie_obj, &ie->ie_stat);
 	if (rc)
 		D_GOTO(err, rc);
 
-	D_STRNDUP(desc->dest, link, 4096);
-	if (!desc->dest)
-		D_GOTO(err, rc = ENOMEM);
+	DFUSE_TRA_INFO(ie, "Inserting inode %lu", ie->ie_stat.st_ino);
 
-	desc->da = fs_handle->symlink_da;
-	strncpy(desc->ie->ie_name, name, NAME_MAX);
-	desc->ie->ie_parent = parent;
+	dfuse_reply_entry(fs_handle, ie, NULL, req);
 
-	desc->request.ir_inode_num = parent;
-
-	rc = dfuse_fs_send(&desc->request);
-	if (rc != 0)
-		D_GOTO(err, 0);
 	return;
 err:
+	D_FREE(ie);
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
-	if (desc) {
-		DFUSE_TRA_DOWN(&desc->request);
-		dfuse_da_release(fs_handle->symlink_da, desc);
-	}
 }

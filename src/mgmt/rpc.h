@@ -102,10 +102,7 @@ extern struct crt_proto_format mgmt_proto_fmt;
 	((daos_size_t)		(pc_scm_size)		CRT_VAR) \
 	((daos_size_t)		(pc_nvme_size)		CRT_VAR) \
 	((daos_prop_t)		(pc_prop)		CRT_PTR) \
-	((uint32_t)		(pc_svc_nr)		CRT_VAR) \
-	((uint32_t)		(pc_mode)		CRT_VAR) \
-	((uint32_t)		(pc_uid)		CRT_VAR) \
-	((uint32_t)		(pc_gid)		CRT_VAR)
+	((uint32_t)		(pc_svc_nr)		CRT_VAR)
 
 #define DAOS_OSEQ_MGMT_POOL_CREATE /* output fields */		 \
 	((d_rank_list_t)	(pc_svc)		CRT_PTR) \

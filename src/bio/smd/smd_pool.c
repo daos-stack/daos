@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,267 +20,324 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-/**
- * DAOS Server Persistent Metadata
- * NVMe Device Persistent Metadata Storage
- */
 #define D_LOGFAC	DD_FAC(bio)
 
-#include <daos_errno.h>
 #include <daos/common.h>
-#include <daos/mem.h>
-#include <gurt/hash.h>
-#include <daos/btree.h>
-#include <daos_types.h>
-
+#include <daos/dtx.h>
 #include "smd_internal.h"
 
-#define SMD_PTAB_ORDER 56
-
-/** Pool table key type */
-struct pool_tab_key {
-	uuid_t	ptk_pid;
-	int	ptk_sid;
+struct smd_pool_entry {
+	uint32_t	spe_tgt_cnt;
+	int		spe_tgts[SMD_MAX_TGT_CNT];
+	uint64_t	spe_blobs[SMD_MAX_TGT_CNT];
 };
 
 static int
-ptab_df_hkey_size(void)
+get_tgt_idx(struct smd_pool_entry *entry, int tgt_id)
 {
-	return sizeof(struct pool_tab_key);
-}
+	int	i;
 
-static void
-ptab_df_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
-{
-	D_ASSERT(key_iov->iov_len == sizeof(struct pool_tab_key));
-	memcpy(hkey, key_iov->iov_buf, key_iov->iov_len);
-}
-
-static int
-ptab_df_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
-{
-	struct pool_tab_key *key1 = (struct pool_tab_key *)&rec->rec_hkey[0];
-	struct pool_tab_key *key2 = (struct pool_tab_key *)hkey;
-	int		     cmp  = 0;
-
-	cmp = uuid_compare(key1->ptk_pid, key2->ptk_pid);
-	if (cmp < 0)
-		return BTR_CMP_LT;
-
-	if (cmp > 0)
-		return BTR_CMP_GT;
-
-	if (key1->ptk_sid > key2->ptk_sid)
-		return BTR_CMP_GT;
-
-	if (key1->ptk_sid < key2->ptk_sid)
-		return BTR_CMP_LT;
-
-	return BTR_CMP_EQ;
-}
-
-
-static int
-ptab_df_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
-{
-	struct umem_instance		*umm = &tins->ti_umm;
-
-	if (UMOFF_IS_NULL(rec->rec_off))
-		return -DER_NONEXIST;
-
-	return umem_free(umm, rec->rec_off);
-}
-
-static int
-ptab_df_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
-		  daos_iov_t *val_iov, struct btr_record *rec)
-{
-	umem_off_t			 npool_off;
-	struct smd_nvme_pool_df		*npool_df;
-	struct pool_tab_key		*pkey = NULL;
-
-	D_ASSERT(key_iov->iov_len == sizeof(struct pool_tab_key));
-	pkey = (struct pool_tab_key *)key_iov->iov_buf;
-
-	npool_off = umem_zalloc(&tins->ti_umm, sizeof(struct smd_nvme_pool_df));
-	if (UMOFF_IS_NULL(npool_off))
-		return -DER_NOMEM;
-	npool_df = umem_off2ptr(&tins->ti_umm, npool_off);
-	uuid_copy(npool_df->np_info.npi_pool_uuid, pkey->ptk_pid);
-	npool_df->np_info.npi_stream_id = pkey->ptk_sid;
-	memcpy(npool_df, val_iov->iov_buf, sizeof(struct smd_nvme_pool_df));
-	rec->rec_off = npool_off;
-
-	return 0;
-}
-
-static int
-ptab_df_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-		  daos_iov_t *key_iov, daos_iov_t *val_iov)
-{
-	struct smd_nvme_pool_df		*npool_df;
-
-	npool_df = umem_off2ptr(&tins->ti_umm, rec->rec_off);
-	memcpy(val_iov->iov_buf, npool_df, sizeof(struct smd_nvme_pool_df));
-
-	return 0;
-}
-
-static int
-ptab_df_rec_update(struct btr_instance *tins, struct btr_record *rec,
-		   daos_iov_t *key_iov, daos_iov_t *val_iov)
-{
-	struct smd_nvme_pool_df		*npool_df;
-	int				 rc;
-
-	rc = umem_tx_add(&tins->ti_umm, rec->rec_off,
-			 sizeof(struct smd_nvme_pool_df));
-	if (rc != 0)
-		return rc;
-
-	npool_df = umem_off2ptr(&tins->ti_umm, rec->rec_off);
-	memcpy(npool_df, val_iov->iov_buf, val_iov->iov_len);
-	return 0;
-}
-
-btr_ops_t ptab_ops = {
-	.to_hkey_size	= ptab_df_hkey_size,
-	.to_hkey_gen	= ptab_df_hkey_gen,
-	.to_hkey_cmp	= ptab_df_hkey_cmp,
-	.to_rec_alloc	= ptab_df_rec_alloc,
-	.to_rec_free	= ptab_df_rec_free,
-	.to_rec_fetch	= ptab_df_rec_fetch,
-	.to_rec_update	= ptab_df_rec_update,
-};
-
-int
-smd_nvme_ptab_register()
-{
-	int	rc;
-
-	D_DEBUG(DB_DF, "Register peristent metadata pool index: %d\n",
-		DBTREE_CLASS_SMD_PTAB);
-
-	rc = dbtree_class_register(DBTREE_CLASS_SMD_PTAB, 0, &ptab_ops);
-	if (rc)
-		D_ERROR("DBTREE PTAB registration failed\n");
-
-	return rc;
+	for (i = 0; i < entry->spe_tgt_cnt; i++) {
+		if (entry->spe_tgts[i] == tgt_id)
+			break;
+	}
+	return (i == entry->spe_tgt_cnt) ? -1 : i;
 }
 
 int
-smd_nvme_md_ptab_create(struct umem_attr *p_umem_attr,
-			struct smd_nvme_pool_tab_df *table_df)
+smd_pool_assign(uuid_t pool_id, int tgt_id, uint64_t blob_id)
 {
-	int		rc = 0;
-	daos_handle_t	btr_hdl;
+	struct smd_pool_entry	entry = { 0 };
+	struct d_uuid		key_pool;
+	d_iov_t			key, val;
+	int			tgt_idx, rc;
 
-	D_ASSERT(table_df->npt_btr.tr_class == 0);
-	D_DEBUG(DB_DF, "Create Persistent NVMe MD Device Index, type=%d\n",
-		DBTREE_CLASS_SMD_DTAB);
+	D_ASSERT(!daos_handle_is_inval(smd_store.ss_pool_hdl));
 
-	rc = dbtree_create_inplace(DBTREE_CLASS_SMD_PTAB, 0, SMD_PTAB_ORDER,
-				   p_umem_attr, &table_df->npt_btr, &btr_hdl);
+	uuid_copy(key_pool.uuid, pool_id);
+	smd_lock(&smd_store);
+
+	/* Fetch pool if it's already existing */
+	d_iov_set(&key, &key_pool, sizeof(key_pool));
+	d_iov_set(&val, &entry, sizeof(entry));
+	rc = dbtree_fetch(smd_store.ss_pool_hdl, BTR_PROBE_EQ,
+			  DAOS_INTENT_DEFAULT, &key, NULL, &val);
+	if (rc == 0) {
+		if (entry.spe_tgt_cnt >= SMD_MAX_TGT_CNT) {
+			D_ERROR("Pool "DF_UUID" is assigned to too many "
+				"targets (%d)\n", DP_UUID(&key_pool.uuid),
+				entry.spe_tgt_cnt);
+			rc = -DER_OVERFLOW;
+			goto out;
+		}
+
+		tgt_idx = get_tgt_idx(&entry, tgt_id);
+		if (tgt_idx != -1) {
+			D_ERROR("Dup target %d, idx: %d\n", tgt_id, tgt_idx);
+			rc = -DER_EXIST;
+			goto out;
+		}
+
+		entry.spe_tgts[entry.spe_tgt_cnt] = tgt_id;
+		entry.spe_blobs[entry.spe_tgt_cnt] = blob_id;
+		entry.spe_tgt_cnt += 1;
+	} else if (rc == -DER_NONEXIST) {
+		entry.spe_tgts[0] = tgt_id;
+		entry.spe_blobs[0] = blob_id;
+		entry.spe_tgt_cnt = 1;
+	} else {
+		D_ERROR("Fetch pool "DF_UUID" failed. %d\n",
+			DP_UUID(&key_pool.uuid), rc);
+		goto out;
+	}
+
+	rc = dbtree_update(smd_store.ss_pool_hdl, &key, &val);
 	if (rc) {
-		D_ERROR("Persistent NVMe pool dbtree create failed\n");
-		D_GOTO(exit, rc);
+		D_ERROR("Update pool "DF_UUID" failed. %d\n",
+			DP_UUID(&key_pool.uuid), rc);
+		goto out;
 	}
-
-	rc = dbtree_close(btr_hdl);
-	if (rc)
-		D_ERROR("Error in closing btree handle\n");
-exit:
+out:
+	smd_unlock(&smd_store);
 	return rc;
-
 }
 
-/**
- * DAOS NVMe pool metatdata index add status
- *
- * \param pool_info     [IN]	NVMe pool info
- *
- * \return			0 on success and negative on
- *				failure
- */
 int
-smd_nvme_add_pool(struct smd_nvme_pool_info *info)
+smd_pool_unassign(uuid_t pool_id, int tgt_id)
 {
-	struct pool_tab_key	ptab_key;
-	struct smd_nvme_pool_df	nvme_ptab_args;
-	struct smd_store	*store = get_smd_store();
-	daos_iov_t		key, value;
-	int			rc	= 0;
+	struct smd_pool_entry	 entry = { 0 };
+	struct d_uuid		 key_pool;
+	d_iov_t			 key, val;
+	int			*tgt_src, *tgt_tgt;
+	uint64_t		*blob_src, *blob_tgt;
+	int			 tgt_idx, rc, move_cnt;
 
-	D_DEBUG(DB_TRACE, "Add a pool id in pool table\n");
-	if (info == NULL) {
-		rc = -DER_INVAL;
-		D_ERROR("Error adding entry in pool table: %d\n", rc);
-		return rc;
+	D_ASSERT(!daos_handle_is_inval(smd_store.ss_pool_hdl));
+
+	uuid_copy(key_pool.uuid, pool_id);
+	smd_lock(&smd_store);
+
+	d_iov_set(&key, &key_pool, sizeof(key_pool));
+	d_iov_set(&val, &entry, sizeof(entry));
+	rc = dbtree_fetch(smd_store.ss_pool_hdl, BTR_PROBE_EQ,
+			  DAOS_INTENT_DEFAULT, &key, NULL, &val);
+	if (rc) {
+		D_ERROR("Fetch pool "DF_UUID" failed. %d\n",
+			DP_UUID(key_pool.uuid), rc);
+		goto out;
 	}
 
-	smd_lock(SMD_PTAB_LOCK);
-	uuid_copy(ptab_key.ptk_pid, info->npi_pool_uuid);
-	ptab_key.ptk_sid = info->npi_stream_id;
-	nvme_ptab_args.np_info = *info;
+	tgt_idx = get_tgt_idx(&entry, tgt_id);
+	if (tgt_idx == -1) {
+		D_ERROR("Pool "DF_UUID" target %d not found.\n",
+			DP_UUID(key_pool.uuid), tgt_id);
+		rc = -DER_NONEXIST;
+		goto out;
+	}
 
-	rc = smd_tx_begin(store);
-	if (rc != 0)
-		goto failed;
+	tgt_src = &entry.spe_tgts[tgt_idx + 1];
+	tgt_tgt = &entry.spe_tgts[tgt_idx];
+	blob_src = &entry.spe_blobs[tgt_idx + 1];
+	blob_tgt = &entry.spe_blobs[tgt_idx];
 
-	daos_iov_set(&key, &ptab_key, sizeof(ptab_key));
-	daos_iov_set(&value, &nvme_ptab_args, sizeof(nvme_ptab_args));
+	D_ASSERT(entry.spe_tgt_cnt >= (tgt_idx + 1));
+	move_cnt = entry.spe_tgt_cnt - 1 - tgt_idx;
+	entry.spe_tgt_cnt -= 1;
 
-	rc = dbtree_update(store->sms_pool_tab, &key, &value);
+	if (move_cnt && entry.spe_tgt_cnt) {
+		memmove(tgt_tgt, tgt_src, move_cnt * sizeof(int));
+		memmove(blob_tgt, blob_src, move_cnt * sizeof(uint64_t));
+	}
 
-	rc = smd_tx_end(store, rc);
-failed:
-	if (rc)
-		D_ERROR("Adding a pool failed in pool_table: %d\n", rc);
-	smd_unlock(SMD_PTAB_LOCK);
-
+	if (entry.spe_tgt_cnt) {
+		rc = dbtree_update(smd_store.ss_pool_hdl, &key, &val);
+		if (rc)
+			D_ERROR("Update pool "DF_UUID" failed. %d\n",
+				DP_UUID(&key_pool.uuid), rc);
+	} else {
+		rc = dbtree_delete(smd_store.ss_pool_hdl, BTR_PROBE_EQ, &key,
+				   NULL);
+		if (rc)
+			D_ERROR("Delete pool "DF_UUID" failed. %d\n",
+				DP_UUID(&key_pool.uuid), rc);
+	}
+out:
+	smd_unlock(&smd_store);
 	return rc;
 }
 
-/**
- * DAOS NVMe pool metatdata index get status
- *
- * \param pool_id	[IN]	 Pool UUID
- * \param stream_id	[IN]	 Stream ID
- * \param info		[OUT]	 NVMe pool info
- */
+static struct smd_pool_info *
+create_pool_info(uuid_t pool_id, struct smd_pool_entry *entry)
+{
+	struct smd_pool_info	*info;
+	int			 i;
+
+	D_ALLOC_PTR(info);
+	if (info == NULL)
+		return NULL;
+
+	D_ALLOC_ARRAY(info->spi_tgts, SMD_MAX_TGT_CNT);
+	if (info->spi_tgts == NULL) {
+		D_FREE(info);
+		return NULL;
+	}
+	D_ALLOC_ARRAY(info->spi_blobs, SMD_MAX_TGT_CNT);
+	if (info->spi_blobs == NULL) {
+		D_FREE(info->spi_tgts);
+		D_FREE(info);
+		return NULL;
+	}
+
+	D_INIT_LIST_HEAD(&info->spi_link);
+	uuid_copy(info->spi_id, pool_id);
+	info->spi_tgt_cnt = entry->spe_tgt_cnt;
+	for (i = 0; i < info->spi_tgt_cnt; i++) {
+		info->spi_tgts[i] = entry->spe_tgts[i];
+		info->spi_blobs[i] = entry->spe_blobs[i];
+	}
+
+	return info;
+}
+
 int
-smd_nvme_get_pool(uuid_t pool_id, int stream_id,
-		  struct smd_nvme_pool_info *info)
+smd_pool_get(uuid_t pool_id, struct smd_pool_info **pool_info)
 {
-	struct smd_nvme_pool_df	nvme_ptab_args;
-	struct smd_store	*store = get_smd_store();
-	daos_iov_t		key, value;
-	struct pool_tab_key	ptkey;
-	int			rc	= 0;
+	struct smd_pool_info	*info;
+	struct smd_pool_entry	 entry = { 0 };
+	struct d_uuid		 key_pool;
+	d_iov_t			 key, val;
+	int			 rc;
 
-	D_DEBUG(DB_TRACE, "Fetching pool id in pool table\n");
-	if (info == NULL) {
-		rc = -DER_INVAL;
-		D_ERROR("Pool in pool table already exists, rc: %d\n", rc);
-		return rc;
+	D_ASSERT(!daos_handle_is_inval(smd_store.ss_pool_hdl));
+
+	uuid_copy(key_pool.uuid, pool_id);
+	smd_lock(&smd_store);
+
+	d_iov_set(&key, &key_pool, sizeof(key_pool));
+	d_iov_set(&val, &entry, sizeof(entry));
+	rc = dbtree_fetch(smd_store.ss_pool_hdl, BTR_PROBE_EQ,
+			  DAOS_INTENT_DEFAULT, &key, NULL, &val);
+	if (rc) {
+		D_ERROR("Fetch pool "DF_UUID" failed. %d\n",
+			DP_UUID(&key_pool.uuid), rc);
+		goto out;
 	}
 
-	uuid_copy(ptkey.ptk_pid, pool_id);
-	ptkey.ptk_sid = stream_id;
-	daos_iov_set(&key, &ptkey, sizeof(struct pool_tab_key));
-	daos_iov_set(&value, &nvme_ptab_args, sizeof(struct smd_nvme_pool_df));
-
-	smd_lock(SMD_PTAB_LOCK);
-	rc = dbtree_lookup(store->sms_pool_tab, &key, &value);
-	smd_unlock(SMD_PTAB_LOCK);
-
-	if (rc)
-		D_DEBUG(DB_MGMT, "Cannot find pool in pool table rc: %d\n",
-			rc);
-	else
-		*info = nvme_ptab_args.np_info;
-
+	info = create_pool_info(pool_id, &entry);
+	if (info == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+	*pool_info = info;
+out:
+	smd_unlock(&smd_store);
 	return rc;
 }
 
+int
+smd_pool_get_blob(uuid_t pool_id, int tgt_id, uint64_t *blob_id)
+{
+	struct smd_pool_entry	entry = { 0 };
+	struct d_uuid		key_pool;
+	d_iov_t			key, val;
+	int			tgt_idx, rc;
 
+	D_ASSERT(!daos_handle_is_inval(smd_store.ss_pool_hdl));
+
+	uuid_copy(key_pool.uuid, pool_id);
+	smd_lock(&smd_store);
+
+	d_iov_set(&key, &key_pool, sizeof(key_pool));
+	d_iov_set(&val, &entry, sizeof(entry));
+	rc = dbtree_fetch(smd_store.ss_pool_hdl, BTR_PROBE_EQ,
+			  DAOS_INTENT_DEFAULT, &key, NULL, &val);
+	if (rc) {
+		D_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MGMT,
+			 "Fetch pool "DF_UUID" failed. %d\n",
+			 DP_UUID(&key_pool.uuid), rc);
+		goto out;
+	}
+
+	tgt_idx = get_tgt_idx(&entry, tgt_id);
+	if (tgt_idx == -1) {
+		D_DEBUG(DB_MGMT, "Pool "DF_UUID" target %d not found.\n",
+			DP_UUID(key_pool.uuid), tgt_id);
+		rc = -DER_NONEXIST;
+		goto out;
+	}
+	*blob_id = entry.spe_blobs[tgt_idx];
+out:
+	smd_unlock(&smd_store);
+	return rc;
+}
+
+int
+smd_pool_list(d_list_t *pool_list, int *pools)
+{
+	struct smd_pool_info	*info;
+	struct smd_pool_entry	 entry = { 0 };
+	daos_handle_t		 iter_hdl;
+	struct d_uuid		 key_pool;
+	d_iov_t			 key, val;
+	int			 pool_cnt = 0;
+	int			 rc;
+
+	D_ASSERT(pool_list && d_list_empty(pool_list));
+	D_ASSERT(!daos_handle_is_inval(smd_store.ss_pool_hdl));
+
+	smd_lock(&smd_store);
+
+	rc = dbtree_iter_prepare(smd_store.ss_pool_hdl, 0, &iter_hdl);
+	if (rc) {
+		D_ERROR("Prepare pool iterator failed. %d\n", rc);
+		goto out;
+	}
+
+	rc = dbtree_iter_probe(iter_hdl, BTR_PROBE_FIRST, DAOS_INTENT_DEFAULT,
+			       NULL, NULL);
+	if (rc) {
+		if (rc != -DER_NONEXIST)
+			D_ERROR("Probe first pool failed. %d\n", rc);
+		else
+			rc = 0;
+		goto done;
+	}
+
+	d_iov_set(&key, &key_pool, sizeof(key_pool));
+	d_iov_set(&val, &entry, sizeof(entry));
+
+	while (1) {
+		rc = dbtree_iter_fetch(iter_hdl, &key, &val, NULL);
+		if (rc != 0) {
+			D_ERROR("Iterate fetch failed. %d\n", rc);
+			break;
+		}
+
+		info = create_pool_info(key_pool.uuid, &entry);
+		if (info == NULL) {
+			rc = -DER_NOMEM;
+			D_ERROR("Create pool info failed. %d\n", rc);
+			break;
+		}
+		d_list_add_tail(&info->spi_link, pool_list);
+
+		pool_cnt++;
+		rc = dbtree_iter_next(iter_hdl);
+		if (rc) {
+			if (rc != -DER_NONEXIST)
+				D_ERROR("Iterate next failed. %d\n", rc);
+			else
+				rc = 0;
+			break;
+		}
+	}
+done:
+	dbtree_iter_finish(iter_hdl);
+out:
+	smd_unlock(&smd_store);
+
+	/* return pool count along with the pool list */
+	*pools = pool_cnt;
+
+	return rc;
+}

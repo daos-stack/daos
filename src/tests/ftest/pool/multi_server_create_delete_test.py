@@ -26,6 +26,8 @@ from __future__ import print_function
 import os
 import traceback
 import json
+from grp import getgrnam
+from pwd import getpwnam
 
 from avocado.utils import process
 from apricot import Test
@@ -35,6 +37,7 @@ import server_utils
 import check_for_pool
 import write_host_file
 
+#pylint: disable=broad-except
 class MultiServerCreateDeleteTest(Test):
     """
     Tests DAOS pool creation, trying both valid and invalid parameters.
@@ -50,17 +53,17 @@ class MultiServerCreateDeleteTest(Test):
         self.hostlist_servers = None
         with open('../../../.build_vars.json') as f_open:
             build_paths = json.load(f_open)
-        basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
+        self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
         self.hostlist_servers = self.params.get("test_machines", '/run/hosts/')
         self.hostfile = write_host_file.write_host_file(self.hostlist_servers,
                                                         self.workdir)
         server_group = self.params.get("name", '/server_config/',
                                        'daos_server')
 
-        self.agent_sessions = agent_utils.run_agent(basepath,
+        self.agent_sessions = agent_utils.run_agent(self.basepath,
                                                     self.hostlist_servers)
-        server_utils.run_server(self.hostfile, server_group, basepath)
-        self.dmg = basepath + '/install/bin/dmg'
+        server_utils.run_server(self, self.hostfile, server_group)
+        self.dmg = self.basepath + '/install/bin/dmg'
 
     def tearDown(self):
         if self.agent_sessions:
@@ -70,7 +73,7 @@ class MultiServerCreateDeleteTest(Test):
     def test_create(self):
         """
         Test basic pool creation.
-        :avocado: tags=pool,poolcreate,multitarget
+        :avocado: tags=all,pool,full_regression,small,multitarget
         """
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
@@ -85,6 +88,8 @@ class MultiServerCreateDeleteTest(Test):
         uidlist = self.params.get("uid", '/run/tests/uids/*')
         if uidlist[0] == 'valid':
             uid = os.geteuid()
+        elif uidlist[0] == 'other_user':
+            uid = getpwnam('nfsnobody')[2]
         else:
             uid = uidlist[0]
         expected_for_param.append(uidlist[1])
@@ -92,6 +97,8 @@ class MultiServerCreateDeleteTest(Test):
         gidlist = self.params.get("gid", '/run/tests/gids/*')
         if gidlist[0] == 'valid':
             gid = os.getegid()
+        elif gidlist[0] == 'other_group':
+            gid = getgrnam('nfsnobody')[2]
         else:
             gid = gidlist[0]
         expected_for_param.append(gidlist[1])

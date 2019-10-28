@@ -64,8 +64,6 @@ struct dtx_handle {
 	 * by other DTXs, but not ready for commit yet.
 	 */
 	d_list_t			 dth_shares;
-	/* The time when the DTX is handled on the server. */
-	uint64_t			 dth_handled_time;
 	/* The hash of the dkey to be modified if applicable */
 	uint64_t			 dth_dkey_hash;
 	/** Pool map version. */
@@ -89,6 +87,44 @@ struct dtx_handle {
 	umem_off_t			 dth_obj;
 };
 
+/* Each sub transaction handle to manage each sub thandle */
+struct dtx_sub_status {
+	struct daos_shard_tgt		dss_tgt;
+	struct dtx_conflict_entry	dss_dce;
+	int				dss_result;
+};
+
+/* Transaction handle on the leader node to manage the transaction */
+struct dtx_leader_handle {
+	/* The dtx handle on the leader node */
+	struct dtx_handle		dlh_handle;
+	/* The time when the DTX is handled on the server. */
+	uint64_t			dlh_handled_time;
+	/* result for the distribute transaction */
+	int				dlh_result;
+
+	/* The array of the DTX COS entries */
+	uint32_t			dlh_dti_cos_count;
+	struct dtx_id			*dlh_dti_cos;
+
+	/* The future to wait for all sub handle to finish */
+	ABT_future			dlh_future;
+
+	/* How many sub leader transaction */
+	uint32_t			dlh_sub_cnt;
+	/* Sub transaction handle to manage the dtx leader */
+	struct dtx_sub_status		*dlh_subs;
+};
+
+struct dtx_share {
+	/** Link into the dtx_handle::dth_shares */
+	d_list_t		dts_link;
+	/** The DTX record type. */
+	uint32_t		dts_type;
+	/** The record in the related tree in SCM. */
+	umem_off_t		dts_record;
+};
+
 struct dtx_stat {
 	uint64_t	dtx_committable_count;
 	uint64_t	dtx_oldest_committable_time;
@@ -100,36 +136,72 @@ struct dtx_stat {
  * DAOS two-phase commit transaction status.
  */
 enum dtx_status {
-	/**  Initialized, but local modification has not completed. */
-	DTX_ST_INIT		= 1,
 	/** Local participant has done the modification. */
-	DTX_ST_PREPARED		= 2,
+	DTX_ST_PREPARED		= 1,
 	/** The DTX has been committed. */
-	DTX_ST_COMMITTED	= 3,
+	DTX_ST_COMMITTED	= 2,
 };
+
+int
+dtx_leader_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
+		 daos_epoch_t epoch, uint64_t dkey_hash, uint32_t pm_ver,
+		 uint32_t intent, struct daos_shard_tgt *tgts, int tgts_cnt,
+		 struct dtx_leader_handle *dlh);
+int
+dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *cont_hdl,
+	       struct ds_cont_child *cont, int result);
+
+typedef void (*dtx_sub_comp_cb_t)(struct dtx_leader_handle *dlh, int idx,
+				  int rc);
+typedef int (*dtx_sub_func_t)(struct dtx_leader_handle *dlh, void *arg, int idx,
+			      dtx_sub_comp_cb_t comp_cb);
 
 int dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid,
 	       uint32_t ver, bool block);
+int
+dtx_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
+	  daos_epoch_t epoch, uint64_t dkey_hash,
+	  struct dtx_conflict_entry *conflict, struct dtx_id *dti_cos,
+	  int dti_cos_cnt, uint32_t pm_ver, uint32_t intent,
+	  struct dtx_handle *dth);
+int
+dtx_end(struct dtx_handle *dth, struct ds_cont_hdl *cont_hdl,
+	struct ds_cont_child *cont, int result);
 
-int dtx_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
-	      daos_epoch_t epoch, uint64_t dkey_hash,
-	      struct dtx_conflict_entry *conflict, struct dtx_id *dti_cos,
-	      int dti_cos_count, uint32_t pm_ver, uint32_t intent, bool leader,
-	      struct dtx_handle **dth);
-
-int dtx_end(struct dtx_handle *dth, struct ds_cont_hdl *cont_hdl,
-	    struct ds_cont *cont, int result);
-
-int dtx_conflict(daos_handle_t coh, struct dtx_handle *dth, uuid_t po_uuid,
-		 uuid_t co_uuid, struct dtx_conflict_entry *dces, int count,
-		 uint32_t version);
+int dtx_leader_exec_ops(struct dtx_leader_handle *dth, dtx_sub_func_t exec_func,
+			void *func_arg);
 
 int dtx_batched_commit_register(struct ds_cont_hdl *hdl);
 
 void dtx_batched_commit_deregister(struct ds_cont_hdl *hdl);
 
+int dtx_obj_sync(uuid_t po_uuid, uuid_t co_uuid, daos_handle_t coh,
+		 daos_unit_oid_t oid, daos_epoch_t epoch, uint32_t map_ver);
+
+/**
+ * Check whether the given DTX is resent one or not.
+ *
+ * \param coh		[IN]	Container open handle.
+ * \param oid		[IN]	Pointer to the object ID.
+ * \param xid		[IN]	Pointer to the DTX identifier.
+ * \param dkey_hash	[IN]	The hashed dkey.
+ * \param punch		[IN]	For punch operation or not.
+ * \param epoch		[IN,OUT] Pointer to current epoch, if it is zero and
+ *				 if the DTX exists, then the DTX's epoch will
+ *				 be saved in it.
+ *
+ * \return		0		means that the DTX has been 'prepared',
+ *					so the local modification has been done
+ *					on related replica(s).
+ *			-DER_ALREADY	means the DTX has been committed or is
+ *					committable.
+ *			-DER_MISMATCH	means that the DTX has ever been
+ *					processed with different epoch.
+ *			Other negative value if error.
+ */
 int dtx_handle_resend(daos_handle_t coh, daos_unit_oid_t *oid,
-		      struct dtx_id *dti, uint64_t dkey_hash, bool punch);
+		      struct dtx_id *dti, uint64_t dkey_hash,
+		      bool punch, daos_epoch_t *epoch);
 
 /* XXX: The higher 48 bits of HLC is the wall clock, the lower bits are for
  *	logic clock that will be hidden when divided by NSEC_PER_SEC.

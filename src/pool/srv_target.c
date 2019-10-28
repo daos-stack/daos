@@ -516,7 +516,7 @@ aggregate_pool_space(struct daos_pool_space *agg_ps,
 	D_ASSERT(agg_ps && ps);
 
 	if (ps->ps_ntargets == 0) {
-		D_ERROR("Skip emtpy space info\n");
+		D_DEBUG(DB_TRACE, "Skip emtpy space info\n");
 		return;
 	}
 
@@ -547,6 +547,9 @@ pool_query_xs_reduce(void *agg_arg, void *xs_arg)
 {
 	struct pool_query_xs_arg	*a_arg = agg_arg;
 	struct pool_query_xs_arg	*x_arg = xs_arg;
+
+	if (x_arg->qxa_space.ps_ntargets == 0)
+		return;
 
 	D_ASSERT(x_arg->qxa_space.ps_ntargets == 1);
 	aggregate_pool_space(&a_arg->qxa_space, &x_arg->qxa_space);
@@ -617,7 +620,7 @@ static int
 pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
 {
 	struct dss_coll_ops		coll_ops;
-	struct dss_coll_args		coll_args;
+	struct dss_coll_args		coll_args = { 0 };
 	struct pool_query_xs_arg	agg_arg = { 0 };
 	int				rc;
 
@@ -637,7 +640,18 @@ pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
 	coll_args.ca_aggregator		= &agg_arg;
 	coll_args.ca_func_args		= &coll_args.ca_stream_args;
 
+	rc = ds_pool_get_failed_tgt_idx(pool->sp_uuid,
+					&coll_args.ca_exclude_tgts,
+					&coll_args.ca_exclude_tgts_cnt);
+	if (rc) {
+		D_ERROR(DF_UUID "failed to get index : rc %d\n",
+			DP_UUID(pool->sp_uuid), rc);
+		return rc;
+	}
+
 	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
+	if (coll_args.ca_exclude_tgts)
+		D_FREE(coll_args.ca_exclude_tgts);
 	if (rc) {
 		D_ERROR("Pool query on pool "DF_UUID" failed, rc:%d\n",
 			DP_UUID(pool->sp_uuid), rc);
@@ -653,7 +667,6 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 {
 	struct pool_tgt_connect_in	*in = crt_req_get(rpc);
 	struct pool_tgt_connect_out	*out = crt_reply_get(rpc);
-	struct pool_map			*map = NULL;
 	struct ds_pool			*pool;
 	struct ds_pool_hdl		*hdl;
 	struct ds_pool_create_arg	 arg;
@@ -704,21 +717,16 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 
-	if (pool->sp_iv_ns == NULL) {
-		rc = ds_pool_iv_ns_update(pool, in->tci_master_rank,
-					  &in->tci_iv_ctxt,
-					  in->tci_iv_ns_id);
-		if (rc) {
-			D_ERROR("attach iv ns failed rc %d\n", rc);
-			D_GOTO(out, rc);
-		}
+	rc = ds_pool_iv_ns_update(pool, in->tci_master_rank, &in->tci_iv_ctxt,
+				  in->tci_iv_ns_id);
+	if (rc) {
+		D_ERROR("attach iv ns failed rc %d\n", rc);
+		D_GOTO(out, rc);
 	}
 
-	rc = pool_tgt_query(pool, &out->tco_space);
+	if (in->tci_query_bits & DAOS_PO_QUERY_SPACE)
+		rc = pool_tgt_query(pool, &out->tco_space);
 out:
-	if (rc != 0 && map != NULL)
-		pool_map_decref(map);
-
 	out->tco_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d (%d)\n",
 		DP_UUID(in->tci_uuid), rpc, out->tco_rc, rc);
@@ -836,7 +844,8 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			struct pool_map *tmp = pool->sp_map;
 
 			rc = pl_map_update(pool->sp_uuid, map,
-					   pool->sp_map != NULL ? false : true);
+					   pool->sp_map != NULL ? false : true,
+					   DEFAULT_PL_TYPE);
 			if (rc != 0) {
 				ABT_rwlock_unlock(pool->sp_lock);
 				D_ERROR(DF_UUID": failed update pl_map: %d\n",
@@ -863,7 +872,8 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		struct pool_map *tmp = pool->sp_map;
 
 		rc = pl_map_update(pool->sp_uuid, map,
-				   pool->sp_map != NULL ? false : true);
+				   pool->sp_map != NULL ? false : true,
+				   DEFAULT_PL_TYPE);
 		if (rc != 0) {
 			ABT_rwlock_unlock(pool->sp_lock);
 			D_ERROR(DF_UUID": failed to update pl_map: %d\n",
@@ -906,14 +916,14 @@ ds_pool_tgt_update_map_handler(crt_rpc_t *rpc)
 	}
 
 	if (rpc->cr_co_bulk_hdl != NULL) {
-		daos_iov_t	iov;
-		daos_sg_list_t	sgl;
+		d_iov_t	iov;
+		d_sg_list_t	sgl;
 
 		memset(&iov, 0, sizeof(iov));
 		sgl.sg_nr = 1;
 		sgl.sg_nr_out = 1;
 		sgl.sg_iovs = &iov;
-		rc = crt_bulk_access(rpc->cr_co_bulk_hdl, daos2crt_sg(&sgl));
+		rc = crt_bulk_access(rpc->cr_co_bulk_hdl, &sgl);
 		if (rc != 0)
 			D_GOTO(out_pool, rc);
 		buf = iov.iov_buf;

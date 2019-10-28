@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@
 #include <daos/pool_map.h>
 #include <daos/tse.h>
 #include <daos_types.h>
+#include "checksum.h"
 
 int dc_cont_init(void);
 void dc_cont_fini(void);
@@ -41,9 +42,10 @@ int dc_cont_node_id2ptr(daos_handle_t coh, uint32_t node_id,
 			struct pool_domain **dom);
 int dc_cont_hdl2uuid(daos_handle_t coh, uuid_t *hdl_uuid, uuid_t *con_uuid);
 daos_handle_t dc_cont_hdl2pool_hdl(daos_handle_t coh);
+struct daos_csummer *dc_cont_hdl2csummer(daos_handle_t coh);
 
-int dc_cont_local2global(daos_handle_t coh, daos_iov_t *glob);
-int dc_cont_global2local(daos_handle_t poh, daos_iov_t glob,
+int dc_cont_local2global(daos_handle_t coh, d_iov_t *glob);
+int dc_cont_global2local(daos_handle_t poh, d_iov_t glob,
 			 daos_handle_t *coh);
 
 int dc_cont_local_open(uuid_t cont_uuid, uuid_t cont_hdl_uuid,
@@ -58,6 +60,7 @@ int dc_cont_open(tse_task_t *task);
 int dc_cont_close(tse_task_t *task);
 int dc_cont_destroy(tse_task_t *task);
 int dc_cont_query(tse_task_t *task);
+int dc_cont_aggregate(tse_task_t *task);
 int dc_cont_rollback(tse_task_t *task);
 int dc_cont_subscribe(tse_task_t *task);
 int dc_cont_list_attr(tse_task_t *task);
@@ -73,8 +76,8 @@ int dc_tx_commit(tse_task_t *task);
 int dc_tx_abort(tse_task_t *task);
 int dc_tx_open_snap(tse_task_t *task);
 int dc_tx_close(tse_task_t *task);
-int dc_tx_rebuild_open(daos_handle_t coh, daos_epoch_t epoch,
-		       daos_handle_t *th);
-int dc_tx_rebuild_close(daos_handle_t th);
+int dc_tx_local_open(daos_handle_t coh, daos_epoch_t epoch,
+		     daos_handle_t *th);
+int dc_tx_local_close(daos_handle_t th);
 
 #endif /* __DAOS_CONTAINER_H__ */

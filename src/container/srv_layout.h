@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,8 +47,8 @@
 #include <daos_types.h>
 
 /* Root KVS (RDB_KVS_GENERIC) */
-extern daos_iov_t ds_cont_prop_conts;		/* container KVS */
-extern daos_iov_t ds_cont_prop_cont_handles;	/* container handle KVS */
+extern d_iov_t ds_cont_prop_conts;		/* container KVS */
+extern d_iov_t ds_cont_prop_cont_handles;	/* container handle KVS */
 
 /*
  * Container KVS (RDB_KVS_GENERIC)
@@ -59,35 +59,31 @@ extern daos_iov_t ds_cont_prop_cont_handles;	/* container handle KVS */
 /*
  * Container properties KVS (RDB_KVS_GENERIC)
  *
- * 1-level KV pairs - ghce, ghpce, max_oid and the optional properties (label,
+ * 1-level KV pairs - ghce, max_oid and the optional properties (label,
  * layout type etc.).
  *
  * And KVS (with next level KV-pairs):
- * LRE and LHE KVSs (RDB_KVS_INTEGER) -
- * A key is an epoch number. A value is an epoch_count. These epoch-sorted
- * KVSs enable us to quickly retrieve the minimum and maximum LREs and LHEs.
  * Snapshot KVS (RDB_KVS_INTEGER) -
  * This KVS stores an ordered list of snapshotted epochs. The values are
  * unused and empty.
  * User-defined attributes (RDB_KVS_GENERIC) -
  * To store container attributes of upper layers.
  */
-extern daos_iov_t ds_cont_prop_ghce;		/* uint64_t */
-extern daos_iov_t ds_cont_prop_ghpce;		/* uint64_t */
-extern daos_iov_t ds_cont_prop_max_oid;		/* uint64_t */
-extern daos_iov_t ds_cont_prop_label;		/* uint64_t */
-extern daos_iov_t ds_cont_prop_layout_type;	/* uint64_t */
-extern daos_iov_t ds_cont_prop_layout_ver;	/* uint64_t */
-extern daos_iov_t ds_cont_prop_csum;		/* uint64_t */
-extern daos_iov_t ds_cont_prop_redun_fac;	/* uint64_t */
-extern daos_iov_t ds_cont_prop_redun_lvl;	/* uint64_t */
-extern daos_iov_t ds_cont_prop_snapshot_max;	/* uint64_t */
-extern daos_iov_t ds_cont_prop_compress;	/* uint64_t */
-extern daos_iov_t ds_cont_prop_encrypt;		/* uint64_t */
-extern daos_iov_t ds_cont_prop_lres;		/* LRE KVS */
-extern daos_iov_t ds_cont_prop_lhes;		/* LHE KVS */
-extern daos_iov_t ds_cont_prop_snapshots;	/* snapshot KVS */
-extern daos_iov_t ds_cont_attr_user;		/* User attributes KVS */
+extern d_iov_t ds_cont_prop_ghce;		/* uint64_t */
+extern d_iov_t ds_cont_prop_max_oid;		/* uint64_t */
+extern d_iov_t ds_cont_prop_label;		/* uint64_t */
+extern d_iov_t ds_cont_prop_layout_type;	/* uint64_t */
+extern d_iov_t ds_cont_prop_layout_ver;		/* uint64_t */
+extern d_iov_t ds_cont_prop_csum;		/* uint64_t */
+extern d_iov_t ds_cont_prop_csum_chunk_size;	/* uint64_t */
+extern d_iov_t ds_cont_prop_csum_server_verify;	/* uint64_t */
+extern d_iov_t ds_cont_prop_redun_fac;	/* uint64_t */
+extern d_iov_t ds_cont_prop_redun_lvl;	/* uint64_t */
+extern d_iov_t ds_cont_prop_snapshot_max;	/* uint64_t */
+extern d_iov_t ds_cont_prop_compress;		/* uint64_t */
+extern d_iov_t ds_cont_prop_encrypt;		/* uint64_t */
+extern d_iov_t ds_cont_prop_snapshots;		/* snapshot KVS */
+extern d_iov_t ds_cont_attr_user;		/* User attributes KVS */
 
 /*
  * Container handle KVS (RDB_KVS_GENERIC)
@@ -98,11 +94,11 @@ struct container_hdl {
 	uuid_t		ch_pool_hdl;
 	uuid_t		ch_cont;
 	uint64_t	ch_hce;
-	uint64_t	ch_lre;
-	uint64_t	ch_lhe;
 	uint64_t	ch_capas;
 };
 
 extern daos_prop_t cont_prop_default;
+
+#define CONT_PROP_NUM	(DAOS_PROP_CO_MAX - DAOS_PROP_CO_MIN - 1)
 
 #endif /* __CONTAINER_SRV_LAYOUT_H__ */

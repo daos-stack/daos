@@ -24,68 +24,45 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-static bool
-readlink_cb(struct dfuse_request *request)
-{
-	struct dfuse_string_out *out = request->out;
-
-	DFUSE_REQUEST_RESOLVE(request, out);
-	if (request->rc) {
-		D_GOTO(out_err, 0);
-	}
-
-	DFUSE_REPLY_READLINK(request, out->path);
-
-	D_FREE(request);
-	return false;
-
-out_err:
-	DFUSE_REPLY_ERR(request, request->rc);
-	D_FREE(request);
-	return false;
-
-}
-
-static const struct dfuse_request_api api = {
-	.on_result	= readlink_cb,
-};
-
 void
 dfuse_cb_readlink(fuse_req_t req, fuse_ino_t ino)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	struct dfuse_request		*request;
-	int rc;
-	int ret;
+	struct dfuse_projection_info	*fsh = fuse_req_userdata(req);
+	struct dfuse_inode_entry	*inode;
+	d_list_t			*rlink;
+	char				*buf = NULL;
+	size_t				size = 0;
+	int				rc;
 
-	D_ALLOC_PTR(request);
-	if (!request) {
-		D_GOTO(out_no_request, ret = ENOMEM);
+	rlink = d_hash_rec_find(&fsh->dpi_iet, &ino, sizeof(ino));
+	if (!rlink) {
+		DFUSE_TRA_ERROR(fsh, "Failed to find inode %lu", ino);
+		D_GOTO(err, rc = EIO);
 	}
 
-	DFUSE_REQUEST_INIT(request, fs_handle);
-	DFUSE_REQUEST_RESET(request);
+	inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	DFUSE_TRA_UP(request, fs_handle, "readlink");
-	DFUSE_TRA_INFO(request, "statfs %lu", ino);
+	rc = dfs_get_symlink_value(inode->ie_obj, NULL, &size);
+	if (rc)
+		D_GOTO(release, rc);
 
-	request->req = req;
-	request->ir_api = &api;
-	request->ir_ht = RHS_INODE_NUM;
-	request->ir_inode_num = ino;
+	D_ALLOC(buf, size);
+	if (!buf)
+		D_GOTO(release, rc = ENOMEM);
 
-	rc = dfuse_fs_send(request);
-	if (rc != 0) {
-		D_GOTO(out_err, ret = EIO);
-	}
+	rc = dfs_get_symlink_value(inode->ie_obj, buf, &size);
+	if (rc)
+		D_GOTO(release, rc);
 
+	DFUSE_REPLY_READLINK(req, buf);
+
+	d_hash_rec_decref(&fsh->dpi_iet, rlink);
+
+	D_FREE(buf);
 	return;
-
-out_no_request:
-	DFUSE_REPLY_ERR_RAW(fs_handle, req, ret);
-	return;
-
-out_err:
-	DFUSE_REPLY_ERR(request, ret);
-	D_FREE(request);
+release:
+	d_hash_rec_decref(&fsh->dpi_iet, rlink);
+err:
+	DFUSE_REPLY_ERR_RAW(fsh, req, rc);
+	D_FREE(buf);
 }

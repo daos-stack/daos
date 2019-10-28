@@ -22,6 +22,7 @@ function print_help()
 Usage: btree.sh [OPTIONS]
     Options:
         -s [num]  Run with num keys
+        dyn       Run with dynamic root
         ukey      Use integer keys
         perf      Run performance tests
         direct    Use direct string key
@@ -40,6 +41,10 @@ while [ $# -gt 0 ]; do
             echo "Bad argument to -s option.  Must be numeric"
             print_help
         fi
+        shift
+        ;;
+    dyn)
+        DYN="-t"
         shift
         ;;
     perf)
@@ -74,7 +79,7 @@ run_test()
 
         echo "B+tree functional test..."
         DAOS_DEBUG="$DDEBUG"                        \
-        "${VCMD[@]}" "$BTR" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
+        "${VCMD[@]}" "$BTR" "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -c                                          \
         -o                                          \
         -u "$RECORDS"                               \
@@ -92,14 +97,19 @@ run_test()
         -D
 
         echo "B+tree batch operations test..."
-        "${VCMD[@]}" "$BTR" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
+        "${VCMD[@]}" "$BTR" "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -c                                          \
         -o                                          \
         -b "$BAT_NUM"                               \
         -D
+
+        echo "B+tree drain test..."
+        "${VCMD[@]}" "$BTR" "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
+        -e -D
+
     else
         echo "B+tree performance test..."
-        "${VCMD[@]}" "$BTR" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
+        "${VCMD[@]}" "$BTR" "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -p "$BAT_NUM"                               \
         -D
     fi

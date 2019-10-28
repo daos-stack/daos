@@ -1,0 +1,86 @@
+{
+   pool-connect-leaks
+   Memcheck:Leak
+   fun:calloc
+   ...
+   fun:dc_pool_connect
+}
+{
+   crt_progress_leak
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:malloc
+   fun:strndup
+   ...
+   fun:crt_grp_lc_uri_insert
+}
+{
+   group-attach-leak
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:malloc
+   fun:strndup
+   ...
+   fun:crt_grp_attach
+   fun:crt_group_attach
+}
+{
+   access-0
+   Memcheck:Param
+   socketcall.sendto(msg)
+   ...
+   fun:send
+   fun:sock_comm_send_socket.isra.3
+   ...
+   fun:sock_pe_progress_tx_entry
+   fun:sock_pe_progress_tx_ctx
+   fun:sock_pe_progress_thread
+   fun:start_thread
+   fun:clone
+}
+{
+   dfuse-cont-dfs-leak
+   Memcheck:Leak
+   fun:calloc
+   fun:dfuse_cont_open*
+}
+{
+   pool-connect-leak
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:calloc
+   fun:d_hash_table_create_inplace
+   ...
+   fun:pl_map_update
+   fun:pool_map_update
+   ...
+   fun:pool_connect_cp
+}
+{
+   dfuse-dfs-leak
+   Memcheck:Leak
+   fun:calloc
+   fun:dfuse_pool_lookup
+   fun:df_ll_lookup
+   fun:fuse_session_process_buf_int
+}
+{
+   pool-query-leak
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:calloc
+   ...
+   fun:process_query_reply*
+   fun:pool_query_cb
+}
+{
+   cont-open-leak
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:calloc
+   fun:dc_cont_alloc
+   fun:dc_cont_open
+   fun:tse_task_schedule
+   fun:dc_task_schedule
+   fun:daos_cont_open
+}

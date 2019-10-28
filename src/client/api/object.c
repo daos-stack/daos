@@ -24,12 +24,13 @@
 
 #include <daos/object.h>
 #include <daos/task.h>
+#include <daos/container.h>
 #include "client_internal.h"
 #include "task_internal.h"
 
 int
 daos_obj_register_class(daos_handle_t coh, daos_oclass_id_t cid,
-			daos_oclass_attr_t *cattr, daos_event_t *ev)
+			struct daos_oclass_attr *cattr, daos_event_t *ev)
 {
 	D_ERROR("Unsupported API\n");
 	return -DER_NOSYS;
@@ -37,14 +38,14 @@ daos_obj_register_class(daos_handle_t coh, daos_oclass_id_t cid,
 
 int
 daos_obj_query_class(daos_handle_t coh, daos_oclass_id_t cid,
-		     daos_oclass_attr_t *cattr, daos_event_t *ev)
+		     struct daos_oclass_attr *cattr, daos_event_t *ev)
 {
 	D_ERROR("Unsupported API\n");
 	return -DER_NOSYS;
 }
 
 int
-daos_obj_list_class(daos_handle_t coh, daos_oclass_list_t *clist,
+daos_obj_list_class(daos_handle_t coh, struct daos_oclass_list *clist,
 		    daos_anchor_t *anchor, daos_event_t *ev)
 {
 	D_ERROR("Unsupported API\n");
@@ -139,7 +140,7 @@ daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
 }
 
 int
-daos_obj_query(daos_handle_t oh, daos_handle_t th, daos_obj_attr_t *oa,
+daos_obj_query(daos_handle_t oh, daos_handle_t th, struct daos_obj_attr *oa,
 	       d_rank_list_t *ranks, daos_event_t *ev)
 {
 	D_ERROR("Unsupported API\n");
@@ -164,7 +165,7 @@ daos_obj_query_key(daos_handle_t oh, daos_handle_t th, uint32_t flags,
 
 int
 daos_obj_fetch(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
-	       unsigned int nr, daos_iod_t *iods, daos_sg_list_t *sgls,
+	       unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
 	       daos_iom_t *maps, daos_event_t *ev)
 {
 	tse_task_t	*task;
@@ -180,7 +181,7 @@ daos_obj_fetch(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
 
 int
 daos_obj_update(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
-		unsigned int nr, daos_iod_t *iods, daos_sg_list_t *sgls,
+		unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
 		daos_event_t *ev)
 {
 	tse_task_t	*task;
@@ -196,7 +197,7 @@ daos_obj_update(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
 
 int
 daos_obj_list_dkey(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
-		   daos_key_desc_t *kds, daos_sg_list_t *sgl,
+		   daos_key_desc_t *kds, d_sg_list_t *sgl,
 		   daos_anchor_t *anchor, daos_event_t *ev)
 {
 	tse_task_t	*task;
@@ -212,7 +213,7 @@ daos_obj_list_dkey(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
 
 int
 daos_obj_list_akey(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
-		   uint32_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
+		   uint32_t *nr, daos_key_desc_t *kds, d_sg_list_t *sgl,
 		   daos_anchor_t *anchor, daos_event_t *ev)
 {
 	tse_task_t	*task;
@@ -262,5 +263,32 @@ daos_obj_layout_get(daos_handle_t coh, daos_obj_id_t oid,
 	if (rc != 0 && *layout != NULL)
 		daos_obj_layout_free(*layout);
 
+	return rc;
+}
+
+int
+daos_obj_verify(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch)
+{
+	tse_task_t	*task;
+	daos_handle_t	 oh;
+	daos_epoch_t	*epochs_p = NULL;
+	int		 epoch_nr = 0;
+	int		 rc;
+
+	rc = daos_obj_open(coh, oid, 0, &oh, NULL);
+	if (rc != 0)
+		return rc;
+
+	/* Sync object against the given @epoch. */
+	rc = dc_obj_sync_task_create(oh, epoch, &epochs_p, &epoch_nr,
+				     NULL, NULL, &task);
+	if (rc == 0) {
+		rc = dc_task_schedule(task, true);
+		if (rc == 0)
+			rc = dc_obj_verify(oh, epochs_p, epoch_nr);
+	}
+
+	D_FREE(epochs_p);
+	daos_obj_close(oh, NULL);
 	return rc;
 }

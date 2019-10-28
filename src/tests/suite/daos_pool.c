@@ -55,7 +55,7 @@ pool_connect(void **state)
 	test_arg_t	*arg = *state;
 	daos_handle_t	 poh;
 	daos_event_t	 ev;
-	daos_pool_info_t info;
+	daos_pool_info_t info = {0};
 	int		 rc;
 
 	if (!arg->hdl_share && arg->myrank != 0)
@@ -79,9 +79,6 @@ pool_connect(void **state)
 				    sizeof(info.pi_uuid));
 		/** TODO: assert_int_equal(info.pi_ntargets, arg->...); */
 		assert_int_equal(info.pi_ndisabled, 0);
-		assert_int_equal(info.pi_uid, arg->uid);
-		assert_int_equal(info.pi_gid, arg->gid);
-		assert_int_equal(info.pi_mode, arg->mode);
 		print_message("success\n");
 
 		print_message("rank 0 querying pool info... ");
@@ -92,9 +89,6 @@ pool_connect(void **state)
 		assert_int_equal(rc, 0);
 		WAIT_ON_ASYNC(arg, ev);
 		assert_int_equal(info.pi_ndisabled, 0);
-		assert_int_equal(info.pi_uid, arg->uid);
-		assert_int_equal(info.pi_gid, arg->gid);
-		assert_int_equal(info.pi_mode, arg->mode);
 		print_message("success\n");
 	}
 
@@ -170,7 +164,7 @@ pool_exclude(void **state)
 	test_arg_t	*arg = *state;
 	daos_handle_t	 poh;
 	daos_event_t	 ev;
-	daos_pool_info_t info;
+	daos_pool_info_t info = {0};
 	struct d_tgt_list tgts;
 	d_rank_t	 rank;
 	int		 tgt = -1;
@@ -469,8 +463,11 @@ pool_properties(void **state)
 	uint64_t		 space_rb = 36;
 	daos_prop_t		*prop;
 	daos_prop_t		*prop_query;
-	struct daos_prop_entry *entry;
+	struct daos_prop_entry	*entry;
+	daos_pool_info_t	 info = {0};
 	int			 rc;
+	char			*expected_owner;
+	char			*expected_group;
 
 	print_message("create pool with properties, and query it to verify.\n");
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
@@ -486,6 +483,15 @@ pool_properties(void **state)
 	while (!rc && arg->setup_state != SETUP_POOL_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, prop, NULL);
 	assert_int_equal(rc, 0);
+
+	if (arg->myrank == 0) {
+		rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);
+		assert_int_equal(rc, 0);
+		rc = daos_mgmt_set_params(arg->group, info.pi_leader,
+			DSS_KEY_FAIL_LOC, DAOS_FORCE_PROP_VERIFY, 0, NULL);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	prop_query = daos_prop_alloc(0);
 	rc = daos_pool_query(arg->pool.poh, NULL, NULL, prop_query, NULL);
@@ -524,19 +530,32 @@ pool_properties(void **state)
 		assert_int_equal(rc, 1); /* fail the test */
 	}
 
+	/* default owner should be effective uid */
+	assert_int_equal(daos_acl_uid_to_principal(geteuid(), &expected_owner),
+			 0);
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_OWNER);
 	if (entry == NULL || entry->dpe_str == NULL ||
-	    strncmp(entry->dpe_str, "nobody@", DAOS_ACL_MAX_PRINCIPAL_LEN)) {
+	    strncmp(entry->dpe_str, expected_owner,
+		    DAOS_ACL_MAX_PRINCIPAL_LEN)) {
 		print_message("Owner prop verification failed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
 
+	/* default owner-group should be effective gid */
+	assert_int_equal(daos_acl_gid_to_principal(getegid(), &expected_group),
+			 0);
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_OWNER_GROUP);
 	if (entry == NULL || entry->dpe_str == NULL ||
-	    strncmp(entry->dpe_str, "nobody@", DAOS_ACL_MAX_PRINCIPAL_LEN)) {
+	    strncmp(entry->dpe_str, expected_group,
+		    DAOS_ACL_MAX_PRINCIPAL_LEN)) {
 		print_message("Owner-group prop verification failed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
+
+	if (arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DSS_KEY_FAIL_LOC, 0,
+				     0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	daos_prop_free(prop);
 	daos_prop_free(prop_query);

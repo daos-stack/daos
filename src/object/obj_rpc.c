@@ -28,6 +28,7 @@
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos/rpc.h>
+#include <daos/object.h>
 #include "obj_rpc.h"
 
 static int
@@ -39,7 +40,7 @@ crt_proc_struct_dtx_id(crt_proc_t proc, struct dtx_id *dti)
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint64_t(proc, &dti->dti_sec);
+	rc = crt_proc_uint64_t(proc, &dti->dti_hlc);
 	if (rc != 0)
 		return -DER_HG;
 
@@ -55,11 +56,11 @@ crt_proc_daos_key_desc_t(crt_proc_t proc, daos_key_desc_t *key)
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint32_t(proc, &key->kd_val_types);
+	rc = crt_proc_uint32_t(proc, &key->kd_val_type);
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint32_t(proc, &key->kd_csum_type);
+	rc = crt_proc_uint16_t(proc, &key->kd_csum_type);
 	if (rc != 0)
 		return -DER_HG;
 
@@ -148,6 +149,14 @@ crt_proc_daos_csum_buf_t(crt_proc_t proc, daos_csum_buf_t *csum)
 	if (rc != 0)
 		return -DER_HG;
 
+	rc = crt_proc_uint32_t(proc, &csum->cs_nr);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint32_t(proc, &csum->cs_chunksize);
+	if (rc != 0)
+		return -DER_HG;
+
 	rc = crt_proc_uint16_t(proc, &csum->cs_type);
 	if (rc != 0)
 		return -DER_HG;
@@ -160,7 +169,7 @@ crt_proc_daos_csum_buf_t(crt_proc_t proc, daos_csum_buf_t *csum)
 	if (rc != 0)
 		return -DER_HG;
 
-	if (csum->cs_buf_len < csum->cs_len) {
+	if (csum->cs_buf_len < csum->cs_len * csum->cs_nr) {
 		D_ERROR("invalid csum buf len %iu < csum len %hu\n",
 			csum->cs_buf_len, csum->cs_len);
 		return -DER_HG;
@@ -174,8 +183,8 @@ crt_proc_daos_csum_buf_t(crt_proc_t proc, daos_csum_buf_t *csum)
 		D_FREE(csum->cs_csum);
 	}
 
-	if (csum->cs_len > 0) {
-		rc = crt_proc_memcpy(proc, csum->cs_csum, csum->cs_len);
+	if (csum->cs_buf_len > 0 && proc_op != CRT_PROC_FREE) {
+		rc = crt_proc_memcpy(proc, csum->cs_csum, csum->cs_buf_len);
 		if (rc != 0) {
 			if (proc_op == CRT_PROC_DECODE)
 				D_FREE(csum->cs_csum);
@@ -231,7 +240,7 @@ crt_proc_daos_iod_t(crt_proc_t proc, daos_iod_t *dvi)
 	if (rc != 0)
 		return -DER_HG;
 
-	if (proc_op == CRT_PROC_ENCODE) {
+	if (proc_op == CRT_PROC_ENCODE || proc_op == CRT_PROC_FREE) {
 		if (dvi->iod_type == DAOS_IOD_ARRAY && dvi->iod_recxs != NULL)
 			existing_flags |= IOD_REC_EXIST;
 		if (dvi->iod_csums != NULL)
@@ -371,7 +380,7 @@ crt_proc_d_sg_list_t(crt_proc_t proc, d_sg_list_t *sgl)
 
 
 static int
-crt_proc_struct_daos_obj_shard_tgt(crt_proc_t proc, struct daos_obj_shard_tgt *st)
+crt_proc_struct_daos_shard_tgt(crt_proc_t proc, struct daos_shard_tgt *st)
 {
 	int rc;
 
@@ -384,7 +393,7 @@ crt_proc_struct_daos_obj_shard_tgt(crt_proc_t proc, struct daos_obj_shard_tgt *s
 	rc = crt_proc_uint32_t(proc, &st->st_tgt_idx);
 	if (rc != 0)
 		return -DER_HG;
-	rc = crt_proc_uint32_t(proc, &st->st_pad);
+	rc = crt_proc_uint32_t(proc, &st->st_tgt_id);
 	if (rc != 0)
 		return -DER_HG;
 
@@ -396,6 +405,7 @@ CRT_RPC_DEFINE(obj_fetch, DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 CRT_RPC_DEFINE(obj_key_enum, DAOS_ISEQ_OBJ_KEY_ENUM, DAOS_OSEQ_OBJ_KEY_ENUM)
 CRT_RPC_DEFINE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
 CRT_RPC_DEFINE(obj_query_key, DAOS_ISEQ_OBJ_QUERY_KEY, DAOS_OSEQ_OBJ_QUERY_KEY)
+CRT_RPC_DEFINE(obj_sync, DAOS_ISEQ_OBJ_SYNC, DAOS_OSEQ_OBJ_SYNC)
 
 /* Define for cont_rpcs[] array population below.
  * See OBJ_PROTO_*_RPC_LIST macro definition
@@ -430,6 +440,7 @@ obj_reply_set_status(crt_rpc_t *rpc, int status)
 	switch (opc_get(rpc->cr_opc)) {
 	case DAOS_OBJ_RPC_UPDATE:
 	case DAOS_OBJ_RPC_FETCH:
+	case DAOS_OBJ_RPC_TGT_UPDATE:
 		((struct obj_rw_out *)reply)->orw_ret = status;
 		break;
 	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
@@ -441,10 +452,16 @@ obj_reply_set_status(crt_rpc_t *rpc, int status)
 	case DAOS_OBJ_RPC_PUNCH:
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH:
+	case DAOS_OBJ_RPC_TGT_PUNCH_DKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH_AKEYS:
 		((struct obj_punch_out *)reply)->opo_ret = status;
 		break;
 	case DAOS_OBJ_RPC_QUERY_KEY:
 		((struct obj_query_key_out *)reply)->okqo_ret = status;
+		break;
+	case DAOS_OBJ_RPC_SYNC:
+		((struct obj_sync_out *)reply)->oso_ret = status;
 		break;
 	default:
 		D_ASSERT(0);
@@ -458,6 +475,7 @@ obj_reply_get_status(crt_rpc_t *rpc)
 
 	switch (opc_get(rpc->cr_opc)) {
 	case DAOS_OBJ_RPC_UPDATE:
+	case DAOS_OBJ_RPC_TGT_UPDATE:
 	case DAOS_OBJ_RPC_FETCH:
 		return ((struct obj_rw_out *)reply)->orw_ret;
 	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
@@ -468,9 +486,14 @@ obj_reply_get_status(crt_rpc_t *rpc)
 	case DAOS_OBJ_RPC_PUNCH:
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH:
+	case DAOS_OBJ_RPC_TGT_PUNCH_DKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH_AKEYS:
 		return ((struct obj_punch_out *)reply)->opo_ret;
 	case DAOS_OBJ_RPC_QUERY_KEY:
 		return ((struct obj_query_key_out *)reply)->okqo_ret;
+	case DAOS_OBJ_RPC_SYNC:
+		return ((struct obj_sync_out *)reply)->oso_ret;
 	default:
 		D_ASSERT(0);
 	}
@@ -484,6 +507,7 @@ obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version)
 
 	switch (opc_get(rpc->cr_opc)) {
 	case DAOS_OBJ_RPC_UPDATE:
+	case DAOS_OBJ_RPC_TGT_UPDATE:
 	case DAOS_OBJ_RPC_FETCH:
 		((struct obj_rw_out *)reply)->orw_map_version = map_version;
 		break;
@@ -497,11 +521,17 @@ obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version)
 	case DAOS_OBJ_RPC_PUNCH:
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH:
+	case DAOS_OBJ_RPC_TGT_PUNCH_DKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH_AKEYS:
 		((struct obj_punch_out *)reply)->opo_map_version = map_version;
 		break;
 	case DAOS_OBJ_RPC_QUERY_KEY:
 		((struct obj_query_key_out *)reply)->okqo_map_version =
 			map_version;
+		break;
+	case DAOS_OBJ_RPC_SYNC:
+		((struct obj_sync_out *)reply)->oso_map_version = map_version;
 		break;
 	default:
 		D_ASSERT(0);
@@ -515,6 +545,7 @@ obj_reply_map_version_get(crt_rpc_t *rpc)
 
 	switch (opc_get(rpc->cr_opc)) {
 	case DAOS_OBJ_RPC_UPDATE:
+	case DAOS_OBJ_RPC_TGT_UPDATE:
 	case DAOS_OBJ_RPC_FETCH:
 		return ((struct obj_rw_out *)reply)->orw_map_version;
 	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
@@ -525,9 +556,14 @@ obj_reply_map_version_get(crt_rpc_t *rpc)
 	case DAOS_OBJ_RPC_PUNCH:
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH:
+	case DAOS_OBJ_RPC_TGT_PUNCH_DKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH_AKEYS:
 		return ((struct obj_punch_out *)reply)->opo_map_version;
 	case DAOS_OBJ_RPC_QUERY_KEY:
 		return ((struct obj_query_key_out *)reply)->okqo_map_version;
+	case DAOS_OBJ_RPC_SYNC:
+		return ((struct obj_sync_out *)reply)->oso_map_version;
 	default:
 		D_ASSERT(0);
 	}
@@ -540,16 +576,16 @@ obj_reply_dtx_conflict_set(crt_rpc_t *rpc, struct dtx_conflict_entry *dce)
 	void *reply = crt_reply_get(rpc);
 
 	switch (opc_get(rpc->cr_opc)) {
-	case DAOS_OBJ_RPC_UPDATE: {
+	case DAOS_OBJ_RPC_TGT_UPDATE: {
 		struct obj_rw_out	*orw = reply;
 
 		daos_dti_copy(&orw->orw_dti_conflict, &dce->dce_xid);
 		orw->orw_dkey_conflict = dce->dce_dkey;
 		break;
 	}
-	case DAOS_OBJ_RPC_PUNCH:
-	case DAOS_OBJ_RPC_PUNCH_DKEYS:
-	case DAOS_OBJ_RPC_PUNCH_AKEYS: {
+	case DAOS_OBJ_RPC_TGT_PUNCH:
+	case DAOS_OBJ_RPC_TGT_PUNCH_DKEYS:
+	case DAOS_OBJ_RPC_TGT_PUNCH_AKEYS: {
 		struct obj_punch_out	*opo = reply;
 
 		daos_dti_copy(&opo->opo_dti_conflict, &dce->dce_xid);

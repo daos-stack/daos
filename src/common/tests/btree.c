@@ -49,9 +49,9 @@ enum ik_btr_opc {
 };
 
 struct test_input_value {
-	bool					input;
+	bool				input;
 	enum	 ik_btr_opc		opc;
-	char					*optval;
+	char				*optval;
 };
 
 struct test_input_value tst_fn_val;
@@ -92,7 +92,7 @@ ik_hkey_size(void)
 }
 
 static void
-ik_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
+ik_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 {
 	uint64_t	*ikey;
 
@@ -102,8 +102,8 @@ ik_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
 }
 
 static int
-ik_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
-		  daos_iov_t *val_iov, struct btr_record *rec)
+ik_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
+		  d_iov_t *val_iov, struct btr_record *rec)
 {
 	umem_off_t		 irec_off;
 	struct ik_rec		*irec;
@@ -149,7 +149,7 @@ ik_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 static int
 ik_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-		 daos_iov_t *key_iov, daos_iov_t *val_iov)
+		 d_iov_t *key_iov, d_iov_t *val_iov)
 {
 	struct ik_rec	*irec;
 	char		*val;
@@ -213,7 +213,7 @@ ik_rec_string(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 ik_rec_update(struct btr_instance *tins, struct btr_record *rec,
-		   daos_iov_t *key, daos_iov_t *val_iov)
+		   d_iov_t *key, d_iov_t *val_iov)
 {
 	struct umem_instance	*umm = &tins->ti_umm;
 	struct ik_rec		*irec;
@@ -360,7 +360,7 @@ ik_btr_close_destroy(void **state)
 
 	if (destroy) {
 		D_PRINT("Destroy btree\n");
-		rc = dbtree_destroy(ik_toh);
+		rc = dbtree_destroy(ik_toh, NULL);
 	} else {
 		D_PRINT("Close btree\n");
 		rc = dbtree_close(ik_toh);
@@ -375,7 +375,7 @@ ik_btr_close_destroy(void **state)
 }
 
 static int
-btr_rec_verify_delete(umem_off_t *rec, daos_iov_t *key)
+btr_rec_verify_delete(umem_off_t *rec, d_iov_t *key)
 {
 	struct umem_instance	*umm;
 	struct ik_rec		*irec;
@@ -437,8 +437,8 @@ ik_btr_kv_operate(void **state)
 
 	while (str != NULL && !isspace(*str) && *str != '\0') {
 		char	   *val = NULL;
-		daos_iov_t	key_iov;
-		daos_iov_t	val_iov;
+		d_iov_t	key_iov;
+		d_iov_t	val_iov;
 		uint64_t	key;
 
 		key = strtoul(str, NULL, 0);
@@ -460,12 +460,12 @@ ik_btr_kv_operate(void **state)
 			str++;
 		}
 
-		daos_iov_set(&key_iov, &key, sizeof(key));
+		d_iov_set(&key_iov, &key, sizeof(key));
 		switch (opc) {
 		default:
 			fail_msg("Invalid opcode\n");
 		case BTR_OPC_UPDATE:
-			daos_iov_set(&val_iov, val, strlen(val) + 1);
+			d_iov_set(&val_iov, val, strlen(val) + 1);
 			rc = dbtree_update(ik_toh, &key_iov, &val_iov);
 			if (rc != 0) {
 				sprintf(outbuf,
@@ -475,7 +475,8 @@ ik_btr_kv_operate(void **state)
 			break;
 
 		case BTR_OPC_DELETE:
-			rc = dbtree_delete(ik_toh, &key_iov, NULL);
+			rc = dbtree_delete(ik_toh, BTR_PROBE_EQ,
+					   &key_iov, NULL);
 			if (rc != 0) {
 				sprintf(outbuf,
 					"Failed to delete "DF_U64"\n", key);
@@ -489,7 +490,8 @@ ik_btr_kv_operate(void **state)
 			break;
 
 		case BTR_OPC_DELETE_RETAIN:
-			rc = dbtree_delete(ik_toh, &key_iov, &rec_off);
+			rc = dbtree_delete(ik_toh, BTR_PROBE_EQ,
+					   &key_iov, &rec_off);
 			if (rc != 0) {
 				sprintf(outbuf,
 					"Failed to delete "DF_U64"\n", key);
@@ -511,7 +513,7 @@ ik_btr_kv_operate(void **state)
 		case BTR_OPC_LOOKUP:
 			D_DEBUG(DB_TEST, "Looking for "DF_U64"\n", key);
 
-			daos_iov_set(&val_iov, NULL, 0); /* get address */
+			d_iov_set(&val_iov, NULL, 0); /* get address */
 			rc = dbtree_lookup(ik_toh, &key_iov, &val_iov);
 			if (rc != 0) {
 				sprintf(outbuf,
@@ -591,8 +593,8 @@ ik_btr_iterate(void **state)
 		del = 0;
 
 	for (i = d = 0;; i++) {
-		daos_iov_t	key_iov;
-		daos_iov_t	val_iov;
+		d_iov_t	key_iov;
+		d_iov_t	val_iov;
 		uint64_t	key;
 
 		if (i == 0 || (del != 0 && d <= del)) {
@@ -614,8 +616,8 @@ ik_btr_iterate(void **state)
 			}
 		}
 
-		daos_iov_set(&key_iov, NULL, 0);
-		daos_iov_set(&val_iov, NULL, 0);
+		d_iov_set(&key_iov, NULL, 0);
+		d_iov_set(&val_iov, NULL, 0);
 		rc = dbtree_iter_fetch(ih, &key_iov, &val_iov, NULL);
 		if (rc != 0) {
 			err = "fetch failure\n";
@@ -826,11 +828,57 @@ ik_btr_perf(void **state)
 	D_FREE(arr);
 }
 
+
+static void
+ik_btr_drain(void **state)
+{
+	static const int drain_keys  = 10000;
+	static const int drain_creds = 23;
+
+	unsigned int	*arr;
+	unsigned int	 drained = 0;
+	char		 buf[64];
+	int		 i;
+
+	D_ALLOC_ARRAY(arr, drain_keys);
+	if (arr == NULL)
+		fail_msg("Array allocation failed");
+
+	D_PRINT("Batch add %d records.\n", drain_keys);
+	ik_btr_gen_keys(arr, drain_keys);
+	for (i = 0; i < drain_keys; i++) {
+		sprintf(buf, "%d:%d", arr[i], arr[i]);
+		tst_fn_val.opc	  = BTR_OPC_UPDATE;
+		tst_fn_val.optval = buf;
+		tst_fn_val.input  = false;
+
+		ik_btr_kv_operate(NULL);
+	}
+
+	ik_btr_query(NULL);
+	while (1) {
+		int	creds = drain_creds;
+		bool	empty = false;
+		int	rc;
+
+		rc = dbtree_drain(ik_toh, &creds, NULL, &empty);
+		if (rc) {
+			fail_msg("Failed to drain btree: %s\n", d_errstr(rc));
+			fail();
+		}
+		drained += drain_creds - creds;
+		D_PRINT("Drained %d of %d KVs, empty=%d\n",
+			drained, drain_keys, empty);
+		if (empty)
+			break;
+	}
+}
+
 static int
 run_btree_open_create_test(void)
 {
 	static const struct CMUnitTest btree_open_create_test[] = {
-		{ "EVT001: btree_open_create test", ik_btr_open_create,
+		{ "BTR001: btree_open_create test", ik_btr_open_create,
 			NULL, NULL},
 		{ NULL, NULL, NULL, NULL }
 	};
@@ -843,7 +891,7 @@ static int
 run_btree_close_destroy_test(void)
 {
 	static const struct CMUnitTest btree_close_destroy_test[] = {
-		{ "EVT002: btree_close_destroy test", ik_btr_close_destroy,
+		{ "BTR002: btree_close_destroy test", ik_btr_close_destroy,
 			NULL, NULL},
 		{ NULL, NULL, NULL, NULL }
 	};
@@ -856,7 +904,7 @@ static int
 run_btree_query_test(void)
 {
 	static const struct CMUnitTest btree_query_test[] = {
-		{ "EVT003: btree_query test", ik_btr_query,
+		{ "BTR003: btree_query test", ik_btr_query,
 			NULL, NULL},
 		{ NULL, NULL, NULL, NULL }
 	};
@@ -869,7 +917,7 @@ static int
 run_btree_iter_test(void)
 {
 	static const struct CMUnitTest btree_iterate_test[] = {
-		{ "EVT004: btree_iterate test", ik_btr_iterate,
+		{ "BTR004: btree_iterate test", ik_btr_iterate,
 			NULL, NULL},
 		{ NULL, NULL, NULL, NULL }
 	};
@@ -882,7 +930,7 @@ static int
 run_btree_batch_oper_test(void)
 {
 	static const struct CMUnitTest btree_batch_oper_test[] = {
-		{ "EVT005: btree_batch_oper test", ik_btr_batch_oper,
+		{ "BTR005: btree_batch_oper test", ik_btr_batch_oper,
 			NULL, NULL},
 		{ NULL, NULL, NULL, NULL }
 	};
@@ -895,7 +943,7 @@ static int
 run_btree_perf_test(void)
 {
 	static const struct CMUnitTest btree_perf_test[] = {
-		{ "EVT006: btree_perf test", ik_btr_perf, NULL, NULL},
+		{ "BTR006: btree_perf test", ik_btr_perf, NULL, NULL},
 		{ NULL, NULL, NULL, NULL }
 	};
 
@@ -907,7 +955,7 @@ static int
 run_btree_kv_operate_test(void)
 {
 	static const struct CMUnitTest btree_kv_operate_test[] = {
-		{ "EVT007: btree_kv_operate test",
+		{ "BTR007: btree_kv_operate test",
 			ik_btr_kv_operate, NULL, NULL},
 		{ NULL, NULL, NULL, NULL }
 	};
@@ -916,14 +964,27 @@ run_btree_kv_operate_test(void)
 				btree_kv_operate_test, NULL, NULL);
 }
 
+static int
+run_btree_drain_test(void)
+{
+	static const struct CMUnitTest btree_drain_test[] = {
+		{ "BTR008: btree_drain test", ik_btr_drain, NULL, NULL},
+		{ NULL, NULL, NULL, NULL }
+	};
+
+	return cmocka_run_group_tests_name("btree drain test",
+				btree_drain_test, NULL, NULL);
+}
 
 static struct option btr_ops[] = {
 	{ "create",	required_argument,	NULL,	'C'	},
 	{ "destroy",	no_argument,		NULL,	'D'	},
+	{ "drain",	no_argument,		NULL,	'e'	},
 	{ "open",	no_argument,		NULL,	'o'	},
 	{ "close",	no_argument,		NULL,	'c'	},
 	{ "update",	required_argument,	NULL,	'u'	},
 	{ "find",	required_argument,	NULL,	'f'	},
+	{ "dyn_tree",	no_argument,		NULL,	't'	},
 	{ "delete",	required_argument,	NULL,	'd'	},
 	{ "del_retain", required_argument,	NULL,	'r'	},
 	{ "query",	no_argument,		NULL,	'q'	},
@@ -939,6 +1000,9 @@ main(int argc, char **argv)
 	struct timeval	tv;
 	int		rc = 0;
 	int		opt;
+	int		dynamic_flag = 0;
+
+	d_register_alt_assert(mock_assert);
 
 	gettimeofday(&tv, NULL);
 	srand(tv.tv_usec);
@@ -950,14 +1014,11 @@ main(int argc, char **argv)
 	if (rc != 0)
 		return rc;
 
-	rc = dbtree_class_register(IK_TREE_CLASS, BTR_FEAT_UINT_KEY, &ik_ops);
-	D_ASSERT(rc == 0);
-
 	optind = 0;
 
 	/* Check for -m option first */
-	while ((opt = getopt_long(argc, argv, "mC:Docqu:d:r:f:i:b:p:", btr_ops,
-				  NULL)) != -1) {
+	while ((opt = getopt_long(argc, argv, "tmC:Deocqu:d:r:f:i:b:p:",
+				  btr_ops, NULL)) != -1) {
 		if (opt == 'm') {
 			D_PRINT("Using pmem\n");
 			rc = utest_pmem_create(POOL_NAME, POOL_SIZE,
@@ -965,7 +1026,16 @@ main(int argc, char **argv)
 			D_ASSERT(rc == 0);
 			break;
 		}
+		if (opt == 't') {
+			D_PRINT("Using dynamic tree order\n");
+			dynamic_flag = BTR_FEAT_DYNAMIC_ROOT;
+		}
 	}
+
+
+	rc = dbtree_class_register(IK_TREE_CLASS,
+				   dynamic_flag | BTR_FEAT_UINT_KEY, &ik_ops);
+	D_ASSERT(rc == 0);
 
 	if (ik_utx == NULL) {
 		D_PRINT("Using vmem\n");
@@ -979,8 +1049,8 @@ main(int argc, char **argv)
 	/* start over */
 	optind = 0;
 
-	while ((opt = getopt_long(argc, argv, "mC:Docqu:d:r:f:i:b:p:", btr_ops,
-				  NULL)) != -1) {
+	while ((opt = getopt_long(argc, argv, "tmC:Deocqu:d:r:f:i:b:p:",
+				  btr_ops, NULL)) != -1) {
 		tst_fn_val.optval = optarg;
 		tst_fn_val.input = true;
 		switch (opt) {
@@ -999,6 +1069,9 @@ main(int argc, char **argv)
 		case 'c':
 			tst_fn_val.input = false;
 			rc = run_btree_close_destroy_test();
+			break;
+		case 'e':
+			rc = run_btree_drain_test();
 			break;
 		case 'q':
 			rc = run_btree_query_test();
@@ -1031,6 +1104,7 @@ main(int argc, char **argv)
 		default:
 			D_PRINT("Unsupported command %c\n", opt);
 		case 'm':
+		case 't':
 			/* handled previously */
 			rc = 0;
 			break;

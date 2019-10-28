@@ -79,7 +79,7 @@ oi_rec_msize(int alloc_overhead)
 }
 
 static void
-oi_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
+oi_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 {
 	/* key can be either oi_hkey or oi_key (for punch and update).
 	 * We only use the hkey part as a key.
@@ -111,8 +111,8 @@ oi_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 }
 
 static int
-oi_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
-	     daos_iov_t *val_iov, struct btr_record *rec)
+oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
+	     d_iov_t *val_iov, struct btr_record *rec)
 {
 	struct vos_obj_df	*obj;
 	struct oi_key		*key;
@@ -123,7 +123,7 @@ oi_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	/* Allocate a PMEM value of type vos_obj_df */
 	obj_off = umem_zalloc(&tins->ti_umm, sizeof(struct vos_obj_df));
 	if (UMOFF_IS_NULL(obj_off))
-		return -DER_NOMEM;
+		return -DER_NOSPACE;
 
 	rc = vos_dtx_register_record(&tins->ti_umm, obj_off, DTX_RT_OBJ, 0);
 	if (rc != 0)
@@ -138,6 +138,7 @@ oi_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	key = key_iov->iov_buf;
 	hkey = &key->oi_hkey;
 
+	obj->vo_sync	= 0;
 	obj->vo_id	= hkey->oi_oid;
 	obj->vo_earliest = key->oi_epc_lo;
 	if (hkey->oi_epc == DAOS_EPOCH_MAX) {
@@ -148,7 +149,7 @@ oi_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 		obj->vo_oi_attr |= VOS_OI_PUNCHED;
 	}
 
-	daos_iov_set(val_iov, obj, sizeof(struct vos_obj_df));
+	d_iov_set(val_iov, obj, sizeof(struct vos_obj_df));
 	rec->rec_off = obj_off;
 
 	D_DEBUG(DB_TRACE, "alloc "DF_UOID" rec "DF_X64"\n",
@@ -161,7 +162,6 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
 	struct umem_instance	*umm = &tins->ti_umm;
 	struct vos_obj_df	*obj;
-	int			 rc = 0;
 
 	obj = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 
@@ -171,27 +171,14 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 			obj->vo_dtx_shares);
 		return -DER_BUSY;
 	}
-
-	/** Free the KV tree within this object */
-	if (obj->vo_tree.tr_class != 0) {
-		struct umem_attr uma;
-		daos_handle_t	 toh;
-
-		umem_attr_get(&tins->ti_umm, &uma);
-		rc = dbtree_open_inplace_ex(&obj->vo_tree, &uma, tins->ti_coh,
-					    tins->ti_blks_info, &toh);
-		if (rc != 0)
-			D_ERROR("Failed to open OI tree: %d\n", rc);
-		else
-			dbtree_destroy(toh);
-	}
-	umem_free(umm, rec->rec_off);
-	return rc;
+	D_ASSERT(tins->ti_priv);
+	return gc_add_item((struct vos_pool *)tins->ti_priv, GC_OBJ,
+			   rec->rec_off, 0);
 }
 
 static int
 oi_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-		 daos_iov_t *key_iov, daos_iov_t *val_iov)
+		 d_iov_t *key_iov, d_iov_t *val_iov)
 {
 	struct vos_obj_df	*obj;
 
@@ -200,13 +187,13 @@ oi_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 		DP_UOID(obj->vo_id), rec->rec_off);
 
 	D_ASSERT(val_iov != NULL);
-	daos_iov_set(val_iov, obj, sizeof(struct vos_obj_df));
+	d_iov_set(val_iov, obj, sizeof(struct vos_obj_df));
 	return 0;
 }
 
 static int
 oi_rec_update(struct btr_instance *tins, struct btr_record *rec,
-		  daos_iov_t *key, daos_iov_t *val)
+		  d_iov_t *key, d_iov_t *val)
 {
 	D_ASSERTF(0, "Should never been called\n");
 	return 0;
@@ -244,19 +231,14 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
 	    daos_epoch_t epoch, uint32_t intent, struct vos_obj_df **obj_p)
 {
 	struct oi_hkey	hkey;
-	daos_iov_t	key_iov;
-	daos_iov_t	val_iov;
+	d_iov_t		key_iov;
+	d_iov_t		val_iov;
 	int		rc;
-
-	if (!cont->vc_otab_df) {
-		D_ERROR("Object index cannot be empty\n");
-		return -DER_NONEXIST;
-	}
 
 	hkey.oi_oid = oid;
 	hkey.oi_epc = epoch;
-	daos_iov_set(&key_iov, &hkey, sizeof(hkey));
-	daos_iov_set(&val_iov, NULL, 0);
+	d_iov_set(&key_iov, &hkey, sizeof(hkey));
+	d_iov_set(&val_iov, NULL, 0);
 
 	rc = dbtree_fetch(cont->vc_btr_hdl, BTR_PROBE_GE | BTR_PROBE_MATCHED,
 			  intent, &key_iov, NULL, &val_iov);
@@ -279,8 +261,8 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 {
 	struct oi_hkey	*hkey;
 	struct oi_key	 key;
-	daos_iov_t	 key_iov;
-	daos_iov_t	 val_iov;
+	d_iov_t	 key_iov;
+	d_iov_t	 val_iov;
 	int		 rc;
 
 	D_DEBUG(DB_TRACE, "Lookup obj "DF_UOID" in the OI table.\n",
@@ -291,14 +273,14 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 		return rc;
 
 	/* Object ID not found insert it to the OI tree */
-	D_DEBUG(DB_TRACE, "Object"DF_UOID" not found adding it.. eph "
+	D_DEBUG(DB_TRACE, "Object "DF_UOID" not found adding it.. eph "
 		DF_U64"\n", DP_UOID(oid), epoch);
 
 	hkey = &key.oi_hkey;
 	hkey->oi_oid = oid;
 	hkey->oi_epc = DAOS_EPOCH_MAX; /* max as incarnation */
 	key.oi_epc_lo = epoch;
-	daos_iov_set(&key_iov, &key, sizeof(key));
+	d_iov_set(&key_iov, &key, sizeof(key));
 
 	rc = dbtree_upsert(cont->vc_btr_hdl, BTR_PROBE_EQ, intent, &key_iov,
 			   &val_iov);
@@ -321,8 +303,8 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 {
 	struct oi_hkey	*hkey;
 	struct oi_key	 key;
-	daos_iov_t	 key_iov;
-	daos_iov_t	 val_iov;
+	d_iov_t	 key_iov;
+	d_iov_t	 val_iov;
 	int		 rc = 0;
 	bool		 replay = (flags & VOS_OF_REPLAY_PC);
 
@@ -348,7 +330,7 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 	key.oi_epc_lo = hkey->oi_epc = epoch;
 	if (!replay) /* We steal the subtree from the max epoch */
 		key.oi_epc_lo = obj->vo_earliest;
-	daos_iov_set(&key_iov, &key, sizeof(key));
+	d_iov_set(&key_iov, &key, sizeof(key));
 
 	rc = dbtree_upsert(cont->vc_btr_hdl, BTR_PROBE_EQ, DAOS_INTENT_PUNCH,
 			   &key_iov, &val_iov);
@@ -388,6 +370,41 @@ out:
 	return rc;
 }
 
+/**
+ * Delete a durable object
+ *
+ * NB: this operation is not going to be part of distributed transaction,
+ * it is only used by rebalance and reintegration.
+ *
+ * XXX: this only deletes the latest incarnation of the object, but the
+ * ongoing work (incarnation log) will change it and there will be only
+ * one incarnation for each object.
+ */
+int
+vos_oi_delete(struct vos_container *cont, daos_unit_oid_t oid)
+{
+	struct oi_hkey	hkey;
+	d_iov_t		key_iov;
+	int		rc = 0;
+
+	D_DEBUG(DB_TRACE, "Delete obj "DF_UOID"\n", DP_UOID(oid));
+
+	hkey.oi_oid = oid;
+	hkey.oi_epc = DAOS_EPOCH_MAX;
+	d_iov_set(&key_iov, &hkey, sizeof(hkey));
+
+	rc = dbtree_delete(cont->vc_btr_hdl, BTR_PROBE_GE | BTR_PROBE_MATCHED,
+			   &key_iov, cont->vc_pool);
+	if (rc == -DER_NONEXIST)
+		return 0;
+
+	if (rc != 0) {
+		D_ERROR("Failed to delete object, rc=%s\n", d_errstr(rc));
+		return rc;
+	}
+	return 0;
+}
+
 static struct vos_oi_iter *
 iter2oiter(struct vos_iterator *iter)
 {
@@ -424,7 +441,7 @@ oi_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
 {
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
 	struct vos_obj_df	*obj;
-	daos_iov_t		 rec_iov;
+	d_iov_t		 rec_iov;
 	int			 rc;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
@@ -435,10 +452,14 @@ oi_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
 		return -DER_INVAL;
 	}
 
-	daos_iov_set(&rec_iov, NULL, 0);
+	d_iov_set(&rec_iov, NULL, 0);
 	rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &rec_iov, NULL);
 	if (rc != 0) {
-		D_ERROR("Error while fetching oid info\n");
+		if (rc == -DER_INPROGRESS)
+			D_DEBUG(DB_TRACE, "Cannot fetch oid infor because of "
+				"conflict modification: %d\n", rc);
+		else
+			D_ERROR("Error while fetching oid info: %d\n", rc);
 		return rc;
 	}
 
@@ -446,6 +467,7 @@ oi_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
 	obj = (struct vos_obj_df *)rec_iov.iov_buf;
 
 	info->ii_oid = obj->vo_id;
+	info->ii_punched = 0;
 	/* Limit the bounds to this object incarnation */
 	info->ii_epr.epr_lo = MAX(obj->vo_earliest, oiter->oit_epr.epr_lo);
 	info->ii_epr.epr_hi = MIN(obj->vo_latest, oiter->oit_epr.epr_hi);
@@ -476,6 +498,7 @@ oi_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	if (oiter == NULL)
 		return -DER_NOMEM;
 
+	oiter->oit_iter.it_type = type;
 	oiter->oit_epr  = param->ip_epr;
 	oiter->oit_cont = cont;
 	vos_cont_addref(cont);
@@ -517,7 +540,7 @@ oi_iter_match_probe(struct vos_iterator *iter)
 		struct vos_obj_df *obj;
 		struct oi_hkey	   hkey;
 		int		   probe;
-		daos_iov_t	   iov;
+		d_iov_t	   iov;
 
 		rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &iov, NULL);
 		if (rc != 0) {
@@ -551,7 +574,7 @@ oi_iter_match_probe(struct vos_iterator *iter)
 		}
 
 		hkey.oi_oid = obj->vo_id;
-		daos_iov_set(&iov, &hkey, sizeof(hkey));
+		d_iov_set(&iov, &hkey, sizeof(hkey));
 		rc = dbtree_iter_probe(oiter->oit_hdl, probe,
 				       vos_iter_intent(iter), &iov, NULL);
 		if (rc != 0) {
@@ -562,10 +585,9 @@ oi_iter_match_probe(struct vos_iterator *iter)
  out:
 	return 0;
  failed:
-	if (rc == -DER_NONEXIST)
-		return 0; /* end of iteration, not a failure */
+	if (rc != -DER_NONEXIST)
+		D_ERROR("iterator %s failed, rc=%d\n", str, rc);
 
-	D_ERROR("iterator %s failed, rc=%d\n", str, rc);
 	return rc;
 }
 
@@ -615,15 +637,19 @@ oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 {
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
 	struct vos_obj_df	*obj;
-	daos_iov_t		 rec_iov;
+	d_iov_t		 rec_iov;
 	int			 rc;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 
-	daos_iov_set(&rec_iov, NULL, 0);
+	d_iov_set(&rec_iov, NULL, 0);
 	rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &rec_iov, anchor);
 	if (rc != 0) {
-		D_ERROR("Error while fetching oid info\n");
+		if (rc == -DER_INPROGRESS)
+			D_DEBUG(DB_TRACE, "Cannot fetch oid info because of "
+				"conflict modification: %d\n", rc);
+		else
+			D_ERROR("Error while fetching oid info: %d\n", rc);
 		return rc;
 	}
 
@@ -643,19 +669,17 @@ static int
 oi_iter_delete(struct vos_iterator *iter, void *args)
 {
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
-	struct vos_pool		*vpool;
 	int			rc = 0;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
-	vpool = vos_cont2pool(oiter->oit_cont);
 
-	rc = vos_tx_begin(vpool);
+	rc = vos_tx_begin(vos_cont2umm(oiter->oit_cont));
 	if (rc != 0)
 		goto exit;
 
 	rc = dbtree_iter_delete(oiter->oit_hdl, args);
 
-	rc = vos_tx_end(vpool, rc);
+	rc = vos_tx_end(vos_cont2umm(oiter->oit_cont), rc);
 
 	if (rc != 0)
 		D_ERROR("Failed to delete oid entry: %d\n", rc);
@@ -688,60 +712,5 @@ vos_obj_tab_register()
 	rc = dbtree_class_register(VOS_BTR_OBJ_TABLE, 0, &oi_btr_ops);
 	if (rc)
 		D_ERROR("dbtree create failed\n");
-	return rc;
-}
-
-int
-vos_obj_tab_create(struct vos_pool *pool, struct vos_obj_table_df *otab_df)
-{
-
-	int				rc = 0;
-	daos_handle_t			btr_hdl;
-	struct btr_root			*oi_root = NULL;
-
-	if (!pool || !otab_df) {
-		D_ERROR("Invalid handle\n");
-		return -DER_INVAL;
-	}
-
-	/** Inplace btr_root */
-	oi_root = (struct btr_root *) &(otab_df->obt_btr);
-	if (!oi_root->tr_class) {
-		D_DEBUG(DB_DF, "create OI Tree in-place: %d\n",
-			VOS_BTR_OBJ_TABLE);
-
-		rc = dbtree_create_inplace(VOS_BTR_OBJ_TABLE, 0,
-					   VOS_OBJ_ORDER, &pool->vp_uma,
-					   &otab_df->obt_btr, &btr_hdl);
-		if (rc)
-			D_ERROR("dbtree create failed\n");
-		dbtree_close(btr_hdl);
-	}
-	return rc;
-}
-
-int
-vos_obj_tab_destroy(struct vos_pool *pool, struct vos_obj_table_df *otab_df)
-{
-	int				rc = 0;
-	daos_handle_t			btr_hdl;
-
-	if (!pool || !otab_df) {
-		D_ERROR("Invalid handle\n");
-		return -DER_INVAL;
-	}
-
-	rc = dbtree_open_inplace_ex(&otab_df->obt_btr, &pool->vp_uma,
-				    DAOS_HDL_INVAL, pool->vp_vea_info,
-				    &btr_hdl);
-	if (rc) {
-		D_ERROR("No Object handle, Tree open failed\n");
-		D_GOTO(exit, rc = -DER_NONEXIST);
-	}
-
-	rc = dbtree_destroy(btr_hdl);
-	if (rc)
-		D_ERROR("OI BTREE destroy failed\n");
-exit:
 	return rc;
 }

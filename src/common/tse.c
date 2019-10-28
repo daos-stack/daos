@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,9 @@
 #include <daos/common.h>
 #include <daos/tse.h>
 #include "tse_internal.h"
+
+D_CASSERT(sizeof(struct tse_task) == TSE_TASK_SIZE);
+D_CASSERT(sizeof(struct tse_task_private) <= TSE_PRIV_SIZE);
 
 struct tse_task_link {
 	d_list_t		 tl_link;
@@ -100,12 +103,15 @@ tse_task_buf_embedded(tse_task_t *task, int size)
 
 	/** Let's assume dtp_buf is always enough at the moment */
 	/** MSC - should malloc if size requested is bigger */
+	size = tse_task_buf_size(size);
 	avail_size = sizeof(dtp->dtp_buf) - dtp->dtp_stack_top;
-	D_ASSERTF(tse_task_buf_size(size) <= avail_size,
+	D_ASSERTF(size <= avail_size,
 		  "req size %u avail size %u (all_size %lu stack_top %u)\n",
-		  tse_task_buf_size(size), avail_size, sizeof(dtp->dtp_buf),
+		  size, avail_size, sizeof(dtp->dtp_buf),
 		  dtp->dtp_stack_top);
 	dtp->dtp_embed_top = size;
+	D_ASSERT((dtp->dtp_stack_top + dtp->dtp_embed_top) <=
+		  sizeof(dtp->dtp_buf));
 	return (void *)dtp->dtp_buf;
 }
 
@@ -118,6 +124,7 @@ tse_task_stack_push(tse_task_t *task, uint32_t size)
 
 	avail_size = sizeof(dtp->dtp_buf) -
 		     (dtp->dtp_stack_top + dtp->dtp_embed_top);
+	size = tse_task_buf_size(size);
 	D_ASSERTF(size <= avail_size, "push size %u exceed avail size %u "
 		   "(all_size %lu, stack_top %u, embed_top %u).\n",
 		   size, avail_size, sizeof(dtp->dtp_buf),
@@ -137,6 +144,7 @@ tse_task_stack_pop(tse_task_t *task, uint32_t size)
 	struct tse_task_private	*dtp = tse_task2priv(task);
 	void			*poped_ptr;
 
+	size = tse_task_buf_size(size);
 	D_ASSERTF(size <= dtp->dtp_stack_top,
 		   "pop size %u exceed stack_top %u.\n",
 		   size, dtp->dtp_stack_top);
@@ -328,7 +336,9 @@ tse_task_complete_locked(struct tse_task_private *dtp,
 	if (dtp->dtp_completed)
 		return;
 
-	D_ASSERT(dtp->dtp_running);
+	if (!dtp->dtp_running)
+		return;
+
 	dtp->dtp_running = 0;
 	dtp->dtp_completing = 0;
 	dtp->dtp_completed = 1;
@@ -373,10 +383,8 @@ int
 tse_task_register_comp_cb(tse_task_t *task, tse_task_cb_t comp_cb,
 			  void *arg, daos_size_t arg_size)
 {
-	if (comp_cb)
-		register_cb(task, true, comp_cb, arg, arg_size);
-
-	return 0;
+	D_ASSERT(comp_cb != NULL);
+	return register_cb(task, true, comp_cb, arg, arg_size);
 }
 
 int
@@ -385,12 +393,16 @@ tse_task_register_cbs(tse_task_t *task, tse_task_cb_t prep_cb,
 		      tse_task_cb_t comp_cb, void *comp_data,
 		      daos_size_t comp_data_size)
 {
-	if (prep_cb)
-		register_cb(task, false, prep_cb, prep_data, prep_data_size);
-	if (comp_cb)
-		register_cb(task, true, comp_cb, comp_data, comp_data_size);
+	int	rc = 0;
 
-	return 0;
+	D_ASSERT(prep_cb != NULL || comp_cb != NULL);
+	if (prep_cb)
+		rc = register_cb(task, false, prep_cb, prep_data,
+				 prep_data_size);
+	if (comp_cb && !rc)
+		rc = register_cb(task, true, comp_cb, comp_data,
+				 comp_data_size);
+	return rc;
 }
 
 /*

@@ -7,13 +7,31 @@ socket_dir: /tmp/daos_sockets
 control_log_mask: DEBUG
 control_log_file: /tmp/daos_control.log
 
+## Transport Credentials Specifying certificates to secure communications
+##
+#transport_config:
+#  # Specify to bypass loading certificates and use insecure communications channnels
+#  allow_insecure: false
+#  # Location where daos_server will look for Client certificates
+#  client_cert_dir: .daos/clients
+#  # Custom CA Root certificate for generated certs
+#  ca_cert: .daos/daosCA.crt
+#  # Server certificate for use in TLS handshakes
+#  cert: .daos/daos_server.crt
+#  # Key portion of Server Certificate
+#  key: .daos/daos_server.key
+
 # single server instance per config file for now
 servers:
 -
-  targets: [0-0]            # map to -t 1, just count number of cpus in the range for now
+  targets: 1                # count of storage targets per each server
+  first_core: 0             # offset of the first core for service xstreams
+  nr_xs_helpers: 0          # count of offload/helper xstreams per target
   fabric_iface: lo          # map to OFI_INTERFACE=lo
   log_mask: DEBUG,RPC=ERR,MEM=ERR
   log_file: /tmp/server.log # map to D_LOG_FILE=/tmp/server.log
+
+  # Environment variable values should be supplied without encapsulating quotes.
   env_vars:                 # influence DAOS IO Server behaviour by setting env variables
   - DAOS_MD_CAP=1024
   - CRT_CTX_SHARE_ADDR=0
@@ -21,7 +39,6 @@ servers:
   - FI_SOCKETS_MAX_CONN_RETRY=1
   - FI_SOCKETS_CONN_TIMEOUT=2000
   - DD_SUBSYS=all
-  - DD_MASK=daos_default
   # uncomment to enable scalable endpoint
   # - CRT_CREDIT_EP_CTX=0
   # - CRT_CTX_SHARE_ADDR=1

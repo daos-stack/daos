@@ -94,7 +94,7 @@ uint64_t			t_wait;
 uint64_t			t_pause;
 bool				t_update_for_fetch;
 bool				t_keep_container;
-daos_oclass_id_t		obj_class = DAOS_OC_LARGE_RW;
+daos_oclass_id_t		obj_class = OC_SX;
 
 struct test {
 	/* Test type */
@@ -130,11 +130,11 @@ struct a_ioreq {
 	d_list_t		list;
 	daos_event_t		ev;
 	daos_key_t		dkey;
-	daos_iov_t		val_iov;
+	d_iov_t		val_iov;
 	daos_iod_t		iod;
 	daos_recx_t		rex;
 	daos_epoch_range_t	erange;
-	daos_sg_list_t		sgl;
+	d_sg_list_t		sgl;
 	daos_csum_buf_t		csum;
 	char			csum_buf[UPDATE_CSUM_SIZE];
 	char			*dkey_buf;
@@ -259,20 +259,20 @@ static void
 ioreq_init_dkey(struct a_ioreq *ioreq, void *buf, size_t size)
 {
 	ioreq->dkey_buf = buf;
-	daos_iov_set(&ioreq->dkey, buf, size);
+	d_iov_set(&ioreq->dkey, buf, size);
 }
 
 static void
 ioreq_init_akey(struct a_ioreq *ioreq, void *buf, size_t size)
 {
 	ioreq->akey_buf = buf;
-	daos_iov_set(&ioreq->iod.iod_name, buf, size);
+	d_iov_set(&ioreq->iod.iod_name, buf, size);
 }
 
 static void
 ioreq_init_value(struct a_ioreq *ioreq, void *buf, size_t size)
 {
-	daos_iov_set(&ioreq->val_iov, buf, size);
+	d_iov_set(&ioreq->val_iov, buf, size);
 }
 
 static void
@@ -312,7 +312,7 @@ free_buffers()
 static void
 kill_daos_server(const char *grp)
 {
-	daos_pool_info_t	info;
+	daos_pool_info_t	info = {0};
 	d_rank_t		rank;
 	int			tgt = -1;
 	struct d_tgt_list	targets;
@@ -577,7 +577,7 @@ object_open(int t_id, int enum_flag, daos_handle_t *object)
 		oid.hi = t_id + 1;
 		oid.lo = t_id;
 	}
-	daos_obj_generate_id(&oid, 0, obj_class);
+	daos_obj_generate_id(&oid, 0, obj_class, 0);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -627,7 +627,7 @@ enumerate(daos_handle_t th, uint32_t *number, daos_key_desc_t *kds,
 {
 	int	rc;
 
-	daos_iov_set(&req->val_iov, buf, len);
+	d_iov_set(&req->val_iov, buf, len);
 
 	/** execute fetch operation */
 	rc = daos_obj_list_dkey(oh, th, number, kds, &req->sgl, anchor, NULL);
@@ -1628,27 +1628,27 @@ test_init(struct test *test, int argc, char *argv[])
 			break;
 		case 'j':
 			if (!strcasecmp(optarg, "TINY")) {
-				obj_class = DAOS_OC_TINY_RW;
+				obj_class = OC_S1;
 			} else if (!strcasecmp(optarg, "SMALL")) {
-				obj_class = DAOS_OC_SMALL_RW;
+				obj_class = OC_S4;
 			} else if (!strcasecmp(optarg, "LARGE")) {
-				obj_class = DAOS_OC_LARGE_RW;
+				obj_class = OC_SX;
 			} else if (!strcasecmp(optarg, "ECHO")) {
 				obj_class = DAOS_OC_ECHO_TINY_RW;
 			} else if (!strcasecmp(optarg, "R2")) {
-				obj_class = DAOS_OC_R2_RW;
+				obj_class = OC_RP_2G2;
 			} else if (!strcasecmp(optarg, "R2S")) {
-				obj_class = DAOS_OC_R2S_RW;
+				obj_class = OC_RP_2G1;
 			} else if (!strcasecmp(optarg, "R3")) {
-				obj_class = DAOS_OC_R3_RW;
+				obj_class = OC_RP_3G2;
 			} else if (!strcasecmp(optarg, "R3S")) {
-				obj_class = DAOS_OC_R3S_RW;
+				obj_class = OC_RP_3G1;
 			} else if (!strcasecmp(optarg, "R4")) {
-				obj_class = DAOS_OC_R4_RW;
+				obj_class = OC_RP_4G2;
 			} else if (!strcasecmp(optarg, "R4S")) {
-				obj_class = DAOS_OC_R4S_RW;
+				obj_class = OC_RP_4G1;
 			} else if (!strcasecmp(optarg, "REPL_MAX")) {
-				obj_class = DAOS_OC_REPL_MAX_RW;
+				obj_class = OC_RP_XSF;
 			} else {
 				fprintf(stderr,
 					"\ndaosbench: Unknown object class\n");
@@ -1790,8 +1790,8 @@ test_init(struct test *test, int argc, char *argv[])
 		return 2;
 	}
 
-	if (t_kill_server && obj_class != DAOS_OC_REPL_MAX_RW &&
-	    obj_class != DAOS_OC_R3_RW) {
+	if (t_kill_server && obj_class != OC_RP_XSF &&
+	    obj_class != OC_RP_3G2) {
 		if (comm_world_rank == 0)
 			fprintf(stderr,
 				"daosbench: REPL or REPL_MAX obj-class "
@@ -1834,7 +1834,7 @@ test_fini(struct test *test)
 		printf("\n");
 		printf("Ended at %s", ctime(&t));
 	}
-	daos_rank_list_free(svcl);
+	d_rank_list_free(svcl);
 }
 
 int main(int argc, char *argv[])

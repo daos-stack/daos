@@ -1,5 +1,5 @@
 #/*
-# * (C) Copyright 2018 Intel Corporation.
+# * (C) Copyright 2018-2019 Intel Corporation.
 # *
 # * Licensed under the Apache License, Version 2.0 (the "License");
 # * you may not use this file except in compliance with the License.
@@ -30,25 +30,25 @@
 # dkey xxx
 # akey xxx
 # iod_size xxx (default is 1)
+# obj_class xxx(ec or replica, default is replica)
 #
 # 2) update
-# 2.1) update array
-# update --epoch x --recx "[idx_start1, idx_end1] [idx_start2, idx_end2] ..."
+# 2.1) update array and take snapshot
+# update --tx x --snap --recx "[idx_start1, idx_end1] [idx_start2, idx_end2] ..."
 # The max number of recxs is 5 (IOREQ_IOD_NR).
-# 2.2) update single type record
-# update --epoch x --single
+# 2.2) update single type record and take snapshot
+# update --tx x --snap --single
 #
 # If no --epoch specified, then use default epoch 1.
 # Other two options: --dkey xxx --akey xxx. If not specified then use the last
 # dkey/akey set at above 1).
 # for the option name:
-# --epoch	== -e
 # --single	== -s
 # --recx	== -r
 # --dkey	== -d
 # --akey	== -a
 #
-# 3) fetch
+# 3) fetch and verify based on snapshot teaken after update.
 # same parameter usage as above 2)
 #
 # 4) discard
@@ -61,16 +61,18 @@ dkey dkey_1
 akey akey_1
 iod_size 32
 
-update --epoch 1 --recx "[0, 2] [3, 8] [12, 18]"
-update --epoch 1 --single
-update --epoch 2 --recx "[1, 3] [5, 10] [12, 14] [100, 108]"
-update --epoch 3 --recx "[0, 8] [13, 17] [90, 104]"
-update --epoch 4 --recx "[1, 20] [80, 96] [110, 120]"
-update --epoch 4 --single
+update --tx 1 --snap --recx "[0, 2] [3, 8] [12, 18]"
+update --tx 2 --snap --recx "[1, 3] [5, 10] [12, 14] [100, 108]"
+update --tx 3 --snap --recx "[0, 8] [13, 17] [90, 104]"
+update --tx 4 --snap --recx "[1, 20] [80, 96] [110, 120]"
 
-fetch --epoch 1 --recx "[0, 2] [3, 8] [12, 18]"
-fetch --epoch 2 --recx "[0, 4] [5, 7] [13, 15] [100, 108]"
-fetch --epoch 2 --single
-fetch --epoch 3 --recx "[0, 8] [13, 17] [90, 104]"
-fetch --epoch 4 --recx "[0, 20] [80, 96] [100, 120]"
-fetch --epoch 4 --single
+fetch --tx 1 --recx "[0, 2] [3, 8] [12, 18]"
+fetch --tx 2 --recx "[0, 4] [5, 7] [13, 15] [100, 108]"
+fetch --tx 3 --recx "[0, 8] [13, 17] [90, 104]"
+fetch --tx 4 --recx "[0, 20] [80, 96] [100, 120]"
+
+akey akey_s
+update --tx 1 --single
+update --tx 4 --single
+fetch --tx 2 --single
+fetch --tx 4 --single

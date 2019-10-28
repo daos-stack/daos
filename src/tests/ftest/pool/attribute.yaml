@@ -3,7 +3,7 @@
 hosts:
   test_machines:
     - boro-A
-timeout: 40
+timeout: 120
 server_config:
   name: daos_server
 attrtests:
@@ -58,10 +58,6 @@ attrtests:
       name:
         - "Negative-Name"
         - FAIL
-    largenumberofattr:
-      name:
-        - "largenumberofattr"
-        - PASS
   value_handles: !mux
     validvalue:
       value:

@@ -116,10 +116,6 @@ drpc_progress_context_close(struct drpc_progress_context *ctx)
 /*
  * Stubs - just needed to make it build
  */
-void
-dss_sleep(int ms)
-{
-}
 
 int
 drpc_progress(struct drpc_progress_context *ctx, int timeout_ms)
@@ -136,6 +132,12 @@ drpc_hdlr_get_handler(int module_id)
 void
 drpc_hdlr_process_msg(Drpc__Call *request, Drpc__Response **resp)
 {
+}
+
+int
+ABT_thread_yield(void)
+{
+	return 0;
 }
 
 /*
@@ -189,10 +191,18 @@ test_drpc_listener_init_cant_create_socket(void **state)
 static void
 test_drpc_listener_init_success(void **state)
 {
+	char expected_socket_path[256];
+
 	assert_int_equal(drpc_listener_init(), DER_SUCCESS);
 
 	/* Created a valid mutex */
 	assert_non_null(ABT_mutex_create_newmutex_ptr);
+
+	/* Initialized unique socket path based on PID */
+	assert_non_null(drpc_listener_socket_path);
+	snprintf(expected_socket_path, sizeof(expected_socket_path),
+		 "%s/daos_io_server_%d.sock", dss_socket_dir, getpid());
+	assert_string_equal(drpc_listener_socket_path, expected_socket_path);
 
 	/* called unlink on socket */
 	assert_int_equal(unlink_call_count, 1);
@@ -228,7 +238,7 @@ test_drpc_listener_init_cant_create_prog_ctx(void **state)
 	/* drpc_progress_context_create returns null */
 	mock_drpc_progress_context_create_teardown();
 
-	assert_int_equal(drpc_listener_init(), -DER_UNKNOWN);
+	assert_int_equal(drpc_listener_init(), -DER_NOMEM);
 
 	/*
 	 * Listener should have been freed.

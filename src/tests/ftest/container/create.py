@@ -29,11 +29,13 @@ import uuid
 
 from apricot import TestWithServers
 
-from daos_api import DaosPool, DaosContainer, DaosApiError
+from pydaos.raw import DaosPool, DaosContainer, DaosApiError
+
 
 class CreateContainerTest(TestWithServers):
     """
     Tests DAOS container create.
+
     :avocado: recursive
     """
 
@@ -43,9 +45,8 @@ class CreateContainerTest(TestWithServers):
 
         Test Description: valid and invalid container creation and close.
 
-        :avocado: tags=regression,cont,contcreate
+        :avocado: tags=all,container,tiny,smoke,full_regression,containercreate
         """
-
         pool = None
         contuuid = None
         expected_results = []
@@ -78,7 +79,10 @@ class CreateContainerTest(TestWithServers):
             expected_results.append(uuidparam[1])
             if uuidparam[0] == 'NULLPTR':
                 self.cancel("skipping this test until DAOS-2043 is fixed")
-                contuuid = 'NULLPTR'
+                # Commenting the line below as it will result in an
+                # AttributeError and never get to the DAOS API code.
+                # Should be further investigated as part of DAOS-3081
+                # contuuid = 'NULLPTR'
             else:
                 contuuid = uuid.UUID(uuidparam[0])
 
@@ -105,7 +109,3 @@ class CreateContainerTest(TestWithServers):
             print(traceback.format_exc())
             if not should_fail:
                 self.fail("Test was expected to pass but it failed.\n")
-        finally:
-            if pool is not None:
-                pool.disconnect()
-                pool.destroy(1)

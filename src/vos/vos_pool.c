@@ -43,7 +43,48 @@
 #include <string.h>
 #include <fcntl.h>
 
+/* NB: None of pmemobj_create/open/close is thread-safe */
 pthread_mutex_t vos_pmemobj_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static inline PMEMobjpool *
+vos_pmemobj_create(const char *path, const char *layout, size_t poolsize,
+		   mode_t mode)
+{
+	PMEMobjpool *pop;
+
+	D_MUTEX_LOCK(&vos_pmemobj_lock);
+	pop = pmemobj_create(path, layout, poolsize, mode);
+	D_MUTEX_UNLOCK(&vos_pmemobj_lock);
+	return pop;
+}
+
+static inline PMEMobjpool *
+vos_pmemobj_open(const char *path, const char *layout)
+{
+	PMEMobjpool *pop;
+
+	D_MUTEX_LOCK(&vos_pmemobj_lock);
+	pop = pmemobj_open(path, layout);
+	D_MUTEX_UNLOCK(&vos_pmemobj_lock);
+	return pop;
+}
+
+static inline void
+vos_pmemobj_close(PMEMobjpool *pop)
+{
+	D_MUTEX_LOCK(&vos_pmemobj_lock);
+	pmemobj_close(pop);
+	D_MUTEX_UNLOCK(&vos_pmemobj_lock);
+}
+
+static inline struct vos_pool_df *
+vos_pool_pop2df(PMEMobjpool *pop)
+{
+	TOID(struct vos_pool_df) pool_df;
+
+	pool_df = POBJ_ROOT(pop, struct vos_pool_df);
+	return D_RW(pool_df);
+}
 
 static int
 umem_get_type(void)
@@ -116,6 +157,7 @@ pool_alloc(uuid_t uuid, struct vos_pool **pool_p)
 		return -DER_NOMEM;
 
 	d_uhash_ulink_init(&pool->vp_hlink, &pool_uuid_hops);
+	D_INIT_LIST_HEAD(&pool->vp_gc_link);
 	uuid_copy(pool->vp_id, uuid);
 
 	memset(&uma, 0, sizeof(uma));
@@ -139,12 +181,6 @@ pool_link(struct vos_pool *pool, struct d_uuid *ukey, daos_handle_t *poh)
 	return 0;
 failed:
 	return rc;
-}
-
-static void
-pool_unlink(struct vos_pool *pool)
-{
-	d_uhash_link_delete(vos_pool_hhash_get(), &pool->vp_hlink);
 }
 
 static int
@@ -221,6 +257,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	struct vos_pool_df	*pool_df;
 	struct bio_xs_context	*xs_ctxt = vos_xsctxt_get();
 	struct bio_blob_hdr	 blob_hdr;
+	daos_handle_t		 hdl;
 	int			 rc = 0, enabled = 1;
 
 	if (!path || uuid_is_null(uuid))
@@ -273,20 +310,24 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	if (rc != 0)
 		goto close;
 
-	rc = pmemobj_tx_add_range_direct(pool_df, sizeof(*pool_df));
+	rc = umem_tx_add_ptr(&umem, pool_df, sizeof(*pool_df));
 	if (rc != 0)
 		goto end;
-	memset(pool_df, 0, sizeof(*pool_df));
 
-	rc = vos_cont_tab_create(&uma, &pool_df->pd_ctab_df);
+	memset(pool_df, 0, sizeof(*pool_df));
+	rc = dbtree_create_inplace(VOS_BTR_CONT_TABLE, 0, VOS_CONT_ORDER,
+				   &uma, &pool_df->pd_cont_root, &hdl);
 	if (rc != 0)
 		goto end;
+
+	dbtree_close(hdl);
 
 	uuid_copy(pool_df->pd_id, uuid);
 	pool_df->pd_scm_sz = scm_sz;
 	pool_df->pd_nvme_sz = nvme_sz;
 	vea_md = &pool_df->pd_vea_df;
 
+	gc_init_pool(&umem, pool_df);
 end:
 	/**
 	 * The transaction can in reality be aborted
@@ -340,24 +381,62 @@ close:
 }
 
 /**
- * Destroy SPDK blob
+ * kill the pool before destroy:
+ * - detach from GC, delete SPDK blob
  */
 int
-vos_blob_destroy(void *uuid)
+vos_pool_kill(uuid_t uuid, bool force)
 {
-	uuid_t			*pool_uuid = uuid;
 	struct bio_xs_context	*xs_ctxt = vos_xsctxt_get();
+	struct d_uuid		 ukey;
 	int			 rc;
 
-	/* NVMe device isn't configured */
-	if (xs_ctxt == NULL)
-		return 0;
+	uuid_copy(ukey.uuid, uuid);
+	while (1) {
+		struct vos_pool	*pool;
 
-	D_DEBUG(DB_MGMT, "Deleting blob for xs:%p pool:"DF_UUID"\n",
-		xs_ctxt, DP_UUID(*pool_uuid));
-	rc = bio_blob_delete(*pool_uuid, xs_ctxt);
+		rc = pool_lookup(&ukey, &pool);
+		if (rc) {
+			D_ASSERT(rc == -DER_NONEXIST);
+			rc = 0;
+			break;
+		}
 
-	return rc;
+		pool->vp_dying = 1;
+		if (gc_have_pool(pool)) {
+			/* still pinned by GC, un-pin it because there is no
+			 * need to run GC for this pool anymore.
+			 */
+			gc_del_pool(pool);
+			vos_pool_decref(pool); /* -1 for lookup */
+			continue;	/* try again */
+		}
+		vos_pool_decref(pool); /* -1 for lookup */
+
+		if (force) {
+			D_ERROR("Open reference exists, force kill\n");
+			/* NB: rebuild might still take refcount vos_pool,
+			 * we don't want to fail destroy or locking space.
+			 */
+			break;
+		}
+		D_ERROR("Open reference exists, cannot kill pool\n");
+		return -DER_BUSY;
+	}
+	D_DEBUG(DB_MGMT, "No open handles, OK to delete\n");
+
+	/* NVMe device is configured */
+	if (xs_ctxt) {
+		D_DEBUG(DB_MGMT, "Deleting blob for xs:%p pool:"DF_UUID"\n",
+			xs_ctxt, DP_UUID(uuid));
+		rc = bio_blob_delete(uuid, xs_ctxt);
+		if (rc) {
+			D_ERROR("Destroy blob for pool="DF_UUID" rc=%s\n",
+				DP_UUID(uuid), d_errstr(rc));
+			/* do not return the error, nothing we can do */
+		}
+	}
+	return 0;
 }
 
 /**
@@ -366,28 +445,13 @@ vos_blob_destroy(void *uuid)
 int
 vos_pool_destroy(const char *path, uuid_t uuid)
 {
+	int	rc;
 
-	struct vos_pool		*pool;
-	struct d_uuid		 ukey;
-	int			 rc;
-
-	uuid_copy(ukey.uuid, uuid);
-	D_DEBUG(DB_MGMT, "Destroy path: %s UUID: "DF_UUID"\n",
+	D_DEBUG(DB_MGMT, "delete path: %s UUID: "DF_UUID"\n",
 		path, DP_UUID(uuid));
-
-	rc = pool_lookup(&ukey, &pool);
-	if (rc == 0) {
-		D_ERROR("Open reference exists, cannot destroy pool\n");
-		vos_pool_decref(pool);
-		D_GOTO(exit, rc = -DER_BUSY);
-	}
-
-	D_DEBUG(DB_MGMT, "No open handles. OK to destroy\n");
-
-	rc = vos_blob_destroy(uuid);
+	rc = vos_pool_kill(uuid, false);
 	if (rc)
-		D_ERROR("Destroy blob path: %s UUID: "DF_UUID"\n",
-			path, DP_UUID(uuid));
+		return rc;
 
 	/**
 	 * NB: no need to explicitly destroy container index table because
@@ -475,7 +539,8 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 	uma->uma_pool = vos_pmemobj_open(path,
 				   POBJ_LAYOUT_NAME(vos_pool_layout));
 	if (uma->uma_pool == NULL) {
-		D_ERROR("Error in opening the pool: %s\n", pmemobj_errormsg());
+		D_ERROR("Error in opening the pool "DF_UUID": %s\n",
+			DP_UUID(uuid), pmemobj_errormsg());
 		D_GOTO(failed, rc = -DER_NO_HDL);
 	}
 
@@ -493,16 +558,16 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 		D_GOTO(failed, rc);
 	}
 
-	pool_df = vos_pool_ptr2df(pool);
+	pool_df = vos_pool_pop2df(uma->uma_pool);
 	if (uuid_compare(uuid, pool_df->pd_id)) {
-		D_ERROR("Mismatch uuid, user="DF_UUID", pool="DF_UUID"\n",
+		D_ERROR("Mismatch uuid, user="DF_UUIDF", pool="DF_UUIDF"\n",
 			DP_UUID(uuid), DP_UUID(pool_df->pd_id));
 		D_GOTO(failed, rc = -DER_IO);
 	}
 
 	/* Cache container table btree hdl */
-	rc = dbtree_open_inplace(&pool_df->pd_ctab_df.ctb_btree,
-				 &pool->vp_uma, &pool->vp_cont_th);
+	rc = dbtree_open_inplace_ex(&pool_df->pd_cont_root, &pool->vp_uma,
+				    DAOS_HDL_INVAL, pool, &pool->vp_cont_th);
 	if (rc) {
 		D_ERROR("Container Tree open failed\n");
 		D_GOTO(failed, rc);
@@ -540,8 +605,13 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 		D_GOTO(failed, rc);
 	}
 
+	pool->vp_pool_df = pool_df;
 	pool->vp_opened = 1;
+	/* NB: probably should call gc_add_pool to clean up garbages left
+	 * behind by crash.
+	 */
 	D_DEBUG(DB_MGMT, "Opened pool %p\n", pool);
+	return 0;
 failed:
 	vos_pool_decref(pool); /* -1 for myself */
 	return rc;
@@ -567,8 +637,9 @@ vos_pool_close(daos_handle_t poh)
 	D_ASSERT(pool->vp_opened > 0);
 	pool->vp_opened--;
 	if (pool->vp_opened == 0)
-		pool_unlink(pool);
+		vos_pool_hash_del(pool);
 
+	vos_pool_decref(pool); /* -1 for myself */
 	return 0;
 }
 
@@ -589,7 +660,7 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo)
 	if (pool == NULL)
 		return -DER_NO_HDL;
 
-	pool_df = vos_pool_ptr2df(pool);
+	pool_df = pool->vp_pool_df;
 
 	D_ASSERT(pinfo != NULL);
 	attr = &pinfo->pif_vea_attr;
@@ -597,6 +668,7 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo)
 	pinfo->pif_scm_sz = pool_df->pd_scm_sz;
 	pinfo->pif_nvme_sz = pool_df->pd_nvme_sz;
 	pinfo->pif_cont_nr = pool_df->pd_cont_nr;
+	pinfo->pif_gc_stat = pool->vp_gc_stat;
 
 	/* query SCM free space */
 	rc = pmemobj_ctl_get(pool->vp_umm.umm_pool,
@@ -638,5 +710,28 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo)
 		  "nvme_free:"DF_U64", nvme_sz:"DF_U64", blk_sz:%u\n",
 		  pinfo->pif_nvme_free, pinfo->pif_nvme_sz, attr->va_blk_sz);
 
+	return 0;
+}
+
+int
+vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc)
+{
+	struct vos_pool		*pool;
+
+	pool = vos_hdl2pool(poh);
+	if (pool == NULL)
+		return -DER_NO_HDL;
+
+	switch (opc) {
+	default:
+		return -DER_NOSYS;
+	case VOS_PO_CTL_RESET_GC:
+		memset(&pool->vp_gc_stat, 0, sizeof(pool->vp_gc_stat));
+		break;
+	case VOS_PO_CTL_VEA_FLUSH:
+		if (pool->vp_vea_info != NULL)
+			vea_flush(pool->vp_vea_info);
+		break;
+	}
 	return 0;
 }

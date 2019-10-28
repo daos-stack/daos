@@ -2,9 +2,10 @@
 
 import os
 
-HEADERS = ['daos.h', 'daos_api.h', 'daos_types.h', 'daos_errno.h',
-           'daos_event.h', 'daos_mgmt.h', 'daos_types.h', 'daos_addons.h',
-           'daos_task.h', 'daos_fs.h', 'daos_uns.h']
+HEADERS = ['daos.h', 'daos_api.h', 'daos_types.h', 'daos_errno.h', 'daos_kv.h',
+           'daos_event.h', 'daos_mgmt.h', 'daos_types.h', 'daos_array.h',
+           'daos_task.h', 'daos_fs.h', 'daos_uns.h', 'daos_security.h',
+           'daos_prop.h', 'daos_obj_class.h', 'daos_obj.h']
 HEADERS_SRV = ['vos.h', 'vos_types.h']
 
 def scons():
@@ -24,13 +25,10 @@ def scons():
         env.Install(os.path.join('$PREFIX', 'include', 'daos_srv'),
                     'include/daos_srv/%s' % header)
 
-    # Add hwloc requires
-    prereqs.require(env, 'hwloc')
-
     # Generate the common libraries used by more than one component
     SConscript('common/SConscript')
     SConscript('bio/SConscript')
-
+    SConscript('vea/SConscript')
     SConscript('vos/SConscript')
 
     # Build each DAOS component

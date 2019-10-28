@@ -19,20 +19,26 @@ The blobstore is a block allocator for a higher-level storage service. The alloc
 
 ## SPDK Integration
 The BIO module relies on the SPDK API to initialize/finalize the SPDK environment on the DAOS server start/shutdown. The DAOS storage model is integrated with SPDK by the following:
-<ol>
-<li>Management of SPDK blobstores and blobs:
-NVMe SSDs are assigned to each DAOS server xstream. SPDK blobstores are created on each NVMe SSD. SPDK blobs are created and attached to each per-xstream VOS pool.</li>
-<li>Association of SPDK I/O channels with DAOS server xstreams:
-Once SPDK I/O channels are properly associated to the corresponding device, NVMe hardware completion pollers are integrated into server polling ULTs.</li>
 
-## Per-Server Metadata Management (SMD)
-One of the major subcomponenets of the BIO module is per-server metadata management. The SMD submodule consists of a PMDK pmemobj pool stored on SCM used to track each DAOS server's local metadata.
+* Management of SPDK blobstores and blobs:
+NVMe SSDs are assigned to each DAOS server xstream. SPDK blobstores are created on each NVMe SSD. SPDK blobs are created and attached to each per-xstream VOS pool.
+* Association of SPDK I/O channels with DAOS server xstreams:
+Once SPDK I/O channels are properly associated to the corresponding device, NVMe hardware completion pollers are integrated into server polling ULTs.
 
-Currently, the persistent metadata tables tracked are:
-- **NVMe Stream Table**: NVMe SSD to DAOS server xstream mapping (local PCIe attached NVMe SSDs are assigned to different server xstreams to avoid hardware contention)
-- **NVMe Pool Table**: NVMe SSD, DAOS server xstream, and SPDK blob ID mapping (SPDK blob to VOS pool:xstream mapping)
-- **NVMe Device Table**: (in progress) NVMe SSD to device status mapping
-On DAOS server start, these tables are loaded from persistent memory and used to initialize new, and load any previous blobstores and blobs. Alos, there is potential to expand this module to support other non-NVMe related metadata in the future.
+  ## Per-Server Metadata Management (SMD)
+  One of the major subcomponenets of the BIO module is per-server metadata management. The SMD submodule consists of a PMDK pmemobj pool stored on SCM used to track each DAOS server's local metadata.
 
-## DMA Buffer Management
-BIO internally manages a per-xstream DMA safe buffer for SPDK DMA transfer over NVMe SSDs. The buffer is allocated using the SPDK memory allocation API and can dynamically grow on demand. This buffer also acts as an intermediate buffer for RDMA over NVMe SSDs, meaning on DAOS bulk update, client data will be RDMA transferred to this buffer first, then the SPDK blob I/O interface will be called to start local DMA transfer from the buffer directly to NVMe SSD. On DAOS bulk fetch, data present on the NVMe SSD will be DMA transferred to this buffer first, and then RDMA transferred to the client.
+  Currently, the persistent metadata tables tracked are :
+  - **NVMe Stream Table**: NVMe SSD to DAOS server xstream mapping (local PCIe attached NVMe SSDs are assigned to different server xstreams to avoid hardware contention)
+  - **NVMe Pool Table**: NVMe SSD, DAOS server xstream, and SPDK blob ID mapping (SPDK blob to VOS pool:xstream mapping)
+  - **NVMe Device Table**: (in progress) NVMe SSD to device status mapping
+  On DAOS server start, these tables are loaded from persistent memory and used to initialize new, and load any previous blobstores and blobs. Alos, there is potential to expand this module to support other non-NVMe related metadata in the future.
+
+  ## DMA Buffer Management
+  BIO internally manages a per-xstream DMA safe buffer for SPDK DMA transfer over NVMe SSDs. The buffer is allocated using the SPDK memory allocation API and can dynamically grow on demand. This buffer also acts as an intermediate buffer for RDMA over NVMe SSDs, meaning on DAOS bulk update, client data will be RDMA transferred to this buffer first, then the SPDK blob I/O interface will be called to start local DMA transfer from the buffer directly to NVMe SSD. On DAOS bulk fetch, data present on the NVMe SSD will be DMA transferred to this buffer first, and then RDMA transferred to the client.
+
+## NVMe Threading Model
+![/doc/graph/NVME_Threading_Model.PNG](/doc/graph/NVME_Threading_Model.PNG "NVMe Threading Model")
+
+## Faulty Device Detection
+Currently in progress
