@@ -568,7 +568,7 @@ def clean_logs(test_yaml, args):
     # log files it will use when it is run.
     log_files = get_log_files(test_yaml, get_log_files(BASE_LOG_FILE_YAML))
     host_list = get_hosts_from_yaml(test_yaml, args)
-    command = "rm -fr {}".format(" ".join(log_files.values()))
+    command = "sudo -n rm -fr {}".format(" ".join(log_files.values()))
     print("Cleaning logs on {}".format(host_list))
     if not spawn_commands(host_list, command):
         print("Error cleaning logs, aborting")
@@ -601,10 +601,18 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
 
     # Copy any log files that exist on the test hosts and remove them from the
     # test host if the copy is successful.  Log any executed scp commands.
+    # command = "set -Eeu; {}".format(
+    #     "for file in {}; do if [ -e $file ]; then set -x; "
+    #     "scp $file {}:{}/${{file##*/}}-$(hostname -s) && sudo -n rm -fr $file; "
+    #     "set +x; fi; done".format(
+    #         " ".join(non_dir_files), this_host, doas_logs_dir))
+    # For debug
     command = "set -Eeu; {}".format(
-        "for file in {}; do if [ -e $file ]; then set -x; "
-        "scp $file {}:{}/${{file##*/}}-$(hostname -s) && rm -fr $file; set +x; "
-        "fi; done".format(" ".join(non_dir_files), this_host, doas_logs_dir))
+        "err=0; for file in {}; do if [ -e $file ]; then set -x; ls -al $file; "
+        "if scp $file {}:{}/${{file##*/}}-$(hostname -s); then "
+        "if ! sudo -n rm -fr $file; then ((err++)); fi; else ((err++)); fi; "
+        "fi; set +x; done; exit $err".format(
+            " ".join(non_dir_files), this_host, doas_logs_dir))
     spawn_commands(host_list, command)
 
 

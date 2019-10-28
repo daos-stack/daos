@@ -409,16 +409,33 @@ bio_xs_io_stat(struct bio_xs_context *ctxt, uint64_t now)
 void
 bio_fini_health_monitoring(struct bio_blobstore *bb)
 {
+	struct bio_dev_health	*bdh = &bb->bb_dev_health;
+
 	/* Free NVMe admin passthru DMA buffers */
-	spdk_dma_free(bb->bb_dev_health.bdh_health_buf);
-	spdk_dma_free(bb->bb_dev_health.bdh_ctrlr_buf);
-	spdk_dma_free(bb->bb_dev_health.bdh_error_buf);
+	if (bdh->bdh_health_buf) {
+		spdk_dma_free(bdh->bdh_health_buf);
+		bdh->bdh_health_buf = NULL;
+	}
+	if (bdh->bdh_ctrlr_buf) {
+		spdk_dma_free(bdh->bdh_ctrlr_buf);
+		bdh->bdh_ctrlr_buf = NULL;
+	}
+	if (bdh->bdh_error_buf) {
+		spdk_dma_free(bdh->bdh_error_buf);
+		bdh->bdh_error_buf = NULL;
+	}
 
 	/* Release I/O channel reference */
-	spdk_put_io_channel(bb->bb_dev_health.bdh_io_channel);
+	if (bdh->bdh_io_channel) {
+		spdk_put_io_channel(bdh->bdh_io_channel);
+		bdh->bdh_io_channel = NULL;
+	}
 
 	/* Close device health monitoring descriptor */
-	spdk_bdev_close(bb->bb_dev_health.bdh_desc);
+	if (bdh->bdh_desc) {
+		spdk_bdev_close(bdh->bdh_desc);
+		bdh->bdh_desc = NULL;
+	}
 }
 
 /*
