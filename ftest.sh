@@ -308,6 +308,7 @@ fi
 
 if [[ $TEST_TAG_ARG == *soak* ]]; then
     IFS="," read -r -a CONTROL_NODE <<< "$TEST_NODES"
+    export PYTHONPATH=utils/:$PYTHONPATH
     if ! ./slurm_setup.py -c ${CONTROL_NODE[0]} -n ${TEST_NODES} -s -i; then
         rc=\${PIPESTATUS[0]}
         exit rc
