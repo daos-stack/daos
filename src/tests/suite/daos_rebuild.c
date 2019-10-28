@@ -369,7 +369,7 @@ rebuild_dkeys(void **state)
 	int			tgt = DEFAULT_FAIL_TGT;
 	int			i;
 
-	if (!test_runable(arg, 6))
+	if (!test_runable(arg, 4))
 		return;
 
 	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
@@ -403,7 +403,7 @@ rebuild_akeys(void **state)
 	int			tgt = DEFAULT_FAIL_TGT;
 	int			i;
 
-	if (!test_runable(arg, 6))
+	if (!test_runable(arg, 4))
 		return;
 
 	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
@@ -440,7 +440,7 @@ rebuild_indexes(void **state)
 	int			j;
 	int			rc;
 
-	if (!test_runable(arg, 6))
+	if (!test_runable(arg, 4))
 		return;
 
 	/* create/connect another pool */
@@ -483,7 +483,7 @@ rebuild_multiple(void **state)
 	int		j;
 	int		k;
 
-	if (!test_runable(arg, 6))
+	if (!test_runable(arg, 4))
 		return;
 
 	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
@@ -524,7 +524,7 @@ rebuild_large_rec(void **state)
 	int			i;
 	char			buffer[5000];
 
-	if (!test_runable(arg, 6))
+	if (!test_runable(arg, 4))
 		return;
 
 	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
