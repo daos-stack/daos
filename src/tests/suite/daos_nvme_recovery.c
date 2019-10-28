@@ -136,9 +136,9 @@ run_daos_nvme_recov_test(int rank, int size, int *sub_tests,
 		sub_tests = NULL;
 	}
 
-	rc = run_daos_sub_tests(nvme_recov_tests, ARRAY_SIZE(nvme_recov_tests),
-				DEFAULT_POOL_SIZE, sub_tests, sub_tests_size,
-				NULL, NULL);
+	rc = run_daos_sub_tests("DAOS nvme recov tests", nvme_recov_tests,
+				ARRAY_SIZE(nvme_recov_tests), sub_tests,
+				sub_tests_size, NULL, NULL);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 

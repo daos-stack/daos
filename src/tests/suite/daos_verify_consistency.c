@@ -390,9 +390,8 @@ run_daos_vc_test(int rank, int size, int *sub_tests, int sub_tests_size)
 		sub_tests = NULL;
 	}
 
-	rc = run_daos_sub_tests(vc_tests, ARRAY_SIZE(vc_tests),
-				DEFAULT_POOL_SIZE, sub_tests, sub_tests_size,
-				NULL, NULL);
+	rc = run_daos_sub_tests("DAOS vc tests", vc_tests, ARRAY_SIZE(vc_tests),
+				sub_tests, sub_tests_size, NULL, NULL);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
