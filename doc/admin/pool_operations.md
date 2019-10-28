@@ -39,7 +39,7 @@ $ dmg pool create --help
 The typical output of this command is as follows:
 
 ```
-g -i pool create -s 1G -n 10G -g root -u root -S daos
+$ dmg -i pool create -s 1G -n 10G -g root -u root -S daos
 Active connections: [localhost:10001]
 Creating DAOS pool with 1GB SCM and 10GB NvMe storage (0.100 ratio)
 Pool-create command SUCCEEDED: UUID: 5d6fa7bf-637f-4dba-bcd2-480ad251cdc7,
