@@ -404,7 +404,7 @@ func (svc *mgmtSvc) SmdListPools(ctx context.Context, req *mgmtpb.SmdPoolReq) (*
 // KillRank implements the method defined for the Management Service.
 //
 // Stop data-plane instance managed by control-plane identified by unique rank.
-func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.DaosRank) (*mgmtpb.DaosResp, error) {
+func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.KillRankReq) (*mgmtpb.DaosResp, error) {
 	svc.log.Debugf("MgmtSvc.KillRank dispatch, req:%+v\n", *req)
 
 	var mi *IOServerInstance
