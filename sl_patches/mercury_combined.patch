@@ -1,8 +1,16 @@
 diff --git a/src/na/na.c b/src/na/na.c
-index 08373e3..80c1f86 100644
+index 08373e3..ea9c9a2 100644
 --- a/src/na/na.c
 +++ b/src/na/na.c
-@@ -147,10 +147,17 @@ na_info_parse(const char *info_string, struct na_info **na_info_ptr)
+@@ -121,6 +121,7 @@ na_info_parse(const char *info_string, struct na_info **na_info_ptr)
+     /* Initialize NA info */
+     na_info->class_name = NULL;
+     na_info->protocol_name = NULL;
++    na_info->domain_name = NULL;
+     na_info->host_name = NULL;
+ 
+     /* Copy info string and work from that */
+@@ -147,10 +148,17 @@ na_info_parse(const char *info_string, struct na_info **na_info_ptr)
          NA_CHECK_ERROR(na_info->class_name == NULL, error, ret, NA_NOMEM_ERROR,
              "Could not duplicate NA info class name");
  
@@ -21,6 +29,23 @@ index 08373e3..80c1f86 100644
      } else {
          /* Get protocol name */
          na_info->protocol_name = strdup(token);
+@@ -195,6 +203,8 @@ na_info_free(struct na_info *na_info)
+ 
+     free(na_info->class_name);
+     free(na_info->protocol_name);
++    if (na_info->domain_name)
++        free(na_info->domain_name);
+     free(na_info->host_name);
+     free(na_info);
+ }
+@@ -208,6 +218,7 @@ na_info_print(struct na_info *na_info)
+ 
+     printf("Class: %s\n", na_info->class_name);
+     printf("Protocol: %s\n", na_info->protocol_name);
++    printf("Domain: %s\n", na_info->domain_name);
+     printf("Hostname: %s\n", na_info->host_name);
+ }
+ #endif
 diff --git a/src/na/na.h b/src/na/na.h
 index 8d0874e..f26e10a 100644
 --- a/src/na/na.h
