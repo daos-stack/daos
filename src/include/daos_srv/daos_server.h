@@ -576,7 +576,7 @@ struct dss_enum_unpack_io {
 	/* punched epochs per akey */
 	daos_epoch_t		*ui_akey_punch_ephs;
 	int			 ui_iods_cap;
-	int			 ui_iods_size;
+	int			 ui_iods_top;
 	int			*ui_recxs_caps;
 	/* punched epochs for dkey */
 	daos_epoch_t		ui_dkey_punch_eph;
