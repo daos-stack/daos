@@ -240,7 +240,7 @@ void bio_media_error(void *msg_arg);
 int bio_blob_close(struct bio_io_context *ctxt, bool async);
 
 /* bio_recovery.c */
-extern struct bio_reaction_ops *ract_ops;
 int bio_bs_state_transit(struct bio_blobstore *bbs);
+int bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state);
 
 #endif /* __BIO_INTERNAL_H__ */

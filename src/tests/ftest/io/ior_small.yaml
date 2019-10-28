@@ -45,6 +45,8 @@ ior:
               api: DAOS
             mpiio:
               api: MPIIO
+            posix:
+              api: POSIX
           transfersize_blocksize: !mux
             256B:
               transfer_size: '256B'
@@ -72,3 +74,5 @@ ior:
 #          transfer_size: '1M'
 #          block_size: '32M'
 #          daos_oclass: "RP_2GX"
+dfuse:
+    mount_dir: "/tmp/daos_dfuse"
