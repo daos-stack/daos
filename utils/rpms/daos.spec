@@ -5,7 +5,7 @@
 
 Name:          daos
 Version:       0.6.0
-Release:       8%{?relval}%{?dist}
+Release:       9%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -30,7 +30,11 @@ BuildRequires: fuse-devel >= 3.4.2
 BuildRequires: protobuf-c-devel
 BuildRequires: spdk-devel, spdk-tools
 BuildRequires: fio < 3.4
+%if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
+%else
+BuildRequires: libisal-devel
+%endif
 BuildRequires: raft-devel <= 0.5.0
 BuildRequires: hwloc-devel
 BuildRequires: openssl-devel
@@ -314,6 +318,9 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/*.a
 
 %changelog
+* Wed Oct 23 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-9
+- Update BR: libisal-devel for Leap
+
 * Mon Oct 07 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-8
 - Use BR: cart-devel-%{cart_sha1} if available
 - Remove cart's BRs as it's -devel Requires them now
