@@ -176,6 +176,49 @@ class _Obj(object):
     def __str__(self):
         return str(self.oid)
 
+class KVIter():
+
+    """Iterator class for KBOjb"""
+
+    def __init__(self, kv):
+        self._entries = []
+        self._nr = 256
+        self._size = 4096 # optimized for 16-char strings
+        self._anchor = None
+        self._done = False
+        self._kv = kv
+
+    def next(self):
+        # for python 2 compatibility
+        return self.__next__()
+
+    def __next__(self):
+        if len(self._entries) != 0:
+            return self._entries.pop()
+        if self._done:
+            raise StopIteration()
+
+        # read more entries
+        (ret, nr, sz, anchor) = pydaos_shim.kv_iter(DAOS_MAGIC, self._kv.oh,
+                                                    self._entries, self._nr,
+                                                    self._size, self._anchor)
+        if ret != pydaos_shim.DER_SUCCESS:
+            raise PyDError("failed to enumerate KV pair", ret)
+
+        # save param for next iterations, those have been adjusted already by
+        # the shim layer
+        self._anchor = anchor
+        self._nr = nr
+        self._size = sz
+        if self._anchor == None:
+            # no more entries to consume
+            self._done = True
+
+        if len(self._entries) != 0:
+            return self._entries.pop()
+        else:
+            raise StopIteration()
+
 class KVObj(_Obj):
     """
     Class representing of DAOS key-value (KV) store object
@@ -277,40 +320,4 @@ class KVObj(_Obj):
         return True
 
     def __iter__(self):
-        self.entries = []
-        self.nr = 256
-        self.size = 4096 # optimized for 16-char strings
-        self.anchor = None
-        self.done = False
-        return self
-
-    def next(self):
-        # for python 2 compatibility
-        return self.__next__()
-
-    def __next__(self):
-        if len(self.entries) != 0:
-            return self.entries.pop()
-        if self.done:
-            raise StopIteration()
-
-        # read more entries
-        (ret, nr, sz, anchor) = pydaos_shim.kv_iter(DAOS_MAGIC, self.oh,
-                                                    self.entries, self.nr,
-                                                    self.size, self.anchor)
-        if ret != pydaos_shim.DER_SUCCESS:
-            raise PyDError("failed to enumerate KV pair", ret)
-
-        # save param for next iterations, those have been adjusted already by
-        # the shim layer
-        self.anchor = anchor
-        self.nr = nr
-        self.size = sz
-        if self.anchor == None:
-            # no more entries to consume
-            self.done = True
-
-        if len(self.entries) != 0:
-            return self.entries.pop()
-        else:
-            raise StopIteration()
+        return KVIter(self)
