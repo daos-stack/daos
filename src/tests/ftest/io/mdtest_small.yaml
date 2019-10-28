@@ -42,7 +42,7 @@ mdtest:
     branch: !mux
         zero:
             branching_factor: 1
-            num_of_files_dirs: 1
+            num_of_files_dirs: 1000
             diff_flags: !mux
                 flags_ssf:
                     flags: " "
