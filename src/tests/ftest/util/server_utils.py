@@ -436,6 +436,10 @@ class ServerManager(ExecutableCommand):
                 cmd_touch_log = "touch {}".format(lfile)
                 pcmd(self._hosts, cmd_touch_log, False)
 
+            # Change ownership of attach info file
+            chmod_attach = "chmod 777 -R {}".format(self.attach.value)
+            pcmd(self._hosts, chmod_attach, False)
+
         try:
             self.run()
         except CommandFailure as details:
