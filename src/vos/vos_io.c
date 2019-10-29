@@ -647,7 +647,7 @@ akey_fetch(struct vos_io_context *ioc, const daos_epoch_range_t *epr,
 		if (rsize == 0)
 			continue;
 
-		if (iod->iod_size == 0)
+		if (iod->iod_size == DAOS_REC_ANY)
 			iod->iod_size = rsize;
 
 		if (iod->iod_size != rsize) {
