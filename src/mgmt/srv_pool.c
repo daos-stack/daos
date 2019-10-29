@@ -603,6 +603,23 @@ ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 		D_ERROR("crt_reply_send failed, rc: %d.\n", rc);
 }
 
+static void
+free_mgmt_list_pools(struct mgmt_list_pools_one **poolsp, uint64_t len)
+{
+	struct mgmt_list_pools_one	*pools;
+	D_ASSERT(poolsp != NULL);
+	pools = *poolsp;
+
+	if (pools) {
+		uint64_t pc;
+
+		for (pc = 0; pc < len; pc++)
+			d_rank_list_free(pools[pc].lp_svc);
+		D_FREE(pools);
+		*poolsp = NULL;
+	}
+}
+
 static int
 enum_pool_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 {
@@ -629,14 +646,16 @@ enum_pool_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	if (ap->pools_index == ap->pools_len) {
 		void	*ptr;
 		size_t	realloc_bytes;
+		size_t	realloc_elems = (ap->pools_len == 0) ? 1 :
+					ap->pools_len * 2;
 
-		realloc_bytes = ((1 << ap->pools_len) *
-				 sizeof(struct mgmt_list_pools_one));
+		realloc_bytes = (realloc_elems *
+				sizeof(struct mgmt_list_pools_one));
 		D_REALLOC(ptr, ap->pools, realloc_bytes);
 		if (ptr == NULL)
 			return -DER_NOMEM;
 		ap->pools = ptr;
-		ap->pools_len = 1 << ap->pools_len;
+		ap->pools_len = realloc_elems;
 	}
 
 	pool = &ap->pools[ap->pools_index];
@@ -676,7 +695,6 @@ ds_mgmt_list_pools(const char *group, uint64_t *npools,
 		goto out_svc;
 	ABT_rwlock_rdlock(svc->ms_lock);
 
-	D_DEBUG(DB_MGMT, "pools:\n");
 	rc = rdb_tx_iterate(&tx, &svc->ms_pools, false /* !backward */,
 			    enum_pool_cb, &iter_args);
 
@@ -686,18 +704,12 @@ ds_mgmt_list_pools(const char *group, uint64_t *npools,
 out_svc:
 	ds_mgmt_svc_put_leader(svc);
 out:
-	if (rc == 0) {
+	if (rc != 0)
+		free_mgmt_list_pools(&iter_args.pools, iter_args.pools_index);
+	else {
 		*npools = iter_args.npools;
 		*poolsp = iter_args.pools;
 		*pools_len = iter_args.pools_index;
-	} else {
-		if (iter_args.pools) {
-			int pc;
-
-			for (pc = 0; pc < iter_args.pools_index; pc++)
-				d_rank_list_free(iter_args.pools[pc].lp_svc);
-			D_FREE(iter_args.pools);
-		}
 	}
 
 	return rc;
@@ -735,6 +747,8 @@ ds_mgmt_hdlr_list_pools(crt_rpc_t *rpc_req)
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
 		D_ERROR("crt_reply_send failed, rc: %d\n", rc);
+
+	free_mgmt_list_pools(&pools, pools_len);
 }
 
 /* Caller is responsible for freeing ranks */

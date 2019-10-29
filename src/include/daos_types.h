@@ -273,9 +273,6 @@ typedef struct {
 	uint32_t			pi_leader;
 	/** pool info bits, see daos_pool_info_bit */
 	uint64_t			pi_bits;
-	/** Possible TODO - add number of pool service replicas?
-	 *  uint32_t			pi_nvc;
-	 */
 	/** Space usage */
 	struct daos_pool_space		pi_space;
 	/** rebuild status */

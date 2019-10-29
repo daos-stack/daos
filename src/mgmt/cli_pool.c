@@ -37,14 +37,6 @@ struct pool_create_arg {
 	d_rank_list_t		*svc;
 };
 
-struct mgmt_list_pools_arg {
-	struct dc_mgmt_sys     *sys;
-	crt_rpc_t	       *rpc;
-	daos_mgmt_pool_info_t  *pools;
-	daos_size_t		req_npools;
-	daos_size_t	       *npools;
-};
-
 static int
 pool_create_cp(tse_task_t *task, void *data)
 {
@@ -362,6 +354,14 @@ out:
 	return rc;
 }
 
+struct mgmt_list_pools_arg {
+	struct dc_mgmt_sys     *sys;
+	crt_rpc_t	       *rpc;
+	daos_mgmt_pool_info_t  *pools;
+	daos_size_t		req_npools;
+	daos_size_t	       *npools;
+};
+
 static int
 mgmt_list_pools_cp(tse_task_t *task, void *data)
 {
@@ -407,7 +407,7 @@ mgmt_list_pools_cp(tse_task_t *task, void *data)
 					     rpc_pool->lp_svc);
 			if (rc) {
 				D_ERROR("Copy RPC reply svc list failed\n");
-				D_GOTO(out_free_svcranks, rc);
+				D_GOTO(out_free_svcranks, rc = -DER_NOMEM);
 			}
 		}
 	}
@@ -445,8 +445,6 @@ dc_mgmt_list_pools(tse_task_t *task)
 	struct mgmt_list_pools_in      *pc_in;
 	struct mgmt_list_pools_arg	cb_args;
 	int				rc = 0;
-
-	(void) cb_args;
 
 	args = dc_task_get_args(task);
 

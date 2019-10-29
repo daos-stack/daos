@@ -330,6 +330,10 @@ daos_pool_remove_replicas(const uuid_t uuid, const char *group,
  * \param pools	[OUT]		Array of pool mgmt information structures.
  *				NULL is permitted in which case only the
  *				number of pools will be returned in \a npools.
+ *				When non-NULL and on successful return, a
+ *				service replica rank list (mgpi_svc) is
+ *				allocated for each item in \pools.
+ *				The rank lists must be freed by the caller.
  * \param npools
  *		[IN,OUT]	[in] \a pools length in items.
  *				[out] Number of pools in the DAOS system.
