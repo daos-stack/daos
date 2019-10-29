@@ -607,6 +607,7 @@ static void
 free_mgmt_list_pools(struct mgmt_list_pools_one **poolsp, uint64_t len)
 {
 	struct mgmt_list_pools_one	*pools;
+
 	D_ASSERT(poolsp != NULL);
 	pools = *poolsp;
 
