@@ -288,6 +288,65 @@ array_set_get_size(void **state)
 	vos_check_obj(state, 5, flags, 1, 1, 2, 0, 2, 0, 2, 1);
 }
 
+static void
+array_size_write(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct pm_info		*info = arg->custom;
+	uint64_t		 start_size;
+	uint64_t		 punch_size;
+	uint64_t		 per_key = 3;
+	uint64_t		 akey_size = 5;
+	daos_epoch_t		 epoch = 10;
+	int			 rc;
+	int			 i;
+
+	rc = vts_array_reset(&info->pi_aoh, epoch, epoch + 1, 1, 2, 1);
+	epoch += 2;
+
+	memset(info->pi_update_buf, 'x', BUF_SIZE);
+
+	for (i = 0; i < 5; i++) {
+		for (start_size = BUF_SIZE, punch_size = 0;
+		     punch_size < start_size;
+		     start_size -= 11, punch_size += 53) {
+			rc = vts_array_write(info->pi_aoh, epoch++, 0,
+					     start_size, info->pi_update_buf);
+			assert_int_equal(rc, 0);
+
+			memcpy(info->pi_fetch_buf, info->pi_fill_buf, BUF_SIZE);
+			rc = vts_array_read(info->pi_aoh, epoch++, 0, BUF_SIZE,
+					    info->pi_fetch_buf);
+			assert_int_equal(rc, 0);
+			assert_memory_equal(info->pi_fetch_buf,
+					    info->pi_update_buf, start_size);
+			assert_memory_equal(info->pi_fetch_buf + start_size,
+					    info->pi_fill_buf,
+					    BUF_SIZE - start_size);
+
+			rc = vts_array_set_size(info->pi_aoh, epoch++,
+						punch_size);
+			assert_int_equal(rc, 0);
+
+			memcpy(info->pi_fetch_buf, info->pi_fill_buf, BUF_SIZE);
+			rc = vts_array_read(info->pi_aoh, epoch++, 0, BUF_SIZE,
+					    info->pi_fetch_buf);
+			assert_int_equal(rc, 0);
+			assert_memory_equal(info->pi_fetch_buf,
+					    info->pi_update_buf, punch_size);
+			assert_memory_equal(info->pi_fetch_buf + punch_size,
+					    info->pi_fill_buf,
+					    BUF_SIZE - punch_size);
+		}
+
+		rc = vts_array_reset(&info->pi_aoh, epoch, epoch + 1, 1,
+				     per_key, akey_size);
+		per_key += 11;
+		akey_size += 7;
+		epoch += 2;
+	}
+}
+
 /* User fills update buffer, after finished, fetch buffer should have identical
  * contents.
  */
@@ -765,6 +824,8 @@ static const struct CMUnitTest punch_model_tests[] = {
 	  array_4, pm_setup, pm_teardown },
 	{ "VOS805: Simple punch model test", punch_model_test, NULL, NULL},
 	{ "VOS806: Multi update", simple_multi_update, NULL, NULL},
+	{ "VOS807: Array Set/get size, write, punch",
+	  array_size_write, pm_setup, pm_teardown },
 };
 
 int
