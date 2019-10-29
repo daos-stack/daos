@@ -61,7 +61,7 @@ type Connect interface {
 	ClearConns() ResultMap
 	ConnectClients(Addresses) ResultMap
 	GetActiveConns(ResultMap) ResultMap
-	KillRank(uuid string, rank uint32) ResultMap
+	KillRank(uint32) ResultMap
 	ListFeatures() ClientFeatureMap
 	NetworkListProviders() ResultMap
 	NetworkScanDevices(searchProvider string) NetworkScanResultMap

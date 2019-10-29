@@ -344,7 +344,7 @@ func (m *mockMgmtSvcClient) GetAttachInfo(ctx context.Context, in *mgmtpb.GetAtt
 	return &mgmtpb.GetAttachInfoResp{}, nil
 }
 
-func (m *mockMgmtSvcClient) KillRank(ctx context.Context, req *mgmtpb.DaosRank, o ...grpc.CallOption) (*mgmtpb.DaosResp, error) {
+func (m *mockMgmtSvcClient) KillRank(ctx context.Context, req *mgmtpb.KillRankReq, o ...grpc.CallOption) (*mgmtpb.DaosResp, error) {
 	return &mgmtpb.DaosResp{}, nil
 }
 

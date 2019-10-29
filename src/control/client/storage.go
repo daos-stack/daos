@@ -69,7 +69,7 @@ func (c *connList) StoragePrepare(req *ctlpb.StoragePrepareReq) ResultMap {
 	return c.makeRequests(req, storagePrepareRequest)
 }
 
-// storageScan/etc/equest returns all discovered SCM and NVMe storage devices
+// storageScanRequest returns all discovered SCM and NVMe storage devices
 // discovered on a remote server by calling over gRPC channel.
 func storageScanRequest(mc Control, req interface{}, ch chan ClientResult) {
 	resp, err := mc.getCtlClient().StorageScan(context.Background(), &ctlpb.StorageScanReq{})

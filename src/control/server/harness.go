@@ -71,9 +71,7 @@ func (h *IOServerHarness) AddInstance(srv *IOServerInstance) error {
 
 	h.Lock()
 	defer h.Unlock()
-	srvIdx := len(h.instances)
-	srv.Index = uint32(srvIdx)
-	srv.runner.Config.Index = uint32(srvIdx)
+	srv.SetIndex(uint32(len(h.instances)))
 
 	h.instances = append(h.instances, srv)
 	return nil
@@ -126,7 +124,7 @@ func (h *IOServerHarness) CreateSuperblocks(recreate bool) error {
 
 	for _, instance := range toCreate {
 		// Only the first I/O server can be an MS replica.
-		if instance.Index == 0 {
+		if instance.Index() == 0 {
 			mInfo, err := getMgmtInfo(instance)
 			if err != nil {
 				return err
@@ -226,20 +224,20 @@ func (h *IOServerHarness) Start(parent context.Context) error {
 	}
 
 	// now monitor them
-	for {
-		select {
-		case <-parent.Done():
-			return nil
-		case err := <-errChan:
-			// If we receive an error from any instance, shut them all down.
-			// TODO: Restart failed instances rather than shutting everything
-			// down.
-			h.log.Errorf("instance error: %s", err)
-			if err != nil {
-				return errors.Wrap(err, "Instance error")
-			}
+	select {
+	case <-parent.Done():
+		return parent.Err()
+	case err := <-errChan:
+		// If we receive an error from any instance, shut them all down.
+		// TODO: Restart failed instances rather than shutting everything
+		// down.
+		h.log.Errorf("instance error: %s", err)
+		if err != nil {
+			return errors.Wrap(err, "Instance error")
 		}
 	}
+
+	return nil
 }
 
 // StartManagementService starts the DAOS management service on this node.

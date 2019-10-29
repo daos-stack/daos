@@ -35,7 +35,7 @@
 #include <daos/drpc_modules.h>
 #include <daos/drpc.pb-c.h>
 #include <daos/event.h>
-#include "mgmt.pb-c.h"
+#include "srv.pb-c.h"
 #include "rpc.h"
 
 struct cp_arg {
@@ -452,10 +452,12 @@ detach_group(bool server, bool pmixless, crt_group_t *group)
 {
 	int rc = 0;
 
-	if (!pmixless)
-		rc = crt_group_detach(group);
-	else if (!server)
-		rc = crt_group_view_destroy(group);
+	if (!server) {
+		if (!pmixless)
+			rc = crt_group_detach(group);
+		else
+			rc = crt_group_view_destroy(group);
+	}
 	D_ASSERTF(rc == 0, "%d\n", rc);
 }
 
