@@ -136,7 +136,7 @@ struct ds_rsvc {
 	ABT_cond		s_state_cv;
 	int			s_leader_ref;	/* on leader state */
 	ABT_cond		s_leader_ref_cv;
-	bool			s_map_dist;
+	bool			s_map_dist;	/* has a map dist request? */
 	ABT_cond		s_map_dist_cv;
 	ABT_thread		s_map_distd;
 	bool			s_map_distd_stop;

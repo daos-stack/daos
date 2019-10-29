@@ -619,10 +619,14 @@ map_distd(void *arg)
 		if (stop)
 			break;
 		rc = rsvc_class(svc->s_class)->sc_map_dist(svc);
-		if (rc != 0)
-			/* Try again. */
+		if (rc != 0) {
+			/*
+			 * Try again, but back off a little bit to limit the
+			 * retry rate.
+			 */
 			svc->s_map_dist = true;
-		dss_sleep(3000 /* ms */);
+			dss_sleep(3000 /* ms */);
+		}
 	}
 	put_leader(svc);
 	ds_rsvc_put(svc);

@@ -560,8 +560,8 @@ static int
 alloc_rank(struct rdb_tx *tx, struct mgmt_svc *svc, uint32_t *rank,
 	   uint32_t *rank_next)
 {
-	d_iov_t	key;
-	d_iov_t	value;
+	d_iov_t		key;
+	d_iov_t		value;
 	int		rc;
 
 	/*
@@ -597,8 +597,8 @@ add_server(struct rdb_tx *tx, struct mgmt_svc *svc, uint32_t rank,
 	   struct server_rec *server)
 {
 	uint64_t	rank_key = rank;
-	d_iov_t	key;
-	d_iov_t	value;
+	d_iov_t		key;
+	d_iov_t		value;
 	int		rc;
 
 	d_iov_set(&key, &rank_key, sizeof(rank_key));
@@ -624,8 +624,8 @@ ds_mgmt_join_handler(struct mgmt_join_in *in, struct mgmt_join_out *out)
 {
 	struct mgmt_svc	       *svc;
 	struct rdb_tx		tx;
-	d_iov_t		key;
-	d_iov_t		value;
+	d_iov_t			key;
+	d_iov_t			value;
 	uint32_t		rank;
 	uint32_t		rank_next;
 	uint32_t		map_version;
