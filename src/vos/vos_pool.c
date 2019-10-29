@@ -43,9 +43,6 @@
 #include <string.h>
 #include <fcntl.h>
 
-/* NB: None of pmemobj_create/open/close is thread-safe */
-pthread_mutex_t vos_pmemobj_lock = PTHREAD_MUTEX_INITIALIZER;
-
 static inline PMEMobjpool *
 vos_pmemobj_create(const char *path, const char *layout, size_t poolsize,
 		   mode_t mode)
