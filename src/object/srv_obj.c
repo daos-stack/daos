@@ -121,8 +121,9 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint32_t map_version,
 			orwo->orw_nrs.ca_count = 0;
 		}
 
-		daos_csummer_free_dcbs(cont_hdl->sch_csummer,
-				       &orwo->orw_csum.ca_arrays);
+		if (cont_hdl)
+			daos_csummer_free_dcbs(cont_hdl->sch_csummer,
+					       &orwo->orw_csum.ca_arrays);
 		orwo->orw_csum.ca_count = 0;
 	}
 }
