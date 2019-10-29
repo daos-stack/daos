@@ -420,7 +420,12 @@ int ds_pool_get_ranks(const uuid_t pool_uuid, int status,
 	 * might be timeout. XXX
 	 */
 	ABT_rwlock_rdlock(pool->sp_lock);
+	if (pool->sp_map == NULL) {
+		rc = 0;
+		goto out_lock;
+	}
 	rc = map_ranks_init(pool->sp_map, status, ranks);
+out_lock:
 	ABT_rwlock_unlock(pool->sp_lock);
 	if (rc != 0)
 		D_ERROR(DF_UUID": failed to create rank list: %d\n",

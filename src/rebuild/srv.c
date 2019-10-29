@@ -1116,17 +1116,15 @@ static void
 rebuild_task_ult(void *arg)
 {
 	struct rebuild_task			*task = arg;
-	struct ds_pool_create_arg		 pc_arg;
 	struct ds_pool				*pool;
 	struct rebuild_global_pool_tracker	*rgt = NULL;
 	struct rebuild_iv			 iv;
 	int					 rc;
 
-	memset(&pc_arg, 0, sizeof(pc_arg));
-	pc_arg.pca_map_version = task->dst_map_ver;
-	rc = ds_pool_lookup_create(task->dst_pool_uuid, &pc_arg, &pool);
-	if (rc) {
-		D_ERROR("pool lookup and create failed: rc %d\n", rc);
+	pool = ds_pool_lookup(task->dst_pool_uuid);
+	if (pool == NULL) {
+		D_ERROR(DF_UUID": failed to look up pool\n",
+			DP_UUID(task->dst_pool_uuid));
 		return;
 	}
 
@@ -1850,7 +1848,6 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 {
 	struct rebuild_scan_in		*rsi = crt_req_get(rpc);
 	struct ds_pool			*pool;
-	struct ds_pool_create_arg	pc_arg = { 0 };
 	struct rebuild_tgt_pool_tracker	*rpt = NULL;
 	struct rebuild_pool_tls		*pool_tls;
 	d_iov_t			iov = { 0 };
@@ -1867,16 +1864,10 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 		DP_UUID(rsi->rsi_pool_uuid), rsi->rsi_pool_map_ver,
 		rsi->rsi_rebuild_ver);
 
-	/* Note: if ds_pool already exists, for example the pool
-	 * is opened, then pca_need_group, pca_map will have zero
-	 * effects, i.e. sp_map & sp_group might be NULL in this
-	 * case. So let's do extra checking in the following.
-	 */
-	pc_arg.pca_map_version = rsi->rsi_pool_map_ver;
-	rc = ds_pool_lookup_create(rsi->rsi_pool_uuid, &pc_arg, &pool);
-	if (rc != 0) {
+	pool = ds_pool_lookup(rsi->rsi_pool_uuid);
+	if (pool == NULL) {
 		D_ERROR("Can not find pool.\n");
-		return rc;
+		return -DER_NONEXIST;
 	}
 
 	/* update the pool map */

@@ -46,20 +46,15 @@
 struct ds_pool {
 	struct daos_llink	sp_entry;
 	uuid_t			sp_uuid;
+	bool			sp_stopping;
 	ABT_rwlock		sp_lock;
 	struct pool_map	       *sp_map;
 	uint32_t		sp_map_version;	/* temporary */
 	crt_group_t	       *sp_group;
 	ABT_mutex		sp_iv_refresh_lock;
-	struct ds_iv_ns		*sp_iv_ns;
+	struct ds_iv_ns	       *sp_iv_ns;
 };
 
-struct ds_pool_create_arg {
-	uint32_t	pca_map_version;
-};
-
-int ds_pool_lookup_create(const uuid_t uuid, struct ds_pool_create_arg *arg,
-			  struct ds_pool **pool);
 struct ds_pool *ds_pool_lookup(const uuid_t uuid);
 void ds_pool_put(struct ds_pool *pool);
 
@@ -134,6 +129,8 @@ int ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 
 int ds_pool_create(const uuid_t pool_uuid, const char *path,
 		   uuid_t target_uuid);
+int ds_pool_start(uuid_t uuid);
+void ds_pool_stop(uuid_t uuid);
 
 int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets,
 		       uuid_t target_uuids[], const char *group,

@@ -943,16 +943,14 @@ static int
 init_svc_pool(struct pool_svc *svc, struct pool_buf *map_buf,
 	      uint32_t map_version)
 {
-	struct ds_pool_create_arg	arg;
-	struct ds_pool		       *pool;
-	int				rc;
+	struct ds_pool *pool;
+	int		rc;
 
-	arg.pca_map_version = map_version;
-	rc = ds_pool_lookup_create(svc->ps_uuid, &arg, &pool);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to get ds_pool: %d\n",
-			DP_UUID(svc->ps_uuid), rc);
-		return rc;
+	pool = ds_pool_lookup(svc->ps_uuid);
+	if (pool == NULL) {
+		D_ERROR(DF_UUID": failed to get ds_pool\n",
+			DP_UUID(svc->ps_uuid));
+		return -DER_NONEXIST;
 	}
 	rc = ds_pool_tgt_map_update(pool, map_buf, map_version);
 	if (rc != 0) {
@@ -1149,16 +1147,25 @@ ds_pool_cont_svc_lookup_leader(uuid_t pool_uuid, struct cont_svc **svcp,
 }
 
 /*
- * Try to start a pool's pool service if its RDB exists. Continue the iteration
- * upon errors as other pools may still be able to work.
+ * Try to start the pool. If a pool service RDB exists, start it. Continue the
+ * iteration upon errors as other pools may still be able to work.
  */
 static int
-start_one(uuid_t uuid, void *arg)
+start_one(uuid_t uuid, void *varg)
 {
 	char	       *path;
-	d_iov_t	id;
+	d_iov_t		id;
 	struct stat	st;
 	int		rc;
+
+	D_DEBUG(DB_MD, DF_UUID": starting pool\n", DP_UUID(uuid));
+
+	rc = ds_pool_start(uuid);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to start pool: %d\n", DP_UUID(uuid),
+			rc);
+		return 0;
+	}
 
 	/*
 	 * Check if an RDB file exists, to avoid unnecessary error messages
@@ -1166,7 +1173,8 @@ start_one(uuid_t uuid, void *arg)
 	 */
 	path = pool_svc_rdb_path(uuid);
 	if (path == NULL) {
-		D_ERROR(DF_UUID": failed allocate rdb path\n", DP_UUID(uuid));
+		D_ERROR(DF_UUID": failed to allocate rdb path\n",
+			DP_UUID(uuid));
 		return 0;
 	}
 	rc = stat(path, &st);
@@ -1186,7 +1194,7 @@ start_one(uuid_t uuid, void *arg)
 }
 
 static void
-pool_svc_start_all(void *arg)
+pool_start_all(void *arg)
 {
 	int rc;
 
@@ -1198,16 +1206,16 @@ pool_svc_start_all(void *arg)
 
 /* Note that this function is currently called from the main xstream. */
 int
-ds_pool_svc_start_all(void)
+ds_pool_start_all(void)
 {
 	ABT_thread	thread;
 	int		rc;
 
-	/* Create a ULT to call ds_pool_svc_start() in xstream 0. */
-	rc = dss_ult_create(pool_svc_start_all, NULL,
-			    DSS_ULT_POOL_SRV, 0, 0, &thread);
+	/* Create a ULT to call ds_rsvc_start() in xstream 0. */
+	rc = dss_ult_create(pool_start_all, NULL /* arg */, DSS_ULT_POOL_SRV,
+			    0 /* tgt_idx */, 0 /* stack_size */, &thread);
 	if (rc != 0) {
-		D_ERROR("failed to create pool service start ULT: %d\n", rc);
+		D_ERROR("failed to create pool start ULT: %d\n", rc);
 		return rc;
 	}
 	ABT_thread_join(thread);
@@ -1220,8 +1228,12 @@ ds_pool_svc_start_all(void)
  * one ULT creation.
  */
 int
-ds_pool_svc_stop_all(void)
+ds_pool_stop_all(void)
 {
+	/*
+	 * TODO: Before returning, release the ds_pool references held by
+	 * ds_pool_start_all.
+	 */
 	return ds_rsvc_stop_all(DS_RSVC_CLASS_POOL);
 }
 

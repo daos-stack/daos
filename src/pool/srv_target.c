@@ -194,6 +194,10 @@ pool_obj(struct daos_llink *llink)
 	return container_of(llink, struct ds_pool, sp_entry);
 }
 
+struct ds_pool_create_arg {
+	uint32_t	pca_map_version;
+};
+
 static int
 pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	       struct daos_llink **link)
@@ -344,47 +348,19 @@ ds_pool_cache_fini(void)
 	ABT_mutex_free(&pool_cache_lock);
 }
 
-/*
- * If "arg == NULL", then this is assumed to be a pure lookup. In this case,
- * -DER_NONEXIST is returned if the ds_pool object does not exist in the cache.
- * A group is only created if "arg->pca_create_group != 0".
- */
-int
-ds_pool_lookup_create(const uuid_t uuid, struct ds_pool_create_arg *arg,
-		      struct ds_pool **pool)
+struct ds_pool *
+ds_pool_lookup(const uuid_t uuid)
 {
 	struct daos_llink      *llink;
 	int			rc;
 
 	ABT_mutex_lock(pool_cache_lock);
 	rc = daos_lru_ref_hold(pool_cache, (void *)uuid, sizeof(uuid_t),
-			       arg, &llink);
+			       NULL /* create_args */, &llink);
 	ABT_mutex_unlock(pool_cache_lock);
-	if (rc != 0) {
-		if (arg == NULL && rc == -DER_NONEXIST)
-			D_DEBUG(DF_DSMS, DF_UUID": pure lookup failed: %d\n",
-				DP_UUID(uuid), rc);
-		else
-			D_ERROR(DF_UUID": failed to lookup%s pool: %d\n",
-				DP_UUID(uuid), arg == NULL ? "" : "/create",
-				rc);
-		return rc;
-	}
-
-	*pool = pool_obj(llink);
-	return 0;
-}
-
-struct ds_pool *
-ds_pool_lookup(const uuid_t uuid)
-{
-	struct ds_pool *pool;
-	int		rc;
-
-	rc = ds_pool_lookup_create(uuid, NULL /* arg */, &pool);
 	if (rc != 0)
-		pool = NULL;
-	return pool;
+		return NULL;
+	return pool_obj(llink);
 }
 
 void
@@ -393,6 +369,72 @@ ds_pool_put(struct ds_pool *pool)
 	ABT_mutex_lock(pool_cache_lock);
 	daos_lru_ref_release(pool_cache, &pool->sp_entry);
 	ABT_mutex_unlock(pool_cache_lock);
+}
+
+/*
+ * Start a pool. Must be called on the system xstream. Hold the ds_pool object
+ * till ds_pool_stop. Only for mgmt and pool modules.
+ */
+int
+ds_pool_start(uuid_t uuid)
+{
+	struct daos_llink	       *llink;
+	struct ds_pool_create_arg	arg = {};
+	int				rc;
+
+	ABT_mutex_lock(pool_cache_lock);
+
+	/*
+	 * Look up the pool without create_args (see pool_alloc_ref) to see if
+	 * the pool is started already.
+	 */
+	rc = daos_lru_ref_hold(pool_cache, (void *)uuid, sizeof(uuid_t),
+			       NULL /* create_args */, &llink);
+	if (rc == 0) {
+		struct ds_pool *pool = pool_obj(llink);
+
+		if (pool->sp_stopping)
+			/* Restart it and hold the reference. */
+			pool->sp_stopping = false;
+		else
+			/* Already started; drop our reference. */
+			daos_lru_ref_release(pool_cache, &pool->sp_entry);
+		goto out_lock;
+	} else if (rc != -DER_NONEXIST) {
+		D_ERROR(DF_UUID": failed to look up pool: %d\n", DP_UUID(uuid),
+			rc);
+		goto out_lock;
+	}
+
+	/* Start it by creating the ds_pool object and hold the reference. */
+	rc = daos_lru_ref_hold(pool_cache, (void *)uuid, sizeof(uuid_t), &arg,
+			       &llink);
+	if (rc != 0)
+		D_ERROR(DF_UUID": failed to start pool: %d\n", DP_UUID(uuid),
+			rc);
+
+out_lock:
+	ABT_mutex_unlock(pool_cache_lock);
+	return rc;
+}
+
+/*
+ * Stop a pool. Must be called on the system xstream. Release the ds_pool
+ * object reference held by ds_pool_start. Only for mgmt and pool modules.
+ */
+void
+ds_pool_stop(uuid_t uuid)
+{
+	struct ds_pool *pool;
+
+	pool = ds_pool_lookup(uuid);
+	if (pool == NULL)
+		return;
+	if (pool->sp_stopping)
+		return;
+	pool->sp_stopping = true;
+	ds_pool_put(pool); /* held by ds_pool_start */
+	ds_pool_put(pool);
 }
 
 /* ds_pool_hdl ****************************************************************/
@@ -664,7 +706,6 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 	struct pool_tgt_connect_out	*out = crt_reply_get(rpc);
 	struct ds_pool			*pool;
 	struct ds_pool_hdl		*hdl;
-	struct ds_pool_create_arg	 arg;
 	int				 rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID": handling rpc %p: hdl="DF_UUID"\n",
@@ -693,11 +734,18 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 	if (hdl == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	arg.pca_map_version = in->tci_map_version;
-	rc = ds_pool_lookup_create(in->tci_uuid, &arg, &pool);
-	if (rc != 0) {
+	pool = ds_pool_lookup(in->tci_uuid);
+	if (pool == NULL) {
 		D_FREE(hdl);
-		D_GOTO(out, rc);
+		rc = -DER_NONEXIST;
+		goto out;
+	}
+
+	rc = ds_pool_tgt_map_update(pool, NULL, in->tci_map_version);
+	if (rc != 0) {
+		ds_pool_put(pool);
+		D_FREE(hdl);
+		goto out;
 	}
 
 	uuid_copy(hdl->sph_uuid, in->tci_hdl);

@@ -87,8 +87,8 @@ struct pool_map_refresh_ult_arg {
  */
 void ds_pool_rsvc_class_register(void);
 void ds_pool_rsvc_class_unregister(void);
-int ds_pool_svc_start_all(void);
-int ds_pool_svc_stop_all(void);
+int ds_pool_start_all(void);
+int ds_pool_stop_all(void);
 void ds_pool_create_handler(crt_rpc_t *rpc);
 void ds_pool_connect_handler(crt_rpc_t *rpc);
 void ds_pool_disconnect_handler(crt_rpc_t *rpc);
