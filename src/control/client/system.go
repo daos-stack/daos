@@ -83,7 +83,7 @@ func (c *connList) SystemMemberQuery() (common.SystemMembers, error) {
 //
 // Currently this is not exposed by control/cmd/dmg as a user command.
 // TODO: consider usage model.
-func (c *connList) KillRank(uuid string, rank uint32) ResultMap {
+func (c *connList) KillRank(rank uint32) ResultMap {
 	var resp *mgmtpb.DaosResp
 	var addr string
 	results := make(ResultMap)
@@ -91,7 +91,7 @@ func (c *connList) KillRank(uuid string, rank uint32) ResultMap {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err == nil {
 		resp, err = mc.getSvcClient().KillRank(context.Background(),
-			&mgmtpb.DaosRank{PoolUuid: uuid, Rank: rank})
+			&mgmtpb.KillRankReq{Rank: rank})
 		addr = mc.getAddress()
 	}
 
