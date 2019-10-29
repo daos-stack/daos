@@ -102,7 +102,7 @@ func (tc *testConn) StoragePrepare(req *ctlpb.StoragePrepareReq) client.ResultMa
 	return nil
 }
 
-func (tc *testConn) StorageScan() (client.NvmeScanResults, client.ScmScanResults) {
+func (tc *testConn) StorageScan(bool) (client.NvmeScanResults, client.ScmScanResults) {
 	tc.appendInvocation("StorageScan")
 	return nil, nil
 }

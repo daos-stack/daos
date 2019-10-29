@@ -34,85 +34,75 @@ import (
 // representing namespaces existing on a NVMe SSD.
 type NvmeNamespaces []*ctlpb.NvmeController_Namespace
 
-func (nnss NvmeNamespaces) String() string {
-	var buf bytes.Buffer
-
-	for _, ns := range nnss {
-		fmt.Fprintf(&buf, "\t\tNamespace: %s\n", ns)
-	}
-
-	return buf.String()
-}
-
 // NvmeHealthstats is an alias for protobuf NvmeController_Health message slice
 // representing device health stats per controller.
 type NvmeHealthstats []*ctlpb.NvmeController_Health
 
-func (stats NvmeHealthstats) String() string {
-	var buf bytes.Buffer
-
-	for _, stat := range stats {
-		fmt.Fprintf(&buf, "\tHealth Stats:\n\t\tTemperature:%dK(%dC)\n", stat.Temp, stat.Temp-273)
-
-		if stat.Tempwarn > 0 {
-			fmt.Fprintf(&buf, "\t\t\tWarning Time:%d\n", uint64(stat.Tempwarn))
-		}
-		if stat.Tempcrit > 0 {
-			fmt.Fprintf(&buf, "\t\t\tCritical Time:%d\n", uint64(stat.Tempcrit))
-		}
-
-		fmt.Fprintf(&buf, "\t\tController Busy Time:%d minutes\n", uint64(stat.Ctrlbusy))
-		fmt.Fprintf(&buf, "\t\tPower Cycles:%d\n", uint64(stat.Powercycles))
-		fmt.Fprintf(&buf, "\t\tPower On Hours:%d hours\n", uint64(stat.Poweronhours))
-		fmt.Fprintf(&buf, "\t\tUnsafe Shutdowns:%d\n", uint64(stat.Unsafeshutdowns))
-		fmt.Fprintf(&buf, "\t\tMedia Errors:%d\n", uint64(stat.Mediaerrors))
-		fmt.Fprintf(&buf, "\t\tError Log Entries:%d\n", uint64(stat.Errorlogs))
-
-		fmt.Fprintf(&buf, "\t\tCritical Warnings:\n")
-		fmt.Fprintf(&buf, "\t\t\tTemperature: ")
-		if stat.Tempwarning {
-			fmt.Fprintf(&buf, "WARNING\n")
-		} else {
-			fmt.Fprintf(&buf, "OK\n")
-		}
-		fmt.Fprintf(&buf, "\t\t\tAvailable Spare: ")
-		if stat.Availspare {
-			fmt.Fprintf(&buf, "WARNING\n")
-		} else {
-			fmt.Fprintf(&buf, "OK\n")
-		}
-		fmt.Fprintf(&buf, "\t\t\tDevice Reliability: ")
-		if stat.Reliability {
-			fmt.Fprintf(&buf, "WARNING\n")
-		} else {
-			fmt.Fprintf(&buf, "OK\n")
-		}
-		fmt.Fprintf(&buf, "\t\t\tRead Only: ")
-		if stat.Readonly {
-			fmt.Fprintf(&buf, "WARNING\n")
-		} else {
-			fmt.Fprintf(&buf, "OK\n")
-		}
-		fmt.Fprintf(&buf, "\t\t\tVolatile Memory Backup: ")
-		if stat.Volatilemem {
-			fmt.Fprintf(&buf, "WARNING\n")
-		} else {
-			fmt.Fprintf(&buf, "OK\n")
-		}
-	}
-
-	return buf.String()
-}
-
 // NvmeControllers is an alias for protobuf NvmeController message slice
 // representing a number of NVMe SSD controllers installed on a storage node.
 type NvmeControllers []*ctlpb.NvmeController
+
+func (ncs NvmeControllers) healthDetail(buf *bytes.Buffer, c *ctlpb.NvmeController) {
+	for _, stat := range c.Healthstats {
+		fmt.Fprintf(buf, "\tHealth Stats:\n\t\tTemperature:%dK(%dC)\n", stat.Temp, stat.Temp-273)
+
+		if stat.Tempwarn > 0 {
+			fmt.Fprintf(buf, "\t\t\tWarning Time:%d\n", uint64(stat.Tempwarn))
+		}
+		if stat.Tempcrit > 0 {
+			fmt.Fprintf(buf, "\t\t\tCritical Time:%d\n", uint64(stat.Tempcrit))
+		}
+
+		fmt.Fprintf(buf, "\t\tController Busy Time:%d minutes\n", uint64(stat.Ctrlbusy))
+		fmt.Fprintf(buf, "\t\tPower Cycles:%d\n", uint64(stat.Powercycles))
+		fmt.Fprintf(buf, "\t\tPower On Hours:%d hours\n", uint64(stat.Poweronhours))
+		fmt.Fprintf(buf, "\t\tUnsafe Shutdowns:%d\n", uint64(stat.Unsafeshutdowns))
+		fmt.Fprintf(buf, "\t\tMedia Errors:%d\n", uint64(stat.Mediaerrors))
+		fmt.Fprintf(buf, "\t\tError Log Entries:%d\n", uint64(stat.Errorlogs))
+
+		fmt.Fprintf(buf, "\t\tCritical Warnings:\n")
+		fmt.Fprintf(buf, "\t\t\tTemperature: ")
+		if stat.Tempwarning {
+			fmt.Fprintf(buf, "WARNING\n")
+		} else {
+			fmt.Fprintf(buf, "OK\n")
+		}
+		fmt.Fprintf(buf, "\t\t\tAvailable Spare: ")
+		if stat.Availspare {
+			fmt.Fprintf(buf, "WARNING\n")
+		} else {
+			fmt.Fprintf(buf, "OK\n")
+		}
+		fmt.Fprintf(buf, "\t\t\tDevice Reliability: ")
+		if stat.Reliability {
+			fmt.Fprintf(buf, "WARNING\n")
+		} else {
+			fmt.Fprintf(buf, "OK\n")
+		}
+		fmt.Fprintf(buf, "\t\t\tRead Only: ")
+		if stat.Readonly {
+			fmt.Fprintf(buf, "WARNING\n")
+		} else {
+			fmt.Fprintf(buf, "OK\n")
+		}
+		fmt.Fprintf(buf, "\t\t\tVolatile Memory Backup: ")
+		if stat.Volatilemem {
+			fmt.Fprintf(buf, "WARNING\n")
+		} else {
+			fmt.Fprintf(buf, "OK\n")
+		}
+	}
+}
 
 // ctrlrDetail provides custom string representation for Controller type
 // defined outside this package.
 func (ncs NvmeControllers) ctrlrDetail(buf *bytes.Buffer, c *ctlpb.NvmeController) {
 	fmt.Fprintf(buf, "\tPCI Addr:%s Serial:%s Model:%s Fwrev:%s Socket:%d\n",
 		c.Pciaddr, c.Serial, c.Model, c.Fwrev, c.Socketid)
+
+	for _, ns := range c.Namespaces {
+		fmt.Fprintf(buf, "\t\tNamespace: id:%d capacity:%d\n", ns.Id, ns.Capacity)
+	}
 }
 
 func (ncs NvmeControllers) String() string {
@@ -120,7 +110,6 @@ func (ncs NvmeControllers) String() string {
 
 	for _, ctrlr := range ncs {
 		ncs.ctrlrDetail(buf, ctrlr)
-		fmt.Fprintf(buf, "%s\n", ctrlr.Namespaces)
 	}
 
 	return buf.String()
@@ -134,8 +123,7 @@ func (ncs NvmeControllers) StringHealthStats() string {
 
 	for _, ctrlr := range ncs {
 		ncs.ctrlrDetail(buf, ctrlr)
-		fmt.Fprintf(buf, "%s\n", ctrlr.Namespaces)
-		fmt.Fprintf(buf, "%s\n", ctrlr.Healthstats)
+		ncs.healthDetail(buf, ctrlr)
 	}
 
 	return buf.String()

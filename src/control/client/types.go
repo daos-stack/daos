@@ -333,15 +333,20 @@ func (results *ScmScanResults) String() string {
 // NvmeScanResult represents the result of scanning for SCM
 // modules installed on a storage node.
 type NvmeScanResult struct {
-	Resp pb_types.NvmeControllers
-	Err  error
+	Health bool
+	Resp   pb_types.NvmeControllers
+	Err    error
 }
 
 func (result *NvmeScanResult) String() string {
-	if result.Err != nil {
+	switch {
+	case result.Err != nil:
 		return fmt.Sprintf("Error: %s", result.Err)
+	case result.Health:
+		return result.Resp.StringHealthStats()
+	default:
+		return result.Resp.String()
 	}
-	return result.Resp.String()
 }
 
 // NvmeScanMap maps NvmeModuleScanResult structs to the addresses

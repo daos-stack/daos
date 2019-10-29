@@ -364,10 +364,10 @@ func defaultMockConnect(log logging.Logger) Connect {
 
 // MockNvmeScanResults mocks slice of nvme scan results for multiple servers.
 // Each result indicates success or failure through presence of Err.
-func MockNvmeScanResults(ctrlrs NvmeControllers, addrs Addresses) NvmeScanResults {
+func MockNvmeScanResults(ctrlrs NvmeControllers, addrs Addresses, health bool) NvmeScanResults {
 	results := make(NvmeScanResults)
 	for _, addr := range addrs {
-		results[addr] = &NvmeScanResult{Resp: ctrlrs}
+		results[addr] = &NvmeScanResult{Resp: ctrlrs, Health: health}
 	}
 	return results
 }

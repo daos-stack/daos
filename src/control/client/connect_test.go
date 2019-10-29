@@ -169,9 +169,9 @@ func TestStorageScan(t *testing.T) {
 
 	cc := defaultClientSetup(log)
 
-	clientNvme, clientScm := cc.StorageScan()
+	clientNvme, clientScm := cc.StorageScan(false)
 
-	if diff := cmp.Diff(MockNvmeScanResults(MockCtrlrs, MockServers), clientNvme); diff != "" {
+	if diff := cmp.Diff(MockNvmeScanResults(MockCtrlrs, MockServers, false), clientNvme); diff != "" {
 		t.Fatalf("unexpected per-client NVMe controllers (-want, +got):\n%s\n", diff)
 	}
 

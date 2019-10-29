@@ -72,7 +72,7 @@ type Connect interface {
 	SmdListPools(*mgmtpb.SmdPoolReq) ResultSmdMap
 	StorageFormat(reformat bool) (ClientCtrlrMap, ClientMountMap)
 	StoragePrepare(*ctlpb.StoragePrepareReq) ResultMap
-	StorageScan() (NvmeScanResults, ScmScanResults)
+	StorageScan(health bool) (NvmeScanResults, ScmScanResults)
 	SystemMemberQuery() (common.SystemMembers, error)
 	SystemStop() (common.SystemMemberResults, error)
 }

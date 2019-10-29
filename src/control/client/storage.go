@@ -90,8 +90,8 @@ func (c *connList) setScanErr(cNvmeScan NvmeScanResults, cScmScan ScmScanResults
 // StorageScan returns details of nonvolatile storage devices attached to each
 // remote server. Critical storage device health information is also returned
 // for all NVMe SSDs discovered. Data received over channel from requests
-// running in parallel.
-func (c *connList) StorageScan() (NvmeScanResults, ScmScanResults) {
+// in parallel. If health param is true, stringer repr will include stats.
+func (c *connList) StorageScan(health bool) (NvmeScanResults, ScmScanResults) {
 	cResults := c.makeRequests(nil, storageScanRequest)
 	cNvmeScan := make(NvmeScanResults) // mapping of server address to NVMe SSDs
 	cScmScan := make(ScmScanResults)   // mapping of server address to SCM modules/namespaces
@@ -116,7 +116,7 @@ func (c *connList) StorageScan() (NvmeScanResults, ScmScanResults) {
 		}
 
 		// Process storage subsystem responses.
-		nvmeResult := &NvmeScanResult{}
+		nvmeResult := &NvmeScanResult{Health: health}
 		scmResult := &ScmScanResult{}
 
 		nState := resp.Nvme.GetState()

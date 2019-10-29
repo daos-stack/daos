@@ -86,7 +86,7 @@ type storageScanCmd struct {
 
 // run NVMe and SCM storage and health query on all connected servers
 func storageScan(log logging.Logger, conns client.Connect) {
-	cNvmeScan, cScmScan := conns.StorageScan()
+	cNvmeScan, cScmScan := conns.StorageScan(false)
 	log.Info(cNvmeScan.String())
 	log.Info(cScmScan.String())
 }
