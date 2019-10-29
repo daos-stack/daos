@@ -102,6 +102,7 @@ class Cont(object):
         print pool and container UUIDs
     """
     def __init__(self, puuid=None, cuuid=None, path=None):
+        self.coh = None
         if path == None and (puuid == None or cuuid == None):
             raise PyDError("invalid pool or container UUID",
                            -pydaos_shim.DER_INVAL)
@@ -119,6 +120,8 @@ class Cont(object):
         self._dc = dc
 
     def __del__(self):
+        if not self.coh:
+            return
         ret = pydaos_shim.cont_close(DAOS_MAGIC, self.poh, self.coh)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to close container", ret)
