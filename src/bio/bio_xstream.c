@@ -312,7 +312,8 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 	 * Query and print the SPDK device health stats for only the device
 	 * owner xstream.
 	 */
-	if (ctxt->bxc_blobstore != NULL && is_bbs_owner(ctxt, ctxt->bxc_blobstore))
+	if (ctxt->bxc_blobstore != NULL &&
+	    is_bbs_owner(ctxt, ctxt->bxc_blobstore))
 		bio_bs_monitor(ctxt, now);
 
 	return count;
