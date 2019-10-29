@@ -417,11 +417,8 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 			 */
 			range_set = isset_range(dom_used, child_pos, child_pos
 						+ num_doms - 1);
-			if (range_set  && curr_dom->do_children != NULL) {
-				clrbit_range(dom_used, child_pos,
-					     child_pos + (num_doms - 1));
-			}
-
+			if (range_set  && curr_dom->do_children != NULL)
+				break;
 			/*
 			 * Keep choosing new domains until one that has
 			 * not been used is found
@@ -475,11 +472,9 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 		   struct pl_obj_layout *layout, struct daos_obj_md *md)
 {
 	uint8_t                 *used_tgts = NULL;
-	uint32_t                selected_dom;
 	uint32_t                fail_num = 0xFFc5;
 	uint32_t                try = 0;
 	uint32_t                num_doms;
-	struct pool_domain      *target_selection;
 	struct pool_domain      *root;
 	int rc = 0;
 
@@ -491,10 +486,12 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 	}
 
 	while (1) {
-
-		uint8_t range_set;
-		uint32_t skipped_targets;
-		uint64_t child_pos;
+		struct pool_domain	*dom_selection;
+		uint32_t		selected_dom;
+		uint32_t		selected_tgt;
+		uint8_t			range_set;
+		uint32_t		skipped_targets;
+		uint64_t		child_pos;
 
 		skipped_targets = 0;
 		num_doms = root->do_child_nr;
@@ -504,8 +501,12 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 					+ num_doms - 1);
 
 		if (range_set  && root->do_children != NULL) {
-			clrbit_range(dom_used, child_pos,
-				     child_pos + (num_doms - 1));
+			/* XXX if all nodes has been chosen for the object,
+			 * and we do not allow co-locate objects on the same
+			 * node yet, let's just stop retry for now.
+			 */
+			D_DEBUG(DB_TRACE, "All nodes has been used here\n");
+			return -DER_NONEXIST;
 		}
 
 		/*
@@ -515,13 +516,14 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 		do {
 			key = crc(key, fail_num++);
 			selected_dom = jump_consistent_hash(key, num_doms);
-			target_selection = &(root->do_children[selected_dom]);
+			dom_selection = &(root->do_children[selected_dom]);
 		} while (isset(dom_used, (selected_dom + child_pos)));
 
-		/* To find rebuild target we examine all targets */
-		num_doms = target_selection->do_target_nr;
 
-		rc = set_used_targets(down_targets, target_selection,
+		/* To find rebuild target we examine all targets */
+		num_doms = dom_selection->do_target_nr;
+
+		rc = set_used_targets(down_targets, dom_selection,
 				      &used_tgts, &skipped_targets);
 		if (rc)
 			return rc;
@@ -533,17 +535,17 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 		do {
 			key = crc(key, try++);
 
-			selected_dom = jump_consistent_hash(key, num_doms);
-			*target = &(target_selection->do_targets[selected_dom]);
+			selected_tgt = jump_consistent_hash(key, num_doms);
+			*target = &(dom_selection->do_targets[selected_tgt]);
 
 			/*
 			 * keep track of what targets have been tried
 			 * in case all targets in domain have failed
 			 */
-			if (isclr(used_tgts, selected_dom))
+			if (isclr(used_tgts, selected_tgt))
 				skipped_targets++;
 
-		} while ((isset(used_tgts, selected_dom)) &&
+		} while ((isset(used_tgts, selected_tgt)) &&
 			 skipped_targets < num_doms);
 
 		if (skipped_targets == num_doms)
@@ -552,6 +554,7 @@ get_rebuild_target(struct pool_map *pmap, struct pool_target **target,
 
 		D_FREE(used_tgts);
 
+		setbit(dom_used, selected_dom + child_pos);
 		/* Use the last examined target if it's not unavailable */
 		if (!pool_target_unavail(*target) ||
 		    (*target)->ta_comp.co_fseq > md->omd_ver) {
@@ -618,10 +621,17 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 
 		rebuild_key = (f_shard->fs_shard_idx * 10) + f_shard->fs_fseq;
 
-		if (spare_avail)
-			get_rebuild_target(jmap->jmp_map.pl_poolmap, &spare_tgt,
-					   crc(key, rebuild_key), dom_used,
-					   used_targets_list, layout, md);
+		if (spare_avail) {
+			int rc;
+
+			rc = get_rebuild_target(jmap->jmp_map.pl_poolmap,
+						&spare_tgt,
+						crc(key, rebuild_key),
+						dom_used, used_targets_list,
+						layout, md);
+			if (rc)
+				spare_avail = false;
+		}
 
 		determine_valid_spares(spare_tgt, md, spare_avail, &current,
 				       remap_list, f_shard, l_shard);

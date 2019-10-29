@@ -117,7 +117,7 @@ remap_dump(d_list_t *remap_list, struct daos_obj_md *md,
 		DP_OID(md->omd_id), comment, md->omd_ver);
 
 	d_list_for_each_entry(f_shard, remap_list, fs_list) {
-		D_DEBUG(DB_PL, "fseq:%u, shard_idx:%u status:%u rank %d\n",
+		D_DEBUG(DB_PL, "fseq:%u, shard_idx:%u status:%u tgt %d\n",
 			f_shard->fs_fseq, f_shard->fs_shard_idx,
 			f_shard->fs_status, f_shard->fs_tgt_id);
 	}
