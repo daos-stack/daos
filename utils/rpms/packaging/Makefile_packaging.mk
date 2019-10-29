@@ -443,7 +443,7 @@ packaging_check:
 	          --exclude \*.tar.\*                           \
 	          --exclude \*.code-workspace                   \
 	          --exclude install                             \
-	          -bur $(PACKAGING_CHECK_DIR)/ packaging/; then \
+	          -bur ../../../rpm/packaging/$(PACKAGING_CHECK_DIR)/ packaging/; then \
 	    exit 1;                                             \
 	fi
 

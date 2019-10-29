@@ -36,8 +36,8 @@ BuildRequires: libisa-l-devel
 BuildRequires: libisal-devel
 %endif
 BuildRequires: raft-devel <= 0.5.0
-BuildRequires: hwloc-devel
 BuildRequires: openssl-devel
+BuildRequires: hwloc-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
 BuildRequires: libcmocka-devel
