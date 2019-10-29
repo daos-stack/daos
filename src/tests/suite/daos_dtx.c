@@ -711,7 +711,7 @@ static const struct CMUnitTest dtx_tests[] = {
 };
 
 static int
-dtx_test_setup((void **state)
+dtx_test_setup(void **state)
 {
 	int     rc;
 

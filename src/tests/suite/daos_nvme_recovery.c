@@ -125,7 +125,7 @@ static const struct CMUnitTest nvme_recov_tests[] = {
 };
 
 static int
-nvme_recov_test_setup((void **state)
+nvme_recov_test_setup(void **state)
 {
 	int     rc;
 

@@ -380,7 +380,7 @@ static const struct CMUnitTest vc_tests[] = {
 };
 
 static int
-vc_test_setup((void **state)
+vc_test_setup(void **state)
 {
 	int     rc;
 
