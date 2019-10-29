@@ -1924,6 +1924,12 @@ int
 rebuild_test_setup(void **state)
 {
 	test_arg_t	*arg = *state;
+	int rc;
+
+	rc = test_setup(state, SETUP_CONT_CONNECT, true, REBUILD_POOL_SIZE,
+			NULL);
+	if (rc)
+		return rc;
 
 	if (arg && arg->myrank == 0)
 		daos_mgmt_set_params(arg->group, -1, DSS_DISABLE_AGGREGATION,

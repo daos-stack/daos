@@ -710,6 +710,17 @@ static const struct CMUnitTest dtx_tests[] = {
 	 dtx_17, NULL, test_case_teardown},
 };
 
+static int
+dtx_test_setup((void **state)
+{
+	int     rc;
+
+	rc = test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
+			NULL);
+
+	return rc;
+}
+
 int
 run_daos_dtx_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
@@ -723,7 +734,7 @@ run_daos_dtx_test(int rank, int size, int *sub_tests, int sub_tests_size)
 
 	rc = run_daos_sub_tests("DAOS dtx tests", dtx_tests,
 				ARRAY_SIZE(dtx_tests), sub_tests,
-				sub_tests_size, NULL, NULL);
+				sub_tests_size, dtx_test_setup, test_teardown);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
