@@ -20,24 +20,56 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+package ioserver
 
-package server
+import "context"
 
-import (
-	types "github.com/daos-stack/daos/src/control/common/storage"
-	"github.com/daos-stack/daos/src/control/server/storage/scm"
+type (
+	TestRunnerConfig struct {
+		StartCb    func()
+		StartErr   error
+		ErrChanCb  func() error
+		ErrChanErr error
+	}
+
+	TestRunner struct {
+		runnerCfg TestRunnerConfig
+		serverCfg *Config
+	}
 )
 
-// PrepScm interface provides capability to prepare SCM storage
-//
-// TODO: Update tests in this layer to use a mock scm.Provider
-// implementation rather than requiring so much knowledge about
-// low-level details.
-type PrepScm interface {
-	GetNamespaces() ([]scm.Namespace, error)
-	GetState() (types.ScmState, error)
-	Prep(types.ScmState) (bool, []scm.Namespace, error)
-	PrepReset(types.ScmState) (bool, error)
+func NewTestRunner(trc *TestRunnerConfig, sc *Config) *TestRunner {
+	if trc == nil {
+		trc = &TestRunnerConfig{}
+	}
+	return &TestRunner{
+		runnerCfg: *trc,
+		serverCfg: sc,
+	}
 }
 
-// core scm prep code moved to storage/scm/ipmctl.go
+func (tr *TestRunner) Start(ctx context.Context, errChan chan<- error) error {
+	if tr.runnerCfg.StartCb != nil {
+		tr.runnerCfg.StartCb()
+	}
+	if tr.runnerCfg.ErrChanCb == nil {
+		tr.runnerCfg.ErrChanCb = func() error {
+			return tr.runnerCfg.ErrChanErr
+		}
+	}
+
+	go func() {
+		select {
+		case <-ctx.Done():
+			return
+		case errChan <- tr.runnerCfg.ErrChanCb():
+			return
+		}
+	}()
+
+	return tr.runnerCfg.StartErr
+}
+
+func (tr *TestRunner) GetConfig() *Config {
+	return tr.serverCfg
+}

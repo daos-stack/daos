@@ -23,6 +23,7 @@
 package scm
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -34,6 +35,7 @@ import (
 	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/provider/system"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 const (
@@ -52,6 +54,13 @@ const (
 	dcpmMountOpts = "dax"
 
 	ramFsType = fsTypeTmpfs
+
+	MsgScmRebootRequired    = "A reboot is required to process new memory allocation goals."
+	MsgScmNoModules         = "no scm modules to prepare"
+	MsgScmNotInited         = "scm storage could not be accessed"
+	MsgScmClassNotSupported = "operation unsupported on scm class"
+	MsgIpmctlDiscoverFail   = "ipmctl module discovery"
+	MsgScmUpdateNotImpl     = "scm firmware update not supported"
 )
 
 type (
@@ -67,6 +76,8 @@ type (
 		Capacity        uint64
 	}
 
+	Modules []Module
+
 	// Namespace represents a mapping between AppDirect regions and block device files.
 	Namespace struct {
 		UUID        string `json:"uuid"`
@@ -74,7 +85,39 @@ type (
 		Name        string `json:"dev"`
 		NumaNode    uint32 `json:"numa_node"`
 	}
+
+	Namespaces []Namespace
 )
+
+func (m Module) String() string {
+	return fmt.Sprintf("PhysicalID:%d Capacity:%d Location:(socket:%d memctrlr:%d "+
+		"chan:%d pos:%d)", m.PhysicalID, m.Capacity, m.SocketID,
+		m.ControllerID, m.ChannelID, m.ChannelPosition)
+}
+
+func (ms Modules) String() string {
+	var buf bytes.Buffer
+
+	for _, m := range ms {
+		fmt.Fprintf(&buf, "\t%s\n", m)
+	}
+
+	return buf.String()
+}
+
+func (n Namespace) String() string {
+	return fmt.Sprintf("%s/%s/%s (NUMA %d)", n.Name, n.BlockDevice, n.UUID, n.NumaNode)
+}
+
+func (ns Namespaces) String() string {
+	var buf bytes.Buffer
+
+	for _, n := range ns {
+		fmt.Fprintf(&buf, "\t%s\n", n)
+	}
+
+	return buf.String()
+}
 
 type (
 	// PrepareRequest defines the parameters for a Prepare opration.
@@ -86,7 +129,7 @@ type (
 	PrepareResponse struct {
 		State          types.ScmState
 		RebootRequired bool
-		Namespaces     []Namespace
+		Namespaces     Namespaces
 	}
 
 	// DcpmParams defines the sub-parameters of a Format operation that
@@ -139,17 +182,17 @@ type (
 	// a successful Scan operation.
 	ScanResponse struct {
 		State      types.ScmState
-		Modules    []Module
-		Namespaces []Namespace
+		Modules    Modules
+		Namespaces Namespaces
 	}
 
 	// Backend defines a set of methods to be implemented by a SCM backend.
 	Backend interface {
-		Discover() ([]Module, error)
-		Prep(types.ScmState) (bool, []Namespace, error)
+		Discover() (Modules, error)
+		Prep(types.ScmState) (bool, Namespaces, error)
 		PrepReset(types.ScmState) (bool, error)
 		GetState() (types.ScmState, error)
-		GetNamespaces() ([]Namespace, error)
+		GetNamespaces() (Namespaces, error)
 	}
 
 	// SystemProvider defines a set of methods to be implemented by a provider
@@ -172,14 +215,40 @@ type (
 		sync.RWMutex
 		scanCompleted bool
 		lastState     types.ScmState
-		modules       []Module
-		namespaces    []Namespace
+		modules       Modules
+		namespaces    Namespaces
 
 		log     logging.Logger
 		backend Backend
 		sys     SystemProvider
 	}
 )
+
+func CreateFormatRequest(scmCfg storage.ScmConfig, reformat bool) (*FormatRequest, error) {
+	req := FormatRequest{
+		Mountpoint: scmCfg.MountPoint,
+		Reformat:   reformat,
+	}
+
+	switch scmCfg.Class {
+	case storage.ScmClassRAM:
+		req.Ramdisk = &RamdiskParams{
+			Size: uint(scmCfg.RamdiskSize),
+		}
+	case storage.ScmClassDCPM:
+		// FIXME (DAOS-3291): Clean up SCM configuration
+		if len(scmCfg.DeviceList) != 1 {
+			return nil, FaultFormatInvalidDeviceCount
+		}
+		req.Dcpm = &DcpmParams{
+			Device: scmCfg.DeviceList[0],
+		}
+	default:
+		return nil, errors.New(MsgScmClassNotSupported)
+	}
+
+	return &req, nil
+}
 
 // Validate checks the request for validity.
 func (fr FormatRequest) Validate() error {
