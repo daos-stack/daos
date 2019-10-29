@@ -87,17 +87,18 @@ func (m *mockStorageFormatServer) Send(resp *StorageFormatResp) error {
 	return nil
 }
 
+// TODO: re-enable when update feature is supported
 // mockStorageUpdateServer provides mocking for server side streaming,
 // implement send method and record sent update responses.
-type mockStorageUpdateServer struct {
-	grpc.ServerStream
-	Results []*StorageUpdateResp
-}
-
-func (m *mockStorageUpdateServer) Send(resp *StorageUpdateResp) error {
-	m.Results = append(m.Results, resp)
-	return nil
-}
+//type mockStorageUpdateServer struct {
+//	grpc.ServerStream
+//	Results []*StorageUpdateResp
+//}
+//
+//func (m *mockStorageUpdateServer) Send(resp *StorageUpdateResp) error {
+//	m.Results = append(m.Results, resp)
+//	return nil
+//}
 
 // return config reference with customised storage config behaviour and params
 func newMockStorageConfig(

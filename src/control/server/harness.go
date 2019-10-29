@@ -35,11 +35,6 @@ import (
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
 
-const (
-	// index in IOServerHarness.instances
-	defaultManagementInstance = 0
-)
-
 // IOServerHarness is responsible for managing IOServer instances
 type IOServerHarness struct {
 	sync.RWMutex

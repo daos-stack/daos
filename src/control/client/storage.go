@@ -36,9 +36,10 @@ import (
 )
 
 const (
-	msgOpenStreamFail = "client.StorageUpdate() open stream failed: "
-	msgStreamRecv     = "%T recv() failed"
-	msgTypeAssert     = "type assertion failed, wanted %T got %T"
+	// TODO: re-enable when update feature is supported
+	//msgOpenStreamFail = "client.StorageUpdate() open stream failed: "
+	msgStreamRecv = "%T recv() failed"
+	msgTypeAssert = "type assertion failed, wanted %T got %T"
 )
 
 // storagePrepareRequest returns results of SCM and NVMe prepare actions
@@ -102,10 +103,10 @@ func (c *connList) StorageScan() (NvmeScanResults, ScmScanResults) {
 			continue
 		}
 
-		resp, ok := res.Value.(ctlpb.StorageScanResp)
+		resp, ok := res.Value.(*ctlpb.StorageScanResp)
 		if !ok {
 			c.setScanErr(cNvmeScan, cScmScan, res.Address,
-				fmt.Errorf(msgBadType, ctlpb.StorageScanResp{}, res.Value))
+				fmt.Errorf(msgBadType, &ctlpb.StorageScanResp{}, res.Value))
 			continue
 		}
 
@@ -229,60 +230,61 @@ func (c *connList) StorageFormat(reformat bool) (ClientCtrlrMap, ClientMountMap)
 	return cCtrlrResults, cMountResults
 }
 
+// TODO: re-enable when update feature is supported
 // storageUpdateRequest attempts to update firmware on nonvolatile storage
 // devices on a remote server by calling over gRPC channel.
 //
 // Calls control storageUpdate routine which activates StorageUpdate service rpc
 // and returns an open stream handle. Receive on stream and send ClientResult
 // over channel for each.
-func storageUpdateRequest(
-	mc Control, req interface{}, ch chan ClientResult) {
-
-	sRes := StorageResult{}
-
-	// Maximum time limit for update is 2hrs to account for lengthy firmware
-	// updates of multiple devices sequentially.
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Minute)
-	defer cancel()
-
-	var updateReq *ctlpb.StorageUpdateReq
-	switch v := req.(type) {
-	case *ctlpb.StorageUpdateReq:
-		updateReq = v
-	default:
-		err := errors.Errorf(
-			msgTypeAssert, ctlpb.StorageUpdateReq{}, req)
-
-		mc.logger().Errorf(err.Error())
-		ch <- ClientResult{mc.getAddress(), nil, err}
-		return // type err
-	}
-
-	stream, err := mc.getCtlClient().StorageUpdate(ctx, updateReq)
-	if err != nil {
-		mc.logger().Errorf(err.Error())
-		ch <- ClientResult{mc.getAddress(), nil, err}
-		return // stream err
-	}
-
-	for {
-		resp, err := stream.Recv()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			err := errors.Wrapf(err, msgStreamRecv, stream)
-			mc.logger().Errorf(err.Error())
-			ch <- ClientResult{mc.getAddress(), nil, err}
-			return // recv err
-		}
-
-		sRes.nvmeCtrlr.Responses = resp.Crets
-		sRes.scmModule.Responses = resp.Mrets
-
-		ch <- ClientResult{mc.getAddress(), sRes, nil}
-	}
-}
+//func storageUpdateRequest(
+//	mc Control, req interface{}, ch chan ClientResult) {
+//
+//	sRes := StorageResult{}
+//
+//	// Maximum time limit for update is 2hrs to account for lengthy firmware
+//	// updates of multiple devices sequentially.
+//	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Minute)
+//	defer cancel()
+//
+//	var updateReq *ctlpb.StorageUpdateReq
+//	switch v := req.(type) {
+//	case *ctlpb.StorageUpdateReq:
+//		updateReq = v
+//	default:
+//		err := errors.Errorf(
+//			msgTypeAssert, ctlpb.StorageUpdateReq{}, req)
+//
+//		mc.logger().Errorf(err.Error())
+//		ch <- ClientResult{mc.getAddress(), nil, err}
+//		return // type err
+//	}
+//
+//	stream, err := mc.getCtlClient().StorageUpdate(ctx, updateReq)
+//	if err != nil {
+//		mc.logger().Errorf(err.Error())
+//		ch <- ClientResult{mc.getAddress(), nil, err}
+//		return // stream err
+//	}
+//
+//	for {
+//		resp, err := stream.Recv()
+//		if err == io.EOF {
+//			break
+//		}
+//		if err != nil {
+//			err := errors.Wrapf(err, msgStreamRecv, stream)
+//			mc.logger().Errorf(err.Error())
+//			ch <- ClientResult{mc.getAddress(), nil, err}
+//			return // recv err
+//		}
+//
+//		sRes.nvmeCtrlr.Responses = resp.Crets
+//		sRes.scmModule.Responses = resp.Mrets
+//
+//		ch <- ClientResult{mc.getAddress(), sRes, nil}
+//	}
+//}
 
 // TODO: re-enable when feature is supported
 // StorageUpdate prepares nonvolatile storage devices attached to each

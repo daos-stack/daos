@@ -394,7 +394,5 @@ func scmNamespacesFromPB(pbNss pb_types.ScmNamespaces) (nss []scm_types.Namespac
 // StorageResult generic container for results of storage subsystems queries.
 type StorageResult struct {
 	nvmeCtrlr pb_types.CtrlrResults
-	scmModule pb_types.ModuleResults
 	scmMount  pb_types.MountResults
-	scmPmem   pb_types.PmemResults
 }

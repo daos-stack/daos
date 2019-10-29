@@ -38,6 +38,7 @@ import (
 	. "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
+	scm_types "github.com/daos-stack/daos/src/control/server/storage/scm/types"
 )
 
 var (
@@ -55,7 +56,7 @@ var (
 			State:   &MockState,
 		},
 	}
-	MockModules       = ScmModules{MockModulePB()}
+	MockScmModules    = ScmModules{MockModulePB()}
 	MockModuleResults = ScmModuleResults{
 		&ctlpb.ScmModuleResult{
 			Loc:   &ctlpb.ScmModule_Location{},
@@ -455,8 +456,8 @@ func newMockConnect(log logging.Logger,
 
 func defaultMockConnect(log logging.Logger) Connect {
 	return newMockConnect(
-		log, connectivity.Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
-		MockModuleResults, MockScmNamespaces, MockMountResults,
+		log, connectivity.Ready, MockFeatures, MockCtrlrs, MockCtrlrResults,
+		MockScmModules, MockModuleResults, MockScmNamespaces, MockMountResults,
 		nil, nil, nil, nil, nil, nil, nil)
 }
 
@@ -474,36 +475,40 @@ func NewClientFM(features []*ctlpb.Feature, addrs Addresses) ClientFeatureMap {
 	return cf
 }
 
-// NewClientNvme provides a mock ClientCtrlrMap populated with ctrlr details
-func NewClientNvme(ctrlrs NvmeControllers, addrs Addresses) ClientCtrlrMap {
-	cMap := make(ClientCtrlrMap)
+// MockNvmeScanResults mocks slice of nvme scan results for multiple servers.
+// Each result indicates success or failure through presence of Err.
+func MockNvmeScanResults(ctrlrs NvmeControllers, addrs Addresses) NvmeScanResults {
+	results := make(NvmeScanResults)
 	for _, addr := range addrs {
-		cMap[addr] = CtrlrResults{Ctrlrs: ctrlrs}
+		results[addr] = &NvmeScanResult{Resp: ctrlrs}
 	}
-	return cMap
+	return results
+}
+
+// MockScmScanResults mocks slice of scm scan results for multiple servers.
+// Each result indicates success or failure through presence of Err.
+func MockScmScanResults(modules ScmModules, pmems ScmNamespaces, addrs Addresses) ScmScanResults {
+	results := make(ScmScanResults)
+	for _, addr := range addrs {
+		results[addr] = &ScmScanResult{
+			Resp: scm_types.ScanResponse{
+				Modules:    scmModulesFromPB(modules),
+				Namespaces: scmNamespacesFromPB(pmems),
+			},
+		}
+	}
+	fmt.Printf("%+v\n", results)
+	return results
 }
 
 // NewClientNvmeResults provides a mock ClientCtrlrMap populated with controller
 // operation responses
-func NewClientNvmeResults(
-	results []*ctlpb.NvmeControllerResult, addrs Addresses) ClientCtrlrMap {
-
+func NewClientNvmeResults(results []*ctlpb.NvmeControllerResult, addrs Addresses) ClientCtrlrMap {
 	cMap := make(ClientCtrlrMap)
 	for _, addr := range addrs {
 		cMap[addr] = CtrlrResults{Responses: results}
 	}
 	return cMap
-}
-
-// NewClientScm provides a mock ScmScanResults populated with scm module details
-func NewClientScm(mms ScmModules, addrs Addresses) ScmScanResults {
-	cScmResults := make(ScmScanResults)
-	//	for _, addr := range addrs {
-	//		// populate with scm_types.ScanResponse
-	//		cScmResults[addr] = ModuleResults{Modules: mms}
-	//		cScmResults[addr] = PmemResults{Devices: pms}
-	//	}
-	return cScmResults
 }
 
 // NewClientScmMount provides a mock ClientMountMap populated with scm mount details

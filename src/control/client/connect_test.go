@@ -109,7 +109,7 @@ func TestConnectClients(t *testing.T) {
 	}
 	for _, tt := range conntests {
 		cc := newMockConnect(
-			log, tt.state, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
+			log, tt.state, MockFeatures, MockCtrlrs, MockCtrlrResults, MockScmModules,
 			MockModuleResults, MockScmNamespaces, MockMountResults,
 			nil, nil, nil, nil, nil, tt.connRet, nil)
 
@@ -211,7 +211,7 @@ func TestStorageFormat(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			cc := connectSetup(
-				log, Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
+				log, Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockScmModules,
 				MockModuleResults, MockScmNamespaces, MockMountResults, nil, tt.formatRet, nil, nil,
 				nil, nil, MockACL)
 
@@ -260,7 +260,7 @@ func TestStorageFormat(t *testing.T) {
 //
 //	for _, tt := range tests {
 //		cc := connectSetup(
-//			log, Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
+//			log, Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockScmModules,
 //			MockModuleResults, MockScmNamespaces, MockMountResults, nil,
 //			nil, tt.updateRet, nil, nil, nil, MockACL)
 //
@@ -303,7 +303,7 @@ func TestKillRank(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		cc := connectSetup(log, Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
+		cc := connectSetup(log, Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockScmModules,
 			MockModuleResults, MockScmNamespaces, MockMountResults, nil, nil, nil,
 			nil, tt.killRet, nil, MockACL)
 
@@ -359,7 +359,7 @@ func TestPoolGetACL(t *testing.T) {
 				err:    tt.getACLErr,
 			}
 			cc := connectSetupServers(tt.addr, log, Ready, MockFeatures,
-				MockCtrlrs, MockCtrlrResults, MockModules,
+				MockCtrlrs, MockCtrlrResults, MockScmModules,
 				MockModuleResults, MockScmNamespaces, MockMountResults,
 				nil, nil, nil, nil, nil, nil,
 				aclResult)

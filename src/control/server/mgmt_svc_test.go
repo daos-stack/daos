@@ -24,6 +24,7 @@
 package server
 
 import (
+	"context"
 	"net"
 	"strconv"
 	"strings"
@@ -151,7 +152,7 @@ func TestPoolGetACL_NoMS(t *testing.T) {
 
 	svc := newMgmtSvc(NewIOServerHarness(log), nil)
 
-	resp, err := svc.PoolGetACL(nil, newTestGetACLReq())
+	resp, err := svc.PoolGetACL(context.TODO(), newTestGetACLReq())
 
 	if resp != nil {
 		t.Errorf("Expected no response, got: %+v", resp)
@@ -168,7 +169,7 @@ func TestPoolGetACL_DrpcFailed(t *testing.T) {
 	expectedErr := errors.New("mock error")
 	setupMockDrpcClient(svc, nil, expectedErr)
 
-	resp, err := svc.PoolGetACL(nil, newTestGetACLReq())
+	resp, err := svc.PoolGetACL(context.TODO(), newTestGetACLReq())
 
 	if resp != nil {
 		t.Errorf("Expected no response, got: %+v", resp)
@@ -190,7 +191,7 @@ func TestPoolGetACL_BadDrpcResp(t *testing.T) {
 
 	setupMockDrpcClientBytes(svc, badBytes, nil)
 
-	resp, err := svc.PoolGetACL(nil, newTestGetACLReq())
+	resp, err := svc.PoolGetACL(context.TODO(), newTestGetACLReq())
 
 	if resp != nil {
 		t.Errorf("Expected no response, got: %+v", resp)
@@ -211,7 +212,7 @@ func TestPoolGetACL_Success(t *testing.T) {
 	}
 	setupMockDrpcClient(svc, expectedResp, nil)
 
-	resp, err := svc.PoolGetACL(nil, newTestGetACLReq())
+	resp, err := svc.PoolGetACL(context.TODO(), newTestGetACLReq())
 
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)
@@ -219,10 +220,7 @@ func TestPoolGetACL_Success(t *testing.T) {
 
 	// Avoid comparing the internal Protobuf fields
 	isHiddenPBField := func(path cmp.Path) bool {
-		if strings.HasPrefix(path.Last().String(), ".XXX_") {
-			return true
-		}
-		return false
+		return strings.HasPrefix(path.Last().String(), ".XXX_")
 	}
 	cmpOpts := []cmp.Option{
 		cmp.FilterPath(isHiddenPBField, cmp.Ignore()),

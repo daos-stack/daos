@@ -58,7 +58,7 @@ func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error)
 		return nil, err
 	}
 
-	if m.config.AllowInsecure == true {
+	if m.config.AllowInsecure {
 		key = nil
 	} else {
 		certName := fmt.Sprintf("%s.%s", credential.Origin, "crt")
