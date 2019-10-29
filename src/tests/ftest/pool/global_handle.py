@@ -47,7 +47,7 @@ class GlobalHandle(TestWithServers):
             check_for_pool.cleanup_pools(self.hostlist_servers)
 
     def check_handle(self, buf_len, iov_len, buf, uuidstr, rank):
-        """ 
+        """
         This gets run in a child process and verifyes the global
         handle can be turned into a local handle in another process.
         """
