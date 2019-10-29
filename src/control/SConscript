@@ -88,16 +88,14 @@ def scons():
                 sharedir = join("share", "spdk", subdir)
                 tpath = join(denv.subst("$PREFIX"), sharedir)
                 if not check_dir_exists(tpath):
-                    denv.Command(
-                        tpath,
-                        join(denv.subst("$SPDK_PREFIX"), sharedir),
-                        Copy("$TARGET", "$SOURCE"))
+                    spath = join(denv.subst("$SPDK_PREFIX"), sharedir)
+                    if tpath != spath:
+                        denv.Command(tpath, spath, Copy("$TARGET", "$SOURCE"))
         tpath = join(denv.subst("$PREFIX"), "include")
         if not check_dir_exists(tpath):
-            denv.Command(
-                tpath,
-                join(denv.subst("$SPDK_PREFIX"), "include"),
-                Copy("$TARGET", "$SOURCE"))
+            spath = join(denv.subst("$SPDK_PREFIX"), "include")
+            if tpath != spath:
+                denv.Command(tpath, spath, Copy("$TARGET", "$SOURCE"))
 
     def CheckGoVersion(context):
         context.Display('Checking for Go compiler in $PATH... ')
