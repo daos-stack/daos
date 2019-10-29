@@ -363,6 +363,7 @@ array_read_write_punch_size(void **state, daos_epoch_t epc_in,
 	uint64_t		 akey_size = 1;
 	uint64_t		 new_size = 7;
 	int			 rc;
+	int			 div = 2;
 	int			 i;
 
 	rc = vts_array_reset(&info->pi_aoh, epoch, epoch + 1, rec_size,
@@ -416,6 +417,9 @@ array_read_write_punch_size(void **state, daos_epoch_t epc_in,
 		epoch += 2;
 		per_key += inc;
 		akey_size += inc;
+
+		rc = vts_array_set_iosize(info->pi_aoh, per_key / div);
+		div++;
 
 		rc = vts_array_get_size(info->pi_aoh, epoch++, &size);
 		assert_int_equal(rc, 0);

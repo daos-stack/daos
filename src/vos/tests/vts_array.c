@@ -43,8 +43,11 @@ struct vts_array {
 	daos_iod_t		 va_iod;
 	daos_iod_t		 va_sv_iod;
 	d_iov_t			 va_dkey;
-	daos_recx_t		 va_recx;
+	uint64_t		 va_recx_nr;
+	daos_recx_t		*va_recx;
+	d_iov_t			*va_iovs;
 	uint64_t		 va_dkey_value;
+	uint64_t		 va_io_size;
 	d_sg_list_t		 va_sgl;
 	struct vts_metadata	 va_meta;
 	uint8_t			*va_akey_value;
@@ -84,6 +87,15 @@ array_open(struct vts_array *array)
 	if (array->va_zero == NULL)
 		return -DER_NOMEM;
 
+	array->va_recx_nr = array->va_io_size = array->va_meta.vm_per_key;
+	D_ALLOC_ARRAY(array->va_recx, array->va_io_size);
+	if (array->va_recx == NULL)
+		return -DER_NOMEM;
+
+	D_ALLOC_ARRAY(array->va_iovs, array->va_io_size);
+	if (array->va_recx == NULL)
+		return -DER_NOMEM;
+
 	return 0;
 }
 
@@ -91,8 +103,6 @@ static int
 array_init(struct vts_array *in, daos_handle_t coh, daos_unit_oid_t oid,
 	   struct vts_array **out)
 {
-	int	rc;
-
 	D_ASSERT((in == NULL && out != NULL) || (in != NULL && out == NULL));
 
 	if (in == NULL) {
@@ -103,21 +113,12 @@ array_init(struct vts_array *in, daos_handle_t coh, daos_unit_oid_t oid,
 		memset(in, 0, sizeof(*in));
 	}
 
-	rc = daos_sgl_init(&in->va_sgl, 1);
-	if (rc != 0) {
-		if (out)
-			D_FREE(in);
-
-		return rc;
-	}
-
-
 	if (out)
 		*out = in;
 
 	d_iov_set(&in->va_dkey, &in->va_dkey_value, sizeof(in->va_dkey_value));
 	in->va_iod.iod_type = DAOS_IOD_ARRAY;
-	in->va_iod.iod_recxs = &in->va_recx;
+	in->va_iod.iod_recxs = in->va_recx;
 	in->va_iod.iod_nr = 1;
 	in->va_coh = coh;
 	in->va_oid = oid;
@@ -133,13 +134,14 @@ array_init(struct vts_array *in, daos_handle_t coh, daos_unit_oid_t oid,
 static void
 array_fini(struct vts_array *in, bool free_array)
 {
-	daos_sgl_fini(&in->va_sgl, false);
 	in->va_meta.vm_magic = 0;
 	if (!free_array)
 		return;
 
 	D_FREE(in->va_zero);
 	D_FREE(in->va_akey_value);
+	D_FREE(in->va_recx);
+	D_FREE(in->va_iovs);
 	D_FREE(in);
 }
 
@@ -147,36 +149,81 @@ static int
 update_array(struct vts_array *array, daos_epoch_t epoch, uint64_t dkey,
 	     uint64_t rec_size, uint64_t offset, uint64_t nr, void *values)
 {
-	d_sg_list_t	*sgl = NULL;
+	d_sg_list_t	*sgls = NULL;
+	d_sg_list_t	 sgl;
+	uint64_t	 cursor = offset;
+	uint64_t	 left = nr;
+	int		 idx = 0;
 
-	array->va_recx.rx_idx = offset;
-	array->va_recx.rx_nr = nr;
+	if (values)
+		sgls = &sgl;
+
+	while (cursor < (offset + nr)) {
+		array->va_recx[idx].rx_idx = cursor;
+		if (left > array->va_io_size)
+			array->va_recx[idx].rx_nr = array->va_io_size;
+		else
+			array->va_recx[idx].rx_nr = left;
+		if (values) {
+			d_iov_set(&array->va_iovs[idx],
+				  values + (cursor - offset) * rec_size,
+				  array->va_recx[idx].rx_nr * rec_size);
+		}
+
+		cursor += array->va_io_size;
+		left -= array->va_io_size;
+		idx++;
+	}
+
+	array->va_iod.iod_recxs = array->va_recx;
+	array->va_iod.iod_nr = idx;
+	sgl.sg_iovs = array->va_iovs;
+	sgl.sg_nr = idx;
+	sgl.sg_nr_out = 0;
+
 	array->va_dkey_value = dkey;
 	array->va_iod.iod_size = rec_size;
-	if (values) {
-		d_iov_set(&array->va_sgl.sg_iovs[0], values,
-			  nr * rec_size);
-		sgl = &array->va_sgl;
-	}
 	d_iov_set(&array->va_iod.iod_name, array->va_akey_value,
 		  array->va_meta.vm_akey_size);
 
 	D_DEBUG(DB_IO, "Writing "DF_U64" records of size "DF_U64" at offset "
 		DF_U64"\n", nr, rec_size, offset);
 	return vos_obj_update(array->va_coh, array->va_oid, epoch, 0,
-			      &array->va_dkey, 1, &array->va_iod, sgl);
+			      &array->va_dkey, 1, &array->va_iod, sgls);
 }
 
 static int
 fetch_array(struct vts_array *array, daos_epoch_t epoch, uint64_t dkey,
 	    uint64_t rec_size, uint64_t offset, uint64_t nr, void *values)
 {
-	d_sg_list_t	*sgl = &array->va_sgl;
+	d_sg_list_t	 sgl;
+	d_sg_list_t	*sgls = &sgl;
+	uint64_t	 cursor = offset;
+	uint64_t	 left = nr;
+	int		 idx = 0;
 
-	array->va_recx.rx_idx = offset;
-	array->va_recx.rx_nr = nr;
-	d_iov_set(&array->va_sgl.sg_iovs[0], values,
-		  nr * rec_size);
+	while (cursor < (offset + nr)) {
+		array->va_recx[idx].rx_idx = cursor;
+		if (left > array->va_io_size)
+			array->va_recx[idx].rx_nr = array->va_io_size;
+		else
+			array->va_recx[idx].rx_nr = left;
+		if (values) {
+			d_iov_set(&array->va_iovs[idx],
+				  values + (cursor - offset) * rec_size,
+				  array->va_recx[idx].rx_nr * rec_size);
+		}
+
+		cursor += array->va_io_size;
+		left -= array->va_io_size;
+		idx++;
+	}
+
+	array->va_iod.iod_nr = idx;
+	sgl.sg_iovs = array->va_iovs;
+	sgl.sg_nr = idx;
+	sgl.sg_nr_out = 0;
+
 	array->va_iod.iod_size = rec_size;
 	array->va_dkey_value = dkey;
 	d_iov_set(&array->va_iod.iod_name, array->va_akey_value,
@@ -185,43 +232,47 @@ fetch_array(struct vts_array *array, daos_epoch_t epoch, uint64_t dkey,
 	D_DEBUG(DB_IO, "Reading "DF_U64" records of size "DF_U64" at offset "
 		DF_U64"\n", nr, rec_size, offset);
 	return vos_obj_fetch(array->va_coh, array->va_oid, epoch,
-			     &array->va_dkey, 1, &array->va_iod, sgl);
+			     &array->va_dkey, 1, &array->va_iod, sgls);
 }
 
 static int
 update_meta(struct vts_array *array, daos_epoch_t epoch,
 	    struct vts_metadata *meta)
 {
-	d_sg_list_t	*sgl = NULL;
+	d_sg_list_t	 sgl = {0};
+	d_iov_t		 iov;
 	uint8_t		 akey = 0;
 
 	array->va_dkey_value = 0;
-	d_iov_set(&array->va_sgl.sg_iovs[0], meta, sizeof(*meta));
-	sgl = &array->va_sgl;
+	d_iov_set(&iov, meta, sizeof(*meta));
+	sgl.sg_iovs = &iov;
+	sgl.sg_nr = 1;
 
 	d_iov_set(&array->va_sv_iod.iod_name, &akey, sizeof(akey));
 
 	D_DEBUG(DB_IO, "Writing metadata at epoch "DF_U64"\n", epoch);
 	return vos_obj_update(array->va_coh, array->va_oid, epoch, 0,
-			      &array->va_dkey, 1, &array->va_sv_iod, sgl);
+			      &array->va_dkey, 1, &array->va_sv_iod, &sgl);
 }
 
 static int
 fetch_meta(struct vts_array *array, daos_epoch_t epoch,
 	   struct vts_metadata *meta)
 {
-	d_sg_list_t	*sgl = NULL;
+	d_sg_list_t	 sgl = {0};
+	d_iov_t		 iov;
 	uint8_t		 akey = 0;
 
 	array->va_dkey_value = 0;
-	d_iov_set(&array->va_sgl.sg_iovs[0], meta, sizeof(*meta));
-	sgl = &array->va_sgl;
+	d_iov_set(&iov, meta, sizeof(*meta));
+	sgl.sg_iovs = &iov;
+	sgl.sg_nr = 1;
 
 	d_iov_set(&array->va_sv_iod.iod_name, &akey, sizeof(akey));
 
 	D_DEBUG(DB_IO, "Reading metadata at epoch "DF_U64"\n", epoch);
 	return vos_obj_fetch(array->va_coh, array->va_oid, epoch,
-			     &array->va_dkey, 1, &array->va_sv_iod, sgl);
+			     &array->va_dkey, 1, &array->va_sv_iod, &sgl);
 }
 
 
@@ -399,6 +450,50 @@ vts_array_get_size(daos_handle_t aoh, daos_epoch_t epoch, daos_size_t *size)
 	*size = (val - 1) * array->va_meta.vm_per_key + recx.rx_idx +
 		recx.rx_nr;
 
+	return 0;
+}
+
+int
+vts_array_set_iosize(daos_handle_t aoh, uint64_t io_size)
+{
+	struct vts_array	*array = vts_hdl2array(aoh);
+	uint64_t		 new_size;
+	uint64_t		 count;
+
+	new_size = io_size;
+
+	if (io_size != 0 && io_size <= array->va_meta.vm_per_key)
+		goto resize;
+
+	/* Default to per_key */
+	new_size = array->va_meta.vm_per_key;
+resize:
+	count = array->va_meta.vm_per_key / new_size;
+	if (array->va_meta.vm_per_key % new_size)
+		count++;
+
+	if (count > array->va_recx_nr) {
+		d_iov_t		*iovs;
+		daos_recx_t	*recx;
+
+		count = count * 2;
+		D_ALLOC_ARRAY(recx, count);
+		if (recx == NULL)
+			return -DER_NOMEM;
+		D_ALLOC_ARRAY(iovs, count);
+		if (iovs == NULL) {
+			D_FREE(recx);
+			return -DER_NOMEM;
+		}
+
+		D_FREE(array->va_recx);
+		D_FREE(array->va_iovs);
+		array->va_recx_nr = count;
+		array->va_recx = recx;
+		array->va_iovs = iovs;
+	}
+
+	array->va_io_size = new_size;
 	return 0;
 }
 

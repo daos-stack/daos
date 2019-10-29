@@ -67,6 +67,17 @@ vts_array_free(daos_handle_t coh, daos_unit_oid_t oid);
 int
 vts_array_open(daos_handle_t coh, daos_unit_oid_t oid, daos_handle_t *aoh);
 
+/** Set the I/O size of the array.  Reads and writes will be split
+ *  into chunks
+ *
+ *  \param	aoh[in]		Open array handle
+ *  \param	io_size[in]	The new io_size (default is record size)
+ *
+ * \return 0 or error code
+ */
+int
+vts_array_set_iosize(daos_handle_t aoh, uint64_t io_size);
+
 /** Punches the vos test array object and recreates it.  Handle remains open
  * \param	aoh[in,out]		Open array handle, returns new handle
  * \param	punch_epoch[in]		punch epoch
