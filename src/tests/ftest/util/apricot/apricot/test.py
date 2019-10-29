@@ -130,9 +130,10 @@ class TestWithoutServers(Test):
         if self.prefix != "/usr":
             self.tmp = os.path.join(self.prefix, 'tmp')
         else:
-	    self.tmp = os.getenv('DAOS_TEST_SHARED_DIR', \
+            self.tmp = os.getenv('DAOS_TEST_SHARED_DIR', \
                                  os.path.expanduser('~/daos_test'))
-	    os.makedirs(self.tmp, exist_ok = True)
+        if not os.path.exists(self.tmp):
+            os.makedirs(self.tmp)
 
         # setup fault injection, this MUST be before API setup
         fault_list = self.params.get("fault_list", '/run/faults/*/')

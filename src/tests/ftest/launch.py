@@ -101,7 +101,8 @@ def set_test_environment():
     if base_dir == "/usr":
         tmp_dir = os.getenv('DAOS_TEST_SHARED_DIR', \
                             os.path.expanduser('~/daos_test'))
-        os.makedirs(tmp_dir, exist_ok = True)
+        if not os.path.exists(tmp_dir):
+            os.makedirs(tmp_dir)
     else:
         tmp_dir = os.path.join(base_dir, "tmp")
 
