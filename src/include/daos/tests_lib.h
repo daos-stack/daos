@@ -28,6 +28,51 @@
 #include <daos_types.h>
 #include <daos/object.h>
 
+#define MIN_CHECK 16
+static inline void
+print_mismatch(const uint8_t *i1, const uint8_t *i2)
+{
+	D_FATAL("    %#x != %#x\n", (int)*i1, (int)*i2);
+}
+
+static inline int
+check_memory_equal(const void *buf1, const void *buf2, size_t size)
+{
+	int	i;
+	int	j;
+	size_t	partial = size % MIN_CHECK;
+	size_t	full = size - partial;
+
+	for (i = 0; i < full; i += MIN_CHECK) {
+		if (memcmp(buf1 + i, buf2 + i, MIN_CHECK) == 0)
+			continue;
+		D_FATAL("Mismatch: offset %d\n", i);
+		for (j = 0; j < MIN_CHECK; j++) {
+			print_mismatch((uint8_t *)buf1 + i + j,
+				       (uint8_t *)buf2 + i + j);
+		}
+		return 1;
+	}
+
+	if (partial == 0 || memcmp(buf1 + i, buf2 + i, partial) == 0)
+		return 0;
+	for (j = 0; j < partial; j++) {
+		print_mismatch((uint8_t *)buf1 + i + j,
+			       (uint8_t *)buf2 + i + j);
+	}
+	return 1;
+}
+#define ASSERT_MEMORY_EQUAL(p1, p2, size)				\
+	do {								\
+		int	_res = check_memory_equal(p1, p2, size);	\
+									\
+		D_ASSERTF(_res == 0, #p1 " != " #p2 "\n");		\
+	} while (0)
+
+#define ASSERT_INT_EQUAL(i1, i2)			\
+	D_ASSERTF(i1 == i2, DF_X64 "!= " DF_X64 "\n",	\
+		  (uint64_t)(i1), (uint64_t)(i2))
+
 /** Read a command line from stdin. */
 char *dts_readline(const char *prompt);
 

@@ -192,7 +192,7 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
 							      data, REC_SIZE,
 							      DAOS_TX_NONE,
 							      req);
-					assert_memory_equal(data, data_verify,
+					ASSERT_MEMORY_EQUAL(data, data_verify,
 						    strlen(data_verify));
 				} else {
 					if (l == 7)
@@ -233,7 +233,7 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
 					lookup_single(dkey, akey, l,
 						      bulk, BULK_SIZE + 10,
 						      DAOS_TX_NONE, req);
-					assert_memory_equal(bulk, compare,
+					ASSERT_MEMORY_EQUAL(bulk, compare,
 							    BULK_SIZE);
 				} else {
 					memset(bulk, 'a', BULK_SIZE);
@@ -262,7 +262,7 @@ rebuild_io_obj_internal(struct ioreq *req, bool validate, daos_epoch_t eph,
 			memset(data, 0, REC_SIZE);
 			lookup_single(dkey, "akey_single", 0, data, REC_SIZE,
 				      DAOS_TX_NONE, req);
-			assert_memory_equal(data, data_verify,
+			ASSERT_MEMORY_EQUAL(data, data_verify,
 					    strlen(data_verify));
 		} else {
 			insert_single(dkey, "akey_single", 0, data,
@@ -1617,14 +1617,14 @@ rebuild_master_failure(void **state)
 	/* Verify the POOL_QUERY get same rebuild status after leader change */
 	pinfo.pi_bits = DPI_REBUILD_STATUS;
 	rc = test_pool_get_info(arg, &pinfo);
-	assert_int_equal(rc, 0);
-	assert_int_equal(pinfo.pi_rebuild_st.rs_done, 1);
+	ASSERT_INT_EQUAL(rc, 0);
+	ASSERT_INT_EQUAL(pinfo.pi_rebuild_st.rs_done, 1);
 	rc = rebuild_change_leader_cb(arg);
-	assert_int_equal(rc, 0);
+	ASSERT_INT_EQUAL(rc, 0);
 	pinfo_new.pi_bits = DPI_REBUILD_STATUS;
 	rc = test_pool_get_info(arg, &pinfo_new);
-	assert_int_equal(rc, 0);
-	assert_int_equal(pinfo_new.pi_rebuild_st.rs_done, 1);
+	ASSERT_INT_EQUAL(rc, 0);
+	ASSERT_INT_EQUAL(pinfo_new.pi_rebuild_st.rs_done, 1);
 	rc = memcmp(&pinfo.pi_rebuild_st, &pinfo_new.pi_rebuild_st,
 		    sizeof(pinfo.pi_rebuild_st));
 	if (rc != 0) {
@@ -1651,7 +1651,7 @@ rebuild_master_failure(void **state)
 	print_message("svc leader changed from %d to %d, should get same "
 		      "rebuild status (memcmp result %d).\n", pinfo.pi_leader,
 		      pinfo_new.pi_leader, rc);
-	assert_int_equal(rc, 0);
+	ASSERT_INT_EQUAL(rc, 0);
 }
 
 static void
@@ -1816,9 +1816,9 @@ multi_pools_rebuild_concurrently(void **state)
 		if (rc)
 			return;
 		if (i % CONT_PER_POOL == 0)
-			assert_int_equal(args[i]->pool.slave, 0);
+			ASSERT_INT_EQUAL(args[i]->pool.slave, 0);
 		else
-			assert_int_equal(args[i]->pool.slave, 1);
+			ASSERT_INT_EQUAL(args[i]->pool.slave, 1);
 	}
 
 	for (i = 0; i < OBJ_PER_CONT; i++) {

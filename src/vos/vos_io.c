@@ -496,27 +496,31 @@ key_ilog_check_one(struct vos_io_context *ioc, struct vos_krec_df *krec,
 		   struct vos_ilog_info *info)
 {
 	struct umem_instance	*umm;
+	daos_epoch_range_t	 epr = *epr_in;
 	int			 rc;
 
 	umm = vos_obj2umm(ioc->ic_obj);
 	rc = vos_ilog_fetch(umm, vos_cont2hdl(ioc->ic_cont),
 			    DAOS_INTENT_DEFAULT, &krec->kr_ilog,
-			    epr_in->epr_hi, punch, info);
+			    epr.epr_hi, punch, info);
 	if (rc != 0)
 		goto out;
 
-	rc = vos_ilog_check(info, epr_in, epr_out, true);
+	rc = vos_ilog_check(info, &epr, epr_out, true);
 out:
-	D_DEBUG(DB_TRACE, "ilog check returned "DF_RC"\n", DP_RC(rc));
+	D_DEBUG(DB_TRACE, "ilog check returned "DF_RC" epr_in="DF_U64"-"DF_U64
+		" punch="DF_U64" epr_out="DF_U64"-"DF_U64"\n", DP_RC(rc),
+		epr.epr_lo, epr.epr_hi, punch,
+		epr_out ? epr_out->epr_lo : 0,
+		epr_out ? epr_out->epr_hi : 0);
 	return rc;
 }
 
 static int
 key_ilog_check(struct vos_io_context *ioc, int prior_rc,
-	       const daos_epoch_range_t *orig_epr, daos_epoch_t punch,
-	       struct vos_krec_df *krec, struct vos_ilog_info *info,
-	       daos_epoch_range_t *update_epr, daos_epoch_range_t *iod_eprs,
-	       int idx)
+	       daos_epoch_t punch, struct vos_krec_df *krec,
+	       struct vos_ilog_info *info, daos_epoch_range_t *update_epr,
+	       daos_epoch_range_t *iod_eprs, int idx)
 {
 	daos_epoch_t		 hi;
 	int			 rc;
@@ -528,12 +532,12 @@ key_ilog_check(struct vos_io_context *ioc, int prior_rc,
 	if (update_epr->epr_hi == hi)
 		return prior_rc;
 
-	*update_epr = *orig_epr;
+	*update_epr = ioc->ic_epr;
 	/* This checks to make sure we always stay in range */
-	D_ASSERT(orig_epr->epr_hi >= hi);
+	D_ASSERT(ioc->ic_epr.epr_hi >= hi);
 	update_epr->epr_hi = hi;
 
-	rc = key_ilog_check_one(ioc, ioc->ic_dkey_krec, orig_epr, punch,
+	rc = key_ilog_check_one(ioc, ioc->ic_dkey_krec, update_epr, punch,
 				update_epr, &ioc->ic_dkey_info);
 	if (rc == 0)
 		rc = key_ilog_check_one(ioc, krec, update_epr, punch,
@@ -543,8 +547,7 @@ key_ilog_check(struct vos_io_context *ioc, int prior_rc,
 }
 
 static int
-akey_fetch(struct vos_io_context *ioc, const daos_epoch_range_t *epr,
-	   daos_handle_t ak_toh)
+akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 {
 	daos_iod_t		*iod = &ioc->ic_iods[ioc->ic_sgl_at];
 	struct vos_krec_df	*krec = NULL;
@@ -570,10 +573,6 @@ akey_fetch(struct vos_io_context *ioc, const daos_epoch_range_t *epr,
 			      VOS_BTR_AKEY, &iod->iod_name, flags,
 			      DAOS_INTENT_DEFAULT, &krec, &toh);
 
-	if (rc == 0)
-		rc = key_ilog_check_one(ioc, krec, epr,
-					ioc->ic_dkey_info.ii_prior_punch,
-					&val_epr, &info);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
 			D_DEBUG(DB_IO, "Nonexistent akey %.*s\n",
@@ -582,16 +581,14 @@ akey_fetch(struct vos_io_context *ioc, const daos_epoch_range_t *epr,
 			iod_empty_sgl(ioc, ioc->ic_sgl_at);
 			rc = 0;
 		} else {
-			D_CDEBUG(rc == -DER_INPROGRESS, DB_TRACE, DLOG_ERR,
-				 "Failed to fetch akey: "DF_RC"\n", DP_RC(rc));
+			D_ERROR("Failed to fetch akey: "DF_RC"\n", DP_RC(rc));
 		}
 		goto out;
 	}
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
-		rc = key_ilog_check(ioc, 0, epr,
-				    ioc->ic_dkey_info.ii_prior_punch, krec,
-				    &info, &val_epr, iod->iod_eprs, 0);
+		rc = key_ilog_check(ioc, 0, ioc->ic_dkey_info.ii_prior_punch,
+				    krec, &info, &val_epr, iod->iod_eprs, 0);
 
 		if (rc != 0) {
 			if (rc == -DER_NONEXIST) {
@@ -601,8 +598,9 @@ akey_fetch(struct vos_io_context *ioc, const daos_epoch_range_t *epr,
 				iod_empty_sgl(ioc, ioc->ic_sgl_at);
 				rc = 0;
 			} else {
-				D_ERROR("Fetch akey failed: rc="DF_RC"\n",
-					DP_RC(rc));
+				D_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR,
+					 "Fetch akey failed: rc="DF_RC"\n",
+					 DP_RC(rc));
 			}
 			goto out;
 		}
@@ -616,7 +614,7 @@ akey_fetch(struct vos_io_context *ioc, const daos_epoch_range_t *epr,
 	prior_rc = 0;
 	for (i = 0; i < iod->iod_nr; i++) {
 		daos_size_t rsize;
-		prior_rc = rc = key_ilog_check(ioc, prior_rc, epr,
+		prior_rc = rc = key_ilog_check(ioc, prior_rc,
 					       ioc->ic_dkey_info.ii_prior_punch,
 					       krec, &info, &val_epr,
 					       iod->iod_eprs, i);
@@ -627,7 +625,9 @@ akey_fetch(struct vos_io_context *ioc, const daos_epoch_range_t *epr,
 			rc = 0;
 			continue;
 		} else if (rc != 0) {
-			D_ERROR("Fetch akey failed: rc="DF_RC"\n", DP_RC(rc));
+			D_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR,
+				 "Fetch akey failed: rc="DF_RC"\n",
+				 DP_RC(rc));
 			goto out;
 		}
 
@@ -682,7 +682,6 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 {
 	struct vos_object	*obj = ioc->ic_obj;
 	daos_handle_t		 toh = DAOS_HDL_INVAL;
-	daos_epoch_range_t	 epr = ioc->ic_epr;
 	int			 i, rc;
 
 	rc = obj_tree_init(obj);
@@ -693,11 +692,6 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 			      dkey, 0, DAOS_INTENT_DEFAULT, &ioc->ic_dkey_krec,
 			      &toh);
 
-	if (rc == 0)
-		rc = key_ilog_check_one(ioc, ioc->ic_dkey_krec, &ioc->ic_epr,
-					obj->obj_ilog_info.ii_prior_punch,
-					&epr, &ioc->ic_dkey_info);
-
 	if (rc == -DER_NONEXIST) {
 		for (i = 0; i < ioc->ic_iod_nr; i++)
 			iod_empty_sgl(ioc, i);
@@ -707,21 +701,20 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 	}
 
 	if (rc != 0) {
-		D_CDEBUG(rc == -DER_INPROGRESS, DB_TRACE, DLOG_ERR,
-			 "Failed to prepare subtree: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Failed to prepare subtree: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 
 	for (i = 0; i < ioc->ic_iod_nr; i++) {
 		iod_set_cursor(ioc, i);
-		rc = akey_fetch(ioc, &epr, toh);
+		rc = akey_fetch(ioc, toh);
 		if (rc != 0)
 			break;
 	}
-
 out:
 	if (!daos_handle_is_inval(toh))
 		key_tree_release(toh, false);
+
 	return rc;
 }
 
@@ -733,6 +726,7 @@ vos_fetch_end(daos_handle_t ioh, int err)
 	/* NB: it's OK to use the stale ioc->ic_obj for fetch_end */
 	D_ASSERT(!ioc->ic_update);
 	vos_ioc_destroy(ioc);
+	D_DEBUG(DB_TRACE, "FETCH END %d\n", err);
 	return err;
 }
 
@@ -743,6 +737,9 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 {
 	struct vos_io_context *ioc;
 	int i, rc;
+
+	D_DEBUG(DB_TRACE, "Fetch "DF_UOID", desc_nr %d, epoch "DF_U64"\n",
+		DP_UOID(oid), iod_nr, epoch);
 
 	rc = vos_ioc_create(coh, oid, true, epoch, iod_nr, iods, size_fetch,
 			    &ioc);
@@ -767,8 +764,10 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	D_DEBUG(DB_IO, "Prepared io context for fetching %d iods\n", iod_nr);
 	*ioh = vos_ioc2ioh(ioc);
+	D_DEBUG(DB_TRACE, "Fetch begin success\n");
 	return 0;
 error:
+	D_DEBUG(DB_TRACE, "Error = %d\n", rc);
 	return vos_fetch_end(vos_ioc2ioh(ioc), rc);
 }
 
@@ -1549,9 +1548,6 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	daos_handle_t ioh;
 	bool size_fetch = (sgls == NULL);
 	int rc;
-
-	D_DEBUG(DB_TRACE, "Fetch "DF_UOID", desc_nr %d, epoch "DF_U64"\n",
-		DP_UOID(oid), iod_nr, epoch);
 
 	rc = vos_fetch_begin(coh, oid, epoch, dkey, iod_nr, iods, size_fetch,
 			     &ioh);
