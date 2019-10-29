@@ -14,7 +14,7 @@ server_config:
     servers:
         log_mask: ERR
         crt_timeout: 2000
-        fabric_iface: ib0
+        fabric_iface: eth0
 
 # If slurm is not specified; launch jobs with mpirun; {slurm|mpirun}
 jobmanager: slurm
