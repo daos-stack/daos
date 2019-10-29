@@ -190,12 +190,6 @@ class EvictTests(TestWithServers):
             self.log.info("Pool # %s is connected with handle %s",
                           count+1, pool[count].pool.handle.value)
 
-            # Create a container
-            # container.append(get_container(
-            #     self.context, pool[count].pool, self.log))
-            # cont_uuid.append(container[count].get_uuid_str())
-            # self.log.info("Pool # %s has container %s",
-            #               count+1, cont_uuid[count])
             container.append(TestContainer(pool[count]))
             container[count].get_params(self)
             container[count].create()

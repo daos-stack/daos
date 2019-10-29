@@ -24,19 +24,15 @@
 from __future__ import print_function
 
 import time
-import traceback
 from avocado import main
 from apricot import TestWithServers
-
-from pydaos.raw import DaosApiError, c_uuid_to_str
-from general_utils import get_pool, get_container
+from test_utils import TestPool, TestContainer
+from pydaos.raw import c_uuid_to_str
 
 
 # pylint: disable=broad-except
 class SimpleCreateDeleteTest(TestWithServers):
-    """
-    Tests DAOS container basics including create, destroy, open, query
-    and close.
+    """Tests container basics including create, destroy, open, query and close.
 
     :avocado: recursive
     """
@@ -47,39 +43,39 @@ class SimpleCreateDeleteTest(TestWithServers):
 
         :avocado: tags=all,container,pr,medium,basecont
         """
-        try:
-            # Parameters used in pool create
-            pool_mode = self.params.get("mode", '/run/pool/createmode/')
-            pool_name = self.params.get("setname", '/run/pool/createset/')
-            pool_size = self.params.get("size", '/run/pool/createsize/')
+        # Create a pool
+        self.log.info("Create a pool")
+        self.pool = TestPool(self.context, self.log)
+        self.pool.get_params(self)
+        self.pool.create()
 
-            # Create pool and connect
-            self.pool = get_pool(
-                self.context, pool_mode, pool_size, pool_name, 1, self.d_log)
+        # Check that the pool was created
+        self.assertTrue(
+            self.pool.check_files(self.hostlist_servers),
+            "Pool data not was not created")
 
-            # Create a container and open
-            self.container = get_container(self.context, self.pool, self.d_log)
+        # Connect to the pool
+        self.assertTrue(self.pool.connect(1), "Pool connect failed")
 
-            # Query and compare the UUID returned from create with
-            # that returned by query
-            self.container.query()
+        # Create a container
+        self.container = TestContainer(self.pool)
+        self.container.get_params(self)
+        self.container.create()
 
-            if self.container.get_uuid_str() != c_uuid_to_str(
-                    self.container.info.ci_uuid):
-                self.fail("Container UUID did not match the one in info'n")
+        self.assertTrue(self.container.open(), "Container open failed")
 
-            self.container.close()
+        # Query and compare the UUID returned from create with
+        # that returned by query
+        self.container.container.query()
+        if self.container.container.get_uuid_str() != c_uuid_to_str(
+                self.container.container.info.ci_uuid):
+            self.fail("Container UUID did not match the one in info'n")
 
-            # Wait and destroy
-            time.sleep(5)
-            self.container.destroy()
+        self.assertTrue(self.container.close(), "Container close failed")
 
-        except DaosApiError as excep:
-            print(excep)
-            print(traceback.format_exc())
-            self.fail("Test was expected to pass but it failed.\n")
-        except Exception as excep:
-            self.fail("Daos code segfaulted most likely, error: %s" % excep)
+        # Wait and destroy
+        time.sleep(5)
+        self.assertTrue(self.container.destroy(), "Container destroy failed")
 
 
 if __name__ == "__main__":

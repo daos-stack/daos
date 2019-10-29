@@ -307,11 +307,10 @@ fi
 # check if slurm needs to be configured for soak
 
 if [[ $TEST_TAG_ARG == *soak* ]]; then
-    IFS="," read -r -a CONTROL_NODE <<< "$TEST_NODES"
-    export PYTHONPATH=utils/:$PYTHONPATH
+    IFS=, read -r -a CONTROL_NODE <<< $TEST_NODES
     if ! ./slurm_setup.py -c ${CONTROL_NODE[0]} -n ${TEST_NODES} -s -i; then
         rc=\${PIPESTATUS[0]}
-        exit rc
+        exit $rc
     else
         rc=0
     fi

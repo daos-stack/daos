@@ -30,7 +30,7 @@ import os
 import pwd
 import re
 from ClusterShell.NodeSet import NodeSet
-sys.path.insert(0, "{0}/utils/".format(
+sys.path.insert(0, "{0}/util/:{0}/apricot/".format(
     os.path.dirname(os.path.abspath(__file__))))
 from general_utils import pcmd, run_task
 
