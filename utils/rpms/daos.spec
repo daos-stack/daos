@@ -148,10 +148,10 @@ This is the package needed to run the DAOS test suite
 # for example, EL7 automatically adds:
 # Requires: libdaos.so.0()(64bit)
 %if (0%{?suse_version} >= 1500)
-Requires: daos-client
-Requires: daos
-Requires: libpmem
-Requires: libpmemobj
+Requires: %{name}-client = %{version}-%{release}
+Requires: %{name} = %{version}-%{release}
+Requires: libpmem1
+Requires: libpmemobj1
 %endif
 Summary: The DAOS development libraries and headers
 %if %{defined cart_sha1}
