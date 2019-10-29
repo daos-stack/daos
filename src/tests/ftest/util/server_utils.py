@@ -240,22 +240,12 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
 
         # Pile of build time variables
         with open("../../../.build_vars.json") as json_vars:
-        # TBD with open(os.path.join(test.basepath, ".build_vars.json")) as json_vars:
             build_vars = json.load(json_vars)
 
         # Create the DAOS server configuration yaml file to pass
         # with daos_server -o <FILE_NAME>
         print("Creating the server yaml file")
-
-        # set default shared dir for daos tests in case DAOS_TEST_SHARED_DIR
-        # is not set, for RPM env and non-RPM env.
-        if build_vars["PREFIX"] == "/usr":
-            default_yamldir = os.path.expanduser('~/daos_test')
-        else:
-            default_yamldir = build_vars["PREFIX"]
-
-        yaml_prefix = os.getenv('DAOS_TEST_SHARED_DIR', default_yamldir)
-        server_yaml = os.path.join(yaml_prefix, AVOCADO_FILE)
+        server_yaml = os.path.join(test.tmp, AVOCADO_FILE)
         server_config = DaosServerConfig()
         server_config.get_params(test)
         if hasattr(test, "server_log"):
@@ -299,21 +289,15 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
         # PATH along to the remote
         if build_vars["PREFIX"] != "/usr":
             server_cmd.extend(["-x", "PATH"])
-            default_tmpdir = os.path.join(build_vars["PREFIX"], "tmp")
-        else:
-            default_tmpdir = os.path.expanduser('~/daos_test')
-
-        # build shared dir for tmp amd yaml files
-        tmpdir = os.getenv('DAOS_TEST_SHARED_DIR', default_tmpdir)
 
         # set env CRT_ATTACH_INFO_PATH
-        os.environ["CRT_ATTACH_INFO_PATH"] = tmpdir
+        os.environ["CRT_ATTACH_INFO_PATH"] = test.tmp
         # Run server in insecure mode until Certificate tests are in place
         server_cmd.extend(
             [os.path.join(build_vars["PREFIX"], "bin", "daos_server"),
              "--debug",
              "--config", server_yaml,
-             "start", "-i", "-a", tmpdir])
+             "start", "-i", "-a", test.tmp])
 
         print("Start CMD>>>>{0}".format(' '.join(server_cmd)))
 

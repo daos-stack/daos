@@ -38,19 +38,19 @@ def check_handle(self, buf_len, iov_len, buf, uuidstr, rank):
     """
 
     try:
-        pool = DaosPool(self.context)
-        pool.set_uuid_str(uuidstr)
-        pool.set_svc(rank)
-        pool.group = "daos_server"
+        self.pool = DaosPool(self.context)
+        self.pool.set_uuid_str(uuidstr)
+        self.pool.set_svc(rank)
+        self.pool.group = "daos_server"
 
         # note that the handle is stored inside the pool as well
-        dummy_local_handle = pool.global2local(self.context, iov_len,
+        dummy_local_handle = self.pool.global2local(self.context, iov_len,
                                                buf_len, buf)
 
         # perform some operations that will use the new handle
-        pool.pool_query()
+        self.pool.pool_query()
         container = DaosContainer(self.context)
-        container.create(pool.handle)
+        container.create(self.pool.handle)
 
     except DaosApiError as excep:
         print(excep)

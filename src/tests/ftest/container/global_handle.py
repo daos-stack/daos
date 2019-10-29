@@ -41,23 +41,23 @@ def check_handle(self, pool_glob_handle, uuidstr, cont_glob_handle, rank):
 
     try:
         # setup the pool and connect using global handle
-        pool = DaosPool(self.context)
-        pool.uuid = uuidstr
-        pool.set_svc(rank)
-        pool.group = "daos_server"
+        self.pool = DaosPool(self.context)
+        self.pool.uuid = uuidstr
+        self.pool.set_svc(rank)
+        self.pool.group = "daos_server"
         buf = ctypes.cast(pool_glob_handle.iov_buf,
                           ctypes.POINTER(ctypes.c_byte *
                                          pool_glob_handle.iov_buf_len))
         buf2 = bytearray()
         buf2.extend(buf.contents)
-        pool_handle = pool.global2local(self.context,
+        pool_handle = self.pool.global2local(self.context,
                                         pool_glob_handle.iov_len,
                                         pool_glob_handle.iov_buf_len,
                                         buf2)
 
         # perform an operation that will use the new handle, if it
         # doesn't throw an exception, then all is well.
-        pool.pool_query()
+        self.pool.pool_query()
 
         # setup the container and then connect using the global handle
         container = DaosContainer(self.context)

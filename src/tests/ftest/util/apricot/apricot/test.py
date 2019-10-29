@@ -125,10 +125,14 @@ class TestWithoutServers(Test):
         self.orterun = os.path.join(self.ompi_prefix, "bin", "orterun")
         self.daosctl = os.path.join(self.prefix, 'bin', 'daosctl')
 
+        # set default shared dir for daos tests in case DAOS_TEST_SHARED_DIR$
+        # is not set, for RPM env and non-RPM env.$
         if self.prefix != "/usr":
-            self.tmp = os.path.join(build_paths["PREFIX"], 'tmp')
+            self.tmp = os.path.join(self.prefix, 'tmp')
         else:
-            self.tmp = os.path.expanduser('~/daos_test')
+	    self.tmp = os.getenv('DAOS_TEST_SHARED_DIR', \
+                                 os.path.expanduser('~/daos_test'))
+	    os.makedirs(self.tmp, exist_ok = True)
 
         # setup fault injection, this MUST be before API setup
         fault_list = self.params.get("fault_list", '/run/faults/*/')

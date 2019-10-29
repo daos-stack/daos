@@ -1,6 +1,5 @@
 """Build DAOS utilities"""
 import daos_build
-import os
 
 def scons():
     """Execute build"""

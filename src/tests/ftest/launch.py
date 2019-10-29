@@ -26,7 +26,6 @@ from __future__ import print_function
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 import json
 from multiprocessing import Process
-import sys
 import os
 import re
 import socket
@@ -99,10 +98,18 @@ def set_test_environment():
     sbin_dir = os.path.join(base_dir, "sbin")
     path = os.environ.get("PATH")
 
+    if base_dir == "/usr":
+        tmp_dir = os.getenv('DAOS_TEST_SHARED_DIR', \
+                            os.path.expanduser('~/daos_test'))
+        os.makedirs(tmp_dir, exist_ok = True)
+    else:
+        tmp_dir = os.path.join(base_dir, "tmp")
+
     # Update env definitions
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, path])
     os.environ["DAOS_SINGLETON_CLI"] = "1"
     os.environ["CRT_CTX_SHARE_ADDR"] = "1"
+    os.environ["CRT_ATTACH_INFO_PATH"] = tmp_dir
 
     # Python paths required for functional testing
     python_version = "python{}{}".format(
