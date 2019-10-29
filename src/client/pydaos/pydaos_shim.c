@@ -679,6 +679,7 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 #ifdef __USE_PYTHON3__
 		} else if (PyUnicode_Check(value)) {
 			Py_ssize_t pysize = 0;
+
 			buf = (char *)PyUnicode_AsUTF8AndSize(value, &pysize);
 			size = pysize;
 #endif
