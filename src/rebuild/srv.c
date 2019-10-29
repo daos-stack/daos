@@ -176,50 +176,6 @@ rebuild_global_pool_tracker_lookup(const uuid_t pool_uuid, unsigned int ver)
 	return found;
 }
 
-enum {
-	SCAN_CHECK,
-	PULL_CHECK,
-};
-
-static bool
-is_rebuild_global_done(struct rebuild_global_pool_tracker *rgt, int type)
-{
-	uint32_t	*bits;
-	int		idx;
-
-	if (type == SCAN_CHECK)
-		bits = rgt->rgt_scan_bits;
-	else
-		bits = rgt->rgt_pull_bits;
-
-	D_ASSERT(bits != NULL);
-
-	D_DEBUG(DB_REBUILD, "%s done check 0x%x [%d-%d]\n",
-		type == SCAN_CHECK ? "scan" : "pull", bits[0], 0,
-		rgt->rgt_bits_size - 1);
-
-	idx = daos_first_unset_bit(bits, roundup(rgt->rgt_bits_size,
-						 DAOS_BITS_SIZE) /
-						 DAOS_BITS_SIZE);
-
-	if (idx == -1 || idx >= rgt->rgt_bits_size)
-		return true;
-
-	return false;
-}
-
-static bool
-is_rebuild_global_pull_done(struct rebuild_global_pool_tracker *rgt)
-{
-	return is_rebuild_global_done(rgt, PULL_CHECK);
-}
-
-static bool
-is_rebuild_global_scan_done(struct rebuild_global_pool_tracker *rgt)
-{
-	return is_rebuild_global_done(rgt, SCAN_CHECK);
-}
-
 int
 rebuild_global_status_update(struct rebuild_global_pool_tracker *rgt,
 			     struct rebuild_iv *iv)
@@ -230,14 +186,11 @@ rebuild_global_status_update(struct rebuild_global_pool_tracker *rgt,
 	if (!iv->riv_scan_done)
 		return 0;
 
-	if (!rgt->rgt_scan_done) {
+	if (!is_rebuild_global_scan_done(rgt)) {
 		setbit(rgt->rgt_scan_bits, iv->riv_rank);
 		D_DEBUG(DB_REBUILD, "rebuild ver %d tgt %d scan"
 			" done bits %x\n", rgt->rgt_rebuild_ver,
 			iv->riv_rank, rgt->rgt_scan_bits[0]);
-		if (is_rebuild_global_scan_done(rgt))
-			rgt->rgt_scan_done = 1;
-
 		/* If global scan is not done, then you can not trust
 		 * pull status. But if the rebuild on that target is
 		 * failed(riv_status != 0), then the target will report
@@ -254,8 +207,6 @@ rebuild_global_status_update(struct rebuild_global_pool_tracker *rgt,
 		D_DEBUG(DB_REBUILD, "rebuild ver %d tgt %d pull"
 			" done bits %x\n", rgt->rgt_rebuild_ver,
 			iv->riv_rank, rgt->rgt_pull_bits[0]);
-		if (is_rebuild_global_pull_done(rgt))
-			rgt->rgt_done = 1;
 	}
 
 	return 0;
@@ -614,16 +565,18 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 				D_ASSERT(dom != NULL);
 				D_DEBUG(DB_REBUILD, "target %d failed\n",
 					dom->do_comp.co_rank);
-				setbit(rgt->rgt_scan_bits,
-				       dom->do_comp.co_rank);
-				setbit(rgt->rgt_pull_bits,
-				       dom->do_comp.co_rank);
+				if (pool_component_unavail(&dom->do_comp)) {
+					setbit(rgt->rgt_scan_bits,
+					       dom->do_comp.co_rank);
+					setbit(rgt->rgt_pull_bits,
+					       dom->do_comp.co_rank);
+				}
 			}
-
 			D_FREE(targets);
 		}
 
-		if (!rgt->rgt_done && rgt->rgt_scan_done) {
+		if (!is_rebuild_global_pull_done(rgt) &&
+		    is_rebuild_global_scan_done(rgt)) {
 			struct rebuild_iv iv;
 
 			memset(&iv, 0, sizeof(iv));
@@ -645,7 +598,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 		}
 
 		/* query the current rebuild status */
-		if (rgt->rgt_done)
+		if (is_rebuild_global_done(rgt))
 			rs->rs_done = 1;
 
 		if (rs->rs_done)
@@ -712,7 +665,7 @@ rebuild_global_pool_tracker_create(struct ds_pool *pool, uint32_t ver,
 	D_INIT_LIST_HEAD(&rgt->rgt_list);
 
 	node_nr = pool_map_node_nr(pool->sp_map);
-	array_size = roundup(node_nr, DAOS_BITS_SIZE) / DAOS_BITS_SIZE;
+	array_size = roundup(node_nr, NBBY) / NBBY;
 	rgt->rgt_bits_size = node_nr;
 
 	D_ALLOC_ARRAY(rgt->rgt_scan_bits, array_size);
@@ -1220,7 +1173,7 @@ rebuild_task_ult(void *arg)
 	/* Wait until rebuild finished */
 	rebuild_leader_status_check(pool, task->dst_map_ver, rgt);
 done:
-	if (!rgt->rgt_done) {
+	if (!is_rebuild_global_done(rgt)) {
 		int ret;
 
 		D_DEBUG(DB_REBUILD, DF_UUID" rebuild is not done.\n",
@@ -1267,7 +1220,7 @@ iv_stop:
 	uuid_copy(iv.riv_pool_uuid, task->dst_pool_uuid);
 	iv.riv_master_rank	= pool->sp_iv_ns->iv_master_rank;
 	iv.riv_ver		= rgt->rgt_rebuild_ver;
-	iv.riv_global_scan_done = rgt->rgt_scan_done;
+	iv.riv_global_scan_done = is_rebuild_global_scan_done(rgt);
 	iv.riv_global_done	= 1;
 	iv.riv_leader_term	= rgt->rgt_leader_term;
 	iv.riv_toberb_obj_count	= rgt->rgt_status.rs_toberb_obj_nr;
