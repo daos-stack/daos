@@ -120,6 +120,7 @@ func (c *StorageControlService) Teardown() {
 	//c.scm.scanCompleted = false
 }
 
+// NvmePrepareRequest encapsulates request parameters for operation.
 type NvmePrepareRequest struct {
 	HugePageCount int
 	TargetUser    string
@@ -180,7 +181,7 @@ func (c *StorageControlService) ScmPrepare(req scm.PrepareRequest) (*scm.Prepare
 	return c.scm.Prepare(req)
 }
 
-// ScanNvme scans locally attached SSDs and returns list directly.
+// NvmeScan scans locally attached SSDs and returns list directly.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
 func (c *StorageControlService) NvmeScan() (types.NvmeControllers, error) {
@@ -191,7 +192,7 @@ func (c *StorageControlService) NvmeScan() (types.NvmeControllers, error) {
 	return c.nvme.controllers, nil
 }
 
-// ScanScm scans locally attached modules, namespaces and state of DCPM config.
+// ScmScan scans locally attached modules, namespaces and state of DCPM config.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
 func (c *StorageControlService) ScmScan() (*storage.ScmScanResponse, error) {

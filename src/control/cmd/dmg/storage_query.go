@@ -48,8 +48,8 @@ type nvmeHealthQueryCmd struct {
 // Execute queries the SPDK NVMe device health stats from all devices on all hosts
 // when nvmeHealthQueryCmd activates.
 func (h *nvmeHealthQueryCmd) Execute(args []string) error {
-	cNvmeScan, _ := h.conns.StorageScan()
-	h.log.Infof("NVMe SSD Device Health Stats:\n%s", cNvmeScan)
+	controllers, _ := h.conns.StorageScan()
+	h.log.Infof(controllers.StringHealthStats())
 	return nil
 }
 

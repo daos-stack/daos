@@ -304,7 +304,7 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 	return nil
 }
 
-// Format delegates to Storage implementation's Format methods to prepare
+// StorageFormat delegates to Storage implementation's Format methods to prepare
 // storage for use by DAOS data plane.
 //
 // Errors returned will stop other servers from formatting, non-fatal errors
