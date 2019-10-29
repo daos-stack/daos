@@ -583,7 +583,7 @@ oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 
 	it_entry->ie_oid = obj->vo_id;
 	it_entry->ie_obj_punch = oiter->oit_ilog_info.ii_next_punch;
-	it_entry->ie_epoch = epr.epr_lo;
+	it_entry->ie_epoch = epr.epr_hi;
 	it_entry->ie_vis_flags = VOS_VIS_FLAG_VISIBLE;
 	if (oiter->oit_ilog_info.ii_create == 0) {
 		/** Object isn't visible so mark covered */
