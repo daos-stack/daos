@@ -239,7 +239,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 		goto out;
 
 	/* NB: noop for full-stack mode */
-	gc_wait_pool(vos_obj2pool(obj));
+	gc_wait();
 out:
 	vos_obj_release(occ, obj);
 	return rc;
@@ -947,8 +947,10 @@ singv_iter_next(struct vos_obj_iter *oiter)
 	 * so return -DER_NONEXIST directly for the next().
 	 */
 	if (oiter->it_flags & VOS_IT_RECX_VISIBLE &&
-	    !oiter->it_iter.it_for_purge)
+	    !(oiter->it_flags & VOS_IT_RECX_COVERED)) {
+		D_ASSERT(oiter->it_epc_expr == VOS_IT_EPC_RR);
 		return -DER_NONEXIST;
+	}
 
 	memset(&entry, 0, sizeof(entry));
 	rc = singv_iter_fetch(oiter, &entry, NULL);

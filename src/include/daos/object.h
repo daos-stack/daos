@@ -336,8 +336,6 @@ int daos_iod_copy(daos_iod_t *dst, daos_iod_t *src);
 void daos_iods_free(daos_iod_t *iods, int nr, bool free);
 daos_size_t daos_iods_len(daos_iod_t *iods, int nr);
 
-#define daos_key_match(key1, key2)	daos_iov_cmp(key1, key2)
-
 int dc_obj_init(void);
 void dc_obj_fini(void);
 

@@ -183,14 +183,14 @@ def scons():
 
     install_go_bin(denv, gosrc, gopath, [nvmecontrol], "daos_server",
                    "daos_server")
-    install_go_bin(denv, gosrc, gopath, None, "dmg", "daos_shell")
+    install_go_bin(denv, gosrc, gopath, None, "dmg", "dmg")
     install_go_bin(denv, gosrc, gopath, None, "drpc_test", "hello_drpc")
 
     agentbin = get_bin_path(gopath, "agent")
     serverbin = get_bin_path(gopath, "daos_server")
-    shellbin = get_bin_path(gopath, "dmg")
+    dmgbin = get_bin_path(gopath, "dmg")
     drpcbin = get_bin_path(gopath, "drpc_test")
-    AlwaysBuild([agentbin, serverbin, shellbin, drpcbin])
+    AlwaysBuild([agentbin, serverbin, dmgbin, drpcbin])
 
 if __name__ == "SCons.Script":
     scons()

@@ -334,5 +334,5 @@ dsc_pool_tgt_exclude(const uuid_t uuid, const char *grp,
 	args->tgts	= tgts;
 	uuid_copy((unsigned char *)args->uuid, uuid);
 
-	return dsc_task_run(task, NULL, NULL, 0, false);
+	return dsc_task_run(task, NULL, NULL, 0, true);
 }
