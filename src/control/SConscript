@@ -139,23 +139,21 @@ def scons():
     denv['ENV']['GOBIN'] = join(gopath, "bin")
 
     install_go_bin(denv, gosrc, gopath, None, "agent", "daos_agent")
+    install_go_bin(denv, gosrc, gopath, None, "dmg", "dmg")
+    install_go_bin(denv, gosrc, gopath, None, "drpc_test", "hello_drpc")
+
+    agentbin = get_bin_path(gopath, "agent")
+    dmgbin = get_bin_path(gopath, "dmg")
+    drpcbin = get_bin_path(gopath, "drpc_test")
+    AlwaysBuild([agentbin, dmgbin, drpcbin])
+
+    senv = denv.Clone()
+    prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
 
     gospdkpath = join(gosrc, "lib", "spdk")
 
     # CGO prerequisite libs for go-spdk bindings
-    denv.AppendUnique(CPPPATH=[join(gospdkpath, "include")])
-
-    install_go_bin(denv, gosrc, gopath, None, "dmg", "daos_shell")
-    install_go_bin(denv, gosrc, gopath, None, "drpc_test", "hello_drpc")
-
-    agentbin = get_bin_path(gopath, "agent")
-    shellbin = get_bin_path(gopath, "dmg")
-    drpcbin = get_bin_path(gopath, "drpc_test")
-    AlwaysBuild([agentbin, shellbin, drpcbin])
-
-
-    senv = denv.Clone()
-    prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
+    senv.AppendUnique(CPPPATH=[join(gospdkpath, "include")])
 
     # Link to DPDK static libs
     senv.AppendUnique(LINKFLAGS=['-Wl,--whole-archive', \

@@ -532,6 +532,8 @@ enum {
 #define DAOS_VC_LOST_DATA		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x42)
 #define DAOS_VC_LOST_REPLICA		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x43)
 
+#define DAOS_NVME_FAULTY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x50)
+
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
 
 static inline int __is_po2(unsigned long long val)

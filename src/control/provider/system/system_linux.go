@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -79,6 +80,7 @@ func (s LinuxProvider) IsMounted(target string) (bool, error) {
 	var scanField int
 	switch {
 	case st.IsDir():
+		target = filepath.Clean(target)
 		scanField = miMountPoint
 	case st.Mode()&os.ModeDevice != 0:
 		scanField = miMajorMinor
