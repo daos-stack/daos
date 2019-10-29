@@ -147,7 +147,8 @@ enum obj_rpc_flags {
 	((uint32_t)		(orw_map_version)	CRT_VAR) \
 	((uint64_t)		(orw_dkey_conflict)	CRT_VAR) \
 	((struct dtx_id)	(orw_dti_conflict)	CRT_VAR) \
-	((daos_size_t)		(orw_sizes)		CRT_ARRAY) \
+	((daos_size_t)		(orw_iod_sizes)		CRT_ARRAY) \
+	((daos_size_t)		(orw_data_sizes)	CRT_ARRAY) \
 	((d_sg_list_t)		(orw_sgls)		CRT_ARRAY) \
 	((uint32_t)		(orw_nrs)		CRT_ARRAY) \
 	((daos_csum_buf_t)	(orw_csum)		CRT_ARRAY)

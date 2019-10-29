@@ -172,9 +172,6 @@ struct bio_rsrvd_dma {
 /* I/O descriptor */
 struct bio_desc {
 	struct bio_io_context	*bd_ctxt;
-	/* SG lists involved in this io descriptor */
-	unsigned int		 bd_sgl_cnt;
-	struct bio_sglist	*bd_sgls;
 	/* DMA buffers reserved by this io descriptor */
 	struct bio_rsrvd_dma	 bd_rsrvd;
 	/* Report blob i/o completion */
@@ -187,6 +184,9 @@ struct bio_desc {
 				 bd_update:1,
 				 bd_dma_issued:1,
 				 bd_retry:1;
+	/* SG lists involved in this io descriptor */
+	unsigned int		 bd_sgl_cnt;
+	struct bio_sglist	 bd_sgls[0];
 };
 
 static inline struct spdk_thread *
