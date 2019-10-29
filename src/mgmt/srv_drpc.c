@@ -26,15 +26,17 @@
  */
 #define D_LOGFAC	DD_FAC(mgmt)
 
+#include <signal.h>
 #include <daos_srv/daos_server.h>
 #include <daos_srv/pool.h>
 #include <daos_api.h>
 #include <daos_security.h>
 
+#include "srv.pb-c.h"
+#include "acl.pb-c.h"
+#include "pool.pb-c.h"
 #include "srv_internal.h"
 #include "drpc_internal.h"
-#include "mgmt.pb-c.h"
-#include "srv.pb-c.h"
 
 static void
 pack_daos_response(Mgmt__DaosResp *daos_resp, Drpc__Response *drpc_resp)
@@ -64,11 +66,12 @@ pack_daos_response(Mgmt__DaosResp *daos_resp, Drpc__Response *drpc_resp)
 void
 ds_mgmt_drpc_kill_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	Mgmt__DaosRank		*req = NULL;
-	Mgmt__DaosResp		*resp = NULL;
+	Mgmt__KillRankReq	 *req = NULL;
+	Mgmt__DaosResp		 *resp = NULL;
+	int			 sig;
 
 	/* Unpack the inner request from the drpc call body */
-	req = mgmt__daos_rank__unpack(
+	req = mgmt__kill_rank_req__unpack(
 		NULL, drpc_req->body.len, drpc_req->body.data);
 	if (req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
@@ -76,23 +79,30 @@ ds_mgmt_drpc_kill_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to kill rank (%u) on pool (%s)\n",
-		req->rank, req->pool_uuid);
+	D_INFO("Received request to kill rank %u (force: %d)\n",
+		req->rank, req->force);
 
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
 		D_ERROR("Failed to allocate daos response ref\n");
-		mgmt__daos_rank__free_unpacked(req, NULL);
+		mgmt__kill_rank_req__free_unpacked(req, NULL);
 		return;
 	}
 
 	/* Response status is populated with SUCCESS on init. */
 	mgmt__daos_resp__init(resp);
 
-	/* TODO: do something with request and populate daos response status */
+	/* terminate local service */
+	if (req->force)
+		sig = SIGKILL;
+	else
+		sig = SIGTERM;
+	D_INFO("Service rank %d is being killed by signal %d\n",
+		req->rank, sig);
+	kill(getpid(), sig);
 
-	mgmt__daos_rank__free_unpacked(req, NULL);
+	mgmt__kill_rank_req__free_unpacked(req, NULL);
 	pack_daos_response(resp, drpc_resp);
 	D_FREE(resp);
 }

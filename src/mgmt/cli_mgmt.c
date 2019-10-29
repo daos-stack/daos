@@ -35,7 +35,7 @@
 #include <daos/drpc_modules.h>
 #include <daos/drpc.pb-c.h>
 #include <daos/event.h>
-#include "mgmt.pb-c.h"
+#include "srv.pb-c.h"
 #include "rpc.h"
 
 struct cp_arg {
