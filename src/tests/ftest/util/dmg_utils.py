@@ -30,11 +30,11 @@ from command_utils import FormattedParameter
 
 
 class DmgCommand(DaosCommand):
-    """Defines a object representing a dmg (or daos_shell) command."""
+    """Defines a object representing a dmg command."""
 
     def __init__(self, path):
         """Create a dmg Command object."""
-        super(DmgCommand, self).__init__("/run/dmg/*", "daos_shell", path)
+        super(DmgCommand, self).__init__("/run/dmg/*", "dmg", path)
 
         self.hostlist = FormattedParameter("-l {}")
         self.hostfile = FormattedParameter("-f {}")

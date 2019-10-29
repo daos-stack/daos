@@ -45,7 +45,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	d_iov_set(&iov, (void *)buff, len);
 	sgl.sg_iovs = &iov;
 
-	rc = dfs_read(oh->doh_dfs, oh->doh_obj, sgl, position, &size);
+	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &sgl, position, &size, NULL);
 	if (rc == 0)
 		DFUSE_REPLY_BUF(oh, req, buff, size);
 	else

@@ -308,7 +308,7 @@ func TestKillRank(t *testing.T) {
 			MockModuleResults, MockPmemDevices, MockMountResults, nil, nil, nil,
 			nil, tt.killRet, nil, MockACL)
 
-		resultMap := cc.KillRank("acd", 0)
+		resultMap := cc.KillRank(0)
 
 		checkResults(t, Addresses{MockServers[0]}, resultMap, tt.killRet)
 	}
