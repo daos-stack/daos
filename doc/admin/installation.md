@@ -231,7 +231,7 @@ Once started, the DAOS server waits for the administrator to format the system.
 This can be triggered in a different shell, using the following command:
 
 ```
-$ docker exec server daos_shell -i storage format -f
+$ docker exec server dmg -i storage format -f
 ```
 
 Upon successful completion of the format, the storage engine is started, and pools
