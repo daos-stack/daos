@@ -769,37 +769,6 @@ ds_pool_svc_destroy(const uuid_t pool_uuid)
 }
 
 static int
-pool_svc_create_group(struct pool_svc *svc, struct pool_buf *map_buf,
-		      uint32_t map_version)
-{
-	char			id[DAOS_UUID_STR_SIZE];
-	crt_group_t	       *group;
-	struct pool_map	       *map;
-	int			rc;
-
-	/* Check if the pool group exists locally. */
-	uuid_unparse_lower(svc->ps_uuid, id);
-	group = crt_group_lookup(id);
-	if (group != NULL)
-		return 0;
-
-	rc = pool_map_create(map_buf, map_version, &map);
-	if (rc != 0)
-		return rc;
-
-	/* Attempt to create the pool group. */
-	rc = ds_pool_group_create(svc->ps_uuid, map, &group);
-	pool_map_decref(map);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create pool group: %d\n",
-			 DP_UUID(svc->ps_uuid), rc);
-		return rc;
-	}
-
-	return 0;
-}
-
-static int
 pool_svc_name_cb(d_iov_t *id, char **name)
 {
 	char *s;
@@ -979,7 +948,6 @@ init_svc_pool(struct pool_svc *svc, struct pool_buf *map_buf,
 	int				rc;
 
 	arg.pca_map_version = map_version;
-	arg.pca_need_group = 1;
 	rc = ds_pool_lookup_create(svc->ps_uuid, &arg, &pool);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to get ds_pool: %d\n",
@@ -1041,11 +1009,6 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
-	if (rc != 0)
-		goto out;
-
-	/* Create the pool group. */
-	rc = pool_svc_create_group(svc, map_buf, map_version);
 	if (rc != 0)
 		goto out;
 
@@ -1754,7 +1717,6 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	d_iov_t				key;
 	d_iov_t				value;
 	struct pool_hdl			hdl;
-	unsigned int			iv_ns_id;
 	uint32_t			nhandles;
 	int				skip_update = 0;
 	int				rc;
@@ -1772,18 +1734,6 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 				    &out->pco_op.po_hint);
 	if (rc != 0)
 		D_GOTO(out, rc);
-
-	/* sp_iv_ns will be destroyed when pool is destroyed,
-	 * see pool_free_ref()
-	 */
-	D_ASSERT(svc->ps_pool != NULL);
-	if (svc->ps_pool->sp_iv_ns == NULL) {
-		rc = ds_iv_ns_create(rpc->cr_ctx, svc->ps_pool->sp_uuid,
-				     svc->ps_pool->sp_group, &iv_ns_id,
-				     &svc->ps_pool->sp_iv_ns);
-		if (rc)
-			D_GOTO(out_svc, rc);
-	}
 
 	if (in->pci_query_bits & DAOS_PO_QUERY_REBUILD_STATUS) {
 		rc = ds_rebuild_query(in->pci_op.pi_uuid, &out->pco_rebuild_st);

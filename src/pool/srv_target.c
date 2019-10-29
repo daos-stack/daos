@@ -201,6 +201,9 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	struct ds_pool_create_arg      *arg = varg;
 	struct ds_pool		       *pool;
 	struct pool_child_lookup_arg	collective_arg;
+	char				group_id[DAOS_UUID_STR_SIZE];
+	struct dss_module_info	       *info = dss_get_module_info();
+	unsigned int			iv_ns_id;
 	int				rc;
 	int				rc_tmp;
 
@@ -237,21 +240,28 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 		goto err_iv_lock;
 	}
 
-	if (arg->pca_need_group) {
-		char id[DAOS_UUID_STR_SIZE];
+	uuid_unparse_lower(key, group_id);
+	rc = crt_group_secondary_create(group_id, NULL /* primary_grp */,
+					NULL /* ranks */, &pool->sp_group);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create pool group: %d\n",
+			DP_UUID(key), rc);
+		goto err_collective;
+	}
 
-		uuid_unparse_lower(key, id);
-		pool->sp_group = crt_group_lookup(id);
-		if (pool->sp_group == NULL) {
-			D_ERROR(DF_UUID": pool group not found\n",
-				DP_UUID(key));
-			D_GOTO(err_collective, rc = -DER_NONEXIST);
-		}
+	rc = ds_iv_ns_create(info->dmi_ctx, pool->sp_uuid, pool->sp_group,
+			     &iv_ns_id, &pool->sp_iv_ns);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create pool IV NS: %d\n",
+			DP_UUID(key), rc);
+		goto err_group;
 	}
 
 	*link = &pool->sp_entry;
 	return 0;
 
+err_group:
+	crt_group_secondary_destroy(pool->sp_group);
 err_collective:
 	rc_tmp = dss_thread_collective(pool_child_delete_one, key, 0);
 	D_ASSERTF(rc_tmp == 0, "%d\n", rc_tmp);
@@ -273,20 +283,12 @@ pool_free_ref(struct daos_llink *llink)
 
 	D_DEBUG(DF_DSMS, DF_UUID": freeing\n", DP_UUID(pool->sp_uuid));
 
-	if (pool->sp_group != NULL) {
-#if 0
-		rc = ds_pool_group_destroy(pool->sp_uuid, pool->sp_group);
-		if (rc != 0)
-			D_ERROR(DF_UUID": failed to destroy pool group %s: "
-				"%d\n", DP_UUID(pool->sp_uuid),
-				pool->sp_group->cg_grpid, rc);
-#else
-		pool->sp_group = NULL;
-#endif
-	}
+	ds_iv_ns_destroy(pool->sp_iv_ns);
 
-	if (pool->sp_iv_ns != NULL)
-		ds_iv_ns_destroy(pool->sp_iv_ns);
+	rc = crt_group_secondary_destroy(pool->sp_group);
+	if (rc != 0)
+		D_ERROR(DF_UUID": failed to destroy pool group: %d\n",
+			DP_UUID(pool->sp_uuid), rc);
 
 	rc = dss_thread_collective(pool_child_delete_one, pool->sp_uuid, 0);
 	if (rc == -DER_CANCELED)
@@ -692,7 +694,6 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	arg.pca_map_version = in->tci_map_version;
-	arg.pca_need_group = 1;
 	rc = ds_pool_lookup_create(in->tci_uuid, &arg, &pool);
 	if (rc != 0) {
 		D_FREE(hdl);

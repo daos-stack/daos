@@ -733,61 +733,6 @@ out:
 	return 0;
 }
 
-static int
-rebuild_pool_group_prepare(struct ds_pool *pool)
-{
-	struct pool_target	*tgts = NULL;
-	unsigned int		tgt_cnt;
-	char			id[DAOS_UUID_STR_SIZE];
-	d_rank_list_t		rank_list;
-	d_rank_t		*ranks = NULL;
-	crt_group_t		*grp;
-	int			i;
-	int			rc;
-
-	if (pool->sp_group != NULL)
-		return 0;
-
-	/* During pool leader changing, the cart group might still
-	 * exists even if sp_group is NULL.
-	 */
-	uuid_unparse_lower(pool->sp_uuid, id);
-	grp = crt_group_lookup(id);
-	if (grp != NULL) {
-		pool->sp_group = grp;
-		return 0;
-	}
-
-	rc = pool_map_find_upin_tgts(pool->sp_map, &tgts, &tgt_cnt);
-	if (rc)
-		return rc;
-
-	D_ALLOC_ARRAY(ranks, tgt_cnt);
-	if (ranks == NULL)
-		D_GOTO(out, rc);
-
-	for (i = 0; i < tgt_cnt; i++) {
-		ranks[i] = tgts[i].ta_comp.co_rank;
-		D_DEBUG(DB_REBUILD, "i %d rank %d\n", i, ranks[i]);
-	}
-
-	rank_list.rl_nr = tgt_cnt;
-	rank_list.rl_ranks = ranks;
-
-	rc = dss_group_create(id, &rank_list, &grp);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	pool->sp_group = grp;
-out:
-	if (ranks != NULL)
-		D_FREE(ranks);
-	if (tgt_cnt > 0 && tgts != NULL)
-		D_FREE(tgts);
-
-	return rc;
-}
-
 /* To notify all targets to prepare the rebuild */
 static int
 rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
@@ -800,10 +745,6 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 
 	D_DEBUG(DB_REBUILD, "pool "DF_UUID" create rebuild iv\n",
 		DP_UUID(pool->sp_uuid));
-
-	rc = rebuild_pool_group_prepare(pool);
-	if (rc)
-		return rc;
 
 	/* Create pool iv ns for the pool */
 	crt_group_rank(pool->sp_group, &master_rank);

@@ -55,8 +55,7 @@ struct ds_pool {
 };
 
 struct ds_pool_create_arg {
-	uint32_t		pca_map_version;
-	bool			pca_need_group;
+	uint32_t	pca_map_version;
 };
 
 int ds_pool_lookup_create(const uuid_t uuid, struct ds_pool_create_arg *arg,
