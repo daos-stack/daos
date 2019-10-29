@@ -77,7 +77,9 @@ BuildRequires: libpsm_infinipath1
 BuildRequires: libpmemblk1
 %endif # (0%{?suse_version} >= 1315)
 %endif # (0%{?rhel} >= 7)
-Requires: libpmem, libpmemobj
+%if (0%{?suse_version} >= 1500)
+Requires: libpmem1, libpmemobj1
+%endif
 Requires: fuse >= 3.4.2
 Requires: protobuf-c
 Requires: spdk
@@ -150,8 +152,6 @@ This is the package needed to run the DAOS test suite
 %if (0%{?suse_version} >= 1500)
 Requires: %{name}-client = %{version}-%{release}
 Requires: %{name} = %{version}-%{release}
-Requires: libpmem1
-Requires: libpmemobj1
 %endif
 Summary: The DAOS development libraries and headers
 %if %{defined cart_sha1}
