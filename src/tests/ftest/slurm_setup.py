@@ -23,13 +23,17 @@
 """
 
 import socket
+import sys
 import argparse
 import logging
 import os
 import pwd
 import re
-from general_utils import pcmd, run_task
 from ClusterShell.NodeSet import NodeSet
+sys.path.insert(0, "{0}/utils/".format(
+    os.path.dirname(os.path.abspath(__file__))))
+from general_utils import pcmd, run_task
+
 
 SLURM_CONF = "/etc/slurm/slurm.conf"
 
