@@ -84,8 +84,7 @@ static struct bio_nvme_data nvme_glb;
 uint64_t io_stat_period;
 
 int
-bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
-	      struct bio_reaction_ops *ops)
+bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id)
 {
 	char		*env;
 	int		rc, fd;
@@ -155,7 +154,6 @@ bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
 	io_stat_period *= (NSEC_PER_SEC / NSEC_PER_USEC);
 
 	nvme_glb.bd_shm_id = shm_id;
-	ract_ops = ops;
 	return 0;
 
 free_cond:

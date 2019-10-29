@@ -37,7 +37,7 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, const char *buff, size_t len,
 	d_iov_set(&iov, (void *)buff, len);
 	sgl.sg_iovs = &iov;
 
-	rc = dfs_write(oh->doh_dfs, oh->doh_obj, sgl, position);
+	rc = dfs_write(oh->doh_dfs, oh->doh_obj, &sgl, position, NULL);
 	if (rc == 0)
 		DFUSE_REPLY_WRITE(oh, req, len);
 	else

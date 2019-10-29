@@ -34,7 +34,12 @@
  * the DAOS progress ULT will be blocked, and NVMe device qpair won't be
  * polled.
  */
-struct bio_reaction_ops	*ract_ops;
+static struct bio_reaction_ops	*ract_ops;
+
+void bio_register_ract_ops(struct bio_reaction_ops *ops)
+{
+	ract_ops = ops;
+}
 
 /*
  * Return value:	0: Faulty reaction is done;
@@ -191,6 +196,7 @@ bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state)
 	case BIO_BS_STATE_OUT:
 		if (bbs->bb_state != BIO_BS_STATE_TEARDOWN)
 			rc = -DER_INVAL;
+		break;
 	case BIO_BS_STATE_REPLACED:
 	case BIO_BS_STATE_REINT:
 		rc = -DER_NOSYS;

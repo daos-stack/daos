@@ -236,10 +236,7 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 	c.log.Infof("formatting storage for I/O server instance %d (reformat: %t)",
 		i.Index, reformat)
 
-	scmConfig, err := i.scmConfig()
-	if err != nil {
-		return errors.Wrap(err, "get scm config")
-	}
+	scmConfig := i.scmConfig()
 
 	// If not reformatting, check if SCM is already formatted.
 	if !reformat {
@@ -273,6 +270,7 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 			return nil // don't continue if we can't format SCM
 		}
 	} else {
+		var err error
 		// If SCM was already formatted, verify if superblock exists.
 		needsSuperblock, err = i.NeedsSuperblock()
 		if err != nil {
@@ -284,10 +282,7 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 
 	// If no superblock exists, populate NVMe response with format results.
 	if needsSuperblock {
-		bdevConfig, err := i.bdevConfig()
-		if err != nil {
-			return errors.Wrap(err, "get bdev config")
-		}
+		bdevConfig := i.bdevConfig()
 
 		// A config with SCM and no block devices is valid.
 		// TODO: pull protobuf specifics out of c.nvme into this file.
@@ -376,7 +371,7 @@ func (c *ControlService) StorageUpdate(req *ctlpb.StorageUpdateReq, stream ctlpb
 
 	// temporary scaffolding
 	for _, i := range c.harness.Instances() {
-		stCfg := i.runner.Config.Storage
+		stCfg := i.runner.GetConfig().Storage
 		ctrlrResults := types.NvmeControllerResults{}
 		c.nvme.Update(stCfg.Bdev, req.Nvme, &ctrlrResults)
 		resp.Crets = ctrlrResults
