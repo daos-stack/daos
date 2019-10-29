@@ -54,7 +54,7 @@ trap 'echo "encountered an unchecked return code, exiting with error"' ERR
 
 IFS=" " read -r -a nodes <<< "${2//,/ }"
 TEST_NODES=$(IFS=","; echo "${nodes[*]:1:8}")
-
+IFS="," read -r -a CONTROL_NODE <<< "${TEST_NODES}"
 # For nodes that are only rebooted between CI nodes left over mounts
 # need to be cleaned up.
 pre_clean () {
@@ -305,9 +305,7 @@ if ${SETUP_ONLY:-false}; then
 fi
 
 # check if slurm needs to be configured for soak
-
 if [[ $TEST_TAG_ARG == *soak* ]]; then
-    IFS=, read -r -a CONTROL_NODE <<< \"${TEST_NODES}\"
     if ! ./slurm_setup.py -c ${CONTROL_NODE[0]} -n ${TEST_NODES} -s -i; then
         rc=\${PIPESTATUS[0]}
         exit \"$rc\"
