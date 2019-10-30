@@ -54,7 +54,7 @@ class GlobalHandle(TestWithServers):
         """
         This gets run in a child process and verifyes the global
         handles can be turned into local handles in another process.
-        """                             
+        """
 
         # setup the pool and connect using global handle
         pool = DaosPool(self.context)
@@ -64,7 +64,7 @@ class GlobalHandle(TestWithServers):
         buf = ctypes.cast(pool_glob_handle.iov_buf,
                           ctypes.POINTER(ctypes.c_byte *
                                          pool_glob_handle.iov_buf_len))
-        buf2 = bytearray()                                           
+        buf2 = bytearray()
         buf2.extend(buf.contents)
         pool_handle = pool.global2local(self.context,
                                         pool_glob_handle.iov_len,
