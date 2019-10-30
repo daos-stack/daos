@@ -1323,7 +1323,7 @@ pipeline {
                                            ed  src/tests/ftest/util/server_utils.py <<"EOF"
 /self.fabric_iface = BasicParameter/s/eth0/ib0/
 /self.provider = BasicParameter/s/sockets/psm2/
-/\["ABT_ENV_MAX_NUM_XSTREAMS=100",/,/"FI_SOCKETS_CONN_TIMEOUT=2000"\]/c
+/\\["ABT_ENV_MAX_NUM_XSTREAMS=100",/,/"FI_SOCKETS_CONN_TIMEOUT=2000"\\]/c
                 ["CRT_TIMEOUT=30",
                  "CRT_CREDIT_EP_CTX=0",
                  "PSM2_MULTI_EP=1",
