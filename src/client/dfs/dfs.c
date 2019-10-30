@@ -132,7 +132,7 @@ struct dfs {
 
 struct dfs_entry {
 	/** mode (permissions + entry type) */
-	mode_t		mode;
+	uint64_t	mode;
 	/** Object ID if not a symbolic link */
 	daos_obj_id_t	oid;
 	/** chunk size of file */
@@ -408,19 +408,28 @@ insert_entry(daos_handle_t oh, daos_handle_t th, const char *name,
 {
 	d_sg_list_t	sgls[INODE_AKEYS];
 	d_iov_t		sg_iovs[INODE_AKEYS];
-	daos_iod_t	iods[INODE_AKEYS];
+	daos_iod_t	iod;
+	daos_recx_t	recx;
 	daos_key_t	dkey;
 	unsigned int	akeys_nr, i;
 	int		rc;
 
 	d_iov_set(&dkey, (void *)name, strlen(name));
-
-	i = 0;
+	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, strlen(INODE_AKEY_NAME));
+	dcb_set_null(&iod.iod_kcsum);
+	iod.iod_nr	= 1;
+	recx.rx_idx	= 0;
+	recx.rx_nr	= INODE_AKEYS;
+	iod.iod_recxs	= &recx;
+	iod.iod_eprs	= NULL;
+	iod.iod_csums	= NULL;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+	iod.iod_size	= sizeof(uint64_t);
 
 	/** Add the mode */
-	d_iov_set(&sg_iovs[i], &entry.mode, sizeof(mode_t));
+	d_iov_set(&sg_iovs[i], &entry.mode, sizeof());
 	d_iov_set(&iods[i].iod_name, MODE_NAME, strlen(MODE_NAME));
-	iods[i].iod_size = sizeof(mode_t);
+
 	i++;
 
 	/** Add the oid */
