@@ -1,6 +1,6 @@
 #!/usr/bin/python
-'''
-  (C) Copyright 2017-2019 Intel Corporation.
+"""
+  (C) Copyright 2018-2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -20,17 +20,11 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
-from __future__ import print_function
-
-import time
-from avocado import main
+"""
 from apricot import TestWithServers
 from test_utils import TestPool, TestContainer
-from pydaos.raw import c_uuid_to_str
 
 
-# pylint: disable=broad-except
 class SimpleCreateDeleteTest(TestWithServers):
     """Tests container basics including create, destroy, open, query and close.
 
@@ -38,8 +32,7 @@ class SimpleCreateDeleteTest(TestWithServers):
     """
 
     def test_container_basics(self):
-        """
-        Test basic container create/destroy/open/close/query.
+        """Test basic container create/destroy/open/close/query.
 
         :avocado: tags=all,container,pr,medium,basecont
         """
@@ -55,28 +48,29 @@ class SimpleCreateDeleteTest(TestWithServers):
             "Pool data not was not created")
 
         # Connect to the pool
-        self.assertTrue(self.pool.connect(1), "Pool connect failed")
+        self.pool.connect(1)
 
         # Create a container
         self.container = TestContainer(self.pool)
         self.container.get_params(self)
         self.container.create()
 
-        self.assertTrue(self.container.open(), "Container open failed")
+        # Open and query the container.  Verify the UUID from the query.
+        checks = {
+            "ci_uuid": self.container.uuid,
+            "es_hce": 0,
+            "es_lre": 0,
+            "es_lhe": 0,
+            "es_ghce": 0,
+            "es_glre": 0,
+            "es_ghpce": 0,
+            "ci_nsnapshots": 0,
+            "ci_min_slipped_epoch": 0,
+        }
+        self.assertTrue(
+            self.container.check_container_info(**checks),
+            "Error confirming container info from query")
 
-        # Query and compare the UUID returned from create with
-        # that returned by query
-        self.container.container.query()
-        if self.container.container.get_uuid_str() != c_uuid_to_str(
-                self.container.container.info.ci_uuid):
-            self.fail("Container UUID did not match the one in info'n")
-
-        self.assertTrue(self.container.close(), "Container close failed")
-
-        # Wait and destroy
-        time.sleep(5)
-        self.assertTrue(self.container.destroy(), "Container destroy failed")
-
-
-if __name__ == "__main__":
-    main()
+        # Close and destroy the container
+        self.container.close()
+        self.container.destroy()

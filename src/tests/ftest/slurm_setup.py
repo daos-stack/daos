@@ -23,16 +23,12 @@
 """
 
 import socket
-import sys
 import argparse
 import logging
-import os
-import pwd
+import getpass
 import re
 from ClusterShell.NodeSet import NodeSet
-sys.path.insert(0, "{0}/util/:{0}/apricot/".format(
-    os.path.dirname(os.path.abspath(__file__))))
-from general_utils import pcmd, run_task
+from util.general_utils import pcmd, run_task
 
 
 SLURM_CONF = "/etc/slurm/slurm.conf"
@@ -234,7 +230,7 @@ def main():
         help="Partiton name; all nodes will be in this partition")
     parser.add_argument(
         "-u", "--user",
-        default=pwd.getpwuid(os.geteuid()).pw_name,
+        default=getpass.getuser(),
         help="slurm user for config file; if none the current user is used")
     parser.add_argument(
         "-i", "--install",
