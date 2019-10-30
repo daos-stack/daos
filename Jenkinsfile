@@ -45,7 +45,7 @@ def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll(
 
 def el7_component_repos = ""
 def sle12_component_repos = ""
-def component_repos = "libfabric@PR-16 cart@PR-216"
+def component_repos = "libfabric@PR-16 ompi@PR-8 cart@PR-216:74"
 def daos_repo = "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
 def el7_daos_repos = el7_component_repos + ' ' + component_repos + ' ' + daos_repo
 def sle12_daos_repos = sle12_component_repos + ' ' + component_repos + ' ' + daos_repo
