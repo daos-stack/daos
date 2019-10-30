@@ -23,7 +23,6 @@
 package scm
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -32,7 +31,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -64,62 +62,6 @@ const (
 )
 
 type (
-	// Module represents a SCM DIMM.
-	//
-	// This is a simplified representation of the raw struct used in the ipmctl package.
-	Module struct {
-		ChannelID       uint32
-		ChannelPosition uint32
-		ControllerID    uint32
-		SocketID        uint32
-		PhysicalID      uint32
-		Capacity        uint64
-	}
-
-	Modules []Module
-
-	// Namespace represents a mapping between AppDirect regions and block device files.
-	Namespace struct {
-		UUID        string `json:"uuid"`
-		BlockDevice string `json:"blockdev"`
-		Name        string `json:"dev"`
-		NumaNode    uint32 `json:"numa_node"`
-	}
-
-	Namespaces []Namespace
-)
-
-func (m Module) String() string {
-	return fmt.Sprintf("PhysicalID:%d Capacity:%d Location:(socket:%d memctrlr:%d "+
-		"chan:%d pos:%d)", m.PhysicalID, m.Capacity, m.SocketID,
-		m.ControllerID, m.ChannelID, m.ChannelPosition)
-}
-
-func (ms Modules) String() string {
-	var buf bytes.Buffer
-
-	for _, m := range ms {
-		fmt.Fprintf(&buf, "\t%s\n", m)
-	}
-
-	return buf.String()
-}
-
-func (n Namespace) String() string {
-	return fmt.Sprintf("%s/%s/%s (NUMA %d)", n.Name, n.BlockDevice, n.UUID, n.NumaNode)
-}
-
-func (ns Namespaces) String() string {
-	var buf bytes.Buffer
-
-	for _, n := range ns {
-		fmt.Fprintf(&buf, "\t%s\n", n)
-	}
-
-	return buf.String()
-}
-
-type (
 	// PrepareRequest defines the parameters for a Prepare opration.
 	PrepareRequest struct {
 		// Reset indicates that the operation should reset (clear) DCPM namespaces.
@@ -127,9 +69,9 @@ type (
 	}
 	// PrepareResponse contains the results of a successful Prepare operation.
 	PrepareResponse struct {
-		State          types.ScmState
+		State          storage.ScmState
 		RebootRequired bool
-		Namespaces     Namespaces
+		Namespaces     storage.ScmNamespaces
 	}
 
 	// DcpmParams defines the sub-parameters of a Format operation that
@@ -181,18 +123,18 @@ type (
 	// ScanResponse contains information gleaned during
 	// a successful Scan operation.
 	ScanResponse struct {
-		State      types.ScmState
-		Modules    Modules
-		Namespaces Namespaces
+		State      storage.ScmState
+		Modules    storage.ScmModules
+		Namespaces storage.ScmNamespaces
 	}
 
 	// Backend defines a set of methods to be implemented by a SCM backend.
 	Backend interface {
-		Discover() (Modules, error)
-		Prep(types.ScmState) (bool, Namespaces, error)
-		PrepReset(types.ScmState) (bool, error)
-		GetState() (types.ScmState, error)
-		GetNamespaces() (Namespaces, error)
+		Discover() (storage.ScmModules, error)
+		Prep(storage.ScmState) (bool, storage.ScmNamespaces, error)
+		PrepReset(storage.ScmState) (bool, error)
+		GetState() (storage.ScmState, error)
+		GetNamespaces() (storage.ScmNamespaces, error)
 	}
 
 	// SystemProvider defines a set of methods to be implemented by a provider
@@ -214,9 +156,9 @@ type (
 	Provider struct {
 		sync.RWMutex
 		scanCompleted bool
-		lastState     types.ScmState
-		modules       Modules
-		namespaces    Namespaces
+		lastState     storage.ScmState
+		modules       storage.ScmModules
+		namespaces    storage.ScmNamespaces
 
 		log     logging.Logger
 		backend Backend
@@ -384,13 +326,13 @@ func (p *Provider) isInitialized() bool {
 	return p.scanCompleted
 }
 
-func (p *Provider) currentState() types.ScmState {
+func (p *Provider) currentState() storage.ScmState {
 	p.RLock()
 	defer p.RUnlock()
 	return p.lastState
 }
 
-func (p *Provider) updateState() (state types.ScmState, err error) {
+func (p *Provider) updateState() (state storage.ScmState, err error) {
 	state, err = p.backend.GetState()
 	if err != nil {
 		return
@@ -404,7 +346,7 @@ func (p *Provider) updateState() (state types.ScmState, err error) {
 }
 
 // GetState returns the current state of DCPM namespaces, if available.
-func (p *Provider) GetState() (types.ScmState, error) {
+func (p *Provider) GetState() (storage.ScmState, error) {
 	if !p.isInitialized() {
 		if _, err := p.Scan(ScanRequest{}); err != nil {
 			return p.lastState, err
