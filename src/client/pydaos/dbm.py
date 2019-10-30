@@ -37,7 +37,7 @@ class daosdm():
 
     def __getitem__(self, key):
         return self._kv[key]
-        
+
     def firstkey(self):
         iter_obj = self._kv.__iter__()
         try:
@@ -100,7 +100,7 @@ class daosdm_rw(daosdm):
 
     def __delitem__(self, key):
         self._kv[key] = None
-    
+
 def open(pool_uuid, cont_uuid, flag):
 
     if flag not in ['r', 'w']:
