@@ -444,7 +444,6 @@ pipeline {
                     when {
                         beforeAgent true
                         allOf {
-                            expression { false }
                             not { branch 'weekly-testing' }
                             expression { env.CHANGE_TARGET != 'weekly-testing' }
                         }
@@ -480,7 +479,7 @@ pipeline {
                                script: '''(cd /var/lib/mock/opensuse-leap-15.1-x86_64/result/ &&
                                            cp -r . $OLDPWD/artifacts/leap15/)
                                           createrepo artifacts/leap15/'''
-                            publishToRepository product: 'cart',
+                            publishToRepository product: 'daos',
                                                 format: 'yum',
                                                 maturity: 'stable',
                                                 tech: 'leap-15',
