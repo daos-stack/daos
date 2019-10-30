@@ -242,18 +242,10 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
         with open("../../../.build_vars.json") as json_vars:
             build_vars = json.load(json_vars)
 
-        if build_vars["PREFIX"] == "/usr":
-            tmp_dir = os.getenv('DAOS_TEST_SHARED_DIR', \
-                                os.path.expanduser('~/daos_test'))
-            if not os.path.exists(tmp_dir):
-                os.makedirs(tmp_dir)
-        else:
-            tmp_dir = os.path.join(build_vars["PREFIX"], "tmp")
-
         # Create the DAOS server configuration yaml file to pass
         # with daos_server -o <FILE_NAME>
-        print("Creating the server yaml file")
-        server_yaml = os.path.join(tmp_dir, AVOCADO_FILE)
+        print("Creating the server yaml file in {}".format(test.tmp))
+        server_yaml = os.path.join(test.tmp, AVOCADO_FILE)
         server_config = DaosServerConfig()
         server_config.get_params(test)
         if hasattr(test, "server_log"):
@@ -303,7 +295,7 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
             [os.path.join(build_vars["PREFIX"], "bin", "daos_server"),
              "--debug",
              "--config", server_yaml,
-             "start", "-i", "-a", tmp_dir])
+             "start", "-i", "-a", test.tmp])
 
         print("Start CMD>>>>{0}".format(' '.join(server_cmd)))
 
