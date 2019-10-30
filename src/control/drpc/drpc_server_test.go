@@ -151,8 +151,8 @@ func TestServer_Start_CantUnlinkSocket(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	tmpDir := common.CreateTestDir(t)
-	defer os.Remove(tmpDir)
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
 
 	path := filepath.Join(tmpDir, "test.sock")
 
@@ -173,8 +173,8 @@ func TestServer_Start_CantListen(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	tmpDir := common.CreateTestDir(t)
-	defer os.Remove(tmpDir)
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
 
 	path := filepath.Join(tmpDir, "test.sock")
 
@@ -289,8 +289,8 @@ func TestServer_Integration(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	tmpDir := common.CreateTestDir(t)
-	defer os.RemoveAll(tmpDir)
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
 	path := filepath.Join(tmpDir, "test.sock")
 
 	dss, _ := NewDomainSocketServer(log, path)

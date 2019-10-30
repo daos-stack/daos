@@ -26,6 +26,7 @@ package common
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 	"reflect"
 	"sort"
 	"strings"
@@ -160,13 +161,18 @@ func GetProtobufCmpOpts() []cmp.Option {
 	}
 }
 
-// CreateTestDir creates a temporary test directory
-func CreateTestDir(t *testing.T) string {
+// CreateTestDir creates a temporary test directory.
+// It returns the path to the directory and a cleanup function.
+func CreateTestDir(t *testing.T) (string, func()) {
 	t.Helper()
-	tmpDir, err := ioutil.TempDir("", t.Name())
+
+	name := strings.Replace(t.Name(), "/", "-", -1)
+	tmpDir, err := ioutil.TempDir("", name)
 	if err != nil {
 		t.Fatalf("Couldn't create temporary directory: %v", err)
 	}
 
-	return tmpDir
+	return tmpDir, func() {
+		os.RemoveAll(tmpDir)
+	}
 }

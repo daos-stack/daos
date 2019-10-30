@@ -75,8 +75,8 @@ func TestCheckDrpcClientSocketPath_BadPath(t *testing.T) {
 }
 
 func TestCheckDrpcClientSocketPath_DirNotSocket(t *testing.T) {
-	tmpDir := common.CreateTestDir(t)
-	defer os.Remove(tmpDir)
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
 
 	path := filepath.Join(tmpDir, "drpc_test.sock")
 	err := os.Mkdir(path, 0755)
@@ -93,8 +93,8 @@ func TestCheckDrpcClientSocketPath_DirNotSocket(t *testing.T) {
 }
 
 func TestCheckDrpcClientSocketPath_FileNotSocket(t *testing.T) {
-	tmpDir := common.CreateTestDir(t)
-	defer os.Remove(tmpDir)
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
 
 	path := filepath.Join(tmpDir, "drpc_test.sock")
 	f, err := os.Create(path)
@@ -112,8 +112,8 @@ func TestCheckDrpcClientSocketPath_FileNotSocket(t *testing.T) {
 }
 
 func TestCheckDrpcClientSocketPath_Success(t *testing.T) {
-	tmpDir := common.CreateTestDir(t)
-	defer os.Remove(tmpDir)
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
 
 	path := filepath.Join(tmpDir, "drpc_test.sock")
 	sock := createTestSocket(t, path)
@@ -158,8 +158,8 @@ func TestDrpcCleanup_BadSocketDir(t *testing.T) {
 }
 
 func TestDrpcCleanup_EmptyDir(t *testing.T) {
-	tmpDir := common.CreateTestDir(t)
-	defer os.Remove(tmpDir)
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
 
 	err := drpcCleanup(tmpDir)
 
@@ -176,8 +176,8 @@ func expectDoesNotExist(t *testing.T, path string) {
 }
 
 func TestDrpcCleanup_Single(t *testing.T) {
-	tmpDir := common.CreateTestDir(t)
-	defer os.Remove(tmpDir)
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
 
 	for _, sockName := range []string{
 		"daos_server.sock",
@@ -200,8 +200,8 @@ func TestDrpcCleanup_Single(t *testing.T) {
 }
 
 func TestDrpcCleanup_DoesNotDeleteNonDaosSocketFiles(t *testing.T) {
-	tmpDir := common.CreateTestDir(t)
-	defer os.Remove(tmpDir)
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
 
 	for _, sockName := range []string{
 		"someone_else.sock",
@@ -228,8 +228,8 @@ func TestDrpcCleanup_DoesNotDeleteNonDaosSocketFiles(t *testing.T) {
 }
 
 func TestDrpcCleanup_Multiple(t *testing.T) {
-	tmpDir := common.CreateTestDir(t)
-	defer os.Remove(tmpDir)
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
 
 	sockNames := []string{
 		"daos_server.sock",
