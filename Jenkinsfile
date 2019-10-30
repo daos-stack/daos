@@ -1320,7 +1320,7 @@ pipeline {
                                            #       -e 's/\\(fabric_iface: *\\)[^ ]*\\( *.*\\)/\\1ib0\\2/'                             \
                                            #       -e '/FI_SOCKETS_CONN_TIMEOUT=/a\\ \\ - FI_PSM2_DISCONNECT=1\\n  - PSM2_MULTI_EP=1\\n  - CRT_CREDIT_EP_CTX=0\\n  - CRT_CTX_SHARE_ADDR=1' \
                                            #          src/tests/ftest/data/daos_server_baseline.yaml
-                                           ed src/tests/ftest/data/daos_server_baseline.yam l<<"EOF"
+                                           ed src/tests/ftest/data/daos_server_baseline.yaml <<"EOF"
 /ofi+sockets/s/sockets/psm2/g
 /fabric_iface/s/eth0/ib0/g
 /  - ABT_ENV_MAX_NUM_XSTREAMS=100/,/^$/c
