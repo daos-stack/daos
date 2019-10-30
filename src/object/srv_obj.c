@@ -111,9 +111,9 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint32_t map_version,
 	if (obj_rpc_is_fetch(rpc)) {
 		struct obj_rw_out	*orwo = crt_reply_get(rpc);
 
-		if (orwo->orw_sizes.ca_arrays != NULL) {
-			D_FREE(orwo->orw_sizes.ca_arrays);
-			orwo->orw_sizes.ca_count = 0;
+		if (orwo->orw_iod_sizes.ca_arrays != NULL) {
+			D_FREE(orwo->orw_iod_sizes.ca_arrays);
+			orwo->orw_iod_sizes.ca_count = 0;
 		}
 
 		if (orwo->orw_nrs.ca_arrays != NULL) {
@@ -397,7 +397,7 @@ obj_set_reply_sizes(crt_rpc_t *rpc)
 		return -DER_INVAL;
 	}
 
-	orwo->orw_sizes.ca_count = size_count;
+	orwo->orw_iod_sizes.ca_count = size_count;
 	D_ALLOC_ARRAY(sizes, size_count);
 	if (sizes == NULL)
 		return -DER_NOMEM;
@@ -405,7 +405,7 @@ obj_set_reply_sizes(crt_rpc_t *rpc)
 	for (i = 0; i < orw->orw_iods.ca_count; i++)
 		sizes[i] = iods[i].iod_size;
 
-	orwo->orw_sizes.ca_arrays = sizes;
+	orwo->orw_iod_sizes.ca_arrays = sizes;
 
 	D_DEBUG(DB_TRACE, "rpc %p set sizes count as %d for "
 		DF_UOID" with epc "DF_U64".\n",
@@ -416,9 +416,12 @@ obj_set_reply_sizes(crt_rpc_t *rpc)
 
 /**
  * Pack nrs in sgls inside the reply, so the client can update
- * sgls before it returns to application. Note: this is only
- * needed for bulk transfer, for inline transfer, it will pack
- * the complete sgls inside the req/reply, see obj_shard_rw().
+ * sgls before it returns to application.
+ * Pack sgl's data size in the reply, client fetch can based on
+ * it to update sgl's iov_len.
+ *
+ * Note: this is only needed for bulk transfer, for inline transfer,
+ * it will pack the complete sgls inside the req/reply, see obj_shard_rw().
  */
 static int
 obj_set_reply_nrs(crt_rpc_t *rpc, daos_handle_t ioh, d_sg_list_t *sgls)
@@ -426,20 +429,27 @@ obj_set_reply_nrs(crt_rpc_t *rpc, daos_handle_t ioh, d_sg_list_t *sgls)
 	struct obj_rw_in	*orw = crt_req_get(rpc);
 	struct obj_rw_out	*orwo = crt_reply_get(rpc);
 	uint32_t		*nrs;
-	uint32_t		nrs_count = orw->orw_nr;
-	int			i;
+	daos_size_t		*data_sizes;
+	uint32_t		 nrs_count = orw->orw_nr;
+	int			 i, j;
 
 	if (nrs_count == 0)
 		return 0;
 
-	/* return num_out for sgl */
+	/* return sg_nr_out and data size for sgl */
 	orwo->orw_nrs.ca_count = nrs_count;
-	D_ALLOC(orwo->orw_nrs.ca_arrays, nrs_count * sizeof(uint32_t));
+	D_ALLOC(orwo->orw_nrs.ca_arrays,
+		nrs_count * (sizeof(uint32_t) + sizeof(daos_size_t)));
 
 	if (orwo->orw_nrs.ca_arrays == NULL)
 		return -DER_NOMEM;
+	orwo->orw_data_sizes.ca_count = nrs_count;
+	orwo->orw_data_sizes.ca_arrays =
+		(void *)((char *)orwo->orw_nrs.ca_arrays +
+			nrs_count * (sizeof(uint32_t)));
 
 	nrs = orwo->orw_nrs.ca_arrays;
+	data_sizes = orwo->orw_data_sizes.ca_arrays;
 	for (i = 0; i < nrs_count; i++) {
 		struct bio_sglist	*bsgl;
 		d_sg_list_t		*sgl;
@@ -452,6 +462,9 @@ obj_set_reply_nrs(crt_rpc_t *rpc, daos_handle_t ioh, d_sg_list_t *sgls)
 			bsgl = vos_iod_sgl_at(ioh, i);
 			D_ASSERT(bsgl != NULL);
 			nrs[i] = bsgl->bs_nr_out;
+			/* tail holes trimmed by ioc_trim_tail_holes() */
+			for (j = 0; j < bsgl->bs_nr_out; j++)
+				data_sizes[i] += bsgl->bs_iovs[j].bi_data_len;
 		}
 	}
 
