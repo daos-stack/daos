@@ -26,13 +26,6 @@
  */
 #ifndef __DAOS_TEST_H
 #define __DAOS_TEST_H
-#if !defined(__has_warning)  /* gcc */
-	#pragma GCC diagnostic ignored "-Wframe-larger-than="
-#else
-	#if __has_warning("-Wframe-larger-than=") /* valid clang warning */
-		#pragma GCC diagnostic ignored "-Wframe-larger-than="
-	#endif
-#endif
 
 #include <unistd.h>
 #include <stdlib.h>
@@ -68,6 +61,10 @@
 #include <daos/mgmt.h>
 #include <daos/tests_lib.h>
 #include <daos.h>
+
+#if D_HAS_WARNING(4, "-Wframe-larger-than=")
+	#pragma GCC diagnostic ignored "-Wframe-larger-than="
+#endif
 
 /** Server crt group ID */
 extern const char *server_group;

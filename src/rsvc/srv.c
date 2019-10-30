@@ -287,7 +287,7 @@ ds_rsvc_lookup(enum ds_rsvc_class_id class, d_iov_t *id,
 	}
 out:
 	if (nonexist)
-		return -DER_NONEXIST;
+		return -DER_NOTREPLICA;
 	if (entry == NULL)
 		return -DER_NOTLEADER;
 	*svc = rsvc_obj(entry);
@@ -965,7 +965,7 @@ ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id,
 	out = crt_reply_get(rpc);
 	rc = out->sao_rc;
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to start%s %d replicas\n",
+		D_ERROR(DF_UUID": failed to start%s replicas: %d\n",
 			DP_UUID(dbid), create ? "/create" : "", rc);
 		ds_rsvc_dist_stop(class, id, ranks, NULL, create);
 		rc = -DER_IO;
@@ -1054,7 +1054,7 @@ ds_rsvc_dist_stop(enum ds_rsvc_class_id class, d_iov_t *id,
 	 * If ranks doesn't include myself, creating a group with ranks will
 	 * fail; bcast to the primary group instead.
 	 */
-	rc = bcast_create(RSVC_STOP, NULL /* group */,  excluded, &rpc);
+	rc = bcast_create(RSVC_STOP, NULL /* group */, excluded, &rpc);
 	if (rc != 0)
 		goto out;
 	in = crt_req_get(rpc);
@@ -1073,10 +1073,11 @@ ds_rsvc_dist_stop(enum ds_rsvc_class_id class, d_iov_t *id,
 	out = crt_reply_get(rpc);
 	rc = out->soo_rc;
 	if (rc != 0) {
-		D_ERROR("failed to stop%s %d replicas\n",
+		D_ERROR("failed to stop%s replicas: %d\n",
 			destroy ? "/destroy" : "", rc);
 		rc = -DER_IO;
 	}
+
 out_mem:
 	daos_iov_free(&in->soi_svc_id);
 out_rpc:
