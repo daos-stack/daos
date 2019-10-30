@@ -7,7 +7,7 @@ PATCHES  = scons_local-$(VERSION).tar.$(SRC_EXT)
 MOCK_OPTIONS := --disablerepo=sclo*
 
 # override allows the caller to set a value and the we append to it
-override PR_REPOS         += spdk@PR-9 fio dpdk@PR-6 pmdk@PR-6 raft
+override PR_REPOS         += spdk@PR-9 dpdk@PR-6
 override SLES_12_PR_REPOS += scons
 override LEAP_42_PR_REPOS += scons
 ifneq ($(REPOSITORY_URL),)
