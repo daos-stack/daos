@@ -396,6 +396,17 @@ func scmNamespacesFromPB(pbNss pb_types.ScmNamespaces) (nss []storage.ScmNamespa
 	return
 }
 
+// StorageScanReq encapsulated subsystem scan parameters.
+type StorageScanReq struct {
+	NvmeHealth bool
+}
+
+// StorageScanResp encapsulated subsystem results.
+type StorageScanResp struct {
+	Nvme NvmeScanResults
+	Scm  ScmScanResults
+}
+
 // StorageFormatResult stores results of format operations on NVMe controllers
 // and SCM mountpoints.
 type StorageFormatResult struct {

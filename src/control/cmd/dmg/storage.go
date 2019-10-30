@@ -27,7 +27,6 @@ import (
 	"github.com/daos-stack/daos/src/control/client"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	types "github.com/daos-stack/daos/src/control/common/storage"
-	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // storageCmd is the struct representing the top-level storage subcommand.
@@ -84,16 +83,14 @@ type storageScanCmd struct {
 	connectedCmd
 }
 
-// run NVMe and SCM storage and health query on all connected servers
-func storageScan(log logging.Logger, conns client.Connect) {
-	cNvmeScan, cScmScan := conns.StorageScan(false)
-	log.Info(cNvmeScan.String())
-	log.Info(cScmScan.String())
-}
-
-// Execute is run when storageScanCmd activates
+// Execute is run when storageScanCmd activates.
+// Runs NVMe and SCM storage scan on all connected servers.
 func (s *storageScanCmd) Execute(args []string) error {
-	storageScan(s.log, s.conns)
+	req := client.StorageScanReq{NvmeHealth: false}
+	cScan := s.conns.StorageScan(&req)
+	s.log.Info(cScan.Nvme.String())
+	s.log.Info(cScan.Scm.String())
+
 	return nil
 }
 

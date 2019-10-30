@@ -169,13 +169,13 @@ func TestStorageScan(t *testing.T) {
 
 	cc := defaultClientSetup(log)
 
-	clientNvme, clientScm := cc.StorageScan(false)
+	clientResp := cc.StorageScan(&StorageScanReq{NvmeHealth: false})
 
-	if diff := cmp.Diff(MockNvmeScanResults(MockCtrlrs, MockServers, false), clientNvme); diff != "" {
+	if diff := cmp.Diff(MockNvmeScanResults(MockCtrlrs, MockServers, false), clientResp.Nvme); diff != "" {
 		t.Fatalf("unexpected per-client NVMe controllers (-want, +got):\n%s\n", diff)
 	}
 
-	if diff := cmp.Diff(MockScmScanResults(MockScmModules, MockScmNamespaces, MockServers), clientScm); diff != "" {
+	if diff := cmp.Diff(MockScmScanResults(MockScmModules, MockScmNamespaces, MockServers), clientResp.Scm); diff != "" {
 		t.Fatalf("unexpected client SCM modules and namespaces (-want, +got):\n%s\n", diff)
 	}
 }

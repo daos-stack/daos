@@ -45,11 +45,13 @@ type nvmeHealthQueryCmd struct {
 	connectedCmd
 }
 
-// Execute queries the SPDK NVMe device health stats from all devices on all hosts
-// when nvmeHealthQueryCmd activates.
+// Execute is run when nvmeHealthQueryCmd activates. Runs NVMe
+// storage scan including health query on all connected servers.
 func (h *nvmeHealthQueryCmd) Execute(args []string) error {
-	controllers, _ := h.conns.StorageScan(true)
-	h.log.Infof(controllers.String())
+	req := client.StorageScanReq{NvmeHealth: true}
+	cScan := h.conns.StorageScan(&req)
+	h.log.Info(cScan.Nvme.String())
+
 	return nil
 }
 

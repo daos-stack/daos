@@ -34,63 +34,63 @@ import (
 // representing namespaces existing on a NVMe SSD.
 type NvmeNamespaces []*ctlpb.NvmeController_Namespace
 
-// NvmeHealthstats is an alias for protobuf NvmeController_Health message slice
+// NvmeHealthstats is an alias for protobuf NvmeController_Health message
 // representing device health stats per controller.
-type NvmeHealthstats []*ctlpb.NvmeController_Health
+type NvmeHealthstats *ctlpb.NvmeController_Health
 
 // NvmeControllers is an alias for protobuf NvmeController message slice
 // representing a number of NVMe SSD controllers installed on a storage node.
 type NvmeControllers []*ctlpb.NvmeController
 
 func (ncs NvmeControllers) healthDetail(buf *bytes.Buffer, c *ctlpb.NvmeController) {
-	for _, stat := range c.Healthstats {
-		fmt.Fprintf(buf, "\tHealth Stats:\n\t\tTemperature:%dK(%dC)\n", stat.Temp, stat.Temp-273)
+	stat := c.Healthstats
 
-		if stat.Tempwarn > 0 {
-			fmt.Fprintf(buf, "\t\t\tWarning Time:%d\n", uint64(stat.Tempwarn))
-		}
-		if stat.Tempcrit > 0 {
-			fmt.Fprintf(buf, "\t\t\tCritical Time:%d\n", uint64(stat.Tempcrit))
-		}
+	fmt.Fprintf(buf, "\tHealth Stats:\n\t\tTemperature:%dK(%dC)\n", stat.Temp, stat.Temp-273)
 
-		fmt.Fprintf(buf, "\t\tController Busy Time:%d minutes\n", uint64(stat.Ctrlbusy))
-		fmt.Fprintf(buf, "\t\tPower Cycles:%d\n", uint64(stat.Powercycles))
-		fmt.Fprintf(buf, "\t\tPower On Hours:%d hours\n", uint64(stat.Poweronhours))
-		fmt.Fprintf(buf, "\t\tUnsafe Shutdowns:%d\n", uint64(stat.Unsafeshutdowns))
-		fmt.Fprintf(buf, "\t\tMedia Errors:%d\n", uint64(stat.Mediaerrors))
-		fmt.Fprintf(buf, "\t\tError Log Entries:%d\n", uint64(stat.Errorlogs))
+	if stat.Tempwarn > 0 {
+		fmt.Fprintf(buf, "\t\t\tWarning Time:%d\n", uint64(stat.Tempwarn))
+	}
+	if stat.Tempcrit > 0 {
+		fmt.Fprintf(buf, "\t\t\tCritical Time:%d\n", uint64(stat.Tempcrit))
+	}
 
-		fmt.Fprintf(buf, "\t\tCritical Warnings:\n")
-		fmt.Fprintf(buf, "\t\t\tTemperature: ")
-		if stat.Tempwarning {
-			fmt.Fprintf(buf, "WARNING\n")
-		} else {
-			fmt.Fprintf(buf, "OK\n")
-		}
-		fmt.Fprintf(buf, "\t\t\tAvailable Spare: ")
-		if stat.Availspare {
-			fmt.Fprintf(buf, "WARNING\n")
-		} else {
-			fmt.Fprintf(buf, "OK\n")
-		}
-		fmt.Fprintf(buf, "\t\t\tDevice Reliability: ")
-		if stat.Reliability {
-			fmt.Fprintf(buf, "WARNING\n")
-		} else {
-			fmt.Fprintf(buf, "OK\n")
-		}
-		fmt.Fprintf(buf, "\t\t\tRead Only: ")
-		if stat.Readonly {
-			fmt.Fprintf(buf, "WARNING\n")
-		} else {
-			fmt.Fprintf(buf, "OK\n")
-		}
-		fmt.Fprintf(buf, "\t\t\tVolatile Memory Backup: ")
-		if stat.Volatilemem {
-			fmt.Fprintf(buf, "WARNING\n")
-		} else {
-			fmt.Fprintf(buf, "OK\n")
-		}
+	fmt.Fprintf(buf, "\t\tController Busy Time:%d minutes\n", uint64(stat.Ctrlbusy))
+	fmt.Fprintf(buf, "\t\tPower Cycles:%d\n", uint64(stat.Powercycles))
+	fmt.Fprintf(buf, "\t\tPower On Hours:%d hours\n", uint64(stat.Poweronhours))
+	fmt.Fprintf(buf, "\t\tUnsafe Shutdowns:%d\n", uint64(stat.Unsafeshutdowns))
+	fmt.Fprintf(buf, "\t\tMedia Errors:%d\n", uint64(stat.Mediaerrors))
+	fmt.Fprintf(buf, "\t\tError Log Entries:%d\n", uint64(stat.Errorlogs))
+
+	fmt.Fprintf(buf, "\t\tCritical Warnings:\n")
+	fmt.Fprintf(buf, "\t\t\tTemperature: ")
+	if stat.Tempwarning {
+		fmt.Fprintf(buf, "WARNING\n")
+	} else {
+		fmt.Fprintf(buf, "OK\n")
+	}
+	fmt.Fprintf(buf, "\t\t\tAvailable Spare: ")
+	if stat.Availspare {
+		fmt.Fprintf(buf, "WARNING\n")
+	} else {
+		fmt.Fprintf(buf, "OK\n")
+	}
+	fmt.Fprintf(buf, "\t\t\tDevice Reliability: ")
+	if stat.Reliability {
+		fmt.Fprintf(buf, "WARNING\n")
+	} else {
+		fmt.Fprintf(buf, "OK\n")
+	}
+	fmt.Fprintf(buf, "\t\t\tRead Only: ")
+	if stat.Readonly {
+		fmt.Fprintf(buf, "WARNING\n")
+	} else {
+		fmt.Fprintf(buf, "OK\n")
+	}
+	fmt.Fprintf(buf, "\t\t\tVolatile Memory Backup: ")
+	if stat.Volatilemem {
+		fmt.Fprintf(buf, "WARNING\n")
+	} else {
+		fmt.Fprintf(buf, "OK\n")
 	}
 }
 
