@@ -218,7 +218,7 @@ func TestService_ProcessMessage(t *testing.T) {
 				t.Fatalf("couldn't unmarshal response bytes: %v", err)
 			}
 
-			cmpOpts := common.GetProtobufCmpOpts()
+			cmpOpts := common.DefaultCmpOpts()
 			if diff := cmp.Diff(tc.expectedResp, resp, cmpOpts...); diff != "" {
 				t.Fatalf("(-want, +got)\n%s", diff)
 			}

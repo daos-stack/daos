@@ -146,9 +146,8 @@ func ShowBufferOnFailure(t *testing.T, buf fmt.Stringer) {
 	}
 }
 
-// GetProtobufCmpOpts gets go-cmp comparison options that allow cmp.Diff to
-// ignore internal Protobuf struct fields
-func GetProtobufCmpOpts() []cmp.Option {
+// DefaultCmpOpts gets default go-cmp comparison options for tests.
+func DefaultCmpOpts() []cmp.Option {
 	// Avoid comparing the internal Protobuf fields
 	isHiddenPBField := func(path cmp.Path) bool {
 		if strings.HasPrefix(path.Last().String(), ".XXX_") {

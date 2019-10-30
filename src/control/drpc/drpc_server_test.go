@@ -112,7 +112,7 @@ func TestSession_ProcessIncomingMessage_Success(t *testing.T) {
 	expectedResp := &Response{
 		Sequence: call.Sequence,
 	}
-	cmpOpts := common.GetProtobufCmpOpts()
+	cmpOpts := common.DefaultCmpOpts()
 	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got)\n%s", diff)
 	}
@@ -324,7 +324,7 @@ func TestServer_Integration(t *testing.T) {
 		Sequence: call.Sequence,
 		Body:     mod.HandleCallResponse,
 	}
-	cmpOpts := common.GetProtobufCmpOpts()
+	cmpOpts := common.DefaultCmpOpts()
 	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got)\n%s", diff)
 	}

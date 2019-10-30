@@ -216,7 +216,7 @@ func TestPoolGetACL_Success(t *testing.T) {
 		t.Errorf("Expected no error, got: %v", err)
 	}
 
-	cmpOpts := common.GetProtobufCmpOpts()
+	cmpOpts := common.DefaultCmpOpts()
 	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
 		t.Fatalf("bad response (-want, +got): \n%s\n", diff)
 	}
