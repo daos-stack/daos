@@ -195,8 +195,14 @@ ulimit -c unlimited
 rm -rf $DAOS_BASE/install/tmp
 mkdir -p $DAOS_BASE/install/tmp
 cd $DAOS_BASE
-export CRT_PHY_ADDR_STR=ofi+sockets
-export OFI_INTERFACE=eth0
+# (02:22:24 PM) Maureen Jean: export CRT_CREDIT_EP_CTX=0 CRT_CTX_SHARE_ADDR=1
+# OFI_INTERFACE=ib0 PSM2_MULTI_EP=1 FI_PSM2_DISCONNECT=1 CRT_PHY_ADDR_STR=ofi+psm2
+export CRT_CREDIT_EP_CTX=0
+export CRT_CTX_SHARE_ADDR=1
+export OFI_INTERFACE=ib0
+export PSM2_MULTI_EP=1
+export FI_PSM2_DISCONNECT=1
+export CRT_PHY_ADDR_STR=ofi+psm2
 # At Oct2018 Longmond F2F it was decided that per-server logs are preferred
 # But now we need to collect them!  Avoid using 'client_daos.log' due to
 # conflicts with the daos_test log renaming.
