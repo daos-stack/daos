@@ -101,6 +101,7 @@ type DeviceHealth struct {
 	ReliabilityWarn bool
 	ReadOnlyWarn    bool
 	VolatileWarn    bool
+	CtrlrPciAddr    string
 }
 
 // Discover calls C.nvme_discover which returns
@@ -174,7 +175,7 @@ func c2GoController(ctrlr *C.struct_ctrlr_t) Controller {
 	}
 }
 
-func c2GoDeviceHealth(health *C.struct_dev_health_t) DeviceHealth {
+func c2GoDeviceHealth(pciAddr string, health *C.struct_dev_health_t) DeviceHealth {
 	return DeviceHealth{
 		Temp:            uint32(health.temperature),
 		TempWarnTime:    uint32(health.warn_temp_time),
@@ -190,6 +191,7 @@ func c2GoDeviceHealth(health *C.struct_dev_health_t) DeviceHealth {
 		ReliabilityWarn: bool(health.dev_reliabilty_warning),
 		ReadOnlyWarn:    bool(health.read_only_warning),
 		VolatileWarn:    bool(health.volatile_mem_warning),
+		CtrlrPciAddr:    pciAddr,
 	}
 }
 
@@ -250,12 +252,16 @@ func processDiscoverReturn(retPtr *C.struct_ret_t, failLocation string) (
 		ctrlrPtr := retPtr.ctrlrs
 		for ctrlrPtr != nil {
 			defer C.free(unsafe.Pointer(ctrlrPtr))
-			ctrlrs = append(ctrlrs, c2GoController(ctrlrPtr))
+			ctrlr := c2GoController(ctrlrPtr)
+			ctrlrs = append(ctrlrs, ctrlr)
 			healthPtr := ctrlrPtr.dev_health
-			if healthPtr != nil {
-				defer C.free(unsafe.Pointer(healthPtr))
-				devs = append(devs, c2GoDeviceHealth(healthPtr))
+			if healthPtr == nil {
+				ctrlrPtr = ctrlrPtr.next
+				continue
 			}
+
+			defer C.free(unsafe.Pointer(healthPtr))
+			devs = append(devs, c2GoDeviceHealth(ctrlr.PCIAddr, healthPtr))
 			ctrlrPtr = ctrlrPtr.next
 		}
 
