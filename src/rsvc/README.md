@@ -18,9 +18,9 @@ A replicated service is implemented using a stack of modules:
 
 	[ mgmt_svc, pool_svc, cont_svc, ... ]
 	[ ds_rsvc ]
-	[           rdb           ]
+	[                rdb                ]
 	[ raft ]
-	[           vos           ]
+	[                vos                ]
 
 `mgmt_svc`, `pool_svc`, and `cont_svc` implement the request handlers and the leadership change event handlers of the respective services. They define their respective service state in terms of the RDB data model provided by `rdb`, implement state queries and updates using RDB transactions, and register their leadership change event handlers into the framework `rsvc` offers.
 
