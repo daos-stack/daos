@@ -25,6 +25,7 @@ package drpc
 import (
 	"net"
 	"os"
+	"sync"
 	"syscall"
 
 	"github.com/pkg/errors"
@@ -44,12 +45,13 @@ const MAXMSGSIZE = 16384
 // DomainSocketServer is the object that listens for incoming dRPC connections,
 // maintains the connections for sessions, and manages the message processing.
 type DomainSocketServer struct {
-	log      logging.Logger
-	sockFile string
-	quit     chan bool
-	listener net.Listener
-	service  *ModuleService
-	sessions map[net.Conn]*Session
+	log           logging.Logger
+	sockFile      string
+	quit          chan bool
+	listener      net.Listener
+	service       *ModuleService
+	sessions      map[net.Conn]*Session
+	sessionsMutex sync.Mutex
 }
 
 // closeSession cleans up the session and removes it from the list of active
@@ -65,7 +67,9 @@ func (d *DomainSocketServer) closeSession(s *Session) {
 func (d *DomainSocketServer) listenSession(s *Session) {
 	for {
 		if err := s.ProcessIncomingMessage(); err != nil {
+			d.sessionsMutex.Lock()
 			d.closeSession(s)
+			d.sessionsMutex.Unlock()
 			break
 		}
 	}
@@ -89,7 +93,9 @@ func (d *DomainSocketServer) Listen() {
 
 		d.log.Debug("Creating session for connection")
 		c := NewSession(conn, d.service)
+		d.sessionsMutex.Lock()
 		d.sessions[conn] = c
+		d.sessionsMutex.Unlock()
 		go d.listenSession(c)
 	}
 }
@@ -123,9 +129,11 @@ func (d *DomainSocketServer) Start() error {
 func (d *DomainSocketServer) Shutdown() {
 	close(d.quit)
 
+	d.sessionsMutex.Lock()
 	for _, s := range d.sessions {
 		d.closeSession(s)
 	}
+	d.sessionsMutex.Unlock()
 	d.listener.Close()
 }
 

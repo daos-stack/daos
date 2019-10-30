@@ -284,3 +284,48 @@ func TestServer_Shutdown(t *testing.T) {
 	common.AssertEqual(t, lis.closeCallCount, 1, "listener should have been closed")
 	common.AssertEqual(t, len(dss.sessions), 0, "sessions should have been cleaned up")
 }
+
+func TestServer_Integration(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	tmpDir := common.CreateTestDir(t)
+	defer os.RemoveAll(tmpDir)
+	path := filepath.Join(tmpDir, "test.sock")
+
+	dss, _ := NewDomainSocketServer(log, path)
+
+	mod := newTestModule(5678)
+	mod.HandleCallResponse = []byte("successful!")
+	dss.RegisterRPCModule(mod)
+
+	// Stand up a server loop
+	if err := dss.Start(); err != nil {
+		t.Fatalf("Couldn't start dRPC server: %v", err)
+	}
+	defer dss.Shutdown()
+
+	// Now start a client...
+	client := NewClientConnection(path)
+	if err := client.Connect(); err != nil {
+		t.Fatalf("failed to connect client: %v", err)
+	}
+	defer client.Close()
+
+	call := &Call{
+		Module: mod.ID(),
+	}
+	resp, err := client.SendMsg(call)
+	if err != nil {
+		t.Fatalf("failed to send message: %v", err)
+	}
+
+	expectedResp := &Response{
+		Sequence: call.Sequence,
+		Body:     mod.HandleCallResponse,
+	}
+	cmpOpts := common.GetProtobufCmpOpts()
+	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
+		t.Fatalf("(-want, +got)\n%s", diff)
+	}
+}

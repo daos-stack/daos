@@ -80,7 +80,6 @@ func newTestClientConnection(dialer *mockDialer, conn *mockConn) *ClientConnecti
 }
 
 func TestNewClientConnection(t *testing.T) {
-	t.Helper()
 	client := NewClientConnection(testSockPath)
 
 	common.AssertTrue(t, client != nil, "Expected a real client")
