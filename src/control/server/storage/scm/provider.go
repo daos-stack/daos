@@ -58,7 +58,6 @@ const (
 	MsgScmNotInited         = "scm storage could not be accessed"
 	MsgScmClassNotSupported = "operation unsupported on scm class"
 	MsgIpmctlDiscoverFail   = "ipmctl module discovery"
-	MsgScmUpdateNotImpl     = "scm firmware update not supported"
 )
 
 type (
@@ -110,11 +109,6 @@ type (
 		Target  string
 		Mounted bool
 	}
-
-	// UpdateRequest defines the parameters for an Update operation.
-	UpdateRequest struct{}
-	// UpdateResponse contains the results of a successful Update operation.
-	UpdateResponse struct{}
 
 	// ScanRequest defines the parameters for a Scan operation.
 	ScanRequest struct {
@@ -650,9 +644,4 @@ func (p *Provider) unmount(target string, flags int) (*MountResponse, error) {
 // is mounted.
 func (p *Provider) IsMounted(target string) (bool, error) {
 	return p.sys.IsMounted(target)
-}
-
-// Update attempts to update the DCPM firmware, if supported.
-func (p *Provider) Update(req UpdateRequest) (*UpdateResponse, error) {
-	return nil, nil
 }

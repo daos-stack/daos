@@ -67,10 +67,6 @@ type Connect interface {
 	StoragePrepare(*ctlpb.StoragePrepareReq) ResultMap
 	StorageScan() (ClientCtrlrMap, ClientModuleMap, ClientPmemMap)
 	StorageFormat(reformat bool) (ClientCtrlrMap, ClientMountMap)
-	StorageUpdate(*ctlpb.StorageUpdateReq) (ClientCtrlrMap, ClientModuleMap)
-	// TODO: implement Burnin client features
-	//StorageBurnIn() (ClientCtrlrMap, ClientModuleMap)
-	ListFeatures() ClientFeatureMap
 	KillRank(rank uint32) ResultMap
 	PoolCreate(*PoolCreateReq) (*PoolCreateResp, error)
 	PoolDestroy(*PoolDestroyReq) error

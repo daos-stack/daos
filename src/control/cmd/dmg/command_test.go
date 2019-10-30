@@ -112,16 +112,6 @@ func (tc *testConn) StorageFormat(reformat bool) (client.ClientCtrlrMap, client.
 	return nil, nil
 }
 
-func (tc *testConn) StorageUpdate(req *ctlpb.StorageUpdateReq) (client.ClientCtrlrMap, client.ClientModuleMap) {
-	tc.appendInvocation(fmt.Sprintf("StorageUpdate-%s", req))
-	return nil, nil
-}
-
-func (tc *testConn) ListFeatures() client.ClientFeatureMap {
-	tc.appendInvocation("ListFeatures")
-	return nil
-}
-
 func (tc *testConn) KillRank(rank uint32) client.ResultMap {
 	tc.appendInvocation(fmt.Sprintf("KillRank-rank %d", rank))
 	return nil

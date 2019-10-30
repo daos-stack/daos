@@ -25,10 +25,7 @@ package main
 
 import (
 	"fmt"
-	"strings"
 	"testing"
-
-	. "github.com/daos-stack/daos/src/control/common/proto/ctl"
 )
 
 func TestStorageCommands(t *testing.T) {
@@ -43,34 +40,6 @@ func TestStorageCommands(t *testing.T) {
 			"Format with reformat",
 			"storage format --reformat",
 			"ConnectClients StorageFormat-true",
-			nil,
-		},
-		{
-			"Update with missing arguments",
-			"storage fwupdate",
-			"",
-			errMissingFlag,
-		},
-		{
-			// Likewise here, this should probably result in a failure
-			"Update without force",
-			"storage fwupdate --nvme-model foo --nvme-fw-path bar --nvme-fw-rev 123",
-			"ConnectClients",
-			nil,
-		},
-		{
-			"Update with force",
-			"storage fwupdate --force --nvme-model foo --nvme-fw-path bar --nvme-fw-rev 123",
-			strings.Join([]string{
-				"ConnectClients",
-				fmt.Sprintf("StorageUpdate-%s", &StorageUpdateReq{
-					Nvme: &UpdateNvmeReq{
-						Model:    "foo",
-						Startrev: "123",
-						Path:     "bar",
-					},
-				}),
-			}, " "),
 			nil,
 		},
 		{

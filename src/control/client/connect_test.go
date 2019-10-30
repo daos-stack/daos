@@ -28,27 +28,24 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 	. "google.golang.org/grpc/connectivity"
 
 	. "github.com/daos-stack/daos/src/control/common"
-	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	. "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func connectSetupServers(
-	servers Addresses, log logging.Logger,
-	state State, features []*ctlpb.Feature, ctrlrs NvmeControllers,
+	servers Addresses, log logging.Logger, state State, ctrlrs NvmeControllers,
 	ctrlrResults NvmeControllerResults, modules ScmModules,
 	moduleResults ScmModuleResults, pmems PmemDevices, mountResults ScmMountResults,
-	scanRet error, formatRet error, updateRet error, burninRet error,
-	killRet error, connectRet error, getACLRet *mockGetACLResult) Connect {
+	scanRet error, formatRet error, killRet error, connectRet error,
+	getACLRet *mockGetACLResult) Connect {
 
 	connect := newMockConnect(
-		log, state, features, ctrlrs, ctrlrResults, modules,
+		log, state, ctrlrs, ctrlrResults, modules,
 		moduleResults, pmems, mountResults, scanRet, formatRet,
-		updateRet, burninRet, killRet, connectRet, getACLRet)
+		killRet, connectRet, getACLRet)
 
 	_ = connect.ConnectClients(servers)
 
@@ -57,15 +54,14 @@ func connectSetupServers(
 
 func connectSetup(
 	log logging.Logger,
-	state State, features []*ctlpb.Feature, ctrlrs NvmeControllers,
-	ctrlrResults NvmeControllerResults, modules ScmModules,
-	moduleResults ScmModuleResults, pmems PmemDevices, mountResults ScmMountResults,
-	scanRet error, formatRet error, updateRet error, burninRet error,
+	state State, ctrlrs NvmeControllers, ctrlrResults NvmeControllerResults,
+	modules ScmModules, moduleResults ScmModuleResults, pmems PmemDevices,
+	mountResults ScmMountResults, scanRet error, formatRet error,
 	killRet error, connectRet error, getACLRet *mockGetACLResult) Connect {
 
-	return connectSetupServers(MockServers, log, state, features, ctrlrs,
+	return connectSetupServers(MockServers, log, state, ctrlrs,
 		ctrlrResults, modules, moduleResults, pmems, mountResults, scanRet,
-		formatRet, updateRet, burninRet, killRet, connectRet, getACLRet)
+		formatRet, killRet, connectRet, getACLRet)
 }
 
 func defaultClientSetup(log logging.Logger) Connect {
@@ -110,9 +106,9 @@ func TestConnectClients(t *testing.T) {
 	}
 	for _, tt := range conntests {
 		cc := newMockConnect(
-			log, tt.state, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
+			log, tt.state, MockCtrlrs, MockCtrlrResults, MockModules,
 			MockModuleResults, MockPmemDevices, MockMountResults,
-			nil, nil, nil, nil, nil, tt.connRet, nil)
+			nil, nil, nil, tt.connRet, nil)
 
 		results := cc.ConnectClients(tt.addrsIn)
 
@@ -167,19 +163,6 @@ func TestGetClearConns(t *testing.T) {
 	checkResults(t, MockServers, results, nil)
 }
 
-func TestListFeatures(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer ShowBufferOnFailure(t, buf)
-
-	cc := defaultClientSetup(log)
-
-	clientFeatures := cc.ListFeatures()
-
-	AssertEqual(
-		t, clientFeatures, NewClientFM(MockFeatures, MockServers),
-		"unexpected client features returned")
-}
-
 func TestStorageScan(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer ShowBufferOnFailure(t, buf)
@@ -213,9 +196,9 @@ func TestStorageFormat(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			cc := connectSetup(
-				log, Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
-				MockModuleResults, MockPmemDevices, MockMountResults, nil, tt.formatRet, nil, nil,
-				nil, nil, MockACL)
+				log, Ready, MockCtrlrs, MockCtrlrResults, MockModules,
+				MockModuleResults, MockPmemDevices, MockMountResults,
+				nil, tt.formatRet, nil, nil, MockACL)
 
 			cNvmeMap, cMountMap := cc.StorageFormat(tt.reformat)
 
@@ -244,53 +227,6 @@ func TestStorageFormat(t *testing.T) {
 	}
 }
 
-func TestStorageUpdate(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer ShowBufferOnFailure(t, buf)
-
-	tests := []struct {
-		updateRet error
-	}{
-		{
-			nil,
-		},
-		{
-			errors.New(msgOpenStreamFail + MockErr.Error()),
-		},
-	}
-
-	for _, tt := range tests {
-		cc := connectSetup(
-			log, Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
-			MockModuleResults, MockPmemDevices, MockMountResults, nil,
-			nil, tt.updateRet, nil, nil, nil, MockACL)
-
-		cNvmeMap, cModuleMap := cc.StorageUpdate(new(ctlpb.StorageUpdateReq))
-
-		if tt.updateRet != nil {
-			for _, addr := range MockServers {
-				AssertEqual(
-					t, cNvmeMap[addr],
-					CtrlrResults{Err: tt.updateRet},
-					"unexpected error for nvme result")
-				AssertEqual(
-					t, cModuleMap[addr],
-					ModuleResults{Err: tt.updateRet},
-					"unexpected error for scm module result")
-			}
-			continue
-		}
-
-		AssertEqual(
-			t, cNvmeMap, NewClientNvmeResults(MockCtrlrResults, MockServers),
-			"unexpected client NVMe SSD controller results returned")
-
-		AssertEqual(
-			t, cModuleMap, NewClientScmResults(MockModuleResults, MockServers),
-			"unexpected client SCM Module results returned")
-	}
-}
-
 func TestKillRank(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer ShowBufferOnFailure(t, buf)
@@ -304,8 +240,8 @@ func TestKillRank(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		cc := connectSetup(log, Ready, MockFeatures, MockCtrlrs, MockCtrlrResults, MockModules,
-			MockModuleResults, MockPmemDevices, MockMountResults, nil, nil, nil,
+		cc := connectSetup(log, Ready, MockCtrlrs, MockCtrlrResults, MockModules,
+			MockModuleResults, MockPmemDevices, MockMountResults, nil,
 			nil, tt.killRet, nil, MockACL)
 
 		resultMap := cc.KillRank(0)
@@ -359,11 +295,10 @@ func TestPoolGetACL(t *testing.T) {
 				status: tt.getACLRespStatus,
 				err:    tt.getACLErr,
 			}
-			cc := connectSetupServers(tt.addr, log, Ready, MockFeatures,
+			cc := connectSetupServers(tt.addr, log, Ready,
 				MockCtrlrs, MockCtrlrResults, MockModules,
 				MockModuleResults, MockPmemDevices, MockMountResults,
-				nil, nil, nil, nil, nil, nil,
-				aclResult)
+				nil, nil, nil, nil, aclResult)
 
 			req := &PoolGetACLReq{
 				UUID: "TestUUID",
