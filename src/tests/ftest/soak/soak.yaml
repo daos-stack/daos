@@ -13,7 +13,6 @@ server_config:
     provider: ofi+sockets
     servers:
         log_mask: ERR
-        crt_timeout: 2000
         fabric_iface: eth0
 
 # If slurm is not specified; launch jobs with mpirun; {slurm|mpirun}
