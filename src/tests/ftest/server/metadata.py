@@ -32,38 +32,34 @@ import avocado
 
 from apricot import TestWithServers, skipForTicket
 from agent_utils import run_agent, stop_agent
-from daos_api import DaosPool, DaosContainer, DaosApiError
-from ior_utils import IorCommand, IorFailed
+from pydaos.raw import DaosContainer, DaosApiError
+from ior_utils import IorCommand
+from command_utils import Orterun, CommandFailure
 from server_utils import run_server, stop_server
 from write_host_file import write_host_file
-
+from test_utils import TestPool
 
 NO_OF_MAX_CONTAINER = 13180
 
 
-def ior_runner_thread(ior_cmd, uuids, mgr, attach, procs, hostfile, results):
+def ior_runner_thread(manager, uuids, results):
     """IOR run thread method.
 
     Args:
-        ior_cmd (IorCommand): [description]
+        manager (str): mpi job manager command
         uuids (list): [description]
-        mgr (str): mpi job manager command
-        attach (str): CART attach info path
-        procs (int): number of host processes
-        hostfile (str): file defining host names and slots
         results (Queue): queue for returning thread results
     """
     for index, cont_uuid in enumerate(uuids):
-        ior_cmd.daos_cont.value = cont_uuid
+        manager.job.daos_cont.update(cont_uuid, "ior.cont_uuid")
         try:
-            ior_cmd.run(mgr, attach, procs, hostfile, False)
-            results.put("PASS")
-
-        except IorFailed as error:
+            manager.run()
+        except CommandFailure as error:
             print(
                 "--- FAIL --- Thread-{0} Failed to run IOR {1}: "
                 "Exception {2}".format(
-                    index, "read" if "-r" in ior_cmd.flags.value else "write",
+                    index,
+                    "read" if "-r" in manager.job.flags.value else "write",
                     str(error)))
             results.put("FAIL")
 
@@ -92,25 +88,9 @@ class ObjectMetadata(TestWithServers):
             self.hostlist_clients, self.workdir, None)
 
         # Create a pool
-        self.pool = DaosPool(self.context)
-        self.pool.create(
-            self.params.get("mode", '/run/pool/createmode/*'),
-            os.geteuid(),
-            os.getegid(),
-            self.params.get("scm_size", '/run/pool/createsize/*'),
-            self.params.get("setname", '/run/pool/createset/*'),
-            None,
-            None,
-            self.params.get("svcn", '/run/pool/createsvc/*'),
-            self.params.get("nvme_size", '/run/pool/createsize/*'))
-
-    def tearDown(self):
-        """Tear down each test case."""
-        try:
-            if self.pool is not None:
-                self.pool.destroy(1)
-        finally:
-            super(ObjectMetadata, self).tearDown()
+        self.pool = TestPool(self.context, self.log)
+        self.pool.get_params(self)
+        self.pool.create()
 
     def thread_control(self, threads, operation):
         """Start threads and wait until all threads are finished.
@@ -145,20 +125,20 @@ class ObjectMetadata(TestWithServers):
         Use Cases:
             ?
 
-        :avocado: tags=metadata,metadata_fill,nvme,small
+        :avocado: tags=all,metadata,pr,small,metadatafill
         """
-        self.pool.connect(2)
+        self.pool.pool.connect(2)
         container = DaosContainer(self.context)
 
         self.d_log.debug("Fillup Metadata....")
         for _cont in range(NO_OF_MAX_CONTAINER):
-            container.create(self.pool.handle)
+            container.create(self.pool.pool.handle)
 
         # This should fail with no Metadata space Error.
         self.d_log.debug("Metadata Overload...")
         try:
             for _cont in range(250):
-                container.create(self.pool.handle)
+                container.create(self.pool.pool.handle)
             self.fail("Test expected to fail with a no metadata space error")
 
         except DaosApiError as exe:
@@ -180,13 +160,13 @@ class ObjectMetadata(TestWithServers):
 
         :avocado: tags=metadata,metadata_free_space,nvme,small
         """
-        self.pool.connect(2)
+        self.pool.pool.connect(2)
         for k in range(10):
             container_array = []
             self.d_log.debug("Container Create Iteration {}".format(k))
             for cont in range(NO_OF_MAX_CONTAINER):
                 container = DaosContainer(self.context)
-                container.create(self.pool.handle)
+                container.create(self.pool.pool.handle)
                 container_array.append(container)
 
             self.d_log.debug("Container Remove Iteration {} ".format(k))
@@ -233,17 +213,19 @@ class ObjectMetadata(TestWithServers):
                 ior_cmd.flags.value = self.params.get(
                     "F", "/run/ior/ior{}flags/".format(operation))
 
+                # Define the job manager for the IOR command
+                path = os.path.join(self.ompi_prefix, "bin")
+                manager = Orterun(ior_cmd, path)
+                env = ior_cmd.get_default_env(str(manager), self.tmp)
+                manager.setup_command(env, self.hostfile_clients, processes)
+
                 # Add a thread for these IOR arguments
                 threads.append(
                     threading.Thread(
                         target=ior_runner_thread,
                         kwargs={
-                            "ior_cmd": ior_cmd,
+                            "manager": manager,
                             "uuids": list_of_uuid_lists[index],
-                            "mgr": self.orterun,
-                            "attach": self.tmp,
-                            "hostfile": self.hostfile_clients,
-                            "procs": processes,
                             "results": self.out_queue}))
 
                 self.log.info(
@@ -269,5 +251,5 @@ class ObjectMetadata(TestWithServers):
 
                 # Start the servers
                 run_server(
-                    self.hostfile_servers, self.server_group, self.basepath,
+                    self, self.hostfile_servers, self.server_group,
                     clean=False)

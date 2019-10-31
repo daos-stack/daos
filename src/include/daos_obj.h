@@ -385,6 +385,9 @@ daos_obj_close(daos_handle_t oh, daos_event_t *ev);
  *			-DER_UNREACH	Network is unreachable
  *			-DER_EP_RO	Permission denied
  *			-DER_NOEXIST	Nonexistent object ID
+ *			-DER_EP_OLD	Related RPC is resent too late as to
+ *					related resent history may have been
+ *					aggregated. Punch result is undefined.
  */
 int
 daos_obj_punch(daos_handle_t oh, daos_handle_t th, daos_event_t *ev);
@@ -407,6 +410,9 @@ daos_obj_punch(daos_handle_t oh, daos_handle_t th, daos_event_t *ev);
  *			-DER_UNREACH	Network is unreachable
  *			-DER_EP_RO	Permission denied
  *			-DER_NOEXIST	Nonexistent object ID
+ *			-DER_EP_OLD	Related RPC is resent too late as to
+ *					related resent history may have been
+ *					aggregated. Punch result is undefined.
  */
 int
 daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, unsigned int nr,
@@ -431,6 +437,9 @@ daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, unsigned int nr,
  *			-DER_UNREACH	Network is unreachable
  *			-DER_EP_RO	Permission denied
  *			-DER_NOEXIST	Nonexistent object ID
+ *			-DER_EP_OLD	Related RPC is resent too late as to
+ *					related resent history may have been
+ *					aggregated. Punch result is undefined.
  */
 int
 daos_obj_punch_akeys(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
@@ -572,6 +581,9 @@ daos_obj_fetch(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
  *			-DER_NO_PERM	Permission denied
  *			-DER_UNREACH	Network is unreachable
  *			-DER_EP_RO	Epoch is read-only
+ *			-DER_EP_OLD	Related RPC is resent too late as to
+ *					related resent history may have been
+ *					aggregated. Update result is undefined.
  */
 int
 daos_obj_update(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
@@ -782,6 +794,22 @@ int
 daos_obj_query_key(daos_handle_t oh, daos_handle_t th, uint32_t flags,
 		   daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
 		   daos_event_t *ev);
+
+/**
+ * Verify object data consistency against the specified epoch.
+ *
+ * \param[in]	coh	Container open handle.
+ * \param[in]	oid	Object ID.
+ * \param[in]	epoch	The (stable) epoch against that the verification will
+ *			be done. DAOS_EPOCH_MAX means current highest epoch.
+ *
+ * \return		0		Success and consistent
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_MISMATCH	Found data inconsistency
+ */
+int
+daos_obj_verify(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch);
 
 #if defined(__cplusplus)
 }

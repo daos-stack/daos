@@ -78,60 +78,6 @@ typedef struct {
 	uint32_t	 cs_chunksize;
 } daos_csum_buf_t;
 
-static inline void daos_csum_set_multiple(daos_csum_buf_t *csum_buf, void *buf,
-					  uint32_t csum_buf_size,
-					  uint16_t csum_size,
-					  uint32_t csum_count,
-					  uint32_t chunksize)
-{
-	csum_buf->cs_csum = buf;
-	csum_buf->cs_len = csum_size;
-	csum_buf->cs_buf_len = csum_buf_size;
-	csum_buf->cs_nr = csum_count;
-	csum_buf->cs_chunksize = chunksize;
-}
-
-static inline bool
-daos_csum_isvalid(const daos_csum_buf_t *csum)
-{
-	return csum != NULL &&
-	       csum->cs_len > 0 &&
-	       csum->cs_buf_len > 0 &&
-	       csum->cs_csum != NULL &&
-	       csum->cs_chunksize > 0 &&
-	       csum->cs_nr > 0;
-}
-
-static inline void
-daos_csum_set(daos_csum_buf_t *csum, void *buf, uint16_t size)
-{
-	daos_csum_set_multiple(csum, buf, size, size, 1, 0);
-}
-
-static inline uint32_t
-daos_csum_idx_from_off(daos_csum_buf_t *csum, uint32_t offset_bytes)
-{
-	return offset_bytes / csum->cs_chunksize;
-}
-
-static inline uint8_t *
-daos_csum_from_idx(daos_csum_buf_t *csum, uint32_t idx)
-{
-	return csum->cs_csum + csum->cs_len * idx;
-}
-
-static inline uint8_t *
-daos_csum_from_offset(daos_csum_buf_t *csum, uint32_t offset_bytes)
-{
-	return daos_csum_from_idx(csum,
-				  daos_csum_idx_from_off(csum, offset_bytes));
-}
-
-enum daos_anchor_flags {
-	/* The RPC will be sent to leader replica. */
-	DAOS_ANCHOR_FLAGS_TO_LEADER	= 1,
-};
-
 typedef enum {
 	DAOS_ANCHOR_TYPE_ZERO	= 0,
 	DAOS_ANCHOR_TYPE_HKEY	= 1,
@@ -151,7 +97,7 @@ typedef struct {
 static inline void
 daos_anchor_set_flags(daos_anchor_t *anchor, uint32_t flags)
 {
-	anchor->da_flags |= flags;
+	anchor->da_flags = flags;
 }
 
 static inline uint32_t
@@ -357,15 +303,6 @@ typedef struct {
 
 typedef uint64_t	daos_epoch_t;
 
-static inline daos_epoch_t
-daos_ts2epoch(void)
-{
-	struct timespec ts;
-
-	clock_gettime(CLOCK_REALTIME, &ts);
-	return ts.tv_sec * 1e9 + ts.tv_nsec;
-}
-
 typedef struct {
 	/** Low bound of the epoch range */
 	daos_epoch_t	epr_lo;
@@ -444,7 +381,10 @@ typedef enum {
 	DAOS_EVS_ABORTED,
 } daos_ev_status_t;
 
-/* rank/target list for target */
+/**
+ * Pool target list, each target is identified by rank & target
+ * index within the rank
+ */
 struct d_tgt_list {
 	d_rank_t	*tl_ranks;
 	int32_t		*tl_tgts;

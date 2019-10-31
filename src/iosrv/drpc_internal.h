@@ -50,6 +50,15 @@ struct drpc_progress_context {
 };
 
 /**
+ * Context for an individual dRPC call.
+ */
+struct drpc_call_ctx {
+	struct drpc	*session;
+	Drpc__Call	*call;
+	Drpc__Response	*resp;
+};
+
+/**
  * Simple linked list node containing a drpc context.
  * Used for the session_ctx_list in drpc_progress_context.
  */

@@ -25,7 +25,8 @@ createtests:
             svc:
                 - 1
                 - 'PASS'
-        svc3:
-            svc:
-                - 3
-                - 'PASS'
+# Uncomment once DAOS-2979 is resolved.
+#        svc3:
+#            svc:
+#                - 3
+#                - 'PASS'

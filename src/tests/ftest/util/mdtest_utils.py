@@ -26,18 +26,16 @@ from __future__ import print_function
 
 import uuid
 
-from avocado.utils.process import run, CmdError
-from command_utils import FormattedParameter, CommandWithParameters
+from command_utils import FormattedParameter, ExecutableCommand
+from command_utils import EnvironmentVariables
 
-class MdtestFailed(Exception):
-    """Raise if mdtest failed"""
 
-class MdtestCommand(CommandWithParameters):
+class MdtestCommand(ExecutableCommand):
     """Defines a object representing a mdtest command."""
 
     def __init__(self):
         """Create an MdtestCommand object."""
-        super(MdtestCommand, self).__init__("mdtest")
+        super(MdtestCommand, self).__init__("/run/mdtest/*", "mdtest")
         self.flags = FormattedParameter("{}")   # mdtest flags
         # Optional arguments
         #  -a=STRING             API for I/O [POSIX|DUMMY]
@@ -127,21 +125,24 @@ class MdtestCommand(CommandWithParameters):
         self.dfs_group = FormattedParameter("--dfs.group {}")
         self.dfs_destroy = FormattedParameter("--dfs.destroy", True)
 
-    def get_params(self, test, path="/run/mdtest/*"):
-        """Get values for all of the mdtest command params using a yaml file.
-        Sets each BasicParameter object's value to the yaml key that matches
-        the assigned name of the BasicParameter object in this class. For
-        example, the self.depth.value will be set to the value in the yaml
-        file with the key 'depth'.
-        Args:
-            test (Test): avocado Test object
-            path (str, optional): yaml namespace. Defaults to "/run/mdtest/*".
-        """
-        super(MdtestCommand, self).get_params(test, path)
+    def get_param_names(self):
+        """Get a sorted list of the defined MdtestCommand parameters."""
+        # Sort the Mdtest parameter names to generate consistent ior commands
+        all_param_names = super(MdtestCommand, self).get_param_names()
+
+        # List all of the common ior params first followed by any dfs-specific
+        # params (except when using POSIX).
+        param_names = [name for name in all_param_names if "dfs" not in name]
+        if self.api.value != "POSIX":
+            param_names.extend(
+                [name for name in all_param_names if "dfs" in name])
+
+        return param_names
+
 
     def set_daos_params(self, group, pool, cont_uuid=None, display=True):
-        """Set the Mdtest parameters for the DAOS group, pool, and container
-           uuid.
+        """Set the Mdtest params for the DAOS group, pool, and container uuid.
+
         Args:
             group (str): DAOS server group name
             pool (TestPool): DAOS test pool object
@@ -157,6 +158,7 @@ class MdtestCommand(CommandWithParameters):
 
     def set_daos_pool_params(self, pool, display=True):
         """Set the Mdtest parameters that are based on a DAOS pool.
+
         Args:
             pool (TestPool): DAOS test pool object
             display (bool, optional): print updated params. Defaults to True.
@@ -166,7 +168,8 @@ class MdtestCommand(CommandWithParameters):
         self.set_daos_svcl_param(pool, display)
 
     def set_daos_svcl_param(self, pool, display=True):
-        """Set the Mdtest daos_svcl param from the ranks of a DAOS pool object
+        """Set the Mdtest daos_svcl param from the ranks of a DAOS pool object.
+
         Args:
             pool (TestPool): DAOS test pool object
             display (bool, optional): print updated params. Defaults to True.
@@ -177,93 +180,29 @@ class MdtestCommand(CommandWithParameters):
                 for index in range(pool.pool.svc.rl_nr)]])
         self.dfs_svcl.update(svcl, "dfs_svcl" if display else None)
 
-    def get_launch_command(self, manager, attach_info, processes, hostfile):
-        """Get the process launch command used to run Mdtest
+    def get_default_env(self, manager_cmd, attach_info, log_file=None):
+        """Get the default enviroment settings for running mdtest.
+
         Args:
-            manager (str): mpi job manager command
+            manager_cmd (str): job manager command
             attach_info (str): CART attach info path
-            mpi_prefix (str): path for the mpi launch command
-            processes (int): number of host processes
-            hostfile (str): file defining host names and slots
-        Raises:
-            MdtestFailed: if an error occured building the Mdtest command
+            log_file (str, optional): log file. Defaults to None.
+
         Returns:
-            str: mdtest launch command
+            EnvironmentVariables: a dictionary of environment names and values
+
         """
-        print("Getting launch command for {}".format(manager))
-        exports = ""
-        env = {
-            "CRT_ATTACH_INFO_PATH": attach_info,
-            "MPI_LIB": "\"\"",
-            "DAOS_SINGLETON_CLI": 1,
-        }
-        if manager.endswith("mpirun"):
-            env.update({
-                "DAOS_POOL": self.dfs_pool_uuid.value,
-                "DAOS_SVCL": self.dfs_svcl.value,
-                "FI_PSM2_DISCONNECT": 1,
-            })
-            assign_env = ["{}={}".format(key, val) for key, val in env.items()]
-            exports = "export {}; ".format("; export ".join(assign_env))
-            args = [
-                "-np {}".format(processes),
-                "-hostfile {}".format(hostfile),
-            ]
+        env = EnvironmentVariables()
+        env["CRT_ATTACH_INFO_PATH"] = attach_info
+        env["MPI_LIB"] = "\"\""
+        env["DAOS_SINGLETON_CLI"] = 1
+        env["FI_PSM2_DISCONNECT"] = 1
+        if log_file:
+            env["D_LOG_FILE"] = log_file
 
-        elif manager.endswith("orterun"):
-            assign_env = ["{}={}".format(key, val) for key, val in env.items()]
-            args = [
-                "-np {}".format(processes),
-                "-hostfile {}".format(hostfile),
-                "-map-by node",
-            ]
-            args.extend(["-x {}".format(assign) for assign in assign_env])
+        if "mpirun" in manager_cmd or "srun" in manager_cmd:
+            env["DAOS_POOL"] = self.dfs_pool_uuid.value
+            env["DAOS_SVCL"] = self.dfs_svcl.value
+            env["FI_PSM2_DISCONNECT"] = 1
 
-        elif manager.endswith("srun"):
-            env.update({
-                "DAOS_POOL": self.dfs_pool_uuid.value,
-                "DAOS_SVCL": self.dfs_svcl.value,
-                "FI_PSM2_DISCONNECT": 1,
-            })
-            assign_env = ["{}={}".format(key, val) for key, val in env.items()]
-            args = [
-                "-l",
-                "--mpi=pmi2",
-                "--export={}".format(",".join(["ALL"] + assign_env)),
-            ]
-            if processes is not None:
-                args.append("--ntasks={}".format(processes))
-                args.append("--distribution=cyclic")
-            if hostfile is not None:
-                args.append("--nodefile={}".format(hostfile))
-
-        else:
-            raise MdtestFailed("Unsupported job manager: {}".format(manager))
-
-        return "{}{} {} {}".format(
-            exports, manager, " ".join(args), self.__str__())
-
-    def run(self, manager, attach_info, processes, hostfile, display=True):
-        """Run the Mdtest command.
-        Args:
-            manager (str): mpi job manager command
-            attach_info (str): CART attach info path
-            processes (int): number of host processes
-            hostfile (str): file defining host names and slots
-            display (bool, optional): print Mdtest output to the console.
-                Defaults to True.
-        Raises:
-            MdtestFailed: if an error occured runnig the Mdtest command
-        """
-        command = self.get_launch_command(
-            manager, attach_info, processes, hostfile)
-        if display:
-            print("<MDTEST CMD>: {}".format(command))
-
-        # Run Mdtest
-        try:
-            run(command, allow_output_check="combined", shell=True)
-
-        except CmdError as error:
-            print("<MdtestRunFailed> Exception occurred: {}".format(error))
-            raise MdtestFailed("Mdtest Run process Failed: {}".format(error))
+        return env

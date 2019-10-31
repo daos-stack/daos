@@ -25,6 +25,7 @@
 #include <spdk/io_channel.h>
 #include <spdk/blob.h>
 #include "bio_internal.h"
+#include <daos_srv/smd.h>
 
 /*
  * The BIO blobstore (mapped to one NVMe device) owner xstream polls the
@@ -33,7 +34,12 @@
  * the DAOS progress ULT will be blocked, and NVMe device qpair won't be
  * polled.
  */
-struct bio_reaction_ops	*ract_ops;
+static struct bio_reaction_ops	*ract_ops;
+
+void bio_register_ract_ops(struct bio_reaction_ops *ops)
+{
+	ract_ops = ops;
+}
 
 /*
  * Return value:	0: Faulty reaction is done;
@@ -55,7 +61,7 @@ on_faulty(struct bio_blobstore *bbs)
 	D_ASSERT(tgt_cnt <= BIO_XS_CNT_MAX && tgt_cnt > 0);
 
 	for (i = 0; i < tgt_cnt; i++)
-		tgt_ids[i] = bbs->bb_xs_ctxts[i]->bxc_xs_id;
+		tgt_ids[i] = bbs->bb_xs_ctxts[i]->bxc_tgt_id;
 	ABT_mutex_unlock(bbs->bb_mutex);
 
 	rc = ract_ops->faulty_reaction(tgt_ids, tgt_cnt);
@@ -190,6 +196,7 @@ bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state)
 	case BIO_BS_STATE_OUT:
 		if (bbs->bb_state != BIO_BS_STATE_TEARDOWN)
 			rc = -DER_INVAL;
+		break;
 	case BIO_BS_STATE_REPLACED:
 	case BIO_BS_STATE_REINT:
 		rc = -DER_NOSYS;
@@ -201,13 +208,28 @@ bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state)
 	}
 
 	if (rc) {
-		D_ERROR("BS state transit error! xs_id: %d, %u -> %u\n",
-			bbs->bb_owner_xs->bxc_xs_id, bbs->bb_state, new_state);
+		D_ERROR("BS state transit error! tgt: %d, %u -> %u\n",
+			bbs->bb_owner_xs->bxc_tgt_id, bbs->bb_state, new_state);
 	} else {
-		D_DEBUG(DB_MGMT, "BS state transited. xs_id: %d, %u -> %u\n",
-			bbs->bb_owner_xs->bxc_xs_id, bbs->bb_state, new_state);
+		D_DEBUG(DB_MGMT, "BS state transited. tgt: %d, %u -> %u\n",
+			bbs->bb_owner_xs->bxc_tgt_id, bbs->bb_state, new_state);
 		bbs->bb_state = new_state;
-		/* TODO: Call SMD to update persistent device state */
+
+		if (new_state == BIO_BS_STATE_NORMAL ||
+		    new_state == BIO_BS_STATE_FAULTY) {
+			struct spdk_bs_type	bstype;
+			uuid_t			dev_id;
+			enum smd_dev_state	dev_state;
+
+			bstype = spdk_bs_get_bstype(bbs->bb_bs);
+			memcpy(dev_id, bstype.bstype, sizeof(dev_id));
+			dev_state = new_state == BIO_BS_STATE_NORMAL ?
+					SMD_DEV_NORMAL : SMD_DEV_FAULTY;
+
+			rc = smd_dev_set_state(dev_id, dev_state);
+			if (rc)
+				D_ERROR("Set device state failed. %d\n", rc);
+		}
 	}
 	ABT_mutex_unlock(bbs->bb_mutex);
 

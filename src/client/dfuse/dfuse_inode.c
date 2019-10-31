@@ -110,20 +110,6 @@ dfuse_check_for_inode(struct dfuse_projection_info *fs_handle,
 	return -DER_SUCCESS;
 };
 
-static void
-drop_ino_ref(struct dfuse_projection_info *fs_handle, ino_t ino)
-{
-	d_list_t *rlink;
-
-	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
-
-	if (!rlink) {
-		DFUSE_TRA_ERROR(fs_handle, "Could not find entry %lu", ino);
-		return;
-	}
-	d_hash_rec_ndecref(&fs_handle->dpi_iet, 2, rlink);
-}
-
 void
 ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 {
@@ -135,10 +121,6 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 
 	D_ASSERT(ref == 0);
 
-	if (ie->ie_parent != 0) {
-		drop_ino_ref(fs_handle, ie->ie_parent);
-	}
-
 	if (ie->ie_obj) {
 		rc = dfs_release(ie->ie_obj);
 		if (rc) {
@@ -148,14 +130,21 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 	}
 
 	if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_root) {
-		DFUSE_TRA_INFO(ie, "Closing dfs_root %d %d",
+		DFUSE_TRA_INFO(ie->ie_dfs, "Closing dfs_root %d %d",
 			       !daos_handle_is_inval(ie->ie_dfs->dfs_poh),
 			       !daos_handle_is_inval(ie->ie_dfs->dfs_coh));
 
 		if (!daos_handle_is_inval(ie->ie_dfs->dfs_coh)) {
+
+			rc = dfs_umount(ie->ie_dfs->dfs_ns);
+			if (rc != 0)
+				DFUSE_TRA_ERROR(ie->ie_dfs,
+						"dfs_umount() failed (%d)",
+						rc);
+
 			rc = daos_cont_close(ie->ie_dfs->dfs_coh, NULL);
 			if (rc != -DER_SUCCESS) {
-				DFUSE_TRA_ERROR(ie,
+				DFUSE_TRA_ERROR(ie->ie_dfs,
 						"daos_cont_close() failed: (%d)",
 						rc);
 			}
@@ -163,7 +152,7 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 		} else if (!daos_handle_is_inval(ie->ie_dfs->dfs_poh)) {
 			rc = daos_pool_disconnect(ie->ie_dfs->dfs_poh, NULL);
 			if (rc != -DER_SUCCESS) {
-				DFUSE_TRA_ERROR(ie,
+				DFUSE_TRA_ERROR(ie->ie_dfs,
 						"daos_pool_disconnect() failed: (%d)",
 						rc);
 			}

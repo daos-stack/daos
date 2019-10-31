@@ -29,7 +29,7 @@ import (
 
 const (
 	DefaultLogLevel = LogLevelInfo
-	logOutputDepth  = 4
+	logOutputDepth  = 3
 	emptyLogFlags   = 0
 )
 
@@ -75,4 +75,13 @@ func NewCombinedLogger(prefix string, output io.Writer) *LeveledLogger {
 			NewErrorLogger(prefix, output),
 		},
 	}
+}
+
+// NewTestLogger returns a logger and a *LogBuffer,
+// with the logger configured to send all output into
+// the buffer. The logger's level is set to DEBUG by default.
+func NewTestLogger(prefix string) (*LeveledLogger, *LogBuffer) {
+	var buf LogBuffer
+	return NewCombinedLogger(prefix, &buf).
+		WithLogLevel(LogLevelDebug), &buf
 }

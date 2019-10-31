@@ -26,7 +26,7 @@ from __future__ import print_function
 import os
 import avocado
 
-from daos_api import DaosPool, DaosApiError
+from pydaos.raw import DaosPool, DaosApiError
 from ior_test_base import IorTestBase
 
 
@@ -51,7 +51,7 @@ class NvmeIo(IorTestBase):
         Use Cases:
             Running multiple IOR on same server start instance.
 
-        :avocado: tags=nvme,nvme_io,large
+        :avocado: tags=all,daosio,full_regression,hw,nvme_io
         """
         # Pool params
         pool_mode = self.params.get("mode", '/run/pool/createmode/*')

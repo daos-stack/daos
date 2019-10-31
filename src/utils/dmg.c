@@ -21,7 +21,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * dmg(8): DAOS Management Utility
+ * dmg_old(8): DAOS Management Utility
  */
 #include <getopt.h>
 #include <stdio.h>
@@ -43,7 +43,7 @@ typedef int (*command_hdlr_t)(int, char *[]);
 
 /* NOTE about command-line arguments --group= (deprecated) and --sys-name= :
  * In new tools (dmg, daos) --group= will have a different meaning.
- * Keeping --group= option here for now (this dmg tool is to be replaced).
+ * Keeping --group= option here for now (this dmg_old tool is to be replaced).
  * A new, preferred option is --sys-name= (or --sys= shorter version).
  */
 
@@ -449,7 +449,7 @@ pool_op_hdlr(int argc, char *argv[])
 		return rc;
 
 	if (op == POOL_QUERY) {
-		daos_pool_info_t		 pinfo;
+		daos_pool_info_t		 pinfo = {0};
 		struct daos_pool_space		*ps = &pinfo.pi_space;
 		struct daos_rebuild_status	*rstat = &pinfo.pi_rebuild_st;
 		int				 i;
@@ -852,7 +852,7 @@ static int
 help_hdlr(int argc, char *argv[])
 {
 	printf("\
-usage: dmg COMMAND [OPTIONS]\n\
+usage: dmg_old COMMAND [OPTIONS]\n\
 commands:\n\
   create	create a pool\n\
   destroy	destroy a pool\n\

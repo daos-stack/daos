@@ -35,6 +35,7 @@ import server_utils
 import check_for_pool
 import write_host_file
 
+# pylint: disable = broad-except
 class MultipleCreatesTest(Test):
     """
     Tests DAOS pool creation, calling it repeatedly one after another
@@ -49,7 +50,7 @@ class MultipleCreatesTest(Test):
         # spot in the repo
         with open('../../../.build_vars.json') as build_file:
             build_paths = json.load(build_file)
-        basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
+        self.basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
 
         self.hostlist_servers = self.params.get("test_machines", '/run/hosts/')
         self.hostfile_servers = write_host_file.write_host_file(
@@ -58,12 +59,11 @@ class MultipleCreatesTest(Test):
         server_group = self.params.get("name", '/server_config/',
                                        'daos_server')
 
-        self.agent_sessions = agent_utils.run_agent(basepath,
+        self.agent_sessions = agent_utils.run_agent(self.basepath,
                                                     self.hostlist_servers)
-        server_utils.run_server(self.hostfile_servers, server_group, basepath)
+        server_utils.run_server(self, self.hostfile_servers, server_group)
 
-        self.daosctl = basepath + '/install/bin/daosctl'
-
+        self.daosctl = self.basepath + '/install/bin/daosctl'
 
     def tearDown(self):
         try:
@@ -77,7 +77,7 @@ class MultipleCreatesTest(Test):
         """
         Test issuing a single  pool create commands at once.
 
-        :avocado: tags=pool,poolcreate,multicreate
+        :avocado: tags=all,pool,smoke,pr,small,createone
         """
 
         # Accumulate a list of pass/fail indicators representing
@@ -147,7 +147,7 @@ class MultipleCreatesTest(Test):
         """
         Test issuing multiple pool create commands at once.
 
-        :avocado: tags=pool,poolcreate,multicreate
+        :avocado: tags=all,pool,smoke,pr,small,createtwo
         """
 
         # Accumulate a list of pass/fail indicators representing
@@ -232,7 +232,7 @@ class MultipleCreatesTest(Test):
         """
         Test issuing multiple pool create commands at once.
 
-        :avocado: tags=pool,poolcreate,multicreate
+        :avocado: tags=all,pool,pr,small,createthree
         """
 
         # Accumulate a list of pass/fail indicators representing what is

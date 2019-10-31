@@ -28,8 +28,7 @@ import traceback
 from apricot import TestWithServers
 
 
-from conversion import c_uuid_to_str
-from daos_api import DaosPool, DaosContainer, DaosApiError
+from pydaos.raw import DaosPool, DaosContainer, DaosApiError, c_uuid_to_str
 
 class BasicTxTest(TestWithServers):
     """
@@ -48,7 +47,7 @@ class BasicTxTest(TestWithServers):
         Not a good test at this point, need to redesign when tx is fully
         working.
 
-        :avocado: tags=container,tx,basictx
+        :avocado: tags=all,container,tx,small,smoke,pr,basictx
         """
         pool = None
 

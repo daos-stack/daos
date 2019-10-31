@@ -15,11 +15,6 @@
 # default: daos_server
 #name: daos
 
-# Management server access points
-# default: hostname of this node at port 10001 for local testing
-#access_points: ['hostname1:10001','hostname2:10001','hostname3:10001']
-#access_points: [hostname1,hostname2,hostname3]
-
 # Force different port number to connect to access points.
 # default: 10000
 #port: 10001
