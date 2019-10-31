@@ -1997,6 +1997,7 @@ out:
 static struct crt_corpc_ops rebuild_tgt_scan_co_ops = {
 	.co_aggregate	= rebuild_tgt_scan_aggregator,
 	.co_pre_forward	= NULL,
+	.co_post_reply	= rebuild_tgt_scan_post_reply,
 };
 
 /* Define for cont_rpcs[] array population below.

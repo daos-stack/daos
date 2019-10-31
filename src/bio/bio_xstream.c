@@ -184,6 +184,12 @@ bio_nvme_fini(void)
 	smd_fini();
 }
 
+static inline bool
+is_bbs_owner(struct bio_xs_context *ctxt, struct bio_blobstore *bbs)
+{
+	return bbs->bb_owner_xs == ctxt;
+}
+
 /*
  * Execute the messages on msg ring, call all registered pollers.
  *
@@ -213,10 +219,9 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 	 * Query and print the SPDK device health stats for only the device
 	 * owner xstream.
 	 */
-	if (ctxt->bxc_blobstore != NULL) {
-		if (ctxt->bxc_blobstore->bb_owner_xs == ctxt)
-			bio_bs_monitor(ctxt, now);
-	}
+	if (ctxt->bxc_blobstore != NULL &&
+	    is_bbs_owner(ctxt, ctxt->bxc_blobstore))
+		bio_bs_monitor(ctxt, now);
 
 	return rc;
 }
@@ -462,9 +467,6 @@ free_bio_blobstore(struct bio_blobstore *bb)
 	ABT_mutex_free(&bb->bb_mutex);
 	D_FREE(bb->bb_xs_ctxts);
 
-	/* Free all device health monitoring info as well */
-	bio_fini_health_monitoring(bb);
-
 	D_FREE(bb);
 }
 
@@ -483,7 +485,7 @@ put_bio_blobstore(struct bio_blobstore *bb, struct bio_xs_context *ctxt)
 
 	ABT_mutex_lock(bb->bb_mutex);
 	/* Unload the blobstore in the same xstream where it was loaded. */
-	if (bb->bb_owner_xs == ctxt && bb->bb_bs != NULL) {
+	if (is_bbs_owner(ctxt, bb) && bb->bb_bs != NULL) {
 		bs = bb->bb_bs;
 		bb->bb_bs = NULL;
 	}
@@ -709,12 +711,27 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id)
 		return daos_errno2der(-rc);
 	}
 
+	/*
+	 * If no bbs (BIO blobstore) is attached to the device, attach one and
+	 * set current xstream as bbs owner.
+	 */
 	if (d_bdev->bb_blobstore == NULL) {
 		d_bdev->bb_blobstore = alloc_bio_blobstore(ctxt);
 		if (d_bdev->bb_blobstore == NULL)
 			return -DER_NOMEM;
+	}
 
-		rc = bio_init_health_monitoring(d_bdev->bb_blobstore,
+	/* Hold bbs refcount for current xstream */
+	ctxt->bxc_blobstore = get_bio_blobstore(d_bdev->bb_blobstore, ctxt);
+	if (ctxt->bxc_blobstore == NULL)
+		return -DER_NOMEM;
+
+	/*
+	 * bbs owner xstream is responsible to initialize monitoring context
+	 * and open SPDK blobstore.
+	 */
+	if (is_bbs_owner(ctxt, ctxt->bxc_blobstore)) {
+		rc = bio_init_health_monitoring(ctxt->bxc_blobstore,
 						d_bdev->bb_bdev);
 		if (rc != 0) {
 			D_ERROR("BIO health monitoring not allocated\n");
@@ -727,16 +744,14 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id)
 		if (bs == NULL)
 			return -DER_INVAL;
 
-		d_bdev->bb_blobstore->bb_bs = bs;
+		ctxt->bxc_blobstore->bb_bs = bs;
 
 		D_DEBUG(DB_MGMT, "Loaded bs, tgt_id:%d, xs:%p dev:%s\n",
 			tgt_id, ctxt, spdk_bdev_get_name(d_bdev->bb_bdev));
+
 	}
 
-	ctxt->bxc_blobstore = get_bio_blobstore(d_bdev->bb_blobstore, ctxt);
-	if (ctxt->bxc_blobstore == NULL)
-		return -DER_NOMEM;
-
+	/* Open IO channel for current xstream */
 	bs = ctxt->bxc_blobstore->bb_bs;
 	D_ASSERT(bs != NULL);
 	ctxt->bxc_io_channel = spdk_bs_alloc_io_channel(bs);
@@ -771,6 +786,10 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 
 	if (ctxt->bxc_blobstore != NULL) {
 		put_bio_blobstore(ctxt->bxc_blobstore, ctxt);
+
+		if (is_bbs_owner(ctxt, ctxt->bxc_blobstore))
+			bio_fini_health_monitoring(ctxt->bxc_blobstore);
+
 		ctxt->bxc_blobstore = NULL;
 	}
 

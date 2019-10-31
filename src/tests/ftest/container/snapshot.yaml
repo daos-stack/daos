@@ -5,15 +5,13 @@ hosts:
       test_machines:
         - boro-A
         - boro-B
-timeout: 500
+timeout: 600
 faults:
     no_faults:
       fault_list: []
 server_config:
    name: daos_server
 poolparams:
-   createmode:
-     mode: 511
    createset:
      setname: daos_server
    createsize:
@@ -22,7 +20,7 @@ snapshot:
     dkey: "dkey"
     akey: "akey"
     test_datasize: 200
-    num_of_snapshot: 10
+    num_of_snapshot: 20
 object_class: !mux
     OC_S1:
         obj_class: 200
