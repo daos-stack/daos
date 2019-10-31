@@ -304,9 +304,8 @@ if ${SETUP_ONLY:-false}; then
     exit 0
 fi
 
-TEST_TAG_ARG=\"${TEST_TAG_ARG}\"
 # check if slurm needs to be configured for soak
-if [[ \${TEST_TAG_ARG} =~ soak ]]; then
+if [[ \"${TEST_TAG_ARG}\" =~ soak ]]; then
     if ! ./slurm_setup.py -c ${CONTROL_NODE[0]} -n ${TEST_NODES} -s -i; then
         rc=\${PIPESTATUS[0]}
         exit \"$rc\"
