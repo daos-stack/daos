@@ -82,8 +82,6 @@ pipeline {
     options {
         // preserve stashes so that jobs can be started at the test stage
         preserveStashes(buildCount: 5)
-        // How can we have different timeouts for weekly and master and PRs?
-        timeout(time: 2, unit: 'HOURS')
     }
 
     stages {
@@ -1175,12 +1173,14 @@ pipeline {
                                        snapshot: true,
                                        inst_repos: component_repos,
                                        inst_rpms: cart_rpms
-                        runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
-                                           export CART_TEST_MODE=native
-                                           bash -x ./multi-node-test.sh 1 ''' +
-                                           env.NODELIST + ''' one_node''',
-                                junit_files: "install/Linux/TESTING/avocado/job-results/CART_1node/*/*.xml"
+                        timeout (time: 30, unit: 'MINUTES') {
+                            runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
+                                    script: '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
+                                               export CART_TEST_MODE=native
+                                               bash -x ./multi-node-test.sh 1 ''' +
+                                               env.NODELIST + ''' one_node''',
+                                    junit_files: "install/Linux/TESTING/avocado/job-results/CART_1node/*/*.xml"
+                        }
                     }
                     post {
                         always {
@@ -1231,12 +1231,14 @@ pipeline {
                                        snapshot: true,
                                        inst_repos: component_repos,
                                        inst_rpms: cart_rpms
-                        runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
-                                           export CART_TEST_MODE=memcheck
-                                           bash -x ./multi-node-test.sh 1 ''' +
-                                           env.NODELIST + ''' one_node''',
-                                junit_files: "install/Linux/TESTING/avocado/job-results/CART_1vgdnode/*/*.xml"
+                        timeout (time: 30, unit: 'MINUTES') {
+                            runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
+                                    script: '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
+                                               export CART_TEST_MODE=memcheck
+                                               bash -x ./multi-node-test.sh 1 ''' +
+                                               env.NODELIST + ''' one_node''',
+                                    junit_files: "install/Linux/TESTING/avocado/job-results/CART_1vgdnode/*/*.xml"
+                            }
                     }
                     post {
                         always {
@@ -1301,12 +1303,14 @@ pipeline {
                                        snapshot: true,
                                        inst_repos: component_repos,
                                        inst_rpms: cart_rpms
-                        runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
-                                           export CART_TEST_MODE=none
-                                           bash -x ./multi-node-test.sh 2 ''' +
-                                           env.NODELIST + ''' two_node''',
-                                junit_files: "install/Linux/TESTING/avocado/job-results/CART_2node/*/*.xml"
+                        timeout (time: 30, unit: 'MINUTES') {
+                            runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
+                                    script: '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
+                                               export CART_TEST_MODE=none
+                                               bash -x ./multi-node-test.sh 2 ''' +
+                                               env.NODELIST + ''' two_node''',
+                                    junit_files: "install/Linux/TESTING/avocado/job-results/CART_2node/*/*.xml"
+                        }
                     }
                     post {
                         always {
@@ -1357,12 +1361,14 @@ pipeline {
                                        snapshot: true,
                                        inst_repos: component_repos,
                                        inst_rpms: cart_rpms
-                        runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
-                                           export CART_TEST_MODE=none
-                                           bash -x ./multi-node-test.sh 3 ''' +
-                                           env.NODELIST + ''' three_node''',
-                                junit_files: "install/Linux/TESTING/avocado/job-results/CART_3node/*/*.xml"
+                        timeout (time: 30, unit: 'MINUTES') {
+                            runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
+                                    script: '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
+                                               export CART_TEST_MODE=none
+                                               bash -x ./multi-node-test.sh 3 ''' +
+                                               env.NODELIST + ''' three_node''',
+                                    junit_files: "install/Linux/TESTING/avocado/job-results/CART_3node/*/*.xml"
+                        }
                     }
                     post {
                         always {
@@ -1413,12 +1419,14 @@ pipeline {
                                        snapshot: true,
                                        inst_repos: component_repos,
                                        inst_rpms: cart_rpms
-                        runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
-                                           export CART_TEST_MODE=none
-                                           bash -x ./multi-node-test.sh 5 ''' +
-                                           env.NODELIST + ''' five_node''',
-                                junit_files: "install/Linux/TESTING/avocado/job-results/CART_5node/*/*.xml"
+                        timeout (time: 30, unit: 'MINUTES') {
+                            runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
+                                    script: '''export PDSH_SSH_ARGS_APPEND="-i ci_key"
+                                               export CART_TEST_MODE=none
+                                               bash -x ./multi-node-test.sh 5 ''' +
+                                               env.NODELIST + ''' five_node''',
+                                    junit_files: "install/Linux/TESTING/avocado/job-results/CART_5node/*/*.xml"
+                        }
                     }
                     post {
                         always {

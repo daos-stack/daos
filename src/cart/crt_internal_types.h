@@ -267,6 +267,7 @@ struct crt_opc_map {
 struct na_ofi_config {
 	int32_t		 noc_port;
 	char		*noc_interface;
+	char		*noc_domain;
 	/* IP addr str for the noc_interface */
 	char		 noc_ip_str[INET_ADDRSTRLEN];
 };

@@ -598,6 +598,7 @@ int crt_na_ofi_config_init(void)
 	struct ifaddrs	*ifa = NULL;
 	void		*tmp_ptr;
 	const char	*ip_str = NULL;
+	char		*domain = NULL;
 	int		rc = 0;
 
 	interface = getenv("OFI_INTERFACE");
@@ -609,6 +610,19 @@ int crt_na_ofi_config_init(void)
 		crt_na_ofi_conf.noc_interface = NULL;
 		D_ERROR("ENV OFI_INTERFACE not set.");
 		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	domain = getenv("OFI_DOMAIN");
+	if (domain == NULL) {
+		D_DEBUG(DB_ALL, "OFI_DOMAIN is not set. Setting it to %s\n",
+			interface);
+		domain = interface;
+	}
+
+	D_STRNDUP(crt_na_ofi_conf.noc_domain, domain, 64);
+	if (!crt_na_ofi_conf.noc_domain) {
+		D_ERROR("Failed to stdndup domain name\n");
+		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	rc = getifaddrs(&if_addrs);
@@ -677,6 +691,7 @@ int crt_na_ofi_config_init(void)
 out:
 	if (rc != -DER_SUCCESS) {
 		D_FREE(crt_na_ofi_conf.noc_interface);
+		D_FREE(crt_na_ofi_conf.noc_domain);
 	}
 	return rc;
 }
@@ -684,5 +699,6 @@ out:
 void crt_na_ofi_config_fini(void)
 {
 	D_FREE(crt_na_ofi_conf.noc_interface);
+	D_FREE(crt_na_ofi_conf.noc_domain);
 	crt_na_ofi_conf.noc_port = 0;
 }
