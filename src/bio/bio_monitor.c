@@ -41,17 +41,9 @@
  * access.  The instances of these possible unaligned accesses happen with
  * default gcc on Fedora 30.
  */
-#if !defined(__has_warning)  /* gcc */
-#if __GNUC__ >= 9
+#if D_HAS_WARNING(9, "-Waddress-of-packed-member")
 	#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
-#endif /* warning only defined in version 9 or later */
-#else /* __has_warning is defined */
-#if __has_warning("-Waddress-of-packed-member") /* valid clang warning */
-	#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
-#endif /* Warning is defined in clang */
-#endif /* __has_warning not defined */
-
-
+#endif
 
 /*
  * Used for getting bio device state, which requires exclusive access from
@@ -409,16 +401,33 @@ bio_xs_io_stat(struct bio_xs_context *ctxt, uint64_t now)
 void
 bio_fini_health_monitoring(struct bio_blobstore *bb)
 {
+	struct bio_dev_health	*bdh = &bb->bb_dev_health;
+
 	/* Free NVMe admin passthru DMA buffers */
-	spdk_dma_free(bb->bb_dev_health.bdh_health_buf);
-	spdk_dma_free(bb->bb_dev_health.bdh_ctrlr_buf);
-	spdk_dma_free(bb->bb_dev_health.bdh_error_buf);
+	if (bdh->bdh_health_buf) {
+		spdk_dma_free(bdh->bdh_health_buf);
+		bdh->bdh_health_buf = NULL;
+	}
+	if (bdh->bdh_ctrlr_buf) {
+		spdk_dma_free(bdh->bdh_ctrlr_buf);
+		bdh->bdh_ctrlr_buf = NULL;
+	}
+	if (bdh->bdh_error_buf) {
+		spdk_dma_free(bdh->bdh_error_buf);
+		bdh->bdh_error_buf = NULL;
+	}
 
 	/* Release I/O channel reference */
-	spdk_put_io_channel(bb->bb_dev_health.bdh_io_channel);
+	if (bdh->bdh_io_channel) {
+		spdk_put_io_channel(bdh->bdh_io_channel);
+		bdh->bdh_io_channel = NULL;
+	}
 
 	/* Close device health monitoring descriptor */
-	spdk_bdev_close(bb->bb_dev_health.bdh_desc);
+	if (bdh->bdh_desc) {
+		spdk_bdev_close(bdh->bdh_desc);
+		bdh->bdh_desc = NULL;
+	}
 }
 
 /*

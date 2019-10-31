@@ -323,13 +323,16 @@ func TestHarnessIOServerStart(t *testing.T) {
 				}))
 			}
 
+			done := make(chan struct{})
 			ctx, shutdown := context.WithCancel(context.Background())
-			go func(t *testing.T) {
-				common.CmpErr(t, tc.expStartErr, harness.Start(ctx))
-			}(t)
+			go func(t *testing.T, expStartErr error, th *IOServerHarness) {
+				common.CmpErr(t, expStartErr, th.Start(ctx))
+				close(done)
+			}(t, tc.expStartErr, harness)
 
 			time.Sleep(50 * time.Millisecond)
 			shutdown()
+			<-done // wait for inner goroutine to finish
 
 			if instanceStarts != tc.expStartCount {
 				t.Fatalf("expected %d starts, got %d", tc.expStartCount, instanceStarts)
