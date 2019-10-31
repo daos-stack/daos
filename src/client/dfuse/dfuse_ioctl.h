@@ -27,9 +27,15 @@
 #include "daos.h"
 
 #define DFUSE_IOCTL_TYPE 0xA3       /* Arbitrary "unique" type of the IOCTL */
-#define DFUSE_IOCTL_REPLY_NUMBER 0xC1 /* Number of the IOCTL.  Also arbitrary */
+#define DFUSE_IOCTL_REPLY_BASE 0xC1 /* Number of the IOCTL.  Also arbitrary */
 #define DFUSE_IOCTL_VERSION 4       /* Version of ioctl protocol */
 
+#define DFUSE_IOCTL_REPLY_CORE (DFUSE_IOCTL_REPLY_BASE)
+#define DFUSE_IOCTL_REPLY_SIZE (DFUSE_IOCTL_REPLY_BASE + 1)
+#define DFUSE_IOCTL_REPLY_POH (DFUSE_IOCTL_REPLY_BASE + 2)
+#define DFUSE_IOCTL_REPLY_COH (DFUSE_IOCTL_REPLY_BASE + 3)
+
+/* Core IOCTL reply */
 struct dfuse_il_reply {
 	int		fir_version;
 	daos_obj_id_t	fir_oid;
@@ -37,8 +43,22 @@ struct dfuse_il_reply {
 	uuid_t		fir_cont;
 };
 
+/* Query for global handle sizes */
+struct dfuse_hs_reply {
+	int		fsr_version;
+	size_t		fsr_pool_size;
+	size_t		fsr_cont_size;
+};
+
 /* Defines the IOCTL command to get the object ID for a open file */
-#define DFUSE_IOCTL_IL ((int)_IOR(DFUSE_IOCTL_TYPE, DFUSE_IOCTL_REPLY_NUMBER, \
-				 struct dfuse_il_reply))
+#define DFUSE_IOCTL_IL ((int)_IOR(DFUSE_IOCTL_TYPE, DFUSE_IOCTL_REPLY_CORE, \
+				  struct dfuse_il_reply))
+
+/* Defined the IOCTL command to get the pool/container handle sizes for a
+ * open file
+ */
+#define DFUSE_IOCTL_IL_SIZE ((int)_IOR(DFUSE_IOCTL_TYPE,		\
+				       DFUSE_IOCTL_REPLY_SIZE,		\
+				       struct dfuse_hs_reply))
 
 #endif /* __DFUSE_IOCTL_H__ */

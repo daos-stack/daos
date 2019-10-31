@@ -315,20 +315,19 @@ func (n *nvmeStorage) Format(cfg storage.BdevConfig, results *(types.NvmeControl
 // loadControllers converts slice of Controller into protobuf equivalent.
 // Implemented as a pure function.
 func loadControllers(ctrlrs []spdk.Controller, nss []spdk.Namespace,
-	health []spdk.DeviceHealth) (pbCtrlrs types.NvmeControllers) {
+	healthStats []spdk.DeviceHealth) (pbCtrlrs types.NvmeControllers) {
 
 	for _, c := range ctrlrs {
 		pbCtrlrs = append(
 			pbCtrlrs,
 			&ctlpb.NvmeController{
-				Model:    c.Model,
-				Serial:   c.Serial,
-				Pciaddr:  c.PCIAddr,
-				Fwrev:    c.FWRev,
-				Socketid: c.SocketID,
-				// repeated pb field
-				Namespaces:  loadNamespaces(c.PCIAddr, nss),
-				Healthstats: loadHealthStats(health),
+				Model:       c.Model,
+				Serial:      c.Serial,
+				Pciaddr:     c.PCIAddr,
+				Fwrev:       c.FWRev,
+				Socketid:    c.SocketID,
+				Healthstats: loadHealthStats(c.PCIAddr, healthStats),
+				Namespaces:  loadNamespaces(c.PCIAddr, nss), // repeated pb field
 			})
 	}
 	return pbCtrlrs
@@ -350,31 +349,31 @@ func loadNamespaces(ctrlrPciAddr string, nss []spdk.Namespace) (_nss types.NvmeN
 	return
 }
 
-// loadHealthStats converts a slice of DeviceHealth into protobuf equivalent.
-// Implemented as a pure function.
-func loadHealthStats(health []spdk.DeviceHealth) (_health types.NvmeHealthstats) {
-	for _, h := range health {
-		_health = append(
-			_health,
-			&ctlpb.NvmeController_Health{
-				Temp:            h.Temp,
-				Tempwarn:        h.TempWarnTime,
-				Tempcrit:        h.TempCritTime,
-				Ctrlbusy:        h.CtrlBusyTime,
-				Powercycles:     h.PowerCycles,
-				Poweronhours:    h.PowerOnHours,
-				Unsafeshutdowns: h.UnsafeShutdowns,
-				Mediaerrors:     h.MediaErrors,
-				Errorlogs:       h.ErrorLogEntries,
-				Tempwarning:     h.TempWarn,
-				Availspare:      h.AvailSpareWarn,
-				Reliability:     h.ReliabilityWarn,
-				Readonly:        h.ReadOnlyWarn,
-				Volatilemem:     h.VolatileWarn,
-			})
+// loadHealthStats find health statistics for a given control identified by PCI
+// address.
+func loadHealthStats(ctrlrPciAddr string, hss []spdk.DeviceHealth) *ctlpb.NvmeController_Health {
+	for _, hs := range hss {
+		if hs.CtrlrPciAddr == ctrlrPciAddr {
+			return &ctlpb.NvmeController_Health{
+				Temp:            hs.Temp,
+				Tempwarn:        hs.TempWarnTime,
+				Tempcrit:        hs.TempCritTime,
+				Ctrlbusy:        hs.CtrlBusyTime,
+				Powercycles:     hs.PowerCycles,
+				Poweronhours:    hs.PowerOnHours,
+				Unsafeshutdowns: hs.UnsafeShutdowns,
+				Mediaerrors:     hs.MediaErrors,
+				Errorlogs:       hs.ErrorLogEntries,
+				Tempwarning:     hs.TempWarn,
+				Availspare:      hs.AvailSpareWarn,
+				Reliability:     hs.ReliabilityWarn,
+				Readonly:        hs.ReadOnlyWarn,
+				Volatilemem:     hs.VolatileWarn,
+			}
+		}
 	}
 
-	return
+	return nil // none found
 }
 
 // newNvmeStorage creates a new instance of nvmeStorage struct.

@@ -63,15 +63,15 @@ func MockControllerPB() *ctlpb.NvmeController {
 		Serial:      "123ABC",
 		Pciaddr:     "0000:81:00.0",
 		Fwrev:       "1.0.0",
+		Healthstats: MockDeviceHealthPB(),
 		Namespaces:  []*ctlpb.NvmeController_Namespace{MockNamespacePB()},
-		Healthstats: []*ctlpb.NvmeController_Health{MockDeviceHealthPB()},
 	}
 }
 
 // NewMockControllerPB generates specific protobuf controller message
 func NewMockControllerPB(
 	pciAddr string, fwRev string, model string, serial string,
-	nss []*ctlpb.NvmeController_Namespace, dh []*ctlpb.NvmeController_Health) *ctlpb.NvmeController {
+	nss []*ctlpb.NvmeController_Namespace, hs *ctlpb.NvmeController_Health) *ctlpb.NvmeController {
 
 	return &ctlpb.NvmeController{
 		Model:       model,
@@ -79,7 +79,7 @@ func NewMockControllerPB(
 		Pciaddr:     pciAddr,
 		Fwrev:       fwRev,
 		Namespaces:  nss,
-		Healthstats: dh,
+		Healthstats: hs,
 	}
 }
 
