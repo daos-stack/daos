@@ -1290,6 +1290,23 @@ crt_grp_priv_destroy(struct crt_grp_priv *grp_priv)
 	grp_priv_fini_membs(grp_priv);
 
 	if (!grp_priv->gp_primary) {
+		struct crt_grp_priv *grp_priv_prim = grp_priv->gp_priv_prim;
+
+		/*
+		 * grp_priv_prim may be NULL as crt_grp_priv_destroy is also
+		 * used to destroy partially created secondary groups. See
+		 * crt_group_secondary_create.
+		 */
+		if (grp_priv_prim != NULL) {
+			int i;
+
+			for (i = 0; i < CRT_MAX_SEC_GRPS; i++) {
+				if (grp_priv_prim->gp_priv_sec[i] == grp_priv)
+					break;
+			}
+			D_ASSERT(i < CRT_MAX_SEC_GRPS); /* must be found */
+			grp_priv->gp_priv_prim->gp_priv_sec[i] = NULL;
+		}
 		d_hash_table_destroy_inplace(&grp_priv->gp_p2s_table,
 						true);
 		d_hash_table_destroy_inplace(&grp_priv->gp_s2p_table,
@@ -4490,13 +4507,15 @@ crt_group_secondary_create(crt_group_id_t grp_name, crt_group_t *primary_grp,
 			break;
 		}
 	}
-
 	if (!found) {
 		D_ERROR("Exceeded secondary groups limit\n");
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
-
-	/* Record primary group in the secondary group */
+	/*
+	 * Record primary group in the secondary group. Note that this field
+	 * controls whether crt_grp_priv_destroy attempts to remove this
+	 * secondary group from grp_priv_prim->gp_priv_sec.
+	 */
 	grp_priv->gp_priv_prim = grp_priv_prim;
 
 	*ret_grp = &grp_priv->gp_pub;
