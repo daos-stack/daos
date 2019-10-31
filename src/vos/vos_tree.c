@@ -362,13 +362,6 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	if (rc != 0)
 		return rc;
 
-
-	if (krec->kr_dtx_shares > 0) {
-		D_ERROR("There are some unknown DTXs (%d) share the key rec\n",
-			krec->kr_dtx_shares);
-		return -DER_BUSY;
-	}
-
 	D_ASSERT(tins->ti_priv);
 	gc = (krec->kr_bmap & KREC_BF_DKEY) ? GC_DKEY : GC_AKEY;
 	return gc_add_item((struct vos_pool *)tins->ti_priv, gc,

@@ -318,10 +318,6 @@ struct vos_krec_df {
 	struct ilog_df			kr_ilog;
 	/** The DTX entry in SCM. */
 	umem_off_t			kr_dtx;
-	/** The count of uncommitted DTXs that share the key. */
-	uint32_t			kr_dtx_shares;
-	/** For 64-bits alignment. */
-	uint32_t			kr_padding;
 	union {
 		/** btree root under the key */
 		struct btr_root			kr_btr;
