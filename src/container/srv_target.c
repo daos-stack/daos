@@ -988,8 +988,6 @@ cont_close_one_rec(struct cont_tgt_close_rec *rec)
 
 	hdl = cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash, rec->tcr_hdl);
 
-	daos_csummer_destroy(&hdl->sch_csummer);
-
 	if (hdl == NULL) {
 		D_DEBUG(DF_DSMS, DF_CONT": already closed: hdl="DF_UUID" hce="
 			DF_U64"\n", DP_CONT(NULL, NULL), DP_UUID(rec->tcr_hdl),
@@ -1016,6 +1014,8 @@ cont_close_one_rec(struct cont_tgt_close_rec *rec)
 		cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
 		hdl->sch_deleted = 1;
 	}
+
+	daos_csummer_destroy(&hdl->sch_csummer);
 
 	cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
 	return 0;

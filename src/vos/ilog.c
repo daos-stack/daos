@@ -335,6 +335,10 @@ ilog_mag2ver(uint32_t magic) {
 	return (magic & ILOG_VERSION_MASK);
 }
 
+/** Increment the version of the log.   The object tree in particular can
+ *  benefit from cached state of the tree.  In order to detect when to
+ *  update the case, we keep a version.
+ */
 static inline uint32_t
 ilog_ver_inc(struct ilog_context *lctx)
 {

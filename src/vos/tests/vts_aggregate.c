@@ -207,9 +207,15 @@ lookup_object(struct io_test_args *arg, daos_unit_oid_t oid)
 	int			 rc;
 	daos_epoch_range_t	 epr = {0, DAOS_EPOCH_MAX};
 
+	/** Do a hold because we may have only deleted one incarnation of the
+	 *  tree.   If this returns 0, we need to release the object though
+	 *  this is only presently used to check existence
+	 */
 	rc = vos_obj_hold(vos_obj_cache_current(),
 			  vos_hdl2cont(arg->ctx.tc_co_hdl), oid, &epr, true,
 			  DAOS_INTENT_DEFAULT, true, &obj);
+	if (rc == 0)
+		vos_obj_release(vos_obj_cache_current(), obj);
 	return rc;
 }
 
