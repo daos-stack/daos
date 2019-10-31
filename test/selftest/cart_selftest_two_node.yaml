@@ -2,8 +2,8 @@
 # required quantity is indicated by the placeholders
 
 defaultENV:
-  #!filter-only : /run/envs_CRT_CTX_SHARE_ADDR/sep
-  #!filter-only : /run/tests/self_test
+  #!filter-only : /run/env_CRT_CTX_SHARE_ADDR/sep
+  #!filter-only : /run/tests/self
   D_LOG_MASK: "WARN"
   CRT_PHY_ADDR_STR: "ofi+sockets"
   OFI_INTERFACE: "eth0"
@@ -31,6 +31,16 @@ tests: !mux
     srv_env: ""
     srv_ppn: "1"
     cli_bin: ../bin/self_test
-    cli_arg: "--group-name target --endpoint 0:0 --message-sizes b2000,b2000 0,0 b2000,b2000 i1000,i1000 b2000,i1000,i1000 0,0 i1000,1,0 --max-inflight-rpcs 16 --repetitions 100"
+    cli_arg: "--group-name target --endpoint 0:0 --message-sizes \"b2000,b2000 0,0 b2000,b2000 i1000,i1000 b2000,i1000,i1000 0,0 i1000,1,0\" --max-inflight-rpcs 16 --repetitions 100"
+    cli_env: ""
+    cli_ppn: "1"
+  self_np:
+    name: self_test_np
+    srv_bin: ../bin/crt_launch
+    srv_arg: "-e tests/test_group_np_srv --name server_grp --cfg_path=."
+    srv_env: ""
+    srv_ppn: "1"
+    cli_bin: ../bin/self_test
+    cli_arg: "--group-name server_grp --endpoint 0:0 --message-sizes \"b2000,b2000 0,0 b2000,b2000 i1000,i1000 b2000,i1000,i1000 0,0 i1000,1,0\" --max-inflight-rpcs 16 --repetitions 100 -t -n -p ."
     cli_env: ""
     cli_ppn: "1"
