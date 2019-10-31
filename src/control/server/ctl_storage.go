@@ -31,6 +31,7 @@ import (
 	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
@@ -159,8 +160,8 @@ func (c *StorageControlService) NvmePrepare(req NvmePrepareRequest) error {
 
 // GetScmState performs required initialisation and returns current state
 // of SCM module preparation.
-func (c *StorageControlService) GetScmState() (types.ScmState, error) {
-	state := types.ScmStateUnknown
+func (c *StorageControlService) GetScmState() (storage.ScmState, error) {
+	state := storage.ScmStateUnknown
 
 	ok, _ := c.ext.checkSudo()
 	if !ok {
