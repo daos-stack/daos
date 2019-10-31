@@ -170,10 +170,9 @@ def scons():
 
     # copy server init files to be used at runtime, explicitly
     # remove first because recursive Delete() on dir fails.
-    moduleserver = join(gosrc, "server")
     denv.Command(
-        join("$PREFIX", "share", "daos", "control", "setup_spdk.sh")
-        join(moduleserver, "init", "setup_spdk.sh"),
+        join("$PREFIX", "share", "daos", "control", "setup_spdk.sh"),
+        join(gosrc, "server", "init", "setup_spdk.sh"),
         [
             Delete("$TARGET"),
             Copy("$TARGET", "$SOURCE")
