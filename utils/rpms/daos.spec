@@ -257,7 +257,7 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/*.so.*
 %{_libdir}/libdfs.so
 %if (0%{?suse_version} >= 1500)
-/lib/libdfs.so
+/lib64/libdfs.so
 %endif
 %{_libdir}/libduns.so
 %{_libdir}/libdfuse.so
