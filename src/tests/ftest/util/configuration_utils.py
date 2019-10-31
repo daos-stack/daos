@@ -501,7 +501,7 @@ class Configuration(object):
             re_path = "/".join(path.split("/")[:-1])
         else:
             # Without a trailing "*", only match the path specifified
-            re_path += "$"
+            re_path = "".join([path, "$"])
         # Replace any "*" not at the end of the path
         search_path = re.compile(re_path.replace('*', '[^/]*'))
 

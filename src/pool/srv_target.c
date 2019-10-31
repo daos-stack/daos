@@ -1,4 +1,4 @@
-/**
+/*
  * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,6 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
+ * \file
+ *
  * ds_pool: Target Operations
  *
  * This file contains the server API methods and the RPC handlers that are both
@@ -36,6 +38,7 @@
  *   Thread-local  ds_pool_child  ds_cont
  *                                ds_cont_hdl
  */
+
 #define D_LOGFAC	DD_FAC(pool)
 
 #include <daos_srv/pool.h>
@@ -102,8 +105,8 @@ ds_pool_child_purge(struct pool_tls *tls)
 }
 
 struct pool_child_lookup_arg {
-	struct ds_pool	*pla_pool;
-	void		*pla_uuid;
+	struct ds_pool *pla_pool;
+	void	       *pla_uuid;
 	uint32_t	pla_map_version;
 };
 
@@ -112,33 +115,35 @@ struct pool_child_lookup_arg {
  * for one thread. This opens the matching VOS pool.
  */
 static int
-ds_pool_child_open(struct ds_pool *pool, uuid_t uuid, unsigned int version)
+pool_child_add_one(void *varg)
 {
+	struct pool_child_lookup_arg   *arg = varg;
 	struct pool_tls		       *tls = pool_tls_get();
 	struct ds_pool_child	       *child;
 	struct dss_module_info	       *info = dss_get_module_info();
 	char			       *path;
 	int				rc;
 
-	child = ds_pool_child_lookup(uuid);
+	child = ds_pool_child_lookup(arg->pla_uuid);
 	if (child != NULL) {
 		ds_pool_child_put(child);
 		return 0;
 	}
 
-	D_DEBUG(DF_DSMS, DF_UUID": creating\n", DP_UUID(uuid));
+	D_DEBUG(DF_DSMS, DF_UUID": creating\n", DP_UUID(arg->pla_uuid));
 
 	D_ALLOC_PTR(child);
 	if (child == NULL)
 		return -DER_NOMEM;
 
-	rc = ds_mgmt_tgt_file(uuid, VOS_FILE, &info->dmi_tgt_id, &path);
+	rc = ds_mgmt_tgt_file(arg->pla_uuid, VOS_FILE, &info->dmi_tgt_id,
+			      &path);
 	if (rc != 0) {
 		D_FREE(child);
 		return rc;
 	}
 
-	rc = vos_pool_open(path, uuid, &child->spc_hdl);
+	rc = vos_pool_open(path, arg->pla_uuid, &child->spc_hdl);
 
 	D_FREE(path);
 
@@ -147,41 +152,13 @@ ds_pool_child_open(struct ds_pool *pool, uuid_t uuid, unsigned int version)
 		return rc;
 	}
 
-	uuid_copy(child->spc_uuid, uuid);
-	child->spc_map_version = version;
+	uuid_copy(child->spc_uuid, arg->pla_uuid);
+	child->spc_map_version = arg->pla_map_version;
 	child->spc_ref = 1; /* 1 for the list */
-	child->spc_pool = pool;
+	child->spc_pool = arg->pla_pool;
 
 	d_list_add(&child->spc_list, &tls->dt_pool_list);
 
-	return 0;
-}
-
-/*
- * Called via dss_collective() to create and add the ds_pool_child object for
- * one thread. This opens the matching VOS pool.
- */
-static int
-pool_child_add_one(void *varg)
-{
-	struct pool_child_lookup_arg   *arg = varg;
-
-	return ds_pool_child_open(arg->pla_pool, arg->pla_uuid,
-				  arg->pla_map_version);
-}
-
-int
-ds_pool_child_close(uuid_t uuid)
-{
-	struct ds_pool_child *child;
-
-	child = ds_pool_child_lookup(uuid);
-	if (child == NULL)
-		return 0;
-
-	d_list_del_init(&child->spc_list);
-	ds_pool_child_put(child); /* -1 for the list */
-	ds_pool_child_put(child); /* -1 for lookup */
 	return 0;
 }
 
@@ -193,7 +170,17 @@ ds_pool_child_close(uuid_t uuid)
 static int
 pool_child_delete_one(void *uuid)
 {
-	return ds_pool_child_close(uuid);
+	struct ds_pool_child *child;
+
+	child = ds_pool_child_lookup(uuid);
+	if (child == NULL)
+		return 0;
+
+	d_list_del_init(&child->spc_list);
+	ds_pool_child_put(child); /* -1 for the list */
+
+	ds_pool_child_put(child); /* -1 for lookup */
+	return 0;
 }
 
 /* ds_pool ********************************************************************/
@@ -216,6 +203,12 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	struct pool_child_lookup_arg	collective_arg;
 	int				rc;
 	int				rc_tmp;
+
+	if (arg == NULL) {
+		/* The caller doesn't want to create a ds_pool object. */
+		rc = -DER_NONEXIST;
+		goto err;
+	}
 
 	D_DEBUG(DF_DSMS, DF_UUID": creating\n", DP_UUID(key));
 
