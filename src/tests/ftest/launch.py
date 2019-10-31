@@ -81,7 +81,7 @@ def get_build_environment():
     """
     build_vars_file = os.path.join(
         os.path.dirname(os.path.realpath(__file__)),
-        "../../../.build_vars.json")
+        "../../.build_vars.json")
     with open(build_vars_file) as vars_file:
         return json.load(vars_file)
 

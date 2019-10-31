@@ -239,7 +239,7 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
         server_count = len(servers)
 
         # Pile of build time variables
-        with open("../../../.build_vars.json") as json_vars:
+        with open("../../.build_vars.json") as json_vars:
             build_vars = json.load(json_vars)
 
         # Create the DAOS server configuration yaml file to pass

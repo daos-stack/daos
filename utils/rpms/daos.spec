@@ -187,7 +187,7 @@ scons %{?no_smp_mflags}              \
       PREFIX=%{?buildroot}%{_prefix}
 BUILDROOT="%{?buildroot}"
 PREFIX="%{?_prefix}"
-sed -i -e s/${BUILDROOT//\//\\/}[^\"]\*/${PREFIX//\//\\/}/g %{?buildroot}%{_prefix}/lib/.build_vars.*
+sed -i -e s/${BUILDROOT//\//\\/}[^\"]\*/${PREFIX//\//\\/}/g %{?buildroot}%{_prefix}/lib/daos/.build_vars.*
 mkdir -p %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{?buildroot}/%{_unitdir}
@@ -318,8 +318,8 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
 # For avocado tests
-%{_prefix}/lib/.build_vars.json
-%{_prefix}/lib/.build_vars.sh
+%{_prefix}/lib/daos/.build_vars.json
+%{_prefix}/lib/daos/.build_vars.sh
 
 %files devel
 %{_includedir}/*

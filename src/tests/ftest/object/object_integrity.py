@@ -57,7 +57,7 @@ class ObjectDataValidation(avocado.Test):
         self.array_size = None
         self.record_length = None
 
-        with open('../../../.build_vars.json') as json_f:
+        with open('../../.build_vars.json') as json_f:
             build_paths = json.load(json_f)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
         server_group = self.params.get("name",
