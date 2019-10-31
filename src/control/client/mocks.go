@@ -278,6 +278,13 @@ type mockGetACLResult struct {
 	err    error
 }
 
+// ACL returns a properly formed AccessControlList from the mock data
+func (m *mockGetACLResult) ACL() *AccessControlList {
+	return &AccessControlList{
+		Entries: m.acl,
+	}
+}
+
 type mockMgmtSvcClient struct {
 	getACLRet *mockGetACLResult
 }

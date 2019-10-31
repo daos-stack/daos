@@ -345,14 +345,14 @@ func TestPoolGetACL(t *testing.T) {
 		"success": {
 			addr:             MockServers,
 			getACLRespStatus: 0,
-			expectedResp:     &PoolGetACLResp{ACL: MockACL.acl},
+			expectedResp:     &PoolGetACLResp{ACL: MockACL.ACL()},
 			expectedErr:      "",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var expectedACL []string
 			if tt.expectedResp != nil {
-				expectedACL = tt.expectedResp.ACL
+				expectedACL = tt.expectedResp.ACL.Entries
 			}
 			aclResult := &mockGetACLResult{
 				acl:    expectedACL,

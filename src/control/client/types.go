@@ -27,6 +27,7 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
+	"strings"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -255,4 +256,26 @@ func (c *controllerFactory) create(address string, cfg *security.TransportConfig
 	err := controller.connect(address, cfg)
 
 	return controller, err
+}
+
+// AccessControlList is a structure for the access control list.
+type AccessControlList struct {
+	Entries []string // Access Control Entries in short string format
+}
+
+// String converts the AccessControlList to a human-readable string.
+func (acl *AccessControlList) String() string {
+	var builder strings.Builder
+
+	builder.WriteString("# Entries:\n")
+	if acl == nil || len(acl.Entries) == 0 {
+		builder.WriteString("#   None\n")
+		return builder.String()
+	}
+
+	for _, ace := range acl.Entries {
+		fmt.Fprintf(&builder, "%s\n", ace)
+	}
+
+	return builder.String()
 }
