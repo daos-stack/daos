@@ -23,6 +23,7 @@
 package drpc
 
 import (
+	"context"
 	"net"
 	"os"
 	"sync"
@@ -33,21 +34,22 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-// MAXMSGSIZE is the maximum drpc message size that may be sent.
+// MaxMsgSize is the maximum drpc message size that may be sent.
 // Using a packetsocket over the unix domain socket means that we receive
 // a whole message at a time without knowing its size. So for this reason
 // we need to restrict the maximum message size so we can preallocate a
 // buffer to put all of the information in. Corresponding C definition is
 // found in include/daos/drpc.h
 //
-const MAXMSGSIZE = 16384
+const MaxMsgSize = 16384
 
 // DomainSocketServer is the object that listens for incoming dRPC connections,
 // maintains the connections for sessions, and manages the message processing.
 type DomainSocketServer struct {
 	log           logging.Logger
 	sockFile      string
-	quit          chan bool
+	ctx           context.Context
+	cancelCtx     func()
 	listener      net.Listener
 	service       *ModuleService
 	sessions      map[net.Conn]*Session
@@ -57,9 +59,11 @@ type DomainSocketServer struct {
 // closeSession cleans up the session and removes it from the list of active
 // sessions.
 func (d *DomainSocketServer) closeSession(s *Session) {
+	d.sessionsMutex.Lock()
 	d.log.Debug("Closing a session")
 	s.Close()
 	delete(d.sessions, s.Conn)
+	d.sessionsMutex.Unlock()
 }
 
 // listenSession runs the listening loop for a Session. It listens for incoming
@@ -67,9 +71,7 @@ func (d *DomainSocketServer) closeSession(s *Session) {
 func (d *DomainSocketServer) listenSession(s *Session) {
 	for {
 		if err := s.ProcessIncomingMessage(); err != nil {
-			d.sessionsMutex.Lock()
 			d.closeSession(s)
-			d.sessionsMutex.Unlock()
 			break
 		}
 	}
@@ -78,16 +80,16 @@ func (d *DomainSocketServer) listenSession(s *Session) {
 // Listen listens for incoming connections on the UNIX domain socket and
 // creates individual sessions for each one.
 func (d *DomainSocketServer) Listen() {
+	go func() {
+		<-d.ctx.Done()
+		d.log.Debug("Quitting listener")
+		d.listener.Close()
+	}()
+
 	for {
 		conn, err := d.listener.Accept()
 		if err != nil {
-			select {
-			case <-d.quit:
-				d.log.Debug("Quitting listener")
-			default:
-				d.log.Errorf("%s: failed to accept connection: %v", d.sockFile, err)
-			}
-
+			d.log.Errorf("%s: failed to accept connection: %v", d.sockFile, err)
 			return
 		}
 
@@ -127,14 +129,7 @@ func (d *DomainSocketServer) Start() error {
 // Shutdown places the state of the server to shutdown which terminates the
 // Listen go routine and starts the cleanup of all open connections.
 func (d *DomainSocketServer) Shutdown() {
-	close(d.quit)
-
-	d.sessionsMutex.Lock()
-	for _, s := range d.sessions {
-		d.closeSession(s)
-	}
-	d.sessionsMutex.Unlock()
-	d.listener.Close()
+	d.cancelCtx()
 }
 
 // RegisterRPCModule takes a Module and associates it with the given
@@ -145,19 +140,20 @@ func (d *DomainSocketServer) RegisterRPCModule(mod Module) {
 
 // NewDomainSocketServer returns a new unstarted instance of a
 // DomainSocketServer for the specified unix domain socket path.
-func NewDomainSocketServer(log logging.Logger, sock string) (*DomainSocketServer, error) {
+func NewDomainSocketServer(ctx context.Context, log logging.Logger, sock string) (*DomainSocketServer, error) {
 	if sock == "" {
 		return nil, errors.New("Missing Argument: sockFile")
 	}
 	service := NewModuleService(log)
-	quit := make(chan bool)
 	sessions := make(map[net.Conn]*Session)
+	dssCtx, cancelCtx := context.WithCancel(ctx)
 	return &DomainSocketServer{
-		log:      log,
-		sockFile: sock,
-		quit:     quit,
-		service:  service,
-		sessions: sessions}, nil
+		log:       log,
+		sockFile:  sock,
+		ctx:       dssCtx,
+		cancelCtx: cancelCtx,
+		service:   service,
+		sessions:  sessions}, nil
 }
 
 // Session represents an individual client connection to the Domain Socket Server.
@@ -169,7 +165,7 @@ type Session struct {
 // ProcessIncomingMessage listens for an incoming message on the session,
 // calls its handler, and sends the response.
 func (s *Session) ProcessIncomingMessage() error {
-	buffer := make([]byte, MAXMSGSIZE)
+	buffer := make([]byte, MaxMsgSize)
 
 	bytesRead, err := s.Conn.Read(buffer)
 	if err != nil {

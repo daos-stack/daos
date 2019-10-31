@@ -111,7 +111,7 @@ func (c *ClientConnection) sendCall(msg *Call) error {
 }
 
 func (c *ClientConnection) recvResponse() (*Response, error) {
-	respBytes := make([]byte, MAXMSGSIZE)
+	respBytes := make([]byte, MaxMsgSize)
 	numBytes, err := c.conn.Read(respBytes)
 	if err != nil {
 		return nil, errors.Wrap(err, "dRPC recv")

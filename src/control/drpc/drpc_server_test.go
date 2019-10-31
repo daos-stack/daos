@@ -23,6 +23,7 @@
 package drpc
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -122,7 +123,7 @@ func TestNewDomainSocketServer_NoSockFile(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	dss, err := NewDomainSocketServer(log, "")
+	dss, err := NewDomainSocketServer(context.Background(), log, "")
 
 	common.CmpErr(t, errors.New("Missing Argument"), err)
 	common.AssertTrue(t, dss == nil, "expected no server created")
@@ -134,7 +135,7 @@ func TestNewDomainSocketServer(t *testing.T) {
 
 	expectedSock := "test.sock"
 
-	dss, err := NewDomainSocketServer(log, expectedSock)
+	dss, err := NewDomainSocketServer(context.Background(), log, expectedSock)
 
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
@@ -162,7 +163,7 @@ func TestServer_Start_CantUnlinkSocket(t *testing.T) {
 	}
 	defer os.Chmod(tmpDir, 0700)
 
-	dss, _ := NewDomainSocketServer(log, path)
+	dss, _ := NewDomainSocketServer(context.Background(), log, path)
 
 	err := dss.Start()
 
@@ -184,7 +185,7 @@ func TestServer_Start_CantListen(t *testing.T) {
 	}
 	defer os.Chmod(tmpDir, 0700)
 
-	dss, _ := NewDomainSocketServer(log, path)
+	dss, _ := NewDomainSocketServer(context.Background(), log, path)
 
 	err := dss.Start()
 
@@ -196,7 +197,7 @@ func TestServer_RegisterModule(t *testing.T) {
 	defer common.ShowBufferOnFailure(t, buf)
 
 	mod := newTestModule(1234)
-	dss, _ := NewDomainSocketServer(log, "dontcare.sock")
+	dss, _ := NewDomainSocketServer(context.Background(), log, "dontcare.sock")
 
 	dss.RegisterRPCModule(mod)
 
@@ -217,7 +218,7 @@ func TestServer_Listen_AcceptError(t *testing.T) {
 
 	lis := newMockListener()
 	lis.acceptErr = errors.New("mock accept error")
-	dss, _ := NewDomainSocketServer(log, "dontcare.sock")
+	dss, _ := NewDomainSocketServer(context.Background(), log, "dontcare.sock")
 	dss.listener = lis
 
 	dss.Listen() // should return instantly
@@ -231,7 +232,7 @@ func TestServer_Listen_AcceptConnection(t *testing.T) {
 
 	lis := newMockListener()
 	lis.setNumConnsToAccept(3)
-	dss, _ := NewDomainSocketServer(log, "dontcare.sock")
+	dss, _ := NewDomainSocketServer(context.Background(), log, "dontcare.sock")
 	dss.listener = lis
 
 	dss.Listen() // will return when error is sent
@@ -246,7 +247,7 @@ func TestServer_ListenSession_Error(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	dss, _ := NewDomainSocketServer(log, "dontcare.sock")
+	dss, _ := NewDomainSocketServer(context.Background(), log, "dontcare.sock")
 	conn := newMockConn()
 	conn.ReadOutputError = errors.New("mock read error")
 	session := NewSession(conn, dss.service)
@@ -266,23 +267,20 @@ func TestServer_Shutdown(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	dss, _ := NewDomainSocketServer(log, "dontcare.sock")
-	lis := newMockListener()
+	dss, _ := NewDomainSocketServer(context.Background(), log, "dontcare.sock")
+	lis := newCtxMockListener(dss.ctx)
 	dss.listener = lis
 
-	// Populate some initial sessions
-	for i := 0; i < 5; i++ {
-		conn := newMockConn()
-		dss.sessions[conn] = NewSession(conn, dss.service)
-	}
+	// Kick off the listen routine - it interacts with the ctx
+	go dss.Listen()
 
 	dss.Shutdown()
 
-	_, ok := <-dss.quit
-	common.AssertFalse(t, ok, "expected quit channel was closed")
+	_, ok := <-dss.ctx.Done()
+	common.AssertFalse(t, ok, "expected context was canceled")
 
-	common.AssertEqual(t, lis.closeCallCount, 1, "listener should have been closed")
-	common.AssertEqual(t, len(dss.sessions), 0, "sessions should have been cleaned up")
+	// Wait for the mock listener to be closed
+	<-lis.closed
 }
 
 func TestServer_Integration(t *testing.T) {
@@ -293,7 +291,7 @@ func TestServer_Integration(t *testing.T) {
 	defer tmpCleanup()
 	path := filepath.Join(tmpDir, "test.sock")
 
-	dss, _ := NewDomainSocketServer(log, path)
+	dss, _ := NewDomainSocketServer(context.Background(), log, path)
 
 	mod := newTestModule(5678)
 	mod.HandleCallResponse = []byte("successful!")

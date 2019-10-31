@@ -23,6 +23,7 @@
 package drpc
 
 import (
+	"context"
 	"net"
 	"testing"
 	"time"
@@ -115,9 +116,9 @@ func (m *mockConn) SetReadOutputBytesToResponse(t *testing.T, resp *Response) {
 	rawRespBytes := marshallResponseToBytes(t, resp)
 	m.ReadOutputNumBytes = len(rawRespBytes)
 
-	// The result from Read() will be MAXMSGSIZE since we have no way to
+	// The result from Read() will be MaxMsgSize since we have no way to
 	// know the size of a read before we read it
-	m.ReadOutputBytes = make([]byte, MAXMSGSIZE)
+	m.ReadOutputBytes = make([]byte, MaxMsgSize)
 	copy(m.ReadOutputBytes, rawRespBytes)
 }
 
@@ -164,5 +165,34 @@ func (l *mockListener) setNumConnsToAccept(n int) {
 func newMockListener() *mockListener {
 	return &mockListener{
 		acceptNumConns: -1,
+	}
+}
+
+// ctxMockListener is a mock of the net.Listener interface that blocks
+// on Accept until the context is canceled.
+type ctxMockListener struct {
+	ctx    context.Context
+	closed chan bool
+}
+
+func (l *ctxMockListener) Accept() (net.Conn, error) {
+	<-l.ctx.Done()
+	return nil, l.ctx.Err()
+}
+
+func (l *ctxMockListener) Close() error {
+	l.closed <- true
+	return nil
+}
+
+func (l *ctxMockListener) Addr() net.Addr {
+	return nil
+}
+
+func newCtxMockListener(ctx context.Context) *ctxMockListener {
+	c := make(chan bool)
+	return &ctxMockListener{
+		ctx:    ctx,
+		closed: c,
 	}
 }
