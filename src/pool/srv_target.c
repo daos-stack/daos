@@ -758,11 +758,7 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 
-	rc = ds_pool_iv_ns_update(pool, in->tci_master_rank, in->tci_iv_ns_id);
-	if (rc) {
-		D_ERROR("attach iv ns failed rc %d\n", rc);
-		D_GOTO(out, rc);
-	}
+	ds_pool_iv_ns_update(pool, in->tci_master_rank);
 
 	if (in->tci_query_bits & DAOS_PO_QUERY_SPACE)
 		rc = pool_tgt_query(pool, &out->tco_space);

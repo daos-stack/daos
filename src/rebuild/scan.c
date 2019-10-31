@@ -799,11 +799,8 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 			/* re-report the #rebuilt cnt next time */
 			rpt->rt_re_report = 1;
 			/* Update master rank */
-			rc = ds_pool_iv_ns_update(rpt->rt_pool,
-						  rsi->rsi_master_rank,
-						  rsi->rsi_ns_id);
-			if (rc)
-				D_GOTO(out, rc);
+			ds_pool_iv_ns_update(rpt->rt_pool,
+					     rsi->rsi_master_rank);
 
 			/* If this is the old leader, then also stop the rebuild
 			 * tracking ULT.

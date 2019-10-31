@@ -957,6 +957,7 @@ init_svc_pool(struct pool_svc *svc, struct pool_buf *map_buf,
 		ds_pool_put(pool);
 		return rc;
 	}
+	ds_pool_iv_ns_update(pool, dss_self_rank());
 	D_ASSERT(svc->ps_pool == NULL);
 	svc->ps_pool = pool;
 	return 0;
@@ -967,6 +968,7 @@ static void
 fini_svc_pool(struct pool_svc *svc)
 {
 	D_ASSERT(svc->ps_pool != NULL);
+	ds_pool_iv_ns_update(svc->ps_pool, -1 /* master_rank */);
 	ds_pool_put(svc->ps_pool);
 	svc->ps_pool = NULL;
 }
@@ -3552,13 +3554,10 @@ out:
 	return rc;
 }
 
-/* Try to create iv namespace for the pool */
-int
-ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank,
-		     unsigned int iv_ns_id)
+void
+ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank)
 {
-	return ds_iv_ns_update(pool->sp_uuid, master_rank, pool->sp_group,
-			       iv_ns_id, &pool->sp_iv_ns);
+	ds_iv_ns_update(pool->sp_iv_ns, master_rank);
 }
 
 int

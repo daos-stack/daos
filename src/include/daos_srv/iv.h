@@ -303,9 +303,7 @@ int ds_iv_invalidate(struct ds_iv_ns *ns, struct ds_iv_key *key,
 int ds_iv_ns_create(crt_context_t ctx, uuid_t pool_uuid, crt_group_t *grp,
 		    unsigned int *ns_id, struct ds_iv_ns **p_iv_ns);
 
-int ds_iv_ns_update(uuid_t pool_uuid, unsigned int master_rank,
-		    crt_group_t *grp, unsigned int iv_ns_id,
-		    struct ds_iv_ns **iv_ns);
+void ds_iv_ns_update(struct ds_iv_ns *ns, unsigned int master_rank);
 
 void ds_iv_ns_destroy(void *ns);
 

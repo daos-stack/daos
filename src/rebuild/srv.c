@@ -746,11 +746,9 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 	D_DEBUG(DB_REBUILD, "pool "DF_UUID" create rebuild iv\n",
 		DP_UUID(pool->sp_uuid));
 
-	/* Create pool iv ns for the pool */
+	/* Update pool iv ns for the pool */
 	crt_group_rank(pool->sp_group, &master_rank);
-	rc = ds_pool_iv_ns_update(pool, master_rank, -1);
-	if (rc)
-		return rc;
+	ds_pool_iv_ns_update(pool, master_rank);
 
 	rc = rebuild_global_pool_tracker_create(pool, rebuild_ver, rgt);
 	if (rc)
@@ -1907,9 +1905,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	D_DEBUG(DB_REBUILD, "rebuild coh/poh "DF_UUID"/"DF_UUID"\n",
 		DP_UUID(rpt->rt_coh_uuid), DP_UUID(rpt->rt_poh_uuid));
 
-	rc = ds_pool_iv_ns_update(pool, rsi->rsi_master_rank, rsi->rsi_ns_id);
-	if (rc)
-		D_GOTO(out, rc);
+	ds_pool_iv_ns_update(pool, rsi->rsi_master_rank);
 
 	pool_tls = rebuild_pool_tls_create(rpt->rt_pool_uuid, rpt->rt_poh_uuid,
 					   rpt->rt_coh_uuid,
