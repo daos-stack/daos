@@ -70,8 +70,7 @@ class IorTestBase(TestWithServers):
     def tearDown(self):
         """Tear down each test case."""
         try:
-            if self.dfuse is not None:
-                self.dfuse.stop()
+            self.dfuse = None
         finally:
             # Stop the servers and agents
             super(IorTestBase, self).tearDown()

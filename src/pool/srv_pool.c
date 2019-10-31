@@ -2535,9 +2535,7 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 	}
 
 	updated = true;
-
-	/** TODO: Call disabled; enable along with `rsvc_client` changes **/
-	(void) replace_failed_replicas;
+	replace_failed_replicas(svc, map);
 
 out_replicas:
 	if (replicasp != NULL) {

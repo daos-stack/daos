@@ -30,16 +30,6 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 )
 
-//go:generate stringer -type=ScmState
-type ScmState int
-
-const (
-	ScmStateUnknown ScmState = iota
-	ScmStateNoRegions
-	ScmStateFreeCapacity
-	ScmStateNoCapacity
-)
-
 // NvmeControllers is an alias for protobuf NvmeController message slice
 // representing a number of NVMe SSD controllers installed on a storage node.
 type NvmeControllers []*ctlpb.NvmeController
