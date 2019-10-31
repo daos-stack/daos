@@ -411,7 +411,6 @@ vts_array_set_size(daos_handle_t aoh, daos_epoch_t epoch, daos_size_t new_size)
 	if (old_size == new_size)
 		return 0;
 
-	D_DEBUG(DB_IO, "Writing one entry at "DF_U64"\n", new_size - 1);
 	return vts_array_write(aoh, epoch, new_size - 1, 1, array->va_zero);
 }
 

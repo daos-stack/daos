@@ -37,8 +37,10 @@ struct vos_ilog_info {
 	struct ilog_entries	ii_entries;
 	/** If non-zero, earliest creation timestamp in current incarnation. */
 	daos_epoch_t		ii_create;
-	/** If non-zero, prior punch (committed or uncommmited) */
+	/** If non-zero, prior committed punch */
 	daos_epoch_t		ii_prior_punch;
+	/** If non-zero, prior committed or uncommitted punch */
+	daos_epoch_t		ii_prior_any_punch;
 	/** If non-zero, subsequent committed punch */
 	daos_epoch_t		ii_next_punch;
 	/** The entity has no valid log entries */
@@ -67,8 +69,11 @@ vos_ilog_fetch_finish(struct vos_ilog_info *info);
  * \param	intent[IN]	Intent of the operation
  * \param	ilog[IN]	The incarnation log root
  * \param	epoch[IN]	Epoch to fetch
- * \param	punch[IN]	Upper layer punch epoch
- * \param	entries[IN,OUT]	incarnation log entries
+ * \param	punched[IN]	Punched epoch.  Ignored if parent is passed.
+ * \param	parent[IN]	parent incarnation log info (NULL if no parent
+ *				log exists).  Fetch should have already been
+ *				called at same epoch or parent.
+ * \param	info[IN,OUT]	incarnation log info
  *
  * \return	-DER_NONEXIST	Nothing in the log
  *		-DER_INPROGRESS	Local target doesn't know latest state
@@ -77,8 +82,8 @@ vos_ilog_fetch_finish(struct vos_ilog_info *info);
  */
 int
 vos_ilog_fetch(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
-	       struct ilog_df *ilog, daos_epoch_t epoch, daos_epoch_t punch,
-	       struct vos_ilog_info *info);
+	       struct ilog_df *ilog, daos_epoch_t epoch, daos_epoch_t punched,
+	       const struct vos_ilog_info *parent, struct vos_ilog_info *info);
 
 /**
  * Check the incarnation log for existence and return important information
@@ -97,17 +102,6 @@ vos_ilog_fetch(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
 int
 vos_ilog_check(struct vos_ilog_info *info, const daos_epoch_range_t *epr_in,
 	       daos_epoch_range_t *epr_out, bool visible_only);
-
-/**
- * Prepare update range by scanning the log for in-flight punches
- *
- * \param	info[IN]	Parsed incarnation log information
- * \param	epoch[IN]	Update epoch
- * \param	epr[IN, OUT]	Initialized epr in, updated epr out
- */
-void
-vos_ilog_update_prepare(struct vos_ilog_info *info, daos_epoch_t epoch,
-			daos_epoch_range_t *epr);
 
 /** Initialize callbacks for vos incarnation log */
 void

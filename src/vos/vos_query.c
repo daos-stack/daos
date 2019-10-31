@@ -59,7 +59,7 @@ check_key(struct open_query *query, struct vos_krec_df *krec)
 	rc = vos_ilog_fetch(vos_obj2umm(query->qt_obj),
 			    vos_cont2hdl(query->qt_obj->obj_cont),
 			    DAOS_INTENT_DEFAULT, &krec->kr_ilog,
-			    epr.epr_hi, query->qt_punch, &query->qt_info);
+			    epr.epr_hi, query->qt_punch, NULL, &query->qt_info);
 	if (rc != 0)
 		return rc;
 
@@ -83,6 +83,7 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 	d_iov_t			 riov;
 	daos_csum_buf_t		 csum;
 	daos_epoch_range_t	 epr = query->qt_epr;
+	daos_epoch_t		 punch = query->qt_punch;
 	int			 rc = 0;
 	int			 fini_rc;
 	int			 opc;
@@ -129,6 +130,7 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 
 		/* Reset the epr */
 		query->qt_epr = epr;
+		query->qt_punch = punch;
 
 		if (query->qt_flags & DAOS_GET_MAX)
 			rc = dbtree_iter_prev(ih);

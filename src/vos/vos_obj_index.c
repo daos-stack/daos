@@ -360,7 +360,8 @@ oi_iter_ilog_check(struct vos_obj_df *obj, struct vos_oi_iter *oiter,
 	umm = vos_cont2umm(oiter->oit_cont);
 	rc = vos_ilog_fetch(umm, vos_cont2hdl(oiter->oit_cont),
 			    vos_iter_intent(&oiter->oit_iter), &obj->vo_ilog,
-			    oiter->oit_epr.epr_hi, 0, &oiter->oit_ilog_info);
+			    oiter->oit_epr.epr_hi, 0, NULL,
+			    &oiter->oit_ilog_info);
 	if (rc != 0)
 		goto out;
 

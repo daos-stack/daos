@@ -666,7 +666,6 @@ punch_model_test(void **state)
 	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, 8, &dkey, 1, &iod, &sgl);
 	assert_int_equal(rc, 0);
 
-	D_INFO("checking punch model test\n");
 	assert_int_equal(strncmp(buf, expected, strlen(under)), 0);
 
 	/* Write one more at 9 */
@@ -726,7 +725,6 @@ punch_model_test(void **state)
 	assert_int_equal(strncmp(buf, latest, strlen(latest)), 0);
 
 	daos_sgl_fini(&sgl, false);
-	D_INFO("done punch model test\n");
 
 	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid,
 			       DAOS_GET_RECX | DAOS_GET_MAX,

@@ -251,15 +251,13 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 		no_create ? "find" : "find/create", DP_UOID(oid), epr->epr_lo,
 		epr->epr_hi);
 
+	obj->obj_sync_epoch = 0;
 	if (no_create) {
 		rc = vos_oi_find(cont, oid, &obj->obj_df);
 		if (rc == -DER_NONEXIST) {
 			D_DEBUG(DB_TRACE, "non exist oid "DF_UOID"\n",
 				DP_UOID(oid));
-			obj->obj_sync_epoch = 0;
 			goto failed;
-		} else if (rc == 0) {
-			obj->obj_sync_epoch = obj->obj_df->vo_sync;
 		}
 	} else {
 		rc = vos_oi_find_alloc(cont, oid, epr->epr_hi, false,
@@ -276,6 +274,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 		D_GOTO(failed, rc = -DER_NONEXIST);
 		goto out;
 	}
+	obj->obj_sync_epoch = obj->obj_df->vo_sync;
 check_object:
 	if (intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH)
 		goto out;
@@ -297,7 +296,7 @@ log_fetch:
 	/** We need to fetch the ilog for creation case as well */
 	rc = vos_ilog_fetch(vos_cont2umm(cont), vos_cont2hdl(cont),
 			    intent, &obj->obj_df->vo_ilog, epr->epr_hi,
-			    0, &obj->obj_ilog_info);
+			    0, NULL, &obj->obj_ilog_info);
 	if (rc != 0) {
 		D_DEBUG(DB_TRACE, "Object "DF_UOID" not found at "
 			DF_U64"\n", DP_UOID(oid), epr->epr_hi);

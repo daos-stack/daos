@@ -554,26 +554,6 @@ ilog_close(daos_handle_t loh)
 	return 0;
 }
 
-static int
-remove_from_tree(struct ilog_context *lctx, const char *type,
-		 const struct ilog_id *id, daos_handle_t *ih)
-{
-	int	rc = 0;
-
-	D_DEBUG(DB_IO, "Removing %s entry "DF_U64" from ilog\n", type,
-		id->id_epoch);
-
-	rc = dbtree_iter_delete(*ih, (void *)lctx);
-
-	if (rc != 0) {
-		D_ERROR("Failure to remove "DF_U64
-			" (%s entry) from ilog: rc=%s\n",
-			id->id_epoch, type, d_errstr(rc));
-	}
-
-	return rc;
-}
-
 int
 ilog_destroy(struct umem_instance *umm,
 	     struct ilog_desc_cbs *cbs, struct ilog_df *root)
@@ -845,67 +825,15 @@ consolidate_tree(struct ilog_context *lctx, const daos_epoch_range_t *epr,
 		 daos_handle_t *toh, daos_handle_t *ih, int opc,
 		 const struct ilog_id *id_in, bool is_punch)
 {
-	const char		*type;
-	struct ilog_id		 key = {0};
-	struct ilog_id		 id = *id_in;
-	d_iov_t			 key_iov;
-	d_iov_t			 val_iov;
 	int			 rc = 0;
-	int			 probe_opc = BTR_PROBE_GT;
-	bool			 punch = 0;
 
-	D_ASSERT(opc != ILOG_OP_UPDATE);
+	D_ASSERT(opc == ILOG_OP_ABORT);
 
-	if (opc == ILOG_OP_ABORT) {
-		rc = dbtree_iter_delete(*ih, NULL);
-		if (rc != 0)
-			goto done;
+	rc = dbtree_iter_delete(*ih, NULL);
+	if (rc != 0)
+		return rc;
 
-		goto collapse;
-	} else if (is_punch) {
-		goto collapse;
-	}
-
-	for (;;) {
-		d_iov_set(&key_iov, (struct ilog_id *)&id, sizeof(id));
-		rc = dbtree_iter_probe(*ih, probe_opc, DAOS_INTENT_DEFAULT,
-				       &key_iov, NULL);
-		if (rc == -DER_NONEXIST)
-			break;
-		if (rc != 0) {
-			D_ERROR("Problem with probing incarnation log:"
-				" rc=%s\n", d_errstr(rc));
-			goto done;
-		}
-
-		d_iov_set(&key_iov, &key, sizeof(key));
-		d_iov_set(&val_iov, &punch, sizeof(punch));
-		rc = dbtree_iter_fetch(*ih, &key_iov, &val_iov, NULL);
-		if (rc != 0) {
-			D_ERROR("Problem with fetching incarnation log:"
-				" rc=%s\n", d_errstr(rc));
-			goto done;
-		}
-
-		if (opc == ILOG_OP_PERSIST) {
-			if (punch)
-				break;
-			type = "redundant";
-		} else {
-			type = "punched";
-		}
-
-		if (epr->epr_hi < key.id_epoch || epr->epr_lo > key.id_epoch)
-			break;
-
-		rc = remove_from_tree(lctx, type, &key, ih);
-		if (rc != 0)
-			goto done;
-	}
-collapse:
-	rc = collapse_tree(lctx, toh, ih);
-done:
-	return rc;
+	return collapse_tree(lctx, toh, ih);
 }
 
 static int
@@ -987,7 +915,7 @@ ilog_tree_modify(struct ilog_context *lctx, const struct ilog_id *id_in,
 			goto done;
 
 		if (is_equal) {
-			if (opc == ILOG_OP_UPDATE)
+			if (opc != ILOG_OP_ABORT)
 				goto done;
 
 			rc = consolidate_tree(lctx, epr, &toh, &ih, opc,
