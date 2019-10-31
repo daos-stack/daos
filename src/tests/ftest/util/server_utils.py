@@ -457,13 +457,6 @@ class ServerManager(ExecutableCommand):
                 "{}:{}".format(host, self.runner.job.yaml_params.port)
                 for host in self._hosts]
 
-            # Change ownership of attach info file
-            chmod_cmds = [
-            "chmod -R 777 {}/daos_server.attach_info_tmp".format(
-                self.attach.value),
-            ]
-            pcmd(self._hosts, chmod_cmds, False)
-
             # Format storage and wait for server to change ownership
             self.log.info("Formatting hosts: <%s>", self._hosts)
             storage_format(self.daosbinpath, ",".join(servers_with_ports))
@@ -472,6 +465,11 @@ class ServerManager(ExecutableCommand):
                 self.runner.job.check_subprocess_status(self.runner.process)
             except CommandFailure as error:
                 self.log.info("Failed to start after format: %s", str(error))
+
+            # Change ownership of attach info file
+            chmod_cmds = "sudo chmod 777 {}/daos_server.attach_info_tmp".format(
+                self.attach.value)
+            pcmd(self._hosts, chmod_cmds, False)
 
         return True
 
