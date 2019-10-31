@@ -38,7 +38,7 @@ def scons():
     denv.Install('$PREFIX/bin/', obj_ctl)
 
     # copy src/tests/ftest to $PREFIX/lib/daos/TESTING/ftest
-    spath = os.path.join(Dir('ftest').srcnode())
+    spath = Dir('ftest').srcnode()
     denv.InstallAs('$PREFIX/lib/daos/TESTING/ftest/', spath)
 
     # tests
