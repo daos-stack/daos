@@ -197,6 +197,7 @@ main(int argc, char **argv)
 			break;
 		case 'g':
 			nr_failed += run_gc_tests();
+			test_run = true;
 			break;
 		case 'X':
 			nr_failed += run_dtx_tests();
@@ -236,13 +237,6 @@ main(int argc, char **argv)
 		print_message("\nSUCCESS! NO TEST FAILURES\n");
 
 exit_1:
-	/* There is no ULT/thread calls vos_gc_run() in this utility, it is
-	 * possible VOS GC might still take refcount on already closed pools.
-	 * These in-mem pools will be freed by calling gc_wait().
-	 *
-	 * NB: this function is only defined for standalone mode.
-	 */
-	gc_wait();
 	vos_fini();
 exit_0:
 	daos_debug_fini();

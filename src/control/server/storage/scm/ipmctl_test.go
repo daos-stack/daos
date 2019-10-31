@@ -35,6 +35,7 @@ import (
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/ipmctl"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 // MockDiscovery returns a mock SCM module of type exported from ipmctl.
@@ -51,12 +52,30 @@ func MockDiscovery() ipmctl.DeviceDiscovery {
 	}
 }
 
-type mockCmdRunner struct {
+// MockModule converts ipmctl type SCM module and returns storage/scm
+// internal type.
+func MockModule(d *ipmctl.DeviceDiscovery) storage.ScmModule {
+	if d == nil {
+		md := MockDiscovery()
+		d = &md
+	}
+
+	return storage.ScmModule{
+		PhysicalID:      uint32(d.Physical_id),
+		ChannelID:       uint32(d.Channel_id),
+		ChannelPosition: uint32(d.Channel_pos),
+		ControllerID:    uint32(d.Memory_controller_id),
+		SocketID:        uint32(d.Socket_id),
+		Capacity:        d.Capacity,
+	}
+}
+
+type mockIpmctl struct {
 	discoverModulesRet error
 	modules            []ipmctl.DeviceDiscovery
 }
 
-func (m *mockCmdRunner) Discover() ([]ipmctl.DeviceDiscovery, error) {
+func (m *mockIpmctl) Discover() ([]ipmctl.DeviceDiscovery, error) {
 	return m.modules, m.discoverModulesRet
 }
 
@@ -110,7 +129,7 @@ func TestGetState(t *testing.T) {
 		errMsg            string
 		showRegionOut     string
 		expRebootRequired bool
-		expNamespaces     []Namespace
+		expNamespaces     storage.ScmNamespaces
 		expCommands       []string
 		lookPathErrMsg    string
 	}{
@@ -172,7 +191,7 @@ func TestGetState(t *testing.T) {
 			mockLookPath := func(string) (s string, err error) {
 				return
 			}
-			mockBinding := &mockCmdRunner{
+			mockBinding := &mockIpmctl{
 				discoverModulesRet: nil,
 				modules:            []ipmctl.DeviceDiscovery{MockDiscovery()},
 			}
@@ -223,15 +242,15 @@ func TestParseNamespaces(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		in            string
-		expNamespaces []Namespace
+		expNamespaces storage.ScmNamespaces
 		expErr        error
 	}{
 		"empty": {
-			expNamespaces: []Namespace{},
+			expNamespaces: storage.ScmNamespaces{},
 		},
 		"single": {
 			in: fmt.Sprintf(listTmpl, 0, 0, 0),
-			expNamespaces: []Namespace{
+			expNamespaces: storage.ScmNamespaces{
 				{
 					Name:        "namespace0.0",
 					BlockDevice: "pmem0",
@@ -244,7 +263,7 @@ func TestParseNamespaces(t *testing.T) {
 			in: strings.Join([]string{
 				"[", fmt.Sprintf(listTmpl, 0, 0, 0), ",",
 				fmt.Sprintf(listTmpl, 1, 1, 1), "]"}, ""),
-			expNamespaces: []Namespace{
+			expNamespaces: storage.ScmNamespaces{
 				{
 					Name:        "namespace0.0",
 					BlockDevice: "pmem0",
@@ -300,7 +319,7 @@ func TestGetNamespaces(t *testing.T) {
 		desc           string
 		errMsg         string
 		cmdOut         string
-		expNamespaces  []Namespace
+		expNamespaces  storage.ScmNamespaces
 		expCommands    []string
 		lookPathErrMsg string
 	}{
@@ -308,7 +327,7 @@ func TestGetNamespaces(t *testing.T) {
 			desc:          "no namespaces",
 			cmdOut:        "",
 			expCommands:   []string{cmdScmListNamespaces},
-			expNamespaces: []Namespace{},
+			expNamespaces: storage.ScmNamespaces{},
 		},
 		{
 			desc:          "single pmem device",
@@ -348,7 +367,7 @@ func TestGetNamespaces(t *testing.T) {
 
 			commands = nil // reset to initial values between tests
 
-			mockBinding := &mockCmdRunner{
+			mockBinding := &mockIpmctl{
 				discoverModulesRet: nil,
 				modules:            []ipmctl.DeviceDiscovery{MockDiscovery()},
 			}

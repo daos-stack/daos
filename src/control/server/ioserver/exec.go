@@ -126,3 +126,8 @@ func (r *Runner) Start(ctx context.Context, errOut chan<- error) error {
 
 	return nil
 }
+
+// GetConfig returns the runner's configuration
+func (r *Runner) GetConfig() *Config {
+	return r.Config
+}

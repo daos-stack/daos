@@ -122,8 +122,8 @@ func (tc *testConn) ListFeatures() client.ClientFeatureMap {
 	return nil
 }
 
-func (tc *testConn) KillRank(uuid string, rank uint32) client.ResultMap {
-	tc.appendInvocation(fmt.Sprintf("KillRank-uuid %s, rank %d", uuid, rank))
+func (tc *testConn) KillRank(rank uint32) client.ResultMap {
+	tc.appendInvocation(fmt.Sprintf("KillRank-rank %d", rank))
 	return nil
 }
 
@@ -169,6 +169,16 @@ func (tc *testConn) SystemStop() (common.SystemMemberResults, error) {
 
 func (tc *testConn) SetTransportConfig(cfg *security.TransportConfig) {
 	tc.appendInvocation("SetTransportConfig")
+}
+
+func (tc *testConn) NetworkListProviders() client.ResultMap {
+	tc.appendInvocation("NetworkListProviders")
+	return nil
+}
+
+func (tc *testConn) NetworkScanDevices(searchProvider string) client.NetworkScanResultMap {
+	tc.appendInvocation(fmt.Sprintf("NetworkScanDevices-%s", searchProvider))
+	return nil
 }
 
 func testExpectedError(t *testing.T, expected, actual error) {

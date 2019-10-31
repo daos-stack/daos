@@ -44,9 +44,9 @@ var (
 	MockServers      = Addresses{"1.2.3.4:10000", "1.2.3.5:10001"}
 	MockFeatures     = []*ctlpb.Feature{MockFeaturePB()}
 	MockCtrlrs       = NvmeControllers{MockControllerPB("E2010413")}
-	MockSuccessState = ctlpb.ResponseState{Status: ctlpb.ResponseStatus_CTRL_SUCCESS}
+	MockSuccessState = ctlpb.ResponseState{Status: ctlpb.ResponseStatus_CTL_SUCCESS}
 	MockState        = ctlpb.ResponseState{
-		Status: ctlpb.ResponseStatus_CTRL_ERR_APP,
+		Status: ctlpb.ResponseStatus_CTL_ERR_APP,
 		Error:  "example application error",
 	}
 	MockCtrlrResults = NvmeControllerResults{
@@ -186,7 +186,7 @@ func (m *mockMgmtCtlClient) ListFeatures(ctx context.Context, req *ctlpb.EmptyRe
 
 func (m *mockMgmtCtlClient) StoragePrepare(ctx context.Context, req *ctlpb.StoragePrepareReq, o ...grpc.CallOption) (*ctlpb.StoragePrepareResp, error) {
 	// return successful prepare results, state member messages
-	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
 	return &ctlpb.StoragePrepareResp{
 		Nvme: &ctlpb.PrepareNvmeResp{
 			State: &MockSuccessState,
@@ -199,7 +199,7 @@ func (m *mockMgmtCtlClient) StoragePrepare(ctx context.Context, req *ctlpb.Stora
 
 func (m *mockMgmtCtlClient) StorageScan(ctx context.Context, req *ctlpb.StorageScanReq, o ...grpc.CallOption) (*ctlpb.StorageScanResp, error) {
 	// return successful query results, state member messages
-	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
 	return &ctlpb.StorageScanResp{
 		Nvme: &ctlpb.ScanNvmeResp{
 			State:  &MockSuccessState,
@@ -227,6 +227,22 @@ func (m *mockMgmtCtlClient) StorageBurnIn(ctx context.Context, req *ctlpb.Storag
 
 func (m *mockMgmtCtlClient) FetchFioConfigPaths(ctx context.Context, req *ctlpb.EmptyReq, o ...grpc.CallOption) (ctlpb.MgmtCtl_FetchFioConfigPathsClient, error) {
 	return &mgmtCtlFetchFioConfigPathsClient{}, nil
+}
+
+type mgmtCtlNetworkScanDevicesClient struct {
+	grpc.ClientStream
+}
+
+func (m *mgmtCtlNetworkScanDevicesClient) Recv() (*ctlpb.DeviceScanReply, error) {
+	return &ctlpb.DeviceScanReply{}, nil
+}
+
+func (m *mockMgmtCtlClient) NetworkScanDevices(ctx context.Context, in *ctlpb.DeviceScanRequest, o ...grpc.CallOption) (ctlpb.MgmtCtl_NetworkScanDevicesClient, error) {
+	return &mgmtCtlNetworkScanDevicesClient{}, nil
+}
+
+func (m *mockMgmtCtlClient) NetworkListProviders(ctx context.Context, in *ctlpb.ProviderListRequest, o ...grpc.CallOption) (*ctlpb.ProviderListReply, error) {
+	return &ctlpb.ProviderListReply{}, nil
 }
 
 func (m *mockMgmtCtlClient) SystemMemberQuery(ctx context.Context, req *ctlpb.SystemMemberQueryReq, o ...grpc.CallOption) (*ctlpb.SystemMemberQueryResp, error) {
@@ -268,13 +284,13 @@ type mockMgmtSvcClient struct {
 
 func (m *mockMgmtSvcClient) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq, o ...grpc.CallOption) (*mgmtpb.PoolCreateResp, error) {
 	// return successful pool creation results
-	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
 	return &mgmtpb.PoolCreateResp{}, nil
 }
 
 func (m *mockMgmtSvcClient) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq, o ...grpc.CallOption) (*mgmtpb.PoolDestroyResp, error) {
 	// return successful pool destroy results
-	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
 	return &mgmtpb.PoolDestroyResp{}, nil
 }
 
@@ -292,7 +308,7 @@ func (m *mockMgmtSvcClient) BioHealthQuery(
 ) (*mgmtpb.BioHealthResp, error) {
 
 	// return successful bio health results
-	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
 	return &mgmtpb.BioHealthResp{}, nil
 }
 
@@ -303,7 +319,7 @@ func (m *mockMgmtSvcClient) SmdListDevs(
 ) (*mgmtpb.SmdDevResp, error) {
 
 	// return successful SMD device list
-	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
 	return &mgmtpb.SmdDevResp{}, nil
 }
 
@@ -314,7 +330,7 @@ func (m *mockMgmtSvcClient) SmdListPools(
 ) (*mgmtpb.SmdPoolResp, error) {
 
 	// return successful SMD pool list
-	// initialise with zero values indicating mgmt.CTRL_SUCCESS
+	// initialise with zero values indicating mgmt.CTL_SUCCESS
 	return &mgmtpb.SmdPoolResp{}, nil
 }
 
@@ -327,7 +343,7 @@ func (m *mockMgmtSvcClient) GetAttachInfo(ctx context.Context, in *mgmtpb.GetAtt
 	return &mgmtpb.GetAttachInfoResp{}, nil
 }
 
-func (m *mockMgmtSvcClient) KillRank(ctx context.Context, req *mgmtpb.DaosRank, o ...grpc.CallOption) (*mgmtpb.DaosResp, error) {
+func (m *mockMgmtSvcClient) KillRank(ctx context.Context, req *mgmtpb.KillRankReq, o ...grpc.CallOption) (*mgmtpb.DaosResp, error) {
 	return &mgmtpb.DaosResp{}, nil
 }
 

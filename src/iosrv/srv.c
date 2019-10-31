@@ -1611,8 +1611,7 @@ dss_srv_init()
 	dss_register_key(&daos_srv_modkey);
 	xstream_data.xd_init_step = XD_INIT_REG_KEY;
 
-	rc = bio_nvme_init(dss_storage_path, dss_nvme_conf, dss_nvme_shm_id,
-			   NULL);
+	rc = bio_nvme_init(dss_storage_path, dss_nvme_conf, dss_nvme_shm_id);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_NVME;
@@ -1744,7 +1743,7 @@ dss_dump_ABT_state()
 }
 
 void
-dss_gc_run(int credits)
+dss_gc_run(daos_handle_t poh, int credits)
 {
 	struct dss_xstream *dxs	 = dss_get_xstream();
 	int		    total = 0;
@@ -1757,18 +1756,21 @@ dss_gc_run(int credits)
 			creds = credits - total;
 
 		total += creds;
-		rc = vos_gc_run(&creds);
+		if (daos_handle_is_inval(poh))
+			rc = vos_gc_run(&creds);
+		else
+			rc = vos_gc_pool(poh, &creds);
+
 		if (rc) {
 			D_ERROR("GC run failed: %s\n", d_errstr(rc));
 			break;
 		}
 		total -= creds; /* subtract the remainded credits */
-		if (creds != 0) {
-			break;
-		}
+		if (creds != 0)
+			break; /* reclaimed everything */
 
 		if (credits > 0 && total >= credits)
-			break;
+			break; /* consumed all credits */
 
 		if (dss_xstream_exiting(dxs))
 			break;
@@ -1776,9 +1778,8 @@ dss_gc_run(int credits)
 		ABT_thread_yield();
 	}
 
-	if (total != 0) {
+	if (total != 0) /* did something */
 		D_DEBUG(DB_TRACE, "GC consumed %d credits\n", total);
-	}
 }
 
 static void
@@ -1788,7 +1789,7 @@ dss_gc_ult(void *args)
 
 	 while (!dss_xstream_exiting(dxs)) {
 		/* -1 means GC will run until there is nothing to do */
-		dss_gc_run(-1);
+		dss_gc_run(DAOS_HDL_INVAL, -1);
 		ABT_thread_yield();
 	 }
 }
