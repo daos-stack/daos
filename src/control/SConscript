@@ -85,14 +85,13 @@ def scons():
     # runtime
     if denv.subst("$SPDK_PREFIX") != "/usr":
         if denv.subst("$SPDK_PREFIX") != denv.subst("$PREFIX"):
-            for subdir in ["scripts", "fio_plugin"]:
-                sharedir = join("share", "spdk", subdir)
-                tpath = join(denv.subst("$PREFIX"), sharedir)
-                if not check_dir_exists(tpath):
-                    denv.Command(
-                        tpath,
-                        join(denv.subst("$SPDK_PREFIX"), sharedir),
-                        Copy("$TARGET", "$SOURCE"))
+            sharedir = join("share", "spdk", "scripts")
+            tpath = join(denv.subst("$PREFIX"), sharedir)
+            if not check_dir_exists(tpath):
+                denv.Command(
+                    tpath,
+                    join(denv.subst("$SPDK_PREFIX"), sharedir),
+                    Copy("$TARGET", "$SOURCE"))
         tpath = join(denv.subst("$PREFIX"), "include")
         if not check_dir_exists(tpath):
             denv.Command(
