@@ -1834,13 +1834,12 @@ crt_hdlr_iv_sync(crt_rpc_t *rpc_req)
 		crt_hdlr_iv_sync_aux(rpc_req);
 	}
 
+	IVNS_DECREF(ivns_internal);
 	return;
-exit:
 
+exit:
 	output->rc = rc;
 	crt_reply_send(rpc_req);
-
-	IVNS_DECREF(ivns_internal);
 }
 
 /* Results aggregate function for sync CORPC */
