@@ -600,16 +600,31 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
         if os.path.splitext(os.path.basename(log_file))[1] != ""]
 
     # Copy any log files that exist on the test hosts and remove them from the
-    # test host if the copy is successful.  Log the commands executed when a
-    # file is detected.  Attempt all commands and report status at the end of
-    # the loop.
-    command = "set -Eeu; {}".format(
-        "err=0; for file in {}; do if [ -e $file ]; then set -x; ls -al $file; "
-        "if scp $file {}:{}/${{file##*/}}-$(hostname -s); then "
-        "if ! sudo -n rm -fr $file; then ((err++)); fi; else ((err++)); fi; "
-        "fi; set +x; done; exit $err".format(
-            " ".join(non_dir_files), this_host, doas_logs_dir))
-    spawn_commands(host_list, command)
+    # test host if the copy is successful.  Attempt all of the commands and
+    # report status at the end of the loop.  Include a listing of the file
+    # related to any failed command.
+    commands = [
+        "set -Eeu",
+        "rc=0",
+        "copied=()",
+        "for file in {}".format(" ".join(non_dir_files)),
+        "do if [ -e $file ]",
+        "then if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
+            this_host, doas_logs_dir),
+        "then copied+=($file)",
+        "if ! sudo -n rm -fr $file",
+        "then ((rc++))",
+        "ls -al $file",
+        "fi",
+        "else ((rc++))",
+        "ls -al $file",
+        "fi",
+        "fi",
+        "done",
+        "echo Copied ${copied[@]}",
+        "exit $rc",
+    ]
+    spawn_commands(host_list, "; ".join(commands))
 
 
 def rename_logs(avocado_logs_dir, test_file):
