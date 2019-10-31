@@ -97,10 +97,13 @@ def define_mercury(reqs):
     reqs.define('ofi',
                 retriever=retriever,
                 commands=['./autogen.sh',
-                          './configure --prefix=$OFI_PREFIX',
+                          './configure --prefix=$OFI_PREFIX ' +
+                          '--enable-psm2' +
+                          check(reqs, 'psm2', "=$PSM2_PREFIX", ''),
                           'make $JOBS_OPT',
                           'make install'],
                 libs=['fabric'],
+                requires=['psm2'],
                 headers=['rdma/fabric.h'],
                 package='libfabric-devel' if inst(reqs, 'ofi') else None)
 
@@ -204,6 +207,9 @@ def define_pmix(reqs):
                           '--with-pmix=' +
                           check(reqs, 'pmix', '$PMIX_PREFIX', 'external') +
                           ' ' +
+                          '--with-psm2' +
+                          check(reqs, 'psm2', "=$PSM2_PREFIX", '') +
+                          ' ' +
                           '--disable-mpi-fortran '
                           '--enable-contrib-no-build=vt '
                           '--with-libevent=external ' +
@@ -213,7 +219,7 @@ def define_pmix(reqs):
                           'make $JOBS_OPT', 'make install'],
                 libs=['open-rte'],
                 required_progs=['g++', 'flex'],
-                requires=['pmix', 'hwloc', 'event'],
+                requires=['pmix', 'hwloc', 'event', 'psm2'],
                 package='ompi-devel' if inst(reqs, 'ompi') else None)
 
 
@@ -356,5 +362,18 @@ def define_components(reqs):
                           'make install'],
                 libs=['protobuf-c'],
                 headers=['protobuf-c/protobuf-c.h'])
+
+    reqs.define('psm2',
+                retriever=GitRepoRetriever(
+                    'https://github.com/intel/opa-psm2.git'),
+                # psm2 hard-codes installing into /usr/...
+                commands=['sed -i -e "s/\\(.{DESTDIR}\\/\\)usr\\//\\1/" ' +
+                          '       -e "s/\\(INSTALL_LIB_TARG=' +
+                          '\\/usr\\/lib\\)64/\\1/" ' +
+                          '       -e "s/\\(INSTALL_LIB_TARG=\\)\\/usr/\\1/" ' +
+                          'Makefile compat/Makefile',
+                          'make $JOBS_OPT',
+                          'make DESTDIR=$PSM2_PREFIX install'],
+                libs=['libpsm2'])
 
 __all__ = ['define_components']
