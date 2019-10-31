@@ -28,6 +28,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 const MsgStoragePrepareWarn = "Memory allocation goals for SCM will be changed and " +
@@ -67,17 +68,17 @@ func (cmd *StoragePrepareCmd) Validate() (bool, bool, error) {
 	return prepNvme, prepScm, nil
 }
 
-func (cmd *StoragePrepareCmd) CheckWarn(log *logging.LeveledLogger, state ScmState) error {
+func (cmd *StoragePrepareCmd) CheckWarn(log *logging.LeveledLogger, state storage.ScmState) error {
 	switch state {
-	case ScmStateNoRegions:
+	case storage.ScmStateNoRegions:
 		if cmd.Reset {
 			return nil
 		}
-	case ScmStateFreeCapacity, ScmStateNoCapacity:
+	case storage.ScmStateFreeCapacity, storage.ScmStateNoCapacity:
 		if !cmd.Reset {
 			return nil
 		}
-	case ScmStateUnknown:
+	case storage.ScmStateUnknown:
 		return errors.New("unknown scm state")
 	default:
 		return errors.Errorf("unhandled scm state %q", state)

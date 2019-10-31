@@ -93,6 +93,11 @@ class Dfuse(DfuseCommand):
         self.attach_info = attach_info
         self.basepath = basepath
 
+    def __del__(self):
+        """Destroy Dfuse object and stop dfuse """
+        # stop dfuse
+        self.stop()
+
     def create_mount_point(self):
         """Create dfuse directory
         Raises:
