@@ -25,7 +25,7 @@ from __future__ import print_function
 
 from general_utils import get_random_string, DaosTestError
 from general_utils import is_pool_rebuild_complete
-from daos_api import DaosApiError
+from pydaos.raw import DaosApiError
 
 import time
 

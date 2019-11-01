@@ -1,5 +1,5 @@
 /**
- * (C) COPYRIGHT 2018-2019 INTEL CORPORATION.
+ * (C) Copyright 2018-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,532 +19,347 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-/**
- * DAOS Server Persistent Metadata
- * NVMe Device Persistent Metadata Storage
- */
 #define D_LOGFAC	DD_FAC(bio)
 
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <linux/falloc.h>
-#include <sys/sysinfo.h>
+#include <libgen.h>
 
 #include <daos/common.h>
-#include <daos_srv/smd.h>
-#include <daos_srv/vos.h>
-#include <daos_srv/daos_server.h>
+#include <daos/btree_class.h>
 #include "smd_internal.h"
 
-static	pthread_mutex_t	mutex		= PTHREAD_MUTEX_INITIALIZER;
-static  pthread_mutex_t	create_mutex	= PTHREAD_MUTEX_INITIALIZER;
-static	umem_class_id_t	md_mem_class	= UMEM_CLASS_PMEM;
+struct smd_store	smd_store;
 
-struct  smd_params	*smd_params_obj;
-struct	smd_store	*sm_obj;
-
-char	pool_uuid[] = "b592b744-6f4a-436e-b7d5-dbb758a35502";
-
-void
-smd_lock(int table_type)
-{
-	D_ASSERT(smd_params_obj != NULL);
-
-	switch (table_type) {
-	case SMD_DTAB_LOCK:
-		ABT_mutex_lock(smd_params_obj->smp_dtab_mutex);
-		break;
-	case SMD_PTAB_LOCK:
-		ABT_mutex_lock(smd_params_obj->smp_ptab_mutex);
-		break;
-	case SMD_STAB_LOCK:
-		ABT_mutex_lock(smd_params_obj->smp_stab_mutex);
-		break;
-	}
-}
-
-void
-smd_unlock(int table_type)
-{
-	D_ASSERT(smd_params_obj != NULL);
-
-	switch (table_type) {
-	case SMD_DTAB_LOCK:
-		ABT_mutex_unlock(smd_params_obj->smp_dtab_mutex);
-		break;
-	case SMD_PTAB_LOCK:
-		ABT_mutex_unlock(smd_params_obj->smp_ptab_mutex);
-		break;
-	case SMD_STAB_LOCK:
-		ABT_mutex_unlock(smd_params_obj->smp_stab_mutex);
-		break;
-	}
-}
-
+#define SMD_STORE_DIR	"daos-srv_meta"
+#define	SMD_STORE_FILE	"nvme-meta"
 
 static int
-smd_file_path_create(const char *path, const char *fname,
-		     char **smp_path, char **smp_file)
+smd_store_gen_fname(const char *path, char **store_fname)
 {
-	int	rc = 0;
+	int	rc;
 
-	if (path == NULL) {
-		D_ERROR("Path cannot be NULL\n");
-		D_GOTO(err, rc = -DER_INVAL);
-	}
+	D_ASSERT(path != NULL);
+	D_ASSERT(store_fname != NULL);
 
-	rc = asprintf(smp_path,
-		      "%s/daos-srv-meta", path);
+	rc = asprintf(store_fname, "%s/%s/%s", path, SMD_STORE_DIR,
+		      SMD_STORE_FILE);
 	if (rc < 0) {
-		D_ERROR("Could not create the SRV-MD store dir: %d\n", rc);
-		D_GOTO(err, rc = -DER_NOMEM);
+		D_ERROR("Generate SMD store filename failed. %d\n", rc);
+		return -DER_NOMEM;
 	}
 
-	if (fname == NULL)
-		rc = asprintf(smp_file, "%s/%s", *smp_path, SRV_NVME_META);
-	else
-		rc = asprintf(smp_file, "%s/%s", *smp_path, fname);
-
-	if (rc < 0) {
-		D_ERROR("Could not create the SRV-MD store file: %d\n", rc);
-		D_GOTO(free_md_path, rc = -DER_NOMEM);
-	}
 	return 0;
+}
 
-free_md_path:
-	D_FREE(*smp_path);
-err:
+int
+smd_store_destroy(const char *path)
+{
+	char	*fname;
+	int	 rc;
+
+	rc = smd_store_gen_fname(path, &fname);
+	if (rc)
+		return rc;
+
+	rc = unlink(fname);
+	if (rc < 0 && errno != ENOENT) {
+		D_ERROR("Unlink SMD store file %s failed. %s\n",
+			fname, strerror(errno));
+		rc = daos_errno2der(errno);
+		goto out;
+	}
+
+	rc = rmdir(dirname(fname));
+	if (rc < 0 && errno != ENOENT) {
+		D_ERROR("Unlink SMD store dir %s failed. %s\n",
+			fname, strerror(errno));
+		rc = daos_errno2der(errno);
+		goto out;
+	}
+	rc = 0;
+out:
+	D_FREE(fname);
 	return rc;
 }
 
 static int
-smd_params_create(void)
+smd_store_check(char *fname, bool *existing)
 {
-	int	rc = 0;
+	int	rc;
 
-	rc = ABT_mutex_create(&smd_params_obj->smp_dtab_mutex);
-	if (rc != ABT_SUCCESS) {
-		rc = dss_abterr2der(rc);
-		D_GOTO(err, rc);
+	*existing = false;
+	rc = access(fname, R_OK | W_OK);
+	if (rc && errno == ENOENT)
+		rc = 0;
+	else if (rc)
+		rc = daos_errno2der(errno);
+	else
+		*existing = true;
+
+	return rc;
+}
+
+#define SMD_FILE_SIZE	(128UL << 20)	/* 128MB */
+#define SMD_MAGIC	(0xdcab0918)
+#define SMD_TREE_ODR	32
+
+static int
+smd_store_create(char *fname)
+{
+	struct umem_attr	 uma = {0};
+	struct umem_instance	 umm = {0};
+	char			*dir;
+	struct smd_df		*smd_df;
+	PMEMobjpool		*ph;
+	daos_handle_t		 btr_hdl;
+	int			 fd, rc;
+
+	dir = strdup(fname);
+	if (dir == NULL)
+		return -DER_NOMEM;
+	dir = dirname(dir);
+
+	rc = mkdir(dir, 0777);
+	if (rc < 0 && errno != EEXIST) {
+		D_ERROR("Create SMD dir %s failed. %s\n",
+			dir, strerror(errno));
+		free(dir);
+		return daos_errno2der(errno);
+	}
+	free(dir);
+
+	fd = open(fname, O_WRONLY | O_CREAT, 0600);
+	if (fd < 0) {
+		D_ERROR("Create SMD file %s failed. %s\n",
+			fname, strerror(errno));
+		return daos_errno2der(errno);
 	}
 
-	rc = ABT_mutex_create(&smd_params_obj->smp_ptab_mutex);
-	if (rc != ABT_SUCCESS) {
-		rc = dss_abterr2der(rc);
-		D_GOTO(free_dtab_mutex, rc);
+	rc = fallocate(fd, 0, 0, SMD_FILE_SIZE);
+	if (rc) {
+		D_ERROR("Pre-alloc SMD file size:"DF_U64" failed. %s\n",
+			SMD_FILE_SIZE, strerror(errno));
+		rc = daos_errno2der(errno);
+		close(fd);
+		return rc;
+	}
+	close(fd);
+
+	ph = pmemobj_create(fname, POBJ_LAYOUT_NAME(smd_md_layout), 0, 0666);
+	if (!ph) {
+		D_ERROR("Create SMD pmemobj pool %s failed. %s\n",
+			fname, pmemobj_errormsg());
+		return -DER_INVAL;
 	}
 
-	rc = ABT_mutex_create(&smd_params_obj->smp_stab_mutex);
-	if (rc != ABT_SUCCESS) {
-		rc = dss_abterr2der(rc);
-		D_GOTO(free_ptab_mutex, rc);
-	}
+	smd_df = smd_pop2df(ph);
+	uma.uma_id = UMEM_CLASS_PMEM;
+	uma.uma_pool = ph;
 
-	smd_params_obj->smp_pool_id = strdup(pool_uuid);
-	if (smd_params_obj->smp_pool_id == NULL) {
-		rc = -DER_NOMEM;
-		D_GOTO(free_stab_mutex, rc);
-	}
-	smd_params_obj->smp_mem_class = UMEM_CLASS_PMEM;
-	return 0;
+	rc = umem_class_init(&uma, &umm);
+	if (rc != 0)
+		goto close;
 
-free_stab_mutex:
-	ABT_mutex_free(&smd_params_obj->smp_stab_mutex);
-free_ptab_mutex:
-	ABT_mutex_free(&smd_params_obj->smp_ptab_mutex);
-free_dtab_mutex:
-	ABT_mutex_free(&smd_params_obj->smp_dtab_mutex);
-err:
+	rc = umem_tx_begin(&umm, NULL);
+	if (rc != 0)
+		goto close;
+
+	rc = pmemobj_tx_add_range_direct(smd_df, sizeof(*smd_df));
+	if (rc != 0)
+		goto tx_end;
+
+	memset(smd_df, 0, sizeof(*smd_df));
+	smd_df->smd_magic = SMD_MAGIC;
+
+	/* Create device table */
+	rc = dbtree_create_inplace(DBTREE_CLASS_UV, 0, SMD_TREE_ODR, &uma,
+				   &smd_df->smd_dev_tab, &btr_hdl);
+	if (rc) {
+		D_ERROR("Create SMD device table failed: %d\n", rc);
+		goto tx_end;
+	}
+	dbtree_close(btr_hdl);
+
+	/* Create pool table */
+	rc = dbtree_create_inplace(DBTREE_CLASS_UV, 0, SMD_TREE_ODR, &uma,
+				   &smd_df->smd_pool_tab, &btr_hdl);
+	if (rc) {
+		D_ERROR("Create SMD pool table failed: %d\n", rc);
+		goto tx_end;
+	}
+	dbtree_close(btr_hdl);
+
+	/* Create target table */
+	rc = dbtree_create_inplace(DBTREE_CLASS_KV, 0, SMD_TREE_ODR, &uma,
+				   &smd_df->smd_tgt_tab, &btr_hdl);
+	if (rc) {
+		D_ERROR("Create SMD target table failed: %d\n", rc);
+		goto tx_end;
+	}
+	dbtree_close(btr_hdl);
+
+tx_end:
+	if (rc == 0)
+		rc = umem_tx_commit(&umm);
+	else
+		rc = umem_tx_abort(&umm, rc);
+close:
+	pmemobj_close(ph);
 	return rc;
 }
 
 static void
-srv_ndms_params_destroy(void)
+smd_store_close(void)
 {
-	if (smd_params_obj->smp_path)
-		D_FREE(smd_params_obj->smp_path);
-	if (smd_params_obj->smp_file)
-		D_FREE(smd_params_obj->smp_file);
-	D_FREE(smd_params_obj->smp_pool_id);
-	ABT_mutex_free(&smd_params_obj->smp_ptab_mutex);
-	ABT_mutex_free(&smd_params_obj->smp_dtab_mutex);
-}
+	if (!daos_handle_is_inval(smd_store.ss_dev_hdl)) {
+		dbtree_close(smd_store.ss_dev_hdl);
+		smd_store.ss_dev_hdl = DAOS_HDL_INVAL;
+	}
 
-static inline void
-smd_obj_destroy()
-{
-	if (sm_obj == NULL)
-		return; /* Nothing to do */
+	if (!daos_handle_is_inval(smd_store.ss_pool_hdl)) {
+		dbtree_close(smd_store.ss_pool_hdl);
+		smd_store.ss_pool_hdl = DAOS_HDL_INVAL;
+	}
 
-	if (!daos_handle_is_inval(sm_obj->sms_dev_tab))
-		dbtree_close(sm_obj->sms_dev_tab);
+	if (!daos_handle_is_inval(smd_store.ss_tgt_hdl)) {
+		dbtree_close(smd_store.ss_tgt_hdl);
+		smd_store.ss_tgt_hdl = DAOS_HDL_INVAL;
+	}
 
-	if (!daos_handle_is_inval(sm_obj->sms_pool_tab))
-		dbtree_close(sm_obj->sms_pool_tab);
-
-	if (sm_obj->sms_uma.uma_pool)
-		pmemobj_close(sm_obj->sms_uma.uma_pool);
-
-	D_FREE(sm_obj);
+	if (smd_store.ss_umm.umm_pool != NULL) {
+		pmemobj_close(smd_store.ss_umm.umm_pool);
+		smd_store.ss_umm.umm_pool = NULL;
+	}
 }
 
 static int
-smd_nvme_obj_create(PMEMobjpool *ph, struct umem_attr *uma,
-		    struct smd_df *smd_df)
+smd_store_open(char *fname)
 {
-	int			rc = 0;
-	struct umem_attr	*l_uma;
-	struct smd_df		*l_smd_df;
+	struct umem_attr	 uma = {0};
+	struct smd_df		*smd_df;
+	PMEMobjpool		*ph;
+	int			 rc;
 
-	if (sm_obj != NULL)
-		return 0;
-
-	D_ALLOC_PTR(sm_obj);
-	if (sm_obj == NULL)
-		return -DER_NOMEM;
-	if (uma == NULL) {
-		l_uma = &sm_obj->sms_uma;
-		l_uma->uma_id = md_mem_class;
-	} else {
-		l_uma = uma;
-		sm_obj->sms_uma = *l_uma;
-	}
-
+	ph = pmemobj_open(fname, POBJ_LAYOUT_NAME(smd_md_layout));
 	if (ph == NULL) {
-		l_uma->uma_pool =
-			pmemobj_open(smd_params_obj->smp_file,
-				     POBJ_LAYOUT_NAME(smd_md_layout));
-			if (l_uma->uma_pool == NULL) {
-				D_ERROR("Error in opening the pool: %s\n",
-					pmemobj_errormsg());
-				D_GOTO(err, rc == -DER_NO_HDL);
-			}
-	} else {
-		l_uma->uma_pool = ph;
+		D_ERROR("Open SMD pmemobj pool %s failed: %s\n",
+			fname, pmemobj_errormsg());
+		return -DER_INVAL;
 	}
 
-	rc = umem_class_init(l_uma, &sm_obj->sms_umm);
+	uma.uma_id = UMEM_CLASS_PMEM;
+	uma.uma_pool = ph;
+
+	rc = umem_class_init(&uma, &smd_store.ss_umm);
 	if (rc != 0) {
-		D_ERROR("Failed to instantiate umem: %d\n", rc);
-		D_GOTO(err, rc);
+		pmemobj_close(ph);
+		smd_store.ss_umm.umm_pool = NULL;
+		return rc;
 	}
 
-	if (smd_df == NULL)
-		l_smd_df = smd_store_ptr2df(sm_obj);
-	else
-		l_smd_df = smd_df;
-
-	rc = dbtree_open_inplace(&l_smd_df->smd_dev_tab_df.ndt_btr,
-				 &sm_obj->sms_uma,
-				 &sm_obj->sms_dev_tab);
+	smd_df = smd_pop2df(ph);
+	/* Open device table */
+	rc = dbtree_open_inplace(&smd_df->smd_dev_tab, &uma,
+				 &smd_store.ss_dev_hdl);
 	if (rc) {
-		D_ERROR("Device Tree open failed: %d\n", rc);
-		D_GOTO(err, rc);
+		D_ERROR("Open SMD device table failed: %d\n", rc);
+		goto error;
 	}
 
-	rc = dbtree_open_inplace(&l_smd_df->smd_pool_tab_df.npt_btr,
-				 &sm_obj->sms_uma,
-				 &sm_obj->sms_pool_tab);
+	/* Open pool table */
+	rc = dbtree_open_inplace(&smd_df->smd_pool_tab, &uma,
+				 &smd_store.ss_pool_hdl);
 	if (rc) {
-		D_ERROR("Pool Tree open failed: %d\n", rc);
-		D_GOTO(err, rc);
+		D_ERROR("Open SMD pool table failed: %d\n", rc);
+		goto error;
 	}
 
-	rc = dbtree_open_inplace(&l_smd_df->smd_stream_tab_df.nst_btr,
-				 &sm_obj->sms_uma,
-				 &sm_obj->sms_stream_tab);
+	/* Open target table */
+	rc = dbtree_open_inplace(&smd_df->smd_tgt_tab, &uma,
+				 &smd_store.ss_tgt_hdl);
 	if (rc) {
-		D_ERROR("Stream tree open failed: %d\n", rc);
-		D_GOTO(err, rc);
+		D_ERROR("Open SMD target table failed: %d\n", rc);
+		goto error;
 	}
-	D_DEBUG(DB_MGMT, "Created SMD DRAM object: %p\n", sm_obj);
+
 	return 0;
-err:
-	smd_obj_destroy();
-	return rc;
-}
-
-/** DAOS per-server metadata dir for PMEM file(s) */
-static int
-mgmt_smd_create_dir(void)
-{
-	mode_t	stored_mode, mode;
-	int	rc;
-
-	stored_mode = umask(0);
-	mode = S_IRWXU | S_IRWXG | S_IRWXO;
-
-	/** create daos-meta directory if it does not exist already */
-	rc = mkdir(smd_params_obj->smp_path, mode);
-	if (rc < 0 && errno != EEXIST) {
-		D_ERROR("failed to create daos-meta dir: %s, %s\n",
-			smd_params_obj->smp_path, strerror(errno));
-		umask(stored_mode);
-		D_GOTO(err, rc = daos_errno2der(errno));
-	}
-	umask(stored_mode);
-	return 0;
-err:
-	return rc;
-}
-
-static int
-mgmt_smd_create_file(daos_size_t size)
-{
-	int	rc = 0;
-	int	fd = -1;
-	mode_t	mode;
-
-	if (access(smd_params_obj->smp_file, F_OK) != -1) {
-		D_DEBUG(DB_MGMT, "File already exists, no need to allocate");
-		return -DER_EXIST;
-	}
-
-	mode = S_IRUSR | S_IWUSR;
-	fd = open(smd_params_obj->smp_file, O_WRONLY | O_CREAT | O_APPEND,
-		  mode);
-	if (fd < 0) {
-		rc = daos_errno2der(errno);
-		D_ERROR("Failed to create srv metadata file %s: %d\n",
-			smd_params_obj->smp_file, rc);
-		D_GOTO(err, rc);
-	}
-
-	rc = fallocate(fd, 0, 0, size);
-	if (rc) {
-		D_ERROR("Error allocate srv md file %s:"DF_U64", rc: %d\n",
-			smd_params_obj->smp_file, size, rc);
-		rc = daos_errno2der(errno);
-	}
-	close(fd);
-err:
+error:
+	smd_store_close();
 	return rc;
 }
 
 void
 smd_fini(void)
 {
-	D_MUTEX_LOCK(&mutex);
-	if (smd_params_obj) {
-		srv_ndms_params_destroy();
-		D_FREE(smd_params_obj);
+	smd_lock(&smd_store);
+	smd_store_close();
+	smd_unlock(&smd_store);
+	ABT_mutex_free(&smd_store.ss_mutex);
+}
+
+int
+smd_init(const char *path)
+{
+	char	*fname;
+	bool	 existing;
+	int	 rc;
+
+	rc = dbtree_class_register(DBTREE_CLASS_KV, 0, &dbtree_kv_ops);
+	if (rc != 0 && rc != -DER_EXIST)
+		return rc;
+
+	rc = dbtree_class_register(DBTREE_CLASS_UV, 0, &dbtree_uv_ops);
+	if (rc != 0 && rc != -DER_EXIST)
+		return rc;
+
+	rc = smd_store_gen_fname(path, &fname);
+	if (rc)
+		return rc;
+
+	memset(&smd_store, 0, sizeof(smd_store));
+	smd_store.ss_dev_hdl = DAOS_HDL_INVAL;
+	smd_store.ss_pool_hdl = DAOS_HDL_INVAL;
+	smd_store.ss_tgt_hdl = DAOS_HDL_INVAL;
+
+	rc = ABT_mutex_create(&smd_store.ss_mutex);
+	if (rc != ABT_SUCCESS) {
+		rc = -DER_NOMEM;
+		D_FREE(fname);
+		return rc;
 	}
-	ABT_finalize();
-	smd_obj_destroy();
-	D_MUTEX_UNLOCK(&mutex);
-}
 
-struct smd_store *
-get_smd_store()
-{
-	return sm_obj;
-}
+	smd_lock(&smd_store);
 
-/** DAOS per-server metadata pool detroy for PMEM metadata */
-void
-smd_remove(const char *path, const char *fname)
-{
+	rc = smd_store_check(fname, &existing);
+	if (rc) {
+		D_ERROR("Check SMD store %s failed. %d\n", fname, rc);
+		goto out;
+	}
 
-	char *l_fname;
-
-	if (sm_obj)
-		smd_obj_destroy();
-
-	if (smd_params_obj == NULL) {
-		char	*l_path;
-		int	rc;
-
-		rc = smd_file_path_create(path, fname, &l_path, &l_fname);
+	/* Create the SMD store if it's not existing */
+	if (!existing) {
+		rc = smd_store_create(fname);
 		if (rc) {
-			D_ERROR("Error creating file name: %d\n", rc);
-			return;
+			D_ERROR("Create SMD store failed. %d\n", rc);
+			goto out;
 		}
-		D_FREE(l_path);
-	} else {
-		l_fname = smd_params_obj->smp_file;
 	}
 
-	if (remove(l_fname))
-		D_ERROR("While deleting file from PMEM: %s\n",
-			strerror(errno));
+	rc = smd_store_open(fname);
+	if (rc) {
+		D_ERROR("Open SMD store failed. %d\n", rc);
+		goto out;
+	}
 
-	if (smd_params_obj != NULL)
+	D_DEBUG(DB_MGMT, "SMD store initialized\n");
+out:
+	smd_unlock(&smd_store);
+	D_FREE(fname);
+
+	if (rc)
 		smd_fini();
-	else
-		D_FREE(l_fname);
-}
-
-/** DAOS per-server metadata pool creation for PMEM metadata */
-int
-smd_nvme_create_md_store(const char *path, const char *fname,
-			 daos_size_t size)
-{
-	int			rc = 0;
-	static int		md_store_created;
-	PMEMobjpool		*ph = NULL;
-	struct smd_df		*smd_df = NULL;
-	struct umem_attr	*l_uma = NULL;
-	struct umem_attr	uma = {0};
-	struct umem_instance	umm = {0};
-
-
-	if (md_store_created) {
-		D_DEBUG(DB_MGMT, "SRV MD store file %s, already exists\n",
-			smd_params_obj->smp_file);
-		return 0;
-	}
-
-	D_MUTEX_LOCK(&create_mutex);
-
-	if (md_store_created)
-		D_GOTO(exit, rc);
-
-	if (smd_params_obj == NULL) {
-		D_ERROR("SMD store has not be init, call smd_init\n");
-		D_GOTO(exit, rc);
-	}
-
-	rc = smd_file_path_create(path, fname, &smd_params_obj->smp_path,
-				  &smd_params_obj->smp_file);
-	if (rc < 0) {
-		D_ERROR("File path creation failed: %d\n", rc);
-		D_GOTO(exit, rc);
-	}
-
-	rc = mgmt_smd_create_dir();
-	if (rc == -DER_EXIST)
-		D_GOTO(err_obj_create, rc = 0);
-	if (rc < 0)
-		D_GOTO(exit, rc);
-
-	if (size == (daos_size_t)-1)
-		size = SMD_FILE_SIZE;
-
-	rc = mgmt_smd_create_file(size);
-	if (rc == -DER_EXIST)
-		D_GOTO(err_obj_create, rc = 0);
-	if (rc < 0)
-		D_GOTO(exit, rc);
-
-	ph = pmemobj_create(smd_params_obj->smp_file,
-			    POBJ_LAYOUT_NAME(smd_md_layout), 0, 0666);
-	if (!ph) {
-		rc = daos_errno2der(errno);
-		D_ERROR("Failed to create pool %s size="DF_U64", errno:%d\n",
-			smd_params_obj->smp_file, size, rc);
-		D_GOTO(err_pool_destroy, rc);
-	}
-
-	uma.uma_id = md_mem_class;
-	uma.uma_pool = ph;
-
-	smd_df  = pmempool_pop2df(ph);
-
-	rc = umem_class_init(&uma, &umm);
-	if (rc != 0)
-		D_GOTO(failed, rc);
-
-	rc = umem_tx_begin(&umm, NULL);
-	if (rc != 0)
-		D_GOTO(failed, rc);
-
-	rc = pmemobj_tx_add_range_direct(smd_df, sizeof(*smd_df));
-	if (rc != 0)
-		D_GOTO(end, rc);
-	memset(smd_df, 0, sizeof(*smd_df));
-
-	l_uma = &uma;
-
-	uuid_parse(pool_uuid, smd_df->smd_id);
-	rc = smd_nvme_md_dtab_create(&uma, &smd_df->smd_dev_tab_df);
-	if (rc != 0)
-		D_GOTO(end, rc);
-	rc = smd_nvme_md_ptab_create(&uma,
-				     &smd_df->smd_pool_tab_df);
-	if (rc != 0)
-		D_GOTO(end, rc);
-	rc = smd_nvme_md_stab_create(&uma,
-				     &smd_df->smd_stream_tab_df);
-	if (rc != 0)
-		D_GOTO(end, rc);
-end:
-	if (rc == 0)
-		rc = umem_tx_commit(&umm);
-	else
-		rc = umem_tx_abort(&umm, rc);
-failed:
-	if (rc != 0) {
-		D_ERROR("Initialize md pool root error:%d\n", rc);
-		D_GOTO(err_pool_destroy, rc);
-	}
-
-err_obj_create:
-	rc = smd_nvme_obj_create(ph, l_uma, smd_df);
-	if (rc != 0) {
-		D_ERROR("Failed to create sm_obj: %p\n", sm_obj);
-		D_GOTO(exit, rc);
-	}
-	md_store_created = 1;
-	D_GOTO(exit, rc);
-
-err_pool_destroy:
-	smd_remove(path, fname);
-exit:
-	D_MUTEX_UNLOCK(&create_mutex);
-	return rc;
-}
-
-int
-smd_create_initialize(const char *path, const char *fname, daos_size_t size)
-{
-	int		rc  = 0;
-	static	int	is_smd_init;
-
-	if (is_smd_init) {
-		D_DEBUG(DB_MGMT, "SRV MD store already init\n");
-		return rc;
-	}
-	D_MUTEX_LOCK(&mutex);
-
-	if (is_smd_init)
-		D_GOTO(exit, rc);
-
-	rc = ABT_init(0, NULL);
-	if (rc != 0) {
-		D_MUTEX_UNLOCK(&mutex);
-		return rc;
-	}
-
-	D_ALLOC_PTR(smd_params_obj);
-	if (smd_params_obj == NULL)
-		D_GOTO(exit, rc);
-
-	rc = smd_params_create();
-	if (rc) {
-		D_ERROR("Failure: Creating in-memory data structs: %d\n", rc);
-		D_GOTO(exit, rc);
-	}
-
-	rc = smd_nvme_md_tables_register();
-	if (rc) {
-		D_ERROR("registering tables failure\n");
-		D_GOTO(exit, rc);
-	}
-
-	rc = smd_nvme_create_md_store(path, fname, size);
-	if (rc) {
-		D_ERROR("creating an MD store\n");
-		D_GOTO(exit, rc);
-	}
-	is_smd_init = 1;
-exit:
-	D_MUTEX_UNLOCK(&mutex);
-	if (rc) {
-		D_DEBUG(DB_MGMT, "Error initializing smd store\n");
-		smd_fini();
-	} else {
-		D_DEBUG(DB_MGMT, "Finished initializing smd store\n");
-	}
 	return rc;
 }

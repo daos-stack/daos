@@ -89,13 +89,14 @@ struct entry {
 #define MAGIC 0xd3f211dc
 
 struct vector {
-	union ptr_lock *data;		/* entries in vector */
-	obj_da_t da;			/* Applocator of free entries */
-	pthread_rwlock_t lock;		/* reader/writer lock for vector */
-	int magic;			/* Magic number for sanity */
-	unsigned int entry_size;	/* Size of entries in vector */
-	unsigned int num_entries;	/* Current number of allocated entries */
-	unsigned int max_entries;	/* limit on size of vector */
+	union ptr_lock		*data;		/* entries in vector */
+	obj_da_t		da;		/* Applocator of free entries */
+	pthread_rwlock_t	lock;		/* reader/writer lock for vector */
+	vector_destroy_cb	destroy_cb;	/* Destroy callback */
+	int			magic;		/* Magic number for sanity */
+	unsigned int		entry_size;	/* Size of entries in vector */
+	unsigned int		num_entries;	/* Current number of allocated entries */
+	unsigned int		max_entries;	/* limit on size of vector */
 };
 
 _Static_assert(sizeof(struct vector) <= sizeof(vector_t),
@@ -161,7 +162,8 @@ expand_if_needed(struct vector *vector, unsigned int index)
 }
 
 int
-vector_init(vector_t *vector, int sizeof_entry, int max_entries)
+vector_init(vector_t *vector, int sizeof_entry, int max_entries,
+	    vector_destroy_cb destroy_cb)
 {
 	struct vector *realv = (struct vector *)vector;
 	int rc;
@@ -177,6 +179,7 @@ vector_init(vector_t *vector, int sizeof_entry, int max_entries)
 	realv->entry_size = sizeof_entry;
 	realv->data = NULL;
 	realv->num_entries = 0;
+	realv->destroy_cb = destroy_cb;
 	/* TODO: Improve cleanup of the error paths in this function */
 	rc = pthread_rwlock_init(&realv->lock, NULL);
 	if (rc != 0)
@@ -184,7 +187,7 @@ vector_init(vector_t *vector, int sizeof_entry, int max_entries)
 	rc = obj_da_initialize(&realv->da,
 			       sizeof(struct entry) + sizeof_entry);
 	if (rc != -DER_SUCCESS)
-		return -DER_NOMEM;
+		return rc;
 	rc = expand_vector(realv, 0);
 
 	if (rc != -DER_SUCCESS)
@@ -337,8 +340,10 @@ vector_decref(vector_t *vector, void *ptr)
 
 	old_value = atomic_fetch_sub(&entry->refcount, 1);
 
-	if (old_value == 1)
+	if (old_value == 1) {
+		realv->destroy_cb(ptr);
 		obj_da_put(&realv->da, entry);
+	}
 
 	return -DER_SUCCESS;
 }

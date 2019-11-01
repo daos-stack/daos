@@ -72,6 +72,7 @@ struct bio_desc;
 struct bio_io_context;
 /* Opaque per-xstream context */
 struct bio_xs_context;
+struct bio_blobstore;
 
 /**
  * Header for SPDK blob per VOS pool
@@ -98,6 +99,7 @@ struct bio_dev_state {
 	uint32_t	 bds_bio_read_errs;
 	uint32_t	 bds_bio_write_errs;
 	uint32_t	 bds_bio_unmap_errs;
+	uint32_t	 bds_checksum_errs;
 	uint16_t	 bds_temperature; /* in Kelvin */
 	/* Critical warnings */
 	uint8_t		 bds_temp_warning	: 1;
@@ -197,18 +199,23 @@ struct bio_reaction_ops {
 	int (*reint_reaction)(int *tgt_ids, int tgt_cnt);
 };
 
+/*
+ * Register faulty/reint reaction callbacks.
+ *
+ * \param ops[IN]	Reaction callback functions
+ */
+void bio_register_ract_ops(struct bio_reaction_ops *ops);
+
 /**
  * Global NVMe initialization.
  *
  * \param[IN] storage_path	daos storage directory path
  * \param[IN] nvme_conf		NVMe config file
  * \param[IN] shm_id		shm id to enable multiprocess mode in SPDK
- * \param[IN] ops		Reaction callback functions
  *
  * \return		Zero on success, negative value on error
  */
-int bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
-		  struct bio_reaction_ops *ops);
+int bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id);
 
 /**
  * Global NVMe finilization.
@@ -221,11 +228,11 @@ void bio_nvme_fini(void);
  * Initialize SPDK env and per-xstream NVMe context.
  *
  * \param[OUT] pctxt	Per-xstream NVMe context to be returned
- * \param[IN] xs_id	xstream ID
+ * \param[IN] tgt_id	Target ID (mapped to a VOS xstream)
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_xsctxt_alloc(struct bio_xs_context **pctxt, int xs_id);
+int bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id);
 
 /*
  * Finalize per-xstream NVMe context and SPDK env.
@@ -436,5 +443,18 @@ bio_yield(void)
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
 	ABT_thread_yield();
 }
+
+/*
+ * Helper function to get the device health state for a given xstream.
+ * Used for querying the BIO health information from the control plane command.
+ *
+ * \param dev_state	[OUT]	BIO device health state
+ * \param xs		[IN]	xstream context
+ *
+ * \return			Zero on success, negative value on error
+ */
+int bio_get_dev_state(struct bio_dev_state *dev_state,
+		      struct bio_xs_context *xs);
+
 
 #endif /* __BIO_API_H__ */

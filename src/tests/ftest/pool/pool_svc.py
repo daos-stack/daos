@@ -28,7 +28,8 @@ import traceback
 
 from apricot import TestWithServers
 
-from daos_api import DaosPool, DaosServer, DaosApiError
+from pydaos.raw import DaosPool, DaosServer, DaosApiError
+
 
 class PoolSvc(TestWithServers):
     """
@@ -36,18 +37,11 @@ class PoolSvc(TestWithServers):
     :avocado: recursive
     """
 
-    def tearDown(self):
-        try:
-            if self.pool is not None and self.pool.attached:
-                self.pool.destroy(1)
-        finally:
-            super(PoolSvc, self).tearDown()
-
     def test_poolsvc(self):
         """
         Test svc arg during pool create.
 
-        :avocado: tags=pool,svc
+        :avocado: tags=all,pool,pr,medium,svc
         """
 
         # parameters used in pool create
@@ -96,9 +90,9 @@ class PoolSvc(TestWithServers):
                 self.pool.connect(1 << 1)
                 self.pool.disconnect()
                 # kill another server which is not a leader and exclude it
-                server = DaosServer(self.context, self.server_group, leader - 1)
+                server = DaosServer(self.context, self.server_group, 3)
                 server.kill(1)
-                self.pool.exclude([leader - 1])
+                self.pool.exclude([3])
                 # perform pool connect
                 self.pool.connect(1 << 1)
 

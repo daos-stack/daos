@@ -33,8 +33,9 @@ import agent_utils
 import server_utils
 import write_host_file
 
-from daos_api import (DaosContext, DaosPool, DaosContainer, IORequest, DaosObj,
-                      DaosApiError, DaosLog)
+from pydaos.raw import (DaosContext, DaosPool, DaosContainer, IORequest, DaosObj,
+                        DaosApiError, DaosLog)
+from apricot import skipForTicket
 
 class ObjectDataValidation(avocado.Test):
     """
@@ -59,7 +60,7 @@ class ObjectDataValidation(avocado.Test):
 
         with open('../../../.build_vars.json') as json_f:
             build_paths = json.load(json_f)
-        basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
+        self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
         server_group = self.params.get("name",
                                        '/server_config/',
                                        'daos_server')
@@ -73,8 +74,9 @@ class ObjectDataValidation(avocado.Test):
         self.array_size = self.params.get("size", '/array_size/')
         self.record_length = self.params.get("length", '/run/record/*')
 
-        self.agent_sessions = agent_utils.run_agent(basepath, self.hostlist)
-        server_utils.run_server(self.hostfile, server_group, basepath)
+        self.agent_sessions = agent_utils.run_agent(
+            self.basepath, self.hostlist)
+        server_utils.run_server(self, self.hostfile, server_group)
 
         self.pool = DaosPool(self.context)
         self.pool.create(self.params.get("mode", '/run/pool/createmode/*'),
@@ -135,10 +137,12 @@ class ObjectDataValidation(avocado.Test):
             (1)DAOS-1346: Verify commit tx bad parameter behavior.
             (2)DAOS-1343: Verify tx_close bad parameter behavior.
             (3)DAOS-1342: Verify tx_close through daos_api.
+            (4)DAOS-1338: Add and verify tx_abort through daos_api.
+            (5)DAOS-1339: Verify tx_abort bad parameter behavior.
         Test Description:
             Write Avocado Test to verify commit tx and close tx
                           bad parameter behavior.
-        :avocado: tags=all,pr,small,negative_test,neg_tx_commit,medium,vm
+        :avocado: tags=all,object,full_regression,small,invalid_tx
         """
         self.d_log.info("==Writing the Single Dataset for negative test...")
         record_index = 0
@@ -192,14 +196,57 @@ class ObjectDataValidation(avocado.Test):
             self.log.info(str(excep))
             self.fail("##(3)Failed on close_tx.")
 
+        try:
+            self.container.abort_tx(invalid_transaction)
+            self.fail(
+                "##(4.1)Container.abort_tx passing with invalid handle")
+        except DaosApiError as excep:
+            self.log.info(str(excep))
+            self.log.info(
+                "==(4)Expecting failure: invalid Container.abort_tx.")
+            if expected_error not in str(excep):
+                self.fail(
+                    "##(4.2)Expecting error RC: -1002, but got {}."
+                    .format(str(excep)))
+
+        #Try to abort the transaction which already closed.
+        try:
+            self.container.abort_tx(new_transaction)
+            self.fail(
+                "##(5.1)Container.abort_tx passing with a closed handle")
+        except DaosApiError as excep:
+            self.log.info(str(excep))
+            self.log.info(
+                "==(5)Expecting failure: Container.abort_tx closed handle.")
+            if expected_error not in str(excep):
+                self.fail(
+                    "##(5.2)Expecting error RC: -1002, but got {}."
+                    .format(str(excep)))
+
+        #open another transaction for abort test
+        try:
+            new_transaction2 = self.container.get_new_tx()
+        except DaosApiError as excep:
+            self.fail("##(6.1)container get_new_tx failed: {}".format(excep))
+        self.log.info("==new_transaction2=     %s", new_transaction2)
+        self.ioreq.single_insert(c_dkey, c_akey, c_value, c_size,
+                                 new_transaction2)
+        try:
+            self.container.abort_tx(new_transaction2)
+            self.log.info("==(6)container.abort_tx test passed.")
+        except DaosApiError as excep:
+            self.log.info(str(excep))
+            self.fail("##(6.2)Failed on abort_tx.")
+
 
     @avocado.fail_on(DaosApiError)
+    @skipForTicket("DAOS-3208")
     def test_single_object_validation(self):
         """
         Test ID: DAOS-707
         Test Description: Write Avocado Test to verify single data after
                           pool/container disconnect/reconnect.
-        :avocado: tags=single_object,data_verification,medium,vm
+        :avocado: tags=all,object,full_regression,small,single_object
         """
         self.d_log.info("Writing the Single Dataset")
         record_index = 0
@@ -252,12 +299,13 @@ class ObjectDataValidation(avocado.Test):
                     record_index = 0
 
     @avocado.fail_on(DaosApiError)
+    @skipForTicket("DAOS-3208")
     def test_array_object_validation(self):
         """
         Test ID: DAOS-707
         Test Description: Write Avocado Test to verify Array data after
                           pool/container disconnect/reconnect.
-        :avocado: tags=array_object,data_verification,array,medium,vm
+        :avocado: tags=all,object,full_regression,small,array_object
         """
         self.d_log.info("Writing the Array Dataset")
         record_index = 0

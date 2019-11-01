@@ -41,7 +41,7 @@ class IorEightServersMpiio(IorTestBase):
             transfersize and block size of 32M for 1K transfer size and 128M
             for rest.
 
-        :avocado: tags=ior,mpiio,eightservers,ior_ssf
+        :avocado: tags=ior_ssf
         """
         ior_flags = self.params.get("F", "/run/ior/iorflags/ssf/")
         self.ior_cmd.flags.update(ior_flags)
@@ -58,7 +58,7 @@ class IorEightServersMpiio(IorTestBase):
             transfersize and block size of 32M for 1K transfer size and 128M
             for rest.
 
-        :avocado: tags=ior,mpiio,eightservers,ior_fpp
+        :avocado: tags=ior_fpp
         """
         ior_flags = self.params.get("F", "/run/ior/iorflags/fpp/")
         self.ior_cmd.flags.update(ior_flags)

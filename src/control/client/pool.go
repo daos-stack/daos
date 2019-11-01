@@ -24,33 +24,143 @@
 package client
 
 import (
+	uuid "github.com/google/uuid"
+	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
-// CreatePool will create a DAOS pool using provided parameters and return uuid
-func (c *connList) CreatePool(req *pb.CreatePoolReq) ResultMap {
-	results := make(ResultMap)
-	mc := c.controllers[0] // connect to first AP only for now
-
-	resp, err := mc.getSvcClient().CreatePool(context.Background(), req)
-
-	result := ClientResult{mc.getAddress(), resp, err}
-	results[result.Address] = result
-
-	return results
+// PoolCreateReq struct contains request
+type PoolCreateReq struct {
+	ScmBytes   uint64
+	NvmeBytes  uint64
+	RankList   string
+	NumSvcReps uint32
+	Sys        string
+	Usr        string
+	Grp        string
+	Acl        []string
+	Uuid       string
 }
 
-// DestroyPool will Destroy a DAOS pool identified by its UUID.
-func (c *connList) DestroyPool(req *pb.DestroyPoolReq) ResultMap {
-	results := make(ResultMap)
-	mc := c.controllers[0] // connect to first AP only for now
+// PoolCreateResp struct contains response
+type PoolCreateResp struct {
+	Uuid    string
+	SvcReps string
+}
 
-	resp, err := mc.getSvcClient().DestroyPool(context.Background(), req)
+// PoolCreate will create a DAOS pool using provided parameters and generated
+// UUID. Return values will be UUID, list of service replicas and error
+// (including any DER code from DAOS).
+//
+// Isolate protobuf encapsulation in client and don't expose to calling code.
+func (c *connList) PoolCreate(req *PoolCreateReq) (*PoolCreateResp, error) {
+	mc, err := chooseServiceLeader(c.controllers)
+	if err != nil {
+		return nil, err
+	}
 
-	result := ClientResult{mc.getAddress(), resp, err}
-	results[result.Address] = result
+	poolUUID, err := uuid.NewRandom()
+	if err != nil {
+		return nil, errors.Wrap(err, "generating pool uuid")
+	}
+	poolUUIDStr := poolUUID.String()
 
-	return results
+	rpcReq := &mgmtpb.PoolCreateReq{
+		Scmbytes: req.ScmBytes, Nvmebytes: req.NvmeBytes, Ranks: req.RankList,
+		Numsvcreps: req.NumSvcReps, Sys: req.Sys, User: req.Usr,
+		Usergroup: req.Grp, Acl: req.Acl, Uuid: poolUUIDStr,
+	}
+
+	c.log.Debugf("Create DAOS pool request: %s\n", rpcReq)
+
+	rpcResp, err := mc.getSvcClient().PoolCreate(context.Background(), rpcReq)
+	if err != nil {
+		return nil, err
+	}
+
+	c.log.Debugf("Create DAOS pool response: %s\n", rpcResp)
+
+	if rpcResp.GetStatus() != 0 {
+		return nil, errors.Errorf("DAOS returned error code: %d\n",
+			rpcResp.GetStatus())
+	}
+
+	return &PoolCreateResp{Uuid: poolUUIDStr, SvcReps: rpcResp.GetSvcreps()}, nil
+}
+
+// PoolDestroyReq struct contains request
+type PoolDestroyReq struct {
+	Uuid  string
+	Force bool
+}
+
+// No PoolDestroyResp as no other parameters other than success/failure.
+
+// PoolDestroy will Destroy a DAOS pool identified by its uuid and returns
+// error (including any DER code from DAOS).
+//
+// Isolate protobuf encapsulation in client and don't expose to calling code.
+func (c *connList) PoolDestroy(req *PoolDestroyReq) error {
+	mc, err := chooseServiceLeader(c.controllers)
+	if err != nil {
+		return err
+	}
+
+	rpcReq := &mgmtpb.PoolDestroyReq{Uuid: req.Uuid, Force: req.Force}
+
+	c.log.Debugf("Destroy DAOS pool request: %s\n", rpcReq)
+
+	rpcResp, err := mc.getSvcClient().PoolDestroy(context.Background(), rpcReq)
+	if err != nil {
+		return err
+	}
+
+	c.log.Debugf("Destroy DAOS pool response: %s\n", rpcResp)
+
+	if rpcResp.GetStatus() != 0 {
+		return errors.Errorf("DAOS returned error code: %d\n",
+			rpcResp.GetStatus())
+	}
+
+	return nil
+}
+
+// PoolGetACLReq contains the input parameters for PoolGetACL
+type PoolGetACLReq struct {
+	UUID string // pool UUID
+}
+
+// PoolGetACLResp contains the output results for PoolGetACL
+type PoolGetACLResp struct {
+	ACL []string // Access Control Entries in string format
+}
+
+// PoolGetACL gets the Access Control List for the pool.
+func (c *connList) PoolGetACL(req *PoolGetACLReq) (*PoolGetACLResp, error) {
+	mc, err := chooseServiceLeader(c.controllers)
+	if err != nil {
+		return nil, err
+	}
+
+	pbReq := &mgmtpb.GetACLReq{Uuid: req.UUID}
+
+	c.log.Debugf("Get DAOS pool ACL request: %v", pbReq)
+
+	pbResp, err := mc.getSvcClient().PoolGetACL(context.Background(), pbReq)
+	if err != nil {
+		return nil, err
+	}
+
+	c.log.Debugf("Get DAOS pool ACL response: %v", pbResp)
+
+	if pbResp.GetStatus() != 0 {
+		return nil, errors.Errorf("DAOS returned error code: %d",
+			pbResp.GetStatus())
+	}
+
+	return &PoolGetACLResp{
+		ACL: pbResp.ACL,
+	}, nil
 }

@@ -44,7 +44,7 @@ vts_dtx_cos(void **state, bool punch)
 
 	/* Insert a DTX into CoS cache. */
 	rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &args->oid, &xid,
-			     dkey_hash, crt_hlc_get(), punch);
+			     dkey_hash, DAOS_EPOCH_MAX - 1, punch, false);
 	assert_int_equal(rc, 0);
 
 	/* Query the DTX with different @punch parameter will find nothing. */
@@ -99,8 +99,8 @@ dtx_3(void **state)
 		daos_dti_gen(&xid, false);
 
 		rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &args->oid, &xid,
-				     dkey_hash, crt_hlc_get(),
-				     i % 2 ? true : false);
+				     dkey_hash, DAOS_EPOCH_MAX - 1,
+				     i % 2 ? true : false, false);
 		assert_int_equal(rc, 0);
 	}
 
@@ -139,12 +139,13 @@ dtx_4(void **state)
 		dkey_hash = lrand48();
 
 		rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &args->oid, &xid[i],
-				     dkey_hash, crt_hlc_get(),
-				     i % 2 ? false : true);
+				     dkey_hash, DAOS_EPOCH_MAX - 1,
+				     i % 2 ? false : true, false);
 		assert_int_equal(rc, 0);
 	}
 
-	rc = vos_dtx_fetch_committable(args->ctx.tc_co_hdl, 100, &dtes);
+	rc = vos_dtx_fetch_committable(args->ctx.tc_co_hdl, 100, NULL,
+				       DAOS_EPOCH_MAX, &dtes);
 	assert_int_equal(rc, 10);
 
 	for (i = 0; i < 10; i++) {
@@ -299,7 +300,7 @@ dtx_5(void **state)
 
 	/* Add former DTX into CoS cache. */
 	rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &args->oid, &xid,
-			     dkey_hash, epoch, false);
+			     dkey_hash, epoch, false, false);
 	assert_int_equal(rc, 0);
 
 	vos_dtx_stat(args->ctx.tc_co_hdl, &stat);
@@ -402,10 +403,20 @@ vts_dtx_commit_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	iod.iod_size = DAOS_REC_ANY;
 
 	rc = io_test_obj_fetch(args, ++epoch, &dkey, &iod, &sgl, true);
-	assert_int_equal(rc, 0);
+	if (punch_obj) {
+		/* Object uses old punch model.  Data is visible before commit
+		 */
+		assert_int_equal(rc, 0);
 
-	/* Data record with punch DTX is readable before commit. */
-	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
+		assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
+	} else {
+		/* Read at later timestamp than the punch should return
+		 * -DER_INPROGRESS
+		 */
+		assert_int_equal(rc, -DER_INPROGRESS);
+
+		assert_memory_not_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
+	}
 
 	/* Commit the punch DTX. */
 	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1);
@@ -498,7 +509,7 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	vts_dtx_end(dth);
 
 	/* Aborted the update DTX. */
-	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, 1, false);
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, epoch, &xid, 1, false);
 	assert_int_equal(rc, 0);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
@@ -532,7 +543,7 @@ vts_dtx_abort_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	vts_dtx_end(dth);
 
 	/* Aborted the punch DTX. */
-	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, 1, false);
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, epoch, &xid, 1, false);
 	assert_int_equal(rc, 0);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
@@ -635,7 +646,7 @@ dtx_14(void **state)
 	 * But we cannot check "assert_int_not_equal(rc, 0)" that depends
 	 * on the umem_tx_abort() which may return 0 for vmem based case.
 	 */
-	vos_dtx_abort(args->ctx.tc_co_hdl, &xid, 1, false);
+	vos_dtx_abort(args->ctx.tc_co_hdl, epoch, &xid, 1, false);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
@@ -697,11 +708,11 @@ dtx_15(void **state)
 	vts_dtx_end(dth);
 
 	/* Aborted the update DTX. */
-	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid, 1, false);
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, epoch, &xid, 1, false);
 	assert_int_equal(rc, 0);
 
 	/* Double aborted the DTX is harmless. */
-	vos_dtx_abort(args->ctx.tc_co_hdl, &xid, 1, false);
+	vos_dtx_abort(args->ctx.tc_co_hdl, epoch, &xid, 1, false);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
@@ -790,7 +801,7 @@ dtx_16(void **state)
 
 	/* Insert a DTX into CoS cache. */
 	rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &args->oid, &xid,
-			     dkey_hash, epoch, false);
+			     dkey_hash, epoch, false, false);
 	assert_int_equal(rc, 0);
 
 	/* Fetch again. */
@@ -1122,12 +1133,14 @@ vts_dtx_shares(struct io_test_args *args, int *commit_list, int commit_count,
 
 		for (i = 0; i < abort_count; i++) {
 			rc = vos_dtx_abort(args->ctx.tc_co_hdl,
+					   epoch[abort_list[i]],
 					   &xid[abort_list[i]], 1, false);
 			assert_int_equal(rc, 0);
 		}
 	} else {
 		for (i = 0; i < abort_count; i++) {
 			rc = vos_dtx_abort(args->ctx.tc_co_hdl,
+					   epoch[abort_list[i]],
 					   &xid[abort_list[i]], 1, false);
 			assert_int_equal(rc, 0);
 		}
@@ -1393,13 +1406,14 @@ vts_dtx_shares_with_punch(struct io_test_args *args, bool punch_obj, bool abort)
 
 	/* Abort or commit the punch DTX. */
 	if (abort)
-		rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid[3], 1, false);
+		rc = vos_dtx_abort(args->ctx.tc_co_hdl, epoch[3], &xid[3], 1,
+				   false);
 	else
 		rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid[3], 1);
 	assert_int_equal(rc, 0);
 
 	/* Abort the first update DTX. */
-	rc = vos_dtx_abort(args->ctx.tc_co_hdl, &xid[0], 1, false);
+	rc = vos_dtx_abort(args->ctx.tc_co_hdl, epoch[0], &xid[0], 1, false);
 	assert_int_equal(rc, 0);
 
 	/* Commit the third update DTX. */

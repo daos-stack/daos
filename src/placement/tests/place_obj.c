@@ -149,7 +149,7 @@ plt_spare_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 	for (i = 0; i < failed_cnt; i++)
 		plt_fail_tgt(failed_tgts[i]);
 
-	rc = pl_map_update(pl_uuid, po_map, false);
+	rc = pl_map_update(pl_uuid, po_map, false, PL_TYPE_RING);
 	D_ASSERT(rc == 0);
 	pl_map = pl_map_find(pl_uuid, oid);
 	D_ASSERT(pl_map != NULL);
@@ -192,6 +192,12 @@ main(int argc, char **argv)
 	rc = daos_debug_init(NULL);
 	if (rc != 0)
 		return rc;
+
+	rc = pl_init();
+	if (rc != 0) {
+		daos_debug_fini();
+		return rc;
+	}
 
 	uuid_generate(pl_uuid);
 	srand(time(NULL));
@@ -338,6 +344,7 @@ main(int argc, char **argv)
 
 	pool_map_decref(po_map);
 	pool_buf_free(buf);
+	pl_fini();
 	daos_debug_fini();
 	D_PRINT("\nall tests passed!\n");
 	return 0;

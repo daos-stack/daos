@@ -26,13 +26,13 @@
 #define D_LOGFAC	DD_FAC(mgmt)
 
 #include <daos_srv/pool.h>
+#include <daos/rpc.h>
 
 #include "srv_internal.h"
 
 static int
 ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid, crt_group_t *grp)
 {
-	struct ds_pool			*pool;
 	crt_rpc_t			*td_req;
 	struct mgmt_tgt_destroy_in	*td_in;
 	d_rank_list_t			excluded = { 0 };
@@ -41,21 +41,9 @@ ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid, crt_group_t *grp)
 	int				topo;
 	int				rc;
 
-	pool = ds_pool_lookup(pool_uuid);
-	if (pool != NULL) {
-		/* This may not be the pool leader node, so down targets
-		 * may not be updated, then the following collective RPC
-		 * might be timeout. XXX
-		 */
-		ABT_rwlock_rdlock(pool->sp_lock);
-		rc = map_ranks_init(pool->sp_map, MAP_RANKS_DOWN, &excluded);
-		ABT_rwlock_unlock(pool->sp_lock);
-		if (rc != 0) {
-			D_ERROR(DF_UUID": failed to create rank list: %d\n",
-				DP_UUID(pool->sp_uuid), rc);
-			return rc;
-		}
-	}
+	rc = ds_pool_get_ranks(pool_uuid, MAP_RANKS_DOWN, &excluded);
+	if (rc)
+		return rc;
 
 	/* Collective RPC to destroy the pool on all of targets */
 	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 4);
@@ -65,7 +53,7 @@ ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid, crt_group_t *grp)
 				  &excluded, opc, NULL, NULL, 0, topo,
 				  &td_req);
 	if (rc)
-		return rc;
+		D_GOTO(fini_ranks, rc);
 
 	td_in = crt_req_get(td_req);
 	D_ASSERT(td_in != NULL);
@@ -82,8 +70,9 @@ ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid, crt_group_t *grp)
 			DP_UUID(pool_uuid), rc);
 out_rpc:
 	crt_req_decref(td_req);
-	map_ranks_fini(&excluded);
 
+fini_ranks:
+	map_ranks_fini(&excluded);
 	return rc;
 }
 
@@ -674,6 +663,90 @@ ds_mgmt_pool_list(void)
 
 	ABT_rwlock_unlock(svc->ms_lock);
 	rdb_tx_end(&tx);
+out_svc:
+	ds_mgmt_svc_put_leader(svc);
+out:
+	return rc;
+}
+
+/* Caller is responsible for freeing ranks */
+static int
+pool_get_ranks(struct mgmt_svc *svc, uuid_t uuid, d_rank_list_t **ranks)
+{
+	struct rdb_tx	tx;
+	struct pool_rec	*rec;
+	int		rc;
+	uint32_t	i;
+	uint32_t	nr_ranks;
+	d_rank_list_t	*pool_ranks;
+
+	rc = rdb_tx_begin(svc->ms_rsvc.s_db, svc->ms_rsvc.s_term, &tx);
+	if (rc != 0)
+		D_GOTO(out, rc);
+	ABT_rwlock_rdlock(svc->ms_lock);
+
+	rc = pool_rec_lookup(&tx, svc, uuid, &rec);
+	if (rc != 0) {
+		D_GOTO(out_lock, rc);
+	} else if (!(rec->pr_state & POOL_READY)) {
+		D_ERROR("Pool not ready\n");
+		D_GOTO(out_lock, rc = -DER_AGAIN);
+	}
+
+	nr_ranks = rec->pr_nreplicas;
+	pool_ranks = d_rank_list_alloc(nr_ranks);
+	if (pool_ranks == NULL)
+		D_GOTO(out_lock, rc = -DER_NOMEM);
+
+	for (i = 0; i < nr_ranks; i++) {
+		pool_ranks->rl_ranks[i] = rec->pr_replicas[i];
+	}
+
+	*ranks = pool_ranks;
+
+out_lock:
+	ABT_rwlock_unlock(svc->ms_lock);
+	rdb_tx_end(&tx);
+out:
+	return rc;
+}
+
+int
+ds_mgmt_pool_get_acl(uuid_t pool_uuid, struct daos_acl **acl)
+{
+	int			rc;
+	struct mgmt_svc		*svc;
+	d_rank_list_t		*ranks;
+	daos_prop_t		*prop;
+	struct daos_prop_entry	*entry;
+
+	D_DEBUG(DB_MGMT, "Getting ACL for pool "DF_UUID"\n",
+		DP_UUID(pool_uuid));
+
+	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
+	if (rc != 0)
+		goto out;
+
+	rc = pool_get_ranks(svc, pool_uuid, &ranks);
+	if (rc != 0)
+		goto out_svc;
+
+	rc = ds_pool_svc_get_acl_prop(pool_uuid, ranks, &prop);
+	if (rc != 0)
+		goto out_ranks;
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
+	if (entry == NULL || entry->dpe_val_ptr == NULL) {
+		D_ERROR("No ACL entry in prop list!\n");
+		D_GOTO(out_prop, rc = -DER_NONEXIST);
+	}
+
+	*acl = daos_acl_dup(entry->dpe_val_ptr);
+
+out_prop:
+	daos_prop_free(prop);
+out_ranks:
+	d_rank_list_free(ranks);
 out_svc:
 	ds_mgmt_svc_put_leader(svc);
 out:

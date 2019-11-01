@@ -4,8 +4,7 @@ import daos_build
 
 HEADERS = ['ioil_io.h', 'ioil_defines.h',
            'ioil_api.h', 'ioil_preload.h']
-COMMON_SRC = ['dfuse_fs.c',
-              'dfuse_da.c',
+COMMON_SRC = ['dfuse_da.c',
               'dfuse_obj_da.c',
               'dfuse_vector.c']
 DFUSE_SRC = ['dfuse_core.c',
@@ -19,6 +18,7 @@ OPS_SRC = ['create',
            'forget',
            'getxattr',
            'listxattr',
+           'ioctl',
            'lookup',
            'mkdir',
            'open',
@@ -29,6 +29,7 @@ OPS_SRC = ['create',
            'readlink',
            'removexattr',
            'setxattr',
+           'setattr',
            'symlink',
            'unlink',
            'write']

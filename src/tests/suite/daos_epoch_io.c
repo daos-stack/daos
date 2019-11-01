@@ -305,14 +305,14 @@ fio_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 				data_len = pwrite(fd, data, len, off);
 			else
 				data_len = pread(fd, data, len, off);
-			if (data_len != len) {
+			if (data_len != len && op->or_op == TEST_OP_UPDATE) {
 				print_message("fio %s/%s failed, len %zu "
 					      "got %zu.\n", dkey, akey,
 					      len, data_len);
 				D_GOTO(out, rc = -DER_IO);
 			}
 			data += len;
-			total_len += len;
+			total_len += data_len;
 		}
 	} else {
 		if (op->or_op == TEST_OP_UPDATE)
@@ -320,7 +320,7 @@ fio_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 		else
 			total_len = pread(fd, buf, buf_size, 0);
 	}
-	if (total_len != buf_size) {
+	if (total_len != buf_size && op->or_op == TEST_OP_UPDATE) {
 		print_message("fio %s/%s failed, buf_size "DF_U64", total_len "
 			      "%zu.\n", dkey, akey, buf_size, total_len);
 		rc = -DER_IO;
@@ -355,9 +355,17 @@ static int
 daos_test_cb_exclude(test_arg_t *arg, struct test_op_record *op,
 		     char **rbuf, daos_size_t *rbuf_size)
 {
-	print_message("exclude rank %u\n", op->ae_arg.ua_rank);
-	daos_exclude_server(arg->pool.pool_uuid, arg->group, &arg->pool.svc,
-			    op->ae_arg.ua_rank);
+	if (op->ae_arg.ua_tgt == -1) {
+		print_message("exclude rank %u\n", op->ae_arg.ua_rank);
+		daos_exclude_server(arg->pool.pool_uuid, arg->group,
+				    &arg->pool.svc, op->ae_arg.ua_rank);
+	} else {
+		print_message("exclude rank %u target %d\n",
+			       op->ae_arg.ua_rank, op->ae_arg.ua_tgt);
+		daos_exclude_target(arg->pool.pool_uuid, arg->group,
+				    &arg->pool.svc, op->ae_arg.ua_rank,
+				    op->ae_arg.ua_tgt);
+	}
 	return 0;
 }
 
@@ -365,7 +373,7 @@ static int
 daos_test_cb_query(test_arg_t *arg, struct test_op_record *op,
 		   char **rbuf, daos_size_t *rbuf_size)
 {
-	daos_pool_info_t pinfo = { 0 };
+	daos_pool_info_t pinfo = {0};
 	int rc;
 
 	/*get only pool space info*/
@@ -1213,6 +1221,21 @@ cmd_line_parse(test_arg_t *arg, char *cmd_line, struct test_op_record **op)
 		D_STRNDUP(arg->eio_args.op_akey, akey, strlen(akey));
 	} else if (strcmp(argv[0], "iod_size") == 0) {
 		arg->eio_args.op_iod_size = atoi(argv[1]);
+	} else if (strcmp(argv[0], "obj_class") == 0) {
+		if (strcmp(argv[1], "ec") == 0) {
+			arg->eio_args.op_ec = 1;
+			arg->eio_args.op_oid = dts_oid_gen(dts_ec_obj_class, 0,
+							   arg->myrank);
+			print_message("the test is for EC object.\n");
+		} else if (strcmp(argv[1], "replica") == 0) {
+			arg->eio_args.op_ec = 0;
+			arg->eio_args.op_oid = dts_oid_gen(dts_obj_class, 0,
+							   arg->myrank);
+			print_message("the test is for replica object.\n");
+		} else {
+			print_message("bad obj_class %s.\n", argv[1]);
+			rc = -DER_INVAL;
+		}
 	} else if (strcmp(argv[0], "oid") == 0) {
 		rc = cmd_parse_oid(arg, argc, argv);
 	} else if (strcmp(argv[0], "update") == 0) {
@@ -1341,7 +1364,7 @@ cmd_line_run(test_arg_t *arg, struct test_op_record *op_rec)
 	D_ASSERT(lvl == TEST_LVL_DAOS || lvl == TEST_LVL_VOS);
 
 	/* for modification OP, just go through DAOS stack and return */
-	if (test_op_is_modify(op))
+	if (test_op_is_modify(op) || op == TEST_OP_POOL_QUERY)
 		return op_dict[op].op_cb[lvl](arg, op_rec, NULL, 0);
 
 	/* for verification OP, firstly retrieve it through DAOS stack */

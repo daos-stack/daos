@@ -24,9 +24,9 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"syscall"
 
@@ -36,7 +36,7 @@ import (
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/drpc"
-	log "github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 const (
@@ -45,6 +45,7 @@ const (
 )
 
 type cliOptions struct {
+	AllowProxy bool   `long:"allow-proxy" description:"Allow proxy configuration via environment"`
 	Debug      bool   `short:"d" long:"debug" description:"Enable debug output"`
 	JSON       bool   `short:"j" long:"json" description:"Enable JSON output"`
 	ConfigPath string `short:"o" long:"config-path" description:"Path to agent configuration file" default:"etc/daos_agent.yml"`
@@ -53,19 +54,23 @@ type cliOptions struct {
 	LogFile    string `short:"l" long:"logfile" description:"Full path and filename for daos agent log file"`
 }
 
-var opts = new(cliOptions)
+func exitWithError(log logging.Logger, err error) {
+	log.Errorf("%s: %v", path.Base(os.Args[0]), err)
+	os.Exit(1)
+}
 
 func main() {
-	if err := agentMain(); err != nil {
-		fmt.Fprintf(os.Stderr, "fatal error: %s\n", err)
-		log.Errorf("%+v", err)
-		os.Exit(1)
+	var opts cliOptions
+	log := logging.NewCommandLineLogger()
+
+	if err := agentMain(log, &opts); err != nil {
+		exitWithError(log, err)
 	}
 }
 
 // applyCmdLineOverrides will overwrite Configuration values with any non empty
 // data provided, usually from the commandline.
-func applyCmdLineOverrides(c *client.Configuration, opts *cliOptions) {
+func applyCmdLineOverrides(log logging.Logger, c *client.Configuration, opts *cliOptions) {
 
 	if opts.RuntimeDir != "" {
 		log.Debugf("Overriding socket path from config file with %s", opts.RuntimeDir)
@@ -82,36 +87,39 @@ func applyCmdLineOverrides(c *client.Configuration, opts *cliOptions) {
 	}
 }
 
-func agentMain() error {
-
+func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
 	log.Info("Starting daos_agent:")
 
-	p := flags.NewParser(opts, flags.Default)
+	p := flags.NewParser(opts, flags.HelpFlag|flags.PassDoubleDash)
 
 	_, err := p.Parse()
 	if err != nil {
 		return err
 	}
 
+	if !opts.AllowProxy {
+		common.ScrubProxyVariables()
+	}
+
 	if opts.JSON {
-		log.SetJSONOutput()
+		log.WithJSONOutput()
 	}
 
 	if opts.Debug {
-		log.SetLevel(log.LogLevelDebug)
+		log.WithLogLevel(logging.LogLevelDebug)
 		log.Debug("debug output enabled")
 	}
 
 	// Load the configuration file using the supplied path or the
 	// default path if none provided.
-	config, err := client.GetConfig(opts.ConfigPath)
+	config, err := client.GetConfig(log, opts.ConfigPath)
 	if err != nil {
 		log.Errorf("An unrecoverable error occurred while processing the configuration file: %s", err)
 		return err
 	}
 
 	// Override configuration with any commandline values given
-	applyCmdLineOverrides(config, opts)
+	applyCmdLineOverrides(log, config, opts)
 
 	env := config.Ext.Getenv(daosAgentDrpcSockEnv)
 	if env != config.RuntimeDir {
@@ -131,11 +139,11 @@ func agentMain() error {
 		defer f.Close()
 		log.Infof("Using logfile: %s", config.LogFile)
 
-		newLogger := log.NewCombinedLogger("", f)
-		if opts.JSON {
-			newLogger = newLogger.WithJSONOutput()
-		}
-		log.SetLogger(newLogger)
+		// Create an additional set of loggers which append everything
+		// to the specified file.
+		log.WithErrorLogger(logging.NewErrorLogger("agent", f)).
+			WithInfoLogger(logging.NewInfoLogger("agent", f)).
+			WithDebugLogger(logging.NewDebugLogger(f))
 	}
 
 	err = config.TransportConfig.PreLoadCertData()
@@ -148,14 +156,18 @@ func agentMain() error {
 	finish := make(chan bool, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
-	drpcServer, err := drpc.NewDomainSocketServer(sockPath)
+	drpcServer, err := drpc.NewDomainSocketServer(log, sockPath)
 	if err != nil {
 		log.Errorf("Unable to create socket server: %v", err)
 		return err
 	}
 
-	drpcServer.RegisterRPCModule(NewSecurityModule(config.TransportConfig))
-	drpcServer.RegisterRPCModule(&mgmtModule{config.AccessPoints[0], config.TransportConfig})
+	drpcServer.RegisterRPCModule(NewSecurityModule(log, config.TransportConfig))
+	drpcServer.RegisterRPCModule(&mgmtModule{
+		log:  log,
+		ap:   config.AccessPoints[0],
+		tcfg: config.TransportConfig,
+	})
 
 	err = drpcServer.Start()
 	if err != nil {

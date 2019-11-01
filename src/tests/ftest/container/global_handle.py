@@ -32,8 +32,7 @@ from multiprocessing import sharedctypes
 from apricot import TestWithServers
 
 import check_for_pool
-from daos_api import DaosContext, DaosPool, DaosContainer, DaosApiError
-from daos_cref import IOV
+from pydaos.raw import DaosContext, DaosPool, DaosContainer, DaosApiError, IOV
 
 def check_handle(pool_glob_handle, uuidstr, cont_glob_handle, rank):
     """
@@ -112,7 +111,7 @@ class GlobalHandle(TestWithServers):
 
         Test Description: Use a pool handle in another process.
 
-        :avocado: tags=container,conthandle,vm,small,regression
+        :avocado: tags=all,container,tiny,pr,conthandle
         """
 
         try:

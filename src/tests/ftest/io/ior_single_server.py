@@ -40,6 +40,6 @@ class IorSingleServer(IorTestBase):
             Different combinations of 1/64/128 Clients,
             1K/4K/32K/128K/512K/1M transfer size.
 
-        :avocado: tags=ior,singleserver
+        :avocado: tags=all,daosio,singleserver
         """
         self.run_ior_with_pool()

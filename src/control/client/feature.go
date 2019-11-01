@@ -32,7 +32,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 )
 
 // FeatureMap is an alias for mgmt features supported by gRPC server.
@@ -88,14 +88,14 @@ func listFeaturesRequest(mc Control, i interface{}, ch chan ClientResult) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	stream, err := mc.getCtlClient().ListFeatures(ctx, &pb.EmptyReq{})
+	stream, err := mc.getCtlClient().ListFeatures(ctx, &ctlpb.EmptyReq{})
 	if err != nil {
 		ch <- ClientResult{mc.getAddress(), nil, err}
 		return
 	}
 
 	fm := make(FeatureMap)
-	var f *pb.Feature
+	var f *ctlpb.Feature
 	for {
 		f, err = stream.Recv()
 		if err == io.EOF {

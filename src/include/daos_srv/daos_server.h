@@ -55,6 +55,8 @@ extern const char      *dss_socket_dir;
 /** NVMe shm_id for enabling SPDK multi-process mode */
 extern int		dss_nvme_shm_id;
 
+/** IO server instance index */
+extern unsigned int	dss_instance_idx;
 
 /**
  * Stackable Module API
@@ -167,26 +169,10 @@ enum {
 
 #define DSS_XS_NAME_LEN		64
 
-/** Per-xstream configuration data */
-struct dss_xstream {
-	char		dx_name[DSS_XS_NAME_LEN];
-	ABT_future	dx_shutdown;
-	hwloc_cpuset_t	dx_cpuset;
-	ABT_xstream	dx_xstream;
-	ABT_pool	dx_pools[DSS_POOL_CNT];
-	ABT_sched	dx_sched;
-	ABT_thread	dx_progress;
-	/* xstream id, [0, DSS_XS_NR_TOTAL - 1] */
-	int		dx_xs_id;
-	/* VOS target id, [0, dss_tgt_nr - 1]. Invalid (-1) for system XS.
-	 * For offload XS it is same value as its main XS.
-	 */
-	int		dx_tgt_id;
-	/* CART context id, invalid (-1) for the offload XS w/o CART context */
-	int		dx_ctx_id;
-	bool		dx_main_xs;	/* true for main XS */
-	bool		dx_comm;	/* true with cart context */
-};
+/* Opaque xstream configuration data */
+struct dss_xstream;
+
+bool dss_xstream_exiting(struct dss_xstream *dxs);
 
 struct dss_module_info {
 	crt_context_t		dmi_ctx;
@@ -199,8 +185,6 @@ struct dss_module_info {
 	/* the cart context id */
 	int			dmi_ctx_id;
 	d_list_t		dmi_dtx_batched_list;
-	tse_sched_t		dmi_sched;
-	uint64_t		dmi_tse_ult_created:1;
 };
 
 extern struct dss_module_key	daos_srv_modkey;
@@ -217,10 +201,10 @@ dss_get_module_info(void)
 	return dmi;
 }
 
-static inline tse_sched_t *
-dss_tse_scheduler(void)
+static inline struct dss_xstream *
+dss_get_xstream(void)
 {
-	return &dss_get_module_info()->dmi_sched;
+	return dss_get_module_info()->dmi_xstream;
 }
 
 /**
@@ -353,7 +337,9 @@ enum dss_ult_type {
 	/** aggregation ULT */
 	DSS_ULT_AGGREGATE,
 	/** drpc listener ULT */
-	DSS_ULT_DRPC,
+	DSS_ULT_DRPC_LISTENER,
+	/** drpc handler ULT */
+	DSS_ULT_DRPC_HANDLER,
 	/** miscellaneous ULT */
 	DSS_ULT_MISC,
 };
@@ -429,6 +415,8 @@ struct dss_coll_args {
 	/** Arguments for dss_collective func (Mandatory) */
 	void				*ca_func_args;
 	void				*ca_aggregator;
+	int				*ca_exclude_tgts;
+	unsigned int			ca_exclude_tgts_cnt;
 	/** Stream arguments for all streams */
 	struct dss_coll_stream_args	ca_stream_args;
 };
@@ -450,11 +438,6 @@ dss_thread_collective_reduce(struct dss_coll_ops *ops,
 
 int dss_task_collective(int (*func)(void *), void *arg, int flag);
 int dss_thread_collective(int (*func)(void *), void *arg, int flag);
-int dss_task_run(tse_task_t *task, unsigned int type, tse_task_cb_t cb,
-		 void *arg, ABT_eventual eventual);
-int dss_eventual_create(ABT_eventual *eventual_ptr);
-int dss_eventual_wait(ABT_eventual eventual);
-void dss_eventual_free(ABT_eventual *eventual);
 struct dss_module *dss_module_get(int mod_id);
 /* Convert Argobots errno to DAOS ones. */
 static inline int
@@ -514,25 +497,26 @@ struct dss_acc_task {
  */
 int dss_acc_offload(struct dss_acc_task *at_args);
 
-/* DAOS object API on the server side */
-int ds_obj_open(daos_handle_t coh, daos_obj_id_t oid,
-		unsigned int mode, daos_handle_t *oh);
-int ds_obj_close(daos_handle_t obj_hl);
+/* DAOS client APIs called on the server side */
+int dsc_obj_open(daos_handle_t coh, daos_obj_id_t oid,
+		 unsigned int mode, daos_handle_t *oh);
+int dsc_obj_close(daos_handle_t obj_hl);
 
-int ds_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch,
-		 daos_key_t *dkey, uint32_t *nr,
-		 daos_key_desc_t *kds, d_sg_list_t *sgl,
-		 daos_anchor_t *anchor);
+int dsc_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch,
+		daos_key_t *dkey, uint32_t *nr,
+		daos_key_desc_t *kds, d_sg_list_t *sgl,
+		daos_anchor_t *anchor);
 
-int ds_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
-		 daos_key_t *dkey, unsigned int nr,
-		 daos_iod_t *iods, d_sg_list_t *sgls,
-		 daos_iom_t *maps);
-int ds_obj_list_obj(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
+int dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
+		daos_key_t *dkey, unsigned int nr,
+		daos_iod_t *iods, d_sg_list_t *sgls,
+		daos_iom_t *maps);
+int dsc_obj_list_obj(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		daos_key_t *akey, daos_size_t *size, uint32_t *nr,
-		daos_key_desc_t *kds, daos_epoch_range_t *eprs,
-		d_sg_list_t *sgl, daos_anchor_t *anchor,
+		daos_key_desc_t *kds, d_sg_list_t *sgl, daos_anchor_t *anchor,
 		daos_anchor_t *dkey_anchor, daos_anchor_t *akey_anchor);
+int dsc_pool_tgt_exclude(const uuid_t uuid, const char *grp,
+			 const d_rank_list_t *svc, struct d_tgt_list *tgts);
 
 struct dss_enum_arg {
 	bool			fill_recxs;	/* type == S||R */
@@ -586,16 +570,18 @@ dss_enum_pack(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
  * data, then ui_sgls[i].sg_iovs[j] will be empty.
  */
 struct dss_enum_unpack_io {
-	daos_unit_oid_t	ui_oid;		/**< type <= OBJ */
-	daos_key_t	ui_dkey;	/**< type <= DKEY */
-	daos_iod_t     *ui_iods;
-	int		ui_iods_cap;
-	int		ui_iods_len;
-	int	       *ui_recxs_caps;
-	daos_epoch_t	ui_dkey_eph;
-	daos_epoch_t   *ui_akey_ephs;
-	d_sg_list_t *ui_sgls;	/**< optional */
-	uint32_t	ui_version;
+	daos_unit_oid_t		 ui_oid;	/**< type <= OBJ */
+	daos_key_t		 ui_dkey;	/**< type <= DKEY */
+	daos_iod_t		*ui_iods;
+	/* punched epochs per akey */
+	daos_epoch_t		*ui_akey_punch_ephs;
+	int			 ui_iods_cap;
+	int			 ui_iods_top;
+	int			*ui_recxs_caps;
+	/* punched epochs for dkey */
+	daos_epoch_t		ui_dkey_punch_eph;
+	d_sg_list_t		*ui_sgls;	/**< optional */
+	uint32_t		 ui_version;
 };
 
 typedef int (*dss_enum_unpack_cb_t)(struct dss_enum_unpack_io *io, void *arg);
@@ -617,5 +603,15 @@ enum dss_init_state {
 void dss_init_state_set(enum dss_init_state state);
 
 bool dss_pmixless(void);
+
+/* default credits */
+#define	DSS_GC_CREDS	256
+
+/**
+ * Run GC for an opened pool, it run GC for all pools if @poh is DAOS_HDL_INVAL
+ */
+void dss_gc_run(daos_handle_t poh, int credits);
+
+bool dss_aggregation_disabled(void);
 
 #endif /* __DSS_API_H__ */
