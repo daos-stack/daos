@@ -5,7 +5,7 @@
 
 Name:          daos
 Version:       0.6.0
-Release:       11%{?relval}%{?dist}
+Release:       12%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -203,6 +203,8 @@ mkdir -p %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/daos-server.service %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 
+%pre server
+getent group daos_admins >/dev/null || groupadd -r daos_admins
 %post server -p /sbin/ldconfig
 %postun server -p /sbin/ldconfig
 
@@ -236,7 +238,10 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %files server
 %{_prefix}%{_sysconfdir}/daos_server.yml
 %{_sysconfdir}/ld.so.conf.d/daos.conf
-%{_bindir}/daos_server
+# set daos_admin to be setuid root in order to perform privileged tasks
+%attr(4750,root,daos_admins) %{_bindir}/daos_admin
+# set daos_server to be setgid daos_admins in order to invoke daos_admin
+%attr(2755,root,daos_admins) %{_bindir}/daos_server
 %{_bindir}/daos_io_server
 %dir %{_libdir}/daos_srv
 %{_libdir}/daos_srv/libcont.so
