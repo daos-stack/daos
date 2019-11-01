@@ -38,7 +38,7 @@ import (
 func connectSetupServers(
 	servers Addresses, log logging.Logger, state State, ctrlrs NvmeControllers,
 	ctrlrResults NvmeControllerResults, modules ScmModules,
-	moduleResults ScmModuleResults, pmems PmemDevices, mountResults ScmMountResults,
+	moduleResults ScmModuleResults, pmems ScmNamespaces, mountResults ScmMountResults,
 	scanRet error, formatRet error, killRet error, connectRet error,
 	getACLRet *mockGetACLResult) Connect {
 
@@ -55,7 +55,7 @@ func connectSetupServers(
 func connectSetup(
 	log logging.Logger,
 	state State, ctrlrs NvmeControllers, ctrlrResults NvmeControllerResults,
-	modules ScmModules, moduleResults ScmModuleResults, pmems PmemDevices,
+	modules ScmModules, moduleResults ScmModuleResults, pmems ScmNamespaces,
 	mountResults ScmMountResults, scanRet error, formatRet error,
 	killRet error, connectRet error, getACLRet *mockGetACLResult) Connect {
 
@@ -106,8 +106,8 @@ func TestConnectClients(t *testing.T) {
 	}
 	for _, tt := range conntests {
 		cc := newMockConnect(
-			log, tt.state, MockCtrlrs, MockCtrlrResults, MockModules,
-			MockModuleResults, MockPmemDevices, MockMountResults,
+			log, tt.state, MockCtrlrs, MockCtrlrResults, MockScmModules,
+			MockModuleResults, MockScmNamespaces, MockMountResults,
 			nil, nil, nil, tt.connRet, nil)
 
 		results := cc.ConnectClients(tt.addrsIn)
@@ -169,16 +169,15 @@ func TestStorageScan(t *testing.T) {
 
 	cc := defaultClientSetup(log)
 
-	clientNvme, clientScm, clientPmem := cc.StorageScan()
+	clientNvme, clientScm := cc.StorageScan()
 
-	AssertEqual(t, clientNvme, NewClientNvme(MockCtrlrs, MockServers),
-		"unexpected client NVMe SSD controllers returned")
+	if diff := cmp.Diff(MockNvmeScanResults(MockCtrlrs, MockServers), clientNvme); diff != "" {
+		t.Fatalf("unexpected per-client NVMe controllers (-want, +got):\n%s\n", diff)
+	}
 
-	AssertEqual(t, clientScm, NewClientScm(MockModules, MockServers),
-		"unexpected client SCM modules returned")
-
-	AssertEqual(t, clientPmem, NewClientPmem(MockPmemDevices, MockServers),
-		"unexpected client PMEM device files returned")
+	if diff := cmp.Diff(MockScmScanResults(MockScmModules, MockScmNamespaces, MockServers), clientScm); diff != "" {
+		t.Fatalf("unexpected client SCM modules and namespaces (-want, +got):\n%s\n", diff)
+	}
 }
 
 func TestStorageFormat(t *testing.T) {
@@ -196,8 +195,8 @@ func TestStorageFormat(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			cc := connectSetup(
-				log, Ready, MockCtrlrs, MockCtrlrResults, MockModules,
-				MockModuleResults, MockPmemDevices, MockMountResults,
+				log, Ready, MockCtrlrs, MockCtrlrResults, MockScmModules,
+				MockModuleResults, MockScmNamespaces, MockMountResults,
 				nil, tt.formatRet, nil, nil, MockACL)
 
 			cNvmeMap, cMountMap := cc.StorageFormat(tt.reformat)
@@ -240,8 +239,8 @@ func TestKillRank(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		cc := connectSetup(log, Ready, MockCtrlrs, MockCtrlrResults, MockModules,
-			MockModuleResults, MockPmemDevices, MockMountResults, nil,
+		cc := connectSetup(log, Ready, MockCtrlrs, MockCtrlrResults, MockScmModules,
+			MockModuleResults, MockScmNamespaces, MockMountResults, nil,
 			nil, tt.killRet, nil, MockACL)
 
 		resultMap := cc.KillRank(0)
@@ -296,8 +295,8 @@ func TestPoolGetACL(t *testing.T) {
 				err:    tt.getACLErr,
 			}
 			cc := connectSetupServers(tt.addr, log, Ready,
-				MockCtrlrs, MockCtrlrResults, MockModules,
-				MockModuleResults, MockPmemDevices, MockMountResults,
+				MockCtrlrs, MockCtrlrResults, MockScmModules,
+				MockModuleResults, MockScmNamespaces, MockMountResults,
 				nil, nil, nil, nil, aclResult)
 
 			req := &PoolGetACLReq{

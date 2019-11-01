@@ -134,7 +134,7 @@ func TestStorageScan(t *testing.T) {
 					State:  new(ResponseState),
 				},
 				Scm: &ScanScmResp{
-					Pmems: PmemDevices{common.MockPmemDevicePB()},
+					Pmems: ScmNamespaces{common.MockPmemDevicePB()},
 					State: new(ResponseState),
 				},
 			},
@@ -164,7 +164,7 @@ func TestStorageScan(t *testing.T) {
 					},
 				},
 				Scm: &ScanScmResp{
-					Pmems: PmemDevices{common.MockPmemDevicePB()},
+					Pmems: ScmNamespaces{common.MockPmemDevicePB()},
 					State: new(ResponseState),
 				},
 			},
@@ -182,7 +182,7 @@ func TestStorageScan(t *testing.T) {
 					},
 				},
 				Scm: &ScanScmResp{
-					Pmems: PmemDevices{common.MockPmemDevicePB()},
+					Pmems: ScmNamespaces{common.MockPmemDevicePB()},
 					State: new(ResponseState),
 				},
 			},

@@ -24,11 +24,12 @@
 package main
 
 import (
+	"fmt"
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/client"
-	. "github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestHasConnection(t *testing.T) {
@@ -68,34 +69,38 @@ func TestHasConnection(t *testing.T) {
 
 	for _, tt := range shelltests {
 		_, out := hasConns(tt.results)
-		AssertEqual(t, out, tt.out, "bad output")
+		if diff := cmp.Diff(out, tt.out); diff != "" {
+			t.Fatalf("unexpected output (-want, +got):\n%s\n", diff)
+		}
 	}
 }
 
 func TestCheckSprint(t *testing.T) {
-	var shelltests = []struct {
+	for name, tt := range map[string]struct {
 		m   string
 		out string
 	}{
-		// FIXME: this suite gets rewritten in a ready PR based on this
-		// one
-		//		{
-		//			NewClientNvme(MockCtrlrs, MockServers).String(),
-		//			"1.2.3.4:10000:\n\tPCI Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:E2010413 Socket:0\n\t\tNamespace: id:12345 capacity:99999 \n\tHealth Stats:\n\t\tTemperature:300K(27C)\n\t\tController Busy Time:0 minutes\n\t\tPower Cycles:99\n\t\tPower On Hours:9999 hours\n\t\tUnsafe Shutdowns:1\n\t\tMedia Errors:0\n\t\tError Log Entries:0\n\t\tCritical Warnings:\n\t\t\tTemperature: OK\n\t\t\tAvailable Spare: OK\n\t\t\tDevice Reliability: OK\n\t\t\tRead Only: OK\n\t\t\tVolatile Memory Backup: OK\n\n1.2.3.5:10001:\n\tPCI Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:E2010413 Socket:0\n\t\tNamespace: id:12345 capacity:99999 \n\tHealth Stats:\n\t\tTemperature:300K(27C)\n\t\tController Busy Time:0 minutes\n\t\tPower Cycles:99\n\t\tPower On Hours:9999 hours\n\t\tUnsafe Shutdowns:1\n\t\tMedia Errors:0\n\t\tError Log Entries:0\n\t\tCritical Warnings:\n\t\t\tTemperature: OK\n\t\t\tAvailable Spare: OK\n\t\t\tDevice Reliability: OK\n\t\t\tRead Only: OK\n\t\t\tVolatile Memory Backup: OK\n\n",
-		//		},
-		{
-			NewClientScm(MockModules, MockServers).String(),
-			"1.2.3.4:10000:\n\tPhysicalID:12345 Capacity:12345 Location:(socket:4 memctrlr:3 chan:1 pos:2)\n\n1.2.3.5:10001:\n\tPhysicalID:12345 Capacity:12345 Location:(socket:4 memctrlr:3 chan:1 pos:2)\n\n",
+		"nvme scan": {
+			fmt.Sprint(MockNvmeScanResults(MockCtrlrs, MockServers)),
+			"map[1.2.3.4:10000:\tPCI Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:1.0.0 Socket:0\n\t\tNamespace: id:12345 capacity:99999 \n\tHealth Stats:\n\t\tTemperature:300K(27C)\n\t\tController Busy Time:0 minutes\n\t\tPower Cycles:99\n\t\tPower On Hours:9999 hours\n\t\tUnsafe Shutdowns:1\n\t\tMedia Errors:0\n\t\tError Log Entries:0\n\t\tCritical Warnings:\n\t\t\tTemperature: OK\n\t\t\tAvailable Spare: OK\n\t\t\tDevice Reliability: OK\n\t\t\tRead Only: OK\n\t\t\tVolatile Memory Backup: OK\n 1.2.3.5:10001:\tPCI Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:1.0.0 Socket:0\n\t\tNamespace: id:12345 capacity:99999 \n\tHealth Stats:\n\t\tTemperature:300K(27C)\n\t\tController Busy Time:0 minutes\n\t\tPower Cycles:99\n\t\tPower On Hours:9999 hours\n\t\tUnsafe Shutdowns:1\n\t\tMedia Errors:0\n\t\tError Log Entries:0\n\t\tCritical Warnings:\n\t\t\tTemperature: OK\n\t\t\tAvailable Spare: OK\n\t\t\tDevice Reliability: OK\n\t\t\tRead Only: OK\n\t\t\tVolatile Memory Backup: OK\n]",
 		},
-		{
+		"scm scan with pmem namespaces": {
+			fmt.Sprint(MockScmScanResults(MockScmModules, MockScmNamespaces, MockServers)),
+			"map[1.2.3.4:10000:SCM Namespaces:\n\tnamespace-1/pmem1/abcd-1234-efgh-5678 (NUMA 1)\n\n 1.2.3.5:10001:SCM Namespaces:\n\tnamespace-1/pmem1/abcd-1234-efgh-5678 (NUMA 1)\n\n]",
+		},
+		"scm scan without pmem namespaces": {
+			fmt.Sprint(MockScmScanResults(MockScmModules, []*ctlpb.PmemDevice{}, MockServers)),
+			"map[1.2.3.4:10000:SCM Modules:\n\tPhysicalID:12345 Capacity:12345 Location:(socket:4 memctrlr:3 chan:1 pos:2)\n\n 1.2.3.5:10001:SCM Modules:\n\tPhysicalID:12345 Capacity:12345 Location:(socket:4 memctrlr:3 chan:1 pos:2)\n\n]",
+		},
+		"scm mount scan": { // currently unused
 			NewClientScmMount(MockMounts, MockServers).String(),
 			"1.2.3.4:10000:\n\tmntpoint:\"/mnt/daos\" \n\n1.2.3.5:10001:\n\tmntpoint:\"/mnt/daos\" \n\n",
 		},
-		{
+		"generic cmd results": {
 			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, MockErr}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, MockErr}}.String(),
 			"1.2.3.4:10000:\n\terror: unknown failure\n1.2.3.5:10001:\n\terror: unknown failure\n",
 		},
-		{
+		"nvme operation results": {
 			NewClientNvmeResults(
 				[]*ctlpb.NvmeControllerResult{
 					{
@@ -108,20 +113,21 @@ func TestCheckSprint(t *testing.T) {
 				}, MockServers).String(),
 			"1.2.3.4:10000:\n\tPCI Addr:0000:81:00.0 Status:CTL_ERR_APP Error:example application error\n\n1.2.3.5:10001:\n\tPCI Addr:0000:81:00.0 Status:CTL_ERR_APP Error:example application error\n\n",
 		},
-		{
-			NewClientScmResults(
-				[]*ctlpb.ScmModuleResult{
-					{
-						Loc: MockModulePB().Loc,
-						State: &ctlpb.ResponseState{
-							Status: ctlpb.ResponseStatus_CTL_ERR_APP,
-							Error:  "example application error",
-						},
-					},
-				}, MockServers).String(),
-			"1.2.3.4:10000:\n\tModule Location:(socket:4 memctrlr:3 chan:1 pos:2) Status:CTL_ERR_APP Error:example application error\n\n1.2.3.5:10001:\n\tModule Location:(socket:4 memctrlr:3 chan:1 pos:2) Status:CTL_ERR_APP Error:example application error\n\n",
-		},
-		{
+		//"scm operation results": { // currently unused
+		//		{
+		//			NewClientScmResults(
+		//				[]*ctlpb.ScmModuleResult{
+		//					{
+		//						Loc: MockModulePB().Loc,
+		//						State: &ctlpb.ResponseState{
+		//							Status: ctlpb.ResponseStatus_CTL_ERR_APP,
+		//							Error:  "example application error",
+		//						},
+		//					},
+		//				}, MockServers).String(),
+		//			"1.2.3.4:10000:\n\tModule Location:(socket:4 memctrlr:3 chan:1 pos:2) Status:CTL_ERR_APP Error:example application error\n\n1.2.3.5:10001:\n\tModule Location:(socket:4 memctrlr:3 chan:1 pos:2) Status:CTL_ERR_APP Error:example application error\n\n",
+		//		},
+		"scm mountpoint operation results": {
 			NewClientScmMountResults(
 				[]*ctlpb.ScmMountResult{
 					{
@@ -134,8 +140,11 @@ func TestCheckSprint(t *testing.T) {
 				}, MockServers).String(),
 			"1.2.3.4:10000:\n\tMntpoint:/mnt/daos Status:CTL_ERR_APP Error:example application error\n\n1.2.3.5:10001:\n\tMntpoint:/mnt/daos Status:CTL_ERR_APP Error:example application error\n\n",
 		},
-	}
-	for _, tt := range shelltests {
-		AssertEqual(t, tt.m, tt.out, "bad output")
+	} {
+		t.Run(name, func(t *testing.T) {
+			if diff := cmp.Diff(tt.out, tt.m); diff != "" {
+				t.Fatalf("unexpected output (-want, +got):\n%s\n", diff)
+			}
+		})
 	}
 }
