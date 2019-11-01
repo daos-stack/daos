@@ -20,30 +20,39 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+// +build linux
 
-package ioserver
+package main
 
-import (
-	"github.com/pkg/errors"
-)
+import "syscall"
 
-type (
-	cmdLogger struct {
-		logFn  func(string)
-		prefix string
+// Hack alert! https://github.com/golang/go/issues/1435
+//
+// The setuid(2) implementation provided by Linux only affects the
+// current thread, not the whole process. The implementation provided
+// in glibc correctly sets it for all threads, but the Go maintainers
+// didn't want to deal with cross-platform compatibility stuff, so
+// they punted and made syscall.Setuid() return ENOTSUPP on Linux.
+//
+// This simple cgo wrapper around glibc's setuid should do the trick.
+
+/*
+#define _GNU_SOURCE
+#include <unistd.h>
+#include <errno.h>
+
+static int
+glibc_setuid(uid_t uid) {
+	int rc = setuid(uid);
+	return (rc < 0) ? errno : 0;
+}
+*/
+import "C"
+
+func setuid(uid int) error {
+	rc := C.glibc_setuid(C.uid_t(uid))
+	if rc != 0 {
+		return syscall.Errno(rc)
 	}
-)
-
-func (cl *cmdLogger) Write(data []byte) (int, error) {
-	if cl.logFn == nil {
-		return 0, errors.New("no log function set in cmdLogger")
-	}
-
-	var msg string
-	if cl.prefix != "" {
-		msg = cl.prefix + " "
-	}
-	msg += string(data)
-	cl.logFn(msg)
-	return len(data), nil
+	return nil
 }

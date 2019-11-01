@@ -32,6 +32,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -77,7 +78,7 @@ func NewRunner(log logging.Logger, config *Config) *Runner {
 }
 
 func (r *Runner) run(ctx context.Context, args, env []string) error {
-	binPath, err := findBinary(ioServerBin)
+	binPath, err := common.FindBinary(ioServerBin)
 	if err != nil {
 		return errors.Wrapf(err, "can't start %s", ioServerBin)
 	}
