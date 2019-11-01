@@ -105,7 +105,8 @@ if [ -d "/mnt/daos" ]; then
     export CGO_CFLAGS="-I${SL_SPDK_PREFIX}/include"
     run_test src/control/run_go_tests.sh
     # Environment variables specific to the rdb tests
-    export PATH="${SL_PREFIX}/bin:${PATH}"
+    # NB: /usr/bin is first in the path to find the setuid daos_admin
+    export PATH="/usr/bin:${SL_PREFIX}/bin:${PATH}"
     # Satisfy requirement for starting daos_server w/o config file
     export CRT_PHY_ADDR_STR=ofi+sockets
     export OFI_INTERFACE=lo

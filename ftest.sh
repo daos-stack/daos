@@ -175,6 +175,11 @@ wq
 EOF
 mount \\\"$DAOS_BASE\\\"\"
 
+# copy daos_admin binary into $PATH and fix perms
+sudo cp $DAOS_BASE/install/bin/daos_admin /usr/bin/daos_admin && \
+	sudo chown root /usr/bin/daos_admin && \
+	sudo chmod 4755 /usr/bin/daos_admin
+
 rm -rf \"${TEST_TAG_DIR:?}/\"
 mkdir -p \"$TEST_TAG_DIR/\"
 if [ -z \"\$JENKINS_URL\" ]; then

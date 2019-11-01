@@ -96,10 +96,11 @@ def set_test_environment():
     base_dir = get_build_environment()["PREFIX"]
     bin_dir = os.path.join(base_dir, "bin")
     sbin_dir = os.path.join(base_dir, "sbin")
+    pbin_dir = "/usr/bin" # for setuid daos_admin
     path = os.environ.get("PATH")
 
     # Update env definitions
-    os.environ["PATH"] = ":".join([bin_dir, sbin_dir, path])
+    os.environ["PATH"] = ":".join([pbin_dir, bin_dir, sbin_dir, path])
     os.environ["DAOS_SINGLETON_CLI"] = "1"
     os.environ["CRT_CTX_SHARE_ADDR"] = "1"
     os.environ["CRT_ATTACH_INFO_PATH"] = os.path.join(base_dir, "tmp")
