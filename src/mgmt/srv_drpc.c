@@ -748,6 +748,127 @@ out:
 }
 
 void
+ds_mgmt_drpc_list_pools(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__PoolListReq		*req = NULL;
+	Mgmt__PoolListResp		*resp = NULL;
+	uint8_t				*body;
+	size_t				 len;
+	struct mgmt_list_pools_one	*pools = NULL;
+	size_t				 pools_len = 0;
+	uint64_t			 npools;
+	int			 srbuflen = 32;
+	int				 sri;		/* svcrep buf index */
+	int				 pi;		/* pool index*/
+	int				 ri;		/* svcrep index */
+	int				 rc = 0;
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__pool_list_req__unpack(
+		NULL, drpc_req->body.len, drpc_req->body.data);
+
+	if (req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to unpack req (list pools)\n");
+		mgmt__pool_list_req__free_unpacked(req, NULL);
+		return;
+	}
+
+	D_INFO("Received request to list pools in DAOS system %s\n",
+		req->lp_grp);
+
+	D_ALLOC_PTR(resp);
+	if (resp == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to allocate daos response ref\n");
+		mgmt__pool_list_req__free_unpacked(req, NULL);
+		return;
+	}
+
+	/* Response status is populated with SUCCESS on init. */
+	mgmt__pool_list_resp__init(resp);
+
+	npools = req->lp_npools;
+	rc = ds_mgmt_list_pools(req->lp_grp, &npools, &pools, &pools_len);
+	if (rc != 0)
+		D_ERROR("Failed to list pools in %s :%d\n", req->lp_grp, rc);
+
+	resp->lp_npools = npools;	/* in system, may exceed n_lp_pools*/
+	resp->n_lp_pools = pools_len;	/* in reply <= req->lp_npools */
+	D_ALLOC_ARRAY(resp->lp_pools, resp->n_lp_pools);
+	if (resp->lp_pools == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	for (pi = 0; pi < resp->n_lp_pools; pi++) {
+		char		*srbuf;
+		d_rank_list_t	*svc = pools[pi].lp_svc;
+
+		D_ALLOC_PTR(resp->lp_pools[pi]);
+		if (resp->lp_pools[pi] == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		D_ALLOC(srbuf, srbuflen);
+		if (srbuf == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		D_ALLOC(resp->lp_pools[pi]->lp_puuid, 37);
+		if (resp->lp_pools[pi]->lp_puuid == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		uuid_unparse(pools[pi].lp_puuid, resp->lp_pools[pi]->lp_puuid);
+
+		sri = sprintf(srbuf, "%u", svc->rl_ranks[0]);
+		for (ri = 0; ri < svc->rl_nr; ri++) {
+			sri += snprintf(&srbuf[sri], srbuflen-sri,
+					      ",%u", svc->rl_ranks[ri]);
+			if (sri >= srbuflen) {
+				char *extra_svc = NULL;
+
+				srbuflen *= 2;
+				D_ALLOC(extra_svc, srbuflen);
+				if (extra_svc == NULL)
+					D_GOTO(out, rc = -DER_NOMEM);
+				sri = snprintf(extra_svc, srbuflen, "%s,%u",
+					       srbuf, svc->rl_ranks[ri]);
+				D_FREE(srbuf);
+				srbuf = extra_svc;
+			}
+		}
+		resp->lp_pools[pi]->svcreps = srbuf;
+	}
+
+
+out:
+	resp->status = rc;
+	len = mgmt__pool_list_resp__get_packed_size(resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to allocate drpc response body\n");
+	} else {
+		mgmt__pool_list_resp__pack(resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__pool_list_req__free_unpacked(req, NULL);
+
+	if (resp->lp_pools) {
+		for (pi = 0; pi < resp->n_lp_pools; pi++) {
+			if (resp->lp_pools[pi]) {
+				if (resp->lp_pools[pi]->lp_puuid)
+					D_FREE(resp->lp_pools[pi]->lp_puuid);
+				if (resp->lp_pools[pi]->svcreps)
+					D_FREE(resp->lp_pools[pi]->svcreps);
+				D_FREE(resp->lp_pools[pi]);
+			}
+		}
+		D_FREE(resp->lp_pools);
+	}
+
+	D_FREE(resp);
+	free_mgmt_list_pools(&pools, pools_len);
+}
+
+void
 ds_mgmt_drpc_smd_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__SmdDevReq		*req = NULL;

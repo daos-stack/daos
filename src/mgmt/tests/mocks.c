@@ -138,3 +138,13 @@ ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp)
 {
 	return 0;
 }
+
+int ds_mgmt_list_pools(const char *group, uint64_t *npools,
+		       struct mgmt_list_pools_one **poolsp, size_t *pools_len)
+{
+	return 0;
+}
+
+void
+free_mgmt_list_pools(struct mgmt_list_pools_one **poolsp, uint64_t len) {
+}

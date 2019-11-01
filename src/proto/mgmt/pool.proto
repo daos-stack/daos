@@ -57,3 +57,19 @@ message PoolDestroyReq {
 message PoolDestroyResp {
 	int32 status = 1; // DAOS error code
 }
+
+
+message PoolListReq {
+	string lp_grp = 1;
+	uint64 lp_npools = 2;
+}
+
+message PoolListResp {
+	message OnePool {
+		string lp_puuid = 1;
+		string svcreps = 2; // service replicas, comma-separated integers.
+}
+	int32 status = 1;
+	repeated OnePool lp_pools = 2;
+	uint64 lp_npools = 3;
+}
