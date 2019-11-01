@@ -26,12 +26,12 @@ import enum
 import uuid
 import sys
 
-# pylint: disable=import-error
+# pylint: disable=no-name-in-module
 if sys.version_info < (3, 0):
     from . import pydaos_shim_27 as pydaos_shim
 else:
     from . import pydaos_shim_3 as pydaos_shim
-# pylint: enable=import-error
+# pylint: enable=no-name-in-module
 
 from . import DAOS_MAGIC
 from . import PyDError
@@ -133,6 +133,7 @@ class Cont(object):
         return ObjID(hi, lo)
 
     def newkv(self, cid=ObjClassID.OC_SX):
+        """Allocate a new key-value store of class cid."""
         oid = self.genoid(cid)
         return KVObj(self.coh, oid, self)
 
@@ -140,6 +141,7 @@ class Cont(object):
         return KVObj(self.coh, oid, self)
 
     def rootkv(self, cid=ObjClassID.OC_SX):
+        """Open the container root key-value store."""
         (ret, hi, lo) = pydaos_shim.obj_idroot(DAOS_MAGIC, cid.value)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to generate root object identifier", ret)
@@ -179,6 +181,7 @@ class _Obj(object):
     def __str__(self):
         return str(self.oid)
 
+# pylint: disable=too-few-public-methods
 class KVIter():
 
     """Iterator class for KBOjb"""
@@ -192,7 +195,7 @@ class KVIter():
         self._kv = kv
 
     def next(self):
-        # for python 2 compatibility
+        """for python 2 compatibility"""
         return self.__next__()
 
     def __next__(self):
@@ -213,7 +216,7 @@ class KVIter():
         self._anchor = anchor
         self._nr = nr
         self._size = sz
-        if self._anchor == None:
+        if self._anchor is None:
             # no more entries to consume
             self._done = True
 
@@ -221,6 +224,7 @@ class KVIter():
             return self._entries.pop()
         else:
             raise StopIteration()
+# pylint: enable=too-few-public-methods
 
 class KVObj(_Obj):
     """

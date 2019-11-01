@@ -25,20 +25,22 @@ pydaos.dbm module for emulating dbm.gnu
 import pydaos
 
 class error(Exception):
-    pass
-
-class errorFlag(error):
-    pass
+    """Exception raised by daosbm() module"""
 
 class daosdm():
+    """dbm.gnu() like interface to daos"""
+
     def __init__(self, kv):
         self._kv = kv
         self._prevkey = None
+        self._iter_obj = None
 
     def __getitem__(self, key):
         return self._kv[key]
 
     def firstkey(self):
+        """Return the first key in the db"""
+
         iter_obj = self._kv.__iter__()
         try:
             key = iter_obj.__next__()
@@ -49,6 +51,7 @@ class daosdm():
             return None
 
     def nextkey(self, key):
+        """Return the next key in the db"""
 
         # Be safe and check for None first.
         if key == None:
@@ -81,19 +84,20 @@ class daosdm():
         except StopIteration:
             return None
 
-    def sync(self):
-        pass
-
     def reorganize(self):
+        """For compatability with dbm.gnu"""
         pass
 
     def sync(self):
+        """For compatability with dbm.gnu"""
         pass
 
     def close(self):
+        """Close the key-value store in the container"""
         self._kv = None
 
 class daosdm_rw(daosdm):
+    """Extends daosdm() with write capability"""
 
     def __setitem__(self, key, value):
         self._kv[key] = value
@@ -102,16 +106,19 @@ class daosdm_rw(daosdm):
         self._kv[key] = None
 
 def open(pool_uuid, cont_uuid, flag):
+    """Open a container and return a daosdm() object"""
 
     if flag not in ['r', 'w']:
-        raise errorFlag
+        raise error
 
     container = pydaos.Cont(pool_uuid, cont_uuid)
 
     kvstore = container.rootkv()
 
+# pylint: disable=redefined-variable-type
     if flag == 'w':
         db = daosdm_rw(kvstore)
     else:
         db = daosdm(kvstore)
+# pylint: enable=redefined-variable-type
     return db

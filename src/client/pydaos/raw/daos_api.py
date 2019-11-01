@@ -2127,7 +2127,8 @@ class DaosContext(object):
                   "r") as version_file:
             daos_version = version_file.read().rstrip()
 
-        self.libdaos = ctypes.CDLL(os.path.join(path, "libdaos.so.{}".format(daos_version)),
+        self.libdaos = ctypes.CDLL(os.path.join(path,
+                                                'libdaos.so.{}'.format(daos_version)),
                                    mode=ctypes.DEFAULT_MODE)
         ctypes.CDLL(os.path.join(path, 'libdaos_common.so'),
                     mode=ctypes.RTLD_GLOBAL)
