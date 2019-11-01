@@ -21,7 +21,6 @@ provided in Contract No. 8F-30005.
 Any reproduction of computer software, computer software documentation, or
 portions thereof marked with this legend must also reproduce the markings.
 """
-from __future__ import print_function
 
 import os
 import time
@@ -65,15 +64,6 @@ class Soak(TestWithServers):
                         state  --string indicating job completion status
         """
         self.soak_results[args["handle"]] = args["state"]
-
-    def harasser_done(self, params):
-        """Call this function when a job is done.
-
-        Args:
-            args (list):harasser --harasser
-                        status   --string indicating completion status
-        """
-        self.harasser_results[params["harasser"]] = params["status"]
 
     def create_pool(self, pools):
         """Create a pool that the various tests use for storage.
@@ -159,15 +149,18 @@ class Soak(TestWithServers):
         for harasser in harassers:
             if "rebuild" == harasser:
                 method = self.launch_rebuild
-                rank = self.params.get(
-                    "rank_to_kill", "/run/" + harasser + "/*")
-                param_list = [rank, pools]
-                job = (Process(target=method, args=param_list))
-                self.harasser_joblist.append(job)
+                ranks = self.params.get(
+                    "ranks_to_kill", "/run/" + harasser + "/*")
+                param_list = [ranks, pools]
             else:
                 raise SoakTestError(
                     "<<FAILED: Harasser {} is not supported. ".format(
                         harasser))
+
+            job = (Process(target=method, args=param_list))
+            self.harasser_joblist.append(job)
+
+        # start all harassers
         for job in self.harasser_joblist:
             job.start()
 
@@ -438,9 +431,9 @@ class Soak(TestWithServers):
                 job_id = None
 
             if job_id:
-                print(
-                    "<<Job {} started with {} >> at {}".format(
-                        job_id, script, time.ctime()))
+                self.log.info(
+                    "<<Job %s started with %s >> at %s",
+                    job_id, script, time.ctime())
                 slurm_utils.register_for_job_results(
                     job_id, self, maxwait=self.test_timeout)
                 # keep a list of the job_id's
@@ -466,8 +459,8 @@ class Soak(TestWithServers):
         if len(job_id_list) > 0:
             # wait for all the jobs to finish
             while len(self.soak_results) < len(job_id_list):
-                # print("<<Waiting for results {} >>".format(
-                #        self.soak_results))
+                # self.log.info(
+                #       "<<Waiting for results %s >>", self.soak_results))
                 # allow time for jobs to execute on nodes
                 time.sleep(2)
             # check for job COMPLETED and remove it from the job queue
@@ -522,6 +515,7 @@ class Soak(TestWithServers):
             pool_index = 0
             cmdlist.extend(self.job_setup(job, pools[pool_index], job_manager))
             pool_index += 1
+
         # if Sbatch; cmdlist is a list of batch scripts
         if job_manager == "Sbatch":
             # Gather the job_ids
@@ -535,6 +529,7 @@ class Soak(TestWithServers):
                 # rebuild can only run once for now
                 if "rebuild" in self.harasser_list:
                     self.harasser_list.remove("rebuild")
+
             # Initialize the failed_job_list to job_list so that any
             # unexpected failures will clear the squeue in tearDown
             self.failed_job_id_list = self.job_id_list
@@ -582,7 +577,7 @@ class Soak(TestWithServers):
         # enable harassers
         if self.harasser_list is not None:
             self.harassers_enabled = True
-            print("<<Harassers are enabled>>")
+            self.log.info("<<Harassers are enabled>>")
         else:
             self.harassers_enabled = False
 
@@ -620,9 +615,8 @@ class Soak(TestWithServers):
                     [str(result[key]) for key in result if key != 0])))
 
         while time.time() < self.start_time + self.test_timeout:
-            print("<<Soak1 PASS {}: time until done {}>>".format(
-                self.loop, (
-                    self.start_time + self.test_timeout - time.time())))
+            self.log.info("<<Soak1 PASS %s: time until done %s>>", self.loop, (
+                self.start_time + self.test_timeout - time.time()))
             # Create all specified pools
             self.pool.extend(self.create_pool(pool_list))
             try:
@@ -651,7 +645,7 @@ class Soak(TestWithServers):
 
     def setUp(self):
         """Define test setup to be done."""
-        print("<<setUp Started>> at {}".format(time.ctime()))
+        self.log.info("<<setUp Started>> at %s", time.ctime())
         # Start the servers in the test case
         self.setup_start_servers = True
         super(Soak, self).setUp()
@@ -680,12 +674,13 @@ class Soak(TestWithServers):
 
     def tearDown(self):
         """Define tearDown and clear any left over jobs in squeue."""
-        print("<<tearDown Started>> at {}".format(time.ctime()))
+        self.log.info("<<tearDown Started>> at %s", time.ctime())
         # clear out any jobs in squeue;
         errors_detected = False
         if len(self.failed_job_id_list) > 0:
-            print("<<Cancel jobs in queue with ids {} >>".format(
-                self.failed_job_id_list))
+            self.log.info(
+                "<<Cancel jobs in queue with ids %s >>",
+                self.failed_job_id_list)
             for job_id in self.failed_job_id_list:
                 try:
                     slurm_utils.cancel_jobs(job_id)

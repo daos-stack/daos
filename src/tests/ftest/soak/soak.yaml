@@ -42,7 +42,8 @@ container_reserved:
 # Harasser parameters
 # Rebuild
 rebuild:
-    rank_to_kill: 3
+    ranks_to_kill: 
+        - 3
     daos_oclass:
         - "RP_3GX"
         # - "RP_2GX"
@@ -77,9 +78,8 @@ smoke:
       - pool1
     joblist:
       - ior_smoke
-
 # SOAK stress test params
-# Test will run for 60 minutes 
+# Test will run for 60 minutes
 soak_stress:
     name: soak_stress
     test_timeout: 3600
@@ -123,12 +123,12 @@ soak_harassers:
     #- snapshot
     #- dmg_create_destroy
 
-# Commandline parmeters 
+# Commandline parameters
 # Benchmark and application params
 # IOR params -a DAOS and -a MPIIO
 # sequential
 ior_smoke:
-    api: 
+    api:
         - DAOS
         - MPIIO
     test_file: daos:testFile
@@ -144,7 +144,7 @@ ior_smoke:
     daos_oclass:
         - 'SX'
 ior_stress:
-    api: 
+    api:
         - DAOS
         - MPIIO
     test_file: daos:testFile
