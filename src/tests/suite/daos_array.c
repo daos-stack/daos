@@ -1068,7 +1068,7 @@ truncate_array(void **state)
 } /* End str_mem_str_arr_io */
 #endif
 
-#define NUM_RECS 1048576
+#define NUM_RECS 16*1024
 
 static void
 large_io(void **state) {
@@ -1084,6 +1084,7 @@ large_io(void **state) {
 	uuid_t			uuid;
 	daos_handle_t		coh;
 	daos_cont_info_t	info;
+	daos_prop_t		*prop;
 	int			rc;
 
 	/** create the array on rank 0 and share the oh. */
@@ -1099,6 +1100,28 @@ large_io(void **state) {
 		assert_int_equal(rc, 0);
 	}
 	handle_share(&coh, HANDLE_CO, arg->myrank, arg->pool.poh, 0);
+
+	double start, end, total = 0;
+
+	prop = daos_prop_alloc(0);
+	if (prop == NULL) {
+		D_ERROR("Failed to allocate prop.");
+		assert_non_null(prop);		
+	}
+
+	start = MPI_Wtime();
+	rc = daos_cont_query(coh, NULL, prop, NULL);
+	daos_prop_free(prop);
+	if (rc) {
+		D_ERROR("daos_cont_query() Failed (%d)\n", rc);
+		assert_int_equal(rc, 0);
+	}
+	end = MPI_Wtime();
+	total = end-start;
+
+	if (total > 1)
+		printf("rank %d had a timeout. total time = %f seconds\n",
+		       arg->myrank, total);
 
 	if (arg->myrank == 0) {
 		oid = dts_oid_gen(OC_SX, feat, 0);
@@ -1119,9 +1142,9 @@ large_io(void **state) {
 	d_iov_set(&iov, wbuf, NUM_RECS);
 	sgl.sg_iovs = &iov;
 
-	double start, end, total = 0;
+	total = 0;
 
-	for (i = 0; i < 100; i++) {
+	for (i = 0; i < 1000; i++) {
 		/** set array location */
 		iod.arr_nr = 1;
 		rg.rg_len = NUM_RECS;
