@@ -155,7 +155,7 @@ pipeline {
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
                                    ignored_files: "src/control/vendor/*:src/mgmt/*.pb-c.[ch]:src/iosrv/*.pb-c.[ch]:src/security/*.pb-c.[ch]:*.crt:*.pem",
-				   branch: 'ampittma/pylint'
+				   branch: 'ampittma-pylint'
                     }
                     post {
                         always {
