@@ -430,11 +430,12 @@ class TestPool(TestDaosApiBase):
             for index, item in enumerate(val)]
         return self._check_info(checks)
 
-    def check_rebuild_status(self, rs_version=None, rs_pad_32=None,
-                             rs_errno=None, rs_done=None,
-                             rs_toberb_obj_nr=None, rs_obj_nr=None,
-                             rs_rec_nr=None):
+    def check_rebuild_status(self, rs_version=None, rs_seconds=None,
+                             rs_errno=None, rs_done=None, rs_padding32=None,
+                             rs_fail_rank=None, rs_toberb_obj_nr=None,
+                             rs_obj_nr=None, rs_rec_nr=None, rs_size=None):
         # pylint: disable=unused-argument
+        # pylint: disable=too-many-arguments
         """Check the pool info rebuild attributes.
 
         Note:
@@ -444,15 +445,18 @@ class TestPool(TestDaosApiBase):
 
         Args:
             rs_version (int, optional): rebuild version. Defaults to None.
-            rs_pad_32 (int, optional): rebuild pad. Defaults to None.
+            rs_seconds (int, optional): rebuild seconds. Defaults to None.
             rs_errno (int, optional): rebuild error number. Defaults to None.
             rs_done (int, optional): rebuild done flag. Defaults to None.
+            rs_padding32 (int, optional): padding. Defaults to None.
+            rs_fail_rank (int, optional): rebuild fail target. Defaults to None.
             rs_toberb_obj_nr (int, optional): number of objects to be rebuilt.
                 Defaults to None.
             rs_obj_nr (int, optional): number of rebuilt objects.
                 Defaults to None.
             rs_rec_nr (int, optional): number of rebuilt records.
                 Defaults to None.
+            rs_size (int, optional): size of all rebuilt records.
 
         Note:
             Arguments may also be provided as a string with a number preceeded
