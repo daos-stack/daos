@@ -493,7 +493,6 @@ class Configuration(object):
                 Defaults to None.
         """
         # Convert a glob-style path into regular expression
-        re_path = ""
         if path is None:
             # Match any path
             re_path = ""

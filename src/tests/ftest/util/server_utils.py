@@ -436,21 +436,6 @@ class ServerManager(ExecutableCommand):
                 cmd_touch_log = "touch {}".format(lfile)
                 pcmd(self._hosts, cmd_touch_log, False)
 
-            # Create sub directory on top of attach_info_path directory
-            chmod_attach = [
-                "mkdir {}/attach_dir".format(self.attach.value),
-                "chmod 777 {}/attach_dir".format(self.attach.value),
-            ]
-            pcmd(self._hosts, "; ".join(chmod_attach), False)
-
-            # Set server -a attach_info_path value to the sub directory
-            self.runner.job.action_command.attach.value = \
-                "{}/attach_dir".format(self.attach.value)
-
-            # Set server environment info_attach_path
-            os.environ["CRT_ATTACH_INFO_PATH"] = \
-                self.runner.job.action_command.attach.value
-
         try:
             self.run()
         except CommandFailure as details:
@@ -479,7 +464,7 @@ class ServerManager(ExecutableCommand):
 
             # Change ownership of attach info file
             chmod_cmds = "sudo chmod 777 {}/daos_server.attach_info_tmp".format(
-                self.runner.job.action_command.attach.value)
+                self.attach.value)
             pcmd(self._hosts, chmod_cmds, False)
 
         return True

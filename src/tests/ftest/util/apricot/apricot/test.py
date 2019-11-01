@@ -29,6 +29,7 @@ from __future__ import print_function
 import os
 import json
 import re
+import stat
 
 from avocado import Test as avocadoTest
 from avocado import skip, TestFail
@@ -122,11 +123,16 @@ class TestWithoutServers(Test):
                                                       '..') + os.path.sep)
         self.prefix = build_paths['PREFIX']
         self.ompi_prefix = build_paths["OMPI_PREFIX"]
-        self.tmp = os.path.join(self.prefix, 'tmp')
+        self.tmp = os.path.join(self.prefix, 'tmp', 'attach_dir')
         self.bin = os.path.join(self.prefix, 'bin')
         self.daos_test = os.path.join(self.bin, 'daos_test')
         self.orterun = os.path.join(self.ompi_prefix, "bin", "orterun")
         self.daosctl = os.path.join(self.bin, 'daosctl')
+
+        # set default shared dir for daos tests
+        if not os.path.exists(self.tmp):
+            os.makedirs(self.tmp)
+        os.chmod(self.tmp, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
 
         # setup fault injection, this MUST be before API setup
         fault_list = self.params.get("fault_list", '/run/faults/*/')
@@ -411,8 +417,7 @@ class TestWithServers(TestWithoutServers):
                     "Starting servers: group=%s, hosts=%s", group, hosts)
                 self.server_managers.append(ServerManager(
                     self.bin,
-                    os.path.join(self.ompi_prefix, "bin"),
-                    attach=os.path.join(self.prefix, "tmp")))
+                    os.path.join(self.ompi_prefix, "bin"), attach=self.tmp))
                 self.server_managers[-1].get_params(self)
                 self.server_managers[-1].runner.job.yaml_params.name = group
                 self.server_managers[-1].hosts = (
