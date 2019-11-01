@@ -26,11 +26,20 @@ package mgmt;
 
 // Access Control List related protobuf structures
 
+// Response to ACL-related requests includes the command status and current ACL
+message ACLResp {
+	int32 status = 1; // DAOS error code
+	repeated string ACL = 2; // List of ACEs in short string format
+}
+
+// Request to fetch an ACL
 message GetACLReq {
 	string uuid = 1; // Target UUID
 }
 
-message GetACLResp {
-	int32 status = 1; // DAOS error code
-	repeated string ACL = 2; // List of ACEs in short string format
+// Request to modify an ACL. 
+// Results depend on the specific modification command.
+message ModifyACLReq {
+	string uuid = 1; // Target UUID
+	repeated string ACL = 2; // List of ACEs to overwrite ACL with
 }

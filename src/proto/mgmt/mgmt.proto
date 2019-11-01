@@ -42,7 +42,9 @@ service MgmtSvc {
 	// Destroy a DAOS pool allocated across a number of ranks
 	rpc PoolDestroy(PoolDestroyReq) returns (PoolDestroyResp) {}
 	// Fetch the Access Control List for a DAOS pool
-	rpc PoolGetACL(GetACLReq) returns (GetACLResp) {}
+	rpc PoolGetACL(GetACLReq) returns (ACLResp) {}
+	// Overwrite the Access Control List for a DAOS pool with a new one
+	rpc PoolOverwriteACL(ModifyACLReq) returns (ACLResp) {}
 	// Get the information required by libdaos to attach to the system.
 	rpc GetAttachInfo(GetAttachInfoReq) returns (GetAttachInfoResp) {}
 	// Get BIO device health information

@@ -92,8 +92,10 @@ int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 int ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force);
 void ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req);
 void ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req);
-int ds_mgmt_pool_get_acl(uuid_t pool_uuid, struct daos_acl **acl);
 void ds_mgmt_hdlr_list_pools(crt_rpc_t *rpc_req);
+int ds_mgmt_pool_get_acl(uuid_t pool_uuid, struct daos_acl **acl);
+int ds_mgmt_pool_overwrite_acl(uuid_t pool_uuid, struct daos_acl *acl,
+			       struct daos_acl **result);
 
 /** srv_query.c */
 
