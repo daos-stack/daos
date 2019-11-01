@@ -112,7 +112,7 @@ crt_proc_struct_daos_rebuild_status(crt_proc_t proc,
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint32_t(proc, &drs->rs_pad_32);
+	rc = crt_proc_uint32_t(proc, &drs->rs_seconds);
 	if (rc != 0)
 		return -DER_HG;
 
@@ -121,6 +121,14 @@ crt_proc_struct_daos_rebuild_status(crt_proc_t proc,
 		return -DER_HG;
 
 	rc = crt_proc_int32_t(proc, &drs->rs_done);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_int32_t(proc, &drs->rs_padding32);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_int32_t(proc, &drs->rs_fail_rank);
 	if (rc != 0)
 		return -DER_HG;
 
@@ -133,6 +141,10 @@ crt_proc_struct_daos_rebuild_status(crt_proc_t proc,
 		return -DER_HG;
 
 	rc = crt_proc_uint64_t(proc, &drs->rs_rec_nr);
+	if (rc != 0)
+		return -DER_HG;
+
+	rc = crt_proc_uint64_t(proc, &drs->rs_size);
 	if (rc != 0)
 		return -DER_HG;
 
