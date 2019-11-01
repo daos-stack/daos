@@ -32,6 +32,7 @@ from test_utils import TestPool, TestContainer
 from ClusterShell.NodeSet import NodeSet
 from general_utils import pcmd
 import socket
+from multiprocessing import Process
 
 
 class SoakTestError(Exception):
@@ -64,6 +65,15 @@ class Soak(TestWithServers):
                         state  --string indicating job completion status
         """
         self.soak_results[args["handle"]] = args["state"]
+
+    def harasser_done(self, params):
+        """Call this function when a job is done.
+
+        Args:
+            args (list):harasser --harasser
+                        status   --string indicating completion status
+        """
+        self.harasser_results[params["harasser"]] = params["status"]
 
     def create_pool(self, pools):
         """Create a pool that the various tests use for storage.
@@ -120,64 +130,174 @@ class Soak(TestWithServers):
                     ", ".join(
                         [str(result[key]) for key in result if key != 0])))
 
-    def create_ior_cmdline(self, job_params, job_spec, pool):
+    def is_harasser(self, harasser):
+        """Check if harasser is defined in yaml.
+
+        Args:
+            harasser (list): list of harassers to launch
+
+        Returns: bool
+
+        """
+        if self.harassers_enabled is True:
+            if self.harasser_list is not None:
+                if harasser in self.harasser_list:
+                    return True
+        else:
+            return False
+
+    def launch_harassers(self, harassers, pools):
+        """Launch any harasser tests if defined in yaml.
+
+        Args:
+            harasser (list): list of harassers to launch
+            pools (TestPool): pool obj
+
+        """
+        job = []
+        # Launch harasser after one complete pass
+        for harasser in harassers:
+            if "rebuild" == harasser:
+                method = self.launch_rebuild
+                rank = self.params.get(
+                    "rank_to_kill", "/run/" + harasser + "/*")
+                param_list = [rank, pools]
+                job = (Process(target=method, args=param_list))
+                self.harasser_joblist.append(job)
+            else:
+                raise SoakTestError(
+                    "<<FAILED: Harasser {} is not supported. ".format(
+                        harasser))
+        for job in self.harasser_joblist:
+            job.start()
+
+        # Disable harassers
+        self.harassers_enabled = False
+
+    def harasser_completion(self, timeout):
+        """Complete harasser jobs.
+
+        Args:
+            timeout (int): timeout in secs
+
+        Returns:
+            bool: status
+
+        """
+        status = True
+        for job in self.harasser_joblist:
+            job.join(timeout)
+        for job in self.harasser_joblist:
+            if job.is_alive():
+                self.log.info("<< HARASSER FAILED >> - %s ", job.name)
+                job.terminate()
+            # if any harasser fails; test should fail
+            if job.exitcode > 0:
+                self.log.info("<< HARASSER FAILED >> - %s ", job.name)
+                status = False
+        return status
+
+    def launch_rebuild(self, rank, pools):
+        """Launch the rebuild process.
+
+        Args:
+            rank (str): Server rank to kill
+            pools (list): list of TestPool obj
+
+        """
+        self.log.info("<<Launch Rebuild>> at %s", time.ctime())
+        status = True
+        for pool in pools:
+            # Kill the server
+            if pool.start_rebuild([rank], self.d_log):
+
+                # Wait for rebuild to start
+                pool.wait_for_rebuild(True)
+
+                # Wait for rebuild to complete
+                pool.wait_for_rebuild(False)
+
+                status &= True
+            else:
+                status &= False
+
+    def create_ior_cmdline(self, job_spec, pool):
         """Create an IOR cmdline to run in slurm batch.
 
         Args:
-            job_params (str): job params from yaml file
-            job_spec (str): specific ior job to run
+
+            job_spec (str): ior job in yaml to run
             pool (obj):   TestPool obj
 
         Returns:
             cmd: cmdline string
 
         """
-        command = []
-        iteration = self.test_iteration
-        ior_params = "/run/" + job_spec + "/"
+        commands = []
 
-        ior_cmd = IorCommand()
-        ior_cmd.namespace = ior_params
-        ior_cmd.get_params(self)
-        if iteration is not None and iteration < 0:
-            ior_cmd.repetitions.update(1000000)
-        ior_cmd.max_duration.update(self.params.get("time", job_params + '*'))
+        iteration = self.test_iteration
+        ior_params = "/run/" + job_spec + "/*"
         # IOR job specs with a list of parameters; update each value
+        #   api
         #   transfer_size
         #   block_size
-        #   daos object class
-        tsize_list = ior_cmd.transfer_size.value
-        bsize_list = ior_cmd.block_size.value
-        oclass_list = ior_cmd.daos_oclass.value
-        for b_size in bsize_list:
-            ior_cmd.block_size.update(b_size)
-            for o_type in oclass_list:
-                ior_cmd.daos_oclass.update(o_type)
-                for t_size in tsize_list:
-                    ior_cmd.transfer_size.update(t_size)
-                    ior_cmd.set_daos_params(self.server_group, pool)
-                    # export the user environment to test node
-                    exports = ["ALL"]
-                    if ior_cmd.api.value == "MPIIO":
-                        env = {
-                            "CRT_ATTACH_INFO_PATH": os.path.join(
-                                self.basepath, "install/tmp"),
-                            "DAOS_POOL": str(ior_cmd.daos_pool.value),
-                            "MPI_LIB": "\"\"",
-                            "DAOS_SVCL": str(ior_cmd.daos_svcl.value),
-                            "DAOS_SINGLETON_CLI": 1,
-                            "FI_PSM2_DISCONNECT": 1
-                        }
-                        exports.extend(
-                            ["{}={}".format(
-                                key, val) for key, val in env.items()])
-                    cmd = "srun -l --mpi=pmi2 --export={} {}".format(
-                        ",".join(exports), ior_cmd)
-                    command.append(cmd)
-                    self.log.debug("<<IOR cmdline >>: %s \n", cmd)
-        return command
 
-    def create_dmg_cmdline(self, job_params, job_spec, pool):
+        api_list = self.params.get("api", ior_params + "*")
+        tsize_list = self.params.get("transfer_size", ior_params + "*")
+        bsize_list = self.params.get("block_size", ior_params + "*")
+        oclass_list = self.params.get("daos_oclass", ior_params + "*")
+        # check if capable of doing rebuild; if yes then daos_oclass = RP_*GX
+        if self.harassers_enabled and self.is_harasser("rebuild"):
+            oclass_list = self.params.get("daos_oclass", "/run/rebuild/*")
+        # update IOR cmdline for each additional IOR obj
+        for api in api_list:
+            for b_size in bsize_list:
+                for t_size in tsize_list:
+                    for o_type in oclass_list:
+                        ior_cmd = IorCommand()
+                        ior_cmd.namespace = ior_params
+                        ior_cmd.get_params(self)
+                        if iteration is not None and iteration < 0:
+                            ior_cmd.repetitions.update(1000000)
+                        if self.job_timeout is not None:
+                            ior_cmd.max_duration.update(self.job_timeout)
+                        else:
+                            ior_cmd.max_duration.update(10)
+                        ior_cmd.api.update(api)
+                        ior_cmd.block_size.update(b_size)
+                        ior_cmd.transfer_size.update(t_size)
+                        ior_cmd.daos_oclass.update(o_type)
+                        ior_cmd.set_daos_params(self.server_group, pool)
+
+                        # slurm/sbatch cmdline
+                        if self.job_manager == "Sbatch":
+                            # export the user environment for srun
+                            exports = ["ALL"]
+                            if ior_cmd.api.value == "MPIIO":
+                                env = {
+                                    "CRT_ATTACH_INFO_PATH": os.path.join(
+                                        self.basepath, "install/tmp"),
+                                    "DAOS_POOL": str(ior_cmd.daos_pool.value),
+                                    "MPI_LIB": "\"\"",
+                                    "DAOS_SVCL": str(ior_cmd.daos_svcl.value),
+                                    "DAOS_SINGLETON_CLI": 1,
+                                    "FI_PSM2_DISCONNECT": 1,
+                                    "IOR_HINT__MPI__romio_daos_obj_class":
+                                    str(ior_cmd.daos_oclass.value)
+                                }
+                                exports.extend(
+                                    ["{}={}".format(
+                                        key, val) for key, val in env.items()])
+                            cmd = "srun -l --mpi=pmi2 --export={} {}".format(
+                                ",".join(exports), str(ior_cmd))
+                            commands.append(cmd)
+                        else:
+                            commands.append(ior_cmd)
+                        self.log.info(
+                            "<<IOR cmdline >>: %s \n", commands[-1].__str__())
+        return commands
+
+    def create_dmg_cmdline(self, job_spec, pool):
         """Create a dmg cmdline to run in slurm batch.
 
         Args:
@@ -190,94 +310,60 @@ class Soak(TestWithServers):
         cmd = ""
         return cmd
 
-    def build_job_script(self, nodesperjob, job, pool):
-        """Create a slurm batch script that will execute a list of jobs.
+    def build_job_script(self, command, nodesperjob, job, tlist, job_timeout):
+        """Create a slurm batch script that will execute a list of cmdlines.
 
         Args:
-            nodesperjob(int): number of nodes executing each job
-            job(str): the job that will be defined in the slurm script with
-            /run/"job"/.  It is currently defined in the yaml as:
-            Example job:
-            job1:
-                name: job1    - unique name
-                time: 10      - cmdline time in seconds; used in IOR -T param
-                tasks: 1      - number of processes per node --ntaskspernode
-                jobspec:
-                    - ior_daos
-                    - ior_mpiio
-            pool (obj):   TestPool obj
+            command(list): list of commandlines to include in slurm sbatch
+            nodesperjob(int): number of nodes to execute job
+            job(str): the job type that will be defined in the slurm script
+            with /run/"job"/
+            tasklist(list): number of tasks to run on each node
+            job_timeout(str):  timeout passed to slurm sbatch
 
         Returns:
             script_list: list of slurm batch scripts
 
         """
         self.log.info("<<Build Script for job %s >> at %s", job, time.ctime())
-
         script_list = []
-        # create one batch script per cmdline
-        # get job params
-        job_params = "/run/" + job + "/"
-        job_name = self.params.get("name", job_params + "*")
-        job_specs = self.params.get("jobspec", job_params + "*")
-        task_list = self.params.get("tasks", job_params + "*")
-        job_time = self.params.get("time", job_params + "*")
-
-        # job_time in minutes:seconds format
-        job_time = str(job_time) + ":00"
-        for job_spec in job_specs:
-            if "ior" in job_spec:
-                # Create IOR cmdline
-                cmd_list = self.create_ior_cmdline(job_params, job_spec, pool)
-            elif "dmg" in job_spec:
-                # create dmg cmdline
-                cmd_list = self.create_dmg_cmdline(job_params, job_spec, pool)
-            else:
-                raise SoakTestError(
-                    "<<FAILED: Soak job: {} Job spec {} is invalid>>".format(
-                        job, job_spec))
-
-            # a single cmdline per batch job; so that a failure is per cmdline
-            # change to multiple cmdlines per batch job  later.
-            for cmd in cmd_list:
-                # additional sbatch params
-                for tasks in task_list:
-                    output = os.path.join(
-                        self.rem_pass_dir, "%N_" + self.test_name +
-                        "_" + job_name + "_" + job_spec +
-                        "_results.out_%j_%t_" + str(tasks) + "_")
-                    num_tasks = nodesperjob * tasks
-                    sbatch = {
-                            "ntasks-per-node": tasks,
-                            "ntasks": num_tasks,
-                            "time": job_time,
-                            "partition": self.partition_clients,
-                            "exclude": NodeSet.fromlist(self.hostlist_servers)}
-                    script = slurm_utils.write_slurm_script(
-                        self.rem_pass_dir, job_name, output, nodesperjob,
-                        [cmd], sbatch)
-                    script_list.append(script)
+        # Create the sbatch script for each cmdline
+        for cmd in command:
+            for tasks in tlist:
+                output = os.path.join(
+                    self.rem_pass_dir, "%N_" + self.test_name +
+                    "_" + job +
+                    "_results.out_%j_%t_" + str(tasks) + "_")
+                num_tasks = self.nodesperjob * tasks
+                sbatch = {
+                        "ntasks-per-node": tasks,
+                        "ntasks": num_tasks,
+                        "time": str(job_timeout) + ":00",
+                        "partition": self.partition_clients,
+                        # "exclude": NodeSet.fromlist(self.hostlist_servers)
+                        }
+                script = slurm_utils.write_slurm_script(
+                    self.rem_pass_dir, job, output, self.nodesperjob,
+                    [cmd], sbatch)
+                script_list.append(script)
         return script_list
 
-    def job_setup(self, test_param, pool):
-        """Create the slurm job batch script .
+    def job_setup(self, job, pool, job_manager):
+        """Create the cmdline needed to launch job.
 
         Args:
-            test_param (str): test_params from yaml file
+            job(str): single job from test params list of jobs to run
             pool (obj): TestPool obj
+            job_manager (str): job manager user to create job cmdline
 
         Returns:
-            scripts: list of slurm batch scripts
+            job_cmdlist: list cmdline that can be launched
+                         by specifed job manager
 
         """
-        # Get jobmanager
-        self.job_manager = self.params.get("jobmanager", "/run/*")
-        # Get test params
-        self.test_name = self.params.get("name", test_param)
-        self.test_iteration = self.params.get("test_iteration", test_param)
-        self.job_list = self.params.get("joblist", test_param + "*")
-        self.nodesperjob = self.params.get("nodesperjob", test_param)
         self.soak_results = {}
-        script_list = []
+        self.harasser_results = {}
+        job_cmdlist = []
 
         self.log.info(
             "<<Job_Setup %s >> at %s", self.test_name, time.ctime())
@@ -306,24 +392,34 @@ class Soak(TestWithServers):
                 "<<FAILED: There are only {} client nodes for this job. "
                 "Job requires {}".format(
                     len(self.hostlist_clients), self.nodesperjob))
-        if self.job_manager == "slurm":
-            # queue up slurm script and register a callback to retrieve
-            # results.  The slurm batch script are single cmdline for now.
-            # scripts is a list of slurm batch scripts with a single cmdline
-            for job in self.job_list:
-                scripts = self.build_job_script(self.nodesperjob, job, pool)
-                script_list.extend(scripts)
-            return script_list
-        else:
-            raise SoakTestError(
-                "<<FAILED: Job manager {} is not yet enabled. "
-                "Job requires slurm".format(self.job_manager))
+        #  get the list of cmdlines for the job
+        for job in self.job_list:
+            if "ior" in job:
+                commands = self.create_ior_cmdline(job, pool)
+            elif "dmg" in job:
+                # create dmg cmdline
+                commands = self.create_dmg_cmdline(job, pool)
+            # Create slurm job
+            if self.job_manager == "Sbatch":
+                # queue up slurm script and register a callback to retrieve
+                # results.  The slurm batch script are single cmdline for now.
+                # scripts is a list of slurm batch scripts with a
+                # single cmdline
+                scripts = self.build_job_script(
+                    commands, self.nodesperjob, job,
+                    self.task_list, self.job_timeout)
+                job_cmdlist.extend(scripts)
+            else:
+                raise SoakTestError(
+                    "<<FAILED: Job manager {} is not supported. ".format(
+                        self.job_manager))
+        return job_cmdlist
 
-    def job_startup(self, scripts):
+    def job_startup(self, job_cmdlist):
         """Submit job batch script.
 
         Args:
-            scripts (list): list of slurm batch scripts to submit to queue
+            job_cmdlist (list): list of jobs to execute
         Returns:
             job_id_list: IDs of each job submitted to slurm.
 
@@ -331,8 +427,9 @@ class Soak(TestWithServers):
         self.log.info(
             "<<Job Startup - %s >> at %s", self.test_name, time.ctime())
         job_id_list = []
-        # scripts is a list of batch script files
-        for script in scripts:
+
+        # job_cmdlist is a list of batch script files
+        for script in job_cmdlist:
             try:
                 job_id = slurm_utils.run_slurm_script(str(script))
             except slurm_utils.SlurmFailed as error:
@@ -364,17 +461,18 @@ class Soak(TestWithServers):
         """
         self.log.info(
             "<<Job Completion - %s >> at %s", self.test_name, time.ctime())
+
         # If there is nothing to do; exit
         if len(job_id_list) > 0:
             # wait for all the jobs to finish
             while len(self.soak_results) < len(job_id_list):
                 # print("<<Waiting for results {} >>".format(
                 #        self.soak_results))
+                # allow time for jobs to execute on nodes
                 time.sleep(2)
             # check for job COMPLETED and remove it from the job queue
             for job, result in self.soak_results.items():
                 # The queue include status of "COMPLETING"
-                # sleep to allow job to move to final state
                 if result == "COMPLETED":
                     job_id_list.remove(int(job))
                 else:
@@ -400,38 +498,60 @@ class Soak(TestWithServers):
             self.soak_results = {}
         return job_id_list
 
-    def execute_jobs(self, test_param, pools):
+    def execute_jobs(self, jobs, pools, job_manager):
         """Execute the overall soak test.
 
         Args:
-            test_param (str): test_params from yaml file
+            jobs (list):  list of jobs to create cmdlines and execute
             pools (list): list of TestPool obj
+            job_manager(str):  job manager used to launch job
 
         Raise:
             SoakTestError
 
         """
         cmdlist = []
-        # Setup cmdlines for jobs
-        for pool in pools:
-            cmdlist.extend(self.job_setup(test_param, pool))
-
-        # Gather the job_ids
-        self.job_id_list = self.job_startup(cmdlist)
-
-        # Initialize the failed_job_list to job_list so that any
-        # unexpected failures will clear the squeue in tearDown
-        self.failed_job_id_list = self.job_id_list
-
-        # Wait for jobs to finish and cancel/kill jobs if necessary
-        self.failed_job_id_list = self.job_completion(self.job_id_list)
-
-        # Test fails on first error but could use continue on error here
-        if len(self.failed_job_id_list) > 0:
+        harasser_status = True
+        self.harasser_joblist = []
+        # Setup cmdlines for job with specified pool
+        if len(pools) < len(jobs):
             raise SoakTestError(
-                "<<FAILED: The following jobs failed {} >>".format(
-                    " ,".join(
-                        str(job_id) for job_id in self.failed_job_id_list)))
+                "<<FAILED: There are not enough pools to run this test>>")
+        for job in jobs:
+            self.job_name = job
+            pool_index = 0
+            cmdlist.extend(self.job_setup(job, pools[pool_index], job_manager))
+            pool_index += 1
+        # if Sbatch; cmdlist is a list of batch scripts
+        if job_manager == "Sbatch":
+            # Gather the job_ids
+            self.job_id_list = self.job_startup(cmdlist)
+
+            # launch harassers if defined and enabled
+            if self.harassers_enabled and self.harasser_list is not None and self.loop > 1:
+                self.launch_harassers(self.harasser_list, self.pool[1:])
+                harasser_status = self.harasser_completion(
+                    self.harasser_timeout)
+                # rebuild can only run once for now
+                if "rebuild" in self.harasser_list:
+                    self.harasser_list.remove("rebuild")
+            # Initialize the failed_job_list to job_list so that any
+            # unexpected failures will clear the squeue in tearDown
+            self.failed_job_id_list = self.job_id_list
+
+            # Wait for jobs to finish and cancel/kill jobs if necessary
+            self.failed_job_id_list = self.job_completion(self.job_id_list)
+
+            # Test fails on first error but could use continue on error here
+            if len(self.failed_job_id_list) > 0 or not harasser_status:
+                raise SoakTestError(
+                    "<<FAILED: The following jobs failed {} >>".format(
+                        " ,".join(
+                            str(j_id) for j_id in self.failed_job_id_list)))
+        else:
+            raise SoakTestError(
+                "<<FAILED: Job manager {} is not supported. ".format(
+                    self.job_manager))
 
     def run_soak(self, test_param):
         """Run the soak test specified by the test params.
@@ -440,10 +560,31 @@ class Soak(TestWithServers):
             test_param (str): test_params from yaml file
 
         """
+        # Initialize loop param for all tests
+        self.loop = 1
+
         pool_list = self.params.get("poollist", test_param + "*")
         self.test_timeout = self.params.get("test_timeout", test_param)
+        self.job_timeout = self.params.get("job_timeout", test_param)
+        self.job_manager = self.params.get("jobmanager", test_param)
+        self.test_name = self.params.get("name", test_param)
+        self.job_list = self.params.get("joblist", test_param + "*")
+        self.nodesperjob = self.params.get("nodesperjob", test_param)
+        self.test_iteration = self.params.get("iteration", test_param)
+        self.task_list = self.params.get("taskspernode", test_param + "*")
+        self.soak_test_name = test_param.split("/")[2]
+        self.harasser_list = self.params.get("harasserlist", test_param + "*")
+        self.harasser_timeout = self.params.get(
+            "harasser_timeout", test_param)
         self.job_id_list = []
-        start_time = time.time()
+        self.start_time = time.time()
+
+        # enable harassers
+        if self.harasser_list is not None:
+            self.harassers_enabled = True
+            print("<<Harassers are enabled>>")
+        else:
+            self.harassers_enabled = False
 
         rank = self.params.get("rank", "/run/container_reserved/*")
         obj_class = self.params.get(
@@ -453,66 +594,10 @@ class Soak(TestWithServers):
         self.pool = self.create_pool(["pool_reserved"])
         self.pool[0].connect()
         self.container = TestContainer(self.pool[0])
-        self.container.namespace = "/run/container_reserved/"
+        self.container.namespace = "/run/container_reserved"
         self.container.get_params(self)
         self.container.create()
         self.container.write_objects(rank, obj_class)
-
-        while time.time() < start_time + self.test_timeout:
-            print("<<Soak1 PASS {}: time until done {}>>".format(
-                self.loop, (start_time + self.test_timeout - time.time())))
-            # Create all specified pools
-            self.pool.extend(self.create_pool(pool_list))
-            try:
-                self.execute_jobs(test_param, self.pool[1:])
-            except SoakTestError as error:
-                self.fail(error)
-            errors = self.destroy_pools(self.pool[1:])
-            # delete the test pools from self.pool; preserving reserved pool
-            self.pool = [self.pool[0]]
-            self.assertEqual(len(errors), 0, "\n".join(errors))
-            self.loop += 1
-            # Break out of loop if smoke
-            if "smoke" in self.test_name:
-                break
-        # Check that the reserve pool is still allocated
-        self.assertTrue(
-                self.pool[0].check_files(self.hostlist_servers),
-                "Pool data not detected on servers")
-        # Verify the data after soak is done
-        self.assertTrue(
-                self.container.read_objects(),
-                "Data verification error on reserved pool"
-                "after SOAK completed")
-
-    def setUp(self):
-        """Define test setup to be done."""
-        print("<<setUp Started>> at {}".format(time.ctime()))
-        super(Soak, self).setUp()
-        # Initialize loop param for all tests
-        self.loop = 1
-
-        self.failed_job_id_list = []
-        # Fail if slurm partition daos_client is not defined
-        if not self.partition_clients:
-            raise SoakTestError(
-                "<<FAILED: Partition is not correctly setup for daos "
-                "slurm partition>>")
-        # Check if the server nodes are in the client list;
-        # this will happen when only one partition is specified
-        for host_server in self.hostlist_servers:
-            if host_server in self.hostlist_clients:
-                self.hostlist_clients.remove(host_server)
-        self.log.info(
-                "<<Updated hostlist_clients %s >>", self.hostlist_clients)
-        # include test node for log cleanup; remove from client list
-        # self.test_node = [socket.gethostname().split('.', 1)[0]]
-        # if self.test_node[0] in self.hostlist_clients:
-        #     self.hostlist_clients.remove(self.test_node[0])
-        #     self.log.info(
-        #         "<<Updated hostlist_clients %s >>", self.hostlist_clients)
-        # self.node_list = self.hostlist_clients + self.test_node
-        self.node_list = self.hostlist_clients
 
         # Setup logging directories for soak logfiles
         # self.output dir is an avocado directory .../data/
@@ -533,6 +618,65 @@ class Soak(TestWithServers):
                 "<<FAILED: Soak directories not removed"
                 "from clients>>: {}".format(", ".join(
                     [str(result[key]) for key in result if key != 0])))
+
+        while time.time() < self.start_time + self.test_timeout:
+            print("<<Soak1 PASS {}: time until done {}>>".format(
+                self.loop, (
+                    self.start_time + self.test_timeout - time.time())))
+            # Create all specified pools
+            self.pool.extend(self.create_pool(pool_list))
+            try:
+                self.execute_jobs(
+                    self.job_list, self.pool[1:], self.job_manager)
+            except SoakTestError as error:
+                self.fail(error)
+            errors = self.destroy_pools(self.pool[1:])
+            # delete the test pools from self.pool; preserving reserved pool
+            self.pool = [self.pool[0]]
+            self.assertEqual(len(errors), 0, "\n".join(errors))
+            self.loop += 1
+
+            # Break out of loop if smoke
+            if "smoke" in self.test_name:
+                break
+        # Check that the reserve pool is still allocated
+        self.assertTrue(
+                self.pool[0].check_files(self.hostlist_servers),
+                "Pool data not detected on servers")
+        # Verify the data after soak is done
+        self.assertTrue(
+                self.container.read_objects(),
+                "Data verification error on reserved pool"
+                "after SOAK completed")
+
+    def setUp(self):
+        """Define test setup to be done."""
+        print("<<setUp Started>> at {}".format(time.ctime()))
+        # Start the servers in the test case
+        self.setup_start_servers = True
+        super(Soak, self).setUp()
+
+        self.failed_job_id_list = []
+        # Fail if slurm partition daos_client is not defined
+        if not self.partition_clients:
+            raise SoakTestError(
+                "<<FAILED: Partition is not correctly setup for daos "
+                "slurm partition>>")
+        # Check if the server nodes are in the client list;
+        # this will happen when only one partition is specified
+        # for host_server in self.hostlist_servers:
+        #     if host_server in self.hostlist_clients:
+        #         self.hostlist_clients.remove(host_server)
+        # self.log.info(
+        #         "<<Updated hostlist_clients %s >>", self.hostlist_clients)
+        # include test node for log cleanup; remove from client list
+        # self.test_node = [socket.gethostname().split('.', 1)[0]]
+        # if self.test_node[0] in self.hostlist_clients:
+        #     self.hostlist_clients.remove(self.test_node[0])
+        #     self.log.info(
+        #         "<<Updated hostlist_clients %s >>", self.hostlist_clients)
+        # self.node_list = self.hostlist_clients + self.test_node
+        self.node_list = self.hostlist_clients
 
     def tearDown(self):
         """Define tearDown and clear any left over jobs in squeue."""
@@ -569,49 +713,43 @@ class Soak(TestWithServers):
         with DAOS with the number of processes determined by the number of
         nodes.
         For this test a single pool will be created.  It will run for ~10 min
-        :avocado: tags=soak,soak_smoke
+        :avocado: tags=soak_smoke
         """
         test_param = "/run/smoke/"
         self.run_soak(test_param)
 
-    def test_soak_ior_daos(self):
-        """Run soak test with IOR -a daos.
-
-        Test ID: DAOS-2256
-        Test Description: This will create a slurm batch job that runs
-        various jobs defined in the soak yaml
-        This test will run for the time specififed in
-        /run/test_param_test_timeout.
-
-        :avocado: tags=soak,soak_ior,soak_ior_daos
-        """
-        test_param = "/run/soak_ior_daos/"
-        self.run_soak(test_param)
-
-    def test_soak_ior_mpiio(self):
-        """Run soak test with IOR -a mpiio.
-
-        Test ID: DAOS-2401,
-        Test Description: This will create a slurm batch job that runs
-        various jobs defined in the soak yaml
-        This test will run for the time specififed in
-        /run/test_param_test_timeout.
-
-        :avocado: tags=soak,soak_ior,soak_ior_mpiio
-        """
-        test_param = "/run/soak_ior_mpiio/"
-        self.run_soak(test_param)
-
     def test_soak_stress(self):
-        """Run soak test with IOR -a mpiio.
+        """Run all soak tests .
 
         Test ID: DAOS-2256
         Test Description: This will create a slurm batch job that runs
         various jobs defined in the soak yaml
         This test will run for the time specififed in
-        /run/test_param_test_timeout.
+        /run/test_timeout.
 
-        :avocado: tags=soak,soak_stress
+        :avocado: tags=soak_stress
         """
         test_param = "/run/soak_stress/"
         self.run_soak(test_param)
+
+    def test_soak_harassers(self):
+        """Run all soak tests with harassers.
+
+        Test ID: DAOS-2511
+        Test Description: This will create a soak job that runs
+        various harassers  defined in the soak yaml
+        This test will run for the time specififed in
+        /run/test_timeout.
+
+        :avocado: tags=soak_harassers
+        """
+        test_param = "/run/soak_harassers/"
+        self.run_soak(test_param)
+
+
+def main():
+    """Kicks off test with main function."""
+
+
+if __name__ == "__main__":
+    main()

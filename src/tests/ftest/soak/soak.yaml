@@ -11,18 +11,23 @@ logdir: /tmp/soak
 server_config:
     name: daos_server
     provider: ofi+sockets
-    server:
+    servers:
         log_mask: ERR
-        crt_timeout: 2000
-        fabric_iface: ib0
+        fabric_iface: eth0
+        env_vars:
+          - ABT_ENV_MAX_NUM_XSTREAMS=100
+          - ABT_MAX_NUM_XSTREAMS=100
+          - DAOS_MD_CAP=1024
+          - CRT_CTX_SHARE_ADDR=0
+          - CRT_TIMEOUT=2000
+          - FI_SOCKETS_MAX_CONN_RETRY=1
+          - FI_SOCKETS_CONN_TIMEOUT=2000
 
-# If slurm is not specified; launch jobs with mpirun; {slurm|mpirun}
-jobmanager: slurm
 # pool_params - attributes of the pools to create; Currently only create one
 pool1:
     mode: 146
     name: daos_server
-    scm_size: 30000000000
+    scm_size: 100000000000
 pool_reserved:
     mode: 511
     name: daos_server
@@ -33,6 +38,17 @@ container_reserved:
     data_size: 32
     object_qty: 20
     record_qty: 10
+
+# Harasser parameters
+# Rebuild
+rebuild:
+    rank_to_kill: 3
+    daos_oclass:
+        - "RP_3GX"
+        # - "RP_2GX"
+        # - "RP_2G1"
+        # - "RP_3G1"
+
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
 #               name:                The name of the Avocado testcase
@@ -45,154 +61,114 @@ container_reserved:
 #                                    in -partition
 #               poollist:            defines pools to create for jobs
 #               joblist:             defines workload per slurm scripts
+#               harasserlist:        defines the harassers to run in test
 # smoke test_params
 smoke:
     name: soak_smoke
     test_timeout: 1200
-    # job runs on all node
+    # maximum timeout for a single job in test in minutes
+    job_timeout: 10
+    # If slurm is not specified; launch jobs with Mpirun; {Sbatch|Srun|Mpirun}
+    jobmanager: Sbatch
     nodesperjob: -1
+    taskspernode:
+      - 1
     poollist:
       - pool1
     joblist:
-      - jobsmoke
-# IOR DAOS stress test case
-# Test will run for 30 minutes;
-# One job per node with 1, 16 and 32 tasks.proccesses per node
-soak_ior_daos:
-    name: soak_ior_daos
-    test_timeout: 1800
-    nodesperjob: -1
-    poollist:
-      - pool1
-    joblist:
-      - job_ior_daos
-# IOR MPIIO stress test case
-# Test will run for 30 minutes;
-# One job per node with 1, 16 and 32 tasks.proccesses per node
-soak_ior_mpiio:
-    name: soak_ior_mpiio
-    test_timeout: 1800
-    nodesperjob: -1
-    poollist:
-      - pool1
-    joblist:
-      - job_ior_mpiio
-# SOAK stress test case
-# Test will run for 60 minutes;
-# One job per node with 1, 16 and 32 tasks.proccesses per node
+      - ior_smoke
+
+# SOAK stress test params
+# Test will run for 60 minutes 
 soak_stress:
     name: soak_stress
     test_timeout: 3600
+    # maximum timeout for a single job in test in minutes
+    job_timeout: 20
+    # If slurm is not specified; launch jobs with Mpirun; {Sbatch|Srun|Mpirun}
+    jobmanager: Sbatch
     nodesperjob: -1
+    # used for perfomance benchmarks
+    taskspernode:
+      - 1
+      - 16
+      #- 32
     poollist:
       - pool1
     joblist:
-      - job_ior_mpiio
-      - job_ior_daos
-      # - job_dmg_create_destroy
+      - ior_stress
+      #- dmg_create_destroy
+      #- fio
+      #- dfs
+# SOAK harasser test params
+# Test will run for 1 hour;
+soak_harassers:
+    name: soak_harassers
+    test_timeout: 3600
+    harasser_timeout: 120
+    # maximum timeout for a single job in test in minutes
+    job_timeout: 20
+    # If slurm is not specified; launch jobs with Mpirun; {Sbatch|Srun|Mpirun}
+    jobmanager: Sbatch
+    nodesperjob: -1
+    # used for perfomance benchmarks
+    taskspernode:
+      - 1
+    poollist:
+      - pool1
+    joblist:
+      - ior_stress
+    harasserlist:
+      - rebuild
+    #- snapshot
+    #- dmg_create_destroy
 
-# job_params  - defines the job specifications for each cmdline listed
-#               name:                The name of the job
-#               time:                The IOR cmdline timeout; passed to slurm
-#               tasks:               slurm --ntaskspernode param
-#               jobspec:             list of cmdline specifications to run
-# smoke job params; Single job; one task per node; np = # nodes
-jobsmoke:
-    name: job_smoke
-    time: 10
-    tasks:
-        - 1
-    jobspec:
-        - smoke_ior_daos
-        - smoke_ior_mpiio
-        # - dmg_create_destroy
-# IOR daos job params; multiple jobs, one job per node;
-# 1, 16 and 32 tasks per node
-job_ior_daos:
-    name: job_ior_daos
-    time: 20
-    tasks:
-        - 1
-        - 16
-        - 32
-    jobspec:
-        - ior_daos
-# IOR MPIIO job params; multiple jobs, one job per node;
-# 1, 16 and 32 tasks per node
-job_ior_mpiio:
-    name: job_ior_mpiio
-    time: 20
-    tasks:
-        - 1
-        - 16
-        - 32
-    jobspec:
-        - ior_mpiio
-# TBD job params for DMG
-job_dmg_create_destroy:
-    name: job_dmg_create_destroy
-    time: 20
-    jobspec:
-        - dmg_create_destroy
-# Commandline parmeters - job specs
+# Commandline parmeters 
 # Benchmark and application params
 # IOR params -a DAOS and -a MPIIO
 # sequential
-smoke_ior_daos:
-    api: DAOS
+ior_smoke:
+    api: 
+        - DAOS
+        - MPIIO
     test_file: daos:testFile
     flags: -v -w -W -r -R
     block_size:
         - '64M'
-    repetition: 1
+    repetitions: 1
     transfer_size:
         - '4k'
         - '128k'
         - '1m'
+    segment_count: 1
     daos_oclass:
         - 'SX'
-smoke_ior_mpiio:
-    api: MPIIO
+ior_stress:
+    api: 
+        - DAOS
+        - MPIIO
     test_file: daos:testFile
     flags: -v -w -W -r -R
     block_size:
         - '64M'
-    repetition: 1
+    repetitions: 5
     transfer_size:
         - '4k'
         - '128k'
         - '1m'
+        - '512K'
+        - '64k'
     daos_oclass:
-        - 'SX'
-ior_daos:
-    api: DAOS
-    test_file: daos:testFile
-    flags: -v -w -W -r -R
-    block_size:
-        - '64M'
-    repetition: 5
-    transfer_size:
-        - '4k'
-        - '512k'
-        - '1m'
-    daos_oclass:
-        - 'SX'
-        #- 'RP_G3X'
-ior_mpiio:
-    api: MPIIO
-    test_file: daos:testFile
-    flags: -v -w -W -r -R
-    block_size:
-        - '64M'
-    repetition: 5
-    transfer_size:
-        - '4k'
-        - '512k'
-        - '1m'
-    daos_oclass:
-        - 'SX'
-        #- 'RP_G2X'
-# dmg cmdline params - TBD
+        - "SX"
+        # - "S1"
+        # - "S4"
+        # - "RP_2GX"
+        # - "RP_2G1"
+        # - "RP_3G1"
+        # - "RP_3GX"
+        # - "RP_4GX"
+        # - "RP_4G1"
+
 dmg_create_destroy:
     size:
       - 8M
