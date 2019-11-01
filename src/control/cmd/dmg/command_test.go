@@ -102,9 +102,9 @@ func (tc *testConn) StoragePrepare(req *ctlpb.StoragePrepareReq) client.ResultMa
 	return nil
 }
 
-func (tc *testConn) StorageScan(bool) (client.NvmeScanResults, client.ScmScanResults) {
-	tc.appendInvocation("StorageScan")
-	return nil, nil
+func (tc *testConn) StorageScan(req *client.StorageScanReq) *client.StorageScanResp {
+	tc.appendInvocation(fmt.Sprintf("StorageScan-%+v", req))
+	return &client.StorageScanResp{}
 }
 
 func (tc *testConn) StorageFormat(reformat bool) (client.ClientCtrlrMap, client.ClientMountMap) {
