@@ -568,7 +568,7 @@ def clean_logs(test_yaml, args):
     # log files it will use when it is run.
     log_files = get_log_files(test_yaml, get_log_files(BASE_LOG_FILE_YAML))
     host_list = get_hosts_from_yaml(test_yaml, args)
-    command = "sudo -n rm -fr {}".format(" ".join(log_files.values()))
+    command = "rm -fr {}".format(" ".join(log_files.values()))
     print("Cleaning logs on {}".format(host_list))
     if not spawn_commands(host_list, command):
         print("Error cleaning logs, aborting")
@@ -612,7 +612,7 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
         "then if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
             this_host, doas_logs_dir),
         "then copied+=($file)",
-        "if ! sudo -n rm -fr $file",
+        "if ! rm -fr $file",
         "then ((rc++))",
         "ls -al $file",
         "fi",
