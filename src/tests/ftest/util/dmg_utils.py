@@ -24,6 +24,7 @@
 from __future__ import print_function
 
 import getpass
+import re
 
 from command_utils import DaosCommand, CommandWithParameters, CommandFailure
 from command_utils import FormattedParameter
@@ -50,6 +51,10 @@ class DmgCommand(DaosCommand):
             self.action_command = self.DmgFormatSubCommand()
         elif self.action.value == "prepare":
             self.action_command = self.DmgPrepareSubCommand()
+        elif self.action.value == "create":
+            self.action_command = self.DmgCreateSubCommand()
+        elif self.action.value == "destroy":
+            self.action_command = self.DmgDestroySubCommand()
         else:
             self.action_command = None
 
@@ -77,6 +82,31 @@ class DmgCommand(DaosCommand):
             self.force = FormattedParameter("-f", False)
             self.reset = FormattedParameter("--reset", False)
 
+    class DmgCreateSubCommand(CommandWithParameters):
+        """Defines a object representing a create sub dmg command."""
+
+        def __init__(self):
+            """Create a dmg Command object."""
+            super(DmgCommand.DmgCreateSubCommand, self).__init__(
+                "/run/dmg/create/*", "create")
+            self.group = FormattedParameter("-g {}")
+            self.user = FormattedParameter("-u {}")
+            self.acl_file = FormattedParameter("-a {}")
+            self.scm_size = FormattedParameter("-s {}")
+            self.nvme_size = FormattedParameter("-n {}")
+            self.ranks = FormattedParameter("-r {}")
+            self.nsvc = FormattedParameter("-v {}")
+            self.sys = FormattedParameter("-S {}")
+
+    class DmgDestroySubCommand(CommandWithParameters):
+        """Defines an object representing a destroy sub dmg command."""
+
+        def __init__(self):
+            """Create a dmg Command object."""
+            super(DmgCommand.DmgDestroySubCommand, self).__init__(
+                "/run/dmg/destroy/*", "destroy")
+            self.pool = FormattedParameter("--pool {}")
+            self.force = FormattedParameter("-f", False)
 
 def storage_scan(path, hosts, insecure=True):
     """ Execute scan command through dmg tool to servers provided.
@@ -214,3 +244,118 @@ def storage_reset(path, hosts, nvme=False, scm=False, user=None,
         return None
 
     return result
+
+
+def pool_create(path, host_port, scm_size, insecure=True, group=None,
+                user=None, acl_file=None, nvme_size=None, ranks=None,
+                nsvc=None, sys=None):
+    """Execute pool create command through dmg tool to servers provided.
+
+    Args:
+        path (str): Path to the directory of dmg binary.
+        host_port (list of str): List of Host:Port where daos_server runs.
+            Use 10001 for the default port number. This number is defined in
+            daos_avocado_test.yaml
+        scm_size (str): SCM size value passed into the command.
+        insecure (bool, optional): Insecure mode. Defaults to True.
+        group (str, otional): Group with priviledges. Defaults to None.
+        user (str, optional): User with priviledges. Defaults to None.
+        acl_file (str, optional): Access Control List file path for DAOS pool.
+            Defaults to None.
+        nvme_size (str, optional): NVMe size. Defaults to None.
+        ranks (str, optional): Storage server unique identifiers (ranks) for
+            DAOS pool
+        nsvc (str, optional): Number of pool service replicas. Defaults to
+            None, in which case 1 is used by the dmg binary in default.
+        sys (str, optional): DAOS system that pool is to be a part of. Defaults
+            to None, in which case daos_server is used by the dmg binary in
+            default.
+
+    Returns:
+        CmdResult: Object that contains exit status, stdout, and other
+            information.
+    """
+    # Create and setup the command
+    dmg = DmgCommand(path)
+    dmg.insecure.value = insecure
+    dmg.hostlist.value = host_port
+    dmg.request.value = "pool"
+    dmg.action.value = "create"
+    dmg.get_action_command()
+    dmg.action_command.group.value = group
+    dmg.action_command.user.value = user
+    dmg.action_command.acl_file.value = acl_file
+    dmg.action_command.scm_size.value = scm_size
+    dmg.action_command.nvme_size.value = nvme_size
+    dmg.action_command.ranks.value = ranks
+    dmg.action_command.nsvc.value = nsvc
+    dmg.action_command.sys.value = sys
+
+    try:
+        result = dmg.run()
+    except CommandFailure as details:
+        print("Pool create command failed: {}".format(details))
+        return None
+
+    return result
+
+
+def pool_destroy(path, host_port, pool_uuid, insecure=True, force=True):
+    """ Execute pool destroy command through dmg tool to servers provided.
+
+    Args:
+        path (str): Path to the directory of dmg binary.
+        host_port (list of str): List of Host:Port where daos_server runs.
+            Use 10001 for the default port number. This number is defined in
+            daos_avocado_test.yaml
+        pool_uuid (str): Pool UUID to destroy.
+        insecure (bool, optional): Insecure mode. Defaults to True.
+        foce (bool, optional): Force removal of DAOS pool. Defaults to True.
+
+    Returns:
+        CmdResult: Object that contains exit status, stdout, and other
+            information.
+    """
+    # Create and setup the command
+    dmg = DmgCommand(path)
+    dmg.insecure.value = insecure
+    dmg.hostlist.value = host_port
+    dmg.request.value = "pool"
+    dmg.action.value = "destroy"
+    dmg.get_action_command()
+    dmg.action_command.pool.value = pool_uuid
+    dmg.action_command.force.value = force
+
+    try:
+        result = dmg.run()
+    except CommandFailure as details:
+        print("Pool destroy command failed: {}".format(details))
+        return None
+
+    return result
+
+
+def get_pool_uuid_from_stdout(stdout_str):
+    """Get Pool UUID from stdout.
+
+    stdout_str is something like:
+    Active connections: [wolf-3:10001]
+    Creating DAOS pool with 100MB SCM and 0B NvMe storage (1.000 ratio)
+    Pool-create command SUCCEEDED: UUID: 9cf5be2d-083d-4f6b-9f3e-38d771ee313f,
+    Service replicas: 0
+
+    This method makes it easy to create a test.
+
+    Args:
+        stdout_str (str): Output of pool create command.
+
+    Returns:
+        str: Pool UUID if found. Otherwise None.
+    """
+    # Find the following with regex. One or more of whitespace after "UUID:"
+    # followed by one of more of number, alphabets, or -. Use parenthesis to
+    # get the returned value.
+    matches = re.findall(r"UUID:\s+([0-9a-fA-F-]+)", stdout_str)
+    if len(matches) > 0:
+        return matches[0]
+    return None
