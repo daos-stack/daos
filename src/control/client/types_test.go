@@ -35,7 +35,6 @@ func TestAccessControlList_String(t *testing.T) {
 		expStr string
 	}{
 		"nil": {
-			acl:    &AccessControlList{},
 			expStr: "# Entries:\n#   None\n",
 		},
 		"empty": {
