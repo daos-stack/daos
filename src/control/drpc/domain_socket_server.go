@@ -48,7 +48,7 @@ type DomainSocketServer struct {
 	sockFile string
 	quit     chan bool
 	listener *net.UnixListener
-	service  *Service
+	service  *ModuleService
 	clients  map[*net.UnixConn]*Client
 }
 
@@ -57,7 +57,7 @@ type DomainSocketServer struct {
 // the Unix domain socket.
 type Client struct {
 	Conn    *net.UnixConn
-	Service *Service
+	Service *ModuleService
 }
 
 // RPCHandler is the go routine used to process incoming messages
@@ -173,7 +173,7 @@ func NewDomainSocketServer(log logging.Logger, sock string) (*DomainSocketServer
 	if sock == "" {
 		return nil, errors.New("Missing Argument: sockFile")
 	}
-	service := NewRPCService(log)
+	service := NewModuleService(log)
 	quit := make(chan bool)
 	clients := make(map[*net.UnixConn]*Client)
 	return &DomainSocketServer{sock, quit, nil, service, clients}, nil

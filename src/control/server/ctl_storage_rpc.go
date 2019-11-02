@@ -54,7 +54,7 @@ func newState(log logging.Logger, status ctlpb.ResponseStatus, errMsg string, in
 	return state
 }
 
-func modulesToPB(mms []scm.Module) (pbMms types.ScmModules) {
+func modulesToPB(mms []storage.ScmModule) (pbMms types.ScmModules) {
 	for _, c := range mms {
 		pbMms = append(
 			pbMms,
@@ -72,7 +72,7 @@ func modulesToPB(mms []scm.Module) (pbMms types.ScmModules) {
 	return
 }
 
-func namespacesToPB(nss []scm.Namespace) (pbNss types.PmemDevices) {
+func namespacesToPB(nss []storage.ScmNamespace) (pbNss types.PmemDevices) {
 	for _, ns := range nss {
 		pbNss = append(pbNss,
 			&ctlpb.PmemDevice{

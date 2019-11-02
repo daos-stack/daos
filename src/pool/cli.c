@@ -408,6 +408,8 @@ pool_connect_cp(tse_task_t *task, void *data)
 			put_pool = false;
 		D_GOTO(out, rc);
 	} else if (rc != 0) {
+		if (rc == -DER_NOTREPLICA)
+			rc = -DER_NONEXIST;
 		D_ERROR("failed to connect to pool: %d\n", rc);
 		D_GOTO(out, rc);
 	}
@@ -1035,7 +1037,7 @@ dc_pool_global2local(d_iov_t glob, daos_handle_t *poh)
 		swap_pool_glob(pool_glob);
 		D_ASSERT(pool_glob->dpg_magic == DC_POOL_GLOB_MAGIC);
 	} else if (pool_glob->dpg_magic != DC_POOL_GLOB_MAGIC) {
-		D_ERROR("Bad hgh_magic: 0x%x.\n", pool_glob->dpg_magic);
+		D_ERROR("Bad dpg_magic: 0x%x.\n", pool_glob->dpg_magic);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -1489,6 +1491,8 @@ pool_evict_cp(tse_task_t *task, void *data)
 
 	rc = out->pvo_op.po_rc;
 	if (rc != 0) {
+		if (rc == -DER_NOTREPLICA)
+			rc = -DER_NONEXIST;
 		D_ERROR("failed to evict pool handles: %d\n", rc);
 		D_GOTO(out, rc);
 	}
