@@ -114,6 +114,8 @@ ec_has_full_or_mult_stripe(daos_iod_t *iod, struct daos_oclass_attr *oca,
 				if (length - (start % ss) >= ss) {
 					*tgt_set = ~0UL;
 				}
+			} else {
+				*tgt_set = ~0UL;
 			}
 			return true;
 		} else if (iod->iod_type == DAOS_IOD_SINGLE) {
@@ -447,23 +449,24 @@ ec_get_tgt_set(daos_iod_t *iods, unsigned int nr, struct daos_oclass_attr *oca,
 {
 	unsigned int    len = oca->u.ec.e_len;
 	unsigned int    k = oca->u.ec.e_k;
-	unsigned int    p = oca->u.ec.e_p;
-	uint64_t	ss = k * len;
-	uint64_t	full;
+	unsigned int    p_offset, p = oca->u.ec.e_p;
+	uint64_t	ss;
+	uint64_t	full = (1UL << (k+p)) - 1;
 	unsigned int	i, j;
 
-	if (parity_include) {
-		full = (1UL << (k+p)) - 1;
+	if (parity_include)
 		for (i = 0; i < p; i++)
 			*tgt_set |= 1UL << i;
-	} else {
-		full = (1UL << k) - 1;
-	}
+
 	for (i = 0; i < nr; i++) {
 		if (iods->iod_type != DAOS_IOD_ARRAY) {
 			*tgt_set |= 1UL << p;
 			continue;
 		}
+
+		if (!parity_include)
+			full = ((1UL << (k+p)) - 1) - ((1UL << p) - 1);
+
 		for (j = 0; j < iods[i].iod_nr; j++) {
 			uint64_t ext_idx;
 			uint64_t rs = iods[i].iod_recxs[j].rx_idx *
@@ -472,19 +475,38 @@ ec_get_tgt_set(daos_iod_t *iods, unsigned int nr, struct daos_oclass_attr *oca,
 						iods[i].iod_size + rs - 1;
 
 			/* No partial-parity updates, so this function won't be
-			 * called if parity is present.
+			 * called if parity is present in a update request.
+			 * For fetch (!parity_include), the code allows parity
+			 * segments to be requested (and handles them
+			 * separately).
 			 */
-			D_ASSERT(!(PARITY_INDICATOR & rs));
-			/* Walk from start to end by len, except for the last
+			if (PARITY_INDICATOR & rs) {
+				/* This allows selecting a parity target
+				 * for fetch. If combined with regualar
+				 * data extents, parity ranges must come
+				 * first in the the recx array.
+				 */
+				D_INFO("rs: %lu\n", rs);
+				D_ASSERT(!parity_include);
+				ss = p * len;
+				p_offset = 0;
+				full = (1UL << p) - 1;
+
+			} else {
+				ss = k * len;
+				p_offset = p;
+			}
+
+ 			/* Walk from start to end by len, except for the last
 			 * iteration. (could cross a cell boundary with less
-			 * than a cell's worth remaining)
+			 * than a cell's worth remaining).
 			 */
 			for (ext_idx = rs; ext_idx <= re;
 			     ext_idx += (re - ext_idx < len && ext_idx != re) ?
 			     re-ext_idx : len) {
 				unsigned int cell = (ext_idx % ss)/len;
 
-				*tgt_set |= 1UL << (cell+p);
+				*tgt_set |= 1UL << (cell+p_offset);
 				if ((*tgt_set == full) && parity_include) {
 					*tgt_set = 0;
 					return;
