@@ -45,7 +45,7 @@ import (
 )
 
 // define supported maximum number of I/O servers
-const maxIoServers = 1
+const maxIoServers = 2
 
 // Start is the entry point for a daos_server instance.
 func Start(log *logging.LeveledLogger, cfg *Configuration) error {
@@ -73,6 +73,9 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	for i, srvCfg := range cfg.Servers {
 		if i+1 > maxIoServers {
 			break
+		}
+		if len(cfg.Servers) > 1 && len(srvCfg.Storage.Bdev.DeviceList) > 0 {
+			return errors.New("multi-io support with NVMe not supported in this release")
 		}
 
 		bp, err := storage.NewBdevProvider(log, srvCfg.Storage.SCM.MountPoint, &srvCfg.Storage.Bdev)

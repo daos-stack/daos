@@ -33,6 +33,7 @@ import (
 	. "github.com/daos-stack/daos/src/control/common/storage"
 	. "github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 )
 
@@ -91,6 +92,7 @@ func MockDeviceHealth(ctrlr *Controller) DeviceHealth {
 		ReliabilityWarn: h.Reliability,
 		ReadOnlyWarn:    h.Readonly,
 		VolatileWarn:    h.Volatilemem,
+		CtrlrPciAddr:    ctrlr.PCIAddr,
 	}
 }
 
@@ -268,119 +270,91 @@ func TestDiscoverNvmeSingle(t *testing.T) {
 
 // Verify correct mapping of namespaces to multiple controllers
 func TestDiscoverNvmeMulti(t *testing.T) {
-	tests := []struct {
-		ctrlrs []Controller
-		nss    []Namespace
-		dh     []DeviceHealth
-	}{
-		{
-			[]Controller{
-				{"", "", "1.2.3.4.5", "1.0.0", 0},
-				{"", "", "1.2.3.4.6", "1.0.0", 0},
-			},
-			[]Namespace{
-				{0, 100, "1.2.3.4.5"},
-				{1, 200, "1.2.3.4.6"},
-			},
-			[]DeviceHealth{
-				{300, 0, 0, 0, 0, 1000, 1, 0, 0,
-					false, false, false, false, false},
-				{300, 0, 0, 0, 0, 1000, 1, 0, 0,
-					false, false, false, false, false},
-			},
-		},
-		{
-			[]Controller{
-				{"", "", "1.2.3.4.5", "1.0.0", 0},
-				{"", "", "1.2.3.4.6", "1.0.0", 0},
-			},
-			[]Namespace{},
-			[]DeviceHealth{
-				{300, 0, 0, 0, 0, 1000, 1, 0, 0,
-					false, false, false, false, false},
-				{300, 0, 0, 0, 0, 1000, 1, 0, 0,
-					false, false, false, false, false},
-			},
-		},
-		{
-			[]Controller{
-				{"", "", "1.2.3.4.5", "1.0.0", 0},
-				{"", "", "1.2.3.4.6", "1.0.0", 0},
-			},
-			[]Namespace{
-				{0, 100, "1.2.3.4.5"},
-				{1, 100, "1.2.3.4.5"},
-				{2, 100, "1.2.3.4.5"},
-				{0, 200, "1.2.3.4.6"},
-				{1, 200, "1.2.3.4.6"},
-				{2, 200, "1.2.3.4.6"},
-			},
-			[]DeviceHealth{
-				{300, 0, 0, 0, 0, 1000, 1, 0, 0,
-					false, false, false, false, false},
-				{300, 0, 0, 0, 0, 1000, 1, 0, 0,
-					false, false, false, false, false},
-			},
-		},
+	mCs := []Controller{
+		{PCIAddr: "1.2.3.4.5", FWRev: "1.0.0"},
+		{PCIAddr: "1.2.3.4.6", FWRev: "1.0.0"},
 	}
+	ns0 := Namespace{ID: 0, Size: 100, CtrlrPciAddr: "1.2.3.4.5"}
+	ns1 := Namespace{ID: 1, Size: 200, CtrlrPciAddr: "1.2.3.4.6"}
+	ns2 := Namespace{ID: 2, Size: 100, CtrlrPciAddr: "1.2.3.4.5"}
+	ns3 := Namespace{ID: 3, Size: 200, CtrlrPciAddr: "1.2.3.4.6"}
+	dh0 := DeviceHealth{Temp: 300, PowerOnHours: 1000, UnsafeShutdowns: 1, CtrlrPciAddr: "1.2.3.4.5"}
+	dh1 := DeviceHealth{Temp: 500, PowerOnHours: 500, UnsafeShutdowns: 2, CtrlrPciAddr: "1.2.3.4.6"}
+	dh2 := DeviceHealth{Temp: 300, PowerOnHours: 1000, UnsafeShutdowns: 1, CtrlrPciAddr: "1.2.3.4.7"}
+	dh3 := DeviceHealth{Temp: 500, PowerOnHours: 500, UnsafeShutdowns: 2, CtrlrPciAddr: "1.2.3.4.8"}
 
-	for _, tt := range tests {
-		log, buf := logging.NewTestLogger(t.Name())
-		defer common.ShowBufferOnFailure(t, buf)
+	for name, tc := range map[string]struct {
+		nss         []Namespace
+		dh          []DeviceHealth
+		expPbCtrlrs NvmeControllers
+	}{
+		"no namespaces or health statistics": {
+			[]Namespace{},
+			[]DeviceHealth{},
+			NvmeControllers{
+				&NvmeController{Pciaddr: mCs[0].PCIAddr, Fwrev: mCs[0].FWRev},
+				&NvmeController{Pciaddr: mCs[1].PCIAddr, Fwrev: mCs[1].FWRev},
+			},
+		},
+		"matching namespace and health statistics": {
+			[]Namespace{ns0, ns1},
+			[]DeviceHealth{dh0, dh1},
+			NvmeControllers{
+				&NvmeController{
+					Pciaddr: mCs[0].PCIAddr, Fwrev: mCs[0].FWRev,
+					Namespaces: NvmeNamespaces{{Id: ns0.ID, Capacity: ns0.Size}},
+					Healthstats: &NvmeController_Health{
+						Temp: dh0.Temp, Poweronhours: dh0.PowerOnHours,
+						Unsafeshutdowns: dh0.UnsafeShutdowns,
+					},
+				},
+				&NvmeController{
+					Pciaddr: mCs[1].PCIAddr, Fwrev: mCs[1].FWRev,
+					Namespaces: NvmeNamespaces{{Id: ns1.ID, Capacity: ns1.Size}},
+					Healthstats: &NvmeController_Health{
+						Temp: dh1.Temp, Poweronhours: dh1.PowerOnHours,
+						Unsafeshutdowns: dh1.UnsafeShutdowns,
+					},
+				},
+			},
+		},
+		"multiple namespaces and no matching health statistics": {
+			[]Namespace{ns0, ns1, ns2, ns3},
+			[]DeviceHealth{dh2, dh3},
+			NvmeControllers{
+				&NvmeController{
+					Pciaddr: mCs[0].PCIAddr, Fwrev: mCs[0].FWRev,
+					Namespaces: NvmeNamespaces{
+						{Id: ns0.ID, Capacity: ns0.Size},
+						{Id: ns2.ID, Capacity: ns2.Size},
+					},
+				},
+				&NvmeController{
+					Pciaddr: mCs[1].PCIAddr, Fwrev: mCs[1].FWRev,
+					Namespaces: NvmeNamespaces{
+						{Id: ns1.ID, Capacity: ns1.Size},
+						{Id: ns3.ID, Capacity: ns3.Size},
+					},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
 
-		sn := newMockNvmeStorage(
-			log, &mockExt{},
-			defaultMockSpdkEnv(),
-			newMockSpdkNvme(
-				log,
-				"1.0.0", "1.0.1", tt.ctrlrs, tt.nss, tt.dh,
-				nil, nil, nil),
-			false)
+			sn := newMockNvmeStorage(log, &mockExt{}, defaultMockSpdkEnv(),
+				newMockSpdkNvme(log, "1.0.0", "1.0.1", mCs, tc.nss, tc.dh, nil, nil, nil),
+				false)
 
-		if err := sn.Discover(); err != nil {
-			t.Fatal(err)
-		}
-
-		if len(tt.ctrlrs) != len(sn.controllers) {
-			t.Fatalf(
-				"unexpected number of controllers found, wanted %d, found %d",
-				len(tt.ctrlrs), len(sn.controllers))
-		}
-
-		// verify we have the expected number of namespaces reported
-		discovered := 0
-		for _, pbC := range sn.controllers {
-			discovered += len(pbC.Namespaces)
-		}
-		if len(tt.nss) != discovered {
-			t.Fatalf(
-				"unexpected number of namespaces found, wanted %d, found %d",
-				len(tt.nss), discovered)
-		}
-
-		// verify protobuf Controller has ns for each one expected
-		for _, n := range tt.nss {
-			foundNs := false // find namespace
-			for i, pbC := range sn.controllers {
-				if n.CtrlrPciAddr == pbC.Pciaddr {
-					for _, pbNs := range sn.controllers[i].Namespaces {
-						if pbNs.Capacity == n.Size && pbNs.Id == n.ID {
-							foundNs = true
-						}
-					}
-				}
+			if err := sn.Discover(); err != nil {
+				t.Fatal(err)
 			}
-			if !foundNs {
-				t.Fatalf("namespace not found: %v", n)
-			}
-		}
 
-		// verify we have expected number of health info per controller
-		if len(tt.dh) != len(sn.controllers) {
-			t.Fatalf(
-				"unexpected number of device health info found, wanted %d, found %d",
-				len(tt.dh), len(sn.controllers))
-		}
+			if diff := cmp.Diff(tc.expPbCtrlrs, sn.controllers); diff != "" {
+				t.Fatalf("unexpected controller results (-want, +got):\n%s\n", diff)
+			}
+		})
 	}
 }
 
@@ -391,10 +365,8 @@ func TestFormatNvme(t *testing.T) {
 	fwRev := "1.0.0"
 	newDefaultCtrlrs := func() NvmeControllers {
 		return NvmeControllers{
-			common.NewMockControllerPB(
-				pciAddr, fwRev, model, serial,
-				NvmeNamespaces(nil),
-				NvmeHealthstats(nil)),
+			common.NewMockControllerPB(pciAddr, fwRev, model, serial,
+				NvmeNamespaces(nil), nil),
 		}
 	}
 
@@ -414,7 +386,7 @@ func TestFormatNvme(t *testing.T) {
 				{
 					Pciaddr: "",
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_SUCCESS,
+						Status: ResponseStatus_CTL_SUCCESS,
 						Info:   msgBdevNoDevs,
 					},
 				},
@@ -430,7 +402,7 @@ func TestFormatNvme(t *testing.T) {
 				{
 					Pciaddr: "",
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_APP,
+						Status: ResponseStatus_CTL_ERR_APP,
 						Error:  msgBdevAlreadyFormatted,
 					},
 				},
@@ -446,7 +418,7 @@ func TestFormatNvme(t *testing.T) {
 				{
 					Pciaddr: "",
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_CONF,
+						Status: ResponseStatus_CTL_ERR_CONF,
 						Error:  msgBdevEmpty,
 					},
 				},
@@ -475,7 +447,7 @@ func TestFormatNvme(t *testing.T) {
 				{
 					Pciaddr: "0000:83:00.0",
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 						Error:  "0000:83:00.0: " + msgBdevNotFound,
 					},
 				},
@@ -495,7 +467,7 @@ func TestFormatNvme(t *testing.T) {
 				{
 					Pciaddr: "0000:83:00.0",
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 						Error:  "0000:83:00.0: " + msgBdevNotFound,
 					},
 				},
@@ -511,7 +483,7 @@ func TestFormatNvme(t *testing.T) {
 				{
 					Pciaddr: "0000:83:00.0",
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 						Error:  "0000:83:00.0: " + msgBdevNotFound,
 					},
 				},
@@ -531,14 +503,14 @@ func TestFormatNvme(t *testing.T) {
 				{
 					Pciaddr: "0000:83:00.0",
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 						Error:  "0000:83:00.0: " + msgBdevNotFound,
 					},
 				},
 				{
 					Pciaddr: "0000:81:00.0",
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 						Error: "0000:81:00.0: " +
 							"example format failure",
 					},
@@ -600,7 +572,7 @@ func TestFormatNvme(t *testing.T) {
 					t, result.Pciaddr, tt.expResults[i].Pciaddr,
 					"unexpected pciaddr, "+tt.desc)
 
-				if result.State.Status == ResponseStatus_CTRL_SUCCESS {
+				if result.State.Status == ResponseStatus_CTL_SUCCESS {
 					if result.State.Info != msgBdevNoDevs {
 						successPciaddrs = append(successPciaddrs, result.Pciaddr)
 					}
@@ -627,10 +599,8 @@ func TestUpdateNvme(t *testing.T) {
 	defaultEndRev := "1.0.1" // default fw revision after update
 	newDefaultCtrlrs := func(rev string) NvmeControllers {
 		return NvmeControllers{
-			common.NewMockControllerPB(
-				pciAddr, rev, model, serial,
-				NvmeNamespaces(nil),
-				NvmeHealthstats(nil)),
+			common.NewMockControllerPB(pciAddr, rev, model, serial,
+				NvmeNamespaces(nil), nil),
 		}
 	}
 
@@ -655,7 +625,7 @@ func TestUpdateNvme(t *testing.T) {
 				{
 					Pciaddr: "",
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_CONF,
+						Status: ResponseStatus_CTL_ERR_CONF,
 						Error:  msgBdevEmpty,
 					},
 				},
@@ -683,7 +653,7 @@ func TestUpdateNvme(t *testing.T) {
 				{
 					Pciaddr: "0000:aa:00.0",
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 						Error:  "0000:aa:00.0: " + msgBdevNotFound,
 					},
 				},
@@ -701,7 +671,7 @@ func TestUpdateNvme(t *testing.T) {
 				{
 					Pciaddr: pciAddr,
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 						Error: pciAddr + ": " +
 							msgBdevModelMismatch +
 							" want " + model + ", have UKNOWN1",
@@ -709,10 +679,8 @@ func TestUpdateNvme(t *testing.T) {
 				},
 			},
 			expCtrlrs: NvmeControllers{
-				common.NewMockControllerPB(
-					pciAddr, startRev, "UKNOWN1", serial,
-					NvmeNamespaces(nil),
-					NvmeHealthstats(nil)),
+				common.NewMockControllerPB(pciAddr, startRev, "UKNOWN1", serial,
+					NvmeNamespaces(nil), nil),
 			},
 			desc: "single device different model",
 		},
@@ -726,7 +694,7 @@ func TestUpdateNvme(t *testing.T) {
 				{
 					Pciaddr: pciAddr,
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 						Error: pciAddr + ": " +
 							msgBdevFwrevStartMismatch +
 							" want 1.0.0, have 2.0.0",
@@ -736,8 +704,7 @@ func TestUpdateNvme(t *testing.T) {
 			expCtrlrs: NvmeControllers{
 				common.NewMockControllerPB(
 					pciAddr, "2.0.0", model, serial,
-					NvmeNamespaces(nil),
-					NvmeHealthstats(nil)),
+					NvmeNamespaces(nil), nil),
 			},
 			desc: "single device different starting rev",
 		},
@@ -750,7 +717,7 @@ func TestUpdateNvme(t *testing.T) {
 				{
 					Pciaddr: pciAddr,
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 						Error: pciAddr + ": " +
 							"*server.mockSpdkNvme: " +
 							"spdk format failed",
@@ -769,7 +736,7 @@ func TestUpdateNvme(t *testing.T) {
 				{
 					Pciaddr: pciAddr,
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 						Error: pciAddr + ": " +
 							msgBdevFwrevEndMismatch,
 					},
@@ -787,7 +754,7 @@ func TestUpdateNvme(t *testing.T) {
 				{
 					Pciaddr: pciAddr,
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 						Error: pciAddr + ": " +
 							msgBdevFwrevEndMismatch,
 					},
@@ -810,7 +777,7 @@ func TestUpdateNvme(t *testing.T) {
 				{
 					Pciaddr: pciAddr,
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 						Error:  pciAddr + ": " + msgBdevNotFound,
 					},
 				},
@@ -821,7 +788,7 @@ func TestUpdateNvme(t *testing.T) {
 				{
 					Pciaddr: "0000:aa:00.0",
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 						Error: "0000:aa:00.0: " +
 							msgBdevFwrevStartMismatch +
 							" want 1.0.0, have 1.0.1",
@@ -830,7 +797,7 @@ func TestUpdateNvme(t *testing.T) {
 				{
 					Pciaddr: "0000:ab:00.0",
 					State: &ResponseState{
-						Status: ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 						Error: "0000:ab:00.0: " +
 							msgBdevModelMismatch +
 							" want ABC, have UKN",
@@ -838,18 +805,12 @@ func TestUpdateNvme(t *testing.T) {
 				},
 			},
 			expCtrlrs: NvmeControllers{
-				common.NewMockControllerPB(
-					"0000:ab:00.0", startRev, "UKN", serial,
-					NvmeNamespaces(nil),
-					NvmeHealthstats(nil)),
-				common.NewMockControllerPB(
-					"0000:aa:00.0", defaultEndRev, model, serial,
-					NvmeNamespaces(nil),
-					NvmeHealthstats(nil)),
-				common.NewMockControllerPB(
-					"0000:81:00.1", defaultEndRev, model, serial,
-					NvmeNamespaces(nil),
-					NvmeHealthstats(nil)),
+				common.NewMockControllerPB("0000:ab:00.0", startRev, "UKN", serial,
+					NvmeNamespaces(nil), nil),
+				common.NewMockControllerPB("0000:aa:00.0", defaultEndRev, model, serial,
+					NvmeNamespaces(nil), nil),
+				common.NewMockControllerPB("0000:81:00.1", defaultEndRev, model, serial,
+					NvmeNamespaces(nil), nil),
 			},
 			desc: "multiple devices (missing,mismatch rev/model,success)",
 		},

@@ -408,6 +408,8 @@ pool_connect_cp(tse_task_t *task, void *data)
 			put_pool = false;
 		D_GOTO(out, rc);
 	} else if (rc != 0) {
+		if (rc == -DER_NOTREPLICA)
+			rc = -DER_NONEXIST;
 		D_ERROR("failed to connect to pool: %d\n", rc);
 		D_GOTO(out, rc);
 	}
@@ -1035,7 +1037,7 @@ dc_pool_global2local(d_iov_t glob, daos_handle_t *poh)
 		swap_pool_glob(pool_glob);
 		D_ASSERT(pool_glob->dpg_magic == DC_POOL_GLOB_MAGIC);
 	} else if (pool_glob->dpg_magic != DC_POOL_GLOB_MAGIC) {
-		D_ERROR("Bad hgh_magic: 0x%x.\n", pool_glob->dpg_magic);
+		D_ERROR("Bad dpg_magic: 0x%x.\n", pool_glob->dpg_magic);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -1121,22 +1123,16 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 	int				i;
 	int				rc;
 
+	if (args->tgts == NULL || args->tgts->tl_nr == 0) {
+		D_ERROR("NULL tgts or tgts->tl_nr is zero\n");
+		D_GOTO(out_task, rc = -DER_INVAL);
+	}
+
+	D_DEBUG(DF_DSMC, DF_UUID": opc %d targets:%u tgts[0]=%u/%d\n",
+		DP_UUID(args->uuid), opc, args->tgts->tl_nr,
+		args->tgts->tl_ranks[0], args->tgts->tl_tgts[0]);
+
 	if (state == NULL) {
-		if (args->tgts == NULL || args->tgts->tl_nr == 0) {
-			D_ERROR("NULL tgts or tgts->tl_nr is zero\n");
-			D_GOTO(out_task, rc = -DER_INVAL);
-		} else if ((opc == POOL_EXCLUDE || opc == POOL_EXCLUDE_OUT) &&
-			   args->tgts->tl_nr > 1) {
-			D_ERROR("pool exclude can only work with "
-				"(tgts->tl_nr == 1) for now.\n");
-			D_GOTO(out_task, rc = -DER_INVAL);
-		}
-
-		D_DEBUG(DF_DSMC, DF_UUID": opc %d targets:%u"
-			" tgts[0]=%u/%d\n", DP_UUID(args->uuid), opc,
-			args->tgts->tl_nr, args->tgts->tl_ranks[0],
-			args->tgts->tl_tgts[0]);
-
 		D_ALLOC_PTR(state);
 		if (state == NULL) {
 			D_ERROR(DF_UUID": failed to allocate state\n",
@@ -1179,7 +1175,6 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 		D_GOTO(out_client, rc);
 	}
 
-	/* XXX Let's update all targets on the node */
 	for (i = 0; i < args->tgts->tl_nr; i++) {
 		list.pta_addrs[i].pta_rank = args->tgts->tl_ranks[i];
 		list.pta_addrs[i].pta_target = args->tgts->tl_tgts[i];
@@ -1496,6 +1491,8 @@ pool_evict_cp(tse_task_t *task, void *data)
 
 	rc = out->pvo_op.po_rc;
 	if (rc != 0) {
+		if (rc == -DER_NOTREPLICA)
+			rc = -DER_NONEXIST;
 		D_ERROR("failed to evict pool handles: %d\n", rc);
 		D_GOTO(out, rc);
 	}

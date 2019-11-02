@@ -45,7 +45,7 @@ def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll(
 
 def el7_component_repos = ""
 def sle12_component_repos = ""
-def component_repos = "spdk fio dpdk pmdk raft"
+def component_repos = ""
 def daos_repo = "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
 def el7_daos_repos = el7_component_repos + ' ' + component_repos + ' ' + daos_repo
 def sle12_daos_repos = sle12_component_repos + ' ' + component_repos + ' ' + daos_repo
@@ -215,7 +215,7 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.centos.7'
+                            filename 'Dockerfile.mockbuild'
                             dir 'utils/rpms/packaging'
                             label 'docker_runner'
                             additionalBuildArgs '--build-arg UID=$(id -u) --build-arg JENKINS_URL=' +
@@ -236,7 +236,7 @@ pipeline {
                                           if git show -s --format=%B | grep "^Skip-build: true"; then
                                               exit 0
                                           fi
-                                          make -C utils/rpms chrootbuild'''
+                                          make CHROOT_NAME="epel-7-x86_64" -C utils/rpms chrootbuild'''
                         }
                     }
                     post {
@@ -293,13 +293,13 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.sles.12.3'
+                            filename 'Dockerfile.mockbuild'
                             dir 'utils/rpms/packaging'
                             label 'docker_runner'
                             args '--privileged=true'
                             additionalBuildArgs '--build-arg UID=$(id -u) --build-arg JENKINS_URL=' +
-                                                env.JENKINS_URL +
-                                                 " --build-arg CACHEBUST=${currentBuild.startTimeInMillis}"
+                                                env.JENKINS_URL
+                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
                         }
                     }
                     steps {
@@ -315,18 +315,17 @@ pipeline {
                                           if git show -s --format=%B | grep "^Skip-build: true"; then
                                               exit 0
                                           fi
-                                          make -C utils/rpms chrootbuild'''
+                                          make CHROOT_NAME="suse-12.3-x86_64" -C utils/rpms chrootbuild'''
                         }
                     }
                     post {
                         success {
                             sh label: "Collect artifacts",
-                               script: '''mockbase=/var/tmp/build-root/home/abuild
-                                          mockroot=$mockbase/rpmbuild
-                                          artdir=$PWD/artifacts/sles12.3
-                                          (cd $mockroot &&
-                                           cp {RPMS/*,SRPMS}/* $artdir)
-                                          createrepo $artdir/'''
+                               script: '''mockroot=/var/lib/mock/suse-12.3-x86_64
+                                          (cd $mockroot/result/ &&
+                                           cp -r . $OLDPWD/artifacts/sles12.3/)
+                                          createrepo artifacts/sles12.3/
+                                          cat $mockroot/result/{root,build}.log'''
                             publishToRepository product: 'daos',
                                                 format: 'yum',
                                                 maturity: 'stable',
@@ -335,12 +334,6 @@ pipeline {
                              stepResult name: env.STAGE_NAME, context: "build",
                                         result: "SUCCESS"
                         }
-                        unsuccessful {
-                            sh label: "Collect artifacts",
-                               script: """if arts=\$(ls _topdir/BUILD/*/config${arch}.log); then
-                                              ln \$arts artifacts/sles12.3/
-                                          fi"""
-                        }
                         unstable {
                             stepResult name: env.STAGE_NAME, context: "build",
                                        result: "UNSTABLE", ignore_failure: true
@@ -348,6 +341,20 @@ pipeline {
                         failure {
                             stepResult name: env.STAGE_NAME, context: "build",
                                        result: "FAILURE", ignore_failure: true
+                        }
+                        unsuccessful {
+                            sh label: "Collect artifacts",
+                               script: '''mockroot=/var/lib/mock/suse-12.3-x86_64
+                                          cat $mockroot/result/{root,build}.log
+                                          artdir=$PWD/artifacts/sles12.3
+                                          if srpms=$(ls _topdir/SRPMS/*); then
+                                              cp -af $srpms $artdir
+                                          fi
+                                          (if cd $mockroot/result/; then
+                                               cp -r . $artdir
+                                           fi)
+                                          cat $mockroot/result/{root,build}.log \
+                                              2>/dev/null || true'''
                         }
                         cleanup {
                             archiveArtifacts artifacts: 'artifacts/sles12.3/**'
@@ -365,14 +372,13 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.leap.42.3'
+                            filename 'Dockerfile.mockbuild'
                             dir 'utils/rpms/packaging'
                             label 'docker_runner'
                             args '--privileged=true'
-                            additionalBuildArgs '--build-arg UID=$(id -u) ' +
-                                                '--build-arg JENKINS_URL=' +
-                                                env.JENKINS_URL +
-                                                 " --build-arg CACHEBUST=${currentBuild.startTimeInMillis}"
+                            additionalBuildArgs '--build-arg UID=$(id -u) --build-arg JENKINS_URL=' +
+                                                env.JENKINS_URL
+                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
                         }
                     }
                     steps {
@@ -388,18 +394,17 @@ pipeline {
                                           if git show -s --format=%B | grep "^Skip-build: true"; then
                                               exit 0
                                           fi
-                                          make -C utils/rpms chrootbuild'''
+                                          make CHROOT_NAME="opensuse-leap-42.3-x86_64" -C utils/rpms chrootbuild'''
                         }
                     }
                     post {
                         success {
                             sh label: "Collect artifacts",
-                               script: '''mockbase=/var/tmp/build-root/home/abuild
-                                          mockroot=$mockbase/rpmbuild
-                                          artdir=$PWD/artifacts/leap42.3
-                                          (cd $mockroot &&
-                                           cp {RPMS/*,SRPMS}/* $artdir)
-                                          createrepo $artdir/'''
+                               script: '''mockroot=/var/lib/mock/opensuse-leap-42.3-x86_64
+                                          (cd $mockroot/result/ &&
+                                           cp -r . $OLDPWD/artifacts/leap42.3/)
+                                          createrepo artifacts/leap42.3/
+                                          cat $mockroot/result/{root,build}.log'''
                             publishToRepository product: 'daos',
                                                 format: 'yum',
                                                 maturity: 'stable',
@@ -407,17 +412,6 @@ pipeline {
                                                 repo_dir: 'artifacts/leap42.3/'
                              stepResult name: env.STAGE_NAME, context: "build",
                                         result: "SUCCESS"
-                        }
-                        unsuccessful {
-                            sh label: "Collect artifacts",
-                                   script: """mockbase=/var/tmp/build-root/home/abuild
-                                      mockroot=$mockbase/rpmbuild
-                                      artdir=\$PWD/artifacts/leap42.3
-                                      (if cd \$mockroot/BUILD; then
-                                           if arts=\$(ls _topdir/BUILD/*/config${arch}.log); then
-                                               ln \$arts \$tdir/
-                                           fi
-                                       fi)"""
                         }
                         unstable {
                             stepResult name: env.STAGE_NAME, context: "build",
@@ -427,8 +421,96 @@ pipeline {
                             stepResult name: env.STAGE_NAME, context: "build",
                                        result: "FAILURE", ignore_failure: true
                         }
+                        unsuccessful {
+                            sh label: "Collect artifacts",
+                               script: '''mockroot=/var/lib/mock/opensuse-leap-42.3-x86_64
+                                          cat $mockroot/result/{root,build}.log
+                                          artdir=$PWD/artifacts/leap42.3
+                                          if srpms=$(ls _topdir/SRPMS/*); then
+                                              cp -af $srpms $artdir
+                                          fi
+                                          (if cd $mockroot/result/; then
+                                               cp -r . $artdir
+                                           fi)
+                                          cat $mockroot/result/{root,build}.log \
+                                              2>/dev/null || true'''
+                        }
                         cleanup {
                             archiveArtifacts artifacts: 'artifacts/leap42.3/**'
+                        }
+                    }
+                }
+                stage('Build RPM on Leap 15') {
+                    when {
+                        beforeAgent true
+                        allOf {
+                            not { branch 'weekly-testing' }
+                            expression { env.CHANGE_TARGET != 'weekly-testing' }
+                        }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile.mockbuild'
+                            dir 'utils/rpms/packaging'
+                            label 'docker_runner'
+                            args '--privileged=true'
+                            additionalBuildArgs '--build-arg UID=$(id -u) --build-arg JENKINS_URL=' +
+                                                env.JENKINS_URL
+                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
+                        }
+                    }
+                    steps {
+                        githubNotify credentialsId: 'daos-jenkins-commit-status',
+                                      description: env.STAGE_NAME,
+                                      context: "build" + "/" + env.STAGE_NAME,
+                                      status: "PENDING"
+                        checkoutScm withSubmodules: true
+                        sh label: env.STAGE_NAME,
+                           script: '''rm -rf artifacts/leap15/
+                              mkdir -p artifacts/leap15/
+                              if git show -s --format=%B | grep "^Skip-build: true"; then
+                                  exit 0
+                              fi
+                              make CHROOT_NAME="opensuse-leap-15.1-x86_64" -C utils/rpms chrootbuild'''
+                    }
+                    post {
+                        success {
+                            sh label: "Collect artifacts",
+                               script: '''(cd /var/lib/mock/opensuse-leap-15.1-x86_64/result/ &&
+                                           cp -r . $OLDPWD/artifacts/leap15/)
+                                          createrepo artifacts/leap15/'''
+                            publishToRepository product: 'daos',
+                                                format: 'yum',
+                                                maturity: 'stable',
+                                                tech: 'leap-15',
+                                                repo_dir: 'artifacts/leap15/'
+                            stepResult name: env.STAGE_NAME, context: "build",
+                                       result: "SUCCESS"
+                        }
+                        unstable {
+                            stepResult name: env.STAGE_NAME, context: "build",
+                                       result: "UNSTABLE"
+                        }
+                        failure {
+                            stepResult name: env.STAGE_NAME, context: "build",
+                                       result: "FAILURE"
+                        }
+                        unsuccessful {
+                            sh label: "Collect artifacts",
+                               script: '''mockroot=/var/lib/mock/opensuse-leap-15.1-x86_64
+                                          cat $mockroot/result/{root,build}.log
+                                          artdir=$PWD/artifacts/leap15
+                                          if srpms=$(ls _topdir/SRPMS/*); then
+                                              cp -af $srpms $artdir
+                                          fi
+                                          (if cd $mockroot/result/; then
+                                               cp -r . $artdir
+                                           fi)
+                                          cat $mockroot/result/{root,build}.log \
+                                              2>/dev/null || true'''
+                        }
+                        cleanup {
+                            archiveArtifacts artifacts: 'artifacts/leap15/**'
                         }
                     }
                 }

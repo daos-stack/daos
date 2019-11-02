@@ -24,6 +24,8 @@
 package main
 
 import (
+	"strings"
+
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
@@ -87,12 +89,10 @@ type networkListCmd struct {
 	logCmd
 }
 
-// List the supported providers and show the example text
+// List the supported providers
 func (cmd *networkListCmd) Execute(args []string) error {
 	providers := netdetect.GetSupportedProviders()
-	cmd.log.Info("Supported providers:\n\n")
-	for _, p := range providers {
-		cmd.log.Infof("\t%s", p)
-	}
+	cmd.log.Info("Supported providers:\n")
+	cmd.log.Infof("\t%s", strings.Join(providers, ", "))
 	return nil
 }

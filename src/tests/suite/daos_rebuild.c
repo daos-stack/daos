@@ -369,7 +369,7 @@ rebuild_dkeys(void **state)
 	int			tgt = DEFAULT_FAIL_TGT;
 	int			i;
 
-	if (!test_runable(arg, 6))
+	if (!test_runable(arg, 4))
 		return;
 
 	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
@@ -403,7 +403,7 @@ rebuild_akeys(void **state)
 	int			tgt = DEFAULT_FAIL_TGT;
 	int			i;
 
-	if (!test_runable(arg, 6))
+	if (!test_runable(arg, 4))
 		return;
 
 	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
@@ -440,7 +440,7 @@ rebuild_indexes(void **state)
 	int			j;
 	int			rc;
 
-	if (!test_runable(arg, 6))
+	if (!test_runable(arg, 4))
 		return;
 
 	/* create/connect another pool */
@@ -483,7 +483,7 @@ rebuild_multiple(void **state)
 	int		j;
 	int		k;
 
-	if (!test_runable(arg, 6))
+	if (!test_runable(arg, 4))
 		return;
 
 	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
@@ -524,7 +524,7 @@ rebuild_large_rec(void **state)
 	int			i;
 	char			buffer[5000];
 
-	if (!test_runable(arg, 6))
+	if (!test_runable(arg, 4))
 		return;
 
 	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
@@ -1628,24 +1628,30 @@ rebuild_master_failure(void **state)
 	rc = memcmp(&pinfo.pi_rebuild_st, &pinfo_new.pi_rebuild_st,
 		    sizeof(pinfo.pi_rebuild_st));
 	if (rc != 0) {
-		print_message("old ver %u pad %u err %d done %d tobeobj "
-			      DF_U64" obj "DF_U64" rec "DF_U64"\n",
+		print_message("old ver %u seconds %u err %d done %d fail %d"
+			      " tobeobj "DF_U64" obj "DF_U64" rec "DF_U64
+			      " sz "DF_U64"\n",
 			      pinfo.pi_rebuild_st.rs_version,
-			      pinfo.pi_rebuild_st.rs_pad_32,
+			      pinfo.pi_rebuild_st.rs_seconds,
 			      pinfo.pi_rebuild_st.rs_errno,
 			      pinfo.pi_rebuild_st.rs_done,
+			      pinfo.pi_rebuild_st.rs_fail_rank,
 			      pinfo.pi_rebuild_st.rs_toberb_obj_nr,
 			      pinfo.pi_rebuild_st.rs_obj_nr,
-			      pinfo.pi_rebuild_st.rs_rec_nr);
-		print_message("new ver %u pad %u err %d done %d tobeobj "
-			      DF_U64" obj "DF_U64" rec "DF_U64"\n",
+			      pinfo.pi_rebuild_st.rs_rec_nr,
+			      pinfo.pi_rebuild_st.rs_size);
+		print_message("new ver %u pad %u err %d done %d fail %d"
+			      " tobeobj "DF_U64" obj "DF_U64" rec "DF_U64
+			      " sz "DF_U64"\n",
 			      pinfo_new.pi_rebuild_st.rs_version,
-			      pinfo_new.pi_rebuild_st.rs_pad_32,
+			      pinfo_new.pi_rebuild_st.rs_seconds,
 			      pinfo_new.pi_rebuild_st.rs_errno,
 			      pinfo_new.pi_rebuild_st.rs_done,
+			      pinfo_new.pi_rebuild_st.rs_fail_rank,
 			      pinfo_new.pi_rebuild_st.rs_toberb_obj_nr,
 			      pinfo_new.pi_rebuild_st.rs_obj_nr,
-			      pinfo_new.pi_rebuild_st.rs_rec_nr);
+			      pinfo_new.pi_rebuild_st.rs_rec_nr,
+			      pinfo_new.pi_rebuild_st.rs_size);
 	}
 
 	print_message("svc leader changed from %d to %d, should get same "
