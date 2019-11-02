@@ -486,7 +486,6 @@ ec_get_tgt_set(daos_iod_t *iods, unsigned int nr, struct daos_oclass_attr *oca,
 				 * data extents, parity ranges must come
 				 * first in the the recx array.
 				 */
-				D_INFO("rs: %lu\n", rs);
 				D_ASSERT(!parity_include);
 				ss = p * len;
 				p_offset = 0;
@@ -496,8 +495,7 @@ ec_get_tgt_set(daos_iod_t *iods, unsigned int nr, struct daos_oclass_attr *oca,
 				ss = k * len;
 				p_offset = p;
 			}
-
- 			/* Walk from start to end by len, except for the last
+			/* Walk from start to end by len, except for the last
 			 * iteration. (could cross a cell boundary with less
 			 * than a cell's worth remaining).
 			 */
