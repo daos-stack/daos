@@ -27,16 +27,14 @@ import (
 	"bytes"
 	"fmt"
 
+	bytesize "github.com/inhies/go-bytesize"
+
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 )
 
 // NvmeNamespaces is an alias for protobuf NvmeController_Namespace message slice
 // representing namespaces existing on a NVMe SSD.
 type NvmeNamespaces []*ctlpb.NvmeController_Namespace
-
-// NvmeHealthstats is an alias for protobuf NvmeController_Health message
-// representing device health stats per controller.
-type NvmeHealthstats *ctlpb.NvmeController_Health
 
 // NvmeControllers is an alias for protobuf NvmeController message slice
 // representing a number of NVMe SSD controllers installed on a storage node.
@@ -101,7 +99,8 @@ func (ncs NvmeControllers) ctrlrDetail(buf *bytes.Buffer, c *ctlpb.NvmeControlle
 		c.Pciaddr, c.Serial, c.Model, c.Fwrev, c.Socketid)
 
 	for _, ns := range c.Namespaces {
-		fmt.Fprintf(buf, "\t\tNamespace: id:%d capacity:%d\n", ns.Id, ns.Capacity)
+		fmt.Fprintf(buf, "\t\tNamespace: id:%d capacity:%s\n", ns.Id,
+			bytesize.New(float64(ns.Capacity)))
 	}
 }
 
@@ -269,20 +268,6 @@ func (mr MountResults) String() string {
 // ScmModules is an alias for protobuf ScmModule message slice representing
 // a number of SCM modules installed on a storage node.
 type ScmModules []*ctlpb.ScmModule
-
-func (sm ScmModules) String() string {
-	var buf bytes.Buffer
-
-	for _, module := range sm {
-		fmt.Fprintf(&buf,
-			"\tPhysicalID:%d Capacity:%d Location:(socket:%d "+
-				"memctrlr:%d chan:%d pos:%d)\n",
-			module.Physicalid, module.Capacity, module.Loc.Socket,
-			module.Loc.Memctrlr, module.Loc.Channel, module.Loc.Channelpos)
-	}
-
-	return buf.String()
-}
 
 // ScmModuleResults is an alias for protobuf ScmModuleResult message slice
 // representing operation results on a number of SCM modules.

@@ -391,6 +391,7 @@ func scmNamespacesFromPB(pbNss pb_types.ScmNamespaces) (nss []storage.ScmNamespa
 				BlockDevice: ns.Blockdev,
 				Name:        ns.Dev,
 				NumaNode:    ns.Numanode,
+				Size:        ns.Size,
 			})
 	}
 	return
