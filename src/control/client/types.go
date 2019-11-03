@@ -297,17 +297,22 @@ func (cmm ClientMountMap) String() string {
 }
 
 // ScmScanResult represents the result of scanning for SCM
-// modules installed on a storage node.
+// modules installed on a storage node and SCM namespaces.
 type ScmScanResult struct {
-	Resp storage.ScmScanResponse
-	Err  error
+	Modules    storage.ScmModules
+	Namespaces storage.ScmNamespaces
+	Err        error
 }
 
 func (result *ScmScanResult) String() string {
-	if result.Err != nil {
+	switch {
+	case result.Err != nil:
 		return fmt.Sprintf("Error: %s", result.Err)
+	case len(result.Namespaces) > 0:
+		return fmt.Sprintf("SCM Namespaces:\n%s\n", result.Namespaces)
+	default:
+		return fmt.Sprintf("SCM Modules:\n%s\n", result.Modules)
 	}
-	return result.Resp.String()
 }
 
 // ScmScanMap maps ScmModuleScanResult structs to the addresses
