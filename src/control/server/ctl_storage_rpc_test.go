@@ -732,7 +732,7 @@ func TestStorageFormat(t *testing.T) {
 			}()
 
 			if !tc.superblockExists && tc.expNvmeFormatted {
-				if err := cs.harness.AwaitStorageReady(context.Background()); err != nil {
+				if err := cs.harness.AwaitStorageReady(context.Background(), false); err != nil {
 					t.Fatal(err)
 				}
 			}

@@ -173,13 +173,12 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	// TODO: Remove all references to root when NVMe support is added to the
 	// privileged binary helper.
 	if !cfgHasBdev(cfg) || syscall.Geteuid() == 0 {
-		if err := harness.AwaitStorageReady(ctx); err != nil {
+		if err := harness.AwaitStorageReady(ctx, cfg.RecreateSuperblocks); err != nil {
 			return err
 		}
 	}
 
-	recreate := false // TODO: make this configurable
-	if err := harness.CreateSuperblocks(recreate); err != nil {
+	if err := harness.CreateSuperblocks(cfg.RecreateSuperblocks); err != nil {
 		return err
 	}
 
