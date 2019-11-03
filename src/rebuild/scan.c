@@ -244,7 +244,7 @@ rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
 			break;
 
 		/* If it is failed, but no need retry, let's just fail */
-		if ((rc != 0 && rc != -DER_TIMEDOUT &&
+		if ((rc != 0 && rc != -DER_TIMEDOUT && rc != -DER_GRPVER &&
 		     !daos_crt_network_error(rc)) ||
 		    (rebuild_out->roo_status != 0 &&
 		     rebuild_out->roo_status != -DER_AGAIN)) {

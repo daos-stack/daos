@@ -190,7 +190,7 @@ mgmt_svc_bootstrap_cb(struct ds_rsvc *rsvc, void *varg)
 	struct bootstrap_arg   *arg = varg;
 	struct rdb_tx		tx;
 	struct rdb_kvs_attr	attr;
-	d_iov_t		value;
+	d_iov_t			value;
 	uint32_t		map_version = 1;
 	uint32_t		rank_next = 0;
 	int			rc;
@@ -252,64 +252,29 @@ out:
 	return rc;
 }
 
-static int
-mgmt_svc_step_up_cb(struct ds_rsvc *rsvc)
-{
-	struct mgmt_svc	       *svc = mgmt_svc_obj(rsvc);
-	struct rdb_tx		tx;
-	d_iov_t		value;
-	int			rc;
-
-	rc = rdb_tx_begin(svc->ms_rsvc.s_db, svc->ms_rsvc.s_term, &tx);
-	if (rc != 0)
-		goto out;
-
-	ABT_rwlock_rdlock(svc->ms_lock);
-
-	d_iov_set(&value, &svc->ms_map_version, sizeof(svc->ms_map_version));
-	rc = rdb_tx_lookup(&tx, &svc->ms_root, &ds_mgmt_prop_map_version,
-			   &value);
-	if (rc != 0) {
-		if (rc == -DER_NONEXIST) {
-			D_DEBUG(DB_MGMT, "new db\n");
-			rc = DER_UNINIT;
-		}
-		goto out_lock;
-	}
-
-	d_iov_set(&value, &svc->ms_rank_next, sizeof(svc->ms_rank_next));
-	rc = rdb_tx_lookup(&tx, &svc->ms_root, &ds_mgmt_prop_rank_next, &value);
-	if (rc != 0)
-		goto out_lock;
-
-	/*
-	 * Just in case the previous leader didn't complete distributing the
-	 * system map before stepping down.
-	 */
-	ds_rsvc_request_map_dist(&svc->ms_rsvc);
-
-out_lock:
-	ABT_rwlock_unlock(svc->ms_lock);
-	rdb_tx_end(&tx);
-out:
-	return rc;
-}
-
-static void
-mgmt_svc_step_down_cb(struct ds_rsvc *rsvc)
-{
-}
-
-static void
-mgmt_svc_drain_cb(struct ds_rsvc *rsvc)
-{
-}
-
 struct enum_server_arg {
 	struct server_entry    *esa_servers;
 	int			esa_servers_cap;
 	int			esa_servers_len;
 };
+
+static void
+enum_server_arg_init(struct enum_server_arg *arg)
+{
+	memset(arg, 0, sizeof(*arg));
+}
+
+static void
+enum_server_arg_fini(struct enum_server_arg *arg)
+{
+	int i;
+
+	if (arg->esa_servers == NULL)
+		return;
+	for (i = 0; i < arg->esa_servers_len; i++)
+		D_FREE(arg->esa_servers[i].se_uri);
+	D_FREE(arg->esa_servers);
+}
 
 static int
 enum_server_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
@@ -348,18 +313,86 @@ enum_server_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		arg->esa_servers_cap = servers_cap;
 	}
 
-	/*
-	 * Note that D_REALLOC_ARRAY doesn't zero the new memory region. Also,
-	 * we use pointers to persistent memory addresses.
-	 */
+	/* Note that D_REALLOC_ARRAY doesn't zero the new memory region. */
 	entry = &arg->esa_servers[arg->esa_servers_len];
 	entry->se_rank = (uint32_t)*rank_key;
 	entry->se_flags = rec->sr_flags;
 	entry->se_nctxs = rec->sr_nctxs;
 	entry->se_uri = rec->sr_uri;
+	D_STRNDUP(entry->se_uri, rec->sr_uri, ADDR_STR_MAX_LEN - 1);
+	if (entry->se_uri == NULL)
+		return -DER_NOMEM;
 	arg->esa_servers_len++;
 
 	return 0;
+}
+
+static int
+mgmt_svc_step_up_cb(struct ds_rsvc *rsvc)
+{
+	struct mgmt_svc	       *svc = mgmt_svc_obj(rsvc);
+	struct rdb_tx		tx;
+	d_iov_t			value;
+	struct enum_server_arg	arg;
+	int			rc;
+
+	rc = rdb_tx_begin(svc->ms_rsvc.s_db, svc->ms_rsvc.s_term, &tx);
+	if (rc != 0)
+		goto out;
+
+	ABT_rwlock_rdlock(svc->ms_lock);
+
+	d_iov_set(&value, &svc->ms_map_version, sizeof(svc->ms_map_version));
+	rc = rdb_tx_lookup(&tx, &svc->ms_root, &ds_mgmt_prop_map_version,
+			   &value);
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST) {
+			D_DEBUG(DB_MGMT, "new db\n");
+			rc = DER_UNINIT;
+		}
+		goto out_lock;
+	}
+
+	d_iov_set(&value, &svc->ms_rank_next, sizeof(svc->ms_rank_next));
+	rc = rdb_tx_lookup(&tx, &svc->ms_root, &ds_mgmt_prop_rank_next, &value);
+	if (rc != 0)
+		goto out_lock;
+
+	/* Update the local primary group with the latest system map. */
+	enum_server_arg_init(&arg);
+	rc = rdb_tx_iterate(&tx, &svc->ms_servers, false /* !backward */,
+			    enum_server_cb, &arg);
+	if (rc != 0) {
+		enum_server_arg_fini(&arg);
+		goto out_lock;
+	}
+	rc = ds_mgmt_group_update(CRT_GROUP_MOD_OP_REPLACE, arg.esa_servers,
+				  arg.esa_servers_len, svc->ms_map_version);
+	enum_server_arg_fini(&arg);
+	if (rc != 0)
+		goto out_lock;
+
+	/*
+	 * Just in case the previous leader didn't complete distributing the
+	 * system map before stepping down.
+	 */
+	ds_rsvc_request_map_dist(&svc->ms_rsvc);
+
+out_lock:
+	ABT_rwlock_unlock(svc->ms_lock);
+	rdb_tx_end(&tx);
+out:
+	return rc;
+}
+
+static void
+mgmt_svc_step_down_cb(struct ds_rsvc *rsvc)
+{
+}
+
+static void
+mgmt_svc_drain_cb(struct ds_rsvc *rsvc)
+{
 }
 
 static int
@@ -411,7 +444,7 @@ mgmt_svc_map_dist_cb(struct ds_rsvc *rsvc)
 {
 	struct mgmt_svc	       *svc = mgmt_svc_obj(rsvc);
 	struct rdb_tx		tx;
-	struct enum_server_arg	arg = {};
+	struct enum_server_arg	arg;
 	struct dss_module_info *info = dss_get_module_info();
 	int			rc;
 
@@ -422,17 +455,20 @@ mgmt_svc_map_dist_cb(struct ds_rsvc *rsvc)
 	if (rc != 0)
 		return rc;
 	ABT_rwlock_rdlock(svc->ms_lock);
+	enum_server_arg_init(&arg);
 	rc = rdb_tx_iterate(&tx, &svc->ms_servers, false /* !backward */,
 			    enum_server_cb, &arg);
 	ABT_rwlock_unlock(svc->ms_lock);
 	rdb_tx_end(&tx);
-	if (rc != 0)
+	if (rc != 0) {
+		enum_server_arg_fini(&arg);
 		return rc;
+	}
 
 	rc = map_update_bcast(info->dmi_ctx, svc, svc->ms_map_version,
 			      arg.esa_servers_len, arg.esa_servers);
 
-	D_FREE(arg.esa_servers);
+	enum_server_arg_fini(&arg);
 	return rc;
 }
 
@@ -629,6 +665,7 @@ ds_mgmt_join_handler(struct mgmt_join_in *in, struct mgmt_join_out *out)
 	uint32_t		rank;
 	uint32_t		rank_next;
 	uint32_t		map_version;
+	struct server_entry	entry = {};
 	int			rc;
 
 	rc = ds_mgmt_svc_lookup_leader(&svc, &out->jo_hint);
@@ -734,10 +771,22 @@ ds_mgmt_join_handler(struct mgmt_join_in *in, struct mgmt_join_out *out)
 
 	D_DEBUG(DB_TRACE, "rank %u joined in map version %u\n", rank,
 		map_version);
+
 	svc->ms_map_version = map_version;
 	if (in->ji_rank != -1)
 		svc->ms_rank_next = rank_next;
+
+	entry.se_rank = rank;
+	entry.se_uri = in->ji_server.sr_uri;
+	rc = ds_mgmt_group_update(CRT_GROUP_MOD_OP_ADD, &entry,
+				  1 /* nservers */, map_version);
+	if (rc != 0) {
+		rdb_resign(svc->ms_rsvc.s_db, svc->ms_rsvc.s_term);
+		rc = 0;
+		goto out_lock;
+	}
 	ds_rsvc_request_map_dist(&svc->ms_rsvc);
+
 	out->jo_rank = rank;
 	out->jo_flags = SERVER_IN;
 
