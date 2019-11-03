@@ -123,16 +123,15 @@ class TestWithoutServers(Test):
                                                       '..') + os.path.sep)
         self.prefix = build_paths['PREFIX']
         self.ompi_prefix = build_paths["OMPI_PREFIX"]
-        self.tmp = os.path.join(self.prefix, 'tmp', 'attach_dir')
+        self.tmp = os.path.join(self.prefix, 'tmp')
         self.bin = os.path.join(self.prefix, 'bin')
         self.daos_test = os.path.join(self.bin, 'daos_test')
         self.orterun = os.path.join(self.ompi_prefix, "bin", "orterun")
         self.daosctl = os.path.join(self.bin, 'daosctl')
 
-        # set default shared dir for daos tests
+        # Create default shared dir for daos tests
         if not os.path.exists(self.tmp):
             os.makedirs(self.tmp)
-        os.chmod(self.tmp, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
 
         # setup fault injection, this MUST be before API setup
         fault_list = self.params.get("fault_list", '/run/faults/*/')

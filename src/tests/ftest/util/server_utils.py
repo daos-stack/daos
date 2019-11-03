@@ -436,6 +436,8 @@ class ServerManager(ExecutableCommand):
                 cmd_touch_log = "touch {}".format(lfile)
                 pcmd(self._hosts, cmd_touch_log, False)
 
+            self.setup_nfs()
+
         try:
             self.run()
         except CommandFailure as details:
@@ -462,7 +464,7 @@ class ServerManager(ExecutableCommand):
             except CommandFailure as error:
                 self.log.info("Failed to start after format: %s", str(error))
 
-            # Change ownership of attach info file
+            # Change ownership shared attach info file
             chmod_cmds = "sudo chmod 777 {}/daos_server.attach_info_tmp".format(
                 self.attach.value)
             pcmd(self._hosts, chmod_cmds, False)
@@ -481,6 +483,12 @@ class ServerManager(ExecutableCommand):
             self.log.info("Changing ownership of mount to non-root user")
             cmd = "sudo chown -R {0}:{0} /mnt/daos*".format(getpass.getuser())
             pcmd(self._hosts, cmd, False)
+
+            # Unmounting the nfs exported sudo controlled attach_info_path
+            self.log.info("Unmounting shared attach_info_path directory")
+            umount_cmd = "sudo umount {}".format(self.attach.value)
+            pcmd(self._hosts, umount_cmd, False)
+
         else:
             try:
                 self.runner.stop()
@@ -521,6 +529,30 @@ class ServerManager(ExecutableCommand):
 
         self.log.info("Cleanup of /mnt/daos directory.")
         pcmd(self._hosts, "; ".join(clean_cmds), False)
+
+    def setup_nfs(self):
+        """Setup the NFS export on the test runner."""
+        os.system("sudo systemctl start nfs-idmap")
+        os.system("sudo systemctl restart nfs-server")
+
+        # Create temp NFS export mount on attach_info_path
+        sudo_attach = "/media/attach_info_nfs"
+        os.system("sudo mkdir -p {}".format(sudo_attach))
+        os.system("sudo chmod 777 {}".format(sudo_attach))
+
+        # Construct string for /etc/exports files
+        exports_list = ["{}{}".format(host, "(rw,sync,no_root_squash)")
+                        for host in self.hosts]
+        os.system("sudo chmod 647 /etc/exports")
+        os.system("sudo echo \"{} {}\" > /etc/exports".format(
+            sudo_attach, " ".join(exports_list)))
+
+        # Get tets runner hostname and mount nfs on hosts
+        test_runner = os.uname()[1]
+        self.log.info("Mounting shared attach_info_path directory")
+        cmd_mnt_sudo_attach = "sudo mount -t nfs {}:{} {}".format(
+            test_runner, sudo_attach, self.attach.value)
+        pcmd(self._hosts, cmd_mnt_sudo_attach, True)
 
 
 def storage_prepare(hosts, user):
