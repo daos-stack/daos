@@ -90,7 +90,7 @@ func TestCheckSprint(t *testing.T) {
 		},
 		"scm scan with pmem namespaces": {
 			fmt.Sprint(MockScmScanResults(MockScmModules, MockScmNamespaces, MockServers)),
-			"map[1.2.3.4:10000:SCM Namespaces:\n\tpmem1/2.90TB/numa1\n\n 1.2.3.5:10001:SCM Namespaces:\n\tpmem1/2.90TB/numa1\n\n]",
+			"map[1.2.3.4:10000:SCM Namespaces: pmem1/2.90TB/numa1\n 1.2.3.5:10001:SCM Namespaces: pmem1/2.90TB/numa1\n]",
 		},
 		"scm scan without pmem namespaces": {
 			fmt.Sprint(MockScmScanResults(MockScmModules, []*ctlpb.PmemDevice{}, MockServers)),
