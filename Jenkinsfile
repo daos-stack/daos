@@ -220,7 +220,7 @@ pipeline {
                                        result: "FAILURE"
                         }
                         unsuccessful {
-                            sh label: "Collect artifacts",
+                            sh label: "Build Log",
                                script: '''mockroot=/var/lib/mock/epel-7-x86_64
                                           artdir=$PWD/artifacts/centos7
                                           if srpms=$(ls _topdir/SRPMS/*); then
@@ -297,7 +297,7 @@ pipeline {
                                        result: "FAILURE"
                         }
                         unsuccessful {
-                            sh label: "Collect artifacts",
+                            sh label: "Build Log",
                                script: '''mockroot=/var/lib/mock/suse-12.3-x86_64
                                           cat $mockroot/result/{root,build}.log
                                           artdir=$PWD/artifacts/sles12.3
@@ -374,7 +374,7 @@ pipeline {
                                        result: "FAILURE"
                         }
                         unsuccessful {
-                            sh label: "Collect artifacts",
+                            sh label: "Build Log",
                                script: '''mockroot=/var/lib/mock/opensuse-leap-42.3-x86_64
                                           cat $mockroot/result/{root,build}.log
                                           artdir=$PWD/artifacts/leap42.3
@@ -448,7 +448,7 @@ pipeline {
                                        result: "FAILURE"
                         }
                         unsuccessful {
-                            sh label: "Collect artifacts",
+                            sh label: "Build Log",
                                script: '''mockroot=/var/lib/mock/opensuse-leap-15.1-x86_64
                                           cat $mockroot/result/{root,build}.log
                                           artdir=$PWD/artifacts/leap15
