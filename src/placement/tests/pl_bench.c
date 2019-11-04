@@ -361,9 +361,9 @@ benchmark_add_data_movement(int argc, char **argv, uint32_t num_domains,
 	int obj_idx;
 	int type_idx;
 	int added;
-	int j;
 	char *token;
 	double *percent_moved;
+	int j;
 
 	/*
 	 * This is the total number of requested map types from the user
