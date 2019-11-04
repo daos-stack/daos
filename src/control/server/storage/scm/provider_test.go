@@ -49,38 +49,38 @@ func TestProviderScan(t *testing.T) {
 		getNamespaceErr error
 		getNamespaceRes storage.ScmNamespaces
 		getStateErr     error
-		expResponse     *storage.ScmScanResponse
+		expResponse     *ScanResponse
 	}{
 		"no modules": {
 			discoverRes: storage.ScmModules{},
-			expResponse: &storage.ScmScanResponse{
+			expResponse: &ScanResponse{
 				Modules: storage.ScmModules{},
 			},
 		},
 		"no namespaces": {
 			discoverRes:     storage.ScmModules{defaultModule},
 			getNamespaceRes: storage.ScmNamespaces{},
-			expResponse: &storage.ScmScanResponse{
+			expResponse: &ScanResponse{
 				Modules:    storage.ScmModules{defaultModule},
 				Namespaces: storage.ScmNamespaces{},
 			},
 		},
 		"ok": {
-			expResponse: &storage.ScmScanResponse{
+			expResponse: &ScanResponse{
 				Modules:    storage.ScmModules{defaultModule},
 				Namespaces: storage.ScmNamespaces{defaultNamespace},
 			},
 		},
 		"rescan": {
 			rescan: true,
-			expResponse: &storage.ScmScanResponse{
+			expResponse: &ScanResponse{
 				Modules:    storage.ScmModules{defaultModule},
 				Namespaces: storage.ScmNamespaces{defaultNamespace},
 			},
 		},
 		"ndctl missing": {
 			getNamespaceErr: FaultMissingNdctl,
-			expResponse: &storage.ScmScanResponse{
+			expResponse: &ScanResponse{
 				Modules:    storage.ScmModules{defaultModule},
 				Namespaces: nil,
 			},
@@ -110,14 +110,14 @@ func TestProviderScan(t *testing.T) {
 				GetStateErr:     tc.getStateErr,
 			})
 			p := NewProvider(log, mb, NewMockSysProvider(nil))
-			cmpRes := func(t *testing.T, want, got *storage.ScmScanResponse) {
+			cmpRes := func(t *testing.T, want, got *ScanResponse) {
 				t.Helper()
 				if diff := cmp.Diff(want, got); diff != "" {
 					t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 				}
 			}
 
-			res, err := p.Scan(storage.ScmScanRequest{})
+			res, err := p.Scan(ScanRequest{})
 			if err != nil {
 				switch err {
 				case FaultMissingNdctl:
@@ -133,7 +133,7 @@ func TestProviderScan(t *testing.T) {
 
 			// TODO: Try to simulate finding something new?
 			// For now, just make sure nothing breaks.
-			res, err = p.Scan(storage.ScmScanRequest{Rescan: tc.rescan})
+			res, err = p.Scan(ScanRequest{Rescan: tc.rescan})
 			if err != nil {
 				t.Fatal(err)
 			}
