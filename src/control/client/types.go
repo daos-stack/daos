@@ -309,7 +309,7 @@ func (result *ScmScanResult) String() string {
 	case result.Err != nil:
 		return fmt.Sprintf("Error: %s", result.Err)
 	case len(result.Namespaces) > 0:
-		return fmt.Sprintf("SCM Namespaces:\n%s\n", result.Namespaces)
+		return fmt.Sprintf("SCM Namespaces:%s\n", result.Namespaces)
 	default:
 		return fmt.Sprintf("SCM Modules:\n%s\n", result.Modules)
 	}
@@ -396,6 +396,7 @@ func scmNamespacesFromPB(pbNss pb_types.ScmNamespaces) (nss []storage.ScmNamespa
 				BlockDevice: ns.Blockdev,
 				Name:        ns.Dev,
 				NumaNode:    ns.Numanode,
+				Size:        ns.Size,
 			})
 	}
 	return

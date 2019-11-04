@@ -71,6 +71,7 @@ func MockScmNamespace() storage.ScmNamespace {
 		BlockDevice: m.Blockdev,
 		Name:        m.Dev,
 		NumaNode:    m.Numanode,
+		Size:        m.Size,
 	}
 }
 
