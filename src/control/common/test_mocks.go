@@ -113,6 +113,7 @@ func MockPmemDevicePB() *ctlpb.PmemDevice {
 		Blockdev: "pmem1",
 		Dev:      "namespace-1",
 		Numanode: 1,
+		Size:     3183575302144,
 	}
 }
 

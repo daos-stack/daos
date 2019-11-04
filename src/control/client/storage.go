@@ -24,10 +24,8 @@
 package client
 
 import (
-	"bytes"
 	"fmt"
 	"io"
-	"sort"
 	"time"
 
 	"github.com/pkg/errors"
@@ -42,94 +40,6 @@ const (
 	msgStreamRecv     = "%T recv() failed"
 	msgTypeAssert     = "type assertion failed, wanted %T got %T"
 )
-
-// ClientCtrlrMap is an alias for query results of NVMe controllers (and
-// any residing namespaces) on connected servers keyed on address.
-type ClientCtrlrMap map[string]types.CtrlrResults
-
-func (ccm ClientCtrlrMap) String() string {
-	var buf bytes.Buffer
-	servers := make([]string, 0, len(ccm))
-
-	for server := range ccm {
-		servers = append(servers, server)
-	}
-	sort.Strings(servers)
-
-	for _, server := range servers {
-		fmt.Fprintf(&buf, "%s:\n%s\n", server, ccm[server])
-	}
-
-	return buf.String()
-}
-
-// ClientMountMap is an alias for query results of SCM regions mounted
-// on connected servers keyed on address.
-type ClientMountMap map[string]types.MountResults
-
-func (cmm ClientMountMap) String() string {
-	var buf bytes.Buffer
-	servers := make([]string, 0, len(cmm))
-
-	for server := range cmm {
-		servers = append(servers, server)
-	}
-	sort.Strings(servers)
-
-	for _, server := range servers {
-		fmt.Fprintf(&buf, "%s:\n%s\n", server, cmm[server])
-	}
-
-	return buf.String()
-}
-
-// ClientModuleMap is an alias for query results of SCM modules installed
-// on connected servers keyed on address.
-type ClientModuleMap map[string]types.ModuleResults
-
-func (cmm ClientModuleMap) String() string {
-	var buf bytes.Buffer
-	servers := make([]string, 0, len(cmm))
-
-	for server := range cmm {
-		servers = append(servers, server)
-	}
-	sort.Strings(servers)
-
-	for _, server := range servers {
-		fmt.Fprintf(&buf, "%s:\n%s\n", server, cmm[server])
-	}
-
-	return buf.String()
-}
-
-// ClientPmemMap is an alias for query results of PMEM device files existing
-// on connected servers keyed on address.
-type ClientPmemMap map[string]types.PmemResults
-
-func (cmm ClientPmemMap) String() string {
-	var buf bytes.Buffer
-	servers := make([]string, 0, len(cmm))
-
-	for server := range cmm {
-		servers = append(servers, server)
-	}
-	sort.Strings(servers)
-
-	for _, server := range servers {
-		fmt.Fprintf(&buf, "%s:\n%s\n", server, cmm[server])
-	}
-
-	return buf.String()
-}
-
-// StorageResult generic container for results of storage subsystems queries.
-type StorageResult struct {
-	nvmeCtrlr types.CtrlrResults
-	scmModule types.ModuleResults
-	scmMount  types.MountResults
-	scmPmem   types.PmemResults
-}
 
 // storagePrepareRequest returns results of SCM and NVMe prepare actions
 // on a remote server by calling over gRPC channel.
@@ -161,76 +71,90 @@ func (c *connList) StoragePrepare(req *ctlpb.StoragePrepareReq) ResultMap {
 // storageScanRequest returns all discovered SCM and NVMe storage devices
 // discovered on a remote server by calling over gRPC channel.
 func storageScanRequest(mc Control, req interface{}, ch chan ClientResult) {
-	sRes := StorageResult{}
-
 	resp, err := mc.getCtlClient().StorageScan(context.Background(), &ctlpb.StorageScanReq{})
 	if err != nil {
 		ch <- ClientResult{mc.getAddress(), nil, err} // return comms error
 		return
 	}
 
-	// process storage subsystem responses
-	nState := resp.Nvme.GetState()
+	ch <- ClientResult{mc.getAddress(), resp, nil}
+}
+
+func (c *connList) setScanErr(cNvmeScan NvmeScanResults, cScmScan ScmScanResults,
+	address string, err error) {
+
+	cNvmeScan[address] = &NvmeScanResult{Err: err}
+	cScmScan[address] = &ScmScanResult{Err: err}
+}
+
+func (c *connList) getNvmeResult(resp *ctlpb.ScanNvmeResp, withHealth bool) *NvmeScanResult {
+	nvmeResult := &NvmeScanResult{Health: withHealth}
+
+	nState := resp.GetState()
 	if nState.GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
 		msg := nState.GetError()
 		if msg == "" {
 			msg = fmt.Sprintf("nvme %+v", nState.GetStatus())
 		}
-		sRes.nvmeCtrlr.Err = errors.Errorf(msg)
-	} else {
-		sRes.nvmeCtrlr.Ctrlrs = resp.Nvme.Ctrlrs
+		nvmeResult.Err = errors.Errorf(msg)
+		return nvmeResult
 	}
 
-	sState := resp.Scm.GetState()
+	nvmeResult.Ctrlrs = resp.GetCtrlrs()
+	return nvmeResult
+}
+
+func (c *connList) getScmResult(resp *ctlpb.ScanScmResp) *ScmScanResult {
+	scmResult := &ScmScanResult{}
+
+	sState := resp.GetState()
 	if sState.GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
 		msg := sState.GetError()
 		if msg == "" {
 			msg = fmt.Sprintf("scm %+v", sState.GetStatus())
 		}
-		sRes.scmModule.Err = errors.Errorf(msg)
-		sRes.scmPmem.Err = errors.Errorf(msg)
-	} else {
-		sRes.scmModule.Modules = resp.Scm.Modules
-		sRes.scmPmem.Devices = resp.Scm.Pmems
+		scmResult.Err = errors.Errorf(msg)
+		return scmResult
 	}
 
-	ch <- ClientResult{mc.getAddress(), sRes, nil}
+	scmResult.Modules = scmModulesFromPB(resp.GetModules())
+	scmResult.Namespaces = scmNamespacesFromPB(resp.GetPmems())
+	return scmResult
 }
 
 // StorageScan returns details of nonvolatile storage devices attached to each
 // remote server. Critical storage device health information is also returned
 // for all NVMe SSDs discovered. Data received over channel from requests
-// running in parallel.
-func (c *connList) StorageScan() (ClientCtrlrMap, ClientModuleMap, ClientPmemMap) {
+// in parallel. If health param is true, stringer repr will include stats.
+func (c *connList) StorageScan(params *StorageScanReq) *StorageScanResp {
 	cResults := c.makeRequests(nil, storageScanRequest)
-	cCtrlrs := make(ClientCtrlrMap)   // mapping of server address to NVMe SSDs
-	cModules := make(ClientModuleMap) // mapping of server address to SCM modules
-	cPmems := make(ClientPmemMap)     // mapping of server address to PMEM device files
+	cNvmeScan := make(NvmeScanResults) // mapping of server address to NVMe SSDs
+	cScmScan := make(ScmScanResults)   // mapping of server address to SCM modules/namespaces
 
 	for _, res := range cResults {
-		if res.Err != nil {
-			cCtrlrs[res.Address] = types.CtrlrResults{Err: res.Err}
-			cModules[res.Address] = types.ModuleResults{Err: res.Err}
-			cPmems[res.Address] = types.PmemResults{Err: res.Err}
+		if res.Err != nil { // likely to be comms err
+			c.setScanErr(cNvmeScan, cScmScan, res.Address, res.Err)
 			continue
 		}
 
-		storageRes, ok := res.Value.(StorageResult)
+		resp, ok := res.Value.(*ctlpb.StorageScanResp)
 		if !ok {
-			err := fmt.Errorf(msgBadType, StorageResult{}, res.Value)
-
-			cCtrlrs[res.Address] = types.CtrlrResults{Err: err}
-			cModules[res.Address] = types.ModuleResults{Err: err}
-			cPmems[res.Address] = types.PmemResults{Err: err}
+			c.setScanErr(cNvmeScan, cScmScan, res.Address,
+				fmt.Errorf(msgBadType, &ctlpb.StorageScanResp{}, res.Value))
 			continue
 		}
 
-		cCtrlrs[res.Address] = storageRes.nvmeCtrlr
-		cModules[res.Address] = storageRes.scmModule
-		cPmems[res.Address] = storageRes.scmPmem
+		if resp.GetNvme() == nil || resp.GetScm() == nil {
+			c.setScanErr(cNvmeScan, cScmScan, res.Address,
+				fmt.Errorf("malformed response, missing submessage %+v", resp))
+			continue
+		}
+
+		cNvmeScan[res.Address] = c.getNvmeResult(resp.Nvme, params.NvmeHealth)
+		cScmScan[res.Address] = c.getScmResult(resp.Scm)
 	}
 
-	return cCtrlrs, cModules, cPmems
+	return &StorageScanResp{Nvme: cNvmeScan, Scm: cScmScan}
 }
 
 // StorageFormatRequest attempts to format nonvolatile storage devices on a
@@ -240,7 +164,7 @@ func (c *connList) StorageScan() (ClientCtrlrMap, ClientModuleMap, ClientPmemMap
 // and returns an open stream handle. Receive on stream and send ClientResult
 // over channel for each.
 func StorageFormatRequest(mc Control, parms interface{}, ch chan ClientResult) {
-	sRes := StorageResult{}
+	sRes := StorageFormatResult{}
 
 	// Maximum time limit for format is 2hrs to account for lengthy low
 	// level formatting of multiple devices sequentially.
@@ -294,9 +218,9 @@ func (c *connList) StorageFormat(reformat bool) (ClientCtrlrMap, ClientMountMap)
 			continue
 		}
 
-		storageRes, ok := res.Value.(StorageResult)
+		storageRes, ok := res.Value.(StorageFormatResult)
 		if !ok {
-			err := fmt.Errorf(msgBadType, StorageResult{}, res.Value)
+			err := fmt.Errorf(msgBadType, StorageFormatResult{}, res.Value)
 
 			cCtrlrResults[res.Address] = types.CtrlrResults{Err: err}
 			cMountResults[res.Address] = types.MountResults{Err: err}

@@ -71,6 +71,7 @@ func MockScmNamespace() storage.ScmNamespace {
 		BlockDevice: m.Blockdev,
 		Name:        m.Dev,
 		NumaNode:    m.Numanode,
+		Size:        m.Size,
 	}
 }
 
@@ -134,7 +135,7 @@ func TestStorageScan(t *testing.T) {
 					State:  new(ResponseState),
 				},
 				Scm: &ScanScmResp{
-					Pmems: PmemDevices{common.MockPmemDevicePB()},
+					Pmems: ScmNamespaces{common.MockPmemDevicePB()},
 					State: new(ResponseState),
 				},
 			},
@@ -164,7 +165,7 @@ func TestStorageScan(t *testing.T) {
 					},
 				},
 				Scm: &ScanScmResp{
-					Pmems: PmemDevices{common.MockPmemDevicePB()},
+					Pmems: ScmNamespaces{common.MockPmemDevicePB()},
 					State: new(ResponseState),
 				},
 			},
@@ -182,7 +183,7 @@ func TestStorageScan(t *testing.T) {
 					},
 				},
 				Scm: &ScanScmResp{
-					Pmems: PmemDevices{common.MockPmemDevicePB()},
+					Pmems: ScmNamespaces{common.MockPmemDevicePB()},
 					State: new(ResponseState),
 				},
 			},

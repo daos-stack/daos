@@ -23,6 +23,7 @@
 package scm
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -73,6 +74,17 @@ type (
 		Namespaces     storage.ScmNamespaces
 	}
 
+	// ScanRequest defines the parameters for a Scan operation.
+	ScanRequest struct {
+		Rescan bool
+	}
+	// ScanResponse contains information gleaned during a successful Scan operation.
+	ScanResponse struct {
+		State      storage.ScmState
+		Modules    storage.ScmModules
+		Namespaces storage.ScmNamespaces
+	}
+
 	// DcpmParams defines the sub-parameters of a Format operation that
 	// will use DCPM storage.
 	DcpmParams struct {
@@ -108,18 +120,6 @@ type (
 	MountResponse struct {
 		Target  string
 		Mounted bool
-	}
-
-	// ScanRequest defines the parameters for a Scan operation.
-	ScanRequest struct {
-		Rescan bool
-	}
-	// ScanResponse contains information gleaned during
-	// a successful Scan operation.
-	ScanResponse struct {
-		State      storage.ScmState
-		Modules    storage.ScmModules
-		Namespaces storage.ScmNamespaces
 	}
 
 	// Backend defines a set of methods to be implemented by a SCM backend.
@@ -159,6 +159,23 @@ type (
 		sys     SystemProvider
 	}
 )
+
+func (sr *ScanResponse) String() string {
+	var buf bytes.Buffer
+
+	// Zero uninitialised value is Unknown (0)
+	if sr.State != storage.ScmStateUnknown {
+		fmt.Fprintf(&buf, "SCM State: %s\n", sr.State.String())
+	}
+
+	if len(sr.Namespaces) > 0 {
+		fmt.Fprintf(&buf, "SCM Namespaces: %s\n", &sr.Namespaces)
+	} else {
+		fmt.Fprintf(&buf, "SCM Modules:\n%s\n", &sr.Modules)
+	}
+
+	return buf.String()
+}
 
 func CreateFormatRequest(scmCfg storage.ScmConfig, reformat bool) (*FormatRequest, error) {
 	req := FormatRequest{
