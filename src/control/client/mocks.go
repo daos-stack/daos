@@ -366,7 +366,7 @@ func defaultMockConnect(log logging.Logger) Connect {
 func MockNvmeScanResults(ctrlrs NvmeControllers, addrs Addresses) NvmeScanResults {
 	results := make(NvmeScanResults)
 	for _, addr := range addrs {
-		results[addr] = &NvmeScanResult{Resp: ctrlrs}
+		results[addr] = &NvmeScanResult{Ctrlrs: ctrlrs}
 	}
 	return results
 }

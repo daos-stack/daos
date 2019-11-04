@@ -87,6 +87,41 @@ func (c *connList) setScanErr(cNvmeScan NvmeScanResults, cScmScan ScmScanResults
 	cScmScan[address] = &ScmScanResult{Err: err}
 }
 
+func (c *connList) getNvmeResult(resp *ctlpb.ScanNvmeResp) *NvmeScanResult {
+	nvmeResult := &NvmeScanResult{}
+
+	nState := resp.GetState()
+	if nState.GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
+		msg := nState.GetError()
+		if msg == "" {
+			msg = fmt.Sprintf("nvme %+v", nState.GetStatus())
+		}
+		nvmeResult.Err = errors.Errorf(msg)
+		return nvmeResult
+	}
+
+	nvmeResult.Ctrlrs = resp.GetCtrlrs()
+	return nvmeResult
+}
+
+func (c *connList) getScmResult(resp *ctlpb.ScanScmResp) *ScmScanResult {
+	scmResult := &ScmScanResult{}
+
+	sState := resp.GetState()
+	if sState.GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
+		msg := sState.GetError()
+		if msg == "" {
+			msg = fmt.Sprintf("scm %+v", sState.GetStatus())
+		}
+		scmResult.Err = errors.Errorf(msg)
+		return scmResult
+	}
+
+	scmResult.Modules = scmModulesFromPB(resp.GetModules())
+	scmResult.Namespaces = scmNamespacesFromPB(resp.GetPmems())
+	return scmResult
+}
+
 // StorageScan returns details of nonvolatile storage devices attached to each
 // remote server. Critical storage device health information is also returned
 // for all NVMe SSDs discovered. Data received over channel from requests
@@ -115,35 +150,8 @@ func (c *connList) StorageScan() (NvmeScanResults, ScmScanResults) {
 			continue
 		}
 
-		// Process storage subsystem responses.
-		nvmeResult := &NvmeScanResult{}
-		scmResult := &ScmScanResult{}
-
-		nState := resp.Nvme.GetState()
-		if nState.GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
-			msg := nState.GetError()
-			if msg == "" {
-				msg = fmt.Sprintf("nvme %+v", nState.GetStatus())
-			}
-			nvmeResult.Err = errors.Errorf(msg)
-		} else {
-			nvmeResult.Resp = resp.Nvme.Ctrlrs
-		}
-
-		sState := resp.Scm.GetState()
-		if sState.GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
-			msg := sState.GetError()
-			if msg == "" {
-				msg = fmt.Sprintf("scm %+v", sState.GetStatus())
-			}
-			scmResult.Err = errors.Errorf(msg)
-		} else {
-			scmResult.Modules = scmModulesFromPB(resp.Scm.GetModules())
-			scmResult.Namespaces = scmNamespacesFromPB(resp.Scm.GetPmems())
-		}
-
-		cNvmeScan[res.Address] = nvmeResult
-		cScmScan[res.Address] = scmResult
+		cNvmeScan[res.Address] = c.getNvmeResult(resp.Nvme)
+		cScmScan[res.Address] = c.getScmResult(resp.Scm)
 	}
 
 	return cNvmeScan, cScmScan
