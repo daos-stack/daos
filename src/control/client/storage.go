@@ -87,8 +87,8 @@ func (c *connList) setScanErr(cNvmeScan NvmeScanResults, cScmScan ScmScanResults
 	cScmScan[address] = &ScmScanResult{Err: err}
 }
 
-func (c *connList) getNvmeResult(resp *ctlpb.ScanNvmeResp) *NvmeScanResult {
-	nvmeResult := &NvmeScanResult{}
+func (c *connList) getNvmeResult(resp *ctlpb.ScanNvmeResp, withHealth bool) *NvmeScanResult {
+	nvmeResult := &NvmeScanResult{Health: withHealth}
 
 	nState := resp.GetState()
 	if nState.GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
@@ -125,8 +125,8 @@ func (c *connList) getScmResult(resp *ctlpb.ScanScmResp) *ScmScanResult {
 // StorageScan returns details of nonvolatile storage devices attached to each
 // remote server. Critical storage device health information is also returned
 // for all NVMe SSDs discovered. Data received over channel from requests
-// running in parallel.
-func (c *connList) StorageScan() (NvmeScanResults, ScmScanResults) {
+// in parallel. If health param is true, stringer repr will include stats.
+func (c *connList) StorageScan(params *StorageScanReq) *StorageScanResp {
 	cResults := c.makeRequests(nil, storageScanRequest)
 	cNvmeScan := make(NvmeScanResults) // mapping of server address to NVMe SSDs
 	cScmScan := make(ScmScanResults)   // mapping of server address to SCM modules/namespaces
@@ -150,11 +150,11 @@ func (c *connList) StorageScan() (NvmeScanResults, ScmScanResults) {
 			continue
 		}
 
-		cNvmeScan[res.Address] = c.getNvmeResult(resp.Nvme)
+		cNvmeScan[res.Address] = c.getNvmeResult(resp.Nvme, params.NvmeHealth)
 		cScmScan[res.Address] = c.getScmResult(resp.Scm)
 	}
 
-	return cNvmeScan, cScmScan
+	return &StorageScanResp{Nvme: cNvmeScan, Scm: cScmScan}
 }
 
 // StorageFormatRequest attempts to format nonvolatile storage devices on a

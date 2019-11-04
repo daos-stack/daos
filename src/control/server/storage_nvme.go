@@ -305,7 +305,7 @@ func (n *nvmeStorage) Format(cfg storage.BdevConfig, results *(types.NvmeControl
 	// add info to result if no controllers have been formatted
 	if len(*results) == 0 && len(cfg.DeviceList) == 0 {
 		addCretFormat(ctlpb.ResponseStatus_CTL_SUCCESS,
-			"", "no controllers specified")
+			"", msgBdevNoDevs)
 	}
 
 	n.log.Debugf("device format on NVMe controllers completed")

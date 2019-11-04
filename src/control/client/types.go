@@ -309,7 +309,7 @@ func (result *ScmScanResult) String() string {
 	case result.Err != nil:
 		return fmt.Sprintf("Error: %s", result.Err)
 	case len(result.Namespaces) > 0:
-		return fmt.Sprintf("SCM Namespaces:\n%s\n", result.Namespaces)
+		return fmt.Sprintf("SCM Namespaces:%s\n", result.Namespaces)
 	default:
 		return fmt.Sprintf("SCM Modules:\n%s\n", result.Modules)
 	}
@@ -338,15 +338,20 @@ func (results *ScmScanResults) String() string {
 // NvmeScanResult represents the result of scanning for SCM
 // modules installed on a storage node.
 type NvmeScanResult struct {
+	Health bool
 	Ctrlrs pb_types.NvmeControllers
 	Err    error
 }
 
 func (result *NvmeScanResult) String() string {
-	if result.Err != nil {
+	switch {
+	case result.Err != nil:
 		return fmt.Sprintf("Error: %s", result.Err)
+	case result.Health:
+		return result.Ctrlrs.StringHealthStats()
+	default:
+		return result.Ctrlrs.String()
 	}
-	return result.Ctrlrs.String()
 }
 
 // NvmeScanResults maps NvmeScanResult structs to the addresses
@@ -391,9 +396,21 @@ func scmNamespacesFromPB(pbNss pb_types.ScmNamespaces) (nss []storage.ScmNamespa
 				BlockDevice: ns.Blockdev,
 				Name:        ns.Dev,
 				NumaNode:    ns.Numanode,
+				Size:        ns.Size,
 			})
 	}
 	return
+}
+
+// StorageScanReq encapsulated subsystem scan parameters.
+type StorageScanReq struct {
+	NvmeHealth bool
+}
+
+// StorageScanResp encapsulated subsystem results.
+type StorageScanResp struct {
+	Nvme NvmeScanResults
+	Scm  ScmScanResults
 }
 
 // StorageFormatResult stores results of format operations on NVMe controllers

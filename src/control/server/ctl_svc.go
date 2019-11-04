@@ -38,6 +38,8 @@ type ControlService struct {
 	membership *common.Membership
 }
 
+// NewControlService returns ControlService to be used as gRPC control service
+// datastore. Initialised with sensible defaults and provided components.
 func NewControlService(l logging.Logger, h *IOServerHarness, sp *scm.Provider, cfg *Configuration, m *common.Membership) (*ControlService, error) {
 	scs, err := DefaultStorageControlService(l, cfg)
 	if err != nil {
