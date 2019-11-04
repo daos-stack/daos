@@ -38,6 +38,24 @@ package netdetect
 #include <rdma/fi_tagged.h>
 #include <rdma/fi_rma.h>
 #include <rdma/fi_errno.h>
+
+#define getHFIUnitError -2
+typedef struct {
+	uint64_t reserved_1;
+	uint8_t  reserved_2;
+	int8_t   unit;
+	uint8_t  port;
+	uint8_t  reserved_3;
+	uint32_t service;
+} psmx2_ep_name;
+
+int getHFIUnit(void *src_addr) {
+	psmx2_ep_name *psmx2;
+	psmx2 = (psmx2_ep_name *)src_addr;
+	if (!psmx2)
+		return getHFIUnitError;
+	return psmx2->unit;
+}
 */
 import "C"
 
@@ -60,6 +78,8 @@ const (
 	libFabricMinorVersion = 7
 	hwlocFlagsStandard    = 0
 	hwlocFlagsWholeSystem = 1
+	allHFIUsed            = -1
+	badAddress            = C.getHFIUnitError
 )
 
 // DeviceAffinity describes the essential details of a device and its NUMA affinity
@@ -777,6 +797,14 @@ func ValidateProviderConfig(device string, provider string) error {
 		return errors.Errorf("device: %s is an invalid device name", device)
 	}
 
+	var hfiDeviceCount int
+	for _, device := range deviceScanCfg.hwlocDeviceNames {
+		if strings.Contains(device, "hfi1_") {
+			hfiDeviceCount++
+			log.Debugf("There are %d hfi1 devices in the system", hfiDeviceCount)
+		}
+	}
+
 	// iterate over the libfabric records that match this provider
 	// and look for one that has a matching device name
 	// The device names returned from libfabric may be device names such as "hfi1_0" that maps to a system device "ib0"
@@ -788,6 +816,58 @@ func ValidateProviderConfig(device string, provider string) error {
 			continue
 		}
 		deviceScanCfg.targetDevice = C.GoString(fi.domain_attr.name)
+
+		// Implements a workaround to handle the current psm2 provider behavior
+		// that reports fi.domain_attr.name as "psm2" instead of an actual device
+		// name like "hfi1_0".
+		//
+		// The work around behaves in two different ways depending on the data available.
+		// When the value of fi.src_addr.unit is 0 or greater, it is used to explicitly
+		// define an hfi1_ unit by appending that number to the "hfi1_" string.
+		//
+		// When the value of fi.src_addr.unit is -1, it means that all hfi1_x units in the system
+		// are supported by the psm2 provider.  In this case, we need to know how many hfi1_x units
+		// there are, and can look for a provider/device match against each item in the list.
+		//
+		// Note that "hfi1_x" is converted to a system device name such as "ibx"
+		// by the call to GetAffinityForDevice()
+		if C.GoString(fi.fabric_attr.prov_name) == "psm2" {
+			if strings.Contains(deviceScanCfg.targetDevice, "psm2") {
+				log.Debugf("psm2 provider and psm2 device found.")
+				hfiUnit := C.getHFIUnit(fi.src_addr)
+				switch hfiUnit {
+				case allHFIUsed:
+					for deviceID := 0; deviceID < hfiDeviceCount; deviceID++ {
+						deviceScanCfg.targetDevice = fmt.Sprintf("hfi1_%d", deviceID)
+						deviceAffinity, err := GetAffinityForDevice(deviceScanCfg)
+						if err != nil {
+							continue
+						}
+						if deviceAffinity.DeviceName == device {
+							log.Debugf("Device %s supports provider: %s", device, provider)
+							return nil
+						}
+					}
+					continue
+				case badAddress:
+					log.Debugf("The fi.src_addr was null - not adding hfi1_n scan result")
+					continue
+				default: // The hfi unit is stated explicitly
+					log.Debugf("Found hfi1_%d (actual)", hfiUnit)
+					deviceScanCfg.targetDevice = fmt.Sprintf("hfi1_%d", hfiUnit)
+					deviceAffinity, err := GetAffinityForDevice(deviceScanCfg)
+					if err != nil {
+						continue
+					}
+					if deviceAffinity.DeviceName == device {
+						log.Debugf("Device %s supports provider: %s", device, provider)
+						return nil
+					}
+					continue
+				}
+			}
+		}
+
 		deviceAffinity, err := GetAffinityForDevice(deviceScanCfg)
 		if err != nil {
 			continue
@@ -843,6 +923,31 @@ func ValidateNUMAConfig(device string, numaNode uint) error {
 	return nil
 }
 
+func createFabricScanEntry(deviceScanCfg DeviceScan, provider string, devCount int) (FabricScan, error) {
+	deviceAffinity, err := GetAffinityForDevice(deviceScanCfg)
+	if err != nil {
+		return FabricScan{}, err
+	}
+
+	// Convert the libfabric provider list to a Mercury compatible provider list
+	mercuryProviderList, err := convertLibFabricToMercury(provider)
+	if err != nil {
+		// An error while converting a libfabric provider to a mercury provider is not fatal.
+		// In this case, we want to omit this libfabric record from our results because it has no
+		// mercury equivalent provider.  There are many providers in libfabric that have no mercury
+		// equivalent, and we want to filter those out right here.
+		return FabricScan{}, err
+	}
+	log.Debugf("Mercury provider list: %v", mercuryProviderList)
+
+	return FabricScan{
+		Provider:   mercuryProviderList,
+		DeviceName: deviceAffinity.DeviceName,
+		NUMANode:   deviceAffinity.NUMANode,
+		Priority:   devCount,
+	}, nil
+}
+
 // ScanFabric examines libfabric data to find the network devices that support the given fabric provider.
 func ScanFabric(provider string) ([]FabricScan, error) {
 	var ScanResults []FabricScan
@@ -887,36 +992,69 @@ func ScanFabric(provider string) ([]FabricScan, error) {
 	log.Debugf("initDeviceScan completed.  Depth %d, numObj %d, systemDeviceNames %v, hwlocDeviceNames %v",
 		deviceScanCfg.depth, deviceScanCfg.numObj, deviceScanCfg.systemDeviceNames, deviceScanCfg.hwlocDeviceNames)
 
+	var hfiDeviceCount int
+	for _, device := range deviceScanCfg.hwlocDeviceNames {
+		if strings.Contains(device, "hfi1_") {
+			hfiDeviceCount++
+			log.Debugf("There are %d hfi1 devices in the system", hfiDeviceCount)
+		}
+	}
+
 	for ; fi != nil; fi = fi.next {
 		if fi.domain_attr == nil || fi.domain_attr.name == nil || fi.fabric_attr == nil || fi.fabric_attr.prov_name == nil {
 			continue
 		}
-
 		deviceScanCfg.targetDevice = C.GoString(fi.domain_attr.name)
-		deviceAffinity, err := GetAffinityForDevice(deviceScanCfg)
-		if err != nil {
-			log.Debugf("Error from GetAffinityForDevice: %v", err)
-			continue
-		}
 
-		// Convert the libfabric provider list to a Mercury compatible provider list
-		mercuryProviderList, err := convertLibFabricToMercury(C.GoString(fi.fabric_attr.prov_name))
-		if err != nil {
-			log.Debugf("Couldn't convert the libfabric provider string: %s", C.GoString(fi.fabric_attr.prov_name))
-			log.Debugf("Skipping FI record for device %s, provider %s", deviceAffinity.DeviceName, C.GoString(fi.fabric_attr.prov_name))
-			// An error while converting a libfabric provider to a mercury provider is not fatal.
-			// In this case, we want to omit this libfabric record from our results because it has no
-			// mercury equivalent provider.  There are many providers in libfabric that have no mercury
-			// equivalent, and we want to filter those out right here.
-			continue
+		// Implements a workaround to handle the current psm2 provider behavior
+		// that reports fi.domain_attr.name as "psm2" instead of an actual device
+		// name like "hfi1_0".
+		//
+		// The work around behaves in two different ways depending on the data available.
+		// When the value of fi.src_addr.unit is 0 or greater, it is used to explicitly
+		// define an hfi1_ unit by appending that number to the "hfi1_" string.
+		//
+		// When the value of fi.src_addr.unit is -1, it means that all hfi1_x units in the system
+		// are supported by the psm2 provider.  In this case, we need to know how many hfi1_x units
+		// there are, and create a fabric scan entry for each one.  By querying the device names from
+		// hwloc, we can count the number of devices matching "hfi1_" and create a device scan
+		// entry for each one.
+		if C.GoString(fi.fabric_attr.prov_name) == "psm2" {
+			if strings.Contains(deviceScanCfg.targetDevice, "psm2") {
+				log.Debugf("psm2 provider and psm2 device found.")
+				hfiUnit := C.getHFIUnit(fi.src_addr)
+				switch hfiUnit {
+				case allHFIUsed:
+					for deviceID := 0; deviceID < hfiDeviceCount; deviceID++ {
+						deviceScanCfg.targetDevice = fmt.Sprintf("hfi1_%d", deviceID)
+						scanResults, err := createFabricScanEntry(deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount)
+						if err != nil {
+							// errors from createFabricScanEntry are non fatal errors
+							continue
+						}
+						results := scanResults.String()
+						if _, found := resultsMap[results]; !found {
+							resultsMap[results] = struct{}{}
+							log.Debugf("\n%s", results)
+							ScanResults = append(ScanResults, scanResults)
+							devCount++
+						}
+					}
+					continue
+				case badAddress:
+					log.Debugf("The fi.src_addr was null - not adding hfi1_n scan result")
+					continue
+				default: // The hfi unit is stated explicitly
+					log.Debugf("Found hfi1_%d (actual)", hfiUnit)
+					deviceScanCfg.targetDevice = fmt.Sprintf("hfi1_%d", hfiUnit)
+					continue
+				}
+			}
 		}
-		log.Debugf("Mercury provider list: %v", mercuryProviderList)
-
-		scanResults := FabricScan{
-			Provider:   mercuryProviderList,
-			DeviceName: deviceAffinity.DeviceName,
-			NUMANode:   deviceAffinity.NUMANode,
-			Priority:   devCount,
+		scanResults, err := createFabricScanEntry(deviceScanCfg, C.GoString(fi.fabric_attr.prov_name), devCount)
+		if err != nil {
+			// errors from createFabricScanEntry are non fatal errors
+			continue
 		}
 
 		results := scanResults.String()
