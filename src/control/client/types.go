@@ -339,7 +339,7 @@ func (results *ScmScanResults) String() string {
 // modules installed on a storage node.
 type NvmeScanResult struct {
 	Health bool
-	Resp   pb_types.NvmeControllers
+	Ctrlrs pb_types.NvmeControllers
 	Err    error
 }
 
@@ -348,13 +348,13 @@ func (result *NvmeScanResult) String() string {
 	case result.Err != nil:
 		return fmt.Sprintf("Error: %s", result.Err)
 	case result.Health:
-		return result.Resp.StringHealthStats()
+		return result.Ctrlrs.StringHealthStats()
 	default:
-		return result.Resp.String()
+		return result.Ctrlrs.String()
 	}
 }
 
-// NvmeScanMap maps NvmeModuleScanResult structs to the addresses
+// NvmeScanResults maps NvmeScanResult structs to the addresses
 // of remote servers identified by an address string.
 type NvmeScanResults map[string]*NvmeScanResult
 
