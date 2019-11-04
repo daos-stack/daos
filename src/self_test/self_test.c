@@ -119,7 +119,7 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 	uint32_t	 init_flags = 0;
 	uint32_t	 grp_size;
 	d_rank_list_t	*rank_list = NULL;
-	int		 attach_retries = 20;
+	int		 attach_retries = 40;
 	int		 ret;
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
