@@ -476,11 +476,9 @@ class ServerManager(ExecutableCommand):
     def stop(self):
         """Stop the server through the runner."""
         self.log.info("Stopping servers")
-        if self.runner.sudo:
+        if self.runner.job.yaml_params.is_nvme():
             self.kill()
-            if self.runner.job.yaml_params.is_nvme() or \
-               self.runner.job.yaml_params.is_scm():
-                storage_reset(self._hosts)
+            storage_reset(self._hosts)
             # Make sure the mount directory belongs to non-root user
             self.log.info("Changing ownership of mount to non-root user")
             cmd = "sudo chown -R {0}:{0} /mnt/daos*".format(getpass.getuser())
