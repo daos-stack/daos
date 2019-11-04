@@ -214,6 +214,11 @@ def spawn_commands(host_list, command, timeout=120):
                     output = "\n      {}".format("\n      ".join(lines))
                 print("    {}: rc={}, output: {}".format(n_set, code, output))
 
+    # List any hosts that timed out
+    timed_out = [str(hosts) for hosts in task.iter_keys_timeout()]
+    if timed_out:
+        print("    {}: timeout detected".format(NodeSet.fromlist(timed_out)))
+
     return status
 
 
@@ -621,7 +626,7 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
         "fi",
         "fi",
         "done",
-        "echo Copied ${copied[@]}",
+        "echo Copied ${copied[@]:-no files}",
         "exit $rc",
     ]
     spawn_commands(host_list, "; ".join(commands))
