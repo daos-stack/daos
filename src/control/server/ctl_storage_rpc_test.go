@@ -252,8 +252,6 @@ func TestStorageScan(t *testing.T) {
 					log, config.ext,
 					newMockSpdkEnv(tc.spdkInitEnvRet),
 					newMockSpdkNvme(log, []spdk.Controller{ctrlr},
-						[]spdk.Namespace{MockNamespace(&ctrlr)},
-						[]spdk.DeviceHealth{MockDeviceHealth(&ctrlr)},
 						tc.spdkDiscoverRet, nil),
 					false)
 				_ = new(StorageScanResp)
@@ -406,8 +404,6 @@ func TestStoragePrepare(t *testing.T) {
 			cs := mockControlService(t, log, config, &mbc, nil)
 			cs.nvme = newMockNvmeStorage(log, config.ext, newMockSpdkEnv(nil),
 				newMockSpdkNvme(log, []spdk.Controller{ctrlr},
-					[]spdk.Namespace{MockNamespace(&ctrlr)},
-					[]spdk.DeviceHealth{MockDeviceHealth(&ctrlr)},
 					nil, nil), false)
 			_ = new(StoragePrepareResp)
 

@@ -26,8 +26,9 @@ import (
 	"bytes"
 	"fmt"
 
+	"github.com/inhies/go-bytesize"
+
 	"github.com/daos-stack/daos/src/control/common"
-	bytesize "github.com/inhies/go-bytesize"
 )
 
 // ScmState represents the probed state of SCM modules on the system.

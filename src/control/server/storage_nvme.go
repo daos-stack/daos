@@ -214,11 +214,11 @@ func (n *nvmeStorage) Discover() error {
 		return errors.WithMessage(err, msgSpdkInitFail)
 	}
 
-	cs, ns, dh, err := n.nvme.Discover()
+	cs, err := n.nvme.Discover()
 	if err != nil {
 		return errors.WithMessage(err, msgSpdkDiscoverFail)
 	}
-	n.controllers = loadControllers(cs, ns, dh)
+	n.controllers = loadControllers(cs)
 	n.initialized = true
 
 	return nil
@@ -284,7 +284,7 @@ func (n *nvmeStorage) Format(cfg storage.BdevConfig, results *(types.NvmeControl
 			n.log.Debugf("formatting nvme controller at %s, may take "+
 				"several minutes!...", pciAddr)
 
-			cs, ns, err := n.nvme.Format(pciAddr)
+			cs, err := n.nvme.Format(pciAddr)
 			if err != nil {
 				addCretFormat(ctlpb.ResponseStatus_CTL_ERR_NVME,
 					pciAddr+": "+err.Error(), "")
@@ -294,7 +294,7 @@ func (n *nvmeStorage) Format(cfg storage.BdevConfig, results *(types.NvmeControl
 			n.log.Debugf("controller format successful (%s)\n", pciAddr)
 
 			addCretFormat(ctlpb.ResponseStatus_CTL_SUCCESS, "", "")
-			n.controllers = loadControllers(cs, ns, nil)
+			n.controllers = loadControllers(cs)
 		}
 	default:
 		addCretFormat(ctlpb.ResponseStatus_CTL_ERR_CONF,
@@ -313,10 +313,7 @@ func (n *nvmeStorage) Format(cfg storage.BdevConfig, results *(types.NvmeControl
 }
 
 // loadControllers converts slice of Controller into protobuf equivalent.
-// Implemented as a pure function.
-func loadControllers(ctrlrs []spdk.Controller, nss []spdk.Namespace,
-	healthStats []spdk.DeviceHealth) (pbCtrlrs types.NvmeControllers) {
-
+func loadControllers(ctrlrs []spdk.Controller) (pbCtrlrs types.NvmeControllers) {
 	for _, c := range ctrlrs {
 		pbCtrlrs = append(
 			pbCtrlrs,
@@ -326,54 +323,48 @@ func loadControllers(ctrlrs []spdk.Controller, nss []spdk.Namespace,
 				Pciaddr:     c.PCIAddr,
 				Fwrev:       c.FWRev,
 				Socketid:    c.SocketID,
-				Healthstats: loadHealthStats(c.PCIAddr, healthStats),
-				Namespaces:  loadNamespaces(c.PCIAddr, nss), // repeated pb field
+				Healthstats: nvmeHealthToPB(c.Health),
+				Namespaces:  nvmeNamespacesToPB(c.Namespaces),
 			})
 	}
 	return pbCtrlrs
 }
 
-// loadNamespaces converts slice of Namespace into protobuf equivalent.
-// Implemented as a pure function.
-func loadNamespaces(ctrlrPciAddr string, nss []spdk.Namespace) (_nss types.NvmeNamespaces) {
+// nvmeNamespacesToPB converts slice of Namespaces into protobuf equivalent.
+func nvmeNamespacesToPB(nss []*spdk.Namespace) (_nss types.NvmeNamespaces) {
 	for _, ns := range nss {
-		if ns.CtrlrPciAddr == ctrlrPciAddr {
-			_nss = append(
-				_nss,
-				&ctlpb.NvmeController_Namespace{
-					Id:       ns.ID,
-					Capacity: ns.Size,
-				})
-		}
+		_nss = append(
+			_nss,
+			&ctlpb.NvmeController_Namespace{
+				Id:       ns.ID,
+				Capacity: ns.Size,
+			})
 	}
 	return
 }
 
-// loadHealthStats find health statistics for a given control identified by PCI
-// address.
-func loadHealthStats(ctrlrPciAddr string, hss []spdk.DeviceHealth) *ctlpb.NvmeController_Health {
-	for _, hs := range hss {
-		if hs.CtrlrPciAddr == ctrlrPciAddr {
-			return &ctlpb.NvmeController_Health{
-				Temp:            hs.Temp,
-				Tempwarn:        hs.TempWarnTime,
-				Tempcrit:        hs.TempCritTime,
-				Ctrlbusy:        hs.CtrlBusyTime,
-				Powercycles:     hs.PowerCycles,
-				Poweronhours:    hs.PowerOnHours,
-				Unsafeshutdowns: hs.UnsafeShutdowns,
-				Mediaerrors:     hs.MediaErrors,
-				Errorlogs:       hs.ErrorLogEntries,
-				Tempwarning:     hs.TempWarn,
-				Availspare:      hs.AvailSpareWarn,
-				Reliability:     hs.ReliabilityWarn,
-				Readonly:        hs.ReadOnlyWarn,
-				Volatilemem:     hs.VolatileWarn,
-			}
-		}
+// nvmeHealthStatsToPB converts health statistics to protouf message format.
+func nvmeHealthToPB(dh *spdk.DeviceHealth) *ctlpb.NvmeController_Health {
+	if dh == nil {
+		return nil // no health statistics available
 	}
 
-	return nil // none found
+	return &ctlpb.NvmeController_Health{
+		Temp:            dh.Temp,
+		Tempwarn:        dh.TempWarnTime,
+		Tempcrit:        dh.TempCritTime,
+		Ctrlbusy:        dh.CtrlBusyTime,
+		Powercycles:     dh.PowerCycles,
+		Poweronhours:    dh.PowerOnHours,
+		Unsafeshutdowns: dh.UnsafeShutdowns,
+		Mediaerrors:     dh.MediaErrors,
+		Errorlogs:       dh.ErrorLogEntries,
+		Tempwarning:     dh.TempWarn,
+		Availspare:      dh.AvailSpareWarn,
+		Reliability:     dh.ReliabilityWarn,
+		Readonly:        dh.ReadOnlyWarn,
+		Volatilemem:     dh.VolatileWarn,
+	}
 }
 
 // newNvmeStorage creates a new instance of nvmeStorage struct.
