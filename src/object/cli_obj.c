@@ -88,8 +88,6 @@ struct obj_auxi_args {
 	uint32_t			 iod_nr;
 	d_list_t			 shard_task_head;
 	struct obj_reasb_req		 reasb_req;
-	/* target bitmap, only used for EC */
-	uint8_t				 tgt_bitmap[OBJ_TGT_BITMAP_LEN];
 	/* one shard_args embedded to save one memory allocation if the obj
 	 * request only targets for one shard.
 	 */
@@ -566,7 +564,8 @@ obj_reasb_req_init(struct obj_auxi_args *obj_auxi, daos_iod_t *iods,
 {
 	struct obj_reasb_req		*reasb_req = &obj_auxi->reasb_req;
 	daos_size_t			 size_iod, size_sgl, size_oiod;
-	daos_size_t			 size_recx, size_tgt_nr, buf_size;
+	daos_size_t			 size_recx, size_tgt_nr;
+	daos_size_t			 size_sorter, buf_size;
 	daos_iod_t			*uiod, *riod;
 	struct obj_ec_recx_array	*ec_recx;
 	void				*buf;
@@ -577,10 +576,11 @@ obj_reasb_req_init(struct obj_auxi_args *obj_auxi, daos_iod_t *iods,
 	size_sgl = roundup(sizeof(d_sg_list_t) * iod_nr, 8);
 	size_oiod = roundup(sizeof(struct obj_io_desc) * iod_nr, 8);
 	size_recx = roundup(sizeof(struct obj_ec_recx_array) * iod_nr, 8);
-	/* for struct obj_ec_recx_array::oer_tgt_recx_nrs/oer_tgt_recx_idxs  */
+	size_sorter = roundup(sizeof(struct obj_ec_seg_sorter) * iod_nr, 8);
+	/* for oer_tgt_recx_nrs/_idxs */
 	size_tgt_nr = roundup(sizeof(uint32_t) *
 			      (oca->u.ec.e_k + oca->u.ec.e_p), 8);
-	buf_size = size_iod + size_sgl + size_oiod + size_recx +
+	buf_size = size_iod + size_sgl + size_oiod + size_recx + size_sorter +
 		   size_tgt_nr * iod_nr * 2;
 	D_ALLOC(buf, buf_size);
 	if (buf == NULL)
@@ -595,6 +595,8 @@ obj_reasb_req_init(struct obj_auxi_args *obj_auxi, daos_iod_t *iods,
 	tmp_ptr += size_oiod;
 	reasb_req->orr_recxs = (void *)tmp_ptr;
 	tmp_ptr += size_recx;
+	reasb_req->orr_sorters = (void *)tmp_ptr;
+	tmp_ptr += size_sorter;
 
 	for (i = 0; i < iod_nr; i++) {
 		uiod = &iods[i];
@@ -633,6 +635,7 @@ obj_reasb_req_fini(struct obj_auxi_args *obj_auxi)
 		daos_sgl_fini(reasb_req->orr_sgls + i, false);
 		obj_io_desc_fini(reasb_req->orr_oiods + i);
 		obj_ec_recxs_fini(&reasb_req->orr_recxs[i]);
+		obj_ec_seg_sorter_fini(&reasb_req->orr_sorters[i]);
 	}
 	D_FREE(reasb_req->orr_iods);
 }

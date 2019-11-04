@@ -29,6 +29,7 @@
 #define __DAOS_OBJ_INTENRAL_H__
 
 #include <abt.h>
+#include <stdint.h>
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos/tse.h>
@@ -126,6 +127,8 @@ struct dc_object {
 
 /** Shard IO descriptor */
 struct obj_shard_iod {
+	/** tgt index [0, k+p) */
+	uint32_t		 siod_tgt_idx;
 	/** start index in extend array in daos_iod_t */
 	uint32_t		 siod_idx;
 	/** number of extends in extend array in daos_iod_t */
@@ -135,7 +138,7 @@ struct obj_shard_iod {
 };
 
 /** Evenly distributed for EC full-stripe-only mode */
-#define OBJ_SIOD_EVEN_DIST	((uint32_t)-1)
+#define OBJ_SIOD_EVEN_DIST	((uint32_t)1)
 
 /**
  * Object IO descriptor.
@@ -145,14 +148,17 @@ struct obj_shard_iod {
 struct obj_io_desc {
 	/**
 	 * number of shard IODs involved for this object IO.
-	 * for EC obj, (siod_nr == 0) if there is only one target, for
-	 * example partial update or fetch targeted with only one shard;
-	 * (siod_nr == OBJ_SIOD_EVEN_DIST) is a special case that the extends
+	 * for EC obj, if there is only one target for example partial update or
+	 * fetch targeted with only one shard, oiod_siods should be NULL as need
+	 * not carry extra info.
+	 */
+	uint32_t		 oiod_nr;
+	/**
+	 * Flags, OBJ_SIOD_EVEN_DIST is for a special case that the extends
 	 * only cover full stripe(s), then each target has same number of
 	 * extends in the extend array (evenly distributed).
 	 */
-	uint32_t		 oiod_nr;
-	uint32_t		 oid_pad;
+	uint32_t		 oiod_flags;
 	/** shard IOD array */
 	struct obj_shard_iod	*oiod_siods;
 };
@@ -171,7 +177,29 @@ struct obj_reasb_req {
 	d_sg_list_t			*orr_sgls;
 	struct obj_io_desc		*orr_oiods;
 	struct obj_ec_recx_array	*orr_recxs;
+	struct obj_ec_seg_sorter	*orr_sorters;
+	/* target bitmap, from first data cell to last parity cell */
+	uint8_t				 tgt_bitmap[OBJ_TGT_BITMAP_LEN];
 };
+
+static inline int
+obj_io_desc_init(struct obj_io_desc *oiod, uint32_t tgt_nr, uint32_t flags)
+{
+#if 0
+	/* XXX refine it later */
+	if (tgt_nr < 2 || flags == OBJ_SIOD_EVEN_DIST) {
+		oiod->oiod_siods = NULL;
+		oiod->oiod_nr = tgt_nr;
+		oiod->oiod_flags = flags;
+		return 0;
+	}
+#endif
+	D_ALLOC_ARRAY(oiod->oiod_siods, tgt_nr);
+	if (oiod->oiod_siods == NULL)
+		return -DER_NOMEM;
+	oiod->oiod_nr = tgt_nr;
+	return 0;
+}
 
 static inline void
 obj_io_desc_fini(struct obj_io_desc *oiod)

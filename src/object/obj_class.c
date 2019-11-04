@@ -297,7 +297,7 @@ static struct daos_obj_class daos_obj_classes[] = {
 			.ca_grp_nr		= 1,
 			.ca_ec_k		= 2,
 			.ca_ec_p		= 2,
-			.ca_ec_cell		= 1 << 15,
+			.ca_ec_cell		= 32,
 		},
 	},
 	{
@@ -502,6 +502,11 @@ obj_ec_codec_init()
 		if (k > OBJ_EC_MAX_K || p > OBJ_EC_MAX_P) {
 			D_ERROR("invalid k %d p %d (max k %d, max p %d)\n",
 				k, p, OBJ_EC_MAX_K, OBJ_EC_MAX_P);
+			D_GOTO(failed, rc = -DER_INVAL);
+		}
+		if (k < 2 || p < 1) {
+			D_ERROR("invalid k %d / p %d (min k 2, min p 1).\n",
+				k, p);
 			D_GOTO(failed, rc = -DER_INVAL);
 		}
 		if (p > k) {

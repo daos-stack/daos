@@ -245,6 +245,32 @@ daos_size_t daos_sgls_packed_size(d_sg_list_t *sgls, int nr,
 		D_ASSERT(moved == (move_dist));				       \
 	} while (0)
 
+/**
+ * Consume buffer of length\a size for \a sgl with \a iov_idx and \a iov_off.
+ * The consumed buffer location will be returned by \a iovs and \a iov_nr.
+ */
+#define daos_sgl_consume(sgl, iov_idx, iov_off, size, iovs, iov_nr)	       \
+	do {								       \
+		uint64_t consumed = 0, step, iov_left;			       \
+		uint32_t consume_idx = 0;				       \
+		if ((size) <= 0)					       \
+			break;						       \
+		while (consumed < (size)) {				       \
+			iov_left = daos_iov_left(sgl, iov_idx, iov_off);       \
+			step = MIN(iov_left, (size) - consumed);	       \
+			iovs[consume_idx].iov_buf =			       \
+				(sgl)->sg_iovs[iov_idx].iov_buf + (iov_off);   \
+			iovs[consume_idx].iov_len = step;		       \
+			consume_idx++;					       \
+			(iov_off) += step;				       \
+			consumed += step;				       \
+			if (daos_iov_left(sgl, iov_idx, iov_off) == 0)	       \
+				daos_sgl_next_iov(iov_idx, iov_off);	       \
+		}							       \
+		(iov_nr) = consume_idx;					       \
+		D_ASSERT(consumed == (size));				       \
+	} while (0)
+
 #ifndef roundup
 #define roundup(x, y)		((((x) + ((y) - 1)) / (y)) * (y))
 #endif
