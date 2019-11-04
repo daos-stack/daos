@@ -28,6 +28,7 @@ import (
 	"fmt"
 
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	bytesize "github.com/inhies/go-bytesize"
 )
 
 // NvmeNamespaces is an alias for protobuf NvmeController_Namespace message slice
@@ -97,7 +98,7 @@ func (ncs NvmeControllers) ctrlrDetail(buf *bytes.Buffer, c *ctlpb.NvmeControlle
 		c.Pciaddr, c.Serial, c.Model, c.Fwrev, c.Socketid)
 
 	for _, ns := range c.Namespaces {
-		fmt.Fprintf(buf, "\t\tNamespace: id:%d capacity:%dGB\n", ns.Id, ns.Capacity)
+		fmt.Fprintf(buf, "\t\tNamespace: id:%d capacity:%s\n", ns.Id, bytesize.GB*bytesize.New(float64(ns.Capacity)))
 	}
 }
 
