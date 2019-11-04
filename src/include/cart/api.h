@@ -2037,6 +2037,7 @@ int crt_group_secondary_destroy(crt_group_t *grp);
  * \param[in] uris               Array of URIs corresponding to contexts and
  *                               rank list
  * \param[in] op                 Modification operation.
+ * \param[in] version            New group version
  *
  * \return                       DER_SUCCESS on success, negative value on
  *                               failure.
@@ -2059,7 +2060,7 @@ int crt_group_secondary_destroy(crt_group_t *grp);
  */
 int crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs,
 			int num_ctxs, d_rank_list_t *ranks, char **uris,
-			crt_group_mod_op_t op);
+			crt_group_mod_op_t op, uint32_t version);
 
 /**
  * Perform a secondary group modification in an atomic fashion based on the
@@ -2070,12 +2071,14 @@ int crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs,
  * \param[in] sec_ranks          List of secondary ranks
  * \param[in] prim_ranks         List of primary ranks
  * \param[in] op                 Modification operation
+ * \param[in] version            New group version
  *
  * \return                       DER_SUCCESS on success, negative value on
  *                               failure.
  */
 int crt_group_secondary_modify(crt_group_t *grp, d_rank_list_t *sec_ranks,
-			d_rank_list_t *prim_ranks, crt_group_mod_op_t op);
+			d_rank_list_t *prim_ranks, crt_group_mod_op_t op,
+			uint32_t version);
 
 #define crt_proc__Bool			crt_proc_bool
 #define crt_proc_d_rank_t		crt_proc_uint32_t

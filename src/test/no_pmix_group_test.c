@@ -715,7 +715,7 @@ int main(int argc, char **argv)
 	DBG_PRINT("primary modify: Add\n");
 	rc = crt_group_primary_modify(grp, &crt_ctx[1], 1,
 				mod_ranks, uris,
-				CRT_GROUP_MOD_OP_ADD);
+				CRT_GROUP_MOD_OP_ADD, 0x0);
 	if (rc != 0) {
 		D_ERROR("crt_group_primary_modify() failed; rc = %d\n", rc);
 		assert(0);
@@ -733,7 +733,7 @@ int main(int argc, char **argv)
 	DBG_PRINT("primary modify: Replace\n");
 	rc = crt_group_primary_modify(grp, &crt_ctx[1], 1,
 				mod_ranks, uris,
-				CRT_GROUP_MOD_OP_REPLACE);
+				CRT_GROUP_MOD_OP_REPLACE, 0x0);
 	if (rc != 0) {
 		D_ERROR("crt_group_primary_modify() failed; rc=%d\n", rc);
 		assert(0);
@@ -749,7 +749,7 @@ int main(int argc, char **argv)
 	DBG_PRINT("primary modify: Remove\n");
 	rc = crt_group_primary_modify(grp, &crt_ctx[1], 1,
 				mod_ranks, NULL,
-				CRT_GROUP_MOD_OP_REMOVE);
+				CRT_GROUP_MOD_OP_REMOVE, 0x0);
 	if (rc != 0) {
 		D_ERROR("crt_group_primary_modify() failed; rc=%d\n", rc);
 		assert(0);
@@ -765,7 +765,7 @@ int main(int argc, char **argv)
 
 	rc = crt_group_primary_modify(grp, &crt_ctx[1], 1,
 				mod_ranks, uris,
-				CRT_GROUP_MOD_OP_ADD);
+				CRT_GROUP_MOD_OP_ADD, 0x0);
 	if (rc != 0) {
 		D_ERROR("crt_group_primary_modify() failed; rc=%d\n", rc);
 		assert(0);
@@ -800,7 +800,8 @@ int main(int argc, char **argv)
 
 	DBG_PRINT("secondary group: Add\n");
 	rc = crt_group_secondary_modify(sec_grp1, mod_sec_ranks,
-					mod_prim_ranks, CRT_GROUP_MOD_OP_ADD);
+					mod_prim_ranks, CRT_GROUP_MOD_OP_ADD,
+					0X0);
 	if (rc != 0) {
 		D_ERROR("crt_group_secondary_modify() failed; rc=%d\n", rc);
 		assert(0);
@@ -822,7 +823,7 @@ int main(int argc, char **argv)
 
 	DBG_PRINT("secondary group: Replace\n");
 	rc = crt_group_secondary_modify(sec_grp1, mod_sec_ranks, mod_prim_ranks,
-					CRT_GROUP_MOD_OP_REPLACE);
+					CRT_GROUP_MOD_OP_REPLACE, 0x0);
 	if (rc != 0) {
 		D_ERROR("crt_group_secondary_modify() failed; rc=%d\n", rc);
 		assert(0);
@@ -835,7 +836,7 @@ int main(int argc, char **argv)
 
 	DBG_PRINT("secondary group: Remove\n");
 	rc = crt_group_secondary_modify(sec_grp1, mod_sec_ranks, NULL,
-					CRT_GROUP_MOD_OP_REMOVE);
+					CRT_GROUP_MOD_OP_REMOVE, 0x0);
 	if (rc != 0) {
 		D_ERROR("crt_group_secondary_modify() failed; rc=%d\n", rc);
 		assert(0);

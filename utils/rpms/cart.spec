@@ -1,8 +1,8 @@
 %define carthome %{_exec_prefix}/lib/%{name}
 
 Name:          cart
-Version:       1.6.0
-Release:       2%{?relval}%{?dist}
+Version:       2.0.0
+Release:       1%{?relval}%{?dist}
 Summary:       CaRT
 
 License:       Apache
@@ -136,6 +136,10 @@ ln %{?buildroot}%{carthome}/{TESTING/.build_vars,.build_vars-Linux}.sh
 %{carthome}/.build_vars-Linux.sh
 
 %changelog
+* Wed Oct 30 2019 Alexander Oganezov <alexander.a.oganezov@intel.com> - 2.0.0-1
+- Libcart version 2.0.0-1
+- crt_group_primary_modify, crt_group_secondary_modify APIs changed
+
 * Thu Oct 24 2019 Brian J. Murrell <brian.murrell@intel.com> - 1.6.0-2
 - Add BRs to prefer packages that have choices
 - Add BR for scons >= 2.4 and gcc-c++

@@ -1,3 +1,11 @@
+cart (2.0.0-1) unstable; urgency=medium
+
+  [ Alexander Oganezov ]
+  * 2.0.0-1 version of CaRT
+  * crt_group_primary_modify, crt_group_secondary_modify APIs changed.
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Wed, 30 Oct 2019 16:22:44 +0000
+
 cart (1.6.0-2) unstable; urgency=medium
   [ Brian J. Murrell ]
   * NOOP (RPM build updates)

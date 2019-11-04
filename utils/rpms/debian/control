@@ -23,7 +23,7 @@ Package: cart
 Section: net
 Architecture: any
 Multi-Arch: same
-Depends: libcart1 (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends},
+Depends: libcart2 (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends},
          openmpi-bin
 Description: Collective and RPC Transport
  CaRT is an open-source RPC transport layer for Big Data and Exascale
@@ -37,7 +37,7 @@ Package: libcart-dev
 Section: libdevel
 Architecture: any
 Multi-Arch: same
-Depends: libcart1 (= ${binary:Version}), ${misc:Depends}
+Depends: libcart2 (= ${binary:Version}), ${misc:Depends}
 Description: Collective and RPC Transport
  CaRT is an open-source RPC transport layer for Big Data and Exascale
  HPC. It supports both traditional P2P RPC delivering and collective RPC
@@ -48,7 +48,7 @@ Description: Collective and RPC Transport
  It contains the header files and links needed for compiling.
 
 
-Package: libcart1
+Package: libcart2
 Section: libs
 Architecture: any
 Multi-Arch: same

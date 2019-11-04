@@ -4905,7 +4905,7 @@ cleanup:
 int
 crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs,
 			d_rank_list_t *ranks, char **uris,
-			crt_group_mod_op_t op)
+			crt_group_mod_op_t op, uint32_t version)
 {
 	struct crt_grp_priv	*grp_priv;
 	d_rank_list_t		*grp_membs;
@@ -4990,6 +4990,8 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs,
 	d_rank_list_free(to_add);
 	d_rank_list_free(to_remove);
 	D_FREE(uri_idx);
+
+	grp_priv->gp_membs_ver = version;
 unlock:
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
@@ -5016,7 +5018,8 @@ cleanup:
 
 int
 crt_group_secondary_modify(crt_group_t *grp, d_rank_list_t *sec_ranks,
-			d_rank_list_t *prim_ranks, crt_group_mod_op_t op)
+			d_rank_list_t *prim_ranks, crt_group_mod_op_t op,
+			uint32_t version)
 {
 	struct crt_grp_priv	*grp_priv;
 	d_rank_list_t		*grp_membs;
@@ -5094,6 +5097,8 @@ crt_group_secondary_modify(crt_group_t *grp, d_rank_list_t *sec_ranks,
 	d_rank_list_free(to_add);
 	d_rank_list_free(to_remove);
 	D_FREE(prim_idx);
+
+	grp_priv->gp_membs_ver = version;
 unlock:
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
