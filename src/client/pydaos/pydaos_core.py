@@ -41,7 +41,7 @@ from . import dc
 ObjClassID = enum.Enum(
     "Enumeration of the DAOS object classes (OC).",
     {key: value for key, value in pydaos_shim.__dict__.items()
-    if key.startswith("OC_")})
+     if key.startswith("OC_")})
 
 class ObjID(object):
     """
@@ -103,7 +103,7 @@ class Cont(object):
     """
     def __init__(self, puuid=None, cuuid=None, path=None):
         self.coh = None
-        if path == None and (puuid == None or cuuid == None):
+        if path is None and (puuid is None or cuuid is None):
             raise PyDError("invalid pool or container UUID",
                            -pydaos_shim.DER_INVAL)
         if path != None:
@@ -127,6 +127,8 @@ class Cont(object):
             raise PyDError("failed to close container", ret)
 
     def genoid(self, cid):
+        """Generate a new object ID globally unique for this container."""
+
         (ret, hi, lo) = pydaos_shim.obj_idgen(DAOS_MAGIC, self.coh, cid.value)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to generate object identifier", ret)
@@ -138,6 +140,7 @@ class Cont(object):
         return KVObj(self.coh, oid, self)
 
     def kv(self, oid):
+        """Open an already-allocated object identified by oid of type ObjID."""
         return KVObj(self.coh, oid, self)
 
     def rootkv(self, cid=ObjClassID.OC_SX):
@@ -276,6 +279,8 @@ class KVObj(_Obj):
         Fetch all the key-value pairs and return them in a python dictionary.
     """
     def get(self, key):
+        """Retrieve value associated with the key."""
+
         d = {key : None}
         self.bget(d)
         return d[key]
@@ -284,6 +289,7 @@ class KVObj(_Obj):
         return self.get(key)
 
     def put(self, key, val):
+        """Update/insert key-value pair. Both parameters should be strings."""
         d = {key : val}
         self.bput(d)
 
@@ -291,16 +297,19 @@ class KVObj(_Obj):
         self.put(key, val)
 
     def bget(self, ddict):
+        """Bulk get value for all the keys of the input python dictionary."""
         ret = pydaos_shim.kv_get(DAOS_MAGIC, self.oh, ddict)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to retrieve KV value", ret)
 
     def bput(self, ddict):
+        """Bulk put all the key-value pairs of the input python dictionary."""
         ret = pydaos_shim.kv_put(DAOS_MAGIC, self.oh, ddict)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to store KV value", ret)
 
     def dump(self):
+        """Fetch all the key-value pairs and return them in a python dictionary."""
         # leverage python iterator, see __iter__/__next__ below
         # could be optimized over the C library in the future
         d = {}
@@ -312,17 +321,17 @@ class KVObj(_Obj):
     def __len__(self):
         # Not efficient for now. Fetch all keys and count them.
         i = 0
-        for key in self:
+        for _ in self:
             i += 1
         return i
 
     def __bool__(self):
-        for key in self:
+        for _ in self:
             return True
         return False
 
     def __contains__(self, key):
-        if self.get(key) == None:
+        if self.get(key) is None:
             return False
         return True
 

@@ -54,7 +54,7 @@ class daosdm():
         """Return the next key in the db"""
 
         # Be safe and check for None first.
-        if key == None:
+        if key is None:
             return None
 
         # If the iterator is carrying on where the
