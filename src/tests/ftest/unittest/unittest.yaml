@@ -10,10 +10,8 @@ UnitTest:
     testname: smd_ut
   vea_ut:
     testname: vea_ut
-  ring_pl_map:
-    testname: ring_pl_map
-  jump_pl_map:
-    testname: jump_pl_map
+  pl_map:
+    testname: pl_map
   eq_tests:
     testname: eq_tests
   vos_tests:

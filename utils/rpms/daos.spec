@@ -216,8 +216,7 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/libdaos_tests.so
 %{_bindir}/vos_size
 %{_bindir}/io_conf
-%{_bindir}/jump_pl_map
-%{_bindir}/ring_pl_map
+%{_bindir}/pl_map
 %{_bindir}/rdbt
 %{_bindir}/vos_size.py
 %{_libdir}/libvos.so

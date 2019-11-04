@@ -25,7 +25,6 @@
 #include <daos/common.h>
 #include <daos/placement.h>
 #include <daos.h>
-#include "place_obj_common.h"
 
 #define DOM_NR		8
 #define	NODE_PER_DOM	1
@@ -35,7 +34,140 @@
 #define COMPONENT_NR	(DOM_NR + DOM_NR * NODE_PER_DOM + \
 			 DOM_NR * NODE_PER_DOM * VOS_PER_TARGET)
 
+static struct pool_map		*po_map;
+static struct pl_map		*pl_map;
+static struct pool_component	 comps[COMPONENT_NR];
+static uint32_t			 po_ver = 1;
 static bool			 pl_debug_msg;
+
+static void
+plt_obj_place(daos_obj_id_t oid, struct pl_obj_layout **layout)
+{
+	struct daos_obj_md	 md;
+	int			 i;
+	int			 rc;
+
+	memset(&md, 0, sizeof(md));
+	md.omd_id  = oid;
+	md.omd_ver = 1;
+
+	rc = pl_obj_place(pl_map, &md, NULL, layout);
+	D_ASSERT(rc == 0);
+
+	D_PRINT("Layout of object "DF_OID"\n", DP_OID(oid));
+	for (i = 0; i < (*layout)->ol_nr; i++)
+		D_PRINT("%d ", (*layout)->ol_shards[i].po_target);
+
+	D_PRINT("\n");
+}
+
+static void
+plt_obj_layout_check(struct pl_obj_layout *layout)
+{
+	int i;
+
+	for (i = 0; i < layout->ol_nr; i++)
+		D_ASSERT(layout->ol_shards[i].po_target != -1);
+}
+
+static bool
+pt_obj_layout_match(struct pl_obj_layout *lo_1, struct pl_obj_layout *lo_2)
+{
+	int	i;
+
+	D_ASSERT(lo_1->ol_nr == lo_2->ol_nr);
+	D_ASSERT(lo_1->ol_nr > 0 && lo_1->ol_nr <= DOM_NR);
+
+	for (i = 0; i < lo_1->ol_nr; i++) {
+		if (lo_1->ol_shards[i].po_target !=
+		    lo_2->ol_shards[i].po_target)
+			return false;
+	}
+
+	return true;
+}
+
+static void
+plt_set_tgt_status(uint32_t id, int status, uint32_t ver)
+{
+	struct pool_target	*target;
+	char			*str;
+	int			 rc;
+
+	switch (status) {
+	case PO_COMP_ST_UP:
+		str = "PO_COMP_ST_UP";
+		break;
+	case PO_COMP_ST_UPIN:
+		str = "PO_COMP_ST_UPIN";
+		break;
+	case PO_COMP_ST_DOWN:
+		str = "PO_COMP_ST_DOWN";
+		break;
+	case PO_COMP_ST_DOWNOUT:
+		str = "PO_COMP_ST_DOWNOUT";
+		break;
+	default:
+		str = "unknown";
+		break;
+	};
+
+	rc = pool_map_find_target(po_map, id, &target);
+	D_ASSERT(rc == 1);
+	if (pl_debug_msg)
+		D_PRINT("set target id %d, rank %d as %s, ver %d.\n",
+			id, target->ta_comp.co_rank, str, ver);
+	target->ta_comp.co_status = status;
+	target->ta_comp.co_fseq = ver;
+	rc = pool_map_set_version(po_map, ver);
+	D_ASSERT(rc == 0);
+}
+
+static void
+plt_fail_tgt(uint32_t id)
+{
+	po_ver++;
+	plt_set_tgt_status(id, PO_COMP_ST_DOWN, po_ver);
+}
+
+static void
+plt_add_tgt(uint32_t id)
+{
+	po_ver++;
+	plt_set_tgt_status(id, PO_COMP_ST_UPIN, po_ver);
+}
+
+static void
+plt_spare_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
+		   int failed_cnt, uint32_t *spare_tgt_ranks,
+		   uint32_t *shard_ids, uint32_t *spare_cnt)
+{
+	struct daos_obj_md	md = { 0 };
+	int			i;
+	int			rc;
+
+	for (i = 0; i < failed_cnt; i++)
+		plt_fail_tgt(failed_tgts[i]);
+
+	rc = pl_map_update(pl_uuid, po_map, false, PL_TYPE_RING);
+	D_ASSERT(rc == 0);
+	pl_map = pl_map_find(pl_uuid, oid);
+	D_ASSERT(pl_map != NULL);
+	dc_obj_fetch_md(oid, &md);
+	md.omd_ver = po_ver;
+	*spare_cnt = pl_obj_find_rebuild(pl_map, &md, NULL, po_ver,
+					 spare_tgt_ranks, shard_ids,
+					 SPARE_MAX_NUM, -1);
+	D_PRINT("spare_cnt %d for version %d -\n", *spare_cnt, po_ver);
+	for (i = 0; i < *spare_cnt; i++)
+		D_PRINT("shard %d, spare target rank %d\n",
+			shard_ids[i], spare_tgt_ranks[i]);
+
+	pl_map_decref(pl_map);
+
+	for (i = 0; i < failed_cnt; i++)
+		plt_add_tgt(failed_tgts[i]);
+}
 
 int
 main(int argc, char **argv)
@@ -44,24 +176,19 @@ main(int argc, char **argv)
 	struct pl_map_init_attr	 mia;
 	int			 i;
 	int			 nr;
-	struct pool_map		*po_map;
 	struct pool_component	*comp;
 	struct pl_obj_layout	*lo_1;
 	struct pl_obj_layout	*lo_2;
 	struct pl_obj_layout	*lo_3;
-	struct pl_map		*pl_map;
-	struct pool_component	 comps[COMPONENT_NR];
 	uuid_t			 pl_uuid;
 	daos_obj_id_t		 oid;
 	uint32_t		 spare_tgt_candidate[SPARE_MAX_NUM];
 	uint32_t		 spare_tgt_ranks[SPARE_MAX_NUM];
 	uint32_t		 shard_ids[SPARE_MAX_NUM];
 	uint32_t		 failed_tgts[SPARE_MAX_NUM];
-	static uint32_t		 po_ver;
 	unsigned int		 spare_cnt;
 	int			 rc;
 
-	po_ver = 1;
 	rc = daos_debug_init(NULL);
 	if (rc != 0)
 		return rc;
@@ -130,17 +257,16 @@ main(int argc, char **argv)
 	/* initial placement when all nodes alive */
 	daos_obj_generate_id(&oid, 0, OC_RP_4G2, 0);
 	D_PRINT("\ntest initial placement when no failed shard ...\n");
-	plt_obj_place(oid, &lo_1, pl_map);
+	plt_obj_place(oid, &lo_1);
 	plt_obj_layout_check(lo_1);
 
 	/* test plt_obj_place when some/all shards failed */
 	D_PRINT("\ntest to fail all shards  and new placement ...\n");
 	for (i = 0; i < SPARE_MAX_NUM && i < lo_1->ol_nr; i++)
-		plt_fail_tgt(lo_1->ol_shards[i].po_target, &po_ver, po_map,
-				pl_debug_msg);
-	plt_obj_place(oid, &lo_2, pl_map);
+		plt_fail_tgt(lo_1->ol_shards[i].po_target);
+	plt_obj_place(oid, &lo_2);
 	plt_obj_layout_check(lo_2);
-	D_ASSERT(!pt_obj_layout_match(lo_1, lo_2, DOM_NR));
+	D_ASSERT(!pt_obj_layout_match(lo_1, lo_2));
 	D_PRINT("spare target candidate:");
 	for (i = 0; i < SPARE_MAX_NUM && i < lo_1->ol_nr; i++) {
 		spare_tgt_candidate[i] = lo_2->ol_shards[i].po_target;
@@ -150,11 +276,10 @@ main(int argc, char **argv)
 
 	D_PRINT("\ntest to add back all failed shards and new placement ...\n");
 	for (i = 0; i < SPARE_MAX_NUM && i < lo_1->ol_nr; i++)
-		plt_add_tgt(lo_1->ol_shards[i].po_target, &po_ver, po_map,
-				pl_debug_msg);
-	plt_obj_place(oid, &lo_3, pl_map);
+		plt_add_tgt(lo_1->ol_shards[i].po_target);
+	plt_obj_place(oid, &lo_3);
 	plt_obj_layout_check(lo_3);
-	D_ASSERT(pt_obj_layout_match(lo_1, lo_3, DOM_NR));
+	D_ASSERT(pt_obj_layout_match(lo_1, lo_3));
 	pl_map_decref(pl_map);
 	pl_map = NULL;
 
@@ -166,8 +291,7 @@ main(int argc, char **argv)
 		failed_tgts[0], failed_tgts[1], spare_tgt_candidate[0],
 		spare_tgt_candidate[1]);
 	plt_spare_tgts_get(pl_uuid, oid, failed_tgts, 2, spare_tgt_ranks,
-			pl_debug_msg, shard_ids, &spare_cnt, &po_ver,
-			PL_TYPE_RING, SPARE_MAX_NUM, po_map, pl_map);
+			   shard_ids, &spare_cnt);
 	D_ASSERT(spare_cnt == 2);
 	D_ASSERT(shard_ids[0] == 0);
 	D_ASSERT(shard_ids[1] == 1);
@@ -182,8 +306,7 @@ main(int argc, char **argv)
 		failed_tgts[0], failed_tgts[1], failed_tgts[2],
 		spare_tgt_candidate[2], spare_tgt_candidate[1]);
 	plt_spare_tgts_get(pl_uuid, oid, failed_tgts, 3, spare_tgt_ranks,
-			   pl_debug_msg, shard_ids, &spare_cnt, &po_ver,
-			   PL_TYPE_RING, SPARE_MAX_NUM, po_map, pl_map);
+			   shard_ids, &spare_cnt);
 	/* should get next spare targets, the first spare candidate failed,
 	 * and shard[0].fseq > shard[1].fseq, so will select shard[1]'s
 	 * next spare first.
@@ -205,8 +328,7 @@ main(int argc, char **argv)
 		failed_tgts[4], spare_tgt_candidate[3], spare_tgt_candidate[4],
 		spare_tgt_candidate[2]);
 	plt_spare_tgts_get(pl_uuid, oid, failed_tgts, 5, spare_tgt_ranks,
-			   pl_debug_msg, shard_ids, &spare_cnt, &po_ver,
-			   PL_TYPE_RING, SPARE_MAX_NUM, po_map, pl_map);
+			   shard_ids, &spare_cnt);
 	D_ASSERT(spare_cnt == 3);
 	D_ASSERT(shard_ids[0] == 3);
 	D_ASSERT(shard_ids[1] == 0);
