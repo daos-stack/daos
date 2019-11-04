@@ -69,8 +69,7 @@ func MockControllerPB() *ctlpb.NvmeController {
 }
 
 // NewMockControllerPB generates specific protobuf controller message
-func NewMockControllerPB(
-	pciAddr string, fwRev string, model string, serial string,
+func NewMockControllerPB(pciAddr string, fwRev string, model string, serial string, numa int32,
 	nss []*ctlpb.NvmeController_Namespace, hs *ctlpb.NvmeController_Health) *ctlpb.NvmeController {
 
 	return &ctlpb.NvmeController{
@@ -78,6 +77,7 @@ func NewMockControllerPB(
 		Serial:      serial,
 		Pciaddr:     pciAddr,
 		Fwrev:       fwRev,
+		Socketid:    numa,
 		Namespaces:  nss,
 		Healthstats: hs,
 	}
