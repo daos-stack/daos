@@ -93,8 +93,8 @@ func (ms ScmModules) String() string {
 }
 
 func (n *ScmNamespace) String() string {
-	return fmt.Sprintf("%s/%s/numa%d", n.BlockDevice,
-		bytesize.New(float64(n.Size)), n.NumaNode)
+	return fmt.Sprintf("%s/numa%d/%s", n.BlockDevice, n.NumaNode,
+		bytesize.New(float64(n.Size)))
 }
 
 func (ns ScmNamespaces) String() string {

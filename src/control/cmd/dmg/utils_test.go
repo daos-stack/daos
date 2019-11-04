@@ -82,15 +82,15 @@ func TestCheckSprint(t *testing.T) {
 	}{
 		"nvme scan without health": {
 			fmt.Sprint(MockNvmeScanResults(MockCtrlrs, MockServers, false)),
-			"map[1.2.3.4:10000:NVMe SSD controller and constituent namespaces:\n\tPCI Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:1.0.0 Socket:0\n\t\tNamespace: id:12345 capacity:97.66KB\n 1.2.3.5:10001:NVMe SSD controller and constituent namespaces:\n\tPCI Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:1.0.0 Socket:0\n\t\tNamespace: id:12345 capacity:97.66KB\n]",
+			"map[1.2.3.4:10000:NVMe SSD controller and constituent namespaces:\n\tPCI Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:1.0.0 Socket:0\n\t\tNamespace: id:12345 capacity:99999GB\n 1.2.3.5:10001:NVMe SSD controller and constituent namespaces:\n\tPCI Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:1.0.0 Socket:0\n\t\tNamespace: id:12345 capacity:99999GB\n]",
 		},
 		"nvme scan with health": {
 			fmt.Sprint(MockNvmeScanResults(MockCtrlrs, MockServers, true)),
-			"map[1.2.3.4:10000:NVMe SSD controller, constituent namespaces and health statistics:\n\tPCI Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:1.0.0 Socket:0\n\t\tNamespace: id:12345 capacity:97.66KB\n\tHealth Stats:\n\t\tTemperature:300K(27C)\n\t\tController Busy Time:0 minutes\n\t\tPower Cycles:99\n\t\tPower On Hours:9999 hours\n\t\tUnsafe Shutdowns:1\n\t\tMedia Errors:0\n\t\tError Log Entries:0\n\t\tCritical Warnings:\n\t\t\tTemperature: OK\n\t\t\tAvailable Spare: OK\n\t\t\tDevice Reliability: OK\n\t\t\tRead Only: OK\n\t\t\tVolatile Memory Backup: OK\n 1.2.3.5:10001:NVMe SSD controller, constituent namespaces and health statistics:\n\tPCI Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:1.0.0 Socket:0\n\t\tNamespace: id:12345 capacity:97.66KB\n\tHealth Stats:\n\t\tTemperature:300K(27C)\n\t\tController Busy Time:0 minutes\n\t\tPower Cycles:99\n\t\tPower On Hours:9999 hours\n\t\tUnsafe Shutdowns:1\n\t\tMedia Errors:0\n\t\tError Log Entries:0\n\t\tCritical Warnings:\n\t\t\tTemperature: OK\n\t\t\tAvailable Spare: OK\n\t\t\tDevice Reliability: OK\n\t\t\tRead Only: OK\n\t\t\tVolatile Memory Backup: OK\n]",
+			"map[1.2.3.4:10000:NVMe SSD controller, constituent namespaces and health statistics:\n\tPCI Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:1.0.0 Socket:0\n\t\tNamespace: id:12345 capacity:99999GB\n\tHealth Stats:\n\t\tTemperature:300K(27C)\n\t\tController Busy Time:0 minutes\n\t\tPower Cycles:99\n\t\tPower On Hours:9999 hours\n\t\tUnsafe Shutdowns:1\n\t\tMedia Errors:0\n\t\tError Log Entries:0\n\t\tCritical Warnings:\n\t\t\tTemperature: OK\n\t\t\tAvailable Spare: OK\n\t\t\tDevice Reliability: OK\n\t\t\tRead Only: OK\n\t\t\tVolatile Memory Backup: OK\n 1.2.3.5:10001:NVMe SSD controller, constituent namespaces and health statistics:\n\tPCI Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:1.0.0 Socket:0\n\t\tNamespace: id:12345 capacity:99999GB\n\tHealth Stats:\n\t\tTemperature:300K(27C)\n\t\tController Busy Time:0 minutes\n\t\tPower Cycles:99\n\t\tPower On Hours:9999 hours\n\t\tUnsafe Shutdowns:1\n\t\tMedia Errors:0\n\t\tError Log Entries:0\n\t\tCritical Warnings:\n\t\t\tTemperature: OK\n\t\t\tAvailable Spare: OK\n\t\t\tDevice Reliability: OK\n\t\t\tRead Only: OK\n\t\t\tVolatile Memory Backup: OK\n]",
 		},
 		"scm scan with pmem namespaces": {
 			fmt.Sprint(MockScmScanResults(MockScmModules, MockScmNamespaces, MockServers)),
-			"map[1.2.3.4:10000:SCM Namespaces: pmem1/2.90TB/numa1\n 1.2.3.5:10001:SCM Namespaces: pmem1/2.90TB/numa1\n]",
+			"map[1.2.3.4:10000:SCM Namespaces: pmem1/numa1/2.90TB\n 1.2.3.5:10001:SCM Namespaces: pmem1/numa1/2.90TB\n]",
 		},
 		"scm scan without pmem namespaces": {
 			fmt.Sprint(MockScmScanResults(MockScmModules, []*ctlpb.PmemDevice{}, MockServers)),
