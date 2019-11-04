@@ -744,9 +744,10 @@ func convertLibFabricToMercury(provider string) (string, error) {
 // ValidateProviderStub is used for most unit testing to replace ValidateProviderConfig because the network configuration
 // validation depends upon physical hardware resources and configuration on the target machine
 // that are either not known or static in the test environment
-func ValidateProviderStub(provider string, device string) error {
+func ValidateProviderStub(device string, provider string) error {
 	// Call the full function to get the results without generating any hard errors
-	err := ValidateProviderConfig(provider, device)
+	log.Debugf("Calling ValidateProviderConfig with %s, %s", device, provider)
+	err := ValidateProviderConfig(device, provider)
 	if err != nil {
 		log.Debugf("ValidateProviderConfig (device: %s, provider %s) returned error: %v", device, provider, err)
 	}
