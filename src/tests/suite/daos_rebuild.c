@@ -34,6 +34,8 @@
 #include <daos/mgmt.h>
 #include <daos/container.h>
 
+static test_arg_t *save_arg;
+
 #define KEY_NR		100
 #define OBJ_NR		10
 #define OBJ_CLS		OC_RP_3G1
@@ -1840,8 +1842,26 @@ multi_pools_rebuild_concurrently(void **state)
 static int
 rebuild_sub_setup(void **state)
 {
+	if (state != NULL && *state != NULL) {
+		save_arg = *state;
+		*state = NULL;
+	}
+
 	return test_setup(state, SETUP_CONT_CONNECT, true,
 			  REBUILD_SUBTEST_POOL_SIZE, NULL);
+}
+
+static int
+rebuild_sub_teardown(void **state)
+{
+	int rc;
+
+	rc = test_teardown(state);
+
+	if (state != NULL && save_arg != NULL)
+		*state = save_arg;
+
+	return rc;
 }
 
 /** create a new pool/container for each test */
@@ -1893,37 +1913,40 @@ static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD23: disconnect pool during scan",
 	 rebuild_tgt_pool_disconnect_in_scan, NULL, test_case_teardown},
 	{"REBUILD24: disconnect pool during rebuild",
-	 rebuild_tgt_pool_disconnect_in_rebuild, NULL, test_teardown},
+	 rebuild_tgt_pool_disconnect_in_rebuild, NULL, test_case_teardown},
 	{"REBUILD25: multi-pools rebuild concurrently",
-	 multi_pools_rebuild_concurrently, rebuild_sub_setup, test_teardown},
+	 multi_pools_rebuild_concurrently, rebuild_sub_setup,
+	 rebuild_sub_teardown},
 	{"REBUILD26: rebuild with master change during scan",
-	rebuild_master_change_during_scan, rebuild_sub_setup, test_teardown},
+	 rebuild_master_change_during_scan, rebuild_sub_setup,
+	 rebuild_sub_teardown},
 	{"REBUILD27: rebuild with master change during rebuild",
-	rebuild_master_change_during_rebuild, rebuild_sub_setup, test_teardown},
+	 rebuild_master_change_during_rebuild, rebuild_sub_setup,
+	 rebuild_sub_teardown},
 	{"REBUILD28: rebuild with master failure",
-	 rebuild_master_failure, rebuild_sub_setup, test_teardown},
+	 rebuild_master_failure, rebuild_sub_setup, rebuild_sub_teardown},
 	{"REBUILD29: connect pool during scan for offline rebuild",
 	 rebuild_offline_pool_connect_in_scan, rebuild_sub_setup,
-	 test_teardown},
+	 rebuild_sub_teardown},
 	{"REBUILD30: connect pool during rebuild for offline rebuild",
 	 rebuild_offline_pool_connect_in_rebuild, rebuild_sub_setup,
-	 test_teardown},
+	 rebuild_sub_teardown},
 	{"REBUILD31: offline rebuild",
-	rebuild_offline, rebuild_sub_setup, test_teardown},
+	rebuild_offline, rebuild_sub_setup, rebuild_sub_teardown},
 	{"REBUILD32: rebuild with two failures",
-	 rebuild_multiple_failures, rebuild_sub_setup, test_teardown},
+	 rebuild_multiple_failures, rebuild_sub_setup, rebuild_sub_teardown},
 	{"REBUILD33: rebuild fail all replicas before rebuild",
 	 rebuild_fail_all_replicas_before_rebuild, rebuild_sub_setup,
-	 test_teardown},
+	 rebuild_sub_teardown},
 	{"REBUILD34: rebuild fail all replicas",
-	 rebuild_fail_all_replicas, rebuild_sub_setup, test_case_teardown},
+	 rebuild_fail_all_replicas, rebuild_sub_setup, rebuild_sub_teardown},
 };
 
 /* TODO: Enable aggregation once stable view rebuild is done. */
 int
 rebuild_test_setup(void **state)
 {
-	test_arg_t	*arg = *state;
+	test_arg_t	*arg;
 	int rc;
 
 	rc = test_setup(state, SETUP_CONT_CONNECT, true, REBUILD_POOL_SIZE,
@@ -1931,6 +1954,7 @@ rebuild_test_setup(void **state)
 	if (rc)
 		return rc;
 
+	arg = *state;
 	if (arg && arg->myrank == 0)
 		daos_mgmt_set_params(arg->group, -1, DSS_DISABLE_AGGREGATION,
 				     1, 0, NULL);
