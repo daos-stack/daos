@@ -336,7 +336,11 @@ io_akey_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 	}
 
 	rc = vos_iter_probe(ih, NULL);
-	if (rc != 0 && rc != -DER_NONEXIST) {
+	if (rc == -DER_NONEXIST) {
+		rc = 0;
+		goto out;
+	}
+	if (rc != 0) {
 		print_error("Failed to set iterator cursor: %d\n", rc);
 		goto out;
 	}
@@ -415,13 +419,13 @@ io_obj_iter_test(struct io_test_args *arg, daos_epoch_range_t *epr,
 	}
 
 	rc = vos_iter_probe(ih, NULL);
-	if (rc != 0) {
+	if (rc != 0 && rc != -DER_NONEXIST) {
 		print_error("Failed to set iterator cursor: %d\n",
 			    rc);
 		goto out;
 	}
 
-	while (1) {
+	while (rc == 0) {
 		vos_iter_entry_t	ent;
 		daos_anchor_t		anchor;
 
@@ -445,8 +449,10 @@ io_obj_iter_test(struct io_test_args *arg, daos_epoch_range_t *epr,
 
 		nr++;
 		rc = vos_iter_next(ih);
-		if (rc == -DER_NONEXIST)
+		if (rc == -DER_NONEXIST) {
+			print_message("Finishing d-key iteration\n");
 			break;
+		}
 
 		if (rc != 0) {
 			print_error("Failed to move cursor: %d\n", rc);
@@ -472,6 +478,7 @@ io_obj_iter_test(struct io_test_args *arg, daos_epoch_range_t *epr,
 			goto out;
 		}
 	}
+	rc = 0;
  out:
 	vos_iter_finish(ih);
 	*num_dkeys = nr;
@@ -744,7 +751,7 @@ static inline int
 hold_objects(struct vos_object **objs, struct daos_lru_cache *occ,
 	     daos_handle_t *coh, daos_unit_oid_t *oid, int start, int end)
 {
-	int i = 0, rc = 0;
+	int	i = 0, rc = 0;
 
 	for (i = start; i < end; i++) {
 		rc = vos_obj_hold(occ, vos_hdl2cont(*coh), *oid, 1, true,
@@ -1588,209 +1595,6 @@ io_simple_punch(void **state)
 	 */
 	rc = io_update_and_fetch_dkey(arg, 10, 10);
 	assert_int_equal(rc, 0);
-}
-
-struct counts {
-	int	recx_nr;
-	int	obj_nr;
-	int	dkey_nr;
-	int	akey_nr;
-	int	akey_punch_nr;
-	int	dkey_punch_nr;
-};
-
-static int
-count_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
-	 vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
-{
-	struct counts	*counts = cb_arg;
-
-	switch (type) {
-	default:
-		break;
-	case VOS_ITER_DKEY:
-		counts->dkey_nr++;
-		if (entry->ie_key_punch)
-			counts->dkey_punch_nr++;
-		break;
-	case VOS_ITER_AKEY:
-		counts->akey_nr++;
-		if (entry->ie_key_punch)
-			counts->akey_punch_nr++;
-		break;
-	case VOS_ITER_RECX:
-		counts->recx_nr++;
-		break;
-	}
-
-	return 0;
-}
-
-static void
-punch_model_test(void **state)
-{
-	struct io_test_args	*arg = *state;
-	int			rc = 0;
-	daos_key_t		dkey;
-	daos_key_t		akey;
-	daos_recx_t		rex;
-	daos_iod_t		iod;
-	d_sg_list_t		sgl;
-	const char		*expected = "HelloWorld";
-	const char		*under = "HelloLonelyWorld";
-	char			buf[32] = {0};
-	char			dkey_buf[UPDATE_DKEY_SIZE];
-	char			akey_buf[UPDATE_AKEY_SIZE];
-	struct vos_iter_anchors	anchors = {0};
-	vos_iter_param_t	param = {0};
-	struct counts		counts = {0};
-	daos_unit_oid_t		oid;
-
-	memset(&rex, 0, sizeof(rex));
-	memset(&iod, 0, sizeof(iod));
-	D_INFO("punch model test\n");
-
-	/* Set up dkey and akey */
-	oid = gen_oid(arg->ofeat);
-	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
-	vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);
-	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
-	set_iov(&akey, &akey_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
-
-	rex.rx_idx = 0;
-	rex.rx_nr = strlen(under);
-
-	iod.iod_type = DAOS_IOD_ARRAY;
-	iod.iod_size = 1;
-	iod.iod_name = akey;
-	iod.iod_recxs = &rex;
-	iod.iod_nr = 1;
-
-	/* Allocate memory for the scatter-gather list */
-	rc = daos_sgl_init(&sgl, 1);
-	assert_int_equal(rc, 0);
-
-	d_iov_set(&sgl.sg_iovs[0], (void *)under, strlen(under));
-
-	/* Write the original value (under) */
-	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, 1, 0, &dkey, 1, &iod,
-			    &sgl);
-	assert_int_equal(rc, 0);
-	/* Punch the akey */
-	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, 2, 0, 0, &dkey, 1, &akey,
-			   NULL);
-	assert_int_equal(rc, 0);
-
-	/* Write the new value (expected) */
-	rex.rx_nr = strlen(expected);
-	d_iov_set(&sgl.sg_iovs[0], (void *)expected, strlen(expected));
-	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, 3, 0, &dkey, 1, &iod,
-			    &sgl);
-	assert_int_equal(rc, 0);
-
-	/* Now read back original # of bytes */
-	rex.rx_nr = strlen(under);
-	d_iov_set(&sgl.sg_iovs[0], (void *)buf, strlen(under));
-	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, 4, &dkey, 1, &iod, &sgl);
-	assert_int_equal(rc, 0);
-
-	assert_int_equal(strncmp(buf, expected, strlen(under)), 0);
-
-	/* Write the original value at latest epoch (under) */
-	d_iov_set(&sgl.sg_iovs[0], (void *)under, strlen(under));
-	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, 5, 0, &dkey, 1, &iod,
-			    &sgl);
-	assert_int_equal(rc, 0);
-	/* Punch the dkey */
-	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, 6, 0, 0, &dkey, 0, NULL,
-			   NULL);
-	assert_int_equal(rc, 0);
-
-	/* Write the new value (expected) at latest epoch*/
-	rex.rx_nr = strlen(expected);
-	d_iov_set(&sgl.sg_iovs[0], (void *)expected, strlen(expected));
-	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, 7, 0, &dkey, 1, &iod,
-			    &sgl);
-	assert_int_equal(rc, 0);
-
-	memset(buf, 0, sizeof(buf));
-	/* Now read back original # of bytes */
-	rex.rx_nr = strlen(under);
-	d_iov_set(&sgl.sg_iovs[0], (void *)buf, strlen(under));
-	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, 8, &dkey, 1, &iod, &sgl);
-	assert_int_equal(rc, 0);
-
-	D_INFO("checking punch model test\n");
-	assert_int_equal(strncmp(buf, expected, strlen(under)), 0);
-
-	/* Write one more at 9 */
-	rex.rx_nr = strlen(expected);
-	d_iov_set(&sgl.sg_iovs[0], (void *)expected, strlen(expected));
-	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, 9, 0, &dkey, 1, &iod,
-			    &sgl);
-	assert_int_equal(rc, 0);
-
-	/** read old one for sanity */
-	memset(buf, 0, sizeof(buf));
-	rex.rx_nr = strlen(under);
-	d_iov_set(&sgl.sg_iovs[0], (void *)buf, strlen(under));
-	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, 5, &dkey, 1, &iod, &sgl);
-	assert_int_equal(rc, 0);
-	assert_int_equal(strncmp(buf, under, strlen(under)), 0);
-
-	/* Non recursive iteration first */
-	param.ip_hdl = arg->ctx.tc_co_hdl;
-	param.ip_ih = DAOS_HDL_INVAL;
-	param.ip_oid = oid;
-	param.ip_dkey = dkey;
-	param.ip_akey = akey;
-	param.ip_epr.epr_hi = 8;
-	param.ip_epr.epr_lo = 0;
-	rc = vos_iterate(&param, VOS_ITER_RECX, false, &anchors, count_cb,
-			 &counts);
-	assert_int_equal(rc, 0);
-	assert_int_equal(counts.recx_nr, 1);
-	assert_int_equal(counts.akey_nr, 0);
-	assert_int_equal(counts.dkey_nr, 0);
-
-	/* Now recurse at an epoch prior to punches */
-	memset(&counts, 0, sizeof(counts));
-	param.ip_hdl = arg->ctx.tc_co_hdl;
-	param.ip_ih = DAOS_HDL_INVAL;
-	d_iov_set(&param.ip_dkey, NULL, 0);
-	d_iov_set(&param.ip_akey, NULL, 0);
-	param.ip_epr.epr_hi = 1;
-	param.ip_epr.epr_lo = 0;
-	memset(&anchors, 0, sizeof(anchors));
-	rc = vos_iterate(&param, VOS_ITER_DKEY, true, &anchors, count_cb,
-			 &counts);
-	assert_int_equal(rc, 0);
-	assert_int_equal(counts.akey_nr, 1);
-	assert_int_equal(counts.dkey_nr, 1);
-	assert_int_equal(counts.akey_punch_nr, 1);
-	assert_int_equal(counts.dkey_punch_nr, 1);
-	assert_int_equal(counts.recx_nr, 1);
-
-	/* Now recurse including punched entries */
-	memset(&counts, 0, sizeof(counts));
-	param.ip_hdl = arg->ctx.tc_co_hdl;
-	param.ip_flags = VOS_IT_PUNCHED;
-	param.ip_ih = DAOS_HDL_INVAL;
-	param.ip_epr.epr_hi = 8;
-	param.ip_epr.epr_lo = 0;
-	memset(&anchors, 0, sizeof(anchors));
-	rc = vos_iterate(&param, VOS_ITER_DKEY, true, &anchors, count_cb,
-			 &counts);
-	assert_int_equal(rc, 0);
-	assert_int_equal(counts.akey_nr, 1);
-	assert_int_equal(counts.dkey_nr, 1);
-	assert_int_equal(counts.akey_punch_nr, 1);
-	assert_int_equal(counts.dkey_punch_nr, 1);
-	/* Five total extents but we are reading at epoch 8 */
-	assert_int_equal(counts.recx_nr, 4);
-
-	daos_sgl_fini(&sgl, false);
-	D_INFO("done punch model test\n");
 }
 
 static void
@@ -2658,7 +2462,6 @@ static const struct CMUnitTest io_tests[] = {
 		csum_fault_injection_multiple_extents_tests, NULL, NULL},
 	{ "VOS351: Checksum fault injection test : Single Value",
 		io_csum_fault_injection_single_value, NULL, NULL},
-	{ "VOS351: Simple punch model test", punch_model_test, NULL, NULL},
 };
 
 static const struct CMUnitTest int_tests[] = {
