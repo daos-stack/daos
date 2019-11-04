@@ -28,12 +28,9 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 )
-
-const pbinName = "daos_admin"
 
 type Forwarder struct {
 	log logging.Logger
@@ -47,16 +44,6 @@ func (f *Forwarder) sendReq(method string, fwdReq interface{}, fwdRes interface{
 		return errors.New("nil response")
 	}
 
-	// TODO: This isn't ideal -- would be better to look up once but putting
-	// this lookup elsewhere results in a ripple of changes to propagate the
-	// error backwards. On the other hand, it's conceivable that we might want
-	// to delegate requests to different binaries. Optimize this later if it
-	// makes sense.
-	pbinPath, err := common.FindBinary(pbinName)
-	if err != nil {
-		return err
-	}
-
 	payload, err := json.Marshal(fwdReq)
 	if err != nil {
 		return errors.Wrap(err, "failed to marshal forwarded request as payload")
@@ -68,7 +55,7 @@ func (f *Forwarder) sendReq(method string, fwdReq interface{}, fwdRes interface{
 	}
 
 	ctx := context.TODO()
-	res, err := pbin.ExecReq(ctx, f.log, pbinPath, req)
+	res, err := pbin.ExecReq(ctx, f.log, pbin.DaosAdminPath, req)
 	if err != nil {
 		return errors.Wrap(err, "privileged binary execution failed")
 	}

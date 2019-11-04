@@ -26,12 +26,14 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -341,12 +343,24 @@ func DefaultProvider(log logging.Logger) *Provider {
 
 // NewProvider returns an initialized *Provider.
 func NewProvider(log logging.Logger, backend Backend, sys SystemProvider) *Provider {
-	return &Provider{
+	p := &Provider{
 		log:     log,
 		backend: backend,
 		sys:     sys,
 		fwd:     &Forwarder{log: log},
 	}
+
+	if val, set := os.LookupEnv(pbin.DisableReqFwdEnvVar); set {
+		disabled, err := strconv.ParseBool(val)
+		if err != nil {
+			log.Errorf("%s was set to non-boolean value (%q); not disabling",
+				pbin.DisableReqFwdEnvVar, val)
+			return p
+		}
+		p.disableForwarding = disabled
+	}
+
+	return p
 }
 
 func (p *Provider) WithForwardingDisabled() *Provider {
