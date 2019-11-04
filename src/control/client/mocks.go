@@ -37,7 +37,6 @@ import (
 	. "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
-	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 var (
@@ -378,10 +377,8 @@ func MockScmScanResults(modules ScmModules, pmems ScmNamespaces, addrs Addresses
 	results := make(ScmScanResults)
 	for _, addr := range addrs {
 		results[addr] = &ScmScanResult{
-			Resp: storage.ScmScanResponse{
-				Modules:    scmModulesFromPB(modules),
-				Namespaces: scmNamespacesFromPB(pmems),
-			},
+			Modules:    scmModulesFromPB(modules),
+			Namespaces: scmNamespacesFromPB(pmems),
 		}
 	}
 	return results

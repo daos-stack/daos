@@ -138,10 +138,8 @@ func (c *connList) StorageScan(params *StorageScanReq) *StorageScanResp {
 			}
 			scmResult.Err = errors.Errorf(msg)
 		} else {
-			// reconstruct storage.ScmScanResponse from protobuf msg
-			scmResult.Resp.Modules = scmModulesFromPB(resp.Scm.GetModules())
-			scmResult.Resp.Namespaces = scmNamespacesFromPB(resp.Scm.GetPmems())
-			// FIXME: populate ScanResponse.ScmState
+			scmResult.Modules = scmModulesFromPB(resp.Scm.GetModules())
+			scmResult.Namespaces = scmNamespacesFromPB(resp.Scm.GetPmems())
 		}
 
 		cNvmeScan[res.Address] = nvmeResult
