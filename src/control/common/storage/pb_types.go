@@ -27,8 +27,9 @@ import (
 	"bytes"
 	"fmt"
 
-	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	bytesize "github.com/inhies/go-bytesize"
+
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 )
 
 // NvmeNamespaces is an alias for protobuf NvmeController_Namespace message slice

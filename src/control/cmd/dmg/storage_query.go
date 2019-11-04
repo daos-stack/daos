@@ -24,9 +24,10 @@
 package main
 
 import (
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/client"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/pkg/errors"
 )
 
 // storageQueryCmd is the struct representing the query storage subcommand

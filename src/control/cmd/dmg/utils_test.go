@@ -27,9 +27,10 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	. "github.com/daos-stack/daos/src/control/client"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	"github.com/google/go-cmp/cmp"
 )
 
 func TestHasConnection(t *testing.T) {
@@ -117,20 +118,6 @@ func TestCheckSprint(t *testing.T) {
 				}, MockServers).String(),
 			"1.2.3.4:10000:\n\tPCI Addr:0000:81:00.0 Status:CTL_ERR_APP Error:example application error\n\n1.2.3.5:10001:\n\tPCI Addr:0000:81:00.0 Status:CTL_ERR_APP Error:example application error\n\n",
 		},
-		//"scm operation results": { // currently unused
-		//		{
-		//			NewClientScmResults(
-		//				[]*ctlpb.ScmModuleResult{
-		//					{
-		//						Loc: MockModulePB().Loc,
-		//						State: &ctlpb.ResponseState{
-		//							Status: ctlpb.ResponseStatus_CTL_ERR_APP,
-		//							Error:  "example application error",
-		//						},
-		//					},
-		//				}, MockServers).String(),
-		//			"1.2.3.4:10000:\n\tModule Location:(socket:4 memctrlr:3 chan:1 pos:2) Status:CTL_ERR_APP Error:example application error\n\n1.2.3.5:10001:\n\tModule Location:(socket:4 memctrlr:3 chan:1 pos:2) Status:CTL_ERR_APP Error:example application error\n\n",
-		//		},
 		"scm mountpoint operation results": {
 			NewClientScmMountResults(
 				[]*ctlpb.ScmMountResult{
