@@ -23,7 +23,6 @@
 """
 from __future__ import print_function
 
-import os
 import re
 import uuid
 
@@ -231,14 +230,6 @@ class IorCommand(ExecutableCommand):
         env["FI_PSM2_DISCONNECT"] = 1
         if log_file:
             env["D_LOG_FILE"] = log_file
-
-        # Export local environment variables
-        env_defaults = {
-            "OFI_INTERFACE": "eth0",
-            "CRT_PHY_ADDR_STR": "ofi+sockets",
-        }
-        for env_name, env_default in env_defaults.items():
-            env[env_name] = os.environ.get(env_name, env_default)
 
         if "mpirun" in manager_cmd or "srun" in manager_cmd:
             env["DAOS_POOL"] = self.daos_pool.value
