@@ -26,6 +26,7 @@ package common_storage
 import (
 	"bytes"
 	"fmt"
+	"time"
 
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 )
@@ -48,15 +49,17 @@ func (ncs NvmeControllers) healthDetail(buf *bytes.Buffer, c *ctlpb.NvmeControll
 	fmt.Fprintf(buf, "\tHealth Stats:\n\t\tTemperature:%dK(%dC)\n", stat.Temp, stat.Temp-273)
 
 	if stat.Tempwarn > 0 {
-		fmt.Fprintf(buf, "\t\t\tWarning Time:%d\n", uint64(stat.Tempwarn))
+		fmt.Fprintf(buf, "\t\t\tTemperature Warning Duration:%s\n",
+			time.Duration(stat.Tempwarn)*time.Minute)
 	}
 	if stat.Tempcrit > 0 {
-		fmt.Fprintf(buf, "\t\t\tCritical Time:%d\n", uint64(stat.Tempcrit))
+		fmt.Fprintf(buf, "\t\t\tTemperature Critical Duration:%s\n",
+			time.Duration(stat.Tempcrit)*time.Minute)
 	}
 
-	fmt.Fprintf(buf, "\t\tController Busy Time:%d minutes\n", uint64(stat.Ctrlbusy))
+	fmt.Fprintf(buf, "\t\tController Busy Time:%s\n", time.Duration(stat.Ctrlbusy)*time.Minute)
 	fmt.Fprintf(buf, "\t\tPower Cycles:%d\n", uint64(stat.Powercycles))
-	fmt.Fprintf(buf, "\t\tPower On Hours:%d hours\n", uint64(stat.Poweronhours))
+	fmt.Fprintf(buf, "\t\tPower On Duration:%s\n", time.Duration(stat.Poweronhours)*time.Hour)
 	fmt.Fprintf(buf, "\t\tUnsafe Shutdowns:%d\n", uint64(stat.Unsafeshutdowns))
 	fmt.Fprintf(buf, "\t\tMedia Errors:%d\n", uint64(stat.Mediaerrors))
 	fmt.Fprintf(buf, "\t\tError Log Entries:%d\n", uint64(stat.Errorlogs))
