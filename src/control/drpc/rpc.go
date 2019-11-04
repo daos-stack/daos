@@ -29,41 +29,43 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-// ModuleState is an interface to allow a caller to pass in private
-// information to the Module that it will need to perform its duties.
+// ModuleState is an interface to allow a module to pass in private
+// information to the rpcModule that it will need to perform its duties.
+// An empty interface is Go's equivalent of a void *
 type ModuleState interface{}
 
 // Module is an interface that a type must implement to provide the
-// functionality needed by the ModuleService to process dRPC requests.
+// functionality needed by the rpcService to be able to process
+// requests.
 type Module interface {
 	HandleCall(*Client, int32, []byte) ([]byte, error)
 	InitModule(ModuleState)
 	ID() int32
 }
 
-// ModuleService is the collection of Modules used by
+// Service is the type representing the collection of Modules used by
 // DomainSocketServer to be used to process messages.
-type ModuleService struct {
+type Service struct {
 	log     logging.Logger
 	modules map[int32]Module
 }
 
-// NewModuleService creates an initialized ModuleService instance
-func NewModuleService(log logging.Logger) *ModuleService {
+// NewRPCService creates an initialized Service instance
+func NewRPCService(log logging.Logger) *Service {
 	modules := make(map[int32]Module)
-	return &ModuleService{
+	return &Service{
 		log:     log,
 		modules: modules,
 	}
 }
 
-// RegisterModule will take in a type that implements the Module interface
+// RegisterModule will take in a type that implements the rpcModule interface
 // and ensure that no other module is already registered with that module
 // identifier.
-func (r *ModuleService) RegisterModule(mod Module) error {
+func (r *Service) RegisterModule(mod Module) error {
 	_, ok := r.modules[mod.ID()]
 	if ok == true {
-		return errors.Errorf("module with ID %d already exists", mod.ID())
+		return errors.Errorf("module with Id %d already exists", mod.ID())
 	}
 	r.modules[mod.ID()] = mod
 	return nil
@@ -102,26 +104,27 @@ func marshalResponse(sequence int64, status Status, body []byte) ([]byte, error)
 	return responseBytes, nil
 }
 
-// ProcessMessage is the main entry point into the ModuleService. It accepts a
-// marshaled drpc.Call instance, processes it, calls the handler in the
-// appropriate Module, and marshals the result into the body of a drpc.Response.
-func (r *ModuleService) ProcessMessage(client *Client, msgBytes []byte) ([]byte, error) {
-	msg := &Call{}
+// ProcessMessage is the main entry point into the rpcService for
+// consumers where it can pass the bytes of the drpc.Call instance.
+// That instance is then unmarshaled and processed and a response is
+// returned.
+func (r *Service) ProcessMessage(client *Client, callBytes []byte) ([]byte, error) {
+	rpcMsg := &Call{}
 
-	err := proto.Unmarshal(msgBytes, msg)
+	err := proto.Unmarshal(callBytes, rpcMsg)
 	if err != nil {
 		return marshalResponse(-1, Status_FAILURE, nil)
 	}
-	module, ok := r.modules[msg.GetModule()]
+	module, ok := r.modules[rpcMsg.GetModule()]
 	if !ok {
 		err = errors.Errorf("Attempted to call unregistered module")
-		return marshalResponse(msg.GetSequence(), Status_UNKNOWN_MODULE, nil)
+		return marshalResponse(rpcMsg.GetSequence(), Status_FAILURE, nil)
 	}
-	respBody, err := module.HandleCall(client, msg.GetMethod(), msg.GetBody())
+	respBody, err := module.HandleCall(client, rpcMsg.GetMethod(), rpcMsg.GetBody())
 	if err != nil {
-		r.log.Errorf("HandleCall for %d:%d failed:%s\n", module.ID(), msg.GetMethod(), err)
-		return marshalResponse(msg.GetSequence(), Status_FAILURE, nil)
+		r.log.Errorf("HandleCall for %d:%d failed:%s\n", module.ID(), rpcMsg.GetMethod(), err)
+		return marshalResponse(rpcMsg.GetSequence(), Status_FAILURE, nil)
 	}
 
-	return marshalResponse(msg.GetSequence(), Status_SUCCESS, respBody)
+	return marshalResponse(rpcMsg.GetSequence(), Status_SUCCESS, respBody)
 }
