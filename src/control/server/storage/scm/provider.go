@@ -169,7 +169,7 @@ func (sr *ScanResponse) String() string {
 	}
 
 	if len(sr.Namespaces) > 0 {
-		fmt.Fprintf(&buf, "SCM Namespaces:\n%s\n", &sr.Namespaces)
+		fmt.Fprintf(&buf, "SCM Namespaces: %s\n", &sr.Namespaces)
 	} else {
 		fmt.Fprintf(&buf, "SCM Modules:\n%s\n", &sr.Modules)
 	}

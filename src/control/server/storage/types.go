@@ -25,6 +25,8 @@ package storage
 import (
 	"bytes"
 	"fmt"
+
+	bytesize "github.com/inhies/go-bytesize"
 )
 
 // ScmState represents the probed state of SCM modules on the system.
@@ -67,6 +69,7 @@ type (
 		BlockDevice string `json:"blockdev"`
 		Name        string `json:"dev"`
 		NumaNode    uint32 `json:"numa_node"`
+		Size        uint64 `json:"size"`
 	}
 
 	// ScmNamespaces is a type alias for []ScmNamespace that provides a fmt.Stringer implementation.
@@ -74,9 +77,9 @@ type (
 )
 
 func (m *ScmModule) String() string {
-	return fmt.Sprintf("PhysicalID:%d Capacity:%d Location:(socket:%d memctrlr:%d "+
-		"chan:%d pos:%d)", m.PhysicalID, m.Capacity, m.SocketID, m.ControllerID,
-		m.ChannelID, m.ChannelPosition)
+	return fmt.Sprintf("PhysicalID:%d Capacity:%s Location:(socket:%d memctrlr:%d "+
+		"chan:%d pos:%d)", m.PhysicalID, bytesize.New(float64(m.Capacity)),
+		m.SocketID, m.ControllerID, m.ChannelID, m.ChannelPosition)
 }
 
 func (ms ScmModules) String() string {
@@ -90,14 +93,15 @@ func (ms ScmModules) String() string {
 }
 
 func (n *ScmNamespace) String() string {
-	return fmt.Sprintf("%s/%s/%s (NUMA %d)", n.Name, n.BlockDevice, n.UUID, n.NumaNode)
+	return fmt.Sprintf("%s/numa%d/%s", n.BlockDevice, n.NumaNode,
+		bytesize.New(float64(n.Size)))
 }
 
 func (ns ScmNamespaces) String() string {
 	var buf bytes.Buffer
 
 	for _, n := range ns {
-		fmt.Fprintf(&buf, "\t%s\n", &n)
+		fmt.Fprintf(&buf, " %s", &n)
 	}
 
 	return buf.String()
