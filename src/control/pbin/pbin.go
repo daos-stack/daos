@@ -23,8 +23,8 @@
 package pbin
 
 const (
-	// DaosAdminPath is the fixed path to the daos_admin privileged helper.
-	DaosAdminPath = "/usr/bin/daos_admin"
+	// DaosAdminName is the name of the daos_admin privileged helper.
+	DaosAdminName = "daos_admin"
 
 	// DisableReqFwdEnvVar is the name of the environment variable which
 	// can be set to disable forwarding requests to the privileged binary.

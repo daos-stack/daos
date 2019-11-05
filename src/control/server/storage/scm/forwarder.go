@@ -28,6 +28,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 )
@@ -44,6 +45,11 @@ func (f *Forwarder) sendReq(method string, fwdReq interface{}, fwdRes interface{
 		return errors.New("nil response")
 	}
 
+	pbinPath, err := common.FindBinary(pbin.DaosAdminName)
+	if err != nil {
+		return err
+	}
+
 	payload, err := json.Marshal(fwdReq)
 	if err != nil {
 		return errors.Wrap(err, "failed to marshal forwarded request as payload")
@@ -55,7 +61,7 @@ func (f *Forwarder) sendReq(method string, fwdReq interface{}, fwdRes interface{
 	}
 
 	ctx := context.TODO()
-	res, err := pbin.ExecReq(ctx, f.log, pbin.DaosAdminPath, req)
+	res, err := pbin.ExecReq(ctx, f.log, pbinPath, req)
 	if err != nil {
 		return errors.Wrap(err, "privileged binary execution failed")
 	}
