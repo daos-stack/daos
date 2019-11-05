@@ -45,7 +45,7 @@ register_ns(struct spdk_nvme_ctrlr *ctrlr, struct spdk_nvme_ns *ns)
 	cdata = spdk_nvme_ctrlr_get_data(ctrlr);
 
 	if (!spdk_nvme_ns_is_active(ns)) {
-		printf("Controller %-20.20s (%-20.20s): Skipping inactive NS %u\n",
+		printf("Controller %-20.20s (%-20.20s): Skip inactive NS %u\n",
 			cdata->mn, cdata->sn, spdk_nvme_ns_get_id(ns));
 		return;
 	}

@@ -31,7 +31,7 @@
 /**
  * @brief NVMECONTROL return codes
  */
-typedef enum _NvmeControlStatusCode {
+enum NvmeControlStatusCode {
 	NVMEC_SUCCESS			= 0,
 	NVMEC_ERR_CHK_SIZE		= 1,
 	NVMEC_ERR_GET_PCI_DEV		= 2,
@@ -42,7 +42,7 @@ typedef enum _NvmeControlStatusCode {
 	NVMEC_ERR_NOT_SUPPORTED		= 7,
 	NVMEC_ERR_BAD_LBA		= 8,
 	NVMEC_LAST_STATUS_VALUE
-} NvmeControlStatusCode;
+};
 
 /**
  * Register the namespace by obtaining the NVMe controller data,
