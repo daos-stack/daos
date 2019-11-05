@@ -503,6 +503,11 @@ ctl_init()
 	d_rank_list_t	*rank_list = NULL;
 	int		 rc = 0;
 
+	if (ctl_gdata.cg_save_cfg) {
+		rc = crt_group_config_path_set(ctl_gdata.cg_cfg_path);
+		D_ASSERTF(rc == 0, "crt_group_config_path_set failed %d\n", rc);
+	}
+
 	tc_cli_start_basic("crt_ctl", ctl_gdata.cg_group_name, &grp,
 			    &rank_list, &ctl_gdata.cg_crt_ctx,
 			    &ctl_gdata.cg_tid, 1, ctl_gdata.cg_save_cfg);
@@ -607,7 +612,7 @@ main(int argc, char **argv)
 	D_ASSERTF(rc == 0, "parse_args() failed. rc %d\n", rc);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
-	tc_test_init(0, 20, false, false);
+	tc_test_init(0, 40, false, false);
 
 	rc = ctl_init();
 	D_ASSERTF(rc == 0, "ctl_init() failed, rc %d\n", rc);
