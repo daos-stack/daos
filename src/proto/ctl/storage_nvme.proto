@@ -60,8 +60,8 @@ message NvmeController {
 	string pciaddr = 3;	// pci address
 	string fwrev = 4;	// firmware revision
 	int32 socketid = 5;	// NUMA socket ID
-	repeated Namespace namespaces = 6;	// controller's namespaces
-	repeated Health healthstats = 7;	// controller's health stats
+	Health healthstats = 6;	// controller's health stats
+	repeated Namespace namespaces = 7;	// controller's namespaces
 }
 
 // NvmeControllerResult represents state of operation performed on controller.

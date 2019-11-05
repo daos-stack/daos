@@ -28,7 +28,7 @@
 #define D_LOGFAC	DD_FAC(tests)
 
 #include "vts_io.h"
-#include <vos_internal.h>	/* for VOS_BLK_SZ & VOS_MW_FLUSH_THRESH */
+#include <vos_internal.h>
 
 #define VERBOSE_MSG(...)			\
 {						\
@@ -212,6 +212,7 @@ lookup_object(struct io_test_args *arg, daos_unit_oid_t oid)
 }
 
 struct agg_tst_dataset {
+	daos_unit_oid_t			 td_oid;
 	daos_iod_type_t			 td_type;
 	daos_epoch_range_t		 td_upd_epr;
 	daos_epoch_range_t		 td_agg_epr;
@@ -329,6 +330,26 @@ generate_recx(daos_recx_t *recx_tot, daos_recx_t *recx)
 }
 
 static void
+generate_akeys(struct io_test_args *arg, daos_unit_oid_t oid, int nr)
+{
+	char	 dkey[UPDATE_DKEY_SIZE] = { 0 };
+	char	 akey[UPDATE_AKEY_SIZE] = { 0 };
+	char	*buf_u;
+	int	 i;
+
+	D_ALLOC(buf_u, 10);
+	assert_non_null(buf_u);
+
+	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
+	for (i = 0; i < nr; i++) {
+		dts_key_gen(akey, UPDATE_AKEY_SIZE, UPDATE_AKEY);
+		update_value(arg, oid, 1, dkey, akey, DAOS_IOD_SINGLE,
+			     10, NULL, buf_u);
+	}
+	D_FREE(buf_u);
+}
+
+static void
 aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 		int punch_nr, daos_epoch_t punch_epoch[])
 {
@@ -342,7 +363,10 @@ aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 	daos_size_t		 view_len;
 	int			 punch_idx = 0, recx_idx = 0, rc;
 
-	oid = dts_unit_oid_gen(0, 0, 0);
+	if (daos_unit_oid_is_null(ds->td_oid))
+		oid = dts_unit_oid_gen(0, 0, 0);
+	else
+		oid = ds->td_oid;
 	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
 	dts_key_gen(akey, UPDATE_AKEY_SIZE, UPDATE_AKEY);
 
@@ -978,6 +1002,44 @@ discard_12(void **state)
 	ds.td_discard = true;
 
 	aggregate_multi(arg, &ds);
+}
+
+/*
+ * Discard won't run into infinite loop.
+ */
+static void
+discard_13(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct agg_tst_dataset	 ds = { 0 };
+	daos_recx_t		 recx_arr[200];
+	daos_recx_t		 recx_tot;
+	int			 i;
+
+	ds.td_oid = dts_unit_oid_gen(0, 0, 0);
+	/*
+	 * Generate enough amount of akeys to ensure vos_iterate()
+	 * trigger re-probe on dkey
+	 */
+	generate_akeys(arg, ds.td_oid, VOS_AGG_CREDITS_MAX + 10);
+
+	recx_tot.rx_idx = 0;
+	recx_tot.rx_nr = 20;
+	for (i = 0; i < 200; i++)
+		generate_recx(&recx_tot, &recx_arr[i]);
+
+	ds.td_type = DAOS_IOD_ARRAY;
+	ds.td_iod_size = 1024;
+	ds.td_expected_recs = -1;
+	ds.td_recx_nr = 200;
+	ds.td_recx = &recx_arr[0];
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = 200;
+	ds.td_agg_epr.epr_lo = 100;
+	ds.td_agg_epr.epr_hi = DAOS_EPOCH_MAX;
+	ds.td_discard = true;
+
+	aggregate_basic(arg, &ds, -1, NULL);
 }
 
 /*
@@ -1622,6 +1684,9 @@ static const struct CMUnitTest discard_tests[] = {
 	  discard_11, NULL, agg_tst_teardown },
 	{ "VOS462: Discard EV, multiple objects, keys",
 	  discard_12, NULL, agg_tst_teardown },
+	{ "VOS463: Discard won't run into infinite loop",
+	  discard_13, NULL, agg_tst_teardown },
+
 };
 
 static const struct CMUnitTest aggregate_tests[] = {
