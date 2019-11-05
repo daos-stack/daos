@@ -24,81 +24,6 @@
 #ifndef NVMECONTROL_H
 #define NVMECONTROL_H
 
-#include <stdbool.h>
-
-#define NVMECONTROL_GBYTE_BYTES 1000000000
-
-/**
- * @brief NVMECONTROL return codes
- */
-typedef enum _NvmeControlStatusCode {
-	NVMEC_SUCCESS			= 0,
-	NVMEC_ERR_CHK_SIZE		= 1,
-	NVMEC_ERR_GET_PCI_DEV		= 2,
-	NVMEC_ERR_PCI_ADDR_FMT		= 3,
-	NVMEC_ERR_PCI_ADDR_PARSE	= 4,
-	NVMEC_ERR_CTRLR_NOT_FOUND	= 5,
-	NVMEC_ERR_NS_NOT_FOUND		= 6,
-	NVMEC_ERR_NOT_SUPPORTED		= 7,
-	NVMEC_ERR_BAD_LBA		= 8,
-	NVMEC_LAST_STATUS_VALUE
-} NvmeControlStatusCode;
-
-/*
- * \brief Raw SPDK device health statistics.
- */
-struct dev_health_t {
-	uint16_t	 temperature; /* in Kelvin */
-	uint32_t	 warn_temp_time;
-	uint32_t	 crit_temp_time;
-	uint64_t	 ctrl_busy_time;
-	uint64_t	 power_cycles;
-	uint64_t	 power_on_hours;
-	uint64_t	 unsafe_shutdowns;
-	uint64_t	 media_errors;
-	uint64_t	 error_log_entries;
-	/* Critical warnings */
-	bool		 temp_warning;
-	bool		 avail_spare_warning;
-	bool		 dev_reliabilty_warning;
-	bool		 read_only_warning;
-	bool		 volatile_mem_warning;
-};
-
-/**
- * \brief NVMe controller details
- */
-struct ctrlr_t {
-	char		     model[1024];
-	char		     serial[1024];
-	char		     pci_addr[1024];
-	char		     fw_rev[1024];
-	int		     socket_id;
-	struct dev_health_t *dev_health;
-	struct ctrlr_t	    *next;
-};
-
-/**
- * \brief NVMe namespace details
- */
-struct ns_t {
-	int		id;
-	int		size;
-	char		ctrlr_pci_addr[1024];
-	struct ns_t	*next;
-};
-
-/**
- * \brief Return containing return code, controllers, namespaces and error
- * message
- */
-struct ret_t {
-	int		rc;
-	struct ctrlr_t	*ctrlrs;
-	struct ns_t	*nss;
-	char		err[1024];
-};
-
 /**
  * Discover NVMe controllers and namespaces, as well as return device health
  * information.
@@ -106,7 +31,6 @@ struct ret_t {
  * \return a pointer to a return struct (ret_t).
  */
 struct ret_t *nvme_discover(void);
-
 
 /**
  * Update NVMe controller firmware.

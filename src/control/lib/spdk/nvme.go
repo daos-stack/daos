@@ -210,13 +210,15 @@ func processReturn(retPtr *C.struct_ret_t, failLocation string) ([]Controller, e
 			ctrlrs = append(ctrlrs, c2GoController(ctrlrPtr))
 			ctrlrRef := &ctrlrs[len(ctrlrs)-1]
 
-			healthPtr := ctrlrPtr.dev_health
-			if healthPtr != nil {
+			if healthPtr := ctrlrPtr.dev_health; healthPtr != nil {
 				defer C.free(unsafe.Pointer(healthPtr))
 				ctrlrRef.Health = c2GoDeviceHealth(healthPtr)
 			}
 
-			// store reference in map so we can add amespaces later
+			// check doesn't already exist and store reference to add amespaces later
+			if _, exists := pciMap[ctrlrRef.PCIAddr]; exists {
+				return nil, errors.New("multiple entries for the same PCI address")
+			}
 			pciMap[ctrlrRef.PCIAddr] = ctrlrRef
 			ctrlrPtr = ctrlrPtr.next
 		}
@@ -225,10 +227,10 @@ func processReturn(retPtr *C.struct_ret_t, failLocation string) ([]Controller, e
 		for nsPtr != nil {
 			defer C.free(unsafe.Pointer(nsPtr))
 			pciAddr := C.GoString(&nsPtr.ctrlr_pci_addr[0])
-			ctrlrRef, ok := pciMap[pciAddr]
-			if !ok || ctrlrRef == nil {
-				return nil, errors.New(
-					"failed to find parent controller for namespace")
+
+			ctrlrRef, exists := pciMap[pciAddr]
+			if !exists || ctrlrRef == nil {
+				return nil, errors.New("failed to find parent controller for namespace")
 			}
 			ctrlrRef.Namespaces = append(ctrlrRef.Namespaces, c2GoNamespace(nsPtr))
 			nsPtr = nsPtr.next
@@ -237,6 +239,5 @@ func processReturn(retPtr *C.struct_ret_t, failLocation string) ([]Controller, e
 		return ctrlrs, nil
 	}
 
-	return nil, fmt.Errorf("%s failed, rc: %d, %s", failLocation, retPtr.rc,
-		C.GoString(&retPtr.err[0]))
+	return nil, fmt.Errorf("%s failed, rc: %d, %s", failLocation, retPtr.rc, C.GoString(&retPtr.err[0]))
 }
