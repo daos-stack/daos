@@ -771,6 +771,12 @@ func TestProviderFormat(t *testing.T) {
 					},
 				}
 			}
+			if req.OwnerUID == 0 {
+				req.OwnerUID = os.Getuid()
+			}
+			if req.OwnerGID == 0 {
+				req.OwnerGID = os.Getgid()
+			}
 			if req.Mountpoint != "" && req.Mountpoint != badMountPoint {
 				req.Mountpoint = filepath.Join(testDir, req.Mountpoint)
 			}

@@ -92,6 +92,8 @@ type (
 		Forwarded  bool
 		Reformat   bool
 		Mountpoint string
+		OwnerUID   int
+		OwnerGID   int
 		Ramdisk    *RamdiskParams
 		Dcpm       *DcpmParams
 	}
@@ -184,6 +186,8 @@ func CreateFormatRequest(scmCfg storage.ScmConfig, reformat bool) (*FormatReques
 	req := FormatRequest{
 		Mountpoint: scmCfg.MountPoint,
 		Reformat:   reformat,
+		OwnerUID:   os.Geteuid(),
+		OwnerGID:   os.Getegid(),
 	}
 
 	switch scmCfg.Class {
@@ -626,6 +630,12 @@ func (p *Provider) formatRamdisk(req FormatRequest) (*FormatResponse, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if err := os.Chown(req.Mountpoint, req.OwnerUID, req.OwnerGID); err != nil {
+		return nil, errors.Wrapf(err, "failed to set ownership of %s to %d.%d",
+			req.Mountpoint, req.OwnerUID, req.OwnerGID)
+	}
+
 	return &FormatResponse{
 		Mountpoint: res.Target,
 		Formatted:  res.Mounted,
@@ -654,6 +664,12 @@ func (p *Provider) formatDcpm(req FormatRequest) (*FormatResponse, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if err := os.Chown(req.Mountpoint, req.OwnerUID, req.OwnerGID); err != nil {
+		return nil, errors.Wrapf(err, "failed to set ownership of %s to %d.%d",
+			req.Mountpoint, req.OwnerUID, req.OwnerGID)
+	}
+
 	return &FormatResponse{
 		Mountpoint: res.Target,
 		Formatted:  res.Mounted,

@@ -171,13 +171,13 @@ func (h *IOServerHarness) AwaitStorageReady(ctx context.Context, skipMissingSupe
 			h.log.Debug("no SCM format required; checking for superblock")
 			needsSuperblock, err := instance.NeedsSuperblock()
 			if err != nil {
-				return errors.Wrap(err, "failed to check instance superblock")
+				h.log.Errorf("failed to check instance superblock: %s", err)
 			}
 			if !needsSuperblock {
 				continue
 			}
 		}
-		h.log.Debug("SCM format required")
+		h.log.Info("SCM format required")
 		instance.AwaitStorageReady(ctx)
 	}
 	return ctx.Err()

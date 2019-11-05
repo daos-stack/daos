@@ -72,6 +72,8 @@ func TestHandler(t *testing.T) {
 	scmFormatReqPayload, err := json.Marshal(scm.FormatRequest{
 		Forwarded:  true,
 		Mountpoint: testTarget,
+		OwnerUID:   os.Getuid(),
+		OwnerGID:   os.Getgid(),
 		Ramdisk: &scm.RamdiskParams{
 			Size: 1,
 		},
