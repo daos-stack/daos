@@ -34,6 +34,7 @@ struct dss_xstream {
 	ABT_pool	dx_pools[DSS_POOL_CNT];
 	ABT_sched	dx_sched;
 	ABT_thread	dx_progress;
+	d_list_t	dx_sleep_ult_list;
 	tse_sched_t	dx_sched_dsc;
 	/* xstream id, [0, DSS_XS_NR_TOTAL - 1] */
 	int		dx_xs_id;
