@@ -107,8 +107,16 @@ def start_server(binfo):
     cmd += "--debug --config {} ".format(config_file)
     cmd += "start -d ./ -t 1 -m vos,rdb,rsvc,mgmt,rdbt -i "
     print("Running command:\n{}".format(cmd))
-    sys.stdout.flush()
 
+    os.system('ldd {}'.format(os.path.join(binfo.get('PREFIX',
+                                                     'bin',
+                                                     'daos_server'))))
+
+    os.system('ldd {}'.format(os.path.join(binfo.get('PREFIX',
+                                                     'bin',
+                                                     'daos_io_server'))))
+
+    sys.stdout.flush()
     try:
         p = subprocess.Popen(shlex.split(cmd))
         return p
