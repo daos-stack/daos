@@ -120,7 +120,7 @@ static void test_nvme_discover_set_g_controllers(void **state)
 	if (g_controllers == NULL) {
 		g_controllers = malloc(sizeof(struct ctrlr_entry));
 		g_controllers->ctrlr = NULL;
-		g_controllers->tr_addr = NULL;
+		g_controllers->dev_health = NULL;
 		g_controllers->next = NULL;
 	}
 

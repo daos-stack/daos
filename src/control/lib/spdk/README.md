@@ -47,5 +47,5 @@ cmocka Test Env:
 
 Build cmocka Tests:
 
-    cd ${GOSPDK}/ctest
+    cd ${GOSPDK}/ctests
     gcc ${TESTFLAGS} ${DISCOVER_WRAPS} -I../include -L../. nvme_discover_test.c ../src/nvme_control.c -o discover_ctest
