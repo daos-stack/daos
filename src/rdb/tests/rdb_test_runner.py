@@ -108,13 +108,13 @@ def start_server(binfo):
     cmd += "start -d ./ -t 1 -m vos,rdb,rsvc,mgmt,rdbt -i "
     print("Running command:\n{}".format(cmd))
 
-    os.system('ldd {}'.format(os.path.join(binfo.get('PREFIX',
-                                                     'bin',
-                                                     'daos_server'))))
+    os.system('ldd {}'.format(os.path.join(binfo.get('PREFIX'),
+                                           'bin',
+                                           'daos_server')))
 
-    os.system('ldd {}'.format(os.path.join(binfo.get('PREFIX',
-                                                     'bin',
-                                                     'daos_io_server'))))
+    os.system('ldd {}'.format(os.path.join(binfo.get('PREFIX'),
+                                           'bin',
+                                           'daos_io_server')))
 
     sys.stdout.flush()
     try:

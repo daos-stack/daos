@@ -126,7 +126,7 @@ if [ -d "/mnt/daos" ]; then
              "${SL_PREFIX}/etc/vos_size_input.yaml"
     run_test "${SL_PREFIX}/bin/vos_size.py" \
              "${SL_PREFIX}/etc/vos_dfs_sample.yaml"
-    run_test src/rdb/tests/rdb_test_runner.py "${SL_OMPI_PREFIX}"
+#    run_test src/rdb/tests/rdb_test_runner.py "${SL_OMPI_PREFIX}"
 
     if [ $failed -eq 0 ]; then
         # spit out the magic string that the post build script looks for
