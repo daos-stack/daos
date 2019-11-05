@@ -42,10 +42,10 @@ cmocka Test Env:
 
     export DISCOVER_WRAPS="-Wl,--wrap=spdk_nvme_probe -Wl,--wrap=collect -Wl,--wrap=cleanup -Wl,--wrap=init_ret"
     export TESTLIBS="-lspdk -lcmocka -lnvme_control"
-    export GCCFLAGS="-c -g -fpic -Wall -Werror -Wshadow -Wno-missing-braces"
+    export GCCFLAGS="-g -fpic -Wall -Werror -Wshadow -Wno-missing-braces"
     export TESTFLAGS="${CGO_LDFLAGS} ${CGO_CFLAGS} ${GCCFLAGS} ${TESTLIBS}"
 
 Build cmocka Tests:
 
     cd ${GOSPDK}/ctests
-    gcc ${TESTFLAGS} ${DISCOVER_WRAPS} -I../include -L../. nvme_discover_test.c ../src/nvme_control.c -o discover_ctest
+    gcc ${TESTFLAGS} ${DISCOVER_WRAPS} -I../include -L../. nvme_discover_test.c ../src/*.c -o discover_ctest

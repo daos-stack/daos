@@ -151,10 +151,9 @@ def scons():
     if compiler == "covc":
         compiler = "gcc"
 
-    nvmecontrol = denv.StaticLibrary(
-        "nvme_control",
-        join(gospdkpath, "src", "nvme_control.c"),
-        CC=compiler, LIBS=['spdk'])
+    nvmecontrol = denv.StaticLibrary("nvme_control",
+                                     Glob(join(gospdkpath, "src", "*.c")),
+                                     CC=compiler, LIBS=['spdk'])
 
     denv.Install(join(denv.subst("$PREFIX"), "lib"), nvmecontrol)
 

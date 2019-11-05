@@ -25,6 +25,7 @@
 #include "spdk/nvme.h"
 #include "spdk/env.h"
 
+#include "nvme_control.h"
 #include "nvme_control_common.h"
 
 void

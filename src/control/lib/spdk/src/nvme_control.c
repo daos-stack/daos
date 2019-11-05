@@ -29,6 +29,9 @@
 #include "nvme_control.h"
 #include "nvme_control_common.h"
 
+struct ctrlr_entry	*g_controllers;
+struct ns_entry		*g_namespaces;
+
 static void
 get_spdk_log_page_completion(void *cb_arg, const struct spdk_nvme_cpl *cpl)
 {
@@ -91,7 +94,7 @@ nvme_discover(void)
 		return ret;
 	}
 
-	if (g_controllers == NULL) {
+	if (g_controllers == NULL || g_controllers->ctrlr == NULL) {
 		fprintf(stderr, "no NVMe controllers found\n");
 		cleanup();
 		return ret;
