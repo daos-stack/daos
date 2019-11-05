@@ -10,10 +10,10 @@ timeout: 5400
 logdir: /tmp/soak
 server_config:
     name: daos_server
-    provider: ofi+sockets
     servers:
         log_mask: ERR
-        fabric_iface: eth0
+        bdev_class: nvme
+        bdev_list: ["0000:81:00.0","0000:da:00.0"]
 
 # If slurm is not specified; launch jobs with mpirun; {slurm|mpirun}
 jobmanager: slurm

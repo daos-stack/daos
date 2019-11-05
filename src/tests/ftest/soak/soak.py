@@ -506,13 +506,13 @@ class Soak(TestWithServers):
         self.log.info(
                 "<<Updated hostlist_clients %s >>", self.hostlist_clients)
         # include test node for log cleanup; remove from client list
-        # self.test_node = [socket.gethostname().split('.', 1)[0]]
-        # if self.test_node[0] in self.hostlist_clients:
-        #     self.hostlist_clients.remove(self.test_node[0])
-        #     self.log.info(
-        #         "<<Updated hostlist_clients %s >>", self.hostlist_clients)
-        # self.node_list = self.hostlist_clients + self.test_node
-        self.node_list = self.hostlist_clients
+        self.test_node = [socket.gethostname().split('.', 1)[0]]
+        if self.test_node[0] in self.hostlist_clients:
+            self.hostlist_clients.remove(self.test_node[0])
+            self.log.info(
+                "<<Updated hostlist_clients %s >>", self.hostlist_clients)
+        self.node_list = self.hostlist_clients + self.test_node
+        # self.node_list = self.hostlist_clients
 
         # Setup logging directories for soak logfiles
         # self.output dir is an avocado directory .../data/
