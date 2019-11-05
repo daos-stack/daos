@@ -289,7 +289,7 @@ struct evt_entry {
 	struct evt_extent		en_ext;
 	/** Actual extent within selected range */
 	struct evt_extent		en_sel_ext;
-	/** checksums of selected extent*/
+	/** checksums of the actual extent*/
 	daos_csum_buf_t			en_csum;
 	/** pool map version */
 	uint32_t			en_ver;

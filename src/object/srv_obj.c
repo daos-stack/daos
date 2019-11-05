@@ -60,6 +60,7 @@ obj_rpc_is_fetch(crt_rpc_t *rpc)
 {
 	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH;
 }
+
 /**
  * After bulk finish, let's send reply, then release the resource.
  */
@@ -832,6 +833,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	crt_bulk_op_t		bulk_op;
 	bool			rma;
 	bool			bulk_bind;
+	bool			size_fetch = false;
 	daos_iod_t		*cpy_iods = NULL;
 	daos_iod_t		*tmp_iods = orw->orw_iods.ca_arrays;
 	int			i, err, rc = 0;
@@ -905,19 +907,12 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 			goto out;
 		}
 	} else {
-		bool size_fetch = (!rma && orw->orw_sgls.ca_arrays == NULL);
+		size_fetch = (!rma && orw->orw_sgls.ca_arrays == NULL);
 		bulk_op = CRT_BULK_PUT;
 
-		if (!size_fetch) {
-			/** don't need checksum if just fetching size */
-			obj_fetch_csum_init(cont_hdl, orw, orwo);
-			obj_fetch_csums_link(orw, orwo);
-		}
 		rc = vos_fetch_begin(cont->sc_hdl, orw->orw_oid, orw->orw_epoch,
 				     dkey, orw->orw_nr, tmp_iods, size_fetch,
 				     &ioh);
-		if (!size_fetch)
-			obj_fetch_csums_unlink(orw);
 
 		if (rc) {
 			D_ERROR(DF_UOID" Fetch begin failed: %d\n",
@@ -948,6 +943,24 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 		D_ERROR(DF_UOID" bio_iod_prep failed: %d.\n",
 			DP_UOID(orw->orw_oid), rc);
 		goto out;
+	}
+
+	if (obj_rpc_is_fetch(rpc) && !size_fetch) {
+		obj_fetch_csum_init(cont_hdl, orw, orwo);
+
+		obj_fetch_csums_link(orw, orwo);
+
+		rc = vos_fetch_csum(ioh,
+				    orw->orw_iods.ca_arrays,
+				    orw->orw_iods.ca_count,
+				    cont_hdl->sch_csummer);
+		obj_fetch_csums_unlink(orw);
+
+		if (rc) {
+			D_ERROR(DF_UOID" fetch verify failed: %d.\n",
+				DP_UOID(orw->orw_oid), rc);
+			goto post;
+		}
 	}
 
 	if (rma) {
