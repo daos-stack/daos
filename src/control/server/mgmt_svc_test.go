@@ -27,7 +27,6 @@ import (
 	"context"
 	"net"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -218,13 +217,7 @@ func TestPoolGetACL_Success(t *testing.T) {
 		t.Errorf("Expected no error, got: %v", err)
 	}
 
-	// Avoid comparing the internal Protobuf fields
-	isHiddenPBField := func(path cmp.Path) bool {
-		return strings.HasPrefix(path.Last().String(), ".XXX_")
-	}
-	cmpOpts := []cmp.Option{
-		cmp.FilterPath(isHiddenPBField, cmp.Ignore()),
-	}
+	cmpOpts := common.DefaultCmpOpts()
 	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
 		t.Fatalf("bad response (-want, +got): \n%s\n", diff)
 	}

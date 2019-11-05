@@ -24,7 +24,6 @@
 package server
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -117,8 +116,8 @@ func TestSrvModule_HandleNotifyReady_Success_Single(t *testing.T) {
 	addIOServerInstances(mod, 1, log)
 
 	// Needs to be a real socket at the path
-	tmpDir := createTestDir(t)
-	defer os.Remove(tmpDir)
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
 	sockPath := filepath.Join(tmpDir, "mgmt_drpc_test.sock")
 
 	sock := createTestSocket(t, sockPath)
@@ -146,8 +145,8 @@ func TestSrvModule_HandleNotifyReady_Success_Multi(t *testing.T) {
 	addIOServerInstances(mod, numInstances, log)
 
 	// Needs to be a real socket at the path
-	tmpDir := createTestDir(t)
-	defer os.Remove(tmpDir)
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
 	sockPath := filepath.Join(tmpDir, "mgmt_drpc_test.sock")
 
 	sock := createTestSocket(t, sockPath)
@@ -182,8 +181,8 @@ func TestSrvModule_HandleNotifyReady_IdxOutOfRange(t *testing.T) {
 	addIOServerInstances(mod, numInstances, log)
 
 	// Needs to be a real socket at the path
-	tmpDir := createTestDir(t)
-	defer os.Remove(tmpDir)
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
 	sockPath := filepath.Join(tmpDir, "mgmt_drpc_test.sock")
 
 	sock := createTestSocket(t, sockPath)
