@@ -110,7 +110,7 @@ class TestDaosApiBase(ObjectWithParameters):
             # Log the exception to obtain additional trace information
             self.log.debug(
                 "Exception raised by %s.%s(%s)",
-                method.__module__, method.__name__,
+                method.im_class.__name__, method.__name__,
                 ", ".join(
                     ["{}={}".format(key, val) for key, val in kwargs.items()]),
                 exc_info=error)
@@ -735,7 +735,8 @@ class TestContainerData(object):
             DaosTestError: if there was an error writing the record
 
         """
-        self.records.append({"akey": akey, "dkey": dkey, "data": data})
+        self.records.append(
+            {"akey": akey, "dkey": dkey, "data": data, "punched": False})
         kwargs = {"dkey": dkey, "akey": akey, "obj": self.obj, "rank": rank}
         if obj_class:
             kwargs["obj_cls"] = obj_class
@@ -790,7 +791,8 @@ class TestContainerData(object):
                     "Written data confirmation failed:"
                     "\n  wrote: {}\n  read:  {}".format(data, data_read))
 
-    def read_record(self, container, akey, dkey, data_size, data_count=0):
+    def read_record(self, container, akey, dkey, data_size, data_count=0,
+                    txn=None):
         """Read a record from the container.
 
         Args:
@@ -799,6 +801,8 @@ class TestContainerData(object):
             dkey (str): the dkey
             data_size (int): size of the data to read
             data_count (int): number of array items to read
+            txn (int, optional): transaction timestamp to read. Defaults to None
+                which uses the last timestamp written.
 
         Raises:
             DaosTestError: if there was an error reading the object
@@ -807,7 +811,12 @@ class TestContainerData(object):
             str: the data read for the container
 
         """
-        kwargs = {"dkey": dkey, "akey": akey, "obj": self.obj, "txn": self.txn}
+        kwargs = {
+            "dkey": dkey,
+            "akey": akey,
+            "obj": self.obj,
+            "txn": txn if txn is not None else self.txn,
+        }
         try:
             if data_count:
                 kwargs["rec_count"] = data_count
@@ -827,39 +836,51 @@ class TestContainerData(object):
         return [data[:-1] for data in read_data] \
             if data_count else read_data.value
 
-    def read_object(self, container):
+    def read_object(self, container, txn=None):
         """Read an object from the container.
 
         Args:
             container (TestContainer): container from which to read the object
+            txn (int, optional): transaction timestamp to read. Defaults to None
+                which uses the last timestamp written.
 
         Returns:
-            bool: True if ll the records where read successfully and matched
+            bool: True if all the records where read successfully and matched
                 what was originally written; False otherwise
 
         """
         status = len(self.records) > 0
         for record_info in self.records:
-            expect = record_info["data"]
+            data = record_info["data"]
             kwargs = {
                 "container": container,
                 "akey": record_info["akey"],
                 "dkey": record_info["dkey"],
-                "data_size": len(expect),
+                "data_size": len(data),
+                "txn": txn,
             }
             try:
-                if isinstance(expect, list):
-                    kwargs["data_count"] = len(expect) + 1
+                if isinstance(data, list):
+                    kwargs["data_count"] = len(data) + 1
                 actual = self.read_record(**kwargs)
-            except DaosApiError as error:
-                container.log.error(error)
+
+            except DaosTestError as error:
+                self.log.error(
+                    "    %s",
+                    str(error).replace(
+                        ") from",
+                        ", punched={}) from".format(record_info["punched"])))
                 status = False
-            finally:
-                if actual != expect:
-                    container.log.error(
-                        "Error data mismatch: expected: %s, actual: %s",
-                        expect, actual)
-                    status = False
+                continue
+
+            expect = "" if record_info["punched"] else record_info["data"]
+            if actual != expect:
+                self.log.error(
+                    "    Error data mismatch (akey=%s, dkey=%s, punched=%s): "
+                    "expected: %s, actual: %s",
+                    record_info["akey"], record_info["dkey"],
+                    record_info["punched"], expect, actual)
+                status = False
         return status
 
 
@@ -882,11 +903,24 @@ class TestContainer(TestDaosApiBase):
         self.akey_size = BasicParameter(None)
         self.dkey_size = BasicParameter(None)
         self.data_size = BasicParameter(None)
+        self.debug = BasicParameter(False, False)
 
         self.container = None
         self.uuid = None
         self.opened = False
         self.written_data = []
+
+    def __str__(self):
+        """Return a string representaion of this TestContainer object.
+
+        Returns:
+            str: the container's UUID, if defined
+
+        """
+        if self.container is not None and self.uuid is not None:
+            return str(self.uuid)
+        else:
+            return super(TestContainer, self).__str__()
 
     @fail_on(DaosApiError)
     def create(self, uuid=None):
@@ -924,6 +958,7 @@ class TestContainer(TestDaosApiBase):
         Returns:
             bool: True if the container has been opened; False if the container
                 is already opened.
+
         """
         if self.container and not self.opened:
             self.log.info("Opening container %s", self.uuid)
@@ -974,14 +1009,12 @@ class TestContainer(TestDaosApiBase):
         return False
 
     @fail_on(DaosTestError)
-    def write_objects(self, rank=None, obj_class=None, debug=False):
+    def write_objects(self, rank=None, obj_class=None):
         """Write objects to the container.
 
         Args:
             rank (int, optional): server rank. Defaults to None.
             obj_class (int, optional): daos object class. Defaults to None.
-            debug (bool, optional): log the record write/read method calls.
-                Defaults to False.
 
         Raises:
             DaosTestError: if there was an error writing the object
@@ -996,21 +1029,22 @@ class TestContainer(TestDaosApiBase):
             " with object class {}".format(obj_class)
             if obj_class is not None else "")
         for _ in range(self.object_qty.value):
-            self.written_data.append(TestContainerData(debug))
+            self.written_data.append(TestContainerData(self.debug.value))
             self.written_data[-1].write_object(
                 self, self.record_qty.value, self.akey_size.value,
                 self.dkey_size.value, self.data_size.value, rank, obj_class)
 
     @fail_on(DaosTestError)
-    def read_objects(self, debug=False):
+    def read_objects(self, txn=None):
         """Read the objects from the container and verify they match.
 
         Args:
-            debug (bool, optional): log the record read method calls. Defaults
-                to False.
+            txn (int, optional): transaction timestamp to read. Defaults to None
+                which uses the last timestamp written.
 
         Returns:
-            bool: True if
+            bool: True if all the container objects contain the same previously
+                written records; False otherwise
 
         """
         self.open()
@@ -1019,8 +1053,8 @@ class TestContainer(TestDaosApiBase):
             len(self.written_data), self.uuid)
         status = len(self.written_data) > 0
         for data in self.written_data:
-            data.debug = debug
-            status &= data.read_object(self)
+            data.debug = self.debug.value
+            status &= data.read_object(self, txn)
         return status
 
     def execute_io(self, duration, rank=None, obj_class=None, debug=False):
@@ -1049,7 +1083,7 @@ class TestContainer(TestDaosApiBase):
         total_bytes_written = 0
         finish_time = time() + duration
         while time() < finish_time:
-            self.written_data.append(TestContainerData(debug))
+            self.written_data.append(TestContainerData(self.debug.value))
             self.written_data[-1].write_object(
                 self, 1, self.akey_size.value, self.dkey_size.value,
                 self.data_size.value, rank, obj_class)
@@ -1115,7 +1149,7 @@ class TestContainer(TestDaosApiBase):
 
         Raises:
             DaosTestError: if there is an error punching the object or
-                determining which objec to punch
+                determining which object to punch
 
         Returns:
             int: number of successfully punched objects
@@ -1132,29 +1166,99 @@ class TestContainer(TestDaosApiBase):
                 txn = 0
                 try:
                     obj = self.written_data[index].obj
+                    # txn = self.written_data[index].txn
                 except IndexError:
                     raise DaosTestError(
                         "Invalid index {} for written data".format(index))
 
                 # Close the object
                 self.log.info(
-                    "Closing object (index: %s, txn: %s) in container %s",
-                    index, txn, self.uuid)
+                    "Closing object %s (index: %s, txn: %s) in container %s",
+                    obj, index, txn, self.uuid)
                 try:
                     self._call_method(obj.close, {})
-                except DaosApiError as error:
-                    self.log.error("  Error: %s", str(error))
+                except DaosApiError:
                     continue
 
                 # Punch the object
                 self.log.info(
-                    "Punching object (index: %s, txn: %s) from container %s",
-                    index, txn, self.uuid)
+                    "Punching object %s (index: %s, txn: %s) from container %s",
+                    obj, index, txn, self.uuid)
                 try:
                     self._call_method(obj.punch, {"txn": txn})
                     count += 1
-                except DaosApiError as error:
-                    self.log.error("  Error: %s", str(error))
+                except DaosApiError:
+                    continue
+
+                # Mark the object's records as punched
+                for record in self.written_data[index].records:
+                    record["punched"] = True
+
+        # Retutrn the number of punched objects
+        return count
+
+    def punch_records(self, indices, punch_dkey=True):
+        """Punch committed records from the container.
+
+        Args:
+            indices (list): list of index numbers indicating which written
+                records in the object to punch from the self.written_data list
+            punch_dkey (bool, optional): whether to punch dkeys or akeys.
+                Defaults to True (punch dkeys).
+
+        Raises:
+            DaosTestError: if there is an error punching the record or
+                determining which record to punch
+
+        Returns:
+            int: number of successfully punched records
+
+        """
+        self.open()
+        self.log.info(
+            "Punching %s records from each object in container %s with %s "
+            "written objects",
+            len(indices), self.uuid, len(self.written_data))
+        count = 0
+        for data in self.written_data:
+            # Close the object
+            self.log.info(
+                "Closing object %s (txn: %s) in container %s",
+                data.obj, data.txn, self.uuid)
+            try:
+                self._call_method(data.obj.close, {})
+            except DaosApiError:
+                continue
+
+            # Find the record to punch at the specified index
+            for index in indices:
+                try:
+                    rec = data.records[index]
+                except IndexError:
+                    raise DaosTestError(
+                        "Invalid record index {} for object {}".format(
+                            index, data.obj))
+
+                # Punch the record
+                self.log.info(
+                    "Punching record %s (index: %s, akey: %s, dkey: %s) from "
+                    "object %s in container %s",
+                    rec, index, rec["akey"], rec["dkey"], data.obj, self.uuid)
+                kwargs = {"txn": 0}
+                try:
+                    if punch_dkey:
+                        kwargs["dkeys"] = [rec["dkey"]]
+                        self._call_method(data.obj.punch_dkeys, kwargs)
+                    else:
+                        kwargs["dkey"] = rec["dkey"]
+                        kwargs["akeys"] = [rec["akey"]]
+                        self._call_method(data.obj.punch_akeys, kwargs)
+                    count += 1
+                except DaosApiError:
+                    continue
+
+                # Mark the record as punched
+                rec["punched"] = True
 
         # Retutrn the number of punched objects
         return count

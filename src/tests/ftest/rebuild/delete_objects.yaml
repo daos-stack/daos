@@ -11,18 +11,20 @@ hosts:
 timeout: 300
 server_config:
   name: daos_server
-  targets: 8
+  servers:
+    targets: 8
 pool:
   mode: 511
   name: daos_server
   scm_size: 1073741824
-  svcn: 4
+  svcn: 2
 container:
   akey_size: 5
   dkey_size: 5
   data_size: 256
   object_qty: 30
   record_qty: 10
-testparams:
+  debug: True
+rebuild:
   rank: 4
   object_class: DAOS_OC_R3_RW
