@@ -1222,11 +1222,13 @@ pipeline {
         stage('Test') {
             when {
                 beforeAgent true
-                // expression { skipTest != true }
-                expression { env.NO_CI_TESTING != 'true' }
-                expression {
-                    sh script: 'git show -s --format=%B | grep "^Skip-test: true"',
-                       returnStatus: true
+                allOf {
+                    // expression { skipTest != true }
+                    expression { env.NO_CI_TESTING != 'true' }
+                    expression {
+                        sh script: 'git show -s --format=%B | grep "^Skip-test: true"',
+                           returnStatus: true
+                    }
                 }
             }
             parallel {
@@ -1297,6 +1299,10 @@ pipeline {
                     }
                 }
                 stage('Functional_Hardware') {
+                    when {
+                        beforeAgent true
+                        expression { env.DAOS_STACK_CI_HARDWARE_SKIP != 'true' }
+                    }
                     agent {
                         label 'ci_nvme9'
                     }

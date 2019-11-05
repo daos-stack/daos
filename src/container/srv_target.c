@@ -136,6 +136,12 @@ cont_stop_agg_ult(struct ds_cont_child *cont)
 	D_DEBUG(DF_DSMS, DF_CONT": Stopping aggregation ULT\n",
 		DP_CONT(NULL, cont->sc_uuid));
 
+	if (cont->sc_agg_ult) {
+		dss_ult_wakeup(cont->sc_agg_ult);
+		dss_sleep_ult_destroy(cont->sc_agg_ult);
+		cont->sc_agg_ult = NULL;
+	}
+
 	cont->sc_abort_vos_aggregating = 1;
 	rc = vos_cont_ctl(cont->sc_hdl, VOS_CO_CTL_ABORT_AGG);
 	if (rc)
@@ -1406,7 +1412,7 @@ ds_cont_tgt_snapshots_refresh(uuid_t pool_uuid, uuid_t cont_uuid)
 #define DAOS_AGG_THRESHOLD	90 /* seconds */
 
 int
-cont_child_aggregate(struct ds_cont_child *cont)
+cont_child_aggregate(struct ds_cont_child *cont, uint64_t *sleep)
 {
 	daos_epoch_t		 epoch_max;
 	daos_epoch_range_t	 epoch_range;
@@ -1415,6 +1421,8 @@ cont_child_aggregate(struct ds_cont_child *cont)
 	uint64_t		 interval;
 	int			 i, rc;
 
+	interval = (uint64_t)DAOS_AGG_THRESHOLD * NSEC_PER_SEC;
+	*sleep = interval;
 	if (dss_aggregation_disabled())
 		return 0;
 
@@ -1429,17 +1437,19 @@ cont_child_aggregate(struct ds_cont_child *cont)
 	if (rc)
 		return rc;
 
-	interval = (uint64_t)DAOS_AGG_THRESHOLD * NSEC_PER_SEC;
 	D_ASSERT(hlc > (interval * 2));
 	/*
 	 * Assume 'current hlc - interval' as the highest stable view (all
 	 * transactions under this epoch is either committed or aborted).
 	 */
 	epoch_max = hlc - interval;
-
 	/* Throttle the aggregation a bit */
-	if (cinfo.ci_hae > epoch_max - interval)
+	if (cinfo.ci_hae > epoch_max - interval) {
+		*sleep = (cinfo.ci_hae - (epoch_max - *sleep));
 		return 0;
+	}
+
+	*sleep = 0;
 
 	/* Cap the aggregation upper bound to the snapshot in creating */
 	if (epoch_max >= cont->sc_aggregation_max)
@@ -1503,8 +1513,14 @@ ds_cont_aggregate_ult(void *arg)
 	D_DEBUG(DB_EPC, DF_UUID": starting aggregation ULT on xstream %d\n",
 		DP_UUID(cont->sc_uuid), dmi->dmi_tgt_id);
 
+	cont->sc_agg_ult = dss_sleep_ult_create();
+	if (cont->sc_agg_ult == NULL)
+		return;
+
 	while (!cont->sc_abort_vos_aggregating) {
-		rc = cont_child_aggregate(cont);
+		uint64_t sleep; /* nano secs */
+
+		rc = cont_child_aggregate(cont, &sleep);
 		if (rc < 0)
 			D_ERROR(DF_UUID": VOS aggregate failed. %d\n",
 				DP_UUID(cont->sc_uuid), rc);
@@ -1513,7 +1529,12 @@ ds_cont_aggregate_ult(void *arg)
 
 		if (dss_xstream_exiting(dmi->dmi_xstream))
 			break;
-		ABT_thread_yield();
+
+		sleep /= NSEC_PER_SEC; /* Convert to seconds */
+		if (sleep > 0)
+			dss_ult_sleep(cont->sc_agg_ult, sleep);
+		else
+			ABT_thread_yield();
 	}
 
 	D_DEBUG(DB_EPC, DF_UUID": stopping aggregation ULT on stream %d\n",
