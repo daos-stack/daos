@@ -24,29 +24,12 @@ package pbin_test
 
 import (
 	"bytes"
-	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"testing"
 
 	"github.com/daos-stack/daos/src/control/pbin"
 )
-
-const (
-	childModeEnvVar = "GO_TESTING_CHILD_MODE"
-	childModeEcho   = "MODE_ECHO"
-	childModeReqRes = "MODE_REQ_RES"
-	testMsg         = "hello world"
-)
-
-func childErrExit(err error) {
-	if err == nil {
-		err = errors.New("unknown error")
-	}
-	fmt.Fprintf(os.Stderr, "CHILD ERROR: %s\n", err)
-	os.Exit(1)
-}
 
 func echo() {
 	sc := pbin.NewStdioConn("child", "parent", os.Stdin, os.Stdout)
@@ -73,17 +56,6 @@ func echo() {
 			}
 			break
 		}
-	}
-}
-
-func TestMain(m *testing.M) {
-	switch os.Getenv(childModeEnvVar) {
-	case "":
-		os.Exit(m.Run())
-	case childModeEcho:
-		echo()
-	case childModeReqRes:
-		reqRes()
 	}
 }
 
