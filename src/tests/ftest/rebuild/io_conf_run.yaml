@@ -11,9 +11,9 @@ hosts:
 timeout: 900
 server_config:
   name: daos_server
-  targets: 8
+  servers:
+    targets: 8
   #Enabled to use NVMe Drives
-  #servers:
   #  bdev_class: nvme
   #  bdev_list: ["0000:81:00.0","0000:da:00.0"]
 pool:

@@ -28,11 +28,11 @@ from command_utils import ExecutableCommand
 from test_utils import TestPool
 
 class IoConfGen(ExecutableCommand):
-    """Base IoConf execute command class.
+    """Defines an object for the daos_gen_io_conf and daos_run_io_conf commands.
 
     :avocado: recursive
     """
-    def __init__(self, command, path="", env=None):
+    def __init__(self, path="", env=None):
         """Create a ExecutableCommand object.
 
         Uses Avocado's utils.process module to run a command str provided.
@@ -42,7 +42,7 @@ class IoConfGen(ExecutableCommand):
             path (str, optional): path to location of command binary file.
                 Defaults to "".
         """
-        super(IoConfGen, self).__init__("", command, path)
+        super(IoConfGen, self).__init__("", path)
         self.verbose = True
         self.env = env
 
@@ -55,17 +55,13 @@ class IoConfTestBase(TestWithServers):
     def __init__(self, *args, **kwargs):
         """Initialize a IoConfTestBase object."""
         super(IoConfTestBase, self).__init__(*args, **kwargs)
-        self.pool = TestPool(self.context, self.log)
-
-    def setUp(self):
-        """Set up each test case."""
-        super(IoConfTestBase, self).setUp()
 
     def setup_test_pool(self):
         """Define a TestPool object."""
+        self.pool = TestPool(self.context, self.log)
         self.pool.get_params(self)
 
-    def gen_io_conf(self, filename="testfile"):
+    def run_gen_io_conf(self, filename="testfile"):
         """
         Generate the test data set file based on parameter from yaml file
 
@@ -104,8 +100,8 @@ class IoConfTestBase(TestWithServers):
         #Run daos_gen_io_conf
         #daos_gen_io_conf -g <rank_size> -t <tgt_size>-o [obj_num]
         #-d [dkey_num] -a [akey_num] -s [rec_size]-O obj_class <file_name>
-        gen_io_conf = IoConfGen(" ".join(cmd))
-        gen_io_conf.run()
+        io_conf_gen = IoConfGen(" ".join(cmd))
+        io_conf_gen.run()
 
     def run_io_conf(self, filename="testfile"):
         """ Run daos_run_io_conf <file_name> """
@@ -116,10 +112,10 @@ class IoConfTestBase(TestWithServers):
                filename]
 
         #Run daos_run_io_conf
-        run_io_conf = IoConfGen(" ".join(cmd),
+        io_conf = IoConfGen(" ".join(cmd),
                                 env={"POOL_SCM_SIZE":"{}"
                                      .format(self.pool.scm_size)})
-        run_io_conf.run()
+        io_conf.run()
 
     def execute_io_conf_run_test(self):
         """
@@ -128,6 +124,6 @@ class IoConfTestBase(TestWithServers):
         #Setup the pool
         self.setup_test_pool()
         #create test file using daos_gen_io_conf
-        self.gen_io_conf()
+        self.run_gen_io_conf()
         #Run test file using daos_run_io_conf
         self.run_io_conf()
