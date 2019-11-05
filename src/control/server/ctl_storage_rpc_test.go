@@ -47,11 +47,11 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
-// MockScmModule returns a mock SCM module of type storage/scm.Module.
-func MockScmModule() scm.Module {
+// MockScmModule returns a mock SCM module of type storage.ScmModule.
+func MockScmModule() storage.ScmModule {
 	m := common.MockModulePB()
 
-	return scm.Module{
+	return storage.ScmModule{
 		PhysicalID:      uint32(m.Physicalid),
 		ChannelID:       uint32(m.Loc.Channel),
 		ChannelPosition: uint32(m.Loc.Channelpos),
@@ -63,10 +63,10 @@ func MockScmModule() scm.Module {
 
 // MockScmNamespace returns a mock SCM namespace (PMEM device file),
 // which would normally be parsed from the output of ndctl cmdline tool.
-func MockScmNamespace() scm.Namespace {
+func MockScmNamespace() storage.ScmNamespace {
 	m := common.MockPmemDevicePB()
 
-	return scm.Namespace{
+	return storage.ScmNamespace{
 		UUID:        m.Uuid,
 		BlockDevice: m.Blockdev,
 		Name:        m.Dev,
@@ -131,9 +131,9 @@ func TestStorageScan(t *testing.T) {
 	for name, tc := range map[string]struct {
 		spdkInitEnvRet      error
 		spdkDiscoverRet     error
-		scmDiscoverRes      []scm.Module
+		scmDiscoverRes      []storage.ScmModule
 		scmDiscoverErr      error
-		scmGetNamespacesRes []scm.Namespace
+		scmGetNamespacesRes []storage.ScmNamespace
 		scmGetNamespacesErr error
 		expSetupErr         error
 		expResp             StorageScanResp
@@ -152,7 +152,7 @@ func TestStorageScan(t *testing.T) {
 			},
 		},
 		"successful scan no scm namespaces": {
-			scmGetNamespacesRes: []scm.Namespace{},
+			scmGetNamespacesRes: []storage.ScmNamespace{},
 			expResp: StorageScanResp{
 				Nvme: &ScanNvmeResp{
 					Ctrlrs: NvmeControllers{pbCtrlr},
@@ -248,10 +248,10 @@ func TestStorageScan(t *testing.T) {
 				GetNamespaceErr: tc.scmGetNamespacesErr,
 			}
 			if mbc.DiscoverRes == nil {
-				mbc.DiscoverRes = []scm.Module{MockScmModule()}
+				mbc.DiscoverRes = []storage.ScmModule{MockScmModule()}
 			}
 			if mbc.GetNamespaceRes == nil {
-				mbc.GetNamespaceRes = []scm.Namespace{MockScmNamespace()}
+				mbc.GetNamespaceRes = []storage.ScmNamespace{MockScmNamespace()}
 			}
 
 			// test for both empty and default config cases
@@ -307,7 +307,7 @@ func TestStoragePrepare(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		inReq               StoragePrepareReq
-		prepScmNamespaceRes []scm.Namespace
+		prepScmNamespaceRes []storage.ScmNamespace
 		prepScmErr          error
 		expResp             StoragePrepareResp
 		isRoot              bool
@@ -317,7 +317,7 @@ func TestStoragePrepare(t *testing.T) {
 				Nvme: &PrepareNvmeReq{},
 				Scm:  &PrepareScmReq{},
 			},
-			[]scm.Namespace{},
+			[]storage.ScmNamespace{},
 			nil,
 			StoragePrepareResp{
 				Nvme: &PrepareNvmeResp{State: new(ResponseState)},
@@ -330,7 +330,7 @@ func TestStoragePrepare(t *testing.T) {
 				Nvme: &PrepareNvmeReq{},
 				Scm:  &PrepareScmReq{},
 			},
-			[]scm.Namespace{},
+			[]storage.ScmNamespace{},
 			nil,
 			StoragePrepareResp{
 				Nvme: &PrepareNvmeResp{
@@ -353,7 +353,7 @@ func TestStoragePrepare(t *testing.T) {
 				Nvme: nil,
 				Scm:  &PrepareScmReq{},
 			},
-			[]scm.Namespace{},
+			[]storage.ScmNamespace{},
 			nil,
 			StoragePrepareResp{
 				Nvme: nil,
@@ -366,7 +366,7 @@ func TestStoragePrepare(t *testing.T) {
 				Nvme: &PrepareNvmeReq{},
 				Scm:  nil,
 			},
-			[]scm.Namespace{},
+			[]storage.ScmNamespace{},
 			nil,
 			StoragePrepareResp{
 				Nvme: &PrepareNvmeResp{State: new(ResponseState)},
@@ -379,7 +379,7 @@ func TestStoragePrepare(t *testing.T) {
 				Nvme: &PrepareNvmeReq{},
 				Scm:  &PrepareScmReq{},
 			},
-			[]scm.Namespace{MockScmNamespace()},
+			[]storage.ScmNamespace{MockScmNamespace()},
 			nil,
 			StoragePrepareResp{
 				Nvme: &PrepareNvmeResp{State: new(ResponseState)},
@@ -395,7 +395,7 @@ func TestStoragePrepare(t *testing.T) {
 				Nvme: &PrepareNvmeReq{},
 				Scm:  &PrepareScmReq{},
 			},
-			[]scm.Namespace{MockScmNamespace()},
+			[]storage.ScmNamespace{MockScmNamespace()},
 			errExample,
 			StoragePrepareResp{
 				Nvme: &PrepareNvmeResp{State: new(ResponseState)},
