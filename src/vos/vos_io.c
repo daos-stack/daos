@@ -1398,7 +1398,7 @@ update_cancel(struct vos_io_context *ioc)
 	if (ioc->ic_actv_at != 0) {
 		D_ASSERT(ioc->ic_actv != NULL);
 		umem_cancel(vos_ioc2umm(ioc), ioc->ic_actv, ioc->ic_actv_at);
-	} else if (ioc->ic_umoffs_cnt != 0) {
+	} else if (ioc->ic_umoffs_cnt != 0 && ioc->ic_actv_cnt == 0) {
 		struct umem_instance *umem = vos_ioc2umm(ioc);
 		int i;
 
@@ -1453,6 +1453,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	/* Publish SCM reservations */
 	if (ioc->ic_actv_at != 0) {
 		err = umem_tx_publish(umem, ioc->ic_actv, ioc->ic_actv_at);
+		ioc->ic_actv_at = 0;
 		D_DEBUG(DB_TRACE, "publish ioc %p actv_at %d rc %d\n",
 			ioc, ioc->ic_actv_cnt, err);
 		if (err)
@@ -1478,7 +1479,6 @@ abort:
 out:
 	if (err != 0)
 		update_cancel(ioc);
-	ioc->ic_actv_at = 0;
 	vos_ioc_destroy(ioc);
 	vos_dth_set(NULL);
 
