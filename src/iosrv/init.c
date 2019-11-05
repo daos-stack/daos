@@ -801,7 +801,7 @@ struct sigaction old_handlers[_NSIG];
 static int
 daos_register_sighand(int signo, void (*handler) (int, siginfo_t *, void *))
 {
-	struct sigaction	act;
+	struct sigaction	act = {0};
 	int			rc;
 
 	if ((signo < 0) || (signo >= _NSIG)) {
