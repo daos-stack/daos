@@ -491,9 +491,8 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
 
 	D_ASSERT(biov->bi_addr.ba_type == DAOS_MEDIA_NVME);
 	bdb = iod_dma_buf(biod);
-
-	off = bio_iov2off(biov);
-	end = bio_iov2off(biov) + biov->bi_data_len;
+	off = bio_iov2extraoff(biov);
+	end = bio_iov2extraoff(biov) + bio_iov2extralen(biov);
 	pg_cnt = ((end + BIO_DMA_PAGE_SZ - 1) >> BIO_DMA_PAGE_SHIFT) -
 			(off >> BIO_DMA_PAGE_SHIFT);
 	pg_off = off & ((uint64_t)BIO_DMA_PAGE_SZ - 1);
@@ -572,7 +571,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
 	/*
 	 * Try to reserve the DMA buffer from the 'current chunk' of the
 	 * per-xstream DMA buffer. It could be different with the last chunk
-	 * in io descripotr, because dma_map_one() may yield in the future.
+	 * in io descriptor, because dma_map_one() may yield in the future.
 	 */
 	if (bdb->bdb_cur_chk != NULL && bdb->bdb_cur_chk != chk) {
 		chk = bdb->bdb_cur_chk;
@@ -607,6 +606,8 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
 
 add_chunk:
 	rc = iod_add_chunk(biod, chk);
+	/** set buf to be the requested data, without the extra */
+	biov->bi_buf += biov->bi_extra_begin;
 	if (rc) {
 		/* Revert the reservation in chunk */
 		D_ASSERT(chk->bdc_pg_idx >= pg_cnt);
@@ -614,6 +615,8 @@ add_chunk:
 		return rc;
 	}
 add_region:
+	/** set buf to be the requested data, without the extra */
+	biov->bi_buf += biov->bi_extra_begin;
 	return iod_add_region(biod, chk, chk_pg_idx, off, end);
 }
 

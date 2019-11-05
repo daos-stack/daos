@@ -34,6 +34,7 @@
 #include <daos_srv/vos.h>
 #include <daos.h>
 #include "vos_internal.h"
+#include "vos_io_checksum.h"
 #include "evt_priv.h"
 
 /** I/O context */
@@ -46,6 +47,10 @@ struct vos_io_context {
 	struct vos_object	*ic_obj;
 	/** BIO descriptor, has ic_iod_nr SGLs */
 	struct bio_desc		*ic_biod;
+	/** Checksums for bio_iovs in \ic_biod */
+	daos_csum_buf_t		*ic_biov_dcbs;
+	uint32_t		 ic_biov_dcb_at;
+	uint32_t		 ic_biov_dcb_nr;
 	/** current dkey info */
 	struct vos_krec_df	*ic_dkey_krec;
 	daos_handle_t		 ic_dkey_loh;
@@ -154,6 +159,9 @@ vos_ioc_destroy(struct vos_io_context *ioc)
 	if (ioc->ic_biod != NULL)
 		bio_iod_free(ioc->ic_biod);
 
+	if (ioc->ic_biov_dcbs != NULL)
+		D_FREE(ioc->ic_biov_dcbs);
+
 	if (ioc->ic_obj)
 		vos_obj_release(vos_obj_cache_current(), ioc->ic_obj);
 
@@ -212,6 +220,10 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 		rc = -DER_NOMEM;
 		goto error;
 	}
+
+	D_ALLOC_ARRAY(ioc->ic_biov_dcbs, 16);
+	ioc->ic_biov_dcb_at = 0;
+	ioc->ic_biov_dcb_nr = 16;
 
 	for (i = 0; i < iod_nr; i++) {
 		int iov_nr = iods[i].iod_nr;
@@ -277,6 +289,33 @@ iod_fetch(struct vos_io_context *ioc, struct bio_iov *biov)
 	bsgl->bs_iovs[iov_at] = *biov;
 	bsgl->bs_nr_out++;
 	ioc->ic_iov_at++;
+	return 0;
+}
+
+static int
+bsgl_dcb_resize(struct vos_io_context *ioc)
+{
+	daos_csum_buf_t *dcbs = ioc->ic_biov_dcbs;
+	uint32_t	 dcb_nr = ioc->ic_biov_dcb_nr;
+
+	if (ioc->ic_size_fetch)
+		return 0;
+
+	if (ioc->ic_biov_dcb_at == dcb_nr - 1) {
+		daos_csum_buf_t *new_dcbs;
+		uint32_t	 new_nr = dcb_nr * 2;
+
+		D_ALLOC_ARRAY(new_dcbs, new_nr);
+		if (new_dcbs == NULL)
+			return -DER_NOMEM;
+
+		memcpy(new_dcbs, &dcbs, dcb_nr * sizeof(*dcbs));
+		D_FREE(ioc->ic_biov_dcbs);
+
+		ioc->ic_biov_dcbs = new_dcbs;
+		ioc->ic_biov_dcb_nr = new_nr;
+	}
+
 	return 0;
 }
 
@@ -358,7 +397,6 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 	daos_off_t		 index;
 	daos_off_t		 end;
 	int			 rc;
-	int			 csum_copied;
 
 	index = recx->rx_idx;
 	end   = recx->rx_idx + recx->rx_nr;
@@ -373,7 +411,6 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 
 	holes = 0;
 	rsize = 0;
-	csum_copied = 0;
 	evt_ent_array_for_each(ent, &ent_array) {
 		daos_off_t	 lo = ent->en_sel_ext.ex_lo;
 		daos_off_t	 hi = ent->en_sel_ext.ex_hi;
@@ -409,37 +446,17 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 			rsize = ent_array.ea_inob;
 		D_ASSERT(rsize == ent_array.ea_inob);
 
-		if (dcb_is_valid(csum) &&
-		    csum_copied * ent->en_csum.cs_len < csum->cs_buf_len &&
-		    csum->cs_chunksize > 0) {
-			uint8_t	    *csum_ptr;
-			daos_size_t  csum_nr;
-
-			D_ASSERT(lo >= recx->rx_idx);
-			/** Make sure the entity csum matches expected csum */
-			D_ASSERT(csum->cs_len == ent->en_csum.cs_len);
-			D_ASSERT(csum->cs_type == ent->en_csum.cs_type);
-			D_ASSERT(csum->cs_chunksize ==
-				 ent->en_csum.cs_chunksize);
-
-			/** Note: only need checksums for requested data, not
-			 * necessarily all checksums from the entire recx entry
-			 */
-			csum_ptr = dcb_off2csum(csum,
-				(uint32_t)((lo - recx->rx_idx) * rsize));
-			csum_nr = csum_chunk_count(csum->cs_chunksize,
-						   lo, hi, rsize);
-			memcpy(csum_ptr, ent->en_csum.cs_csum,
-			       csum_nr * ent->en_csum.cs_len);
-			if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_FAIL))
-				csum_ptr[0] += 2; /* poison the checksum */
-
-			csum_copied += csum_nr;
-			D_ASSERT(csum_copied <= csum->cs_nr);
-		}
-
 		biov.bi_data_len = nr * ent_array.ea_inob;
 		biov.bi_addr = ent->en_addr;
+
+		rc = bsgl_dcb_resize(ioc);
+		if (rc != 0)
+			goto failed;
+
+		vic_update_biov(&biov, ent, rsize,
+				ioc->ic_biov_dcbs,
+				&ioc->ic_biov_dcb_at);
+
 		rc = iod_fetch(ioc, &biov);
 		if (rc != 0)
 			goto failed;
@@ -461,6 +478,30 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 		*rsize_p = rsize;
 failed:
 	evt_ent_array_fini(&ent_array);
+	return rc;
+}
+
+int
+vos_fetch_csum(daos_handle_t ioh, daos_iod_t *iods, uint32_t iods_nr,
+	       struct daos_csummer *csummer)
+{
+	struct vos_io_context	*ioc = vos_ioh2ioc(ioh);
+	int			 rc = 0;
+	uint32_t		 biov_dcbs_idx = 0;
+	size_t			 biov_dcbs_used = 0;
+	int			 i;
+
+	for (i = 0; i < iods_nr; i++) {
+		rc = vic_fetch_iod(
+			&iods[i], csummer,
+			bio_iod_sgl(ioc->ic_biod, i),
+			&ioc->ic_biov_dcbs[biov_dcbs_idx],
+			&biov_dcbs_used);
+		if (rc != 0)
+			return rc;
+		biov_dcbs_idx += biov_dcbs_used;
+	}
+
 	return rc;
 }
 
@@ -1600,7 +1641,8 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 int
 vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	      daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods,
+	      daos_key_t *dkey, unsigned int iod_nr,
+	      struct daos_csummer *csummer, daos_iod_t *iods,
 	      d_sg_list_t *sgls)
 {
 	daos_handle_t ioh;
@@ -1642,6 +1684,9 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		if (rc)
 			D_ERROR("Copy "DF_UOID" failed %d\n",
 				DP_UOID(oid), rc);
+
+
+		rc = vos_fetch_csum(ioh, iods, iod_nr, csummer);
 	}
 
 	rc = vos_fetch_end(ioh, rc);

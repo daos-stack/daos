@@ -457,9 +457,9 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr);
  */
 int
 vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	      daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods,
+	      daos_key_t *dkey, unsigned int iod_nr,
+	      struct daos_csummer *csummer, daos_iod_t *iods,
 	      d_sg_list_t *sgls);
-
 
 /**
  * Update records for the specfied object.
@@ -918,5 +918,11 @@ enum vos_cont_opc {
  */
 int
 vos_cont_ctl(daos_handle_t coh, enum vos_cont_opc opc);
+
+/** Fetch the checksums for the requested data */
+int
+vos_fetch_csum(daos_handle_t ioh, daos_iod_t *iods, uint32_t iods_nr,
+	       struct daos_csummer *csummer);
+
 
 #endif /* __VOS_API_H */

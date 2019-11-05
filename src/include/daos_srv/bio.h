@@ -58,6 +58,11 @@ struct bio_iov {
 	/* Data length in bytes */
 	size_t		 bi_data_len;
 	bio_addr_t	 bi_addr;
+	/** can be used to fetch more than actual address. Useful if more
+	 * data is needed for processing (like checksums) than requested
+	 */
+	size_t		 bi_extra_begin; /** bytes before */
+	size_t		 bi_extra_end; /** bytes after */
 };
 
 struct bio_sglist {
@@ -134,6 +139,24 @@ bio_iov2off(struct bio_iov *biov)
 	return biov->bi_addr.ba_off;
 }
 
+static inline uint64_t
+bio_iov2extraoff(struct bio_iov *biov)
+{
+	return biov->bi_addr.ba_off - biov->bi_extra_begin;
+}
+
+static inline uint64_t
+bio_iov2extralen(struct bio_iov *biov)
+{
+	return biov->bi_data_len + biov->bi_extra_begin + biov->bi_extra_end;
+}
+
+static inline uint64_t
+bio_iov2len(struct bio_iov *biov)
+{
+	return biov->bi_data_len + biov->bi_extra_begin + biov->bi_extra_end;
+}
+
 static inline int
 bio_sgl_init(struct bio_sglist *sgl, unsigned int nr)
 {
@@ -183,6 +206,19 @@ bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl)
 
 	return 0;
 }
+
+/** Get a specific bio_iov from a bio_sglist if the idx exists. Otherwise
+ * return NULL
+ */
+static inline struct bio_iov *
+bio_sgl_iov(struct bio_sglist *bsgl, uint32_t idx)
+{
+	if (idx >= bsgl->bs_nr_out)
+		return NULL;
+
+	return &bsgl->bs_iovs[idx];
+}
+
 
 /**
  * Callbacks called on NVMe device state transition
