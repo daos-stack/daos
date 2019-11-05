@@ -50,6 +50,7 @@ def daos_repo = "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
 def el7_daos_repos = el7_component_repos + ' ' + component_repos + ' ' + daos_repo
 def sle12_daos_repos = sle12_component_repos + ' ' + component_repos + ' ' + daos_repo
 def ior_repos = "mpich@daos_adio-rpm:16 ior-hpc@daos:40"
+def functional_rpms = 'cart-' + env.CART_COMMIT + ' ' + 'ior-hpc-3.3.0-3.el7.x86_64 mpich-autoload-3.3-1.el7.x86_64 mpich-3.3-1.el7.x86_64'
 
 def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
                           exit 0
@@ -1233,8 +1234,7 @@ pipeline {
                                        node_count: 9,
                                        snapshot: true,
                                        inst_repos: el7_daos_repos + ' ' + ior_repos,
-                                       inst_rpms: 'cart-' + env.CART_COMMIT + ' ' +
-                                                  'ior-hpc mpich-autoload'
+                                       inst_rpms: functional_rpms
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
@@ -1300,15 +1300,13 @@ pipeline {
                                        node_count: 1,
                                        snapshot: true,
                                        inst_repos: el7_daos_repos + ' ' + ior_repos,
-                                       inst_rpms: 'cart-' + env.CART_COMMIT + ' ' +
-                                                  'ior-hpc mpich-autoload'
+                                       inst_rpms: functional_rpms
                         // Then just reboot the physical nodes
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
                                        power_only: true,
                                        inst_repos: el7_daos_repos + ' ' + ior_repos,
-                                       inst_rpms: 'cart-' + env.CART_COMMIT + ' ' +
-                                                  'ior-hpc mpich-autoload'
+                                       inst_rpms: functional_rpms
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
