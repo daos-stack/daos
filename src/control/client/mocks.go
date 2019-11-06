@@ -25,6 +25,7 @@ package client
 
 import (
 	"io"
+	"sort"
 
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -361,27 +362,26 @@ func defaultMockConnect(log logging.Logger) Connect {
 		nil, nil, nil, nil, nil)
 }
 
-// MockNvmeScanResults mocks slice of nvme scan results for multiple servers.
+// MockScanResp mocks scan results from scm and nvme for multiple servers.
 // Each result indicates success or failure through presence of Err.
-func MockNvmeScanResults(ctrlrs NvmeControllers, addrs Addresses, health bool) NvmeScanResults {
-	results := make(NvmeScanResults)
-	for _, addr := range addrs {
-		results[addr] = &NvmeScanResult{Ctrlrs: ctrlrs, Health: health}
-	}
-	return results
-}
+func MockScanResp(cs NvmeControllers, ms ScmModules, nss ScmNamespaces, addrs Addresses, summary bool) *StorageScanResp {
+	nvmeResults := make(NvmeScanResults)
+	scmResults := make(ScmScanResults)
 
-// MockScmScanResults mocks slice of scm scan results for multiple servers.
-// Each result indicates success or failure through presence of Err.
-func MockScmScanResults(modules ScmModules, pmems ScmNamespaces, addrs Addresses) ScmScanResults {
-	results := make(ScmScanResults)
 	for _, addr := range addrs {
-		results[addr] = &ScmScanResult{
-			Modules:    scmModulesFromPB(modules),
-			Namespaces: scmNamespacesFromPB(pmems),
+		nvmeResults[addr] = &NvmeScanResult{Ctrlrs: cs}
+
+		scmResults[addr] = &ScmScanResult{
+			Modules:    scmModulesFromPB(ms),
+			Namespaces: scmNamespacesFromPB(nss),
 		}
 	}
-	return results
+
+	sort.Strings(addrs)
+
+	return &StorageScanResp{
+		summary: summary, Servers: addrs, Nvme: nvmeResults, Scm: scmResults,
+	}
 }
 
 // NewClientNvmeResults provides a mock ClientCtrlrMap populated with controller
