@@ -41,15 +41,9 @@ set -e
 if [ ! -d "scons_local" ];then
   cd ..
 fi
-<<<<<<< HEAD
-PYTHONPATH=$PWD/utils:$PWD/src/tests/ftest/util/
-PYTHONPATH=$PYTHONPATH:$PWD/src/tests/ftest/util/apricot/
-PYTHONPATH=$PYTHONPATH:$PWD/src/client/
-=======
 PYTHONPATH=$PWD/utils:$PWD/install/lib/daos/TESTING/ftest/util/
 PYTHONPATH=$PYTHONPATH:$PWD/install/lib/daos/TESTING/ftest/util/apricot/
-PYTHONPATH=$PYTHONPATH:$PWD/src/utils/py:${PYTHONPATH}
->>>>>>> master
+PYTHONPATH=$PYTHONPATH:$PWD/src/client/
 export PYTHONPATH
 
 if [ -z "$*" ]; then
@@ -61,13 +55,8 @@ if [ -z "$*" ]; then
     flist+=" -s $file "
   done
   # the functional test code
-<<<<<<< HEAD
   flist+=$(find src/tests/ftest/ -name \*.py | sort)
   flist+=$(find src/client/pydaos/ -name \*.py | sort)
-=======
-  flist+=$(find install/lib/daos/TESTING/ftest/ -name \*.py)
-  flist+=$(find src/utils/py/ -name \*.py)
->>>>>>> master
 else
   flist=$*
 fi
