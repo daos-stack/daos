@@ -1035,7 +1035,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Leap 15 with Intel-C') {
+                stage('Build on Leap 15 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
                         allOf {
@@ -1055,7 +1055,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}", COMPILER: "icc",
-                                   failure_artifacts: 'config.log-leap15-icc'
+                                   TARGET_PREFIX: 'install/opt', failure_artifacts: 'config.log-leap15-icc'
                     }
                     post {
                         always {
