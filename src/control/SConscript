@@ -99,7 +99,8 @@ def scons():
                 join(denv.subst("$SPDK_PREFIX"), "include"),
                 Copy("$TARGET", "$SOURCE"))
 
-    def CheckGoVersion(context):
+    def check_go_version(context):
+        """Check GO Version"""
         context.Display('Checking for Go compiler in $PATH... ')
         go_path = context.env.WhereIs(GO_COMPILER)
         if go_path:
@@ -119,17 +120,20 @@ def scons():
         if len([x for x, y in
                 zip(go_version.split('.'), MIN_GO_VERSION.split('.'))
                 if int(x) < int(y)]) > 0:
-            context.Result('%s is too old (min supported: %s) ' % (go_version, MIN_GO_VERSION))
+            context.Result('%s is too old (min supported: %s) '
+                           % (go_version, MIN_GO_VERSION))
             return 0
         else:
             context.Result('%s' % go_version)
             return 1
 
-    conf = Configure(denv, custom_tests={'CheckGoVersion': CheckGoVersion})
+    conf = Configure(denv, custom_tests={'CheckGoVersion': check_go_version})
+    # pylint: disable=no-member
     if not conf.CheckGoVersion():
         print('no usable Go compiler found (yum install golang?)')
         exit(1)
     denv = conf.Finish()
+    # pylint: enable=no-member
 
     # GOPATH for SCons builds in the build directory
     gopath = Dir('.').abspath
@@ -156,7 +160,7 @@ def scons():
         join(gospdkpath, "src", "nvme_control.c"),
         CC=compiler, LIBS=['spdk'])
 
-    denv.Install(join(denv.subst("$PREFIX"), "lib"), nvmecontrol)
+    denv.Install(join(denv.subst("$PREFIX"), "lib64"), nvmecontrol)
 
     # CGO shell env vars.
     denv.AppendENVPath(
