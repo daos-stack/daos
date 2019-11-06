@@ -1035,7 +1035,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Leap 15 with Intel-C') {
+                stage('Build on Leap 15 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
                         allOf {
@@ -1055,7 +1055,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}", COMPILER: "icc",
-                                   failure_artifacts: 'config.log-leap15-icc'
+                                   TARGET_PREFIX: 'install/opt', failure_artifacts: 'config.log-leap15-icc'
                     }
                     post {
                         always {
@@ -1244,22 +1244,22 @@ pipeline {
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
                                            ./ftest.sh "$test_tag" $tnodes''',
-                                junit_files: "src/tests/ftest/avocado/*/*/*.xml src/tests/ftest/*_results.xml",
+                                junit_files: "install/lib/daos/TESTING/ftest/avocado/*/*/*.xml install/lib/daos/TESTING/ftest/*_results.xml",
                                 failure_artifacts: env.STAGE_NAME
                     }
                     post {
                         always {
-                            sh '''rm -rf src/tests/ftest/avocado/*/*/html/
+                            sh '''rm -rf install/lib/daos/TESTING/ftest/avocado/*/*/html/
                                   if [ -n "$STAGE_NAME" ]; then
                                       rm -rf "$STAGE_NAME/"
                                       mkdir "$STAGE_NAME/"
                                       # compress those potentially huge DAOS logs
-                                      if daos_logs=$(ls src/tests/ftest/avocado/job-results/*/daos_logs/*); then
+                                      if daos_logs=$(ls install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/*); then
                                           lbzip2 $daos_logs
                                       fi
                                       arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
-                                      arts="$arts$(ls -d src/tests/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
-                                      arts="$arts$(ls src/tests/ftest/*.stacktrace 2>/dev/null || true)"
+                                      arts="$arts$(ls -d install/lib/daos/TESTING/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
+                                      arts="$arts$(ls install/lib/daos/TESTING/ftest/*.stacktrace 2>/dev/null || true)"
                                       if [ -n "$arts" ]; then
                                           mv $(echo $arts | tr '\n' ' ') "$STAGE_NAME/"
                                       fi
@@ -1268,7 +1268,7 @@ pipeline {
                                       false
                                   fi'''
                             archiveArtifacts artifacts: env.STAGE_NAME + '/**'
-                            junit env.STAGE_NAME + '/*/results.xml, src/tests/ftest/*_results.xml'
+                            junit env.STAGE_NAME + '/*/results.xml, install/lib/daos/TESTING/ftest/*_results.xml'
                         }
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
                         success {
@@ -1322,22 +1322,22 @@ pipeline {
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
                                            ./ftest.sh "$test_tag" $tnodes''',
-                                junit_files: "src/tests/ftest/avocado/*/*/*.xml src/tests/ftest/*_results.xml",
+                                junit_files: "install/lib/daos/TESTING/ftest/avocado/*/*/*.xml install/lib/daos/TESTING/ftest/*_results.xml",
                                 failure_artifacts: env.STAGE_NAME
                     }
                     post {
                         always {
-                            sh '''rm -rf src/tests/ftest/avocado/*/*/html/
+                            sh '''rm -rf install/lib/daos/TESTING/ftest/avocado/*/*/html/
                                   if [ -n "$STAGE_NAME" ]; then
                                       rm -rf "$STAGE_NAME/"
                                       mkdir "$STAGE_NAME/"
                                       # compress those potentially huge DAOS logs
-                                      if daos_logs=$(ls src/tests/ftest/avocado/job-results/*/daos_logs/*); then
+                                      if daos_logs=$(ls install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/*); then
                                           lbzip2 $daos_logs
                                       fi
                                       arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
-                                      arts="$arts$(ls -d src/tests/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
-                                      arts="$arts$(ls src/tests/ftest/*.stacktrace 2>/dev/null || true)"
+                                      arts="$arts$(ls -d install/lib/daos/TESTING/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
+                                      arts="$arts$(ls install/lib/daos/TESTING/ftest/*.stacktrace 2>/dev/null || true)"
                                       if [ -n "$arts" ]; then
                                           mv $(echo $arts | tr '\n' ' ') "$STAGE_NAME/"
                                       fi
@@ -1346,7 +1346,7 @@ pipeline {
                                       false
                                   fi'''
                             archiveArtifacts artifacts: env.STAGE_NAME + '/**'
-                            junit env.STAGE_NAME + '/*/results.xml, src/tests/ftest/*_results.xml'
+                            junit env.STAGE_NAME + '/*/results.xml, install/lib/daos/TESTING/ftest/*_results.xml'
                         }
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
                         success {

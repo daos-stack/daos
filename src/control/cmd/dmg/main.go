@@ -97,7 +97,7 @@ func appSetup(log logging.Logger, opts *cliOptions, conns client.Connect) error 
 		return errors.New("hostfile option not implemented")
 	}
 
-	if opts.Insecure == true {
+	if opts.Insecure {
 		config.TransportConfig.AllowInsecure = true
 	}
 

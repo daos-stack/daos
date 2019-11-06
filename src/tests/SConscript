@@ -1,5 +1,6 @@
 """Build tests"""
 import daos_build
+import os
 
 def scons():
     """Execute build"""
@@ -11,7 +12,7 @@ def scons():
     denv = env.Clone()
 
     # Add runtime paths for daos libraries
-    denv.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../lib/daos_srv')])
+    denv.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../lib64/daos_srv')])
 
     denv.Append(CPPPATH=[Dir('suite').srcnode()])
     prereqs.require(denv, 'ompi', 'argobots', 'hwloc', 'protobufc')
@@ -35,6 +36,10 @@ def scons():
     obj_ctl = daos_build.program(denv, 'obj_ctl', ['obj_ctl.c', dts_common],
                                  LIBS=libs)
     denv.Install('$PREFIX/bin/', obj_ctl)
+
+    # copy src/tests/ftest to $PREFIX/lib/daos/TESTING/ftest
+    spath = Dir('ftest').srcnode()
+    denv.InstallAs('$PREFIX/lib/daos/TESTING/ftest/', spath)
 
     # tests
     SConscript('suite/SConscript', exports=['denv'])
