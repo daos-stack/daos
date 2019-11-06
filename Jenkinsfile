@@ -73,8 +73,6 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
                             sudo cp /tmp/daos_server_baseline.yaml /usr/etc/daos_server.yml
                             cat /usr/etc/daos_server.yml
                             cat /usr/etc/daos_agent.yml
-			    ldd /usr/bin/daos_server
-			    ldd /usr/bin/daos_io_server
                             coproc orterun -np 1 -H \\\$HOSTNAME --enable-recovery -x DAOS_SINGLETON_CLI=1 daos_server --debug --config /usr/etc/daos_server.yml start -t 1 -a /tmp -i --recreate-superblocks
                             trap 'set -x; kill -INT \\\$COPROC_PID' EXIT
                             line=\"\"

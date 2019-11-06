@@ -97,9 +97,15 @@ func (r *Runner) run(ctx context.Context, args, env []string) error {
 	// can't go away until PMIx support is removed, though.
 	cmd.Env = mergeEnvVars(os.Environ(), env)
 
-	// I/O server should get a SIGKILL if this process dies.
 	cmd.SysProcAttr = &syscall.SysProcAttr{
+		// I/O server should get a SIGKILL if this process dies.
 		Pdeathsig: syscall.SIGKILL,
+		// I/O server should run with real uid/gid (drop egid).
+		Credential: &syscall.Credential{
+			Uid:         uint32(os.Getuid()),
+			Gid:         uint32(os.Getgid()),
+			NoSetGroups: true,
+		},
 	}
 
 	r.log.Debugf("%s:%d config: %#v", ioServerBin, r.Config.Index, r.Config)
