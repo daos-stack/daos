@@ -44,11 +44,11 @@
 static int
 checksum_sgl_cb(uint8_t *buf, size_t len, void *args);
 
+#ifdef CSUM_TRACE
 /** helper function to trace bytes */
 static void
 trace_bytes(const uint8_t *buf, const size_t len, const size_t max)
 {
-#ifdef CSUM_TRACE
 	int	char_buf_len = max == 0 ? len : min(max, len);
 	char	char_buf[char_buf_len * 2];
 	int	i;
@@ -60,14 +60,17 @@ trace_bytes(const uint8_t *buf, const size_t len, const size_t max)
 		sprintf(char_buf + i * 2, "%x", buf[i]);
 
 	C_TRACE("%s\n", char_buf);
-#endif
 }
+#else
+#define	trace_bytes(...) (void)0
+#endif
 
+
+#ifdef CSUM_TRACE
 /** helper function to trace chars */
 static void
 trace_chars(const uint8_t *buf, const size_t len, const uint32_t max)
 {
-#ifdef CSUM_TRACE
 	int i;
 
 	if (buf == NULL)
@@ -75,8 +78,10 @@ trace_chars(const uint8_t *buf, const size_t len, const uint32_t max)
 
 	for (i = 0; i <  len && (i < max || max == 0); i++)
 		C_TRACE("%c", buf[i]);
-#endif
 }
+#else
+#define	trace_chars(...) (void)0
+#endif
 
 static void
 daos_csummer_print_csum(struct daos_csummer *obj, uint8_t *csum)
@@ -582,8 +587,9 @@ daos_csummer_calc(struct daos_csummer *obj, d_sg_list_t *sgl,
 	int		rc = 0;
 	uint32_t	csum_nr = 0;
 
-	if (!(daos_csummer_initialized(obj) &&
-	      csum_iod_is_supported(obj->dcs_chunk_size, iod) && sgl))
+	if (!daos_csummer_initialized(obj) ||
+	    !csum_iod_is_supported(obj->dcs_chunk_size, iod) ||
+	    sgl == NULL)
 		return 0;
 
 	rc = daos_csummer_alloc_dcbs(obj, iod, 1, pcsum_bufs, &csum_nr);
