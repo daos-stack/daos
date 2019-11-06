@@ -31,76 +31,70 @@ import (
 	"github.com/daos-stack/daos/src/control/client"
 )
 
-func TestStorageCommands(t *testing.T) {
+func TestStorageQueryCommands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
 		{
-			"Format without reformat",
-			"storage format",
-			"ConnectClients StorageFormat-false",
-			nil,
-		},
-		{
-			"Format with reformat",
-			"storage format --reformat",
-			"ConnectClients StorageFormat-true",
-			nil,
-		},
-		{
-			"Scan",
-			"storage scan",
+			"NVMe health query",
+			"storage query nvme-health",
 			strings.Join([]string{
 				"ConnectClients",
 				fmt.Sprintf("StorageScan-%+v", &client.StorageScanReq{
-					NvmeHealth: false,
+					NvmeHealth: true,
 				}),
 			}, " "),
 			nil,
 		},
 		{
-			"Prepare without force",
-			"storage prepare",
-			"ConnectClients",
-			fmt.Errorf("consent not given"),
+			"blobstore health query none specified",
+			"storage query blobstore-health",
+			"ConnectClients BioHealthQuery",
+			fmt.Errorf("device UUID or target ID is required"),
 		},
 		{
-			"Prepare with nvme-only and scm-only",
-			"storage prepare --force --nvme-only --scm-only",
-			"ConnectClients",
-			fmt.Errorf("nvme-only and scm-only options should not be set together"),
+			"blobstore health query both specified",
+			"storage query blobstore-health --tgtid 123 --devuuid abc",
+			"ConnectClients BioHealthQuery",
+			fmt.Errorf("either device UUID OR target ID need to be specified not both"),
 		},
 		{
-			"Prepare with scm-only",
-			"storage prepare --force --scm-only",
-			"ConnectClients StoragePrepare",
+			"blobstore health query tgtid",
+			"storage query blobstore-health --tgtid 123",
+			"ConnectClients BioHealthQuery-tgt_id:\"123\" ",
 			nil,
 		},
 		{
-			"Prepare with nvme-only",
-			"storage prepare --force --nvme-only",
-			"ConnectClients StoragePrepare",
+			"blobstore health query devuuid",
+			"storage query blobstore-health --devuuid abcd",
+			"ConnectClients BioHealthQuery-dev_uuid:\"abcd\" ",
 			nil,
 		},
 		{
-			"Prepare with non-existent option",
-			"storage prepare --force --nvme",
-			"",
-			fmt.Errorf("unknown flag `nvme'"),
-		},
-		{
-			"Prepare with force and reset",
-			"storage prepare --force --reset",
-			"ConnectClients StoragePrepare",
+			"per-server metadata query pools",
+			"storage query smd --pools",
+			"ConnectClients SmdListPools-",
 			nil,
 		},
 		{
-			"Prepare with force",
-			"storage prepare --force",
-			"ConnectClients StoragePrepare",
+			"per-server metadata query devices",
+			"storage query smd --devices",
+			"ConnectClients SmdListDevs-",
+			nil,
+		},
+		{
+			"per-server metadata query not specified",
+			"storage query smd",
+			"ConnectClients SmdListDevs- SmdListPools-",
+			nil,
+		},
+		{
+			"per-server metadata query both specified",
+			"storage query smd --pools --devices",
+			"ConnectClients SmdListDevs- SmdListPools-",
 			nil,
 		},
 		{
 			"Nonexistent subcommand",
-			"storage quack",
+			"storage query quack",
 			"",
 			fmt.Errorf("Unknown command"),
 		},
