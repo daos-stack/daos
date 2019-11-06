@@ -493,7 +493,7 @@ static void print_results(struct st_latency *latencies,
 		printf("\t\t%u:%u - ", rank, tag);
 
 		/* At least some messages to this endpoint succeeded */
-		if (start_idx + num_failed < last_idx)
+		if (start_idx + num_failed <= last_idx)
 			printf("%ld", latencies[median_idx].val / 1000);
 
 		printf("\n");
@@ -1136,8 +1136,8 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "\n"
 	       "  --repetitions-per-size <N>\n"
 	       "      Short version: -r\n"
-	       "      Number of samples per message size. RPCs for each particular size\n"
-	       "      will be repeated this many times.\n"
+	       "      Number of samples per message size per endpt.\n"
+	       "      RPCs for each particular size will be repeated this many times per endpt.\n"
 	       "      Default: %d\n"
 	       "\n"
 	       "  --max-inflight-rpcs <N>\n"
@@ -1746,6 +1746,9 @@ int main(int argc, char *argv[])
 	}
 
 	/******************** Parse message sizes argument ********************/
+
+	/* repeat rep_count for each endpoint */
+	rep_count = rep_count * num_endpts;
 
 	/*
 	 * Count the number of tuple tokens (',') in the user-specified string
