@@ -5,11 +5,17 @@ def scons():
     """Execute build"""
     Import('env')
 
+<<<<<<< HEAD
     env.Install("$PREFIX/lib/daos/certgen", ['admin.cnf',
                                              'agent.cnf',
                                              'ca.cnf',
                                              'server.cnf',
                                              'gen_certificates.sh'])
+=======
+    env.Install("$PREFIX/lib64/daos/certgen",
+                ['admin.cnf', 'agent.cnf', 'ca.cnf',
+                 'server.cnf', 'gen_certificates.sh'])
+>>>>>>> master
 
 if __name__ == "SCons.Script":
     scons()

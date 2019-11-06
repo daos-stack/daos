@@ -187,16 +187,7 @@ scons %{?no_smp_mflags}              \
       PREFIX=%{?buildroot}%{_prefix}
 BUILDROOT="%{?buildroot}"
 PREFIX="%{?_prefix}"
-sed -i -e s/${BUILDROOT//\//\\/}[^\"]\*/${PREFIX//\//\\/}/g %{?buildroot}%{_prefix}/TESTING/.build_vars.*
-mv %{?buildroot}%{_prefix}/lib{,64}
-#mv %{?buildroot}/{usr/,}etc
-mkdir -p %{?buildroot}/%{_exec_prefix}/lib/%{name}
-mv %{?buildroot}%{_prefix}/lib64/daos %{?buildroot}/%{_exec_prefix}/lib/
-mv %{?buildroot}%{_prefix}/{TESTING,lib/%{name}/}
-cp -al ftest.sh src/tests/ftest %{?buildroot}%{daoshome}/TESTING
-find %{?buildroot}%{daoshome}/TESTING/ftest -name \*.py[co] -print0 | xargs -r0 rm -f
-#ln %{?buildroot}%{daoshome}/{TESTING/.build_vars,.build_vars-Linux}.sh
-mkdir -p %{?buildroot}%{daoshome}/utils
+sed -i -e s/${BUILDROOT//\//\\/}[^\"]\*/${PREFIX//\//\\/}/g %{?buildroot}%{_prefix}/lib/daos/.build_vars.*
 mkdir -p %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{?buildroot}/%{_unitdir}
@@ -228,9 +219,9 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 # TODO: this should move to %{_libdir}/daos/libplacement.so
 %{_libdir}/daos_srv/libplacement.so
 # Certificate generation files
-%dir %{daoshome}
-%{daoshome}/certgen/
-%{daoshome}/VERSION
+%dir %{_libdir}/%{name}
+%{_libdir}/%{name}/certgen/
+%{_libdir}/%{name}/VERSION
 %doc
 
 %files server
@@ -267,7 +258,7 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/*.so.*
 %{_libdir}/libdfs.so
 %if (0%{?suse_version} >= 1500)
-/lib/libdfs.so
+/lib64/libdfs.so
 %endif
 %{_libdir}/libduns.so
 %{_libdir}/libdfuse.so
@@ -306,8 +297,8 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_unitdir}/daos-agent.service
 
 %files tests
-%dir %{daoshome}/utils
-%{daoshome}/TESTING
+%dir %{_prefix}/lib/daos
+%{_prefix}/lib/daos/TESTING
 %{_bindir}/hello_drpc
 %{_bindir}/*_test*
 %{_bindir}/smd_ut
@@ -319,6 +310,9 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_bindir}/obj_ctl
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
+# For avocado tests
+%{_prefix}/lib/daos/.build_vars.json
+%{_prefix}/lib/daos/.build_vars.sh
 
 %files devel
 %{_includedir}/*
