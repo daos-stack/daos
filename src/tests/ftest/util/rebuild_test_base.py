@@ -159,7 +159,7 @@ class RebuildTestBase(TestWithServers):
 
     def verify_container_data(self, txn=None):
         """Verify the container data.
-        
+
         Args:
             txn (int, optional): transaction timestamp to read. Defaults to None
                 which uses the last timestamp written.
