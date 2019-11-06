@@ -40,7 +40,7 @@ class IoConfGen(ExecutableCommand):
         Args:
             command (str): string of the command to be executed.
             path (str, optional): path to location of command binary file.
-                Defaults to "".
+                Defaults to ""
         """
         super(IoConfGen, self).__init__("", path)
         self.verbose = True
