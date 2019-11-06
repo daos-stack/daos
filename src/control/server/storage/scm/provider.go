@@ -80,7 +80,8 @@ type (
 
 	// ScanRequest defines the parameters for a Scan operation.
 	ScanRequest struct {
-		Rescan bool
+		Forwarded bool
+		Rescan    bool
 	}
 
 	// ScanResponse contains information gleaned during a successful Scan operation.
@@ -119,7 +120,7 @@ type (
 		Formatted  bool
 	}
 
-	// MountReqeust defines the parameters for a Mount operation.
+	// MountRequest defines the parameters for a Mount operation.
 	MountRequest struct {
 		Forwarded bool
 		Source    string
