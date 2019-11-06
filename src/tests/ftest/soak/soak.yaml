@@ -6,13 +6,16 @@ hosts:
         - boro-D
     client_partition: daos_client
 # This timeout must be longer than the test_timeout param (+30minutes)
-timeout: 5400
+timeout: 10800
 logdir: /tmp/soak
 server_config:
     name: daos_server
     provider: ofi+sockets
+    targets: 8
     servers:
         log_mask: ERR
+        #bdev_class: nvme
+        #bdev_list: ["0000:81:00.0","0000:da:00.0"]
         fabric_iface: eth0
         env_vars:
           - ABT_ENV_MAX_NUM_XSTREAMS=100
@@ -24,10 +27,18 @@ server_config:
           - FI_SOCKETS_CONN_TIMEOUT=2000
 
 # pool_params - attributes of the pools to create; Currently only create one
+pool_smoke:
+    mode: 146
+    name: daos_server
+    scm_size: 4000000000
 pool1:
     mode: 146
     name: daos_server
-    scm_size: 100000000000
+    scm_size: 40000000000
+pool2:
+    mode: 511
+    name: daos_server
+    scm_size: 40000000000
 pool_reserved:
     mode: 511
     name: daos_server
@@ -42,10 +53,10 @@ container_reserved:
 # Harasser parameters
 # Rebuild
 rebuild:
-    ranks_to_kill: 
-        - 3
+    ranks_to_kill:
+        - 2
     daos_oclass:
-        - "RP_3GX"
+        - "RP_2GX"
         # - "RP_2GX"
         # - "RP_2G1"
         # - "RP_3G1"
@@ -71,11 +82,11 @@ smoke:
     job_timeout: 10
     # If slurm is not specified; launch jobs with Mpirun; {Sbatch|Srun|Mpirun}
     jobmanager: Sbatch
-    nodesperjob: -1
+    nodesperjob: 1
     taskspernode:
       - 1
     poollist:
-      - pool1
+      - pool_smoke
     joblist:
       - ior_smoke
 # SOAK stress test params
@@ -95,6 +106,7 @@ soak_stress:
       #- 32
     poollist:
       - pool1
+      #- pool2
     joblist:
       - ior_stress
       #- dmg_create_destroy
@@ -105,7 +117,7 @@ soak_stress:
 soak_harassers:
     name: soak_harassers
     test_timeout: 3600
-    harasser_timeout: 120
+    harasser_timeout: 300
     # maximum timeout for a single job in test in minutes
     job_timeout: 20
     # If slurm is not specified; launch jobs with Mpirun; {Sbatch|Srun|Mpirun}
