@@ -86,9 +86,7 @@ trace_chars(const uint8_t *buf, const size_t len, const uint32_t max)
 static void
 daos_csummer_print_csum(struct daos_csummer *obj, uint8_t *csum)
 {
-	uint16_t csum_size = daos_csummer_get_csum_len(obj);
-
-	trace_bytes(csum, csum_size, 0);
+	trace_bytes(csum, daos_csummer_get_csum_len(obj), 0);
 }
 
 /** Container Property knowledge */
