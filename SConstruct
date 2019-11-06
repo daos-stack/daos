@@ -19,12 +19,6 @@ DESIRED_FLAGS = ['-Wno-gnu-designator',
 PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
                  '-Wno-unused-function']
 
-def need_scons_local():
-    """Print scons_local warning and exit"""
-    print ('scons_local submodule is needed in order to do DAOS build')
-    print ('Use git submodule init; git submodule update')
-    sys.exit(-1)
-
 def get_version():
     """ Read version from VERSION file """
     with open("VERSION", "r") as version_file:
@@ -244,15 +238,14 @@ def scons():
         exit(0)
 
     """Execute build"""
-    if not os.path.exists('scons_local'):
-        need_scons_local()
-    else:
-        try:
-            sys.path.insert(0, os.path.join(Dir('#').abspath, 'scons_local'))
-            from prereq_tools import PreReqComponent
-            print ('Using scons_local build')
-        except ImportError:
-            need_scons_local()
+    try:
+        sys.path.insert(0, os.path.join(Dir('#').abspath, 'scons_local'))
+        from prereq_tools import PreReqComponent
+        print ('Using scons_local build')
+    except ImportError:
+        print ('scons_local submodule is needed in order to do DAOS build')
+        print ('Use git submodule update --init')
+        sys.exit(-1)
 
     env = Environment(TOOLS=['extra', 'default'])
 
