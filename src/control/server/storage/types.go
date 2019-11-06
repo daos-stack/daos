@@ -92,8 +92,19 @@ func (ms ScmModules) String() string {
 	return buf.String()
 }
 
+// Summary reports accumulated storage space and the number of devices.
+func (ms ScmModules) Summary() string {
+	tCap := bytesize.New(0)
+
+	for _, m := range ms {
+		tCap += bytesize.New(float64(m.Capacity))
+	}
+
+	return fmt.Sprintf("%s in %d modules (unprepared)", tCap, len(ms))
+}
+
 func (n *ScmNamespace) String() string {
-	return fmt.Sprintf("%s/numa%d/%s", n.BlockDevice, n.NumaNode,
+	return fmt.Sprintf("Device:%s Socket:%d Capacity:%s", n.BlockDevice, n.NumaNode,
 		bytesize.New(float64(n.Size)))
 }
 
@@ -101,8 +112,19 @@ func (ns ScmNamespaces) String() string {
 	var buf bytes.Buffer
 
 	for _, n := range ns {
-		fmt.Fprintf(&buf, " %s", &n)
+		fmt.Fprintf(&buf, "\t%s\n", &n)
 	}
 
 	return buf.String()
+}
+
+// Summary reports accumulated storage space and the number of devices.
+func (ns ScmNamespaces) Summary() string {
+	tCap := bytesize.New(0)
+
+	for _, n := range ns {
+		tCap += bytesize.New(float64(n.Size))
+	}
+
+	return fmt.Sprintf("%s in %d devices", tCap, len(ns))
 }

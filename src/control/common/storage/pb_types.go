@@ -130,6 +130,21 @@ func (ncs NvmeControllers) StringHealthStats() string {
 	return buf.String()
 }
 
+// Summary reports accumulated storage space and the number of devices.
+func (ncs NvmeControllers) Summary() string {
+	tCap := bytesize.New(0)
+	numNss := 0
+
+	for _, c := range ncs {
+		numNss += len(c.Namespaces)
+		for _, n := range c.Namespaces {
+			tCap += bytesize.GB * bytesize.New(float64(n.Capacity))
+		}
+	}
+
+	return fmt.Sprintf("%s in %d namespaces on %d devices", tCap, numNss, len(ncs))
+}
+
 // NvmeControllerResults is an alias for protobuf NvmeControllerResult messages
 // representing operation results on a number of NVMe controllers.
 type NvmeControllerResults []*ctlpb.NvmeControllerResult

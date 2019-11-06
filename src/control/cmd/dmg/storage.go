@@ -81,6 +81,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 type storageScanCmd struct {
 	logCmd
 	connectedCmd
+	Summary bool `long:"summary" description:"List total capacity and number of devices only"`
 }
 
 // Execute is run when storageScanCmd activates.
@@ -88,8 +89,15 @@ type storageScanCmd struct {
 func (s *storageScanCmd) Execute(args []string) error {
 	req := client.StorageScanReq{NvmeHealth: false}
 	cScan := s.conns.StorageScan(&req)
-	s.log.Info(cScan.Nvme.String())
-	s.log.Info(cScan.Scm.String())
+
+	for _, srv := range cScan.Servers {
+		if !s.Summary {
+			s.log.Infof("%s %s", srv, cScan.Nvme[srv].String())
+			s.log.Infof("%s %s", srv, cScan.Scm[srv].String())
+		}
+		s.log.Infof("%s Summary:\n\t%s\n\t%s\n", srv,
+			cScan.Scm[srv].Summary(), cScan.Nvme[srv].Summary())
+	}
 
 	return nil
 }

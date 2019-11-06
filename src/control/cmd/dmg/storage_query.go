@@ -51,7 +51,10 @@ type nvmeHealthQueryCmd struct {
 func (h *nvmeHealthQueryCmd) Execute(args []string) error {
 	req := client.StorageScanReq{NvmeHealth: true}
 	cScan := h.conns.StorageScan(&req)
-	h.log.Info(cScan.Nvme.String())
+
+	for _, srv := range cScan.Servers {
+		h.log.Infof("%s %s", srv, cScan.Nvme[srv].String())
+	}
 
 	return nil
 }
