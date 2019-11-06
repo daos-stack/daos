@@ -71,6 +71,7 @@ func MockScmNamespace() storage.ScmNamespace {
 		BlockDevice: m.Blockdev,
 		Name:        m.Dev,
 		NumaNode:    m.Numanode,
+		Size:        m.Size,
 	}
 }
 
@@ -82,18 +83,6 @@ type mockStorageFormatServer struct {
 }
 
 func (m *mockStorageFormatServer) Send(resp *StorageFormatResp) error {
-	m.Results = append(m.Results, resp)
-	return nil
-}
-
-// mockStorageUpdateServer provides mocking for server side streaming,
-// implement send method and record sent update responses.
-type mockStorageUpdateServer struct {
-	grpc.ServerStream
-	Results []*StorageUpdateResp
-}
-
-func (m *mockStorageUpdateServer) Send(resp *StorageUpdateResp) error {
 	m.Results = append(m.Results, resp)
 	return nil
 }
@@ -123,8 +112,8 @@ func newMockStorageConfig(
 
 func TestStorageScan(t *testing.T) {
 	var (
-		ctrlr      = MockController("")
-		pbCtrlr    = common.MockControllerPB("")
+		ctrlr      = MockController()
+		pbCtrlr    = common.MockControllerPB()
 		errExample = errors.New("example failure")
 	)
 
@@ -146,7 +135,7 @@ func TestStorageScan(t *testing.T) {
 					State:  new(ResponseState),
 				},
 				Scm: &ScanScmResp{
-					Pmems: PmemDevices{common.MockPmemDevicePB()},
+					Pmems: ScmNamespaces{common.MockPmemDevicePB()},
 					State: new(ResponseState),
 				},
 			},
@@ -176,7 +165,7 @@ func TestStorageScan(t *testing.T) {
 					},
 				},
 				Scm: &ScanScmResp{
-					Pmems: PmemDevices{common.MockPmemDevicePB()},
+					Pmems: ScmNamespaces{common.MockPmemDevicePB()},
 					State: new(ResponseState),
 				},
 			},
@@ -194,7 +183,7 @@ func TestStorageScan(t *testing.T) {
 					},
 				},
 				Scm: &ScanScmResp{
-					Pmems: PmemDevices{common.MockPmemDevicePB()},
+					Pmems: ScmNamespaces{common.MockPmemDevicePB()},
 					State: new(ResponseState),
 				},
 			},
@@ -262,13 +251,10 @@ func TestStorageScan(t *testing.T) {
 				cs.nvme = newMockNvmeStorage(
 					log, config.ext,
 					newMockSpdkEnv(tc.spdkInitEnvRet),
-					newMockSpdkNvme(
-						log,
-						"1.0.0", "1.0.1",
-						[]spdk.Controller{ctrlr},
+					newMockSpdkNvme(log, []spdk.Controller{ctrlr},
 						[]spdk.Namespace{MockNamespace(&ctrlr)},
 						[]spdk.DeviceHealth{MockDeviceHealth(&ctrlr)},
-						tc.spdkDiscoverRet, nil, nil),
+						tc.spdkDiscoverRet, nil),
 					false)
 				_ = new(StorageScanResp)
 
@@ -301,7 +287,7 @@ func TestStorageScan(t *testing.T) {
 
 func TestStoragePrepare(t *testing.T) {
 	var (
-		ctrlr      = MockController("")
+		ctrlr      = MockController()
 		errExample = errors.New("example failure")
 	)
 
@@ -419,10 +405,10 @@ func TestStoragePrepare(t *testing.T) {
 			}
 			cs := mockControlService(t, log, config, &mbc, nil)
 			cs.nvme = newMockNvmeStorage(log, config.ext, newMockSpdkEnv(nil),
-				newMockSpdkNvme(log, "", "", []spdk.Controller{ctrlr},
+				newMockSpdkNvme(log, []spdk.Controller{ctrlr},
 					[]spdk.Namespace{MockNamespace(&ctrlr)},
 					[]spdk.DeviceHealth{MockDeviceHealth(&ctrlr)},
-					nil, nil, nil), false)
+					nil, nil), false)
 			_ = new(StoragePrepareResp)
 
 			// runs discovery for nvme & scm
@@ -746,158 +732,3 @@ func TestStorageFormat(t *testing.T) {
 		})
 	}
 }
-
-//func TestStorageUpdate(t *testing.T) {
-//	pciAddr := "0000:81:00.0" // default pciaddr for tests
-//
-//	tests := []struct {
-//		bDevs      []string
-//		nvmeParams *UpdateNvmeReq // provided in client gRPC call
-//		scmParams  *UpdateScmReq
-//		moduleRets ScmModuleResults
-//		ctrlrRets  NvmeControllerResults
-//		desc       string
-//	}{
-//		{
-//			desc:  "nvme update success",
-//			bDevs: []string{pciAddr},
-//			nvmeParams: &UpdateNvmeReq{
-//				Startrev: "1.0.0",
-//				Model:    "ABC",
-//			},
-//			ctrlrRets: NvmeControllerResults{
-//				{
-//					Pciaddr: pciAddr,
-//					State:   new(ResponseState),
-//				},
-//			},
-//			moduleRets: ScmModuleResults{
-//				{
-//					Loc: &ScmModule_Location{},
-//					State: &ResponseState{
-//						Status: ResponseStatus_CTL_NO_IMPL,
-//						Error:  msgScmUpdateNotImpl,
-//					},
-//				},
-//			},
-//		},
-//		{
-//			desc:  "nvme update wrong model",
-//			bDevs: []string{pciAddr},
-//			nvmeParams: &UpdateNvmeReq{
-//				Startrev: "1.0.0",
-//				Model:    "AB",
-//			},
-//			ctrlrRets: NvmeControllerResults{
-//				{
-//					Pciaddr: pciAddr,
-//					State: &ResponseState{
-//						Status: ResponseStatus_CTL_ERR_NVME,
-//						Error: pciAddr + ": " +
-//							msgBdevModelMismatch +
-//							" want AB, have ABC",
-//					},
-//				},
-//			},
-//			moduleRets: ScmModuleResults{
-//				{
-//					Loc: &ScmModule_Location{},
-//					State: &ResponseState{
-//						Status: ResponseStatus_CTL_NO_IMPL,
-//						Error:  msgScmUpdateNotImpl,
-//					},
-//				},
-//			},
-//		},
-//		{
-//			desc:  "nvme update wrong starting revision",
-//			bDevs: []string{pciAddr},
-//			nvmeParams: &UpdateNvmeReq{
-//				Startrev: "2.0.0",
-//				Model:    "ABC",
-//			},
-//			ctrlrRets: NvmeControllerResults{
-//				{
-//					Pciaddr: pciAddr,
-//					State: &ResponseState{
-//						Status: ResponseStatus_CTL_ERR_NVME,
-//						Error: pciAddr + ": " +
-//							msgBdevFwrevStartMismatch +
-//							" want 2.0.0, have 1.0.0",
-//					},
-//				},
-//			},
-//			moduleRets: ScmModuleResults{
-//				{
-//					Loc: &ScmModule_Location{},
-//					State: &ResponseState{
-//						Status: ResponseStatus_CTL_NO_IMPL,
-//						Error:  msgScmUpdateNotImpl,
-//					},
-//				},
-//			},
-//		},
-//	}
-//
-//	for _, tt := range tests {
-//		t.Run(name, func(t *testing.T) {
-//			log, buf := logging.NewTestLogger(t.Name())
-//			defer common.ShowBufferOnFailure(t, buf)
-//
-//			config := defaultMockConfig(t)
-//			cs := mockControlService(t, log, config, nil)
-//
-//			// runs discovery for nvme & scm
-//			if err := cs.Setup(); err != nil {
-//				t.Fatal(err)
-//			}
-//
-//			mock := &mockStorageUpdateServer{}
-//
-//			req := &StorageUpdateReq{
-//				Nvme: tt.nvmeParams,
-//				Scm:  tt.scmParams,
-//			}
-//
-//			if err := cs.StorageUpdate(req, mock); err != nil {
-//				t.Fatal(err.Error() + name)
-//			}
-//
-//			common.AssertEqual(
-//				t, len(mock.Results), 1,
-//				"unexpected number of responses sent, "+name)
-//
-//			for i, result := range mock.Results[0].Crets {
-//				expected := tt.ctrlrRets[i]
-//				common.AssertEqual(
-//					t, result.State.Error,
-//					expected.State.Error,
-//					"unexpected result error message, "+name)
-//				common.AssertEqual(
-//					t, result.State.Status,
-//					expected.State.Status,
-//					"unexpected response status, "+name)
-//				common.AssertEqual(
-//					t, result.Pciaddr,
-//					expected.Pciaddr,
-//					"unexpected pciaddr, "+name)
-//			}
-//
-//			for i, result := range mock.Results[0].Mrets {
-//				expected := tt.moduleRets[i]
-//				common.AssertEqual(
-//					t, result.State.Error,
-//					expected.State.Error,
-//					"unexpected result error message, "+name)
-//				common.AssertEqual(
-//					t, result.State.Status,
-//					expected.State.Status,
-//					"unexpected response status, "+name)
-//				common.AssertEqual(
-//					t, result.Loc,
-//					expected.Loc,
-//					"unexpected mntpoint, "+name)
-//			}
-//		})
-//	}
-//}

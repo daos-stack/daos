@@ -23,6 +23,7 @@
 package scm
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -60,7 +61,6 @@ const (
 	MsgScmNotInited         = "scm storage could not be accessed"
 	MsgScmClassNotSupported = "operation unsupported on scm class"
 	MsgIpmctlDiscoverFail   = "ipmctl module discovery"
-	MsgScmUpdateNotImpl     = "scm firmware update not supported"
 )
 
 type (
@@ -70,6 +70,7 @@ type (
 		// Reset indicates that the operation should reset (clear) DCPM namespaces.
 		Reset bool
 	}
+
 	// PrepareResponse contains the results of a successful Prepare operation.
 	PrepareResponse struct {
 		State          storage.ScmState
@@ -77,16 +78,30 @@ type (
 		Namespaces     storage.ScmNamespaces
 	}
 
+	// ScanRequest defines the parameters for a Scan operation.
+	ScanRequest struct {
+		Rescan bool
+	}
+
+	// ScanResponse contains information gleaned during a successful Scan operation.
+	ScanResponse struct {
+		State      storage.ScmState
+		Modules    storage.ScmModules
+		Namespaces storage.ScmNamespaces
+	}
+
 	// DcpmParams defines the sub-parameters of a Format operation that
 	// will use DCPM storage.
 	DcpmParams struct {
 		Device string
 	}
+
 	// RamdiskParams defines the sub-parameters of a Format operation that
 	// will use tmpfs-based ramdisk storage.
 	RamdiskParams struct {
 		Size uint
 	}
+
 	// FormatRequest defines the parameters for a Format operation or query.
 	FormatRequest struct {
 		Forwarded  bool
@@ -97,6 +112,7 @@ type (
 		Ramdisk    *RamdiskParams
 		Dcpm       *DcpmParams
 	}
+
 	// FormatResponse contains the results of a successful Format operation or query.
 	FormatResponse struct {
 		Mountpoint string
@@ -112,28 +128,11 @@ type (
 		Flags     uintptr
 		Data      string
 	}
+
 	// MountResponse contains the results of a successful Mount operation.
 	MountResponse struct {
 		Target  string
 		Mounted bool
-	}
-
-	// UpdateRequest defines the parameters for an Update operation.
-	UpdateRequest struct{}
-	// UpdateResponse contains the results of a successful Update operation.
-	UpdateResponse struct{}
-
-	// ScanRequest defines the parameters for a Scan operation.
-	ScanRequest struct {
-		Forwarded bool
-		Rescan    bool
-	}
-	// ScanResponse contains information gleaned during
-	// a successful Scan operation.
-	ScanResponse struct {
-		State      storage.ScmState
-		Modules    storage.ScmModules
-		Namespaces storage.ScmNamespaces
 	}
 
 	// forwardableRequest defines an interface for any request that
@@ -181,6 +180,23 @@ type (
 		disableForwarding bool
 	}
 )
+
+func (sr *ScanResponse) String() string {
+	var buf bytes.Buffer
+
+	// Zero uninitialised value is Unknown (0)
+	if sr.State != storage.ScmStateUnknown {
+		fmt.Fprintf(&buf, "SCM State: %s\n", sr.State.String())
+	}
+
+	if len(sr.Namespaces) > 0 {
+		fmt.Fprintf(&buf, "SCM Namespaces: %s\n", &sr.Namespaces)
+	} else {
+		fmt.Fprintf(&buf, "SCM Modules:\n%s\n", &sr.Modules)
+	}
+
+	return buf.String()
+}
 
 func CreateFormatRequest(scmCfg storage.ScmConfig, reformat bool) (*FormatRequest, error) {
 	req := FormatRequest{
@@ -771,9 +787,4 @@ func (p *Provider) unmount(target string, flags int) (*MountResponse, error) {
 // is mounted.
 func (p *Provider) IsMounted(target string) (bool, error) {
 	return p.sys.IsMounted(target)
-}
-
-// Update attempts to update the DCPM firmware, if supported.
-func (p *Provider) Update(req UpdateRequest) (*UpdateResponse, error) {
-	return nil, nil
 }

@@ -107,7 +107,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	}
 
 	// Single daos_server dRPC server to handle all iosrv requests
-	if err := drpcSetup(log, cfg.SocketDir, harness.Instances(), cfg.TransportConfig); err != nil {
+	if err := drpcSetup(ctx, log, cfg.SocketDir, harness.Instances(), cfg.TransportConfig); err != nil {
 		return errors.WithMessage(err, "dRPC setup")
 	}
 
