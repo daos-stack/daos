@@ -171,7 +171,7 @@ def get_file_path(bin_name, dir_path=""):
     Raises:
         OSError: If failed to find the bin_name file
     """
-    with open('../../../.build_vars.json') as json_file:
+    with open('../../.build_vars.json') as json_file:
         build_paths = json.load(json_file)
     basepath = os.path.normpath(build_paths['PREFIX'] + "/../{0}"
                                 .format(dir_path))

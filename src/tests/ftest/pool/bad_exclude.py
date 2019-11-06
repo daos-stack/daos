@@ -101,7 +101,7 @@ class BadExcludeTest(TestWithServers):
             # setup the DAOS python API
             with open('../../../.build_vars.json') as build_file:
                 data = json.load(build_file)
-            context = DaosContext(data['PREFIX'] + '/lib/')
+            context = DaosContext(data['PREFIX'] + '/lib64/')
 
             # initialize a python pool object then create the underlying
             # daos storage

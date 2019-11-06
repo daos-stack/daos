@@ -24,6 +24,7 @@
 package server
 
 import (
+	"context"
 	"sync"
 
 	"github.com/golang/protobuf/proto"
@@ -111,7 +112,7 @@ func newTestMgmtSvc(log logging.Logger) *mgmtSvc {
 	var msCfg mgmtSvcClientCfg
 	msCfg.AccessPoints = append(msCfg.AccessPoints, "localhost")
 
-	srv := NewIOServerInstance(log, nil, nil, newMgmtSvcClient(nil, log, msCfg), r)
+	srv := NewIOServerInstance(log, nil, nil, newMgmtSvcClient(context.TODO(), log, msCfg), r)
 	srv.setSuperblock(&Superblock{
 		MS: true,
 	})

@@ -15,10 +15,10 @@ def build_vos(env, standalone):
     if standalone:
         denv.Append(CPPDEFINES={'VOS_STANDALONE' : '1'})
         denv.Append(OBJPREFIX="s_")
-        install = 'lib'
+        install = 'lib64'
         libname = 'vos'
     else:
-        install = 'lib/daos_srv'
+        install = 'lib64/daos_srv'
         libname = 'vos_srv'
 
     files = FILES
