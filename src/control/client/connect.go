@@ -57,27 +57,22 @@ func chooseServiceLeader(cs []Control) (Control, error) {
 // Connect is an external interface providing functionality across multiple
 // connected clients (controllers).
 type Connect interface {
-	// SetTransportConfig sets the gRPC transport confguration
-	SetTransportConfig(*security.TransportConfig)
-	// ConnectClients attempts to connect a list of addresses
-	ConnectClients(Addresses) ResultMap
-	// GetActiveConns verifies states and removes inactive conns
-	GetActiveConns(ResultMap) ResultMap
+	BioHealthQuery(*mgmtpb.BioHealthReq) ResultQueryMap
 	ClearConns() ResultMap
-	StoragePrepare(*ctlpb.StoragePrepareReq) ResultMap
-	StorageScan() (ClientCtrlrMap, ClientModuleMap, ClientPmemMap)
-	StorageFormat(reformat bool) (ClientCtrlrMap, ClientMountMap)
-	StorageUpdate(*ctlpb.StorageUpdateReq) (ClientCtrlrMap, ClientModuleMap)
-	// TODO: implement Burnin client features
-	//StorageBurnIn() (ClientCtrlrMap, ClientModuleMap)
-	ListFeatures() ClientFeatureMap
-	KillRank(uuid string, rank uint32) ResultMap
+	ConnectClients(Addresses) ResultMap
+	GetActiveConns(ResultMap) ResultMap
+	KillRank(rank uint32) ResultMap
+	NetworkListProviders() ResultMap
+	NetworkScanDevices(searchProvider string) NetworkScanResultMap
 	PoolCreate(*PoolCreateReq) (*PoolCreateResp, error)
 	PoolDestroy(*PoolDestroyReq) error
 	PoolGetACL(*PoolGetACLReq) (*PoolGetACLResp, error)
-	BioHealthQuery(*mgmtpb.BioHealthReq) ResultQueryMap
+	SetTransportConfig(*security.TransportConfig)
 	SmdListDevs(*mgmtpb.SmdDevReq) ResultSmdMap
 	SmdListPools(*mgmtpb.SmdPoolReq) ResultSmdMap
+	StorageFormat(reformat bool) (ClientCtrlrMap, ClientMountMap)
+	StoragePrepare(*ctlpb.StoragePrepareReq) ResultMap
+	StorageScan(*StorageScanReq) *StorageScanResp
 	SystemMemberQuery() (common.SystemMembers, error)
 	SystemStop() (common.SystemMemberResults, error)
 }

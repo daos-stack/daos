@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,40 +20,56 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+package ioserver
 
-package server
+import "context"
 
-import (
-	"context"
-	"testing"
+type (
+	TestRunnerConfig struct {
+		StartCb    func()
+		StartErr   error
+		ErrChanCb  func() error
+		ErrChanErr error
+	}
 
-	. "github.com/daos-stack/daos/src/control/common"
-	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	"github.com/daos-stack/daos/src/control/logging"
+	TestRunner struct {
+		runnerCfg TestRunnerConfig
+		serverCfg *Config
+	}
 )
 
-// TODO: add server side streaming test for list features
+func NewTestRunner(trc *TestRunnerConfig, sc *Config) *TestRunner {
+	if trc == nil {
+		trc = &TestRunnerConfig{}
+	}
+	return &TestRunner{
+		runnerCfg: *trc,
+		serverCfg: sc,
+	}
+}
 
-func TestGetFeature(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer ShowBufferOnFailure(t, buf)
-
-	cs := defaultMockControlService(t, log)
-
-	mockFeature := MockFeaturePB()
-	fMap := make(FeatureMap)
-	fMap[mockFeature.Fname.Name] = mockFeature
-	cs.supportedFeatures = fMap
-
-	feature, err := cs.GetFeature(context.TODO(), mockFeature.Fname)
-	if err != nil {
-		t.Fatal(err)
+func (tr *TestRunner) Start(ctx context.Context, errChan chan<- error) error {
+	if tr.runnerCfg.StartCb != nil {
+		tr.runnerCfg.StartCb()
+	}
+	if tr.runnerCfg.ErrChanCb == nil {
+		tr.runnerCfg.ErrChanCb = func() error {
+			return tr.runnerCfg.ErrChanErr
+		}
 	}
 
-	AssertEqual(t, feature, mockFeature, "")
+	go func() {
+		select {
+		case <-ctx.Done():
+			return
+		case errChan <- tr.runnerCfg.ErrChanCb():
+			return
+		}
+	}()
 
-	_, err = cs.GetFeature(context.TODO(), &ctlpb.FeatureName{Name: "non-existent"})
-	if err == nil {
-		t.Fatal(err)
-	}
+	return tr.runnerCfg.StartErr
+}
+
+func (tr *TestRunner) GetConfig() *Config {
+	return tr.serverCfg
 }

@@ -21,23 +21,21 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package server
+syntax = "proto3";
+package ctl;
 
-import (
-	types "github.com/daos-stack/daos/src/control/common/storage"
-	"github.com/daos-stack/daos/src/control/server/storage/scm"
-)
-
-// PrepScm interface provides capability to prepare SCM storage
-//
-// TODO: Update tests in this layer to use a mock scm.Provider
-// implementation rather than requiring so much knowledge about
-// low-level details.
-type PrepScm interface {
-	GetNamespaces() ([]scm.Namespace, error)
-	GetState() (types.ScmState, error)
-	Prep(types.ScmState) (bool, []scm.Namespace, error)
-	PrepReset(types.ScmState) (bool, error)
+message DeviceScanRequest {
+  string provider = 1;
 }
 
-// core scm prep code moved to storage/scm/ipmctl.go
+message DeviceScanReply {
+  string provider = 1;
+  string device = 2;
+  uint32 numanode = 3;
+}
+
+message ProviderListRequest {}
+
+message ProviderListReply {
+  string provider = 1;
+}

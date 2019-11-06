@@ -21,21 +21,49 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-syntax = "proto3";
-package ctl;
+package main
 
-message FeatureName {
-	string name = 1;
+import (
+	"testing"
+)
+
+func TestNetworkCommands(t *testing.T) {
+	runCmdTests(t, []cmdTest{
+		{
+			"Get network provider list",
+			"network list",
+			"ConnectClients NetworkListProviders",
+			nil,
+		},
+		{
+			"Perform network scan no provider",
+			"network scan",
+			"ConnectClients NetworkScanDevices-",
+			nil,
+		},
+		{
+			"Perform network scan all providers long",
+			"network scan --all",
+			"ConnectClients NetworkScanDevices-",
+			nil,
+		},
+		{
+			"Perform network scan all providers short",
+			"network scan -a",
+			"ConnectClients NetworkScanDevices-",
+			nil,
+		},
+		{
+			"Perform network scan with provider ofi+sockets (short)",
+			"network scan -p 'ofi+sockets'",
+			"ConnectClients NetworkScanDevices-'ofi+sockets'",
+			nil,
+		},
+		{
+			"Perform network scan with provider ofi+sockets (long)",
+			"network scan --provider 'ofi+sockets'",
+			"ConnectClients NetworkScanDevices-'ofi+sockets'",
+			nil,
+		},
+	})
 }
-
-message Category {
-	string category = 1;
-}
-
-// Feature represents a management task that can be performed by server.
-message Feature {
-	Category category = 1;	// The category of capabilities this feature belongs to.
-	FeatureName fname = 2;	// The name of the feature.
-	string description = 3;	// The description of the feature.
-}
-

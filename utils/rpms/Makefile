@@ -3,9 +3,13 @@ SRC_EXT := gz
 SOURCE   = $(NAME)-$(VERSION).tar.$(SRC_EXT)
 PATCHES  = scons_local-$(VERSION).tar.$(SRC_EXT)
 
-SLES_12_PR_REPOS := scons
-LEAP_42_PR_REPOS := scons
-PR_REPOS         := spdk fio dpdk pmdk raft
+#https://github.com/rpm-software-management/mock/issues/384
+MOCK_OPTIONS := --disablerepo=sclo*
+
+# override allows the caller to set a value and the we append to it
+#override PR_REPOS         +=
+override SLES_12_PR_REPOS += scons
+override LEAP_42_PR_REPOS += scons
 ifneq ($(REPOSITORY_URL),)
 ifneq ($(DAOS_STACK_$(DISTRO_BASE)_GROUP_REPO),)
 EL_7_REPOS     = https://copr-be.cloud.fedoraproject.org/results/jhli/ipmctl/epel-7-x86_64/   \

@@ -34,17 +34,11 @@ import (
 
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
-
-	"github.com/daos-stack/daos/src/control/logging"
 )
 
-const (
-	sudoUserEnv = "SUDO_USER"
-	rootUser    = "root"
-	// UtilLogDepth signifies stack depth, set calldepth on calls to logger so
-	// log message context refers to caller not callee.
-	UtilLogDepth = 4
-)
+// UtilLogDepth signifies stack depth, set calldepth on calls to logger so
+// log message context refers to caller not callee.
+const UtilLogDepth = 4
 
 // GetAbsInstallPath retrieves absolute path of files in daos install dir
 func GetAbsInstallPath(relPath string) (string, error) {
@@ -232,9 +226,7 @@ func SyncDir(path string) (err error) {
 }
 
 // Run executes command in os and builds useful error message.
-func Run(log logging.Logger, cmd string) error {
-	log.Debugf("exec '%s'\n", cmd)
-
+func Run(cmd string) error {
 	// executing as subshell enables pipes in cmd string
 	out, err := exec.Command("sh", "-c", cmd).CombinedOutput()
 	if err != nil {
