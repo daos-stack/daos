@@ -902,7 +902,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	 *   create the root for the subtree, or just return it if it's already
 	 *   there.
 	 */
-	rc = dbtree_fetch(toh, BTR_PROBE_GE | BTR_PROBE_MATCHED, intent, key,
+	rc = dbtree_fetch(toh, BTR_PROBE_EQ, intent, key,
 			  NULL, &riov);
 	switch (rc) {
 	default:
@@ -964,12 +964,9 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	daos_handle_t		 loh = DAOS_HDL_INVAL;
 	int			 rc;
 
-	rc = dbtree_fetch(toh, BTR_PROBE_GE | BTR_PROBE_MATCHED,
-			  DAOS_INTENT_UPDATE, key_iov, NULL, val_iov);
+	rc = dbtree_fetch(toh, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, key_iov, NULL,
+			  val_iov);
 	if (rc != 0) {
-		if (rc == -DER_INPROGRESS)
-			return rc;
-
 		D_ASSERT(rc == -DER_NONEXIST);
 		/* use BTR_PROBE_BYPASS to avoid probe again */
 		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, DAOS_INTENT_UPDATE,
