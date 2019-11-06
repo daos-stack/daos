@@ -72,10 +72,6 @@ if [ -d "/mnt/daos" ]; then
         SL_PREFIX=$PWD/${SL_PREFIX/*\/install/install}
         SL_OMPI_PREFIX=$PWD/${SL_OMPI_PREFIX/*\/install/install}
     fi
-
-    ldd $SL_PREFIX/bin/daos_server
-    ldd $SL_PREFIX/bin/daos_io_server
-
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
     run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
     export DAOS_IO_BYPASS=pm
@@ -113,6 +109,8 @@ if [ -d "/mnt/daos" ]; then
     # Satisfy requirement for starting daos_server w/o config file
     export CRT_PHY_ADDR_STR=ofi+sockets
     export OFI_INTERFACE=lo
+    # Disable this as it doesn't work for now.
+    # run_test src/rdb/tests/rdb_test_runner.py "${SL_OMPI_PREFIX}"
     run_test build/src/security/tests/cli_security_tests
     run_test build/src/security/tests/srv_acl_tests
     run_test build/src/common/tests/acl_api_tests
@@ -126,7 +124,6 @@ if [ -d "/mnt/daos" ]; then
              "${SL_PREFIX}/etc/vos_size_input.yaml"
     run_test "${SL_PREFIX}/bin/vos_size.py" \
              "${SL_PREFIX}/etc/vos_dfs_sample.yaml"
-#    run_test src/rdb/tests/rdb_test_runner.py "${SL_OMPI_PREFIX}"
 
     if [ $failed -eq 0 ]; then
         # spit out the magic string that the post build script looks for
