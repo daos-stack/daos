@@ -138,12 +138,13 @@ def scons():
 
     install_go_bin(denv, gosrc, gopath, None, "agent", "daos_agent")
     install_go_bin(denv, gosrc, gopath, None, "dmg", "dmg")
+    install_go_bin(denv, gosrc, gopath, None, "daos_admin", "daos_admin")
     install_go_bin(denv, gosrc, gopath, None, "drpc_test", "hello_drpc")
 
     agentbin = get_bin_path(gopath, "agent")
     dmgbin = get_bin_path(gopath, "dmg")
     drpcbin = get_bin_path(gopath, "drpc_test")
-    AlwaysBuild([agentbin, dmgbin, drpcbin])
+    AlwaysBuild([agentbin, dmgbin, adminbin, drpcbin])
 
     senv = denv.Clone()
     prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
