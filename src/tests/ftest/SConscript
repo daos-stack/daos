@@ -7,35 +7,18 @@ def scons():
 
     ftest_install_dir = '$PREFIX/lib/daos/TESTING/ftest'
 
-    env.Install(ftest_install_dir, Glob('*.*'))
-    env.Install(os.path.join(ftest_install_dir, 'container'),
-                 Glob('container/*.*'))
-    env.Install(os.path.join(ftest_install_dir, 'control'),
-                 Glob('control/*.*'))
-    env.Install(os.path.join(ftest_install_dir, 'daos_test'),
-                 Glob('daos_test/*.*'))
-    env.Install(os.path.join(ftest_install_dir, 'data'),
-                 Glob('data/*.*'))
-    env.Install(os.path.join(ftest_install_dir, 'io'),
-                 Glob('io/*.*'))
-    env.Install(os.path.join(ftest_install_dir, 'network'),
-                 Glob('network/*.*'))
-    env.Install(os.path.join(ftest_install_dir, 'object'),
-                 Glob('object/*.*'))
-    env.Install(os.path.join(ftest_install_dir, 'pool'),
-                 Glob('pool/*.*'))
-    env.Install(os.path.join(ftest_install_dir, 'rebuild'),
-                 Glob('rebuild/*.*'))
-    env.Install(os.path.join(ftest_install_dir, 'security'),
-                 Glob('security/*.*'))
-    env.Install(os.path.join(ftest_install_dir, 'server'),
-                 Glob('server/*.*'))
-    env.Install(os.path.join(ftest_install_dir, 'soak'),
-                 Glob('soak/*.*'))
-    env.Install(os.path.join(ftest_install_dir, 'unittest'),
-                 Glob('unittest/*.*'))
+    env.Install(ftest_install_dir, Glob('*.*')) 
+
+    dirs = ['container', 'control', 'daos_test', 'data', 'io', \
+            'network', 'object', 'pool', 'rebuild', 'security', \
+            'server', 'soak', 'unittest']
+
+    for dir in dirs:
+        env.Install(os.path.join(ftest_install_dir, dir),
+        Glob("%s/*.*" % dir))
+
     # util
-    SConscript('util/SConscript', exports=['env'])
+    SConscript('util/SConscript')
 
 if __name__ == "SCons.Script":
     scons()
