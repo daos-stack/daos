@@ -172,9 +172,6 @@ func TestStorageScan(t *testing.T) {
 	clientResp := cc.StorageScan(&StorageScanReq{})
 
 	AssertEqual(t, MockScanResp(MockCtrlrs, MockScmModules, MockScmNamespaces, MockServers, false), clientResp, "")
-	//	if diff := cmp.Diff(MockScanResp(MockCtrlrs, MockScmModules, MockScmNamespaces, MockServers, false), clientResp); diff != "" {
-	//		t.Fatalf("unexpected per-server scan results (-want, +got):\n%s\n", diff)
-	//	}
 }
 
 func TestStorageFormat(t *testing.T) {
