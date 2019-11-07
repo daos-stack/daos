@@ -21,23 +21,47 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package server
+package client
 
 import (
-	types "github.com/daos-stack/daos/src/control/common/storage"
-	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	"testing"
+
+	"github.com/daos-stack/daos/src/control/common"
 )
 
-// PrepScm interface provides capability to prepare SCM storage
-//
-// TODO: Update tests in this layer to use a mock scm.Provider
-// implementation rather than requiring so much knowledge about
-// low-level details.
-type PrepScm interface {
-	GetNamespaces() ([]scm.Namespace, error)
-	GetState() (types.ScmState, error)
-	Prep(types.ScmState) (bool, []scm.Namespace, error)
-	PrepReset(types.ScmState) (bool, error)
+func TestAccessControlList_String(t *testing.T) {
+	for name, tc := range map[string]struct {
+		acl    *AccessControlList
+		expStr string
+	}{
+		"nil": {
+			expStr: "# Entries:\n#   None\n",
+		},
+		"empty": {
+			acl:    &AccessControlList{},
+			expStr: "# Entries:\n#   None\n",
+		},
+		"single": {
+			acl: &AccessControlList{
+				Entries: []string{
+					"A::user@:rw",
+				},
+			},
+			expStr: "# Entries:\nA::user@:rw\n",
+		},
+		"multiple": {
+			acl: &AccessControlList{
+				Entries: []string{
+					"A::OWNER@:rw",
+					"A:G:GROUP@:rw",
+					"A:G:readers@:r",
+				},
+			},
+			expStr: "# Entries:\nA::OWNER@:rw\nA:G:GROUP@:rw\nA:G:readers@:r\n",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			common.AssertEqual(t, tc.acl.String(), tc.expStr, "string output didn't match")
+		})
+	}
 }
-
-// core scm prep code moved to storage/scm/ipmctl.go

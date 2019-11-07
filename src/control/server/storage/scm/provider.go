@@ -23,6 +23,7 @@
 package scm
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -31,9 +32,9 @@ import (
 
 	"github.com/pkg/errors"
 
-	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/provider/system"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 const (
@@ -52,28 +53,12 @@ const (
 	dcpmMountOpts = "dax"
 
 	ramFsType = fsTypeTmpfs
-)
 
-type (
-	// Module represents a SCM DIMM.
-	//
-	// This is a simplified representation of the raw struct used in the ipmctl package.
-	Module struct {
-		ChannelID       uint32
-		ChannelPosition uint32
-		ControllerID    uint32
-		SocketID        uint32
-		PhysicalID      uint32
-		Capacity        uint64
-	}
-
-	// Namespace represents a mapping between AppDirect regions and block device files.
-	Namespace struct {
-		UUID        string `json:"uuid"`
-		BlockDevice string `json:"blockdev"`
-		Name        string `json:"dev"`
-		NumaNode    uint32 `json:"numa_node"`
-	}
+	MsgScmRebootRequired    = "A reboot is required to process new memory allocation goals."
+	MsgScmNoModules         = "no scm modules to prepare"
+	MsgScmNotInited         = "scm storage could not be accessed"
+	MsgScmClassNotSupported = "operation unsupported on scm class"
+	MsgIpmctlDiscoverFail   = "ipmctl module discovery"
 )
 
 type (
@@ -84,9 +69,20 @@ type (
 	}
 	// PrepareResponse contains the results of a successful Prepare operation.
 	PrepareResponse struct {
-		State          types.ScmState
+		State          storage.ScmState
 		RebootRequired bool
-		Namespaces     []Namespace
+		Namespaces     storage.ScmNamespaces
+	}
+
+	// ScanRequest defines the parameters for a Scan operation.
+	ScanRequest struct {
+		Rescan bool
+	}
+	// ScanResponse contains information gleaned during a successful Scan operation.
+	ScanResponse struct {
+		State      storage.ScmState
+		Modules    storage.ScmModules
+		Namespaces storage.ScmNamespaces
 	}
 
 	// DcpmParams defines the sub-parameters of a Format operation that
@@ -126,30 +122,13 @@ type (
 		Mounted bool
 	}
 
-	// UpdateRequest defines the parameters for an Update operation.
-	UpdateRequest struct{}
-	// UpdateResponse contains the results of a successful Update operation.
-	UpdateResponse struct{}
-
-	// ScanRequest defines the parameters for a Scan operation.
-	ScanRequest struct {
-		Rescan bool
-	}
-	// ScanResponse contains information gleaned during
-	// a successful Scan operation.
-	ScanResponse struct {
-		State      types.ScmState
-		Modules    []Module
-		Namespaces []Namespace
-	}
-
 	// Backend defines a set of methods to be implemented by a SCM backend.
 	Backend interface {
-		Discover() ([]Module, error)
-		Prep(types.ScmState) (bool, []Namespace, error)
-		PrepReset(types.ScmState) (bool, error)
-		GetState() (types.ScmState, error)
-		GetNamespaces() ([]Namespace, error)
+		Discover() (storage.ScmModules, error)
+		Prep(storage.ScmState) (bool, storage.ScmNamespaces, error)
+		PrepReset(storage.ScmState) (bool, error)
+		GetState() (storage.ScmState, error)
+		GetNamespaces() (storage.ScmNamespaces, error)
 	}
 
 	// SystemProvider defines a set of methods to be implemented by a provider
@@ -171,15 +150,58 @@ type (
 	Provider struct {
 		sync.RWMutex
 		scanCompleted bool
-		lastState     types.ScmState
-		modules       []Module
-		namespaces    []Namespace
+		lastState     storage.ScmState
+		modules       storage.ScmModules
+		namespaces    storage.ScmNamespaces
 
 		log     logging.Logger
 		backend Backend
 		sys     SystemProvider
 	}
 )
+
+func (sr *ScanResponse) String() string {
+	var buf bytes.Buffer
+
+	// Zero uninitialised value is Unknown (0)
+	if sr.State != storage.ScmStateUnknown {
+		fmt.Fprintf(&buf, "SCM State: %s\n", sr.State.String())
+	}
+
+	if len(sr.Namespaces) > 0 {
+		fmt.Fprintf(&buf, "SCM Namespaces: %s\n", &sr.Namespaces)
+	} else {
+		fmt.Fprintf(&buf, "SCM Modules:\n%s\n", &sr.Modules)
+	}
+
+	return buf.String()
+}
+
+func CreateFormatRequest(scmCfg storage.ScmConfig, reformat bool) (*FormatRequest, error) {
+	req := FormatRequest{
+		Mountpoint: scmCfg.MountPoint,
+		Reformat:   reformat,
+	}
+
+	switch scmCfg.Class {
+	case storage.ScmClassRAM:
+		req.Ramdisk = &RamdiskParams{
+			Size: uint(scmCfg.RamdiskSize),
+		}
+	case storage.ScmClassDCPM:
+		// FIXME (DAOS-3291): Clean up SCM configuration
+		if len(scmCfg.DeviceList) != 1 {
+			return nil, FaultFormatInvalidDeviceCount
+		}
+		req.Dcpm = &DcpmParams{
+			Device: scmCfg.DeviceList[0],
+		}
+	default:
+		return nil, errors.New(MsgScmClassNotSupported)
+	}
+
+	return &req, nil
+}
 
 // Validate checks the request for validity.
 func (fr FormatRequest) Validate() error {
@@ -315,13 +337,13 @@ func (p *Provider) isInitialized() bool {
 	return p.scanCompleted
 }
 
-func (p *Provider) currentState() types.ScmState {
+func (p *Provider) currentState() storage.ScmState {
 	p.RLock()
 	defer p.RUnlock()
 	return p.lastState
 }
 
-func (p *Provider) updateState() (state types.ScmState, err error) {
+func (p *Provider) updateState() (state storage.ScmState, err error) {
 	state, err = p.backend.GetState()
 	if err != nil {
 		return
@@ -335,7 +357,7 @@ func (p *Provider) updateState() (state types.ScmState, err error) {
 }
 
 // GetState returns the current state of DCPM namespaces, if available.
-func (p *Provider) GetState() (types.ScmState, error) {
+func (p *Provider) GetState() (storage.ScmState, error) {
 	if !p.isInitialized() {
 		if _, err := p.Scan(ScanRequest{}); err != nil {
 			return p.lastState, err
@@ -639,9 +661,4 @@ func (p *Provider) unmount(target string, flags int) (*MountResponse, error) {
 // is mounted.
 func (p *Provider) IsMounted(target string) (bool, error) {
 	return p.sys.IsMounted(target)
-}
-
-// Update attempts to update the DCPM firmware, if supported.
-func (p *Provider) Update(req UpdateRequest) (*UpdateResponse, error) {
-	return nil, nil
 }

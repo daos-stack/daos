@@ -20,22 +20,56 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+package ioserver
 
-syntax = "proto3";
-package ctl;
+import "context"
 
-message FeatureName {
-	string name = 1;
+type (
+	TestRunnerConfig struct {
+		StartCb    func()
+		StartErr   error
+		ErrChanCb  func() error
+		ErrChanErr error
+	}
+
+	TestRunner struct {
+		runnerCfg TestRunnerConfig
+		serverCfg *Config
+	}
+)
+
+func NewTestRunner(trc *TestRunnerConfig, sc *Config) *TestRunner {
+	if trc == nil {
+		trc = &TestRunnerConfig{}
+	}
+	return &TestRunner{
+		runnerCfg: *trc,
+		serverCfg: sc,
+	}
 }
 
-message Category {
-	string category = 1;
+func (tr *TestRunner) Start(ctx context.Context, errChan chan<- error) error {
+	if tr.runnerCfg.StartCb != nil {
+		tr.runnerCfg.StartCb()
+	}
+	if tr.runnerCfg.ErrChanCb == nil {
+		tr.runnerCfg.ErrChanCb = func() error {
+			return tr.runnerCfg.ErrChanErr
+		}
+	}
+
+	go func() {
+		select {
+		case <-ctx.Done():
+			return
+		case errChan <- tr.runnerCfg.ErrChanCb():
+			return
+		}
+	}()
+
+	return tr.runnerCfg.StartErr
 }
 
-// Feature represents a management task that can be performed by server.
-message Feature {
-	Category category = 1;	// The category of capabilities this feature belongs to.
-	FeatureName fname = 2;	// The name of the feature.
-	string description = 3;	// The description of the feature.
+func (tr *TestRunner) GetConfig() *Config {
+	return tr.serverCfg
 }
-

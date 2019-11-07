@@ -102,9 +102,9 @@ func (tc *testConn) StoragePrepare(req *ctlpb.StoragePrepareReq) client.ResultMa
 	return nil
 }
 
-func (tc *testConn) StorageScan() (client.ClientCtrlrMap, client.ClientModuleMap, client.ClientPmemMap) {
-	tc.appendInvocation("StorageScan")
-	return nil, nil, nil
+func (tc *testConn) StorageScan(req *client.StorageScanReq) *client.StorageScanResp {
+	tc.appendInvocation(fmt.Sprintf("StorageScan-%+v", req))
+	return &client.StorageScanResp{}
 }
 
 func (tc *testConn) StorageFormat(reformat bool) (client.ClientCtrlrMap, client.ClientMountMap) {
@@ -112,18 +112,8 @@ func (tc *testConn) StorageFormat(reformat bool) (client.ClientCtrlrMap, client.
 	return nil, nil
 }
 
-func (tc *testConn) StorageUpdate(req *ctlpb.StorageUpdateReq) (client.ClientCtrlrMap, client.ClientModuleMap) {
-	tc.appendInvocation(fmt.Sprintf("StorageUpdate-%s", req))
-	return nil, nil
-}
-
-func (tc *testConn) ListFeatures() client.ClientFeatureMap {
-	tc.appendInvocation("ListFeatures")
-	return nil
-}
-
-func (tc *testConn) KillRank(uuid string, rank uint32) client.ResultMap {
-	tc.appendInvocation(fmt.Sprintf("KillRank-uuid %s, rank %d", uuid, rank))
+func (tc *testConn) KillRank(rank uint32) client.ResultMap {
+	tc.appendInvocation(fmt.Sprintf("KillRank-rank %d", rank))
 	return nil
 }
 

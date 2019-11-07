@@ -29,46 +29,46 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-// ModuleState is an interface to allow a module to pass in private
-// information to the rpcModule that it will need to perform its duties.
-// An empty interface is Go's equivalent of a void *
-type ModuleState interface{}
-
 // Module is an interface that a type must implement to provide the
-// functionality needed by the rpcService to be able to process
-// requests.
+// functionality needed by the ModuleService to process dRPC requests.
 type Module interface {
-	HandleCall(*Client, int32, []byte) ([]byte, error)
-	InitModule(ModuleState)
+	HandleCall(*Session, int32, []byte) ([]byte, error)
 	ID() int32
 }
 
-// Service is the type representing the collection of Modules used by
+// ModuleService is the collection of Modules used by
 // DomainSocketServer to be used to process messages.
-type Service struct {
+type ModuleService struct {
 	log     logging.Logger
 	modules map[int32]Module
 }
 
-// NewRPCService creates an initialized Service instance
-func NewRPCService(log logging.Logger) *Service {
+// NewModuleService creates an initialized ModuleService instance
+func NewModuleService(log logging.Logger) *ModuleService {
 	modules := make(map[int32]Module)
-	return &Service{
+	return &ModuleService{
 		log:     log,
 		modules: modules,
 	}
 }
 
-// RegisterModule will take in a type that implements the rpcModule interface
+// RegisterModule will take in a type that implements the Module interface
 // and ensure that no other module is already registered with that module
 // identifier.
-func (r *Service) RegisterModule(mod Module) error {
-	_, ok := r.modules[mod.ID()]
-	if ok == true {
-		return errors.Errorf("module with Id %d already exists", mod.ID())
+func (r *ModuleService) RegisterModule(mod Module) error {
+	_, ok := r.GetModule(mod.ID())
+	if ok {
+		return errors.Errorf("module with ID %d already exists", mod.ID())
 	}
 	r.modules[mod.ID()] = mod
 	return nil
+}
+
+// GetModule fetches the module for the given ID. Returns true if found, false
+// otherwise.
+func (r *ModuleService) GetModule(id int32) (Module, bool) {
+	mod, found := r.modules[id]
+	return mod, found
 }
 
 // marshalResponse is an internal function that will take the necessary
@@ -104,27 +104,26 @@ func marshalResponse(sequence int64, status Status, body []byte) ([]byte, error)
 	return responseBytes, nil
 }
 
-// ProcessMessage is the main entry point into the rpcService for
-// consumers where it can pass the bytes of the drpc.Call instance.
-// That instance is then unmarshaled and processed and a response is
-// returned.
-func (r *Service) ProcessMessage(client *Client, callBytes []byte) ([]byte, error) {
-	rpcMsg := &Call{}
+// ProcessMessage is the main entry point into the ModuleService. It accepts a
+// marshaled drpc.Call instance, processes it, calls the handler in the
+// appropriate Module, and marshals the result into the body of a drpc.Response.
+func (r *ModuleService) ProcessMessage(session *Session, msgBytes []byte) ([]byte, error) {
+	msg := &Call{}
 
-	err := proto.Unmarshal(callBytes, rpcMsg)
+	err := proto.Unmarshal(msgBytes, msg)
 	if err != nil {
 		return marshalResponse(-1, Status_FAILURE, nil)
 	}
-	module, ok := r.modules[rpcMsg.GetModule()]
+	module, ok := r.GetModule(msg.GetModule())
 	if !ok {
 		err = errors.Errorf("Attempted to call unregistered module")
-		return marshalResponse(rpcMsg.GetSequence(), Status_FAILURE, nil)
+		return marshalResponse(msg.GetSequence(), Status_UNKNOWN_MODULE, nil)
 	}
-	respBody, err := module.HandleCall(client, rpcMsg.GetMethod(), rpcMsg.GetBody())
+	respBody, err := module.HandleCall(session, msg.GetMethod(), msg.GetBody())
 	if err != nil {
-		r.log.Errorf("HandleCall for %d:%d failed:%s\n", module.ID(), rpcMsg.GetMethod(), err)
-		return marshalResponse(rpcMsg.GetSequence(), Status_FAILURE, nil)
+		r.log.Errorf("HandleCall for %d:%d failed:%s\n", module.ID(), msg.GetMethod(), err)
+		return marshalResponse(msg.GetSequence(), Status_FAILURE, nil)
 	}
 
-	return marshalResponse(rpcMsg.GetSequence(), Status_SUCCESS, respBody)
+	return marshalResponse(msg.GetSequence(), Status_SUCCESS, respBody)
 }

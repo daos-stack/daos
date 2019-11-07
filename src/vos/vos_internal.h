@@ -67,6 +67,9 @@ extern struct dss_module_key vos_module_key;
  */
 #define VOS_MW_FLUSH_THRESH	(1UL << 23)	/* 8MB */
 
+/* Force aggregation/discard ULT yield on certain amount of tight loops */
+#define VOS_AGG_CREDITS_MAX	256
+
 static inline uint32_t vos_byte2blkcnt(uint64_t bytes)
 {
 	D_ASSERT(bytes != 0);
@@ -1014,8 +1017,6 @@ vos_iter_intent(struct vos_iterator *iter)
 
 void
 gc_wait(void);
-void
-gc_wait_pool(struct vos_pool *pool);
 int
 gc_add_pool(struct vos_pool *pool);
 void
