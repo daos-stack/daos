@@ -24,6 +24,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path"
 	"strings"
@@ -90,7 +91,21 @@ func appSetup(log logging.Logger, opts *cliOptions, conns client.Connect) error 
 	}
 
 	if opts.HostList != "" {
-		config.HostList = strings.Split(opts.HostList, ",")
+		// expand any compressed nodesets for specific ports
+		// example opts.HostList: intelA[1-10]:10000,intelB[2,3]:10001
+		portHosts, err := hostsByPort(strings.Split(opts.HostList, ","),
+			config.Port)
+		if err != nil {
+			return err
+		}
+
+		// reconstruct slice of all "host:port" addresses from map
+		for port, hosts := range portHosts {
+			for _, host := range hosts {
+				config.HostList = append(config.HostList,
+					fmt.Sprintf("%s:%d", host, port))
+			}
+		}
 	}
 
 	if opts.HostFile != "" {
@@ -107,12 +122,16 @@ func appSetup(log logging.Logger, opts *cliOptions, conns client.Connect) error 
 	}
 	conns.SetTransportConfig(config.TransportConfig)
 
-	ok, out := hasConns(conns.ConnectClients(config.HostList))
-	if !ok {
-		return errors.New(out) // no active connections
+	active, inactive, err := checkConns(conns.ConnectClients(config.HostList))
+	if err != nil {
+		return err
+	}
+	if len(active) == 0 {
+		return errors.New("no active connections")
 	}
 
-	log.Info(out)
+	log.Infof("Active: %s", strings.Join(active, ","))
+	log.Debugf("Inctive: %v", inactive)
 
 	return nil
 }

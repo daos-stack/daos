@@ -25,54 +25,76 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 
 	. "github.com/daos-stack/daos/src/control/client"
+	. "github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 )
 
-func TestHasConnection(t *testing.T) {
-	var shelltests = []struct {
-		results ResultMap
-		out     string
+func TestCheckConns(t *testing.T) {
+	for name, tc := range map[string]struct {
+		results  ResultMap
+		active   string
+		inactive string
+		expErr   error
 	}{
-		{
-			ResultMap{},
-			"Active connections: []\nNo active connections!",
+		"no connections": {
+			results: ResultMap{},
 		},
-		{
-			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, nil}},
-			"Active connections: [1.2.3.4:10000]\n",
+		"single successful connection": {
+			results: ResultMap{"abc:10000": ClientResult{"abc:10000", nil, nil}},
+			active:  "abc:10000",
 		},
-		{
-			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, MockErr}},
-			"failed to connect to 1.2.3.4:10000 (unknown failure)\nActive connections: []\nNo active connections!",
+		"single failed connection": {
+			results:  ResultMap{"abc4:10000": ClientResult{"abc4:10000", nil, MockErr}},
+			inactive: "map[unknown failure:[abc4:10000]]",
 		},
-		{
-			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, nil}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, nil}},
-			"Active connections: [1.2.3.4:10000 1.2.3.5:10001]\n",
+		"multiple successful connections": {
+			results: ResultMap{
+				"foo.bar:10000": ClientResult{"foo.bar:10000", nil, nil},
+				"foo.baz:10001": ClientResult{"foo.baz:10001", nil, nil},
+			},
+			active: "foo.bar:10000,foo.baz:10001",
 		},
-		{
-			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, MockErr}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, MockErr}},
-			"failed to connect to 1.2.3.4:10000 (unknown failure)\nfailed to connect to 1.2.3.5:10001 (unknown failure)\nActive connections: []\nNo active connections!",
+		"multiple failed connections": {
+			results:  ResultMap{"abc4:10000": ClientResult{"abc4:10000", nil, MockErr}, "abc5:10001": ClientResult{"abc5:10001", nil, MockErr}},
+			inactive: "map[unknown failure:[abc4:10000 abc5:10001]]",
 		},
-		{
-			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, MockErr}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, nil}},
-			"failed to connect to 1.2.3.4:10000 (unknown failure)\nActive connections: [1.2.3.5:10001]\n",
+		"multiple failed connections with hostlist compress": {
+			results:  ResultMap{"abc4:10000": ClientResult{"abc4:10000", nil, MockErr}, "abc5:10000": ClientResult{"abc5:10000", nil, MockErr}},
+			inactive: "map[unknown failure:[abc[4-5]:10000]]",
 		},
-		{
-			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, nil}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, MockErr}},
-			"failed to connect to 1.2.3.5:10001 (unknown failure)\nActive connections: [1.2.3.4:10000]\n",
+		"failed and successful connections": {
+			results:  ResultMap{"abc4:10000": ClientResult{"abc4:10000", nil, MockErr}, "abc5:10001": ClientResult{"abc5:10001", nil, nil}},
+			active:   "abc5:10001",
+			inactive: "map[unknown failure:[abc4:10000]]",
 		},
-	}
+		"multiple successful connections with hostlist compress": {
+			results: ResultMap{
+				"bar4:10001": ClientResult{"bar4:10001", nil, nil},
+				"bar5:10001": ClientResult{"bar5:10001", nil, nil},
+			},
+			active: "bar[4-5]:10001",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if tc.inactive == "" {
+				tc.inactive = "map[]"
+			}
 
-	for _, tt := range shelltests {
-		_, out := hasConns(tt.results)
-		if diff := cmp.Diff(out, tt.out); diff != "" {
-			t.Fatalf("unexpected output (-want, +got):\n%s\n", diff)
-		}
+			active, inactive, err := checkConns(tc.results)
+			if diff := cmp.Diff(tc.active, strings.Join(active, ",")); diff != "" {
+				t.Fatalf("unexpected active (-want, +got):\n%s\n", diff)
+			}
+			if diff := cmp.Diff(tc.inactive, fmt.Sprintf("%v", inactive)); diff != "" {
+				t.Fatalf("unexpected inactive (-want, +got):\n%s\n", diff)
+			}
+			CmpErr(t, tc.expErr, err)
+		})
 	}
 }
 
