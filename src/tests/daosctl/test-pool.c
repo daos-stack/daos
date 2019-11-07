@@ -179,6 +179,8 @@ cmd_connect_pool(int argc, const char **argv, void *ctx)
 
 	/* finish parsing the uuid */
 	rc = uuid_parse(cp_options.uuid, uuid);
+	if (rc < 0)
+		return rc;
 
 	/* turn the list of pool service nodes into a rank list */
 	rc = parse_rank_list(cp_options.server_list,
