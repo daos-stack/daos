@@ -31,7 +31,7 @@
 #include "srv_internal.h"
 
 static int
-ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid, crt_group_t *grp)
+ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid)
 {
 	crt_rpc_t			*td_req;
 	struct mgmt_tgt_destroy_in	*td_in;
@@ -49,7 +49,7 @@ ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid, crt_group_t *grp)
 	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 4);
 	opc = DAOS_RPC_OPCODE(MGMT_TGT_DESTROY, DAOS_MGMT_MODULE,
 			      DAOS_MGMT_VERSION);
-	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, grp,
+	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL,
 				  &excluded, opc, NULL, NULL, 0, topo,
 				  &td_req);
 	if (rc)
@@ -316,8 +316,6 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 	struct mgmt_tgt_create_out	*tc_out;
 	d_rank_t			*tc_out_ranks;
 	uuid_t				*tc_out_uuids;
-	crt_group_t			*grp = NULL;
-	char				id[64];
 	d_rank_list_t			*rank_list;
 	uuid_t				*tgt_uuids = NULL;
 	unsigned int			i;
@@ -336,22 +334,14 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 	}
 
 	/* Collective RPC to all of targets of the pool */
-	D_CASSERT(sizeof(id) >= DAOS_UUID_STR_SIZE);
-	uuid_unparse_lower(pool_uuid, id);
-	rc = snprintf(id + DAOS_UUID_STR_SIZE - 1,
-		      sizeof(id) - (DAOS_UUID_STR_SIZE - 1), "-tmp");
-	D_ASSERT(rc >= 0 && rc + DAOS_UUID_STR_SIZE <= sizeof(id));
-	rc = dss_group_create(id, rank_list, &grp);
-	if (rc != 0)
-		goto out_preparation;
-
 	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 4);
 	opc = DAOS_RPC_OPCODE(MGMT_TGT_CREATE, DAOS_MGMT_MODULE,
 			      DAOS_MGMT_VERSION);
-	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, grp, NULL,
-				  opc, NULL, NULL, 0, topo, &tc_req);
+	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL,
+				  rank_list, opc, NULL, NULL,
+				  CRT_RPC_FLAG_EXCLUSIVE, topo, &tc_req);
 	if (rc)
-		goto out_grp;
+		goto out_preparation;
 
 	tc_in = crt_req_get(tc_req);
 	D_ASSERT(tc_in != NULL);
@@ -362,7 +352,7 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 	rc = dss_rpc_send(tc_req);
 	if (rc != 0) {
 		crt_req_decref(tc_req);
-		goto out_grp;
+		goto out_preparation;
 	}
 
 	tc_out = crt_reply_get(tc_req);
@@ -435,9 +425,7 @@ out_uuids:
 	D_FREE(tgt_uuids);
 tgt_fail:
 	if (rc)
-		ds_mgmt_tgt_pool_destroy(pool_uuid, grp);
-out_grp:
-	dss_group_destroy(grp);
+		ds_mgmt_tgt_pool_destroy(pool_uuid);
 out_preparation:
 	if (rc != 0)
 		pool_rec_delete(svc, pool_uuid);
@@ -556,7 +544,7 @@ ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force)
 		goto out_svc;
 	}
 
-	rc = ds_mgmt_tgt_pool_destroy(pool_uuid, NULL);
+	rc = ds_mgmt_tgt_pool_destroy(pool_uuid);
 	if (rc != 0) {
 		D_ERROR("Destroying pool "DF_UUID" failed, rc: %d.\n",
 			DP_UUID(pool_uuid), rc);
