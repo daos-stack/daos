@@ -457,5 +457,3 @@ func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.PoolListReq) (*mg
 
 	return resp, nil
 }
-
-
