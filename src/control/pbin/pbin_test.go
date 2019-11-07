@@ -20,30 +20,44 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
-
-package ioserver
+package pbin_test
 
 import (
+	"fmt"
+	"os"
+	"testing"
+
 	"github.com/pkg/errors"
 )
 
-type (
-	cmdLogger struct {
-		logFn  func(string)
-		prefix string
-	}
+const (
+	childModeEnvVar = "GO_TESTING_CHILD_MODE"
+	childModeEcho   = "MODE_ECHO"
+	childModeReqRes = "MODE_REQ_RES"
+	testMsg         = "hello world"
 )
 
-func (cl *cmdLogger) Write(data []byte) (int, error) {
-	if cl.logFn == nil {
-		return 0, errors.New("no log function set in cmdLogger")
+func childErrExit(err error) {
+	if err == nil {
+		err = errors.New("unknown error")
 	}
+	fmt.Fprintf(os.Stderr, "CHILD ERROR: %s\n", err)
+	os.Exit(1)
+}
 
-	var msg string
-	if cl.prefix != "" {
-		msg = cl.prefix + " "
+func TestMain(m *testing.M) {
+	mode := os.Getenv(childModeEnvVar)
+	switch mode {
+	case "":
+		// default; run the test binary
+		os.Exit(m.Run())
+	case childModeEcho:
+		// for stdio_test
+		echo()
+	case childModeReqRes:
+		// for exec_test
+		reqRes()
+	default:
+		childErrExit(errors.Errorf("Unknown child mode: %q", mode))
 	}
-	msg += string(data)
-	cl.logFn(msg)
-	return len(data), nil
 }
