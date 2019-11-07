@@ -27,7 +27,7 @@ run_gen_io_conf:
     #  ranks: "8"
   tgts: !mux
     remove_all_targets:
-      targets: 
+      targets:
     #Disabled because of DAOS-3510
     #remove_single_target:
     #  targets: "8"
