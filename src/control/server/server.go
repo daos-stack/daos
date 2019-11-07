@@ -51,6 +51,11 @@ const maxIoServers = 2
 func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	log.Debugf("cfg: %#v", cfg)
 
+	err := cfg.Validate()
+	if err != nil {
+		return err
+	}
+
 	// Backup active config.
 	saveActiveConfig(log, cfg)
 
