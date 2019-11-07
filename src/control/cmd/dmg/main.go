@@ -26,7 +26,6 @@ package main
 import (
 	"os"
 	"path"
-	"strings"
 
 	flags "github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
@@ -84,13 +83,15 @@ type cliOptions struct {
 
 // appSetup loads config file, processes cli overrides and connects clients.
 func appSetup(log logging.Logger, opts *cliOptions, conns client.Connect) error {
+	cmdRunner := defaultCmdRunner(log)
+
 	config, err := client.GetConfig(log, opts.ConfigPath)
 	if err != nil {
 		return errors.WithMessage(err, "processing config file")
 	}
 
 	if opts.HostList != "" {
-		config.HostList = strings.Split(opts.HostList, ",")
+		config.HostList = cmdRunner.expandHosts(opts.HostList)
 	}
 
 	if opts.HostFile != "" {
@@ -107,7 +108,7 @@ func appSetup(log logging.Logger, opts *cliOptions, conns client.Connect) error 
 	}
 	conns.SetTransportConfig(config.TransportConfig)
 
-	ok, out := hasConns(conns.ConnectClients(config.HostList))
+	ok, out := cmdRunner.hasConns(conns.ConnectClients(config.HostList))
 	if !ok {
 		return errors.New(out) // no active connections
 	}

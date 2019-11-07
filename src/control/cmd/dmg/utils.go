@@ -25,13 +25,109 @@ package main
 
 import (
 	"fmt"
+	"os/exec"
 	"sort"
+	"strings"
 
 	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func hasConns(results client.ResultMap) (bool, string) {
-	out := sprintConns(results)
+const (
+	cmdNodesetExpand = "nodeset -e --separator=',' %s"
+	cmdNodesetFold   = "nodeset -f --separator=',' %s"
+	cmdClubak        = "clubak -b < %s" // normally supply filename
+)
+
+type runCmdFn func(string) (string, error)
+type lookPathFn func(string) (string, error)
+
+type runCmdError struct {
+	wrapped error
+	stdout  string
+}
+
+func (rce *runCmdError) Error() string {
+	if ee, ok := rce.wrapped.(*exec.ExitError); ok {
+		return fmt.Sprintf("%s: stdout: %s; stderr: %s", ee.ProcessState,
+			rce.stdout, ee.Stderr)
+	}
+
+	return fmt.Sprintf("%s: stdout: %s", rce.wrapped.Error(), rce.stdout)
+}
+
+func run(cmd string) (string, error) {
+	out, err := exec.Command("bash", "-c", cmd).Output()
+	if err != nil {
+		return "", &runCmdError{
+			wrapped: err,
+			stdout:  string(out),
+		}
+	}
+
+	return string(out), nil
+}
+
+type cmdRunner struct {
+	log      logging.Logger
+	runCmd   runCmdFn
+	lookPath lookPathFn
+}
+
+func defaultCmdRunner(log logging.Logger) *cmdRunner {
+	return &cmdRunner{log: log, runCmd: run, lookPath: exec.LookPath}
+}
+
+// checkNodeset verifies nodeset application is installed (part of clustershell).
+func (r *cmdRunner) checkNodeset() error {
+	_, err := r.lookPath("nodeset")
+	if err != nil {
+		return FaultMissingNodeset
+	}
+
+	return nil
+}
+
+// expandHosts takes string specifying host pattern and returns slice of host addresses.
+func (r *cmdRunner) expandHosts(hostPattern string) []string {
+	hosts := strings.Split(hostPattern, ",")
+
+	// check to see if we can use nodeset to expand hostlist pattern
+	if err := r.checkNodeset(); err != nil {
+		r.log.Debug(err.Error())
+		return hosts // fallback
+	}
+
+	out, err := run(fmt.Sprintf(cmdNodesetExpand, hostPattern))
+	if err != nil {
+		r.log.Debug(err.Error())
+		return hosts
+	}
+
+	return strings.Split(out, ",")
+}
+
+// foldHosts takes a slice of addresses and returns a folded pattern.
+func (r *cmdRunner) foldHosts(hosts []string) string {
+	hostsStr := strings.Join(hosts, ",")
+
+	// check to see if we can use nodeset to fold slice of addresses
+	if err := r.checkNodeset(); err != nil {
+		r.log.Debug(err.Error())
+		return hostsStr // fallback
+	}
+
+	out, err := r.runCmd(fmt.Sprintf(cmdNodesetFold, hostsStr))
+	if err != nil {
+		r.log.Debug(err.Error())
+		return hostsStr // fallback
+	}
+
+	return out
+}
+
+func (r *cmdRunner) hasConns(results client.ResultMap) (bool, string) {
+	out := r.sprintConns(results)
 	for _, res := range results {
 		if res.Err == nil {
 			return true, out
@@ -39,29 +135,39 @@ func hasConns(results client.ResultMap) (bool, string) {
 	}
 
 	// notify if there have been no successful connections
-	return false, fmt.Sprintf("%sNo active connections!", out)
+	return false, fmt.Sprintf("%sNo active connections!\n", out)
 }
 
-func sprintConns(results client.ResultMap) (out string) {
+func (r *cmdRunner) sprintConns(results client.ResultMap) (out string) {
+	var active []string
+	var inactive []string
+
 	// map keys always processed in order
-	var addrs []string
 	for addr := range results {
-		addrs = append(addrs, addr)
+		active = append(active, addr)
 	}
-	sort.Strings(addrs)
+	sort.Strings(active)
 
 	i := 0
-	for _, addr := range addrs {
+	for _, addr := range active {
 		if results[addr].Err != nil {
-			out = fmt.Sprintf(
-				"%sfailed to connect to %s (%s)\n",
-				out, addr, results[addr].Err)
+			r.log.Errorf("failed to connect to %s (%s)",
+				addr, results[addr].Err)
+			inactive = append(inactive, addr)
 			continue
 		}
-		addrs[i] = addr
+		active[i] = addr
 		i++
 	}
-	addrs = addrs[:i]
+	active = active[:i]
 
-	return fmt.Sprintf("%sActive connections: %v\n", out, addrs)
+	// attempt to fold lists of addresses
+	if len(inactive) > 0 {
+		out = fmt.Sprintf("Inactive: %s\n", r.foldHosts(inactive))
+	}
+	if len(active) > 0 {
+		out = fmt.Sprintf("%sActive: %s\n", out, r.foldHosts(active))
+	}
+
+	return out
 }

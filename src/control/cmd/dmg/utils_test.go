@@ -28,51 +28,93 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 
 	. "github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func TestHasConnection(t *testing.T) {
-	var shelltests = []struct {
-		results ResultMap
-		out     string
+	for name, tc := range map[string]struct {
+		results     ResultMap
+		runCmdOut   string
+		lookPathErr error
+		out         string
+		expCmds     []string
 	}{
-		{
-			ResultMap{},
-			"Active connections: []\nNo active connections!",
+		"no connections": {
+			results: ResultMap{},
+			out:     "No active connections!\n",
 		},
-		{
-			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, nil}},
-			"Active connections: [1.2.3.4:10000]\n",
+		"single successful connection": {
+			results: ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, nil}},
+			out:     "Active: 1.2.3.4:10000\n",
 		},
-		{
-			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, MockErr}},
-			"failed to connect to 1.2.3.4:10000 (unknown failure)\nActive connections: []\nNo active connections!",
+		"single failed connection": {
+			results: ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, MockErr}},
+			out:     "Inactive: 1.2.3.4:10000\nNo active connections!\n",
 		},
-		{
-			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, nil}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, nil}},
-			"Active connections: [1.2.3.4:10000 1.2.3.5:10001]\n",
+		"multiple successful connections": {
+			results: ResultMap{
+				"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, nil},
+				"1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, nil},
+			},
+			out: "Active: 1.2.3.4:10000,1.2.3.5:10001\n",
 		},
-		{
-			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, MockErr}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, MockErr}},
-			"failed to connect to 1.2.3.4:10000 (unknown failure)\nfailed to connect to 1.2.3.5:10001 (unknown failure)\nActive connections: []\nNo active connections!",
+		"multiple failed connections": {
+			results: ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, MockErr}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, MockErr}},
+			out:     "Inactive: 1.2.3.4:10000,1.2.3.5:10001\nNo active connections!\n",
 		},
-		{
-			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, MockErr}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, nil}},
-			"failed to connect to 1.2.3.4:10000 (unknown failure)\nActive connections: [1.2.3.5:10001]\n",
+		"failed and successful connections": {
+			results: ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, MockErr}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, nil}},
+			out:     "Inactive: 1.2.3.4:10000\nActive: 1.2.3.5:10001\n",
 		},
-		{
-			ResultMap{"1.2.3.4:10000": ClientResult{"1.2.3.4:10000", nil, nil}, "1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, MockErr}},
-			"failed to connect to 1.2.3.5:10001 (unknown failure)\nActive connections: [1.2.3.4:10000]\n",
+		"multiple successful connections with nodeset fold": {
+			runCmdOut: "1.2.3.[4,5]:10001",
+			results: ResultMap{
+				"1.2.3.4:10001": ClientResult{"1.2.3.4:10001", nil, nil},
+				"1.2.3.5:10001": ClientResult{"1.2.3.5:10001", nil, nil},
+			},
+			out:     "Active: 1.2.3.[4,5]:10001\n",
+			expCmds: []string{"nodeset -f --separator=',' 1.2.3.4:10001,1.2.3.5:10001"},
 		},
-	}
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
 
-	for _, tt := range shelltests {
-		_, out := hasConns(tt.results)
-		if diff := cmp.Diff(out, tt.out); diff != "" {
-			t.Fatalf("unexpected output (-want, +got):\n%s\n", diff)
-		}
+			commands := []string{}
+			if tc.expCmds == nil {
+				tc.expCmds = []string{}
+			}
+			// if nothing useful from runCmd, trigger fallback
+			if tc.runCmdOut == "" {
+				tc.lookPathErr = errors.New("no binary")
+			}
+
+			mockLookPath := func(string) (string, error) {
+				fmt.Printf("lp: %#v\n", tc.lookPathErr)
+				return "", tc.lookPathErr
+			}
+
+			mockRunFn := func(in string) (string, error) {
+				commands = append(commands, in)
+				fmt.Printf("mr: %#v\n", tc.runCmdOut)
+				return tc.runCmdOut, nil
+			}
+
+			runner := &cmdRunner{log: log, runCmd: mockRunFn, lookPath: mockLookPath}
+			_, out := runner.hasConns(tc.results)
+			if diff := cmp.Diff(tc.out, out); diff != "" {
+				t.Fatalf("unexpected output (-want, +got):\n%s\n", diff)
+			}
+
+			if diff := cmp.Diff(tc.expCmds, commands); diff != "" {
+				t.Fatalf("unexpected command (-want, +got):\n%s\n", diff)
+			}
+		})
 	}
 }
 
