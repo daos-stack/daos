@@ -29,6 +29,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -235,4 +236,28 @@ func Run(cmd string) error {
 	}
 
 	return err
+}
+
+// FindBinary attempts to locate the named binary by checking
+// $PATH first. If the binary is not found in $PATH, then
+// it looks in the directory containing the binary for
+// the running process.
+func FindBinary(binName string) (string, error) {
+	// Try the direct route first
+	binPath, err := exec.LookPath(binName)
+	if err == nil {
+		return binPath, nil
+	}
+
+	// If that fails, look to see if it's adjacent to
+	// this binary
+	selfPath, err := os.Readlink("/proc/self/exe")
+	if err != nil {
+		return "", errors.Wrap(err, "unable to determine path to self")
+	}
+	binPath = path.Join(path.Dir(selfPath), binName)
+	if _, err := os.Stat(binPath); err != nil {
+		return "", errors.Errorf("unable to locate %s", binName)
+	}
+	return binPath, nil
 }
