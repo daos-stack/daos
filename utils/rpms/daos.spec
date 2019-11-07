@@ -333,6 +333,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Wed Nov 06 2019 Michael MacDonald <mjmac.macdonald@intel.com> 0.6.0-12
+- Add daos_admin privileged helper for daos_server
+
 * Fri Oct 25 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-11
 - Handle differences in Leap 15 Python packaging
 
