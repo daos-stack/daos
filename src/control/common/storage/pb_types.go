@@ -30,6 +30,7 @@ import (
 
 	bytesize "github.com/inhies/go-bytesize"
 
+	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 )
 
@@ -141,23 +142,17 @@ func (ncs NvmeControllers) StringHealthStats() string {
 	return buf.String()
 }
 
-// Summary reports accumulated storage space and the number of devices.
+// Summary reports accumulated storage space and the number of controllers.
 func (ncs NvmeControllers) Summary() string {
 	tCap := bytesize.New(0)
-	numNss := 0
-
-	if len(ncs) == 0 {
-		return "none"
-	}
-
 	for _, c := range ncs {
-		numNss += len(c.Namespaces)
 		for _, n := range c.Namespaces {
 			tCap += bytesize.GB * bytesize.New(float64(n.Capacity))
 		}
 	}
 
-	return fmt.Sprintf("%s in %d namespaces on %d devices", tCap, numNss, len(ncs))
+	return fmt.Sprintf("%s total capacity over %d %s",
+		tCap, len(ncs), common.Pluralise("controller", len(ncs)))
 }
 
 // NvmeControllerResults is an alias for protobuf NvmeControllerResult messages
