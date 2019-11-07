@@ -1547,7 +1547,7 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 		if (strlen(path) < dfs->prefix_len)
 			return EINVAL;
 
-		if (strncmp (dfs->prefix, path, dfs->prefix_len) != 0)
+		if (strncmp(dfs->prefix, path, dfs->prefix_len) != 0)
 			return EINVAL;
 
 		path += dfs->prefix_len;
