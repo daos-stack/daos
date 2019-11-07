@@ -175,12 +175,12 @@ wq
 EOF
 mount \\\"$DAOS_BASE\\\"\"
 
-# copy daos_admin binary into \$PATH and fix perms
+# first, strip the execute bit from the in-tree binary,
+# then copy daos_admin binary into \$PATH and fix perms
+chmod -x $DAOS_BASE/install/bin/daos_admin && \
 sudo cp $DAOS_BASE/install/bin/daos_admin /usr/bin/daos_admin && \
 	sudo chown root /usr/bin/daos_admin && \
-	sudo chmod 4755 /usr/bin/daos_admin && \
-	mv $DAOS_BASE/install/bin/daos_admin \
-	   $DAOS_BASE/install/bin/orig.daos_admin
+	sudo chmod 4755 /usr/bin/daos_admin
 
 rm -rf \"${TEST_TAG_DIR:?}/\"
 mkdir -p \"$TEST_TAG_DIR/\"
