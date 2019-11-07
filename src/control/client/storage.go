@@ -26,6 +26,7 @@ package client
 import (
 	"fmt"
 	"io"
+	"sort"
 	"time"
 
 	"github.com/pkg/errors"
@@ -87,8 +88,8 @@ func (c *connList) setScanErr(cNvmeScan NvmeScanResults, cScmScan ScmScanResults
 	cScmScan[address] = &ScmScanResult{Err: err}
 }
 
-func (c *connList) getNvmeResult(resp *ctlpb.ScanNvmeResp, withHealth bool) *NvmeScanResult {
-	nvmeResult := &NvmeScanResult{Health: withHealth}
+func (c *connList) getNvmeResult(resp *ctlpb.ScanNvmeResp) *NvmeScanResult {
+	nvmeResult := &NvmeScanResult{}
 
 	nState := resp.GetState()
 	if nState.GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
@@ -126,35 +127,41 @@ func (c *connList) getScmResult(resp *ctlpb.ScanScmResp) *ScmScanResult {
 // remote server. Critical storage device health information is also returned
 // for all NVMe SSDs discovered. Data received over channel from requests
 // in parallel. If health param is true, stringer repr will include stats.
-func (c *connList) StorageScan(params *StorageScanReq) *StorageScanResp {
+func (c *connList) StorageScan(p *StorageScanReq) *StorageScanResp {
 	cResults := c.makeRequests(nil, storageScanRequest)
 	cNvmeScan := make(NvmeScanResults) // mapping of server address to NVMe SSDs
 	cScmScan := make(ScmScanResults)   // mapping of server address to SCM modules/namespaces
+	servers := make([]string, 0, len(cResults))
 
-	for _, res := range cResults {
+	for addr, res := range cResults {
 		if res.Err != nil { // likely to be comms err
-			c.setScanErr(cNvmeScan, cScmScan, res.Address, res.Err)
+			c.setScanErr(cNvmeScan, cScmScan, addr, res.Err)
 			continue
 		}
 
 		resp, ok := res.Value.(*ctlpb.StorageScanResp)
 		if !ok {
-			c.setScanErr(cNvmeScan, cScmScan, res.Address,
+			c.setScanErr(cNvmeScan, cScmScan, addr,
 				fmt.Errorf(msgBadType, &ctlpb.StorageScanResp{}, res.Value))
 			continue
 		}
 
 		if resp.GetNvme() == nil || resp.GetScm() == nil {
-			c.setScanErr(cNvmeScan, cScmScan, res.Address,
+			c.setScanErr(cNvmeScan, cScmScan, addr,
 				fmt.Errorf("malformed response, missing submessage %+v", resp))
 			continue
 		}
 
-		cNvmeScan[res.Address] = c.getNvmeResult(resp.Nvme, params.NvmeHealth)
-		cScmScan[res.Address] = c.getScmResult(resp.Scm)
+		cNvmeScan[addr] = c.getNvmeResult(resp.Nvme)
+		cScmScan[addr] = c.getScmResult(resp.Scm)
+		servers = append(servers, addr)
 	}
 
-	return &StorageScanResp{Nvme: cNvmeScan, Scm: cScmScan}
+	sort.Strings(servers)
+
+	return &StorageScanResp{
+		summary: p.Summary, Servers: servers, Nvme: cNvmeScan, Scm: cScmScan,
+	}
 }
 
 // StorageFormatRequest attempts to format nonvolatile storage devices on a

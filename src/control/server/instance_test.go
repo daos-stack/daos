@@ -196,8 +196,7 @@ func TestIOServerInstance_MountScmDevice(t *testing.T) {
 			}
 
 			runner := ioserver.NewRunner(log, tc.ioCfg)
-			ms := scm.NewMockSysProvider(tc.msCfg)
-			mp := scm.NewProvider(log, nil, ms)
+			mp := scm.NewMockProvider(log, nil, tc.msCfg)
 			instance := NewIOServerInstance(log, nil, mp, nil, runner)
 
 			gotErr := instance.MountScmDevice()
@@ -323,9 +322,7 @@ func TestIOServerInstance_NeedsScmFormat(t *testing.T) {
 			}
 
 			runner := ioserver.NewRunner(log, tc.ioCfg)
-			mb := scm.NewMockBackend(tc.mbCfg)
-			ms := scm.NewMockSysProvider(tc.msCfg)
-			mp := scm.NewProvider(log, mb, ms)
+			mp := scm.NewMockProvider(log, tc.mbCfg, tc.msCfg)
 			instance := NewIOServerInstance(log, nil, mp, nil, runner)
 
 			gotNeedsFormat, gotErr := instance.NeedsScmFormat()

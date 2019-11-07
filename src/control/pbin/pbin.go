@@ -20,30 +20,13 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+package pbin
 
-package ioserver
+const (
+	// DaosAdminName is the name of the daos_admin privileged helper.
+	DaosAdminName = "daos_admin"
 
-import (
-	"github.com/pkg/errors"
+	// DisableReqFwdEnvVar is the name of the environment variable which
+	// can be set to disable forwarding requests to the privileged binary.
+	DisableReqFwdEnvVar = "DAOS_DISABLE_REQ_FWD"
 )
-
-type (
-	cmdLogger struct {
-		logFn  func(string)
-		prefix string
-	}
-)
-
-func (cl *cmdLogger) Write(data []byte) (int, error) {
-	if cl.logFn == nil {
-		return 0, errors.New("no log function set in cmdLogger")
-	}
-
-	var msg string
-	if cl.prefix != "" {
-		msg = cl.prefix + " "
-	}
-	msg += string(data)
-	cl.logFn(msg)
-	return len(data), nil
-}
