@@ -143,6 +143,7 @@ def scons():
 
     agentbin = get_bin_path(gopath, "agent")
     dmgbin = get_bin_path(gopath, "dmg")
+    adminbin = get_bin_path(gopath, "daos_admin")
     drpcbin = get_bin_path(gopath, "drpc_test")
     AlwaysBuild([agentbin, dmgbin, adminbin, drpcbin])
 
