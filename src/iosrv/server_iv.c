@@ -281,12 +281,12 @@ refresh_iv_value(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		 d_sg_list_t *src, int ref_rc, void *priv)
 {
 	struct ds_iv_class	*class = entry->iv_class;
-	int			rc;
+	int			rc = 0;
 
 	if (class->iv_class_ops && class->iv_class_ops->ivc_ent_refresh)
 		rc = class->iv_class_ops->ivc_ent_refresh(entry, key, src,
 							  ref_rc, priv);
-	else
+	else if (src != NULL)
 		rc = daos_sgl_copy_data(&entry->iv_value, src);
 	return rc;
 }
@@ -441,18 +441,18 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 		entry = priv_entry->entry;
 	}
 
-	if (iv_value && iv_value->sg_iovs != NULL) {
-		if (refresh)
-			rc = refresh_iv_value(entry, &key, iv_value, ref_rc,
+	if (refresh) {
+		rc = refresh_iv_value(entry, &key, iv_value, ref_rc,
 				      priv_entry ? priv_entry->priv : NULL);
-		else
-			rc = update_iv_value(entry, &key, iv_value,
-				      priv_entry ? priv_entry->priv : NULL);
-		if (rc != -DER_IVCB_FORWARD && rc != 0) {
-			D_ERROR("key id %d update failed: rc = %d\n",
-				key.class_id, rc);
-			return rc;
-		}
+	} else {
+		D_ASSERT(iv_value != NULL);
+		rc = update_iv_value(entry, &key, iv_value,
+				     priv_entry ? priv_entry->priv : NULL);
+	}
+	if (rc != -DER_IVCB_FORWARD && rc != 0) {
+		D_ERROR("key id %d update failed: rc = %d\n",
+			key.class_id, rc);
+		return rc;
 	}
 
 	if (invalidate)
