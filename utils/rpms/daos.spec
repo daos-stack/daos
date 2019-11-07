@@ -82,7 +82,7 @@ Requires: libpmem1, libpmemobj1
 %endif
 Requires: fuse >= 3.4.2
 Requires: protobuf-c
-Requires: spdk
+Requires: spdk <= 18.07
 Requires: fio < 3.4
 Requires: openssl
 # ensure we get exactly the right cart RPM
