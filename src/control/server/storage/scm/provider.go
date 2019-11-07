@@ -23,7 +23,6 @@
 package scm
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -159,23 +158,6 @@ type (
 		sys     SystemProvider
 	}
 )
-
-func (sr *ScanResponse) String() string {
-	var buf bytes.Buffer
-
-	// Zero uninitialised value is Unknown (0)
-	if sr.State != storage.ScmStateUnknown {
-		fmt.Fprintf(&buf, "SCM State: %s\n", sr.State.String())
-	}
-
-	if len(sr.Namespaces) > 0 {
-		fmt.Fprintf(&buf, "SCM Namespaces: %s\n", &sr.Namespaces)
-	} else {
-		fmt.Fprintf(&buf, "SCM Modules:\n%s\n", &sr.Modules)
-	}
-
-	return buf.String()
-}
 
 func CreateFormatRequest(scmCfg storage.ScmConfig, reformat bool) (*FormatRequest, error) {
 	req := FormatRequest{
