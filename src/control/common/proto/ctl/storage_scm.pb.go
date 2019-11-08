@@ -3,9 +3,11 @@
 
 package ctl
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
+import (
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
+	math "math"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -16,16 +18,16 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
 // ScmModule represent Storage Class Memory modules installed.
 type ScmModule struct {
-	// string uid = 1; // The uid of the module.
+	//string uid = 1; // The uid of the module.
 	Physicalid uint32 `protobuf:"varint,1,opt,name=physicalid,proto3" json:"physicalid,omitempty"`
-	// string handle = 3; // The device handle of the module.
-	// string serial = 8; // The serial number of the module.
+	//string handle = 3; // The device handle of the module.
+	//string serial = 8; // The serial number of the module.
 	Capacity uint64 `protobuf:"varint,2,opt,name=capacity,proto3" json:"capacity,omitempty"`
-	// string fwrev = 10; // The firmware revision of the module.
+	//string fwrev = 10; // The firmware revision of the module.
 	Loc                  *ScmModule_Location `protobuf:"bytes,3,opt,name=loc,proto3" json:"loc,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}            `json:"-"`
 	XXX_unrecognized     []byte              `json:"-"`
@@ -36,16 +38,17 @@ func (m *ScmModule) Reset()         { *m = ScmModule{} }
 func (m *ScmModule) String() string { return proto.CompactTextString(m) }
 func (*ScmModule) ProtoMessage()    {}
 func (*ScmModule) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_scm_e2367fd7225763bb, []int{0}
+	return fileDescriptor_fa79a1cba4dc284c, []int{0}
 }
+
 func (m *ScmModule) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ScmModule.Unmarshal(m, b)
 }
 func (m *ScmModule) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ScmModule.Marshal(b, m, deterministic)
 }
-func (dst *ScmModule) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ScmModule.Merge(dst, src)
+func (m *ScmModule) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ScmModule.Merge(m, src)
 }
 func (m *ScmModule) XXX_Size() int {
 	return xxx_messageInfo_ScmModule.Size(m)
@@ -91,16 +94,17 @@ func (m *ScmModule_Location) Reset()         { *m = ScmModule_Location{} }
 func (m *ScmModule_Location) String() string { return proto.CompactTextString(m) }
 func (*ScmModule_Location) ProtoMessage()    {}
 func (*ScmModule_Location) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_scm_e2367fd7225763bb, []int{0, 0}
+	return fileDescriptor_fa79a1cba4dc284c, []int{0, 0}
 }
+
 func (m *ScmModule_Location) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ScmModule_Location.Unmarshal(m, b)
 }
 func (m *ScmModule_Location) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ScmModule_Location.Marshal(b, m, deterministic)
 }
-func (dst *ScmModule_Location) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ScmModule_Location.Merge(dst, src)
+func (m *ScmModule_Location) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ScmModule_Location.Merge(m, src)
 }
 func (m *ScmModule_Location) XXX_Size() int {
 	return xxx_messageInfo_ScmModule_Location.Size(m)
@@ -154,16 +158,17 @@ func (m *PmemDevice) Reset()         { *m = PmemDevice{} }
 func (m *PmemDevice) String() string { return proto.CompactTextString(m) }
 func (*PmemDevice) ProtoMessage()    {}
 func (*PmemDevice) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_scm_e2367fd7225763bb, []int{1}
+	return fileDescriptor_fa79a1cba4dc284c, []int{1}
 }
+
 func (m *PmemDevice) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PmemDevice.Unmarshal(m, b)
 }
 func (m *PmemDevice) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_PmemDevice.Marshal(b, m, deterministic)
 }
-func (dst *PmemDevice) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_PmemDevice.Merge(dst, src)
+func (m *PmemDevice) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PmemDevice.Merge(m, src)
 }
 func (m *PmemDevice) XXX_Size() int {
 	return xxx_messageInfo_PmemDevice.Size(m)
@@ -216,16 +221,17 @@ func (m *ScmMount) Reset()         { *m = ScmMount{} }
 func (m *ScmMount) String() string { return proto.CompactTextString(m) }
 func (*ScmMount) ProtoMessage()    {}
 func (*ScmMount) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_scm_e2367fd7225763bb, []int{2}
+	return fileDescriptor_fa79a1cba4dc284c, []int{2}
 }
+
 func (m *ScmMount) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ScmMount.Unmarshal(m, b)
 }
 func (m *ScmMount) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ScmMount.Marshal(b, m, deterministic)
 }
-func (dst *ScmMount) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ScmMount.Merge(dst, src)
+func (m *ScmMount) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ScmMount.Merge(m, src)
 }
 func (m *ScmMount) XXX_Size() int {
 	return xxx_messageInfo_ScmMount.Size(m)
@@ -272,16 +278,17 @@ func (m *ScmModuleResult) Reset()         { *m = ScmModuleResult{} }
 func (m *ScmModuleResult) String() string { return proto.CompactTextString(m) }
 func (*ScmModuleResult) ProtoMessage()    {}
 func (*ScmModuleResult) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_scm_e2367fd7225763bb, []int{3}
+	return fileDescriptor_fa79a1cba4dc284c, []int{3}
 }
+
 func (m *ScmModuleResult) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ScmModuleResult.Unmarshal(m, b)
 }
 func (m *ScmModuleResult) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ScmModuleResult.Marshal(b, m, deterministic)
 }
-func (dst *ScmModuleResult) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ScmModuleResult.Merge(dst, src)
+func (m *ScmModuleResult) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ScmModuleResult.Merge(m, src)
 }
 func (m *ScmModuleResult) XXX_Size() int {
 	return xxx_messageInfo_ScmModuleResult.Size(m)
@@ -319,16 +326,17 @@ func (m *ScmMountResult) Reset()         { *m = ScmMountResult{} }
 func (m *ScmMountResult) String() string { return proto.CompactTextString(m) }
 func (*ScmMountResult) ProtoMessage()    {}
 func (*ScmMountResult) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_scm_e2367fd7225763bb, []int{4}
+	return fileDescriptor_fa79a1cba4dc284c, []int{4}
 }
+
 func (m *ScmMountResult) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ScmMountResult.Unmarshal(m, b)
 }
 func (m *ScmMountResult) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ScmMountResult.Marshal(b, m, deterministic)
 }
-func (dst *ScmMountResult) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ScmMountResult.Merge(dst, src)
+func (m *ScmMountResult) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ScmMountResult.Merge(m, src)
 }
 func (m *ScmMountResult) XXX_Size() int {
 	return xxx_messageInfo_ScmMountResult.Size(m)
@@ -364,16 +372,17 @@ func (m *PrepareScmReq) Reset()         { *m = PrepareScmReq{} }
 func (m *PrepareScmReq) String() string { return proto.CompactTextString(m) }
 func (*PrepareScmReq) ProtoMessage()    {}
 func (*PrepareScmReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_scm_e2367fd7225763bb, []int{5}
+	return fileDescriptor_fa79a1cba4dc284c, []int{5}
 }
+
 func (m *PrepareScmReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PrepareScmReq.Unmarshal(m, b)
 }
 func (m *PrepareScmReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_PrepareScmReq.Marshal(b, m, deterministic)
 }
-func (dst *PrepareScmReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_PrepareScmReq.Merge(dst, src)
+func (m *PrepareScmReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PrepareScmReq.Merge(m, src)
 }
 func (m *PrepareScmReq) XXX_Size() int {
 	return xxx_messageInfo_PrepareScmReq.Size(m)
@@ -403,16 +412,17 @@ func (m *PrepareScmResp) Reset()         { *m = PrepareScmResp{} }
 func (m *PrepareScmResp) String() string { return proto.CompactTextString(m) }
 func (*PrepareScmResp) ProtoMessage()    {}
 func (*PrepareScmResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_scm_e2367fd7225763bb, []int{6}
+	return fileDescriptor_fa79a1cba4dc284c, []int{6}
 }
+
 func (m *PrepareScmResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_PrepareScmResp.Unmarshal(m, b)
 }
 func (m *PrepareScmResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_PrepareScmResp.Marshal(b, m, deterministic)
 }
-func (dst *PrepareScmResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_PrepareScmResp.Merge(dst, src)
+func (m *PrepareScmResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PrepareScmResp.Merge(m, src)
 }
 func (m *PrepareScmResp) XXX_Size() int {
 	return xxx_messageInfo_PrepareScmResp.Size(m)
@@ -447,16 +457,17 @@ func (m *ScanScmReq) Reset()         { *m = ScanScmReq{} }
 func (m *ScanScmReq) String() string { return proto.CompactTextString(m) }
 func (*ScanScmReq) ProtoMessage()    {}
 func (*ScanScmReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_scm_e2367fd7225763bb, []int{7}
+	return fileDescriptor_fa79a1cba4dc284c, []int{7}
 }
+
 func (m *ScanScmReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ScanScmReq.Unmarshal(m, b)
 }
 func (m *ScanScmReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ScanScmReq.Marshal(b, m, deterministic)
 }
-func (dst *ScanScmReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ScanScmReq.Merge(dst, src)
+func (m *ScanScmReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ScanScmReq.Merge(m, src)
 }
 func (m *ScanScmReq) XXX_Size() int {
 	return xxx_messageInfo_ScanScmReq.Size(m)
@@ -480,16 +491,17 @@ func (m *ScanScmResp) Reset()         { *m = ScanScmResp{} }
 func (m *ScanScmResp) String() string { return proto.CompactTextString(m) }
 func (*ScanScmResp) ProtoMessage()    {}
 func (*ScanScmResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_scm_e2367fd7225763bb, []int{8}
+	return fileDescriptor_fa79a1cba4dc284c, []int{8}
 }
+
 func (m *ScanScmResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ScanScmResp.Unmarshal(m, b)
 }
 func (m *ScanScmResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_ScanScmResp.Marshal(b, m, deterministic)
 }
-func (dst *ScanScmResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ScanScmResp.Merge(dst, src)
+func (m *ScanScmResp) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ScanScmResp.Merge(m, src)
 }
 func (m *ScanScmResp) XXX_Size() int {
 	return xxx_messageInfo_ScanScmResp.Size(m)
@@ -531,16 +543,17 @@ func (m *FormatScmReq) Reset()         { *m = FormatScmReq{} }
 func (m *FormatScmReq) String() string { return proto.CompactTextString(m) }
 func (*FormatScmReq) ProtoMessage()    {}
 func (*FormatScmReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_scm_e2367fd7225763bb, []int{9}
+	return fileDescriptor_fa79a1cba4dc284c, []int{9}
 }
+
 func (m *FormatScmReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_FormatScmReq.Unmarshal(m, b)
 }
 func (m *FormatScmReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_FormatScmReq.Marshal(b, m, deterministic)
 }
-func (dst *FormatScmReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_FormatScmReq.Merge(dst, src)
+func (m *FormatScmReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_FormatScmReq.Merge(m, src)
 }
 func (m *FormatScmReq) XXX_Size() int {
 	return xxx_messageInfo_FormatScmReq.Size(m)
@@ -561,16 +574,17 @@ func (m *UpdateScmReq) Reset()         { *m = UpdateScmReq{} }
 func (m *UpdateScmReq) String() string { return proto.CompactTextString(m) }
 func (*UpdateScmReq) ProtoMessage()    {}
 func (*UpdateScmReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_scm_e2367fd7225763bb, []int{10}
+	return fileDescriptor_fa79a1cba4dc284c, []int{10}
 }
+
 func (m *UpdateScmReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_UpdateScmReq.Unmarshal(m, b)
 }
 func (m *UpdateScmReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_UpdateScmReq.Marshal(b, m, deterministic)
 }
-func (dst *UpdateScmReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_UpdateScmReq.Merge(dst, src)
+func (m *UpdateScmReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_UpdateScmReq.Merge(m, src)
 }
 func (m *UpdateScmReq) XXX_Size() int {
 	return xxx_messageInfo_UpdateScmReq.Size(m)
@@ -591,16 +605,17 @@ func (m *BurninScmReq) Reset()         { *m = BurninScmReq{} }
 func (m *BurninScmReq) String() string { return proto.CompactTextString(m) }
 func (*BurninScmReq) ProtoMessage()    {}
 func (*BurninScmReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_storage_scm_e2367fd7225763bb, []int{11}
+	return fileDescriptor_fa79a1cba4dc284c, []int{11}
 }
+
 func (m *BurninScmReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_BurninScmReq.Unmarshal(m, b)
 }
 func (m *BurninScmReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_BurninScmReq.Marshal(b, m, deterministic)
 }
-func (dst *BurninScmReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_BurninScmReq.Merge(dst, src)
+func (m *BurninScmReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_BurninScmReq.Merge(m, src)
 }
 func (m *BurninScmReq) XXX_Size() int {
 	return xxx_messageInfo_BurninScmReq.Size(m)
@@ -627,9 +642,9 @@ func init() {
 	proto.RegisterType((*BurninScmReq)(nil), "ctl.BurninScmReq")
 }
 
-func init() { proto.RegisterFile("storage_scm.proto", fileDescriptor_storage_scm_e2367fd7225763bb) }
+func init() { proto.RegisterFile("storage_scm.proto", fileDescriptor_fa79a1cba4dc284c) }
 
-var fileDescriptor_storage_scm_e2367fd7225763bb = []byte{
+var fileDescriptor_fa79a1cba4dc284c = []byte{
 	// 467 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x53, 0xcd, 0x6e, 0xd3, 0x40,
 	0x10, 0x96, 0xeb, 0xa4, 0x4d, 0x26, 0x89, 0x0b, 0x2b, 0x04, 0x56, 0x0e, 0x28, 0x32, 0xaa, 0x64,

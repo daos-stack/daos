@@ -146,5 +146,5 @@ int ds_mgmt_list_pools(const char *group, uint64_t *npools,
 }
 
 void
-free_mgmt_list_pools(struct mgmt_list_pools_one **poolsp, uint64_t len) {
+ds_mgmt_free_pool_list(struct mgmt_list_pools_one **poolsp, uint64_t len) {
 }

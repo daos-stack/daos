@@ -21,7 +21,7 @@ typedef struct _Mgmt__PoolDestroyReq Mgmt__PoolDestroyReq;
 typedef struct _Mgmt__PoolDestroyResp Mgmt__PoolDestroyResp;
 typedef struct _Mgmt__PoolListReq Mgmt__PoolListReq;
 typedef struct _Mgmt__PoolListResp Mgmt__PoolListResp;
-typedef struct _Mgmt__PoolListResp__OnePool Mgmt__PoolListResp__OnePool;
+typedef struct _Mgmt__PoolListResp__Pool Mgmt__PoolListResp__Pool;
 
 
 /* --- enums --- */
@@ -135,35 +135,53 @@ struct  _Mgmt__PoolDestroyResp
 struct  _Mgmt__PoolListReq
 {
   ProtobufCMessage base;
-  char *lp_grp;
-  uint64_t lp_npools;
+  /*
+   * DAOS system identifier
+   */
+  char *sys;
+  /*
+   * Client response buffer capacity in number of pools
+   */
+  uint64_t numpools;
 };
 #define MGMT__POOL_LIST_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_list_req__descriptor) \
     , (char *)protobuf_c_empty_string, 0 }
 
 
-struct  _Mgmt__PoolListResp__OnePool
+struct  _Mgmt__PoolListResp__Pool
 {
   ProtobufCMessage base;
-  char *lp_puuid;
   /*
-   * service replicas, comma-separated integers.
+   * uuid of pool
+   */
+  char *uuid;
+  /*
+   * pool service replicas, comma-separated integers
    */
   char *svcreps;
 };
-#define MGMT__POOL_LIST_RESP__ONE_POOL__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_list_resp__one_pool__descriptor) \
+#define MGMT__POOL_LIST_RESP__POOL__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_list_resp__pool__descriptor) \
     , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
 struct  _Mgmt__PoolListResp
 {
   ProtobufCMessage base;
+  /*
+   * DAOS error code
+   */
   int32_t status;
-  size_t n_lp_pools;
-  Mgmt__PoolListResp__OnePool **lp_pools;
-  uint64_t lp_npools;
+  /*
+   * pools list (max length PoolListReq.numPools)
+   */
+  size_t n_pools;
+  Mgmt__PoolListResp__Pool **pools;
+  /*
+   * number of pools in system
+   */
+  uint64_t numpools;
 };
 #define MGMT__POOL_LIST_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_list_resp__descriptor) \
@@ -265,9 +283,9 @@ Mgmt__PoolListReq *
 void   mgmt__pool_list_req__free_unpacked
                      (Mgmt__PoolListReq *message,
                       ProtobufCAllocator *allocator);
-/* Mgmt__PoolListResp__OnePool methods */
-void   mgmt__pool_list_resp__one_pool__init
-                     (Mgmt__PoolListResp__OnePool         *message);
+/* Mgmt__PoolListResp__Pool methods */
+void   mgmt__pool_list_resp__pool__init
+                     (Mgmt__PoolListResp__Pool         *message);
 /* Mgmt__PoolListResp methods */
 void   mgmt__pool_list_resp__init
                      (Mgmt__PoolListResp         *message);
@@ -304,8 +322,8 @@ typedef void (*Mgmt__PoolDestroyResp_Closure)
 typedef void (*Mgmt__PoolListReq_Closure)
                  (const Mgmt__PoolListReq *message,
                   void *closure_data);
-typedef void (*Mgmt__PoolListResp__OnePool_Closure)
-                 (const Mgmt__PoolListResp__OnePool *message,
+typedef void (*Mgmt__PoolListResp__Pool_Closure)
+                 (const Mgmt__PoolListResp__Pool *message,
                   void *closure_data);
 typedef void (*Mgmt__PoolListResp_Closure)
                  (const Mgmt__PoolListResp *message,
@@ -322,7 +340,7 @@ extern const ProtobufCMessageDescriptor mgmt__pool_destroy_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_destroy_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_list_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_list_resp__descriptor;
-extern const ProtobufCMessageDescriptor mgmt__pool_list_resp__one_pool__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_list_resp__pool__descriptor;
 
 PROTOBUF_C__END_DECLS
 

@@ -102,7 +102,7 @@ int ds_mgmt_pool_get_acl(uuid_t pool_uuid, struct daos_acl **acl);
  * Note: ds_mgmt_list_pools poolsp arg is a CaRT structure type
  */
 void
-free_mgmt_list_pools(struct mgmt_list_pools_one **poolsp, uint64_t len);
+ds_mgmt_free_pool_list(struct mgmt_list_pools_one **poolsp, uint64_t len);
 int ds_mgmt_list_pools(const char *group, uint64_t *npools,
 		       struct mgmt_list_pools_one **poolsp, size_t *pools_len);
 

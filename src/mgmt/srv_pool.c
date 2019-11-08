@@ -604,7 +604,7 @@ ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 }
 
 void
-free_mgmt_list_pools(struct mgmt_list_pools_one **poolsp, uint64_t len)
+ds_mgmt_free_pool_list(struct mgmt_list_pools_one **poolsp, uint64_t len)
 {
 	struct mgmt_list_pools_one	*pools;
 
@@ -706,7 +706,7 @@ out_svc:
 	ds_mgmt_svc_put_leader(svc);
 out:
 	if (rc != 0)
-		free_mgmt_list_pools(&iter_args.pools, iter_args.pools_index);
+		ds_mgmt_free_pool_list(&iter_args.pools, iter_args.pools_index);
 	else {
 		*npools = iter_args.npools;
 		*poolsp = iter_args.pools;
@@ -747,7 +747,7 @@ ds_mgmt_hdlr_list_pools(crt_rpc_t *rpc_req)
 	if (rc != 0)
 		D_ERROR("crt_reply_send failed, rc: %d\n", rc);
 
-	free_mgmt_list_pools(&pools, pools_len);
+	ds_mgmt_free_pool_list(&pools, pools_len);
 }
 
 /* Caller is responsible for freeing ranks */

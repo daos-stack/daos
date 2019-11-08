@@ -3,9 +3,11 @@
 
 package ctl
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
+import (
+	fmt "fmt"
+	proto "github.com/golang/protobuf/proto"
+	math "math"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -16,7 +18,7 @@ var _ = math.Inf
 // is compatible with the proto package it is being compiled against.
 // A compilation error at this line likely means your copy of the
 // proto package needs to be updated.
-const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
+const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
 type FeatureName struct {
 	Name                 string   `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
@@ -29,16 +31,17 @@ func (m *FeatureName) Reset()         { *m = FeatureName{} }
 func (m *FeatureName) String() string { return proto.CompactTextString(m) }
 func (*FeatureName) ProtoMessage()    {}
 func (*FeatureName) Descriptor() ([]byte, []int) {
-	return fileDescriptor_features_11bd2ab5fcdfda18, []int{0}
+	return fileDescriptor_2216f05915163cdf, []int{0}
 }
+
 func (m *FeatureName) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_FeatureName.Unmarshal(m, b)
 }
 func (m *FeatureName) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_FeatureName.Marshal(b, m, deterministic)
 }
-func (dst *FeatureName) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_FeatureName.Merge(dst, src)
+func (m *FeatureName) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_FeatureName.Merge(m, src)
 }
 func (m *FeatureName) XXX_Size() int {
 	return xxx_messageInfo_FeatureName.Size(m)
@@ -67,16 +70,17 @@ func (m *Category) Reset()         { *m = Category{} }
 func (m *Category) String() string { return proto.CompactTextString(m) }
 func (*Category) ProtoMessage()    {}
 func (*Category) Descriptor() ([]byte, []int) {
-	return fileDescriptor_features_11bd2ab5fcdfda18, []int{1}
+	return fileDescriptor_2216f05915163cdf, []int{1}
 }
+
 func (m *Category) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Category.Unmarshal(m, b)
 }
 func (m *Category) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Category.Marshal(b, m, deterministic)
 }
-func (dst *Category) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Category.Merge(dst, src)
+func (m *Category) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Category.Merge(m, src)
 }
 func (m *Category) XXX_Size() int {
 	return xxx_messageInfo_Category.Size(m)
@@ -108,16 +112,17 @@ func (m *Feature) Reset()         { *m = Feature{} }
 func (m *Feature) String() string { return proto.CompactTextString(m) }
 func (*Feature) ProtoMessage()    {}
 func (*Feature) Descriptor() ([]byte, []int) {
-	return fileDescriptor_features_11bd2ab5fcdfda18, []int{2}
+	return fileDescriptor_2216f05915163cdf, []int{2}
 }
+
 func (m *Feature) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Feature.Unmarshal(m, b)
 }
 func (m *Feature) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	return xxx_messageInfo_Feature.Marshal(b, m, deterministic)
 }
-func (dst *Feature) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Feature.Merge(dst, src)
+func (m *Feature) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Feature.Merge(m, src)
 }
 func (m *Feature) XXX_Size() int {
 	return xxx_messageInfo_Feature.Size(m)
@@ -155,9 +160,9 @@ func init() {
 	proto.RegisterType((*Feature)(nil), "ctl.Feature")
 }
 
-func init() { proto.RegisterFile("features.proto", fileDescriptor_features_11bd2ab5fcdfda18) }
+func init() { proto.RegisterFile("features.proto", fileDescriptor_2216f05915163cdf) }
 
-var fileDescriptor_features_11bd2ab5fcdfda18 = []byte{
+var fileDescriptor_2216f05915163cdf = []byte{
 	// 162 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x4b, 0x4b, 0x4d, 0x2c,
 	0x29, 0x2d, 0x4a, 0x2d, 0xd6, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x4e, 0x2e, 0xc9, 0x51,

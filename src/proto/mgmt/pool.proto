@@ -60,16 +60,16 @@ message PoolDestroyResp {
 
 
 message PoolListReq {
-	string lp_grp = 1;
-	uint64 lp_npools = 2;
+	string sys = 1; // DAOS system identifier
+	uint64 numPools = 2; // Client response buffer capacity in number of pools
 }
 
 message PoolListResp {
-	message OnePool {
-		string lp_puuid = 1;
-		string svcreps = 2; // service replicas, comma-separated integers.
+	message Pool {
+		string uuid = 1; // uuid of pool
+		string svcreps = 2; // pool service replicas, comma-separated integers
 }
-	int32 status = 1;
-	repeated OnePool lp_pools = 2;
-	uint64 lp_npools = 3;
+	int32 status = 1; // DAOS error code
+	repeated Pool pools = 2; // pools list (max length PoolListReq.numPools)
+	uint64 numPools = 3; // number of pools in system
 }
