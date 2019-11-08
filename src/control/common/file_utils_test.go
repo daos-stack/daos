@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package ioserver
+package common
 
 import (
 	"fmt"
@@ -53,7 +53,7 @@ func TestFindBinaryInPath(t *testing.T) {
 	}
 
 	t.Run("expected success", func(t *testing.T) {
-		binPath, err := findBinary(testName)
+		binPath, err := FindBinary(testName)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -62,7 +62,7 @@ func TestFindBinaryInPath(t *testing.T) {
 		}
 	})
 	t.Run("expected failure", func(t *testing.T) {
-		_, err := findBinary("noWayThisExistsQuackMoo")
+		_, err := FindBinary("noWayThisExistsQuackMoo")
 		if err == nil {
 			t.Fatal("expected lookup to fail")
 		}
@@ -77,7 +77,7 @@ func TestFindBinaryAdjacent(t *testing.T) {
 	}
 	testFile.Close()
 
-	binPath, err := findBinary(t.Name())
+	binPath, err := FindBinary(t.Name())
 	if err != nil {
 		t.Fatal(err)
 	}

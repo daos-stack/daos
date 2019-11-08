@@ -24,6 +24,7 @@
 package main
 
 import (
+	"net"
 	"os/user"
 	"strconv"
 
@@ -97,17 +98,22 @@ func NewSecurityModule(log logging.Logger, tc *security.TransportConfig) *Securi
 		log:    log,
 		config: tc,
 	}
-	mod.InitModule(nil)
+	mod.ext = &external{}
 	return &mod
 }
 
 // HandleCall is the handler for calls to the SecurityModule
-func (m *SecurityModule) HandleCall(client *drpc.Client, method int32, body []byte) ([]byte, error) {
+func (m *SecurityModule) HandleCall(session *drpc.Session, method int32, body []byte) ([]byte, error) {
 	if method != drpc.MethodRequestCredentials {
 		return nil, errors.Errorf("Attempt to call unregistered function")
 	}
 
-	info, err := security.DomainInfoFromUnixConn(m.log, client.Conn)
+	uConn, ok := session.Conn.(*net.UnixConn)
+	if !ok {
+		return nil, errors.New("connection is not a unix socket")
+	}
+
+	info, err := security.DomainInfoFromUnixConn(m.log, uConn)
 	if err != nil {
 		return nil, errors.WithMessage(err, "Unable to get credentials for client socket")
 	}
@@ -127,11 +133,6 @@ func (m *SecurityModule) HandleCall(client *drpc.Client, method int32, body []by
 		return nil, errors.Wrap(err, "Failed to marshal response")
 	}
 	return responseBytes, nil
-}
-
-// InitModule initializes internal variables for the module
-func (m *SecurityModule) InitModule(state drpc.ModuleState) {
-	m.ext = &external{}
 }
 
 //ID will return Security module ID

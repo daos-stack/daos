@@ -130,6 +130,9 @@ struct dfs {
 	dfs_obj_t		root;
 	/** DFS container attributes (Default chunk size, oclass, etc.) */
 	dfs_attr_t		attr;
+	/** Optional Prefix to account for when resolving an absolute path */
+	char			*prefix;
+	daos_size_t		prefix_len;
 };
 
 struct dfs_entry {
@@ -1262,8 +1265,37 @@ dfs_umount(dfs_t *dfs)
 	daos_obj_close(dfs->root.oh, NULL);
 	daos_obj_close(dfs->super_oh, NULL);
 
+	if (dfs->prefix)
+		D_FREE(dfs->prefix);
+
 	D_MUTEX_DESTROY(&dfs->lock);
 	D_FREE(dfs);
+
+	return 0;
+}
+
+int
+dfs_set_prefix(dfs_t *dfs, const char *prefix)
+{
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+
+	if (prefix == NULL) {
+		if (dfs->prefix)
+			D_FREE(dfs->prefix);
+		return 0;
+	}
+
+	if (prefix[0] != '/' || strnlen(prefix, PATH_MAX) > PATH_MAX-1)
+		return EINVAL;
+
+	dfs->prefix = strndup(prefix, PATH_MAX-1);
+	if (dfs->prefix == NULL)
+		return ENOMEM;
+
+	dfs->prefix_len = strlen(dfs->prefix);
+	if (dfs->prefix[dfs->prefix_len-1] == '/')
+		dfs->prefix_len--;
 
 	return 0;
 }
@@ -1507,6 +1539,16 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 		return EINVAL;
 	if (path == NULL || strnlen(path, PATH_MAX-1) > PATH_MAX-1)
 		return EINVAL;
+	if (path[0] != '/')
+		return EINVAL;
+
+	/** if we added a prefix, check and skip over it */
+	if (dfs->prefix) {
+		if (strncmp(dfs->prefix, path, dfs->prefix_len) != 0)
+			return EINVAL;
+
+		path += dfs->prefix_len;
+	}
 
 	daos_mode = get_daos_obj_mode(flags);
 	if (daos_mode == -1)
