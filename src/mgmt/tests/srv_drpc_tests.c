@@ -220,10 +220,6 @@ test_drpc_pool_get_acl_success(void **state)
 	}
 }
 
-#define GET_ACL_TEST(x)	cmocka_unit_test_setup_teardown(x, \
-						drpc_pool_get_acl_setup, \
-						drpc_pool_get_acl_teardown)
-
 /*
  * dRPC List Pools setup/teardown
  */
@@ -269,6 +265,9 @@ test_drpc_list_pools_bad_request(void **state)
 	assert_int_equal(resp.body.len, 0);
 }
 
+#define GET_ACL_TEST(x)	cmocka_unit_test_setup_teardown(x, \
+						drpc_pool_get_acl_setup, \
+						drpc_pool_get_acl_teardown)
 
 #define LIST_POOLS_TEST(x) cmocka_unit_test_setup_teardown(x, \
 						drpc_list_pools_setup, \

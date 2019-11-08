@@ -837,7 +837,7 @@ ds_mgmt_drpc_list_pools(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		if (resp.pools[i] == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 
-		D_ALLOC(resp.pools[i]->uuid, 37);
+		D_ALLOC(resp.pools[i]->uuid, DAOS_UUID_STR_SIZE);
 		if (resp.pools[i]->uuid == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 		uuid_unparse(pools[i].lp_puuid, resp.pools[i]->uuid);
@@ -851,9 +851,9 @@ out:
 	resp.status = rc;
 	len = mgmt__list_pools_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
-	if (body == NULL)
+	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
-	else {
+	} else {
 		mgmt__list_pools_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
 		drpc_resp->body.data = body;

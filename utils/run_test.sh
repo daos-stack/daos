@@ -119,7 +119,7 @@ if [ -d "/mnt/daos" ]; then
     run_test build/src/iosrv/tests/drpc_progress_tests
     run_test build/src/iosrv/tests/drpc_handler_tests
     run_test build/src/iosrv/tests/drpc_listener_tests
-    run_test "${SL_PREFIX}/bin/srv_drpc_tests"
+    run_test build/src/mgmt/tests/srv_drpc_tests
     run_test "${SL_PREFIX}/bin/vos_size"
     run_test "${SL_PREFIX}/bin/vos_size.py" \
              "${SL_PREFIX}/etc/vos_size_input.yaml"
