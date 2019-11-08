@@ -31,6 +31,7 @@
 
 #include <daos/common.h>
 #include <daos_types.h>
+#include <daos_srv/daos_server.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/rsvc.h>
 #include <daos_srv/vos_types.h>
@@ -68,6 +69,9 @@ struct ds_cont_child {
 				 sc_closing:1,
 				 sc_destroying:1;
 	uint32_t		 sc_dtx_flush_wait_count;
+
+	/* Aggregate ULT */
+	struct dss_sleep_ult	 *sc_agg_ult;
 	/** Aggregation limit (set when snapshot is in progress) **/
 	uint64_t		 sc_aggregation_max;
 	uint64_t		*sc_snapshots;
@@ -104,8 +108,6 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 int
 ds_cont_local_close(uuid_t cont_hdl_uuid);
 
-int
-ds_cont_child_lookup_or_create(struct ds_cont_hdl *hdl, uuid_t cont_uuid);
 int
 ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 		     struct ds_cont_child **ds_cont);
