@@ -70,9 +70,9 @@ type Connect interface {
 	SetTransportConfig(*security.TransportConfig)
 	SmdListDevs(*mgmtpb.SmdDevReq) ResultSmdMap
 	SmdListPools(*mgmtpb.SmdPoolReq) ResultSmdMap
+	StorageScan(*StorageScanReq) *StorageScanResp
 	StorageFormat(reformat bool) (ClientCtrlrMap, ClientMountMap)
 	StoragePrepare(*ctlpb.StoragePrepareReq) ResultMap
-	StorageScan(*StorageScanReq) *StorageScanResp
 	SystemMemberQuery() (common.SystemMembers, error)
 	SystemStop() (common.SystemMemberResults, error)
 }
@@ -186,8 +186,7 @@ func (c *connList) ClearConns() ResultMap {
 
 // makeRequests performs supplied method over each controller in connList and
 // stores generic result object for each in map keyed on address.
-func (c *connList) makeRequests(
-	req interface{},
+func (c *connList) makeRequests(req interface{},
 	requestFn func(Control, interface{}, chan ClientResult)) ResultMap {
 
 	cMap := make(ResultMap) // mapping of server host addresses to results

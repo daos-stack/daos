@@ -5,7 +5,7 @@
 
 Name:          daos
 Version:       0.6.0
-Release:       11%{?relval}%{?dist}
+Release:       12%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -82,7 +82,7 @@ Requires: libpmem1, libpmemobj1
 %endif
 Requires: fuse >= 3.4.2
 Requires: protobuf-c
-Requires: spdk
+Requires: spdk <= 18.07
 Requires: fio < 3.4
 Requires: openssl
 # ensure we get exactly the right cart RPM
@@ -194,6 +194,8 @@ mkdir -p %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/daos-server.service %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 
+%pre server
+getent group daos_admins >/dev/null || groupadd -r daos_admins
 %post server -p /sbin/ldconfig
 %postun server -p /sbin/ldconfig
 
@@ -227,7 +229,10 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %files server
 %{_prefix}%{_sysconfdir}/daos_server.yml
 %{_sysconfdir}/ld.so.conf.d/daos.conf
-%{_bindir}/daos_server
+# set daos_admin to be setuid root in order to perform privileged tasks
+%attr(4750,root,daos_admins) %{_bindir}/daos_admin
+# set daos_server to be setgid daos_admins in order to invoke daos_admin
+%attr(2755,root,daos_admins) %{_bindir}/daos_server
 %{_bindir}/daos_io_server
 %dir %{_libdir}/daos_srv
 %{_libdir}/daos_srv/libcont.so
@@ -328,6 +333,9 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/*.a
 
 %changelog
+* Wed Nov 06 2019 Michael MacDonald <mjmac.macdonald@intel.com> 0.6.0-12
+- Add daos_admin privileged helper for daos_server
+
 * Fri Oct 25 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-11
 - Handle differences in Leap 15 Python packaging
 
