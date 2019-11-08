@@ -110,7 +110,7 @@ class TestDaosApiBase(ObjectWithParameters):
             # Log the exception to obtain additional trace information
             self.log.debug(
                 "Exception raised by %s.%s(%s)",
-                method.im_class.__name__, method.__name__,
+                method.__self__.__class__.__name__, method.__name__,
                 ", ".join(
                     ["{}={}".format(key, val) for key, val in kwargs.items()]),
                 exc_info=error)
@@ -624,8 +624,9 @@ class TestPool(TestDaosApiBase):
         """
         self.get_info()
         keys = (
-            "rs_version", "rs_pad_32", "rs_errno", "rs_done",
-            "rs_toberb_obj_nr", "rs_obj_nr", "rs_rec_nr")
+            "rs_version", "rs_seconds", "rs_errno", "rs_done", "rs_padding32",
+            "rs_fail_rank", "rs_toberb_obj_nr", "rs_obj_nr", "rs_rec_nr",
+            "rs_size")
         return {key: getattr(self.info.pi_rebuild_st, key) for key in keys}
 
     def display_pool_rebuild_status(self):
