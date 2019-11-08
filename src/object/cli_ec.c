@@ -59,9 +59,9 @@ struct ec_params {
 
 struct ec_fetch_params {
 	daos_iod_t		*iods;	/* Replaces iod array in fetch. */
+	struct ec_fetch_params	*next;/* Next entry in list */
+	daos_iod_t		 niod;
 	unsigned int		 nr;	/* number of records in iods    */
-	daos_iod_t			 niod;
-	struct ec_fetch_params		*next;/* Next entry in list */
 };
 
 static bool
@@ -69,8 +69,8 @@ ec_is_full_stripe(daos_iod_t *iod, struct daos_oclass_attr *oca,
 		  unsigned int recx_idx)
 {
 	unsigned int	ss = oca->u.ec.e_k * oca->u.ec.e_len;
-	unsigned int start = iod->iod_recxs[recx_idx].rx_idx * iod->iod_size;
-	unsigned int length = iod->iod_recxs[recx_idx].rx_nr * iod->iod_size;
+	unsigned int	start = iod->iod_recxs[recx_idx].rx_idx * iod->iod_size;
+	unsigned int	length = iod->iod_recxs[recx_idx].rx_nr * iod->iod_size;
 
 	if (length < ss && start/ss == (start+length)/ss) {
 		return false;
@@ -217,16 +217,16 @@ ec_array_encode(struct ec_params *params, daos_obj_id_t oid, daos_iod_t *iod,
 	uint64_t	 s_cur;
 	unsigned int	 len = oca->u.ec.e_len;
 	unsigned int	 k = oca->u.ec.e_k;
-	unsigned int	 p = oca->u.ec.e_p;
 	daos_recx_t     *this_recx = &iod->iod_recxs[recx_idx];
 	uint64_t	 ss = len * k;
 	uint64_t	 recx_start_offset = this_recx->rx_idx * iod->iod_size;
 	uint64_t	 recx_end_offset = (this_recx->rx_nr * iod->iod_size) +
 					   recx_start_offset;
-	unsigned int	 i;
-	int		 rc = 0;
 	uint64_t	 so = recx_start_offset % ss ?
 						ss - recx_start_offset % ss : 0;
+	unsigned int	 p = oca->u.ec.e_p;
+	unsigned int	 i;
+	int		 rc = 0;
 
 	/* This recx is not a full stripe, so move sgl cursors and return */
 	if (!ec_is_full_stripe(iod, oca, recx_idx)) {
