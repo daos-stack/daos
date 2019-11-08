@@ -44,8 +44,8 @@ class IoConfGen(ExecutableCommand):
             path (str, optional): path to location of command binary file.
                 Defaults to ""
         """
-        super(IoConfGen, self).__init__("/run/run_gen_io_conf/*",
-                                        "daos_gen_io_conf")
+        super(IoConfGen, self).__init__("/run/gen_io_conf/*",
+                                        "daos_gen_io_conf", path)
         self.verbose = True
         self.env = env
         self.ranks = FormattedParameter("-g {}")
@@ -53,7 +53,7 @@ class IoConfGen(ExecutableCommand):
         self.obj_num = FormattedParameter("-o {}")
         self.akeys = FormattedParameter("-a {}")
         self.dkeys = FormattedParameter("-d {}")
-        self.re_size = FormattedParameter("-s {}")
+        self.record_size = FormattedParameter("-s {}")
         self.obj_class = FormattedParameter("-O {}")
         self.filename = BasicParameter(None, "testfile")
 
@@ -105,7 +105,7 @@ class IoConfTestBase(TestWithServers):
         Execute the rebuild test steps.
         """
         self.setup_test_pool()
-        io_conf = IoConfGen()
+        io_conf = IoConfGen(os.path.join(self.prefix, "bin"))
         io_conf.get_params(self)
         io_conf.run()
         #Run test file using daos_run_io_conf

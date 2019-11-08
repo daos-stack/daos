@@ -18,7 +18,7 @@ server_config:
   #  bdev_list: ["0000:81:00.0","0000:da:00.0"]
 pool:
   scm_size: 14G
-run_gen_io_conf:
+gen_io_conf:
   no_of_ranks: !mux
     default_single_rank:
       ranks:
@@ -43,11 +43,11 @@ run_gen_io_conf:
     #Need NVMe to use for large number of size
     #large_no_akeys:
     #  akeys: "10"
-  record_size: !mux
+  record: !mux
     small_record_no:
-      re_size: "1"
+      record_size: "1"
     #large_record_no:
-    #  re_size: "50"
+    #  record_size: "50"
   no_of_objects: !mux
     small_no_objects:
       obj_num: "1"
