@@ -356,7 +356,8 @@ func TestPoolOverwriteACL(t *testing.T) {
 			expectedErr:            "",
 		},
 		"nil input": {
-			addr: MockServers,
+			addr:                   MockServers,
+			inputACL:               nil,
 			overwriteACLRespStatus: 0,
 			expectedResp:           &PoolOverwriteACLResp{ACL: &AccessControlList{}},
 			expectedErr:            "",
