@@ -30,7 +30,6 @@ import (
 
 	bytesize "github.com/inhies/go-bytesize"
 
-	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 )
 
@@ -151,8 +150,7 @@ func (ncs NvmeControllers) Summary() string {
 		}
 	}
 
-	return fmt.Sprintf("%s total capacity over %d %s",
-		tCap, len(ncs), common.Pluralise("controller", len(ncs)))
+	return fmt.Sprintf("%s\t\t%d", tCap, len(ncs))
 }
 
 // NvmeControllerResults is an alias for protobuf NvmeControllerResult messages

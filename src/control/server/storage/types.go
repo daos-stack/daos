@@ -26,7 +26,6 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/daos-stack/daos/src/control/common"
 	bytesize "github.com/inhies/go-bytesize"
 )
 
@@ -104,8 +103,7 @@ func (ms ScmModules) Summary() string {
 		tCap += bytesize.New(float64(m.Capacity))
 	}
 
-	return fmt.Sprintf("%s total capacity over %d %s (unprepared)",
-		tCap, len(ms), common.Pluralise("module", len(ms)))
+	return fmt.Sprintf("%s\t%d", tCap, len(ms))
 }
 
 func (n *ScmNamespace) String() string {
@@ -134,6 +132,5 @@ func (ns ScmNamespaces) Summary() string {
 		tCap += bytesize.New(float64(n.Size))
 	}
 
-	return fmt.Sprintf("%s total capacity over %d %s",
-		tCap, len(ns), common.Pluralise("namespace", len(ns)))
+	return fmt.Sprintf("%s\t%d", tCap, len(ns))
 }

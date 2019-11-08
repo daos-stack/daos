@@ -325,7 +325,7 @@ func (result *ScmScanResult) Summary() (out string) {
 	default:
 		out = result.Modules.Summary()
 	}
-	return fmt.Sprintf("SCM: %s", out)
+	return fmt.Sprintf("%s", out)
 }
 
 // ScmScanMap maps ScmModuleScanResult structs to the addresses
@@ -357,7 +357,7 @@ func (result *NvmeScanResult) Summary() (out string) {
 	if result.Err != nil {
 		return fmt.Sprintf("NVMe Error: %s", result.Err)
 	}
-	return fmt.Sprintf("NVMe: %s", result.Ctrlrs.Summary())
+	return fmt.Sprintf("%s", result.Ctrlrs.Summary())
 }
 
 // NvmeScanResults maps NvmeScanResult structs to the addresses
@@ -423,8 +423,9 @@ func (ssr *StorageScanResp) String() string {
 func (ssr *StorageScanResp) Summary() string {
 	var buf bytes.Buffer
 
+	fmt.Fprintf(&buf, "HOST\t\tSCM-CAP\tNS-COUNT\tNVMe-CAP\tSSD-COUNT\n")
 	for _, srv := range ssr.Servers {
-		fmt.Fprintf(&buf, "%s %s %s\n", srv,
+		fmt.Fprintf(&buf, "%s\t%s\t\t%s\n", srv,
 			ssr.Scm[srv].Summary(), ssr.Nvme[srv].Summary())
 	}
 
