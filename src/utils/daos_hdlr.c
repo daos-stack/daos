@@ -236,6 +236,7 @@ cont_query_hdlr(struct cmd_args_s *ap)
 	printf("Number of snapshots: %i\n", (int)cont_info.ci_nsnapshots);
 	printf("Latest Persistent Snapshot: %i\n",
 		(int)cont_info.ci_lsnapshot);
+	printf("Highest Aggregated Epoch: "DF_U64"\n", cont_info.ci_hae);
 	/* TODO: list snapshot epoch numbers, including ~80 column wrap. */
 
 	if (ap->path != NULL) {
