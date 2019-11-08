@@ -81,15 +81,14 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 type storageScanCmd struct {
 	logCmd
 	connectedCmd
+	Summary bool `short:"m" long:"summary" description:"List total capacity and number of devices only"`
 }
 
 // Execute is run when storageScanCmd activates.
 // Runs NVMe and SCM storage scan on all connected servers.
-func (s *storageScanCmd) Execute(args []string) error {
-	req := client.StorageScanReq{NvmeHealth: false}
-	cScan := s.conns.StorageScan(&req)
-	s.log.Info(cScan.Nvme.String())
-	s.log.Info(cScan.Scm.String())
+func (cmd *storageScanCmd) Execute(args []string) error {
+	req := client.StorageScanReq{Summary: cmd.Summary}
+	cmd.log.Info(cmd.conns.StorageScan(&req).String())
 
 	return nil
 }

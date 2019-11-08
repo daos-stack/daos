@@ -38,9 +38,7 @@ func TestStorageQueryCommands(t *testing.T) {
 			"storage query nvme-health",
 			strings.Join([]string{
 				"ConnectClients",
-				fmt.Sprintf("StorageScan-%+v", &client.StorageScanReq{
-					NvmeHealth: true,
-				}),
+				fmt.Sprintf("StorageScan-%+v", &client.StorageScanReq{}),
 			}, " "),
 			nil,
 		},

@@ -1398,6 +1398,7 @@ update_cancel(struct vos_io_context *ioc)
 	if (ioc->ic_actv_at != 0) {
 		D_ASSERT(ioc->ic_actv != NULL);
 		umem_cancel(vos_ioc2umm(ioc), ioc->ic_actv, ioc->ic_actv_at);
+		ioc->ic_actv_at = 0;
 	} else if (ioc->ic_umoffs_cnt != 0 && ioc->ic_actv_cnt == 0) {
 		struct umem_instance *umem = vos_ioc2umm(ioc);
 		int i;
