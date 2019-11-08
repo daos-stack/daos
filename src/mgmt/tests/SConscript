@@ -15,5 +15,7 @@ def scons():
                     LIBS=['cmocka', 'protobuf-c', 'daos_common', 'gurt',
                           'uuid'])
 
+    denv.Install('$PREFIX/bin/', ['srv_drpc_tests'])
+
 if __name__ == "SCons.Script":
     scons()

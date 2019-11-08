@@ -603,6 +603,10 @@ ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 		D_ERROR("crt_reply_send failed, rc: %d.\n", rc);
 }
 
+/* Free array of pools created in ds_mgmt_list_pools() iteration.
+ * CaRT and drpc handlers use same mgmt_list_pools_one type for the array.
+ */
+
 void
 ds_mgmt_free_pool_list(struct mgmt_list_pools_one **poolsp, uint64_t len)
 {

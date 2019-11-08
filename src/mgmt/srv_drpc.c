@@ -791,8 +791,8 @@ out:
 void
 ds_mgmt_drpc_list_pools(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	Mgmt__PoolListReq		*req = NULL;
-	Mgmt__PoolListResp		resp = MGMT__POOL_LIST_RESP__INIT;
+	Mgmt__ListPoolsReq		*req = NULL;
+	Mgmt__ListPoolsResp		resp = MGMT__LIST_POOLS_RESP__INIT;
 	uint8_t				*body;
 	size_t				 len;
 	struct mgmt_list_pools_one	*pools = NULL;
@@ -802,13 +802,13 @@ ds_mgmt_drpc_list_pools(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	int				 rc = 0;
 
 	/* Unpack the inner request from the drpc call body */
-	req = mgmt__pool_list_req__unpack(
+	req = mgmt__list_pools_req__unpack(
 		NULL, drpc_req->body.len, drpc_req->body.data);
 
 	if (req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
 		D_ERROR("Failed to unpack req (list pools)\n");
-		mgmt__pool_list_req__free_unpacked(req, NULL);
+		mgmt__list_pools_req__free_unpacked(req, NULL);
 		return;
 	}
 
@@ -849,17 +849,17 @@ ds_mgmt_drpc_list_pools(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 out:
 	resp.status = rc;
-	len = mgmt__pool_list_resp__get_packed_size(&resp);
+	len = mgmt__list_pools_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL)
 		drpc_resp->status = DRPC__STATUS__FAILURE;
 	else {
-		mgmt__pool_list_resp__pack(&resp, body);
+		mgmt__list_pools_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
 		drpc_resp->body.data = body;
 	}
 
-	mgmt__pool_list_req__free_unpacked(req, NULL);
+	mgmt__list_pools_req__free_unpacked(req, NULL);
 
 	if (resp.pools) {
 		for (i = 0; i < resp.n_pools; i++) {

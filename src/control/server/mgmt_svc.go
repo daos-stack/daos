@@ -435,7 +435,7 @@ func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.KillRankReq) (*mgm
 }
 
 // ListPools implements the method defined for the Management Service.
-func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.PoolListReq) (*mgmtpb.PoolListResp, error) {
+func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*mgmtpb.ListPoolsResp, error) {
 	svc.log.Debugf("MgmtSvc.ListPools dispatch, req:%+v\n", *req)
 
 	mi, err := svc.harness.GetMSLeaderInstance()
@@ -448,7 +448,7 @@ func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.PoolListReq) (*mg
 		return nil, err
 	}
 
-	resp := &mgmtpb.PoolListResp{}
+	resp := &mgmtpb.ListPoolsResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal ListPools response")
 	}

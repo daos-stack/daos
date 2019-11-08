@@ -19,9 +19,9 @@ typedef struct _Mgmt__PoolCreateReq Mgmt__PoolCreateReq;
 typedef struct _Mgmt__PoolCreateResp Mgmt__PoolCreateResp;
 typedef struct _Mgmt__PoolDestroyReq Mgmt__PoolDestroyReq;
 typedef struct _Mgmt__PoolDestroyResp Mgmt__PoolDestroyResp;
-typedef struct _Mgmt__PoolListReq Mgmt__PoolListReq;
-typedef struct _Mgmt__PoolListResp Mgmt__PoolListResp;
-typedef struct _Mgmt__PoolListResp__Pool Mgmt__PoolListResp__Pool;
+typedef struct _Mgmt__ListPoolsReq Mgmt__ListPoolsReq;
+typedef struct _Mgmt__ListPoolsResp Mgmt__ListPoolsResp;
+typedef struct _Mgmt__ListPoolsResp__Pool Mgmt__ListPoolsResp__Pool;
 
 
 /* --- enums --- */
@@ -132,7 +132,7 @@ struct  _Mgmt__PoolDestroyResp
     , 0 }
 
 
-struct  _Mgmt__PoolListReq
+struct  _Mgmt__ListPoolsReq
 {
   ProtobufCMessage base;
   /*
@@ -144,12 +144,12 @@ struct  _Mgmt__PoolListReq
    */
   uint64_t numpools;
 };
-#define MGMT__POOL_LIST_REQ__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_list_req__descriptor) \
+#define MGMT__LIST_POOLS_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_pools_req__descriptor) \
     , (char *)protobuf_c_empty_string, 0 }
 
 
-struct  _Mgmt__PoolListResp__Pool
+struct  _Mgmt__ListPoolsResp__Pool
 {
   ProtobufCMessage base;
   /*
@@ -161,12 +161,12 @@ struct  _Mgmt__PoolListResp__Pool
    */
   char *svcreps;
 };
-#define MGMT__POOL_LIST_RESP__POOL__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_list_resp__pool__descriptor) \
+#define MGMT__LIST_POOLS_RESP__POOL__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_pools_resp__pool__descriptor) \
     , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
-struct  _Mgmt__PoolListResp
+struct  _Mgmt__ListPoolsResp
 {
   ProtobufCMessage base;
   /*
@@ -174,17 +174,17 @@ struct  _Mgmt__PoolListResp
    */
   int32_t status;
   /*
-   * pools list (max length PoolListReq.numPools)
+   * pools list (max length ListPoolsReq.numPools)
    */
   size_t n_pools;
-  Mgmt__PoolListResp__Pool **pools;
+  Mgmt__ListPoolsResp__Pool **pools;
   /*
    * number of pools in system
    */
   uint64_t numpools;
 };
-#define MGMT__POOL_LIST_RESP__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_list_resp__descriptor) \
+#define MGMT__LIST_POOLS_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_pools_resp__descriptor) \
     , 0, 0,NULL, 0 }
 
 
@@ -264,46 +264,46 @@ Mgmt__PoolDestroyResp *
 void   mgmt__pool_destroy_resp__free_unpacked
                      (Mgmt__PoolDestroyResp *message,
                       ProtobufCAllocator *allocator);
-/* Mgmt__PoolListReq methods */
-void   mgmt__pool_list_req__init
-                     (Mgmt__PoolListReq         *message);
-size_t mgmt__pool_list_req__get_packed_size
-                     (const Mgmt__PoolListReq   *message);
-size_t mgmt__pool_list_req__pack
-                     (const Mgmt__PoolListReq   *message,
+/* Mgmt__ListPoolsReq methods */
+void   mgmt__list_pools_req__init
+                     (Mgmt__ListPoolsReq         *message);
+size_t mgmt__list_pools_req__get_packed_size
+                     (const Mgmt__ListPoolsReq   *message);
+size_t mgmt__list_pools_req__pack
+                     (const Mgmt__ListPoolsReq   *message,
                       uint8_t             *out);
-size_t mgmt__pool_list_req__pack_to_buffer
-                     (const Mgmt__PoolListReq   *message,
+size_t mgmt__list_pools_req__pack_to_buffer
+                     (const Mgmt__ListPoolsReq   *message,
                       ProtobufCBuffer     *buffer);
-Mgmt__PoolListReq *
-       mgmt__pool_list_req__unpack
+Mgmt__ListPoolsReq *
+       mgmt__list_pools_req__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data);
-void   mgmt__pool_list_req__free_unpacked
-                     (Mgmt__PoolListReq *message,
+void   mgmt__list_pools_req__free_unpacked
+                     (Mgmt__ListPoolsReq *message,
                       ProtobufCAllocator *allocator);
-/* Mgmt__PoolListResp__Pool methods */
-void   mgmt__pool_list_resp__pool__init
-                     (Mgmt__PoolListResp__Pool         *message);
-/* Mgmt__PoolListResp methods */
-void   mgmt__pool_list_resp__init
-                     (Mgmt__PoolListResp         *message);
-size_t mgmt__pool_list_resp__get_packed_size
-                     (const Mgmt__PoolListResp   *message);
-size_t mgmt__pool_list_resp__pack
-                     (const Mgmt__PoolListResp   *message,
+/* Mgmt__ListPoolsResp__Pool methods */
+void   mgmt__list_pools_resp__pool__init
+                     (Mgmt__ListPoolsResp__Pool         *message);
+/* Mgmt__ListPoolsResp methods */
+void   mgmt__list_pools_resp__init
+                     (Mgmt__ListPoolsResp         *message);
+size_t mgmt__list_pools_resp__get_packed_size
+                     (const Mgmt__ListPoolsResp   *message);
+size_t mgmt__list_pools_resp__pack
+                     (const Mgmt__ListPoolsResp   *message,
                       uint8_t             *out);
-size_t mgmt__pool_list_resp__pack_to_buffer
-                     (const Mgmt__PoolListResp   *message,
+size_t mgmt__list_pools_resp__pack_to_buffer
+                     (const Mgmt__ListPoolsResp   *message,
                       ProtobufCBuffer     *buffer);
-Mgmt__PoolListResp *
-       mgmt__pool_list_resp__unpack
+Mgmt__ListPoolsResp *
+       mgmt__list_pools_resp__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data);
-void   mgmt__pool_list_resp__free_unpacked
-                     (Mgmt__PoolListResp *message,
+void   mgmt__list_pools_resp__free_unpacked
+                     (Mgmt__ListPoolsResp *message,
                       ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
@@ -319,14 +319,14 @@ typedef void (*Mgmt__PoolDestroyReq_Closure)
 typedef void (*Mgmt__PoolDestroyResp_Closure)
                  (const Mgmt__PoolDestroyResp *message,
                   void *closure_data);
-typedef void (*Mgmt__PoolListReq_Closure)
-                 (const Mgmt__PoolListReq *message,
+typedef void (*Mgmt__ListPoolsReq_Closure)
+                 (const Mgmt__ListPoolsReq *message,
                   void *closure_data);
-typedef void (*Mgmt__PoolListResp__Pool_Closure)
-                 (const Mgmt__PoolListResp__Pool *message,
+typedef void (*Mgmt__ListPoolsResp__Pool_Closure)
+                 (const Mgmt__ListPoolsResp__Pool *message,
                   void *closure_data);
-typedef void (*Mgmt__PoolListResp_Closure)
-                 (const Mgmt__PoolListResp *message,
+typedef void (*Mgmt__ListPoolsResp_Closure)
+                 (const Mgmt__ListPoolsResp *message,
                   void *closure_data);
 
 /* --- services --- */
@@ -338,9 +338,9 @@ extern const ProtobufCMessageDescriptor mgmt__pool_create_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_create_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_destroy_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_destroy_resp__descriptor;
-extern const ProtobufCMessageDescriptor mgmt__pool_list_req__descriptor;
-extern const ProtobufCMessageDescriptor mgmt__pool_list_resp__descriptor;
-extern const ProtobufCMessageDescriptor mgmt__pool_list_resp__pool__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__list_pools_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__list_pools_resp__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__list_pools_resp__pool__descriptor;
 
 PROTOBUF_C__END_DECLS
 
