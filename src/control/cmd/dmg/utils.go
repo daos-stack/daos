@@ -25,6 +25,7 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os/exec"
 	"sort"
 	"strings"
@@ -98,10 +99,11 @@ func (r *cmdRunner) expandHosts(hostPattern string) []string {
 		return hosts // fallback
 	}
 
-	out, err := run(fmt.Sprintf(cmdNodesetExpand, hostPattern))
+	out, err := r.runCmd(fmt.Sprintf(cmdNodesetExpand,
+		strings.TrimSpace(hostPattern)))
 	if err != nil {
 		r.log.Debug(err.Error())
-		return hosts
+		return hosts // fallback
 	}
 
 	return strings.Split(out, ",")
@@ -109,7 +111,7 @@ func (r *cmdRunner) expandHosts(hostPattern string) []string {
 
 // foldHosts takes a slice of addresses and returns a folded pattern.
 func (r *cmdRunner) foldHosts(hosts []string) string {
-	hostsStr := strings.Join(hosts, ",")
+	hostsStr := strings.TrimSpace(strings.Join(hosts, ","))
 
 	// check to see if we can use nodeset to fold slice of addresses
 	if err := r.checkNodeset(); err != nil {
@@ -151,7 +153,7 @@ func (r *cmdRunner) sprintConns(results client.ResultMap) (out string) {
 	i := 0
 	for _, addr := range active {
 		if results[addr].Err != nil {
-			r.log.Errorf("failed to connect to %s (%s)",
+			r.log.Debugf("failed to connect to %s (%s)",
 				addr, results[addr].Err)
 			inactive = append(inactive, addr)
 			continue
@@ -163,11 +165,27 @@ func (r *cmdRunner) sprintConns(results client.ResultMap) (out string) {
 
 	// attempt to fold lists of addresses
 	if len(inactive) > 0 {
-		out = fmt.Sprintf("Inactive: %s\n", r.foldHosts(inactive))
+		out = fmt.Sprintf("%s Inactive\n",
+			strings.TrimSpace(r.foldHosts(inactive)))
 	}
 	if len(active) > 0 {
-		out = fmt.Sprintf("%sActive: %s\n", out, r.foldHosts(active))
+		out = fmt.Sprintf("%s%s Active\n", out,
+			strings.TrimSpace(r.foldHosts(active)))
 	}
 
 	return out
+}
+
+func (r *cmdRunner) aggregate(in string) (out string, err error) {
+	fName := "/tmp/storage_summary.tmp"
+
+	if err = r.checkNodeset(); err != nil {
+		return
+	}
+
+	if err = ioutil.WriteFile(fName, []byte(in), 0644); err != nil {
+		return
+	}
+
+	return r.runCmd(fmt.Sprintf(cmdClubak, fName))
 }

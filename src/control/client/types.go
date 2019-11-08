@@ -411,11 +411,20 @@ func (ssr *StorageScanResp) String() string {
 
 	for _, srv := range ssr.Servers {
 		fmt.Fprintf(&buf, "%s\n", srv)
-		if !ssr.summary {
-			fmt.Fprintf(&buf, "\t%s", ssr.Scm[srv].String())
-			fmt.Fprintf(&buf, "\t%s", ssr.Nvme[srv].String())
-		}
+		fmt.Fprintf(&buf, "\t%s", ssr.Scm[srv].String())
+		fmt.Fprintf(&buf, "\t%s", ssr.Nvme[srv].String())
 		fmt.Fprintf(&buf, "\tSummary:\n\t\t%s\n\t\t%s\n",
+			ssr.Scm[srv].Summary(), ssr.Nvme[srv].Summary())
+	}
+
+	return buf.String()
+}
+
+func (ssr *StorageScanResp) Summary() string {
+	var buf bytes.Buffer
+
+	for _, srv := range ssr.Servers {
+		fmt.Fprintf(&buf, "%s %s %s\n", srv,
 			ssr.Scm[srv].Summary(), ssr.Nvme[srv].Summary())
 	}
 
