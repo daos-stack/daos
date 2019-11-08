@@ -1286,7 +1286,7 @@ dfs_set_prefix(dfs_t *dfs, const char *prefix)
 		return 0;
 	}
 
-	if (prefix[0] != '/' || strnlen(prefix, PATH_MAX-1) > PATH_MAX-1)
+	if (prefix[0] != '/' || strnlen(prefix, PATH_MAX) > PATH_MAX-1)
 		return EINVAL;
 
 	dfs->prefix = strndup(prefix, PATH_MAX-1);
@@ -1544,9 +1544,6 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 
 	/** if we added a prefix, check and skip over it */
 	if (dfs->prefix) {
-		if (strlen(path) < dfs->prefix_len)
-			return EINVAL;
-
 		if (strncmp(dfs->prefix, path, dfs->prefix_len) != 0)
 			return EINVAL;
 
