@@ -41,14 +41,6 @@ type MgmtCtlClient interface {
 	StorageScan(ctx context.Context, in *StorageScanReq, opts ...grpc.CallOption) (*StorageScanResp, error)
 	// Format nonvolatile storage devices for use with DAOS
 	StorageFormat(ctx context.Context, in *StorageFormatReq, opts ...grpc.CallOption) (MgmtCtl_StorageFormatClient, error)
-	// Update nonvolatile storage device firmware
-	StorageUpdate(ctx context.Context, in *StorageUpdateReq, opts ...grpc.CallOption) (MgmtCtl_StorageUpdateClient, error)
-	// Perform burn-in testing to verify nonvolatile storage devices
-	StorageBurnIn(ctx context.Context, in *StorageBurnInReq, opts ...grpc.CallOption) (MgmtCtl_StorageBurnInClient, error)
-	// Fetch FIO configuration file specifying burn-in jobs/workloads
-	FetchFioConfigPaths(ctx context.Context, in *EmptyReq, opts ...grpc.CallOption) (MgmtCtl_FetchFioConfigPathsClient, error)
-	// List features supported on remote storage server/DAOS system
-	ListFeatures(ctx context.Context, in *EmptyReq, opts ...grpc.CallOption) (MgmtCtl_ListFeaturesClient, error)
 	// Query DAOS system membership (joined data-plane instances)
 	SystemMemberQuery(ctx context.Context, in *SystemMemberQueryReq, opts ...grpc.CallOption) (*SystemMemberQueryResp, error)
 	// Stop DAOS system (shutdown data-plane instances)
@@ -117,134 +109,6 @@ func (x *mgmtCtlStorageFormatClient) Recv() (*StorageFormatResp, error) {
 	return m, nil
 }
 
-func (c *mgmtCtlClient) StorageUpdate(ctx context.Context, in *StorageUpdateReq, opts ...grpc.CallOption) (MgmtCtl_StorageUpdateClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_MgmtCtl_serviceDesc.Streams[1], "/ctl.MgmtCtl/StorageUpdate", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &mgmtCtlStorageUpdateClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type MgmtCtl_StorageUpdateClient interface {
-	Recv() (*StorageUpdateResp, error)
-	grpc.ClientStream
-}
-
-type mgmtCtlStorageUpdateClient struct {
-	grpc.ClientStream
-}
-
-func (x *mgmtCtlStorageUpdateClient) Recv() (*StorageUpdateResp, error) {
-	m := new(StorageUpdateResp)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *mgmtCtlClient) StorageBurnIn(ctx context.Context, in *StorageBurnInReq, opts ...grpc.CallOption) (MgmtCtl_StorageBurnInClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_MgmtCtl_serviceDesc.Streams[2], "/ctl.MgmtCtl/StorageBurnIn", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &mgmtCtlStorageBurnInClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type MgmtCtl_StorageBurnInClient interface {
-	Recv() (*StorageBurnInResp, error)
-	grpc.ClientStream
-}
-
-type mgmtCtlStorageBurnInClient struct {
-	grpc.ClientStream
-}
-
-func (x *mgmtCtlStorageBurnInClient) Recv() (*StorageBurnInResp, error) {
-	m := new(StorageBurnInResp)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *mgmtCtlClient) FetchFioConfigPaths(ctx context.Context, in *EmptyReq, opts ...grpc.CallOption) (MgmtCtl_FetchFioConfigPathsClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_MgmtCtl_serviceDesc.Streams[3], "/ctl.MgmtCtl/FetchFioConfigPaths", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &mgmtCtlFetchFioConfigPathsClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type MgmtCtl_FetchFioConfigPathsClient interface {
-	Recv() (*FilePath, error)
-	grpc.ClientStream
-}
-
-type mgmtCtlFetchFioConfigPathsClient struct {
-	grpc.ClientStream
-}
-
-func (x *mgmtCtlFetchFioConfigPathsClient) Recv() (*FilePath, error) {
-	m := new(FilePath)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *mgmtCtlClient) ListFeatures(ctx context.Context, in *EmptyReq, opts ...grpc.CallOption) (MgmtCtl_ListFeaturesClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_MgmtCtl_serviceDesc.Streams[4], "/ctl.MgmtCtl/ListFeatures", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &mgmtCtlListFeaturesClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type MgmtCtl_ListFeaturesClient interface {
-	Recv() (*Feature, error)
-	grpc.ClientStream
-}
-
-type mgmtCtlListFeaturesClient struct {
-	grpc.ClientStream
-}
-
-func (x *mgmtCtlListFeaturesClient) Recv() (*Feature, error) {
-	m := new(Feature)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
 func (c *mgmtCtlClient) SystemMemberQuery(ctx context.Context, in *SystemMemberQueryReq, opts ...grpc.CallOption) (*SystemMemberQueryResp, error) {
 	out := new(SystemMemberQueryResp)
 	err := c.cc.Invoke(ctx, "/ctl.MgmtCtl/SystemMemberQuery", in, out, opts...)
@@ -273,7 +137,7 @@ func (c *mgmtCtlClient) NetworkListProviders(ctx context.Context, in *ProviderLi
 }
 
 func (c *mgmtCtlClient) NetworkScanDevices(ctx context.Context, in *DeviceScanRequest, opts ...grpc.CallOption) (MgmtCtl_NetworkScanDevicesClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_MgmtCtl_serviceDesc.Streams[5], "/ctl.MgmtCtl/NetworkScanDevices", opts...)
+	stream, err := c.cc.NewStream(ctx, &_MgmtCtl_serviceDesc.Streams[1], "/ctl.MgmtCtl/NetworkScanDevices", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -312,14 +176,6 @@ type MgmtCtlServer interface {
 	StorageScan(context.Context, *StorageScanReq) (*StorageScanResp, error)
 	// Format nonvolatile storage devices for use with DAOS
 	StorageFormat(*StorageFormatReq, MgmtCtl_StorageFormatServer) error
-	// Update nonvolatile storage device firmware
-	StorageUpdate(*StorageUpdateReq, MgmtCtl_StorageUpdateServer) error
-	// Perform burn-in testing to verify nonvolatile storage devices
-	StorageBurnIn(*StorageBurnInReq, MgmtCtl_StorageBurnInServer) error
-	// Fetch FIO configuration file specifying burn-in jobs/workloads
-	FetchFioConfigPaths(*EmptyReq, MgmtCtl_FetchFioConfigPathsServer) error
-	// List features supported on remote storage server/DAOS system
-	ListFeatures(*EmptyReq, MgmtCtl_ListFeaturesServer) error
 	// Query DAOS system membership (joined data-plane instances)
 	SystemMemberQuery(context.Context, *SystemMemberQueryReq) (*SystemMemberQueryResp, error)
 	// Stop DAOS system (shutdown data-plane instances)
@@ -388,90 +244,6 @@ type mgmtCtlStorageFormatServer struct {
 }
 
 func (x *mgmtCtlStorageFormatServer) Send(m *StorageFormatResp) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func _MgmtCtl_StorageUpdate_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(StorageUpdateReq)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(MgmtCtlServer).StorageUpdate(m, &mgmtCtlStorageUpdateServer{stream})
-}
-
-type MgmtCtl_StorageUpdateServer interface {
-	Send(*StorageUpdateResp) error
-	grpc.ServerStream
-}
-
-type mgmtCtlStorageUpdateServer struct {
-	grpc.ServerStream
-}
-
-func (x *mgmtCtlStorageUpdateServer) Send(m *StorageUpdateResp) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func _MgmtCtl_StorageBurnIn_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(StorageBurnInReq)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(MgmtCtlServer).StorageBurnIn(m, &mgmtCtlStorageBurnInServer{stream})
-}
-
-type MgmtCtl_StorageBurnInServer interface {
-	Send(*StorageBurnInResp) error
-	grpc.ServerStream
-}
-
-type mgmtCtlStorageBurnInServer struct {
-	grpc.ServerStream
-}
-
-func (x *mgmtCtlStorageBurnInServer) Send(m *StorageBurnInResp) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func _MgmtCtl_FetchFioConfigPaths_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(EmptyReq)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(MgmtCtlServer).FetchFioConfigPaths(m, &mgmtCtlFetchFioConfigPathsServer{stream})
-}
-
-type MgmtCtl_FetchFioConfigPathsServer interface {
-	Send(*FilePath) error
-	grpc.ServerStream
-}
-
-type mgmtCtlFetchFioConfigPathsServer struct {
-	grpc.ServerStream
-}
-
-func (x *mgmtCtlFetchFioConfigPathsServer) Send(m *FilePath) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func _MgmtCtl_ListFeatures_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(EmptyReq)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(MgmtCtlServer).ListFeatures(m, &mgmtCtlListFeaturesServer{stream})
-}
-
-type MgmtCtl_ListFeaturesServer interface {
-	Send(*Feature) error
-	grpc.ServerStream
-}
-
-type mgmtCtlListFeaturesServer struct {
-	grpc.ServerStream
-}
-
-func (x *mgmtCtlListFeaturesServer) Send(m *Feature) error {
 	return x.ServerStream.SendMsg(m)
 }
 
@@ -582,26 +354,6 @@ var _MgmtCtl_serviceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 		{
-			StreamName:    "StorageUpdate",
-			Handler:       _MgmtCtl_StorageUpdate_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "StorageBurnIn",
-			Handler:       _MgmtCtl_StorageBurnIn_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "FetchFioConfigPaths",
-			Handler:       _MgmtCtl_FetchFioConfigPaths_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "ListFeatures",
-			Handler:       _MgmtCtl_ListFeatures_Handler,
-			ServerStreams: true,
-		},
-		{
 			StreamName:    "NetworkScanDevices",
 			Handler:       _MgmtCtl_NetworkScanDevices_Handler,
 			ServerStreams: true,
@@ -610,32 +362,26 @@ var _MgmtCtl_serviceDesc = grpc.ServiceDesc{
 	Metadata: "control.proto",
 }
 
-func init() { proto.RegisterFile("control.proto", fileDescriptor_control_3b95ca9e102e6309) }
+func init() { proto.RegisterFile("control.proto", fileDescriptor_control_6bea9c4deded268b) }
 
-var fileDescriptor_control_3b95ca9e102e6309 = []byte{
-	// 382 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x74, 0x92, 0xdf, 0x6a, 0xe2, 0x40,
-	0x14, 0xc6, 0x95, 0x65, 0x77, 0x61, 0x36, 0x11, 0x76, 0x74, 0xdd, 0xdd, 0x5c, 0xfa, 0x00, 0x56,
-	0xda, 0x0b, 0xa1, 0x97, 0xda, 0x06, 0x5a, 0xb4, 0x58, 0x43, 0xaf, 0xcb, 0x38, 0x1e, 0x35, 0x34,
-	0xc9, 0xc4, 0x99, 0x13, 0x4b, 0x9e, 0xb5, 0x2f, 0x53, 0xe6, 0x4f, 0x20, 0x31, 0xf6, 0xf2, 0xfc,
-	0xbe, 0xf3, 0xfd, 0x08, 0x99, 0x43, 0x7c, 0x2e, 0x32, 0x94, 0x22, 0x19, 0xe7, 0x52, 0xa0, 0xa0,
-	0xdf, 0x38, 0x26, 0x81, 0xc7, 0x45, 0x9a, 0x8a, 0xcc, 0xa2, 0xc0, 0x57, 0x28, 0x24, 0xdb, 0x83,
-	0x1b, 0x7b, 0x3b, 0x60, 0x58, 0x48, 0x50, 0x6e, 0xa6, 0x19, 0xe0, 0xbb, 0x90, 0x6f, 0xaf, 0x8a,
-	0xb3, 0xaa, 0xe2, 0xa9, 0x52, 0x21, 0xa4, 0x76, 0xba, 0xfe, 0xf8, 0x4e, 0x7e, 0x2e, 0xf7, 0x29,
-	0xce, 0x31, 0xa1, 0x73, 0xd2, 0x8b, 0xac, 0x6e, 0x25, 0x21, 0x67, 0x12, 0xe8, 0x70, 0xcc, 0x31,
-	0x19, 0x37, 0xe1, 0x1a, 0x8e, 0xc1, 0xdf, 0x8b, 0x5c, 0xe5, 0xa3, 0x0e, 0xbd, 0x25, 0xbf, 0x1c,
-	0x8f, 0x38, 0xcb, 0x68, 0xbf, 0xbe, 0xa9, 0x89, 0xae, 0x0f, 0xda, 0xd0, 0x74, 0x67, 0xc4, 0x77,
-	0x30, 0x14, 0x32, 0x65, 0x48, 0xff, 0xd4, 0x17, 0x2d, 0xd3, 0xfd, 0xe1, 0x25, 0xac, 0x0d, 0x93,
-	0x6e, 0xcd, 0xf1, 0x92, 0x6f, 0x19, 0x42, 0xd3, 0x61, 0x59, 0xcb, 0x51, 0xe1, 0x96, 0x63, 0x56,
-	0xc8, 0xec, 0x21, 0x6b, 0x3a, 0x2c, 0x6b, 0x39, 0x2a, 0xec, 0x1c, 0x53, 0xd2, 0x0f, 0x01, 0xf9,
-	0x21, 0x8c, 0xc5, 0x5c, 0x64, 0xbb, 0x78, 0xbf, 0x62, 0x78, 0x50, 0xd4, 0x37, 0x95, 0xfb, 0x34,
-	0xc7, 0x52, 0x1b, 0xec, 0x18, 0xc6, 0x09, 0xe8, 0xd8, 0x14, 0xaf, 0x88, 0xb7, 0x88, 0x15, 0x86,
-	0xee, 0x25, 0xcf, 0x1b, 0x9e, 0x6d, 0xd8, 0xd4, 0x14, 0x16, 0xe4, 0x77, 0x64, 0x9e, 0x74, 0x09,
-	0xe9, 0x06, 0xe4, 0x73, 0x01, 0xb2, 0xa4, 0xff, 0xed, 0xa7, 0x9d, 0x73, 0x6d, 0x08, 0xbe, 0x8a,
-	0xcc, 0x1b, 0x4c, 0x09, 0xb1, 0x51, 0x84, 0x22, 0xa7, 0xb4, 0xb6, 0xab, 0x81, 0xee, 0xf7, 0x5b,
-	0xcc, 0x14, 0x1f, 0xc9, 0xe0, 0xc9, 0x5e, 0x9b, 0xfe, 0xfc, 0x95, 0x14, 0xa7, 0x78, 0x0b, 0x52,
-	0xd1, 0x7f, 0x66, 0xbd, 0x9a, 0x75, 0xb6, 0x86, 0x63, 0x01, 0x0a, 0xdd, 0xef, 0x6b, 0x26, 0x79,
-	0x52, 0x8e, 0x3a, 0x34, 0x24, 0xd4, 0xb9, 0xf4, 0x75, 0xdc, 0xc1, 0x29, 0xe6, 0xa0, 0xdc, 0x35,
-	0xda, 0xc9, 0x9d, 0x92, 0xf1, 0x0c, 0x5a, 0xdc, 0x58, 0x26, 0xdd, 0xcd, 0x0f, 0x73, 0xe4, 0x37,
-	0x9f, 0x01, 0x00, 0x00, 0xff, 0xff, 0xf0, 0x7b, 0x87, 0xc8, 0x49, 0x03, 0x00, 0x00,
+var fileDescriptor_control_6bea9c4deded268b = []byte{
+	// 288 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x74, 0x91, 0xcd, 0x4a, 0xc3, 0x40,
+	0x10, 0xc7, 0x5b, 0x0a, 0x0a, 0xab, 0x11, 0x9c, 0xc6, 0xaa, 0x39, 0xf6, 0x01, 0x42, 0xd1, 0x83,
+	0xe0, 0xd1, 0x4a, 0x0f, 0xd2, 0x4a, 0x6d, 0x1e, 0x40, 0xd2, 0x75, 0x28, 0xc1, 0x24, 0xbb, 0x9d,
+	0x9d, 0x56, 0xf2, 0xc8, 0xbe, 0x85, 0xec, 0x87, 0x90, 0x9a, 0x7a, 0x9c, 0xdf, 0xff, 0x83, 0xdd,
+	0x19, 0x11, 0x49, 0x55, 0x33, 0xa9, 0x32, 0xd5, 0xa4, 0x58, 0xc1, 0x40, 0x72, 0x99, 0x44, 0x86,
+	0x15, 0xe5, 0x1b, 0xf4, 0x2c, 0x81, 0x1a, 0xf9, 0x4b, 0xd1, 0xe7, 0xbb, 0x91, 0x79, 0x1d, 0xd8,
+	0xb9, 0x69, 0x0c, 0x63, 0xe5, 0xa7, 0xbb, 0xef, 0x81, 0x38, 0x5d, 0x6c, 0x2a, 0x9e, 0x72, 0x09,
+	0x53, 0x71, 0x91, 0xf9, 0xf8, 0x92, 0x50, 0xe7, 0x84, 0x30, 0x4a, 0x25, 0x97, 0xe9, 0x21, 0x5c,
+	0xe1, 0x36, 0xb9, 0x3e, 0xca, 0x8d, 0x1e, 0xf7, 0xe0, 0x51, 0x9c, 0x05, 0x9e, 0xc9, 0xbc, 0x86,
+	0x61, 0xdb, 0x69, 0x89, 0x8d, 0xc7, 0x5d, 0xe8, 0xb2, 0x4f, 0x22, 0x0a, 0x70, 0xa6, 0xa8, 0xca,
+	0x19, 0xae, 0xda, 0x46, 0xcf, 0x6c, 0x7e, 0x74, 0x0c, 0xdb, 0x86, 0x49, 0x1f, 0xe6, 0xe2, 0x32,
+	0x73, 0x1f, 0x5c, 0x60, 0xb5, 0x46, 0x7a, 0xdb, 0x21, 0x35, 0x70, 0xeb, 0x03, 0x7f, 0xb9, 0xed,
+	0x4a, 0xfe, 0x93, 0xdc, 0x8b, 0x1e, 0x84, 0xf0, 0x52, 0xc6, 0x4a, 0x03, 0xb4, 0xbc, 0x16, 0xd8,
+	0xfc, 0xb0, 0xc3, 0x5c, 0xf0, 0x45, 0xc4, 0xaf, 0x7e, 0xf7, 0xf3, 0xc2, 0xf0, 0x92, 0xd4, 0xbe,
+	0xf8, 0x40, 0x32, 0x70, 0xe3, 0xec, 0xbf, 0xb3, 0xd5, 0x56, 0xb8, 0xdd, 0xa1, 0xe1, 0xf0, 0xa9,
+	0x43, 0x45, 0x97, 0xcd, 0xb8, 0x07, 0x33, 0x01, 0xa1, 0xcb, 0xee, 0xea, 0x19, 0xf7, 0x85, 0x44,
+	0x13, 0x6e, 0xe3, 0xa7, 0xb0, 0x58, 0xd7, 0x13, 0x77, 0xb8, 0x6b, 0x99, 0xf4, 0xd7, 0x27, 0xee,
+	0xe4, 0xf7, 0x3f, 0x01, 0x00, 0x00, 0xff, 0xff, 0x4d, 0x93, 0x6e, 0xc9, 0x39, 0x02, 0x00, 0x00,
 }

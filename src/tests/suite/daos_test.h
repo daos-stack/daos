@@ -26,13 +26,6 @@
  */
 #ifndef __DAOS_TEST_H
 #define __DAOS_TEST_H
-#if !defined(__has_warning)  /* gcc */
-	#pragma GCC diagnostic ignored "-Wframe-larger-than="
-#else
-	#if __has_warning("-Wframe-larger-than=") /* valid clang warning */
-		#pragma GCC diagnostic ignored "-Wframe-larger-than="
-	#endif
-#endif
 
 #include <unistd.h>
 #include <stdlib.h>
@@ -68,6 +61,10 @@
 #include <daos/mgmt.h>
 #include <daos/tests_lib.h>
 #include <daos.h>
+
+#if D_HAS_WARNING(4, "-Wframe-larger-than=")
+	#pragma GCC diagnostic ignored "-Wframe-larger-than="
+#endif
 
 /** Server crt group ID */
 extern const char *server_group;
@@ -277,6 +274,8 @@ int run_daos_dtx_test(int rank, int size, int *tests, int test_size);
 int run_daos_vc_test(int rank, int size, int *tests, int test_size);
 int run_daos_checksum_test(int rank, int size);
 int run_daos_fs_test(int rank, int size, int *tests, int test_size);
+int run_daos_nvme_recov_test(int rank, int size, int *sub_tests,
+			     int sub_tests_size);
 
 void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 		      d_rank_list_t *svc, d_rank_t rank);
