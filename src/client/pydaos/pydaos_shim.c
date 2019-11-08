@@ -288,7 +288,6 @@ do {				\
 	DEFINE_OC_EXPL(EC_16P2G);	/** OC_EC_16P2G1, OC_EC_16P2G2, ... */
 	DEFINE_OC_EXPL(EC_16P2G);	/** OC_EC_16P2G1, OC_EC_16P2G2, ... */
 
-
 #define DEFINE_OC_INTERNAL(name)\
 do {				\
 	DEFINE_OC(name, 1);	\

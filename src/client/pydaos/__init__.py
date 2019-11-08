@@ -59,7 +59,7 @@ class DaosClient():
     """DaosClient object"""
 
     # Created automatically as module is imported, and the
-    # local ref is droped when it's unloaded.
+    # local ref is dropped when it's unloaded.
     def __init__(self):
         # Initialize DAOS
         self.connected = False

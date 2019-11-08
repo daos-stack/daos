@@ -85,11 +85,11 @@ class daosdm():
             return None
 
     def reorganize(self):
-        """For compatability with dbm.gnu"""
+        """For compatibility with dbm.gnu"""
         pass
 
     def sync(self):
-        """For compatability with dbm.gnu"""
+        """For compatibility with dbm.gnu"""
         pass
 
     def close(self):
