@@ -148,7 +148,7 @@ define install_repos
 	        ;;                                                          \
 	        sl42.3) distro="leap42.3";                                  \
 	        ;;                                                          \
-	        sl15.1) distro="leap15.1";                                  \
+	        sl15.1) distro="leap15";                                    \
 	        ;;                                                          \
 	    esac;                                                           \
 	    baseurl=$${JENKINS_URL:-https://build.hpdd.intel.com/}job/daos-stack/job/$$repo/job/$$branch/; \
@@ -375,6 +375,16 @@ else
 chrootbuild: $(SRPM) $(CALLING_MAKEFILE)
 	if [ -w /etc/mock/$(CHROOT_NAME).cfg ]; then                                        \
 	    echo -e "config_opts['yum.conf'] += \"\"\"\n" >> /etc/mock/$(CHROOT_NAME).cfg;  \
+	    case $(DISTRO_ID) in                                                            \
+	        el7) distro="centos7";                                                      \
+	        ;;                                                                          \
+	        sle12.3) distro="sles12.3";                                                 \
+	        ;;                                                                          \
+	        sl42.3) distro="leap42.3";                                                  \
+	        ;;                                                                          \
+	        sl15.1) distro="leap15";                                                    \
+	        ;;                                                                          \
+	    esac;                                                                           \
 	    for repo in $($(DISTRO_BASE)_PR_REPOS) $(PR_REPOS); do                          \
 	        branch="master";                                                            \
 	        build_number="lastSuccessfulBuild";                                         \
@@ -388,7 +398,7 @@ chrootbuild: $(SRPM) $(CALLING_MAKEFILE)
 	        fi;                                                                         \
 	        echo -e "[$$repo:$$branch:$$build_number]\n\
 name=$$repo:$$branch:$$build_number\n\
-baseurl=$${JENKINS_URL:-https://build.hpdd.intel.com/}job/daos-stack/job/$$repo/job/$$branch/$$build_number/artifact/artifacts/centos7/\n\
+baseurl=$${JENKINS_URL:-https://build.hpdd.intel.com/}job/daos-stack/job/$$repo/job/$$branch/$$build_number/artifact/artifacts/$$distro/\n\
 enabled=1\n\
 gpgcheck=False\n" >> /etc/mock/$(CHROOT_NAME).cfg;                                          \
 	    done;                                                                           \

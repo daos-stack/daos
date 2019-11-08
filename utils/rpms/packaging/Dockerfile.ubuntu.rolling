@@ -4,7 +4,7 @@
 # 'recipe' for Docker to build an Debian package
 #
 # Pull base image
-FROM ubuntu:18.04
+FROM ubuntu:rolling
 Maintainer daos-stack <daos@daos.groups.io>
 
 # use same UID as host and default value of 1000 if not specified

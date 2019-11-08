@@ -148,3 +148,29 @@
     obj:*/libcrypto.so.1.*
     ...
 }
+{
+   PSM2 leak 1
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:sysfs_init
+   fun:_dl_init
+   obj:/usr/lib64/ld-2.17.so
+}
+{
+   mercury bug/leak 1
+   Memcheck:Addr4
+   fun:OPA_load_int
+   fun:hg_atomic_get32
+   fun:na_ofi_cq_process_event
+   fun:na_ofi_progress
+   fun:NA_Progress
+}
+{
+   mercury bug/leak 2
+   Memcheck:Addr8
+   fun:na_ofi_complete
+   fun:na_ofi_cq_process_event
+   fun:na_ofi_progress
+   fun:NA_Progress
+}

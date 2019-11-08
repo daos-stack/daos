@@ -16,6 +16,7 @@ GIT_NUM_COMMITS := $(shell git rev-list HEAD --count)
 
 BUILD_DEFINES := --define "%relval .$(GIT_NUM_COMMITS).g$(GIT_SHORT)" --define "%sha1 $(GIT_SHA1)"
 RPM_BUILD_OPTIONS := $(BUILD_DEFINES)
+PACKAGING_CHECK_DIR := ../../../rpm/packaging
 
 dist: $(SOURCES)
 
