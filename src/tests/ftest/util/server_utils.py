@@ -43,13 +43,10 @@ from command_utils import ObjectWithParameters, BasicParameter
 
 SESSIONS = {}
 
-DEFAULT_FILE = "src/tests/ftest/data/daos_server_baseline.yaml"
-AVOCADO_FILE = "src/tests/ftest/data/daos_avocado_test.yaml"
-
+AVOCADO_FILE = "daos_avocado_test.yaml"
 
 class ServerFailed(Exception):
     """Server didn't start/stop properly."""
-
 
 class DaosServerConfig(ObjectWithParameters):
     """Defines the daos_server configuration yaml parameters."""
@@ -241,10 +238,14 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
             [line.split(' ')[0] for line in genio.read_all_lines(hostfile)])
         server_count = len(servers)
 
+        # Pile of build time variables
+        with open("../../.build_vars.json") as json_vars:
+            build_vars = json.load(json_vars)
+
         # Create the DAOS server configuration yaml file to pass
         # with daos_server -o <FILE_NAME>
-        print("Creating the server yaml file")
-        server_yaml = os.path.join(test.basepath, AVOCADO_FILE)
+        print("Creating the server yaml file in {}".format(test.tmp))
+        server_yaml = os.path.join(test.tmp, AVOCADO_FILE)
         server_config = DaosServerConfig()
         server_config.get_params(test)
         if hasattr(test, "server_log"):
@@ -268,10 +269,6 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
                     "Error cleaning tmpfs on servers: {}".format(
                         ", ".join(
                             [str(result[key]) for key in result if key != 0])))
-
-        # Pile of build time variables
-        with open(os.path.join(test.basepath, ".build_vars.json")) as json_vars:
-            build_vars = json.load(json_vars)
 
         server_cmd = [
             os.path.join(build_vars["OMPI_PREFIX"], "bin", "orterun"),
@@ -298,8 +295,7 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
             [os.path.join(build_vars["PREFIX"], "bin", "daos_server"),
              "--debug",
              "--config", server_yaml,
-             "start", "-i",
-             "-a", os.path.join(test.basepath, "install", "tmp")])
+             "start", "-i", "--recreate-superblocks", "-a", test.tmp])
 
         print("Start CMD>>>>{0}".format(' '.join(server_cmd)))
 

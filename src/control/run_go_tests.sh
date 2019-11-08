@@ -45,10 +45,10 @@ function setup_environment()
 	source "${build_source}"
 
 	# ugh, appease the linter...
-	LD_LIBRARY_PATH=${SL_PREFIX}/lib
+	LD_LIBRARY_PATH=${SL_PREFIX}/lib64
 	LD_LIBRARY_PATH+=":${SL_SPDK_PREFIX}/lib"
 	LD_LIBRARY_PATH+=":${SL_HWLOC_PREFIX}/lib"
-	CGO_LDFLAGS=-L${SL_PREFIX}/lib
+	CGO_LDFLAGS=-L${SL_PREFIX}/lib64
 	CGO_LDFLAGS+=" -L${SL_SPDK_PREFIX}/lib"
 	CGO_LDFLAGS+=" -L${SL_HWLOC_PREFIX}/lib"
 	CGO_CFLAGS=-I${SL_PREFIX}/include

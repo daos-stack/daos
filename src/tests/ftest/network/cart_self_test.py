@@ -59,8 +59,7 @@ class CartSelfTest(TestWithoutServers):
         self.hostfile_servers = write_host_file.write_host_file(
             self.hostlist_servers, self.workdir)
 
-        context = DaosContext(self.prefix + '/lib/')
-        self.d_log = DaosLog(context)
+        self.d_log = DaosLog(self.context)
 
         # self_test params
         self.self_test_bin = os.path.join(self.prefix, "bin/self_test")
