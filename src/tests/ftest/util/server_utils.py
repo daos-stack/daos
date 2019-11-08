@@ -248,7 +248,7 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
         server_yaml = os.path.join(test.tmp, AVOCADO_FILE)
         server_config = DaosServerConfig()
         server_config.get_params(test)
-        if hasattr(test, "server_log"):
+        if hasattr(test, "server_log") and test.server_log is not None:
             server_config.update_log_file(test.server_log)
         server_config.create_yaml(server_yaml)
 
@@ -275,7 +275,8 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
             "--np", str(server_count)]
         if uri_path is not None:
             server_cmd.extend(["--report-uri", uri_path])
-        server_cmd.extend(["--hostfile", hostfile, "--enable-recovery"])
+        server_cmd.extend(
+            ["--hostfile", hostfile, "--enable-recovery", "--tag-output"])
 
         # Add any user supplied environment
         if env_dict is not None:
