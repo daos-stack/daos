@@ -24,6 +24,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -67,7 +68,10 @@ func runDrpcServer(log logging.Logger) error {
 	finish := make(chan bool, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
-	drpcServer, err := drpc.NewDomainSocketServer(log, *unixSocket)
+	ctx, shutdown := context.WithCancel(context.Background())
+	defer shutdown()
+
+	drpcServer, err := drpc.NewDomainSocketServer(ctx, log, *unixSocket)
 	if err != nil {
 		return errors.Wrap(err, "creating socket server")
 	}

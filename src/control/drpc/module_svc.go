@@ -29,15 +29,10 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-// ModuleState is an interface to allow a caller to pass in private
-// information to the Module that it will need to perform its duties.
-type ModuleState interface{}
-
 // Module is an interface that a type must implement to provide the
 // functionality needed by the ModuleService to process dRPC requests.
 type Module interface {
-	HandleCall(*Client, int32, []byte) ([]byte, error)
-	InitModule(ModuleState)
+	HandleCall(*Session, int32, []byte) ([]byte, error)
 	ID() int32
 }
 
@@ -61,12 +56,19 @@ func NewModuleService(log logging.Logger) *ModuleService {
 // and ensure that no other module is already registered with that module
 // identifier.
 func (r *ModuleService) RegisterModule(mod Module) error {
-	_, ok := r.modules[mod.ID()]
-	if ok == true {
+	_, ok := r.GetModule(mod.ID())
+	if ok {
 		return errors.Errorf("module with ID %d already exists", mod.ID())
 	}
 	r.modules[mod.ID()] = mod
 	return nil
+}
+
+// GetModule fetches the module for the given ID. Returns true if found, false
+// otherwise.
+func (r *ModuleService) GetModule(id int32) (Module, bool) {
+	mod, found := r.modules[id]
+	return mod, found
 }
 
 // marshalResponse is an internal function that will take the necessary
@@ -105,19 +107,19 @@ func marshalResponse(sequence int64, status Status, body []byte) ([]byte, error)
 // ProcessMessage is the main entry point into the ModuleService. It accepts a
 // marshaled drpc.Call instance, processes it, calls the handler in the
 // appropriate Module, and marshals the result into the body of a drpc.Response.
-func (r *ModuleService) ProcessMessage(client *Client, msgBytes []byte) ([]byte, error) {
+func (r *ModuleService) ProcessMessage(session *Session, msgBytes []byte) ([]byte, error) {
 	msg := &Call{}
 
 	err := proto.Unmarshal(msgBytes, msg)
 	if err != nil {
 		return marshalResponse(-1, Status_FAILURE, nil)
 	}
-	module, ok := r.modules[msg.GetModule()]
+	module, ok := r.GetModule(msg.GetModule())
 	if !ok {
 		err = errors.Errorf("Attempted to call unregistered module")
 		return marshalResponse(msg.GetSequence(), Status_UNKNOWN_MODULE, nil)
 	}
-	respBody, err := module.HandleCall(client, msg.GetMethod(), msg.GetBody())
+	respBody, err := module.HandleCall(session, msg.GetMethod(), msg.GetBody())
 	if err != nil {
 		r.log.Errorf("HandleCall for %d:%d failed:%s\n", module.ID(), msg.GetMethod(), err)
 		return marshalResponse(msg.GetSequence(), Status_FAILURE, nil)

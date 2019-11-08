@@ -29,7 +29,6 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
-	"strings"
 
 	"github.com/pkg/errors"
 
@@ -42,8 +41,6 @@ import (
 
 const (
 	spdkSetupPath      = "share/daos/control/setup_spdk.sh"
-	spdkFioPluginDir   = "share/daos/spdk/fio_plugin"
-	fioExecPath        = "bin/fio"
 	defaultNrHugepages = 1024
 	nrHugepagesEnv     = "_NRHUGE"
 	targetUserEnv      = "_TARGET_USER"
@@ -55,16 +52,13 @@ const (
 	msgBdevNotFound = "controller at pci addr not found, check device exists " +
 		"and can be discovered, you may need to run `sudo daos_server " +
 		"storage prepare --nvme-only` to setup SPDK to access SSDs"
-	msgBdevNotInited          = "nvme storage not initialized"
-	msgBdevClassNotSupported  = "operation unsupported on bdev class"
-	msgSpdkInitFail           = "SPDK env init, has setup been run?"
-	msgSpdkDiscoverFail       = "SPDK controller discovery"
-	msgBdevFwrevStartMismatch = "controller fwrev unexpected before update"
-	msgBdevFwrevEndMismatch   = "controller fwrev unchanged after update"
-	msgBdevModelMismatch      = "controller model unexpected"
-	msgBdevNoDevs             = "no controllers specified"
-	msgBdevClassIsFile        = "nvme emulation initialized with backend file"
-	msgBdevScmNotReady        = "nvme format not performed because scm not ready"
+	msgBdevNotInited         = "nvme storage not initialized"
+	msgBdevClassNotSupported = "operation unsupported on bdev class"
+	msgSpdkInitFail          = "SPDK env init, has setup been run?"
+	msgSpdkDiscoverFail      = "SPDK controller discovery"
+	msgBdevNoDevs            = "no controllers specified"
+	msgBdevClassIsFile       = "nvme emulation initialized with backend file"
+	msgBdevScmNotReady       = "nvme format not performed because scm not ready"
 )
 
 // SpdkSetup is an interface to configure spdk prerequisites via a
@@ -311,155 +305,11 @@ func (n *nvmeStorage) Format(cfg storage.BdevConfig, results *(types.NvmeControl
 	// add info to result if no controllers have been formatted
 	if len(*results) == 0 && len(cfg.DeviceList) == 0 {
 		addCretFormat(ctlpb.ResponseStatus_CTL_SUCCESS,
-			"", "no controllers specified")
+			"", msgBdevNoDevs)
 	}
 
 	n.log.Debugf("device format on NVMe controllers completed")
 	n.formatted = true
-}
-
-// Update attempts to update firmware on NVMe controllers attached to a
-// given server identified by PCI addresses as specified in config file.
-// Update populates resp NvmeControllerResult for each NVMe controller
-// specified in config file bdev_list param.
-//
-// Firmware will only be updated if the controller the current fw rev
-// and model match the "startRev" and "model" fn parameters respectively.
-// Path and slot params refer to the fw image file location and controller
-// firmware register to update respectively.
-//
-// One result with empty Pciaddr will be reported if there are preliminary
-// errors occurring before devices could be accessed. Otherwise a result will
-// be populated for each device in bdev_list.
-func (n *nvmeStorage) Update(cfg storage.BdevConfig, req *ctlpb.UpdateNvmeReq, results *(types.NvmeControllerResults)) {
-	var pciAddr string
-	n.log.Debugf("performing firmware update on NVMe controllers")
-
-	// appends results to response to provide update specific function
-	addCretUpdate := func(status ctlpb.ResponseStatus, errMsg string) {
-		*results = append(*results, newCret(n.log, "update", pciAddr, status, errMsg, ""))
-	}
-
-	if !n.initialized {
-		addCretUpdate(ctlpb.ResponseStatus_CTL_ERR_APP, msgBdevNotInited)
-		return
-	}
-
-	switch cfg.Class {
-	case storage.BdevClassNvme:
-		for _, pciAddr = range cfg.DeviceList {
-			if pciAddr == "" {
-				addCretUpdate(ctlpb.ResponseStatus_CTL_ERR_CONF, msgBdevEmpty)
-				continue
-			}
-
-			ctrlr := n.getController(pciAddr)
-			if ctrlr == nil {
-				addCretUpdate(ctlpb.ResponseStatus_CTL_ERR_NVME,
-					pciAddr+": "+msgBdevNotFound)
-				continue
-			}
-
-			if strings.TrimSpace(ctrlr.Model) != req.Model {
-				addCretUpdate(ctlpb.ResponseStatus_CTL_ERR_NVME,
-					fmt.Sprintf(pciAddr+": "+msgBdevModelMismatch+
-						" want %s, have %s", req.Model, ctrlr.Model))
-				continue
-			}
-
-			if strings.TrimSpace(ctrlr.Fwrev) != req.Startrev {
-				addCretUpdate(ctlpb.ResponseStatus_CTL_ERR_NVME,
-					fmt.Sprintf(pciAddr+": "+msgBdevFwrevStartMismatch+
-						" want %s, have %s", req.Startrev, ctrlr.Fwrev))
-				continue
-			}
-
-			n.log.Debugf(
-				"updating firmware (current rev %s, fw image %s)"+
-					" on nvme controller at %s, may take several "+
-					"minutes!", ctrlr.Fwrev, req.Path, pciAddr)
-
-			cs, ns, err := n.nvme.Update(pciAddr, req.Path, req.Slot)
-			if err != nil {
-				addCretUpdate(ctlpb.ResponseStatus_CTL_ERR_NVME,
-					fmt.Sprintf(pciAddr+": %T: "+err.Error(), n.nvme))
-				// TODO: verify controller responsive after
-				//       error, return fatal response to stop
-				//       further updates if not
-				continue
-			}
-			n.controllers = loadControllers(cs, ns, nil)
-
-			ctrlr = n.getController(pciAddr)
-			if ctrlr == nil {
-				addCretUpdate(ctlpb.ResponseStatus_CTL_ERR_NVME,
-					pciAddr+": "+msgBdevNotFound+" (after update)")
-				continue
-			}
-
-			// verify controller is reporting an updated rev
-			if ctrlr.Fwrev == req.Startrev || ctrlr.Fwrev == "" {
-				addCretUpdate(ctlpb.ResponseStatus_CTL_ERR_NVME,
-					fmt.Sprintf(pciAddr+": "+msgBdevFwrevEndMismatch))
-				continue
-			}
-
-			n.log.Debugf("controller fwupdate successful (%s: %s->%s)\n",
-				pciAddr, req.Startrev, ctrlr.Fwrev)
-
-			addCretUpdate(ctlpb.ResponseStatus_CTL_SUCCESS, "")
-		}
-	default:
-		addCretUpdate(ctlpb.ResponseStatus_CTL_ERR_CONF,
-			fmt.Sprintf("%s: %s", cfg.Class, msgBdevClassNotSupported))
-		return
-	}
-
-	n.log.Debugf("device fwupdates on specified NVMe controllers completed\n")
-}
-
-// BurnIn method implementation for nvmeStorage
-// Doesn't call through go-spdk, returns cmds to be issued over shell
-func (n *nvmeStorage) BurnIn(pciAddr string, nsID int32, configPath string) (
-	fioPath string, cmds []string, env string, err error) {
-
-	if !n.initialized {
-		err = errors.New(msgBdevNotInited)
-		return
-	}
-
-	pluginDir := ""
-	pluginDir, err = n.ext.getAbsInstallPath(spdkFioPluginDir)
-	if err != nil {
-		return
-	}
-
-	fioPath, err = n.ext.getAbsInstallPath(fioExecPath)
-	if err != nil {
-		return
-	}
-
-	// run fio with spdk plugin specified in LD_PRELOAD env
-	env = fmt.Sprintf("LD_PRELOAD=%s/fio_plugin", pluginDir)
-	// limitation of fio_plugin for spdk is that traddr needs
-	// to not contain colon chars, convert to full-stops
-	// https://github.com/spdk/spdk/tree/master/examples/nvme/fio_plugin .
-	// shm_id specified within fio configs to enable spdk multiprocess
-	// mode required to perform burn-in from Go process.
-	// eta options provided to trigger periodic client responses.
-	cmds = []string{
-		fmt.Sprintf(
-			"--filename=\"trtype=PCIe traddr=%s ns=%d\"",
-			strings.Replace(pciAddr, ":", ".", -1), nsID),
-		"--ioengine=spdk",
-		"--eta=always",
-		"--eta-newline=10",
-		configPath,
-	}
-	n.log.Debugf(
-		"BurnIn command string: %s %s %v", env, fioPath, cmds)
-
-	return
 }
 
 // loadControllers converts slice of Controller into protobuf equivalent.
