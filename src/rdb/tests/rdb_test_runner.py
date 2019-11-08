@@ -105,7 +105,7 @@ def start_server(binfo):
     cmd += "-x LD_LIBRARY_PATH "
     cmd += binfo.get("PREFIX") + "/bin/daos_server "
     cmd += "--debug --config {} ".format(config_file)
-    cmd += "start -d ./ -t 1 -m vos,rdb,rsvc,mgmt,rdbt -i "
+    cmd += "start -d ./ -t 1 -m vos,rdb,rsvc,mgmt,rdbt -i --recreate-superblocks "
     print("Running command:\n{}".format(cmd))
     sys.stdout.flush()
 
