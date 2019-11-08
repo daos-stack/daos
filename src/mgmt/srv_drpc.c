@@ -754,7 +754,7 @@ out:
 static char *
 rank_list_to_csvstr(d_rank_list_t *rl)
 {
-	char 	*buf = NULL;
+	char	*buf = NULL;
 	int	 buflen = 16;	/* grow as needed */
 	int	 bufidx;
 	int	 i;
