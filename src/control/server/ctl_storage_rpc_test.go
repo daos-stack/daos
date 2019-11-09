@@ -293,7 +293,7 @@ func TestStoragePrepare(t *testing.T) {
 		inReq               StoragePrepareReq
 		prepScmNamespaceRes []storage.ScmNamespace
 		prepScmErr          error
-		expResp             StoragePrepareResp
+		expResp             *StoragePrepareResp
 		isRoot              bool
 	}{
 		"success": {
@@ -303,7 +303,7 @@ func TestStoragePrepare(t *testing.T) {
 			},
 			[]storage.ScmNamespace{},
 			nil,
-			StoragePrepareResp{
+			&StoragePrepareResp{
 				Nvme: &PrepareNvmeResp{State: new(ResponseState)},
 				Scm:  &PrepareScmResp{State: new(ResponseState)},
 			},
@@ -316,18 +316,15 @@ func TestStoragePrepare(t *testing.T) {
 			},
 			[]storage.ScmNamespace{},
 			nil,
-			StoragePrepareResp{
+			&StoragePrepareResp{
 				Nvme: &PrepareNvmeResp{
 					State: &ResponseState{
 						Status: ResponseStatus_CTL_ERR_NVME,
-						Error:  os.Args[0] + " must be run as root or sudo",
+						Error:  os.Args[0] + " must be run as root or sudo in order to prepare NVMe in this release",
 					},
 				},
 				Scm: &PrepareScmResp{
-					State: &ResponseState{
-						Status: ResponseStatus_CTL_ERR_SCM,
-						Error:  os.Args[0] + " must be run as root or sudo",
-					},
+					State: new(ResponseState),
 				},
 			},
 			false,
@@ -339,7 +336,7 @@ func TestStoragePrepare(t *testing.T) {
 			},
 			[]storage.ScmNamespace{},
 			nil,
-			StoragePrepareResp{
+			&StoragePrepareResp{
 				Nvme: nil,
 				Scm:  &PrepareScmResp{State: new(ResponseState)},
 			},
@@ -352,7 +349,7 @@ func TestStoragePrepare(t *testing.T) {
 			},
 			[]storage.ScmNamespace{},
 			nil,
-			StoragePrepareResp{
+			&StoragePrepareResp{
 				Nvme: &PrepareNvmeResp{State: new(ResponseState)},
 				Scm:  nil,
 			},
@@ -365,7 +362,7 @@ func TestStoragePrepare(t *testing.T) {
 			},
 			[]storage.ScmNamespace{MockScmNamespace()},
 			nil,
-			StoragePrepareResp{
+			&StoragePrepareResp{
 				Nvme: &PrepareNvmeResp{State: new(ResponseState)},
 				Scm: &PrepareScmResp{
 					State: new(ResponseState),
@@ -381,7 +378,7 @@ func TestStoragePrepare(t *testing.T) {
 			},
 			[]storage.ScmNamespace{MockScmNamespace()},
 			errExample,
-			StoragePrepareResp{
+			&StoragePrepareResp{
 				Nvme: &PrepareNvmeResp{State: new(ResponseState)},
 				Scm: &PrepareScmResp{
 					State: &ResponseState{
@@ -400,6 +397,7 @@ func TestStoragePrepare(t *testing.T) {
 			config := newDefaultConfiguration(newMockExt(nil, true, nil,
 				true, nil, nil, nil, tc.isRoot))
 			mbc := scm.MockBackendConfig{
+				DiscoverRes:      []storage.ScmModule{MockScmModule()},
 				PrepNamespaceRes: tc.prepScmNamespaceRes,
 				PrepErr:          tc.prepScmErr,
 			}
@@ -420,16 +418,8 @@ func TestStoragePrepare(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if resp.Nvme == nil {
-				common.AssertEqual(t, resp.Nvme, tc.expResp.Nvme, "unexpected nvme response, "+name)
-			} else {
-				common.AssertEqual(t, resp.Nvme.State, tc.expResp.Nvme.State, "unexpected nvme state in response, "+name)
-			}
-			if resp.Scm == nil {
-				common.AssertEqual(t, resp.Scm, tc.expResp.Scm, "unexpected scm response, "+name)
-			} else {
-				common.AssertEqual(t, resp.Scm.State, tc.expResp.Scm.State, "unexpected scm state in response, "+name)
-				common.AssertEqual(t, resp.Scm.Pmems, tc.expResp.Scm.Pmems, "unexpected pmem devices in response, "+name)
+			if diff := cmp.Diff(tc.expResp, resp); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
@@ -724,7 +714,7 @@ func TestStorageFormat(t *testing.T) {
 			}()
 
 			if !tc.superblockExists && tc.expNvmeFormatted {
-				if err := cs.harness.AwaitStorageReady(context.Background()); err != nil {
+				if err := cs.harness.AwaitStorageReady(context.Background(), false); err != nil {
 					t.Fatal(err)
 				}
 			}
