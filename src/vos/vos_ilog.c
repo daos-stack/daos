@@ -242,11 +242,9 @@ vos_ilog_check(struct vos_ilog_info *info, const daos_epoch_range_t *epr_in,
 	return 0;
 }
 
-static int
+static inline int
 vos_ilog_update_check(struct vos_ilog_info *info, const daos_epoch_range_t *epr)
 {
-	if (info->ii_create == 0)
-		return -DER_NONEXIST;
 	if (info->ii_create <= info->ii_prior_any_punch)
 		return -DER_NONEXIST;
 
