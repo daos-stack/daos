@@ -236,15 +236,16 @@ def storage_reset(hosts, user=None, hugepages="4096", insecure=True):
     return result
 
 
-def pool_create(path, host_port, scm_size, insecure=True, group=None,
+def pool_create(path, scm_size, host_port=None, insecure=True, group=None,
                 user=None, acl_file=None, nvme_size=None, ranks=None,
                 nsvc=None, sys=None):
     """Execute pool create command through dmg tool to servers provided.
 
     Args:
         path (str): Path to the directory of dmg binary.
-        host_port (list of str): List of Host:Port where daos_server runs.
-            Use 10001 for the default port number. This number is defined in
+        host_port (str, optional): Comma separated list of Host:Port where
+            daos_server runs. e.g., wolf-31:10001,wolf-32:10001. Use 10001 for
+            the default port number. This number is defined in
             daos_avocado_test.yaml
         scm_size (str): SCM size value passed into the command.
         insecure (bool, optional): Insecure mode. Defaults to True.
@@ -290,13 +291,14 @@ def pool_create(path, host_port, scm_size, insecure=True, group=None,
     return result
 
 
-def pool_destroy(path, host_port, pool_uuid, insecure=True, force=True):
+def pool_destroy(path, pool_uuid, host_port=None, insecure=True, force=True):
     """ Execute pool destroy command through dmg tool to servers provided.
 
     Args:
         path (str): Path to the directory of dmg binary.
-        host_port (list of str): List of Host:Port where daos_server runs.
-            Use 10001 for the default port number. This number is defined in
+        host_port (str, optional): Comma separated list of Host:Port where
+            daos_server runs. e.g., wolf-31:10001,wolf-32:10001. Use 10001 for
+            the default port number. This number is defined in
             daos_avocado_test.yaml
         pool_uuid (str): Pool UUID to destroy.
         insecure (bool, optional): Insecure mode. Defaults to True.
@@ -346,6 +348,33 @@ def get_pool_uuid_from_stdout(stdout_str):
     # followed by one of more of number, alphabets, or -. Use parenthesis to
     # get the returned value.
     matches = re.findall(r"UUID:\s+([0-9a-fA-F-]+)", stdout_str)
+    if len(matches) > 0:
+        return matches[0]
+    return None
+
+
+def get_service_replicas_from_stdout(stdout_str):
+    """Get service replicas from stdout.
+
+    stdout_str is something like:
+    Active connections: [wolf-3:10001]
+    Creating DAOS pool with 100MB SCM and 0B NvMe storage (1.000 ratio)
+    Pool-create command SUCCEEDED: UUID: 9cf5be2d-083d-4f6b-9f3e-38d771ee313f,
+    Service replicas: 0
+
+    This method makes it easy to create a test. This method expects there's a
+    single number after "Service replicas:"
+
+    Args:
+        stdout_str (str): Output of pool create command.
+
+    Returns:
+        str: Service replicas value if found. Otherwise None.
+    """
+    # Find the following with regex. One or more of whitespace after "Service
+    # replicas:" followed by one of more of number. Use parenthesis to get the
+    # returned value.
+    matches = re.findall(r"Service replicas:\s+([0-9]+)", stdout_str)
     if len(matches) > 0:
         return matches[0]
     return None

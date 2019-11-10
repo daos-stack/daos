@@ -29,9 +29,12 @@ from avocado import fail_on
 from avocado.utils import process
 from command_utils import BasicParameter, ObjectWithParameters
 from pydaos.raw import (DaosApiError, DaosServer, DaosContainer, DaosPool,
-                        c_uuid_to_str)
+                        c_uuid_to_str, daos_cref)
 from general_utils import check_pool_files, get_random_string, DaosTestError
-
+import ctypes
+import getpass
+from dmg_utils import (pool_create, pool_destroy, get_pool_uuid_from_stdout,
+                       get_service_replicas_from_stdout)
 
 class CallbackHandler(object):
     """Defines a callback method to use with DaosApi class methods."""
@@ -186,6 +189,104 @@ class TestPool(TestDaosApiBase):
             self.uuid, self.svc_ranks)
 
     @fail_on(DaosApiError)
+    def create_dmg(self, dmg_bin_path):
+        """Create a pool using dmg create pool.
+
+        1. Destroys the existing pool
+        2. Use dmg to create a pool
+        3. Create DaosPool object so that we can use other pool-related
+            operations
+        4. Set UUID of the new pool to the DaosPool object
+
+        Args:
+            dmg_bin_path (str): Directory where dmg is installed. Call
+                self.basepath + '/install/bin' in the test
+        
+        Returns:
+            Boolean: True if the pool create succeeds. False otherwise.
+        """
+        # 1. Destroys the existing pool
+        self.destroy()
+        if self.target_list.value is not None:
+            self.log.info(
+                "Creating a pool on targets %s", self.target_list.value)
+        else:
+            self.log.info("Creating a pool")
+
+        # 2. Use dmg to create a pool
+        user = getpass.getuser()
+        # Currently, there is one test that creates the pool over the subset of
+        # the server hosts; pool/evict_test. To do so, the test needs to set
+        # the rank(s) to target_list.value starting from 0. e.g., if you're
+        # using 4 server hosts; wolf-1, wolf-2, wolf-3, and wolf-4, and want to
+        # create a pool over the first two hosts; wolf-1 and 2, then set the
+        # list [0, 1] to target_list.value. We'll convert it to the comma
+        # separated string and set it to dmg. For instance, [0, 1] will result
+        # in dmg pool create -r 0,1. If you don't set target_list.value, -r
+        # won't be used, in which case the pool is created over all the server
+        # hosts
+        if self.target_list.value == None:
+            ranks_comma_separated = None
+        else:
+            ranks_comma_separated = ""
+            for i in range(len(self.target_list.value)):
+                ranks_comma_separated += str(self.target_list.value[i])
+                # If this element is not the last one, append comma
+                if i < len(self.target_list.value) - 1:
+                    ranks_comma_separated += ","
+        self.log.info("ranks_comma_separated = %s" % ranks_comma_separated)
+        # Call the dmg pool create command
+        create_result = pool_create(path=dmg_bin_path,
+                                    scm_size=self.scm_size.value, group=user,
+                                    user=user, ranks=ranks_comma_separated)
+        # If the returned result is None, that means the command has failed
+        if create_result == None:
+            return False
+        self.log.info("Result stdout = %s" % create_result.stdout)
+        self.log.info("Result exit status = %s" % create_result.exit_status)
+        # Get UUID and service replica from the output
+        new_uuid = get_pool_uuid_from_stdout(create_result.stdout)
+        service_replica = get_service_replicas_from_stdout(
+            create_result.stdout)
+        self.log.info("New Pool UUID = %s" % new_uuid)
+        self.log.info("New Pool service replica = %s" % service_replica)
+
+        # 3. Create DaosPool object. The process is similar to the one in
+        # DaosPool.create, but there are some modifications
+        self.pool = DaosPool(self.context)
+        if self.name.value == None:
+            self.pool.group = None
+        else:
+            self.pool.group = ctypes.create_string_buffer(self.name.value)
+        if self.svcn.value == None:
+            svcn_val = 1
+        else:
+            svcn_val = self.svcn.value
+        # Modification 1: Use the length of service_replica returned by dmg to
+        # calculate rank_t. Note that we assume we always get a single number.
+        # I'm not sure if we ever get multiple numbers, but in that case, we
+        # need to modify this implementation to create a list out of the
+        # multiple numbers possibly separated by comma
+        service_replicas = [int(service_replica)]
+        rank_t = ctypes.c_uint * len(service_replicas)
+        # Modification 2: Use the service_replicas list to generate rank. In
+        # DaosPool, we first use some garbage 999999 values and let DAOS set
+        # the correct values, but we can't do that here, so we need to set the
+        # correct rank value by ourself
+        rank = rank_t(*list([svc for svc in service_replicas]))
+        rl_ranks = ctypes.POINTER(ctypes.c_uint)(rank)
+        # Modification 3: Similar to 1. Use the length of service_replicas list
+        # instead of self.svcn.value
+        self.pool.svc = daos_cref.RankList(rl_ranks, len(service_replicas))
+
+        # 4. Set UUID and attached to the DaosPool object
+        self.pool.set_uuid_str(new_uuid)
+        self.pool.attached = 1
+        # Also set the UUID to this object's uuid
+        self.uuid = self.pool.get_uuid_str()
+        return True
+
+    @fail_on(DaosApiError)
     def connect(self, permission=1):
         """Connect to the pool.
 
@@ -240,6 +341,39 @@ class TestPool(TestDaosApiBase):
             self.log.info("Destroying pool %s", self.uuid)
             if self.pool.attached:
                 self._call_method(self.pool.destroy, {"force": force})
+            self.pool = None
+            self.uuid = None
+            self.info = None
+            self.svc_ranks = None
+            return True
+        return False
+    
+    @fail_on(DaosApiError)
+    def destroy_dmg(self, dmg_bin_path, force=1):
+        """Destroy the pool using dmg.
+
+        Args:
+            dmg_bin_path (str): Directory where dmg is installed. Call
+                self.basepath + '/install/bin' in the test
+            force (int, optional): force flag. Defaults to 1.
+
+        Returns:
+            bool: True if the pool has been destroyed; False if the pool is not
+                defined.
+        """
+        if self.pool:
+            self.disconnect()
+            self.log.info("Destroying pool %s", self.uuid)
+            if self.pool.attached:
+                if force == 1:
+                    force_bool = True
+                else:
+                    force_bool = False
+                destroy_result = pool_destroy(path=dmg_bin_path,
+                                              pool_uuid=self.uuid,
+                                              force=force_bool)
+                self.log.info(" Destroy result stdout = %s" %
+                              destroy_result.stdout)
             self.pool = None
             self.uuid = None
             self.info = None
