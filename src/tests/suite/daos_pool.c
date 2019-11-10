@@ -562,6 +562,63 @@ pool_properties(void **state)
 	test_teardown((void **)&arg);
 }
 
+static void
+pool_op_retry(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_handle_t	 poh;
+	daos_pool_info_t info = {0};
+	int		 rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	print_message("setting DAOS_POOL_CONNECT_FAIL_CORPC ... ");
+	rc = daos_mgmt_set_params(arg->group, 0, DSS_KEY_FAIL_LOC,
+				  DAOS_POOL_CONNECT_FAIL_CORPC | DAOS_FAIL_ONCE,
+				  0, NULL);
+	assert_int_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("connecting to pool ... ");
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+			       &arg->pool.svc, DAOS_PC_RW, &poh, &info,
+			       NULL /* ev */);
+	assert_int_equal(rc, 0);
+	assert_memory_equal(info.pi_uuid, arg->pool.pool_uuid,
+			    sizeof(info.pi_uuid));
+	assert_int_equal(info.pi_ndisabled, 0);
+	print_message("success\n");
+
+	print_message("setting DAOS_POOL_QUERY_FAIL_CORPC ... ");
+	rc = daos_mgmt_set_params(arg->group, 0, DSS_KEY_FAIL_LOC,
+				  DAOS_POOL_QUERY_FAIL_CORPC | DAOS_FAIL_ONCE,
+				  0, NULL);
+	assert_int_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("querying pool info... ");
+	memset(&info, 'D', sizeof(info));
+	info.pi_bits = DPI_ALL;
+	rc = daos_pool_query(poh, NULL /* tgts */, &info, NULL, NULL /* ev */);
+	assert_int_equal(rc, 0);
+	assert_int_equal(info.pi_ndisabled, 0);
+	print_message("success\n");
+
+	print_message("setting DAOS_POOL_DISCONNECT_FAIL_CORPC ... ");
+	rc = daos_mgmt_set_params(arg->group, 0, DSS_KEY_FAIL_LOC,
+				  DAOS_POOL_DISCONNECT_FAIL_CORPC |
+				  DAOS_FAIL_ONCE, 0, NULL);
+	assert_int_equal(rc, 0);
+	print_message("success\n");
+
+	/** disconnect from pool */
+	print_message("disconnecting from pool ... ");
+	rc = daos_pool_disconnect(poh, NULL /* ev */);
+	assert_int_equal(rc, 0);
+	print_message("success\n");
+}
+
 static int
 pool_setup_sync(void **state)
 {
@@ -974,6 +1031,8 @@ static const struct CMUnitTest pool_tests[] = {
 	  list_containers_test, setup_zerocontainers, teardown_containers},
 	{ "POOL12: pool list containers (many)",
 	  list_containers_test, setup_manycontainers, teardown_containers},
+	{ "POOL13: retry POOL_{CONNECT,DISCONNECT,QUERY}",
+	  pool_op_retry, NULL, test_case_teardown}
 };
 
 int

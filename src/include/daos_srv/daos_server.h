@@ -176,14 +176,16 @@ bool dss_xstream_exiting(struct dss_xstream *dxs);
 
 struct dss_module_info {
 	crt_context_t		dmi_ctx;
-	struct bio_xs_context	*dmi_nvme_ctxt;
-	struct dss_xstream	*dmi_xstream;
+	struct bio_xs_context  *dmi_nvme_ctxt;
+	struct dss_xstream     *dmi_xstream;
 	/* the xstream id */
 	int			dmi_xs_id;
 	/* the VOS target id */
 	int			dmi_tgt_id;
 	/* the cart context id */
 	int			dmi_ctx_id;
+	/* dss_module.sm_setup completed for all modules */
+	bool			dmi_up;
 	d_list_t		dmi_dtx_batched_list;
 };
 
