@@ -120,10 +120,33 @@ static int
 dtx_iter_next(struct vos_iterator *iter)
 {
 	struct vos_dtx_iter	*oiter = iter2oiter(iter);
+	struct vos_dtx_act_ent	*dae;
+	d_iov_t			 rec_iov;
+	int			 rc = 0;
 
 	D_ASSERT(iter->it_type == VOS_ITER_DTX);
 
-	return dbtree_iter_next(oiter->oit_hdl);
+	while (1) {
+		rc = dbtree_iter_next(oiter->oit_hdl);
+		if (rc != 0)
+			break;
+
+		d_iov_set(&rec_iov, NULL, 0);
+		rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &rec_iov, NULL);
+		if (rc != 0)
+			break;
+
+		D_ASSERT(rec_iov.iov_len == sizeof(struct vos_dtx_act_ent));
+		dae = (struct vos_dtx_act_ent *)rec_iov.iov_buf;
+
+		/* Only need to return the DTX that was handled before the
+		 * latest DTX resync.
+		 */
+		if (DAE_SRV_GEN(dae) < oiter->oit_cont->vc_dtx_resync_gen)
+			break;
+	}
+
+	return rc;
 }
 
 static int
@@ -131,8 +154,8 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	       daos_anchor_t *anchor)
 {
 	struct vos_dtx_iter	*oiter = iter2oiter(iter);
-	struct vos_dtx_entry_df	*dtx;
-	d_iov_t		 rec_iov;
+	struct vos_dtx_act_ent	*dae;
+	d_iov_t			 rec_iov;
 	int			 rc;
 
 	D_ASSERT(iter->it_type == VOS_ITER_DTX);
@@ -144,18 +167,17 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 		return rc;
 	}
 
-	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_dtx_entry_df));
-	dtx = (struct vos_dtx_entry_df *)rec_iov.iov_buf;
+	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_dtx_act_ent));
+	dae = (struct vos_dtx_act_ent *)rec_iov.iov_buf;
 
-	it_entry->ie_epoch = dtx->te_epoch;
-	it_entry->ie_xid = dtx->te_xid;
-	it_entry->ie_oid = dtx->te_oid;
-	it_entry->ie_dtx_time = dtx->te_time;
-	it_entry->ie_dtx_intent = dtx->te_intent;
-	it_entry->ie_dtx_hash = dtx->te_dkey_hash;
+	it_entry->ie_xid = DAE_XID(dae);
+	it_entry->ie_oid = DAE_OID(dae);
+	it_entry->ie_epoch = DAE_EPOCH(dae);
+	it_entry->ie_dtx_intent = DAE_INTENT(dae);
+	it_entry->ie_dtx_hash = DAE_DKEY_HASH(dae);
 
 	D_DEBUG(DB_TRACE, "DTX iterator fetch the one "DF_DTI"\n",
-		DP_DTI(&dtx->te_xid));
+		DP_DTI(&DAE_XID(dae)));
 
 	return 0;
 }

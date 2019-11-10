@@ -38,6 +38,17 @@
 #include <daos_srv/vos_types.h>
 
 /**
+ * Refresh the DTX resync generation.
+ *
+ * \param coh	[IN]	Container open handle.
+ *
+ * \return		Zero on success.
+ * \return		Negative value if error.
+ */
+int
+vos_dtx_update_resync_gen(daos_handle_t coh);
+
+/**
  * Add the given DTX to the Commit-on-Share (CoS) cache (in DRAM).
  *
  * \param coh		[IN]	Container open handle.
@@ -45,9 +56,8 @@
  * \param dti		[IN]	The DTX identifier.
  * \param dkey_hash	[IN]	The hashed dkey.
  * \param epoch		[IN]	The DTX epoch.
+ * \param gen		[IN]	The DTX generation.
  * \param punch		[IN]	For punch DTX or not.
- * \param check		[IN]	Check whether the DTX need restart because
- *				of sync epoch or not.
  *
  * \return		Zero on success.
  * \return		-DER_INPROGRESS	retry with newer epoch.
@@ -55,7 +65,8 @@
  */
 int
 vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
-		uint64_t dkey_hash, daos_epoch_t epoch, bool punch, bool check);
+		uint64_t dkey_hash, daos_epoch_t epoch, uint64_t gen,
+		bool punch);
 
 /**
  * Search the specified DTX is in the CoS cache or not.
@@ -174,28 +185,22 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count);
  * \param epoch	[IN]	The max epoch for the DTX to be aborted.
  * \param dtis	[IN]	The array for DTX identifiers to be aborted.
  * \param count [IN]	The count of DTXs to be aborted.
- * \param force [IN]	Force abort even if some replica(s) have not
- *			'prepared' related DTXs.
  *
  * \return		Zero on success, negative value if error.
  */
 int
 vos_dtx_abort(daos_handle_t coh, daos_epoch_t epoch, struct dtx_id *dtis,
-	      int count, bool force);
+	      int count);
 
 /**
  * Aggregate the committed DTXs.
  *
  * \param coh	[IN]	Container open handle.
- * \param max	[IN]	The max count of DTXs to be aggregated.
- * \param age	[IN]	Not aggregate the DTX which age is newer than that.
  *
- * \return	Positive value if no more DTXs can be aggregated.
- * \return	Zero if the requested (@max) DTXs have been aggregated.
- * \return	Negative value if error.
+ * \return		Zero on success, negative value if error.
  */
 int
-vos_dtx_aggregate(daos_handle_t coh, uint64_t max, uint64_t age);
+vos_dtx_aggregate(daos_handle_t coh);
 
 /**
  * Query the container's DTXs information.
@@ -217,6 +222,28 @@ vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat);
  */
 int
 vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch);
+
+/**
+ * Establish the indexed committed DTX table in DRAM.
+ *
+ * \param coh	[IN]		Container open handle.
+ * \param hint	[IN,OUT]	Pointer to the address (offset in SCM) that
+ *				contains committed DTX entries to be handled.
+ *
+ * \return	Zero on success, need further re-index.
+ *		Positive, re-index is completed.
+ *		Negative value if error.
+ */
+int
+vos_dtx_cmt_reindex(daos_handle_t coh, void *hint);
+
+/**
+ * Cleanup current DTX handle.
+ *
+ * \param dth	[IN]	Pointer to the DTX handle.
+ */
+void
+vos_dtx_handle_cleanup(struct dtx_handle *dth);
 
 /**
  * Initialize the environment for a VOS instance

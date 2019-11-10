@@ -1457,7 +1457,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	if (dth != NULL && dth->dth_dti_cos_count > 0 &&
 	    dth->dth_dti_cos_done == 0) {
 		vos_dtx_commit_internal(ioc->ic_obj->obj_cont, dth->dth_dti_cos,
-					dth->dth_dti_cos_count);
+					dth->dth_dti_cos_count, 0);
 		dth->dth_dti_cos_done = 1;
 	}
 

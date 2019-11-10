@@ -87,7 +87,6 @@ cont_child_alloc_ref(void *key, unsigned int ksize, void *varg,
 		goto out_cond;
 
 	uuid_copy(cont->sc_uuid, key);
-	cont->sc_dtx_resync_time = crt_hlc_get();
 	/* prevent aggregation till snapshot iv refreshed */
 	cont->sc_aggregation_max = 0;
 	cont->sc_snapshots_nr = 0;
@@ -104,6 +103,81 @@ cont_child_alloc_ref(void *key, unsigned int ksize, void *varg,
  out:
 	D_FREE(cont);
 	return rc;
+}
+
+void
+ds_cont_dtx_reindex_ult(void *arg)
+{
+	struct ds_cont_child		*cont	= arg;
+	struct dss_module_info		*dmi	= dss_get_module_info();
+	uint64_t			 hint	= 0;
+	int				 rc;
+
+	D_DEBUG(DF_DSMS, DF_CONT": starting DTX reindex ULT on xstream %d\n",
+		DP_CONT(NULL, cont->sc_uuid), dmi->dmi_tgt_id);
+
+	while (!cont->sc_dtx_reindex_abort &&
+	       !dss_xstream_exiting(dmi->dmi_xstream)) {
+		rc = vos_dtx_cmt_reindex(cont->sc_hdl, &hint);
+		if (rc < 0) {
+			D_ERROR(DF_UUID": DTX reindex failed: rc = %d\n",
+				DP_UUID(cont->sc_uuid), rc);
+			goto out;
+		}
+
+		if (rc > 0) {
+			D_DEBUG(DF_DSMS, DF_CONT": DTX reindex done\n",
+				DP_CONT(NULL, cont->sc_uuid));
+			goto out;
+		}
+
+		ABT_thread_yield();
+	}
+
+	D_DEBUG(DF_DSMS, DF_CONT": stopping DTX reindex ULT on stream %d\n",
+		DP_CONT(NULL, cont->sc_uuid), dmi->dmi_tgt_id);
+
+out:
+	cont->sc_dtx_reindex = 0;
+	ds_cont_child_put(cont);
+}
+
+static int
+cont_start_dtx_reindex_ult(struct ds_cont_child *cont)
+{
+	int rc;
+
+	D_ASSERT(cont != NULL);
+
+	if (cont->sc_dtx_reindex || cont->sc_dtx_reindex_abort)
+		return 0;
+
+	ds_cont_child_get(cont);
+	cont->sc_dtx_reindex = 1;
+	rc = dss_ult_create(ds_cont_dtx_reindex_ult, cont,
+			    DSS_ULT_DTX_RESYNC, DSS_TGT_SELF, 0, NULL);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": Failed to create DTX reindex ULT: rc %d\n",
+			DP_UUID(cont->sc_uuid), rc);
+		cont->sc_dtx_reindex = 0;
+		ds_cont_child_put(cont);
+	}
+
+	return rc;
+}
+
+static void
+cont_stop_dtx_reindex_ult(struct ds_cont_child *cont)
+{
+	if (!cont->sc_dtx_reindex)
+		return;
+
+	cont->sc_dtx_reindex_abort = 1;
+
+	while (cont->sc_dtx_reindex)
+		ABT_thread_yield();
+
+	cont->sc_dtx_reindex_abort = 0;
 }
 
 static int
@@ -132,6 +206,9 @@ static void
 cont_stop_agg_ult(struct ds_cont_child *cont)
 {
 	int rc;
+
+	if (!cont->sc_vos_aggregating)
+		return;
 
 	D_DEBUG(DF_DSMS, DF_CONT": Stopping aggregation ULT\n",
 		DP_CONT(NULL, cont->sc_uuid));
@@ -849,6 +926,10 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		if (rc)
 			goto err_cont;
 
+		rc = cont_start_dtx_reindex_ult(hdl->sch_cont);
+		if (rc != 0)
+			goto err_cont;
+
 		rc = dtx_batched_commit_register(hdl);
 		if (rc != 0) {
 			D_ERROR("Failed to register the container "DF_UUID
@@ -886,6 +967,8 @@ err_cont:
 	if (hdl->sch_cont)
 		cont_child_put(tls->dt_cont_cache, hdl->sch_cont);
 
+	cont_stop_dtx_reindex_ult(hdl->sch_cont);
+	cont_stop_agg_ult(hdl->sch_cont);
 	if (vos_co_created) {
 		D_DEBUG(DF_DSMS, DF_CONT": destroying new vos container\n",
 			DP_CONT(hdl->sch_pool->spc_uuid, cont_uuid));

@@ -163,9 +163,9 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	struct umem_instance	*umm = &tins->ti_umm;
 	struct vos_obj_df	*obj;
 
-	obj = umem_off2ptr(&tins->ti_umm, rec->rec_off);
+	obj = umem_off2ptr(umm, rec->rec_off);
 
-	vos_dtx_deregister_record(umm, obj->vo_dtx, rec->rec_off, DTX_RT_OBJ);
+	vos_dtx_deregister_record(umm, tins->ti_coh, obj->vo_dtx, rec->rec_off);
 	if (obj->vo_dtx_shares > 0) {
 		D_ERROR("There are some unknown DTXs (%d) share the obj rec\n",
 			obj->vo_dtx_shares);
@@ -301,12 +301,13 @@ int
 vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 	     daos_epoch_t epoch, uint32_t flags, struct vos_obj_df *obj)
 {
-	struct oi_hkey	*hkey;
-	struct oi_key	 key;
-	d_iov_t	 key_iov;
-	d_iov_t	 val_iov;
-	int		 rc = 0;
-	bool		 replay = (flags & VOS_OF_REPLAY_PC);
+	struct dtx_handle	*dth;
+	struct oi_hkey		*hkey;
+	struct oi_key		 key;
+	d_iov_t			 key_iov;
+	d_iov_t			 val_iov;
+	int			 rc = 0;
+	bool			 replay = (flags & VOS_OF_REPLAY_PC);
 
 	D_DEBUG(DB_TRACE, "Punch obj "DF_UOID", epoch="DF_U64".\n",
 		DP_UOID(oid), epoch);
@@ -337,7 +338,8 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 	if (rc != 0 || replay)
 		goto out;
 
-	if (vos_dth_get() == NULL) {
+	dth = vos_dth_get();
+	if (dth == NULL || dth->dth_solo) {
 		struct vos_obj_df *tmp;
 
 		D_ASSERT((obj->vo_oi_attr & VOS_OI_PUNCHED) == 0);
