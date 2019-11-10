@@ -82,7 +82,10 @@ static int
 vos_ilog_del(struct umem_instance *umm, umem_off_t ilog_off, umem_off_t tx_id,
 	     void *args)
 {
-	vos_dtx_deregister_record(umm, tx_id, ilog_off, DTX_RT_ILOG);
+	daos_handle_t	coh;
+
+	coh.cookie = (unsigned long)args;
+	vos_dtx_deregister_record(umm, coh, tx_id, ilog_off);
 	return 0;
 }
 
@@ -96,7 +99,7 @@ vos_ilog_desc_cbs_init(struct ilog_desc_cbs *cbs, daos_handle_t coh)
 	cbs->dc_log_add_cb = vos_ilog_add;
 	cbs->dc_log_add_args = NULL;
 	cbs->dc_log_del_cb = vos_ilog_del;
-	cbs->dc_log_del_args = NULL;
+	cbs->dc_log_del_args = (void *)(unsigned long)coh.cookie;
 }
 
 static void
