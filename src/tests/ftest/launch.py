@@ -61,8 +61,7 @@ except ImportError:
             """Destroy a TemporaryDirectory object."""
             rmtree(self.name)
 
-
-TEST_LOG_FILE_YAML = "./data/daos_avocado_test.yaml"
+TEST_DAOS_SERVER_YAML = "daos_avocado_test.yaml"
 BASE_LOG_FILE_YAML = "./data/daos_server_baseline.yaml"
 SERVER_KEYS = (
     "test_machines",
@@ -88,6 +87,28 @@ def get_build_environment():
         return json.load(vars_file)
 
 
+def get_temporary_directory(base_dir=None):
+    """Get the temporary directory used by functional tests.
+
+    Args:
+        base_dir (str, optional): base installation directory. Defaults to None.
+
+    Returns:
+        str: the full path of the temporary directory
+
+    """
+    if base_dir is None:
+        base_dir = get_build_environment()["PREFIX"]
+    if base_dir == "/usr":
+        tmp_dir = os.getenv(
+            "DAOS_TEST_SHARED_DIR", os.path.expanduser("~/daos_test"))
+        if not os.path.exists(tmp_dir):
+            os.makedirs(tmp_dir)
+    else:
+        tmp_dir = os.path.join(base_dir, "tmp")
+    return tmp_dir
+
+
 def set_test_environment():
     """Set up the test environment.
 
@@ -100,19 +121,12 @@ def set_test_environment():
     sbin_dir = os.path.join(base_dir, "sbin")
     path = os.environ.get("PATH")
 
-    if base_dir == "/usr":
-        tmp_dir = os.getenv('DAOS_TEST_SHARED_DIR', \
-                            os.path.expanduser('~/daos_test'))
-        if not os.path.exists(tmp_dir):
-            os.makedirs(tmp_dir)
-    else:
-        tmp_dir = os.path.join(base_dir, "tmp")
-
     # Update env definitions
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, path])
     os.environ["DAOS_SINGLETON_CLI"] = "1"
     os.environ["CRT_CTX_SHARE_ADDR"] = "1"
-    os.environ["CRT_ATTACH_INFO_PATH"] = tmp_dir
+    os.environ["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", "eth0")
+    os.environ["CRT_ATTACH_INFO_PATH"] = get_temporary_directory(base_dir)
 
     # Python paths required for functional testing
     python_version = "python{}{}".format(
@@ -500,6 +514,7 @@ def get_log_files(config_yaml, daos_files=None):
             os.getenv("D_LOG_FILE", "/tmp/server.log"))[0]
         daos_files = {
             "log_file": "/tmp/server.log",
+            "server_log_file": "/tmp/server.log",
             "agent_log_file": "/tmp/daos_agent.log",
             "control_log_file": "/tmp/daos_control.log",
             "socket_dir": "/tmp/daos_sockets",
@@ -599,7 +614,8 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
         args (argparse.Namespace): command line arguments for this program
     """
     this_host = socket.gethostname().split(".")[0]
-    log_files = get_log_files(TEST_LOG_FILE_YAML)
+    log_files = get_log_files(
+        os.path.join(get_temporary_directory(), TEST_DAOS_SERVER_YAML))
     host_list = get_hosts_from_yaml(test_yaml, args)
     doas_logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs")
 
