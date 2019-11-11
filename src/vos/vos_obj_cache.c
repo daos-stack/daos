@@ -201,8 +201,6 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 {
 	struct vos_object	*obj;
 	struct daos_llink	*lret;
-	struct ilog_desc_cbs	 cbs;
-	daos_handle_t		 loh;
 	struct obj_lru_key	 lkey;
 	int			 rc = 0;
 
@@ -279,37 +277,33 @@ check_object:
 	if (intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH)
 		goto out;
 
-	if (no_create)
-		goto log_fetch;
+	if (no_create) {
+		rc = vos_ilog_fetch(vos_cont2umm(cont), vos_cont2hdl(cont),
+				    intent, &obj->obj_df->vo_ilog, epr->epr_hi,
+				    0, NULL, &obj->obj_ilog_info);
+		if (rc != 0) {
+			D_DEBUG(DB_TRACE, "Object "DF_UOID" not found at "
+				DF_U64"\n", DP_UOID(oid), epr->epr_hi);
+			goto failed;
+		}
 
-	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
-	rc = ilog_open(vos_cont2umm(cont), &obj->obj_df->vo_ilog, &cbs, &loh);
-	if (rc != 0)
-		goto failed;
-
-	rc = ilog_update(loh, NULL, epr->epr_hi, false);
-
-	ilog_close(loh);
-	if (rc != 0)
-		goto failed;
-log_fetch:
-	/** We need to fetch the ilog for creation case as well */
-	rc = vos_ilog_fetch(vos_cont2umm(cont), vos_cont2hdl(cont),
-			    intent, &obj->obj_df->vo_ilog, epr->epr_hi,
-			    0, NULL, &obj->obj_ilog_info);
-	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "Object "DF_UOID" not found at "
-			DF_U64"\n", DP_UOID(oid), epr->epr_hi);
-		goto failed;
+		rc = vos_ilog_check(&obj->obj_ilog_info, epr, epr,
+				    visible_only);
+		if (rc != 0) {
+			D_DEBUG(DB_TRACE, "Object "DF_UOID" not visible at "
+				DF_U64"-"DF_U64"\n", DP_UOID(oid), epr->epr_lo,
+				epr->epr_hi);
+			goto failed;
+		}
+		goto out;
 	}
 
-	if (no_create == false)
-		goto out;
-
-	rc = vos_ilog_check(&obj->obj_ilog_info, epr, epr, visible_only);
+	rc = vos_ilog_update(cont, &obj->obj_df->vo_ilog, epr,
+			     NULL, &obj->obj_ilog_info);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "Object "DF_UOID" not visible at "DF_U64"-"
-			DF_U64"\n", DP_UOID(oid), epr->epr_lo, epr->epr_hi);
+		D_ERROR("Could not update object "DF_UOID" at "DF_U64
+			": "DF_RC"\n", DP_UOID(oid), epr->epr_hi,
+			DP_RC(rc));
 		goto failed;
 	}
 out:
