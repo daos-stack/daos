@@ -143,6 +143,7 @@ class DaosServer(DaosCommand):
             self.attach = FormattedParameter("-a {}")
             self.sock_dir = FormattedParameter("-d {}")
             self.insecure = FormattedParameter("-i", True)
+            self.recreate = FormattedParameter("--recreate-superblocks", True)
 
 
 class DaosServerConfig(ObjectWithParameters):
@@ -359,6 +360,7 @@ class ServerManager(ExecutableCommand):
         self.debug = BasicParameter(None, True)       # ServerCommand param
         self.attach = BasicParameter(None, attach)    # ServerCommand param
         self.insecure = BasicParameter(None, True)    # ServerCommand param
+        self.recreate = BasicParameter(None, True)    # ServerCommand param
         self.sudo = BasicParameter(None, False)       # ServerCommand param
         self.srv_timeout = BasicParameter(None, timeout)   # ServerCommand param
         self.report_uri = BasicParameter(None)             # Orterun param
@@ -391,7 +393,7 @@ class ServerManager(ExecutableCommand):
             test (Test): avocado Test object
         """
         server_params = ["debug", "sudo", "srv_timeout"]
-        server_start_params = ["attach", "insecure"]
+        server_start_params = ["attach", "insecure", "recreate"]
         runner_params = ["enable_recovery", "export", "report_uri"]
         super(ServerManager, self).get_params(test)
         self.runner.job.yaml_params.get_params(test)
