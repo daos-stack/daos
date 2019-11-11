@@ -49,7 +49,7 @@ def scons():
     tenv.AppendUnique(CPPPATH=['..'])
     tenv.AppendUnique(CPPPATH='../il')
     tenv.AppendUnique(LIBPATH='../il')
-    tenv.AppendUnique(RPATH='$PREFIX/lib')
+    tenv.AppendUnique(RPATH='$PREFIX/lib64')
 
     prereqs.require(tenv, 'cunit')
 
@@ -76,7 +76,7 @@ def scons():
 
     Default(il_test)
 
-    tenv.Install('$PREFIX/TESTING/tests', il_test)
+    tenv.Install('$PREFIX/lib/daos/TESTING/tests', il_test)
 
 if __name__ == "SCons.Script":
     scons()

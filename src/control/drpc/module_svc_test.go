@@ -23,7 +23,6 @@
 package drpc
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
@@ -35,29 +34,6 @@ import (
 )
 
 const defaultTestModID int32 = 7
-
-// mockModule is a test module used for verifying the drpc.ModuleService
-type mockModule struct {
-	HandleCallResponse []byte
-	HandleCallErr      error
-	IDValue            int32
-}
-
-func (m *mockModule) HandleCall(client *Client, method int32, input []byte) ([]byte, error) {
-	return m.HandleCallResponse, m.HandleCallErr
-}
-
-func (m *mockModule) InitModule(state ModuleState) {}
-
-func (m *mockModule) ID() int32 {
-	return m.IDValue
-}
-
-func newTestModule(ID int32) *mockModule {
-	return &mockModule{
-		IDValue: ID,
-	}
-}
 
 func TestNewModuleService(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
@@ -84,7 +60,7 @@ func TestService_RegisterModule_Single_Success(t *testing.T) {
 		t.Fatalf("expected no error, got: %v", err)
 	}
 
-	mod, ok := service.modules[expectedID]
+	mod, ok := service.GetModule(expectedID)
 
 	if !ok {
 		t.Fatalf("module wasn't found under ID %d", expectedID)
@@ -113,7 +89,7 @@ func TestService_RegisterModule_Multiple_Success(t *testing.T) {
 	}
 
 	for i, id := range expectedIDs {
-		mod, ok := service.modules[id]
+		mod, ok := service.GetModule(id)
 
 		if !ok {
 			t.Fatalf("registered module %d wasn't found", id)
@@ -140,6 +116,22 @@ func TestService_RegisterModule_DuplicateID(t *testing.T) {
 	err := service.RegisterModule(dupMod)
 
 	common.CmpErr(t, errors.New("already exists"), err)
+}
+
+func TestService_GetModule_NotFound(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	service := NewModuleService(log)
+	if err := service.RegisterModule(newTestModule(defaultTestModID)); err != nil {
+		t.Fatalf("couldn't register module: %v", err)
+	}
+
+	_, ok := service.GetModule(defaultTestModID + 1)
+
+	if ok {
+		t.Fatal("module wasn't expected to match ID")
+	}
 }
 
 func getGarbageBytes() []byte {
@@ -214,7 +206,7 @@ func TestService_ProcessMessage(t *testing.T) {
 			service := NewModuleService(log)
 			service.RegisterModule(mockMod)
 
-			respBytes, err := service.ProcessMessage(&Client{}, tc.callBytes)
+			respBytes, err := service.ProcessMessage(&Session{}, tc.callBytes)
 
 			if err != nil {
 				t.Fatalf("expected nil error, got: %v", err)
@@ -226,17 +218,7 @@ func TestService_ProcessMessage(t *testing.T) {
 				t.Fatalf("couldn't unmarshal response bytes: %v", err)
 			}
 
-			// Avoid comparing the internal Protobuf fields
-			isHiddenPBField := func(path cmp.Path) bool {
-				if strings.HasPrefix(path.Last().String(), ".XXX_") {
-					return true
-				}
-				return false
-			}
-			cmpOpts := []cmp.Option{
-				cmp.FilterPath(isHiddenPBField, cmp.Ignore()),
-			}
-
+			cmpOpts := common.DefaultCmpOpts()
 			if diff := cmp.Diff(tc.expectedResp, resp, cmpOpts...); diff != "" {
 				t.Fatalf("(-want, +got)\n%s", diff)
 			}
