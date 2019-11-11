@@ -150,7 +150,7 @@ flags_are_valid(unsigned int flags)
 #define DC_POOL_DEFAULT_COMPONENTS_NR 128
 
 static struct dc_pool *
-pool_alloc(void)
+pool_alloc(unsigned int nr)
 {
 	struct dc_pool *pool;
 	int rc = 0;
@@ -179,7 +179,7 @@ pool_alloc(void)
 		goto failed;
 	}
 
-	pool->dp_map_sz = pool_buf_size(DC_POOL_DEFAULT_COMPONENTS_NR);
+	pool->dp_map_sz = pool_buf_size(nr);
 
 	return pool;
 
@@ -408,6 +408,8 @@ pool_connect_cp(tse_task_t *task, void *data)
 			put_pool = false;
 		D_GOTO(out, rc);
 	} else if (rc != 0) {
+		if (rc == -DER_NOTREPLICA)
+			rc = -DER_NONEXIST;
 		D_ERROR("failed to connect to pool: %d\n", rc);
 		D_GOTO(out, rc);
 	}
@@ -469,7 +471,7 @@ dc_pool_local_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 	}
 
 	/** allocate and fill in pool connection */
-	pool = pool_alloc();
+	pool = pool_alloc(pool_map_comp_cnt(map));
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -549,7 +551,7 @@ dc_pool_connect(tse_task_t *task)
 			D_GOTO(out_task, rc = -DER_INVAL);
 
 		/** allocate and fill in pool connection */
-		pool = pool_alloc();
+		pool = pool_alloc(DC_POOL_DEFAULT_COMPONENTS_NR);
 		if (pool == NULL)
 			D_GOTO(out_task, rc = -DER_NOMEM);
 		uuid_copy(pool->dp_pool, args->uuid);
@@ -962,7 +964,7 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 	D_ASSERT(map_buf != NULL);
 
 	/** allocate and fill in pool connection */
-	pool = pool_alloc();
+	pool = pool_alloc(pool_glob->dpg_map_pb_nr);
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -1035,7 +1037,7 @@ dc_pool_global2local(d_iov_t glob, daos_handle_t *poh)
 		swap_pool_glob(pool_glob);
 		D_ASSERT(pool_glob->dpg_magic == DC_POOL_GLOB_MAGIC);
 	} else if (pool_glob->dpg_magic != DC_POOL_GLOB_MAGIC) {
-		D_ERROR("Bad hgh_magic: 0x%x.\n", pool_glob->dpg_magic);
+		D_ERROR("Bad dpg_magic: 0x%x.\n", pool_glob->dpg_magic);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -1489,6 +1491,8 @@ pool_evict_cp(tse_task_t *task, void *data)
 
 	rc = out->pvo_op.po_rc;
 	if (rc != 0) {
+		if (rc == -DER_NOTREPLICA)
+			rc = -DER_NONEXIST;
 		D_ERROR("failed to evict pool handles: %d\n", rc);
 		D_GOTO(out, rc);
 	}

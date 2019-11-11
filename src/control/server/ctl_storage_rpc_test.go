@@ -47,11 +47,11 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
-// MockScmModule returns a mock SCM module of type storage/scm.Module.
-func MockScmModule() scm.Module {
+// MockScmModule returns a mock SCM module of type storage.ScmModule.
+func MockScmModule() storage.ScmModule {
 	m := common.MockModulePB()
 
-	return scm.Module{
+	return storage.ScmModule{
 		PhysicalID:      uint32(m.Physicalid),
 		ChannelID:       uint32(m.Loc.Channel),
 		ChannelPosition: uint32(m.Loc.Channelpos),
@@ -63,14 +63,15 @@ func MockScmModule() scm.Module {
 
 // MockScmNamespace returns a mock SCM namespace (PMEM device file),
 // which would normally be parsed from the output of ndctl cmdline tool.
-func MockScmNamespace() scm.Namespace {
+func MockScmNamespace() storage.ScmNamespace {
 	m := common.MockPmemDevicePB()
 
-	return scm.Namespace{
+	return storage.ScmNamespace{
 		UUID:        m.Uuid,
 		BlockDevice: m.Blockdev,
 		Name:        m.Dev,
 		NumaNode:    m.Numanode,
+		Size:        m.Size,
 	}
 }
 
@@ -82,18 +83,6 @@ type mockStorageFormatServer struct {
 }
 
 func (m *mockStorageFormatServer) Send(resp *StorageFormatResp) error {
-	m.Results = append(m.Results, resp)
-	return nil
-}
-
-// mockStorageUpdateServer provides mocking for server side streaming,
-// implement send method and record sent update responses.
-type mockStorageUpdateServer struct {
-	grpc.ServerStream
-	Results []*StorageUpdateResp
-}
-
-func (m *mockStorageUpdateServer) Send(resp *StorageUpdateResp) error {
 	m.Results = append(m.Results, resp)
 	return nil
 }
@@ -123,17 +112,17 @@ func newMockStorageConfig(
 
 func TestStorageScan(t *testing.T) {
 	var (
-		ctrlr      = MockController("")
-		pbCtrlr    = common.MockControllerPB("")
+		ctrlr      = MockController()
+		pbCtrlr    = common.MockControllerPB()
 		errExample = errors.New("example failure")
 	)
 
 	for name, tc := range map[string]struct {
 		spdkInitEnvRet      error
 		spdkDiscoverRet     error
-		scmDiscoverRes      []scm.Module
+		scmDiscoverRes      []storage.ScmModule
 		scmDiscoverErr      error
-		scmGetNamespacesRes []scm.Namespace
+		scmGetNamespacesRes []storage.ScmNamespace
 		scmGetNamespacesErr error
 		expSetupErr         error
 		expResp             StorageScanResp
@@ -146,13 +135,13 @@ func TestStorageScan(t *testing.T) {
 					State:  new(ResponseState),
 				},
 				Scm: &ScanScmResp{
-					Pmems: PmemDevices{common.MockPmemDevicePB()},
+					Pmems: ScmNamespaces{common.MockPmemDevicePB()},
 					State: new(ResponseState),
 				},
 			},
 		},
 		"successful scan no scm namespaces": {
-			scmGetNamespacesRes: []scm.Namespace{},
+			scmGetNamespacesRes: []storage.ScmNamespace{},
 			expResp: StorageScanResp{
 				Nvme: &ScanNvmeResp{
 					Ctrlrs: NvmeControllers{pbCtrlr},
@@ -176,7 +165,7 @@ func TestStorageScan(t *testing.T) {
 					},
 				},
 				Scm: &ScanScmResp{
-					Pmems: PmemDevices{common.MockPmemDevicePB()},
+					Pmems: ScmNamespaces{common.MockPmemDevicePB()},
 					State: new(ResponseState),
 				},
 			},
@@ -194,7 +183,7 @@ func TestStorageScan(t *testing.T) {
 					},
 				},
 				Scm: &ScanScmResp{
-					Pmems: PmemDevices{common.MockPmemDevicePB()},
+					Pmems: ScmNamespaces{common.MockPmemDevicePB()},
 					State: new(ResponseState),
 				},
 			},
@@ -248,10 +237,10 @@ func TestStorageScan(t *testing.T) {
 				GetNamespaceErr: tc.scmGetNamespacesErr,
 			}
 			if mbc.DiscoverRes == nil {
-				mbc.DiscoverRes = []scm.Module{MockScmModule()}
+				mbc.DiscoverRes = []storage.ScmModule{MockScmModule()}
 			}
 			if mbc.GetNamespaceRes == nil {
-				mbc.GetNamespaceRes = []scm.Namespace{MockScmNamespace()}
+				mbc.GetNamespaceRes = []storage.ScmNamespace{MockScmNamespace()}
 			}
 
 			// test for both empty and default config cases
@@ -262,13 +251,10 @@ func TestStorageScan(t *testing.T) {
 				cs.nvme = newMockNvmeStorage(
 					log, config.ext,
 					newMockSpdkEnv(tc.spdkInitEnvRet),
-					newMockSpdkNvme(
-						log,
-						"1.0.0", "1.0.1",
-						[]spdk.Controller{ctrlr},
+					newMockSpdkNvme(log, []spdk.Controller{ctrlr},
 						[]spdk.Namespace{MockNamespace(&ctrlr)},
 						[]spdk.DeviceHealth{MockDeviceHealth(&ctrlr)},
-						tc.spdkDiscoverRet, nil, nil),
+						tc.spdkDiscoverRet, nil),
 					false)
 				_ = new(StorageScanResp)
 
@@ -301,15 +287,15 @@ func TestStorageScan(t *testing.T) {
 
 func TestStoragePrepare(t *testing.T) {
 	var (
-		ctrlr      = MockController("")
+		ctrlr      = MockController()
 		errExample = errors.New("example failure")
 	)
 
 	for name, tc := range map[string]struct {
 		inReq               StoragePrepareReq
-		prepScmNamespaceRes []scm.Namespace
+		prepScmNamespaceRes []storage.ScmNamespace
 		prepScmErr          error
-		expResp             StoragePrepareResp
+		expResp             *StoragePrepareResp
 		isRoot              bool
 	}{
 		"success": {
@@ -317,9 +303,9 @@ func TestStoragePrepare(t *testing.T) {
 				Nvme: &PrepareNvmeReq{},
 				Scm:  &PrepareScmReq{},
 			},
-			[]scm.Namespace{},
+			[]storage.ScmNamespace{},
 			nil,
-			StoragePrepareResp{
+			&StoragePrepareResp{
 				Nvme: &PrepareNvmeResp{State: new(ResponseState)},
 				Scm:  &PrepareScmResp{State: new(ResponseState)},
 			},
@@ -330,20 +316,17 @@ func TestStoragePrepare(t *testing.T) {
 				Nvme: &PrepareNvmeReq{},
 				Scm:  &PrepareScmReq{},
 			},
-			[]scm.Namespace{},
+			[]storage.ScmNamespace{},
 			nil,
-			StoragePrepareResp{
+			&StoragePrepareResp{
 				Nvme: &PrepareNvmeResp{
 					State: &ResponseState{
 						Status: ResponseStatus_CTL_ERR_NVME,
-						Error:  os.Args[0] + " must be run as root or sudo",
+						Error:  os.Args[0] + " must be run as root or sudo in order to prepare NVMe in this release",
 					},
 				},
 				Scm: &PrepareScmResp{
-					State: &ResponseState{
-						Status: ResponseStatus_CTL_ERR_SCM,
-						Error:  os.Args[0] + " must be run as root or sudo",
-					},
+					State: new(ResponseState),
 				},
 			},
 			false,
@@ -353,9 +336,9 @@ func TestStoragePrepare(t *testing.T) {
 				Nvme: nil,
 				Scm:  &PrepareScmReq{},
 			},
-			[]scm.Namespace{},
+			[]storage.ScmNamespace{},
 			nil,
-			StoragePrepareResp{
+			&StoragePrepareResp{
 				Nvme: nil,
 				Scm:  &PrepareScmResp{State: new(ResponseState)},
 			},
@@ -366,9 +349,9 @@ func TestStoragePrepare(t *testing.T) {
 				Nvme: &PrepareNvmeReq{},
 				Scm:  nil,
 			},
-			[]scm.Namespace{},
+			[]storage.ScmNamespace{},
 			nil,
-			StoragePrepareResp{
+			&StoragePrepareResp{
 				Nvme: &PrepareNvmeResp{State: new(ResponseState)},
 				Scm:  nil,
 			},
@@ -379,9 +362,9 @@ func TestStoragePrepare(t *testing.T) {
 				Nvme: &PrepareNvmeReq{},
 				Scm:  &PrepareScmReq{},
 			},
-			[]scm.Namespace{MockScmNamespace()},
+			[]storage.ScmNamespace{MockScmNamespace()},
 			nil,
-			StoragePrepareResp{
+			&StoragePrepareResp{
 				Nvme: &PrepareNvmeResp{State: new(ResponseState)},
 				Scm: &PrepareScmResp{
 					State: new(ResponseState),
@@ -395,9 +378,9 @@ func TestStoragePrepare(t *testing.T) {
 				Nvme: &PrepareNvmeReq{},
 				Scm:  &PrepareScmReq{},
 			},
-			[]scm.Namespace{MockScmNamespace()},
+			[]storage.ScmNamespace{MockScmNamespace()},
 			errExample,
-			StoragePrepareResp{
+			&StoragePrepareResp{
 				Nvme: &PrepareNvmeResp{State: new(ResponseState)},
 				Scm: &PrepareScmResp{
 					State: &ResponseState{
@@ -416,15 +399,16 @@ func TestStoragePrepare(t *testing.T) {
 			config := newDefaultConfiguration(newMockExt(nil, true, nil,
 				true, nil, nil, nil, tc.isRoot))
 			mbc := scm.MockBackendConfig{
+				DiscoverRes:      []storage.ScmModule{MockScmModule()},
 				PrepNamespaceRes: tc.prepScmNamespaceRes,
 				PrepErr:          tc.prepScmErr,
 			}
 			cs := mockControlService(t, log, config, &mbc, nil)
 			cs.nvme = newMockNvmeStorage(log, config.ext, newMockSpdkEnv(nil),
-				newMockSpdkNvme(log, "", "", []spdk.Controller{ctrlr},
+				newMockSpdkNvme(log, []spdk.Controller{ctrlr},
 					[]spdk.Namespace{MockNamespace(&ctrlr)},
 					[]spdk.DeviceHealth{MockDeviceHealth(&ctrlr)},
-					nil, nil, nil), false)
+					nil, nil), false)
 			_ = new(StoragePrepareResp)
 
 			// runs discovery for nvme & scm
@@ -438,16 +422,8 @@ func TestStoragePrepare(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if resp.Nvme == nil {
-				common.AssertEqual(t, resp.Nvme, tc.expResp.Nvme, "unexpected nvme response, "+name)
-			} else {
-				common.AssertEqual(t, resp.Nvme.State, tc.expResp.Nvme.State, "unexpected nvme state in response, "+name)
-			}
-			if resp.Scm == nil {
-				common.AssertEqual(t, resp.Scm, tc.expResp.Scm, "unexpected scm response, "+name)
-			} else {
-				common.AssertEqual(t, resp.Scm.State, tc.expResp.Scm.State, "unexpected scm state in response, "+name)
-				common.AssertEqual(t, resp.Scm.Pmems, tc.expResp.Scm.Pmems, "unexpected pmem devices in response, "+name)
+			if diff := cmp.Diff(tc.expResp, resp); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
@@ -742,7 +718,7 @@ func TestStorageFormat(t *testing.T) {
 			}()
 
 			if !tc.superblockExists && tc.expNvmeFormatted {
-				if err := cs.harness.AwaitStorageReady(context.Background()); err != nil {
+				if err := cs.harness.AwaitStorageReady(context.Background(), false); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -756,158 +732,3 @@ func TestStorageFormat(t *testing.T) {
 		})
 	}
 }
-
-//func TestStorageUpdate(t *testing.T) {
-//	pciAddr := "0000:81:00.0" // default pciaddr for tests
-//
-//	tests := []struct {
-//		bDevs      []string
-//		nvmeParams *UpdateNvmeReq // provided in client gRPC call
-//		scmParams  *UpdateScmReq
-//		moduleRets ScmModuleResults
-//		ctrlrRets  NvmeControllerResults
-//		desc       string
-//	}{
-//		{
-//			desc:  "nvme update success",
-//			bDevs: []string{pciAddr},
-//			nvmeParams: &UpdateNvmeReq{
-//				Startrev: "1.0.0",
-//				Model:    "ABC",
-//			},
-//			ctrlrRets: NvmeControllerResults{
-//				{
-//					Pciaddr: pciAddr,
-//					State:   new(ResponseState),
-//				},
-//			},
-//			moduleRets: ScmModuleResults{
-//				{
-//					Loc: &ScmModule_Location{},
-//					State: &ResponseState{
-//						Status: ResponseStatus_CTL_NO_IMPL,
-//						Error:  msgScmUpdateNotImpl,
-//					},
-//				},
-//			},
-//		},
-//		{
-//			desc:  "nvme update wrong model",
-//			bDevs: []string{pciAddr},
-//			nvmeParams: &UpdateNvmeReq{
-//				Startrev: "1.0.0",
-//				Model:    "AB",
-//			},
-//			ctrlrRets: NvmeControllerResults{
-//				{
-//					Pciaddr: pciAddr,
-//					State: &ResponseState{
-//						Status: ResponseStatus_CTL_ERR_NVME,
-//						Error: pciAddr + ": " +
-//							msgBdevModelMismatch +
-//							" want AB, have ABC",
-//					},
-//				},
-//			},
-//			moduleRets: ScmModuleResults{
-//				{
-//					Loc: &ScmModule_Location{},
-//					State: &ResponseState{
-//						Status: ResponseStatus_CTL_NO_IMPL,
-//						Error:  msgScmUpdateNotImpl,
-//					},
-//				},
-//			},
-//		},
-//		{
-//			desc:  "nvme update wrong starting revision",
-//			bDevs: []string{pciAddr},
-//			nvmeParams: &UpdateNvmeReq{
-//				Startrev: "2.0.0",
-//				Model:    "ABC",
-//			},
-//			ctrlrRets: NvmeControllerResults{
-//				{
-//					Pciaddr: pciAddr,
-//					State: &ResponseState{
-//						Status: ResponseStatus_CTL_ERR_NVME,
-//						Error: pciAddr + ": " +
-//							msgBdevFwrevStartMismatch +
-//							" want 2.0.0, have 1.0.0",
-//					},
-//				},
-//			},
-//			moduleRets: ScmModuleResults{
-//				{
-//					Loc: &ScmModule_Location{},
-//					State: &ResponseState{
-//						Status: ResponseStatus_CTL_NO_IMPL,
-//						Error:  msgScmUpdateNotImpl,
-//					},
-//				},
-//			},
-//		},
-//	}
-//
-//	for _, tt := range tests {
-//		t.Run(name, func(t *testing.T) {
-//			log, buf := logging.NewTestLogger(t.Name())
-//			defer common.ShowBufferOnFailure(t, buf)
-//
-//			config := defaultMockConfig(t)
-//			cs := mockControlService(t, log, config, nil)
-//
-//			// runs discovery for nvme & scm
-//			if err := cs.Setup(); err != nil {
-//				t.Fatal(err)
-//			}
-//
-//			mock := &mockStorageUpdateServer{}
-//
-//			req := &StorageUpdateReq{
-//				Nvme: tt.nvmeParams,
-//				Scm:  tt.scmParams,
-//			}
-//
-//			if err := cs.StorageUpdate(req, mock); err != nil {
-//				t.Fatal(err.Error() + name)
-//			}
-//
-//			common.AssertEqual(
-//				t, len(mock.Results), 1,
-//				"unexpected number of responses sent, "+name)
-//
-//			for i, result := range mock.Results[0].Crets {
-//				expected := tt.ctrlrRets[i]
-//				common.AssertEqual(
-//					t, result.State.Error,
-//					expected.State.Error,
-//					"unexpected result error message, "+name)
-//				common.AssertEqual(
-//					t, result.State.Status,
-//					expected.State.Status,
-//					"unexpected response status, "+name)
-//				common.AssertEqual(
-//					t, result.Pciaddr,
-//					expected.Pciaddr,
-//					"unexpected pciaddr, "+name)
-//			}
-//
-//			for i, result := range mock.Results[0].Mrets {
-//				expected := tt.moduleRets[i]
-//				common.AssertEqual(
-//					t, result.State.Error,
-//					expected.State.Error,
-//					"unexpected result error message, "+name)
-//				common.AssertEqual(
-//					t, result.State.Status,
-//					expected.State.Status,
-//					"unexpected response status, "+name)
-//				common.AssertEqual(
-//					t, result.Loc,
-//					expected.Loc,
-//					"unexpected mntpoint, "+name)
-//			}
-//		})
-//	}
-//}

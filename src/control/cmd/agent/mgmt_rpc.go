@@ -45,7 +45,7 @@ type mgmtModule struct {
 	tcfg *security.TransportConfig
 }
 
-func (mod *mgmtModule) HandleCall(cli *drpc.Client, method int32, req []byte) ([]byte, error) {
+func (mod *mgmtModule) HandleCall(session *drpc.Session, method int32, req []byte) ([]byte, error) {
 	switch method {
 	case drpc.MethodGetAttachInfo:
 		return mod.handleGetAttachInfo(req)
@@ -53,8 +53,6 @@ func (mod *mgmtModule) HandleCall(cli *drpc.Client, method int32, req []byte) ([
 		return nil, errors.Errorf("unknown dRPC %d", method)
 	}
 }
-
-func (mod *mgmtModule) InitModule(state drpc.ModuleState) {}
 
 func (mod *mgmtModule) ID() int32 {
 	return drpc.ModuleMgmt

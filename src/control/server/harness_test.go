@@ -78,11 +78,10 @@ func TestHarnessCreateSuperblocks(t *testing.T) {
 				AccessPoints: defaultApList,
 			},
 		)
-		mb := scm.DefaultMockBackend()
-		sys := scm.NewMockSysProvider(&scm.MockSysConfig{
+		msc := &scm.MockSysConfig{
 			IsMountedBool: true,
-		})
-		mp := scm.NewProvider(log, mb, sys)
+		}
+		mp := scm.NewMockProvider(log, nil, msc)
 		srv := NewIOServerInstance(log, nil, mp, ms, r)
 		srv.fsRoot = testDir
 		if err := h.AddInstance(srv); err != nil {
@@ -323,13 +322,16 @@ func TestHarnessIOServerStart(t *testing.T) {
 				}))
 			}
 
+			done := make(chan struct{})
 			ctx, shutdown := context.WithCancel(context.Background())
-			go func(t *testing.T) {
-				common.CmpErr(t, tc.expStartErr, harness.Start(ctx))
-			}(t)
+			go func(t *testing.T, expStartErr error, th *IOServerHarness) {
+				common.CmpErr(t, expStartErr, th.Start(ctx))
+				close(done)
+			}(t, tc.expStartErr, harness)
 
 			time.Sleep(50 * time.Millisecond)
 			shutdown()
+			<-done // wait for inner goroutine to finish
 
 			if instanceStarts != tc.expStartCount {
 				t.Fatalf("expected %d starts, got %d", tc.expStartCount, instanceStarts)

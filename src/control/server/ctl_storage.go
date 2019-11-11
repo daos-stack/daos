@@ -31,6 +31,7 @@ import (
 	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
@@ -119,6 +120,7 @@ func (c *StorageControlService) Teardown() {
 	//c.scm.scanCompleted = false
 }
 
+// NvmePrepareRequest encapsulates request parameters for operation.
 type NvmePrepareRequest struct {
 	HugePageCount int
 	TargetUser    string
@@ -132,7 +134,7 @@ type NvmePrepareRequest struct {
 func (c *StorageControlService) NvmePrepare(req NvmePrepareRequest) error {
 	ok, usr := c.nvme.ext.checkSudo()
 	if !ok {
-		return errors.Errorf("%s must be run as root or sudo", os.Args[0])
+		return errors.Errorf("%s must be run as root or sudo in order to prepare NVMe in this release", os.Args[0])
 	}
 
 	// falls back to sudoer or root if TargetUser is unspecified
@@ -159,14 +161,7 @@ func (c *StorageControlService) NvmePrepare(req NvmePrepareRequest) error {
 
 // GetScmState performs required initialisation and returns current state
 // of SCM module preparation.
-func (c *StorageControlService) GetScmState() (types.ScmState, error) {
-	state := types.ScmStateUnknown
-
-	ok, _ := c.ext.checkSudo()
-	if !ok {
-		return state, errors.Errorf("%s must be run as root or sudo", os.Args[0])
-	}
-
+func (c *StorageControlService) GetScmState() (storage.ScmState, error) {
 	return c.scm.GetState()
 }
 
@@ -179,7 +174,7 @@ func (c *StorageControlService) ScmPrepare(req scm.PrepareRequest) (*scm.Prepare
 	return c.scm.Prepare(req)
 }
 
-// ScanNvme scans locally attached SSDs and returns list directly.
+// NvmeScan scans locally attached SSDs and returns list directly.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
 func (c *StorageControlService) NvmeScan() (types.NvmeControllers, error) {
@@ -190,7 +185,7 @@ func (c *StorageControlService) NvmeScan() (types.NvmeControllers, error) {
 	return c.nvme.controllers, nil
 }
 
-// ScanScm scans locally attached modules, namespaces and state of DCPM config.
+// ScmScan scans locally attached modules, namespaces and state of DCPM config.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
 func (c *StorageControlService) ScmScan() (*scm.ScanResponse, error) {

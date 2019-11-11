@@ -26,8 +26,8 @@ import (
 	"os"
 	"strings"
 
-	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 type (
@@ -94,46 +94,46 @@ func DefaultMockSysProvider() *MockSysProvider {
 // implementation providing capability to access and configure
 // SCM modules and namespaces.
 type MockBackendConfig struct {
-	DiscoverRes      Modules
+	DiscoverRes      storage.ScmModules
 	DiscoverErr      error
-	GetNamespaceRes  Namespaces
+	GetNamespaceRes  storage.ScmNamespaces
 	GetNamespaceErr  error
 	GetStateErr      error
-	StartingState    types.ScmState
-	NextState        types.ScmState
+	StartingState    storage.ScmState
+	NextState        storage.ScmState
 	PrepNeedsReboot  bool
-	PrepNamespaceRes Namespaces
+	PrepNamespaceRes storage.ScmNamespaces
 	PrepErr          error
 }
 
 type MockBackend struct {
-	curState types.ScmState
+	curState storage.ScmState
 	cfg      MockBackendConfig
 }
 
-func (mb *MockBackend) Discover() (Modules, error) {
+func (mb *MockBackend) Discover() (storage.ScmModules, error) {
 	return mb.cfg.DiscoverRes, mb.cfg.DiscoverErr
 }
 
-func (mb *MockBackend) GetNamespaces() (Namespaces, error) {
+func (mb *MockBackend) GetNamespaces() (storage.ScmNamespaces, error) {
 	return mb.cfg.GetNamespaceRes, mb.cfg.GetNamespaceErr
 }
 
-func (mb *MockBackend) GetState() (types.ScmState, error) {
+func (mb *MockBackend) GetState() (storage.ScmState, error) {
 	if mb.cfg.GetStateErr != nil {
-		return types.ScmStateUnknown, mb.cfg.GetStateErr
+		return storage.ScmStateUnknown, mb.cfg.GetStateErr
 	}
 	return mb.curState, nil
 }
 
-func (mb *MockBackend) Prep(_ types.ScmState) (bool, Namespaces, error) {
+func (mb *MockBackend) Prep(_ storage.ScmState) (bool, storage.ScmNamespaces, error) {
 	if mb.cfg.PrepErr == nil {
 		mb.curState = mb.cfg.NextState
 	}
 	return mb.cfg.PrepNeedsReboot, mb.cfg.PrepNamespaceRes, mb.cfg.PrepErr
 }
 
-func (mb *MockBackend) PrepReset(_ types.ScmState) (bool, error) {
+func (mb *MockBackend) PrepReset(_ storage.ScmState) (bool, error) {
 	if mb.cfg.PrepErr == nil {
 		mb.curState = mb.cfg.NextState
 	}
@@ -155,9 +155,9 @@ func DefaultMockBackend() *MockBackend {
 }
 
 func NewMockProvider(log logging.Logger, mbc *MockBackendConfig, msc *MockSysConfig) *Provider {
-	return NewProvider(log, NewMockBackend(mbc), NewMockSysProvider(msc))
+	return NewProvider(log, NewMockBackend(mbc), NewMockSysProvider(msc)).WithForwardingDisabled()
 }
 
 func DefaultMockProvider(log logging.Logger) *Provider {
-	return NewProvider(log, DefaultMockBackend(), DefaultMockSysProvider())
+	return NewProvider(log, DefaultMockBackend(), DefaultMockSysProvider()).WithForwardingDisabled()
 }
