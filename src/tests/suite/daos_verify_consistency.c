@@ -190,7 +190,7 @@ vc_3(void **state)
 	struct ioreq	 req;
 	int		 rc;
 
-	print_message("misc single & array value without inconsistency\n");
+	print_message("misc single and array value without inconsistency\n");
 
 	if (!test_runable(arg, dts_vc_replica_cnt))
 		return;
@@ -363,7 +363,7 @@ static const struct CMUnitTest vc_tests[] = {
 	 vc_1, NULL, test_case_teardown},
 	{"VC2: verify array value without inconsistency",
 	 vc_2, NULL, test_case_teardown},
-	{"VC3: misc single & array value without inconsistency",
+	{"VC3: misc single and array value without inconsistency",
 	 vc_3, NULL, test_case_teardown},
 	{"VC4: verify with different rec",
 	 vc_4, NULL, test_case_teardown},
