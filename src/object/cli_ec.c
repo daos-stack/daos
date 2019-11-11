@@ -69,18 +69,15 @@ ec_is_full_stripe(daos_iod_t *iod, struct daos_oclass_attr *oca,
 		  unsigned int recx_idx)
 {
 	unsigned int	ss = oca->u.ec.e_k * oca->u.ec.e_len;
-	unsigned int	start = iod->iod_recxs[recx_idx].rx_idx * iod->iod_size;
-	unsigned int	length = iod->iod_recxs[recx_idx].rx_nr * iod->iod_size;
+	unsigned long	start = iod->iod_recxs[recx_idx].rx_idx * iod->iod_size;
+	unsigned long	length = iod->iod_recxs[recx_idx].rx_nr * iod->iod_size;
+	unsigned long	so = ss - start % ss;
 
 	if (length < ss && start/ss == (start+length)/ss) {
 		return false;
 	}
-	if (start % ss) {
-		unsigned long so = ss - start % ss;
-
-		start += so;
+	if (start % ss)
 		length -= so;
-	}
 
 	if (length < ss)
 		return false;
@@ -99,9 +96,9 @@ ec_has_full_or_mult_stripe(daos_iod_t *iod, struct daos_oclass_attr *oca,
 
 	for (i = 0; i < iod->iod_nr; i++) {
 		if (iod->iod_type == DAOS_IOD_ARRAY) {
-			unsigned int start =
+			unsigned long start =
 				iod->iod_recxs[i].rx_idx * iod->iod_size;
-			unsigned int length =
+			unsigned long length =
 				iod->iod_recxs[i].rx_nr * iod->iod_size;
 
 			if (length < ss && start/ss == (start+length)/ss) {
