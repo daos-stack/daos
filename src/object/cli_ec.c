@@ -108,7 +108,7 @@ ec_has_full_or_mult_stripe(daos_iod_t *iod, struct daos_oclass_attr *oca,
 
 				start += so;
 				length -= so;
-				if (length - (start % ss) >= ss) {
+				if (length >= ss) {
 					*tgt_set = ~0UL;
 				}
 			} else {
