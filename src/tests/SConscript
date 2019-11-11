@@ -37,10 +37,6 @@ def scons():
                                  LIBS=libs)
     denv.Install('$PREFIX/bin/', obj_ctl)
 
-    # copy src/tests/ftest to $PREFIX/lib/daos/TESTING/ftest
-    spath = Dir('ftest').srcnode()
-    denv.InstallAs('$PREFIX/lib/daos/TESTING/ftest/', spath)
-
     # tests
     SConscript('suite/SConscript', exports=['denv'])
 
@@ -52,6 +48,9 @@ def scons():
 
     # Build security_test
     SConscript('security/SConscript')
+
+    # ftest
+    SConscript('ftest/SConscript')
 
 if __name__ == "SCons.Script":
     scons()
