@@ -165,7 +165,8 @@ class Soak(TestWithServers):
                             "DAOS_POOL": str(ior_cmd.daos_pool.value),
                             "MPI_LIB": "\"\"",
                             "DAOS_SVCL": str(ior_cmd.daos_svcl.value),
-                            "DAOS_SINGLETON_CLI": 1,
+                            "DAOS_SINGLETON_CLI": os.environ.get(
+                                "DAOS_SINGLETON_CLI", 0),
                             "FI_PSM2_DISCONNECT": 1
                         }
                         exports.extend(

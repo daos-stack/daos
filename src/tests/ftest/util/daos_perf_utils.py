@@ -27,17 +27,18 @@ import os
 import subprocess
 import json
 
-class DaosPerfFailed(Exception):
-    """Raise if daos_perf failed"""
 
-#pylint: disable=R0903
+class DaosPerfFailed(Exception):
+    """Raise if daos_perf failed."""
+
+
+# pylint: disable=R0903
 class DaosPerfParam(object):
-    """
-    Defines a object representing a single daos_perf command line parameter.
-    """
+    """An object representing a single daos_perf command line parameter."""
 
     def __init__(self, str_format, default=None):
         """Create a DaosPerfParam object.
+
         Args:
             str_format (str): format string used to convert the value into an
                 daos_perf command line argument string
@@ -49,8 +50,10 @@ class DaosPerfParam(object):
 
     def __str__(self):
         """Return a DaosPerfParam object as a string.
+
         Returns:
             str: if defined, the DaosPerf parameter, otherwise an empty string
+
         """
         if isinstance(self.default, bool) and self.value:
             return self.str_format
@@ -61,6 +64,7 @@ class DaosPerfParam(object):
 
     def set_yaml_value(self, name, test, path="/run/daos_perf/*"):
         """Set the value of the parameter using the test's yaml file value.
+
         Args:
             name (str): name associated with the value in the yaml file
             test (Test): avocado Test object
@@ -108,8 +112,10 @@ class DaosPerfCommand(object):
 
     def __str__(self):
         """Return a DaosPerfCommand object as a string.
+
         Returns:
             str: the daos_perf command with all the defined parameters
+
         """
         params = []
         for value in self.__dict__.values():
@@ -120,6 +126,7 @@ class DaosPerfCommand(object):
 
     def set_params(self, test, path="/run/daos_perf/*"):
         """Set values for all of the daos_perf command params using a yaml file.
+
         Args:
             test (Test): avocado Test object
             path (str, optional): yaml namespace. Defaults to "/run/daos_perf/*"
@@ -128,13 +135,16 @@ class DaosPerfCommand(object):
             daos_perf_param.set_yaml_value(name, test, path)
 
     def get_launch_command(self, basepath, processes, hostfile, runpath=None):
-        """Get the process launch command used to run daos_perf
+        """Get the process launch command used to run daos_perf.
+
         Args:
             basepath (str): DAOS base path
             processes (int): number of host processes
             hostfile (str): file defining host names and slots
+
         Returns:
             str: returns daos_perf command
+
         """
         with open(os.path.join(basepath, ".build_vars.json")) as afile:
             build_paths = json.load(afile)
@@ -146,7 +156,8 @@ class DaosPerfCommand(object):
             "-np {}".format(processes),
             "--hostfile {}".format(hostfile),
             "--map-by node",
-            "-x DAOS_SINGLETON_CLI=1",
+            "-x DAOS_SINGLETON_CLI={}".format(
+                os.environ.get("DAOS_SINGLETON_CLI", 0)),
             "-x CRT_ATTACH_INFO_PATH={}".format(attach_info_path),
         ]
         command = " ".join(orterun_cmd + [self.__str__()])
@@ -155,14 +166,17 @@ class DaosPerfCommand(object):
 
     def run(self, basepath, processes, hostfile, display=True, path=None):
         """Run the daos_perf command.
+
         Args:
             basepath (str): DAOS base path
             processes (int): number of host processes
             hostfile (str): file defining host names and slots
             display (bool, optional): print daos_perf output to the console.
                 Defaults to True.
+
         Raises:
             DaosPerfFailed: if an error occured runnig the daos_perf command
+
         """
         command = self.get_launch_command(basepath, processes, hostfile, path)
         if display:

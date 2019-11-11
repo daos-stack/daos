@@ -24,6 +24,7 @@
 
 from __future__ import print_function
 
+import os
 import uuid
 
 from command_utils import FormattedParameter, ExecutableCommand
@@ -139,7 +140,6 @@ class MdtestCommand(ExecutableCommand):
 
         return param_names
 
-
     def set_daos_params(self, group, pool, cont_uuid=None, display=True):
         """Set the Mdtest params for the DAOS group, pool, and container uuid.
 
@@ -195,7 +195,7 @@ class MdtestCommand(ExecutableCommand):
         env = EnvironmentVariables()
         env["CRT_ATTACH_INFO_PATH"] = attach_info
         env["MPI_LIB"] = "\"\""
-        env["DAOS_SINGLETON_CLI"] = 1
+        env["DAOS_SINGLETON_CLI"] = os.environ.get("DAOS_SINGLETON_CLI", 0)
         env["FI_PSM2_DISCONNECT"] = 1
         if log_file:
             env["D_LOG_FILE"] = log_file

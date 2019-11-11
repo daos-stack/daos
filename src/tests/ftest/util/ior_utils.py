@@ -23,6 +23,7 @@
 """
 from __future__ import print_function
 
+import os
 import re
 import uuid
 
@@ -226,7 +227,7 @@ class IorCommand(ExecutableCommand):
         env = EnvironmentVariables()
         env["CRT_ATTACH_INFO_PATH"] = attach_info
         env["MPI_LIB"] = "\"\""
-        env["DAOS_SINGLETON_CLI"] = 1
+        env["DAOS_SINGLETON_CLI"] = os.environ.get("DAOS_SINGLETON_CLI", 0)
         env["FI_PSM2_DISCONNECT"] = 1
         if log_file:
             env["D_LOG_FILE"] = log_file

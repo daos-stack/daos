@@ -28,19 +28,28 @@ import subprocess
 import paramiko
 import socket
 
+
 class MpioFailed(Exception):
-    """Raise if MPIO failed"""
+    """Raise if MPIO failed."""
+
 
 class MpioUtils():
-    """MpioUtils Class"""
+    """MpioUtils Class."""
 
     def __init__(self):
-
+        """Initialize a MpioUtils object."""
         self.mpichinstall = None
 
     def mpich_installed(self, hostlist):
-        """Check if mpich is installed"""
+        """Check if mpich is installed.
 
+        Args:
+            hostlist (list): list of hosts to check if mpich is installed
+
+        Returns:
+            bool: True if mpich is installed; False otherwise
+
+        """
         try:
             # checking mpich install
             self.mpichinstall = subprocess.check_output(
@@ -60,19 +69,24 @@ class MpioUtils():
             return False
 
     def run_romio(self, basepath, hostlist, romio_test_repo):
-        """
-            Running ROMIO testsuite under mpich
-            Function Arguments:
-                basepath --path where all daos and it's dependencies can be
-                           fetched from
-                hostlist --list of client hosts
-                romio_test_repo --built romio test directory
-        """
+        """Run the ROMIO testsuite under mpich.
 
+        Args:
+            basepath (str): path from which to fetch all daos dependencies
+            hostlist (list): list of client hosts
+            romio_test_repo (str): built romio test directory
+
+        Raises:
+            MpioFailed: if a ROMIO test fails
+
+        """
         # environment variables only to be set on client node
-        env_variables = ["export CRT_ATTACH_INFO_PATH={}/install/tmp/" \
-                             .format(basepath),
-                         "export MPI_LIB=''", "export DAOS_SINGLETON_CLI=1"]
+        env_variables = [
+            "export CRT_ATTACH_INFO_PATH={}/install/tmp/".format(basepath),
+            "export MPI_LIB=''",
+            "export DAOS_SINGLETON_CLI={}".format(
+                os.environ.get("DAOS_SINGLETON_CLI", 0)),
+        ]
 
         # setting attributes
         cd_cmd = 'cd ' + romio_test_repo
@@ -100,28 +114,33 @@ class MpioUtils():
         except (IOError, OSError, paramiko.SSHException, socket.error) as excep:
             raise MpioFailed("<ROMIO Test FAILED> \nException occurred: {}"
                              .format(str(excep)))
+
     # pylint: disable=R0913
     def run_llnl_mpi4py_hdf5(self, basepath, hostfile, pool_uuid, test_repo,
                              test_name, client_processes):
-        """
-            Running LLNL, MPI4PY and HDF5 testsuites
-            Function Arguments:
-                basepath          --path where all daos and it's dependencies
-                                    can be fetched from
-                hostfile          --client hostfile
-                pool_uuid         --Pool UUID
-                test_repo         --test repo location
-                test_name         --name of test to be tested
+        """Run the LLNL, MPI4PY and HDF5 testsuites.
+
+        Args:
+            basepath (str): path from which to fetch all daos dependencies
+            hostlist (list): list of client hosts
+            pool_uuid (str): pool UUID
+            test_repo (str): test repo location
+            test_name (str): name of test to be tested
+            client_processes (int): number of client processes
+
+        Raises:
+            MpioFailed: if the LLNL, MPI4PY and HDF5 testsuite fails
+
         """
         print("self.mpichinstall: {}".format(self.mpichinstall))
         # environment variables only to be set on client node
-        env_variables = {"CRT_ATTACH_INFO_PATH": "{}/install/tmp/"\
-                             .format(basepath),
-                         "MPI_LIB": '',
-                         "MPIO_USER_PATH": "daos:",
-                         "DAOS_POOL": "{}".format(pool_uuid),
-                         "DAOS_SVCL": "{}".format(0),
-                         "HDF5_PARAPREFIX": "daos:"}
+        env_variables = {
+            "CRT_ATTACH_INFO_PATH": "{}/install/tmp/".format(basepath),
+            "MPI_LIB": '',
+            "MPIO_USER_PATH": "daos:",
+            "DAOS_POOL": "{}".format(pool_uuid),
+            "DAOS_SVCL": "{}".format(0),
+            "HDF5_PARAPREFIX": "daos:"}
         # setting attributes
         cd_cmd = 'cd ' + test_repo
         # running 8 client processes
@@ -135,12 +154,14 @@ class MpioUtils():
         elif test_name == "hdf5" and (os.path.isfile(test_repo + "/testphdf5")
                                       and os.path.isfile(test_repo
                                                          + "/t_shapesame")):
-            test_cmd = ("echo ***Running testhdf5*** ;" +
-                        " mpirun -np {} --hostfile {} ./testphdf5 ;"\
-                        .format(client_processes, hostfile) +
-                        "echo ***Running t_shapesame*** ;" +
-                        "mpirun -np {} --hostfile {} ./t_shapesame"\
-                        .format(client_processes, hostfile))
+            test_cmd = "; ".join(
+                ["echo ***Running testhdf5***",
+                 "mpirun -np {} --hostfile {} ./testphdf5".format(
+                     client_processes, hostfile),
+                 "echo ***Running t_shapesame***",
+                 "mpirun -np {} --hostfile {} ./t_shapesame".format(
+                    client_processes, hostfile)]
+            )
         else:
             raise MpioFailed("Wrong test name or test repo location specified")
 
@@ -166,5 +187,5 @@ class MpioUtils():
                                  + " code:{}".format(process.poll()))
 
         except (ValueError, OSError) as excep:
-            raise MpioFailed("<Test FAILED> \nException occurred: {}"\
-                                 .format(str(excep)))
+            raise MpioFailed(
+                "<Test FAILED> \nException occurred: {}".format(str(excep)))

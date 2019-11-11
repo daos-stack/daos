@@ -1,15 +1,19 @@
 #!/usr/bin/python
 """
   (C) Copyright 2019 Intel Corporation.
+
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
   You may obtain a copy of the License at
-      http://www.apache.org/licenses/LICENSE-2.0
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
   See the License for the specific language governing permissions and
   limitations under the License.
+
   GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
   The Government's rights to use, modify, reproduce, release, perform, display,
   or disclose this software are subject to the terms of the Apache License as
@@ -18,8 +22,10 @@
   portions thereof marked with this legend must also reproduce the markings.
 """
 from __future__ import print_function
-import general_utils
 
+import os
+
+import general_utils
 from command_utils import ExecutableCommand, EnvironmentVariables
 from command_utils import CommandFailure, FormattedParameter
 from ClusterShell.NodeSet import NodeSet
@@ -43,7 +49,8 @@ class DfuseCommand(ExecutableCommand):
         self.foreground = FormattedParameter("--foreground", False)
 
     def set_dfuse_params(self, pool, display=True):
-        """Set the dfuse parameters for the DAOS group, pool, and container uuid
+        """Set the dfuse params for the DAOS group, pool, and container uuid.
+
         Args:
             pool (TestPool): DAOS test pool object
             display (bool, optional): print updated params. Defaults to True.
@@ -52,6 +59,7 @@ class DfuseCommand(ExecutableCommand):
 
     def set_dfuse_pool_params(self, pool, display=True):
         """Set Dfuse params based on Daos Pool.
+
         Args:
             pool (TestPool): DAOS test pool object
             display (bool, optional): print updated params. Defaults to True.
@@ -61,11 +69,11 @@ class DfuseCommand(ExecutableCommand):
 
     def set_dfuse_svcl_param(self, pool, display=True):
         """Set the dfuse svcl param from the ranks of a DAOS pool object.
+
         Args:
             pool (TestPool): DAOS test pool object
             display (bool, optional): print updated params. Defaults to True.
         """
-
         svcl = ":".join(
             [str(item) for item in [
                 int(pool.pool.svc.rl_ranks[index])
@@ -73,7 +81,8 @@ class DfuseCommand(ExecutableCommand):
         self.svcl.update(svcl, "svcl" if display else None)
 
     def set_dfuse_cont_param(self, cont, display=True):
-        """Set dfuse cont param from Container object
+        """Set dfuse cont param from Container object.
+
         Args:
             cont (TestContainer): Daos test container object
             display (bool, optional): print updated params. Defaults to True.
@@ -82,10 +91,10 @@ class DfuseCommand(ExecutableCommand):
 
 
 class Dfuse(DfuseCommand):
-    """Class defining an object of type DfuseCommand"""
+    """Class defining an object of type DfuseCommand."""
 
     def __init__(self, hosts, attach_info, basepath=None):
-        """Create a dfuse object"""
+        """Create a dfuse object."""
         super(Dfuse, self).__init__("/run/dfuse/*", "dfuse")
 
         # set params
@@ -94,14 +103,16 @@ class Dfuse(DfuseCommand):
         self.basepath = basepath
 
     def __del__(self):
-        """Destroy Dfuse object and stop dfuse """
+        """Destroy Dfuse object and stop dfuse."""
         # stop dfuse
         self.stop()
 
     def create_mount_point(self):
-        """Create dfuse directory
+        """Create dfuse directory.
+
         Raises:
             CommandFailure: In case of error creating directory
+
         """
         # raise exception if mount point not specified
         if self.mount_dir.value is None:
@@ -123,9 +134,11 @@ class Dfuse(DfuseCommand):
                     "hosts: {}".format(self.mount_dir.value, error_hosts))
 
     def remove_mount_point(self):
-        """Remove dfuse directory
+        """Remove dfuse directory.
+
         Raises:
             CommandFailure: In case of error deleting directory
+
         """
         # raise exception if mount point not specified
         if self.mount_dir.value is None:
@@ -147,11 +160,12 @@ class Dfuse(DfuseCommand):
                     "hosts: {}".format(self.mount_dir.value, error_hosts))
 
     def run(self):
-        """ Run the dfuse command.
+        """Run the dfuse command.
+
         Raises:
             CommandFailure: In case dfuse run command fails
-        """
 
+        """
         # create dfuse dir if does not exist
         self.create_mount_point()
         # obtain env export string
@@ -172,11 +186,12 @@ class Dfuse(DfuseCommand):
                     error_hosts))
 
     def stop(self):
-        """Stop dfuse
+        """Stop dfuse.
+
         Raises:
             CommandFailure: In case dfuse stop fails
-        """
 
+        """
         cmd = "if [ -x '$(command -v fusermount)' ]; "
         cmd += "then fusermount -u {0}; else fusermount3 -u {0}; fi".\
                format(self.mount_dir.value)
@@ -192,17 +207,16 @@ class Dfuse(DfuseCommand):
                     error_hosts))
 
     def get_default_env(self):
-
         """Get the default enviroment settings for running Dfuse.
-        Returns:
-            (str):  a single string of all env vars to be
-                                  exported
-        """
 
+        Returns:
+            (str): a single string of all env vars to be exported
+
+        """
         # obtain any env variables to be exported
         env = EnvironmentVariables()
         env["CRT_ATTACH_INFO_PATH"] = self.attach_info
-        env["DAOS_SINGLETON_CLI"] = 1
+        env["DAOS_SINGLETON_CLI"] = os.environ.get("DAOS_SINGLETON_CLI", 0)
 
         if self.basepath is not None:
             try:
