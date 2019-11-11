@@ -327,6 +327,9 @@ daos_pool_remove_replicas(const uuid_t uuid, const char *group,
  * List all pools created in the specified DAOS system.
  *
  * \param group	[IN]		Name of DAOS system managing the service.
+ * \param npools
+ *		[IN,OUT]	[in] \a pools length in items.
+ *				[out] Number of pools in the DAOS system.
  * \param pools	[OUT]		Array of pool mgmt information structures.
  *				NULL is permitted in which case only the
  *				number of pools will be returned in \a npools.
@@ -334,16 +337,17 @@ daos_pool_remove_replicas(const uuid_t uuid, const char *group,
  *				service replica rank list (mgpi_svc) is
  *				allocated for each item in \pools.
  *				The rank lists must be freed by the caller.
- * \param npools
- *		[IN,OUT]	[in] \a pools length in items.
- *				[out] Number of pools in the DAOS system.
  * \param ev	[IN]		Completion event. Optional and can be NULL.
  *				The function will run in blocking mode
  *				if \a ev is NULL.
+ *
+ * \return			0		Success
+ *				-DER_TRUNC	\a pools cannot hold \a npools
+ *						items
  */
 int
-daos_mgmt_list_pools(const char *group, daos_mgmt_pool_info_t *pools,
-		     daos_size_t *npools, daos_event_t *ev);
+daos_mgmt_list_pools(const char *group, daos_size_t *npools,
+		     daos_mgmt_pool_info_t *pools, daos_event_t *ev);
 
 /**
  * Add mark to servers.

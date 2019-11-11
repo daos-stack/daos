@@ -466,8 +466,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 
 	/* Check for any unimplemented commands, print help */
 	if (ap->p_op != -1 &&
-	    (ap->p_op == POOL_LIST_CONTAINERS ||
-	     ap->p_op == POOL_STAT ||
+	    (ap->p_op == POOL_STAT ||
 	     ap->p_op == POOL_GET_PROP ||
 	     ap->p_op == POOL_GET_ATTR ||
 	     ap->p_op == POOL_LIST_ATTRS)) {
@@ -546,11 +545,11 @@ pool_op_hdlr(struct cmd_args_s *ap)
 	case POOL_QUERY:
 		rc = pool_query_hdlr(ap);
 		break;
+	case POOL_LIST_CONTAINERS:
+		rc = pool_list_containers_hdlr(ap);
+		break;
 
 	/* TODO: implement the following ops */
-	case POOL_LIST_CONTAINERS:
-		/* rc = pool_list_containers_hdlr() */
-		break;
 	case POOL_STAT:
 		/* rc = pool_stat_hdlr(ap); */
 		break;

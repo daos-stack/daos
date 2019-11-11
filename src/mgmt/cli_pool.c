@@ -412,12 +412,6 @@ mgmt_list_pools_cp(tse_task_t *task, void *data)
 		}
 	}
 
-	if (arg->pools && (*arg->npools > arg->req_npools)) {
-		D_WARN("pool list contains only client-requested npools=%lu, "
-			"less than npools=%lu in system\n", arg->req_npools,
-			*arg->npools);
-	}
-
 out_free_svcranks:
 	if (arg->pools && (rc != 0)) {
 		for (pidx = 0; pidx < pc_out->lp_pools.ca_count; pidx++) {
@@ -490,6 +484,9 @@ dc_mgmt_list_pools(tse_task_t *task)
 				       sizeof(cb_args));
 	if (rc != 0)
 		D_GOTO(out_put_req, rc);
+
+	D_DEBUG(DB_MGMT, "retrieving list of pools in DAOS system: %s\n",
+		args->grp);
 
 	/** send the request */
 	return daos_rpc_send(rpc_req, task);

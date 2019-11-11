@@ -68,6 +68,7 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_pool_get_attr, sizeof(daos_pool_get_attr_t)},
 	{dc_pool_set_attr, sizeof(daos_pool_set_attr_t)},
 	{dc_pool_stop_svc, sizeof(daos_pool_stop_svc_t)},
+	{dc_pool_list_cont, sizeof(daos_pool_list_cont_t)},
 
 	/** Container */
 	{dc_cont_create, sizeof(daos_cont_create_t)},
