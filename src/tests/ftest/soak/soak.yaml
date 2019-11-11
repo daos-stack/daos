@@ -16,10 +16,14 @@ server_config:
 # If slurm is not specified; launch jobs with mpirun; {slurm|mpirun}
 jobmanager: slurm
 # pool_params - attributes of the pools to create; Currently only create one
+pool_smoke:
+    mode: 146
+    name: daos_server
+    scm_size: 1000000000
 pool1:
     mode: 146
     name: daos_server
-    scm_size: 8000000000
+    scm_size: 30000000000
 pool_reserved:
     mode: 511
     name: daos_server
@@ -49,7 +53,7 @@ smoke:
     # job runs on all node
     nodesperjob: -1
     poollist:
-      - pool1
+      - pool_smoke
     joblist:
       - jobsmoke
 # IOR DAOS stress test case
