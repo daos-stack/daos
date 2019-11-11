@@ -260,7 +260,7 @@ class TestWithServers(TestWithoutServers):
         # Start the clients (agents)
         if self.setup_start_agents:
             self.agent_sessions = agent_utils.run_agent(
-                self.basepath, self.hostlist_servers, self.hostlist_clients)
+                self, self.hostlist_servers, self.hostlist_clients)
 
         # Start the servers
         if self.setup_start_servers:
