@@ -448,21 +448,21 @@ ec_get_tgt_set(daos_iod_t *iods, unsigned int nr, struct daos_oclass_attr *oca,
 	unsigned int    k = oca->u.ec.e_k;
 	unsigned int    p_offset, p = oca->u.ec.e_p;
 	uint64_t	ss;
-	uint64_t	full = (1UL << (k+p)) - 1;
+	uint64_t	full;
 	unsigned int	i, j;
 
-	if (parity_include)
+	if (parity_include) {
 		for (i = 0; i < p; i++)
 			*tgt_set |= 1UL << i;
+		full = (1UL << (k+p)) - 1;
+	} else
+		full = ((1UL << (k+p)) - 1) - ((1UL << p) - 1);
 
 	for (i = 0; i < nr; i++) {
 		if (iods->iod_type != DAOS_IOD_ARRAY) {
 			*tgt_set |= 1UL << p;
 			continue;
 		}
-
-		if (!parity_include)
-			full = ((1UL << (k+p)) - 1) - ((1UL << p) - 1);
 
 		for (j = 0; j < iods[i].iod_nr; j++) {
 			uint64_t ext_idx;
@@ -486,7 +486,6 @@ ec_get_tgt_set(daos_iod_t *iods, unsigned int nr, struct daos_oclass_attr *oca,
 				D_ASSERT(!parity_include);
 				ss = p * len;
 				p_offset = 0;
-				full = (1UL << p) - 1;
 
 			} else {
 				ss = k * len;
