@@ -201,7 +201,7 @@ class TestPool(TestDaosApiBase):
         Args:
             dmg_bin_path (str): Directory where dmg is installed. Call
                 self.basepath + '/install/bin' in the test
-        
+
         Returns:
             Boolean: True if the pool create succeeds. False otherwise.
         """
@@ -347,7 +347,7 @@ class TestPool(TestDaosApiBase):
             self.svc_ranks = None
             return True
         return False
-    
+
     @fail_on(DaosApiError)
     def destroy_dmg(self, dmg_bin_path, force=1):
         """Destroy the pool using dmg.
