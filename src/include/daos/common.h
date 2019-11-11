@@ -261,6 +261,7 @@ daos_size_t daos_sgls_packed_size(d_sg_list_t *sgls, int nr,
 			iovs[consume_idx].iov_buf =			       \
 				(sgl)->sg_iovs[iov_idx].iov_buf + (iov_off);   \
 			iovs[consume_idx].iov_len = step;		       \
+			iovs[consume_idx].iov_buf_len = step;		       \
 			consume_idx++;					       \
 			(iov_off) += step;				       \
 			consumed += step;				       \

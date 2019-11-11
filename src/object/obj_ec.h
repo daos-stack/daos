@@ -49,6 +49,44 @@ struct obj_ec_codec {
 	unsigned char		*ec_gftbls;
 };
 
+/** Shard IO descriptor */
+struct obj_shard_iod {
+	/** tgt index [0, k+p) */
+	uint32_t		 siod_tgt_idx;
+	/** start index in extend array in daos_iod_t */
+	uint32_t		 siod_idx;
+	/** number of extends in extend array in daos_iod_t */
+	uint32_t		 siod_nr;
+	/** the byte offset of this shard's data to the sgl/bulk */
+	uint64_t		 siod_off;
+};
+
+/** Evenly distributed for EC full-stripe-only mode */
+#define OBJ_SIOD_EVEN_DIST	((uint32_t)1)
+
+/**
+ * Object IO descriptor.
+ * NULL for replica obj, as each shard/tgt with same extends in iod.
+ * Non-NULL for EC obj to specify IO descriptor for different targets.
+ */
+struct obj_io_desc {
+	/**
+	 * number of shard IODs involved for this object IO.
+	 * for EC obj, if there is only one target for example partial update or
+	 * fetch targeted with only one shard, oiod_siods should be NULL as need
+	 * not carry extra info.
+	 */
+	uint32_t		 oiod_nr;
+	/**
+	 * Flags, OBJ_SIOD_EVEN_DIST is for a special case that the extends
+	 * only cover full stripe(s), then each target has same number of
+	 * extends in the extend array (evenly distributed).
+	 */
+	uint32_t		 oiod_flags;
+	/** shard IOD array */
+	struct obj_shard_iod	*oiod_siods;
+};
+
 /** To record the recxs in original iod which include full stripes */
 struct obj_ec_recx {
 	/** index of the recx in original iod::iod_recxs array */
@@ -154,6 +192,33 @@ struct obj_reasb_req;
 #define obj_ec_idx_of_vos_idx(vos_idx, stripe_rec_nr, e_len, tgt_idx)	       \
 	((((vos_idx) / (e_len)) * stripe_rec_nr) + (tgt_idx) * (e_len) +       \
 	 (vos_idx) % (e_len))
+
+static inline int
+obj_io_desc_init(struct obj_io_desc *oiod, uint32_t tgt_nr, uint32_t flags)
+{
+#if 0
+	/* XXX refine it later */
+	if (tgt_nr < 2 || flags == OBJ_SIOD_EVEN_DIST) {
+		oiod->oiod_siods = NULL;
+		oiod->oiod_nr = tgt_nr;
+		oiod->oiod_flags = flags;
+		return 0;
+	}
+#endif
+	D_ALLOC_ARRAY(oiod->oiod_siods, tgt_nr);
+	if (oiod->oiod_siods == NULL)
+		return -DER_NOMEM;
+	oiod->oiod_nr = tgt_nr;
+	return 0;
+}
+
+static inline void
+obj_io_desc_fini(struct obj_io_desc *oiod)
+{
+	if (oiod->oiod_siods != NULL)
+		D_FREE(oiod->oiod_siods);
+	memset(oiod, 0, sizeof(*oiod));
+}
 
 /* obj_class.c */
 int obj_ec_codec_init(void);

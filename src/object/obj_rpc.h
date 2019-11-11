@@ -39,6 +39,8 @@
 #include <daos/dtx.h>
 #include <daos/object.h>
 
+#include "obj_ec.h"
+
 /* It cannot exceed the mercury unexpected msg size (4KB), reserves half-KB
  * for other RPC fields and cart/HG headers.
  */
@@ -139,6 +141,7 @@ enum obj_rpc_flags {
 	((struct dtx_id)	(orw_dti_cos)		CRT_ARRAY) \
 	((daos_iod_t)		(orw_iods)		CRT_ARRAY) \
 	((d_sg_list_t)		(orw_sgls)		CRT_ARRAY) \
+	((struct obj_io_desc)	(orw_oiods)		CRT_ARRAY) \
 	((crt_bulk_t)		(orw_bulks)		CRT_ARRAY) \
 	((struct daos_shard_tgt) (orw_shard_tgts)	CRT_ARRAY)
 

@@ -321,6 +321,58 @@ free:
 }
 
 static int
+crt_proc_struct_obj_shard_iod(crt_proc_t proc, struct obj_shard_iod *siod)
+{
+	if (crt_proc_uint32_t(proc, &siod->siod_tgt_idx) != 0)
+		return -DER_HG;
+	if (crt_proc_uint32_t(proc, &siod->siod_idx) != 0)
+		return -DER_HG;
+	if (crt_proc_uint32_t(proc, &siod->siod_nr) != 0)
+		return -DER_HG;
+	if (crt_proc_uint64_t(proc, &siod->siod_off) != 0)
+		return -DER_HG;
+	return 0;
+}
+
+static int
+crt_proc_struct_obj_io_desc(crt_proc_t proc, struct obj_io_desc *oiod)
+{
+	crt_proc_op_t	proc_op;
+	uint32_t	i;
+	int		rc;
+
+	rc = crt_proc_uint32_t(proc, &oiod->oiod_nr);
+	if (rc)
+		return -DER_HG;
+	rc = crt_proc_uint32_t(proc, &oiod->oiod_flags);
+	if (rc)
+		return -DER_HG;
+
+	rc = crt_proc_get_op(proc, &proc_op);
+	if (rc != 0)
+		return -DER_HG;
+	if (proc_op == CRT_PROC_DECODE && oiod->oiod_nr > 0) {
+		rc = obj_io_desc_init(oiod, oiod->oiod_nr, oiod->oiod_flags);
+		if (rc)
+			return rc;
+	}
+
+	for (i = 0; i < oiod->oiod_nr; i++) {
+		rc = crt_proc_struct_obj_shard_iod(proc, &oiod->oiod_siods[i]);
+		if (rc != 0) {
+			if (proc_op == CRT_PROC_DECODE)
+				obj_io_desc_fini(oiod);
+			return -DER_HG;
+		}
+	}
+
+	if (proc_op == CRT_PROC_FREE && oiod->oiod_siods != NULL)
+		obj_io_desc_fini(oiod);
+
+	return 0;
+}
+
+static int
 crt_proc_daos_anchor_t(crt_proc_t proc, daos_anchor_t *anchor)
 {
 	if (crt_proc_uint16_t(proc, &anchor->da_type) != 0)

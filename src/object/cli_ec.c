@@ -167,8 +167,12 @@ obj_ec_seg_insert(struct obj_ec_seg_sorter *sorter, uint32_t tgt_idx,
 	D_ASSERT(tgt_idx < sorter->ess_tgt_nr_total);
 	D_ASSERT(sorter->ess_seg_nr + iov_nr <= sorter->ess_seg_nr_total);
 	D_ASSERT(iov_nr > 0);
-	for (i = 0; i < iov_nr; i++)
+	for (i = 0; i < iov_nr; i++) {
 		D_ASSERT(iovs[i].iov_len > 0);
+		EC_TRACE("tgt %d insert segment iov_buf %p, iov_len %zu, "
+			 "iov_buf_len %zu.\n", tgt_idx, iovs[i].iov_buf,
+			 iovs[i].iov_len, iovs[i].iov_buf_len);
+	}
 
 	if (tgt_head->esh_seg_nr == 0)
 		sorter->ess_tgt_nr++;
@@ -180,6 +184,7 @@ obj_ec_seg_insert(struct obj_ec_seg_sorter *sorter, uint32_t tgt_idx,
 		tmp_iov = &seg[tgt_head->esh_last].oes_iov;
 		while (tmp_iov->iov_buf + tmp_iov->iov_len == iovs[0].iov_buf) {
 			tmp_iov->iov_len += iovs[0].iov_len;
+			tmp_iov->iov_buf_len = tmp_iov->iov_len;
 			iovs++;
 			iov_nr--;
 			if (iov_nr == 0)
@@ -209,7 +214,7 @@ obj_ec_seg_pack(struct obj_ec_seg_sorter *sorter, d_sg_list_t *sgl)
 	uint32_t		 tgt, idx = 0;
 
 	D_ASSERT(sorter->ess_seg_nr <= sgl->sg_nr);
-	for (tgt = 0; tgt < sorter->ess_tgt_nr; tgt++) {
+	for (tgt = 0; tgt < sorter->ess_tgt_nr_total; tgt++) {
 		tgt_head = &sorter->ess_tgts[tgt];
 		if (tgt_head->esh_seg_nr == 0)
 			continue;
@@ -557,7 +562,7 @@ recx_with_full_stripe(uint32_t recx_idx, struct obj_ec_recx_array *r_array,
 		(r_recx)[cur_idx].rx_idx = (recx_idx);			       \
 		(r_recx)[cur_idx].rx_nr = (recx_nr);			       \
 		EC_TRACE("tgt %d, cur_idx %d, adding idx "DF_U64", nr "DF_U64  \
-			 "start_idx[%d] %d, r_idx[%d] %d.\n", tgt, cur_idx,    \
+			 " start_idx[%d] %d, r_idx[%d] %d.\n", tgt, cur_idx,   \
 			 recx_idx, recx_nr, tgt, (start_idx)[tgt], tgt,	       \
 			 (r_idx)[tgt]);					       \
 		(r_idx)[tgt]++;						       \
@@ -762,6 +767,7 @@ ec_parity_seg_add(struct obj_ec_recx_array *ec_recxs, daos_iod_t *iod,
 	if (ec_recxs->oer_stripe_total == 0)
 		return;
 	iov.iov_len = ec_recxs->oer_stripe_total * cell_bytes;
+	iov.iov_buf_len = iov.iov_len;
 	for (i = 0; i < obj_ec_parity_tgt_nr(oca); i++) {
 		iov.iov_buf = ec_recxs->oer_pbufs[i];
 		obj_ec_seg_insert(sorter, obj_ec_data_tgt_nr(oca) + i,
@@ -849,6 +855,7 @@ obj_reasb_req_dump(struct obj_reasb_req *reasb_req, d_sg_list_t *usgl,
 		}
 		D_PRINT("\n");
 	}
+
 	D_PRINT("\nrecxs array [vos_idx, nr]:\n");
 	for (j = 0; j < iod->iod_nr; j++) {
 		recx = &iod->iod_recxs[j];
@@ -858,6 +865,7 @@ obj_reasb_req_dump(struct obj_reasb_req *reasb_req, d_sg_list_t *usgl,
 		if (j % 8 == 7)
 			D_PRINT("\n");
 	}
+	D_PRINT("\n");
 
 	D_PRINT("\nsgl, sg_nr %d, sg_nr_out %d\n", sgl->sg_nr, sgl->sg_nr_out);
 	D_PRINT("segments [iov_buf (offset), iov_len]:\n");
@@ -874,6 +882,7 @@ obj_reasb_req_dump(struct obj_reasb_req *reasb_req, d_sg_list_t *usgl,
 		if (j % 4 == 3)
 			D_PRINT("\n");
 	}
+	D_PRINT("\n");
 
 	D_PRINT("\noiod, oiod_nr %d, oiod_flags 0x%x\n",
 		oiod->oiod_nr, oiod->oiod_flags);

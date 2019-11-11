@@ -125,44 +125,6 @@ struct dc_object {
 	struct dc_obj_layout	*cob_shards;
 };
 
-/** Shard IO descriptor */
-struct obj_shard_iod {
-	/** tgt index [0, k+p) */
-	uint32_t		 siod_tgt_idx;
-	/** start index in extend array in daos_iod_t */
-	uint32_t		 siod_idx;
-	/** number of extends in extend array in daos_iod_t */
-	uint32_t		 siod_nr;
-	/** the byte offset of this shard's data to the sgl/bulk */
-	uint64_t		 siod_off;
-};
-
-/** Evenly distributed for EC full-stripe-only mode */
-#define OBJ_SIOD_EVEN_DIST	((uint32_t)1)
-
-/**
- * Object IO descriptor.
- * NULL for replica obj, as each shard/tgt with same extends in iod.
- * Non-NULL for EC obj to specify IO descriptor for different targets.
- */
-struct obj_io_desc {
-	/**
-	 * number of shard IODs involved for this object IO.
-	 * for EC obj, if there is only one target for example partial update or
-	 * fetch targeted with only one shard, oiod_siods should be NULL as need
-	 * not carry extra info.
-	 */
-	uint32_t		 oiod_nr;
-	/**
-	 * Flags, OBJ_SIOD_EVEN_DIST is for a special case that the extends
-	 * only cover full stripe(s), then each target has same number of
-	 * extends in the extend array (evenly distributed).
-	 */
-	uint32_t		 oiod_flags;
-	/** shard IOD array */
-	struct obj_shard_iod	*oiod_siods;
-};
-
 /**
  * Reassembled obj request.
  * User input iod/sgl possibly need to be reassembled at client before sending
@@ -181,33 +143,6 @@ struct obj_reasb_req {
 	/* target bitmap, from first data cell to last parity cell */
 	uint8_t				 tgt_bitmap[OBJ_TGT_BITMAP_LEN];
 };
-
-static inline int
-obj_io_desc_init(struct obj_io_desc *oiod, uint32_t tgt_nr, uint32_t flags)
-{
-#if 0
-	/* XXX refine it later */
-	if (tgt_nr < 2 || flags == OBJ_SIOD_EVEN_DIST) {
-		oiod->oiod_siods = NULL;
-		oiod->oiod_nr = tgt_nr;
-		oiod->oiod_flags = flags;
-		return 0;
-	}
-#endif
-	D_ALLOC_ARRAY(oiod->oiod_siods, tgt_nr);
-	if (oiod->oiod_siods == NULL)
-		return -DER_NOMEM;
-	oiod->oiod_nr = tgt_nr;
-	return 0;
-}
-
-static inline void
-obj_io_desc_fini(struct obj_io_desc *oiod)
-{
-	if (oiod->oiod_siods != NULL)
-		D_FREE(oiod->oiod_siods);
-	memset(oiod, 0, sizeof(*oiod));
-}
 
 static inline void
 enum_anchor_copy(daos_anchor_t *dst, daos_anchor_t *src)
