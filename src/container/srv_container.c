@@ -786,6 +786,7 @@ cont_close_bcast(crt_context_t ctx, struct cont_svc *svc,
 	in = crt_req_get(rpc);
 	in->tci_recs.ca_arrays = recs;
 	in->tci_recs.ca_count = nrecs;
+	uuid_copy(in->tci_pool_uuid, svc->cs_pool_uuid);
 
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)

@@ -169,15 +169,9 @@ func TestStorageScan(t *testing.T) {
 
 	cc := defaultClientSetup(log)
 
-	clientResp := cc.StorageScan(&StorageScanReq{NvmeHealth: false})
+	clientResp := cc.StorageScan(&StorageScanReq{})
 
-	if diff := cmp.Diff(MockNvmeScanResults(MockCtrlrs, MockServers, false), clientResp.Nvme); diff != "" {
-		t.Fatalf("unexpected per-client NVMe controllers (-want, +got):\n%s\n", diff)
-	}
-
-	if diff := cmp.Diff(MockScmScanResults(MockScmModules, MockScmNamespaces, MockServers), clientResp.Scm); diff != "" {
-		t.Fatalf("unexpected client SCM modules and namespaces (-want, +got):\n%s\n", diff)
-	}
+	AssertEqual(t, MockScanResp(MockCtrlrs, MockScmModules, MockScmNamespaces, MockServers, false), clientResp, "")
 }
 
 func TestStorageFormat(t *testing.T) {
@@ -280,14 +274,14 @@ func TestPoolGetACL(t *testing.T) {
 		"success": {
 			addr:             MockServers,
 			getACLRespStatus: 0,
-			expectedResp:     &PoolGetACLResp{ACL: MockACL.acl},
+			expectedResp:     &PoolGetACLResp{ACL: MockACL.ACL()},
 			expectedErr:      "",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var expectedACL []string
 			if tt.expectedResp != nil {
-				expectedACL = tt.expectedResp.ACL
+				expectedACL = tt.expectedResp.ACL.Entries
 			}
 			aclResult := &mockGetACLResult{
 				acl:    expectedACL,

@@ -239,13 +239,14 @@ def scons():
         exit(0)
 
     """Execute build"""
-    if os.path.exists('scons_local'):
-        try:
-            sys.path.insert(0, os.path.join(Dir('#').abspath, 'scons_local'))
-            from prereq_tools import PreReqComponent
-            print ('Using scons_local build')
-        except ImportError:
-            print ('Using traditional build')
+    try:
+        sys.path.insert(0, os.path.join(Dir('#').abspath, 'scons_local'))
+        from prereq_tools import PreReqComponent
+        print ('Using scons_local build')
+    except ImportError:
+        print ('scons_local submodule is needed in order to do DAOS build')
+        print ('Use git submodule update --init')
+        sys.exit(-1)
 
     env = Environment(TOOLS=['extra', 'default'])
 
