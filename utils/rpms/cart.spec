@@ -2,7 +2,7 @@
 
 Name:          cart
 Version:       2.1.0
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       CaRT
 
 License:       Apache
@@ -55,7 +55,9 @@ Requires: boost-devel
 Requires: mercury-devel
 Requires: openpa-devel
 Requires: libfabric-devel
-Requires: ompi-devel
+# can't do this until we can land ompi@PR-10 and
+# scons_local@bmurrell/ompi-env-module
+#Requires: ompi-devel
 Requires: pmix-devel
 Requires: hwloc-devel
 %if %{defined sha1}
@@ -136,6 +138,12 @@ ln %{?buildroot}%{carthome}/{TESTING/.build_vars,.build_vars-Linux}.sh
 %{carthome}/.build_vars-Linux.sh
 
 %changelog
+* Mon Nov 11 2019 Brian J. Murrell <brian.murrell@intel.com> - 2.1.0-2
+- Don't R: ompi-devel from cart-devel as it breaks the ior
+  build which ends up building with ompi instead of mpich
+  - the correct solution here is to environment-module-ize
+    ompi
+
 * Mon Nov 11 2019 Jeff Olivier <jeffrey.v.olivier@intel.com> - 2.1.0-1
 - Libcart version 2.1.0-1
 - Add support for registering error codes

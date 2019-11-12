@@ -54,6 +54,7 @@ def cart_rpms = ""
 if (!env.CHANGE_ID &&
     (env.BRANCH_NAME != "weekly-testing" &&
      env.BRANCH_NAME != "master" &&
+     env.BRANCH_NAME != "daos_devel1" &&
      env.BRANCH_NAME != "daos_devel")) {
    currentBuild.result = 'SUCCESS'
    return
