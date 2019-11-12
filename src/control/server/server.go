@@ -63,7 +63,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 
 	err := cfg.Validate()
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 
 	// Backup active config.
