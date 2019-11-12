@@ -49,7 +49,7 @@ def component_repos = ""
 def daos_repo = "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
 def el7_daos_repos = el7_component_repos + ' ' + component_repos + ' ' + daos_repo
 def sle12_daos_repos = sle12_component_repos + ' ' + component_repos + ' ' + daos_repo
-def ior_repos = "mpich@daos_adio-rpm ior-hpc@daos"
+def ior_repos = "mpich@daos_adio-rpm ior-hpc@PR-46:3"
 
 def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
                           exit 0
@@ -1301,10 +1301,6 @@ pipeline {
                     }
                 }
                 stage('Functional_Hardware') {
-                    when {
-                        beforeAgent true
-                        expression { env.DAOS_STACK_CI_HARDWARE_SKIP != 'true' }
-                    }
                     agent {
                         label 'ci_nvme9'
                     }
