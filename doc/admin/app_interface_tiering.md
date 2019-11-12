@@ -305,7 +305,7 @@ deserialize a DAOS container to a set of POSIX files that can be stored or
 "parked" in an external POSIX filesystem. This transformation is agnostic to the
 data model and container type and will retain all DAOS internal metadata.
 
-[^1]: https://github.com/daos-stack/daos/blob/master/src/utils/py/README.md
+[^1]: https://github.com/daos-stack/daos/blob/master/src/client/pydaos/raw/README.md
 
 [^2]: https://godoc.org/github.com/daos-stack/go-daos/pkg/daos
 
