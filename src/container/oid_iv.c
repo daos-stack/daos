@@ -26,6 +26,7 @@
 #define D_LOGFAC	DD_FAC(container)
 
 #include <abt.h>
+#include <daos_errno.h>
 #include <cart/iv.h>
 #include <daos/common.h>
 #include <gurt/list.h>

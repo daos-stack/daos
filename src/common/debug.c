@@ -50,6 +50,9 @@ debug_fini_locked(void)
 {
 	int	rc;
 
+	/* Deregister daos specific error codes */
+	daos_errno_fini();
+
 	rc = D_LOG_DEREGISTER_DB(DAOS_FOREACH_DB);
 	if (rc != 0) /* Just print a message but no need to fail */
 		D_PRINT_ERR("Failed to deallocate daos debug bits: %d\n", rc);
@@ -199,6 +202,16 @@ daos_debug_init(char *logfile)
 	io_bypass_init();
 	dd_ref = 1;
 	D_MUTEX_UNLOCK(&dd_lock);
+
+	/* Register daos specific error codes */
+	rc = daos_errno_init();
+	if (rc != 0) {
+		D_ERROR("DAOS error strings could not be registered: "DF_RC"\n",
+			DP_RC(rc));
+		/* Ignore the error as it only affects new daos error codes
+		 * log messages.
+		 */
+	}
 
 	return 0;
 

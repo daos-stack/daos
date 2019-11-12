@@ -41,17 +41,13 @@
 #include <pthread.h>
 #include <byteswap.h>
 
+#include <daos_errno.h>
 #include <daos/debug.h>
 #include <gurt/hash.h>
 #include <gurt/common.h>
 #include <cart/api.h>
 #include <daos_types.h>
 #include <daos_prop.h>
-
-#ifndef DF_RC
-#define DF_RC "%s(%d)"
-#define DP_RC(rc) d_errstr(rc), rc
-#endif /* DF_RC */
 
 #define DF_OID		DF_U64"."DF_U64
 #define DP_OID(o)	(o).hi, (o).lo
