@@ -27,9 +27,9 @@ container:
       object_qty: 30
       record_qty: 10
     small:
-      data_size: 32
-      object_qty: 9
-      record_qty: 3
+      data_size: 8
+      object_qty: 30
+      record_qty: 1
   debug: True
 rebuild:
   rank: 4
