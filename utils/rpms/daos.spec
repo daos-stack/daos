@@ -274,11 +274,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/python2.7/site-packages/pydaos/*.pyc
 %{_libdir}/python2.7/site-packages/pydaos/*.pyo
 %endif
-%if (0%{?rhel} >= 7)
 %{_libdir}/python2.7/site-packages/pydaos/pydaos_shim_27.so
-%else
-%{_libdir}/python2.7/site-packages/pydaos/pydaos_shim_27.cpython-36m-x86_64-linux-gnu.so
-%endif
 %dir  %{_libdir}/python2.7/site-packages/pydaos/raw
 %{_libdir}/python2.7/site-packages/pydaos/raw/*.py
 %if (0%{?rhel} >= 7)
@@ -293,11 +289,7 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/python3/site-packages/pydaos/*.pyc
 %{_libdir}/python3/site-packages/pydaos/*.pyo
 %endif
-%if (0%{?rhel} >= 7)
 %{_libdir}/python3/site-packages/pydaos/pydaos_shim_3.so
-%else
-%{_libdir}/python3/site-packages/pydaos/pydaos_shim_3.cpython-36m-x86_64-linux-gnu.so
-%endif
 %dir %{_libdir}/python3/site-packages/pydaos/raw
 %{_libdir}/python3/site-packages/pydaos/raw/*.py
 %if (0%{?rhel} >= 7)
