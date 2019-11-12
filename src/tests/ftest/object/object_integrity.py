@@ -23,7 +23,6 @@
 """
 
 import os
-import sys
 import json
 import ctypes
 import time
@@ -58,13 +57,13 @@ class ObjectDataValidation(avocado.Test):
         self.array_size = None
         self.record_length = None
 
-        with open('../../../.build_vars.json') as json_f:
+        with open('../../.build_vars.json') as json_f:
             build_paths = json.load(json_f)
         self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
         server_group = self.params.get("name",
                                        '/server_config/',
                                        'daos_server')
-        self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
+        self.context = DaosContext(build_paths['PREFIX'] + '/lib64/')
         self.d_log = DaosLog(self.context)
         self.hostlist = self.params.get("test_machines", '/run/hosts/*')
         self.hostfile = write_host_file.write_host_file(self.hostlist,

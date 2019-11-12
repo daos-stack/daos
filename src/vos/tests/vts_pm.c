@@ -145,8 +145,6 @@ vos_check(void **state, vos_iter_param_t *param, vos_iter_type_t type,
 
 	rc = vos_iterate(param, type, true, &anchors, count_cb, &counts);
 	assert_int_equal(rc, 0);
-	/*
-	 * Enable these checks with punch model change
 	assert_int_equal(expected->num_objs, counts.num_objs);
 	assert_int_equal(expected->num_dkeys, counts.num_dkeys);
 	assert_int_equal(expected->num_akeys, counts.num_akeys);
@@ -155,7 +153,6 @@ vos_check(void **state, vos_iter_param_t *param, vos_iter_type_t type,
 	assert_int_equal(expected->num_punched_dkeys, counts.num_punched_dkeys);
 	assert_int_equal(expected->num_punched_akeys, counts.num_punched_akeys);
 	assert_int_equal(expected->num_punched_recx, counts.num_punched_recx);
-	*/
 }
 
 static void

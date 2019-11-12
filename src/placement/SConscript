@@ -20,7 +20,7 @@ def scons():
 
     # generate server module
     srv = daos_build.library(denv, 'placement', common_tgts)
-    denv.Install('$PREFIX/lib/daos_srv', srv)
+    denv.Install('$PREFIX/lib64/daos_srv', srv)
 
     # placement client library
     dc_placement_tgts = common_tgts

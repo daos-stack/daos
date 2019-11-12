@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,36 +20,13 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+package pbin
 
-package server
+const (
+	// DaosAdminName is the name of the daos_admin privileged helper.
+	DaosAdminName = "daos_admin"
 
-import (
-	"github.com/pkg/errors"
-	"golang.org/x/net/context"
-
-	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	// DisableReqFwdEnvVar is the name of the environment variable which
+	// can be set to disable forwarding requests to the privileged binary.
+	DisableReqFwdEnvVar = "DAOS_DISABLE_REQ_FWD"
 )
-
-// FeatureMap is a type alias
-type FeatureMap map[string]*ctlpb.Feature
-
-// GetFeature returns the feature from feature name.
-func (s *ControlService) GetFeature(
-	ctx context.Context, name *ctlpb.FeatureName) (*ctlpb.Feature, error) {
-	f, exists := s.supportedFeatures[name.Name]
-	if !exists {
-		return nil, errors.Errorf("no feature with name %s", name.Name)
-	}
-	return f, nil
-}
-
-// ListFeatures lists all features supported by the management server.
-func (s *ControlService) ListFeatures(
-	empty *ctlpb.EmptyReq, stream ctlpb.MgmtCtl_ListFeaturesServer) error {
-	for _, feature := range s.supportedFeatures {
-		if err := stream.Send(feature); err != nil {
-			return err
-		}
-	}
-	return nil
-}
