@@ -126,6 +126,7 @@ struct dtx_share {
 };
 
 struct dtx_stat {
+	uint64_t	dtx_priority_count;
 	uint64_t	dtx_committable_count;
 	uint64_t	dtx_oldest_committable_time;
 	uint64_t	dtx_committed_count;

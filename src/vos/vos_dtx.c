@@ -464,8 +464,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti)
 	 *	via its DTX record(s).
 	 */
 	dtx_rec_release(umm, umoff, false, false, true);
-	vos_dtx_del_cos(cont, &dtx->te_oid, dti, dtx->te_dkey_hash,
-			dtx->te_intent == DAOS_INTENT_PUNCH ? true : false);
+	vos_dtx_del_cos(cont, dti);
 
 out:
 	D_DEBUG(DB_TRACE, "Commit the DTX "DF_DTI": rc = %d\n",
@@ -675,9 +674,7 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 		if (cont == NULL)
 			goto skip_cos;
 
-		rc = vos_dtx_lookup_cos(coh, &dtx->te_oid, &dtx->te_xid,
-			dtx->te_dkey_hash,
-			dtx->te_intent == DAOS_INTENT_PUNCH ? true : false);
+		rc = vos_dtx_lookup_cos(coh, &dtx->te_xid);
 		if (rc == 0)
 			return ALB_AVAILABLE_CLEAN;
 
@@ -918,7 +915,7 @@ vos_dtx_check_resend(daos_handle_t coh, daos_unit_oid_t *oid,
 {
 	int	rc;
 
-	rc = vos_dtx_lookup_cos(coh, oid, xid, dkey_hash, punch);
+	rc = vos_dtx_lookup_cos(coh, xid);
 	if (rc == 0)
 		return DTX_ST_COMMITTED;
 
@@ -1043,6 +1040,7 @@ vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat)
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
 
+	stat->dtx_priority_count = cont->vc_dtx_priority_count;
 	stat->dtx_committable_count = cont->vc_dtx_committable_count;
 	stat->dtx_oldest_committable_time = vos_dtx_cos_oldest(cont);
 	stat->dtx_committed_count = cont->vc_cont_df->cd_dtx_table_df.tt_count;

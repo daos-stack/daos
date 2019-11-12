@@ -146,7 +146,8 @@ dtx_batched_commit(void *arg)
 		d_list_move_tail(&dbca->dbca_link, &dmi->dmi_dtx_batched_list);
 		vos_dtx_stat(cont->sc_hdl, &stat);
 
-		if ((stat.dtx_committable_count > DTX_THRESHOLD_COUNT) ||
+		if ((stat.dtx_priority_count > DTX_PRIO_THRESHOLD_CNT) ||
+		    (stat.dtx_committable_count > DTX_THRESHOLD_COUNT) ||
 		    (stat.dtx_oldest_committable_time != 0 &&
 		     dtx_hlc_age2sec(stat.dtx_oldest_committable_time) >
 		     DTX_COMMIT_THRESHOLD_AGE)) {
@@ -288,34 +289,6 @@ dtx_leader_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 		return 0;
 	}
 
-	/* XXX: For leader case, we need to find out the potential
-	 *	conflict DTXs in the CoS cache, and append them to
-	 *	the dispatched RPC to non-leaders. Then non-leader
-	 *	replicas can commit them before real modifications
-	 *	to avoid availability trouble.
-	 */
-	dti_cos_count = vos_dtx_list_cos(coh, oid, dkey_hash,
-			intent == DAOS_INTENT_UPDATE ? DCLT_PUNCH :
-						       DCLT_PUNCH | DCLT_UPDATE,
-			DTX_THRESHOLD_COUNT, &dti_cos);
-	if (dti_cos_count < 0) {
-		D_FREE(dlh->dlh_subs);
-		return dti_cos_count;
-	}
-
-	if (dti_cos_count > 0 && dti_cos == NULL) {
-		/* There are too many conflict DTXs to be committed,
-		 * as to cannot be taken via the normal IO RPC. The
-		 * background dedicated DTXs batched commit ULT has
-		 * not committed them in time. Let's retry later.
-		 */
-		D_DEBUG(DB_TRACE, "Too many pontential conflict DTXs"
-			" for the given "DF_DTI", let's retry later.\n",
-			DP_DTI(dti));
-		D_FREE(dlh->dlh_subs);
-		return -DER_INPROGRESS;
-	}
-
 init:
 	dtx_handle_init(dti, oid, coh, epoch, dkey_hash, pm_ver, intent,
 			NULL, dti_cos, dti_cos_count, true,
@@ -434,13 +407,7 @@ dtx_conflict(daos_handle_t coh, struct dtx_leader_handle *dlh, uuid_t po_uuid,
 		if (skip)
 			continue;
 
-		rc = vos_dtx_lookup_cos(coh, oid, &dces[i].dce_xid,
-					dces[i].dce_dkey, true);
-		if (rc != -DER_NONEXIST)
-			goto found;
-
-		rc = vos_dtx_lookup_cos(coh, oid, &dces[i].dce_xid,
-					dces[i].dce_dkey, false);
+		rc = vos_dtx_lookup_cos(coh, &dces[i].dce_xid);
 		if (rc != -DER_NONEXIST)
 			goto found;
 
@@ -591,10 +558,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *cont_hdl,
 		rc = vos_dtx_check(cont->sc_hdl, &dth->dth_xid);
 		switch (rc) {
 		case DTX_ST_PREPARED:
-			rc = vos_dtx_lookup_cos(dth->dth_coh, &dth->dth_oid,
-					&dth->dth_xid, dth->dth_dkey_hash,
-					dth->dth_intent == DAOS_INTENT_PUNCH ?
-					true : false);
+			rc = vos_dtx_lookup_cos(dth->dth_coh, &dth->dth_xid);
 			/* The resync ULT has already added it into the CoS
 			 * cache, current ULT needs to do nothing.
 			 */
@@ -625,9 +589,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *cont_hdl,
 	}
 
 	rc = vos_dtx_add_cos(dth->dth_coh, &dth->dth_oid, &dth->dth_xid,
-			     dth->dth_dkey_hash, dth->dth_epoch,
-			     dth->dth_intent == DAOS_INTENT_PUNCH ?
-			     true : false, true);
+			     dth->dth_epoch, true);
 	if (rc == -DER_INPROGRESS) {
 		D_WARN(DF_UUID": Fail to add DTX "DF_DTI" to CoS "
 		       "because of using old epoch "DF_U64"\n",

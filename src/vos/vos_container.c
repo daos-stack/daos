@@ -198,6 +198,7 @@ cont_free(struct d_ulink *ulink)
 	if (!daos_handle_is_inval(cont->vc_dtx_cos_hdl))
 		dbtree_destroy(cont->vc_dtx_cos_hdl, NULL);
 	D_ASSERT(d_list_empty(&cont->vc_dtx_committable));
+	D_ASSERT(d_list_empty(&cont->vc_dtx_priority));
 	dbtree_close(cont->vc_dtx_active_hdl);
 	dbtree_close(cont->vc_dtx_committed_hdl);
 	dbtree_close(cont->vc_btr_hdl);
@@ -366,6 +367,8 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	cont->vc_dtx_cos_hdl = DAOS_HDL_INVAL;
 	D_INIT_LIST_HEAD(&cont->vc_dtx_committable);
 	cont->vc_dtx_committable_count = 0;
+	D_INIT_LIST_HEAD(&cont->vc_dtx_priority);
+	cont->vc_dtx_priority_count = 0;
 
 	/* Cache this btr object ID in container handle */
 	rc = dbtree_open_inplace_ex(&cont->vc_cont_df->cd_obj_root,

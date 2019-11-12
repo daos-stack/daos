@@ -135,8 +135,12 @@ struct vos_container {
 	struct btr_root		vc_dtx_cos_btr;
 	/* The global list for commiitable DTXs. */
 	d_list_t		vc_dtx_committable;
-	/* The count of commiitable DTXs. */
+	/* The count of committable DTXs. */
 	uint32_t		vc_dtx_committable_count;
+	/* The global list for priority committable DTXs. */
+	d_list_t		vc_dtx_priority;
+	/* The count of committable DTXs. */
+	uint32_t		vc_dtx_priority_count;
 	/** Direct pointer to the VOS container */
 	struct vos_cont_df	*vc_cont_df;
 	/**
@@ -415,14 +419,10 @@ vos_dtx_cos_register(void);
  * Remove the DTX from the CoS cache.
  *
  * \param cont		[IN]	Pointer to the container.
- * \param oid		[IN]	Pointer to the object ID.
  * \param xid		[IN]	Pointer to the DTX identifier.
- * \param dkey_hash	[IN]	The hashed dkey.
- * \param punch		[IN]	For punch DTX or not.
  */
 void
-vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
-		struct dtx_id *xid, uint64_t dkey_hash, bool punch);
+vos_dtx_del_cos(struct vos_container *cont, struct dtx_id *xid);
 
 /**
  * Query the oldest DTX's timestamp in the CoS cache.

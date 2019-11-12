@@ -37,35 +37,27 @@ vts_dtx_cos(void **state, bool punch)
 	struct io_test_args	*args = *state;
 	struct vos_container	*cont;
 	struct dtx_id		 xid;
-	uint64_t		 dkey_hash = lrand48();
+	struct dtx_id		 xid2;
 	int			 rc;
 
 	daos_dti_gen(&xid, false);
+	daos_dti_gen(&xid2, false);
 
 	/* Insert a DTX into CoS cache. */
 	rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &args->oid, &xid,
-			     dkey_hash, DAOS_EPOCH_MAX - 1, punch, false);
+			     DAOS_EPOCH_MAX - 1, false);
 	assert_int_equal(rc, 0);
 
-	/* Query the DTX with different @punch parameter will find nothing. */
-	rc = vos_dtx_lookup_cos(args->ctx.tc_co_hdl, &args->oid, &xid,
-				dkey_hash, !punch);
-	assert_int_equal(rc, -DER_NONEXIST);
-
-	/* Query the DTX different dkey hash will find nothing. */
-	rc = vos_dtx_lookup_cos(args->ctx.tc_co_hdl, &args->oid, &xid,
-				dkey_hash + 1, punch);
-	assert_int_equal(rc, -DER_NONEXIST);
-
-	rc = vos_dtx_lookup_cos(args->ctx.tc_co_hdl, &args->oid, &xid,
-				dkey_hash, punch);
+	rc = vos_dtx_lookup_cos(args->ctx.tc_co_hdl, &xid);
 	assert_int_equal(rc, 0);
+
+	rc = vos_dtx_lookup_cos(args->ctx.tc_co_hdl, &xid2);
+	assert_int_equal(rc, -DER_NONEXIST);
 
 	cont = vos_hdl2cont(args->ctx.tc_co_hdl);
 	/* Remove the DTX from CoS cache. */
-	vos_dtx_del_cos(cont, &args->oid, &xid, dkey_hash, punch);
-	rc = vos_dtx_lookup_cos(args->ctx.tc_co_hdl, &args->oid, &xid,
-				dkey_hash, punch);
+	vos_dtx_del_cos(cont, &xid);
+	rc = vos_dtx_lookup_cos(args->ctx.tc_co_hdl, &xid);
 	assert_int_equal(rc, -DER_NONEXIST);
 }
 
@@ -83,46 +75,6 @@ dtx_2(void **state)
 	vts_dtx_cos(state, true);
 }
 
-/* DTX CoS cache list */
-static void
-dtx_3(void **state)
-{
-	struct io_test_args	*args = *state;
-	struct dtx_id		*dti_cos = NULL;
-	struct dtx_id		 xid;
-	struct dtx_stat		 stat = { 0 };
-	uint64_t		 dkey_hash = lrand48();
-	int			 rc;
-	int			 i;
-
-	for (i = 0; i < 11; i++) {
-		daos_dti_gen(&xid, false);
-
-		rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &args->oid, &xid,
-				     dkey_hash, DAOS_EPOCH_MAX - 1,
-				     i % 2 ? true : false, false);
-		assert_int_equal(rc, 0);
-	}
-
-	rc = vos_dtx_list_cos(args->ctx.tc_co_hdl, &args->oid, dkey_hash,
-			      DCLT_PUNCH, 100, &dti_cos);
-	assert_int_equal(rc, 5);
-	D_FREE(dti_cos);
-
-	rc = vos_dtx_list_cos(args->ctx.tc_co_hdl, &args->oid, dkey_hash,
-			      DCLT_UPDATE, 100, &dti_cos);
-	assert_int_equal(rc, 6);
-	D_FREE(dti_cos);
-
-	rc = vos_dtx_list_cos(args->ctx.tc_co_hdl, &args->oid, dkey_hash,
-			      DCLT_PUNCH | DCLT_UPDATE, 100, &dti_cos);
-	assert_int_equal(rc, 11);
-	D_FREE(dti_cos);
-
-	vos_dtx_stat(args->ctx.tc_co_hdl, &stat);
-	assert_int_equal(stat.dtx_committable_count, 11);
-}
-
 /* DTX CoS cache fetch committable */
 static void
 dtx_4(void **state)
@@ -130,17 +82,14 @@ dtx_4(void **state)
 	struct io_test_args	*args = *state;
 	struct dtx_entry	*dtes = NULL;
 	struct dtx_id		 xid[11];
-	uint64_t		 dkey_hash;
 	int			 rc;
 	int			 i;
 
 	for (i = 0; i < 10; i++) {
 		daos_dti_gen(&xid[i], false);
-		dkey_hash = lrand48();
 
 		rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &args->oid, &xid[i],
-				     dkey_hash, DAOS_EPOCH_MAX - 1,
-				     i % 2 ? false : true, false);
+				     DAOS_EPOCH_MAX - 1, false);
 		assert_int_equal(rc, 0);
 	}
 
@@ -299,8 +248,8 @@ dtx_5(void **state)
 	vts_dtx_end(dth);
 
 	/* Add former DTX into CoS cache. */
-	rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &args->oid, &xid,
-			     dkey_hash, epoch, false, false);
+	rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &args->oid, &xid, epoch,
+			     false);
 	assert_int_equal(rc, 0);
 
 	vos_dtx_stat(args->ctx.tc_co_hdl, &stat);
@@ -792,8 +741,8 @@ dtx_16(void **state)
 	assert_memory_not_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 
 	/* Insert a DTX into CoS cache. */
-	rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &args->oid, &xid,
-			     dkey_hash, epoch, false, false);
+	rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &args->oid, &xid, epoch,
+			     false);
 	assert_int_equal(rc, 0);
 
 	/* Fetch again. */
@@ -1526,8 +1475,6 @@ static const struct CMUnitTest dtx_tests[] = {
 	  dtx_1, NULL, dtx_tst_teardown },
 	{ "VOS502: punch-DTX CoS cache insert/delete/query",
 	  dtx_2, NULL, dtx_tst_teardown },
-	{ "VOS503: DTX CoS cache list",
-	  dtx_3, NULL, dtx_tst_teardown },
 	{ "VOS504: DTX CoS cache fetch committable",
 	  dtx_4, NULL, dtx_tst_teardown },
 	{ "VOS505: remove DTX from CoS cache after commit",

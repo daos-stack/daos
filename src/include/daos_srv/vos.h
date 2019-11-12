@@ -43,9 +43,7 @@
  * \param coh		[IN]	Container open handle.
  * \param oid		[IN]	The target object (shard) ID.
  * \param dti		[IN]	The DTX identifier.
- * \param dkey_hash	[IN]	The hashed dkey.
  * \param epoch		[IN]	The DTX epoch.
- * \param punch		[IN]	For punch DTX or not.
  * \param check		[IN]	Check whether the DTX need restart because
  *				of sync epoch or not.
  *
@@ -55,41 +53,20 @@
  */
 int
 vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
-		uint64_t dkey_hash, daos_epoch_t epoch, bool punch, bool check);
+		daos_epoch_t epoch, bool check);
 
 /**
  * Search the specified DTX is in the CoS cache or not.
  *
  * \param coh		[IN]	Container open handle.
- * \param oid		[IN]	Pointer to the object ID.
  * \param xid		[IN]	Pointer to the DTX identifier.
- * \param dkey_hash	[IN]	The hashed dkey.
- * \param punch		[IN]	For punch DTX or not.
  *
  * \return	0 if the DTX exists in the CoS cache.
  * \return	-DER_NONEXIST if not in the CoS cache.
  * \return	Other negative values on error.
  */
 int
-vos_dtx_lookup_cos(daos_handle_t coh, daos_unit_oid_t *oid,
-		   struct dtx_id *xid, uint64_t dkey_hash, bool punch);
-
-/**
- * Fetch the list of the DTXs to be committed because of (potential) share.
- *
- * \param coh		[IN]	Container open handle.
- * \param oid		[IN]	The target object (shard) ID.
- * \param dkey_hash	[IN]	The hashed dkey.
- * \param types		[IN]	The DTX types to be listed.
- * \param max		[IN]	The max size of the array for DTX entries.
- * \param dtis		[OUT]	The DTX IDs array to be committed for share.
- *
- * \return			The count of DTXs to be committed for share
- *				on success, negative value if error.
- */
-int
-vos_dtx_list_cos(daos_handle_t coh, daos_unit_oid_t *oid, uint64_t dkey_hash,
-		 uint32_t types, int max, struct dtx_id **dtis);
+vos_dtx_lookup_cos(daos_handle_t coh, struct dtx_id *xid);
 
 /**
  * Fetch the list of the DTXs that can be committed.
