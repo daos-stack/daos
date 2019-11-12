@@ -1157,7 +1157,7 @@ nested_dkey_iter_init(struct vos_obj_iter *oiter, struct vos_iter_info *info)
 	D_ASSERTF(rc != -DER_NONEXIST,
 		  "Nested iterator called without setting probe");
 	if (rc != 0) {
-		/** -DER_NONEXIST and -DER_INPROGESS should be caught earlier.
+		/** -DER_NONEXIST and -DER_INPROGRESS should be caught earlier.
 		 *  This function should only be called after a successful
 		 *  probe.
 		 */
