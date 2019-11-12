@@ -172,10 +172,6 @@ struct obj_reasb_req;
 /** Query the number of bytes in EC cell */
 #define obj_ec_cell_bytes(iod, oca)					\
 	(((oca)->u.ec.e_len) * ((iod)->iod_size))
-/** Query the number of data cells the recx covers */
-#define obj_ec_recx_cell_nr(recx, oca)					\
-	((((recx)->rx_nr) / ((oca)->u.ec.e_len)) +			\
-	 (((recx)->rx_idx) % ((oca)->u.ec.e_len)))
 /** Query the tgt idx of data cell for daos recx idx */
 #define obj_ec_tgt_of_recx_idx(idx, stripe_rec_nr, e_len)		\
 	(((idx) % (stripe_rec_nr)) / (e_len))
@@ -192,6 +188,22 @@ struct obj_reasb_req;
 #define obj_ec_idx_of_vos_idx(vos_idx, stripe_rec_nr, e_len, tgt_idx)	       \
 	((((vos_idx) / (e_len)) * stripe_rec_nr) + (tgt_idx) * (e_len) +       \
 	 (vos_idx) % (e_len))
+
+/** Query the number of data cells the recx covers */
+static inline uint32_t
+obj_ec_recx_cell_nr(daos_recx_t *recx, struct daos_oclass_attr *oca)
+{
+	uint64_t	recx_end, start, end;
+
+	recx_end = recx->rx_idx + recx->rx_nr;
+	start = roundup(recx->rx_idx, obj_ec_cell_rec_nr(oca));
+	end = rounddown(recx_end, obj_ec_cell_rec_nr(oca));
+	if (start > end)
+		return 1;
+	return (end - start) / obj_ec_cell_rec_nr(oca) +
+	       (recx->rx_idx % obj_ec_cell_rec_nr(oca)) +
+	       (recx_end % obj_ec_cell_rec_nr(oca));
+}
 
 static inline int
 obj_io_desc_init(struct obj_io_desc *oiod, uint32_t tgt_nr, uint32_t flags)
