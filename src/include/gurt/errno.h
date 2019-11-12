@@ -170,26 +170,76 @@
 	/** Checksum error */						\
 	ACTION(DER_CSUM,		(DER_ERR_DAOS_BASE + 21))
 
+#if defined(D_ERRNO_V2)
+/** Defines the gurt error codes */
+#define D_FOREACH_ERR_RANGE(ACTION)	\
+	ACTION(GURT,	1000)
+#else /* !D_ERRNO_V2 */
+/** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\
 	ACTION(GURT,	1000)		\
 	ACTION(DAOS,	2000)
+#endif /* D_ERRNO_V2 */
 
-#define D_DEFINE_GURT_ERRNO(name, value) name = value,
+#define D_DEFINE_ERRNO(name, value) name = value,
 
-#define D_DEFINE_RANGE_ERRNO(name, base)		\
-	DER_ERR_##name##_BASE		=	(base),	\
-	D_FOREACH_##name##_ERR(D_DEFINE_GURT_ERRNO)	\
-	DER_ERR_##name##_LIMIT,
+#define D_DEFINE_RANGE_ERRNO(name, base)			\
+	enum {							\
+		DER_ERR_##name##_BASE		=	(base),	\
+		D_FOREACH_##name##_ERR(D_DEFINE_ERRNO)		\
+		DER_ERR_##name##_LIMIT,				\
+	};
 
-typedef enum {
-	DER_SUCCESS	=	0,
-	D_FOREACH_ERR_RANGE(D_DEFINE_RANGE_ERRNO)
-	DER_UNKNOWN	=	DER_ERR_GURT_BASE + 500000,
-} d_errno_t;
+#define D_DEFINE_ERRSTR(name, value) #name,
 
-#undef D_DEFINE_GURT_ERRNO
+#define D_DEFINE_RANGE_ERRSTR(name)				\
+	static const char * const g_##name##_error_strings[] = {\
+		D_FOREACH_##name##_ERR(D_DEFINE_ERRSTR)		\
+	};
 
+D_FOREACH_ERR_RANGE(D_DEFINE_RANGE_ERRNO)
+
+/** Macro to register a range defined using D_DEFINE_RANGE macros */
+#define D_REGISTER_RANGE(name)				\
+	d_errno_register_range(DER_ERR_##name##_BASE,	\
+			       DER_ERR_##name##_LIMIT,	\
+			       g_##name##_error_strings)
+
+/** Macro to deregister a range defined using D_DEFINE_RANGE macros */
+#define D_DEREGISTER_RANGE(name)			\
+	d_errno_deregister_range(DER_ERR_##name##_BASE)
+
+#define DER_SUCCESS	0
+#define DER_UNKNOWN	(DER_ERR_GURT_BASE + 500000)
+
+/** Return a string associated with a registered gurt errno
+ *
+ * \param	rc[in]	The error code
+ *
+ * \return	String value for error code or DER_UNKNOWN
+ */
 const char *d_errstr(int rc);
+
+/** Register error codes with gurt.  Use D_REGISTER_RANGE.
+ *
+ * \param	start[in]	Start of error range.  Actual errors start at
+ *				\p start + 1
+ * \param	end[in]		End of range.  All error codes should be less
+ *				than \p end
+ * \param	error_strings[in]	Array of strings.   Must be one per
+ *					code in the range
+ *
+ * \return	0 on success, otherwise error code
+ */
+int d_errno_register_range(int start, int end,
+			   const char * const *error_strings);
+
+/** De-register error codes with gurt.  Use D_DEREGISTER_RANGE.
+ *
+ * \param	start[in]	Start of error range
+ */
+void d_errno_deregister_range(int start);
+
 
 /** @}
  */

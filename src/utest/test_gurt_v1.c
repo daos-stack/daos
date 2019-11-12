@@ -40,4 +40,5 @@
  */
 
 #define D_LOG_V1_TEST
+#define TEST_OLD_ERROR
 #include "test_gurt.c"

@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2019 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -40,17 +40,34 @@
  */
 #include "gurt/errno.h"
 #include "gurt/debug.h"
+#include "gurt/list.h"
+#include "gurt/common.h"
 
-#define D_DEFINE_GURT_ERRSTR(name, value) #name,
+static D_LIST_HEAD(g_error_reg_list);
+
+struct d_error_reg {
+	d_list_t		er_link;
+	int			er_base;
+	int			er_limit;
+	const char * const	*er_strings;
+	bool			er_alloc;
+};
 
 #define D_DEFINE_COMP_ERRSTR(name, base)				\
 	static const char * const g_##name##_errstr[] = {		\
-		D_FOREACH_##name##_ERR(D_DEFINE_GURT_ERRSTR)		\
+		D_FOREACH_##name##_ERR(D_DEFINE_ERRSTR)			\
 	};								\
-	D_CASSERT((sizeof(g_##name##_errstr) /			\
+	D_CASSERT((sizeof(g_##name##_errstr) /				\
 			 sizeof(g_##name##_errstr[0])) ==		\
 	      ((DER_ERR_##name##_LIMIT - DER_ERR_##name##_BASE - 1)),	\
-			#name "is not contiguous");
+			#name "is not contiguous");			\
+	static struct d_error_reg g_##name##_errreg = {			\
+		.er_base	= DER_ERR_##name##_BASE,		\
+		.er_limit	= DER_ERR_##name##_LIMIT,		\
+		.er_strings	= g_##name##_errstr,			\
+		.er_alloc	= false,				\
+	};
+
 
 D_FOREACH_ERR_RANGE(D_DEFINE_COMP_ERRSTR)
 
@@ -63,16 +80,71 @@ D_FOREACH_ERR_RANGE(D_DEFINE_COMP_ERRSTR)
 		return g_##name##_errstr[rc - first];		\
 	} while (0);
 
+#define D_ADD_LIST(name, base)					\
+		d_list_add_tail(&g_##name##_errreg.er_link, &g_error_reg_list);
+
 #define D_ABS(value) ((value) > 0 ? (value) : (-value))
+
+static __attribute__((constructor)) void
+d_err_init(void)
+{
+	D_FOREACH_ERR_RANGE(D_ADD_LIST)
+}
 
 const char *d_errstr(int rc)
 {
+	struct d_error_reg	*entry;
+
 	if (rc == 0)
 		return "DER_SUCCESS";
 
 	rc = D_ABS(rc);
 
-	D_FOREACH_ERR_RANGE(D_CHECK_RANGE)
+	d_list_for_each_entry(entry, &g_error_reg_list, er_link) {
+		if (rc <= entry->er_base || rc >= entry->er_limit)
+			continue;
+		return entry->er_strings[rc - entry->er_base - 1];
+	}
 
 	return "DER_UNKNOWN";
+}
+
+int
+d_errno_register_range(int start, int end, const char * const *error_strings)
+{
+	struct	d_error_reg	*entry;
+
+	D_ALLOC_PTR(entry);
+	if (entry == NULL) {
+		D_ERROR("No memory to register error code range %d - %d\n",
+			start, end);
+		/* Not fatal.  It just means we get DER_UNKNOWN from d_errstr */
+		return -DER_NOMEM;
+	}
+
+	entry->er_base = start;
+	entry->er_limit = end;
+	entry->er_strings = error_strings;
+	entry->er_alloc = true;
+	d_list_add(&entry->er_link, &g_error_reg_list);
+
+	return 0;
+}
+
+void
+d_errno_deregister_range(int start)
+{
+	struct d_error_reg	*entry;
+
+	d_list_for_each_entry(entry, &g_error_reg_list, er_link) {
+		if (!entry->er_alloc)
+			break;
+		if (entry->er_base == start) {
+			d_list_del(&entry->er_link);
+			D_FREE(entry);
+			return;
+		}
+	}
+	D_ERROR("Attempted to deregister non-existent error range from %d\n",
+		start);
 }

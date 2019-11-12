@@ -1,7 +1,7 @@
 %define carthome %{_exec_prefix}/lib/%{name}
 
 Name:          cart
-Version:       2.0.0
+Version:       2.1.0
 Release:       1%{?relval}%{?dist}
 Summary:       CaRT
 
@@ -136,6 +136,10 @@ ln %{?buildroot}%{carthome}/{TESTING/.build_vars,.build_vars-Linux}.sh
 %{carthome}/.build_vars-Linux.sh
 
 %changelog
+* Mon Nov 11 2019 Jeff Olivier <jeffrey.v.olivier@intel.com> - 2.1.0-1
+- Libcart version 2.1.0-1
+- Add support for registering error codes
+
 * Wed Oct 30 2019 Alexander Oganezov <alexander.a.oganezov@intel.com> - 2.0.0-1
 - Libcart version 2.0.0-1
 - crt_group_primary_modify, crt_group_secondary_modify APIs changed

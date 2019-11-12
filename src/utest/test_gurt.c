@@ -37,6 +37,10 @@
  *
  * This file tests macros in GURT
  */
+#ifndef TEST_OLD_ERROR
+#define D_ERRNO_V2
+#endif
+
 #include <stdio.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -143,6 +147,63 @@ test_time(void **state)
 #define D_CHECK_IN_RANGE(name, base)		\
 	D_FOREACH_##name##_ERR(D_CHECK_ERR_IN_RANGE)
 
+#define D_FOREACH_CUSTOM1_ERR(ACTION)				\
+	ACTION(DER_CUSTOM1,	(DER_ERR_CUSTOM1_BASE + 1))	\
+	ACTION(DER_CUSTOM2,	(DER_ERR_CUSTOM1_BASE + 2))
+
+#define D_FOREACH_CUSTOM2_ERR(ACTION)				\
+	ACTION(DER_CUSTOM3,	(DER_ERR_CUSTOM2_BASE + 1))	\
+	ACTION(DER_CUSTOM4,	(DER_ERR_CUSTOM2_BASE + 2))
+
+D_DEFINE_RANGE_ERRNO(CUSTOM1, 2000)
+D_DEFINE_RANGE_ERRNO(CUSTOM2, 3000)
+
+D_DEFINE_RANGE_ERRSTR(CUSTOM1)
+D_DEFINE_RANGE_ERRSTR(CUSTOM2)
+
+void test_d_errstr_v2(void **state)
+{
+	const char	*value;
+	int		rc;
+
+	rc = D_REGISTER_RANGE(CUSTOM1);
+	assert_int_equal(rc, 0);
+
+	rc = D_REGISTER_RANGE(CUSTOM2);
+	assert_int_equal(rc, 0);
+
+	value = d_errstr(DER_CUSTOM1);
+	assert_string_equal(value, "DER_CUSTOM1");
+
+	value = d_errstr(DER_CUSTOM2);
+	assert_string_equal(value, "DER_CUSTOM2");
+
+	value = d_errstr(DER_CUSTOM3);
+	assert_string_equal(value, "DER_CUSTOM3");
+
+	value = d_errstr(DER_CUSTOM4);
+	assert_string_equal(value, "DER_CUSTOM4");
+
+	D_DEREGISTER_RANGE(CUSTOM1);
+	D_DEREGISTER_RANGE(CUSTOM2);
+
+	/* CUSTOM1 and CUSTOM2 overlap with DAOS codes */
+	value = d_errstr(DER_CUSTOM1);
+	assert_string_not_equal(value, "DER_CUSTOM1");
+	assert_string_not_equal(value, "DER_UNKNOWN");
+
+	value = d_errstr(DER_CUSTOM2);
+	assert_string_not_equal(value, "DER_CUSTOM2");
+	assert_string_not_equal(value, "DER_UNKNOWN");
+
+	value = d_errstr(DER_CUSTOM3);
+	assert_string_equal(value, "DER_UNKNOWN");
+
+	value = d_errstr(DER_CUSTOM4);
+	assert_string_equal(value, "DER_UNKNOWN");
+
+}
+
 void test_d_errstr(void **state)
 {
 	const char	*value;
@@ -165,10 +226,15 @@ void test_d_errstr(void **state)
 	assert_string_equal(value, "DER_SUCCESS");
 	value = d_errstr(-DER_IVCB_FORWARD);
 	assert_string_equal(value, "DER_IVCB_FORWARD");
+#ifdef TEST_OLD_ERROR
 	value = d_errstr(-DER_FREE_MEM);
 	assert_string_equal(value, "DER_FREE_MEM");
 	value = d_errstr(-DER_STALE);
 	assert_string_equal(value, "DER_STALE");
+	(void)test_d_errstr_v2;
+#else
+	test_d_errstr_v2(state);
+#endif
 }
 
 static int

@@ -1,3 +1,11 @@
+cart (2.1.0-1) unstable; urgency=medium
+
+  [ Jeff Olivier ]
+  * 2.1.0-1 version of CaRT
+  * Add interface to register error codes with gurt
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Mon, 11 Nov 2019 19:27:01 +0000
+
 cart (2.0.0-1) unstable; urgency=medium
 
   [ Alexander Oganezov ]
