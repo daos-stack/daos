@@ -24,6 +24,7 @@
 package netdetect
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
@@ -133,7 +134,7 @@ func TestParseTopology(t *testing.T) {
 // we do expect that libfabric is installed and will report at least one provider,device,numa record.
 // If we get at least one record and no errors, the test is successful.
 func TestScanFabric(t *testing.T) {
-
+	fmt.Println("TestScanFabric -- Test")
 	provider := "" // an empty provider string is a search for 'all'
 	results, err := ScanFabric(provider)
 	if err != nil {
@@ -143,6 +144,7 @@ func TestScanFabric(t *testing.T) {
 	if len(results) == 0 {
 		t.Fatal(err)
 	}
+	t.Fatal(err)
 }
 
 // TestValidateNetworkConfig runs in a basic loopback mode with ScanFabric.  ScanFabric
