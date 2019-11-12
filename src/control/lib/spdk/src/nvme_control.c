@@ -68,8 +68,13 @@ get_dev_health_logs(struct spdk_nvme_ctrlr *ctrlr,
 	return rc;
 }
 
+typedef int (*prober)(const struct spdk_nvme_transport_id *trid, void *cb_ctx,
+		      spdk_nvme_probe_cb probe_cb,
+		      spdk_nvme_attach_cb attach_cb,
+		      spdk_nvme_remove_cb remove_cb);
+
 struct ret_t *
-nvme_discover(void)
+_nvme_discover(void, prober probe)
 {
 	int			 rc;
 	struct ret_t		*ret;
@@ -86,7 +91,7 @@ nvme_discover(void)
 	 *  called for each controller after the SPDK NVMe driver has completed
 	 *  initializing the controller we chose to attach.
 	 */
-	rc = spdk_nvme_probe(NULL, NULL, probe_cb, attach_cb, NULL);
+	rc = probe(NULL, NULL, probe_cb, attach_cb, NULL);
 
 	if (rc != 0) {
 		fprintf(stderr, "spdk_nvme_probe() failed\n");
@@ -130,6 +135,8 @@ nvme_discover(void)
 
 	return ret;
 }
+
+#define nvme_discover(void) _nvme_discover(&spdk_nvme_probe)
 
 struct ret_t *
 nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot)

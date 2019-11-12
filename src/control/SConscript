@@ -162,14 +162,13 @@ def scons():
     denv.Install(join(denv.subst("$PREFIX"), "lib64"), nvmecontrol)
 
     # CGO shell env vars.
-    denv.AppendENVPath(
-        "CGO_LDFLAGS",
-        denv.subst("-L%s -L$SPDK_PREFIX/lib -L$HWLOC_PREFIX/lib"
-                   " -L$OFI_PREFIX/lib $_RPATH" % gopath))
-    denv.AppendENVPath(
-        "CGO_CFLAGS",
-        denv.subst("-I$SPDK_PREFIX/include -I$HWLOC_PREFIX/include"
-                   " -I$OFI_PREFIX/include"))
+    denv.AppendENVPath("CGO_LDFLAGS", denv.subst("-L%s -L$SPDK_PREFIX/lib "
+                                                 "-L$HWLOC_PREFIX/lib "
+                                                 "-L$OFI_PREFIX/lib "
+                                                 "$_RPATH" % gopath))
+    denv.AppendENVPath("CGO_CFLAGS", denv.subst("-I$SPDK_PREFIX/include "
+                                                "-I$HWLOC_PREFIX/include "
+                                                "-I$OFI_PREFIX/include"))
 
     # copy server init files to be used at runtime, explicitly
     # remove first because recursive Delete() on dir fails.
@@ -193,6 +192,8 @@ def scons():
     dmgbin = get_bin_path(gopath, "dmg")
     drpcbin = get_bin_path(gopath, "drpc_test")
     AlwaysBuild([agentbin, serverbin, adminbin, dmgbin, drpcbin])
+
+    SConscript('lib/spdk/ctests/SConscript', exports='denv')
 
 if __name__ == "SCons.Script":
     scons()
