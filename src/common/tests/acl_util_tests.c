@@ -1031,6 +1031,30 @@ test_ace_from_str_too_long(void **state)
 }
 
 static void
+test_ace_from_str_principal_too_long(void **state)
+{
+	size_t		i;
+	char		bad_username[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN + 1];
+	char		input[DAOS_ACL_MAX_ACE_STR_LEN + 1];
+	struct daos_ace	*ace = NULL;
+
+	memset(bad_username, 0, sizeof(bad_username));
+
+	/* create a long principal string > principal max by 1 */
+	for (i = 0; i < DAOS_ACL_MAX_PRINCIPAL_LEN; i++) {
+		bad_username[i] = 'u';
+	}
+	bad_username[i] = '@'; /* gotta be a properly formatted principal */
+
+	snprintf(input, sizeof(input), "A::%s:rw", bad_username);
+
+	/* Should interpret as invalid */
+	assert_int_equal(daos_ace_from_str(input, &ace), -DER_INVAL);
+
+	assert_null(ace);
+}
+
+static void
 test_ace_to_str_null_ace(void **state)
 {
 	char buf[DAOS_ACL_MAX_ACE_STR_LEN];
@@ -1494,6 +1518,7 @@ main(void)
 		cmocka_unit_test(test_ace_from_str_not_all_fields),
 		cmocka_unit_test(test_ace_from_str_too_many_fields),
 		cmocka_unit_test(test_ace_from_str_too_long),
+		cmocka_unit_test(test_ace_from_str_principal_too_long),
 		cmocka_unit_test(test_ace_to_str_null_ace),
 		cmocka_unit_test(test_ace_to_str_null_buf),
 		cmocka_unit_test(test_ace_to_str_zero_len_buf),
