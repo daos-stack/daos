@@ -5,7 +5,7 @@
 
 Name:          daos
 Version:       0.6.0
-Release:       12%{?relval}%{?dist}
+Release:       13%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -20,6 +20,9 @@ BuildRequires: cart-devel-%{cart_sha1}
 %else
 BuildRequires: cart-devel
 %endif
+# temporarliy until we can land ompi@PR-10 and
+# scons_local@bmurrell/ompi-env-module
+BuildRequires: ompi-devel
 %if (0%{?rhel} >= 7)
 BuildRequires: argobots-devel >= 1.0rc1
 %else
@@ -325,6 +328,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Wed Nov 06 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-13
+- Use new cart with R: mercury to < 1.0.1-20 due to incompatibility
+
 * Wed Nov 06 2019 Michael MacDonald <mjmac.macdonald@intel.com> 0.6.0-12
 - Add daos_admin privileged helper for daos_server
 
