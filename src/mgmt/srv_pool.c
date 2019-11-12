@@ -883,3 +883,38 @@ out_svc:
 out:
 	return rc;
 }
+
+int
+ds_mgmt_pool_update_acl(uuid_t pool_uuid, struct daos_acl *acl,
+			struct daos_acl **result)
+{
+	int			rc;
+	struct mgmt_svc		*svc;
+	d_rank_list_t		*ranks;
+
+	D_DEBUG(DB_MGMT, "Updating ACL for pool "DF_UUID"\n",
+		DP_UUID(pool_uuid));
+
+	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
+	if (rc != 0)
+		goto out;
+
+	rc = pool_get_ranks(svc, pool_uuid, &ranks);
+	if (rc != 0)
+		goto out_svc;
+
+	rc = ds_pool_svc_update_acl(pool_uuid, ranks, acl);
+	if (rc != 0)
+		goto out_ranks;
+
+	rc = get_acl_for_pool(pool_uuid, ranks, result);
+	if (rc != 0)
+		goto out_ranks;
+
+out_ranks:
+	d_rank_list_free(ranks);
+out_svc:
+	ds_mgmt_svc_put_leader(svc);
+out:
+	return rc;
+}

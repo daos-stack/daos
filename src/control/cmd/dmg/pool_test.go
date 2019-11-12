@@ -291,6 +291,48 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Update pool ACL with invalid ACL file",
+			"pool update-acl --pool 12345678-1234-1234-1234-1234567890ab --acl-file /not/a/real/file",
+			"ConnectClients",
+			dmgTestErr("opening ACL file: open /not/a/real/file: no such file or directory"),
+		},
+		{
+			"Update pool ACL without file or entry",
+			"pool update-acl --pool 12345678-1234-1234-1234-1234567890ab",
+			"ConnectClients",
+			dmgTestErr("either ACL file or entry parameter is required"),
+		},
+		{
+			"Update pool ACL with both file and entry",
+			fmt.Sprintf("pool update-acl --pool 12345678-1234-1234-1234-1234567890ab --acl-file %s --entry A::user@:rw", testACLFile),
+			"ConnectClients",
+			dmgTestErr("either ACL file or entry parameter is required"),
+		},
+		{
+			"Update pool ACL with ACL file",
+			fmt.Sprintf("pool update-acl --pool 12345678-1234-1234-1234-1234567890ab --acl-file %s", testACLFile),
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("PoolUpdateACL-%+v", &client.PoolUpdateACLReq{
+					UUID: "12345678-1234-1234-1234-1234567890ab",
+					ACL:  testACL,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Update pool ACL with entry",
+			"pool update-acl --pool 12345678-1234-1234-1234-1234567890ab --entry A::user@:rw",
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("PoolUpdateACL-%+v", &client.PoolUpdateACLReq{
+					UUID: "12345678-1234-1234-1234-1234567890ab",
+					ACL:  &client.AccessControlList{Entries: []string{"A::user@:rw"}},
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Nonexistent subcommand",
 			"pool quack",
 			"",

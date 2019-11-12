@@ -54,4 +54,16 @@ extern void		*ds_mgmt_pool_overwrite_acl_result_ptr;
 void mock_ds_mgmt_pool_overwrite_acl_setup(void);
 void mock_ds_mgmt_pool_overwrite_acl_teardown(void);
 
+/*
+ * Mock ds_mgmt_pool_update_acl
+ */
+extern int		ds_mgmt_pool_update_acl_return;
+extern uuid_t		ds_mgmt_pool_update_acl_uuid;
+extern struct daos_acl	*ds_mgmt_pool_update_acl_acl;
+extern struct daos_acl	*ds_mgmt_pool_update_acl_result;
+extern void		*ds_mgmt_pool_update_acl_result_ptr;
+
+void mock_ds_mgmt_pool_update_acl_setup(void);
+void mock_ds_mgmt_pool_update_acl_teardown(void);
+
 #endif /* __MGMT_TESTS_MOCKS_H__ */

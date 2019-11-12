@@ -65,3 +65,40 @@ func TestAccessControlList_String(t *testing.T) {
 		})
 	}
 }
+
+func TestAccessControlList_Empty(t *testing.T) {
+	for name, tc := range map[string]struct {
+		acl       *AccessControlList
+		expResult bool
+	}{
+		"nil": {
+			expResult: true,
+		},
+		"empty": {
+			acl:       &AccessControlList{},
+			expResult: true,
+		},
+		"single": {
+			acl: &AccessControlList{
+				Entries: []string{
+					"A::user@:rw",
+				},
+			},
+			expResult: false,
+		},
+		"multiple": {
+			acl: &AccessControlList{
+				Entries: []string{
+					"A::OWNER@:rw",
+					"A:G:GROUP@:rw",
+					"A:G:readers@:r",
+				},
+			},
+			expResult: false,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			common.AssertEqual(t, tc.acl.Empty(), tc.expResult, "result didn't match")
+		})
+	}
+}
