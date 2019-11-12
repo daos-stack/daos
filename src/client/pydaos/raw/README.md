@@ -10,8 +10,8 @@ The Python API for DAOS provides access to DAOS API functionality with an emphas
 
 The Python API is split into several files based on functionality:
 
-* The Python object API, located in the source tree at [src/utils/py/daos_api.py](daos_api.py).
-* The mapping of C structures to Python classes, located in the source tree at [src/utils/py/daos_cref.py](daos_cref.py)
+* The Python object API, located in the source tree at [src/client/pydaos/raw/daos_api.py](daos_api.py).
+* The mapping of C structures to Python classes, located in the source tree at [src/client/pydaos/raw/daos_cref.py](daos_cref.py)
 
 High-level abstraction classes exist to manipulate DAOS storage:
 ```python
