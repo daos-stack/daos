@@ -26,6 +26,7 @@ import (
 	"bytes"
 	"fmt"
 
+	"github.com/daos-stack/daos/src/control/common"
 	bytesize "github.com/inhies/go-bytesize"
 )
 
@@ -60,10 +61,10 @@ type (
 		Capacity        uint64
 	}
 
-	// ScmModules is a type alias for []ScmModule that provides a fmt.Stringer implementation.
+	// ScmModules is a type alias for []ScmModule that implements fmt.Stringer.
 	ScmModules []ScmModule
 
-	// ScmNamespace represents a mapping between AppDirect regions and block device files.
+	// ScmNamespace represents a mapping of AppDirect regions to block device files.
 	ScmNamespace struct {
 		UUID        string `json:"uuid"`
 		BlockDevice string `json:"blockdev"`
@@ -72,7 +73,7 @@ type (
 		Size        uint64 `json:"size"`
 	}
 
-	// ScmNamespaces is a type alias for []ScmNamespace that provides a fmt.Stringer implementation.
+	// ScmNamespaces is a type alias for []ScmNamespace that implements fmt.Stringer.
 	ScmNamespaces []ScmNamespace
 )
 
@@ -85,24 +86,54 @@ func (m *ScmModule) String() string {
 func (ms ScmModules) String() string {
 	var buf bytes.Buffer
 
+	if len(ms) == 0 {
+		return "\t\tnone\n"
+	}
+
 	for _, m := range ms {
-		fmt.Fprintf(&buf, "\t%s\n", &m)
+		fmt.Fprintf(&buf, "\t\t%s\n", &m)
 	}
 
 	return buf.String()
 }
 
+// Summary reports accumulated storage space and the number of modules.
+func (ms ScmModules) Summary() string {
+	tCap := bytesize.New(0)
+	for _, m := range ms {
+		tCap += bytesize.New(float64(m.Capacity))
+	}
+
+	return fmt.Sprintf("%s total capacity over %d %s (unprepared)",
+		tCap, len(ms), common.Pluralise("module", len(ms)))
+}
+
 func (n *ScmNamespace) String() string {
-	return fmt.Sprintf("%s/numa%d/%s", n.BlockDevice, n.NumaNode,
+	return fmt.Sprintf("Device:%s Socket:%d Capacity:%s", n.BlockDevice, n.NumaNode,
 		bytesize.New(float64(n.Size)))
 }
 
 func (ns ScmNamespaces) String() string {
 	var buf bytes.Buffer
 
+	if len(ns) == 0 {
+		return "\t\tnone\n"
+	}
+
 	for _, n := range ns {
-		fmt.Fprintf(&buf, " %s", &n)
+		fmt.Fprintf(&buf, "\t\t%s\n", &n)
 	}
 
 	return buf.String()
+}
+
+// Summary reports accumulated storage space and the number of namespaces.
+func (ns ScmNamespaces) Summary() string {
+	tCap := bytesize.New(0)
+	for _, n := range ns {
+		tCap += bytesize.New(float64(n.Size))
+	}
+
+	return fmt.Sprintf("%s total capacity over %d %s",
+		tCap, len(ns), common.Pluralise("namespace", len(ns)))
 }
