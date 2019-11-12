@@ -1531,6 +1531,10 @@ out:
 	/* No snapshot deletion happened in this round of aggregation */
 	if (cont->sc_aggregation_min != 0)
 		cont->sc_aggregation_min = DAOS_EPOCH_MAX;
+
+	D_DEBUG(DB_EPC, DF_UUID"[%d]: Aggregating finished\n",
+		DP_UUID(cont->sc_uuid), dss_get_module_info()->dmi_tgt_id);
+
 	return rc;
 }
 
