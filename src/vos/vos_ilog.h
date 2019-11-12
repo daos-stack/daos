@@ -33,6 +33,8 @@
 #include <daos/common.h>
 #include <ilog.h>
 
+struct vos_container;
+
 struct vos_ilog_info {
 	struct ilog_entries	ii_entries;
 	/** If non-zero, earliest creation timestamp in current incarnation. */
@@ -84,6 +86,27 @@ int
 vos_ilog_fetch(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
 	       struct ilog_df *ilog, daos_epoch_t epoch, daos_epoch_t punched,
 	       const struct vos_ilog_info *parent, struct vos_ilog_info *info);
+
+/**
+ * Check the incarnation log if an update is needed and update it.  Refreshes
+ * the log into \p entries.
+ *
+ * \param	cont[IN]	Pointer to vos container
+ * \param	ilog[IN]	The incarnation log root
+ * \param	epr[IN]		Range of update
+ * \param	parent[IN]	parent incarnation log info (NULL if no parent
+ *				log exists).  Fetch should have already been
+ *				called at same epoch or parent.
+ * \param	info[IN,OUT]	incarnation log info
+ *
+ * \return	0		Successful update
+ *		other		Appropriate error code
+ */
+int
+vos_ilog_update(struct vos_container *cont, struct ilog_df *ilog,
+		const daos_epoch_range_t *epr, struct vos_ilog_info *parent,
+		struct vos_ilog_info *info);
+
 
 /**
  * Check the incarnation log for existence and return important information
