@@ -59,6 +59,7 @@ struct rebuild_scan_arg {
 	daos_handle_t		rebuild_tree_hdl;
 	struct rebuild_tgt_pool_tracker *rpt;
 	ABT_mutex		scan_lock;
+	daos_rebuild_opc_t	rebuild_op;
 	int			rebuild_tgt_nr;
 };
 
@@ -491,8 +492,11 @@ out:
 }
 
 /**
- * The rebuild objects will be gathered into a global objects arrary by
+ * The rebuild objects will be gathered into a global objects array by
  * target id.
+ *
+ * This groups the updates for each individual target into REBUILD_SEND_LIMIT
+ * size batches before sending them to each target.
  **/
 static int
 rebuild_object_insert(struct rebuild_scan_arg *arg, unsigned int tgt_id,
@@ -511,7 +515,7 @@ rebuild_object_insert(struct rebuild_scan_arg *arg, unsigned int tgt_id,
 	ABT_mutex_lock(arg->scan_lock);
 	rc = dbtree_lookup(toh, &key_iov, &val_iov);
 	if (rc < 0) {
-		/* Try to find the target rebuild tree */
+		/* Don't have a tree for this target - create one */
 		rc = rebuild_tgt_tree_create(toh, tgt_id, &tgt_root);
 		if (rc) {
 			ABT_mutex_unlock(arg->scan_lock);
@@ -559,7 +563,7 @@ placement_check(uuid_t co_uuid, vos_iter_entry_t *ent, void *data)
 	unsigned int		shard_array[LOCAL_ARRAY_SIZE];
 	unsigned int		*tgts = NULL;
 	unsigned int		*shards = NULL;
-	int			rebuild_nr;
+	int			rebuild_nr = 0;
 	d_rank_t		myrank;
 	int			i;
 	int			rc;
@@ -588,9 +592,21 @@ placement_check(uuid_t co_uuid, vos_iter_entry_t *ent, void *data)
 		shards = shard_array;
 	}
 
-	rebuild_nr = pl_obj_find_rebuild(map, &md, NULL, rpt->rt_rebuild_ver,
-					 tgts, shards, arg->rebuild_tgt_nr,
-					 myrank);
+	if (arg->rebuild_op == RB_OP_FAIL || arg->rebuild_op == RB_OP_DRAIN) {
+		rebuild_nr = pl_obj_find_rebuild(map, &md, NULL,
+						 rpt->rt_rebuild_ver,
+						 tgts, shards,
+						 arg->rebuild_tgt_nr, myrank);
+	} else if (arg->rebuild_op == RB_OP_ADD) {
+		rebuild_nr = pl_obj_find_reint(map, &md, NULL,
+					       rpt->rt_rebuild_ver,
+					       tgts, shards,
+					       arg->rebuild_tgt_nr, myrank);
+	} else {
+		D_ASSERT(arg->rebuild_op == RB_OP_FAIL ||
+			 arg->rebuild_op == RB_OP_DRAIN ||
+			 arg->rebuild_op == RB_OP_ADD);
+	}
 	if (rebuild_nr <= 0) /* No need rebuild */
 		D_GOTO(out, rc = rebuild_nr);
 
@@ -619,7 +635,8 @@ placement_check(uuid_t co_uuid, vos_iter_entry_t *ent, void *data)
 			if (rc)
 				D_GOTO(out, rc);
 		} else {
-			D_DEBUG(DB_REBUILD, "skip "DF_UOID".\n", DP_UOID(oid));
+			D_DEBUG(DB_REBUILD, "rebuild skip "DF_UOID".\n",
+				DP_UOID(oid));
 			rc = 0;
 		}
 	}
@@ -850,6 +867,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		D_GOTO(out_lock, rc);
 	}
 
+	scan_arg->rebuild_op = rsi->rsi_rebuild_op;
 	scan_arg->rebuild_tgt_nr = rsi->rsi_tgts_num;
 	rpt_get(rpt);
 	scan_arg->rpt = rpt;

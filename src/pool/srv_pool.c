@@ -3277,6 +3277,13 @@ ds_pool_tgt_exclude(uuid_t pool_uuid, struct pool_target_id_list *list)
 				       NULL, NULL, NULL, NULL);
 }
 
+int
+ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list)
+{
+	return ds_pool_update_internal(pool_uuid, list, POOL_ADD_IN,
+				       NULL, NULL, NULL, NULL);
+}
+
 /*
  * Perform a pool map update indicated by opc. If successful, the new pool map
  * version is reported via map_version. Upon -DER_NOTLEADER, a pool service
@@ -3316,12 +3323,25 @@ ds_pool_update(uuid_t pool_uuid, crt_opcode_t opc,
 		} else { /* enabled by default */
 			D_ASSERT(replicas != NULL);
 			ret = ds_rebuild_schedule(pool_uuid, *map_version,
-						  &target_list, replicas);
+						  &target_list, RB_OP_FAIL,
+						  replicas);
 			if (ret != 0) {
 				D_ERROR("rebuild fails rc %d\n", ret);
 				if (rc == 0)
 					rc = ret;
 			}
+		}
+	} else if (updated && opc == POOL_ADD) {
+		int	 ret;
+
+		/* TODO: Environment variable / config setting to disable add */
+		D_ASSERT(replicas != NULL);
+		ret = ds_rebuild_schedule(pool_uuid, *map_version, &target_list,
+					  RB_OP_ADD, replicas);
+		if (ret != 0) {
+			D_ERROR("rebuild fails rc %d\n", ret);
+			if (rc == 0)
+				rc = ret;
 		}
 	}
 

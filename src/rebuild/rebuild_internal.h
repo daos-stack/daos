@@ -29,9 +29,13 @@
 #define __REBUILD_INTERNAL_H__
 
 #include <stdint.h>
+#include <abt.h>
 #include <uuid/uuid.h>
 #include <daos/rpc.h>
 #include <daos/btree.h>
+#include <daos/pool_map.h>
+#include <daos_srv/daos_server.h>
+#include <daos_srv/rebuild.h>
 
 struct rebuild_one {
 	daos_key_t	ro_dkey;
@@ -215,6 +219,7 @@ struct rebuild_task {
 	d_list_t	dst_list;
 	uuid_t		dst_pool_uuid;
 	struct pool_target_id_list	dst_tgts;
+	daos_rebuild_opc_t		dst_op;
 	d_rank_list_t	*dst_svc_list;
 	uint32_t	dst_map_ver;
 };

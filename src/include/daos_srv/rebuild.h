@@ -28,15 +28,27 @@
 #define __DAOS_SRV_REBUILD_H__
 
 #include <daos_types.h>
+#include <daos_srv/pool.h>
 
 #define REBUILD_ENV            "DAOS_REBUILD"
 #define REBUILD_ENV_DISABLED   "no"
+
+/**
+ * Enum values to indicate the rebuild operation that should be applied to the
+ * associated targets
+ */
+typedef enum {
+	RB_OP_FAIL,
+	RB_OP_DRAIN,
+	RB_OP_ADD,
+} daos_rebuild_opc_t;
 
 bool is_rebuild_container(uuid_t pool_uuid, uuid_t coh_uuid);
 bool is_rebuild_pool(uuid_t pool_uuid, uuid_t poh_uuid);
 
 int ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
-			struct pool_target_id_list *tgts_failed,
+			struct pool_target_id_list *tgts,
+			daos_rebuild_opc_t rebuild_op,
 			d_rank_list_t *svc_list);
 int ds_rebuild_query(uuid_t pool_uuid,
 		     struct daos_rebuild_status *status);
