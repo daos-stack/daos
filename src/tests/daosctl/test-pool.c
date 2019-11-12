@@ -175,7 +175,7 @@ cmd_connect_pool(int argc, const char **argv, void *ctx)
 		flag = DAOS_PC_EX;
 
 	/* finish parsing the uuid */
-	if (!cp_options.uuid || !uuid_parse(cp_options.uuid, uuid))
+	if (!cp_options.uuid || (uuid_parse(cp_options.uuid, uuid) < 0))
 		return EINVAL;
 
 	/* turn the list of pool service nodes into a rank list */

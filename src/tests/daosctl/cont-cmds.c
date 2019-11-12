@@ -135,8 +135,8 @@ cmd_create_container(int argc, const char **argv, void *ctx)
 	argp_parse(&argp, argc, (char **restrict)argv, 0, 0, &cc_options);
 
 	/* uuid needs extra parsing */
-	if (!cc_options.pool_uuid || 
-	    !uuid_parse(cc_options.pool_uuid, pool_uuid))
+	if (!cc_options.pool_uuid ||
+	    (uuid_parse(cc_options.pool_uuid, pool_uuid) < 0))
 		return EINVAL;
 
 	/* turn the list of pool service nodes into a rank list */
