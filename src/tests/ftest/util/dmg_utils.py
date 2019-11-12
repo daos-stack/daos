@@ -80,6 +80,34 @@ class DmgCommand(DaosCommand):
             self.force = FormattedParameter("-f", False)
             self.reset = FormattedParameter("--reset", False)
 
+class DmgOldCommand(DaosCommand):
+    """Defines a object representing the dmg_old command."""
+
+    def __init__(self, path):
+        """Create a dmg_old command object."""
+        super(DmgOldCommand, self).__init__("/run/dmg_old/*", "dmg_old", path)
+
+    def get_action_command(self):
+        """Assign a command object for the specified request and action."""
+        if self.action_old.value == "query":
+            self.action_command = DmgOldQueryCommand()
+        else:
+            self.action_command = None
+
+    class DmgOldQueryCommand(CommandWithParameters):
+        #ExecutableCommand
+        """Defines a object representing a dmg_old query sub command."""
+
+        def __init__(self):
+            """Create a dmg_old query sub command object."""
+            super(DmgCommand, self).__init__("/run/dmg_old/*", "query", None)
+#            self.pool = BasicParameter(None)
+#            self.cont = BasicParameter(None)
+#            self.oid = BasicParameter(None)
+
+
+
+
 
 def storage_scan(hosts, insecure=True):
     """ Execute scan command through dmg tool to servers provided.

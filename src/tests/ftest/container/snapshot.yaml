@@ -3,8 +3,8 @@
 hosts:
     test_machines1:
       test_machines:
-        - boro-A
-        - boro-B
+        - boro-35
+        - boro-34
 timeout: 500
 faults:
     no_faults:
@@ -26,11 +26,3 @@ snapshot:
 object_class: !mux
     OC_S1:
         obj_class: 200
-    OC_S4:
-        obj_class: 202
-    OC_SX:
-        obj_class: 214
-    OC_RP_2G1:
-        obj_class: 220
-    OC_RP_2G2:
-        obj_class: 221

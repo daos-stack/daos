@@ -91,10 +91,10 @@ class ConnectTest(TestWithServers):
                           format(uuid_str, host2))
 
             connect_cmd = ('{0} connect-pool -i {1} '
-                           '-s {2} -r -l 0,1'.format(daosctl,
-                                                     uuid_str, setid))
-            process.system(connect_cmd)
-
+                           '-r'.format(daosctl, uuid_str))
+                                                    
+            ret = process.system(connect_cmd)
+            print("=====pool connect  ret=",ret)
 
             if expected_result == 'FAIL':
                 self.fail("Expected to fail but passed.\n")

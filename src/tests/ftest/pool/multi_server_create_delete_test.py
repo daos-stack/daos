@@ -95,6 +95,10 @@ class MultiServerCreateDeleteTest(Test):
         tgtlist = tgtlistlist[0]
         expected_for_param.append(tgtlistlist[1])
 
+##DH++
+        scm_size = self.params.get("scm_size", '/run/tests/pool/*', 16777216)
+##DH--
+
         # if any parameter is FAIL then the test should FAIL
         expected_result = 'PASS'
         for result in expected_for_param:
@@ -105,13 +109,15 @@ class MultiServerCreateDeleteTest(Test):
         host1 = self.hostlist_servers[0]
         host2 = self.hostlist_servers[1]
 
+##DH++ --scm_size
         try:
             cmd = (
-                "{} pool create "
+                "{} pool create -i "
                 "--user={} "
                 "--group={} "
                 "--sys={} "
-                "--ranks={}".format(self.dmg, user, group, setid, tgtlist))
+                "--scm-size={} "
+                "--ranks={}".format(self.dmg, user, group, setid, scm_size, tgtlist))
 
             uuid_str = (
                 """{0}""".format(process.system_output(cmd)).split(" ")[0])

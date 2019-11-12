@@ -2,8 +2,8 @@
 # required quantity is indicated by the placeholders
 hosts:
   test_machines:
-    - boro-A
-    - boro-B
+    - boro-35
+    - boro-34
 server_config:
   name: daos_server
 tests:
@@ -29,29 +29,20 @@ tests:
       group:
         - root
         - PASS
-    anothergroup:
-      group:
-        - nfsnobody
-        - PASS
   setnames: !mux
     validsetname:
       setname:
         - daos_server
         - PASS
-    badsetname:
-      setname:
-        - complete_rubbish
-        - FAIL
   tgtlist: !mux
     firsttgt:
       tgt:
         - "0"
         - PASS
-    bothtgt:
-      tgt:
-        - "0,1"
-        - PASS
-    badtgt:
-      tgt:
-        - "0,1,2"
-        - FAIL
+##DH++
+  pool:
+    createset:
+      name: daos_server
+    createsize:
+      scm_size: 16777216
+

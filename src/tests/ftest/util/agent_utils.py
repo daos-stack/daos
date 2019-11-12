@@ -138,8 +138,8 @@ class DaosAgentConfig(ObjectWithParameters):
 def run_agent(self, server_list, client_list=None):
     """Start daos agents on the specified hosts.
 
-    Make sure the environment is setup for the security agent and then launches
-    it on the compute nodes.
+    Make sure the environment is setup for the security agent and then
+    launchess it on the compute nodes.
 
     This is temporary; presuming the agent will deamonize at somepoint and
     can be started killed more appropriately.
@@ -148,7 +148,8 @@ def run_agent(self, server_list, client_list=None):
         self
             .tmp: provides tmp directory for DAOS repo or installation
         server_list (list): nodes acting as server nodes in the test
-        client_list (list, optional): nodes acting as client nodes in the test.
+        client_list (list, optional): nodes acting as client nodes in the
+                    test.
             Defaults to None.
 
     Raises:
@@ -161,11 +162,16 @@ def run_agent(self, server_list, client_list=None):
     sessions = {}
     user = getpass.getuser()
 
+    # if empty client list, 'self' is effectively client
+    if client_list == None:
+        client_list = include_local_host(client_list)
     client_count = len(client_list)
+
     # Create the DAOS Agent configuration yaml file to pass
     # with daos_agent -o <FILE_NAME>
     agent_yaml = os.path.join(self.tmp, "daos_agent.yml")
     agent_config = DaosAgentConfig()
+    agent_config.get_params(self)
     agent_config.hostlist.value = client_list
 
     access_point_list = []
@@ -174,14 +180,9 @@ def run_agent(self, server_list, client_list=None):
         access_point_list.append(access_point)
     agent_config.access_points.value = access_point_list
 
-    agent_config.get_params(self)
     if hasattr(self, "agent_log"):
         agent_config.update_log_file(self.agent_log)
     agent_config.create_yaml(agent_yaml)
-
-    # if empty client list, 'self' is effectively client
-    if client_list == None:
-        client_list = include_local_host(client_list)
 
     # Verify the domain socket directory is present and owned by this user
     file_checks = (
@@ -196,12 +197,9 @@ def run_agent(self, server_list, client_list=None):
                     nodeset, host_type, directory, user))
 
     # launch the agent
-    with open(os.path.join(self.basepath, ".build_vars.json")) as json_vars:
-        build_vars = json.load(json_vars)
-
-    daos_agent_bin = os.path.join(build_vars["PREFIX"], "bin", "daos_agent")
     daos_agent_bin_line = "daos_agent -o " + agent_yaml
-    daos_agent_bin = os.path.join(build_vars["PREFIX"], "bin", daos_agent_bin_line)
+    daos_agent_bin = os.path.join(self.basepath, "install/bin",
+                                  daos_agent_bin_line)
     print("<AGENT> Agent command: ",daos_agent_bin)
 
     for client in client_list:
@@ -226,7 +224,7 @@ def run_agent(self, server_list, client_list=None):
         while not sessions[client].poll():
             if time.time() - start_time > timeout:
                 print("<AGENT>: {}".format(expected_data))
-                raise AgentFailed("DAOS Agent didn't start!  Agent reported:\n"
+                raise AgentFailed("DAOS Agent didn't start! Agent reported:\n"
                                   "{}before we gave up waiting for it to "
                                   "start".format(expected_data))
             output = ""

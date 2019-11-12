@@ -206,6 +206,10 @@ class DaosServerConfig(ObjectWithParameters):
                 if value is not None and value is not False:
                     yaml_data["servers"][index][name] = value
 
+        print("=========================")
+        print("  Server  yaml_data= ", yaml_data)
+        print(" ")
+
         # Write default_value_set dictionary in to AVOCADO_FILE
         # This will be used to start with daos_server -o option.
         try:
