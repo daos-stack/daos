@@ -63,7 +63,7 @@ struct  _Mgmt__GetACLReq
 
 
 /*
- * Request to modify an ACL. 
+ * Request to modify an ACL
  * Results depend on the specific modification command.
  */
 struct  _Mgmt__ModifyACLReq

@@ -43,7 +43,7 @@ service MgmtSvc {
 	rpc PoolDestroy(PoolDestroyReq) returns (PoolDestroyResp) {}
 	// Fetch the Access Control List for a DAOS pool
 	rpc PoolGetACL(GetACLReq) returns (ACLResp) {}
-	// Overwrite the Access Control List for a DAOS pool with a new one
+	// Overwrite the Access Control List for a DAOS pool with a new one.
 	rpc PoolOverwriteACL(ModifyACLReq) returns (ACLResp) {}
 	// Get the information required by libdaos to attach to the system.
 	rpc GetAttachInfo(GetAttachInfoReq) returns (GetAttachInfoResp) {}
@@ -55,4 +55,6 @@ service MgmtSvc {
 	rpc SmdListPools(SmdPoolReq) returns (SmdPoolResp) {}
 	// Kill DAOS IO server identified by rank.
 	rpc KillRank(KillRankReq) returns (DaosResp) {};
+	// List all pools in a DAOS system: basic info: UUIDs, service ranks
+	rpc ListPools(ListPoolsReq) returns (ListPoolsResp) {};
 }

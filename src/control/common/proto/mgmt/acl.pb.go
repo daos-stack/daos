@@ -31,7 +31,7 @@ func (m *ACLResp) Reset()         { *m = ACLResp{} }
 func (m *ACLResp) String() string { return proto.CompactTextString(m) }
 func (*ACLResp) ProtoMessage()    {}
 func (*ACLResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_acl_2a32025a6169e47c, []int{0}
+	return fileDescriptor_acl_69bff8234a0efaee, []int{0}
 }
 func (m *ACLResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ACLResp.Unmarshal(m, b)
@@ -77,7 +77,7 @@ func (m *GetACLReq) Reset()         { *m = GetACLReq{} }
 func (m *GetACLReq) String() string { return proto.CompactTextString(m) }
 func (*GetACLReq) ProtoMessage()    {}
 func (*GetACLReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_acl_2a32025a6169e47c, []int{1}
+	return fileDescriptor_acl_69bff8234a0efaee, []int{1}
 }
 func (m *GetACLReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetACLReq.Unmarshal(m, b)
@@ -104,7 +104,7 @@ func (m *GetACLReq) GetUuid() string {
 	return ""
 }
 
-// Request to modify an ACL.
+// Request to modify an ACL
 // Results depend on the specific modification command.
 type ModifyACLReq struct {
 	Uuid                 string   `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
@@ -118,7 +118,7 @@ func (m *ModifyACLReq) Reset()         { *m = ModifyACLReq{} }
 func (m *ModifyACLReq) String() string { return proto.CompactTextString(m) }
 func (*ModifyACLReq) ProtoMessage()    {}
 func (*ModifyACLReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_acl_2a32025a6169e47c, []int{2}
+	return fileDescriptor_acl_69bff8234a0efaee, []int{2}
 }
 func (m *ModifyACLReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ModifyACLReq.Unmarshal(m, b)
@@ -158,9 +158,9 @@ func init() {
 	proto.RegisterType((*ModifyACLReq)(nil), "mgmt.ModifyACLReq")
 }
 
-func init() { proto.RegisterFile("acl.proto", fileDescriptor_acl_2a32025a6169e47c) }
+func init() { proto.RegisterFile("acl.proto", fileDescriptor_acl_69bff8234a0efaee) }
 
-var fileDescriptor_acl_2a32025a6169e47c = []byte{
+var fileDescriptor_acl_69bff8234a0efaee = []byte{
 	// 130 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x4c, 0x4c, 0xce, 0xd1,
 	0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0xc9, 0x4d, 0xcf, 0x2d, 0x51, 0x32, 0xe6, 0x62, 0x77,

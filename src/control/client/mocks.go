@@ -276,6 +276,11 @@ func newMockMgmtSvcClient(getACLResult *mockACLResult) mgmtpb.MgmtSvcClient {
 	}
 }
 
+func (m *mockMgmtSvcClient) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq, o ...grpc.CallOption) (*mgmtpb.ListPoolsResp, error) {
+	// return successful list pools results
+	return &mgmtpb.ListPoolsResp{}, nil
+}
+
 // implement mock/stub behaviour for Control
 type mockControl struct {
 	address    string

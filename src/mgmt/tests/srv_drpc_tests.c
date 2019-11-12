@@ -424,9 +424,58 @@ test_drpc_pool_overwrite_acl_success(void **state)
 	D_FREE(resp.body.data);
 }
 
+/*
+ * dRPC List Pools setup/teardown
+ */
+
+static int
+drpc_list_pools_setup(void **state)
+{
+	/* mock_ds_mgmt_list_pools_setup(); */
+
+	return 0;
+}
+
+static int
+drpc_list_pools_teardown(void **state)
+{
+	/* mock_ds_mgmt_list_pools_teardown(); */
+
+	return 0;
+}
+
+/*
+ * dRPC List Pools tests
+ */
+static void
+test_drpc_list_pools_bad_request(void **state)
+{
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+	uint8_t		bad_bytes[16];
+	size_t		i;
+
+	/* Fill out with junk that won't translate to a ListPoolsReq */
+	for (i = 0; i < sizeof(bad_bytes); i++)
+		bad_bytes[i] = i;
+
+	call.body.data = bad_bytes;
+	call.body.len = sizeof(bad_bytes);
+
+	ds_mgmt_drpc_list_pools(&call, &resp);
+
+	assert_int_equal(resp.status, DRPC__STATUS__FAILURE);
+	assert_null(resp.body.data);
+	assert_int_equal(resp.body.len, 0);
+}
+
 #define ACL_TEST(x)	cmocka_unit_test_setup_teardown(x, \
 						drpc_pool_acl_setup, \
 						drpc_pool_acl_teardown)
+
+#define LIST_POOLS_TEST(x) cmocka_unit_test_setup_teardown(x, \
+						drpc_list_pools_setup, \
+						drpc_list_pools_teardown)
 int
 main(void)
 {
@@ -441,6 +490,7 @@ main(void)
 		ACL_TEST(test_drpc_pool_overwrite_acl_bad_acl),
 		ACL_TEST(test_drpc_pool_overwrite_acl_mgmt_svc_fails),
 		ACL_TEST(test_drpc_pool_overwrite_acl_success),
+		LIST_POOLS_TEST(test_drpc_list_pools_bad_request),
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);
