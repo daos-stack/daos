@@ -134,7 +134,7 @@ type NvmePrepareRequest struct {
 func (c *StorageControlService) NvmePrepare(req NvmePrepareRequest) error {
 	ok, usr := c.nvme.ext.checkSudo()
 	if !ok {
-		return errors.Errorf("%s must be run as root or sudo", os.Args[0])
+		return errors.Errorf("%s must be run as root or sudo in order to prepare NVMe in this release", os.Args[0])
 	}
 
 	// falls back to sudoer or root if TargetUser is unspecified
@@ -162,13 +162,6 @@ func (c *StorageControlService) NvmePrepare(req NvmePrepareRequest) error {
 // GetScmState performs required initialisation and returns current state
 // of SCM module preparation.
 func (c *StorageControlService) GetScmState() (storage.ScmState, error) {
-	state := storage.ScmStateUnknown
-
-	ok, _ := c.ext.checkSudo()
-	if !ok {
-		return state, errors.Errorf("%s must be run as root or sudo", os.Args[0])
-	}
-
 	return c.scm.GetState()
 }
 

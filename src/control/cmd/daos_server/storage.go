@@ -144,11 +144,14 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 		cmd.log.Info(controllers.String())
 	}
 
-	scmScanResp, err := svc.ScmScan()
-	if err != nil {
+	scmResp, err := svc.ScmScan()
+	switch {
+	case err != nil:
 		scanErrors = append(scanErrors, err)
-	} else {
-		cmd.log.Info(scmScanResp.String())
+	case len(scmResp.Namespaces) > 0:
+		cmd.log.Infof("SCM Namespaces:\n%s\n", scmResp.Namespaces)
+	default:
+		cmd.log.Infof("SCM Modules:\n%s\n", scmResp.Modules)
 	}
 
 	if len(scanErrors) > 0 {

@@ -26,10 +26,10 @@
 #include "evt_priv.h"
 #include "vos_internal.h"
 
-#ifdef VOS_TRACE
-#define V_TRACE(...) D_DEBUG(__VA_ARGS__)
-#else
+#ifdef VOS_DISABLE_TRACE
 #define V_TRACE(...) (void)0
+#else
+#define V_TRACE(...) D_DEBUG(__VA_ARGS__)
 #endif
 
 enum {
@@ -1928,7 +1928,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 
 		D_ASSERT(!leaf || at == 0);
 		V_TRACE(DB_TRACE,
-			"Checking "DF_RECT"("DF_X64"), l=%d, a=%d, f=%d\n",
+			"Checking mbr="DF_RECT"("DF_X64"), l=%d, a=%d, f=%d\n",
 			DP_RECT(evt_node_mbr_get(tcx, node)), nd_off, level, at,
 			leaf);
 
@@ -1943,11 +1943,9 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 
 			rtmp = &ne->ne_rect;
 
-			V_TRACE(DB_TRACE, " rect[%d]="DF_RECT"\n",
-				i, DP_RECT(rtmp));
-
 			if (evt_filter_rect(filter, rtmp, leaf)) {
-				V_TRACE(DB_TRACE, "Filtered "DF_FILTER"\n",
+				V_TRACE(DB_TRACE, "Filtered "DF_RECT" filter=("
+					DF_FILTER")\n", DP_RECT(rtmp),
 					DP_FILTER(filter));
 				continue; /* Doesn't match the filter */
 			}
@@ -1985,7 +1983,8 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 				V_TRACE(DB_TRACE, "Enter the next level\n");
 				break;
 			}
-			V_TRACE(DB_TRACE, "Found overlapped leaf rect\n");
+			V_TRACE(DB_TRACE, "Found overlapped leaf rect: "DF_RECT
+				"\n", DP_RECT(rtmp));
 
 			desc = evt_node_desc_at(tcx, node, i);
 			rc = evt_desc_log_status(tcx, desc, intent);

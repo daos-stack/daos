@@ -29,17 +29,12 @@ def scons():
     denv.Install('$PREFIX/bin/', daos_perf)
 
     daos_racer = daos_build.program(denv, 'daos_racer',
-                                   ['daos_racer.c', dts_common], LIBS=libs)
+                                    ['daos_racer.c', dts_common], LIBS=libs)
     denv.Install('$PREFIX/bin/', daos_racer)
-
 
     obj_ctl = daos_build.program(denv, 'obj_ctl', ['obj_ctl.c', dts_common],
                                  LIBS=libs)
     denv.Install('$PREFIX/bin/', obj_ctl)
-
-    # copy src/tests/ftest to $PREFIX/lib/daos/TESTING/ftest
-    spath = Dir('ftest').srcnode()
-    denv.InstallAs('$PREFIX/lib/daos/TESTING/ftest/', spath)
 
     # tests
     SConscript('suite/SConscript', exports=['denv'])
@@ -52,6 +47,9 @@ def scons():
 
     # Build security_test
     SConscript('security/SConscript')
+
+    # ftest
+    SConscript('ftest/SConscript')
 
 if __name__ == "SCons.Script":
     scons()
