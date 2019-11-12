@@ -21,9 +21,15 @@ pool:
 container:
   akey_size: 5
   dkey_size: 5
-  data_size: 256
-  object_qty: 30
-  record_qty: 10
+  sizes: !mux
+    large:
+      data_size: 256
+      object_qty: 30
+      record_qty: 10
+    small:
+      data_size: 32
+      object_qty: 9
+      record_qty: 3
   debug: True
 rebuild:
   rank: 4
