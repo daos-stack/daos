@@ -1156,6 +1156,10 @@ daos_ace_is_valid(struct daos_ace *ace)
 		return false;
 	}
 
+	if (ace->dae_principal_len > 0 &&
+	    !daos_acl_principal_is_valid(ace->dae_principal))
+		return false;
+
 	if (!permissions_match_access_type(ace, DAOS_ACL_ACCESS_ALLOW) ||
 	    !permissions_match_access_type(ace, DAOS_ACL_ACCESS_AUDIT) ||
 	    !permissions_match_access_type(ace, DAOS_ACL_ACCESS_ALARM)) {

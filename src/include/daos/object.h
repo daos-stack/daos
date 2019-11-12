@@ -96,15 +96,6 @@ enum {
 				 */
 };
 
-/** Internal classes for testing & debugging */
-enum {
-	OC_INTERNAL		= OC_RESERVED + 1,
-	OC_RP_4G1,
-	OC_RP_4G2,
-	OC_RP_4G4,
-	OC_RP_4GX,
-};
-
 static inline bool
 daos_obj_is_echo(daos_obj_id_t oid)
 {
