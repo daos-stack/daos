@@ -68,7 +68,8 @@ RUN yum -y install \
            python2-avocado python2-avocado-plugins-output-html \
            python2-avocado-plugins-varianter-yaml-to-mux       \
            yum-plugin-copr python-pathlib                      \
-           python2-clustershell python2-Cython python2-pip;    \
+           python2-clustershell python2-Cython python2-pip     \
+           python36-clustershell;                              \
     yum -y copr enable jhli/ipmctl;                            \
     yum -y copr enable jhli/safeclib;                          \
     yum -y install libipmctl-devel
