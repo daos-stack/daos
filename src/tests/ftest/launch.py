@@ -102,10 +102,13 @@ def get_temporary_directory(base_dir=None):
     if base_dir == "/usr":
         tmp_dir = os.getenv(
             "DAOS_TEST_SHARED_DIR", os.path.expanduser("~/daos_test"))
-        if not os.path.exists(tmp_dir):
-            os.makedirs(tmp_dir)
     else:
         tmp_dir = os.path.join(base_dir, "tmp")
+
+    # Make sure the temporary directory exists to prevent pydaos import errors
+    if not os.path.exists(tmp_dir):
+        os.makedirs(tmp_dir)
+
     return tmp_dir
 
 
