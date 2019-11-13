@@ -591,8 +591,12 @@ ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 		D_ERROR("crt_reply_send failed, rc: %d.\n", rc);
 }
 
-static void
-free_mgmt_list_pools(struct mgmt_list_pools_one **poolsp, uint64_t len)
+/* Free array of pools created in ds_mgmt_list_pools() iteration.
+ * CaRT and drpc handlers use same mgmt_list_pools_one type for the array.
+ */
+
+void
+ds_mgmt_free_pool_list(struct mgmt_list_pools_one **poolsp, uint64_t len)
 {
 	struct mgmt_list_pools_one	*pools;
 
@@ -658,7 +662,7 @@ enum_pool_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	return 0;
 }
 
-static int
+int
 ds_mgmt_list_pools(const char *group, uint64_t *npools,
 		   struct mgmt_list_pools_one **poolsp, size_t *pools_len)
 {
@@ -694,7 +698,7 @@ out_svc:
 	ds_mgmt_svc_put_leader(svc);
 out:
 	if (rc != 0)
-		free_mgmt_list_pools(&iter_args.pools, iter_args.pools_index);
+		ds_mgmt_free_pool_list(&iter_args.pools, iter_args.pools_index);
 	else {
 		*npools = iter_args.npools;
 		*poolsp = iter_args.pools;
@@ -703,8 +707,6 @@ out:
 
 	return rc;
 }
-
-/* TODO: dRPC handler for mgmt service list pools (daos_shell / golang) */
 
 /* CaRT RPC handler for management service "list pools" (dmg / C API) */
 void
@@ -737,7 +739,7 @@ ds_mgmt_hdlr_list_pools(crt_rpc_t *rpc_req)
 	if (rc != 0)
 		D_ERROR("crt_reply_send failed, rc: %d\n", rc);
 
-	free_mgmt_list_pools(&pools, pools_len);
+	ds_mgmt_free_pool_list(&pools, pools_len);
 }
 
 /* Caller is responsible for freeing ranks */
