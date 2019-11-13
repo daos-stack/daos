@@ -140,8 +140,12 @@ struct obj_reasb_req {
 	struct obj_io_desc		*orr_oiods;
 	struct obj_ec_recx_array	*orr_recxs;
 	struct obj_ec_seg_sorter	*orr_sorters;
-	/* target bitmap, from first data cell to last parity cell */
-	uint8_t				 tgt_bitmap[OBJ_TGT_BITMAP_LEN];
+	uint32_t			 orr_tgt_nr;
+	/* target bitmap, one bit for each target (from first data cell to last
+	 * parity cell.
+	 */
+	uint8_t				*tgt_bitmap;
+	struct obj_tgt_oiod		*tgt_oiods;
 };
 
 static inline void
@@ -206,6 +210,8 @@ struct shard_rw_args {
 	struct dtx_id		 dti;
 	uint64_t		 dkey_hash;
 	crt_bulk_t		*bulks;
+	struct obj_io_desc	*oiods;
+	uint64_t		*offs;
 };
 
 struct shard_punch_args {

@@ -1137,8 +1137,122 @@ obj_ec_req_reassemb(daos_obj_rw_t *args, daos_obj_id_t oid,
 		}
 	}
 
+	for (i = 0; i < obj_ec_tgt_nr(oca); i++) {
+		if (isset(reasb_req->tgt_bitmap, i))
+			reasb_req->orr_tgt_nr++;
+	}
+
+	if (!update) {
+		reasb_req->tgt_oiods = obj_ec_tgt_oiod_init(
+			reasb_req->orr_oiods, iod_nr, reasb_req->tgt_bitmap,
+			obj_ec_tgt_nr(oca) - 1, reasb_req->orr_tgt_nr);
+		if (reasb_req->tgt_oiods == NULL) {
+			D_ERROR(DF_OID" obj_ec_tgt_oiod_init failed.\n",
+				DP_OID(oid));
+			rc = -DER_NOMEM;
+			goto out;
+		}
+	}
+
 out:
 	return rc;
+}
+
+void
+obj_ec_tgt_oiod_fini(struct obj_tgt_oiod *tgt_oiods)
+{
+	if (tgt_oiods == NULL)
+		return;
+	D_FREE(tgt_oiods[0].oto_offs);
+	D_FREE(tgt_oiods);
+}
+
+struct obj_tgt_oiod *
+obj_ec_tgt_oiod_get(struct obj_tgt_oiod *tgt_oiods, uint32_t tgt_nr,
+		    uint32_t tgt_idx)
+{
+	struct obj_tgt_oiod	*tgt_oiod;
+	uint32_t		 tgt;
+
+	for (tgt = 0; tgt < tgt_nr; tgt++) {
+		tgt_oiod = &tgt_oiods[tgt];
+		if (tgt_oiod->oto_tgt_idx == tgt_idx)
+			return tgt_oiod;
+	}
+
+	return NULL;
+}
+
+struct obj_tgt_oiod *
+obj_ec_tgt_oiod_init(struct obj_io_desc *r_oiods, uint32_t iod_nr,
+		     uint8_t *tgt_bitmap, uint32_t tgt_max_idx, uint32_t tgt_nr)
+{
+	struct obj_tgt_oiod	*tgt_oiod, *tgt_oiods;
+	struct obj_io_desc	*oiod, *r_oiod;
+	struct obj_shard_iod	*siod, *r_siod;
+	void			*buf;
+	uint8_t			*tmp_ptr;
+	daos_size_t		 off_size, oiod_size, siod_size, item_size;
+	uint32_t		 i, j, idx, tgt;
+
+	D_ASSERT(tgt_nr > 0 && iod_nr > 0);
+
+	D_ALLOC_ARRAY(tgt_oiods, tgt_nr);
+	if (tgt_oiods == NULL)
+		return NULL;
+
+	off_size = sizeof(uint64_t);
+	oiod_size = roundup(sizeof(struct obj_io_desc), 8);
+	siod_size = roundup(sizeof(struct obj_shard_iod), 8);
+	item_size = (off_size + oiod_size + siod_size) * iod_nr;
+	D_ALLOC(buf, item_size * tgt_nr);
+	if (buf == NULL) {
+		D_FREE(tgt_oiods);
+		return NULL;
+	}
+
+	for (i = 0, idx = 0; i < tgt_nr; i++, idx++) {
+		while (isclr(tgt_bitmap, idx))
+			idx++;
+		D_ASSERT(idx <= tgt_max_idx);
+		tgt_oiod = &tgt_oiods[i];
+		tgt_oiod->oto_iod_nr = iod_nr;
+		tgt_oiod->oto_tgt_idx = idx;
+		tmp_ptr = buf + i * item_size;
+		tgt_oiod->oto_offs = (void *)tmp_ptr;
+		tmp_ptr += off_size * iod_nr;
+		tgt_oiod->oto_oiods = (void *)tmp_ptr;
+		tmp_ptr += oiod_size * iod_nr;
+		for (j = 0; j < iod_nr; j++) {
+			oiod = &tgt_oiod->oto_oiods[j];
+			oiod->oiod_nr = 1;
+			oiod->oiod_flags = OBJ_SIOD_PROC_ONE;
+			siod = (void *)tmp_ptr;
+			tmp_ptr += siod_size;
+			siod->siod_tgt_idx = idx;
+			siod->siod_nr = 0;
+			oiod->oiod_siods = siod;
+		}
+	}
+
+	/* traverse reassembled oiod and fill the tgt_oiod (per target oiod) */
+	for (i = 0; i < iod_nr; i++) {
+		r_oiod = &r_oiods[i];
+		for (j = 0; j < r_oiod->oiod_nr; j++) {
+			r_siod = &r_oiod->oiod_siods[j];
+			tgt = r_siod->siod_tgt_idx;
+			tgt_oiod = &tgt_oiods[tgt];
+			D_ASSERT(tgt_oiod->oto_tgt_idx == tgt);
+			tgt_oiod->oto_offs[i] = r_siod->siod_off;
+			siod = &tgt_oiod->oto_oiods[i].oiod_siods[0];
+			D_ASSERT(siod->siod_tgt_idx == tgt);
+			siod->siod_idx = r_siod->siod_idx;
+			siod->siod_nr = r_siod->siod_nr;
+			D_ASSERT(siod->siod_nr > 0);
+		}
+	}
+
+	return tgt_oiods;
 }
 
 /* EC struct used to save state during encoding and to drive resource recovery.

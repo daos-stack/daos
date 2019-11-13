@@ -388,8 +388,8 @@ obj_set_reply_sizes(crt_rpc_t *rpc)
 	D_ASSERT(orwo != NULL);
 	D_ASSERT(orw != NULL);
 
-	iods = orw->orw_iods.ca_arrays;
-	size_count = orw->orw_iods.ca_count;
+	iods = orw->orw_iod_array.oia_iods;
+	size_count = orw->orw_iod_array.oia_iod_nr;
 
 	if (size_count <= 0) {
 		D_ERROR("rpc %p contains invalid sizes count %d for "
@@ -403,7 +403,7 @@ obj_set_reply_sizes(crt_rpc_t *rpc)
 	if (sizes == NULL)
 		return -DER_NOMEM;
 
-	for (i = 0; i < orw->orw_iods.ca_count; i++)
+	for (i = 0; i < orw->orw_iod_array.oia_iod_nr; i++)
 		sizes[i] = iods[i].iod_size;
 
 	orwo->orw_iod_sizes.ca_arrays = sizes;
@@ -576,8 +576,8 @@ ds_obj_rw_echo_handler(crt_rpc_t *rpc)
 	}
 
 	/* Only support 1 iod now */
-	D_ASSERT(orw->orw_iods.ca_count == 1);
-	iod = orw->orw_iods.ca_arrays;
+	D_ASSERT(orw->orw_iod_array.oia_iod_nr == 1);
+	iod = orw->orw_iod_array.oia_iods;
 
 	tls = obj_tls_get();
 	p_sgl = &tls->ot_echo_sgl;
@@ -772,13 +772,15 @@ next:
 static void
 obj_fetch_csums_link(const struct obj_rw_in *orw, const struct obj_rw_out *orwo)
 {
-	daos_iods_link_dcbs(orw->orw_iods.ca_arrays, orw->orw_iods.ca_count,
+	daos_iods_link_dcbs(orw->orw_iod_array.oia_iods,
+			    orw->orw_iod_array.oia_iod_nr,
 			    orwo->orw_csum.ca_arrays, orwo->orw_csum.ca_count);
 }
 static void
 obj_fetch_csums_unlink(struct obj_rw_in *orw)
 {
-	daos_iods_unlink_dcbs(orw->orw_iods.ca_arrays, orw->orw_iods.ca_count);
+	daos_iods_unlink_dcbs(orw->orw_iod_array.oia_iods,
+			      orw->orw_iod_array.oia_iod_nr);
 }
 
 /** if checksums are enabled, fetch needs to allocate the memory that will be
@@ -803,8 +805,8 @@ obj_fetch_csum_init(struct ds_cont_hdl *cont_hdl,
 	 * The memory will be freed in obj_rw_reply
 	 */
 	rc = daos_csummer_alloc_dcbs(cont_hdl->sch_csummer,
-				     orw->orw_iods.ca_arrays,
-				     (uint32_t) orw->orw_iods.ca_count,
+				     orw->orw_iod_array.oia_iods,
+				     orw->orw_iod_array.oia_iod_nr,
 				     &csums,
 				     &csum_nr);
 
@@ -836,7 +838,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	bool			rma;
 	bool			bulk_bind;
 	daos_iod_t		*cpy_iods = NULL;
-	daos_iod_t		*tmp_iods = orw->orw_iods.ca_arrays;
+	daos_iod_t		*tmp_iods = orw->orw_iod_array.oia_iods;
 	int			i, err, rc = 0;
 
 	D_TIME_START(tls->ot_sp, time_start, OBJ_PF_UPDATE_LOCAL);
@@ -2093,8 +2095,8 @@ obj_verify_bio_csum(crt_rpc_t *rpc, struct bio_desc *biod,
 {
 	struct obj_rw_in	*orw = crt_req_get(rpc);
 	struct ds_pool		*pool;
-	daos_iod_t		*iods = orw->orw_iods.ca_arrays;
-	uint64_t		 iods_nr = orw->orw_iods.ca_count;
+	daos_iod_t		*iods = orw->orw_iod_array.oia_iods;
+	uint64_t		 iods_nr = orw->orw_iod_array.oia_iod_nr;
 	unsigned int		 i;
 	int			 rc = 0;
 

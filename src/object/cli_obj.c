@@ -40,7 +40,7 @@
 #define CLI_OBJ_IO_PARMS	8
 #define NIL_BITMAP		(NULL)
 
-#define OBJ_TGT_INLINE_NR	(29)
+#define OBJ_TGT_INLINE_NR	(28)
 struct obj_req_tgts {
 	/* to save memory allocation if #targets <= OBJ_TGT_INLINE_NR */
 	struct daos_shard_tgt	 ort_tgts_inline[OBJ_TGT_INLINE_NR];
@@ -582,7 +582,7 @@ obj_reasb_req_init(struct obj_auxi_args *obj_auxi, daos_iod_t *iods,
 	size_tgt_nr = roundup(sizeof(uint32_t) *
 			      (oca->u.ec.e_k + oca->u.ec.e_p), 8);
 	buf_size = size_iod + size_sgl + size_oiod + size_recx + size_sorter +
-		   size_tgt_nr * iod_nr * 2;
+		   size_tgt_nr * iod_nr * 2 + OBJ_TGT_BITMAP_LEN;
 	D_ALLOC(buf, buf_size);
 	if (buf == NULL)
 		return -DER_NOMEM;
@@ -598,6 +598,8 @@ obj_reasb_req_init(struct obj_auxi_args *obj_auxi, daos_iod_t *iods,
 	tmp_ptr += size_recx;
 	reasb_req->orr_sorters = (void *)tmp_ptr;
 	tmp_ptr += size_sorter;
+	reasb_req->tgt_bitmap = (void *)tmp_ptr;
+	tmp_ptr += OBJ_TGT_BITMAP_LEN;
 
 	for (i = 0; i < iod_nr; i++) {
 		uiod = &iods[i];
@@ -639,6 +641,8 @@ obj_reasb_req_fini(struct obj_auxi_args *obj_auxi)
 		obj_io_desc_fini(reasb_req->orr_oiods + i);
 		obj_ec_recxs_fini(&reasb_req->orr_recxs[i]);
 		obj_ec_seg_sorter_fini(&reasb_req->orr_sorters[i]);
+		obj_ec_tgt_oiod_fini(reasb_req->tgt_oiods);
+		reasb_req->tgt_oiods = NULL;
 	}
 	D_FREE(reasb_req->orr_iods);
 }
@@ -765,13 +769,12 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 	D_ASSERT(shard_cnt >= 1);
 	grp_size = shard_cnt / grp_nr;
 	D_ASSERT(grp_size * grp_nr == shard_cnt);
-	if (cli_disp)
+	if (cli_disp || bit_map != NIL_BITMAP)
 		D_ASSERT(grp_nr == 1);
 	req_tgts->ort_srv_disp = (srv_io_mode != DIM_CLIENT_DISPATCH) &&
 				  !cli_disp && grp_size > 1;
 
 	if (bit_map != NIL_BITMAP) {
-		D_ASSERT(grp_nr == 1);
 		shard_nr = 0;
 		for (i = 0; i < shard_cnt; i++)
 			if (isset(bit_map, i))
@@ -1579,7 +1582,7 @@ obj_req_get_tgts(struct dc_object *obj, enum obj_rpc_opc opc, int *shard,
 	uint32_t	grp_nr;
 
 	case DAOS_OBJ_RPC_FETCH:
-		if (bit_map == NULL) {
+		if (bit_map == NIL_BITMAP) {
 			if (spec_shard) {
 				D_ASSERT(shard != NULL);
 
@@ -2277,6 +2280,8 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 {
 	daos_obj_rw_t		*obj_args;
 	struct shard_rw_args	*shard_arg;
+	struct obj_reasb_req	*reasb_req;
+	struct obj_tgt_oiod	*toiod;
 
 	obj_args = dc_task_get_args(obj_auxi->obj_task);
 	shard_arg = container_of(shard_auxi, struct shard_rw_args, auxi);
@@ -2286,6 +2291,29 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 			     srv_io_mode != DIM_DTX_FULL_ENABLED);
 	shard_arg->dkey_hash		= dkey_hash;
 	shard_arg->bulks		= obj_auxi->bulks;
+	if (obj_auxi->req_reasbed) {
+		reasb_req = &obj_auxi->reasb_req;
+		if (reasb_req->tgt_oiods != NULL) {
+			D_ASSERT(obj_auxi->opc == DAOS_OBJ_RPC_FETCH);
+			toiod= obj_ec_tgt_oiod_get(
+				reasb_req->tgt_oiods, reasb_req->orr_tgt_nr,
+				shard_auxi->shard - shard_auxi->start_shard);
+			D_ASSERT(toiod != NULL);
+			shard_arg->oiods = toiod->oto_oiods;
+			D_ASSERT(shard_arg->oiods[0].oiod_nr == 1 &&
+				 (shard_arg->oiods[0].oiod_flags &
+				  OBJ_SIOD_PROC_ONE) != 0);
+			shard_arg->offs = toiod->oto_offs;
+			D_ASSERT(shard_arg->offs != NULL);
+		} else {
+			D_ASSERT(obj_auxi->opc == DAOS_OBJ_RPC_UPDATE);
+			shard_arg->oiods = reasb_req->orr_oiods;
+			shard_arg->offs = NULL;
+		}
+	} else {
+		shard_arg->oiods = NULL;
+		shard_arg->offs = NULL;
+	}
 
 	return 0;
 }
@@ -2369,9 +2397,9 @@ do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
 	else
 		obj_auxi->to_leader = (flags & DIOF_TO_LEADER) != 0;
 	rc = obj_req_get_tgts(obj, DAOS_OBJ_RPC_FETCH, (int *)&shard,
-			      dkey_hash, NIL_BITMAP, map_ver,
-			      obj_auxi->to_leader, obj_auxi->spec_shard,
-			      &obj_auxi->req_tgts);
+			      dkey_hash, obj_auxi->reasb_req.tgt_bitmap,
+			      map_ver, obj_auxi->to_leader,
+			      obj_auxi->spec_shard, &obj_auxi->req_tgts);
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 
@@ -2451,8 +2479,8 @@ dc_obj_update(tse_task_t *task)
 
 	dkey_hash = obj_dkey2hash(args->dkey);
 	rc = obj_req_get_tgts(obj, DAOS_OBJ_RPC_UPDATE, NULL, dkey_hash,
-			      NIL_BITMAP, map_ver, false, false,
-			      &obj_auxi->req_tgts);
+			      obj_auxi->reasb_req.tgt_bitmap, map_ver, false,
+			      false, &obj_auxi->req_tgts);
 
 	if (!obj_auxi->io_retry)
 		obj_update_csums(obj, args);
@@ -3115,8 +3143,8 @@ dc_obj_sync(tse_task_t *task)
 			*args->epochs_p[i] = 0;
 	}
 
-	rc = obj_req_get_tgts(obj, DAOS_OBJ_RPC_SYNC, NULL, 0, NULL, map_ver,
-			      true, false, &obj_auxi->req_tgts);
+	rc = obj_req_get_tgts(obj, DAOS_OBJ_RPC_SYNC, NULL, 0, NIL_BITMAP,
+			      map_ver, true, false, &obj_auxi->req_tgts);
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 

@@ -36,7 +36,7 @@
 #define OBJ_EC_MAX_M		(OBJ_EC_MAX_K + OBJ_EC_MAX_P)
 /** Length of target bitmap */
 #define OBJ_TGT_BITMAP_LEN						\
-	(roundup(((OBJ_EC_MAX_M) / NBBY), 4))
+	(roundup(((OBJ_EC_MAX_M) / NBBY), 8))
 
 /** EC codec for object EC encoding/decoding */
 struct obj_ec_codec {
@@ -62,7 +62,9 @@ struct obj_shard_iod {
 };
 
 /** Evenly distributed for EC full-stripe-only mode */
-#define OBJ_SIOD_EVEN_DIST	((uint32_t)1)
+#define OBJ_SIOD_EVEN_DIST	((uint32_t)1 << 0)
+/** Flag used only for proc func, to only proc to one specific target */
+#define OBJ_SIOD_PROC_ONE	((uint32_t)1 << 1)
 
 /**
  * Object IO descriptor.
@@ -121,6 +123,24 @@ struct obj_ec_recx_array {
 	uint32_t		 oer_nr;
 	/** full stripe recx array */
 	struct obj_ec_recx	*oer_recxs;
+};
+
+/**
+ * Object target oiod/offset.
+ * Only used as temporary buffer to facilitate the RPC proc.
+ */
+struct obj_tgt_oiod {
+	/* target idx [0, k + p) */
+	uint32_t		 oto_tgt_idx;
+	/* number of iods */
+	uint32_t		 oto_iod_nr;
+	uint32_t		 oto_tgt_nr;
+	/* offset array, oto_iod_nr offsets for each target */
+	uint64_t		*oto_offs;
+	/* oiod array, oto_iod_nr oiods for each target,
+	 * each oiod with just one siod.
+	 */
+	struct obj_io_desc	*oto_oiods;
 };
 
 /**
@@ -243,5 +263,11 @@ int obj_ec_req_reassemb(daos_obj_rw_t *args, daos_obj_id_t oid,
 			struct obj_reasb_req *reasb_req, bool update);
 void obj_ec_recxs_fini(struct obj_ec_recx_array *recxs);
 void obj_ec_seg_sorter_fini(struct obj_ec_seg_sorter *sorter);
+void obj_ec_tgt_oiod_fini(struct obj_tgt_oiod *tgt_oiods);
+struct obj_tgt_oiod *obj_ec_tgt_oiod_init(struct obj_io_desc *r_oiods,
+			uint32_t iod_nr, uint8_t *tgt_bitmap,
+			uint32_t tgt_max_idx, uint32_t tgt_nr);
+struct obj_tgt_oiod *obj_ec_tgt_oiod_get(struct obj_tgt_oiod *tgt_oiods,
+			uint32_t tgt_nr, uint32_t tgt_idx);
 
 #endif /* __OBJ_EC_H__ */
