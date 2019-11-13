@@ -1273,6 +1273,7 @@ ilog_status_refresh(struct ilog_context *lctx, uint32_t intent,
 	int32_t			 status;
 
 	priv->ip_intent = intent;
+	priv->ip_rc = 0;
 	ilog_foreach_entry(entries, entry) {
 		status = ilog_status_get(lctx, entry->ie_id.id_tx_id, intent);
 		if (status < 0) {

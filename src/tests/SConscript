@@ -29,9 +29,8 @@ def scons():
     denv.Install('$PREFIX/bin/', daos_perf)
 
     daos_racer = daos_build.program(denv, 'daos_racer',
-                                   ['daos_racer.c', dts_common], LIBS=libs)
+                                    ['daos_racer.c', dts_common], LIBS=libs)
     denv.Install('$PREFIX/bin/', daos_racer)
-
 
     obj_ctl = daos_build.program(denv, 'obj_ctl', ['obj_ctl.c', dts_common],
                                  LIBS=libs)
