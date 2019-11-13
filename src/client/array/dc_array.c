@@ -1081,6 +1081,57 @@ create_sgl(d_sg_list_t *user_sgl, daos_size_t cell_size,
 }
 
 static int
+set_short_read_cb(tse_task_t *task, void *data)
+{
+	daos_array_io_t		*args = daos_task_get_args(task);
+	struct io_params	*io_list = *((struct io_params **)data);
+	struct io_params	*current;
+	daos_size_t		num_records = 0;
+	int			rc = task->dt_result;
+
+	if (rc != 0) {
+		D_ERROR("Array Read Failed (%d)\n", rc);
+		return rc;
+	}
+
+	current = io_list;
+	while (current) {
+		daos_size_t	len = 0;
+		int		i;
+
+		/** if the sgl is empty then skip this entry */
+		if (current->sgl.sg_nr == 0)
+			goto next;
+
+		i = current->sgl.sg_nr_out - 1;
+		/** if no DAOS "short-fetch" detected, continue */
+		if (current->sgl.sg_nr == current->sgl.sg_nr_out &&
+		    current->sgl.sg_iovs[i].iov_buf_len ==
+		    current->sgl.sg_iovs[i].iov_len)
+			goto next;
+
+		/** How many bytes are short fetched. */
+		if (current->sgl.sg_nr == current->sgl.sg_nr_out ||
+		    current->sgl.sg_nr_out != 0) {
+			len = current->sgl.sg_iovs[i].iov_buf_len -
+				current->sgl.sg_iovs[i].iov_len;
+		}
+		for (i = current->sgl.sg_nr_out; i < current->sgl.sg_nr; i++)
+			len += current->sgl.sg_iovs[i].iov_buf_len;
+
+		D_ASSERT(len);
+		/** calculate number of records short-fetched */
+		num_records += len / current->cell_size;
+next:
+		current = current->next;
+	}
+
+	args->iod->arr_nr_short_read = num_records;
+
+	return rc;
+}
+
+static int
 dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	    daos_array_iod_t *rg_iod, d_sg_list_t *user_sgl,
 	    daos_opc_t op_type, tse_task_t *task)
@@ -1171,8 +1222,13 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 		if (num_ios == 0) {
 			head = params;
 			current = head;
+
 			tse_task_register_comp_cb(task, free_io_params_cb,
 						  &head, sizeof(head));
+			if (op_type == DAOS_OPC_ARRAY_READ)
+				tse_task_register_comp_cb(task,
+							  set_short_read_cb,
+							  &head, sizeof(head));
 		} else {
 			D_ASSERT(current);
 			current->next = params;
@@ -1184,6 +1240,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 		dkey = &params->dkey;
 		params->akey_str = '0';
 		params->user_sgl_used = false;
+		params->cell_size = array->cell_size;
 
 		num_ios++;
 
@@ -1548,8 +1605,8 @@ struct set_size_props {
 	char		buf[ENUM_DESC_BUF];
 	daos_key_desc_t kds[ENUM_DESC_NR];
 	char		*val;
-	d_iov_t	iov;
-	d_sg_list_t  sgl;
+	d_iov_t		iov;
+	d_sg_list_t	sgl;
 	uint32_t	nr;
 	daos_anchor_t	anchor;
 	bool		update_dkey;

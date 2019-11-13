@@ -154,7 +154,6 @@ dfs_test_read_thread(void *arg)
 	daos_size_t			buf_size;
 	daos_size_t			read_size, got_size;
 	daos_size_t			off = 0;
-	int				count = 0;
 	int				rc;
 
 	print_message("dfs_test_read_thread %d\n", targ->thread_idx);
@@ -179,13 +178,17 @@ dfs_test_read_thread(void *arg)
 		read_size = min(targ->total_size - off, targ->stride);
 		sgl.sg_iovs[0].iov_len = read_size;
 
+		/*
 		if (count % 10 == 0)
 		print_message("thread %d try to read off %d, size %d......\n",
 			      targ->thread_idx, (int)off, (int)read_size);
+		*/
 		rc = dfs_read(dfs, obj, &sgl, off, &got_size, NULL);
+		/*
 		if (count++ % 10 == 0)
 		print_message("thread %d read done rc %d, got_size %d.\n",
 			      targ->thread_idx, rc, (int)got_size);
+		*/
 		assert_int_equal(rc, 0);
 		assert_int_equal(read_size, got_size);
 		off += targ->stride * dfs_test_thread_nr;
@@ -237,10 +240,100 @@ dfs_test_read_shared_file(void **state)
 	dfs_test_file_del(name);
 }
 
+#define NUM_SEGS 10
+
+static void
+dfs_test_short_read(void **state)
+{
+	dfs_obj_t		*obj;
+	daos_size_t		read_size;
+	daos_size_t		chunk_size = 2000;
+	daos_size_t		buf_size = 1024;
+	int			*wbuf, *rbuf[NUM_SEGS];
+	char			*name = "short_read_file";
+	d_sg_list_t		wsgl, rsgl;
+	d_iov_t			iov;
+	int			i, rc;
+
+	D_ALLOC(wbuf, buf_size);
+	assert_non_null(wbuf);
+	for (i = 0; i < buf_size/sizeof(int); i++)
+		wbuf[i] = i+1;
+
+	for (i = 0; i < NUM_SEGS; i++) {
+		D_ALLOC_ARRAY(rbuf[i], buf_size);
+		assert_non_null(rbuf[i]);
+	}
+
+	/** set memory location */
+	rsgl.sg_nr = NUM_SEGS;
+	D_ALLOC_ARRAY(rsgl.sg_iovs, NUM_SEGS);
+	assert_non_null(rsgl.sg_iovs);
+	for (i = 0; i < NUM_SEGS; i++)
+		d_iov_set(&rsgl.sg_iovs[i], rbuf[i], buf_size);
+
+	d_iov_set(&iov, wbuf, buf_size);
+	wsgl.sg_nr = 1;
+	wsgl.sg_iovs = &iov;
+
+	rc = dfs_open(dfs, NULL, name, S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT, 0, chunk_size, NULL, &obj);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_read(dfs, obj, &rsgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, 0);
+
+	rc = dfs_write(dfs, obj, &wsgl, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_read(dfs, obj, &rsgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, buf_size);
+
+	rc = dfs_write(dfs, obj, &wsgl, 2 * buf_size, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_read(dfs, obj, &rsgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, buf_size * 3);
+
+	rc = dfs_write(dfs, obj, &wsgl, 5 * buf_size, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_read(dfs, obj, &rsgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, buf_size * 6);
+
+	rc = dfs_punch(dfs, obj, 1048576*2, 0);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_read(dfs, obj, &rsgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, buf_size * NUM_SEGS);
+
+	rc = dfs_punch(dfs, obj, 0, DFS_MAX_FSIZE);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_read(dfs, obj, &rsgl, 0, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, 0);
+
+	rc = dfs_release(obj);
+	dfs_test_file_del(name);
+
+	D_FREE(wbuf);
+	for (i = 0; i < NUM_SEGS; i++)
+		D_FREE(rbuf[i]);
+	D_FREE(rsgl.sg_iovs);
+}
+
 static const struct CMUnitTest dfs_tests[] = {
 	{ "DFS_TEST1: DFS mount / umount",
 	  dfs_test_mount, async_disable, test_case_teardown},
-	{ "DFS_TEST2: multi-threads read shared file",
+	{ "DFS_TEST2: DFS short reads",
+	  dfs_test_short_read, async_disable, test_case_teardown},
+	{ "DFS_TEST3: multi-threads read shared file",
 	  dfs_test_read_shared_file, async_disable, test_case_teardown},
 };
 
