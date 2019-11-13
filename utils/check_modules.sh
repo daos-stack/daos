@@ -43,20 +43,20 @@ if [ ! -d "scons_local" ];then
 fi
 PYTHONPATH=$PWD/utils:$PWD/install/lib/daos/TESTING/ftest/util/
 PYTHONPATH=$PYTHONPATH:$PWD/install/lib/daos/TESTING/ftest/util/apricot/
-PYTHONPATH=$PYTHONPATH:$PWD/src/client/
+PYTHONPATH=$PYTHONPATH:$PWD/src/utils/py:${PYTHONPATH}
 export PYTHONPATH
 
 if [ -z "$*" ]; then
   flist="utils/daos_build.py -s SConstruct"
   # Exclude raft and scons_local
   scripts=$(find . -name SConscript | grep -v scons_local| grep -v raft | \
-           grep -v _build.external | sort)
+           grep -v _build.external)
   for file in $scripts; do
-    flist+=" -s $file "
+    flist+=" -s $file"
   done
   # the functional test code
-  flist+=$(find src/tests/ftest/ -name \*.py | sort)
-  flist+=$(find src/client/pydaos/ -name \*.py | sort)
+  flist+=$(find install/lib/daos/TESTING/ftest/ -name \*.py)
+  flist+=$(find src/utils/py/ -name \*.py)
 else
   flist=$*
 fi

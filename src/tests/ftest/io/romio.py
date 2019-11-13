@@ -31,6 +31,8 @@ from apricot import skipForTicket
 
 sys.path.append('./util')
 sys.path.append('../util')
+sys.path.append('../../../utils/py')
+sys.path.append('./../../utils/py')
 
 import agent_utils
 import server_utils

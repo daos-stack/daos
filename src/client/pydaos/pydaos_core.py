@@ -26,22 +26,18 @@ import enum
 import uuid
 import sys
 
-# pylint: disable=no-name-in-module
+# pylint: disable=import-error
 if sys.version_info < (3, 0):
-    from . import pydaos_shim_27 as pydaos_shim
+    import pydaos_shim_27 as pydaos_shim
 else:
-    from . import pydaos_shim_3 as pydaos_shim
-# pylint: enable=no-name-in-module
-
-from . import DAOS_MAGIC
-from . import PyDError
-from . import dc
+    import pydaos_shim_3 as pydaos_shim
+# pylint: enable=import-error
 
 # Import Object class as an enumeration
 ObjClassID = enum.Enum(
     "Enumeration of the DAOS object classes (OC).",
     {key: value for key, value in pydaos_shim.__dict__.items()
-     if key.startswith("OC_")})
+    if key.startswith("OC_")})
 
 class ObjID(object):
     """
@@ -101,9 +97,8 @@ class Cont(object):
     __str__
         print pool and container UUIDs
     """
-    def __init__(self, puuid=None, cuuid=None, path=None):
-        self.coh = None
-        if path is None and (puuid is None or cuuid is None):
+    def __init__(self, puuid = None, cuuid = None, path = None):
+        if path == None and (puuid == None or cuuid == None):
             raise PyDError("invalid pool or container UUID",
                            -pydaos_shim.DER_INVAL)
         if path != None:
@@ -117,34 +112,26 @@ class Cont(object):
             raise PyDError("failed to access container", ret)
         self.poh = poh
         self.coh = coh
-        self._dc = dc
 
     def __del__(self):
-        if not self.coh:
-            return
         ret = pydaos_shim.cont_close(DAOS_MAGIC, self.poh, self.coh)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to close container", ret)
 
     def genoid(self, cid):
-        """Generate a new object ID globally unique for this container."""
-
         (ret, hi, lo) = pydaos_shim.obj_idgen(DAOS_MAGIC, self.coh, cid.value)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to generate object identifier", ret)
         return ObjID(hi, lo)
 
-    def newkv(self, cid=ObjClassID.OC_SX):
-        """Allocate a new key-value store of class cid."""
+    def newkv(self, cid = ObjClassID.OC_SX):
         oid = self.genoid(cid)
         return KVObj(self.coh, oid, self)
 
     def kv(self, oid):
-        """Open an already-allocated object identified by oid of type ObjID."""
         return KVObj(self.coh, oid, self)
 
-    def rootkv(self, cid=ObjClassID.OC_SX):
-        """Open the container root key-value store."""
+    def rootkv(self, cid = ObjClassID.OC_SX):
         (ret, hi, lo) = pydaos_shim.obj_idroot(DAOS_MAGIC, cid.value)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to generate root object identifier", ret)
@@ -159,17 +146,14 @@ class _Obj(object):
 
     def __init__(self, coh, oid, cont):
         self.oid = oid
-        # Set self.oh to Null here so it's defined in __dell__ if there's
-        # a problem with the obj_open() call.
-        self.oh = None
-        # keep container around until all objects are gone
-        self.cont = cont
         # Open to the object
         (ret, oh) = pydaos_shim.obj_open(DAOS_MAGIC, coh, self.oid.hi,
                                          self.oid.lo, 0)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to open object", ret)
         self.oh = oh
+        # keep container around until all objects are gone
+        self.cont = cont
 
     def __del__(self):
         if self.oh is None:
@@ -183,51 +167,6 @@ class _Obj(object):
 
     def __str__(self):
         return str(self.oid)
-
-# pylint: disable=too-few-public-methods
-class KVIter():
-
-    """Iterator class for KBOjb"""
-
-    def __init__(self, kv):
-        self._entries = []
-        self._nr = 256
-        self._size = 4096 # optimized for 16-char strings
-        self._anchor = None
-        self._done = False
-        self._kv = kv
-
-    def next(self):
-        """for python 2 compatibility"""
-        return self.__next__()
-
-    def __next__(self):
-        if len(self._entries) != 0:
-            return self._entries.pop()
-        if self._done:
-            raise StopIteration()
-
-        # read more entries
-        (ret, nr, sz, anchor) = pydaos_shim.kv_iter(DAOS_MAGIC, self._kv.oh,
-                                                    self._entries, self._nr,
-                                                    self._size, self._anchor)
-        if ret != pydaos_shim.DER_SUCCESS:
-            raise PyDError("failed to enumerate KV pair", ret)
-
-        # save param for next iterations, those have been adjusted already by
-        # the shim layer
-        self._anchor = anchor
-        self._nr = nr
-        self._size = sz
-        if self._anchor is None:
-            # no more entries to consume
-            self._done = True
-
-        if len(self._entries) != 0:
-            return self._entries.pop()
-        else:
-            raise StopIteration()
-# pylint: enable=too-few-public-methods
 
 class KVObj(_Obj):
     """
@@ -279,9 +218,7 @@ class KVObj(_Obj):
         Fetch all the key-value pairs and return them in a python dictionary.
     """
     def get(self, key):
-        """Retrieve value associated with the key."""
-
-        d = {key : None}
+        d = { key : None }
         self.bget(d)
         return d[key]
 
@@ -289,27 +226,23 @@ class KVObj(_Obj):
         return self.get(key)
 
     def put(self, key, val):
-        """Update/insert key-value pair. Both parameters should be strings."""
-        d = {key : val}
+        d = { key : val }
         self.bput(d)
 
     def __setitem__(self, key, val):
         self.put(key, val)
 
     def bget(self, ddict):
-        """Bulk get value for all the keys of the input python dictionary."""
         ret = pydaos_shim.kv_get(DAOS_MAGIC, self.oh, ddict)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to retrieve KV value", ret)
 
     def bput(self, ddict):
-        """Bulk put all the key-value pairs of the input python dictionary."""
         ret = pydaos_shim.kv_put(DAOS_MAGIC, self.oh, ddict)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to store KV value", ret)
 
     def dump(self):
-        """Fetch all the key-value pairs and return them in a python dictionary."""
         # leverage python iterator, see __iter__/__next__ below
         # could be optimized over the C library in the future
         d = {}
@@ -321,19 +254,55 @@ class KVObj(_Obj):
     def __len__(self):
         # Not efficient for now. Fetch all keys and count them.
         i = 0
-        for _ in self:
-            i += 1
-        return i
+        for key in self:
+	    i += 1
+	return i
 
     def __bool__(self):
-        for _ in self:
+        for key in self:
             return True
-        return False
+	return False
 
     def __contains__(self, key):
-        if self.get(key) is None:
-            return False
-        return True
+        if self.get(key) == None:
+	    return False
+	return True
 
     def __iter__(self):
-        return KVIter(self)
+        self.entries = []
+        self.nr = 256
+        self.size = 4096 # optimized for 16-char strings
+        self.anchor = None
+        self.done = False
+        return self
+
+    def next(self):
+        # for python 2 compatibility
+        return self.__next__()
+
+    def __next__(self):
+        if len(self.entries) != 0:
+            return self.entries.pop()
+        if self.done:
+            raise StopIteration()
+
+        # read more entries
+        (ret, nr, sz, anchor) = pydaos_shim.kv_iter(DAOS_MAGIC, self.oh,
+                                                    self.entries, self.nr,
+                                                    self.size, self.anchor)
+        if ret != pydaos_shim.DER_SUCCESS:
+            raise PyDError("failed to enumerate KV pair", ret)
+
+        # save param for next iterations, those have been adjusted already by
+        # the shim layer
+        self.anchor = anchor
+        self.nr = nr
+        self.size = sz
+        if self.anchor == None:
+            # no more entries to consume
+            self.done = True
+
+        if len(self.entries) != 0:
+            return self.entries.pop()
+        else:
+            raise StopIteration()
