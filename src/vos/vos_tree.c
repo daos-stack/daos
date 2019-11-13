@@ -938,7 +938,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 
 /** Close the opened trees */
 void
-key_tree_release(daos_handle_t toh, bool is_array)
+key_tree_release_(daos_handle_t toh, bool is_array)
 {
 	int	rc;
 

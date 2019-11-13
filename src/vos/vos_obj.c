@@ -1062,6 +1062,8 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	if (rc != 0)
 		goto failed;
 
+	D_INFO("tree type = %d\n", type);
+
 	switch (type) {
 	default:
 		D_ERROR("unknown iterator type %d.\n", type);

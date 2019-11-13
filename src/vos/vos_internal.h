@@ -897,8 +897,14 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 		 enum vos_tree_class tclass, daos_key_t *key, int flags,
 		 uint32_t intent, struct vos_krec_df **krecp,
 		 daos_handle_t *sub_toh);
+#define key_tree_release(toh, is_array) \
+({\
+	D_INFO("Calling key_tree_release\n");\
+	key_tree_release_(toh, is_array);    \
+})
+
 void
-key_tree_release(daos_handle_t toh, bool is_array);
+key_tree_release_(daos_handle_t toh, bool is_array);
 int
 key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	       d_iov_t *key_iov, d_iov_t *val_iov, int flags);
