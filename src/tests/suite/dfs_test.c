@@ -45,7 +45,8 @@ dfs_test_mount(void **state)
 	uuid_generate(cuuid);
 	rc = daos_cont_create(arg->pool.poh, cuuid, NULL, NULL);
 	assert_int_equal(rc, 0);
-	printf("Created non-POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
+	print_message("Created non-POSIX Container "DF_UUIDF"\n",
+		      DP_UUID(cuuid));
 	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
 			    &coh, &co_info, NULL);
 	assert_int_equal(rc, 0);
@@ -58,12 +59,13 @@ dfs_test_mount(void **state)
 	assert_int_equal(rc, 0);
 	rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
 	assert_int_equal(rc, 0);
-	printf("Destroyed non-POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
+	print_message("Destroyed non-POSIX Container "DF_UUIDF"\n",
+		      DP_UUID(cuuid));
 
 	/** create a DFS container with POSIX layout */
 	rc = dfs_cont_create(arg->pool.poh, cuuid, NULL, NULL, NULL);
 	assert_int_equal(rc, 0);
-	printf("Created POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
+	print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
 	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
 			    &coh, &co_info, NULL);
 	assert_int_equal(rc, 0);
@@ -77,7 +79,7 @@ dfs_test_mount(void **state)
 	assert_int_equal(rc, 0);
 	rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
 	assert_int_equal(rc, 0);
-	printf("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
+	print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
 }
 
 static int
@@ -280,10 +282,12 @@ dfs_test_short_read(void **state)
 		      O_RDWR | O_CREAT, 0, chunk_size, NULL, &obj);
 	assert_int_equal(rc, 0);
 
+	/** reading empty file should return 0 */
 	rc = dfs_read(dfs, obj, &rsgl, 0, &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, 0);
 
+	/** write strided pattern and check read size with segmented buffers */
 	rc = dfs_write(dfs, obj, &wsgl, 0, NULL);
 	assert_int_equal(rc, 0);
 
@@ -305,6 +309,7 @@ dfs_test_short_read(void **state)
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, buf_size * 6);
 
+	/** truncate the buffer to a large size, read should return all */
 	rc = dfs_punch(dfs, obj, 1048576*2, 0);
 	assert_int_equal(rc, 0);
 
@@ -312,12 +317,24 @@ dfs_test_short_read(void **state)
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, buf_size * NUM_SEGS);
 
+	/** punch all the data, read should return 0 */
 	rc = dfs_punch(dfs, obj, 0, DFS_MAX_FSIZE);
 	assert_int_equal(rc, 0);
 
 	rc = dfs_read(dfs, obj, &rsgl, 0, &read_size, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(read_size, 0);
+
+	/** write to 2 chunks with a large gap in the middle */
+	rc = dfs_write(dfs, obj, &wsgl, 0, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_write(dfs, obj, &wsgl, 1048576*2, NULL);
+	assert_int_equal(rc, 0);
+
+	/** reading in between, even holes should not be a short read */
+	rc = dfs_read(dfs, obj, &rsgl, 1048576, &read_size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(read_size, buf_size * NUM_SEGS);
 
 	rc = dfs_release(obj);
 	dfs_test_file_del(name);
@@ -351,7 +368,7 @@ dfs_setup(void **state)
 	uuid_generate(co_uuid);
 	rc = dfs_cont_create(arg->pool.poh, co_uuid, NULL, &co_hdl, &dfs);
 	assert_int_equal(rc, 0);
-	printf("Created POSIX Container "DF_UUIDF"\n", DP_UUID(co_uuid));
+	print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 
 	return rc;
 }
@@ -368,7 +385,8 @@ dfs_teardown(void **state)
 	assert_int_equal(rc, 0);
 	rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
 	assert_int_equal(rc, 0);
-	printf("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(co_uuid));
+	print_message("Destroyed POSIX Container "DF_UUIDF"\n",
+		      DP_UUID(co_uuid));
 
 	return test_teardown(state);
 }
@@ -379,6 +397,7 @@ run_daos_fs_test(int rank, int size, int *sub_tests, int sub_tests_size)
 	int	rc;
 
 	MPI_Barrier(MPI_COMM_WORLD);
+	if (rank == 0)
 	rc = cmocka_run_group_tests_name("DAOS FileSystem (DFS) tests",
 					 dfs_tests, dfs_setup, dfs_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
