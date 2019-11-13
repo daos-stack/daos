@@ -376,8 +376,8 @@ dfs_setup(void **state)
 static int
 dfs_teardown(void **state)
 {
-	test_arg_t		*arg = *state;
-	int rc;
+	test_arg_t	*arg = *state;
+	int		rc;
 
 	rc = dfs_umount(dfs);
 	assert_int_equal(rc, 0);
@@ -394,12 +394,13 @@ dfs_teardown(void **state)
 int
 run_daos_fs_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
-	int	rc;
+	int rc = 0;
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (rank == 0)
-	rc = cmocka_run_group_tests_name("DAOS FileSystem (DFS) tests",
-					 dfs_tests, dfs_setup, dfs_teardown);
+		rc = cmocka_run_group_tests_name("DAOS FileSystem (DFS) tests",
+						 dfs_tests, dfs_setup,
+						 dfs_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }
