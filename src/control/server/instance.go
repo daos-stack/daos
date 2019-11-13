@@ -40,6 +40,13 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
+// IOServerStarter defines an interface for starting the actual
+// daos_io_server.
+type IOServerStarter interface {
+	Start(context.Context, chan<- error) error
+	GetConfig() *ioserver.Config
+}
+
 // IOServerInstance encapsulates control-plane specific configuration
 // and functionality for managed I/O server instances. The distinction
 // between this structure and what's in the ioserver package is that the
@@ -48,10 +55,8 @@ import (
 // be used with IOServerHarness to manage and monitor multiple instances
 // per node.
 type IOServerInstance struct {
-	Index uint32
-
 	log           logging.Logger
-	runner        *ioserver.Runner
+	runner        IOServerStarter
 	bdevProvider  *storage.BdevProvider
 	scmProvider   *scm.Provider
 	msClient      *mgmtSvcClient
@@ -71,10 +76,9 @@ type IOServerInstance struct {
 // its dependencies.
 func NewIOServerInstance(log logging.Logger,
 	bp *storage.BdevProvider, sp *scm.Provider,
-	msc *mgmtSvcClient, r *ioserver.Runner) *IOServerInstance {
+	msc *mgmtSvcClient, r IOServerStarter) *IOServerInstance {
 
 	return &IOServerInstance{
-		Index:         r.Config.Index,
 		log:           log,
 		runner:        r,
 		bdevProvider:  bp,
@@ -85,28 +89,14 @@ func NewIOServerInstance(log logging.Logger,
 	}
 }
 
-// scmConfig returns the SCM configuration assigned to this instance.
-func (srv *IOServerInstance) scmConfig() (storage.ScmConfig, error) {
-	var nullCfg storage.ScmConfig
-	if srv.runner == nil {
-		return nullCfg, errors.New("no runner configured")
-	}
-	if srv.runner.Config == nil {
-		return nullCfg, errors.New("no ioserver config set on runner")
-	}
-	return srv.runner.Config.Storage.SCM, nil
+// scmConfig returns the scm configuration assigned to this instance.
+func (srv *IOServerInstance) scmConfig() storage.ScmConfig {
+	return srv.runner.GetConfig().Storage.SCM
 }
 
 // bdevConfig returns the block device configuration assigned to this instance.
-func (srv *IOServerInstance) bdevConfig() (storage.BdevConfig, error) {
-	var nullCfg storage.BdevConfig
-	if srv.runner == nil {
-		return nullCfg, errors.New("no runner configured")
-	}
-	if srv.runner.Config == nil {
-		return nullCfg, errors.New("no ioserver config set on runner")
-	}
-	return srv.runner.Config.Storage.Bdev, nil
+func (srv *IOServerInstance) bdevConfig() storage.BdevConfig {
+	return srv.runner.GetConfig().Storage.Bdev
 }
 
 func (srv *IOServerInstance) setDrpcClient(c drpc.DomainSocketClient) {
@@ -124,14 +114,21 @@ func (srv *IOServerInstance) getDrpcClient() (drpc.DomainSocketClient, error) {
 	return srv._drpcClient, nil
 }
 
+// SetIndex sets the server index assigned by the harness.
+func (srv *IOServerInstance) SetIndex(idx uint32) {
+	srv.runner.GetConfig().Index = idx
+}
+
+// Index returns the server index assigned by the harness.
+func (srv *IOServerInstance) Index() uint32 {
+	return srv.runner.GetConfig().Index
+}
+
 // MountScmDevice mounts the configured SCM device (DCPM or ramdisk emulation)
 // at the mountpoint specified in the configuration. If the device is already
 // mounted, the function returns nil, indicating success.
 func (srv *IOServerInstance) MountScmDevice() error {
-	scmCfg, err := srv.scmConfig()
-	if err != nil {
-		return err
-	}
+	scmCfg := srv.scmConfig()
 
 	isMount, err := srv.scmProvider.IsMounted(scmCfg.MountPoint)
 	if err != nil && !os.IsNotExist(errors.Cause(err)) {
@@ -154,7 +151,7 @@ func (srv *IOServerInstance) MountScmDevice() error {
 		}
 		res, err = srv.scmProvider.MountDcpm(scmCfg.DeviceList[0], scmCfg.MountPoint)
 	default:
-		err = errors.New(msgScmClassNotSupported)
+		err = errors.New(scm.MsgScmClassNotSupported)
 	}
 	if err != nil {
 		return errors.WithMessage(err, "mounting existing scm dir")
@@ -174,10 +171,7 @@ func (srv *IOServerInstance) NeedsScmFormat() (bool, error) {
 	}
 	srv.RUnlock()
 
-	scmCfg, err := srv.scmConfig()
-	if err != nil {
-		return false, err
-	}
+	scmCfg := srv.scmConfig()
 
 	srv.log.Debugf("%s: checking formatting", scmCfg.MountPoint)
 
@@ -186,27 +180,12 @@ func (srv *IOServerInstance) NeedsScmFormat() (bool, error) {
 	srv.Lock()
 	defer srv.Unlock()
 
-	req := scm.FormatRequest{
-		Mountpoint: scmCfg.MountPoint,
-	}
-	switch scmCfg.Class {
-	case storage.ScmClassRAM:
-		req.Ramdisk = &scm.RamdiskParams{
-			Size: uint(scmCfg.RamdiskSize),
-		}
-	case storage.ScmClassDCPM:
-		// FIXME (DAOS-3291): Clean up SCM configuration
-		if len(scmCfg.DeviceList) != 1 {
-			return false, scm.FaultFormatInvalidDeviceCount
-		}
-		req.Dcpm = &scm.DcpmParams{
-			Device: scmCfg.DeviceList[0],
-		}
-	default:
-		return false, errors.New(msgScmClassNotSupported)
+	req, err := scm.CreateFormatRequest(scmCfg, false)
+	if err != nil {
+		return false, err
 	}
 
-	res, err := srv.scmProvider.CheckFormat(req)
+	res, err := srv.scmProvider.CheckFormat(*req)
 	if err != nil {
 		return false, err
 	}
@@ -237,7 +216,7 @@ func (srv *IOServerInstance) Start(ctx context.Context, errChan chan<- error) er
 // NotifyReady receives a ready message from the running IOServer
 // instance.
 func (srv *IOServerInstance) NotifyReady(msg *srvpb.NotifyReadyReq) {
-	srv.log.Debugf("I/O server instance %d ready: %v", srv.Index, msg)
+	srv.log.Debugf("I/O server instance %d ready: %v", srv.Index(), msg)
 
 	// Activate the dRPC client connection to this iosrv
 	srv.setDrpcClient(drpc.NewClientConnection(msg.DrpcListenerSock))
@@ -256,7 +235,7 @@ func (srv *IOServerInstance) AwaitReady() chan *srvpb.NotifyReadyReq {
 
 // NotifyStorageReady releases any blocks on AwaitStorageReady().
 func (srv *IOServerInstance) NotifyStorageReady() {
-	srv.log.Debugf("I/O server instance %d notifying storage ready", srv.Index)
+	srv.log.Debugf("I/O server instance %d notifying storage ready", srv.Index())
 	go func() {
 		close(srv.storageReady)
 	}()
@@ -266,9 +245,9 @@ func (srv *IOServerInstance) NotifyStorageReady() {
 func (srv *IOServerInstance) AwaitStorageReady(ctx context.Context) {
 	select {
 	case <-ctx.Done():
-		srv.log.Infof("I/O server instance %d storage not ready: %s", srv.Index, ctx.Err())
+		srv.log.Infof("I/O server instance %d storage not ready: %s", srv.Index(), ctx.Err())
 	case <-srv.storageReady:
-		srv.log.Infof("I/O server instance %d storage ready", srv.Index)
+		srv.log.Infof("I/O server instance %d storage ready", srv.Index())
 	}
 }
 
@@ -319,7 +298,7 @@ func (srv *IOServerInstance) SetRank(ctx context.Context, ready *srvpb.NotifyRea
 }
 
 func (srv *IOServerInstance) callSetRank(rank ioserver.Rank) error {
-	dresp, err := srv.CallDrpc(mgmtModuleID, setRank, &mgmtpb.SetRankReq{Rank: uint32(rank)})
+	dresp, err := srv.CallDrpc(drpc.ModuleMgmt, drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: uint32(rank)})
 	if err != nil {
 		return err
 	}
@@ -343,7 +322,7 @@ func (srv *IOServerInstance) StartManagementService() error {
 
 	// should have been loaded by now
 	if superblock == nil {
-		return errors.Errorf("I/O server instance %d: nil superblock", srv.Index)
+		return errors.Errorf("I/O server instance %d: nil superblock", srv.Index())
 	}
 
 	if superblock.CreateMS {
@@ -394,7 +373,7 @@ func (srv *IOServerInstance) callCreateMS(superblock *Superblock) error {
 		req.Addr = msAddr
 	}
 
-	dresp, err := srv.CallDrpc(mgmtModuleID, createMS, req)
+	dresp, err := srv.CallDrpc(drpc.ModuleMgmt, drpc.MethodCreateMS, req)
 	if err != nil {
 		return err
 	}
@@ -411,7 +390,7 @@ func (srv *IOServerInstance) callCreateMS(superblock *Superblock) error {
 }
 
 func (srv *IOServerInstance) callStartMS() error {
-	dresp, err := srv.CallDrpc(mgmtModuleID, startMS, nil)
+	dresp, err := srv.CallDrpc(drpc.ModuleMgmt, drpc.MethodStartMS, nil)
 	if err != nil {
 		return err
 	}
@@ -428,7 +407,7 @@ func (srv *IOServerInstance) callStartMS() error {
 }
 
 func (srv *IOServerInstance) callSetUp() error {
-	dresp, err := srv.CallDrpc(mgmtModuleID, setUp, nil)
+	dresp, err := srv.CallDrpc(drpc.ModuleMgmt, drpc.MethodSetUp, nil)
 	if err != nil {
 		return err
 	}

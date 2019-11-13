@@ -36,6 +36,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
@@ -167,7 +168,7 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(mgmtModuleID, getAttachInfo, req)
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodGetAttachInfo, req)
 	if err != nil {
 		return nil, err
 	}
@@ -217,7 +218,7 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (*mgmtpb.Join
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(mgmtModuleID, join, req)
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodJoin, req)
 	if err != nil {
 		return nil, err
 	}
@@ -273,7 +274,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(mgmtModuleID, poolCreate, req)
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolCreate, req)
 	if err != nil {
 		return nil, err
 	}
@@ -297,7 +298,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(mgmtModuleID, poolDestroy, req)
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolDestroy, req)
 	if err != nil {
 		return nil, err
 	}
@@ -321,7 +322,7 @@ func (svc *mgmtSvc) PoolGetACL(ctx context.Context, req *mgmtpb.GetACLReq) (*mgm
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(mgmtModuleID, poolGetACL, req)
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolGetACL, req)
 	if err != nil {
 		return nil, err
 	}
@@ -345,7 +346,7 @@ func (svc *mgmtSvc) BioHealthQuery(ctx context.Context, req *mgmtpb.BioHealthReq
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(mgmtModuleID, bioHealth, req)
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodBioHealth, req)
 	if err != nil {
 		return nil, err
 	}
@@ -367,7 +368,7 @@ func (svc *mgmtSvc) SmdListDevs(ctx context.Context, req *mgmtpb.SmdDevReq) (*mg
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(mgmtModuleID, smdDevs, req)
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodSmdDevs, req)
 	if err != nil {
 		return nil, err
 	}
@@ -387,7 +388,7 @@ func (svc *mgmtSvc) SmdListPools(ctx context.Context, req *mgmtpb.SmdPoolReq) (*
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(mgmtModuleID, smdPools, req)
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodSmdPools, req)
 	if err != nil {
 		return nil, err
 	}
@@ -407,7 +408,7 @@ func (svc *mgmtSvc) DevStateQuery(ctx context.Context, req *mgmtpb.DevStateReq) 
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(mgmtModuleID, devState, req)
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodDevStateQuery, req)
 	if err != nil {
 		return nil, err
 	}
@@ -427,7 +428,7 @@ func (svc *mgmtSvc) StorageSetFaulty(ctx context.Context, req *mgmtpb.DevStateRe
 		return nil, err
 	}
 
-	dresp, err := mi.CallDrpc(mgmtModuleID, setFaulty, req)
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodSetFaultyState, req)
 	if err != nil {
 		return nil, err
 	}
@@ -443,7 +444,7 @@ func (svc *mgmtSvc) StorageSetFaulty(ctx context.Context, req *mgmtpb.DevStateRe
 // KillRank implements the method defined for the Management Service.
 //
 // Stop data-plane instance managed by control-plane identified by unique rank.
-func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.DaosRank) (*mgmtpb.DaosResp, error) {
+func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.KillRankReq) (*mgmtpb.DaosResp, error) {
 	svc.log.Debugf("MgmtSvc.KillRank dispatch, req:%+v\n", *req)
 
 	var mi *IOServerInstance
@@ -458,7 +459,7 @@ func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.DaosRank) (*mgmtpb
 		return nil, errors.Errorf("rank %d not found on this server", req.Rank)
 	}
 
-	dresp, err := mi.CallDrpc(mgmtModuleID, killRank, req)
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodKillRank, req)
 	if err != nil {
 		return nil, err
 	}
@@ -469,6 +470,30 @@ func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.DaosRank) (*mgmtpb
 	}
 
 	svc.log.Debugf("MgmtSvc.KillRank dispatch, resp:%+v\n", *resp)
+
+	return resp, nil
+}
+
+// ListPools implements the method defined for the Management Service.
+func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*mgmtpb.ListPoolsResp, error) {
+	svc.log.Debugf("MgmtSvc.ListPools dispatch, req:%+v\n", *req)
+
+	mi, err := svc.harness.GetMSLeaderInstance()
+	if err != nil {
+		return nil, err
+	}
+
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodListPools, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.ListPoolsResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal ListPools response")
+	}
+
+	svc.log.Debugf("MgmtSvc.ListPools dispatch, resp:%+v\n", *resp)
 
 	return resp, nil
 }

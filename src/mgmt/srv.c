@@ -123,6 +123,9 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_POOL_GET_ACL:
 		ds_mgmt_drpc_pool_get_acl(drpc_req, drpc_resp);
 		break;
+	case DRPC_METHOD_MGMT_LIST_POOLS:
+		ds_mgmt_drpc_list_pools(drpc_req, drpc_resp);
+		break;
 	default:
 		drpc_resp->status = DRPC__STATUS__UNKNOWN_METHOD;
 		D_ERROR("Unknown method\n");

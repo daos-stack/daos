@@ -30,50 +30,12 @@ import (
 
 	commands "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/server"
+	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
 type storageCmd struct {
-	Scan    storageScanCmd    `command:"scan" description:"Scan SCM and NVMe storage attached to local server"`
 	Prepare storagePrepareCmd `command:"prepare" alias:"p" description:"Prepare SCM and NVMe storage attached to remote servers."`
-}
-
-type storageScanCmd struct {
-	logCmd
-}
-
-func (cmd *storageScanCmd) Execute(args []string) error {
-	svc, err := server.DefaultStorageControlService(cmd.log, server.NewConfiguration())
-	if err != nil {
-		return errors.WithMessage(err, "failed to init ControlService")
-	}
-
-	cmd.log.Info("Scanning locally-attached storage...")
-
-	scanErrors := make([]error, 0, 2)
-
-	controllers, err := svc.ScanNvme()
-	if err != nil {
-		scanErrors = append(scanErrors, err)
-	} else {
-		cmd.log.Infof("NVMe SSD controller and constituent namespaces:\n%s", controllers)
-	}
-
-	modules, pmems, err := svc.ScanScm()
-	if err != nil {
-		scanErrors = append(scanErrors, err)
-	} else {
-		cmd.log.Infof("SCM modules:\n%s\nPMEM device files:\n%s", modules, pmems)
-	}
-
-	if len(scanErrors) > 0 {
-		errStr := "scan error(s):\n"
-		for _, err := range scanErrors {
-			errStr += fmt.Sprintf("  %s\n", err.Error())
-		}
-		return errors.New(errStr)
-	}
-
-	return nil
+	Scan    storageScanCmd    `command:"scan" description:"Scan SCM and NVMe storage attached to local server"`
 }
 
 type storagePrepareCmd struct {
@@ -117,7 +79,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		cmd.log.Info(op + " locally-attached NVMe storage...")
 
 		// Prepare NVMe access through SPDK
-		if err := svc.PrepareNvme(server.PrepareNvmeRequest{
+		if err := svc.NvmePrepare(server.NvmePrepareRequest{
 			HugePageCount: cmd.NrHugepages,
 			TargetUser:    cmd.TargetUser,
 			PCIWhitelist:  cmd.PCIWhiteList,
@@ -141,23 +103,63 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 
 		// Prepare SCM modules to be presented as pmem device files.
 		// Pass evaluated state to avoid running GetScmState() twice.
-		needsReboot, devices, err := svc.PrepareScm(server.PrepareScmRequest{
-			Reset: cmd.Reset,
-		})
+		resp, err := svc.ScmPrepare(scm.PrepareRequest{Reset: cmd.Reset})
 		if err != nil {
 			return concatErrors(scanErrors, err)
 		}
-		if needsReboot {
-			cmd.log.Info(server.MsgScmRebootRequired)
-		} else if len(devices) > 0 {
-			cmd.log.Infof("persistent memory device files:\n\t%+v\n", devices)
+		if resp.RebootRequired {
+			cmd.log.Info(scm.MsgScmRebootRequired)
+		} else if len(resp.Namespaces) > 0 {
+			cmd.log.Infof("SCM namespaces:\n\t%+v\n", resp.Namespaces)
 		} else {
-			cmd.log.Info("no persistent memory device files")
+			cmd.log.Info("no SCM namespaces")
 		}
 	}
 
 	if len(scanErrors) > 0 {
 		return concatErrors(scanErrors, nil)
+	}
+
+	return nil
+}
+
+type storageScanCmd struct {
+	logCmd
+}
+
+func (cmd *storageScanCmd) Execute(args []string) error {
+	svc, err := server.DefaultStorageControlService(cmd.log, server.NewConfiguration())
+	if err != nil {
+		return errors.WithMessage(err, "failed to init ControlService")
+	}
+
+	cmd.log.Info("Scanning locally-attached storage...")
+
+	scanErrors := make([]error, 0, 2)
+
+	controllers, err := svc.NvmeScan()
+	if err != nil {
+		scanErrors = append(scanErrors, err)
+	} else {
+		cmd.log.Info(controllers.String())
+	}
+
+	scmResp, err := svc.ScmScan()
+	switch {
+	case err != nil:
+		scanErrors = append(scanErrors, err)
+	case len(scmResp.Namespaces) > 0:
+		cmd.log.Infof("SCM Namespaces:\n%s\n", scmResp.Namespaces)
+	default:
+		cmd.log.Infof("SCM Modules:\n%s\n", scmResp.Modules)
+	}
+
+	if len(scanErrors) > 0 {
+		errStr := "scan error(s):\n"
+		for _, err := range scanErrors {
+			errStr += fmt.Sprintf("  %s\n", err.Error())
+		}
+		return errors.New(errStr)
 	}
 
 	return nil

@@ -3,10 +3,13 @@ SRC_EXT := gz
 SOURCE   = $(NAME)-$(VERSION).tar.$(SRC_EXT)
 PATCHES  = scons_local-$(VERSION).tar.$(SRC_EXT)
 
-SLES_12_PR_REPOS := scons
-LEAP_42_PR_REPOS := scons
-PR_REPOS         := pmix spdk isa-l fio dpdk protobuf-c fuse pmdk raft \
-	            cart@daos_devel1
+#https://github.com/rpm-software-management/mock/issues/384
+MOCK_OPTIONS := --disablerepo=sclo*
+
+# override allows the caller to set a value and the we append to it
+#override PR_REPOS         +=
+override SLES_12_PR_REPOS += scons
+override LEAP_42_PR_REPOS += scons
 ifneq ($(REPOSITORY_URL),)
 ifneq ($(DAOS_STACK_$(DISTRO_BASE)_GROUP_REPO),)
 EL_7_REPOS     = https://copr-be.cloud.fedoraproject.org/results/jhli/ipmctl/epel-7-x86_64/   \
@@ -25,8 +28,9 @@ SLES_12_REPOS += https://download.opensuse.org/repositories/science:/HPC:/SLE12S
 
 GIT_SHORT       := $(shell git rev-parse --short HEAD)
 GIT_NUM_COMMITS := $(shell git rev-list HEAD --count)
+CART_SHA1       := $(shell sed -ne 's/CART *= *\(.*\)/\1/p' ../../utils/build.config)
 
-BUILD_DEFINES := --define "%relval .$(GIT_NUM_COMMITS).g$(GIT_SHORT)"
+BUILD_DEFINES     := --define "%relval .$(GIT_NUM_COMMITS).g$(GIT_SHORT)" --define "%cart_sha1 $(CART_SHA1)"
 RPM_BUILD_OPTIONS := $(BUILD_DEFINES)
 
 dist: $(SOURCES)

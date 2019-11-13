@@ -24,6 +24,7 @@
 package main
 
 import (
+	"net"
 	"os/user"
 	"strconv"
 
@@ -34,13 +35,6 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/security/auth"
-)
-
-// Module id for the Agent security module
-const securityModuleID int32 = 1
-
-const (
-	methodRequestCredentials int32 = 101
 )
 
 // userInfo is an internal implementation of the security.User interface
@@ -104,17 +98,22 @@ func NewSecurityModule(log logging.Logger, tc *security.TransportConfig) *Securi
 		log:    log,
 		config: tc,
 	}
-	mod.InitModule(nil)
+	mod.ext = &external{}
 	return &mod
 }
 
 // HandleCall is the handler for calls to the SecurityModule
-func (m *SecurityModule) HandleCall(client *drpc.Client, method int32, body []byte) ([]byte, error) {
-	if method != methodRequestCredentials {
+func (m *SecurityModule) HandleCall(session *drpc.Session, method int32, body []byte) ([]byte, error) {
+	if method != drpc.MethodRequestCredentials {
 		return nil, errors.Errorf("Attempt to call unregistered function")
 	}
 
-	info, err := security.DomainInfoFromUnixConn(m.log, client.Conn)
+	uConn, ok := session.Conn.(*net.UnixConn)
+	if !ok {
+		return nil, errors.New("connection is not a unix socket")
+	}
+
+	info, err := security.DomainInfoFromUnixConn(m.log, uConn)
 	if err != nil {
 		return nil, errors.WithMessage(err, "Unable to get credentials for client socket")
 	}
@@ -136,12 +135,7 @@ func (m *SecurityModule) HandleCall(client *drpc.Client, method int32, body []by
 	return responseBytes, nil
 }
 
-// InitModule initializes internal variables for the module
-func (m *SecurityModule) InitModule(state drpc.ModuleState) {
-	m.ext = &external{}
-}
-
 //ID will return Security module ID
 func (m *SecurityModule) ID() int32 {
-	return securityModuleID
+	return drpc.ModuleSecurityAgent
 }

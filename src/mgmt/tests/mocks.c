@@ -25,7 +25,7 @@
  * Mocks for DAOS mgmt unit tests
  */
 
-#include "../mgmt.pb-c.h"
+#include "../srv.pb-c.h"
 #include "../srv_internal.h"
 #include "mocks.h"
 
@@ -137,6 +137,16 @@ int
 ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp)
 {
 	return 0;
+}
+
+int ds_mgmt_list_pools(const char *group, uint64_t *npools,
+		       struct mgmt_list_pools_one **poolsp, size_t *pools_len)
+{
+	return 0;
+}
+
+void
+ds_mgmt_free_pool_list(struct mgmt_list_pools_one **poolsp, uint64_t len) {
 }
 
 int

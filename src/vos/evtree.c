@@ -26,10 +26,10 @@
 #include "evt_priv.h"
 #include "vos_internal.h"
 
-#ifdef VOS_TRACE
-#define V_TRACE(...) D_DEBUG(__VA_ARGS__)
-#else
+#ifdef VOS_DISABLE_TRACE
 #define V_TRACE(...) (void)0
+#else
+#define V_TRACE(...) D_DEBUG(__VA_ARGS__)
 #endif
 
 enum {
@@ -221,13 +221,6 @@ evt_ent_array_fini(struct evt_entry_array *ent_array)
 
 /** When we go over the embedded limit, set a minimum allocation */
 #define EVT_MIN_ALLOC 4096
-
-static void
-ent_array_reset(struct evt_context *tcx, struct evt_entry_array *ent_array)
-{
-	ent_array->ea_ent_nr = 0;
-	ent_array->ea_inob = tcx->tc_inob;
-}
 
 static bool
 ent_array_resize(struct evt_context *tcx, struct evt_entry_array *ent_array,
@@ -1921,8 +1914,6 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 	if (tcx->tc_root->tr_depth == 0)
 		return 0; /* empty tree */
 
-	if (ent_array == &tcx->tc_iter.it_entries)
-		ent_array_reset(tcx, ent_array);
 	evt_tcx_reset_trace(tcx);
 
 	level = at = 0;
@@ -1937,7 +1928,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 
 		D_ASSERT(!leaf || at == 0);
 		V_TRACE(DB_TRACE,
-			"Checking "DF_RECT"("DF_X64"), l=%d, a=%d, f=%d\n",
+			"Checking mbr="DF_RECT"("DF_X64"), l=%d, a=%d, f=%d\n",
 			DP_RECT(evt_node_mbr_get(tcx, node)), nd_off, level, at,
 			leaf);
 
@@ -1952,11 +1943,9 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 
 			rtmp = &ne->ne_rect;
 
-			V_TRACE(DB_TRACE, " rect[%d]="DF_RECT"\n",
-				i, DP_RECT(rtmp));
-
 			if (evt_filter_rect(filter, rtmp, leaf)) {
-				V_TRACE(DB_TRACE, "Filtered "DF_FILTER"\n",
+				V_TRACE(DB_TRACE, "Filtered "DF_RECT" filter=("
+					DF_FILTER")\n", DP_RECT(rtmp),
 					DP_FILTER(filter));
 				continue; /* Doesn't match the filter */
 			}
@@ -1994,7 +1983,8 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 				V_TRACE(DB_TRACE, "Enter the next level\n");
 				break;
 			}
-			V_TRACE(DB_TRACE, "Found overlapped leaf rect\n");
+			V_TRACE(DB_TRACE, "Found overlapped leaf rect: "DF_RECT
+				"\n", DP_RECT(rtmp));
 
 			desc = evt_node_desc_at(tcx, node, i);
 			rc = evt_desc_log_status(tcx, desc, intent);
@@ -2977,7 +2967,7 @@ int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
 	filter.fr_epr.epr_lo = rect->rc_epc;
 	filter.fr_epr.epr_hi = rect->rc_epc;
 	filter.fr_punch = 0;
-	rc = evt_ent_array_fill(tcx, EVT_FIND_SAME, DAOS_INTENT_PUNCH,
+	rc = evt_ent_array_fill(tcx, EVT_FIND_SAME, DAOS_INTENT_PURGE,
 				&filter, rect, &ent_array);
 	if (rc != 0)
 		return rc;
