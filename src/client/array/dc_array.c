@@ -76,6 +76,7 @@ struct io_params {
 	d_sg_list_t		sgl;
 	bool			user_sgl_used;
 	daos_size_t		cell_size;
+	daos_size_t		num_records;
 	tse_task_t		*task;
 	struct io_params	*next;
 };
@@ -1084,37 +1085,62 @@ create_sgl(d_sg_list_t *user_sgl, daos_size_t cell_size,
 static int
 set_short_read_cb(tse_task_t *task, void *data)
 {
-	struct	io_params *io_list = *((struct io_params **)data);
-	int	rc = task->dt_result;
+	struct io_params	*io_list = *((struct io_params **)data);
+	struct io_params	*current;
+	uint64_t		dkey_val;
+	daos_size_t		num_records = 0;
+	bool			break_on_lower = false;
+	int			rc = task->dt_result;
 
-	while (io_list) {
-		struct io_params *current = io_list;
+	/*
+	 * List is already sorted in decreasing dkey order, so we just have to
+	 * look at the highest dkey with valid data. We could have more than one
+	 * entry in the list with the same dkey.
+	 */
+	dkey_val = io_list->dkey_val;
+	current = io_list;
+	while (current) {
+		daos_size_t	len = 0;
 
-		/** if the sgl is empty in the first place, then continue */
+		/*
+		 * if we moved to a lower dkey and the higher one is not empty
+		 * or all short-fetched, we can break here.
+		 */
+		if (dkey_val > current->dkey_val && break_on_lower)
+			break;
+
+		/** if the sgl is empty then skip this entry */
 		if (current->sgl.sg_nr == 0)
-			continue;
+			goto next;
+
+		dkey_val = current->dkey_val;
 
 		/** if no DAOS "short-fetch" detected, continue */
 		if (current->sgl.sg_nr == current->sgl.sg_nr_out &&
 		    current->sgl.sg_iovs[current->sgl.sg_nr].iov_buf_len ==
-		    current->sgl.sg_iovs[current->sgl.sg_nr].iov_len)
-			continue;
-
-		/** if dkey is smaller than dkey already handled, skip */
-		if (dkey_val > current->dkey_val)
-			continue;
-
-		D_ASSERT(dkey_val != current->dkey_val);
-
-		for (i = current->sgl.sg_nr_out; i < current->sgl.sg_nr; i++) {
-			len += current->sgl.sg_iovs[i].iov_buf_len -
-				current->sgl.sg_iovs[i].iov_len;
+		    current->sgl.sg_iovs[current->sgl.sg_nr].iov_len) {
+			break_on_lower = true;
+			goto next;
 		}
 
-		dkey_val = current->dkey_val;
-		args->last_valid_idx =
-			current->sgl.sg_iovs[current->sgl.sg_nr].iov_len;
-		io_list = current->next;
+		/** How many bytes are short fetched */
+		for (i = current->sgl.sg_nr_out-1; i < current->sgl.sg_nr; i++)
+			len += current->sgl.sg_iovs[i].iov_buf_len -
+				current->sgl.sg_iovs[i].iov_len;
+
+		/** calculate number of records short-fetched */
+		recs = len / current->iod.iod_size;
+		num_records += recs;
+
+		/** if the entire read from this dkey is not short fetched, we
+		 * can break once we encounter a lower key. */
+		if (recs != current->num_records)
+			break_on_lower = true;
+
+		printf ("DKEY "DF_U64": shortfetched %zu bytes, %zu records\n",
+			current->dkey_val, len, num_records);
+	next:
+		current = current->next;
 	}
 
 	return rc;
@@ -1136,7 +1162,7 @@ dc_array_io(daos_opc_t op_type, tse_task_t *task)
 	daos_size_t	num_records;
 	daos_off_t	record_i;
 	daos_csum_buf_t	null_csum;
-	struct io_params *head, *current = NULL;
+	struct io_params *head;
 	daos_size_t	num_ios, io_extent;
 	d_list_t	io_task_list;
 	int		rc;
@@ -1206,29 +1232,6 @@ dc_array_io(daos_opc_t op_type, tse_task_t *task)
 			D_GOTO(err_task, rc = -DER_NOMEM);
 		}
 
-		/*
-		 * since we probably have multiple dkey ios, put them in linked
-		 * list to free later.
-		 */
-		if (num_ios == 0) {
-			head = params;
-			current = head;
-			tse_task_register_comp_cb(task, free_io_params_cb,
-						  &head, sizeof(head));
-		} else {
-			D_ASSERT(current);
-			current->next = params;
-			current = params;
-		}
-
-		iod = &params->iod;
-		sgl = &params->sgl;
-		dkey = &params->dkey;
-		params->akey_str = '0';
-		params->user_sgl_used = false;
-
-		num_ios++;
-
 		rc = compute_dkey(array, array_idx, &num_records, &record_i,
 				  &params->dkey_val);
 		if (rc != 0) {
@@ -1240,6 +1243,50 @@ dc_array_io(daos_opc_t op_type, tse_task_t *task)
 			params->dkey_val);
 		D_DEBUG(DB_IO, "idx = %d\t num_records = %zu\t record_i = %d\n",
 			(int)array_idx, num_records, (int)record_i);
+
+		/*
+		 * since we probably have multiple dkey ios, put them in linked
+		 * list to free later.
+		 */
+		if (num_ios == 0) {
+			head = params;
+			//current = head;
+		} else {
+			struct io_params *prev, *current;
+
+			current = head;
+			prev = NULL;
+			while (1) {
+				D_ASSERT(current);
+				if (current->dkey_val <= params->dkey_val) {
+					params->next = current;
+					if (prev)
+						prev->next = params;
+					else
+						head = params;
+					break;
+				}
+				if (current->next == NULL) {
+					current->next = params;
+					break;
+				}
+
+				prev = current;
+				current = current->next;
+			}
+			//D_ASSERT(current);
+			//current->next = params;
+			//current = params;
+		}
+
+		iod = &params->iod;
+		sgl = &params->sgl;
+		dkey = &params->dkey;
+		params->akey_str = '0';
+		params->user_sgl_used = false;
+
+		num_ios++;
+
 		d_iov_set(dkey, &params->dkey_val, sizeof(uint64_t));
 
 		/* set descriptor for KV object */
@@ -1370,6 +1417,8 @@ dc_array_io(daos_opc_t op_type, tse_task_t *task)
 			}
 		}
 
+		params->num_records = dkey_records;
+
 		/* issue IO to DAOS */
 		if (op_type == DAOS_OPC_ARRAY_READ) {
 			daos_obj_fetch_t *io_arg;
@@ -1417,6 +1466,11 @@ dc_array_io(daos_opc_t op_type, tse_task_t *task)
 		tse_task_list_add(io_task, &io_task_list);
 	} /* end while */
 
+	if (op_type == DAOS_OPC_ARRAY_READ)
+		tse_task_register_comp_cb(task, set_short_read_cb,
+					  &head, sizeof(head));
+	tse_task_register_comp_cb(task, free_io_params_cb,
+				  &head, sizeof(head));
 	tse_task_list_sched(&io_task_list, false);
 	array_decref(array);
 	if (op_type == DAOS_OPC_ARRAY_READ)

@@ -51,10 +51,13 @@ typedef struct {
 	/** Array of ranges; each range defines a starting index and length. */
 	daos_range_t	       *arr_rgs;
 	/*
-	 * On read only: return the number of records read. If this is less
-	 * than the number of records that has been asked for, then there are
-	 * holes in the array, or the read has gone beyond the array extent. */
-	daos_size_t		arr_nr;
+	 * On read only: return the number of records read up to the highest
+	 * index/len in arr_rgs that is valid (not hole/punhed). Note that this
+	 * could include holes if the actual array size is larger than that
+	 * highest index, so for detecting an actual short read, an array get
+	 * size is required if this is not zero.
+	 */
+	daos_size_t		arr_nr_short_read;
 } daos_array_iod_t;
 
 /**
