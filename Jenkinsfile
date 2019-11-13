@@ -1302,10 +1302,6 @@ pipeline {
                     }
                 }
                 stage('Functional_Hardware') {
-                    when {
-                        beforeAgent true
-                        expression { env.DAOS_STACK_CI_HARDWARE_SKIP != 'true' }
-                    }
                     agent {
                         label 'ci_nvme9'
                     }
