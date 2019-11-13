@@ -286,7 +286,7 @@ key_ilog_prepare(struct vos_obj_iter *oiter, daos_handle_t toh, int key_type,
 	return 0;
 fail:
 	if (sub_toh)
-		key_tree_release(*sub_toh, false);
+		key_tree_release(*sub_toh, flags & SUBTR_EVT);
 	return rc;
 }
 
