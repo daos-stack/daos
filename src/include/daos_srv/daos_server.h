@@ -605,13 +605,10 @@ unsigned int dss_ctx_nr_get(void);
 /** Server init state (see server_init) */
 enum dss_init_state {
 	DSS_INIT_STATE_INIT,		/**< initial state */
-	DSS_INIT_STATE_RANK_SET,	/**< rank has been set */
 	DSS_INIT_STATE_SET_UP		/**< ready to set up modules */
 };
 
 void dss_init_state_set(enum dss_init_state state);
-
-bool dss_pmixless(void);
 
 /* default credits */
 #define	DSS_GC_CREDS	256
