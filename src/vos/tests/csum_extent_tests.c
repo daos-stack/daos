@@ -1300,8 +1300,8 @@ need_new_checksum_tests(void **state)
 		.include_next_biov = false,
 		.chunk_bytes = 10,
 		.chunksize = 10,
-		.biov = {.bi_data_len = 10, .bi_extra_end = 0,
-			.bi_extra_begin = 0},
+		.biov = {.bi_data_len = 10, .bi_suffix_len = 0,
+			.bi_prefix_len = 0},
 		.biov_offset = 0,
 	});
 
@@ -1313,8 +1313,8 @@ need_new_checksum_tests(void **state)
 		.include_next_biov = false,
 		.chunk_bytes = 8,
 		.chunksize = 8,
-		.biov = {.bi_data_len = 8, .bi_extra_end = 0,
-			.bi_extra_begin = 0},
+		.biov = {.bi_data_len = 8, .bi_suffix_len = 0,
+			.bi_prefix_len = 0},
 		.biov_offset = 0,
 	});
 
@@ -1327,8 +1327,8 @@ need_new_checksum_tests(void **state)
 		.chunksize = 8,
 		.chunk_bytes = 8,
 		.csum_started = false,
-		.biov = {.bi_data_len = 20, .bi_extra_end = 0,
-			.bi_extra_begin = 0},
+		.biov = {.bi_data_len = 20, .bi_suffix_len = 0,
+			.bi_prefix_len = 0},
 		.biov_offset = 0,
 	});
 
@@ -1340,8 +1340,8 @@ need_new_checksum_tests(void **state)
 		.chunksize = 16,
 		.chunk_bytes = 16,
 		.csum_started = false,
-		.biov = {.bi_data_len = 6, .bi_extra_end = 0,
-			.bi_extra_begin = 0},
+		.biov = {.bi_data_len = 6, .bi_suffix_len = 0,
+			.bi_prefix_len = 0},
 		.biov_offset = 0,
 	});
 
@@ -1355,8 +1355,8 @@ need_new_checksum_tests(void **state)
 		.chunksize = 8,
 		.chunk_bytes = 6,
 		.csum_started = false,
-		.biov = {.bi_data_len = 6, .bi_extra_end = 0,
-			.bi_extra_begin = 0},
+		.biov = {.bi_data_len = 6, .bi_suffix_len = 0,
+			.bi_prefix_len = 0},
 		.biov_offset = 0,
 		.biov_start = 4 /** starts so next biov is after chunk end */
 
@@ -1372,8 +1372,8 @@ need_new_checksum_tests(void **state)
 		.chunksize = 8,
 		.chunk_bytes = 8,
 		.csum_started = false,
-		.biov = {.bi_data_len = 6, .bi_extra_end = 0,
-			.bi_extra_begin = 0},
+		.biov = {.bi_data_len = 6, .bi_suffix_len = 0,
+			.bi_prefix_len = 0},
 		.biov_offset = 0,
 		.biov_start = 4 /** starts so next biov is after chunk end */
 	});
@@ -1387,8 +1387,8 @@ need_new_checksum_tests(void **state)
 		.chunksize = 8,
 		.chunk_bytes = 6,
 		.csum_started = false,
-		.biov = {.bi_data_len = 6, .bi_extra_end = 0,
-			.bi_extra_begin = 2},
+		.biov = {.bi_data_len = 6, .bi_suffix_len = 0,
+			.bi_prefix_len = 2},
 		.biov_offset = 0,
 		.biov_start = 1
 	});
@@ -1400,8 +1400,8 @@ need_new_checksum_tests(void **state)
 		.chunksize = 8,
 		.chunk_bytes = 6,
 		.csum_started = false,
-		.biov = {.bi_data_len = 6, .bi_extra_end = 2,
-			.bi_extra_begin = 0},
+		.biov = {.bi_data_len = 6, .bi_suffix_len = 2,
+			.bi_prefix_len = 0},
 		.biov_offset = 0,
 		.biov_start = 0
 	});
@@ -1484,11 +1484,11 @@ test_case_create(struct vos_fetch_test_context *ctx, struct test_setup setup)
 
 		biov->bi_data_len = (l->sel.ex_hi - l->sel.ex_lo + 1) *
 				    rec_size;
-		biov->bi_extra_begin = (l->sel.ex_lo - l->ful.ex_lo) *
-				       rec_size;
-		biov->bi_extra_end = (l->ful.ex_hi - l->sel.ex_hi) *
-				     rec_size;
-		biov->bi_buf += biov->bi_extra_begin;
+		biov->bi_prefix_len = (l->sel.ex_lo - l->ful.ex_lo) *
+				      rec_size;
+		biov->bi_suffix_len = (l->ful.ex_hi - l->sel.ex_hi) *
+				      rec_size;
+		biov->bi_buf += biov->bi_prefix_len;
 
 		/** Just a rough count */
 		num_of_csum = data_len / cs + 1;
@@ -1526,7 +1526,7 @@ test_case_destroy(struct vos_fetch_test_context *ctx)
 
 	for (i = 0; i < ctx->nr; i++) {
 		void *bio_buf = ctx->bsgl.bs_iovs[i].bi_buf -
-				ctx->bsgl.bs_iovs[i].bi_extra_begin;
+				ctx->bsgl.bs_iovs[i].bi_prefix_len;
 		if (bio_buf)
 			D_FREE(bio_buf);
 

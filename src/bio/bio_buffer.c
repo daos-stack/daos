@@ -607,7 +607,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
 add_chunk:
 	rc = iod_add_chunk(biod, chk);
 	/** set buf to be the requested data, without the extra */
-	biov->bi_buf += biov->bi_extra_begin;
+	biov->bi_buf += biov->bi_prefix_len;
 	if (rc) {
 		/* Revert the reservation in chunk */
 		D_ASSERT(chk->bdc_pg_idx >= pg_cnt);
@@ -616,7 +616,7 @@ add_chunk:
 	}
 add_region:
 	/** set buf to be the requested data, without the extra */
-	biov->bi_buf += biov->bi_extra_begin;
+	biov->bi_buf += biov->bi_prefix_len;
 	return iod_add_region(biod, chk, chk_pg_idx, off, end);
 }
 

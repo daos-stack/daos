@@ -79,7 +79,9 @@
 	/** rebuild operation */				\
 	ACTION(DB_REBUILD, rebuild, rebuild,	    0, arg)	\
 	/** security check */					\
-	ACTION(DB_SEC,	   sec,	    security,       0, arg)
+	ACTION(DB_SEC,	   sec,	    security,       0, arg)	\
+	/** checksum */						\
+	ACTION(DB_CSUM,	   csum,    checksum,	    0, arg)
 
 DAOS_FOREACH_DB(D_LOG_DECLARE_DB, D_NOOP);
 DAOS_FOREACH_LOG_FAC(D_LOG_DECLARE_FAC, DAOS_FOREACH_DB);

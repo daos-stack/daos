@@ -59,10 +59,12 @@ struct bio_iov {
 	size_t		 bi_data_len;
 	bio_addr_t	 bi_addr;
 	/** can be used to fetch more than actual address. Useful if more
-	 * data is needed for processing (like checksums) than requested
+	 * data is needed for processing (like checksums) than requested.
+	 * Prefix and suffix are needed because 'extra' needed data might
+	 * be before or after actual requested data.
 	 */
-	size_t		 bi_extra_begin; /** bytes before */
-	size_t		 bi_extra_end; /** bytes after */
+	size_t		 bi_prefix_len; /** bytes before */
+	size_t		 bi_suffix_len; /** bytes after */
 };
 
 struct bio_sglist {
@@ -142,19 +144,19 @@ bio_iov2off(struct bio_iov *biov)
 static inline uint64_t
 bio_iov2extraoff(struct bio_iov *biov)
 {
-	return biov->bi_addr.ba_off - biov->bi_extra_begin;
+	return biov->bi_addr.ba_off - biov->bi_prefix_len;
 }
 
 static inline uint64_t
 bio_iov2extralen(struct bio_iov *biov)
 {
-	return biov->bi_data_len + biov->bi_extra_begin + biov->bi_extra_end;
+	return biov->bi_data_len + biov->bi_prefix_len + biov->bi_suffix_len;
 }
 
 static inline uint64_t
 bio_iov2len(struct bio_iov *biov)
 {
-	return biov->bi_data_len + biov->bi_extra_begin + biov->bi_extra_end;
+	return biov->bi_data_len + biov->bi_prefix_len + biov->bi_suffix_len;
 }
 
 static inline int

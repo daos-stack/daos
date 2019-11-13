@@ -33,24 +33,19 @@
 #include <daos/common.h>
 #include <daos/checksum.h>
 
-#ifdef CSUM_TRACE
-#define C_TRACE(...) D_DEBUG(DB_TRACE, __VA_ARGS__)
-#else
-#define C_TRACE(...) (void)0
-#endif
-
+#define C_TRACE(...) D_DEBUG(DB_CSUM, __VA_ARGS__)
+#define C_TRACE_ENABLED() D_LOG_ENABLED(DB_TRACE)
 
 /** File function signatures */
 static int
 checksum_sgl_cb(uint8_t *buf, size_t len, void *args);
 
-#ifdef CSUM_TRACE
 /** helper function to trace bytes */
 static void
 trace_bytes(const uint8_t *buf, const size_t len, const size_t max)
 {
-	int	char_buf_len = max == 0 ? len : min(max, len);
-	char	char_buf[char_buf_len * 2];
+	size_t	char_buf_len = max == 0 ? len : min(max, len);
+	char	char_buf[char_buf_len * 2 + 1];
 	int	i;
 
 	if (buf == NULL)
@@ -58,33 +53,31 @@ trace_bytes(const uint8_t *buf, const size_t len, const size_t max)
 
 	for (i = 0; i <  len && (i < max || max == 0); i++)
 		sprintf(char_buf + i * 2, "%x", buf[i]);
-
+	char_buf[i] = '\0';
 	C_TRACE("%s\n", char_buf);
 }
-#else
-#define	trace_bytes(...) (void)0
-#endif
 
 
-#ifdef CSUM_TRACE
+
 /** helper function to trace chars */
 static void
-trace_chars(const uint8_t *buf, const size_t len, const uint32_t max)
+trace_chars(const uint8_t *buf, const size_t buf_len, const uint32_t max)
 {
 	int i;
 
 	if (buf == NULL)
 		return;
+	size_t len = max == 0 ? buf_len : min(buf_len, max);
+	char str[len + 1];
 
-	for (i = 0; i <  len && (i < max || max == 0); i++)
-		C_TRACE("%c", buf[i]);
+	for (i = 0; i <  len ; i++)
+		str[i] = buf[i] == '\0' ? '_' : buf[i];
+	str[i] = '\0';
+	C_TRACE("%s", str);
 }
-#else
-#define	trace_chars(...) (void)0
-#endif
 
 static void
-daos_csummer_print_csum(struct daos_csummer *obj, uint8_t *csum)
+daos_csummer_trace_csum(struct daos_csummer *obj, uint8_t *csum)
 {
 	trace_bytes(csum, daos_csummer_get_csum_len(obj), 0);
 }
@@ -338,16 +331,19 @@ daos_csummer_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 {
 	int rc = 0;
 
-	C_TRACE("buf_len: %lu\n", buf_len);
-	C_TRACE("buf: ...");
-	trace_chars(buf, buf_len, 50);
-	C_TRACE("\n");
+	if (C_TRACE_ENABLED()) {
+		C_TRACE("Buffer (len=%lu):\n", buf_len);
+		trace_chars(buf, buf_len, 50);
+		C_TRACE("\n");
+	}
 
 	if (obj->dcs_csum_buf && obj->dcs_csum_buf_size > 0)
 		rc = obj->dcs_algo->cf_update(obj, buf, buf_len);
 
-	C_TRACE("CSUM: ...");
-	daos_csummer_print_csum(obj, obj->dcs_csum_buf);
+	if (C_TRACE_ENABLED()) {
+		C_TRACE("CSUM: ...");
+		daos_csummer_trace_csum(obj, obj->dcs_csum_buf);
+	}
 
 	return rc;
 }
@@ -387,9 +383,11 @@ bool
 daos_csummer_csum_compare(struct daos_csummer *obj, uint8_t *a,
 			  uint8_t *b, uint32_t csum_len)
 {
-	C_TRACE("Comparing: ");
-	daos_csummer_print_csum(obj, a);
-	daos_csummer_print_csum(obj, b);
+	if (C_TRACE_ENABLED()) {
+		C_TRACE("Comparing: ");
+		daos_csummer_trace_csum(obj, a);
+		daos_csummer_trace_csum(obj, b);
+	}
 
 	if (obj->dcs_algo->cf_compare)
 		return obj->dcs_algo->cf_compare(obj, a, b, csum_len);

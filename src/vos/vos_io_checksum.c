@@ -29,11 +29,7 @@
 #include "vos_io_checksum.h"
 #include "evt_priv.h"
 
-#ifdef CSUM_TRACE
-#define C_TRACE(...)   D_DEBUG(DB_TRACE, __VA_ARGS__)
-#else
-#define C_TRACE(...) (void)0
-#endif
+#define C_TRACE(...) D_DEBUG(DB_CSUM, __VA_ARGS__)
 
 /** Holds information about checksum and  data to verify when a
  * new checksum for an extent chunk is needed
@@ -167,8 +163,8 @@ vcc_remember_to_verify(struct vos_csum_context *ctx, uint8_t *biov_csum,
 	/** Need to calculate the appropriate chunk to remember */
 	chunksize = ctx->csummer->dcs_chunk_size;
 	sel_lo = ctx->ext_start + ctx->bsgl_idx->iov_offset;
-	physical_lo = ctx->ext_start - (biov->bi_extra_begin / ctx->rec_len);
-	physical_hi = ctx->ext_start + (biov->bi_data_len + biov->bi_extra_end)
+	physical_lo = ctx->ext_start - (biov->bi_prefix_len / ctx->rec_len);
+	physical_hi = ctx->ext_start + (biov->bi_data_len + biov->bi_suffix_len)
 				       / ctx->rec_len - 1;
 
 	chunk = csum_recidx2range(chunksize, sel_lo, physical_lo, physical_hi,
@@ -466,8 +462,8 @@ vic_needs_new_csum(struct bio_iov *biov, daos_off_t biov_bytes_used,
 
 	using_whole_chunk_of_extent = biov_extends_past_chunk ||
 				      (biov_hi < chunk_bytes_hi &&
-				       biov->bi_extra_end == 0 &&
-				       biov->bi_extra_begin == 0);
+				       biov->bi_suffix_len == 0 &&
+				       biov->bi_prefix_len == 0);
 
 	return !(is_only_extent_in_chunk && using_whole_chunk_of_extent);
 }
@@ -480,8 +476,8 @@ vic_update_biov(struct bio_iov *biov, struct evt_entry *ent,
 	struct evt_extent aligned_extent;
 
 	if (!dcb_is_valid(&ent->en_csum)) {
-		biov->bi_extra_begin = 0;
-		biov->bi_extra_end = 0;
+		biov->bi_prefix_len = 0;
+		biov->bi_suffix_len = 0;
 		return;
 	}
 
@@ -493,8 +489,8 @@ vic_update_biov(struct bio_iov *biov, struct evt_entry *ent,
 
 	aligned_extent = evt_entry_align_to_csum_chunk(ent, rsize);
 
-	biov->bi_extra_begin = (ent->en_sel_ext.ex_lo - aligned_extent.ex_lo) *
-			       rsize;
-	biov->bi_extra_end = (aligned_extent.ex_hi - ent->en_sel_ext.ex_hi) *
-			     rsize;
+	biov->bi_prefix_len = (ent->en_sel_ext.ex_lo - aligned_extent.ex_lo) *
+			      rsize;
+	biov->bi_suffix_len = (aligned_extent.ex_hi - ent->en_sel_ext.ex_hi) *
+			      rsize;
 }
