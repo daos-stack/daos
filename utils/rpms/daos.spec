@@ -5,7 +5,7 @@
 
 Name:          daos
 Version:       0.6.0
-Release:       11%{?relval}%{?dist}
+Release:       13%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -20,6 +20,9 @@ BuildRequires: cart-devel-%{cart_sha1}
 %else
 BuildRequires: cart-devel
 %endif
+# temporarliy until we can land ompi@PR-10 and
+# scons_local@bmurrell/ompi-env-module
+BuildRequires: ompi-devel
 %if (0%{?rhel} >= 7)
 BuildRequires: argobots-devel >= 1.0rc1
 %else
@@ -82,7 +85,7 @@ Requires: libpmem1, libpmemobj1
 %endif
 Requires: fuse >= 3.4.2
 Requires: protobuf-c
-Requires: spdk
+Requires: spdk <= 18.07
 Requires: fio < 3.4
 Requires: openssl
 # ensure we get exactly the right cart RPM
@@ -194,6 +197,8 @@ mkdir -p %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/daos-server.service %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 
+%pre server
+getent group daos_admins >/dev/null || groupadd -r daos_admins
 %post server -p /sbin/ldconfig
 %postun server -p /sbin/ldconfig
 
@@ -227,7 +232,10 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %files server
 %{_prefix}%{_sysconfdir}/daos_server.yml
 %{_sysconfdir}/ld.so.conf.d/daos.conf
-%{_bindir}/daos_server
+# set daos_admin to be setuid root in order to perform privileged tasks
+%attr(4750,root,daos_admins) %{_bindir}/daos_admin
+# set daos_server to be setgid daos_admins in order to invoke daos_admin
+%attr(2755,root,daos_admins) %{_bindir}/daos_server
 %{_bindir}/daos_io_server
 %dir %{_libdir}/daos_srv
 %{_libdir}/daos_srv/libcont.so
@@ -269,11 +277,7 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/python2.7/site-packages/pydaos/*.pyc
 %{_libdir}/python2.7/site-packages/pydaos/*.pyo
 %endif
-%if (0%{?rhel} >= 7)
 %{_libdir}/python2.7/site-packages/pydaos/pydaos_shim_27.so
-%else
-%{_libdir}/python2.7/site-packages/pydaos/pydaos_shim_27.cpython-36m-x86_64-linux-gnu.so
-%endif
 %dir  %{_libdir}/python2.7/site-packages/pydaos/raw
 %{_libdir}/python2.7/site-packages/pydaos/raw/*.py
 %if (0%{?rhel} >= 7)
@@ -288,11 +292,7 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/python3/site-packages/pydaos/*.pyc
 %{_libdir}/python3/site-packages/pydaos/*.pyo
 %endif
-%if (0%{?rhel} >= 7)
 %{_libdir}/python3/site-packages/pydaos/pydaos_shim_3.so
-%else
-%{_libdir}/python3/site-packages/pydaos/pydaos_shim_3.cpython-36m-x86_64-linux-gnu.so
-%endif
 %dir %{_libdir}/python3/site-packages/pydaos/raw
 %{_libdir}/python3/site-packages/pydaos/raw/*.py
 %if (0%{?rhel} >= 7)
@@ -328,6 +328,12 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/*.a
 
 %changelog
+* Wed Nov 06 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-13
+- Use new cart with R: mercury to < 1.0.1-20 due to incompatibility
+
+* Wed Nov 06 2019 Michael MacDonald <mjmac.macdonald@intel.com> 0.6.0-12
+- Add daos_admin privileged helper for daos_server
+
 * Fri Oct 25 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-11
 - Handle differences in Leap 15 Python packaging
 
