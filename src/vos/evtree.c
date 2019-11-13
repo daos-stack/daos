@@ -1114,7 +1114,7 @@ evt_node_alloc(struct evt_context *tcx, unsigned int flags,
 	if (UMOFF_IS_NULL(nd_off))
 		return -DER_NOSPACE;
 
-	V_TRACE(DB_TRACE, "Allocate new node "DF_U64" %d bytes\n",
+	V_TRACE(DB_TRACE, "Allocate new node "DF_X64" %d bytes\n",
 		nd_off, evt_node_size(tcx));
 	nd = evt_off2ptr(tcx, nd_off);
 	nd->tn_flags = flags;
@@ -1272,7 +1272,8 @@ evt_node_split(struct evt_context *tcx, bool leaf,
  */
 static int
 evt_node_insert(struct evt_context *tcx, struct evt_node *nd, umem_off_t in_off,
-		const struct evt_entry_in *ent, bool *mbr_changed)
+		const struct evt_entry_in *ent, bool *mbr_changed,
+		bool tx_added)
 {
 	int		 rc;
 	bool		 changed = 0;
@@ -1280,7 +1281,7 @@ evt_node_insert(struct evt_context *tcx, struct evt_node *nd, umem_off_t in_off,
 	V_TRACE(DB_TRACE, "Insert "DF_RECT" into "DF_RECT"\n",
 		DP_RECT(&ent->ei_rect), DP_RECT(evt_node_mbr_get(tcx, nd)));
 
-	rc = tcx->tc_ops->po_insert(tcx, nd, in_off, ent, &changed);
+	rc = tcx->tc_ops->po_insert(tcx, nd, in_off, ent, &changed, tx_added);
 	if (rc != 0)
 		return rc;
 
@@ -1577,7 +1578,8 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
 			bool	changed;
 
 			rc = evt_node_insert(tcx, nd_cur, nm_save,
-					     &entry, &changed);
+					     &entry, &changed,
+					     trace->tr_tx_added);
 			if (rc != 0)
 				D_GOTO(failed, rc);
 
@@ -1613,7 +1615,8 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
 		 * new created node.
 		 */
 		nd_tmp = evt_select_node(tcx, &entry.ei_rect, nd_cur, nd_new);
-		rc = evt_node_insert(tcx, nd_tmp, nm_save, &entry, NULL);
+		/* Not sure whether @nd_tmp has tx_added, handle it false. */
+		rc = evt_node_insert(tcx, nd_tmp, nm_save, &entry, NULL, false);
 		if (rc != 0)
 			D_GOTO(failed, rc);
 
@@ -1647,7 +1650,8 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
 			D_GOTO(failed, rc);
 		nd_new = evt_off2node(tcx, nm_new);
 
-		rc = evt_node_insert(tcx, nd_new, nm_save, &entry, NULL);
+		/* @nd_new is new allocate, regard the tr_tx_added as true. */
+		rc = evt_node_insert(tcx, nd_new, nm_save, &entry, NULL, true);
 		if (rc != 0)
 			D_GOTO(failed, rc);
 
@@ -2389,7 +2393,7 @@ typedef int (cmp_rect_cb)(struct evt_context *tcx, const struct evt_rect *mbr,
 static int
 evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 		  umem_off_t in_off, const struct evt_entry_in *ent,
-		  bool *changed, cmp_rect_cb cb)
+		  bool *changed, cmp_rect_cb cb, bool tx_added)
 {
 	struct evt_node_entry	*ne = NULL;
 	struct evt_desc		*desc = NULL;
@@ -2422,6 +2426,11 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 
 		if (!leaf) {
 			nr = nd->tn_nr - i;
+			rc = umem_tx_add_ptr(evt_umm(tcx), ne,
+					     nr * sizeof(*ne));
+			if (rc < 0)
+				return rc;
+
 			memmove(ne + 1, ne, nr * sizeof(*ne));
 			break;
 		}
@@ -2430,6 +2439,11 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 		rc = evt_desc_log_status(tcx, desc, DAOS_INTENT_CHECK);
 		if (rc != ALB_UNAVAILABLE) {
 			nr = nd->tn_nr - i;
+			rc = umem_tx_add_ptr(evt_umm(tcx), ne,
+					     nr * sizeof(*ne));
+			if (rc < 0)
+				return rc;
+
 			memmove(ne + 1, ne, nr * sizeof(*ne));
 		} else {
 			umem_off_t	off = ne->ne_child;
@@ -2439,6 +2453,10 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 			 * is large enough or not even if it had. So we have to
 			 * free the former @desc and re-allocate it properly.
 			 */
+			rc = umem_tx_add_ptr(evt_umm(tcx), ne, sizeof(*ne));
+			if (rc < 0)
+				return rc;
+
 			rc = evt_node_entry_free(tcx, ne);
 			if (rc != 0)
 				return rc;
@@ -2461,6 +2479,11 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 			if (rc == ALB_UNAVAILABLE) {
 				umem_off_t	off = ne->ne_child;
 
+				rc = umem_tx_add_ptr(evt_umm(tcx), ne,
+						     sizeof(*ne));
+				if (rc < 0)
+					return rc;
+
 				rc = evt_node_entry_free(tcx, ne);
 				if (rc != 0)
 					return rc;
@@ -2473,6 +2496,7 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 		}
 
 		if (!reuse)
+			/* extend at the tail, not need tx_add_ptr. */
 			ne = evt_node_entry_at(tcx, nd, nd->tn_nr);
 	}
 
@@ -2511,8 +2535,16 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 		ne->ne_child = in_off;
 	}
 
-	if (!reuse)
+	if (!reuse) {
+		if (!tx_added) {
+			rc = umem_tx_add_ptr(evt_umm(tcx), &nd->tn_nr,
+					     sizeof(nd->tn_nr));
+			if (rc < 0)
+				return rc;
+		}
+
 		nd->tn_nr++;
+	}
 
 	return 0;
 }
@@ -2634,10 +2666,10 @@ evt_ssof_cmp_rect(struct evt_context *tcx, const struct evt_rect *mbr,
 static int
 evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
 		umem_off_t in_off, const struct evt_entry_in *ent,
-		bool *changed)
+		bool *changed, bool tx_added)
 {
 	return evt_common_insert(tcx, nd, in_off, ent, changed,
-				 evt_ssof_cmp_rect);
+				 evt_ssof_cmp_rect, tx_added);
 }
 
 static int
@@ -2737,10 +2769,10 @@ done:
 static int
 evt_sdist_insert(struct evt_context *tcx, struct evt_node *nd,
 		umem_off_t in_off, const struct evt_entry_in *ent,
-		bool *changed)
+		bool *changed, bool tx_added)
 {
 	return evt_common_insert(tcx, nd, in_off, ent, changed,
-				 evt_sdist_cmp_rect);
+				 evt_sdist_cmp_rect, tx_added);
 }
 
 static int

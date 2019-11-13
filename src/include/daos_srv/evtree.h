@@ -414,7 +414,7 @@ struct evt_policy_ops {
 			     struct evt_node *node,
 			     uint64_t in_off,
 			     const struct evt_entry_in *entry,
-			     bool *mbr_changed);
+			     bool *mbr_changed, bool tx_added);
 	/**
 	 * move half entries of the current node \a nd_src to the new
 	 * node \a nd_dst.
