@@ -46,9 +46,10 @@ const (
 type PoolCmd struct {
 	Create       PoolCreateCmd       `command:"create" alias:"c" description:"Create a DAOS pool"`
 	Destroy      PoolDestroyCmd      `command:"destroy" alias:"d" description:"Destroy a DAOS pool"`
-	GetACL       PoolGetACLCmd       `command:"get-acl" alias:"g" description:"Get a DAOS pool's Access Control List"`
-	OverwriteACL PoolOverwriteACLCmd `command:"overwrite-acl" alias:"o" description:"Overwrite a DAOS pool's Access Control List"`
-	UpdateACL    PoolUpdateACLCmd    `command:"update-acl" alias:"u" description:"Update entries in a DAOS pool's Access Control List"`
+	GetACL       PoolGetACLCmd       `command:"get-acl" alias:"ga" description:"Get a DAOS pool's Access Control List"`
+	OverwriteACL PoolOverwriteACLCmd `command:"overwrite-acl" alias:"oa" description:"Overwrite a DAOS pool's Access Control List"`
+	UpdateACL    PoolUpdateACLCmd    `command:"update-acl" alias:"ua" description:"Update entries in a DAOS pool's Access Control List"`
+	DeleteACL    PoolDeleteACLCmd    `command:"delete-acl" alias:"da" description:"Delete an entry from a DAOS pool's Access Control List"`
 }
 
 // PoolCreateCmd is the struct representing the command to create a DAOS pool.
@@ -126,6 +127,20 @@ type PoolUpdateACLCmd struct {
 // Execute is run when the PoolUpdateACLCmd subcommand is activated
 func (d *PoolUpdateACLCmd) Execute(args []string) error {
 	return poolUpdateACL(d.log, d.conns, d.UUID, d.ACLFile, d.Entry)
+}
+
+// PoolDeleteACLCmd represents the command to delete an entry from the Access
+// Control List of a DAOS pool.
+type PoolDeleteACLCmd struct {
+	logCmd
+	connectedCmd
+	UUID      string `long:"pool" required:"1" description:"UUID of DAOS pool"`
+	Principal string `short:"p" long:"principal" required:"1" description:"Principal whose entry should be removed"`
+}
+
+// Execute is run when the PoolDeleteACLCmd subcommand is activated
+func (d *PoolDeleteACLCmd) Execute(args []string) error {
+	return poolDeleteACL(d.log, d.conns, d.UUID, d.Principal)
 }
 
 // getSize retrieves number of bytes from human readable string representation
@@ -352,6 +367,24 @@ func poolUpdateACL(log logging.Logger, conns client.Connect, poolUUID string, ac
 	}
 
 	log.Infof("Pool-update-ACL command succeeded, UUID: %s\n", poolUUID)
+	log.Info(resp.ACL.String())
+
+	return nil
+}
+
+func poolDeleteACL(log logging.Logger, conns client.Connect, poolUUID string, principal string) error {
+	req := &client.PoolDeleteACLReq{
+		UUID:      poolUUID,
+		Principal: principal,
+	}
+
+	resp, err := conns.PoolDeleteACL(req)
+	if err != nil {
+		log.Infof("Pool-delete-ACL command failed: %s\n", err.Error())
+		return err
+	}
+
+	log.Infof("Pool-delete-ACL command succeeded, UUID: %s\n", poolUUID)
 	log.Info(resp.ACL.String())
 
 	return nil

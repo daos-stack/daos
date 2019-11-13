@@ -2732,6 +2732,172 @@ out:
 	return rc;
 }
 
+/**
+ * Delete entries in a pool's ACL without having a handle for the pool
+ */
+void
+ds_pool_acl_delete_handler(crt_rpc_t *rpc)
+{
+	struct pool_acl_delete_in	*in = crt_req_get(rpc);
+	struct pool_acl_delete_out	*out = crt_reply_get(rpc);
+	struct pool_svc			*svc;
+	struct rdb_tx			tx;
+	int				rc;
+	daos_prop_t			*prop = NULL;
+	struct daos_prop_entry		*entry;
+
+	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
+		DP_UUID(in->pdi_op.pi_uuid), rpc);
+
+	rc = pool_svc_lookup_leader(in->pdi_op.pi_uuid, &svc,
+				    &out->pdo_op.po_hint);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
+
+	/*
+	 * We need to read the old ACL, modify, and rewrite it
+	 */
+	ABT_rwlock_wrlock(svc->ps_lock);
+
+	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ACL, &prop);
+	if (rc != 0)
+		D_GOTO(out_lock, rc);
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
+	if (entry == NULL) {
+		D_ERROR(DF_UUID": No ACL prop entry for pool\n",
+			DP_UUID(in->pdi_op.pi_uuid));
+		D_GOTO(out_prop, rc);
+	}
+
+	rc = daos_acl_remove_ace((struct daos_acl **)&entry->dpe_val_ptr,
+				 in->pdi_type, in->pdi_principal);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": Failed to remove requested principal, "
+			"rc=%d\n", DP_UUID(in->pdi_op.pi_uuid), rc);
+		D_GOTO(out_prop, rc);
+	}
+
+	rc = pool_prop_write(&tx, &svc->ps_root, prop);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to write updated ACL for pool: %d\n",
+			DP_UUID(in->pdi_op.pi_uuid), rc);
+		D_GOTO(out_prop, rc);
+	}
+
+	rc = rdb_tx_commit(&tx);
+	if (rc != 0)
+		D_GOTO(out_prop, rc);
+
+out_prop:
+	daos_prop_free(prop);
+out_lock:
+	ABT_rwlock_unlock(svc->ps_lock);
+	rdb_tx_end(&tx);
+out_svc:
+	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pdo_op.po_hint);
+	pool_svc_put_leader(svc);
+out:
+	out->pdo_op.po_rc = rc;
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
+		DP_UUID(in->pdi_op.pi_uuid), rpc, rc);
+	crt_reply_send(rpc);
+}
+
+/**
+ * Send a CaRT message to the pool svc to remove an entry by principal from the
+ * pool's ACL.
+ *
+ * \param[in]	pool_uuid	UUID of the pool
+ * \param[in]	ranks		Pool service replicas
+ * \param[in]	principal_type	Type of the principal to be removed
+ * \param[in]	principal_name	Name of the principal to be removed
+ *
+ * \return	0		Success
+ *
+ */
+int
+ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
+		       enum daos_acl_principal_type principal_type,
+		       const char *principal_name)
+{
+	int				rc;
+	struct rsvc_client		client;
+	crt_endpoint_t			ep;
+	struct dss_module_info		*info = dss_get_module_info();
+	crt_rpc_t			*rpc;
+	struct pool_acl_delete_in	*in;
+	struct pool_acl_delete_out	*out;
+	char				*name_buf = NULL;
+	size_t				name_buf_len;
+
+	D_DEBUG(DB_MGMT, DF_UUID": Deleting entry from pool ACL\n",
+			DP_UUID(pool_uuid));
+
+	if (principal_name != NULL) {
+		/* Need to sanitize the incoming string */
+		name_buf_len = DAOS_ACL_MAX_PRINCIPAL_BUF_LEN;
+		D_ALLOC_ARRAY(name_buf, name_buf_len);
+		if (name_buf == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		/* force null terminator in copy */
+		strncpy(name_buf, principal_name, name_buf_len - 1);
+	}
+
+	rc = rsvc_client_init(&client, ranks);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+rechoose:
+	ep.ep_grp = NULL; /* primary group */
+	rsvc_client_choose(&client, &ep);
+
+	rc = pool_req_create(info->dmi_ctx, &ep, POOL_ACL_DELETE, &rpc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create pool delete ACL rpc: %d\n",
+			DP_UUID(pool_uuid), rc);
+		D_GOTO(out_client, rc);
+	}
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->pdi_op.pi_uuid, pool_uuid);
+	uuid_clear(in->pdi_op.pi_hdl);
+	in->pdi_type = (uint8_t)principal_type;
+	in->pdi_principal = name_buf;
+
+	rc = dss_rpc_send(rpc);
+	out = crt_reply_get(rpc);
+	D_ASSERT(out != NULL);
+
+	rc = rsvc_client_complete_rpc(&client, &ep, rc,
+				      out->pdo_op.po_rc,
+				      &out->pdo_op.po_hint);
+	if (rc == RSVC_CLIENT_RECHOOSE) {
+		crt_req_decref(rpc);
+		dss_sleep(1000 /* ms */);
+		D_GOTO(rechoose, rc);
+	}
+
+	rc = out->pdo_op.po_rc;
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to delete ACL entry for pool: %d\n",
+			DP_UUID(pool_uuid), rc);
+		D_GOTO(out_rpc, rc);
+	}
+
+out_rpc:
+	crt_req_decref(rpc);
+out_client:
+	rsvc_client_fini(&client);
+out:
+	D_FREE(name_buf);
+	return rc;
+}
+
 static int
 replace_failed_replicas(struct pool_svc *svc, struct pool_map *map)
 {

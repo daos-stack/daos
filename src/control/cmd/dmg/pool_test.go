@@ -333,6 +333,24 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Delete pool ACL without principal flag",
+			"pool delete-acl --pool 12345678-1234-1234-1234-1234567890ab",
+			"ConnectClients",
+			dmgTestErr("the required flag `-p, --principal' was not specified"),
+		},
+		{
+			"Delete pool ACL",
+			"pool delete-acl --pool 12345678-1234-1234-1234-1234567890ab --principal OWNER@",
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("PoolDeleteACL-%+v", &client.PoolDeleteACLReq{
+					UUID:      "12345678-1234-1234-1234-1234567890ab",
+					Principal: "OWNER@",
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Nonexistent subcommand",
 			"pool quack",
 			"",
