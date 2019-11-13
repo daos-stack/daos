@@ -46,6 +46,7 @@ DaosObjClass = enum.Enum(
     {key: value for key, value in pydaos_shim.__dict__.items()
      if key.startswith("OC_")})
 
+
 class DaosPool(object):
     """A python object representing a DAOS pool."""
 
@@ -55,7 +56,7 @@ class DaosPool(object):
         self.connected = 0
         self.context = context
         self.uuid = (ctypes.c_ubyte * 1)(0)
-        self.group = ctypes.create_string_buffer(b"not set")
+        self.group = None
         self.handle = ctypes.c_uint64(0)
         self.glob = None
         self.svc = None
@@ -71,7 +72,7 @@ class DaosPool(object):
         self.uuid = conversion.str_to_c_uuid(uuidstr)
 
     def set_group(self, group):
-        """Set group given a string"""
+        """Set group given a string."""
         self.group = ctypes.create_string_buffer(group)
 
     def create(self, mode, uid, gid, scm_size, group, target_list=None,
@@ -2116,6 +2117,7 @@ class DaosServer(object):
             raise DaosApiError("Server kill returned non-zero. RC: {0}"
                                .format(ret))
 
+
 class DaosContext(object):
     # pylint: disable=too-few-public-methods
     """Provides environment and other info for a DAOS client."""
@@ -2127,9 +2129,9 @@ class DaosContext(object):
                   "r") as version_file:
             daos_version = version_file.read().rstrip()
 
-        self.libdaos = ctypes.CDLL(os.path.join(path,
-                                                'libdaos.so.{}'.format(daos_version)),
-                                   mode=ctypes.DEFAULT_MODE)
+        self.libdaos = ctypes.CDLL(
+            os.path.join(path, 'libdaos.so.{}'.format(daos_version)),
+            mode=ctypes.DEFAULT_MODE)
         ctypes.CDLL(os.path.join(path, 'libdaos_common.so'),
                     mode=ctypes.RTLD_GLOBAL)
 
@@ -2235,6 +2237,7 @@ class DaosLog:
         c_level = ctypes.c_uint64(level)
 
         func(c_msg, c_filename, c_caller_func, c_line, c_level)
+
 
 class DaosApiError(Exception):
     """DAOS API exception class."""
