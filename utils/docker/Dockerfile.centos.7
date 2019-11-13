@@ -151,5 +151,5 @@ ENV DAOS_SINGLETON_CLI=1
 ENV CRT_ATTACH_INFO_PATH=/tmp/uri
 
 # Set PYTHONPATH environment variable for pylint
-ARG ftest_dir /home/$USER/daos/install/lib/daos/TESTING/ftest
-ENV PYTHONPATH=${ftest_dir}/util:${ftest_dir}/util/apricot:$PYTHONPATH
+ARG FTEST_DIR=/home/$USER/daos/install/lib/daos/TESTING/ftest
+ENV PYTHONPATH=${FTEST_DIR}/util:${FTEST_DIR}/util/apricot:$PYTHONPATH
