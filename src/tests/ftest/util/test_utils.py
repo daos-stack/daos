@@ -220,7 +220,7 @@ class TestPool(TestDaosApiBase):
 
         # 2. Use dmg to create a pool
         user = getpass.getuser()
-        if group == None:
+        if group is None:
             group = user
         # Currently, there is one test that creates the pool over the subset of
         # the server hosts; pool/evict_test. To do so, the test needs to set
@@ -241,28 +241,28 @@ class TestPool(TestDaosApiBase):
                 # If this element is not the last one, append comma
                 if i < len(self.target_list.value) - 1:
                     ranks_comma_separated += ","
-        self.log.info("ranks_comma_separated = %s" % ranks_comma_separated)
+        self.log.info("ranks_comma_separated = %s", ranks_comma_separated)
         # Call the dmg pool create command
         create_result = pool_create(path=dmg_bin_path,
                                     scm_size=self.scm_size.value, group=group,
                                     user=user, ranks=ranks_comma_separated,
                                     nsvc=nsvc)
         # If the returned result is None, that means the command has failed
-        if create_result == None:
+        if create_result is None:
             return False
-        self.log.info("Result stdout = %s" % create_result.stdout)
-        self.log.info("Result exit status = %s" % create_result.exit_status)
+        self.log.info("Result stdout = %s", create_result.stdout)
+        self.log.info("Result exit status = %s", create_result.exit_status)
         # Get UUID and service replica from the output
         new_uuid = get_pool_uuid_from_stdout(create_result.stdout)
         service_replica = get_service_replicas_from_stdout(
             create_result.stdout)
-        self.log.info("New Pool UUID = %s" % new_uuid)
-        self.log.info("New Pool service replica = %s" % service_replica)
+        self.log.info("New Pool UUID = %s", new_uuid)
+        self.log.info("New Pool service replica = %s", service_replica)
 
         # 3. Create DaosPool object. The process is similar to the one in
         # DaosPool.create, but there are some modifications
         self.pool = DaosPool(self.context)
-        if self.name.value == None:
+        if self.name.value is None:
             self.pool.group = None
         else:
             self.pool.group = ctypes.create_string_buffer(self.name.value)
@@ -369,14 +369,11 @@ class TestPool(TestDaosApiBase):
             self.disconnect()
             self.log.info("Destroying pool %s", self.uuid)
             if self.pool.attached:
-                if force == 1:
-                    force_bool = True
-                else:
-                    force_bool = False
+                force_bool = bool(force == 1)
                 destroy_result = pool_destroy(path=dmg_bin_path,
                                               pool_uuid=self.uuid,
                                               force=force_bool)
-                self.log.info(" Destroy result stdout = %s" %
+                self.log.info(" Destroy result stdout = %s",
                               destroy_result.stdout)
             self.pool = None
             self.uuid = None
