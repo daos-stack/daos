@@ -842,52 +842,6 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 }
 
 static int
-key_ilog_update(struct vos_io_context *ioc, struct vos_krec_df *krec,
-		struct vos_ilog_info *parent, struct vos_ilog_info *info)
-{
-	struct ilog_desc_cbs	 cbs;
-	daos_handle_t		 loh;
-	daos_epoch_range_t	 max_epr = ioc->ic_epr;
-	int			 rc = 0;
-
-	D_ASSERT(parent->ii_prior_any_punch >= parent->ii_prior_punch);
-
-	if (parent->ii_prior_any_punch > max_epr.epr_lo)
-		max_epr.epr_lo = parent->ii_prior_any_punch;
-
-	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(ioc->ic_obj->obj_cont));
-	rc = ilog_open(vos_ioc2umm(ioc), &krec->kr_ilog, &cbs, &loh);
-	if (rc != 0) {
-		D_ERROR("Could not open incarnation log: "DF_RC"\n", DP_RC(rc));
-		return rc;
-	}
-
-	rc = ilog_update(loh, &max_epr, ioc->ic_epr.epr_hi, false);
-	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "Problem with update of incarnation log: "
-			DF_RC"\n", DP_RC(rc));
-		goto out;
-	}
-
-	if (info == NULL)
-		goto out;
-
-	/** Update info for nested tree update */
-	rc = vos_ilog_fetch(vos_cont2umm(ioc->ic_cont),
-			    vos_cont2hdl(ioc->ic_cont),
-			    DAOS_INTENT_UPDATE, &krec->kr_ilog,
-			    ioc->ic_epr.epr_hi, 0, parent, info);
-	if (rc != 0) {
-		D_ERROR("Problem fetching incarnation log on update: "DF_RC
-			"\n", DP_RC(rc));
-	}
-out:
-	ilog_close(loh);
-
-	return rc;
-}
-
-static int
 akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh)
 {
 	struct vos_object	*obj = ioc->ic_obj;
@@ -912,7 +866,8 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh)
 	if (rc != 0)
 		return rc;
 
-	rc = key_ilog_update(ioc, krec, &ioc->ic_dkey_info, NULL);
+	rc = vos_ilog_update(ioc->ic_cont, &krec->kr_ilog, &ioc->ic_epr,
+			     &ioc->ic_dkey_info, &ioc->ic_akey_info);
 	if (rc != 0) {
 		D_ERROR("Failed to update akey ilog: "DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -962,8 +917,8 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey)
 	}
 	subtr_created = true;
 
-	rc = key_ilog_update(ioc, krec, &obj->obj_ilog_info,
-			     &ioc->ic_dkey_info);
+	rc = vos_ilog_update(ioc->ic_cont, &krec->kr_ilog, &ioc->ic_epr,
+			     &obj->obj_ilog_info, &ioc->ic_dkey_info);
 	if (rc != 0) {
 		D_ERROR("Failed to update dkey ilog: "DF_RC"\n", DP_RC(rc));
 		goto out;

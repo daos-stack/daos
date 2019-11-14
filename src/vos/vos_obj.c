@@ -286,7 +286,7 @@ key_ilog_prepare(struct vos_obj_iter *oiter, daos_handle_t toh, int key_type,
 	return 0;
 fail:
 	if (sub_toh)
-		key_tree_release(*sub_toh, false);
+		key_tree_release(*sub_toh, flags & SUBTR_EVT);
 	return rc;
 }
 
@@ -1157,7 +1157,7 @@ nested_dkey_iter_init(struct vos_obj_iter *oiter, struct vos_iter_info *info)
 	D_ASSERTF(rc != -DER_NONEXIST,
 		  "Nested iterator called without setting probe");
 	if (rc != 0) {
-		/** -DER_NONEXIST and -DER_INPROGESS should be caught earlier.
+		/** -DER_NONEXIST and -DER_INPROGRESS should be caught earlier.
 		 *  This function should only be called after a successful
 		 *  probe.
 		 */
