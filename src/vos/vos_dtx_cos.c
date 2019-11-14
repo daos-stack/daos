@@ -106,8 +106,8 @@ dtx_cos_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	dcr->dcr_id = *xid;
 
 	d_list_add_tail(&dcr->dcr_link,
-			&dcrb->crb_cont->vc_dtx_committable);
-	dcrb->crb_cont->vc_dtx_committable_count++;
+			&dcr->dcr_cont->vc_dtx_committable_list);
+	dcr->dcr_cont->vc_dtx_committable_count++;
 
 	rec->rec_off = umem_ptr2off(&tins->ti_umm, dcr);
 
@@ -173,11 +173,14 @@ vos_dtx_cos_register(void)
 
 int
 vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
-		daos_epoch_t epoch, bool check)
+		daos_epoch_t epoch, uint64_t gen)
 {
+	struct daos_lru_cache		*occ = vos_obj_cache_current();
+	struct vos_object		*obj = NULL;
 	struct vos_container		*cont;
 	struct dtx_id			 key;
 	struct dtx_cos_rec_bundle	 rbund;
+	daos_epoch_range_t		 epr = {0, epoch};
 	d_iov_t				 kiov;
 	d_iov_t				 riov;
 	int				 rc;
@@ -185,23 +188,55 @@ vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
 
-	if (check) {
-		struct daos_lru_cache   *occ = vos_obj_cache_current();
-		struct vos_object       *obj = NULL;
-		daos_epoch_range_t       epr = {0, epoch};
+	/* If the DTX is started befoe DTX resync operation (for rebuild),
+	 * then it is possbile that the DTX resync ULT may have aborted
+	 * or committed the DTX during current ULT waiting for the reply.
+	 * let's check DTX status locally before marking as 'committable'.
+	 */
+	if (gen == 0)
+		goto add;
 
-		/* Sync epoch check inside vos_obj_hold(). We do not
-		* care about whether it is for punch or update , so
-		* use DAOS_INTENT_COS to bypass DTX conflict check.
-		*/
-		rc = vos_obj_hold(occ, cont, *oid, &epr, true, DAOS_INTENT_COS,
-				  true, &obj);
-		if (rc != 0)
-			return rc;
+	if (gen < cont->vc_dtx_resync_gen) {
+		rc = vos_dtx_check(coh, dti);
+		switch (rc) {
+		case DTX_ST_PREPARED:
+			rc = vos_dtx_lookup_cos(coh, dti);
+			/* The resync ULT has already added it into the
+			 * CoS cache, current ULT needs to do nothing.
+			 */
+			if (rc == 0)
+				return -DER_ALREADY;
 
-		vos_obj_release(occ, obj, false);
+			/* Normal case, then add it to CoS cache. */
+			if (rc == -DER_NONEXIST)
+				break;
+
+			return rc >= 0 ? -DER_INVAL : rc;
+		case DTX_ST_COMMITTED:
+			/* The DTX has been committed by resync ULT by race. */
+			return -DER_ALREADY;
+		case -DER_NONEXIST:
+			/* The DTX has been aborted by resync ULT, ask the
+			 * client to retry.
+			 */
+			return -DER_NONEXIST;
+		default:
+			return rc >= 0 ? -DER_INVAL : rc;
+		}
 	}
 
+	/* Sync epoch check inside vos_obj_hold(). We do not
+	 * care about whether it is for punch or update , so
+	 * use DAOS_INTENT_COS to bypass DTX conflict check.
+	 */
+	rc = vos_obj_hold(occ, cont, *oid, &epr, true,
+			  DAOS_INTENT_COS, true, &obj);
+	if (rc != 0)
+		return rc;
+
+	vos_obj_release(occ, obj, false);
+
+add:
 	D_ASSERT(epoch != DAOS_EPOCH_MAX);
 
 	key = *dti;
@@ -247,7 +282,7 @@ vos_dtx_lookup_cos(daos_handle_t coh, struct dtx_id *xid)
 
 	if (dcr->dcr_check_count > DTX_CHECK_THRESHOLD) {
 		d_list_del(&dcr->dcr_link);
-		d_list_add_tail(&dcr->dcr_link, &cont->vc_dtx_priority);
+		d_list_add_tail(&dcr->dcr_link, &cont->vc_dtx_priority_list);
 		cont->vc_dtx_committable_count--;
 		cont->vc_dtx_priority_count++;
 	}
@@ -312,10 +347,11 @@ vos_dtx_fetch_committable(daos_handle_t coh, uint32_t max_cnt,
 	if (dte == NULL)
 		return -DER_NOMEM;
 
-	fetch_committable(&cont->vc_dtx_priority, dte, oid, epoch, &i, count);
+	fetch_committable(&cont->vc_dtx_priority_list, dte, oid, epoch, &i,
+			  count);
 	if (committable)
-		fetch_committable(&cont->vc_dtx_committable, dte, oid, epoch,
-				  &i, count);
+		fetch_committable(&cont->vc_dtx_committable_list, dte, oid,
+				  epoch, &i, count);
 
 	if (i == 0) {
 		D_FREE(dte);
@@ -345,10 +381,10 @@ vos_dtx_cos_oldest(struct vos_container *cont)
 {
 	struct dtx_cos_rec	*dcr;
 
-	if (d_list_empty(&cont->vc_dtx_committable))
+	if (d_list_empty(&cont->vc_dtx_committable_list))
 		return 0;
 
-	dcr = d_list_entry(cont->vc_dtx_committable.next,
+	dcr = d_list_entry(cont->vc_dtx_committable_list.next,
 			   struct dtx_cos_rec, dcr_link);
 
 	return dcr->dcr_time;

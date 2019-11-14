@@ -60,6 +60,8 @@ struct dtx_handle {
 	daos_handle_t			 dth_coh;
 	/** The epoch# for the DTX. */
 	daos_epoch_t			 dth_epoch;
+	/* The generation when the DTX is handled on the server. */
+	uint64_t			 dth_gen;
 	/** The {obj/dkey/akey}-tree records that are created
 	 * by other DTXs, but not ready for commit yet.
 	 */
@@ -72,7 +74,8 @@ struct dtx_handle {
 	uint32_t			 dth_intent;
 	uint32_t			 dth_sync:1, /* commit synchronously. */
 					 dth_leader:1, /* leader replica. */
-					 dth_non_rep:1, /* non-replicated. */
+					 /* Only one participator in the DTX. */
+					 dth_solo:1,
 					 /* dti_cos has been committed. */
 					 dth_dti_cos_done:1;
 	/* The count the DTXs in the dth_dti_cos array. */
@@ -81,8 +84,8 @@ struct dtx_handle {
 	struct dtx_id			*dth_dti_cos;
 	/* The identifier of the DTX that conflict with current one. */
 	struct dtx_conflict_entry	*dth_conflict;
-	/** The address of the DTX entry in SCM. */
-	umem_off_t			 dth_ent;
+	/** Pointer to the DTX entry in DRAM. */
+	void				*dth_ent;
 	/** The address (offset) of the (new) object to be modified. */
 	umem_off_t			 dth_obj;
 };
@@ -98,8 +101,6 @@ struct dtx_sub_status {
 struct dtx_leader_handle {
 	/* The dtx handle on the leader node */
 	struct dtx_handle		dlh_handle;
-	/* The time when the DTX is handled on the server. */
-	uint64_t			dlh_handled_time;
 	/* result for the distribute transaction */
 	int				dlh_result;
 
@@ -114,15 +115,6 @@ struct dtx_leader_handle {
 	uint32_t			dlh_sub_cnt;
 	/* Sub transaction handle to manage the dtx leader */
 	struct dtx_sub_status		*dlh_subs;
-};
-
-struct dtx_share {
-	/** Link into the dtx_handle::dth_shares */
-	d_list_t		dts_link;
-	/** The DTX record type. */
-	uint32_t		dts_type;
-	/** The record in the related tree in SCM. */
-	umem_off_t		dts_record;
 };
 
 struct dtx_stat {

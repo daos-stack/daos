@@ -226,6 +226,16 @@ gc_drain_cont(struct vos_gc *gc, struct vos_pool *pool,
 	return gc_drain_btr(gc, pool, &cont->cd_obj_root, credits, empty);
 }
 
+static int
+gc_free_cont(struct vos_gc *gc, struct vos_pool *pool, struct vos_gc_item *item)
+{
+	vos_dtx_table_destroy(&pool->vp_umm,
+			      umem_off2ptr(&pool->vp_umm, item->it_addr));
+	umem_free(&pool->vp_umm, item->it_addr);
+
+	return 0;
+}
+
 static struct vos_gc	gc_table[] = {
 	{
 		.gc_name		= "akey",
@@ -254,7 +264,7 @@ static struct vos_gc	gc_table[] = {
 		.gc_type		= GC_CONT,
 		.gc_drain_creds		= 1,
 		.gc_drain		= gc_drain_cont,
-		.gc_free		= NULL,
+		.gc_free		= gc_free_cont,
 	},
 	{
 		.gc_name		= "unknown",

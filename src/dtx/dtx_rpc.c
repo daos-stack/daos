@@ -257,60 +257,71 @@ dtx_req_list_cb(void **args)
 }
 
 static int
-dtx_req_list_send(crt_opcode_t opc, d_list_t *head, int length, uuid_t po_uuid,
-		  uuid_t co_uuid, daos_epoch_t epoch)
+dtx_req_wait(struct dtx_req_args *dra)
+{
+	int	rc;
+
+	rc = ABT_future_wait(dra->dra_future);
+	D_ASSERTF(rc == ABT_SUCCESS,
+		  "ABT_future_wait failed for opc %x, length = %d: rc = %d.\n",
+		  dra->dra_opc, dra->dra_length, rc);
+
+	D_DEBUG(DB_TRACE, "DTX req for opc %x, future %p done, rc = %d\n",
+		dra->dra_opc, dra->dra_future, rc);
+
+	ABT_future_free(&dra->dra_future);
+	return dra->dra_result;
+}
+
+static int
+dtx_req_list_send(struct dtx_req_args *dra, crt_opcode_t opc, d_list_t *head,
+		  int len, uuid_t po_uuid, uuid_t co_uuid, daos_epoch_t epoch)
 {
 	ABT_future		 future;
-	struct dtx_req_args	 dra;
 	struct dtx_req_rec	*drr;
 	int			 rc;
+	int			 i = 0;
 
-	dra.dra_opc = opc;
-	uuid_copy(dra.dra_po_uuid, po_uuid);
-	uuid_copy(dra.dra_co_uuid, co_uuid);
-	dra.dra_list = head;
-	dra.dra_length = length;
-	dra.dra_result = 0;
+	dra->dra_opc = opc;
+	uuid_copy(dra->dra_po_uuid, po_uuid);
+	uuid_copy(dra->dra_co_uuid, co_uuid);
+	dra->dra_list = head;
+	dra->dra_length = len;
+	dra->dra_result = 0;
 
-	rc = ABT_future_create(length, dtx_req_list_cb, &future);
+	rc = ABT_future_create(len, dtx_req_list_cb, &future);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("ABT_future_create failed for opc %x, length = %d: "
-			"rc = %d.\n", opc, length, rc);
+		D_ERROR("ABT_future_create failed for opc %x, len = %d: "
+			"rc = %d.\n", opc, len, rc);
 		return dss_abterr2der(rc);
 	}
 
 	D_DEBUG(DB_TRACE, "DTX req for opc %x, future %p start.\n",
 		opc, future);
-	dra.dra_future = future;
+	dra->dra_future = future;
 	d_list_for_each_entry(drr, head, drr_link) {
-		drr->drr_parent = &dra;
+		drr->drr_parent = dra;
 		drr->drr_result = 0;
 		rc = dtx_req_send(drr, epoch);
-		if (rc != 0)
-			break;
-	}
+		if (rc != 0) {
+			/* If the first sub-RPC failed, then break, otherwise
+			 * other remote replicas may have alread received the
+			 * RPC and executed it, so have to go ahead.
+			 */
+			if (i == 0) {
+				ABT_future_free(&dra->dra_future);
+				dra->dra_future = ABT_FUTURE_NULL;
+				return rc;
+			}
 
-	if (rc != 0) {
-		while (drr->drr_link.next != head) {
-			drr = d_list_entry(drr->drr_link.next,
-					   struct dtx_req_rec, drr_link);
-			drr->drr_parent = &dra;
 			drr->drr_result = rc;
 			ABT_future_set(future, drr);
 		}
+
+		i++;
 	}
 
-	rc = ABT_future_wait(future);
-	D_ASSERTF(rc == ABT_SUCCESS,
-		  "ABT_future_wait failed for opc %x, length = %d: rc = %d.\n",
-		  opc, length, rc);
-
-	D_DEBUG(DB_TRACE, "DTX req for opc %x, future %p done, rc = %d\n",
-		opc, future, rc);
-	ABT_future_free(&future);
-	rc = dra.dra_result;
-
-	return rc;
+	return 0;
 }
 
 static int
@@ -562,6 +573,7 @@ int
 dtx_commit(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dtes,
 	   int count, uint32_t version)
 {
+	struct dtx_req_args	 dra;
 	struct ds_cont_child	*cont = NULL;
 	struct dtx_id		*dti = NULL;
 	struct umem_attr	 uma;
@@ -571,6 +583,7 @@ dtx_commit(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dtes,
 	int			 length;
 	int			 rc;
 	int			 rc1 = 0;
+	int			 rc2 = 0;
 
 	rc = ds_cont_child_lookup(po_uuid, co_uuid, &cont);
 	if (rc != 0)
@@ -589,23 +602,22 @@ dtx_commit(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dtes,
 	if (length < 0)
 		D_GOTO(out, rc = length);
 
-	/* Local commit firstly. Then if client resend related RPC during the
-	 * subseqent remote commit, it will reply to the client with success.
-	 */
-	if (dti != NULL)
-		rc = vos_dtx_commit(cont->sc_hdl, dti, count);
+	if (!d_list_empty(&head)) {
+		dra.dra_future = ABT_FUTURE_NULL;
+		rc = dtx_req_list_send(&dra, DTX_COMMIT, &head, length, po_uuid,
+				       co_uuid, crt_hlc_get());
+		if (rc != 0)
+			goto out;
+	}
 
-	if (rc == 0 && !d_list_empty(&head))
-		/* If local commit is successful, then even if remote commit
-		 * hit failure, it is still recoverable, so let's ignore the
-		 * remote commit failure.
-		 */
-		rc1 = dtx_req_list_send(DTX_COMMIT, &head, length, po_uuid,
-					co_uuid, crt_hlc_get());
+	rc1 = vos_dtx_commit(cont->sc_hdl, dti, count);
+
+	if (dra.dra_future != ABT_FUTURE_NULL)
+		rc2 = dtx_req_wait(&dra);
 
 out:
-	D_DEBUG(DB_TRACE, "Commit DTXs "DF_DTI", count %d: rc %d %d\n",
-		DP_DTI(&dtes[0].dte_xid), count, rc, rc1);
+	D_DEBUG(DB_TRACE, "Commit DTXs "DF_DTI", count %d: rc %d %d %d\n",
+		DP_DTI(&dtes[0].dte_xid), count, rc, rc1, rc2);
 
 	if (dti != NULL)
 		D_FREE(dti);
@@ -625,6 +637,7 @@ int
 dtx_abort(uuid_t po_uuid, uuid_t co_uuid, daos_epoch_t epoch,
 	  struct dtx_entry *dtes, int count, uint32_t version)
 {
+	struct dtx_req_args	 dra;
 	struct ds_cont_child	*cont = NULL;
 	struct dtx_id		*dti = NULL;
 	struct umem_attr	 uma;
@@ -634,6 +647,7 @@ dtx_abort(uuid_t po_uuid, uuid_t co_uuid, daos_epoch_t epoch,
 	int			 length;
 	int			 rc;
 	int			 rc1 = 0;
+	int			 rc2 = 0;
 
 	rc = ds_cont_child_lookup(po_uuid, co_uuid, &cont);
 	if (rc != 0)
@@ -654,22 +668,24 @@ dtx_abort(uuid_t po_uuid, uuid_t co_uuid, daos_epoch_t epoch,
 
 	D_ASSERT(dti != NULL);
 
-	/* Local abort firstly. */
-	rc = vos_dtx_abort(cont->sc_hdl, epoch, dti, count, false);
+	if (!d_list_empty(&head)) {
+		dra.dra_future = ABT_FUTURE_NULL;
+		rc = dtx_req_list_send(&dra, DTX_ABORT, &head, length, po_uuid,
+				       co_uuid, epoch);
+		if (rc != 0)
+			goto out;
+	}
 
-	if (rc == -DER_NONEXIST)
-		rc = 0;
+	rc1 = vos_dtx_abort(cont->sc_hdl, epoch, dti, count);
+	if (rc1 == -DER_NONEXIST)
+		rc1 = 0;
 
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	if (!d_list_empty(&head))
-		rc1 = dtx_req_list_send(DTX_ABORT, &head, length, po_uuid,
-					co_uuid, epoch);
+	if (dra.dra_future != ABT_FUTURE_NULL)
+		rc2 = dtx_req_wait(&dra);
 
 out:
-	D_DEBUG(DB_TRACE, "Abort DTXs "DF_DTI", count %d: rc %d %d\n",
-		DP_DTI(&dtes[0].dte_xid), count, rc, rc1);
+	D_DEBUG(DB_TRACE, "Abort DTXs "DF_DTI", count %d: rc %d %d %d\n",
+		DP_DTI(&dtes[0].dte_xid), count, rc, rc1, rc2);
 
 	if (dti != NULL)
 		D_FREE(dti);
@@ -689,6 +705,7 @@ int
 dtx_check(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dte,
 	  struct pl_obj_layout *layout)
 {
+	struct dtx_req_args	 dra;
 	struct ds_pool		*pool;
 	daos_unit_oid_t		*oid = &dte->dte_oid;
 	struct dtx_req_rec	*drr;
@@ -757,11 +774,15 @@ dtx_check(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dte,
 	/* If no other available targets, then current target is the
 	 * unique valid one, it can be committed if it is also 'prepared'.
 	 */
-	if (d_list_empty(&head))
+	if (d_list_empty(&head)) {
 		rc = DTX_ST_PREPARED;
-	else
-		rc = dtx_req_list_send(DTX_CHECK, &head, length, po_uuid,
-				       co_uuid, crt_hlc_get());
+		goto out;
+	}
+
+	rc = dtx_req_list_send(&dra, DTX_CHECK, &head, length, po_uuid,
+			       co_uuid, crt_hlc_get());
+	if (rc == 0)
+		rc = dtx_req_wait(&dra);
 
 out:
 	d_list_for_each_entry_safe(drr, next, &head, drr_link) {
