@@ -38,6 +38,11 @@ var (
 )
 
 const (
+	// MaxRange is the largest host range (hi - lo) supported
+	MaxRange = 16384
+)
+
+const (
 	outerRangeSeparators = "\t, "
 	innerRangeSeparator  = ","
 	rangeOperator        = "-"
@@ -154,6 +159,9 @@ func parseRange(input, rangeOp string) (*hostRange, error) {
 
 	if hi < lo {
 		return nil, fmt.Errorf("invalid range %q (%d < %d)", input, hi, lo)
+	}
+	if hi-lo > MaxRange {
+		return nil, fmt.Errorf("invalid range %q (> %d hosts)", input, MaxRange)
 	}
 
 	return &hostRange{

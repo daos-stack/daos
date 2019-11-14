@@ -164,15 +164,28 @@ func TestHostSet_FuzzCrashers(t *testing.T) {
 	// Test against problematic inputs found by go-fuzz testing
 
 	for input, tc := range map[string]struct {
-		expErr error
+		expErr    error
+		expDelErr error
 	}{
-		"00]000000[": {
+		"00]000000[": { // check for r < l
 			expErr: errors.New("invalid range"),
 		},
+		"host[1-10000000000]": { // -ETOOBIG
+			expErr: errors.New("invalid range"),
+		},
+		"d,d1": {}, // should be parsed as two ranges, not merged
 	} {
 		t.Run(input, func(t *testing.T) {
-			_, gotErr := hostlist.CreateSet(input)
+			hs, gotErr := hostlist.CreateSet(input)
 			cmpErr(t, tc.expErr, gotErr)
+			if gotErr != nil {
+				return
+			}
+
+			t.Logf("set: %s", hs)
+
+			_, delErr := hs.Delete(input)
+			cmpErr(t, tc.expDelErr, delErr)
 		})
 	}
 }

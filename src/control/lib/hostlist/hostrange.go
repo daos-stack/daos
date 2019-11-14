@@ -55,7 +55,8 @@ func (hrs hostRanges) Swap(i, j int) {
 }
 
 func (hr *hostRange) canAppend(other *hostRange) bool {
-	if hr.prefix == other.prefix &&
+	if hr.isRange && other.isRange &&
+		hr.prefix == other.prefix &&
 		hr.suffix == other.suffix &&
 		hr.hi == other.lo-1 &&
 		hr.combinesWidth(other) {
