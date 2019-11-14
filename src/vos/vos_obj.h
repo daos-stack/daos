@@ -106,7 +106,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
  * \param obj	[IN]	Reference to be released.
  */
 void
-vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj);
+vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj, bool evict);
 
 static inline int
 vos_obj_refcount(struct vos_object *obj)
