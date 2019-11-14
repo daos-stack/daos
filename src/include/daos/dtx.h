@@ -40,9 +40,6 @@
 /* Number of times an entry gets looked up before DTX prioritizes a commit */
 #define DTX_CHECK_THRESHOLD	3
 
-/* The threshold for priority commits for triggering DTX aggregation */
-#define DTX_PRIO_THRESHOLD_CNT	4
-
 
 /**
  * DAOS two-phase commit transaction identifier,

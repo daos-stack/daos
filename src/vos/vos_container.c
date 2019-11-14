@@ -192,8 +192,8 @@ cont_free(struct d_ulink *ulink)
 	cont = container_of(ulink, struct vos_container, vc_uhlink);
 	D_ASSERT(cont->vc_open_count == 0);
 
-	if (!daos_handle_is_inval(cont->vc_dtx_cos_hdl))
-		dbtree_destroy(cont->vc_dtx_cos_hdl, NULL);
+	if (!daos_handle_is_inval(cont->vc_dtx_cc_hdl))
+		dbtree_destroy(cont->vc_dtx_cc_hdl, NULL);
 
 	dbtree_close(cont->vc_dtx_active_hdl);
 	dbtree_close(cont->vc_dtx_committed_hdl);
@@ -379,7 +379,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	cont->vc_cont_df = args.ca_cont_df;
 	cont->vc_dtx_active_hdl = DAOS_HDL_INVAL;
 	cont->vc_dtx_committed_hdl = DAOS_HDL_INVAL;
-	cont->vc_dtx_cos_hdl = DAOS_HDL_INVAL;
+	cont->vc_dtx_cc_hdl = DAOS_HDL_INVAL;
 	D_INIT_LIST_HEAD(&cont->vc_dtx_committable_list);
 	D_INIT_LIST_HEAD(&cont->vc_dtx_committed_list);
 	D_INIT_LIST_HEAD(&cont->vc_dtx_committed_tmp_list);
@@ -425,9 +425,9 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 
 	rc = dbtree_create_inplace_ex(VOS_BTR_DTX_COS, 0,
 				      DTX_BTREE_ORDER, &uma,
-				      &cont->vc_dtx_cos_btr,
+				      &cont->vc_dtx_cc_btr,
 				      DAOS_HDL_INVAL, cont,
-				      &cont->vc_dtx_cos_hdl);
+				      &cont->vc_dtx_cc_hdl);
 	if (rc != 0) {
 		D_ERROR("Failed to create DTX CoS btree: rc = %d\n", rc);
 		D_GOTO(exit, rc);

@@ -1136,22 +1136,9 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 			D_GOTO(out, rc);
 	}
 
-	/* Inject failure for test to simulate the case of lost some
-	 * record/akey/dkey on some non-leader.
-	 */
-	if (DAOS_FAIL_CHECK(DAOS_VC_LOST_DATA)) {
-		if (orw->orw_dti_cos.ca_count > 0)
-			vos_dtx_commit(cont->sc_hdl, orw->orw_dti_cos.ca_arrays,
-				       orw->orw_dti_cos.ca_count);
-
-		D_GOTO(out, rc = 0);
-	}
-
 	rc = dtx_begin(&orw->orw_dti, &orw->orw_oid, cont->sc_hdl,
 		       orw->orw_epoch, orw->orw_dkey_hash,
-		       &conflict, orw->orw_dti_cos.ca_arrays,
-		       orw->orw_dti_cos.ca_count, orw->orw_map_ver,
-		       DAOS_INTENT_UPDATE, handle);
+		       orw->orw_map_ver, DAOS_INTENT_UPDATE, handle);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for update %d.\n",
 			DP_UOID(orw->orw_oid), rc);
@@ -1757,9 +1744,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	/* Start the local transaction */
 	rc = dtx_begin(&opi->opi_dti, &opi->opi_oid, cont->sc_hdl,
 		       opi->opi_epoch, opi->opi_dkey_hash,
-		       &conflict, opi->opi_dti_cos.ca_arrays,
-		       opi->opi_dti_cos.ca_count, opi->opi_map_ver,
-		       DAOS_INTENT_PUNCH, handle);
+		       opi->opi_map_ver, DAOS_INTENT_PUNCH, handle);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for punch %d.\n",
 			DP_UOID(opi->opi_oid), rc);

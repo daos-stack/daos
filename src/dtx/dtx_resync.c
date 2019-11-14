@@ -110,9 +110,9 @@ dtx_resync_commit(uuid_t po_uuid, struct ds_cont_child *cont,
 		if (dre->dre_in_cache)
 			goto commit;
 
-		rc = vos_dtx_lookup_cos(cont->sc_hdl, &dre->dre_xid);
+		rc = vos_dtx_lookup_cc(cont->sc_hdl, &dre->dre_xid);
 		if (rc == -DER_NONEXIST) {
-			rc = vos_dtx_add_cos(cont->sc_hdl, &dre->dre_oid,
+			rc = vos_dtx_add_cc(cont->sc_hdl, &dre->dre_oid,
 				&dre->dre_xid, dre->dre_epoch, 0);
 			if (rc < 0)
 				D_WARN("Fail to add DTX "DF_DTI" to CoS cache: "
@@ -161,7 +161,7 @@ dtx_status_handle(struct dtx_resync_args *dra)
 			layout = NULL;
 		}
 
-		rc = vos_dtx_lookup_cos(cont->sc_hdl, &dre->dre_xid);
+		rc = vos_dtx_lookup_cc(cont->sc_hdl, &dre->dre_xid);
 		/* If it is in CoS cache, no need to check remote replicas. */
 		if (rc == 0) {
 			dre->dre_in_cache = 1;
@@ -227,7 +227,7 @@ dtx_status_handle(struct dtx_resync_args *dra)
 			continue;
 		}
 
-		rc = vos_dtx_lookup_cos(cont->sc_hdl, &dre->dre_xid);
+		rc = vos_dtx_lookup_cc(cont->sc_hdl, &dre->dre_xid);
 		if (rc == 0) {
 			dre->dre_in_cache = 1;
 			goto commit;

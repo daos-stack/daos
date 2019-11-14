@@ -32,7 +32,7 @@
 #include "vts_io.h"
 
 static void
-vts_dtx_cos(void **state, bool punch)
+vts_dtx_cc(void **state, bool punch)
 {
 	struct io_test_args	*args = *state;
 	struct vos_container	*cont;
@@ -44,20 +44,20 @@ vts_dtx_cos(void **state, bool punch)
 	daos_dti_gen(&xid2, false);
 
 	/* Insert a DTX into CoS cache. */
-	rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &args->oid, &xid,
-			     DAOS_EPOCH_MAX - 1, 0);
+	rc = vos_dtx_add_cc(args->ctx.tc_co_hdl, &args->oid, &xid,
+			    DAOS_EPOCH_MAX - 1, 0);
 	assert_int_equal(rc, 0);
 
-	rc = vos_dtx_lookup_cos(args->ctx.tc_co_hdl, &xid);
+	rc = vos_dtx_lookup_cc(args->ctx.tc_co_hdl, &xid);
 	assert_int_equal(rc, 0);
 
-	rc = vos_dtx_lookup_cos(args->ctx.tc_co_hdl, &xid2);
+	rc = vos_dtx_lookup_cc(args->ctx.tc_co_hdl, &xid2);
 	assert_int_equal(rc, -DER_NONEXIST);
 
 	cont = vos_hdl2cont(args->ctx.tc_co_hdl);
 	/* Remove the DTX from CoS cache. */
-	vos_dtx_del_cos(cont, &xid);
-	rc = vos_dtx_lookup_cos(args->ctx.tc_co_hdl, &xid);
+	vos_dtx_del_cc(cont, &xid);
+	rc = vos_dtx_lookup_cc(args->ctx.tc_co_hdl, &xid);
 	assert_int_equal(rc, -DER_NONEXIST);
 }
 
@@ -65,14 +65,14 @@ vts_dtx_cos(void **state, bool punch)
 static void
 dtx_1(void **state)
 {
-	vts_dtx_cos(state, false);
+	vts_dtx_cc(state, false);
 }
 
 /* punch-DTX CoS cache insert/delete/query */
 static void
 dtx_2(void **state)
 {
-	vts_dtx_cos(state, true);
+	vts_dtx_cc(state, true);
 }
 
 /* DTX CoS cache fetch committable */
@@ -88,13 +88,13 @@ dtx_4(void **state)
 	for (i = 0; i < 10; i++) {
 		daos_dti_gen(&xid[i], false);
 
-		rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &args->oid, &xid[i],
+		rc = vos_dtx_add_cc(args->ctx.tc_co_hdl, &args->oid, &xid[i],
 				     DAOS_EPOCH_MAX - 1, 0);
 		assert_int_equal(rc, 0);
 	}
 
-	rc = vos_dtx_fetch_committable(args->ctx.tc_co_hdl, 100, NULL,
-				       DAOS_EPOCH_MAX, &dtes);
+	rc = vos_dtx_fetch_cc(args->ctx.tc_co_hdl, 100, NULL, DAOS_EPOCH_MAX,
+			      &dtes);
 	assert_int_equal(rc, 10);
 
 	for (i = 0; i < 10; i++) {
@@ -129,13 +129,8 @@ vts_dtx_begin(struct dtx_id *xid, daos_unit_oid_t *oid, daos_handle_t coh,
 	dth->dth_oid = *oid;
 	dth->dth_coh = coh;
 	dth->dth_epoch = epoch;
-	D_INIT_LIST_HEAD(&dth->dth_shares);
-	dth->dth_dkey_hash = dkey_hash;
 	dth->dth_ver = 1; /* init version */
 	dth->dth_intent = intent;
-	dth->dth_dti_cos = NULL;
-	dth->dth_dti_cos_count = 0;
-	dth->dth_conflict = conflict;
 	dth->dth_leader = 1;
 	dth->dth_ent = NULL;
 	dth->dth_obj = UMOFF_NULL;
@@ -244,7 +239,7 @@ dtx_5(void **state)
 	vts_dtx_end(dth);
 
 	/* Add former DTX into CoS cache. */
-	rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &args->oid, &xid, epoch, 0);
+	rc = vos_dtx_add_cc(args->ctx.tc_co_hdl, &args->oid, &xid, epoch, 0);
 	assert_int_equal(rc, 0);
 
 	vos_dtx_stat(args->ctx.tc_co_hdl, &stat);
@@ -729,7 +724,7 @@ dtx_16(void **state)
 	assert_memory_not_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 
 	/* Insert a DTX into CoS cache. */
-	rc = vos_dtx_add_cos(args->ctx.tc_co_hdl, &args->oid, &xid, epoch, 0);
+	rc = vos_dtx_add_cc(args->ctx.tc_co_hdl, &args->oid, &xid, epoch, 0);
 	assert_int_equal(rc, 0);
 
 	/* Fetch again. */

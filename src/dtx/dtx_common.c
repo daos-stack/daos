@@ -103,9 +103,8 @@ dtx_flush_committable(struct dss_module_info *dmi,
 	do {
 		struct dtx_entry	*dtes = NULL;
 
-		rc = vos_dtx_fetch_committable(cont->sc_hdl,
-					       DTX_THRESHOLD_COUNT, NULL,
-					       DAOS_EPOCH_MAX, &dtes);
+		rc = vos_dtx_fetch_cc(cont->sc_hdl, DTX_THRESHOLD_COUNT, NULL,
+				      DAOS_EPOCH_MAX, &dtes);
 		if (rc <= 0)
 			break;
 
@@ -162,14 +161,13 @@ dtx_batched_commit(void *arg)
 		d_list_move_tail(&dbca->dbca_link, &dmi->dmi_dtx_batched_list);
 		vos_dtx_stat(cont->sc_hdl, &stat);
 
-		if ((stat.dtx_priority_count > DTX_PRIO_THRESHOLD_CNT) ||
+		if ((stat.dtx_priority_count > 0) ||
 		    (stat.dtx_committable_count > DTX_THRESHOLD_COUNT) ||
 		    (stat.dtx_oldest_committable_time != 0 &&
 		     dtx_hlc_age2sec(stat.dtx_oldest_committable_time) >
 		     DTX_COMMIT_THRESHOLD_AGE)) {
-			rc = vos_dtx_fetch_committable(cont->sc_hdl,
-						DTX_THRESHOLD_COUNT, NULL,
-						DAOS_EPOCH_MAX, &dtes);
+			rc = vos_dtx_fetch_cc(cont->sc_hdl, DTX_THRESHOLD_COUNT,
+					      NULL, DAOS_EPOCH_MAX, &dtes);
 			if (rc > 0) {
 				rc = dtx_commit(dbca->dbca_pool->spc_uuid,
 					cont->sc_uuid, dtes, rc,
@@ -220,24 +218,17 @@ check:
  */
 static void
 dtx_handle_init(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
-		daos_epoch_t epoch, uint64_t dkey_hash, uint32_t pm_ver,
-		uint32_t intent, struct dtx_conflict_entry *conflict,
-		struct dtx_id *dti_cos, int dti_cos_count, bool leader,
-		bool solo, struct dtx_handle *dth)
+		daos_epoch_t epoch, uint32_t pm_ver, uint32_t intent,
+		bool leader, bool solo, struct dtx_handle *dth)
 {
 	dth->dth_xid = *dti;
 	dth->dth_oid = *oid;
 	dth->dth_coh = coh;
 	dth->dth_epoch = epoch;
-	D_INIT_LIST_HEAD(&dth->dth_shares);
-	dth->dth_dkey_hash = dkey_hash;
 	dth->dth_ver = pm_ver;
 	dth->dth_intent = intent;
 	dth->dth_leader = leader ? 1 : 0;
 	dth->dth_solo = solo ? 1 : 0;
-	dth->dth_dti_cos = dti_cos;
-	dth->dth_dti_cos_count = dti_cos_count;
-	dth->dth_conflict = conflict;
 	dth->dth_ent = NULL;
 	dth->dth_obj = UMOFF_NULL;
 	dth->dth_sync = 0;
@@ -253,7 +244,6 @@ dtx_handle_init(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
  * \param oid		[IN]	The target object (shard) ID.
  * \param coh		[IN]	Container open handle.
  * \param epoch		[IN]	Epoch for the DTX.
- * \param dkey_hash	[IN]	Hash of the dkey to be modified if applicable.
  * \param tgts		[IN]	targets for distribute transaction.
  * \param tgts_cnt	[IN]	number of targets.
  * \param pm_ver	[IN]	Pool map version for the DTX.
@@ -264,13 +254,11 @@ dtx_handle_init(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
  */
 int
 dtx_leader_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
-		 daos_epoch_t epoch, uint64_t dkey_hash, uint32_t pm_ver,
-		 uint32_t intent, struct daos_shard_tgt *tgts, int tgts_cnt,
+		 daos_epoch_t epoch, uint32_t pm_ver, uint32_t intent,
+		 struct daos_shard_tgt *tgts, int tgts_cnt,
 		 struct dtx_leader_handle *dlh)
 {
 	struct dtx_handle	*dth = &dlh->dlh_handle;
-	struct dtx_id		*dti_cos = NULL;
-	int			 dti_cos_count = 0;
 	int			 i;
 
 	/* Single replica case. */
@@ -297,188 +285,31 @@ dtx_leader_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 	}
 
 init:
-	dtx_handle_init(dti, oid, coh, epoch, dkey_hash, pm_ver, intent,
-			NULL, dti_cos, dti_cos_count, true,
-			tgts_cnt == 0 ? true : false, dth);
+	dtx_handle_init(dti, oid, coh, epoch, pm_ver, intent,
+			true, tgts_cnt == 0 ? true : false, dth);
 
 	D_DEBUG(DB_TRACE, "Start DTX "DF_DTI" for object "DF_OID
-		" ver %u, dkey %llu, dti_cos_count %d, intent %s\n",
+		" ver %u, intent %s\n",
 		DP_DTI(&dth->dth_xid), DP_OID(oid->id_pub), dth->dth_ver,
-		(unsigned long long)dth->dth_dkey_hash, dti_cos_count,
 		intent == DAOS_INTENT_PUNCH ? "Punch" : "Update");
 
 	return 0;
 }
 
 static int
-dtx_leader_wait(struct dtx_leader_handle *dlh, struct dtx_conflict_entry **dces,
-		int *dces_cnt)
+dtx_leader_wait(struct dtx_leader_handle *dlh)
 {
 	int	rc;
 
 	rc = ABT_future_wait(dlh->dlh_future);
 	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_wait failed %d.\n", rc);
 	rc = dlh->dlh_result;
-	if (rc == -DER_INPROGRESS && dces_cnt != NULL) {
-		struct dtx_conflict_entry	*conflict;
-		int				shard_cnt = dlh->dlh_sub_cnt;
-		int				i;
-		int				j;
 
-		D_ALLOC_ARRAY(conflict, shard_cnt);
-		if (conflict == NULL) {
-			rc = -DER_NOMEM;
-			goto out;
-		}
-
-		for (i = 0, j = 0; i < shard_cnt; i++) {
-			struct dtx_sub_status *dss;
-
-			dss = &dlh->dlh_subs[i];
-			if (!daos_is_zero_dti(&dss->dss_dce.dce_xid)) {
-				daos_dti_copy(&conflict[j].dce_xid,
-					      &dss->dss_dce.dce_xid);
-				conflict[j++].dce_dkey =
-					      dss->dss_dce.dce_dkey;
-			}
-		}
-
-		D_ASSERT(j > 0);
-
-		*dces = conflict;
-		*dces_cnt = j;
-	}
-
-out:
 	ABT_future_free(&dlh->dlh_future);
 	D_DEBUG(DB_TRACE, "dth "DF_DTI" rc %d\n",
 		DP_DTI(&dlh->dlh_handle.dth_xid), rc);
 	return rc;
 };
-
-/**
- * Handle the conflict between current DTX and former uncommmitted DTXs.
- *
- * Current Commit on Share (CoS) mechanism cannot guarantee all related
- * DTXs to be handled in advance for current modification. If some confict
- * is detected after the RPC dispatching, the non-leader replica(s) will
- * return failures to the leader replica, then the leader needs to check
- * whether the conflict is caused by committable DTX(s) or not. if yes,
- * then commit them (via appending them to CoS list), otherwise, either
- * fail out (if leader also failed because of confilict) or abort them
- * if the leader replica executes related modification successfully.
- *
- * \param coh		[IN]	Container open handle.
- * \param dth		[IN]	The DTX handle.
- * \param po_uuid	[IN]	Pool UUID.
- * \param co_uuid	[IN]	Container UUID.
- * \param count		[IN]	The @dces array size.
- * \param version	[IN]	Current pool map version.
- *
- * \return			Zero on success, negative value if error.
- */
-static int
-dtx_conflict(daos_handle_t coh, struct dtx_leader_handle *dlh, uuid_t po_uuid,
-	     uuid_t co_uuid, struct dtx_conflict_entry *dces, int count,
-	     uint32_t version)
-{
-	struct dtx_handle	*dth = &dlh->dlh_handle;
-	daos_unit_oid_t		*oid = &dth->dth_oid;
-	struct dtx_id		*commit_ids = NULL;
-	struct dtx_entry	*abort_dtes = NULL;
-	int			 commit_cnt = 0;
-	int			 abort_cnt = 0;
-	int			 rc = 0;
-	int			 i;
-
-	D_ALLOC_ARRAY(commit_ids, count);
-	if (commit_ids == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	D_ALLOC_ARRAY(abort_dtes, count);
-	if (abort_dtes == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	for (i = 0; i < count; i++) {
-		int	j;
-		bool	skip = false;
-
-		for (j = 0; j < i; j++) {
-			if (daos_dti_equal(&dces[i].dce_xid,
-					   &dces[j].dce_xid)) {
-				skip = true;
-				break;
-			}
-		}
-
-		if (skip)
-			continue;
-
-		rc = vos_dtx_lookup_cos(coh, &dces[i].dce_xid);
-		if (rc != -DER_NONEXIST)
-			goto found;
-
-		rc = vos_dtx_check(coh, &dces[i].dce_xid);
-		if (rc == DTX_ST_COMMITTED)
-			rc = 0;
-		else if (rc >= 0)
-			rc = -DER_NONEXIST;
-
-found:
-		if (rc == 0) {
-			daos_dti_copy(&commit_ids[commit_cnt++],
-				      &dces[i].dce_xid);
-			continue;
-		}
-
-		if (rc == -DER_NONEXIST) {
-			daos_dti_copy(&abort_dtes[abort_cnt].dte_xid,
-				      &dces[i].dce_xid);
-			abort_dtes[abort_cnt++].dte_oid = *oid;
-			continue;
-		}
-
-		goto out;
-	}
-
-	if (commit_cnt > 0) {
-		struct dtx_id	*dti_cos;
-		int		 dti_cos_count;
-
-		/* Append the committable DTXs' ID to the CoS list. */
-		dti_cos_count = dth->dth_dti_cos_count + commit_cnt;
-		D_ALLOC_ARRAY(dti_cos, dti_cos_count);
-		if (dti_cos == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-
-		if (dth->dth_dti_cos != NULL) {
-			memcpy(dti_cos, dth->dth_dti_cos,
-			       sizeof(struct dtx_id) * dth->dth_dti_cos_count);
-
-			D_FREE(dth->dth_dti_cos);
-		}
-
-		memcpy(dti_cos + dth->dth_dti_cos_count, commit_ids,
-		       sizeof(struct dtx_id) * commit_cnt);
-		dth->dth_dti_cos_count = dti_cos_count;
-		dth->dth_dti_cos = dti_cos;
-	}
-
-	if (abort_cnt > 0) {
-		rc = dtx_abort(po_uuid, co_uuid, dth->dth_epoch,
-			       abort_dtes, abort_cnt, version);
-		if (rc == -DER_NONEXIST)
-			rc = 0;
-	}
-
-out:
-	D_FREE(commit_ids);
-	D_FREE(abort_dtes);
-
-	D_ASSERTF(rc <= 0, "unexpected return value %d\n", rc);
-
-	return rc;
-}
 
 /**
  * Stop the leader thandle.
@@ -487,7 +318,6 @@ out:
  * \param oid		[IN]	The target object (shard) ID.
  * \param coh		[IN]	Container open handle.
  * \param epoch		[IN]	Epoch for the DTX.
- * \param dkey_hash	[IN]	Hash of the dkey to be modified if applicable.
  * \param pm_ver	[IN]	Pool map version for the DTX.
  * \param intent	[IN]	The intent of related modification.
  * \param dth		[OUT]	Pointer to the DTX handle.
@@ -499,7 +329,6 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *cont_hdl,
 	       struct ds_cont_child *cont, int result)
 {
 	struct dtx_handle		*dth = &dlh->dlh_handle;
-	struct dtx_conflict_entry	*dces = NULL;
 	int				*ptr = NULL;
 	int				 dces_cnt = 0;
 	int				 rc = 0;
@@ -527,36 +356,11 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *cont_hdl,
 		return result < 0 ? result : rc;
 	}
 
-	if (rc == -DER_INPROGRESS && dces != NULL) {
-		/* XXX: The local modification has been done, but remote
-		 *	replica failed because of some uncommitted DTX,
-		 *	it may be caused by some garbage DTXs on remote
-		 *	replicas or leader has more information because
-		 *	of CoS cache. So handle (abort or commit) them
-		 *	firstly then retry.
-		 */
-		D_ASSERT(dth != NULL);
-		D_DEBUG(DB_TRACE, "Hit conflict DTX "DF_DTI" for "
-			DF_DTI", handle them and retry update.\n",
-			DP_DTI(&dces[0].dce_xid), DP_DTI(&dth->dth_xid));
-
-		rc = dtx_conflict(cont_hdl->sch_cont->sc_hdl, dlh,
-				  cont_hdl->sch_pool->spc_uuid,
-				  cont->sc_uuid, dces, dces_cnt,
-				  cont_hdl->sch_pool->spc_map_version);
-		D_FREE(dces);
-		if (rc >= 0) {
-			D_DEBUG(DB_TRACE, "retry DTX "DF_DTI"\n",
-				DP_DTI(&dth->dth_xid));
-			return -DER_AGAIN;
-		}
-	}
-
 	if (result < 0 || rc < 0)
 		D_GOTO(out, result = result < 0 ? result : rc);
 
-	rc = vos_dtx_add_cos(dth->dth_coh, &dth->dth_oid, &dth->dth_xid,
-			     dth->dth_epoch, dth->dth_gen);
+	rc = vos_dtx_add_cc(dth->dth_coh, &dth->dth_oid, &dth->dth_xid,
+			    dth->dth_epoch, dth->dth_gen);
 
 	if (rc == -DER_INPROGRESS) {
 		D_WARN(DF_UUID": Fail to add DTX "DF_DTI" to CoS "
@@ -609,17 +413,15 @@ out:
 	}
 
 	D_DEBUG(DB_TRACE,
-		"Stop the DTX "DF_DTI" ver %u, dkey %llu, intent %s, "
+		"Stop the DTX "DF_DTI" ver %u, intent %s, "
 		"%s, %s participator(s): rc = %d\n",
 		DP_DTI(&dth->dth_xid), dth->dth_ver,
-		(unsigned long long)dth->dth_dkey_hash,
 		dth->dth_intent == DAOS_INTENT_PUNCH ? "Punch" : "Update",
 		dth->dth_sync ? "sync" : "async",
 		dth->dth_solo ? "single" : "multiple", result);
 
 	D_ASSERTF(result <= 0, "unexpected return value %d\n", result);
 
-	D_FREE(dth->dth_dti_cos);
 	D_FREE(dlh->dlh_subs);
 
 	return result;
@@ -635,10 +437,6 @@ out:
  * \param oid		[IN]	The target object (shard) ID.
  * \param coh		[IN]	Container open handle.
  * \param epoch		[IN]	Epoch for the DTX.
- * \param dkey_hash	[IN]	Hash of the dkey to be modified if applicable.
- * \param conflict	[IN]	The pointer to record conflict dtx
- * \param dti_cos	[IN,OUT]The DTX array to be committed because of shared.
- * \param dti_cos_count [IN,OUT]The @dti_cos array size.
  * \param pm_ver	[IN]	Pool map version for the DTX.
  * \param intent	[IN]	The intent of related modification.
  * \param leader	[IN]	The target (to be modified) is leader or not.
@@ -648,21 +446,18 @@ out:
  */
 int
 dtx_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
-	  daos_epoch_t epoch, uint64_t dkey_hash,
-	  struct dtx_conflict_entry *conflict, struct dtx_id *dti_cos,
-	  int dti_cos_cnt, uint32_t pm_ver, uint32_t intent,
+	  daos_epoch_t epoch, uint32_t pm_ver, uint32_t intent,
 	  struct dtx_handle *dth)
 {
 	if (dth == NULL || daos_is_zero_dti(dti))
 		return 0;
 
-	dtx_handle_init(dti, oid, coh, epoch, dkey_hash, pm_ver, intent,
-			conflict, dti_cos, dti_cos_cnt, false, false, dth);
+	dtx_handle_init(dti, oid, coh, epoch, pm_ver, intent, false, false,
+			dth);
 
 	D_DEBUG(DB_TRACE, "Start the DTX "DF_DTI" for object "DF_OID
-		" ver %u, dkey %llu, dti_cos_count %d, intent %s\n",
+		" ver %u, intent %s\n",
 		DP_DTI(&dth->dth_xid), DP_OID(oid->id_pub), dth->dth_ver,
-		(unsigned long long)dth->dth_dkey_hash, dti_cos_cnt,
 		intent == DAOS_INTENT_PUNCH ? "Punch" : "Update");
 
 	return 0;
@@ -677,31 +472,12 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_hdl *cont_hdl,
 	if (dth == NULL || daos_is_zero_dti(&dth->dth_xid))
 		goto out;
 
-	if (result < 0) {
-		if (dth->dth_dti_cos_count > 0) {
-			/* XXX: For non-leader replica, even if we fail to
-			 *	make related modification for some reason,
-			 *	we still need to commit the DTXs for CoS.
-			 *	Because other replica may have already
-			 *	committed them. For leader case, it is
-			 *	not important even if we miss to commit
-			 *	the CoS DTXs, because they are still in
-			 *	CoS cache, and can be committed next time.
-			 */
-			rc = vos_dtx_commit(cont->sc_hdl, dth->dth_dti_cos,
-					    dth->dth_dti_cos_count);
-			if (rc != 0)
-				D_ERROR(DF_UUID": Fail to DTX CoS commit: %d\n",
-					DP_UUID(cont->sc_uuid), rc);
-		}
-
+	if (result < 0)
 		vos_dtx_abort(cont->sc_hdl, dth->dth_epoch, &dth->dth_xid, 1);
-	}
 
 	D_DEBUG(DB_TRACE,
-		"Stop the DTX "DF_DTI" ver %u, dkey %llu, intent %s, rc = %d\n",
+		"Stop the DTX "DF_DTI" ver %u, intent %s, rc = %d\n",
 		DP_DTI(&dth->dth_xid), dth->dth_ver,
-		(unsigned long long)dth->dth_dkey_hash,
 		dth->dth_intent == DAOS_INTENT_PUNCH ? "Punch" : "Update",
 		result);
 
@@ -821,7 +597,7 @@ out:
 
 int
 dtx_handle_resend(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
-		  uint64_t dkey_hash, bool punch, daos_epoch_t *epoch)
+		  bool punch, daos_epoch_t *epoch)
 {
 	int	rc;
 
@@ -839,7 +615,7 @@ dtx_handle_resend(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
 		return -DER_NONEXIST;
 
 again:
-	rc = vos_dtx_check_resend(coh, oid, dti, dkey_hash, punch, epoch);
+	rc = vos_dtx_check_resend(coh, oid, dti, punch, epoch);
 	switch (rc) {
 	case DTX_ST_PREPARED:
 		return 0;
@@ -1008,8 +784,8 @@ dtx_obj_sync(uuid_t po_uuid, uuid_t co_uuid, daos_handle_t coh,
 	while (1) {
 		struct dtx_entry	*dtes = NULL;
 
-		rc = vos_dtx_fetch_committable(coh, DTX_THRESHOLD_COUNT, &oid,
-					       epoch, &dtes);
+		rc = vos_dtx_fetch_cc(coh, DTX_THRESHOLD_COUNT, &oid, epoch,
+				      &dtes);
 		if (rc < 0) {
 			D_ERROR(DF_UOID" fail to fetch dtx: rc = %d\n",
 				DP_UOID(oid), rc);

@@ -153,14 +153,6 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (rc != 0)
 		goto reset;
 
-	/* Commit the CoS DTXs via the PUNCH PMDK transaction. */
-	if (dth != NULL && dth->dth_dti_cos_count > 0 &&
-	    dth->dth_dti_cos_done == 0) {
-		vos_dtx_commit_internal(cont, dth->dth_dti_cos,
-					dth->dth_dti_cos_count, 0);
-		dth->dth_dti_cos_done = 1;
-	}
-
 	/* NB: punch always generate a new incarnation of the object */
 	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), oid, &epr,
 			  false, DAOS_INTENT_PUNCH, true, &obj);

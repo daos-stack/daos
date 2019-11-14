@@ -132,13 +132,13 @@ struct vos_container {
 	/* The handle for committed DTX table */
 	daos_handle_t		vc_dtx_committed_hdl;
 	/* The objects with committable DTXs in DRAM. */
-	daos_handle_t		vc_dtx_cos_hdl;
+	daos_handle_t		vc_dtx_cc_hdl;
 	/** The root of the B+ tree for ative DTXs. */
 	struct btr_root		vc_dtx_active_btr;
 	/** The root of the B+ tree for committed DTXs. */
 	struct btr_root		vc_dtx_committed_btr;
 	/* The DTX COS-btree. */
-	struct btr_root		vc_dtx_cos_btr;
+	struct btr_root		vc_dtx_cc_btr;
 	/* The global list for priority committable DTXs. */
 	d_list_t		vc_dtx_priority_list;
 	/* The global list for committable DTXs. */
@@ -475,7 +475,7 @@ vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
  * \return		0 on success and negative on failure.
  */
 int
-vos_dtx_cos_register(void);
+vos_dtx_cc_register(void);
 
 /**
  * Remove the DTX from the CoS cache.
@@ -484,7 +484,7 @@ vos_dtx_cos_register(void);
  * \param xid		[IN]	Pointer to the DTX identifier.
  */
 void
-vos_dtx_del_cos(struct vos_container *cont, struct dtx_id *xid);
+vos_dtx_del_cc(struct vos_container *cont, struct dtx_id *xid);
 
 /**
  * Query the oldest DTX's timestamp in the CoS cache.
@@ -495,7 +495,7 @@ vos_dtx_del_cos(struct vos_container *cont, struct dtx_id *xid);
  *			Zero if the CoS cache is empty.
  */
 uint64_t
-vos_dtx_cos_oldest(struct vos_container *cont);
+vos_dtx_cc_oldest(struct vos_container *cont);
 
 /**
  * Establish indexed active DTX table in DRAM.

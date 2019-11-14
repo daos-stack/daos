@@ -408,8 +408,6 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	uuid_copy(orw->orw_co_uuid, cont_uuid);
 	daos_dti_copy(&orw->orw_dti, &args->dti);
 	orw->orw_flags = args->auxi.flags | flags;
-	orw->orw_dti_cos.ca_count = 0;
-	orw->orw_dti_cos.ca_arrays = NULL;
 
 	orw->orw_epoch = args->auxi.epoch;
 	orw->orw_dkey_hash = args->dkey_hash;
@@ -570,8 +568,6 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	uuid_copy(opi->opi_co_uuid, args->pa_cont_uuid);
 	daos_dti_copy(&opi->opi_dti, &args->pa_dti);
 	opi->opi_flags = args->pa_auxi.flags;
-	opi->opi_dti_cos.ca_count = 0;
-	opi->opi_dti_cos.ca_arrays = NULL;
 
 	rc = daos_rpc_send(req, task);
 	if (rc != 0) {

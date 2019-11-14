@@ -38,11 +38,6 @@ struct dtx_entry {
 	daos_unit_oid_t		dte_oid;
 };
 
-enum dtx_cos_list_types {
-	DCLT_UPDATE		= (1 << 0),
-	DCLT_PUNCH		= (1 << 1),
-};
-
 /**
  * DAOS two-phase commit transaction handle in DRAM.
  */
@@ -62,12 +57,6 @@ struct dtx_handle {
 	daos_epoch_t			 dth_epoch;
 	/* The generation when the DTX is handled on the server. */
 	uint64_t			 dth_gen;
-	/** The {obj/dkey/akey}-tree records that are created
-	 * by other DTXs, but not ready for commit yet.
-	 */
-	d_list_t			 dth_shares;
-	/* The hash of the dkey to be modified if applicable */
-	uint64_t			 dth_dkey_hash;
 	/** Pool map version. */
 	uint32_t			 dth_ver;
 	/** The intent of related modification. */
@@ -75,15 +64,7 @@ struct dtx_handle {
 	uint32_t			 dth_sync:1, /* commit synchronously. */
 					 dth_leader:1, /* leader replica. */
 					 /* Only one participator in the DTX. */
-					 dth_solo:1,
-					 /* dti_cos has been committed. */
-					 dth_dti_cos_done:1;
-	/* The count the DTXs in the dth_dti_cos array. */
-	uint32_t			 dth_dti_cos_count;
-	/* The array of the DTXs for Commit on Share (conflcit). */
-	struct dtx_id			*dth_dti_cos;
-	/* The identifier of the DTX that conflict with current one. */
-	struct dtx_conflict_entry	*dth_conflict;
+					 dth_solo:1;
 	/** Pointer to the DTX entry in DRAM. */
 	void				*dth_ent;
 	/** The address (offset) of the (new) object to be modified. */
@@ -103,10 +84,6 @@ struct dtx_leader_handle {
 	struct dtx_handle		dlh_handle;
 	/* result for the distribute transaction */
 	int				dlh_result;
-
-	/* The array of the DTX COS entries */
-	uint32_t			dlh_dti_cos_count;
-	struct dtx_id			*dlh_dti_cos;
 
 	/* The future to wait for all sub handle to finish */
 	ABT_future			dlh_future;
@@ -137,8 +114,8 @@ enum dtx_status {
 
 int
 dtx_leader_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
-		 daos_epoch_t epoch, uint64_t dkey_hash, uint32_t pm_ver,
-		 uint32_t intent, struct daos_shard_tgt *tgts, int tgts_cnt,
+		 daos_epoch_t epoch, uint32_t pm_ver, uint32_t intent,
+		 struct daos_shard_tgt *tgts, int tgts_cnt,
 		 struct dtx_leader_handle *dlh);
 int
 dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *cont_hdl,
@@ -153,9 +130,7 @@ int dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid,
 	       uint32_t ver, bool block);
 int
 dtx_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
-	  daos_epoch_t epoch, uint64_t dkey_hash,
-	  struct dtx_conflict_entry *conflict, struct dtx_id *dti_cos,
-	  int dti_cos_cnt, uint32_t pm_ver, uint32_t intent,
+	  daos_epoch_t epoch, uint32_t pm_ver, uint32_t intent,
 	  struct dtx_handle *dth);
 int
 dtx_end(struct dtx_handle *dth, struct ds_cont_hdl *cont_hdl,

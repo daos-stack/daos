@@ -65,15 +65,6 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, int pos)
 	return -DER_INPROGRESS;
 }
 
-static inline void
-dtx_record_conflict(struct dtx_handle *dth, struct vos_dtx_act_ent *dae)
-{
-	if (dth != NULL && dth->dth_conflict != NULL && dae != NULL) {
-		daos_dti_copy(&dth->dth_conflict->dce_xid, &DAE_XID(dae));
-		dth->dth_conflict->dce_dkey = DAE_DKEY_HASH(dae);
-	}
-}
-
 static struct dtx_batched_cleanup_blob *
 dtx_bcb_alloc(struct vos_container *cont, struct vos_dtx_scm_blob *dsb)
 {
@@ -634,7 +625,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 	if (rc != 0 || epoch != 0)
 		goto out;
 
-	vos_dtx_del_cos(cont, dti);
+	vos_dtx_del_cc(cont, dti);
 
 	/* XXX: Only mark the DTX as DTX_ST_COMMITTED (when commit) is not
 	 *	enough. Otherwise, some subsequent modification may change
@@ -775,7 +766,6 @@ vos_dtx_alloc(struct umem_instance *umm, struct dtx_handle *dth)
 
 	DAE_XID(dae) = dth->dth_xid;
 	DAE_OID(dae) = dth->dth_oid;
-	DAE_DKEY_HASH(dae) = dth->dth_dkey_hash;
 	DAE_EPOCH(dae) = dth->dth_epoch;
 	DAE_FLAGS(dae) = dth->dth_leader ? DTX_EF_LEADER : 0;
 	DAE_INTENT(dae) = dth->dth_intent;
@@ -937,7 +927,7 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 
 	dae = (struct vos_dtx_act_ent *)riov.iov_buf;
 
-	rc = vos_dtx_lookup_cos(coh, &DAE_XID(dae));
+	rc = vos_dtx_lookup_cc(coh, &DAE_XID(dae));
 	if (rc == 0)
 		return ALB_AVAILABLE_CLEAN;
 
@@ -945,74 +935,22 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 		return rc;
 
 	/* The followings are for non-committable cases. */
-
-	if (intent == DAOS_INTENT_DEFAULT || intent == DAOS_INTENT_REBUILD) {
-		if (!(DAE_FLAGS(dae) & DTX_EF_LEADER) ||
-		    DAOS_FAIL_CHECK(DAOS_VOS_NON_LEADER)) {
-			/* Inavailable for rebuild case. */
-			if (intent == DAOS_INTENT_REBUILD)
-				return ALB_UNAVAILABLE;
-
-			/* Non-leader and non-rebuild case, return
-			 * -DER_INPROGRESS, then the caller will retry
-			 * the RPC with leader replica.
-			 */
-			return dtx_inprogress(dae, 1);
-		}
-
-		/* For leader, non-committed DTX is unavailable. */
-		return ALB_UNAVAILABLE;
-	}
-
-	/* PUNCH DTX cannot be shared by others. */
-	if (DAE_INTENT(dae) == DAOS_INTENT_PUNCH) {
-		if (dth == NULL)
-			/* XXX: For rebuild case, if some normal IO
-			 *	has generated punch-record (by race)
-			 *	before rebuild logic handling that,
-			 *	then rebuild logic should ignore such
-			 *	punch-record, because the punch epoch
-			 *	will be higher than the rebuild epoch.
-			 *	The rebuild logic needs to create the
-			 *	original target record that exists on
-			 *	other healthy replicas before punch.
-			 */
+	if (!(DAE_FLAGS(dae) & DTX_EF_LEADER) ||
+	    DAOS_FAIL_CHECK(DAOS_VOS_NON_LEADER)) {
+		/* Unavailable for rebuild case. */
+		if (intent == DAOS_INTENT_REBUILD)
 			return ALB_UNAVAILABLE;
 
-		dtx_record_conflict(dth, dae);
-
-		return dtx_inprogress(dae, 2);
-	}
-
-	/* PUNCH cannot share with others. */
-	if (intent == DAOS_INTENT_PUNCH) {
-		/* XXX: One corner case: if some DTXs share the same
-		 *	object/key, and the original DTX that create
-		 *	the object/key is aborted, then when we come
-		 *	here, we do not know which DTX conflict with
-		 *	me, so we can NOT set dth::dth_conflict that
-		 *	will be used by DTX conflict handling logic.
+		/* Non-leader and non-rebuild case, return
+		 * -DER_INPROGRESS, then the caller will retry
+		 * the RPC with leader replica.
 		 */
-		dtx_record_conflict(dth, dae);
-
-		return dtx_inprogress(dae, 3);
+		return dtx_inprogress(dae, 1);
 	}
 
-	if (DAE_INTENT(dae) != DAOS_INTENT_UPDATE) {
-		D_ERROR("Unexpected DTX intent %u\n", DAE_INTENT(dae));
-		return -DER_INVAL;
-	}
+	/* For leader, non-committed DTX is unavailable. */
+	return ALB_UNAVAILABLE;
 
-	D_ASSERT(intent == DAOS_INTENT_UPDATE);
-
-	/* XXX: This seems NOT suitable. Before new punch model introduced,
-	 *	we allow multiple concurrent modifications to update targets
-	 *	under the same object/dkey/akey. That is the DTX share mode.
-	 *	It should not cause any conflict.
-	 */
-	dtx_record_conflict(dth, dae);
-
-	return dtx_inprogress(dae, 4);
 }
 
 umem_off_t
@@ -1262,13 +1200,12 @@ do_vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch)
 
 int
 vos_dtx_check_resend(daos_handle_t coh, daos_unit_oid_t *oid,
-		     struct dtx_id *xid, uint64_t dkey_hash,
-		     bool punch, daos_epoch_t *epoch)
+		     struct dtx_id *xid, daos_epoch_t *epoch)
 {
 	struct vos_container	*cont;
 	int			 rc;
 
-	rc = vos_dtx_lookup_cos(coh, xid);
+	rc = vos_dtx_lookup_cc(coh, xid);
 	if (rc == 0)
 		return DTX_ST_COMMITTED;
 
@@ -1561,7 +1498,7 @@ vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat)
 
 	stat->dtx_priority_count = cont->vc_dtx_priority_count;
 	stat->dtx_committable_count = cont->vc_dtx_committable_count;
-	stat->dtx_oldest_committable_time = vos_dtx_cos_oldest(cont);
+	stat->dtx_oldest_committable_time = vos_dtx_cc_oldest(cont);
 	stat->dtx_committed_count = cont->vc_dtx_committed_count;
 	if (d_list_empty(&cont->vc_dtx_committed_list)) {
 		stat->dtx_oldest_committed_time = 0;

@@ -23,6 +23,8 @@
 /**
  * This file is part of daos two-phase commit transaction.
  *
+ * To be renamed in subsequent patch
+ *
  * vos/vos_dtx_cos.c
  */
 #define D_LOGFAC	DD_FAC(vos)
@@ -32,7 +34,7 @@
 #include "vos_layout.h"
 #include "vos_internal.h"
 
-struct dtx_cos_rec_bundle {
+struct dtx_cc_rec_bundle {
 	struct vos_container	*crb_cont;
 	daos_epoch_t		 crb_time;
 	daos_unit_oid_t		 crb_oid;
@@ -42,7 +44,7 @@ struct dtx_cos_rec_bundle {
  * committable DTXs that modify (update or punch) something under the same
  * object and the same dkey.
  */
-struct dtx_cos_rec {
+struct dtx_cc_rec {
 	/* Pointer to the container. */
 	struct vos_container	*dcr_cont;
 	/* Link in committable or priority list */
@@ -58,13 +60,13 @@ struct dtx_cos_rec {
 };
 
 static int
-dtx_cos_hkey_size(void)
+dtx_cc_hkey_size(void)
 {
 	return sizeof(struct dtx_id);
 }
 
 static void
-dtx_cos_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
+dtx_cc_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 {
 	D_ASSERT(key_iov->iov_len == sizeof(struct dtx_id));
 
@@ -72,7 +74,7 @@ dtx_cos_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 }
 
 static int
-dtx_cos_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
+dtx_cc_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 {
 	struct dtx_id *hkey1 = (struct dtx_id *)&rec->rec_hkey[0];
 	struct dtx_id *hkey2 = (struct dtx_id *)hkey;
@@ -84,16 +86,16 @@ dtx_cos_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 }
 
 static int
-dtx_cos_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
-		  d_iov_t *val_iov, struct btr_record *rec)
+dtx_cc_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
+		 d_iov_t *val_iov, struct btr_record *rec)
 {
 	struct dtx_id			*xid;
-	struct dtx_cos_rec_bundle	*dcrb;
-	struct dtx_cos_rec		*dcr;
+	struct dtx_cc_rec_bundle	*dcrb;
+	struct dtx_cc_rec		*dcr;
 
 	D_ASSERT(tins->ti_umm.umm_id == UMEM_CLASS_VMEM);
 
-	dcrb = (struct dtx_cos_rec_bundle *)val_iov->iov_buf;
+	dcrb = (struct dtx_cc_rec_bundle *)val_iov->iov_buf;
 	xid = (struct dtx_id *)key_iov->iov_buf;
 
 	D_ALLOC_PTR(dcr);
@@ -115,13 +117,13 @@ dtx_cos_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 }
 
 static int
-dtx_cos_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
+dtx_cc_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
-	struct dtx_cos_rec		*dcr;
+	struct dtx_cc_rec		*dcr;
 
 	D_ASSERT(tins->ti_umm.umm_id == UMEM_CLASS_VMEM);
 
-	dcr = (struct dtx_cos_rec *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
+	dcr = (struct dtx_cc_rec *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
 
 	d_list_del(&dcr->dcr_link);
 	if (dcr->dcr_check_count > DTX_CHECK_THRESHOLD)
@@ -134,37 +136,37 @@ dtx_cos_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 }
 
 static int
-dtx_cos_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
+dtx_cc_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 		  d_iov_t *key_iov, d_iov_t *val_iov)
 {
-	struct dtx_cos_rec	*dcr;
+	struct dtx_cc_rec	*dcr;
 
 	D_ASSERT(val_iov != NULL);
 
-	dcr = (struct dtx_cos_rec *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
-	d_iov_set(val_iov, dcr, sizeof(struct dtx_cos_rec));
+	dcr = (struct dtx_cc_rec *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
+	d_iov_set(val_iov, dcr, sizeof(struct dtx_cc_rec));
 
 	return 0;
 }
 
-static btr_ops_t dtx_btr_cos_ops = {
-	.to_hkey_size	= dtx_cos_hkey_size,
-	.to_hkey_gen	= dtx_cos_hkey_gen,
-	.to_hkey_cmp	= dtx_cos_hkey_cmp,
-	.to_rec_alloc	= dtx_cos_rec_alloc,
-	.to_rec_free	= dtx_cos_rec_free,
-	.to_rec_fetch	= dtx_cos_rec_fetch,
+static btr_ops_t dtx_btr_cc_ops = {
+	.to_hkey_size	= dtx_cc_hkey_size,
+	.to_hkey_gen	= dtx_cc_hkey_gen,
+	.to_hkey_cmp	= dtx_cc_hkey_cmp,
+	.to_rec_alloc	= dtx_cc_rec_alloc,
+	.to_rec_free	= dtx_cc_rec_free,
+	.to_rec_fetch	= dtx_cc_rec_fetch,
 };
 
 int
-vos_dtx_cos_register(void)
+vos_dtx_cc_register(void)
 {
 	int	rc;
 
 	D_DEBUG(DB_DF, "Registering DTX CoS class: %d\n",
 		VOS_BTR_DTX_COS);
 
-	rc = dbtree_class_register(VOS_BTR_DTX_COS, 0, &dtx_btr_cos_ops);
+	rc = dbtree_class_register(VOS_BTR_DTX_COS, 0, &dtx_btr_cc_ops);
 	if (rc != 0)
 		D_ERROR("Failed to register DTX CoS dbtree: rc = %d\n", rc);
 
@@ -172,14 +174,14 @@ vos_dtx_cos_register(void)
 }
 
 int
-vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
+vos_dtx_add_cc(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
 		daos_epoch_t epoch, uint64_t gen)
 {
 	struct daos_lru_cache		*occ = vos_obj_cache_current();
 	struct vos_object		*obj = NULL;
 	struct vos_container		*cont;
 	struct dtx_id			 key;
-	struct dtx_cos_rec_bundle	 rbund;
+	struct dtx_cc_rec_bundle	 rbund;
 	daos_epoch_range_t		 epr = {0, epoch};
 	d_iov_t				 kiov;
 	d_iov_t				 riov;
@@ -200,7 +202,7 @@ vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
 		rc = vos_dtx_check(coh, dti);
 		switch (rc) {
 		case DTX_ST_PREPARED:
-			rc = vos_dtx_lookup_cos(coh, dti);
+			rc = vos_dtx_lookup_cc(coh, dti);
 			/* The resync ULT has already added it into the
 			 * CoS cache, current ULT needs to do nothing.
 			 */
@@ -247,7 +249,7 @@ add:
 	rbund.crb_time = epoch;
 	d_iov_set(&riov, &rbund, sizeof(rbund));
 
-	rc = dbtree_upsert(cont->vc_dtx_cos_hdl, BTR_PROBE_EQ,
+	rc = dbtree_upsert(cont->vc_dtx_cc_hdl, BTR_PROBE_EQ,
 			   DAOS_INTENT_UPDATE, &kiov, &riov);
 
 	D_DEBUG(DB_TRACE, "Insert DTX "DF_DTI" to CoS cache rc = %d\n",
@@ -257,13 +259,13 @@ add:
 }
 
 int
-vos_dtx_lookup_cos(daos_handle_t coh, struct dtx_id *xid)
+vos_dtx_lookup_cc(daos_handle_t coh, struct dtx_id *xid)
 {
 	struct vos_container		*cont;
 	struct dtx_id			 key;
 	d_iov_t				 kiov;
 	d_iov_t				 riov;
-	struct dtx_cos_rec		*dcr;
+	struct dtx_cc_rec		*dcr;
 	int				 rc;
 
 	cont = vos_hdl2cont(coh);
@@ -273,11 +275,11 @@ vos_dtx_lookup_cos(daos_handle_t coh, struct dtx_id *xid)
 	d_iov_set(&kiov, &key, sizeof(key));
 	d_iov_set(&riov, NULL, 0);
 
-	rc = dbtree_lookup(cont->vc_dtx_cos_hdl, &kiov, &riov);
+	rc = dbtree_lookup(cont->vc_dtx_cc_hdl, &kiov, &riov);
 	if (rc != 0)
 		return rc;
 
-	dcr = (struct dtx_cos_rec *)riov.iov_buf;
+	dcr = (struct dtx_cc_rec *)riov.iov_buf;
 	dcr->dcr_check_count++;
 
 	if (dcr->dcr_check_count > DTX_CHECK_THRESHOLD) {
@@ -294,7 +296,7 @@ static void
 fetch_committable(d_list_t *list, struct dtx_entry *dte, daos_unit_oid_t *oid,
 		  daos_epoch_t epoch, uint32_t *cursor, uint32_t count)
 {
-	struct dtx_cos_rec	*dcr;
+	struct dtx_cc_rec	*dcr;
 
 	if (*cursor >= count)
 		return;
@@ -317,9 +319,8 @@ fetch_committable(d_list_t *list, struct dtx_entry *dte, daos_unit_oid_t *oid,
 }
 
 int
-vos_dtx_fetch_committable(daos_handle_t coh, uint32_t max_cnt,
-			  daos_unit_oid_t *oid, daos_epoch_t epoch,
-			  struct dtx_entry **dtes)
+vos_dtx_fetch_cc(daos_handle_t coh, uint32_t max_cnt, daos_unit_oid_t *oid,
+		 daos_epoch_t epoch, struct dtx_entry **dtes)
 {
 	struct dtx_entry	*dte;
 	struct vos_container	*cont;
@@ -365,7 +366,7 @@ vos_dtx_fetch_committable(daos_handle_t coh, uint32_t max_cnt,
 
 
 void
-vos_dtx_del_cos(struct vos_container *cont, struct dtx_id *xid)
+vos_dtx_del_cc(struct vos_container *cont, struct dtx_id *xid)
 {
 	struct dtx_id		 key;
 	d_iov_t				 kiov;
@@ -373,19 +374,19 @@ vos_dtx_del_cos(struct vos_container *cont, struct dtx_id *xid)
 	key = *xid;
 	d_iov_set(&kiov, &key, sizeof(key));
 
-	dbtree_delete(cont->vc_dtx_cos_hdl, BTR_PROBE_EQ, &kiov, NULL);
+	dbtree_delete(cont->vc_dtx_cc_hdl, BTR_PROBE_EQ, &kiov, NULL);
 }
 
 uint64_t
-vos_dtx_cos_oldest(struct vos_container *cont)
+vos_dtx_cc_oldest(struct vos_container *cont)
 {
-	struct dtx_cos_rec	*dcr;
+	struct dtx_cc_rec	*dcr;
 
 	if (d_list_empty(&cont->vc_dtx_committable_list))
 		return 0;
 
 	dcr = d_list_entry(cont->vc_dtx_committable_list.next,
-			   struct dtx_cos_rec, dcr_link);
+			   struct dtx_cc_rec, dcr_link);
 
 	return dcr->dcr_time;
 }

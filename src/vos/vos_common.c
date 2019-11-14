@@ -217,9 +217,9 @@ vos_mod_init(void)
 		return rc;
 	}
 
-	rc = vos_dtx_cos_register();
+	rc = vos_dtx_cc_register();
 	if (rc != 0) {
-		D_ERROR("DTX CoS btree initialization error\n");
+		D_ERROR("DTX Committable cache btree initialization error\n");
 		return rc;
 	}
 

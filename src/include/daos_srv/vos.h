@@ -49,7 +49,7 @@ int
 vos_dtx_update_resync_gen(daos_handle_t coh);
 
 /**
- * Add the given DTX to the Commit-on-Share (CoS) cache (in DRAM).
+ * Add the given DTX to the Committable cache (in DRAM)
  *
  * \param coh		[IN]	Container open handle.
  * \param oid		[IN]	The target object (shard) ID.
@@ -62,11 +62,11 @@ vos_dtx_update_resync_gen(daos_handle_t coh);
  * \return		Other negative value if error.
  */
 int
-vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
-		daos_epoch_t epoch, uint64_t gen);
+vos_dtx_add_cc(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
+	       daos_epoch_t epoch, uint64_t gen);
 
 /**
- * Search the specified DTX is in the CoS cache or not.
+ * Search the specified DTX is in the Commitable cache
  *
  * \param coh		[IN]	Container open handle.
  * \param xid		[IN]	Pointer to the DTX identifier.
@@ -76,7 +76,7 @@ vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
  * \return	Other negative values on error.
  */
 int
-vos_dtx_lookup_cos(daos_handle_t coh, struct dtx_id *xid);
+vos_dtx_lookup_cc(daos_handle_t coh, struct dtx_id *xid);
 
 /**
  * Fetch the list of the DTXs that can be committed.
@@ -93,9 +93,8 @@ vos_dtx_lookup_cos(daos_handle_t coh, struct dtx_id *xid);
  *			Negative value on failure.
  */
 int
-vos_dtx_fetch_committable(daos_handle_t coh, uint32_t max_cnt,
-			  daos_unit_oid_t *oid, daos_epoch_t epoch,
-			  struct dtx_entry **dtes);
+vos_dtx_fetch_cc(daos_handle_t coh, uint32_t max_cnt, daos_unit_oid_t *oid,
+		 daos_epoch_t epoch, struct dtx_entry **dtes);
 
 /**
  * Check whether the given DTX is resent one or not.
@@ -103,8 +102,6 @@ vos_dtx_fetch_committable(daos_handle_t coh, uint32_t max_cnt,
  * \param coh		[IN]	Container open handle.
  * \param oid		[IN]	Pointer to the object ID.
  * \param xid		[IN]	Pointer to the DTX identifier.
- * \param dkey_hash	[IN]	The hashed dkey.
- * \param punch		[IN]	For punch operation or not.
  * \param epoch		[IN,OUT] Pointer to current epoch, if it is zero and
  *				 if the DTX exists, then the DTX's epoch will
  *				 be saved in it.
@@ -119,8 +116,7 @@ vos_dtx_fetch_committable(daos_handle_t coh, uint32_t max_cnt,
  */
 int
 vos_dtx_check_resend(daos_handle_t coh, daos_unit_oid_t *oid,
-		     struct dtx_id *dti, uint64_t dkey_hash,
-		     bool punch, daos_epoch_t *epoch);
+		     struct dtx_id *dti, daos_epoch_t *epoch);
 
 /**
  * Check the specified DTX's persistent status.

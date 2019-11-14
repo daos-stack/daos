@@ -1272,14 +1272,6 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	if (err != 0)
 		goto abort;
 
-	/* Commit the CoS DTXs via the IO PMDK transaction. */
-	if (dth != NULL && dth->dth_dti_cos_count > 0 &&
-	    dth->dth_dti_cos_done == 0) {
-		vos_dtx_commit_internal(ioc->ic_obj->obj_cont, dth->dth_dti_cos,
-					dth->dth_dti_cos_count, 0);
-		dth->dth_dti_cos_done = 1;
-	}
-
 	/* Publish SCM reservations */
 	if (ioc->ic_actv_at != 0) {
 		err = umem_tx_publish(umem, ioc->ic_actv, ioc->ic_actv_at);
