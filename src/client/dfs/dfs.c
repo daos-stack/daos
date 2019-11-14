@@ -936,11 +936,11 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 	d_iov_set(&iods[i].iod_name, MAGIC_NAME, strlen(MAGIC_NAME));
 	i++;
 
-	d_iov_set(&sg_iovs[i], &sb_ver, sizeof(uint64_t));
+	d_iov_set(&sg_iovs[i], &sb_ver, sizeof(sb_ver));
 	d_iov_set(&iods[i].iod_name, SB_VERSION_NAME, strlen(SB_VERSION_NAME));
 	i++;
 
-	d_iov_set(&sg_iovs[i], &layout_ver, sizeof(uint64_t));
+	d_iov_set(&sg_iovs[i], &layout_ver, sizeof(layout_ver));
 	d_iov_set(&iods[i].iod_name, LAYOUT_NAME, strlen(LAYOUT_NAME));
 	i++;
 
@@ -957,7 +957,6 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 		sgls[i].sg_nr_out	= 0;
 		sgls[i].sg_iovs		= &sg_iovs[i];
 
-
 		dcb_set_null(&iods[i].iod_kcsum);
 		iods[i].iod_nr		= 1;
 		iods[i].iod_size	= DAOS_REC_ANY;
@@ -971,9 +970,9 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 	if (create) {
 		iods[0].iod_size = sizeof(uint64_t);
 		magic = DFS_SB_MAGIC;
-		iods[1].iod_size = sizeof(uint16_t);
+		iods[1].iod_size = sizeof(sb_ver);
 		sb_ver = DFS_SB_VERSION;
-		iods[2].iod_size = sizeof(uint16_t);
+		iods[2].iod_size = sizeof(layout_ver);
 		layout_ver = DFS_LAYOUT_VERSION;
 		iods[3].iod_size = sizeof(daos_size_t);
 		if (attr && attr->da_chunk_size != 0)
