@@ -296,3 +296,9 @@ daos_mgmt_list_pools(const char *group, daos_mgmt_pool_info_t *pools,
 
 	return dc_task_schedule(task, true);
 }
+
+int
+daos_mgmt_add_mark(const char *mark)
+{
+	return dc_mgmt_add_mark(mark);
+}
