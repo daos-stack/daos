@@ -1271,10 +1271,15 @@ ilog_status_refresh(struct ilog_context *lctx, uint32_t intent,
 	struct ilog_priv	*priv = ilog_ent2priv(entries);
 	struct ilog_entry	*entry;
 	int32_t			 status;
+	bool			 same_intent = (intent == priv->ip_intent);
 
 	priv->ip_intent = intent;
 	priv->ip_rc = 0;
 	ilog_foreach_entry(entries, entry) {
+		if (same_intent &&
+		    (entry->ie_status == ILOG_COMMITTED ||
+		     entry->ie_status == ILOG_REMOVED))
+			continue;
 		status = ilog_status_get(lctx, entry->ie_id.id_tx_id, intent);
 		if (status < 0) {
 			priv->ip_rc = status;
@@ -1301,8 +1306,7 @@ ilog_fetch_needed(struct umem_instance *umm, struct ilog_root *root,
 		goto reset;
 	}
 
-	if (priv->ip_intent != intent)
-		ilog_status_refresh(&priv->ip_lctx, intent, entries);
+	ilog_status_refresh(&priv->ip_lctx, intent, entries);
 
 	return false;
 reset:
@@ -1426,32 +1430,49 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 	struct ilog_priv	*priv = ilog_ent2priv(entries);
 	d_iov_t			 id_iov;
 	d_iov_t			 val_iov;
+	bool			 in_progress = false;
 	int			 status;
-	int			 rc;
+	int			 rc = 0;
 
 	ILOG_ASSERT_VALID(root_df);
 
 	root = (struct ilog_root *)root_df;
 
-	if (!ilog_fetch_needed(umm, root, cbs, intent, entries))
-		return priv->ip_rc;
+	if (!ilog_fetch_needed(umm, root, cbs, intent, entries)) {
+		if (priv->ip_rc == -DER_INPROGRESS ||
+		    priv->ip_rc == -DER_NONEXIST)
+			return priv->ip_rc;
+		if (priv->ip_rc < 0) {
+			/* Don't cache error return codes */
+			rc = priv->ip_rc;
+			priv->ip_rc = 0;
+			priv->ip_log_version = ILOG_MAGIC;
+			return rc;
+		}
+		return 0;
+	}
 
 	lctx = &priv->ip_lctx;
 
 	if (ilog_empty(root))
-		return -DER_NONEXIST;
+		D_GOTO(out, rc = 0);
 
 	if (root->lr_tree.it_embedded) {
 		status = ilog_status_get(lctx, root->lr_id.id_tx_id, intent);
-		if (status < 0)
-			return status;
+		if (status == -DER_INPROGRESS)
+			in_progress = true;
+		else if (status < 0)
+			D_GOTO(fail, rc = status);
 		rc = set_entry(entries, &root->lr_id, root->lr_punch, status);
-		return rc;
+
+		if (rc != 0)
+			goto fail;
+		goto out;
 	}
 
 	rc = open_tree_iterator(lctx, &priv->ip_ih);
 	if (rc != 0)
-		return rc;
+		goto fail;
 
 	d_iov_set(&id_iov, &id, sizeof(id));
 	id.id_epoch = 0;
@@ -1459,11 +1480,11 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 	rc = dbtree_iter_probe(priv->ip_ih, BTR_PROBE_GE,
 			       DAOS_INTENT_DEFAULT, &id_iov, NULL);
 	if (rc == -DER_NONEXIST)
-		return rc;
+		D_GOTO(out, rc = 0);
 
 	if (rc != 0) {
 		D_ERROR("Error probing ilog: rc = %s\n", d_errstr(rc));
-		return rc;
+		goto fail;
 	}
 
 	for (;;) {
@@ -1473,29 +1494,44 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 		if (rc != 0) {
 			D_ERROR("Error fetching ilog entry from tree:"
 				" rc = %s\n", d_errstr(rc));
-			return rc;
+			goto fail;
 		}
 
 		id_out = (struct ilog_id *)id_iov.iov_buf;
 
 		status = ilog_status_get(lctx, id_out->id_tx_id, intent);
-		if (status < 0)
-			return status;
-
+		if (status == -DER_INPROGRESS)
+			in_progress = true;
+		else if (status < 0)
+			D_GOTO(fail, rc = status);
 		rc = set_entry(entries, id_out, *(bool *)val_iov.iov_buf,
 			       status);
 		if (rc != 0)
-			return rc;
+			goto fail;
 
 		rc = dbtree_iter_next(priv->ip_ih);
 		if (rc == -DER_NONEXIST)
-			break;
+			D_GOTO(out, rc = 0);
+		if (rc != 0)
+			goto fail;
 	}
+out:
+	/* Cache whole log */
+	if (in_progress)
+		rc = -DER_INPROGRESS;
 
+	D_ASSERT(rc != -DER_NONEXIST);
 	if (entries->ie_num_entries == 0)
-		return -DER_NONEXIST;
+		rc = -DER_NONEXIST;
 
-	return 0;
+	priv->ip_rc = rc;
+
+	return rc;
+fail:
+	/* fetch again next time */
+	priv->ip_log_version = ILOG_MAGIC;
+
+	return rc;
 }
 
 void
