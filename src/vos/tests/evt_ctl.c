@@ -1588,7 +1588,7 @@ test_evt_various_data_size_internal(void **state)
 		* evt_find (first epoch) and evt_delete (random deletes)
 		* till out of space condition
 		*/
-		count = 0;
+		iteration = 0;
 		for (epoch = 1; ; epoch++) {
 			if (DAOS_ON_VALGRIND) {
 				iteration++;
