@@ -50,6 +50,7 @@ void ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc);
 void ds_mgmt_params_set_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_tgt_params_set_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_profile_hdlr(crt_rpc_t *rpc);
+void ds_mgmt_mark_hdlr(crt_rpc_t *rpc);
 
 /** srv_system.c */
 
@@ -123,5 +124,6 @@ int ds_mgmt_tgt_map_update_pre_forward(crt_rpc_t *rpc, void *arg);
 void ds_mgmt_hdlr_tgt_map_update(crt_rpc_t *rpc);
 int ds_mgmt_tgt_map_update_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				      void *priv);
+void ds_mgmt_tgt_mark_hdlr(crt_rpc_t *rpc);
 
 #endif /* __SRV_MGMT_INTERNAL_H__ */
