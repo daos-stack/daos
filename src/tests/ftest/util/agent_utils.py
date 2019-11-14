@@ -68,7 +68,7 @@ class DaosAgentConfig(ObjectWithParameters):
 
         # DaosAgentConfig Parameters
         #   name: daos
-        #   access_points: ['hostname1:10001','hostname2:10001']
+        #   access_points: ['server[0]:10001']
         #   port: 10001
         #   hostlist: ['host1', 'host2']
         #   runtime_dir: /var/run/daos_agent
@@ -94,14 +94,6 @@ class DaosAgentConfig(ObjectWithParameters):
         """
         super(DaosAgentConfig, self).get_params(test)
         self.transport_params.get_params(test)
-
-    def update_log_file(self, name):
-        """Update the logfile parameter for the daos agent.
-
-        Args:
-            name (str): new log file name and path
-        """
-        self.transport_params.log_file.update(name, "log_file")
 
     def create_yaml(self, filename):
         """Create a yaml file from the parameter values.
@@ -162,7 +154,7 @@ def run_agent(test, server_list, client_list=None):
     user = getpass.getuser()
 
     # if empty client list, 'test' is effectively client
-    if client_list == None:
+    if client_list is None:
         client_list = include_local_host(client_list)
     client_count = len(client_list)
 
@@ -173,14 +165,9 @@ def run_agent(test, server_list, client_list=None):
     agent_config.get_params(test)
     agent_config.hostlist.value = client_list
 
-    access_point_list = []
-    for index in range(client_count):
-        access_point = client_list[index] + ":" + str(agent_config.port)
-        access_point_list.append(access_point)
-    agent_config.access_points.value = access_point_list
+    access_point = server_list[0] + ":" + str(agent_config.port)
+    agent_config.access_points.value = access_point.split()
 
-    if hasattr(test, "agent_log"):
-        agent_config.update_log_file(test.agent_log)
     agent_config.create_yaml(agent_yaml)
 
     # Verify the domain socket directory is present and owned by this user
@@ -199,7 +186,7 @@ def run_agent(test, server_list, client_list=None):
     daos_agent_bin_line = "daos_agent -o " + agent_yaml
     daos_agent_bin = os.path.join(test.basepath, "install/bin",
                                   daos_agent_bin_line)
-    print("<AGENT> Agent command: ",daos_agent_bin)
+    print("<AGENT> Agent command: ", daos_agent_bin)
 
     for client in client_list:
         sessions[client] = subprocess.Popen(
