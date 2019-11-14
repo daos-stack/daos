@@ -116,7 +116,7 @@ class MdtestBase(TestWithServers):
     def _start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
         # Get Dfuse params
-        self.dfuse = Dfuse(self.hostlist_clients, self.tmp, self.basepath)
+        self.dfuse = Dfuse(self.hostlist_clients, self.tmp, True)
         self.dfuse.get_params(self)
 
         # update dfuse params
