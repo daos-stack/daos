@@ -393,12 +393,12 @@ func fmtRangeHost(hr *hostRange, num uint) string {
 // onto the HostList and then removes it from the HostList. Returns
 // an error if the HostList is empty.
 func (hl *HostList) Pop() (hostName string, err error) {
-	if hl.IsEmpty() {
-		return "", ErrEmpty
-	}
-
 	hl.Lock()
 	defer hl.Unlock()
+
+	if len(hl.ranges) == 0 {
+		return "", ErrEmpty
+	}
 
 	hl.hostCount--
 
@@ -423,12 +423,12 @@ func (hl *HostList) Pop() (hostName string, err error) {
 // onto the HostList and then removes it from the HostList. Returns
 // an error if the HostList is empty.
 func (hl *HostList) Shift() (hostName string, err error) {
-	if hl.IsEmpty() {
-		return "", ErrEmpty
-	}
-
 	hl.Lock()
 	defer hl.Unlock()
+
+	if len(hl.ranges) == 0 {
+		return "", ErrEmpty
+	}
 
 	hl.hostCount--
 
@@ -512,12 +512,12 @@ func fmtRange(hr *hostRange) (rs string) {
 // are removed from the HostList. Returns an error if the
 // HostList is empty.
 func (hl *HostList) PopRange() (hostRange string, err error) {
-	if hl.IsEmpty() {
-		return "", ErrEmpty
-	}
-
 	hl.Lock()
 	defer hl.Unlock()
+
+	if len(hl.ranges) == 0 {
+		return "", ErrEmpty
+	}
 
 	tailIdx := len(hl.ranges) - 1
 	tail := hl.ranges[tailIdx]
@@ -534,12 +534,12 @@ func (hl *HostList) PopRange() (hostRange string, err error) {
 // are removed from the HostList. Returns an error if the
 // HostList is empty.
 func (hl *HostList) ShiftRange() (hostRange string, err error) {
-	if hl.IsEmpty() {
-		return "", ErrEmpty
-	}
-
 	hl.Lock()
 	defer hl.Unlock()
+
+	if len(hl.ranges) == 0 {
+		return "", ErrEmpty
+	}
 
 	head := hl.ranges[0]
 	hostRange = fmtRange(head)
