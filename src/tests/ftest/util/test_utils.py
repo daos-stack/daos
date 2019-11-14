@@ -189,7 +189,7 @@ class TestPool(TestDaosApiBase):
             self.uuid, self.svc_ranks)
 
     @fail_on(DaosApiError)
-    def create_dmg(self, dmg_bin_path):
+    def create_dmg(self, dmg_bin_path, nsvc=None, group=None):
         """Create a pool using dmg create pool.
 
         1. Destroys the existing pool
@@ -201,12 +201,17 @@ class TestPool(TestDaosApiBase):
         Args:
             dmg_bin_path (str): Directory where dmg is installed. Call
                 self.basepath + '/install/bin' in the test
+            nsvc (str): Number of pool service replicas. Defaults to None, in
+                which case 1 is used by the dmg binary in default. Currently
+                pool/pool_svc is the only test that uses this parameter.
+            group (str): Group name. Defaults to None, in which case the
+                system's username is passed into dmg_utils.py as group.
 
         Returns:
             Boolean: True if the pool create succeeds. False otherwise.
         """
         # 1. Destroys the existing pool
-        self.destroy()
+        self.destroy_dmg(dmg_bin_path)
         if self.target_list.value is not None:
             self.log.info(
                 "Creating a pool on targets %s", self.target_list.value)
@@ -215,6 +220,8 @@ class TestPool(TestDaosApiBase):
 
         # 2. Use dmg to create a pool
         user = getpass.getuser()
+        if group == None:
+            group = user
         # Currently, there is one test that creates the pool over the subset of
         # the server hosts; pool/evict_test. To do so, the test needs to set
         # the rank(s) to target_list.value starting from 0. e.g., if you're
@@ -237,8 +244,9 @@ class TestPool(TestDaosApiBase):
         self.log.info("ranks_comma_separated = %s" % ranks_comma_separated)
         # Call the dmg pool create command
         create_result = pool_create(path=dmg_bin_path,
-                                    scm_size=self.scm_size.value, group=user,
-                                    user=user, ranks=ranks_comma_separated)
+                                    scm_size=self.scm_size.value, group=group,
+                                    user=user, ranks=ranks_comma_separated,
+                                    nsvc=nsvc)
         # If the returned result is None, that means the command has failed
         if create_result == None:
             return False
@@ -258,10 +266,6 @@ class TestPool(TestDaosApiBase):
             self.pool.group = None
         else:
             self.pool.group = ctypes.create_string_buffer(self.name.value)
-        if self.svcn.value == None:
-            svcn_val = 1
-        else:
-            svcn_val = self.svcn.value
         # Modification 1: Use the length of service_replica returned by dmg to
         # calculate rank_t. Note that we assume we always get a single number.
         # I'm not sure if we ever get multiple numbers, but in that case, we
