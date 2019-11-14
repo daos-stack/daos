@@ -70,10 +70,18 @@ RUN yum -y install \
            yum-plugin-copr python-pathlib                      \
            python2-clustershell python2-Cython python2-pip     \
            python36-clustershell python36-paramiko             \
-           python3-pip;                                        \
+           python3-pip openmpi-devel;                          \
     yum -y copr enable jhli/ipmctl;                            \
     yum -y copr enable jhli/safeclib;                          \
     yum -y install libipmctl-devel
+
+# DAOS python 3 packages required for pylint
+RUN pip3 install avocado-framework; \
+    pip3 install avocado-framework-plugin-result-html; \
+    pip3 install avocado-framework-plugin-varianter-yaml-to-mux; \
+    pip3 install numpy; \
+    pip3 install mpi4py; \
+    pip3 install jira
 
 # Add DAOS user
 ENV USER daos
@@ -127,15 +135,6 @@ gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;         
 # force an upgrade to get any newly built RPMs
 ARG CACHEBUST=1
 RUN yum -y upgrade --exclude=dpdk-devel,dpdk,mercury-devel,mercury,cart-devel,cart,fio
-
-# DAOS python 3 packages required for pylint
-#  - mpi4py requires ompi-devel
-RUN pip3 install avocado-framework; \
-    pip3 install avocado-framework-plugin-result-html; \
-    pip3 install avocado-framework-plugin-varianter-yaml-to-mux; \
-    pip3 install numpy; \
-    pip3 install mpi4py; \
-    pip3 install jira
 
 # Switch to new user
 #USER $USER
