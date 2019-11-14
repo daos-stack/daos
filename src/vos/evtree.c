@@ -2967,7 +2967,7 @@ int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
 	filter.fr_epr.epr_lo = rect->rc_epc;
 	filter.fr_epr.epr_hi = rect->rc_epc;
 	filter.fr_punch = 0;
-	rc = evt_ent_array_fill(tcx, EVT_FIND_SAME, DAOS_INTENT_PUNCH,
+	rc = evt_ent_array_fill(tcx, EVT_FIND_SAME, DAOS_INTENT_PURGE,
 				&filter, rect, &ent_array);
 	if (rc != 0)
 		return rc;
