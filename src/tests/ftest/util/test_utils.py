@@ -232,7 +232,7 @@ class TestPool(TestDaosApiBase):
         # in dmg pool create -r 0,1. If you don't set target_list.value, -r
         # won't be used, in which case the pool is created over all the server
         # hosts
-        if self.target_list.value == None:
+        if self.target_list.value is None:
             ranks_comma_separated = None
         else:
             ranks_comma_separated = ""
