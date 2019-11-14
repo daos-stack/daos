@@ -31,7 +31,7 @@ BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libpmem-devel, libpmemobj-devel
 BuildRequires: fuse-devel >= 3.4.2
 BuildRequires: protobuf-c-devel
-BuildRequires: spdk-devel, spdk-tools
+BuildRequires: spdk-devel <= 18.07, spdk-tools <= 18.07
 BuildRequires: fio < 3.4
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
