@@ -79,7 +79,6 @@ const (
 	MethodDevStateQuery = C.DRPC_METHOD_MGMT_DEV_STATE_QUERY
 	// MethodSetFaultyState is a ModuleMgmt method
 	MethodSetFaultyState = C.DRPC_METHOD_MGMT_SET_FAULTY_STATE
-
 )
 
 const (

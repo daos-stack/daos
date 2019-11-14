@@ -150,8 +150,13 @@ ds_mgmt_free_pool_list(struct mgmt_list_pools_one **poolsp, uint64_t len) {
 }
 
 int
-ds_mgmt_dev_state_query(uuid_t uuid, Mgmt__DevStateResp *resp,
-			bool set_state)
+ds_mgmt_dev_state_query(uuid_t uuid, Mgmt__DevStateResp *resp)
+{
+	return 0;
+}
+
+int
+ds_mgmt_faulty_state_set(uuid_t uuid, Mgmt__DevStateResp *resp)
 {
 	return 0;
 }

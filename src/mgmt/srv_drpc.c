@@ -1162,7 +1162,7 @@ ds_mgmt_drpc_dev_state_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	} else
 		uuid_clear(uuid); /* need to set uuid = NULL */
 
-	rc = ds_mgmt_dev_state_query(uuid, resp, /*set state*/false);
+	rc = ds_mgmt_dev_state_query(uuid, resp);
 	if (rc != 0)
 		D_ERROR("Failed to query device state :%d\n", rc);
 
@@ -1232,7 +1232,7 @@ ds_mgmt_drpc_dev_set_faulty(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	} else
 		uuid_clear(uuid); /* need to set uuid = NULL */
 
-	rc = ds_mgmt_dev_state_query(uuid, resp, /*set state*/true);
+	rc = ds_mgmt_faulty_state_set(uuid, resp);
 	if (rc != 0)
 		D_ERROR("Failed to set FAULTY device state :%d\n", rc);
 

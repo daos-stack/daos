@@ -114,7 +114,7 @@ func (s *smdQueryCmd) Execute(args []string) error {
 	return nil
 }
 
-// devStateQueryCmd is the struct representing the "storage query devie-state" subcommand
+// devStateQueryCmd is the struct representing the "storage query device-state" subcommand
 type devStateQueryCmd struct {
 	logCmd
 	connectedCmd
