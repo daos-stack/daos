@@ -70,7 +70,7 @@ RUN yum -y install \
            yum-plugin-copr python-pathlib                      \
            python2-clustershell python2-Cython python2-pip     \
            python36-clustershell python36-paramiko             \
-           python3-pip python-mpi4py;                          \
+           python3-pip openmpi-devel;                          \
     yum -y copr enable jhli/ipmctl;                            \
     yum -y copr enable jhli/safeclib;                          \
     yum -y install libipmctl-devel
@@ -80,6 +80,7 @@ RUN pip3 install avocado-framework; \
     pip3 install avocado-framework-plugin-result-html; \
     pip3 install avocado-framework-plugin-varianter-yaml-to-mux; \
     pip3 install numpy; \
+    env MPICC=/usr/lib64/openmpi/bin/mpicc pip install mpi4py; \
     pip3 install jira
 
 # Add DAOS user
