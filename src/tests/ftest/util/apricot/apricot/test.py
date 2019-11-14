@@ -428,7 +428,8 @@ class TestWithServers(TestWithoutServers):
                 if self.prefix != "/usr":
                     if self.server_managers[-1].runner.export.value is None:
                         self.server_managers[-1].runner.export.value = []
-                    self.server_managers[-1].runner.export.value.extend(["PATH"])
+                    self.server_managers[-1].runner.export.value.extend(
+                        ["PATH"])
                 try:
                     avocado_file = "src/tests/ftest/data/daos_avocado_test.yaml"
                     yamlfile = "{}/{}".format(self.basepath, avocado_file)

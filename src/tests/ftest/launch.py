@@ -610,10 +610,10 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
     # Copy any log files that exist on the test hosts and remove them from the
     # test host if the copy is successful.  Log any executed scp commands.
     # command = "set -Eeu; {}".format(
-    #     "for file in {}; do if [ -e $file ]; then set -x; "
-    #     "scp $file {}:{}/${{file##*/}}-$(hostname -s) && sudo -n rm -fr $file; "
-    #     "set +x; fi; done".format(
-    #         " ".join(non_dir_files), this_host, doas_logs_dir))
+    #   "for file in {}; do if [ -e $file ]; then set -x; "
+    #   "scp $file {}:{}/${{file##*/}}-$(hostname -s) && sudo -n rm -fr $file; "
+    #   "set +x; fi; done".format(
+    #       " ".join(non_dir_files), this_host, doas_logs_dir))
     # For debug
     command = "set -Eeu; {}".format(
         "err=0; for file in {}; do if [ -e $file ]; then set -x; ls -al $file; "

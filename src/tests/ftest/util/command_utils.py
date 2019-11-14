@@ -83,7 +83,7 @@ class BasicParameter(object):
 
 
 class FormattedParameter(BasicParameter):
-    # pylint: disable=too-few-public-methods
+    # pylint: disable=too-few-public-methods, pylint-no-member
     """A class for test parameters whose values are read from a yaml file."""
 
     def __init__(self, str_format, default=None):
@@ -343,7 +343,7 @@ class ExecutableCommand(CommandWithParameters):
         """
         self.log.info(
             "Checking status of the %s command in %s",
-            self._command, subprocess)
+            self._command, sub_process)
         return True
 
     def stop(self):
