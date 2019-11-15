@@ -62,25 +62,28 @@ type (
 	HostList struct {
 		sync.RWMutex
 		ranges    hostRanges
-		hostCount uint
+		hostCount int
 	}
 )
 
 func (hn *hostName) Parse(input string) error {
 	// prefixN (default)
-	re := regexp.MustCompile(`^([a-zA-Z]+)(\d+)(.*)`)
+	re := regexp.MustCompile(`^([a-zA-Z]+)(\d+)?(.*)?`)
 	if strings.Contains(input, "-") {
 		// handle hosts in the format prefixN-N
-		re = regexp.MustCompile(`^(\w+-?)(\d+)(.*)`)
+		re = regexp.MustCompile(`^(\w+-?)(\d+)?(.*)?`)
 	}
 
 	matches := re.FindStringSubmatch(input)
 	if matches == nil {
-		hn.prefix = input
-		return nil
+		return fmt.Errorf("invalid hostname %q", input)
 	}
 
+	if len(matches[1]) == 0 {
+		return fmt.Errorf("invalid hostname (missing prefix) %q", input)
+	}
 	hn.prefix = matches[1]
+
 	if len(matches[2]) > 0 {
 		number, err := strconv.ParseUint(matches[2], 10, 0)
 		if err != nil {
@@ -222,6 +225,9 @@ func parseBracketedHostList(input, rangeSep, rangeOp string) (*HostList, error) 
 		}
 
 		prefix := tok[:leftIndex]
+		if len(prefix) == 0 {
+			return nil, fmt.Errorf("invalid range: %q", tok)
+		}
 		var suffix string
 		if len(tok[rightIndex:]) > 0 {
 			suffix = tok[rightIndex+1:]
@@ -411,8 +417,10 @@ func (hl *HostList) Pop() (hostName string, err error) {
 	}
 
 	hostName = fmtRangeHost(tail, tail.hi)
-	tail.hi--
-	if tail.hi < tail.lo {
+	if tail.hi > 0 {
+		tail.hi--
+	}
+	if tail.hi < tail.lo || (tail.hi == tail.lo && tail.lo == 0) {
 		hl.ranges = hl.ranges[:tailIdx]
 	}
 
@@ -448,7 +456,7 @@ func (hl *HostList) Shift() (hostName string, err error) {
 	return
 }
 
-func (hl *HostList) getNthHostRange(n int) (int, *hostRange, uint, error) {
+func (hl *HostList) getNthHostRange(n int) (int, *hostRange, int, error) {
 	if hl.hostCount == 0 {
 		return -1, nil, 0, ErrEmpty
 	}
@@ -457,15 +465,15 @@ func (hl *HostList) getNthHostRange(n int) (int, *hostRange, uint, error) {
 		return -1, nil, 0, errors.New("index can't be < 0")
 	}
 
-	if uint(n) >= hl.hostCount {
+	if n >= hl.hostCount {
 		return -1, nil, 0, errors.New("index must be < hostCount")
 	}
 
-	var counted uint
+	var counted int
 	for idx, hr := range hl.ranges {
 		rangeCount := hr.count()
 
-		if uint(n) <= rangeCount-1+counted {
+		if n <= rangeCount-1+counted {
 			return idx, hr, counted, nil
 		}
 		counted += rangeCount
@@ -487,7 +495,7 @@ func (hl *HostList) Nth(n int) (string, error) {
 	}
 
 	if hr.isRange {
-		return fmtRangeHost(hr, hr.lo+uint(n)-depth), nil
+		return fmtRangeHost(hr, hr.lo+uint(n)-uint(depth)), nil
 	}
 	return hr.prefix, nil
 }
@@ -561,10 +569,10 @@ func (hl *HostList) Find(stringHost string) (int, bool) {
 	hl.RLock()
 	defer hl.RUnlock()
 
-	var counted uint
+	var counted int
 	for _, hr := range hl.ranges {
 		if offset, contains := hr.containsHost(hn); contains {
-			return int(counted + offset), true
+			return counted + int(offset), true
 		}
 		counted += hr.count()
 	}
@@ -647,7 +655,7 @@ func (hl *HostList) DeleteNth(n int) error {
 		return hl.deleteRangeAt(idx)
 	}
 
-	hostNum := hr.lo + uint(n) - depth
+	hostNum := hr.lo + uint(n) - uint(depth)
 	newHr, err := hr.deleteHost(hostNum)
 	if err != nil {
 		return err
@@ -715,7 +723,7 @@ func (hl *HostList) Count() int {
 
 // IsEmpty returns true if the HostList has zero hosts.
 func (hl *HostList) IsEmpty() bool {
-	return hl.Count() == 0
+	return hl.Count() <= 0
 }
 
 // Uniq forces a sort operation on the HostList and removes duplicates.
@@ -734,7 +742,7 @@ func (hl *HostList) Uniq() {
 		cur := hl.ranges[i]
 		dupes := prev.join(cur)
 		if dupes >= 0 {
-			hl.hostCount -= uint(dupes)
+			hl.hostCount -= dupes
 			hl.ranges = append(hl.ranges[:i], hl.ranges[i+1:]...)
 		} else {
 			i++

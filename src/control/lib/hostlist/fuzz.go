@@ -32,7 +32,7 @@ func Fuzz(data []byte) int {
 
 	_ = hs.String()
 
-	if _, err := hs.Delete(string(data)); err != nil {
+	if _, err := hs.Delete(string(data)); err != nil && err != ErrEmpty {
 		panic(err)
 	}
 

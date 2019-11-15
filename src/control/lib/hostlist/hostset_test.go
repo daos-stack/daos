@@ -167,13 +167,26 @@ func TestHostSet_FuzzCrashers(t *testing.T) {
 		expErr    error
 		expDelErr error
 	}{
-		"00]000000[": { // check for r < l
+		// check for r < l
+		"00]000000[": {
 			expErr: errors.New("invalid range"),
 		},
-		"host[1-10000000000]": { // -ETOOBIG
+		// -ETOOBIG
+		"host[1-10000000000]": {
 			expErr: errors.New("invalid range"),
 		},
-		"d,d1": {}, // should be parsed as two ranges, not merged
+		// should be parsed as two ranges, not merged
+		"d,d1": {},
+		// don't allow nonsensical prefixes
+		"-,-,,1 b,e-,d,y _m,%": {
+			expErr: errors.New("invalid hostname"),
+		},
+		// require a prefix (duh!)
+		"[45,    7,2,42,4,6,8,8,0]": {
+			expErr: errors.New("invalid range"),
+		},
+		// be careful with uint--
+		"host0": {},
 	} {
 		t.Run(input, func(t *testing.T) {
 			hs, gotErr := hostlist.CreateSet(input)

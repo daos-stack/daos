@@ -66,8 +66,8 @@ func (hr *hostRange) canAppend(other *hostRange) bool {
 	return false
 }
 
-func (hr *hostRange) count() uint {
-	return hr.hi - hr.lo + 1
+func (hr *hostRange) count() int {
+	return int(hr.hi - hr.lo + 1)
 }
 
 func (hr *hostRange) within(other *hostRange) bool {
