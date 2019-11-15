@@ -729,6 +729,20 @@ func TestProviderFormat(t *testing.T) {
 			getFsStr: fsTypeNone,
 			mountErr: errors.New("mount failed"),
 		},
+		"dcpm: missing device": {
+			request: &FormatRequest{
+				Mountpoint: goodMountPoint,
+				Dcpm: &DcpmParams{
+					Device: "/bad/device",
+				},
+			},
+			getFsErr: &os.PathError{
+				Op:   "stat",
+				Path: "/bad/device",
+				Err:  os.ErrNotExist,
+			},
+			expErr: FaultFormatMissingDevice,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
