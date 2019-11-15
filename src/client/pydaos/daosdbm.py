@@ -68,9 +68,10 @@ class daos_named_kv():
         """Return a list of KVs"""
 
         for kv in self.root_kv:
-            yield(kv)
+            yield kv
 
 def main():
+    """Migrate data from dbm file to named DAOS KV"""
 
     if len(sys.argv) < 3:
         print('Need pool/container UUIDs')
@@ -112,7 +113,7 @@ def main():
         start_count = 0
 
     start_count = 0
-        
+
     print('Copying records from {} to {}'.format(start_count, count))
 
     start_time = time.perf_counter()
