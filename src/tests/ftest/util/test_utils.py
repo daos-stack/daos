@@ -176,7 +176,8 @@ class TestPool(TestDaosApiBase):
         """Create a pool with either API or dmg.
 
         To use dmg, the test needs to set control_method.value to USE_DMG
-        prior to calling this method. For example,
+        prior to calling this method. It also needs to set dmg_bin_path. For
+        example,
 
         self.pool.dmg_bin_path = self.basepath + '/install/bin'
 
