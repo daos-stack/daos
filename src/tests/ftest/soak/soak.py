@@ -248,12 +248,11 @@ class Soak(TestWithServers):
                         "_results.out_%j_%t_" + str(tasks) + "_")
                     num_tasks = nodesperjob * tasks
                     sbatch = {
-                            "ntasks-per-node": tasks,
-                            "ntasks": num_tasks,
-                            "time": job_time,
-                            "partition": self.partition_clients,
-                            "exclude": NodeSet.fromlist(
-                                self.hostlist_servers + self.test_node)}
+                        "ntasks-per-node": tasks,
+                        "ntasks": num_tasks,
+                        "time": job_time,
+                        "partition": self.partition_clients,
+                        "exclude": NodeSet.fromlist(self.hostlist_servers)}
                     script = slurm_utils.write_slurm_script(
                         self.rem_pass_dir, job_name, output, nodesperjob,
                         [cmd], sbatch)
