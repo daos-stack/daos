@@ -105,9 +105,9 @@ vos_ilog_fetch_(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
  */
 #define vos_ilog_update vos_ilog_update_
 int
-vos_ilog_update(struct vos_container *cont, struct ilog_df *ilog,
-		const daos_epoch_range_t *epr, struct vos_ilog_info *parent,
-		struct vos_ilog_info *info);
+vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
+		 const daos_epoch_range_t *epr, struct vos_ilog_info *parent,
+		 struct vos_ilog_info *info);
 
 
 /**
