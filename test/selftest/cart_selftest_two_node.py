@@ -56,21 +56,24 @@ class CartSelfTwoNodeTest(Test):
         :avocado: tags=all,selftest,two_node
         """
 
-        urifile = self.utils.create_uri_file()
+        srvcmd = self.utils.build_cmd(self, self.env, "srv", True)
 
-        srvcmd = self.utils.build_cmd(self, self.env, "srv", True, urifile)
-        clicmd = self.utils.build_cmd(self, self.env, "cli", False, urifile)
-
-        srv_rtn = self.utils.launch_cmd_bg(self, srvcmd)
+        try:
+            srv_rtn = self.utils.launch_cmd_bg(self, srvcmd)
+        except Exception as e:
+            self.utils.print("Exception in launching server : {}".format(e))
+            self.fail("Test failed.\n")
 
         # Verify the server is still running.
         if not self.utils.check_process(srv_rtn):
             procrtn = self.utils.stop_process(srv_rtn)
-            self.fail("Server did not launch, return code %s" % procrtn)
+            self.fail("Server did not launch, return code %s" \
+                       % procrtn)
 
+        clicmd = self.utils.build_cmd(self, self.env, "cli1", False)
         self.utils.launch_test(self, clicmd, srv_rtn)
-
-        self.utils.stop_process(srv_rtn)
+        clicmd = self.utils.build_cmd(self, self.env, "cli2", False)
+        self.utils.launch_test(self, clicmd, srv_rtn)
 
 if __name__ == "__main__":
     main()

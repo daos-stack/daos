@@ -2,8 +2,8 @@
 # required quantity is indicated by the placeholders
 
 defaultENV:
-  #!filter-only : /run/envs_CRT_CTX_SHARE_ADDR/sep
-  #!filter-only : /run/tests/rpc_error
+  #!filter-only : /run/env_CRT_CTX_SHARE_ADDR/sep
+  #!filter-only : /run/tests/proto_np
   D_LOG_MASK: "DEBUG,MEM=ERR"
   CRT_PHY_ADDR_STR: "ofi+sockets"
   OFI_INTERFACE: "eth0"
@@ -24,14 +24,14 @@ hosts: !mux
     cli:
        - boro-A
 tests: !mux
-  proto:
-    name: proto_basic
-    srv_bin: tests/test_proto_server
-    srv_arg: "--name service_group  --is_service"
+  proto_np:
+    name: proto_np
+    srv_bin: ../bin/crt_launch
+    srv_arg: "-e tests/test_proto_server --name proto_srv_grp --cfg_path=."
     srv_env: ""
     srv_ppn: "1"
     cli_bin: tests/test_proto_client
-    cli_arg: " --name client_group --attach_to service_group"
+    cli_arg: "--name proto_cli_grp --attach_to proto_srv_grp --cfg_path=."
     cli_env: ""
     cli_ppn: "1"
   echo:
