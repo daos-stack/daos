@@ -701,6 +701,7 @@ void crt_hdlr_iv_update(crt_rpc_t *rpc_req);
 void crt_hdlr_iv_sync(crt_rpc_t *rpc_req);
 int crt_iv_sync_corpc_aggregate(crt_rpc_t *source, crt_rpc_t *result,
 				void *arg);
+int crt_iv_sync_corpc_pre_forward(crt_rpc_t *rpc, void *arg);
 
 /* crt_register.c */
 int

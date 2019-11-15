@@ -343,6 +343,23 @@ typedef int (*crt_iv_on_put_cb_t)(crt_iv_namespace_t ivns,
 typedef bool (*crt_iv_keys_match_cb_t)(crt_iv_namespace_t ivns,
 				crt_iv_key_t *key1, crt_iv_key_t *key2);
 
+/**
+ * If provided, this callback will be called before the
+ * synchronization/notification is propagated (flowing down from root to leaf)
+ * to the child nodes, if any.
+ *
+ * \param[in] ivns		the local handle of the IV namespace
+ * \param[in] iv_key		key of the IV
+ * \param[in] iv_ver		version of the IV
+ * \param[in] iv_value		IV value to be refresh
+ * \param[in] arg		private user data
+ *
+ * \return			DER_SUCCESS on success, negative value if error
+ */
+typedef int (*crt_iv_pre_sync_cb_t)(crt_iv_namespace_t ivns,
+				    crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
+				    d_sg_list_t *iv_value, void *arg);
+
 struct crt_iv_ops {
 	crt_iv_pre_fetch_cb_t	ivo_pre_fetch;
 	crt_iv_on_fetch_cb_t	ivo_on_fetch;
@@ -354,6 +371,7 @@ struct crt_iv_ops {
 	crt_iv_on_get_cb_t	ivo_on_get;
 	crt_iv_on_put_cb_t	ivo_on_put;
 	crt_iv_keys_match_cb_t	ivo_keys_match;
+	crt_iv_pre_sync_cb_t	ivo_pre_sync;
 };
 
 /**

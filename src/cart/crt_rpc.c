@@ -149,7 +149,7 @@ CRT_RPC_DEFINE(crt_iv_sync, CRT_ISEQ_IV_SYNC, CRT_OSEQ_IV_SYNC)
 
 static struct crt_corpc_ops crt_iv_sync_co_ops = {
 	.co_aggregate = crt_iv_sync_corpc_aggregate,
-	.co_pre_forward = NULL,
+	.co_pre_forward = crt_iv_sync_corpc_pre_forward,
 };
 
 /* barrier */

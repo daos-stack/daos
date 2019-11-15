@@ -1862,6 +1862,90 @@ crt_iv_sync_corpc_aggregate(crt_rpc_t *source, crt_rpc_t *result, void *arg)
 	return 0;
 }
 
+static int
+call_pre_sync_cb(struct crt_ivns_internal *ivns_internal,
+		 struct crt_iv_sync_in *input, crt_rpc_t *rpc_req)
+{
+	struct crt_iv_ops	*iv_ops;
+	d_sg_list_t		 iv_value;
+	d_sg_list_t		 tmp_iv;
+	void			*user_priv;
+	bool			 need_put = false;
+	int			 rc;
+
+	iv_ops = crt_iv_ops_get(ivns_internal, input->ivs_class_id);
+	D_ASSERT(iv_ops != NULL);
+
+	rc = iv_ops->ivo_on_get(ivns_internal, &input->ivs_key, 0,
+				CRT_IV_PERM_WRITE, &iv_value,
+				&user_priv);
+	tmp_iv = iv_value;
+	if (rc != 0) {
+		D_ERROR("ivo_on_get() failed; rc=%d\n", rc);
+		D_GOTO(exit, rc);
+	}
+	need_put = true;
+
+	rc = crt_bulk_access(rpc_req->cr_co_bulk_hdl, &tmp_iv);
+	if (rc != 0) {
+		D_ERROR("crt_bulk_access() failed; rc=%d\n", rc);
+		D_GOTO(exit, rc);
+	}
+
+	D_DEBUG(DB_TRACE, "Executing ivo_pre_sync\n");
+	rc = iv_ops->ivo_pre_sync(ivns_internal, &input->ivs_key, 0,
+				  &iv_value, user_priv);
+	if (rc != 0)
+		D_ERROR("ivo_pre_sync() failed; rc=%d\n", rc);
+
+exit:
+	if (need_put)
+		iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
+	return rc;
+}
+
+int
+crt_iv_sync_corpc_pre_forward(crt_rpc_t *rpc, void *arg)
+{
+	struct crt_iv_sync_in		*input;
+	struct crt_ivns_internal	*ivns_internal;
+	struct crt_iv_ops		*iv_ops;
+	struct crt_ivns_id		 ivns_id;
+	crt_iv_sync_t			*sync_type;
+	int				 rc = 0;
+
+	/* This is an internal call. All errors are fatal */
+	input = crt_req_get(rpc);
+	D_ASSERT(input != NULL);
+
+	ivns_id.ii_group_name = input->ivs_ivns_group;
+	ivns_id.ii_nsid = input->ivs_ivns_id;
+	sync_type = (crt_iv_sync_t *)input->ivs_sync_type.iov_buf;
+
+	ivns_internal = crt_ivns_internal_lookup(&ivns_id);
+
+	/* In some use-cases sync can arrive to a node that hasn't attached
+	* iv namespace yet. Treat such errors as fatal if the flag is set.
+	**/
+	if (ivns_internal == NULL) {
+		D_ERROR("ivns_internal was NULL. ivns_id=%s:%d\n",
+			ivns_id.ii_group_name, ivns_id.ii_nsid);
+
+		D_ASSERT(!(sync_type->ivs_flags &
+			   CRT_IV_SYNC_FLAG_NS_ERRORS_FATAL));
+		return -DER_NONEXIST;
+	}
+
+	iv_ops = crt_iv_ops_get(ivns_internal, input->ivs_class_id);
+	D_ASSERT(iv_ops != NULL);
+
+	if (iv_ops->ivo_pre_sync != NULL)
+		rc = call_pre_sync_cb(ivns_internal, input, rpc);
+
+	IVNS_DECREF(ivns_internal);
+	return rc;
+}
+
 /* Calback structure for iv sync RPC */
 struct iv_sync_cb_info {
 	/* Local bulk handle to free in callback */
