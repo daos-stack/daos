@@ -145,22 +145,77 @@ class TestPool(TestDaosApiBase):
         self.uid = os.geteuid()
         self.gid = os.getegid()
 
+        # Constants to define whether to use API or dmg to create and destroy
+        # pool.
+        self.USE_API = 0
+        self.USE_DMG = 1
+
         self.mode = BasicParameter(None)
         self.name = BasicParameter(None)            # server group name
         self.svcn = BasicParameter(None)
         self.target_list = BasicParameter(None)
         self.scm_size = BasicParameter(None)
         self.nvme_size = BasicParameter(None)
+        # Set UES_API to use API or USE_DMG to use dmg. If it's not set, API is
+        # used.
+        self.control_method = BasicParameter(None)
 
         self.pool = None
         self.uuid = None
         self.info = None
         self.svc_ranks = None
         self.connected = False
+        # Required to use dmg. It defined the directory where dmg is installed.
+        # Call self.basepath + '/install/bin' in the test
+        self.dmg_bin_path = None
+        # Optional to use dmg. If it's not set, the system's username is passed
+        # into dmg_utils.py as group.
+        self.group = None
+
+    def create(self):
+        """Create a pool with either API or dmg.
+
+        To use dmg, the test needs to set control_method.value to USE_DMG
+        prior to calling this method. For example,
+
+        self.pool.dmg_bin_path = self.basepath + '/install/bin'
+
+        If it wants to use --nsvc option, it needs to set the value to
+        svcn.value. Otherwise, 1 is used. If it wants to use --group, it needs
+        to set group.
+
+        This method makes it easy to switch between the API and dmg when
+        creating a pool. However, if the test needs to test the create
+        functionality, it won't be simple and we need to keep in mind the
+        return value and @fail_on(DaosApiError).
+
+        create_with_dmg returns the result with True or False, so the test
+        needs to check this. On the other hand, create_with_api doesn't have a
+        return value. When create fails, it fails the test. Thus, it's not
+        possible to test negative cases because the test would fail regardless
+        of the expectation. I think one simple way is to create a copy of
+        create_with_api, but without @fail_on. Then catch the exception
+        in the test for negative cases.
+
+        pool_svc tests the create functionality. There may be more.
+
+        Returns:
+            bool: If dmg is used, True for success and False for failure. If
+                API is used, it returns True for success, but fails the test if
+                it couldn't create a pool for some reason.
+        """
+        if (self.control_method.value is None or
+            self.control_method.value == self.USE_API):
+            self.create_with_api()
+            return True
+        elif (self.control_method.value == self.USE_DMG and
+              self.dmg_bin_path is not None):
+            return self.create_with_dmg()
+        return False
 
     @fail_on(DaosApiError)
-    def create(self):
-        """Create a pool.
+    def create_with_api(self):
+        """Create a pool with API.
 
         Destroys an existing pool if defined and assigns self.pool and
         self.uuid.
@@ -188,8 +243,7 @@ class TestPool(TestDaosApiBase):
             "  Pool created with uuid %s and svc ranks %s",
             self.uuid, self.svc_ranks)
 
-    @fail_on(DaosApiError)
-    def create_dmg(self, dmg_bin_path, nsvc=None, group=None):
+    def create_with_dmg(self):
         """Create a pool using dmg create pool.
 
         1. Destroys the existing pool
@@ -198,20 +252,11 @@ class TestPool(TestDaosApiBase):
             operations
         4. Set UUID of the new pool to the DaosPool object
 
-        Args:
-            dmg_bin_path (str): Directory where dmg is installed. Call
-                self.basepath + '/install/bin' in the test
-            nsvc (str): Number of pool service replicas. Defaults to None, in
-                which case 1 is used by the dmg binary in default. Currently
-                pool/pool_svc is the only test that uses this parameter.
-            group (str): Group name. Defaults to None, in which case the
-                system's username is passed into dmg_utils.py as group.
-
         Returns:
             Boolean: True if the pool create succeeds. False otherwise.
         """
         # 1. Destroys the existing pool
-        self.destroy_dmg(dmg_bin_path)
+        self.destroy()
         if self.target_list.value is not None:
             self.log.info(
                 "Creating a pool on targets %s", self.target_list.value)
@@ -220,8 +265,8 @@ class TestPool(TestDaosApiBase):
 
         # 2. Use dmg to create a pool
         user = getpass.getuser()
-        if group is None:
-            group = user
+        if self.group is None:
+            self.group = user
         # Currently, there is one test that creates the pool over the subset of
         # the server hosts; pool/evict_test. To do so, the test needs to set
         # the rank(s) to target_list.value starting from 0. e.g., if you're
@@ -243,10 +288,10 @@ class TestPool(TestDaosApiBase):
                     ranks_comma_separated += ","
         self.log.info("ranks_comma_separated = %s", ranks_comma_separated)
         # Call the dmg pool create command
-        create_result = pool_create(path=dmg_bin_path,
-                                    scm_size=self.scm_size.value, group=group,
-                                    user=user, ranks=ranks_comma_separated,
-                                    nsvc=nsvc)
+        create_result = pool_create(path=self.dmg_bin_path,
+                                    scm_size=self.scm_size.value,
+                                    group=self.group, user=user,ranks=ranks_comma_separated,
+                                    nsvc=self.svcn.value)
         # If the returned result is None, that means the command has failed
         if create_result is None:
             return False
@@ -330,7 +375,28 @@ class TestPool(TestDaosApiBase):
 
     @fail_on(DaosApiError)
     def destroy(self, force=1):
-        """Destroy the pool.
+        """Destroy the pool with either API or dmg.
+
+        It uses control_method member previously set, so if you want to use the
+        other way for some reason, update it before calling this method.
+
+        Args:
+            force (int, optional): force flag. Defaults to 1.
+
+        Returns:
+            bool: True if the pool has been destroyed; False if the pool is not
+                defined.
+        """
+        if (self.control_method.value is None or
+            self.control_method.value == self.USE_API):
+            return self.destroy_with_api(force)
+        elif (self.control_method.value == self.USE_DMG and
+              self.dmg_bin_path is not None):
+            return self.destroy_with_dmg(force)
+
+    @fail_on(DaosApiError)
+    def destroy_with_api(self, force=1):
+        """Destroy the pool with API.
 
         Args:
             force (int, optional): force flag. Defaults to 1.
@@ -353,12 +419,10 @@ class TestPool(TestDaosApiBase):
         return False
 
     @fail_on(DaosApiError)
-    def destroy_dmg(self, dmg_bin_path, force=1):
-        """Destroy the pool using dmg.
+    def destroy_with_dmg(self, force=1):
+        """Destroy the pool with dmg pool destroy.
 
         Args:
-            dmg_bin_path (str): Directory where dmg is installed. Call
-                self.basepath + '/install/bin' in the test
             force (int, optional): force flag. Defaults to 1.
 
         Returns:
@@ -370,7 +434,7 @@ class TestPool(TestDaosApiBase):
             self.log.info("Destroying pool %s", self.uuid)
             if self.pool.attached:
                 force_bool = bool(force == 1)
-                destroy_result = pool_destroy(path=dmg_bin_path,
+                destroy_result = pool_destroy(path=self.dmg_bin_path,
                                               pool_uuid=self.uuid,
                                               force=force_bool)
                 self.log.info(" Destroy result stdout = %s",
