@@ -431,8 +431,7 @@ class TestWithServers(TestWithoutServers):
                     self.server_managers[-1].runner.export.value.extend(
                         ["PATH"])
                 try:
-                    avocado_file = "src/tests/ftest/data/daos_avocado_test.yaml"
-                    yamlfile = "{}/{}".format(self.basepath, avocado_file)
+                    yamlfile = os.path.join(self.tmp, "daos_avocado_test.yaml")
                     self.server_managers[-1].start(yamlfile)
                 except ServerFailed as error:
                     self.multi_log("  {}".format(error))
