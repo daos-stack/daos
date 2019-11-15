@@ -907,8 +907,6 @@ int
 vos_gc_pool(daos_handle_t poh, int *credits);
 
 enum vos_cont_opc {
-	/** reset HAE (Highest Aggregated Epoch) **/
-	VOS_CO_CTL_RESET_HAE,
 	/** abort VOS aggregation **/
 	VOS_CO_CTL_ABORT_AGG,
 };
