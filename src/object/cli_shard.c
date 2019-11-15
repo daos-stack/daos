@@ -578,7 +578,9 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		D_ERROR("punch rpc failed rc %d\n", rc);
 		D_GOTO(out_req, rc);
 	}
-	return rc;
+
+	dc_pool_put(pool);
+	return 0;
 
 out_req:
 	crt_req_decref(req);
