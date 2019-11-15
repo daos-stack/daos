@@ -3313,6 +3313,7 @@ crt_grp_config_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank)
 	D_ALLOC(grpname, CRT_GROUP_ID_MAX_LEN + 1);
 	if (grpname == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
+
 	snprintf(fmt, 64, "%%*s%%%ds", CRT_GROUP_ID_MAX_LEN);
 	rc = fscanf(fp, fmt, grpname);
 	if (rc == EOF) {
@@ -3355,7 +3356,7 @@ crt_grp_config_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	D_ALLOC(addr_str, CRT_ADDR_STR_MAX_LEN);
+	D_ALLOC(addr_str, CRT_ADDR_STR_MAX_LEN + 1);
 	if (addr_str == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
