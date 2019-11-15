@@ -363,6 +363,8 @@ typedef struct {
 	uint32_t		ci_nsnapshots;
 	/** Epochs of returns snapshots */
 	daos_epoch_t	       *ci_snapshots;
+	/** The minimal "Highest aggregated epoch" among all targets */
+	daos_epoch_t		ci_hae;
 	/* TODO: add more members, e.g., size, # objects, uid, gid... */
 } daos_cont_info_t;
 
