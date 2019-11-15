@@ -833,7 +833,7 @@ static const struct CMUnitTest punch_model_tests[] = {
 int
 run_pm_tests(void)
 {
-	if (RUNNING_ON_VALGRIND)
+	if (DAOS_ON_VALGRIND)
 		buf_size = 100;
 	return cmocka_run_group_tests_name("VOS Punch Model tests",
 					   punch_model_tests, setup_io,
