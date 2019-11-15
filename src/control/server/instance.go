@@ -190,8 +190,15 @@ func (srv *IOServerInstance) NeedsScmFormat() (bool, error) {
 		return false, err
 	}
 
-	srv.log.Debugf("%s (%s) needs format: %t", scmCfg.MountPoint, scmCfg.Class, !res.Formatted)
-	return !res.Formatted, nil
+	// Logic:
+	// 1. If the SCM is mounted, assume here that it doesn't need to be formatted.
+	// 2. If not mounted, check:
+	// 2a. Does it appear to be formatted with something?
+	// AND
+	// 2b. Does it appear to be mountable by us?
+	needsFormat := !res.Mounted && !(res.Formatted && res.Mountable)
+	srv.log.Debugf("%s (%s) needs format: %t", scmCfg.MountPoint, scmCfg.Class, needsFormat)
+	return needsFormat, nil
 }
 
 // Start checks to make sure that the instance has a valid superblock before

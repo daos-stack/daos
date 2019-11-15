@@ -117,6 +117,8 @@ type (
 	FormatResponse struct {
 		Mountpoint string
 		Formatted  bool
+		Mounted    bool
+		Mountable  bool
 	}
 
 	// MountRequest defines the parameters for a Mount operation.
@@ -549,6 +551,7 @@ func (p *Provider) CheckFormat(req FormatRequest) (*FormatResponse, error) {
 		return nil, errors.Wrapf(err, "failed to check if %s is mounted", req.Mountpoint)
 	}
 	if isMounted {
+		res.Mounted = true
 		return res, nil
 	}
 
@@ -562,9 +565,18 @@ func (p *Provider) CheckFormat(req FormatRequest) (*FormatResponse, error) {
 		}
 
 		p.log.Debugf("device %s filesystem: %s", req.Dcpm.Device, fsType)
-		if fsType != fsTypeNone {
-			return res, nil
+
+		switch fsType {
+		case fsTypeExt4:
+			res.Mountable = true
+		case fsTypeNone:
+			res.Formatted = false
 		}
+
+		return res, nil
+	} else {
+		// ramdisk
+		res.Mountable = true
 	}
 
 	res.Formatted = false
@@ -641,6 +653,8 @@ func (p *Provider) formatRamdisk(req FormatRequest) (*FormatResponse, error) {
 	return &FormatResponse{
 		Mountpoint: res.Target,
 		Formatted:  res.Mounted,
+		Mounted:    res.Mounted,
+		Mountable:  !res.Mounted,
 	}, nil
 }
 
@@ -675,6 +689,8 @@ func (p *Provider) formatDcpm(req FormatRequest) (*FormatResponse, error) {
 	return &FormatResponse{
 		Mountpoint: res.Target,
 		Formatted:  res.Mounted,
+		Mounted:    res.Mounted,
+		Mountable:  !res.Mounted,
 	}, nil
 }
 
