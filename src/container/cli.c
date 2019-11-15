@@ -819,6 +819,7 @@ cont_query_complete(tse_task_t *task, void *data)
 
 	uuid_copy(arg->cqa_info->ci_uuid, cont->dc_uuid);
 
+	arg->cqa_info->ci_hae = out->cqo_hae;
 	/* TODO */
 	arg->cqa_info->ci_nsnapshots = 0;
 	arg->cqa_info->ci_snapshots = NULL;
