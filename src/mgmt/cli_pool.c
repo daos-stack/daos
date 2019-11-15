@@ -381,6 +381,7 @@ mgmt_list_pools_cp(tse_task_t *task, void *data)
 	pc_out = crt_reply_get(arg->rpc);
 	D_ASSERT(pc_out != NULL);
 	rc = pc_out->lp_rc;
+	*arg->npools = pc_out->lp_npools;
 	if (rc) {
 		D_ERROR("MGMT_POOL_CREATE replied failed, rc: %d\n", rc);
 		D_GOTO(out, rc);
@@ -388,8 +389,6 @@ mgmt_list_pools_cp(tse_task_t *task, void *data)
 
 	pc_in = crt_req_get(arg->rpc);
 	D_ASSERT(pc_in != NULL);
-
-	*arg->npools = pc_out->lp_npools;
 
 	/* copy RPC response pools info to client buffer, if provided */
 	if (arg->pools) {
@@ -442,11 +441,6 @@ dc_mgmt_list_pools(tse_task_t *task)
 
 	args = dc_task_get_args(task);
 
-	if (args->npools == NULL) {
-		D_ERROR("npools must be non-NULL\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
 	rc = dc_mgmt_sys_attach(args->grp, &cb_args.sys);
 	if (rc != 0) {
 		D_ERROR("cannot attach to DAOS system: %s\n", args->grp);
@@ -498,5 +492,6 @@ out_put_req:
 out_grp:
 	dc_mgmt_sys_detach(cb_args.sys);
 out:
+	tse_task_complete(task, rc);
 	return rc;
 }
