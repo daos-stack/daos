@@ -29,6 +29,7 @@
 
 #include <daos.h>
 #include <daos_prop.h>
+#include <daos_mgmt.h>
 #include "daos_test.h"
 
 /** Server crt group ID */

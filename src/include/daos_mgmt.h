@@ -345,6 +345,14 @@ int
 daos_mgmt_list_pools(const char *group, daos_mgmt_pool_info_t *pools,
 		     daos_size_t *npools, daos_event_t *ev);
 
+/**
+ * Add mark to servers.
+ *
+ * \param mark	[IN]	mark to add to the debug log.
+ */
+int
+daos_mgmt_add_mark(const char *mark);
+
 #if defined(__cplusplus)
 }
 #endif
