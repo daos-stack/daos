@@ -209,10 +209,7 @@ func parseBracketedHostList(input, rangeSep, rangeOp string) (*HostList, error) 
 		}
 
 		if rightIndex = strings.IndexRune(tok, ']'); rightIndex == -1 {
-			if err := hl.PushHost(tok); err != nil {
-				return nil, err
-			}
-			continue
+			return nil, fmt.Errorf("invalid range %q", tok)
 		}
 
 		if rightIndex <= leftIndex {

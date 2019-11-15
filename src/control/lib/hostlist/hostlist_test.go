@@ -60,6 +60,18 @@ func TestHostList_Create(t *testing.T) {
 			expUniqOut:   "node3,node1-3,node1-2.suffix1,node1-[45,47].suffix2,node2-1",
 			expUniqCount: 6,
 		},
+		"prefix-N": {
+			startList:    "node-3,node-1",
+			expRawOut:    "node-[3,1]",
+			expUniqOut:   "node-[1,3]",
+			expUniqCount: 2,
+		},
+		"prefixN-N": {
+			startList:    "node1-3,node1-1,node2-1",
+			expRawOut:    "node1-[3,1],node2-1",
+			expUniqOut:   "node1-[1,3],node2-1",
+			expUniqCount: 3,
+		},
 		"duplicates removed": {
 			startList:    "node[1-128],node2,node4,node8,node16,node32,node64,node128",
 			expRawOut:    "node[1-128,2,4,8,16,32,64,128]",
@@ -116,11 +128,9 @@ func TestHostList_Create(t *testing.T) {
 			startList: "node[ab]",
 			expErr:    errors.New("invalid range"),
 		},
-		"unclosed range": { // seems like it should be an error, but C version allows it
-			startList:    "node[0-1",
-			expRawOut:    "node[0-1",
-			expUniqOut:   "node[0-1",
-			expUniqCount: 1,
+		"unclosed range": {
+			startList: "node[0-1",
+			expErr:    errors.New("invalid range"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
