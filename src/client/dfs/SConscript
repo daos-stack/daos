@@ -13,7 +13,8 @@ def scons():
             for line in f:
                 if 'ID' in line:
                     line = line.strip()
-                    _, distro = line.strip().split('=').strip('"')
+                    _, distro = line.strip().split('=')
+                    distro = distro.strip('"')
                     break
         if distro in ['centos', 'rhel', 'fedora', 'opensuse']:
             import rpm
