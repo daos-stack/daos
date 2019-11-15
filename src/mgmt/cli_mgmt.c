@@ -222,6 +222,45 @@ err_grp:
 	return rc;
 }
 
+int
+dc_mgmt_add_mark(const char *mark)
+{
+	struct dc_mgmt_sys	*sys;
+	struct mgmt_mark_in	*in;
+	crt_endpoint_t		ep;
+	crt_rpc_t		*rpc = NULL;
+	crt_opcode_t		opc;
+	int			rc;
+
+	rc = dc_mgmt_sys_attach(NULL, &sys);
+	if (rc != 0) {
+		D_ERROR("failed to attach to grp rc %d.\n", rc);
+		return -DER_INVAL;
+	}
+
+	ep.ep_grp = sys->sy_group;
+	ep.ep_rank = 0;
+	ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
+	opc = DAOS_RPC_OPCODE(MGMT_MARK, DAOS_MGMT_MODULE,
+			      DAOS_MGMT_VERSION);
+	rc = crt_req_create(daos_get_crt_ctx(), &ep, opc, &rpc);
+	if (rc != 0) {
+		D_ERROR("crt_req_create failed, rc: %d.\n", rc);
+		D_GOTO(err_grp, rc);
+	}
+
+	D_ASSERT(rpc != NULL);
+	in = crt_req_get(rpc);
+	in->m_mark = (char *)mark;
+	/** send the request */
+	rc = daos_rpc_send_wait(rpc);
+err_grp:
+	D_DEBUG(DB_MGMT, "mgmt mark: rc %d\n", rc);
+	dc_mgmt_sys_detach(sys);
+	return rc;
+
+}
+
 struct dc_mgmt_psr {
 	d_rank_t	 rank;
 	char		*uri;

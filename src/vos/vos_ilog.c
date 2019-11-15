@@ -307,13 +307,10 @@ update:
 		return rc;
 	}
 
-	rc = vos_ilog_fetch(vos_cont2umm(cont), vos_cont2hdl(cont),
-			    DAOS_INTENT_UPDATE, ilog, epr->epr_hi,
-			    0, parent, info);
-	if (rc != 0) {
-		D_ERROR("Could not fetch incarnation log: "DF_RC"\n",
-			DP_RC(rc));
-	}
+	/* No need to refetch the log.  The only field that is used by update
+	 * is prior_any_punch.   This field will not be changed by ilog_update
+	 * for the purpose of parsing the child log.
+	 */
 
 	return rc;
 }
