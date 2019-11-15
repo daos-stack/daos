@@ -717,7 +717,8 @@ nvme_faulty_reaction(int *tgt_ids, int tgt_cnt)
 	struct smd_pool_info	*pool_info, *tmp;
 	d_list_t		 pool_list;
 	d_rank_t		 pl_rank;
-	int			 pool_cnt, ret, rc;
+	int			 pool_cnt, ret = 0, rc = 0;
+	int			 online_pool_cnt = 0, offline_pool_cnt = 0;
 
 	D_ASSERT(tgt_cnt > 0);
 	D_ASSERT(tgt_ids != NULL);
@@ -732,6 +733,7 @@ nvme_faulty_reaction(int *tgt_ids, int tgt_cnt)
 	d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {
 		ret = check_pool_targets(pool_info->spi_id, tgt_ids, tgt_cnt,
 					 &pl_rank);
+
 		switch (ret) {
 		case 0:
 			/*
@@ -740,6 +742,7 @@ nvme_faulty_reaction(int *tgt_ids, int tgt_cnt)
 			 */
 			D_DEBUG(DB_MGMT, DF_UUID": Targets are excluded out.\n",
 				DP_UUID(pool_info->spi_id));
+			online_pool_cnt++;
 			break;
 		case 1:
 			/*
@@ -748,6 +751,7 @@ nvme_faulty_reaction(int *tgt_ids, int tgt_cnt)
 			 */
 			D_DEBUG(DB_MGMT, DF_UUID": Targets are in excluding.\n",
 				DP_UUID(pool_info->spi_id));
+			online_pool_cnt++;
 			if (rc == 0)
 				rc = 1;
 			break;
@@ -758,10 +762,20 @@ nvme_faulty_reaction(int *tgt_ids, int tgt_cnt)
 			 */
 			D_DEBUG(DB_MGMT, DF_UUID": Trigger targets exclude.\n",
 				DP_UUID(pool_info->spi_id));
+			online_pool_cnt++;
 			rc = exclude_pool_targets(pool_info->spi_id, tgt_ids,
 						  tgt_cnt, pl_rank);
 			if (rc == 0)
 				rc = 1;
+			break;
+		case -DER_NOSYS:
+			/*
+			 * Offline pool recovery currently not supported,
+			 * skip pool and continue, but do not fail.
+			 */
+			D_DEBUG(DB_MGMT, DF_UUID": Pool is offline, skip.\n",
+				DP_UUID(pool_info->spi_id));
+			offline_pool_cnt++;
 			break;
 		default:
 			/* Errors */
@@ -776,8 +790,18 @@ nvme_faulty_reaction(int *tgt_ids, int tgt_cnt)
 		smd_free_pool_info(pool_info);
 	}
 
-	D_DEBUG(DB_MGMT, "Faulty reaction done. tgt_cnt:%d, rc:%d\n",
-		tgt_cnt, rc);
+	/*
+	 * In the case of offline pool recovery, allow successful
+	 * completion of the faulty reaction if at least one online,
+	 * healthy pool is present, and no other errors are present.
+	 */
+	if (rc == 0 && ret == -DER_NOSYS && online_pool_cnt == 0)
+		rc = -DER_NOSYS;
+
+	D_DEBUG(DB_MGMT, "Faulty reaction done. rc:%d, "
+		"targets:%d, online_pools:%d, offline_pools:%d\n",
+		rc, tgt_cnt, online_pool_cnt, offline_pool_cnt);
+
 	return rc;
 }
 
