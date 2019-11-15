@@ -2441,6 +2441,127 @@ out:
 	return rc;
 }
 
+/**
+ * Set a pool's properties without having a handle for the pool
+ */
+void
+ds_pool_prop_set_handler(crt_rpc_t *rpc)
+{
+	struct pool_prop_set_in		*in = crt_req_get(rpc);
+	struct pool_prop_set_out	*out = crt_reply_get(rpc);
+	struct pool_svc			*svc;
+	struct rdb_tx			tx;
+	int				rc;
+
+	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
+		DP_UUID(in->psi_op.pi_uuid), rpc);
+
+	rc = pool_svc_lookup_leader(in->psi_op.pi_uuid, &svc,
+				    &out->pso_op.po_hint);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
+
+	ABT_rwlock_wrlock(svc->ps_lock);
+
+	rc = pool_prop_write(&tx, &svc->ps_root, in->psi_prop);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to write prop for pool: %d\n",
+			DP_UUID(in->psi_op.pi_uuid), rc);
+		D_GOTO(out_lock, rc);
+	}
+
+	rc = rdb_tx_commit(&tx);
+	if (rc != 0)
+		D_GOTO(out_lock, rc);
+
+out_lock:
+	ABT_rwlock_unlock(svc->ps_lock);
+	rdb_tx_end(&tx);
+out_svc:
+	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pso_op.po_hint);
+	pool_svc_put_leader(svc);
+out:
+	out->pso_op.po_rc = rc;
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
+		DP_UUID(in->psi_op.pi_uuid), rpc, rc);
+	crt_reply_send(rpc);
+}
+
+/**
+ * Send a CaRT message to the pool svc to set the requested pool properties.
+ *
+ * \param[in]	pool_uuid	UUID of the pool
+ * \param[in]	ranks		Pool service replicas
+ * \param[in]	prop		Pool prop
+ *
+ * \return	0		Success
+ *
+ */
+int
+ds_pool_svc_set_prop(uuid_t pool_uuid, d_rank_list_t *ranks, daos_prop_t *prop)
+{
+	int				rc;
+	struct rsvc_client		client;
+	crt_endpoint_t			ep;
+	struct dss_module_info		*info = dss_get_module_info();
+	crt_rpc_t			*rpc;
+	struct pool_prop_set_in		*in;
+	struct pool_prop_set_out	*out;
+
+	D_DEBUG(DB_MGMT, DF_UUID": Setting pool prop\n", DP_UUID(pool_uuid));
+
+	rc = rsvc_client_init(&client, ranks);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+rechoose:
+	ep.ep_grp = NULL; /* primary group */
+	rsvc_client_choose(&client, &ep);
+
+	rc = pool_req_create(info->dmi_ctx, &ep, POOL_PROP_SET, &rpc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create pool set prop rpc: %d\n",
+			DP_UUID(pool_uuid), rc);
+		D_GOTO(out_client, rc);
+	}
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->psi_op.pi_uuid, pool_uuid);
+	uuid_clear(in->psi_op.pi_hdl);
+	in->psi_prop = prop;
+
+	rc = dss_rpc_send(rpc);
+	out = crt_reply_get(rpc);
+	D_ASSERT(out != NULL);
+
+	rc = rsvc_client_complete_rpc(&client, &ep, rc,
+				      out->pso_op.po_rc,
+				      &out->pso_op.po_hint);
+	if (rc == RSVC_CLIENT_RECHOOSE) {
+		crt_req_decref(rpc);
+		dss_sleep(1000 /* ms */);
+		D_GOTO(rechoose, rc);
+	}
+
+	rc = out->pso_op.po_rc;
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to set prop for pool: %d\n",
+			DP_UUID(pool_uuid), rc);
+		D_GOTO(out_rpc, rc);
+	}
+
+out_rpc:
+	crt_req_decref(rpc);
+out_client:
+	rsvc_client_fini(&client);
+out:
+	return rc;
+}
+
 static int
 replace_failed_replicas(struct pool_svc *svc, struct pool_map *map)
 {
