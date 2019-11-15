@@ -780,7 +780,7 @@ get_params_from_modify_acl_req(Drpc__Call *drpc_req, uuid_t uuid_out,
 			       struct daos_acl **acl_out)
 {
 	Mgmt__ModifyACLReq	*req = NULL;
-	int 			rc;
+	int			rc;
 
 	req = mgmt__modify_aclreq__unpack(NULL, drpc_req->body.len,
 					  drpc_req->body.data);
