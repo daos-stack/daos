@@ -138,7 +138,9 @@ struct crt_grp_destroy_out {
 };
 
 struct crt_iv_fetch_in {
-	d_iov_t ifi_nsid;
+	uint32_t ifi_ivns_id;
+	uint32_t pad1;
+	crt_group_id_t ifi_ivns_group;
 	d_iov_t ifi_key;
 	crt_bulk_t ifi_value_bulk;
 	int32_t ifi_class_id;
@@ -150,7 +152,9 @@ struct crt_iv_fetch_out {
 };
 
 struct crt_iv_sync_in {
-	d_iov_t ivs_nsid;
+	uint32_t ivs_ivns_id;
+	uint32_t pad1;
+	crt_group_id_t ivs_ivns_group;
 	d_iov_t ivs_key;
 	d_iov_t ivs_sync_type;
 	uint32_t ivs_class_id;
@@ -161,7 +165,9 @@ struct crt_iv_sync_out {
 };
 
 struct crt_iv_update_in {
-	d_iov_t ivu_nsid;
+	uint32_t ivu_ivns_id;
+	uint32_t pad1;
+	crt_group_id_t ivu_ivns_group;
 	d_iov_t ivu_key;
 	d_iov_t ivu_sync_type;
 	crt_bulk_t ivu_iv_value_bulk;

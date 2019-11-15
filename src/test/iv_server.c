@@ -55,6 +55,9 @@
 #define _SERVER
 #include "iv_common.h"
 
+#define MY_IVNS_ID 0xABCD
+
+
 static d_rank_t g_my_rank;
 static uint32_t g_group_size;
 
@@ -681,12 +684,6 @@ init_iv(void)
 	crt_rpc_t		*rpc;
 	int			 tree_topo;
 
-	/*
-	 * This is the IV "global" ivns handle - which is *sent* to other nodes
-	 * It is not consumed on this node outside of this function
-	 */
-	d_iov_t			 s_ivns;
-
 	tree_topo = crt_tree_topo(CRT_TREE_KNOMIAL, 2);
 
 	if (g_my_rank == 0) {
@@ -694,12 +691,8 @@ init_iv(void)
 		iv_class.ivc_feats = 0;
 		iv_class.ivc_ops = &g_ivc_ops;
 
-		/*
-		 * Here g_ivns is the "local" handle
-		 * The "global" (to all nodes) handle is s_ivns
-		 */
 		rc = crt_iv_namespace_create(g_main_ctx, NULL, tree_topo,
-					     &iv_class, 1, &g_ivns, &s_ivns);
+					&iv_class, 1, MY_IVNS_ID, &g_ivns);
 		assert(rc == 0);
 
 		namespace_attached = 1;
@@ -711,10 +704,6 @@ init_iv(void)
 						 &server_ep, (void *)&input,
 						 &rpc);
 			assert(rc == 0);
-
-			input->global_ivns_iov.iov_buf = s_ivns.iov_buf;
-			input->global_ivns_iov.iov_buf_len = s_ivns.iov_buf_len;
-			input->global_ivns_iov.iov_len = s_ivns.iov_len;
 
 			rc = send_rpc_request(g_main_ctx, rpc, (void *)&output);
 			assert(rc == 0);
@@ -768,8 +757,10 @@ iv_set_ivns(crt_rpc_t *rpc)
 	iv_class.ivc_feats = 0;
 	iv_class.ivc_ops = &g_ivc_ops;
 
-	rc = crt_iv_namespace_attach(g_main_ctx, &input->global_ivns_iov,
-				     &iv_class, 1, &g_ivns);
+	/* Don't get back ivns handle as we don't need it */
+	rc = crt_iv_namespace_create(g_main_ctx, NULL,
+			crt_tree_topo(CRT_TREE_KNOMIAL, 2),
+			&iv_class, 1, MY_IVNS_ID, &g_ivns);
 	assert(rc == 0);
 
 	output->rc = 0;

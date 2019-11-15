@@ -394,62 +394,32 @@ struct crt_iv_class {
  *				See \a enum crt_tree_type,
  *				\a crt_tree_topo().
  * \param[in] iv_classes	the array of IV class. User must ensure passing
- *				same set of iv_classes when creating or
- *				attaching IV namespace, or undefined results are
- *				expected.
+ *				same set of iv_classes when adding IV namespace
+ *				on all participating nodes.
  * \param[in] num_class		the number of elements in the iv_classes array,
  *				one IV namespace should have at least one IV
  *				class.
- * \param[out] ivns		the local handle of the IV namespace
- * \param[out] g_ivns		the global handle of the IV namespace. It can be
- *				transferred to other processes on any other node
- *				in the group, and the crt_iv_namespace_attach()
- *				can attach to the global handle to get a local
- *				usable IV namespace handle.
+ * \param[in] iv_ns_id		Unique id, identifying the namespace within the
+ *				group.
+ * \param[out] ivns		Local handle of the IV namespace
  *
  * \return			DER_SUCCESS on success, negative value if error
  */
 int
 crt_iv_namespace_create(crt_context_t crt_ctx, crt_group_t *grp, int tree_topo,
-			struct crt_iv_class *iv_classes, uint32_t num_class,
-			crt_iv_namespace_t *ivns, d_iov_t *g_ivns);
+		struct crt_iv_class *iv_classes, uint32_t num_classes,
+		uint32_t iv_ns_id, crt_iv_namespace_t *ivns);
 
 /**
- * Return global IV namespace from the local IV namespace
+ * Retrieve IV namespace id from the handle.
  *
- * \param[in] ivns		Local namespace
- * \param[out] g_ivns		Global namespace
+ * \param[in] ivns		Incast variable namespace handle
+ * \param[out] id		Associated id returned
  *
- * \return			DER_SUCCESS on success, negative value if error
+ * \return			DER_SUCCESS on success, negative value on error
  */
 int
-crt_iv_global_namespace_get(crt_iv_namespace_t *ivns, d_iov_t *g_ivns);
-
-/**
- * Attach to a global IV namespace to get a local handle of the IV namespace.
- *
- * User should call crt_iv_namespace_create on one node within the group of the
- * namespace, and call crt_iv_namespace_attach on all other nodes with in the
- * group. And need to provide the same set of IV classes, Otherwise IV behaviour
- * is undermined.
- *
- * \param[in] crt_ctx		CRT transport namespace
- * \param[in] g_ivns		the global handle of the IV namespace
- * \param[in] iv_classes	the array of IV class. User must ensure passing
- *				same set of iv_classes when creating or
- *				attaching IV namespace, or undefined results are
- *				expected.
- * \param[in] num_class		the number of elements in the iv_classes array,
- *				one IV namespace should have at least one IV
- *				class.
- * \param[out] ivns		the local handle of the IV namespace
- *
- * \return			DER_SUCCESS on success, negative value if error
- */
-int
-crt_iv_namespace_attach(crt_context_t crt_ctx, d_iov_t *g_ivns,
-			struct crt_iv_class *iv_classes, uint32_t num_class,
-			crt_iv_namespace_t *ivns);
+crt_iv_namespace_id_get(crt_iv_namespace_t *ivns, uint32_t *id);
 
 /**
  * Completion callback for \ref crt_iv_namespace_destroy.

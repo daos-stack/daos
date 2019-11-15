@@ -399,7 +399,7 @@ progress_function(void *data)
 	return NULL;
 }
 
-#define NUM_ATTACH_RETRIES 10
+#define NUM_ATTACH_RETRIES 30
 
 int main(int argc, char **argv)
 {
