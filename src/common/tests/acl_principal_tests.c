@@ -747,6 +747,118 @@ test_acl_principal_to_gid_getgrnam_buf_too_small(void **state)
 	free_test_group(grp);
 }
 
+/*
+ * Tests for parsing a principal string
+ */
+
+static void
+test_acl_principal_from_str_null_params(void **state)
+{
+	enum daos_acl_principal_type	type;
+	char				*name;
+
+	assert_int_equal(daos_acl_principal_from_str(NULL, &type, &name),
+			 -DER_INVAL);
+	assert_int_equal(daos_acl_principal_from_str("OWNER@", NULL, &name),
+			 -DER_INVAL);
+	assert_int_equal(daos_acl_principal_from_str("OWNER@", &type, NULL),
+			 -DER_INVAL);
+}
+
+static void
+expect_principal_str_is_special_type(const char *str,
+				     enum daos_acl_principal_type exp_type)
+{
+	enum daos_acl_principal_type	type;
+	char				*name;
+
+	assert_int_equal(daos_acl_principal_from_str(str, &type, &name),
+			 0);
+
+	assert_int_equal(type, exp_type);
+	assert_null(name);
+}
+
+static void
+test_acl_principal_from_str_special(void **state)
+{
+	expect_principal_str_is_special_type("OWNER@", DAOS_ACL_OWNER);
+	expect_principal_str_is_special_type("GROUP@", DAOS_ACL_OWNER_GROUP);
+	expect_principal_str_is_special_type("EVERYONE@", DAOS_ACL_EVERYONE);
+}
+
+static void
+expect_principal_str_is_named_type(const char *str,
+				   enum daos_acl_principal_type exp_type,
+				   const char *exp_name)
+{
+	enum daos_acl_principal_type	type;
+	char				*name;
+
+	assert_int_equal(daos_acl_principal_from_str(str, &type, &name),
+			 0);
+
+	assert_int_equal(type, exp_type);
+	assert_non_null(name);
+	assert_string_equal(name, exp_name);
+
+	D_FREE(name);
+}
+
+static void
+test_acl_principal_from_str_named(void **state)
+{
+	expect_principal_str_is_named_type("u:niceuser@", DAOS_ACL_USER,
+					   "niceuser@");
+	expect_principal_str_is_named_type("u:me@nicedomain", DAOS_ACL_USER,
+					   "me@nicedomain");
+	expect_principal_str_is_named_type("g:readers@", DAOS_ACL_GROUP,
+					   "readers@");
+	expect_principal_str_is_named_type("g:devs@bigcompany.com",
+					   DAOS_ACL_GROUP,
+					   "devs@bigcompany.com");
+}
+
+static void
+test_acl_principal_from_str_bad_format(void **state)
+{
+	enum daos_acl_principal_type	type;
+	char				*name;
+
+	assert_int_equal(daos_acl_principal_from_str("", &type, &name),
+			 -DER_INVAL);
+	assert_int_equal(daos_acl_principal_from_str("USER@", &type, &name),
+			 -DER_INVAL);
+	assert_int_equal(daos_acl_principal_from_str("U:name@", &type, &name),
+			 -DER_INVAL);
+	assert_int_equal(daos_acl_principal_from_str("G:name@", &type, &name),
+			 -DER_INVAL);
+	assert_int_equal(daos_acl_principal_from_str("user:name@", &type,
+			 &name), -DER_INVAL);
+	assert_int_equal(daos_acl_principal_from_str("group:name@", &type,
+			 &name), -DER_INVAL);
+	assert_int_equal(daos_acl_principal_from_str("x:name@", &type, &name),
+			 -DER_INVAL);
+	assert_int_equal(daos_acl_principal_from_str("name@", &type, &name),
+			 -DER_INVAL);
+}
+
+static void
+test_acl_principal_from_str_invalid_name(void **state)
+{
+	enum daos_acl_principal_type	type;
+	char				*name;
+
+	assert_int_equal(daos_acl_principal_from_str("u:", &type, &name),
+			 -DER_INVAL);
+	assert_int_equal(daos_acl_principal_from_str("g:", &type, &name),
+			 -DER_INVAL);
+	assert_int_equal(daos_acl_principal_from_str("u:name@name@", &type,
+			 &name), -DER_INVAL);
+	assert_int_equal(daos_acl_principal_from_str("u:name", &type,
+			 &name), -DER_INVAL);
+}
+
 int
 main(void)
 {
@@ -786,6 +898,11 @@ main(void)
 		cmocka_unit_test(test_acl_principal_to_gid_getgrnam_err),
 		cmocka_unit_test(
 			test_acl_principal_to_gid_getgrnam_buf_too_small),
+		cmocka_unit_test(test_acl_principal_from_str_null_params),
+		cmocka_unit_test(test_acl_principal_from_str_special),
+		cmocka_unit_test(test_acl_principal_from_str_named),
+		cmocka_unit_test(test_acl_principal_from_str_bad_format),
+		cmocka_unit_test(test_acl_principal_from_str_invalid_name),
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);

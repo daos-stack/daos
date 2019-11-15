@@ -31,13 +31,6 @@
 #include <gurt/debug.h>
 
 /*
- * String values for special principal types
- */
-#define PRINCIPAL_OWNER_STR	"OWNER@"
-#define PRINCIPAL_OWNER_GRP_STR	"GROUP@"
-#define PRINCIPAL_EVERYONE_STR	"EVERYONE@"
-
-/*
  * Characters representing access flags
  */
 #define FLAG_GROUP_CH		'G'
@@ -156,13 +149,13 @@ get_ace_from_identity(const char *identity, uint16_t flags)
 {
 	enum daos_acl_principal_type type;
 
-	if (strncmp(identity, PRINCIPAL_OWNER_STR,
+	if (strncmp(identity, DAOS_ACL_PRINCIPAL_OWNER,
 		    DAOS_ACL_MAX_PRINCIPAL_BUF_LEN) == 0)
 		type = DAOS_ACL_OWNER;
-	else if (strncmp(identity, PRINCIPAL_OWNER_GRP_STR,
+	else if (strncmp(identity, DAOS_ACL_PRINCIPAL_OWNER_GRP,
 			 DAOS_ACL_MAX_PRINCIPAL_BUF_LEN) == 0)
 		type = DAOS_ACL_OWNER_GROUP;
-	else if (strncmp(identity, PRINCIPAL_EVERYONE_STR,
+	else if (strncmp(identity, DAOS_ACL_PRINCIPAL_EVERYONE,
 			 DAOS_ACL_MAX_PRINCIPAL_BUF_LEN) == 0)
 		type = DAOS_ACL_EVERYONE;
 	else if (flags & DAOS_ACL_FLAG_GROUP)
@@ -305,11 +298,11 @@ get_principal_name_str(struct daos_ace *ace)
 {
 	switch (ace->dae_principal_type) {
 	case DAOS_ACL_OWNER:
-		return PRINCIPAL_OWNER_STR;
+		return DAOS_ACL_PRINCIPAL_OWNER;
 	case DAOS_ACL_OWNER_GROUP:
-		return PRINCIPAL_OWNER_GRP_STR;
+		return DAOS_ACL_PRINCIPAL_OWNER_GRP;
 	case DAOS_ACL_EVERYONE:
-		return PRINCIPAL_EVERYONE_STR;
+		return DAOS_ACL_PRINCIPAL_EVERYONE;
 	case DAOS_ACL_USER:
 	case DAOS_ACL_GROUP:
 	default:
