@@ -45,10 +45,10 @@ class SimpleCreateDeleteTest(TestWithServers):
         # Check that the pool was created
         self.assertTrue(
             self.pool.check_files(self.hostlist_servers),
-            "Pool data not was not created")
+            "Pool data not was created")
 
         # Connect to the pool
-        self.pool.connect(1)
+        self.pool.connect()
 
         # Create a container
         self.container = TestContainer(self.pool)

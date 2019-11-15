@@ -77,10 +77,10 @@ class Soak(TestWithServers):
         """
         pool_obj_list = []
         for pool_name in pools:
-            path = "/run/" + pool_name + "/*"
             # Create a pool
             pool_obj_list.append(TestPool(self.context, self.log))
-            pool_obj_list[-1].namespace = path
+            pool_obj_list[-1].namespace = os.path.join(
+                "/run/", pool_name, "/*")
             pool_obj_list[-1].get_params(self)
             pool_obj_list[-1].create()
             self.log.info("Valid Pool UUID is %s", pool_obj_list[-1].uuid)
@@ -134,14 +134,15 @@ class Soak(TestWithServers):
         """
         command = []
         iteration = self.test_iteration
-        ior_params = "/run/" + job_spec + "/*"
+        ior_params = os.path.join("run", job_spec, "*")
 
         ior_cmd = IorCommand()
         ior_cmd.namespace = ior_params
         ior_cmd.get_params(self)
         if iteration is not None and iteration < 0:
             ior_cmd.repetitions.update(1000000)
-        ior_cmd.max_duration.update(self.params.get("time", job_params + '*'))
+        ior_cmd.max_duration.update(self.params.get(
+            "time", os.path.join(job_params, "*")))
         # IOR job specs with a list of parameters; update each value
         #   transfer_size
         #   block_size
