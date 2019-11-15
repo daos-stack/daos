@@ -955,10 +955,10 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 
 	if (rma) {
 		bulk_bind = orw->orw_flags & ORF_BULK_BIND;
-		if ((opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE ||
+		if (oca->ca_resil == DAOS_RES_EC &&
+		    (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE ||
 		     opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_UPDATE ||
-		     opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH) &&
-			oca->ca_resil == DAOS_RES_EC) {
+		     opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH)) {
 			rc = ec_bulk_transfer(rpc, bulk_op, bulk_bind,
 					      orw->orw_bulks.ca_arrays, ioh,
 					      skip_list, orw->orw_nr);
