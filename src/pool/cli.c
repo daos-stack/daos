@@ -1495,11 +1495,6 @@ pool_list_cont_cb(tse_task_t *task, void *data)
 	struct pool_list_cont_out	*out = crt_reply_get(arg->rpc);
 	int				 rc = task->dt_result;
 
-	if (rc) {
-		D_ERROR("task error while listing containers: %d\n", rc);
-		D_GOTO(out, rc);
-	}
-
 	rc = pool_rsvc_client_complete_rpc(arg->lca_pool, &arg->rpc->cr_ep, rc,
 					   &out->plco_op, task);
 	if (rc < 0)

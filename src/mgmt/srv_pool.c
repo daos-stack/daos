@@ -638,13 +638,10 @@ enum_pool_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	/* Realloc pools[] if needed (double each time starting with 1) */
 	if (ap->pools_index == ap->pools_len) {
 		void	*ptr;
-		size_t	realloc_bytes;
 		size_t	realloc_elems = (ap->pools_len == 0) ? 1 :
 					ap->pools_len * 2;
 
-		realloc_bytes = (realloc_elems *
-				sizeof(struct mgmt_list_pools_one));
-		D_REALLOC(ptr, ap->pools, realloc_bytes);
+		D_REALLOC_ARRAY(ptr, ap->pools, realloc_elems);
 		if (ptr == NULL)
 			return -DER_NOMEM;
 		ap->pools = ptr;

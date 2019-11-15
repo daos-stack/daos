@@ -1468,13 +1468,10 @@ enum_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	/* Realloc conts[] if needed (double each time starting with 1) */
 	if (ap->conts_index == ap->conts_len) {
 		void	*ptr;
-		size_t	realloc_bytes;
 		size_t	realloc_elems = (ap->conts_len == 0) ? 1 :
 					ap->conts_len * 2;
 
-		realloc_bytes = (realloc_elems *
-				sizeof(struct daos_pool_cont_info));
-		D_REALLOC(ptr, ap->conts, realloc_bytes);
+		D_REALLOC_ARRAY(ptr, ap->conts, realloc_elems);
 		if (ptr == NULL)
 			return -DER_NOMEM;
 		ap->conts = ptr;
@@ -1525,7 +1522,7 @@ ds_cont_list(uuid_t pool_uuid, uint64_t *ncont,
 
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		D_GOTO(out_svc, rc);
 
 	ABT_rwlock_rdlock(svc->cs_lock);
 
@@ -1535,6 +1532,10 @@ ds_cont_list(uuid_t pool_uuid, uint64_t *ncont,
 	/* read-only, so no rdb_tx_commit */
 	ABT_rwlock_unlock(svc->cs_lock);
 	rdb_tx_end(&tx);
+
+out_svc:
+	cont_svc_put_leader(svc);
+
 out:
 	*ncont = args.ncont;
 	/* conts, ncont initialized to NULL,0 - update if successful */
