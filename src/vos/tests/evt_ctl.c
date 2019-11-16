@@ -1571,6 +1571,7 @@ test_evt_various_data_size_internal(void **state)
 	bio_addr_t		 addr;
 	struct evt_extent	 extent;
 	daos_epoch_range_t	 epr;
+	int			 iteration = 0;
 
 	for (count = 0; count < sizeof(val)/sizeof(int); count++) {
 		rc = evt_create(arg->ta_root, ts_feats, ORDER_DEF_INTERNAL,
@@ -1587,7 +1588,13 @@ test_evt_various_data_size_internal(void **state)
 		* evt_find (first epoch) and evt_delete (random deletes)
 		* till out of space condition
 		*/
+		iteration = 0;
 		for (epoch = 1; ; epoch++) {
+			if (DAOS_ON_VALGRIND) {
+				iteration++;
+				if (iteration > 20)
+					break;
+			}
 			entry.ei_rect.rc_ex.ex_lo = epoch;
 			entry.ei_rect.rc_ex.ex_hi = epoch + data_size;
 			entry.ei_rect.rc_epc = epoch;
