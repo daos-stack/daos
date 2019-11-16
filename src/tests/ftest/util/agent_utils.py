@@ -26,7 +26,6 @@ from __future__ import print_function
 import os
 import time
 import subprocess
-import json
 import getpass
 import socket
 import errno
@@ -137,7 +136,7 @@ def run_agent(test, server_list, client_list=None):
     can be started killed more appropriately.
 
     Args:
-        test.tmp: provides tmp directory for DAOS repo or installation
+        test (Test): provides tmp directory for DAOS repo or installation
         server_list (list): nodes acting as server nodes in the test
         client_list (list, optional): nodes acting as client nodes in the
                     test.
@@ -154,9 +153,7 @@ def run_agent(test, server_list, client_list=None):
     user = getpass.getuser()
 
     # if empty client list, 'test' is effectively client
-    if client_list is None:
-        client_list = include_local_host(client_list)
-    client_count = len(client_list)
+    client_list = include_local_host(client_list)
 
     # Create the DAOS Agent configuration yaml file to pass
     # with daos_agent -o <FILE_NAME>
@@ -165,7 +162,7 @@ def run_agent(test, server_list, client_list=None):
     agent_config.get_params(test)
     agent_config.hostlist.value = client_list
 
-    access_point = server_list[0] + ":" + str(agent_config.port)
+    access_point = ":".join((server_list[0], str(agent_config.port)))
     agent_config.access_points.value = access_point.split()
 
     agent_config.create_yaml(agent_yaml)
@@ -183,10 +180,9 @@ def run_agent(test, server_list, client_list=None):
                     nodeset, host_type, directory, user))
 
     # launch the agent
-    daos_agent_bin_line = "daos_agent -o " + agent_yaml
-    daos_agent_bin = os.path.join(test.basepath, "install/bin",
-                                  daos_agent_bin_line)
-    print("<AGENT> Agent command: ", daos_agent_bin)
+    daos_agent_bin = os.path.join(test.prefix, "bin", "daos_agent")
+    daos_agent_cmd = " ".join((daos_agent_bin, "-o", agent_yaml))
+    print("<AGENT> Agent command: ", daos_agent_cmd)
 
     for client in client_list:
         sessions[client] = subprocess.Popen(
