@@ -840,6 +840,11 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	int			i, err, rc = 0;
 
 	D_TIME_START(tls->ot_sp, time_start, OBJ_PF_UPDATE_LOCAL);
+
+	D_ASSERT((opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE ||
+		     opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_UPDATE ||
+		     opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH);
+
 	if (daos_is_zero_dti(&orw->orw_dti)) {
 		D_DEBUG(DB_TRACE, "disable dtx\n");
 		dth = NULL;
@@ -955,10 +960,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 
 	if (rma) {
 		bulk_bind = orw->orw_flags & ORF_BULK_BIND;
-		if (oca->ca_resil == DAOS_RES_EC &&
-		    (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE ||
-		     opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_UPDATE ||
-		     opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH)) {
+		if (oca->ca_resil == DAOS_RES_EC) {
 			rc = ec_bulk_transfer(rpc, bulk_op, bulk_bind,
 					      orw->orw_bulks.ca_arrays, ioh,
 					      skip_list, orw->orw_nr);
