@@ -841,7 +841,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 
 	D_TIME_START(tls->ot_sp, time_start, OBJ_PF_UPDATE_LOCAL);
 
-	D_ASSERT((opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE ||
+	D_ASSERT(opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE ||
 		     opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_UPDATE ||
 		     opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH);
 
