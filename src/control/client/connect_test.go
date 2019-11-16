@@ -40,12 +40,12 @@ func connectSetupServers(
 	ctrlrResults NvmeControllerResults, modules ScmModules,
 	moduleResults ScmModuleResults, pmems ScmNamespaces, mountResults ScmMountResults,
 	scanRet error, formatRet error, killRet error, connectRet error,
-	getACLRet *mockGetACLResult) Connect {
+	ACLRet *mockACLResult) Connect {
 
 	connect := newMockConnect(
 		log, state, ctrlrs, ctrlrResults, modules,
 		moduleResults, pmems, mountResults, scanRet, formatRet,
-		killRet, connectRet, getACLRet)
+		killRet, connectRet, ACLRet)
 
 	_ = connect.ConnectClients(servers)
 
@@ -57,11 +57,11 @@ func connectSetup(
 	state State, ctrlrs NvmeControllers, ctrlrResults NvmeControllerResults,
 	modules ScmModules, moduleResults ScmModuleResults, pmems ScmNamespaces,
 	mountResults ScmMountResults, scanRet error, formatRet error,
-	killRet error, connectRet error, getACLRet *mockGetACLResult) Connect {
+	killRet error, connectRet error, ACLRet *mockACLResult) Connect {
 
 	return connectSetupServers(MockServers, log, state, ctrlrs,
 		ctrlrResults, modules, moduleResults, pmems, mountResults, scanRet,
-		formatRet, killRet, connectRet, getACLRet)
+		formatRet, killRet, connectRet, ACLRet)
 }
 
 func defaultClientSetup(log logging.Logger) Connect {
@@ -283,7 +283,7 @@ func TestPoolGetACL(t *testing.T) {
 			if tt.expectedResp != nil {
 				expectedACL = tt.expectedResp.ACL.Entries
 			}
-			aclResult := &mockGetACLResult{
+			aclResult := &mockACLResult{
 				acl:    expectedACL,
 				status: tt.getACLRespStatus,
 				err:    tt.getACLErr,
@@ -298,6 +298,92 @@ func TestPoolGetACL(t *testing.T) {
 			}
 
 			resp, err := cc.PoolGetACL(req)
+
+			if tt.expectedErr != "" {
+				ExpectError(t, err, tt.expectedErr, name)
+			} else if err != nil {
+				t.Fatalf("expected nil error, got %v", err)
+			}
+
+			if diff := cmp.Diff(tt.expectedResp, resp); diff != "" {
+				t.Fatalf("unexpected ACL (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestPoolOverwriteACL(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer ShowBufferOnFailure(t, buf)
+
+	testACL := &AccessControlList{
+		Entries: MockACL.acl,
+	}
+
+	for name, tt := range map[string]struct {
+		addr                   Addresses
+		inputACL               *AccessControlList
+		overwriteACLRespStatus int32
+		overwriteACLErr        error
+		expectedResp           *PoolOverwriteACLResp
+		expectedErr            string
+	}{
+		"no service leader": {
+			addr:         nil,
+			inputACL:     testACL,
+			expectedResp: nil,
+			expectedErr:  "no active connections",
+		},
+		"gRPC call failed": {
+			addr:            MockServers,
+			inputACL:        testACL,
+			overwriteACLErr: MockErr,
+			expectedResp:    nil,
+			expectedErr:     MockErr.Error(),
+		},
+		"gRPC resp bad status": {
+			addr:                   MockServers,
+			inputACL:               testACL,
+			overwriteACLRespStatus: -5001,
+			expectedResp:           nil,
+			expectedErr:            "DAOS returned error code: -5001",
+		},
+		"success": {
+			addr:                   MockServers,
+			inputACL:               testACL,
+			overwriteACLRespStatus: 0,
+			expectedResp:           &PoolOverwriteACLResp{ACL: testACL},
+			expectedErr:            "",
+		},
+		"nil input": {
+			addr:                   MockServers,
+			inputACL:               nil,
+			overwriteACLRespStatus: 0,
+			expectedResp:           &PoolOverwriteACLResp{ACL: &AccessControlList{}},
+			expectedErr:            "",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var expectedACL []string
+			if tt.expectedResp != nil {
+				expectedACL = tt.expectedResp.ACL.Entries
+			}
+			aclResult := &mockACLResult{
+				acl:    expectedACL,
+				status: tt.overwriteACLRespStatus,
+				err:    tt.overwriteACLErr,
+			}
+			cc := connectSetupServers(tt.addr, log, Ready,
+				MockCtrlrs, MockCtrlrResults, MockScmModules,
+				MockModuleResults, MockScmNamespaces, MockMountResults,
+				nil, nil, nil, nil, aclResult)
+
+			req := &PoolOverwriteACLReq{
+				UUID: "TestUUID",
+				ACL:  tt.inputACL,
+			}
+
+			resp, err := cc.PoolOverwriteACL(req)
 
 			if tt.expectedErr != "" {
 				ExpectError(t, err, tt.expectedErr, name)
