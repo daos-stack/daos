@@ -429,6 +429,6 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		dbtree_close(query.qt_dkey_toh);
 out:
 	if (obj)
-		vos_obj_release(vos_obj_cache_current(), obj);
+		vos_obj_release(vos_obj_cache_current(), obj, false);
 	return rc;
 }
