@@ -24,7 +24,7 @@ def scons():
             headers = ts.dbMatch('name', 'lustre')
             if not headers:
                 headers = ts.dbMatch('name', 'lustre-client')
-            if headers and parse_version(h['version']) >= parse_version('2.12.57'):
+            if headers and parse_version(headers['version']) >= parse_version('2.12.57'):
                 denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
             else:
                 print("Found no package lustre nor lustre-client.")
@@ -36,7 +36,7 @@ def scons():
             if not instver:
                 instver = cache["lustre-client"].installed
             if instver and parse_version(instver.version) >= parse_version('2.12.57'):
-                    denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
+                denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
             else:
                 print("Found no package lustre nor lustre-client.")
         else:
