@@ -525,6 +525,7 @@ pipeline {
                                                  build/src/client/api/tests/eq_tests,
                                                  build/src/iosrv/tests/drpc_handler_tests,
                                                  build/src/iosrv/tests/drpc_listener_tests,
+                                                 build/src/mgmt/tests/srv_drpc_tests,
                                                  build/src/security/tests/cli_security_tests,
                                                  build/src/security/tests/srv_acl_tests,
                                                  build/src/vos/vea/tests/vea_ut,
