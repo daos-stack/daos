@@ -109,6 +109,10 @@
 	X(POOL_GET_ACL,							\
 		0, &CQF_pool_get_acl,					\
 		ds_pool_get_acl_handler,				\
+		NULL),							\
+	X(POOL_PROP_SET,						\
+		0, &CQF_pool_prop_set,					\
+		ds_pool_prop_set_handler,				\
 		NULL)
 
 /* Define for RPC enum population below */
@@ -352,6 +356,15 @@ CRT_RPC_DECLARE(pool_tgt_update_map, DAOS_ISEQ_POOL_TGT_UPDATE_MAP,
 	((daos_prop_t)		(pgo_prop)		CRT_PTR)
 
 CRT_RPC_DECLARE(pool_get_acl, DAOS_ISEQ_POOL_GET_ACL, DAOS_OSEQ_POOL_GET_ACL)
+
+#define DAOS_ISEQ_POOL_PROP_SET	/* input fields */		 \
+	((struct pool_op_in)	(psi_op)		CRT_VAR) \
+	((daos_prop_t)		(psi_prop)		CRT_PTR)
+
+#define DAOS_OSEQ_POOL_PROP_SET	/* output fields */		 \
+	((struct pool_op_out)	(pso_op)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_prop_set, DAOS_ISEQ_POOL_PROP_SET, DAOS_OSEQ_POOL_PROP_SET)
 
 static inline int
 pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
