@@ -206,7 +206,7 @@ class TestPool(TestDaosApiBase):
                 it couldn't create a pool for some reason.
         """
         if (self.control_method.value is None or
-            self.control_method.value == self.USE_API):
+                self.control_method.value == self.USE_API):
             self.create_with_api()
             return True
         elif (self.control_method.value == self.USE_DMG and
@@ -393,7 +393,7 @@ class TestPool(TestDaosApiBase):
                 self.control_method.value == self.USE_API):
             return self.destroy_with_api(force)
         elif (self.control_method.value == self.USE_DMG and
-                  self.dmg_bin_path is not None):
+              self.dmg_bin_path is not None):
             return self.destroy_with_dmg(force)
 
     @fail_on(DaosApiError)
