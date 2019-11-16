@@ -291,7 +291,8 @@ class TestPool(TestDaosApiBase):
         # Call the dmg pool create command
         create_result = pool_create(path=self.dmg_bin_path,
                                     scm_size=self.scm_size.value,
-                                    group=self.group, user=user,ranks=ranks_comma_separated,
+                                    group=self.group, user=user,
+                                    ranks=ranks_comma_separated,
                                     nsvc=self.svcn.value)
         # If the returned result is None, that means the command has failed
         if create_result is None:
@@ -389,10 +390,10 @@ class TestPool(TestDaosApiBase):
                 defined.
         """
         if (self.control_method.value is None or
-            self.control_method.value == self.USE_API):
+                self.control_method.value == self.USE_API):
             return self.destroy_with_api(force)
         elif (self.control_method.value == self.USE_DMG and
-              self.dmg_bin_path is not None):
+                  self.dmg_bin_path is not None):
             return self.destroy_with_dmg(force)
 
     @fail_on(DaosApiError)
