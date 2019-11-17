@@ -386,7 +386,7 @@ vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
 		if (rc != 0)
 			return rc;
 
-		vos_obj_release(occ, obj);
+		vos_obj_release(occ, obj, false);
 	}
 
 	D_ASSERT(epoch != DAOS_EPOCH_MAX);

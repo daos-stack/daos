@@ -1097,6 +1097,6 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
 		}
 	}
 
-	vos_obj_release(occ, obj);
+	vos_obj_release(occ, obj, false);
 	return rc;
 }
