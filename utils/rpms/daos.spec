@@ -3,7 +3,7 @@
 
 %define daoshome %{_exec_prefix}/lib/%{name}
 
-%global spdk_max_version 18.07
+%global spdk_max_version 19.04.1
 
 Name:          daos
 Version:       0.6.0
