@@ -255,7 +255,7 @@ obj_ec_seg_pack(struct obj_ec_seg_sorter *sorter, d_sg_list_t *sgl)
 /* update recx_nrs for partial update */
 #define ec_partial_tgt_recx_nrs(recx, stripe_rec_nr, oca, recx_nrs, i, update) \
 	do {								       \
-		uint64_t tmp_idx;					       \
+		uint64_t tmp_idx, tmp_end;				       \
 		uint32_t tgt;						       \
 		if (update) {						       \
 			/* each parity node have one recx as replica */	       \
@@ -269,7 +269,8 @@ obj_ec_seg_pack(struct obj_ec_seg_sorter *sorter, d_sg_list_t *sgl)
 		}							       \
 		/* update recx_nrs on recx covered data cells */	       \
 		tmp_idx = rounddown((recx)->rx_idx, (oca)->u.ec.e_len);	       \
-		while (tmp_idx < ((recx)->rx_idx + (recx)->rx_nr)) {	       \
+		tmp_end = (recx)->rx_idx + (recx)->rx_nr;		       \
+		while (tmp_idx < tmp_end) {				       \
 			tgt = obj_ec_tgt_of_recx_idx(			       \
 				tmp_idx, stripe_rec_nr, (oca)->u.ec.e_len);    \
 			recx_nrs[tgt]++;				       \
@@ -1241,7 +1242,7 @@ obj_ec_tgt_oiod_init(struct obj_io_desc *r_oiods, uint32_t iod_nr,
 		for (j = 0; j < r_oiod->oiod_nr; j++) {
 			r_siod = &r_oiod->oiod_siods[j];
 			tgt = r_siod->siod_tgt_idx;
-			tgt_oiod = &tgt_oiods[tgt];
+			tgt_oiod = obj_ec_tgt_oiod_get(tgt_oiods, tgt_nr, tgt);
 			D_ASSERT(tgt_oiod->oto_tgt_idx == tgt);
 			tgt_oiod->oto_offs[i] = r_siod->siod_off;
 			siod = &tgt_oiod->oto_oiods[i].oiod_siods[0];

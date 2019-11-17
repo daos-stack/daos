@@ -348,7 +348,8 @@ struct ds_obj_exec_arg {
 	crt_rpc_t		*rpc;
 	struct ds_cont_hdl	*cont_hdl;
 	struct ds_cont_child	*cont;
-	uint32_t		flags;
+	void			*args;
+	uint32_t		 flags;
 };
 
 int

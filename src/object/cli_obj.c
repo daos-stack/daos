@@ -2295,7 +2295,7 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 		reasb_req = &obj_auxi->reasb_req;
 		if (reasb_req->tgt_oiods != NULL) {
 			D_ASSERT(obj_auxi->opc == DAOS_OBJ_RPC_FETCH);
-			toiod= obj_ec_tgt_oiod_get(
+			toiod = obj_ec_tgt_oiod_get(
 				reasb_req->tgt_oiods, reasb_req->orr_tgt_nr,
 				shard_auxi->shard - shard_auxi->start_shard);
 			D_ASSERT(toiod != NULL);

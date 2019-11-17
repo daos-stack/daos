@@ -144,6 +144,21 @@ struct obj_tgt_oiod {
 };
 
 /**
+ * Splitted obj request (only used on leader shard for obj update).
+ * For object update, client sends update request to leader, the leader need to
+ * split it for different targets before dispatch.
+ */
+struct obj_ec_split_req {
+	uint32_t		 osr_start_shard;
+	/* forward targets' tgt_oiods */
+	struct obj_tgt_oiod	*osr_tgt_oiods;
+	/* leader shard's iods */
+	daos_iod_t		*osr_iods;
+	/* leader shard's offsets (one for each iod) */
+	uint64_t		*osr_offs;
+};
+
+/**
  * Segment sorter to sort segments per target.
  * In EC IO request reassemble, it needs to regenerate a new sgl with iovs
  * grouped by target and each target's segments need to be sorted to be same
@@ -269,5 +284,10 @@ struct obj_tgt_oiod *obj_ec_tgt_oiod_init(struct obj_io_desc *r_oiods,
 			uint32_t tgt_max_idx, uint32_t tgt_nr);
 struct obj_tgt_oiod *obj_ec_tgt_oiod_get(struct obj_tgt_oiod *tgt_oiods,
 			uint32_t tgt_nr, uint32_t tgt_idx);
+
+/* srv_ec.c */
+struct obj_rw_in;
+int obj_ec_rw_req_split(struct obj_rw_in *orw, struct obj_ec_split_req **req);
+void obj_ec_split_req_fini(struct obj_ec_split_req *req);
 
 #endif /* __OBJ_EC_H__ */
