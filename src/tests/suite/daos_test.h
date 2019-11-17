@@ -167,7 +167,7 @@ typedef struct {
 	struct epoch_io_args	eio_args;
 
 	/* List pools resources (mgmt tests) */
-	void 			*mgmt_lp_args;
+	void			*mgmt_lp_args;
 } test_arg_t;
 
 enum {

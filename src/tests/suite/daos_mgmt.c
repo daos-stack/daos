@@ -156,9 +156,10 @@ teardown_pools(void **state)
 	struct test_list_pools	*lparg = arg->mgmt_lp_args;
 	int			 i;
 	int			 rc;
+
 	if (lparg) {
 		for (i = 0; i < lparg->nsyspools; i++) {
-;			rc = pool_destroy_safe(arg, &lparg->tpools[i]);
+			rc = pool_destroy_safe(arg, &lparg->tpools[i]);
 			if (rc != 0)
 				return rc;
 		}
@@ -182,6 +183,7 @@ static int
 setup_manypools(void **state)
 {
 	const daos_size_t npools = 8;
+
 	return setup_pools(state, npools);
 }
 
@@ -189,6 +191,7 @@ setup_manypools(void **state)
 static void
 clean_pool_info(daos_size_t npools, daos_mgmt_pool_info_t *pools) {
 	int	i;
+
 	if (pools) {
 		for (i = 0; i < npools; i++) {
 			uuid_clear(pools[i].mgpi_uuid);
@@ -213,9 +216,12 @@ find_pool(void **state, daos_mgmt_pool_info_t *pool)
 	int			 found_idx = -1;
 
 	for (i = 0; i < lparg->nsyspools; i++) {
-		bool uuid_match = (uuid_compare(pool->mgpi_uuid,
-						lparg->tpools[i].pool_uuid) == 0);
-		bool ranks_match = d_rank_list_identical(&lparg->tpools[i].svc,
+		bool			 uuid_match;
+		bool			 ranks_match;
+
+		uuid_match = (uuid_compare(pool->mgpi_uuid,
+					   lparg->tpools[i].pool_uuid) == 0);
+		ranks_match = d_rank_list_identical(&lparg->tpools[i].svc,
 							 pool->mgpi_svc);
 
 		if (uuid_match && ranks_match) {
@@ -320,7 +326,7 @@ list_pools_test(void **state)
 		      tnum++);
 
 	/* Teardown for above 2 tests */
-	D_FREE(pools);	/* clean_pool_info() freed the mgpi_svc rank lists */
+	D_FREE(pools);	/* clean_pool_info() freed mgpi_svc */
 	pools = NULL;
 
 	/***** Test: invalid npools=NULL *****/
@@ -347,7 +353,7 @@ list_pools_test(void **state)
 		clean_pool_info(npools_alloc, pools);
 
 		/* Teardown */
-		D_FREE(pools);	/* clean_pool_info() freed the mgpi_svc rank lists */
+		D_FREE(pools);	/* clean_pool_info() freed mgpi_svc */
 		pools = NULL;
 		print_message("success t%d: pools[] exact length\n", tnum++);
 
@@ -367,7 +373,7 @@ list_pools_test(void **state)
 		print_message("success t%d: pools[] under-sized\n", tnum++);
 
 		/* Teardown */
-		D_FREE(pools);	/* clean_pool_info() freed the mgpi_svc rank lists */
+		D_FREE(pools);	/* clean_pool_info() freed mgpi_svc */
 		pools = NULL;
 	} /* if (lpargs->nsyspools > 0) */
 

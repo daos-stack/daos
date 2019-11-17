@@ -360,6 +360,15 @@ CRT_RPC_DECLARE(pool_tgt_update_map, DAOS_ISEQ_POOL_TGT_UPDATE_MAP,
 
 CRT_RPC_DECLARE(pool_get_acl, DAOS_ISEQ_POOL_GET_ACL, DAOS_OSEQ_POOL_GET_ACL)
 
+#define DAOS_ISEQ_POOL_PROP_SET	/* input fields */		 \
+	((struct pool_op_in)	(psi_op)		CRT_VAR) \
+	((daos_prop_t)		(psi_prop)		CRT_PTR)
+
+#define DAOS_OSEQ_POOL_PROP_SET	/* output fields */		 \
+	((struct pool_op_out)	(pso_op)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_prop_set, DAOS_ISEQ_POOL_PROP_SET, DAOS_OSEQ_POOL_PROP_SET)
+
 #define DAOS_ISEQ_POOL_LIST_CONT	/* input fields */		 \
 	((struct pool_op_in)	(plci_op)			CRT_VAR) \
 	((crt_bulk_t)		(plci_cont_bulk)		CRT_VAR) \
@@ -371,15 +380,6 @@ CRT_RPC_DECLARE(pool_get_acl, DAOS_ISEQ_POOL_GET_ACL, DAOS_OSEQ_POOL_GET_ACL)
 
 CRT_RPC_DECLARE(pool_list_cont, DAOS_ISEQ_POOL_LIST_CONT,
 		DAOS_OSEQ_POOL_LIST_CONT)
-
-#define DAOS_ISEQ_POOL_PROP_SET	/* input fields */		 \
-	((struct pool_op_in)	(psi_op)		CRT_VAR) \
-	((daos_prop_t)		(psi_prop)		CRT_PTR)
-
-#define DAOS_OSEQ_POOL_PROP_SET	/* output fields */		 \
-	((struct pool_op_out)	(pso_op)		CRT_VAR)
-
-CRT_RPC_DECLARE(pool_prop_set, DAOS_ISEQ_POOL_PROP_SET, DAOS_OSEQ_POOL_PROP_SET)
 
 static inline int
 pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
