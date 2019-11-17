@@ -31,6 +31,12 @@ class SimpleCreateDeleteTest(TestWithServers):
     :avocado: recursive
     """
 
+    def __init__(self, *args, **kwargs):
+        """Initialize a SimpleCreateDeleteTest object."""
+        super(SimpleCreateDeleteTest, self).__init__(*args, **kwargs)
+        self.pool = None
+        self.container = None
+
     def test_container_basics(self):
         """Test basic container create/destroy/open/close/query.
 
