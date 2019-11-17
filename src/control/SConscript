@@ -85,11 +85,12 @@ def scons():
     prefix = denv.subst("$PREFIX")
     sprefix = denv.subst("$SPDK_PREFIX")
     if sprefix not in ["/usr", prefix]:
-        for d in [join("share", "spdk", "scripts"), join("include", "spdk")]:
-            tp = join(prefix, d)
-            if not check_dir_exists(tp):
-                os.mkdirs(tp)
-                denv.Command(tp, join(sprefix, d), Copy("$TARGET", "$SOURCE"))
+        for _dir in [join("share", "spdk", "scripts"), join("include", "spdk")]:
+            target = join(prefix, _dir)
+            if not check_dir_exists(target):
+                os.makedirs(target)
+                denv.Command(target, join(sprefix, _dir), Copy("$TARGET",
+                                                               "$SOURCE"))
 
     def check_go_version(context):
         """Check GO Version"""
