@@ -604,7 +604,7 @@ class Soak(TestWithServers):
         self.run_soak(test_param)
 
     def test_soak_stress(self):
-        """Run soak test with IOR -a mpiio.
+        """Run soak stress.
 
         Test ID: DAOS-2256
         Test Description: This will create a slurm batch job that runs
