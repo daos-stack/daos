@@ -68,13 +68,8 @@ get_dev_health_logs(struct spdk_nvme_ctrlr *ctrlr,
 	return rc;
 }
 
-typedef int (*prober)(const struct spdk_nvme_transport_id *trid, void *cb_ctx,
-		      spdk_nvme_probe_cb probe_cb,
-		      spdk_nvme_attach_cb attach_cb,
-		      spdk_nvme_remove_cb remove_cb);
-
 struct ret_t *
-_nvme_discover(void, prober probe)
+_nvme_discover(prober probe)
 {
 	int			 rc;
 	struct ret_t		*ret;
@@ -136,7 +131,7 @@ _nvme_discover(void, prober probe)
 	return ret;
 }
 
-#define nvme_discover(void) _nvme_discover(&spdk_nvme_probe)
+#define nvme_discover(void) _nvme_discover(&spdk_nvme_probe);
 
 struct ret_t *
 nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot)

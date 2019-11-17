@@ -103,6 +103,12 @@ struct dev_health_entry {
 extern struct ctrlr_entry	*g_controllers;
 extern struct ns_entry		*g_namespaces;
 
+typedef int (*prober)(const struct spdk_nvme_transport_id *trid, void *cb_ctx,
+		      spdk_nvme_probe_cb probe_cb,
+		      spdk_nvme_attach_cb attach_cb,
+		      spdk_nvme_remove_cb remove_cb);
+struct ret_t *_nvme_discover(prober);
+
 /**
  * Discover NVMe controllers and namespaces, as well as return device health
  * information.
