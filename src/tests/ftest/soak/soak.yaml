@@ -115,7 +115,7 @@ job_ior_daos:
     tasks:
         - 1
         - 16
-        - 32
+        #- 32
     jobspec:
         - ior_daos
 # IOR MPIIO job params; multiple jobs, one job per node;
@@ -126,7 +126,7 @@ job_ior_mpiio:
     tasks:
         - 1
         - 16
-        - 32
+        #- 32
     jobspec:
         - ior_mpiio
 # TBD job params for DMG
