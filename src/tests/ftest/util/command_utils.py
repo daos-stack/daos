@@ -83,7 +83,7 @@ class BasicParameter(object):
 
 
 class FormattedParameter(BasicParameter):
-    # pylint: disable=too-few-public-methods, pylint-no-member
+    # pylint: disable=too-few-public-methods
     """A class for test parameters whose values are read from a yaml file."""
 
     def __init__(self, str_format, default=None):
@@ -108,9 +108,8 @@ class FormattedParameter(BasicParameter):
             return self._str_format
         elif not isinstance(self._default, bool) and self.value is not None:
             if isinstance(self.value, dict):
-                return " ".join(
-                    [self._str_format.format("{} \"{}\"".format(key, value))
-                     for key, value in self.value.items()])
+                return " ".join([self._str_format.format("{} \"{}\"".format(
+                    key, self.value[key])) for key in self.value])
             elif isinstance(self.value, (list, tuple)):
                 return " ".join(
                     [self._str_format.format(value) for value in self.value])
