@@ -2311,10 +2311,14 @@ ds_pool_list_cont_handler(crt_rpc_t *rpc)
 		DP_UUID(in->plci_op.pi_uuid), DP_UUID(in->plci_op.pi_hdl),
 		ncont, cont_buf);
 
-	if (cont_buf) {
+	/* Send results (if there are any) only if client provided a handle */
+	if (cont_buf && (in->plci_ncont > 0) &&
+	    (in->plci_cont_bulk != CRT_BULK_NULL)) {
 		rc = transfer_cont_buf(cont_buf, ncont, svc, rpc,
 				       in->plci_cont_bulk);
+	}
 
+	if (cont_buf) {
 		D_FREE(cont_buf);
 		cont_buf = NULL;
 	}

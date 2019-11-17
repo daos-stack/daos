@@ -136,7 +136,8 @@ setup_pools(void **state, daos_size_t npools)
 
 err_destroy_pools:
 	for (i = 0; i < npools; i++) {
-		if (!(daos_handle_is_inval(lparg->tpools[i].poh)))
+		if (!uuid_is_null(lparg->tpools[i].pool_uuid) &&
+		    (arg->myrank == 0))
 			(void) pool_destroy_safe(arg, &lparg->tpools[i]);
 	}
 
@@ -157,18 +158,24 @@ teardown_pools(void **state)
 	int			 i;
 	int			 rc;
 
-	if (lparg) {
-		for (i = 0; i < lparg->nsyspools; i++) {
-			rc = pool_destroy_safe(arg, &lparg->tpools[i]);
+	if (lparg == NULL)
+		return 0;
+
+	for (i = 0; i < lparg->nsyspools; i++) {
+		if (!uuid_is_null(lparg->tpools[i].pool_uuid)) {
+			if (arg->myrank == 0)
+				rc = pool_destroy_safe(arg, &lparg->tpools[i]);
+			if (arg->multi_rank)
+				MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 			if (rc != 0)
 				return rc;
 		}
-		lparg->nsyspools = 0;
-		D_FREE(lparg->tpools);
-		lparg->tpools = NULL;
-		D_FREE(arg->mgmt_lp_args);
-		arg->mgmt_lp_args = NULL;
 	}
+	lparg->nsyspools = 0;
+	D_FREE(lparg->tpools);
+	lparg->tpools = NULL;
+	D_FREE(arg->mgmt_lp_args);
+	arg->mgmt_lp_args = NULL;
 
 	return test_case_teardown(state);
 }
@@ -230,7 +237,7 @@ find_pool(void **state, daos_mgmt_pool_info_t *pool)
 		}
 	}
 
-	print_message("pool "DF_UUIDF" in list-pools result was %sfound\n",
+	print_message("pool "DF_UUIDF" %sfound in list result\n",
 		      DP_UUID(pool->mgpi_uuid),
 		      ((found_idx == -1) ? "NOT " : ""));
 	return found_idx;
@@ -279,7 +286,6 @@ verify_pool_info(void **state, int rc_ret, daos_size_t npools_in,
 /* Common function for testing list pools feature.
  * Some tests can only be run when multiple pools have been created,
  * Other tests may run when there are zero or more pools in the system.
- * TODO: utility function to verify daos_mgmt_pool_info_t * array content.
  */
 static void
 list_pools_test(void **state)
@@ -321,7 +327,6 @@ list_pools_test(void **state)
 	npools = 0;
 	rc = daos_mgmt_list_pools(arg->group, &npools, pools, NULL /* ev */);
 	assert_int_equal(rc, -DER_INVAL);
-	clean_pool_info(npools_alloc, pools);
 	print_message("success t%d: npools=0, non-NULL pools[] -DER_INVAL\n",
 		      tnum++);
 
@@ -350,7 +355,6 @@ list_pools_test(void **state)
 					  NULL /* ev */);
 		assert_int_equal(rc, 0);
 		verify_pool_info(state, rc, npools_alloc, pools, npools);
-		clean_pool_info(npools_alloc, pools);
 
 		/* Teardown */
 		D_FREE(pools);	/* clean_pool_info() freed mgpi_svc */
@@ -369,7 +373,6 @@ list_pools_test(void **state)
 					  NULL /* ev */);
 		assert_int_equal(rc, -DER_TRUNC);
 		verify_pool_info(state, rc, npools_alloc, pools, npools);
-		clean_pool_info(npools_alloc, pools);
 		print_message("success t%d: pools[] under-sized\n", tnum++);
 
 		/* Teardown */

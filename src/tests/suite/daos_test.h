@@ -168,6 +168,9 @@ typedef struct {
 
 	/* List pools resources (mgmt tests) */
 	void			*mgmt_lp_args;
+
+	/* List containers (pool tests) */
+	void			*pool_lc_args;
 } test_arg_t;
 
 enum {

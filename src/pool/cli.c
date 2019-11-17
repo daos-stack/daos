@@ -1544,11 +1544,6 @@ dc_pool_list_cont(tse_task_t *task)
 
 	args = dc_task_get_args(task);
 
-	if (args->ncont == NULL) {
-		D_ERROR("ncont must be non-NULL\n");
-		D_GOTO(out_task, rc = -DER_INVAL);
-	}
-
 	/** Lookup bumps pool ref ,1 */
 	pool = dc_hdl2pool(args->poh);
 	if (pool == NULL)
@@ -1577,7 +1572,7 @@ dc_pool_list_cont(tse_task_t *task)
 	/** +1 for args */
 	crt_req_addref(rpc);
 
-	if (in->plci_ncont > 0) {
+	if ((args->ncont > 0) && args->cont_buf) {
 		rc = list_cont_bulk_create(daos_task2ctx(task),
 					   &in->plci_cont_bulk,
 					   args->cont_buf, in->plci_ncont);
