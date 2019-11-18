@@ -70,7 +70,7 @@ RUN yum -y install \
            yum-plugin-copr python-pathlib                      \
            python2-clustershell python2-Cython python2-pip     \
            python36-clustershell python36-paramiko             \
-           python3-pip;                                        \
+           python36-numpy python36-jira python3-pip;           \
     yum -y copr enable jhli/ipmctl;                            \
     yum -y copr enable jhli/safeclib;                          \
     yum -y install libipmctl-devel
@@ -79,9 +79,7 @@ RUN yum -y install \
 #  - excluding mpi4py as it depends on CORCI-635
 RUN pip3 install avocado-framework; \
     pip3 install avocado-framework-plugin-result-html; \
-    pip3 install avocado-framework-plugin-varianter-yaml-to-mux; \
-    pip3 install numpy; \
-    pip3 install jira
+    pip3 install avocado-framework-plugin-varianter-yaml-to-mux
 
 # Add DAOS user
 ENV USER daos
