@@ -51,9 +51,7 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 {
 	struct crt_corpc_info	*co_info;
 	struct crt_corpc_hdr	*co_hdr;
-	int			 rc = 0;
-	d_rank_list_t		*membs;
-	uint32_t		 nr;
+	int			 rc;
 
 	D_ASSERT(rpc_priv != NULL);
 	D_ASSERT(grp_priv != NULL);
@@ -72,19 +70,6 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 		crt_grp_priv_addref(grp_priv);
 	co_info->co_grp_ref_taken = 1;
 	co_info->co_grp_priv = grp_priv;
-
-	if (co_info->co_filter_ranks != NULL) {
-		membs = grp_priv_get_membs(grp_priv);
-		nr = co_info->co_filter_ranks->rl_nr;
-		d_rank_list_filter(membs, co_info->co_filter_ranks,
-				   false /* exclude */);
-		if ((flags & CRT_RPC_FLAG_EXCLUSIVE) &&
-		    (co_info->co_filter_ranks->rl_nr != nr)) {
-			D_ERROR("%u/%u exclusive ranks out of group\n",
-				nr - co_info->co_filter_ranks->rl_nr, nr);
-			D_GOTO(out, rc = -DER_OOG);
-		}
-	}
 
 	co_info->co_grp_ver = grp_ver;
 	co_info->co_tree_topo = tree_topo;
@@ -114,6 +99,7 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 		co_hdr->coh_tree_topo = tree_topo;
 		co_hdr->coh_root = grp_root;
 	}
+
 	co_hdr->coh_bulk_hdl = co_bulk_hdl;
 
 	rpc_priv->crp_corpc_info = co_info;
