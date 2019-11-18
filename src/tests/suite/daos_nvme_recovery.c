@@ -115,7 +115,7 @@ nvme_recov_1(void **state)
 	 *	  is ready.
 	 */
 	print_message("Waiting for faulty reaction done...\n");
-	sleep(60);
+	sleep(180);
 	print_message("Done\n");
 }
 
