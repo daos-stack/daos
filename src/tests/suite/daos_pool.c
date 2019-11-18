@@ -626,14 +626,15 @@ setup_containers(void **state, daos_size_t nconts)
 				       &lcarg->tpool.poh, NULL /* pool info */,
 				       NULL /* ev */);
 		if (rc != 0)
-			print_message("setup: daos_pool_connect failed: %d\n", rc);
+			print_message("setup: daos_pool_connect failed: %d\n",
+				      rc);
 	}
 
 	if (arg->multi_rank) {
 		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 		if (rc == 0) {
-			handle_share(&lcarg->tpool.poh, HANDLE_POOL, arg->myrank,
-				     lcarg->tpool.poh, 0);
+			handle_share(&lcarg->tpool.poh, HANDLE_POOL,
+				     arg->myrank, lcarg->tpool.poh, 0);
 		}
 	}
 
