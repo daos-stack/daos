@@ -1556,11 +1556,14 @@ ds_cont_aggregate_ult(void *arg)
 		uint64_t sleep; /* nano secs */
 
 		rc = cont_child_aggregate(cont, &sleep);
-		if (rc < 0)
+		if (rc < 0) {
 			D_ERROR(DF_UUID": VOS aggregate failed. %d\n",
 				DP_UUID(cont->sc_uuid), rc);
-		else if (rc)
+			if (rc == -DER_SHUTDOWN)
+				break;
+		} else if (rc) {
 			break;	/* aggregation aborted */
+		}
 
 		if (dss_xstream_exiting(dmi->dmi_xstream))
 			break;
