@@ -91,10 +91,6 @@ class IoConfTestBase(TestWithServers):
     :avocado: recursive
     """
 
-    def __init__(self, *args, **kwargs):
-        """Initialize a IoConfTestBase object."""
-        super(IoConfTestBase, self).__init__(*args, **kwargs)
-
     def setup_test_pool(self):
         """Define a TestPool object."""
         self.pool = TestPool(self.context, self.log)
