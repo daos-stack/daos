@@ -46,6 +46,8 @@ struct  ilog_df {
 struct umem_instance;
 
 enum ilog_status {
+	/** Log status is not set */
+	ILOG_INVALID,
 	/** Log entry is visible to caller */
 	ILOG_COMMITTED,
 	/** Log entry is not yet visible */
