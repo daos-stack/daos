@@ -448,6 +448,10 @@ main(int argc, char **argv)
 	if (rc)
 		D_GOTO(out, rc);
 
+	if (ts_ctx.tsc_mpi_rank == 0)
+		daos_mgmt_set_params(NULL, -1, DSS_DISABLE_AGGREGATION,
+				     1, 0, NULL);
+
 	sub_tests_init(sub_tests, 0xFFFF);
 	expire = dts_time_now() + duration;
 
@@ -459,6 +463,13 @@ main(int argc, char **argv)
 			break;
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (ts_ctx.tsc_mpi_rank == 0) {
+		daos_mgmt_set_params(NULL, -1, DSS_DISABLE_AGGREGATION,
+				     0, 0, NULL);
+		fprintf(stdout, "racer done with %d threads duration %u secs\n",
+			ts_ctx.tsc_mpi_size, duration);
+	}
 
 	dts_ctx_fini(&ts_ctx);
 out:
