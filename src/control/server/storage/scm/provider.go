@@ -297,7 +297,7 @@ func (ssp *defaultSystemProvider) Mkfs(fsType, device string, force bool) error 
 	return nil
 }
 
-// GetFs probes the specified device in an attempt to determine the
+// Getfs probes the specified device in an attempt to determine the
 // formatted filesystem type, if any.
 func (ssp *defaultSystemProvider) Getfs(device string) (string, error) {
 	cmdPath, err := exec.LookPath("file")
@@ -555,6 +555,9 @@ func (p *Provider) CheckFormat(req FormatRequest) (*FormatResponse, error) {
 	if req.Dcpm != nil {
 		fsType, err := p.sys.Getfs(req.Dcpm.Device)
 		if err != nil {
+			if os.IsNotExist(errors.Cause(err)) {
+				return nil, errors.Wrap(FaultFormatMissingDevice, req.Dcpm.Device)
+			}
 			return nil, errors.Wrapf(err, "failed to check if %s is formatted", req.Dcpm.Device)
 		}
 
