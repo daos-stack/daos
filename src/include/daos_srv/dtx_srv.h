@@ -59,8 +59,6 @@ struct dtx_handle {
 	uint64_t			 dth_gen;
 	/** Pool map version. */
 	uint32_t			 dth_ver;
-	/** The intent of related modification. */
-	uint32_t			 dth_intent;
 	uint32_t			 dth_sync:1, /* commit synchronously. */
 					 dth_leader:1, /* leader replica. */
 					 /* Only one participator in the DTX. */
@@ -114,7 +112,7 @@ enum dtx_status {
 
 int
 dtx_leader_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
-		 daos_epoch_t epoch, uint32_t pm_ver, uint32_t intent,
+		 daos_epoch_t epoch, uint32_t pm_ver,
 		 struct daos_shard_tgt *tgts, int tgts_cnt,
 		 struct dtx_leader_handle *dlh);
 int
@@ -130,8 +128,7 @@ int dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid,
 	       uint32_t ver, bool block);
 int
 dtx_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
-	  daos_epoch_t epoch, uint32_t pm_ver, uint32_t intent,
-	  struct dtx_handle *dth);
+	  daos_epoch_t epoch, uint32_t pm_ver, struct dtx_handle *dth);
 int
 dtx_end(struct dtx_handle *dth, struct ds_cont_hdl *cont_hdl,
 	struct ds_cont_child *cont, int result);
@@ -152,8 +149,6 @@ int dtx_obj_sync(uuid_t po_uuid, uuid_t co_uuid, daos_handle_t coh,
  * \param coh		[IN]	Container open handle.
  * \param oid		[IN]	Pointer to the object ID.
  * \param xid		[IN]	Pointer to the DTX identifier.
- * \param dkey_hash	[IN]	The hashed dkey.
- * \param punch		[IN]	For punch operation or not.
  * \param epoch		[IN,OUT] Pointer to current epoch, if it is zero and
  *				 if the DTX exists, then the DTX's epoch will
  *				 be saved in it.
@@ -168,8 +163,7 @@ int dtx_obj_sync(uuid_t po_uuid, uuid_t co_uuid, daos_handle_t coh,
  *			Other negative value if error.
  */
 int dtx_handle_resend(daos_handle_t coh, daos_unit_oid_t *oid,
-		      struct dtx_id *dti, uint64_t dkey_hash,
-		      bool punch, daos_epoch_t *epoch);
+		      struct dtx_id *dti, daos_epoch_t *epoch);
 
 /* XXX: The higher 48 bits of HLC is the wall clock, the lower bits are for
  *	logic clock that will be hidden when divided by NSEC_PER_SEC.

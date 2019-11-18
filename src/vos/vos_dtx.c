@@ -768,7 +768,6 @@ vos_dtx_alloc(struct umem_instance *umm, struct dtx_handle *dth)
 	DAE_OID(dae) = dth->dth_oid;
 	DAE_EPOCH(dae) = dth->dth_epoch;
 	DAE_FLAGS(dae) = dth->dth_leader ? DTX_EF_LEADER : 0;
-	DAE_INTENT(dae) = dth->dth_intent;
 	DAE_SRV_GEN(dae) = dth->dth_gen;
 	DAE_LAYOUT_GEN(dae) = dth->dth_gen;
 

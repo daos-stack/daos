@@ -218,15 +218,14 @@ check:
  */
 static void
 dtx_handle_init(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
-		daos_epoch_t epoch, uint32_t pm_ver, uint32_t intent,
-		bool leader, bool solo, struct dtx_handle *dth)
+		daos_epoch_t epoch, uint32_t pm_ver, bool leader, bool solo,
+		struct dtx_handle *dth)
 {
 	dth->dth_xid = *dti;
 	dth->dth_oid = *oid;
 	dth->dth_coh = coh;
 	dth->dth_epoch = epoch;
 	dth->dth_ver = pm_ver;
-	dth->dth_intent = intent;
 	dth->dth_leader = leader ? 1 : 0;
 	dth->dth_solo = solo ? 1 : 0;
 	dth->dth_ent = NULL;
@@ -247,14 +246,13 @@ dtx_handle_init(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
  * \param tgts		[IN]	targets for distribute transaction.
  * \param tgts_cnt	[IN]	number of targets.
  * \param pm_ver	[IN]	Pool map version for the DTX.
- * \param intent	[IN]	The intent of related modification.
  * \param dth		[OUT]	Pointer to the DTX handle.
  *
  * \return			Zero on success, negative value if error.
  */
 int
 dtx_leader_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
-		 daos_epoch_t epoch, uint32_t pm_ver, uint32_t intent,
+		 daos_epoch_t epoch, uint32_t pm_ver,
 		 struct daos_shard_tgt *tgts, int tgts_cnt,
 		 struct dtx_leader_handle *dlh)
 {
@@ -285,13 +283,12 @@ dtx_leader_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
 	}
 
 init:
-	dtx_handle_init(dti, oid, coh, epoch, pm_ver, intent,
-			true, tgts_cnt == 0 ? true : false, dth);
+	dtx_handle_init(dti, oid, coh, epoch, pm_ver, true,
+			tgts_cnt == 0 ? true : false, dth);
 
 	D_DEBUG(DB_TRACE, "Start DTX "DF_DTI" for object "DF_OID
-		" ver %u, intent %s\n",
-		DP_DTI(&dth->dth_xid), DP_OID(oid->id_pub), dth->dth_ver,
-		intent == DAOS_INTENT_PUNCH ? "Punch" : "Update");
+		" ver %u\n",
+		DP_DTI(&dth->dth_xid), DP_OID(oid->id_pub), dth->dth_ver);
 
 	return 0;
 }
@@ -329,8 +326,6 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *cont_hdl,
 	       struct ds_cont_child *cont, int result)
 {
 	struct dtx_handle		*dth = &dlh->dlh_handle;
-	int				*ptr = NULL;
-	int				 dces_cnt = 0;
 	int				 rc = 0;
 
 	if (dlh == NULL)
@@ -346,10 +341,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *cont_hdl,
 	/* NB: even the local request failure, dth_ent == NULL, we
 	 * should still wait for remote object to finish the request.
 	 */
-	if (!daos_is_zero_dti(&dth->dth_xid) && result >= 0)
-		ptr = &dces_cnt;
-
-	rc = dtx_leader_wait(dlh, &dces, ptr);
+	rc = dtx_leader_wait(dlh);
 	if (daos_is_zero_dti(&dth->dth_xid)) {
 		D_FREE(dlh->dlh_subs);
 
@@ -413,10 +405,9 @@ out:
 	}
 
 	D_DEBUG(DB_TRACE,
-		"Stop the DTX "DF_DTI" ver %u, intent %s, "
-		"%s, %s participator(s): rc = %d\n",
+		"Stop the DTX "DF_DTI" ver %u, %s, "
+		"%s participator(s): rc = %d\n",
 		DP_DTI(&dth->dth_xid), dth->dth_ver,
-		dth->dth_intent == DAOS_INTENT_PUNCH ? "Punch" : "Update",
 		dth->dth_sync ? "sync" : "async",
 		dth->dth_solo ? "single" : "multiple", result);
 
@@ -438,7 +429,6 @@ out:
  * \param coh		[IN]	Container open handle.
  * \param epoch		[IN]	Epoch for the DTX.
  * \param pm_ver	[IN]	Pool map version for the DTX.
- * \param intent	[IN]	The intent of related modification.
  * \param leader	[IN]	The target (to be modified) is leader or not.
  * \param dth		[OUT]	Pointer to the DTX handle.
  *
@@ -446,19 +436,17 @@ out:
  */
 int
 dtx_begin(struct dtx_id *dti, daos_unit_oid_t *oid, daos_handle_t coh,
-	  daos_epoch_t epoch, uint32_t pm_ver, uint32_t intent,
-	  struct dtx_handle *dth)
+	  daos_epoch_t epoch, uint32_t pm_ver, struct dtx_handle *dth)
 {
 	if (dth == NULL || daos_is_zero_dti(dti))
 		return 0;
 
-	dtx_handle_init(dti, oid, coh, epoch, pm_ver, intent, false, false,
+	dtx_handle_init(dti, oid, coh, epoch, pm_ver, false, false,
 			dth);
 
 	D_DEBUG(DB_TRACE, "Start the DTX "DF_DTI" for object "DF_OID
-		" ver %u, intent %s\n",
-		DP_DTI(&dth->dth_xid), DP_OID(oid->id_pub), dth->dth_ver,
-		intent == DAOS_INTENT_PUNCH ? "Punch" : "Update");
+		" ver %u\n",
+		DP_DTI(&dth->dth_xid), DP_OID(oid->id_pub), dth->dth_ver);
 
 	return 0;
 }
@@ -467,8 +455,6 @@ int
 dtx_end(struct dtx_handle *dth, struct ds_cont_hdl *cont_hdl,
 	struct ds_cont_child *cont, int result)
 {
-	int rc = 0;
-
 	if (dth == NULL || daos_is_zero_dti(&dth->dth_xid))
 		goto out;
 
@@ -476,9 +462,8 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_hdl *cont_hdl,
 		vos_dtx_abort(cont->sc_hdl, dth->dth_epoch, &dth->dth_xid, 1);
 
 	D_DEBUG(DB_TRACE,
-		"Stop the DTX "DF_DTI" ver %u, intent %s, rc = %d\n",
+		"Stop the DTX "DF_DTI" ver %u, rc = %d\n",
 		DP_DTI(&dth->dth_xid), dth->dth_ver,
-		dth->dth_intent == DAOS_INTENT_PUNCH ? "Punch" : "Update",
 		result);
 
 	D_ASSERTF(result <= 0, "unexpected return value %d\n", result);
@@ -597,7 +582,7 @@ out:
 
 int
 dtx_handle_resend(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
-		  bool punch, daos_epoch_t *epoch)
+		  daos_epoch_t *epoch)
 {
 	int	rc;
 
@@ -615,7 +600,7 @@ dtx_handle_resend(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
 		return -DER_NONEXIST;
 
 again:
-	rc = vos_dtx_check_resend(coh, oid, dti, punch, epoch);
+	rc = vos_dtx_check_resend(coh, oid, dti, epoch);
 	switch (rc) {
 	case DTX_ST_PREPARED:
 		return 0;
