@@ -24,14 +24,14 @@ include packaging/Makefile_packaging.mk
 
 PACKAGING_CHECK_DIR ?= ../../../rpm/packaging
 
-scons_local-$(VERSION).tar.gz:
+scons_local-$(VERSION).tar.gz: FORCE
 	cd ../../scons_local &&                        \
 	git archive --format tar --prefix scons_local/ \
 	            -o $$OLDPWD/$(basename $@) HEAD ./
 	rm -f $@
 	gzip $(basename $@)
 
-$(NAME)-$(VERSION).tar.gz:
+$(NAME)-$(VERSION).tar.gz: FORCE
 	echo $@
 	echo $(basename $@)
 	cd ../../ &&                                          \
