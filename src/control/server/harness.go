@@ -156,7 +156,8 @@ func (h *IOServerHarness) AwaitStorageReady(ctx context.Context, skipMissingSupe
 	for _, instance := range h.instances {
 		needsScmFormat, err := instance.NeedsScmFormat()
 		if err != nil {
-			return errors.Wrap(err, "failed to check storage formatting")
+			h.log.Error(errors.Wrap(err, "failed to check storage formatting").Error())
+			needsScmFormat = true
 		}
 
 		if !needsScmFormat {
