@@ -336,9 +336,11 @@ class KVObj(_Obj):
         return False
 
     def __contains__(self, key):
-        if self.get(key) is None:
+        try:
+            self.get(key)
+            return True
+        except KeyError:
             return False
-        return True
 
     def __iter__(self):
         return KVIter(self)
