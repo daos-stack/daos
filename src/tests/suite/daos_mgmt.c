@@ -189,7 +189,8 @@ setup_zeropools(void **state)
 static int
 setup_manypools(void **state)
 {
-	const daos_size_t npools = 8;
+	/* Keep this small - CI environment may only have ~6GB in config */
+	const daos_size_t npools = 4;
 
 	return setup_pools(state, npools);
 }
