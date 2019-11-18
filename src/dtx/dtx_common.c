@@ -309,7 +309,7 @@ dtx_leader_wait(struct dtx_leader_handle *dlh)
 	D_DEBUG(DB_TRACE, "dth "DF_DTI" rc %d\n",
 		DP_DTI(&dlh->dlh_handle.dth_xid), rc);
 	return rc;
-};
+}
 
 /**
  * Stop the leader thandle.
