@@ -33,6 +33,32 @@
 #define DEFAULT_BUF_LEN 1024
 
 /*
+ * No platform-agnostic way to fetch the max buflen - so let's try a
+ * sane value and double until it's big enough.
+ *
+ * Assumes expr is part of the getpw*_r family of functions, and rc/buf/buflen
+ * and a goto label "out" are already defined in the surrounding function.
+ */
+#define TRY_UNTIL_BUF_SIZE_OK(expr)				\
+{								\
+	char	*new_buf = NULL;				\
+								\
+	buflen = DEFAULT_BUF_LEN;				\
+	do {							\
+		D_REALLOC(new_buf, buf, buflen);		\
+		if (new_buf == NULL) {				\
+			D_ERROR("Couldn't alloc buffer\n");	\
+			D_GOTO(out, rc = -DER_NOMEM);		\
+		}						\
+		buf = new_buf;					\
+								\
+		rc = (expr);					\
+								\
+		buflen *= 2;					\
+	} while (rc == ERANGE);					\
+}
+
+/*
  * States used to parse a principal name
  */
 enum validity_state {
@@ -121,31 +147,14 @@ daos_acl_uid_to_principal(uid_t uid, char **name)
 	struct passwd	user;
 	struct passwd	*result = NULL;
 	char		*buf = NULL;
-	char		*new_buf = NULL;
-	size_t		buflen = DEFAULT_BUF_LEN;
+	size_t		buflen;
 
 	if (name == NULL) {
 		D_INFO("name pointer was NULL!\n");
 		return -DER_INVAL;
 	}
 
-	/*
-	 * No platform-agnostic way to fetch the max buflen - so let's try a
-	 * sane value and double until it's big enough.
-	 */
-	do {
-		D_REALLOC(new_buf, buf, buflen);
-		if (new_buf == NULL) {
-			D_ERROR("Couldn't allocate memory for getpwuid_r\n");
-			return -DER_NOMEM;
-		}
-
-		buf = new_buf;
-
-		rc = getpwuid_r(uid, &user, buf, buflen, &result);
-
-		buflen *= 2;
-	} while (rc == ERANGE);
+	TRY_UNTIL_BUF_SIZE_OK(getpwuid_r(uid, &user, buf, buflen, &result));
 
 	if (rc != 0) {
 		D_ERROR("Error from getpwuid_r: %d\n", rc);
@@ -171,31 +180,14 @@ daos_acl_gid_to_principal(gid_t gid, char **name)
 	struct group	grp;
 	struct group	*result = NULL;
 	char		*buf = NULL;
-	char		*new_buf = NULL;
-	size_t		buflen = DEFAULT_BUF_LEN;
+	size_t		buflen;
 
 	if (name == NULL) {
 		D_INFO("name pointer was NULL!\n");
 		return -DER_INVAL;
 	}
 
-	/*
-	 * No platform-agnostic way to fetch the max buflen - so let's try a
-	 * sane value and double until it's big enough.
-	 */
-	do {
-		D_REALLOC(new_buf, buf, buflen);
-		if (new_buf == NULL) {
-			D_ERROR("Couldn't allocate memory for getgrgid_r\n");
-			return -DER_NOMEM;
-		}
-
-		buf = new_buf;
-
-		rc = getgrgid_r(gid, &grp, buf, buflen, &result);
-
-		buflen *= 2;
-	} while (rc == ERANGE);
+	TRY_UNTIL_BUF_SIZE_OK(getgrgid_r(gid, &grp, buf, buflen, &result));
 
 	if (rc != 0) {
 		D_ERROR("Error from getgrgid_r: %d\n", rc);
@@ -246,8 +238,7 @@ daos_acl_principal_to_uid(const char *principal, uid_t *uid)
 {
 	char		username[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
 	char		*buf = NULL;
-	char		*new_buf = NULL;
-	size_t		buflen = DEFAULT_BUF_LEN;
+	size_t		buflen;
 	struct passwd	passwd;
 	struct passwd	*result = NULL;
 	int		rc;
@@ -261,19 +252,8 @@ daos_acl_principal_to_uid(const char *principal, uid_t *uid)
 	if (rc != 0)
 		return rc;
 
-	do {
-		D_REALLOC(new_buf, buf, buflen);
-		if (new_buf == NULL) {
-			D_ERROR("Couldn't alloc buffer for getpwnam_r\n");
-			return -DER_NOMEM;
-		}
-
-		buf = new_buf;
-
-		rc = getpwnam_r(username, &passwd, buf, buflen, &result);
-
-		buflen *= 2;
-	} while (rc == ERANGE);
+	TRY_UNTIL_BUF_SIZE_OK(getpwnam_r(username, &passwd, buf, buflen,
+					 &result));
 
 	if (rc != 0) {
 		D_ERROR("Error from getpwnam_r: %d\n", rc);
@@ -297,8 +277,7 @@ daos_acl_principal_to_gid(const char *principal, gid_t *gid)
 {
 	char		grpname[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
 	char		*buf = NULL;
-	char		*new_buf = NULL;
-	size_t		buflen = DEFAULT_BUF_LEN;
+	size_t		buflen;
 	struct group	grp;
 	struct group	*result = NULL;
 	int		rc;
@@ -312,19 +291,7 @@ daos_acl_principal_to_gid(const char *principal, gid_t *gid)
 	if (rc != 0)
 		return rc;
 
-	do {
-		D_REALLOC(new_buf, buf, buflen);
-		if (new_buf == NULL) {
-			D_ERROR("Couldn't alloc buffer for getgrnam_r\n");
-			return -DER_NOMEM;
-		}
-
-		buf = new_buf;
-
-		rc = getgrnam_r(grpname, &grp, buf, buflen, &result);
-
-		buflen *= 2;
-	} while (rc == ERANGE);
+	TRY_UNTIL_BUF_SIZE_OK(getgrnam_r(grpname, &grp, buf, buflen, &result));
 
 	if (rc != 0) {
 		D_ERROR("Error from getgrnam_r: %d\n", rc);
