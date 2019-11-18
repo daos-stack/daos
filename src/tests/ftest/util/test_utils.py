@@ -168,9 +168,6 @@ class TestPool(TestDaosApiBase):
         # Required to use dmg. It defined the directory where dmg is installed.
         # Call self.basepath + '/install/bin' in the test
         self.dmg_bin_path = None
-        # Optional to use dmg. If it's not set, the system's username is passed
-        # into dmg_utils.py as group.
-        self.group = None
 
     def create(self):
         """Create a pool with either API or dmg.
@@ -183,7 +180,8 @@ class TestPool(TestDaosApiBase):
 
         If it wants to use --nsvc option, it needs to set the value to
         svcn.value. Otherwise, 1 is used. If it wants to use --group, it needs
-        to set group.
+        to set name.value. If it's not set, the system's username is passed
+        into dmg_utils.py as group.
 
         This method makes it easy to switch between the API and dmg when
         creating a pool. However, if the test needs to test the create
@@ -266,8 +264,8 @@ class TestPool(TestDaosApiBase):
 
         # 2. Use dmg to create a pool
         user = getpass.getuser()
-        if self.group is None:
-            self.group = user
+        if self.name.value is None:
+            self.name.value = user
         # Currently, there is one test that creates the pool over the subset of
         # the server hosts; pool/evict_test. To do so, the test needs to set
         # the rank(s) to target_list.value starting from 0. e.g., if you're
@@ -291,7 +289,7 @@ class TestPool(TestDaosApiBase):
         # Call the dmg pool create command
         create_result = pool_create(path=self.dmg_bin_path,
                                     scm_size=self.scm_size.value,
-                                    group=self.group, user=user,
+                                    group=self.name.value, user=user,
                                     ranks=ranks_comma_separated,
                                     nsvc=self.svcn.value)
         # If the returned result is None, that means the command has failed
