@@ -76,6 +76,7 @@ struct rebuild_obj_key {
 struct rebuild_tgt_pool_tracker {
 	/** pin the pool during the rebuild */
 	struct ds_pool		*rt_pool;
+	struct dss_sleep_ult	*rt_ult;
 	/** active rebuild pullers for each xstream */
 	struct rebuild_puller	*rt_pullers;
 	/** # xstreams */
@@ -129,6 +130,7 @@ struct rebuild_global_pool_tracker {
 	/* rebuild status */
 	struct daos_rebuild_status	rgt_status;
 
+	struct dss_sleep_ult		*rgt_ult;
 	/* link to rebuild_global.rg_global_tracker_list */
 	d_list_t	rgt_list;
 

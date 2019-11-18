@@ -570,12 +570,15 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 			    struct rebuild_global_pool_tracker *rgt)
 {
 	double		last_print = 0;
-	double		last_query = 0;
 	unsigned int	total;
 	int		rc;
 
 	rc = crt_group_size(pool->sp_group, &total);
 	if (rc)
+		return;
+
+	rgt->rgt_ult = dss_sleep_ult_create();
+	if (rgt->rgt_ult == NULL)
 		return;
 
 	while (1) {
@@ -585,15 +588,6 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 		unsigned int			failed_tgts_cnt;
 		double				now;
 		char				*str;
-
-		now = ABT_get_wtime();
-		if (now - last_query < RBLD_BCAST_INTV) {
-			/* Yield to other ULTs */
-			ABT_thread_yield();
-			continue;
-		}
-
-		last_query = now;
 
 		rc = pool_map_find_failed_tgts(pool->sp_map, &targets,
 					       &failed_tgts_cnt);
@@ -674,14 +668,17 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver,
 			break;
 		}
 
+		now = ABT_get_wtime();
 		/* print something at least for each 10 secons */
 		if (now - last_print > 10) {
 			last_print = now;
 			D_PRINT("%s", sbuf);
 		}
-
-		ABT_thread_yield();
+		dss_ult_sleep(rgt->rgt_ult, RBLD_BCAST_INTV);
 	}
+
+	dss_sleep_ult_destroy(rgt->rgt_ult);
+	rgt->rgt_ult = NULL;
 }
 
 static void
@@ -1660,23 +1657,19 @@ void
 rebuild_tgt_status_check(void *arg)
 {
 	struct rebuild_tgt_pool_tracker	*rpt = arg;
-	double				last_query = 0;
-	double				now;
 
 	D_ASSERT(rpt != NULL);
+	rpt->rt_ult = dss_sleep_ult_create();
+	if (rpt->rt_ult == NULL) {
+		D_ERROR("Can not start rebuild status check\n");
+		return;
+	}
+
 	while (1) {
 		struct rebuild_iv		iv;
 		struct rebuild_tgt_query_info	status;
 		int				rc;
 
-		now = ABT_get_wtime();
-		if (now - last_query < RBLD_CHECK_INTV) {
-			/* Yield to other ULTs */
-			ABT_thread_yield();
-			continue;
-		}
-
-		last_query = now;
 		memset(&status, 0, sizeof(status));
 		ABT_mutex_create(&status.lock);
 		rc = rebuild_tgt_query(rpt, &status);
@@ -1779,7 +1772,12 @@ rebuild_tgt_status_check(void *arg)
 
 		if (rpt->rt_global_done)
 			break;
+
+		dss_ult_sleep(rpt->rt_ult, RBLD_CHECK_INTV);
 	}
+
+	dss_sleep_ult_destroy(rpt->rt_ult);
+	rpt->rt_ult = NULL;
 
 	rpt_put(rpt);
 	rebuild_tgt_fini(rpt);
