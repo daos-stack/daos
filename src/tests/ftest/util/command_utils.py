@@ -364,6 +364,9 @@ class ExecutableCommand(CommandWithParameters):
                 signal.SIGQUIT, None,
                 signal.SIGKILL]
 
+            # Turn off verbosity to keep the logs clean as the server stops
+            self._process.verbose = False
+
             # Keep sending signals and or waiting while the process is alive
             while self._process.poll() is None and signal_list:
                 signal_type = signal_list.pop(0)
