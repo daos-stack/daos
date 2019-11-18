@@ -57,12 +57,12 @@ tests: !mux
     cli_ppn: "1"
   no_timeout:
     name: no_timeout_basic
-    srv_bin: tests/test_group
-    srv_arg: "--name service_group  --is_service"
+    srv_bin: ../bin/crt_launch
+    srv_arg: "-e tests/test_group_np_srv --name timeout_srv_grp --cfg_path=."
     srv_env: "-x CRT_TIMEOUT=10"
     srv_ppn: "1"
     cli_bin: tests/test_no_timeout
-    cli_arg: " --name client_group --attach_to service_group"
+    cli_arg: " --name client_group --attach_to timeout_srv_grp --cfg_path=."
     cli_env: "-x CRT_TIMEOUT=10"
     cli_ppn: "1"
   threaded:

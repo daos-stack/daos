@@ -44,9 +44,7 @@
 #include <getopt.h>
 #include <semaphore.h>
 
-#include <gurt/common.h>
-#include <cart/api.h>
-#include "crt_fake_events.h"
+#include "tests_common.h"
 #include "test_group_rpc.h"
 
 #define TEST_CTX_MAX_NUM	72
@@ -61,11 +59,9 @@ struct test_t {
 	char		*t_remote_group_name;
 	uint32_t	 t_remote_group_size;
 	d_rank_t	 t_my_rank;
-	uint32_t	 t_should_attach:1,
-			 t_shutdown:1,
-			 t_complete:1;
-	int		 t_is_service;
-	unsigned int	 t_ctx_num;
+	int		 t_save_cfg;
+	char		*t_cfg_path;
+	unsigned int	 t_srv_ctx_num;
 	crt_context_t	 t_crt_ctx[TEST_CTX_MAX_NUM];
 	int		 t_thread_id[TEST_CTX_MAX_NUM]; /* logical tid */
 	pthread_t	 t_tid[TEST_CTX_MAX_NUM];
@@ -74,24 +70,9 @@ struct test_t {
 };
 
 struct test_t test_g = {
-	.t_ctx_num = 1,
+	.t_srv_ctx_num = 1,
 	.t_roomno = 1082
 };
-
-static inline void
-test_sem_timedwait(sem_t *sem, int sec, int line_number)
-{
-	struct timespec			deadline;
-	int				rc;
-
-	rc = clock_gettime(CLOCK_REALTIME, &deadline);
-	D_ASSERTF(rc == 0, "clock_gettime() failed at line %d rc: %d\n",
-		  line_number, rc);
-	deadline.tv_sec += sec;
-	rc = sem_timedwait(sem, &deadline);
-	D_ASSERTF(rc == 0, "sem_timedwait() failed at line %d rc: %d\n",
-		  line_number, rc);
-}
 
 void
 client_cb_common(const struct crt_cb_info *cb_info)
@@ -126,7 +107,7 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		sem_post(&test_g.t_token_to_proceed);
 		break;
 	case TEST_OPC_SHUTDOWN:
-		test_g.t_complete = 1;
+		g_shutdown = 1;
 		sem_post(&test_g.t_token_to_proceed);
 		break;
 	default:
@@ -134,54 +115,16 @@ client_cb_common(const struct crt_cb_info *cb_info)
 	}
 }
 
-static void *
-progress_thread(void *arg)
-{
-	crt_context_t	ctx;
-	pthread_t	current_thread = pthread_self();
-	int		num_cores = sysconf(_SC_NPROCESSORS_ONLN);
-	cpu_set_t	cpuset;
-	int		t_idx;
-	int		rc;
-
-	t_idx = *(int *)arg;
-	CPU_ZERO(&cpuset);
-	CPU_SET(t_idx % num_cores, &cpuset);
-	pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset);
-
-	fprintf(stderr, "progress thread %d running on core %d...\n",
-		t_idx, sched_getcpu());
-
-	ctx = test_g.t_crt_ctx[t_idx];
-	/* progress loop */
-	 while (1) {
-		rc = crt_progress(ctx, 0, NULL, NULL);
-		if (rc != 0 && rc != -DER_TIMEDOUT)
-			D_ERROR("crt_progress failed rc: %d.\n", rc);
-
-		if (test_g.t_shutdown == 1 && test_g.t_complete == 1)
-			break;
-	}
-
-	printf("progress_thread: rc: %d, test_srv.do_shutdown: %d.\n",
-	       rc, test_g.t_shutdown);
-	printf("progress_thread: progress thread exit ...\n");
-
-	D_ASSERT(rc == 0 || rc == -DER_TIMEDOUT);
-
-	pthread_exit(NULL);
-}
-
 void test_shutdown_handler(crt_rpc_t *rpc_req)
 {
-	printf("tier1 test_srver received shutdown request, opc: %#x.\n",
-	       rpc_req->cr_opc);
+	DBG_PRINT("tier1 test_srver received shutdown request, opc: %#x.\n",
+		  rpc_req->cr_opc);
 
 	D_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");
 	D_ASSERTF(rpc_req->cr_output == NULL, "RPC request output is NULL\n");
 
-	test_g.t_shutdown = 1;
-	printf("tier1 test_srver set shutdown flag.\n");
+	g_shutdown = 1;
+	DBG_PRINT("tier1 test_srver set shutdown flag.\n");
 }
 
 static struct crt_proto_rpc_format my_proto_rpc_fmt_test_no_timeout[] = {
@@ -211,55 +154,8 @@ static struct crt_proto_format my_proto_fmt_test_no_timeout = {
 	.cpf_base = TEST_NO_TIMEOUT_BASE,
 };
 
-void
-test_init(void)
-{
-	uint32_t	flag;
-	int		i;
-	int		rc = 0;
-
-	fprintf(stderr, "local group: %s remote group: %s\n",
-		test_g.t_local_group_name, test_g.t_remote_group_name);
-
-	rc = d_log_init();
-	assert(rc == 0);
-
-	rc = sem_init(&test_g.t_token_to_proceed, 0, 0);
-	D_ASSERTF(rc == 0, "sem_init() failed.\n");
-
-	flag = test_g.t_is_service ? CRT_FLAG_BIT_SERVER : 0;
-	rc = crt_init(test_g.t_local_group_name, flag);
-	D_ASSERTF(rc == 0, "crt_init() failed, rc: %d\n", rc);
-
-	rc = crt_group_rank(NULL, &test_g.t_my_rank);
-	D_ASSERTF(rc == 0, "crt_group_rank() failed. rc: %d\n", rc);
-	if (test_g.t_is_service) {
-		rc = crt_group_config_save(NULL, true);
-		D_ASSERTF(rc == 0, "crt_group_config_save() failed. rc: %d\n",
-			rc);
-	}
-
-	/* register RPCs */
-	if (test_g.t_is_service) {
-		D_ERROR("Can't run as service.\n");
-	} else {
-		rc = crt_proto_register(&my_proto_fmt_test_no_timeout);
-		D_ASSERTF(rc == 0, "crt_proto_register() failed. rc: %d\n", rc);
-	}
-
-	for (i = 0; i < test_g.t_ctx_num; i++) {
-		test_g.t_thread_id[i] = i;
-		rc = crt_context_create(&test_g.t_crt_ctx[i]);
-		D_ASSERTF(rc == 0, "crt_context_create() failed. rc: %d\n", rc);
-		rc = pthread_create(&test_g.t_tid[i], NULL, progress_thread,
-				    &test_g.t_thread_id[i]);
-		D_ASSERTF(rc == 0, "pthread_create() failed. rc: %d\n", rc);
-	}
-	test_g.t_complete = 1;
-}
-
 static void
-ping_delay_reply(crt_group_t *remote_group, int rank, uint32_t delay)
+ping_delay_reply(crt_group_t *remote_group, int rank, int tag, uint32_t delay)
 {
 	crt_rpc_t			*rpc_req = NULL;
 	struct crt_test_ping_delay_in	*rpc_req_input;
@@ -269,14 +165,15 @@ ping_delay_reply(crt_group_t *remote_group, int rank, uint32_t delay)
 
 	server_ep.ep_grp = remote_group;
 	server_ep.ep_rank = rank;
+	server_ep.ep_tag = tag;
 	rc = crt_req_create(test_g.t_crt_ctx[0], &server_ep,
-			TEST_OPC_PING_DELAY, &rpc_req);
+			    TEST_OPC_PING_DELAY, &rpc_req);
 	D_ASSERTF(rc == 0 && rpc_req != NULL, "crt_req_create() failed,"
-			" rc: %d rpc_req: %p\n", rc, rpc_req);
+		  " rc: %d rpc_req: %p\n", rc, rpc_req);
 
 	rpc_req_input = crt_req_get(rpc_req);
 	D_ASSERTF(rpc_req_input != NULL, "crt_req_get() failed."
-			" rpc_req_input: %p\n", rpc_req_input);
+		  " rpc_req_input: %p\n", rpc_req_input);
 	D_ALLOC(buffer, 256);
 	D_ASSERTF(buffer != NULL, "Cannot allocate memory.\n");
 	snprintf(buffer,  256, "Guest %d", test_g.t_my_rank);
@@ -297,59 +194,71 @@ ping_delay_reply(crt_group_t *remote_group, int rank, uint32_t delay)
 void
 test_run(void)
 {
-	int			ii;
-	uint32_t		delay = 22;
-	int			rc;
-	int			attach_retries_left;
+	crt_group_t	*grp = NULL;
+	d_rank_list_t	*rank_list = NULL;
+	d_rank_t	 rank;
+	int		 tag;
+	crt_endpoint_t	 server_ep = {0};
+	crt_rpc_t	*rpc_req = NULL;
+	uint32_t	 delay = 22;
+	int		 i;
+	int		 rc = 0;
 
-	if (!test_g.t_should_attach)
-		return;
+	fprintf(stderr, "local group: %s remote group: %s\n",
+		test_g.t_local_group_name, test_g.t_remote_group_name);
 
-	if (test_g.t_is_service) {
-		rc = crt_init(test_g.t_local_group_name, 0);
-		D_ASSERTF(rc == 0, "crt_init() failed. rc: %d\n", rc);
+	if (test_g.t_save_cfg) {
+		rc = crt_group_config_path_set(test_g.t_cfg_path);
+		D_ASSERTF(rc == 0, "crt_group_config_path_set failed %d\n", rc);
 	}
 
-	attach_retries_left = NUM_ATTACH_RETRIES;
-	while (attach_retries_left-- > 0) {
-		sleep(1);
-		rc = crt_group_attach(test_g.t_remote_group_name,
-				      &test_g.t_remote_group);
-		if (rc == 0)
-			break;
+	tc_cli_start_basic(test_g.t_local_group_name,
+			   test_g.t_remote_group_name,
+			   &grp, &rank_list, &test_g.t_crt_ctx[0],
+			   &test_g.t_tid[0], test_g.t_srv_ctx_num,
+			   test_g.t_save_cfg);
 
-		printf("attach failed (rc=%d). retries left %d\n",
-			rc, attach_retries_left);
-	}
-	D_ASSERTF(rc == 0, "crt_group_attach failed, rc: %d\n", rc);
-	D_ASSERTF(test_g.t_remote_group != NULL, "NULL attached srv_grp\n");
+	rc = sem_init(&test_g.t_token_to_proceed, 0, 0);
+	D_ASSERTF(rc == 0, "sem_init() failed.\n");
 
-	test_g.t_complete = 0;
+	rc = crt_group_rank(NULL, &test_g.t_my_rank);
+	D_ASSERTF(rc == 0, "crt_group_rank() failed. rc: %d\n", rc);
+
+	/* register RPCs */
+	rc = crt_proto_register(&my_proto_fmt_test_no_timeout);
+	D_ASSERTF(rc == 0, "crt_proto_register() failed. rc: %d\n", rc);
+
+	rc = tc_wait_for_ranks(test_g.t_crt_ctx[0], grp, rank_list,
+				test_g.t_srv_ctx_num - 1, test_g.t_srv_ctx_num,
+				5, 150);
+	D_ASSERTF(rc == 0, "wait_for_ranks() failed; rc=%d\n", rc);
+
 	crt_group_size(test_g.t_remote_group, &test_g.t_remote_group_size);
 	fprintf(stderr, "size of %s is %d\n", test_g.t_remote_group_name,
 		test_g.t_remote_group_size);
 
-	for (ii = 0; ii < test_g.t_remote_group_size; ii++)
-		ping_delay_reply(test_g.t_remote_group, ii, delay);
+	for (i = 0; i < rank_list->rl_nr; i++) {
+		rank = rank_list->rl_ranks[i];
 
-	for (ii = 0; ii < test_g.t_remote_group_size; ii++)
-		test_sem_timedwait(&test_g.t_token_to_proceed, delay + 5,
-				   __LINE__);
-}
+		for (tag = 0; tag < test_g.t_srv_ctx_num; tag++) {
+			DBG_PRINT("Sending rpc to %d:%d\n", rank, tag);
+			ping_delay_reply(grp, rank, tag, delay);
+		}
+	}
 
-void
-test_fini()
-{
-	int				 ii;
-	crt_endpoint_t			 server_ep = {0};
-	crt_rpc_t			*rpc_req = NULL;
-	int				 rc = 0;
+	for (i = 0; i < rank_list->rl_nr; i++) {
+		tc_sem_timedwait(&test_g.t_token_to_proceed, 61,
+				 __LINE__);
+	}
 
-	if (test_g.t_should_attach && test_g.t_my_rank == 0) {
+	if (test_g.t_my_rank == 0) {
 		/* client rank 0 tells all servers to shut down */
-		for (ii = 0; ii < test_g.t_remote_group_size; ii++) {
-			server_ep.ep_grp = test_g.t_remote_group;
-			server_ep.ep_rank = ii;
+		for (i = 0; i < rank_list->rl_nr; i++) {
+			rank = rank_list->rl_ranks[i];
+
+			server_ep.ep_grp = grp;
+			server_ep.ep_rank = rank;
+
 			rc = crt_req_create(test_g.t_crt_ctx[0], &server_ep,
 					    TEST_OPC_SHUTDOWN, &rpc_req);
 			D_ASSERTF(rc == 0 && rpc_req != NULL,
@@ -359,40 +268,38 @@ test_fini()
 			D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n",
 				  rc);
 
-			test_sem_timedwait(&test_g.t_token_to_proceed, 61,
+			tc_sem_timedwait(&test_g.t_token_to_proceed, 61,
 					   __LINE__);
 		}
 	}
-	if (test_g.t_should_attach) {
-		rc = crt_group_detach(test_g.t_remote_group);
-		D_ASSERTF(rc == 0, "crt_group_detach failed, rc: %d\n", rc);
-	}
-	if (!test_g.t_is_service)
-		test_g.t_shutdown = 1;
 
-	for (ii = 0; ii < test_g.t_ctx_num; ii++) {
-		rc = pthread_join(test_g.t_tid[ii], NULL);
-		if (rc != 0)
-			fprintf(stderr, "pthread_join failed. rc: %d\n", rc);
-		D_DEBUG(DB_TEST, "joined progress thread.\n");
-		rc = crt_context_destroy(test_g.t_crt_ctx[ii], 1);
-		D_ASSERTF(rc == 0, "crt_context_destroy() failed. rc: %d\n",
-			  rc);
-		D_DEBUG(DB_TEST, "destroyed crt_ctx.\n");
+	D_FREE(rank_list->rl_ranks);
+	D_FREE(rank_list);
+
+	if (test_g.t_save_cfg) {
+		rc = crt_group_detach(grp);
+		D_ASSERTF(rc == 0, "crt_group_detach failed, rc: %d\n", rc);
+	} else {
+		rc = crt_group_view_destroy(grp);
+		D_ASSERTF(rc == 0,
+			  "crt_group_view_destroy() failed; rc=%d\n", rc);
 	}
+
+	g_shutdown = 1;
+
+	rc = pthread_join(test_g.t_tid[0], NULL);
+	if (rc != 0)
+		fprintf(stderr, "pthread_join failed. rc: %d\n", rc);
+	D_DEBUG(DB_TEST, "joined progress thread.\n");
 
 	rc = sem_destroy(&test_g.t_token_to_proceed);
 	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");
-	/* corresponding to the crt_init() in run_test_group() */
-	if (test_g.t_should_attach && test_g.t_is_service) {
-		rc = crt_finalize();
-		D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
-	}
+
 	rc = crt_finalize();
 	D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
-	D_DEBUG(DB_TEST, "exiting.\n");
 
 	d_log_fini();
+	D_DEBUG(DB_TEST, "exiting.\n");
 }
 
 int
@@ -403,8 +310,8 @@ test_parse_args(int argc, char **argv)
 	struct option			long_options[] = {
 		{"name", required_argument, 0, 'n'},
 		{"attach_to", required_argument, 0, 'a'},
-		{"is_service", no_argument, &test_g.t_is_service, 1},
-		{"ctx_num", required_argument, 0, 'c'},
+		{"srv_ctx_num", required_argument, 0, 'c'},
+		{"cfg_path", required_argument, 0, 's'},
 		{0, 0, 0, 0}
 	};
 
@@ -422,7 +329,6 @@ test_parse_args(int argc, char **argv)
 			break;
 		case 'a':
 			test_g.t_remote_group_name = optarg;
-			test_g.t_should_attach = 1;
 			break;
 		case 'c': {
 			unsigned int	nr;
@@ -434,12 +340,17 @@ test_parse_args(int argc, char **argv)
 					"[%d, %d], using 1 for test.\n", nr,
 					1, TEST_CTX_MAX_NUM);
 			} else {
-				test_g.t_ctx_num = nr;
+				test_g.t_srv_ctx_num = nr;
 				fprintf(stderr, "will create %d contexts.\n",
 					nr);
 			}
 			break;
 		}
+		case 's':
+			test_g.t_save_cfg = 1;
+			test_g.t_cfg_path = optarg;
+			break;
+
 		case '?':
 			return 1;
 		default:
@@ -465,9 +376,10 @@ int main(int argc, char **argv)
 		return rc;
 	}
 
-	test_init();
+	/* rank, num_attach_retries, is_server, assert_on_error */
+	tc_test_init(0, 40, false, true);
+
 	test_run();
-	test_fini();
 
 	return rc;
 }
