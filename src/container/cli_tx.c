@@ -228,31 +228,12 @@ out:
 	return rc;
 }
 
-static int
-tx_commit_cb(tse_task_t *task, void *data)
-{
-	struct dc_tx		*tx = *((struct dc_tx **)data);
-	int			rc = task->dt_result;
-
-	D_SPIN_LOCK(&tx->tx_spin);
-
-	if (rc != 0)
-		tx->tx_status = TX_FAILED;
-	else
-		tx->tx_status = TX_COMMITTED;
-
-	D_SPIN_UNLOCK(&tx->tx_spin);
-
-	tx_decref(tx);
-	return rc;
-}
-
 int
 dc_tx_commit(tse_task_t *task)
 {
 	daos_tx_commit_t	*args;
 	struct dc_tx		*tx;
-	int			rc;
+	int			rc = 0;
 
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
@@ -265,7 +246,7 @@ dc_tx_commit(tse_task_t *task)
 
 	if (tx->tx_mode != TX_RW) {
 		D_ERROR("Can't commit a RDONLY TX\n");
-		D_GOTO(err_task, rc = -DER_NO_PERM);
+		D_GOTO(err_tx, rc = -DER_NO_PERM);
 	}
 
 	D_SPIN_LOCK(&tx->tx_spin);
@@ -274,26 +255,18 @@ dc_tx_commit(tse_task_t *task)
 		D_SPIN_UNLOCK(&tx->tx_spin);
 		D_GOTO(err_tx, rc = -DER_INVAL);
 	}
-	tx->tx_status = TX_COMMITTING;
+	/* XXX let's mark it committed for now, it should commit rpc
+	 * to server later.
+	 */
+	tx->tx_status = TX_COMMITTED;
 	D_SPIN_UNLOCK(&tx->tx_spin);
 
-	rc = dc_epoch_op(tx->tx_coh, CONT_EPOCH_COMMIT, &tx->tx_epoch, task);
-	if (rc != 0) {
-		D_ERROR("Failed to register completion cb\n");
-		D_GOTO(err_tx, rc);
-	}
-
-	/** CB to update TX status */
-	rc = tse_task_register_cbs(task, NULL, NULL, 0, tx_commit_cb, &tx,
-				   sizeof(tx));
-	if (rc != 0) {
-		D_ERROR("Failed to register completion cb\n");
-		D_GOTO(err_tx, rc);
-	}
-
-	/** tx_decref done in tx_commit_cb() */
-	return rc;
 err_tx:
+	if (rc) {
+		D_SPIN_LOCK(&tx->tx_spin);
+		tx->tx_status = TX_FAILED;
+		D_SPIN_UNLOCK(&tx->tx_spin);
+	}
 	tx_decref(tx);
 err_task:
 	tse_task_complete(task, rc);
