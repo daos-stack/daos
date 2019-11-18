@@ -195,8 +195,6 @@ cont_free(struct d_ulink *ulink)
 	if (!daos_handle_is_inval(cont->vc_dtx_cc_hdl))
 		dbtree_destroy(cont->vc_dtx_cc_hdl, NULL);
 
-	dbtree_close(cont->vc_dtx_active_hdl);
-	dbtree_close(cont->vc_dtx_committed_hdl);
 	if (!daos_handle_is_inval(cont->vc_dtx_active_hdl))
 		dbtree_destroy(cont->vc_dtx_active_hdl, NULL);
 	if (!daos_handle_is_inval(cont->vc_dtx_committed_hdl))

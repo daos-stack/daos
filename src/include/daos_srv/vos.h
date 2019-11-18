@@ -87,6 +87,7 @@ vos_dtx_lookup_cc(daos_handle_t coh, struct dtx_id *xid);
  *				object if it is non-NULL.
  * \param epoch		[IN]	Only return the DTXs that is not newer than
  *				the specified epoch.
+ * \param flush		[IN]	Flush all of the committable entries
  * \param dtes		[OUT]	The array for DTX entries can be committed.
  *
  * \return		Positve value for the @dtes array size.
@@ -94,7 +95,7 @@ vos_dtx_lookup_cc(daos_handle_t coh, struct dtx_id *xid);
  */
 int
 vos_dtx_fetch_cc(daos_handle_t coh, uint32_t max_cnt, daos_unit_oid_t *oid,
-		 daos_epoch_t epoch, struct dtx_entry **dtes);
+		 daos_epoch_t epoch, bool flush, struct dtx_entry **dtes);
 
 /**
  * Check whether the given DTX is resent one or not.

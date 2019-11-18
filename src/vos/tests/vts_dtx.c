@@ -43,7 +43,7 @@ vts_dtx_cc(void **state, bool punch)
 	daos_dti_gen(&xid, false);
 	daos_dti_gen(&xid2, false);
 
-	/* Insert a DTX into CoS cache. */
+	/* Insert a DTX into committable cache. */
 	rc = vos_dtx_add_cc(args->ctx.tc_co_hdl, &args->oid, &xid,
 			    DAOS_EPOCH_MAX - 1, 0);
 	assert_int_equal(rc, 0);
@@ -55,27 +55,27 @@ vts_dtx_cc(void **state, bool punch)
 	assert_int_equal(rc, -DER_NONEXIST);
 
 	cont = vos_hdl2cont(args->ctx.tc_co_hdl);
-	/* Remove the DTX from CoS cache. */
+	/* Remove the DTX from committable cache. */
 	vos_dtx_del_cc(cont, &xid);
 	rc = vos_dtx_lookup_cc(args->ctx.tc_co_hdl, &xid);
 	assert_int_equal(rc, -DER_NONEXIST);
 }
 
-/* update-DTX CoS cache insert/delete/query */
+/* update-DTX committable cache insert/delete/query */
 static void
 dtx_1(void **state)
 {
 	vts_dtx_cc(state, false);
 }
 
-/* punch-DTX CoS cache insert/delete/query */
+/* punch-DTX committable cache insert/delete/query */
 static void
 dtx_2(void **state)
 {
 	vts_dtx_cc(state, true);
 }
 
-/* DTX CoS cache fetch committable */
+/* DTX committable cache fetch committable */
 static void
 dtx_4(void **state)
 {
@@ -94,23 +94,51 @@ dtx_4(void **state)
 	}
 
 	rc = vos_dtx_fetch_cc(args->ctx.tc_co_hdl, 100, NULL, DAOS_EPOCH_MAX,
-			      &dtes);
+			      true, &dtes);
 	assert_int_equal(rc, 10);
 
 	for (i = 0; i < 10; i++) {
+		if (!daos_dti_equal(&xid[i], &dtes[i].dte_xid))
+			break;
+	}
+	assert_int_equal(i, 10);
+
+	D_FREE(dtes);
+
+	/** With flush set to false, we should see nothing */
+	rc = vos_dtx_fetch_cc(args->ctx.tc_co_hdl, 100, NULL, DAOS_EPOCH_MAX,
+			      false, &dtes);
+	assert_int_equal(rc, 0);
+
+	/* Lookup first couple of entries several times, moving to priority
+	 * cache
+	 */
+	for (i = 0; i < 10; i++) {
+		rc = vos_dtx_lookup_cc(args->ctx.tc_co_hdl, &xid[1]);
+		assert_int_equal(rc, 0);
+		rc = vos_dtx_lookup_cc(args->ctx.tc_co_hdl, &xid[0]);
+		assert_int_equal(rc, 0);
+	}
+
+	/* Now fetch again without no flush */
+	rc = vos_dtx_fetch_cc(args->ctx.tc_co_hdl, 100, NULL, DAOS_EPOCH_MAX,
+			      false, &dtes);
+	assert_int_equal(rc, 2);
+
+	for (i = 0; i < 2; i++) {
 		int	j;
 
 		for (j = 0; j < 10; j++) {
-			if (daos_dti_equal(&xid[j], &dtes[i].dte_xid)) {
-				daos_dti_gen(&xid[j], true);
+			if (daos_dti_equal(&xid[j], &dtes[i].dte_xid))
 				break;
-			}
 		}
-
-		assert_true(j < 10);
+		if (j >= 2)
+			break;
 	}
+	assert_int_equal(i, 2);
 
 	D_FREE(dtes);
+
 }
 
 static int
@@ -193,7 +221,7 @@ vts_dtx_prep_update(struct io_test_args *args, struct dtx_id *xid,
 	iod->iod_nr = 1;
 }
 
-/* remove DTX from CoS cache after commit */
+/* remove DTX from committable cache after commit */
 static void
 dtx_5(void **state)
 {
@@ -233,7 +261,7 @@ dtx_5(void **state)
 	/* The DTX is 'prepared'. */
 	vts_dtx_end(dth);
 
-	/* Add former DTX into CoS cache. */
+	/* Add former DTX into committable cache. */
 	rc = vos_dtx_add_cc(args->ctx.tc_co_hdl, &args->oid, &xid, epoch, 0);
 	assert_int_equal(rc, 0);
 
@@ -241,7 +269,7 @@ dtx_5(void **state)
 	saved_committable = stat.dtx_committable_count;
 	saved_committed = stat.dtx_committed_count;
 
-	/* Commit former DTX that will be removed from the CoS cache. */
+	/* Commit former DTX that will be removed from the committable cache. */
 	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1);
 	assert_int_equal(rc, 0);
 
@@ -652,7 +680,7 @@ dtx_15(void **state)
 	assert_memory_equal(update_buf1, fetch_buf, UPDATE_BUF_SIZE);
 }
 
-/* DTX in CoS cache makes related data record as readable */
+/* DTX in committable cache makes related data record as readable */
 static void
 dtx_16(void **state)
 {
@@ -674,8 +702,6 @@ dtx_16(void **state)
 	char				 update_buf[UPDATE_BUF_SIZE];
 	char				 fetch_buf[UPDATE_BUF_SIZE];
 	int				 rc;
-
-	skip();
 
 	vts_dtx_prep_update(args, &xid, &val_iov, &dkey_iov, &dkey, dkey_buf,
 			    &akey, akey_buf, &iod, &sgl, &rex, update_buf,
@@ -710,7 +736,7 @@ dtx_16(void **state)
 	/* Former DTX is not committed, so nothing can be fetched. */
 	assert_memory_not_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 
-	/* Insert a DTX into CoS cache. */
+	/* Insert a DTX into committable cache. */
 	rc = vos_dtx_add_cc(args->ctx.tc_co_hdl, &args->oid, &xid, epoch, 0);
 	assert_int_equal(rc, 0);
 
@@ -718,7 +744,9 @@ dtx_16(void **state)
 	rc = io_test_obj_fetch(args, epoch, &dkey, &iod, &sgl, true);
 	assert_int_equal(rc, 0);
 
-	/* The DTX in CoS cache will make related data record as readable. */
+	/* The DTX in committable cache will make related data record as
+	 * readable.
+	 */
 	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 
 	/* Commit the fisrt 4 DTXs. */
@@ -783,8 +811,6 @@ dtx_17(void **state)
 	bool				 found[10];
 	int				 rc;
 	int				 i;
-
-	skip();
 
 	/* Assume I am the leader. */
 	for (i = 0; i < 10; i++) {
@@ -929,487 +955,6 @@ dtx_18(void **state)
 	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 }
 
-static void
-vts_dtx_shares(struct io_test_args *args, int *commit_list, int commit_count,
-	       int *abort_list, int abort_count, bool commit_first)
-{
-	struct dtx_handle		*dth = NULL;
-	struct dtx_id			 xid[5];
-	daos_iod_t			 iod[5];
-	d_sg_list_t			 sgl[5];
-	daos_recx_t			 rex[5];
-	daos_key_t			 dkey;
-	daos_key_t			 akey[5];
-	d_iov_t				 val_iov;
-	d_iov_t				 dkey_iov;
-	uint64_t			 epoch[5];
-	uint64_t			 dkey_hash;
-	char				 dkey_buf[UPDATE_DKEY_SIZE];
-	char				*akey_buf[5];
-	char				*update_buf[5];
-	char				 fetch_buf[UPDATE_BUF_SIZE];
-	int				 rc;
-	int				 i;
-
-	skip();
-
-	assert_true(commit_count + abort_count == 5);
-
-	akey_buf[0] = malloc(UPDATE_AKEY_SIZE);
-	assert_true(akey_buf[0] != NULL);
-
-	update_buf[0] = malloc(UPDATE_BUF_SIZE);
-	assert_true(update_buf[0] != NULL);
-
-	vts_dtx_prep_update(args, &xid[0], &val_iov, &dkey_iov, &dkey, dkey_buf,
-			    &akey[0], akey_buf[0], &iod[0], &sgl[0], &rex[0],
-			    update_buf[0], UPDATE_BUF_SIZE, UPDATE_REC_SIZE,
-			    &dkey_hash, &epoch[0], false);
-
-	/* Assume I am the leader. */
-	rc = vts_dtx_begin(&xid[0], &args->oid, args->ctx.tc_co_hdl, epoch[0],
-			   &dth);
-	assert_int_equal(rc, 0);
-
-	rc = io_test_obj_update(args, epoch[0], &dkey, &iod[0], &sgl[0],
-				dth, true);
-	assert_int_equal(rc, 0);
-
-	vts_dtx_end(dth);
-
-	for (i = 1; i < 5; i++) {
-		akey_buf[i] = malloc(UPDATE_AKEY_SIZE);
-		assert_true(akey_buf[i] != NULL);
-
-		update_buf[i] = malloc(UPDATE_BUF_SIZE);
-		assert_true(update_buf[i] != NULL);
-
-		memset(&iod[i], 0, sizeof(iod[i]));
-		memset(&sgl[i], 0, sizeof(sgl[i]));
-		memset(&rex[i], 0, sizeof(rex[i]));
-
-		daos_dti_gen(&xid[i], false);
-		epoch[i] = crt_hlc_get();
-
-		dts_buf_render(update_buf[i], UPDATE_BUF_SIZE);
-		d_iov_set(&val_iov, update_buf[i], UPDATE_BUF_SIZE);
-
-		sgl[i].sg_iovs = &val_iov;
-		sgl[i].sg_nr = 1;
-
-		rex[i].rx_idx = hash_key(&dkey_iov,
-					 args->ofeat & DAOS_OF_DKEY_UINT64);
-		rex[i].rx_nr = 1;
-
-		vts_key_gen(akey_buf[i], args->akey_size, false, args);
-		set_iov(&akey[i], akey_buf[i],
-			args->ofeat & DAOS_OF_AKEY_UINT64);
-
-		iod[i].iod_name = akey[i];
-		iod[i].iod_type = DAOS_IOD_SINGLE;
-		iod[i].iod_size = UPDATE_BUF_SIZE;
-		iod[i].iod_recxs = &rex[i];
-		iod[i].iod_nr = 1;
-
-		rc = vts_dtx_begin(&xid[i], &args->oid, args->ctx.tc_co_hdl,
-				   epoch[i], &dth);
-		assert_int_equal(rc, 0);
-
-		rc = io_test_obj_update(args, epoch[i], &dkey, &iod[i], &sgl[i],
-					dth, true);
-		assert_int_equal(rc, 0);
-
-		vts_dtx_end(dth);
-	}
-
-	if (commit_first) {
-		for (i = 0; i < commit_count; i++) {
-			rc = vos_dtx_commit(args->ctx.tc_co_hdl,
-					    &xid[commit_list[i]], 1);
-			assert_int_equal(rc, 0);
-		}
-
-		for (i = 0; i < abort_count; i++) {
-			rc = vos_dtx_abort(args->ctx.tc_co_hdl,
-					   epoch[abort_list[i]],
-					   &xid[abort_list[i]], 1);
-			assert_int_equal(rc, 0);
-		}
-	} else {
-		for (i = 0; i < abort_count; i++) {
-			rc = vos_dtx_abort(args->ctx.tc_co_hdl,
-					   epoch[abort_list[i]],
-					   &xid[abort_list[i]], 1);
-			assert_int_equal(rc, 0);
-		}
-
-		for (i = 0; i < commit_count; i++) {
-			rc = vos_dtx_commit(args->ctx.tc_co_hdl,
-					    &xid[commit_list[i]], 1);
-			assert_int_equal(rc, 0);
-		}
-	}
-
-	for (i = 0; i < commit_count; i++) {
-		memset(fetch_buf, 0, UPDATE_BUF_SIZE);
-		d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
-		iod[commit_list[i]].iod_size = DAOS_REC_ANY;
-
-		rc = io_test_obj_fetch(args, epoch[commit_list[i]], &dkey,
-				       &iod[commit_list[i]],
-				       &sgl[commit_list[i]], true);
-		assert_int_equal(rc, 0);
-
-		assert_memory_equal(update_buf[commit_list[i]], fetch_buf,
-				    UPDATE_BUF_SIZE);
-	}
-
-	for (i = 0; i < abort_count; i++) {
-		memset(fetch_buf, 0, UPDATE_BUF_SIZE);
-		d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
-		iod[abort_list[i]].iod_size = DAOS_REC_ANY;
-
-		rc = io_test_obj_fetch(args, epoch[abort_list[i]], &dkey,
-				       &iod[abort_list[i]],
-				       &sgl[abort_list[i]], true);
-		assert_int_equal(rc, 0);
-
-		assert_memory_not_equal(update_buf[abort_list[i]], fetch_buf,
-					UPDATE_BUF_SIZE);
-	}
-
-	if (abort_count == 5) {
-		vos_iter_param_t		 param = { 0 };
-		struct vos_iter_anchors		 anchors = { 0 };
-		struct vts_dtx_iter_data	 vdid = { 0 };
-		bool				 found = false;
-
-		param.ip_hdl = args->ctx.tc_co_hdl;
-		param.ip_ih = DAOS_HDL_INVAL;
-		param.ip_oid = args->oid;
-		param.ip_epr.epr_lo = epoch[0];
-		param.ip_epr.epr_hi = epoch[4];
-		param.ip_epc_expr = VOS_IT_EPC_RE;
-
-		vdid.dkeys = (void **)&dkey_buf;
-		vdid.found = &found;
-		vdid.count = 1;
-
-		rc = vos_iterate(&param, VOS_ITER_DKEY, false, &anchors,
-				 vts_dtx_iter_cb, &vdid);
-		assert_int_equal(rc, 0);
-		assert_true(!found);
-	}
-
-	for (i = 0; i < 5; i++) {
-		free(akey_buf[i]);
-		free(update_buf[i]);
-	}
-}
-
-/* share DTX, all committed, commit the first DTX firstly */
-static void
-dtx_19(void **state)
-{
-	int	commit_list[5] = { 0, 1, 2, 3, 4 };
-
-	vts_dtx_shares(*state, commit_list, 5, NULL, 0, true);
-}
-
-/* share DTX, all committed, commit the first DTX lastly */
-static void
-dtx_20(void **state)
-{
-	int	commit_list[5] = { 1, 4, 2, 3, 0 };
-
-	vts_dtx_shares(*state, commit_list, 5, NULL, 0, true);
-}
-
-/* share DTX, all aborted, abort the first DTX firstly */
-static void
-dtx_21(void **state)
-{
-	int	abort_list[5] = { 0, 1, 2, 3, 4 };
-
-	vts_dtx_shares(*state, NULL, 0, abort_list, 5, false);
-}
-
-/* share DTX, all aborted, abort the first DTX lastly */
-static void
-dtx_22(void **state)
-{
-	int	abort_list[5] = { 1, 4, 2, 3, 0 };
-
-	vts_dtx_shares(*state, NULL, 0, abort_list, 5, false);
-}
-
-/* share DTX, some committed, the first DTX is committed firstly */
-static void
-dtx_23(void **state)
-{
-	int	commit_list[3] = { 0, 4, 2 };
-	int	abort_list[2] = { 1, 3 };
-
-	vts_dtx_shares(*state, commit_list, 3, abort_list, 2, true);
-}
-
-/* share DTX, some committed, the first DTX is committed,
- * but some DTX is aborted firstly
- */
-static void
-dtx_24(void **state)
-{
-	int	commit_list[3] = { 0, 4, 2 };
-	int	abort_list[2] = { 1, 3 };
-
-	vts_dtx_shares(*state, commit_list, 3, abort_list, 2, false);
-}
-
-/* share DTX, some committed, the first DTX is aborted firstly */
-static void
-dtx_25(void **state)
-{
-	int	commit_list[3] = { 1, 4, 2 };
-	int	abort_list[2] = { 0, 3 };
-
-	vts_dtx_shares(*state, commit_list, 3, abort_list, 2, false);
-}
-
-/* share DTX, some committed, the first DTX is aborted,
- * but some DTX is committed firstly
- */
-static void
-dtx_26(void **state)
-{
-	int	commit_list[3] = { 1, 4, 2 };
-	int	abort_list[2] = { 0, 3 };
-
-	vts_dtx_shares(*state, commit_list, 3, abort_list, 2, true);
-}
-
-static void
-vts_dtx_shares_with_punch(struct io_test_args *args, bool punch_obj, bool abort)
-{
-	struct dtx_handle		*dth = NULL;
-	struct dtx_id			 xid[4];
-	daos_iod_t			 iod[3];
-	d_sg_list_t			 sgl[3];
-	daos_recx_t			 rex[3];
-	daos_key_t			 dkey;
-	daos_key_t			 akey[3];
-	d_iov_t				 val_iov;
-	d_iov_t				 dkey_iov;
-	uint64_t			 epoch[4];
-	uint64_t			 dkey_hash;
-	char				 dkey_buf[UPDATE_DKEY_SIZE];
-	char				*akey_buf[3];
-	char				*update_buf[3];
-	char				 fetch_buf[UPDATE_BUF_SIZE];
-	int				 rc;
-	int				 i;
-
-	skip();
-
-	akey_buf[0] = malloc(UPDATE_AKEY_SIZE);
-	assert_true(akey_buf[0] != NULL);
-
-	update_buf[0] = malloc(UPDATE_BUF_SIZE);
-	assert_true(update_buf[0] != NULL);
-
-	vts_dtx_prep_update(args, &xid[0], &val_iov, &dkey_iov, &dkey, dkey_buf,
-			    &akey[0], akey_buf[0], &iod[0], &sgl[0], &rex[0],
-			    update_buf[0], UPDATE_BUF_SIZE, UPDATE_REC_SIZE,
-			    &dkey_hash, &epoch[0], false);
-
-	/* Assume I am the leader. */
-	rc = vts_dtx_begin(&xid[0], &args->oid, args->ctx.tc_co_hdl, epoch[0],
-			   &dth);
-	assert_int_equal(rc, 0);
-
-	rc = io_test_obj_update(args, epoch[0], &dkey, &iod[0], &sgl[0],
-				dth, true);
-	assert_int_equal(rc, 0);
-
-	vts_dtx_end(dth);
-
-	for (i = 1; i < 3; i++) {
-		akey_buf[i] = malloc(UPDATE_AKEY_SIZE);
-		assert_true(akey_buf[i] != NULL);
-
-		update_buf[i] = malloc(UPDATE_BUF_SIZE);
-		assert_true(update_buf[i] != NULL);
-
-		memset(&iod[i], 0, sizeof(iod[i]));
-		memset(&sgl[i], 0, sizeof(sgl[i]));
-		memset(&rex[i], 0, sizeof(rex[i]));
-
-		daos_dti_gen(&xid[i], false);
-		epoch[i] = crt_hlc_get();
-
-		dts_buf_render(update_buf[i], UPDATE_BUF_SIZE);
-		d_iov_set(&val_iov, update_buf[i], UPDATE_BUF_SIZE);
-
-		sgl[i].sg_iovs = &val_iov;
-		sgl[i].sg_nr = 1;
-
-		rex[i].rx_idx = hash_key(&dkey_iov,
-					 args->ofeat & DAOS_OF_DKEY_UINT64);
-		rex[i].rx_nr = 1;
-
-		vts_key_gen(akey_buf[i], args->akey_size, false, args);
-		set_iov(&akey[i], akey_buf[i],
-			args->ofeat & DAOS_OF_AKEY_UINT64);
-
-		iod[i].iod_name = akey[i];
-		iod[i].iod_type = DAOS_IOD_SINGLE;
-		iod[i].iod_size = UPDATE_BUF_SIZE;
-		iod[i].iod_recxs = &rex[i];
-		iod[i].iod_nr = 1;
-
-		rc = vts_dtx_begin(&xid[i], &args->oid, args->ctx.tc_co_hdl,
-				   epoch[i], &dth);
-		assert_int_equal(rc, 0);
-
-		rc = io_test_obj_update(args, epoch[i], &dkey, &iod[i], &sgl[i],
-					dth, true);
-		assert_int_equal(rc, 0);
-
-		vts_dtx_end(dth);
-	}
-
-	/* Commit the second update DTX firstly. */
-	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid[1], 1);
-	assert_int_equal(rc, 0);
-
-	daos_dti_gen(&xid[3], false);
-	epoch[3] = crt_hlc_get();
-
-	rc = vts_dtx_begin(&xid[3], &args->oid, args->ctx.tc_co_hdl, epoch[3],
-			   &dth);
-	assert_int_equal(rc, 0);
-
-	/* Punch the object or dkey. */
-	if (punch_obj)
-		rc = vos_obj_punch(args->ctx.tc_co_hdl, args->oid, epoch[3],
-				   1, 0, NULL, 0, NULL, dth);
-	else
-		rc = vos_obj_punch(args->ctx.tc_co_hdl, args->oid, epoch[3],
-				   1, 0, &dkey, 0, NULL, dth);
-	assert_int_equal(rc, 0);
-
-	vts_dtx_end(dth);
-
-	/* Abort or commit the punch DTX. */
-	if (abort)
-		rc = vos_dtx_abort(args->ctx.tc_co_hdl, epoch[3], &xid[3], 1);
-	else
-		rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid[3], 1);
-	assert_int_equal(rc, 0);
-
-	/* Abort the first update DTX. */
-	rc = vos_dtx_abort(args->ctx.tc_co_hdl, epoch[0], &xid[0], 1);
-	assert_int_equal(rc, 0);
-
-	/* Commit the third update DTX. */
-	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid[2], 1);
-	assert_int_equal(rc, 0);
-
-	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
-	d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
-	iod[0].iod_size = DAOS_REC_ANY;
-
-	/* DTX[0] is aborted, so cannot be read even if against epoch[0] */
-	rc = io_test_obj_fetch(args, epoch[0], &dkey, &iod[0], &sgl[0], true);
-	assert_int_equal(rc, 0);
-
-	assert_memory_not_equal(update_buf[0], fetch_buf, UPDATE_BUF_SIZE);
-
-	for (i = 1; i < 3; i++) {
-		memset(fetch_buf, 0, UPDATE_BUF_SIZE);
-		d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
-		iod[i].iod_size = DAOS_REC_ANY;
-
-		/* DTX[i] is committed, so readable against its epoch[i] */
-		rc = io_test_obj_fetch(args, epoch[i], &dkey, &iod[i],
-				       &sgl[i], true);
-		assert_int_equal(rc, 0);
-
-		assert_memory_equal(update_buf[i], fetch_buf, UPDATE_BUF_SIZE);
-	}
-
-	if (abort) {
-		memset(fetch_buf, 0, UPDATE_BUF_SIZE);
-		d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
-		iod[0].iod_size = DAOS_REC_ANY;
-
-		rc = io_test_obj_fetch(args, ++epoch[3], &dkey, &iod[0],
-				       &sgl[0], true);
-		assert_int_equal(rc, 0);
-
-		assert_memory_not_equal(update_buf[0], fetch_buf,
-					UPDATE_BUF_SIZE);
-
-		for (i = 1; i < 3; i++) {
-			memset(fetch_buf, 0, UPDATE_BUF_SIZE);
-			d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
-			iod[i].iod_size = DAOS_REC_ANY;
-
-			rc = io_test_obj_fetch(args, ++epoch[3], &dkey, &iod[i],
-					       &sgl[i], true);
-			assert_int_equal(rc, 0);
-
-			assert_memory_equal(update_buf[i], fetch_buf,
-					    UPDATE_BUF_SIZE);
-		}
-	} else {
-		for (i = 0; i < 3; i++) {
-			memset(fetch_buf, 0, UPDATE_BUF_SIZE);
-			d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
-			iod[i].iod_size = DAOS_REC_ANY;
-
-			rc = io_test_obj_fetch(args, ++epoch[3], &dkey, &iod[i],
-					       &sgl[i], true);
-			assert_int_equal(rc, 0);
-
-			assert_memory_not_equal(update_buf[i], fetch_buf,
-						UPDATE_BUF_SIZE);
-		}
-	}
-
-	for (i = 0; i < 3; i++) {
-		free(akey_buf[i]);
-		free(update_buf[i]);
-	}
-}
-
-/* punch obj during some shared DTXs, the punch is committed */
-static void
-dtx_27(void **state)
-{
-	vts_dtx_shares_with_punch(*state, true, false);
-}
-
-/* punch obj during some shared DTXs, the punch is aborted */
-static void
-dtx_28(void **state)
-{
-	vts_dtx_shares_with_punch(*state, true, true);
-}
-
-/* punch key during some shared DTXs, the punch is committed */
-static void
-dtx_29(void **state)
-{
-	vts_dtx_shares_with_punch(*state, false, false);
-}
-
-/* punch key during some shared DTXs, the punch is aborted */
-static void
-dtx_30(void **state)
-{
-	vts_dtx_shares_with_punch(*state, false, true);
-}
-
 static int
 dtx_tst_teardown(void **state)
 {
@@ -1418,13 +963,13 @@ dtx_tst_teardown(void **state)
 }
 
 static const struct CMUnitTest dtx_tests[] = {
-	{ "VOS501: update-DTX CoS cache insert/delete/query",
+	{ "VOS501: update-DTX committable cache insert/delete/query",
 	  dtx_1, NULL, dtx_tst_teardown },
-	{ "VOS502: punch-DTX CoS cache insert/delete/query",
+	{ "VOS502: punch-DTX committable cache insert/delete/query",
 	  dtx_2, NULL, dtx_tst_teardown },
-	{ "VOS504: DTX CoS cache fetch committable",
+	{ "VOS504: DTX committable cache fetch committable",
 	  dtx_4, NULL, dtx_tst_teardown },
-	{ "VOS505: remove DTX from CoS cache after commit",
+	{ "VOS505: remove DTX from committable cache after commit",
 	  dtx_5, NULL, dtx_tst_teardown },
 	{ "VOS506: DTX commit visibility (single value, punch key)",
 	  dtx_6, NULL, dtx_tst_teardown },
@@ -1446,40 +991,12 @@ static const struct CMUnitTest dtx_tests[] = {
 	  dtx_14, NULL, dtx_tst_teardown },
 	{ "VOS515: DTX ops against aborted DTX",
 	  dtx_15, NULL, dtx_tst_teardown },
-	{ "VOS516: DTX in CoS cache makes related data record as readable",
+	{ "VOS516: DTX in committable cache makes record readable",
 	  dtx_16, NULL, dtx_tst_teardown },
 	{ "VOS517: list dkey with DTX",
 	  dtx_17, NULL, dtx_tst_teardown },
 	{ "VOS518: DTX aggregation",
 	  dtx_18, NULL, dtx_tst_teardown },
-	{ "VOS519: share DTX, all committed, commit the first one firstly",
-	  dtx_19, NULL, dtx_tst_teardown },
-	{ "VOS520: share DTX, all committed, commit the first one lastly",
-	  dtx_20, NULL, dtx_tst_teardown },
-	{ "VOS521: share DTX, all aborted, abort the first DTX firstly",
-	  dtx_21, NULL, dtx_tst_teardown },
-	{ "VOS522: share DTX, all aborted, abort the first DTX lastly",
-	  dtx_22, NULL, dtx_tst_teardown },
-	{ "VOS523: share DTX, some committed, "
-		"the first DTX is committed firstly",
-	  dtx_23, NULL, dtx_tst_teardown },
-	{ "VOS524: share DTX, some committed, the first DTX is committed, "
-		"but some DTX is aborted firstly",
-	  dtx_24, NULL, dtx_tst_teardown },
-	{ "VOS525: share DTX, some committed, "
-		"the first DTX is aborted firstly",
-	  dtx_25, NULL, dtx_tst_teardown },
-	{ "VOS526: share DTX, some committed, the first DTX is aborted, "
-		"but some DTX is committed firstly",
-	  dtx_26, NULL, dtx_tst_teardown },
-	{ "VOS527: punch obj during some shared DTXs, the punch is committed",
-	  dtx_27, NULL, dtx_tst_teardown },
-	{ "VOS528: punch obj during some shared DTXs, the punch is aborted",
-	  dtx_28, NULL, dtx_tst_teardown },
-	{ "VOS529: punch key during some shared DTXs, the punch is committed",
-	  dtx_29, NULL, dtx_tst_teardown },
-	{ "VOS530: punch key during some shared DTXs, the punch is aborted",
-	  dtx_30, NULL, dtx_tst_teardown },
 };
 
 int

@@ -104,7 +104,7 @@ dtx_flush_committable(struct dss_module_info *dmi,
 		struct dtx_entry	*dtes = NULL;
 
 		rc = vos_dtx_fetch_cc(cont->sc_hdl, DTX_THRESHOLD_COUNT, NULL,
-				      DAOS_EPOCH_MAX, &dtes);
+				      DAOS_EPOCH_MAX, true, &dtes);
 		if (rc <= 0)
 			break;
 
@@ -146,6 +146,7 @@ dtx_batched_commit(void *arg)
 		struct dtx_entry		*dtes = NULL;
 		struct dtx_stat			 stat = { 0 };
 		int				 rc;
+		bool				 expired = false;
 
 		if (d_list_empty(&dmi->dmi_dtx_batched_list))
 			goto check;
@@ -161,13 +162,15 @@ dtx_batched_commit(void *arg)
 		d_list_move_tail(&dbca->dbca_link, &dmi->dmi_dtx_batched_list);
 		vos_dtx_stat(cont->sc_hdl, &stat);
 
+		expired = (stat.dtx_oldest_committable_time != 0 &&
+			   dtx_hlc_age2sec(stat.dtx_oldest_committable_time) >
+			   DTX_COMMIT_THRESHOLD_AGE);
 		if ((stat.dtx_priority_count > 0) ||
 		    (stat.dtx_committable_count > DTX_THRESHOLD_COUNT) ||
-		    (stat.dtx_oldest_committable_time != 0 &&
-		     dtx_hlc_age2sec(stat.dtx_oldest_committable_time) >
-		     DTX_COMMIT_THRESHOLD_AGE)) {
+		    expired) {
 			rc = vos_dtx_fetch_cc(cont->sc_hdl, DTX_THRESHOLD_COUNT,
-					      NULL, DAOS_EPOCH_MAX, &dtes);
+					      NULL, DAOS_EPOCH_MAX, expired,
+					      &dtes);
 			if (rc > 0) {
 				rc = dtx_commit(dbca->dbca_pool->spc_uuid,
 					cont->sc_uuid, dtes, rc,
@@ -770,7 +773,7 @@ dtx_obj_sync(uuid_t po_uuid, uuid_t co_uuid, daos_handle_t coh,
 		struct dtx_entry	*dtes = NULL;
 
 		rc = vos_dtx_fetch_cc(coh, DTX_THRESHOLD_COUNT, &oid, epoch,
-				      &dtes);
+				      true, &dtes);
 		if (rc < 0) {
 			D_ERROR(DF_UOID" fail to fetch dtx: rc = %d\n",
 				DP_UOID(oid), rc);

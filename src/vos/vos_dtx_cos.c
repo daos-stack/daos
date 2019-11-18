@@ -282,7 +282,7 @@ vos_dtx_lookup_cc(daos_handle_t coh, struct dtx_id *xid)
 	dcr = (struct dtx_cc_rec *)riov.iov_buf;
 	dcr->dcr_check_count++;
 
-	if (dcr->dcr_check_count > DTX_CHECK_THRESHOLD) {
+	if (dcr->dcr_check_count == DTX_CHECK_THRESHOLD) {
 		d_list_del(&dcr->dcr_link);
 		d_list_add_tail(&dcr->dcr_link, &cont->vc_dtx_priority_list);
 		cont->vc_dtx_committable_count--;
@@ -320,7 +320,7 @@ fetch_committable(d_list_t *list, struct dtx_entry *dte, daos_unit_oid_t *oid,
 
 int
 vos_dtx_fetch_cc(daos_handle_t coh, uint32_t max_cnt, daos_unit_oid_t *oid,
-		 daos_epoch_t epoch, struct dtx_entry **dtes)
+		 daos_epoch_t epoch, bool flush, struct dtx_entry **dtes)
 {
 	struct dtx_entry	*dte;
 	struct vos_container	*cont;
@@ -334,7 +334,7 @@ vos_dtx_fetch_cc(daos_handle_t coh, uint32_t max_cnt, daos_unit_oid_t *oid,
 	committable = cont->vc_dtx_committable_count;
 
 	if (oid == NULL) {
-		if (committable < DTX_THRESHOLD_COUNT)
+		if (!flush && committable < DTX_THRESHOLD_COUNT)
 			committable = 0;
 	}
 
