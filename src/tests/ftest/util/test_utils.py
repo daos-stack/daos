@@ -33,7 +33,7 @@ from pydaos.raw import (DaosApiError, DaosServer, DaosContainer, DaosPool,
 from general_utils import check_pool_files, get_random_string, DaosTestError
 import ctypes
 import getpass
-from dmg_utils import (pool_create, pool_destroy, get_pool_uuid_from_stdout,
+from dmg_utils import (get_pool_uuid_from_stdout,
                        get_service_replicas_from_stdout, DmgCommand)
 
 class CallbackHandler(object):
@@ -265,21 +265,21 @@ class TestPool(TestDaosApiBase):
                 self.pool.group = None
             else:
                 self.pool.group = ctypes.create_string_buffer(self.name.value)
-            # Modification 1: Use the length of service_replica returned by dmg to
-            # calculate rank_t. Note that we assume we always get a single number.
-            # I'm not sure if we ever get multiple numbers, but in that case, we
-            # need to modify this implementation to create a list out of the
-            # multiple numbers possibly separated by comma
+            # Modification 1: Use the length of service_replica returned by dmg
+            # to calculate rank_t. Note that we assume we always get a single
+            # number. I'm not sure if we ever get multiple numbers, but in that
+            # case, we need to modify this implementation to create a list out
+            # of the multiple numbers possibly separated by comma
             service_replicas = [int(service_replica)]
             rank_t = ctypes.c_uint * len(service_replicas)
-            # Modification 2: Use the service_replicas list to generate rank. In
-            # DaosPool, we first use some garbage 999999 values and let DAOS set
-            # the correct values, but we can't do that here, so we need to set the
-            # correct rank value by ourself
+            # Modification 2: Use the service_replicas list to generate rank.
+            # In DaosPool, we first use some garbage 999999 values and let DAOS
+            # set the correct values, but we can't do that here, so we need to
+            # set the correct rank value by ourself
             rank = rank_t(*list([svc for svc in service_replicas]))
             rl_ranks = ctypes.POINTER(ctypes.c_uint)(rank)
-            # Modification 3: Similar to 1. Use the length of service_replicas list
-            # instead of self.svcn.value
+            # Modification 3: Similar to 1. Use the length of service_replicas
+            # list instead of self.svcn.value
             self.pool.svc = daos_cref.RankList(rl_ranks, len(service_replicas))
 
             # 4. Set UUID and attached to the DaosPool object
