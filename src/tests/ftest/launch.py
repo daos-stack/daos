@@ -515,31 +515,36 @@ def get_log_files(config_yaml, daos_files=None):
     if daos_files is None:
         daos_core_test_dir = os.path.split(
             os.getenv("D_LOG_FILE", "/tmp/server.log"))[0]
-        daos_files = {
-            "log_file": "/tmp/server.log",
-            "server_log_file": "/tmp/server.log",
-            "agent_log_file": "/tmp/daos_agent.log",
-            "control_log_file": "/tmp/daos_control.log",
-            "socket_dir": "/tmp/daos_sockets",
-            "debug_log_default": os.getenv("D_LOG_FILE", "/tmp/daos.log"),
-            "test_variant_client_logs":
-                "{}/*_client_daos.log".format(daos_core_test_dir),
-            "test_variant_server_logs":
-                "{}/*_server_daos.log".format(daos_core_test_dir),
-        }
+        # daos_files = {
+        #     "log_file": "/tmp/server.log",
+        #     "admin_log_file": "/tmp/daos_admin.log",
+        #     "server_log_file": "/tmp/server.log",
+        #     "agent_log_file": "/tmp/daos_agent.log",
+        #     "control_log_file": "/tmp/daos_control.log",
+        #     "socket_dir": "/tmp/daos_sockets",
+        #     "debug_log_default": os.getenv("D_LOG_FILE", "/tmp/daos.log"),
+        #     "test_variant_client_logs":
+        #         "{}/*_client_daos.log".format(daos_core_test_dir),
+        #     "test_variant_server_logs":
+        #         "{}/*_server_daos.log".format(daos_core_test_dir),
+        # }
+        daos_files = {"tmp": "/tmp/*.log"}
+        if daos_core_test_dir not in daos_files:
+            daos_files[daos_core_test_dir] = os.path.join(
+                daos_core_test_dir, "*.log")
 
-    # Determine the log file locations defined by the last run test
-    print("Checking {} for daos log file locations".format(config_yaml))
-    yaml_data = get_yaml_data(config_yaml)
+    # # Determine the log file locations defined by the last run test
+    # print("Checking {} for daos log file locations".format(config_yaml))
+    # yaml_data = get_yaml_data(config_yaml)
 
-    # Replace any default log file with its yaml definition
-    matches = find_values(yaml_data, daos_files.keys(), val_type=str)
-    for key, value in matches.items():
-        if value != daos_files[key]:
-            print(
-                "  Update found for {}: {} -> {}".format(
-                    key, daos_files[key], value))
-            daos_files[key] = value
+    # # Replace any default log file with its yaml definition
+    # matches = find_values(yaml_data, daos_files.keys(), val_type=str)
+    # for key, value in matches.items():
+    #     if value != daos_files[key]:
+    #         print(
+    #             "  Update found for {}: {} -> {}".format(
+    #                 key, daos_files[key], value))
+    #         daos_files[key] = value
 
     return daos_files
 
