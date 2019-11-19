@@ -1566,13 +1566,24 @@ dc_pool_list_cont(tse_task_t *task)
 	in = crt_req_get(rpc);
 	uuid_copy(in->plci_op.pi_uuid, pool->dp_pool);
 	uuid_copy(in->plci_op.pi_hdl, pool->dp_pool_hdl);
-	in->plci_ncont = *args->ncont;
+	/* Requested ncont: if we have > 0 specified but cont_buf==NULL, we
+	 * need to receive the number of containers in the pool. *ncont could
+	 * be an uninitialized value in client. Set to 0 in request.
+	 */
+	if ((args->cont_buf == NULL) && (*args->ncont > 0))
+		in->plci_ncont = 0;
+	else
+		in->plci_ncont = *args->ncont;
 	in->plci_cont_bulk = CRT_BULK_NULL;
+
+	D_DEBUG(DF_DSMC, "req_ncont="DF_U64" (cont_buf=%p, *ncont="DF_U64"\n",
+			 in->plci_ncont, args->cont_buf,
+			 *args->ncont);
 
 	/** +1 for args */
 	crt_req_addref(rpc);
 
-	if ((args->ncont > 0) && args->cont_buf) {
+	if ((*args->ncont > 0) && args->cont_buf) {
 		rc = list_cont_bulk_create(daos_task2ctx(task),
 					   &in->plci_cont_bulk,
 					   args->cont_buf, in->plci_ncont);
@@ -1581,10 +1592,10 @@ dc_pool_list_cont(tse_task_t *task)
 	}
 
 	lc_cb_args.lca_pool = pool;
-	lc_cb_args.lca_req_ncont = *args->ncont;
 	lc_cb_args.lca_ncont = args->ncont;
 	lc_cb_args.lca_cont_buf = args->cont_buf;
 	lc_cb_args.rpc = rpc;
+	lc_cb_args.lca_req_ncont = in->plci_ncont;
 
 	rc = tse_task_register_comp_cb(task, pool_list_cont_cb, &lc_cb_args,
 				       sizeof(lc_cb_args));

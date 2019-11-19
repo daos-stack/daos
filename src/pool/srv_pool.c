@@ -2485,10 +2485,6 @@ out:
 }
 
 /**
- * List a pool's containers
- */
-
-/**
  * Query a pool's ACL property without having a handle for the pool
  */
 void

@@ -292,11 +292,6 @@ daos_mgmt_list_pools(const char *group, daos_size_t *npools,
 		return -DER_INVAL;
 	}
 
-	if ((*npools == 0) && pools) {
-		D_ERROR("npools=0 but non-NULL pools=%p\n", pools);
-		return -DER_INVAL;
-	}
-
 	rc = dc_task_create(dc_mgmt_list_pools, NULL, ev, &task);
 	if (rc)
 		return rc;

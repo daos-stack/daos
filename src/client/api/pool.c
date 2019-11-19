@@ -134,11 +134,6 @@ daos_pool_list_cont(daos_handle_t poh, daos_size_t *ncont,
 		return -DER_INVAL;
 	}
 
-	if ((*ncont == 0) && cbuf) {
-		D_ERROR("ncont=0 but non-NULL cbuf=%p\n", cbuf);
-		return -DER_INVAL;
-	}
-
 	rc = dc_task_create(dc_pool_list_cont, NULL, ev, &task);
 	if (rc)
 		return rc;

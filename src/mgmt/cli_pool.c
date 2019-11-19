@@ -466,13 +466,24 @@ dc_mgmt_list_pools(tse_task_t *task)
 
 	/** fill in request buffer */
 	pc_in->lp_grp = (d_string_t)args->grp;
-	pc_in->lp_npools = *args->npools;
+	/* Requested npools: if we have > 0 specified but pools==NULL, we need
+	 * to receive the number of pools in the system. *npools could be an
+	 * uninitialized value in client. Set to 0 in request.
+	 */
+	if ((args->pools == NULL) && (*args->npools > 0))
+		pc_in->lp_npools = 0;
+	else
+		pc_in->lp_npools = *args->npools;
+
+	D_DEBUG(DF_DSMC, "req_npools="DF_U64" (pools=%p, *npools="DF_U64"\n",
+			 pc_in->lp_npools, args->pools,
+			 *args->npools);
 
 	crt_req_addref(rpc_req);
 	cb_args.rpc = rpc_req;
-	cb_args.req_npools = *args->npools;
 	cb_args.npools = args->npools;
 	cb_args.pools = args->pools;
+	cb_args.req_npools = pc_in->lp_npools;
 
 	rc = tse_task_register_comp_cb(task, mgmt_list_pools_cp, &cb_args,
 				       sizeof(cb_args));

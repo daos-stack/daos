@@ -269,6 +269,8 @@ verify_pool_info(void **state, int rc_ret, daos_size_t npools_in,
 	 */
 	nfilled = (rc_ret == 0) ? npools_out : 0;
 
+	print_message("verifying pools[0..%zu], nfilled=%zu\n", npools_in,
+		      nfilled);
 	/* Walk through pools[] items daos_mgmt_list_pools() was told about */
 	for (i = 0; i < npools_in; i++) {
 		if (i < nfilled) {
@@ -301,7 +303,7 @@ list_pools_test(void **state)
 	int			 tnum = 0;
 
 	/***** Test: retrieve number of pools in system *****/
-	npools = npools_orig = 0xABC0; /* Junk value */
+	npools = npools_orig = 0xABC0; /* Junk value (e.g., uninitialized) */
 	rc = daos_mgmt_list_pools(arg->group, &npools, NULL /* pools */,
 			NULL /* ev */);
 	assert_int_equal(rc, 0);
@@ -324,12 +326,13 @@ list_pools_test(void **state)
 	clean_pool_info(npools_alloc, pools);
 	print_message("success t%d: pools[] over-sized\n", tnum++);
 
-	/***** Test: provide npools=0, non-NULL pools. -DER_INVAL ****/
+	/***** Test: provide npools=0, non-NULL pools  ****/
 	npools = 0;
 	rc = daos_mgmt_list_pools(arg->group, &npools, pools, NULL /* ev */);
-	assert_int_equal(rc, -DER_INVAL);
-	print_message("success t%d: npools=0, non-NULL pools[] -DER_INVAL\n",
-		      tnum++);
+	assert_int_equal(rc, 0);
+	assert_int_equal(npools, lparg->nsyspools);
+	print_message("success t%d: npools=0, non-NULL pools[] rc=%d\n",
+		      tnum++, rc);
 
 	/* Teardown for above 2 tests */
 	D_FREE(pools);	/* clean_pool_info() freed mgpi_svc */

@@ -647,8 +647,7 @@ setup_containers(void **state, daos_size_t nconts)
 
 	if (nconts) {
 		D_ALLOC_ARRAY(lcarg->conts, nconts);
-		if (lcarg->conts == NULL)
-			goto err_disconnect_pool;
+		assert_ptr_not_equal(lcarg->conts, NULL);
 		print_message("setup: alloc lcarg->conts len %zu\n",
 			      nconts);
 	}
@@ -693,10 +692,6 @@ err_destroy_conts:
 					  1 /* force */, NULL /* ev */);
 		}
 	}
-
-err_disconnect_pool:
-	if (arg->myrank == 0)
-		daos_pool_disconnect(lcarg->tpool.poh, NULL /* ev */);
 
 err_destroy_pool:
 	if (arg->myrank == 0)
@@ -829,6 +824,8 @@ verify_cont_info(void **state, int rc_ret, daos_size_t nconts_in,
 	nfilled = (rc_ret == 0) ? nconts_out : 0;
 
 	/* Walk through conts[] items daos_pool_list_cont() was told about */
+	print_message("verifying conts[0..%zu], nfilled=%zu\n", nconts_in,
+		      nfilled);
 	for (i = 0; i < nconts_in; i++) {
 		if (i < nfilled) {
 			/* container is found in the setup state */
@@ -858,7 +855,7 @@ list_containers_test(void **state)
 	int				 tnum = 0;
 
 	/***** Test: retrieve number of containers in pool *****/
-	nconts = nconts_orig = 0xDEF0; /* Junk value */
+	nconts = nconts_orig = 0xDEF0; /* Junk value (e.g., uninitialized) */
 	assert_false(daos_handle_is_inval(lcarg->tpool.poh));
 	rc = daos_pool_list_cont(lcarg->tpool.poh, &nconts, NULL /* conts */,
 			NULL /* ev */);
@@ -887,13 +884,14 @@ list_containers_test(void **state)
 	clean_cont_info(nconts_alloc, conts);
 	print_message("success t%d: conts[] over-sized\n", tnum++);
 
-	/***** Test: provide nconts=0, non-NULL conts. -DER_INVAL ****/
+	/***** Test: provide nconts=0, non-NULL conts ****/
 	nconts = 0;
 	rc = daos_pool_list_cont(lcarg->tpool.poh, &nconts, conts,
 				 NULL /* ev */);
-	assert_int_equal(rc, -DER_INVAL);
-	print_message("success t%d: nconts=0, non-NULL conts[] -DER_INVAL\n",
-		      tnum++);
+	assert_int_equal(rc, 0);
+	assert_int_equal(nconts, lcarg->nconts);
+	print_message("success t%d: nconts=0, non-NULL conts[] rc=%d\n",
+		      tnum++, rc);
 
 	/* Teardown for above 2 tests */
 	D_FREE(conts);

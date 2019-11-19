@@ -303,7 +303,7 @@ daos_pool_set_attr(daos_handle_t poh, int n, char const *const names[],
  *
  * \param[in]	poh	Pool connection handle.
  * \param[in,out]
- *		ncont	[in] \a conts length in items.
+ *		ncont	[in] \a cbuf length in items.
  *			[out] Number of containers in the pool.
  * \param[out]	cbuf	Array of container structures.
  *			NULL is permitted in which case only the number

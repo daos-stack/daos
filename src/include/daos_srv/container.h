@@ -116,10 +116,6 @@ void ds_cont_hdl_get(struct ds_cont_hdl *hdl);
 
 int ds_cont_close_by_pool_hdls(uuid_t pool_uuid, uuid_t *pool_hdls,
 			       int n_pool_hdls, crt_context_t ctx);
-#if 0
-int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts,
-		 uint64_t *ncont);
-#endif
 int ds_cont_list(uuid_t pool_uuid, uint64_t *ncont,
 		 struct daos_pool_cont_info **conts, uint64_t *conts_len);
 int
