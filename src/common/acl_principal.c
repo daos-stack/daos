@@ -43,7 +43,7 @@
 #define TRY_UNTIL_BUF_SIZE_OK(expr)				\
 do {								\
 	char	*new_buf = NULL;				\
-	size_t		buflen;					\
+	size_t	buflen;						\
 								\
 	buflen = DEFAULT_BUF_LEN;				\
 	do {							\
