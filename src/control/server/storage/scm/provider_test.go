@@ -381,7 +381,6 @@ func TestProviderCheckFormat(t *testing.T) {
 			isMountedErr: os.ErrNotExist,
 			expResponse: &FormatResponse{
 				Mountpoint: goodMountPoint,
-				Mountable:  true,
 				Formatted:  false,
 			},
 		},

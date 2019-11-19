@@ -190,13 +190,7 @@ func (srv *IOServerInstance) NeedsScmFormat() (bool, error) {
 		return false, err
 	}
 
-	// Logic:
-	// 1. If the SCM is mounted, assume here that it doesn't need to be formatted.
-	// 2. If not mounted, check:
-	// 2a. Does it appear to be formatted with something?
-	// AND
-	// 2b. Does it appear to be mountable by us?
-	needsFormat := !res.Mounted && !(res.Formatted && res.Mountable)
+	needsFormat := !res.Mounted && !res.Mountable
 	srv.log.Debugf("%s (%s) needs format: %t", scmCfg.MountPoint, scmCfg.Class, needsFormat)
 	return needsFormat, nil
 }

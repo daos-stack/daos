@@ -555,31 +555,29 @@ func (p *Provider) CheckFormat(req FormatRequest) (*FormatResponse, error) {
 		return res, nil
 	}
 
-	if req.Dcpm != nil {
-		fsType, err := p.sys.Getfs(req.Dcpm.Device)
-		if err != nil {
-			if os.IsNotExist(errors.Cause(err)) {
-				return nil, errors.Wrap(FaultFormatMissingDevice, req.Dcpm.Device)
-			}
-			return nil, errors.Wrapf(err, "failed to check if %s is formatted", req.Dcpm.Device)
-		}
-
-		p.log.Debugf("device %s filesystem: %s", req.Dcpm.Device, fsType)
-
-		switch fsType {
-		case fsTypeExt4:
-			res.Mountable = true
-		case fsTypeNone:
-			res.Formatted = false
-		}
-
-		return res, nil
-	} else {
+	if req.Dcpm == nil {
 		// ramdisk
-		res.Mountable = true
+		res.Formatted = false
+		return res, nil
 	}
 
-	res.Formatted = false
+	fsType, err := p.sys.Getfs(req.Dcpm.Device)
+	if err != nil {
+		if os.IsNotExist(errors.Cause(err)) {
+			return nil, errors.Wrap(FaultFormatMissingDevice, req.Dcpm.Device)
+		}
+		return nil, errors.Wrapf(err, "failed to check if %s is formatted", req.Dcpm.Device)
+	}
+
+	p.log.Debugf("device %s filesystem: %s", req.Dcpm.Device, fsType)
+
+	switch fsType {
+	case fsTypeExt4:
+		res.Mountable = true
+	case fsTypeNone:
+		res.Formatted = false
+	}
+
 	return res, nil
 }
 
