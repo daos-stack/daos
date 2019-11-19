@@ -16,30 +16,36 @@
 // GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
 // The Government's rights to use, modify, reproduce, release, perform, display,
 // or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. B609815.
+// provided in Contract No. 8F-30005.
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+// +build gofuzz
 
-syntax = "proto3";
-package mgmt;
+package hostlist
 
-// Access Control List related protobuf structures
+// Fuzz is used to subject the library to randomized inputs in order to
+// identify any deficiencies in input parsing and/or error handling.
+// The number of inputs that may result in errors is infinite; the number
+// of inputs that result in crashes should be zero.
+//
+// This function is only built by go-fuzz, using go-fuzz-build. See
+// https://github.com/dvyukov/go-fuzz for details on installing and
+// running the fuzzer.
+//
+// The most recent run:
+// 2019/11/15 07:24:09 workers: 4, corpus: 641 (1h10m ago), crashers: 0, restarts: 1/9998, execs: 134399056 (3727/sec), cover: 1339, uptime: 10h1m
+func Fuzz(data []byte) int {
+	hs, err := CreateSet(string(data))
+	if err != nil {
+		return 0
+	}
 
-// Response to ACL-related requests includes the command status and current ACL
-message ACLResp {
-	int32 status = 1; // DAOS error code
-	repeated string ACL = 2; // List of ACEs in short string format
-}
+	_ = hs.String()
 
-// Request to fetch an ACL
-message GetACLReq {
-	string uuid = 1; // Target UUID
-}
+	if _, err := hs.Delete(string(data)); err != nil && err != ErrEmpty {
+		panic(err)
+	}
 
-// Request to modify an ACL
-// Results depend on the specific modification command.
-message ModifyACLReq {
-	string uuid = 1; // Target UUID
-	repeated string ACL = 2; // List of ACEs to overwrite ACL with
+	return 1
 }

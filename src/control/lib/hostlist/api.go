@@ -16,30 +16,43 @@
 // GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
 // The Government's rights to use, modify, reproduce, release, perform, display,
 // or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. B609815.
+// provided in Contract No. 8F-30005.
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+package hostlist
 
-syntax = "proto3";
-package mgmt;
+// This file contains package-level convenience functions for working with
+// hostlist strings.
 
-// Access Control List related protobuf structures
+// Expand converts a ranged host string into an expanded string
+// of all hosts in the supplied range(s).
+func Expand(stringHosts string) (string, error) {
+	hs, err := CreateSet(stringHosts)
+	if err != nil {
+		return "", err
+	}
 
-// Response to ACL-related requests includes the command status and current ACL
-message ACLResp {
-	int32 status = 1; // DAOS error code
-	repeated string ACL = 2; // List of ACEs in short string format
+	return hs.DerangedString(), nil
 }
 
-// Request to fetch an ACL
-message GetACLReq {
-	string uuid = 1; // Target UUID
+// Compress converts the supplied host list into a string
+// of ranged host strings.
+func Compress(stringHosts string) (string, error) {
+	hs, err := CreateSet(stringHosts)
+	if err != nil {
+		return "", err
+	}
+
+	return hs.RangedString(), nil
 }
 
-// Request to modify an ACL
-// Results depend on the specific modification command.
-message ModifyACLReq {
-	string uuid = 1; // Target UUID
-	repeated string ACL = 2; // List of ACEs to overwrite ACL with
+// Count returns the number of distinct hosts in the supplied host list.
+func Count(stringHosts string) (int, error) {
+	hs, err := CreateSet(stringHosts)
+	if err != nil {
+		return -1, err
+	}
+
+	return hs.Count(), nil
 }
