@@ -73,7 +73,7 @@ func (cmd *systemMemberQueryCmd) Execute(args []string) error {
 	case err != nil:
 		msg = errors.WithMessagef(err, "FAILED").Error()
 	case len(members) > 0:
-		msg += fmt.Sprintf("%s", members)
+		msg += members.String()
 	default:
 		msg += "no joined members"
 	}

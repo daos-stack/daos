@@ -28,7 +28,7 @@
 #define D_LOGFAC	DD_FAC(tests)
 
 #include "vts_io.h"
-#include <vos_internal.h>	/* for VOS_BLK_SZ & VOS_MW_FLUSH_THRESH */
+#include <vos_internal.h>
 
 #define VERBOSE_MSG(...)			\
 {						\
@@ -203,15 +203,24 @@ phy_recs_nr(struct io_test_args *arg, daos_unit_oid_t oid,
 static int
 lookup_object(struct io_test_args *arg, daos_unit_oid_t oid)
 {
-	struct vos_obj_df	*obj_df = NULL;
+	struct vos_object	*obj = NULL;
 	int			 rc;
+	daos_epoch_range_t	 epr = {0, DAOS_EPOCH_MAX};
 
-	rc = vos_oi_find(vos_hdl2cont(arg->ctx.tc_co_hdl), oid, 1,
-			 DAOS_INTENT_DEFAULT, &obj_df);
+	/** Do a hold because we may have only deleted one incarnation of the
+	 *  tree.   If this returns 0, we need to release the object though
+	 *  this is only presently used to check existence
+	 */
+	rc = vos_obj_hold(vos_obj_cache_current(),
+			  vos_hdl2cont(arg->ctx.tc_co_hdl), oid, &epr, true,
+			  DAOS_INTENT_DEFAULT, true, &obj);
+	if (rc == 0)
+		vos_obj_release(vos_obj_cache_current(), obj, false);
 	return rc;
 }
 
 struct agg_tst_dataset {
+	daos_unit_oid_t			 td_oid;
 	daos_iod_type_t			 td_type;
 	daos_epoch_range_t		 td_upd_epr;
 	daos_epoch_range_t		 td_agg_epr;
@@ -329,6 +338,26 @@ generate_recx(daos_recx_t *recx_tot, daos_recx_t *recx)
 }
 
 static void
+generate_akeys(struct io_test_args *arg, daos_unit_oid_t oid, int nr)
+{
+	char	 dkey[UPDATE_DKEY_SIZE] = { 0 };
+	char	 akey[UPDATE_AKEY_SIZE] = { 0 };
+	char	*buf_u;
+	int	 i;
+
+	D_ALLOC(buf_u, 10);
+	assert_non_null(buf_u);
+
+	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
+	for (i = 0; i < nr; i++) {
+		dts_key_gen(akey, UPDATE_AKEY_SIZE, UPDATE_AKEY);
+		update_value(arg, oid, 1, dkey, akey, DAOS_IOD_SINGLE,
+			     10, NULL, buf_u);
+	}
+	D_FREE(buf_u);
+}
+
+static void
 aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 		int punch_nr, daos_epoch_t punch_epoch[])
 {
@@ -342,7 +371,10 @@ aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 	daos_size_t		 view_len;
 	int			 punch_idx = 0, recx_idx = 0, rc;
 
-	oid = dts_unit_oid_gen(0, 0, 0);
+	if (daos_unit_oid_is_null(ds->td_oid))
+		oid = dts_unit_oid_gen(0, 0, 0);
+	else
+		oid = ds->td_oid;
 	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
 	dts_key_gen(akey, UPDATE_AKEY_SIZE, UPDATE_AKEY);
 
@@ -401,41 +433,28 @@ get_ds_index(int oid_idx, int dkey_idx, int akey_idx, int nr)
 static void
 generate_or_verify(struct io_test_args *arg, daos_unit_oid_t oid, char *dkey,
 		   char *akey, struct agg_tst_dataset *ds_arr, int ds_idx,
-		   bool random_type, int key_nr, bool verify)
+		   int key_nr, bool verify)
 {
-	struct agg_tst_dataset	*ds;
-	int			 i;
+	struct agg_tst_dataset	*ds = &ds_arr[ds_idx];
 
-	for (i = 0; i < 2; i++) {
-		ds = &ds_arr[ds_idx];
-		/*
-		 * It's possible since all updates & iod_type were randomly
-		 * generated.
-		 */
-		if (ds->td_type != DAOS_IOD_SINGLE &&
-		    ds->td_type != DAOS_IOD_ARRAY) {
-			VERBOSE_MSG("Skip uninitialized ds. i:%d, ds_idx:%d\n",
-				    i, ds_idx);
-			continue;
-		}
-
-		if (verify)
-			verify_view(arg, oid, dkey, akey, ds);
-		else
-			generate_view(arg, oid, dkey, akey, ds);
-
-		if (!random_type)
-			break;
-
-		ds_idx += key_nr;
+	/* It's possible that some keys are not touched by random updates */
+	if (ds->td_type != DAOS_IOD_SINGLE &&
+	    ds->td_type != DAOS_IOD_ARRAY) {
+		VERBOSE_MSG("Skip uninitialized ds. ds_idx:%d\n", ds_idx);
+		return;
 	}
+
+	if (verify)
+		verify_view(arg, oid, dkey, akey, ds);
+	else
+		generate_view(arg, oid, dkey, akey, ds);
+
 }
 
 static void
 multi_view(struct io_test_args *arg, daos_unit_oid_t oids[],
 	   char dkeys[][UPDATE_DKEY_SIZE], char akeys[][UPDATE_DKEY_SIZE],
-	   int nr, struct agg_tst_dataset *ds_arr, bool random_type,
-	   int key_nr, bool verify)
+	   int nr, struct agg_tst_dataset *ds_arr, int key_nr, bool verify)
 {
 	daos_unit_oid_t	oid;
 	char		*dkey, *akey;
@@ -453,8 +472,8 @@ multi_view(struct io_test_args *arg, daos_unit_oid_t oids[],
 						      akey_idx, nr);
 
 				generate_or_verify(arg, oid, dkey, akey,
-						   ds_arr, ds_idx, random_type,
-						   key_nr, verify);
+						   ds_arr, ds_idx, key_nr,
+						   verify);
 			}
 		}
 	}
@@ -479,7 +498,6 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 	daos_recx_t		 recx, *recx_p;
 	int			 oid_idx, dkey_idx, akey_idx;
 	int			 i, key_nr, ds_nr, ds_idx, rc;
-	bool			 random_type;
 
 	epr_u = &ds_sample->td_upd_epr;
 	epr_a = &ds_sample->td_agg_epr;
@@ -490,16 +508,17 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 		dts_key_gen(akeys[i], UPDATE_AKEY_SIZE, UPDATE_AKEY);
 	}
 
+	assert_true(ds_sample->td_type == DAOS_IOD_SINGLE ||
+		    ds_sample->td_type == DAOS_IOD_ARRAY);
 	ds_nr = key_nr = AT_OBJ_KEY_NR * AT_OBJ_KEY_NR * AT_OBJ_KEY_NR;
-	random_type = (ds_sample->td_type == DAOS_IOD_NONE);
-	if (random_type)
-		ds_nr *= 2;
 	D_ALLOC_ARRAY(ds_arr, ds_nr);
 	assert_non_null(ds_arr);
 
 	for (i = 0; i < ds_nr; i++) {
 		ds = &ds_arr[i];
 		*ds = *ds_sample;
+		/* Clear iod_type and update epr */
+		ds->td_type = DAOS_IOD_NONE;
 		memset(&ds->td_upd_epr, 0, sizeof(*epr_u));
 	}
 
@@ -513,8 +532,6 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 
 	VERBOSE_MSG("Generate random updates over multiple objs/keys.\n");
 	for (epoch = epr_u->epr_lo; epoch <= epr_u->epr_hi; epoch++) {
-		daos_iod_type_t	iod_type;
-
 		oid_idx = rand() % AT_OBJ_KEY_NR;
 		dkey_idx = rand() % AT_OBJ_KEY_NR;
 		akey_idx = rand() % AT_OBJ_KEY_NR;
@@ -525,17 +542,8 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 
 		ds_idx = get_ds_index(oid_idx, dkey_idx, akey_idx,
 				      AT_OBJ_KEY_NR);
-		if (random_type) {
-			iod_type = (rand() % 2) ? DAOS_IOD_SINGLE :
-						  DAOS_IOD_ARRAY;
-			if (iod_type == DAOS_IOD_ARRAY)
-				ds_idx += key_nr;
-		} else {
-			iod_type = ds_sample->td_type;
-		}
-
 		ds = &ds_arr[ds_idx];
-		ds->td_type = iod_type;
+		ds->td_type = ds_sample->td_type;
 
 		/* First update can't be punched record */
 		if ((rand() % 2) && (ds->td_iod_size != 0))
@@ -583,8 +591,8 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 			ds->td_expected_recs = 0;
 	}
 
-	multi_view(arg, oids, dkeys, akeys, AT_OBJ_KEY_NR, ds_arr, random_type,
-		   key_nr, false);
+	multi_view(arg, oids, dkeys, akeys, AT_OBJ_KEY_NR, ds_arr, key_nr,
+		   false);
 
 	VERBOSE_MSG("%s multiple objs/keys\n", ds_sample->td_discard ?
 		    "Discard" : "Aggregate");
@@ -595,8 +603,8 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a);
 	assert_int_equal(rc, 0);
 
-	multi_view(arg, oids, dkeys, akeys, AT_OBJ_KEY_NR, ds_arr, random_type,
-		   key_nr, true);
+	multi_view(arg, oids, dkeys, akeys, AT_OBJ_KEY_NR, ds_arr, key_nr,
+		   true);
 	D_FREE(ds_arr);
 }
 
@@ -978,6 +986,44 @@ discard_12(void **state)
 	ds.td_discard = true;
 
 	aggregate_multi(arg, &ds);
+}
+
+/*
+ * Discard won't run into infinite loop.
+ */
+static void
+discard_13(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct agg_tst_dataset	 ds = { 0 };
+	daos_recx_t		 recx_arr[200];
+	daos_recx_t		 recx_tot;
+	int			 i;
+
+	ds.td_oid = dts_unit_oid_gen(0, 0, 0);
+	/*
+	 * Generate enough amount of akeys to ensure vos_iterate()
+	 * trigger re-probe on dkey
+	 */
+	generate_akeys(arg, ds.td_oid, VOS_AGG_CREDITS_MAX + 10);
+
+	recx_tot.rx_idx = 0;
+	recx_tot.rx_nr = 20;
+	for (i = 0; i < 200; i++)
+		generate_recx(&recx_tot, &recx_arr[i]);
+
+	ds.td_type = DAOS_IOD_ARRAY;
+	ds.td_iod_size = 1024;
+	ds.td_expected_recs = -1;
+	ds.td_recx_nr = 200;
+	ds.td_recx = &recx_arr[0];
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = 200;
+	ds.td_agg_epr.epr_lo = 100;
+	ds.td_agg_epr.epr_hi = DAOS_EPOCH_MAX;
+	ds.td_discard = true;
+
+	aggregate_basic(arg, &ds, -1, NULL);
 }
 
 /*
@@ -1622,6 +1668,9 @@ static const struct CMUnitTest discard_tests[] = {
 	  discard_11, NULL, agg_tst_teardown },
 	{ "VOS462: Discard EV, multiple objects, keys",
 	  discard_12, NULL, agg_tst_teardown },
+	{ "VOS463: Discard won't run into infinite loop",
+	  discard_13, NULL, agg_tst_teardown },
+
 };
 
 static const struct CMUnitTest aggregate_tests[] = {
