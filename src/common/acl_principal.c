@@ -48,10 +48,8 @@ do {								\
 	buflen = DEFAULT_BUF_LEN;				\
 	do {							\
 		D_REALLOC(new_buf, buf, buflen);		\
-		if (new_buf == NULL) {				\
-			D_ERROR("Couldn't alloc buffer\n");	\
+		if (new_buf == NULL)				\
 			D_GOTO(out, rc = -DER_NOMEM);		\
-		}						\
 		buf = new_buf;					\
 								\
 		rc = (expr);					\
