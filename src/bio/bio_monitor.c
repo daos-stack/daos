@@ -68,7 +68,7 @@ bio_get_dev_state_internal(void *msg_arg)
 }
 
 static void
-bio_set_faulty_state_internal(void *msg_arg)
+bio_dev_set_faulty_internal(void *msg_arg)
 {
 	struct dev_state_msg_arg	*dsm = msg_arg;
 	int				 rc;
@@ -83,7 +83,7 @@ bio_set_faulty_state_internal(void *msg_arg)
 	if (rc)
 		D_ERROR("State transition failed, rc=%d\n", rc);
 
-	ABT_eventual_set(dsm->eventual, NULL, 0);
+	ABT_eventual_set(dsm->eventual, &rc, sizeof(rc));
 }
 
 /* Call internal method to get BIO device state from the device owner xstream */
@@ -117,23 +117,27 @@ bio_get_dev_state(struct bio_dev_state *dev_state, struct bio_xs_context *xs)
  * state transition. Called from the device owner xstream.
  */
 int
-bio_set_faulty_state(struct bio_xs_context *xs)
+bio_dev_set_faulty(struct bio_xs_context *xs)
 {
 	struct dev_state_msg_arg	dsm = { 0 };
 	int				rc;
+	int				*dsm_rc;
 
-	rc = ABT_eventual_create(0, &dsm.eventual);
+	rc = ABT_eventual_create(sizeof(*dsm_rc), &dsm.eventual);
 	if (rc != ABT_SUCCESS)
 		return rc;
 
 	dsm.xs = xs;
 
 	spdk_thread_send_msg(owner_thread(xs->bxc_blobstore),
-			     bio_set_faulty_state_internal, &dsm);
-	ABT_eventual_wait(dsm.eventual, NULL);
+			     bio_dev_set_faulty_internal, &dsm);
+	rc = ABT_eventual_wait(dsm.eventual, (void **)&dsm_rc);
+	if (rc == 0)
+		rc = *dsm_rc;
+	else
+		rc = dss_abterr2der(rc);
 
-	rc = ABT_eventual_free(&dsm.eventual);
-	if (rc != ABT_SUCCESS)
+	if (ABT_eventual_free(&dsm.eventual) != ABT_SUCCESS)
 		D_ERROR("BIO set device state ABT future not freed\n");
 
 	return rc;

@@ -191,7 +191,7 @@ ds_mgmt_dev_state_query(uuid_t uuid, Mgmt__DevStateResp *resp)
 }
 
 int
-ds_mgmt_faulty_state_set(uuid_t uuid, Mgmt__DevStateResp *resp)
+ds_mgmt_dev_set_faulty(uuid_t uuid, Mgmt__DevStateResp *resp)
 {
 	return 0;
 }

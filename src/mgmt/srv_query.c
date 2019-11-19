@@ -68,7 +68,7 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 	if (uuid_is_null(dev_uuid) && strlen(tgt) == 0) {
 		/* Either dev uuid or tgt id needs to be specified for query */
 		D_ERROR("Neither dev_uuid or tgt_id specified for BIO query\n");
-		return -1;
+		return -DER_INVAL;
 	}
 
 	/*
@@ -307,7 +307,7 @@ ds_mgmt_dev_state_query(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
 	int			 rc = 0;
 
 	if (uuid_is_null(dev_uuid))
-		return -1;
+		return -DER_INVAL;
 
 	D_DEBUG(DB_MGMT, "Querying SMD device state for dev:"DF_UUID"\n",
 		DP_UUID(dev_uuid));
@@ -379,7 +379,7 @@ bio_faulty_state_set(void *arg)
 		return;
 	}
 
-	rc = bio_set_faulty_state(bxc);
+	rc = bio_dev_set_faulty(bxc);
 	if (rc != 0) {
 		D_ERROR("Error setting FAULTY BIO device state\n");
 		return;
@@ -387,7 +387,7 @@ bio_faulty_state_set(void *arg)
 }
 
 int
-ds_mgmt_faulty_state_set(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
+ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
 {
 	struct smd_dev_info	*dev_info;
 	ABT_thread		 thread;
@@ -396,7 +396,7 @@ ds_mgmt_faulty_state_set(uuid_t dev_uuid, Mgmt__DevStateResp *resp)
 	int			 rc = 0;
 
 	if (uuid_is_null(dev_uuid))
-		return -1;
+		return -DER_INVAL;
 
 	D_DEBUG(DB_MGMT, "Setting FAULTY SMD device state for dev:"DF_UUID"\n",
 		DP_UUID(dev_uuid));

@@ -1310,7 +1310,7 @@ ds_mgmt_drpc_dev_set_faulty(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	} else
 		uuid_clear(uuid); /* need to set uuid = NULL */
 
-	rc = ds_mgmt_faulty_state_set(uuid, resp);
+	rc = ds_mgmt_dev_set_faulty(uuid, resp);
 	if (rc != 0)
 		D_ERROR("Failed to set FAULTY device state :%d\n", rc);
 
