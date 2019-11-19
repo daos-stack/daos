@@ -50,9 +50,7 @@ from write_host_file import write_host_file
 
 SESSIONS = {}
 
-DEFAULT_FILE = "src/tests/ftest/data/daos_server_baseline.yaml"
-AVOCADO_FILE = "src/tests/ftest/data/daos_avocado_test.yaml"
-
+AVOCADO_FILE = "daos_avocado_test.yaml"
 
 class ServerFailed(Exception):
     """Server didn't start/stop properly."""
@@ -71,7 +69,7 @@ class DaosServer(DaosCommand):
             "/run/daos_server/*", "daos_server", path)
 
         self.yaml_params = DaosServerConfig()
-        self.timeout = 30
+        self.timeout = 120
         self.server_cnt = 1
         self.mode = "normal"
 
@@ -145,6 +143,7 @@ class DaosServer(DaosCommand):
             self.attach = FormattedParameter("-a {}")
             self.sock_dir = FormattedParameter("-d {}")
             self.insecure = FormattedParameter("-i", True)
+            self.recreate = FormattedParameter("--recreate-superblocks", True)
 
 
 class DaosServerConfig(ObjectWithParameters):
@@ -361,6 +360,7 @@ class ServerManager(ExecutableCommand):
         self.debug = BasicParameter(None, True)       # ServerCommand param
         self.attach = BasicParameter(None, attach)    # ServerCommand param
         self.insecure = BasicParameter(None, True)    # ServerCommand param
+        self.recreate = BasicParameter(None, True)    # ServerCommand param
         self.sudo = BasicParameter(None, False)       # ServerCommand param
         self.srv_timeout = BasicParameter(None, timeout)   # ServerCommand param
         self.report_uri = BasicParameter(None)             # Orterun param
@@ -393,7 +393,7 @@ class ServerManager(ExecutableCommand):
             test (Test): avocado Test object
         """
         server_params = ["debug", "sudo", "srv_timeout"]
-        server_start_params = ["attach", "insecure"]
+        server_start_params = ["attach", "insecure", "recreate"]
         runner_params = ["enable_recovery", "export", "report_uri"]
         super(ServerManager, self).get_params(test)
         self.runner.job.yaml_params.get_params(test)
@@ -424,15 +424,10 @@ class ServerManager(ExecutableCommand):
         self.server_clean()
 
         # Prepare nvme storage in servers
-        if self.runner.job.yaml_params.is_scm():
-            self.log.info("Performing SCM storage prepare in <format> mode")
-            storage_prepare(self._hosts, "root")
-
-        # Prepare nvme storage in servers
         if self.runner.job.yaml_params.is_nvme():
             self.log.info("Performing nvme storage prepare in <format> mode")
             storage_prepare(self._hosts, "root")
-            self.runner.mca.value = {"plm_rsh_args": "-i ci_key -l root"}
+            self.runner.mca.value = {"plm_rsh_args": "-l root"}
 
             # Make sure log file has been created for ownership change
             lfile = self.runner.job.yaml_params.server_params[-1].log_file.value
@@ -440,6 +435,10 @@ class ServerManager(ExecutableCommand):
                 self.log.info("Creating log file")
                 cmd_touch_log = "touch {}".format(lfile)
                 pcmd(self._hosts, cmd_touch_log, False)
+
+            # Change ownership of attach info directory
+            chmod_attach = "chmod 777 -R {}".format(self.attach.value)
+            pcmd(self._hosts, chmod_attach, False)
 
         try:
             self.run()
@@ -458,13 +457,6 @@ class ServerManager(ExecutableCommand):
                 "{}:{}".format(host, self.runner.job.yaml_params.port)
                 for host in self._hosts]
 
-            # Change ownership of attach info file
-            chmod_cmds = [
-            "chmod -R 777 {}/daos_server.attach_info_tmp".format(
-                self.attach.value),
-            ]
-            pcmd(self._hosts, chmod_cmds, False)
-
             # Format storage and wait for server to change ownership
             self.log.info("Formatting hosts: <%s>", self._hosts)
             storage_format(self.daosbinpath, ",".join(servers_with_ports))
@@ -474,16 +466,19 @@ class ServerManager(ExecutableCommand):
             except CommandFailure as error:
                 self.log.info("Failed to start after format: %s", str(error))
 
+            # Change ownership shared attach info file
+            chmod_cmds = "sudo chmod 777 {}/daos_server.attach_info_tmp".format(
+                self.attach.value)
+            pcmd(self._hosts, chmod_cmds, False)
+
         return True
 
     def stop(self):
         """Stop the server through the runner."""
         self.log.info("Stopping servers")
-        if self.runner.sudo:
+        if self.runner.job.yaml_params.is_nvme():
             self.kill()
-            if self.runner.job.yaml_params.is_nvme() or \
-               self.runner.job.yaml_params.is_scm():
-                storage_reset(self._hosts)
+            storage_reset(self._hosts)
             # Make sure the mount directory belongs to non-root user
             self.log.info("Changing ownership of mount to non-root user")
             cmd = "sudo chown -R {0}:{0} /mnt/daos*".format(getpass.getuser())
@@ -530,27 +525,17 @@ class ServerManager(ExecutableCommand):
         pcmd(self._hosts, "; ".join(clean_cmds), False)
 
 
-def storage_prepare(hosts, user, device_type):
+def storage_prepare(hosts, user):
     """
     Prepare the storage on servers using the DAOS server's yaml settings file.
     Args:
         hosts (str): a string of comma-separated host names
-	user : Username
-	device_type = SCM or NVME
     Raises:
         ServerFailed: if server failed to prepare storage
     """
-    device_args = ""
     daos_srv_bin = get_file_path("bin/daos_server")
-    if device_type == "nvme":
-            dev_param = "-n"
-	    device_args = " --hugepages=4096"
-    elif device_type == "dcpm":
-            dev_param = "-s"
-    else:
-         raise ServerFailed("Invalid device type")
-    cmd = ("sudo {} storage prepare {} -u \"{}\" {} -f"
-           .format(daos_srv_bin[0], dev_param, user, dev_args))
+    cmd = ("sudo {} storage prepare -n -u \"{}\" --hugepages=4096 -f"
+           .format(daos_srv_bin[0], user))
     result = pcmd(hosts, cmd, timeout=120)
     if len(result) > 1 or 0 not in result:
         raise ServerFailed("Error preparing NVMe storage")
@@ -594,10 +579,14 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
             [line.split(' ')[0] for line in genio.read_all_lines(hostfile)])
         server_count = len(servers)
 
+        # Pile of build time variables
+        with open("../../.build_vars.json") as json_vars:
+            build_vars = json.load(json_vars)
+
         # Create the DAOS server configuration yaml file to pass
         # with daos_server -o <FILE_NAME>
-        print("Creating the server yaml file")
-        server_yaml = os.path.join(test.basepath, AVOCADO_FILE)
+        print("Creating the server yaml file in {}".format(test.tmp))
+        server_yaml = os.path.join(test.tmp, AVOCADO_FILE)
         server_config = DaosServerConfig()
         server_config.get_params(test)
         if hasattr(test, "server_log"):
@@ -621,10 +610,6 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
                     "Error cleaning tmpfs on servers: {}".format(
                         ", ".join(
                             [str(result[key]) for key in result if key != 0])))
-
-        # Pile of build time variables
-        with open(os.path.join(test.basepath, ".build_vars.json")) as json_vars:
-            build_vars = json.load(json_vars)
 
         server_cmd = [
             os.path.join(build_vars["OMPI_PREFIX"], "bin", "orterun"),
@@ -651,8 +636,7 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
             [os.path.join(build_vars["PREFIX"], "bin", "daos_server"),
              "--debug",
              "--config", server_yaml,
-             "start", "-i",
-             "-a", os.path.join(test.basepath, "install", "tmp")])
+             "start", "-i", "--recreate-superblocks", "-a", test.tmp])
 
         print("Start CMD>>>>{0}".format(' '.join(server_cmd)))
 
