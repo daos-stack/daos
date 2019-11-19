@@ -273,9 +273,9 @@ void obj_ec_codec_fini(void);
 struct obj_ec_codec *obj_ec_codec_get(daos_oclass_id_t oc_id);
 
 /* cli_ec.c */
-int obj_ec_req_reassemb(daos_obj_rw_t *args, daos_obj_id_t oid,
-			struct daos_oclass_attr *oca,
-			struct obj_reasb_req *reasb_req, bool update);
+int obj_ec_req_reasb(daos_obj_rw_t *args, daos_obj_id_t oid,
+		     struct daos_oclass_attr *oca,
+		     struct obj_reasb_req *reasb_req, bool update);
 void obj_ec_recxs_fini(struct obj_ec_recx_array *recxs);
 void obj_ec_seg_sorter_fini(struct obj_ec_seg_sorter *sorter);
 void obj_ec_tgt_oiod_fini(struct obj_tgt_oiod *tgt_oiods);

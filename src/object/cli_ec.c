@@ -688,8 +688,8 @@ ec_parity_recx_add(daos_recx_t *recx, daos_recx_t *r_recx, uint32_t *r_idx,
 	uint64_t	tmp_idx, tmp_nr;
 	uint32_t	i;
 
-	D_ASSERT(recx->rx_idx % stripe_rec_nr == 0);
-	D_ASSERT(recx->rx_nr % stripe_rec_nr == 0);
+	D_ASSERTF((recx->rx_idx % stripe_rec_nr) == 0, "bad rx_idx\n");
+	D_ASSERTF((recx->rx_nr % stripe_rec_nr) == 0, "bad rx_nr\n");
 	D_ASSERT(recx->rx_nr > 0);
 	tmp_idx = ec_vos_idx(recx->rx_idx) | PARITY_INDICATOR;
 	tmp_nr = (recx->rx_nr / stripe_rec_nr) * cell_rec_nr;
@@ -978,7 +978,7 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 	bool				 with_full_stripe;
 	int				 rc = 0;
 
-	D_ASSERT(cell_rec_nr > 0); /* for compiling warning */
+	D_ASSERT(cell_rec_nr > 0);
 	if (iov_nr <= EC_INLINE_IOVS) {
 		iovs = iov_inline;
 	} else {
@@ -1004,8 +1004,9 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 		if (recx->rx_idx < full_recx->rx_idx) {
 			tmp_recx.rx_idx = recx->rx_idx;
 			tmp_recx.rx_nr = full_recx->rx_idx - recx->rx_idx;
-			D_ASSERT(tmp_recx.rx_nr == (stripe_rec_nr -
-					recx->rx_idx % stripe_rec_nr));
+			D_ASSERTF(tmp_recx.rx_nr == (stripe_rec_nr -
+					recx->rx_idx % stripe_rec_nr),
+				  "bad recx\n");
 			ec_data_recx_add(&tmp_recx, riod->iod_recxs, ridx,
 					 tgt_recx_idxs, oca, true);
 			ec_data_seg_add(&tmp_recx, iod_size, sgl, &iov_idx,
@@ -1101,9 +1102,9 @@ obj_ec_recx_reasb(daos_iod_t *iod, d_sg_list_t *sgl,
 }
 
 int
-obj_ec_req_reassemb(daos_obj_rw_t *args, daos_obj_id_t oid,
-		    struct daos_oclass_attr *oca,
-		    struct obj_reasb_req *reasb_req, bool update)
+obj_ec_req_reasb(daos_obj_rw_t *args, daos_obj_id_t oid,
+		 struct daos_oclass_attr *oca, struct obj_reasb_req *reasb_req,
+		 bool update)
 {
 	daos_iod_t		*iods;
 	d_sg_list_t		*sgls;

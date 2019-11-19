@@ -144,7 +144,7 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 	if (split_req != NULL) {
 		tgt_idx = shard_tgt->st_shard;
 		tgt_oiod = obj_ec_tgt_oiod_get(split_req->osr_tgt_oiods,
-					       dlh->dlh_sub_cnt,
+					       dlh->dlh_sub_cnt + 1,
 					       tgt_idx);
 		D_ASSERT(tgt_oiod != NULL);
 		orw->orw_iod_array.oia_oiods = tgt_oiod->oto_oiods;

@@ -456,7 +456,7 @@ crt_proc_struct_obj_iod_array(crt_proc_t proc, struct obj_iod_array *iod_array)
 			return -DER_NOMEM;
 		iod_array->oia_iods = buf;
 		if (off_nr != 0) {
-			iod_array->oia_offs = buf + off_size;
+			iod_array->oia_offs = buf + iod_size;
 			for (i = 0; i < off_nr; i++) {
 				if (crt_proc_uint64_t(proc,
 					&iod_array->oia_offs[i]))
@@ -466,7 +466,7 @@ crt_proc_struct_obj_iod_array(crt_proc_t proc, struct obj_iod_array *iod_array)
 			iod_array->oia_offs = NULL;
 		}
 		if (iod_array->oia_oiod_nr != 0)
-			iod_array->oia_oiods = buf + off_size + iod_size;
+			iod_array->oia_oiods = buf + iod_size + off_size;
 		else
 			iod_array->oia_oiods = NULL;
 	}

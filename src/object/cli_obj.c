@@ -674,8 +674,8 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 		return rc;
 	}
 
-	rc = obj_ec_req_reassemb(args, oid, oca, reasb_req,
-				 obj_auxi->opc == DAOS_OBJ_RPC_UPDATE);
+	rc = obj_ec_req_reasb(args, oid, oca, reasb_req,
+			      obj_auxi->opc == DAOS_OBJ_RPC_UPDATE);
 	if (rc == 0) {
 		obj_auxi->flags |= ORF_DTX_SYNC;
 		obj_auxi->req_reasbed = true;
@@ -684,7 +684,7 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 		if (reasb_req->orr_sgls != NULL)
 			args->sgls = reasb_req->orr_sgls;
 	} else {
-		D_ERROR(DF_OID" obj_ec_req_reassemb failed %d.\n",
+		D_ERROR(DF_OID" obj_ec_req_reasb failed %d.\n",
 			DP_OID(oid), rc);
 		obj_reasb_req_fini(obj_auxi);
 	}
@@ -1352,9 +1352,7 @@ obj_rw_bulk_prep(struct dc_object *obj, daos_iod_t *iods, d_sg_list_t *sgls,
 	 */
 	data_size = sgls_size;
 
-	if (data_size >= OBJ_BULK_LIMIT ||
-		ec_mult_data_targets(obj_auxi->req_tgts.ort_grp_size,
-				     obj->cob_md.omd_id)) {
+	if (data_size >= OBJ_BULK_LIMIT || obj_auxi->reasb_req.orr_tgt_nr > 1) {
 		bulk_perm = update ? CRT_BULK_RO : CRT_BULK_RW;
 		rc = obj_bulk_prep(sgls, nr, bulk_bind, bulk_perm, task,
 				   obj_auxi);
