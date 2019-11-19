@@ -297,7 +297,7 @@ func (ssp *defaultSystemProvider) Mkfs(fsType, device string, force bool) error 
 	return nil
 }
 
-// GetFs probes the specified device in an attempt to determine the
+// Getfs probes the specified device in an attempt to determine the
 // formatted filesystem type, if any.
 func (ssp *defaultSystemProvider) Getfs(device string) (string, error) {
 	cmdPath, err := exec.LookPath("file")
@@ -435,6 +435,7 @@ func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 		}
 		p.Lock()
 		p.scanCompleted = true
+		p.lastState = res.State
 		p.modules = res.Modules
 		p.namespaces = res.Namespaces
 		p.Unlock()
@@ -496,6 +497,27 @@ func (p *Provider) Prepare(req PrepareRequest) (res *PrepareResponse, err error)
 	}
 
 	if req.Reset {
+		// Ensure that namespace block devices are unmounted first.
+		if sr := p.createScanResponse(); len(sr.Namespaces) > 0 {
+			for _, ns := range sr.Namespaces {
+				nsDev := "/dev/" + ns.BlockDevice
+				isMounted, err := p.sys.IsMounted(nsDev)
+				if err != nil {
+					if os.IsNotExist(errors.Cause(err)) {
+						continue
+					}
+					return nil, err
+				}
+				if isMounted {
+					p.log.Debugf("Unmounting %s", nsDev)
+					if err := p.sys.Unmount(nsDev, 0); err != nil {
+						p.log.Errorf("Unmount error: %s", err)
+						return nil, err
+					}
+				}
+			}
+		}
+
 		res.RebootRequired, err = p.backend.PrepReset(p.currentState())
 		if err != nil {
 			res = nil
@@ -555,6 +577,9 @@ func (p *Provider) CheckFormat(req FormatRequest) (*FormatResponse, error) {
 	if req.Dcpm != nil {
 		fsType, err := p.sys.Getfs(req.Dcpm.Device)
 		if err != nil {
+			if os.IsNotExist(errors.Cause(err)) {
+				return nil, errors.Wrap(FaultFormatMissingDevice, req.Dcpm.Device)
+			}
 			return nil, errors.Wrapf(err, "failed to check if %s is formatted", req.Dcpm.Device)
 		}
 
