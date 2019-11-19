@@ -435,6 +435,7 @@ func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 		}
 		p.Lock()
 		p.scanCompleted = true
+		p.lastState = res.State
 		p.modules = res.Modules
 		p.namespaces = res.Namespaces
 		p.Unlock()
@@ -496,6 +497,27 @@ func (p *Provider) Prepare(req PrepareRequest) (res *PrepareResponse, err error)
 	}
 
 	if req.Reset {
+		// Ensure that namespace block devices are unmounted first.
+		if sr := p.createScanResponse(); len(sr.Namespaces) > 0 {
+			for _, ns := range sr.Namespaces {
+				nsDev := "/dev/" + ns.BlockDevice
+				isMounted, err := p.sys.IsMounted(nsDev)
+				if err != nil {
+					if os.IsNotExist(errors.Cause(err)) {
+						continue
+					}
+					return nil, err
+				}
+				if isMounted {
+					p.log.Debugf("Unmounting %s", nsDev)
+					if err := p.sys.Unmount(nsDev, 0); err != nil {
+						p.log.Errorf("Unmount error: %s", err)
+						return nil, err
+					}
+				}
+			}
+		}
+
 		res.RebootRequired, err = p.backend.PrepReset(p.currentState())
 		if err != nil {
 			res = nil
