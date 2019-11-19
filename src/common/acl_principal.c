@@ -36,12 +36,14 @@
  * No platform-agnostic way to fetch the max buflen - so let's try a
  * sane value and double until it's big enough.
  *
- * Assumes expr is part of the getpw*_r family of functions, and rc/buf/buflen
- * and a goto label "out" are already defined in the surrounding function.
+ * Assumes expr returns ERANGE if the buffer isn't large enough, and 
+ * rc/buf/buflen and a goto label "out" are already defined in the surrounding
+ * function.
  */
 #define TRY_UNTIL_BUF_SIZE_OK(expr)				\
-{								\
+do {								\
 	char	*new_buf = NULL;				\
+	size_t		buflen;					\
 								\
 	buflen = DEFAULT_BUF_LEN;				\
 	do {							\
@@ -56,7 +58,7 @@
 								\
 		buflen *= 2;					\
 	} while (rc == ERANGE);					\
-}
+} while (0)
 
 /*
  * States used to parse a principal name
@@ -147,7 +149,6 @@ daos_acl_uid_to_principal(uid_t uid, char **name)
 	struct passwd	user;
 	struct passwd	*result = NULL;
 	char		*buf = NULL;
-	size_t		buflen;
 
 	if (name == NULL) {
 		D_INFO("name pointer was NULL!\n");
@@ -180,7 +181,6 @@ daos_acl_gid_to_principal(gid_t gid, char **name)
 	struct group	grp;
 	struct group	*result = NULL;
 	char		*buf = NULL;
-	size_t		buflen;
 
 	if (name == NULL) {
 		D_INFO("name pointer was NULL!\n");
@@ -238,7 +238,6 @@ daos_acl_principal_to_uid(const char *principal, uid_t *uid)
 {
 	char		username[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
 	char		*buf = NULL;
-	size_t		buflen;
 	struct passwd	passwd;
 	struct passwd	*result = NULL;
 	int		rc;
@@ -277,7 +276,6 @@ daos_acl_principal_to_gid(const char *principal, gid_t *gid)
 {
 	char		grpname[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
 	char		*buf = NULL;
-	size_t		buflen;
 	struct group	grp;
 	struct group	*result = NULL;
 	int		rc;
