@@ -36,7 +36,7 @@
  * No platform-agnostic way to fetch the max buflen - so let's try a
  * sane value and double until it's big enough.
  *
- * Assumes expr returns ERANGE if the buffer isn't large enough, and 
+ * Assumes expr returns ERANGE if the buffer isn't large enough, and
  * rc/buf/buflen and a goto label "out" are already defined in the surrounding
  * function.
  */
