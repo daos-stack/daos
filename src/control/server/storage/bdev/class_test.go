@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package storage
+package bdev
 
 import (
 	"bytes"
@@ -34,13 +34,14 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 // TestParseBdev verifies config parameters for bdev get converted into nvme
 // config files that can be consumed by spdk.
 func TestParseBdev(t *testing.T) {
 	tests := map[string]struct {
-		bdevClass  BdevClass
+		bdevClass  storage.BdevClass
 		bdevList   []string
 		bdevSize   int // relevant for MALLOC/FILE
 		bdevNumber int // relevant for MALLOC
@@ -62,7 +63,7 @@ func TestParseBdev(t *testing.T) {
 			},
 		},
 		"multiple controllers": {
-			bdevClass: BdevClassNvme,
+			bdevClass: storage.BdevClassNvme,
 			bdevList:  []string{"0000:81:00.0", "0000:81:00.1"},
 			wantBuf: []string{
 				`[Nvme]`,
@@ -78,7 +79,7 @@ func TestParseBdev(t *testing.T) {
 			},
 		},
 		"AIO file": {
-			bdevClass: BdevClassFile,
+			bdevClass: storage.BdevClassFile,
 			bdevList:  []string{"myfile", "myotherfile"},
 			bdevSize:  5, // GB/file
 			wantBuf: []string{
@@ -90,7 +91,7 @@ func TestParseBdev(t *testing.T) {
 			vosEnv: "AIO",
 		},
 		"AIO kdev": {
-			bdevClass: BdevClassKdev,
+			bdevClass: storage.BdevClassKdev,
 			bdevList:  []string{"sdb", "sdc"},
 			wantBuf: []string{
 				`[AIO]`,
@@ -101,7 +102,7 @@ func TestParseBdev(t *testing.T) {
 			vosEnv: "AIO",
 		},
 		"MALLOC": {
-			bdevClass:  BdevClassMalloc,
+			bdevClass:  storage.BdevClassMalloc,
 			bdevSize:   5, // GB/file
 			bdevNumber: 2, // number of LUNs
 			wantBuf: []string{
@@ -122,13 +123,13 @@ func TestParseBdev(t *testing.T) {
 			}
 			defer os.RemoveAll(testDir)
 
-			config := BdevConfig{}
+			config := storage.BdevConfig{}
 			if tt.bdevClass != "" {
 				config.Class = tt.bdevClass
 			}
 			if len(tt.bdevList) != 0 {
 				switch tt.bdevClass {
-				case BdevClassFile, BdevClassKdev:
+				case storage.BdevClassFile, storage.BdevClassKdev:
 					for _, devFile := range tt.bdevList {
 						absPath := filepath.Join(testDir, devFile)
 						config.DeviceList = append(config.DeviceList, absPath)
@@ -158,7 +159,7 @@ func TestParseBdev(t *testing.T) {
 				}
 			}(t)
 
-			provider, err := NewBdevProvider(testLog, testDir, &config)
+			provider, err := NewClassProvider(testLog, testDir, &config)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -192,7 +193,7 @@ func TestParseBdev(t *testing.T) {
 			}
 
 			// The remainder only applies to loopback file devices.
-			if tt.bdevClass != BdevClassFile {
+			if tt.bdevClass != storage.BdevClassFile {
 				return
 			}
 			for _, testFile := range config.DeviceList {
