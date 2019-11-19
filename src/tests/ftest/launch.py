@@ -641,7 +641,7 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
     # report status at the end of the loop.  Include a listing of the file
     # related to any failed command.
     commands = [
-        "set -Eeu",
+        "set -eu",
         "rc=0",
         "copied=()",
         "for file in {}".format(" ".join(non_dir_files)),
@@ -649,7 +649,7 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
         "then if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
             this_host, doas_logs_dir),
         "then copied+=($file)",
-        "if ! rm -fr $file",
+        "if ! sudo rm -fr $file",
         "then ((rc++))",
         "ls -al $file",
         "fi",
