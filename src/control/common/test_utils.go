@@ -97,18 +97,28 @@ func ExpectError(
 	}
 }
 
+// CmpErrBool returns a boolean value indicating equivalancy between the supplied errors.
+func CmpErrBool(want, got error) bool {
+	if want == got {
+		return true
+	}
+
+	if want == nil || got == nil {
+		return false
+	}
+	if !strings.Contains(got.Error(), want.Error()) {
+		return false
+	}
+
+	return true
+}
+
 // CmpErr compares two errors for equality or at least close similarity in their messages.
 func CmpErr(t *testing.T, want, got error) {
 	t.Helper()
 
-	if want == got {
-		return
-	}
-	if want == nil || got == nil {
-		t.Fatalf("unexpected error (wanted: %v, got: %v)", want, got)
-	}
-	if !strings.Contains(got.Error(), want.Error()) {
-		t.Fatalf("unexpected error (wanted: %s, got: %s)", want, got)
+	if !CmpErrBool(want, got) {
+		t.Fatalf("unexpected error\n(wanted: %v, got: %v)", want, got)
 	}
 }
 
