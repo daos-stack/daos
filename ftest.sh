@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (C) 2019 Intel Corporation
+# Copyright (C) Copyright 2019-2020 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -123,10 +123,6 @@ if ${TEARDOWN_ONLY:-false}; then
     cleanup
     exit 0
 fi
-
-# let's output to a dir in the tree
-rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
-mkdir -p install/lib/daos/TESTING/ftest/avocado/job-results
 
 trap 'set +e; cleanup' EXIT
 
@@ -351,10 +347,6 @@ if ! ./launch.py -c -a -r -i -s -ts ${TEST_NODES} ${TEST_TAG_ARR[*]}; then
 else
     rc=0
 fi
-
-# Remove the latest avocado symlink directory to avoid inclusion in the
-# jenkins build artifacts
-unlink $DAOS_BASE/install/lib/daos/TESTING/ftest/avocado/job-results/latest
 
 # get stacktraces for the core files
 if ls core.*; then
