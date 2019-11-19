@@ -645,6 +645,10 @@ func (p *Provider) formatRamdisk(req FormatRequest) (*FormatResponse, error) {
 		return nil, err
 	}
 
+	if !res.Mounted {
+		return nil, errors.Errorf("%s was not mounted", req.Mountpoint)
+	}
+
 	if err := os.Chown(req.Mountpoint, req.OwnerUID, req.OwnerGID); err != nil {
 		return nil, errors.Wrapf(err, "failed to set ownership of %s to %d.%d",
 			req.Mountpoint, req.OwnerUID, req.OwnerGID)
@@ -652,9 +656,9 @@ func (p *Provider) formatRamdisk(req FormatRequest) (*FormatResponse, error) {
 
 	return &FormatResponse{
 		Mountpoint: res.Target,
-		Formatted:  res.Mounted,
-		Mounted:    res.Mounted,
-		Mountable:  !res.Mounted,
+		Formatted:  true,
+		Mounted:    true,
+		Mountable:  false,
 	}, nil
 }
 
@@ -681,6 +685,10 @@ func (p *Provider) formatDcpm(req FormatRequest) (*FormatResponse, error) {
 		return nil, err
 	}
 
+	if !res.Mounted {
+		return nil, errors.Errorf("%s was not mounted", req.Mountpoint)
+	}
+
 	if err := os.Chown(req.Mountpoint, req.OwnerUID, req.OwnerGID); err != nil {
 		return nil, errors.Wrapf(err, "failed to set ownership of %s to %d.%d",
 			req.Mountpoint, req.OwnerUID, req.OwnerGID)
@@ -688,9 +696,9 @@ func (p *Provider) formatDcpm(req FormatRequest) (*FormatResponse, error) {
 
 	return &FormatResponse{
 		Mountpoint: res.Target,
-		Formatted:  res.Mounted,
-		Mounted:    res.Mounted,
-		Mountable:  !res.Mounted,
+		Formatted:  true,
+		Mounted:    true,
+		Mountable:  false,
 	}, nil
 }
 
