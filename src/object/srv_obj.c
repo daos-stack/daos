@@ -64,16 +64,18 @@ obj_rpc_is_fetch(crt_rpc_t *rpc)
  * After bulk finish, let's send reply, then release the resource.
  */
 static int
-obj_rw_complete(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
+obj_rw_complete(crt_rpc_t *rpc, struct ds_cont_child *cont,
 		daos_handle_t ioh, int status, struct dtx_handle *dth)
 {
 	struct obj_rw_in	*orwi = crt_req_get(rpc);
 	int			 rc;
 
 	if (!daos_handle_is_inval(ioh)) {
-		uint32_t map_version = cont_hdl->sch_pool->spc_map_version;
+		uint32_t map_version;
 		bool update = obj_rpc_is_update(rpc);
 
+		D_ASSERT(cont != NULL);
+		map_version = cont->sc_pool->spc_map_version;
 		rc = update ? vos_update_end(ioh, map_version, &orwi->orw_dkey,
 					     status, dth) :
 			      vos_fetch_end(ioh, status);
@@ -501,14 +503,14 @@ obj_verify_cont_hdl(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 
-	if (cont_hdl->sch_cont != NULL) { /* a regular container */
+	/* normal container open handle with ds_cont_child attached */
+	if (cont_hdl->sch_cont != NULL) {
 		ds_cont_child_get(cont_hdl->sch_cont);
 		*contp = cont_hdl->sch_cont;
 		D_GOTO(out, rc = 0);
 	}
 
-	if (!is_rebuild_container(cont_hdl->sch_pool->spc_uuid,
-				  cont_hdl_uuid)) {
+	if (!is_rebuild_container(pool_uuid, cont_hdl_uuid)) {
 		D_ERROR("Empty container "DF_UUID" (ref=%d) handle?\n",
 			DP_UUID(cont_uuid), cont_hdl->sch_ref);
 		D_GOTO(out, rc = -DER_NO_HDL);
@@ -524,9 +526,8 @@ obj_verify_cont_hdl(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	D_DEBUG(DB_TRACE, DF_UUID"/%p is rebuild cont hdl\n",
 		DP_UUID(cont_hdl_uuid), cont_hdl);
 
-	/* load or create VOS container on demand */
-	rc = ds_cont_child_lookup(cont_hdl->sch_pool->spc_uuid, cont_uuid,
-				  contp);
+	/* load VOS container on demand for rebuild */
+	rc = ds_cont_child_lookup(pool_uuid, cont_uuid, contp);
 	if (rc)
 		D_GOTO(out, rc);
 out:
@@ -946,7 +947,7 @@ post:
 	err = bio_iod_post(biod);
 	rc = rc ? : err;
 out:
-	rc = obj_rw_complete(rpc, cont_hdl, ioh, rc, dth);
+	rc = obj_rw_complete(rpc, cont, ioh, rc, dth);
 	D_TIME_END(tls->ot_sp, time_start, OBJ_PF_UPDATE_LOCAL);
 	return rc;
 }
@@ -958,7 +959,8 @@ obj_verify_req(daos_unit_oid_t oid, uint32_t rpc_map_ver, uuid_t pool_uuid,
 	       struct ds_cont_hdl **hdlp, struct ds_cont_child **contp,
 	       uint32_t *map_ver)
 {
-	int		rc;
+	struct ds_pool_child	*pool_child;
+	int			 rc;
 
 	*hdlp = NULL;
 	*contp = NULL;
@@ -967,12 +969,15 @@ obj_verify_req(daos_unit_oid_t oid, uint32_t rpc_map_ver, uuid_t pool_uuid,
 	if (rc)
 		return rc;
 
-	D_ASSERT((*hdlp)->sch_pool != NULL);
-	*map_ver = (*hdlp)->sch_pool->spc_map_version;
+	D_ASSERT((*hdlp) != NULL);
+	D_ASSERT((*contp) != NULL);
 
-	if (rpc_map_ver > *map_ver ||
-	   (*hdlp)->sch_pool->spc_pool->sp_map == NULL ||
-	   DAOS_FAIL_CHECK(DAOS_FORCE_REFRESH_POOL_MAP)) {
+	pool_child = (*contp)->sc_pool;
+	D_ASSERT(pool_child != NULL);
+	*map_ver = pool_child->spc_map_version;
+
+	if (rpc_map_ver > *map_ver || pool_child->spc_pool->sp_map == NULL ||
+	    DAOS_FAIL_CHECK(DAOS_FORCE_REFRESH_POOL_MAP)) {
 		/* XXX: Client (or leader replica) has newer pool map than
 		 *	current replica. Two possibile cases:
 		 *
@@ -1000,9 +1005,9 @@ obj_verify_req(daos_unit_oid_t oid, uint32_t rpc_map_ver, uuid_t pool_uuid,
 		 */
 		D_DEBUG(DB_IO, "stale server map_version %d req %d\n",
 			*map_ver, rpc_map_ver);
-		rc = ds_pool_child_map_refresh_async((*hdlp)->sch_pool);
+		rc = ds_pool_child_map_refresh_async(pool_child);
 		if (rc == 0) {
-			*map_ver = (*hdlp)->sch_pool->spc_map_version;
+			*map_ver = pool_child->spc_map_version;
 			rc = -DER_STALE;
 		}
 
@@ -1017,14 +1022,11 @@ obj_verify_req(daos_unit_oid_t oid, uint32_t rpc_map_ver, uuid_t pool_uuid,
 
 out_put:
 	if (rc) {
-		if (*contp != NULL) {
-			ds_cont_child_put(*contp);
-			*contp = NULL;
-		}
-		if (*hdlp != NULL) {
-			ds_cont_hdl_put(*hdlp);
-			*hdlp = NULL;
-		}
+		ds_cont_child_put(*contp);
+		*contp = NULL;
+
+		ds_cont_hdl_put(*hdlp);
+		*hdlp = NULL;
 	}
 
 	return rc;
@@ -1054,8 +1056,6 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 			    &cont_hdl, &cont, &map_ver);
 	if (rc)
 		goto out;
-
-	D_ASSERT(cont_hdl->sch_pool != NULL);
 
 	if (DAOS_FAIL_CHECK(DAOS_VC_DIFF_DKEY)) {
 		unsigned char	*buf = dkey->iov_buf;
@@ -1200,8 +1200,6 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		goto reply;
 	}
 
-	D_ASSERT(cont_hdl->sch_pool != NULL);
-
 	D_DEBUG(DB_TRACE,
 		"rpc %p opc %d oid "DF_UOID" dkey "DF_KEY" tag/xs %d/%d epc "
 		DF_U64", pmv %u/%u dti "DF_DTI".\n",
@@ -1300,7 +1298,7 @@ out:
 		rc = -DER_IO;
 
 	/* Stop the distribute transaction */
-	rc = dtx_leader_end(&dlh, cont_hdl, cont, rc);
+	rc = dtx_leader_end(&dlh, cont, rc);
 	if (rc == -DER_AGAIN) {
 		flags |= ORF_RESEND;
 		D_GOTO(again, rc);
@@ -1373,8 +1371,6 @@ obj_iter_vos(crt_rpc_t *rpc, struct vos_iter_anchors *anchors,
 			    &cont, map_version);
 	if (rc)
 		D_GOTO(out, rc);
-
-	D_ASSERT(cont_hdl->sch_pool != NULL);
 
 	/* prepare enumeration parameters */
 	param.ip_hdl = cont->sc_hdl;
@@ -1896,7 +1892,7 @@ out:
 		rc = -DER_IO;
 
 	/* Stop the distribute transaction */
-	rc = dtx_leader_end(&dlh, cont_hdl, cont, rc);
+	rc = dtx_leader_end(&dlh, cont, rc);
 	if (rc == -DER_AGAIN) {
 		flags |= ORF_RESEND;
 		D_GOTO(again, rc);
@@ -1945,8 +1941,8 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	if (rc)
 		D_GOTO(out, rc);
 
-	D_ASSERT(cont_hdl->sch_pool != NULL);
-	map_version = cont_hdl->sch_pool->spc_map_version;
+	D_ASSERT(cont != NULL && cont->sc_pool != NULL);
+	map_version = cont->sc_pool->spc_map_version;
 
 	dkey = &okqi->okqi_dkey;
 	akey = &okqi->okqi_akey;
