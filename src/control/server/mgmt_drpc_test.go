@@ -202,3 +202,149 @@ func TestSrvModule_HandleNotifyReady_IdxOutOfRange(t *testing.T) {
 			expectedError, err.Error())
 	}
 }
+
+func getTestBioErrorReqBytes(t *testing.T, sockPath string, idx uint32, tgt int32, unmap bool, read bool, write bool) []byte {
+	req := getTestBioErrorReq(t, sockPath, idx, tgt, unmap, read, write)
+	reqBytes, err := proto.Marshal(req)
+
+	if err != nil {
+		t.Fatalf("Couldn't create fake request: %v", err)
+	}
+
+	return reqBytes
+}
+
+func TestSrvModule_HandleBioError_Invalid(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	expectedErr := "unmarshal BioError request"
+	mod := &srvModule{}
+	addIOServerInstances(mod, 1, log)
+
+	// Some arbitrary bytes, shouldn't translate to a request
+	badBytes := make([]byte, 16)
+	for i := range badBytes {
+		badBytes[i] = byte(i)
+	}
+
+	err := mod.handleBioErr(badBytes)
+
+	if err == nil {
+		t.Fatalf("Expected error, got nil")
+	}
+
+	if !strings.Contains(err.Error(), expectedErr) {
+		t.Errorf("Expected error to contain %q, got %q",
+			expectedErr, err.Error())
+	}
+}
+
+func TestSrvModule_HandleBioError_BadSockPath(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	expectedErr := "check BioError request socket path"
+	mod := &srvModule{}
+	addIOServerInstances(mod, 1, log)
+
+	reqBytes := getTestBioErrorReqBytes(t, "/some/bad/path", 0, 0, false,
+		false, true)
+
+	err := mod.handleBioErr(reqBytes)
+
+	if err == nil {
+		t.Fatalf("Expected error, got nil")
+	}
+
+	if !strings.Contains(err.Error(), expectedErr) {
+		t.Errorf("Expected error to contain %q, got %q",
+			expectedErr, err.Error())
+	}
+}
+
+func TestSrvModule_HandleBioError_Success_Single(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	mod := &srvModule{}
+	addIOServerInstances(mod, 1, log)
+
+	// Needs to be a real socket at the path
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
+	sockPath := filepath.Join(tmpDir, "mgmt_drpc_test.sock")
+
+	sock := createTestSocket(t, sockPath)
+	defer cleanupTestSocket(sockPath, sock)
+
+	reqBytes := getTestBioErrorReqBytes(t, sockPath, 0, 0, false, false,
+		true)
+
+	err := mod.handleBioErr(reqBytes)
+
+	if err != nil {
+		t.Fatalf("Expected no error, got %q", err.Error())
+	}
+}
+
+func TestSrvModule_HandleBioError_Success_Multi(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	mod := &srvModule{}
+	numInstances := 5
+	idx := uint32(numInstances - 1)
+
+	addIOServerInstances(mod, numInstances, log)
+
+	// Needs to be a real socket at the path
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
+	sockPath := filepath.Join(tmpDir, "mgmt_drpc_test.sock")
+
+	sock := createTestSocket(t, sockPath)
+	defer cleanupTestSocket(sockPath, sock)
+
+	reqBytes := getTestBioErrorReqBytes(t, sockPath, idx, 0, false, false,
+		true)
+
+	err := mod.handleBioErr(reqBytes)
+
+	if err != nil {
+		t.Fatalf("Expected no error, got %q", err.Error())
+	}
+}
+
+func TestSrvModule_HandleBioErr_IdxOutOfRange(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	expectedError := "out of range"
+	mod := &srvModule{}
+	numInstances := 5
+
+	addIOServerInstances(mod, numInstances, log)
+
+	// Needs to be a real socket at the path
+	tmpDir, tmpCleanup := common.CreateTestDir(t)
+	defer tmpCleanup()
+	sockPath := filepath.Join(tmpDir, "mgmt_drpc_test.sock")
+
+	sock := createTestSocket(t, sockPath)
+	defer cleanupTestSocket(sockPath, sock)
+
+	reqBytes := getTestBioErrorReqBytes(t, sockPath, uint32(numInstances),
+		0, false, false, true)
+
+	err := mod.handleBioErr(reqBytes)
+
+	if err == nil {
+		t.Fatal("Expected error, got nil")
+	}
+
+	if !strings.Contains(err.Error(), expectedError) {
+		t.Errorf("Expected error to contain %q, got %q",
+			expectedError, err.Error())
+	}
+}

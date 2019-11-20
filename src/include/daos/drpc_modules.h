@@ -72,6 +72,7 @@ enum drpc_mgmt_method {
 
 enum drpc_srv_method {
 	DRPC_METHOD_SRV_NOTIFY_READY		= 301,
+	DRPC_METHOD_SRV_BIO_ERR			= 302,
 
 	NUM_DRPC_SRV_METHODS			/* Must be last */
 };

@@ -80,6 +80,33 @@ func TestIOServerInstance_NotifyReady(t *testing.T) {
 	waitForIosrvReady(t, instance)
 }
 
+func getTestBioErrorReq(t *testing.T, sockPath string, idx uint32, tgt int32, unmap bool, read bool, write bool) *srvpb.BioErrorReq {
+	return &srvpb.BioErrorReq{
+		DrpcListenerSock: sockPath,
+		InstanceIdx:      idx,
+		TgtId:            tgt,
+		UnmapErr:         unmap,
+		ReadErr:          read,
+		WriteErr:         write,
+	}
+}
+
+func TestIOServerInstance_BioError(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	instance := getTestIOServerInstance(log)
+
+	req := getTestBioErrorReq(t, "/tmp/instance_test.sock", 0, 0, false, false, true)
+
+	instance.BioErrorNotify(req)
+
+	dc, err := instance.getDrpcClient()
+	if err != nil || dc == nil {
+		t.Fatal("Expected a dRPC client connection")
+	}
+}
+
 func TestIOServerInstance_CallDrpc(t *testing.T) {
 	for name, tc := range map[string]struct {
 		notReady bool
