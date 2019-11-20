@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,36 +20,32 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+// +build gofuzz
 
-package server
+package hostlist
 
-import (
-	"github.com/pkg/errors"
-	"golang.org/x/net/context"
-
-	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-)
-
-// FeatureMap is a type alias
-type FeatureMap map[string]*ctlpb.Feature
-
-// GetFeature returns the feature from feature name.
-func (s *ControlService) GetFeature(
-	ctx context.Context, name *ctlpb.FeatureName) (*ctlpb.Feature, error) {
-	f, exists := s.supportedFeatures[name.Name]
-	if !exists {
-		return nil, errors.Errorf("no feature with name %s", name.Name)
+// Fuzz is used to subject the library to randomized inputs in order to
+// identify any deficiencies in input parsing and/or error handling.
+// The number of inputs that may result in errors is infinite; the number
+// of inputs that result in crashes should be zero.
+//
+// This function is only built by go-fuzz, using go-fuzz-build. See
+// https://github.com/dvyukov/go-fuzz for details on installing and
+// running the fuzzer.
+//
+// The most recent run:
+// 2019/11/15 07:24:09 workers: 4, corpus: 641 (1h10m ago), crashers: 0, restarts: 1/9998, execs: 134399056 (3727/sec), cover: 1339, uptime: 10h1m
+func Fuzz(data []byte) int {
+	hs, err := CreateSet(string(data))
+	if err != nil {
+		return 0
 	}
-	return f, nil
-}
 
-// ListFeatures lists all features supported by the management server.
-func (s *ControlService) ListFeatures(
-	empty *ctlpb.EmptyReq, stream ctlpb.MgmtCtl_ListFeaturesServer) error {
-	for _, feature := range s.supportedFeatures {
-		if err := stream.Send(feature); err != nil {
-			return err
-		}
+	_ = hs.String()
+
+	if _, err := hs.Delete(string(data)); err != nil && err != ErrEmpty {
+		panic(err)
 	}
-	return nil
+
+	return 1
 }

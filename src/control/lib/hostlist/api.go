@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,40 +20,39 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+package hostlist
 
-package server
+// This file contains package-level convenience functions for working with
+// hostlist strings.
 
-import (
-	"context"
-	"testing"
-
-	. "github.com/daos-stack/daos/src/control/common"
-	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	"github.com/daos-stack/daos/src/control/logging"
-)
-
-// TODO: add server side streaming test for list features
-
-func TestGetFeature(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer ShowBufferOnFailure(t, buf)
-
-	cs := defaultMockControlService(t, log)
-
-	mockFeature := MockFeaturePB()
-	fMap := make(FeatureMap)
-	fMap[mockFeature.Fname.Name] = mockFeature
-	cs.supportedFeatures = fMap
-
-	feature, err := cs.GetFeature(context.TODO(), mockFeature.Fname)
+// Expand converts a ranged host string into an expanded string
+// of all hosts in the supplied range(s).
+func Expand(stringHosts string) (string, error) {
+	hs, err := CreateSet(stringHosts)
 	if err != nil {
-		t.Fatal(err)
+		return "", err
 	}
 
-	AssertEqual(t, feature, mockFeature, "")
+	return hs.DerangedString(), nil
+}
 
-	_, err = cs.GetFeature(context.TODO(), &ctlpb.FeatureName{Name: "non-existent"})
-	if err == nil {
-		t.Fatal(err)
+// Compress converts the supplied host list into a string
+// of ranged host strings.
+func Compress(stringHosts string) (string, error) {
+	hs, err := CreateSet(stringHosts)
+	if err != nil {
+		return "", err
 	}
+
+	return hs.RangedString(), nil
+}
+
+// Count returns the number of distinct hosts in the supplied host list.
+func Count(stringHosts string) (int, error) {
+	hs, err := CreateSet(stringHosts)
+	if err != nil {
+		return -1, err
+	}
+
+	return hs.Count(), nil
 }

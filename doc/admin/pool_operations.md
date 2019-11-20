@@ -155,9 +155,14 @@ The ACL file is expected to be a text file with one ACE listed on each line. For
 example:
 
 ```
+# Entries:
 A::OWNER@:rw
 A:G:GROUP@:rw
+# Everyone should be allowed to read
+A::EVERYONE@:r
 ```
+
+You may add comments to the ACL file by starting the line with `#`.
 
 ### Displaying a pool's ACL
 
@@ -172,7 +177,13 @@ with one ACE per line.
 
 ### Modifying a pool's ACL
 
-TODO
+To replace a pool's ACL with a new ACL:
+
+```
+$ dmg pool overwrite-acl --pool <UUID> --acl-file <path>
+```
+
+The ACL file must be in the format noted above for pool creation.
 
 ## Pool Query
 The pool query operation retrieves information (i.e., the number of targets,

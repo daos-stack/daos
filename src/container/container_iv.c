@@ -326,11 +326,13 @@ cont_iv_capa_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			d_sg_list_t *src, void **priv)
 {
 	struct cont_iv_key	*civ_key = key2priv(key);
-	struct cont_iv_entry	*civ_ent = src->sg_iovs[0].iov_buf;
+	struct cont_iv_entry	*civ_ent;
 	int rc;
 
-	D_ASSERT(civ_ent != NULL);
+	if (src == NULL) /* invalidate */
+		return 0;
 
+	civ_ent = src->sg_iovs[0].iov_buf;
 	/* open the container locally */
 	rc = ds_cont_tgt_open(entry->ns->iv_pool_uuid,
 			      civ_key->cont_uuid, civ_ent->cont_uuid,
@@ -364,12 +366,18 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			return rc;
 	}
 
-	/* Put it to IV tree */
 	memcpy(&root_hdl, entry->iv_value.sg_iovs[0].iov_buf, sizeof(root_hdl));
 	d_iov_set(&key_iov, civ_key, sizeof(*civ_key));
-	d_iov_set(&val_iov, src->sg_iovs[0].iov_buf,
-		     src->sg_iovs[0].iov_len);
-	rc = dbtree_update(root_hdl, &key_iov, &val_iov);
+	if (src == NULL) {
+		/* Delete the entry for invalidate */
+		rc = dbtree_delete(root_hdl, BTR_PROBE_EQ, &key_iov, NULL);
+	} else {
+		/* Put it to IV tree */
+		d_iov_set(&val_iov, src->sg_iovs[0].iov_buf,
+			     src->sg_iovs[0].iov_len);
+		rc = dbtree_update(root_hdl, &key_iov, &val_iov);
+	}
+
 	if (rc < 0)
 		D_ERROR("failed to insert: rc %d\n", rc);
 
@@ -615,10 +623,10 @@ cont_iv_capa_fetch(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 	int			*status;
 	int			rc;
 
-	if (!DAOS_FAIL_CHECK(DAOS_FORCE_CAPA_FETCH)) {
-		*cont_hdl = ds_cont_hdl_lookup(cont_hdl_uuid);
-		if (*cont_hdl != NULL)
-			return 0;
+	*cont_hdl = ds_cont_hdl_lookup(cont_hdl_uuid);
+	if (*cont_hdl != NULL && !DAOS_FAIL_CHECK(DAOS_FORCE_CAPA_FETCH)) {
+		D_DEBUG(DB_TRACE, "get hdl %p\n", cont_hdl);
+		return 0;
 	}
 
 	D_DEBUG(DB_TRACE, "Can not find "DF_UUID" hdl\n",
@@ -680,6 +688,25 @@ cont_iv_capability_update(void *ns, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	rc = cont_iv_update(ns, IV_CONT_CAPA, cont_hdl_uuid, &iv_entry,
 			    sizeof(struct cont_iv_entry),
 			    CRT_IV_SHORTCUT_TO_ROOT, CRT_IV_SYNC_EAGER);
+	return rc;
+}
+
+int
+cont_iv_capability_invalidate(void *ns, uuid_t cont_hdl_uuid)
+{
+	struct ds_iv_key	key = { 0 };
+	struct cont_iv_key	*civ_key;
+	int			rc;
+
+	civ_key = key2priv(&key);
+	uuid_copy(civ_key->cont_uuid, cont_hdl_uuid);
+	civ_key->class_id = IV_CONT_CAPA;
+
+	key.class_id = IV_CONT_CAPA;
+	rc = ds_iv_invalidate(ns, &key, 0, CRT_IV_SYNC_NONE, 0);
+	if (rc)
+		D_ERROR("iv invalidate failed %d\n", rc);
+
 	return rc;
 }
 

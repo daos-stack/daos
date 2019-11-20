@@ -29,9 +29,8 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
-	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	types "github.com/daos-stack/daos/src/control/common/storage"
+	pb_types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -54,7 +53,7 @@ func newState(log logging.Logger, status ctlpb.ResponseStatus, errMsg string, in
 	return state
 }
 
-func modulesToPB(mms []storage.ScmModule) (pbMms types.ScmModules) {
+func scmModulesToPB(mms []storage.ScmModule) (pbMms pb_types.ScmModules) {
 	for _, c := range mms {
 		pbMms = append(
 			pbMms,
@@ -72,7 +71,7 @@ func modulesToPB(mms []storage.ScmModule) (pbMms types.ScmModules) {
 	return
 }
 
-func namespacesToPB(nss []storage.ScmNamespace) (pbNss types.PmemDevices) {
+func scmNamespacesToPB(nss []storage.ScmNamespace) (pbNss pb_types.ScmNamespaces) {
 	for _, ns := range nss {
 		pbNss = append(pbNss,
 			&ctlpb.PmemDevice{
@@ -80,6 +79,7 @@ func namespacesToPB(nss []storage.ScmNamespace) (pbNss types.PmemDevices) {
 				Blockdev: ns.BlockDevice,
 				Dev:      ns.Name,
 				Numanode: ns.NumaNode,
+				Size:     ns.Size,
 			})
 	}
 
@@ -128,7 +128,7 @@ func (c *StorageControlService) doScmPrepare(pbReq *ctlpb.PrepareScmReq) (pbResp
 	}
 
 	pbResp.State = newState(c.log, ctlpb.ResponseStatus_CTL_SUCCESS, "", info, msg)
-	pbResp.Pmems = namespacesToPB(resp.Namespaces)
+	pbResp.Pmems = scmNamespacesToPB(resp.Namespaces)
 
 	return
 }
@@ -182,9 +182,9 @@ func (c *StorageControlService) StorageScan(ctx context.Context, req *ctlpb.Stor
 			State: newState(c.log, ctlpb.ResponseStatus_CTL_SUCCESS, "", "", msg),
 		}
 		if len(result.Namespaces) > 0 {
-			resp.Scm.Pmems = namespacesToPB(result.Namespaces)
+			resp.Scm.Pmems = scmNamespacesToPB(result.Namespaces)
 		} else {
-			resp.Scm.Modules = modulesToPB(result.Modules)
+			resp.Scm.Modules = scmModulesToPB(result.Modules)
 		}
 	}
 
@@ -229,7 +229,7 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 	needsSuperblock := true
 	needsScmFormat := reformat
 	// placeholder result indicating NVMe not yet formatted
-	resp.Crets = types.NvmeControllerResults{
+	resp.Crets = pb_types.NvmeControllerResults{
 		newCret(c.log, "format", "", ctlpb.ResponseStatus_CTL_ERR_NVME, msgBdevScmNotReady, ""),
 	}
 
@@ -257,7 +257,7 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 
 	// When SCM format is required, format and populate response with result.
 	if needsScmFormat {
-		results := types.ScmMountResults{}
+		results := pb_types.ScmMountResults{}
 		result, err := c.scmFormat(scmConfig, true)
 		if err != nil {
 			return errors.Wrap(err, "scm format") // return unexpected errors
@@ -278,7 +278,7 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 		}
 	}
 
-	results := types.NvmeControllerResults{} // init actual NVMe format results
+	results := pb_types.NvmeControllerResults{} // init actual NVMe format results
 
 	// If no superblock exists, populate NVMe response with format results.
 	if needsSuperblock {
@@ -305,7 +305,7 @@ func (c *ControlService) doFormat(i *IOServerInstance, reformat bool, resp *ctlp
 	return nil
 }
 
-// Format delegates to Storage implementation's Format methods to prepare
+// StorageFormat delegates to Storage implementation's Format methods to prepare
 // storage for use by DAOS data plane.
 //
 // Errors returned will stop other servers from formatting, non-fatal errors
@@ -338,145 +338,3 @@ func (c *ControlService) StorageFormat(req *ctlpb.StorageFormatReq, stream ctlpb
 
 	return nil
 }
-
-// Update is currently a placeholder method stubbing SCM module fw update.
-func (c *ControlService) ScmUpdate(cfg storage.ScmConfig, req *ctlpb.UpdateScmReq, results *(types.ScmModuleResults)) {
-	// respond with single result indicating no implementation
-	*results = append(
-		*results,
-		&ctlpb.ScmModuleResult{
-			Loc: &ctlpb.ScmModule_Location{},
-			State: newState(c.log, ctlpb.ResponseStatus_CTL_NO_IMPL,
-				scm.MsgScmUpdateNotImpl, "", "scm module update"),
-		})
-}
-
-// TODO: implement gRPC fw update feature in scm subsystem
-// Update delegates to Storage implementation's fw update methods to prepare
-// storage for use by DAOS data plane.
-//
-// Send response containing multiple results of update operations on scm mounts
-// and nvme controllers.
-func (c *ControlService) StorageUpdate(req *ctlpb.StorageUpdateReq, stream ctlpb.MgmtCtl_StorageUpdateServer) error {
-	resp := new(ctlpb.StorageUpdateResp)
-
-	c.log.Debug("received StorageUpdate RPC; proceeding to instance storage update")
-
-	// TODO: We may want to ease this restriction at some point, but having this
-	// here for now should help to cut down on shenanigans which might result
-	// in data loss.
-	if c.harness.IsStarted() {
-		return errors.New("cannot update storage with running I/O server instances")
-	}
-
-	// temporary scaffolding
-	for _, i := range c.harness.Instances() {
-		stCfg := i.runner.GetConfig().Storage
-		ctrlrResults := types.NvmeControllerResults{}
-		c.nvme.Update(stCfg.Bdev, req.Nvme, &ctrlrResults)
-		resp.Crets = ctrlrResults
-
-		moduleResults := types.ScmModuleResults{}
-		c.ScmUpdate(stCfg.SCM, req.Scm, &moduleResults)
-		resp.Mrets = moduleResults
-	}
-
-	if err := stream.Send(resp); err != nil {
-		return errors.WithMessagef(err, "sending response (%+v)", resp)
-	}
-
-	return nil
-}
-
-// TODO: implement gRPC burn-in feature in nvme and scm subsystems
-// Burnin delegates to Storage implementation's Burnin methods to prepare
-// storage for use by DAOS data plane.
-//
-// Send response containing multiple results of burn-in operations on scm mounts
-// and nvme controllers.
-func (c *ControlService) StorageBurnIn(req *ctlpb.StorageBurnInReq, stream ctlpb.MgmtCtl_StorageBurnInServer) error {
-
-	c.log.Debug("received StorageBurnIn RPC; proceeding to instance storage burnin")
-
-	return errors.New("StorageBurnIn not implemented")
-	//	for i := range c.config.Servers {
-	//		c.nvme.BurnIn(i, req.Nvme, resp)
-	//		c.scm.BurnIn(i, req.Scm, resp)
-	//	}
-
-	//	if err := stream.Send(resp); err != nil {
-	//		return errors.WithMessagef(err, "sending response (%+v)", resp)
-	//	}
-
-	//	return nil
-}
-
-// FetchFioConfigPaths retrieves any configuration files in fio_plugin directory
-func (c *ControlService) FetchFioConfigPaths(
-	empty *ctlpb.EmptyReq, stream ctlpb.MgmtCtl_FetchFioConfigPathsServer) error {
-
-	pluginDir, err := common.GetAbsInstallPath(spdkFioPluginDir)
-	if err != nil {
-		return err
-	}
-
-	paths, err := common.GetFilePaths(pluginDir, "fio")
-	if err != nil {
-		return err
-	}
-
-	for _, path := range paths {
-		if err := stream.Send(&ctlpb.FilePath{Path: path}); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// TODO: to be used during the limitation of burnin feature
-//// BurnInNvme runs burn-in validation on NVMe Namespace and returns cmd output
-//// in a stream to the gRPC consumer.
-//func (c *controlService) BurnInNvme(
-//	req *ctlpb.BurnInNvmeReq, stream ctlpb.MgmtCtl_BurnInNvmeServer) error {
-//	// retrieve command components
-//	cmdName, args, env, err := c.nvme.BurnIn(
-//		req.GetPciaddr(),
-//		// hardcode first Namespace on controller for the moment
-//		1,
-//		req.Path.Path)
-//	if err != nil {
-//		return err
-//	}
-//	// construct command executer and init env/reader
-//	cmd := exec.Command(cmdName, args...)
-//	cmd.Env = os.Environ()
-//	cmd.Env = append(cmd.Env, env)
-//	var stderr bytes.Buffer
-//	cmd.Stderr = &stderr
-//	cmdReader, err := cmd.StdoutPipe()
-//	if err != nil {
-//		return errors.Errorf("Error creating StdoutPipe for Cmd %v", err)
-//	}
-//	// run text scanner as goroutine
-//	scanner := bufio.NewScanner(cmdReader)
-//	go func() {
-//		for scanner.Scan() {
-//			stream.Send(&ctlpb.BurnInNvmeReport{Report: scanner.Text()})
-//		}
-//	}()
-//	// start command and wait for finish
-//	err = cmd.Start()
-//	if err != nil {
-//		return errors.Errorf(
-//			"Error starting Cmd: %s, Args: %v, Env: %s (%v)",
-//			cmdName, args, env, err)
-//	}
-//	err = cmd.Wait()
-//	if err != nil {
-//		return errors.Errorf(
-//			"Error waiting for completion of Cmd: %s, Args: %v, Env: %s (%v, %q)",
-//			cmdName, args, env, err, stderr.String())
-//	}
-//	return nil
-//}
