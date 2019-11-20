@@ -426,7 +426,7 @@ class ServerManager(ExecutableCommand):
         # Prepare nvme storage in servers
         if self.runner.job.yaml_params.is_nvme():
             self.log.info("Performing nvme storage prepare in <format> mode")
-            storage_prepare(self._hosts, "root")
+            storage_prepare(self._hosts, "root", "nvme")
             self.runner.mca.value = {"plm_rsh_args": "-l root"}
 
             # Make sure log file has been created for ownership change
@@ -525,32 +525,49 @@ class ServerManager(ExecutableCommand):
         pcmd(self._hosts, "; ".join(clean_cmds), False)
 
 
-def storage_prepare(hosts, user):
+def storage_prepare(hosts, user, device_type):
     """
     Prepare the storage on servers using the DAOS server's yaml settings file.
     Args:
         hosts (str): a string of comma-separated host names
+	user : Username
+	device_type = scm or nvme
     Raises:
         ServerFailed: if server failed to prepare storage
     """
-    daos_srv_bin = get_file_path("bin/daos_server")
-    cmd = ("sudo {} storage prepare -n -u \"{}\" --hugepages=4096 -f"
-           .format(daos_srv_bin[0], user))
+    device_args = ""
+    # Get the daos_server from the install path. Useful for testing
+    # with daos built binaries.
+    daos_srv_bin = get_file_path("bin/daos_server","install")
+    if device_type == "nvme":
+            dev_param = "-n"
+	    device_args = " --hugepages=4096"
+    elif device_type == "dcpm":
+            dev_param = "-s"
+    else:
+         raise ServerFailed("Invalid device type")
+    cmd = ("sudo {} storage prepare {} -u \"{}\" {} -f"
+           .format(daos_srv_bin[0], dev_param, user, dev_args))
     result = pcmd(hosts, cmd, timeout=120)
     if len(result) > 1 or 0 not in result:
         raise ServerFailed("Error preparing NVMe storage")
 
 
-def storage_reset(hosts):
+def storage_reset(hosts, device_type):
     """
     Reset the Storage on servers using the DAOS server's yaml settings file.
     Args:
         hosts (str): a string of comma-separated host names
+	device_type : nvme or scm
     Raises:
         ServerFailed: if server failed to reset storage
     """
-    daos_srv_bin = get_file_path("bin/daos_server")
-    cmd = "sudo {} storage prepare -n --reset -f".format(daos_srv_bin[0])
+    if device_type == "nvme":
+       dev_param = "-n"
+    else:
+       dev_param = "-s"
+    daos_srv_bin = get_file_path("bin/daos_server", "install")
+    cmd = "sudo {} storage prepare {} --reset -f".format(daos_srv_bin[0], dev_param)
     result = pcmd(hosts, cmd)
     if len(result) > 1 or 0 not in result:
         raise ServerFailed("Error resetting NVMe storage")
