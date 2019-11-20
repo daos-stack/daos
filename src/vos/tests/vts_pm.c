@@ -881,7 +881,7 @@ object_punch_and_fetch(void **state)
 		d_iov_set(&sgl.sg_iovs[0], (void *)buf, sizeof(buf));
 
 		rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, epoch++, &dkey, 1,
-				   &iod, &sgl);
+				   NULL, &iod, &sgl);
 		assert_int_equal(rc, 0);
 		assert_int_equal(iod.iod_size, 0);
 	}

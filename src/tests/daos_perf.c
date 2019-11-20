@@ -131,10 +131,10 @@ vos_update_or_fetch(enum ts_op_type op_type, struct dts_io_credit *cred,
 
 		if (op_type == TS_DO_FETCH) {
 			memcpy(cred->tc_sgl.sg_iovs[0].iov_buf,
-			       bsgl->bs_iovs[0].bi_buf,
-			       bsgl->bs_iovs[0].bi_data_len);
+			       bio_iov2raw_buf(&bsgl->bs_iovs[0]),
+			       bio_iov2raw_len(&bsgl->bs_iovs[0]));
 		} else {
-			memcpy(bsgl->bs_iovs[0].bi_buf,
+			memcpy(bio_iov2raw_buf(&bsgl->bs_iovs[0]),
 			       cred->tc_sgl.sg_iovs[0].iov_buf,
 			       cred->tc_sgl.sg_iovs[0].iov_len);
 		}

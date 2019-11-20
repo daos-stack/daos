@@ -562,7 +562,7 @@ calc_csum(struct daos_csummer *obj, d_sg_list_t *sgl,
 			daos_csummer_set_buffer(obj, buf, csums->cs_len);
 			daos_csummer_reset(obj);
 
-			bytes_for_csum = chunk.dcc_nr * rec_len;
+			bytes_for_csum = chunk.dcr_nr * rec_len;
 			rc = daos_sgl_processor(sgl, &idx, bytes_for_csum,
 						checksum_sgl_cb, obj);
 			if (rc)
@@ -750,10 +750,10 @@ csum_recidx2range(size_t chunksize, daos_off_t record_idx, size_t lo_boundary,
 	lo = csum_chunk_align_floor(record_idx, chunksize);
 	hi = csum_chunk_align_ceiling(record_idx, chunksize);
 
-	result.dcc_lo = max(lo, lo_boundary);
-	result.dcc_hi = min(hi, hi_boundary);
+	result.dcr_lo = max(lo, lo_boundary);
+	result.dcr_hi = min(hi, hi_boundary);
 
-	result.dcc_nr = result.dcc_hi - result.dcc_lo + 1;
+	result.dcr_nr = result.dcr_hi - result.dcr_lo + 1;
 
 	return result;
 }
@@ -766,6 +766,16 @@ csum_chunkidx2range(uint64_t rec_size, uint64_t chunksize, uint64_t chunk_idx,
 			      + chunk_idx * (chunksize / rec_size);
 
 	return csum_recidx2range(chunksize, record_idx, lo, hi, rec_size);
+}
+
+struct daos_csum_range
+csum_chunkrange(uint64_t chunksize, uint64_t idx)
+{
+	struct daos_csum_range	result;
+
+	dcr_set_idx_nr(&result, idx * chunksize, chunksize);
+
+	return result;
 }
 
 struct daos_csum_range
@@ -790,12 +800,12 @@ csum_align_boundaries(daos_off_t lo, daos_off_t hi,
 	lo_aligned = csum_chunk_align_floor(lo, chunksize_records);
 	hi_aligned = csum_chunk_align_ceiling(hi, chunksize_records);
 
-	result.dcc_lo = max(lo_boundary, lo_aligned);
-	result.dcc_hi = min(hi_boundary, hi_aligned);
-	overflow_gaurd = result.dcc_hi + 1;
-	if (overflow_gaurd < result.dcc_hi)
+	result.dcr_lo = max(lo_boundary, lo_aligned);
+	result.dcr_hi = min(hi_boundary, hi_aligned);
+	overflow_gaurd = result.dcr_hi + 1;
+	if (overflow_gaurd < result.dcr_hi)
 		overflow_gaurd = UINT64_MAX;
-	result.dcc_nr = overflow_gaurd - result.dcc_lo;
+	result.dcr_nr = overflow_gaurd - result.dcr_lo;
 
 	return result;
 }
@@ -846,7 +856,7 @@ csum_chunk_count(uint32_t chunk_size, uint64_t lo_idx, uint64_t hi_idx,
 		return 0;
 	chunk = csum_align_boundaries(lo_idx, hi_idx, 0, UINT64_MAX,
 				      rec_size, chunk_size);
-	daos_size_t result = chunk.dcc_nr / (chunk_size / rec_size);
+	daos_size_t result = chunk.dcr_nr / (chunk_size / rec_size);
 	return result;
 }
 

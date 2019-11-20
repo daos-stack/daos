@@ -1247,20 +1247,18 @@ csum_fault_injection_multiple_extents_tests(void **state)
 
 struct need_new_checksum_tests_args {
 	/**  bytes needed for the chunk, can be smaller than chunk size */
-	uint32_t	chunk_bytes;
 	size_t		chunksize; /** chunk size */
-	/** how much of biov has already been used */
-	daos_off_t	biov_offset;
 	/** If a new checksum calculation has already started */
 	bool		csum_started;
-	struct bio_iov	biov;
-	struct bio_iov	next_biov;
-	bool		include_next_biov;
+	bool		has_next_biov;
 	/** byte the biov starts (not known by biov, but must is
 	 * calculated based on evt_entry/biov combo. For testing,
 	 * just hard code it.
 	 */
-	daos_off_t	biov_start;
+	daos_off_t	req_start;
+	daos_off_t	req_len;
+	daos_off_t	raw_len;
+
 };
 
 #define	NEED_NEW_CHECKSUM_TESTS_TESTCASE(expected, ...) \
@@ -1271,20 +1269,22 @@ void
 need_new_checksum_tests_testcase(char *file, int line, bool expected,
 				 struct need_new_checksum_tests_args args)
 {
-	struct bio_iov	*next_biov = NULL;
 	bool		 result;
 
-	if (args.include_next_biov)
-		next_biov = &args.next_biov;
+	bool has_next = args.has_next_biov;
+	bool started = args.csum_started;
+	struct daos_csum_range chunk;
+	struct daos_csum_range req;
+	struct daos_csum_range raw;
 
-	result = vic_needs_new_csum(&args.biov,
-				    args.biov_offset, args.chunk_bytes,
-				    args.biov_start,
-				    next_biov, args.csum_started,
-				    args.chunksize);
+	dcr_set_idx_nr(&chunk, 0, args.chunksize);
+	dcr_set_idx_nr(&req, args.req_start, args.req_len);
+	dcr_set_idx_nr(&raw, args.req_start, args.raw_len);
+
+	result = vic_needs_new_csum(&raw, &req, &chunk, started, has_next);
 	if (result != expected) {
 		print_error("%s:%d expected %d but found %d\n", file, line,
-			expected, result);
+			    expected, result);
 		fail();
 	}
 }
@@ -1297,12 +1297,10 @@ need_new_checksum_tests(void **state)
 	 */
 	NEED_NEW_CHECKSUM_TESTS_TESTCASE(true, {
 		.csum_started = true,
-		.include_next_biov = false,
-		.chunk_bytes = 10,
+		.has_next_biov = false,
 		.chunksize = 10,
-		.biov = {.bi_data_len = 10, .bi_suffix_len = 0,
-			.bi_prefix_len = 0},
-		.biov_offset = 0,
+		.req_len = 10,
+		.raw_len = 10,
 	});
 
 	/**
@@ -1310,12 +1308,10 @@ need_new_checksum_tests(void **state)
 	 */
 	NEED_NEW_CHECKSUM_TESTS_TESTCASE(false, {
 		.csum_started = false,
-		.include_next_biov = false,
-		.chunk_bytes = 8,
+		.has_next_biov = false,
 		.chunksize = 8,
-		.biov = {.bi_data_len = 8, .bi_suffix_len = 0,
-			.bi_prefix_len = 0},
-		.biov_offset = 0,
+		.req_len = 8,
+		.raw_len = 8,
 	});
 
 	/**
@@ -1323,26 +1319,22 @@ need_new_checksum_tests(void **state)
 	 * checksum is not needed.
 	 */
 	NEED_NEW_CHECKSUM_TESTS_TESTCASE(false, {
-		.include_next_biov = false,
+		.has_next_biov = false,
 		.chunksize = 8,
-		.chunk_bytes = 8,
 		.csum_started = false,
-		.biov = {.bi_data_len = 20, .bi_suffix_len = 0,
-			.bi_prefix_len = 0},
-		.biov_offset = 0,
+		.req_len = 20,
+		.raw_len = 20,
 	});
 
 	/**
 	 * Extent is smaller than chunksize and is only extent in chunk
 	 */
 	NEED_NEW_CHECKSUM_TESTS_TESTCASE(false, {
-		.include_next_biov = false,
+		.has_next_biov = false,
 		.chunksize = 16,
-		.chunk_bytes = 16,
 		.csum_started = false,
-		.biov = {.bi_data_len = 6, .bi_suffix_len = 0,
-			.bi_prefix_len = 0},
-		.biov_offset = 0,
+		.req_len = 6,
+		.raw_len = 6,
 	});
 
 	/**
@@ -1350,15 +1342,12 @@ need_new_checksum_tests(void **state)
 	 * it is after the next chunk starts
 	 */
 	NEED_NEW_CHECKSUM_TESTS_TESTCASE(false, {
-		.include_next_biov = true,
-		.next_biov = {.bi_data_len = 10},
+		.has_next_biov = true,
 		.chunksize = 8,
-		.chunk_bytes = 6,
 		.csum_started = false,
-		.biov = {.bi_data_len = 6, .bi_suffix_len = 0,
-			.bi_prefix_len = 0},
-		.biov_offset = 0,
-		.biov_start = 4 /** starts so next biov is after chunk end */
+		.req_len = 6,
+		.raw_len = 6,
+		.req_start = 4 /** starts so next biov is after chunk end */
 
 	});
 
@@ -1367,15 +1356,12 @@ need_new_checksum_tests(void **state)
 	 * same chunk ... will need to calc new csum
 	 */
 	NEED_NEW_CHECKSUM_TESTS_TESTCASE(true, {
-		.include_next_biov = true,
-		.next_biov = {.bi_data_len = 10},
+		.has_next_biov = true,
 		.chunksize = 8,
-		.chunk_bytes = 8,
 		.csum_started = false,
-		.biov = {.bi_data_len = 6, .bi_suffix_len = 0,
-			.bi_prefix_len = 0},
-		.biov_offset = 0,
-		.biov_start = 4 /** starts so next biov is after chunk end */
+		.req_len = 3,
+		.raw_len = 3,
+		.req_start = 4 /** starts so next biov is after chunk end */
 	});
 
 	/**
@@ -1383,27 +1369,23 @@ need_new_checksum_tests(void **state)
 	 * chunk), but still smaller than chunk.
 	 */
 	NEED_NEW_CHECKSUM_TESTS_TESTCASE(true, {
-		.include_next_biov = false,
+		.has_next_biov = false,
 		.chunksize = 8,
-		.chunk_bytes = 6,
 		.csum_started = false,
-		.biov = {.bi_data_len = 6, .bi_suffix_len = 0,
-			.bi_prefix_len = 2},
-		.biov_offset = 0,
-		.biov_start = 1
+		.req_len = 6,
+		.raw_len = 8,
+		.req_start = 1
 	});
 	/**
 	 * Same as previous, but using biov end instead of begin
 	 */
 	NEED_NEW_CHECKSUM_TESTS_TESTCASE(true, {
-		.include_next_biov = false,
+		.has_next_biov = false,
 		.chunksize = 8,
-		.chunk_bytes = 6,
 		.csum_started = false,
-		.biov = {.bi_data_len = 6, .bi_suffix_len = 2,
-			.bi_prefix_len = 0},
-		.biov_offset = 0,
-		.biov_start = 0
+		.req_len = 6,
+		.raw_len = 8,
+		.req_start = 0
 	});
 }
 
@@ -1472,6 +1454,7 @@ test_case_create(struct vos_fetch_test_context *ctx, struct test_setup setup)
 		daos_csum_buf_t		*dcb;
 		size_t			 data_len;
 		size_t			 num_of_csum;
+		bio_addr_t		 addr = {0};
 
 		l = &setup.layout[i];
 		data = l->data;
@@ -1479,16 +1462,15 @@ test_case_create(struct vos_fetch_test_context *ctx, struct test_setup setup)
 		data_len = (l->ful.ex_hi - l->ful.ex_lo + 1) * rec_size;
 		biov = &ctx->bsgl.bs_iovs[i];
 
-		D_ALLOC(biov->bi_buf, data_len);
-		memcpy(biov->bi_buf, data, data_len);
+		bio_iov_set_extra(biov, addr, evt_extent_width(&l->sel) *
+					      rec_size,
+				  (l->sel.ex_lo - l->ful.ex_lo) *
+				  rec_size,
+				  (l->ful.ex_hi - l->sel.ex_hi) *
+				  rec_size);
 
-		biov->bi_data_len = (l->sel.ex_hi - l->sel.ex_lo + 1) *
-				    rec_size;
-		biov->bi_prefix_len = (l->sel.ex_lo - l->ful.ex_lo) *
-				      rec_size;
-		biov->bi_suffix_len = (l->ful.ex_hi - l->sel.ex_hi) *
-				      rec_size;
-		biov->bi_buf += biov->bi_prefix_len;
+		bio_iov_alloc_raw_buf(biov, data_len);
+		memcpy(bio_iov2raw_buf(biov), data, data_len);
 
 		/** Just a rough count */
 		num_of_csum = data_len / cs + 1;
@@ -1525,8 +1507,7 @@ test_case_destroy(struct vos_fetch_test_context *ctx)
 	daos_csummer_free_dcbs(ctx->csummer, &ctx->iod.iod_csums);
 
 	for (i = 0; i < ctx->nr; i++) {
-		void *bio_buf = ctx->bsgl.bs_iovs[i].bi_buf -
-				ctx->bsgl.bs_iovs[i].bi_prefix_len;
+		void *bio_buf = bio_iov2raw_buf(&ctx->bsgl.bs_iovs[i]);
 		if (bio_buf)
 			D_FREE(bio_buf);
 
@@ -1689,10 +1670,10 @@ with_unaligned_chunks_csums_new_csum_is_created(void **state)
  * though parts of the extent are.
  *
  * Should look like this:
- * Fetch extent:	5  A | B  C
- * epoch 2 extent:	   A | B  C | D  E | F  G | H  I | \0
- * epoch 1 extent:	5  6 | \0
- * index:		0  1 | 2  3 | 4  5 | 6  7 | 8  9 | 10
+ * Fetch extent:	5  A  B  C
+ * epoch 2 extent:	   A  B  C  D  E  F  G | H  I  \0
+ * epoch 1 extent:	5  6  \0
+ * index:		0  1  2  3  4  5  6  7 | 8  9  10
  */
 static void
 with_extent_larger_than_request(void **state)
@@ -1714,7 +1695,7 @@ with_extent_larger_than_request(void **state)
 			{.data = "56",
 				.sel = {0, 0}, .ful = {0, 2} },
 			{.data = "ABCDEFGHI",
-				.sel = {1, 3}, .ful = {0, 9} },
+				.sel = {1, 3}, .ful = {1, 10} },
 			{.data = NULL}
 		}
 	});
@@ -1723,7 +1704,7 @@ with_extent_larger_than_request(void **state)
 	ASSERT_SUCCESS(vos_fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
-	FAKE_UPDATE_SAW("5|BCD|56\0|ABCDEFGH|");
+	FAKE_UPDATE_SAW("5|ABC|56\0|ABCDEFG|");
 	assert_int_equal(4, fake_update_called);
 	assert_int_equal(2, fake_compare_called);
 
@@ -1854,9 +1835,49 @@ more_partial_extent_tests(void **state)
 static void
 test_larger_records(void **state)
 {
-	struct vos_fetch_test_context ctx;
-	char large_data01[1024 * 16];
-	char large_data02[1024 * 16] = "";
+	struct vos_fetch_test_context	ctx;
+	const int			buf_len = 1024;
+	char				large_data01[buf_len];
+	char				large_data02[buf_len];
+	int				i;
+
+	for (i = 0; i < buf_len; i++) {
+		large_data01[i] = 'A' + i % ('Z' + 1 - 'A');
+		large_data02[i] = 'a' + i % ('z' + 1 - 'a');
+	}
+
+	TEST_CASE_CREATE(&ctx, {
+		.request_idx = 0,
+		.request_len = 8,
+		.chunksize = 12,
+		.rec_size = 4,
+		.layout = {
+			{.data = large_data02,
+				.sel = {0, 3}, .ful = {0, 3} },
+			{.data = large_data01,
+				.sel = {4, 7}, .ful = {4, 7} },
+			{.data = NULL}
+		}
+	});
+
+	/** Act */
+	ASSERT_SUCCESS(vos_fetch_csum_verify_bsgl_with_args(&ctx));
+
+	/** Verify */
+	/** 1 record from 1st extent (mnop) and 2 records from 2nd extent
+	 * (ABCDEFGH)
+	 */
+	FAKE_UPDATE_SAW("mnop|ABCDEFGH|mnop|ABCDEFGH|");
+
+	/** clean up */
+	test_case_destroy(&ctx);
+}
+static void
+test_larger_records2(void **state)
+{
+	struct vos_fetch_test_context	ctx;
+	char				large_data01[1024 * 16];
+	char				large_data02[1024 * 16] = "";
 
 	memset(large_data01, 'A', 1024 * 16);
 	memset(large_data02, 'B', 1024 * 16);
@@ -1935,6 +1956,8 @@ static const struct CMUnitTest tests[] = {
 		more_partial_extent_tests, setup, teardown},
 	{ "VOS_CSUM_FETCH08: Fetch with larger records",
 		test_larger_records, setup, teardown},
+	{ "VOS_CSUM_FETCH09: Fetch with larger records",
+		test_larger_records2, setup, teardown},
 
 	{ "VOS_CSUM_100: Determine if need new checksum",
 		need_new_checksum_tests, setup, teardown},

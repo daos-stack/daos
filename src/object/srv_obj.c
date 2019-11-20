@@ -466,7 +466,8 @@ obj_set_reply_nrs(crt_rpc_t *rpc, daos_handle_t ioh, d_sg_list_t *sgls)
 			nrs[i] = bsgl->bs_nr_out;
 			/* tail holes trimmed by ioc_trim_tail_holes() */
 			for (j = 0; j < bsgl->bs_nr_out; j++)
-				data_sizes[i] += bsgl->bs_iovs[j].bi_data_len;
+				data_sizes[i] += bio_iov2req_len(
+					&bsgl->bs_iovs[j]);
 		}
 	}
 

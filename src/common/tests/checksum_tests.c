@@ -878,8 +878,8 @@ daos_recx_get_chunk_testcase(char *filename, int line,
 
 	chunk = csum_recx_chunkidx2range(&args.recx, args.rb, args.cs, idx);
 
-	uint64_t result_start = chunk.dcc_lo;
-	uint64_t result_len = chunk.dcc_nr;
+	uint64_t result_start = chunk.dcr_lo;
+	uint64_t result_len = chunk.dcr_nr;
 
 	if (expected_start != result_start)
 		fail_msg("(%s:%d) Expected start %lu but found %lu. ",
@@ -961,9 +961,9 @@ test_align_boundaries(void **state)
 		7 /** hi boundary */,
 		1 /** rec size */,
 		8 /** chunk size */);
-	assert_int_equal(0, result.dcc_lo);
-	assert_int_equal(7, result.dcc_hi);
-	assert_int_equal(8, result.dcc_nr);
+	assert_int_equal(0, result.dcr_lo);
+	assert_int_equal(7, result.dcr_hi);
+	assert_int_equal(8, result.dcr_nr);
 
 	result = csum_align_boundaries(
 		1, /** lo */
@@ -972,8 +972,8 @@ test_align_boundaries(void **state)
 		7 /** hi boundary */,
 		1 /** rec size */,
 		8 /** chunk size */);
-	assert_int_equal(0, result.dcc_lo);
-	assert_int_equal(7, result.dcc_hi);
+	assert_int_equal(0, result.dcr_lo);
+	assert_int_equal(7, result.dcr_hi);
 
 	result = csum_align_boundaries(
 		1, /** lo */
@@ -982,8 +982,8 @@ test_align_boundaries(void **state)
 		7 /** hi boundary */,
 		1 /** rec size */,
 		8 /** chunk size */);
-	assert_int_equal(0, result.dcc_lo);
-	assert_int_equal(7, result.dcc_hi);
+	assert_int_equal(0, result.dcr_lo);
+	assert_int_equal(7, result.dcr_hi);
 
 	result = csum_align_boundaries(
 		1, /** lo */
@@ -992,8 +992,8 @@ test_align_boundaries(void **state)
 		8 /** hi boundary */,
 		1 /** rec size */,
 		8 /** chunk size */);
-	assert_int_equal(0, result.dcc_lo);
-	assert_int_equal(7, result.dcc_hi);
+	assert_int_equal(0, result.dcr_lo);
+	assert_int_equal(7, result.dcr_hi);
 
 	result = csum_align_boundaries(
 		1, /** lo */
@@ -1002,8 +1002,8 @@ test_align_boundaries(void **state)
 		10 /** hi boundary */,
 		1 /** rec size */,
 		8 /** chunk size */);
-	assert_int_equal(0, result.dcc_lo);
-	assert_int_equal(10, result.dcc_hi);
+	assert_int_equal(0, result.dcr_lo);
+	assert_int_equal(10, result.dcr_hi);
 
 	result = csum_align_boundaries(
 		16, /** lo */
@@ -1012,8 +1012,8 @@ test_align_boundaries(void **state)
 		100 /** hi boundary */,
 		2 /** rec size */,
 		8 /** chunk size */);
-	assert_int_equal(16, result.dcc_lo);
-	assert_int_equal(99, result.dcc_hi);
+	assert_int_equal(16, result.dcr_lo);
+	assert_int_equal(99, result.dcr_hi);
 
 	result = csum_align_boundaries(
 		UINT64_MAX, /** lo */
@@ -1022,9 +1022,9 @@ test_align_boundaries(void **state)
 		UINT64_MAX /** hi boundary */,
 		8 /** rec size */,
 		1024 * 32 /** chunk size */);
-	assert_int_equal(UINT64_MAX - 0xFFF, result.dcc_lo);
-	assert_int_equal(UINT64_MAX, result.dcc_hi);
-	assert_int_equal(1024 * 4 - 1, result.dcc_nr);
+	assert_int_equal(UINT64_MAX - 0xFFF, result.dcr_lo);
+	assert_int_equal(UINT64_MAX, result.dcr_hi);
+	assert_int_equal(1024 * 4 - 1, result.dcr_nr);
 
 	/** result is 0 if lo/hi is outside of boundary */
 	result = csum_align_boundaries(
@@ -1034,9 +1034,9 @@ test_align_boundaries(void **state)
 		100 /** hi boundary */,
 		1 /** rec size */,
 		8 /** chunk size */);
-	assert_int_equal(0, result.dcc_lo);
-	assert_int_equal(0, result.dcc_hi);
-	assert_int_equal(0, result.dcc_nr);
+	assert_int_equal(0, result.dcr_lo);
+	assert_int_equal(0, result.dcr_hi);
+	assert_int_equal(0, result.dcr_nr);
 	result = csum_align_boundaries(
 		10, /** lo */
 		1000 /** hi */,
@@ -1044,9 +1044,9 @@ test_align_boundaries(void **state)
 		100 /** hi boundary */,
 		1 /** rec size */,
 		8 /** chunk size */);
-	assert_int_equal(0, result.dcc_lo);
-	assert_int_equal(0, result.dcc_hi);
-	assert_int_equal(0, result.dcc_nr);
+	assert_int_equal(0, result.dcr_lo);
+	assert_int_equal(0, result.dcr_hi);
+	assert_int_equal(0, result.dcr_nr);
 }
 
 static void
@@ -1060,9 +1060,9 @@ test_align_to_chunk(void **state)
 		0 /** lo boundary */,
 		8 /** hi boundary */,
 		1 /** rec size */);
-	assert_int_equal(0, result.dcc_lo);
-	assert_int_equal(7, result.dcc_hi);
-	assert_int_equal(8, result.dcc_nr);
+	assert_int_equal(0, result.dcr_lo);
+	assert_int_equal(7, result.dcr_hi);
+	assert_int_equal(8, result.dcr_nr);
 
 	result = csum_recidx2range(
 		8 /** chunksize */,
@@ -1070,8 +1070,8 @@ test_align_to_chunk(void **state)
 		0 /** lo boundary */,
 		8 /** hi boundary */,
 		1 /** rec size */);
-	assert_int_equal(0, result.dcc_lo);
-	assert_int_equal(7, result.dcc_hi);
+	assert_int_equal(0, result.dcr_lo);
+	assert_int_equal(7, result.dcr_hi);
 
 	result = csum_recidx2range(
 		8 /** chunksize */,
@@ -1079,8 +1079,8 @@ test_align_to_chunk(void **state)
 		0 /** lo boundary */,
 		8 /** hi boundary */,
 		1 /** rec size */);
-	assert_int_equal(0, result.dcc_lo);
-	assert_int_equal(7, result.dcc_hi);
+	assert_int_equal(0, result.dcr_lo);
+	assert_int_equal(7, result.dcr_hi);
 
 	result = csum_recidx2range(
 		8 /** chunksize */,
@@ -1088,8 +1088,8 @@ test_align_to_chunk(void **state)
 		0 /** lo boundary */,
 		8 /** hi boundary */,
 		1 /** rec size */);
-	assert_int_equal(8, result.dcc_lo);
-	assert_int_equal(8, result.dcc_hi);
+	assert_int_equal(8, result.dcr_lo);
+	assert_int_equal(8, result.dcr_hi);
 
 	result = csum_recidx2range(
 		8 /** chunksize */,
@@ -1097,8 +1097,8 @@ test_align_to_chunk(void **state)
 		0 /** lo boundary */,
 		8 /** hi boundary */,
 		1 /** rec size */);
-	assert_int_equal(8, result.dcc_lo);
-	assert_int_equal(8, result.dcc_hi);
+	assert_int_equal(8, result.dcr_lo);
+	assert_int_equal(8, result.dcr_hi);
 
 	result = csum_recidx2range(
 		1024 * 32 /** chunksize */,
@@ -1106,9 +1106,9 @@ test_align_to_chunk(void **state)
 		0 /** lo boundary */,
 		UINT64_MAX /** hi boundary */,
 		8 /** rec size */);
-	assert_int_equal(UINT64_MAX - 0xFFF, result.dcc_lo);
-	assert_int_equal(UINT64_MAX, result.dcc_hi);
-	assert_int_equal(1024 * 4, result.dcc_nr);
+	assert_int_equal(UINT64_MAX - 0xFFF, result.dcr_lo);
+	assert_int_equal(UINT64_MAX, result.dcr_hi);
+	assert_int_equal(1024 * 4, result.dcr_nr);
 }
 
 /**

@@ -376,7 +376,7 @@ static inline void
 biov_set_hole(struct bio_iov *biov, ssize_t len)
 {
 	memset(biov, 0, sizeof(*biov));
-	biov->bi_data_len = len;
+	bio_iov_set_len(biov, len);
 	bio_addr_set_hole(&biov->bi_addr, 1);
 }
 
@@ -447,8 +447,7 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 			rsize = ent_array.ea_inob;
 		D_ASSERT(rsize == ent_array.ea_inob);
 
-		biov.bi_data_len = nr * ent_array.ea_inob;
-		biov.bi_addr = ent->en_addr;
+		bio_iov_set(&biov, ent->en_addr, nr * ent_array.ea_inob);
 
 		rc = bsgl_dcb_resize(ioc);
 		if (rc != 0)
@@ -1069,7 +1068,7 @@ iod_reserve(struct vos_io_context *ioc, struct bio_iov *biov)
 
 	D_DEBUG(DB_IO, "media %hu offset "DF_U64" size %zd\n",
 		biov->bi_addr.ba_type, biov->bi_addr.ba_off,
-		biov->bi_data_len);
+		bio_iov2len(biov));
 	return 0;
 }
 
@@ -1132,7 +1131,7 @@ vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
 	}
 done:
 	bio_addr_set(&biov.bi_addr, media, off);
-	biov.bi_data_len = size;
+	bio_iov_set_len(&biov, size);
 	rc = iod_reserve(ioc, &biov);
 
 	return rc;
@@ -1167,7 +1166,7 @@ vos_reserve_recx(struct vos_io_context *ioc, uint16_t media, daos_size_t size)
 	}
 done:
 	bio_addr_set(&biov.bi_addr, media, off);
-	biov.bi_data_len = size;
+	bio_iov_set_len(&biov, size);
 	rc = iod_reserve(ioc, &biov);
 
 	return rc;

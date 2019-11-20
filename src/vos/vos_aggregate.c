@@ -790,9 +790,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 
 		mark_yield(&addr_src, acts);
 		D_ASSERT(biov_idx < bsgl.bs_nr);
-		bsgl.bs_iovs[biov_idx].bi_buf = NULL;
-		bsgl.bs_iovs[biov_idx].bi_addr = addr_src;
-		bsgl.bs_iovs[biov_idx].bi_data_len = copy_size;
+		bio_iov_set(&bsgl.bs_iovs[biov_idx], addr_src, copy_size);
 		biov_idx++;
 
 		D_ASSERT(iov.iov_buf_len >= copy_size);

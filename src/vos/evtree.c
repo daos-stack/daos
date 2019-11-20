@@ -3078,8 +3078,8 @@ evt_entry_align_to_csum_chunk(struct evt_entry *entry, daos_off_t record_size)
 		entry->en_ext.ex_lo, entry->en_ext.ex_hi,
 		record_size, entry->en_csum.cs_chunksize);
 
-	result.ex_hi = chunk.dcc_hi;
-	result.ex_lo = chunk.dcc_lo;
+	result.ex_hi = chunk.dcr_hi;
+	result.ex_lo = chunk.dcr_lo;
 
 	return result;
 }

@@ -398,10 +398,26 @@ csum_chunk_align_ceiling(daos_off_t off, size_t chunksize);
 /** Represents a chunk, extent, or some calculated alignment for a range
  */
 struct daos_csum_range {
-	daos_off_t	dcc_lo; /** idx to first record in chunk */
-	daos_off_t	dcc_hi; /** idx to last record in chunk */
-	daos_size_t	dcc_nr; /** num of records in chunk  */
+	daos_off_t	dcr_lo; /** idx to first record in chunk */
+	daos_off_t	dcr_hi; /** idx to last record in chunk */
+	daos_size_t	dcr_nr; /** num of records in chunk  */
 };
+
+static inline void
+dcr_set_idxs(struct daos_csum_range *range, daos_off_t lo, daos_off_t hi)
+{
+	range->dcr_lo = lo;
+	range->dcr_hi = hi;
+	range->dcr_nr = hi - lo + 1;
+}
+
+static inline void
+dcr_set_idx_nr(struct daos_csum_range *range, daos_off_t lo, size_t nr)
+{
+	range->dcr_lo = lo;
+	range->dcr_nr = nr;
+	range->dcr_hi = lo + nr - 1;
+}
 
 /**
  * Given a recx, get chunk boundaries for a chunk index not exceeding the
@@ -426,6 +442,9 @@ csum_recidx2range(size_t chunksize, daos_off_t record_idx, size_t lo_boundary,
 struct daos_csum_range
 csum_chunkidx2range(uint64_t rec_size, uint64_t chunksize, uint64_t chunk_idx,
 		    uint64_t lo, uint64_t hi);
+
+struct daos_csum_range
+csum_chunkrange(uint64_t chunksize, uint64_t idx);
 
 /**
  * will grow the selected range to align to chunk boundaries, not exceeding

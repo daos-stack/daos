@@ -58,6 +58,7 @@ struct bio_iov {
 	/* Data length in bytes */
 	size_t		 bi_data_len;
 	bio_addr_t	 bi_addr;
+
 	/** can be used to fetch more than actual address. Useful if more
 	 * data is needed for processing (like checksums) than requested.
 	 * Prefix and suffix are needed because 'extra' needed data might
@@ -135,28 +136,106 @@ bio_addr_set_hole(bio_addr_t *addr, uint16_t hole)
 	addr->ba_hole = hole;
 }
 
+static inline void
+bio_iov_set(struct bio_iov *biov, bio_addr_t addr, uint64_t data_len)
+{
+	biov->bi_addr = addr;
+	biov->bi_data_len = data_len;
+	biov->bi_buf = NULL;
+	biov->bi_prefix_len = 0;
+	biov->bi_suffix_len = 0;
+}
+
+static inline void
+bio_iov_set_extra(struct bio_iov *biov, bio_addr_t addr, uint64_t data_len,
+	uint64_t prefix_len, uint64_t suffix_len)
+{
+	biov->bi_addr = addr;
+	biov->bi_buf = NULL;
+	biov->bi_data_len = data_len;
+	biov->bi_prefix_len = prefix_len;
+	biov->bi_suffix_len = suffix_len;
+}
+
 static inline uint64_t
 bio_iov2off(struct bio_iov *biov)
 {
+	D_ASSERT(biov->bi_prefix_len == 0 && biov->bi_suffix_len == 0);
 	return biov->bi_addr.ba_off;
-}
-
-static inline uint64_t
-bio_iov2extraoff(struct bio_iov *biov)
-{
-	return biov->bi_addr.ba_off - biov->bi_prefix_len;
-}
-
-static inline uint64_t
-bio_iov2extralen(struct bio_iov *biov)
-{
-	return biov->bi_data_len + biov->bi_prefix_len + biov->bi_suffix_len;
 }
 
 static inline uint64_t
 bio_iov2len(struct bio_iov *biov)
 {
+	D_ASSERT(biov->bi_prefix_len == 0 && biov->bi_suffix_len == 0);
+	return biov->bi_data_len;
+}
+
+static inline void
+bio_iov_set_len(struct bio_iov *biov, uint64_t len)
+{
+	biov->bi_data_len = len;
+}
+
+static inline void *
+bio_iov2buf(struct bio_iov *biov)
+{
+	D_ASSERT(biov->bi_prefix_len == 0 && biov->bi_suffix_len == 0);
+	return biov->bi_buf;
+}
+
+static inline uint64_t
+bio_iov2raw_off(struct bio_iov *biov)
+{
+	return biov->bi_addr.ba_off - biov->bi_prefix_len;
+}
+
+static inline uint64_t
+bio_iov2raw_len(struct bio_iov *biov)
+{
 	return biov->bi_data_len + biov->bi_prefix_len + biov->bi_suffix_len;
+}
+
+static inline void *
+bio_iov2raw_buf(struct bio_iov *biov)
+{
+	return biov->bi_buf;
+}
+
+static inline void
+bio_iov_set_raw_buf(struct bio_iov *biov, void *val)
+{
+	biov->bi_buf = val;
+}
+
+static inline void
+bio_iov_alloc_raw_buf(struct bio_iov *biov, uint64_t len)
+{
+	D_ALLOC(biov->bi_buf, len);
+}
+
+static inline void *
+bio_iov2req_buf(struct bio_iov *biov)
+{
+	return biov->bi_buf + biov->bi_prefix_len;
+}
+
+static inline uint64_t
+bio_iov2req_off(struct bio_iov *biov)
+{
+	return biov->bi_addr.ba_off;
+}
+
+static inline uint64_t
+bio_iov2req_len(struct bio_iov *biov)
+{
+	return biov->bi_data_len;
+}
+
+static inline
+uint16_t bio_iov2media(struct bio_iov *biov)
+{
+	return biov->bi_addr.ba_type;
 }
 
 static inline int

@@ -29,29 +29,23 @@
 /**
  * Determine if the saved checksum for a chunk can be used, or if a
  * new checksum is required.
- *
- * @param biov			Source data
- * @param biov_bytes_used	How many bytes have already been used for
- *				previous chunk considerations
- * @param chunk_bytes		Number of bytes needed for chunk. Won't always
- *				be chunksize because request might not be chunk
- *				aligned, or a previous \biov might have
- *				contributed to the current chunk.
- * @param biov_byte_start	Record aligned byte the biov starts on.
- * @param next_biov		Next biov in the bsgl. NULL if \biov is the last
+ * @param raw_ext		Range of the raw (actual) extent (should map
+ *				to evt_entry.en_ext)
+ * @param req_ext		Range of the requested extent (should map
+ *				to evt_entry.en_sel_ext)
+ * @param chunk			Range of the chunk under investigation
  * @param csum_started		whether or not a previous biov for the current
  *				chunk exists and started a new checksum that
  *				\biov should contribute to
- * @param chunksize		configured chunksize
- *
- * @return			true if a checksum needs to be calculated
- *				false if can use stored checksum
+ * @param has_next_biov		Is there another extent following
+ * @return
  */
 bool
-vic_needs_new_csum(struct bio_iov *biov, daos_off_t biov_bytes_used,
-		   uint32_t chunk_bytes, size_t biov_byte_start,
-		   struct bio_iov *next_biov, bool csum_started,
-		   uint32_t chunksize);
+vic_needs_new_csum(struct daos_csum_range *raw_ext,
+		   struct daos_csum_range *req_ext,
+		   struct daos_csum_range *chunk,
+		   bool csum_started,
+		   bool has_next_biov);
 
 /**
  * will process the bsgl and create new checksums or use the stored

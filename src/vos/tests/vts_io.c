@@ -297,8 +297,8 @@ io_recx_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 
 			D_PRINT("\trecx %u : %s\n",
 				(unsigned int)ent.ie_recx.rx_idx,
-				ent.ie_biov.bi_buf == NULL ?
-				"[NULL]" : (char *)ent.ie_biov.bi_buf);
+				bio_iov2buf(&ent.ie_biov) == NULL ?
+				"[NULL]" : (char *)bio_iov2buf(&ent.ie_biov));
 			D_PRINT("\tepoch: "DF_U64"\n", ent.ie_epoch);
 		}
 
@@ -524,9 +524,9 @@ io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch,
 
 	for (i = off = 0; i < bsgl->bs_nr_out; i++) {
 		biov = &bsgl->bs_iovs[i];
-		memcpy(biov->bi_buf, srv_iov->iov_buf + off,
-		       biov->bi_data_len);
-		off += biov->bi_data_len;
+		memcpy(bio_iov2buf(biov), srv_iov->iov_buf + off,
+		       bio_iov2len(biov));
+		off += bio_iov2len(biov);
 	}
 	assert_true(srv_iov->iov_len == off);
 
@@ -587,9 +587,9 @@ io_test_obj_fetch(struct io_test_args *arg, daos_epoch_t epoch,
 	for (i = off = 0; i < bsgl->bs_nr_out; i++) {
 		biov = &bsgl->bs_iovs[i];
 		if (!bio_addr_is_hole(&biov->bi_addr))
-			memcpy(dst_iov->iov_buf + off, biov->bi_buf,
-			       biov->bi_data_len);
-		off += biov->bi_data_len;
+			memcpy(dst_iov->iov_buf + off, bio_iov2buf(biov),
+			       bio_iov2len(biov));
+		off += bio_iov2len(biov);
 	}
 	dst_iov->iov_len = off;
 	assert_true(dst_iov->iov_buf_len >= dst_iov->iov_len);
