@@ -36,27 +36,28 @@
  * No platform-agnostic way to fetch the max buflen - so let's try a
  * sane value and double until it's big enough.
  *
- * Assumes expr returns ERANGE if the buffer isn't large enough, and
- * rc/buf/buflen and a goto label "out" are already defined in the surrounding
- * function.
+ * Assumes _func is in the getpw*_r family of functions.
  */
-#define TRY_UNTIL_BUF_SIZE_OK(expr)				\
-do {								\
-	char	*new_buf = NULL;				\
-	size_t	buflen;						\
-								\
-	buflen = DEFAULT_BUF_LEN;				\
-	do {							\
-		D_REALLOC(new_buf, buf, buflen);		\
-		if (new_buf == NULL)				\
-			D_GOTO(out, rc = -DER_NOMEM);		\
-		buf = new_buf;					\
-								\
-		rc = (expr);					\
-								\
-		buflen *= 2;					\
-	} while (rc == ERANGE);					\
-} while (0)
+#define TRY_UNTIL_BUF_SIZE_OK(_func, _arg1, _arg2, _buf, _result)	\
+({									\
+	int	__rc = 0;						\
+	char	*new_buf = NULL;					\
+	size_t	buflen = DEFAULT_BUF_LEN;				\
+									\
+	do {								\
+		D_REALLOC(new_buf, _buf, buflen);			\
+		if (new_buf == NULL) {					\
+			__rc = -DER_NOMEM;				\
+			break;						\
+		}							\
+		_buf = new_buf;						\
+									\
+		__rc = _func(_arg1, _arg2, _buf, buflen, _result);	\
+									\
+		buflen *= 2;						\
+	} while (__rc == ERANGE);					\
+	__rc;								\
+})
 
 /*
  * States used to parse a principal name
@@ -153,8 +154,9 @@ daos_acl_uid_to_principal(uid_t uid, char **name)
 		return -DER_INVAL;
 	}
 
-	TRY_UNTIL_BUF_SIZE_OK(getpwuid_r(uid, &user, buf, buflen, &result));
-
+	rc = TRY_UNTIL_BUF_SIZE_OK(getpwuid_r, uid, &user, buf, &result);
+	if (rc == -DER_NOMEM)
+		D_GOTO(out, rc);
 	if (rc != 0) {
 		D_ERROR("Error from getpwuid_r: %d\n", rc);
 		D_GOTO(out, rc = d_errno2der(rc));
@@ -185,8 +187,9 @@ daos_acl_gid_to_principal(gid_t gid, char **name)
 		return -DER_INVAL;
 	}
 
-	TRY_UNTIL_BUF_SIZE_OK(getgrgid_r(gid, &grp, buf, buflen, &result));
-
+	rc = TRY_UNTIL_BUF_SIZE_OK(getgrgid_r, gid, &grp, buf, &result);
+	if (rc == -DER_NOMEM)
+		D_GOTO(out, rc);
 	if (rc != 0) {
 		D_ERROR("Error from getgrgid_r: %d\n", rc);
 		D_GOTO(out, rc = d_errno2der(rc));
@@ -249,9 +252,9 @@ daos_acl_principal_to_uid(const char *principal, uid_t *uid)
 	if (rc != 0)
 		return rc;
 
-	TRY_UNTIL_BUF_SIZE_OK(getpwnam_r(username, &passwd, buf, buflen,
-					 &result));
-
+	rc = TRY_UNTIL_BUF_SIZE_OK(getpwnam_r, username, &passwd, buf, &result);
+	if (rc == -DER_NOMEM)
+		D_GOTO(out, rc);
 	if (rc != 0) {
 		D_ERROR("Error from getpwnam_r: %d\n", rc);
 		D_GOTO(out, rc = d_errno2der(rc));
@@ -287,8 +290,9 @@ daos_acl_principal_to_gid(const char *principal, gid_t *gid)
 	if (rc != 0)
 		return rc;
 
-	TRY_UNTIL_BUF_SIZE_OK(getgrnam_r(grpname, &grp, buf, buflen, &result));
-
+	rc = TRY_UNTIL_BUF_SIZE_OK(getgrnam_r, grpname, &grp, buf, &result);
+	if (rc == -DER_NOMEM)
+		D_GOTO(out, rc);
 	if (rc != 0) {
 		D_ERROR("Error from getgrnam_r: %d\n", rc);
 		D_GOTO(out, rc = d_errno2der(rc));
