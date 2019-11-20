@@ -214,7 +214,7 @@ static inline bool
 daos_rpc_retryable_rc(int rc)
 {
 	return daos_crt_network_error(rc) || rc == -DER_TIMEDOUT ||
-	       rc == -DER_AGAIN || rc == -DER_MISMATCH;
+	       rc == -DER_AGAIN;
 }
 
 #endif /* __DRPC_API_H__ */

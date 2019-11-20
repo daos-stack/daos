@@ -972,8 +972,7 @@ iv_op(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 
 retry:
 	rc = iv_op_internal(ns, key, value, sync, shortcut, opc);
-	if (retry && (daos_crt_network_error(rc) || rc == -DER_TIMEDOUT ||
-		      rc == -DER_AGAIN || rc == -DER_MISMATCH)) {
+	if (retry && daos_rpc_retryable_rc(rc)) {
 		D_DEBUG(DB_TRACE, "retry upon %d\n", rc);
 		goto retry;
 	}
