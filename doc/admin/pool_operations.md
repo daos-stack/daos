@@ -55,6 +55,12 @@ two pool service replica on rank 0 and 1.
 $ dmg pool destroy --pool=${puuid}
 ```
 
+**To see a list of the pools in your DAOS system:**
+
+```
+$ dmg system list-pools
+```
+
 ## Pool Properties
 
 At creation time, a list of pool properties can be specified through the
