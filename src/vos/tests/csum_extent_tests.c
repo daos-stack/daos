@@ -1508,6 +1508,7 @@ test_case_destroy(struct vos_fetch_test_context *ctx)
 
 	for (i = 0; i < ctx->nr; i++) {
 		void *bio_buf = bio_iov2raw_buf(&ctx->bsgl.bs_iovs[i]);
+
 		if (bio_buf)
 			D_FREE(bio_buf);
 
