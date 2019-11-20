@@ -2258,7 +2258,7 @@ ds_pool_list_cont_handler(crt_rpc_t *rpc)
 	struct pool_list_cont_in	*in = crt_req_get(rpc);
 	struct pool_list_cont_out	*out = crt_reply_get(rpc);
 	struct daos_pool_cont_info	*cont_buf = NULL;
-	uint64_t			 ncont;
+	uint64_t			 ncont = 0;
 	struct pool_svc			*svc;
 	struct rdb_tx			 tx;
 	d_iov_t				 key;
