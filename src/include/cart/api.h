@@ -1340,6 +1340,18 @@ int
 crt_group_version(crt_group_t *grp, uint32_t *version);
 
 /**
+ * Set the group membership version
+ *
+ * \param[in] grp              CRT group handle, NULL means the local
+ *                             primary/global group
+ * \param[in] version          New group membership version
+ *
+ * \return                     DER_SUCCESS on success, negative value on error
+ */
+int
+crt_group_version_set(crt_group_t *grp, uint32_t version);
+
+/**
  * Query number of group members.
  *
  * \param[in] grp              CRT group handle, NULL mean the local

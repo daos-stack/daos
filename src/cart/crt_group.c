@@ -2103,6 +2103,31 @@ out:
 	return rc;
 }
 
+int
+crt_group_version_set(crt_group_t *grp, uint32_t version)
+{
+	struct crt_grp_priv	*grp_priv;
+	int			 rc = 0;
+
+	if (!crt_initialized()) {
+		D_ERROR("CRT not initialized.\n");
+		D_GOTO(out, rc = -DER_UNINIT);
+	}
+
+	grp_priv = crt_grp_pub2priv(grp);
+	if (!grp_priv) {
+		D_ERROR("Invalid group\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	D_RWLOCK_RDLOCK(grp_priv->gp_rwlock_ft);
+	grp_priv->gp_membs_ver = version;
+	D_RWLOCK_UNLOCK(grp_priv->gp_rwlock_ft);
+
+out:
+	return rc;
+}
+
 static int
 crt_primary_grp_init(crt_group_id_t grpid)
 {

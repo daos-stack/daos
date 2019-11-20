@@ -57,7 +57,8 @@ TEST_RPC_ERR_SRC = 'test_rpc_error.c'
 CRT_RPC_TESTS = ['rpc_test_cli.c', 'rpc_test_srv.c', 'rpc_test_srv2.c']
 SWIM_TESTS = ['test_swim.c', 'test_swim_net.c']
 HLC_TESTS = ['test_hlc_net.c']
-TEST_GROUP_NP_TESTS = ['test_group_np_srv.c', 'test_group_np_cli.c']
+TEST_GROUP_NP_TESTS = ['test_group_np_srv.c', 'test_group_np_cli.c',
+                       'no_pmix_group_version.c']
 
 def scons():
     """scons function"""

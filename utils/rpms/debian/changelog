@@ -1,3 +1,11 @@
+cart (3.1.0-1) unstable; urgency=medium
+
+  [ Alexander Oganezov ]
+  * 3.1.0-1 version of CaRT
+  * New crt_group_version_set() API added
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Tue, 19 Nov 2019 19:27:01 +0000
+
 cart (3.0.0-1) unstable; urgency=medium
 
   [ Alexander Oganezov ]

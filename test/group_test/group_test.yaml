@@ -17,3 +17,7 @@ tests: !mux
     srv_bin: ../bin/crt_launch
     srv_arg: "-e tests/no_pmix_group_test"
     srv_ppn: "8"
+    name: group_version_test
+    srv_bin: ../bin/crt_launch
+    srv_arg: "-e tests/no_pmix_group_version"
+    srv_ppn: "8"

@@ -227,20 +227,16 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	uint32_t		 grp_size, nchildren;
 	uint32_t		 *tree_children;
 	struct crt_topo_ops	*tops;
-	struct crt_grp_priv	*default_grp_priv;
 	int			 i, rc = 0;
 
 
-	default_grp_priv = crt_grp_pub2priv(NULL);
-	D_ASSERT(default_grp_priv != NULL);
-
 	D_RWLOCK_RDLOCK(grp_priv->gp_rwlock_ft);
 	if (ver_match != NULL) {
-		*ver_match = (bool)(grp_ver == default_grp_priv->gp_membs_ver);
+		*ver_match = (bool)(grp_ver == grp_priv->gp_membs_ver);
 
 		if (*ver_match == false) {
 			D_ERROR("Version mismatch. Passed: %u current:%u\n",
-				grp_ver, default_grp_priv->gp_membs_ver);
+				grp_ver, grp_priv->gp_membs_ver);
 			D_GOTO(out, rc = -DER_MISMATCH);
 		}
 	}

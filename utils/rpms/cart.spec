@@ -1,7 +1,7 @@
 %define carthome %{_exec_prefix}/lib/%{name}
 
 Name:          cart
-Version:       3.0.0
+Version:       3.1.0
 Release:       1%{?relval}%{?dist}
 Summary:       CaRT
 
@@ -138,6 +138,10 @@ ln %{?buildroot}%{carthome}/{TESTING/.build_vars,.build_vars-Linux}.sh
 %{carthome}/.build_vars-Linux.sh
 
 %changelog
+* Tue Nov 19 2019 Alexander Oganezov <alexander.a.oganezov@intel.com> - 3.1.0-1
+- Libcart version 3.1.0-1
+- New crt_group_version_set() API added
+
 * Wed Nov 13 2019 Alexander Oganezov <alexander.a.oganezov@intel.com> - 3.0.0-1
 - Libcart version 3.0.0-1
 - IV namespace APIs changed

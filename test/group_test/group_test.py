@@ -39,7 +39,7 @@ class GroupTest(Test):
     """
     Runs GroupTests for primary and secondary resizeable groups
 
-    :avocado: tags=all,group_test,one_node
+    :avocado: tags=all,group_test,one_node,no_pmix
     """
     def setUp(self):
         """ Test setup """
