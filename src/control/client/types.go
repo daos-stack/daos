@@ -308,71 +308,61 @@ type ScmScanResult struct {
 func (result *ScmScanResult) String() string {
 	switch {
 	case result.Err != nil:
-		return fmt.Sprintf("Error: %s", result.Err)
+		return fmt.Sprintf("SCM Error: %s", result.Err)
 	case len(result.Namespaces) > 0:
-		return fmt.Sprintf("SCM Namespaces:%s\n", result.Namespaces)
+		return fmt.Sprintf("SCM Namespaces:\n%s", result.Namespaces)
 	default:
-		return fmt.Sprintf("SCM Modules:\n%s\n", result.Modules)
+		return fmt.Sprintf("SCM Modules:\n%s", result.Modules)
 	}
+}
+
+func (result *ScmScanResult) Summary() (out string) {
+	switch {
+	case result.Err != nil:
+		return fmt.Sprintf("SCM Error: %s", result.Err)
+	case len(result.Namespaces) > 0:
+		out = result.Namespaces.Summary()
+	default:
+		out = result.Modules.Summary()
+	}
+	return fmt.Sprintf("SCM: %s", out)
 }
 
 // ScmScanMap maps ScmModuleScanResult structs to the addresses
 // of remote servers identified by an address string.
 type ScmScanResults map[string]*ScmScanResult
 
-func (results *ScmScanResults) String() string {
-	var buf bytes.Buffer
-	servers := make([]string, 0, len(*results))
-
-	for server := range *results {
-		servers = append(servers, server)
-	}
-	sort.Strings(servers)
-
-	for _, server := range servers {
-		fmt.Fprintf(&buf, "%s:\n%s\n", server, (*results)[server])
-	}
-
-	return buf.String()
-}
-
 // NvmeScanResult represents the result of scanning for SCM
 // modules installed on a storage node.
 type NvmeScanResult struct {
-	Health bool
 	Ctrlrs pb_types.NvmeControllers
 	Err    error
 }
 
 func (result *NvmeScanResult) String() string {
-	switch {
-	case result.Err != nil:
-		return fmt.Sprintf("Error: %s", result.Err)
-	case result.Health:
-		return result.Ctrlrs.StringHealthStats()
-	default:
-		return result.Ctrlrs.String()
+	if result.Err != nil {
+		return fmt.Sprintf("NVMe Error: %s", result.Err)
 	}
+	return result.Ctrlrs.String()
+}
+
+func (result *NvmeScanResult) StringHealthStats() string {
+	if result.Err != nil {
+		return fmt.Sprintf("NVMe Error: %s", result.Err)
+	}
+	return result.Ctrlrs.StringHealthStats()
+}
+
+func (result *NvmeScanResult) Summary() (out string) {
+	if result.Err != nil {
+		return fmt.Sprintf("NVMe Error: %s", result.Err)
+	}
+	return fmt.Sprintf("NVMe: %s", result.Ctrlrs.Summary())
 }
 
 // NvmeScanResults maps NvmeScanResult structs to the addresses
 // of remote servers identified by an address string.
 type NvmeScanResults map[string]*NvmeScanResult
-
-func (results *NvmeScanResults) String() string {
-	var buf bytes.Buffer
-	servers := make([]string, 0, len(*results))
-
-	for server := range *results {
-		servers = append(servers, server)
-	}
-	sort.Strings(servers)
-
-	for _, server := range servers {
-		fmt.Fprintf(&buf, "%s:\n%s\n", server, (*results)[server])
-	}
-	return buf.String()
-}
 
 func scmModulesFromPB(pbMms pb_types.ScmModules) (mms []storage.ScmModule) {
 	for _, c := range pbMms {
@@ -405,13 +395,42 @@ func scmNamespacesFromPB(pbNss pb_types.ScmNamespaces) (nss []storage.ScmNamespa
 
 // StorageScanReq encapsulated subsystem scan parameters.
 type StorageScanReq struct {
-	NvmeHealth bool
+	Summary bool
 }
 
 // StorageScanResp encapsulated subsystem results.
 type StorageScanResp struct {
-	Nvme NvmeScanResults
-	Scm  ScmScanResults
+	summary bool
+	Servers []string
+	Nvme    NvmeScanResults
+	Scm     ScmScanResults
+}
+
+func (ssr *StorageScanResp) String() string {
+	var buf bytes.Buffer
+
+	for _, srv := range ssr.Servers {
+		fmt.Fprintf(&buf, "%s\n", srv)
+		if !ssr.summary {
+			fmt.Fprintf(&buf, "\t%s", ssr.Scm[srv].String())
+			fmt.Fprintf(&buf, "\t%s", ssr.Nvme[srv].String())
+		}
+		fmt.Fprintf(&buf, "\tSummary:\n\t\t%s\n\t\t%s\n",
+			ssr.Scm[srv].Summary(), ssr.Nvme[srv].Summary())
+	}
+
+	return buf.String()
+}
+
+func (ssr *StorageScanResp) StringHealthStats() string {
+	var buf bytes.Buffer
+
+	for _, srv := range ssr.Servers {
+		fmt.Fprintf(&buf, "%s\n", srv)
+		fmt.Fprintf(&buf, "\t%s", ssr.Nvme[srv].StringHealthStats())
+	}
+
+	return buf.String()
 }
 
 // StorageFormatResult stores results of format operations on NVMe controllers

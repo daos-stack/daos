@@ -48,10 +48,9 @@ type nvmeHealthQueryCmd struct {
 
 // Execute is run when nvmeHealthQueryCmd activates. Runs NVMe
 // storage scan including health query on all connected servers.
-func (h *nvmeHealthQueryCmd) Execute(args []string) error {
-	req := client.StorageScanReq{NvmeHealth: true}
-	cScan := h.conns.StorageScan(&req)
-	h.log.Info(cScan.Nvme.String())
+func (cmd *nvmeHealthQueryCmd) Execute(args []string) error {
+	req := client.StorageScanReq{Summary: false}
+	cmd.log.Info(cmd.conns.StorageScan(&req).StringHealthStats())
 
 	return nil
 }

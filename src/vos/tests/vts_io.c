@@ -33,6 +33,7 @@
 #include "csum_extent_tests.h"
 #include <daos_api.h>
 #include <daos/checksum.h>
+#include "vts_array.h"
 
 #define NO_FLAGS	    (0)
 
@@ -749,17 +750,21 @@ exit:
 
 static inline int
 hold_objects(struct vos_object **objs, struct daos_lru_cache *occ,
-	     daos_handle_t *coh, daos_unit_oid_t *oid, int start, int end)
+	     daos_handle_t *coh, daos_unit_oid_t *oid, int start, int end,
+	     bool no_create, int exp_rc)
 {
-	int	i = 0, rc = 0;
+	int			i = 0, rc = 0;
+	daos_epoch_range_t	epr = {0, 1};
 
 	for (i = start; i < end; i++) {
-		rc = vos_obj_hold(occ, vos_hdl2cont(*coh), *oid, 1, true,
-				  DAOS_INTENT_DEFAULT, &objs[i]);
-		assert_int_equal(rc, 0);
+		rc = vos_obj_hold(occ, vos_hdl2cont(*coh), *oid, &epr,
+				  no_create, no_create ? DAOS_INTENT_DEFAULT :
+				  DAOS_INTENT_UPDATE, true, &objs[i]);
+		if (rc != exp_rc)
+			return 1;
 	}
 
-	return rc;
+	return 0;
 }
 
 static void
@@ -776,10 +781,10 @@ io_oi_test(void **state)
 	cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
 	assert_ptr_not_equal(cont, NULL);
 
-	rc = vos_oi_find_alloc(cont, oid, 1, DAOS_INTENT_UPDATE, &obj[0]);
+	rc = vos_oi_find_alloc(cont, oid, 1, true, &obj[0]);
 	assert_int_equal(rc, 0);
 
-	rc = vos_oi_find_alloc(cont, oid, 1, DAOS_INTENT_UPDATE, &obj[1]);
+	rc = vos_oi_find_alloc(cont, oid, 1, true, &obj[1]);
 	assert_int_equal(rc, 0);
 }
 
@@ -790,6 +795,7 @@ io_obj_cache_test(void **state)
 	struct vos_test_ctx	*ctx = &arg->ctx;
 	struct daos_lru_cache	*occ = NULL;
 	struct vos_object	*objs[20];
+	daos_epoch_range_t	 epr = {0, 1};
 	daos_unit_oid_t		 oids[2];
 	char			*po_name;
 	uuid_t			 pool_uuid;
@@ -818,29 +824,43 @@ io_obj_cache_test(void **state)
 	oids[0] = gen_oid(arg->ofeat);
 	oids[1] = gen_oid(arg->ofeat);
 
-	rc = hold_objects(objs, occ, &ctx->tc_co_hdl, &oids[0], 0, 10);
+	rc = vos_obj_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0], &epr,
+			  false, DAOS_INTENT_DEFAULT, true, &objs[0]);
+	assert_int_equal(rc, 0);
+	vos_obj_release(occ, objs[0], false);
+
+	rc = vos_obj_hold(occ, vos_hdl2cont(l_coh), oids[1], &epr, false,
+			  DAOS_INTENT_DEFAULT, true, &objs[0]);
+	assert_int_equal(rc, 0);
+	vos_obj_release(occ, objs[0], false);
+
+	rc = hold_objects(objs, occ, &ctx->tc_co_hdl, &oids[0], 0, 10, true, 0);
 	assert_int_equal(rc, 0);
 
-	rc = hold_objects(objs, occ, &ctx->tc_co_hdl, &oids[1], 10, 15);
+	rc = hold_objects(objs, occ, &ctx->tc_co_hdl, &oids[1], 10, 15, true,
+			  -DER_NONEXIST);
 	assert_int_equal(rc, 0);
 
-	rc = vos_obj_hold(occ, vos_hdl2cont(l_coh), oids[1], 1, true,
-			  DAOS_INTENT_DEFAULT, &objs[16]);
+	rc = hold_objects(objs, occ, &l_coh, &oids[1], 10, 15, true, 0);
 	assert_int_equal(rc, 0);
-	vos_obj_release(occ, objs[16]);
+	rc = vos_obj_hold(occ, vos_hdl2cont(l_coh), oids[1], &epr, true,
+			  DAOS_INTENT_DEFAULT, true, &objs[16]);
+	assert_int_equal(rc, 0);
+
+	vos_obj_release(occ, objs[16], false);
 
 	for (i = 0; i < 5; i++)
-		vos_obj_release(occ, objs[i]);
+		vos_obj_release(occ, objs[i], false);
 	for (i = 10; i < 15; i++)
-		vos_obj_release(occ, objs[i]);
+		vos_obj_release(occ, objs[i], false);
 
-	rc = hold_objects(objs, occ, &ctx->tc_co_hdl, &oids[1], 15, 20);
+	rc = hold_objects(objs, occ, &l_coh, &oids[1], 15, 20, true, 0);
 	assert_int_equal(rc, 0);
 
 	for (i = 5; i < 10; i++)
-		vos_obj_release(occ, objs[i]);
+		vos_obj_release(occ, objs[i], false);
 	for (i = 15; i < 20; i++)
-		vos_obj_release(occ, objs[i]);
+		vos_obj_release(occ, objs[i], false);
 
 	rc = vos_cont_close(l_coh);
 	assert_int_equal(rc, 0);
@@ -1935,8 +1955,7 @@ oid_iter_test_setup(void **state)
 	for (i = 0; i < VTS_IO_OIDS; i++) {
 		oids[i] = gen_oid(arg->ofeat);
 
-		rc = vos_oi_find_alloc(cont, oids[i], 1, DAOS_INTENT_UPDATE,
-				       &obj_df);
+		rc = vos_oi_find_alloc(cont, oids[i], 1, true, &obj_df);
 		assert_int_equal(rc, 0);
 	}
 	return 0;

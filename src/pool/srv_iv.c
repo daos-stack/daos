@@ -218,7 +218,10 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	struct ds_pool		*pool;
 	int			rc;
 
-	D_ASSERT(src_iv != NULL);
+	if (src == NULL) /* invalidate */
+		return 0;
+
+	src_iv = src->sg_iovs[0].iov_buf;
 	D_ASSERT(dst_iv != NULL);
 	rc = pool_iv_ent_copy(entry->iv_class->iv_class_id,
 			      &entry->iv_value, src);

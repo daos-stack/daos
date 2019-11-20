@@ -144,7 +144,7 @@ func (h *IOServerHarness) CreateSuperblocks(recreate bool) error {
 
 // AwaitStorageReady blocks until all managed IOServer instances
 // have storage available and ready to be used.
-func (h *IOServerHarness) AwaitStorageReady(ctx context.Context) error {
+func (h *IOServerHarness) AwaitStorageReady(ctx context.Context, skipMissingSuperblock bool) error {
 	h.RLock()
 	defer h.RUnlock()
 
@@ -156,20 +156,24 @@ func (h *IOServerHarness) AwaitStorageReady(ctx context.Context) error {
 	for _, instance := range h.instances {
 		needsScmFormat, err := instance.NeedsScmFormat()
 		if err != nil {
-			return errors.Wrap(err, "failed to check storage formatting")
+			h.log.Error(errors.Wrap(err, "failed to check storage formatting").Error())
+			needsScmFormat = true
 		}
 
 		if !needsScmFormat {
+			if skipMissingSuperblock {
+				continue
+			}
 			h.log.Debug("no SCM format required; checking for superblock")
 			needsSuperblock, err := instance.NeedsSuperblock()
 			if err != nil {
-				return errors.Wrap(err, "failed to check instance superblock")
+				h.log.Errorf("failed to check instance superblock: %s", err)
 			}
 			if !needsSuperblock {
 				continue
 			}
 		}
-		h.log.Debug("SCM format required")
+		h.log.Info("SCM format required")
 		instance.AwaitStorageReady(ctx)
 	}
 	return ctx.Err()

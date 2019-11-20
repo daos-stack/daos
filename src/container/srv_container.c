@@ -786,6 +786,7 @@ cont_close_bcast(crt_context_t ctx, struct cont_svc *svc,
 	in = crt_req_get(rpc);
 	in->tci_recs.ca_arrays = recs;
 	in->tci_recs.ca_count = nrecs;
+	uuid_copy(in->tci_pool_uuid, svc->cs_pool_uuid);
 
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
@@ -962,7 +963,7 @@ cont_query_bcast(crt_context_t ctx, struct cont *cont, const uuid_t pool_hdl,
 	uuid_copy(in->tqi_pool_uuid, pool_hdl);
 	uuid_copy(in->tqi_cont_uuid, cont->c_uuid);
 	out = crt_reply_get(rpc);
-	out->tqo_min_purged_epoch = DAOS_EPOCH_MAX;
+	out->tqo_hae = DAOS_EPOCH_MAX;
 
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
@@ -974,6 +975,8 @@ cont_query_bcast(crt_context_t ctx, struct cont *cont, const uuid_t pool_hdl,
 		D_DEBUG(DF_DSMS, DF_CONT": failed to query %d targets\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
 		D_GOTO(out_rpc, rc = -DER_IO);
+	} else {
+		query_out->cqo_hae = out->tqo_hae;
 	}
 
 out_rpc:

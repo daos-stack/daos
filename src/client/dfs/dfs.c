@@ -130,6 +130,9 @@ struct dfs {
 	dfs_obj_t		root;
 	/** DFS container attributes (Default chunk size, oclass, etc.) */
 	dfs_attr_t		attr;
+	/** Optional Prefix to account for when resolving an absolute path */
+	char			*prefix;
+	daos_size_t		prefix_len;
 };
 
 struct dfs_entry {
@@ -929,23 +932,23 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 	d_iov_set(&dkey, SB_DKEY, strlen(SB_DKEY));
 
 	i = 0;
-	d_iov_set(&sg_iovs[i], &magic, sizeof(uint64_t));
+	d_iov_set(&sg_iovs[i], &magic, sizeof(magic));
 	d_iov_set(&iods[i].iod_name, MAGIC_NAME, strlen(MAGIC_NAME));
 	i++;
 
-	d_iov_set(&sg_iovs[i], &sb_ver, sizeof(uint64_t));
+	d_iov_set(&sg_iovs[i], &sb_ver, sizeof(sb_ver));
 	d_iov_set(&iods[i].iod_name, SB_VERSION_NAME, strlen(SB_VERSION_NAME));
 	i++;
 
-	d_iov_set(&sg_iovs[i], &layout_ver, sizeof(uint64_t));
+	d_iov_set(&sg_iovs[i], &layout_ver, sizeof(layout_ver));
 	d_iov_set(&iods[i].iod_name, LAYOUT_NAME, strlen(LAYOUT_NAME));
 	i++;
 
-	d_iov_set(&sg_iovs[i], &chunk_size, sizeof(daos_size_t));
+	d_iov_set(&sg_iovs[i], &chunk_size, sizeof(chunk_size));
 	d_iov_set(&iods[i].iod_name, CS_NAME, strlen(CS_NAME));
 	i++;
 
-	d_iov_set(&sg_iovs[i], &oclass, sizeof(daos_oclass_id_t));
+	d_iov_set(&sg_iovs[i], &oclass, sizeof(oclass));
 	d_iov_set(&iods[i].iod_name, OC_NAME, strlen(OC_NAME));
 	i++;
 
@@ -953,7 +956,6 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 		sgls[i].sg_nr		= 1;
 		sgls[i].sg_nr_out	= 0;
 		sgls[i].sg_iovs		= &sg_iovs[i];
-
 
 		dcb_set_null(&iods[i].iod_kcsum);
 		iods[i].iod_nr		= 1;
@@ -966,18 +968,18 @@ open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 
 	/** create the SB and exit */
 	if (create) {
-		iods[0].iod_size = sizeof(uint64_t);
+		iods[0].iod_size = sizeof(magic);
 		magic = DFS_SB_MAGIC;
-		iods[1].iod_size = sizeof(uint16_t);
+		iods[1].iod_size = sizeof(sb_ver);
 		sb_ver = DFS_SB_VERSION;
-		iods[2].iod_size = sizeof(uint16_t);
+		iods[2].iod_size = sizeof(layout_ver);
 		layout_ver = DFS_LAYOUT_VERSION;
-		iods[3].iod_size = sizeof(daos_size_t);
+		iods[3].iod_size = sizeof(chunk_size);
 		if (attr && attr->da_chunk_size != 0)
 			chunk_size = attr->da_chunk_size;
 		else
 			chunk_size = DFS_DEFAULT_CHUNK_SIZE;
-		iods[4].iod_size = sizeof(daos_oclass_id_t);
+		iods[4].iod_size = sizeof(oclass);
 		if (attr && attr->da_oclass_id != OC_UNKNOWN)
 			oclass = attr->da_oclass_id;
 		else
@@ -1262,8 +1264,37 @@ dfs_umount(dfs_t *dfs)
 	daos_obj_close(dfs->root.oh, NULL);
 	daos_obj_close(dfs->super_oh, NULL);
 
+	if (dfs->prefix)
+		D_FREE(dfs->prefix);
+
 	D_MUTEX_DESTROY(&dfs->lock);
 	D_FREE(dfs);
+
+	return 0;
+}
+
+int
+dfs_set_prefix(dfs_t *dfs, const char *prefix)
+{
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+
+	if (prefix == NULL) {
+		if (dfs->prefix)
+			D_FREE(dfs->prefix);
+		return 0;
+	}
+
+	if (prefix[0] != '/' || strnlen(prefix, PATH_MAX) > PATH_MAX-1)
+		return EINVAL;
+
+	dfs->prefix = strndup(prefix, PATH_MAX-1);
+	if (dfs->prefix == NULL)
+		return ENOMEM;
+
+	dfs->prefix_len = strlen(dfs->prefix);
+	if (dfs->prefix[dfs->prefix_len-1] == '/')
+		dfs->prefix_len--;
 
 	return 0;
 }
@@ -1507,6 +1538,16 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 		return EINVAL;
 	if (path == NULL || strnlen(path, PATH_MAX-1) > PATH_MAX-1)
 		return EINVAL;
+	if (path[0] != '/')
+		return EINVAL;
+
+	/** if we added a prefix, check and skip over it */
+	if (dfs->prefix) {
+		if (strncmp(dfs->prefix, path, dfs->prefix_len) != 0)
+			return EINVAL;
+
+		path += dfs->prefix_len;
+	}
 
 	daos_mode = get_daos_obj_mode(flags);
 	if (daos_mode == -1)

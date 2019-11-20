@@ -522,6 +522,11 @@ create_ace_from_mutable_str(char *str, struct daos_ace **ace)
 			state = process_flags(field, &flags);
 			break;
 		case ACE_IDENTITY:
+			if (!daos_acl_principal_is_valid(field)) {
+				state = ACE_INVALID;
+				break;
+			}
+
 			new_ace = get_ace_from_identity(field, flags);
 			if (new_ace == NULL) {
 				D_ERROR("Couldn't alloc ACE structure\n");
