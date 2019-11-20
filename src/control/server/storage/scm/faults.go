@@ -52,7 +52,8 @@ var (
 	)
 	FaultFormatNoReformat = scmFault(
 		code.StorageAlreadyFormatted,
-		"format request for already-formatted storage and reformat not specified", "",
+		"format request for already-formatted storage and reformat not specified",
+		"retry the operation with reformat option to overwrite existing format",
 	)
 	FaultDeviceAlreadyMounted = scmFault(
 		code.StorageDeviceAlreadyMounted,
@@ -63,6 +64,11 @@ var (
 		code.StorageDeviceAlreadyMounted,
 		"request included already-mounted mount target (cannot double-mount)",
 		"unmount the target and retry the operation",
+	)
+	FaultFormatMissingDevice = scmFault(
+		code.ScmFormatBadParam,
+		"configured SCM device does not exist",
+		"check the configured value and/or perform the SCM preparation procedure",
 	)
 	FaultMissingNdctl = scmFault(
 		code.MissingSoftwareDependency,

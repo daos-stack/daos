@@ -31,6 +31,7 @@
 
 #include <daos/common.h>
 #include <daos_types.h>
+#include <daos_srv/daos_server.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/rsvc.h>
 #include <daos_srv/vos_types.h>
@@ -68,7 +69,24 @@ struct ds_cont_child {
 				 sc_closing:1,
 				 sc_destroying:1;
 	uint32_t		 sc_dtx_flush_wait_count;
-	/** Aggregation limit (set when snapshot is in progress) **/
+
+	/* Aggregate ULT */
+	struct dss_sleep_ult	 *sc_agg_ult;
+	/*
+	 * Lower bound of aggregation epoch, it can be:
+	 *
+	 * < DAOS_EOPCH_MAX	: Some snapshot was deleted since last
+	 *			  round of aggregation
+	 * DAOS_EPOCH_MAX	: No snapshot deletion since last round of
+	 *			  aggregation
+	 */
+	uint64_t		 sc_aggregation_min;
+	/* Upper bound of aggregation epoch, it can be:
+	 *
+	 * 0			: When snapshot list isn't retrieved yet
+	 * DAOS_EPOCH_MAX	: When snapshot list is retrieved
+	 * snapshot epoch	: When the snapshot creation is in-progress
+	 */
 	uint64_t		 sc_aggregation_max;
 	uint64_t		*sc_snapshots;
 	uint32_t		 sc_snapshots_nr;
@@ -104,8 +122,6 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 int
 ds_cont_local_close(uuid_t cont_hdl_uuid);
 
-int
-ds_cont_child_lookup_or_create(struct ds_cont_hdl *hdl, uuid_t cont_uuid);
 int
 ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 		     struct ds_cont_child **ds_cont);

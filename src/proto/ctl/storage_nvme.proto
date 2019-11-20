@@ -60,8 +60,8 @@ message NvmeController {
 	string pciaddr = 3;	// pci address
 	string fwrev = 4;	// firmware revision
 	int32 socketid = 5;	// NUMA socket ID
-	repeated Namespace namespaces = 6;	// controller's namespaces
-	repeated Health healthstats = 7;	// controller's health stats
+	Health healthstats = 6;	// controller's health stats
+	repeated Namespace namespaces = 7;	// controller's namespaces
 }
 
 // NvmeControllerResult represents state of operation performed on controller.
@@ -91,16 +91,3 @@ message ScanNvmeResp {
 message FormatNvmeReq {}
 
 // FormatNvmeResp isn't required because controller results are returned instead
-
-message UpdateNvmeReq {
-	string model = 1; // Only upgrade devices of specific model
-	string startrev = 2; // Only upgrade devices with starting revision
-	string path = 3;	// Filesystem path containing firmware image
-	int32 slot = 4;		// Firmware slot (register) to update
-}
-
-// TODO: provide facility to supply FIO config in params
-message BurninNvmeReq {
-	FilePath fioconfig = 1;	// FIO workload configuration file path
-}
-

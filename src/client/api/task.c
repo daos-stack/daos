@@ -134,7 +134,7 @@ dc_task_schedule(tse_task_t *task, bool instant)
 		D_GOTO(out, rc = 0); /* error has been reported to event */
 	}
 
- out:
+out:
 	if (daos_event_is_priv(ev)) {
 		daos_event_priv_wait();
 		rc = ev->ev_error;

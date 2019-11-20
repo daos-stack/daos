@@ -94,8 +94,8 @@ write_map_buf(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_buf *buf,
  * version into "map_buf" and "map_version", respectively.
  */
 static int
-read_map_buf(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_buf **buf,
-	     uint32_t *version)
+locate_map_buf(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_buf **buf,
+	       uint32_t *version)
 {
 	uint32_t	ver;
 	d_iov_t	value;
@@ -120,6 +120,26 @@ read_map_buf(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_buf **buf,
 	return 0;
 }
 
+/* Callers are responsible for freeing buf with D_FREE. */
+static int
+read_map_buf(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_buf **buf,
+	     uint32_t *version)
+{
+	struct pool_buf	       *b;
+	size_t			size;
+	int			rc;
+
+	rc = locate_map_buf(tx, kvs, &b, version);
+	if (rc != 0)
+		return rc;
+	size = pool_buf_size(b->pb_nr);
+	D_ALLOC(*buf, size);
+	if (*buf == NULL)
+		return -DER_NOMEM;
+	memcpy(*buf, b, size);
+	return 0;
+}
+
 /* Callers are responsible for destroying the object via pool_map_decref(). */
 static int
 read_map(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_map **map)
@@ -128,7 +148,7 @@ read_map(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_map **map)
 	uint32_t		version;
 	int			rc;
 
-	rc = read_map_buf(tx, kvs, &buf, &version);
+	rc = locate_map_buf(tx, kvs, &buf, &version);
 	if (rc != 0)
 		return rc;
 
@@ -766,11 +786,13 @@ ds_pool_svc_destroy(const uuid_t pool_uuid)
 }
 
 static int
-pool_svc_create_group(struct pool_svc *svc, struct pool_map *map)
+pool_svc_create_group(struct pool_svc *svc, struct pool_buf *map_buf,
+		      uint32_t map_version)
 {
-	char		id[DAOS_UUID_STR_SIZE];
-	crt_group_t    *group;
-	int		rc;
+	char			id[DAOS_UUID_STR_SIZE];
+	crt_group_t	       *group;
+	struct pool_map	       *map;
+	int			rc;
 
 	/* Check if the pool group exists locally. */
 	uuid_unparse_lower(svc->ps_uuid, id);
@@ -778,8 +800,13 @@ pool_svc_create_group(struct pool_svc *svc, struct pool_map *map)
 	if (group != NULL)
 		return 0;
 
+	rc = pool_map_create(map_buf, map_version, &map);
+	if (rc != 0)
+		return rc;
+
 	/* Attempt to create the pool group. */
 	rc = ds_pool_group_create(svc->ps_uuid, map, &group);
+	pool_map_decref(map);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create pool group: %d\n",
 			 DP_UUID(svc->ps_uuid), rc);
@@ -956,112 +983,115 @@ pool_svc_free_cb(struct ds_rsvc *rsvc)
 	D_FREE(svc);
 }
 
+/*
+ * Initialize and update svc->ps_pool with map_buf and map_version. This
+ * ensures that svc->ps_pool matches the latest pool map.
+ */
+static int
+init_svc_pool(struct pool_svc *svc, struct pool_buf *map_buf,
+	      uint32_t map_version)
+{
+	struct ds_pool_create_arg	arg;
+	struct ds_pool		       *pool;
+	int				rc;
+
+	arg.pca_map_version = map_version;
+	arg.pca_need_group = 1;
+	rc = ds_pool_lookup_create(svc->ps_uuid, &arg, &pool);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to get ds_pool: %d\n",
+			DP_UUID(svc->ps_uuid), rc);
+		return rc;
+	}
+	rc = ds_pool_tgt_map_update(pool, map_buf, map_version);
+	if (rc != 0) {
+		ds_pool_put(pool);
+		return rc;
+	}
+	D_ASSERT(svc->ps_pool == NULL);
+	svc->ps_pool = pool;
+	return 0;
+}
+
+/* Finalize svc->ps_pool. */
+static void
+fini_svc_pool(struct pool_svc *svc)
+{
+	D_ASSERT(svc->ps_pool != NULL);
+	ds_pool_put(svc->ps_pool);
+	svc->ps_pool = NULL;
+}
+
 static int
 pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 {
-	struct pool_svc		       *svc = pool_svc_obj(rsvc);
-	struct rdb_tx			tx;
-	struct ds_pool		       *pool;
-	d_rank_list_t		       *replicas = NULL;
-	struct pool_map		       *map = NULL;
-	uint32_t			map_version;
-	struct ds_pool_create_arg	arg;
-	d_rank_t			rank;
-	int				rc;
+	struct pool_svc	       *svc = pool_svc_obj(rsvc);
+	struct rdb_tx		tx;
+	d_rank_list_t	       *replicas = NULL;
+	struct pool_buf	       *map_buf = NULL;
+	uint32_t		map_version;
+	bool			cont_svc_up = false;
+	d_rank_t		rank;
+	int			rc;
 
-	/* Read the pool map into map and map_version. */
+	/* Read the pool map into map_buf and map_version. */
 	rc = rdb_tx_begin(rsvc->s_db, rsvc->s_term, &tx);
 	if (rc != 0)
 		goto out;
 	ABT_rwlock_rdlock(svc->ps_lock);
-	rc = read_map(&tx, &svc->ps_root, &map);
-	if (rc == 0)
-		rc = rdb_get_ranks(rsvc->s_db, &replicas);
-	ABT_rwlock_unlock(svc->ps_lock);
-	rdb_tx_end(&tx);
+	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
-			D_DEBUG(DF_DSMS, DF_UUID": new db\n",
+			D_DEBUG(DB_MD, DF_UUID": new db\n",
 				DP_UUID(svc->ps_uuid));
-			rc = DER_UNINIT;
+			rc = +DER_UNINIT;
 		} else {
-			D_ERROR(DF_UUID": failed to get %s: %d\n",
-				DP_UUID(svc->ps_uuid),
-				map == NULL ? "pool map" : "replica ranks", rc);
+			D_ERROR(DF_UUID": failed to read pool map buffer: %d\n",
+				DP_UUID(svc->ps_uuid), rc);
 		}
-		goto out;
+		goto out_lock;
 	}
-	map_version = pool_map_get_version(map);
-
-	/* Create the pool group. */
-	rc = pool_svc_create_group(svc, map);
+	rc = rdb_get_ranks(rsvc->s_db, &replicas);
+	if (rc != 0)
+		D_ERROR(DF_UUID": failed to get pool service replica: %d\n",
+			DP_UUID(svc->ps_uuid), rc);
+out_lock:
+	ABT_rwlock_unlock(svc->ps_lock);
+	rdb_tx_end(&tx);
 	if (rc != 0)
 		goto out;
 
-	/* Create or revalidate svc->ps_pool with map and map_version. */
-	D_ASSERT(svc->ps_pool == NULL);
-	arg.pca_map_version = map_version;
-	arg.pca_need_group = 1;
-	rc = ds_pool_lookup_create(svc->ps_uuid, &arg, &svc->ps_pool);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to get ds_pool: %d\n",
-			DP_UUID(svc->ps_uuid), rc);
+	/* Create the pool group. */
+	rc = pool_svc_create_group(svc, map_buf, map_version);
+	if (rc != 0)
 		goto out;
-	}
-	pool = svc->ps_pool;
-	ABT_rwlock_wrlock(pool->sp_lock);
-	if (pool->sp_map != map) {
-		/* An existing ds_pool; map not used yet. */
-		D_ASSERTF(pool->sp_map_version <= map_version, "%u <= %u\n",
-			  pool->sp_map_version, map_version);
-		D_ASSERTF(pool->sp_map == NULL ||
-			  pool_map_get_version(pool->sp_map) <= map_version,
-			  "%u <= %u\n", pool_map_get_version(pool->sp_map),
-			  map_version);
-		if (pool->sp_map == NULL ||
-		    pool_map_get_version(pool->sp_map) < map_version) {
-			struct pool_map *tmp;
 
-			rc = pl_map_update(pool->sp_uuid, map,
-					   pool->sp_map != NULL ? false : true,
-					   DEFAULT_PL_TYPE);
-			if (rc != 0) {
-				svc->ps_pool = NULL;
-				ABT_rwlock_unlock(pool->sp_lock);
-				ds_pool_put(pool);
-				goto out;
-			}
-
-			/* Need to update pool->sp_map. Swap with map. */
-			tmp = pool->sp_map;
-			pool->sp_map = map;
-			map = tmp;
-			pool->sp_map_version = map_version;
-		}
-	} else {
-		map = NULL; /* taken over by pool */
-	}
-	ABT_rwlock_unlock(pool->sp_lock);
+	rc = init_svc_pool(svc, map_buf, map_version);
+	if (rc != 0)
+		goto out;
 
 	ds_cont_svc_step_up(svc->ps_cont_svc);
+	cont_svc_up = true;
 
-	rc = ds_rebuild_regenerate_task(pool, replicas);
-	if (rc != 0) {
-		ds_cont_svc_step_down(svc->ps_cont_svc);
-		ds_pool_put(svc->ps_pool);
-		svc->ps_pool = NULL;
+	rc = ds_rebuild_regenerate_task(svc->ps_pool, replicas);
+	if (rc != 0)
 		goto out;
-	}
 
 	rc = crt_group_rank(NULL, &rank);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 	D_PRINT(DF_UUID": rank %u became pool service leader "DF_U64"\n",
 		DP_UUID(svc->ps_uuid), rank, svc->ps_rsvc.s_term);
 out:
-	if (map != NULL)
-		pool_map_decref(map);
-	if (replicas)
+	if (rc != 0) {
+		if (cont_svc_up)
+			ds_cont_svc_step_down(svc->ps_cont_svc);
+		if (svc->ps_pool != NULL)
+			fini_svc_pool(svc);
+	}
+	if (replicas != NULL)
 		d_rank_list_free(replicas);
+	if (map_buf != NULL)
+		D_FREE(map_buf);
 	return rc;
 }
 
@@ -1073,9 +1103,7 @@ pool_svc_step_down_cb(struct ds_rsvc *rsvc)
 	int			rc;
 
 	ds_cont_svc_step_down(svc->ps_cont_svc);
-	D_ASSERT(svc->ps_pool != NULL);
-	ds_pool_put(svc->ps_pool);
-	svc->ps_pool = NULL;
+	fini_svc_pool(svc);
 
 	rc = crt_group_rank(NULL, &rank);
 	D_ASSERTF(rc == 0, "%d\n", rc);
@@ -1858,7 +1886,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	 * completes, then we simply return the error and the client will throw
 	 * its pool_buf away.
 	 */
-	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
+	rc = locate_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to read pool map: %d\n",
 			DP_UUID(svc->ps_uuid), rc);
@@ -2261,7 +2289,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 		}
 	}
 
-	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
+	rc = locate_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to read pool map: %d\n",
 			DP_UUID(svc->ps_uuid), rc);
@@ -2413,6 +2441,127 @@ out:
 	return rc;
 }
 
+/**
+ * Set a pool's properties without having a handle for the pool
+ */
+void
+ds_pool_prop_set_handler(crt_rpc_t *rpc)
+{
+	struct pool_prop_set_in		*in = crt_req_get(rpc);
+	struct pool_prop_set_out	*out = crt_reply_get(rpc);
+	struct pool_svc			*svc;
+	struct rdb_tx			tx;
+	int				rc;
+
+	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
+		DP_UUID(in->psi_op.pi_uuid), rpc);
+
+	rc = pool_svc_lookup_leader(in->psi_op.pi_uuid, &svc,
+				    &out->pso_op.po_hint);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
+
+	ABT_rwlock_wrlock(svc->ps_lock);
+
+	rc = pool_prop_write(&tx, &svc->ps_root, in->psi_prop);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to write prop for pool: %d\n",
+			DP_UUID(in->psi_op.pi_uuid), rc);
+		D_GOTO(out_lock, rc);
+	}
+
+	rc = rdb_tx_commit(&tx);
+	if (rc != 0)
+		D_GOTO(out_lock, rc);
+
+out_lock:
+	ABT_rwlock_unlock(svc->ps_lock);
+	rdb_tx_end(&tx);
+out_svc:
+	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pso_op.po_hint);
+	pool_svc_put_leader(svc);
+out:
+	out->pso_op.po_rc = rc;
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
+		DP_UUID(in->psi_op.pi_uuid), rpc, rc);
+	crt_reply_send(rpc);
+}
+
+/**
+ * Send a CaRT message to the pool svc to set the requested pool properties.
+ *
+ * \param[in]	pool_uuid	UUID of the pool
+ * \param[in]	ranks		Pool service replicas
+ * \param[in]	prop		Pool prop
+ *
+ * \return	0		Success
+ *
+ */
+int
+ds_pool_svc_set_prop(uuid_t pool_uuid, d_rank_list_t *ranks, daos_prop_t *prop)
+{
+	int				rc;
+	struct rsvc_client		client;
+	crt_endpoint_t			ep;
+	struct dss_module_info		*info = dss_get_module_info();
+	crt_rpc_t			*rpc;
+	struct pool_prop_set_in		*in;
+	struct pool_prop_set_out	*out;
+
+	D_DEBUG(DB_MGMT, DF_UUID": Setting pool prop\n", DP_UUID(pool_uuid));
+
+	rc = rsvc_client_init(&client, ranks);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+rechoose:
+	ep.ep_grp = NULL; /* primary group */
+	rsvc_client_choose(&client, &ep);
+
+	rc = pool_req_create(info->dmi_ctx, &ep, POOL_PROP_SET, &rpc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create pool set prop rpc: %d\n",
+			DP_UUID(pool_uuid), rc);
+		D_GOTO(out_client, rc);
+	}
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->psi_op.pi_uuid, pool_uuid);
+	uuid_clear(in->psi_op.pi_hdl);
+	in->psi_prop = prop;
+
+	rc = dss_rpc_send(rpc);
+	out = crt_reply_get(rpc);
+	D_ASSERT(out != NULL);
+
+	rc = rsvc_client_complete_rpc(&client, &ep, rc,
+				      out->pso_op.po_rc,
+				      &out->pso_op.po_hint);
+	if (rc == RSVC_CLIENT_RECHOOSE) {
+		crt_req_decref(rpc);
+		dss_sleep(1000 /* ms */);
+		D_GOTO(rechoose, rc);
+	}
+
+	rc = out->pso_op.po_rc;
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to set prop for pool: %d\n",
+			DP_UUID(pool_uuid), rc);
+		D_GOTO(out_rpc, rc);
+	}
+
+out_rpc:
+	crt_req_decref(rpc);
+out_client:
+	rsvc_client_fini(&client);
+out:
+	return rc;
+}
+
 static int
 replace_failed_replicas(struct pool_svc *svc, struct pool_map *map)
 {
@@ -2515,9 +2664,7 @@ ds_pool_update_internal(uuid_t pool_uuid, struct pool_target_id_list *tgts,
 	}
 
 	updated = true;
-
-	/** TODO: Call disabled; enable along with `rsvc_client` changes **/
-	(void) replace_failed_replicas;
+	replace_failed_replicas(svc, map);
 
 out_replicas:
 	if (replicasp != NULL) {
@@ -2881,8 +3028,9 @@ ds_pool_svc_stop_handler(crt_rpc_t *rpc)
 }
 
 /**
- * update pool map to all servers.
- **/
+ * Get a copy of the latest pool map buffer. Callers are responsible for
+ * freeing iov->iov_buf with D_FREE.
+ */
 int
 ds_pool_map_buf_get(uuid_t uuid, d_iov_t *iov, uint32_t *map_version)
 {

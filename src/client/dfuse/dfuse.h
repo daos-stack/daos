@@ -35,7 +35,9 @@
 #include "daos_fs.h"
 
 #include "dfuse_common.h"
-#include "dfuse.h"
+
+#define DFUSE_UNS_POOL_ATTR "user.uns.pool"
+#define DFUSE_UNS_CONTAINER_ATTR "user.uns.container"
 
 struct dfuse_info {
 	struct fuse_session		*di_session;
@@ -353,17 +355,19 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define DFUSE_REPLY_IOCTL(handle, req, arg)				\
+#define DFUSE_REPLY_IOCTL_SIZE(handle, req, arg, size)			\
 	do {								\
 		int __rc;						\
 		DFUSE_TRA_DEBUG(handle, "Returning ioctl");		\
-		__rc = fuse_reply_ioctl(req, 0, &(arg),			\
-					sizeof(arg));			\
+		__rc = fuse_reply_ioctl(req, 0, arg, size);		\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(handle,				\
 					"fuse_reply_ioctl returned %d:%s", \
 					__rc, strerror(-__rc));		\
 	} while (0)
+
+#define DFUSE_REPLY_IOCTL(handle, req, arg)			\
+	DFUSE_REPLY_IOCTL_SIZE(handle, req, &(arg), sizeof(arg))
 
 /**
  * Inode handle.

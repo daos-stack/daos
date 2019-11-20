@@ -31,12 +31,15 @@
 
 #include <Python.h>
 
-#include "daos_types.h"
-#include "daos.h"
-#include "daos_obj_class.h"
-#include <daos/object.h>
-#include "daos_kv.h"
-#include "daos_uns.h"
+#include <gurt/debug.h>
+#include <gurt/list.h>
+
+#include <daos_types.h>
+#include <daos.h>
+#include <daos_obj_class.h>
+#include <gurt/common.h>
+#include <daos_kv.h>
+#include <daos_uns.h>
 
 #define PY_SHIM_MAGIC_NUMBER 0x7A89
 
@@ -548,7 +551,16 @@ __shim_handle__kv_get(PyObject *self, PyObject *args)
 
 		/** submit get request */
 		op->key_obj = key;
-		op->key     = PyString_AsString(key);
+#ifdef __USE_PYTHON3__
+		if (PyUnicode_Check(key)) {
+			op->key = (char *)PyUnicode_AsUTF8(key);
+		} else
+#endif
+		{
+			op->key = PyString_AsString(key);
+		}
+		if (!op->key)
+			D_GOTO(err, 0);
 		rc = daos_kv_get(oh, DAOS_TX_NONE, op->key, &op->size, op->buf,
 				 evp);
 		if (rc)
@@ -604,6 +616,9 @@ out:
 
 	/* Populate return list */
 	return PyInt_FromLong(rc);
+
+err:
+	return NULL;
 }
 
 static PyObject *
@@ -664,18 +679,32 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 		/** XXX: Interpret all values as strings for now */
 		if (value == Py_None) {
 			size = 0;
+#ifdef __USE_PYTHON3__
+		} else if (PyUnicode_Check(value)) {
+			Py_ssize_t pysize = 0;
+
+			buf = (char *)PyUnicode_AsUTF8AndSize(value, &pysize);
+			size = pysize;
+#endif
 		} else {
 			buf = PyString_AsString(value);
-			if (buf == NULL) {
-				rc = -DER_IO;
-				break;
-			}
+			if (buf == NULL)
+				D_GOTO(err, 0);
 
 			/** don't store final '\0' */
 			size = strlen(buf);
 		}
 
-		key_str = PyString_AsString(key);
+#ifdef __USE_PYTHON3__
+		if (PyUnicode_Check(key)) {
+			key_str = (char *)PyUnicode_AsUTF8(key);
+		} else
+#endif
+		{
+			key_str = PyString_AsString(key);
+		}
+		if (!key_str)
+			D_GOTO(err, 0);
 
 		/** insert or delete kv pair */
 		if (size == 0)
@@ -703,6 +732,9 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 		rc = ret;
 
 	return PyInt_FromLong(rc);
+err:
+	daos_eq_destroy(eq, 0);
+	return NULL;
 }
 
 static PyObject *
