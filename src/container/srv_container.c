@@ -1433,13 +1433,11 @@ out_svc:
 struct list_cont_iter_args {
 	uuid_t				pool_uuid;
 
-	/* Remaining containers in client buf, total containers in pool */
-	uint64_t			avail_ncont;
+	/* Number of containers in pool and conts[] index while counting */
 	uint64_t			ncont;
 
-	/* conts[]: capacity, and current index */
+	/* conts[]: capacity*/
 	uint64_t			conts_len;
-	uint64_t			conts_index;
 	struct daos_pool_cont_info	*conts;
 };
 
@@ -1458,17 +1456,12 @@ enum_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	}
 
 	uuid_copy(cont_uuid, key->iov_buf);
-	ap->ncont++;
 
 	D_DEBUG(DF_DSMS, "pool/cont: "DF_CONTF"\n",
 		DP_CONT(ap->pool_uuid, cont_uuid));
 
-	/* Client didn't provide buffer or not enough space */
-	if (ap->avail_ncont < ap->ncont)
-		return 0;
-
 	/* Realloc conts[] if needed (double each time starting with 1) */
-	if (ap->conts_index == ap->conts_len) {
+	if (ap->ncont == ap->conts_len) {
 		void	*ptr;
 		size_t	realloc_elems = (ap->conts_len == 0) ? 1 :
 					ap->conts_len * 2;
@@ -1480,8 +1473,8 @@ enum_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		ap->conts_len = realloc_elems;
 	}
 
-	cinfo = &ap->conts[ap->conts_index];
-	ap->conts_index++;
+	cinfo = &ap->conts[ap->ncont];
+	ap->ncont++;
 	uuid_copy(cinfo->pci_uuid, cont_uuid);
 	return 0;
 }
@@ -1489,16 +1482,15 @@ enum_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 /**
  * List all containers in a pool.
  *
- * \param[in]		pool_uuid	Pool UUID.
- * \param[in,out]	ncont		[in] Max length of conts[] result.
- *					[out] Number of containers in the pool.
- * \param[out]		conts		Array of container info structures
- *					to be allocated. Caller must free.
- * \param[out]		conts_len	Number of items in conts[].
+ * \param[in]	pool_uuid	Pool UUID.
+ * \param[out]	conts		Array of container info structures
+ *				to be allocated. Caller must free.
+ * \param[out]	ncont		Number of containers in the pool
+ *				(number of items populated in conts[]).
  */
 int
-ds_cont_list(uuid_t pool_uuid, uint64_t *ncont,
-	struct daos_pool_cont_info **conts, uint64_t *conts_len)
+ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts,
+	     uint64_t *ncont)
 {
 	int				 rc;
 	struct cont_svc			*svc;
@@ -1506,11 +1498,9 @@ ds_cont_list(uuid_t pool_uuid, uint64_t *ncont,
 	struct list_cont_iter_args	 args;
 
 	*conts = NULL;
-	*conts_len = 0;
+	*ncont = 0;
 
-	args.avail_ncont = *ncont;
 	args.ncont = 0;			/* number of containers in the pool */
-	args.conts_index = 0;		/* number items in conts[] */
 	args.conts_len = 0;		/* allocated length of conts[] */
 	args.conts = NULL;
 
@@ -1538,25 +1528,17 @@ out_svc:
 	cont_svc_put_leader(svc);
 
 out:
-	*ncont = args.ncont;
-	/* conts, ncont initialized to NULL,0 - update if successful */
+	D_DEBUG(DF_DSMS, "iterate rc=%d, args.conts=%p, args.ncont="DF_U64"\n",
+			rc, args.conts, args.ncont);
 
-	D_DEBUG(DF_DSMS, "iterate rc=%d, args.conts=%p, args.ncont="DF_U64
-		", args.avail_ncont="DF_U64"\n", rc, args.conts, args.ncont,
-		args.avail_ncont);
 	if (rc != 0) {
 		/* Error in iteration */
 		if (args.conts)
 			D_FREE(args.conts);
-	} else if (args.conts && (args.ncont > args.avail_ncont)) {
-		/* Iteration OK, but client buffer too small for results */
-		D_FREE(args.conts);
-		rc = -DER_TRUNC;
 	} else {
+		*ncont = args.ncont;
 		*conts = args.conts;
-		*conts_len = args.conts_index;
 	}
-
 	return rc;
 }
 

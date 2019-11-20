@@ -2258,8 +2258,7 @@ ds_pool_list_cont_handler(crt_rpc_t *rpc)
 	struct pool_list_cont_in	*in = crt_req_get(rpc);
 	struct pool_list_cont_out	*out = crt_reply_get(rpc);
 	struct daos_pool_cont_info	*cont_buf = NULL;
-	uint64_t			 ncont = in->plci_ncont;
-	size_t				 cont_buf_len = 0;
+	uint64_t			 ncont;
 	struct pool_svc			*svc;
 	struct rdb_tx			 tx;
 	d_iov_t				 key;
@@ -2300,22 +2299,31 @@ ds_pool_list_cont_handler(crt_rpc_t *rpc)
 		D_GOTO(out_svc, rc);
 
 	/* Call container service to get the list */
-	rc = ds_cont_list(in->plci_op.pi_uuid, &ncont, &cont_buf,
-			  &cont_buf_len);
-	if (rc != 0)
+	rc = ds_cont_list(in->plci_op.pi_uuid, &cont_buf, &ncont);
+	if (rc != 0) {
 		D_GOTO(out_svc, rc);
-	D_DEBUG(DF_DSMS, DF_UUID": hdl="DF_UUID": has %"PRIu64" containers, "
-		"cont_buf=%p\n",
-		DP_UUID(in->plci_op.pi_uuid), DP_UUID(in->plci_op.pi_hdl),
-		ncont, cont_buf);
+	} else if ((in->plci_ncont > 0) && (ncont > in->plci_ncont)) {
+		/* Got a list, but client buffer not supplied or too small */
+		D_DEBUG(DF_DSMS, DF_UUID": hdl="DF_UUID": has %"PRIu64
+				 " containers (more than client: %"PRIu64")\n",
+				 DP_UUID(in->plci_op.pi_uuid),
+				 DP_UUID(in->plci_op.pi_hdl),
+				 ncont, in->plci_ncont);
+		D_GOTO(out_free_cont_buf, rc = -DER_TRUNC);
+	} else {
+		D_DEBUG(DF_DSMS, DF_UUID": hdl="DF_UUID": has %"PRIu64
+				 " containers\n", DP_UUID(in->plci_op.pi_uuid),
+				 DP_UUID(in->plci_op.pi_hdl), ncont);
 
-	/* Send results (if there are any) only if client provided a handle */
-	if (cont_buf && (in->plci_ncont > 0) &&
-	    (in->plci_cont_bulk != CRT_BULK_NULL)) {
-		rc = transfer_cont_buf(cont_buf, ncont, svc, rpc,
-				       in->plci_cont_bulk);
+		/* Send any results only if client provided a handle */
+		if (cont_buf && (in->plci_ncont > 0) &&
+		    (in->plci_cont_bulk != CRT_BULK_NULL)) {
+			rc = transfer_cont_buf(cont_buf, ncont, svc, rpc,
+					       in->plci_cont_bulk);
+		}
 	}
 
+out_free_cont_buf:
 	if (cont_buf) {
 		D_FREE(cont_buf);
 		cont_buf = NULL;

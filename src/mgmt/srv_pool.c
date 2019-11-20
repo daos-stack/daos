@@ -703,9 +703,9 @@ out:
 	if (rc != 0) {
 		/* Error in iteration */
 		ds_mgmt_free_pool_list(&iter_args.pools, iter_args.pools_index);
-	} else if (iter_args.pools &&
-		 (iter_args.npools > iter_args.avail_npools)) {
-		/* Iteration OK, but client buffer too small for results */
+	} else if ((iter_args.avail_npools > 0) &&
+		   (iter_args.npools > iter_args.avail_npools)) {
+		/* Got a list, but client buffer not supplied or too small */
 		ds_mgmt_free_pool_list(&iter_args.pools, iter_args.pools_index);
 		rc = -DER_TRUNC;
 	} else {
