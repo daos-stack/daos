@@ -79,6 +79,7 @@ class IorTestBase(TestWithServers):
     def create_pool(self):
         """Create a TestPool object to use with ior."""
         # Get the pool params
+        # pylint: disable=attribute-defined-outside-init
         self.pool = TestPool(self.context, self.log)
         self.pool.get_params(self)
 
@@ -204,21 +205,16 @@ class IorTestBase(TestWithServers):
             original_pool_info (PoolInfo): Pool info prior to IOR
             processes (int): number of processes
         """
-#        if isinstance(self.pool, TestPool):
-#            self.pool = self.pool.pool
-
+        # Get the current pool size for comparison
         if isinstance(self.pool, TestPool):
             self.pool.get_info()
             current_pool_info = self.pool.info
         elif isinstance(self.pool, DaosPool):
+            # pylint: disable=no-member
             current_pool_info = self.pool.pool_query()
         else:
             raise Exception("Unsupported pool object class: {}".\
-                            format(type(self.pool))) 
-        
-        # Get the current pool size for comparison
-        # pylint: disable=no-member
-#        current_pool_info = self.pool.pool_query()
+                            format(type(self.pool)))
 
         # If Transfer size is < 4K, Pool size will verified against NVMe, else
         # it will be checked against SCM

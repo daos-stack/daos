@@ -76,6 +76,7 @@ class NvmeIoVerification(IorTestBase):
         # Loop for every IOR object type
         for ior_param in tests:
             # Create and connect to a pool
+            # pylint: disable=attribute-defined-outside-init
             self.pool = DaosPool(self.context)
             self.pool.create(
                 pool_mode, pool_uid, pool_gid, ior_param[0], pool_group,
@@ -103,6 +104,7 @@ class NvmeIoVerification(IorTestBase):
 
             try:
                 if self.pool:
+                    # pylint: disable=attribute-defined-outside-init
                     self.pool.disconnect()
                     self.pool.destroy(1)
                     self.pool = None
