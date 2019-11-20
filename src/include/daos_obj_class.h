@@ -387,6 +387,15 @@ enum {
 	OC_RESERVED		= (1U << 10),
 };
 
+/** Internal classes for testing & debugging */
+enum {
+	OC_INTERNAL		= OC_RESERVED + 1,
+	OC_RP_4G1,
+	OC_RP_4G2,
+	OC_RP_4G4,
+	OC_RP_4GX,
+};
+
 enum daos_obj_schema {
 	DAOS_OS_SINGLE,		/**< Single stripe object */
 	DAOS_OS_STRIPED,	/**< Fix striped object */

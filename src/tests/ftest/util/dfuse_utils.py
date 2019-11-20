@@ -84,14 +84,14 @@ class DfuseCommand(ExecutableCommand):
 class Dfuse(DfuseCommand):
     """Class defining an object of type DfuseCommand"""
 
-    def __init__(self, hosts, attach_info, basepath=None):
+    def __init__(self, hosts, tmp, dfuse_env=False):
         """Create a dfuse object"""
         super(Dfuse, self).__init__("/run/dfuse/*", "dfuse")
 
         # set params
         self.hosts = hosts
-        self.attach_info = attach_info
-        self.basepath = basepath
+        self.tmp = tmp
+        self.dfuse_env = dfuse_env
 
     def __del__(self):
         """Destroy Dfuse object and stop dfuse """
@@ -156,11 +156,9 @@ class Dfuse(DfuseCommand):
         self.create_mount_point()
         # obtain env export string
         env = self.get_default_env()
-
         # run dfuse command
         ret_code = general_utils.pcmd(self.hosts, env + self.__str__(),
                                       timeout=30)
-
         # check for any failures
         if 0 not in ret_code:
             error_hosts = NodeSet(
@@ -201,12 +199,12 @@ class Dfuse(DfuseCommand):
 
         # obtain any env variables to be exported
         env = EnvironmentVariables()
-        env["CRT_ATTACH_INFO_PATH"] = self.attach_info
+        env["CRT_ATTACH_INFO_PATH"] = self.tmp
         env["DAOS_SINGLETON_CLI"] = 1
 
-        if self.basepath is not None:
+        if self.dfuse_env:
             try:
-                with open('{}/{}'.format(self.basepath, AVOCADO_FILE),
+                with open('{}/{}'.format(self.tmp, AVOCADO_FILE),
                           'r') as read_file:
                     for line in read_file:
                         if ("provider" in line) or ("fabric_iface" in line):
