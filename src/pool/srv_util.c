@@ -781,7 +781,18 @@ nvme_faulty_reaction(int *tgt_ids, int tgt_cnt)
 	return rc;
 }
 
+static int
+nvme_bio_error(bool unmap, bool update, int tgt_id)
+{
+	int rc;
+
+	rc = notify_bio_error(unmap, update, tgt_id);
+
+	return rc;
+}
+
 struct bio_reaction_ops nvme_reaction_ops = {
 	.faulty_reaction	= nvme_faulty_reaction,
 	.reint_reaction		= NULL,
+	.ioerr_reaction		= nvme_bio_error,
 };
