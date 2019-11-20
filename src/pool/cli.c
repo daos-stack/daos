@@ -1566,11 +1566,11 @@ dc_pool_list_cont(tse_task_t *task)
 	in = crt_req_get(rpc);
 	uuid_copy(in->plci_op.pi_uuid, pool->dp_pool);
 	uuid_copy(in->plci_op.pi_hdl, pool->dp_pool_hdl);
-	/* Requested ncont: if we have > 0 specified but cont_buf==NULL, we
-	 * need to receive the number of containers in the pool. *ncont could
-	 * be an uninitialized value in client. Set to 0 in request.
+	/* If provided cont_buf is NULL, caller needs the number of containers
+	 * to be returned in ncont. Set ncont=0 in the request in this case
+	 * (caller value may be uninitialized).
 	 */
-	if ((args->cont_buf == NULL) && (*args->ncont > 0))
+	if (args->cont_buf == NULL)
 		in->plci_ncont = 0;
 	else
 		in->plci_ncont = *args->ncont;

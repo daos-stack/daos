@@ -466,11 +466,11 @@ dc_mgmt_list_pools(tse_task_t *task)
 
 	/** fill in request buffer */
 	pc_in->lp_grp = (d_string_t)args->grp;
-	/* Requested npools: if we have > 0 specified but pools==NULL, we need
-	 * to receive the number of pools in the system. *npools could be an
-	 * uninitialized value in client. Set to 0 in request.
+	/* If provided pools is NULL, caller needs the number of pools
+	 * to be returned in npools. Set npools=0 in the request in this case
+	 * (caller value may be uninitialized).
 	 */
-	if ((args->pools == NULL) && (*args->npools > 0))
+	if (args->pools == NULL)
 		pc_in->lp_npools = 0;
 	else
 		pc_in->lp_npools = *args->npools;

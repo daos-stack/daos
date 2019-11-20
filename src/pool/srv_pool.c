@@ -2191,7 +2191,7 @@ transfer_cont_buf(struct daos_pool_cont_info *cont_buf, size_t ncont,
 	crt_bulk_opid_t			 bulk_opid;
 	ABT_eventual			 eventual;
 	int				*status;
-	int				rc;
+	int				 rc;
 
 	D_ASSERT(ncont > 0);
 	cont_buf_size = ncont * sizeof(struct daos_pool_cont_info);
@@ -2289,11 +2289,9 @@ ds_pool_list_cont_handler(crt_rpc_t *rpc)
 		d_iov_set(&key, in->plci_op.pi_hdl, sizeof(uuid_t));
 		d_iov_set(&value, &hdl, sizeof(hdl));
 		rc = rdb_tx_lookup(&tx, &svc->ps_handles, &key, &value);
-		if (rc != 0) {
-			if (rc == -DER_NONEXIST)
-				rc = -DER_NO_HDL;
+		if (rc == -DER_NONEXIST)
+			rc = -DER_NO_HDL;
 			/* defer goto out_svc until unlock/tx_end */
-		}
 	}
 
 	ABT_rwlock_unlock(svc->ps_lock);

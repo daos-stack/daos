@@ -1489,13 +1489,12 @@ enum_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 /**
  * List all containers in a pool.
  *
- * \param[in]	pool_uuid	Pool UUID
- * \param[in,out]
- *		ncont		[in] Max length of conts[] caller can consume.
- *				[out] Number of containers in the pool.
- * \param]out]	conts		Array of container info structures result.
- *				Allocated by this function, caller must free.
- * \param[out]	conts_len	Number of items in conts[]
+ * \param[in]		pool_uuid	Pool UUID.
+ * \param[in,out]	ncont		[in] Max length of conts[] result.
+ *					[out] Number of containers in the pool.
+ * \param[out]		conts		Array of container info structures
+ *					to be allocated. Caller must free.
+ * \param[out]		conts_len	Number of items in conts[].
  */
 int
 ds_cont_list(uuid_t pool_uuid, uint64_t *ncont,

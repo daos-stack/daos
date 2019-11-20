@@ -304,7 +304,6 @@ typedef struct {
 /* DAOS pool container information
  *
  */
-
 struct daos_pool_cont_info {
 	uuid_t		pci_uuid;
 };
