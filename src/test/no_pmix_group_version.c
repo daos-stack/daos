@@ -483,8 +483,7 @@ int main(int argc, char **argv)
 
 	/* TEST2: Set local sec_grp1 to version 0x123 */
 	crt_group_version_set(sec_grp1, 0x123);
-	verify_corpc(crt_ctx[1], sec_grp1, -DER_MISMATCH);
-
+	verify_corpc(crt_ctx[1], sec_grp1, -DER_GRPVER);
 
 	/* TEST3: Verify primary group 'grp' is still matching versions */
 	verify_corpc(crt_ctx[1], grp, DER_SUCCESS);
@@ -499,7 +498,7 @@ int main(int argc, char **argv)
 	/* TEST5: Set 'sec_grp1' rank 5 to version 0x124 */
 	set_group_version(crt_ctx[1], sec_grp1,
 			s_list->rl_ranks[5], 0x124);
-	verify_corpc(crt_ctx[1], sec_grp1, -DER_MISMATCH);
+	verify_corpc(crt_ctx[1], sec_grp1, -DER_GRPVER);
 
 	/* TEST6: Set all ranks 'grp' to version 0x2; 7th rank to 0x3 */
 	for (i = 0; i < p_list->rl_nr; i++) {
@@ -507,7 +506,7 @@ int main(int argc, char **argv)
 				p_list->rl_ranks[i], 0x2);
 	}
 	set_group_version(crt_ctx[1], grp, p_list->rl_ranks[7], 0x3);
-	verify_corpc(crt_ctx[1], grp, -DER_MISMATCH);
+	verify_corpc(crt_ctx[1], grp, -DER_GRPVER);
 
 
 	/* Send shutdown RPC to all nodes except for self */

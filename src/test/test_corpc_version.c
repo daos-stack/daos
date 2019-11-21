@@ -495,7 +495,7 @@ client_cb(const struct crt_cb_info *cb_info)
  * rank is hit first, we might bet back -DER_NONEXIST instead
  * if rank updated membership list but group version hasnt changed yet
  */
-		D_ASSERTF((cb_info->cci_rc == -DER_MISMATCH ||
+		D_ASSERTF((cb_info->cci_rc == -DER_GRPVER ||
 			cb_info->cci_rc == -DER_NONEXIST),
 			"cb_info->cci_rc %d\n", cb_info->cci_rc);
 		corpc_ver_mismatch_cb(rpc_req);

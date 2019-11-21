@@ -123,7 +123,9 @@
 	/** denial-of-service */					\
 	ACTION(DER_DOS,			(DER_ERR_GURT_BASE + 34))       \
 	/** Incorrect target for the RPC  */				\
-	ACTION(DER_BAD_TARGET,		(DER_ERR_GURT_BASE + 35))
+	ACTION(DER_BAD_TARGET,		(DER_ERR_GURT_BASE + 35))	\
+	/** Group versioning mismatch */				\
+	ACTION(DER_GRPVER,		(DER_ERR_GURT_BASE + 36))
 	/** TODO: add more error numbers */
 
 #define D_FOREACH_DAOS_ERR(ACTION)					\

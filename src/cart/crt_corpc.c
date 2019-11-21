@@ -859,7 +859,7 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 
 	if (!ver_match) {
 		D_INFO("parent version and local version mismatch.\n");
-		rc = -DER_MISMATCH;
+		rc = -DER_GRPVER;
 		co_info->co_child_num = 0;
 		crt_corpc_fail_parent_rpc(rpc_priv, rc);
 		D_GOTO(forward_done, rc);

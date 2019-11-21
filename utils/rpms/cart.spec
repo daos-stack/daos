@@ -138,6 +138,10 @@ ln %{?buildroot}%{carthome}/{TESTING/.build_vars,.build_vars-Linux}.sh
 %{carthome}/.build_vars-Linux.sh
 
 %changelog
+* Thu Nov 21 2019 Alexander Oganezov <alexander.a.oganezov@intel.com> - 3.2.0-1
+- Libcart version 3.2.0-1
+- New DER_GRPVER error code added
+
 * Tue Nov 19 2019 Alexander Oganezov <alexander.a.oganezov@intel.com> - 3.1.0-1
 - Libcart version 3.1.0-1
 - New crt_group_version_set() API added

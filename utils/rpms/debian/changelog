@@ -1,3 +1,11 @@
+cart (3.2.0-1) unstable; urgency=medium
+
+  [ Alexander Oganezov ]
+  * 3.2.0-1 version of CaRT
+  * New DER_GRPVER error code added
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Thu, 21 Nov 2019 19:27:01 +0000
+
 cart (3.1.0-1) unstable; urgency=medium
 
   [ Alexander Oganezov ]
