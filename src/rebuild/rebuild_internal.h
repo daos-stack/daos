@@ -277,6 +277,8 @@ struct rebuild_iv {
 	int		riv_status;
 };
 
+#define DEFAULT_YIELD_FREQ	128
+
 extern struct dss_module_key rebuild_module_key;
 static inline struct rebuild_tls *
 rebuild_tls_get()
