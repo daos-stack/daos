@@ -117,6 +117,8 @@ type (
 	FormatResponse struct {
 		Mountpoint string
 		Formatted  bool
+		Mounted    bool
+		Mountable  bool
 	}
 
 	// MountRequest defines the parameters for a Mount operation.
@@ -571,25 +573,33 @@ func (p *Provider) CheckFormat(req FormatRequest) (*FormatResponse, error) {
 		return nil, errors.Wrapf(err, "failed to check if %s is mounted", req.Mountpoint)
 	}
 	if isMounted {
+		res.Mounted = true
 		return res, nil
 	}
 
-	if req.Dcpm != nil {
-		fsType, err := p.sys.Getfs(req.Dcpm.Device)
-		if err != nil {
-			if os.IsNotExist(errors.Cause(err)) {
-				return nil, errors.Wrap(FaultFormatMissingDevice, req.Dcpm.Device)
-			}
-			return nil, errors.Wrapf(err, "failed to check if %s is formatted", req.Dcpm.Device)
-		}
-
-		p.log.Debugf("device %s filesystem: %s", req.Dcpm.Device, fsType)
-		if fsType != fsTypeNone {
-			return res, nil
-		}
+	if req.Dcpm == nil {
+		// ramdisk
+		res.Formatted = false
+		return res, nil
 	}
 
-	res.Formatted = false
+	fsType, err := p.sys.Getfs(req.Dcpm.Device)
+	if err != nil {
+		if os.IsNotExist(errors.Cause(err)) {
+			return nil, errors.Wrap(FaultFormatMissingDevice, req.Dcpm.Device)
+		}
+		return nil, errors.Wrapf(err, "failed to check if %s is formatted", req.Dcpm.Device)
+	}
+
+	p.log.Debugf("device %s filesystem: %s", req.Dcpm.Device, fsType)
+
+	switch fsType {
+	case fsTypeExt4:
+		res.Mountable = true
+	case fsTypeNone:
+		res.Formatted = false
+	}
+
 	return res, nil
 }
 
@@ -655,6 +665,10 @@ func (p *Provider) formatRamdisk(req FormatRequest) (*FormatResponse, error) {
 		return nil, err
 	}
 
+	if !res.Mounted {
+		return nil, errors.Errorf("%s was not mounted", req.Mountpoint)
+	}
+
 	if err := os.Chown(req.Mountpoint, req.OwnerUID, req.OwnerGID); err != nil {
 		return nil, errors.Wrapf(err, "failed to set ownership of %s to %d.%d",
 			req.Mountpoint, req.OwnerUID, req.OwnerGID)
@@ -662,7 +676,9 @@ func (p *Provider) formatRamdisk(req FormatRequest) (*FormatResponse, error) {
 
 	return &FormatResponse{
 		Mountpoint: res.Target,
-		Formatted:  res.Mounted,
+		Formatted:  true,
+		Mounted:    true,
+		Mountable:  false,
 	}, nil
 }
 
@@ -689,6 +705,10 @@ func (p *Provider) formatDcpm(req FormatRequest) (*FormatResponse, error) {
 		return nil, err
 	}
 
+	if !res.Mounted {
+		return nil, errors.Errorf("%s was not mounted", req.Mountpoint)
+	}
+
 	if err := os.Chown(req.Mountpoint, req.OwnerUID, req.OwnerGID); err != nil {
 		return nil, errors.Wrapf(err, "failed to set ownership of %s to %d.%d",
 			req.Mountpoint, req.OwnerUID, req.OwnerGID)
@@ -696,7 +716,9 @@ func (p *Provider) formatDcpm(req FormatRequest) (*FormatResponse, error) {
 
 	return &FormatResponse{
 		Mountpoint: res.Target,
-		Formatted:  res.Mounted,
+		Formatted:  true,
+		Mounted:    true,
+		Mountable:  false,
 	}, nil
 }
 
