@@ -706,12 +706,14 @@ dma_rw(struct bio_desc *biod, bool prep)
 
 			if (biod->bd_update)
 				spdk_blob_io_write(blob, channel, payload,
-						   pg_idx, pg_cnt,
-						   rw_completion, biod);
+					page2io_unit(biod->bd_ctxt, pg_idx),
+					page2io_unit(biod->bd_ctxt, pg_cnt),
+					rw_completion, biod);
 			else
 				spdk_blob_io_read(blob, channel, payload,
-						  pg_idx, pg_cnt,
-						  rw_completion, biod);
+					page2io_unit(biod->bd_ctxt, pg_idx),
+					page2io_unit(biod->bd_ctxt, pg_cnt),
+					rw_completion, biod);
 			continue;
 		}
 

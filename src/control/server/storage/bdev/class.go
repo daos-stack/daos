@@ -21,7 +21,7 @@
 // portions thereof marked with this legend must also reproduce the markings.
 //
 
-package storage
+package bdev
 
 import (
 	"bytes"
@@ -35,6 +35,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 const (
@@ -71,16 +72,16 @@ const (
 type bdev struct {
 	templ   string
 	vosEnv  string
-	isEmpty func(BdevConfig) string                // check no elements
-	isValid func(BdevConfig) string                // check valid elements
-	prep    func(logging.Logger, BdevConfig) error // prerequisite actions
+	isEmpty func(storage.BdevConfig) string                // check no elements
+	isValid func(storage.BdevConfig) string                // check valid elements
+	prep    func(logging.Logger, storage.BdevConfig) error // prerequisite actions
 }
 
-func nilValidate(c BdevConfig) string { return "" }
+func nilValidate(c storage.BdevConfig) string { return "" }
 
-func nilPrep(l logging.Logger, c BdevConfig) error { return nil }
+func nilPrep(l logging.Logger, c storage.BdevConfig) error { return nil }
 
-func isEmptyList(c BdevConfig) string {
+func isEmptyList(c storage.BdevConfig) string {
 	if len(c.DeviceList) == 0 {
 		return "bdev_list empty " + msgBdevNone
 	}
@@ -88,7 +89,7 @@ func isEmptyList(c BdevConfig) string {
 	return ""
 }
 
-func isEmptyNumber(c BdevConfig) string {
+func isEmptyNumber(c storage.BdevConfig) string {
 	if c.DeviceCount == 0 {
 		return "bdev_number == 0 " + msgBdevNone
 	}
@@ -96,7 +97,7 @@ func isEmptyNumber(c BdevConfig) string {
 	return ""
 }
 
-func isValidList(c BdevConfig) string {
+func isValidList(c storage.BdevConfig) string {
 	for i, elem := range c.DeviceList {
 		if elem == "" {
 			return fmt.Sprintf("%s (index %d)", msgBdevEmpty, i)
@@ -106,7 +107,7 @@ func isValidList(c BdevConfig) string {
 	return ""
 }
 
-func isValidSize(c BdevConfig) string {
+func isValidSize(c storage.BdevConfig) string {
 	if c.FileSize < 1 {
 		return msgBdevBadSize
 	}
@@ -144,7 +145,7 @@ func createEmptyFile(log logging.Logger, path string, size int64) error {
 	return nil
 }
 
-func prepBdevFile(l logging.Logger, c BdevConfig) error {
+func prepBdevFile(l logging.Logger, c storage.BdevConfig) error {
 	// truncate or create files for SPDK AIO emulation,
 	// requested size aligned with block size
 	size := (int64(c.FileSize*gbyte) / int64(blkSize)) * int64(blkSize)
@@ -161,33 +162,34 @@ func prepBdevFile(l logging.Logger, c BdevConfig) error {
 
 // genFromNvme takes NVMe device PCI addresses and generates config content
 // (output as string) from template.
-func genFromTempl(cfg BdevConfig, templ string) (out bytes.Buffer, err error) {
+func genFromTempl(cfg storage.BdevConfig, templ string) (out bytes.Buffer, err error) {
 	t := template.Must(template.New(confOut).Parse(templ))
 	err = t.Execute(&out, cfg)
 	return
 }
 
-type BdevProvider struct {
+// ClassProvider implements functionality for a given bdev class
+type ClassProvider struct {
 	log     logging.Logger
-	cfg     BdevConfig
+	cfg     storage.BdevConfig
 	cfgPath string
 	bdev    bdev
 }
 
-func NewBdevProvider(log logging.Logger, cfgDir string, cfg *BdevConfig) (*BdevProvider, error) {
-	p := &BdevProvider{
+func NewClassProvider(log logging.Logger, cfgDir string, cfg *storage.BdevConfig) (*ClassProvider, error) {
+	p := &ClassProvider{
 		log: log,
 		cfg: *cfg,
 	}
 
 	switch cfg.Class {
-	case BdevClassNone, BdevClassNvme:
+	case storage.BdevClassNone, storage.BdevClassNvme:
 		p.bdev = bdev{nvmeTempl, "", isEmptyList, isValidList, nilPrep}
-	case BdevClassMalloc:
+	case storage.BdevClassMalloc:
 		p.bdev = bdev{mallocTempl, "MALLOC", isEmptyNumber, nilValidate, nilPrep}
-	case BdevClassKdev:
+	case storage.BdevClassKdev:
 		p.bdev = bdev{kdevTempl, "AIO", isEmptyList, isValidList, nilPrep}
-	case BdevClassFile:
+	case storage.BdevClassFile:
 		p.bdev = bdev{fileTempl, "AIO", isEmptyList, isValidSize, prepBdevFile}
 	default:
 		return nil, errors.Errorf("unable to map %q to BdevClass", cfg.Class)
@@ -216,11 +218,11 @@ func NewBdevProvider(log logging.Logger, cfgDir string, cfg *BdevConfig) (*BdevP
 	return p, nil
 }
 
-func (p *BdevProvider) PrepareDevices() error {
+func (p *ClassProvider) PrepareDevices() error {
 	return p.bdev.prep(p.log, p.cfg)
 }
 
-func (p *BdevProvider) GenConfigFile() error {
+func (p *ClassProvider) GenConfigFile() error {
 	if p.cfgPath == "" {
 		return nil
 	}
