@@ -318,8 +318,7 @@ static inline bool
 obj_retry_error(int err)
 {
 	return err == -DER_TIMEDOUT || err == -DER_STALE ||
-	       err == -DER_INPROGRESS || err == -DER_AGAIN ||
-	       daos_crt_network_error(err);
+	       err == -DER_INPROGRESS || daos_crt_network_error(err);
 }
 
 void obj_shard_decref(struct dc_obj_shard *shard);

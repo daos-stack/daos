@@ -117,16 +117,11 @@ rdbt_init(crt_group_t *group, d_rank_t rank, uuid_t uuid, uint32_t nreplicas)
 	struct rdbt_init_out   *out;
 	int			rc;
 
-retry:
 	rpc = create_rpc(RDBT_INIT, group, rank);
 	in = crt_req_get(rpc);
 	uuid_copy(in->tii_uuid, uuid);
 	in->tii_nreplicas = nreplicas;
 	rc = invoke_rpc(rpc);
-	if (rc == -DER_AGAIN) {
-		destroy_rpc(rpc);
-		goto retry;
-	}
 	D_ASSERTF(rc == 0, "%d\n", rc);
 	out = crt_reply_get(rpc);
 	rc = out->tio_rc;

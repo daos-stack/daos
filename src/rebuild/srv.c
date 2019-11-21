@@ -924,8 +924,8 @@ retry:
 		/* If it is network failure or timedout, let's refresh
 		 * failure list and retry
 		 */
-		if ((rc == -DER_TIMEDOUT || daos_crt_network_error(rc) ||
-		     rc == -DER_AGAIN) && !rebuild_gst.rg_abort) {
+		if ((rc == -DER_TIMEDOUT || daos_crt_network_error(rc)) &&
+		    !rebuild_gst.rg_abort) {
 			crt_req_decref(rpc);
 			D_GOTO(retry, rc);
 		}

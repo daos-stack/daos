@@ -1,4 +1,4 @@
-/**
+/*
  * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,12 +21,15 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
+ * \file
+ *
  * This file is part of the DAOS server. It implements the DAOS service
  * including:
  * - network setup
  * - start/stop execution streams
  * - bind execution streams to core/NUMA node
  */
+
 #define D_LOGFAC       DD_FAC(server)
 
 #include <abt.h>
@@ -425,82 +428,18 @@ dss_sched_create(ABT_pool *pools, int pool_num, ABT_sched *new_sched)
 	return dss_abterr2der(ret);
 }
 
-static int
-mark_xstream_up(void *arg)
-{
-	struct dss_module_info *info = dss_get_module_info();
-
-	info->dmi_up = true;
-	D_DEBUG(DB_TRACE, "xstream %d ctx %d up\n", info->dmi_xs_id,
-		info->dmi_ctx_id);
-	return 0;
-}
-
-static void
-mark_xstream_up_void(void *arg)
-{
-	int *rc = arg;
-
-	*rc = mark_xstream_up(NULL /* arg */);
-}
-
 /**
- * Mark the system and the target main xstreams "up" (see
- * dss_module_info.dmi_up).
+ * Process the rpc received, let's create a ABT thread for each request.
  */
 int
-dss_srv_mark_xstreams_up(void)
+dss_process_rpc(crt_context_t *ctx, crt_rpc_t *rpc,
+		void (*real_rpc_hdlr)(void *), void *arg)
 {
-	struct dss_xstream     *xstream = dss_xstream_get(0);
-	ABT_task		task;
-	int			task_rc;
-	int			rc;
-
-	/* For xstream 0. */
-	rc = ABT_task_create(xstream->dx_pools[DSS_POOL_SHARE],
-			     mark_xstream_up_void, &task_rc, &task);
-	if (rc != ABT_SUCCESS)
-		return dss_abterr2der(rc);
-	rc = ABT_task_join(task);
-	D_ASSERTF(rc == 0, "%d\n", rc);
-	rc = ABT_task_free(&task);
-	D_ASSERTF(rc == 0, "%d\n", rc);
-	if (task_rc != 0)
-		return task_rc;
-
-	/* For target main xstreams. */
-	return dss_task_collective(mark_xstream_up, NULL /* arg */,
-				   0 /* flag */);
-}
-
-struct receive_rpc_arg {
-	ABT_pool	       *pools;
-	struct dss_module_info *info;
-};
-
-static int
-receive_rpc(crt_context_t *ctx, crt_rpc_t *rpc, void (*real_rpc_hdlr)(void *),
-	    void *varg)
-{
-	struct receive_rpc_arg *arg = varg;
-	struct dss_module_info *info = arg->info;
-	unsigned int		mod_id = opc_get_mod_id(rpc->cr_opc);
-	struct dss_module      *module = dss_module_get(mod_id);
-	ABT_pool	       *pools = arg->pools;
-	ABT_pool		pool;
-	int			rc;
-
-	/* If we are not ready for RPCs yet, tell the sender to retry later. */
-	/* TODO: Always allow CaRT internal RPCs, except for IV ones. */
-	if (!info->dmi_up) {
-		d_rank_t rank;
-
-		rc = crt_req_src_rank_get(rpc, &rank);
-		D_ASSERTF(rc == 0, "%d\n", rc);
-		D_DEBUG(DB_TRACE, "not ready for RPCs: ctx=%d opc=%x rank=%u\n",
-			info->dmi_ctx_id, rpc->cr_opc, rank);
-		return -DER_AGAIN;
-	}
+	unsigned int	mod_id = opc_get_mod_id(rpc->cr_opc);
+	struct dss_module *module = dss_module_get(mod_id);
+	ABT_pool	*pools = arg;
+	ABT_pool	pool;
+	int		rc;
 
 	/* For RPC originally from CART might still come here, and its mod_id
 	 * is 0xfe, and module would be NULL.
@@ -532,7 +471,6 @@ dss_srv_handler(void *arg)
 	struct dss_xstream		*dx = (struct dss_xstream *)arg;
 	struct dss_thread_local_storage	*dtc;
 	struct dss_module_info		*dmi;
-	struct receive_rpc_arg		*receive_rpc_arg = NULL;
 	int				 rc;
 	bool				 signal_caller = true;
 
@@ -558,24 +496,16 @@ dss_srv_handler(void *arg)
 	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_list);
 
 	if (dx->dx_comm) {
-		D_ALLOC_PTR(receive_rpc_arg);
-		if (receive_rpc_arg == NULL) {
-			D_ERROR("failed to allocate receive_rpc_arg\n");
-			rc = -DER_NOMEM;
-			goto tls_fini;
-		}
-		receive_rpc_arg->pools = dx->dx_pools;
-		receive_rpc_arg->info = dmi;
-
 		/* create private transport context */
 		rc = crt_context_create(&dmi->dmi_ctx);
 		if (rc != 0) {
 			D_ERROR("failed to create crt ctxt: %d\n", rc);
-			goto receive_rpc_arg_free;
+			goto tls_fini;
 		}
 
-		rc = crt_context_register_rpc_task(dmi->dmi_ctx, receive_rpc,
-						   receive_rpc_arg);
+		rc = crt_context_register_rpc_task(dmi->dmi_ctx,
+						   dss_process_rpc,
+						   dx->dx_pools);
 		if (rc != 0) {
 			D_ERROR("failed to register process cb %d\n", rc);
 			goto crt_destroy;
@@ -701,11 +631,8 @@ nvme_fini:
 tse_fini:
 	tse_sched_fini(&dx->dx_sched_dsc);
 crt_destroy:
-	if (dx->dx_comm) {
+	if (dx->dx_comm)
 		crt_context_destroy(dmi->dmi_ctx, true);
-receive_rpc_arg_free:
-		D_FREE(receive_rpc_arg);
-	}
 tls_fini:
 	dss_tls_fini(dtc);
 signal:
@@ -961,7 +888,7 @@ dss_xstreams_fini(bool force)
 	D_DEBUG(DB_TRACE, "Execution streams stopped\n");
 }
 
-static void
+void
 dss_xstreams_open_barrier(void)
 {
 	ABT_mutex_lock(xstream_data.xd_mutex);
@@ -1034,7 +961,7 @@ dss_start_xs_id(int xs_id)
 }
 
 static int
-dss_xstreams_init()
+dss_xstreams_init(void)
 {
 	int	rc;
 	int	i, xs_id;
@@ -1096,7 +1023,6 @@ dss_xstreams_init()
 	D_DEBUG(DB_TRACE, "%d execution streams successfully started "
 		"(first core %d)\n", dss_tgt_nr, dss_core_offset);
 out:
-	dss_xstreams_open_barrier();
 	if (dss_xstreams_empty()) /* started nothing */
 		pthread_key_delete(dss_tls_key);
 

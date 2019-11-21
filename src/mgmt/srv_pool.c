@@ -73,7 +73,7 @@ ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid)
 
 	rc = dss_rpc_send(td_req);
 	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_DESTROY_FAIL_CORPC))
-		rc = -DER_AGAIN; /* see pool_destroy_cp */
+		rc = -DER_TIMEDOUT;
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 

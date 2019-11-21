@@ -184,8 +184,6 @@ struct dss_module_info {
 	int			dmi_tgt_id;
 	/* the cart context id */
 	int			dmi_ctx_id;
-	/* dss_module.sm_setup completed for all modules */
-	bool			dmi_up;
 	d_list_t		dmi_dtx_batched_list;
 };
 

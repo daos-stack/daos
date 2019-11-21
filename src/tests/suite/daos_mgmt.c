@@ -422,7 +422,11 @@ pool_create_and_destroy_retry(void **state)
 
 	print_message("destroying pool synchronously ... ");
 	rc = daos_pool_destroy(uuid, arg->group, 1, NULL);
+#if 0 /* see pool_create_cp */
 	assert_int_equal(rc, 0);
+#else
+	assert_int_equal(rc, -DER_TIMEDOUT);
+#endif
 	print_message("success\n");
 }
 

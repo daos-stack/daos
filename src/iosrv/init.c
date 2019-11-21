@@ -578,9 +578,7 @@ server_init(int argc, char *argv[])
 		goto exit_drpc_fini;
 	D_INFO("Modules successfully set up\n");
 
-	rc = dss_srv_mark_xstreams_up();
-	if (rc != 0)
-		goto exit_setup_all;
+	dss_xstreams_open_barrier();
 	D_INFO("Service fully up\n");
 
 	gethostname(hostname, 255);
@@ -595,8 +593,6 @@ server_init(int argc, char *argv[])
 
 	return 0;
 
-exit_setup_all:
-	dss_module_cleanup_all();
 exit_drpc_fini:
 	drpc_fini();
 exit_init_state:
