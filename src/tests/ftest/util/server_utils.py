@@ -546,7 +546,7 @@ def storage_prepare(hosts, user, device_type):
     device_args = ""
     if device_type == "nvme":
             dev_param = "-n"
-	        device_args = " --hugepages=4096"
+            device_args = " --hugepages=4096"
     elif device_type == "dcpm":
             dev_param = "-s"
     else:
