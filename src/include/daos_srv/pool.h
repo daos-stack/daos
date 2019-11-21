@@ -144,6 +144,8 @@ int ds_pool_svc_destroy(const uuid_t pool_uuid);
 
 int ds_pool_svc_get_acl_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
 			     daos_prop_t **prop);
+int ds_pool_svc_set_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
+			 daos_prop_t *prop);
 
 /*
  * Called by dmg on the pool service leader to list all pool handles of a pool.

@@ -813,6 +813,76 @@ simple_multi_update(void **state)
 	}
 }
 
+static void
+object_punch_and_fetch(void **state)
+{
+	struct io_test_args	*arg = *state;
+	const char		*value = "HelloCruelWorld";
+	daos_key_t		 update_keys[2];
+	daos_key_t		 punch_keys[2];
+	daos_key_t		*punch_akeys[2];
+	daos_key_t		*actual_keys[2];
+	daos_key_t		 dkey;
+	daos_iod_t		 iod = {0};
+	d_sg_list_t		 sgl = {0};
+	daos_unit_oid_t		 oid;
+	daos_epoch_t		 epoch = 1;
+	int			 i = 0;
+	int			 rc = 0;
+	uint8_t			 stable_key = 0;
+	char			 key1 = 'a';
+	char			 key2 = 'b';
+	char			 buf[32] = {0};
+
+	test_args_reset(arg, VPOOL_SIZE);
+
+	rc = daos_sgl_init(&sgl, 1);
+	assert_int_equal(rc, 0);
+	d_iov_set(&update_keys[0], &stable_key, sizeof(stable_key));
+	d_iov_set(&update_keys[1], &key1, sizeof(key1));
+	d_iov_set(&punch_keys[0], &stable_key, sizeof(stable_key));
+	d_iov_set(&punch_keys[1], &key2, sizeof(key2));
+	punch_akeys[0] = &punch_keys[1];
+	punch_akeys[1] = NULL;
+	actual_keys[0] = &dkey;
+	actual_keys[1] = &iod.iod_name;
+
+	for (i = 0; i < 2; i++) {
+		/* Set up dkey and akey */
+		oid = gen_oid(0);
+
+		*actual_keys[0] = update_keys[i];
+		*actual_keys[1] = update_keys[1 - i];
+
+		iod.iod_type = DAOS_IOD_SINGLE;
+		iod.iod_size = 0;
+		d_iov_set(&sgl.sg_iovs[0], (void *)value, sizeof(value));
+		iod.iod_nr = 1;
+		iod.iod_recxs = NULL;
+
+		rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, epoch++, 0, &dkey,
+				    1, &iod, &sgl);
+		assert_int_equal(rc, 0);
+
+		*actual_keys[0] = punch_keys[i];
+		*actual_keys[1] = punch_keys[1 - i];
+
+		rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, epoch++, 0, 0,
+				   &dkey, 1 - i, punch_akeys[i], NULL);
+		assert_int_equal(rc, 0);
+
+		iod.iod_size = 0;
+		d_iov_set(&sgl.sg_iovs[0], (void *)buf, sizeof(buf));
+
+		rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, epoch++, &dkey, 1,
+				   &iod, &sgl);
+		assert_int_equal(rc, 0);
+		assert_int_equal(iod.iod_size, 0);
+	}
+
+	daos_sgl_fini(&sgl, false);
+}
+
 static const struct CMUnitTest punch_model_tests[] = {
 	{ "VOS800: VOS punch model array set/get size",
 	  array_set_get_size, pm_setup, pm_teardown },
@@ -828,12 +898,14 @@ static const struct CMUnitTest punch_model_tests[] = {
 	{ "VOS806: Multi update", simple_multi_update, NULL, NULL},
 	{ "VOS807: Array Set/get size, write, punch",
 	  array_size_write, pm_setup, pm_teardown },
+	{ "VOS808: Object punch and fetch",
+	  object_punch_and_fetch, NULL, NULL },
 };
 
 int
 run_pm_tests(void)
 {
-	if (RUNNING_ON_VALGRIND)
+	if (DAOS_ON_VALGRIND)
 		buf_size = 100;
 	return cmocka_run_group_tests_name("VOS Punch Model tests",
 					   punch_model_tests, setup_io,

@@ -70,25 +70,75 @@ func scanMountInfo(input io.Reader, target string, scanField int) (bool, error) 
 	return false, scn.Err()
 }
 
+func resolveDeviceMount(device string) (string, error) {
+	fi, err := os.Stat(device)
+	if err != nil {
+		return "", err
+	}
+
+	majorMinor, err := resolveDevice(fi)
+	if err != nil {
+		return "", err
+	}
+
+	mi, err := os.Open("/proc/self/mountinfo")
+	if err != nil {
+		return "", err
+	}
+	defer mi.Close()
+
+	scn := bufio.NewScanner(mi)
+	for scn.Scan() {
+		fields := strings.Fields(scn.Text())
+		if len(fields) < miNumFields {
+			continue
+		}
+		if fields[miMajorMinor] == majorMinor {
+			return fields[miMountPoint], nil
+		}
+	}
+
+	return "", errors.Errorf("Unable to resolve %s to mountpoint", device)
+}
+
+func resolveDevice(fi os.FileInfo) (string, error) {
+	if fi.Mode()&os.ModeDevice == 0 {
+		return "", errors.Errorf("%s is not a device", fi.Name())
+	}
+	st, ok := fi.Sys().(*syscall.Stat_t)
+	if !ok {
+		return "", errors.Errorf("unable to get underlying stat for %v", fi)
+	}
+	return fmt.Sprintf("%d:%d", st.Rdev/256, st.Rdev%256), nil
+}
+
+func isDevice(target string) bool {
+	fi, err := os.Stat(target)
+	if err != nil {
+		return false
+	}
+
+	return fi.Mode()&os.ModeDevice != 0
+}
+
 // IsMounted checks the target device or directory for mountedness.
 func (s LinuxProvider) IsMounted(target string) (bool, error) {
-	st, err := os.Stat(target)
+	fi, err := os.Stat(target)
 	if err != nil {
 		return false, err
 	}
 
 	var scanField int
 	switch {
-	case st.IsDir():
+	case fi.IsDir():
 		target = filepath.Clean(target)
 		scanField = miMountPoint
-	case st.Mode()&os.ModeDevice != 0:
+	case fi.Mode()&os.ModeDevice != 0:
 		scanField = miMajorMinor
-		st, ok := st.Sys().(*syscall.Stat_t)
-		if !ok {
-			return false, errors.Errorf("unable to get underlying stat for %v", st)
+		target, err = resolveDevice(fi)
+		if err != nil {
+			return false, err
 		}
-		target = fmt.Sprintf("%d:%d", st.Rdev/256, st.Rdev%256)
 	default:
 		return false, errors.Errorf("not a valid mount target: %q", target)
 	}
@@ -109,5 +159,13 @@ func (s LinuxProvider) Mount(source, target, fstype string, flags uintptr, data 
 
 // Unmount provides an implementation of Unmounter which calls the system implementation.
 func (s LinuxProvider) Unmount(target string, flags int) error {
+	// umount(2) in Linux doesn't allow unmount of a block device
+	if isDevice(target) {
+		mntPoint, err := resolveDeviceMount(target)
+		if err != nil {
+			return err
+		}
+		target = mntPoint
+	}
 	return unix.Unmount(target, flags)
 }

@@ -149,13 +149,13 @@ vos_ioc_reserve_init(struct vos_io_context *ioc)
 }
 
 static void
-vos_ioc_destroy(struct vos_io_context *ioc)
+vos_ioc_destroy(struct vos_io_context *ioc, bool evict)
 {
 	if (ioc->ic_biod != NULL)
 		bio_iod_free(ioc->ic_biod);
 
 	if (ioc->ic_obj)
-		vos_obj_release(vos_obj_cache_current(), ioc->ic_obj);
+		vos_obj_release(vos_obj_cache_current(), ioc->ic_obj, evict);
 
 	vos_ioc_reserve_fini(ioc);
 	vos_ilog_fetch_finish(&ioc->ic_dkey_info);
@@ -240,7 +240,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	return 0;
 error:
 	if (ioc != NULL)
-		vos_ioc_destroy(ioc);
+		vos_ioc_destroy(ioc, false);
 	return rc;
 }
 
@@ -687,7 +687,7 @@ vos_fetch_end(daos_handle_t ioh, int err)
 
 	/* NB: it's OK to use the stale ioc->ic_obj for fetch_end */
 	D_ASSERT(!ioc->ic_update);
-	vos_ioc_destroy(ioc);
+	vos_ioc_destroy(ioc, false);
 	return err;
 }
 
@@ -1309,7 +1309,7 @@ abort:
 out:
 	if (err != 0)
 		update_cancel(ioc);
-	vos_ioc_destroy(ioc);
+	vos_ioc_destroy(ioc, err != 0);
 	vos_dth_set(NULL);
 
 	return err;
