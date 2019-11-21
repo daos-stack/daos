@@ -86,6 +86,10 @@ func TestHostList_Expand(t *testing.T) {
 		"huey,dewey,louie": {
 			expOut: "dewey,huey,louie",
 		},
+		"10.5.1.[10-15]:10001,10.5.1.42:10001": {
+			expOut: `10.5.1.10:10001,10.5.1.11:10001,10.5.1.12:10001,` +
+				`10.5.1.13:10001,10.5.1.14:10001,10.5.1.15:10001,10.5.1.42:10001`,
+		},
 	} {
 		t.Run(input, func(t *testing.T) {
 			gotOut, gotErr := hostlist.Expand(input)
@@ -121,6 +125,10 @@ func TestHostList_Compress(t *testing.T) {
 		"huey,dewey,louie": {
 			expOut: "dewey,huey,louie",
 		},
+		`10.5.1.10:10001,10.5.1.11:10001,10.5.1.12:10001,` +
+			`10.5.1.13:10001,10.5.1.14:10001,10.5.1.15:10001,10.5.1.42:10001`: {
+			expOut: "10.5.1.[10-15,42]:10001",
+		},
 	} {
 		t.Run(input, func(t *testing.T) {
 			gotOut, gotErr := hostlist.Compress(input)
@@ -153,6 +161,10 @@ func TestHostList_Count(t *testing.T) {
 		},
 		"huey,dewey,louie": {
 			expCount: 3,
+		},
+		`10.5.1.10:10001,10.5.1.11:10001,10.5.1.12:10001,10.5.1.13:10001,` +
+			`10.5.1.14:10001,10.5.1.15:10001,10.5.1.42:10001`: {
+			expCount: 7,
 		},
 	} {
 		t.Run(input, func(t *testing.T) {
