@@ -248,9 +248,11 @@ void bio_xsctxt_free(struct bio_xs_context *ctxt);
  *
  * \param[IN] ctxt	Per-xstream NVMe context
  *
- * \return		Executed message count
+ * \return		0: If no work was done
+ *			1: If work was done
+ *			-1: If thread has exited
  */
-size_t bio_nvme_poll(struct bio_xs_context *ctxt);
+int bio_nvme_poll(struct bio_xs_context *ctxt);
 
 /*
  * Create per VOS instance blob.
