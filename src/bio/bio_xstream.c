@@ -28,6 +28,7 @@
 #include <uuid/uuid.h>
 #include <abt.h>
 #include <spdk/env.h>
+#include <spdk/thread.h>
 #include <spdk/bdev.h>
 #include <spdk/io_channel.h>
 #include <spdk/blob_bdev.h>
@@ -36,6 +37,9 @@
 #include <spdk/conf.h>
 #include "bio_internal.h"
 #include <daos_srv/smd.h>
+
+/* FIXME: remove it once SPDK being upgraded */
+void spdk_set_thread(struct spdk_thread *thread);
 
 /* These Macros should be turned into DAOS configuration in the future */
 #define DAOS_MSG_RING_SZ	4096
@@ -180,88 +184,6 @@ bio_nvme_fini(void)
 	smd_fini();
 }
 
-struct bio_msg {
-	spdk_thread_fn	 bm_fn;
-	void		*bm_arg;
-};
-
-/*
- * send_msg() can be called from any thread, the passed function
- * pointer (spdk_thread_fn) must be called on the same thread that
- * spdk_allocate_thread was called from.
- */
-static void
-send_msg(spdk_thread_fn fn, void *arg, void *ctxt)
-{
-	struct bio_xs_context *nvme_ctxt = ctxt;
-	struct bio_msg *msg;
-	size_t count;
-
-	D_ALLOC_PTR(msg);
-	if (msg == NULL) {
-		D_ERROR("failed to allocate msg\n");
-		return;
-	}
-
-	msg->bm_fn = fn;
-	msg->bm_arg = arg;
-
-	D_ASSERT(nvme_ctxt->bxc_msg_ring != NULL);
-	count = spdk_ring_enqueue(nvme_ctxt->bxc_msg_ring, (void **)&msg, 1);
-	if (count != 1)
-		D_ERROR("failed to enqueue msg %lu\n", count);
-};
-
-/*
- * SPDK can register various pollers for the service xstream, the registered
- * poll functions will be called periodically in dss_srv_handler().
- *
- * For example, when the spdk_get_io_channel(nvme_bdev) is called in the
- * context of a service xstream, a SPDK I/O channel mapping to the xstream
- * will be created for submitting I/O requests against the nvme_bdev, and the
- * device completion poller will be registered on channel creation callback.
- */
-struct bio_nvme_poller {
-	spdk_poller_fn	 bnp_fn;
-	void		*bnp_arg;
-	uint64_t	 bnp_period_us;
-	uint64_t	 bnp_expire_us;
-	d_list_t	 bnp_link;
-};
-
-/* SPDK bdev will register various poll functions through this callback */
-static struct spdk_poller *
-start_poller(void *ctxt, spdk_poller_fn fn, void *arg, uint64_t period_us)
-{
-	struct bio_xs_context *nvme_ctxt = ctxt;
-	struct bio_nvme_poller *poller;
-
-	D_ALLOC_PTR(poller);
-	if (poller == NULL) {
-		D_ERROR("failed to allocate poller\n");
-		return NULL;
-	}
-
-	poller->bnp_fn = fn;
-	poller->bnp_arg = arg;
-	poller->bnp_period_us = period_us;
-	poller->bnp_expire_us = d_timeus_secdiff(0) + period_us;
-	d_list_add(&poller->bnp_link, &nvme_ctxt->bxc_pollers);
-
-	return (struct spdk_poller *)poller;
-}
-
-/* SPDK bdev uregister various poll functions through this callback */
-static void
-stop_poller(struct spdk_poller *poller, void *ctxt)
-{
-	struct bio_nvme_poller *nvme_poller;
-
-	nvme_poller = (struct bio_nvme_poller *)poller;
-	d_list_del_init(&nvme_poller->bnp_link);
-	D_FREE(nvme_poller);
-}
-
 static inline bool
 is_bbs_owner(struct bio_xs_context *ctxt, struct bio_blobstore *bbs)
 {
@@ -273,37 +195,22 @@ is_bbs_owner(struct bio_xs_context *ctxt, struct bio_blobstore *bbs)
  *
  * \param[IN] ctxt	Per-xstream NVMe context
  *
- * \returns		Executed message count
+ * \returns		0: If mo work was done
+ *			1: If work was done
+ *			-1: If thread has exited
  */
-size_t
+int
 bio_nvme_poll(struct bio_xs_context *ctxt)
 {
-	struct bio_msg		*msg;
-	struct bio_nvme_poller	*poller;
-	size_t			 count;
-	uint64_t		 now = d_timeus_secdiff(0);
+
+	uint64_t now = d_timeus_secdiff(0);
+	int rc;
 
 	/* NVMe context setup was skipped */
 	if (ctxt == NULL)
 		return 0;
 
-	/* Process one msg on the msg ring */
-	count = spdk_ring_dequeue(ctxt->bxc_msg_ring, (void **)&msg, 1);
-	if (count > 0) {
-		msg->bm_fn(msg->bm_arg);
-		D_FREE(msg);
-	}
-
-	/* Call all registered poller one by one */
-	d_list_for_each_entry(poller, &ctxt->bxc_pollers, bnp_link) {
-		if (poller->bnp_period_us != 0 && poller->bnp_expire_us > now)
-			continue;
-
-		poller->bnp_fn(poller->bnp_arg);
-
-		if (poller->bnp_period_us != 0)
-			poller->bnp_expire_us = now + poller->bnp_period_us;
-	}
+	rc = spdk_thread_poll(ctxt->bxc_thread, 0, 0);
 
 	/* Print SPDK I/O stats for each xstream */
 	bio_xs_io_stat(ctxt, now);
@@ -316,7 +223,7 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 	    is_bbs_owner(ctxt, ctxt->bxc_blobstore))
 		bio_bs_monitor(ctxt, now);
 
-	return count;
+	return rc;
 }
 
 struct common_cp_arg {
@@ -368,7 +275,7 @@ common_bs_cb(void *arg, struct spdk_blob_store *bs, int rc)
 void
 xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights)
 {
-	size_t count;
+	int rc;
 
 	/* Wait for the completion callback done */
 	if (inflights != NULL) {
@@ -378,8 +285,8 @@ xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights)
 
 	/* Continue to drain all msgs in the msg ring */
 	do {
-		count = bio_nvme_poll(ctxt);
-	} while (count > 0);
+		rc = bio_nvme_poll(ctxt);
+	} while (rc > 0);
 }
 
 int
@@ -866,6 +773,8 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id)
 void
 bio_xsctxt_free(struct bio_xs_context *ctxt)
 {
+	bool	init_thread = true;
+
 	/* NVMe context setup was skipped */
 	if (ctxt == NULL)
 		return;
@@ -916,8 +825,10 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 
 			nvme_glb.bd_init_thread = NULL;
 
-		} else if (nvme_glb.bd_xstream_cnt == 0) {
-			ABT_cond_broadcast(nvme_glb.bd_barrier);
+		} else {
+			init_thread = false;
+			if (nvme_glb.bd_xstream_cnt == 0)
+				ABT_cond_broadcast(nvme_glb.bd_barrier);
 		}
 	}
 
@@ -925,15 +836,14 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 
 	if (ctxt->bxc_thread != NULL) {
 		xs_poll_completion(ctxt, NULL);
-		spdk_free_thread();
+		spdk_thread_exit(ctxt->bxc_thread);
 		ctxt->bxc_thread = NULL;
-	}
 
-	if (ctxt->bxc_msg_ring != NULL) {
-		spdk_ring_free(ctxt->bxc_msg_ring);
-		ctxt->bxc_msg_ring = NULL;
+		if (init_thread) {
+			spdk_thread_lib_fini();
+			spdk_env_fini();
+		}
 	}
-	D_ASSERT(d_list_empty(&ctxt->bxc_pollers));
 
 	if (ctxt->bxc_dma_buf != NULL) {
 		dma_buffer_destroy(ctxt->bxc_dma_buf);
@@ -946,10 +856,10 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 int
 bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 {
-	struct spdk_conf *config = NULL;
-	struct bio_xs_context *ctxt;
-	char name[32];
-	int rc;
+	struct spdk_conf	*config = NULL;
+	struct bio_xs_context	*ctxt;
+	char			 th_name[32];
+	int			 rc;
 
 	/* Skip NVMe context setup if the daos_nvme.conf isn't present */
 	if (nvme_glb.bd_nvme_conf == NULL) {
@@ -961,7 +871,6 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 	if (ctxt == NULL)
 		return -DER_NOMEM;
 
-	D_INIT_LIST_HEAD(&ctxt->bxc_pollers);
 	D_INIT_LIST_HEAD(&ctxt->bxc_io_ctxts);
 	ctxt->bxc_tgt_id = tgt_id;
 
@@ -1014,6 +923,14 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 			rc = -DER_INVAL; /* spdk_env_init() returns -1 */
 			goto out;
 		}
+
+		rc = spdk_thread_lib_init(NULL, 0);
+		if (rc != 0) {
+			D_ERROR("failed to init SPDK thread lib, rc:%d\n", rc);
+			rc = -DER_INVAL;
+			spdk_env_fini();
+			goto out;
+		}
 	}
 
 	/*
@@ -1022,23 +939,18 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 	 * spdk_bdev_initialize() call, it also could be used for blobstore
 	 * metadata io channel in following init_bio_bdevs() call.
 	 */
-	ctxt->bxc_msg_ring = spdk_ring_create(SPDK_RING_TYPE_MP_SC,
-					      DAOS_MSG_RING_SZ,
-					      SPDK_ENV_SOCKET_ID_ANY);
-	if (ctxt->bxc_msg_ring == NULL) {
-		D_ERROR("failed to allocate msg ring\n");
-		rc = -DER_NOMEM;
-		goto out;
-	}
-
-	snprintf(name, sizeof(name), "daos_spdk_%d", tgt_id);
-	ctxt->bxc_thread = spdk_allocate_thread(send_msg, start_poller,
-						stop_poller, ctxt, name);
+	snprintf(th_name, sizeof(th_name), "daos_spdk_%d", tgt_id);
+	ctxt->bxc_thread = spdk_thread_create((const char *)th_name, NULL);
 	if (ctxt->bxc_thread == NULL) {
 		D_ERROR("failed to alloc SPDK thread\n");
 		rc = -DER_NOMEM;
+		if (nvme_glb.bd_init_thread == NULL) {
+			spdk_thread_lib_fini();
+			spdk_env_fini();
+		}
 		goto out;
 	}
+	spdk_set_thread(ctxt->bxc_thread);
 
 	/*
 	 * The first started xstream will scan all bdevs and create blobstores,
