@@ -68,10 +68,18 @@ RUN yum -y install \
            python2-avocado python2-avocado-plugins-output-html \
            python2-avocado-plugins-varianter-yaml-to-mux       \
            yum-plugin-copr python-pathlib                      \
-           python2-clustershell python2-Cython python2-pip;    \
+           python2-clustershell python2-Cython python2-pip     \
+           python36-clustershell python36-paramiko             \
+           python36-numpy python36-jira python3-pip;           \
     yum -y copr enable jhli/ipmctl;                            \
     yum -y copr enable jhli/safeclib;                          \
     yum -y install libipmctl-devel
+
+# DAOS python 3 packages required for pylint
+#  - excluding mpi4py as it depends on CORCI-635
+RUN pip3 install avocado-framework; \
+    pip3 install avocado-framework-plugin-result-html; \
+    pip3 install avocado-framework-plugin-varianter-yaml-to-mux
 
 # Add DAOS user
 ENV USER daos

@@ -118,11 +118,9 @@ struct bio_blobstore {
 /* Per-xstream NVMe context */
 struct bio_xs_context {
 	int			 bxc_tgt_id;
-	struct spdk_ring	*bxc_msg_ring;
 	struct spdk_thread	*bxc_thread;
 	struct bio_blobstore	*bxc_blobstore;
 	struct spdk_io_channel	*bxc_io_channel;
-	d_list_t		 bxc_pollers;
 	struct bio_dma_buffer	*bxc_dma_buf;
 	d_list_t		 bxc_io_ctxts;
 	struct spdk_bdev_desc	*bxc_desc; /* for io stat only, read-only */
@@ -137,6 +135,7 @@ struct bio_io_context {
 	struct spdk_blob	*bic_blob;
 	struct bio_xs_context	*bic_xs_ctxt;
 	uint32_t		 bic_inflight_dmas;
+	uint32_t		 bic_io_unit;
 	unsigned int		 bic_opening:1,
 				 bic_closing:1;
 };
@@ -199,6 +198,12 @@ static inline bool
 is_blob_valid(struct bio_io_context *ctxt)
 {
 	return ctxt->bic_blob != NULL && !ctxt->bic_closing;
+}
+
+static inline uint64_t
+page2io_unit(struct bio_io_context *ctxt, uint64_t page)
+{
+	return page * (BIO_DMA_PAGE_SZ / ctxt->bic_io_unit);
 }
 
 enum {
