@@ -21,7 +21,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This file is part of daos_sr
+ * DAOS server erasure-coded object IO handling.
  *
  * src/object/srv_ec.c
  */

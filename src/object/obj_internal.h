@@ -152,6 +152,7 @@ struct obj_io_desc {
 	 * extends in the extend array (evenly distributed).
 	 */
 	uint32_t		 oiod_nr;
+	uint32_t		 oid_pad;
 	/** shard IOD array */
 	struct obj_shard_iod	*oiod_siods;
 };
@@ -166,15 +167,19 @@ struct obj_io_desc {
  *    it, create oiod/siod to specify each shard/tgt's IO req.
  */
 struct obj_reasb_req {
-	daos_iod_t		*orr_iods;
-	d_sg_list_t		*orr_sgls;
-	struct obj_io_desc	*orr_oiods;
-	/* reassemble flag, false means directly assigned from input iod/sgl
-	 * so need not to be freed.
-	 */
-	uint32_t		 orr_iod_reasb:1,
-				 orr_sgl_reasb:1;
+	daos_iod_t			*orr_iods;
+	d_sg_list_t			*orr_sgls;
+	struct obj_io_desc		*orr_oiods;
+	struct obj_ec_recx_array	*orr_recxs;
 };
+
+static inline void
+obj_io_desc_fini(struct obj_io_desc *oiod)
+{
+	if (oiod->oiod_siods != NULL)
+		D_FREE(oiod->oiod_siods);
+	memset(oiod, 0, sizeof(*oiod));
+}
 
 static inline void
 enum_anchor_copy(daos_anchor_t *dst, daos_anchor_t *src)

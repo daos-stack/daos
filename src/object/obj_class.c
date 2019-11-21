@@ -504,6 +504,11 @@ obj_ec_codec_init()
 				k, p, OBJ_EC_MAX_K, OBJ_EC_MAX_P);
 			D_GOTO(failed, rc = -DER_INVAL);
 		}
+		if (p > k) {
+			D_ERROR("invalid k %d p %d (parity target number cannot"
+				" exceed data target number).\n", k, p);
+			D_GOTO(failed, rc = -DER_INVAL);
+		}
 		m = k + p;
 		/* 32B needed for data generated for each input coefficient */
 		D_ALLOC(ec_codec->ec_gftbls, k * p * 32);

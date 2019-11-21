@@ -21,7 +21,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * DAOS client erasure-coded object handling.
+ * DAOS client erasure-coded object IO handling.
  *
  * src/object/cli_ec.c
  */
@@ -32,6 +32,157 @@
 #include <daos_types.h>
 #include "obj_rpc.h"
 #include "obj_internal.h"
+
+static int
+obj_ec_recxs_init(struct obj_ec_recx_array *recxs, uint32_t recx_nr)
+{
+	if (recxs->oer_recxs != NULL) {
+		D_ERROR("oer_recxs non-NULL, cannot init again.\n");
+		return -DER_INVAL;
+	}
+
+	if (recx_nr == 0)
+		return 0;
+
+	D_ALLOC_ARRAY(recxs->oer_recxs, recx_nr);
+	if (recxs->oer_recxs == NULL)
+		return -DER_NOMEM;
+
+	return 0;
+}
+
+void
+obj_ec_recxs_fini(struct obj_ec_recx_array *recxs)
+{
+	if (recxs == NULL)
+		return;
+	if (recxs->oer_recxs != NULL)
+		D_FREE(recxs->oer_recxs);
+	recxs->oer_nr = 0;
+	recxs->oer_stripe_total = 0;
+}
+
+#define ec_all_data_tgt_recx_nrs(oca, tgt_nrs, i)			       \
+	for (i = 0; i < (oca)->u.ec.e_k; i++)				       \
+		tgt_nrs[i]++;
+
+#define ec_all_parity_tgt_recx_nrs(oca, tgt_nrs, i)			       \
+	for (i = 0; i < (oca)->u.ec.e_p; i++)				       \
+		tgt_nrs[(oca)->u.ec.e_k + i]++;
+
+#define ec_all_tgt_recx_nrs(oca, tgt_nrs, i)				       \
+	for (i = 0; i < obj_ec_tgt_nr(oca); i++)			       \
+		tgt_nrs[i]++;
+
+#define ec_partial_tgt_recx_nrs(recx, stripe_rec_nr, oca, tgt_nrs, i)	       \
+	do {								       \
+		uint64_t tmp_idx = (recx)->rx_idx;			       \
+		int	 tgt;						       \
+		/* each parity node have one recx as replica */		       \
+		ec_all_parity_tgt_recx_nrs(oca, tgt_nrs, i);		       \
+		if ((recx)->rx_nr > ((stripe_rec_nr) - (oca)->u.ec.e_len)) {   \
+			ec_all_data_tgt_recx_nrs(oca, tgt_nrs, i);	       \
+			break;						       \
+		}							       \
+		while (tmp_idx < ((recx)->rx_idx + (recx)->rx_nr)) {	       \
+			tgt = obj_ec_tgt_of_recx_idx(			       \
+				tmp_idx, stripe_rec_nr, (oca)->u.ec.e_len);    \
+			tgt_nrs[tgt]++;					       \
+			tmp_idx += (oca)->u.ec.e_len;			       \
+		}							       \
+	} while (0)
+
+/** scan the iod to find the full_stripe recxs and some help info */
+int
+obj_ec_recx_scan(daos_iod_t *iod, struct daos_oclass_attr *oca,
+		 struct obj_ec_recx_array *ec_recx_array)
+{
+	struct obj_ec_recx	*ec_recx = NULL;
+	daos_recx_t		*recx;
+	uint32_t		 recx_nr;
+	uint32_t		 *tgt_recx_nrs;
+	uint64_t		 stripe_rec_nr;
+	uint64_t		 start, end, rec_nr, rec_off;
+	int			 i, j, idx, rc;
+
+	D_ASSERT(iod->iod_type == DAOS_IOD_ARRAY);
+	stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
+	tgt_recx_nrs = ec_recx_array->oer_tgt_recx_nrs;
+
+	for (i = 0, idx = 0, rec_off = 0; i < iod->iod_nr; i++) {
+		recx = &iod->iod_recxs[i];
+		start = roundup(recx->rx_idx, stripe_rec_nr);
+		end = rounddown(recx->rx_idx + recx->rx_nr, stripe_rec_nr);
+		if (start >= end) {
+			ec_partial_tgt_recx_nrs(recx, stripe_rec_nr, oca,
+						tgt_recx_nrs, j);
+			rec_off += recx->rx_nr;
+			continue;
+		}
+
+		if (ec_recx_array->oer_recxs == NULL) {
+			rc = obj_ec_recxs_init(ec_recx_array, iod->iod_nr - i);
+			if (rc)
+				return rc;
+			ec_recx = ec_recx_array->oer_recxs;
+		}
+		ec_recx[idx].oer_idx = i;
+		rec_nr = end - start;
+		ec_recx[idx].oer_stripe_nr = rec_nr / stripe_rec_nr;
+		ec_recx[idx].oer_byte_off = (rec_off + start - recx->rx_idx) *
+					    iod->iod_size;
+		ec_recx[idx].oer_recx.rx_idx = start;
+		ec_recx[idx].oer_recx.rx_nr = rec_nr;
+		ec_recx_array->oer_stripe_total += ec_recx[idx].oer_stripe_nr;
+		idx++;
+		rec_off += recx->rx_nr;
+		/* at least one recx on each tgt for full stripe */
+		ec_all_tgt_recx_nrs(oca, tgt_recx_nrs, j);
+		/* partial update before or after full stripe need replica to
+		 * parity target.
+		 */
+		if (recx->rx_idx < start)
+			ec_all_parity_tgt_recx_nrs(oca, tgt_recx_nrs, j);
+		if (recx->rx_idx + recx->rx_nr > end)
+			ec_all_parity_tgt_recx_nrs(oca, tgt_recx_nrs, j);
+	}
+
+	if (ec_recx_array->oer_recxs != NULL) {
+		D_ASSERT(idx > 0 && idx <= iod->iod_nr);
+		ec_recx_array->oer_nr = idx;
+	} else {
+		D_ASSERT(ec_recx_array->oer_nr == 0);
+	}
+
+	for (i = 0, recx_nr = 0; i < obj_ec_tgt_nr(oca); i++) {
+		ec_recx_array->oer_tgt_recx_idxs[i] = recx_nr;
+		recx_nr += tgt_recx_nrs[i];
+	}
+
+	return 0;
+}
+
+int
+obj_ec_req_reassemb(daos_obj_rw_t *args, daos_obj_id_t oid,
+		    struct daos_oclass_attr *oca,
+		    struct obj_reasb_req *reasb_req)
+{
+/*
+	daos_iod_t		*iods, *riods = NULL;
+	d_sg_list_t		*sgls, *rsgls = NULL;
+	uint32_t		 iod_nr = args->nr;
+	int			 i, rc = 0;
+
+	iods = args->iods;
+	sgls = args->sgls;
+
+	for (i = 0; i < iod_nr; i++) {
+	}
+*/
+
+
+	return 0;
+}
 
 /* EC struct used to save state during encoding and to drive resource recovery.
  */
