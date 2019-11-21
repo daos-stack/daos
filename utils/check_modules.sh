@@ -41,8 +41,9 @@ set -e
 if [ ! -d "scons_local" ];then
   cd ..
 fi
-PYTHONPATH=$PWD/utils:$PWD/install/lib/daos/TESTING/ftest/util/
-PYTHONPATH=$PYTHONPATH:$PWD/install/lib/daos/TESTING/ftest/util/apricot/
+# Set PYTHONPATH for source files not installed files
+PYTHONPATH=$PWD/utils:$PWD/src/tests/ftest/util/
+PYTHONPATH=$PYTHONPATH:$PWD/src/tests/ftest/util/apricot/
 PYTHONPATH=$PYTHONPATH:$PWD/src/client/
 export PYTHONPATH
 

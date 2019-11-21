@@ -3,11 +3,12 @@
 
 %define daoshome %{_exec_prefix}/lib/%{name}
 
-%global spdk_max_version 18.07
+# Unlimited maximum version
+%global spdk_max_version 1000
 
 Name:          daos
 Version:       0.6.0
-Release:       14%{?relval}%{?dist}
+Release:       15%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -330,6 +331,9 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Tue Nov 19 2019 Tom Nabarro <tom.nabarro@intel.com> 0.6.0-15
+- Temporarily unconstrain max. version of spdk
+
 * Wed Nov 06 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-14
 - Constrain max. version of spdk
 
