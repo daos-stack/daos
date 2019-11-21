@@ -166,6 +166,8 @@ static int test_set_member_state(struct swim_context *ctx,
 	int i, cnt, rc = 0;
 
 	switch (state->sms_status) {
+	case SWIM_MEMBER_INACTIVE:
+		break;
 	case SWIM_MEMBER_ALIVE:
 		break;
 	case SWIM_MEMBER_SUSPECT:

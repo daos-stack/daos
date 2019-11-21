@@ -212,6 +212,22 @@ struct crt_proto_query_out {
 	int32_t pq_rc;
 };
 
+struct crt_rpc_swim_in {
+	swim_id_t src;
+	struct {
+	uint64_t ca_count;
+	struct swim_member_update *ca_arrays;
+	} upds;
+};
+
+struct crt_rpc_swim_wack_in {
+	swim_id_t src;
+	struct {
+	uint64_t ca_count;
+	struct swim_member_update *ca_arrays;
+	} upds;
+};
+
 struct crt_st_both_bulk_in {
 	uint64_t unused1;
 	crt_bulk_t unused2;

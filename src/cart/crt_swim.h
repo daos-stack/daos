@@ -69,7 +69,7 @@ void crt_swim_fini(void);
 
 int  crt_swim_enable(struct crt_grp_priv *grp_priv, int crt_ctx_idx);
 int  crt_swim_disable(struct crt_grp_priv *grp_priv, int crt_ctx_idx);
-void crt_swim_disable_all(struct crt_grp_priv *grp_priv);
+void crt_swim_disable_all(void);
 int  crt_swim_rank_add(struct crt_grp_priv *grp_priv, d_rank_t rank);
 int  crt_swim_rank_del(struct crt_grp_priv *grp_priv, d_rank_t rank);
 void crt_swim_rank_del_all(struct crt_grp_priv *grp_priv);

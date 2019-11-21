@@ -141,6 +141,7 @@ static struct crt_proto_format my_proto_fmt_basic_corpc = {
 	.cpf_base = TEST_CORPC_PREFWD_BASE,
 };
 
+void crt_swim_disable_all(void);
 
 int main(void)
 {
@@ -187,6 +188,7 @@ int main(void)
 		crt_progress(g_main_ctx, 1000, NULL, NULL);
 
 	D_DEBUG(DB_TEST, "Shutting down\n");
+	crt_swim_disable_all();
 
 	tc_drain_queue(g_main_ctx);
 

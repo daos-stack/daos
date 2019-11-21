@@ -792,7 +792,7 @@ crt_grp_ctx_invalid(struct crt_context *ctx, bool locked)
 		D_RWLOCK_RDLOCK(&grp_gdata->gg_rwlock);
 	grp_priv = grp_gdata->gg_srv_pri_grp;
 	if (grp_priv != NULL) {
-		crt_swim_disable_all(grp_priv);
+		crt_swim_disable_all();
 		rc = crt_grp_lc_ctx_invalid(grp_priv, ctx);
 		if (rc != 0) {
 			D_ERROR("crt_grp_lc_ctx_invalid failed, group %s, "

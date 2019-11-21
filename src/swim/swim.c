@@ -59,7 +59,7 @@ swim_dump_updates(swim_id_t self_id, swim_id_t from, swim_id_t to,
 	if (fp != NULL) {
 		for (i = 0; i < nupds; i++) {
 			rc = fprintf(fp, " {%lu %c %lu}", upds[i].smu_id,
-				     "ASD"[upds[i].smu_state.sms_status],
+				SWIM_STATUS_CHARS[upds[i].smu_state.sms_status],
 				     upds[i].smu_state.sms_incarnation);
 			if (rc < 0)
 				break;
@@ -645,13 +645,19 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 			 * ping request
 			 */
 			if (now > ctx->sc_dping_deadline) {
-				/* no response from direct pings,
-				 * suspect this member
-				 */
-				swim_member_suspect(ctx, ctx->sc_self,
-						    ctx->sc_target,
+				/* no response from direct ping */
+				if (target_state.sms_status != SWIM_MEMBER_INACTIVE) {
+					/* suspect this member */
+					swim_member_suspect(ctx, ctx->sc_self,
+							    ctx->sc_target,
 						  target_state.sms_incarnation);
-				ctx_state = SCS_TIMEDOUT;
+					ctx_state = SCS_TIMEDOUT;
+				} else {
+					/* just goto next member,
+					 * this is not ready yet.
+					 */
+					ctx_state = SCS_DEAD;
+				}
 			}
 			break;
 		case SCS_IPINGED:
@@ -753,20 +759,27 @@ swim_parse_message(struct swim_context *ctx, swim_id_t from,
 	size_t i;
 	int rc = 0;
 
+	swim_dump_updates(self_id, from, self_id, upds, nupds);
+
 	if (self_id == SWIM_ID_INVALID || nupds == 0) /* not initialized yet */
 		return 0; /* Ignore this update */
-
-	swim_dump_updates(self_id, from, self_id, upds, nupds);
 
 	swim_ctx_lock(ctx);
 	ctx_state = swim_state_get(ctx);
 
-	if (ctx_state == SCS_DPINGED && from == ctx->sc_target)
+	if (from == ctx->sc_target &&
+	    (ctx_state == SCS_BEGIN || ctx_state == SCS_DPINGED))
 		ctx_state = SCS_ACKED;
 
 	to = upds[0].smu_id; /* save first index from update */
 	for (i = 0; i < nupds; i++) {
 		switch (upds[i].smu_state.sms_status) {
+		case SWIM_MEMBER_INACTIVE:
+			/* ignore inactive updates.
+			 * inactive status is only for bootstrapping now,
+			 * so it should not be spread across others.
+			 */
+			break;
 		case SWIM_MEMBER_ALIVE:
 			/* ignore alive updates for self */
 			if (upds[i].smu_id == self_id)

@@ -59,8 +59,12 @@ typedef uint64_t swim_id_t;
 enum swim_member_status {
 	SWIM_MEMBER_ALIVE = 0,
 	SWIM_MEMBER_SUSPECT,
-	SWIM_MEMBER_DEAD
+	SWIM_MEMBER_DEAD,
+	SWIM_MEMBER_INACTIVE
 };
+
+/** This chars should represent values of enum swim_member_status to print */
+#define SWIM_STATUS_CHARS "ASDI"
 
 /** SWIM state associated with each group member */
 struct swim_member_state {

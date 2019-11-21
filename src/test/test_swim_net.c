@@ -243,13 +243,9 @@ static int swim_get_member_state(struct swim_context *ctx,
 				 swim_id_t id, struct swim_member_state *state)
 {
 	struct swim_global_srv *srv = swim_data(ctx);
-	swim_id_t self = swim_self_get(ctx);
 	int rc = 0;
 
 	*state = srv->swim_ms[id];
-
-	dbg("get_member_state %lu ==> %lu: nr=%lu, st=%c", self, id,
-	    state->sms_incarnation, "ASD"[state->sms_status]);
 
 	return rc;
 }
@@ -262,6 +258,8 @@ static int swim_set_member_state(struct swim_context *ctx,
 	int rc = 0;
 
 	switch (state->sms_status) {
+	case SWIM_MEMBER_INACTIVE:
+		break;
 	case SWIM_MEMBER_ALIVE:
 		break;
 	case SWIM_MEMBER_SUSPECT:
@@ -274,9 +272,6 @@ static int swim_set_member_state(struct swim_context *ctx,
 		fprintf(stderr, "%lu: notify %lu unknown\n", self, id);
 		break;
 	}
-
-	dbg("set_member_state %lu ==> %lu: nr=%lu, st=%c", self, id,
-	    state->sms_incarnation, "ASD"[state->sms_status]);
 
 	srv->swim_ms[id] = *state;
 	return rc;
@@ -306,16 +301,20 @@ static void *srv_progress(void *data)
 static void swim_progress_cb(crt_context_t ctx, void *arg)
 {
 	struct swim_global_srv *srv = arg;
+	swim_id_t self_id = swim_self_get(srv->swim_ctx);
 	int rc = 0;
 
 	dbg("---%s--->", __func__);
+
+	if (self_id == SWIM_ID_INVALID)
+		goto out;
 
 	rc = swim_progress(srv->swim_ctx, 1);
 	if (rc == -ESHUTDOWN)
 		srv->shutdown = 1;
 	else if (rc != -ETIMEDOUT)
 		D_ERROR("swim_progress() failed rc=%d\n", rc);
-
+out:
 	dbg("<---%s---", __func__);
 }
 
@@ -331,8 +330,12 @@ static void srv_fini(void)
 	if (global_srv.progress_thid)
 		pthread_join(global_srv.progress_thid, NULL);
 
+	rc = crt_unregister_progress_cb(swim_progress_cb, 0, &global_srv);
+	D_ASSERTF(rc == 0, "crt_unregister_progress_cb() failed %d\n", rc);
+
 	swim_fini(global_srv.swim_ctx);
 	free(global_srv.swim_ms);
+	global_srv.swim_ctx = NULL;
 
 	rc = crt_context_destroy(global_srv.crt_ctx, 0);
 	D_ASSERTF(rc == 0, "crt_context_destroy failed rc=%d\n", rc);
@@ -424,7 +427,7 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "%02d. %02u:", t, global_srv.my_rank);
 		for (j = 0; j < global_srv.grp_size; j++) {
 			s = global_srv.swim_ms[j].sms_status;
-			fprintf(stderr, " %c", "ASD"[s]);
+			fprintf(stderr, " %c", SWIM_STATUS_CHARS[s]);
 		}
 		fprintf(stderr, "\n");
 		if (global_srv.my_rank == global_srv.grp_size - 1) {

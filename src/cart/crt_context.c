@@ -699,6 +699,7 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 	crt_endpoint_t			*tgt_ep;
 	crt_rpc_t			*ul_req;
 	struct crt_uri_lookup_in	*ul_in;
+	int				 rc;
 
 	if (crt_req_timeout_reset(rpc_priv)) {
 		RPC_TRACE(DB_NET, rpc_priv,
@@ -759,7 +760,9 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 				  "aborting to group %s, rank %d, tgt_uri %s\n",
 				  grp_priv->gp_pub.cg_grpid,
 				  tgt_ep->ep_rank, rpc_priv->crp_tgt_uri);
-			crt_req_abort(&rpc_priv->crp_pub);
+			rc = crt_req_abort(&rpc_priv->crp_pub);
+			if (rc)
+				crt_context_req_untrack(rpc_priv);
 		}
 		break;
 	}
