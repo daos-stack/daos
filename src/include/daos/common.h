@@ -216,6 +216,42 @@ daos_size_t daos_sgls_buf_size(d_sg_list_t *sgls, int nr);
 daos_size_t daos_sgls_packed_size(d_sg_list_t *sgls, int nr,
 				  daos_size_t *buf_size);
 
+/** Move to next iov, it's caller's responsibility to ensure the idx boundary */
+#define daos_sgl_next_iov(iov_idx, iov_off)				\
+	do {								\
+		(iov_idx)++;						\
+		(iov_off) = 0;						\
+	} while (0)
+/** Get the leftover space in an iov of sgl */
+#define daos_iov_left(sgl, iov_idx, iov_off)				\
+	((sgl)->sg_iovs[iov_idx].iov_len - (iov_off))
+/**
+ * Move sgl forward from iov_idx/iov_off, with move_dist distance. It is
+ * caller's responsibility to check the boundary.
+ */
+#define daos_sgl_move(sgl, iov_idx, iov_off, move_dist)			       \
+	do {								       \
+		uint64_t moved = 0, step, iov_left;			       \
+		if ((move_dist) <= 0)					       \
+			break;						       \
+		while (moved < (move_dist)) {				       \
+			iov_left = daos_iov_left(sgl, iov_idx, iov_off);       \
+			step = MIN(iov_left, (move_dist) - moved);	       \
+			(iov_off) += step;				       \
+			moved += step;					       \
+			if (daos_iov_left(sgl, iov_idx, iov_off) == 0)	       \
+				daos_sgl_next_iov(iov_idx, iov_off);	       \
+		}							       \
+		D_ASSERT(moved == (move_dist));				       \
+	} while (0)
+
+#ifndef roundup
+#define roundup(x, y)		((((x) + ((y) - 1)) / (y)) * (y))
+#endif
+#ifndef rounddown
+#define rounddown(x, y)		(((x) / (y)) * (y))
+#endif
+
 /**
  * Request a buffer of length \a bytes_needed from the sgl starting at
  * index \a idx. The length of the resulting buffer will be the number

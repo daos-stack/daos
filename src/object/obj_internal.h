@@ -41,6 +41,7 @@
 #include <daos_srv/dtx_srv.h>
 
 #include "obj_rpc.h"
+#include "obj_ec.h"
 
 /**
  * This environment is mostly for performance evaluation.
@@ -123,15 +124,56 @@ struct dc_object {
 	struct dc_obj_layout	*cob_shards;
 };
 
-/** EC codec for object EC encoding/decoding */
-struct obj_ec_codec {
-	/** encode matrix, can be used to generate decode matrix */
-	unsigned char		*ec_en_matrix;
+/** Shard IO descriptor */
+struct obj_shard_iod {
+	/** start index in extend array in daos_iod_t */
+	uint32_t		 siod_idx;
+	/** number of extends in extend array in daos_iod_t */
+	uint32_t		 siod_nr;
+	/** the byte offset of this shard's data to the sgl/bulk */
+	uint64_t		 siod_off;
+};
+
+/** Evenly distributed for EC full-stripe-only mode */
+#define OBJ_SIOD_EVEN_DIST	((uint32_t)-1)
+
+/**
+ * Object IO descriptor.
+ * NULL for replica obj, as each shard/tgt with same extends in iod.
+ * Non-NULL for EC obj to specify IO descriptor for different targets.
+ */
+struct obj_io_desc {
 	/**
-	 * GF (galois field) tables, pointer to array of input tables generated
-	 * from coding coefficients. Needed for both encoding and decoding.
+	 * number of shard IODs involved for this object IO.
+	 * for EC obj, (siod_nr == 0) if there is only one target, for
+	 * example partial update or fetch targeted with only one shard;
+	 * (siod_nr == OBJ_SIOD_EVEN_DIST) is a special case that the extends
+	 * only cover full stripe(s), then each target has same number of
+	 * extends in the extend array (evenly distributed).
 	 */
-	unsigned char		*ec_gftbls;
+	uint32_t		 oiod_nr;
+	/** shard IOD array */
+	struct obj_shard_iod	*oiod_siods;
+};
+
+/**
+ * Reassembled obj request.
+ * User input iod/sgl possibly need to be reassembled at client before sending
+ * to server, for example:
+ * 1) merge adjacent recxs, or sort out-of-order recxs and generate new sgl to
+ *    match with it;
+ * 2) For EC obj, split iod/recxs to each target, generate new sgl to match with
+ *    it, create oiod/siod to specify each shard/tgt's IO req.
+ */
+struct obj_reasb_req {
+	daos_iod_t		*orr_iods;
+	d_sg_list_t		*orr_sgls;
+	struct obj_io_desc	*orr_oiods;
+	/* reassemble flag, false means directly assigned from input iod/sgl
+	 * so need not to be freed.
+	 */
+	uint32_t		 orr_iod_reasb:1,
+				 orr_sgl_reasb:1;
 };
 
 static inline void
@@ -367,9 +409,6 @@ int  obj_utils_init(void);
 void obj_utils_fini(void);
 
 /* obj_class.c */
-int obj_ec_codec_init(void);
-void obj_ec_codec_fini(void);
-struct obj_ec_codec *obj_ec_codec_get(daos_oclass_id_t oc_id);
 int obj_encode_full_stripe(daos_obj_id_t oid, d_sg_list_t *sgl,
 			   uint32_t *sg_idx, size_t *sg_off,
 			   struct obj_ec_parity *parity, uint32_t p_idx);

@@ -522,7 +522,7 @@ out:
 	return rc;
 }
 
-#define OBJ_TGT_INLINE_NR	(32)
+#define OBJ_TGT_INLINE_NR	(30)
 struct obj_req_tgts {
 	/* to save memory allocation if #targets <= OBJ_TGT_INLINE_NR */
 	struct daos_shard_tgt	 ort_tgts_inline[OBJ_TGT_INLINE_NR];
@@ -1028,6 +1028,7 @@ struct obj_auxi_args {
 	crt_bulk_t			*bulks;
 	uint32_t			 bulk_nr;
 	d_list_t			 shard_task_head;
+	struct obj_reasb_req		 reasb_req;
 	/* one shard_args embedded to save one memory allocation if the obj
 	 * request only targets for one shard.
 	 */
