@@ -422,6 +422,10 @@ class ServerManager(ExecutableCommand):
         """Start the server through the runner."""
         self.runner.job.set_config(yamlfile)
         self.server_clean()
+        # Prepare SCM storage in servers
+        if self.runner.job.yaml_params.is_scm():
+            self.log.info("Performing SCM storage prepare in <format> mode")
+            storage_prepare(self.hosts, "root", "scm")
 
         # Prepare nvme storage in servers
         if self.runner.job.yaml_params.is_nvme():
@@ -478,7 +482,7 @@ class ServerManager(ExecutableCommand):
         self.log.info("Stopping servers")
         if self.runner.job.yaml_params.is_nvme():
             self.kill()
-            storage_reset(self._hosts)
+            storage_reset(self._hosts, "nvme")
             # Make sure the mount directory belongs to non-root user
             self.log.info("Changing ownership of mount to non-root user")
             cmd = "sudo chown -R {0}:{0} /mnt/daos*".format(getpass.getuser())
@@ -538,16 +542,17 @@ def storage_prepare(hosts, user, device_type):
     device_args = ""
     # Get the daos_server from the install path. Useful for testing
     # with daos built binaries.
-    daos_srv_bin = get_file_path("bin/daos_server","install")
+    daos_srv_bin = get_file_path("bin/daos_server")
+    device_args = ""
     if device_type == "nvme":
             dev_param = "-n"
-	    device_args = " --hugepages=4096"
+	        device_args = " --hugepages=4096"
     elif device_type == "dcpm":
             dev_param = "-s"
     else:
-         raise ServerFailed("Invalid device type")
+            raise ServerFailed("Invalid device type")
     cmd = ("sudo {} storage prepare {} -u \"{}\" {} -f"
-           .format(daos_srv_bin[0], dev_param, user, dev_args))
+           .format(daos_srv_bin[0], dev_param, user, device_args))
     result = pcmd(hosts, cmd, timeout=120)
     if len(result) > 1 or 0 not in result:
         raise ServerFailed("Error preparing NVMe storage")
@@ -566,7 +571,7 @@ def storage_reset(hosts, device_type):
        dev_param = "-n"
     else:
        dev_param = "-s"
-    daos_srv_bin = get_file_path("bin/daos_server", "install")
+    daos_srv_bin = get_file_path("bin/daos_server")
     cmd = "sudo {} storage prepare {} --reset -f".format(daos_srv_bin[0], dev_param)
     result = pcmd(hosts, cmd)
     if len(result) > 1 or 0 not in result:
