@@ -191,8 +191,9 @@ func (srv *IOServerInstance) NeedsScmFormat() (bool, error) {
 		return false, err
 	}
 
-	srv.log.Debugf("%s (%s) needs format: %t", scmCfg.MountPoint, scmCfg.Class, !res.Formatted)
-	return !res.Formatted, nil
+	needsFormat := !res.Mounted && !res.Mountable
+	srv.log.Debugf("%s (%s) needs format: %t", scmCfg.MountPoint, scmCfg.Class, needsFormat)
+	return needsFormat, nil
 }
 
 // Start checks to make sure that the instance has a valid superblock before

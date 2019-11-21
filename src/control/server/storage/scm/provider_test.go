@@ -390,6 +390,7 @@ func TestProviderCheckFormat(t *testing.T) {
 			expResponse: &FormatResponse{
 				Mountpoint: goodMountPoint,
 				Formatted:  true,
+				Mounted:    true,
 			},
 		},
 		"getFs fails": {
@@ -401,7 +402,7 @@ func TestProviderCheckFormat(t *testing.T) {
 			},
 			getFsErr: errors.New("getfs failed"),
 		},
-		"already formatted": {
+		"already formatted; not mountable": {
 			request: &FormatRequest{
 				Mountpoint: goodMountPoint,
 				Dcpm: &DcpmParams{
@@ -411,6 +412,20 @@ func TestProviderCheckFormat(t *testing.T) {
 			getFsStr: "reiserfs",
 			expResponse: &FormatResponse{
 				Mountpoint: goodMountPoint,
+				Formatted:  true,
+			},
+		},
+		"already formatted; mountable": {
+			request: &FormatRequest{
+				Mountpoint: goodMountPoint,
+				Dcpm: &DcpmParams{
+					Device: goodDevice,
+				},
+			},
+			getFsStr: fsTypeExt4,
+			expResponse: &FormatResponse{
+				Mountpoint: goodMountPoint,
+				Mountable:  true,
 				Formatted:  true,
 			},
 		},
@@ -544,6 +559,7 @@ func TestProviderFormat(t *testing.T) {
 			expResponse: &FormatResponse{
 				Mountpoint: goodMountPoint,
 				Formatted:  true,
+				Mounted:    true,
 			},
 		},
 		"ramdisk: already mounted, no reformat": {
@@ -561,6 +577,7 @@ func TestProviderFormat(t *testing.T) {
 			expResponse: &FormatResponse{
 				Mountpoint: goodMountPoint,
 				Formatted:  true,
+				Mounted:    true,
 			},
 		},
 		"ramdisk: not mounted; mkdir fails": {
@@ -585,6 +602,7 @@ func TestProviderFormat(t *testing.T) {
 			expResponse: &FormatResponse{
 				Mountpoint: goodMountPoint,
 				Formatted:  true,
+				Mounted:    true,
 			},
 		},
 		"ramdisk: already mounted; reformat; unmount fails": {
@@ -652,6 +670,7 @@ func TestProviderFormat(t *testing.T) {
 			expResponse: &FormatResponse{
 				Mountpoint: goodMountPoint,
 				Formatted:  true,
+				Mounted:    true,
 			},
 		},
 		"dcpm: not mounted; already formatted; reformat": {
@@ -666,6 +685,7 @@ func TestProviderFormat(t *testing.T) {
 			expResponse: &FormatResponse{
 				Mountpoint: goodMountPoint,
 				Formatted:  true,
+				Mounted:    true,
 			},
 		},
 		"dcpm: mounted; already formatted; reformat": {
@@ -680,6 +700,7 @@ func TestProviderFormat(t *testing.T) {
 			expResponse: &FormatResponse{
 				Mountpoint: goodMountPoint,
 				Formatted:  true,
+				Mounted:    true,
 			},
 		},
 		"dcpm: mountpoint doesn't exist; not formatted": {
@@ -694,6 +715,7 @@ func TestProviderFormat(t *testing.T) {
 			expResponse: &FormatResponse{
 				Mountpoint: goodMountPoint,
 				Formatted:  true,
+				Mounted:    true,
 			},
 		},
 		"dcpm: not mounted; not formatted": {
@@ -707,6 +729,7 @@ func TestProviderFormat(t *testing.T) {
 			expResponse: &FormatResponse{
 				Mountpoint: goodMountPoint,
 				Formatted:  true,
+				Mounted:    true,
 			},
 		},
 		"dcpm: not mounted; not formatted; mkfs fails": {
