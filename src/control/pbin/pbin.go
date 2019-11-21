@@ -29,4 +29,8 @@ const (
 	// DisableReqFwdEnvVar is the name of the environment variable which
 	// can be set to disable forwarding requests to the privileged binary.
 	DisableReqFwdEnvVar = "DAOS_DISABLE_REQ_FWD"
+
+	// DaosAdminLogFileEnvVar is the name of the environment variable which
+	// can be set to enable non-ERROR logging in the privileged binary.
+	DaosAdminLogFileEnvVar = "DAOS_ADMIN_LOG_FILE"
 )

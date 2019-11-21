@@ -70,7 +70,6 @@ func (n *NvmMgmt) Discover() (devices []DeviceDiscovery, err error) {
 		return
 	}
 	if count == 0 {
-		println("no NVDIMMs found!")
 		return
 	}
 
