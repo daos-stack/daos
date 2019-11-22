@@ -41,7 +41,7 @@ import (
 // 	returns map[int][]string{10000: ["intelA1", ..."intelA10"],
 // 				 10001: ["intelB2", "intelB3"]}
 func hostsByPort(addrPatterns []string, defaultPort int) (map[int][]string, error) {
-	portHosts := make(map[int][]string, len(addrPatterns))
+	portHosts := make(map[int][]string)
 
 	for _, p := range addrPatterns {
 		var port int
@@ -79,18 +79,54 @@ func hostsByPort(addrPatterns []string, defaultPort int) (map[int][]string, erro
 	return portHosts, nil
 }
 
-// rangeByPort takes host:port addresses and default port number and returns
-// address patterns after expanding nodesets and mapping to ports.
-func rangeByPort(addrs []string, defaultPort int) ([]string, error) {
-	var patterns []string
+// flattenHostAddrs takes nodeset:port patterns and returns individual addresses
+// after expanding nodesets and mapping to ports.
+func flattenHostAddrs(addrPatterns string) ([]string, error) {
+	var addrs []string
+	var ports []int
 
-	portHosts, err := hostsByPort(addrs, defaultPort)
+	// expand any compressed nodesets for specific ports
+	// example opts.HostList: intelA[1-10]:10000,intelB[2,3]:10001
+	portHosts, err := hostsByPort(strings.Split(addrPatterns, ","), 0)
+	if err != nil {
+		return nil, err
+	}
+
+	for port := range portHosts {
+		ports = append(ports, port)
+	}
+	sort.Ints(ports)
+
+	// reconstruct slice of all "host:port" addresses from map
+	for _, port := range ports {
+		for _, host := range portHosts[port] {
+			addrs = append(addrs, fmt.Sprintf("%s:%d", host, port))
+		}
+	}
+
+	return addrs, nil
+}
+
+// rangeByPort takes host:port addresses and returns patterns after expanding
+// nodesets and mapping to ports.
+func rangeByPort(addrs []string) ([]string, error) {
+	var patterns []string
+	var ports []int
+
+	// port should always be populated and will fail if default 0 used
+	portHosts, err := hostsByPort(addrs, 0)
 	if err != nil {
 		return nil, errors.Errorf("failed to group hosts by port %v (%s)", addrs, err)
 	}
 
+	for port := range portHosts {
+		ports = append(ports, port)
+	}
+	sort.Ints(ports)
+
 	// reconstruct pattern of all successfully connected hosts per port
-	for port, hosts := range portHosts {
+	for _, port := range ports {
+		hosts := portHosts[port]
 		compressed, err := hostlist.Compress(strings.Join(hosts, ","))
 		if err != nil {
 			return nil, errors.Errorf("failed to compress hostlist %v (%s)\n",
@@ -127,15 +163,14 @@ func checkConns(results client.ResultMap) (active []string, inactive map[string]
 	addrs = addrs[:i]
 
 	// group hosts by port from successful connection addresses
-	// port should always be populated and will fail if default 0 used
-	active, err = rangeByPort(addrs, 0)
+	active, err = rangeByPort(addrs)
 	if err != nil {
 		return nil, nil, errors.WithMessage(err, "reducing active addresses")
 	}
 
 	// group hosts by port and reassign to msg key for unsuccessful connection addresses
 	for msg, addrs := range inactive {
-		patterns, err := rangeByPort(addrs, 0)
+		patterns, err := rangeByPort(addrs)
 		if err != nil {
 			return nil, nil, errors.WithMessage(err, "reducing inactive addresses")
 		}

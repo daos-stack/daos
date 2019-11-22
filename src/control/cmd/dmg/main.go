@@ -24,7 +24,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"path"
 	"strings"
@@ -91,20 +90,9 @@ func appSetup(log logging.Logger, opts *cliOptions, conns client.Connect) error 
 	}
 
 	if opts.HostList != "" {
-		// expand any compressed nodesets for specific ports
-		// example opts.HostList: intelA[1-10]:10000,intelB[2,3]:10001
-		portHosts, err := hostsByPort(strings.Split(opts.HostList, ","),
-			config.Port)
+		config.HostList, err = flattenHostAddrs(opts.HostList)
 		if err != nil {
 			return err
-		}
-
-		// reconstruct slice of all "host:port" addresses from map
-		for port, hosts := range portHosts {
-			for _, host := range hosts {
-				config.HostList = append(config.HostList,
-					fmt.Sprintf("%s:%d", host, port))
-			}
 		}
 	}
 

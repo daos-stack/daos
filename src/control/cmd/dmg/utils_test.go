@@ -35,6 +35,31 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 )
 
+func TestFlattenAddrs(t *testing.T) {
+	for name, tc := range map[string]struct {
+		addrPatterns string
+		expAddrs     string
+		expErr       error
+	}{
+		"single addr": {
+			addrPatterns: "abc:10000",
+			expAddrs:     "abc:10000",
+		},
+		"multiple nodesets": {
+			addrPatterns: "abc[1-5]:10000,abc[6-10]:10001,def[1-3]:10000",
+			expAddrs:     "abc1:10000,abc2:10000,abc3:10000,abc4:10000,abc5:10000,def1:10000,def2:10000,def3:10000,abc6:10001,abc7:10001,abc8:10001,abc9:10001,abc10:10001",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			outAddrs, err := flattenHostAddrs(tc.addrPatterns)
+			CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expAddrs, strings.Join(outAddrs, ",")); diff != "" {
+				t.Fatalf("unexpected output (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestCheckConns(t *testing.T) {
 	for name, tc := range map[string]struct {
 		results  ResultMap
@@ -85,15 +110,14 @@ func TestCheckConns(t *testing.T) {
 			if tc.inactive == "" {
 				tc.inactive = "map[]"
 			}
-
 			active, inactive, err := checkConns(tc.results)
+			CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.active, strings.Join(active, ",")); diff != "" {
 				t.Fatalf("unexpected active (-want, +got):\n%s\n", diff)
 			}
 			if diff := cmp.Diff(tc.inactive, fmt.Sprintf("%v", inactive)); diff != "" {
 				t.Fatalf("unexpected inactive (-want, +got):\n%s\n", diff)
 			}
-			CmpErr(t, tc.expErr, err)
 		})
 	}
 }
