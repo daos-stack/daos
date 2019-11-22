@@ -21,7 +21,7 @@ gen_io_conf:
   no_of_ranks: !mux
     default_single_rank:
       ranks:
-    #Disabled because of DAOS-3510
+    #Disabled because of DAOS-3510 defect
     #all_rank:
     #  ranks: "8"
   tgts: !mux
