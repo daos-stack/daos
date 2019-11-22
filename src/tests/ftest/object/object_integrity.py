@@ -74,7 +74,7 @@ class ObjectDataValidation(avocado.Test):
         self.record_length = self.params.get("length", '/run/record/*')
 
         self.agent_sessions = agent_utils.run_agent(
-            self.basepath, self.hostlist)
+            self, self.hostlist)
         server_utils.run_server(self, self.hostfile, server_group)
 
         self.pool = DaosPool(self.context)

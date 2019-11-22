@@ -27,14 +27,8 @@ import os
 import traceback
 import uuid
 import threading
+import Queue
 import avocado
-
-try:
-    # python 3.x
-    import queue as queue
-except ImportError:
-    # python 2.7
-    import Queue as queue
 
 from apricot import TestWithServers, skipForTicket
 from agent_utils import run_agent, stop_agent
@@ -54,7 +48,7 @@ def ior_runner_thread(manager, uuids, results):
     Args:
         manager (str): mpi job manager command
         uuids (list): [description]
-        results (queue): queue for returning thread results
+        results (Queue): queue for returning thread results
     """
     for index, cont_uuid in enumerate(uuids):
         manager.job.daos_cont.update(cont_uuid, "ior.cont_uuid")
@@ -198,7 +192,7 @@ class ObjectMetadata(TestWithServers):
         """
         files_per_thread = 400
         total_ior_threads = 5
-        self.out_queue = queue.Queue()
+        self.out_queue = Queue.Queue()
 
         processes = self.params.get("slots", "/run/ior/clientslots/*")
 
@@ -252,7 +246,7 @@ class ObjectMetadata(TestWithServers):
 
                 # Start the agents
                 self.agent_sessions = run_agent(
-                    self.basepath, self.hostlist_clients,
+                    self, self.hostlist_clients,
                     self.hostlist_servers)
 
                 # Start the servers

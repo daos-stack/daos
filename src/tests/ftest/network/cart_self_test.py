@@ -85,7 +85,7 @@ class CartSelfTest(TestWithoutServers):
         self.server_group = self.params.get("name", 'server_config',
                                             'daos_server')
         self.uri_file = os.path.join(self.basepath, "install", "tmp", "uri.txt")
-        self.agent_sessions = agent_utils.run_agent(self.basepath,
+        self.agent_sessions = agent_utils.run_agent(self,
                                                     self.hostlist_servers)
         server_utils.run_server(self, self.hostfile_servers, self.server_group,
                                 uri_path=self.uri_file, env_dict=self.env_dict)

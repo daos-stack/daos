@@ -59,7 +59,7 @@ class MultiServerCreateDeleteTest(Test):
         server_group = self.params.get("name", '/server_config/',
                                        'daos_server')
 
-        self.agent_sessions = agent_utils.run_agent(self.basepath,
+        self.agent_sessions = agent_utils.run_agent(self,
                                                     self.hostlist_servers)
         server_utils.run_server(self, self.hostfile, server_group)
         self.dmg = self.basepath + '/install/bin/dmg'
