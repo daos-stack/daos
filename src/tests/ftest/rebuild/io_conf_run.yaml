@@ -21,38 +21,33 @@ gen_io_conf:
   no_of_ranks: !mux
     default_single_rank:
       ranks:
-    #Disabled because of DAOS-3510 defect
-    #all_rank:
-    #  ranks: "8"
+    all_rank:
+      ranks: "8"
   tgts: !mux
     remove_all_targets:
       targets:
-    #Disabled because of DAOS-3510
-    #remove_single_target:
-    #  targets: "8"
+    remove_single_target:
+      targets: "8"
   no_of_dkeys: !mux
     small_no_dkeys:
       dkeys: "1"
-    #Need NVMe to use for large number of size
-    #large_no_dkeys:
-    #  dkeys: "10"
+    large_no_dkeys:
+      dkeys: "10"
   no_of_akeys: !mux
     small_no_akeys:
       akeys: "1"
-    #Need NVMe to use for large number of size
-    #large_no_akeys:
-    #  akeys: "10"
+    large_no_akeys:
+      akeys: "10"
   record: !mux
     small_record_no:
       record_size: "1"
-    #large_record_no:
-    #  record_size: "50"
+    large_record_no:
+      record_size: "50"
   no_of_objects: !mux
     small_no_objects:
       obj_num: "1"
-    #Need NVMe to use for large number of size
-    #large_no_objects:
-    #  obj_num: "10"
+    large_no_objects:
+      obj_num: "10"
   object_class: !mux
     replica2_group1:
       obj_class: "RP_2G1"
