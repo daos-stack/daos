@@ -1,0 +1,53 @@
+hosts:
+    test_servers:
+        - boro-A
+        - boro-B
+        - boro-C
+        - boro-D
+    test_clients:
+        - boro-E
+timeout: 1000
+server_config:
+    name: daos_server
+    servers:
+        bdev_class: nvme
+        bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
+pool:
+    createmode:
+        mode_RW:
+             mode: 146
+    createset:
+        group: daos_server
+    createsize:
+        scm_size: 1600000000
+        nvme_size: 9000000000
+    createsvc:
+        svcn: 1
+fio:
+  global:
+    name: 'global'
+    directory: "/tmp/daos_dfuse"
+    ioengine: 'libaio'
+    thread: 16
+    group_reporting: 1
+    direct: 1
+    verify: 'crc64'
+    iodepth: 32
+    bs: !mux
+#      bs_256B:
+#        blocksize: '256B'
+#        size: '16M'
+      bs_1M:
+        blocksize: '1M'
+        size: '1G'
+    read_write: !mux
+      sequential:
+        rw: 'rw'
+#      random:
+#        rw: 'randrw'
+  test:
+    name: 'test'
+    numjobs: 1
+
+dfuse:
+  mount_dir: "/tmp/daos_dfuse"
