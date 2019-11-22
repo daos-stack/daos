@@ -17,6 +17,12 @@ DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-tautological-constant-out-of-range-compare',
                  '-Wframe-larger-than=4096']
 
+# Added for SDL Task CT158
+DESIRED_FLAGS.extend(['-fno-strict-overflow', '-fno-delete-null-pointer-checks', '-fwrapv'])
+
+# Added for SDL Task T217
+DESIRED_FLAGS.extend(['-fstack-protector-strong', '-fstack-clash-protection', '-D_FORTIFY_SOURCE=2'])
+
 PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
                  '-Wno-unused-function']
 
