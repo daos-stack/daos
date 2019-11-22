@@ -47,9 +47,11 @@ struct jm_obj_placement {
  */
 struct pl_jump_map {
 	/** placement map interface */
-	struct pl_map   jmp_map;
-	/* Total size of domain type specified during map creation*/
-	unsigned int    jmp_domain_nr;
+	struct pl_map		jmp_map;
+	/* Total size of domain type specified during map creation */
+	unsigned int		jmp_domain_nr;
+	/* The dom that will comtain no colocated shards */
+	pool_comp_type_t	min_redundant_dom;
 };
 
 /**
@@ -482,10 +484,12 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 {
 	struct pool_target      *target;
 	struct pool_domain      *root;
+	struct pool_domain      *min_redundant_dom;
 	daos_obj_id_t           oid;
 	uint8_t                 *dom_used;
 	uint8_t                 *tgts_used;
 	uint32_t                dom_used_length;
+	uint32_t 		doms_left;
 	uint64_t                key;
 	int i, j, k, rc;
 
@@ -496,9 +500,16 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 	k = 0;
 	oid = md->omd_id;
 	key = oid.lo;
-
-	rc = 0;
+	doms_left = jmap->jmp_domain_nr;
 	target = NULL;
+
+	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap,
+			  jmap->min_redundant_dom,
+			  PO_COMP_ID_ALL, &min_redundant_dom);
+	if (rc == 0) {
+		D_ERROR("Could not find node type in pool map.");
+		return -DER_NONEXIST;
+	}
 
 	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_ROOT,
 				  PO_COMP_ID_ALL, &root);
@@ -554,6 +565,18 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 
 
 	for (i = 0; i < jmop->jmop_grp_nr; i++) {
+
+		if(doms_left < jmop->jmop_grp_size) {
+			uint32_t start_dom;
+			uint32_t end_dom;
+
+			doms_left = jmap->jmp_domain_nr;
+			start_dom =  min_redundant_dom - root;
+			end_dom = start_dom + (doms_left - 1);
+
+			clrbit_range(dom_used, start_dom, end_dom);
+		}
+
 		for (; j < jmop->jmop_grp_size; j++, k++) {
 			uint32_t tgt_id;
 			uint32_t fseq;
@@ -574,6 +597,7 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 				if (rc)
 					D_GOTO(out, rc);
 			}
+			doms_left--;
 		}
 		j = 0;
 	}
@@ -648,6 +672,7 @@ jump_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 		goto ERR;
 	}
 
+	jmap->min_redundant_dom = mia->ia_jump_map.domain;
 	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap,
 			  mia->ia_jump_map.domain, PO_COMP_ID_ALL, &doms);
 	if (rc <= 0) {
