@@ -62,6 +62,11 @@ type (
 	}
 )
 
+func IsFailedRequest(err error) bool {
+	_, ok := err.(*RequestFailure)
+	return ok
+}
+
 func (rf *RequestFailure) Error() string {
 	if rf == nil {
 		return "nil *RequestFailure"

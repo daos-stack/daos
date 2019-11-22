@@ -813,7 +813,13 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 		goto out;
 	}
 
-	D_ASSERT(flags & SUBTR_CREATE);
+	if ((flags & SUBTR_CREATE) == 0) {
+		/** This can happen if application does a punch first before any
+		 *  updates.   Simply return -DER_NONEXIST in such case.
+		 */
+		rc = -DER_NONEXIST;
+		goto out;
+	}
 
 	if (flags & SUBTR_EVT) {
 		rc = evt_create(&krec->kr_evt, vos_evt_feats, VOS_EVT_ORDER,

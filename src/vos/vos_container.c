@@ -501,9 +501,6 @@ vos_cont_ctl(daos_handle_t coh, enum vos_cont_opc opc)
 	}
 
 	switch (opc) {
-	case VOS_CO_CTL_RESET_HAE:
-		cont->vc_cont_df->cd_hae = 0;
-		break;
 	case VOS_CO_CTL_ABORT_AGG:
 		cont->vc_abort_aggregation = 1;
 		break;

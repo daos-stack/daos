@@ -2225,6 +2225,7 @@ do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
 
 	is_ec = daos_oclass_is_ec(obj->cob_md.omd_id, &oca);
 	if (is_ec) {
+		ec_split_recxs(task, oca);
 		ec_get_tgt_set(args->iods, args->nr, oca, false, &tgt_set);
 		D_ASSERT(tgt_set != 0);
 	}

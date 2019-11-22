@@ -683,18 +683,57 @@ free_ace_list(char **list, size_t len)
 	D_FREE(list);
 }
 
+static void
+free_resp_acl(Mgmt__ACLResp *resp)
+{
+	free_ace_list(resp->acl, resp->n_acl);
+}
+
+static int
+add_acl_to_response(struct daos_acl *acl, Mgmt__ACLResp *resp)
+{
+	char	**ace_list = NULL;
+	size_t	ace_nr = 0;
+	int	rc;
+
+	rc = daos_acl_to_strs(acl, &ace_list, &ace_nr);
+	if (rc != 0) {
+		D_ERROR("Couldn't convert ACL to string list, rc=%d", rc);
+		return rc;
+	}
+
+	resp->n_acl = ace_nr;
+	resp->acl = ace_list;
+
+	return 0;
+}
+
+static void
+pack_acl_resp(Mgmt__ACLResp *acl_resp, Drpc__Response *drpc_resp)
+{
+	size_t	len;
+	uint8_t	*body;
+
+	len = mgmt__aclresp__get_packed_size(acl_resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to allocate buffer for packed ACLResp\n");
+	} else {
+		mgmt__aclresp__pack(acl_resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+}
+
 void
 ds_mgmt_drpc_pool_get_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__GetACLReq		*req = NULL;
-	Mgmt__GetACLResp	resp = MGMT__GET_ACLRESP__INIT;
+	Mgmt__ACLResp		resp = MGMT__ACLRESP__INIT;
 	int			rc;
 	uuid_t			pool_uuid;
 	struct daos_acl		*acl = NULL;
-	char			**ace_list = NULL;
-	size_t			ace_nr = 0;
-	size_t			len;
-	uint8_t			*body;
 
 	req = mgmt__get_aclreq__unpack(NULL, drpc_req->body.len,
 				       drpc_req->body.data);
@@ -704,7 +743,7 @@ ds_mgmt_drpc_pool_get_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to get ACL for pool pool %s\n",
+	D_INFO("Received request to get ACL for pool %s\n",
 		req->uuid);
 
 	if (uuid_parse(req->uuid, pool_uuid) != 0) {
@@ -718,33 +757,72 @@ ds_mgmt_drpc_pool_get_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out, rc);
 	}
 
-	rc = daos_acl_to_strs(acl, &ace_list, &ace_nr);
-	if (rc != 0) {
-		D_ERROR("Couldn't convert ACL to string list, rc=%d", rc);
+	rc = add_acl_to_response(acl, &resp);
+	if (rc != 0)
 		D_GOTO(out_acl, rc);
-	}
-
-	resp.acl = ace_list;
-	resp.n_acl = ace_nr;
 
 out_acl:
 	daos_acl_free(acl);
 out:
 	resp.status = rc;
 
-	len = mgmt__get_aclresp__get_packed_size(&resp);
-	D_ALLOC(body, len);
-	if (body == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
-		D_ERROR("Failed to allocate buffer for packed GetACLResp\n");
-	} else {
-		mgmt__get_aclresp__pack(&resp, body);
-		drpc_resp->body.len = len;
-		drpc_resp->body.data = body;
-	}
+	pack_acl_resp(&resp, drpc_resp);
+	free_resp_acl(&resp);
 
 	mgmt__get_aclreq__free_unpacked(req, NULL);
-	free_ace_list(ace_list, ace_nr);
+}
+
+void
+ds_mgmt_drpc_pool_overwrite_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__ModifyACLReq	*req = NULL;
+	Mgmt__ACLResp		resp = MGMT__ACLRESP__INIT;
+	int			rc = 0;
+	uuid_t			pool_uuid;
+	struct daos_acl		*acl = NULL;
+	struct daos_acl		*result = NULL;
+
+	req = mgmt__modify_aclreq__unpack(NULL, drpc_req->body.len,
+					  drpc_req->body.data);
+	if (req == NULL) {
+		D_ERROR("Failed to unpack ModifyACLReq\n");
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		return;
+	}
+
+	D_INFO("Received request to overwrite ACL for pool %.64s\n",
+		req->uuid);
+
+	if (uuid_parse(req->uuid, pool_uuid) != 0) {
+		D_ERROR("Couldn't parse UUID\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = daos_acl_from_strs((const char **)req->acl, req->n_acl, &acl);
+	if (rc != 0) {
+		D_ERROR("Couldn't parse requested ACL strings to DAOS ACL, "
+			"rc=%d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = ds_mgmt_pool_overwrite_acl(pool_uuid, acl, &result);
+	if (rc != 0) {
+		D_ERROR("Couldn't overwrite pool ACL, rc=%d\n", rc);
+		D_GOTO(out_acl, rc);
+	}
+
+	rc = add_acl_to_response(result, &resp);
+	daos_acl_free(result);
+
+out_acl:
+	daos_acl_free(acl);
+out:
+	resp.status = rc;
+
+	pack_acl_resp(&resp, drpc_resp);
+	free_resp_acl(&resp);
+
+	mgmt__modify_aclreq__free_unpacked(req, NULL);
 }
 
 /* Convert d_rank_list_t values to a string of comma-separated ranks.
