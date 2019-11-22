@@ -33,6 +33,13 @@ extern "C" {
 
 #include <gurt/errno.h>
 
+#ifndef DER_DF_INCOMPT
+# define DER_DF_INCOMPT		DER_IO
+#endif
+
+#ifndef DER_DF_INVAL
+# define DER_DF_INVAL		DER_IO
+#endif
 
 #if defined(__cplusplus)
 }
