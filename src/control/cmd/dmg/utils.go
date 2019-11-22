@@ -24,15 +24,29 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/client"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
-	"github.com/pkg/errors"
 )
+
+type HostGroup map[string]*hostlist.HostSet
+
+func (hg HostGroup) Compress() string {
+	buf := &bytes.Buffer{}
+
+	for k, hs := range hg {
+		fmt.Fprintf(buf, "%s: %s ", hs.RangedString())
+	}
+
+	return buf.String()
+}
 
 // hostsByPort takes slice of address patterns and returns a map of host slice
 // for each port (after expanding each port specific nodeset).
@@ -40,11 +54,11 @@ import (
 // e.g. for input patterns string[]{"intelA[1-10]:10000", "intelB[2,3]:10001"}
 // 	returns map[int][]string{10000: ["intelA1", ..."intelA10"],
 // 				 10001: ["intelB2", "intelB3"]}
-func hostsByPort(addrPatterns []string, defaultPort int) (map[int][]string, error) {
-	portHosts := make(map[int][]string)
+func hostsByPort(addrPatterns []string, defaultPort int) (HostGroup, error) {
+	portHosts := make(HostGroup)
 
 	for _, p := range addrPatterns {
-		var port int
+		var port string
 		var err error
 		var expanded string
 		// separate port from compressed host string
@@ -53,27 +67,30 @@ func hostsByPort(addrPatterns []string, defaultPort int) (map[int][]string, erro
 		switch len(portHost) {
 		case 1:
 			// no port specified, use default
-			port = defaultPort
+			port = strconv.Itoa(defaultPort)
 		case 2:
-			port, err = strconv.Atoi(portHost[1])
-			if err != nil {
-				return nil, errors.WithMessage(err, "invalid port")
-			}
+			port = portHost[1]
 		default:
 			return nil, errors.Errorf("cannot parse %s", p)
 		}
 
-		if port == 0 {
+		if port == "" || port == "0" {
 			return nil, errors.New("invalid port")
 		}
 
-		expanded, err = hostlist.Expand(portHost[0])
+		value, isPresent := portHosts[port]
+		if isPresent {
+			_, err := value.Insert(portHost[0])
+			if err != nil {
+				return nil, err
+			}
+			continue
+		}
+
+		portHosts[port], err = hostlist.CreateSet(portHost[0])
 		if err != nil {
 			return nil, err
 		}
-
-		portHosts[port] = append(portHosts[port],
-			strings.Split(expanded, ",")...)
 	}
 
 	return portHosts, nil
