@@ -12,7 +12,6 @@ timeout: 900
 server_config:
   name: daos_server
   servers:
-    targets: 8
     bdev_class: nvme
     bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
 pool:
