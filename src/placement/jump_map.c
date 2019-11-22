@@ -489,7 +489,7 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 	uint8_t                 *dom_used;
 	uint8_t                 *tgts_used;
 	uint32_t                dom_used_length;
-	uint32_t 		doms_left;
+	uint32_t		doms_left;
 	uint64_t                key;
 	int i, j, k, rc;
 
@@ -566,7 +566,7 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 
 	for (i = 0; i < jmop->jmop_grp_nr; i++) {
 
-		if(doms_left < jmop->jmop_grp_size) {
+		if (doms_left < jmop->jmop_grp_size) {
 			uint32_t start_dom;
 			uint32_t end_dom;
 
