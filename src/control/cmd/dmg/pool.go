@@ -44,9 +44,10 @@ const (
 
 // PoolCmd is the struct representing the top-level pool subcommand.
 type PoolCmd struct {
-	Create  PoolCreateCmd  `command:"create" alias:"c" description:"Create a DAOS pool"`
-	Destroy PoolDestroyCmd `command:"destroy" alias:"d" description:"Destroy a DAOS pool"`
-	GetACL  PoolGetACLCmd  `command:"get-acl" alias:"g" description:"Get a DAOS pool's Access Control List"`
+	Create       PoolCreateCmd       `command:"create" alias:"c" description:"Create a DAOS pool"`
+	Destroy      PoolDestroyCmd      `command:"destroy" alias:"d" description:"Destroy a DAOS pool"`
+	GetACL       PoolGetACLCmd       `command:"get-acl" alias:"g" description:"Get a DAOS pool's Access Control List"`
+	OverwriteACL PoolOverwriteACLCmd `command:"overwrite-acl" alias:"o" description:"Overwrite a DAOS pool's Access Control List"`
 }
 
 // PoolCreateCmd is the struct representing the command to create a DAOS pool.
@@ -95,6 +96,20 @@ type PoolGetACLCmd struct {
 // Execute is run when the PoolGetACLCmd subcommand is activated
 func (d *PoolGetACLCmd) Execute(args []string) error {
 	return poolGetACL(d.log, d.conns, d.UUID)
+}
+
+// PoolOverwriteACLCmd represents the command to overwrite the Access Control
+// List of a DAOS pool.
+type PoolOverwriteACLCmd struct {
+	logCmd
+	connectedCmd
+	UUID    string `long:"pool" required:"1" description:"UUID of DAOS pool"`
+	ACLFile string `short:"a" long:"acl-file" required:"1" description:"Path for new Access Control List file"`
+}
+
+// Execute is run when the PoolOverwriteACLCmd subcommand is activated
+func (d *PoolOverwriteACLCmd) Execute(args []string) error {
+	return poolOverwriteACL(d.log, d.conns, d.UUID, d.ACLFile)
 }
 
 // getSize retrieves number of bytes from human readable string representation
@@ -263,7 +278,29 @@ func poolGetACL(log logging.Logger, conns client.Connect, poolUUID string) error
 	}
 
 	log.Infof("Pool-get-ACL command succeeded, UUID: %s\n", poolUUID)
+	log.Info(resp.ACL.String())
 
+	return nil
+}
+
+func poolOverwriteACL(log logging.Logger, conns client.Connect, poolUUID string, aclFile string) error {
+	acl, err := readACLFile(aclFile)
+	if err != nil {
+		return err
+	}
+
+	req := &client.PoolOverwriteACLReq{
+		UUID: poolUUID,
+		ACL:  acl,
+	}
+
+	resp, err := conns.PoolOverwriteACL(req)
+	if err != nil {
+		log.Infof("Pool-overwrite-ACL command failed: %s\n", err.Error())
+		return err
+	}
+
+	log.Infof("Pool-overwrite-ACL command succeeded, UUID: %s\n", poolUUID)
 	log.Info(resp.ACL.String())
 
 	return nil

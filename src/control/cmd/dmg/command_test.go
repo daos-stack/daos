@@ -132,6 +132,11 @@ func (tc *testConn) PoolGetACL(req *client.PoolGetACLReq) (*client.PoolGetACLRes
 	return &client.PoolGetACLResp{}, nil
 }
 
+func (tc *testConn) PoolOverwriteACL(req *client.PoolOverwriteACLReq) (*client.PoolOverwriteACLResp, error) {
+	tc.appendInvocation(fmt.Sprintf("PoolOverwriteACL-%+v", req))
+	return &client.PoolOverwriteACLResp{ACL: req.ACL}, nil
+}
+
 func (tc *testConn) BioHealthQuery(req *mgmtpb.BioHealthReq) client.ResultQueryMap {
 	tc.appendInvocation(fmt.Sprintf("BioHealthQuery-%s", req))
 	return nil

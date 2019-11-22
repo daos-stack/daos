@@ -224,7 +224,7 @@ ilog_log_add(struct ilog_context *lctx, struct ilog_id *id)
 		return rc;
 	}
 
-	D_DEBUG(DB_IO, "Registered ilog="DF_U64" epoch="DF_U64" tx_id="
+	D_DEBUG(DB_IO, "Registered ilog="DF_X64" epoch="DF_U64" tx_id="
 		DF_U64"\n", lctx->ic_root_off, id->id_epoch,
 		id->id_tx_id);
 
@@ -248,7 +248,7 @@ ilog_log_del(struct ilog_context *lctx, const struct ilog_id *id)
 		return rc;
 	}
 
-	D_DEBUG(DB_IO, "De-registered ilog="DF_U64" epoch="DF_U64" tx_id="
+	D_DEBUG(DB_IO, "De-registered ilog="DF_X64" epoch="DF_U64" tx_id="
 		DF_U64"\n", lctx->ic_root_off, id->id_epoch,
 		id->id_tx_id);
 
@@ -500,6 +500,7 @@ ilog_create(struct umem_instance *umm, struct ilog_df *root)
 {
 	struct ilog_context	lctx = {
 		.ic_root = (struct ilog_root *)root,
+		.ic_root_off = umem_ptr2off(umm, root),
 		.ic_umm = *umm,
 		.ic_ref = 0,
 		.ic_in_txn = 0,
@@ -954,9 +955,9 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 
 	root = lctx->ic_root;
 
-	D_DEBUG(DB_IO, "%s in incarnation log: epoch:" DF_U64
-		" tree_version: %d\n", opc_str[opc], id_in->id_epoch,
-		ilog_mag2ver(root->lr_magic));
+	D_DEBUG(DB_IO, "%s in incarnation log: log:"DF_X64 " epoch:" DF_U64
+		" tree_version: %d\n", opc_str[opc], lctx->ic_root_off,
+		id_in->id_epoch, ilog_mag2ver(root->lr_magic));
 
 	if (root->lr_tree.it_embedded && root->lr_id.id_epoch <= epr->epr_hi
 	    && root->lr_id.id_epoch >= epr->epr_lo) {
@@ -1290,7 +1291,7 @@ ilog_status_refresh(struct ilog_context *lctx, uint32_t intent,
 }
 
 static bool
-ilog_fetch_needed(struct umem_instance *umm, struct ilog_root *root,
+ilog_fetch_cached(struct umem_instance *umm, struct ilog_root *root,
 		  const struct ilog_desc_cbs *cbs, uint32_t intent,
 		  struct ilog_entries *entries)
 {
@@ -1306,9 +1307,12 @@ ilog_fetch_needed(struct umem_instance *umm, struct ilog_root *root,
 		goto reset;
 	}
 
+	if (priv->ip_rc == -DER_NONEXIST)
+		return true;
+
 	ilog_status_refresh(&priv->ip_lctx, intent, entries);
 
-	return false;
+	return true;
 reset:
 	memset(lctx, 0, sizeof(*lctx));
 	lctx->ic_root = root;
@@ -1325,7 +1329,7 @@ reset:
 	priv->ip_log_version = ilog_mag2ver(lctx->ic_root->lr_magic);
 	priv->ip_rc = 0;
 
-	return true;
+	return false;
 }
 
 static int
@@ -1438,7 +1442,7 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 
 	root = (struct ilog_root *)root_df;
 
-	if (!ilog_fetch_needed(umm, root, cbs, intent, entries)) {
+	if (ilog_fetch_cached(umm, root, cbs, intent, entries)) {
 		if (priv->ip_rc == -DER_INPROGRESS ||
 		    priv->ip_rc == -DER_NONEXIST)
 			return priv->ip_rc;
@@ -1483,7 +1487,7 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 		D_GOTO(out, rc = 0);
 
 	if (rc != 0) {
-		D_ERROR("Error probing ilog: rc = %s\n", d_errstr(rc));
+		D_ERROR("Error probing ilog: "DF_RC"\n", DP_RC(rc));
 		goto fail;
 	}
 
@@ -1516,7 +1520,9 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 			goto fail;
 	}
 out:
-	/* Cache whole log */
+	/* We don't exit loop early with -DER_INPROGRESS so we cache the while
+	 * log for future updates.
+	 */
 	if (in_progress)
 		rc = -DER_INPROGRESS;
 

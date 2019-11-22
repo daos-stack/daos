@@ -363,10 +363,13 @@ dtx_leader_wait(struct dtx_leader_handle *dlh, struct dtx_conflict_entry **dces,
 			}
 		}
 
-		D_ASSERT(j > 0);
-
-		*dces = conflict;
 		*dces_cnt = j;
+		if (j > 0) {
+			*dces = conflict;
+		} else {
+			D_FREE(conflict);
+			*dces = NULL;
+		}
 	}
 
 out:

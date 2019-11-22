@@ -177,7 +177,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	rc = vos_tx_end(vos_cont2umm(cont), rc);
 	if (obj != NULL)
-		vos_obj_release(vos_obj_cache_current(), obj);
+		vos_obj_release(vos_obj_cache_current(), obj, rc != 0);
 
 reset:
 	vos_dth_set(NULL);
@@ -223,7 +223,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 	/* NB: noop for full-stack mode */
 	gc_wait();
 out:
-	vos_obj_release(occ, obj);
+	vos_obj_release(occ, obj, true);
 	return rc;
 }
 
@@ -1179,7 +1179,7 @@ nested_dkey_iter_init(struct vos_obj_iter *oiter, struct vos_iter_info *info)
 
 	return 0;
 failed:
-	vos_obj_release(vos_obj_cache_current(), oiter->it_obj);
+	vos_obj_release(vos_obj_cache_current(), oiter->it_obj, false);
 
 	return rc;
 }
@@ -1303,7 +1303,7 @@ vos_obj_iter_fini(struct vos_iterator *iter)
 	 */
 	if (oiter->it_obj != NULL &&
 	    (iter->it_type == VOS_ITER_DKEY || !iter->it_from_parent))
-		vos_obj_release(vos_obj_cache_current(), oiter->it_obj);
+		vos_obj_release(vos_obj_cache_current(), oiter->it_obj, false);
 
 	vos_ilog_fetch_finish(&oiter->it_ilog_info);
 	D_FREE(oiter);

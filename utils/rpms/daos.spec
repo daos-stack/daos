@@ -3,9 +3,12 @@
 
 %define daoshome %{_exec_prefix}/lib/%{name}
 
+# Unlimited maximum version
+%global spdk_max_version 1000
+
 Name:          daos
 Version:       0.6.0
-Release:       13%{?relval}%{?dist}
+Release:       15%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -31,7 +34,7 @@ BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libpmem-devel, libpmemobj-devel
 BuildRequires: fuse-devel >= 3.4.2
 BuildRequires: protobuf-c-devel
-BuildRequires: spdk-devel <= 18.07, spdk-tools <= 18.07
+BuildRequires: spdk-devel <= %{spdk_max_version}, spdk-tools <= %{spdk_max_version}
 BuildRequires: fio < 3.4
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
@@ -85,7 +88,7 @@ Requires: libpmem1, libpmemobj1
 %endif
 Requires: fuse >= 3.4.2
 Requires: protobuf-c
-Requires: spdk <= 18.07
+Requires: spdk <= %{spdk_max_version}
 Requires: fio < 3.4
 Requires: openssl
 # ensure we get exactly the right cart RPM
@@ -108,7 +111,7 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name} = %{version}-%{release}
-Requires: spdk-tools
+Requires: spdk-tools <= %{spdk_max_version}
 Requires: ndctl
 Requires: ipmctl
 Requires(post): /sbin/ldconfig
@@ -328,6 +331,12 @@ getent group daos_admins >/dev/null || groupadd -r daos_admins
 %{_libdir}/*.a
 
 %changelog
+* Tue Nov 19 2019 Tom Nabarro <tom.nabarro@intel.com> 0.6.0-15
+- Temporarily unconstrain max. version of spdk
+
+* Wed Nov 06 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-14
+- Constrain max. version of spdk
+
 * Wed Nov 06 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-13
 - Use new cart with R: mercury to < 1.0.1-20 due to incompatibility
 

@@ -72,7 +72,21 @@ struct ds_cont_child {
 
 	/* Aggregate ULT */
 	struct dss_sleep_ult	 *sc_agg_ult;
-	/** Aggregation limit (set when snapshot is in progress) **/
+	/*
+	 * Lower bound of aggregation epoch, it can be:
+	 *
+	 * < DAOS_EOPCH_MAX	: Some snapshot was deleted since last
+	 *			  round of aggregation
+	 * DAOS_EPOCH_MAX	: No snapshot deletion since last round of
+	 *			  aggregation
+	 */
+	uint64_t		 sc_aggregation_min;
+	/* Upper bound of aggregation epoch, it can be:
+	 *
+	 * 0			: When snapshot list isn't retrieved yet
+	 * DAOS_EPOCH_MAX	: When snapshot list is retrieved
+	 * snapshot epoch	: When the snapshot creation is in-progress
+	 */
 	uint64_t		 sc_aggregation_max;
 	uint64_t		*sc_snapshots;
 	uint32_t		 sc_snapshots_nr;

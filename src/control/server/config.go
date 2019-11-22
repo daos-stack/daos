@@ -348,7 +348,7 @@ func (c *Configuration) Load() error {
 		c.updateServerConfig(srvCfg)
 	}
 
-	return c.Validate()
+	return nil
 }
 
 // SaveToFile serializes the configuration and saves it to the specified filename.

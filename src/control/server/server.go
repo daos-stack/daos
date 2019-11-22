@@ -40,7 +40,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
-	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
@@ -60,6 +60,11 @@ const maxIoServers = 2
 // Start is the entry point for a daos_server instance.
 func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 	log.Debugf("cfg: %#v", cfg)
+
+	err := cfg.Validate()
+	if err != nil {
+		return errors.Wrapf(err, "%s: validation failed", cfg.Path)
+	}
 
 	// Backup active config.
 	saveActiveConfig(log, cfg)
@@ -89,7 +94,7 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 			break
 		}
 
-		bp, err := storage.NewBdevProvider(log, srvCfg.Storage.SCM.MountPoint, &srvCfg.Storage.Bdev)
+		bp, err := bdev.NewClassProvider(log, srvCfg.Storage.SCM.MountPoint, &srvCfg.Storage.Bdev)
 		if err != nil {
 			return err
 		}

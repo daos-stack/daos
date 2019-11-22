@@ -67,6 +67,7 @@ type Connect interface {
 	PoolCreate(*PoolCreateReq) (*PoolCreateResp, error)
 	PoolDestroy(*PoolDestroyReq) error
 	PoolGetACL(*PoolGetACLReq) (*PoolGetACLResp, error)
+	PoolOverwriteACL(*PoolOverwriteACLReq) (*PoolOverwriteACLResp, error)
 	SetTransportConfig(*security.TransportConfig)
 	SmdListDevs(*mgmtpb.SmdDevReq) ResultSmdMap
 	SmdListPools(*mgmtpb.SmdPoolReq) ResultSmdMap
