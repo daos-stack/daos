@@ -47,7 +47,7 @@ SIMPLE_TEST_SRC = ['test_crt_barrier.c', 'threaded_client.c',
                    'test_no_timeout.c', 'test_ep_cred_server.c',
                    'test_ep_cred_client.c', 'no_pmix_launcher_server.c',
                    'no_pmix_launcher_client.c', 'no_pmix_group_test.c',
-                   'test_rpc_to_ghost_rank.c']
+                   'test_rpc_to_ghost_rank.c', 'no_pmix_corpc_errors.c']
 ECHO_TEST_SRC = ['crt_echo_cli.c', 'crt_echo_srv.c', 'crt_echo_srv2.c']
 BASIC_SRC = ['crt_basic.c']
 TEST_GROUP_SRC = 'test_group.c'

@@ -1309,6 +1309,7 @@ crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code)
 			  "Sent CART level error message back to client. error_code: %d\n",
 			  error_code);
 	}
+	rpc_priv->crp_reply_pending = 0;
 }
 
 static int
