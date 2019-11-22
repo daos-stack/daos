@@ -29,12 +29,12 @@ import uuid
 import threading
 import avocado
 
-try:	
-    # python 3.x	
-    import queue as queue	
-except ImportError:	
-    # python 2.7	
-    import Queue as queue	
+try:
+    # python 3.x
+    import queue as queue
+except ImportError:
+    # python 2.7
+    import Queue as queue
 
 from apricot import TestWithServers, skipForTicket
 from agent_utils import run_agent, stop_agent
