@@ -32,7 +32,9 @@
 
 #define DEFAULT_BUF_LEN	1024
 #define USER_PREFIX	"u:"
+#define USER_PREFIX_LEN	(sizeof(USER_PREFIX) - 1)
 #define GRP_PREFIX	"g:"
+#define GRP_PREFIX_LEN	(sizeof(GRP_PREFIX) - 1)
 
 /*
  * No platform-agnostic way to fetch the max buflen - so let's try a
@@ -333,6 +335,25 @@ static int
 get_principal_type_from_str(const char *principal_str,
 			    enum daos_acl_principal_type *type)
 {
+	/*
+	 * Named user or group will be designated by prefix
+	 */
+	if (strncmp(principal_str, USER_PREFIX, USER_PREFIX_LEN) == 0) {
+		*type = DAOS_ACL_USER;
+		return 0;
+	}
+
+	if (strncmp(principal_str, GRP_PREFIX, GRP_PREFIX_LEN) == 0) {
+		*type = DAOS_ACL_GROUP;
+		return 0;
+	}
+
+	if (strncmp(principal_str, DAOS_ACL_PRINCIPAL_EVERYONE,
+		    DAOS_ACL_MAX_PRINCIPAL_BUF_LEN) == 0) {
+		*type = DAOS_ACL_EVERYONE;
+		return 0;
+	}
+
 	if (strncmp(principal_str, DAOS_ACL_PRINCIPAL_OWNER,
 		    DAOS_ACL_MAX_PRINCIPAL_BUF_LEN) == 0) {
 		*type = DAOS_ACL_OWNER;
@@ -345,25 +366,6 @@ get_principal_type_from_str(const char *principal_str,
 		return 0;
 	}
 
-	if (strncmp(principal_str, DAOS_ACL_PRINCIPAL_EVERYONE,
-		    DAOS_ACL_MAX_PRINCIPAL_BUF_LEN) == 0) {
-		*type = DAOS_ACL_EVERYONE;
-		return 0;
-	}
-
-	/*
-	 * Named user or group will be designated by prefix
-	 */
-	if (strncmp(principal_str, USER_PREFIX, strlen(USER_PREFIX)) == 0) {
-		*type = DAOS_ACL_USER;
-		return 0;
-	}
-
-	if (strncmp(principal_str, GRP_PREFIX, strlen(GRP_PREFIX)) == 0) {
-		*type = DAOS_ACL_GROUP;
-		return 0;
-	}
-
 	return -DER_INVAL;
 }
 
@@ -373,9 +375,9 @@ get_start_of_name(const char *principal_str, enum daos_acl_principal_type type)
 	size_t idx;
 
 	if (type == DAOS_ACL_USER)
-		idx = strlen(USER_PREFIX);
+		idx = USER_PREFIX_LEN;
 	else
-		idx = strlen(GRP_PREFIX);
+		idx = GRP_PREFIX_LEN;
 
 	return &principal_str[idx];
 }
