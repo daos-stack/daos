@@ -45,11 +45,9 @@ def arch = ""
 def sanitized_JOB_NAME = JOB_NAME.toLowerCase().replaceAll('/', '-').replaceAll('%2f', '-')
 
 def el7_component_repos = ""
-def sle12_component_repos = ""
 def component_repos = ""
 def daos_repo = "daos@${env.BRANCH_NAME}:${env.BUILD_NUMBER}"
 def el7_daos_repos = el7_component_repos + ' ' + component_repos + ' ' + daos_repo
-def sle12_daos_repos = sle12_component_repos + ' ' + component_repos + ' ' + daos_repo
 def ior_repos = "mpich@daos_adio-rpm ior-hpc@daos"
 
 def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
@@ -200,10 +198,7 @@ pipeline {
             when {
                 beforeAgent true
                 // expression { skipTest != true }
-                expression {
-                    sh script: 'git show -s --format=%B | grep "^Skip-build: true"',
-                       returnStatus: true
-                }
+                expression { commitPragma pragma: 'Skip-build' == 'true' }
             }
             parallel {
                 stage('Build RPM on CentOS 7') {
@@ -820,18 +815,14 @@ pipeline {
                 beforeAgent true
                 // expression { skipTest != true }
                 expression { env.NO_CI_TESTING != 'true' }
-                expression {
-                    sh script: 'git show -s --format=%B | grep "^Skip-test: true"',
-                       returnStatus: true
-                }
+                expression { commitPragma pragma: 'Skip-test' == 'true' }
             }
             parallel {
                 stage('run_test.sh') {
                     when {
                       beforeAgent true
                       expression {
-                        sh script: 'git show -s --format=%B | grep "^Skip-run_test: true"',
-                        returnStatus: true
+                        commitPragma pragma: 'Skip-run_test' == 'true'
                       }
                     }
                     agent {
@@ -949,10 +940,7 @@ pipeline {
                 allOf {
                     // expression { skipTest != true }
                     expression { env.NO_CI_TESTING != 'true' }
-                    expression {
-                        sh script: 'git show -s --format=%B | grep "^Skip-test: true"',
-                           returnStatus: true
-                    }
+                    expression { commitPragma pragma: 'Skip-test' == 'true' }
                 }
             }
             parallel {
@@ -1020,9 +1008,7 @@ pipeline {
                     when {
                         beforeAgent true
                         expression {
-                            sh script: 'git show -s --format=%B |' +
-                                       ' grep "^Skip-func-test: true"',
-                            returnStatus: true
+                            commitPragma pragma: 'Skip-func-test' == 'true'
                         }
                     }
                     agent {
@@ -1096,9 +1082,8 @@ pipeline {
                         allOf {
                             expression { env.DAOS_STACK_CI_HARDWARE_SKIP != 'true' }
                             expression {
-                                sh script: 'git show -s --format=%B |' +
-                                           ' grep "^Skip-func-hw-test: true"',
-                                returnStatus: true }
+                              commitPragma pragma: 'Skip-func-hw-test' == 'true'
+                            }
                         }
                     }
                     agent {
@@ -1197,42 +1182,6 @@ pipeline {
                                             sudo yum -y history rollback last-1
                                             sudo yum -y install daos-server
                                             sudo yum -y install daos-tests\n''' +
-                                            "${rpm_test_daos_test}" + '"',
-                                    junit_files: null,
-                                    failure_artifacts: env.STAGE_NAME, ignore_failure: true
-                        }
-                    }
-                }
-                stage('Test SLES12.3 RPMs') {
-                    when {
-                        beforeAgent true
-                        allOf {
-                            expression { false }
-                            not { branch 'weekly-testing' }
-                            expression { env.CHANGE_TARGET != 'weekly-testing' }
-                            expression { return env.QUICKBUILD == '1' }
-                        }
-                    }
-                    agent {
-                        label 'ci_vm1'
-                    }
-                    steps {
-                        provisionNodes NODELIST: env.NODELIST,
-                                       distro: 'sles12sp3',
-                                       node_count: 1,
-                                       snapshot: true,
-                                       inst_repos: sle12_daos_repos + " python-pathlib"
-                        catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
-                            runTest script: "${rpm_test_pre}" +
-                                         '''sudo zypper --non-interactive ar -f https://download.opensuse.org/repositories/science:/HPC:/SLE12SP3_Missing/SLE_12_SP3/ hwloc
-                                            # for libcmocka
-                                            sudo zypper --non-interactive ar https://download.opensuse.org/repositories/home:/jhli/SLE_15/home:jhli.repo
-                                            sudo zypper --non-interactive ar https://download.opensuse.org/repositories/devel:libraries:c_c++/SLE_12_SP3/devel:libraries:c_c++.repo
-                                            sudo zypper --non-interactive --gpg-auto-import-keys ref
-                                            sudo zypper --non-interactive rm openmpi libfabric1
-                                            sudo zypper --non-interactive in daos-client
-                                            sudo zypper --non-interactive in daos-server
-                                            sudo zypper --non-interactive in daos-tests\n''' +
                                             "${rpm_test_daos_test}" + '"',
                                     junit_files: null,
                                     failure_artifacts: env.STAGE_NAME, ignore_failure: true
