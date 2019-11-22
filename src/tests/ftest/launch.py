@@ -600,7 +600,7 @@ def clean_logs(test_yaml, args):
     # log files it will use when it is run.
     log_files = get_log_files(test_yaml, get_log_files(BASE_LOG_FILE_YAML))
     host_list = get_hosts_from_yaml(test_yaml, args)
-    command = "rm -fr {}".format(" ".join(log_files.values()))
+    command = "sudo rm -fr {}".format(" ".join(log_files.values()))
     print("Cleaning logs on {}".format(host_list))
     if not spawn_commands(host_list, command):
         print("Error cleaning logs, aborting")
