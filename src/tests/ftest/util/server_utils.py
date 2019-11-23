@@ -143,7 +143,7 @@ class DaosServer(DaosCommand):
             self.attach = FormattedParameter("-a {}")
             self.sock_dir = FormattedParameter("-d {}")
             self.insecure = FormattedParameter("-i", True)
-            self.recreate = FormattedParameter("--recreate-superblocks", False)
+            self.recreate = FormattedParameter("--recreate-superblocks", True)
 
 
 class DaosServerConfig(ObjectWithParameters):
@@ -360,7 +360,7 @@ class ServerManager(ExecutableCommand):
         self.debug = BasicParameter(None, True)       # ServerCommand param
         self.attach = BasicParameter(None, attach)    # ServerCommand param
         self.insecure = BasicParameter(None, True)    # ServerCommand param
-        self.recreate = BasicParameter(None, False)    # ServerCommand param
+        self.recreate = BasicParameter(None, True)    # ServerCommand param
         self.sudo = BasicParameter(None, False)       # ServerCommand param
         self.srv_timeout = BasicParameter(None, timeout)   # ServerCommand param
         self.report_uri = BasicParameter(None)             # Orterun param
@@ -520,10 +520,11 @@ class ServerManager(ExecutableCommand):
         clean_cmds = [
             "find /mnt/daos -mindepth 1 -maxdepth 1 -print0 | xargs -0r rm -rf"
         ]
-        if self.runner.job.yaml_params.is_scm():
-            clean_cmds.append("sudo umount /mnt/daos; sudo wipefs -a /dev/pmem0")
-        else:
+        if self.runner.job.yaml_params.is_nvme():
             clean_cmds.append("sudo rm -rf /mnt/daos; sudo umount /mnt/daos")
+        if self.runner.job.yaml_params.is_scm():
+            clean_cmds.append("sudo umount /mnt/daos;"
+                              "sudo wipefs -a /dev/pmem0")
         self.log.info("Cleanup of /mnt/daos directory.")
         pcmd(self._hosts, "; ".join(clean_cmds), False)
 
@@ -551,7 +552,7 @@ def storage_prepare(hosts, user, device_type):
     else:
         raise ServerFailed("Invalid device type")
     cmd = ("sudo {} storage prepare {} -u \"{}\" {} -f"
-        .format(daos_srv_bin[0], dev_param, user, device_args))
+           .format(daos_srv_bin[0], dev_param, user, device_args))
     result = pcmd(hosts, cmd, timeout=120)
     if len(result) > 1 or 0 not in result:
         raise ServerFailed("Error preparing NVMe storage")
@@ -652,7 +653,7 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
             [os.path.join(build_vars["PREFIX"], "bin", "daos_server"),
              "--debug",
              "--config", server_yaml,
-             "start", "-i", "-a", test.tmp])
+             "start", "-i", "--recreate-superblocks", "-a", test.tmp])
 
         print("Start CMD>>>>{0}".format(' '.join(server_cmd)))
 
