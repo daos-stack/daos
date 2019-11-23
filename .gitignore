@@ -31,4 +31,3 @@ vos_size.yaml
 site/
 src/tests/ftest/avocado/
 conftest_*.c
-
