@@ -132,7 +132,7 @@ on_teardown(struct bio_blobstore *bbs)
 	int	i, rc = 0, ret;
 
 	/*
-	 * The blobstore is already closed, transit to next state.
+	 * The blobstore is already closed, transition to next state.
 	 * TODO: Need to cleanup bdev when supporting reintegration.
 	 */
 	if (bbs->bb_bs == NULL)
@@ -163,6 +163,21 @@ on_teardown(struct bio_blobstore *bbs)
 	}
 
 	return 1;
+}
+
+static char *
+bio_state_enum_to_str(enum bio_bs_state state)
+{
+	switch (state) {
+	case BIO_BS_STATE_NORMAL: return "NORMAL";
+	case BIO_BS_STATE_FAULTY: return "FAULTY";
+	case BIO_BS_STATE_TEARDOWN: return "TEARDOWN";
+	case BIO_BS_STATE_OUT: return "OUT";
+	case BIO_BS_STATE_REPLACED: return "REPLACED";
+	case BIO_BS_STATE_REINT: return "REINT";
+	}
+
+	return "Undefined state";
 }
 
 int
@@ -203,16 +218,21 @@ bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state)
 		break;
 	default:
 		rc = -DER_INVAL;
-		D_ASSERTF(0, "Invalid bs state: %u\n", new_state);
+		D_ASSERTF(0, "Invalid bs state: %u (%s)\n",
+			  new_state, bio_state_enum_to_str(new_state));
 		break;
 	}
 
 	if (rc) {
-		D_ERROR("BS state transit error! tgt: %d, %u -> %u\n",
-			bbs->bb_owner_xs->bxc_tgt_id, bbs->bb_state, new_state);
+		D_ERROR("BS state transition error! tgt: %d, %s -> %s\n",
+			bbs->bb_owner_xs->bxc_tgt_id,
+			bio_state_enum_to_str(bbs->bb_state),
+			bio_state_enum_to_str(new_state));
 	} else {
-		D_DEBUG(DB_MGMT, "BS state transited. tgt: %d, %u -> %u\n",
-			bbs->bb_owner_xs->bxc_tgt_id, bbs->bb_state, new_state);
+		D_DEBUG(DB_MGMT, "BS state transitioned. tgt: %d, %s -> %s\n",
+			bbs->bb_owner_xs->bxc_tgt_id,
+			bio_state_enum_to_str(bbs->bb_state),
+			bio_state_enum_to_str(new_state));
 		bbs->bb_state = new_state;
 
 		if (new_state == BIO_BS_STATE_NORMAL ||
@@ -264,7 +284,8 @@ bio_bs_state_transit(struct bio_blobstore *bbs)
 		break;
 	default:
 		rc = -DER_INVAL;
-		D_ASSERTF(0, "Invalid bs state:%u\n", bbs->bb_state);
+		D_ASSERTF(0, "Invalid bs state:%u (%s)\n",
+			 bbs->bb_state, bio_state_enum_to_str(bbs->bb_state));
 		break;
 	}
 

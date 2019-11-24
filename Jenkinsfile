@@ -465,13 +465,15 @@ pipeline {
                                       context: "build" + "/" + env.STAGE_NAME,
                                       status: "PENDING"
                         checkoutScm withSubmodules: true
-                        sh label: env.STAGE_NAME,
-                           script: '''rm -rf artifacts/leap15/
-                              mkdir -p artifacts/leap15/
-                              if git show -s --format=%B | grep "^Skip-build: true"; then
-                                  exit 0
-                              fi
-                              make CHROOT_NAME="opensuse-leap-15.1-x86_64" -C utils/rpms chrootbuild'''
+                        catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
+                            sh label: env.STAGE_NAME,
+                               script: '''rm -rf artifacts/leap15/
+                                  mkdir -p artifacts/leap15/
+                                  if git show -s --format=%B | grep "^Skip-build: true"; then
+                                      exit 0
+                                  fi
+                                  make CHROOT_NAME="opensuse-leap-15.1-x86_64" -C utils/rpms chrootbuild'''
+                        }
                     }
                     post {
                         success {
@@ -540,7 +542,8 @@ pipeline {
                                                  build/src/common/tests/drpc_tests,
                                                  build/src/common/tests/acl_api_tests,
                                                  build/src/common/tests/acl_util_tests,
-                                                 build/src/common/tests/acl_util_real,
+                                                 build/src/common/tests/acl_principal_tests,
+                                                 build/src/common/tests/acl_real_tests,
                                                  build/src/iosrv/tests/drpc_progress_tests,
                                                  build/src/control/src/github.com/daos-stack/daos/src/control/mgmt,
                                                  build/src/client/api/tests/eq_tests,
@@ -586,6 +589,7 @@ pipeline {
                             */
                         }
                         unsuccessful {
+                            sh 'ls install/include/spdk/ install/include/hwloc.h || true'
                             sh """if [ -f config${arch}.log ]; then
                                       mv config${arch}.log config.log-centos7-gcc
                                   fi"""
@@ -1121,7 +1125,7 @@ pipeline {
                                        node_count: 1,
                                        snapshot: true,
                                        inst_repos: el7_component_repos + ' ' + component_repos,
-                                       inst_rpms: "argobots cart-${env.CART_COMMIT} fuse3-libs hwloc-devel libisa-l libpmem libpmemobj protobuf-c spdk-devel libfabric-devel pmix"
+                                       inst_rpms: "argobots cart-${env.CART_COMMIT} fuse3-libs hwloc-devel libisa-l libpmem libpmemobj protobuf-c spdk-devel libfabric-devel pmix numactl-devel"
                         runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''# JENKINS-52781 tar function is breaking symlinks
                                            rm -rf test_results
