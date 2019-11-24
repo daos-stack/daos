@@ -35,11 +35,13 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 )
 
+// HostGroup associates HostSet with a port number.
 type HostGroup struct {
 	Port    string
 	HostSet *hostlist.HostSet
 }
 
+// HostGroups represents a slice of HostGroup elements.
 type HostGroups []*HostGroup
 
 func (hgs HostGroups) String() string {
@@ -58,11 +60,13 @@ func (hgs HostGroups) String() string {
 	return strings.Join(ranges, ",") + "\n"
 }
 
+// HostGroupsError associates HostGroups with an error message.
 type HostGroupsError struct {
 	Groups HostGroups
 	Error  string
 }
 
+// HostGroupErrors represents a slice of HostGroupsError elements.
 type HostGroupsErrors []*HostGroupsError
 
 func (hges HostGroupsErrors) String() string {
@@ -76,12 +80,12 @@ func (hges HostGroupsErrors) String() string {
 	return strings.Join(errRanges, "")
 }
 
-// hostsByPort takes slice of address patterns and returns a map of host slice
+// hostsByPort takes slice of address patterns and returns a HostGroup
 // for each port (after expanding each port specific nodeset).
 //
 // e.g. for input patterns string[]{"intelA[1-10]:10000", "intelB[2,3]:10001"}
-// 	returns map[int][]string{10000: ["intelA1", ..."intelA10"],
-// 				 10001: ["intelB2", "intelB3"]}
+// 	returns HostGroups{{10000, ["intelA1", ..."intelA10"]},
+//		{10001, ["intelB2", "intelB3"]}}
 func hostsByPort(addrPatterns []string, defaultPort int) (groups HostGroups, err error) {
 	var ports []string
 	portHosts := make(map[string]*hostlist.HostSet)
@@ -150,7 +154,8 @@ func flattenHostAddrs(addrPatterns string) (addrs []string, err error) {
 	return
 }
 
-// checkConns analyses connection results and returns summary compressed hostlists.
+// checkConns analyses connection results and returns summary compressed active
+// and inactive hostlists.
 func checkConns(results client.ResultMap) (active HostGroups, inactive HostGroupsErrors, err error) {
 	var addrs []string
 	var msgs []string
