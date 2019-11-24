@@ -108,6 +108,17 @@ class DmgCommand(DaosCommand):
             self.pool = FormattedParameter("--pool {}")
             self.force = FormattedParameter("-f", False)
 
+    class DmgNetScan(CommandWithParameters):
+        """Defines an object representing a network scan dmg command."""
+
+        def __init__(self):
+            """Create a dmg Command object."""
+            super(DmgCommand.DmgNetScan, self).__init__(
+                "/run/dmg/netscan/*", "scan")
+            self.provider = FormattedParameter("-p {}")
+            self.all = FormattedParameter("-a", False)
+
+
 def storage_scan(path, hosts, insecure=True):
     """ Execute scan command through dmg tool to servers provided.
 
