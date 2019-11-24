@@ -29,6 +29,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 
 	. "github.com/daos-stack/daos/src/control/client"
 	. "github.com/daos-stack/daos/src/control/common"
@@ -48,6 +49,10 @@ func TestFlattenAddrs(t *testing.T) {
 		"multiple nodesets": {
 			addrPatterns: "abc[1-5]:10000,abc[6-10]:10001,def[1-3]:10000",
 			expAddrs:     "abc1:10000,abc2:10000,abc3:10000,abc4:10000,abc5:10000,def1:10000,def2:10000,def3:10000,abc6:10001,abc7:10001,abc8:10001,abc9:10001,abc10:10001",
+		},
+		"multiple ip sets": {
+			addrPatterns: "10.0.0.[1-5]:10000,10.0.0.[6-10]:10001,192.168.0.[1-3]:10000",
+			expAddrs:     "10.0.0.1:10000,10.0.0.2:10000,10.0.0.3:10000,10.0.0.4:10000,10.0.0.5:10000,192.168.0.1:10000,192.168.0.2:10000,192.168.0.3:10000,10.0.0.6:10001,10.0.0.7:10001,10.0.0.8:10001,10.0.0.9:10001,10.0.0.10:10001",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -72,50 +77,68 @@ func TestCheckConns(t *testing.T) {
 		},
 		"single successful connection": {
 			results: ResultMap{"abc:10000": ClientResult{"abc:10000", nil, nil}},
-			active:  "abc:10000",
+			active:  "abc:10000\n",
 		},
 		"single failed connection": {
 			results:  ResultMap{"abc4:10000": ClientResult{"abc4:10000", nil, MockErr}},
-			inactive: "map[unknown failure:[abc4:10000]]",
+			inactive: "unknown failure: abc4:10000\n",
 		},
 		"multiple successful connections": {
 			results: ResultMap{
 				"foo.bar:10000": ClientResult{"foo.bar:10000", nil, nil},
 				"foo.baz:10001": ClientResult{"foo.baz:10001", nil, nil},
 			},
-			active: "foo.bar:10000,foo.baz:10001",
+			active: "foo.bar:10000,foo.baz:10001\n",
 		},
 		"multiple failed connections": {
 			results:  ResultMap{"abc4:10000": ClientResult{"abc4:10000", nil, MockErr}, "abc5:10001": ClientResult{"abc5:10001", nil, MockErr}},
-			inactive: "map[unknown failure:[abc4:10000 abc5:10001]]",
+			inactive: "unknown failure: abc4:10000,abc5:10001\n",
 		},
 		"multiple failed connections with hostlist compress": {
 			results:  ResultMap{"abc4:10000": ClientResult{"abc4:10000", nil, MockErr}, "abc5:10000": ClientResult{"abc5:10000", nil, MockErr}},
-			inactive: "map[unknown failure:[abc[4-5]:10000]]",
+			inactive: "unknown failure: abc[4-5]:10000\n",
 		},
 		"failed and successful connections": {
 			results:  ResultMap{"abc4:10000": ClientResult{"abc4:10000", nil, MockErr}, "abc5:10001": ClientResult{"abc5:10001", nil, nil}},
-			active:   "abc5:10001",
-			inactive: "map[unknown failure:[abc4:10000]]",
+			active:   "abc5:10001\n",
+			inactive: "unknown failure: abc4:10000\n",
 		},
-		"multiple successful connections with hostlist compress": {
+		"multiple connections with hostlist compress": {
 			results: ResultMap{
 				"bar4:10001": ClientResult{"bar4:10001", nil, nil},
 				"bar5:10001": ClientResult{"bar5:10001", nil, nil},
+				"bar3:10001": ClientResult{"bar3:10001", nil, nil},
+				"bar6:10001": ClientResult{"bar6:10001", nil, nil},
+				"bar2:10001": ClientResult{"bar2:10001", nil, errors.New("foobaz")},
+				"bar7:10001": ClientResult{"bar7:10001", nil, errors.New("foobar")},
+				"bar8:10001": ClientResult{"bar8:10001", nil, errors.New("foobar")},
+				"bar9:10000": ClientResult{"bar9:10000", nil, errors.New("foobar")},
 			},
-			active: "bar[4-5]:10001",
+			active:   "bar[3-6]:10001\n",
+			inactive: "foobar: bar9:10000,bar[7-8]:10001\nfoobaz: bar2:10001\n",
+		},
+		"multiple connections with IP address compress": {
+			results: ResultMap{
+				"10.0.0.4:10001": ClientResult{"10.0.0.4:10001", nil, nil},
+				"10.0.0.5:10001": ClientResult{"10.0.0.5:10001", nil, nil},
+				"10.0.0.3:10001": ClientResult{"10.0.0.3:10001", nil, nil},
+				"10.0.0.6:10001": ClientResult{"10.0.0.6:10001", nil, nil},
+				"10.0.0.2:10001": ClientResult{"10.0.0.2:10001", nil, errors.New("foobaz")},
+				"10.0.0.7:10001": ClientResult{"10.0.0.7:10001", nil, errors.New("foobar")},
+				"10.0.0.8:10001": ClientResult{"10.0.0.8:10001", nil, errors.New("foobar")},
+				"10.0.0.9:10000": ClientResult{"10.0.0.9:10000", nil, errors.New("foobar")},
+			},
+			active:   "10.0.0.[3-6]:10001\n",
+			inactive: "foobar: 10.0.0.9:10000,10.0.0.[7-8]:10001\nfoobaz: 10.0.0.2:10001\n",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if tc.inactive == "" {
-				tc.inactive = "map[]"
-			}
 			active, inactive, err := checkConns(tc.results)
 			CmpErr(t, tc.expErr, err)
-			if diff := cmp.Diff(tc.active, strings.Join(active, ",")); diff != "" {
+			if diff := cmp.Diff(tc.active, active.String()); diff != "" {
 				t.Fatalf("unexpected active (-want, +got):\n%s\n", diff)
 			}
-			if diff := cmp.Diff(tc.inactive, fmt.Sprintf("%v", inactive)); diff != "" {
+			if diff := cmp.Diff(tc.inactive, inactive.String()); diff != "" {
 				t.Fatalf("unexpected inactive (-want, +got):\n%s\n", diff)
 			}
 		})

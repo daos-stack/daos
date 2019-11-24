@@ -45,21 +45,35 @@ type HostGroups []*HostGroup
 func (hgs HostGroups) String() string {
 	var ranges []string
 
-	for _, hg := range hgs {
-		ranges = append(ranges,
-			fmt.Sprintf("%d:%s", hg.Port, hg.HostSet.RangedString()))
+	if len(hgs) == 0 {
+		return ""
+
 	}
 
-	return strings.Join(ranges, ",")
+	for _, hg := range hgs {
+		ranges = append(ranges,
+			fmt.Sprintf("%s:%s", hg.HostSet.RangedString(), hg.Port))
+	}
+
+	return strings.Join(ranges, ",") + "\n"
 }
 
-type FailedHostGroups struct {
+type HostGroupsError struct {
 	Groups HostGroups
 	Error  string
 }
 
-func (fhg FailedHostGroups) String() string {
-	return fmt.Sprintf("%s: %s\n", fhg.Error, fhg.Groups)
+type HostGroupsErrors []*HostGroupsError
+
+func (hges HostGroupsErrors) String() string {
+	var errRanges []string
+
+	for _, hge := range hges {
+		errRanges = append(errRanges,
+			fmt.Sprintf("%s: %s", hge.Error, hge.Groups))
+	}
+
+	return strings.Join(errRanges, "")
 }
 
 // hostsByPort takes slice of address patterns and returns a map of host slice
@@ -137,7 +151,7 @@ func flattenHostAddrs(addrPatterns string) (addrs []string, err error) {
 }
 
 // checkConns analyses connection results and returns summary compressed hostlists.
-func checkConns(results client.ResultMap) (active HostGroups, inactive []*FailedHostGroups, err error) {
+func checkConns(results client.ResultMap) (active HostGroups, inactive HostGroupsErrors, err error) {
 	var addrs []string
 	var msgs []string
 	var groups HostGroups
@@ -180,7 +194,7 @@ func checkConns(results client.ResultMap) (active HostGroups, inactive []*Failed
 			return
 		}
 		inactive = append(inactive,
-			&FailedHostGroups{Groups: groups, Error: msg})
+			&HostGroupsError{Groups: groups, Error: msg})
 	}
 
 	return

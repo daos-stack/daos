@@ -26,7 +26,6 @@ package main
 import (
 	"os"
 	"path"
-	"strings"
 
 	flags "github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
@@ -115,11 +114,12 @@ func appSetup(log logging.Logger, opts *cliOptions, conns client.Connect) error 
 		return err
 	}
 	if len(active) == 0 {
+		log.Errorf("Inactive:\n%s\n", inactive)
 		return errors.New("no active connections")
 	}
 
-	log.Infof("Active: %s", strings.Join(active, ","))
-	log.Debugf("Inctive: %v", inactive)
+	log.Infof("Active: %s\n", active)
+	log.Infof("Inactive:\n%s\n", inactive)
 
 	return nil
 }
