@@ -52,6 +52,8 @@ class BadConnectTest(Test):
                                "../../../.build_vars.json")) as build_file:
             build_paths = json.load(build_file)
         self.basepath = os.path.normpath(build_paths['PREFIX'] + "/../")
+        self.prefix = build_paths['PREFIX']
+        self.tmp = os.path.join(self.prefix, 'tmp')
 
         self.hostlist_servers = self.params.get("test_machines", '/run/hosts/')
 
