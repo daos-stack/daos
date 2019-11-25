@@ -40,13 +40,13 @@ type PoolCreateReq struct {
 	Sys        string
 	Usr        string
 	Grp        string
-	Acl        []string
-	Uuid       string
+	ACL        *AccessControlList
+	UUID       string
 }
 
 // PoolCreateResp struct contains response
 type PoolCreateResp struct {
-	Uuid    string
+	UUID    string
 	SvcReps string
 }
 
@@ -70,7 +70,11 @@ func (c *connList) PoolCreate(req *PoolCreateReq) (*PoolCreateResp, error) {
 	rpcReq := &mgmtpb.PoolCreateReq{
 		Scmbytes: req.ScmBytes, Nvmebytes: req.NvmeBytes, Ranks: req.RankList,
 		Numsvcreps: req.NumSvcReps, Sys: req.Sys, User: req.Usr,
-		Usergroup: req.Grp, Acl: req.Acl, Uuid: poolUUIDStr,
+		Usergroup: req.Grp, Uuid: poolUUIDStr,
+	}
+
+	if req.ACL != nil {
+		rpcReq.Acl = req.ACL.Entries
 	}
 
 	c.log.Debugf("Create DAOS pool request: %s\n", rpcReq)
@@ -87,12 +91,12 @@ func (c *connList) PoolCreate(req *PoolCreateReq) (*PoolCreateResp, error) {
 			rpcResp.GetStatus())
 	}
 
-	return &PoolCreateResp{Uuid: poolUUIDStr, SvcReps: rpcResp.GetSvcreps()}, nil
+	return &PoolCreateResp{UUID: poolUUIDStr, SvcReps: rpcResp.GetSvcreps()}, nil
 }
 
 // PoolDestroyReq struct contains request
 type PoolDestroyReq struct {
-	Uuid  string
+	UUID  string
 	Force bool
 }
 
@@ -108,7 +112,7 @@ func (c *connList) PoolDestroy(req *PoolDestroyReq) error {
 		return err
 	}
 
-	rpcReq := &mgmtpb.PoolDestroyReq{Uuid: req.Uuid, Force: req.Force}
+	rpcReq := &mgmtpb.PoolDestroyReq{Uuid: req.UUID, Force: req.Force}
 
 	c.log.Debugf("Destroy DAOS pool request: %s\n", rpcReq)
 
@@ -134,7 +138,7 @@ type PoolGetACLReq struct {
 
 // PoolGetACLResp contains the output results for PoolGetACL
 type PoolGetACLResp struct {
-	ACL []string // Access Control Entries in string format
+	ACL *AccessControlList
 }
 
 // PoolGetACL gets the Access Control List for the pool.
@@ -161,6 +165,6 @@ func (c *connList) PoolGetACL(req *PoolGetACLReq) (*PoolGetACLResp, error) {
 	}
 
 	return &PoolGetACLResp{
-		ACL: pbResp.ACL,
+		ACL: &AccessControlList{Entries: pbResp.ACL},
 	}, nil
 }

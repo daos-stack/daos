@@ -388,10 +388,10 @@ vts_dtx_commit_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	assert_int_equal(rc, 0);
 
 	if (punch_obj)
-		rc = vos_obj_punch(args->ctx.tc_co_hdl, args->oid, ++epoch,
+		rc = vos_obj_punch(args->ctx.tc_co_hdl, args->oid, epoch,
 				   1, 0, NULL, 0, NULL, dth);
 	else
-		rc = vos_obj_punch(args->ctx.tc_co_hdl, args->oid, ++epoch,
+		rc = vos_obj_punch(args->ctx.tc_co_hdl, args->oid, epoch,
 				   1, 0, &dkey, 1, &akey, dth);
 	assert_int_equal(rc, 0);
 
@@ -403,20 +403,10 @@ vts_dtx_commit_visibility(struct io_test_args *args, bool ext, bool punch_obj)
 	iod.iod_size = DAOS_REC_ANY;
 
 	rc = io_test_obj_fetch(args, ++epoch, &dkey, &iod, &sgl, true);
-	if (punch_obj) {
-		/* Object uses old punch model.  Data is visible before commit
-		 */
-		assert_int_equal(rc, 0);
+	/* Punch is not yet visible */
+	assert_int_equal(rc, 0);
 
-		assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
-	} else {
-		/* Read at later timestamp than the punch should return
-		 * -DER_INPROGRESS
-		 */
-		assert_int_equal(rc, -DER_INPROGRESS);
-
-		assert_memory_not_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
-	}
+	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 
 	/* Commit the punch DTX. */
 	rc = vos_dtx_commit(args->ctx.tc_co_hdl, &xid, 1);
@@ -764,6 +754,8 @@ dtx_16(void **state)
 	char				 fetch_buf[UPDATE_BUF_SIZE];
 	int				 rc;
 
+	skip();
+
 	vts_dtx_prep_update(args, &xid, &val_iov, &dkey_iov, &dkey, dkey_buf,
 			    &akey, akey_buf, &iod, &sgl, &rex, update_buf,
 			    UPDATE_BUF_SIZE, UPDATE_REC_SIZE, &dkey_hash,
@@ -868,6 +860,8 @@ dtx_17(void **state)
 	bool				 found[10];
 	int				 rc;
 	int				 i;
+
+	skip();
 
 	/* Assume I am the leader. */
 	for (i = 0; i < 10; i++) {
@@ -1051,6 +1045,8 @@ vts_dtx_shares(struct io_test_args *args, int *commit_list, int commit_count,
 	char				 fetch_buf[UPDATE_BUF_SIZE];
 	int				 rc;
 	int				 i;
+
+	skip();
 
 	assert_true(commit_count + abort_count == 5);
 
@@ -1310,6 +1306,8 @@ vts_dtx_shares_with_punch(struct io_test_args *args, bool punch_obj, bool abort)
 	char				 fetch_buf[UPDATE_BUF_SIZE];
 	int				 rc;
 	int				 i;
+
+	skip();
 
 	akey_buf[0] = malloc(UPDATE_AKEY_SIZE);
 	assert_true(akey_buf[0] != NULL);

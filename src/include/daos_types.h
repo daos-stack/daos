@@ -288,6 +288,19 @@ typedef struct {
 	struct daos_rebuild_status	pi_rebuild_st;
 } daos_pool_info_t;
 
+/*
+ * DAOS management pool information
+ */
+typedef struct {
+	/* TODO? same pool info structure as a pool query?
+	 * requires back-end RPC to each pool service.
+	 * daos_pool_info_t		 mgpi_info;
+	 */
+	uuid_t				 mgpi_uuid;
+	/** List of current pool service replica ranks */
+	d_rank_list_t			*mgpi_svc;
+} daos_mgmt_pool_info_t;
+
 /**
  * DAOS_PC_RO connects to the pool for reading only.
  *

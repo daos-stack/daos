@@ -375,13 +375,14 @@ vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
 	if (check) {
 		struct daos_lru_cache	*occ = vos_obj_cache_current();
 		struct vos_object	*obj = NULL;
+		daos_epoch_range_t	 epr = {0, epoch};
 
 		/* Sync epoch check inside vos_obj_hold(). We do not
 		 * care about whether it is for punch or update , so
 		 * use DAOS_INTENT_COS to bypass DTX conflict check.
 		 */
-		rc = vos_obj_hold(occ, cont, *oid, epoch, true,
-				  DAOS_INTENT_COS, &obj);
+		rc = vos_obj_hold(occ, cont, *oid, &epr, true,
+				  DAOS_INTENT_COS, true, &obj);
 		if (rc != 0)
 			return rc;
 

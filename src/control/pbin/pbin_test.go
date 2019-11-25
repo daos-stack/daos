@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,40 +20,44 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
-
-package server
+package pbin_test
 
 import (
-	"context"
+	"fmt"
+	"os"
 	"testing"
 
-	. "github.com/daos-stack/daos/src/control/common"
-	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/pkg/errors"
 )
 
-// TODO: add server side streaming test for list features
+const (
+	childModeEnvVar = "GO_TESTING_CHILD_MODE"
+	childModeEcho   = "MODE_ECHO"
+	childModeReqRes = "MODE_REQ_RES"
+	testMsg         = "hello world"
+)
 
-func TestGetFeature(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer ShowBufferOnFailure(t, buf)
-
-	cs := defaultMockControlService(t, log)
-
-	mockFeature := MockFeaturePB()
-	fMap := make(FeatureMap)
-	fMap[mockFeature.Fname.Name] = mockFeature
-	cs.supportedFeatures = fMap
-
-	feature, err := cs.GetFeature(context.TODO(), mockFeature.Fname)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	AssertEqual(t, feature, mockFeature, "")
-
-	_, err = cs.GetFeature(context.TODO(), &ctlpb.FeatureName{Name: "non-existent"})
+func childErrExit(err error) {
 	if err == nil {
-		t.Fatal(err)
+		err = errors.New("unknown error")
+	}
+	fmt.Fprintf(os.Stderr, "CHILD ERROR: %s\n", err)
+	os.Exit(1)
+}
+
+func TestMain(m *testing.M) {
+	mode := os.Getenv(childModeEnvVar)
+	switch mode {
+	case "":
+		// default; run the test binary
+		os.Exit(m.Run())
+	case childModeEcho:
+		// for stdio_test
+		echo()
+	case childModeReqRes:
+		// for exec_test
+		reqRes()
+	default:
+		childErrExit(errors.Errorf("Unknown child mode: %q", mode))
 	}
 }

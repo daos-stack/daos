@@ -54,7 +54,10 @@
 		ds_mgmt_params_set_hdlr, NULL),				\
 	X(MGMT_PROFILE,							\
 		0, &CQF_mgmt_profile,					\
-		ds_mgmt_profile_hdlr, NULL)
+		ds_mgmt_profile_hdlr, NULL),				\
+	X(MGMT_LIST_POOLS,						\
+		0, &CQF_mgmt_list_pools,				\
+		ds_mgmt_hdlr_list_pools, NULL)
 
 #define MGMT_PROTO_SRV_RPC_LIST						\
 	X(MGMT_TGT_CREATE,						\
@@ -203,5 +206,24 @@ CRT_GEN_STRUCT(server_entry, DAOS_SEQ_SERVER_ENTRY);
 
 CRT_RPC_DECLARE(mgmt_tgt_map_update, DAOS_ISEQ_MGMT_TGT_MAP_UPDATE,
 		DAOS_OSEQ_MGMT_TGT_MAP_UPDATE)
+
+/* List pools: returns an array of mgmt_list_pools_one */
+#define DAOS_SEQ_MGMT_LIST_POOLS_ONE \
+	((uuid_t)		(lp_puuid)	CRT_VAR) \
+	((d_rank_list_t)	(lp_svc)	CRT_PTR)
+
+CRT_GEN_STRUCT(mgmt_list_pools_one, DAOS_SEQ_MGMT_LIST_POOLS_ONE);
+
+#define DAOS_ISEQ_MGMT_LIST_POOLS /* input fields */		 \
+	((d_string_t)		(lp_grp)		CRT_VAR) \
+	((uint64_t)		(lp_npools)		CRT_VAR)
+
+#define DAOS_OSEQ_MGMT_LIST_POOLS /* output fields */			   \
+	((struct mgmt_list_pools_one)		(lp_pools)	CRT_ARRAY) \
+	((uint64_t)				(lp_npools)	CRT_VAR)   \
+	((int32_t)				(lp_rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(mgmt_list_pools, DAOS_ISEQ_MGMT_LIST_POOLS,
+		DAOS_OSEQ_MGMT_LIST_POOLS)
 
 #endif /* __MGMT_RPC_H__ */

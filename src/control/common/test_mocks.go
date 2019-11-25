@@ -25,16 +25,6 @@ package common
 
 import ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 
-// MockFeaturePB is a mock protobuf Feature message used in tests for multiple
-// packages.
-func MockFeaturePB() *ctlpb.Feature {
-	return &ctlpb.Feature{
-		Category:    &ctlpb.Category{Category: "nvme"},
-		Fname:       &ctlpb.FeatureName{Name: "burn-name"},
-		Description: "run workloads on device to test",
-	}
-}
-
 // MockNamespacePB is a mock protobuf Namespace message used in tests for
 // multiple packages.
 func MockNamespacePB() *ctlpb.NvmeController_Namespace {
@@ -67,12 +57,12 @@ func MockDeviceHealthPB() *ctlpb.NvmeController_Health {
 
 // MockControllerPB is a mock protobuf Controller message used in tests for
 // multiple packages (message contains repeated namespace field).
-func MockControllerPB(fwRev string) *ctlpb.NvmeController {
+func MockControllerPB() *ctlpb.NvmeController {
 	return &ctlpb.NvmeController{
 		Model:       "ABC",
 		Serial:      "123ABC",
 		Pciaddr:     "0000:81:00.0",
-		Fwrev:       fwRev,
+		Fwrev:       "1.0.0",
 		Healthstats: MockDeviceHealthPB(),
 		Namespaces:  []*ctlpb.NvmeController_Namespace{MockNamespacePB()},
 	}
@@ -123,6 +113,7 @@ func MockPmemDevicePB() *ctlpb.PmemDevice {
 		Blockdev: "pmem1",
 		Dev:      "namespace-1",
 		Numanode: 1,
+		Size:     3183575302144,
 	}
 }
 

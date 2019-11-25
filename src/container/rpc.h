@@ -303,6 +303,7 @@ struct cont_tgt_close_rec {
 };
 
 #define DAOS_ISEQ_TGT_CLOSE	/* input fields */		 \
+	((uuid_t)		(tci_pool_uuid)		CRT_VAR) \
 	((struct cont_tgt_close_rec) (tci_recs)		CRT_ARRAY)
 
 #define DAOS_OSEQ_TGT_CLOSE	/* output fields */		 \

@@ -200,7 +200,7 @@ func poolCreate(log logging.Logger, conns client.Connect, scmSize string,
 		return errors.Wrap(err, "calculating pool storage sizes")
 	}
 
-	var acl []string
+	var acl *client.AccessControlList
 	if aclFile != "" {
 		acl, err = readACLFile(aclFile)
 		if err != nil {
@@ -221,7 +221,7 @@ func poolCreate(log logging.Logger, conns client.Connect, scmSize string,
 	req := &client.PoolCreateReq{
 		ScmBytes: uint64(scmBytes), NvmeBytes: uint64(nvmeBytes),
 		RankList: rankList, NumSvcReps: numSvcReps, Sys: sys,
-		Usr: usr, Grp: grp, Acl: acl,
+		Usr: usr, Grp: grp, ACL: acl,
 	}
 
 	resp, err := conns.PoolCreate(req)
@@ -229,7 +229,7 @@ func poolCreate(log logging.Logger, conns client.Connect, scmSize string,
 		msg = errors.WithMessage(err, "FAILED").Error()
 	} else {
 		msg += fmt.Sprintf("UUID: %s, Service replicas: %s",
-			resp.Uuid, resp.SvcReps)
+			resp.UUID, resp.SvcReps)
 	}
 
 	log.Infof("Pool-create command %s\n", msg)
@@ -241,7 +241,7 @@ func poolCreate(log logging.Logger, conns client.Connect, scmSize string,
 func poolDestroy(log logging.Logger, conns client.Connect, poolUUID string, force bool) error {
 	msg := "succeeded"
 
-	req := &client.PoolDestroyReq{Uuid: poolUUID, Force: force}
+	req := &client.PoolDestroyReq{UUID: poolUUID, Force: force}
 
 	err := conns.PoolDestroy(req)
 	if err != nil {
@@ -263,15 +263,8 @@ func poolGetACL(log logging.Logger, conns client.Connect, poolUUID string) error
 	}
 
 	log.Infof("Pool-get-ACL command succeeded, UUID: %s\n", poolUUID)
-	acl := resp.ACL
 
-	log.Info("# Entries:\n")
-	if len(acl) == 0 {
-		log.Info("None\n")
-	}
-	for _, ace := range acl {
-		log.Infof("%s\n", ace)
-	}
+	log.Info(resp.ACL.String())
 
 	return nil
 }

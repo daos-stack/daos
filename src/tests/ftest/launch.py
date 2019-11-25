@@ -81,7 +81,7 @@ def get_build_environment():
     """
     build_vars_file = os.path.join(
         os.path.dirname(os.path.realpath(__file__)),
-        "../../../.build_vars.json")
+        "../../.build_vars.json")
     with open(build_vars_file) as vars_file:
         return json.load(vars_file)
 
@@ -98,11 +98,19 @@ def set_test_environment():
     sbin_dir = os.path.join(base_dir, "sbin")
     path = os.environ.get("PATH")
 
+    if base_dir == "/usr":
+        tmp_dir = os.getenv('DAOS_TEST_SHARED_DIR', \
+                            os.path.expanduser('~/daos_test'))
+        if not os.path.exists(tmp_dir):
+            os.makedirs(tmp_dir)
+    else:
+        tmp_dir = os.path.join(base_dir, "tmp")
+
     # Update env definitions
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, path])
     os.environ["DAOS_SINGLETON_CLI"] = "1"
     os.environ["CRT_CTX_SHARE_ADDR"] = "1"
-    os.environ["CRT_ATTACH_INFO_PATH"] = os.path.join(base_dir, "tmp")
+    os.environ["CRT_ATTACH_INFO_PATH"] = tmp_dir
 
     # Python paths required for functional testing
     python_version = "python{}{}".format(
@@ -111,7 +119,7 @@ def set_test_environment():
     required_python_paths = [
         os.path.abspath("util/apricot"),
         os.path.abspath("util"),
-        os.path.join(base_dir, "lib", python_version, "site-packages"),
+        os.path.join(base_dir, "lib64", python_version, "site-packages"),
     ]
 
     # Check the PYTHONPATH env definition

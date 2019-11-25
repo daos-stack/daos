@@ -121,8 +121,9 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint32_t map_version,
 			orwo->orw_nrs.ca_count = 0;
 		}
 
-		daos_csummer_free_dcbs(cont_hdl->sch_csummer,
-				       &orwo->orw_csum.ca_arrays);
+		if (cont_hdl)
+			daos_csummer_free_dcbs(cont_hdl->sch_csummer,
+					       &orwo->orw_csum.ca_arrays);
 		orwo->orw_csum.ca_count = 0;
 	}
 }
@@ -509,15 +510,15 @@ obj_verify_cont_hdl(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 				  cont_hdl_uuid)) {
 		D_ERROR("Empty container "DF_UUID" (ref=%d) handle?\n",
 			DP_UUID(cont_uuid), cont_hdl->sch_ref);
-		D_GOTO(failed, rc = -DER_NO_HDL);
+		D_GOTO(out, rc = -DER_NO_HDL);
 	}
 
 	/* rebuild handle is a dummy and never attached by a real container */
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_NO_HDL))
-		D_GOTO(failed, rc = -DER_NO_HDL);
+		D_GOTO(out, rc = -DER_NO_HDL);
 
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_STALE_POOL))
-		D_GOTO(failed, rc = -DER_STALE);
+		D_GOTO(out, rc = -DER_STALE);
 
 	D_DEBUG(DB_TRACE, DF_UUID"/%p is rebuild cont hdl\n",
 		DP_UUID(cont_hdl_uuid), cont_hdl);
@@ -526,12 +527,14 @@ obj_verify_cont_hdl(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	rc = ds_cont_child_lookup(cont_hdl->sch_pool->spc_uuid, cont_uuid,
 				  contp);
 	if (rc)
-		D_GOTO(failed, rc);
+		D_GOTO(out, rc);
 out:
-	*hdlp = cont_hdl;
-failed:
-	if (cont_hdl != NULL && rc != 0)
+	if (cont_hdl != NULL && rc != 0) {
 		ds_cont_hdl_put(cont_hdl);
+		cont_hdl = NULL;
+	}
+
+	*hdlp = cont_hdl;
 
 	return rc;
 }

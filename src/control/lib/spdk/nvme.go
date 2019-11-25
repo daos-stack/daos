@@ -49,9 +49,6 @@ type NVME interface {
 	Discover() ([]Controller, []Namespace, []DeviceHealth, error)
 	// Format NVMe controller namespaces
 	Format(ctrlrPciAddr string) ([]Controller, []Namespace, error)
-	// Update NVMe controller firmware
-	Update(ctrlrPciAddr string, path string, slot int32) (
-		[]Controller, []Namespace, error)
 	// Cleanup NVMe object references
 	Cleanup()
 }

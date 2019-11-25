@@ -73,7 +73,7 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
                             sudo cp /tmp/daos_server_baseline.yaml /usr/etc/daos_server.yml
                             cat /usr/etc/daos_server.yml
                             cat /usr/etc/daos_agent.yml
-                            coproc orterun -np 1 -H \\\$HOSTNAME --enable-recovery -x DAOS_SINGLETON_CLI=1 daos_server --debug --config /usr/etc/daos_server.yml start -t 1 -a /tmp -i
+                            coproc orterun -np 1 -H \\\$HOSTNAME --enable-recovery -x DAOS_SINGLETON_CLI=1 daos_server --debug --config /usr/etc/daos_server.yml start -t 1 -a /tmp -i --recreate-superblocks
                             trap 'set -x; kill -INT \\\$COPROC_PID' EXIT
                             line=\"\"
                             while [[ \"\\\$line\" != *started\\\\ on\\\\ rank\\\\ 0* ]]; do
@@ -1035,7 +1035,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Leap 15 with Intel-C') {
+                stage('Build on Leap 15 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
                         allOf {
@@ -1055,7 +1055,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild clean: "_build.external${arch}", COMPILER: "icc",
-                                   failure_artifacts: 'config.log-leap15-icc'
+                                   TARGET_PREFIX: 'install/opt', failure_artifacts: 'config.log-leap15-icc'
                     }
                     post {
                         always {
@@ -1142,6 +1142,14 @@ pipeline {
                                                sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
                                                sudo mkdir -p $DAOS_BASE
                                                sudo mount -t nfs $HOSTNAME:$PWD $DAOS_BASE
+
+                                               # copy daos_admin binary into \$PATH and fix perms
+                                               sudo cp $DAOS_BASE/install/bin/daos_admin /usr/bin/daos_admin && \
+                                                   sudo chown root /usr/bin/daos_admin && \
+                                                   sudo chmod 4755 /usr/bin/daos_admin && \
+                                                   mv $DAOS_BASE/install/bin/daos_admin \
+                                                      $DAOS_BASE/install/bin/orig_daos_admin
+
                                                # set CMOCKA envs here
                                                export CMOCKA_MESSAGE_OUTPUT="xml"
                                                export CMOCKA_XML_FILE="$DAOS_BASE/test_results/%g.xml"
@@ -1216,11 +1224,13 @@ pipeline {
         stage('Test') {
             when {
                 beforeAgent true
-                // expression { skipTest != true }
-                expression { env.NO_CI_TESTING != 'true' }
-                expression {
-                    sh script: 'git show -s --format=%B | grep "^Skip-test: true"',
-                       returnStatus: true
+                allOf {
+                    // expression { skipTest != true }
+                    expression { env.NO_CI_TESTING != 'true' }
+                    expression {
+                        sh script: 'git show -s --format=%B | grep "^Skip-test: true"',
+                           returnStatus: true
+                    }
                 }
             }
             parallel {
@@ -1234,7 +1244,7 @@ pipeline {
                                        snapshot: true,
                                        inst_repos: el7_daos_repos + ' ' + ior_repos,
                                        inst_rpms: 'cart-' + env.CART_COMMIT + ' ' +
-                                                  'ior-hpc mpich-autoload'
+                                                  'ior-hpc mpich-autoload ndctl'
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
@@ -1242,22 +1252,22 @@ pipeline {
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
                                            ./ftest.sh "$test_tag" $tnodes''',
-                                junit_files: "src/tests/ftest/avocado/*/*/*.xml src/tests/ftest/*_results.xml",
+                                junit_files: "install/lib/daos/TESTING/ftest/avocado/*/*/*.xml install/lib/daos/TESTING/ftest/*_results.xml",
                                 failure_artifacts: env.STAGE_NAME
                     }
                     post {
                         always {
-                            sh '''rm -rf src/tests/ftest/avocado/*/*/html/
+                            sh '''rm -rf install/lib/daos/TESTING/ftest/avocado/*/*/html/
                                   if [ -n "$STAGE_NAME" ]; then
                                       rm -rf "$STAGE_NAME/"
                                       mkdir "$STAGE_NAME/"
                                       # compress those potentially huge DAOS logs
-                                      if daos_logs=$(ls src/tests/ftest/avocado/job-results/*/daos_logs/*); then
+                                      if daos_logs=$(ls install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/*); then
                                           lbzip2 $daos_logs
                                       fi
                                       arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
-                                      arts="$arts$(ls -d src/tests/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
-                                      arts="$arts$(ls src/tests/ftest/*.stacktrace 2>/dev/null || true)"
+                                      arts="$arts$(ls -d install/lib/daos/TESTING/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
+                                      arts="$arts$(ls install/lib/daos/TESTING/ftest/*.stacktrace 2>/dev/null || true)"
                                       if [ -n "$arts" ]; then
                                           mv $(echo $arts | tr '\n' ' ') "$STAGE_NAME/"
                                       fi
@@ -1266,7 +1276,7 @@ pipeline {
                                       false
                                   fi'''
                             archiveArtifacts artifacts: env.STAGE_NAME + '/**'
-                            junit env.STAGE_NAME + '/*/results.xml, src/tests/ftest/*_results.xml'
+                            junit env.STAGE_NAME + '/*/results.xml, install/lib/daos/TESTING/ftest/*_results.xml'
                         }
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
                         success {
@@ -1291,6 +1301,10 @@ pipeline {
                     }
                 }
                 stage('Functional_Hardware') {
+                    when {
+                        beforeAgent true
+                        expression { env.DAOS_STACK_CI_HARDWARE_SKIP != 'true' }
+                    }
                     agent {
                         label 'ci_nvme9'
                     }
@@ -1301,14 +1315,14 @@ pipeline {
                                        snapshot: true,
                                        inst_repos: el7_daos_repos + ' ' + ior_repos,
                                        inst_rpms: 'cart-' + env.CART_COMMIT + ' ' +
-                                                  'ior-hpc mpich-autoload'
+                                                  'ior-hpc mpich-autoload ndctl'
                         // Then just reboot the physical nodes
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
                                        power_only: true,
                                        inst_repos: el7_daos_repos + ' ' + ior_repos,
                                        inst_rpms: 'cart-' + env.CART_COMMIT + ' ' +
-                                                  'ior-hpc mpich-autoload'
+                                                  'ior-hpc mpich-autoload ndctl'
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
@@ -1316,22 +1330,22 @@ pipeline {
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
                                            ./ftest.sh "$test_tag" $tnodes''',
-                                junit_files: "src/tests/ftest/avocado/*/*/*.xml src/tests/ftest/*_results.xml",
+                                junit_files: "install/lib/daos/TESTING/ftest/avocado/*/*/*.xml install/lib/daos/TESTING/ftest/*_results.xml",
                                 failure_artifacts: env.STAGE_NAME
                     }
                     post {
                         always {
-                            sh '''rm -rf src/tests/ftest/avocado/*/*/html/
+                            sh '''rm -rf install/lib/daos/TESTING/ftest/avocado/*/*/html/
                                   if [ -n "$STAGE_NAME" ]; then
                                       rm -rf "$STAGE_NAME/"
                                       mkdir "$STAGE_NAME/"
                                       # compress those potentially huge DAOS logs
-                                      if daos_logs=$(ls src/tests/ftest/avocado/job-results/*/daos_logs/*); then
+                                      if daos_logs=$(ls install/lib/daos/TESTING/ftest/avocado/job-results/*/daos_logs/*); then
                                           lbzip2 $daos_logs
                                       fi
                                       arts="$arts$(ls *daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
-                                      arts="$arts$(ls -d src/tests/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
-                                      arts="$arts$(ls src/tests/ftest/*.stacktrace 2>/dev/null || true)"
+                                      arts="$arts$(ls -d install/lib/daos/TESTING/ftest/avocado/job-results/* 2>/dev/null)" && arts="$arts"$'\n'
+                                      arts="$arts$(ls install/lib/daos/TESTING/ftest/*.stacktrace 2>/dev/null || true)"
                                       if [ -n "$arts" ]; then
                                           mv $(echo $arts | tr '\n' ' ') "$STAGE_NAME/"
                                       fi
@@ -1340,7 +1354,7 @@ pipeline {
                                       false
                                   fi'''
                             archiveArtifacts artifacts: env.STAGE_NAME + '/**'
-                            junit env.STAGE_NAME + '/*/results.xml, src/tests/ftest/*_results.xml'
+                            junit env.STAGE_NAME + '/*/results.xml, install/lib/daos/TESTING/ftest/*_results.xml'
                         }
                         /* temporarily moved into runTest->stepResult due to JENKINS-39203
                         success {

@@ -78,11 +78,10 @@ func TestHarnessCreateSuperblocks(t *testing.T) {
 				AccessPoints: defaultApList,
 			},
 		)
-		mb := scm.DefaultMockBackend()
-		sys := scm.NewMockSysProvider(&scm.MockSysConfig{
+		msc := &scm.MockSysConfig{
 			IsMountedBool: true,
-		})
-		mp := scm.NewProvider(log, mb, sys)
+		}
+		mp := scm.NewMockProvider(log, nil, msc)
 		srv := NewIOServerInstance(log, nil, mp, ms, r)
 		srv.fsRoot = testDir
 		if err := h.AddInstance(srv); err != nil {

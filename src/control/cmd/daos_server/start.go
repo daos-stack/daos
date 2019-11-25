@@ -38,17 +38,18 @@ type serverStarter func(*logging.LeveledLogger, *server.Configuration) error
 type startCmd struct {
 	logCmd
 	cfgCmd
-	start       serverStarter
-	Port        uint16  `short:"p" long:"port" description:"Port for the gRPC management interfect to listen on"`
-	MountPath   string  `short:"s" long:"storage" description:"Storage path"`
-	Modules     *string `short:"m" long:"modules" description:"List of server modules to load"`
-	Targets     uint16  `short:"t" long:"targets" description:"number of targets to use (default use all cores)"`
-	NrXsHelpers *uint16 `short:"x" long:"xshelpernr" description:"number of helper XS per VOS target"`
-	FirstCore   uint16  `short:"f" long:"firstcore" default:"0" description:"index of first core for service thread"`
-	Group       string  `short:"g" long:"group" description:"Server group name"`
-	Attach      *string `short:"a" long:"attach_info" description:"Attach info patch (to support non-PMIx client)"`
-	SocketDir   string  `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_io_server sockets"`
-	Insecure    bool    `short:"i" long:"insecure" description:"allow for insecure connections"`
+	start               serverStarter
+	Port                uint16  `short:"p" long:"port" description:"Port for the gRPC management interfect to listen on"`
+	MountPath           string  `short:"s" long:"storage" description:"Storage path"`
+	Modules             *string `short:"m" long:"modules" description:"List of server modules to load"`
+	Targets             uint16  `short:"t" long:"targets" description:"number of targets to use (default use all cores)"`
+	NrXsHelpers         *uint16 `short:"x" long:"xshelpernr" description:"number of helper XS per VOS target"`
+	FirstCore           uint16  `short:"f" long:"firstcore" default:"0" description:"index of first core for service thread"`
+	Group               string  `short:"g" long:"group" description:"Server group name"`
+	Attach              *string `short:"a" long:"attach_info" description:"Attach info patch (to support non-PMIx client)"`
+	SocketDir           string  `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_io_server sockets"`
+	Insecure            bool    `short:"i" long:"insecure" description:"allow for insecure connections"`
+	RecreateSuperblocks bool    `long:"recreate-superblocks" description:"recreate missing superblocks rather than failing"`
 }
 
 func (cmd *startCmd) setCLIOverrides() error {
@@ -74,6 +75,7 @@ func (cmd *startCmd) setCLIOverrides() error {
 	if cmd.Attach != nil {
 		cmd.config.WithAttachInfo(*cmd.Attach)
 	}
+	cmd.config.RecreateSuperblocks = cmd.RecreateSuperblocks
 
 	host, err := os.Hostname()
 	if err != nil {

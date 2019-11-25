@@ -66,8 +66,8 @@ def scons():
 
     py_env = env.Clone()
 
-    build_shim_module(py_env, svars, '$PREFIX/lib/', "2.7")
-    build_shim_module(py_env, svars, '$PREFIX/lib/', "3")
+    build_shim_module(py_env, svars, '$PREFIX/lib64/', "2.7")
+    build_shim_module(py_env, svars, '$PREFIX/lib64/', "3")
 
 if __name__ == "SCons.Script":
     scons()

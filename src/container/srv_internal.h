@@ -139,6 +139,9 @@ struct cont_iv_entry {
 };
 
 struct cont_iv_key {
+	/* SNAP/PROP_IV the key is the container uuid.
+	 * CAPA the key is the container hdl uuid.
+	 */
 	uuid_t		cont_uuid;
 	/* IV class id, to differentiate SNAP/CAPA/PROP IV */
 	uint32_t	class_id;
@@ -241,6 +244,7 @@ int ds_cont_iv_init(void);
 int ds_cont_iv_fini(void);
 int cont_iv_capability_update(void *ns, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 			      uint64_t capas);
+int cont_iv_capability_invalidate(void *ns, uuid_t cont_hdl_uuid);
 int cont_iv_prop_update(void *ns, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 			daos_prop_t *prop);
 

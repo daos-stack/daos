@@ -23,7 +23,6 @@
 '''
 import os
 import traceback
-import json
 
 from apricot import TestWithServers
 from pydaos.raw import DaosContext, DaosPool, DaosApiError
@@ -115,14 +114,9 @@ class BadCreateTest(TestWithServers):
                 break
 
         try:
-            # setup the DAOS python API
-            with open('../../../.build_vars.json') as build_file:
-                data = json.load(build_file)
-            context = DaosContext(data['PREFIX'] + '/lib/')
-
             # initialize a python pool object then create the underlying
             # daos storage
-            pool = DaosPool(context)
+            pool = DaosPool(self.context)
             pool.create(mode, uid, gid, size, group, targetptr)
 
             if expected_result in ['FAIL']:

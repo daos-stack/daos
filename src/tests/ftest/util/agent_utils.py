@@ -81,7 +81,7 @@ def run_agent(basepath, server_list, client_list=None):
                     nodeset, host_type, directory, user))
 
     # launch the agent
-    with open(os.path.join(basepath, ".build_vars.json")) as json_vars:
+    with open("../../.build_vars.json") as json_vars:
         build_vars = json.load(json_vars)
     daos_agent_bin = os.path.join(build_vars["PREFIX"], "bin", "daos_agent")
 

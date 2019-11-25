@@ -357,6 +357,17 @@ int dss_ult_create_execute(int (*func)(void *), void *arg,
 			   void (*user_cb)(void *), void *cb_args,
 			   int ult_type, int tgt_id, size_t stack_size);
 
+struct dss_sleep_ult {
+	ABT_thread	dsu_thread;
+	uint64_t	dsu_expire_time;
+	d_list_t	dsu_list;
+};
+
+struct dss_sleep_ult *dss_sleep_ult_create(void);
+void dss_sleep_ult_destroy(struct dss_sleep_ult *dsu);
+void dss_ult_sleep(struct dss_sleep_ult *dsu, uint64_t expire_secs);
+void dss_ult_wakeup(struct dss_sleep_ult *dsu);
+
 /* Pack return codes with additional argument to reduce */
 struct dss_stream_arg_type {
 	/** return value */

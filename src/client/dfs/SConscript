@@ -48,7 +48,7 @@ def scons():
 
     dfs_src = ['dfs.c']
     dfs = daos_build.library(denv, 'dfs', dfs_src, LIBS=libraries)
-    denv.Install('$PREFIX/lib/', dfs)
+    denv.Install('$PREFIX/lib64/', dfs)
 
     libraries = libraries + ['dfs']
 
@@ -62,7 +62,7 @@ def scons():
     fenv.Install('$PREFIX/bin/', dfuse_hl)
 
     duns = daos_build.library(denv, 'duns', 'duns.c', LIBS=libraries)
-    denv.Install('$PREFIX/lib/', duns)
+    denv.Install('$PREFIX/lib64/', duns)
 
 if __name__ == "SCons.Script":
     scons()

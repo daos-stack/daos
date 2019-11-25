@@ -56,17 +56,18 @@ type networkNUMAValidation func(string, uint) error
 // See utils/config/daos_server.yml for parameter descriptions.
 type Configuration struct {
 	// control-specific
-	ControlPort     int                       `yaml:"port"`
-	TransportConfig *security.TransportConfig `yaml:"transport_config"`
-	Servers         []*ioserver.Config        `yaml:"servers"`
-	BdevInclude     []string                  `yaml:"bdev_include,omitempty"`
-	BdevExclude     []string                  `yaml:"bdev_exclude,omitempty"`
-	NrHugepages     int                       `yaml:"nr_hugepages"`
-	ControlLogMask  ControlLogLevel           `yaml:"control_log_mask"`
-	ControlLogFile  string                    `yaml:"control_log_file"`
-	ControlLogJSON  bool                      `yaml:"control_log_json,omitempty"`
-	UserName        string                    `yaml:"user_name"`
-	GroupName       string                    `yaml:"group_name"`
+	ControlPort         int                       `yaml:"port"`
+	TransportConfig     *security.TransportConfig `yaml:"transport_config"`
+	Servers             []*ioserver.Config        `yaml:"servers"`
+	BdevInclude         []string                  `yaml:"bdev_include,omitempty"`
+	BdevExclude         []string                  `yaml:"bdev_exclude,omitempty"`
+	NrHugepages         int                       `yaml:"nr_hugepages"`
+	ControlLogMask      ControlLogLevel           `yaml:"control_log_mask"`
+	ControlLogFile      string                    `yaml:"control_log_file"`
+	ControlLogJSON      bool                      `yaml:"control_log_json,omitempty"`
+	UserName            string                    `yaml:"user_name"`
+	GroupName           string                    `yaml:"group_name"`
+	RecreateSuperblocks bool                      `yaml:"recreate_superblocks"`
 
 	// duplicated in ioserver.Config
 	SystemName string                `yaml:"name"`
@@ -97,10 +98,17 @@ type Configuration struct {
 	validateNUMAFn networkNUMAValidation
 }
 
+// WithRecreateSuperblocks indicates that a missing superblock should not be treated as
+// an error. The server will create new superblocks as necessary.
+func (c *Configuration) WithRecreateSuperblocks() *Configuration {
+	c.RecreateSuperblocks = true
+	return c
+}
+
 // WithProviderValidator is used for unit testing configurations that are not necessarily valid on the test machine.
 // We use the stub function ValidateNetworkConfigStub to avoid unnecessary failures
 // in those tests that are not concerned with testing a truly valid configuration
-// for the test system
+// for the test system.
 func (c *Configuration) WithProviderValidator(fn networkProviderValidation) *Configuration {
 	c.validateProviderFn = fn
 	return c
@@ -109,7 +117,7 @@ func (c *Configuration) WithProviderValidator(fn networkProviderValidation) *Con
 // WithNUMAValidator is used for unit testing configurations that are not necessarily valid on the test machine.
 // We use the stub function ValidateNetworkConfigStub to avoid unnecessary failures
 // in those tests that are not concerned with testing a truly valid configuration
-// for the test system
+// for the test system.
 func (c *Configuration) WithNUMAValidator(fn networkNUMAValidation) *Configuration {
 	c.validateNUMAFn = fn
 	return c

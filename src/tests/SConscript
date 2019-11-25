@@ -1,5 +1,6 @@
 """Build tests"""
 import daos_build
+import os
 
 def scons():
     """Execute build"""
@@ -11,10 +12,10 @@ def scons():
     denv = env.Clone()
 
     # Add runtime paths for daos libraries
-    denv.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../lib/daos_srv')])
+    denv.AppendUnique(RPATH=[Literal(r'\$$ORIGIN/../lib64/daos_srv')])
 
     denv.Append(CPPPATH=[Dir('suite').srcnode()])
-    prereqs.require(denv, 'ompi', 'argobots', 'hwloc')
+    prereqs.require(denv, 'ompi', 'argobots', 'hwloc', 'protobufc')
 
     daos_build.program(denv, 'simple_array', 'simple_array.c', LIBS=libs)
     daosbench = daos_build.program(denv, 'daosbench', 'daosbench.c', LIBS=libs)
@@ -47,6 +48,9 @@ def scons():
 
     # Build security_test
     SConscript('security/SConscript')
+
+    # ftest
+    SConscript('ftest/SConscript')
 
 if __name__ == "SCons.Script":
     scons()

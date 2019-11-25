@@ -27,11 +27,35 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
+	"strings"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	pb_types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
+
+// ControllerFactory is an interface providing capability to connect clients.
+type ControllerFactory interface {
+	create(string, *security.TransportConfig) (Control, error)
+}
+
+// controllerFactory as an implementation of ControllerFactory.
+type controllerFactory struct {
+	log logging.Logger
+}
+
+// create instantiates and connects a client to server at given address.
+func (c *controllerFactory) create(address string, cfg *security.TransportConfig) (Control, error) {
+	controller := &control{
+		log: c.log,
+	}
+
+	err := controller.connect(address, cfg)
+
+	return controller, err
+}
 
 // Addresses is an alias for a slice of <ipv4/hostname>:<port> addresses.
 type Addresses []string
@@ -233,26 +257,207 @@ func (rm ResultSmdMap) String() string {
 	return buf.String()
 }
 
-// ScmModules is an alias for protobuf ScmModule message slice representing
-// a number of SCM modules installed on a storage node.
+// ClientCtrlrMap is an alias for query results of NVMe controllers (and
+// any residing namespaces) on connected servers keyed on address.
+type ClientCtrlrMap map[string]pb_types.CtrlrResults
 
-// ControllerFactory is an interface providing capability to connect clients.
-type ControllerFactory interface {
-	create(string, *security.TransportConfig) (Control, error)
-}
+func (ccm ClientCtrlrMap) String() string {
+	var buf bytes.Buffer
+	servers := make([]string, 0, len(ccm))
 
-// controllerFactory as an implementation of ControllerFactory.
-type controllerFactory struct {
-	log logging.Logger
-}
+	for server := range ccm {
+		servers = append(servers, server)
+	}
+	sort.Strings(servers)
 
-// create instantiates and connects a client to server at given address.
-func (c *controllerFactory) create(address string, cfg *security.TransportConfig) (Control, error) {
-	controller := &control{
-		log: c.log,
+	for _, server := range servers {
+		fmt.Fprintf(&buf, "%s:\n%s\n", server, ccm[server])
 	}
 
-	err := controller.connect(address, cfg)
+	return buf.String()
+}
 
-	return controller, err
+// ClientMountMap is an alias for query results of SCM regions mounted
+// on connected servers keyed on address.
+type ClientMountMap map[string]pb_types.MountResults
+
+func (cmm ClientMountMap) String() string {
+	var buf bytes.Buffer
+	servers := make([]string, 0, len(cmm))
+
+	for server := range cmm {
+		servers = append(servers, server)
+	}
+	sort.Strings(servers)
+
+	for _, server := range servers {
+		fmt.Fprintf(&buf, "%s:\n%s\n", server, cmm[server])
+	}
+
+	return buf.String()
+}
+
+// ScmScanResult represents the result of scanning for SCM
+// modules installed on a storage node and SCM namespaces.
+type ScmScanResult struct {
+	Modules    storage.ScmModules
+	Namespaces storage.ScmNamespaces
+	Err        error
+}
+
+func (result *ScmScanResult) String() string {
+	switch {
+	case result.Err != nil:
+		return fmt.Sprintf("SCM Error: %s", result.Err)
+	case len(result.Namespaces) > 0:
+		return fmt.Sprintf("SCM Namespaces:\n%s", result.Namespaces)
+	default:
+		return fmt.Sprintf("SCM Modules:\n%s", result.Modules)
+	}
+}
+
+func (result *ScmScanResult) Summary() (out string) {
+	switch {
+	case result.Err != nil:
+		return fmt.Sprintf("SCM Error: %s", result.Err)
+	case len(result.Namespaces) > 0:
+		out = result.Namespaces.Summary()
+	default:
+		out = result.Modules.Summary()
+	}
+	return fmt.Sprintf("SCM: %s", out)
+}
+
+// ScmScanMap maps ScmModuleScanResult structs to the addresses
+// of remote servers identified by an address string.
+type ScmScanResults map[string]*ScmScanResult
+
+// NvmeScanResult represents the result of scanning for SCM
+// modules installed on a storage node.
+type NvmeScanResult struct {
+	Ctrlrs pb_types.NvmeControllers
+	Err    error
+}
+
+func (result *NvmeScanResult) String() string {
+	if result.Err != nil {
+		return fmt.Sprintf("NVMe Error: %s", result.Err)
+	}
+	return result.Ctrlrs.String()
+}
+
+func (result *NvmeScanResult) StringHealthStats() string {
+	if result.Err != nil {
+		return fmt.Sprintf("NVMe Error: %s", result.Err)
+	}
+	return result.Ctrlrs.StringHealthStats()
+}
+
+func (result *NvmeScanResult) Summary() (out string) {
+	if result.Err != nil {
+		return fmt.Sprintf("NVMe Error: %s", result.Err)
+	}
+	return fmt.Sprintf("NVMe: %s", result.Ctrlrs.Summary())
+}
+
+// NvmeScanResults maps NvmeScanResult structs to the addresses
+// of remote servers identified by an address string.
+type NvmeScanResults map[string]*NvmeScanResult
+
+func scmModulesFromPB(pbMms pb_types.ScmModules) (mms []storage.ScmModule) {
+	for _, c := range pbMms {
+		mms = append(mms,
+			storage.ScmModule{
+				ChannelID:       c.Loc.Channel,
+				ChannelPosition: c.Loc.Channelpos,
+				ControllerID:    c.Loc.Memctrlr,
+				SocketID:        c.Loc.Socket,
+				PhysicalID:      c.Physicalid,
+				Capacity:        c.Capacity,
+			})
+	}
+	return
+}
+
+func scmNamespacesFromPB(pbNss pb_types.ScmNamespaces) (nss []storage.ScmNamespace) {
+	for _, ns := range pbNss {
+		nss = append(nss,
+			storage.ScmNamespace{
+				UUID:        ns.Uuid,
+				BlockDevice: ns.Blockdev,
+				Name:        ns.Dev,
+				NumaNode:    ns.Numanode,
+				Size:        ns.Size,
+			})
+	}
+	return
+}
+
+// StorageScanReq encapsulated subsystem scan parameters.
+type StorageScanReq struct {
+	Summary bool
+}
+
+// StorageScanResp encapsulated subsystem results.
+type StorageScanResp struct {
+	summary bool
+	Servers []string
+	Nvme    NvmeScanResults
+	Scm     ScmScanResults
+}
+
+func (ssr *StorageScanResp) String() string {
+	var buf bytes.Buffer
+
+	for _, srv := range ssr.Servers {
+		fmt.Fprintf(&buf, "%s\n", srv)
+		if !ssr.summary {
+			fmt.Fprintf(&buf, "\t%s", ssr.Scm[srv].String())
+			fmt.Fprintf(&buf, "\t%s", ssr.Nvme[srv].String())
+		}
+		fmt.Fprintf(&buf, "\tSummary:\n\t\t%s\n\t\t%s\n",
+			ssr.Scm[srv].Summary(), ssr.Nvme[srv].Summary())
+	}
+
+	return buf.String()
+}
+
+func (ssr *StorageScanResp) StringHealthStats() string {
+	var buf bytes.Buffer
+
+	for _, srv := range ssr.Servers {
+		fmt.Fprintf(&buf, "%s\n", srv)
+		fmt.Fprintf(&buf, "\t%s", ssr.Nvme[srv].StringHealthStats())
+	}
+
+	return buf.String()
+}
+
+// StorageFormatResult stores results of format operations on NVMe controllers
+// and SCM mountpoints.
+type StorageFormatResult struct {
+	nvmeCtrlr pb_types.CtrlrResults
+	scmMount  pb_types.MountResults
+}
+
+// AccessControlList is a structure for the access control list.
+type AccessControlList struct {
+	Entries []string // Access Control Entries in short string format
+}
+
+// String converts the AccessControlList to a human-readable string.
+func (acl *AccessControlList) String() string {
+	var builder strings.Builder
+
+	builder.WriteString("# Entries:\n")
+	if acl == nil || len(acl.Entries) == 0 {
+		builder.WriteString("#   None\n")
+		return builder.String()
+	}
+
+	for _, ace := range acl.Entries {
+		fmt.Fprintf(&builder, "%s\n", ace)
+	}
+
+	return builder.String()
 }
