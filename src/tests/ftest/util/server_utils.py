@@ -522,9 +522,16 @@ class ServerManager(ExecutableCommand):
         ]
         if self.runner.job.yaml_params.is_nvme():
             clean_cmds.append("sudo rm -rf /mnt/daos; sudo umount /mnt/daos")
+        # scm_mount can be /mnt/daos0 or /mnt/daos1 for two daos_server
+        # instances. Presently, not supported in DAOS. The for loop needs
+        # to be updated in future to handle it. Single instance pmem
+        # device should work now.
         if self.runner.job.yaml_params.is_scm():
-            clean_cmds.append("sudo umount /mnt/daos;"
-                              "sudo wipefs -a /dev/pmem0")
+            scm_mount_count = len(self.runner.job.yaml_params.
+                                  server_params[-1].scm_list.value)
+            for count in range(0, scm_mount_count):
+                clean_cmds.append("sudo umount /mnt/daos;"
+                                  "sudo wipefs -a /dev/pmem{}").format(count)
         self.log.info("Cleanup of /mnt/daos directory.")
         pcmd(self._hosts, "; ".join(clean_cmds), False)
 
