@@ -289,6 +289,8 @@ dtx_cmt_ent_free(struct btr_instance *tins, struct btr_record *rec,
 		D_ASSERT(bcb != NULL);
 
 		idx = dce->dce_index;
+		D_ASSERT(idx >= 0);
+
 		dsb = umem_off2ptr(umm, bcb->bcb_dsb_off);
 
 		if (dsb->dsb_active_data[idx].dae_flags != DTX_EF_INVALID) {
@@ -563,8 +565,7 @@ dtx_rec_release(struct umem_instance *umm, struct vos_container *cont,
 	D_ASSERT(bcb->bcb_dae_count > 0);
 
 	if (sync) {
-		if (DAE_INDEX(dae) != -1 &&
-		    (bcb->bcb_dae_count > 1 || dsb->dsb_index < dsb->dsb_cap)) {
+		if (bcb->bcb_dae_count > 1 || dsb->dsb_index < dsb->dsb_cap) {
 			umem_tx_add_ptr(umm, &dae_df->dae_flags,
 					sizeof(dae_df->dae_flags));
 			/* Mark the DTX entry as invalid in SCM. */
@@ -724,10 +725,8 @@ vos_dtx_extend_act_table(struct vos_container *cont)
 			sizeof(struct vos_dtx_act_ent_df);
 
 	bcb = dtx_bcb_alloc(cont, dsb);
-	if (bcb == NULL) {
-		umem_free(umm, dsb_off);
+	if (bcb == NULL)
 		return -DER_NOMEM;
-	}
 
 	tmp = umem_off2ptr(umm, cont_df->cd_dtx_active_tail);
 	if (tmp == NULL) {
@@ -762,7 +761,8 @@ vos_dtx_alloc(struct umem_instance *umm, struct dtx_handle *dth)
 	struct vos_dtx_scm_blob		*dsb;
 	d_iov_t				 kiov;
 	d_iov_t				 riov;
-	int				 rc;
+	int				 rc = 0;
+	bool				 allocated = false;
 
 	cont = vos_hdl2cont(dth->dth_coh);
 	D_ASSERT(cont != NULL);
@@ -789,15 +789,16 @@ vos_dtx_alloc(struct umem_instance *umm, struct dtx_handle *dth)
 		if (rc != 0)
 			goto out;
 
+		allocated = true;
 		dsb = umem_off2ptr(umm, cont_df->cd_dtx_active_tail);
 	}
 
 	bcb = d_list_entry(cont->vc_batched_cleanup_list.prev,
 			   struct dtx_batched_cleanup_blob, bcb_cont_link);
 
-	/* Set it as dsb::dsb_index via vos_dtx_prepared(). */
+	/* Will be set as dsb::dsb_index via vos_dtx_prepared(). */
 	DAE_INDEX(dae) = -1;
-	dae->dae_df_off = umem_ptr2off(umm, dsb) +
+	dae->dae_df_off = bcb->bcb_dsb_off +
 			offsetof(struct vos_dtx_scm_blob, dsb_active_data) +
 			sizeof(struct vos_dtx_act_ent_df) * dsb->dsb_index;
 	dae->dae_dsb = dsb;
@@ -813,7 +814,10 @@ vos_dtx_alloc(struct umem_instance *umm, struct dtx_handle *dth)
 out:
 	if (rc != 0) {
 		D_FREE_PTR(dae);
-		D_FREE_PTR(bcb);
+		if (allocated) {
+			d_list_del(&bcb->bcb_cont_link);
+			D_FREE_PTR(bcb);
+		}
 	}
 
 	return rc;
@@ -931,8 +935,8 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 			/* Handle it as aborted one. */
 			return ALB_UNAVAILABLE;
 
-		D_WARN("Cannot find active DTX entry for "DF_DTI"\n",
-		       DP_DTI(&dae_df->dae_xid));
+		D_ERROR("Failed to find active DTX entry for "DF_DTI"\n",
+			DP_DTI(&dae_df->dae_xid));
 		return rc;
 	}
 
@@ -944,8 +948,11 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 	if (rc == 0)
 		return ALB_AVAILABLE_CLEAN;
 
-	if (rc != -DER_NONEXIST)
+	if (rc != -DER_NONEXIST) {
+		D_ERROR("Failed to check CoS for DTX entry "DF_DTI"\n",
+			DP_DTI(&dae_df->dae_xid));
 		return rc;
+	}
 
 	/* The followings are for non-committable cases. */
 
@@ -1040,8 +1047,8 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 	struct dtx_handle	*dth = vos_dth_get();
 	int			 rc = 0;
 
-	/* For single participator case, we only need the DTX entry
-	 * without DTX records for related targets to be modified.
+	/* For single participator case, we only need committed DTX
+	 * entry for handling resend case, nothing for active table.
 	 */
 	if (dth == NULL || dth->dth_solo) {
 		*tx_id = UMOFF_NULL;
@@ -1071,8 +1078,11 @@ vos_dtx_deregister_record(struct umem_instance *umm, daos_handle_t coh,
 			  umem_off_t entry, umem_off_t record)
 {
 	struct vos_container		*cont;
+	struct vos_dtx_act_ent		*dae;
 	struct vos_dtx_act_ent_df	*dae_df;
 	struct vos_dtx_record_df	*rec_df;
+	d_iov_t				 kiov;
+	d_iov_t				 riov;
 	int				 count;
 	int				 rc;
 	int				 i;
@@ -1086,43 +1096,40 @@ vos_dtx_deregister_record(struct umem_instance *umm, daos_handle_t coh,
 		return;
 
 	cont = vos_hdl2cont(coh);
-	if (cont != NULL) {
-		struct vos_dtx_act_ent		*dae;
-		d_iov_t				 kiov;
-		d_iov_t				 riov;
+	if (cont == NULL)
+		goto handle_df;
 
-		d_iov_set(&kiov, &dae_df->dae_xid, sizeof(dae_df->dae_xid));
-		d_iov_set(&riov, NULL, 0);
-		rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
-		if (rc != 0) {
-			D_WARN("NOT find active DTX entry when deregister for "
-			       DF_DTI"\n", DP_DTI(&dae_df->dae_xid));
-			return;
-		}
-
-		dae = (struct vos_dtx_act_ent *)riov.iov_buf;
-		if (DAE_REC_CNT(dae) > DTX_INLINE_REC_CNT)
-			count = DTX_INLINE_REC_CNT;
-		else
-			count = DAE_REC_CNT(dae);
-
-		for (i = 0; i < count; i++) {
-			if (record == DAE_REC_INLINE(dae)[i].dr_record) {
-				DAE_REC_INLINE(dae)[i].dr_record = UMOFF_NULL;
-				goto handle_df;
-			}
-		}
-
-		for (i = 0; i < DAE_REC_CNT(dae) - DTX_INLINE_REC_CNT; i++) {
-			if (record == dae->dae_records[i].dr_record) {
-				dae->dae_records[i].dr_record = UMOFF_NULL;
-				goto handle_df;
-			}
-		}
-
-		/* Not found */
+	d_iov_set(&kiov, &dae_df->dae_xid, sizeof(dae_df->dae_xid));
+	d_iov_set(&riov, NULL, 0);
+	rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
+	if (rc != 0) {
+		D_WARN("NOT find active DTX entry when deregister for "
+		       DF_DTI"\n", DP_DTI(&dae_df->dae_xid));
 		return;
 	}
+
+	dae = (struct vos_dtx_act_ent *)riov.iov_buf;
+	if (DAE_REC_CNT(dae) > DTX_INLINE_REC_CNT)
+		count = DTX_INLINE_REC_CNT;
+	else
+		count = DAE_REC_CNT(dae);
+
+	for (i = 0; i < count; i++) {
+		if (record == DAE_REC_INLINE(dae)[i].dr_record) {
+			DAE_REC_INLINE(dae)[i].dr_record = UMOFF_NULL;
+			goto handle_df;
+		}
+	}
+
+	for (i = 0; i < DAE_REC_CNT(dae) - DTX_INLINE_REC_CNT; i++) {
+		if (record == dae->dae_records[i].dr_record) {
+			dae->dae_records[i].dr_record = UMOFF_NULL;
+			goto handle_df;
+		}
+	}
+
+	/* Not found */
+	return;
 
 handle_df:
 	if (dae_df->dae_rec_cnt > DTX_INLINE_REC_CNT)
@@ -1159,11 +1166,10 @@ handle_df:
 int
 vos_dtx_prepared(struct dtx_handle *dth)
 {
+	struct vos_dtx_act_ent	*dae = dth->dth_ent;
 	struct vos_container	*cont;
-	struct vos_dtx_entry_df	*dtx;
-	int			 rc = 0;
 
-	if (dtx_is_null(dth->dth_ent))
+	if (dae == NULL)
 		return 0;
 
 	cont = vos_hdl2cont(dth->dth_coh);
@@ -1178,15 +1184,13 @@ vos_dtx_prepared(struct dtx_handle *dth)
 		dth->dth_sync = 1;
 	} else {
 		struct umem_instance		*umm = vos_cont2umm(cont);
-		struct vos_dtx_act_ent		*dae = dth->dth_ent;
 		struct vos_dtx_scm_blob		*dsb = dae->dae_dsb;
 
-		/* If some DTXs share something (object/key) with others,
-		 * or punch object that is quite possible affect subsequent
-		 * operations, then synchronously commit the DTX when it
-		 * becomes committable to avoid availability trouble.
+		/* If the DTX is for punch object that is quite possible affect
+		 * subsequent operations, then synchronously commit the DTX when
+		 * it becomes committable to avoid availability trouble.
 		 */
-		if (DAE_FLAGS(dae) & DTX_EF_SHARES || DAE_DKEY_HASH(dae) == 0)
+		if (DAE_DKEY_HASH(dae) == 0)
 			dth->dth_sync = 1;
 
 		if (dae->dae_records != NULL) {
@@ -1402,10 +1406,8 @@ new_blob:
 
 	if (count > 1) {
 		D_ALLOC(dce_df, sizeof(*dce_df) * count);
-		if (dce_df == NULL) {
-			umem_free(umm, dsb_off);
+		if (dce_df == NULL)
 			return -DER_NOMEM;
-		}
 	} else {
 		dce_df = &dsb->dsb_commmitted_data[0];
 	}
@@ -1733,8 +1735,11 @@ next:
 
 		bcb->bcb_dae_count = dsb->dsb_count;
 		if (bcb->bcb_dae_count == 0) {
-			if (cont_df->cd_dtx_active_tail != dsb_off) {
-				D_ERROR("Invalid active DTX blob\n");
+			if (cont_df->cd_dtx_active_tail != dsb_off ||
+			    dsb->dsb_index >= dsb->dsb_cap) {
+				D_ERROR("Invalid active DTX blob: "UMOFF_PF
+					", idx %d, cap %d\n", UMOFF_P(dsb_off),
+					dsb->dsb_index, dsb->dsb_cap);
 				rc = -DER_IO;
 			}
 
@@ -1836,8 +1841,11 @@ vos_dtx_cmt_reindex(daos_handle_t coh, void *hint)
 	cont->vc_reindex_cmt_dtx = 1;
 
 	for (i = 0; i < dsb->dsb_count; i++) {
-		if (dsb->dsb_commmitted_data[i].dce_epoch == 0)
+		if (daos_is_zero_dti(&dsb->dsb_commmitted_data[i].dce_xid) ||
+		    dsb->dsb_commmitted_data[i].dce_epoch == 0) {
+			D_WARN("Skip invalid committed DTX entry\n");
 			continue;
+		}
 
 		D_ALLOC_PTR(dce);
 		if (dce == NULL)

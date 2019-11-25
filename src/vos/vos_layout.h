@@ -174,12 +174,10 @@ enum vos_dtx_record_types {
 };
 
 enum vos_dtx_entry_flags {
-	/* The DTX shares something with other DTX(s). */
-	DTX_EF_SHARES			= (1 << 0),
 	/* The DTX is the leader */
-	DTX_EF_LEADER			= (1 << 1),
+	DTX_EF_LEADER			= (1 << 0),
 	/* The DTX entry is invalid. */
-	DTX_EF_INVALID			= (1 << 2),
+	DTX_EF_INVALID			= (1 << 1),
 };
 
 /** The agent of the record being modified via the DTX in both SCM and DRAM. */
