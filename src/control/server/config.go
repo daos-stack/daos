@@ -65,6 +65,7 @@ type Configuration struct {
 	ControlLogMask      ControlLogLevel           `yaml:"control_log_mask"`
 	ControlLogFile      string                    `yaml:"control_log_file"`
 	ControlLogJSON      bool                      `yaml:"control_log_json,omitempty"`
+	HelperLogFile       string                    `yaml:"helper_log_file"`
 	UserName            string                    `yaml:"user_name"`
 	GroupName           string                    `yaml:"group_name"`
 	RecreateSuperblocks bool                      `yaml:"recreate_superblocks"`
@@ -281,6 +282,12 @@ func (c *Configuration) WithControlLogFile(filePath string) *Configuration {
 // WithControlLogJSON enables or disables JSON output.
 func (c *Configuration) WithControlLogJSON(enabled bool) *Configuration {
 	c.ControlLogJSON = enabled
+	return c
+}
+
+// WithHelperLogFile sets the path to the daos_admin logfile.
+func (c *Configuration) WithHelperLogFile(filePath string) *Configuration {
+	c.HelperLogFile = filePath
 	return c
 }
 
