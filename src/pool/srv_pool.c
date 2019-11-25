@@ -338,7 +338,7 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 		switch (entry->dpe_type) {
 		case DAOS_PROP_PO_LABEL:
 			D_FREE(entry_def->dpe_str);
-			D_STRNDUP(entry_def->dpe_str,entry->dpe_str,
+			D_STRNDUP(entry_def->dpe_str, entry->dpe_str,
 				  DAOS_PROP_LABEL_MAX_LEN);
 			if (entry_def->dpe_str == NULL)
 				return -DER_NOMEM;
