@@ -1656,8 +1656,8 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr)
 	}
 
 	/*
-	 * Update LAE, when aggregating for snapshot deletion, the
-	 * @epr->epr_hi could be smaller than the LAE
+	 * Update HAE, when aggregating for snapshot deletion, the
+	 * @epr->epr_hi could be smaller than the HAE
 	 */
 	if (cont->vc_cont_df->cd_hae < epr->epr_hi)
 		cont->vc_cont_df->cd_hae = epr->epr_hi;

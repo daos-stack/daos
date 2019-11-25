@@ -40,7 +40,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
-	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
@@ -294,7 +294,7 @@ func TestHarnessIOServerStart(t *testing.T) {
 					tc.trc.StartCb = func() { instanceStarts++ }
 				}
 				runner := ioserver.NewTestRunner(tc.trc, srvCfg)
-				bdevProvider, err := storage.NewBdevProvider(log,
+				bdevProvider, err := bdev.NewClassProvider(log,
 					srvCfg.Storage.SCM.MountPoint, &srvCfg.Storage.Bdev)
 				if err != nil {
 					t.Fatal(err)
@@ -304,7 +304,7 @@ func TestHarnessIOServerStart(t *testing.T) {
 					ControlAddr:  &net.TCPAddr{},
 					AccessPoints: []string{"localhost"},
 				}
-				msClient := newMgmtSvcClient(nil, log, msClientCfg)
+				msClient := newMgmtSvcClient(context.TODO(), log, msClientCfg)
 				srv := NewIOServerInstance(log, bdevProvider, scmProvider, msClient, runner)
 				if err := harness.AddInstance(srv); err != nil {
 					t.Fatal(err)

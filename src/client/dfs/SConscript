@@ -9,12 +9,11 @@ def scons():
 
     """If Lustre installed use its headers instead of our local defines"""
     try:
-        import os
         with open('/etc/os-release') as f:
             for line in f:
                 if 'ID' in line:
                     line = line.strip()
-                    id, distro = line.strip().split('=')
+                    _, distro = line.strip().split('=')
                     break
         if distro in ['"centos"', '"rhel"', '"fedora"']:
             import rpm

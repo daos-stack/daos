@@ -314,7 +314,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 }
 
 // PoolGetACL forwards a request to the IO server to fetch a pool's Access Control List
-func (svc *mgmtSvc) PoolGetACL(ctx context.Context, req *mgmtpb.GetACLReq) (*mgmtpb.GetACLResp, error) {
+func (svc *mgmtSvc) PoolGetACL(ctx context.Context, req *mgmtpb.GetACLReq) (*mgmtpb.ACLResp, error) {
 	svc.log.Debugf("MgmtSvc.PoolGetACL dispatch, req:%+v\n", *req)
 
 	mi, err := svc.harness.GetMSLeaderInstance()
@@ -327,12 +327,61 @@ func (svc *mgmtSvc) PoolGetACL(ctx context.Context, req *mgmtpb.GetACLReq) (*mgm
 		return nil, err
 	}
 
-	resp := &mgmtpb.GetACLResp{}
+	resp := &mgmtpb.ACLResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal PoolGetACL response")
 	}
 
 	svc.log.Debugf("MgmtSvc.PoolGetACL dispatch, resp:%+v\n", *resp)
+
+	return resp, nil
+}
+
+// PoolOverwriteACL forwards a request to the IO server to overwrite a pool's Access Control List
+func (svc *mgmtSvc) PoolOverwriteACL(ctx context.Context, req *mgmtpb.ModifyACLReq) (*mgmtpb.ACLResp, error) {
+	svc.log.Debugf("MgmtSvc.PoolOverwriteACL dispatch, req:%+v\n", *req)
+
+	mi, err := svc.harness.GetMSLeaderInstance()
+	if err != nil {
+		return nil, err
+	}
+
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolOverwriteACL, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.ACLResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal PoolOverwriteACL response")
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolOverwriteACL dispatch, resp:%+v\n", *resp)
+
+	return resp, nil
+}
+
+// PoolUpdateACL forwards a request to the IO server to add or update entries in
+// a pool's Access Control List
+func (svc *mgmtSvc) PoolUpdateACL(ctx context.Context, req *mgmtpb.ModifyACLReq) (*mgmtpb.ACLResp, error) {
+	svc.log.Debugf("MgmtSvc.PoolUpdateACL dispatch, req:%+v\n", *req)
+
+	mi, err := svc.harness.GetMSLeaderInstance()
+	if err != nil {
+		return nil, err
+	}
+
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolUpdateACL, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.ACLResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal PoolUpdateACL response")
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolUpdateACL dispatch, resp:%+v\n", *resp)
 
 	return resp, nil
 }
@@ -430,6 +479,30 @@ func (svc *mgmtSvc) KillRank(ctx context.Context, req *mgmtpb.KillRankReq) (*mgm
 	}
 
 	svc.log.Debugf("MgmtSvc.KillRank dispatch, resp:%+v\n", *resp)
+
+	return resp, nil
+}
+
+// ListPools implements the method defined for the Management Service.
+func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*mgmtpb.ListPoolsResp, error) {
+	svc.log.Debugf("MgmtSvc.ListPools dispatch, req:%+v\n", *req)
+
+	mi, err := svc.harness.GetMSLeaderInstance()
+	if err != nil {
+		return nil, err
+	}
+
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodListPools, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.ListPoolsResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal ListPools response")
+	}
+
+	svc.log.Debugf("MgmtSvc.ListPools dispatch, resp:%+v\n", *resp)
 
 	return resp, nil
 }

@@ -3,9 +3,9 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('denv')
+    Import('senv')
 
-    unit_env = denv.Clone()
+    unit_env = senv.Clone()
     unit_env.AppendUnique(OBJPREFIX='utest_')
     # Some syscalls are aliased when fortification is enabled, which makes
     # mocking in unit tests into a headache.

@@ -844,7 +844,8 @@ vos_dtx_prepared(struct dtx_handle *dth)
 	struct vos_dtx_entry_df	*dtx;
 	int			 rc = 0;
 
-	D_ASSERT(!dtx_is_null(dth->dth_ent));
+	if (dtx_is_null(dth->dth_ent))
+		return 0;
 
 	cont = vos_hdl2cont(dth->dth_coh);
 	D_ASSERT(cont != NULL);
@@ -1097,6 +1098,6 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
 		}
 	}
 
-	vos_obj_release(occ, obj);
+	vos_obj_release(occ, obj, false);
 	return rc;
 }

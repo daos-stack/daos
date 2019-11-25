@@ -591,8 +591,12 @@ ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 		D_ERROR("crt_reply_send failed, rc: %d.\n", rc);
 }
 
-static void
-free_mgmt_list_pools(struct mgmt_list_pools_one **poolsp, uint64_t len)
+/* Free array of pools created in ds_mgmt_list_pools() iteration.
+ * CaRT and drpc handlers use same mgmt_list_pools_one type for the array.
+ */
+
+void
+ds_mgmt_free_pool_list(struct mgmt_list_pools_one **poolsp, uint64_t len)
 {
 	struct mgmt_list_pools_one	*pools;
 
@@ -634,13 +638,10 @@ enum_pool_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	/* Realloc pools[] if needed (double each time starting with 1) */
 	if (ap->pools_index == ap->pools_len) {
 		void	*ptr;
-		size_t	realloc_bytes;
 		size_t	realloc_elems = (ap->pools_len == 0) ? 1 :
 					ap->pools_len * 2;
 
-		realloc_bytes = (realloc_elems *
-				sizeof(struct mgmt_list_pools_one));
-		D_REALLOC(ptr, ap->pools, realloc_bytes);
+		D_REALLOC_ARRAY(ptr, ap->pools, realloc_elems);
 		if (ptr == NULL)
 			return -DER_NOMEM;
 		ap->pools = ptr;
@@ -658,7 +659,7 @@ enum_pool_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	return 0;
 }
 
-static int
+int
 ds_mgmt_list_pools(const char *group, uint64_t *npools,
 		   struct mgmt_list_pools_one **poolsp, size_t *pools_len)
 {
@@ -666,6 +667,9 @@ ds_mgmt_list_pools(const char *group, uint64_t *npools,
 	struct rdb_tx			 tx;
 	struct list_pools_iter_args	 iter_args;
 	int				 rc;
+
+	*poolsp = NULL;
+	*pools_len = 0;
 
 	/* TODO: attach to DAOS system based on group argument */
 
@@ -693,18 +697,24 @@ ds_mgmt_list_pools(const char *group, uint64_t *npools,
 out_svc:
 	ds_mgmt_svc_put_leader(svc);
 out:
-	if (rc != 0)
-		free_mgmt_list_pools(&iter_args.pools, iter_args.pools_index);
-	else {
-		*npools = iter_args.npools;
+	*npools = iter_args.npools;
+	/* poolsp, pools_len initialized to NULL,0 - update if successful */
+
+	if (rc != 0) {
+		/* Error in iteration */
+		ds_mgmt_free_pool_list(&iter_args.pools, iter_args.pools_index);
+	} else if ((iter_args.avail_npools > 0) &&
+		   (iter_args.npools > iter_args.avail_npools)) {
+		/* Got a list, but client buffer not supplied or too small */
+		ds_mgmt_free_pool_list(&iter_args.pools, iter_args.pools_index);
+		rc = -DER_TRUNC;
+	} else {
 		*poolsp = iter_args.pools;
 		*pools_len = iter_args.pools_index;
 	}
 
 	return rc;
 }
-
-/* TODO: dRPC handler for mgmt service list pools (daos_shell / golang) */
 
 /* CaRT RPC handler for management service "list pools" (dmg / C API) */
 void
@@ -732,12 +742,12 @@ ds_mgmt_hdlr_list_pools(crt_rpc_t *rpc_req)
 	pc_out->lp_pools.ca_arrays = pools;
 	pc_out->lp_pools.ca_count = pools_len;
 
-	/* TODO: something different for larger RPC replies? */
+	/* TODO: bulk transfer for large responses */
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
 		D_ERROR("crt_reply_send failed, rc: %d\n", rc);
 
-	free_mgmt_list_pools(&pools, pools_len);
+	ds_mgmt_free_pool_list(&pools, pools_len);
 }
 
 /* Caller is responsible for freeing ranks */
@@ -782,14 +792,37 @@ out:
 	return rc;
 }
 
+static int
+get_acl_for_pool(uuid_t pool_uuid, d_rank_list_t *ranks, struct daos_acl **acl)
+{
+	int			rc;
+	daos_prop_t		*prop;
+	struct daos_prop_entry	*entry;
+
+	rc = ds_pool_svc_get_acl_prop(pool_uuid, ranks, &prop);
+	if (rc != 0)
+		return rc;
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
+	if (entry == NULL || entry->dpe_val_ptr == NULL) {
+		D_ERROR("No ACL entry in prop list!\n");
+		D_GOTO(out_prop, rc = -DER_NONEXIST);
+	}
+
+	*acl = daos_acl_dup(entry->dpe_val_ptr);
+
+out_prop:
+	daos_prop_free(prop);
+
+	return rc;
+}
+
 int
 ds_mgmt_pool_get_acl(uuid_t pool_uuid, struct daos_acl **acl)
 {
 	int			rc;
 	struct mgmt_svc		*svc;
 	d_rank_list_t		*ranks;
-	daos_prop_t		*prop;
-	struct daos_prop_entry	*entry;
 
 	D_DEBUG(DB_MGMT, "Getting ACL for pool "DF_UUID"\n",
 		DP_UUID(pool_uuid));
@@ -802,20 +835,90 @@ ds_mgmt_pool_get_acl(uuid_t pool_uuid, struct daos_acl **acl)
 	if (rc != 0)
 		goto out_svc;
 
-	rc = ds_pool_svc_get_acl_prop(pool_uuid, ranks, &prop);
+	rc = get_acl_for_pool(pool_uuid, ranks, acl);
 	if (rc != 0)
 		goto out_ranks;
 
-	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_ACL);
-	if (entry == NULL || entry->dpe_val_ptr == NULL) {
-		D_ERROR("No ACL entry in prop list!\n");
-		D_GOTO(out_prop, rc = -DER_NONEXIST);
-	}
+out_ranks:
+	d_rank_list_free(ranks);
+out_svc:
+	ds_mgmt_svc_put_leader(svc);
+out:
+	return rc;
+}
 
-	*acl = daos_acl_dup(entry->dpe_val_ptr);
+int
+ds_mgmt_pool_overwrite_acl(uuid_t pool_uuid, struct daos_acl *acl,
+			   struct daos_acl **result)
+{
+	int			rc;
+	struct mgmt_svc		*svc;
+	d_rank_list_t		*ranks;
+	daos_prop_t		*prop;
+
+	D_DEBUG(DB_MGMT, "Overwriting ACL for pool "DF_UUID"\n",
+		DP_UUID(pool_uuid));
+
+	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
+	if (rc != 0)
+		goto out;
+
+	rc = pool_get_ranks(svc, pool_uuid, &ranks);
+	if (rc != 0)
+		goto out_svc;
+
+	prop = daos_prop_alloc(1);
+	if (prop == NULL)
+		goto out_ranks;
+
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_ACL;
+	prop->dpp_entries[0].dpe_val_ptr = daos_acl_dup(acl);
+
+	rc = ds_pool_svc_set_prop(pool_uuid, ranks, prop);
+	if (rc != 0)
+		goto out_prop;
+
+	rc = get_acl_for_pool(pool_uuid, ranks, result);
+	if (rc != 0)
+		goto out_prop;
 
 out_prop:
 	daos_prop_free(prop);
+out_ranks:
+	d_rank_list_free(ranks);
+out_svc:
+	ds_mgmt_svc_put_leader(svc);
+out:
+	return rc;
+}
+
+int
+ds_mgmt_pool_update_acl(uuid_t pool_uuid, struct daos_acl *acl,
+			struct daos_acl **result)
+{
+	int			rc;
+	struct mgmt_svc		*svc;
+	d_rank_list_t		*ranks;
+
+	D_DEBUG(DB_MGMT, "Updating ACL for pool "DF_UUID"\n",
+		DP_UUID(pool_uuid));
+
+	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
+	if (rc != 0)
+		goto out;
+
+	rc = pool_get_ranks(svc, pool_uuid, &ranks);
+	if (rc != 0)
+		goto out_svc;
+
+	rc = ds_pool_svc_update_acl(pool_uuid, ranks, acl);
+	if (rc != 0)
+		goto out_ranks;
+
+	rc = get_acl_for_pool(pool_uuid, ranks, result);
+	if (rc != 0)
+		goto out_ranks;
+
 out_ranks:
 	d_rank_list_free(ranks);
 out_svc:
