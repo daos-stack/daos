@@ -205,13 +205,178 @@ func TestPoolGetACL_Success(t *testing.T) {
 
 	svc := newTestMgmtSvc(log)
 
-	expectedResp := &mgmtpb.GetACLResp{
+	expectedResp := &mgmtpb.ACLResp{
 		Status: 0,
 		ACL:    []string{"A::OWNER@:rw", "A:g:GROUP@:r"},
 	}
 	setupMockDrpcClient(svc, expectedResp, nil)
 
 	resp, err := svc.PoolGetACL(context.TODO(), newTestGetACLReq())
+
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+
+	cmpOpts := common.DefaultCmpOpts()
+	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
+		t.Fatalf("bad response (-want, +got): \n%s\n", diff)
+	}
+}
+
+func newTestModifyACLReq() *mgmtpb.ModifyACLReq {
+	return &mgmtpb.ModifyACLReq{
+		Uuid: "testUUID",
+		ACL: []string{
+			"A::OWNER@:rw",
+		},
+	}
+}
+
+func TestPoolOverwriteACL_NoMS(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	svc := newMgmtSvc(NewIOServerHarness(log), nil)
+
+	resp, err := svc.PoolOverwriteACL(context.TODO(), newTestModifyACLReq())
+
+	if resp != nil {
+		t.Errorf("Expected no response, got: %+v", resp)
+	}
+
+	common.CmpErr(t, errors.New("no managed instances"), err)
+}
+
+func TestPoolOverwriteACL_DrpcFailed(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	svc := newTestMgmtSvc(log)
+	expectedErr := errors.New("mock error")
+	setupMockDrpcClient(svc, nil, expectedErr)
+
+	resp, err := svc.PoolOverwriteACL(context.TODO(), newTestModifyACLReq())
+
+	if resp != nil {
+		t.Errorf("Expected no response, got: %+v", resp)
+	}
+
+	common.CmpErr(t, expectedErr, err)
+}
+
+func TestPoolOverwriteACL_BadDrpcResp(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	svc := newTestMgmtSvc(log)
+	// dRPC call returns junk in the message body
+	badBytes := make([]byte, 16)
+	for i := range badBytes {
+		badBytes[i] = byte(i)
+	}
+
+	setupMockDrpcClientBytes(svc, badBytes, nil)
+
+	resp, err := svc.PoolOverwriteACL(context.TODO(), newTestModifyACLReq())
+
+	if resp != nil {
+		t.Errorf("Expected no response, got: %+v", resp)
+	}
+
+	common.CmpErr(t, errors.New("unmarshal"), err)
+}
+
+func TestPoolOverwriteACL_Success(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	svc := newTestMgmtSvc(log)
+
+	expectedResp := &mgmtpb.ACLResp{
+		Status: 0,
+		ACL:    []string{"A::OWNER@:rw", "A:g:GROUP@:r"},
+	}
+	setupMockDrpcClient(svc, expectedResp, nil)
+
+	resp, err := svc.PoolOverwriteACL(nil, newTestModifyACLReq())
+
+	if err != nil {
+		t.Errorf("Expected no error, got: %v", err)
+	}
+
+	cmpOpts := common.DefaultCmpOpts()
+	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
+		t.Fatalf("bad response (-want, +got): \n%s\n", diff)
+	}
+}
+
+func TestPoolUpdateACL_NoMS(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	svc := newMgmtSvc(NewIOServerHarness(log), nil)
+
+	resp, err := svc.PoolUpdateACL(context.TODO(), newTestModifyACLReq())
+
+	if resp != nil {
+		t.Errorf("Expected no response, got: %+v", resp)
+	}
+
+	common.CmpErr(t, errors.New("no managed instances"), err)
+}
+
+func TestPoolUpdateACL_DrpcFailed(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	svc := newTestMgmtSvc(log)
+	expectedErr := errors.New("mock error")
+	setupMockDrpcClient(svc, nil, expectedErr)
+
+	resp, err := svc.PoolUpdateACL(context.TODO(), newTestModifyACLReq())
+
+	if resp != nil {
+		t.Errorf("Expected no response, got: %+v", resp)
+	}
+
+	common.CmpErr(t, expectedErr, err)
+}
+
+func TestPoolUpdateACL_BadDrpcResp(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	svc := newTestMgmtSvc(log)
+	// dRPC call returns junk in the message body
+	badBytes := make([]byte, 16)
+	for i := range badBytes {
+		badBytes[i] = byte(i)
+	}
+
+	setupMockDrpcClientBytes(svc, badBytes, nil)
+
+	resp, err := svc.PoolUpdateACL(context.TODO(), newTestModifyACLReq())
+
+	if resp != nil {
+		t.Errorf("Expected no response, got: %+v", resp)
+	}
+
+	common.CmpErr(t, errors.New("unmarshal"), err)
+}
+
+func TestPoolUpdateACL_Success(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	svc := newTestMgmtSvc(log)
+
+	expectedResp := &mgmtpb.ACLResp{
+		Status: 0,
+		ACL:    []string{"A::OWNER@:rw", "A:g:GROUP@:r"},
+	}
+	setupMockDrpcClient(svc, expectedResp, nil)
+
+	resp, err := svc.PoolUpdateACL(nil, newTestModifyACLReq())
 
 	if err != nil {
 		t.Errorf("Expected no error, got: %v", err)

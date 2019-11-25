@@ -30,6 +30,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -66,6 +67,9 @@ func (c *logCmd) setLog(log *logging.LeveledLogger) {
 func exitWithError(log *logging.LeveledLogger, err error) {
 	log.Debugf("%+v", err)
 	log.Errorf("%v", err)
+	if fault.HasResolution(err) {
+		log.Error(fault.ShowResolutionFor(err))
+	}
 	os.Exit(1)
 }
 

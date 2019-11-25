@@ -44,7 +44,7 @@ function setup_environment()
 
 	source "${build_source}"
 
-	# ugh, appease the linter...
+	# allow cgo to find and link to third-party libs
 	LD_LIBRARY_PATH=${SL_PREFIX}/lib64
 	LD_LIBRARY_PATH+=":${SL_SPDK_PREFIX}/lib"
 	LD_LIBRARY_PATH+=":${SL_HWLOC_PREFIX}/lib"

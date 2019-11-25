@@ -187,10 +187,14 @@ vos_obj_cache_current(void)
 }
 
 void
-vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj)
+vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj, bool evict)
 {
 
 	D_ASSERT((occ != NULL) && (obj != NULL));
+
+	if (evict)
+		daos_lru_ref_evict(&obj->obj_llink);
+
 	daos_lru_ref_release(occ, &obj->obj_llink);
 }
 
@@ -201,8 +205,6 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 {
 	struct vos_object	*obj;
 	struct daos_llink	*lret;
-	struct ilog_desc_cbs	 cbs;
-	daos_handle_t		 loh;
 	struct obj_lru_key	 lkey;
 	int			 rc = 0;
 
@@ -212,7 +214,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	*obj_p = NULL;
 
 	if (cont->vc_pool->vp_dying)
-		return -DER_NONEXIST;
+		return -DER_SHUTDOWN; /* TODO: use a more targeted errno */
 
 	D_DEBUG(DB_TRACE, "Try to hold cont="DF_UUID", obj="DF_UOID
 		" create=%s epr="DF_U64"-"DF_U64"\n",
@@ -279,37 +281,33 @@ check_object:
 	if (intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH)
 		goto out;
 
-	if (no_create)
-		goto log_fetch;
+	if (no_create) {
+		rc = vos_ilog_fetch(vos_cont2umm(cont), vos_cont2hdl(cont),
+				    intent, &obj->obj_df->vo_ilog, epr->epr_hi,
+				    0, NULL, &obj->obj_ilog_info);
+		if (rc != 0) {
+			D_DEBUG(DB_TRACE, "Object "DF_UOID" not found at "
+				DF_U64"\n", DP_UOID(oid), epr->epr_hi);
+			goto failed;
+		}
 
-	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
-	rc = ilog_open(vos_cont2umm(cont), &obj->obj_df->vo_ilog, &cbs, &loh);
-	if (rc != 0)
-		goto failed;
-
-	rc = ilog_update(loh, NULL, epr->epr_hi, false);
-
-	ilog_close(loh);
-	if (rc != 0)
-		goto failed;
-log_fetch:
-	/** We need to fetch the ilog for creation case as well */
-	rc = vos_ilog_fetch(vos_cont2umm(cont), vos_cont2hdl(cont),
-			    intent, &obj->obj_df->vo_ilog, epr->epr_hi,
-			    0, NULL, &obj->obj_ilog_info);
-	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "Object "DF_UOID" not found at "
-			DF_U64"\n", DP_UOID(oid), epr->epr_hi);
-		goto failed;
+		rc = vos_ilog_check(&obj->obj_ilog_info, epr, epr,
+				    visible_only);
+		if (rc != 0) {
+			D_DEBUG(DB_TRACE, "Object "DF_UOID" not visible at "
+				DF_U64"-"DF_U64"\n", DP_UOID(oid), epr->epr_lo,
+				epr->epr_hi);
+			goto failed;
+		}
+		goto out;
 	}
 
-	if (no_create == false)
-		goto out;
-
-	rc = vos_ilog_check(&obj->obj_ilog_info, epr, epr, visible_only);
+	rc = vos_ilog_update(cont, &obj->obj_df->vo_ilog, epr,
+			     NULL, &obj->obj_ilog_info);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "Object "DF_UOID" not visible at "DF_U64"-"
-			DF_U64"\n", DP_UOID(oid), epr->epr_lo, epr->epr_hi);
+		D_ERROR("Could not update object "DF_UOID" at "DF_U64
+			": "DF_RC"\n", DP_UOID(oid), epr->epr_hi,
+			DP_RC(rc));
 		goto failed;
 	}
 out:
@@ -335,7 +333,7 @@ out:
 	*obj_p = obj;
 	return 0;
 failed:
-	vos_obj_release(occ, obj);
+	vos_obj_release(occ, obj, true);
 failed_2:
 	if (rc != -DER_NONEXIST)
 		D_CDEBUG(rc == -DER_INPROGRESS, DB_TRACE, DLOG_ERR,

@@ -63,6 +63,9 @@ func (f *Forwarder) sendReq(method string, fwdReq interface{}, fwdRes interface{
 	ctx := context.TODO()
 	res, err := pbin.ExecReq(ctx, f.log, pbinPath, req)
 	if err != nil {
+		if pbin.IsFailedRequest(err) {
+			return err
+		}
 		return errors.Wrap(err, "privileged binary execution failed")
 	}
 

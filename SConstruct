@@ -127,7 +127,7 @@ def scons():
         try:
             version = env['RELEASE']
         except KeyError:
-            print ("Usage: scons RELEASE=x.y.z release")
+            print("Usage: scons RELEASE=x.y.z release")
             exit(1)
 
         # create a branch for the PR

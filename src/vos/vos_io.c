@@ -149,13 +149,13 @@ vos_ioc_reserve_init(struct vos_io_context *ioc)
 }
 
 static void
-vos_ioc_destroy(struct vos_io_context *ioc)
+vos_ioc_destroy(struct vos_io_context *ioc, bool evict)
 {
 	if (ioc->ic_biod != NULL)
 		bio_iod_free(ioc->ic_biod);
 
 	if (ioc->ic_obj)
-		vos_obj_release(vos_obj_cache_current(), ioc->ic_obj);
+		vos_obj_release(vos_obj_cache_current(), ioc->ic_obj, evict);
 
 	vos_ioc_reserve_fini(ioc);
 	vos_ilog_fetch_finish(&ioc->ic_dkey_info);
@@ -240,7 +240,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	return 0;
 error:
 	if (ioc != NULL)
-		vos_ioc_destroy(ioc);
+		vos_ioc_destroy(ioc, false);
 	return rc;
 }
 
@@ -578,6 +578,14 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 	for (i = 0; i < iod->iod_nr; i++) {
 		daos_size_t rsize;
 
+		if (iod->iod_recxs[i].rx_nr == 0) {
+			D_DEBUG(DB_IO,
+				"Skip empty read IOD at %d: idx %lu, nr %lu\n",
+				i, (unsigned long)iod->iod_recxs[i].rx_idx,
+				(unsigned long)iod->iod_recxs[i].rx_nr);
+			continue;
+		}
+
 		rc = akey_fetch_recx(toh, &val_epr, &iod->iod_recxs[i],
 				     daos_iod_csum(iod, i), &rsize, ioc);
 		if (rc != 0) {
@@ -687,7 +695,7 @@ vos_fetch_end(daos_handle_t ioh, int err)
 
 	/* NB: it's OK to use the stale ioc->ic_obj for fetch_end */
 	D_ASSERT(!ioc->ic_update);
-	vos_ioc_destroy(ioc);
+	vos_ioc_destroy(ioc, false);
 	return err;
 }
 
@@ -842,52 +850,6 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 }
 
 static int
-key_ilog_update(struct vos_io_context *ioc, struct vos_krec_df *krec,
-		struct vos_ilog_info *parent, struct vos_ilog_info *info)
-{
-	struct ilog_desc_cbs	 cbs;
-	daos_handle_t		 loh;
-	daos_epoch_range_t	 max_epr = ioc->ic_epr;
-	int			 rc = 0;
-
-	D_ASSERT(parent->ii_prior_any_punch >= parent->ii_prior_punch);
-
-	if (parent->ii_prior_any_punch > max_epr.epr_lo)
-		max_epr.epr_lo = parent->ii_prior_any_punch;
-
-	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(ioc->ic_obj->obj_cont));
-	rc = ilog_open(vos_ioc2umm(ioc), &krec->kr_ilog, &cbs, &loh);
-	if (rc != 0) {
-		D_ERROR("Could not open incarnation log: "DF_RC"\n", DP_RC(rc));
-		return rc;
-	}
-
-	rc = ilog_update(loh, &max_epr, ioc->ic_epr.epr_hi, false);
-	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "Problem with update of incarnation log: "
-			DF_RC"\n", DP_RC(rc));
-		goto out;
-	}
-
-	if (info == NULL)
-		goto out;
-
-	/** Update info for nested tree update */
-	rc = vos_ilog_fetch(vos_cont2umm(ioc->ic_cont),
-			    vos_cont2hdl(ioc->ic_cont),
-			    DAOS_INTENT_UPDATE, &krec->kr_ilog,
-			    ioc->ic_epr.epr_hi, 0, parent, info);
-	if (rc != 0) {
-		D_ERROR("Problem fetching incarnation log on update: "DF_RC
-			"\n", DP_RC(rc));
-	}
-out:
-	ilog_close(loh);
-
-	return rc;
-}
-
-static int
 akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh)
 {
 	struct vos_object	*obj = ioc->ic_obj;
@@ -912,7 +874,8 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh)
 	if (rc != 0)
 		return rc;
 
-	rc = key_ilog_update(ioc, krec, &ioc->ic_dkey_info, NULL);
+	rc = vos_ilog_update(ioc->ic_cont, &krec->kr_ilog, &ioc->ic_epr,
+			     &ioc->ic_dkey_info, &ioc->ic_akey_info);
 	if (rc != 0) {
 		D_ERROR("Failed to update akey ilog: "DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -926,8 +889,20 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh)
 	} /* else: array */
 
 	for (i = 0; i < iod->iod_nr; i++) {
+		umem_off_t	umoff = iod_update_umoff(ioc);
+
 		D_DEBUG(DB_IO, "Array update %d eph "DF_U64"\n", i,
 			ioc->ic_epr.epr_hi);
+
+		if (iod->iod_recxs[i].rx_nr == 0) {
+			D_ASSERT(UMOFF_IS_NULL(umoff));
+			D_DEBUG(DB_IO,
+				"Skip empty write IOD at %d: idx %lu, nr %lu\n",
+				i, (unsigned long)iod->iod_recxs[i].rx_idx,
+				(unsigned long)iod->iod_recxs[i].rx_nr);
+			continue;
+		}
+
 		daos_csum_buf_t *csum = daos_iod_csum(iod, i);
 		rc = akey_update_recx(toh, pm_ver, &iod->iod_recxs[i], csum,
 				      iod->iod_size, ioc);
@@ -962,8 +937,8 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey)
 	}
 	subtr_created = true;
 
-	rc = key_ilog_update(ioc, krec, &obj->obj_ilog_info,
-			     &ioc->ic_dkey_info);
+	rc = vos_ilog_update(ioc->ic_cont, &krec->kr_ilog, &ioc->ic_epr,
+			     &obj->obj_ilog_info, &ioc->ic_dkey_info);
 	if (rc != 0) {
 		D_ERROR("Failed to update dkey ilog: "DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -1280,9 +1255,8 @@ update_cancel(struct vos_io_context *ioc)
 		D_ASSERT(umem->umm_id == UMEM_CLASS_VMEM);
 
 		for (i = 0; i < ioc->ic_umoffs_cnt; i++) {
-			if (UMOFF_IS_NULL(ioc->ic_umoffs[i]))
-				continue;
-			umem_free(umem, ioc->ic_umoffs[i]);
+			if (!UMOFF_IS_NULL(ioc->ic_umoffs[i]))
+				umem_free(umem, ioc->ic_umoffs[i]);
 		}
 	}
 
@@ -1354,7 +1328,7 @@ abort:
 out:
 	if (err != 0)
 		update_cancel(ioc);
-	vos_ioc_destroy(ioc);
+	vos_ioc_destroy(ioc, err != 0);
 	vos_dth_set(NULL);
 
 	return err;

@@ -164,9 +164,9 @@ vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
 }
 
 int
-vos_ilog_fetch(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
-	       struct ilog_df *ilog, daos_epoch_t epoch, daos_epoch_t punched,
-	       const struct vos_ilog_info *parent, struct vos_ilog_info *info)
+vos_ilog_fetch_(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
+		struct ilog_df *ilog, daos_epoch_t epoch, daos_epoch_t punched,
+		const struct vos_ilog_info *parent, struct vos_ilog_info *info)
 {
 	struct ilog_desc_cbs	 cbs;
 	daos_epoch_t		 punch;
@@ -203,8 +203,8 @@ init:
 }
 
 int
-vos_ilog_check(struct vos_ilog_info *info, const daos_epoch_range_t *epr_in,
-	       daos_epoch_range_t *epr_out, bool visible_only)
+vos_ilog_check_(struct vos_ilog_info *info, const daos_epoch_range_t *epr_in,
+		daos_epoch_range_t *epr_out, bool visible_only)
 {
 	if (epr_out && epr_out != epr_in)
 		*epr_out = *epr_in;
@@ -240,6 +240,79 @@ vos_ilog_check(struct vos_ilog_info *info, const daos_epoch_range_t *epr_in,
 	 */
 
 	return 0;
+}
+
+static inline int
+vos_ilog_update_check(struct vos_ilog_info *info, const daos_epoch_range_t *epr)
+{
+	if (info->ii_create <= info->ii_prior_any_punch)
+		return -DER_NONEXIST;
+
+	return 0;
+}
+
+int vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
+		     const daos_epoch_range_t *epr,
+		     struct vos_ilog_info *parent, struct vos_ilog_info *info)
+{
+	daos_epoch_range_t	max_epr = *epr;
+	struct ilog_desc_cbs	cbs;
+	daos_handle_t		loh;
+	int			rc;
+
+	if (parent != NULL) {
+		D_ASSERT(parent->ii_prior_any_punch >= parent->ii_prior_punch);
+
+		if (parent->ii_prior_any_punch > max_epr.epr_lo)
+			max_epr.epr_lo = parent->ii_prior_any_punch;
+	}
+
+	D_DEBUG(DB_TRACE, "Checking and updating incarnation log in range "
+		DF_U64"-"DF_U64"\n", max_epr.epr_lo, max_epr.epr_hi);
+
+	/** Do a fetch first.  The log may already exist */
+	rc = vos_ilog_fetch(vos_cont2umm(cont), vos_cont2hdl(cont),
+			    DAOS_INTENT_UPDATE, ilog, epr->epr_hi,
+			    0, parent, info);
+	if (rc == -DER_NONEXIST)
+		goto update;
+	if (rc != 0) {
+		D_ERROR("Could not update ilog %p at "DF_U64": "DF_RC"\n",
+			ilog, epr->epr_hi, DP_RC(rc));
+		return rc;
+	}
+
+	rc = vos_ilog_update_check(info, &max_epr);
+	if (rc == 0)
+		return rc;
+	if (rc != -DER_NONEXIST) {
+		D_ERROR("Check failed: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+update:
+	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
+	rc = ilog_open(vos_cont2umm(cont), ilog, &cbs, &loh);
+	if (rc != 0) {
+		D_ERROR("Could not open incarnation log: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	rc = ilog_update(loh, &max_epr, epr->epr_hi, false);
+
+	ilog_close(loh);
+
+	if (rc != 0) {
+		D_ERROR("Could not update incarnation log: "DF_RC"\n",
+			DP_RC(rc));
+		return rc;
+	}
+
+	/* No need to refetch the log.  The only field that is used by update
+	 * is prior_any_punch.   This field will not be changed by ilog_update
+	 * for the purpose of parsing the child log.
+	 */
+
+	return rc;
 }
 
 void

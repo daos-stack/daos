@@ -73,7 +73,7 @@ func (c *connList) PoolCreate(req *PoolCreateReq) (*PoolCreateResp, error) {
 		Usergroup: req.Grp, Uuid: poolUUIDStr,
 	}
 
-	if req.ACL != nil {
+	if !req.ACL.Empty() {
 		rpcReq.Acl = req.ACL.Entries
 	}
 
@@ -165,6 +165,96 @@ func (c *connList) PoolGetACL(req *PoolGetACLReq) (*PoolGetACLResp, error) {
 	}
 
 	return &PoolGetACLResp{
+		ACL: &AccessControlList{Entries: pbResp.ACL},
+	}, nil
+}
+
+// PoolOverwriteACLReq contains the input parameters for PoolOverwriteACL
+type PoolOverwriteACLReq struct {
+	UUID string             // pool UUID
+	ACL  *AccessControlList // new ACL for the pool
+}
+
+// PoolOverwriteACLResp returns the updated ACL for the pool
+type PoolOverwriteACLResp struct {
+	ACL *AccessControlList // actual ACL of the pool
+}
+
+// PoolOverwriteACL sends a request to replace the pool's old Access Control List
+// with a new one. If it succeeds, it returns the updated ACL. If not, it returns
+// an error.
+func (c *connList) PoolOverwriteACL(req *PoolOverwriteACLReq) (*PoolOverwriteACLResp, error) {
+	mc, err := chooseServiceLeader(c.controllers)
+	if err != nil {
+		return nil, err
+	}
+
+	pbReq := &mgmtpb.ModifyACLReq{Uuid: req.UUID}
+	if !req.ACL.Empty() {
+		pbReq.ACL = req.ACL.Entries
+	}
+
+	c.log.Debugf("Overwrite DAOS pool ACL request: %v", pbReq)
+
+	pbResp, err := mc.getSvcClient().PoolOverwriteACL(context.Background(), pbReq)
+	if err != nil {
+		return nil, err
+	}
+
+	c.log.Debugf("Overwrite DAOS pool ACL response: %v", pbResp)
+
+	if pbResp.GetStatus() != 0 {
+		return nil, errors.Errorf("DAOS returned error code: %d",
+			pbResp.GetStatus())
+	}
+
+	return &PoolOverwriteACLResp{
+		ACL: &AccessControlList{Entries: pbResp.ACL},
+	}, nil
+}
+
+// PoolUpdateACLReq contains the input parameters for PoolUpdateACL
+type PoolUpdateACLReq struct {
+	UUID string             // pool UUID
+	ACL  *AccessControlList // ACL entries to add to the pool
+}
+
+// PoolUpdateACLResp returns the updated ACL for the pool
+type PoolUpdateACLResp struct {
+	ACL *AccessControlList // actual ACL of the pool
+}
+
+// PoolUpdateACL sends a request to add new entries and update existing entries
+// in a pool's Access Control List. If it succeeds, it returns the updated ACL.
+// If not, it returns an error.
+func (c *connList) PoolUpdateACL(req *PoolUpdateACLReq) (*PoolUpdateACLResp, error) {
+	mc, err := chooseServiceLeader(c.controllers)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.ACL.Empty() {
+		return nil, errors.New("no entries requested")
+	}
+
+	pbReq := &mgmtpb.ModifyACLReq{Uuid: req.UUID}
+	pbReq.ACL = req.ACL.Entries
+
+	c.log.Debugf("Update DAOS pool ACL request: %v", pbReq)
+
+	pbResp, err := mc.getSvcClient().PoolUpdateACL(context.Background(), pbReq)
+	if err != nil {
+		return nil, err
+	}
+
+	c.log.Debugf("Update DAOS pool ACL response: %v", pbResp)
+
+	if pbResp.GetStatus() != 0 {
+		return nil, errors.Errorf("DAOS returned error code: %d",
+			pbResp.GetStatus())
+	}
+
+	return &PoolUpdateACLResp{
 		ACL: &AccessControlList{Entries: pbResp.ACL},
 	}, nil
 }

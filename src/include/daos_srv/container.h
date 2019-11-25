@@ -72,7 +72,21 @@ struct ds_cont_child {
 
 	/* Aggregate ULT */
 	struct dss_sleep_ult	 *sc_agg_ult;
-	/** Aggregation limit (set when snapshot is in progress) **/
+	/*
+	 * Lower bound of aggregation epoch, it can be:
+	 *
+	 * < DAOS_EOPCH_MAX	: Some snapshot was deleted since last
+	 *			  round of aggregation
+	 * DAOS_EPOCH_MAX	: No snapshot deletion since last round of
+	 *			  aggregation
+	 */
+	uint64_t		 sc_aggregation_min;
+	/* Upper bound of aggregation epoch, it can be:
+	 *
+	 * 0			: When snapshot list isn't retrieved yet
+	 * DAOS_EPOCH_MAX	: When snapshot list is retrieved
+	 * snapshot epoch	: When the snapshot creation is in-progress
+	 */
 	uint64_t		 sc_aggregation_max;
 	uint64_t		*sc_snapshots;
 	uint32_t		 sc_snapshots_nr;
@@ -102,6 +116,8 @@ void ds_cont_hdl_get(struct ds_cont_hdl *hdl);
 
 int ds_cont_close_by_pool_hdls(uuid_t pool_uuid, uuid_t *pool_hdls,
 			       int n_pool_hdls, crt_context_t ctx);
+int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts,
+		 uint64_t *ncont);
 int
 ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		   uint64_t capas, struct ds_cont_hdl **cont_hdl);
