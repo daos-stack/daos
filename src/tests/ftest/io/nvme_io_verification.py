@@ -23,10 +23,10 @@
 """
 from __future__ import print_function
 
-import os
 import avocado
 
-from pydaos.raw import DaosPool, DaosApiError
+from pydaos.raw import DaosApiError
+from test_utils import TestPool
 from ior_test_base import IorTestBase
 
 class NvmeIoVerification(IorTestBase):
@@ -61,15 +61,9 @@ class NvmeIoVerification(IorTestBase):
             created.
         :avocado: tags=all,daosio,full_regression,hw,nvme_io_verification
         """
-        # Pool params
-        pool_mode = self.params.get("mode", '/run/pool/createmode/*')
-        pool_uid = os.geteuid()
-        pool_gid = os.getegid()
-        pool_group = self.params.get("setname", '/run/pool/createset/*')
-        pool_svcn = self.params.get("svcn", '/run/pool/createsvc/')
-
         # Test params
         tests = self.params.get("ior_sequence", '/run/ior/*')
+        processes = self.params.get("np", '/run/ior/*')
         transfer_size = self.params.get("tsize", '/run/ior/transfersize/*/')
         block_size = self.ior_cmd.block_size.value
 
@@ -77,16 +71,22 @@ class NvmeIoVerification(IorTestBase):
         for ior_param in tests:
             # Create and connect to a pool
             # pylint: disable=attribute-defined-outside-init
-            self.pool = DaosPool(self.context)
-            self.pool.create(
-                pool_mode, pool_uid, pool_gid, ior_param[0], pool_group,
-                svcn=pool_svcn, nvme_size=ior_param[1])
+            self.pool = TestPool(self.context, self.log)
+            self.pool.get_params(self)
 
-            self.pool.connect(1 << 1)
+            # update pool sizes
+            self.pool.scm_size.update(ior_param[0])
+            self.pool.nvme_size.update(ior_param[1])
+
+            # Create a pool
+            self.pool.create()
+
+            # get pool info
+            self.pool.get_info()
 
             for tsize in transfer_size:
                 # Get the current pool sizes
-                size_before_ior = self.pool.pool_query()
+                size_before_ior = self.pool.info
 
                 # Run ior with the parameters specified for this pass
                 self.ior_cmd.transfer_size.update(tsize)
@@ -97,7 +97,7 @@ class NvmeIoVerification(IorTestBase):
                 else:
                     self.ior_cmd.block_size.update(block_size)
                 self.ior_cmd.set_daos_params(self.server_group, self.pool)
-                self.run_ior(self.get_job_manager_command())
+                self.run_ior(self.get_job_manager_command(), processes)
 
                 # Verify IOR consumed the expected amount ofrom the pool
                 self.verify_pool_size(size_before_ior, self.processes)
@@ -105,7 +105,6 @@ class NvmeIoVerification(IorTestBase):
             try:
                 if self.pool:
                     # pylint: disable=attribute-defined-outside-init
-                    self.pool.disconnect()
                     self.pool.destroy(1)
                     self.pool = None
             except DaosApiError as error:

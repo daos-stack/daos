@@ -145,7 +145,7 @@ class IorTestBase(TestWithServers):
         if self.pool is None:
             self.create_pool()
         # Update IOR params with the pool
-        self.ior_cmd.set_daos_params(self.server_group, self.pool.pool)
+        self.ior_cmd.set_daos_params(self.server_group, self.pool)
 
         # start dfuse if api is POSIX
         if self.ior_cmd.api.value == "POSIX":
@@ -180,15 +180,13 @@ class IorTestBase(TestWithServers):
         mpirun_path = os.path.join(mpio_util.mpichinstall, "bin")
         return Mpirun(self.ior_cmd, mpirun_path)
 
-    def run_ior(self, manager, processes=None):
+    def run_ior(self, manager, processes):
         """Run the IOR command.
 
         Args:
             manager (str): mpi job manager command
             processes (int): number of host processes
         """
-        if self.processes and processes is None:
-            processes = self.processes
         env = self.ior_cmd.get_default_env(
             str(manager), self.tmp, self.client_log)
         manager.setup_command(env, self.hostfile_clients, processes)
