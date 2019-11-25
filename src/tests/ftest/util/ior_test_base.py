@@ -30,7 +30,6 @@ from ior_utils import IorCommand
 from command_utils import Mpirun, CommandFailure
 from mpio_utils import MpioUtils
 from test_utils import TestPool
-from pydaos.raw import DaosPool
 from dfuse_utils import Dfuse
 import write_host_file
 
@@ -79,7 +78,6 @@ class IorTestBase(TestWithServers):
     def create_pool(self):
         """Create a TestPool object to use with ior."""
         # Get the pool params
-        # pylint: disable=attribute-defined-outside-init
         self.pool = TestPool(self.context, self.log)
         self.pool.get_params(self)
 
@@ -204,15 +202,7 @@ class IorTestBase(TestWithServers):
             processes (int): number of processes
         """
         # Get the current pool size for comparison
-        if isinstance(self.pool, TestPool):
-            self.pool.get_info()
-            current_pool_info = self.pool.info
-        elif isinstance(self.pool, DaosPool):
-            # pylint: disable=no-member
-            current_pool_info = self.pool.pool_query()
-        else:
-            raise Exception("Unsupported pool object class: {}".\
-                            format(type(self.pool)))
+        current_pool_info = self.pool.pool.pool_query()
 
         # If Transfer size is < 4K, Pool size will verified against NVMe, else
         # it will be checked against SCM

@@ -70,7 +70,6 @@ class NvmeIoVerification(IorTestBase):
         # Loop for every IOR object type
         for ior_param in tests:
             # Create and connect to a pool
-            # pylint: disable=attribute-defined-outside-init
             self.pool = TestPool(self.context, self.log)
             self.pool.get_params(self)
 
@@ -102,12 +101,5 @@ class NvmeIoVerification(IorTestBase):
                 # Verify IOR consumed the expected amount ofrom the pool
                 self.verify_pool_size(size_before_ior, self.processes)
 
-            try:
-                if self.pool:
-                    # pylint: disable=attribute-defined-outside-init
-                    self.pool.destroy(1)
-                    self.pool = None
-            except DaosApiError as error:
-                self.log.error(
-                    "Pool disconnect/destroy error: %s", str(error))
-                self.fail("Failed to Destroy/Disconnect the Pool")
+            # destroy pool
+            self.pool.destroy()
