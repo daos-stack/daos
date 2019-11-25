@@ -13,7 +13,8 @@ hosts:
     - client-G
 server_config:
   name: daos_server
-  targets: 8
+  servers:
+    targets: 8
 pool:
   mode: 511
   name: daos_server

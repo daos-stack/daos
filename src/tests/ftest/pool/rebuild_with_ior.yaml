@@ -12,7 +12,8 @@ hosts:
 timeout: 600
 server_config:
   name: daos_server
-  targets: 8
+  servers:
+    targets: 8
 testparams:
   ranks:
     rank_to_kill: 3
