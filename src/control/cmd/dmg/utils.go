@@ -25,7 +25,6 @@ package main
 
 import (
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -35,50 +34,9 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 )
 
-// HostGroup associates HostSet with a port number.
-type HostGroup struct {
-	Port    string
-	HostSet *hostlist.HostSet
-}
-
-// HostGroups represents a slice of HostGroup elements.
-type HostGroups []*HostGroup
-
-func (hgs HostGroups) String() string {
-	var ranges []string
-
-	if len(hgs) == 0 {
-		return ""
-
-	}
-
-	for _, hg := range hgs {
-		ranges = append(ranges,
-			fmt.Sprintf("%s:%s", hg.HostSet.RangedString(), hg.Port))
-	}
-
-	return strings.Join(ranges, ",") + "\n"
-}
-
-// HostGroupsError associates HostGroups with an error message.
-type HostGroupsError struct {
-	Groups HostGroups
-	Error  string
-}
-
-// HostGroupErrors represents a slice of HostGroupsError elements.
-type HostGroupsErrors []*HostGroupsError
-
-func (hges HostGroupsErrors) String() string {
-	var errRanges []string
-
-	for _, hge := range hges {
-		errRanges = append(errRanges,
-			fmt.Sprintf("%s: %s", hge.Error, hge.Groups))
-	}
-
-	return strings.Join(errRanges, "")
-}
+const (
+	defaultHostPort = 10001
+)
 
 // hostsByPort takes slice of address patterns and returns a HostGroup
 // for each port (after expanding each port specific nodeset).
@@ -86,9 +44,8 @@ func (hges HostGroupsErrors) String() string {
 // e.g. for input patterns string[]{"intelA[1-10]:10000", "intelB[2,3]:10001"}
 // 	returns HostGroups{{10000, ["intelA1", ..."intelA10"]},
 //		{10001, ["intelB2", "intelB3"]}}
-func hostsByPort(addrPatterns []string, defaultPort int) (groups HostGroups, err error) {
-	var ports []string
-	portHosts := make(map[string]*hostlist.HostSet)
+func hostsByPort(addrPatterns []string, defaultPort int) (hostlist.HostGroup, error) {
+	portHosts := make(hostlist.HostGroup)
 
 	for _, p := range addrPatterns {
 		var port string
@@ -106,48 +63,34 @@ func hostsByPort(addrPatterns []string, defaultPort int) (groups HostGroups, err
 		}
 
 		if port == "" || port == "0" {
-			return nil, errors.New("invalid port")
+			return nil, errors.Errorf("invalid port %q", port)
 		}
 
-		if _, exists := portHosts[port]; !exists {
-			portHosts[port] = new(hostlist.HostSet)
-		}
-
-		if _, err = portHosts[port].Insert(hp[0]); err != nil {
-			return
+		if err := portHosts.AddHost(port, hp[0]); err != nil {
+			return nil, err
 		}
 	}
 
-	for port := range portHosts {
-		ports = append(ports, port)
-	}
-	sort.Strings(ports)
-
-	for _, port := range ports {
-		groups = append(groups,
-			&HostGroup{Port: port, HostSet: portHosts[port]})
-	}
-
-	return
+	return portHosts, nil
 }
 
 // flattenHostAddrs takes nodeset:port patterns and returns individual addresses
 // after expanding nodesets and mapping to ports.
 func flattenHostAddrs(addrPatterns string) (addrs []string, err error) {
-	var portHostGroups HostGroups
-
 	// expand any compressed nodesets for specific ports
 	// example opts.HostList: intelA[1-10]:10000,intelB[2,3]:10001
-	portHostGroups, err = hostsByPort(strings.Split(addrPatterns, ","), 0)
+	portHostSets, err := hostsByPort(strings.Split(addrPatterns, ","), defaultHostPort)
 	if err != nil {
 		return
 	}
 
+	ports := portHostSets.Keys()
 	// reconstruct slice of all "host:port" addresses from map
-	for _, group := range portHostGroups {
-		hosts := strings.Split(group.HostSet.DerangedString(), ",")
+	for _, port := range ports {
+		set := portHostSets[port]
+		hosts := strings.Split(set.DerangedString(), ",")
 		for _, host := range hosts {
-			addrs = append(addrs, fmt.Sprintf("%s:%s", host, group.Port))
+			addrs = append(addrs, fmt.Sprintf("%s:%s", host, port))
 		}
 	}
 
@@ -156,50 +99,22 @@ func flattenHostAddrs(addrPatterns string) (addrs []string, err error) {
 
 // checkConns analyses connection results and returns summary compressed active
 // and inactive hostlists.
-func checkConns(results client.ResultMap) (active HostGroups, inactive HostGroupsErrors, err error) {
-	var addrs []string
-	var msgs []string
-	var groups HostGroups
-	errHosts := make(map[string][]string)
+func checkConns(results client.ResultMap) (active hostlist.HostGroup, inactive hostlist.HostGroup, err error) {
+	active = make(hostlist.HostGroup)
+	inactive = make(hostlist.HostGroup)
 
-	// map keys always processed in order
 	for addr := range results {
-		addrs = append(addrs, addr)
-	}
-	sort.Strings(addrs)
-
-	i := 0
-	for _, addr := range addrs {
 		if results[addr].Err != nil {
 			// group failed conn attempts by error msg
 			errMsg := results[addr].Err.Error()
-			errHosts[errMsg] = append(errHosts[errMsg], addr)
+			if err = inactive.AddHost(errMsg, addr); err != nil {
+				return
+			}
 			continue
 		}
-		addrs[i] = addr
-		i++
-	}
-	addrs = addrs[:i]
-
-	// group hosts by port from successful connection addresses
-	active, err = hostsByPort(addrs, 0)
-	if err != nil {
-		return
-	}
-
-	for msg := range errHosts {
-		msgs = append(msgs, msg)
-	}
-	sort.Strings(msgs)
-
-	// group hosts by port and reassign to msg key for unsuccessful connection addresses
-	for _, msg := range msgs {
-		groups, err = hostsByPort(errHosts[msg], 0)
-		if err != nil {
+		if err = active.AddHost("connected", addr); err != nil {
 			return
 		}
-		inactive = append(inactive,
-			&HostGroupsError{Groups: groups, Error: msg})
 	}
 
 	return

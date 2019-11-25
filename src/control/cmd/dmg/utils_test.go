@@ -77,31 +77,31 @@ func TestCheckConns(t *testing.T) {
 		},
 		"single successful connection": {
 			results: ResultMap{"abc:10000": ClientResult{"abc:10000", nil, nil}},
-			active:  "abc:10000\n",
+			active:  "abc:10000: connected\n",
 		},
 		"single failed connection": {
 			results:  ResultMap{"abc4:10000": ClientResult{"abc4:10000", nil, MockErr}},
-			inactive: "unknown failure: abc4:10000\n",
+			inactive: "abc4:10000: unknown failure\n",
 		},
 		"multiple successful connections": {
 			results: ResultMap{
 				"foo.bar:10000": ClientResult{"foo.bar:10000", nil, nil},
 				"foo.baz:10001": ClientResult{"foo.baz:10001", nil, nil},
 			},
-			active: "foo.bar:10000,foo.baz:10001\n",
+			active: "foo.bar:10000,foo.baz:10001: connected\n",
 		},
 		"multiple failed connections": {
 			results:  ResultMap{"abc4:10000": ClientResult{"abc4:10000", nil, MockErr}, "abc5:10001": ClientResult{"abc5:10001", nil, MockErr}},
-			inactive: "unknown failure: abc4:10000,abc5:10001\n",
+			inactive: "abc4:10000,abc5:10001: unknown failure\n",
 		},
 		"multiple failed connections with hostlist compress": {
 			results:  ResultMap{"abc4:10000": ClientResult{"abc4:10000", nil, MockErr}, "abc5:10000": ClientResult{"abc5:10000", nil, MockErr}},
-			inactive: "unknown failure: abc[4-5]:10000\n",
+			inactive: "abc[4-5]:10000: unknown failure\n",
 		},
 		"failed and successful connections": {
 			results:  ResultMap{"abc4:10000": ClientResult{"abc4:10000", nil, MockErr}, "abc5:10001": ClientResult{"abc5:10001", nil, nil}},
-			active:   "abc5:10001\n",
-			inactive: "unknown failure: abc4:10000\n",
+			active:   "abc5:10001: connected\n",
+			inactive: "abc4:10000: unknown failure\n",
 		},
 		"multiple connections with hostlist compress": {
 			results: ResultMap{
@@ -114,8 +114,8 @@ func TestCheckConns(t *testing.T) {
 				"bar8:10001": ClientResult{"bar8:10001", nil, errors.New("foobar")},
 				"bar9:10000": ClientResult{"bar9:10000", nil, errors.New("foobar")},
 			},
-			active:   "bar[3-6]:10001\n",
-			inactive: "foobar: bar9:10000,bar[7-8]:10001\nfoobaz: bar2:10001\n",
+			active:   "bar[3-6]:10001: connected\n",
+			inactive: "bar9:10000,bar[7-8]:10001: foobar\n               bar2:10001: foobaz\n",
 		},
 		"multiple connections with IP address compress": {
 			results: ResultMap{
@@ -128,8 +128,8 @@ func TestCheckConns(t *testing.T) {
 				"10.0.0.8:10001": ClientResult{"10.0.0.8:10001", nil, errors.New("foobar")},
 				"10.0.0.9:10000": ClientResult{"10.0.0.9:10000", nil, errors.New("foobar")},
 			},
-			active:   "10.0.0.[3-6]:10001\n",
-			inactive: "foobar: 10.0.0.9:10000,10.0.0.[7-8]:10001\nfoobaz: 10.0.0.2:10001\n",
+			active:   "10.0.0.[3-6]:10001: connected\n",
+			inactive: "10.0.0.9:10000,10.0.0.[7-8]:10001: foobar\n                   10.0.0.2:10001: foobaz\n",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
