@@ -21,6 +21,9 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
+
+#include <daos/common.h>
+
 #include <daos_security.h>
 #include <gurt/common.h>
 #include <gurt/debug.h>

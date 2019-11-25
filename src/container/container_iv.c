@@ -787,7 +787,8 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t *prop)
 		case DAOS_PROP_CO_LABEL:
 			D_ASSERT(strlen(iv_prop->cip_label) <=
 				 DAOS_PROP_LABEL_MAX_LEN);
-			prop_entry->dpe_str = strdup(iv_prop->cip_label);
+			D_STRNDUP(prop_entry->dpe_str, iv_prop->cip_label,
+				  DAOS_PROP_LABEL_MAX_LEN);
 			if (prop_entry->dpe_str)
 				label_alloc = prop_entry->dpe_str;
 			else

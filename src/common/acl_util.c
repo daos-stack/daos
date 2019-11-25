@@ -26,6 +26,8 @@
  * Lists
  */
 
+#include <daos/common.h>
+
 #include <daos_security.h>
 #include <gurt/common.h>
 #include <gurt/debug.h>
