@@ -3640,7 +3640,10 @@ ds_pool_check_leader(uuid_t pool_uuid, daos_unit_oid_t *oid,
 	if (rc != 1)
 		D_GOTO(out, rc = -DER_INVAL);
 
-	crt_group_rank(pool->sp_group, &myrank);
+	rc = crt_group_rank(NULL, &myrank);
+	if (rc < 0)
+		goto out;
+
 	if (myrank != target->ta_comp.co_rank) {
 		rc = 0;
 	} else {
