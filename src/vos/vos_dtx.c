@@ -1160,6 +1160,11 @@ int
 vos_dtx_prepared(struct dtx_handle *dth)
 {
 	struct vos_container	*cont;
+	struct vos_dtx_entry_df	*dtx;
+	int			 rc = 0;
+
+	if (dtx_is_null(dth->dth_ent))
+		return 0;
 
 	cont = vos_hdl2cont(dth->dth_coh);
 	D_ASSERT(cont != NULL);
