@@ -21,6 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
+#include <daos/common.h>
+
 #include "dfuse_common.h"
 #include "dfuse.h"
 
@@ -37,6 +39,8 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 
 	D_ASSERT(ie->ie_parent);
 	D_ASSERT(ie->ie_dfs);
+
+	DFUSE_TRA_UP(ie, fs_handle, "inode");
 
 	if (ie->ie_stat.st_ino == 0) {
 		rc = dfs_obj2id(ie->ie_obj, &oid);

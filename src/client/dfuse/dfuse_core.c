@@ -21,6 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
+#include <daos/common.h>
+
 #include "dfuse_common.h"
 #include "dfuse.h"
 
@@ -162,6 +164,8 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	D_ALLOC_PTR(fs_handle);
 	if (!fs_handle)
 		return false;
+
+	DFUSE_TRA_ROOT(fs_handle, "fs_handle");
 
 	fs_handle->dpi_info = dfuse_info;
 
