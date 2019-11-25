@@ -641,3 +641,17 @@ func TestHostList_Within(t *testing.T) {
 		})
 	}
 }
+
+func TestHostList_ZeroValue(t *testing.T) {
+	zVal := &hostlist.HostList{}
+
+	err := zVal.Push("host[1-8]")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gotCount := zVal.Count()
+	if gotCount != 8 {
+		t.Fatalf("expected count to be 8, got %d", gotCount)
+	}
+}

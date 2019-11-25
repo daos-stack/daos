@@ -742,7 +742,10 @@ iod_update_umoff(struct vos_io_context *ioc)
 {
 	umem_off_t umoff;
 
-	D_ASSERT(ioc->ic_umoffs_at < ioc->ic_umoffs_cnt);
+	D_ASSERTF(ioc->ic_umoffs_at < ioc->ic_umoffs_cnt,
+		  "Invalid ioc_reserve at/cnt: %u/%u\n",
+		  ioc->ic_umoffs_at, ioc->ic_umoffs_cnt);
+
 	umoff = ioc->ic_umoffs[ioc->ic_umoffs_at];
 	ioc->ic_umoffs_at++;
 
@@ -1126,11 +1129,13 @@ vos_reserve_recx(struct vos_io_context *ioc, uint16_t media, daos_size_t size)
 
 	memset(&biov, 0, sizeof(biov));
 	/* recx punch */
-	if (size == 0) {
+	if (size == 0 || media != DAOS_MEDIA_SCM) {
 		ioc->ic_umoffs[ioc->ic_umoffs_cnt] = UMOFF_NULL;
 		ioc->ic_umoffs_cnt++;
-		bio_addr_set_hole(&biov.bi_addr, 1);
-		goto done;
+		if (size == 0) {
+			bio_addr_set_hole(&biov.bi_addr, 1);
+			goto done;
+		}
 	}
 
 	/*
