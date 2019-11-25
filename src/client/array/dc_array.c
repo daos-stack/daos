@@ -1223,17 +1223,15 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 		 */
 		do {
 			daos_off_t	old_array_idx;
-
+			daos_recx_t	*new_recxs;
 			iod->iod_nr++;
 
 			/** add another element to recxs */
-			iod->iod_recxs = (daos_recx_t *)realloc
-				(iod->iod_recxs, sizeof(daos_recx_t) *
-				 iod->iod_nr);
-			if (iod->iod_recxs == NULL) {
-				D_ERROR("Failed memory allocation\n");
+			D_REALLOC_ARRAY(new_recxs, iod->iod_recxs, iod->iod_nr);
+			if (new_recxs == NULL) {
 				D_GOTO(err_task, rc = -DER_NOMEM);
 			}
+			iod->iod_recxs = new_recxs;
 
 			/** set the record access for this range */
 			iod->iod_recxs[i].rx_idx = record_i;
