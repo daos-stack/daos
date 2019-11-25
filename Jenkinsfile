@@ -465,13 +465,15 @@ pipeline {
                                       context: "build" + "/" + env.STAGE_NAME,
                                       status: "PENDING"
                         checkoutScm withSubmodules: true
-                        sh label: env.STAGE_NAME,
-                           script: '''rm -rf artifacts/leap15/
-                              mkdir -p artifacts/leap15/
-                              if git show -s --format=%B | grep "^Skip-build: true"; then
-                                  exit 0
-                              fi
-                              make CHROOT_NAME="opensuse-leap-15.1-x86_64" -C utils/rpms chrootbuild'''
+                        catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
+                            sh label: env.STAGE_NAME,
+                               script: '''rm -rf artifacts/leap15/
+                                  mkdir -p artifacts/leap15/
+                                  if git show -s --format=%B | grep "^Skip-build: true"; then
+                                      exit 0
+                                  fi
+                                  make CHROOT_NAME="opensuse-leap-15.1-x86_64" -C utils/rpms chrootbuild'''
+                        }
                     }
                     post {
                         success {
