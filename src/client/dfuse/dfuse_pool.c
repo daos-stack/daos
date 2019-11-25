@@ -100,6 +100,8 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (!ie)
 		D_GOTO(close, rc = ENOMEM);
 
+	DFUSE_TRA_UP(ie, parent, "inode");
+
 	ie->ie_parent = parent->ie_stat.st_ino;
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';

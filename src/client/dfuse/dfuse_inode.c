@@ -169,5 +169,7 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 		 */
 	}
 
+	DFUSE_TRA_DOWN(ie);
+
 	D_FREE(ie);
 }

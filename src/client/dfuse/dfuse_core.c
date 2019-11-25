@@ -220,6 +220,8 @@ dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs)
 	if (!ie)
 		D_GOTO(err, 0);
 
+	DFUSE_TRA_UP(ie, fs_handle, "root_inode");
+
 	ie->ie_dfs = dfs;
 	ie->ie_parent = 1;
 	atomic_fetch_add(&ie->ie_ref, 1);

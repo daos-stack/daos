@@ -117,6 +117,8 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(close, rc = ENOMEM);
 	}
 
+	DFUSE_TRA_UP(ie, parent, "inode");
+
 	rc = dfs_mount(parent->ie_dfs->dfs_poh, dfs->dfs_coh, O_RDWR, &ddfs);
 	if (rc) {
 		DFUSE_LOG_ERROR("dfs_mount() failed: (%s)", strerror(rc));

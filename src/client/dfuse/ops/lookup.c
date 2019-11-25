@@ -40,8 +40,6 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	D_ASSERT(ie->ie_parent);
 	D_ASSERT(ie->ie_dfs);
 
-	DFUSE_TRA_UP(ie, fs_handle, "inode");
-
 	if (ie->ie_stat.st_ino == 0) {
 		rc = dfs_obj2id(ie->ie_obj, &oid);
 		if (rc)
@@ -262,6 +260,8 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	D_ALLOC_PTR(ie);
 	if (!ie)
 		D_GOTO(err, rc = ENOMEM);
+
+	DFUSE_TRA_UP(ie, parent, "inode");
 
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
