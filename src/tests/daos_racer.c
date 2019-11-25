@@ -460,6 +460,41 @@ main(int argc, char **argv)
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 
+	if (ts_ctx.tsc_mpi_rank == 0) {
+		int	count;
+
+		count = obj_cnt_per_class * min(OBJ_CNT, ts_ctx.tsc_mpi_size);
+		fprintf(stdout, "Verifying consistency after racer...\n");
+
+		/* Skip single replicated objects. */
+		for (idx = obj_cnt_per_class; idx < count; idx++) {
+			daos_obj_id_t	oid;
+
+			oid = racer_oid_gen(idx);
+			rc = daos_obj_verify(ts_ctx.tsc_coh, oid,
+					     DAOS_EPOCH_MAX);
+			if (rc == -DER_NONEXIST) {
+				rc = 0;
+				continue;
+			}
+
+			if (rc == -DER_MISMATCH) {
+				fprintf(stderr, "Found inconsistency for obj "
+					DF_OID"\n", DP_OID(oid));
+				rc = 0;
+				continue;
+			}
+
+			if (rc != 0) {
+				fprintf(stderr, "Failed to verify obj "DF_OID
+					": rc = %d\n", DP_OID(oid), rc);
+				break;
+			}
+		}
+
+		fprintf(stdout, "Verified consistency after racer.\n");
+	}
+
 	dts_ctx_fini(&ts_ctx);
 out:
 	MPI_Finalize();
