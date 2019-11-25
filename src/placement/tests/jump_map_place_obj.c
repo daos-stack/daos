@@ -176,9 +176,9 @@ main(int argc, char **argv)
 	failed_tgts[0] = lo_3->ol_shards[0].po_target;
 	failed_tgts[1] = lo_3->ol_shards[1].po_target;
 	reint_tgts[0] = lo_3->ol_shards[0].po_target;
-	plt_reint_tgts_get(pl_uuid, oid, failed_tgts, 2, reint_tgts , 1,
-			spare_tgt_ranks, shard_ids, &spare_cnt, PL_TYPE_JUMP_MAP,
-			SPARE_MAX_NUM, po_map, pl_map, &po_ver, pl_debug_msg);
+	plt_reint_tgts_get(pl_uuid, oid, failed_tgts, 2, reint_tgts, 1,
+		spare_tgt_ranks, shard_ids, &spare_cnt, PL_TYPE_JUMP_MAP,
+		SPARE_MAX_NUM, po_map, pl_map, &po_ver, pl_debug_msg);
 	D_PRINT("reintegrated target %d. expected target %d\n",
 			reint_tgts[0], lo_3->ol_shards[0].po_target);
 
@@ -209,9 +209,9 @@ main(int argc, char **argv)
 	failed_tgts[3] = lo_3->ol_shards[1].po_target;
 	reint_tgts[0] = lo_3->ol_shards[0].po_target;
 	reint_tgts[1] = spare_tgt_candidate[0];
-	plt_reint_tgts_get(pl_uuid, oid, failed_tgts, 3, reint_tgts , 2,
-			spare_tgt_ranks, shard_ids, &spare_cnt, PL_TYPE_JUMP_MAP,
-			SPARE_MAX_NUM, po_map, pl_map, &po_ver, pl_debug_msg);
+	plt_reint_tgts_get(pl_uuid, oid, failed_tgts, 3, reint_tgts, 2,
+		spare_tgt_ranks, shard_ids, &spare_cnt, PL_TYPE_JUMP_MAP,
+		SPARE_MAX_NUM, po_map, pl_map, &po_ver, pl_debug_msg);
 	D_PRINT("\n");
 	D_ASSERT(spare_cnt >= 1);
 	D_ASSERT(shard_ids[0] == 0);

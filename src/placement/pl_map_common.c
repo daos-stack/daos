@@ -283,8 +283,9 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 					goto fill;
 
 				leader = pl_select_leader(md->omd_id,
-							  l_shard->po_shard, layout->ol_nr,
-							  true, pl_obj_get_shard, layout);
+					l_shard->po_shard, layout->ol_nr,
+					true, pl_obj_get_shard, layout);
+
 				if (leader < 0) {
 					D_WARN("Not sure whether current shard "
 					       "is leader or not for obj "
@@ -346,9 +347,9 @@ fill:
 
 void
 determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
-		       bool spare_avail, d_list_t **current, d_list_t *remap_list,
-		       bool ignore_up, struct failed_shard *f_shard,
-		       struct pl_obj_shard *l_shard)
+		bool spare_avail, d_list_t **current, d_list_t *remap_list,
+		bool ignore_up, struct failed_shard *f_shard,
+		struct pl_obj_shard *l_shard)
 {
 	struct failed_shard *f_tmp;
 

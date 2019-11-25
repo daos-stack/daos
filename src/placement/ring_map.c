@@ -1027,7 +1027,7 @@ ring_obj_remap_shards(struct pl_ring_map *rimap, struct daos_obj_md *md,
 		spare_tgt = &tgts[plts[spare_idx].pt_pos];
 
 		determine_valid_spares(spare_tgt, md, spare_avail, &current,
-				remap_list, ignore_up, f_shard, l_shard);
+				       remap_list, ignore_up, f_shard, l_shard);
 	}
 
 	remap_dump(remap_list, md, "after remap:");
@@ -1085,7 +1085,7 @@ ring_obj_layout_fill(struct pl_map *map, struct daos_obj_md *md,
 			layout->ol_shards[k].po_fseq   = tgt->ta_comp.co_fseq;
 
 			if (pool_target_unavail(tgt) && !(ignore_up == true &&
-					tgt->ta_comp.co_status == PO_COMP_ST_UP)) {
+				     tgt->ta_comp.co_status == PO_COMP_ST_UP)) {
 				rc = remap_alloc_one(remap_list, k, tgt);
 				if (rc)
 					D_GOTO(out, rc);
@@ -1116,7 +1116,8 @@ ring_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	struct pl_obj_layout      *layout;
 	d_list_t                   remap_list;
 	int                        rc;
-	bool			ignore_up = false;
+	bool                    ignore_up = false;
+
 	rc = ring_obj_placement_get(rimap, md, shard_md, &rop);
 	if (rc) {
 		D_ERROR("ring_obj_placement_get failed, rc %d.\n", rc);
@@ -1131,7 +1132,7 @@ ring_obj_place(struct pl_map *map, struct daos_obj_md *md,
 
 	D_INIT_LIST_HEAD(&remap_list);
 	rc = ring_obj_layout_fill(map, md, &rop, layout, &remap_list,
-			ignore_up);
+				  ignore_up);
 	if (rc) {
 		D_ERROR("ring_obj_layout_fill failed, rc %d.\n", rc);
 		pl_obj_layout_free(layout);
@@ -1160,7 +1161,8 @@ ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 	unsigned int               shards_count;
 	int                        idx = 0;
 	int                        rc;
-	bool 				ignore_up = false;
+	bool			   ignore_up = false;
+
 	/* Caller should guarantee the pl_map is uptodate */
 	if (pl_map_version(map) < rebuild_ver) {
 		D_ERROR("pl_map version(%u) < rebuild version(%u)\n",
@@ -1214,7 +1216,7 @@ ring_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 		    uint32_t *shard_idx, unsigned int array_size,
 		    int myrank)
 {
-	uint32_t 		reint_stack_shards = SHARDS_ON_STACK_COUNT/2;
+	uint32_t                reint_stack_shards = SHARDS_ON_STACK_COUNT / 2;
 	struct ring_obj_placement  rop;
 	struct pl_ring_map        *rimap = pl_map2rimap(map);
 	struct pl_obj_layout      *layout;
@@ -1227,7 +1229,7 @@ ring_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 	d_list_t                   reint_list;
 	unsigned int               shards_count;
 	int                        idx = 0;
-	int				index = 0;
+	int                             index = 0;
 	int                        rc;
 
 	/* Caller should guarantee the pl_map is uptodate */
@@ -1274,7 +1276,7 @@ ring_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 
 	/* Find targets affected directly by reintegration. */
 	rc = ring_obj_layout_fill(map, md, &rop, layout, &remap_list,
-		false);
+				  false);
 	if (rc)
 		goto out;
 
@@ -1289,14 +1291,14 @@ ring_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 		goto out;
 
 
-	for(index = 0; index < layout->ol_nr; ++index) {
-		uint32_t reint_target = reint_layout->ol_shards[index].po_target;
+	for (index = 0; index < layout->ol_nr; ++index) {
+		uint32_t reint_tgt = reint_layout->ol_shards[index].po_target;
 		uint32_t original_target = layout->ol_shards[index].po_target;
 		struct pool_target *temp_tgt;
 
-		if(reint_target != original_target) {
+		if (reint_tgt != original_target) {
 			pool_map_find_target(rimap->rmp_map.pl_poolmap,
-					reint_target, &temp_tgt);
+					     reint_tgt, &temp_tgt);
 			reint_alloc_one(&reint_list, index, temp_tgt);
 		}
 	}
