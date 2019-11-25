@@ -321,7 +321,7 @@ def define_components(reqs):
                                  True)
     reqs.define('cart',
                 retriever=retriever,
-                commands=["scons $JOBS_OPT "
+                commands=["scons --config=force $JOBS_OPT "
                           "OMPI_PREBUILT=$OMPI_PREFIX "
                           "MERCURY_PREBUILT=$MERCURY_PREFIX "
                           "PMIX_PREBUILT=$PMIX_PREFIX "
