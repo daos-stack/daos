@@ -279,9 +279,8 @@ list_pools_hdlr(int argc, char *argv[])
 		{NULL,		0,			NULL,	0}
 	};
 	const char		*sysname = default_sysname;
-	daos_size_t		 orig_npools;
 	daos_size_t		 npools;
-	daos_size_t		 cli_npools;
+	const daos_size_t	 extra_npools_margin = 16;
 	daos_mgmt_pool_info_t	*pools;
 	daos_size_t		 pc;
 	daos_size_t		 sc;
@@ -302,31 +301,32 @@ list_pools_hdlr(int argc, char *argv[])
 	}
 
 	/* First: request number of pools (to size our buffer) */
-	rc = daos_mgmt_list_pools(sysname, NULL /* pools */,
-			&npools, NULL /* ev */);
+	rc = daos_mgmt_list_pools(sysname, &npools, NULL /* pools */,
+				  NULL /* ev */);
 	if (rc != 0) {
-		fprintf(stderr, "failed to get number of pools in %s\n",
-				sysname);
+		fprintf(stderr, "failed to get number of pools in %s: %d\n",
+				sysname, rc);
 		return rc;
 	}
 
+	/* If no pools, no need for a second call */
+	if (npools == 0)
+		return rc;
+
 	/* Allocate pools[]. Note: svc ranks per pool allocated by API */
+	npools += extra_npools_margin;
 	D_ALLOC_ARRAY(pools, npools);
 	D_ASSERT(pools != NULL);
 
 	/* Second: request list of pools */
-	orig_npools = npools;
-	rc = daos_mgmt_list_pools(sysname, pools, &npools,
-				  NULL /* ev */);
+	rc = daos_mgmt_list_pools(sysname, &npools, pools, NULL /* ev */);
 	if (rc != 0) {
-		fprintf(stderr, "failed to list pools\n");
+		fprintf(stderr, "failed to list pools: %d\n", rc);
 		D_FREE(pools);
 		return rc;
 	}
 
-	/* npools in response (in system) could be larger than our buffer */
-	cli_npools = (npools <= orig_npools) ? npools : orig_npools;
-	for (pc = 0; pc < cli_npools; pc++) {
+	for (pc = 0; pc < npools; pc++) {
 		daos_mgmt_pool_info_t	*pool = &pools[pc];
 
 		printf(DF_UUIDF" ", DP_UUID(pool->mgpi_uuid));

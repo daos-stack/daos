@@ -105,6 +105,7 @@ char *DP_UUID(const void *uuid);
 /* For prefixes of error messages about a container */
 #define DF_CONT			DF_UUID"/"DF_UUID
 #define DP_CONT(puuid, cuuid)	DP_UUID(puuid), DP_UUID(cuuid)
+#define DF_CONTF		DF_UUIDF"/"DF_UUIDF
 
 char *daos_key2str(daos_key_t *key);
 
