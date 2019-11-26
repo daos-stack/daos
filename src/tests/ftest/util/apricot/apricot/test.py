@@ -410,7 +410,8 @@ class TestWithServers(TestWithoutServers):
             server_groups (dict, optional): [description]. Defaults to None.
         """
         if server_groups is None:
-            server_groups = {"daos_server": self.hostlist_servers}
+            server_groups = {self.server_group: self.hostlist_servers}
+
         if isinstance(server_groups, dict):
             # Optionally start servers on a different subset of hosts with a
             # different server group
