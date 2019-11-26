@@ -24,6 +24,7 @@
 
 #include <daos/object.h>
 #include <daos/task.h>
+#include <daos/container.h>
 #include "client_internal.h"
 #include "task_internal.h"
 
@@ -262,5 +263,32 @@ daos_obj_layout_get(daos_handle_t coh, daos_obj_id_t oid,
 	if (rc != 0 && *layout != NULL)
 		daos_obj_layout_free(*layout);
 
+	return rc;
+}
+
+int
+daos_obj_verify(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch)
+{
+	tse_task_t	*task;
+	daos_handle_t	 oh;
+	daos_epoch_t	*epochs_p = NULL;
+	int		 epoch_nr = 0;
+	int		 rc;
+
+	rc = daos_obj_open(coh, oid, 0, &oh, NULL);
+	if (rc != 0)
+		return rc;
+
+	/* Sync object against the given @epoch. */
+	rc = dc_obj_sync_task_create(oh, epoch, &epochs_p, &epoch_nr,
+				     NULL, NULL, &task);
+	if (rc == 0) {
+		rc = dc_task_schedule(task, true);
+		if (rc == 0)
+			rc = dc_obj_verify(oh, epochs_p, epoch_nr);
+	}
+
+	D_FREE(epochs_p);
+	daos_obj_close(oh, NULL);
 	return rc;
 }

@@ -33,7 +33,7 @@ from errno import ENOENT
 from time import sleep
 
 from avocado import fail_on
-from daos_api import DaosApiError, DaosServer, DaosContainer, DaosPool
+from pydaos.raw import DaosApiError, DaosServer, DaosContainer, DaosPool
 from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet
 
@@ -125,7 +125,7 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     return retcode_dict
 
 
-def check_file_exists(hosts, filename, user=None):
+def check_file_exists(hosts, filename, user=None, directory=False):
     """Check if a specified file exist on each specified hosts.
 
     If specified, verify that the file exists and is owned by the user.
@@ -142,7 +142,14 @@ def check_file_exists(hosts, filename, user=None):
 
     """
     missing_file = NodeSet()
-    command = "test {} '{}'".format("-e" if user is None else "-O", filename)
+    command = "test -e {0}".format(filename)
+    if user is not None and not directory:
+        command = "test -O {0}".format(filename)
+    elif user is not None and directory:
+        command = "test -O {0} && test -d {0}".format(filename)
+    elif directory:
+        command = "test -d '{0}'".format(filename)
+
     task = run_task(hosts, command)
     for ret_code, node_list in task.iter_retcodes():
         if ret_code != 0:
@@ -164,7 +171,7 @@ def get_file_path(bin_name, dir_path=""):
     Raises:
         OSError: If failed to find the bin_name file
     """
-    with open('../../../.build_vars.json') as json_file:
+    with open('../../.build_vars.json') as json_file:
         build_paths = json.load(json_file)
     basepath = os.path.normpath(build_paths['PREFIX'] + "/../{0}"
                                 .format(dir_path))

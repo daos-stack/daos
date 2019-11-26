@@ -32,7 +32,9 @@
 #include <sys/xattr.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/vfs.h>
 #include <fcntl.h>
+#include <libgen.h>
 #include <daos.h>
 #include <daos/common.h>
 #include <daos/rpc.h>
@@ -51,12 +53,77 @@
 #define DUNS_XATTR_FMT		"DAOS.%s://%36s/%36s/%s/%zu"
 
 /* TODO: implement these pool op functions
- * int pool_list_cont_hdlr(struct cmd_args_s *ap);
  * int pool_stat_hdlr(struct cmd_args_s *ap);
  * int pool_get_prop_hdlr(struct cmd_args_s *ap);
  * int pool_get_attr_hdlr(struct cmd_args_s *ap);
  * int pool_list_attrs_hdlr(struct cmd_args_s *ap);
  */
+
+int
+pool_list_containers_hdlr(struct cmd_args_s *ap)
+{
+	daos_size_t			 ncont = 0;
+	const daos_size_t		 extra_cont_margin = 16;
+	struct daos_pool_cont_info	*conts = NULL;
+	int				 i;
+	int				 rc = 0;
+	int				 rc2;
+
+	assert(ap != NULL);
+	assert(ap->p_op == POOL_LIST_CONTAINERS);
+
+	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
+			       ap->mdsrv, DAOS_PC_RO, &ap->pool,
+			       NULL /* info */, NULL /* ev */);
+	if (rc != 0) {
+		fprintf(stderr, "failed to connect to pool: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	/* Issue first API call to get current number of containers */
+	rc = daos_pool_list_cont(ap->pool, &ncont, NULL /* cbuf */,
+				 NULL /* ev */);
+	if (rc != 0) {
+		fprintf(stderr, "pool get ncont failed: %d\n", rc);
+		D_GOTO(out_disconnect, rc);
+	}
+
+	/* If no containers, no need for a second call */
+	if (ncont == 0)
+		D_GOTO(out_disconnect, rc);
+
+	/* Allocate conts[] with some margin to avoid -DER_TRUNC if more
+	 * containers were created after the first call
+	 */
+	ncont += extra_cont_margin;
+	D_ALLOC_ARRAY(conts, ncont);
+	if (conts == NULL)
+		D_GOTO(out_disconnect, rc = -DER_NOMEM);
+
+	rc = daos_pool_list_cont(ap->pool, &ncont, conts, NULL /* ev */);
+	if (rc != 0) {
+		fprintf(stderr, "pool list containers failed: %d\n", rc);
+		D_GOTO(out_free, rc);
+	}
+
+	for (i = 0; i < ncont; i++) {
+		D_PRINT(DF_UUIDF"\n", DP_UUID(conts[i].pci_uuid));
+	}
+
+out_free:
+	D_FREE(conts);
+
+out_disconnect:
+	/* Pool disconnect  in normal and error flows: preserve rc */
+	rc2 = daos_pool_disconnect(ap->pool, NULL);
+	if (rc2 != 0)
+		fprintf(stderr, "Pool disconnect failed : %d\n", rc2);
+
+	if (rc == 0)
+		rc = rc2;
+out:
+	return rc;
+}
 
 int
 pool_query_hdlr(struct cmd_args_s *ap)
@@ -154,20 +221,33 @@ out:
 int
 cont_create_hdlr(struct cmd_args_s *ap)
 {
-	int	rc;
+	int		rc;
 
-	rc = daos_cont_create(ap->pool, ap->c_uuid, NULL, NULL);
-	if (rc != 0)
+	/** allow creating a POSIX container without a link in the UNS path */
+	if (ap->type == DAOS_PROP_CO_LAYOUT_POSIX) {
+		dfs_attr_t attr;
+
+		attr.da_id = 0;
+		attr.da_oclass_id = ap->oclass;
+		attr.da_chunk_size = ap->chunk_size;
+		rc = dfs_cont_create(ap->pool, ap->c_uuid, &attr, NULL, NULL);
+	} else {
+		rc = daos_cont_create(ap->pool, ap->c_uuid, NULL, NULL);
+	}
+
+	if (rc != 0) {
 		fprintf(stderr, "failed to create container: %d\n", rc);
-	else
-		fprintf(stdout, "Successfully created container "DF_UUIDF"\n",
-				DP_UUID(ap->c_uuid));
+		return rc;
+	}
+
+	fprintf(stdout, "Successfully created container "DF_UUIDF"\n",
+		DP_UUID(ap->c_uuid));
 
 	return rc;
 }
 
 /* cont_create_uns_hdlr() - create container and link to
- * POSIX filesystem directory or HDF 5 file.
+ * POSIX filesystem directory or HDF5 file.
  */
 int
 cont_create_uns_hdlr(struct cmd_args_s *ap)
@@ -185,12 +265,12 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 	uuid_copy(dattr.da_puuid, ap->p_uuid);
 	uuid_copy(dattr.da_cuuid, ap->c_uuid);
 	dattr.da_type = ap->type;
-	dattr.da_oclass = ap->oclass;
+	dattr.da_oclass_id = ap->oclass;
 	dattr.da_chunk_size = ap->chunk_size;
 
-	rc = duns_link_path(ap->path, ap->sysname, ap->mdsrv, &dattr);
+	rc = duns_create_path(ap->pool, ap->path, &dattr);
 	if (rc) {
-		fprintf(stderr, "duns_link_path() error: rc=%d\n", rc);
+		fprintf(stderr, "duns_create_path() error: rc=%d\n", rc);
 		D_GOTO(err_rc, rc);
 	}
 
@@ -201,6 +281,112 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 
 	return 0;
 
+err_rc:
+	return rc;
+}
+
+int
+cont_uns_insert_hdlr(struct cmd_args_s *ap)
+{
+	struct statfs	stsf;
+	int		rc;
+	char		*dir;
+	char		*base;
+	char		*pool;
+	char		*cont;
+	int		fd;
+	int		nfd;
+	int		err;
+
+	if (!ap->path) {
+		fprintf(stderr,
+			"Path not set\n");
+		D_GOTO(err_rc, rc = -DER_INVAL);
+	}
+
+	base = basename(ap->path);
+
+	/* This function modifies ap->path by inserting a \0 in place of the
+	 * last '/' character, so it's important to call basename() before
+	 * dirname() or basename will return the name of the parent directory
+	 * not the bottom level entry.
+	 */
+	dir = dirname(ap->path);
+
+	fd = open(dir, O_PATH | O_DIRECTORY);
+	if (fd < 0) {
+		err = errno;
+		fprintf(stderr,
+			"Failed to open parent directory %s\n", strerror(err));
+		D_GOTO(err_rc, rc = -DER_INVAL);
+	}
+
+	rc = fstatfs(fd, &stsf);
+	if (rc < 0) {
+		err = errno;
+		fprintf(stderr,
+			"Failed to statfs parent directory %s\n",
+			strerror(err));
+		D_GOTO(close, rc = -DER_IO);
+	}
+
+	/* This should read FUSE_SUPER_MAGIC however this is not exported from
+	 * the kernel headers so hard-code the value
+	 */
+	if (stsf.f_type != 0x65735546) {
+		fprintf(stderr,
+			"Wrong filesystem type for path\n");
+		D_GOTO(close, rc = -DER_INVAL);
+	}
+
+	rc = mkdirat(fd, base, 0700);
+	if (rc < 0) {
+		err = errno;
+		fprintf(stderr,
+			"Failed to make new directory %s\n", strerror(err));
+		D_GOTO(close, rc = daos_errno2der(rc));
+	}
+
+	nfd = openat(fd, base, O_RDONLY, O_DIRECTORY);
+	if (nfd < 0) {
+		err = errno;
+		fprintf(stderr,
+			"Failed to open new directory %s\n", strerror(err));
+		D_GOTO(unlink, rc = -DER_IO);
+	}
+
+	pool = DP_UUID(ap->p_uuid);
+
+	rc = fsetxattr(nfd, "user.uns.pool", pool, strlen(pool), XATTR_CREATE);
+	if (rc < 0) {
+		err = errno;
+		fprintf(stderr,
+			"Failed to set pool attribute %s\n", strerror(err));
+		D_GOTO(close_two, rc = -DER_IO);
+
+	}
+
+	cont = DP_UUID(ap->c_uuid);
+
+	rc = fsetxattr(nfd, "user.uns.container", cont, strlen(cont),
+		       XATTR_CREATE);
+	if (rc < 0) {
+		err = errno;
+		fprintf(stderr,
+			"Failed to set cont attribute %s\n", strerror(err));
+		D_GOTO(close_two, rc = -DER_IO);
+
+	}
+
+	printf("Setup UNS entry point\n");
+	return 0;
+
+close_two:
+	close(nfd);
+unlink:
+	unlinkat(fd, base, AT_REMOVEDIR);
+close:
+	close(fd);
 err_rc:
 	return rc;
 }
@@ -223,6 +409,7 @@ cont_query_hdlr(struct cmd_args_s *ap)
 	printf("Number of snapshots: %i\n", (int)cont_info.ci_nsnapshots);
 	printf("Latest Persistent Snapshot: %i\n",
 		(int)cont_info.ci_lsnapshot);
+	printf("Highest Aggregated Epoch: "DF_U64"\n", cont_info.ci_hae);
 	/* TODO: list snapshot epoch numbers, including ~80 column wrap. */
 
 	if (ap->path != NULL) {
@@ -230,13 +417,14 @@ cont_query_hdlr(struct cmd_args_s *ap)
 		 * all resulting fields should be populated
 		 */
 		assert(ap->type != DAOS_PROP_CO_LAYOUT_UNKOWN);
-		assert(ap->oclass != OC_UNKNOWN);
-		assert(ap->chunk_size != 0);
 
 		printf("DAOS Unified Namespace Attributes on path %s:\n",
 			ap->path);
 		daos_unparse_ctype(ap->type, type);
-		daos_oclass_id2name(ap->oclass, oclass);
+		if (ap->oclass == OC_UNKNOWN)
+			strcpy(oclass, "UNKNOWN");
+		else
+			daos_oclass_id2name(ap->oclass, oclass);
 		printf("Container Type:\t%s\n", type);
 		printf("Object Class:\t%s\n", oclass);
 		printf("Chunk Size:\t%zu\n", ap->chunk_size);
@@ -252,6 +440,17 @@ int
 cont_destroy_hdlr(struct cmd_args_s *ap)
 {
 	int	rc;
+
+	if (ap->path) {
+		rc = duns_destroy_path(ap->pool, ap->path);
+		if (rc)
+			fprintf(stderr, "duns_destroy_path() failed %s (%d)\n",
+				ap->path, rc);
+		else
+			fprintf(stdout, "Successfully destroyed path %s\n",
+				ap->path);
+		return rc;
+	}
 
 	/* TODO: when API supports, change arg 3 to ap->force_destroy. */
 	rc = daos_cont_destroy(ap->pool, ap->c_uuid, 1, NULL);

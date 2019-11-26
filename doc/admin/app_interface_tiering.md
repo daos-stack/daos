@@ -154,7 +154,7 @@ is granted access to the pool and container).
 To mount an existing POSIX container with dfuse, run the following command:
 
 ```
-$ dfuse -p a171434a-05a5-4671-8fe2-615aa0d05094 -s 0 -c 464e68ca-0a30-4a5f-8829-238e890899d2 -m /tmp/daos -S
+$ dfuse --pool a171434a-05a5-4671-8fe2-615aa0d05094 -s 0 --container 464e68ca-0a30-4a5f-8829-238e890899d2 -m /tmp/daos
 ```
 
 The UUID after -p and -c should be replaced with respectively the pool and
@@ -163,15 +163,20 @@ local directory where the mount point will be setup.
 When done, the file system can be unmounted via fusermount:
 
 ```
-$ fusermount -u /tmp/daos
+$ fusermount3 -u /tmp/daos
 ```
 
 ### libioil
 
-An interception library called libioil is under development. This library will
-work in conjunction with dfuse and allow to intercept POSIX read(2) and write(2)
-and issue the I/O operations directly from the application context through
-libdaos and without any application changes.
+An interception library called libioil is available to work with dfuse. This
+library works in conjunction with dfuse and allow to interception of POSIX I/O
+calls and issue the I/O operations directly from the application context through
+libdaos without any appliction changes.  This provides kernel-bypass for I/O data
+leading to improved performance.
+To use this set the LD_PRELOAD to point to the shared libray in the DOAS install
+dir
+
+LD_PRELOAD=/path/to/daos/install/lib/libioil.so
 
 Support for libioil is currently planned for DAOS v1.2.
 
@@ -180,6 +185,34 @@ Support for libioil is currently planned for DAOS v1.2.
 The DAOS tier can be tightly integrated with the Lustre parallel filesystem in
 which DAOS containers will be represented through the Lustre namespace. This
 capability is under development and is scheduled for DAOS v1.2.
+
+Current state of work can be summarized as follow :
+
+-   DAOS integration with Lustre uses the Lustre foreign file/dir feature
+    (from LU-11376 and associated patches)
+ 
+-   each time a DAOS POSIX container is created, using `daos` utility and its
+    '--path' UNS option, a Lustre foreign file/dir of 'daos' type is being
+    created with a specific LOV/LMV EA content that will allow to store the
+    DAOS pool and containers UUIDs. 
+
+-   Lustre Client patch for LU-12682, adds DAOS specific support to the Lustre
+    foreign file/dir feature. It allows for foreign file/dir of `daos` type
+    to be presented and act as `<absolute-prefix>/<pool-uuid>/<container-uuid>`
+    a symlink to the Linux Kernel/VFS.
+
+-   the <absolute-prefix> can be specified as the new `daos=<absolute-prefix>`
+    Lustre Client mount option, or also thru the new `llite.*.daos_prefix`
+    Lustre dynamic tuneable. And both <pool-uuid> and <container-uuid> are
+    extracted from foreign file/dir LOV/LMV EA.
+ 
+-   to allow for symlink resolution and transparent access to DAOS concerned
+    container content, it is expected that a DFuse/DFS instance/mount, of
+    DAOS Server root, exists on <absolute-prefix> presenting all served
+    pools/containers as `<pool-uuid>/<container-uuid>` relative paths.
+
+-   `daos` foreign support is enabled at mount time with `daos=` option
+    present, or dynamically thru `llite.*.daos_enable` setting.
 
 ## HPC I/O Middleware Support
 
@@ -272,7 +305,7 @@ deserialize a DAOS container to a set of POSIX files that can be stored or
 "parked" in an external POSIX filesystem. This transformation is agnostic to the
 data model and container type and will retain all DAOS internal metadata.
 
-[^1]: https://github.com/daos-stack/daos/blob/master/src/utils/py/README.md
+[^1]: https://github.com/daos-stack/daos/blob/master/src/client/pydaos/raw/README.md
 
 [^2]: https://godoc.org/github.com/daos-stack/go-daos/pkg/daos
 

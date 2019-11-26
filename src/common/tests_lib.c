@@ -305,3 +305,53 @@ dts_log(const char *msg, const char *file, const char *func, int line,
 	if (mask)
 		d_log(mask, "%s:%d %s() %s", file, line, func, msg);
 }
+
+static void
+v_dts_sgl_init_with_strings_repeat(d_sg_list_t *sgl, uint32_t repeat,
+				   uint32_t count, char *d,
+				   va_list valist)
+{
+	char *arg = d;
+	int i, j;
+
+	d_sgl_init(sgl, count);
+	for (i = 0; i < count; i++) {
+		size_t arg_len = strlen(arg);
+
+		char *buf = NULL;
+		size_t buf_len = arg_len * repeat + 1; /** +1 for NULL
+							* Terminator
+							*/
+		D_ALLOC(buf, buf_len);
+		D_ASSERT(buf != 0);
+		for (j = 0; j < repeat; j++)
+			memcpy(buf + j * arg_len, arg, arg_len);
+		buf[buf_len - 1] = '\0';
+
+		sgl->sg_iovs[i].iov_buf = buf;
+		sgl->sg_iovs[i].iov_buf_len = sgl->sg_iovs[i].iov_len = buf_len;
+
+		arg = va_arg(valist, char *);
+	}
+}
+
+void
+dts_sgl_init_with_strings(d_sg_list_t *sgl, uint32_t count, char *d, ...)
+{
+	va_list valist;
+
+	va_start(valist, d);
+	v_dts_sgl_init_with_strings_repeat(sgl, 1, count, d, valist);
+	va_end(valist);
+}
+
+void
+dts_sgl_init_with_strings_repeat(d_sg_list_t *sgl, uint32_t repeat,
+				 uint32_t count, char *d, ...)
+{
+	va_list valist;
+
+	va_start(valist, d);
+	v_dts_sgl_init_with_strings_repeat(sgl, repeat, count, d, valist);
+	va_end(valist);
+}

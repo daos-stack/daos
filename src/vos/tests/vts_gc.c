@@ -205,7 +205,17 @@ gc_wait_check(struct gc_test_args *args, bool cont_delete)
 
 	print_message("wait for VOS GC\n");
 	stat = &pinfo.pif_gc_stat;
-	gc_wait();
+	while (1) {
+		int	creds = 64;
+
+		rc = vos_gc_pool(args->gc_ctx.tsc_poh, &creds);
+		if (rc) {
+			print_error("gc pool failed: %s\n", d_errstr(rc));
+			return rc;
+		}
+		if (creds != 0)
+			break;
+	}
 
 	print_message("query GC result\n");
 	rc = vos_pool_query(args->gc_ctx.tsc_poh, &pinfo);

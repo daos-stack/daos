@@ -199,18 +199,23 @@ struct bio_reaction_ops {
 	int (*reint_reaction)(int *tgt_ids, int tgt_cnt);
 };
 
+/*
+ * Register faulty/reint reaction callbacks.
+ *
+ * \param ops[IN]	Reaction callback functions
+ */
+void bio_register_ract_ops(struct bio_reaction_ops *ops);
+
 /**
  * Global NVMe initialization.
  *
  * \param[IN] storage_path	daos storage directory path
  * \param[IN] nvme_conf		NVMe config file
  * \param[IN] shm_id		shm id to enable multiprocess mode in SPDK
- * \param[IN] ops		Reaction callback functions
  *
  * \return		Zero on success, negative value on error
  */
-int bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id,
-		  struct bio_reaction_ops *ops);
+int bio_nvme_init(const char *storage_path, const char *nvme_conf, int shm_id);
 
 /**
  * Global NVMe finilization.
@@ -243,9 +248,11 @@ void bio_xsctxt_free(struct bio_xs_context *ctxt);
  *
  * \param[IN] ctxt	Per-xstream NVMe context
  *
- * \return		Executed message count
+ * \return		0: If no work was done
+ *			1: If work was done
+ *			-1: If thread has exited
  */
-size_t bio_nvme_poll(struct bio_xs_context *ctxt);
+int bio_nvme_poll(struct bio_xs_context *ctxt);
 
 /*
  * Create per VOS instance blob.

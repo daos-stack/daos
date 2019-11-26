@@ -51,6 +51,7 @@ typedef void (*drpc_handler_t)(Drpc__Call *, Drpc__Response *);
 struct drpc {
 	struct unixcomm	*comm; /** unix domain socket communication context */
 	int		sequence; /** sequence number of latest message sent */
+	uint32_t	ref_count; /** open refs to this ctx */
 
 	/**
 	 * Handler for messages received by a listening drpc context.
@@ -75,9 +76,10 @@ struct drpc *drpc_connect(char *sockaddr);
 struct drpc *drpc_listen(char *sockaddr, drpc_handler_t handler);
 bool drpc_is_valid_listener(struct drpc *ctx);
 struct drpc *drpc_accept(struct drpc *listener_ctx);
-int drpc_recv(struct drpc *ctx);
 int drpc_recv_call(struct drpc *ctx, Drpc__Call **call);
 int drpc_send_response(struct drpc *ctx, Drpc__Response *resp);
 int drpc_close(struct drpc *ctx);
+
+int drpc_add_ref(struct drpc *ctx);
 
 #endif /* __DAOS_DRPC_H__ */

@@ -27,28 +27,59 @@ package mgmt;
 // Management Service Protobuf Definitions related to interactions between
 // DAOS control server and DAOS IO Servers.
 
-// Identifier for server rank within DAOS pool
-message DaosRank {
-	string pool_uuid = 1;	// UUID of the pool
-	uint32 rank = 2;	// Server rank
+// Generic response just containing DER from IO server.
+message DaosResp {
+	int32 status = 1;	// DAOS error code.
 }
 
-message DaosResp {
-	int32 status = 1; // DAOS error code
+message JoinReq {
+	string uuid = 1;	// Servee UUID.
+	uint32 rank = 2;	// Server rank desired, if not -1.
+	string uri = 3;		// Server CaRT base URI (i.e., for context 0).
+	uint32 nctxs = 4;	// Server CaRT context count.
+	string addr = 5;	// Server management address.
 }
+
+message JoinResp {
+	int32 status = 1;	// DAOS error code
+	uint32 rank = 2;	// Server rank assigned.
+	enum State {
+		IN = 0;		// Server in the system.
+		OUT = 1;	// Server excluded from the system.
+	}
+	State state = 3;	// Server state in the system map.
+}
+
+message GetAttachInfoReq {
+	string sys = 1;		// System name. For daos_agent only.
+}
+
+message GetAttachInfoResp {
+	int32 status = 1;	// DAOS error code
+	message Psr {
+		uint32 rank = 1;
+		string uri = 2;
+	}
+	repeated Psr psrs = 2;	// CaRT PSRs of the system group.
+}
+
+message KillRankReq {
+	bool force = 1;		// Force service termination.
+	uint32 rank = 2;	// DAOS IO server unique identifier.
+}
+
+// KillRankResp is identical to DaosResp.
 
 message SetRankReq {
-	uint32 rank = 1;
+	uint32 rank = 1;	// DAOS IO server unique identifier.
 }
 
 // SetRankResp is identical to DaosResp.
 
 message CreateMsReq {
-	bool bootstrap = 1;
-	// Server UUID of this MS replica.
-	string uuid = 2;
-	// Server management address of this MS replica.
-	string addr = 3;
+	bool bootstrap = 1;	// Bootstrap the DAOS management service (MS).
+	string uuid = 2;	// DAOS IO server UUID of this MS replica.
+	string addr = 3;	// Control server management address of this MS replica.
 }
 
 // CreateMsResp is identical to DaosResp.

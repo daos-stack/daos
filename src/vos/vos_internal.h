@@ -38,6 +38,7 @@
 #include <daos_srv/daos_server.h>
 #include <daos_srv/bio.h>
 #include <vos_layout.h>
+#include <vos_ilog.h>
 #include <vos_obj.h>
 
 #define VOS_CONT_ORDER		20	/* Order of container tree */
@@ -65,6 +66,9 @@ extern struct dss_module_key vos_module_key;
  * growing and trigger window flush immediately.
  */
 #define VOS_MW_FLUSH_THRESH	(1UL << 23)	/* 8MB */
+
+/* Force aggregation/discard ULT yield on certain amount of tight loops */
+#define VOS_AGG_CREDITS_MAX	256
 
 static inline uint32_t vos_byte2blkcnt(uint64_t bytes)
 {
@@ -356,15 +360,20 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
  *
  * \param umm		[IN]	Instance of an unified memory class.
  * \param record	[IN]	Address (offset) of the record (in SCM)
- *				to be modified.
+ *				to associate witht the transaction.
  * \param type		[IN]	The record type, see vos_dtx_record_types.
- * \param flags		[IN]	The record flags, see vos_dtx_record_flags.
+ * \param dtx		[OUT]	tx_id is returned.  Caller is responsible
+ *				to save it in the record.
  *
  * \return		0 on success and negative on failure.
  */
 int
 vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
-			uint32_t type, uint32_t flags);
+			uint32_t type, umem_off_t *tx_id);
+
+/** Return the already active dtx id, if any */
+umem_off_t
+vos_dtx_get(void);
 
 /**
  * Deregister the record from the DTX entry.
@@ -392,6 +401,7 @@ vos_dtx_prepared(struct dtx_handle *dth);
 void
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
 			int count);
+
 
 /**
  * Register dbtree class for DTX CoS, it is called within vos_init().
@@ -442,6 +452,8 @@ enum vos_tree_class {
 	VOS_BTR_DTX_TABLE	= (VOS_BTR_BEGIN + 5),
 	/** The objects with committable DTXs in DRAM */
 	VOS_BTR_DTX_COS		= (VOS_BTR_BEGIN + 6),
+	/** The VOS incarnation log tree */
+	VOS_BTR_ILOG		= (VOS_BTR_BEGIN + 7),
 	/** the last reserved tree class */
 	VOS_BTR_END,
 };
@@ -494,14 +506,12 @@ struct vos_rec_bundle {
  * Inline data structure for embedding the key bundle and key into an anchor
  * for serialization.
  */
-#define	EMBEDDED_KEY_MAX	80
+#define	EMBEDDED_KEY_MAX	96
 struct vos_embedded_key {
-	/** The kbund of the current iterator */
-	struct vos_key_bundle	ek_kbund;
 	/** Inlined iov kbund references */
 	d_iov_t		ek_kiov;
 	/** Inlined buffer the kiov references*/
-	unsigned char		ek_key[EMBEDDED_KEY_MAX];
+	unsigned char	ek_key[EMBEDDED_KEY_MAX];
 };
 D_CASSERT(sizeof(struct vos_embedded_key) == DAOS_ANCHOR_BUF_MAX);
 
@@ -748,6 +758,8 @@ struct vos_iter_info {
 	struct vos_object	*ii_obj;
 	d_iov_t			*ii_akey; /* conditional akey */
 	daos_epoch_range_t	 ii_epr;
+	/** highest epoch where parent obj/key was punched */
+	daos_epoch_t		 ii_punched;
 	/** epoch logic expression for the iterator. */
 	vos_it_epc_expr_t	 ii_epc_expr;
 	/** iterator flags */
@@ -814,6 +826,8 @@ vos_hdl2iter(daos_handle_t hdl)
 struct vos_obj_iter {
 	/* public part of the iterator */
 	struct vos_iterator	 it_iter;
+	/** Incarnation log entries for current iterator */
+	struct vos_ilog_info	 it_ilog_info;
 	/** handle of iterator */
 	daos_handle_t		 it_hdl;
 	/** condition of the iterator: epoch logic expression */
@@ -822,6 +836,8 @@ struct vos_obj_iter {
 	uint32_t		 it_flags;
 	/** condition of the iterator: epoch range */
 	daos_epoch_range_t	 it_epr;
+	/** highest epoch where parent obj/key was punched */
+	daos_epoch_t		 it_punched;
 	/** condition of the iterator: attribute key */
 	daos_key_t		 it_akey;
 	/* reference on the object */
@@ -877,15 +893,15 @@ vos_evt_desc_cbs_init(struct evt_desc_cbs *cbs, struct vos_pool *pool,
 
 /* vos_obj.c */
 int
-key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
-		 daos_handle_t toh, enum vos_tree_class tclass,
-		 daos_key_t *key, int flags, uint32_t intent,
-		 struct vos_krec_df **krec, daos_handle_t *sub_toh);
+key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
+		 enum vos_tree_class tclass, daos_key_t *key, int flags,
+		 uint32_t intent, struct vos_krec_df **krecp,
+		 daos_handle_t *sub_toh);
 void
 key_tree_release(daos_handle_t toh, bool is_array);
 int
-key_tree_punch(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov,
-	       d_iov_t *val_iov, int flags);
+key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
+	       d_iov_t *key_iov, d_iov_t *val_iov, int flags);
 
 /* vos_io.c */
 uint16_t
@@ -895,70 +911,31 @@ int
 vos_publish_blocks(struct vos_container *cont, d_list_t *blk_list, bool publish,
 		   enum vos_io_stream ios);
 
-/* Update the timestamp in a key or object.  The latest and earliest must be
- * contiguous in the struct being updated.  This is ensured at present by
- * the static assertions on vos_obj_df and vos_krec_df structures
- */
-static inline int
-vos_df_ts_update(struct vos_object *obj, daos_epoch_t *latest_df,
-		 const daos_epoch_range_t *epr)
+static inline struct umem_instance *
+vos_pool2umm(struct vos_pool *pool)
 {
-	struct umem_instance	*umm;
-	daos_epoch_t		*earliest_df;
-	daos_epoch_t		*start = NULL;
-	int			 size = 0;
-	int			 rc = 0;
+	return &pool->vp_umm;
+}
 
-	D_ASSERT(latest_df != NULL && obj != NULL && epr != NULL);
-
-	earliest_df = latest_df + 1;
-
-	if (*latest_df >= epr->epr_hi &&
-	    *earliest_df <= epr->epr_lo)
-		goto out;
-
-	if (*latest_df < epr->epr_hi) {
-		start = latest_df;
-		size = sizeof(*latest_df);
-
-		if (*earliest_df > epr->epr_lo)
-			size += sizeof(*earliest_df);
-		else
-			earliest_df = NULL;
-	} else {
-		latest_df = NULL;
-		start = earliest_df;
-		size = sizeof(*earliest_df);
-
-		D_ASSERT(*earliest_df > epr->epr_lo);
-	}
-
-	umm = vos_obj2umm(obj);
-	rc = umem_tx_add_ptr(umm, start, size);
-	if (rc != 0)
-		goto out;
-
-	if (latest_df)
-		*latest_df = epr->epr_hi;
-	if (earliest_df)
-		*earliest_df = epr->epr_lo;
-out:
-	return rc;
+static inline struct umem_instance *
+vos_cont2umm(struct vos_container *cont)
+{
+	return vos_pool2umm(cont->vc_pool);
 }
 
 static inline int
-vos_tx_begin(struct vos_pool *vpool)
+vos_tx_begin(struct umem_instance *umm)
 {
-	return umem_tx_begin(&vpool->vp_umm, NULL);
+	return umem_tx_begin(umm, NULL);
 }
 
 static inline int
-vos_tx_end(struct vos_pool *vpool, int rc)
+vos_tx_end(struct umem_instance *umm, int rc)
 {
 	if (rc != 0)
-		return umem_tx_abort(&vpool->vp_umm, rc);
+		return umem_tx_abort(umm, rc);
 
-	return umem_tx_commit(&vpool->vp_umm);
+	return umem_tx_commit(umm);
 
 }
 
@@ -974,8 +951,6 @@ vos_iter_intent(struct vos_iterator *iter)
 
 void
 gc_wait(void);
-void
-gc_wait_pool(struct vos_pool *pool);
 int
 gc_add_pool(struct vos_pool *pool);
 void

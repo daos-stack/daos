@@ -49,9 +49,6 @@ type NVME interface {
 	Discover() ([]Controller, []Namespace, []DeviceHealth, error)
 	// Format NVMe controller namespaces
 	Format(ctrlrPciAddr string) ([]Controller, []Namespace, error)
-	// Update NVMe controller firmware
-	Update(ctrlrPciAddr string, path string, slot int32) (
-		[]Controller, []Namespace, error)
 	// Cleanup NVMe object references
 	Cleanup()
 }
@@ -87,20 +84,21 @@ type Namespace struct {
 // and describes the raw SPDK device health stats
 // of a controller (NVMe SSD).
 type DeviceHealth struct {
-	Temp		uint32
-	TempWarnTime	uint32
-	TempCritTime	uint32
-	CtrlBusyTime	uint64
-	PowerCycles	uint64
-	PowerOnHours	uint64
-	UnsafeShutdowns	uint64
-	MediaErrors	uint64
-	ErrorLogEntries	uint64
-	TempWarn	bool
-	AvailSpareWarn	bool
+	Temp            uint32
+	TempWarnTime    uint32
+	TempCritTime    uint32
+	CtrlBusyTime    uint64
+	PowerCycles     uint64
+	PowerOnHours    uint64
+	UnsafeShutdowns uint64
+	MediaErrors     uint64
+	ErrorLogEntries uint64
+	TempWarn        bool
+	AvailSpareWarn  bool
 	ReliabilityWarn bool
-	ReadOnlyWarn	bool
-	VolatileWarn	bool
+	ReadOnlyWarn    bool
+	VolatileWarn    bool
+	CtrlrPciAddr    string
 }
 
 // Discover calls C.nvme_discover which returns
@@ -174,22 +172,23 @@ func c2GoController(ctrlr *C.struct_ctrlr_t) Controller {
 	}
 }
 
-func c2GoDeviceHealth(health *C.struct_dev_health_t) DeviceHealth {
-	return DeviceHealth {
-		Temp:		 uint32(health.temperature),
-		TempWarnTime:	 uint32(health.warn_temp_time),
-		TempCritTime:	 uint32(health.crit_temp_time),
-		CtrlBusyTime:	 uint64(health.ctrl_busy_time),
-		PowerCycles:	 uint64(health.power_cycles),
-		PowerOnHours:	 uint64(health.power_on_hours),
+func c2GoDeviceHealth(pciAddr string, health *C.struct_dev_health_t) DeviceHealth {
+	return DeviceHealth{
+		Temp:            uint32(health.temperature),
+		TempWarnTime:    uint32(health.warn_temp_time),
+		TempCritTime:    uint32(health.crit_temp_time),
+		CtrlBusyTime:    uint64(health.ctrl_busy_time),
+		PowerCycles:     uint64(health.power_cycles),
+		PowerOnHours:    uint64(health.power_on_hours),
 		UnsafeShutdowns: uint64(health.unsafe_shutdowns),
-		MediaErrors:	 uint64(health.media_errors),
+		MediaErrors:     uint64(health.media_errors),
 		ErrorLogEntries: uint64(health.error_log_entries),
-		TempWarn:	 bool(health.temp_warning),
-		AvailSpareWarn:	 bool(health.avail_spare_warning),
+		TempWarn:        bool(health.temp_warning),
+		AvailSpareWarn:  bool(health.avail_spare_warning),
 		ReliabilityWarn: bool(health.dev_reliabilty_warning),
-		ReadOnlyWarn:	 bool(health.read_only_warning),
-		VolatileWarn:	 bool(health.volatile_mem_warning),
+		ReadOnlyWarn:    bool(health.read_only_warning),
+		VolatileWarn:    bool(health.volatile_mem_warning),
+		CtrlrPciAddr:    pciAddr,
 	}
 }
 
@@ -250,12 +249,16 @@ func processDiscoverReturn(retPtr *C.struct_ret_t, failLocation string) (
 		ctrlrPtr := retPtr.ctrlrs
 		for ctrlrPtr != nil {
 			defer C.free(unsafe.Pointer(ctrlrPtr))
-			ctrlrs = append(ctrlrs, c2GoController(ctrlrPtr))
+			ctrlr := c2GoController(ctrlrPtr)
+			ctrlrs = append(ctrlrs, ctrlr)
 			healthPtr := ctrlrPtr.dev_health
-			if healthPtr != nil {
-				defer C.free(unsafe.Pointer(healthPtr))
-				devs = append(devs, c2GoDeviceHealth(healthPtr))
+			if healthPtr == nil {
+				ctrlrPtr = ctrlrPtr.next
+				continue
 			}
+
+			defer C.free(unsafe.Pointer(healthPtr))
+			devs = append(devs, c2GoDeviceHealth(ctrlr.PCIAddr, healthPtr))
 			ctrlrPtr = ctrlrPtr.next
 		}
 

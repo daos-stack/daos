@@ -83,7 +83,7 @@ class RebuildWithIOR(IorTestBase):
         self.run_ior_with_pool()
 
         # Kill the server
-        self.pool.start_rebuild(self.server_group, rank, self.d_log)
+        self.pool.start_rebuild([rank], self.d_log)
 
         # Wait for rebuild to start
         self.pool.wait_for_rebuild(True)

@@ -47,6 +47,12 @@
 #include <cart/api.h>
 #include <daos_types.h>
 #include <daos_prop.h>
+#include <daos_security.h>
+
+#ifndef DF_RC
+#define DF_RC "%s(%d)"
+#define DP_RC(rc) d_errstr(rc), rc
+#endif /* DF_RC */
 
 #define DF_OID		DF_U64"."DF_U64
 #define DP_OID(o)	(o).hi, (o).lo
@@ -99,6 +105,7 @@ char *DP_UUID(const void *uuid);
 /* For prefixes of error messages about a container */
 #define DF_CONT			DF_UUID"/"DF_UUID
 #define DP_CONT(puuid, cuuid)	DP_UUID(puuid), DP_UUID(cuuid)
+#define DF_CONTF		DF_UUIDF"/"DF_UUIDF
 
 char *daos_key2str(daos_key_t *key);
 
@@ -126,7 +133,7 @@ daos_u32_hash(uint64_t key, unsigned int bits)
 static inline uint8_t
 isset_range(uint8_t *bitmap, uint32_t start, uint32_t end)
 {
-	int index;
+	uint32_t index;
 
 	for (index = start; index <= end; ++index)
 		if (isclr(bitmap, index))
@@ -138,7 +145,7 @@ isset_range(uint8_t *bitmap, uint32_t start, uint32_t end)
 static inline void
 clrbit_range(uint8_t *bitmap, uint32_t start, uint32_t end)
 {
-	int index;
+	uint32_t index;
 
 	for (index = start; index <= end; ++index)
 		clrbit(bitmap, index);
@@ -420,6 +427,7 @@ enum {
 	DSS_KEY_FAIL_VALUE,
 	DSS_KEY_FAIL_NUM,
 	DSS_REBUILD_RES_PERCENTAGE,
+	DSS_DISABLE_AGGREGATION,
 	DSS_KEY_NUM,
 };
 
@@ -521,6 +529,13 @@ enum {
 #define DAOS_DTX_LOST_RPC_REPLY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x34)
 #define DAOS_DTX_LONG_TIME_RESEND	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x35)
 
+#define DAOS_VC_DIFF_REC		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x40)
+#define DAOS_VC_DIFF_DKEY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x41)
+#define DAOS_VC_LOST_DATA		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x42)
+#define DAOS_VC_LOST_REPLICA		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x43)
+
+#define DAOS_NVME_FAULTY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x50)
+
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
 
 static inline int __is_po2(unsigned long long val)
@@ -565,6 +580,7 @@ bool daos_hhash_link_delete(struct d_hlink *hlink);
 crt_init_options_t *daos_crt_init_opt_get(bool server, int crt_nr);
 
 int crt_proc_daos_prop_t(crt_proc_t proc, daos_prop_t **data);
+int crt_proc_struct_daos_acl(crt_proc_t proc, struct daos_acl **data);
 
 bool daos_prop_valid(daos_prop_t *prop, bool pool, bool input);
 daos_prop_t *daos_prop_dup(daos_prop_t *prop, bool pool);

@@ -115,6 +115,11 @@ simple_array_mgmt(void **state)
 			       &oh, NULL);
 	assert_int_equal(rc, 0);
 
+	rc = daos_array_get_attr(oh, &csize, &cell_size);
+	assert_int_equal(rc, 0);
+	assert_int_equal(4, cell_size);
+	assert_int_equal(chunk_size, csize);
+
 	rc = daos_array_set_size(oh, DAOS_TX_NONE, 265, NULL);
 	assert_int_equal(rc, 0);
 	rc = daos_array_get_size(oh, DAOS_TX_NONE, &size, NULL);
@@ -1005,6 +1010,70 @@ strided_array(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 } /* End str_mem_str_arr_io */
 
+static void
+truncate_array(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	daos_handle_t	oh;
+	daos_array_iod_t iod = {};
+	daos_range_t	rg = {};
+	d_iov_t		iov = {};
+	d_sg_list_t	sgl = {};
+	void		*buf;
+	int		rc;
+	daos_size_t	size;
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	oid = dts_oid_gen(OC_SX, feat, arg->myrank);
+
+	/** create the array */
+	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 1, 1048576, &oh,
+			       NULL);
+	assert_int_equal(rc, 0);
+
+	/* Set array size to be large */
+	rc = daos_array_set_size(oh, DAOS_TX_NONE, 1024 * 1024, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = daos_array_get_size(oh, DAOS_TX_NONE, &size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(size, 1024 * 1024);
+
+	/* Set array size to zero */
+	rc = daos_array_set_size(oh, DAOS_TX_NONE, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = daos_array_get_size(oh, DAOS_TX_NONE, &size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(size, 0);
+
+	D_ALLOC(buf, 1024);
+	assert_non_null(buf);
+
+	iod.arr_nr = 1;
+	iod.arr_rgs = &rg;
+	rg.rg_len = 6;
+
+	sgl.sg_nr = 1;
+	sgl.sg_iovs = &iov;
+	d_iov_set(&iov, buf, 6);
+
+	/* perform small write */
+	rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	/* check array size */
+	size = 0;
+	rc = daos_array_get_size(oh, DAOS_TX_NONE, &size, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(size, 6);
+
+	D_FREE(buf);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+} /* End str_mem_str_arr_io */
+
 static const struct CMUnitTest array_api_tests[] = {
 	{"Array API: create/open/close (blocking)",
 	 simple_array_mgmt, async_disable, NULL},
@@ -1026,6 +1095,8 @@ static const struct CMUnitTest array_api_tests[] = {
 	 read_empty_records, async_disable, NULL},
 	{"Array API: strided_array (blocking)",
 	 strided_array, async_disable, NULL},
+	{"Array API: write after truncate",
+	 truncate_array, async_disable, NULL},
 };
 
 static int

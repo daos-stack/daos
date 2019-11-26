@@ -24,13 +24,14 @@
 package client
 
 import (
-	"bytes"
 	"fmt"
-	"sort"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 )
@@ -40,216 +41,42 @@ const (
 	msgConnInactive = "socket connection is not active (%s)"
 )
 
-// Addresses is an alias for a slice of <ipv4/hostname>:<port> addresses.
-type Addresses []string
-
-// ClientResult is a container for output of any type of client request.
-type ClientResult struct {
-	Address string
-	Value   interface{}
-	Err     error
-}
-
-func (cr ClientResult) String() string {
-	if cr.Err != nil {
-		return fmt.Sprintf("error: " + cr.Err.Error())
-	}
-	return fmt.Sprintf("%+v", cr.Value)
-}
-
-// ClientBioResult is a container for output of BIO health
-// query client requests.
-type ClientBioResult struct {
-	Address string
-	Stats   *pb.BioHealthResp
-	Err     error
-}
-
-func (cr ClientBioResult) String() string {
-	var buf bytes.Buffer
-
-	if cr.Err != nil {
-		return fmt.Sprintf("error: " + cr.Err.Error())
+// chooseServiceLeader will decide which connection to send request on.
+//
+// Currently expect only one connection to be available and return that.
+// TODO: this should probably be implemented on the Connect interface.
+func chooseServiceLeader(cs []Control) (Control, error) {
+	if len(cs) == 0 {
+		return nil, errors.New("no active connections")
 	}
 
-	if cr.Stats.Status != 0 {
-		return fmt.Sprintf("error: %v\n", cr.Stats.Status)
-	}
-
-	fmt.Fprintf(&buf, "Device UUID: %v\n", cr.Stats.DevUuid)
-	fmt.Fprintf(&buf, "\tRead errors: %v\n", cr.Stats.ReadErrs)
-	fmt.Fprintf(&buf, "\tWrite errors: %v\n", cr.Stats.WriteErrs)
-	fmt.Fprintf(&buf, "\tUnmap errors: %v\n", cr.Stats.UnmapErrs)
-	fmt.Fprintf(&buf, "\tChecksum errors: %v\n", cr.Stats.ChecksumErrs)
-	fmt.Fprintf(&buf, "\tDevice Health:\n")
-	fmt.Fprintf(&buf, "\t\tError log entries: %v\n", cr.Stats.ErrorCount)
-	fmt.Fprintf(&buf, "\t\tMedia errors: %v\n", cr.Stats.MediaErrors)
-	fmt.Fprintf(&buf, "\t\tTemperature: %v\n", cr.Stats.Temperature)
-	fmt.Fprintf(&buf, "\t\tTemperature: ")
-	if cr.Stats.Temp {
-		fmt.Fprintf(&buf, "WARNING\n")
-	} else {
-		fmt.Fprintf(&buf, "OK\n")
-	}
-	fmt.Fprintf(&buf, "\t\tAvailable Spare: ")
-	if cr.Stats.Spare {
-		fmt.Fprintf(&buf, "WARNING\n")
-	} else {
-		fmt.Fprintf(&buf, "OK\n")
-	}
-	fmt.Fprintf(&buf, "\t\tDevice Reliability: ")
-	if cr.Stats.DeviceReliability {
-		fmt.Fprintf(&buf, "WARNING\n")
-	} else {
-		fmt.Fprintf(&buf, "OK\n")
-	}
-	fmt.Fprintf(&buf, "\t\tRead Only: ")
-	if cr.Stats.Readonly {
-		fmt.Fprintf(&buf, "WARNING\n")
-	} else {
-		fmt.Fprintf(&buf, "OK\n")
-	}
-	fmt.Fprintf(&buf, "\t\tVolatile Memory Backup: ")
-	if cr.Stats.VolatileMemory {
-		fmt.Fprintf(&buf, "WARNING\n")
-	} else {
-		fmt.Fprintf(&buf, "OK\n")
-	}
-
-	return buf.String()
-}
-
-// ClientSmdResult is a container for output of SMD dev list
-// query client requests.
-type ClientSmdResult struct {
-	Address string
-	Devs    *pb.SmdDevResp
-	Err     error
-}
-
-func (cr ClientSmdResult) String() string {
-	var buf bytes.Buffer
-
-	if cr.Err != nil {
-		return fmt.Sprintf("error: " + cr.Err.Error())
-	}
-
-	if cr.Devs.Status != 0 {
-		return fmt.Sprintf("error: %v\n", cr.Devs.Status)
-	}
-
-	for _, d := range cr.Devs.Devices {
-		fmt.Fprintf(&buf, "Device:\n")
-		fmt.Fprintf(&buf, "\t\tUUID: %+v\n", d.Uuid)
-		fmt.Fprintf(&buf, "\t\tVOS Target IDs: ")
-		for _, t := range d.TgtIds {
-			fmt.Fprintf(&buf, "%d ", t)
-		}
-		fmt.Fprintf(&buf, "\n")
-	}
-
-	return buf.String()
-}
-
-// ResultMap map client addresses to method call ClientResults
-type ResultMap map[string]ClientResult
-type ResultQueryMap map[string]ClientBioResult
-type ResultSmdMap map[string]ClientSmdResult
-
-func (rm ResultMap) String() string {
-	var buf bytes.Buffer
-	servers := make([]string, 0, len(rm))
-
-	for server := range rm {
-		servers = append(servers, server)
-	}
-	sort.Strings(servers)
-
-	for _, server := range servers {
-		fmt.Fprintf(&buf, "%s:\n\t%s\n", server, rm[server])
-	}
-
-	return buf.String()
-}
-
-func (rm ResultQueryMap) String() string {
-	var buf bytes.Buffer
-	servers := make([]string, 0, len(rm))
-
-	for server := range rm {
-		servers = append(servers, server)
-	}
-	sort.Strings(servers)
-
-	for _, server := range servers {
-		fmt.Fprintf(&buf, "%s:\n\t%s\n", server, rm[server])
-	}
-
-	return buf.String()
-}
-
-func (rm ResultSmdMap) String() string {
-	var buf bytes.Buffer
-	servers := make([]string, 0, len(rm))
-
-	for server := range rm {
-		servers = append(servers, server)
-	}
-	sort.Strings(servers)
-
-	for _, server := range servers {
-		fmt.Fprintf(&buf, "%s:\n\t%s\n", server, rm[server])
-	}
-
-	return buf.String()
-}
-
-// ScmModules is an alias for protobuf ScmModule message slice representing
-// a number of SCM modules installed on a storage node.
-
-// ControllerFactory is an interface providing capability to connect clients.
-type ControllerFactory interface {
-	create(string, *security.TransportConfig) (Control, error)
-}
-
-// controllerFactory as an implementation of ControllerFactory.
-type controllerFactory struct {
-	log logging.Logger
-}
-
-// create instantiates and connects a client to server at given address.
-func (c *controllerFactory) create(address string, cfg *security.TransportConfig) (Control, error) {
-	controller := &control{
-		log: c.log,
-	}
-
-	err := controller.connect(address, cfg)
-
-	return controller, err
+	// just return the first connection, expected to be the service leader
+	return cs[0], nil
 }
 
 // Connect is an external interface providing functionality across multiple
 // connected clients (controllers).
 type Connect interface {
-	// SetTransportConfig sets the gRPC transport confguration
-	SetTransportConfig(*security.TransportConfig)
-	// ConnectClients attempts to connect a list of addresses
-	ConnectClients(Addresses) ResultMap
-	// GetActiveConns verifies states and removes inactive conns
-	GetActiveConns(ResultMap) ResultMap
+	BioHealthQuery(*mgmtpb.BioHealthReq) ResultQueryMap
 	ClearConns() ResultMap
-	StoragePrepare(*pb.StoragePrepareReq) ResultMap
-	StorageScan() (ClientCtrlrMap, ClientModuleMap, ClientPmemMap)
-	StorageFormat() (ClientCtrlrMap, ClientMountMap)
-	StorageUpdate(*pb.StorageUpdateReq) (ClientCtrlrMap, ClientModuleMap)
-	// TODO: implement Burnin client features
-	//StorageBurnIn() (ClientCtrlrMap, ClientModuleMap)
-	ListFeatures() ClientFeatureMap
-	KillRank(uuid string, rank uint32) ResultMap
+	ConnectClients(Addresses) ResultMap
+	GetActiveConns(ResultMap) ResultMap
+	KillRank(rank uint32) ResultMap
+	NetworkListProviders() ResultMap
+	NetworkScanDevices(searchProvider string) NetworkScanResultMap
 	PoolCreate(*PoolCreateReq) (*PoolCreateResp, error)
 	PoolDestroy(*PoolDestroyReq) error
-	BioHealthQuery(*pb.BioHealthReq) ResultQueryMap
-	SmdListDevs(*pb.SmdDevReq) ResultSmdMap
+	PoolGetACL(*PoolGetACLReq) (*PoolGetACLResp, error)
+	PoolOverwriteACL(*PoolOverwriteACLReq) (*PoolOverwriteACLResp, error)
+	PoolUpdateACL(req *PoolUpdateACLReq) (*PoolUpdateACLResp, error)
+	SetTransportConfig(*security.TransportConfig)
+	SmdListDevs(*mgmtpb.SmdDevReq) ResultSmdMap
+	SmdListPools(*mgmtpb.SmdPoolReq) ResultSmdMap
+	StorageScan(*StorageScanReq) *StorageScanResp
+	StorageFormat(reformat bool) (ClientCtrlrMap, ClientMountMap)
+	StoragePrepare(*ctlpb.StoragePrepareReq) ResultMap
+	SystemMemberQuery() (common.SystemMembers, error)
+	SystemStop() (common.SystemMemberResults, error)
 }
 
 // connList is an implementation of Connect and stores controllers
@@ -361,8 +188,7 @@ func (c *connList) ClearConns() ResultMap {
 
 // makeRequests performs supplied method over each controller in connList and
 // stores generic result object for each in map keyed on address.
-func (c *connList) makeRequests(
-	req interface{},
+func (c *connList) makeRequests(req interface{},
 	requestFn func(Control, interface{}, chan ClientResult)) ResultMap {
 
 	cMap := make(ResultMap) // mapping of server host addresses to results

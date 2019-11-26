@@ -43,7 +43,6 @@ struct dfuse_data {
 	int		debug;
 	int		foreground;
 	int		singlethread;
-	bool		destroy;
 	char		*mountpoint;
 	char		*pool;
 	char		*svcl;
@@ -534,7 +533,7 @@ dfuse_read(const char *path, char *buf, size_t size, off_t offset,
 	d_iov_set(&iov, buf, size);
 	sgl.sg_iovs = &iov;
 
-	rc = dfs_read(dfs, obj, sgl, offset, &actual);
+	rc = dfs_read(dfs, obj, &sgl, offset, &actual, NULL);
 	if (rc)
 		return -rc;
 
@@ -561,7 +560,7 @@ dfuse_write(const char *path, const char *buf, size_t size, off_t offset,
 	d_iov_set(&iov, (void *)buf, size);
 	sgl.sg_iovs = &iov;
 
-	rc = dfs_write(dfs, obj, sgl, offset);
+	rc = dfs_write(dfs, obj, &sgl, offset, NULL);
 	if (rc)
 		return -rc;
 
@@ -1036,7 +1035,6 @@ static void usage(const char *progname)
 "	-g		DAOS server group name to connect to\n"
 "	-c		DAOS cont uuid to create/mount\n"
 "	--root-cont	mount the special root container on the pool\n"
-"	-r		Remove/Destroy the DAOS container when unmounted\n"
 "\n"
 "FUSE Options:\n",
 progname);
@@ -1058,7 +1056,6 @@ static struct fuse_opt dfuse_opts[] = {
 	DFUSE_OPT("-g %s", group, 0),
 	DFUSE_OPT("-c %s", cont, 0),
 	DFUSE_OPT("--root-cont", root_cont, 1),
-	DFUSE_OPT("-r", destroy, 1),
 	FUSE_OPT_END
 };
 
@@ -1079,7 +1076,6 @@ int main(int argc, char *argv[])
 	bool			free_pool = true;
 	bool			free_svcl = true;
 	bool			free_grp = true;
-	bool			cont_created = false;
 	uuid_t			pool_uuid, co_uuid;
 	daos_pool_info_t	pool_info = {};
 	daos_cont_info_t	co_info;
@@ -1171,11 +1167,6 @@ int main(int argc, char *argv[])
 	}
 
 	if (dfuse_fs.root_cont) {
-		if (dfuse_fs.destroy) {
-			fprintf(stderr, "Can't destroy root container\n");
-			D_GOTO(out_disc, rc = 1);
-		}
-
 		if (dfuse_fs.debug)
 			fprintf(stderr, "Mounting root Container\n");
 
@@ -1190,10 +1181,8 @@ int main(int argc, char *argv[])
 			D_GOTO(out_disc, rc = 1);
 		}
 
-		if (dfuse_fs.debug) {
-			fprintf(stderr, "Container create/open\n");
+		if (dfuse_fs.debug)
 			fprintf(stderr, "DFS Container: %s\n", dfuse_fs.cont);
-		}
 
 		rc = uuid_parse(dfuse_fs.cont, co_uuid);
 		if (rc) {
@@ -1201,20 +1190,9 @@ int main(int argc, char *argv[])
 			D_GOTO(out_disc, rc = 1);
 		}
 
-		/** Try to open the DAOS container first (the mountpoint) */
+		/** Open the DAOS container first (the mountpoint) */
 		rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info,
 				    NULL);
-		/* If NOEXIST we create it */
-		if (rc == -DER_NONEXIST) {
-			if (dfuse_fs.debug)
-				fprintf(stderr, "Creating Container..\n");
-			rc = daos_cont_create(poh, co_uuid, NULL, NULL);
-			if (rc == 0) {
-				cont_created = true;
-				rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW,
-						    &coh, &co_info, NULL);
-			}
-		}
 		if (rc) {
 			fprintf(stderr, "Failed container open (%d)\n", rc);
 			D_GOTO(out_disc, rc = 1);
@@ -1222,8 +1200,9 @@ int main(int argc, char *argv[])
 
 		rc = dfs_mount(poh, coh, O_RDWR, &dfs);
 		if (rc) {
-			fprintf(stderr, "dfs_mount failed (%d)\n", rc);
-			D_GOTO(out_cont, rc = 1);
+			daos_cont_close(coh, NULL);
+			fprintf(stderr, "Failed dfs mount (%d)\n", rc);
+			D_GOTO(out_disc, rc = 1);
 		}
 	}
 
@@ -1256,15 +1235,9 @@ out_dmount:
 		dfs_umount_root_cont(dfs);
 	else
 		dfs_umount(dfs);
-out_cont:
 	if (!dfuse_fs.root_cont)
 		daos_cont_close(coh, NULL);
 out_disc:
-	if (dfuse_fs.destroy || (rc && cont_created)) {
-		D_ASSERT(!dfuse_fs.root_cont);
-		fprintf(stderr, "Destroying DFS Container\n");
-		daos_cont_destroy(poh, co_uuid, 1, NULL);
-	}
 	daos_pool_disconnect(poh, NULL);
 out_daos:
 	daos_fini();

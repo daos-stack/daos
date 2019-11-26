@@ -8,13 +8,13 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
 
-    prereqs.require(denv, 'argobots', 'protobufc')
+    prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
 
     # dtx
     dtx = daos_build.library(denv, 'dtx',
                              ['dtx_srv.c', 'dtx_rpc.c', 'dtx_resync.c',
                               'dtx_common.c'])
-    denv.Install('$PREFIX/lib/daos_srv', dtx)
+    denv.Install('$PREFIX/lib64/daos_srv', dtx)
 
 if __name__ == "SCons.Script":
     scons()

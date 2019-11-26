@@ -236,15 +236,14 @@ rebuild_one_punch_keys(struct rebuild_tgt_pool_tracker *rpt,
 	int	rc = 0;
 
 	/* Punch dkey */
-	if (rdone->ro_max_eph != DAOS_EPOCH_MAX) {
-		D_DEBUG(DB_REBUILD,
-			DF_UOID" punch dkey "DF_KEY" eph "DF_U64"\n",
+	if (rdone->ro_dkey_punch_eph != 0) {
+		D_DEBUG(DB_REBUILD, DF_UOID" punch dkey "DF_KEY"/"DF_U64"\n",
 			DP_UOID(rdone->ro_oid), DP_KEY(&rdone->ro_dkey),
-			rdone->ro_max_eph);
+			rdone->ro_dkey_punch_eph);
 		rc = vos_obj_punch(cont->sc_hdl, rdone->ro_oid,
-				   rdone->ro_max_eph, rpt->rt_rebuild_ver,
-				   VOS_OF_REPLAY_PC, &rdone->ro_dkey, 0, NULL,
-				   NULL);
+				   rdone->ro_dkey_punch_eph,
+				   rpt->rt_rebuild_ver, VOS_OF_REPLAY_PC,
+				   &rdone->ro_dkey, 0, NULL, NULL);
 		if (rc) {
 			D_ERROR(DF_UOID" punch dkey failed: rc %d\n",
 				DP_UOID(rdone->ro_oid), rc);
@@ -252,21 +251,25 @@ rebuild_one_punch_keys(struct rebuild_tgt_pool_tracker *rpt,
 		}
 	}
 
-	if (rdone->ro_ephs == NULL)
-		return 0;
+	for (i = 0; i < rdone->ro_iod_num; i++) {
+		daos_epoch_t eph;
 
-	/* Punch akeys */
-	for (i = 0; i < rdone->ro_ephs_num; i++) {
-		D_DEBUG(DB_REBUILD, DF_UOID" rdone %p punch dkey "DF_KEY
-			" akey "DF_KEY" eph "DF_U64"\n",
-			DP_UOID(rdone->ro_oid), rdone, DP_KEY(&rdone->ro_dkey),
-			DP_KEY(&rdone->ro_ephs_keys[i]), rdone->ro_ephs[i]);
+		eph = rdone->ro_akey_punch_ephs[i];
+		D_ASSERT(eph != DAOS_EPOCH_MAX);
+		if (eph == 0)
+			continue;
 
-		D_ASSERT(rdone->ro_ephs[i] != DAOS_EPOCH_MAX);
+		D_DEBUG(DB_REBUILD, DF_UOID" rdone %p punch dkey "
+			DF_KEY" akey "DF_KEY" eph "DF_U64"\n",
+			DP_UOID(rdone->ro_oid), rdone,
+			DP_KEY(&rdone->ro_dkey),
+			DP_KEY(&rdone->ro_iods[i].iod_name), eph);
+
 		rc = vos_obj_punch(cont->sc_hdl, rdone->ro_oid,
-				   rdone->ro_ephs[i], rpt->rt_rebuild_ver,
-				   VOS_OF_REPLAY_PC, &rdone->ro_dkey, 1,
-				   &rdone->ro_ephs_keys[i], NULL);
+				   eph, rpt->rt_rebuild_ver,
+				   VOS_OF_REPLAY_PC, &rdone->ro_dkey,
+				   1, &rdone->ro_iods[i].iod_name,
+				   NULL);
 		if (rc) {
 			D_ERROR(DF_UOID" punch akey failed: rc %d\n",
 				DP_UOID(rdone->ro_oid), rc);
@@ -351,6 +354,7 @@ rebuild_dkey(struct rebuild_tgt_pool_tracker *rpt,
 	}
 
 	tls->rebuild_pool_rec_count += rdone->ro_rec_num;
+	tls->rebuild_pool_size += rdone->ro_size;
 cont_put:
 	ds_cont_child_put(rebuild_cont);
 obj_close:
@@ -376,11 +380,8 @@ rebuild_one_destroy(struct rebuild_one *rdone)
 		daos_iods_free(rdone->ro_punch_iods, rdone->ro_iod_alloc_num,
 			       true);
 
-	if (rdone->ro_ephs) {
-		for (i = 0; i < rdone->ro_ephs_num; i++)
-			daos_iov_free(&rdone->ro_ephs_keys[i]);
-		D_FREE(rdone->ro_ephs);
-	}
+	if (rdone->ro_akey_punch_ephs)
+		D_FREE(rdone->ro_akey_punch_ephs);
 
 	if (rdone->ro_sgls) {
 		for (i = 0; i < rdone->ro_iod_alloc_num; i++)
@@ -504,6 +505,7 @@ rw_iod_pack(struct rebuild_one *rdone, daos_iod_t *iod, d_sg_list_t *sgls)
 {
 	int idx = rdone->ro_iod_num;
 	int rec_cnt = 0;
+	uint64_t total_size = 0;
 	int i;
 	int rc;
 
@@ -515,8 +517,9 @@ rw_iod_pack(struct rebuild_one *rdone, daos_iod_t *iod, d_sg_list_t *sgls)
 
 	for (i = 0; i < iod->iod_nr; i++) {
 		rec_cnt += iod->iod_recxs[i].rx_nr;
+		total_size += iod->iod_recxs[i].rx_nr * iod->iod_size;
 		if (rdone->ro_epoch == 0 ||
-		    iod->iod_eprs[i].epr_lo < rdone->ro_epoch)
+		    iod->iod_eprs[i].epr_lo > rdone->ro_epoch)
 			rdone->ro_epoch = iod->iod_eprs[i].epr_lo;
 	}
 
@@ -542,6 +545,7 @@ rw_iod_pack(struct rebuild_one *rdone, daos_iod_t *iod, d_sg_list_t *sgls)
 
 	rdone->ro_iod_num++;
 	rdone->ro_rec_num += rec_cnt;
+	rdone->ro_size += total_size;
 	iod->iod_recxs = NULL;
 	iod->iod_csums = NULL;
 	iod->iod_eprs = NULL;
@@ -581,22 +585,19 @@ punch_iod_pack(struct rebuild_one *rdone, daos_iod_t *iod)
  */
 static int
 rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
-		  daos_key_t *dkey, daos_epoch_t dkey_eph, daos_iod_t *iods,
-		  daos_epoch_t *akey_ephs, int iod_eph_total,
-		  d_sg_list_t *sgls, uint32_t version)
+		  daos_key_t *dkey, daos_epoch_t dkey_eph,
+		  daos_iod_t *iods, daos_epoch_t *akey_ephs,
+		  int iod_eph_total, d_sg_list_t *sgls, uint32_t version)
 {
 	struct rebuild_puller		*puller;
 	struct rebuild_tgt_pool_tracker *rpt = iter_arg->rpt;
 	struct rebuild_one		*rdone = NULL;
-	unsigned int			ephs_cnt = 0;
 	bool				inline_copy = true;
 	int				i;
 	int				rc;
 
-	D_DEBUG(DB_REBUILD,
-		"rebuild dkey "DF_KEY" iod nr %d dkey_eph "DF_U64"\n",
-		DP_KEY(dkey), iod_eph_total, dkey_eph);
-
+	D_DEBUG(DB_REBUILD, "rebuild dkey "DF_KEY" iod nr %d\n", DP_KEY(dkey),
+		iod_eph_total);
 	if (iod_eph_total == 0 || rpt->rt_rebuild_ver <= version) {
 		D_DEBUG(DB_REBUILD, "No need rebuild eph_total %d version %u"
 			" rebuild ver %u\n", iod_eph_total, version,
@@ -612,10 +613,9 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 	if (rdone->ro_iods == NULL)
 		D_GOTO(free, rc = -DER_NOMEM);
 
-	D_ALLOC_ARRAY(rdone->ro_ephs, iod_eph_total);
-	D_ALLOC_ARRAY(rdone->ro_ephs_keys, iod_eph_total);
-	if (rdone->ro_iods == NULL || rdone->ro_ephs == NULL ||
-	    rdone->ro_ephs_keys == NULL)
+	rdone->ro_dkey_punch_eph = dkey_eph;
+	D_ALLOC_ARRAY(rdone->ro_akey_punch_ephs, iod_eph_total);
+	if (rdone->ro_akey_punch_ephs == NULL)
 		D_GOTO(free, rc = -DER_NOMEM);
 
 	rdone->ro_iod_alloc_num = iod_eph_total;
@@ -641,20 +641,12 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 	}
 
 	for (i = 0; i < iod_eph_total; i++) {
-		if (akey_ephs[i] != DAOS_EPOCH_MAX) {
 			/* Pack punched epoch here */
-			rdone->ro_ephs[ephs_cnt] = akey_ephs[i];
-			rc = daos_iov_copy(&rdone->ro_ephs_keys[ephs_cnt],
-					   &iods[i].iod_name);
-			if (rc)
-				D_GOTO(free, rc);
-
-			ephs_cnt++;
-			D_DEBUG(DB_REBUILD, "punched iod idx %d akey "DF_KEY
-				" ephs "DF_U64" ephs_cnt %d\n", i,
-				DP_KEY(&iods[i].iod_name),
-				akey_ephs[i], ephs_cnt);
-		}
+		rdone->ro_akey_punch_ephs[i] = akey_ephs[i];
+		if (akey_ephs[i] != 0)
+			D_DEBUG(DB_REBUILD, "punched %d akey "DF_KEY" "
+				DF_U64"\n", i, DP_KEY(&iods[i].iod_name),
+				akey_ephs[i]);
 
 		if (iods[i].iod_nr == 0)
 			continue;
@@ -666,8 +658,6 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 					 inline_copy ? &sgls[i] : NULL);
 	}
 
-	rdone->ro_ephs_num = ephs_cnt;
-	rdone->ro_max_eph = dkey_eph;
 	rdone->ro_version = version;
 	puller = &rpt->rt_pullers[iter_arg->tgt_idx];
 	if (puller->rp_ult == NULL) {
@@ -695,9 +685,9 @@ rebuild_one_queue(struct rebuild_iter_obj_arg *iter_arg, daos_unit_oid_t *oid,
 	rdone->ro_oid = *oid;
 	uuid_copy(rdone->ro_cont_uuid, iter_arg->cont_uuid);
 
-	D_DEBUG(DB_REBUILD, DF_UOID" %p dkey "DF_KEY" rebuild on idx %d max eph"
-		" "DF_U64" iod_num %d\n", DP_UOID(rdone->ro_oid), rdone,
-		DP_KEY(dkey), iter_arg->tgt_idx, rdone->ro_max_eph,
+	D_DEBUG(DB_REBUILD, DF_UOID" %p dkey "DF_KEY" rebuild on idx %d"
+		" iod_num %d\n", DP_UOID(rdone->ro_oid), rdone,
+		DP_KEY(dkey), iter_arg->tgt_idx,
 		rdone->ro_iod_num);
 
 	ABT_mutex_lock(puller->rp_lock);
@@ -715,8 +705,8 @@ static int
 rebuild_one_queue_cb(struct dss_enum_unpack_io *io, void *arg)
 {
 	return rebuild_one_queue(arg, &io->ui_oid, &io->ui_dkey,
-				 io->ui_dkey_eph, io->ui_iods,
-				 io->ui_akey_ephs, io->ui_iods_len,
+				 io->ui_dkey_punch_eph, io->ui_iods,
+				 io->ui_akey_punch_ephs, io->ui_iods_top + 1,
 				 io->ui_sgls, io->ui_version);
 }
 
@@ -803,7 +793,6 @@ rebuild_obj_ult(void *data)
 	buf_len = ITER_BUF_SIZE;
 	while (1) {
 		daos_key_desc_t	kds[KDS_NUM] = { 0 };
-		daos_epoch_range_t eprs[KDS_NUM];
 		uint32_t	num = KDS_NUM;
 		daos_size_t	size;
 
@@ -817,7 +806,7 @@ rebuild_obj_ult(void *data)
 		sgl.sg_iovs = &iov;
 
 		rc = dsc_obj_list_obj(oh, arg->epoch, NULL, NULL, &size, &num,
-				      kds, eprs, &sgl, &anchor, &dkey_anchor,
+				      kds, &sgl, &anchor, &dkey_anchor,
 				      &akey_anchor);
 
 		if (rc == -DER_KEY2BIG) {
@@ -851,9 +840,6 @@ rebuild_obj_ult(void *data)
 		enum_arg.kds_len = num;
 		enum_arg.sgl = &sgl;
 		enum_arg.sgl_idx = 1;
-		enum_arg.eprs = eprs;
-		enum_arg.eprs_cap = KDS_NUM;
-		enum_arg.eprs_len = num;
 		rc = dss_enum_unpack(VOS_ITER_DKEY, &enum_arg,
 				     rebuild_one_queue_cb, arg);
 		if (rc) {

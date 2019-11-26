@@ -364,6 +364,13 @@ out:
 	return evt_iter_skip_holes(tcx, iter);
 }
 
+static void
+ent_array_reset(struct evt_context *tcx, struct evt_entry_array *ent_array)
+{
+	ent_array->ea_ent_nr = 0;
+	ent_array->ea_inob = tcx->tc_inob;
+}
+
 int
 evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc,
 	       const struct evt_rect *rect, const daos_anchor_t *anchor)
@@ -385,6 +392,7 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc,
 		D_GOTO(out, rc = -DER_NO_HDL);
 
 	enta = &iter->it_entries;
+	ent_array_reset(tcx, enta);
 
 	if (evt_iter_is_sorted(iter))
 		return evt_iter_probe_sorted(tcx, iter, opc, rect, anchor);

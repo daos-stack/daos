@@ -161,6 +161,13 @@ daos_array_destroy(daos_handle_t oh, daos_handle_t th, daos_event_t *ev)
 }
 
 int
+daos_array_get_attr(daos_handle_t oh, daos_size_t *chunk_size,
+		    daos_size_t *cell_size)
+{
+	return dc_array_get_attr(oh, chunk_size, cell_size);
+}
+
+int
 daos_array_read(daos_handle_t oh, daos_handle_t th,
 		daos_array_iod_t *iod, d_sg_list_t *sgl,
 		daos_csum_buf_t *csums, daos_event_t *ev)

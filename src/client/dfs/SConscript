@@ -7,13 +7,47 @@ def scons():
 
     denv = env.Clone()
 
+    """If Lustre installed use its headers instead of our local defines"""
+    try:
+        with open('/etc/os-release') as f:
+            for line in f:
+                if 'ID' in line:
+                    line = line.strip()
+                    _, distro = line.strip().split('=')
+                    break
+        if distro in ['"centos"', '"rhel"', '"fedora"']:
+            import rpm
+            ts = rpm.TransactionSet()
+            headers = ts.dbMatch('name', 'lustre')
+            if not headers:
+                print("No package lustre found.")
+            else:
+                from pkg_resources import parse_version
+                for h in headers:
+                    if parse_version(h['version']) >= parse_version('2.12.57'):
+                        denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
+        elif distro in ('"debian"', '"ubuntu"'):
+            import apt
+            cache = apt.Cache()
+            cache.open()
+            instver = cache["lustre"].installed
+            if instver:
+                if parse_version(instver.version) >= parse_version('2.12.57'):
+                    denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
+            else:
+                print("No package lustre found.")
+        else:
+            print("Unable to identify distro.")
+    except ImportError:
+        pass
+
     denv.AppendUnique(CPPDEFINES=['-DFUSE_USE_VERSION=32'])
 
     libraries = ['$LIBS', 'daos_common', 'daos', 'uuid']
 
     dfs_src = ['dfs.c']
     dfs = daos_build.library(denv, 'dfs', dfs_src, LIBS=libraries)
-    denv.Install('$PREFIX/lib/', dfs)
+    denv.Install('$PREFIX/lib64/', dfs)
 
     libraries = libraries + ['dfs']
 
@@ -27,7 +61,7 @@ def scons():
     fenv.Install('$PREFIX/bin/', dfuse_hl)
 
     duns = daos_build.library(denv, 'duns', 'duns.c', LIBS=libraries)
-    denv.Install('$PREFIX/lib/', duns)
+    denv.Install('$PREFIX/lib64/', duns)
 
 if __name__ == "SCons.Script":
     scons()

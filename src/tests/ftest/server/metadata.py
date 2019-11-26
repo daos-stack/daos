@@ -27,12 +27,18 @@ import os
 import traceback
 import uuid
 import threading
-import Queue
 import avocado
+
+try:
+    # python 3.x
+    import queue as queue
+except ImportError:
+    # python 2.7
+    import Queue as queue
 
 from apricot import TestWithServers, skipForTicket
 from agent_utils import run_agent, stop_agent
-from daos_api import DaosContainer, DaosApiError
+from pydaos.raw import DaosContainer, DaosApiError
 from ior_utils import IorCommand
 from command_utils import Orterun, CommandFailure
 from server_utils import run_server, stop_server
@@ -48,7 +54,7 @@ def ior_runner_thread(manager, uuids, results):
     Args:
         manager (str): mpi job manager command
         uuids (list): [description]
-        results (Queue): queue for returning thread results
+        results (queue): queue for returning thread results
     """
     for index, cont_uuid in enumerate(uuids):
         manager.job.daos_cont.update(cont_uuid, "ior.cont_uuid")
@@ -192,7 +198,7 @@ class ObjectMetadata(TestWithServers):
         """
         files_per_thread = 400
         total_ior_threads = 5
-        self.out_queue = Queue.Queue()
+        self.out_queue = queue.Queue()
 
         processes = self.params.get("slots", "/run/ior/clientslots/*")
 
@@ -251,5 +257,5 @@ class ObjectMetadata(TestWithServers):
 
                 # Start the servers
                 run_server(
-                    self.hostfile_servers, self.server_group, self.basepath,
+                    self, self.hostfile_servers, self.server_group,
                     clean=False)

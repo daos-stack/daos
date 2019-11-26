@@ -28,8 +28,7 @@ import traceback
 from avocado import main
 from apricot import TestWithServers
 
-from daos_api import DaosApiError
-from conversion import c_uuid_to_str
+from pydaos.raw import DaosApiError, c_uuid_to_str
 from general_utils import get_pool, get_container
 
 

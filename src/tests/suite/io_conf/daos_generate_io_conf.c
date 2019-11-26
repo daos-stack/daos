@@ -30,8 +30,8 @@
 static int obj_num = 1;
 static int dkey_num = 10;
 static int akey_num = 10;
-static int rank_size = 8;
-static int tgt_size = 8;
+static int rank_size = -1;
+static int tgt_size = -1;
 static int iod_size = 1;
 static char *default_class = "repl_3_small_rw_spec_rank";
 static char *obj_class;
@@ -115,7 +115,7 @@ void print_usage(void)
 {
 	fprintf(stdout, "daos_generate_io_conf -g <rank_size> -t <tgt_size>"
 		"-o [obj_num] -d [dkey_num] -a [akey_num] -s [rec_size]"
-		"<file_name>\n");
+		"-O obj_class <file_name>\n");
 }
 
 static void
@@ -454,6 +454,15 @@ generate_io_conf_rec(int fd, struct current_status *status)
 	eph = status->cur_tx;
 	inject_fail_idx = rand() % epoch_times;
 	tgt = rand() % tgt_size;
+	if (tgt_size != -1) {
+		tgt = rand() % tgt_size;
+	} else {
+		tgt = tgt_size;
+	}
+
+	if (rank_size != -1) {
+		status->cur_rank = rand() % rank_size;
+	}
 	record_type = rand() % 2;
 
 	for (i = 0; i < epoch_times; i++) {

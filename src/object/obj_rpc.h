@@ -145,12 +145,13 @@ enum obj_rpc_flags {
 #define DAOS_OSEQ_OBJ_RW	/* output fields */		 \
 	((int32_t)		(orw_ret)		CRT_VAR) \
 	((uint32_t)		(orw_map_version)	CRT_VAR) \
-	((uint64_t)		(orw_attr)		CRT_VAR) \
 	((uint64_t)		(orw_dkey_conflict)	CRT_VAR) \
 	((struct dtx_id)	(orw_dti_conflict)	CRT_VAR) \
-	((daos_size_t)		(orw_sizes)		CRT_ARRAY) \
+	((daos_size_t)		(orw_iod_sizes)		CRT_ARRAY) \
+	((daos_size_t)		(orw_data_sizes)	CRT_ARRAY) \
 	((d_sg_list_t)		(orw_sgls)		CRT_ARRAY) \
-	((uint32_t)		(orw_nrs)		CRT_ARRAY)
+	((uint32_t)		(orw_nrs)		CRT_ARRAY) \
+	((daos_csum_buf_t)	(orw_csum)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(obj_rw,		DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 CRT_RPC_DECLARE(obj_update,	DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
@@ -186,7 +187,7 @@ CRT_RPC_DECLARE(obj_fetch,	DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 	((daos_anchor_t)	(oeo_dkey_anchor)	CRT_VAR) \
 	((daos_anchor_t)	(oeo_akey_anchor)	CRT_VAR) \
 	((daos_key_desc_t)	(oeo_kds)		CRT_ARRAY) \
-	((d_sg_list_t)	(oeo_sgl)		CRT_VAR) \
+	((d_sg_list_t)		(oeo_sgl)		CRT_VAR) \
 	((daos_recx_t)		(oeo_recxs)		CRT_ARRAY) \
 	((daos_epoch_range_t)	(oeo_eprs)		CRT_ARRAY)
 

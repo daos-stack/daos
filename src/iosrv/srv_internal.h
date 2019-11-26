@@ -34,6 +34,7 @@ struct dss_xstream {
 	ABT_pool	dx_pools[DSS_POOL_CNT];
 	ABT_sched	dx_sched;
 	ABT_thread	dx_progress;
+	d_list_t	dx_sleep_ult_list;
 	tse_sched_t	dx_sched_dsc;
 	/* xstream id, [0, DSS_XS_NR_TOTAL - 1] */
 	int		dx_xs_id;
@@ -56,7 +57,14 @@ extern int		dss_core_depth;
 extern int		dss_core_nr;
 /** start offset index of the first core for service XS */
 extern int		dss_core_offset;
-
+/** NUMA node to bind to */
+extern int		dss_numa_node;
+/** bitmap describing core allocation */
+extern hwloc_bitmap_t	core_allocation_bitmap;
+/** a copy of the NUMA node object in the topology */
+extern hwloc_obj_t	numa_obj;
+/** number of cores in the given NUMA node */
+extern int		dss_num_cores_numa_node;
 /** Number of offload XS per target (1 or 2)*/
 extern unsigned int	dss_tgt_offload_xs_nr;
 /** number of system XS */
@@ -132,8 +140,10 @@ dss_ult_xs(int ult_type, int tgt_id)
 		return DSS_MAIN_XS_ID(tgt_id) + dss_tgt_offload_xs_nr;
 	case DSS_ULT_POOL_SRV:
 	case DSS_ULT_RDB:
-	case DSS_ULT_DRPC:
+	case DSS_ULT_DRPC_HANDLER:
 		return 0;
+	case DSS_ULT_DRPC_LISTENER:
+		return 1;
 	case DSS_ULT_REBUILD:
 	case DSS_ULT_AGGREGATE:
 		return DSS_MAIN_XS_ID(tgt_id);
@@ -161,12 +171,13 @@ dss_ult_pool(int ult_type)
 	case DSS_ULT_CHECKSUM:
 	case DSS_ULT_COMPRESS:
 	case DSS_ULT_POOL_SRV:
-	case DSS_ULT_DRPC:
+	case DSS_ULT_DRPC_LISTENER:
 	case DSS_ULT_RDB:
 	case DSS_ULT_MISC:
+	case DSS_ULT_DRPC_HANDLER:
+	case DSS_ULT_AGGREGATE:
 		return DSS_POOL_SHARE;
 	case DSS_ULT_REBUILD:
-	case DSS_ULT_AGGREGATE:
 		return DSS_POOL_REBUILD;
 	default:
 		D_ASSERTF(0, "bad ult_type %d.\n", ult_type);

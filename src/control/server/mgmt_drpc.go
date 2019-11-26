@@ -23,10 +23,6 @@
 
 package server
 
-// #cgo CFLAGS: -I${SRCDIR}/../../../include
-// #include <daos/drpc_modules.h>
-import "C"
-
 import (
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -35,62 +31,38 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 )
 
-const (
-	mgmtModuleID  = C.DRPC_MODULE_MGMT
-	killRank      = C.DRPC_METHOD_MGMT_KILL_RANK
-	setRank       = C.DRPC_METHOD_MGMT_SET_RANK
-	createMS      = C.DRPC_METHOD_MGMT_CREATE_MS
-	startMS       = C.DRPC_METHOD_MGMT_START_MS
-	join          = C.DRPC_METHOD_MGMT_JOIN
-	getAttachInfo = C.DRPC_METHOD_MGMT_GET_ATTACH_INFO
-	poolCreate    = C.DRPC_METHOD_MGMT_POOL_CREATE
-	poolDestroy   = C.DRPC_METHOD_MGMT_POOL_DESTROY
-	bioHealth     = C.DRPC_METHOD_MGMT_BIO_HEALTH_QUERY
-	setUp         = C.DRPC_METHOD_MGMT_SET_UP
-	smdDevs       = C.DRPC_METHOD_MGMT_SMD_LIST_DEVS
-
-	srvModuleID = C.DRPC_MODULE_SRV
-	notifyReady = C.DRPC_METHOD_SRV_NOTIFY_READY
-)
-
-// mgmtModule is the management drpc module struct
 // mgmtModule represents the daos_server mgmt dRPC module. It sends dRPCs to
 // the daos_io_server iosrv module (src/iosrv).
 type mgmtModule struct{}
 
 // HandleCall is the handler for calls to the mgmtModule
-func (m *mgmtModule) HandleCall(client *drpc.Client, method int32, body []byte) ([]byte, error) {
+func (m *mgmtModule) HandleCall(session *drpc.Session, method int32, body []byte) ([]byte, error) {
 	return nil, errors.New("mgmt module handler is not implemented")
 }
 
-// InitModule is empty for this module
-func (m *mgmtModule) InitModule(state drpc.ModuleState) {}
-
 // ID will return Mgmt module ID
 func (m *mgmtModule) ID() int32 {
-	return mgmtModuleID
+	return drpc.ModuleMgmt
 }
 
 // srvModule represents the daos_server dRPC module. It handles dRPCs sent by
 // the daos_io_server iosrv module (src/iosrv).
 type srvModule struct {
-	iosrv *IOServerInstance
+	iosrvs []*IOServerInstance
 }
 
-// HandleCall is the handler for calls to the srvModule
-func (mod *srvModule) HandleCall(cli *drpc.Client, method int32, req []byte) ([]byte, error) {
+// HandleCall is the handler for calls to the srvModule.
+func (mod *srvModule) HandleCall(session *drpc.Session, method int32, req []byte) ([]byte, error) {
 	switch method {
-	case notifyReady:
+	case drpc.MethodNotifyReady:
 		return nil, mod.handleNotifyReady(req)
 	default:
 		return nil, errors.Errorf("unknown dRPC %d", method)
 	}
 }
 
-func (mod *srvModule) InitModule(state drpc.ModuleState) {}
-
 func (mod *srvModule) ID() int32 {
-	return srvModuleID
+	return drpc.ModuleSrv
 }
 
 func (mod *srvModule) handleNotifyReady(reqb []byte) error {
@@ -99,7 +71,16 @@ func (mod *srvModule) handleNotifyReady(reqb []byte) error {
 		return errors.Wrap(err, "unmarshal NotifyReady request")
 	}
 
-	mod.iosrv.NotifyReady(req)
+	if req.InstanceIdx >= uint32(len(mod.iosrvs)) {
+		return errors.Errorf("instance index %v is out of range (%v instances)",
+			req.InstanceIdx, len(mod.iosrvs))
+	}
+
+	if err := checkDrpcClientSocketPath(req.DrpcListenerSock); err != nil {
+		return errors.Wrap(err, "check NotifyReady request socket path")
+	}
+
+	mod.iosrvs[req.InstanceIdx].NotifyReady(req)
 
 	return nil
 }

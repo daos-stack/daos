@@ -8,6 +8,7 @@ import errno
 from SCons.Script import BUILD_TARGETS
 
 sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils'))
+import daos_build
 
 DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-missing-braces',
@@ -89,7 +90,7 @@ def preload_prereqs(prereqs):
     prereqs.define('cmocka', libs=['cmocka'], package='libcmocka-devel')
     prereqs.define('readline', libs=['readline', 'history'],
                    package='readline')
-    reqs = ['cart', 'argobots', 'pmdk', 'cmocka',
+    reqs = ['cart', 'argobots', 'pmdk', 'cmocka', 'ofi', 'hwloc',
             'uuid', 'crypto', 'fuse', 'protobufc']
     if not is_platform_arm():
         reqs.extend(['spdk', 'isal'])
@@ -126,7 +127,7 @@ def scons():
         try:
             version = env['RELEASE']
         except KeyError:
-            print ("Usage: scons RELEASE=x.y.z release")
+            print("Usage: scons RELEASE=x.y.z release")
             exit(1)
 
         # create a branch for the PR
@@ -238,13 +239,14 @@ def scons():
         exit(0)
 
     """Execute build"""
-    if os.path.exists('scons_local'):
-        try:
-            sys.path.insert(0, os.path.join(Dir('#').abspath, 'scons_local'))
-            from prereq_tools import PreReqComponent
-            print ('Using scons_local build')
-        except ImportError:
-            print ('Using traditional build')
+    try:
+        sys.path.insert(0, os.path.join(Dir('#').abspath, 'scons_local'))
+        from prereq_tools import PreReqComponent
+        print ('Using scons_local build')
+    except ImportError:
+        print ('scons_local submodule is needed in order to do DAOS build')
+        print ('Use git submodule update --init')
+        sys.exit(-1)
 
     env = Environment(TOOLS=['extra', 'default'])
 
@@ -260,6 +262,8 @@ def scons():
 
     prereqs = PreReqComponent(env, opts, commits_file)
     preload_prereqs(prereqs)
+    if prereqs.check_component('valgrind_devel'):
+        env.AppendUnique(CPPDEFINES=["DAOS_HAS_VALGRIND"])
     opts.Save(opts_file, env)
 
     env.Alias('install', '$PREFIX')
@@ -272,16 +276,18 @@ def scons():
 
     set_defaults(env)
 
+    build_prefix = prereqs.get_src_build_dir()
+
     # generate targets in specific build dir to avoid polluting the source code
-    VariantDir('build', '.', duplicate=0)
-    SConscript('build/src/SConscript')
+    VariantDir(build_prefix, '.', duplicate=0)
+    SConscript('{}/src/SConscript'.format(build_prefix))
 
     buildinfo = prereqs.get_build_info()
     buildinfo.gen_script('.build_vars.sh')
     buildinfo.save('.build_vars.json')
-    env.InstallAs("$PREFIX/TESTING/.build_vars.sh", ".build_vars.sh")
-    env.InstallAs("$PREFIX/TESTING/.build_vars.json", ".build_vars.json")
-    env.InstallAs("$PREFIX/lib/daos/VERSION", "VERSION")
+    # also install to $PREFIX/lib to work with existing avocado test code
+    daos_build.install(env, "lib/daos/", ['.build_vars.sh', '.build_vars.json'])
+    env.Install("$PREFIX/lib64/daos", "VERSION")
 
     env.Install('$PREFIX/etc', ['utils/memcheck-daos-client.supp'])
 
@@ -291,8 +297,8 @@ def scons():
     # install certificate generation files
     SConscript('utils/certs/SConscript')
 
-    Default('build')
-    Depends('install', 'build')
+    Default(build_prefix)
+    Depends('install', build_prefix)
 
     try:
         #if using SCons 2.4+, provide a more complete help

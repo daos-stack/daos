@@ -99,6 +99,21 @@ cleanup:
 	return false;
 }
 
+static void
+show_help(char *name)
+{
+	printf("usage: %s -m=PATHSTR -s=RANKS\n"
+		"\n"
+		"	-m --mountpoint=PATHSTR	Mount point to use\n"
+		"	-s --svc=RANKS		pool service replicas like 1,2,3\n"
+		"	   --pool=UUID		pool UUID\n"
+		"	   --container=UUID	container UUID\n"
+		"	   --sys-name=STR	DAOS system name context for servers\n"
+		"	-S --singlethreaded	Single threaded\n"
+		"	-f --foreground		Run in foreground\n",
+		name);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -109,16 +124,20 @@ main(int argc, char **argv)
 	int			ret = -DER_SUCCESS;
 	int			rc;
 
+	/* The 'daos' command uses -m as an alias for --scv however
+	 * dfuse uses -m for --mountpoint so this is inconsistent
+	 * but probably better than changing the meaning of the -m
+	 * option here.h
+	 */
 	struct option long_options[] = {
 		{"pool",		required_argument, 0, 'p'},
 		{"container",		required_argument, 0, 'c'},
-		{"svcl",		required_argument, 0, 's'},
-		{"group",		required_argument, 0, 'g'},
+		{"svc",			required_argument, 0, 's'},
+		{"sys-name",		required_argument, 0, 'G'},
 		{"mountpoint",		required_argument, 0, 'm'},
 		{"singlethread",	no_argument,	   0, 'S'},
 		{"foreground",		no_argument,	   0, 'f'},
 		{"help",		no_argument,	   0, 'h'},
-		{"prefix",		required_argument, 0, 'p'},
 		{0, 0, 0, 0}
 	};
 
@@ -129,7 +148,7 @@ main(int argc, char **argv)
 	dfuse_info->di_threaded = true;
 
 	while (1) {
-		c = getopt_long(argc, argv, "p:c:s:g:m:Sfh",
+		c = getopt_long(argc, argv, "s:m:Sfh",
 				long_options, NULL);
 
 		if (c == -1)
@@ -145,7 +164,7 @@ main(int argc, char **argv)
 		case 's':
 			svcl = optarg;
 			break;
-		case 'g':
+		case 'G':
 			dfuse_info->di_group = optarg;
 			break;
 		case 'm':
@@ -158,9 +177,11 @@ main(int argc, char **argv)
 			dfuse_info->di_foreground = true;
 			break;
 		case 'h':
+			show_help(argv[0]);
 			exit(0);
 			break;
 		case '?':
+			show_help(argv[0]);
 			exit(1);
 			break;
 		}
@@ -172,16 +193,18 @@ main(int argc, char **argv)
 	}
 
 	if (!dfuse_info->di_mountpoint) {
-		DFUSE_LOG_ERROR("Mountpoint is required");
-		D_GOTO(out_dfuse, ret = -DER_INVAL);
+		printf("Mountpoint is required\n");
+		show_help(argv[0]);
+		exit(1);
 	}
 
 	/* Is this required, or can we assume some kind of default for
 	 * this.
 	 */
 	if (!svcl) {
-		DFUSE_LOG_ERROR("Svcl is required");
-		D_GOTO(out_dfuse, ret = -DER_INVAL);
+		printf("Svcl is required\n");
+		show_help(argv[0]);
+		exit(1);
 	}
 
 	DFUSE_TRA_ROOT(dfuse_info, "dfuse_info");
@@ -263,6 +286,8 @@ main(int argc, char **argv)
 
 	fuse_session_destroy(dfuse_info->di_session);
 
+	D_GOTO(out_dfs, 0);
+
 out_cont:
 	if (dfuse_info->di_cont) {
 		dfs_umount(dfs->dfs_ns);
@@ -286,5 +311,8 @@ out:
 	 * DAOS error numbers.
 	 */
 	DFUSE_LOG_INFO("Exiting with status %d", ret);
-	return -(ret + DER_ERR_GURT_BASE);
+	if (ret)
+		return -(ret + DER_ERR_GURT_BASE);
+	else
+		return 0;
 }

@@ -42,17 +42,19 @@
 static int
 timebox(int (*cb)(void *), void *arg, uint64_t *usec)
 {
-	struct timespec start, end, result;
+	struct timespec	start, end, result;
+	uint64_t	delta_us;
+	int		rc;
 
 	clock_gettime(CLOCK_MONOTONIC_RAW, &start);
 
-	int rc = cb(arg);
+	rc = cb(arg);
 
 	clock_gettime(CLOCK_MONOTONIC_RAW, &end);
 
 	result = d_timediff(start, end);
 
-	uint64_t delta_us = ((uint64_t)result.tv_sec * 1000000000 +
+	delta_us = ((uint64_t)result.tv_sec * 1000000000 +
 				(uint64_t)result.tv_nsec) / 1000;
 	*usec = delta_us;
 
@@ -63,7 +65,6 @@ struct csum_timing_args {
 	struct daos_csummer *csummer;
 	uint8_t *buf;
 	size_t len;
-
 };
 
 int
@@ -72,6 +73,7 @@ csum_timed_cb(void *arg)
 	struct csum_timing_args *timing_args = arg;
 	int rc =  daos_csummer_update(timing_args->csummer, timing_args->buf,
 				      timing_args->len);
+
 	if (rc)
 		return rc;
 	return daos_csummer_finish(timing_args->csummer);
@@ -81,9 +83,11 @@ int
 run_timings(struct csum_ft *fts[], const int types_count,
 		 const size_t *sizes, const int sizes_count)
 {
-	int size_idx;
-	int type_idx;
-	int rc;
+	int	size_idx;
+	int	type_idx;
+	size_t	usec;
+	int	rc;
+
 
 	for (size_idx = 0; size_idx < sizes_count; size_idx++) {
 		/** create data to checksum */
@@ -99,24 +103,24 @@ run_timings(struct csum_ft *fts[], const int types_count,
 		printf("Data Length: %"PRIu64"\n", len);
 
 		for (type_idx = 0; type_idx < types_count; type_idx++) {
-			struct csum_ft *ft = fts[type_idx];
-			struct daos_csummer *csummer;
+			struct csum_ft		*ft = fts[type_idx];
+			struct daos_csummer	*csummer;
+			struct csum_timing_args	 args;
+			size_t			 csum_size;
+			uint8_t			*csum_buf;
 
 			rc = daos_csummer_init(&csummer, ft, 0);
 			if (rc != 0)
 				return rc;
 
-			struct csum_timing_args args = {
-				.csummer = csummer,
-				.buf = buf,
-				.len = len
-			};
-			size_t csum_size = daos_csummer_get_size(csummer);
-			uint8_t *csum_buf = calloc(csum_size, 1);
+			args.csummer = csummer;
+			args.buf = buf;
+			args.len = len;
+
+			csum_size = daos_csummer_get_csum_len(csummer);
+			csum_buf = calloc(csum_size, 1);
 
 			daos_csummer_set_buffer(csummer, csum_buf, csum_size);
-
-			size_t usec;
 
 			rc = timebox(csum_timed_cb, &args, &usec);
 

@@ -67,7 +67,7 @@ class DestroyRebuild(TestWithServers):
             "Invlaid pool information detected prior to rebuild")
 
         # Start rebuild
-        self.pool.start_rebuild(self.server_group, rank, self.d_log)
+        self.pool.start_rebuild([rank], self.d_log)
         self.pool.wait_for_rebuild(True)
 
         # Destroy the pool while rebuild is active

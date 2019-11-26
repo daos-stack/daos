@@ -32,7 +32,9 @@
 
 #include "drpc_mocks.h"
 #include <daos_types.h>
+#include <daos/drpc_modules.h>
 #include <daos_srv/security.h>
+
 #include "../srv_internal.h"
 
 /*
@@ -358,9 +360,9 @@ test_validate_creds_success(void **state)
 	assert_int_equal(drpc_call_flags, R_SYNC);
 	assert_non_null(drpc_call_msg_ptr);
 	assert_int_equal(drpc_call_msg_content.module,
-			 DRPC_MODULE_SECURITY_SERVER);
+			 DRPC_MODULE_SEC);
 	assert_int_equal(drpc_call_msg_content.method,
-			 DRPC_METHOD_SECURITY_SERVER_VALIDATE_CREDENTIALS);
+			 DRPC_METHOD_SEC_VALIDATE_CREDS);
 	assert_non_null(drpc_call_resp_ptr);
 
 	assert_ptr_equal(drpc_close_ctx, drpc_call_ctx);

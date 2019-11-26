@@ -49,7 +49,7 @@ smd_ut_setup(void **state)
 
 	rc = smd_init(SMD_STORAGE_PATH);
 	if (rc) {
-		print_error("Error initializing SMD store\n");
+		print_error("Error initializing SMD store: %d\n", rc);
 		daos_debug_fini();
 		return rc;
 	}
@@ -213,8 +213,9 @@ ut_pool(void **state)
 	assert_int_equal(rc, -DER_NONEXIST);
 
 	D_INIT_LIST_HEAD(&pool_list);
-	rc = smd_pool_list(&pool_list);
+	rc = smd_pool_list(&pool_list, &pool_cnt);
 	assert_int_equal(rc, 0);
+	assert_int_equal(pool_cnt, 2);
 
 	d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {
 		if (uuid_compare(pool_info->spi_id, id1) == 0)
@@ -224,12 +225,9 @@ ut_pool(void **state)
 		else
 			assert_true(false);
 
-		pool_cnt++;
-
 		d_list_del(&pool_info->spi_link);
 		smd_free_pool_info(pool_info);
 	}
-	assert_int_equal(pool_cnt, 2);
 
 	rc = smd_pool_unassign(id1, 5);
 	assert_int_equal(rc, -DER_NONEXIST);
@@ -253,6 +251,18 @@ static const struct CMUnitTest smd_uts[] = {
 
 int main(int argc, char **argv)
 {
-	return cmocka_run_group_tests_name("SMD unit tests", smd_uts,
-					   smd_ut_setup, smd_ut_teardown);
+	int	rc;
+
+	rc = ABT_init(0, NULL);
+	if (rc != 0) {
+		D_PRINT("Error initializing ABT\n");
+		return rc;
+	}
+
+
+	rc = cmocka_run_group_tests_name("SMD unit tests", smd_uts,
+					 smd_ut_setup, smd_ut_teardown);
+
+	ABT_finalize();
+	return rc;
 }

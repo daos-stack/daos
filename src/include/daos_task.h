@@ -52,6 +52,7 @@ typedef enum {
 	DAOS_OPC_SET_PARAMS,
 	DAOS_OPC_POOL_ADD_REPLICAS,
 	DAOS_OPC_POOL_REMOVE_REPLICAS,
+	DAOS_OPC_MGMT_LIST_POOLS,
 
 	/** Pool APIs */
 	DAOS_OPC_POOL_CONNECT,
@@ -65,6 +66,7 @@ typedef enum {
 	DAOS_OPC_POOL_GET_ATTR,
 	DAOS_OPC_POOL_SET_ATTR,
 	DAOS_OPC_POOL_STOP_SVC,
+	DAOS_OPC_POOL_LIST_CONT,
 
 	/** Container APIs */
 	DAOS_OPC_CONT_CREATE,
@@ -212,6 +214,12 @@ typedef struct {
 } daos_pool_query_target_t;
 
 typedef struct {
+	daos_handle_t			 poh;
+	daos_size_t			*ncont;
+	struct daos_pool_cont_info	*cont_buf;
+} daos_pool_list_cont_t;
+
+typedef struct {
 	daos_handle_t		poh;
 	char			*buf;
 	size_t			*size;
@@ -240,6 +248,12 @@ typedef struct {
 	d_rank_list_t		*targets;
 	d_rank_list_t		*failed;
 } daos_pool_replicas_t;
+
+typedef struct {
+	const char		*grp;
+	daos_mgmt_pool_info_t	*pools;
+	daos_size_t		*npools;
+} daos_mgmt_list_pools_t;
 
 typedef struct {
 	daos_handle_t		poh;
@@ -440,8 +454,8 @@ struct daos_obj_fetch_shard {
 
 struct daos_obj_sync_args {
 	daos_handle_t		oh;
-	daos_handle_t		th;
-	daos_epoch_t		**epoch;
+	daos_epoch_t		epoch;
+	daos_epoch_t		**epochs_p;
 	int			*nr;
 };
 

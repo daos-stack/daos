@@ -814,56 +814,6 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	    struct vos_iter_anchors *anchors, vos_iter_cb_t cb, void *arg);
 
 /**
- * VOS object index set attributes
- * Add a new object ID entry in the object index table
- * Creates an empty tree for the object
- *
- * \param coh   [IN]    Container handle
- * \param oid   [IN]    DAOS object ID
- * \param epoch [IN]    Epoch to set
- * \param attr	[IN]	Attributes bitmask.  May not contain VOS_OI_PUNCHED
- *
- * \return              0 on success and negative on
- *                      failure
- */
-int
-vos_oi_set_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		uint64_t attr);
-
-/**
- * VOS object index clear attributes
- * Add a new object ID entry in the object index table
- * Creates an empty tree for the object
- *
- * \param coh   [IN]    Container handle
- * \param oid   [IN]    DAOS object ID
- * \param epoch [IN]    Epoch to set
- * \param attr	[IN]	Attributes bitmask.  May not contain VOS_OI_PUNCHED
- *
- * \return              0 on success and negative on
- *                      failure
- */
-int
-vos_oi_clear_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		  uint64_t attr);
-
-/**
- * VOS object index get attributes
- *
- * \param coh   [IN]		Container handle
- * \param oid   [IN]		DAOS object ID
- * \param epoch [IN]		Epoch to get
- * \param dth	[IN]		Pointer to the DTX handle.
- * \param attr	[IN, OUT]	Attributes bitmask
- *
- * \return			0 on success and negative on
- *				failure
- */
-int
-vos_oi_get_attr(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-		struct dtx_handle *dth, uint64_t *attr);
-
-/**
  * Retrieve the largest or smallest integer DKEY, AKEY, and array offset from an
  * object. If object does not have an array value, 0 is returned in extent. User
  * has to specify what is being queried (dkey, akey, and/or recx) along with the
@@ -953,5 +903,18 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc);
 
 int
 vos_gc_run(int *credits);
+int
+vos_gc_pool(daos_handle_t poh, int *credits);
+
+enum vos_cont_opc {
+	/** abort VOS aggregation **/
+	VOS_CO_CTL_ABORT_AGG,
+};
+
+/**
+ * Set various vos container state, see \a vos_cont_opc.
+ */
+int
+vos_cont_ctl(daos_handle_t coh, enum vos_cont_opc opc);
 
 #endif /* __VOS_API_H */

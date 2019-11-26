@@ -120,6 +120,48 @@ struct rw_cb_args {
 	unsigned int		*map_ver;
 };
 
+int dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
+{
+	struct daos_csummer	*csummer;
+	d_sg_list_t		*sgls;
+	struct obj_rw_in	*orw;
+	struct obj_rw_out	*orwo;
+	daos_iod_t		*iods;
+	int			 i;
+	int			 rc = 0;
+
+	csummer = dc_cont_hdl2csummer(rw_args->dobj->do_co_hdl);
+	if (!daos_csummer_initialized(csummer))
+		return 0;
+
+	orw = crt_req_get(rw_args->rpc);
+	orwo = crt_reply_get(rw_args->rpc);
+	sgls = rw_args->rwaa_sgls;
+	iods = orw->orw_iods.ca_arrays;
+
+	if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_FETCH_FAIL))
+		/** Got csum successfully from server. Now poison it!! */
+		orwo->orw_csum.ca_arrays->cs_csum[0]++;
+
+	/** Link the checksums returned from the server to the iods to make
+	 *  verifying the data the iod describes easier
+	 */
+	daos_iods_link_dcbs(
+		iods, orw->orw_nr,
+		orwo->orw_csum.ca_arrays,
+		orwo->orw_csum.ca_count);
+
+	for (i = 0; i < orw->orw_nr && rc == 0; i++)
+		rc = daos_csummer_verify(csummer, &iods[i],
+					 &sgls[i]);
+
+	/** Remove the extra link to the checksum memory to prevent duplicate
+	 * freeing
+	 */
+	daos_iods_unlink_dcbs(iods, orw->orw_nr);
+	return rc;
+}
+
 static int
 dc_rw_cb(tse_task_t *task, void *arg)
 {
@@ -173,19 +215,18 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	*rw_args->map_ver = obj_reply_map_version_get(rw_args->rpc);
 
 	orwo = crt_reply_get(rw_args->rpc);
-	rw_args->dobj->do_attr = orwo->orw_attr;
 	if (opc == DAOS_OBJ_RPC_FETCH) {
 		daos_iod_t	*iods;
 		uint64_t	*sizes;
 		int		 i, j;
 
 		iods = orw->orw_iods.ca_arrays;
-		sizes = orwo->orw_sizes.ca_arrays;
+		sizes = orwo->orw_iod_sizes.ca_arrays;
 
-		if (orwo->orw_sizes.ca_count != orw->orw_nr) {
+		if (orwo->orw_iod_sizes.ca_count != orw->orw_nr) {
 			D_ERROR("out:%u != in:%u for "DF_UOID" with eph "
 				DF_U64".\n",
-				(unsigned)orwo->orw_sizes.ca_count,
+				(unsigned)orwo->orw_iod_sizes.ca_count,
 				orw->orw_nr, DP_UOID(orw->orw_oid),
 				orw->orw_epoch);
 			D_GOTO(out, rc = -DER_PROTO);
@@ -207,11 +248,13 @@ dc_rw_cb(tse_task_t *task, void *arg)
 			d_iov_t		*iov;
 			uint32_t	*nrs;
 			uint32_t	 nrs_count;
-			daos_size_t	 data_size;
+			daos_size_t	*replied_sizes;
+			daos_size_t	 data_size, size_in_iod;
 			daos_size_t	 buf_size;
 
 			nrs = orwo->orw_nrs.ca_arrays;
 			nrs_count = orwo->orw_nrs.ca_count;
+			replied_sizes = orwo->orw_data_sizes.ca_arrays;
 			if (nrs_count != orw->orw_nr) {
 				D_ERROR("Invalid nrs %u != %u\n", nrs_count,
 					orw->orw_nr);
@@ -229,12 +272,14 @@ dc_rw_cb(tse_task_t *task, void *arg)
 					sgls[i].sg_nr_out = 0;
 					continue;
 				}
-				data_size = daos_iods_len(&iods[i], 1);
-				if (data_size == -1) {
+				size_in_iod = daos_iods_len(&iods[i], 1);
+				if (size_in_iod == -1) {
 					/* only for echo mode */
 					sgls[i].sg_nr_out = sgls[i].sg_nr;
 					continue;
 				}
+				data_size = replied_sizes[i];
+				D_ASSERT(data_size <= size_in_iod);
 				buf_size = 0;
 				for (j = 0; j < sgls[i].sg_nr; j++) {
 					iov = &sgls[i].sg_iovs[j];
@@ -251,6 +296,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 				}
 			}
 		}
+		rc = dc_rw_cb_csum_verify(rw_args);
 	}
 out:
 	crt_req_decref(rw_args->rpc);
@@ -532,7 +578,9 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		D_ERROR("punch rpc failed rc %d\n", rc);
 		D_GOTO(out_req, rc);
 	}
-	return rc;
+
+	dc_pool_put(pool);
+	return 0;
 
 out_req:
 	crt_req_decref(req);
@@ -554,7 +602,6 @@ struct obj_enum_args {
 	struct dc_obj_shard	*eaa_obj;
 	d_sg_list_t		*eaa_sgl;
 	daos_recx_t		*eaa_recxs;
-	daos_epoch_range_t	*eaa_eprs;
 	daos_size_t		*eaa_size;
 	unsigned int		*eaa_map_ver;
 };
@@ -613,13 +660,6 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 		memcpy(enum_args->eaa_kds, oeo->oeo_kds.ca_arrays,
 		       sizeof(*enum_args->eaa_kds) *
 		       oeo->oeo_kds.ca_count);
-
-	if (enum_args->eaa_eprs && oeo->oeo_eprs.ca_count > 0) {
-		D_ASSERT(*enum_args->eaa_nr >= oeo->oeo_eprs.ca_count);
-		memcpy(enum_args->eaa_eprs, oeo->oeo_eprs.ca_arrays,
-		       sizeof(*enum_args->eaa_eprs) *
-		       oeo->oeo_eprs.ca_count);
-	}
 
 	if (enum_args->eaa_recxs && oeo->oeo_recxs.ca_count > 0) {
 		D_ASSERT(*enum_args->eaa_nr >= oeo->oeo_recxs.ca_count);
@@ -774,7 +814,6 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	enum_args.eaa_sgl = sgl;
 	enum_args.eaa_map_ver = &args->la_auxi.map_ver;
 	enum_args.eaa_recxs = obj_args->recxs;
-	enum_args.eaa_eprs = obj_args->eprs;
 	rc = tse_task_register_comp_cb(task, dc_enumerate_cb, &enum_args,
 				       sizeof(enum_args));
 	if (rc != 0)
@@ -995,7 +1034,9 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
 		D_ERROR("query_key rpc failed rc %d\n", rc);
 		D_GOTO(out_req, rc);
 	}
-	return rc;
+
+	dc_pool_put(pool);
+	return 0;
 
 out_req:
 	crt_req_decref(req);

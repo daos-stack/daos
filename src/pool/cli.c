@@ -150,7 +150,7 @@ flags_are_valid(unsigned int flags)
 #define DC_POOL_DEFAULT_COMPONENTS_NR 128
 
 static struct dc_pool *
-pool_alloc(void)
+pool_alloc(unsigned int nr)
 {
 	struct dc_pool *pool;
 	int rc = 0;
@@ -179,7 +179,7 @@ pool_alloc(void)
 		goto failed;
 	}
 
-	pool->dp_map_sz = pool_buf_size(DC_POOL_DEFAULT_COMPONENTS_NR);
+	pool->dp_map_sz = pool_buf_size(nr);
 
 	return pool;
 
@@ -408,6 +408,8 @@ pool_connect_cp(tse_task_t *task, void *data)
 			put_pool = false;
 		D_GOTO(out, rc);
 	} else if (rc != 0) {
+		if (rc == -DER_NOTREPLICA)
+			rc = -DER_NONEXIST;
 		D_ERROR("failed to connect to pool: %d\n", rc);
 		D_GOTO(out, rc);
 	}
@@ -469,7 +471,7 @@ dc_pool_local_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 	}
 
 	/** allocate and fill in pool connection */
-	pool = pool_alloc();
+	pool = pool_alloc(pool_map_comp_cnt(map));
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -549,7 +551,7 @@ dc_pool_connect(tse_task_t *task)
 			D_GOTO(out_task, rc = -DER_INVAL);
 
 		/** allocate and fill in pool connection */
-		pool = pool_alloc();
+		pool = pool_alloc(DC_POOL_DEFAULT_COMPONENTS_NR);
 		if (pool == NULL)
 			D_GOTO(out_task, rc = -DER_NOMEM);
 		uuid_copy(pool->dp_pool, args->uuid);
@@ -962,7 +964,7 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 	D_ASSERT(map_buf != NULL);
 
 	/** allocate and fill in pool connection */
-	pool = pool_alloc();
+	pool = pool_alloc(pool_glob->dpg_map_pb_nr);
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -1035,7 +1037,7 @@ dc_pool_global2local(d_iov_t glob, daos_handle_t *poh)
 		swap_pool_glob(pool_glob);
 		D_ASSERT(pool_glob->dpg_magic == DC_POOL_GLOB_MAGIC);
 	} else if (pool_glob->dpg_magic != DC_POOL_GLOB_MAGIC) {
-		D_ERROR("Bad hgh_magic: 0x%x.\n", pool_glob->dpg_magic);
+		D_ERROR("Bad dpg_magic: 0x%x.\n", pool_glob->dpg_magic);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -1121,22 +1123,16 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 	int				i;
 	int				rc;
 
+	if (args->tgts == NULL || args->tgts->tl_nr == 0) {
+		D_ERROR("NULL tgts or tgts->tl_nr is zero\n");
+		D_GOTO(out_task, rc = -DER_INVAL);
+	}
+
+	D_DEBUG(DF_DSMC, DF_UUID": opc %d targets:%u tgts[0]=%u/%d\n",
+		DP_UUID(args->uuid), opc, args->tgts->tl_nr,
+		args->tgts->tl_ranks[0], args->tgts->tl_tgts[0]);
+
 	if (state == NULL) {
-		if (args->tgts == NULL || args->tgts->tl_nr == 0) {
-			D_ERROR("NULL tgts or tgts->tl_nr is zero\n");
-			D_GOTO(out_task, rc = -DER_INVAL);
-		} else if ((opc == POOL_EXCLUDE || opc == POOL_EXCLUDE_OUT) &&
-			   args->tgts->tl_nr > 1) {
-			D_ERROR("pool exclude can only work with "
-				"(tgts->tl_nr == 1) for now.\n");
-			D_GOTO(out_task, rc = -DER_INVAL);
-		}
-
-		D_DEBUG(DF_DSMC, DF_UUID": opc %d targets:%u"
-			" tgts[0]=%u/%d\n", DP_UUID(args->uuid), opc,
-			args->tgts->tl_nr, args->tgts->tl_ranks[0],
-			args->tgts->tl_tgts[0]);
-
 		D_ALLOC_PTR(state);
 		if (state == NULL) {
 			D_ERROR(DF_UUID": failed to allocate state\n",
@@ -1145,11 +1141,17 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 		}
 
 		rc = dc_mgmt_sys_attach(args->grp, &state->sys);
-		if (rc != 0)
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to sys attach, rc %d.\n",
+				DP_UUID(args->uuid), rc);
 			D_GOTO(out_state, rc);
+		}
 		rc = rsvc_client_init(&state->client, args->svc);
-		if (rc != 0)
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to rsvc_client_init, rc %d.\n",
+				DP_UUID(args->uuid), rc);
 			D_GOTO(out_group, rc);
+		}
 
 		daos_task_set_priv(task, state);
 	}
@@ -1167,11 +1169,12 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 
 	rc = pool_target_addr_list_alloc(args->tgts->tl_nr, &list);
 	if (rc) {
+		D_ERROR(DF_UUID": pool_target_addr_list_alloc failed, rc %d.\n",
+			DP_UUID(args->uuid), rc);
 		crt_req_decref(rpc);
 		D_GOTO(out_client, rc);
 	}
 
-	/* XXX Let's update all targets on the node */
 	for (i = 0; i < args->tgts->tl_nr; i++) {
 		list.pta_addrs[i].pta_rank = args->tgts->tl_ranks[i];
 		list.pta_addrs[i].pta_target = args->tgts->tl_tgts[i];
@@ -1454,6 +1457,171 @@ out_task:
 	return rc;
 }
 
+static int
+list_cont_bulk_create(crt_context_t ctx, crt_bulk_t *bulk,
+		      struct daos_pool_cont_info *buf, daos_size_t ncont)
+{
+	d_iov_t		iov;
+	d_sg_list_t	sgl;
+
+	d_iov_set(&iov, buf, ncont * sizeof(struct daos_pool_cont_info));
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs = &iov;
+
+	return crt_bulk_create(ctx, &sgl, CRT_BULK_RW, bulk);
+}
+
+static void
+list_cont_bulk_destroy(crt_bulk_t bulk)
+{
+	if (bulk != CRT_BULK_NULL)
+		crt_bulk_free(bulk);
+}
+
+struct pool_lc_arg {
+	crt_rpc_t			*rpc;
+	struct dc_pool			*lca_pool;
+	daos_size_t			 lca_req_ncont;
+	daos_size_t			*lca_ncont;
+	struct daos_pool_cont_info	*lca_cont_buf;
+};
+
+static int
+pool_list_cont_cb(tse_task_t *task, void *data)
+{
+	struct pool_lc_arg		*arg = (struct pool_lc_arg *) data;
+	struct pool_list_cont_in	*in = crt_req_get(arg->rpc);
+	struct pool_list_cont_out	*out = crt_reply_get(arg->rpc);
+	int				 rc = task->dt_result;
+
+	rc = pool_rsvc_client_complete_rpc(arg->lca_pool, &arg->rpc->cr_ep, rc,
+					   &out->plco_op, task);
+	if (rc < 0)
+		D_GOTO(out, rc);
+	else if (rc == RSVC_CLIENT_RECHOOSE)
+		D_GOTO(out, rc = 0);
+
+	D_DEBUG(DF_DSMC, DF_UUID": list cont rpc done: %d\n",
+		DP_UUID(arg->lca_pool->dp_pool), rc);
+
+	if (rc) {
+		D_ERROR("RPC error while listing containers: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = out->plco_op.po_rc;
+	*arg->lca_ncont = out->plco_ncont;
+	/* arg->lca_cont_buf written by bulk transfer if buffer provided */
+
+	if (arg->lca_cont_buf && (rc == -DER_TRUNC)) {
+		D_WARN("ncont provided ("DF_U64") < required ("DF_U64")\n",
+				in->plci_ncont, out->plco_ncont);
+		D_GOTO(out, rc);
+	} else if (rc != 0) {
+		D_ERROR("failed to list containers %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+out:
+	crt_req_decref(arg->rpc);
+	dc_pool_put(arg->lca_pool);
+	list_cont_bulk_destroy(in->plci_cont_bulk);
+	return rc;
+}
+
+int
+dc_pool_list_cont(tse_task_t *task)
+{
+	daos_pool_list_cont_t		*args;
+	struct dc_pool			*pool;
+	crt_endpoint_t			 ep;
+	crt_rpc_t			*rpc;
+	struct pool_list_cont_in	*in;
+	struct pool_lc_arg		 lc_cb_args;
+
+	int				 rc;
+
+	args = dc_task_get_args(task);
+
+	/** Lookup bumps pool ref ,1 */
+	pool = dc_hdl2pool(args->poh);
+	if (pool == NULL)
+		D_GOTO(out_task, rc = -DER_NO_HDL);
+
+	D_DEBUG(DF_DSMC, DF_UUID": list containers: hdl="DF_UUID"\n",
+		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl));
+
+	ep.ep_grp = pool->dp_sys->sy_group;
+	D_MUTEX_LOCK(&pool->dp_client_lock);
+	rsvc_client_choose(&pool->dp_client, &ep);
+	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_LIST_CONT, &rpc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create pool list cont rpc: %d\n",
+			DP_UUID(pool->dp_pool), rc);
+		D_GOTO(out_pool, rc);
+	}
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->plci_op.pi_uuid, pool->dp_pool);
+	uuid_copy(in->plci_op.pi_hdl, pool->dp_pool_hdl);
+	/* If provided cont_buf is NULL, caller needs the number of containers
+	 * to be returned in ncont. Set ncont=0 in the request in this case
+	 * (caller value may be uninitialized).
+	 */
+	if (args->cont_buf == NULL)
+		in->plci_ncont = 0;
+	else
+		in->plci_ncont = *args->ncont;
+	in->plci_cont_bulk = CRT_BULK_NULL;
+
+	D_DEBUG(DF_DSMC, "req_ncont="DF_U64" (cont_buf=%p, *ncont="DF_U64"\n",
+			 in->plci_ncont, args->cont_buf,
+			 *args->ncont);
+
+	/** +1 for args */
+	crt_req_addref(rpc);
+
+	if ((*args->ncont > 0) && args->cont_buf) {
+		rc = list_cont_bulk_create(daos_task2ctx(task),
+					   &in->plci_cont_bulk,
+					   args->cont_buf, in->plci_ncont);
+		if (rc != 0)
+			D_GOTO(out_rpc, rc);
+	}
+
+	lc_cb_args.lca_pool = pool;
+	lc_cb_args.lca_ncont = args->ncont;
+	lc_cb_args.lca_cont_buf = args->cont_buf;
+	lc_cb_args.rpc = rpc;
+	lc_cb_args.lca_req_ncont = in->plci_ncont;
+
+	rc = tse_task_register_comp_cb(task, pool_list_cont_cb, &lc_cb_args,
+				       sizeof(lc_cb_args));
+	if (rc != 0)
+		D_GOTO(out_bulk, rc);
+
+	/** send the request */
+	rc = daos_rpc_send(rpc, task);
+	if (rc != 0)
+		D_GOTO(out_bulk, rc);
+
+	return rc;
+out_bulk:
+	if (in->plci_ncont > 0)
+		list_cont_bulk_destroy(in->plci_cont_bulk);
+
+out_rpc:
+	crt_req_decref(rpc);
+	crt_req_decref(rpc);
+out_pool:
+	dc_pool_put(pool);
+out_task:
+	tse_task_complete(task, rc);
+	return rc;
+}
+
 struct pool_evict_state {
 	struct rsvc_client	client;
 	struct dc_mgmt_sys     *sys;
@@ -1488,6 +1656,8 @@ pool_evict_cp(tse_task_t *task, void *data)
 
 	rc = out->pvo_op.po_rc;
 	if (rc != 0) {
+		if (rc == -DER_NOTREPLICA)
+			rc = -DER_NONEXIST;
 		D_ERROR("failed to evict pool handles: %d\n", rc);
 		D_GOTO(out, rc);
 	}

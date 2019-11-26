@@ -1,0 +1,49 @@
+// (C) Copyright 2019 Intel Corporation.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+// The Government's rights to use, modify, reproduce, release, perform, display,
+// or disclose this software are subject to the terms of the Apache License as
+// provided in Contract No. 8F-30005.
+// Any reproduction of computer software, computer software documentation, or
+// portions thereof marked with this legend must also reproduce the markings.
+//
+
+syntax = "proto3";
+package ctl;
+
+message EmptyReq {}
+
+message FilePath {
+	string path = 1;
+}
+
+enum ResponseStatus {
+	CTL_SUCCESS = 0;
+	CTL_IN_PROGRESS = 1;	// Not yet completed
+	CTL_WAITING = 2;	// Blocked
+	CTL_ERR_CONF = -1;	// Config file parsing error
+	CTL_ERR_NVME = -2;	// NVMe subsystem error
+	CTL_ERR_SCM = -3;	// SCM subsystem error
+	CTL_ERR_APP = -4;	// Other application error
+	CTL_ERR_UNKNOWN = -5;	// Unknown error
+	CTL_NO_IMPL = -6;	// No implementation
+}
+
+message ResponseState {
+	ResponseStatus status = 1;
+	string error = 2;
+	string info = 3;
+}
+

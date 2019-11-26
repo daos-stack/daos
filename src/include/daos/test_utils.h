@@ -74,6 +74,12 @@ Drpc__Call *new_drpc_call_with_module(int module_id);
 void mock_valid_drpc_call_in_recvmsg(void);
 
 /**
+ * Using mocks in test_mocks.h, sets up recvmsg mock to populate a valid
+ * serialized Drpc__Response as the message received.
+ */
+void mock_valid_drpc_resp_in_recvmsg(Drpc__Status status);
+
+/**
  * Generates a valid Drpc__Response structure.
  *
  * \return	Newly allocated Drpc__Response

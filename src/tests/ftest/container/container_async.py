@@ -30,7 +30,7 @@ import threading
 
 from apricot import TestWithServers
 
-from daos_api import  DaosPool, DaosContainer, DaosApiError
+from pydaos.raw import  DaosPool, DaosContainer, DaosApiError
 
 # pylint: disable=global-variable-not-assigned, global-statement
 GLOB_SIGNAL = None

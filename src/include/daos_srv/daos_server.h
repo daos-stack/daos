@@ -55,6 +55,8 @@ extern const char      *dss_socket_dir;
 /** NVMe shm_id for enabling SPDK multi-process mode */
 extern int		dss_nvme_shm_id;
 
+/** IO server instance index */
+extern unsigned int	dss_instance_idx;
 
 /**
  * Stackable Module API
@@ -335,7 +337,9 @@ enum dss_ult_type {
 	/** aggregation ULT */
 	DSS_ULT_AGGREGATE,
 	/** drpc listener ULT */
-	DSS_ULT_DRPC,
+	DSS_ULT_DRPC_LISTENER,
+	/** drpc handler ULT */
+	DSS_ULT_DRPC_HANDLER,
 	/** miscellaneous ULT */
 	DSS_ULT_MISC,
 };
@@ -352,6 +356,17 @@ int dss_ult_create_all(void (*func)(void *), void *arg, bool main);
 int dss_ult_create_execute(int (*func)(void *), void *arg,
 			   void (*user_cb)(void *), void *cb_args,
 			   int ult_type, int tgt_id, size_t stack_size);
+
+struct dss_sleep_ult {
+	ABT_thread	dsu_thread;
+	uint64_t	dsu_expire_time;
+	d_list_t	dsu_list;
+};
+
+struct dss_sleep_ult *dss_sleep_ult_create(void);
+void dss_sleep_ult_destroy(struct dss_sleep_ult *dsu);
+void dss_ult_sleep(struct dss_sleep_ult *dsu, uint64_t expire_secs);
+void dss_ult_wakeup(struct dss_sleep_ult *dsu);
 
 /* Pack return codes with additional argument to reduce */
 struct dss_stream_arg_type {
@@ -412,7 +427,7 @@ struct dss_coll_args {
 	void				*ca_func_args;
 	void				*ca_aggregator;
 	int				*ca_exclude_tgts;
-	int				ca_exclude_tgts_cnt;
+	unsigned int			ca_exclude_tgts_cnt;
 	/** Stream arguments for all streams */
 	struct dss_coll_stream_args	ca_stream_args;
 };
@@ -509,8 +524,7 @@ int dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
 		daos_iom_t *maps);
 int dsc_obj_list_obj(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		daos_key_t *akey, daos_size_t *size, uint32_t *nr,
-		daos_key_desc_t *kds, daos_epoch_range_t *eprs,
-		d_sg_list_t *sgl, daos_anchor_t *anchor,
+		daos_key_desc_t *kds, d_sg_list_t *sgl, daos_anchor_t *anchor,
 		daos_anchor_t *dkey_anchor, daos_anchor_t *akey_anchor);
 int dsc_pool_tgt_exclude(const uuid_t uuid, const char *grp,
 			 const d_rank_list_t *svc, struct d_tgt_list *tgts);
@@ -567,16 +581,18 @@ dss_enum_pack(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
  * data, then ui_sgls[i].sg_iovs[j] will be empty.
  */
 struct dss_enum_unpack_io {
-	daos_unit_oid_t	ui_oid;		/**< type <= OBJ */
-	daos_key_t	ui_dkey;	/**< type <= DKEY */
-	daos_iod_t     *ui_iods;
-	int		ui_iods_cap;
-	int		ui_iods_len;
-	int	       *ui_recxs_caps;
-	daos_epoch_t	ui_dkey_eph;
-	daos_epoch_t   *ui_akey_ephs;
-	d_sg_list_t *ui_sgls;	/**< optional */
-	uint32_t	ui_version;
+	daos_unit_oid_t		 ui_oid;	/**< type <= OBJ */
+	daos_key_t		 ui_dkey;	/**< type <= DKEY */
+	daos_iod_t		*ui_iods;
+	/* punched epochs per akey */
+	daos_epoch_t		*ui_akey_punch_ephs;
+	int			 ui_iods_cap;
+	int			 ui_iods_top;
+	int			*ui_recxs_caps;
+	/* punched epochs for dkey */
+	daos_epoch_t		ui_dkey_punch_eph;
+	d_sg_list_t		*ui_sgls;	/**< optional */
+	uint32_t		 ui_version;
 };
 
 typedef int (*dss_enum_unpack_cb_t)(struct dss_enum_unpack_io *io, void *arg);
@@ -602,6 +618,11 @@ bool dss_pmixless(void);
 /* default credits */
 #define	DSS_GC_CREDS	256
 
-void dss_gc_run(int credits);
+/**
+ * Run GC for an opened pool, it run GC for all pools if @poh is DAOS_HDL_INVAL
+ */
+void dss_gc_run(daos_handle_t poh, int credits);
+
+bool dss_aggregation_disabled(void);
 
 #endif /* __DSS_API_H__ */

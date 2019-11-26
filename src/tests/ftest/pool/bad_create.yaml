@@ -15,12 +15,12 @@ createtests:
    uids: !mux
       gooduid:
          uid:
-             - 12374638
+             - VALID
              - PASS
    gids: !mux
       goodgid:
          gid:
-             - 12374638
+             - VALID
              - PASS
    setnames: !mux
       badstring:

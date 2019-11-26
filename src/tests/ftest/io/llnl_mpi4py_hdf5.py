@@ -28,7 +28,7 @@ from apricot import TestWithServers, skipForTicket
 
 import write_host_file
 from mpio_utils import MpioUtils, MpioFailed
-from daos_api import DaosPool, DaosApiError
+from pydaos.raw import DaosPool, DaosApiError
 
 class LlnlMpi4pyHdf5(TestWithServers):
     """

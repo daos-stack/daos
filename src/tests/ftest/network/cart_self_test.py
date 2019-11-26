@@ -29,7 +29,7 @@ from apricot import TestWithoutServers
 import agent_utils
 import server_utils
 import write_host_file
-from daos_api import DaosContext, DaosLog
+from pydaos.raw import DaosContext, DaosLog
 
 class CartSelfTest(TestWithoutServers):
     """
@@ -59,8 +59,7 @@ class CartSelfTest(TestWithoutServers):
         self.hostfile_servers = write_host_file.write_host_file(
             self.hostlist_servers, self.workdir)
 
-        context = DaosContext(self.prefix + '/lib/')
-        self.d_log = DaosLog(context)
+        self.d_log = DaosLog(self.context)
 
         # self_test params
         self.self_test_bin = os.path.join(self.prefix, "bin/self_test")
@@ -88,9 +87,8 @@ class CartSelfTest(TestWithoutServers):
         self.uri_file = os.path.join(self.basepath, "install", "tmp", "uri.txt")
         self.agent_sessions = agent_utils.run_agent(self.basepath,
                                                     self.hostlist_servers)
-        server_utils.run_server(self.hostfile_servers, self.server_group,
-                                self.basepath, uri_path=self.uri_file,
-                                env_dict=self.env_dict)
+        server_utils.run_server(self, self.hostfile_servers, self.server_group,
+                                uri_path=self.uri_file, env_dict=self.env_dict)
 
     def tearDown(self):
         try:

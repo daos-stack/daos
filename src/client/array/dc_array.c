@@ -567,8 +567,6 @@ dc_array_create(tse_task_t *task)
 	open_args->mode	= DAOS_OO_RW;
 	open_args->oh	= args->oh;
 
-	tse_task_schedule(open_task, false);
-
 	/** Create task to write object metadata */
 	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(task),
 			      1, &open_task, &update_task);
@@ -600,6 +598,7 @@ dc_array_create(tse_task_t *task)
 		D_GOTO(err_put2, rc);
 	}
 
+	tse_task_schedule(open_task, false);
 	tse_task_schedule(update_task, false);
 	tse_sched_progress(tse_task2sched(task));
 
@@ -751,8 +750,6 @@ dc_array_open(tse_task_t *task)
 	open_args->mode	= args->mode;
 	open_args->oh	= args->oh;
 
-	tse_task_schedule(open_task, false);
-
 	/** if this is an open_with_attr call, just add the handle CB */
 	if (args->open_with_attr) {
 		/** The upper task completes when the open task completes */
@@ -769,6 +766,7 @@ dc_array_open(tse_task_t *task)
 			D_GOTO(err_put1, rc);
 		}
 
+		tse_task_schedule(open_task, false);
 		tse_sched_progress(tse_task2sched(task));
 		return rc;
 	}
@@ -826,6 +824,7 @@ dc_array_open(tse_task_t *task)
 		D_GOTO(err_put2, rc);
 	}
 
+	tse_task_schedule(open_task, false);
 	tse_task_schedule(fetch_task, false);
 	tse_sched_progress(tse_task2sched(task));
 
@@ -937,6 +936,26 @@ err_put1:
 err_ptask:
 	tse_task_complete(task, rc);
 	return rc;
+}
+
+int
+dc_array_get_attr(daos_handle_t oh, daos_size_t *chunk_size,
+		  daos_size_t *cell_size)
+{
+	struct dc_array		*array;
+
+	if (chunk_size == NULL || cell_size == NULL)
+		return -DER_INVAL;
+
+	/** decref for that in free_handle_cb */
+	array = array_hdl2ptr(oh);
+	if (array == NULL)
+		return -DER_NO_HDL;
+
+	*chunk_size = array->chunk_size;
+	*cell_size = array->cell_size;
+
+	return 0;
 }
 
 static bool
@@ -1078,6 +1097,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	daos_csum_buf_t	null_csum;
 	struct io_params *head, *current = NULL;
 	daos_size_t	num_ios;
+	d_list_t	io_task_list;
 	int		rc;
 
 	if (rg_iod == NULL) {
@@ -1110,13 +1130,14 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	dcb_set_null(&null_csum);
 
 	head = NULL;
-
+	D_INIT_LIST_HEAD(&io_task_list);
 	/*
 	 * Loop over every range, but at the same time combine consecutive
 	 * ranges that belong to the same dkey. If the user gives ranges that
 	 * are not increasing in offset, they probably won't be combined unless
 	 * the separating ranges also belong to the same dkey.
 	 */
+
 	while (u < rg_iod->arr_nr) {
 		daos_iod_t	*iod;
 		d_sg_list_t	*sgl;
@@ -1298,8 +1319,6 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 		}
 		/** create an sgl from the user sgl for the current IOD */
 		else {
-			daos_size_t s;
-
 			/* set sgl for current dkey */
 			rc = create_sgl(user_sgl, array->cell_size,
 					dkey_records, &cur_off, &cur_i, sgl);
@@ -1307,15 +1326,6 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 				D_ERROR("Failed to create sgl\n");
 				D_GOTO(err_task, rc);
 			}
-
-			D_DEBUG(DB_IO, "DKEY SGL -----------------------\n");
-			D_DEBUG(DB_IO, "sg_nr = %u\n", sgl->sg_nr);
-			for (s = 0; s < sgl->sg_nr; s++) {
-				D_DEBUG(DB_IO, "%zu: length %zu, Buf %p\n",
-					s, sgl->sg_iovs[s].iov_len,
-					sgl->sg_iovs[s].iov_buf);
-			}
-			D_DEBUG(DB_IO, "--------------------------------\n");
 		}
 
 		/* issue IO to DAOS */
@@ -1362,9 +1372,10 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 		}
 
 		tse_task_register_deps(task, 1, &io_task);
-		tse_task_schedule(io_task, false);
+		tse_task_list_add(io_task, &io_task_list);
 	} /* end while */
 
+	tse_task_list_sched(&io_task_list, false);
 	array_decref(array);
 	tse_sched_progress(tse_task2sched(task));
 	return 0;

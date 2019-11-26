@@ -117,7 +117,7 @@ class IorCommand(ExecutableCommand):
         # List all of the common ior params first followed by any daos-specific
         # params (except when using MPIIO).
         param_names = [name for name in all_param_names if "daos" not in name]
-        if self.api.value != "MPIIO":
+        if self.api.value not in ["MPIIO", "POSIX"]:
             param_names.extend(
                 [name for name in all_param_names if "daos" in name])
 

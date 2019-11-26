@@ -80,7 +80,7 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 		if (rc != 0) {
 			D_ERROR("Device UUID:"DF_UUID" not found\n",
 				DP_UUID(dev_uuid));
-			goto out;
+			return rc;
 		}
 		if (dev_info->sdi_tgts == NULL) {
 			D_ERROR("No targets mapped to device\n");
@@ -94,7 +94,7 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 		rc = smd_dev_get_by_tgt(tgt_id, &dev_info);
 		if (rc != 0) {
 			D_ERROR("Tgt_id:%d not found\n", tgt_id);
-			goto out;
+			return rc;
 		}
 		uuid_copy(dev_uuid, dev_info->sdi_id);
 	}
@@ -148,14 +148,12 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 	d_list_for_each_entry_safe(dev_info, tmp, &dev_list, sdi_link) {
 		D_ALLOC(resp->devices[i], sizeof(*(resp->devices[i])));
 		if (resp->devices[i] == NULL) {
-			D_ERROR("Failed to allocate device\n");
 			rc = -DER_NOMEM;
 			break;
 		}
 		mgmt__smd_dev_resp__device__init(resp->devices[i]);
 		D_ALLOC(resp->devices[i]->uuid, DAOS_UUID_STR_SIZE);
 		if (resp->devices[i]->uuid == NULL) {
-			D_ERROR("Failed to allocate device uuid\n");
 			rc = -DER_NOMEM;
 			break;
 		}
@@ -179,7 +177,7 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 		i++;
 	}
 
-	/* Free all devices is there was an error allocating any */
+	/* Free all devices if there was an error allocating any */
 	if (rc != 0) {
 		d_list_for_each_entry_safe(dev_info, tmp, &dev_list, sdi_link) {
 			d_list_del(&dev_info->sdi_link);
@@ -201,6 +199,102 @@ ds_mgmt_smd_list_devs(Mgmt__SmdDevResp *resp)
 		goto out;
 	}
 	resp->n_devices = dev_list_cnt;
+
+out:
+	return rc;
+}
+
+int
+ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp)
+{
+	struct smd_pool_info	*pool_info = NULL, *tmp;
+	d_list_t		 pool_list;
+	int			 pool_list_cnt = 0;
+	int			 i = 0, j;
+	int			 rc = 0;
+
+	D_DEBUG(DB_MGMT, "Querying SMD pool list\n");
+
+	D_INIT_LIST_HEAD(&pool_list);
+	rc = smd_pool_list(&pool_list, &pool_list_cnt);
+	if (rc != 0) {
+		D_ERROR("Failed to get all VOS pools from SMD\n");
+		return rc;
+	}
+
+	D_ALLOC(resp->pools, sizeof(*resp->pools) * pool_list_cnt);
+	if (resp->pools == NULL) {
+		D_ERROR("Failed to allocate pools for resp\n");
+		return -DER_NOMEM;
+	}
+
+	d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {
+		D_ALLOC(resp->pools[i], sizeof(*(resp->pools[i])));
+		if (resp->pools[i] == NULL) {
+			rc = -DER_NOMEM;
+			break;
+		}
+		mgmt__smd_pool_resp__pool__init(resp->pools[i]);
+		D_ALLOC(resp->pools[i]->uuid, DAOS_UUID_STR_SIZE);
+		if (resp->pools[i]->uuid == NULL) {
+			rc = -DER_NOMEM;
+			break;
+		}
+		uuid_unparse_lower(pool_info->spi_id, resp->pools[i]->uuid);
+
+		resp->pools[i]->n_tgt_ids = pool_info->spi_tgt_cnt;
+		D_ALLOC(resp->pools[i]->tgt_ids,
+			sizeof(int) * pool_info->spi_tgt_cnt);
+		if (resp->pools[i]->tgt_ids == NULL) {
+			rc = -DER_NOMEM;
+			break;
+		}
+		for (j = 0; j < pool_info->spi_tgt_cnt; j++)
+			resp->pools[i]->tgt_ids[j] = pool_info->spi_tgts[j];
+
+		resp->pools[i]->n_blobs = pool_info->spi_tgt_cnt;
+		D_ALLOC(resp->pools[i]->blobs,
+			sizeof(uint64_t) * pool_info->spi_tgt_cnt);
+		if (resp->pools[i]->blobs == NULL) {
+			rc = -DER_NOMEM;
+			break;
+		}
+		for (j = 0; j < pool_info->spi_tgt_cnt; j++)
+			resp->pools[i]->blobs[j] = pool_info->spi_blobs[j];
+
+
+		d_list_del(&pool_info->spi_link);
+		/* Frees spi_tgts, spi_blobs, and pool_info */
+		smd_free_pool_info(pool_info);
+		pool_info = NULL;
+
+		i++;
+	}
+
+	/* Free all pools if there was an error allocating any */
+	if (rc != 0) {
+		d_list_for_each_entry_safe(pool_info, tmp, &pool_list,
+					   spi_link) {
+			d_list_del(&pool_info->spi_link);
+			smd_free_pool_info(pool_info);
+		}
+		for (; i >= 0; i--) {
+			if (resp->pools[i] != NULL) {
+				if (resp->pools[i]->uuid != NULL)
+					D_FREE(resp->pools[i]->uuid);
+				if (resp->pools[i]->tgt_ids != NULL)
+					D_FREE(resp->pools[i]->tgt_ids);
+				if (resp->pools[i]->blobs != NULL)
+					D_FREE(resp->pools[i]->blobs);
+				D_FREE(resp->pools[i]);
+			}
+		}
+		D_FREE(resp->pools);
+		resp->pools = NULL;
+		resp->n_pools = 0;
+		goto out;
+	}
+	resp->n_pools = pool_list_cnt;
 
 out:
 	return rc;

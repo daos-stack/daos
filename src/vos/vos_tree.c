@@ -78,8 +78,6 @@ iov2rec_bundle(d_iov_t *val_iov)
 struct ktr_hkey {
 	/** murmur64 hash */
 	uint64_t		kh_hash[2];
-	/** epoch when this key is punched. */
-	uint64_t		kh_epoch;
 	/** cacheline alignment */
 	uint64_t		kh_pad_64;
 };
@@ -89,7 +87,7 @@ struct ktr_hkey {
  */
 static int
 ktr_rec_store(struct btr_instance *tins, struct btr_record *rec,
-	      struct vos_key_bundle *kbund, struct vos_rec_bundle *rbund)
+	      d_iov_t *key_iov, struct vos_rec_bundle *rbund)
 {
 	struct vos_krec_df *krec = vos_rec2krec(tins, rec);
 	d_iov_t	   *iov	 = rbund->rb_iov;
@@ -105,7 +103,7 @@ ktr_rec_store(struct btr_instance *tins, struct btr_record *rec,
 	kbuf = vos_krec2key(krec);
 
 	if (iov->iov_buf != NULL) {
-		D_ASSERT(iov->iov_buf == kbund->kb_key->iov_buf);
+		D_ASSERT(iov->iov_buf == key_iov->iov_buf);
 		memcpy(kbuf, iov->iov_buf, iov->iov_len);
 	} else {
 		/* return it for RDMA */
@@ -121,7 +119,7 @@ ktr_rec_store(struct btr_instance *tins, struct btr_record *rec,
  */
 static int
 ktr_rec_load(struct btr_instance *tins, struct btr_record *rec,
-	     struct vos_key_bundle *kbund, struct vos_rec_bundle *rbund)
+	     d_iov_t *key, struct vos_rec_bundle *rbund)
 {
 	struct vos_krec_df *krec = vos_rec2krec(tins, rec);
 	d_iov_t	   *iov	 = rbund->rb_iov;
@@ -131,13 +129,8 @@ ktr_rec_load(struct btr_instance *tins, struct btr_record *rec,
 	kbuf = vos_krec2key(krec);
 	iov->iov_len = krec->kr_size;
 
-	if (kbund != NULL) {
-		if (kbund->kb_key != NULL) {
-			d_iov_set(kbund->kb_key, kbuf, krec->kr_size);
-		} else {
-			kbund->kb_key = iov;
-		}
-	}
+	if (key != NULL)
+		d_iov_set(key, kbuf, krec->kr_size);
 
 	if (iov->iov_buf == NULL) {
 		iov->iov_buf = kbuf;
@@ -184,13 +177,11 @@ static void
 ktr_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 {
 	struct ktr_hkey		*kkey  = (struct ktr_hkey *)hkey;
-	struct vos_key_bundle	*kbund = iov2key_bundle(key_iov);
-	daos_key_t		*key   = kbund->kb_key;
 
-	kkey->kh_hash[0] = d_hash_murmur64(key->iov_buf, key->iov_len,
+	kkey->kh_hash[0] = d_hash_murmur64(key_iov->iov_buf, key_iov->iov_len,
 					   VOS_BTR_MUR_SEED);
-	kkey->kh_hash[1] = d_hash_string_u32(key->iov_buf, key->iov_len);
-	kkey->kh_epoch	 = kbund->kb_epoch;
+	kkey->kh_hash[1] = d_hash_string_u32(key_iov->iov_buf,
+					     key_iov->iov_len);
 }
 
 /** compare the hashed key */
@@ -211,12 +202,6 @@ ktr_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 
 	if (k1->kh_hash[1] > k2->kh_hash[1])
 		return BTR_CMP_GT;
-
-	if (k1->kh_epoch > k2->kh_epoch)
-		return BTR_CMP_GT | BTR_CMP_MATCHED;
-
-	if (k1->kh_epoch < k2->kh_epoch)
-		return BTR_CMP_LT | BTR_CMP_MATCHED;
 
 	return BTR_CMP_EQ;
 }
@@ -278,34 +263,21 @@ static int
 ktr_key_cmp(struct btr_instance *tins, struct btr_record *rec,
 	    d_iov_t *key_iov)
 {
-	d_iov_t		*kiov;
 	struct vos_krec_df	*krec;
-	struct vos_key_bundle	*kbund;
 	uint64_t		 feats = tins->ti_root->tr_feats;
-	daos_epoch_t		 punched = DAOS_EPOCH_MAX;
 	int			 cmp = 0;
 
 	krec  = vos_rec2krec(tins, rec);
-	kbund = iov2key_bundle(key_iov);
-	kiov  = kbund->kb_key;
 
 	if (feats & VOS_KEY_CMP_UINT64)
-		cmp = ktr_key_cmp_uint64(krec, kiov);
+		cmp = ktr_key_cmp_uint64(krec, key_iov);
 	else if (feats & VOS_KEY_CMP_LEXICAL)
-		cmp = ktr_key_cmp_lexical(krec, kiov);
+		cmp = ktr_key_cmp_lexical(krec, key_iov);
 	else
-		cmp = ktr_key_cmp_default(krec, kiov);
+		cmp = ktr_key_cmp_default(krec, key_iov);
 
 	if (cmp != BTR_CMP_EQ)
 		return cmp;
-
-	if (krec->kr_bmap & KREC_BF_PUNCHED)
-		punched = krec->kr_latest;
-	if (punched > kbund->kb_epoch)
-		return BTR_CMP_GT | BTR_CMP_MATCHED;
-
-	if (punched < kbund->kb_epoch)
-		return BTR_CMP_LT | BTR_CMP_MATCHED;
 
 	return BTR_CMP_EQ;
 }
@@ -314,18 +286,14 @@ static void
 ktr_key_encode(struct btr_instance *tins, d_iov_t *key,
 	       daos_anchor_t *anchor)
 {
-	struct vos_key_bundle *kbund = iov2key_bundle(key);
-
-	if (kbund->kb_key) {
+	if (key) {
 		struct vos_embedded_key *embedded =
 			(struct vos_embedded_key *)anchor->da_buf;
-		D_ASSERT(kbund->kb_key->iov_len <= sizeof(embedded->ek_key));
+		D_ASSERT(key->iov_len <= sizeof(embedded->ek_key));
 
-		memcpy(embedded->ek_key, kbund->kb_key->iov_buf,
-		       kbund->kb_key->iov_len);
-		embedded->ek_kbund.kb_epoch = kbund->kb_epoch;
+		memcpy(embedded->ek_key, key->iov_buf, key->iov_len);
 		/** Pointers will have to be set on decode. */
-		embedded->ek_kiov.iov_len = kbund->kb_key->iov_len;
+		embedded->ek_kiov.iov_len = key->iov_len;
 		embedded->ek_kiov.iov_buf_len = sizeof(embedded->ek_key);
 	}
 }
@@ -337,11 +305,9 @@ ktr_key_decode(struct btr_instance *tins, d_iov_t *key,
 	struct vos_embedded_key *embedded =
 		(struct vos_embedded_key *) anchor->da_buf;
 
+	/* Fix the pointer first */
 	embedded->ek_kiov.iov_buf = &embedded->ek_key[0];
-	embedded->ek_kbund.kb_key = &embedded->ek_kiov;
-
-	key->iov_buf = &embedded->ek_kbund;
-	key->iov_len = key->iov_buf_len = sizeof(embedded->ek_kbund);
+	*key = embedded->ek_kiov;
 }
 
 /** create a new key-record, or install an externally allocated key-record */
@@ -349,12 +315,10 @@ static int
 ktr_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	      d_iov_t *val_iov, struct btr_record *rec)
 {
-	struct vos_key_bundle	*kbund;
 	struct vos_rec_bundle	*rbund;
 	struct vos_krec_df	*krec;
 	int			 rc = 0;
 
-	kbund = iov2key_bundle(key_iov);
 	rbund = iov2rec_bundle(val_iov);
 
 	rec->rec_off = umem_zalloc(&tins->ti_umm, vos_krec_size(rbund));
@@ -362,18 +326,10 @@ ktr_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 		return -DER_NOSPACE;
 
 	krec = vos_rec2krec(tins, rec);
-	if (kbund->kb_epoch == DAOS_EPOCH_MAX) {
-		/* These will be updated on first update */
-		krec->kr_earliest = DAOS_EPOCH_MAX;
-		krec->kr_latest = 0;
-	} else {
-		/* NB: if it's the first time punch, kr_earliest will be updated
-		 * to timestamp of punched tree.  If it's a replay, we know it
-		 * will never be greater than the punched epoch so it's a
-		 * reasonable starting boundary.
-		 */
-		krec->kr_earliest = krec->kr_latest = kbund->kb_epoch;
-		krec->kr_bmap |= KREC_BF_PUNCHED;
+	rc = ilog_create(&tins->ti_umm, &krec->kr_ilog);
+	if (rc != 0) {
+		D_ERROR("Failure to create incarnation log\n");
+		return rc;
 	}
 
 	if (rbund->rb_tclass == VOS_BTR_DKEY)
@@ -381,12 +337,7 @@ ktr_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 
 	rbund->rb_krec = krec;
 
-	/** Subtree will be created later */
-
-	rc = vos_dtx_register_record(&tins->ti_umm, rec->rec_off,
-				     DTX_RT_KEY, 0);
-	if (rc == 0)
-		ktr_rec_store(tins, rec, kbund, rbund);
+	ktr_rec_store(tins, rec, key_iov, rbund);
 
 	return rc;
 }
@@ -394,9 +345,11 @@ ktr_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 static int
 ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
-	struct vos_krec_df *krec;
-	struct umem_attr    uma;
-	int		    gc;
+	struct vos_krec_df	*krec;
+	struct umem_attr	 uma;
+	struct ilog_desc_cbs	 cbs;
+	int			 gc;
+	int			 rc;
 
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return 0;
@@ -404,13 +357,10 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	krec = vos_rec2krec(tins, rec);
 	umem_attr_get(&tins->ti_umm, &uma);
 
-	vos_dtx_deregister_record(&tins->ti_umm, krec->kr_dtx, rec->rec_off,
-				  DTX_RT_KEY);
-	if (krec->kr_dtx_shares > 0) {
-		D_ERROR("There are some unknown DTXs (%d) share the key rec\n",
-			krec->kr_dtx_shares);
-		return -DER_BUSY;
-	}
+	vos_ilog_desc_cbs_init(&cbs, DAOS_HDL_INVAL);
+	rc = ilog_destroy(&tins->ti_umm, &cbs, &krec->kr_ilog);
+	if (rc != 0)
+		return rc;
 
 	D_ASSERT(tins->ti_priv);
 	gc = (krec->kr_bmap & KREC_BF_DKEY) ? GC_DKEY : GC_AKEY;
@@ -424,22 +374,12 @@ ktr_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 {
 	struct vos_krec_df	*krec = vos_rec2krec(tins, rec);
 	struct vos_rec_bundle	*rbund = iov2rec_bundle(val_iov);
-	struct vos_key_bundle	*kbund = NULL;
 
 	rbund->rb_krec = krec;
 
-	if (key_iov != NULL) {
-		kbund = iov2key_bundle(key_iov);
-		/* NB: For now, this preserves previous fetch semantics but
-		 * need to investigate further if it's needed
-		 */
-		if (krec->kr_bmap & KREC_BF_PUNCHED)
-			kbund->kb_epoch = krec->kr_latest;
-		else
-			kbund->kb_epoch = DAOS_EPOCH_MAX;
+	if (key_iov != NULL)
+		ktr_rec_load(tins, rec, key_iov, rbund);
 
-		ktr_rec_load(tins, rec, kbund, rbund);
-	}
 	return 0;
 }
 
@@ -457,18 +397,6 @@ ktr_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	return 0;
 }
 
-static int
-ktr_check_availability(struct btr_instance *tins, struct btr_record *rec,
-		       uint32_t intent)
-{
-	struct vos_krec_df	*key;
-
-	key = umem_off2ptr(&tins->ti_umm, rec->rec_off);
-	return vos_dtx_check_availability(&tins->ti_umm, tins->ti_coh,
-				  key->kr_dtx, rec->rec_off, intent,
-				  DTX_RT_KEY);
-}
-
 static btr_ops_t key_btr_ops = {
 	.to_rec_msize		= ktr_rec_msize,
 	.to_hkey_size		= ktr_hkey_size,
@@ -481,7 +409,6 @@ static btr_ops_t key_btr_ops = {
 	.to_rec_free		= ktr_rec_free,
 	.to_rec_fetch		= ktr_rec_fetch,
 	.to_rec_update		= ktr_rec_update,
-	.to_check_availability	= ktr_check_availability,
 };
 
 /**
@@ -506,6 +433,7 @@ static int
 svt_rec_store(struct btr_instance *tins, struct btr_record *rec,
 	      struct vos_key_bundle *kbund, struct vos_rec_bundle *rbund)
 {
+	struct dtx_handle	*dth	= vos_dth_get();
 	struct vos_irec_df	*irec	= vos_rec2irec(tins, rec);
 	daos_csum_buf_t		*csum	= rbund->rb_csum;
 	struct bio_iov		*biov	= rbund->rb_biov;
@@ -526,7 +454,18 @@ svt_rec_store(struct btr_instance *tins, struct btr_record *rec,
 	/** at this point, it's assumed that enough was allocated for the irec
 	 *  to hold a checksum of length csum->cs_len
 	 */
-	memcpy(vos_irec2csum(irec), csum->cs_csum, csum->cs_len);
+	if (dth != NULL && dth->dth_leader &&
+	    irec->ir_ex_addr.ba_type == DAOS_MEDIA_SCM &&
+	    DAOS_FAIL_CHECK(DAOS_VC_DIFF_REC)) {
+		void	*addr;
+
+		irec->ir_cs_size = 0;
+		irec->ir_cs_type = 0;
+		addr = vos_irec2data(irec);
+		*((int *)addr) = rand();
+	} else {
+		memcpy(vos_irec2csum(irec), csum->cs_csum, csum->cs_len);
+	}
 
 	return 0;
 }
@@ -621,6 +560,7 @@ svt_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 {
 	struct vos_rec_bundle	*rbund;
 	struct vos_key_bundle	*kbund;
+	struct vos_irec_df	*irec;
 	int			 rc = 0;
 
 	kbund = iov2key_bundle(key_iov);
@@ -638,8 +578,9 @@ svt_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 		rbund->rb_off = UMOFF_NULL; /* taken over by btree */
 	}
 
+	irec	= vos_rec2irec(tins, rec);
 	rc = vos_dtx_register_record(&tins->ti_umm, rec->rec_off,
-				     DTX_RT_SVT, 0);
+				     DTX_RT_SVT, &irec->ir_dtx);
 	if (rc != 0)
 		/* It is unnecessary to free the PMEM that will be dropped
 		 * automatically when the PMDK transaction is aborted.
@@ -800,8 +741,8 @@ evt_dop_log_status(struct umem_instance *umm, struct evt_desc *desc,
 int
 evt_dop_log_add(struct umem_instance *umm, struct evt_desc *desc, void *args)
 {
-	return vos_dtx_register_record(umm, umem_ptr2off(umm, desc),
-				       DTX_RT_EVT, 0);
+	return vos_dtx_register_record(umm, umem_ptr2off(umm, desc), DTX_RT_EVT,
+				       &desc->dc_dtx);
 }
 
 int
@@ -872,7 +813,13 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 		goto out;
 	}
 
-	D_ASSERT(flags & SUBTR_CREATE);
+	if ((flags & SUBTR_CREATE) == 0) {
+		/** This can happen if application does a punch first before any
+		 *  updates.   Simply return -DER_NONEXIST in such case.
+		 */
+		rc = -DER_NONEXIST;
+		goto out;
+	}
 
 	if (flags & SUBTR_EVT) {
 		rc = evt_create(&krec->kr_evt, vos_evt_feats, VOS_EVT_ORDER,
@@ -928,17 +875,15 @@ out:
  *		  load both btree and evtree root.
  */
 int
-key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
-		 daos_handle_t toh, enum vos_tree_class tclass,
-		 daos_key_t *key, int flags, uint32_t intent,
-		 struct vos_krec_df **krecp, daos_handle_t *sub_toh)
+key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
+		 enum vos_tree_class tclass, daos_key_t *key, int flags,
+		 uint32_t intent, struct vos_krec_df **krecp,
+		 daos_handle_t *sub_toh)
 {
 	struct vos_krec_df	*krec;
 	daos_csum_buf_t		 csum;
-	struct vos_key_bundle	 kbund;
 	struct vos_rec_bundle	 rbund;
-	d_iov_t		 kiov;
-	d_iov_t		 riov;
+	d_iov_t			 riov;
 	int			 rc;
 
 	if (krecp != NULL)
@@ -947,10 +892,6 @@ key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
 	D_DEBUG(DB_TRACE, "prepare tree, flags=%x, tclass=%d\n", flags, tclass);
 	if (tclass != VOS_BTR_AKEY && (flags & SUBTR_EVT))
 		D_GOTO(out, rc = -DER_INVAL);
-
-	tree_key_bundle2iov(&kbund, &kiov);
-	kbund.kb_key	= key;
-	kbund.kb_epoch	= epoch;
 
 	tree_rec_bundle2iov(&rbund, &riov);
 	rbund.rb_off	= UMOFF_NULL;
@@ -967,44 +908,30 @@ key_tree_prepare(struct vos_object *obj, daos_epoch_t epoch,
 	 *   create the root for the subtree, or just return it if it's already
 	 *   there.
 	 */
-	rc = dbtree_fetch(toh, BTR_PROBE_GE | BTR_PROBE_MATCHED, intent, &kiov,
+	rc = dbtree_fetch(toh, BTR_PROBE_EQ, intent, key,
 			  NULL, &riov);
 	switch (rc) {
 	default:
 		D_ERROR("fetch failed: %d\n", rc);
 		goto out;
-
-	case -DER_INPROGRESS:
-		/* Log for -DER_INPROGRESS has already been handled by
-		 * dtx_inprogress().
-		 */
-		goto out;
 	case -DER_NONEXIST:
 		if (!(flags & SUBTR_CREATE))
 			goto out;
 
-		kbund.kb_epoch	= DAOS_EPOCH_MAX;
 		rbund.rb_iov	= key;
 		/* use BTR_PROBE_BYPASS to avoid probe again */
-		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, intent, &kiov, &riov);
+		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, intent, key, &riov);
 		if (rc) {
 			D_ERROR("Failed to upsert: %d\n", rc);
 			goto out;
 		}
-		krec = rbund.rb_krec;
-		break;
 	case 0:
 		krec = rbund.rb_krec;
-		if (krec->kr_bmap & KREC_BF_PUNCHED &&
-		    krec->kr_latest == epoch) {
-			/* already punched in this epoch */
-			rc = -DER_NONEXIST;
-			goto out;
-		}
 		break;
 	}
 
-	rc = tree_open_create(obj, tclass, flags, krec, sub_toh);
+	if (sub_toh)
+		rc = tree_open_create(obj, tclass, flags, krec, sub_toh);
 	if (rc)
 		goto out;
 
@@ -1033,91 +960,47 @@ key_tree_release(daos_handle_t toh, bool is_array)
  * Punch a key in its parent tree.
  */
 int
-key_tree_punch(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov,
-	       d_iov_t *val_iov, int flags)
+key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
+	       d_iov_t *key_iov, d_iov_t *val_iov, int flags)
 {
-	struct vos_key_bundle	*kbund;
 	struct vos_rec_bundle	*rbund;
 	struct vos_krec_df	*krec;
-	umem_off_t		 umoff;
+	struct umem_instance	*umm;
+	struct ilog_desc_cbs	 cbs;
+	daos_handle_t		 loh = DAOS_HDL_INVAL;
 	int			 rc;
-	bool			 replay = (flags & VOS_OF_REPLAY_PC);
 
-	rc = dbtree_fetch(toh, BTR_PROBE_GE | BTR_PROBE_MATCHED,
-			  DAOS_INTENT_PUNCH, key_iov, NULL, val_iov);
+	rc = dbtree_fetch(toh, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, key_iov, NULL,
+			  val_iov);
 	if (rc != 0) {
-		if (rc == -DER_INPROGRESS)
-			return rc;
-
 		D_ASSERT(rc == -DER_NONEXIST);
 		/* use BTR_PROBE_BYPASS to avoid probe again */
-		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, DAOS_INTENT_PUNCH,
+		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, DAOS_INTENT_UPDATE,
 				   key_iov, val_iov);
-		if (rc)
+		if (rc) {
 			D_ERROR("Failed to add new punch, rc=%d\n", rc);
-
-		return rc;
+			return rc;
+		}
 	}
 
-	/* found a match */
-	kbund = iov2key_bundle(key_iov);
+	/** Punch always adds a log entry */
 	rbund = iov2rec_bundle(val_iov);
 	krec = rbund->rb_krec;
-	umoff = umem_ptr2off(vos_obj2umm(obj), krec);
+	umm = vos_obj2umm(obj);
 
-	if (krec->kr_bmap & KREC_BF_PUNCHED &&
-	    krec->kr_latest == kbund->kb_epoch) {
-		D_DEBUG(DB_TRACE, "epoch "DF_U64" already punched\n",
-			krec->kr_latest);
-		return 0; /* nothing to do */
-	}
-
-	if (krec->kr_latest >= kbund->kb_epoch && !replay) {
-		D_CRIT("Underwrite is only allowed for punch replay: "
-		       DF_U64" >="DF_U64"\n", krec->kr_latest, kbund->kb_epoch);
-		return -DER_NO_PERM;
-	}
-
-	/* PROBE_EQ == insert in this case */
-	rc = dbtree_upsert(toh, BTR_PROBE_EQ, DAOS_INTENT_PUNCH, key_iov,
-			   val_iov);
-	if (rc != 0 || replay)
+	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(obj->obj_cont));
+	rc = ilog_open(umm, &krec->kr_ilog, &cbs, &loh);
+	if (rc != 0) {
+		D_ERROR("Failed to open incarnation log: rc = %s\n",
+			d_errstr(rc));
 		return rc;
-
-	if (vos_dth_get() == NULL) { /* delete the max epoch */
-		struct umem_instance	*umm = vos_obj2umm(obj);
-		struct vos_krec_df	*krec2;
-		struct vos_key_bundle	 kbund2;
-		d_iov_t			 tmp;
-
-		krec2 = rbund->rb_krec;
-		if (krec->kr_bmap & KREC_BF_BTR) {
-			krec2->kr_btr = krec->kr_btr;
-			umem_tx_add_ptr(umm, &krec->kr_btr,
-					sizeof(krec->kr_btr));
-			memset(&krec->kr_btr, 0, sizeof(krec->kr_btr));
-		} else {
-			D_ASSERT(krec->kr_bmap & KREC_BF_EVT);
-			krec2->kr_evt = krec->kr_evt;
-			umem_tx_add_ptr(umm, &krec->kr_evt,
-					sizeof(krec->kr_evt));
-			memset(&krec->kr_evt, 0, sizeof(krec->kr_evt));
-		}
-		/* Capture the earliest modification time of the removed key */
-		krec2->kr_earliest = krec->kr_earliest;
-		krec2->kr_bmap = krec->kr_bmap | KREC_BF_PUNCHED;
-
-		tree_key_bundle2iov(&kbund2, &tmp);
-		kbund2.kb_key	= kbund->kb_key;
-		kbund2.kb_epoch	= DAOS_EPOCH_MAX;
-
-		rc = dbtree_delete(toh, BTR_PROBE_EQ, &tmp, vos_obj2pool(obj));
-		if (rc)
-			D_ERROR("Failed to delete: %d\n", rc);
-	} else {
-		rc = vos_dtx_register_record(btr_hdl2umm(toh), umoff,
-					     DTX_RT_KEY, DTX_RF_EXCHANGE_SRC);
 	}
+	rc = ilog_update(loh, NULL, epoch, true);
+	if (rc != 0)
+		D_ERROR("Failed to update incarnation log entry:"
+			" %s\n", d_errstr(rc));
+	ilog_close(loh);
+
 	return rc;
 }
 

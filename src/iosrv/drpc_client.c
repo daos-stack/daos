@@ -32,6 +32,7 @@
 #include <daos_srv/daos_server.h>
 #include "srv.pb-c.h"
 #include "srv_internal.h"
+#include "drpc_internal.h"
 
 /** dRPC client context */
 struct drpc *dss_drpc_ctx;
@@ -51,6 +52,9 @@ notify_ready(void)
 	if (rc != 0)
 		goto out;
 	req.nctxs = DSS_CTX_NR_TOTAL;
+	/* Do not free, this string is managed by the dRPC listener */
+	req.drpclistenersock = drpc_listener_socket_path;
+	req.instanceidx = dss_instance_idx;
 
 	reqb_size = srv__notify_ready_req__get_packed_size(&req);
 	D_ALLOC(reqb, reqb_size);

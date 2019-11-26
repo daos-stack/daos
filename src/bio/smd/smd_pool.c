@@ -272,13 +272,14 @@ out:
 }
 
 int
-smd_pool_list(d_list_t *pool_list)
+smd_pool_list(d_list_t *pool_list, int *pools)
 {
 	struct smd_pool_info	*info;
 	struct smd_pool_entry	 entry = { 0 };
 	daos_handle_t		 iter_hdl;
 	struct d_uuid		 key_pool;
 	d_iov_t			 key, val;
+	int			 pool_cnt = 0;
 	int			 rc;
 
 	D_ASSERT(pool_list && d_list_empty(pool_list));
@@ -320,6 +321,7 @@ smd_pool_list(d_list_t *pool_list)
 		}
 		d_list_add_tail(&info->spi_link, pool_list);
 
+		pool_cnt++;
 		rc = dbtree_iter_next(iter_hdl);
 		if (rc) {
 			if (rc != -DER_NONEXIST)
@@ -333,5 +335,9 @@ done:
 	dbtree_iter_finish(iter_hdl);
 out:
 	smd_unlock(&smd_store);
+
+	/* return pool count along with the pool list */
+	*pools = pool_cnt;
+
 	return rc;
 }

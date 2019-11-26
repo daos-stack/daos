@@ -38,18 +38,17 @@ struct rebuild_one {
 	d_list_t	ro_list;
 	uuid_t		ro_cont_uuid;
 	daos_unit_oid_t	ro_oid;
-	daos_epoch_t	ro_max_eph;
+	daos_epoch_t	ro_dkey_punch_eph;
 	daos_epoch_t	ro_epoch;
 	daos_iod_t	*ro_iods;
 	daos_iod_t	*ro_punch_iods;
-	daos_epoch_t	*ro_ephs;
-	daos_key_t	*ro_ephs_keys;
+	daos_epoch_t	*ro_akey_punch_ephs;
 	d_sg_list_t	*ro_sgls;
-	unsigned int	ro_ephs_num;
 	unsigned int	ro_iod_num;
 	unsigned int	ro_punch_iod_num;
 	unsigned int	ro_iod_alloc_num;
 	unsigned int	ro_rec_num;
+	uint64_t	ro_size;
 	uint64_t	ro_version;
 };
 
@@ -113,6 +112,7 @@ struct rebuild_tgt_pool_tracker {
 	/* reported # rebuilt objs */
 	uint64_t		rt_reported_obj_cnt;
 	uint64_t		rt_reported_rec_cnt;
+	uint64_t		rt_reported_size;
 
 	unsigned int		rt_lead_puller_running:1,
 				rt_abort:1,
@@ -156,6 +156,7 @@ struct rebuild_global_pool_tracker {
 	/* The term of the current rebuild leader */
 	uint64_t	rgt_leader_term;
 
+	uint64_t	rgt_time_start;
 	unsigned int	rgt_scan_done:1,
 			rgt_done:1,
 			rgt_abort:1;
@@ -231,6 +232,7 @@ struct rebuild_pool_tls {
 	d_list_t	rebuild_pool_list;
 	uint64_t	rebuild_pool_obj_count;
 	uint64_t	rebuild_pool_rec_count;
+	uint64_t	rebuild_pool_size;
 	unsigned int	rebuild_pool_ver;
 	int		rebuild_pool_status;
 	unsigned int	rebuild_pool_scanning:1;
@@ -253,6 +255,7 @@ struct rebuild_tgt_query_info {
 	int status;
 	uint64_t rec_count;
 	uint64_t obj_count;
+	uint64_t size;
 	bool rebuilding;
 	ABT_mutex lock;
 };
@@ -262,6 +265,7 @@ struct rebuild_iv {
 	uint64_t	riv_toberb_obj_count;
 	uint64_t	riv_obj_count;
 	uint64_t	riv_rec_count;
+	uint64_t	riv_size;
 	uint64_t	riv_leader_term;
 	unsigned int	riv_rank;
 	unsigned int	riv_master_rank;
@@ -293,6 +297,7 @@ void rebuild_obj_handler(crt_rpc_t *rpc);
 void rebuild_tgt_scan_handler(crt_rpc_t *rpc);
 int rebuild_tgt_scan_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				void *priv);
+int rebuild_tgt_scan_post_reply(crt_rpc_t *rpc, void *arg);
 
 int rebuild_iv_fetch(void *ns, struct rebuild_iv *rebuild_iv);
 int rebuild_iv_update(void *ns, struct rebuild_iv *rebuild_iv,

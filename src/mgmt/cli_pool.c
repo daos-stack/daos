@@ -353,3 +353,156 @@ out:
 	tse_task_complete(task, rc);
 	return rc;
 }
+
+struct mgmt_list_pools_arg {
+	struct dc_mgmt_sys     *sys;
+	crt_rpc_t	       *rpc;
+	daos_mgmt_pool_info_t  *pools;
+	daos_size_t		req_npools;
+	daos_size_t	       *npools;
+};
+
+static int
+mgmt_list_pools_cp(tse_task_t *task, void *data)
+{
+	struct mgmt_list_pools_arg	*arg;
+	struct mgmt_list_pools_out	*pc_out;
+	struct mgmt_list_pools_in	*pc_in;
+	uint64_t			 pidx;
+	int				 rc = task->dt_result;
+
+	arg = (struct mgmt_list_pools_arg *)data;
+
+	if (rc) {
+		D_ERROR("RPC error while listing pools: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	pc_out = crt_reply_get(arg->rpc);
+	D_ASSERT(pc_out != NULL);
+	rc = pc_out->lp_rc;
+	*arg->npools = pc_out->lp_npools;
+	if (rc) {
+		D_ERROR("MGMT_POOL_CREATE replied failed, rc: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	pc_in = crt_req_get(arg->rpc);
+	D_ASSERT(pc_in != NULL);
+
+	/* copy RPC response pools info to client buffer, if provided */
+	if (arg->pools) {
+		/* Response ca_count expected <= client-specified npools */
+		for (pidx = 0; pidx < pc_out->lp_pools.ca_count; pidx++) {
+			struct mgmt_list_pools_one	*rpc_pool =
+					&pc_out->lp_pools.ca_arrays[pidx];
+			daos_mgmt_pool_info_t		*cli_pool =
+					&arg->pools[pidx];
+
+			uuid_copy(cli_pool->mgpi_uuid, rpc_pool->lp_puuid);
+
+			/* allocate rank list for caller (simplifies API) */
+			rc = d_rank_list_dup(&cli_pool->mgpi_svc,
+					     rpc_pool->lp_svc);
+			if (rc) {
+				D_ERROR("Copy RPC reply svc list failed\n");
+				D_GOTO(out_free_svcranks, rc = -DER_NOMEM);
+			}
+		}
+	}
+
+out_free_svcranks:
+	if (arg->pools && (rc != 0)) {
+		for (pidx = 0; pidx < pc_out->lp_pools.ca_count; pidx++) {
+			daos_mgmt_pool_info_t *pool = &arg->pools[pidx];
+
+			if (pool->mgpi_svc)
+				d_rank_list_free(pool->mgpi_svc);
+		}
+	}
+
+out:
+	dc_mgmt_sys_detach(arg->sys);
+	crt_req_decref(arg->rpc);
+
+	return rc;
+}
+
+int
+dc_mgmt_list_pools(tse_task_t *task)
+{
+	daos_mgmt_list_pools_t	        *args;
+	crt_endpoint_t			svr_ep;
+	crt_rpc_t		       *rpc_req = NULL;
+	crt_opcode_t			opc;
+	struct mgmt_list_pools_in      *pc_in;
+	struct mgmt_list_pools_arg	cb_args;
+	int				rc = 0;
+
+	args = dc_task_get_args(task);
+
+	rc = dc_mgmt_sys_attach(args->grp, &cb_args.sys);
+	if (rc != 0) {
+		D_ERROR("cannot attach to DAOS system: %s\n", args->grp);
+		D_GOTO(out, rc);
+	}
+
+	svr_ep.ep_grp = cb_args.sys->sy_group;
+	svr_ep.ep_rank = 0;
+	svr_ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
+	opc = DAOS_RPC_OPCODE(MGMT_LIST_POOLS, DAOS_MGMT_MODULE,
+			      DAOS_MGMT_VERSION);
+
+	rc = crt_req_create(daos_task2ctx(task), &svr_ep, opc, &rpc_req);
+	if (rc != 0) {
+		D_ERROR("crt_req_create(MGMT_LIST_POOLS failed, rc: %d.\n",
+			rc);
+		D_GOTO(out_grp, rc);
+	}
+
+	D_ASSERT(rpc_req != NULL);
+	pc_in = crt_req_get(rpc_req);
+	D_ASSERT(pc_in != NULL);
+
+	/** fill in request buffer */
+	pc_in->lp_grp = (d_string_t)args->grp;
+	/* If provided pools is NULL, caller needs the number of pools
+	 * to be returned in npools. Set npools=0 in the request in this case
+	 * (caller value may be uninitialized).
+	 */
+	if (args->pools == NULL)
+		pc_in->lp_npools = 0;
+	else
+		pc_in->lp_npools = *args->npools;
+
+	D_DEBUG(DF_DSMC, "req_npools="DF_U64" (pools=%p, *npools="DF_U64"\n",
+			 pc_in->lp_npools, args->pools,
+			 *args->npools);
+
+	crt_req_addref(rpc_req);
+	cb_args.rpc = rpc_req;
+	cb_args.npools = args->npools;
+	cb_args.pools = args->pools;
+	cb_args.req_npools = pc_in->lp_npools;
+
+	rc = tse_task_register_comp_cb(task, mgmt_list_pools_cp, &cb_args,
+				       sizeof(cb_args));
+	if (rc != 0)
+		D_GOTO(out_put_req, rc);
+
+	D_DEBUG(DB_MGMT, "retrieving list of pools in DAOS system: %s\n",
+		args->grp);
+
+	/** send the request */
+	return daos_rpc_send(rpc_req, task);
+
+out_put_req:
+	crt_req_decref(rpc_req);
+	crt_req_decref(rpc_req);
+
+out_grp:
+	dc_mgmt_sys_detach(cb_args.sys);
+out:
+	tse_task_complete(task, rc);
+	return rc;
+}

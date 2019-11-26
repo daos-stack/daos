@@ -24,14 +24,6 @@
 /*
  * Unit tests for the drpc module
  */
-
-#if !defined(__has_warning)  /* gcc */
-	#pragma GCC diagnostic ignored "-Wframe-larger-than="
-#else
-	#if __has_warning("-Wframe-larger-than=") /* valid clang warning */
-		#pragma GCC diagnostic ignored "-Wframe-larger-than="
-	#endif
-#endif
 #include <stdarg.h>
 #include <stddef.h>
 #include <setjmp.h>
@@ -44,6 +36,9 @@
 #include <daos/test_mocks.h>
 #include <daos/test_utils.h>
 
+#if D_HAS_WARNING(4, "-Wframe-larger-than=")
+	#pragma GCC diagnostic ignored "-Wframe-larger-than="
+#endif
 
 /* None of these tests depend on a real socket existing */
 static char *TEST_SOCK_ADDR = "/good/socket.sock";
@@ -125,6 +120,7 @@ test_drpc_connect_success(void **state)
 	assert_int_equal(ctx->comm->fd, socket_return);
 	assert_int_equal(ctx->comm->flags, 0);
 	assert_null(ctx->handler);
+	assert_int_equal(ctx->ref_count, 1);
 
 	free_drpc(ctx);
 }
@@ -151,15 +147,60 @@ test_drpc_close_fails_if_ctx_comm_null(void **state)
 }
 
 static void
+test_drpc_close_closing_socket_fails(void **state)
+{
+	int		expected_fd = 123;
+	struct drpc	*ctx = new_drpc_with_fd(expected_fd);
+
+	close_return = -1;
+	errno = ENOMEM;
+
+	/* error is logged but ignored */
+	assert_int_equal(drpc_close(ctx), 0);
+
+	/* called close() */
+	assert_int_equal(close_fd, expected_fd);
+}
+
+static void
 test_drpc_close_success(void **state)
 {
 	int		expected_fd = 123;
 	struct drpc	*ctx = new_drpc_with_fd(expected_fd);
 
-	assert_int_equal(drpc_close(ctx), DER_SUCCESS);
+	ctx->ref_count = 1;
+
+	assert_int_equal(drpc_close(ctx), 0);
 
 	/* called close() with the ctx fd */
 	assert_int_equal(close_fd, expected_fd);
+}
+
+static void
+test_drpc_close_with_unexpected_ref_count(void **state)
+{
+	struct drpc	*ctx = new_drpc_with_fd(123);
+
+	ctx->ref_count = 0;
+
+	assert_int_equal(drpc_close(ctx), -DER_INVAL);
+
+	free_drpc(ctx);
+}
+
+static void
+test_drpc_close_with_multiple_refs(void **state)
+{
+	struct drpc *ctx = new_drpc_with_fd(123);
+
+	ctx->ref_count = 2;
+
+	assert_int_equal(drpc_close(ctx), 0);
+
+	assert_int_equal(close_fd, 0); /* close() wasn't called */
+	assert_int_equal(ctx->ref_count, 1);
+
+	free_drpc(ctx);
 }
 
 /*
@@ -322,6 +363,7 @@ test_drpc_listen_success(void **state)
 	assert_int_equal(ctx->comm->flags, O_NONBLOCK);
 	assert_int_equal(ctx->sequence, 0);
 	assert_ptr_equal(ctx->handler, mock_drpc_handler);
+	assert_int_equal(ctx->ref_count, 1);
 
 	/*
 	 * Called socket() with correct params
@@ -432,6 +474,7 @@ test_drpc_accept_success(void **state)
 	assert_int_equal(session_ctx->comm->flags, 0);
 	assert_int_equal(session_ctx->sequence, 0);
 	assert_ptr_equal(session_ctx->handler, ctx->handler);
+	assert_int_equal(session_ctx->ref_count, 1);
 
 	/* called accept() on parent ctx */
 	assert_int_equal(accept_sockfd, ctx->comm->fd);
@@ -450,139 +493,6 @@ test_drpc_accept_fails_if_accept_fails(void **state)
 	accept_return = -1;
 
 	assert_null(drpc_accept(ctx));
-
-	free_drpc(ctx);
-}
-
-/*
- * drpc_recv unit tests
- */
-static void
-test_drpc_recv_fails_if_ctx_is_null(void **state)
-{
-	assert_int_equal(drpc_recv(NULL), -DER_INVAL);
-}
-
-static void
-test_drpc_recv_fails_if_handler_is_null(void **state)
-{
-	struct drpc *ctx = new_drpc_with_fd(12);
-
-	ctx->handler = NULL;
-
-	assert_int_equal(drpc_recv(ctx), -DER_INVAL);
-
-	free_drpc(ctx);
-}
-
-static void
-test_drpc_recv_success(void **state)
-{
-	struct drpc	*ctx = new_drpc_with_fd(6);
-	uint8_t		expected_response[UNIXCOMM_MAXMSGSIZE];
-	size_t		expected_response_size;
-
-	mock_valid_drpc_call_in_recvmsg();
-
-	assert_int_equal(drpc_recv(ctx), DER_SUCCESS);
-
-	/*
-	 * Called recvmsg()
-	 */
-	assert_int_equal(recvmsg_call_count, 1);
-	assert_int_equal(recvmsg_sockfd, ctx->comm->fd);
-	assert_non_null(recvmsg_msg_ptr);
-	assert_non_null(recvmsg_msg_iov_base_ptr);
-	assert_int_equal(recvmsg_msg_iov_len, UNIXCOMM_MAXMSGSIZE);
-	assert_int_equal(recvmsg_flags, 0);
-
-	/*
-	 * Called handler with appropriate inputs
-	 */
-	assert_int_equal(mock_drpc_handler_call_count, 1);
-	assert_non_null(mock_drpc_handler_call);
-	assert_non_null(mock_drpc_handler_resp_ptr);
-
-	/*
-	 * Sent response message - should be the one returned from
-	 * the handler
-	 */
-	memset(expected_response, 0, sizeof(expected_response));
-	drpc__response__pack(mock_drpc_handler_resp_return, expected_response);
-	expected_response_size =
-			drpc__response__get_packed_size(
-					mock_drpc_handler_resp_return);
-
-	assert_int_equal(sendmsg_call_count, 1);
-	assert_int_equal(sendmsg_sockfd, ctx->comm->fd);
-	assert_non_null(sendmsg_msg_ptr);
-	assert_non_null(sendmsg_msg_iov_base_ptr);
-	assert_int_equal(sendmsg_msg_iov_len, expected_response_size);
-	assert_memory_equal(sendmsg_msg_content, expected_response,
-			expected_response_size);
-
-	free_drpc(ctx);
-}
-
-static void
-assert_drpc_recv_fails_with_recvmsg_errno(int recvmsg_errno,
-		int expected_retval)
-{
-	struct drpc *ctx = new_drpc_with_fd(3);
-
-	mock_valid_drpc_call_in_recvmsg();
-
-	recvmsg_call_count = 0;
-	recvmsg_return = -1;
-	errno = recvmsg_errno;
-
-	assert_int_equal(drpc_recv(ctx), expected_retval);
-
-	/* Didn't call subsequent methods after recvmsg */
-	assert_int_equal(recvmsg_call_count, 1);
-	assert_int_equal(mock_drpc_handler_call_count, 0);
-	assert_int_equal(sendmsg_call_count, 0);
-
-	free_drpc(ctx);
-}
-
-static void
-test_drpc_recv_fails_if_recvmsg_fails(void **state)
-{
-	assert_drpc_recv_fails_with_recvmsg_errno(ENOMEM, -DER_NOMEM);
-}
-
-static void
-test_drpc_recv_fails_if_recvmsg_would_block(void **state)
-{
-	assert_drpc_recv_fails_with_recvmsg_errno(EWOULDBLOCK, -DER_AGAIN);
-	assert_drpc_recv_fails_with_recvmsg_errno(EAGAIN, -DER_AGAIN);
-}
-
-static void
-test_drpc_recv_fails_if_incoming_call_malformed(void **state)
-{
-	struct drpc *ctx = new_drpc_with_fd(6);
-
-	/* Incoming message is weird garbage */
-	recvmsg_return = sizeof(recvmsg_msg_content);
-	memset(recvmsg_msg_content, 1, sizeof(recvmsg_msg_content));
-
-	assert_int_equal(drpc_recv(ctx), -DER_PROTO);
-
-	free_drpc(ctx);
-}
-
-static void
-test_drpc_recv_fails_if_sendmsg_fails(void **state)
-{
-	struct drpc *ctx = new_drpc_with_fd(122);
-
-	mock_valid_drpc_call_in_recvmsg();
-	sendmsg_return = -1;
-	errno = EINVAL;
-
-	assert_int_equal(drpc_recv(ctx), -DER_INVAL);
 
 	free_drpc(ctx);
 }
@@ -865,6 +775,43 @@ test_drpc_response_free_null(void **state)
 	drpc_response_free(NULL);
 }
 
+static void
+test_drpc_add_ref_null(void **state)
+{
+	assert_int_equal(drpc_add_ref(NULL), -DER_INVAL);
+}
+
+static void
+test_drpc_add_ref_success(void **state)
+{
+	struct drpc	*ctx = new_drpc_with_fd(100);
+	int		i;
+
+	ctx->ref_count = 0;
+
+	/* Add a bunch of refs just to see how it goes */
+	for (i = 0; i < 125; i++) {
+		assert_int_equal(drpc_add_ref(ctx), 0);
+		assert_int_equal(ctx->ref_count, i + 1);
+	}
+
+	free_drpc(ctx);
+}
+
+static void
+test_drpc_add_ref_doesnt_update_max_count(void **state)
+{
+	struct drpc *ctx = new_drpc_with_fd(100);
+
+	ctx->ref_count = UINT_MAX;
+
+	assert_int_equal(drpc_add_ref(ctx), -DER_INVAL);
+
+	assert_int_equal(ctx->ref_count, UINT_MAX);
+
+	free_drpc(ctx);
+}
+
 /* Convenience macro for tests in this file */
 #define DRPC_UTEST(X)						\
 	cmocka_unit_test_setup_teardown(X, setup_drpc_mocks,	\
@@ -879,7 +826,10 @@ main(void)
 		DRPC_UTEST(test_drpc_connect_success),
 		DRPC_UTEST(test_drpc_close_fails_if_ctx_null),
 		DRPC_UTEST(test_drpc_close_fails_if_ctx_comm_null),
+		DRPC_UTEST(test_drpc_close_closing_socket_fails),
 		DRPC_UTEST(test_drpc_close_success),
+		DRPC_UTEST(test_drpc_close_with_unexpected_ref_count),
+		DRPC_UTEST(test_drpc_close_with_multiple_refs),
 		DRPC_UTEST(test_drpc_call_fails_if_sendmsg_fails),
 		DRPC_UTEST(test_drpc_call_sends_call_as_mesg),
 		DRPC_UTEST(test_drpc_call_with_no_flags_returns_async),
@@ -896,13 +846,6 @@ main(void)
 		DRPC_UTEST(test_drpc_accept_fails_with_null_handler),
 		DRPC_UTEST(test_drpc_accept_success),
 		DRPC_UTEST(test_drpc_accept_fails_if_accept_fails),
-		DRPC_UTEST(test_drpc_recv_fails_if_ctx_is_null),
-		DRPC_UTEST(test_drpc_recv_fails_if_handler_is_null),
-		DRPC_UTEST(test_drpc_recv_success),
-		DRPC_UTEST(test_drpc_recv_fails_if_recvmsg_fails),
-		DRPC_UTEST(test_drpc_recv_fails_if_recvmsg_would_block),
-		DRPC_UTEST(test_drpc_recv_fails_if_incoming_call_malformed),
-		DRPC_UTEST(test_drpc_recv_fails_if_sendmsg_fails),
 		DRPC_UTEST(test_drpc_recv_call_null_ctx),
 		DRPC_UTEST(test_drpc_recv_call_bad_handler),
 		DRPC_UTEST(test_drpc_recv_call_null_call),
@@ -920,7 +863,10 @@ main(void)
 		cmocka_unit_test(test_drpc_call_free_null),
 		cmocka_unit_test(test_drpc_response_create_null_call),
 		cmocka_unit_test(test_drpc_response_create_free_success),
-		cmocka_unit_test(test_drpc_response_free_null)
+		cmocka_unit_test(test_drpc_response_free_null),
+		cmocka_unit_test(test_drpc_add_ref_null),
+		cmocka_unit_test(test_drpc_add_ref_success),
+		cmocka_unit_test(test_drpc_add_ref_doesnt_update_max_count)
 	};
 	return cmocka_run_group_tests(tests, NULL, NULL);
 }

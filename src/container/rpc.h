@@ -112,7 +112,11 @@
 	X(CONT_TGT_EPOCH_AGGREGATE,					\
 		0, &CQF_cont_tgt_epoch_aggregate,			\
 		ds_cont_tgt_epoch_aggregate_handler,			\
-		&ds_cont_tgt_epoch_aggregate_co_ops)
+		&ds_cont_tgt_epoch_aggregate_co_ops),			\
+	X(CONT_TGT_SNAPSHOT_NOTIFY,					\
+		0, &CQF_cont_tgt_snapshot_notify,			\
+		ds_cont_tgt_snapshot_notify_handler,			\
+		&ds_cont_tgt_snapshot_notify_co_ops)
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a
@@ -211,6 +215,7 @@ CRT_RPC_DECLARE(cont_close, DAOS_ISEQ_CONT_CLOSE, DAOS_OSEQ_CONT_CLOSE)
 /** Add more items to query when needed */
 #define DAOS_OSEQ_CONT_QUERY	/* output fields */		 \
 	((struct cont_op_out)	(cqo_op)		CRT_VAR) \
+	((daos_epoch_t)		(cqo_hae)		CRT_VAR) \
 	((daos_prop_t)		(cqo_prop)		CRT_PTR)
 
 CRT_RPC_DECLARE(cont_query, DAOS_ISEQ_CONT_QUERY, DAOS_OSEQ_CONT_QUERY)
@@ -299,6 +304,7 @@ struct cont_tgt_close_rec {
 };
 
 #define DAOS_ISEQ_TGT_CLOSE	/* input fields */		 \
+	((uuid_t)		(tci_pool_uuid)		CRT_VAR) \
 	((struct cont_tgt_close_rec) (tci_recs)		CRT_ARRAY)
 
 #define DAOS_OSEQ_TGT_CLOSE	/* output fields */		 \
@@ -314,7 +320,7 @@ CRT_RPC_DECLARE(cont_tgt_close, DAOS_ISEQ_TGT_CLOSE, DAOS_OSEQ_TGT_CLOSE)
 #define DAOS_OSEQ_TGT_QUERY	/* output fields */		 \
 	((int32_t)		(tqo_rc)		CRT_VAR) \
 	((int32_t)		(tqo_pad32)		CRT_VAR) \
-	((daos_epoch_t)		(tqo_min_purged_epoch)	CRT_VAR)
+	((daos_epoch_t)		(tqo_hae)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_tgt_query, DAOS_ISEQ_TGT_QUERY, DAOS_OSEQ_TGT_QUERY)
 
@@ -340,6 +346,17 @@ CRT_RPC_DECLARE(cont_tgt_epoch_discard, DAOS_ISEQ_CONT_TGT_EPOCH_DISCARD,
 
 CRT_RPC_DECLARE(cont_tgt_epoch_aggregate, DAOS_ISEQ_CONT_TGT_EPOCH_AGGREGATE,
 		DAOS_OSEQ_CONT_TGT_EPOCH_AGGREGATE)
+
+#define DAOS_ISEQ_CONT_TGT_SNAPSHOT_NOTIFY /* input fields */	 \
+	((uuid_t)		(tsi_cont_uuid)		CRT_VAR) \
+	((uuid_t)		(tsi_pool_uuid)		CRT_VAR)
+
+#define DAOS_OSEQ_CONT_TGT_SNAPSHOT_NOTIFY /* output fields */	 \
+				/* number of errors */		 \
+	((int32_t)		(tso_rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(cont_tgt_snapshot_notify, DAOS_ISEQ_CONT_TGT_SNAPSHOT_NOTIFY,
+		DAOS_OSEQ_CONT_TGT_SNAPSHOT_NOTIFY)
 
 static inline int
 cont_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,

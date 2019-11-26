@@ -28,8 +28,7 @@ import traceback
 from apricot import TestWithServers
 
 
-from conversion import c_uuid_to_str
-from daos_api import DaosPool, DaosContainer, DaosApiError
+from pydaos.raw import DaosPool, DaosContainer, DaosApiError, c_uuid_to_str
 
 class BasicTxTest(TestWithServers):
     """

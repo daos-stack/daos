@@ -89,3 +89,11 @@ func IsAlphabetic(s string) bool {
 	}
 	return true
 }
+
+// Pluralise appends "s" to input string unless n==1.
+func Pluralise(s string, n int) string {
+	if n == 1 {
+		return s
+	}
+	return s + "s"
+}

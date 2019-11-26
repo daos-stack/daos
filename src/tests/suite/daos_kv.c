@@ -25,18 +25,13 @@
  *
  * src/tests/suite/daos_kv.c
  */
-
-#if !defined(__has_warning)  /* gcc */
-	#pragma GCC diagnostic ignored "-Wframe-larger-than="
-#else
-	#if __has_warning("-Wframe-larger-than=") /* valid clang warning */
-		#pragma GCC diagnostic ignored "-Wframe-larger-than="
-	#endif
-#endif
-
 #include <daos.h>
 #include <daos_kv.h>
 #include "daos_test.h"
+
+#if D_HAS_WARNING(4, "-Wframe-larger-than")
+	#pragma GCC diagnostic ignored "-Wframe-larger-than="
+#endif
 
 static void simple_put_get(void **state);
 

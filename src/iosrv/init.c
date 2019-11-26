@@ -68,6 +68,9 @@ const char	       *dss_socket_dir = "/var/run/daos_server";
 /** NVMe shm_id for enabling SPDK multi-process mode */
 int			dss_nvme_shm_id = DAOS_NVME_SHMID_NONE;
 
+/** IO server instance index */
+unsigned int		dss_instance_idx;
+
 /** attach_info path to support singleton client */
 static bool	        save_attach_info;
 const char	       *attach_info_path;
@@ -80,7 +83,13 @@ int			dss_core_depth;
 int			dss_core_nr;
 /** start offset index of the first core for service XS */
 int			dss_core_offset;
-
+/** NUMA node to bind to */
+int			dss_numa_node = -1;
+hwloc_bitmap_t	core_allocation_bitmap;
+/** a copy of the NUMA node object in the topology */
+hwloc_obj_t		numa_obj;
+/** number of cores in the given NUMA node */
+int			dss_num_cores_numa_node;
 /** Module facility bitmask */
 static uint64_t		dss_mod_facs;
 
@@ -204,7 +213,12 @@ dss_tgt_nr_get(int ncores, int nr)
 	 * dss_tgt_offload_xs_nr offload XS. Calculate the nr_default
 	 * as the number of main XS based on number of cores.
 	 */
-	nr_default = (ncores - dss_sys_xs_nr) / DSS_XS_NR_PER_TGT;
+	if (dss_numa_node == -1)
+		nr_default = (ncores - dss_sys_xs_nr) / DSS_XS_NR_PER_TGT;
+	else
+		nr_default = (((ncores - dss_sys_xs_nr) - dss_core_offset) /
+			      DSS_XS_NR_PER_TGT);
+
 	if (nr_default == 0)
 		nr_default = 1;
 
@@ -225,20 +239,88 @@ dss_tgt_nr_get(int ncores, int nr)
 static int
 dss_topo_init()
 {
+	int		depth;
+	int		numa_node_nr;
+	int		num_cores_visited;
+	char		*cpuset;
+	int		k;
+	hwloc_obj_t	corenode;
+
 	hwloc_topology_init(&dss_topo);
 	hwloc_topology_load(dss_topo);
 
 	dss_core_depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_CORE);
 	dss_core_nr = hwloc_get_nbobjs_by_type(dss_topo, HWLOC_OBJ_CORE);
-	dss_tgt_nr = dss_tgt_nr_get(dss_core_nr, nr_threads);
+	depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_NUMANODE);
+	numa_node_nr = hwloc_get_nbobjs_by_depth(dss_topo, depth);
 
-	if (dss_core_offset < 0 || dss_core_offset >= dss_core_nr) {
-		D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), "
-			"should within range [0, %d]", dss_core_offset,
-			dss_core_nr - 1);
+	/* if no NUMA node was specified, or NUMA data unavailable */
+	/* fall back to the legacy core allocation algorithm */
+	if (dss_numa_node == -1 || numa_node_nr <= 0) {
+		D_PRINT("Using legacy core allocation algorithm\n");
+		dss_tgt_nr = dss_tgt_nr_get(dss_core_nr, nr_threads);
+
+		if (dss_core_offset < 0 || dss_core_offset >= dss_core_nr) {
+			D_ERROR("invalid dss_core_offset %d "
+				"(set by \"-f\" option),"
+				" should within range [0, %d]",
+				dss_core_offset, dss_core_nr - 1);
+			return -DER_INVAL;
+		}
+		return 0;
+	}
+
+	if (dss_numa_node > numa_node_nr) {
+		D_ERROR("Invalid NUMA node selected. "
+			"Must be no larger than %d\n",
+			numa_node_nr);
 		return -DER_INVAL;
 	}
 
+	numa_obj = hwloc_get_obj_by_depth(dss_topo, depth, dss_numa_node);
+	if (numa_obj == NULL) {
+		D_ERROR("NUMA node %d was not found in the topology",
+			dss_numa_node);
+		return -DER_INVAL;
+	}
+
+	/* create an empty bitmap, then set each bit as we */
+	/* find a core that matches */
+	core_allocation_bitmap = hwloc_bitmap_alloc();
+	if (core_allocation_bitmap == NULL) {
+		D_ERROR("Unable to allocate core allocation bitmap\n");
+		return -DER_INVAL;
+	}
+
+	dss_num_cores_numa_node = 0;
+	num_cores_visited = 0;
+
+	for (k = 0; k < dss_core_nr; k++) {
+		corenode = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, k);
+		if (corenode == NULL)
+			continue;
+		if (hwloc_bitmap_isincluded(corenode->allowed_cpuset,
+					    numa_obj->allowed_cpuset) != 0) {
+			if (num_cores_visited++ >= dss_core_offset) {
+				hwloc_bitmap_set(core_allocation_bitmap, k);
+				hwloc_bitmap_asprintf(&cpuset,
+						      corenode->allowed_cpuset);
+			}
+			dss_num_cores_numa_node++;
+		}
+	}
+	hwloc_bitmap_asprintf(&cpuset, core_allocation_bitmap);
+	free(cpuset);
+
+	dss_tgt_nr = dss_tgt_nr_get(dss_num_cores_numa_node, nr_threads);
+	if (dss_core_offset < 0 || dss_core_offset >= dss_num_cores_numa_node) {
+		D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), "
+			"should within range [0, %d]", dss_core_offset,
+			dss_num_cores_numa_node - 1);
+		return -DER_INVAL;
+	}
+
+	D_PRINT("Using NUMA core allocation algorithm\n");
 	return 0;
 }
 
@@ -503,6 +585,9 @@ server_init(int argc, char *argv[])
 		size, dss_tgt_nr, dss_tgt_offload_xs_nr, dss_core_offset,
 		hostname);
 
+	if (numa_obj)
+		D_PRINT("Using NUMA node: %d", dss_numa_node);
+
 	return 0;
 
 exit_drpc_fini:
@@ -583,10 +668,14 @@ Options:\n\
       Shared segment ID (enable multi-process mode in SPDK, default none)\n\
   --attach_info=path, -apath\n\
       Attach info patch (to support non-PMIx client, default \"/tmp\")\n\
+  --instance_idx=idx, -I idx\n\
+      Identifier for this server instance (default %u)\n\
+  --pinned_numa_node=numanode, -p numanode\n\
+      Bind to cores within the specified NUMA node\n\
   --help, -h\n\
       Print this description\n",
 		prog, prog, modules, daos_sysname, dss_storage_path,
-		dss_socket_dir, dss_nvme_conf);
+		dss_socket_dir, dss_nvme_conf, dss_instance_idx);
 }
 
 static int
@@ -602,9 +691,11 @@ parse(int argc, char **argv)
 		{ "shm_id",		required_argument,	NULL,	'i' },
 		{ "modules",		required_argument,	NULL,	'm' },
 		{ "nvme",		required_argument,	NULL,	'n' },
+		{ "pinned_numa_node",	required_argument,	NULL,	'p' },
 		{ "targets",		required_argument,	NULL,	't' },
 		{ "storage",		required_argument,	NULL,	's' },
 		{ "xshelpernr",		required_argument,	NULL,	'x' },
+		{ "instance_idx",	required_argument,	NULL,	'I' },
 		{ NULL,			0,			NULL,	0}
 	};
 	int	rc = 0;
@@ -612,7 +703,7 @@ parse(int argc, char **argv)
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "a:c:d:f:g:hi:m:n:t:s:x:", opts,
+	while ((c = getopt_long(argc, argv, "a:c:d:f:g:hi:m:n:p:t:s:x:I:", opts,
 				NULL)) != -1) {
 		unsigned int	 nr;
 		char		*end;
@@ -678,6 +769,9 @@ parse(int argc, char **argv)
 		case 'n':
 			dss_nvme_conf = optarg;
 			break;
+		case 'p':
+			dss_numa_node = atoi(optarg);
+			break;
 		case 'i':
 			dss_nvme_shm_id = atoi(optarg);
 			break;
@@ -687,6 +781,9 @@ parse(int argc, char **argv)
 		case 'a':
 			save_attach_info = true;
 			attach_info_path = optarg;
+			break;
+		case 'I':
+			dss_instance_idx = atoi(optarg);
 			break;
 		default:
 			usage(argv[0], stderr);
@@ -704,7 +801,7 @@ struct sigaction old_handlers[_NSIG];
 static int
 daos_register_sighand(int signo, void (*handler) (int, siginfo_t *, void *))
 {
-	struct sigaction	act;
+	struct sigaction	act = {0};
 	int			rc;
 
 	if ((signo < 0) || (signo >= _NSIG)) {

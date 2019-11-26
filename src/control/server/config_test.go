@@ -37,6 +37,7 @@ import (
 	"github.com/pkg/errors"
 
 	. "github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
@@ -88,7 +89,9 @@ func defaultMockConfig(t *testing.T) *Configuration {
 // supply mock external interface, populates config from given file path
 func mockConfigFromFile(t *testing.T, e External, path string) *Configuration {
 	t.Helper()
-	c := newDefaultConfiguration(e)
+	c := newDefaultConfiguration(e).
+		WithProviderValidator(netdetect.ValidateProviderStub).
+		WithNUMAValidator(netdetect.ValidateNUMAStub)
 	c.Path = path
 
 	if err := c.Load(); err != nil {
@@ -143,9 +146,15 @@ func TestConfigMarshalUnmarshal(t *testing.T) {
 				uncommentServerConfig(t, tt.inPath)
 			}
 
-			configA := newDefaultConfiguration(tt.inExt)
+			configA := newDefaultConfiguration(tt.inExt).
+				WithProviderValidator(netdetect.ValidateProviderStub).
+				WithNUMAValidator(netdetect.ValidateNUMAStub)
 			configA.Path = tt.inPath
 			err = configA.Load()
+			if err == nil {
+				err = configA.Validate()
+			}
+
 			if tt.errMsg != "" {
 				ExpectError(t, err, tt.errMsg, name)
 				return
@@ -155,12 +164,19 @@ func TestConfigMarshalUnmarshal(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			configB := newDefaultConfiguration(tt.inExt)
+			configB := newDefaultConfiguration(tt.inExt).
+				WithProviderValidator(netdetect.ValidateProviderStub).
+				WithNUMAValidator(netdetect.ValidateNUMAStub)
 			if err := configB.SetPath(testFile); err != nil {
 				t.Fatal(err)
 			}
 
-			if err := configB.Load(); err != nil {
+			err = configB.Load()
+			if err == nil {
+				err = configB.Validate()
+			}
+
+			if err != nil {
 				t.Fatal(err)
 			}
 
@@ -189,6 +205,9 @@ func TestConstructedConfig(t *testing.T) {
 	uncommentServerConfig(t, testFile)
 	defaultCfg := mockConfigFromFile(t, defaultMockExt(), testFile)
 
+	var numaNode0 uint = 0
+	var numaNode1 uint = 1
+
 	// Next, construct a config to compare against the first one. It should be
 	// possible to construct an identical configuration with the helpers.
 	constructed := NewConfiguration().
@@ -207,6 +226,8 @@ func TestConstructedConfig(t *testing.T) {
 		WithFaultCb("./.daos/fd_callback").
 		WithFaultPath("/vcdu0/rack1/hostname").
 		WithHyperthreads(true).
+		WithProviderValidator(netdetect.ValidateProviderStub).
+		WithNUMAValidator(netdetect.ValidateNUMAStub).
 		WithServers(
 			ioserver.NewConfig().
 				WithRank(0).
@@ -220,6 +241,7 @@ func TestConstructedConfig(t *testing.T) {
 				WithBdevDeviceList("0000:81:00.0").
 				WithFabricInterface("qib0").
 				WithFabricInterfacePort(20000).
+				WithPinnedNumaNode(&numaNode0).
 				WithEnvVars("CRT_TIMEOUT=30").
 				WithLogFile("/tmp/daos_server1.log").
 				WithLogMask("WARN"),
@@ -237,6 +259,7 @@ func TestConstructedConfig(t *testing.T) {
 				WithBdevFileSize(16).
 				WithFabricInterface("qib0").
 				WithFabricInterfacePort(20000).
+				WithPinnedNumaNode(&numaNode1).
 				WithEnvVars("CRT_TIMEOUT=100").
 				WithLogFile("/tmp/daos_server2.log").
 				WithLogMask("WARN"),

@@ -22,54 +22,23 @@
  */
 #define D_LOGFAC        DD_FAC(tests)
 
-
 #include <string.h>
-#include <errno.h>
-#include <getopt.h>
-
 #include <stdarg.h>
 #include <stddef.h>
-#include <setjmp.h>
 #include <stdint.h>
-
+#include <setjmp.h> /** For cmocka.h */
 #include <cmocka.h>
-
 #include <daos/common.h>
-
-#include "misc_tests.h"
-
-
-void
-daos_sgl_init_with_strings(d_sg_list_t *sgl, uint32_t count, char *d, ...)
-{
-	int i;
-	va_list valist;
-	char *arg = d;
-
-	va_start(valist, d);
-
-	d_sgl_init(sgl, count);
-	for (i = 0; i < count; i++) {
-		size_t arg_len = strlen(arg) + 1;
-
-		D_ALLOC(sgl->sg_iovs[i].iov_buf, arg_len);
-		memcpy(sgl->sg_iovs[i].iov_buf, arg, arg_len);
-		sgl->sg_iovs[i].iov_buf_len = sgl->sg_iovs[i].iov_len = arg_len;
-		arg = va_arg(valist, char *);
-	}
-
-	va_end(valist);
-}
+#include <daos/tests_lib.h>
 
 static void test_sgl_get_bytes_with_single_iov(void **state)
 {
-	d_sg_list_t	 sgl;
-	uint8_t		*buf = NULL;
-	size_t		 len;
+	uint8_t			*buf = NULL;
+	size_t			 len;
+	d_sg_list_t		 sgl;
+	struct daos_sgl_idx	 idx = {0};
 
-	daos_sgl_init_with_strings(&sgl, 1, "abcd");
-	struct daos_sgl_idx idx = {0};
-
+	dts_sgl_init_with_strings(&sgl, 1, "abcd");
 
 	/** Get the first byte of the sgl */
 	daos_sgl_get_bytes(&sgl, &idx, 1, &buf, &len);
@@ -91,16 +60,15 @@ static void test_sgl_get_bytes_with_single_iov(void **state)
 
 static void test_sgl_get_bytes_with_multiple_iovs(void **state)
 {
-	d_sg_list_t	 sgl;
-	uint8_t		*buf = NULL;
-	size_t		 len;
+	uint8_t			*buf = NULL;
+	size_t			 len;
+	d_sg_list_t		 sgl;
+	struct daos_sgl_idx	 idx = {0};
+	bool			 end;
 
-	daos_sgl_init_with_strings(&sgl, 2, "a", "b");
-	struct daos_sgl_idx idx = {0};
+	dts_sgl_init_with_strings(&sgl, 2, "a", "b");
 
-
-	bool end = daos_sgl_get_bytes(&sgl, &idx, 3, &buf, &len);
-
+	end = daos_sgl_get_bytes(&sgl, &idx, 3, &buf, &len);
 	assert_int_equal('a', *(char *)buf);
 	/** even though 3 requested, only got 2 because can only process a
 	 * single iov at a time.
@@ -123,15 +91,16 @@ static void test_sgl_get_bytes_with_multiple_iovs(void **state)
 
 static void test_sgl_get_bytes_trying_to_exceed_len(void **state)
 {
-	d_sg_list_t sgl;
-	struct daos_sgl_idx idx = {0};
-	uint8_t *buf = NULL;
-	size_t len;
+	uint8_t			*buf = NULL;
+	size_t			 len;
+	d_sg_list_t		 sgl;
+	struct daos_sgl_idx	 idx = {0};
+	bool			 end;
+	size_t			 sgl_len;
 
-	daos_sgl_init_with_strings(&sgl, 1, "a");
-	size_t sgl_len = sgl.sg_iovs[0].iov_len;
-
-	bool end = daos_sgl_get_bytes(&sgl, &idx, sgl_len + 1, &buf, &len);
+	dts_sgl_init_with_strings(&sgl, 1, "a");
+	sgl_len = sgl.sg_iovs[0].iov_len;
+	end = daos_sgl_get_bytes(&sgl, &idx, sgl_len + 1, &buf, &len);
 
 	assert_int_equal(sgl_len, len); /** len is still only sgl_len */
 	assert_true(end); /** yep, still the end */
@@ -161,8 +130,7 @@ static void test_completely_process_sgl(void **state)
 	sgl_cb_buf_idx = sgl_cb_buf;
 	sgl_cb_call_count = 0;
 
-
-	daos_sgl_init_with_strings(&sgl, 2, "a", "bc");
+	dts_sgl_init_with_strings(&sgl, 2, "a", "bc");
 
 	daos_sgl_processor(&sgl, &idx, 6, dummy_sgl_cb, NULL);
 
@@ -175,14 +143,14 @@ static void test_completely_process_sgl(void **state)
 
 static void test_process_sgl_span_iov_with_diff_requests(void **state)
 {
+	d_sg_list_t		sgl;
+	struct daos_sgl_idx	idx = {0};
+
+	sgl_cb_call_count = 0;
 	memset(sgl_cb_buf, 0, SGL_CB_BUFF_SIZE);
 	sgl_cb_buf_idx = sgl_cb_buf;
-	sgl_cb_call_count = 0;
 
-	d_sg_list_t sgl;
-
-	daos_sgl_init_with_strings(&sgl, 2, "abc", "def");
-	struct daos_sgl_idx idx = {0};
+	dts_sgl_init_with_strings(&sgl, 2, "abc", "def");
 
 	daos_sgl_processor(&sgl, &idx, 2, dummy_sgl_cb, NULL);
 	assert_int_equal(1, sgl_cb_call_count);
@@ -199,7 +167,6 @@ static void test_process_sgl_span_iov_with_diff_requests(void **state)
 	/** idx should be at end */
 	assert_int_equal(2, idx.iov_idx);
 	assert_int_equal(0, idx.iov_offset);
-
 
 	d_sgl_fini(&sgl, true);
 }

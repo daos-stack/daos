@@ -29,10 +29,14 @@ import (
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 type mainOpts struct {
+	AllowProxy bool `long:"allow-proxy" description:"Allow proxy configuration via environment"`
 	// Minimal set of top-level options
 	ConfigPath string `short:"o" long:"config" description:"Server config file path"`
 	// TODO(DAOS-3129): This should be -d, but it conflicts with the start
@@ -43,6 +47,7 @@ type mainOpts struct {
 	// Define subcommands
 	Storage storageCmd `command:"storage" description:"Perform tasks related to locally-attached storage"`
 	Start   startCmd   `command:"start" description:"Start daos_server"`
+	Network networkCmd `command:"network" description:"Perform network device scan based on fabric provider"`
 }
 
 type cmdLogger interface {
@@ -55,42 +60,31 @@ type logCmd struct {
 
 func (c *logCmd) setLog(log *logging.LeveledLogger) {
 	c.log = log
+	// Initialize the netdetect logger
+	netdetect.SetLogger(log)
 }
 
 func exitWithError(log *logging.LeveledLogger, err error) {
 	log.Debugf("%+v", err)
 	log.Errorf("%v", err)
+	if fault.HasResolution(err) {
+		log.Error(fault.ShowResolutionFor(err))
+	}
 	os.Exit(1)
 }
 
 func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error {
 	p := flags.NewParser(opts, flags.HelpFlag|flags.PassDoubleDash)
-	// TODO(DAOS-3129): Remove this when subcommands are required, in order
-	// to eliminate parsing ambiguity.
-	p.Options |= flags.IgnoreUnknown
-	p.SubcommandsOptional = true
+	p.SubcommandsOptional = false
 	p.CommandHandler = func(cmd flags.Commander, cmdArgs []string) error {
+		if !opts.AllowProxy {
+			common.ScrubProxyVariables()
+		}
 		if opts.Debug {
 			log.SetLevel(logging.LogLevelDebug)
 		}
 		if opts.JSON {
 			log.WithJSONOutput()
-		}
-
-		// TODO(DAOS-3129): We should require the user to specify a subcommand, in order to
-		// improve the UX of this utility.
-		if cmd == nil {
-			log.Error("No command supplied; defaulting to start (DEPRECATED: Future versions will require a subcommand)")
-			cmd = &opts.Start
-
-			if len(cmdArgs) > 0 {
-				log.Debugf("Re-parsing unknown flags as start flags: %v", cmdArgs)
-				cmdParser := flags.NewParser(cmd, flags.None)
-				_, err := cmdParser.ParseArgs(cmdArgs)
-				if err != nil {
-					return errors.Wrap(err, "failed to parse unknown flags as start flags")
-				}
-			}
 		}
 
 		if logCmd, ok := cmd.(cmdLogger); ok {

@@ -32,39 +32,57 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
-	. "github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/common"
+	. "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	. "github.com/daos-stack/daos/src/control/common/storage"
-	"github.com/daos-stack/daos/src/control/lib/ipmctl"
+	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
+
+// MockScmModule returns a mock SCM module of type storage.ScmModule.
+func MockScmModule() storage.ScmModule {
+	m := common.MockModulePB()
+
+	return storage.ScmModule{
+		PhysicalID:      uint32(m.Physicalid),
+		ChannelID:       uint32(m.Loc.Channel),
+		ChannelPosition: uint32(m.Loc.Channelpos),
+		ControllerID:    uint32(m.Loc.Memctrlr),
+		SocketID:        uint32(m.Loc.Socket),
+		Capacity:        m.Capacity,
+	}
+}
+
+// MockScmNamespace returns a mock SCM namespace (PMEM device file),
+// which would normally be parsed from the output of ndctl cmdline tool.
+func MockScmNamespace() storage.ScmNamespace {
+	m := common.MockPmemDevicePB()
+
+	return storage.ScmNamespace{
+		UUID:        m.Uuid,
+		BlockDevice: m.Blockdev,
+		Name:        m.Dev,
+		NumaNode:    m.Numanode,
+		Size:        m.Size,
+	}
+}
 
 // mockStorageFormatServer provides mocking for server side streaming,
 // implement send method and record sent format responses.
 type mockStorageFormatServer struct {
 	grpc.ServerStream
-	Results []*pb.StorageFormatResp
+	Results []*StorageFormatResp
 }
 
-func (m *mockStorageFormatServer) Send(resp *pb.StorageFormatResp) error {
-	m.Results = append(m.Results, resp)
-	return nil
-}
-
-// mockStorageUpdateServer provides mocking for server side streaming,
-// implement send method and record sent update responses.
-type mockStorageUpdateServer struct {
-	grpc.ServerStream
-	Results []*pb.StorageUpdateResp
-}
-
-func (m *mockStorageUpdateServer) Send(resp *pb.StorageUpdateResp) error {
+func (m *mockStorageFormatServer) Send(resp *StorageFormatResp) error {
 	m.Results = append(m.Results, resp)
 	return nil
 }
@@ -93,358 +111,326 @@ func newMockStorageConfig(
 }
 
 func TestStorageScan(t *testing.T) {
-	ctrlr := MockController("")
-	pbCtrlr := MockControllerPB("")
-	module := MockModule()
-	pbModule := MockModulePB()
-	errExample := errors.New("example failure")
+	var (
+		ctrlr      = MockController()
+		pbCtrlr    = common.MockControllerPB()
+		errExample = errors.New("example failure")
+	)
 
-	tests := []struct {
-		desc              string
-		spdkInitEnvRet    error
-		spdkDiscoverRet   error
-		ipmctlDiscoverRet error
-		expNvmeInited     bool
-		expScmInited      bool
-		config            *Configuration
-		expResp           pb.StorageScanResp
-		setupErrMsg       string
-		scanErrMsg        string
+	for name, tc := range map[string]struct {
+		spdkInitEnvRet      error
+		spdkDiscoverRet     error
+		scmDiscoverRes      []storage.ScmModule
+		scmDiscoverErr      error
+		scmGetNamespacesRes []storage.ScmNamespace
+		scmGetNamespacesErr error
+		expSetupErr         error
+		expResp             StorageScanResp
+		expNvmeFailedInit   bool
 	}{
-		{
-			"success", nil, nil, nil, true, true,
-			defaultMockConfig(t),
-			pb.StorageScanResp{
-				Nvme: &pb.ScanNvmeResp{
+		"successful scan with scm namespaces": {
+			expResp: StorageScanResp{
+				Nvme: &ScanNvmeResp{
 					Ctrlrs: NvmeControllers{pbCtrlr},
-					State:  new(pb.ResponseState),
+					State:  new(ResponseState),
 				},
-				Scm: &pb.ScanScmResp{
-					Modules: ScmModules{pbModule},
-					State:   new(pb.ResponseState),
+				Scm: &ScanScmResp{
+					Pmems: ScmNamespaces{common.MockPmemDevicePB()},
+					State: new(ResponseState),
 				},
-			}, "", "",
+			},
 		},
-		{
-			"spdk init fail", errExample, nil, nil, false, true,
-			defaultMockConfig(t),
-			pb.StorageScanResp{},
-			msgBdevNotFound + ": missing [0000:81:00.0]",
-			"",
-		},
-		{
-			"spdk discover fail", nil, errExample, nil, false, true,
-			defaultMockConfig(t),
-			pb.StorageScanResp{},
-			msgBdevNotFound + ": missing [0000:81:00.0]",
-			"",
-		},
-		{
-			"ipmctl discover fail", nil, nil, errExample, true, false,
-			defaultMockConfig(t),
-			pb.StorageScanResp{
-				Nvme: &pb.ScanNvmeResp{
+		"successful scan no scm namespaces": {
+			scmGetNamespacesRes: []storage.ScmNamespace{},
+			expResp: StorageScanResp{
+				Nvme: &ScanNvmeResp{
 					Ctrlrs: NvmeControllers{pbCtrlr},
-					State:  new(pb.ResponseState),
+					State:  new(ResponseState),
 				},
-				Scm: &pb.ScanScmResp{
-					State: &pb.ResponseState{
-						Error: "SCM storage scan: " + msgIpmctlDiscoverFail +
-							": example failure",
-						Status: pb.ResponseStatus_CTRL_ERR_SCM,
-					},
+				Scm: &ScanScmResp{
+					Modules: ScmModules{common.MockModulePB()},
+					State:   new(ResponseState),
 				},
-			}, "", "",
+			},
 		},
-		{
-			"all discover fail", nil, errExample, errExample, false, false,
-			defaultMockConfig(t),
-			pb.StorageScanResp{},
-			msgBdevNotFound + ": missing [0000:81:00.0]",
-			"",
-		},
-		{
-			"success empty config", nil, nil, nil, true, true,
-			emptyMockConfig(t),
-			pb.StorageScanResp{
-				Nvme: &pb.ScanNvmeResp{
-					Ctrlrs: NvmeControllers{pbCtrlr},
-					State:  new(pb.ResponseState),
-				},
-				Scm: &pb.ScanScmResp{
-					Modules: ScmModules{pbModule},
-					State:   new(pb.ResponseState),
-				},
-			}, "", "",
-		},
-		{
-			"spdk init fail empty config", errExample, nil, nil, false, true,
-			emptyMockConfig(t),
-			pb.StorageScanResp{
-				Nvme: &pb.ScanNvmeResp{
-					State: &pb.ResponseState{
+		"spdk init fail": {
+			spdkInitEnvRet: errExample,
+			expSetupErr:    errors.New(msgBdevNotFound + ": missing [0000:81:00.0]"),
+			expResp: StorageScanResp{
+				Nvme: &ScanNvmeResp{
+					State: &ResponseState{
 						Error: "NVMe storage scan: " + msgSpdkInitFail +
 							": example failure",
-						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 					},
 				},
-				Scm: &pb.ScanScmResp{
-					Modules: ScmModules{pbModule},
-					State:   new(pb.ResponseState),
+				Scm: &ScanScmResp{
+					Pmems: ScmNamespaces{common.MockPmemDevicePB()},
+					State: new(ResponseState),
 				},
-			}, "", "",
+			},
+			expNvmeFailedInit: true,
 		},
-		{
-			"spdk discover fail empty config", nil, errExample, nil, false, true,
-			emptyMockConfig(t),
-			pb.StorageScanResp{
-				Nvme: &pb.ScanNvmeResp{
-					State: &pb.ResponseState{
+		"spdk discover fail": {
+			spdkDiscoverRet: errExample,
+			expSetupErr:     errors.New(msgBdevNotFound + ": missing [0000:81:00.0]"),
+			expResp: StorageScanResp{
+				Nvme: &ScanNvmeResp{
+					State: &ResponseState{
 						Error: "NVMe storage scan: " + msgSpdkDiscoverFail +
 							": example failure",
-						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 					},
 				},
-				Scm: &pb.ScanScmResp{
-					Modules: ScmModules{pbModule},
-					State:   new(pb.ResponseState),
+				Scm: &ScanScmResp{
+					Pmems: ScmNamespaces{common.MockPmemDevicePB()},
+					State: new(ResponseState),
 				},
-			}, "", "",
+			},
+			expNvmeFailedInit: true,
 		},
-		{
-			"ipmctl discover fail empty config", nil, nil, errExample, true, false,
-			emptyMockConfig(t),
-			pb.StorageScanResp{
-				Nvme: &pb.ScanNvmeResp{
+		"scm module discovery fail": {
+			scmDiscoverErr: errExample,
+			expResp: StorageScanResp{
+				Nvme: &ScanNvmeResp{
 					Ctrlrs: NvmeControllers{pbCtrlr},
-					State:  new(pb.ResponseState),
+					State:  new(ResponseState),
 				},
-				Scm: &pb.ScanScmResp{
-					State: &pb.ResponseState{
-						Error: "SCM storage scan: " + msgIpmctlDiscoverFail +
-							": example failure",
-						Status: pb.ResponseStatus_CTRL_ERR_SCM,
+				Scm: &ScanScmResp{
+					State: &ResponseState{
+						Error:  "example failure",
+						Status: ResponseStatus_CTL_ERR_SCM,
 					},
 				},
-			}, "", "",
+			},
 		},
-		{
-			"all discover fail empty config", nil, errExample, errExample, false, false,
-			emptyMockConfig(t),
-			pb.StorageScanResp{
-				Scm: &pb.ScanScmResp{
-					State: &pb.ResponseState{
-						Error: "SCM storage scan: " + msgIpmctlDiscoverFail +
-							": example failure",
-						Status: pb.ResponseStatus_CTRL_ERR_SCM,
-					},
-				},
-				Nvme: &pb.ScanNvmeResp{
-					State: &pb.ResponseState{
+		"all discover fail": {
+			scmDiscoverErr:  errExample,
+			spdkDiscoverRet: errExample,
+			expSetupErr:     errors.New(msgBdevNotFound + ": missing [0000:81:00.0]"),
+			expResp: StorageScanResp{
+				Nvme: &ScanNvmeResp{
+					State: &ResponseState{
 						Error: "NVMe storage scan: " + msgSpdkDiscoverFail +
 							": example failure",
-						Status: pb.ResponseStatus_CTRL_ERR_NVME,
+						Status: ResponseStatus_CTL_ERR_NVME,
 					},
 				},
-			}, "", "",
+				Scm: &ScanScmResp{
+					State: &ResponseState{
+						Error:  "example failure",
+						Status: ResponseStatus_CTL_ERR_SCM,
+					},
+				},
+			},
+			expNvmeFailedInit: true,
 		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.desc, func(t *testing.T) {
+	} {
+		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)
+
+			mbc := scm.MockBackendConfig{
+				DiscoverRes:     tc.scmDiscoverRes,
+				DiscoverErr:     tc.scmDiscoverErr,
+				GetNamespaceRes: tc.scmGetNamespacesRes,
+				GetNamespaceErr: tc.scmGetNamespacesErr,
+			}
+			if mbc.DiscoverRes == nil {
+				mbc.DiscoverRes = []storage.ScmModule{MockScmModule()}
+			}
+			if mbc.GetNamespaceRes == nil {
+				mbc.GetNamespaceRes = []storage.ScmNamespace{MockScmNamespace()}
+			}
 
 			// test for both empty and default config cases
-			config := tt.config
-			cs := mockControlService(t, log, config)
-			cs.scm = newMockScmStorage(log, config.ext, tt.ipmctlDiscoverRet,
-				[]ipmctl.DeviceDiscovery{module}, false, newMockPrepScm())
-			cs.nvme = newMockNvmeStorage(
-				log, config.ext,
-				newMockSpdkEnv(tt.spdkInitEnvRet),
-				newMockSpdkNvme(
-					log,
-					"1.0.0", "1.0.1",
-					[]spdk.Controller{ctrlr},
-					[]spdk.Namespace{MockNamespace(&ctrlr)},
-					[]spdk.DeviceHealth{MockDeviceHealth(&ctrlr)},
-					tt.spdkDiscoverRet, nil, nil),
-				false)
-			_ = new(pb.StorageScanResp)
+			for configIdx, config := range []*Configuration{defaultMockConfig(t), emptyMockConfig(t)} {
+				cs := mockControlService(t, log, config, &mbc, nil)
 
-			// runs discovery for nvme & scm
-			err := cs.Setup()
-			if err != nil {
-				AssertEqual(t, err.Error(), tt.setupErrMsg, tt.desc)
-				return
+				// overwrite default nvme storage behaviour
+				cs.nvme = newMockNvmeStorage(
+					log, config.ext,
+					newMockSpdkEnv(tc.spdkInitEnvRet),
+					newMockSpdkNvme(log, []spdk.Controller{ctrlr},
+						[]spdk.Namespace{MockNamespace(&ctrlr)},
+						[]spdk.DeviceHealth{MockDeviceHealth(&ctrlr)},
+						tc.spdkDiscoverRet, nil),
+					false)
+				_ = new(StorageScanResp)
+
+				// runs discovery for nvme & scm
+				err := cs.Setup()
+				if err != nil {
+					common.ExpectError(t, err, tc.expSetupErr.Error(), name)
+				} else {
+					// if emptyMockConfig (configIdx == 1), no err raised in setup.
+					if configIdx == 0 {
+						common.AssertEqual(t, tc.expSetupErr, nil, name)
+					}
+				}
+
+				// cs.StorageScan will never return err
+				resp, err := cs.StorageScan(context.TODO(), &StorageScanReq{})
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				if diff := cmp.Diff(tc.expResp, *resp); diff != "" {
+					t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+				}
+
+				common.AssertEqual(t, cs.nvme.initialized, !tc.expNvmeFailedInit, name)
 			}
-			AssertEqual(t, "", tt.setupErrMsg, tt.desc)
-
-			resp, err := cs.StorageScan(context.TODO(), &pb.StorageScanReq{})
-			if err != nil {
-				AssertEqual(t, err.Error(), tt.scanErrMsg, tt.desc)
-				return
-			}
-			AssertEqual(t, "", tt.scanErrMsg, tt.desc)
-
-			AssertEqual(t, len(cs.nvme.controllers), len(resp.Nvme.Ctrlrs), "unexpected number of controllers")
-			AssertEqual(t, len(cs.scm.modules), len(resp.Scm.Modules), "unexpected number of modules")
-
-			AssertEqual(t, resp.Nvme.State, tt.expResp.Nvme.State, "unexpected Nvmestate, "+tt.desc)
-			AssertEqual(t, resp.Scm.State, tt.expResp.Scm.State, "unexpected Scmstate, "+tt.desc)
-			AssertEqual(t, resp.Nvme.Ctrlrs, tt.expResp.Nvme.Ctrlrs, "unexpected controllers, "+tt.desc)
-			AssertEqual(t, resp.Scm.Modules, tt.expResp.Scm.Modules, "unexpected modules, "+tt.desc)
-
-			AssertEqual(t, cs.nvme.initialized, tt.expNvmeInited, tt.desc)
-			AssertEqual(t, cs.scm.initialized, tt.expScmInited, tt.desc)
 		})
 	}
 }
 
 func TestStoragePrepare(t *testing.T) {
-	ctrlr := MockController("")
-	module := MockModule()
+	var (
+		ctrlr      = MockController()
+		errExample = errors.New("example failure")
+	)
 
-	tests := []struct {
-		desc     string
-		inReq    pb.StoragePrepareReq
-		outPmems []pmemDev
-		expResp  pb.StoragePrepareResp
-		isRoot   bool
-		errMsg   string
+	for name, tc := range map[string]struct {
+		inReq               StoragePrepareReq
+		prepScmNamespaceRes []storage.ScmNamespace
+		prepScmErr          error
+		expResp             *StoragePrepareResp
+		isRoot              bool
 	}{
-		{
-			"success",
-			pb.StoragePrepareReq{
-				Nvme: &pb.PrepareNvmeReq{},
-				Scm:  &pb.PrepareScmReq{},
+		"success": {
+			StoragePrepareReq{
+				Nvme: &PrepareNvmeReq{},
+				Scm:  &PrepareScmReq{},
 			},
-			[]pmemDev{},
-			pb.StoragePrepareResp{
-				Nvme: &pb.PrepareNvmeResp{State: new(pb.ResponseState)},
-				Scm:  &pb.PrepareScmResp{State: new(pb.ResponseState)},
+			[]storage.ScmNamespace{},
+			nil,
+			&StoragePrepareResp{
+				Nvme: &PrepareNvmeResp{State: new(ResponseState)},
+				Scm:  &PrepareScmResp{State: new(ResponseState)},
 			},
 			true,
-			"",
 		},
-		{
-			"not run as root",
-			pb.StoragePrepareReq{
-				Nvme: &pb.PrepareNvmeReq{},
-				Scm:  &pb.PrepareScmReq{},
+		"not run as root": {
+			StoragePrepareReq{
+				Nvme: &PrepareNvmeReq{},
+				Scm:  &PrepareScmReq{},
 			},
-			[]pmemDev{},
-			pb.StoragePrepareResp{
-				Nvme: &pb.PrepareNvmeResp{
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_NVME,
-						Error:  os.Args[0] + " must be run as root or sudo",
+			[]storage.ScmNamespace{},
+			nil,
+			&StoragePrepareResp{
+				Nvme: &PrepareNvmeResp{
+					State: &ResponseState{
+						Status: ResponseStatus_CTL_ERR_NVME,
+						Error:  os.Args[0] + " must be run as root or sudo in order to prepare NVMe in this release",
 					},
 				},
-				Scm: &pb.PrepareScmResp{
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_SCM,
-						Error:  os.Args[0] + " must be run as root or sudo",
-					},
+				Scm: &PrepareScmResp{
+					State: new(ResponseState),
 				},
 			},
 			false,
-			"",
 		},
-		{
-			"scm only",
-			pb.StoragePrepareReq{
+		"scm only": {
+			StoragePrepareReq{
 				Nvme: nil,
-				Scm:  &pb.PrepareScmReq{},
+				Scm:  &PrepareScmReq{},
 			},
-			[]pmemDev{},
-			pb.StoragePrepareResp{
+			[]storage.ScmNamespace{},
+			nil,
+			&StoragePrepareResp{
 				Nvme: nil,
-				Scm:  &pb.PrepareScmResp{State: new(pb.ResponseState)},
+				Scm:  &PrepareScmResp{State: new(ResponseState)},
 			},
 			true,
-			"",
 		},
-		{
-			"nvme only",
-			pb.StoragePrepareReq{
-				Nvme: &pb.PrepareNvmeReq{},
+		"nvme only": {
+			StoragePrepareReq{
+				Nvme: &PrepareNvmeReq{},
 				Scm:  nil,
 			},
-			[]pmemDev{},
-			pb.StoragePrepareResp{
-				Nvme: &pb.PrepareNvmeResp{State: new(pb.ResponseState)},
+			[]storage.ScmNamespace{},
+			nil,
+			&StoragePrepareResp{
+				Nvme: &PrepareNvmeResp{State: new(ResponseState)},
 				Scm:  nil,
 			},
 			true,
-			"",
 		},
-		{
-			"success with pmem devices",
-			pb.StoragePrepareReq{
-				Nvme: &pb.PrepareNvmeReq{},
-				Scm:  &pb.PrepareScmReq{},
+		"success with pmem devices": {
+			StoragePrepareReq{
+				Nvme: &PrepareNvmeReq{},
+				Scm:  &PrepareScmReq{},
 			},
-			[]pmemDev{MockPmemDevice()},
-			pb.StoragePrepareResp{
-				Nvme: &pb.PrepareNvmeResp{State: new(pb.ResponseState)},
-				Scm: &pb.PrepareScmResp{
-					State: new(pb.ResponseState),
-					Pmems: []*pb.PmemDevice{MockPmemDevicePB()},
+			[]storage.ScmNamespace{MockScmNamespace()},
+			nil,
+			&StoragePrepareResp{
+				Nvme: &PrepareNvmeResp{State: new(ResponseState)},
+				Scm: &PrepareScmResp{
+					State: new(ResponseState),
+					Pmems: []*PmemDevice{common.MockPmemDevicePB()},
 				},
 			},
 			true,
-			"",
 		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.desc, func(t *testing.T) {
+		"fail scm prep": {
+			StoragePrepareReq{
+				Nvme: &PrepareNvmeReq{},
+				Scm:  &PrepareScmReq{},
+			},
+			[]storage.ScmNamespace{MockScmNamespace()},
+			errExample,
+			&StoragePrepareResp{
+				Nvme: &PrepareNvmeResp{State: new(ResponseState)},
+				Scm: &PrepareScmResp{
+					State: &ResponseState{
+						Status: ResponseStatus_CTL_ERR_SCM,
+						Error:  errExample.Error(),
+					},
+				},
+			},
+			true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)
 
 			config := newDefaultConfiguration(newMockExt(nil, true, nil,
-				true, nil, nil, nil, tt.isRoot))
-
-			cs := defaultMockControlService(t, log)
-			cs.scm = newMockScmStorage(log, config.ext, nil,
-				[]ipmctl.DeviceDiscovery{module}, false,
-				&mockPrepScm{pmemDevs: tt.outPmems})
+				true, nil, nil, nil, tc.isRoot))
+			mbc := scm.MockBackendConfig{
+				DiscoverRes:      []storage.ScmModule{MockScmModule()},
+				PrepNamespaceRes: tc.prepScmNamespaceRes,
+				PrepErr:          tc.prepScmErr,
+			}
+			cs := mockControlService(t, log, config, &mbc, nil)
 			cs.nvme = newMockNvmeStorage(log, config.ext, newMockSpdkEnv(nil),
-				newMockSpdkNvme(log, "", "", []spdk.Controller{ctrlr},
+				newMockSpdkNvme(log, []spdk.Controller{ctrlr},
 					[]spdk.Namespace{MockNamespace(&ctrlr)},
 					[]spdk.DeviceHealth{MockDeviceHealth(&ctrlr)},
-					nil, nil, nil), false)
-			_ = new(pb.StoragePrepareResp)
+					nil, nil), false)
+			_ = new(StoragePrepareResp)
 
 			// runs discovery for nvme & scm
 			if err := cs.Setup(); err != nil {
-				t.Fatal(err.Error() + tt.desc)
+				t.Fatal(err.Error() + name)
 			}
-			resp, err := cs.StoragePrepare(context.TODO(), &tt.inReq)
-			if err != nil {
-				AssertEqual(t, err.Error(), tt.errMsg, tt.desc)
-			}
-			AssertEqual(t, "", tt.errMsg, tt.desc)
 
-			if resp.Nvme == nil {
-				AssertEqual(t, resp.Nvme, tt.expResp.Nvme, "unexpected nvme response, "+tt.desc)
-			} else {
-				AssertEqual(t, resp.Nvme.State, tt.expResp.Nvme.State, "unexpected nvme state in response, "+tt.desc)
+			// StoragePrepare should never return an error
+			resp, err := cs.StoragePrepare(context.TODO(), &tc.inReq)
+			if err != nil {
+				t.Fatal(err)
 			}
-			if resp.Scm == nil {
-				AssertEqual(t, resp.Scm, tt.expResp.Scm, "unexpected scm response, "+tt.desc)
-			} else {
-				AssertEqual(t, resp.Scm.State, tt.expResp.Scm.State, "unexpected scm state in response, "+tt.desc)
-				AssertEqual(t, resp.Scm.Pmems, tt.expResp.Scm.Pmems, "unexpected pmem devices in response, "+tt.desc)
+
+			if diff := cmp.Diff(tc.expResp, resp); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
 }
 
 func TestStorageFormat(t *testing.T) {
-	tests := []struct {
+	for name, tc := range map[string]struct {
 		superblockExists bool
 		mountRet         error
 		unmountRet       error
@@ -457,137 +443,209 @@ func TestStorageFormat(t *testing.T) {
 		bClass           storage.BdevClass
 		bDevs            []string
 		expNvmeFormatted bool
-		expScmFormatted  bool
-		mountRets        ScmMountResults
-		ctrlrRets        NvmeControllerResults
+		expResults       []*StorageFormatResp
 		isRoot           bool
-		desc             string
+		reformat         bool
 	}{
-		{
-			desc:            "ram success",
-			sMount:          "/mnt/daos",
-			sClass:          storage.ScmClassRAM,
-			sSize:           6,
-			expScmFormatted: true,
-			ctrlrRets: NvmeControllerResults{
+		"ram success": {
+			sMount:           "/mnt/daos",
+			sClass:           storage.ScmClassRAM,
+			sSize:            6,
+			expNvmeFormatted: true,
+			expResults: []*StorageFormatResp{
 				{
-					Pciaddr: "",
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_CONF,
-						Error:  ": " + msgBdevClassNotSupported,
+					Crets: []*NvmeControllerResult{},
+					Mrets: []*ScmMountResult{
+						{
+							Mntpoint: "/mnt/daos",
+							State:    new(ResponseState),
+						},
 					},
 				},
 			},
-			mountRets: ScmMountResults{
-				{
-					Mntpoint: "/mnt/daos",
-					State:    new(pb.ResponseState),
-				},
-			},
 		},
-		{
-			desc:            "dcpm success",
-			sMount:          "/mnt/daos",
-			sClass:          storage.ScmClassDCPM,
-			sDevs:           []string{"/dev/pmem1"},
-			expScmFormatted: true,
-			ctrlrRets: NvmeControllerResults{
+		"dcpm success": {
+			sMount:           "/mnt/daos",
+			sClass:           storage.ScmClassDCPM,
+			sDevs:            []string{"/dev/pmem1"},
+			expNvmeFormatted: true,
+			expResults: []*StorageFormatResp{
 				{
-					Pciaddr: "",
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_CONF,
-						Error:  ": " + msgBdevClassNotSupported,
+					Crets: []*NvmeControllerResult{},
+					Mrets: []*ScmMountResult{
+						{
+							Mntpoint: "/mnt/daos",
+							State:    new(ResponseState),
+						},
 					},
 				},
 			},
-			mountRets: ScmMountResults{
-				{
-					Mntpoint: "/mnt/daos",
-					State:    new(pb.ResponseState),
-				},
-			},
 		},
-		{
-			desc:             "nvme and dcpm success",
+		"nvme and dcpm success": {
 			sMount:           "/mnt/daos",
 			sClass:           storage.ScmClassDCPM,
 			sDevs:            []string{"/dev/pmem1"},
 			bClass:           storage.BdevClassNvme,
 			bDevs:            []string{"0000:81:00.0"},
-			expScmFormatted:  true,
 			expNvmeFormatted: true,
-			ctrlrRets: NvmeControllerResults{
+			expResults: []*StorageFormatResp{
 				{
-					Pciaddr: "0000:81:00.0",
-					State:   new(pb.ResponseState),
-				},
-			},
-			mountRets: ScmMountResults{
-				{
-					Mntpoint: "/mnt/daos",
-					State:    new(pb.ResponseState),
+					Crets: []*NvmeControllerResult{
+						{
+							Pciaddr: "0000:81:00.0",
+							State:   new(ResponseState),
+						},
+					},
+					Mrets: []*ScmMountResult{
+						{
+							Mntpoint: "/mnt/daos",
+							State:    new(ResponseState),
+						},
+					},
 				},
 			},
 		},
-		{
-			desc:             "nvme and ram success",
+		"nvme and ram success": {
 			sMount:           "/mnt/daos",
 			sClass:           storage.ScmClassRAM,
 			sDevs:            []string{"/dev/pmem1"}, // ignored if SCM class is ram
 			sSize:            6,
 			bClass:           storage.BdevClassNvme,
 			bDevs:            []string{"0000:81:00.0"},
-			expScmFormatted:  true,
 			expNvmeFormatted: true,
-			ctrlrRets: NvmeControllerResults{
+			expResults: []*StorageFormatResp{
 				{
-					Pciaddr: "0000:81:00.0",
-					State:   new(pb.ResponseState),
-				},
-			},
-			mountRets: ScmMountResults{
-				{
-					Mntpoint: "/mnt/daos",
-					State:    new(pb.ResponseState),
+					Crets: []*NvmeControllerResult{
+						{
+							Pciaddr: "0000:81:00.0",
+							State:   new(ResponseState),
+						},
+					},
+					Mrets: []*ScmMountResult{
+						{
+							Mntpoint: "/mnt/daos",
+							State:    new(ResponseState),
+						},
+					},
 				},
 			},
 		},
-		{
-			desc: "already formatted",
-			// if superblock exists should set storage formatted
-			superblockExists: true,
+		"ram already mounted no reformat": {
+			superblockExists: true, // if superblockExists we emulate ext4 fs is mounted
 			sMount:           "/mnt/daos",
 			sClass:           storage.ScmClassRAM,
 			sSize:            6,
 			bClass:           storage.BdevClassNvme,
 			bDevs:            []string{"0000:81:00.0"},
-			expScmFormatted:  true,
-			expNvmeFormatted: true,
-			ctrlrRets: NvmeControllerResults{
+			expResults: []*StorageFormatResp{
 				{
-					Pciaddr: "",
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_APP,
-						Error:  msgBdevAlreadyFormatted,
+					Crets: []*NvmeControllerResult{
+						{
+							State: &ResponseState{
+								Status: ResponseStatus_CTL_ERR_NVME,
+								Error:  msgBdevScmNotReady,
+							},
+						},
 					},
-				},
-			},
-			mountRets: ScmMountResults{
-				{
-					Mntpoint: "/mnt/daos",
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_APP,
-						Error:  msgScmAlreadyFormatted,
+					Mrets: []*ScmMountResult{
+						{
+							Mntpoint: "/mnt/daos",
+							State: &ResponseState{
+								Status: ResponseStatus_CTL_ERR_SCM,
+								Error:  scm.FaultFormatNoReformat.Error(),
+								Info:   fault.ShowResolutionFor(scm.FaultFormatNoReformat),
+							},
+						},
 					},
 				},
 			},
 		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.desc, func(t *testing.T) {
+		"ram already mounted and reformat set": {
+			superblockExists: true, // if superblockExists we emulate ext4 fs is mounted
+			reformat:         true,
+			sMount:           "/mnt/daos",
+			sClass:           storage.ScmClassRAM,
+			sSize:            6,
+			bClass:           storage.BdevClassNvme,
+			bDevs:            []string{"0000:81:00.0"},
+			expNvmeFormatted: true,
+			expResults: []*StorageFormatResp{
+				{
+					Crets: []*NvmeControllerResult{
+						{
+							Pciaddr: "0000:81:00.0",
+							State:   new(ResponseState),
+						},
+					},
+					Mrets: []*ScmMountResult{
+						{
+							Mntpoint: "/mnt/daos",
+							State:    new(ResponseState),
+						},
+					},
+				},
+			},
+		},
+		"dcpm already mounted no reformat": {
+			superblockExists: true, // if superblockExists we emulate ext4 fs is mounted
+			sMount:           "/mnt/daos",
+			sClass:           storage.ScmClassDCPM,
+			sDevs:            []string{"/dev/pmem1"},
+			bClass:           storage.BdevClassNvme,
+			bDevs:            []string{"0000:81:00.0"},
+			expResults: []*StorageFormatResp{
+				{
+					Crets: []*NvmeControllerResult{
+						{
+							State: &ResponseState{
+								Status: ResponseStatus_CTL_ERR_NVME,
+								Error:  msgBdevScmNotReady,
+							},
+						},
+					},
+					Mrets: []*ScmMountResult{
+						{
+							Mntpoint: "/mnt/daos",
+							State: &ResponseState{
+								Status: ResponseStatus_CTL_ERR_SCM,
+								Error:  scm.FaultFormatNoReformat.Error(),
+								Info:   fault.ShowResolutionFor(scm.FaultFormatNoReformat),
+							},
+						},
+					},
+				},
+			},
+		},
+		"dcpm already mounted and reformat set": {
+			superblockExists: true, // if superblockExists we emulate ext4 fs is mounted
+			reformat:         true,
+			sMount:           "/mnt/daos",
+			sClass:           storage.ScmClassDCPM,
+			sDevs:            []string{"/dev/pmem1"},
+			bClass:           storage.BdevClassNvme,
+			bDevs:            []string{"0000:81:00.0"},
+			expNvmeFormatted: true,
+			expResults: []*StorageFormatResp{
+				{
+					Crets: []*NvmeControllerResult{
+						{
+							Pciaddr: "0000:81:00.0",
+							State:   new(ResponseState),
+						},
+					},
+					Mrets: []*ScmMountResult{
+						{
+							Mntpoint: "/mnt/daos",
+							State:    new(ResponseState),
+						},
+					},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)()
+			defer common.ShowBufferOnFailure(t, buf)
 
 			testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
 			defer os.RemoveAll(testDir)
@@ -595,30 +653,57 @@ func TestStorageFormat(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			config := newMockStorageConfig(tt.mountRet, tt.unmountRet, tt.mkdirRet,
-				tt.removeRet, tt.sMount, tt.sClass, tt.sDevs, tt.sSize,
-				tt.bClass, tt.bDevs, tt.superblockExists, tt.isRoot)
-			cs := mockControlService(t, log, config)
+			// Hack to deal with creating the mountpoint in test.
+			// FIXME (DAOS-3471): The tests in this layer really shouldn't be
+			// reaching down far enough to actually interact with the filesystem.
+			tc.sMount = filepath.Join(testDir, tc.sMount)
+			if len(tc.expResults) == 1 && len(tc.expResults[0].Mrets) == 1 {
+				mp := &(tc.expResults[0].Mrets[0].Mntpoint)
+				if *mp != "" {
+					if strings.HasSuffix(tc.sMount, *mp) {
+						*mp = tc.sMount
+					}
+				}
+			}
+
+			config := newMockStorageConfig(tc.mountRet, tc.unmountRet, tc.mkdirRet,
+				tc.removeRet, tc.sMount, tc.sClass, tc.sDevs, tc.sSize,
+				tc.bClass, tc.bDevs, tc.superblockExists, tc.isRoot)
+
+			getFsRetStr := "none"
+			if tc.superblockExists {
+				getFsRetStr = "ext4"
+			}
+			msc := &scm.MockSysConfig{
+				IsMountedBool: tc.superblockExists,
+				MountErr:      tc.mountRet,
+				UnmountErr:    tc.unmountRet,
+				GetfsStr:      getFsRetStr,
+			}
+			cs := mockControlService(t, log, config, nil, msc)
 
 			// runs discovery for nvme & scm
 			if err := cs.Setup(); err != nil {
-				t.Fatal(err.Error() + tt.desc)
+				t.Fatal(err.Error() + name)
 			}
 
 			mock := &mockStorageFormatServer{}
 			mockWg := new(sync.WaitGroup)
 			mockWg.Add(1)
 
-			AssertEqual(t, cs.nvme.formatted, false, tt.desc)
-			AssertEqual(t, cs.scm.formatted, false, tt.desc)
+			common.AssertEqual(t, cs.nvme.formatted, false, name)
 
 			for _, i := range cs.harness.Instances() {
-				i.fsRoot = testDir
-				if err := os.MkdirAll(filepath.Join(testDir, tt.sMount), 0777); err != nil {
+				root := filepath.Dir(tc.sMount)
+				if tc.superblockExists {
+					root = tc.sMount
+				}
+				if err := os.MkdirAll(root, 0777); err != nil {
 					t.Fatal(err)
 				}
+
 				// if the instance is expected to have a valid superblock, create one
-				if tt.superblockExists {
+				if tc.superblockExists {
 					if err := i.CreateSuperblock(&mgmtInfo{}); err != nil {
 						t.Fatal(err)
 					}
@@ -628,210 +713,22 @@ func TestStorageFormat(t *testing.T) {
 			go func() {
 				// should signal wait group in srv to unlock if
 				// successful once format completed
-				_ = cs.StorageFormat(nil, mock)
+				_ = cs.StorageFormat(&StorageFormatReq{Reformat: tc.reformat}, mock)
 				mockWg.Done()
 			}()
 
-			if !tt.superblockExists && tt.expNvmeFormatted && tt.expScmFormatted {
-				if err := cs.harness.AwaitStorageReady(context.Background()); err != nil {
+			if !tc.superblockExists && tc.expNvmeFormatted {
+				if err := cs.harness.AwaitStorageReady(context.Background(), false); err != nil {
 					t.Fatal(err)
 				}
 			}
 			mockWg.Wait() // wait for test goroutines to complete
 
-			AssertEqual(
-				t, len(mock.Results), 1,
-				"unexpected number of responses sent, "+tt.desc)
-
-			for i, result := range mock.Results[0].Crets {
-				expected := tt.ctrlrRets[i]
-				AssertEqual(
-					t, result.State.Error,
-					expected.State.Error,
-					"unexpected result error message, "+tt.desc)
-				AssertEqual(
-					t, result.State.Status,
-					expected.State.Status,
-					"unexpected response status, "+tt.desc)
-				AssertEqual(
-					t, result.Pciaddr,
-					expected.Pciaddr,
-					"unexpected pciaddr, "+tt.desc)
+			if diff := cmp.Diff(tc.expResults, mock.Results); diff != "" {
+				t.Fatalf("unexpected results: (-want, +got):\n%s\n", diff)
 			}
 
-			for i, result := range mock.Results[0].Mrets {
-				expected := tt.mountRets[i]
-				AssertEqual(
-					t, result.State.Error,
-					expected.State.Error,
-					"unexpected result error message, "+tt.desc)
-				AssertEqual(
-					t, result.State.Status,
-					expected.State.Status,
-					"unexpected response status, "+tt.desc)
-				AssertEqual(
-					t, result.Mntpoint,
-					expected.Mntpoint,
-					"unexpected mntpoint, "+tt.desc)
-			}
-
-			AssertEqual(t, cs.nvme.formatted, tt.expNvmeFormatted, tt.desc)
-			AssertEqual(t, cs.scm.formatted, tt.expScmFormatted, tt.desc)
-		})
-	}
-}
-
-func TestStorageUpdate(t *testing.T) {
-	pciAddr := "0000:81:00.0" // default pciaddr for tests
-
-	tests := []struct {
-		bDevs      []string
-		nvmeParams *pb.UpdateNvmeReq // provided in client gRPC call
-		scmParams  *pb.UpdateScmReq
-		moduleRets ScmModuleResults
-		ctrlrRets  NvmeControllerResults
-		desc       string
-	}{
-		{
-			desc:  "nvme update success",
-			bDevs: []string{pciAddr},
-			nvmeParams: &pb.UpdateNvmeReq{
-				Startrev: "1.0.0",
-				Model:    "ABC",
-			},
-			ctrlrRets: NvmeControllerResults{
-				{
-					Pciaddr: pciAddr,
-					State:   new(pb.ResponseState),
-				},
-			},
-			moduleRets: ScmModuleResults{
-				{
-					Loc: &pb.ScmModule_Location{},
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_NO_IMPL,
-						Error:  msgScmUpdateNotImpl,
-					},
-				},
-			},
-		},
-		{
-			desc:  "nvme update wrong model",
-			bDevs: []string{pciAddr},
-			nvmeParams: &pb.UpdateNvmeReq{
-				Startrev: "1.0.0",
-				Model:    "AB",
-			},
-			ctrlrRets: NvmeControllerResults{
-				{
-					Pciaddr: pciAddr,
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_NVME,
-						Error: pciAddr + ": " +
-							msgBdevModelMismatch +
-							" want AB, have ABC",
-					},
-				},
-			},
-			moduleRets: ScmModuleResults{
-				{
-					Loc: &pb.ScmModule_Location{},
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_NO_IMPL,
-						Error:  msgScmUpdateNotImpl,
-					},
-				},
-			},
-		},
-		{
-			desc:  "nvme update wrong starting revision",
-			bDevs: []string{pciAddr},
-			nvmeParams: &pb.UpdateNvmeReq{
-				Startrev: "2.0.0",
-				Model:    "ABC",
-			},
-			ctrlrRets: NvmeControllerResults{
-				{
-					Pciaddr: pciAddr,
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_ERR_NVME,
-						Error: pciAddr + ": " +
-							msgBdevFwrevStartMismatch +
-							" want 2.0.0, have 1.0.0",
-					},
-				},
-			},
-			moduleRets: ScmModuleResults{
-				{
-					Loc: &pb.ScmModule_Location{},
-					State: &pb.ResponseState{
-						Status: pb.ResponseStatus_CTRL_NO_IMPL,
-						Error:  msgScmUpdateNotImpl,
-					},
-				},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.desc, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)()
-
-			config := defaultMockConfig(t)
-			cs := mockControlService(t, log, config)
-
-			// runs discovery for nvme & scm
-			if err := cs.Setup(); err != nil {
-				t.Fatal(err)
-			}
-
-			mock := &mockStorageUpdateServer{}
-
-			req := &pb.StorageUpdateReq{
-				Nvme: tt.nvmeParams,
-				Scm:  tt.scmParams,
-			}
-
-			if err := cs.StorageUpdate(req, mock); err != nil {
-				t.Fatal(err.Error() + tt.desc)
-			}
-
-			AssertEqual(
-				t, len(mock.Results), 1,
-				"unexpected number of responses sent, "+tt.desc)
-
-			for i, result := range mock.Results[0].Crets {
-				expected := tt.ctrlrRets[i]
-				AssertEqual(
-					t, result.State.Error,
-					expected.State.Error,
-					"unexpected result error message, "+tt.desc)
-				AssertEqual(
-					t, result.State.Status,
-					expected.State.Status,
-					"unexpected response status, "+tt.desc)
-				AssertEqual(
-					t, result.Pciaddr,
-					expected.Pciaddr,
-					"unexpected pciaddr, "+tt.desc)
-			}
-
-			for i, result := range mock.Results[0].Mrets {
-				expected := tt.moduleRets[i]
-				AssertEqual(
-					t, result.State.Error,
-					expected.State.Error,
-					"unexpected result error message, "+tt.desc)
-				AssertEqual(
-					t, result.State.Status,
-					expected.State.Status,
-					"unexpected response status, "+tt.desc)
-				AssertEqual(
-					t, result.Loc,
-					expected.Loc,
-					"unexpected mntpoint, "+tt.desc)
-			}
+			common.AssertEqual(t, cs.nvme.formatted, tc.expNvmeFormatted, name)
 		})
 	}
 }

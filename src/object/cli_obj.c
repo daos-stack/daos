@@ -30,6 +30,7 @@
 #include <daos/object.h>
 #include <daos/container.h>
 #include <daos/pool.h>
+#include <daos/task.h>
 #include <daos_task.h>
 #include <daos_types.h>
 #include <daos_obj.h>
@@ -1424,21 +1425,6 @@ obj_req_valid(void *args, int opc, daos_epoch_t *epoch)
 			rc = 0;
 		}
 		break;
-	case DAOS_OBJ_RPC_SYNC: {
-		struct daos_obj_sync_args	*s_args = args;
-
-		rc = dc_tx_check(s_args->th, false, epoch);
-		if (rc != 0) {
-			if (rc != -DER_INVAL)
-				D_GOTO(out, rc);
-
-			/* FIXME: until distributed transaction. */
-			*epoch = dc_io_epoch();
-			D_DEBUG(DB_IO, "set epoch "DF_U64"\n", *epoch);
-			rc = 0;
-		}
-		break;
-	}
 	default:
 		D_ERROR("bad opc %d.\n", opc);
 		D_GOTO(out, rc = -DER_INVAL);
@@ -1530,7 +1516,14 @@ obj_req_get_tgts(struct dc_object *obj, enum obj_rpc_opc opc, int *shard,
 	case DAOS_OBJ_AKEY_RPC_ENUMERATE:
 	case DAOS_OBJ_RECX_RPC_ENUMERATE:
 		D_ASSERT(shard != NULL);
-		if (*shard != -1) {
+		if (*shard == -1) {
+			D_ASSERT(!spec_shard);
+
+			*shard = obj_dkey2shard(obj, dkey_hash, map_ver, opc,
+						to_leader);
+			if (*shard < 0)
+				D_GOTO(out, rc = *shard);
+		} else if (!spec_shard) {
 			if (to_leader)
 				*shard = obj_grp_leader_get(obj, *shard,
 							    map_ver);
@@ -1540,10 +1533,9 @@ obj_req_get_tgts(struct dc_object *obj, enum obj_rpc_opc opc, int *shard,
 			if (*shard < 0)
 				D_GOTO(out, rc = *shard);
 		} else {
-			*shard = obj_dkey2shard(obj, dkey_hash, map_ver,
-						opc, to_leader);
-			if (*shard < 0)
-				D_GOTO(out, rc = *shard);
+			D_ASSERT(shard != NULL);
+			D_ASSERT(*shard >= 0);
+			D_ASSERT(*shard < obj->cob_shards_nr);
 		}
 		req_tgts->ort_shard_tgts = req_tgts->ort_tgts_inline;
 		req_tgts->ort_srv_disp = 0;
@@ -1985,19 +1977,16 @@ obj_list_dkey_cb(tse_task_t *task, struct obj_list_arg *arg, unsigned int opc)
 
 static void
 obj_update_csum_destroy(const struct dc_object *obj,
-			     const daos_obj_update_t *args) {
-	int i;
-	struct daos_csummer *csummer = dc_cont_hdl2csummer(obj->cob_coh);
+			     const daos_obj_update_t *args)
+{
+	struct daos_csummer	*csummer = dc_cont_hdl2csummer(obj->cob_coh);
+	int			 i;
 
 	if (!daos_csummer_initialized(csummer))
 		return;
 
-	for (i = 0; i < args->nr; i++) {
-		daos_iod_t *iod = &args->iods[i];
-
-		daos_csummer_destroy_csum_buf(csummer, iod->iod_nr,
-					      &iod->iod_csums);
-	}
+	for (i = 0; i < args->nr; i++)
+		daos_csummer_free_dcbs(csummer, &(&args->iods[i])->iod_csums);
 }
 
 static int
@@ -2045,12 +2034,9 @@ obj_comp_cb(tse_task_t *task, void *data)
 	case DAOS_OBJ_RPC_QUERY_KEY:
 	case DAOS_OBJ_RPC_SYNC:
 		obj = *((struct dc_object **)data);
-		if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE) {
+		if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE)
 			/** checksums sent, need to destroy now */
-			daos_obj_update_t *args = dc_task_get_args(task);
-
-			obj_update_csum_destroy(obj, args);
-		}
+			obj_update_csum_destroy(obj, dc_task_get_args(task));
 		if (task->dt_result != 0)
 			break;
 		if (d_list_empty(&obj_auxi->shard_task_head)) {
@@ -2115,10 +2101,10 @@ obj_comp_cb(tse_task_t *task, void *data)
 			struct daos_obj_sync_args	*sync_args;
 
 			sync_args = dc_task_get_args(task);
-			D_ASSERT(sync_args->epoch != NULL);
+			D_ASSERT(sync_args->epochs_p != NULL);
 
-			D_FREE(*sync_args->epoch);
-			*sync_args->epoch = NULL;
+			D_FREE(*sync_args->epochs_p);
+			*sync_args->epochs_p = NULL;
 			*sync_args->nr = 0;
 		}
 
@@ -2176,31 +2162,36 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 	return 0;
 }
 
+/** Ensures that checksum structures are NULL. If not will log a warning and
+ *  set to NULL. This is needed because the checksum structures are visible
+ *  in the public APIs but should not be used.
+ */
+static void
+obj_null_csum(const daos_obj_update_t *args) {
+	int i;
+
+	for (i = 0; i < args->nr; i++) {
+		if (args->iods[i].iod_csums != NULL) {
+			D_WARN("iod csums should be NULL\n");
+			args->iods[i].iod_csums = NULL;
+		}
+	}
+}
+
 static void
 obj_update_csums(const struct dc_object *obj, const daos_obj_update_t *args) {
 	struct daos_csummer	*csummer = dc_cont_hdl2csummer(obj->cob_coh);
-	int			i;
+	int			 i;
 
+	obj_null_csum(args);
 	if (!daos_csummer_initialized(csummer)) /** Not configured */
 		return;
 
-
 	for (i = 0; i < args->nr; i++) {
-		/**
-		 * TODO: Turn this into an assert after csums are
-		 * removed from public interface. csums should always be
-		 * cleaned up/freed internally, so might be a memory leak if
-		 * not NULL. But user can pass in right now so don't assert.
-		 * (D_ASSERT(args->iods[i].iod_csums == NULL)
-		 */
-		if (args->iods[i].iod_csums != NULL)
-			D_WARN("args->iods[i].iod_csums not NULL\n");
-		daos_csummer_calc_csum(csummer,
-				       &args->sgls[i],
-				       args->iods[i].iod_size,
-				       args->iods[i].iod_recxs,
-				       args->iods[i].iod_nr,
-				       &args->iods[i].iod_csums);
+		daos_csummer_calc(csummer, &args->sgls[i],
+				  &args->iods[i], &args->iods[i].iod_csums);
+		if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_FAIL))
+			((char *)args->iods[i].iod_csums->cs_csum)[0]++;
 	}
 }
 
@@ -2234,6 +2225,7 @@ do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
 
 	is_ec = daos_oclass_is_ec(obj->cob_md.omd_id, &oca);
 	if (is_ec) {
+		ec_split_recxs(task, oca);
 		ec_get_tgt_set(args->iods, args->nr, oca, false, &tgt_set);
 		D_ASSERT(tgt_set != 0);
 	}
@@ -2264,6 +2256,7 @@ do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
 			DP_OID(obj->cob_md.omd_id), rc);
 		goto out_task;
 	}
+	obj_null_csum(args);
 
 	rc = obj_req_fanout(obj, obj_auxi, dkey_hash, map_ver, epoch,
 			    shard_rw_prep, dc_obj_shard_rw, task);
@@ -2392,8 +2385,8 @@ dc_obj_list_internal(tse_task_t *task, int opc, daos_obj_list_t *args)
 	unsigned int		 map_ver;
 	struct obj_list_arg	 list_args;
 	uint64_t		 dkey_hash;
-	int			 shard = -1;
 	daos_epoch_t		 epoch;
+	int			 shard = -1;
 	int			 rc;
 
 	rc = obj_req_valid(args, opc, &epoch);
@@ -2432,8 +2425,18 @@ dc_obj_list_internal(tse_task_t *task, int opc, daos_obj_list_t *args)
 		shard = dc_obj_anchor2shard(args->dkey_anchor);
 		D_ASSERT(shard != -1);
 	}
+
+	if (args->dkey_anchor != NULL &&
+	    (daos_anchor_get_flags(args->dkey_anchor) & DIOF_TO_SPEC_SHARD)) {
+		shard = dc_obj_anchor2shard(args->dkey_anchor);
+		obj_auxi->spec_shard = 1;
+	} else {
+		obj_auxi->spec_shard = 0;
+	}
+
 	rc = obj_req_get_tgts(obj, opc, &shard, dkey_hash, 0, map_ver,
-			      obj_auxi->to_leader, false, &obj_auxi->req_tgts);
+			      obj_auxi->to_leader, obj_auxi->spec_shard,
+			      &obj_auxi->req_tgts);
 	if (rc != 0)
 		goto out_task;
 	if (args->dkey == NULL)
@@ -2788,8 +2791,10 @@ dc_obj_query_key(tse_task_t *api_task)
 
 	rc = check_query_flags(obj->cob_md.omd_id, api_args->flags,
 			       api_args->dkey, api_args->akey, api_args->recx);
-	if (rc)
+	if (rc) {
+		obj_decref(obj);
 		D_GOTO(out_task, rc);
+	}
 
 	obj_auxi = tse_task_stack_push(api_task, sizeof(*obj_auxi));
 	obj_auxi->opc = DAOS_OBJ_RPC_QUERY_KEY;
@@ -2931,7 +2936,7 @@ shard_sync_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 
 	obj_args = dc_task_get_args(obj_auxi->obj_task);
 	shard_args = container_of(shard_auxi, struct shard_sync_args, sa_auxi);
-	shard_args->sa_epoch = &(*obj_args->epoch)[grp_idx];
+	shard_args->sa_epoch = &(*obj_args->epochs_p)[grp_idx];
 
 	return 0;
 }
@@ -2942,7 +2947,6 @@ dc_obj_sync(tse_task_t *task)
 	struct daos_obj_sync_args	*args;
 	struct obj_auxi_args		*obj_auxi = NULL;
 	struct dc_object		*obj = NULL;
-	daos_epoch_t			 epoch;
 	uint32_t			 map_ver;
 	int				 rc;
 	int				 i;
@@ -2953,12 +2957,6 @@ dc_obj_sync(tse_task_t *task)
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL,
 		  "Task Argument OPC does not match DC OPC\n");
-
-	rc = obj_req_valid(args, DAOS_OBJ_RPC_SYNC, &epoch);
-	if (rc != 0)
-		D_GOTO(out_task, rc);
-
-	D_ASSERT(epoch);
 
 	obj = obj_hdl2ptr(args->oh);
 	if (obj == NULL)
@@ -2988,12 +2986,12 @@ dc_obj_sync(tse_task_t *task)
 			D_GOTO(out_task, rc = -DER_NOMEM);
 
 		*args->nr = obj->cob_grp_nr;
-		*args->epoch = tmp;
+		*args->epochs_p = tmp;
 	} else {
-		D_ASSERT(*args->epoch != NULL);
+		D_ASSERT(*args->epochs_p != NULL);
 
 		for (i = 0; i < *args->nr; i++)
-			*args->epoch[i] = 0;
+			*args->epochs_p[i] = 0;
 	}
 
 	rc = obj_req_get_tgts(obj, DAOS_OBJ_RPC_SYNC, NULL, 0, 0, map_ver,
@@ -3004,11 +3002,95 @@ dc_obj_sync(tse_task_t *task)
 	D_DEBUG(DB_IO, "sync "DF_OID", reps %d\n",
 		DP_OID(obj->cob_md.omd_id), obj_get_replicas(obj));
 
-	rc = obj_req_fanout(obj, obj_auxi, 0, map_ver, epoch,
+	rc = obj_req_fanout(obj, obj_auxi, 0, map_ver, args->epoch,
 			    shard_sync_prep, dc_obj_shard_sync, task);
 	return rc;
 
 out_task:
 	tse_task_complete(task, rc);
+	return rc;
+}
+
+int
+dc_obj_verify(daos_handle_t oh, daos_epoch_t *epochs, unsigned int nr)
+{
+	struct dc_obj_verify_args		*dova = NULL;
+	struct dc_object			*obj = NULL;
+	struct daos_oclass_attr			*oc_attr;
+	unsigned int				 reps = 0;
+	int					 rc = 0;
+	int					 i;
+
+	obj = obj_hdl2ptr(oh);
+	oc_attr = daos_oclass_attr_find(obj->cob_md.omd_id);
+	D_ASSERT(oc_attr != NULL);
+
+	/* XXX: Currently, only support to verify replicated object.
+	 *	Need more work for EC object in the future.
+	 */
+	if (oc_attr->ca_resil != DAOS_RES_REPL)
+		D_GOTO(out, rc = -DER_NOSYS);
+
+	if (oc_attr->u.rp.r_num == DAOS_OBJ_REPL_MAX)
+		reps = obj->cob_grp_size;
+	else
+		reps = oc_attr->u.rp.r_num;
+
+	if (reps == 1)
+		goto out;
+
+	/* XXX: If we support progressive object layout in the future,
+	 *	The "obj->cob_grp_nr" may be different from given @nr.
+	 */
+	D_ASSERTF(obj->cob_grp_nr == nr, "Invalid grp count %u/%u\n",
+		  obj->cob_grp_nr, nr);
+
+	D_ALLOC_ARRAY(dova, reps);
+	if (dova == NULL) {
+		D_ERROR(DF_OID" no MEM for verify group, reps %u\n",
+			DP_OID(obj->cob_md.omd_id), reps);
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	for (i = 0; i < reps; i++) {
+		struct dc_obj_verify_cursor	*cursor = &dova[i].cursor;
+
+		dova[i].oh = oh;
+
+		dova[i].list_buf = dova[i].inline_buf;
+		dova[i].list_buf_len = DOVA_BUF_LEN;
+
+		dova[i].fetch_buf = NULL;
+		dova[i].fetch_buf_len = 0;
+
+		cursor->iod.iod_recxs = &cursor->recx;
+		/* We merge the recxs if they can be merged.
+		 * So always signle IOD.
+		 */
+		cursor->iod.iod_nr = 1;
+	}
+
+	for (i = 0; i < obj->cob_grp_nr && rc == 0; i++) {
+		/* Zero epoch means the shards in related redundancy group
+		 * have not been created yet.
+		 */
+		if (epochs[i] != 0)
+			rc = dc_obj_verify_rdg(obj, dova, i, reps, epochs[i]);
+	}
+
+out:
+	if (dova != NULL) {
+		for (i = 0; i < reps; i++) {
+			if (dova[i].list_buf != dova[i].inline_buf)
+				D_FREE(dova[i].list_buf);
+
+			D_FREE(dova[i].fetch_buf);
+		}
+
+		D_FREE(dova);
+	}
+
+	obj_decref(obj);
+
 	return rc;
 }

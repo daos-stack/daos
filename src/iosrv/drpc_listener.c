@@ -32,6 +32,8 @@
 
 #include <abt.h>
 #include <stddef.h>
+#include <sys/types.h>
+#include <unistd.h>
 #include <daos_srv/daos_server.h>
 #include "drpc_handler.h"
 #include "drpc_internal.h"
@@ -45,11 +47,8 @@ static struct drpc_listener_status {
 	ABT_thread	thread;		/* so we can cleanup when we're done */
 } status;
 
-static const int	SLEEP_TIME_MS = 1000; /* time to yield between cycles */
-/* TODO: Make unique sock name from pid when 2+ io server instances */
-static const char	*listener_socket_name = "daos_io_server.sock";
-
-char			*drpc_listener_socket_path;
+/* Path of the socket the dRPC server will listen on */
+char *drpc_listener_socket_path;
 
 static bool
 is_listener_running(void)
@@ -87,13 +86,13 @@ drpc_listener_run(void *arg)
 	while (is_listener_running()) {
 		int rc;
 
-		/* instant timeout - don't hog the xstream */
-		rc = drpc_progress(ctx, 0);
+		/* wait a second */
+		rc = drpc_progress(ctx, 1000);
 		if (rc != DER_SUCCESS && rc != -DER_TIMEDOUT) {
 			D_ERROR("dRPC listener progress error: %d\n", rc);
 		}
 
-		dss_sleep(SLEEP_TIME_MS); /* yield for a bit */
+		ABT_thread_yield();
 	}
 
 	D_INFO("Closing down dRPC listener\n");
@@ -146,7 +145,7 @@ drpc_listener_start_ult(ABT_thread *thread)
 
 	/* Create a ULT to start the drpc listener */
 	rc = dss_ult_create(drpc_listener_run, (void *)ctx,
-			    DSS_ULT_DRPC, 0, 0, thread);
+			    DSS_ULT_DRPC_LISTENER, 0, 0, thread);
 	if (rc != 0) {
 		D_ERROR("Failed to create drpc listener ULT: %d\n", rc);
 		drpc_progress_context_close(ctx);
@@ -159,11 +158,9 @@ drpc_listener_start_ult(ABT_thread *thread)
 static int
 generate_socket_path(void)
 {
-	int rc;
-
-	rc = asprintf(&drpc_listener_socket_path, "%s/%s",
-			dss_socket_dir, listener_socket_name);
-	if (rc < 0) {
+	D_ASPRINTF(drpc_listener_socket_path, "%s/daos_io_server_%d.sock",
+		   dss_socket_dir, getpid());
+	if (drpc_listener_socket_path == NULL) {
 		D_ERROR("Failed to allocate socket path\n");
 		return -DER_NOMEM;
 	}

@@ -28,7 +28,7 @@ import traceback
 
 from apricot import TestWithServers
 
-from daos_api import DaosPool, DaosServer, DaosApiError
+from pydaos.raw import DaosPool, DaosServer, DaosApiError
 
 
 class PoolSvc(TestWithServers):

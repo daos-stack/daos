@@ -96,15 +96,6 @@ enum {
 				 */
 };
 
-/** Internal classes for testing & debugging */
-enum {
-	OC_INTERNAL		= OC_RESERVED + 1,
-	OC_RP_4G1,
-	OC_RP_4G2,
-	OC_RP_4G4,
-	OC_RP_4GX,
-};
-
 static inline bool
 daos_obj_is_echo(daos_obj_id_t oid)
 {
@@ -336,8 +327,6 @@ int daos_iod_copy(daos_iod_t *dst, daos_iod_t *src);
 void daos_iods_free(daos_iod_t *iods, int nr, bool free);
 daos_size_t daos_iods_len(daos_iod_t *iods, int nr);
 
-#define daos_key_match(key1, key2)	daos_iov_cmp(key1, key2)
-
 int dc_obj_init(void);
 void dc_obj_fini(void);
 
@@ -362,6 +351,7 @@ int dc_obj_list_obj(tse_task_t *task);
 int dc_obj_fetch_md(daos_obj_id_t oid, struct daos_obj_md *md);
 int dc_obj_layout_get(daos_handle_t oh, struct daos_obj_layout **p_layout);
 int dc_obj_layout_refresh(daos_handle_t oh);
+int dc_obj_verify(daos_handle_t oh, daos_epoch_t *epochs, unsigned int nr);
 daos_handle_t dc_obj_hdl2cont_hdl(daos_handle_t oh);
 
 /** Decode shard number from enumeration anchor */
@@ -383,6 +373,32 @@ enum daos_io_flags {
 	DIOF_TO_LEADER		= 0x1,
 	/* The RPC will be sent to specified replica. */
 	DIOF_TO_SPEC_SHARD	= 0x2,
+	/* The operation (enumeration) has specified epoch. */
+	DIOF_WITH_SPEC_EPOCH	= 0x4,
+};
+
+/**
+ * The type of the packing data for serialization
+ */
+enum {
+	OBJ_ITER_NONE,
+	OBJ_ITER_OBJ,
+	OBJ_ITER_DKEY,
+	OBJ_ITER_AKEY,
+	OBJ_ITER_SINGLE,
+	OBJ_ITER_RECX,
+	OBJ_ITER_DKEY_EPOCH,
+	OBJ_ITER_AKEY_EPOCH,
+};
+
+#define RECX_INLINE	(1U << 0)
+
+struct obj_enum_rec {
+	daos_recx_t		rec_recx;
+	daos_epoch_range_t	rec_epr;
+	uint64_t		rec_size;
+	uint32_t		rec_version;
+	uint32_t		rec_flags;
 };
 
 #endif /* __DD_OBJ_H__ */

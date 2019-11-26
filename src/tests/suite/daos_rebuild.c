@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -369,7 +369,7 @@ rebuild_dkeys(void **state)
 	int			tgt = DEFAULT_FAIL_TGT;
 	int			i;
 
-	if (!test_runable(arg, 6))
+	if (!test_runable(arg, 4))
 		return;
 
 	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
@@ -403,7 +403,7 @@ rebuild_akeys(void **state)
 	int			tgt = DEFAULT_FAIL_TGT;
 	int			i;
 
-	if (!test_runable(arg, 6))
+	if (!test_runable(arg, 4))
 		return;
 
 	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
@@ -440,7 +440,7 @@ rebuild_indexes(void **state)
 	int			j;
 	int			rc;
 
-	if (!test_runable(arg, 6))
+	if (!test_runable(arg, 4))
 		return;
 
 	/* create/connect another pool */
@@ -483,7 +483,7 @@ rebuild_multiple(void **state)
 	int		j;
 	int		k;
 
-	if (!test_runable(arg, 6))
+	if (!test_runable(arg, 4))
 		return;
 
 	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
@@ -524,7 +524,7 @@ rebuild_large_rec(void **state)
 	int			i;
 	char			buffer[5000];
 
-	if (!test_runable(arg, 6))
+	if (!test_runable(arg, 4))
 		return;
 
 	oid = dts_oid_gen(DAOS_OC_R3S_SPEC_RANK, 0, arg->myrank);
@@ -1628,24 +1628,30 @@ rebuild_master_failure(void **state)
 	rc = memcmp(&pinfo.pi_rebuild_st, &pinfo_new.pi_rebuild_st,
 		    sizeof(pinfo.pi_rebuild_st));
 	if (rc != 0) {
-		print_message("old ver %u pad %u err %d done %d tobeobj "
-			      DF_U64" obj "DF_U64" rec "DF_U64"\n",
+		print_message("old ver %u seconds %u err %d done %d fail %d"
+			      " tobeobj "DF_U64" obj "DF_U64" rec "DF_U64
+			      " sz "DF_U64"\n",
 			      pinfo.pi_rebuild_st.rs_version,
-			      pinfo.pi_rebuild_st.rs_pad_32,
+			      pinfo.pi_rebuild_st.rs_seconds,
 			      pinfo.pi_rebuild_st.rs_errno,
 			      pinfo.pi_rebuild_st.rs_done,
+			      pinfo.pi_rebuild_st.rs_fail_rank,
 			      pinfo.pi_rebuild_st.rs_toberb_obj_nr,
 			      pinfo.pi_rebuild_st.rs_obj_nr,
-			      pinfo.pi_rebuild_st.rs_rec_nr);
-		print_message("new ver %u pad %u err %d done %d tobeobj "
-			      DF_U64" obj "DF_U64" rec "DF_U64"\n",
+			      pinfo.pi_rebuild_st.rs_rec_nr,
+			      pinfo.pi_rebuild_st.rs_size);
+		print_message("new ver %u pad %u err %d done %d fail %d"
+			      " tobeobj "DF_U64" obj "DF_U64" rec "DF_U64
+			      " sz "DF_U64"\n",
 			      pinfo_new.pi_rebuild_st.rs_version,
-			      pinfo_new.pi_rebuild_st.rs_pad_32,
+			      pinfo_new.pi_rebuild_st.rs_seconds,
 			      pinfo_new.pi_rebuild_st.rs_errno,
 			      pinfo_new.pi_rebuild_st.rs_done,
+			      pinfo_new.pi_rebuild_st.rs_fail_rank,
 			      pinfo_new.pi_rebuild_st.rs_toberb_obj_nr,
 			      pinfo_new.pi_rebuild_st.rs_obj_nr,
-			      pinfo_new.pi_rebuild_st.rs_rec_nr);
+			      pinfo_new.pi_rebuild_st.rs_rec_nr,
+			      pinfo_new.pi_rebuild_st.rs_size);
 	}
 
 	print_message("svc leader changed from %d to %d, should get same "
@@ -1919,6 +1925,33 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_fail_all_replicas, rebuild_sub_setup, test_case_teardown},
 };
 
+/* TODO: Enable aggregation once stable view rebuild is done. */
+int
+rebuild_test_setup(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	if (arg && arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DSS_DISABLE_AGGREGATION,
+				     1, 0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+	return 0;
+}
+
+int
+rebuild_test_teardown(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	if (arg && arg->myrank == 0)
+		daos_mgmt_set_params(arg->group, -1, DSS_DISABLE_AGGREGATION,
+				     0, 0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	test_teardown(state);
+	return 0;
+}
+
 int
 run_daos_rebuild_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
@@ -1932,7 +1965,7 @@ run_daos_rebuild_test(int rank, int size, int *sub_tests, int sub_tests_size)
 
 	rc = run_daos_sub_tests(rebuild_tests, ARRAY_SIZE(rebuild_tests),
 				REBUILD_POOL_SIZE, sub_tests, sub_tests_size,
-				NULL, NULL);
+				rebuild_test_setup, rebuild_test_teardown);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 

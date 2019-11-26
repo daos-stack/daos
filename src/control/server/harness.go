@@ -35,24 +35,17 @@ import (
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 )
 
-const (
-	// index in IOServerHarness.instances
-	defaultManagementInstance = 0
-)
-
 // IOServerHarness is responsible for managing IOServer instances
 type IOServerHarness struct {
 	sync.RWMutex
 	log       logging.Logger
-	ext       External
 	instances []*IOServerInstance
 	started   bool
 }
 
 // NewHarness returns an initialized *IOServerHarness
-func NewIOServerHarness(ext External, log logging.Logger) *IOServerHarness {
+func NewIOServerHarness(log logging.Logger) *IOServerHarness {
 	return &IOServerHarness{
-		ext:       ext,
 		log:       log,
 		instances: make([]*IOServerInstance, 0, 2),
 	}
@@ -78,17 +71,15 @@ func (h *IOServerHarness) AddInstance(srv *IOServerInstance) error {
 
 	h.Lock()
 	defer h.Unlock()
-	srvIdx := len(h.instances)
-	srv.Index = srvIdx
-	srv.runner.Config.Index = srvIdx
+	srv.SetIndex(uint32(len(h.instances)))
 
 	h.instances = append(h.instances, srv)
 	return nil
 }
 
-// GetManagementInstance returns a managed IO Server instance
-// to be used as a management target.
-func (h *IOServerHarness) GetManagementInstance() (*IOServerInstance, error) {
+// GetMSLeaderInstance returns a managed IO Server instance to be used as a
+// management target and fails if selected instance is not MS Leader.
+func (h *IOServerHarness) GetMSLeaderInstance() (*IOServerInstance, error) {
 	h.RLock()
 	defer h.RUnlock()
 
@@ -96,12 +87,15 @@ func (h *IOServerHarness) GetManagementInstance() (*IOServerInstance, error) {
 		return nil, errors.New("harness has no managed instances")
 	}
 
-	if defaultManagementInstance > len(h.instances) {
-		return nil, errors.Errorf("no instance index %d", defaultManagementInstance)
+	var err error
+	for _, mi := range h.Instances() {
+		// try each instance, returning the first one that is a replica (if any are)
+		if err = checkIsMSReplica(mi); err == nil {
+			return mi, nil
+		}
 	}
 
-	// Just pick one for now.
-	return h.instances[defaultManagementInstance], nil
+	return nil, err
 }
 
 // CreateSuperblocks creates instance superblocks as needed.
@@ -130,7 +124,7 @@ func (h *IOServerHarness) CreateSuperblocks(recreate bool) error {
 
 	for _, instance := range toCreate {
 		// Only the first I/O server can be an MS replica.
-		if instance.Index == 0 {
+		if instance.Index() == 0 {
 			mInfo, err := getMgmtInfo(instance)
 			if err != nil {
 				return err
@@ -150,7 +144,7 @@ func (h *IOServerHarness) CreateSuperblocks(recreate bool) error {
 
 // AwaitStorageReady blocks until all managed IOServer instances
 // have storage available and ready to be used.
-func (h *IOServerHarness) AwaitStorageReady(ctx context.Context) error {
+func (h *IOServerHarness) AwaitStorageReady(ctx context.Context, skipMissingSuperblock bool) error {
 	h.RLock()
 	defer h.RUnlock()
 
@@ -162,20 +156,24 @@ func (h *IOServerHarness) AwaitStorageReady(ctx context.Context) error {
 	for _, instance := range h.instances {
 		needsScmFormat, err := instance.NeedsScmFormat()
 		if err != nil {
-			return errors.Wrap(err, "failed to check storage formatting")
+			h.log.Error(errors.Wrap(err, "failed to check storage formatting").Error())
+			needsScmFormat = true
 		}
 
 		if !needsScmFormat {
+			if skipMissingSuperblock {
+				continue
+			}
 			h.log.Debug("no SCM format required; checking for superblock")
 			needsSuperblock, err := instance.NeedsSuperblock()
 			if err != nil {
-				return errors.Wrap(err, "failed to check instance superblock")
+				h.log.Errorf("failed to check instance superblock: %s", err)
 			}
 			if !needsSuperblock {
 				continue
 			}
 		}
-		h.log.Debug("SCM format required")
+		h.log.Info("SCM format required")
 		instance.AwaitStorageReady(ctx)
 	}
 	return ctx.Err()
@@ -187,6 +185,13 @@ func (h *IOServerHarness) Start(parent context.Context) error {
 	if h.IsStarted() {
 		return errors.New("can't start: harness already started")
 	}
+
+	// Now we want to block any RPCs that might try to mess with storage
+	// (format, firmware update, etc) before attempting to start I/O servers
+	// which are using the storage.
+	h.Lock()
+	h.started = true
+	h.Unlock()
 
 	instances := h.Instances()
 	ctx, shutdown := context.WithCancel(parent)
@@ -210,7 +215,7 @@ func (h *IOServerHarness) Start(parent context.Context) error {
 			}
 		case ready := <-instance.AwaitReady():
 			if pmixless() {
-				h.log.Debug("PMIx-less mode detected")
+				h.log.Debugf("PMIx-less mode detected (ready: %v)", ready)
 				if err := instance.SetRank(ctx, ready); err != nil {
 					return err
 				}
@@ -222,25 +227,21 @@ func (h *IOServerHarness) Start(parent context.Context) error {
 		return errors.Wrap(err, "failed to start management service")
 	}
 
-	h.Lock()
-	h.started = true
-	h.Unlock()
-
 	// now monitor them
-	for {
-		select {
-		case <-parent.Done():
-			return nil
-		case err := <-errChan:
-			// If we receive an error from any instance, shut them all down.
-			// TODO: Restart failed instances rather than shutting everything
-			// down.
-			h.log.Errorf("instance error: %s", err)
-			if err != nil {
-				return errors.Wrap(err, "Instance error")
-			}
+	select {
+	case <-parent.Done():
+		return parent.Err()
+	case err := <-errChan:
+		// If we receive an error from any instance, shut them all down.
+		// TODO: Restart failed instances rather than shutting everything
+		// down.
+		h.log.Errorf("instance error: %s", err)
+		if err != nil {
+			return errors.Wrap(err, "Instance error")
 		}
 	}
+
+	return nil
 }
 
 // StartManagementService starts the DAOS management service on this node.

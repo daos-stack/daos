@@ -5,24 +5,34 @@ hosts:
         - boro-C
         - boro-D
     client_partition: daos_client
-
-timeout: 7200
+# This timeout must be longer than the test_timeout param (+30minutes)
+timeout: 5400
 logdir: /tmp/soak
 server_config:
     name: daos_server
+    provider: ofi+sockets
+    servers:
+        log_mask: ERR
+        crt_timeout: 2000
+        fabric_iface: ib0
+
 # If slurm is not specified; launch jobs with mpirun; {slurm|mpirun}
 jobmanager: slurm
 # pool_params - attributes of the pools to create; Currently only create one
 pool1:
     mode: 146
     name: daos_server
-    scm_size: 100000000000
-    svcn: 1
+    scm_size: 30000000000
 pool_reserved:
     mode: 511
     name: daos_server
     scm_size: 3000000000
-    svcn: 1
+container_reserved:
+    akey_size: 5
+    dkey_size: 5
+    data_size: 32
+    object_qty: 20
+    record_qty: 10
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
 #               name:                The name of the Avocado testcase
@@ -51,7 +61,7 @@ smoke:
 soak_ior_daos:
     name: soak_ior_daos
     test_timeout: 1800
-    nodesperjob: 1
+    nodesperjob: -1
     poollist:
       - pool1
     joblist:
@@ -62,7 +72,7 @@ soak_ior_daos:
 soak_ior_mpiio:
     name: soak_ior_mpiio
     test_timeout: 1800
-    nodesperjob: 1
+    nodesperjob: -1
     poollist:
       - pool1
     joblist:
@@ -73,7 +83,7 @@ soak_ior_mpiio:
 soak_stress:
     name: soak_stress
     test_timeout: 3600
-    nodesperjob: 1
+    nodesperjob: -1
     poollist:
       - pool1
     joblist:
@@ -100,7 +110,7 @@ jobsmoke:
 # 1, 16 and 32 tasks per node
 job_ior_daos:
     name: job_ior_daos
-    time: 10
+    time: 20
     tasks:
         - 1
         - 16
@@ -111,7 +121,7 @@ job_ior_daos:
 # 1, 16 and 32 tasks per node
 job_ior_mpiio:
     name: job_ior_mpiio
-    time: 10
+    time: 20
     tasks:
         - 1
         - 16
@@ -121,10 +131,10 @@ job_ior_mpiio:
 # TBD job params for DMG
 job_dmg_create_destroy:
     name: job_dmg_create_destroy
-    time: 600
+    time: 20
     jobspec:
         - dmg_create_destroy
-# Commandline parmeters
+# Commandline parmeters - job specs
 # Benchmark and application params
 # IOR params -a DAOS and -a MPIIO
 # sequential
@@ -162,9 +172,8 @@ ior_daos:
         - '64M'
     repetition: 5
     transfer_size:
-        - '1k'
         - '4k'
-        - '128k'
+        - '512k'
         - '1m'
     daos_oclass:
         - 'SX'
@@ -177,13 +186,12 @@ ior_mpiio:
         - '64M'
     repetition: 5
     transfer_size:
-        - '1k'
         - '4k'
-        - '128k'
+        - '512k'
         - '1m'
     daos_oclass:
         - 'SX'
-        #- 'RP_G3X'
+        #- 'RP_G2X'
 # dmg cmdline params - TBD
 dmg_create_destroy:
     size:

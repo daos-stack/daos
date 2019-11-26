@@ -444,7 +444,7 @@ err_task:
  * stack with a specific epoch.
  */
 int
-dc_tx_rebuild_open(daos_handle_t coh, daos_epoch_t epoch, daos_handle_t *th)
+dc_tx_local_open(daos_handle_t coh, daos_epoch_t epoch, daos_handle_t *th)
 {
 	struct dc_tx *tx;
 
@@ -465,7 +465,7 @@ dc_tx_rebuild_open(daos_handle_t coh, daos_epoch_t epoch, daos_handle_t *th)
 }
 
 int
-dc_tx_rebuild_close(daos_handle_t th)
+dc_tx_local_close(daos_handle_t th)
 {
 	struct dc_tx *tx;
 

@@ -397,6 +397,15 @@ drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg,
 	return 0;
 }
 
+static void
+init_drpc_ctx(struct drpc *ctx, struct unixcomm *comm, drpc_handler_t handler)
+{
+	ctx->comm = comm;
+	ctx->handler = handler;
+	ctx->sequence = 0;
+	ctx->ref_count = 1;
+}
+
 /**
  * Connect to a drpc socket server on the given path.
  *
@@ -420,9 +429,7 @@ drpc_connect(char *sockaddr)
 		return NULL;
 	}
 
-	ctx->comm = comms;
-	ctx->sequence = 0;
-	ctx->handler = NULL;
+	init_drpc_ctx(ctx, comms, NULL);
 	return ctx;
 }
 
@@ -440,7 +447,8 @@ drpc_connect(char *sockaddr)
 struct drpc *
 drpc_listen(char *sockaddr, drpc_handler_t handler)
 {
-	struct drpc *ctx;
+	struct drpc	*ctx;
+	struct unixcomm *comm;
 
 	if (sockaddr == NULL || handler == NULL) {
 		D_ERROR("Bad input, sockaddr=%p, handler=%p\n",
@@ -452,14 +460,13 @@ drpc_listen(char *sockaddr, drpc_handler_t handler)
 	if (ctx == NULL)
 		return NULL;
 
-	ctx->comm = unixcomm_listen(sockaddr, O_NONBLOCK);
-	if (ctx->comm == NULL) {
+	comm = unixcomm_listen(sockaddr, O_NONBLOCK);
+	if (comm == NULL) {
 		D_FREE(ctx);
 		return NULL;
 	}
 
-	ctx->handler = handler;
-
+	init_drpc_ctx(ctx, comm, handler);
 	return ctx;
 }
 
@@ -491,7 +498,8 @@ drpc_is_valid_listener(struct drpc *ctx)
 struct drpc *
 drpc_accept(struct drpc *listener_ctx)
 {
-	struct drpc *session_ctx;
+	struct drpc	*session_ctx;
+	struct unixcomm	*comm;
 
 	if (!drpc_is_valid_listener(listener_ctx)) {
 		D_ERROR("dRPC context is not a listener\n");
@@ -502,14 +510,13 @@ drpc_accept(struct drpc *listener_ctx)
 	if (session_ctx == NULL)
 		return NULL;
 
-	session_ctx->comm = unixcomm_accept(listener_ctx->comm);
-	if (session_ctx->comm == NULL) {
+	comm = unixcomm_accept(listener_ctx->comm);
+	if (comm == NULL) {
 		D_FREE(session_ctx);
 		return NULL;
 	}
 
-	session_ctx->handler = listener_ctx->handler;
-
+	init_drpc_ctx(session_ctx, comm, listener_ctx->handler);
 	return session_ctx;
 }
 
@@ -560,62 +567,6 @@ get_incoming_call(struct drpc *ctx, Drpc__Call **call)
 	}
 
 	return 0;
-}
-
-static int
-handle_incoming_message(struct drpc *ctx, Drpc__Response **response)
-{
-	int		rc;
-	Drpc__Call	*request;
-
-	rc = get_incoming_call(ctx, &request);
-	if (rc != 0)
-		return rc;
-
-	*response = drpc_response_create(request);
-	if (*response == NULL) {
-		drpc_call_free(request);
-		return -DER_NOMEM;
-	}
-
-	ctx->handler(request, *response);
-
-	drpc_call_free(request);
-	return rc;
-}
-
-/**
- * Listen for a client message on a drpc session, handle the message, and send
- * the response back to the client.
- *
- * \param	ctx		drpc context on which to listen
- *
- * \return	DER_SUCCESS	Successfully got and handled the message
- *		-DER_INVAL	Invalid drpc session context
- *		-DER_NOMEM	Out of memory
- *		-DER_AGAIN	Listener socket is nonblocking and there was no
- *					pending message on the pipe.
- *		-DER_PROTO	Error processing message
- */
-int
-drpc_recv(struct drpc *session_ctx)
-{
-	int		rc;
-	Drpc__Response	*response;
-
-	if (!drpc_is_valid_listener(session_ctx)) {
-		D_ERROR("dRPC context isn't a valid listener\n");
-		return -DER_INVAL;
-	}
-
-	rc = handle_incoming_message(session_ctx, &response);
-	if (rc != 0)
-		return rc;
-
-	rc = send_response(session_ctx, response);
-
-	drpc_response_free(response);
-	return rc;
 }
 
 /**
@@ -681,21 +632,73 @@ drpc_send_response(struct drpc *session_ctx, Drpc__Response *resp)
 /**
  * Close the existing drpc connection.
  *
- * \param ctx	The drpc context representing the connection (will be freed)
+ * If there are multiple references to the context, the ref count will be
+ * decremented. Otherwise the context will be freed.
+ *
+ * \param ctx	The drpc context representing the connection (will be freed if
+ *		last reference is removed)
  *
  * \returns	Whether the underlying close on the socket was successful.
  */
 int
 drpc_close(struct drpc *ctx)
 {
-	int ret;
+	int		ret;
+	uint32_t	new_count;
 
 	if (!ctx || !ctx->comm) {
 		D_ERROR("Context is already closed\n");
 		return -DER_INVAL;
 	}
 
-	ret = unixcomm_close(ctx->comm);
-	D_FREE(ctx);
-	return ret;
+	if (ctx->ref_count == 0) {
+		D_ERROR("Ref count is already zero\n");
+		return -DER_INVAL;
+	}
+
+	D_DEBUG(DB_MGMT, "Decrementing refcount (%u)\n",
+		ctx->ref_count);
+	ctx->ref_count--;
+
+	new_count = ctx->ref_count;
+
+	if (new_count == 0) {
+		D_INFO("Closing dRPC socket fd=%d\n", ctx->comm->fd);
+
+		ret = unixcomm_close(ctx->comm);
+		if (ret != 0)
+			D_ERROR("Failed to close dRPC socket (rc=%d)\n", ret);
+		D_FREE(ctx);
+	}
+	return 0;
 }
+
+/**
+ * Adds to the reference count of the dRPC context.
+ *
+ * \param	ctx	dRPC context
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Context is not valid
+ */
+int
+drpc_add_ref(struct drpc *ctx)
+{
+	int rc = 0;
+
+	if (ctx == NULL) {
+		D_ERROR("Context is null\n");
+		return -DER_INVAL;
+	}
+
+	if (ctx->ref_count == UINT_MAX) {
+		D_ERROR("Can't increment current ref count (count=%u)\n",
+			ctx->ref_count);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	ctx->ref_count++;
+out:
+	return rc;
+}
+

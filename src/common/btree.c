@@ -1302,7 +1302,6 @@ btr_probe_valid(dbtree_probe_opc_t opc)
 	    opc == BTR_PROBE_EQ)
 		return true;
 
-	opc &= ~BTR_PROBE_MATCHED;
 	return (opc == BTR_PROBE_GT || opc == BTR_PROBE_LT ||
 		opc == BTR_PROBE_GE || opc == BTR_PROBE_LE);
 }
@@ -1432,7 +1431,7 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	alb.intent = intent;
 
 again:
-	switch (probe_opc & ~BTR_PROBE_MATCHED) {
+	switch (probe_opc) {
 	default:
 		D_ASSERT(0);
 	case BTR_PROBE_FIRST:
@@ -1493,12 +1492,6 @@ again:
 		/* fall through */
 	case BTR_PROBE_GT:
 		if (cmp & BTR_CMP_GT) {
-			if ((intent == DAOS_INTENT_UPDATE ||
-			     intent == DAOS_INTENT_PUNCH ||
-			     probe_opc & BTR_PROBE_MATCHED) &&
-			    !(cmp & BTR_CMP_MATCHED))
-				break;
-
 			/* Check availability if the target matched or it is
 			 * for non-modification related operation.
 			 */
@@ -1547,12 +1540,6 @@ again:
 		/* fall through */
 	case BTR_PROBE_LT:
 		if (cmp & BTR_CMP_LT) {
-			if ((intent == DAOS_INTENT_UPDATE ||
-			     intent == DAOS_INTENT_PUNCH ||
-			     probe_opc & BTR_PROBE_MATCHED) &&
-			    !(cmp & BTR_CMP_MATCHED))
-				break;
-
 			/* Check availability if the target matched or it is
 			 * for non-modification related operation.
 			 */
@@ -1582,24 +1569,8 @@ again:
 	}
 
 	D_ASSERT(cmp != BTR_CMP_EQ);
-	if (cmp & BTR_CMP_MATCHED) {
-		rc = PROBE_RC_OK;
-	} else {
-		if (probe_opc & BTR_PROBE_MATCHED) {
-			rc = PROBE_RC_NONE;
-			/* restore the probe trace for follow-on insert. */
-			if (trace) {
-				D_ASSERT(saved != -1);
-
-				memcpy(tcx->tc_trace, trace,
-				       tcx->tc_depth * sizeof(*trace));
-				btr_trace_set(tcx, level, nd_off, saved);
-			}
-		} else {
-			/* GT/GE/LT/LE without MATCHED */
-			rc = PROBE_RC_OK;
-		}
-	}
+	/* GT/GE/LT/LE */
+	rc = PROBE_RC_OK;
  out:
 	tcx->tc_probe_rc = rc;
 	if (rc == PROBE_RC_ERR)
@@ -1844,7 +1815,7 @@ btr_insert(struct btr_context *tcx, d_iov_t *key, d_iov_t *val)
 	struct btr_record *rec;
 	char		  *rec_str;
 	char		   str[BTR_PRINT_BUF];
-	union btr_rec_buf  rec_buf;
+	union btr_rec_buf  rec_buf = {0};
 	int		   rc;
 
 	rec = &rec_buf.rb_rec;
@@ -2799,6 +2770,32 @@ btr_tree_stat(struct btr_context *tcx, struct btr_stat *stat)
 	return 0;
 }
 
+/* Estimates the number of elements in a btree.  If the depth is 1,
+ * the count is exact.  Otherwise, it's an estimate based on the
+ * depth of the tree.  The primary existing use case is to know
+ * when to collapse the incarnation log so we can reduce space
+ * usage when only 1 entry exists.
+ */
+static int
+btr_tree_count(struct btr_context *tcx, struct btr_root *root)
+{
+	int	i;
+	int	total;
+
+	if (root->tr_depth == 0)
+		return 0;
+	if (root->tr_depth == 1) {
+		struct btr_node *node = btr_off2ptr(tcx, root->tr_node);
+
+		return node->tn_keyn;
+	}
+
+	total = 1;
+	for (i = 0; i < root->tr_depth; i++)
+		total *= root->tr_order;
+	return total / 2;
+}
+
 /**
  * Query attributes and/or gather nodes and records statistics of btree.
  *
@@ -2823,6 +2820,7 @@ dbtree_query(daos_handle_t toh, struct btr_attr *attr, struct btr_stat *stat)
 		attr->ba_class	= root->tr_class;
 		attr->ba_feats	= root->tr_feats;
 		umem_attr_get(&tcx->tc_tins.ti_umm, &attr->ba_uma);
+		attr->ba_count = btr_tree_count(tcx, root);
 	}
 
 	if (stat != NULL)
@@ -3277,7 +3275,7 @@ dbtree_iter_prepare(daos_handle_t toh, unsigned int options, daos_handle_t *ih)
 		/* use the iterator embedded in btr_context */
 		if (tcx->tc_ref != 1) { /* don't screw up others */
 			D_DEBUG(DB_TRACE,
-				"The embedded iterator is in using\n");
+				"The embedded iterator is in use\n");
 			return -DER_BUSY;
 		}
 

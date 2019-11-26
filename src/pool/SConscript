@@ -8,7 +8,7 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
 
-    prereqs.require(denv, 'argobots', 'protobufc')
+    prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
 
     common = denv.SharedObject(['rpc.c'])
     # ds_pool: Pool Server
@@ -16,7 +16,7 @@ def scons():
                                  ['srv.c', 'srv_pool.c', 'srv_layout.c',
                                   'srv_target.c', 'srv_util.c', 'srv_iv.c',
                                   common])
-    denv.Install('$PREFIX/lib/daos_srv', ds_pool)
+    denv.Install('$PREFIX/lib64/daos_srv', ds_pool)
 
     # dc_pool: Pool Client
     dc_pool_tgts = denv.SharedObject(['cli.c']) + common

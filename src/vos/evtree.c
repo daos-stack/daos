@@ -26,10 +26,10 @@
 #include "evt_priv.h"
 #include "vos_internal.h"
 
-#ifdef VOS_TRACE
-#define V_TRACE(...) D_DEBUG(__VA_ARGS__)
-#else
+#ifdef VOS_DISABLE_TRACE
 #define V_TRACE(...) (void)0
+#else
+#define V_TRACE(...) D_DEBUG(__VA_ARGS__)
 #endif
 
 enum {
@@ -221,13 +221,6 @@ evt_ent_array_fini(struct evt_entry_array *ent_array)
 
 /** When we go over the embedded limit, set a minimum allocation */
 #define EVT_MIN_ALLOC 4096
-
-static void
-ent_array_reset(struct evt_context *tcx, struct evt_entry_array *ent_array)
-{
-	ent_array->ea_ent_nr = 0;
-	ent_array->ea_inob = tcx->tc_inob;
-}
 
 static bool
 ent_array_resize(struct evt_context *tcx, struct evt_entry_array *ent_array,
@@ -570,8 +563,8 @@ evt_truncate_next(struct evt_context *tcx, struct evt_entry_array *ent_array,
 }
 
 static int
-evt_find_visible(struct evt_context *tcx, struct evt_entry_array *ent_array,
-		 int *num_visible)
+evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
+		 struct evt_entry_array *ent_array, int *num_visible)
 {
 	struct evt_extent	*this_ext;
 	struct evt_extent	*next_ext;
@@ -583,17 +576,30 @@ evt_find_visible(struct evt_context *tcx, struct evt_entry_array *ent_array,
 	d_list_t		*current;
 	d_list_t		*next;
 	bool			 insert;
+	daos_epoch_t		 punched_epoch = filter ? filter->fr_punch : 0;
 	int			 rc = 0;
 
-	/* reset the linked list.  We'll reconstruct it */
 	D_INIT_LIST_HEAD(&covered);
 	*num_visible = 0;
 
-	/* Now place all entries sorted in covered list */
+	/* Some of the entries may be punched by a key.  We don't need to
+	 * consider such entries for the visibility algorithm and can mark them
+	 * covered to start.   All other entries are placed into the sorted list
+	 * to be considered in the visibility algorithm.
+	 */
 	evt_ent_array_for_each(this_ent, ent_array) {
 		next = evt_array_entry2link(this_ent);
+
+		if (punched_epoch >= this_ent->en_epoch) {
+			this_ent->en_visibility = EVT_COVERED;
+			continue;
+		}
+
 		d_list_add_tail(next, &covered);
 	}
+
+	if (d_list_empty(&covered))
+		return 0;
 
 	/* Now uncover entries */
 	current = covered.next;
@@ -720,8 +726,13 @@ evt_ent_array_sort(struct evt_context *tcx, struct evt_entry_array *ent_array,
 
 	if (ent_array->ea_ent_nr == 1) {
 		ent = evt_ent_array_get(ent_array, 0);
-		ent->en_visibility = EVT_VISIBLE;
-		num_visible = 1;
+		num_visible = 0;
+		if (filter && filter->fr_punch >= ent->en_epoch) {
+			ent->en_visibility = EVT_COVERED;
+		} else {
+			num_visible = 1;
+			ent->en_visibility = EVT_VISIBLE;
+		}
 		goto re_sort;
 	}
 
@@ -733,7 +744,7 @@ evt_ent_array_sort(struct evt_context *tcx, struct evt_entry_array *ent_array,
 		      evt_ent_list_cmp);
 
 		/* Now separate entries into covered and visible */
-		rc = evt_find_visible(tcx, ent_array, &num_visible);
+		rc = evt_find_visible(tcx, filter, ent_array, &num_visible);
 
 		if (rc != 0) {
 			if (rc == -DER_AGAIN)
@@ -744,20 +755,6 @@ evt_ent_array_sort(struct evt_context *tcx, struct evt_entry_array *ent_array,
 	}
 
 re_sort:
-	if (filter && filter->fr_punch != 0) {
-		/** If items are punched by outer layer, mark them covered */
-		evt_ent_array_for_each(ent, ent_array) {
-			if (ent->en_epoch > filter->fr_punch)
-				continue;
-			if (evt_flags_get(ent->en_visibility) == EVT_COVERED)
-				continue;
-			ent->en_visibility ^= EVT_VISIBLE;
-			ent->en_visibility |= EVT_COVERED;
-			D_ASSERT(evt_flags_equal(ent->en_visibility,
-						 EVT_COVERED));
-		}
-	}
-
 	ents = ent_array->ea_ents;
 	total = ent_array->ea_ent_nr;
 	compar = evt_ent_list_cmp;
@@ -819,7 +816,8 @@ evt_tcx_trace(struct evt_context *tcx, int level)
 }
 
 static void
-evt_tcx_set_trace(struct evt_context *tcx, int level, umem_off_t nd_off, int at)
+evt_tcx_set_trace(struct evt_context *tcx, int level, umem_off_t nd_off, int at,
+		  bool alloc)
 {
 	struct evt_trace *trace;
 
@@ -828,9 +826,12 @@ evt_tcx_set_trace(struct evt_context *tcx, int level, umem_off_t nd_off, int at)
 	V_TRACE(DB_TRACE, "set trace[%d] "DF_X64"/%d\n", level, nd_off, at);
 
 	trace = evt_tcx_trace(tcx, level);
-	trace->tr_node = nd_off;
-	trace->tr_tx_added = false;
 	trace->tr_at = at;
+	if (trace->tr_node == nd_off)
+		return;
+
+	trace->tr_node = nd_off;
+	trace->tr_tx_added = alloc;
 }
 
 /** Reset all traces within context and set root as the 0-level trace */
@@ -840,7 +841,7 @@ evt_tcx_reset_trace(struct evt_context *tcx)
 	memset(&tcx->tc_trace_scratch[0], 0,
 	       sizeof(tcx->tc_trace_scratch[0]) * EVT_TRACE_MAX);
 	evt_tcx_set_dep(tcx, tcx->tc_root->tr_depth);
-	evt_tcx_set_trace(tcx, 0, tcx->tc_root->tr_node, 0);
+	evt_tcx_set_trace(tcx, 0, tcx->tc_root->tr_node, 0, false);
 }
 
 /**
@@ -1336,7 +1337,7 @@ evt_root_empty(struct evt_context *tcx)
 static int
 evt_root_tx_add(struct evt_context *tcx)
 {
-	void	*root;
+	struct evt_root	*root;
 
 	if (!evt_has_tx(tcx))
 		return 0;
@@ -1425,7 +1426,7 @@ evt_root_activate(struct evt_context *tcx, const struct evt_entry_in *ent)
 	}
 
 	evt_tcx_set_dep(tcx, root->tr_depth);
-	evt_tcx_set_trace(tcx, 0, nd_off, 0);
+	evt_tcx_set_trace(tcx, 0, nd_off, 0, true);
 
 	return 0;
 }
@@ -1657,6 +1658,7 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
 		evt_tcx_set_dep(tcx, tcx->tc_depth + 1);
 		tcx->tc_trace->tr_node = nm_new;
 		tcx->tc_trace->tr_at = 0;
+		tcx->tc_trace->tr_tx_added = true;
 
 		rc = evt_root_tx_add(tcx);
 		if (rc != 0)
@@ -1703,7 +1705,7 @@ evt_insert_entry(struct evt_context *tcx, const struct evt_entry_in *ent)
 		nd = evt_off2node(tcx, nd_off);
 
 		if (evt_node_is_leaf(tcx, nd)) {
-			evt_tcx_set_trace(tcx, level, nd_off, 0);
+			evt_tcx_set_trace(tcx, level, nd_off, 0, false);
 			break;
 		}
 
@@ -1730,7 +1732,7 @@ evt_insert_entry(struct evt_context *tcx, const struct evt_entry_in *ent)
 		}
 
 		/* store the trace in case we need to bubble split */
-		evt_tcx_set_trace(tcx, level, nd_off, tr_at);
+		evt_tcx_set_trace(tcx, level, nd_off, tr_at, false);
 		nd_off = nm_dst;
 		level++;
 	}
@@ -1917,8 +1919,6 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 	if (tcx->tc_root->tr_depth == 0)
 		return 0; /* empty tree */
 
-	if (ent_array == &tcx->tc_iter.it_entries)
-		ent_array_reset(tcx, ent_array);
 	evt_tcx_reset_trace(tcx);
 
 	level = at = 0;
@@ -1933,7 +1933,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 
 		D_ASSERT(!leaf || at == 0);
 		V_TRACE(DB_TRACE,
-			"Checking "DF_RECT"("DF_X64"), l=%d, a=%d, f=%d\n",
+			"Checking mbr="DF_RECT"("DF_X64"), l=%d, a=%d, f=%d\n",
 			DP_RECT(evt_node_mbr_get(tcx, node)), nd_off, level, at,
 			leaf);
 
@@ -1948,11 +1948,9 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 
 			rtmp = &ne->ne_rect;
 
-			V_TRACE(DB_TRACE, " rect[%d]="DF_RECT"\n",
-				i, DP_RECT(rtmp));
-
 			if (evt_filter_rect(filter, rtmp, leaf)) {
-				V_TRACE(DB_TRACE, "Filtered "DF_FILTER"\n",
+				V_TRACE(DB_TRACE, "Filtered "DF_RECT" filter=("
+					DF_FILTER")\n", DP_RECT(rtmp),
 					DP_FILTER(filter));
 				continue; /* Doesn't match the filter */
 			}
@@ -1990,7 +1988,8 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 				V_TRACE(DB_TRACE, "Enter the next level\n");
 				break;
 			}
-			V_TRACE(DB_TRACE, "Found overlapped leaf rect\n");
+			V_TRACE(DB_TRACE, "Found overlapped leaf rect: "DF_RECT
+				"\n", DP_RECT(rtmp));
 
 			desc = evt_node_desc_at(tcx, node, i);
 			rc = evt_desc_log_status(tcx, desc, intent);
@@ -2067,7 +2066,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 				 * iteration.
 				 * NB: clip is not implemented yet.
 				 */
-				evt_tcx_set_trace(tcx, level, nd_off, i);
+				evt_tcx_set_trace(tcx, level, nd_off, i, false);
 				D_GOTO(out, rc = 0);
 
 			case EVT_FIND_ALL:
@@ -2077,7 +2076,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 
 		if (i < node->tn_nr) {
 			/* overlapped with a non-leaf node, dive into it. */
-			evt_tcx_set_trace(tcx, level, nd_off, i);
+			evt_tcx_set_trace(tcx, level, nd_off, i, false);
 			nd_off = evt_node_child_at(tcx, node, i);
 			at = 0;
 			level++;
@@ -2126,6 +2125,8 @@ evt_find(daos_handle_t toh, const daos_epoch_range_t *epr,
 	struct evt_filter	 filter;
 	struct evt_rect		 rect;
 	int			 rc;
+
+	D_ASSERT(epr != NULL || extent != NULL);
 
 	tcx = evt_hdl2tcx(toh);
 	if (tcx == NULL)
@@ -2811,7 +2812,7 @@ evt_tcx_fix_trace(struct evt_context *tcx, int level)
 		trace = &tcx->tc_trace[index - 1];
 		nd = evt_off2node(tcx, trace->tr_node);
 		ne = evt_node_entry_at(tcx, nd, trace->tr_at);
-		evt_tcx_set_trace(tcx, index, ne->ne_child, 0);
+		evt_tcx_set_trace(tcx, index, ne->ne_child, 0, false);
 	}
 
 	return 0;
@@ -2971,7 +2972,7 @@ int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
 	filter.fr_epr.epr_lo = rect->rc_epc;
 	filter.fr_epr.epr_hi = rect->rc_epc;
 	filter.fr_punch = 0;
-	rc = evt_ent_array_fill(tcx, EVT_FIND_SAME, DAOS_INTENT_PUNCH,
+	rc = evt_ent_array_fill(tcx, EVT_FIND_SAME, DAOS_INTENT_PURGE,
 				&filter, rect, &ent_array);
 	if (rc != 0)
 		return rc;

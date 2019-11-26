@@ -39,11 +39,40 @@ extern "C" {
 
 #include <dirent.h>
 
-#define DFS_MAX_PATH NAME_MAX
-#define DFS_MAX_FSIZE (~0ULL)
+#define DFS_MAX_PATH		NAME_MAX
+#define DFS_MAX_FSIZE		(~0ULL)
 
 typedef struct dfs_obj dfs_obj_t;
 typedef struct dfs dfs_t;
+
+typedef struct {
+	/*
+	 * User ID for DFS container (Optional); can be mapped to a Lustre FID
+	 * for example in the Unified namespace.
+	 */
+	uint64_t		da_id;
+	/** Default Chunk size for all files in container */
+	daos_size_t		da_chunk_size;
+	/** Default Object Class for all objects in the container */
+	daos_oclass_id_t	da_oclass_id;
+} dfs_attr_t;
+
+/**
+ * Create a DFS container with the the POSIX property layout set.
+ * Optionally set attributes for hints on the container.
+ *
+ * \param[in]	poh	Pool open handle.
+ * \param[in]	co_uuid	Container UUID.
+ * \param[in]	attr	Optional set of attributes to set on the container.
+ *			Pass NULL if none.
+ * \param[out]	coh	Optionally leave the container open and return it hdl.
+ * \param[out]	dfs	Optionally mount DFS on the container and return it.
+ *
+ * \return              0 on success, errno code on failure.
+ */
+int
+dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
+		daos_handle_t *coh, dfs_t **dfs);
 
 /**
  * Mount a file system over DAOS. The pool and container handle must remain
@@ -74,6 +103,21 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **dfs);
  */
 int
 dfs_umount(dfs_t *dfs);
+
+/**
+ * Optionally set a prefix on the dfs mount where all paths passed to dfs_lookup
+ * are trimmed of that prefix. This is helpful when using DFS API with a dfuse
+ * mount and the user would like to reference files in the dfuse mount instead
+ * of the absolute path from the root of the DFS container.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	prefix	absolute prefix to trim off path to dfs_lookup.
+ *			Passing NULL unsets the prefix.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_set_prefix(dfs_t *dfs, const char *prefix);
 
 /**
  * Convert from a dfs_obj_t to a daos_obj_id_t.
@@ -188,12 +232,17 @@ dfs_release(dfs_obj_t *obj);
  * \param[in]	off	Offset into the file to read from.
  * \param[out]	read_size
  *			How much data is actually read.
+ *			TODO - support short reads when iom is supported.
+ *			For now this returns whatever was requested and short
+ *			read is not supported.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t sgl, daos_off_t off,
-	 daos_size_t *read_size);
+dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
+	 daos_size_t *read_size, daos_event_t *ev);
 
 /**
  * Write data to the file object.
@@ -202,11 +251,14 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t sgl, daos_off_t off,
  * \param[in]	obj	Opened file object.
  * \param[in]	sgl	Scatter/Gather list for data buffer.
  * \param[in]	off	Offset into the file to write to.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t sgl, daos_off_t off);
+dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
+	  daos_event_t *ev);
 
 /**
  * Query size of file data.
@@ -375,6 +427,18 @@ dfs_get_mode(dfs_obj_t *obj, mode_t *mode);
  */
 int
 dfs_get_file_oh(dfs_obj_t *obj, daos_handle_t *oh);
+
+/**
+ * Retrieve the chunk size of a DFS file object.
+ *
+ * \param[in]	obj	Open object.
+ * \param[out]	chunk_size
+ *			Chunk size of array object.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_get_chunk_size(dfs_obj_t *obj, daos_size_t *chunk_size);
 
 /**
  * Retrieve Symlink value of object if it's a symlink. If the buffer size passed

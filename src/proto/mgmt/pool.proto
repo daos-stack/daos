@@ -35,15 +35,15 @@ message PoolCreateReq {
 	uint32 numsvcreps = 4; // desired number of pool service replicas
 	string user = 5; // formatted user e.g. "bob@"
 	string usergroup = 6; // formatted group e.g. "builders@"
-	string sys = 7; // DAOS system identifier
-	repeated string acl = 8; // Access Control Entries in short string format
+	string uuid = 7; // UUID for new pool, generated on the client
+	string sys = 8; // DAOS system identifier
+	repeated string acl = 9; // Access Control Entries in short string format
 }
 
 // PoolCreateResp returns created pool uuid and ranks.
 message PoolCreateResp {
 	int32 status = 1; // DAOS error code
-	string uuid = 2; // new pool's uuid
-	string svcreps = 3; // comma separated integers
+	string svcreps = 2; // comma separated integers
 }
 
 // PoolDestroyReq supplies pool identifier and force flag.
@@ -56,4 +56,19 @@ message PoolDestroyReq {
 // PoolDestroyResp returns resultant state of destroy operation.
 message PoolDestroyResp {
 	int32 status = 1; // DAOS error code
+}
+
+message ListPoolsReq {
+	string sys = 1; // DAOS system identifier
+	uint64 numPools = 2; // Client response buffer capacity in number of pools
+}
+
+message ListPoolsResp {
+	message Pool {
+		string uuid = 1; // uuid of pool
+		string svcreps = 2; // pool service replicas, comma-separated integers
+	}
+	int32 status = 1; // DAOS error code
+	repeated Pool pools = 2; // pools list (max length ListPoolsReq.numPools)
+	uint64 numPools = 3; // number of pools in system
 }

@@ -17,26 +17,26 @@ For instructions on building and running DAOS see the [Quickstart guide](../../.
 <p>
 
 ```bash
-[tanabarr@boro-45 daos_m]$ orterun -np 2 -H boro-44,boro-45 --report-uri /tmp/urifile --enable-recovery daos_server -c 1  -o /home/tanabarr/projects/daos_m/utils/config/examples/daos_server_sockets.yml
-2019/03/28 12:28:07 config.go:85: debug: DAOS config read from /home/tanabarr/projects/daos_m/utils/config/examples/daos_server_sockets.yml
-2019/03/28 12:28:07 config.go:85: debug: DAOS config read from /home/tanabarr/projects/daos_m/utils/config/examples/daos_server_sockets.yml
+[daosuser@boro-45 daos_m]$ orterun -np 2 -H boro-44,boro-45 --report-uri /tmp/urifile --enable-recovery daos_server start -c 1  -o /home/daosuser/projects/daos_m/utils/config/examples/daos_server_sockets.yml
+2019/03/28 12:28:07 config.go:85: debug: DAOS config read from /home/daosuser/projects/daos_m/utils/config/examples/daos_server_sockets.yml
+2019/03/28 12:28:07 config.go:85: debug: DAOS config read from /home/daosuser/projects/daos_m/utils/config/examples/daos_server_sockets.yml
 2019/03/28 12:28:07 main.go:79: debug: Switching control log level to DEBUG
-boro-44.boro.hpdd.intel.com 2019/03/28 12:28:07 config.go:121: debug: Active config saved to /home/tanabarr/projects/daos_m/utils/config/examples/.daos_server.active.yml (read-only)
+boro-44.boro.hpdd.intel.com 2019/03/28 12:28:07 config.go:121: debug: Active config saved to /home/daosuser/projects/daos_m/utils/config/examples/.daos_server.active.yml (read-only)
 Starting SPDK v18.07-pre / DPDK 18.02.0 initialization...
 [ DPDK EAL parameters: spdk -c 0x1 --file-prefix=spdk234203216 --base-virtaddr=0x200000000000 --proc-type=auto ]
 EAL: Detected 72 lcore(s)
 EAL: Auto-detected process type: PRIMARY
 2019/03/28 12:28:07 main.go:79: debug: Switching control log level to DEBUG
-boro-45.boro.hpdd.intel.com 2019/03/28 12:28:07 config.go:121: debug: Active config saved to /home/tanabarr/projects/daos_m/utils/config/examples/.daos_server.active.yml (read-only)
+boro-45.boro.hpdd.intel.com 2019/03/28 12:28:07 config.go:121: debug: Active config saved to /home/daosuser/projects/daos_m/utils/config/examples/.daos_server.active.yml (read-only)
 EAL: Detected 72 lcore(s)
 Starting SPDK v18.07-pre / DPDK 18.02.0 initialization...
 [ DPDK EAL parameters: spdk -c 0x1 --file-prefix=spdk290246766 --base-virtaddr=0x200000000000 --proc-type=auto ]
 EAL: Auto-detected process type: PRIMARY
 EAL: No free hugepages reported in hugepages-1048576kB
 EAL: No free hugepages reported in hugepages-1048576kB
-EAL: Multi-process socket /home/tanabarr/.spdk234203216_unix
+EAL: Multi-process socket /home/daosuser/.spdk234203216_unix
 EAL: Probing VFIO support...
-EAL: Multi-process socket /home/tanabarr/.spdk290246766_unix
+EAL: Multi-process socket /home/daosuser/.spdk290246766_unix
 EAL: Probing VFIO support...
 EAL: PCI device 0000:81:00.0 on NUMA socket 1
 EAL:   probe driver: 8086:2701 spdk_nvme
@@ -50,11 +50,11 @@ Starting SPDK v18.07-pre / DPDK 18.02.0 initialization...
 EAL: Auto-detected process type: SECONDARY
 EAL: Detected 72 lcore(s)
 EAL: Auto-detected process type: SECONDARY
-EAL: Multi-process socket /home/tanabarr/.spdk234203216_unix_141938_a591f56066dd7
+EAL: Multi-process socket /home/daosuser/.spdk234203216_unix_141938_a591f56066dd7
 EAL: Probing VFIO support...
 EAL: WARNING: Address Space Layout Randomization (ASLR) is enabled in the kernel.
 EAL:    This may cause issues with mapping memory into secondary processes
-EAL: Multi-process socket /home/tanabarr/.spdk290246766_unix_23680_14e5a164a3bd1db
+EAL: Multi-process socket /home/daosuser/.spdk290246766_unix_23680_14e5a164a3bd1db
 EAL: Probing VFIO support...
 EAL: WARNING: Address Space Layout Randomization (ASLR) is enabled in the kernel.
 EAL:    This may cause issues with mapping memory into secondary processes
@@ -109,7 +109,7 @@ TODO: examples for both DCPM and RAM (emulation) SCM classes including config fi
 
 ## Subcommands
 
-`daos_server` supports various subcommands (see `daos_server --help` for available subcommands) which will perform stand-alone tasks as opposed to launching as a daemon (default operation if launched without subcommand).
+`daos_server` supports various subcommands (see `daos_server --help` for available subcommands) which will perform stand-alone tasks (e.g. `storage prepare|scan`) or attempt to bring-up the data plane (`start` subcommand).
 
 ### storage prepare --nvme-only
 
@@ -134,12 +134,12 @@ See `daos_server storage prepare --help` for usage.
 <p>
 
 ```bash
-[tanabarr@boro-45 daos_m]$ daos_server storage scan
+[daosuser@boro-45 daos_m]$ daos_server storage scan
 Starting SPDK v18.07-pre / DPDK 18.02.0 initialization...
 [ DPDK EAL parameters: spdk -c 0x1 --file-prefix=spdk_pid29193 ]
 EAL: Detected 72 lcore(s)
 EAL: No free hugepages reported in hugepages-1048576kB
-EAL: Multi-process socket /home/tanabarr/.spdk_pid29193_unix
+EAL: Multi-process socket /home/daosuser/.spdk_pid29193_unix
 EAL: Probing VFIO support...
 Unable to unlink shared memory file: /var/run/.spdk_pid29193_config. Error code: 2
 Unable to unlink shared memory file: /var/run/.spdk_pid29193_hugepage_info. Error code: 2
@@ -190,16 +190,16 @@ See `daos_server storage scan --help` for usage.
 
 ## Management Tool (client) Usage
 
-[`daos_shell`](../cmd/dmg/README.md) is a management tool which exercises the client api and can be run on login nodes by an unprivileged user.
+[`dmg`](../cmd/dmg/README.md) is a management tool which exercises the client api and can be run on login nodes by an unprivileged user.
 The tool is lightweight and doesn't depend on storage libraries.
 Implemented as a gRPC client application it connects and interacts with multiple gRPC servers concurrently, connecting to specified ports.
 
 In order to run the tool to perform administrative tasks from non-storage nodes (e.g. login nodes) over an out-of-band management network;
 
  1. build and run the `daos_server` as per the [quickstart guide](https://github.com/daos-stack/daos/blob/master/doc/quickstart.md) on the storage nodes
- 2. run `daos_shell` from a login node
+ 2. run `dmg` from a login node
 
-See `daos_shell --help` for usage and [here](../cmd/dmg) for package details.
+See `dmg --help` for usage and [here](../cmd/dmg) for package details.
 
 ## Storage management
 
@@ -225,7 +225,7 @@ The DAOS control plane will provide SCM storage management capabilities enabling
 
 #### SCM module discovery
 
-Device details for any discovered (Intel) data-centre persistent memory modules (DCPM modules) on the storage server will be returned when running `storage scan` subcommand on [`daos_shell`](../cmd/dmg/README.md#-subcommands) or [`daos_server`](#storage-list) executables.
+Device details for any discovered (Intel) data-centre persistent memory modules (DCPM modules) on the storage server will be returned when running `storage scan` subcommand on [`dmg`](../cmd/dmg/README.md#-subcommands) or [`daos_server`](#storage-list) executables.
 
 TODO: return details of AppDirect memory regions
 
@@ -249,8 +249,7 @@ If `scm_mount` IS mounted but no superblock exists, control plane will attempt t
 <p>
 
 ```bash
-[root@wolf-72 daos_m]# install/bin/orterun -np 1 --hostfile hostfile --enable-recovery --allow-run-as-root install/bin/daos_server -t 1 -o /root/daos_m/utils/config/examples/daos_server_sockets.yml
-[root@wolf-72 daos_m]# install/bin/orterun -np 1 --hostfile hostfile --enable-recovery --allow-run-as-root install/bin/daos_server -t 1 -o /root/daos_m/utils/config/examples/daos_server_sockets.yml
+[root@wolf-72 daos_m]# install/bin/orterun -np 1 --hostfile hostfile --enable-recovery --allow-run-as-root install/bin/daos_server start -t 1 -o /root/daos_m/utils/config/examples/daos_server_sockets.yml
 2019/04/10 04:04:05 config.go:103: debug: DAOS config read from /root/daos_m/utils/config/examples/daos_server_sockets.yml
 2019/04/10 04:04:05 config.go:135: debug: Active config saved to /root/daos_m/utils/config/examples/.daos_server.active.yml (read-only)
 2019/04/10 04:04:05 config.go:405: debug: Switching control log level to DEBUG
@@ -283,7 +282,7 @@ wolf-72.wolf.hpdd.intel.com 2019/04/10 04:04:09 main.go:129: error: Failed to fo
 ```bash
 [root@wolf-72 daos_m]# mkdir /mnt/daos
 [root@wolf-72 daos_m]# mount -t tmpfs -o size=68719476736 tmpfs /mnt/daos
-[root@wolf-72 daos_m]# install/bin/orterun -np 1 --hostfile hostfile --enable-recovery --allow-run-as-root install/bin/daos_server -t 1 -o /root/daos_m/utils/config/examples/daos_server_sockets.yml
+[root@wolf-72 daos_m]# install/bin/orterun -np 1 --hostfile hostfile --enable-recovery --allow-run-as-root install/bin/daos_server start -t 1 -o /root/daos_m/utils/config/examples/daos_server_sockets.yml
 2019/04/10 04:04:50 config.go:103: debug: DAOS config read from /root/daos_m/utils/config/examples/daos_server_sockets.yml
 2019/04/10 04:04:50 config.go:135: debug: Active config saved to /root/daos_m/utils/config/examples/.daos_server.active.yml (read-only)
 2019/04/10 04:04:50 config.go:405: debug: Switching control log level to DEBUG
@@ -315,7 +314,7 @@ DAOS I/O server (v0.4.0) process 135939 started on rank 0 (out of 1) with 1 targ
 <p>
 
 ```bash
-[root@wolf-72 daos_m]# install/bin/orterun -np 1 --hostfile hostfile --enable-recovery --allow-run-as-root install/bin/daos_server -t 1 -o /root/daos_m/utils/config/examples/daos_server_sockets.yml
+[root@wolf-72 daos_m]# install/bin/orterun -np 1 --hostfile hostfile --enable-recovery --allow-run-as-root install/bin/daos_server start -t 1 -o /root/daos_m/utils/config/examples/daos_server_sockets.yml
 2019/04/10 03:34:22 config.go:103: debug: DAOS config read from /root/daos_m/utils/config/examples/daos_server_sockets.yml
 2019/04/10 03:34:22 config.go:135: debug: Active config saved to /root/daos_m/utils/config/examples/.daos_server.active.yml (read-only)
 2019/04/10 03:34:22 config.go:405: debug: Switching control log level to DEBUG
@@ -345,7 +344,7 @@ DAOS I/O server (v0.4.0) process 135671 started on rank 0 (out of 1) with 1 targ
 <p>
 
 ```bash
-[root@wolf-72 daos_m]# install/bin/orterun -np 1 --hostfile hostfile --enable-recovery --allow-run-as-root install/bin/daos_server -t 1 -o /root/daos_m/utils/config/examples/daos_server_sockets.yml
+[root@wolf-72 daos_m]# install/bin/orterun -np 1 --hostfile hostfile --enable-recovery --allow-run-as-root install/bin/daos_server start -t 1 -o /root/daos_m/utils/config/examples/daos_server_sockets.yml
 2019/04/10 03:34:22 config.go:103: debug: DAOS config read from /root/daos_m/utils/config/examples/daos_server_sockets.yml
 2019/04/10 03:34:22 config.go:135: debug: Active config saved to /root/daos_m/utils/config/examples/.daos_server.active.yml (read-only)
 2019/04/10 03:34:22 config.go:405: debug: Switching control log level to DEBUG
@@ -383,10 +382,6 @@ DAOS I/O server (v0.4.0) process 135863 started on rank 0 (out of 1) with 1 targ
 </p>
 </details>
 
-#### SCM Firmware Update
-
-#### SCM Burn-in Validation
-
 #### SCM Provisioning
 
 Provisioning SCM occurs by configuring DCPM modules in AppDirect memory regions (interleaved mode) in groups of modules local to a specific socket (NUMA) and resultant nvdimm namespaces are defined a device identifier (e.g. /dev/pmem0). This can be performed through the [ipmctl](https://github.com/intel/ipmctl) tool.
@@ -403,7 +398,7 @@ The DAOS control plane will provide NVMe storage management capabilities enablin
 
 #### NVMe Controller and Namespace Discovery
 
-Device details for any discovered NVMe SSDs accessible through SPDK on the storage server will be returned when running `storage scan` subcommand on [`daos_shell`](../cmd/dmg/README.md#subcommands) or [`daos_server`](#storage-list) executables.
+Device details for any discovered NVMe SSDs accessible through SPDK on the storage server will be returned when running `storage scan` subcommand on [`dmg`](../cmd/dmg/README.md#subcommands) or [`daos_server`](#storage-list) executables.
 
 The following animation illustrates starting the control server and using the management shell to view the NVMe Namespaces discovered on a locally available NVMe Controller (assuming the quickstart guide instructions have already been performed):
 
@@ -423,12 +418,16 @@ The SPDK "[blobcli](https://github.com/spdk/spdk/tree/master/examples/blob/cli)"
 
 In order to designate NVMe devices to be used by DAOS data plane instances, the control plane will generate an `nvme.conf` file to be consumed by SPDK which will be written to the `scm_mount` (persistent) mounted location as a final stage of formatting before the superblock is written, signifying the server has been formatted.
 
-#### NVMe Controller Firmware Update
+## Bootstrapping and DAOS system membership
 
-The following animation illustrates starting the control server and using the management shell to update the firmware on a locally available NVMe Controller (assuming the quickstart guide instructions have already been performed):
+When starting a data-plane instance, we look at the superblock to determine whether it should be a MS (management service) replica.
+The `daos_server.yml`'s `access_points` parameter is used (only during format) to determine whether an instance is to be a MS replica or not.
 
-![Demo: Updating NVMe Controller Firmware](/doc/graph/daosshellfwupdate.svg)
+When the starting instance is identified as an MS replica, it performs bootstrap and starts.
+If the DAOS system has only one replica (as specified by `access_points` parameter), the host of the bootstrapped instance is now the MS leader.
+Whereas if there are multiple replicas, elections will happen in the background and eventually a leader will be elected.
 
-#### NVMe Controller Burn-in Validation
+When the starting instance is not identified as an MS replica, the instance's host calls Join on MgmtSvcClient over gRPC including the instance's host ControlAddress (address that the gRPC server is listening on) in the request addressed to the MS leader.
 
-Burn-in validation is performed using the [fio tool](https://github.com/axboe/fio) which executes workloads over the SPDK framework using the [fio plugin](https://github.com/spdk/spdk/tree/v18.04.1/examples/nvme/fio_plugin).
+MgmtSvc running on the MS leader handles the Join request received by gRPC server and forwards request over dRPC to the MS leader instance.
+If the Join request is successful then the MS leader MgmtSvc records the address contained in the request as a new system member.

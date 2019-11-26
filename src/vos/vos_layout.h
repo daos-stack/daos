@@ -36,6 +36,7 @@
 #include <daos_srv/bio.h>
 #include <daos_srv/vea.h>
 #include <daos_srv/dtx_srv.h>
+#include "ilog.h"
 
 /**
  * VOS metadata structure declarations
@@ -169,10 +170,9 @@ struct vos_pool_df {
  * array value that is changed in the transaction (DTX).
  */
 enum vos_dtx_record_types {
-	DTX_RT_OBJ	= 1,
-	DTX_RT_KEY	= 2,
-	DTX_RT_SVT	= 3,
-	DTX_RT_EVT	= 4,
+	DTX_RT_ILOG	= 1,
+	DTX_RT_SVT	= 2,
+	DTX_RT_EVT	= 3,
 };
 
 enum vos_dtx_record_flags {
@@ -212,12 +212,10 @@ struct vos_dtx_record_df {
 };
 
 enum vos_dtx_entry_flags {
-	/* The DTX contains exchange of some record(s). */
-	DTX_EF_EXCHANGE_PENDING		= (1 << 0),
 	/* The DTX shares something with other DTX(s). */
-	DTX_EF_SHARES			= (1 << 1),
+	DTX_EF_SHARES			= (1 << 0),
 	/* The DTX is the leader */
-	DTX_EF_LEADER			= (1 << 2),
+	DTX_EF_LEADER			= (1 << 1),
 };
 
 /**
@@ -297,12 +295,8 @@ enum vos_krec_bf {
 	KREC_BF_EVT			= (1 << 0),
 	/* Single Value or Key (btree) */
 	KREC_BF_BTR			= (1 << 1),
-	/* The key is punched at time kr_latest */
-	KREC_BF_PUNCHED			= (1 << 2),
-	/* The key has been (or will be) removed */
-	KREC_BF_REMOVED			= (1 << 3),
 	/* it's a dkey, otherwise is akey */
-	KREC_BF_DKEY			= (1 << 4),
+	KREC_BF_DKEY			= (1 << 2),
 };
 
 /**
@@ -320,16 +314,10 @@ struct vos_krec_df {
 	uint8_t				kr_pad_8;
 	/** key length */
 	uint32_t			kr_size;
-	/* Latest known update timestamp or punched timestamp */
-	daos_epoch_t			kr_latest;
-	/* Earliest known modification timestamp */
-	daos_epoch_t			kr_earliest;
+	/** Incarnation log for key */
+	struct ilog_df			kr_ilog;
 	/** The DTX entry in SCM. */
 	umem_off_t			kr_dtx;
-	/** The count of uncommitted DTXs that share the key. */
-	uint32_t			kr_dtx_shares;
-	/** For 64-bits alignment. */
-	uint32_t			kr_padding;
 	union {
 		/** btree root under the key */
 		struct btr_root			kr_btr;
@@ -338,13 +326,6 @@ struct vos_krec_df {
 	};
 	/* Checksum and key are stored after tree root */
 };
-
-/* Assumptions made about relative placement of these fields so
- * assert that they are true
- */
-D_CASSERT(offsetof(struct vos_krec_df, kr_earliest) ==
-	  offsetof(struct vos_krec_df, kr_latest) +
-	  sizeof(((struct vos_krec_df *)0)->kr_latest));
 
 /**
  * Persisted VOS single value & epoch record, it is referenced by
@@ -379,25 +360,12 @@ struct vos_obj_df {
 	daos_epoch_t			vo_sync;
 	/** Attributes of object.  See vos_oi_attr */
 	uint64_t			vo_oi_attr;
-	/** Latest known update timestamp or punched timestamp */
-	daos_epoch_t			vo_latest;
-	/** Earliest known update timestamp */
-	daos_epoch_t			vo_earliest;
+	/** Incarnation log for the object */
+	struct ilog_df			vo_ilog;
 	/** The DTX entry in SCM. */
 	umem_off_t			vo_dtx;
-	/** The count of uncommitted DTXs that share the object. */
-	uint32_t			vo_dtx_shares;
-	/** Incarnation of the object, it's increased each time it's punched. */
-	uint32_t			vo_incarnation;
 	/** VOS dkey btree root */
 	struct btr_root			vo_tree;
 };
-
-/* Assumptions made about relative placement of these fields so
- * assert that they are true
- */
-D_CASSERT(offsetof(struct vos_obj_df, vo_earliest) ==
-	  offsetof(struct vos_obj_df, vo_latest) +
-	  sizeof(((struct vos_obj_df *)0)->vo_latest));
 
 #endif

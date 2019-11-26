@@ -55,7 +55,7 @@ The DAOS management Go package allows to administrate a DAOS system from any nod
 
 The DAOS library (i.e. libdaos) implements the DAOS storage model and is primarily targeted at application and I/O middleware developers who want to store datasets into DAOS containers. It can be used from any nodes connected to the fabric used by the targeted DAOS system. The application process is authenticated via the DAOS agent (see next section). The API exported by libdaos is commonly called the DAOS API (in opposition to the DAOS management API) and allows to manage containers and access DAOS objects through different interfaces (e.g. key-value store or array API). The libdfs library emulates POSIX file and directory abstractions over libdaos and provides a smooth migration path for applications that require a POSIX namespace. For further reading on libdaos, bindings for different programming languages and libdfs:
 - <a href="client/api/README.md">DAOS Library (libdaos)</a> and <a href="client/array/README.md">array interface</a> and <a href="client/kv/README.md">KV interface</a> built on top of the native DAOS API</a>
-- <a href="utils/py/README.md">Python API bindings</a>
+- <a href="src/client/pydaos/raw/README.md">Python API bindings</a>
 - <a href="https://github.com/daos-stack/go-daos">Go bindings</a> and <a href="https://godoc.org/github.com/daos-stack/go-daos/pkg/daos">API documentation</a>
 - <a href="client/dfs/README.md">POSIX File & Directory Emulation (libdfs)</a>
 

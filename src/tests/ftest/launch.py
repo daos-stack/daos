@@ -25,13 +25,16 @@ from __future__ import print_function
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 import json
-from multiprocessing import Process
 import os
 import re
 import socket
 import subprocess
+from sys import version_info
 import time
 import yaml
+
+from ClusterShell.NodeSet import NodeSet
+from ClusterShell.Task import task_self
 
 try:
     # For python versions >= 3.2
@@ -80,7 +83,7 @@ def get_build_environment():
     """
     build_vars_file = os.path.join(
         os.path.dirname(os.path.realpath(__file__)),
-        "../../../.build_vars.json")
+        "../../.build_vars.json")
     with open(build_vars_file) as vars_file:
         return json.load(vars_file)
 
@@ -97,19 +100,28 @@ def set_test_environment():
     sbin_dir = os.path.join(base_dir, "sbin")
     path = os.environ.get("PATH")
 
+    if base_dir == "/usr":
+        tmp_dir = os.getenv('DAOS_TEST_SHARED_DIR', \
+                            os.path.expanduser('~/daos_test'))
+        if not os.path.exists(tmp_dir):
+            os.makedirs(tmp_dir)
+    else:
+        tmp_dir = os.path.join(base_dir, "tmp")
+
     # Update env definitions
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, path])
     os.environ["DAOS_SINGLETON_CLI"] = "1"
     os.environ["CRT_CTX_SHARE_ADDR"] = "1"
-    os.environ["CRT_ATTACH_INFO_PATH"] = os.path.join(base_dir, "tmp")
+    os.environ["CRT_ATTACH_INFO_PATH"] = tmp_dir
 
     # Python paths required for functional testing
+    python_version = "python{}{}".format(
+        version_info.major,
+        "" if version_info.major > 2 else ".{}".format(version_info.minor))
     required_python_paths = [
         os.path.abspath("util/apricot"),
         os.path.abspath("util"),
-        os.path.abspath("../../utils/py"),
-        os.path.join(base_dir, "lib", "python2.7", "site-packages"),
-        os.path.join(base_dir, "lib", "python3", "site-packages"),
+        os.path.join(base_dir, "lib64", python_version, "site-packages"),
     ]
 
     # Check the PYTHONPATH env definition
@@ -174,40 +186,43 @@ def spawn_commands(host_list, command, timeout=120):
         command (str): command to run on each host
         timeout (int): number of seconds to wait for all jobs to complete
 
+    Returns:
+        bool: True if the command completed successfully (rc=0) on each
+            specified host; False otherwise
+
     """
-    # Create a job to run the command on each host
-    jobs = []
-    for host in host_list:
-        host_command = command.format(host=host)
-        jobs.append(Process(target=get_output, args=(host_command,)))
+    # Create a ClusterShell Task to run the command in parallel on the hosts
+    nodes = NodeSet.fromlist(host_list)
+    task = task_self()
+    # task.set_info('debug', True)
+    # Enable forwarding of the ssh authentication agent connection
+    task.set_info("ssh_options", "-oForwardAgent=yes")
+    print("Running on {}: {}".format(nodes, command))
+    task.run(command=command, nodes=nodes, timeout=timeout)
 
-    # Start the background jobs
-    for job in jobs:
-        job.start()
+    # Create a dictionary of hosts for each unique return code
+    results = {code: hosts for code, hosts in task.iter_retcodes()}
 
-    # Block until each job is complete or the overall timeout is reached
-    elapsed = 0
-    for job in jobs:
-        # Update the join timeout to account for previously joined jobs
-        join_timeout = timeout - elapsed if elapsed <= timeout else 0
+    # Determine if the command completed successfully across all the hosts
+    status = len(results) == 1 and 0 in results
+    if not status:
+        print("  Errors detected running \"{}\":".format(command))
 
-        # Block until this job completes or the overall timeout is reached
-        start_time = int(time.time())
-        job.join(join_timeout)
+    # Display the command output
+    for code in sorted(results):
+        output_data = list(task.iter_buffers(results[code]))
+        if len(output_data) == 0:
+            err_nodes = NodeSet.fromlist(results[code])
+            print("    {}: rc={}, output: <NONE>".format(err_nodes, code))
+        else:
+            for output, o_hosts in output_data:
+                n_set = NodeSet.fromlist(o_hosts)
+                lines = str(output).splitlines()
+                if len(lines) > 1:
+                    output = "\n      {}".format("\n      ".join(lines))
+                print("    {}: rc={}, output: {}".format(n_set, code, output))
 
-        # Update the amount of time that has elapsed since waiting for jobs
-        elapsed += int(time.time()) - start_time
-
-    # Terminate any processes that may still be running after timeout
-    return_value = True
-    for job in jobs:
-        if job.is_alive():
-            print("Terminating job {}".format(job.pid))
-            job.terminate()
-        if job.exitcode != 0:
-            return_value = False
-
-    return return_value
+    return status
 
 
 def find_values(obj, keys, key=None, val_type=list):
@@ -410,7 +425,7 @@ def run_tests(test_files, tag_filter, args):
             # Optionally clean the log files before running this test on the
             # servers and clients specified for this test
             if args.clean:
-                if not clean_logs(test_file["yaml"]):
+                if not clean_logs(test_file["yaml"], args):
                     return 128
 
             # Execute this test
@@ -423,7 +438,7 @@ def run_tests(test_files, tag_filter, args):
             # Optionally store all of the doas server and client log files
             # along with the test results
             if args.archive:
-                archive_logs(avocado_logs_dir, test_file["yaml"])
+                archive_logs(avocado_logs_dir, test_file["yaml"], args)
 
             # Optionally rename the test results directory for this test
             if args.rename:
@@ -519,7 +534,7 @@ def find_yaml_hosts(test_yaml):
     return find_values(get_yaml_data(test_yaml), SERVER_KEYS + CLIENT_KEYS)
 
 
-def get_hosts_from_yaml(test_yaml):
+def get_hosts_from_yaml(test_yaml, args):
     """Extract the list of hosts from the test yaml file.
 
     This host will be included in the list if no clients are explicitly called
@@ -527,12 +542,15 @@ def get_hosts_from_yaml(test_yaml):
 
     Args:
         test_yaml (str): test yaml file
+        args (argparse.Namespace): command line arguments for this program
 
     Returns:
         list: a unique list of hosts specified in the test's yaml file
 
     """
     host_set = set()
+    if args.include_localhost:
+        host_set.add(socket.gethostname().split(".")[0])
     found_client_key = False
     for key, value in find_yaml_hosts(test_yaml).items():
         host_set.update(value)
@@ -546,18 +564,19 @@ def get_hosts_from_yaml(test_yaml):
     return sorted(list(host_set))
 
 
-def clean_logs(test_yaml):
+def clean_logs(test_yaml, args):
     """Remove the test log files on each test host.
 
     Args:
         test_yaml (str): yaml file containing host names
+        args (argparse.Namespace): command line arguments for this program
     """
     # Use the default server yaml and then the test yaml to update the default
     # DAOS log file locations.  This should simulate how the test defines which
     # log files it will use when it is run.
     log_files = get_log_files(test_yaml, get_log_files(BASE_LOG_FILE_YAML))
-    host_list = get_hosts_from_yaml(test_yaml)
-    command = "ssh {{host}} \"rm -fr {}\"".format(" ".join(log_files.values()))
+    host_list = get_hosts_from_yaml(test_yaml, args)
+    command = "sudo -n rm -fr {}".format(" ".join(log_files.values()))
     print("Cleaning logs on {}".format(host_list))
     if not spawn_commands(host_list, command):
         print("Error cleaning logs, aborting")
@@ -566,16 +585,17 @@ def clean_logs(test_yaml):
     return True
 
 
-def archive_logs(avocado_logs_dir, test_yaml):
+def archive_logs(avocado_logs_dir, test_yaml, args):
     """Copy all of the host test log files to the avocado results directory.
 
     Args:
         avocado_logs_dir ([type]): [description]
         test_yaml (str): yaml file containing host names
+        args (argparse.Namespace): command line arguments for this program
     """
     this_host = socket.gethostname().split(".")[0]
     log_files = get_log_files(TEST_LOG_FILE_YAML)
-    host_list = get_hosts_from_yaml(test_yaml)
+    host_list = get_hosts_from_yaml(test_yaml, args)
     doas_logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs")
 
     # Create a subdirectory in the avocado logs directory for this test
@@ -588,11 +608,19 @@ def archive_logs(avocado_logs_dir, test_yaml):
         if os.path.splitext(os.path.basename(log_file))[1] != ""]
 
     # Copy any log files that exist on the test hosts and remove them from the
-    # test host if the copy is successful
-    command = "ssh {{host}} 'set -e; {}'".format(
-        "for file in {}; do if [ -e $file ]; then "
-        "scp $file {}:{}/${{{{file##*/}}}}-{{host}} && rm -fr $file; fi; "
-        "done".format(" ".join(non_dir_files), this_host, doas_logs_dir))
+    # test host if the copy is successful.  Log any executed scp commands.
+    # command = "set -Eeu; {}".format(
+    #   "for file in {}; do if [ -e $file ]; then set -x; "
+    #   "scp $file {}:{}/${{file##*/}}-$(hostname -s) && sudo -n rm -fr $file; "
+    #   "set +x; fi; done".format(
+    #       " ".join(non_dir_files), this_host, doas_logs_dir))
+    # For debug
+    command = "set -Eeu; {}".format(
+        "err=0; for file in {}; do if [ -e $file ]; then set -x; ls -al $file; "
+        "if scp $file {}:{}/${{file##*/}}-$(hostname -s); then "
+        "if ! sudo -n rm -fr $file; then ((err++)); fi; else ((err++)); fi; "
+        "fi; set +x; done; exit $err".format(
+            " ".join(non_dir_files), this_host, doas_logs_dir))
     spawn_commands(host_list, command)
 
 
@@ -699,6 +727,10 @@ def main():
         action="store_true",
         help="when replacing server/client yaml file placeholders, discard "
              "any placeholders that do not end up with a replacement value")
+    parser.add_argument(
+        "-i", "--include_localhost",
+        action="store_true",
+        help="include the local host when cleaning and archiving")
     parser.add_argument(
         "-l", "--list",
         action="store_true",

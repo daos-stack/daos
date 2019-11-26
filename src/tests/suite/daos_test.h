@@ -26,13 +26,6 @@
  */
 #ifndef __DAOS_TEST_H
 #define __DAOS_TEST_H
-#if !defined(__has_warning)  /* gcc */
-	#pragma GCC diagnostic ignored "-Wframe-larger-than="
-#else
-	#if __has_warning("-Wframe-larger-than=") /* valid clang warning */
-		#pragma GCC diagnostic ignored "-Wframe-larger-than="
-	#endif
-#endif
 
 #include <unistd.h>
 #include <stdlib.h>
@@ -69,11 +62,20 @@
 #include <daos/tests_lib.h>
 #include <daos.h>
 
+#if D_HAS_WARNING(4, "-Wframe-larger-than=")
+	#pragma GCC diagnostic ignored "-Wframe-larger-than="
+#endif
+
 /** Server crt group ID */
 extern const char *server_group;
 
 /** Pool service replicas */
 extern unsigned int svc_nreplicas;
+
+/** Checksum Type & info*/
+extern unsigned int dt_csum_type;
+extern unsigned int dt_csum_chunksize;
+extern bool dt_csum_server_verify;
 
 /* the temporary IO dir*/
 extern char *test_io_dir;
@@ -163,6 +165,12 @@ typedef struct {
 	void			*rebuild_post_cb_arg;
 	/* epoch IO OP queue */
 	struct epoch_io_args	eio_args;
+
+	/* List pools resources (mgmt tests) */
+	void			*mgmt_lp_args;
+
+	/* List containers (pool tests) */
+	void			*pool_lc_args;
 } test_arg_t;
 
 enum {
@@ -201,6 +209,11 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 int
 test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *po_prop,
 		     daos_prop_t *co_prop);
+int
+test_setup_pool_create(void **state, struct test_pool *ipool,
+		       struct test_pool *opool, daos_prop_t *prop);
+int
+pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool);
 
 static inline int
 async_enable(void **state)
@@ -269,6 +282,11 @@ int run_daos_oid_alloc_test(int rank, int size);
 int run_daos_degraded_test(int rank, int size);
 int run_daos_rebuild_test(int rank, int size, int *tests, int test_size);
 int run_daos_dtx_test(int rank, int size, int *tests, int test_size);
+int run_daos_vc_test(int rank, int size, int *tests, int test_size);
+int run_daos_checksum_test(int rank, int size);
+int run_daos_fs_test(int rank, int size, int *tests, int test_size);
+int run_daos_nvme_recov_test(int rank, int size, int *sub_tests,
+			     int sub_tests_size);
 
 void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 		      d_rank_list_t *svc, d_rank_t rank);

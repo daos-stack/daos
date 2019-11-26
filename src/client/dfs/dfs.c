@@ -28,16 +28,36 @@
 #include <sys/xattr.h>
 #include <daos/checksum.h>
 #include <daos/common.h>
+#include <daos/event.h>
+#include <daos/array.h>
 
 #include "daos.h"
 #include "daos_fs.h"
 
-/** D-key name of SB info in the SB object */
-#define SB_DKEY		"DFS_SB_DKEY"
-/** A-key name of SB info in the SB object */
-#define SB_AKEY		"DFS_SB_AKEY"
-/** Magic Value for SB value */
-#define SB_MAGIC	0xda05df50da05df50
+/** D-key name of SB metadata */
+#define SB_DKEY		"DFS_SB_METADATA"
+
+#define SB_AKEYS	5
+/** A-key name of SB magic */
+#define MAGIC_NAME	"DFS_MAGIC"
+/** A-key name of SB version */
+#define SB_VERSION_NAME	"DFS_SB_VERSION"
+/** A-key name of DFS Layout Version */
+#define LAYOUT_NAME	"DFS_LAYOUT_VERSION"
+/** A-key name of Default chunk size */
+#define CS_NAME		"DFS_CHUNK_SIZE"
+/** A-key name of Default Object Class */
+#define OC_NAME		"DFS_OBJ_CLASS"
+
+/** Magic Value */
+#define DFS_SB_MAGIC		0xda05df50da05df50
+/** DFS Layout version value */
+#define DFS_SB_VERSION		1
+/** DFS SB Version Value */
+#define DFS_LAYOUT_VERSION	1
+/** Array object stripe size for regular files */
+#define DFS_DEFAULT_CHUNK_SIZE	1048576
+#define DFS_DEFAULT_OBJ_CLASS	OC_SX
 
 /** Number of A-keys for attributes in any object entry */
 #define INODE_AKEYS	7
@@ -55,9 +75,6 @@
 #define CTIME_NAME	"ctime"
 /** A-key name of symlink value */
 #define SYML_NAME	"syml"
-
-/** Array object stripe size for regular files */
-#define DFS_DEFAULT_CHUNK_SIZE	1048576
 
 /** Parameters for dkey enumeration */
 #define ENUM_DESC_NR    10
@@ -107,14 +124,15 @@ struct dfs {
 	daos_handle_t		coh;
 	/** Object ID reserved for this DFS (see oid_gen below) */
 	daos_obj_id_t		oid;
-	/** OID of SB */
-	daos_obj_id_t		super_oid;
 	/** Open object handle of SB */
 	daos_handle_t		super_oh;
 	/** Root object info */
 	dfs_obj_t		root;
-	/** Default Chunk Size in this container */
-	daos_size_t		chunk_size;
+	/** DFS container attributes (Default chunk size, oclass, etc.) */
+	dfs_attr_t		attr;
+	/** Optional Prefix to account for when resolving an absolute path */
+	char			*prefix;
+	daos_size_t		prefix_len;
 };
 
 struct dfs_entry {
@@ -224,7 +242,7 @@ oid_gen(dfs_t *dfs, uint16_t oclass, bool file, daos_obj_id_t *oid)
 	int		rc;
 
 	if (oclass == 0)
-		oclass = OC_SX;
+		oclass = dfs->attr.da_oclass_id;
 
 	D_MUTEX_LOCK(&dfs->lock);
 	/** If we ran out of local OIDs, alloc one from the container */
@@ -543,7 +561,7 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 
 		rc = daos_array_open_with_attr(dfs->coh, entry.oid, th,
 			DAOS_OO_RO, 1, entry.chunk_size ? entry.chunk_size :
-			dfs->chunk_size, &file_oh, NULL);
+			dfs->attr.da_chunk_size, &file_oh, NULL);
 		if (rc) {
 			D_ERROR("daos_array_open_with_attr() failed (%d)\n",
 				rc);
@@ -565,6 +583,8 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 		 * sparse files or file metadata or xattributes.
 		 */
 		stbuf->st_blocks = (size + (1 << 9) - 1) >> 9;
+		stbuf->st_blksize = entry.chunk_size ? entry.chunk_size :
+			dfs->attr.da_chunk_size;
 		break;
 	}
 	case S_IFLNK:
@@ -652,8 +672,10 @@ open_file(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 
 	/* Check if parent has the filename entry */
 	rc = fetch_entry(parent->oh, th, file->name, false, &exists, &entry);
-	if (rc)
+	if (rc) {
+		D_ERROR("fetch_entry %s failed %d.\n", file->name, rc);
 		return rc;
+	}
 
 	if (flags & O_CREAT) {
 		if (exists) {
@@ -678,7 +700,7 @@ open_file(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 		/** Open the array object for the file */
 		rc = daos_array_open_with_attr(dfs->coh, file->oid, th,
 			DAOS_OO_RW, 1, chunk_size ? chunk_size :
-			dfs->chunk_size, &file->oh, NULL);
+			dfs->attr.da_chunk_size, &file->oh, NULL);
 		if (rc != 0) {
 			D_ERROR("daos_array_open_with_attr() failed (%d)\n",
 				rc);
@@ -721,13 +743,15 @@ open_file:
 
 	rc = check_access(dfs, geteuid(), getegid(), entry.mode,
 			  (daos_mode == DAOS_OO_RO) ? R_OK : R_OK | W_OK);
-	if (rc)
+	if (rc) {
+		D_ERROR("check_access failed %d\n", rc);
 		return rc;
+	}
 
 	file->mode = entry.mode;
 	rc = daos_array_open_with_attr(dfs->coh, entry.oid, th, daos_mode, 1,
-			entry.chunk_size ? entry.chunk_size : dfs->chunk_size,
-			&file->oh, NULL);
+			entry.chunk_size ? entry.chunk_size :
+			dfs->attr.da_chunk_size, &file->oh, NULL);
 	if (rc != 0) {
 		D_ERROR("daos_array_open_with_attr() failed (%d)\n", rc);
 		return daos_der2errno(rc);
@@ -876,75 +900,240 @@ open_symlink(dfs_t *dfs, daos_handle_t th, dfs_obj_t *parent, int flags,
 }
 
 static int
-check_sb(dfs_t *dfs, daos_handle_t th, bool insert, bool *exists)
+open_sb(daos_handle_t coh, bool create, dfs_attr_t *attr, daos_handle_t *oh)
 {
-	d_sg_list_t	sgl;
-	d_iov_t	sg_iov;
-	daos_iod_t	iod;
-	daos_key_t	dkey;
-	uint64_t	sb_magic;
-	int		rc;
+	d_sg_list_t		sgls[SB_AKEYS];
+	d_iov_t			sg_iovs[SB_AKEYS];
+	daos_iod_t		iods[SB_AKEYS];
+	daos_key_t		dkey;
+	uint64_t		magic;
+	uint16_t		sb_ver;
+	uint16_t		layout_ver;
+	daos_size_t		chunk_size = 0;
+	daos_oclass_id_t	oclass = OC_UNKNOWN;
+	daos_obj_id_t		super_oid;
+	int			i, rc;
 
-	d_iov_set(&dkey, SB_DKEY, strlen(SB_DKEY));
+	if (oh == NULL)
+		return EINVAL;
 
-	d_iov_set(&sg_iov, &sb_magic, sizeof(uint64_t));
-	sgl.sg_nr = 1;
-	sgl.sg_nr_out = 0;
-	sgl.sg_iovs = &sg_iov;
+	/** Open SB object */
+	super_oid.lo = RESERVED_LO;
+	super_oid.hi = SB_HI;
+	daos_obj_generate_id(&super_oid, 0, OC_RP_XSF, 0);
 
-	d_iov_set(&iod.iod_name, SB_AKEY, strlen(SB_AKEY));
-	dcb_set_null(&iod.iod_kcsum);
-	iod.iod_nr	= 1;
-	iod.iod_size	= DAOS_REC_ANY;
-	iod.iod_recxs	= NULL;
-	iod.iod_eprs	= NULL;
-	iod.iod_csums	= NULL;
-	iod.iod_type	= DAOS_IOD_SINGLE;
-
-	rc = daos_obj_fetch(dfs->super_oh, th, &dkey, 1, &iod, &sgl,
-			    NULL, NULL);
+	rc = daos_obj_open(coh, super_oid, create ? DAOS_OO_RW : DAOS_OO_RO,
+			   oh, NULL);
 	if (rc) {
-		D_ERROR("Failed to fetch SB info (%d)\n", rc);
+		D_ERROR("daos_obj_open() Failed (%d)\n", rc);
 		return daos_der2errno(rc);
 	}
 
-	/** check if SB info exists */
-	if (iod.iod_size == 0) {
-		*exists = false;
+	d_iov_set(&dkey, SB_DKEY, strlen(SB_DKEY));
 
-		/** if insert option is set, then insert the SB */
-		if (!insert)
-			return 0;
-		iod.iod_size = sizeof(uint64_t);
-		sb_magic = SB_MAGIC;
-		rc = daos_obj_update(dfs->super_oh, th, &dkey, 1, &iod, &sgl,
-				     NULL);
-		if (rc) {
-			D_ERROR("Failed to update SB info (%d)\n", rc);
-			return daos_der2errno(rc);
-		}
-	} else {
-		if (sb_magic != SB_MAGIC) {
-			D_ERROR("SB MAGIC verification failed\n");
-			return EINVAL;
-		}
+	i = 0;
+	d_iov_set(&sg_iovs[i], &magic, sizeof(magic));
+	d_iov_set(&iods[i].iod_name, MAGIC_NAME, strlen(MAGIC_NAME));
+	i++;
 
-		*exists = true;
+	d_iov_set(&sg_iovs[i], &sb_ver, sizeof(sb_ver));
+	d_iov_set(&iods[i].iod_name, SB_VERSION_NAME, strlen(SB_VERSION_NAME));
+	i++;
+
+	d_iov_set(&sg_iovs[i], &layout_ver, sizeof(layout_ver));
+	d_iov_set(&iods[i].iod_name, LAYOUT_NAME, strlen(LAYOUT_NAME));
+	i++;
+
+	d_iov_set(&sg_iovs[i], &chunk_size, sizeof(chunk_size));
+	d_iov_set(&iods[i].iod_name, CS_NAME, strlen(CS_NAME));
+	i++;
+
+	d_iov_set(&sg_iovs[i], &oclass, sizeof(oclass));
+	d_iov_set(&iods[i].iod_name, OC_NAME, strlen(OC_NAME));
+	i++;
+
+	for (i = 0; i < SB_AKEYS; i++) {
+		sgls[i].sg_nr		= 1;
+		sgls[i].sg_nr_out	= 0;
+		sgls[i].sg_iovs		= &sg_iovs[i];
+
+		dcb_set_null(&iods[i].iod_kcsum);
+		iods[i].iod_nr		= 1;
+		iods[i].iod_size	= DAOS_REC_ANY;
+		iods[i].iod_recxs	= NULL;
+		iods[i].iod_eprs	= NULL;
+		iods[i].iod_csums	= NULL;
+		iods[i].iod_type	= DAOS_IOD_SINGLE;
 	}
 
+	/** create the SB and exit */
+	if (create) {
+		iods[0].iod_size = sizeof(magic);
+		magic = DFS_SB_MAGIC;
+		iods[1].iod_size = sizeof(sb_ver);
+		sb_ver = DFS_SB_VERSION;
+		iods[2].iod_size = sizeof(layout_ver);
+		layout_ver = DFS_LAYOUT_VERSION;
+		iods[3].iod_size = sizeof(chunk_size);
+		if (attr && attr->da_chunk_size != 0)
+			chunk_size = attr->da_chunk_size;
+		else
+			chunk_size = DFS_DEFAULT_CHUNK_SIZE;
+		iods[4].iod_size = sizeof(oclass);
+		if (attr && attr->da_oclass_id != OC_UNKNOWN)
+			oclass = attr->da_oclass_id;
+		else
+			oclass = DFS_DEFAULT_OBJ_CLASS;
+
+		rc = daos_obj_update(*oh, DAOS_TX_NONE, &dkey, SB_AKEYS, iods,
+				     sgls, NULL);
+		if (rc) {
+			D_ERROR("Failed to update SB info (%d)\n", rc);
+			D_GOTO(err, rc = daos_der2errno(rc));
+		}
+
+		return 0;
+	}
+
+	/* otherwise fetch the values and verify SB */
+	rc = daos_obj_fetch(*oh, DAOS_TX_NONE, &dkey, SB_AKEYS, iods, sgls,
+			    NULL, NULL);
+	if (rc) {
+		D_ERROR("Failed to fetch SB info (%d)\n", rc);
+		D_GOTO(err, rc = daos_der2errno(rc));
+	}
+
+	/** check if SB info exists */
+	if (iods[0].iod_size == 0) {
+		D_ERROR("SB does not exist.\n");
+		D_GOTO(err, rc = ENOENT);
+	}
+
+	if (magic != DFS_SB_MAGIC) {
+		D_ERROR("SB MAGIC verification failed\n");
+		D_GOTO(err, rc = EINVAL);
+	}
+
+	D_ASSERT(attr);
+	attr->da_chunk_size = (chunk_size) ? chunk_size :
+		DFS_DEFAULT_CHUNK_SIZE;
+	attr->da_oclass_id = (oclass != OC_UNKNOWN) ? oclass :
+		DFS_DEFAULT_OBJ_CLASS;
+
+	/** TODO - check SB & layout versions */
 	return 0;
+err:
+	daos_obj_close(*oh, NULL);
+	return rc;
+}
+
+int
+dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
+		daos_handle_t *_coh, dfs_t **_dfs)
+{
+	daos_handle_t		coh, super_oh;
+	struct dfs_entry	entry = {0};
+	daos_prop_t		*prop = NULL;
+	daos_cont_info_t	co_info;
+	dfs_t			*dfs;
+	dfs_attr_t		dattr;
+	int			rc;
+
+	if (_dfs && _coh == NULL) {
+		D_ERROR("Should pass a valid container handle pointer\n");
+		return EINVAL;
+	}
+
+	prop = daos_prop_alloc(1);
+	if (prop == NULL) {
+		D_ERROR("Failed to allocate container prop.");
+		return ENOMEM;
+	}
+
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
+	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_LAYOUT_POSIX;
+
+	rc = daos_cont_create(poh, co_uuid, prop, NULL);
+	daos_prop_free(prop);
+	if (rc) {
+		D_ERROR("daos_cont_create() failed (%d)\n", rc);
+		return daos_der2errno(rc);
+	}
+
+	rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info, NULL);
+	if (rc) {
+		D_ERROR("daos_cont_open() failed (%d)\n", rc);
+		D_GOTO(err_destroy, rc = daos_der2errno(rc));
+	}
+
+	if (attr && attr->da_chunk_size != 0)
+		dattr.da_chunk_size = attr->da_chunk_size;
+	else
+		dattr.da_chunk_size = DFS_DEFAULT_CHUNK_SIZE;
+
+	if (attr && attr->da_oclass_id != OC_UNKNOWN)
+		dattr.da_oclass_id = attr->da_oclass_id;
+	else
+		dattr.da_oclass_id = DFS_DEFAULT_OBJ_CLASS;
+
+	/** Create SB */
+	rc = open_sb(coh, true, &dattr, &super_oh);
+	if (rc)
+		D_GOTO(err_close, rc);
+
+	/** Add root object */
+	entry.oid.lo = RESERVED_LO;
+	entry.oid.hi = ROOT_HI;
+	daos_obj_generate_id(&entry.oid, 0, dattr.da_oclass_id, 0);
+	entry.mode = S_IFDIR | 0777;
+	entry.atime = entry.mtime = entry.ctime = time(NULL);
+	entry.chunk_size = dattr.da_chunk_size;
+
+	rc = insert_entry(super_oh, DAOS_TX_NONE, "/", entry);
+	if (rc) {
+		D_ERROR("Failed to insert root entry (%d).", rc);
+		D_GOTO(err_super, rc);
+	}
+
+	daos_obj_close(super_oh, NULL);
+
+	if (_dfs) {
+		/** Mount DFS on the container we just created */
+		rc = dfs_mount(poh, coh, O_RDWR, &dfs);
+		if (rc) {
+			D_ERROR("dfs_mount() failed (%d)\n", rc);
+			D_GOTO(err_close, rc);
+		}
+		*_dfs = dfs;
+	}
+
+	if (_coh) {
+		*_coh = coh;
+	} else {
+		rc = daos_cont_close(coh, NULL);
+		if (rc) {
+			D_ERROR("daos_cont_close() failed (%d)\n", rc);
+			D_GOTO(err_destroy, rc);
+		}
+	}
+
+	return rc;
+err_super:
+	daos_obj_close(super_oh, NULL);
+err_close:
+	daos_cont_close(coh, NULL);
+err_destroy:
+	daos_cont_destroy(poh, co_uuid, 1, NULL);
+	return rc;
 }
 
 int
 dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 {
 	dfs_t			*dfs;
-	daos_handle_t		th;
 	daos_pool_info_t	pool_info = {};
 	daos_prop_t		*prop;
-	struct daos_prop_entry	*prop_entry;
-	struct dfs_entry	entry = {0};
-	bool			sb_exists;
+	struct daos_prop_entry	*entry;
 	int			amode, obj_mode;
 	int			rc;
 
@@ -952,6 +1141,26 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	obj_mode = get_daos_obj_mode(flags);
 	if (obj_mode == -1)
 		return EINVAL;
+
+	prop = daos_prop_alloc(0);
+	if (prop == NULL) {
+		D_ERROR("Failed to allocate prop.");
+		return ENOMEM;
+	}
+
+	rc = daos_cont_query(coh, NULL, prop, NULL);
+	if (rc) {
+		D_ERROR("daos_cont_query() Failed (%d)\n", rc);
+		daos_prop_free(prop);
+		return daos_der2errno(rc);
+	}
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_LAYOUT_TYPE);
+	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_LAYOUT_POSIX) {
+		daos_prop_free(prop);
+		return EINVAL;
+	}
+	daos_prop_free(prop);
 
 	D_ALLOC_PTR(dfs);
 	if (dfs == NULL)
@@ -961,173 +1170,76 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	dfs->coh = coh;
 	dfs->amode = amode;
 
-	/** TODO - this will be fetched from container attributes */
-	dfs->chunk_size = DFS_DEFAULT_CHUNK_SIZE;
-
 	rc = D_MUTEX_INIT(&dfs->lock, NULL);
 	if (rc != 0)
 		return daos_der2errno(rc);
 
-	/* Fetch ownership props with the query */
 	prop = daos_prop_alloc(0);
 	if (prop == NULL) {
-		D_ERROR("Failed to allocate pool prop for query\n");
-		rc = -DER_NOMEM;
-		D_GOTO(err_dfs, rc);
+		D_ERROR("Failed to allocate prop.");
+		return ENOMEM;
 	}
 
 	rc = daos_pool_query(poh, NULL, &pool_info, prop, NULL);
 	if (rc) {
 		D_ERROR("daos_pool_query() Failed (%d)\n", rc);
-		D_GOTO(err_prop, rc = daos_der2errno(rc));
+		daos_prop_free(prop);
+		D_GOTO(err_dfs, rc = daos_der2errno(rc));
 	}
 
 	/* Convert the owner information to uid/gid */
-	prop_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER);
-	D_ASSERT(prop_entry != NULL);
-	rc = daos_acl_principal_to_uid(prop_entry->dpe_str, &dfs->uid);
+	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER);
+	D_ASSERT(entry != NULL);
+	rc = daos_acl_principal_to_uid(entry->dpe_str, &dfs->uid);
 	if (rc != 0) {
 		D_ERROR("Unable to convert owner to uid\n");
-		D_GOTO(err_prop, rc = daos_der2errno(rc));
+		daos_prop_free(prop);
+		D_GOTO(err_dfs, rc = daos_der2errno(rc));
 	}
 
-	prop_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER_GROUP);
-	D_ASSERT(prop_entry != NULL);
-	rc = daos_acl_principal_to_gid(prop_entry->dpe_str, &dfs->gid);
+	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER_GROUP);
+	D_ASSERT(entry != NULL);
+	rc = daos_acl_principal_to_gid(entry->dpe_str, &dfs->gid);
 	if (rc != 0) {
 		D_ERROR("Unable to convert owner-group to gid\n");
-		D_GOTO(err_prop, rc = daos_der2errno(rc));
+		daos_prop_free(prop);
+		D_GOTO(err_dfs, rc = daos_der2errno(rc));
 	}
 
 	daos_prop_free(prop);
 
-	/** if mount RW, create TX */
-	if (amode == O_RDWR) {
-		rc = daos_tx_open(coh, &th, NULL);
-		if (rc) {
-			D_ERROR("daos_tx_open() Failed (%d)\n", rc);
-			D_GOTO(err_prop, rc = daos_der2errno(rc));
-		}
-	} else if (amode == O_RDONLY) {
-		th = DAOS_TX_NONE;
-	} else {
-		D_ERROR("Invalid dfs_mount access mode\n");
-		D_GOTO(err_prop, rc = EINVAL);
-	}
+	/** Verify SB */
+	rc = open_sb(coh, false, &dfs->attr, &dfs->super_oh);
+	if (rc)
+		D_GOTO(err_dfs, rc);
 
-	dfs->oid.hi = 0;
-	dfs->oid.lo = 0;
-
-	/** Open special object on container for SB info */
-	dfs->super_oid.lo = RESERVED_LO;
-	dfs->super_oid.hi = SB_HI;
-	daos_obj_generate_id(&dfs->super_oid, 0, OC_RP_XSF, 0);
-
-	rc = daos_obj_open(coh, dfs->super_oid, obj_mode, &dfs->super_oh, NULL);
+	/** Check if super object has the root entry */
+	strcpy(dfs->root.name, "/");
+	dfs->root.parent_oid.lo = RESERVED_LO;
+	dfs->root.parent_oid.hi = SB_HI;
+	daos_obj_generate_id(&dfs->root.parent_oid, 0, OC_RP_XSF, 0);
+	rc = open_dir(dfs, DAOS_TX_NONE, dfs->super_oh, amode, 0, &dfs->root);
 	if (rc) {
-		D_ERROR("daos_obj_open() Failed (%d)\n", rc);
-		D_GOTO(err_tx, rc = daos_der2errno(rc));
+		D_ERROR("Failed to open root object\n");
+		D_GOTO(err_super, rc);
 	}
-
-	D_DEBUG(DB_TRACE, "DFS super object %"PRIu64".%"PRIu64"\n",
-		dfs->super_oid.hi, dfs->super_oid.lo);
 
 	/** if RW, allocate an OID for the namespace */
 	if (amode == O_RDWR) {
 		rc = daos_cont_alloc_oids(coh, 1, &dfs->oid.lo, NULL);
 		if (rc) {
 			D_ERROR("daos_cont_alloc_oids() Failed (%d)\n", rc);
-			D_GOTO(err_tx, rc = daos_der2errno(rc));
-		}
-	}
-
-	/** Check if SB object exists already, and create it if it doesn't */
-	rc = check_sb(dfs, th, (amode == O_RDWR), &sb_exists);
-	if (rc)
-		D_GOTO(err_tx, rc);
-
-	/** Check if super object has the root entry */
-	strcpy(dfs->root.name, "/");
-	oid_cp(&dfs->root.parent_oid, dfs->super_oid);
-
-	rc = open_dir(dfs, th, dfs->super_oh, amode, 0, &dfs->root);
-	if (rc == 0) {
-		/** OID should not be 0 since this is an existing namespace. */
-		if (sb_exists && amode == O_RDWR &&
-		    dfs->oid.lo == RESERVED_LO) {
-			D_ERROR("OID should not be 0 in existing namespace\n");
-			D_GOTO(err_super, rc = EINVAL);
-		}
-		D_DEBUG(DB_TRACE, "Namespace exists. OID lo = %"PRIu64".\n",
-			dfs->oid.lo);
-	} else if (rc == ENOENT) {
-		if (amode == O_RDWR) {
-			/*
-			 * Set hi when we allocate the reserved oid. Account 0
-			 * for SB, 1 for root obj.
-			 */
-			if (dfs->oid.lo == RESERVED_LO)
-				dfs->oid.hi = ROOT_HI + 1;
-			/*
-			 * if lo is not 0 (reserved), we can use all the hi
-			 * ranks and we can start hi from 0. This happens when
-			 * multiple independent access is mounting the dfs at
-			 * the same time, and races between SB creation and oid
-			 * allocation can happen, leading us to here where the
-			 * mounter did not see the SB, but another one has raced
-			 * and allocated oid 0. One example is the MPI-IO file
-			 * per process case, where every process creates it's
-			 * own file in the same flat namespace.
-			 */
-			else
-				dfs->oid.hi = 0;
-		} else {
-			dfs->oid.hi = MAX_OID_HI;
-		}
-
-		/** Create the root object */
-		dfs->root.mode = S_IFDIR | 0777;
-		dfs->root.oid.lo = RESERVED_LO;
-		dfs->root.oid.hi = ROOT_HI;
-		daos_obj_generate_id(&dfs->root.oid, 0, OC_SX, 0);
-
-		rc = daos_obj_open(coh, dfs->root.oid, obj_mode, &dfs->root.oh,
-				   NULL);
-		if (rc) {
-			D_ERROR("Failed to open root dir object (%d).", rc);
-			D_GOTO(err_super, rc = daos_der2errno(rc));
-		}
-
-		/** Insert root entry in the SB */
-		oid_cp(&entry.oid, dfs->root.oid);
-		entry.mode = S_IFDIR | 0777;
-		entry.atime = entry.mtime = entry.ctime = time(NULL);
-		entry.chunk_size = 0;
-
-		rc = insert_entry(dfs->super_oh, th, dfs->root.name, entry);
-		if (rc) {
-			D_ERROR("Failed to insert root entry (%d).", rc);
-			D_GOTO(err_root, rc);
-		}
-
-		D_DEBUG(DB_TRACE, "Created root object %"PRIu64".%"PRIu64"\n",
-			dfs->root.oid.hi, dfs->root.oid.lo);
-	} else {
-		D_ERROR("Failed to create/open root object\n");
-		D_GOTO(err_super, rc);
-	}
-
-	if (amode == O_RDWR) {
-		rc = daos_tx_commit(th, NULL);
-		if (rc) {
-			D_ERROR("TX commit failed (rc = %d)\n", rc);
 			D_GOTO(err_root, rc = daos_der2errno(rc));
 		}
-		rc = daos_tx_close(th, NULL);
-		if (rc) {
-			D_ERROR("TX close failed (rc = %d)\n", rc);
-			D_GOTO(err_root, rc = daos_der2errno(rc));
-		}
+
+		/*
+		 * if this is the first time we allocate on this container,
+		 * account 0 for SB, 1 for root obj.
+		 */
+		if (dfs->oid.lo == RESERVED_LO)
+			dfs->oid.hi = ROOT_HI + 1;
+		else
+			dfs->oid.hi = 0;
 	}
 
 	dfs->mounted = true;
@@ -1135,18 +1247,9 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 
 	return rc;
 err_root:
-	daos_obj_punch(dfs->root.oh, th, NULL);
 	daos_obj_close(dfs->root.oh, NULL);
 err_super:
-	daos_obj_punch(dfs->super_oh, th, NULL);
 	daos_obj_close(dfs->super_oh, NULL);
-err_tx:
-	if (amode == O_RDWR) {
-		daos_tx_abort(th, NULL);
-		daos_tx_close(th, NULL);
-	}
-err_prop:
-	daos_prop_free(prop);
 err_dfs:
 	D_FREE(dfs);
 	return rc;
@@ -1161,8 +1264,37 @@ dfs_umount(dfs_t *dfs)
 	daos_obj_close(dfs->root.oh, NULL);
 	daos_obj_close(dfs->super_oh, NULL);
 
+	if (dfs->prefix)
+		D_FREE(dfs->prefix);
+
 	D_MUTEX_DESTROY(&dfs->lock);
 	D_FREE(dfs);
+
+	return 0;
+}
+
+int
+dfs_set_prefix(dfs_t *dfs, const char *prefix)
+{
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+
+	if (prefix == NULL) {
+		if (dfs->prefix)
+			D_FREE(dfs->prefix);
+		return 0;
+	}
+
+	if (prefix[0] != '/' || strnlen(prefix, PATH_MAX) > PATH_MAX-1)
+		return EINVAL;
+
+	dfs->prefix = strndup(prefix, PATH_MAX-1);
+	if (dfs->prefix == NULL)
+		return ENOMEM;
+
+	dfs->prefix_len = strlen(dfs->prefix);
+	if (dfs->prefix[dfs->prefix_len-1] == '/')
+		dfs->prefix_len--;
 
 	return 0;
 }
@@ -1176,6 +1308,25 @@ dfs_get_file_oh(dfs_obj_t *obj, daos_handle_t *oh)
 		return EINVAL;
 
 	oh->cookie = obj->oh.cookie;
+	return 0;
+}
+
+int
+dfs_get_chunk_size(dfs_obj_t *obj, daos_size_t *chunk_size)
+{
+	daos_size_t	cell_size;
+	int		rc;
+
+	if (obj == NULL || !S_ISREG(obj->mode))
+		return EINVAL;
+	if (chunk_size == NULL)
+		return EINVAL;
+
+	rc = daos_array_get_attr(obj->oh, chunk_size, &cell_size);
+	if (rc)
+		return daos_der2errno(rc);
+
+	D_ASSERT(cell_size == 1);
 	return 0;
 }
 
@@ -1387,6 +1538,16 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 		return EINVAL;
 	if (path == NULL || strnlen(path, PATH_MAX-1) > PATH_MAX-1)
 		return EINVAL;
+	if (path[0] != '/')
+		return EINVAL;
+
+	/** if we added a prefix, check and skip over it */
+	if (dfs->prefix) {
+		if (strncmp(dfs->prefix, path, dfs->prefix_len) != 0)
+			return EINVAL;
+
+		path += dfs->prefix_len;
+	}
 
 	daos_mode = get_daos_obj_mode(flags);
 	if (daos_mode == -1)
@@ -1458,8 +1619,8 @@ dfs_lookup_loop:
 
 			rc = daos_array_open_with_attr(dfs->coh, entry.oid,
 				DAOS_TX_NONE, daos_mode, 1, entry.chunk_size ?
-				entry.chunk_size : dfs->chunk_size, &obj->oh,
-				NULL);
+				entry.chunk_size : dfs->attr.da_chunk_size,
+				&obj->oh, NULL);
 			if (rc != 0) {
 				D_ERROR("daos_array_open() Failed (%d)\n", rc);
 				D_GOTO(err_obj, rc = daos_der2errno(rc));
@@ -1772,7 +1933,8 @@ dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 	if (S_ISREG(entry.mode)) {
 		rc = daos_array_open_with_attr(dfs->coh, entry.oid,
 			DAOS_TX_NONE, daos_mode, 1, entry.chunk_size ?
-			entry.chunk_size : dfs->chunk_size, &obj->oh, NULL);
+			entry.chunk_size : dfs->attr.da_chunk_size, &obj->oh,
+			NULL);
 		if (rc != 0) {
 			D_ERROR("daos_array_open_with_attr() Failed (%d)\n",
 				rc);
@@ -2003,9 +2165,175 @@ dfs_release(dfs_obj_t *obj)
 	return 0;
 }
 
+struct dfs_read_params {
+	dfs_t			*dfs;
+	dfs_obj_t		*obj;
+	d_sg_list_t		*sgl;
+	daos_size_t		*read_size;
+	daos_off_t		off;
+	daos_size_t		array_size;
+	daos_size_t		buf_size;
+	daos_array_iod_t	iod;
+	daos_range_t		rg;
+};
+
 static int
-io_internal(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t sgl, daos_off_t off,
-	    int flag)
+read_cb(tse_task_t *task, void *data)
+{
+	struct dfs_read_params	*params;
+	daos_array_io_t		*read_args;
+	d_sg_list_t		*sgl;
+	daos_size_t		max_read;
+	daos_size_t		bytes_to_read, rem;
+	int			i;
+	int			rc = task->dt_result;
+
+	if (rc != 0) {
+		D_ERROR("Failed to get array size (%d)\n", rc);
+		return rc;
+	}
+
+	params = daos_task_get_priv(task);
+	D_ASSERT(params != NULL);
+
+	if (params->off >= params->array_size) {
+		*params->read_size = 0;
+		tse_task_complete(task, 0);
+		return 0;
+	}
+
+	/* Update SGL in case we try to read beyond eof to not do that */
+	sgl = params->sgl;
+	max_read = params->array_size - params->off;
+	bytes_to_read = 0;
+	for (i = 0; i < sgl->sg_nr; i++) {
+		if (bytes_to_read + sgl->sg_iovs[i].iov_len <= max_read) {
+			bytes_to_read += sgl->sg_iovs[i].iov_len;
+		} else {
+			rem = max_read - bytes_to_read;
+			if (rem) {
+				bytes_to_read += rem;
+				sgl->sg_iovs[i].iov_len = rem;
+				i++;
+				break;
+			}
+		}
+	}
+	sgl->sg_nr = i;
+
+	/** set array location */
+	params->iod.arr_nr = 1;
+	params->rg.rg_len = bytes_to_read;
+	params->rg.rg_idx = params->off;
+	params->iod.arr_rgs = &params->rg;
+	*params->read_size = bytes_to_read;
+
+	read_args = daos_task_get_args(task);
+	read_args->oh		= params->obj->oh;
+	read_args->th		= DAOS_TX_NONE;
+	read_args->iod		= &params->iod;
+	read_args->sgl		= sgl;
+	read_args->csums	= NULL;
+
+	return 0;
+}
+
+int
+dfs_read_int(tse_task_t *task)
+{
+	struct dfs_read_params	*params = daos_task_get_args(task);
+	tse_task_t		*size_task = NULL, *read_task = NULL;
+	daos_array_get_size_t	*size_args;
+	int			rc;
+
+	/** Create task to read from array */
+	rc = daos_task_create(DAOS_OPC_ARRAY_READ,
+			      tse_task2sched(task), 0, NULL, &read_task);
+	if (rc != 0)
+		D_GOTO(err, rc);
+
+	rc = daos_task_create(DAOS_OPC_ARRAY_GET_SIZE,
+			      tse_task2sched(task), 0, NULL, &size_task);
+	if (rc)
+		D_GOTO(err_rtask, rc);
+
+	size_args = daos_task_get_args(size_task);
+	size_args->oh	= params->obj->oh;
+	size_args->th	= DAOS_TX_NONE;
+	size_args->size	= &params->array_size;
+
+	daos_task_set_priv(read_task, params);
+	rc = tse_task_register_cbs(read_task, read_cb, NULL, 0, NULL, 0, 0);
+	if (rc)
+		D_GOTO(err_stask, rc);
+
+	rc = tse_task_register_deps(read_task, 1, &size_task);
+	if (rc)
+		D_GOTO(err_stask, rc);
+	rc = tse_task_register_deps(task, 1, &read_task);
+	if (rc != 0)
+		D_GOTO(err_stask, rc);
+
+	tse_task_schedule(size_task, false);
+	tse_task_schedule(read_task, false);
+	tse_sched_progress(tse_task2sched(task));
+	return rc;
+
+err_stask:
+	tse_task_complete(size_task, rc);
+err_rtask:
+	tse_task_complete(read_task, rc);
+err:
+	tse_task_complete(task, rc);
+	return rc;
+}
+
+int
+dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
+	 daos_size_t *read_size, daos_event_t *ev)
+{
+	struct dfs_read_params	*args;
+	tse_task_t		*task;
+	daos_size_t		buf_size;
+	int			i, rc;
+
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (obj == NULL || !S_ISREG(obj->mode))
+		return EINVAL;
+
+	buf_size = 0;
+	for (i = 0; i < sgl->sg_nr; i++)
+		buf_size += sgl->sg_iovs[i].iov_len;
+	if (buf_size == 0) {
+		*read_size = 0;
+		if (ev) {
+			daos_event_launch(ev);
+			daos_event_complete(ev, 0);
+		}
+		return 0;
+	}
+
+	D_DEBUG(DB_TRACE, "DFS Read: Off %"PRIu64", Len %zu\n", off, buf_size);
+
+	rc = dc_task_create(dfs_read_int, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->dfs	= dfs;
+	args->obj	= obj;
+	args->sgl	= sgl;
+	args->off	= off;
+	args->read_size	= read_size;
+	args->buf_size	= buf_size;
+
+	return dc_task_schedule(task, true);
+}
+
+int
+dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
+	  daos_event_t *ev)
 {
 	daos_array_iod_t	iod;
 	daos_range_t		rg;
@@ -2013,92 +2341,6 @@ io_internal(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t sgl, daos_off_t off,
 	int			i;
 	int			rc;
 
-	buf_size = 0;
-	for (i = 0; i < sgl.sg_nr; i++)
-		buf_size += sgl.sg_iovs[i].iov_len;
-
-	/** set array location */
-	iod.arr_nr = 1;
-	rg.rg_len = buf_size;
-	rg.rg_idx = off;
-	iod.arr_rgs = &rg;
-
-	D_DEBUG(DB_TRACE, "IO OP %d, Off %"PRIu64", Len %zu\n",
-		flag, off, buf_size);
-
-	if (flag == DFS_WRITE) {
-		rc = daos_array_write(obj->oh, DAOS_TX_NONE, &iod, &sgl,
-				      NULL, NULL);
-		if (rc)
-			D_ERROR("daos_array_write() failed (%d)\n", rc);
-	} else if (flag == DFS_READ) {
-		rc = daos_array_read(obj->oh, DAOS_TX_NONE, &iod, &sgl, NULL,
-				     NULL);
-		if (rc)
-			D_ERROR("daos_array_write() failed (%d)\n", rc);
-	} else {
-		rc = -DER_INVAL;
-	}
-
-	return daos_der2errno(rc);
-}
-
-int
-dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t sgl, daos_off_t off,
-	 daos_size_t *read_size)
-{
-	daos_size_t	array_size, max_read;
-	daos_size_t	bytes_to_read, rem;
-	int		i;
-	int		rc;
-
-	if (dfs == NULL || !dfs->mounted)
-		return EINVAL;
-	if (obj == NULL || !S_ISREG(obj->mode))
-		return EINVAL;
-
-	rc = daos_array_get_size(obj->oh, DAOS_TX_NONE, &array_size, NULL);
-	if (rc) {
-		D_ERROR("daos_array_get_size() failed (%d)\n", rc);
-		return daos_der2errno(rc);
-	}
-
-	if (off >= array_size) {
-		*read_size = 0;
-		return 0;
-	}
-
-	/* Update SGL in case we try to read beyond eof to not do that */
-	max_read = array_size - off;
-	bytes_to_read = 0;
-	for (i = 0; i < sgl.sg_nr; i++) {
-		if (bytes_to_read + sgl.sg_iovs[i].iov_len <= max_read) {
-			bytes_to_read += sgl.sg_iovs[i].iov_len;
-		} else {
-			rem = max_read - bytes_to_read;
-			if (rem) {
-				bytes_to_read += rem;
-				sgl.sg_iovs[i].iov_len = rem;
-				i++;
-				break;
-			}
-		}
-	}
-	sgl.sg_nr = i;
-
-	rc = io_internal(dfs, obj, sgl, off, DFS_READ);
-	if (rc) {
-		D_ERROR("daos_array_read() failed (%d)\n", rc);
-		return rc;
-	}
-
-	*read_size = bytes_to_read;
-	return 0;
-}
-
-int
-dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t sgl, daos_off_t off)
-{
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
 	if (dfs->amode != O_RDWR)
@@ -2106,7 +2348,30 @@ dfs_write(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t sgl, daos_off_t off)
 	if (obj == NULL || !S_ISREG(obj->mode))
 		return EINVAL;
 
-	return io_internal(dfs, obj, sgl, off, DFS_WRITE);
+	buf_size = 0;
+	for (i = 0; i < sgl->sg_nr; i++)
+		buf_size += sgl->sg_iovs[i].iov_len;
+	if (buf_size == 0) {
+		if (ev) {
+			daos_event_launch(ev);
+			daos_event_complete(ev, 0);
+		}
+		return 0;
+	}
+
+	/** set array location */
+	iod.arr_nr = 1;
+	rg.rg_len = buf_size;
+	rg.rg_idx = off;
+	iod.arr_rgs = &rg;
+
+	D_DEBUG(DB_TRACE, "DFS Write: Off %"PRIu64", Len %zu\n", off, buf_size);
+
+	rc = daos_array_write(obj->oh, DAOS_TX_NONE, &iod, sgl, NULL, ev);
+	if (rc)
+		D_ERROR("daos_array_write() failed (%d)\n", rc);
+
+	return daos_der2errno(rc);
 }
 
 int
@@ -2143,8 +2408,8 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf)
 
 	if (name == NULL) {
 		if (strcmp(parent->name, "/") != 0) {
-			D_ERROR("Invalid path %s and entry name %s)\n",
-				parent->name, name);
+			D_ERROR("Invalid path %s and entry name is NULL)\n",
+				parent->name);
 			return EINVAL;
 		}
 		name = parent->name;
@@ -2202,8 +2467,8 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 		return ENOTDIR;
 	if (name == NULL) {
 		if (strcmp(parent->name, "/") != 0) {
-			D_ERROR("Invalid path %s and entry name %s\n",
-				parent->name, name);
+			D_ERROR("Invalid path %s and entry name is NULL\n",
+				parent->name);
 			return EINVAL;
 		}
 		name = parent->name;
@@ -2275,8 +2540,8 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 		return ENOTDIR;
 	if (name == NULL) {
 		if (strcmp(parent->name, "/") != 0) {
-			D_ERROR("Invalid path %s and entry name %s)\n",
-				parent->name, name);
+			D_ERROR("Invalid path %s and entry name is NULL)\n",
+				parent->name);
 			return EINVAL;
 		}
 		name = parent->name;
@@ -3175,7 +3440,6 @@ dfs_mount_root_cont(daos_handle_t poh, dfs_t **dfs)
 	uuid_t			co_uuid;
 	daos_cont_info_t	co_info;
 	daos_handle_t		coh;
-	bool			cont_created = false;
 	int			rc;
 
 	/** Use special UUID for root container */
@@ -3187,33 +3451,21 @@ dfs_mount_root_cont(daos_handle_t poh, dfs_t **dfs)
 
 	/** Try to open the DAOS container first (the mountpoint) */
 	rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info, NULL);
+	if (rc == 0) {
+		rc = dfs_mount(poh, coh, O_RDWR, dfs);
+		if (rc)
+			D_ERROR("dfs_mount failed (%d)\n", rc);
+		return rc;
+	}
 	/* If NOEXIST we create it */
 	if (rc == -DER_NONEXIST) {
-		rc = daos_cont_create(poh, co_uuid, NULL, NULL);
-		if (rc == 0) {
-			cont_created = true;
-			rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh,
-					    &co_info, NULL);
-		}
-	}
-	if (rc) {
-		fprintf(stderr, "Failed to create/open container (%d)\n", rc);
-		D_GOTO(out_del, rc = daos_der2errno(rc));
+		rc = dfs_cont_create(poh, co_uuid, NULL, &coh, dfs);
+		if (rc)
+			D_ERROR("dfs_cont_create failed (%d)\n", rc);
+		return rc;
 	}
 
-	rc = dfs_mount(poh, coh, O_RDWR, dfs);
-	if (rc) {
-		fprintf(stderr, "dfs_mount failed (%d)\n", rc);
-		D_GOTO(out_cont, rc);
-	}
-
-	return 0;
-
-out_cont:
-	daos_cont_close(coh, NULL);
-out_del:
-	if (cont_created)
-		daos_cont_destroy(poh, co_uuid, 1, NULL);
+	/** COH is tracked in dfs and closed in dfs_umount_root_cont() */
 	return rc;
 }
 

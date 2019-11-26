@@ -21,8 +21,7 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 """
-from __future__ import print_function
-
+from logging import getLogger
 import time
 import os
 import signal
@@ -46,6 +45,7 @@ class BasicParameter(object):
         """
         self.value = value if value is not None else default
         self._default = default
+        self.log = getLogger(__name__)
 
     def __str__(self):
         """Convert this BasicParameter into a string.
@@ -64,7 +64,10 @@ class BasicParameter(object):
             test (Test): avocado Test object to use to read the yaml file
             path (str): yaml path where the name is to be found
         """
-        self.value = test.params.get(name, path, self._default)
+        if hasattr(test, "config") and test.config is not None:
+            self.value = test.config.get(name, path, self._default)
+        else:
+            self.value = test.params.get(name, path, self._default)
 
     def update(self, value, name=None):
         """Update the value of the parameter.
@@ -76,7 +79,7 @@ class BasicParameter(object):
         """
         self.value = value
         if name is not None:
-            print("Updated param {} => {}".format(name, self.value))
+            self.log.debug("Updated param %s => %s", name, self.value)
 
 
 class FormattedParameter(BasicParameter):
@@ -104,7 +107,10 @@ class FormattedParameter(BasicParameter):
         if isinstance(self._default, bool) and self.value:
             return self._str_format
         elif not isinstance(self._default, bool) and self.value is not None:
-            if isinstance(self.value, (list, tuple)):
+            if isinstance(self.value, dict):
+                return " ".join([self._str_format.format("{} \"{}\"".format(
+                    key, self.value[key])) for key in self.value])
+            elif isinstance(self.value, (list, tuple)):
                 return " ".join(
                     [self._str_format.format(value) for value in self.value])
             else:
@@ -123,6 +129,7 @@ class ObjectWithParameters(object):
             namespace (str): yaml namespace (path to parameters)
         """
         self.namespace = namespace
+        self.log = getLogger(__name__)
 
     def get_attribute_names(self, attr_type=None):
         """Get a sorted list of the names of the attr_type attributes.
@@ -142,6 +149,9 @@ class ObjectWithParameters(object):
 
     def get_param_names(self):
         """Get a sorted list of the names of the BasicParameter attributes.
+
+        Note: Override this method to change the order or inclusion of a
+            command parameter in the get_params() method.
 
         Returns:
             list: a list of class attribute names used to define parameters
@@ -196,7 +206,7 @@ class CommandWithParameters(ObjectWithParameters):
         # Join all the parameters that have been assigned a value with the
         # command to create the command string
         params = []
-        for name in self.get_param_names():
+        for name in self.get_str_param_names():
             value = str(getattr(self, name))
             if value != "":
                 params.append(value)
@@ -208,6 +218,16 @@ class CommandWithParameters(ObjectWithParameters):
 
         # Return the command and its parameters
         return " ".join(command_list + params)
+
+    def get_str_param_names(self):
+        """Get a sorted list of the names of the command attributes.
+
+        Returns:
+            list: a list of class attribute names used to define parameters
+                for the command.
+
+        """
+        return self.get_param_names()
 
 
 class ExecutableCommand(CommandWithParameters):
@@ -234,6 +254,11 @@ class ExecutableCommand(CommandWithParameters):
         self.env = None
         self.sudo = False
 
+    @property
+    def process(self):
+        """Getter for process attribute of the ExecutableCommand class."""
+        return self._process
+
     def run(self):
         """Run the command.
 
@@ -243,8 +268,8 @@ class ExecutableCommand(CommandWithParameters):
         """
         if self.run_as_subprocess:
             self._run_subprocess()
-        else:
-            self._run_process()
+            return None
+        return self._run_process()
 
     def _run_process(self):
         """Run the command as a foreground process.
@@ -265,12 +290,12 @@ class ExecutableCommand(CommandWithParameters):
         }
         try:
             # Block until the command is complete or times out
-            process.run(**kwargs)
+            return process.run(**kwargs)
 
         except process.CmdError as error:
             # Command failed or possibly timed out
             msg = "Error occurred running '{}': {}".format(command, error)
-            print(msg)
+            self.log.error(msg)
             raise CommandFailure(msg)
 
     def _run_subprocess(self):
@@ -297,27 +322,27 @@ class ExecutableCommand(CommandWithParameters):
             # check_subprocess_status() method.
             if not self.check_subprocess_status(self._process):
                 msg = "Command '{}' did not launch correctly".format(self)
-                print(msg)
+                self.log.error(msg)
                 raise CommandFailure(msg)
         else:
-            print("Process is already running")
+            self.log.info("Process is already running")
 
-    def check_subprocess_status(self, subprocess):
+    def check_subprocess_status(self, sub_process):
         """Verify command status when called in a subprocess.
 
         Optional method to provide a means for detecting successful command
         execution when running the command as a subprocess.
 
         Args:
-            subprocess (process.SubProcess): subprocess used to run the command
+            sub_process (process.SubProcess): subprocess used to run the command
 
         Returns:
             bool: whether or not the command progress has been detected
 
         """
-        print(
-            "Checking status of the {} command in {}".format(
-                self._command, subprocess))
+        self.log.info(
+            "Checking status of the %s command in %s",
+            self._command, sub_process)
         return True
 
     def stop(self):
@@ -339,6 +364,9 @@ class ExecutableCommand(CommandWithParameters):
                 signal.SIGQUIT, None,
                 signal.SIGKILL]
 
+            # Turn off verbosity to keep the logs clean as the server stops
+            self._process.verbose = False
+
             # Keep sending signals and or waiting while the process is alive
             while self._process.poll() is None and signal_list:
                 signal_type = signal_list.pop(0)
@@ -350,6 +378,60 @@ class ExecutableCommand(CommandWithParameters):
                 # Indicate an error if the process required a SIGKILL
                 raise CommandFailure("Error stopping '{}'".format(self))
             self._process = None
+
+
+class DaosCommand(ExecutableCommand):
+    """A class for similar daos command line tools."""
+
+    def __init__(self, namespace, command, path=""):
+        """Create DaosCommand object.
+
+        Specific type of command object built so command str returns:
+            <command> <options> <request> <action/subcommand> <options>
+
+        Args:
+            namespace (str): yaml namespace (path to parameters)
+            command (str): string of the command to be executed.
+            path (str): path to location of daos command binary.
+        """
+        super(DaosCommand, self).__init__(namespace, command, path)
+        self.request = BasicParameter(None)
+        self.action = BasicParameter(None)
+        self.action_command = None
+
+    def get_action_command(self):
+        """Assign a command object for the specified request and action."""
+        self.action_command = None
+
+    def get_param_names(self):
+        """Get a sorted list of DaosCommand parameter names."""
+        names = self.get_attribute_names(FormattedParameter)
+        names.extend(["request", "action"])
+        return names
+
+    def get_params(self, test):
+        """Get values for all of the command params from the yaml file.
+
+        Args:
+            test (Test): avocado Test object
+        """
+        super(DaosCommand, self).get_params(test)
+        self.get_action_command()
+        if isinstance(self.action_command, ObjectWithParameters):
+            self.action_command.get_params(test)
+
+    def get_str_param_names(self):
+        """Get a sorted list of the names of the command attributes.
+
+        Returns:
+            list: a list of class attribute names used to define parameters
+                for the command.
+
+        """
+        names = self.get_param_names()
+        if self.action_command is not None:
+            names[-1] = "action_command"
+        return names
 
 
 class EnvironmentVariables(dict):
@@ -404,9 +486,11 @@ class JobManager(ExecutableCommand):
             str: the command with all the defined parameters
 
         """
-        # Join the job manager command with the command to manage
-        job_manager_command = super(JobManager, self).__str__()
-        return "{} {}".format(job_manager_command, self.job)
+        commands = [super(JobManager, self).__str__(), str(self.job)]
+        if self.job.sudo:
+            commands.insert(-1, "sudo -n")
+
+        return " ".join(commands)
 
     def check_subprocess_status(self, subprocess):
         """Verify command status when called in a subprocess.
@@ -449,12 +533,14 @@ class Orterun(JobManager):
             "/run/orterun", "orterun", job, path, subprocess)
 
         self.hostfile = FormattedParameter("--hostfile {}", None)
-        self.processes = FormattedParameter("-np {}", 1)
-        self.display_map = FormattedParameter("--display-map", True)
+        self.processes = FormattedParameter("--np {}", 1)
+        self.display_map = FormattedParameter("--display-map", False)
         self.map_by = FormattedParameter("--map-by {}", "node")
         self.export = FormattedParameter("-x {}", None)
         self.enable_recovery = FormattedParameter("--enable-recovery", True)
         self.report_uri = FormattedParameter("--report-uri {}", None)
+        self.allow_run_as_root = FormattedParameter("--allow-run-as-root", None)
+        self.mca = FormattedParameter("--mca {}", None)
 
     def setup_command(self, env, hostfile, processes):
         """Set up the orterun command with common inputs.

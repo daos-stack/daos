@@ -23,58 +23,48 @@
 
 package main
 
-// #cgo CFLAGS: -I${SRCDIR}/../../../include
-// #include <daos/drpc_modules.h>
-import "C"
-
 import (
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
-	log "github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
-)
-
-const (
-	mgmtModuleID  = C.DRPC_MODULE_MGMT
-	getAttachInfo = C.DRPC_METHOD_MGMT_GET_ATTACH_INFO
 )
 
 // mgmtModule represents the daos_agent dRPC module. It acts mostly as a
 // Management Service proxy, handling dRPCs sent by libdaos by forwarding them
 // to MS.
 type mgmtModule struct {
+	log logging.Logger
 	// The access point
 	ap   string
 	tcfg *security.TransportConfig
 }
 
-func (mod *mgmtModule) HandleCall(cli *drpc.Client, method int32, req []byte) ([]byte, error) {
+func (mod *mgmtModule) HandleCall(session *drpc.Session, method int32, req []byte) ([]byte, error) {
 	switch method {
-	case getAttachInfo:
+	case drpc.MethodGetAttachInfo:
 		return mod.handleGetAttachInfo(req)
 	default:
 		return nil, errors.Errorf("unknown dRPC %d", method)
 	}
 }
 
-func (mod *mgmtModule) InitModule(state drpc.ModuleState) {}
-
 func (mod *mgmtModule) ID() int32 {
-	return mgmtModuleID
+	return drpc.ModuleMgmt
 }
 
 func (mod *mgmtModule) handleGetAttachInfo(reqb []byte) ([]byte, error) {
-	req := &pb.GetAttachInfoReq{}
+	req := &mgmtpb.GetAttachInfoReq{}
 	if err := proto.Unmarshal(reqb, req); err != nil {
 		return nil, errors.Wrap(err, "unmarshal GetAttachInfo request")
 	}
 
-	log.Debugf("GetAttachInfo %s %v", mod.ap, *req)
+	mod.log.Debugf("GetAttachInfo %s %v", mod.ap, *req)
 
 	dialOpt, err := security.DialOptionForTransportConfig(mod.tcfg)
 	if err != nil {
@@ -88,17 +78,17 @@ func (mod *mgmtModule) handleGetAttachInfo(reqb []byte) ([]byte, error) {
 	}
 	defer conn.Close()
 
-	client := pb.NewMgmtSvcClient(conn)
+	client := mgmtpb.NewMgmtSvcClient(conn)
 
 	resp, err := client.GetAttachInfo(context.Background(), req)
 	if err != nil {
 		return nil, errors.Wrapf(err, "GetAttachInfo %s %v", mod.ap, *req)
 	}
 
-	respb, err := proto.Marshal(resp)
+	resmgmtpb, err := proto.Marshal(resp)
 	if err != nil {
 		return nil, errors.Wrap(err, "marshal GetAttachInfo response")
 	}
 
-	return respb, nil
+	return resmgmtpb, nil
 }

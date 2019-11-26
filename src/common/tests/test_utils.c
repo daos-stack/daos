@@ -37,11 +37,15 @@ new_drpc_with_fd(int fd)
 	D_ALLOC_PTR(ctx->comm);
 
 	ctx->comm->fd = fd;
+	ctx->comm->flags = R_SYNC;
 
+	ctx->sequence = 1;
 	ctx->handler = mock_drpc_handler;
+	ctx->ref_count = 1;
 
 	return ctx;
 }
+
 
 void
 free_drpc(struct drpc *ctx)
@@ -96,4 +100,18 @@ new_drpc_response(void)
 	resp->status = DRPC__STATUS__FAILURE;
 
 	return resp;
+}
+
+void
+mock_valid_drpc_resp_in_recvmsg(Drpc__Status status)
+{
+	Drpc__Response *resp = new_drpc_response();
+
+	resp->status = status;
+
+	/* Mock a valid DRPC response coming in */
+	recvmsg_return = drpc__response__get_packed_size(resp);
+	drpc__response__pack(resp, recvmsg_msg_content);
+
+	drpc__response__free_unpacked(resp, NULL);
 }

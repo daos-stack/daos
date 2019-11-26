@@ -217,6 +217,7 @@
 #
 #  fabric_iface: qib0
 #  fabric_iface_port: 20000
+#  pinned_numa_node: 0
 #
 #  # Force specific debug mask (D_LOG_MASK) at start up time.
 #  # By default, just use the default debug mask used by DAOS.
@@ -310,6 +311,7 @@
 #
 #  fabric_iface: qib0
 #  fabric_iface_port: 20000
+#  pinned_numa_node: 1
 #
 #  # Force specific debug mask (D_LOG_MASK) at start up time.
 #  # By default, just use the default debug mask used by DAOS.

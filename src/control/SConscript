@@ -1,6 +1,7 @@
 #!/bin/env python
 """Build DAOS Control Plane"""
 #pylint: disable=too-many-locals
+from __future__ import print_function
 import os
 from os.path import join, isdir
 
@@ -78,28 +79,21 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
 
     denv = env.Clone()
-    prereqs.require(denv, 'spdk')
 
     # if SPDK_PREFIX differs from PREFIX, copy dir so files can be accessed at
     # runtime
-    if denv.subst("$SPDK_PREFIX") != "/usr":
-        if denv.subst("$SPDK_PREFIX") != denv.subst("$PREFIX"):
-            for subdir in ["scripts", "fio_plugin"]:
-                sharedir = join("share", "spdk", subdir)
-                tpath = join(denv.subst("$PREFIX"), sharedir)
-                if not check_dir_exists(tpath):
-                    denv.Command(
-                        tpath,
-                        join(denv.subst("$SPDK_PREFIX"), sharedir),
-                        Copy("$TARGET", "$SOURCE"))
-        tpath = join(denv.subst("$PREFIX"), "include")
-        if not check_dir_exists(tpath):
-            denv.Command(
-                tpath,
-                join(denv.subst("$SPDK_PREFIX"), "include"),
-                Copy("$TARGET", "$SOURCE"))
+    prefix = denv.subst("$PREFIX")
+    sprefix = denv.subst("$SPDK_PREFIX")
+    if sprefix not in ["/usr", prefix]:
+        for _dir in [join("share", "spdk", "scripts"), join("include", "spdk")]:
+            target = join(prefix, _dir)
+            if not check_dir_exists(target):
+                os.makedirs(target)
+                denv.Command(target, join(sprefix, _dir), Copy("$TARGET",
+                                                               "$SOURCE"))
 
-    def CheckGoVersion(context):
+    def check_go_version(context):
+        """Check GO Version"""
         context.Display('Checking for Go compiler in $PATH... ')
         go_path = context.env.WhereIs(GO_COMPILER)
         if go_path:
@@ -119,17 +113,20 @@ def scons():
         if len([x for x, y in
                 zip(go_version.split('.'), MIN_GO_VERSION.split('.'))
                 if int(x) < int(y)]) > 0:
-            context.Result('%s is too old (min supported: %s) ' % (go_version, MIN_GO_VERSION))
+            context.Result('%s is too old (min supported: %s) '
+                           % (go_version, MIN_GO_VERSION))
             return 0
         else:
             context.Result('%s' % go_version)
             return 1
 
-    conf = Configure(denv, custom_tests={'CheckGoVersion': CheckGoVersion})
+    conf = Configure(denv, custom_tests={'CheckGoVersion': check_go_version})
+    # pylint: disable=no-member
     if not conf.CheckGoVersion():
-        print 'no usable Go compiler found (yum install golang?)'
+        print('no usable Go compiler found (yum install golang?)')
         exit(1)
     denv = conf.Finish()
+    # pylint: enable=no-member
 
     # GOPATH for SCons builds in the build directory
     gopath = Dir('.').abspath
@@ -141,53 +138,74 @@ def scons():
     denv['ENV']['GOBIN'] = join(gopath, "bin")
 
     install_go_bin(denv, gosrc, gopath, None, "agent", "daos_agent")
+    install_go_bin(denv, gosrc, gopath, None, "dmg", "dmg")
+    install_go_bin(denv, gosrc, gopath, None, "daos_admin", "daos_admin")
+    install_go_bin(denv, gosrc, gopath, None, "drpc_test", "hello_drpc")
+
+    agentbin = get_bin_path(gopath, "agent")
+    dmgbin = get_bin_path(gopath, "dmg")
+    adminbin = get_bin_path(gopath, "daos_admin")
+    drpcbin = get_bin_path(gopath, "drpc_test")
+    AlwaysBuild([agentbin, dmgbin, adminbin, drpcbin])
+
+    senv = denv.Clone()
+    prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
 
     gospdkpath = join(gosrc, "lib", "spdk")
 
     # CGO prerequisite libs for go-spdk bindings
-    denv.AppendUnique(CPPPATH=[join(gospdkpath, "include")])
+    senv.AppendUnique(CPPPATH=[join(gospdkpath, "include")])
+
+    # Link to DPDK static libs
+    senv.AppendUnique(LINKFLAGS=['-Wl,--whole-archive', \
+                      '-lrte_mempool', '-lrte_mempool_ring', '-lrte_bus_pci', \
+                      '-lrte_pci', '-lrte_ring', '-lrte_mbuf', '-lrte_eal', \
+                      '-lrte_kvargs', \
+                      '-Wl,--no-whole-archive'])
+
     # hack to avoid building this library with cov compiler for the moment
-    compiler = denv.get('COMPILER').lower()
+    compiler = senv.get('COMPILER').lower()
     if compiler == "covc":
         compiler = "gcc"
 
-    nvmecontrol = denv.StaticLibrary(
+    nvmecontrol = senv.StaticLibrary(
         "nvme_control",
         join(gospdkpath, "src", "nvme_control.c"),
-        CC=compiler, LIBS=['spdk'])
+        CC=compiler, LIBS=['spdk', 'spdk_env_dpdk', 'numa'])
 
-    denv.Install(join(denv.subst("$PREFIX"), "lib"), nvmecontrol)
+    senv.Install(join(senv.subst("$PREFIX"), "lib64"), nvmecontrol)
 
     # CGO shell env vars.
-    denv.AppendENVPath(
+
+    # explicitly link RTE & SPDK libs
+    senv.AppendENVPath(
         "CGO_LDFLAGS",
-        denv.subst("-L%s -L$SPDK_PREFIX/lib $_RPATH" % gopath))
-    denv.AppendENVPath(
+        senv.subst("-L%s -L$SPDK_PREFIX/lib -L$HWLOC_PREFIX/lib"
+                   " -L$OFI_PREFIX/lib -L$ISAL_PREFIX/lib $_RPATH" % gopath) + \
+                   " -lspdk_env_dpdk -lspdk_thread -lspdk_bdev -lspdk_copy" + \
+                   " -lrte_mempool  -lrte_mempool_ring -lrte_bus_pci" + \
+                   " -lrte_pci -lrte_ring -lrte_mbuf -lrte_eal -lrte_kvargs" + \
+                   " -lspdk_bdev_aio -lspdk_bdev_nvme -lspdk_bdev_malloc" + \
+                   " -lspdk_conf -lspdk_blob -lspdk_nvme -lspdk_util" + \
+                   " -lspdk_json -lspdk_jsonrpc -lspdk_rpc -lspdk_trace" + \
+                   " -lspdk_sock -lspdk_log -lspdk_notify -lspdk_blob_bdev " + \
+                   " -lnuma -ldl -lisal")
+
+    senv.AppendENVPath(
         "CGO_CFLAGS",
-        denv.subst("-I$SPDK_PREFIX/include"))
+        senv.subst("-I$SPDK_PREFIX/include -I$HWLOC_PREFIX/include"
+                   " -I$OFI_PREFIX/include"))
 
-    # copy server init files to be used at runtime, explicitly
-    # remove first because recursive Delete() on dir fails.
-    moduleserver = join(gosrc, "server")
-    for fname in ["mgmtinit_db.json", "setup_spdk.sh"]:
-        denv.Command(
-            join("$PREFIX", "share", "daos", "control", fname),
-            join(moduleserver, "init", fname),
-            [
-                Delete("$TARGET"),
-                Copy("$TARGET", "$SOURCE")
-            ])
+    # copy setup_spdk.sh script to be executed at daos_server runtime
+    senv.Command(join("$PREFIX", "share", "daos", "control", "setup_spdk.sh"),
+                 join(gosrc, "server", "init", "setup_spdk.sh"),
+                 [Delete("$TARGET"), Copy("$TARGET", "$SOURCE")])
 
-    install_go_bin(denv, gosrc, gopath, [nvmecontrol], "daos_server",
+    install_go_bin(senv, gosrc, gopath, [nvmecontrol], "daos_server",
                    "daos_server")
-    install_go_bin(denv, gosrc, gopath, None, "dmg", "daos_shell")
-    install_go_bin(denv, gosrc, gopath, None, "drpc_test", "hello_drpc")
 
-    agentbin = get_bin_path(gopath, "agent")
     serverbin = get_bin_path(gopath, "daos_server")
-    shellbin = get_bin_path(gopath, "dmg")
-    drpcbin = get_bin_path(gopath, "drpc_test")
-    AlwaysBuild([agentbin, serverbin, shellbin, drpcbin])
+    AlwaysBuild([serverbin,])
 
 if __name__ == "SCons.Script":
     scons()

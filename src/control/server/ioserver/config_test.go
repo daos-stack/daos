@@ -89,6 +89,7 @@ func TestMergeEnvVars(t *testing.T) {
 }
 
 func TestConstructedConfig(t *testing.T) {
+	var numaNode uint = 8
 	goldenPath := "testdata/full.golden"
 
 	// just set all values regardless of validity
@@ -113,7 +114,8 @@ func TestConstructedConfig(t *testing.T) {
 		WithEnvVars("FOO=BAR", "BAZ=QUX").
 		WithServiceThreadCore(8).
 		WithTargetCount(12).
-		WithHelperStreamCount(1)
+		WithHelperStreamCount(1).
+		WithPinnedNumaNode(&numaNode)
 
 	if *update {
 		outFile, err := os.Create(goldenPath)
@@ -162,21 +164,23 @@ func TestConfigValidation(t *testing.T) {
 
 func TestConfigToCmdVals(t *testing.T) {
 	var (
-		mountPoint    = "/mnt/test"
-		provider      = "test+foo"
-		interfaceName = "qib0"
-		modules       = "foo,bar,baz"
-		systemName    = "test-system"
-		socketDir     = "/var/run/foo"
-		attachInfo    = "/tmp/attach"
-		logMask       = "LOG_MASK_VALUE"
-		logFile       = "/path/to/log"
-		cfgPath       = "/path/to/nvme.conf"
-		shmId         = 42
-		interfacePort = 20
-		targetCount   = 4
-		helperCount   = 1
-		serviceCore   = 8
+		mountPoint     = "/mnt/test"
+		provider       = "test+foo"
+		interfaceName  = "qib0"
+		modules        = "foo,bar,baz"
+		systemName     = "test-system"
+		socketDir      = "/var/run/foo"
+		attachInfo     = "/tmp/attach"
+		logMask        = "LOG_MASK_VALUE"
+		logFile        = "/path/to/log"
+		cfgPath        = "/path/to/nvme.conf"
+		shmId          = 42
+		interfacePort  = 20
+		targetCount    = 4
+		helperCount    = 1
+		serviceCore    = 8
+		index          = 2
+		pinnedNumaNode = uint(1)
 	)
 	cfg := NewConfig().
 		WithScmMountPoint(mountPoint).
@@ -186,6 +190,7 @@ func TestConfigToCmdVals(t *testing.T) {
 		WithFabricProvider(provider).
 		WithFabricInterface(interfaceName).
 		WithFabricInterfacePort(interfacePort).
+		WithPinnedNumaNode(&pinnedNumaNode).
 		WithModules(modules).
 		WithSocketDir(socketDir).
 		WithAttachInfoPath(attachInfo).
@@ -194,6 +199,8 @@ func TestConfigToCmdVals(t *testing.T) {
 		WithShmID(shmId).
 		WithBdevConfigPath(cfgPath).
 		WithSystemName(systemName)
+
+	cfg.Index = uint32(index)
 
 	wantArgs := []string{
 		"-x", strconv.Itoa(helperCount),
@@ -206,6 +213,8 @@ func TestConfigToCmdVals(t *testing.T) {
 		"-d", socketDir,
 		"-i", strconv.Itoa(shmId),
 		"-n", cfgPath,
+		"-I", strconv.Itoa(index),
+		"-p", strconv.FormatUint(uint64(pinnedNumaNode), 10),
 	}
 	wantEnv := []string{
 		"OFI_INTERFACE=" + interfaceName,

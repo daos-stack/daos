@@ -28,58 +28,30 @@ import (
 	"strings"
 	"testing"
 
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/client"
 )
 
 func TestStorageCommands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
 		{
-			// FIXME: This arguably should result in an error,
-			// but we can't see the io.EOF error because it's
-			// swallowed in getConsent()
-			"Format without force",
+			"Format without reformat",
 			"storage format",
-			"ConnectClients",
+			"ConnectClients StorageFormat-false",
 			nil,
 		},
 		{
-			"Format with force",
-			"storage format --force",
-			"ConnectClients StorageFormat",
-			nil,
-		},
-		{
-			"Update with missing arguments",
-			"storage fwupdate",
-			"",
-			errMissingFlag,
-		},
-		{
-			// Likewise here, this should probably result in a failure
-			"Update without force",
-			"storage fwupdate --nvme-model foo --nvme-fw-path bar --nvme-fw-rev 123",
-			"ConnectClients",
-			nil,
-		},
-		{
-			"Update with force",
-			"storage fwupdate --force --nvme-model foo --nvme-fw-path bar --nvme-fw-rev 123",
-			strings.Join([]string{
-				"ConnectClients",
-				fmt.Sprintf("StorageUpdate-%s", &pb.StorageUpdateReq{
-					Nvme: &pb.UpdateNvmeReq{
-						Model:    "foo",
-						Startrev: "123",
-						Path:     "bar",
-					},
-				}),
-			}, " "),
+			"Format with reformat",
+			"storage format --reformat",
+			"ConnectClients StorageFormat-true",
 			nil,
 		},
 		{
 			"Scan",
 			"storage scan",
-			"ConnectClients StorageScan",
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("StorageScan-%+v", &client.StorageScanReq{}),
+			}, " "),
 			nil,
 		},
 		{

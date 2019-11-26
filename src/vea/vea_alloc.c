@@ -387,7 +387,7 @@ persistent_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 	d_iov_set(&key_out, &blk_off, sizeof(blk_off));
 	d_iov_set(&val, &found, sizeof(found));
 
-	rc = dbtree_fetch(btr_hdl, opc, DAOS_INTENT_PUNCH, &key_in, &key_out,
+	rc = dbtree_fetch(btr_hdl, opc, DAOS_INTENT_DEFAULT, &key_in, &key_out,
 			  &val);
 	if (rc) {
 		D_ERROR("failed to find extent ["DF_U64", %u]\n",

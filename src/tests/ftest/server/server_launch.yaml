@@ -1,7 +1,0 @@
-files:
-      hostfile1: /mnt/shared/test/hostfile1
-      hostfile2: /mnt/shared/test/hostfile2
-      urifile: /mnt/shared/test/urifile
-tests:
-      hostname: localhost
-

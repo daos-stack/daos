@@ -17,7 +17,7 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
 
-    prereqs.require(denv, 'protobufc', 'argobots')
+    prereqs.require(denv, 'protobufc', 'argobots', 'hwloc')
 
     # Populate the object cache
     cache = {}
@@ -26,7 +26,7 @@ def scons():
 
     ds_sec = daos_build.library(denv, 'security',
                                 get_objects(cache, 'srv.c', 'srv_acl.c'))
-    denv.Install('$PREFIX/lib/daos_srv', ds_sec)
+    denv.Install('$PREFIX/lib64/daos_srv', ds_sec)
 
     # dc_security: Security Client
     dc_security_tgts = get_objects(cache, 'cli_security.c', 'auth.pb-c.c')

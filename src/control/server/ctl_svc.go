@@ -24,67 +24,32 @@
 package server
 
 import (
-	"encoding/json"
-	"io/ioutil"
-
 	"github.com/daos-stack/daos/src/control/common"
-	pb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
-var jsonDBRelPath = "share/daos/control/mgmtinit_db.json"
-
 // ControlService implements the control plane control service, satisfying
-// pb.MgmtCtlServer, and is the data container for the service.
+
+// ctlpb.MgmtCtlServer, and is the data container for the service.
 type ControlService struct {
 	StorageControlService
-	harness           *IOServerHarness
-	drpc              drpc.DomainSocketClient
-	supportedFeatures FeatureMap
+	harness    *IOServerHarness
+	membership *common.Membership
 }
 
-func NewControlService(l logging.Logger, h *IOServerHarness, cfg *Configuration) (*ControlService, error) {
+// NewControlService returns ControlService to be used as gRPC control service
+// datastore. Initialised with sensible defaults and provided components.
+func NewControlService(l logging.Logger, h *IOServerHarness, sp *scm.Provider, cfg *Configuration, m *common.Membership) (*ControlService, error) {
 	scs, err := DefaultStorageControlService(l, cfg)
 	if err != nil {
 		return nil, err
 	}
-
-	fMap, err := loadInitData(jsonDBRelPath)
-	if err != nil {
-		return nil, err
-	}
+	scs.scm = sp
 
 	return &ControlService{
 		StorageControlService: *scs,
 		harness:               h,
-		drpc:                  scs.drpc,
-		supportedFeatures:     fMap,
+		membership:            m,
 	}, nil
-}
-
-// loadInitData retrieves initial data from relative file path.
-func loadInitData(relPath string) (m FeatureMap, err error) {
-	absPath, err := common.GetAbsInstallPath(relPath)
-	if err != nil {
-		return
-	}
-
-	m = make(FeatureMap)
-
-	file, err := ioutil.ReadFile(absPath)
-	if err != nil {
-		return
-	}
-
-	var features []*pb.Feature
-	if err = json.Unmarshal(file, &features); err != nil {
-		return
-	}
-
-	for _, f := range features {
-		m[f.Fname.Name] = f
-	}
-
-	return
 }
