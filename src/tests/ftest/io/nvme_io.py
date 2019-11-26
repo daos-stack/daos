@@ -28,6 +28,7 @@ import avocado
 
 from pydaos.raw import DaosPool, DaosApiError
 from ior_test_base import IorTestBase
+from test_utils import TestPool
 
 
 class NvmeIo(IorTestBase):
@@ -53,12 +54,6 @@ class NvmeIo(IorTestBase):
 
         :avocado: tags=all,daosio,full_regression,hw,nvme_io
         """
-        # Pool params
-        pool_mode = self.params.get("mode", '/run/pool/createmode/*')
-        pool_uid = os.geteuid()
-        pool_gid = os.getegid()
-        pool_group = self.params.get("setname", '/run/pool/createset/*')
-        pool_svcn = self.params.get("svcn", '/run/pool/createsvc/')
 
         # Test params
         tests = self.params.get("ior_sequence", '/run/ior/*')
@@ -74,14 +69,20 @@ class NvmeIo(IorTestBase):
                     continue
 
                 # Create and connect to a pool
-                self.pool = DaosPool(self.context)
-                self.pool.create(
-                    pool_mode, pool_uid, pool_gid, ior_param[0], pool_group,
-                    svcn=pool_svcn, nvme_size=ior_param[1])
-                self.pool.connect(1 << 1)
+                self.pool = TestPool(self.context, self.log)
+                self.pool.get_params(self)
+                # update pool sizes
+                self.pool.scm_size.update(ior_param[0])
+                self.pool.nvme_size.update(ior_param[1])
+
+                # Create a pool
+                self.pool.create()
+
+                # get pool info
+                self.pool.get_info()
 
                 # Get the current pool sizes
-                size_before_ior = self.pool.pool_query()
+                size_before_ior = self.pool.info
 
                 # Run ior with the parameters specified for this pass
                 self.ior_cmd.transfer_size.update(ior_param[2])
@@ -93,11 +94,5 @@ class NvmeIo(IorTestBase):
                 # Verify IOR consumed the expected amount ofrom the pool
                 self.verify_pool_size(size_before_ior, ior_param[4])
 
-                try:
-                    if self.pool:
-                        self.pool.disconnect()
-                        self.pool.destroy(1)
-                except DaosApiError as error:
-                    self.log.error(
-                        "Pool disconnect/destroy error: %s", str(error))
-                    self.fail("Failed to Destroy/Disconnect the Pool")
+                # destroy pool
+                self.pool.destroy()
