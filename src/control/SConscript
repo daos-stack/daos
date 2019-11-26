@@ -148,36 +148,13 @@ def scons():
     drpcbin = get_bin_path(gopath, "drpc_test")
     AlwaysBuild([agentbin, dmgbin, adminbin, drpcbin])
 
+    nvmecontrol = SConscript('lib/spdk/SConscript')
+    denv.AppendUnique(LIBPATH=['lib/spdk'])
+
     senv = denv.Clone()
     prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
 
-    gospdkpath = join(gosrc, "lib", "spdk")
-
-    # CGO prerequisite libs for go-spdk bindings
-    senv.AppendUnique(CPPPATH=[join(gospdkpath, "include")])
-
-    # Link to DPDK static libs
-    senv.AppendUnique(LINKFLAGS=['-Wl,--whole-archive', \
-                      '-lrte_mempool', '-lrte_mempool_ring', '-lrte_bus_pci', \
-                      '-lrte_pci', '-lrte_ring', '-lrte_mbuf', '-lrte_eal', \
-                      '-lrte_kvargs', \
-                      '-Wl,--no-whole-archive'])
-
-    # hack to avoid building this library with cov compiler for the moment
-    compiler = senv.get('COMPILER').lower()
-    if compiler == "covc":
-        compiler = "gcc"
-
-    nvmecontrol = senv.StaticLibrary("nvme_control",
-                                     Glob(join(gospdkpath, "src", "*.c")),
-                                     CC=compiler,
-                                     LIBS=['spdk', 'spdk_env_dpdk', 'numa'])
-
-    senv.Install(join(senv.subst("$PREFIX"), "lib64"), nvmecontrol)
-
-    # CGO shell env vars.
-
-    # explicitly link RTE & SPDK libs
+    # Explicitly link RTE & SPDK libs for CGO access.
     senv.AppendENVPath("CGO_LDFLAGS",
         senv.subst("-L%s -L$SPDK_PREFIX/lib -L$HWLOC_PREFIX/lib "
                    "-L$OFI_PREFIX/lib -L$ISAL_PREFIX/lib $_RPATH" % gopath) + \
@@ -194,7 +171,7 @@ def scons():
                                                 "-I$HWLOC_PREFIX/include "
                                                 "-I$OFI_PREFIX/include"))
 
-    # copy setup_spdk.sh script to be executed at daos_server runtime
+    # Copy setup_spdk.sh script to be executed at daos_server runtime.
     senv.Command(join("$PREFIX", "share", "daos", "control", "setup_spdk.sh"),
                  join(gosrc, "server", "init", "setup_spdk.sh"),
                  [Delete("$TARGET"), Copy("$TARGET", "$SOURCE")])
@@ -204,8 +181,6 @@ def scons():
 
     serverbin = get_bin_path(gopath, "daos_server")
     AlwaysBuild([serverbin,])
-
-    SConscript('lib/spdk/ctests/SConscript', exports='senv')
 
 if __name__ == "SCons.Script":
     scons()
