@@ -147,7 +147,7 @@ class IorCommand(ExecutableCommand):
             display (bool, optional): print updated params. Defaults to True.
         """
         self.daos_pool.update(
-            pool.get_uuid_str(), "daos_pool" if display else None)
+            pool.pool.get_uuid_str(), "daos_pool" if display else None)
         self.set_daos_svcl_param(pool, display)
 
     def set_daos_svcl_param(self, pool, display=True):
@@ -159,8 +159,8 @@ class IorCommand(ExecutableCommand):
         """
         svcl = ":".join(
             [str(item) for item in [
-                int(pool.svc.rl_ranks[index])
-                for index in range(pool.svc.rl_nr)]])
+                int(pool.pool.svc.rl_ranks[index])
+                for index in range(pool.pool.svc.rl_nr)]])
         self.daos_svcl.update(svcl, "daos_svcl" if display else None)
 
     def get_aggregate_total(self, processes):

@@ -23,10 +23,9 @@
 """
 from __future__ import print_function
 
-import os
 import avocado
 
-from pydaos.raw import DaosPool, DaosApiError
+from pydaos.raw import DaosApiError
 from ior_test_base import IorTestBase
 from test_utils import TestPool
 

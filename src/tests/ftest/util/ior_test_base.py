@@ -75,14 +75,6 @@ class IorTestBase(TestWithServers):
             # Stop the servers and agents
             super(IorTestBase, self).tearDown()
 
-    def tearDown(self):
-        """Tear down each test case."""
-        if isinstance(self.pool, TestPool):
-            self.pool = self.pool.pool
-
-        # Stop the servers and agents
-        super(IorTestBase, self).tearDown()
-
     def create_pool(self):
         """Create a TestPool object to use with ior."""
         # Get the pool params
@@ -151,7 +143,7 @@ class IorTestBase(TestWithServers):
         if self.pool is None:
             self.create_pool()
         # Update IOR params with the pool
-        self.ior_cmd.set_daos_params(self.server_group, self.pool.pool)
+        self.ior_cmd.set_daos_params(self.server_group, self.pool)
 
         # start dfuse if api is POSIX
         if self.ior_cmd.api.value == "POSIX":
@@ -186,20 +178,16 @@ class IorTestBase(TestWithServers):
         mpirun_path = os.path.join(mpio_util.mpichinstall, "bin")
         return Mpirun(self.ior_cmd, mpirun_path)
 
-    def run_ior(self, manager, processes=None):
+    def run_ior(self, manager, processes):
         """Run the IOR command.
 
         Args:
             manager (str): mpi job manager command
             processes (int): number of host processes
         """
-        if self.processes and processes is None:
-            processes = self.processes
-
         env = self.ior_cmd.get_default_env(
             str(manager), self.tmp, self.client_log)
         manager.setup_command(env, self.hostfile_clients, processes)
-
         try:
             manager.run()
         except CommandFailure as error:
@@ -213,12 +201,8 @@ class IorTestBase(TestWithServers):
             original_pool_info (PoolInfo): Pool info prior to IOR
             processes (int): number of processes
         """
-        if isinstance(self.pool, TestPool):
-            self.pool = self.pool.pool
-
         # Get the current pool size for comparison
-        # pylint: disable=no-member
-        current_pool_info = self.pool.pool_query()
+        current_pool_info = self.pool.pool.pool_query()
 
         # If Transfer size is < 4K, Pool size will verified against NVMe, else
         # it will be checked against SCM
@@ -230,6 +214,7 @@ class IorTestBase(TestWithServers):
             self.log.info(
                 "Size is < 4K,Size verification will be done with SCM size")
             storage_index = 0
+
         actual_pool_size = \
             original_pool_info.pi_space.ps_space.s_free[storage_index] - \
             current_pool_info.pi_space.ps_space.s_free[storage_index]
