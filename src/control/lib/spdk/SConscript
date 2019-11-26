@@ -1,15 +1,17 @@
 #!/bin/env python
 """Build DAOS SPDK Go bindings"""
+from os.path import join
+
 def scons():
     """Execute build"""
-    Import('denv', 'prereqs', 'gosrc")
+    Import('denv', 'prereqs')
 
     denv.AppendUnique(LIBPATH=[Dir('.')])
 
-    senv = senv.Clone()
+    senv = denv.Clone()
     prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
 
-    senv.AppendUnique(CPPPATH=[Dir('.'))])
+    senv.AppendUnique(CPPPATH=[join(Dir('.').srcnode().abspath, "include")])
 
     # Link to DPDK static libs
     senv.AppendUnique(LINKFLAGS=['-Wl,--whole-archive', \
@@ -23,16 +25,15 @@ def scons():
     if compiler == "covc":
         compiler = "gcc"
 
-    nvmecontrol = senv.StaticLibrary("nvme_control",
-                                     Glob("src/*.c")),
+    denv.nvmecontrol = senv.StaticLibrary("nvme_control",
+                                     ["src/nvme_control.c",
+                                      "src/nvme_control_common.c"],
                                      CC=compiler,
                                      LIBS=['spdk', 'spdk_env_dpdk', 'numa'])
 
-    senv.Install(join(senv.subst("$PREFIX"), "lib64"), nvmecontrol)
+    senv.Install(join(senv.subst("$PREFIX"), "lib64"), denv.nvmecontrol)
 
-    SConscript('ctests/SConscript', exports='senv')
-
-    Return('nvmecontrol')
+    #SConscript('ctests/SConscript', exports='denv')
 
 if __name__ == "SCons.Script":
     scons()
