@@ -53,12 +53,77 @@
 #define DUNS_XATTR_FMT		"DAOS.%s://%36s/%36s/%s/%zu"
 
 /* TODO: implement these pool op functions
- * int pool_list_cont_hdlr(struct cmd_args_s *ap);
  * int pool_stat_hdlr(struct cmd_args_s *ap);
  * int pool_get_prop_hdlr(struct cmd_args_s *ap);
  * int pool_get_attr_hdlr(struct cmd_args_s *ap);
  * int pool_list_attrs_hdlr(struct cmd_args_s *ap);
  */
+
+int
+pool_list_containers_hdlr(struct cmd_args_s *ap)
+{
+	daos_size_t			 ncont = 0;
+	const daos_size_t		 extra_cont_margin = 16;
+	struct daos_pool_cont_info	*conts = NULL;
+	int				 i;
+	int				 rc = 0;
+	int				 rc2;
+
+	assert(ap != NULL);
+	assert(ap->p_op == POOL_LIST_CONTAINERS);
+
+	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
+			       ap->mdsrv, DAOS_PC_RO, &ap->pool,
+			       NULL /* info */, NULL /* ev */);
+	if (rc != 0) {
+		fprintf(stderr, "failed to connect to pool: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	/* Issue first API call to get current number of containers */
+	rc = daos_pool_list_cont(ap->pool, &ncont, NULL /* cbuf */,
+				 NULL /* ev */);
+	if (rc != 0) {
+		fprintf(stderr, "pool get ncont failed: %d\n", rc);
+		D_GOTO(out_disconnect, rc);
+	}
+
+	/* If no containers, no need for a second call */
+	if (ncont == 0)
+		D_GOTO(out_disconnect, rc);
+
+	/* Allocate conts[] with some margin to avoid -DER_TRUNC if more
+	 * containers were created after the first call
+	 */
+	ncont += extra_cont_margin;
+	D_ALLOC_ARRAY(conts, ncont);
+	if (conts == NULL)
+		D_GOTO(out_disconnect, rc = -DER_NOMEM);
+
+	rc = daos_pool_list_cont(ap->pool, &ncont, conts, NULL /* ev */);
+	if (rc != 0) {
+		fprintf(stderr, "pool list containers failed: %d\n", rc);
+		D_GOTO(out_free, rc);
+	}
+
+	for (i = 0; i < ncont; i++) {
+		D_PRINT(DF_UUIDF"\n", DP_UUID(conts[i].pci_uuid));
+	}
+
+out_free:
+	D_FREE(conts);
+
+out_disconnect:
+	/* Pool disconnect  in normal and error flows: preserve rc */
+	rc2 = daos_pool_disconnect(ap->pool, NULL);
+	if (rc2 != 0)
+		fprintf(stderr, "Pool disconnect failed : %d\n", rc2);
+
+	if (rc == 0)
+		rc = rc2;
+out:
+	return rc;
+}
 
 int
 pool_query_hdlr(struct cmd_args_s *ap)
