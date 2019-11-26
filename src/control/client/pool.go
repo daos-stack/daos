@@ -142,7 +142,7 @@ type PoolGetACLResp struct {
 }
 
 // PoolGetACL gets the Access Control List for the pool.
-func (c *connList) PoolGetACL(req *PoolGetACLReq) (*PoolGetACLResp, error) {
+func (c *connList) PoolGetACL(req PoolGetACLReq) (*PoolGetACLResp, error) {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
 		return nil, err
@@ -183,7 +183,7 @@ type PoolOverwriteACLResp struct {
 // PoolOverwriteACL sends a request to replace the pool's old Access Control List
 // with a new one. If it succeeds, it returns the updated ACL. If not, it returns
 // an error.
-func (c *connList) PoolOverwriteACL(req *PoolOverwriteACLReq) (*PoolOverwriteACLResp, error) {
+func (c *connList) PoolOverwriteACL(req PoolOverwriteACLReq) (*PoolOverwriteACLResp, error) {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
 		return nil, err
@@ -227,7 +227,7 @@ type PoolUpdateACLResp struct {
 // PoolUpdateACL sends a request to add new entries and update existing entries
 // in a pool's Access Control List. If it succeeds, it returns the updated ACL.
 // If not, it returns an error.
-func (c *connList) PoolUpdateACL(req *PoolUpdateACLReq) (*PoolUpdateACLResp, error) {
+func (c *connList) PoolUpdateACL(req PoolUpdateACLReq) (*PoolUpdateACLResp, error) {
 	mc, err := chooseServiceLeader(c.controllers)
 	if err != nil {
 		return nil, err
@@ -273,7 +273,7 @@ type PoolDeleteACLResp struct {
 // PoolDeleteACL sends a request to delete an entry in a pool's Access Control
 // List. If it succeeds, it returns the updated ACL. If it fails, it returns an
 // error.
-func (c *connList) PoolDeleteACL(req *PoolDeleteACLReq) (*PoolDeleteACLResp, error) {
+func (c *connList) PoolDeleteACL(req PoolDeleteACLReq) (*PoolDeleteACLResp, error) {
 	if req.Principal == "" {
 		return nil, errors.New("no principal provided")
 	}

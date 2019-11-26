@@ -97,7 +97,18 @@ type PoolGetACLCmd struct {
 
 // Execute is run when the PoolGetACLCmd subcommand is activated
 func (d *PoolGetACLCmd) Execute(args []string) error {
-	return poolGetACL(d.log, d.conns, d.UUID)
+	req := client.PoolGetACLReq{UUID: d.UUID}
+
+	resp, err := d.conns.PoolGetACL(req)
+	if err != nil {
+		d.log.Infof("Pool-get-ACL command failed: %s\n", err.Error())
+		return err
+	}
+
+	d.log.Infof("Pool-get-ACL command succeeded, UUID: %s\n", d.UUID)
+	d.log.Info(resp.ACL.String())
+
+	return nil
 }
 
 // PoolOverwriteACLCmd represents the command to overwrite the Access Control
@@ -111,7 +122,26 @@ type PoolOverwriteACLCmd struct {
 
 // Execute is run when the PoolOverwriteACLCmd subcommand is activated
 func (d *PoolOverwriteACLCmd) Execute(args []string) error {
-	return poolOverwriteACL(d.log, d.conns, d.UUID, d.ACLFile)
+	acl, err := readACLFile(d.ACLFile)
+	if err != nil {
+		return err
+	}
+
+	req := client.PoolOverwriteACLReq{
+		UUID: d.UUID,
+		ACL:  acl,
+	}
+
+	resp, err := d.conns.PoolOverwriteACL(req)
+	if err != nil {
+		d.log.Infof("Pool-overwrite-ACL command failed: %s\n", err.Error())
+		return err
+	}
+
+	d.log.Infof("Pool-overwrite-ACL command succeeded, UUID: %s\n", d.UUID)
+	d.log.Info(resp.ACL.String())
+
+	return nil
 }
 
 // PoolUpdateACLCmd represents the command to update the Access Control List of
@@ -126,7 +156,38 @@ type PoolUpdateACLCmd struct {
 
 // Execute is run when the PoolUpdateACLCmd subcommand is activated
 func (d *PoolUpdateACLCmd) Execute(args []string) error {
-	return poolUpdateACL(d.log, d.conns, d.UUID, d.ACLFile, d.Entry)
+	if (d.ACLFile == "" && d.Entry == "") || (d.ACLFile != "" && d.Entry != "") {
+		return errors.New("either ACL file or entry parameter is required")
+	}
+
+	var acl *client.AccessControlList
+	if d.ACLFile != "" {
+		aclFileResult, err := readACLFile(d.ACLFile)
+		if err != nil {
+			return err
+		}
+		acl = aclFileResult
+	} else {
+		acl = &client.AccessControlList{
+			Entries: []string{d.Entry},
+		}
+	}
+
+	req := client.PoolUpdateACLReq{
+		UUID: d.UUID,
+		ACL:  acl,
+	}
+
+	resp, err := d.conns.PoolUpdateACL(req)
+	if err != nil {
+		d.log.Infof("Pool-update-ACL command failed: %s\n", err.Error())
+		return err
+	}
+
+	d.log.Infof("Pool-update-ACL command succeeded, UUID: %s\n", d.UUID)
+	d.log.Info(resp.ACL.String())
+
+	return nil
 }
 
 // PoolDeleteACLCmd represents the command to delete an entry from the Access
@@ -140,7 +201,21 @@ type PoolDeleteACLCmd struct {
 
 // Execute is run when the PoolDeleteACLCmd subcommand is activated
 func (d *PoolDeleteACLCmd) Execute(args []string) error {
-	return poolDeleteACL(d.log, d.conns, d.UUID, d.Principal)
+	req := client.PoolDeleteACLReq{
+		UUID:      d.UUID,
+		Principal: d.Principal,
+	}
+
+	resp, err := d.conns.PoolDeleteACL(req)
+	if err != nil {
+		d.log.Infof("Pool-delete-ACL command failed: %s\n", err.Error())
+		return err
+	}
+
+	d.log.Infof("Pool-delete-ACL command succeeded, UUID: %s\n", d.UUID)
+	d.log.Info(resp.ACL.String())
+
+	return nil
 }
 
 // getSize retrieves number of bytes from human readable string representation
@@ -297,95 +372,4 @@ func poolDestroy(log logging.Logger, conns client.Connect, poolUUID string, forc
 	log.Infof("Pool-destroy command %s\n", msg)
 
 	return err
-}
-
-func poolGetACL(log logging.Logger, conns client.Connect, poolUUID string) error {
-	req := &client.PoolGetACLReq{UUID: poolUUID}
-
-	resp, err := conns.PoolGetACL(req)
-	if err != nil {
-		log.Infof("Pool-get-ACL command failed: %s\n", err.Error())
-		return err
-	}
-
-	log.Infof("Pool-get-ACL command succeeded, UUID: %s\n", poolUUID)
-	log.Info(resp.ACL.String())
-
-	return nil
-}
-
-func poolOverwriteACL(log logging.Logger, conns client.Connect, poolUUID string, aclFile string) error {
-	acl, err := readACLFile(aclFile)
-	if err != nil {
-		return err
-	}
-
-	req := &client.PoolOverwriteACLReq{
-		UUID: poolUUID,
-		ACL:  acl,
-	}
-
-	resp, err := conns.PoolOverwriteACL(req)
-	if err != nil {
-		log.Infof("Pool-overwrite-ACL command failed: %s\n", err.Error())
-		return err
-	}
-
-	log.Infof("Pool-overwrite-ACL command succeeded, UUID: %s\n", poolUUID)
-	log.Info(resp.ACL.String())
-
-	return nil
-}
-
-func poolUpdateACL(log logging.Logger, conns client.Connect, poolUUID string, aclFile string, ace string) error {
-	if (aclFile == "" && ace == "") || (aclFile != "" && ace != "") {
-		return errors.New("either ACL file or entry parameter is required")
-	}
-
-	var acl *client.AccessControlList
-	if aclFile != "" {
-		aclFileResult, err := readACLFile(aclFile)
-		if err != nil {
-			return err
-		}
-		acl = aclFileResult
-	} else {
-		acl = &client.AccessControlList{
-			Entries: []string{ace},
-		}
-	}
-
-	req := &client.PoolUpdateACLReq{
-		UUID: poolUUID,
-		ACL:  acl,
-	}
-
-	resp, err := conns.PoolUpdateACL(req)
-	if err != nil {
-		log.Infof("Pool-update-ACL command failed: %s\n", err.Error())
-		return err
-	}
-
-	log.Infof("Pool-update-ACL command succeeded, UUID: %s\n", poolUUID)
-	log.Info(resp.ACL.String())
-
-	return nil
-}
-
-func poolDeleteACL(log logging.Logger, conns client.Connect, poolUUID string, principal string) error {
-	req := &client.PoolDeleteACLReq{
-		UUID:      poolUUID,
-		Principal: principal,
-	}
-
-	resp, err := conns.PoolDeleteACL(req)
-	if err != nil {
-		log.Infof("Pool-delete-ACL command failed: %s\n", err.Error())
-		return err
-	}
-
-	log.Infof("Pool-delete-ACL command succeeded, UUID: %s\n", poolUUID)
-	log.Info(resp.ACL.String())
-
-	return nil
 }

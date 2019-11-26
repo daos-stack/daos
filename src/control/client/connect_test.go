@@ -293,7 +293,7 @@ func TestPoolGetACL(t *testing.T) {
 				MockModuleResults, MockScmNamespaces, MockMountResults,
 				nil, nil, nil, nil, aclResult)
 
-			req := &PoolGetACLReq{
+			req := PoolGetACLReq{
 				UUID: "TestUUID",
 			}
 
@@ -378,7 +378,7 @@ func TestPoolOverwriteACL(t *testing.T) {
 				MockModuleResults, MockScmNamespaces, MockMountResults,
 				nil, nil, nil, nil, aclResult)
 
-			req := &PoolOverwriteACLReq{
+			req := PoolOverwriteACLReq{
 				UUID: "TestUUID",
 				ACL:  tt.inputACL,
 			}
@@ -469,7 +469,7 @@ func TestPoolUpdateACL(t *testing.T) {
 				MockModuleResults, MockScmNamespaces, MockMountResults,
 				nil, nil, nil, nil, aclResult)
 
-			req := &PoolUpdateACLReq{
+			req := PoolUpdateACLReq{
 				UUID: "TestUUID",
 				ACL:  tt.inputACL,
 			}
@@ -548,7 +548,7 @@ func TestPoolDeleteACL(t *testing.T) {
 				MockModuleResults, MockScmNamespaces, MockMountResults,
 				nil, nil, nil, nil, aclResult)
 
-			req := &PoolDeleteACLReq{
+			req := PoolDeleteACLReq{
 				UUID:      "TestUUID",
 				Principal: tt.inputPrincipal,
 			}
