@@ -205,5 +205,7 @@ def scons():
     serverbin = get_bin_path(gopath, "daos_server")
     AlwaysBuild([serverbin,])
 
+    SConscript('lib/spdk/ctests/SConscript', exports='senv')
+
 if __name__ == "SCons.Script":
     scons()

@@ -1,0 +1,20 @@
+"""Build spdk bindings C tests"""
+import daos_build
+
+def scons():
+    """Execute build"""
+    Import('senv')
+
+    unit_env = senv.Clone()
+    unit_env.AppendUnique(OBJPREFIX='utest_')
+    # Some syscalls are aliased when fortification is enabled, which makes
+    # mocking in unit tests into a headache.
+    # The compiler decides this on its own, but let's force the issue.
+    unit_env.Append(CCFLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0")
+
+    daos_build.test(unit_env, 'nvme_discover_tests',
+                    ['nvme_discover_test.c', '../src/nvme_control_common.c',
+                     '../src/nvme_control.c'], LIBS=['spdk', 'cmocka'])
+
+if __name__ == "SCons.Script":
+    scons()
