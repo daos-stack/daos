@@ -24,47 +24,6 @@
 #ifndef NVMECONTROL_H
 #define NVMECONTROL_H
 
-#include <stdbool.h>
-
-#define NVMECONTROL_GBYTE_BYTES 1000000000
-
-/**
- * @brief NVMECONTROL return codes
- */
-typedef enum _NvmeControlStatusCode {
-	NVMEC_SUCCESS			= 0,
-	NVMEC_ERR_CHK_SIZE		= 1,
-	NVMEC_ERR_GET_PCI_DEV		= 2,
-	NVMEC_ERR_PCI_ADDR_FMT		= 3,
-	NVMEC_ERR_PCI_ADDR_PARSE	= 4,
-	NVMEC_ERR_CTRLR_NOT_FOUND	= 5,
-	NVMEC_ERR_NS_NOT_FOUND		= 6,
-	NVMEC_ERR_NOT_SUPPORTED		= 7,
-	NVMEC_ERR_BAD_LBA		= 8,
-	NVMEC_LAST_STATUS_VALUE
-} NvmeControlStatusCode;
-
-/*
- * \brief Raw SPDK device health statistics.
- */
-struct dev_health_t {
-	uint16_t	 temperature; /* in Kelvin */
-	uint32_t	 warn_temp_time;
-	uint32_t	 crit_temp_time;
-	uint64_t	 ctrl_busy_time;
-	uint64_t	 power_cycles;
-	uint64_t	 power_on_hours;
-	uint64_t	 unsafe_shutdowns;
-	uint64_t	 media_errors;
-	uint64_t	 error_log_entries;
-	/* Critical warnings */
-	bool		 temp_warning;
-	bool		 avail_spare_warning;
-	bool		 dev_reliabilty_warning;
-	bool		 read_only_warning;
-	bool		 volatile_mem_warning;
-};
-
 /**
  * \brief NVMe controller details
  */
@@ -88,6 +47,27 @@ struct ns_t {
 	struct ns_t	*next;
 };
 
+/*
+ * \brief Raw SPDK device health statistics.
+ */
+struct dev_health_t {
+	uint16_t	 temperature; /* in Kelvin */
+	uint32_t	 warn_temp_time;
+	uint32_t	 crit_temp_time;
+	uint64_t	 ctrl_busy_time;
+	uint64_t	 power_cycles;
+	uint64_t	 power_on_hours;
+	uint64_t	 unsafe_shutdowns;
+	uint64_t	 media_errors;
+	uint64_t	 error_log_entries;
+	/* Critical warnings */
+	bool		 temp_warning;
+	bool		 avail_spare_warning;
+	bool		 dev_reliabilty_warning;
+	bool		 read_only_warning;
+	bool		 volatile_mem_warning;
+};
+
 /**
  * \brief Return containing return code, controllers, namespaces and error
  * message
@@ -99,6 +79,36 @@ struct ret_t {
 	char		err[1024];
 };
 
+struct ctrlr_entry {
+	struct spdk_nvme_ctrlr	*ctrlr;
+	struct spdk_pci_addr	 pci_addr;
+	struct dev_health_entry	*dev_health;
+	int			 socket_id;
+	struct ctrlr_entry	*next;
+};
+
+struct ns_entry {
+	struct spdk_nvme_ctrlr	*ctrlr;
+	struct spdk_nvme_ns	*ns;
+	struct ns_entry		*next;
+	struct spdk_nvme_qpair	*qpair;
+};
+
+struct dev_health_entry {
+	struct spdk_nvme_health_information_page health_page;
+	struct spdk_nvme_error_information_entry error_page[256];
+	int					 inflight;
+};
+
+extern struct ctrlr_entry	*g_controllers;
+extern struct ns_entry		*g_namespaces;
+
+typedef int (*prober)(const struct spdk_nvme_transport_id *trid, void *cb_ctx,
+		      spdk_nvme_probe_cb probe_cb,
+		      spdk_nvme_attach_cb attach_cb,
+		      spdk_nvme_remove_cb remove_cb);
+struct ret_t *_nvme_discover(prober);
+
 /**
  * Discover NVMe controllers and namespaces, as well as return device health
  * information.
@@ -106,7 +116,6 @@ struct ret_t {
  * \return a pointer to a return struct (ret_t).
  */
 struct ret_t *nvme_discover(void);
-
 
 /**
  * Update NVMe controller firmware.

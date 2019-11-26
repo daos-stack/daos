@@ -35,6 +35,7 @@ package spdk
 #include "spdk/nvme.h"
 #include "spdk/env.h"
 #include "include/nvme_control.h"
+#include "include/nvme_control_common.h"
 */
 import "C"
 
