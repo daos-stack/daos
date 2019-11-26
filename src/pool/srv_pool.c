@@ -2809,8 +2809,6 @@ ds_pool_acl_update_handler(crt_rpc_t *rpc)
 	}
 
 	rc = rdb_tx_commit(&tx);
-	if (rc != 0)
-		D_GOTO(out_prop, rc);
 
 out_prop:
 	daos_prop_free(prop);
@@ -2886,13 +2884,10 @@ rechoose:
 	}
 
 	rc = out->puo_op.po_rc;
-	if (rc != 0) {
+	if (rc != 0)
 		D_ERROR(DF_UUID": failed to update ACL for pool: %d\n",
 			DP_UUID(pool_uuid), rc);
-		D_GOTO(out_rpc, rc);
-	}
 
-out_rpc:
 	crt_req_decref(rpc);
 out_client:
 	rsvc_client_fini(&client);
@@ -2958,8 +2953,6 @@ ds_pool_acl_delete_handler(crt_rpc_t *rpc)
 	}
 
 	rc = rdb_tx_commit(&tx);
-	if (rc != 0)
-		D_GOTO(out_prop, rc);
 
 out_prop:
 	daos_prop_free(prop);
@@ -3051,13 +3044,10 @@ rechoose:
 	}
 
 	rc = out->pdo_op.po_rc;
-	if (rc != 0) {
+	if (rc != 0)
 		D_ERROR(DF_UUID": failed to delete ACL entry for pool: %d\n",
 			DP_UUID(pool_uuid), rc);
-		D_GOTO(out_rpc, rc);
-	}
 
-out_rpc:
 	crt_req_decref(rpc);
 out_client:
 	rsvc_client_fini(&client);
