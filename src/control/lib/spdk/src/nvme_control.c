@@ -131,7 +131,11 @@ _nvme_discover(prober probe)
 	return ret;
 }
 
-#define nvme_discover(void) _nvme_discover(&spdk_nvme_probe);
+struct ret_t *
+nvme_discover(void)
+{
+	return _nvme_discover(&spdk_nvme_probe);
+}
 
 struct ret_t *
 nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot)

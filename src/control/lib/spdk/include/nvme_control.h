@@ -103,6 +103,10 @@ struct dev_health_entry {
 extern struct ctrlr_entry	*g_controllers;
 extern struct ns_entry		*g_namespaces;
 
+/**
+ * Provide ability to pass function pointers to nvme_discover for mocking
+ * in unit tests.
+ */
 typedef int (*prober)(const struct spdk_nvme_transport_id *trid, void *cb_ctx,
 		      spdk_nvme_probe_cb probe_cb,
 		      spdk_nvme_attach_cb attach_cb,
