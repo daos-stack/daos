@@ -381,6 +381,7 @@ mgmt_list_pools_cp(tse_task_t *task, void *data)
 	pc_out = crt_reply_get(arg->rpc);
 	D_ASSERT(pc_out != NULL);
 	rc = pc_out->lp_rc;
+	*arg->npools = pc_out->lp_npools;
 	if (rc) {
 		D_ERROR("MGMT_POOL_CREATE replied failed, rc: %d\n", rc);
 		D_GOTO(out, rc);
@@ -388,8 +389,6 @@ mgmt_list_pools_cp(tse_task_t *task, void *data)
 
 	pc_in = crt_req_get(arg->rpc);
 	D_ASSERT(pc_in != NULL);
-
-	*arg->npools = pc_out->lp_npools;
 
 	/* copy RPC response pools info to client buffer, if provided */
 	if (arg->pools) {
@@ -410,12 +409,6 @@ mgmt_list_pools_cp(tse_task_t *task, void *data)
 				D_GOTO(out_free_svcranks, rc = -DER_NOMEM);
 			}
 		}
-	}
-
-	if (arg->pools && (*arg->npools > arg->req_npools)) {
-		D_WARN("pool list contains only client-requested npools=%lu, "
-			"less than npools=%lu in system\n", arg->req_npools,
-			*arg->npools);
 	}
 
 out_free_svcranks:
@@ -448,11 +441,6 @@ dc_mgmt_list_pools(tse_task_t *task)
 
 	args = dc_task_get_args(task);
 
-	if (args->npools == NULL) {
-		D_ERROR("npools must be non-NULL\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
 	rc = dc_mgmt_sys_attach(args->grp, &cb_args.sys);
 	if (rc != 0) {
 		D_ERROR("cannot attach to DAOS system: %s\n", args->grp);
@@ -478,18 +466,32 @@ dc_mgmt_list_pools(tse_task_t *task)
 
 	/** fill in request buffer */
 	pc_in->lp_grp = (d_string_t)args->grp;
-	pc_in->lp_npools = *args->npools;
+	/* If provided pools is NULL, caller needs the number of pools
+	 * to be returned in npools. Set npools=0 in the request in this case
+	 * (caller value may be uninitialized).
+	 */
+	if (args->pools == NULL)
+		pc_in->lp_npools = 0;
+	else
+		pc_in->lp_npools = *args->npools;
+
+	D_DEBUG(DF_DSMC, "req_npools="DF_U64" (pools=%p, *npools="DF_U64"\n",
+			 pc_in->lp_npools, args->pools,
+			 *args->npools);
 
 	crt_req_addref(rpc_req);
 	cb_args.rpc = rpc_req;
-	cb_args.req_npools = *args->npools;
 	cb_args.npools = args->npools;
 	cb_args.pools = args->pools;
+	cb_args.req_npools = pc_in->lp_npools;
 
 	rc = tse_task_register_comp_cb(task, mgmt_list_pools_cp, &cb_args,
 				       sizeof(cb_args));
 	if (rc != 0)
 		D_GOTO(out_put_req, rc);
+
+	D_DEBUG(DB_MGMT, "retrieving list of pools in DAOS system: %s\n",
+		args->grp);
 
 	/** send the request */
 	return daos_rpc_send(rpc_req, task);
@@ -501,5 +503,6 @@ out_put_req:
 out_grp:
 	dc_mgmt_sys_detach(cb_args.sys);
 out:
+	tse_task_complete(task, rc);
 	return rc;
 }

@@ -1429,6 +1429,119 @@ out_svc:
 	return rc;
 }
 
+/* argument type for callback function to list containers */
+struct list_cont_iter_args {
+	uuid_t				pool_uuid;
+
+	/* Number of containers in pool and conts[] index while counting */
+	uint64_t			ncont;
+
+	/* conts[]: capacity*/
+	uint64_t			conts_len;
+	struct daos_pool_cont_info	*conts;
+};
+
+/* callback function for list containers iteration. */
+static int
+enum_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
+{
+	struct list_cont_iter_args	*ap = varg;
+	struct daos_pool_cont_info	*cinfo;
+	uuid_t				 cont_uuid;
+	(void) val;
+
+	if (key->iov_len != sizeof(uuid_t)) {
+		D_ERROR("invalid key size: key="DF_U64"\n", key->iov_len);
+		return -DER_IO;
+	}
+
+	uuid_copy(cont_uuid, key->iov_buf);
+
+	D_DEBUG(DF_DSMS, "pool/cont: "DF_CONTF"\n",
+		DP_CONT(ap->pool_uuid, cont_uuid));
+
+	/* Realloc conts[] if needed (double each time starting with 1) */
+	if (ap->ncont == ap->conts_len) {
+		void	*ptr;
+		size_t	realloc_elems = (ap->conts_len == 0) ? 1 :
+					ap->conts_len * 2;
+
+		D_REALLOC_ARRAY(ptr, ap->conts, realloc_elems);
+		if (ptr == NULL)
+			return -DER_NOMEM;
+		ap->conts = ptr;
+		ap->conts_len = realloc_elems;
+	}
+
+	cinfo = &ap->conts[ap->ncont];
+	ap->ncont++;
+	uuid_copy(cinfo->pci_uuid, cont_uuid);
+	return 0;
+}
+
+/**
+ * List all containers in a pool.
+ *
+ * \param[in]	pool_uuid	Pool UUID.
+ * \param[out]	conts		Array of container info structures
+ *				to be allocated. Caller must free.
+ * \param[out]	ncont		Number of containers in the pool
+ *				(number of items populated in conts[]).
+ */
+int
+ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts,
+	     uint64_t *ncont)
+{
+	int				 rc;
+	struct cont_svc			*svc;
+	struct rdb_tx			 tx;
+	struct list_cont_iter_args	 args;
+
+	*conts = NULL;
+	*ncont = 0;
+
+	args.ncont = 0;			/* number of containers in the pool */
+	args.conts_len = 0;		/* allocated length of conts[] */
+	args.conts = NULL;
+
+	uuid_copy(args.pool_uuid, pool_uuid);
+
+	rc = cont_svc_lookup_leader(pool_uuid, 0 /* id */, &svc,
+				    NULL /* hint **/);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
+
+	ABT_rwlock_rdlock(svc->cs_lock);
+
+	rc = rdb_tx_iterate(&tx, &svc->cs_conts, false /* !backward */,
+			    enum_cont_cb, &args);
+
+	/* read-only, so no rdb_tx_commit */
+	ABT_rwlock_unlock(svc->cs_lock);
+	rdb_tx_end(&tx);
+
+out_svc:
+	cont_svc_put_leader(svc);
+
+out:
+	D_DEBUG(DF_DSMS, "iterate rc=%d, args.conts=%p, args.ncont="DF_U64"\n",
+			rc, args.conts, args.ncont);
+
+	if (rc != 0) {
+		/* Error in iteration */
+		if (args.conts)
+			D_FREE(args.conts);
+	} else {
+		*ncont = args.ncont;
+		*conts = args.conts;
+	}
+	return rc;
+}
+
 static int
 cont_op_with_hdl(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		 struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc)
