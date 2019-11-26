@@ -198,9 +198,8 @@ func c2GoNamespace(ns *C.struct_ns_t) *Namespace {
 }
 
 // processReturn parses return structs
-func processReturn(retPtr *C.struct_ret_t, failLocation string) ([]Controller, error) {
-	var ctrlrs []Controller
-	var pciMap map[string]*Controller
+func processReturn(retPtr *C.struct_ret_t, failLocation string) (ctrlrs []Controller, err error) {
+	pciMap := make(map[string]*Controller)
 
 	defer C.free(unsafe.Pointer(retPtr))
 
