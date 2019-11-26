@@ -1881,7 +1881,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	/*
 	 * Transfer the pool map to the client before adding the pool handle,
 	 * so that we don't need to worry about rolling back the transaction
-	 * when the tranfer fails. The client has already been authenticated
+	 * when the transfer fails. The client has already been authenticated
 	 * and authorized at this point. If an error occurs after the transfer
 	 * completes, then we simply return the error and the client will throw
 	 * its pool_buf away.
@@ -2170,6 +2170,174 @@ out_rpc:
 out:
 	D_DEBUG(DB_MD, DF_UUID": bcasted: %d\n", DP_UUID(svc->ps_uuid), rc);
 	return rc;
+}
+
+/*
+ * Transfer list of containers to "remote_bulk". If the remote bulk buffer
+ * is too small, then return -DER_TRUNC. RPC response will contain the number
+ * of containers in the pool that the client can use to resize its buffer
+ * for another RPC request.
+ */
+static int
+transfer_cont_buf(struct daos_pool_cont_info *cont_buf, size_t ncont,
+		  struct pool_svc *svc, crt_rpc_t *rpc, crt_bulk_t remote_bulk)
+{
+	size_t				 cont_buf_size;
+	daos_size_t			 remote_bulk_size;
+	d_iov_t				 cont_iov;
+	d_sg_list_t			 cont_sgl;
+	crt_bulk_t			 bulk = CRT_BULK_NULL;
+	struct crt_bulk_desc		 bulk_desc;
+	crt_bulk_opid_t			 bulk_opid;
+	ABT_eventual			 eventual;
+	int				*status;
+	int				 rc;
+
+	D_ASSERT(ncont > 0);
+	cont_buf_size = ncont * sizeof(struct daos_pool_cont_info);
+
+	/* Check if the client bulk buffer is large enough. */
+	rc = crt_bulk_get_len(remote_bulk, &remote_bulk_size);
+	if (rc != 0)
+		D_GOTO(out, rc);
+	if (remote_bulk_size < cont_buf_size) {
+		D_ERROR(DF_UUID": remote container buffer("DF_U64")"
+			" < required (%lu)\n", DP_UUID(svc->ps_uuid),
+			remote_bulk_size, cont_buf_size);
+		D_GOTO(out, rc = -DER_TRUNC);
+	}
+
+	d_iov_set(&cont_iov, cont_buf, cont_buf_size);
+	cont_sgl.sg_nr = 1;
+	cont_sgl.sg_nr_out = 0;
+	cont_sgl.sg_iovs = &cont_iov;
+
+	rc = crt_bulk_create(rpc->cr_ctx, &cont_sgl, CRT_BULK_RO, &bulk);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	/* Prepare for crt_bulk_transfer(). */
+	bulk_desc.bd_rpc = rpc;
+	bulk_desc.bd_bulk_op = CRT_BULK_PUT;
+	bulk_desc.bd_remote_hdl = remote_bulk;
+	bulk_desc.bd_remote_off = 0;
+	bulk_desc.bd_local_hdl = bulk;
+	bulk_desc.bd_local_off = 0;
+	bulk_desc.bd_len = cont_iov.iov_len;
+
+	rc = ABT_eventual_create(sizeof(*status), &eventual);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(out_bulk, rc = dss_abterr2der(rc));
+
+	rc = crt_bulk_transfer(&bulk_desc, bulk_cb, &eventual, &bulk_opid);
+	if (rc != 0)
+		D_GOTO(out_eventual, rc);
+
+	rc = ABT_eventual_wait(eventual, (void **)&status);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
+
+	if (*status != 0)
+		D_GOTO(out_eventual, rc = *status);
+
+out_eventual:
+	ABT_eventual_free(&eventual);
+out_bulk:
+	if (bulk != CRT_BULK_NULL)
+		crt_bulk_free(bulk);
+out:
+	return rc;
+}
+
+/* CaRT RPC handler for pool container listing
+ * Requires a pool handle (except for rebuild).
+ */
+void
+ds_pool_list_cont_handler(crt_rpc_t *rpc)
+{
+	struct pool_list_cont_in	*in = crt_req_get(rpc);
+	struct pool_list_cont_out	*out = crt_reply_get(rpc);
+	struct daos_pool_cont_info	*cont_buf = NULL;
+	uint64_t			 ncont = 0;
+	struct pool_svc			*svc;
+	struct rdb_tx			 tx;
+	d_iov_t				 key;
+	d_iov_t				 value;
+	struct pool_hdl			 hdl;
+	int				 rc;
+
+	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
+		DP_UUID(in->plci_op.pi_uuid), rpc, DP_UUID(in->plci_op.pi_hdl));
+
+	rc = pool_svc_lookup_leader(in->plci_op.pi_uuid, &svc,
+				    &out->plco_op.po_hint);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
+
+	ABT_rwlock_rdlock(svc->ps_lock);
+
+	/* Verify the pool handle. Note: since rebuild will not
+	 * connect the pool, so we only verify the non-rebuild
+	 * pool.
+	 */
+	if (!is_rebuild_pool(in->plci_op.pi_uuid, in->plci_op.pi_hdl)) {
+		d_iov_set(&key, in->plci_op.pi_hdl, sizeof(uuid_t));
+		d_iov_set(&value, &hdl, sizeof(hdl));
+		rc = rdb_tx_lookup(&tx, &svc->ps_handles, &key, &value);
+		if (rc == -DER_NONEXIST)
+			rc = -DER_NO_HDL;
+			/* defer goto out_svc until unlock/tx_end */
+	}
+
+	ABT_rwlock_unlock(svc->ps_lock);
+	rdb_tx_end(&tx);
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
+
+	/* Call container service to get the list */
+	rc = ds_cont_list(in->plci_op.pi_uuid, &cont_buf, &ncont);
+	if (rc != 0) {
+		D_GOTO(out_svc, rc);
+	} else if ((in->plci_ncont > 0) && (ncont > in->plci_ncont)) {
+		/* Got a list, but client buffer not supplied or too small */
+		D_DEBUG(DF_DSMS, DF_UUID": hdl="DF_UUID": has %"PRIu64
+				 " containers (more than client: %"PRIu64")\n",
+				 DP_UUID(in->plci_op.pi_uuid),
+				 DP_UUID(in->plci_op.pi_hdl),
+				 ncont, in->plci_ncont);
+		D_GOTO(out_free_cont_buf, rc = -DER_TRUNC);
+	} else {
+		D_DEBUG(DF_DSMS, DF_UUID": hdl="DF_UUID": has %"PRIu64
+				 " containers\n", DP_UUID(in->plci_op.pi_uuid),
+				 DP_UUID(in->plci_op.pi_hdl), ncont);
+
+		/* Send any results only if client provided a handle */
+		if (cont_buf && (in->plci_ncont > 0) &&
+		    (in->plci_cont_bulk != CRT_BULK_NULL)) {
+			rc = transfer_cont_buf(cont_buf, ncont, svc, rpc,
+					       in->plci_cont_bulk);
+		}
+	}
+
+out_free_cont_buf:
+	if (cont_buf) {
+		D_FREE(cont_buf);
+		cont_buf = NULL;
+	}
+
+out_svc:
+	ds_rsvc_set_hint(&svc->ps_rsvc, &out->plco_op.po_hint);
+	pool_svc_put_leader(svc);
+out:
+	out->plco_op.po_rc = rc;
+	out->plco_ncont = ncont;
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
+		DP_UUID(in->plci_op.pi_uuid), rpc, rc);
+	crt_reply_send(rpc);
 }
 
 void

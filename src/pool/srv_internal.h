@@ -103,6 +103,7 @@ void ds_pool_svc_stop_handler(crt_rpc_t *rpc);
 void ds_pool_attr_list_handler(crt_rpc_t *rpc);
 void ds_pool_attr_get_handler(crt_rpc_t *rpc);
 void ds_pool_attr_set_handler(crt_rpc_t *rpc);
+void ds_pool_list_cont_handler(crt_rpc_t *rpc);
 
 /*
  * srv_target.c

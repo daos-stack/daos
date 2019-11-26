@@ -298,6 +298,27 @@ daos_pool_set_attr(daos_handle_t poh, int n, char const *const names[],
 		   void const *const values[], size_t const sizes[],
 		   daos_event_t *ev);
 
+/**
+ * List a pool's containers.
+ *
+ * \param[in]	poh	Pool connection handle.
+ * \param[in,out]
+ *		ncont	[in] \a cbuf length in items.
+ *			[out] Number of containers in the pool.
+ * \param[out]	cbuf	Array of container structures.
+ *			NULL is permitted in which case only the number
+ *			of containers will be returned in \a ncont.
+ * \param[in]	ev	Completion event. Optional and can be NULL.
+ *			The function will run in blocking mode
+ *			if \a ev is NULL.
+ *
+ * \return		0		Success
+ *			-DER_TRUNC	\a cbuf cannot hold \a ncont items
+ */
+int
+daos_pool_list_cont(daos_handle_t poh, daos_size_t *ncont,
+		    struct daos_pool_cont_info *cbuf, daos_event_t *ev);
+
 /*
  * Container API
  */

@@ -87,7 +87,10 @@
 		ds_pool_replicas_update_handler, NULL),			\
 	X(POOL_REPLICAS_REMOVE,						\
 		0, &CQF_pool_replicas_remove,				\
-		ds_pool_replicas_update_handler, NULL)
+		ds_pool_replicas_update_handler, NULL),			\
+	X(POOL_LIST_CONT,						\
+		0, &CQF_pool_list_cont,					\
+		ds_pool_list_cont_handler, NULL)
 
 #define POOL_PROTO_SRV_RPC_LIST						\
 	X(POOL_TGT_CONNECT,						\
@@ -394,6 +397,18 @@ CRT_RPC_DECLARE(pool_acl_update, DAOS_ISEQ_POOL_ACL_UPDATE,
 
 CRT_RPC_DECLARE(pool_acl_delete, DAOS_ISEQ_POOL_ACL_DELETE,
 		DAOS_OSEQ_POOL_ACL_DELETE)
+
+#define DAOS_ISEQ_POOL_LIST_CONT	/* input fields */		 \
+	((struct pool_op_in)	(plci_op)			CRT_VAR) \
+	((crt_bulk_t)		(plci_cont_bulk)		CRT_VAR) \
+	((uint64_t)		(plci_ncont)			CRT_VAR)
+
+#define DAOS_OSEQ_POOL_LIST_CONT	/* output fields */		 \
+	((struct pool_op_out)	(plco_op)			CRT_VAR) \
+	((uint64_t)		(plco_ncont)			CRT_VAR)
+
+CRT_RPC_DECLARE(pool_list_cont, DAOS_ISEQ_POOL_LIST_CONT,
+		DAOS_OSEQ_POOL_LIST_CONT)
 
 static inline int
 pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,

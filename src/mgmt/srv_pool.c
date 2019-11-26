@@ -638,13 +638,10 @@ enum_pool_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	/* Realloc pools[] if needed (double each time starting with 1) */
 	if (ap->pools_index == ap->pools_len) {
 		void	*ptr;
-		size_t	realloc_bytes;
 		size_t	realloc_elems = (ap->pools_len == 0) ? 1 :
 					ap->pools_len * 2;
 
-		realloc_bytes = (realloc_elems *
-				sizeof(struct mgmt_list_pools_one));
-		D_REALLOC(ptr, ap->pools, realloc_bytes);
+		D_REALLOC_ARRAY(ptr, ap->pools, realloc_elems);
 		if (ptr == NULL)
 			return -DER_NOMEM;
 		ap->pools = ptr;
@@ -670,6 +667,9 @@ ds_mgmt_list_pools(const char *group, uint64_t *npools,
 	struct rdb_tx			 tx;
 	struct list_pools_iter_args	 iter_args;
 	int				 rc;
+
+	*poolsp = NULL;
+	*pools_len = 0;
 
 	/* TODO: attach to DAOS system based on group argument */
 
@@ -697,10 +697,18 @@ ds_mgmt_list_pools(const char *group, uint64_t *npools,
 out_svc:
 	ds_mgmt_svc_put_leader(svc);
 out:
-	if (rc != 0)
+	*npools = iter_args.npools;
+	/* poolsp, pools_len initialized to NULL,0 - update if successful */
+
+	if (rc != 0) {
+		/* Error in iteration */
 		ds_mgmt_free_pool_list(&iter_args.pools, iter_args.pools_index);
-	else {
-		*npools = iter_args.npools;
+	} else if ((iter_args.avail_npools > 0) &&
+		   (iter_args.npools > iter_args.avail_npools)) {
+		/* Got a list, but client buffer not supplied or too small */
+		ds_mgmt_free_pool_list(&iter_args.pools, iter_args.pools_index);
+		rc = -DER_TRUNC;
+	} else {
 		*poolsp = iter_args.pools;
 		*pools_len = iter_args.pools_index;
 	}
@@ -734,7 +742,7 @@ ds_mgmt_hdlr_list_pools(crt_rpc_t *rpc_req)
 	pc_out->lp_pools.ca_arrays = pools;
 	pc_out->lp_pools.ca_count = pools_len;
 
-	/* TODO: something different for larger RPC replies? */
+	/* TODO: bulk transfer for large responses */
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
 		D_ERROR("crt_reply_send failed, rc: %d\n", rc);

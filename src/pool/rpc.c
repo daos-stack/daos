@@ -186,6 +186,8 @@ CRT_RPC_DEFINE(pool_acl_update, DAOS_ISEQ_POOL_ACL_UPDATE,
 		DAOS_OSEQ_POOL_ACL_UPDATE)
 CRT_RPC_DEFINE(pool_acl_delete, DAOS_ISEQ_POOL_ACL_DELETE,
 		DAOS_OSEQ_POOL_ACL_DELETE)
+CRT_RPC_DEFINE(pool_list_cont, DAOS_ISEQ_POOL_LIST_CONT,
+		DAOS_OSEQ_POOL_LIST_CONT)
 
 /* Define for cont_rpcs[] array population below.
  * See POOL_PROTO_*_RPC_LIST macro definition
