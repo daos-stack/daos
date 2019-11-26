@@ -63,7 +63,7 @@ class MultiServerCreateDeleteTest(TestWithoutServers):
 
     def tearDown(self):
         """
-        test teardown 
+        test teardown
         """
         if self.agent_sessions:
             agent_utils.stop_agent(self.agent_sessions)
