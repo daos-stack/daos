@@ -26,7 +26,7 @@ from __future__ import print_function
 import os
 import traceback
 from avocado.utils import process
-from apricot import TestWithoutServer, skipForTicket
+from apricot import TestWithoutServers, skipForTicket
 import agent_utils
 import server_utils
 import check_for_pool
@@ -41,6 +41,9 @@ class MultiServerCreateDeleteTest(TestWithoutServers):
     """
     # super wasteful since its doing this for every variation
     def setUp(self):
+        """
+        test setup
+        """
         super(MultiServerCreateDeleteTest, self).setUp()
         self.agent_sessions = None
         # there is a presumption that this test lives in a specific spot
@@ -59,6 +62,9 @@ class MultiServerCreateDeleteTest(TestWithoutServers):
         self.dmg = self.basepath + '/install/bin/dmg'
 
     def tearDown(self):
+        """
+        test teardown 
+        """
         if self.agent_sessions:
             agent_utils.stop_agent(self.agent_sessions)
         server_utils.stop_server(hosts=self.hostlist_servers)
