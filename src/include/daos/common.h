@@ -47,6 +47,7 @@
 #include <cart/api.h>
 #include <daos_types.h>
 #include <daos_prop.h>
+#include <daos_security.h>
 
 #ifndef DF_RC
 #define DF_RC "%s(%d)"
@@ -104,6 +105,7 @@ char *DP_UUID(const void *uuid);
 /* For prefixes of error messages about a container */
 #define DF_CONT			DF_UUID"/"DF_UUID
 #define DP_CONT(puuid, cuuid)	DP_UUID(puuid), DP_UUID(cuuid)
+#define DF_CONTF		DF_UUIDF"/"DF_UUIDF
 
 char *daos_key2str(daos_key_t *key);
 
@@ -578,6 +580,7 @@ bool daos_hhash_link_delete(struct d_hlink *hlink);
 crt_init_options_t *daos_crt_init_opt_get(bool server, int crt_nr);
 
 int crt_proc_daos_prop_t(crt_proc_t proc, daos_prop_t **data);
+int crt_proc_struct_daos_acl(crt_proc_t proc, struct daos_acl **data);
 
 bool daos_prop_valid(daos_prop_t *prop, bool pool, bool input);
 daos_prop_t *daos_prop_dup(daos_prop_t *prop, bool pool);

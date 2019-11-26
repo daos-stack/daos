@@ -35,7 +35,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
     add-apt-repository ppa:jhli/libsafec;                               \
     add-apt-repository ppa:jhli/ipmctl;                                 \
     apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
-                       libsafec-dev libipmctl-dev
+                       libsafec-dev libipmctl-dev ndctl ipmctl
 
 # hack the default shell to bash instead of dash
 RUN rm /bin/sh && ln -s bash /bin/sh

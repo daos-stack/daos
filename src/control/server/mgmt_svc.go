@@ -361,6 +361,31 @@ func (svc *mgmtSvc) PoolOverwriteACL(ctx context.Context, req *mgmtpb.ModifyACLR
 	return resp, nil
 }
 
+// PoolUpdateACL forwards a request to the IO server to add or update entries in
+// a pool's Access Control List
+func (svc *mgmtSvc) PoolUpdateACL(ctx context.Context, req *mgmtpb.ModifyACLReq) (*mgmtpb.ACLResp, error) {
+	svc.log.Debugf("MgmtSvc.PoolUpdateACL dispatch, req:%+v\n", *req)
+
+	mi, err := svc.harness.GetMSLeaderInstance()
+	if err != nil {
+		return nil, err
+	}
+
+	dresp, err := mi.CallDrpc(drpc.ModuleMgmt, drpc.MethodPoolUpdateACL, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.ACLResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal PoolUpdateACL response")
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolUpdateACL dispatch, resp:%+v\n", *resp)
+
+	return resp, nil
+}
+
 // BioHealthQuery implements the method defined for the Management Service.
 func (svc *mgmtSvc) BioHealthQuery(ctx context.Context, req *mgmtpb.BioHealthReq) (*mgmtpb.BioHealthResp, error) {
 	svc.log.Debugf("MgmtSvc.BioHealthQuery dispatch, req:%+v\n", *req)
