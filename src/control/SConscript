@@ -170,15 +170,17 @@ def scons():
 
     nvmecontrol = senv.StaticLibrary("nvme_control",
                                      Glob(join(gospdkpath, "src", "*.c")),
-                                     CC=compiler, LIBS=['spdk', 'spdk_env_dpdk',
-                                                        'numa'])
+                                     CC=compiler,
+                                     LIBS=['spdk', 'spdk_env_dpdk', 'numa'])
 
     senv.Install(join(senv.subst("$PREFIX"), "lib64"), nvmecontrol)
 
+    # CGO shell env vars.
+
     # explicitly link RTE & SPDK libs
     senv.AppendENVPath("CGO_LDFLAGS",
-        senv.subst("-L%s -L$SPDK_PREFIX/lib -L$HWLOC_PREFIX/lib"
-                   " -L$OFI_PREFIX/lib -L$ISAL_PREFIX/lib $_RPATH" % gopath) + \
+        senv.subst("-L%s -L$SPDK_PREFIX/lib -L$HWLOC_PREFIX/lib "
+                   "-L$OFI_PREFIX/lib -L$ISAL_PREFIX/lib $_RPATH" % gopath) + \
         " -lspdk_env_dpdk -lspdk_thread -lspdk_bdev -lspdk_copy" + \
         " -lrte_mempool  -lrte_mempool_ring -lrte_bus_pci" + \
         " -lrte_pci -lrte_ring -lrte_mbuf -lrte_eal -lrte_kvargs" + \
@@ -188,9 +190,9 @@ def scons():
         " -lspdk_sock -lspdk_log -lspdk_notify -lspdk_blob_bdev " + \
         " -lnuma -ldl -lisal")
 
-    senv.AppendENVPath("CGO_CFLAGS",
-        senv.subst("-I$SPDK_PREFIX/include -I$HWLOC_PREFIX/include"
-                   " -I$OFI_PREFIX/include"))
+    senv.AppendENVPath("CGO_CFLAGS", senv.subst("-I$SPDK_PREFIX/include "
+                                                "-I$HWLOC_PREFIX/include "
+                                                "-I$OFI_PREFIX/include"))
 
     # copy setup_spdk.sh script to be executed at daos_server runtime
     senv.Command(join("$PREFIX", "share", "daos", "control", "setup_spdk.sh"),
