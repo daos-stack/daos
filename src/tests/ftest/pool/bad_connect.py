@@ -23,18 +23,14 @@
 '''
 from __future__ import print_function
 
-import os
 import traceback
 import json
 import ctypes
-from apricot import Test
-
-
 import agent_utils
 import server_utils
 import write_host_file
-from pydaos.raw import DaosContext, DaosPool, DaosApiError, RankList
 from apricot import TestWithoutServers
+from pydaos.raw import DaosContext, DaosPool, DaosApiError, RankList
 
 class BadConnectTest(TestWithoutServers):
     """

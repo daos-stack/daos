@@ -23,7 +23,6 @@
 """
 
 import os
-import json
 import ctypes
 import time
 import avocado
@@ -32,10 +31,9 @@ import agent_utils
 import server_utils
 import write_host_file
 
-from pydaos.raw import (DaosContext, DaosPool, DaosContainer, IORequest, DaosObj,
-                        DaosApiError, DaosLog)
-from apricot import skipForTicket
-from apricot import TestWithoutServers
+from pydaos.raw import (DaosPool, DaosContainer, IORequest,
+                        DaosObj, DaosApiError)
+from apricot import skipForTicket, TestWithoutServers
 
 class ObjectDataValidation(TestWithoutServers):
     """

@@ -29,7 +29,6 @@ from __future__ import print_function
 import os
 import json
 import re
-import stat
 
 from avocado import Test as avocadoTest
 from avocado import skip, TestFail

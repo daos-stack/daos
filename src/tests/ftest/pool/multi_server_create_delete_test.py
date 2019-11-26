@@ -25,17 +25,12 @@ from __future__ import print_function
 
 import os
 import traceback
-import json
-
 from avocado.utils import process
-from apricot import Test
-
+from apricot import TestWithoutServer, skipForTicket
 import agent_utils
 import server_utils
 import check_for_pool
 import write_host_file
-from apricot import TestWithoutServers
-from apricot import skipForTicket
 
 #pylint: disable=broad-except
 class MultiServerCreateDeleteTest(TestWithoutServers):
@@ -131,7 +126,7 @@ class MultiServerCreateDeleteTest(TestWithoutServers):
             delete_cmd = (
                 "{} pool destroy "
                 "--pool={} "
-                # "--group={2} "  # TODO: should this be implemented?
+                # "--group={2} "  TODO: should this be implemented?
                 "--force".format(self.dmg, uuid_str))  # , setid))
 
             process.system(delete_cmd)

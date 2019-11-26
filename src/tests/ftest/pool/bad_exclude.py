@@ -27,14 +27,11 @@ import os
 import traceback
 import json
 import ctypes
-from apricot import Test
-
-
 import agent_utils
 import server_utils
 import write_host_file
-from pydaos.raw import DaosContext, DaosPool, DaosApiError, RankList
 from apricot import TestWithoutServers
+from pydaos.raw import DaosContext, DaosPool, DaosApiError, RankList
 
 class BadExcludeTest(TestWithoutServers):
     """
@@ -120,7 +117,7 @@ class BadExcludeTest(TestWithoutServers):
         pool = None
         try:
             # setup the DAOS python API
-            with open('../../../.build_vars.json') as build_file:
+            with open('../../.build_vars.json') as build_file:
                 data = json.load(build_file)
             context = DaosContext(data['PREFIX'] + '/lib64/')
 

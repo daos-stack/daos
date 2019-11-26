@@ -23,11 +23,8 @@
 '''
 from __future__ import print_function
 
-import os
 import sys
-import json
-from apricot import TestWithoutServers 
-from apricot import skipForTicket
+from apricot import TestWithoutServers, skipForTicket
 
 sys.path.append('./util')
 sys.path.append('../util')
@@ -36,7 +33,6 @@ import agent_utils
 import server_utils
 import write_host_file
 from mpio_utils import MpioUtils, MpioFailed
-from pydaos.raw import DaosContext
 
 class Romio(TestWithoutServers):
     """
@@ -125,7 +121,7 @@ class Romio(TestWithoutServers):
                              "failed to destroy pool"]
 
             for line in searchfile:
-                for i in xrange(len(error_message)):
+                for i in range(len(error_message)):
                     if error_message[i] in line:
                         self.fail("Romio Test Failed with error_message: "
                                   "{}".format(error_message[i]))

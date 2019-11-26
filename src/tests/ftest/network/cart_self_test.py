@@ -29,7 +29,7 @@ from apricot import TestWithoutServers
 import agent_utils
 import server_utils
 import write_host_file
-from pydaos.raw import DaosContext, DaosLog
+from pydaos.raw import DaosLog
 
 class CartSelfTest(TestWithoutServers):
     """
