@@ -38,20 +38,17 @@
  * ==============================
  */
 
-//struct ret_t *__wrap_init_ret(void)
-//{
-//	return mock_ptr_type(struct ret_t *);
-//}
+int
+mock_get_dev_health_logs(struct spdk_nvme_ctrlr *ctrlr,
+			 struct dev_health_entry *entry)
+{
+	struct spdk_nvme_health_information_page health_page;
 
-//void __wrap_cleanup(void)
-//{
-//	printf("Mock cleanup()...\n");
-//}
-//
-//void __wrap_collect(struct ret_t *ret)
-//{
-//	printf("Mock collect()...\n");
-//}
+	memset(&health_page, 0, sizeof(health_page));
+	entry->health_page = health_page;
+
+	return 0;
+}
 
 /**
  * ===================
@@ -66,10 +63,17 @@ mock_spdk_nvme_probe_ok(const struct spdk_nvme_transport_id *trid,
 			spdk_nvme_attach_cb attach_cb,
 			spdk_nvme_remove_cb remove_cb)
 {
-	//check_expecteds(probe_cb);
-	//check_expected(attach_cb);
+	return 0;
+}
 
-	return 0; //mock_type(int);
+int
+mock_spdk_nvme_probe_fail(const struct spdk_nvme_transport_id *trid,
+			void *cb_ctx,
+			spdk_nvme_probe_cb probe_cb,
+			spdk_nvme_attach_cb attach_cb,
+			spdk_nvme_remove_cb remove_cb)
+{
+	return -1;
 }
 
 int
@@ -83,31 +87,24 @@ mock_spdk_nvme_detach_ok(struct spdk_nvme_ctrlr *ctrlr)
  * Test functions
  * ===================
  */
-//static void test_nvme_discover_null_g_controllers(void **state)
-//{
-//	(void) state; /*unused*/
-//	struct ret_t *rv, *ret;
-//
-//	/* ret_t values for mock init_ret */
-//	ret = test_malloc(sizeof(struct ret_t));
-//	ret->rc = 0;
-//	ret->ctrlrs = NULL;
-//	ret->nss = NULL;
-//	snprintf(ret->err, sizeof(ret->err), "none");
-//
-//	/* Define param checks and return values */
-//	will_return(__wrap_init_ret, &ret);
-//	will_return(__wrap_spdk_nvme_probe, 0);
-//	expect_any(__wrap_spdk_nvme_probe, probe_cb);
-//	expect_any(__wrap_spdk_nvme_probe, attach_cb);
-//
-//	rv = nvme_discover();
-//	if (rv != NULL) {
-//		printf("nvme_discover() returned: %d\n", rv->rc);
-//	}
-//
-//	test_free(ret);
-//}
+
+static void
+test_nvme_discover_null_g_controllers(void **state)
+{
+	(void) state; /*unused*/
+	struct ret_t *ret;
+
+	assert_true(g_controllers == NULL);
+
+	ret = _nvme_discover(&mock_spdk_nvme_probe_ok,
+			     &mock_spdk_nvme_detach_ok,
+			     &mock_get_dev_health_logs);
+	assert_int_equal(ret->rc, 0);
+
+	assert_true(ret->ctrlrs == NULL);
+
+	free(ret);
+}
 
 static void
 test_nvme_discover_set_g_controllers(void **state)
@@ -115,60 +112,101 @@ test_nvme_discover_set_g_controllers(void **state)
 	(void) state; /*unused*/
 	struct ret_t *ret;
 
-	/* ret_t values for mock init_ret */
-//	ret = malloc(sizeof(struct ret_t));
-//	ret->rc = 0;
-//	ret->ctrlrs = NULL;
-//	ret->nss = NULL;
-//	snprintf(ret->err, sizeof(ret->err), "none");
-
-	if (g_controllers == NULL) {
-		g_controllers = malloc(sizeof(struct ctrlr_entry));
-		g_controllers->ctrlr = NULL;
-		g_controllers->dev_health = NULL;
-		g_controllers->next = NULL;
+	if (g_controllers != NULL) {
+		assert_true(false);
 	}
+	g_controllers = malloc(sizeof(struct ctrlr_entry));
+	g_controllers->ctrlr = NULL;
+	g_controllers->dev_health = NULL;
+	g_controllers->next = NULL;
 
 	ret = _nvme_discover(&mock_spdk_nvme_probe_ok,
-			    &mock_spdk_nvme_detach_ok);
+			     &mock_spdk_nvme_detach_ok,
+			     &mock_get_dev_health_logs);
 	assert_int_equal(ret->rc, 0);
+
+	assert_true(ret->ctrlrs == NULL);
 
 	free(ret);
 }
 
-//static void test_nvme_discover_nvme_probe_fail(void **state)
-//{
-//	(void) state; /*unused*/
-//	struct ret_t *rv, *ret;
-//
-//	/* ret_t values for mock init_ret */
-//	ret = test_malloc(sizeof(struct ret_t));
-//	ret->rc = 0;
-//	ret->ctrlrs = NULL;
-//	ret->nss = NULL;
-//	snprintf(ret->err, sizeof(ret->err), "none");
-//
-//	/* Define param checks and return values */
-//	will_return(__wrap_init_ret, &ret);
-//	will_return(__wrap_spdk_nvme_probe, 1);
-//	expect_any(__wrap_spdk_nvme_probe, probe_cb);
-//	expect_any(__wrap_spdk_nvme_probe, attach_cb);
-//
-//	rv = nvme_discover();
-//	if (rv != NULL) {
-//		printf("nvme_discover() returned: %d\n", rv->rc);
-//	}
-//
-//	test_free(ret);
-//}
+static void
+test_nvme_discover_probe_fail(void **state)
+{
+	(void) state; /*unused*/
+	struct ret_t *ret;
+
+	if (g_controllers != NULL) {
+		assert_true(false);
+	}
+	g_controllers = malloc(sizeof(struct ctrlr_entry));
+	g_controllers->ctrlr = NULL;
+	g_controllers->dev_health = NULL;
+	g_controllers->next = NULL;
+
+	ret = _nvme_discover(&mock_spdk_nvme_probe_fail,
+			     &mock_spdk_nvme_detach_ok,
+			     &mock_get_dev_health_logs);
+	assert_int_equal(ret->rc, -1);
+
+	assert_true(ret->ctrlrs == NULL);
+
+	free(ret);
+}
+
+/* TODO: work out how we can access nvme_internal.h to
+ *       access the opaque spdk_nvme_ctrlr type to mock.
+static void
+test_nvme_collect(void **state)
+{
+	(void) state;
+	struct ret_t *ret;
+	struct spdk_nvme_transport_id trid = {};
+	struct spdk_nvme_ctrlr_opts opts = {};
+	struct spdk_nvme_ctrlr ctrlr1;
+	struct spdk_nvme_ctrlr ctrlr2;
+
+	if (g_controllers != NULL) {
+		assert_true(false);
+	}
+	g_controllers = malloc(sizeof(struct ctrlr_entry));
+	g_controllers->ctrlr = NULL;
+	g_controllers->dev_health = NULL;
+	g_controllers->next = NULL;
+
+	memset(&ctrlr1, 0, sizeof(struct spdk_nvme_ctrlr));
+	snprintf(ctrlr1.trid.traddr, sizeof(ctrlr1.trid.traddr),
+		 "0000:01:00.0");
+	ctrlr1->trid.trtype = SPDK_NVME_TRANSPORT_PCIE;
+	memset(&ctrlr2, 0, sizeof(struct spdk_nvme_ctrlr));
+	snprintf(ctrlr2.trid.traddr, sizeof(ctrlr2.trid.traddr),
+		 "0000:02:00.0");
+	ctrlr2.trid.trtype = SPDK_NVME_TRANSPORT_PCIE;
+
+	memset(&trid, 0, sizeof(trid));
+	trid.trtype = SPDK_NVME_TRANSPORT_PCIE;
+
+	attach_cb(NULL, &trid, &ctrlr1, &opts);
+	attach_cb(NULL, &trid, &ctrlr2, &opts);
+
+	assert_true(ret->ctrlrs == NULL);
+
+	collect();
+
+	assert_true(ret->ctrlrs != NULL);
+
+	free(ret);
+}
+*/
 
 int
 main(void)
 {
 	const struct CMUnitTest tests[] = {
-		//cmocka_unit_test(test_nvme_discover_null_g_controllers),
+		cmocka_unit_test(test_nvme_discover_null_g_controllers),
 		cmocka_unit_test(test_nvme_discover_set_g_controllers),
-		//cmocka_unit_test(test_nvme_discover_nvme_probe_fail),
+		cmocka_unit_test(test_nvme_discover_probe_fail),
+		/*cmocka_unit_test(test_nvme_collect),*/
 	};
 
 	return cmocka_run_group_tests(tests, NULL, NULL);

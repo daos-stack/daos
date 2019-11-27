@@ -44,7 +44,7 @@ struct ns_t {
 	int		id;
 	int		size;
 	char		ctrlr_pci_addr[1024];
-	struct ns_t	*next;
+	struct ns_t    *next;
 };
 
 /*
@@ -74,8 +74,8 @@ struct dev_health_t {
  */
 struct ret_t {
 	int		rc;
-	struct ctrlr_t	*ctrlrs;
-	struct ns_t	*nss;
+	struct ctrlr_t *ctrlrs;
+	struct ns_t    *nss;
 	char		err[1024];
 };
 
@@ -112,7 +112,9 @@ typedef int (*prober)(const struct spdk_nvme_transport_id *trid, void *cb_ctx,
 		      spdk_nvme_attach_cb attach_cb,
 		      spdk_nvme_remove_cb remove_cb);
 typedef int (*detacher)(struct spdk_nvme_ctrlr *ctrlr);
-struct ret_t *_nvme_discover(prober, detacher);
+typedef int (*health_getter)(struct spdk_nvme_ctrlr *ctrlr,
+			     struct dev_health_entry *entry);
+struct ret_t *_nvme_discover(prober, detacher, health_getter);
 
 /**
  * Discover NVMe controllers and namespaces, as well as return device health
