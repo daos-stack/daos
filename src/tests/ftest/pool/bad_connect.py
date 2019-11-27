@@ -28,7 +28,7 @@ import ctypes
 import agent_utils
 import server_utils
 import write_host_file
-from apricot import TestWithoutServers
+from apricot import TestWithoutServers, skipForTicket
 from pydaos.raw import DaosContext, DaosPool, DaosApiError, RankList
 
 class BadConnectTest(TestWithoutServers):
@@ -65,6 +65,7 @@ class BadConnectTest(TestWithoutServers):
             agent_utils.stop_agent(self.agent_sessions)
         server_utils.stop_server(hosts=self.hostlist_servers)
 
+    @skipForTicket("DAOS-3819")
     def test_connect(self):
         """
         Pass bad parameters to pool connect
