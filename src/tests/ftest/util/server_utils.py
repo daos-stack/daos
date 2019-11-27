@@ -144,7 +144,6 @@ class DaosServer(DaosCommand):
             self.xshelpernr = FormattedParameter("-x {}")
             self.firstcore = FormattedParameter("-f {}")
             self.group = FormattedParameter("-g {}")
-            self.attach = FormattedParameter("-a {}")
             self.sock_dir = FormattedParameter("-d {}")
             self.insecure = FormattedParameter("-i", True)
             self.recreate = FormattedParameter("--recreate-superblocks", True)
@@ -335,13 +334,12 @@ class ServerManager(ExecutableCommand):
     """Defines object to manage server functions and launch server command."""
     # pylint: disable=pylint-no-self-use
 
-    def __init__(self, daosbinpath, runnerpath, attach="/tmp", timeout=300):
+    def __init__(self, daosbinpath, runnerpath, timeout=300):
         """Create a ServerManager object.
 
         Args:
             daosbinpath (str): Path to daos bin
             runnerpath (str): Path to Orterun binary.
-            attach (str, optional): Defaults to "/tmp".
             timeout (int, optional): Time for the server to start.
                 Defaults to 300.
         """
@@ -358,12 +356,8 @@ class ServerManager(ExecutableCommand):
         self.runner.job.action.value = "start"
         self.runner.job.get_action_command()
 
-        # Set server environment
-        os.environ["CRT_ATTACH_INFO_PATH"] = attach
-
         # Parameters that user can specify in the test yaml to modify behavior.
         self.debug = BasicParameter(None, True)       # ServerCommand param
-        self.attach = BasicParameter(None, attach)    # ServerCommand param
         self.insecure = BasicParameter(None, True)    # ServerCommand param
         self.recreate = BasicParameter(None, True)    # ServerCommand param
         self.sudo = BasicParameter(None, False)       # ServerCommand param
@@ -399,7 +393,7 @@ class ServerManager(ExecutableCommand):
             test (Test): avocado Test object
         """
         server_params = ["debug", "sudo", "srv_timeout"]
-        server_start_params = ["attach", "insecure", "recreate"]
+        server_start_params = ["insecure", "recreate"]
         runner_params = ["enable_recovery", "export", "report_uri"]
         super(ServerManager, self).get_params(test)
         self.runner.job.yaml_params.get_params(test)
@@ -442,10 +436,6 @@ class ServerManager(ExecutableCommand):
                 cmd_touch_log = "touch {}".format(lfile)
                 pcmd(self._hosts, cmd_touch_log, False)
 
-            # Change ownership of attach info directory
-            chmod_attach = "chmod 777 -R {}".format(self.attach.value)
-            pcmd(self._hosts, chmod_attach, False)
-
         try:
             self.run()
         except CommandFailure as details:
@@ -471,11 +461,6 @@ class ServerManager(ExecutableCommand):
                 self.runner.job.check_subprocess_status(self.runner.process)
             except CommandFailure as error:
                 self.log.info("Failed to start after format: %s", str(error))
-
-            # Change ownership shared attach info file
-            chmod_cmds = "sudo chmod 777 {}/daos_server.attach_info_tmp".format(
-                self.attach.value)
-            pcmd(self._hosts, chmod_cmds, False)
 
         return True
 
@@ -644,7 +629,7 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
             [os.path.join(build_vars["PREFIX"], "bin", "daos_server"),
              "--debug",
              "--config", server_yaml,
-             "start", "-i", "--recreate-superblocks", "-a", test.tmp])
+             "start", "-i", "--recreate-superblocks"])
 
         print("Start CMD>>>>{0}".format(' '.join(server_cmd)))
 
