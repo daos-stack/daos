@@ -167,6 +167,12 @@ class NvmeObject(TestWithServers):
         self.pool_size = self.params.get("size", "/run/pool/createsize/*")
         self.array_size = self.params.get("array_size", "/run/container/*")
 
+        # update timeout for single_pool test case
+        timeout_for_single_pool = self.params.get(
+            "timeout_single_pool", "/run/timeouts/*/")
+        if "nvme_object_single_pool" in self.__str__():
+            self.timeout = timeout_for_single_pool
+
     @avocado.fail_on(DaosApiError)
     def test_nvme_object_single_pool(self):
         """Jira ID: DAOS-2087.

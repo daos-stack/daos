@@ -12,7 +12,11 @@ hosts:
   - boro-G
  test_clients:
   - boro-H
-timeout: 16000
+timeouts:
+  single_pool:
+    timeout_single_pool: 900
+  multiple_pool:
+    timeout: 16000
 server_config:
  name: daos_server
  servers:
