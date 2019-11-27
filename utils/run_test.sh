@@ -113,6 +113,7 @@ if [ -d "/mnt/daos" ]; then
     export LD_LIBRARY_PATH PATH
     run_test src/rdb/tests/rdb_test_runner.py "${SL_OMPI_PREFIX}"
     export PATH=${OLD_PATH} LD_LIBRARY_PATH=${OLD_LDLIBPATH}
+    run_test build/src/control/lib/spdk/ctests/nvme_discover_tests
     run_test build/src/security/tests/cli_security_tests
     run_test build/src/security/tests/srv_acl_tests
     run_test build/src/common/tests/acl_api_tests
