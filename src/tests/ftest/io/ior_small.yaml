@@ -12,7 +12,7 @@ hosts:
             - boro-F
             - boro-G
             - boro-H
-timeout: 1200
+timeout: 1800
 server_config:
     name: daos_server
     servers:
@@ -28,6 +28,7 @@ pool:
         group: daos_server
     createsize:
         scm_size: 3000000000
+        nvme_size: 9000000000
     createsvc:
         svcn: 1
 ior:

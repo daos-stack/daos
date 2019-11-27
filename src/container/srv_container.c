@@ -21,7 +21,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * /file
+ * \file
  *
  * ds_cont: Container Operations
  *
@@ -517,6 +517,8 @@ cont_destroy_bcast(crt_context_t ctx, struct cont_svc *svc,
 	uuid_copy(in->tdi_uuid, cont_uuid);
 
 	rc = dss_rpc_send(rpc);
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_CONT_DESTROY_FAIL_CORPC))
+		rc = -DER_TIMEDOUT;
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
@@ -789,6 +791,8 @@ cont_close_bcast(crt_context_t ctx, struct cont_svc *svc,
 	uuid_copy(in->tci_pool_uuid, svc->cs_pool_uuid);
 
 	rc = dss_rpc_send(rpc);
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_CONT_CLOSE_FAIL_CORPC))
+		rc = -DER_TIMEDOUT;
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
@@ -966,6 +970,8 @@ cont_query_bcast(crt_context_t ctx, struct cont *cont, const uuid_t pool_hdl,
 	out->tqo_hae = DAOS_EPOCH_MAX;
 
 	rc = dss_rpc_send(rpc);
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_CONT_QUERY_FAIL_CORPC))
+		rc = -DER_TIMEDOUT;
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
