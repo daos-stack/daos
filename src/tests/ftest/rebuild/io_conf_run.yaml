@@ -8,7 +8,7 @@ hosts:
     - boro-F
     - boro-G
     - boro-H
-timeout: 900
+timeout: 3600
 server_config:
   name: daos_server
   servers:
@@ -31,12 +31,12 @@ gen_io_conf:
     #small_no_dkeys:
     #  dkeys: "1"
     large_no_dkeys:
-      dkeys: "10"
+      dkeys: "5"
   no_of_akeys: !mux
     #small_no_akeys:
     #  akeys: "1"
     large_no_akeys:
-      akeys: "10"
+      akeys: "5"
   record: !mux
     #small_record_no:
     #  record_size: "1"
