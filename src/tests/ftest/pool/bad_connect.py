@@ -24,12 +24,11 @@
 from __future__ import print_function
 
 import traceback
-import json
 import ctypes
 import agent_utils
 import server_utils
 import write_host_file
-from apricot import TestWithoutServers, skipForTicket
+from apricot import TestWithoutServers
 from pydaos.raw import DaosContext, DaosPool, DaosApiError, RankList
 
 class BadConnectTest(TestWithoutServers):
@@ -66,7 +65,6 @@ class BadConnectTest(TestWithoutServers):
             agent_utils.stop_agent(self.agent_sessions)
         server_utils.stop_server(hosts=self.hostlist_servers)
 
-    @skipForTicket("DAOS-3819")
     def test_connect(self):
         """
         Pass bad parameters to pool connect
@@ -118,14 +116,9 @@ class BadConnectTest(TestWithoutServers):
         pgroup = ctypes.create_string_buffer(0)
         pool = None
         try:
-            # setup the DAOS python API
-            with open('../../.build_vars.json') as build_file:
-                data = json.load(build_file)
-            context = DaosContext(data['PREFIX'] + '/lib64/')
-
             # initialize a python pool object then create the underlying
             # daos storage
-            pool = DaosPool(context)
+            pool = DaosPool(self.context)
             pool.create(createmode, createuid, creategid,
                         createsize, createsetid, None)
             # save this uuid since we might trash it as part of the test
