@@ -71,7 +71,7 @@ class DmgNetworkScanTest(TestWithServers):
             for i, line in enumerate(dmg_out.stdout.splitlines()):
                 for j, item in enumerate(net_items):
                     if item in line:
-                        pout[i+j] = line.strip('\t')
+                        pout[i + j] = line.strip('\t')
 
         dmg_dev = []
         exp_dev = self.params.get("options", "/run/expected/")
