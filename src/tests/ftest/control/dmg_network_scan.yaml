@@ -6,7 +6,26 @@ hosts:
 server_config:
   name: daos_server
   port: 10001
+  control_log_mask: INFO
 dmg:
   request: network
   action: scan
   insecure: True
+
+expected:
+  options:
+    -
+      fabric_iface: ib0
+      provider: ofi+sockets
+      pinned_numa_node: "0"
+
+    -
+      fabric_iface: eth0
+      provider: ofi+sockets
+      pinned_numa_node: "0"
+
+    -
+      fabric_iface: lo
+      provider: ofi+sockets
+      pinned_numa_node: "0"
+

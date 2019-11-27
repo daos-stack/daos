@@ -30,6 +30,10 @@ from command_utils import DaosCommand, CommandWithParameters, CommandFailure
 from command_utils import FormattedParameter
 
 
+class DmgFailure(Exception):
+    """Base exception for this module."""
+
+
 class DmgCommand(DaosCommand):
     """Defines a object representing a dmg command."""
 

@@ -25,9 +25,10 @@ from __future__ import print_function
 
 import os
 
-from dmg_utils import DmgCommand
+from dmg_utils import DmgCommand, DmgFailure
 from apricot import TestWithServers
 from avocado.utils import process
+
 
 class DmgNetworkScanTest(TestWithServers):
     """Test Class Description:
@@ -58,6 +59,37 @@ class DmgNetworkScanTest(TestWithServers):
         dmg.hostlist.update(",".join(servers_with_ports), "dmg.hostlist")
 
         try:
-            dmg.run()
+            dmg_out = dmg.run()
         except process.CmdError as details:
             self.fail("dmg command failed: {}".format(details))
+
+        # This parse asumes that the device information is listed on separate
+        # lines and with this format 'info_type: info'
+        if isinstance(dmg_out.stdout, str):
+            pout = {}
+            net_items = ["numa_node:", "iface:", "provider:"]
+            for i, line in enumerate(dmg_out.stdout.splitlines()):
+                for j, item in enumerate(net_items):
+                    if item in line:
+                        pout[i+j] = line.strip('\t')
+
+        dmg_dev = []
+        exp_dev = self.params.get("options", "/run/expected/")
+        dmg_dev_list = [list(pout.values())[i:i + len(exp_dev)]
+                        for i in range(0, len(pout.items()), len(exp_dev))]
+
+        # Convert dmg list of string to list of tuples
+        for sub_list in dmg_dev_list:
+            dmg_dev.append([tuple(map(str, sub.split(': ')))
+                            for sub in sub_list])
+
+        # Verify
+        try:
+            for i, device in enumerate(exp_dev):
+                device.sort(key=lambda x: x[0])
+                dmg_dev[i].sort(key=lambda x: x[0])
+                if device not in dmg_dev:
+                    self.fail("Could not find device information on dmg ouput.")
+        except DmgFailure as error:
+            self.log.error(str(error))
+            self.fail("Test failed during dmg output verification.")
