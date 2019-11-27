@@ -15,10 +15,9 @@ def scons():
     prereqs.require(unit_env, 'pmdk', 'spdk', 'hwloc', 'cmocka')
 
     daos_build.test(unit_env, 'nvme_discover_tests',
-                    ['nvme_discover_test.c', '../src/nvme_control_common.c',
-                     '../src/nvme_control.c'],
-                     LIBS=['spdk', 'spdk_env_dpdk', 'numa', 'cmocka', 'pthread',
-                           'dl'])
+                    ['nvme_discover_test.c', senv.ncc, senv.nc],
+                    LIBS=['spdk', 'spdk_env_dpdk', 'numa', 'cmocka', 'pthread',
+                          'dl'])
 
 if __name__ == "SCons.Script":
     scons()
