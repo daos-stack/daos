@@ -450,7 +450,7 @@ func (acl *AccessControlList) String() string {
 	var builder strings.Builder
 
 	builder.WriteString("# Entries:\n")
-	if acl == nil || len(acl.Entries) == 0 {
+	if acl.Empty() {
 		builder.WriteString("#   None\n")
 		return builder.String()
 	}
@@ -460,4 +460,12 @@ func (acl *AccessControlList) String() string {
 	}
 
 	return builder.String()
+}
+
+// Empty checks whether there are any entries in the AccessControlList
+func (acl *AccessControlList) Empty() bool {
+	if acl == nil || len(acl.Entries) == 0 {
+		return true
+	}
+	return false
 }
