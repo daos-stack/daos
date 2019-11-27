@@ -299,6 +299,68 @@ co_properties(void **state)
 	test_teardown((void **)&arg);
 }
 
+static void
+co_op_retry(void **state)
+{
+	test_arg_t	*arg = *state;
+	uuid_t		 uuid;
+	daos_handle_t	 coh;
+	daos_cont_info_t info;
+	int		 rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	uuid_generate(uuid);
+
+	print_message("creating container ... ");
+	rc = daos_cont_create(arg->pool.poh, uuid, NULL, NULL);
+	assert_int_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("opening container ... ");
+	rc = daos_cont_open(arg->pool.poh, uuid, DAOS_COO_RW, &coh, &info,
+			    NULL);
+	assert_int_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("setting DAOS_CONT_QUERY_FAIL_CORPC ... ");
+	rc = daos_mgmt_set_params(arg->group, 0, DSS_KEY_FAIL_LOC,
+				  DAOS_CONT_QUERY_FAIL_CORPC | DAOS_FAIL_ONCE,
+				  0, NULL);
+	assert_int_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("querying container ... ");
+	rc = daos_cont_query(coh, &info, NULL, NULL);
+	assert_int_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("setting DAOS_CONT_CLOSE_FAIL_CORPC ... ");
+	rc = daos_mgmt_set_params(arg->group, 0, DSS_KEY_FAIL_LOC,
+				  DAOS_CONT_CLOSE_FAIL_CORPC | DAOS_FAIL_ONCE,
+				  0, NULL);
+	assert_int_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("closing container ... ");
+	rc = daos_cont_close(coh, NULL);
+	assert_int_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("setting DAOS_CONT_DESTROY_FAIL_CORPC ... ");
+	rc = daos_mgmt_set_params(arg->group, 0, DSS_KEY_FAIL_LOC,
+				  DAOS_CONT_DESTROY_FAIL_CORPC | DAOS_FAIL_ONCE,
+				  0, NULL);
+	assert_int_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("destroying container ... ");
+	rc = daos_cont_destroy(arg->pool.poh, uuid, 1 /* force */, NULL);
+	assert_int_equal(rc, 0);
+	print_message("success\n");
+}
+
 static int
 co_setup_sync(void **state)
 {
@@ -335,6 +397,8 @@ static const struct CMUnitTest co_tests[] = {
 	  co_attribute, co_setup_async, test_case_teardown},
 	{ "CONT6: create container with properties and query",
 	  co_properties, NULL, test_case_teardown},
+	{ "CONT7: retry CONT_{CLOSE,DESTROY,QUERY}",
+	  co_op_retry, NULL, test_case_teardown}
 };
 
 int
