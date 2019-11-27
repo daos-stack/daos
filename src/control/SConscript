@@ -149,15 +149,14 @@ def scons():
     AlwaysBuild([agentbin, dmgbin, adminbin, drpcbin])
 
     SConscript('lib/spdk/SConscript', exports='denv')
-    denv.AppendUnique(LIBPATH=['lib/spdk'])
 
     senv = denv.Clone()
     prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
 
     # Explicitly link RTE & SPDK libs for CGO access.
     senv.AppendENVPath("CGO_LDFLAGS",
-        senv.subst("-L%s -L$SPDK_PREFIX/lib -L$HWLOC_PREFIX/lib "
-                   "-L$OFI_PREFIX/lib -L$ISAL_PREFIX/lib $_RPATH" % gopath) + \
+        senv.subst("-L$PREFIX/lib64 -L$SPDK_PREFIX/lib -L$HWLOC_PREFIX/lib "
+                   "-L$OFI_PREFIX/lib -L$ISAL_PREFIX/lib $_RPATH") + \
         " -lspdk_env_dpdk -lspdk_thread -lspdk_bdev -lspdk_copy" + \
         " -lrte_mempool  -lrte_mempool_ring -lrte_bus_pci" + \
         " -lrte_pci -lrte_ring -lrte_mbuf -lrte_eal -lrte_kvargs" + \

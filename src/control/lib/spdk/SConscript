@@ -15,10 +15,10 @@ def scons():
 
     # Link to DPDK static libs
     senv.AppendUnique(LINKFLAGS=['-Wl,--whole-archive', \
-                      '-lrte_mempool', '-lrte_mempool_ring', '-lrte_bus_pci', \
-                      '-lrte_pci', '-lrte_ring', '-lrte_mbuf', '-lrte_eal', \
-                      '-lrte_kvargs', \
-                      '-Wl,--no-whole-archive'])
+                                 '-lrte_mempool', '-lrte_mempool_ring', \
+                                 '-lrte_bus_pci', '-lrte_pci', '-lrte_ring', \
+                                 '-lrte_mbuf', '-lrte_eal', '-lrte_kvargs', \
+                                 '-Wl,--no-whole-archive'])
 
     # hack to avoid building this library with cov compiler for the moment
     compiler = senv.get('COMPILER').lower()
@@ -26,14 +26,15 @@ def scons():
         compiler = "gcc"
 
     denv.nvmecontrol = senv.StaticLibrary("nvme_control",
-                                     ["src/nvme_control.c",
-                                      "src/nvme_control_common.c"],
-                                     CC=compiler,
-                                     LIBS=['spdk', 'spdk_env_dpdk', 'numa'])
+                                          ["src/nvme_control.c",
+                                           "src/nvme_control_common.c"],
+                                          CC=compiler,
+                                          LIBS=['spdk', 'spdk_env_dpdk',
+                                          'numa'])
 
     senv.Install(join(senv.subst("$PREFIX"), "lib64"), denv.nvmecontrol)
 
-    #SConscript('ctests/SConscript', exports='denv')
+    SConscript('ctests/SConscript', exports='senv')
 
 if __name__ == "SCons.Script":
     scons()

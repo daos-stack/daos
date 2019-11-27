@@ -21,7 +21,6 @@
 * portions thereof marked with this legend must also reproduce the markings.
 */
 
-#include <stdio.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <setjmp.h>
@@ -31,7 +30,7 @@
 #include "spdk/nvme.h"
 #include "spdk/env.h"
 
-#include "nvme_control.h"
+#include "../include/nvme_control.h"
 
 /**
  * ==============================
