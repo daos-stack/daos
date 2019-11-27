@@ -14,28 +14,31 @@ def scons():
                 if 'ID' in line:
                     line = line.strip()
                     _, distro = line.strip().split('=')
+                    distro = distro.strip('"')
                     break
-        if distro in ['"centos"', '"rhel"', '"fedora"']:
+        if distro in ['centos', 'rhel', 'fedora', 'opensuse']:
             import rpm
+            from pkg_resources import parse_version
+
             ts = rpm.TransactionSet()
             headers = ts.dbMatch('name', 'lustre')
             if not headers:
-                print("No package lustre found.")
+                headers = ts.dbMatch('name', 'lustre-client')
+            if headers and parse_version(headers['version']) >= parse_version('2.12.57'):
+                denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
             else:
-                from pkg_resources import parse_version
-                for h in headers:
-                    if parse_version(h['version']) >= parse_version('2.12.57'):
-                        denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
-        elif distro in ('"debian"', '"ubuntu"'):
+                print("Found no package lustre nor lustre-client.")
+        elif distro in ('debian', 'ubuntu'):
             import apt
             cache = apt.Cache()
             cache.open()
             instver = cache["lustre"].installed
-            if instver:
-                if parse_version(instver.version) >= parse_version('2.12.57'):
-                    denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
+            if not instver:
+                instver = cache["lustre-client"].installed
+            if instver and parse_version(instver.version) >= parse_version('2.12.57'):
+                denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
             else:
-                print("No package lustre found.")
+                print("Found no package lustre nor lustre-client.")
         else:
             print("Unable to identify distro.")
     except ImportError:
