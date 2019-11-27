@@ -500,7 +500,7 @@ server_init(int argc, char *argv[])
 		D_GOTO(exit_mod_loaded, rc);
 	D_INFO("Module %s successfully loaded\n", modules);
 
-	/* start up service */
+	/* initialize service */
 	rc = dss_srv_init();
 	if (rc) {
 		D_ERROR("DAOS cannot be initialized using the configured "
@@ -509,7 +509,7 @@ server_init(int argc, char *argv[])
 			dss_storage_path);
 		D_GOTO(exit_mod_loaded, rc);
 	}
-	D_INFO("Service is now running\n");
+	D_INFO("Service initialized\n");
 
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		rc = daos_init();
@@ -577,6 +577,9 @@ server_init(int argc, char *argv[])
 	if (rc != 0)
 		goto exit_drpc_fini;
 	D_INFO("Modules successfully set up\n");
+
+	dss_xstreams_open_barrier();
+	D_INFO("Service fully up\n");
 
 	gethostname(hostname, 255);
 	D_PRINT("DAOS I/O server (v%s) process %u started on rank %u "
