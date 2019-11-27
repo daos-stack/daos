@@ -11,7 +11,7 @@ logdir: /tmp/soak
 server_config:
     name: daos_server
     provider: ofi+sockets
-    server:
+    servers:
         log_mask: ERR
         crt_timeout: 2000
         fabric_iface: ib0
