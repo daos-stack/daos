@@ -25,7 +25,6 @@ from __future__ import print_function
 
 import os
 import traceback
-import json
 import ctypes
 import agent_utils
 import server_utils
