@@ -331,30 +331,3 @@ collect_health_stats(struct dev_health_entry *entry, struct ctrlr_t *ctrlr)
 	return 0;
 }
 
-void
-cleanup(void)
-{
-	struct ns_entry		*ns_entry;
-	struct ctrlr_entry	*ctrlr_entry;
-
-	ns_entry = g_namespaces;
-	ctrlr_entry = g_controllers;
-
-	while (ns_entry) {
-		struct ns_entry *next = ns_entry->next;
-
-		free(ns_entry);
-		ns_entry = next;
-	}
-
-	while (ctrlr_entry) {
-		struct ctrlr_entry *next = ctrlr_entry->next;
-
-		if (ctrlr_entry->dev_health != NULL)
-			free(ctrlr_entry->dev_health);
-		spdk_nvme_detach(ctrlr_entry->ctrlr);
-		free(ctrlr_entry);
-		ctrlr_entry = next;
-	}
-}
-

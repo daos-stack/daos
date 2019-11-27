@@ -126,10 +126,4 @@ collect(struct ret_t *ret);
 int
 collect_health_stats(struct dev_health_entry *entry, struct ctrlr_t *ctrlr);
 
-/**
- * Cleanup structs held in memory.
- */
-void
-cleanup(void);
-
 #endif

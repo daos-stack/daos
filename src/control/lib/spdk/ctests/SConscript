@@ -1,4 +1,4 @@
-"""Build spdk bindings C tests"""
+"""Build go-spdk bindings C tests"""
 import daos_build
 
 def scons():
@@ -6,16 +6,11 @@ def scons():
     Import('senv', 'prereqs')
 
     unit_env = senv.Clone()
-    #unit_env.AppendUnique(OBJPREFIX='utest_')
-    # Some syscalls are aliased when fortification is enabled, which makes
-    # mocking in unit tests into a headache.
-    # The compiler decides this on its own, but let's force the issue.
-    #unit_env.Append(CCFLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0")
 
     prereqs.require(unit_env, 'pmdk', 'spdk', 'hwloc', 'cmocka')
 
-    daos_build.test(unit_env, 'nvme_discover_tests',
-                    ['nvme_discover_test.c', senv.ncc, senv.nc],
+    daos_build.test(unit_env, 'nvme_control_tests',
+                    ['nvme_control_ut.c', senv.ncc, senv.nc],
                     LIBS=['spdk', 'spdk_env_dpdk', 'numa', 'cmocka', 'pthread',
                           'dl'])
 

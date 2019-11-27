@@ -59,17 +59,23 @@
  * ===================
  */
 
-int mock_spdk_nvme_probe_ok(
-		const struct spdk_nvme_transport_id *trid,
-		void *cb_ctx,
-		spdk_nvme_probe_cb probe_cb,
-		spdk_nvme_attach_cb attach_cb,
-		spdk_nvme_remove_cb remove_cb)
+int
+mock_spdk_nvme_probe_ok(const struct spdk_nvme_transport_id *trid,
+			void *cb_ctx,
+			spdk_nvme_probe_cb probe_cb,
+			spdk_nvme_attach_cb attach_cb,
+			spdk_nvme_remove_cb remove_cb)
 {
 	//check_expecteds(probe_cb);
 	//check_expected(attach_cb);
 
 	return 0; //mock_type(int);
+}
+
+int
+mock_spdk_nvme_detach_ok(struct spdk_nvme_ctrlr *ctrlr)
+{
+	return 0;
 }
 
 /**
@@ -103,18 +109,18 @@ int mock_spdk_nvme_probe_ok(
 //	test_free(ret);
 //}
 
-static void test_nvme_discover_set_g_controllers(void **state)
+static void
+test_nvme_discover_set_g_controllers(void **state)
 {
 	(void) state; /*unused*/
-	struct ret_t *rv, *ret;
+	struct ret_t *ret;
 
 	/* ret_t values for mock init_ret */
-	ret = malloc(sizeof(struct ret_t));
-	//ret = test_malloc(sizeof(struct ret_t));
-	ret->rc = 0;
-	ret->ctrlrs = NULL;
-	ret->nss = NULL;
-	snprintf(ret->err, sizeof(ret->err), "none");
+//	ret = malloc(sizeof(struct ret_t));
+//	ret->rc = 0;
+//	ret->ctrlrs = NULL;
+//	ret->nss = NULL;
+//	snprintf(ret->err, sizeof(ret->err), "none");
 
 	if (g_controllers == NULL) {
 		g_controllers = malloc(sizeof(struct ctrlr_entry));
@@ -123,16 +129,9 @@ static void test_nvme_discover_set_g_controllers(void **state)
 		g_controllers->next = NULL;
 	}
 
-	/* Define param checks and return values */
-	//will_return(__wrap_init_ret, &ret);
-	//will_return(__wrap_spdk_nvme_probe, 0);
-	//expect_any(__wrap_spdk_nvme_probe, probe_cb);
-	//expect_any(__wrap_spdk_nvme_probe, attach_cb);
-
-	rv = _nvme_discover(&mock_spdk_nvme_probe_ok);
-	if (rv != NULL) {
-		printf("nvme_discover() returned: %d\n", rv->rc);
-	}
+	ret = _nvme_discover(&mock_spdk_nvme_probe_ok,
+			    &mock_spdk_nvme_detach_ok);
+	assert_int_equal(ret->rc, 0);
 
 	free(ret);
 }
@@ -163,7 +162,8 @@ static void test_nvme_discover_set_g_controllers(void **state)
 //	test_free(ret);
 //}
 
-int main(void)
+int
+main(void)
 {
 	const struct CMUnitTest tests[] = {
 		//cmocka_unit_test(test_nvme_discover_null_g_controllers),

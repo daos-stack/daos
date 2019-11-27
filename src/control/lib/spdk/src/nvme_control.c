@@ -31,50 +31,49 @@
 struct ctrlr_entry	*g_controllers;
 struct ns_entry		*g_namespaces;
 
-static void
-get_spdk_log_page_completion(void *cb_arg, const struct spdk_nvme_cpl *cpl)
-{
-	struct dev_health_entry *entry = cb_arg;
+//static void
+//get_spdk_log_page_completion(void *cb_arg, const struct spdk_nvme_cpl *cpl)
+//{
+//	struct dev_health_entry *entry = cb_arg;
+//
+//	if (spdk_nvme_cpl_is_error(cpl))
+//		fprintf(stderr, "Error with SPDK health log page\n");
+//
+//	entry->inflight--;
+//}
 
-	if (spdk_nvme_cpl_is_error(cpl))
-		fprintf(stderr, "Error with SPDK health log page\n");
-
-	entry->inflight--;
-}
-
-static int
-get_dev_health_logs(struct spdk_nvme_ctrlr *ctrlr,
-		    struct dev_health_entry *entry)
-{
-	struct spdk_nvme_health_information_page health_page;
-	int					 rc = 0;
-
-	entry->inflight++;
-	rc = spdk_nvme_ctrlr_cmd_get_log_page(ctrlr,
-					      SPDK_NVME_LOG_HEALTH_INFORMATION,
-					      SPDK_NVME_GLOBAL_NS_TAG,
-					      &health_page,
-					      sizeof(health_page),
-					      0, get_spdk_log_page_completion,
-					      entry);
-	if (rc != 0)
-		return rc;
-
-	while (entry->inflight)
-		spdk_nvme_ctrlr_process_admin_completions(ctrlr);
-
-	entry->health_page = health_page;
-	return rc;
-}
+//static int
+//get_dev_health_logs(struct spdk_nvme_ctrlr *ctrlr,
+//		    struct dev_health_entry *entry)
+//{
+//	struct spdk_nvme_health_information_page health_page;
+//	int					 rc = 0;
+//
+//	entry->inflight++;
+//	rc = spdk_nvme_ctrlr_cmd_get_log_page(ctrlr,
+//					      SPDK_NVME_LOG_HEALTH_INFORMATION,
+//					      SPDK_NVME_GLOBAL_NS_TAG,
+//					      &health_page,
+//					      sizeof(health_page),
+//					      0, get_spdk_log_page_completion,
+//					      entry);
+//	if (rc != 0)
+//		return rc;
+//
+//	while (entry->inflight)
+//		spdk_nvme_ctrlr_process_admin_completions(ctrlr);
+//
+//	entry->health_page = health_page;
+//	return rc;
+//}
 
 struct ret_t *
-_nvme_discover(prober probe)
+_nvme_discover(prober probe, detacher detach)
 {
 	int			 rc;
 	struct ret_t		*ret;
-	struct ctrlr_entry	*ctrlr_entry;
-	struct dev_health_entry	*health_entry;
-
+	//struct ctrlr_entry	*ctrlr_entry;
+	//struct dev_health_entry	*health_entry;
 
 	ret = init_ret();
 
@@ -86,46 +85,46 @@ _nvme_discover(prober probe)
 	 *  initializing the controller we chose to attach.
 	 */
 	rc = probe(NULL, NULL, probe_cb, attach_cb, NULL);
-
 	if (rc != 0) {
-		fprintf(stderr, "spdk_nvme_probe() failed\n");
-		cleanup();
+		sprintf(ret->err, "spdk_nvme_probe() failed");
+		ret->rc = 1;
+		nvme_cleanup(detach);
 		return ret;
 	}
 
 	if (g_controllers == NULL || g_controllers->ctrlr == NULL) {
-		fprintf(stderr, "no NVMe controllers found\n");
-		cleanup();
+		fprintf(stderr, "No NVMe controllers found\n");
+		nvme_cleanup(detach);
 		return ret;
 	}
 
-	/*
-	 * Collect NVMe SSD health stats for each probed controller.
-	 */
-	ctrlr_entry = g_controllers;
-
-	while (ctrlr_entry) {
-		health_entry = malloc(sizeof(struct dev_health_entry));
-		if (health_entry == NULL) {
-			fprintf(stderr, "health_entry malloc failed");
-			cleanup();
-			return ret;
-		}
-
-		rc = get_dev_health_logs(ctrlr_entry->ctrlr, health_entry);
-		if (rc != 0) {
-			fprintf(stderr,
-				"Unable to get SPDK ctrlr health logs\n");
-			free(health_entry);
-			cleanup();
-			return ret;
-		}
-
-		ctrlr_entry->dev_health = health_entry;
-		ctrlr_entry = ctrlr_entry->next;
-	}
-
-	collect(ret);
+//	/*
+//	 * Collect NVMe SSD health stats for each probed controller.
+//	 */
+//	ctrlr_entry = g_controllers;
+//
+//	while (ctrlr_entry) {
+//		health_entry = malloc(sizeof(struct dev_health_entry));
+//		if (health_entry == NULL) {
+//			fprintf(stderr, "health_entry malloc failed");
+//			nvme_cleanup();
+//			return ret;
+//		}
+//
+//		rc = get_dev_health_logs(ctrlr_entry->ctrlr, health_entry);
+//		if (rc != 0) {
+//			fprintf(stderr,
+//				"Unable to get SPDK ctrlr health logs\n");
+//			free(health_entry);
+//			nvme_cleanup();
+//			return ret;
+//		}
+//
+//		ctrlr_entry->dev_health = health_entry;
+//		ctrlr_entry = ctrlr_entry->next;
+//	}
+//
+//	collect(ret);
 
 	return ret;
 }
@@ -133,7 +132,7 @@ _nvme_discover(prober probe)
 struct ret_t *
 nvme_discover(void)
 {
-	return _nvme_discover(&spdk_nvme_probe);
+	return _nvme_discover(&spdk_nvme_probe, &spdk_nvme_detach);
 }
 
 struct ret_t *
@@ -286,7 +285,29 @@ nvme_format(char *ctrlr_pci_addr)
 }
 
 void
-nvme_cleanup()
+nvme_cleanup(detacher detach)
 {
-	cleanup();
+	struct ns_entry		*ns_entry;
+	struct ctrlr_entry	*ctrlr_entry;
+
+	ns_entry = g_namespaces;
+	ctrlr_entry = g_controllers;
+
+	while (ns_entry != NULL) {
+		struct ns_entry *next = ns_entry->next;
+
+		free(ns_entry);
+		ns_entry = next;
+	}
+
+	while (ctrlr_entry != NULL) {
+		struct ctrlr_entry *next = ctrlr_entry->next;
+
+		if (ctrlr_entry->dev_health != NULL)
+			free(ctrlr_entry->dev_health);
+		detach(ctrlr_entry->ctrlr);
+		free(ctrlr_entry);
+		ctrlr_entry = next;
+	}
 }
+
