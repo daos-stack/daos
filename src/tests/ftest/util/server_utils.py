@@ -530,8 +530,8 @@ class ServerManager(ExecutableCommand):
             scm_mount_count = len(self.runner.job.yaml_params.
                                   server_params[-1].scm_list.value)
             for count in range(0, scm_mount_count):
-                clean_cmds.append("sudo umount /mnt/daos;"
-                                  "sudo wipefs -a /dev/pmem{}").format(count)
+                clean_cmds.append("sudo umount /mnt/daos; \
+                                   sudo wipefs -a /dev/pmem{}".format(count))
         self.log.info("Cleanup of /mnt/daos directory.")
         pcmd(self._hosts, "; ".join(clean_cmds), False)
 
