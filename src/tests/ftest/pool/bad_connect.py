@@ -28,8 +28,8 @@ import ctypes
 import agent_utils
 import server_utils
 import write_host_file
-from apricot import TestWithoutServers, skipForTicket
 from pydaos.raw import DaosContext, DaosPool, DaosApiError, RankList
+from apricot import TestWithoutServers, skipForTicket
 
 class BadConnectTest(TestWithoutServers):
     """
