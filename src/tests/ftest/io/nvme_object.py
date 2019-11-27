@@ -185,8 +185,7 @@ class NvmeObject(TestWithServers):
         Use Cases:
             Verify the objects are being created and the data is not
             corrupted.
-        :avocado: tags=nvme,hw,nvme_object_single_pool,medium,nvme_object
-        :avocado: tags=full_regression
+        :avocado: tags=nvme,pr,hw,nvme_object_single_pool,medium,nvme_object
         """
 
         # perform multiple object writes to a single pool
