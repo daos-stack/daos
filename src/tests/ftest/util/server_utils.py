@@ -71,6 +71,7 @@ class DaosServer(DaosCommand):
         self.yaml_params = DaosServerConfig()
         self.timeout = 120
         self.server_cnt = 1
+        self.server_list = []
         self.mode = "normal"
 
         self.debug = FormattedParameter("-b", True)
@@ -92,6 +93,9 @@ class DaosServer(DaosCommand):
 
     def set_config(self, yamlfile):
         """Set the config value of the parameters in server command."""
+        access_points = ":".join((self.server_list[0],
+                                  str(self.yaml_params.port)))
+        self.yaml_params.access_points.value = access_points.split()
         self.config.value = self.yaml_params.create_yaml(yamlfile)
         self.mode = "normal"
         if self.yaml_params.is_nvme() or self.yaml_params.is_scm():
@@ -244,6 +248,7 @@ class DaosServerConfig(ObjectWithParameters):
 
         # Parameters
         self.name = BasicParameter(None, "daos_server")
+        self.access_points = BasicParameter(None)       # e.g. "<host>:<port>"
         self.port = BasicParameter(None, 10001)
         self.provider = BasicParameter(None, "ofi+sockets")
         self.socket_dir = BasicParameter(None)          # /tmp/daos_sockets
@@ -384,6 +389,7 @@ class ServerManager(ExecutableCommand):
         self.runner.hostfile.value = write_host_file(
             self._hosts, workdir, slots)
         self.runner.job.server_cnt = len(self._hosts)
+        self.runner.job.server_list = self._hosts
 
     def get_params(self, test):
         """Get values from the yaml file and assign them respectively
@@ -589,6 +595,8 @@ def run_server(test, hostfile, setname, uri_path=None, env_dict=None,
         server_yaml = os.path.join(test.tmp, AVOCADO_FILE)
         server_config = DaosServerConfig()
         server_config.get_params(test)
+        access_points = ":".join((servers[0], str(server_config.port)))
+        server_config.access_points.value = access_points.split()
         if hasattr(test, "server_log") and test.server_log is not None:
             server_config.update_log_file(test.server_log)
         server_config.create_yaml(server_yaml)

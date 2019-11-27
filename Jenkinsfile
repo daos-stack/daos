@@ -57,6 +57,8 @@ def rpm_test_pre = '''if git show -s --format=%B | grep "^Skip-test: true"; then
                       nodelist=(${NODELIST//,/ })
                       scp -i ci_key src/tests/ftest/data/daos_server_baseline.yaml \
                                     jenkins@${nodelist[0]}:/tmp
+                      scp -i ci_key src/tests/ftest/data/daos_agent_baseline.yaml \
+                                    jenkins@${nodelist[0]}:/tmp
                       ssh -i ci_key jenkins@${nodelist[0]} "set -ex\n'''
 
 def rpm_test_daos_test = '''me=\\\$(whoami)
@@ -70,7 +72,10 @@ def rpm_test_daos_test = '''me=\\\$(whoami)
                             sudo chown \\\$me:\\\$me /tmp/daos_sockets
                             sudo mkdir -p /mnt/daos
                             sudo mount -t tmpfs -o size=16777216k tmpfs /mnt/daos
+                            sed -i -e \\\"/^access_points:/s/example/\\\$(hostname -s)/\\\" /tmp/daos_server_baseline.yaml
+                            sed -i -e \\\"/^access_points:/s/example/\\\$(hostname -s)/\\\" /tmp/daos_agent_baseline.yaml
                             sudo cp /tmp/daos_server_baseline.yaml /usr/etc/daos_server.yml
+                            sudo cp /tmp/daos_agent_baseline.yaml /usr/etc/daos_agent.yml
                             cat /usr/etc/daos_server.yml
                             cat /usr/etc/daos_agent.yml
                             coproc orterun -np 1 -H \\\$HOSTNAME --enable-recovery -x DAOS_SINGLETON_CLI=1 daos_server --debug --config /usr/etc/daos_server.yml start -t 1 -a /tmp -i --recreate-superblocks
