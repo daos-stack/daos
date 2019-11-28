@@ -120,6 +120,7 @@ Requires(postun): /sbin/ldconfig
 %if %{defined cart_sha1}
 Requires: cart-%{cart_sha1}
 %endif
+Requires: libfabric >= 1.8.0
 
 %description server
 This is the package needed to run a DAOS server
@@ -131,6 +132,7 @@ Requires: %{name} = %{version}-%{release}
 %if %{defined cart_sha1}
 Requires: cart-%{cart_sha1}
 %endif
+Requires: libfabric >= 1.8.0
 
 %description client
 This is the package needed to run a DAOS client
