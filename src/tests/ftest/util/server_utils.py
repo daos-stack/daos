@@ -420,19 +420,25 @@ class ServerManager(ExecutableCommand):
 
     def start(self, yamlfile):
         """Start the server through the runner."""
+        storage_prep_flag = ""
         self.runner.job.set_config(yamlfile)
         self.server_clean()
         # Prepare SCM storage in servers
         if self.runner.job.yaml_params.is_scm():
+            storage_prep_flag = "dcpm"
             self.log.info("Performing SCM storage prepare in <format> mode")
-            storage_prepare(self.hosts, "root", "dcpm")
+        else:
+            storage_prep_flag = "ram"
 
         # Prepare nvme storage in servers
         if self.runner.job.yaml_params.is_nvme():
-            self.log.info("Performing nvme storage prepare in <format> mode")
-            storage_prepare(self._hosts, "root", "nvme")
-            self.runner.mca.value = {"plm_rsh_args": "-l root"}
-
+            if storage_prep_flag == "dcpm":
+                storage_prep_flag = "dcpm_nvme"
+            elif storage_prep_flag == "ram":
+                storage_prep_flag = "ram_nvme"
+            else:
+                storage_prep_flag = "nvme"
+            self.log.info("Performing NVMe storage prepare in <format> mode")
             # Make sure log file has been created for ownership change
             lfile = self.runner.job.yaml_params.server_params[-1].log_file.value
             if lfile is not None:
@@ -443,6 +449,9 @@ class ServerManager(ExecutableCommand):
             # Change ownership of attach info directory
             chmod_attach = "chmod 777 -R {}".format(self.attach.value)
             pcmd(self._hosts, chmod_attach, False)
+
+        storage_prepare(self._hosts, "root", storage_prep_flag)
+        self.runner.mca.value = {"plm_rsh_args": "-l root"}
 
         try:
             self.run()
@@ -546,16 +555,20 @@ def storage_prepare(hosts, user, device_type):
     Raises:
         ServerFailed: if server failed to prepare storage
     """
-    device_args = ""
     # Get the daos_server from the install path. Useful for testing
     # with daos built binaries.
-    daos_srv_bin = get_file_path("bin/daos_server")
+    dev_param = ""
     device_args = ""
-    if device_type == "nvme":
-        dev_param = "-n"
-        device_args = " --hugepages=4096"
+    daos_srv_bin = get_file_path("bin/daos_server")
+    if device_type == "ram":
+        return True
     elif device_type == "dcpm":
         dev_param = "-s"
+    elif device_type == "dcpm_nvme":
+        device_args = " --hugepages=4096"
+    elif device_type == "ram_nvme" or device_type == "nvme":
+        dev_param = "-n"
+        device_args = " --hugepages=4096"
     else:
         raise ServerFailed("Invalid device type")
     cmd = ("sudo {} storage prepare {} -u \"{}\" {} -f"
@@ -568,6 +581,8 @@ def storage_prepare(hosts, user, device_type):
 def storage_reset(hosts):
     """
     Reset the Storage on servers using the DAOS server's yaml settings file.
+    NOTE: Don't enhance this method to reset SCM. SCM
+    will not be in a useful state for running next tests.
     Args:
         hosts (str): a string of comma-separated host names
     Raises:
