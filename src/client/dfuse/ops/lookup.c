@@ -21,8 +21,6 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#include <daos/common.h>
-
 #include "dfuse_common.h"
 #include "dfuse.h"
 
