@@ -137,7 +137,9 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	atomic_fetch_add(&ie->ie_ref, 1);
 	ie->ie_dfs = dfs;
 
+	D_MUTEX_LOCK(&fs_handle->dpi_info->di_lock);
 	d_list_add(&dfs->dfs_list, &fs_handle->dpi_info->di_dfs_list);
+	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 
 	rc = dfuse_lookup_inode(fs_handle, ie->ie_dfs, NULL,
 				&ie->ie_stat.st_ino);

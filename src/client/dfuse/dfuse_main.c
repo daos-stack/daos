@@ -146,6 +146,10 @@ main(int argc, char **argv)
 		D_GOTO(out_fini, ret = -DER_NOMEM);
 
 	D_INIT_LIST_HEAD(&dfuse_info->di_dfs_list);
+	rc = D_MUTEX_INIT(&dfuse_info->di_lock, NULL);
+	if (rc != -DER_SUCCESS) {
+		D_GOTO(out_fini, ret = rc);
+	}
 
 	dfuse_info->di_threaded = true;
 
@@ -345,6 +349,7 @@ out_svcl:
 	d_rank_list_free(dfuse_info->di_svcl);
 out_dfuse:
 	DFUSE_TRA_DOWN(dfuse_info);
+	D_MUTEX_DESTROY(&dfuse_info->di_lock);
 	D_FREE(dfuse_info);
 out_fini:
 	daos_fini();

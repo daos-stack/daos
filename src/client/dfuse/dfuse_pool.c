@@ -145,7 +145,9 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	daos_prop_free(prop);
 
+	D_MUTEX_LOCK(&fs_handle->dpi_info->di_lock);
 	d_list_add(&dfs->dfs_list, &fs_handle->dpi_info->di_dfs_list);
+	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 
 	rc = dfuse_lookup_inode(fs_handle, ie->ie_dfs, NULL,
 				&ie->ie_stat.st_ino);

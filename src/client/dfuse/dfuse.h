@@ -50,6 +50,7 @@ struct dfuse_info {
 	bool				di_threaded;
 	bool				di_foreground;
 	d_list_t			di_dfs_list;
+	pthread_mutex_t			di_lock;
 };
 
 /* Launch fuse, and do not return until complete */

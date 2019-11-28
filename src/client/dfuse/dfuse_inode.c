@@ -162,14 +162,6 @@ ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
 			}
 
 		}
-
-		/* TODO:
-		 * Check if this is correct, there could still be entries in
-		 * the inode record table which are keeping a pointer to this
-		 * value
-		 *
-		 * D_FREE(ie->ie_dfs);
-		 */
 	}
 
 	D_FREE(ie);

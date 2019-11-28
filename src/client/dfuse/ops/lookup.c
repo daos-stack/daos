@@ -214,7 +214,9 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	if (rc)
 		D_GOTO(out_umount, ret = rc);
 
+	D_MUTEX_LOCK(&fs_handle->dpi_info->di_lock);
 	d_list_add(&dfs->dfs_list, &fs_handle->dpi_info->di_dfs_list);
+	D_MUTEX_UNLOCK(&fs_handle->dpi_info->di_lock);
 
 	rc = dfuse_lookup_inode(fs_handle, dfs, &oid,
 				&ie->ie_stat.st_ino);
