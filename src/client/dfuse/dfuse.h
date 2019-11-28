@@ -49,6 +49,7 @@ struct dfuse_info {
 	d_rank_list_t			*di_svcl;
 	bool				di_threaded;
 	bool				di_foreground;
+	d_list_t			di_dfs_list;
 };
 
 /* Launch fuse, and do not return until complete */
@@ -60,7 +61,6 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info,
 
 struct dfuse_projection_info {
 	struct dfuse_info		*dpi_info;
-	struct dfuse_dfs		*dpi_ddfs;
 	uint32_t			dpi_max_read;
 	uint32_t			dpi_max_write;
 	/** Hash table of open inodes */
@@ -162,6 +162,7 @@ struct dfuse_dfs {
 	daos_pool_info_t	dfs_pool_info;
 	daos_cont_info_t	dfs_co_info;
 	ino_t			dfs_root;
+	d_list_t		dfs_list;
 };
 
 /* dfuse_core.c */

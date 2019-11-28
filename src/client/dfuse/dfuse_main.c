@@ -145,6 +145,8 @@ main(int argc, char **argv)
 	if (!dfuse_info)
 		D_GOTO(out_fini, ret = -DER_NOMEM);
 
+	D_INIT_LIST_HEAD(&dfuse_info->di_dfs_list);
+
 	dfuse_info->di_threaded = true;
 
 	while (1) {
@@ -230,6 +232,8 @@ main(int argc, char **argv)
 		D_GOTO(out_svcl, 0);
 	}
 
+	d_list_add(&dfs->dfs_list, &dfuse_info->di_dfs_list);
+
 	if (dfuse_info->di_pool) {
 		if (uuid_parse(dfuse_info->di_pool, dfs->dfs_pool) < 0) {
 			DFUSE_LOG_ERROR("Invalid pool uuid");
@@ -297,7 +301,46 @@ out_pool:
 	if (dfuse_info->di_pool)
 		daos_pool_disconnect(dfs->dfs_poh, NULL);
 out_dfs:
-	D_FREE(dfs);
+	while ((dfs = d_list_pop_entry(&dfuse_info->di_dfs_list,
+				       struct dfuse_dfs, dfs_list)))
+	{
+		/* Try and close/disconnect all container/pool handles and free
+		 * the dfs struct.
+		 *
+		 * dfuse_destroy_fuse() has already been called here which will
+		 * have iterated the inode table and should have dropped all
+		 * references to the dfs entries, however depending on the order
+		 * some pools/containers may be left open here so check for this
+		 * and try them again.
+		 */
+		if (!daos_handle_is_inval(dfs->dfs_coh)) {
+
+			if (dfs->dfs_ns) {
+				rc = dfs_umount(dfs->dfs_ns);
+				if (rc != 0)
+					DFUSE_TRA_ERROR(dfs,
+							"dfs_umount() failed (%d)",
+							rc);
+			}
+
+			rc = daos_cont_close(dfs->dfs_coh, NULL);
+			if (rc != -DER_SUCCESS) {
+				DFUSE_TRA_ERROR(dfs,
+						"daos_cont_close() failed: (%d)",
+						rc);
+			}
+
+		} else if (!daos_handle_is_inval(dfs->dfs_poh)) {
+			rc = daos_pool_disconnect(dfs->dfs_poh, NULL);
+			if (rc != -DER_SUCCESS) {
+				DFUSE_TRA_ERROR(dfs,
+						"daos_pool_disconnect() failed: (%d)",
+						rc);
+			}
+		}
+
+		D_FREE(dfs);
+	}
 out_svcl:
 	d_rank_list_free(dfuse_info->di_svcl);
 out_dfuse:

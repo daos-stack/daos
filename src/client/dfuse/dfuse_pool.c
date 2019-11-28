@@ -145,6 +145,8 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	daos_prop_free(prop);
 
+	d_list_add(&dfs->dfs_list, &fs_handle->dpi_info->di_dfs_list);
+
 	rc = dfuse_lookup_inode(fs_handle, ie->ie_dfs, NULL,
 				&ie->ie_stat.st_ino);
 	if (rc) {

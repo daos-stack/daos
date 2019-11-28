@@ -137,6 +137,8 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 	atomic_fetch_add(&ie->ie_ref, 1);
 	ie->ie_dfs = dfs;
 
+	d_list_add(&dfs->dfs_list, &fs_handle->dpi_info->di_dfs_list);
+
 	rc = dfuse_lookup_inode(fs_handle, ie->ie_dfs, NULL,
 				&ie->ie_stat.st_ino);
 	if (rc) {

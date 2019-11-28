@@ -213,6 +213,9 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	rc = dfs_obj2id(ie->ie_obj, &oid);
 	if (rc)
 		D_GOTO(out_umount, ret = rc);
+
+	d_list_add(&dfs->dfs_list, &fs_handle->dpi_info->di_dfs_list);
+
 	rc = dfuse_lookup_inode(fs_handle, dfs, &oid,
 				&ie->ie_stat.st_ino);
 	if (rc)
