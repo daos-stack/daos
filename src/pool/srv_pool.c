@@ -1640,6 +1640,8 @@ pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
 		in->tci_query_bits = DAOS_PO_QUERY_SPACE;
 
 	rc = dss_rpc_send(rpc);
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_CONNECT_FAIL_CORPC))
+		rc = -DER_TIMEDOUT;
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
@@ -2005,6 +2007,8 @@ pool_disconnect_bcast(crt_context_t ctx, struct pool_svc *svc,
 	in->tdi_hdls.ca_arrays = pool_hdls;
 	in->tdi_hdls.ca_count = n_pool_hdls;
 	rc = dss_rpc_send(rpc);
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_DISCONNECT_FAIL_CORPC))
+		rc = -DER_TIMEDOUT;
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
@@ -2151,6 +2155,8 @@ pool_space_query_bcast(crt_context_t ctx, struct pool_svc *svc, uuid_t pool_hdl,
 	uuid_copy(in->tqi_op.pi_uuid, svc->ps_uuid);
 	uuid_copy(in->tqi_op.pi_hdl, pool_hdl);
 	rc = dss_rpc_send(rpc);
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_QUERY_FAIL_CORPC))
+		rc = -DER_TIMEDOUT;
 	if (rc != 0)
 		goto out_rpc;
 

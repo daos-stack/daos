@@ -96,17 +96,6 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr);
 int
 duns_destroy_path(daos_handle_t poh, const char *path);
 
-/**
- * If dynamicaly resolved, will point to the llapi_unlink_foreign() Lustre
- * API, which needs to be used to remove foreign DAOS file/dir.
- *
- * \param[in]	path	Valid path in an existing Lustre namespace.
- *
- * \return		0 on Success. Negative on Failure.
- */
-extern int
-(*unlink_foreign)(char *);
-
 #if defined(__cplusplus)
 }
 #endif

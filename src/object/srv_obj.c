@@ -2076,7 +2076,7 @@ ds_obj_abt_pool_choose_cb(crt_rpc_t *rpc, ABT_pool *pools)
 	return pool;
 }
 
-static bool
+static int
 cont_prop_srv_verify(struct ds_iv_ns *ns, uuid_t co_hdl)
 {
 	int			rc;
