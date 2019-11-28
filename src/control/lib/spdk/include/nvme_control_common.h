@@ -68,7 +68,7 @@ register_ns(struct spdk_nvme_ctrlr *ctrlr, struct spdk_nvme_ns *ns);
  */
 bool
 probe_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
-	struct spdk_nvme_ctrlr_opts *opts);
+	 struct spdk_nvme_ctrlr_opts *opts);
 
 /**
  * Attach call back function to report a device that has been
@@ -82,8 +82,8 @@ probe_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
  */
 void
 attach_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
-	struct spdk_nvme_ctrlr *ctrlr,
-	const struct spdk_nvme_ctrlr_opts *opts);
+	  struct spdk_nvme_ctrlr *ctrlr,
+	  const struct spdk_nvme_ctrlr_opts *opts);
 
 /**
  * Initialize the ret_t struct by allocating memory and setting attributes
@@ -109,6 +109,16 @@ check_size(int written, int max, char *msg, struct ret_t *ret);
  **/
 struct ctrlr_entry *
 get_controller(char *addr, struct ret_t *ret);
+
+/**
+ * Provide ability to pass function pointers to collect for mocking
+ * in unit tests.
+ */
+typedef const struct spdk_nvme_ctrlr_data *(*data_getter)(struct spdk_nvme_ctrlr *);
+typedef struct spdk_pci_device *(*pci_getter)(struct spdk_nvme_ctrlr *);
+typedef int (*socket_id_getter)(struct spdk_pci_device *);
+void
+_collect(struct ret_t *ret, data_getter, pci_getter, socket_id_getter);
 
 /**
  * Collect controller and namespace information of the NVMe devices.

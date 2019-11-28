@@ -1,29 +1,29 @@
-//
-// (C) Copyright 2018-2019 Intel Corporation.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
-//
+/**
+* (C) Copyright 2018-2019 Intel Corporation.
+*
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+*    http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*
+* GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+* The Government's rights to use, modify, reproduce, release, perform, display,
+* or disclose this software are subject to the terms of the Apache License as
+* provided in Contract No. 8F-30005.
+* Any reproduction of computer software, computer software documentation, or
+* portions thereof marked with this legend must also reproduce the markings.
+*/
 
-#include "spdk/stdinc.h"
-#include "spdk/nvme.h"
-#include "spdk/env.h"
+#include <spdk/stdinc.h>
+#include <spdk/nvme.h>
+#include <spdk/env.h>
 
 #include "nvme_control.h"
 #include "nvme_control_common.h"
@@ -87,13 +87,13 @@ _nvme_discover(prober probe, detacher detach, health_getter get_health)
 	rc = probe(NULL, NULL, probe_cb, attach_cb, NULL);
 	if (rc != 0) {
 		sprintf(ret->err, "spdk_nvme_probe() failed");
-		ret->rc = -1;
+		ret->rc = rc;
 		nvme_cleanup(detach);
 		return ret;
 	}
 
 	if (!g_controllers || !g_controllers->ctrlr) {
-		fprintf(stderr, "No NVMe controllers found\n");
+		sprintf(ret->err, "no nvme controllers found");
 		nvme_cleanup(detach);
 		return ret;
 	}
@@ -106,15 +106,17 @@ _nvme_discover(prober probe, detacher detach, health_getter get_health)
 	while (ctrlr_entry) {
 		health_entry = malloc(sizeof(struct dev_health_entry));
 		if (health_entry == NULL) {
-			fprintf(stderr, "health_entry malloc failed");
+			sprintf(ret->err, "health_entry malloc failed");
+			ret->rc = -ENOMEM;
 			nvme_cleanup(detach);
 			return ret;
 		}
 
 		rc = get_health(ctrlr_entry->ctrlr, health_entry);
 		if (rc != 0) {
-			fprintf(stderr,
-				"Unable to get SPDK ctrlr health logs\n");
+			sprintf(ret->err,
+				"unable to get SPDK ctrlr health logs");
+			ret->rc = rc;
 			free(health_entry);
 			nvme_cleanup(detach);
 			return ret;

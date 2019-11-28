@@ -21,9 +21,9 @@
 * portions thereof marked with this legend must also reproduce the markings.
 */
 
-#include "spdk/stdinc.h"
-#include "spdk/nvme.h"
-#include "spdk/env.h"
+#include <spdk/stdinc.h>
+#include <spdk/nvme.h>
+#include <spdk/env.h>
 
 #include "nvme_control.h"
 #include "nvme_control_common.h"
@@ -139,8 +139,8 @@ check_size(int written, int max, char *msg, struct ret_t *ret)
 struct ctrlr_entry *
 get_controller(char *addr, struct ret_t *ret)
 {
-	struct spdk_pci_addr			pci_addr;
-	struct ctrlr_entry			*entry = NULL;
+	struct spdk_pci_addr	pci_addr;
+	struct ctrlr_entry     *entry = NULL;
 
 	entry = g_controllers;
 
@@ -168,15 +168,16 @@ get_controller(char *addr, struct ret_t *ret)
 }
 
 void
-collect(struct ret_t *ret)
+_collect(struct ret_t *ret, data_getter get_data, pci_getter get_pci,
+	 socket_id_getter get_socket_id)
 {
-	struct ns_entry				*ns_entry;
-	struct ctrlr_entry			*ctrlr_entry;
-	const struct spdk_nvme_ctrlr_data	*cdata;
-	struct spdk_pci_device			*pci_dev;
+	struct ns_entry			       *ns_entry;
+	struct ctrlr_entry		       *ctrlr_entry;
+	const struct spdk_nvme_ctrlr_data      *cdata;
+	struct spdk_pci_device		       *pci_dev;
 	struct spdk_pci_addr			pci_addr;
-	struct ctrlr_t				*ctrlr_tmp;
-	struct ns_t				*ns_tmp;
+	struct ctrlr_t			       *ctrlr_tmp;
+	struct ns_t			       *ns_tmp;
 	int					written;
 	int					rc;
 
@@ -232,12 +233,13 @@ collect(struct ret_t *ret)
 			return;
 		}
 
-		cdata = spdk_nvme_ctrlr_get_data(ctrlr_entry->ctrlr);
+		cdata = get_data(ctrlr_entry->ctrlr);
 
 		written = snprintf(ctrlr_tmp->model, sizeof(ctrlr_tmp->model),
 				   "%-20.20s", cdata->mn);
 		if (check_size(written, sizeof(ctrlr_tmp->model),
 			       "model truncated", ret) != 0) {
+			free(ctrlr_tmp);
 			return;
 		}
 
@@ -245,6 +247,7 @@ collect(struct ret_t *ret)
 				   "%-20.20s", cdata->sn);
 		if (check_size(written, sizeof(ctrlr_tmp->serial),
 			       "serial truncated", ret) != 0) {
+			free(ctrlr_tmp);
 			return;
 		}
 
@@ -252,6 +255,7 @@ collect(struct ret_t *ret)
 				   "%s", cdata->fr);
 		if (check_size(written, sizeof(ctrlr_tmp->fw_rev),
 			       "firmware revision truncated", ret) != 0) {
+			free(ctrlr_tmp);
 			return;
 		}
 
@@ -262,18 +266,21 @@ collect(struct ret_t *ret)
 			snprintf(ret->err, sizeof(ret->err),
 				 "spdk_pci_addr_fmt: rc %d", rc);
 			ret->rc = -NVMEC_ERR_PCI_ADDR_FMT;
+			free(ctrlr_tmp);
 			return;
 		}
 
-		pci_dev = spdk_nvme_ctrlr_get_pci_device(ctrlr_entry->ctrlr);
+		pci_dev = get_pci(ctrlr_entry->ctrlr);
 		if (!pci_dev) {
 			snprintf(ret->err, sizeof(ret->err), "get_pci_device");
 			ret->rc = -NVMEC_ERR_GET_PCI_DEV;
+			free(ctrlr_tmp);
 			return;
 		}
 
 		/* populate numa socket id */
-		ctrlr_tmp->socket_id = spdk_pci_device_get_socket_id(pci_dev);
+		ctrlr_tmp->socket_id = get_socket_id(pci_dev);
+		free(pci_dev);
 
 		/*
 		 * Alloc device health stats per controller only if device
@@ -291,6 +298,14 @@ collect(struct ret_t *ret)
 	}
 
 	ret->rc = 0;
+}
+
+void
+collect(struct ret_t *ret)
+{
+	_collect(ret, &spdk_nvme_ctrlr_get_data,
+		 &spdk_nvme_ctrlr_get_pci_device,
+		 &spdk_pci_device_get_socket_id);
 }
 
 int

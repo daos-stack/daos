@@ -1,16 +1,21 @@
 """Build go-spdk bindings C tests"""
 import daos_build
+from os.path import join
 
 def scons():
     """Execute build"""
     Import('senv', 'prereqs')
 
     unit_env = senv.Clone()
-
     prereqs.require(unit_env, 'pmdk', 'spdk', 'hwloc', 'cmocka')
 
+    # equivalent to -I flags for spdk/lib/nvme and spdk/include for ut mocking
+    spdk_src = unit_env.subst("$SPDK_SRC")
+    unit_env.AppendUnique(CPPPATH=[join(spdk_src, "lib", "nvme"),
+                                   join(spdk_src, "include")])
+
     daos_build.test(unit_env, 'nvme_control_tests',
-                    ['nvme_control_ut.c', senv.ncc, senv.nc],
+                    ['nvme_control_ut.c', unit_env.ncc, unit_env.nc],
                     LIBS=['spdk', 'spdk_env_dpdk', 'numa', 'cmocka', 'pthread',
                           'dl'])
 
