@@ -267,7 +267,7 @@ test_nvme_collect(void **state)
 int
 teardown(void ** state)
 {
-	nvme_cleanup(&mock_spdk_nvme_detach_ok);
+	_cleanup(&mock_spdk_nvme_detach_ok);
 
 	return 0;
 }

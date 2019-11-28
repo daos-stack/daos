@@ -88,13 +88,13 @@ _nvme_discover(prober probe, detacher detach, health_getter get_health)
 	if (rc != 0) {
 		sprintf(ret->err, "spdk_nvme_probe() failed");
 		ret->rc = rc;
-		nvme_cleanup(detach);
+		_cleanup(detach);
 		return ret;
 	}
 
 	if (!g_controllers || !g_controllers->ctrlr) {
 		sprintf(ret->err, "no nvme controllers found");
-		nvme_cleanup(detach);
+		_cleanup(detach);
 		return ret;
 	}
 
@@ -108,7 +108,7 @@ _nvme_discover(prober probe, detacher detach, health_getter get_health)
 		if (health_entry == NULL) {
 			sprintf(ret->err, "health_entry malloc failed");
 			ret->rc = -ENOMEM;
-			nvme_cleanup(detach);
+			_cleanup(detach);
 			return ret;
 		}
 
@@ -118,7 +118,7 @@ _nvme_discover(prober probe, detacher detach, health_getter get_health)
 				"unable to get SPDK ctrlr health logs");
 			ret->rc = rc;
 			free(health_entry);
-			nvme_cleanup(detach);
+			_cleanup(detach);
 			return ret;
 		}
 
@@ -288,7 +288,7 @@ nvme_format(char *ctrlr_pci_addr)
 }
 
 void
-nvme_cleanup(detacher detach)
+_cleanup(detacher detach)
 {
 	struct ns_entry		*ns_entry;
 	struct ctrlr_entry	*ctrlr_entry;
@@ -319,3 +319,8 @@ nvme_cleanup(detacher detach)
 	g_controllers = NULL;
 }
 
+void
+nvme_cleanup(void)
+{
+	_cleanup(&spdk_nvme_detach);
+}

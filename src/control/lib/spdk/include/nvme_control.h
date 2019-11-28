@@ -116,6 +116,8 @@ typedef int (*health_getter)(struct spdk_nvme_ctrlr *,
 			     struct dev_health_entry *);
 struct ret_t *
 _nvme_discover(prober, detacher, health_getter);
+void
+_cleanup(detacher);
 
 /**
  * Discover NVMe controllers and namespaces, as well as return device health
@@ -152,6 +154,6 @@ nvme_format(char *ctrlr_pci_addr);
  * Cleanup structs held in memory.
  */
 void
-nvme_cleanup(detacher);
+nvme_cleanup(void);
 
 #endif
