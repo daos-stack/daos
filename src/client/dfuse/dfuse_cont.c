@@ -21,8 +21,6 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#include <daos/common.h>
-
 #include "dfuse_common.h"
 #include "dfuse.h"
 #include "daos_fs.h"
@@ -63,6 +61,8 @@ dfuse_cont_open(fuse_req_t req, struct dfuse_inode_entry *parent,
 		return;
 	}
 	uuid_copy(dfs->dfs_pool, parent->ie_dfs->dfs_pool);
+
+	DFUSE_TRA_UP(dfs, fs_handle, "dfs");
 
 	if (create) {
 		rc = dfs_cont_create(parent->ie_dfs->dfs_poh, dfs->dfs_cont,

@@ -256,7 +256,6 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 #define DFUSE_FUSE_REPLY_ERR(req, status)		\
 	do {						\
 		DFUSE_REPLY_ERR_RAW(req, req, status);	\
-		DFUSE_TRA_DOWN(req);			\
 	} while (0)
 
 #define DFUSE_REPLY_ZERO(req)						\
@@ -268,7 +267,6 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 			DFUSE_TRA_ERROR(req,				\
 					"fuse_reply_err returned %d:%s", \
 					__rc, strerror(-__rc));		\
-		DFUSE_TRA_DOWN(req);					\
 	} while (0)
 
 #define DFUSE_REPLY_ATTR(req, attr)					\
@@ -293,7 +291,6 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 			DFUSE_TRA_ERROR(req,				\
 					"fuse_reply_readlink returned %d:%s", \
 					__rc, strerror(-__rc));		\
-		DFUSE_TRA_DOWN(req);					\
 	} while (0)
 
 #define DFUSE_REPLY_BUF(handle, req, buf, size)				\

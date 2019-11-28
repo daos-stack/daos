@@ -80,6 +80,8 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		return;
 	}
 
+	DFUSE_TRA_UP(dfs, fs_handle, "dfs");
+
 	rc = daos_pool_connect(dfs->dfs_pool, dfuse_info->di_group,
 			       dfuse_info->di_svcl, DAOS_PC_RW,
 			       &dfs->dfs_poh, &dfs->dfs_pool_info,
