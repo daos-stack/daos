@@ -306,8 +306,7 @@ out_pool:
 		daos_pool_disconnect(dfs->dfs_poh, NULL);
 out_dfs:
 	while ((dfs = d_list_pop_entry(&dfuse_info->di_dfs_list,
-				       struct dfuse_dfs, dfs_list)))
-	{
+				       struct dfuse_dfs, dfs_list))) {
 		/* Try and close/disconnect all container/pool handles and free
 		 * the dfs struct.
 		 *
