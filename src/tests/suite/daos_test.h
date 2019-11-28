@@ -165,6 +165,12 @@ typedef struct {
 	void			*rebuild_post_cb_arg;
 	/* epoch IO OP queue */
 	struct epoch_io_args	eio_args;
+
+	/* List pools resources (mgmt tests) */
+	void			*mgmt_lp_args;
+
+	/* List containers (pool tests) */
+	void			*pool_lc_args;
 } test_arg_t;
 
 enum {
@@ -203,6 +209,11 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 int
 test_setup_next_step(void **state, struct test_pool *pool, daos_prop_t *po_prop,
 		     daos_prop_t *co_prop);
+int
+test_setup_pool_create(void **state, struct test_pool *ipool,
+		       struct test_pool *opool, daos_prop_t *prop);
+int
+pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool);
 
 static inline int
 async_enable(void **state)

@@ -87,7 +87,10 @@
 		ds_pool_replicas_update_handler, NULL),			\
 	X(POOL_REPLICAS_REMOVE,						\
 		0, &CQF_pool_replicas_remove,				\
-		ds_pool_replicas_update_handler, NULL)
+		ds_pool_replicas_update_handler, NULL),			\
+	X(POOL_LIST_CONT,						\
+		0, &CQF_pool_list_cont,					\
+		ds_pool_list_cont_handler, NULL)
 
 #define POOL_PROTO_SRV_RPC_LIST						\
 	X(POOL_TGT_CONNECT,						\
@@ -113,6 +116,10 @@
 	X(POOL_PROP_SET,						\
 		0, &CQF_pool_prop_set,					\
 		ds_pool_prop_set_handler,				\
+		NULL),							\
+	X(POOL_ACL_UPDATE,						\
+		0, &CQF_pool_acl_update,				\
+		ds_pool_acl_update_handler,				\
 		NULL)
 
 /* Define for RPC enum population below */
@@ -365,6 +372,28 @@ CRT_RPC_DECLARE(pool_get_acl, DAOS_ISEQ_POOL_GET_ACL, DAOS_OSEQ_POOL_GET_ACL)
 	((struct pool_op_out)	(pso_op)		CRT_VAR)
 
 CRT_RPC_DECLARE(pool_prop_set, DAOS_ISEQ_POOL_PROP_SET, DAOS_OSEQ_POOL_PROP_SET)
+
+#define DAOS_ISEQ_POOL_ACL_UPDATE	/* input fields */	 \
+	((struct pool_op_in)	(pui_op)		CRT_VAR) \
+	((struct daos_acl)	(pui_acl)		CRT_PTR)
+
+#define DAOS_OSEQ_POOL_ACL_UPDATE	/* output fields */	 \
+	((struct pool_op_out)	(puo_op)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_acl_update, DAOS_ISEQ_POOL_ACL_UPDATE,
+		DAOS_OSEQ_POOL_ACL_UPDATE)
+
+#define DAOS_ISEQ_POOL_LIST_CONT	/* input fields */		 \
+	((struct pool_op_in)	(plci_op)			CRT_VAR) \
+	((crt_bulk_t)		(plci_cont_bulk)		CRT_VAR) \
+	((uint64_t)		(plci_ncont)			CRT_VAR)
+
+#define DAOS_OSEQ_POOL_LIST_CONT	/* output fields */		 \
+	((struct pool_op_out)	(plco_op)			CRT_VAR) \
+	((uint64_t)		(plco_ncont)			CRT_VAR)
+
+CRT_RPC_DECLARE(pool_list_cont, DAOS_ISEQ_POOL_LIST_CONT,
+		DAOS_OSEQ_POOL_LIST_CONT)
 
 static inline int
 pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
