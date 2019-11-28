@@ -845,6 +845,10 @@ ds_mgmt_hdlr_tgt_map_update(crt_rpc_t *rpc)
 	uint32_t			version;
 	int				rc;
 
+	/*
+	 * If ds_mgmt_tgt_map_update_pre_forward succeeded, in->tm_map_version
+	 * should be <= the system group version.
+	 */
 	rc = crt_group_version(NULL /* grp */, &version);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 	if (in->tm_map_version > version)

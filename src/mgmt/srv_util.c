@@ -46,6 +46,8 @@ ds_mgmt_group_update(crt_group_mod_op_t op, struct server_entry *servers,
 
 	rc = crt_group_version(NULL /* grp */, &version_current);
 	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(version_current < version, "%u < %u\n", version_current,
+		  version);
 	D_DEBUG(DB_MGMT, "%u -> %u\n", version_current, version);
 
 	ranks = d_rank_list_alloc(nservers);

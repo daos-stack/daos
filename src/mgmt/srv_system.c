@@ -333,7 +333,7 @@ mgmt_svc_step_up_cb(struct ds_rsvc *rsvc)
 	struct mgmt_svc	       *svc = mgmt_svc_obj(rsvc);
 	struct rdb_tx		tx;
 	d_iov_t			value;
-	struct enum_server_arg	arg;
+	uint32_t		version;
 	int			rc;
 
 	rc = rdb_tx_begin(svc->ms_rsvc.s_db, svc->ms_rsvc.s_term, &tx);
@@ -348,7 +348,7 @@ mgmt_svc_step_up_cb(struct ds_rsvc *rsvc)
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
 			D_DEBUG(DB_MGMT, "new db\n");
-			rc = DER_UNINIT;
+			rc = +DER_UNINIT;
 		}
 		goto out_lock;
 	}
@@ -359,18 +359,26 @@ mgmt_svc_step_up_cb(struct ds_rsvc *rsvc)
 		goto out_lock;
 
 	/* Update the local primary group with the latest system map. */
-	enum_server_arg_init(&arg);
-	rc = rdb_tx_iterate(&tx, &svc->ms_servers, false /* !backward */,
-			    enum_server_cb, &arg);
-	if (rc != 0) {
+	rc = crt_group_version(NULL /* grp */, &version);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+	if (version < svc->ms_map_version) {
+		struct enum_server_arg arg;
+
+		enum_server_arg_init(&arg);
+		rc = rdb_tx_iterate(&tx, &svc->ms_servers,
+				    false /* !backward */, enum_server_cb,
+				    &arg);
+		if (rc != 0) {
+			enum_server_arg_fini(&arg);
+			goto out_lock;
+		}
+		rc = ds_mgmt_group_update(CRT_GROUP_MOD_OP_REPLACE,
+					  arg.esa_servers, arg.esa_servers_len,
+					  svc->ms_map_version);
 		enum_server_arg_fini(&arg);
-		goto out_lock;
+		if (rc != 0)
+			goto out_lock;
 	}
-	rc = ds_mgmt_group_update(CRT_GROUP_MOD_OP_REPLACE, arg.esa_servers,
-				  arg.esa_servers_len, svc->ms_map_version);
-	enum_server_arg_fini(&arg);
-	if (rc != 0)
-		goto out_lock;
 
 	/*
 	 * Just in case the previous leader didn't complete distributing the
