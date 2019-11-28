@@ -116,6 +116,8 @@ void ds_cont_hdl_get(struct ds_cont_hdl *hdl);
 
 int ds_cont_close_by_pool_hdls(uuid_t pool_uuid, uuid_t *pool_hdls,
 			       int n_pool_hdls, crt_context_t ctx);
+int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts,
+		 uint64_t *ncont);
 int
 ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		   uint64_t capas, struct ds_cont_hdl **cont_hdl);
