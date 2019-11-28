@@ -78,6 +78,8 @@ const (
 	MethodListPools = C.DRPC_METHOD_MGMT_LIST_POOLS
 	// MethodPoolOverwriteACL is a ModuleMgmt method
 	MethodPoolOverwriteACL = C.DRPC_METHOD_MGMT_POOL_OVERWRITE_ACL
+	// MethodPoolUpdateACL is a ModuleMgmt method
+	MethodPoolUpdateACL = C.DRPC_METHOD_MGMT_POOL_UPDATE_ACL
 )
 
 const (

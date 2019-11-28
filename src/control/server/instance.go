@@ -56,14 +56,14 @@ type IOServerStarter interface {
 // be used with IOServerHarness to manage and monitor multiple instances
 // per node.
 type IOServerInstance struct {
-	log           logging.Logger
-	runner        IOServerStarter
-	bdevProvider  *bdev.ClassProvider
-	scmProvider   *scm.Provider
-	msClient      *mgmtSvcClient
-	instanceReady chan *srvpb.NotifyReadyReq
-	storageReady  chan struct{}
-	fsRoot        string
+	log               logging.Logger
+	runner            IOServerStarter
+	bdevClassProvider *bdev.ClassProvider
+	scmProvider       *scm.Provider
+	msClient          *mgmtSvcClient
+	instanceReady     chan *srvpb.NotifyReadyReq
+	storageReady      chan struct{}
+	fsRoot            string
 
 	sync.RWMutex
 	// these must be protected by a mutex in order to
@@ -76,17 +76,17 @@ type IOServerInstance struct {
 // NewIOServerInstance returns an *IOServerInstance initialized with
 // its dependencies.
 func NewIOServerInstance(log logging.Logger,
-	bp *bdev.ClassProvider, sp *scm.Provider,
+	bcp *bdev.ClassProvider, sp *scm.Provider,
 	msc *mgmtSvcClient, r IOServerStarter) *IOServerInstance {
 
 	return &IOServerInstance{
-		log:           log,
-		runner:        r,
-		bdevProvider:  bp,
-		scmProvider:   sp,
-		msClient:      msc,
-		instanceReady: make(chan *srvpb.NotifyReadyReq),
-		storageReady:  make(chan struct{}),
+		log:               log,
+		runner:            r,
+		bdevClassProvider: bcp,
+		scmProvider:       sp,
+		msClient:          msc,
+		instanceReady:     make(chan *srvpb.NotifyReadyReq),
+		storageReady:      make(chan struct{}),
 	}
 }
 
@@ -205,10 +205,10 @@ func (srv *IOServerInstance) Start(ctx context.Context, errChan chan<- error) er
 			return errors.Wrap(err, "start failed; no superblock")
 		}
 	}
-	if err := srv.bdevProvider.PrepareDevices(); err != nil {
+	if err := srv.bdevClassProvider.PrepareDevices(); err != nil {
 		return errors.Wrap(err, "start failed; unable to prepare NVMe device(s)")
 	}
-	if err := srv.bdevProvider.GenConfigFile(); err != nil {
+	if err := srv.bdevClassProvider.GenConfigFile(); err != nil {
 		return errors.Wrap(err, "start failed; unable to generate NVMe configuration for SPDK")
 	}
 
