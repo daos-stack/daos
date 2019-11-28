@@ -121,8 +121,6 @@ pipeline {
     options {
         // preserve stashes so that jobs can be started at the test stage
         preserveStashes(buildCount: 5)
-        // How can we have different timeouts for weekly and master and PRs?
-        timeout(time: 24, unit: 'HOURS')
     }
 
     stages {
