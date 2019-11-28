@@ -465,13 +465,15 @@ pipeline {
                                       context: "build" + "/" + env.STAGE_NAME,
                                       status: "PENDING"
                         checkoutScm withSubmodules: true
-                        sh label: env.STAGE_NAME,
-                           script: '''rm -rf artifacts/leap15/
-                              mkdir -p artifacts/leap15/
-                              if git show -s --format=%B | grep "^Skip-build: true"; then
-                                  exit 0
-                              fi
-                              make CHROOT_NAME="opensuse-leap-15.1-x86_64" -C utils/rpms chrootbuild'''
+                        catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
+                            sh label: env.STAGE_NAME,
+                               script: '''rm -rf artifacts/leap15/
+                                  mkdir -p artifacts/leap15/
+                                  if git show -s --format=%B | grep "^Skip-build: true"; then
+                                      exit 0
+                                  fi
+                                  make CHROOT_NAME="opensuse-leap-15.1-x86_64" -C utils/rpms chrootbuild'''
+                        }
                     }
                     post {
                         success {
@@ -540,7 +542,8 @@ pipeline {
                                                  build/src/common/tests/drpc_tests,
                                                  build/src/common/tests/acl_api_tests,
                                                  build/src/common/tests/acl_util_tests,
-                                                 build/src/common/tests/acl_util_real,
+                                                 build/src/common/tests/acl_principal_tests,
+                                                 build/src/common/tests/acl_real_tests,
                                                  build/src/iosrv/tests/drpc_progress_tests,
                                                  build/src/control/src/github.com/daos-stack/daos/src/control/mgmt,
                                                  build/src/client/api/tests/eq_tests,

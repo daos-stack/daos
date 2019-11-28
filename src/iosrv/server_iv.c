@@ -904,8 +904,9 @@ ds_iv_done(crt_iv_namespace_t ivns, uint32_t class_id,
 }
 
 static int
-iv_internal(struct ds_iv_ns *ns, struct ds_iv_key *key_iv, d_sg_list_t *value,
-	    crt_iv_sync_t *sync, unsigned int shortcut, int opc)
+iv_op_internal(struct ds_iv_ns *ns, struct ds_iv_key *key_iv,
+	       d_sg_list_t *value, crt_iv_sync_t *sync, unsigned int shortcut,
+	       int opc)
 {
 	struct iv_cb_info	cb_info;
 	ABT_future		future;
@@ -963,6 +964,21 @@ out:
 	return rc;
 }
 
+static int
+iv_op(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
+      crt_iv_sync_t *sync, unsigned int shortcut, bool retry, int opc)
+{
+	int rc;
+
+retry:
+	rc = iv_op_internal(ns, key, value, sync, shortcut, opc);
+	if (retry && daos_rpc_retryable_rc(rc)) {
+		D_DEBUG(DB_TRACE, "retry upon %d\n", rc);
+		goto retry;
+	}
+	return rc;
+}
+
 /**
  * Fetch the value from the iv_entry, if the entry does not exist, it
  * will create the iv entry locally.
@@ -973,9 +989,10 @@ out:
  * return		0 if succeed, otherwise error code.
  */
 int
-ds_iv_fetch(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value)
+ds_iv_fetch(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
+	    bool retry)
 {
-	return iv_internal(ns, key, value, NULL, 0, IV_FETCH);
+	return iv_op(ns, key, value, NULL, 0, retry, IV_FETCH);
 }
 
 /**
@@ -995,7 +1012,7 @@ ds_iv_fetch(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value)
 int
 ds_iv_update(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 	     unsigned int shortcut, unsigned int sync_mode,
-	     unsigned int sync_flags)
+	     unsigned int sync_flags, bool retry)
 {
 	crt_iv_sync_t	iv_sync;
 
@@ -1003,7 +1020,7 @@ ds_iv_update(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 	iv_sync.ivs_mode = sync_mode;
 	iv_sync.ivs_flags = sync_flags;
 
-	return iv_internal(ns, key, value, &iv_sync, shortcut, IV_UPDATE);
+	return iv_op(ns, key, value, &iv_sync, shortcut, retry, IV_UPDATE);
 }
 
 /**
@@ -1022,7 +1039,7 @@ ds_iv_update(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 int
 ds_iv_invalidate(struct ds_iv_ns *ns, struct ds_iv_key *key,
 		 unsigned int shortcut, unsigned int sync_mode,
-		 unsigned int sync_flags)
+		 unsigned int sync_flags, bool retry)
 {
 	crt_iv_sync_t iv_sync;
 
@@ -1030,5 +1047,5 @@ ds_iv_invalidate(struct ds_iv_ns *ns, struct ds_iv_key *key,
 	iv_sync.ivs_mode = sync_mode;
 	iv_sync.ivs_flags = sync_flags;
 
-	return iv_internal(ns, key, NULL, &iv_sync, shortcut, IV_INVALIDATE);
+	return iv_op(ns, key, NULL, &iv_sync, shortcut, retry, IV_INVALIDATE);
 }
