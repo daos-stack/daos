@@ -287,13 +287,14 @@ enum iv_key {
 	IV_CONT_PROP,
 };
 
-int ds_iv_fetch(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value);
+int ds_iv_fetch(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
+		bool retry);
 int ds_iv_update(struct ds_iv_ns *ns, struct ds_iv_key *key,
 		 d_sg_list_t *value, unsigned int shortcut,
-		 unsigned int sync_mode, unsigned int sync_flags);
+		 unsigned int sync_mode, unsigned int sync_flags, bool retry);
 int ds_iv_invalidate(struct ds_iv_ns *ns, struct ds_iv_key *key,
 		     unsigned int shortcut, unsigned int sync_mode,
-		     unsigned int sync_flags);
+		     unsigned int sync_flags, bool retry);
 
 int ds_iv_ns_create(crt_context_t ctx, uuid_t pool_uuid, crt_group_t *grp,
 		    unsigned int *ns_id, struct ds_iv_ns **p_iv_ns);
