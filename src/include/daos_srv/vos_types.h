@@ -30,6 +30,11 @@
 #include <daos/object.h>
 #include <daos/dtx.h>
 
+enum dtx_cos_flags {
+	DCF_FOR_PUNCH	= (1 << 0),
+	DCF_HAS_ILOG	= (1 << 1),
+};
+
 enum vos_oi_attr {
 	/** Marks object as failed */
 	VOS_OI_FAILED		= (1U << 0),

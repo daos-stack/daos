@@ -115,10 +115,13 @@ dtx_resync_commit(uuid_t po_uuid, struct ds_cont_child *cont,
 					dre->dre_intent == DAOS_INTENT_PUNCH ?
 					true : false);
 		if (rc == -DER_NONEXIST) {
+			int	flags = 0;
+
+			if (dre->dre_intent == DAOS_INTENT_PUNCH)
+				flags |= DCF_FOR_PUNCH;
 			rc = vos_dtx_add_cos(cont->sc_hdl, &dre->dre_oid,
 				&dre->dre_xid, dre->dre_hash, dre->dre_epoch, 0,
-				dre->dre_intent == DAOS_INTENT_PUNCH ?
-				true : false);
+				flags);
 			if (rc < 0)
 				D_WARN("Fail to add DTX "DF_DTI" to CoS cache: "
 				       "rc = %d\n",  DP_DTI(&dre->dre_xid), rc);

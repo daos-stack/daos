@@ -519,9 +519,8 @@ dtx_rec_release(struct umem_instance *umm, struct vos_container *cont,
 	int				 i;
 	bool				 sync = false;
 
-	/* XXX: To avoid complex ilog related status check, let's
-	 *	check next record directly. For pure ilog touched
-	 *	DTX case, we do NOT handle it via batched cleanup.
+	/* XXX: To avoid complex ilog related status check, for pure ilog
+	 *	touched DTX case, we do NOT handle it via batched cleanup.
 	 *
 	 *	For abort case, cleanup DTX entry synchronously.
 	 */
@@ -1083,6 +1082,8 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 
 		/* Incarnation log entry implies a share */
 		*tx_id = dae->dae_df_off;
+		if (type == DTX_RT_ILOG)
+			dth->dth_has_ilog = 1;
 	}
 
 	return rc;
@@ -1661,6 +1662,7 @@ dtx_act_handle_batched_cleanup(struct vos_container *cont,
 	struct umem_instance		*umm;
 	struct vos_dtx_blob_df		*dbd;
 	struct vos_dtx_record_df	*rec_df;
+	int				 idx = 0;
 	int				 rc;
 
 	if (daos_is_zero_dti(&dae_df->dae_xid) ||
@@ -1675,12 +1677,26 @@ dtx_act_handle_batched_cleanup(struct vos_container *cont,
 
 	umm = vos_cont2umm(cont);
 	rec_df = &dae_df->dae_rec_inline[0];
+
+again:
 	switch (rec_df->dr_type) {
 	case DTX_RT_ILOG:
-		/* XXX: For pure ilog touched DTX case, we do NOT handle it
-		 *	via batched cleanup.
+		/* XXX: To avoid complex ilog related status check, let's
+		 *	check next record. For pure ilog touched DTX case,
+		 *	we do NOT handle it via batched cleanup.
 		 */
-		return 0;
+		idx++;
+		if (idx >= dae_df->dae_rec_cnt)
+			return 0;
+
+		if (idx < DTX_INLINE_REC_CNT) {
+			rec_df = &dae_df->dae_rec_inline[idx];
+		} else {
+			rec_df = umem_off2ptr(umm, dae_df->dae_rec_off);
+			rec_df = rec_df + idx - DTX_INLINE_REC_CNT;
+		}
+
+		goto again;
 	case DTX_RT_SVT: {
 		struct vos_irec_df	*svt;
 

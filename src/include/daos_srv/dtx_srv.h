@@ -77,7 +77,9 @@ struct dtx_handle {
 					 /* Only one participator in the DTX. */
 					 dth_solo:1,
 					 /* dti_cos has been committed. */
-					 dth_dti_cos_done:1;
+					 dth_dti_cos_done:1,
+					 /* XXX: touch ilog entry. */
+					 dth_has_ilog:1;
 	/* The count the DTXs in the dth_dti_cos array. */
 	uint32_t			 dth_dti_cos_count;
 	/* The array of the DTXs for Commit on Share (conflcit). */

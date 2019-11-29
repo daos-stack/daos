@@ -538,6 +538,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *cont_hdl,
 	struct dtx_conflict_entry	*dces = NULL;
 	int				*ptr = NULL;
 	int				 dces_cnt = 0;
+	int				 flags = 0;
 	int				 rc = 0;
 
 	if (dlh == NULL)
@@ -591,10 +592,14 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *cont_hdl,
 	if (result < 0 || rc < 0)
 		D_GOTO(out, result = result < 0 ? result : rc);
 
+	if (dth->dth_intent == DAOS_INTENT_PUNCH)
+		flags |= DCF_FOR_PUNCH;
+	if (dth->dth_has_ilog)
+		flags |= DCF_HAS_ILOG;
+
 	rc = vos_dtx_add_cos(dth->dth_coh, &dth->dth_oid, &dth->dth_xid,
 			     dth->dth_dkey_hash, dth->dth_epoch, dth->dth_gen,
-			     dth->dth_intent == DAOS_INTENT_PUNCH ?
-			     true : false);
+			     flags);
 	if (rc == -DER_INPROGRESS) {
 		D_WARN(DF_UUID": Fail to add DTX "DF_DTI" to CoS "
 		       "because of using old epoch "DF_U64"\n",

@@ -57,7 +57,7 @@ vos_dtx_update_resync_gen(daos_handle_t coh);
  * \param dkey_hash	[IN]	The hashed dkey.
  * \param epoch		[IN]	The DTX epoch.
  * \param gen		[IN]	The DTX generation.
- * \param punch		[IN]	For punch DTX or not.
+ * \param flags		[IN]	See dtx_cos_flags.
  *
  * \return		Zero on success.
  * \return		-DER_INPROGRESS	retry with newer epoch.
@@ -66,7 +66,7 @@ vos_dtx_update_resync_gen(daos_handle_t coh);
 int
 vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
 		uint64_t dkey_hash, daos_epoch_t epoch, uint64_t gen,
-		bool punch);
+		uint32_t flags);
 
 /**
  * Search the specified DTX is in the CoS cache or not.

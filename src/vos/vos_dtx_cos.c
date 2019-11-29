@@ -43,10 +43,21 @@ struct dtx_cos_rec {
 	 */
 	d_list_t		 dcr_update_list;
 	d_list_t		 dcr_punch_list;
+	/* XXX: It is hack, the DTX with ilog entry needs to committed ASAP,
+	 *	otherwise, there may be a lot of prepared ilog entries that
+	 *	will much affect subsequent operation efficiency. Before we
+	 *	resolving such issue properly, we will commit the DTX with
+	 *	ilog entry via the CoS mechanism: assume the DTX with ilog
+	 *	entry conflict with any other DTX. The DTX with the UPDATE
+	 *	intent and has ilog entry will be in the dcr_ilog_list.
+	 */
+	d_list_t		 dcr_ilog_list;
 	/* The number of the UPDATE DTXs in the dcr_update_list. */
 	int			 dcr_update_count;
 	/* The number of the PUNCH DTXs in the dcr_punch_list. */
 	int			 dcr_punch_count;
+	/* The number of the DTXs in the dcr_ilog_list. */
+	int			 dcr_ilog_count;
 };
 
 /* Above dtx_cos_rec is consisted of a series of dtx_cos_rec_child uints.
@@ -56,7 +67,7 @@ struct dtx_cos_rec {
 struct dtx_cos_rec_child {
 	/* Link into the container::vc_dtx_committable_list. */
 	d_list_t		 dcrc_committable;
-	/* Link into related dcr_{update,punch}_list. */
+	/* Link into related dcr_{update,punch,ilog}_list. */
 	d_list_t		 dcrc_link;
 	/* The DTX identifier. */
 	struct dtx_id		 dcrc_dti;
@@ -69,7 +80,7 @@ struct dtx_cos_rec_child {
 struct dtx_cos_rec_bundle {
 	struct dtx_id		*dti;
 	daos_epoch_t		 epoch;
-	bool			 punch;
+	uint32_t		 flags;
 };
 
 struct dtx_cos_key {
@@ -125,6 +136,7 @@ dtx_cos_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	dcr->dcr_oid = key->oid;
 	D_INIT_LIST_HEAD(&dcr->dcr_update_list);
 	D_INIT_LIST_HEAD(&dcr->dcr_punch_list);
+	D_INIT_LIST_HEAD(&dcr->dcr_ilog_list);
 
 	D_ALLOC_PTR(dcrc);
 	if (dcrc == NULL) {
@@ -140,9 +152,12 @@ dtx_cos_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 			&cont->vc_dtx_committable_list);
 	cont->vc_dtx_committable_count++;
 
-	if (rbund->punch) {
+	if (rbund->flags & DCF_FOR_PUNCH) {
 		d_list_add_tail(&dcrc->dcrc_link, &dcr->dcr_punch_list);
 		dcr->dcr_punch_count = 1;
+	} else if (rbund->flags & DCF_HAS_ILOG) {
+		d_list_add_tail(&dcrc->dcrc_link, &dcr->dcr_ilog_list);
+		dcr->dcr_ilog_count = 1;
 	} else {
 		d_list_add_tail(&dcrc->dcrc_link, &dcr->dcr_update_list);
 		dcr->dcr_update_count = 1;
@@ -171,6 +186,13 @@ dtx_cos_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		cont->vc_dtx_committable_count--;
 	}
 	d_list_for_each_entry_safe(dcrc, next, &dcr->dcr_punch_list,
+				   dcrc_link) {
+		d_list_del(&dcrc->dcrc_link);
+		d_list_del(&dcrc->dcrc_committable);
+		D_FREE_PTR(dcrc);
+		cont->vc_dtx_committable_count--;
+	}
+	d_list_for_each_entry_safe(dcrc, next, &dcr->dcr_ilog_list,
 				   dcrc_link) {
 		d_list_del(&dcrc->dcrc_link);
 		d_list_del(&dcrc->dcrc_committable);
@@ -222,9 +244,12 @@ dtx_cos_rec_update(struct btr_instance *tins, struct btr_record *rec,
 			&cont->vc_dtx_committable_list);
 	cont->vc_dtx_committable_count++;
 
-	if (rbund->punch) {
+	if (rbund->flags & DCF_FOR_PUNCH) {
 		d_list_add_tail(&dcrc->dcrc_link, &dcr->dcr_punch_list);
 		dcr->dcr_punch_count++;
+	} else if (rbund->flags & DCF_HAS_ILOG) {
+		d_list_add_tail(&dcrc->dcrc_link, &dcr->dcr_ilog_list);
+		dcr->dcr_ilog_count++;
 	} else {
 		d_list_add_tail(&dcrc->dcrc_link, &dcr->dcr_update_list);
 		dcr->dcr_update_count++;
@@ -264,13 +289,12 @@ vos_dtx_list_cos(daos_handle_t coh, daos_unit_oid_t *oid, uint64_t dkey_hash,
 {
 	struct vos_container		*cont;
 	struct dtx_cos_key		 key;
-	d_iov_t			 kiov;
-	d_iov_t			 riov;
+	d_iov_t				 kiov;
+	d_iov_t				 riov;
 	struct dtx_id			*dti = NULL;
 	struct dtx_cos_rec		*dcr = NULL;
-	struct dtx_cos_rec		*dcr2 = NULL;
 	struct dtx_cos_rec_child	*dcrc;
-	int				 count = 0;
+	int				 count;
 	int				 rc;
 	int				 i = 0;
 
@@ -283,35 +307,22 @@ vos_dtx_list_cos(daos_handle_t coh, daos_unit_oid_t *oid, uint64_t dkey_hash,
 	d_iov_set(&riov, NULL, 0);
 
 	rc = dbtree_lookup(cont->vc_dtx_cos_hdl, &kiov, &riov);
-	if (rc == 0) {
-		dcr = (struct dtx_cos_rec *)riov.iov_buf;
-		if (types & DCLT_PUNCH)
-			count += dcr->dcr_punch_count;
-		if (types & DCLT_UPDATE)
-			count += dcr->dcr_update_count;
-	} else if (rc == -DER_NONEXIST) {
-		/* The DTX with zero hash for punch is potential conflict
-		 * with any other subsequent DTX against the same object.
-		 * So let's list them.
-		 */
-		if (dkey_hash == 0 || !(types & DCLT_PUNCH))
-			goto out;
+	if (rc != 0)
+		return rc == -DER_NONEXIST ? 0 : rc;
 
-		key.dkey = 0;
-		d_iov_set(&riov, NULL, 0);
-
-		rc = dbtree_lookup(cont->vc_dtx_cos_hdl, &kiov, &riov);
-		if (rc != 0)
-			D_GOTO(out, count = (rc == -DER_NONEXIST ? 0 : rc));
-
-		dcr2 = (struct dtx_cos_rec *)riov.iov_buf;
-		count += dcr2->dcr_punch_count;
-	} else {
-		D_GOTO(out, count = rc);
-	}
+	dcr = (struct dtx_cos_rec *)riov.iov_buf;
+	/* XXX: It is hack, the DTX with ilog entry needs to committed ASAP.
+	 *	Currently, we do that via the CoS mechanism: assume the DTX
+	 *	with ilog entry conflict with any other DTX.
+	 */
+	count = dcr->dcr_ilog_count;
+	if (types & DCLT_PUNCH)
+		count += dcr->dcr_punch_count;
+	if (types & DCLT_UPDATE)
+		count += dcr->dcr_update_count;
 
 	if (count == 0)
-		goto out;
+		return 0;
 
 	/* There are too many shared DTXs to be committed, as to
 	 * cannot be taken via the normal UPDATE RPC. Return the
@@ -319,44 +330,36 @@ vos_dtx_list_cos(daos_handle_t coh, daos_unit_oid_t *oid, uint64_t dkey_hash,
 	 */
 	if (count > max) {
 		*dtis = NULL;
-		goto out;
+		return count;
 	}
 
 	D_ALLOC_ARRAY(dti, count);
 	if (dti == NULL)
-		D_GOTO(out, count = -DER_NOMEM);
+		return -DER_NOMEM;
+
+	d_list_for_each_entry(dcrc, &dcr->dcr_ilog_list, dcrc_link)
+		dti[i++] = dcrc->dcrc_dti;
 
 	if (types & DCLT_PUNCH) {
-		if (dcr != NULL) {
-			d_list_for_each_entry(dcrc, &dcr->dcr_punch_list,
-					      dcrc_link)
-				dti[i++] = dcrc->dcrc_dti;
-		}
-
-		if (dcr2 != NULL) {
-			d_list_for_each_entry(dcrc, &dcr2->dcr_punch_list,
-					      dcrc_link)
-				dti[i++] = dcrc->dcrc_dti;
-		}
+		d_list_for_each_entry(dcrc, &dcr->dcr_punch_list, dcrc_link)
+			dti[i++] = dcrc->dcrc_dti;
 	}
 
-	if (types & DCLT_UPDATE && dcr != NULL) {
+	if (types & DCLT_UPDATE) {
 		d_list_for_each_entry(dcrc, &dcr->dcr_update_list, dcrc_link)
 			dti[i++] = dcrc->dcrc_dti;
 	}
 
 	D_ASSERT(i == count);
-
 	*dtis = dti;
 
-out:
 	return count;
 }
 
 int
 vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
 		uint64_t dkey_hash, daos_epoch_t epoch, uint64_t gen,
-		bool punch)
+		uint32_t flags)
 {
 	struct daos_lru_cache		*occ = vos_obj_cache_current();
 	struct vos_object		*obj = NULL;
@@ -383,8 +386,8 @@ vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
 		rc = vos_dtx_check(coh, dti);
 		switch (rc) {
 		case DTX_ST_PREPARED:
-			rc = vos_dtx_lookup_cos(coh, oid, dti,
-						dkey_hash, punch);
+			rc = vos_dtx_lookup_cos(coh, oid, dti, dkey_hash,
+						flags & DCF_FOR_PUNCH);
 			/* The resync ULT has already added it into the
 			 * CoS cache, current ULT needs to do nothing.
 			 */
@@ -429,16 +432,17 @@ add:
 
 	rbund.dti = dti;
 	rbund.epoch = epoch;
-	rbund.punch = punch;
+	rbund.flags = flags;
 	d_iov_set(&riov, &rbund, sizeof(rbund));
 
 	rc = dbtree_upsert(cont->vc_dtx_cos_hdl, BTR_PROBE_EQ,
 			   DAOS_INTENT_UPDATE, &kiov, &riov);
 
 	D_DEBUG(DB_TRACE, "Insert DTX "DF_DTI" to CoS cache, key %llu, "
-		"intent %s: rc = %d\n",
+		"intent %s, %s ilog entry: rc = %d\n",
 		DP_DTI(dti), (unsigned long long)dkey_hash,
-		punch ? "Punch" : "Update", rc);
+		flags & DCF_FOR_PUNCH ? "Punch" : "Update",
+		flags & DCF_HAS_ILOG ? "has" : "has not", rc);
 
 	return rc;
 }
@@ -472,11 +476,19 @@ vos_dtx_lookup_cos(daos_handle_t coh, daos_unit_oid_t *oid,
 	if (punch)
 		head = &dcr->dcr_punch_list;
 	else
-		head = &dcr->dcr_update_list;
+		head = &dcr->dcr_ilog_list;
 
 	d_list_for_each_entry(dcrc, head, dcrc_link) {
 		if (memcmp(&dcrc->dcrc_dti, xid, sizeof(*xid)) == 0)
 			return 0;
+	}
+
+	if (!punch) {
+		/* For UPDATE DTX, the DTX entry can be in {update,ilog}_list */
+		d_list_for_each_entry(dcrc, &dcr->dcr_update_list, dcrc_link) {
+			if (memcmp(&dcrc->dcrc_dti, xid, sizeof(*xid)) == 0)
+				return 0;
+		}
 	}
 
 	return -DER_NONEXIST;
@@ -557,14 +569,14 @@ vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
 	if (punch)
 		head = &dcr->dcr_punch_list;
 	else
-		head = &dcr->dcr_update_list;
+		head = &dcr->dcr_ilog_list;
 
 	d_list_for_each_entry(dcrc, head, dcrc_link) {
 		if (memcmp(&dcrc->dcrc_dti, xid, sizeof(*xid)) != 0)
 			continue;
 
 		D_DEBUG(DB_TRACE, "Remove DTX "DF_DTI" from CoS cache, "
-			"key %llu, intent %s\n",
+			"key %llu, intent %s, has ilog entry\n",
 			DP_DTI(&dcrc->dcrc_dti), (unsigned long long)dkey_hash,
 			punch ? "Punch" : "Update");
 
@@ -576,9 +588,38 @@ vos_dtx_del_cos(struct vos_container *cont, daos_unit_oid_t *oid,
 		if (punch)
 			dcr->dcr_punch_count--;
 		else
-			dcr->dcr_update_count--;
+			dcr->dcr_ilog_count--;
 
-		if (dcr->dcr_punch_count == 0 && dcr->dcr_update_count == 0)
+		if (dcr->dcr_punch_count == 0 && dcr->dcr_update_count == 0 &&
+		    dcr->dcr_ilog_count == 0)
+			dbtree_delete(cont->vc_dtx_cos_hdl, BTR_PROBE_EQ,
+				      &kiov, NULL);
+
+		return;
+	}
+
+	if (punch)
+		return;
+
+	/* For UPDATE DTX, the DTX entry can be in {update,ilog}_list */
+	d_list_for_each_entry(dcrc, &dcr->dcr_update_list, dcrc_link) {
+		if (memcmp(&dcrc->dcrc_dti, xid, sizeof(*xid)) != 0)
+			continue;
+
+		D_DEBUG(DB_TRACE, "Remove DTX "DF_DTI" from CoS cache, "
+			"key %llu, intent %s, has not ilog entry\n",
+			DP_DTI(&dcrc->dcrc_dti), (unsigned long long)dkey_hash,
+			punch ? "Punch" : "Update");
+
+		d_list_del(&dcrc->dcrc_committable);
+		d_list_del(&dcrc->dcrc_link);
+		D_FREE_PTR(dcrc);
+
+		cont->vc_dtx_committable_count--;
+		dcr->dcr_update_count--;
+
+		if (dcr->dcr_punch_count == 0 && dcr->dcr_update_count == 0 &&
+		    dcr->dcr_ilog_count == 0)
 			dbtree_delete(cont->vc_dtx_cos_hdl, BTR_PROBE_EQ,
 				      &kiov, NULL);
 
