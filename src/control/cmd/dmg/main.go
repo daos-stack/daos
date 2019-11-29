@@ -109,17 +109,16 @@ func appSetup(log logging.Logger, opts *cliOptions, conns client.Connect) error 
 	}
 	conns.SetTransportConfig(config.TransportConfig)
 
-	active, inactive, err := checkConns(conns.ConnectClients(config.HostList))
+	connStates, err := checkConns(conns.ConnectClients(config.HostList))
 	if err != nil {
 		return err
 	}
-	if len(active) == 0 {
-		log.Errorf("Inactive:\n%s\n", inactive)
+	if len(connStates["connected"]) == 0 {
+		log.Error(connStates.String())
 		return errors.New("no active connections")
 	}
 
-	log.Infof("Active: %s\n", active)
-	log.Infof("Inactive:\n%s\n", inactive)
+	log.Info(connStates.String())
 
 	return nil
 }
