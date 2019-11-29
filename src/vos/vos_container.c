@@ -651,24 +651,17 @@ vos_dtx_update_resync_gen(daos_handle_t coh)
 {
 	struct vos_container	*cont;
 	struct vos_cont_df	*cont_df;
-	int			 rc;
 
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
 
 	cont_df = cont->vc_cont_df;
-	rc = vos_tx_begin(vos_cont2umm(cont));
-	if (rc == 0) {
-		umem_tx_add_ptr(vos_cont2umm(cont),
-				&cont_df->cd_dtx_resync_gen,
-				sizeof(cont_df->cd_dtx_resync_gen));
-		cont_df->cd_dtx_resync_gen++;
-		rc = vos_tx_end(vos_cont2umm(cont), 0);
-		if (rc == 0)
-			cont->vc_dtx_resync_gen = cont_df->cd_dtx_resync_gen;
-	}
-
-	return rc;
+	cont->vc_dtx_resync_gen = cont_df->cd_dtx_resync_gen + 1;
+	pmemobj_memcpy_persist(vos_cont2umm(cont)->umm_pool,
+			       &cont_df->cd_dtx_resync_gen,
+			       &cont->vc_dtx_resync_gen,
+			       sizeof(cont_df->cd_dtx_resync_gen));
+	return 0;
 }
 
 /** iterator for co_uuid */

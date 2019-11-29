@@ -179,8 +179,8 @@ struct dtx_batched_cleanup_blob {
 	/* The count of valid DAE entry, if hit zero, then batched cleanup. */
 	int			bcb_dae_count;
 
-	/* The offset of the vos_dtx_scm_blob to be batched cleanup. */
-	umem_off_t		bcb_dsb_off;
+	/* The offset of the vos_dtx_blob_df to be batched cleanup. */
+	umem_off_t		bcb_dbd_off;
 
 	/* The offset of dae_rec_off to be batched cleanup. */
 	umem_off_t		bcb_recs[0];
@@ -189,7 +189,7 @@ struct dtx_batched_cleanup_blob {
 struct vos_dtx_act_ent {
 	struct vos_dtx_act_ent_df	 dae_base;
 	umem_off_t			 dae_df_off;
-	struct vos_dtx_scm_blob		*dae_dsb;
+	struct vos_dtx_blob_df		*dae_dbd;
 	struct dtx_batched_cleanup_blob	*dae_bcb;
 	/* More DTX records if out of the inlined buffer. */
 	struct vos_dtx_record_df	*dae_records;

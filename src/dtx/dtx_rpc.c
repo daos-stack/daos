@@ -602,8 +602,8 @@ dtx_commit(uuid_t po_uuid, uuid_t co_uuid, struct dtx_entry *dtes,
 	if (length < 0)
 		D_GOTO(out, rc = length);
 
+	dra.dra_future = ABT_FUTURE_NULL;
 	if (!d_list_empty(&head)) {
-		dra.dra_future = ABT_FUTURE_NULL;
 		rc = dtx_req_list_send(&dra, DTX_COMMIT, &head, length, po_uuid,
 				       co_uuid, crt_hlc_get());
 		if (rc != 0)
@@ -668,8 +668,8 @@ dtx_abort(uuid_t po_uuid, uuid_t co_uuid, daos_epoch_t epoch,
 
 	D_ASSERT(dti != NULL);
 
+	dra.dra_future = ABT_FUTURE_NULL;
 	if (!d_list_empty(&head)) {
-		dra.dra_future = ABT_FUTURE_NULL;
 		rc = dtx_req_list_send(&dra, DTX_ABORT, &head, length, po_uuid,
 				       co_uuid, epoch);
 		if (rc != 0)

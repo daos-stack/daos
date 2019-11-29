@@ -612,9 +612,6 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *cont_hdl,
 		D_GOTO(out, result = -DER_INPROGRESS);
 	}
 
-	if (rc == -DER_ALREADY)
-		D_GOTO(out, result = 0);
-
 	if (rc != 0) {
 		D_WARN(DF_UUID": Fail to add DTX "DF_DTI" to CoS cache: %d. "
 		       "Try to commit it sychronously.\n",

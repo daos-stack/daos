@@ -389,7 +389,7 @@ vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
 			 * CoS cache, current ULT needs to do nothing.
 			 */
 			if (rc == 0)
-				return -DER_ALREADY;
+				return 0;
 
 			/* Normal case, then add it to CoS cache. */
 			if (rc == -DER_NONEXIST)
@@ -398,7 +398,7 @@ vos_dtx_add_cos(daos_handle_t coh, daos_unit_oid_t *oid, struct dtx_id *dti,
 			return rc >= 0 ? -DER_INVAL : rc;
 		case DTX_ST_COMMITTED:
 			/* The DTX has been committed by resync ULT by race. */
-			return -DER_ALREADY;
+			return 0;
 		case -DER_NONEXIST:
 			/* The DTX has been aborted by resync ULT, ask the
 			 * client to retry.

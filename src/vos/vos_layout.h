@@ -210,7 +210,7 @@ struct vos_dtx_act_ent_df {
 	uint64_t			dae_layout_gen;
 	/** The intent of related modification. */
 	uint32_t			dae_intent;
-	/** The index in the current vos_dtx_scm_blob. */
+	/** The index in the current vos_dtx_blob_df. */
 	uint32_t			dae_index;
 	/** The inlined dtx records. */
 	struct vos_dtx_record_df	dae_rec_inline[DTX_INLINE_REC_CNT];
@@ -238,30 +238,30 @@ struct vos_dtx_cmt_ent_df {
 	daos_epoch_t			dce_epoch;
 };
 
-struct vos_dtx_scm_blob {
+struct vos_dtx_blob_df {
 	/** Magic number, can be used to distinguish active or committed DTX. */
-	int					dsb_magic;
+	int					dbd_magic;
 	/** The total (filled + free) slots in the blob. */
-	int					dsb_cap;
+	int					dbd_cap;
 	/** Already filled slots count. */
-	int					dsb_count;
+	int					dbd_count;
 	/** The next available slot for active DTX entry in the blob. */
-	int					dsb_index;
+	int					dbd_index;
 	/** Prev dtx_scm_blob. */
-	umem_off_t				dsb_prev;
+	umem_off_t				dbd_prev;
 	/** Next dtx_scm_blob. */
-	umem_off_t				dsb_next;
+	umem_off_t				dbd_next;
 	/** Append only DTX entries in the blob. */
 	union {
-		struct vos_dtx_act_ent_df	dsb_active_data[0];
-		struct vos_dtx_cmt_ent_df	dsb_commmitted_data[0];
+		struct vos_dtx_act_ent_df	dbd_active_data[0];
+		struct vos_dtx_cmt_ent_df	dbd_commmitted_data[0];
 	};
 };
 
-/* Assume dsb_index is next to dsb_count. */
-D_CASSERT(offsetof(struct vos_dtx_scm_blob, dsb_index) ==
-	  offsetof(struct vos_dtx_scm_blob, dsb_count) +
-	  sizeof(((struct vos_dtx_scm_blob *)0)->dsb_count));
+/* Assume dbd_index is next to dbd_count. */
+D_CASSERT(offsetof(struct vos_dtx_blob_df, dbd_index) ==
+	  offsetof(struct vos_dtx_blob_df, dbd_count) +
+	  sizeof(((struct vos_dtx_blob_df *)0)->dbd_count));
 
 enum vos_io_stream {
 	/**
