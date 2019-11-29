@@ -101,25 +101,18 @@ func flattenHostAddrs(addrPatterns string) (addrs []string, err error) {
 // checkConns analyses connection results and returns summary compressed active
 // and inactive hostlists (but disregards connection port).
 func checkConns(results client.ResultMap) (active hostlist.HostGroups, inactive hostlist.HostGroups, err error) {
-	var host string
 	active = make(hostlist.HostGroups)
 	inactive = make(hostlist.HostGroups)
 
 	for addr := range results {
-		// should fail if no port in addr
-		host, _, err = splitPort(addr, 0)
-		if err != nil {
-			return
-		}
-
 		resultErr := results[addr].Err
 		if resultErr != nil {
-			if err = inactive.AddHost(resultErr.Error(), host); err != nil {
+			if err = inactive.AddHost(resultErr.Error(), addr); err != nil {
 				return
 			}
 			continue
 		}
-		if err = active.AddHost("connected", host); err != nil {
+		if err = active.AddHost("connected", addr); err != nil {
 			return
 		}
 	}
