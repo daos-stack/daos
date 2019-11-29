@@ -29,7 +29,7 @@ from apricot import TestWithoutServers
 import agent_utils
 import server_utils
 import write_host_file
-from pydaos.raw import DaosContext, DaosLog
+from pydaos.raw import DaosLog
 
 
 class CartSelfTest(TestWithoutServers):
@@ -89,9 +89,9 @@ class CartSelfTest(TestWithoutServers):
         # daos server params
         self.server_group = self.params.get("name", 'server_config',
                                             'daos_server')
+
         self.uri_file = os.path.join(self.tmp, "uri.txt")
-        self.agent_sessions = agent_utils.run_agent(
-            self.basepath, self.hostlist_servers)
+        self.agent_sessions = agent_utils.run_agent(self, self.hostlist_servers)
         server_utils.run_server(
             self, self.hostfile_servers, self.server_group,
             uri_path=self.uri_file, env_dict=self.env_dict)
