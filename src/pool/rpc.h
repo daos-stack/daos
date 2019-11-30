@@ -120,6 +120,10 @@
 	X(POOL_ACL_UPDATE,						\
 		0, &CQF_pool_acl_update,				\
 		ds_pool_acl_update_handler,				\
+		NULL),							\
+	X(POOL_ACL_DELETE,						\
+		0, &CQF_pool_acl_delete,				\
+		ds_pool_acl_delete_handler,				\
 		NULL)
 
 /* Define for RPC enum population below */
@@ -382,6 +386,17 @@ CRT_RPC_DECLARE(pool_prop_set, DAOS_ISEQ_POOL_PROP_SET, DAOS_OSEQ_POOL_PROP_SET)
 
 CRT_RPC_DECLARE(pool_acl_update, DAOS_ISEQ_POOL_ACL_UPDATE,
 		DAOS_OSEQ_POOL_ACL_UPDATE)
+
+#define DAOS_ISEQ_POOL_ACL_DELETE	/* input fields */	 \
+	((struct pool_op_in)	(pdi_op)		CRT_VAR) \
+	((uint8_t)		(pdi_type)		CRT_VAR) \
+	((d_const_string_t)	(pdi_principal)		CRT_VAR)
+
+#define DAOS_OSEQ_POOL_ACL_DELETE	/* output fields */	 \
+	((struct pool_op_out)	(pdo_op)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_acl_delete, DAOS_ISEQ_POOL_ACL_DELETE,
+		DAOS_OSEQ_POOL_ACL_DELETE)
 
 #define DAOS_ISEQ_POOL_LIST_CONT	/* input fields */		 \
 	((struct pool_op_in)	(plci_op)			CRT_VAR) \

@@ -149,6 +149,9 @@ int ds_pool_svc_set_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
 			 daos_prop_t *prop);
 int ds_pool_svc_update_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 			   struct daos_acl *acl);
+int ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
+			   enum daos_acl_principal_type principal_type,
+			   const char *principal_name);
 
 /*
  * Called by dmg on the pool service leader to list all pool handles of a pool.

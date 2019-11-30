@@ -135,6 +135,39 @@ mock_ds_mgmt_pool_update_acl_teardown(void)
 	daos_acl_free(ds_mgmt_pool_update_acl_result);
 }
 
+int		ds_mgmt_pool_delete_acl_return;
+uuid_t		ds_mgmt_pool_delete_acl_uuid;
+const char	*ds_mgmt_pool_delete_acl_principal;
+struct daos_acl	*ds_mgmt_pool_delete_acl_result;
+void		*ds_mgmt_pool_delete_acl_result_ptr;
+int
+ds_mgmt_pool_delete_acl(uuid_t pool_uuid, const char *principal,
+			struct daos_acl **result)
+{
+	uuid_copy(ds_mgmt_pool_delete_acl_uuid, pool_uuid);
+	ds_mgmt_pool_delete_acl_principal = principal;
+	ds_mgmt_pool_delete_acl_result_ptr = (void *)result;
+	if (result != NULL)
+		*result = daos_acl_dup(ds_mgmt_pool_delete_acl_result);
+	return ds_mgmt_pool_delete_acl_return;
+}
+
+void
+mock_ds_mgmt_pool_delete_acl_setup(void)
+{
+	ds_mgmt_pool_delete_acl_return = 0;
+	uuid_clear(ds_mgmt_pool_delete_acl_uuid);
+	ds_mgmt_pool_delete_acl_principal = NULL;
+	ds_mgmt_pool_delete_acl_result = NULL;
+	ds_mgmt_pool_delete_acl_result_ptr = NULL;
+}
+
+void
+mock_ds_mgmt_pool_delete_acl_teardown(void)
+{
+	daos_acl_free(ds_mgmt_pool_delete_acl_result);
+}
+
 /*
  * Stubs, to avoid linker errors
  * TODO: Implement mocks when there is a test that uses these
