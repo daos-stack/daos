@@ -266,7 +266,7 @@ func TestPoolCommands(t *testing.T) {
 			"pool get-acl --pool 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 			strings.Join([]string{
 				"ConnectClients",
-				fmt.Sprintf("PoolGetACL-%+v", &client.PoolGetACLReq{
+				fmt.Sprintf("PoolGetACL-%+v", client.PoolGetACLReq{
 					UUID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 				}),
 			}, " "),
@@ -283,7 +283,7 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool overwrite-acl --pool 12345678-1234-1234-1234-1234567890ab --acl-file %s", testACLFile),
 			strings.Join([]string{
 				"ConnectClients",
-				fmt.Sprintf("PoolOverwriteACL-%+v", &client.PoolOverwriteACLReq{
+				fmt.Sprintf("PoolOverwriteACL-%+v", client.PoolOverwriteACLReq{
 					UUID: "12345678-1234-1234-1234-1234567890ab",
 					ACL:  testACL,
 				}),
@@ -313,7 +313,7 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool update-acl --pool 12345678-1234-1234-1234-1234567890ab --acl-file %s", testACLFile),
 			strings.Join([]string{
 				"ConnectClients",
-				fmt.Sprintf("PoolUpdateACL-%+v", &client.PoolUpdateACLReq{
+				fmt.Sprintf("PoolUpdateACL-%+v", client.PoolUpdateACLReq{
 					UUID: "12345678-1234-1234-1234-1234567890ab",
 					ACL:  testACL,
 				}),
@@ -325,9 +325,27 @@ func TestPoolCommands(t *testing.T) {
 			"pool update-acl --pool 12345678-1234-1234-1234-1234567890ab --entry A::user@:rw",
 			strings.Join([]string{
 				"ConnectClients",
-				fmt.Sprintf("PoolUpdateACL-%+v", &client.PoolUpdateACLReq{
+				fmt.Sprintf("PoolUpdateACL-%+v", client.PoolUpdateACLReq{
 					UUID: "12345678-1234-1234-1234-1234567890ab",
 					ACL:  &client.AccessControlList{Entries: []string{"A::user@:rw"}},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Delete pool ACL without principal flag",
+			"pool delete-acl --pool 12345678-1234-1234-1234-1234567890ab",
+			"ConnectClients",
+			dmgTestErr("the required flag `-p, --principal' was not specified"),
+		},
+		{
+			"Delete pool ACL",
+			"pool delete-acl --pool 12345678-1234-1234-1234-1234567890ab --principal OWNER@",
+			strings.Join([]string{
+				"ConnectClients",
+				fmt.Sprintf("PoolDeleteACL-%+v", client.PoolDeleteACLReq{
+					UUID:      "12345678-1234-1234-1234-1234567890ab",
+					Principal: "OWNER@",
 				}),
 			}, " "),
 			nil,
