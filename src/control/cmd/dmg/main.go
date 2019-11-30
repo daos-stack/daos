@@ -113,7 +113,7 @@ func appSetup(log logging.Logger, opts *cliOptions, conns client.Connect) error 
 	if err != nil {
 		return err
 	}
-	if len(connStates["connected"]) == 0 {
+	if _, exists := connStates["connected"]; !exists {
 		log.Error(connStates.String())
 		return errors.New("no active connections")
 	}

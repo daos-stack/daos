@@ -67,41 +67,39 @@ func TestFlattenAddrs(t *testing.T) {
 
 func TestCheckConns(t *testing.T) {
 	for name, tc := range map[string]struct {
-		results  ResultMap
-		active   string
-		inactive string
-		expErr   error
+		results ResultMap
+		states  string
+		expErr  error
 	}{
 		"no connections": {
 			results: ResultMap{},
 		},
 		"single successful connection": {
 			results: ResultMap{"abc:10000": ClientResult{"abc:10000", nil, nil}},
-			active:  "abc:10000: connected\n",
+			states:  "abc:10000: connected\n",
 		},
 		"single failed connection": {
-			results:  ResultMap{"abc4:10000": ClientResult{"abc4:10000", nil, MockErr}},
-			inactive: "abc4:10000: unknown failure\n",
+			results: ResultMap{"abc4:10000": ClientResult{"abc4:10000", nil, MockErr}},
+			states:  "abc4:10000: unknown failure\n",
 		},
 		"multiple successful connections": {
 			results: ResultMap{
 				"foo.bar:10000": ClientResult{"foo.bar:10000", nil, nil},
 				"foo.baz:10001": ClientResult{"foo.baz:10001", nil, nil},
 			},
-			active: "foo.bar:10000,foo.baz:10001: connected\n",
+			states: "foo.bar:10000,foo.baz:10001: connected\n",
 		},
 		"multiple failed connections": {
-			results:  ResultMap{"abc4:10000": ClientResult{"abc4:10000", nil, MockErr}, "abc5:10001": ClientResult{"abc5:10001", nil, MockErr}},
-			inactive: "abc4:10000,abc5:10001: unknown failure\n",
+			results: ResultMap{"abc4:10000": ClientResult{"abc4:10000", nil, MockErr}, "abc5:10001": ClientResult{"abc5:10001", nil, MockErr}},
+			states:  "abc4:10000,abc5:10001: unknown failure\n",
 		},
 		"multiple failed connections with hostlist compress": {
-			results:  ResultMap{"abc4:10000": ClientResult{"abc4:10000", nil, MockErr}, "abc5:10000": ClientResult{"abc5:10000", nil, MockErr}},
-			inactive: "abc[4-5]:10000: unknown failure\n",
+			results: ResultMap{"abc4:10000": ClientResult{"abc4:10000", nil, MockErr}, "abc5:10000": ClientResult{"abc5:10000", nil, MockErr}},
+			states:  "abc[4-5]:10000: unknown failure\n",
 		},
 		"failed and successful connections": {
-			results:  ResultMap{"abc4:10000": ClientResult{"abc4:10000", nil, MockErr}, "abc5:10001": ClientResult{"abc5:10001", nil, nil}},
-			active:   "abc5:10001: connected\n",
-			inactive: "abc4:10000: unknown failure\n",
+			results: ResultMap{"abc4:10000": ClientResult{"abc4:10000", nil, MockErr}, "abc5:10001": ClientResult{"abc5:10001", nil, nil}},
+			states:  "abc5:10001: connected\nabc4:10000: unknown failure\n",
 		},
 		"multiple connections with hostlist compress": {
 			results: ResultMap{
@@ -114,8 +112,8 @@ func TestCheckConns(t *testing.T) {
 				"bar8:10001": ClientResult{"bar8:10001", nil, errors.New("foobar")},
 				"bar9:10000": ClientResult{"bar9:10000", nil, errors.New("foobar")},
 			},
-			active:   "bar[3-6]:10001: connected\n",
-			inactive: "bar9:10000,bar[7-8]:10001: foobar\n               bar2:10001: foobaz\n",
+			states: "           bar[3-6]:10001: connected\nbar9:10000,bar[7-8]:10001: foobar\n" +
+				"               bar2:10001: foobaz\n",
 		},
 		"multiple connections with IP address compress": {
 			results: ResultMap{
@@ -128,18 +126,15 @@ func TestCheckConns(t *testing.T) {
 				"10.0.0.8:10001": ClientResult{"10.0.0.8:10001", nil, errors.New("foobar")},
 				"10.0.0.9:10000": ClientResult{"10.0.0.9:10000", nil, errors.New("foobar")},
 			},
-			active:   "10.0.0.[3-6]:10001: connected\n",
-			inactive: "10.0.0.9:10000,10.0.0.[7-8]:10001: foobar\n                   10.0.0.2:10001: foobaz\n",
+			states: "               10.0.0.[3-6]:10001: connected\n10.0.0.9:10000,10.0.0.[7-8]:10001: foobar\n" +
+				"                   10.0.0.2:10001: foobaz\n",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			active, inactive, err := checkConns(tc.results)
+			states, err := checkConns(tc.results)
 			CmpErr(t, tc.expErr, err)
-			if diff := cmp.Diff(tc.active, active.String()); diff != "" {
-				t.Fatalf("unexpected active (-want, +got):\n%s\n", diff)
-			}
-			if diff := cmp.Diff(tc.inactive, inactive.String()); diff != "" {
-				t.Fatalf("unexpected inactive (-want, +got):\n%s\n", diff)
+			if diff := cmp.Diff(tc.states, states.String()); diff != "" {
+				t.Fatalf("unexpected states (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
