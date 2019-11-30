@@ -450,8 +450,9 @@ class ServerManager(ExecutableCommand):
             chmod_attach = "chmod 777 -R {}".format(self.attach.value)
             pcmd(self._hosts, chmod_attach, False)
 
-        storage_prepare(self._hosts, "root", storage_prep_flag)
-        self.runner.mca.value = {"plm_rsh_args": "-l root"}
+        if storage_prep_flag != "ram":
+            storage_prepare(self._hosts, "root", storage_prep_flag)
+            self.runner.mca.value = {"plm_rsh_args": "-l root"}
 
         try:
             self.run()
@@ -560,9 +561,7 @@ def storage_prepare(hosts, user, device_type):
     dev_param = ""
     device_args = ""
     daos_srv_bin = get_file_path("bin/daos_server")
-    if device_type == "ram":
-        return True
-    elif device_type == "dcpm":
+    if device_type == "dcpm":
         dev_param = "-s"
     elif device_type == "dcpm_nvme":
         device_args = " --hugepages=4096"
