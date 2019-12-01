@@ -178,7 +178,7 @@ int ds_pool_cont_svc_lookup_leader(uuid_t pool_uuid, struct cont_svc **svc,
 				   struct rsvc_hint *hint);
 
 int ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank,
-			 d_iov_t *iv_iov, unsigned int iv_ns_id);
+			 unsigned int iv_ns_id);
 
 int ds_pool_svc_term_get(uuid_t uuid, uint64_t *term);
 
