@@ -72,7 +72,7 @@ class DaosAgentConfig(ObjectWithParameters):
         #   hostlist: ['host1', 'host2']
         #   runtime_dir: /var/run/daos_agent
         #   log_file: /tmp/daos_agent.log
-        self.name = BasicParameter(None, "daos")
+        self.name = BasicParameter(None, "daos_server")
         self.access_points = BasicParameter(None)
         self.port = BasicParameter(None, 10001)
         self.hostlist = BasicParameter(None)

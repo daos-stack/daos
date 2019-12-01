@@ -106,7 +106,12 @@ class EvictTests(TestWithServers):
             self.pool.pool.evict()
         # exception is expected
         except DaosApiError as result:
-            status = "-1005" in str(result)
+            if test_param == "BAD_SERVER_NAME":
+                # Due to DAOS-3835, no specific error code is available for now.
+                err = "-1025"
+            else:
+                err = "-1005"
+            status = err in str(result)
             if status:
                 self.log.info(
                     "Expected exception - invalid param %s\n %s\n",
