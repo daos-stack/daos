@@ -238,3 +238,30 @@ class IorCommand(ExecutableCommand):
             env["IOR_HINT__MPI__romio_daos_obj_class"] = self.daos_oclass.value
 
         return env
+
+    def get_ior_metrics(self, cmdresult):
+        """Parse the CmdResult (output of the test) and look for
+           the ior stdout and get the read and write metrics.
+
+        Args:
+            cmdresult (CmdResult): output of job manager
+
+       Returns:
+            metrics (tuple) : list of write and read metrics from ior run
+
+        """
+        IOR_METRIC_SUMMARY = "Summary of all tests:"
+        messages = cmdresult.stdout.splitlines()
+        # Get the index whre the summary starts and add one to
+        # get to the header.
+        idx = messages.index(IOR_METRIC_SUMMARY) + 1
+        header = (",".join(messages[idx].split())).split(",")
+        # idx +1 and idx + 2 will give the write and read metrics.
+        write_metrics = (" ".join(messages[idx+1].split())).split()
+        read_metrics = (" ".join(messages[idx+2].split())).split()
+        # For Debug purpose
+        # for i in range(len(header)):
+        #    print("{0},{1},{2}".format(header[i], write_metrics[i], read_metrics[i]))
+        return (write_metrics, read_metrics)
+		
+
