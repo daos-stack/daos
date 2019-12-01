@@ -35,6 +35,7 @@
 
 static d_list_t			 ds_iv_ns_list;
 static int			 ds_iv_ns_id = 1;
+static int			 ds_iv_ns_tree_topo;
 static d_list_t			 ds_iv_class_list;
 static int			 ds_iv_class_nr;
 static int			 crt_iv_class_nr;
@@ -690,13 +691,10 @@ ds_iv_ns_destroy(void *ns)
  */
 int
 ds_iv_ns_create(crt_context_t ctx, uuid_t pool_uuid,
-		crt_group_t *grp, unsigned int *ns_id, d_iov_t *ivns,
+		crt_group_t *grp, unsigned int *ns_id,
 		struct ds_iv_ns **p_iv_ns)
 {
-	d_iov_t			*g_ivns;
-	d_iov_t			tmp = { 0 };
 	struct ds_iv_ns		*ns = NULL;
-	int			tree_topo;
 	int			rc;
 
 	/* Create namespace on master */
@@ -705,17 +703,8 @@ ds_iv_ns_create(crt_context_t ctx, uuid_t pool_uuid,
 	if (rc)
 		return rc;
 
-	if (ivns == NULL)
-		g_ivns = &tmp;
-	else
-		g_ivns = ivns;
-
-	/* Let's set the topo to 32 to avoid cart IV failover,
-	 * which is not supported yet. XXX
-	 */
-	tree_topo = crt_tree_topo(CRT_TREE_KNOMIAL, 32);
-	rc = crt_iv_namespace_create(ctx, grp, tree_topo, crt_iv_class,
-				     crt_iv_class_nr, &ns->iv_ns, g_ivns);
+	rc = crt_iv_namespace_create(ctx, grp, ds_iv_ns_tree_topo, crt_iv_class,
+				     crt_iv_class_nr, 0, &ns->iv_ns);
 	if (rc)
 		D_GOTO(free, rc);
 
@@ -729,8 +718,8 @@ free:
 }
 
 int
-ds_iv_ns_attach(crt_context_t ctx, uuid_t pool_uuid, unsigned int ns_id,
-		unsigned int master_rank, d_iov_t *iv_ctxt,
+ds_iv_ns_attach(crt_context_t ctx, uuid_t pool_uuid, crt_group_t *grp,
+		unsigned int ns_id, unsigned int master_rank,
 		struct ds_iv_ns **p_iv_ns)
 {
 	struct ds_iv_ns	*ns = NULL;
@@ -754,8 +743,8 @@ ds_iv_ns_attach(crt_context_t ctx, uuid_t pool_uuid, unsigned int ns_id,
 	if (rc)
 		return rc;
 
-	rc = crt_iv_namespace_attach(ctx, (d_iov_t *)iv_ctxt, crt_iv_class,
-				     crt_iv_class_nr, &ns->iv_ns);
+	rc = crt_iv_namespace_create(ctx, grp, ds_iv_ns_tree_topo, crt_iv_class,
+				     crt_iv_class_nr, 0, &ns->iv_ns);
 	if (rc)
 		D_GOTO(free, rc);
 
@@ -772,8 +761,7 @@ free:
 
 /* Update iv namespace */
 int
-ds_iv_ns_update(uuid_t pool_uuid, unsigned int master_rank,
-		crt_group_t *grp, d_iov_t *iv_iov,
+ds_iv_ns_update(uuid_t pool_uuid, unsigned int master_rank, crt_group_t *grp,
 		unsigned int iv_ns_id, struct ds_iv_ns **iv_ns)
 {
 	struct ds_iv_ns	*ns;
@@ -793,15 +781,14 @@ ds_iv_ns_update(uuid_t pool_uuid, unsigned int master_rank,
 		return 0;
 
 	/* Create new iv_ns */
-	if (iv_iov == NULL) {
+	if (iv_ns_id == -1) {
 		/* master node */
-		rc = ds_iv_ns_create(dss_get_module_info()->dmi_ctx,
-				     pool_uuid, grp, &iv_ns_id, NULL, &ns);
+		rc = ds_iv_ns_create(dss_get_module_info()->dmi_ctx, pool_uuid,
+				     grp, &iv_ns_id, &ns);
 	} else {
 		/* other node */
-		rc = ds_iv_ns_attach(dss_get_module_info()->dmi_ctx,
-				     pool_uuid, iv_ns_id, master_rank, iv_iov,
-				     &ns);
+		rc = ds_iv_ns_attach(dss_get_module_info()->dmi_ctx, pool_uuid,
+				     grp, iv_ns_id, master_rank, &ns);
 	}
 
 	if (rc) {
@@ -811,15 +798,6 @@ ds_iv_ns_update(uuid_t pool_uuid, unsigned int master_rank,
 
 	*iv_ns = ns;
 	return rc;
-}
-
-/**
- * Get IV ns global identifer from cart.
- */
-int
-ds_iv_global_ns_get(struct ds_iv_ns *ns, d_iov_t *g_ivns)
-{
-	return crt_iv_global_namespace_get(ns->iv_ns, g_ivns);
 }
 
 unsigned int
@@ -832,6 +810,10 @@ void
 ds_iv_init()
 {
 	D_INIT_LIST_HEAD(&ds_iv_ns_list);
+	/* Let's set the topo to 32 to avoid cart IV failover,
+	 * which is not supported yet. XXX
+	 */
+	ds_iv_ns_tree_topo = crt_tree_topo(CRT_TREE_KNOMIAL, 32);
 	D_INIT_LIST_HEAD(&ds_iv_class_list);
 }
 
