@@ -65,6 +65,7 @@ type Configuration struct {
 	ControlLogMask      ControlLogLevel           `yaml:"control_log_mask"`
 	ControlLogFile      string                    `yaml:"control_log_file"`
 	ControlLogJSON      bool                      `yaml:"control_log_json,omitempty"`
+	HelperLogFile       string                    `yaml:"helper_log_file"`
 	UserName            string                    `yaml:"user_name"`
 	GroupName           string                    `yaml:"group_name"`
 	RecreateSuperblocks bool                      `yaml:"recreate_superblocks"`
@@ -284,6 +285,12 @@ func (c *Configuration) WithControlLogJSON(enabled bool) *Configuration {
 	return c
 }
 
+// WithHelperLogFile sets the path to the daos_admin logfile.
+func (c *Configuration) WithHelperLogFile(filePath string) *Configuration {
+	c.HelperLogFile = filePath
+	return c
+}
+
 // WithUserName sets the user to run as.
 func (c *Configuration) WithUserName(name string) *Configuration {
 	c.UserName = name
@@ -348,7 +355,7 @@ func (c *Configuration) Load() error {
 		c.updateServerConfig(srvCfg)
 	}
 
-	return c.Validate()
+	return nil
 }
 
 // SaveToFile serializes the configuration and saves it to the specified filename.

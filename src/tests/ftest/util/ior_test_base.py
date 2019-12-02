@@ -112,7 +112,7 @@ class IorTestBase(TestWithServers):
     def start_dfuse(self):
         """Create a DfuseCommand object to start dfuse."""
         # Get Dfuse params
-        self.dfuse = Dfuse(self.hostlist_clients, self.tmp, self.basepath)
+        self.dfuse = Dfuse(self.hostlist_clients, self.tmp, True)
         self.dfuse.get_params(self)
 
         # update dfuse params
@@ -124,7 +124,8 @@ class IorTestBase(TestWithServers):
             self.dfuse.run()
         except CommandFailure as error:
             self.log.error("Dfuse command %s failed on hosts %s",
-                           str(self.dfuse), str(NodeSet(self.dfuse.hosts)),
+                           str(self.dfuse),
+                           str(NodeSet.fromlist(self.dfuse.hosts)),
                            exc_info=error)
             self.fail("Test was expected to pass but it failed.\n")
 
@@ -213,7 +214,6 @@ class IorTestBase(TestWithServers):
             self.log.info(
                 "Size is < 4K,Size verification will be done with SCM size")
             storage_index = 0
-
         actual_pool_size = \
             original_pool_info.pi_space.ps_space.s_free[storage_index] - \
             current_pool_info.pi_space.ps_space.s_free[storage_index]

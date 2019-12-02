@@ -340,7 +340,7 @@ oid_iv_reserve(void *ns, uuid_t poh_uuid, uuid_t co_uuid,
 	oids->num_oids = num_oids;
 
 	rc = ds_iv_update(ns, &key, value, 0, CRT_IV_SYNC_NONE,
-			  CRT_IV_SYNC_BIDIRECTIONAL);
+			  CRT_IV_SYNC_BIDIRECTIONAL, false /* retry */);
 	if (rc)
 		D_ERROR("iv update failed %d\n", rc);
 

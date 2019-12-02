@@ -301,6 +301,13 @@ typedef struct {
 	d_rank_list_t			*mgpi_svc;
 } daos_mgmt_pool_info_t;
 
+/* DAOS pool container information
+ *
+ */
+struct daos_pool_cont_info {
+	uuid_t		pci_uuid;
+};
+
 /**
  * DAOS_PC_RO connects to the pool for reading only.
  *
@@ -363,6 +370,8 @@ typedef struct {
 	uint32_t		ci_nsnapshots;
 	/** Epochs of returns snapshots */
 	daos_epoch_t	       *ci_snapshots;
+	/** The minimal "Highest aggregated epoch" among all targets */
+	daos_epoch_t		ci_hae;
 	/* TODO: add more members, e.g., size, # objects, uid, gid... */
 } daos_cont_info_t;
 

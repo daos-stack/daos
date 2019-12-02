@@ -816,7 +816,8 @@ evt_tcx_trace(struct evt_context *tcx, int level)
 }
 
 static void
-evt_tcx_set_trace(struct evt_context *tcx, int level, umem_off_t nd_off, int at)
+evt_tcx_set_trace(struct evt_context *tcx, int level, umem_off_t nd_off, int at,
+		  bool alloc)
 {
 	struct evt_trace *trace;
 
@@ -825,9 +826,12 @@ evt_tcx_set_trace(struct evt_context *tcx, int level, umem_off_t nd_off, int at)
 	V_TRACE(DB_TRACE, "set trace[%d] "DF_X64"/%d\n", level, nd_off, at);
 
 	trace = evt_tcx_trace(tcx, level);
-	trace->tr_node = nd_off;
-	trace->tr_tx_added = false;
 	trace->tr_at = at;
+	if (trace->tr_node == nd_off)
+		return;
+
+	trace->tr_node = nd_off;
+	trace->tr_tx_added = alloc;
 }
 
 /** Reset all traces within context and set root as the 0-level trace */
@@ -837,7 +841,7 @@ evt_tcx_reset_trace(struct evt_context *tcx)
 	memset(&tcx->tc_trace_scratch[0], 0,
 	       sizeof(tcx->tc_trace_scratch[0]) * EVT_TRACE_MAX);
 	evt_tcx_set_dep(tcx, tcx->tc_root->tr_depth);
-	evt_tcx_set_trace(tcx, 0, tcx->tc_root->tr_node, 0);
+	evt_tcx_set_trace(tcx, 0, tcx->tc_root->tr_node, 0, false);
 }
 
 /**
@@ -1422,7 +1426,7 @@ evt_root_activate(struct evt_context *tcx, const struct evt_entry_in *ent)
 	}
 
 	evt_tcx_set_dep(tcx, root->tr_depth);
-	evt_tcx_set_trace(tcx, 0, nd_off, 0);
+	evt_tcx_set_trace(tcx, 0, nd_off, 0, true);
 
 	return 0;
 }
@@ -1654,6 +1658,7 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
 		evt_tcx_set_dep(tcx, tcx->tc_depth + 1);
 		tcx->tc_trace->tr_node = nm_new;
 		tcx->tc_trace->tr_at = 0;
+		tcx->tc_trace->tr_tx_added = true;
 
 		rc = evt_root_tx_add(tcx);
 		if (rc != 0)
@@ -1700,7 +1705,7 @@ evt_insert_entry(struct evt_context *tcx, const struct evt_entry_in *ent)
 		nd = evt_off2node(tcx, nd_off);
 
 		if (evt_node_is_leaf(tcx, nd)) {
-			evt_tcx_set_trace(tcx, level, nd_off, 0);
+			evt_tcx_set_trace(tcx, level, nd_off, 0, false);
 			break;
 		}
 
@@ -1727,7 +1732,7 @@ evt_insert_entry(struct evt_context *tcx, const struct evt_entry_in *ent)
 		}
 
 		/* store the trace in case we need to bubble split */
-		evt_tcx_set_trace(tcx, level, nd_off, tr_at);
+		evt_tcx_set_trace(tcx, level, nd_off, tr_at, false);
 		nd_off = nm_dst;
 		level++;
 	}
@@ -2061,7 +2066,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 				 * iteration.
 				 * NB: clip is not implemented yet.
 				 */
-				evt_tcx_set_trace(tcx, level, nd_off, i);
+				evt_tcx_set_trace(tcx, level, nd_off, i, false);
 				D_GOTO(out, rc = 0);
 
 			case EVT_FIND_ALL:
@@ -2071,7 +2076,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 
 		if (i < node->tn_nr) {
 			/* overlapped with a non-leaf node, dive into it. */
-			evt_tcx_set_trace(tcx, level, nd_off, i);
+			evt_tcx_set_trace(tcx, level, nd_off, i, false);
 			nd_off = evt_node_child_at(tcx, node, i);
 			at = 0;
 			level++;
@@ -2807,7 +2812,7 @@ evt_tcx_fix_trace(struct evt_context *tcx, int level)
 		trace = &tcx->tc_trace[index - 1];
 		nd = evt_off2node(tcx, trace->tr_node);
 		ne = evt_node_entry_at(tcx, nd, trace->tr_at);
-		evt_tcx_set_trace(tcx, index, ne->ne_child, 0);
+		evt_tcx_set_trace(tcx, index, ne->ne_child, 0, false);
 	}
 
 	return 0;
@@ -2967,7 +2972,7 @@ int evt_delete(daos_handle_t toh, const struct evt_rect *rect,
 	filter.fr_epr.epr_lo = rect->rc_epc;
 	filter.fr_epr.epr_hi = rect->rc_epc;
 	filter.fr_punch = 0;
-	rc = evt_ent_array_fill(tcx, EVT_FIND_SAME, DAOS_INTENT_PUNCH,
+	rc = evt_ent_array_fill(tcx, EVT_FIND_SAME, DAOS_INTENT_PURGE,
 				&filter, rect, &ent_array);
 	if (rc != 0)
 		return rc;

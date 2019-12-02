@@ -40,12 +40,6 @@
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="
 #endif
 
-#ifdef DAOS_HAS_VALGRIND
-#include <valgrind/valgrind.h>
-#else
-#define RUNNING_ON_VALGRIND 0
-#endif
-
 #define VPOOL_16M	(16ULL << 20)
 #define VPOOL_1G	(1ULL << 30)
 #define VPOOL_2G	(2ULL << 30)
