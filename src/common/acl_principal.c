@@ -30,7 +30,11 @@
 #include <pwd.h>
 #include <grp.h>
 
-#define DEFAULT_BUF_LEN 1024
+#define DEFAULT_BUF_LEN	1024
+#define USER_PREFIX	"u:"
+#define USER_PREFIX_LEN	(sizeof(USER_PREFIX) - 1)
+#define GRP_PREFIX	"g:"
+#define GRP_PREFIX_LEN	(sizeof(GRP_PREFIX) - 1)
 
 /*
  * No platform-agnostic way to fetch the max buflen - so let's try a
@@ -308,4 +312,117 @@ daos_acl_principal_to_gid(const char *principal, gid_t *gid)
 out:
 	D_FREE(buf);
 	return rc;
+}
+
+static bool
+is_special_type(enum daos_acl_principal_type type)
+{
+	switch (type) {
+	case DAOS_ACL_OWNER:
+	case DAOS_ACL_OWNER_GROUP:
+	case DAOS_ACL_EVERYONE:
+		return true;
+	case DAOS_ACL_USER:
+	case DAOS_ACL_GROUP:
+	default:
+		break;
+	}
+
+	return false;
+}
+
+static int
+get_principal_type_from_str(const char *principal_str,
+			    enum daos_acl_principal_type *type)
+{
+	/*
+	 * Named user or group will be designated by prefix
+	 */
+	if (strncmp(principal_str, USER_PREFIX, USER_PREFIX_LEN) == 0) {
+		*type = DAOS_ACL_USER;
+		return 0;
+	}
+
+	if (strncmp(principal_str, GRP_PREFIX, GRP_PREFIX_LEN) == 0) {
+		*type = DAOS_ACL_GROUP;
+		return 0;
+	}
+
+	if (strncmp(principal_str, DAOS_ACL_PRINCIPAL_EVERYONE,
+		    DAOS_ACL_MAX_PRINCIPAL_BUF_LEN) == 0) {
+		*type = DAOS_ACL_EVERYONE;
+		return 0;
+	}
+
+	if (strncmp(principal_str, DAOS_ACL_PRINCIPAL_OWNER,
+		    DAOS_ACL_MAX_PRINCIPAL_BUF_LEN) == 0) {
+		*type = DAOS_ACL_OWNER;
+		return 0;
+	}
+
+	if (strncmp(principal_str, DAOS_ACL_PRINCIPAL_OWNER_GRP,
+		    DAOS_ACL_MAX_PRINCIPAL_BUF_LEN) == 0) {
+		*type = DAOS_ACL_OWNER_GROUP;
+		return 0;
+	}
+
+	return -DER_INVAL;
+}
+
+static const char *
+get_start_of_name(const char *principal_str, enum daos_acl_principal_type type)
+{
+	size_t idx;
+
+	if (type == DAOS_ACL_USER)
+		idx = USER_PREFIX_LEN;
+	else
+		idx = GRP_PREFIX_LEN;
+
+	return &principal_str[idx];
+}
+
+int
+daos_acl_principal_from_str(const char *principal_str,
+			    enum daos_acl_principal_type *type,
+			    char **name)
+{
+	int		rc;
+	const char	*p_name;
+
+	if (principal_str == NULL || type == NULL || name == NULL) {
+		D_INFO("Null input: principal_str=%p, type=%p, name=%p\n",
+		       principal_str, type, name);
+		return -DER_INVAL;
+	}
+
+	rc = get_principal_type_from_str(principal_str, type);
+	if (rc != 0) {
+		D_INFO("Badly-formatted principal string\n");
+		return rc;
+	}
+
+	/*
+	 * Nothing else to do for special types.
+	 */
+	if (is_special_type(*type)) {
+		*name = NULL;
+		return 0;
+	}
+
+	/*
+	 * Make sure the name is something sane before we go through the
+	 * trouble of allocating it.
+	 */
+	p_name = get_start_of_name(principal_str, *type);
+	if (!daos_acl_principal_is_valid(p_name)) {
+		D_INFO("Invalid principal name\n");
+		return -DER_INVAL;
+	}
+
+	D_STRNDUP(*name, p_name, DAOS_ACL_MAX_PRINCIPAL_LEN);
+	if (*name == NULL)
+		return -DER_NOMEM;
+
+	return 0;
 }

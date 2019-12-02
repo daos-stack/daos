@@ -66,6 +66,7 @@ typedef enum {
 	DAOS_OPC_POOL_GET_ATTR,
 	DAOS_OPC_POOL_SET_ATTR,
 	DAOS_OPC_POOL_STOP_SVC,
+	DAOS_OPC_POOL_LIST_CONT,
 
 	/** Container APIs */
 	DAOS_OPC_CONT_CREATE,
@@ -211,6 +212,12 @@ typedef struct {
 	d_rank_list_t		*failed;
 	daos_target_info_t	*info_list;
 } daos_pool_query_target_t;
+
+typedef struct {
+	daos_handle_t			 poh;
+	daos_size_t			*ncont;
+	struct daos_pool_cont_info	*cont_buf;
+} daos_pool_list_cont_t;
 
 typedef struct {
 	daos_handle_t		poh;

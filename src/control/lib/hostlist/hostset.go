@@ -22,7 +22,10 @@
 //
 package hostlist
 
-import "sync"
+import (
+	"errors"
+	"sync"
+)
 
 type (
 	// HostSet is a special case of HostList which never contains duplicates
@@ -44,24 +47,38 @@ func CreateSet(stringHosts string) (*HostSet, error) {
 	return &HostSet{list: hl}, nil
 }
 
+// initList will initialize the underlying *HostList if necessary
+func (hs *HostSet) initList() {
+	hs.Lock()
+	defer hs.Unlock()
+
+	if hs.list == nil {
+		hs.list, _ = Create("")
+	}
+}
+
 func (hs *HostSet) String() string {
 	return hs.RangedString()
 }
 
 // RangedString returns a string containing a bracketed HostSet representation.
 func (hs *HostSet) RangedString() string {
+	hs.initList()
 	return hs.list.RangedString()
 }
 
 // DerangedString returns a string containing the hostnames of
 // every host in the HostSet, without any bracketing.
 func (hs *HostSet) DerangedString() string {
+	hs.initList()
 	return hs.list.DerangedString()
 }
 
 // Insert adds a host or list of hosts to the HostSet.
 // Returns the number of non-duplicate hosts successfully added.
 func (hs *HostSet) Insert(stringHosts string) (int, error) {
+	hs.initList()
+
 	newList, err := Create(stringHosts)
 	if err != nil {
 		return -1, err
@@ -82,6 +99,8 @@ func (hs *HostSet) Insert(stringHosts string) (int, error) {
 // Delete removes a host or list of hosts from the HostSet.
 // Returns the number of hosts successfully removed.
 func (hs *HostSet) Delete(stringHosts string) (int, error) {
+	hs.initList()
+
 	hs.Lock()
 	defer hs.Unlock()
 
@@ -94,15 +113,38 @@ func (hs *HostSet) Delete(stringHosts string) (int, error) {
 	return int(hs.list.hostCount - startCount), nil
 }
 
+// MergeSet merges the supplied HostSet into this one.
+func (hs *HostSet) MergeSet(other *HostSet) error {
+	hs.initList()
+
+	if other == nil {
+		return errors.New("nil HostSet")
+	}
+
+	hs.Lock()
+	defer hs.Unlock()
+	other.Lock()
+	defer other.Unlock()
+
+	if err := hs.list.PushList(other.list); err != nil {
+		return err
+	}
+	hs.list.Uniq()
+
+	return nil
+}
+
 // Within returns true if all hosts in the supplied hosts are contained
 // within the HostSet, false otherwise.
 func (hs *HostSet) Within(stringHosts string) (bool, error) {
+	hs.initList()
 	return hs.list.Within(stringHosts)
 }
 
 // Intersects returns a *HostSet containing hosts which are in both this
 // HostSet and the supplied hosts string.
 func (hs *HostSet) Intersects(stringHosts string) (*HostSet, error) {
+	hs.initList()
 	intersection, err := hs.list.Intersects(stringHosts)
 	if err != nil {
 		return nil, err
@@ -116,6 +158,7 @@ func (hs *HostSet) Intersects(stringHosts string) (*HostSet, error) {
 // onto the HostSet and then removes it from the HostSet. Returns
 // an error if the HostSet is empty
 func (hs *HostSet) Shift() (string, error) {
+	hs.initList()
 	return hs.list.Shift()
 }
 
@@ -124,6 +167,7 @@ func (hs *HostSet) Shift() (string, error) {
 // are removed from the HostSet. Returns an error if the HostSet
 // is empty.
 func (hs *HostSet) ShiftRange() (string, error) {
+	hs.initList()
 	return hs.list.ShiftRange()
 }
 
@@ -131,6 +175,7 @@ func (hs *HostSet) ShiftRange() (string, error) {
 // onto the HostSet and then removes it from the HostSet. Returns
 // an error if the HostSet is empty
 func (hs *HostSet) Pop() (string, error) {
+	hs.initList()
 	return hs.list.Pop()
 }
 
@@ -139,10 +184,12 @@ func (hs *HostSet) Pop() (string, error) {
 // are removed from the HostSet. Returns an error if the HostSet
 // is empty.
 func (hs *HostSet) PopRange() (string, error) {
+	hs.initList()
 	return hs.list.PopRange()
 }
 
 // Count returns the number of hosts in the HostSet.
 func (hs *HostSet) Count() int {
+	hs.initList()
 	return hs.list.Count()
 }
