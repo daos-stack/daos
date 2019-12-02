@@ -890,7 +890,6 @@ read_empty_records(void **state)
 
 	/** Write segmented */
 	for (i = 0; i < NUM_ELEMS; i++) {
-		iod.arr_rgs[i].rg_len = sizeof(int);
 		iod.arr_rgs[i].rg_idx = i * arg->rank_size * sizeof(int) +
 			arg->myrank * sizeof(int) +
 			i * NUM_ELEMS * sizeof(int);
@@ -909,7 +908,6 @@ read_empty_records(void **state)
 	d_iov_set(&iov, rbuf, NUM_ELEMS * sizeof(int));
 	rc = daos_array_read(oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
-	/** reading all holes except first interger at idx 0 */
 	assert_int_equal(iod.arr_nr_short_read, (NUM_ELEMS-1) * sizeof(int));
 
 	/** Verify data */
