@@ -695,7 +695,6 @@ class TestContainerData(object):
 
         Returns:
             list: a list of all the used akeys
-
         """
         return [record["akey"] for record in self.records]
 
@@ -734,7 +733,6 @@ class TestContainerData(object):
 
         Raises:
             DaosTestError: if there was an error writing the record
-
         """
         self.records.append({"akey": akey, "dkey": dkey, "data": data})
         kwargs = {"dkey": dkey, "akey": akey, "obj": self.obj, "rank": rank}
@@ -760,7 +758,7 @@ class TestContainerData(object):
                     data, container.uuid, error))
 
     def write_object(self, container, record_qty, akey_size, dkey_size,
-                     data_size, rank=None, obj_class=None, array=False):
+                     data_size, rank=None, obj_class=None, data_array_size=0):
         """Write an object to the container.
 
         Args:
@@ -768,30 +766,32 @@ class TestContainerData(object):
             record_qty (int): the number of records to write
             rank (int, optional): rank. Defaults to None.
             obj_class (int, optional): daos object class. Defaults to None.
-            array (bool, optional): write an array or single value. Defaults to
-                False.
+            data_array_size (optional): write an array or single value.
+                                        Defaults to 0.
 
         Raises:
             DaosTestError: if there was an error writing the object
-
         """
         for _ in range(record_qty):
             akey = get_random_string(akey_size, self.get_akeys())
             dkey = get_random_string(dkey_size, self.get_dkeys())
-            data = [get_random_string(data_size) for _ in range(data_size)] \
-                if array else get_random_string(data_size)
-
+            if data_array_size == 0:
+                data = get_random_string(data_size)
+            else:
+                data = [
+                    get_random_string(data_size)
+                    for _ in range(data_array_size)]
             # Write single data to the container
             self.write_record(container, akey, dkey, data, rank, obj_class)
-
             # Verify the data was written correctly
-            data_read = self.read_record(container, akey, dkey, data_size)
+            data_read = self.read_record(
+                container, akey, dkey, data_size, data_array_size)
             if data != data_read:
                 raise DaosTestError(
                     "Written data confirmation failed:"
                     "\n  wrote: {}\n  read:  {}".format(data, data_read))
 
-    def read_record(self, container, akey, dkey, data_size, data_count=0):
+    def read_record(self, container, akey, dkey, data_size, data_array_size=0):
         """Read a record from the container.
 
         Args:
@@ -799,20 +799,19 @@ class TestContainerData(object):
             akey (str): the akey
             dkey (str): the dkey
             data_size (int): size of the data to read
-            data_count (int): number of array items to read
+            data_array_size (int): size of array item
 
         Raises:
             DaosTestError: if there was an error reading the object
 
         Returns:
             str: the data read for the container
-
         """
         kwargs = {"dkey": dkey, "akey": akey, "obj": self.obj, "txn": self.txn}
         try:
-            if data_count:
-                kwargs["rec_count"] = data_count
-                kwargs["rec_size"] = data_size
+            if data_array_size > 0:
+                kwargs["rec_count"] = data_array_size
+                kwargs["rec_size"] = data_size + 1
                 self._log_method("read_an_array", kwargs)
                 read_data = container.container.read_an_array(**kwargs)
             else:
@@ -823,10 +822,10 @@ class TestContainerData(object):
             raise DaosTestError(
                 "Error reading {}data (dkey={}, akey={}, size={}) from "
                 "container {}: {}".format(
-                    "array " if data_count else "", dkey, akey, data_size,
-                    container.uuid, error))
+                    "array " if data_array_size > 0 else "", dkey, akey,
+                    data_size, container.uuid, error))
         return [data[:-1] for data in read_data] \
-            if data_count else read_data.value
+            if data_array_size > 0 else read_data.value
 
     def read_object(self, container):
         """Read an object from the container.
@@ -837,7 +836,6 @@ class TestContainerData(object):
         Returns:
             bool: True if ll the records where read successfully and matched
                 what was originally written; False otherwise
-
         """
         status = len(self.records) > 0
         for record_info in self.records:
@@ -846,11 +844,15 @@ class TestContainerData(object):
                 "container": container,
                 "akey": record_info["akey"],
                 "dkey": record_info["dkey"],
-                "data_size": len(expect),
+                "data_size": len(expect[0].split()),
             }
             try:
                 if isinstance(expect, list):
-                    kwargs["data_count"] = len(expect) + 1
+                    kwargs["data_size"] = len(expect[0]) if expect else 0
+                    kwargs["data_array_size"] = len(expect)
+                else:
+                    kwargs["data_size"] = len(expect)
+                    kwargs["data_array_size"] = 0
                 actual = self.read_record(**kwargs)
             except DaosApiError as error:
                 container.log.error(error)
@@ -883,6 +885,7 @@ class TestContainer(TestDaosApiBase):
         self.akey_size = BasicParameter(None)
         self.dkey_size = BasicParameter(None)
         self.data_size = BasicParameter(None)
+        self.data_array_size = BasicParameter(0, 0)
 
         self.container = None
         self.uuid = None
@@ -1050,7 +1053,6 @@ class TestContainer(TestDaosApiBase):
 
         Raises:
             DaosTestError: if there was an error writing the object
-
         """
         self.open()
         self.log.info(
@@ -1064,7 +1066,8 @@ class TestContainer(TestDaosApiBase):
             self.written_data.append(TestContainerData(debug))
             self.written_data[-1].write_object(
                 self, self.record_qty.value, self.akey_size.value,
-                self.dkey_size.value, self.data_size.value, rank, obj_class)
+                self.dkey_size.value, self.data_size.value, rank, obj_class,
+                self.data_array_size.value)
 
     @fail_on(DaosTestError)
     def read_objects(self, debug=False):
@@ -1076,7 +1079,6 @@ class TestContainer(TestDaosApiBase):
 
         Returns:
             bool: True if
-
         """
         self.open()
         self.log.info(

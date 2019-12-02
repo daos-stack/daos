@@ -176,8 +176,8 @@ bool dss_xstream_exiting(struct dss_xstream *dxs);
 
 struct dss_module_info {
 	crt_context_t		dmi_ctx;
-	struct bio_xs_context	*dmi_nvme_ctxt;
-	struct dss_xstream	*dmi_xstream;
+	struct bio_xs_context  *dmi_nvme_ctxt;
+	struct dss_xstream     *dmi_xstream;
 	/* the xstream id */
 	int			dmi_xs_id;
 	/* the VOS target id */
@@ -532,6 +532,7 @@ int dsc_pool_tgt_exclude(const uuid_t uuid, const char *grp,
 struct dss_enum_arg {
 	bool			fill_recxs;	/* type == S||R */
 	bool			chk_key2big;
+	bool			need_punch;	/* need to pack punch epoch */
 	daos_epoch_range_t     *eprs;
 	int			eprs_cap;
 	int			eprs_len;
