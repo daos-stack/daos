@@ -24,6 +24,7 @@ PyDAOS Module allowing global access to the DAOS containers and objects.
 
 import sys
 import atexit
+import os
 
 dc = None
 
@@ -63,6 +64,8 @@ class DaosClient():
     def __init__(self):
         # Initialize DAOS
         self.connected = False
+        os.environ["FI_LOG_LEVEL"] = "info"
+        print(os.environ)
         _rc = pydaos_shim.daos_init(DAOS_MAGIC)
         if _rc != pydaos_shim.DER_SUCCESS:
             raise PyDError("Failed to initialize DAOS", _rc)

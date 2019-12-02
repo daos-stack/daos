@@ -36,6 +36,6 @@ class DaosCoreTestRebuild(DaosCoreBase):
         Test Description: Purpose of this test is to run just the daos_test
                           rebuild tests.
         Use case: Balance testing load betweeen hardware and VM clusters.
-        :avocado: tags=all,pr,hw,unittest,medium,daos_test_rebuild
+        :avocado: tags=all,pr,unittest,medium,daos_test_rebuild
         """
         DaosCoreBase.run_subtest(self)
