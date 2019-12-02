@@ -532,6 +532,7 @@ int dsc_pool_tgt_exclude(const uuid_t uuid, const char *grp,
 struct dss_enum_arg {
 	bool			fill_recxs;	/* type == S||R */
 	bool			chk_key2big;
+	bool			need_punch;	/* need to pack punch epoch */
 	daos_epoch_range_t     *eprs;
 	int			eprs_cap;
 	int			eprs_len;

@@ -117,7 +117,7 @@ unload_bs_cp(void *arg, int rc)
 	struct bio_blobstore *bbs = arg;
 
 	if (rc != 0)
-		D_ERROR("Failed to unload bs:%p, %d\n", bbs, rc);
+		D_ERROR("Failed to unload blobstore:%p, %d\n", bbs, rc);
 	else
 		bbs->bb_bs = NULL;
 }
@@ -218,18 +218,19 @@ bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state)
 		break;
 	default:
 		rc = -DER_INVAL;
-		D_ASSERTF(0, "Invalid bs state: %u (%s)\n",
+		D_ASSERTF(0, "Invalid blobstore state: %u (%s)\n",
 			  new_state, bio_state_enum_to_str(new_state));
 		break;
 	}
 
 	if (rc) {
-		D_ERROR("BS state transition error! tgt: %d, %s -> %s\n",
+		D_ERROR("Blobstore state transition error! tgt: %d, %s -> %s\n",
 			bbs->bb_owner_xs->bxc_tgt_id,
 			bio_state_enum_to_str(bbs->bb_state),
 			bio_state_enum_to_str(new_state));
 	} else {
-		D_DEBUG(DB_MGMT, "BS state transitioned. tgt: %d, %s -> %s\n",
+		D_DEBUG(DB_MGMT, "Blobstore state transitioned. "
+			"tgt: %d, %s -> %s\n",
 			bbs->bb_owner_xs->bxc_tgt_id,
 			bio_state_enum_to_str(bbs->bb_state),
 			bio_state_enum_to_str(new_state));
@@ -284,7 +285,7 @@ bio_bs_state_transit(struct bio_blobstore *bbs)
 		break;
 	default:
 		rc = -DER_INVAL;
-		D_ASSERTF(0, "Invalid bs state:%u (%s)\n",
+		D_ASSERTF(0, "Invalid blobstore state:%u (%s)\n",
 			 bbs->bb_state, bio_state_enum_to_str(bbs->bb_state));
 		break;
 	}
