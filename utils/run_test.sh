@@ -99,15 +99,20 @@ if [ -d "/mnt/daos" ]; then
     run_test src/vos/tests/evt_ctl.sh pmem
     run_test "${SL_PREFIX}/bin/vea_ut"
     run_test src/rdb/raft_tests/raft_tests.py
-    run_test src/control/run_go_tests.sh
     go_spdk_ctests="build/src/control/lib/spdk/ctests/nvme_control_ctests"
+    echo "DEBUG: "
+    ls -lah "$go_spdk_ctests"
     if test -f "$go_spdk_ctests"; then
         run_test "$go_spdk_ctests"
     else
         echo "$go_spdk_ctests missing, SPDK_SRC not available when built?"
     fi
+    run_test src/control/run_go_tests.sh
     # Environment variables specific to the rdb tests
     export PATH="${SL_PREFIX}/bin:${PATH}"
+    export CRT_PHY_ADDR_STR=ofi+sockets
+    export OFI_INTERFACE=lo
+    LD_LIBRARY_PATH="${SL_SPDK_PREFIX}/lib:${LD_LIBRARY_PATH}"
     export LD_LIBRARY_PATH="${SL_PREFIX}/lib64:${LD_LIBRARY_PATH}"
     run_test src/rdb/tests/rdb_test_runner.py "${SL_OMPI_PREFIX}"
     run_test build/src/security/tests/cli_security_tests
