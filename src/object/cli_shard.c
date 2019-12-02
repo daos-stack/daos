@@ -578,7 +578,9 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		D_ERROR("punch rpc failed rc %d\n", rc);
 		D_GOTO(out_req, rc);
 	}
-	return rc;
+
+	dc_pool_put(pool);
+	return 0;
 
 out_req:
 	crt_req_decref(req);
@@ -1032,7 +1034,9 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, daos_epoch_t epoch,
 		D_ERROR("query_key rpc failed rc %d\n", rc);
 		D_GOTO(out_req, rc);
 	}
-	return rc;
+
+	dc_pool_put(pool);
+	return 0;
 
 out_req:
 	crt_req_decref(req);

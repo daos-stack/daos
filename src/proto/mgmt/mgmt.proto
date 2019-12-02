@@ -45,6 +45,10 @@ service MgmtSvc {
 	rpc PoolGetACL(GetACLReq) returns (ACLResp) {}
 	// Overwrite the Access Control List for a DAOS pool with a new one.
 	rpc PoolOverwriteACL(ModifyACLReq) returns (ACLResp) {}
+	// Update existing the Access Control List for a DAOS pool with new entries.
+	rpc PoolUpdateACL(ModifyACLReq) returns (ACLResp) {}
+	// Delete an entry from a DAOS pool's Access Control List
+	rpc PoolDeleteACL(DeleteACLReq) returns (ACLResp) {}
 	// Get the information required by libdaos to attach to the system.
 	rpc GetAttachInfo(GetAttachInfoReq) returns (GetAttachInfoResp) {}
 	// Get BIO device health information

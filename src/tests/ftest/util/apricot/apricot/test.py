@@ -37,10 +37,11 @@ from ClusterShell.NodeSet import NodeSet, NodeSetParseError
 
 import fault_config_utils
 import agent_utils
-import server_utils
 import write_host_file
-from pydaos.raw import DaosContext, DaosLog, DaosApiError
+
+from server_utils import ServerManager, ServerFailed
 from configuration_utils import Configuration
+from pydaos.raw import DaosContext, DaosLog, DaosApiError
 
 
 # pylint: disable=invalid-name
@@ -121,9 +122,10 @@ class TestWithoutServers(Test):
                                                       '..') + os.path.sep)
         self.prefix = build_paths['PREFIX']
         self.ompi_prefix = build_paths["OMPI_PREFIX"]
+        self.bin = os.path.join(self.prefix, 'bin')
         self.daos_test = os.path.join(self.prefix, 'bin', 'daos_test')
         self.orterun = os.path.join(self.ompi_prefix, "bin", "orterun")
-        self.daosctl = os.path.join(self.prefix, 'bin', 'daosctl')
+        self.daosctl = os.path.join(self.bin, 'daosctl')
 
         # set default shared dir for daos tests in case DAOS_TEST_SHARED_DIR
         # is not set, for RPM env and non-RPM env.
@@ -183,8 +185,8 @@ class TestWithServers(TestWithoutServers):
         """Initialize a TestWithServers object."""
         super(TestWithServers, self).__init__(*args, **kwargs)
 
+        self.server_managers = []
         self.agent_sessions = None
-        self.nvme_parameter = None
         self.setup_start_servers = True
         self.setup_start_agents = True
         self.server_log = None
@@ -209,8 +211,6 @@ class TestWithServers(TestWithoutServers):
         test_clients = self.params.get("test_clients", "/run/hosts/*")
         server_count = self.params.get("server_count", "/run/hosts/*")
         client_count = self.params.get("client_count", "/run/hosts/*")
-        self.nvme_parameter = self.params.get(
-            "bdev_class", '/server_config/server/')
         # If server or client host list are defined through valid slurm
         # partition names override any hosts specified through lists.
         test_servers, self.partition_servers = self.get_partition_hosts(
@@ -253,13 +253,7 @@ class TestWithServers(TestWithoutServers):
                     "Test requires {} {}; {} specified".format(
                         expected_count, host_type, actual_count))
 
-        # Storage setup if requested in test input file
-        if self.nvme_parameter == "nvme":
-            server_utils.storage_prepare(self.hostlist_servers)
-
         # Create host files
-        self.hostfile_servers = write_host_file.write_host_file(
-            self.hostlist_servers, self.workdir, self.hostfile_servers_slots)
         if self.hostlist_clients:
             self.hostfile_clients = write_host_file.write_host_file(
                 self.hostlist_clients, self.workdir,
@@ -268,7 +262,7 @@ class TestWithServers(TestWithoutServers):
         # Start the clients (agents)
         if self.setup_start_agents:
             self.agent_sessions = agent_utils.run_agent(
-                self.basepath, self.hostlist_servers, self.hostlist_clients)
+                self, self.hostlist_servers, self.hostlist_clients)
 
         # Start the servers
         if self.setup_start_servers:
@@ -399,24 +393,14 @@ class TestWithServers(TestWithoutServers):
 
         """
         error_list = []
-        if self.hostfile_servers:
-            # Reset the nvme storage
-            if self.nvme_parameter == "nvme":
-                self.multi_log("Resetting NVMe storage on the servers")
+        if self.server_managers:
+            for server_manager in self.server_managers:
                 try:
-                    server_utils.storage_reset(self.hostlist_servers)
-                except server_utils.ServerFailed as error:
+                    server_manager.stop()
+                except ServerFailed as error:
                     self.multi_log("  {}".format(error))
                     error_list.append(
-                        "Error resetting nvme storage: {}".format(error))
-
-            # Stop the servers
-            self.multi_log("Stopping servers")
-            try:
-                server_utils.stop_server(hosts=self.hostlist_servers)
-            except server_utils.ServerFailed as error:
-                self.multi_log("  {}".format(error))
-                error_list.append("Error stopping servers: {}".format(error))
+                        "Error stopping servers: {}".format(error))
         return error_list
 
     def start_servers(self, server_groups=None):
@@ -425,18 +409,33 @@ class TestWithServers(TestWithoutServers):
         Args:
             server_groups (dict, optional): [description]. Defaults to None.
         """
+        if server_groups is None:
+            server_groups = {self.server_group: self.hostlist_servers}
+
         if isinstance(server_groups, dict):
             # Optionally start servers on a different subset of hosts with a
             # different server group
             for group, hosts in server_groups.items():
                 self.log.info(
                     "Starting servers: group=%s, hosts=%s", group, hosts)
-                hostfile = write_host_file.write_host_file(hosts, self.workdir)
-                server_utils.run_server(self, hostfile, group)
-
-        else:
-            server_utils.run_server(
-                self, self.hostfile_servers, self.server_group)
+                self.server_managers.append(ServerManager(
+                    self.bin,
+                    os.path.join(self.ompi_prefix, "bin"), attach=self.tmp))
+                self.server_managers[-1].get_params(self)
+                self.server_managers[-1].runner.job.yaml_params.name = group
+                self.server_managers[-1].hosts = (
+                    hosts, self.workdir, self.hostfile_servers_slots)
+                if self.prefix != "/usr":
+                    if self.server_managers[-1].runner.export.value is None:
+                        self.server_managers[-1].runner.export.value = []
+                    self.server_managers[-1].runner.export.value.extend(
+                        ["PATH"])
+                try:
+                    yamlfile = os.path.join(self.tmp, "daos_avocado_test.yaml")
+                    self.server_managers[-1].start(yamlfile)
+                except ServerFailed as error:
+                    self.multi_log("  {}".format(error))
+                    self.fail("Error starting server: {}".format(error))
 
     def get_partition_hosts(self, partition_key, host_list):
         """[summary].

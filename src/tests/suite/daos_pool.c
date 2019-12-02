@@ -562,6 +562,63 @@ pool_properties(void **state)
 	test_teardown((void **)&arg);
 }
 
+static void
+pool_op_retry(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_handle_t	 poh;
+	daos_pool_info_t info = {0};
+	int		 rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	print_message("setting DAOS_POOL_CONNECT_FAIL_CORPC ... ");
+	rc = daos_mgmt_set_params(arg->group, 0, DSS_KEY_FAIL_LOC,
+				  DAOS_POOL_CONNECT_FAIL_CORPC | DAOS_FAIL_ONCE,
+				  0, NULL);
+	assert_int_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("connecting to pool ... ");
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+			       &arg->pool.svc, DAOS_PC_RW, &poh, &info,
+			       NULL /* ev */);
+	assert_int_equal(rc, 0);
+	assert_memory_equal(info.pi_uuid, arg->pool.pool_uuid,
+			    sizeof(info.pi_uuid));
+	assert_int_equal(info.pi_ndisabled, 0);
+	print_message("success\n");
+
+	print_message("setting DAOS_POOL_QUERY_FAIL_CORPC ... ");
+	rc = daos_mgmt_set_params(arg->group, 0, DSS_KEY_FAIL_LOC,
+				  DAOS_POOL_QUERY_FAIL_CORPC | DAOS_FAIL_ONCE,
+				  0, NULL);
+	assert_int_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("querying pool info... ");
+	memset(&info, 'D', sizeof(info));
+	info.pi_bits = DPI_ALL;
+	rc = daos_pool_query(poh, NULL /* tgts */, &info, NULL, NULL /* ev */);
+	assert_int_equal(rc, 0);
+	assert_int_equal(info.pi_ndisabled, 0);
+	print_message("success\n");
+
+	print_message("setting DAOS_POOL_DISCONNECT_FAIL_CORPC ... ");
+	rc = daos_mgmt_set_params(arg->group, 0, DSS_KEY_FAIL_LOC,
+				  DAOS_POOL_DISCONNECT_FAIL_CORPC |
+				  DAOS_FAIL_ONCE, 0, NULL);
+	assert_int_equal(rc, 0);
+	print_message("success\n");
+
+	/** disconnect from pool */
+	print_message("disconnecting from pool ... ");
+	rc = daos_pool_disconnect(poh, NULL /* ev */);
+	assert_int_equal(rc, 0);
+	print_message("success\n");
+}
+
 static int
 pool_setup_sync(void **state)
 {
@@ -583,6 +640,369 @@ setup(void **state)
 {
 	return test_setup(state, SETUP_POOL_CREATE, true, DEFAULT_POOL_SIZE,
 			  NULL);
+}
+
+/* Private definition for void * typed test_arg_t.pool_lc_args */
+struct test_list_cont {
+	struct test_pool	 tpool;
+	daos_size_t		 nconts;
+	uuid_t			*conts;
+};
+
+static int
+setup_containers(void **state, daos_size_t nconts)
+{
+	test_arg_t		*arg = *state;
+	struct test_list_cont	*lcarg = NULL;
+	int			 i;
+	int			 rc = 0;
+
+	D_ALLOC_PTR(lcarg);
+	if (lcarg == NULL)
+		goto err;
+
+	/***** First, create a pool in which containers will be created *****/
+
+	/* Set some properties in the in/out tpool struct */
+	lcarg->tpool.poh = DAOS_HDL_INVAL;
+	lcarg->tpool.svc.rl_nr = svc_nreplicas;
+	lcarg->tpool.svc.rl_ranks = lcarg->tpool.ranks;
+	lcarg->tpool.pool_size = 1 << 30;	/* 1GB SCM */
+	/* Create the pool */
+	rc = test_setup_pool_create(state, NULL /* ipool */, &lcarg->tpool,
+				    NULL /* prop */);
+	if (rc != 0) {
+		print_message("setup: daos_pool_create failed: %d\n", rc);
+		goto err_free_lcarg;
+	}
+
+	/* TODO: make test_setup_pool_connect() more generic, call here */
+	if (arg->myrank == 0) {
+		rc = daos_pool_connect(lcarg->tpool.pool_uuid, arg->group,
+				       &lcarg->tpool.svc, DAOS_PC_RW,
+				       &lcarg->tpool.poh, NULL /* pool info */,
+				       NULL /* ev */);
+		if (rc != 0)
+			print_message("setup: daos_pool_connect failed: %d\n",
+				      rc);
+	}
+
+	if (arg->multi_rank) {
+		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		if (rc == 0) {
+			handle_share(&lcarg->tpool.poh, HANDLE_POOL,
+				     arg->myrank, lcarg->tpool.poh, 0);
+		}
+	}
+
+	if (rc != 0)
+		goto err_destroy_pool;
+	print_message("setup: connected to pool: "DF_UUIDF"\n",
+		      DP_UUID(lcarg->tpool.pool_uuid));
+
+	/***** Create many containers in the pool *****/
+
+	if (nconts) {
+		D_ALLOC_ARRAY(lcarg->conts, nconts);
+		assert_ptr_not_equal(lcarg->conts, NULL);
+		print_message("setup: alloc lcarg->conts len %zu\n",
+			      nconts);
+	}
+
+	for (i = 0; i < nconts; i++) {
+		/* TODO: make test_setup_cont_create() generic, call here */
+		if (arg->myrank == 0) {
+			uuid_generate(lcarg->conts[i]);
+			print_message("setup: creating container: "DF_UUIDF"\n",
+				      DP_UUID(lcarg->conts[i]));
+			rc = daos_cont_create(lcarg->tpool.poh,
+					      lcarg->conts[i], NULL /* prop */,
+					      NULL /* ev */);
+			if (rc != 0)
+				print_message("setup: daos_cont_create "
+						"failed: %d\n", rc);
+		}
+
+		if (arg->multi_rank) {
+			MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+			/** broadcast container UUID */
+			if (rc == 0)
+				MPI_Bcast(lcarg->conts[i],
+					  sizeof(lcarg->conts[i]), MPI_CHAR,
+					  0, MPI_COMM_WORLD);
+		}
+
+		if (rc != 0)
+			goto err_destroy_conts;
+	}
+
+	lcarg->nconts = nconts;
+	arg->pool_lc_args = lcarg;
+	return 0;
+
+err_destroy_conts:
+	if (arg->myrank == 0) {
+		for (i = 0; i < nconts; i++) {
+			if (uuid_is_null(lcarg->conts[i]))
+				break;
+			daos_cont_destroy(lcarg->tpool.poh, lcarg->conts[i],
+					  1 /* force */, NULL /* ev */);
+		}
+	}
+
+err_destroy_pool:
+	if (arg->myrank == 0)
+		pool_destroy_safe(arg, &lcarg->tpool);
+
+err_free_lcarg:
+	D_FREE(lcarg);
+
+err:
+	return 1;
+}
+
+static int
+teardown_containers(void **state)
+{
+	test_arg_t		*arg = *state;
+	struct test_list_cont	*lcarg = arg->pool_lc_args;
+	int			 i;
+	int			 rc;
+
+	if (lcarg == NULL)
+		return 0;
+
+	for (i = 0; i < lcarg->nconts; i++) {
+		if (uuid_is_null(lcarg->conts[i]))
+			break;
+
+		if (arg->myrank == 0) {
+			print_message("teardown: destroy container: "
+				      DF_UUIDF"\n", DP_UUID(lcarg->conts[i]));
+			rc = daos_cont_destroy(lcarg->tpool.poh,
+					       lcarg->conts[i], 1, NULL);
+		}
+
+		if (arg->multi_rank)
+			MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+		if (rc != 0)
+			return rc;
+	}
+
+	if (arg->myrank == 0)
+		rc = pool_destroy_safe(arg, &lcarg->tpool);
+
+	if (arg->multi_rank)
+		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+	if (rc != 0)
+		return rc;
+
+	lcarg->nconts = 0;
+	D_FREE(lcarg->conts);
+	D_FREE(arg->pool_lc_args);
+	arg->pool_lc_args = NULL;
+
+	return test_case_teardown(state);
+}
+
+static int
+setup_zerocontainers(void **state)
+{
+	return setup_containers(state, 0 /* nconts */);
+}
+
+static int
+setup_manycontainers(void **state)
+{
+	const daos_size_t nconts = 16;
+
+	return setup_containers(state, nconts);
+}
+
+static void
+clean_cont_info(daos_size_t nconts, struct daos_pool_cont_info *conts) {
+	int	i;
+
+	if (conts) {
+		for (i = 0; i < nconts; i++)
+			uuid_clear(conts[i].pci_uuid);
+	}
+}
+
+/* Search for container information in pools created in setup (pool_lc_args)
+ * Return matching index or -1 if no match.
+ */
+static int
+find_cont(void **state, struct daos_pool_cont_info *cont)
+{
+	test_arg_t		*arg = *state;
+	struct test_list_cont	*lcarg = arg->pool_lc_args;
+	int			 i;
+	int			 found_idx = -1;
+
+	for (i = 0; i < lcarg->nconts; i++) {
+		if (uuid_compare(cont->pci_uuid, lcarg->conts[i]) == 0) {
+			found_idx = i;
+			break;
+		}
+	}
+
+	print_message("container "DF_UUIDF" %sfound in list result\n",
+		      DP_UUID(cont->pci_uuid),
+		      ((found_idx == -1) ? "NOT " : ""));
+	return found_idx;
+}
+
+/* Verify container info returned by DAOS API
+ * rc_ret:	return code from daos_pool_list_cont()
+ * npools_in:	ncont input argument to daos_pool_list_cont()
+ * npools_out:	ncont output argument value after daos_pool_list_cont()
+ */
+static void
+verify_cont_info(void **state, int rc_ret, daos_size_t nconts_in,
+		 struct daos_pool_cont_info *conts, daos_size_t nconts_out)
+{
+	test_arg_t		*arg = *state;
+	struct test_list_cont	*lcarg = arg->pool_lc_args;
+	daos_size_t		 nfilled;
+	int			 i;
+	int			 rc;
+
+	assert_int_equal(nconts_out, lcarg->nconts);
+
+	if (conts == NULL)
+		return;
+
+	/* How many entries of conts[] expected to be populated?
+	 * In successful calls, nconts_out.
+	 */
+	nfilled = (rc_ret == 0) ? nconts_out : 0;
+
+	/* Walk through conts[] items daos_pool_list_cont() was told about */
+	print_message("verifying conts[0..%zu], nfilled=%zu\n", nconts_in,
+		      nfilled);
+	for (i = 0; i < nconts_in; i++) {
+		if (i < nfilled) {
+			/* container is found in the setup state */
+			rc = find_cont(state, &conts[i]);
+			assert_int_not_equal(rc, -1);
+		} else {
+			/* Expect no content in conts[>=nfilled] */
+			rc = uuid_is_null(conts[i].pci_uuid);
+			assert_int_not_equal(rc, 0);
+		}
+	}
+}
+/* Common function for testing list containers feature.
+ * Some tests can only be run when multiple containers have been created,
+ * Other tests may run when there are zero or more containers in the pool.
+ */
+static void
+list_containers_test(void **state)
+{
+	test_arg_t			*arg = *state;
+	struct test_list_cont		*lcarg = arg->pool_lc_args;
+	int				 rc;
+	daos_size_t			 nconts;
+	daos_size_t			 nconts_alloc;
+	daos_size_t			 nconts_orig;
+	struct daos_pool_cont_info	*conts = NULL;
+	int				 tnum = 0;
+
+	/***** Test: retrieve number of containers in pool *****/
+	nconts = nconts_orig = 0xDEF0; /* Junk value (e.g., uninitialized) */
+	assert_false(daos_handle_is_inval(lcarg->tpool.poh));
+	rc = daos_pool_list_cont(lcarg->tpool.poh, &nconts, NULL /* conts */,
+			NULL /* ev */);
+	print_message("daos_pool_list_cont returned rc=%d\n", rc);
+	assert_int_equal(rc, 0);
+	verify_cont_info(state, rc, nconts_orig, NULL /* conts */, nconts);
+
+	print_message("success t%d: output nconts=%zu\n", tnum++,
+		      lcarg->nconts);
+
+	/* Setup for next 2 tests: alloc conts[] */
+	nconts_alloc = lcarg->nconts + 10;
+	D_ALLOC_ARRAY(conts, nconts_alloc);
+	assert_ptr_not_equal(conts, NULL);
+
+	/***** Test: provide nconts, conts. Expect nconts=lcarg->nconts
+	 * and that many items in conts[] filled
+	 *****/
+	nconts = nconts_alloc;
+	rc = daos_pool_list_cont(lcarg->tpool.poh, &nconts, conts,
+				 NULL /* ev */);
+	assert_int_equal(rc, 0);
+	assert_int_equal(nconts, lcarg->nconts);
+	verify_cont_info(state, rc, nconts_alloc, conts, nconts);
+
+	clean_cont_info(nconts_alloc, conts);
+	print_message("success t%d: conts[] over-sized\n", tnum++);
+
+	/***** Test: provide nconts=0, non-NULL conts ****/
+	nconts = 0;
+	rc = daos_pool_list_cont(lcarg->tpool.poh, &nconts, conts,
+				 NULL /* ev */);
+	assert_int_equal(rc, 0);
+	assert_int_equal(nconts, lcarg->nconts);
+	print_message("success t%d: nconts=0, non-NULL conts[] rc=%d\n",
+		      tnum++, rc);
+
+	/* Teardown for above 2 tests */
+	D_FREE(conts);
+	conts = NULL;
+
+	/***** Test: invalid nconts=NULL *****/
+	rc = daos_pool_list_cont(lcarg->tpool.poh, NULL /* nconts */,
+				  NULL /* conts */, NULL /* ev */);
+	assert_int_equal(rc, -DER_INVAL);
+	print_message("success t%d: in &nconts NULL, -DER_INVAL\n", tnum++);
+
+
+	/*** Tests that can only run with multiple containers ***/
+	if (lcarg->nconts > 1) {
+		/***** Test: Exact size buffer *****/
+		/* Setup */
+		nconts_alloc = lcarg->nconts;
+		D_ALLOC_ARRAY(conts, nconts_alloc);
+		assert_ptr_not_equal(conts, NULL);
+
+		/* Test: Exact size buffer */
+		nconts = nconts_alloc;
+		rc = daos_pool_list_cont(lcarg->tpool.poh, &nconts, conts,
+					  NULL /* ev */);
+		assert_int_equal(rc, 0);
+		assert_int_equal(nconts, lcarg->nconts);
+		verify_cont_info(state, rc, nconts_alloc, conts, nconts);
+
+		/* Teardown */
+		D_FREE(conts);
+		conts = NULL;
+		print_message("success t%d: conts[] exact length\n", tnum++);
+
+		/***** Test: Under-sized buffer (negative) -DER_TRUNC *****/
+		/* Setup */
+		nconts_alloc = lcarg->nconts - 1;
+		D_ALLOC_ARRAY(conts, nconts_alloc);
+		assert_ptr_not_equal(conts, NULL);
+
+		/* Test: Under-sized buffer */
+		nconts = nconts_alloc;
+		rc = daos_pool_list_cont(lcarg->tpool.poh, &nconts, conts,
+					  NULL /* ev */);
+		assert_int_equal(rc, -DER_TRUNC);
+		verify_cont_info(state, rc, nconts_alloc, conts, nconts);
+
+		print_message("success t%d: conts[] under-sized\n", tnum++);
+
+		/* Teardown */
+		D_FREE(conts);
+		conts = NULL;
+	} /* if (lcarg->nconts  > 0) */
+
+	print_message("success\n");
 }
 
 static const struct CMUnitTest pool_tests[] = {
@@ -607,6 +1027,12 @@ static const struct CMUnitTest pool_tests[] = {
 	  init_fini_conn, NULL, test_case_teardown},
 	{ "POOL10: pool create with properties and query",
 	  pool_properties, NULL, test_case_teardown},
+	{ "POOL11: pool list containers (zero)",
+	  list_containers_test, setup_zerocontainers, teardown_containers},
+	{ "POOL12: pool list containers (many)",
+	  list_containers_test, setup_manycontainers, teardown_containers},
+	{ "POOL13: retry POOL_{CONNECT,DISCONNECT,QUERY}",
+	  pool_op_retry, NULL, test_case_teardown}
 };
 
 int

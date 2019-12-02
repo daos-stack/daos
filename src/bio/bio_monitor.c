@@ -29,7 +29,7 @@
 #include <daos_srv/smd.h>
 
 /*
- * Period to query raw device health stats, auto detect faulty and transit
+ * Period to query raw device health stats, auto detect faulty and transition
  * device state. 60 seconds by default.
  */
 #define NVME_MONITOR_PERIOD	(60ULL * (NSEC_PER_SEC / NSEC_PER_USEC))

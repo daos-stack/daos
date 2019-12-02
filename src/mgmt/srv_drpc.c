@@ -772,38 +772,56 @@ out:
 	mgmt__get_aclreq__free_unpacked(req, NULL);
 }
 
+/*
+ * Pulls params out of the ModifyACLReq and validates them.
+ */
+static int
+get_params_from_modify_acl_req(Drpc__Call *drpc_req, uuid_t uuid_out,
+			       struct daos_acl **acl_out)
+{
+	Mgmt__ModifyACLReq	*req = NULL;
+	int			rc;
+
+	req = mgmt__modify_aclreq__unpack(NULL, drpc_req->body.len,
+					  drpc_req->body.data);
+	if (req == NULL) {
+		D_ERROR("Failed to unpack ModifyACLReq\n");
+		return -DER_PROTO;
+	}
+
+	if (uuid_parse(req->uuid, uuid_out) != 0) {
+		D_ERROR("Couldn't parse UUID\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = daos_acl_from_strs((const char **)req->acl, req->n_acl, acl_out);
+	if (rc != 0) {
+		D_ERROR("Couldn't parse requested ACL strings to DAOS ACL, "
+			"rc=%d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+out:
+	mgmt__modify_aclreq__free_unpacked(req, NULL);
+	return rc;
+}
+
 void
 ds_mgmt_drpc_pool_overwrite_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	Mgmt__ModifyACLReq	*req = NULL;
 	Mgmt__ACLResp		resp = MGMT__ACLRESP__INIT;
 	int			rc = 0;
 	uuid_t			pool_uuid;
 	struct daos_acl		*acl = NULL;
 	struct daos_acl		*result = NULL;
 
-	req = mgmt__modify_aclreq__unpack(NULL, drpc_req->body.len,
-					  drpc_req->body.data);
-	if (req == NULL) {
-		D_ERROR("Failed to unpack ModifyACLReq\n");
+	rc = get_params_from_modify_acl_req(drpc_req, pool_uuid, &acl);
+	if (rc == -DER_PROTO) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
 		return;
 	}
-
-	D_INFO("Received request to overwrite ACL for pool %.64s\n",
-		req->uuid);
-
-	if (uuid_parse(req->uuid, pool_uuid) != 0) {
-		D_ERROR("Couldn't parse UUID\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	rc = daos_acl_from_strs((const char **)req->acl, req->n_acl, &acl);
-	if (rc != 0) {
-		D_ERROR("Couldn't parse requested ACL strings to DAOS ACL, "
-			"rc=%d\n", rc);
+	if (rc != 0)
 		D_GOTO(out, rc);
-	}
 
 	rc = ds_mgmt_pool_overwrite_acl(pool_uuid, acl, &result);
 	if (rc != 0) {
@@ -821,8 +839,81 @@ out:
 
 	pack_acl_resp(&resp, drpc_resp);
 	free_resp_acl(&resp);
+}
 
-	mgmt__modify_aclreq__free_unpacked(req, NULL);
+void
+ds_mgmt_drpc_pool_update_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__ACLResp		resp = MGMT__ACLRESP__INIT;
+	int			rc = 0;
+	uuid_t			pool_uuid;
+	struct daos_acl		*acl = NULL;
+	struct daos_acl		*result = NULL;
+
+	rc = get_params_from_modify_acl_req(drpc_req, pool_uuid, &acl);
+	if (rc == -DER_PROTO) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		return;
+	}
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = ds_mgmt_pool_update_acl(pool_uuid, acl, &result);
+	if (rc != 0) {
+		D_ERROR("Couldn't update pool ACL, rc=%d\n", rc);
+		D_GOTO(out_acl, rc);
+	}
+
+	rc = add_acl_to_response(result, &resp);
+	daos_acl_free(result);
+
+out_acl:
+	daos_acl_free(acl);
+out:
+	resp.status = rc;
+
+	pack_acl_resp(&resp, drpc_resp);
+	free_resp_acl(&resp);
+}
+
+void
+ds_mgmt_drpc_pool_delete_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	Mgmt__DeleteACLReq	*req;
+	Mgmt__ACLResp		resp = MGMT__ACLRESP__INIT;
+	int			rc = 0;
+	uuid_t			pool_uuid;
+	struct daos_acl		*result = NULL;
+
+	req = mgmt__delete_aclreq__unpack(NULL, drpc_req->body.len,
+					  drpc_req->body.data);
+	if (req == NULL) {
+		D_ERROR("Failed to unpack DeleteACLReq\n");
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		return;
+	}
+
+	if (uuid_parse(req->uuid, pool_uuid) != 0) {
+		D_ERROR("Couldn't parse UUID\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = ds_mgmt_pool_delete_acl(pool_uuid, req->principal, &result);
+	if (rc != 0) {
+		D_ERROR("Couldn't delete entry from pool ACL, rc=%d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = add_acl_to_response(result, &resp);
+	daos_acl_free(result);
+
+out:
+	resp.status = rc;
+
+	pack_acl_resp(&resp, drpc_resp);
+	free_resp_acl(&resp);
+
+	mgmt__delete_aclreq__free_unpacked(req, NULL);
 }
 
 /* Convert d_rank_list_t values to a string of comma-separated ranks.
@@ -893,6 +984,8 @@ ds_mgmt_drpc_list_pools(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_INFO("Received request to list pools in DAOS system %s\n",
 		req->sys);
 
+	/* resp.pools, n_pols, and numpools are all NULL/0 to start */
+
 	npools = req->numpools;
 	rc = ds_mgmt_list_pools(req->sys, &npools, &pools, &pools_len);
 	if (rc != 0) {
@@ -927,6 +1020,8 @@ ds_mgmt_drpc_list_pools(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 out:
 	resp.status = rc;
+	resp.numpools = npools;	/* in system, may exceed n_pools */
+
 	len = mgmt__list_pools_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {

@@ -310,20 +310,6 @@ rdb_create_raft_rpc(crt_opcode_t opc, raft_node_t *node, crt_rpc_t **rpc)
 	return crt_req_create(info->dmi_ctx, &ep, opc_full, rpc);
 }
 
-int
-rdb_create_bcast(crt_opcode_t opc, crt_group_t *group, crt_rpc_t **rpc)
-{
-	struct dss_module_info *info = dss_get_module_info();
-	crt_opcode_t		opc_full;
-
-	opc_full = DAOS_RPC_OPCODE(opc, DAOS_RDB_MODULE, DAOS_RDB_VERSION);
-	return crt_corpc_req_create(info->dmi_ctx, group,
-				    NULL /* excluded_ranks */, opc_full,
-				    NULL /* co_bulk_hdl */, NULL /* priv */,
-				    0 /* flags */,
-				    crt_tree_topo(CRT_TREE_FLAT, 0), rpc);
-}
-
 struct rdb_raft_rpc {
 	d_list_t	drc_entry;	/* in rdb::{d_requests,d_replies} */
 	crt_rpc_t      *drc_rpc;
