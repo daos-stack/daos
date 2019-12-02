@@ -247,9 +247,10 @@ pool_map_node_nr(struct pool_map *map)
  *  until it is fully reintegrated or added to the pool except as part of
  *  the reintegration/addition calls to placement.
  *
- * param[in]	tgt		The pool target who's availability is being checked.
- * param[in]	for_reint	True if this target is being checked as part of the
- * 				reintegration API call.
+ * param[in]	tgt		The pool target who's availability is being
+ * 				checked.
+ * param[in]	for_reint	True if this target is being checked as part
+ * 				of the reintegration API call.
  *
  * return	True if the target is not available, otherwise false.
  *
