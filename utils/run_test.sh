@@ -100,11 +100,11 @@ if [ -d "/mnt/daos" ]; then
     run_test "${SL_PREFIX}/bin/vea_ut"
     run_test src/rdb/raft_tests/raft_tests.py
     run_test src/control/run_go_tests.sh
-    go_spdk_ctests = "build/src/control/lib/spdk/ctests/nvme_control_ctests"
-    if hash $go_spdk_ctests 2>/dev/null; then
-        run_test go_spdk_ctests
+    go_spdk_ctests="build/src/control/lib/spdk/ctests/nvme_control_ctests"
+    if test -f "$go_spdk_ctests"; then
+        run_test "$go_spdk_ctests"
     else
-        echo "$go_spdk_ctests missing, SPDK src probably not available"
+        echo "$go_spdk_ctests missing, SPDK_SRC not available when built?"
     fi
     # Environment variables specific to the rdb tests
     export PATH="${SL_PREFIX}/bin:${PATH}"

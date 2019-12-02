@@ -1,6 +1,8 @@
 """Build go-spdk bindings C tests"""
+from __future__ import print_function
 import daos_build
-from os.path import join
+import os
+from os.path import join, isdir
 
 def scons():
     """Execute build"""
@@ -14,7 +16,7 @@ def scons():
     unit_env.AppendUnique(CPPPATH=[join(spdk_src, "lib", "nvme"),
                                    join(spdk_src, "include")])
 
-    if len(os.listdir(spdk_src)) != 0:
+    if isdir(spdk_src) and len(os.listdir(spdk_src)) != 0:
         daos_build.test(unit_env, 'nvme_control_ctests',
                         ['nvme_control_ut.c', unit_env.ncc, unit_env.nc],
                         LIBS=['spdk', 'spdk_env_dpdk', 'numa', 'cmocka',
