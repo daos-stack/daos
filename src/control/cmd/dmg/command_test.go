@@ -127,19 +127,24 @@ func (tc *testConn) PoolDestroy(req *client.PoolDestroyReq) error {
 	return nil
 }
 
-func (tc *testConn) PoolGetACL(req *client.PoolGetACLReq) (*client.PoolGetACLResp, error) {
+func (tc *testConn) PoolGetACL(req client.PoolGetACLReq) (*client.PoolGetACLResp, error) {
 	tc.appendInvocation(fmt.Sprintf("PoolGetACL-%+v", req))
 	return &client.PoolGetACLResp{}, nil
 }
 
-func (tc *testConn) PoolOverwriteACL(req *client.PoolOverwriteACLReq) (*client.PoolOverwriteACLResp, error) {
+func (tc *testConn) PoolOverwriteACL(req client.PoolOverwriteACLReq) (*client.PoolOverwriteACLResp, error) {
 	tc.appendInvocation(fmt.Sprintf("PoolOverwriteACL-%+v", req))
 	return &client.PoolOverwriteACLResp{ACL: req.ACL}, nil
 }
 
-func (tc *testConn) PoolUpdateACL(req *client.PoolUpdateACLReq) (*client.PoolUpdateACLResp, error) {
+func (tc *testConn) PoolUpdateACL(req client.PoolUpdateACLReq) (*client.PoolUpdateACLResp, error) {
 	tc.appendInvocation(fmt.Sprintf("PoolUpdateACL-%+v", req))
 	return &client.PoolUpdateACLResp{ACL: req.ACL}, nil
+}
+
+func (tc *testConn) PoolDeleteACL(req client.PoolDeleteACLReq) (*client.PoolDeleteACLResp, error) {
+	tc.appendInvocation(fmt.Sprintf("PoolDeleteACL-%+v", req))
+	return &client.PoolDeleteACLResp{}, nil
 }
 
 func (tc *testConn) BioHealthQuery(req *mgmtpb.BioHealthReq) client.ResultQueryMap {

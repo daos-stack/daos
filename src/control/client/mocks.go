@@ -230,6 +230,10 @@ func (m *mockMgmtSvcClient) PoolUpdateACL(ctx context.Context, req *mgmtpb.Modif
 	return m.returnACLResult()
 }
 
+func (m *mockMgmtSvcClient) PoolDeleteACL(ctx context.Context, req *mgmtpb.DeleteACLReq, o ...grpc.CallOption) (*mgmtpb.ACLResp, error) {
+	return m.returnACLResult()
+}
+
 func (m *mockMgmtSvcClient) BioHealthQuery(
 	ctx context.Context,
 	req *mgmtpb.BioHealthReq,
