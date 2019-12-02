@@ -52,8 +52,8 @@ typedef struct {
 	daos_range_t	       *arr_rgs;
 	/*
 	 * On read only: return the number of records that are short fetched
-	 * from every dkey. This helps for checking for short reads. If this
-	 * values is not zero, then a short read is possible and should be
+	 * from the largest dkey(s). This helps for checking for short reads. If
+	 * this values is not zero, then a short read is possible and should be
 	 * checked with daos_array_get_size() compared with the indexes being
 	 * read.
 	 */
