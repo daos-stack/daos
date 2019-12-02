@@ -40,7 +40,7 @@ func TestFlattenAddrs(t *testing.T) {
 	for name, tc := range map[string]struct {
 		addrPatterns string
 		expAddrs     string
-		expErr       error
+		expErrMsg    string
 	}{
 		"single addr": {
 			addrPatterns: "abc:10000",
@@ -54,10 +54,20 @@ func TestFlattenAddrs(t *testing.T) {
 			addrPatterns: "10.0.0.[1-5]:10000,10.0.0.[6-10]:10001,192.168.0.[1-3]:10000",
 			expAddrs:     "10.0.0.1:10000,10.0.0.2:10000,10.0.0.3:10000,10.0.0.4:10000,10.0.0.5:10000,192.168.0.1:10000,192.168.0.2:10000,192.168.0.3:10000,10.0.0.6:10001,10.0.0.7:10001,10.0.0.8:10001,10.0.0.9:10001,10.0.0.10:10001",
 		},
+		"missing port": {
+			addrPatterns: "localhost:10001,abc-[1-3]",
+			expAddrs:     "localhost:10001,abc-1:9999,abc-2:9999,abc-3:9999",
+		},
+		"too many colons":     {"bad:addr:here,:100", "", "cannot parse \"bad:addr:here\""},
+		"no host":             {"valid:10001,:100", "", "invalid host \"\""},
+		"bad host number":     {"1001", "", "invalid hostname \"1001\""},
+		"bad port alphabetic": {"foo:bar", "", "cannot parse \"foo:bar\": strconv.Atoi: parsing \"bar\": invalid syntax"},
+		"bad port empty":      {"foo:", "", "invalid port \"\""},
+		"bad port zero":       {"foo:0", "", "invalid port \"0\""},
 	} {
 		t.Run(name, func(t *testing.T) {
-			outAddrs, err := flattenHostAddrs(tc.addrPatterns)
-			CmpErr(t, tc.expErr, err)
+			outAddrs, err := flattenHostAddrs(tc.addrPatterns, 9999)
+			ExpectError(t, err, tc.expErrMsg, name)
 			if diff := cmp.Diff(tc.expAddrs, strings.Join(outAddrs, ",")); diff != "" {
 				t.Fatalf("unexpected output (-want, +got):\n%s\n", diff)
 			}

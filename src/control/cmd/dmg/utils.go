@@ -45,12 +45,22 @@ func splitPort(addrPattern string, defaultPort int) (string, string, error) {
 		port = strconv.Itoa(defaultPort)
 	case 2:
 		port = hp[1]
+		if port == "" {
+			return "", "", errors.Errorf("invalid port %q", port)
+		}
+		if _, err := strconv.Atoi(port); err != nil {
+			return "", "", errors.WithMessagef(err, "cannot parse %q",
+				addrPattern)
+		}
 	default:
-		return "", "", errors.Errorf("cannot parse %s", addrPattern)
+		return "", "", errors.Errorf("cannot parse %q", addrPattern)
 	}
 
-	if port == "" || port == "0" {
+	if port == "0" {
 		return "", "", errors.Errorf("invalid port %q", port)
+	}
+	if hp[0] == "" {
+		return "", "", errors.Errorf("invalid host %q", hp[0])
 	}
 
 	return hp[0], port, nil
@@ -77,12 +87,12 @@ func hostsByPort(addrPatterns []string, defaultPort int) (hostlist.HostGroups, e
 
 // flattenHostAddrs takes nodeset:port patterns and returns individual addresses
 // after expanding nodesets and mapping to ports.
-func flattenHostAddrs(addrPatterns string) (addrs []string, err error) {
+func flattenHostAddrs(addrPatterns string, defaultPort int) (addrs []string, err error) {
 	var portHosts hostlist.HostGroups
 
 	// expand any compressed nodesets for specific ports, should fail if no
 	// port in pattern.
-	portHosts, err = hostsByPort(strings.Split(addrPatterns, ","), 0)
+	portHosts, err = hostsByPort(strings.Split(addrPatterns, ","), defaultPort)
 	if err != nil {
 		return
 	}

@@ -89,7 +89,7 @@ func appSetup(log logging.Logger, opts *cliOptions, conns client.Connect) error 
 	}
 
 	if opts.HostList != "" {
-		config.HostList, err = flattenHostAddrs(opts.HostList)
+		config.HostList, err = flattenHostAddrs(opts.HostList, config.Port)
 		if err != nil {
 			return err
 		}
