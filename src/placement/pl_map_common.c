@@ -63,31 +63,6 @@ remap_add_one(d_list_t *remap_list, struct failed_shard *f_new)
 	d_list_add(&f_new->fs_list, remap_list);
 }
 
-void
-reint_add_one(d_list_t *remap_list, struct failed_shard *f_new)
-{
-	struct failed_shard     *f_shard;
-	d_list_t                *tmp;
-
-	D_DEBUG(DB_PL, "Reint target : fnew: %u", f_new->fs_shard_idx);
-
-	/* All failed shards are sorted by fseq in ascending order */
-	d_list_for_each_prev(tmp, remap_list) {
-		f_shard = d_list_entry(tmp, struct failed_shard, fs_list);
-
-		D_DEBUG(DB_PL, "fnew: %u, fshard: %u", f_new->fs_shard_idx,
-			f_shard->fs_shard_idx);
-
-		if (f_new->fs_shard_idx < f_shard->fs_shard_idx)
-			continue;
-		if (f_new->fs_shard_idx == f_shard->fs_shard_idx)
-			return;
-		d_list_add(&f_new->fs_list, tmp);
-		return;
-	}
-	d_list_add(&f_new->fs_list, remap_list);
-}
-
 int
 alloc_f_shard(struct failed_shard **f_new,  unsigned int shard_idx,
 	      struct pool_target *tgt)
@@ -148,7 +123,7 @@ reint_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
 	rc = alloc_f_shard(&f_new, shard_idx, tgt);
 	if (rc == 0) {
 		f_new->fs_tgt_id = tgt->ta_comp.co_id;
-		reint_add_one(remap_list, f_new);
+		d_list_add(&f_new->fs_list, remap_list);
 	}
 	return rc;
 }
@@ -348,7 +323,7 @@ fill:
 void
 determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		bool spare_avail, d_list_t **current, d_list_t *remap_list,
-		bool ignore_up, struct failed_shard *f_shard,
+		bool for_reint, struct failed_shard *f_shard,
 		struct pl_obj_shard *l_shard)
 {
 	struct failed_shard *f_tmp;
@@ -358,8 +333,7 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 
 
 	/* The selected spare target is down as well */
-	if (pool_target_unavail(spare_tgt) && !(ignore_up == true &&
-			spare_tgt->ta_comp.co_status == PO_COMP_ST_UP)) {
+	if (pool_target_unavail(spare_tgt, for_reint)) {
 		D_ASSERTF(spare_tgt->ta_comp.co_fseq !=
 			  f_shard->fs_fseq, "same fseq %u!\n",
 			  f_shard->fs_fseq);

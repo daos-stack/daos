@@ -352,7 +352,7 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 static int
 obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 		 struct pl_obj_layout *layout, struct jm_obj_placement *jmop,
-		 d_list_t *remap_list, bool ignore_up, uint8_t *tgts_used,
+		 d_list_t *remap_list, bool for_reint, uint8_t *tgts_used,
 		 uint8_t *dom_used)
 {
 	struct failed_shard     *f_shard;
@@ -396,7 +396,7 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 				   dom_used, tgts_used, layout, shard_id);
 
 		determine_valid_spares(spare_tgt, md, spare_avail, &current,
-				       remap_list, ignore_up, f_shard, l_shard);
+				       remap_list, for_reint, f_shard, l_shard);
 
 	}
 
@@ -479,7 +479,7 @@ jump_map_obj_spec_place_get(struct pl_jump_map *jmap, daos_obj_id_t oid,
 static int
 get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 		  struct jm_obj_placement *jmop, d_list_t *remap_list,
-		  bool ignore_up, struct daos_obj_md *md)
+		  bool for_reint, struct daos_obj_md *md)
 {
 	struct pool_target      *target;
 	struct pool_domain      *root;
@@ -540,8 +540,7 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 		layout->ol_shards[0].po_fseq = target->ta_comp.co_fseq;
 		setbit(tgts_used, target->ta_comp.co_id);
 
-		if (pool_target_unavail(target) && !(ignore_up == true &&
-				target->ta_comp.co_status == PO_COMP_ST_UP)) {
+		if (pool_target_unavail(target, for_reint)) {
 			rc = remap_alloc_one(remap_list, 0, target);
 			if (rc)
 				D_GOTO(out, rc);
@@ -560,23 +559,19 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 		for (; j < jmop->jmop_grp_size; j++, k++) {
 			uint32_t tgt_id;
 			uint32_t fseq;
-			enum pool_comp_state target_state;
 
 			get_target(root, &target, key, dom_used, tgts_used,
 				   layout, k);
 
 			tgt_id = target->ta_comp.co_id;
 			fseq = target->ta_comp.co_fseq;
-			target_state = target->ta_comp.co_status;
 
 			layout->ol_shards[k].po_target = tgt_id;
 			layout->ol_shards[k].po_shard = k;
 			layout->ol_shards[k].po_fseq = fseq;
 
 			/** If target is failed queue it for remap*/
-			if (pool_target_unavail(target) &&
-					!(ignore_up == true &&
-					target_state == PO_COMP_ST_UP))  {
+			if (pool_target_unavail(target, for_reint))  {
 
 				rc = remap_alloc_one(remap_list, k, target);
 				if (rc)
@@ -586,7 +581,7 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 		j = 0;
 	}
 
-	rc = obj_remap_shards(jmap, md, layout, jmop, remap_list, ignore_up,
+	rc = obj_remap_shards(jmap, md, layout, jmop, remap_list, for_reint,
 			      tgts_used, dom_used);
 out:
 	if (rc) {
@@ -898,7 +893,7 @@ jump_map_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 	D_INIT_LIST_HEAD(&remap_list);
 	D_INIT_LIST_HEAD(&reint_list);
 
-	/* Find targets affected directly by reintegration. */
+	/* Get original placement */
 	rc = get_object_layout(jmap, layout, &jop, &remap_list, false, md);
 	if (rc)
 		goto out;
@@ -907,7 +902,7 @@ jump_map_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 	remap_list_free_all(&remap_list);
 	D_INIT_LIST_HEAD(&remap_list);
 
-	/* Find targets indirectly affected by reintegration. */
+	/* Get placement after reintegration. */
 	rc = get_object_layout(jmap, reint_layout, &jop, &remap_list, true, md);
 	if (rc)
 		goto out;

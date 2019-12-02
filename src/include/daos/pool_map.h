@@ -241,12 +241,25 @@ pool_map_node_nr(struct pool_map *map)
 	return pool_map_find_nodes(map, PO_COMP_ID_ALL, NULL);
 }
 
+/*
+ *  Returns true if the target is not available for use.
+ *  When a target is in the UP state it is considered unavailable
+ *  until it is fully reintegrated or added to the pool except as part of
+ *  the reintegration/addition calls to placement.
+ *
+ * param[in]	tgt		The pool target who's availability is being checked.
+ * param[in]	for_reint	True if this target is being checked as part of the
+ * 				reintegration API call.
+ *
+ * return	True if the target is not available, otherwise false.
+ *
+ */
 static inline bool
-pool_target_unavail(struct pool_target *tgt)
+pool_target_unavail(struct pool_target *tgt, bool for_reint)
 {
 	return tgt->ta_comp.co_status == PO_COMP_ST_DOWN ||
 	       tgt->ta_comp.co_status == PO_COMP_ST_DOWNOUT ||
-	       tgt->ta_comp.co_status == PO_COMP_ST_UP;
+	       (tgt->ta_comp.co_status == PO_COMP_ST_UP && !for_reint);
 }
 
 pool_comp_state_t pool_comp_str2state(const char *name);
