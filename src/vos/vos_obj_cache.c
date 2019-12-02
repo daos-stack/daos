@@ -187,10 +187,14 @@ vos_obj_cache_current(void)
 }
 
 void
-vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj)
+vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj, bool evict)
 {
 
 	D_ASSERT((occ != NULL) && (obj != NULL));
+
+	if (evict)
+		daos_lru_ref_evict(&obj->obj_llink);
+
 	daos_lru_ref_release(occ, &obj->obj_llink);
 }
 
@@ -210,7 +214,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	*obj_p = NULL;
 
 	if (cont->vc_pool->vp_dying)
-		return -DER_NONEXIST;
+		return -DER_SHUTDOWN; /* TODO: use a more targeted errno */
 
 	D_DEBUG(DB_TRACE, "Try to hold cont="DF_UUID", obj="DF_UOID
 		" create=%s epr="DF_U64"-"DF_U64"\n",
@@ -329,7 +333,7 @@ out:
 	*obj_p = obj;
 	return 0;
 failed:
-	vos_obj_release(occ, obj);
+	vos_obj_release(occ, obj, true);
 failed_2:
 	if (rc != -DER_NONEXIST)
 		D_CDEBUG(rc == -DER_INPROGRESS, DB_TRACE, DLOG_ERR,

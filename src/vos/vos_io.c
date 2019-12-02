@@ -149,13 +149,13 @@ vos_ioc_reserve_init(struct vos_io_context *ioc)
 }
 
 static void
-vos_ioc_destroy(struct vos_io_context *ioc)
+vos_ioc_destroy(struct vos_io_context *ioc, bool evict)
 {
 	if (ioc->ic_biod != NULL)
 		bio_iod_free(ioc->ic_biod);
 
 	if (ioc->ic_obj)
-		vos_obj_release(vos_obj_cache_current(), ioc->ic_obj);
+		vos_obj_release(vos_obj_cache_current(), ioc->ic_obj, evict);
 
 	vos_ioc_reserve_fini(ioc);
 	vos_ilog_fetch_finish(&ioc->ic_dkey_info);
@@ -240,7 +240,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	return 0;
 error:
 	if (ioc != NULL)
-		vos_ioc_destroy(ioc);
+		vos_ioc_destroy(ioc, false);
 	return rc;
 }
 
@@ -578,6 +578,14 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 	for (i = 0; i < iod->iod_nr; i++) {
 		daos_size_t rsize;
 
+		if (iod->iod_recxs[i].rx_nr == 0) {
+			D_DEBUG(DB_IO,
+				"Skip empty read IOD at %d: idx %lu, nr %lu\n",
+				i, (unsigned long)iod->iod_recxs[i].rx_idx,
+				(unsigned long)iod->iod_recxs[i].rx_nr);
+			continue;
+		}
+
 		rc = akey_fetch_recx(toh, &val_epr, &iod->iod_recxs[i],
 				     daos_iod_csum(iod, i), &rsize, ioc);
 		if (rc != 0) {
@@ -687,7 +695,7 @@ vos_fetch_end(daos_handle_t ioh, int err)
 
 	/* NB: it's OK to use the stale ioc->ic_obj for fetch_end */
 	D_ASSERT(!ioc->ic_update);
-	vos_ioc_destroy(ioc);
+	vos_ioc_destroy(ioc, false);
 	return err;
 }
 
@@ -734,7 +742,10 @@ iod_update_umoff(struct vos_io_context *ioc)
 {
 	umem_off_t umoff;
 
-	D_ASSERT(ioc->ic_umoffs_at < ioc->ic_umoffs_cnt);
+	D_ASSERTF(ioc->ic_umoffs_at < ioc->ic_umoffs_cnt,
+		  "Invalid ioc_reserve at/cnt: %u/%u\n",
+		  ioc->ic_umoffs_at, ioc->ic_umoffs_cnt);
+
 	umoff = ioc->ic_umoffs[ioc->ic_umoffs_at];
 	ioc->ic_umoffs_at++;
 
@@ -881,8 +892,20 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh)
 	} /* else: array */
 
 	for (i = 0; i < iod->iod_nr; i++) {
+		umem_off_t	umoff = iod_update_umoff(ioc);
+
 		D_DEBUG(DB_IO, "Array update %d eph "DF_U64"\n", i,
 			ioc->ic_epr.epr_hi);
+
+		if (iod->iod_recxs[i].rx_nr == 0) {
+			D_ASSERT(UMOFF_IS_NULL(umoff));
+			D_DEBUG(DB_IO,
+				"Skip empty write IOD at %d: idx %lu, nr %lu\n",
+				i, (unsigned long)iod->iod_recxs[i].rx_idx,
+				(unsigned long)iod->iod_recxs[i].rx_nr);
+			continue;
+		}
+
 		daos_csum_buf_t *csum = daos_iod_csum(iod, i);
 		rc = akey_update_recx(toh, pm_ver, &iod->iod_recxs[i], csum,
 				      iod->iod_size, ioc);
@@ -1106,11 +1129,13 @@ vos_reserve_recx(struct vos_io_context *ioc, uint16_t media, daos_size_t size)
 
 	memset(&biov, 0, sizeof(biov));
 	/* recx punch */
-	if (size == 0) {
+	if (size == 0 || media != DAOS_MEDIA_SCM) {
 		ioc->ic_umoffs[ioc->ic_umoffs_cnt] = UMOFF_NULL;
 		ioc->ic_umoffs_cnt++;
-		bio_addr_set_hole(&biov.bi_addr, 1);
-		goto done;
+		if (size == 0) {
+			bio_addr_set_hole(&biov.bi_addr, 1);
+			goto done;
+		}
 	}
 
 	/*
@@ -1235,9 +1260,8 @@ update_cancel(struct vos_io_context *ioc)
 		D_ASSERT(umem->umm_id == UMEM_CLASS_VMEM);
 
 		for (i = 0; i < ioc->ic_umoffs_cnt; i++) {
-			if (UMOFF_IS_NULL(ioc->ic_umoffs[i]))
-				continue;
-			umem_free(umem, ioc->ic_umoffs[i]);
+			if (!UMOFF_IS_NULL(ioc->ic_umoffs[i]))
+				umem_free(umem, ioc->ic_umoffs[i]);
 		}
 	}
 
@@ -1309,7 +1333,7 @@ abort:
 out:
 	if (err != 0)
 		update_cancel(ioc);
-	vos_ioc_destroy(ioc);
+	vos_ioc_destroy(ioc, err != 0);
 	vos_dth_set(NULL);
 
 	return err;

@@ -55,7 +55,7 @@ class DaosPool(object):
         self.connected = 0
         self.context = context
         self.uuid = (ctypes.c_ubyte * 1)(0)
-        self.group = ctypes.create_string_buffer(b"not set")
+        self.group = None
         self.handle = ctypes.c_uint64(0)
         self.glob = None
         self.svc = None

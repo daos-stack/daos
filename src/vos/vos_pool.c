@@ -43,13 +43,18 @@
 #include <string.h>
 #include <fcntl.h>
 
+/* NB: None of pmemobj_create/open/close is thread-safe */
+pthread_mutex_t vos_pmemobj_lock = PTHREAD_MUTEX_INITIALIZER;
+
 static inline PMEMobjpool *
 vos_pmemobj_create(const char *path, const char *layout, size_t poolsize,
 		   mode_t mode)
 {
 	PMEMobjpool *pop;
 
+	D_MUTEX_LOCK(&vos_pmemobj_lock);
 	pop = pmemobj_create(path, layout, poolsize, mode);
+	D_MUTEX_UNLOCK(&vos_pmemobj_lock);
 	return pop;
 }
 
@@ -58,14 +63,18 @@ vos_pmemobj_open(const char *path, const char *layout)
 {
 	PMEMobjpool *pop;
 
+	D_MUTEX_LOCK(&vos_pmemobj_lock);
 	pop = pmemobj_open(path, layout);
+	D_MUTEX_UNLOCK(&vos_pmemobj_lock);
 	return pop;
 }
 
 static inline void
 vos_pmemobj_close(PMEMobjpool *pop)
 {
+	D_MUTEX_LOCK(&vos_pmemobj_lock);
 	pmemobj_close(pop);
+	D_MUTEX_UNLOCK(&vos_pmemobj_lock);
 }
 
 static inline struct vos_pool_df *

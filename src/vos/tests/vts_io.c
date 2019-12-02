@@ -827,12 +827,12 @@ io_obj_cache_test(void **state)
 	rc = vos_obj_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0], &epr,
 			  false, DAOS_INTENT_DEFAULT, true, &objs[0]);
 	assert_int_equal(rc, 0);
-	vos_obj_release(occ, objs[0]);
+	vos_obj_release(occ, objs[0], false);
 
 	rc = vos_obj_hold(occ, vos_hdl2cont(l_coh), oids[1], &epr, false,
 			  DAOS_INTENT_DEFAULT, true, &objs[0]);
 	assert_int_equal(rc, 0);
-	vos_obj_release(occ, objs[0]);
+	vos_obj_release(occ, objs[0], false);
 
 	rc = hold_objects(objs, occ, &ctx->tc_co_hdl, &oids[0], 0, 10, true, 0);
 	assert_int_equal(rc, 0);
@@ -847,20 +847,20 @@ io_obj_cache_test(void **state)
 			  DAOS_INTENT_DEFAULT, true, &objs[16]);
 	assert_int_equal(rc, 0);
 
-	vos_obj_release(occ, objs[16]);
+	vos_obj_release(occ, objs[16], false);
 
 	for (i = 0; i < 5; i++)
-		vos_obj_release(occ, objs[i]);
+		vos_obj_release(occ, objs[i], false);
 	for (i = 10; i < 15; i++)
-		vos_obj_release(occ, objs[i]);
+		vos_obj_release(occ, objs[i], false);
 
 	rc = hold_objects(objs, occ, &l_coh, &oids[1], 15, 20, true, 0);
 	assert_int_equal(rc, 0);
 
 	for (i = 5; i < 10; i++)
-		vos_obj_release(occ, objs[i]);
+		vos_obj_release(occ, objs[i], false);
 	for (i = 15; i < 20; i++)
-		vos_obj_release(occ, objs[i]);
+		vos_obj_release(occ, objs[i], false);
 
 	rc = vos_cont_close(l_coh);
 	assert_int_equal(rc, 0);

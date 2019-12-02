@@ -72,6 +72,7 @@ if [ -d "/mnt/daos" ]; then
         SL_PREFIX=$PWD/${SL_PREFIX/*\/install/install}
         SL_OMPI_PREFIX=$PWD/${SL_OMPI_PREFIX/*\/install/install}
     fi
+
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
     run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
     export DAOS_IO_BYPASS=pm
@@ -115,10 +116,12 @@ if [ -d "/mnt/daos" ]; then
     run_test build/src/security/tests/srv_acl_tests
     run_test build/src/common/tests/acl_api_tests
     run_test build/src/common/tests/acl_util_tests
-    run_test build/src/common/tests/acl_util_real
+    run_test build/src/common/tests/acl_principal_tests
+    run_test build/src/common/tests/acl_real_tests
     run_test build/src/iosrv/tests/drpc_progress_tests
     run_test build/src/iosrv/tests/drpc_handler_tests
     run_test build/src/iosrv/tests/drpc_listener_tests
+    run_test build/src/mgmt/tests/srv_drpc_tests
     run_test "${SL_PREFIX}/bin/vos_size"
     run_test "${SL_PREFIX}/bin/vos_size.py" \
              "${SL_PREFIX}/etc/vos_size_input.yaml"
