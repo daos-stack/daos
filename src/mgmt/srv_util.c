@@ -44,6 +44,9 @@ ds_mgmt_group_update(crt_group_mod_op_t op, struct server_entry *servers,
 
 	D_ASSERTF(info->dmi_ctx_id == 0, "%d\n", info->dmi_ctx_id);
 
+	if (!dss_pmixless())
+		return 0;
+
 	rc = crt_group_version(NULL /* grp */, &version_current);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 	D_ASSERTF(version_current < version, "%u < %u\n", version_current,
