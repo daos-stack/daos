@@ -319,8 +319,7 @@ CRT_RPC_DECLARE(pool_svc_stop, DAOS_ISEQ_POOL_SVC_STOP, DAOS_OSEQ_POOL_SVC_STOP)
 	((uint32_t)		(tci_iv_ns_id)		CRT_VAR) \
 	((uint32_t)		(tci_master_rank)	CRT_VAR) \
 	((uint32_t)		(tci_pad)		CRT_VAR) \
-	((uint64_t)		(tci_query_bits)	CRT_VAR) \
-	((d_iov_t)		(tci_iv_ctxt)		CRT_VAR)
+	((uint64_t)		(tci_query_bits)	CRT_VAR)
 
 #define DAOS_OSEQ_POOL_TGT_CONNECT /* output fields */		 \
 	((struct daos_pool_space) (tco_space)		CRT_VAR) \
