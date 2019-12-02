@@ -99,12 +99,12 @@ if [ -d "/mnt/daos" ]; then
     run_test src/vos/tests/evt_ctl.sh pmem
     run_test "${SL_PREFIX}/bin/vea_ut"
     run_test src/rdb/raft_tests/raft_tests.py
-    # Satisfy CGO requirements for go-spdk bindings
-    export CGO_LDFLAGS="-L${SL_SPDK_PREFIX}/lib -L${SL_PREFIX}/lib64"
-    export CGO_CFLAGS="-I${SL_SPDK_PREFIX}/include"
     run_test src/control/run_go_tests.sh
-    unset CGO_CFLAGS CGO_LDFLAGS
-    run_test build/src/control/lib/spdk/ctests/nvme_control_tests
+    run_test build/src/control/lib/spdk/ctests/nvme_control_ctests
+    # Environment variables specific to the rdb tests
+    export PATH="${SL_PREFIX}/bin:${PATH}"
+    export LD_LIBRARY_PATH="${SL_PREFIX}/lib64:${LD_LIBRARY_PATH}"
+    run_test src/rdb/tests/rdb_test_runner.py "${SL_OMPI_PREFIX}"
     run_test build/src/security/tests/cli_security_tests
     run_test build/src/security/tests/srv_acl_tests
     run_test build/src/common/tests/acl_api_tests
@@ -120,12 +120,6 @@ if [ -d "/mnt/daos" ]; then
              "${SL_PREFIX}/etc/vos_size_input.yaml"
     run_test "${SL_PREFIX}/bin/vos_size.py" \
              "${SL_PREFIX}/etc/vos_dfs_sample.yaml"
-    # Satisfy internal daos imports & runtime daos_server deps
-    LD_LIBRARY_PATH="${SL_PREFIX}/lib64:${LD_LIBRARY_PATH}"
-    LD_LIBRARY_PATH="${SL_SPDK_PREFIX}/lib:${LD_LIBRARY_PATH}"
-    PATH="${SL_PREFIX}/bin:${OLD_PATH}"
-    export LD_LIBRARY_PATH PATH
-    run_test src/rdb/tests/rdb_test_runner.py "${SL_OMPI_PREFIX}"
 
     if [ $failed -eq 0 ]; then
         # spit out the magic string that the post build script looks for

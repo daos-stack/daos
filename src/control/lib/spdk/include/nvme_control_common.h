@@ -114,9 +114,15 @@ get_controller(char *addr, struct ret_t *ret);
  * Provide ability to pass function pointers to collect for mocking
  * in unit tests.
  */
-typedef const struct spdk_nvme_ctrlr_data *(*data_getter)(struct spdk_nvme_ctrlr *);
-typedef struct spdk_pci_device *(*pci_getter)(struct spdk_nvme_ctrlr *);
-typedef int (*socket_id_getter)(struct spdk_pci_device *);
+typedef const struct spdk_nvme_ctrlr_data *
+(*data_getter)(struct spdk_nvme_ctrlr *);
+
+typedef struct spdk_pci_device *
+(*pci_getter)(struct spdk_nvme_ctrlr *);
+
+typedef int
+(*socket_id_getter)(struct spdk_pci_device *);
+
 void
 _collect(struct ret_t *ret, data_getter, pci_getter, socket_id_getter);
 

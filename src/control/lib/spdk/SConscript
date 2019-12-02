@@ -31,10 +31,9 @@ def scons():
                                           CC=compiler, LIBS=['spdk', 'numa',
                                                              'spdk_env_dpdk'])
 
-    #senv.Install(join(senv.subst("$PREFIX"), "lib64"), denv.nvmecontrol)
+    senv.Install(join(senv.subst("$PREFIX"), "lib64"), denv.nvmecontrol)
 
     SConscript('ctests/SConscript', exports='senv')
 
 if __name__ == "SCons.Script":
     scons()
-

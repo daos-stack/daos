@@ -47,4 +47,4 @@ cmocka Test Env:
 Build cmocka Tests:
 
     cd ${GOSPDK}/ctests
-    gcc ${TESTFLAGS} -I../include -L../. nvme_control_ut.c ../src/*.c -o nvme_control_tests
+    gcc ${TESTFLAGS} -I../include -L../. nvme_control_ut.c ../src/*.c -o nvme_control_ctests
