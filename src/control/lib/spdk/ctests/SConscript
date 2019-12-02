@@ -1,8 +1,9 @@
+#!/bin/env python
 """Build go-spdk bindings C tests"""
 from __future__ import print_function
-import daos_build
 import os
 from os.path import join, isdir
+import daos_build
 
 def scons():
     """Execute build"""
@@ -17,11 +18,12 @@ def scons():
                                    join(spdk_src, 'include')])
 
     if isdir(spdk_src) and len(os.listdir(spdk_src)) != 0:
-        ut = daos_build.test(unit_env, 'nvme_control_ctests',
-                             ['nvme_control_ut.c', unit_env.ncc, unit_env.nc],
-                             LIBS=['spdk', 'spdk_env_dpdk', 'numa', 'cmocka',
-                                   'pthread', 'dl'])
-        unit_env.Install(join(senv.subst("$PREFIX"), 'bin'), ut)
+        tests = daos_build.test(unit_env, 'nvme_control_ctests',
+                                ['nvme_control_ut.c', unit_env.ncc,
+                                 unit_env.nc],
+                                LIBS=['spdk', 'spdk_env_dpdk', 'numa',
+                                      'cmocka', 'pthread', 'dl'])
+        unit_env.Install(join(senv.subst("$PREFIX"), 'bin'), tests)
     else:
         print("SPDK src directory empty (%s), skipping nvme_control_ut build",
               spdk_src)
