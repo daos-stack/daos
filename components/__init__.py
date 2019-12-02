@@ -87,7 +87,6 @@ def define_mercury(reqs):
                                 '-DOFI_LIBRARY=$OFI_PREFIX/lib/libfabric.so'),
                           'make $JOBS_OPT', 'make install'],
                 libs=['mercury', 'na', 'mercury_util'],
-                patch="$PATCH_PREFIX/mercury_combined.patch",
                 requires=[atomic, 'boost', 'ofi'] + libs,
                 extra_include_path=[os.path.join('include', 'na')],
                 out_of_src_build=True,
