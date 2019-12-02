@@ -52,6 +52,8 @@ drpc_pool_acl_setup(void **state)
 {
 	mock_ds_mgmt_pool_get_acl_setup();
 	mock_ds_mgmt_pool_overwrite_acl_setup();
+	mock_ds_mgmt_pool_update_acl_setup();
+	mock_ds_mgmt_pool_delete_acl_setup();
 
 	return 0;
 }
@@ -61,6 +63,8 @@ drpc_pool_acl_teardown(void **state)
 {
 	mock_ds_mgmt_pool_get_acl_teardown();
 	mock_ds_mgmt_pool_overwrite_acl_teardown();
+	mock_ds_mgmt_pool_update_acl_teardown();
+	mock_ds_mgmt_pool_delete_acl_teardown();
 
 	return 0;
 }
@@ -136,26 +140,34 @@ setup_get_acl_drpc_call(Drpc__Call *call, char *uuid)
 }
 
 static void
+expect_drpc_acl_resp_with_error(Drpc__Response *resp, int expected_err)
+{
+	Mgmt__ACLResp *acl_resp = NULL;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	assert_non_null(resp->body.data);
+
+	acl_resp = mgmt__aclresp__unpack(NULL, resp->body.len,
+					 resp->body.data);
+	assert_non_null(acl_resp);
+	assert_int_equal(acl_resp->status, expected_err);
+	assert_int_equal(acl_resp->n_acl, 0);
+
+	mgmt__aclresp__free_unpacked(acl_resp, NULL);
+}
+
+static void
 test_drpc_pool_get_acl_bad_uuid(void **state)
 {
-	Drpc__Call		call = DRPC__CALL__INIT;
-	Drpc__Response		resp = DRPC__RESPONSE__INIT;
-	Mgmt__ACLResp		*acl_resp = NULL;
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
 
 	setup_get_acl_drpc_call(&call, "Not a UUID at all");
 
 	ds_mgmt_drpc_pool_get_acl(&call, &resp);
 
-	assert_int_equal(resp.status, DRPC__STATUS__SUCCESS);
-	assert_non_null(resp.body.data);
+	expect_drpc_acl_resp_with_error(&resp, -DER_INVAL);
 
-	acl_resp = mgmt__aclresp__unpack(NULL, resp.body.len,
-					 resp.body.data);
-	assert_non_null(acl_resp);
-	assert_int_equal(acl_resp->status, -DER_INVAL);
-	assert_int_equal(acl_resp->n_acl, 0);
-
-	mgmt__aclresp__free_unpacked(acl_resp, NULL);
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
 }
@@ -163,25 +175,16 @@ test_drpc_pool_get_acl_bad_uuid(void **state)
 static void
 test_drpc_pool_get_acl_mgmt_svc_fails(void **state)
 {
-	Drpc__Call		call = DRPC__CALL__INIT;
-	Drpc__Response		resp = DRPC__RESPONSE__INIT;
-	Mgmt__ACLResp		*acl_resp = NULL;
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
 
 	setup_get_acl_drpc_call(&call, TEST_UUID);
 	ds_mgmt_pool_get_acl_return = -DER_UNKNOWN;
 
 	ds_mgmt_drpc_pool_get_acl(&call, &resp);
 
-	assert_int_equal(resp.status, DRPC__STATUS__SUCCESS);
-	assert_non_null(resp.body.data);
+	expect_drpc_acl_resp_with_error(&resp, ds_mgmt_pool_get_acl_return);
 
-	acl_resp = mgmt__aclresp__unpack(NULL, resp.body.len,
-					 resp.body.data);
-	assert_non_null(acl_resp);
-	assert_int_equal(acl_resp->status, ds_mgmt_pool_get_acl_return);
-	assert_int_equal(acl_resp->n_acl, 0);
-
-	mgmt__aclresp__free_unpacked(acl_resp, NULL);
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
 }
@@ -199,10 +202,9 @@ get_valid_acl(void)
 static void
 test_drpc_pool_get_acl_cant_translate_acl(void **state)
 {
-	Drpc__Call		call = DRPC__CALL__INIT;
-	Drpc__Response		resp = DRPC__RESPONSE__INIT;
-	Mgmt__ACLResp		*acl_resp = NULL;
-	struct daos_ace		*ace;
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+	struct daos_ace	*ace;
 
 	setup_get_acl_drpc_call(&call, TEST_UUID);
 	ds_mgmt_pool_get_acl_return_acl = get_valid_acl();
@@ -213,47 +215,48 @@ test_drpc_pool_get_acl_cant_translate_acl(void **state)
 
 	ds_mgmt_drpc_pool_get_acl(&call, &resp);
 
-	assert_int_equal(resp.status, DRPC__STATUS__SUCCESS);
-	assert_non_null(resp.body.data);
+	expect_drpc_acl_resp_with_error(&resp, -DER_INVAL);
 
-	acl_resp = mgmt__aclresp__unpack(NULL, resp.body.len,
-					 resp.body.data);
-	assert_non_null(acl_resp);
-	assert_int_equal(acl_resp->status, -DER_INVAL);
-	assert_int_equal(acl_resp->n_acl, 0);
-
-	mgmt__aclresp__free_unpacked(acl_resp, NULL);
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
 }
 
 static void
+expect_drpc_acl_resp_success(Drpc__Response *resp, const char **expected_acl,
+			     size_t expected_acl_nr)
+{
+	Mgmt__ACLResp	*acl_resp = NULL;
+	size_t		i;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	assert_non_null(resp->body.data);
+
+	acl_resp = mgmt__aclresp__unpack(NULL, resp->body.len,
+					 resp->body.data);
+	assert_non_null(acl_resp);
+	assert_int_equal(acl_resp->status, 0);
+	assert_int_equal(acl_resp->n_acl, expected_acl_nr);
+
+	for (i = 0; i < expected_acl_nr; i++) {
+		assert_string_equal(acl_resp->acl[i], expected_acl[i]);
+	}
+
+	mgmt__aclresp__free_unpacked(acl_resp, NULL);
+}
+
+static void
 test_drpc_pool_get_acl_success(void **state)
 {
-	Drpc__Call		call = DRPC__CALL__INIT;
-	Drpc__Response		resp = DRPC__RESPONSE__INIT;
-	Mgmt__ACLResp		*acl_resp = NULL;
-	int			i;
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
 
 	setup_get_acl_drpc_call(&call, TEST_UUID);
 	ds_mgmt_pool_get_acl_return_acl = get_valid_acl();
 
 	ds_mgmt_drpc_pool_get_acl(&call, &resp);
 
-	assert_int_equal(resp.status, DRPC__STATUS__SUCCESS);
-	assert_non_null(resp.body.data);
+	expect_drpc_acl_resp_success(&resp, TEST_ACES, TEST_ACES_NR);
 
-	acl_resp = mgmt__aclresp__unpack(NULL, resp.body.len,
-					 resp.body.data);
-	assert_non_null(acl_resp);
-	assert_int_equal(acl_resp->status, 0);
-	assert_int_equal(acl_resp->n_acl, TEST_ACES_NR);
-
-	for (i = 0; i < TEST_ACES_NR; i++) {
-		assert_string_equal(acl_resp->acl[i], TEST_ACES[i]);
-	}
-
-	mgmt__aclresp__free_unpacked(acl_resp, NULL);
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
 }
@@ -310,25 +313,16 @@ setup_modify_acl_drpc_call(Drpc__Call *call, char *uuid, const char **acl,
 static void
 test_drpc_pool_overwrite_acl_bad_uuid(void **state)
 {
-	Drpc__Call		call = DRPC__CALL__INIT;
-	Drpc__Response		resp = DRPC__RESPONSE__INIT;
-	Mgmt__ACLResp		*acl_resp = NULL;
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
 
 	setup_modify_acl_drpc_call(&call, "invalid UUID", TEST_ACES,
 				   TEST_ACES_NR);
 
 	ds_mgmt_drpc_pool_overwrite_acl(&call, &resp);
 
-	assert_int_equal(resp.status, DRPC__STATUS__SUCCESS);
-	assert_non_null(resp.body.data);
+	expect_drpc_acl_resp_with_error(&resp, -DER_INVAL);
 
-	acl_resp = mgmt__aclresp__unpack(NULL, resp.body.len,
-					 resp.body.data);
-	assert_non_null(acl_resp);
-	assert_int_equal(acl_resp->status, -DER_INVAL);
-	assert_int_equal(acl_resp->n_acl, 0);
-
-	mgmt__aclresp__free_unpacked(acl_resp, NULL);
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
 }
@@ -338,7 +332,6 @@ test_drpc_pool_overwrite_acl_bad_acl(void **state)
 {
 	Drpc__Call		call = DRPC__CALL__INIT;
 	Drpc__Response		resp = DRPC__RESPONSE__INIT;
-	Mgmt__ACLResp		*acl_resp = NULL;
 	size_t			bad_nr = 2;
 	static const char	*bad_aces[] = {"A::OWNER@:rw", "invalid"};
 
@@ -347,16 +340,8 @@ test_drpc_pool_overwrite_acl_bad_acl(void **state)
 
 	ds_mgmt_drpc_pool_overwrite_acl(&call, &resp);
 
-	assert_int_equal(resp.status, DRPC__STATUS__SUCCESS);
-	assert_non_null(resp.body.data);
+	expect_drpc_acl_resp_with_error(&resp, -DER_INVAL);
 
-	acl_resp = mgmt__aclresp__unpack(NULL, resp.body.len,
-					 resp.body.data);
-	assert_non_null(acl_resp);
-	assert_int_equal(acl_resp->status, -DER_INVAL);
-	assert_int_equal(acl_resp->n_acl, 0);
-
-	mgmt__aclresp__free_unpacked(acl_resp, NULL);
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
 }
@@ -364,25 +349,17 @@ test_drpc_pool_overwrite_acl_bad_acl(void **state)
 static void
 test_drpc_pool_overwrite_acl_mgmt_svc_fails(void **state)
 {
-	Drpc__Call		call = DRPC__CALL__INIT;
-	Drpc__Response		resp = DRPC__RESPONSE__INIT;
-	Mgmt__ACLResp		*acl_resp = NULL;
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
 
 	setup_modify_acl_drpc_call(&call, TEST_UUID, TEST_ACES, TEST_ACES_NR);
 	ds_mgmt_pool_overwrite_acl_return = -DER_UNKNOWN;
 
 	ds_mgmt_drpc_pool_overwrite_acl(&call, &resp);
 
-	assert_int_equal(resp.status, DRPC__STATUS__SUCCESS);
-	assert_non_null(resp.body.data);
+	expect_drpc_acl_resp_with_error(&resp,
+					ds_mgmt_pool_overwrite_acl_return);
 
-	acl_resp = mgmt__aclresp__unpack(NULL, resp.body.len,
-					 resp.body.data);
-	assert_non_null(acl_resp);
-	assert_int_equal(acl_resp->status, ds_mgmt_pool_overwrite_acl_return);
-	assert_int_equal(acl_resp->n_acl, 0);
-
-	mgmt__aclresp__free_unpacked(acl_resp, NULL);
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
 }
@@ -390,10 +367,8 @@ test_drpc_pool_overwrite_acl_mgmt_svc_fails(void **state)
 static void
 test_drpc_pool_overwrite_acl_success(void **state)
 {
-	Drpc__Call		call = DRPC__CALL__INIT;
-	Drpc__Response		resp = DRPC__RESPONSE__INIT;
-	Mgmt__ACLResp		*acl_resp = NULL;
-	size_t			i;
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
 
 	setup_modify_acl_drpc_call(&call, TEST_UUID, TEST_ACES, TEST_ACES_NR);
 
@@ -406,20 +381,203 @@ test_drpc_pool_overwrite_acl_success(void **state)
 
 	ds_mgmt_drpc_pool_overwrite_acl(&call, &resp);
 
-	assert_int_equal(resp.status, DRPC__STATUS__SUCCESS);
-	assert_non_null(resp.body.data);
+	expect_drpc_acl_resp_success(&resp, TEST_ACES, TEST_ACES_NR);
 
-	acl_resp = mgmt__aclresp__unpack(NULL, resp.body.len,
-					 resp.body.data);
-	assert_non_null(acl_resp);
-	assert_int_equal(acl_resp->status, 0);
-	assert_int_equal(acl_resp->n_acl, TEST_ACES_NR);
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
 
-	for (i = 0; i < TEST_ACES_NR; i++) {
-		assert_string_equal(acl_resp->acl[i], TEST_ACES[i]);
-	}
+/*
+ * dRPC Update ACL tests
+ */
+static void
+test_drpc_pool_update_acl_bad_request(void **state)
+{
+	Drpc__Call	*call;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
 
-	mgmt__aclresp__free_unpacked(acl_resp, NULL);
+	call = new_drpc_call_with_bad_body();
+
+	ds_mgmt_drpc_pool_update_acl(call, &resp);
+
+	assert_int_equal(resp.status, DRPC__STATUS__FAILURE);
+	assert_null(resp.body.data);
+	assert_int_equal(resp.body.len, 0);
+
+	drpc_call_free(call);
+}
+
+static void
+test_drpc_pool_update_acl_bad_uuid(void **state)
+{
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+
+	setup_modify_acl_drpc_call(&call, "invalid UUID", TEST_ACES,
+				   TEST_ACES_NR);
+
+	ds_mgmt_drpc_pool_update_acl(&call, &resp);
+
+	expect_drpc_acl_resp_with_error(&resp, -DER_INVAL);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_update_acl_bad_acl(void **state)
+{
+	Drpc__Call		call = DRPC__CALL__INIT;
+	Drpc__Response		resp = DRPC__RESPONSE__INIT;
+	size_t			bad_nr = 2;
+	static const char	*bad_aces[] = {"A::OWNER@:rw", "invalid"};
+
+	setup_modify_acl_drpc_call(&call, TEST_UUID, bad_aces,
+				   bad_nr);
+
+	ds_mgmt_drpc_pool_update_acl(&call, &resp);
+
+	expect_drpc_acl_resp_with_error(&resp, -DER_INVAL);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_update_acl_mgmt_svc_fails(void **state)
+{
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+
+	setup_modify_acl_drpc_call(&call, TEST_UUID, TEST_ACES, TEST_ACES_NR);
+	ds_mgmt_pool_update_acl_return = -DER_UNKNOWN;
+
+	ds_mgmt_drpc_pool_update_acl(&call, &resp);
+
+	expect_drpc_acl_resp_with_error(&resp, ds_mgmt_pool_update_acl_return);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_update_acl_success(void **state)
+{
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+
+	setup_modify_acl_drpc_call(&call, TEST_UUID, TEST_ACES, TEST_ACES_NR);
+
+	/*
+	 * Set up the mgmt svc update function to return the same ACEs
+	 * we passed in as its result. Arbitrary.
+	 */
+	assert_int_equal(daos_acl_from_strs(TEST_ACES, TEST_ACES_NR,
+			 &ds_mgmt_pool_update_acl_result), 0);
+
+	ds_mgmt_drpc_pool_update_acl(&call, &resp);
+
+	expect_drpc_acl_resp_success(&resp, TEST_ACES, TEST_ACES_NR);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+/*
+ * dRPC Delete ACL tests
+ */
+static void
+test_drpc_pool_delete_acl_bad_request(void **state)
+{
+	Drpc__Call	*call;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+
+	call = new_drpc_call_with_bad_body();
+
+	ds_mgmt_drpc_pool_delete_acl(call, &resp);
+
+	assert_int_equal(resp.status, DRPC__STATUS__FAILURE);
+	assert_null(resp.body.data);
+	assert_int_equal(resp.body.len, 0);
+
+	drpc_call_free(call);
+}
+
+static void
+pack_delete_acl_req(Drpc__Call *call, Mgmt__DeleteACLReq *req)
+{
+	size_t	len;
+	uint8_t	*body;
+
+	len = mgmt__delete_aclreq__get_packed_size(req);
+	D_ALLOC(body, len);
+	assert_non_null(body);
+
+	mgmt__delete_aclreq__pack(req, body);
+
+	call->body.data = body;
+	call->body.len = len;
+}
+
+static void
+setup_delete_acl_drpc_call(Drpc__Call *call, char *uuid, char *principal)
+{
+	Mgmt__DeleteACLReq req = MGMT__DELETE_ACLREQ__INIT;
+
+	req.uuid = uuid;
+	req.principal = principal;
+
+	pack_delete_acl_req(call, &req);
+}
+
+static void
+test_drpc_pool_delete_acl_bad_uuid(void **state)
+{
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+
+	setup_delete_acl_drpc_call(&call, "invalid UUID", "OWNER@");
+
+	ds_mgmt_drpc_pool_delete_acl(&call, &resp);
+
+	expect_drpc_acl_resp_with_error(&resp, -DER_INVAL);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_delete_acl_mgmt_svc_fails(void **state)
+{
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+
+	setup_delete_acl_drpc_call(&call, TEST_UUID, "OWNER@");
+	ds_mgmt_pool_delete_acl_return = -DER_UNKNOWN;
+
+	ds_mgmt_drpc_pool_delete_acl(&call, &resp);
+
+	expect_drpc_acl_resp_with_error(&resp, ds_mgmt_pool_delete_acl_return);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_delete_acl_success(void **state)
+{
+	Drpc__Call	call = DRPC__CALL__INIT;
+	Drpc__Response	resp = DRPC__RESPONSE__INIT;
+
+	setup_delete_acl_drpc_call(&call, TEST_UUID, "OWNER@");
+
+	assert_int_equal(daos_acl_from_strs(TEST_ACES, TEST_ACES_NR,
+			 &ds_mgmt_pool_delete_acl_result), 0);
+
+	ds_mgmt_drpc_pool_delete_acl(&call, &resp);
+
+	expect_drpc_acl_resp_success(&resp, TEST_ACES, TEST_ACES_NR);
+
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
 }
@@ -490,6 +648,15 @@ main(void)
 		ACL_TEST(test_drpc_pool_overwrite_acl_bad_acl),
 		ACL_TEST(test_drpc_pool_overwrite_acl_mgmt_svc_fails),
 		ACL_TEST(test_drpc_pool_overwrite_acl_success),
+		ACL_TEST(test_drpc_pool_update_acl_bad_request),
+		ACL_TEST(test_drpc_pool_update_acl_bad_uuid),
+		ACL_TEST(test_drpc_pool_update_acl_bad_acl),
+		ACL_TEST(test_drpc_pool_update_acl_mgmt_svc_fails),
+		ACL_TEST(test_drpc_pool_update_acl_success),
+		ACL_TEST(test_drpc_pool_delete_acl_bad_request),
+		ACL_TEST(test_drpc_pool_delete_acl_bad_uuid),
+		ACL_TEST(test_drpc_pool_delete_acl_mgmt_svc_fails),
+		ACL_TEST(test_drpc_pool_delete_acl_success),
 		LIST_POOLS_TEST(test_drpc_list_pools_bad_request),
 	};
 

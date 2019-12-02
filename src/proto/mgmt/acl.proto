@@ -43,3 +43,9 @@ message ModifyACLReq {
 	string uuid = 1; // Target UUID
 	repeated string ACL = 2; // List of ACEs to overwrite ACL with
 }
+
+// Delete a principal's entry from the ACL
+message DeleteACLReq {
+	string uuid = 1; // Target UUID
+	string principal = 2; // Principal whose entry is to be deleted
+}

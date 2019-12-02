@@ -1,4 +1,4 @@
-/**
+/*
  * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,6 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
+ * \file
+ *
  * DAOS common code for RPC management. Infrastructure for registering the
  * protocol between the client library and the server module as well as between
  * the server modules.
@@ -211,7 +213,7 @@ int daos_rpc_send_wait(crt_rpc_t *rpc);
 static inline bool
 daos_rpc_retryable_rc(int rc)
 {
-	return rc == -DER_TIMEDOUT || rc == -DER_HG;
+	return daos_crt_network_error(rc) || rc == -DER_TIMEDOUT;
 }
 
 #endif /* __DRPC_API_H__ */

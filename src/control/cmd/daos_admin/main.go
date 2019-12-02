@@ -24,6 +24,7 @@
 package main
 
 import (
+	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -39,24 +40,30 @@ func exitWithError(log logging.Logger, err error) {
 	if err == nil {
 		err = errors.New("Unknown error")
 	}
-	log.Errorf("ERROR: %s", err)
+	log.Error(err.Error())
 	os.Exit(1)
+}
+
+func configureLogging(binName string) logging.Logger {
+	logLevel := logging.LogLevelError
+	combinedOut := ioutil.Discard
+	if logPath, set := os.LookupEnv(pbin.DaosAdminLogFileEnvVar); set {
+		lf, err := common.AppendFile(logPath)
+		if err == nil {
+			combinedOut = lf
+			logLevel = logging.LogLevelDebug
+		}
+	}
+
+	// By default, we only want to log errors to stderr.
+	return logging.NewCombinedLogger(binName, combinedOut).
+		WithErrorLogger(logging.NewCommandLineErrorLogger(os.Stderr)).
+		WithLogLevel(logLevel)
 }
 
 func main() {
 	binName := filepath.Base(os.Args[0])
-	// send all log output to stderr for now
-	// FIXME: only send errors to stderr; send debug logging to file?
-	log := logging.NewCombinedLogger(binName, os.Stderr).
-		WithLogLevel(logging.LogLevelDebug)
-
-	lf, err := common.AppendFile("/tmp/daos_admin.log")
-	if err != nil {
-		exitWithError(log, err)
-	}
-	log.WithErrorLogger(logging.NewErrorLogger("admin", lf)).
-		WithInfoLogger(logging.NewInfoLogger("admin", lf)).
-		WithDebugLogger(logging.NewDebugLogger(lf))
+	log := configureLogging(binName)
 
 	if os.Geteuid() != 0 {
 		exitWithError(log, errors.Errorf("%s not setuid root", binName))
