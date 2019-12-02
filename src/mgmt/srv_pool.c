@@ -72,6 +72,8 @@ ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid)
 	uuid_copy(td_in->td_pool_uuid, pool_uuid);
 
 	rc = dss_rpc_send(td_req);
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_DESTROY_FAIL_CORPC))
+		rc = -DER_TIMEDOUT;
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
@@ -187,7 +189,7 @@ pool_create_prepare(struct mgmt_svc *svc, uuid_t uuid, d_rank_list_t *tgts_in,
 	if (rc == 0) {
 		D_DEBUG(DB_MGMT, "found "DF_UUID" state=%u\n", DP_UUID(uuid),
 			rec->pr_state);
-		if (rec->pr_state & POOL_CREATING)
+		if (rec->pr_state == POOL_CREATING)
 			rc = -DER_AGAIN;
 		else
 			rc = -DER_ALREADY;
@@ -360,6 +362,8 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 	tc_in->tc_scm_size = scm_size;
 	tc_in->tc_nvme_size = nvme_size;
 	rc = dss_rpc_send(tc_req);
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_CREATE_FAIL_CORPC))
+		rc = -DER_TIMEDOUT;
 	if (rc != 0) {
 		crt_req_decref(tc_req);
 		goto out_preparation;
@@ -487,8 +491,10 @@ pool_destroy_prepare(struct mgmt_svc *svc, uuid_t uuid)
 
 	rc = pool_rec_lookup(&tx, svc, uuid, &rec);
 	if (rc == 0) {
-		if (!(rec->pr_state & POOL_READY)) {
+		if (rec->pr_state == POOL_CREATING) {
 			rc = -DER_AGAIN;
+			goto out_lock;
+		} else if (rec->pr_state == POOL_DESTROYING) {
 			goto out_lock;
 		}
 	} else if (rc == -DER_NONEXIST) {
@@ -769,7 +775,7 @@ pool_get_ranks(struct mgmt_svc *svc, uuid_t uuid, d_rank_list_t **ranks)
 	rc = pool_rec_lookup(&tx, svc, uuid, &rec);
 	if (rc != 0) {
 		D_GOTO(out_lock, rc);
-	} else if (!(rec->pr_state & POOL_READY)) {
+	} else if (rec->pr_state != POOL_READY) {
 		D_ERROR("Pool not ready\n");
 		D_GOTO(out_lock, rc = -DER_AGAIN);
 	}
@@ -919,6 +925,49 @@ ds_mgmt_pool_update_acl(uuid_t pool_uuid, struct daos_acl *acl,
 	if (rc != 0)
 		goto out_ranks;
 
+out_ranks:
+	d_rank_list_free(ranks);
+out_svc:
+	ds_mgmt_svc_put_leader(svc);
+out:
+	return rc;
+}
+
+int
+ds_mgmt_pool_delete_acl(uuid_t pool_uuid, const char *principal,
+			struct daos_acl **result)
+{
+	int				rc;
+	struct mgmt_svc			*svc;
+	d_rank_list_t			*ranks;
+	enum daos_acl_principal_type	type;
+	char				*name = NULL;
+
+	D_DEBUG(DB_MGMT, "Deleting ACL entry for pool "DF_UUID"\n",
+		DP_UUID(pool_uuid));
+
+	rc = ds_mgmt_svc_lookup_leader(&svc, NULL /* hint */);
+	if (rc != 0)
+		goto out;
+
+	rc = pool_get_ranks(svc, pool_uuid, &ranks);
+	if (rc != 0)
+		goto out_svc;
+
+	rc = daos_acl_principal_from_str(principal, &type, &name);
+	if (rc != 0)
+		goto out_ranks;
+
+	rc = ds_pool_svc_delete_acl(pool_uuid, ranks, type, name);
+	if (rc != 0)
+		goto out_name;
+
+	rc = get_acl_for_pool(pool_uuid, ranks, result);
+	if (rc != 0)
+		goto out_name;
+
+out_name:
+	D_FREE(name);
 out_ranks:
 	d_rank_list_free(ranks);
 out_svc:
