@@ -1444,6 +1444,7 @@ obj_iter_vos(crt_rpc_t *rpc, struct vos_iter_anchors *anchors,
 		param.ip_epr.epr_lo = 0;
 		recursive = true;
 		enum_arg->chk_key2big = true;
+		enum_arg->need_punch = true;
 	}
 
 	/*
