@@ -13,14 +13,15 @@ def scons():
 
     # equivalent to -I flags for spdk/lib/nvme and spdk/include for ut mocking
     spdk_src = unit_env.subst("$SPDK_SRC")
-    unit_env.AppendUnique(CPPPATH=[join(spdk_src, "lib", "nvme"),
-                                   join(spdk_src, "include")])
+    unit_env.AppendUnique(CPPPATH=[join(spdk_src, 'lib', 'nvme'),
+                                   join(spdk_src, 'include')])
 
     if isdir(spdk_src) and len(os.listdir(spdk_src)) != 0:
-        daos_build.test(unit_env, 'nvme_control_ctests',
-                        ['nvme_control_ut.c', unit_env.ncc, unit_env.nc],
-                        LIBS=['spdk', 'spdk_env_dpdk', 'numa', 'cmocka',
-                              'pthread', 'dl'])
+        ut = daos_build.test(unit_env, 'nvme_control_ctests',
+                             ['nvme_control_ut.c', unit_env.ncc, unit_env.nc],
+                             LIBS=['spdk', 'spdk_env_dpdk', 'numa', 'cmocka',
+                                   'pthread', 'dl'])
+        unit_env.Install(join(senv.subst("$PREFIX"), 'bin'), ut)
     else:
         print("SPDK src directory empty (%s), skipping nvme_control_ut build",
               spdk_src)

@@ -99,9 +99,7 @@ if [ -d "/mnt/daos" ]; then
     run_test src/vos/tests/evt_ctl.sh pmem
     run_test "${SL_PREFIX}/bin/vea_ut"
     run_test src/rdb/raft_tests/raft_tests.py
-    go_spdk_ctests="build/src/control/lib/spdk/ctests/nvme_control_ctests"
-    echo "DEBUG: "
-    ls -lah "$go_spdk_ctests"
+    go_spdk_ctests="${SL_PREFIX}/bin/nvme_control_ctests"
     if test -f "$go_spdk_ctests"; then
         run_test "$go_spdk_ctests"
     else
