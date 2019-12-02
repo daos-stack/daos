@@ -244,7 +244,7 @@ func TestSrvModule_HandleBioError_BadSockPath(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	expectedErr := "check BioError request socket path"
+	expectedErr := "check BioErr request socket path"
 	mod := &srvModule{}
 	addIOServerInstances(mod, 1, log)
 

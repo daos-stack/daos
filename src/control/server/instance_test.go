@@ -100,11 +100,6 @@ func TestIOServerInstance_BioError(t *testing.T) {
 	req := getTestBioErrorReq(t, "/tmp/instance_test.sock", 0, 0, false, false, true)
 
 	instance.BioErrorNotify(req)
-
-	dc, err := instance.getDrpcClient()
-	if err != nil || dc == nil {
-		t.Fatal("Expected a dRPC client connection")
-	}
 }
 
 func TestIOServerInstance_CallDrpc(t *testing.T) {
