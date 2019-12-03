@@ -947,7 +947,7 @@ pipeline {
                 stage('Coverity on CentOS 7') {
                     // Eventually this will only run on Master builds.
                     // Unfortunately for now, a PR build could break
-                    // the quickbuid, which would not be detected until
+                    // the quickbuild, which would not be detected until
                     // the master build fails.
 //                    when {
 //                        beforeAgent true
@@ -976,7 +976,7 @@ pipeline {
                         }
                     }
                     steps {
-                        sh "rm -f daos_coverity.tgz"
+                        sh "rm -f coverity/daos_coverity.tgz"
                         sconsBuild coverity: "daos-stack/daos",
                                    clean: "_build.external${arch}",
                                    failure_artifacts: 'config.log-centos7-cov'
@@ -984,22 +984,25 @@ pipeline {
                     post {
                         success {
                             sh """rm -rf _build.external${arch}
+                                  mkdir -p coverity
+                                  rm -f coverity/*
                                   if [ -e cov-int ]; then
-                                      tar czf daos_coverity.tgz cov-int
+                                      tar czf coverity/daos_coverity.tgz cov-int
                                   fi"""
-                            archiveArtifacts artifacts: 'daos_coverity.tgz',
+                            archiveArtifacts artifacts: 'coverity/daos_coverity.tgz',
                                              allowEmptyArchive: true
                         }
                         unsuccessful {
-                            sh """if [ -f config${arch}.log ]; then
-                                      mv config${arch}.log config.log-centos7-cov
+                            sh """mkdir -p coverity
+                                  if [ -f config${arch}.log ]; then
+                                      mv config${arch}.log coverity/config.log-centos7-cov
                                   fi
                                   if [ -f cov-int/build-log.txt ]; then
-                                      mv cov-int/build-log.txt cov-build-log.txt
+                                      mv cov-int/build-log.txt coverity/cov-build-log.txt
                                   fi"""
-                            archiveArtifacts artifacts: 'cov-build-log.txt',
+                            archiveArtifacts artifacts: 'coverity/cov-build-log.txt',
                                              allowEmptyArchive: true
-                            archiveArtifacts artifacts: 'config.log-centos7-cov',
+                            archiveArtifacts artifacts: 'coverity/config.log-centos7-cov',
                                              allowEmptyArchive: true
                       }
                     }
