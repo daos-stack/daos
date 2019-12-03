@@ -111,7 +111,7 @@ pipeline {
                     "--build-arg NOBUILD=1 --build-arg UID=$env.UID "         +
                     "--build-arg JENKINS_URL=$env.JENKINS_URL "               +
                     "--build-arg CACHEBUST=${currentBuild.startTimeInMillis}"
-        QUICKBUILD = commitPragma pragma: "Quick-build" == "true"
+        QUICKBUILD = commitPragma pragma: "Quick-build", def_val: "false"
         SSH_KEY_ARGS = "-ici_key"
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
         CART_COMMIT = sh(script: "sed -ne 's/CART *= *\\(.*\\)/\\1/p' utils/build.config", returnStdout: true).trim()
@@ -548,7 +548,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch 'master'
-                            expression { return env.QUICKBUILD == '1' }
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -609,7 +609,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch 'master'
-                            expression { return env.QUICKBUILD == '1' }
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -671,7 +671,7 @@ pipeline {
                         allOf {
                             not { branch 'weekly-testing' }
                             expression { env.CHANGE_TARGET != 'weekly-testing' }
-                            expression { return env.QUICKBUILD == '1' }
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -732,7 +732,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             environment name: 'SLES12_3_DOCKER', value: 'true'
-                            expression { return env.QUICKBUILD == '1' }
+                            expression { env.QUICKBUILD != 'true' }
                             not { branch 'weekly-testing' }
                             expression { env.CHANGE_TARGET != 'weekly-testing' }
                         }
@@ -797,7 +797,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             environment name: 'LEAP42_3_DOCKER', value: 'true'
-                            expression { return env.QUICKBUILD == '1' }
+                            expression { env.QUICKBUILD != 'true' }
                             not { branch 'weekly-testing' }
                             expression { env.CHANGE_TARGET != 'weekly-testing' }
                         }
@@ -862,7 +862,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch 'master'
-                            expression { return env.QUICKBUILD == '1' }
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -923,7 +923,7 @@ pipeline {
                         beforeAgent true
                         allOf {
                             branch 'master'
-                            expression { return env.QUICKBUILD == '1' }
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
@@ -985,7 +985,7 @@ pipeline {
                         allOf {
                             not { branch 'weekly-testing' }
                             expression { env.CHANGE_TARGET != 'weekly-testing' }
-                            expression { return env.QUICKBUILD == '1' }
+                            expression { env.QUICKBUILD != 'true' }
                         }
                     }
                     agent {
