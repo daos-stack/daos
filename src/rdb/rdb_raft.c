@@ -678,10 +678,15 @@ out:
 	return rc;
 }
 
+struct rdb_raft_unpack_arg {
+	daos_handle_t	slc;
+	uint64_t	base;
+};
+
 static int
-rdb_raft_exec_unpack_io(struct dss_enum_unpack_io *io, void *arg)
+rdb_raft_exec_unpack_io(struct dss_enum_unpack_io *io, void *varg)
 {
-	daos_handle_t  *slc = arg;
+	struct rdb_raft_unpack_arg *arg = varg;
 
 #if 0
 	int i;
@@ -705,16 +710,18 @@ rdb_raft_exec_unpack_io(struct dss_enum_unpack_io *io, void *arg)
 	}
 #endif
 
-	return vos_obj_update(*slc, io->ui_oid, 0 /* epoch */, io->ui_version,
+	return vos_obj_update(arg->slc, io->ui_oid, arg->base, io->ui_version,
 			      &io->ui_dkey, io->ui_iods_top + 1, io->ui_iods,
 			      io->ui_sgls);
 }
 
 static int
-rdb_raft_unpack_chunk(daos_handle_t slc, d_iov_t *kds, d_iov_t *data)
+rdb_raft_unpack_chunk(daos_handle_t slc, uint64_t base, d_iov_t *kds,
+		      d_iov_t *data)
 {
-	struct dss_enum_arg	arg;
-	d_sg_list_t		sgl;
+	struct dss_enum_arg		arg;
+	d_sg_list_t			sgl;
+	struct rdb_raft_unpack_arg	unpack_arg;
 
 	/* Set up the same iteration as rdb_raft_pack_chunk. */
 	memset(&arg, 0, sizeof(arg));
@@ -729,9 +736,12 @@ rdb_raft_unpack_chunk(daos_handle_t slc, d_iov_t *kds, d_iov_t *data)
 	sgl.sg_iovs = data;
 	arg.sgl = &sgl;
 
+	unpack_arg.slc = slc;
+	unpack_arg.base = base;
+
 	/* Unpack from the object level. */
 	return dss_enum_unpack(VOS_ITER_OBJ, &arg, rdb_raft_exec_unpack_io,
-			       &slc);
+			       &unpack_arg);
 }
 
 static int
@@ -830,7 +840,8 @@ rdb_raft_cb_recv_installsnapshot(raft_server_t *raft, void *arg,
 	}
 
 	/* Save this chunk but do not update the SLC record yet. */
-	rc = rdb_raft_unpack_chunk(*slc, &in->isi_local.rl_kds_iov,
+	rc = rdb_raft_unpack_chunk(*slc, msg->last_idx,
+				   &in->isi_local.rl_kds_iov,
 				   &in->isi_local.rl_data_iov);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to unpack IS chunk %d/"DF_U64": %d\n",
