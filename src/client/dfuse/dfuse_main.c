@@ -141,9 +141,13 @@ main(int argc, char **argv)
 		{0, 0, 0, 0}
 	};
 
+	rc = daos_debug_init(NULL);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
 	D_ALLOC_PTR(dfuse_info);
 	if (!dfuse_info)
-		D_GOTO(out_fini, ret = -DER_NOMEM);
+		D_GOTO(out, ret = -DER_NOMEM);
 
 	dfuse_info->di_threaded = true;
 
@@ -207,8 +211,6 @@ main(int argc, char **argv)
 		exit(1);
 	}
 
-	DFUSE_TRA_ROOT(dfuse_info, "dfuse_info");
-
 	if (!dfuse_info->di_foreground) {
 		rc = daemon(0, 0);
 		if (rc)
@@ -217,7 +219,9 @@ main(int argc, char **argv)
 
 	rc = daos_init();
 	if (rc != -DER_SUCCESS)
-		D_GOTO(out, ret = rc);
+		D_GOTO(out_debug, ret = rc);
+
+	DFUSE_TRA_ROOT(dfuse_info, "dfuse_info");
 
 	dfuse_info->di_svcl = daos_rank_list_parse(svcl, ":");
 	if (dfuse_info->di_svcl == NULL) {
@@ -303,8 +307,9 @@ out_svcl:
 out_dfuse:
 	DFUSE_TRA_DOWN(dfuse_info);
 	D_FREE(dfuse_info);
-out_fini:
 	daos_fini();
+out_debug:
+	daos_debug_fini();
 out:
 	/* Convert CaRT error numbers to something that can be returned to the
 	 * user.  This needs to be less than 256 so only works for CaRT, not
