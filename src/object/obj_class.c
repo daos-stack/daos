@@ -370,6 +370,7 @@ daos_oclass_id2name(daos_oclass_id_t oc_id, char *str)
 	}
 
 	D_ASSERT(oc->oc_id == OC_UNKNOWN);
+	strcpy(str, "UNKNOWN");
 	return -1;
 }
 

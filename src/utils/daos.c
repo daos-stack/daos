@@ -868,7 +868,14 @@ help_hdlr(struct cmd_args_s *ap)
 "	--path=PATHSTR     container namespace path\n"
 "	--type=CTYPESTR    container type (HDF5, POSIX)\n"
 "	--oclass=OCLSSTR   container object class\n"
-"			   (tiny, small, large, R2, R2S, repl_max)\n"
+"			   (");
+	/* vs hardcoded list like "tiny, small, large, R2, R2S, repl_max" */
+	{	int i;
+
+		while (daos_obj_classes[i].oc_name != NULL)
+			fprintf(stream, "%s, ", daos_obj_classes[i++].oc_name);
+	}
+	fprintf(stream, ")\n"
 "	--chunk_size=BYTES chunk size of files created. Supports suffixes:\n"
 "			   K (KB), M (MB), G (GB), T (TB), P (PB), E (EB)\n"
 "container options (destroy):\n"
