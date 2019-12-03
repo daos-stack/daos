@@ -130,64 +130,6 @@ pipeline {
                 cancelPreviousBuilds()
             }
         }
-        stage('Pre-build') {
-            when {
-                beforeAgent true
-                allOf {
-                    not { branch 'weekly-testing' }
-                    expression { env.CHANGE_TARGET != 'weekly-testing' }
-                    expression { return env.QUICKBUILD == '1' }
-                }
-            }
-            parallel {
-                stage('checkpatch') {
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.centos.7'
-                            dir 'utils/docker'
-                            label 'docker_runner'
-                            additionalBuildArgs "-t ${sanitized_JOB_NAME}-centos7 " + '$BUILDARGS'
-                        }
-                    }
-                    steps {
-                        checkPatch user: GITHUB_USER_USR,
-                                   password: GITHUB_USER_PSW,
-                                   ignored_files: "src/control/vendor/*:src/mgmt/*.pb-c.[ch]:src/iosrv/*.pb-c.[ch]:src/security/*.pb-c.[ch]:*.crt:*.pem"
-                    }
-                    post {
-                        always {
-                            archiveArtifacts artifacts: 'pylint.log', allowEmptyArchive: true
-                            /* when JENKINS-39203 is resolved, can probably use stepResult
-                               here and remove the remaining post conditions
-                               stepResult name: env.STAGE_NAME,
-                                          context: 'build/' + env.STAGE_NAME,
-                                          result: ${currentBuild.currentResult}
-                            */
-                        }
-                        /* temporarily moved into stepResult due to JENKINS-39203
-                        success {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'pre-build/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                        }
-                        unstable {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'pre-build/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                        }
-                        failure {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'pre-build/' + env.STAGE_NAME,
-                                         status: 'ERROR'
-                        }
-                        */
-                    }
-                }
-            }
-        }
         stage('Build') {
             /* Don't use failFast here as whilst it avoids using extra resources
              * and gives faster results for PRs it's also on for master where we
@@ -1103,127 +1045,6 @@ pipeline {
                 }
             }
         }
-        stage('Unit Test') {
-            when {
-                beforeAgent true
-                // expression { skipTest != true }
-                expression { env.NO_CI_TESTING != 'true' }
-                expression {
-                    sh script: 'git show -s --format=%B | grep "^Skip-test: true"',
-                       returnStatus: true
-                }
-            }
-            parallel {
-                stage('run_test.sh') {
-                    agent {
-                        label 'ci_vm1'
-                    }
-                    steps {
-                        provisionNodes NODELIST: env.NODELIST,
-                                       node_count: 1,
-                                       snapshot: true,
-                                       inst_repos: el7_component_repos + ' ' + component_repos,
-                                       inst_rpms: "argobots cart-${env.CART_COMMIT} fuse3-libs hwloc-devel libisa-l libpmem libpmemobj protobuf-c spdk-devel libfabric-devel pmix numactl-devel"
-                        runTest stashes: [ 'CentOS-tests', 'CentOS-install', 'CentOS-build-vars' ],
-                                script: '''# JENKINS-52781 tar function is breaking symlinks
-                                           rm -rf test_results
-                                           mkdir test_results
-                                           rm -f build/src/control/src/github.com/daos-stack/daos/src/control
-                                           mkdir -p build/src/control/src/github.com/daos-stack/daos/src/
-                                           ln -s ../../../../../../../../src/control build/src/control/src/github.com/daos-stack/daos/src/control
-                                           . ./.build_vars.sh
-                                           DAOS_BASE=${SL_PREFIX%/install*}
-                                           NODE=${NODELIST%%,*}
-                                           ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
-                                               set -e
-                                               sudo bash -c 'echo \"1\" > /proc/sys/kernel/sysrq'
-                                               if grep /mnt/daos\\  /proc/mounts; then
-                                                   sudo umount /mnt/daos
-                                               else
-                                                   sudo mkdir -p /mnt/daos
-                                               fi
-                                               sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
-                                               sudo mkdir -p $DAOS_BASE
-                                               sudo mount -t nfs $HOSTNAME:$PWD $DAOS_BASE
-
-                                               # copy daos_admin binary into \$PATH and fix perms
-                                               sudo cp $DAOS_BASE/install/bin/daos_admin /usr/bin/daos_admin && \
-                                                   sudo chown root /usr/bin/daos_admin && \
-                                                   sudo chmod 4755 /usr/bin/daos_admin && \
-                                                   mv $DAOS_BASE/install/bin/daos_admin \
-                                                      $DAOS_BASE/install/bin/orig_daos_admin
-
-                                               # set CMOCKA envs here
-                                               export CMOCKA_MESSAGE_OUTPUT="xml"
-                                               export CMOCKA_XML_FILE="$DAOS_BASE/test_results/%g.xml"
-                                               cd $DAOS_BASE
-                                               OLD_CI=false utils/run_test.sh"''',
-                              junit_files: 'test_results/*.xml'
-                    }
-                    post {
-                        /* temporarily moved into runTest->stepResult due to JENKINS-39203
-                        success {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                        }
-                        unstable {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                        }
-                        failure {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'test/' + env.STAGE_NAME,
-                                         status: 'ERROR'
-                        }
-                        */
-                        always {
-                            /* https://issues.jenkins-ci.org/browse/JENKINS-58952
-                             * label is at the end
-                            sh label: "Collect artifacts and tear down",
-                               script '''set -ex */
-                            sh script: '''set -ex
-                                      . ./.build_vars.sh
-                                      DAOS_BASE=${SL_PREFIX%/install*}
-                                      NODE=${NODELIST%%,*}
-                                      ssh $SSH_KEY_ARGS jenkins@$NODE "set -x
-                                          cd $DAOS_BASE
-                                          rm -rf run_test.sh/
-                                          mkdir run_test.sh/
-                                          if ls /tmp/daos*.log > /dev/null; then
-                                              mv /tmp/daos*.log run_test.sh/
-                                          fi
-                                          # servers can sometimes take a while to stop when the test is done
-                                          x=0
-                                          while [ \"\\\$x\" -lt \"10\" ] &&
-                                                pgrep '(orterun|daos_server|daos_io_server)'; do
-                                              sleep 1
-                                              let x=\\\$x+1
-                                          done
-                                          if ! sudo umount /mnt/daos; then
-                                              echo \"Failed to unmount $DAOS_BASE\"
-                                              ps axf
-                                          fi
-                                          cd
-                                          if ! sudo umount \"$DAOS_BASE\"; then
-                                              echo \"Failed to unmount $DAOS_BASE\"
-                                              ps axf
-                                          fi"
-                                      # Note that we are taking advantage of the NFS mount here and if that
-                                      # should ever go away, we need to pull run_test.sh/ from $NODE
-                                      python utils/fix_cmocka_xml.py''',
-                            label: "Collect artifacts and tear down"
-                            junit 'test_results/*.xml'
-                            archiveArtifacts artifacts: 'run_test.sh/**'
-                        }
-                    }
-                }
-            }
-        }
         stage('Test') {
             when {
                 beforeAgent true
@@ -1309,7 +1130,7 @@ pipeline {
                         expression { env.DAOS_STACK_CI_HARDWARE_SKIP != 'true' }
                     }
                     agent {
-                        label 'ci_nvme9'
+                        label 'ci_nvme9-test'
                     }
                     steps {
                         // First snapshot provision the VM at beginning of list
@@ -1329,7 +1150,7 @@ pipeline {
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
-                                               test_tag=pr,hw
+                                               test_tag=pr,iorsmall
                                            fi
                                            tnodes=$(echo $NODELIST | cut -d ',' -f 1-9)
                                            ./ftest.sh "$test_tag" $tnodes''',
@@ -1379,71 +1200,6 @@ pipeline {
                                          status: 'ERROR'
                         }
                         */
-                    }
-                }
-                stage('Test CentOS 7 RPMs') {
-                    when {
-                        beforeAgent true
-                        allOf {
-                            not { branch 'weekly-testing' }
-                            expression { env.CHANGE_TARGET != 'weekly-testing' }
-                            expression { return env.QUICKBUILD == '1' }
-                        }
-                    }
-                    agent {
-                        label 'ci_vm1'
-                    }
-                    steps {
-                        provisionNodes NODELIST: env.NODELIST,
-                                       node_count: 1,
-                                       snapshot: true,
-                                       inst_repos: el7_daos_repos + ' ' + ior_repos
-                        catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
-                            runTest script: "${rpm_test_pre}" +
-                                         '''sudo yum -y install daos-client
-                                            sudo yum -y history rollback last-1
-                                            sudo yum -y install daos-server
-                                            sudo yum -y install daos-tests\n''' +
-                                            "${rpm_test_daos_test}" + '"',
-                                    junit_files: null,
-                                    failure_artifacts: env.STAGE_NAME, ignore_failure: true
-                        }
-                    }
-                }
-                stage('Test SLES12.3 RPMs') {
-                    when {
-                        beforeAgent true
-                        allOf {
-                            expression { false }
-                            not { branch 'weekly-testing' }
-                            expression { env.CHANGE_TARGET != 'weekly-testing' }
-                            expression { return env.QUICKBUILD == '1' }
-                        }
-                    }
-                    agent {
-                        label 'ci_vm1'
-                    }
-                    steps {
-                        provisionNodes NODELIST: env.NODELIST,
-                                       distro: 'sles12sp3',
-                                       node_count: 1,
-                                       snapshot: true,
-                                       inst_repos: sle12_daos_repos + " python-pathlib"
-                        catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS') {
-                            runTest script: "${rpm_test_pre}" +
-                                         '''sudo zypper --non-interactive ar -f https://download.opensuse.org/repositories/science:/HPC:/SLE12SP3_Missing/SLE_12_SP3/ hwloc
-                                            # for libcmocka
-                                            sudo zypper --non-interactive ar https://download.opensuse.org/repositories/home:/jhli/SLE_15/home:jhli.repo
-                                            sudo zypper --non-interactive ar https://download.opensuse.org/repositories/devel:libraries:c_c++/SLE_12_SP3/devel:libraries:c_c++.repo
-                                            sudo zypper --non-interactive --gpg-auto-import-keys ref
-                                            sudo zypper --non-interactive rm openmpi libfabric1
-                                            sudo zypper --non-interactive in daos-client
-                                            sudo zypper --non-interactive in daos-server
-                                            sudo zypper --non-interactive in daos-tests\n''' +
-                                            "${rpm_test_daos_test}" + '"',
-                                    junit_files: null,
-                                    failure_artifacts: env.STAGE_NAME, ignore_failure: true
-                        }
                     }
                 }
             }

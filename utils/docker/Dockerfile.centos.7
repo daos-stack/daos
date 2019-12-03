@@ -124,16 +124,16 @@ gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;         
         done;                                                                    \
         pkgs="cart-devel$CART_COMMIT argobots-devel libpmem-devel                \
               libpmemobj-devel fuse-devel protobuf-c-devel spdk-devel            \
-              fio-3.3-4.el7 libisa-l-devel mercury-devel-1.0.1-13.el7            \
+              fio-3.3-4.el7 libisa-l-devel mercury-devel-1.0.1-19.el7            \
               openpa-devel libfabric-devel                                       \
-              ompi-devel pmix-devel hwloc-devel dpdk-devel-18.02";               \
+              ompi-devel pmix-devel hwloc-devel dpdk-devel";                     \
         echo "Installing: $pkgs";                                                \
         yum -y install $pkgs;                                                    \
     fi
 
 # force an upgrade to get any newly built RPMs
 ARG CACHEBUST=1
-RUN yum -y upgrade --exclude=dpdk-devel,dpdk,mercury-devel,mercury,cart-devel,cart,fio
+RUN yum -y upgrade --exclude=spdk-devel,spdk,dpdk-devel,dpdk,mercury-devel,mercury,cart-devel,cart,fio
 
 # Switch to new user
 #USER $USER
