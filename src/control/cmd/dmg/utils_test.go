@@ -155,33 +155,9 @@ func TestCheckSprint(t *testing.T) {
 		m   string
 		out string
 	}{
-		"nvme scan summary without health": {
-			fmt.Sprint(MockScanResp(MockCtrlrs, nil, nil, MockServers, true)),
-			"1.2.3.4:10000\n\tSummary:\n\t\tSCM: 0.00B (0 modules)\n\t\tNVMe: 97.66TB (1 controller)\n1.2.3.5:10001\n\tSummary:\n\t\tSCM: 0.00B (0 modules)\n\t\tNVMe: 97.66TB (1 controller)\n",
-		},
-		"nvme scan without health": {
-			fmt.Sprint(MockScanResp(MockCtrlrs, nil, nil, MockServers, false)),
-			"1.2.3.4:10000\n\tSCM Modules:\n\t\tnone\n\tNVMe controllers and namespaces:\n\t\tPCI Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:1.0.0 Socket:0\n\t\t\tNamespace: id:12345 capacity:97.66TB\n\tSummary:\n\t\tSCM: 0.00B (0 modules)\n\t\tNVMe: 97.66TB (1 controller)\n1.2.3.5:10001\n\tSCM Modules:\n\t\tnone\n\tNVMe controllers and namespaces:\n\t\tPCI Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:1.0.0 Socket:0\n\t\t\tNamespace: id:12345 capacity:97.66TB\n\tSummary:\n\t\tSCM: 0.00B (0 modules)\n\t\tNVMe: 97.66TB (1 controller)\n",
-		},
 		"nvme scan with health": {
-			fmt.Sprint(MockScanResp(MockCtrlrs, nil, nil, MockServers, false).StringHealthStats()),
+			fmt.Sprint(MockScanResp(MockCtrlrs, nil, nil, MockServers).StringHealthStats()),
 			"1.2.3.4:10000\n\tNVMe controllers and namespaces detail with health statistics:\n\t\tPCI Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:1.0.0 Socket:0\n\t\t\tNamespace: id:12345 capacity:97.66TB\n\t\tHealth Stats:\n\t\t\tTemperature:300K(27C)\n\t\t\tController Busy Time:0s\n\t\t\tPower Cycles:99\n\t\t\tPower On Duration:9999h0m0s\n\t\t\tUnsafe Shutdowns:1\n\t\t\tMedia Errors:0\n\t\t\tError Log Entries:0\n\t\t\tCritical Warnings:\n\t\t\t\tTemperature: OK\n\t\t\t\tAvailable Spare: OK\n\t\t\t\tDevice Reliability: OK\n\t\t\t\tRead Only: OK\n\t\t\t\tVolatile Memory Backup: OK\n1.2.3.5:10001\n\tNVMe controllers and namespaces detail with health statistics:\n\t\tPCI Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:1.0.0 Socket:0\n\t\t\tNamespace: id:12345 capacity:97.66TB\n\t\tHealth Stats:\n\t\t\tTemperature:300K(27C)\n\t\t\tController Busy Time:0s\n\t\t\tPower Cycles:99\n\t\t\tPower On Duration:9999h0m0s\n\t\t\tUnsafe Shutdowns:1\n\t\t\tMedia Errors:0\n\t\t\tError Log Entries:0\n\t\t\tCritical Warnings:\n\t\t\t\tTemperature: OK\n\t\t\t\tAvailable Spare: OK\n\t\t\t\tDevice Reliability: OK\n\t\t\t\tRead Only: OK\n\t\t\t\tVolatile Memory Backup: OK\n",
-		},
-		"scm scan summary with pmem namespaces": {
-			fmt.Sprint(MockScanResp(nil, MockScmModules, MockScmNamespaces, MockServers, true)),
-			"1.2.3.4:10000\n\tSummary:\n\t\tSCM: 2.90TB (1 namespace)\n\t\tNVMe: 0.00B (0 controllers)\n1.2.3.5:10001\n\tSummary:\n\t\tSCM: 2.90TB (1 namespace)\n\t\tNVMe: 0.00B (0 controllers)\n",
-		},
-		"scm scan with pmem namespaces": {
-			fmt.Sprint(MockScanResp(nil, MockScmModules, MockScmNamespaces, MockServers, false)),
-			"1.2.3.4:10000\n\tSCM Namespaces:\n\t\tDevice:pmem1 Socket:1 Capacity:2.90TB\n\tNVMe controllers and namespaces:\n\t\tnone\n\tSummary:\n\t\tSCM: 2.90TB (1 namespace)\n\t\tNVMe: 0.00B (0 controllers)\n1.2.3.5:10001\n\tSCM Namespaces:\n\t\tDevice:pmem1 Socket:1 Capacity:2.90TB\n\tNVMe controllers and namespaces:\n\t\tnone\n\tSummary:\n\t\tSCM: 2.90TB (1 namespace)\n\t\tNVMe: 0.00B (0 controllers)\n",
-		},
-		"scm scan summary without pmem namespaces": {
-			fmt.Sprint(MockScanResp(nil, MockScmModules, nil, MockServers, true)),
-			"1.2.3.4:10000\n\tSummary:\n\t\tSCM: 12.06KB (1 module)\n\t\tNVMe: 0.00B (0 controllers)\n1.2.3.5:10001\n\tSummary:\n\t\tSCM: 12.06KB (1 module)\n\t\tNVMe: 0.00B (0 controllers)\n",
-		},
-		"scm scan without pmem namespaces": {
-			fmt.Sprint(MockScanResp(nil, MockScmModules, nil, MockServers, false)),
-			"1.2.3.4:10000\n\tSCM Modules:\n\t\tPhysicalID:12345 Capacity:12.06KB Location:(socket:4 memctrlr:3 chan:1 pos:2)\n\tNVMe controllers and namespaces:\n\t\tnone\n\tSummary:\n\t\tSCM: 12.06KB (1 module)\n\t\tNVMe: 0.00B (0 controllers)\n1.2.3.5:10001\n\tSCM Modules:\n\t\tPhysicalID:12345 Capacity:12.06KB Location:(socket:4 memctrlr:3 chan:1 pos:2)\n\tNVMe controllers and namespaces:\n\t\tnone\n\tSummary:\n\t\tSCM: 12.06KB (1 module)\n\t\tNVMe: 0.00B (0 controllers)\n",
 		},
 		"scm mount scan": {
 			NewClientScmMount(MockMounts, MockServers).String(),

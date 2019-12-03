@@ -40,6 +40,10 @@ import (
 )
 
 const (
+	defaultRuntimeDir        = "/var/run/daos_server"
+	defaultConfigPath        = "etc/daos_server.yml"
+	defaultSystemName        = "daos_server"
+	defaultPort              = 10000
 	configOut                = ".daos_server.active.yml"
 	relConfExamplesPath      = "utils/config/examples/"
 	msgBadConfig             = "insufficient config file, see examples in "
@@ -312,14 +316,14 @@ func (c *Configuration) parse(data []byte) error {
 // populated with defaults.
 func newDefaultConfiguration(ext External) *Configuration {
 	return &Configuration{
-		SystemName:         "daos_server",
-		SocketDir:          "/var/run/daos_server",
+		SystemName:         defaultSystemName,
+		SocketDir:          defaultRuntimeDir,
 		AccessPoints:       []string{"localhost"},
-		ControlPort:        10000,
+		ControlPort:        defaultPort,
 		TransportConfig:    security.DefaultServerTransportConfig(),
 		Hyperthreads:       false,
 		NrHugepages:        1024,
-		Path:               "etc/daos_server.yml",
+		Path:               defaultConfigPath,
 		NvmeShmID:          0,
 		ControlLogMask:     ControlLogLevel(logging.LogLevelInfo),
 		ext:                ext,

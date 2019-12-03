@@ -25,7 +25,6 @@ package main
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -51,10 +50,7 @@ func TestStorageCommands(t *testing.T) {
 		{
 			"Scan",
 			"storage scan",
-			strings.Join([]string{
-				"ConnectClients",
-				fmt.Sprintf("StorageScan-%+v", &StorageScanReq{}),
-			}, " "),
+			"ConnectClients StorageScan-<nil>",
 			nil,
 		},
 		{
@@ -108,20 +104,65 @@ func TestStorageCommands(t *testing.T) {
 	})
 }
 
-func TestGenScanDisplay(t *testing.T) {
+func TestScanDisplay(t *testing.T) {
 	for name, tc := range map[string]struct {
 		scanResp  *StorageScanResp
 		summary   bool
 		expOut    string
 		expErrMsg string
 	}{
-		"coalesced summary output": {
-			scanResp: MockScanResp(MockCtrlrs, MockScmModules, MockScmNamespaces, MockServers, true),
+		"typical scan": {
+			scanResp: MockScanResp(MockCtrlrs, MockScmModules, MockScmNamespaces, MockServers),
+			expOut: "1.2.3.[4-5]\n\tSCM Namespaces:\n\t\tDevice:pmem1 Socket:1 " +
+				"Capacity:2.90TB\n\tNVMe controllers and namespaces:\n\t\tPCI " +
+				"Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:1.0.0 Socket:" +
+				"0\n\t\t\tNamespace: id:12345 capacity:97.66TB\n",
+		},
+		"summary scan": {
+			scanResp: MockScanResp(MockCtrlrs, MockScmModules, MockScmNamespaces, MockServers),
 			summary:  true,
+			expOut: "\n HOSTS\t\tSCM\t\t\tNVME\t\n -----\t\t---\t\t\t----\t\n 1.2" +
+				".3.[4-5]\t2.90TB (1 namespace)\t97.66TB (1 controller)",
+		},
+		"scm scan with pmem namespaces": {
+			scanResp: MockScanResp(nil, MockScmModules, MockScmNamespaces, MockServers),
+			expOut: "1.2.3.[4-5]\n\tSCM Namespaces:\n\t\tDevice:pmem1 Socket:1 " +
+				"Capacity:2.90TB\n\tNVMe controllers and namespaces:\n\t\tnone\n",
+		},
+		"summary scm scan with pmem namespaces": {
+			scanResp: MockScanResp(nil, MockScmModules, MockScmNamespaces, MockServers),
+			summary:  true,
+			expOut: "\n HOSTS\t\tSCM\t\t\tNVME\t\n -----\t\t---\t\t\t----\t\n 1.2.3." +
+				"[4-5]\t2.90TB (1 namespace)\t0.00B (0 controllers)",
+		},
+		"scm scan without pmem namespaces": {
+			scanResp: MockScanResp(nil, MockScmModules, nil, MockServers),
+			expOut: "1.2.3.[4-5]\n\tSCM Modules:\n\t\tPhysicalID:12345 " +
+				"Capacity:12.06KB Location:(socket:4 memctrlr:3 chan:1 pos:2)\n" +
+				"\tNVMe controllers and namespaces:\n\t\tnone\n",
+		},
+		"summary scm scan without pmem namespaces": {
+			scanResp: MockScanResp(nil, MockScmModules, nil, MockServers),
+			summary:  true,
+			expOut: "\n HOSTS\t\tSCM\t\t\tNVME\t\n -----\t\t---\t\t\t----\t\n 1.2.3." +
+				"[4-5]\t12.06KB (1 module)\t0.00B (0 controllers)",
+		},
+		"nvme scan": {
+			scanResp: MockScanResp(MockCtrlrs, nil, nil, MockServers),
+			expOut: "1.2.3.[4-5]\n\tSCM Modules:\n\t\tnone\n\t" +
+				"NVMe controllers and namespaces:\n\t\tPCI " +
+				"Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:1.0.0 Socket:" +
+				"0\n\t\t\tNamespace: id:12345 capacity:97.66TB\n",
+		},
+		"summary nvme scan": {
+			scanResp: MockScanResp(MockCtrlrs, nil, nil, MockServers),
+			summary:  true,
+			expOut: "\n HOSTS\t\tSCM\t\t\tNVME\t\n -----\t\t---\t\t\t----\t\n 1.2" +
+				".3.[4-5]\t0.00B (0 modules)\t97.66TB (1 controller)",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			out, err := genScanDisplay(tc.scanResp, tc.summary)
+			out, err := scanDisplay(tc.scanResp, tc.summary)
 			ExpectError(t, err, tc.expErrMsg, name)
 			if diff := cmp.Diff(tc.expOut, out); diff != "" {
 				t.Fatalf("unexpected output (-want, +got):\n%s\n", diff)
