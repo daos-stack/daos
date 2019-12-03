@@ -1462,14 +1462,15 @@ test_case_create(struct vos_fetch_test_context *ctx, struct test_setup setup)
 		data_len = (l->ful.ex_hi - l->ful.ex_lo + 1) * rec_size;
 		biov = &ctx->bsgl.bs_iovs[i];
 
-		bio_iov_set_extra(biov, addr, evt_extent_width(&l->sel) *
-					      rec_size,
+		bio_iov_set(biov, addr,
+			    evt_extent_width(&l->sel) * rec_size);
+		bio_iov_set_extra(biov,
 				  (l->sel.ex_lo - l->ful.ex_lo) *
 				  rec_size,
 				  (l->ful.ex_hi - l->sel.ex_hi) *
 				  rec_size);
 
-		bio_iov_alloc_raw_buf(biov, data_len);
+		D_ALLOC(biov->bi_buf, data_len);
 		memcpy(bio_iov2raw_buf(biov), data, data_len);
 
 		/** Just a rough count */

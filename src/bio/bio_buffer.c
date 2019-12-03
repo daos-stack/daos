@@ -485,7 +485,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
 	if (biov->bi_addr.ba_type == DAOS_MEDIA_SCM) {
 		struct umem_instance *umem = biod->bd_ctxt->bic_umem;
 		bio_iov_set_raw_buf(biov,
-				    umem_off2ptr(umem, bio_iov2req_off(biov)));
+				    umem_off2ptr(umem, bio_iov2raw_off(biov)));
 		return 0;
 	}
 
@@ -610,7 +610,6 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov,
 
 add_chunk:
 	rc = iod_add_chunk(biod, chk);
-	/** set buf to be the requested data, without the extra */
 	if (rc) {
 		/* Revert the reservation in chunk */
 		D_ASSERT(chk->bdc_pg_idx >= pg_cnt);
@@ -618,7 +617,6 @@ add_chunk:
 		return rc;
 	}
 add_region:
-	/** set buf to be the requested data, without the extra */
 	return iod_add_region(biod, chk, chk_pg_idx, off, end);
 }
 

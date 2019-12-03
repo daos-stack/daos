@@ -561,8 +561,7 @@ vic_update_biov(struct bio_iov *biov, struct evt_entry *ent,
 	struct evt_extent aligned_extent;
 
 	if (!dcb_is_valid(&ent->en_csum)) {
-		biov->bi_prefix_len = 0;
-		biov->bi_suffix_len = 0;
+		bio_iov_set_extra(biov, 0, 0);
 		return;
 	}
 
@@ -573,9 +572,9 @@ vic_update_biov(struct bio_iov *biov, struct evt_entry *ent,
 	(*dcb_count)++;
 
 	aligned_extent = evt_entry_align_to_csum_chunk(ent, rsize);
-
-	biov->bi_prefix_len = (ent->en_sel_ext.ex_lo - aligned_extent.ex_lo) *
-			      rsize;
-	biov->bi_suffix_len = (aligned_extent.ex_hi - ent->en_sel_ext.ex_hi) *
-			      rsize;
+	bio_iov_set_extra(biov,
+			  (ent->en_sel_ext.ex_lo - aligned_extent.ex_lo) *
+			  rsize,
+			  (aligned_extent.ex_hi - ent->en_sel_ext.ex_hi) *
+			  rsize);
 }

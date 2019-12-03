@@ -147,14 +147,13 @@ bio_iov_set(struct bio_iov *biov, bio_addr_t addr, uint64_t data_len)
 }
 
 static inline void
-bio_iov_set_extra(struct bio_iov *biov, bio_addr_t addr, uint64_t data_len,
-	uint64_t prefix_len, uint64_t suffix_len)
+bio_iov_set_extra(struct bio_iov *biov,	uint64_t prefix_len,
+		  uint64_t suffix_len)
 {
-	biov->bi_addr = addr;
-	biov->bi_buf = NULL;
-	biov->bi_data_len = data_len;
 	biov->bi_prefix_len = prefix_len;
 	biov->bi_suffix_len = suffix_len;
+	biov->bi_addr.ba_off -= prefix_len;
+	biov->bi_data_len += prefix_len + suffix_len;
 }
 
 static inline uint64_t
@@ -187,13 +186,13 @@ bio_iov2buf(struct bio_iov *biov)
 static inline uint64_t
 bio_iov2raw_off(struct bio_iov *biov)
 {
-	return biov->bi_addr.ba_off - biov->bi_prefix_len;
+	return biov->bi_addr.ba_off;
 }
 
 static inline uint64_t
 bio_iov2raw_len(struct bio_iov *biov)
 {
-	return biov->bi_data_len + biov->bi_prefix_len + biov->bi_suffix_len;
+	return biov->bi_data_len;
 }
 
 static inline void *
@@ -223,13 +222,13 @@ bio_iov2req_buf(struct bio_iov *biov)
 static inline uint64_t
 bio_iov2req_off(struct bio_iov *biov)
 {
-	return biov->bi_addr.ba_off;
+	return biov->bi_addr.ba_off + biov->bi_prefix_len;
 }
 
 static inline uint64_t
 bio_iov2req_len(struct bio_iov *biov)
 {
-	return biov->bi_data_len;
+	return biov->bi_data_len - (biov->bi_prefix_len + biov->bi_suffix_len);
 }
 
 static inline
@@ -280,9 +279,9 @@ bio_sgl_convert(struct bio_sglist *bsgl, d_sg_list_t *sgl)
 		struct bio_iov	*biov = &bsgl->bs_iovs[i];
 		d_iov_t	*iov = &sgl->sg_iovs[i];
 
-		iov->iov_buf = biov->bi_buf;
-		iov->iov_len = biov->bi_data_len;
-		iov->iov_buf_len = biov->bi_data_len;
+		iov->iov_buf = bio_iov2req_buf(biov);
+		iov->iov_len = bio_iov2req_len(biov);
+		iov->iov_buf_len = bio_iov2req_len(biov);
 	}
 
 	return 0;
