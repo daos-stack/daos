@@ -455,7 +455,8 @@ ts_iterate_internal(uint32_t type, vos_iter_param_t *param,
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 		else
-			D_ERROR("Failed to prepare d-key iterator: %d\n", rc);
+			D_ERROR("Failed to prepare d-key iterator: "DF_RC"\n",
+				DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1277,7 +1278,7 @@ main(int argc, char **argv)
 		}
 
 		if (rc != 0) {
-			fprintf(stderr, "Failed: %d\n", rc);
+			fprintf(stderr, "Failed: "DF_RC"\n", DP_RC(rc));
 			break;
 		}
 

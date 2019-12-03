@@ -888,7 +888,8 @@ rebuild_scan_broadcast(struct ds_pool *pool,
 	rc = crt_bulk_create(dss_get_module_info()->dmi_ctx, &sgl, CRT_BULK_RW,
 			     &bulk_hdl);
 	if (rc != 0) {
-		D_ERROR("Create bulk for map buffer failed: rc %d\n", rc);
+		D_ERROR("Create bulk for map buffer failed: rc "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 
@@ -901,7 +902,7 @@ retry:
 				  REBUILD_OBJECTS_SCAN, &rpc, bulk_hdl,
 				  NULL);
 	if (rc != 0) {
-		D_ERROR("pool map broad cast failed: rc %d\n", rc);
+		D_ERROR("pool map broad cast failed: rc "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_rpc, rc = 0); /* ignore the failure */
 	}
 
@@ -974,7 +975,7 @@ retry:
 					pool_map_get_version(pool->sp_map),
 					&list, svc_list);
 			if (rc != 0) {
-				D_ERROR("rebuild fails rc %d\n", rc);
+				D_ERROR("rebuild fails rc "DF_RC"\n", DP_RC(rc));
 				break;
 			}
 		}
@@ -1142,20 +1143,21 @@ rebuild_leader_start(struct ds_pool *pool, uint32_t rebuild_ver,
 
 	rc = ds_pool_svc_term_get(pool->sp_uuid, &leader_term);
 	if (rc) {
-		D_ERROR("Get pool service term failed: rc = %d\n", rc);
+		D_ERROR("Get pool service term failed: rc = "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
 	rc = rebuild_prepare(pool, rebuild_ver, leader_term, tgts_failed,
 			     p_rgt);
 	if (rc) {
-		D_ERROR("rebuild prepare failed: rc %d\n", rc);
+		D_ERROR("rebuild prepare failed: rc "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
 	rc = ds_pool_map_buf_get(pool->sp_uuid, &map_buf_iov, &map_ver);
 	if (rc) {
-		D_ERROR("pool map broadcast failed: rc %d\n", rc);
+		D_ERROR("pool map broadcast failed: rc "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1164,7 +1166,7 @@ rebuild_leader_start(struct ds_pool *pool, uint32_t rebuild_ver,
 				    map_ver, &map_buf_iov);
 	D_FREE(map_buf_iov.iov_buf);
 	if (rc) {
-		D_ERROR("object scan failed: rc %d\n", rc);
+		D_ERROR("object scan failed: rc "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1186,7 +1188,7 @@ rebuild_task_ult(void *arg)
 	pc_arg.pca_map_version = task->dst_map_ver;
 	rc = ds_pool_lookup_create(task->dst_pool_uuid, &pc_arg, &pool);
 	if (rc) {
-		D_ERROR("pool lookup and create failed: rc %d\n", rc);
+		D_ERROR("pool lookup and create failed: rc "DF_RC"\n", DP_RC(rc));
 		return;
 	}
 
@@ -1514,7 +1516,8 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, d_rank_list_t *svc_list)
 	rc = pool_map_find_down_tgts(pool->sp_map, &down_tgts,
 				     &down_tgts_cnt);
 	if (rc != 0) {
-		D_ERROR("failed to create failed tgt list rc %d\n", rc);
+		D_ERROR("failed to create failed tgt list rc "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 

@@ -110,7 +110,7 @@ mgmt_svc_alloc_cb(d_iov_t *id, struct ds_rsvc **rsvc)
 
 	rc = ABT_rwlock_create(&svc->ms_lock);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("failed to create ms_lock: %d\n", rc);
+		D_ERROR("failed to create ms_lock: "DF_RC"\n", DP_RC(rc));
 		rc = dss_abterr2der(rc);
 		goto err_svc;
 	}
@@ -382,7 +382,8 @@ map_update_bcast(crt_context_t ctx, struct mgmt_svc *svc, uint32_t map_version,
 				  0 /* flags */,
 				  crt_tree_topo(CRT_TREE_KNOMIAL, 32), &rpc);
 	if (rc != 0) {
-		D_ERROR("failed to create system map update RPC: %d\n", rc);
+		D_ERROR("failed to create system map update RPC: "DF_RC"\n",
+			DP_RC(rc));
 		goto out;
 	}
 	in = crt_req_get(rpc);
@@ -401,8 +402,8 @@ map_update_bcast(crt_context_t ctx, struct mgmt_svc *svc, uint32_t map_version,
 out_rpc:
 	crt_req_decref(rpc);
 out:
-	D_DEBUG(DB_MGMT, "leave: version=%u nservers=%d: %d\n", map_version,
-		nservers, rc);
+	D_DEBUG(DB_MGMT, "leave: version=%u nservers=%d: "DF_RC"\n", map_version,
+		nservers, DP_RC(rc));
 	return rc;
 }
 
@@ -481,7 +482,7 @@ ds_mgmt_svc_start(bool create, size_t size, bool bootstrap, uuid_t srv_uuid,
 		replicas.rl_ranks = &arg.sa_rank;
 
 		rc = crt_group_rank(NULL, &arg.sa_rank);
-		D_ASSERTF(rc == 0, "%d\n", rc);
+		D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 		arg.sa_server.sr_flags = SERVER_IN;
 		arg.sa_server.sr_nctxs = dss_ctx_nr_get();
 		uuid_copy(arg.sa_server.sr_uuid, srv_uuid);
@@ -498,7 +499,7 @@ ds_mgmt_svc_start(bool create, size_t size, bool bootstrap, uuid_t srv_uuid,
 		D_ASSERT(grp != NULL);
 		rc = crt_rank_uri_get(grp, arg.sa_rank, 0 /* tag */, &uri);
 		if (rc != 0) {
-			D_ERROR("unable to get self URI: %d\n", rc);
+			D_ERROR("unable to get self URI: "DF_RC"\n", DP_RC(rc));
 			return rc;
 		}
 		len = strnlen(uri, ADDR_STR_MAX_LEN);
@@ -516,7 +517,8 @@ ds_mgmt_svc_start(bool create, size_t size, bool bootstrap, uuid_t srv_uuid,
 			   create, size, bootstrap ? &replicas : NULL,
 			   bootstrap ? &arg : NULL);
 	if (rc != 0 && rc != -DER_ALREADY)
-		D_ERROR("failed to start management service: %d\n", rc);
+		D_ERROR("failed to start management service: "DF_RC"\n",
+			DP_RC(rc));
 
 	return rc;
 }
@@ -528,7 +530,8 @@ ds_mgmt_svc_stop(void)
 
 	rc = ds_rsvc_stop_all(DS_RSVC_CLASS_MGMT);
 	if (rc != 0)
-		D_ERROR("failed to stop management service: %d\n", rc);
+		D_ERROR("failed to stop management service: "DF_RC"\n",
+			DP_RC(rc));
 	return rc;
 }
 
@@ -788,7 +791,8 @@ ds_mgmt_get_attach_info_handler(Mgmt__GetAttachInfoResp *resp)
 		rc = crt_rank_uri_get(grp, rank, 0 /* tag */,
 				      &(resp->psrs[i]->uri));
 		if (rc != 0) {
-			D_ERROR("unable to get rank %u URI: %d\n", rank, rc);
+			D_ERROR("unable to get rank %u URI: "DF_RC"\n", rank,
+				DP_RC(rc));
 			break;
 		}
 	}

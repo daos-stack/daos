@@ -808,7 +808,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 						    pool, sub_toh);
 		}
 		if (rc != 0)
-			D_ERROR("Failed to open tree: %d\n", rc);
+			D_ERROR("Failed to open tree: "DF_RC"\n", DP_RC(rc));
 
 		goto out;
 	}
@@ -825,7 +825,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 		rc = evt_create(&krec->kr_evt, vos_evt_feats, VOS_EVT_ORDER,
 				uma, &cbs, sub_toh);
 		if (rc != 0) {
-			D_ERROR("Failed to create evtree: %d\n", rc);
+			D_ERROR("Failed to create evtree: "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
 	} else {
@@ -855,7 +855,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 					      ta->ta_order, uma, &krec->kr_btr,
 					      coh, pool, sub_toh);
 		if (rc != 0) {
-			D_ERROR("Failed to create btree: %d\n", rc);
+			D_ERROR("Failed to create btree: "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
 	}
@@ -912,7 +912,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 			  NULL, &riov);
 	switch (rc) {
 	default:
-		D_ERROR("fetch failed: %d\n", rc);
+		D_ERROR("fetch failed: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	case -DER_NONEXIST:
 		if (!(flags & SUBTR_CREATE))
@@ -922,7 +922,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 		/* use BTR_PROBE_BYPASS to avoid probe again */
 		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, intent, key, &riov);
 		if (rc) {
-			D_ERROR("Failed to upsert: %d\n", rc);
+			D_ERROR("Failed to upsert: "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
 	case 0:
@@ -978,7 +978,8 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, DAOS_INTENT_UPDATE,
 				   key_iov, val_iov);
 		if (rc) {
-			D_ERROR("Failed to add new punch, rc=%d\n", rc);
+			D_ERROR("Failed to add new punch, rc="DF_RC"\n",
+				DP_RC(rc));
 			return rc;
 		}
 	}
@@ -1071,7 +1072,8 @@ obj_tree_register(void)
 		rc = dbtree_class_register(ta->ta_class, ta->ta_feats,
 					   ta->ta_ops);
 		if (rc != 0) {
-			D_ERROR("Failed to register %s: %d\n", ta->ta_name, rc);
+			D_ERROR("Failed to register %s: "DF_RC"\n", ta->ta_name,
+				DP_RC(rc));
 			break;
 		}
 		D_DEBUG(DB_TRACE, "Register tree type %s\n", ta->ta_name);

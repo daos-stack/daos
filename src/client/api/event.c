@@ -104,14 +104,14 @@ daos_eq_lib_init()
 		flags |= CRT_FLAG_BIT_PMIX_DISABLE;
 	rc = crt_init_opt(NULL, flags, daos_crt_init_opt_get(false, 1));
 	if (rc != 0) {
-		D_ERROR("failed to initialize crt: %d\n", rc);
+		D_ERROR("failed to initialize crt: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(unlock, rc);
 	}
 
 	/* use a global shared context for all eq for now */
 	rc = crt_context_create(&daos_eq_ctx);
 	if (rc != 0) {
-		D_ERROR("failed to create client context: %d\n", rc);
+		D_ERROR("failed to create client context: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(crt, rc);
 	}
 
@@ -149,7 +149,8 @@ daos_eq_lib_fini()
 	if (daos_eq_ctx != NULL) {
 		rc = crt_context_destroy(daos_eq_ctx, 1 /* force */);
 		if (rc != 0) {
-			D_ERROR("failed to destroy client context: %d\n", rc);
+			D_ERROR("failed to destroy client context: "DF_RC"\n",
+				DP_RC(rc));
 			D_GOTO(unlock, rc);
 		}
 		daos_eq_ctx = NULL;
@@ -157,7 +158,7 @@ daos_eq_lib_fini()
 
 	rc = crt_finalize();
 	if (rc != 0) {
-		D_ERROR("failed to shutdown crt: %d\n", rc);
+		D_ERROR("failed to shutdown crt: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(unlock, rc);
 	}
 
@@ -604,7 +605,7 @@ daos_event_test(struct daos_event *ev, int64_t timeout, bool *flag)
 		daos_eq_putref(epa.eqx);
 
 	if (rc != 0 && rc != -DER_TIMEDOUT) {
-		D_ERROR("crt progress failed with %d\n", rc);
+		D_ERROR("crt progress failed with "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -740,7 +741,7 @@ daos_eq_poll(daos_handle_t eqh, int wait_running, int64_t timeout,
 	daos_eq_putref(epa.eqx);
 
 	if (rc != 0 && rc != -DER_TIMEDOUT) {
-		D_ERROR("crt progress failed with %d\n", rc);
+		D_ERROR("crt progress failed with "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -1068,7 +1069,8 @@ daos_event_fini(struct daos_event *ev)
 
 		rc = daos_event_fini(daos_evx2ev(tmp));
 		if (rc < 0) {
-			D_ERROR("Failed to finalize child event (%d)\n", rc);
+			D_ERROR("Failed to finalize child event "DF_RC"\n",
+				DP_RC(rc));
 			goto out;
 		}
 		tmp->evx_status = DAOS_EVS_READY;

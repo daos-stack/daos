@@ -106,7 +106,7 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint32_t map_version,
 
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		D_ERROR("send reply failed: %d\n", rc);
+		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
 
 	if (obj_rpc_is_fetch(rpc)) {
 		struct obj_rw_out	*orwo = crt_reply_get(rpc);
@@ -880,8 +880,8 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 						    &cpy_iods);
 				if (rc) {
 					D_ERROR(
-					DF_UOID" EC update failed: %d\n",
-					DP_UOID(orw->orw_oid), rc);
+					DF_UOID" EC update failed: "DF_RC"\n",
+					DP_UOID(orw->orw_oid), DP_RC(rc));
 					goto out;
 				}
 				tmp_iods = cpy_iods;
@@ -891,8 +891,8 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 					      oca, skip_list);
 		}
 		if (rc) {
-			D_ERROR(DF_UOID" EC update failed: %d\n",
-			DP_UOID(orw->orw_oid), rc);
+			D_ERROR(DF_UOID" EC update failed: "DF_RC"\n",
+			DP_UOID(orw->orw_oid), DP_RC(rc));
 			goto out;
 		}
 	}
@@ -904,8 +904,8 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 				      orw->orw_epoch, dkey, orw->orw_nr,
 				      tmp_iods, &ioh, dth);
 		if (rc) {
-			D_ERROR(DF_UOID" Update begin failed: %d\n",
-				DP_UOID(orw->orw_oid), rc);
+			D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
+				DP_UOID(orw->orw_oid), DP_RC(rc));
 			goto out;
 		}
 	} else {
@@ -924,8 +924,8 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 			obj_fetch_csums_unlink(orw);
 
 		if (rc) {
-			D_ERROR(DF_UOID" Fetch begin failed: %d\n",
-				DP_UOID(orw->orw_oid), rc);
+			D_ERROR(DF_UOID" Fetch begin failed: "DF_RC"\n",
+				DP_UOID(orw->orw_oid), DP_RC(rc));
 			goto out;
 		}
 
@@ -949,8 +949,8 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	biod = vos_ioh2desc(ioh);
 	rc = bio_iod_prep(biod);
 	if (rc) {
-		D_ERROR(DF_UOID" bio_iod_prep failed: %d.\n",
-			DP_UOID(orw->orw_oid), rc);
+		D_ERROR(DF_UOID" bio_iod_prep failed: "DF_RC".\n",
+			DP_UOID(orw->orw_oid), DP_RC(rc));
 		goto out;
 	}
 
@@ -973,8 +973,8 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 
 	if (rc == -DER_OVERFLOW) {
 		rc = -DER_REC2BIG;
-		D_ERROR(DF_UOID" bio_iod_copy failed, rc %d",
-			DP_UOID(orw->orw_oid), rc);
+		D_ERROR(DF_UOID" bio_iod_copy failed, rc "DF_RC"",
+			DP_UOID(orw->orw_oid), DP_RC(rc));
 		goto post;
 	}
 
@@ -1154,13 +1154,14 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 		       orw->orw_dti_cos.ca_count, orw->orw_map_ver,
 		       DAOS_INTENT_UPDATE, handle);
 	if (rc != 0) {
-		D_ERROR(DF_UOID": Failed to start DTX for update %d.\n",
-			DP_UOID(orw->orw_oid), rc);
+		D_ERROR(DF_UOID": Failed to start DTX for update "DF_RC".\n",
+			DP_UOID(orw->orw_oid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 	rc = obj_local_rw(rpc, cont_hdl, cont, handle);
 	if (rc != 0) {
-		D_ERROR(DF_UOID": error=%d.\n", DP_UOID(orw->orw_oid), rc);
+		D_ERROR(DF_UOID": error="DF_RC".\n", DP_UOID(orw->orw_oid),
+			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1226,7 +1227,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 			    orw->orw_co_uuid, opc_get(rpc->cr_opc),
 			    &cont_hdl, &cont, &map_ver);
 	if (rc != 0) {
-		D_ASSERTF(rc < 0, "unexpected error# %d\n", rc);
+		D_ASSERTF(rc < 0, "unexpected error# "DF_RC"\n", DP_RC(rc));
 
 		goto reply;
 	}
@@ -1250,8 +1251,8 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	if (obj_rpc_is_fetch(rpc)) {
 		rc = obj_local_rw(rpc, cont_hdl, cont, NULL);
 		if (rc != 0) {
-			D_ERROR(DF_UOID": error=%d.\n",
-				DP_UOID(orw->orw_oid), rc);
+			D_ERROR(DF_UOID": error="DF_RC".\n",
+				DP_UOID(orw->orw_oid), DP_RC(rc));
 			D_GOTO(out, rc);
 		}
 
@@ -1299,8 +1300,8 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 			      orw->orw_shard_tgts.ca_arrays,
 			      orw->orw_shard_tgts.ca_count, &dlh);
 	if (rc != 0) {
-		D_ERROR(DF_UOID": Failed to start DTX for update %d.\n",
-			DP_UOID(orw->orw_oid), rc);
+		D_ERROR(DF_UOID": Failed to start DTX for update "DF_RC".\n",
+			DP_UOID(orw->orw_oid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1353,7 +1354,7 @@ obj_enum_complete(crt_rpc_t *rpc, int status, int map_version)
 	obj_reply_map_version_set(rpc, map_version);
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		D_ERROR("send reply failed: %d\n", rc);
+		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
 
 	oei = crt_req_get(rpc);
 	D_ASSERT(oei != NULL);
@@ -1658,7 +1659,7 @@ obj_punch_complete(crt_rpc_t *rpc, int status, uint32_t map_version,
 
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		D_ERROR("send reply failed: %d\n", rc);
+		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
 }
 
 static int
@@ -1758,15 +1759,16 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 		       opi->opi_dti_cos.ca_count, opi->opi_map_ver,
 		       DAOS_INTENT_PUNCH, handle);
 	if (rc != 0) {
-		D_ERROR(DF_UOID": Failed to start DTX for punch %d.\n",
-			DP_UOID(opi->opi_oid), rc);
+		D_ERROR(DF_UOID": Failed to start DTX for punch "DF_RC".\n",
+			DP_UOID(opi->opi_oid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
 	/* local RPC handler */
 	rc = obj_local_punch(opi, opc_get(rpc->cr_opc), cont_hdl, cont, handle);
 	if (rc != 0) {
-		D_ERROR(DF_UOID": error=%d.\n", DP_UOID(opi->opi_oid), rc);
+		D_ERROR(DF_UOID": error="DF_RC".\n", DP_UOID(opi->opi_oid),
+			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 out:
@@ -1842,8 +1844,8 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 		rc = obj_local_punch(opi, opc_get(rpc->cr_opc), cont_hdl, cont,
 				     NULL);
 		if (rc != 0) {
-			D_ERROR(DF_UOID": error=%d.\n",
-				DP_UOID(opi->opi_oid), rc);
+			D_ERROR(DF_UOID": error="DF_RC".\n",
+				DP_UOID(opi->opi_oid), DP_RC(rc));
 			D_GOTO(out, rc);
 		}
 
@@ -1891,8 +1893,8 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 			      opi->opi_shard_tgts.ca_arrays,
 			      opi->opi_shard_tgts.ca_count, &dlh);
 	if (rc != 0) {
-		D_ERROR(DF_UOID": Failed to start DTX for punch %d.\n",
-			DP_UOID(opi->opi_oid), rc);
+		D_ERROR(DF_UOID": Failed to start DTX for punch "DF_RC".\n",
+			DP_UOID(opi->opi_oid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1985,7 +1987,7 @@ out:
 
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		D_ERROR("send reply failed: %d\n", rc);
+		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
 }
 
 void
@@ -2037,7 +2039,7 @@ out:
 
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		D_ERROR("send reply failed: %d\n", rc);
+		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
 }
 
 /**

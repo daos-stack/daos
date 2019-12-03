@@ -57,7 +57,8 @@ dtx_iter_fini(struct vos_iterator *iter)
 	if (!daos_handle_is_inval(oiter->oit_hdl)) {
 		rc = dbtree_iter_finish(oiter->oit_hdl);
 		if (rc != 0)
-			D_ERROR("oid_iter_fini failed: rc = %d\n", rc);
+			D_ERROR("oid_iter_fini failed: rc = "DF_RC"\n",
+				DP_RC(rc));
 	}
 
 	if (oiter->oit_cont != NULL)
@@ -94,7 +95,8 @@ dtx_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 
 	rc = dbtree_iter_prepare(cont->vc_dtx_active_hdl, 0, &oiter->oit_hdl);
 	if (rc != 0) {
-		D_ERROR("Failed to prepare DTX iteration: rc = %d\n", rc);
+		D_ERROR("Failed to prepare DTX iteration: rc = "DF_RC"\n",
+			DP_RC(rc));
 		dtx_iter_fini(&oiter->oit_iter);
 	} else {
 		*iter_pp = &oiter->oit_iter;
@@ -140,7 +142,8 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	d_iov_set(&rec_iov, NULL, 0);
 	rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &rec_iov, anchor);
 	if (rc != 0) {
-		D_ERROR("Error while fetching DTX info: rc = %d\n", rc);
+		D_ERROR("Error while fetching DTX info: rc = "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 
@@ -177,7 +180,7 @@ dtx_iter_delete(struct vos_iterator *iter, void *args)
 	rc = dbtree_iter_delete(oiter->oit_hdl, args);
 	if (rc != 0) {
 		umem_tx_abort(umm, rc);
-		D_ERROR("Failed to delete DTX entry: rc = %d\n", rc);
+		D_ERROR("Failed to delete DTX entry: rc = "DF_RC"\n", DP_RC(rc));
 	} else {
 		umem_tx_commit(umm);
 	}

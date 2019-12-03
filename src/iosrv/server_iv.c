@@ -496,7 +496,7 @@ ivc_pre_cb(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	rc = dss_ult_create(cb_func, cb_arg, DSS_ULT_MISC, DSS_TGT_SELF,
 			    0, NULL);
 	if (rc)
-		D_ERROR("dss_ult_create failed, rc %d.\n", rc);
+		D_ERROR("dss_ult_create failed, rc "DF_RC"\n", DP_RC(rc));
 }
 
 static int
@@ -805,7 +805,7 @@ ds_iv_ns_update(uuid_t pool_uuid, unsigned int master_rank,
 	}
 
 	if (rc) {
-		D_ERROR("pool iv ns create failed %d\n", rc);
+		D_ERROR("pool iv ns create failed "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 

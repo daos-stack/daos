@@ -191,7 +191,7 @@ srv_profile_dump(void *arg)
 	tgt_id = dss_get_module_info()->dmi_xs_id;
 	rc = crt_group_rank(NULL, &rank);
 	if (rc) {
-		D_ERROR("start dump ult failed: rc %d\n", rc);
+		D_ERROR("start dump ult failed: rc "DF_RC"\n", DP_RC(rc));
 		return;
 	}
 
@@ -199,7 +199,7 @@ srv_profile_dump(void *arg)
 		D_ALLOC(path, strlen(sp->sp_dir_path) + 64);
 		if (path == NULL) {
 			rc = -DER_NOMEM;
-			D_ERROR("start dump ult failed: rc %d\n", rc);
+			D_ERROR("start dump ult failed: rc "DF_RC"\n", DP_RC(rc));
 			return;
 		}
 

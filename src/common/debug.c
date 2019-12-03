@@ -52,7 +52,8 @@ debug_fini_locked(void)
 
 	rc = D_LOG_DEREGISTER_DB(DAOS_FOREACH_DB);
 	if (rc != 0) /* Just print a message but no need to fail */
-		D_PRINT_ERR("Failed to deallocate daos debug bits: %d\n", rc);
+		D_PRINT_ERR("Failed to deallocate daos debug bits: "DF_RC"\n",
+			DP_RC(rc));
 
 	daos_fail_fini();
 	/* Unregister DAOS debug bit groups */
@@ -167,22 +168,26 @@ daos_debug_init(char *logfile)
 			    DLOG_FLV_FAC | DLOG_FLV_LOGPID | DLOG_FLV_TAG,
 			    DLOG_INFO, DLOG_CRIT);
 	if (rc != 0) {
-		D_PRINT_ERR("Failed to init DAOS debug log: %d\n", rc);
+		D_PRINT_ERR("Failed to init DAOS debug log: "DF_RC"\n",
+			DP_RC(rc));
 		goto failed_unlock;
 	}
 
 	rc = D_LOG_REGISTER_FAC(DAOS_FOREACH_LOG_FAC);
 	if (rc != 0) /* Just print a message but no need to fail */
-		D_PRINT_ERR("Failed to register daos log facilities: %d\n", rc);
+		D_PRINT_ERR("Failed to register daos log facilities: "DF_RC"\n",
+			DP_RC(rc));
 
 	rc = D_LOG_REGISTER_DB(DAOS_FOREACH_DB);
 	if (rc != 0) /* Just print a message but no need to fail */
-		D_PRINT_ERR("Failed to register daos debug bits: %d\n", rc);
+		D_PRINT_ERR("Failed to register daos debug bits: "DF_RC"\n",
+			DP_RC(rc));
 
 	/* Register DAOS debug bit groups */
 	rc = d_log_dbg_grp_alloc(DB_GRP1, "daos_default", D_LOG_SET_AS_DEFAULT);
 	if (rc < 0) {
-		D_PRINT_ERR("Error allocating daos debug group: %d\n", rc);
+		D_PRINT_ERR("Error allocating daos debug group: "DF_RC"\n",
+			DP_RC(rc));
 		rc = -DER_UNINIT;
 		goto failed_unlock;
 	}
@@ -192,7 +197,8 @@ daos_debug_init(char *logfile)
 
 	rc = daos_fail_init();
 	if (rc) {
-		D_PRINT_ERR("Failed to init DAOS fail injection: %d\n", rc);
+		D_PRINT_ERR("Failed to init DAOS fail injection: "DF_RC"\n",
+			DP_RC(rc));
 		goto failed_unlock;
 	}
 

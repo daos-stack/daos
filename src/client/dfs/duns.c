@@ -437,7 +437,7 @@ duns_create_lustre_path(daos_handle_t poh, const char *path,
 	} while ((rc == -DER_EXIST) && try_multiple);
 
 	if (rc) {
-		D_ERROR("Failed to create container (%d)\n", rc);
+		D_ERROR("Failed to create container "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err, rc);
 	}
 
@@ -455,7 +455,7 @@ duns_create_lustre_path(daos_handle_t poh, const char *path,
 				   LU_FOREIGN_TYPE_DAOS, 0xda05, str);
 	if (rc) {
 		D_ERROR("Failed to create Lustre dir '%s' with foreign "
-			"LMV '%s' (rc = %d).\n", path, str, rc);
+			"LMV '%s' (rc = "DF_RC").\n", path, str, DP_RC(rc));
 		D_GOTO(err_cont, rc = -DER_INVAL);
 	}
 
@@ -575,7 +575,8 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 
 		rc = lsetxattr(path, DUNS_XATTR_NAME, str, len + 1, 0);
 		if (rc) {
-			D_ERROR("Failed to set DAOS xattr (rc = %d).\n", rc);
+			D_ERROR("Failed to set DAOS xattr (rc = "DF_RC").\n",
+				DP_RC(rc));
 			D_GOTO(err_link, rc = -DER_INVAL);
 		}
 
@@ -604,7 +605,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		}
 	} while ((rc == -DER_EXIST) && try_multiple);
 	if (rc) {
-		D_ERROR("Failed to create container (%d)\n", rc);
+		D_ERROR("Failed to create container "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_link, rc);
 	}
 
@@ -626,15 +627,15 @@ duns_destroy_path(daos_handle_t poh, const char *path)
 	/* Resolve pool, container UUIDs from path */
 	rc = duns_resolve_path(path, &dattr);
 	if (rc) {
-		D_ERROR("duns_resolve_path() Failed on path %s (%d)\n",
-			path, rc);
+		D_ERROR("duns_resolve_path() Failed on path %s "DF_RC"\n",
+			path, DP_RC(rc));
 		return rc;
 	}
 
 	/** Destroy the container */
 	rc = daos_cont_destroy(poh, dattr.da_cuuid, 1, NULL);
 	if (rc) {
-		D_ERROR("Failed to destroy container (%d)\n", rc);
+		D_ERROR("Failed to destroy container "DF_RC"\n", DP_RC(rc));
 		/** recreate the link ? */
 		return rc;
 	}

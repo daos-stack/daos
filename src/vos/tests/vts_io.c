@@ -259,13 +259,15 @@ io_recx_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 		else
-			print_error("Failed to create recx iterator: %d\n", rc);
+			print_error("Failed to create recx iterator: "DF_RC"\n",
+				DP_RC(rc));
 		return rc;
 	}
 
 	rc = vos_iter_probe(ih, NULL);
 	if (rc != 0 && rc != -DER_NONEXIST) {
-		print_error("Failed to set iterator cursor: %d\n", rc);
+		print_error("Failed to set iterator cursor: "DF_RC"\n",
+			DP_RC(rc));
 		goto out;
 	}
 
@@ -278,13 +280,13 @@ io_recx_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 		memset(&ent, 0, sizeof(ent));
 		rc = vos_iter_fetch(ih, &ent, NULL);
 		if (rc != 0) {
-			print_error("Failed to fetch recx: %d\n", rc);
+			print_error("Failed to fetch recx: "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
 
 		rc = vos_iter_copy(ih, &ent, &iov_out);
 		if (rc != 0) {
-			print_error("Failed to copy recx: %d\n", rc);
+			print_error("Failed to copy recx: "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
 
@@ -309,7 +311,8 @@ io_recx_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 
 		rc = vos_iter_next(ih);
 		if (rc != 0 && rc != -DER_NONEXIST) {
-			print_error("Failed to move cursor: %d\n", rc);
+			print_error("Failed to move cursor: "DF_RC"\n",
+				DP_RC(rc));
 			goto out;
 		}
 	}
@@ -332,7 +335,8 @@ io_akey_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 	param->ip_dkey = *dkey;
 	rc = vos_iter_prepare(VOS_ITER_AKEY, param, &ih);
 	if (rc != 0) {
-		print_error("Failed to create akey iterator: %d\n", rc);
+		print_error("Failed to create akey iterator: "DF_RC"\n",
+			DP_RC(rc));
 		goto out;
 	}
 
@@ -342,7 +346,8 @@ io_akey_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 		goto out;
 	}
 	if (rc != 0) {
-		print_error("Failed to set iterator cursor: %d\n", rc);
+		print_error("Failed to set iterator cursor: "DF_RC"\n",
+			DP_RC(rc));
 		goto out;
 	}
 
@@ -351,7 +356,7 @@ io_akey_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 
 		rc = vos_iter_fetch(ih, &ent, NULL);
 		if (rc != 0) {
-			print_error("Failed to fetch akey: %d\n", rc);
+			print_error("Failed to fetch akey: "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
 
@@ -373,7 +378,8 @@ io_akey_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 		nr++;
 		rc = vos_iter_next(ih);
 		if (rc != 0 && rc != -DER_NONEXIST) {
-			print_error("Failed to move cursor: %d\n", rc);
+			print_error("Failed to move cursor: "DF_RC"\n",
+				DP_RC(rc));
 			goto out;
 		}
 	}
@@ -437,7 +443,7 @@ io_obj_iter_test(struct io_test_args *arg, daos_epoch_range_t *epr,
 		}
 
 		if (rc != 0) {
-			print_error("Failed to fetch dkey: %d\n", rc);
+			print_error("Failed to fetch dkey: "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
 
@@ -456,7 +462,8 @@ io_obj_iter_test(struct io_test_args *arg, daos_epoch_range_t *epr,
 		}
 
 		if (rc != 0) {
-			print_error("Failed to move cursor: %d\n", rc);
+			print_error("Failed to move cursor: "DF_RC"\n",
+				DP_RC(rc));
 			goto out;
 		}
 
@@ -505,7 +512,7 @@ io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch,
 		rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, epoch,
 				    0, dkey, 1, iod, sgl);
 		if (rc != 0 && verbose)
-			print_error("Failed to update: %d\n", rc);
+			print_error("Failed to update: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 	/* Punch can't be zero copy */
@@ -515,7 +522,8 @@ io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch,
 			      1, iod, &ioh, dth);
 	if (rc != 0) {
 		if (verbose && rc != -DER_INPROGRESS)
-			print_error("Failed to prepare ZC update: %d\n", rc);
+			print_error("Failed to prepare ZC update: "DF_RC"\n",
+				DP_RC(rc));
 		return rc;
 	}
 
@@ -539,7 +547,7 @@ io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch,
 end:
 	rc = vos_update_end(ioh, 0, dkey, rc, dth);
 	if (rc != 0 && verbose && rc != -DER_INPROGRESS)
-		print_error("Failed to submit ZC update: %d\n", rc);
+		print_error("Failed to submit ZC update: "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -562,7 +570,7 @@ io_test_obj_fetch(struct io_test_args *arg, daos_epoch_t epoch,
 				   arg->oid, epoch, dkey, 1, iod,
 				   sgl);
 		if (rc != 0 && verbose)
-			print_error("Failed to fetch: %d\n", rc);
+			print_error("Failed to fetch: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -570,7 +578,8 @@ io_test_obj_fetch(struct io_test_args *arg, daos_epoch_t epoch,
 			     1, iod, false, &ioh);
 	if (rc != 0) {
 		if (verbose && rc != -DER_INPROGRESS)
-			print_error("Failed to prepare ZC update: %d\n", rc);
+			print_error("Failed to prepare ZC update: "DF_RC"\n",
+				DP_RC(rc));
 		return rc;
 	}
 
@@ -596,7 +605,7 @@ io_test_obj_fetch(struct io_test_args *arg, daos_epoch_t epoch,
 end:
 	rc = vos_fetch_end(ioh, rc);
 	if (rc != 0 && verbose && rc != -DER_INPROGRESS)
-		print_error("Failed to submit ZC update: %d\n", rc);
+		print_error("Failed to submit ZC update: "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -1291,7 +1300,8 @@ io_oid_iter_test(struct io_test_args *arg)
 
 	rc = vos_iter_probe(ih, NULL);
 	if (rc != 0) {
-		print_error("Failed to set iterator cursor: %d\n", rc);
+		print_error("Failed to set iterator cursor: "DF_RC"\n",
+			DP_RC(rc));
 		goto out;
 	}
 
@@ -1306,7 +1316,8 @@ io_oid_iter_test(struct io_test_args *arg)
 		}
 
 		if (rc != 0) {
-			print_error("Failed to fetch objid: %d\n", rc);
+			print_error("Failed to fetch objid: "DF_RC"\n",
+				DP_RC(rc));
 			goto out;
 		}
 
@@ -1319,7 +1330,8 @@ io_oid_iter_test(struct io_test_args *arg)
 			break;
 
 		if (rc != 0) {
-			print_error("Failed to move cursor: %d\n", rc);
+			print_error("Failed to move cursor: "DF_RC"\n",
+				DP_RC(rc));
 			goto out;
 		}
 
@@ -1329,14 +1341,16 @@ io_oid_iter_test(struct io_test_args *arg)
 		rc = vos_iter_fetch(ih, &ent, &anchor);
 		if (rc != 0) {
 			assert_true(rc != -DER_NONEXIST);
-			print_error("Failed to fetch anchor: %d\n", rc);
+			print_error("Failed to fetch anchor: "DF_RC"\n",
+				DP_RC(rc));
 			goto out;
 		}
 
 		rc = vos_iter_probe(ih, &anchor);
 		if (rc != 0) {
 			assert_true(rc != -DER_NONEXIST);
-			print_error("Failed to probe anchor: %d\n", rc);
+			print_error("Failed to probe anchor: "DF_RC"\n",
+				DP_RC(rc));
 			goto out;
 		}
 	}
@@ -1515,14 +1529,14 @@ io_simple_one_key_cross_container(void **state)
 	uuid_generate_time_safe(arg->addn_co_uuid);
 	rc = vos_cont_create(arg->ctx.tc_po_hdl, arg->addn_co_uuid);
 	if (rc) {
-		print_error("vos container creation error: %d\n", rc);
+		print_error("vos container creation error: "DF_RC"\n", DP_RC(rc));
 		return;
 	}
 
 	rc = vos_cont_open(arg->ctx.tc_po_hdl, arg->addn_co_uuid,
 			   &arg->addn_co);
 	if (rc) {
-		print_error("vos container open error: %d\n", rc);
+		print_error("vos container open error: "DF_RC"\n", DP_RC(rc));
 		goto failed;
 	}
 
@@ -1559,14 +1573,14 @@ io_simple_one_key_cross_container(void **state)
 	rc  = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, epoch,
 			     0, &dkey, 1, &iod, &sgl);
 	if (rc) {
-		print_error("Failed to update %d\n", rc);
+		print_error("Failed to update "DF_RC"\n", DP_RC(rc));
 		goto failed;
 	}
 
 	rc = vos_obj_update(arg->addn_co, l_oid, epoch, 0, &dkey, 1, &iod,
 			    &sgl);
 	if (rc) {
-		print_error("Failed to update %d\n", rc);
+		print_error("Failed to update "DF_RC"\n", DP_RC(rc));
 		goto failed;
 	}
 
@@ -1705,7 +1719,7 @@ io_sgl_update(void **state)
 	daos_sgl_fini(&sgl, true);
 
 	if (rc) {
-		print_error("Failed to update: %d\n", rc);
+		print_error("Failed to update: "DF_RC"\n", DP_RC(rc));
 		goto exit;
 	}
 	inc_cntr(arg->ta_flags);
@@ -1719,7 +1733,7 @@ io_sgl_update(void **state)
 	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, arg->oid, 1, &dkey, 1, &iod,
 				&sgl);
 	if (rc) {
-		print_error("Failed to fetch: %d\n", rc);
+		print_error("Failed to fetch: "DF_RC"\n", DP_RC(rc));
 		goto exit;
 	}
 	daos_sgl_fini(&sgl, false);

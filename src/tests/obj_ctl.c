@@ -258,7 +258,8 @@ ctl_daos_list(struct dts_io_credit *cred)
 		}
 
 		if (rc) {
-			fprintf(stderr, "Failed to list keys: %d\n", rc);
+			fprintf(stderr, "Failed to list keys: "DF_RC"\n",
+				DP_RC(rc));
 			return rc;
 		}
 
@@ -471,7 +472,8 @@ out:
 
 	switch (rc) {
 	case -2: /* real failure */
-		D_PRINT("Operation failed, rc=%d\n", rc);
+		D_PRINT("Operation failed, rc="DF_RC"\n",
+			DP_RC(rc));
 		break;
 
 	case -1: /* invalid input */
@@ -533,7 +535,8 @@ main(int argc, char **argv)
 
 	rc = dts_ctx_init(&ctl_ctx);
 	if (rc != 0) {
-		fprintf(stderr, "Failed to initialize utility: %d\n", rc);
+		fprintf(stderr, "Failed to initialize utility: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 

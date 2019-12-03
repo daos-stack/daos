@@ -114,7 +114,7 @@ cont_iv_ent_init(struct ds_iv_key *iv_key, void *data,
 	uma.uma_id = UMEM_CLASS_VMEM;
 	rc = dbtree_create(DBTREE_CLASS_NV, 0, 4, &uma, NULL, &root_hdl);
 	if (rc != 0) {
-		D_ERROR("failed to create tree: %d\n", rc);
+		D_ERROR("failed to create tree: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -185,7 +185,8 @@ cont_iv_ent_destroy(d_sg_list_t *sgl)
 			rc = dbtree_iterate(*root_hdl, DAOS_INTENT_PUNCH, false,
 					    delete_iter_cb, NULL);
 			if (rc < 0) {
-				D_ERROR("dbtree iterate fails %d\n", rc);
+				D_ERROR("dbtree iterate fails "DF_RC"\n",
+					DP_RC(rc));
 				return rc;
 			}
 		}
@@ -311,7 +312,7 @@ again:
 				rc = -DER_NONEXIST;
 			}
 		}
-		D_DEBUG(DB_MGMT, "lookup cont: rc %d\n", rc);
+		D_DEBUG(DB_MGMT, "lookup cont: rc "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -379,7 +380,7 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	}
 
 	if (rc < 0)
-		D_ERROR("failed to insert: rc %d\n", rc);
+		D_ERROR("failed to insert: rc "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -490,8 +491,8 @@ cont_iv_fetch(void *ns, int class_id, uuid_t key_uuid,
 	civ_key->class_id = class_id;
 	rc = ds_iv_fetch(ns, &key, cont_iv ? &sgl : NULL);
 	if (rc)
-		D_ERROR(DF_UUID" iv fetch failed %d\n",
-			DP_UUID(key_uuid), rc);
+		D_ERROR(DF_UUID" iv fetch failed "DF_RC"\n",
+			DP_UUID(key_uuid), DP_RC(rc));
 
 	return rc;
 }
@@ -521,7 +522,8 @@ cont_iv_update(void *ns, int class_id, uuid_t key_uuid,
 	civ_key->class_id = class_id;
 	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0);
 	if (rc)
-		D_ERROR(DF_UUID" iv update failed %d\n", DP_UUID(key_uuid), rc);
+		D_ERROR(DF_UUID" iv update failed "DF_RC"\n", DP_UUID(key_uuid),
+			DP_RC(rc));
 
 	return rc;
 }
@@ -705,7 +707,7 @@ cont_iv_capability_invalidate(void *ns, uuid_t cont_hdl_uuid)
 	key.class_id = IV_CONT_CAPA;
 	rc = ds_iv_invalidate(ns, &key, 0, CRT_IV_SYNC_NONE, 0);
 	if (rc)
-		D_ERROR("iv invalidate failed %d\n", rc);
+		D_ERROR("iv invalidate failed "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -911,20 +913,20 @@ cont_iv_prop_fetch_ult(void *data)
 	rc = cont_iv_fetch(arg->iv_ns, IV_CONT_PROP, arg->cont_hdl_uuid,
 			   iv_entry, iv_entry_size);
 	if (rc) {
-		D_ERROR("cont_iv_fetch failed %d.\n", rc);
+		D_ERROR("cont_iv_fetch failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
 	D_ASSERT(prop != NULL);
 	rc = cont_iv_prop_g2l(&iv_entry->iv_prop, prop_fetch);
 	if (rc) {
-		D_ERROR("cont_iv_prop_g2l failed %d.\n", rc);
+		D_ERROR("cont_iv_prop_g2l failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
 	rc = daos_prop_copy(prop, prop_fetch);
 	if (rc) {
-		D_ERROR("daos_prop_copy failed %d.\n", rc);
+		D_ERROR("daos_prop_copy failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 

@@ -112,7 +112,7 @@ cont_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 
 	rc = vos_dtx_table_create(pool, &cont_df->cd_dtx_table_df);
 	if (rc) {
-		D_ERROR("Failed to create DTX table: rc = %d\n", rc);
+		D_ERROR("Failed to create DTX table: rc = "DF_RC"\n", DP_RC(rc));
 		D_GOTO(failed, rc);
 	}
 
@@ -380,7 +380,8 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 			&cont->vc_cont_df->cd_dtx_table_df.tt_committed_btr,
 			&pool->vp_uma, &cont->vc_dtx_committed_hdl);
 	if (rc) {
-		D_ERROR("Failed to open committed DTX table: rc = %d\n", rc);
+		D_ERROR("Failed to open committed DTX table: rc = "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(exit, rc);
 	}
 
@@ -388,7 +389,8 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 			&cont->vc_cont_df->cd_dtx_table_df.tt_active_btr,
 			&pool->vp_uma, &cont->vc_dtx_active_hdl);
 	if (rc) {
-		D_ERROR("Failed to open active DTX table: rc = %d\n", rc);
+		D_ERROR("Failed to open active DTX table: rc = "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(exit, rc);
 	}
 
@@ -399,7 +401,8 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 				   &cont->vc_dtx_cos_btr,
 				   &cont->vc_dtx_cos_hdl);
 	if (rc != 0) {
-		D_ERROR("Failed to create DTX CoS btree: rc = %d\n", rc);
+		D_ERROR("Failed to create DTX CoS btree: rc = "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(exit, rc);
 	}
 
@@ -643,7 +646,7 @@ cont_iter_fini(struct vos_iterator *iter)
 	if (!daos_handle_is_inval(co_iter->cot_hdl)) {
 		rc = dbtree_iter_finish(co_iter->cot_hdl);
 		if (rc)
-			D_ERROR("co_iter_fini failed: %d\n", rc);
+			D_ERROR("co_iter_fini failed: "DF_RC"\n", DP_RC(rc));
 	}
 
 	if (co_iter->cot_pool != NULL)
@@ -708,7 +711,7 @@ cont_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 
 	rc = dbtree_iter_fetch(co_iter->cot_hdl, &key, &value, anchor);
 	if (rc != 0) {
-		D_ERROR("Error while fetching co info: %d\n", rc);
+		D_ERROR("Error while fetching co info: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 	D_ASSERT(value.iov_len == sizeof(struct cont_df_args));

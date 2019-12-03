@@ -434,7 +434,7 @@ tgt_create(uuid_t pool_uuid, uuid_t tgt_uuid, daos_size_t scm_size,
 
 	rc = mkdir(newborn, 0700);
 	if (rc < 0 && errno != EEXIST) {
-		D_ERROR("failed to created pool directory: %d\n", rc);
+		D_ERROR("failed to created pool directory: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc = daos_errno2der(errno));
 	}
 
@@ -446,14 +446,14 @@ tgt_create(uuid_t pool_uuid, uuid_t tgt_uuid, daos_size_t scm_size,
 	/** initialize DAOS-M target and fetch uuid */
 	rc = ds_pool_create(pool_uuid, newborn, tgt_uuid);
 	if (rc) {
-		D_ERROR("ds_pool_create failed, rc: %d.\n", rc);
+		D_ERROR("ds_pool_create failed, rc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_tree, rc);
 	}
 
 	/** ready for prime time, move away from NEWBORNS dir */
 	rc = rename(newborn, path);
 	if (rc < 0) {
-		D_ERROR("failed to rename pool directory: %d\n", rc);
+		D_ERROR("failed to rename pool directory: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_tree, rc = daos_errno2der(errno));
 	}
 
@@ -771,7 +771,7 @@ tgt_profile_task(void *arg)
 			break;
 	}
 
-	D_DEBUG(DB_MGMT, "profile task: rc %d\n", rc);
+	D_DEBUG(DB_MGMT, "profile task: rc "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
 
@@ -833,13 +833,13 @@ ds_mgmt_tgt_map_update_pre_forward(crt_rpc_t *rpc, void *arg)
 
 	rc = crt_group_rank(group, &self_rank);
 	if (rc != 0) {
-		D_DEBUG(DB_MGMT, "self rank unknown: %d\n", rc);
+		D_DEBUG(DB_MGMT, "self rank unknown: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
 	rc = crt_group_ranks_get(group, &ranks);
 	if (rc != 0) {
-		D_ERROR("failed to get existing ranks: %d\n", rc);
+		D_ERROR("failed to get existing ranks: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 

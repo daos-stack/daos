@@ -66,7 +66,7 @@ on_faulty(struct bio_blobstore *bbs)
 
 	rc = ract_ops->faulty_reaction(tgt_ids, tgt_cnt);
 	if (rc < 0)
-		D_ERROR("Faulty reaction failed. %d\n", rc);
+		D_ERROR("Faulty reaction failed. "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -117,7 +117,7 @@ unload_bs_cp(void *arg, int rc)
 	struct bio_blobstore *bbs = arg;
 
 	if (rc != 0)
-		D_ERROR("Failed to unload bs:%p, %d\n", bbs, rc);
+		D_ERROR("Failed to unload bs:%p, "DF_RC"\n", bbs, DP_RC(rc));
 	else
 		bbs->bb_bs = NULL;
 }
@@ -228,7 +228,8 @@ bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state)
 
 			rc = smd_dev_set_state(dev_id, dev_state);
 			if (rc)
-				D_ERROR("Set device state failed. %d\n", rc);
+				D_ERROR("Set device state failed. "DF_RC"\n",
+					DP_RC(rc));
 		}
 	}
 	ABT_mutex_unlock(bbs->bb_mutex);

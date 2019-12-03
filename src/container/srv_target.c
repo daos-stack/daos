@@ -121,8 +121,8 @@ cont_start_agg_ult(struct ds_cont_child *cont)
 	rc = dss_ult_create(ds_cont_aggregate_ult, cont,
 			    DSS_ULT_AGGREGATE, DSS_TGT_SELF, 0, NULL);
 	if (rc) {
-		D_ERROR(DF_UUID": Failed to create aggregation ULT; rc %d\n",
-			DP_UUID(cont->sc_uuid), rc);
+		D_ERROR(DF_UUID": Failed to create aggregation ULT; rc "DF_RC"\n",
+			DP_UUID(cont->sc_uuid), DP_RC(rc));
 		cont->sc_vos_aggregating = 0;
 		ds_cont_child_put(cont);
 	}
@@ -146,8 +146,8 @@ cont_stop_agg_ult(struct ds_cont_child *cont)
 	cont->sc_abort_vos_aggregating = 1;
 	rc = vos_cont_ctl(cont->sc_hdl, VOS_CO_CTL_ABORT_AGG);
 	if (rc)
-		D_ERROR(DF_UUID": Abort aggregation failed. %d\n",
-			DP_UUID(cont->sc_uuid), rc);
+		D_ERROR(DF_UUID": Abort aggregation failed. "DF_RC"\n",
+			DP_UUID(cont->sc_uuid), DP_RC(rc));
 
 	while (cont->sc_vos_aggregating)
 		ABT_thread_yield();
@@ -217,12 +217,12 @@ cont_child_lookup(struct daos_lru_cache *cache, const uuid_t uuid,
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D_DEBUG(DF_DSMS, DF_CONT": failed to lookup%s "
-				"container: %d\n", DP_CONT(NULL, uuid),
-				pool == NULL ? "" : "/create", rc);
+				"container: "DF_RC"\n", DP_CONT(NULL, uuid),
+				pool == NULL ? "" : "/create", DP_RC(rc));
 		else
-			D_ERROR(DF_CONT": failed to lookup%s container: %d\n",
+			D_ERROR(DF_CONT": failed to lookup%s container: "DF_RC"\n",
 				DP_CONT(NULL, uuid),
-				pool == NULL ? "" : "/create", rc);
+				pool == NULL ? "" : "/create", DP_RC(rc));
 		return rc;
 	}
 
@@ -484,12 +484,12 @@ ds_cont_lookup_create(const uuid_t uuid, void *arg, struct ds_cont **cont_p)
 	ABT_mutex_unlock(cont_cache_lock);
 	if (rc != 0) {
 		if (arg == NULL && rc == -DER_NONEXIST)
-			D_DEBUG(DF_DSMS, DF_UUID": pure lookup failed: %d\n",
-				DP_UUID(uuid), rc);
+			D_DEBUG(DF_DSMS, DF_UUID": pure lookup failed: "DF_RC"\n",
+				DP_UUID(uuid), DP_RC(rc));
 		else
-			D_ERROR(DF_UUID": failed to lookup%s: %d\n",
+			D_ERROR(DF_UUID": failed to lookup%s: "DF_RC"\n",
 				DP_UUID(uuid), arg == NULL ? "" : "/create",
-				rc);
+				DP_RC(rc));
 		return rc;
 	}
 
@@ -606,8 +606,8 @@ cont_child_destroy_one(void *vin)
 	 */
 	vos_pool_ctl(pool->spc_hdl, VOS_PO_CTL_VEA_FLUSH);
 	if (rc) {
-		D_ERROR(DF_CONT": VEA flush failed. %d\n",
-			DP_CONT(pool->spc_uuid, in->tdi_uuid), rc);
+		D_ERROR(DF_CONT": VEA flush failed. "DF_RC"\n",
+			DP_CONT(pool->spc_uuid, in->tdi_uuid), DP_RC(rc));
 		goto out_pool;
 	}
 out_pool:
@@ -628,9 +628,9 @@ ds_cont_tgt_destroy_handler(crt_rpc_t *rpc)
 
 	rc = dss_thread_collective(cont_child_destroy_one, in, 0);
 	out->tdo_rc = (rc == 0 ? 0 : 1);
-	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d "DF_RC"\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc, out->tdo_rc,
-		rc);
+		DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -745,8 +745,9 @@ ds_dtx_resync(void *arg)
 	if (rc != 0)
 		D_WARN("Fail to resync some DTX(s) for the pool/cont "
 		       DF_UUID"/"DF_UUID" that may affect subsequent "
-		       "operations: rc = %d.\n", DP_UUID(ddra->pool->spc_uuid),
-		       DP_UUID(ddra->co_uuid), rc);
+		       "operations: rc = "DF_RC".\n",
+		       DP_UUID(ddra->pool->spc_uuid),
+		       DP_UUID(ddra->co_uuid), DP_RC(rc));
 
 	ds_pool_child_put(ddra->pool);
 	D_FREE(ddra);
@@ -856,8 +857,8 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		rc = dtx_batched_commit_register(hdl);
 		if (rc != 0) {
 			D_ERROR("Failed to register the container "DF_UUID
-				" to the DTX batched commit list: rc = %d\n",
-				DP_UUID(cont_uuid), rc);
+				" to the DTX batched commit list: rc = "DF_RC"\n",
+				DP_UUID(cont_uuid), DP_RC(rc));
 			D_GOTO(err_cont, rc);
 		}
 
@@ -950,8 +951,8 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 	rc = ds_pool_get_failed_tgt_idx(pool_uuid, &coll_args.ca_exclude_tgts,
 					&coll_args.ca_exclude_tgts_cnt);
 	if (rc) {
-		D_ERROR(DF_UUID "failed to get index : rc %d\n",
-			DP_UUID(pool_uuid), rc);
+		D_ERROR(DF_UUID "failed to get index : rc "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
 		return rc;
 	}
 
@@ -966,9 +967,9 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		 * done by IV asynchronously, so this cont_open_one might return
 		 * -DER_NO_HDL if it can not find pool handle. (DAOS-3185)
 		 */
-		D_ERROR("open "DF_UUID"/"DF_UUID"/"DF_UUID":%d\n",
+		D_ERROR("open "DF_UUID"/"DF_UUID"/"DF_UUID":"DF_RC"\n",
 			DP_UUID(pool_uuid), DP_UUID(cont_uuid),
-			DP_UUID(cont_hdl_uuid), rc);
+			DP_UUID(cont_hdl_uuid), DP_RC(rc));
 		return rc;
 	}
 
@@ -1081,12 +1082,12 @@ ds_cont_tgt_close_handler(crt_rpc_t *rpc)
 	}
 
 	rc = dss_thread_collective(cont_close_one, in, 0);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 
 out:
 	out->tco_rc = (rc == 0 ? 0 : 1);
-	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
-		DP_CONT(NULL, NULL), rpc, out->tco_rc, rc);
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d "DF_RC"\n",
+		DP_CONT(NULL, NULL), rpc, out->tco_rc, DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -1134,18 +1135,18 @@ cont_query_one(void *vin)
 	rc = vos_cont_open(pool_child->spc_hdl, in->tqi_cont_uuid,
 			   &vos_chdl);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": Failed %s: %d",
+		D_ERROR(DF_CONT": Failed %s: "DF_RC"",
 			DP_CONT(in->tqi_pool_uuid, in->tqi_cont_uuid), opstr,
-			rc);
+			DP_RC(rc));
 		D_GOTO(ds_child, rc);
 	}
 
 	opstr = "Querying VOS container open handle\n";
 	rc = vos_cont_query(vos_chdl, &vos_cinfo);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": Failed :%s: %d",
+		D_ERROR(DF_CONT": Failed :%s: "DF_RC"",
 			DP_CONT(in->tqi_pool_uuid, in->tqi_cont_uuid), opstr,
-			rc);
+			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 	pack_args->xcq_hae = vos_cinfo.ci_hae;
@@ -1221,12 +1222,12 @@ ds_cont_tgt_query_handler(crt_rpc_t *rpc)
 
 	rc = dss_task_collective_reduce(&coll_ops, &coll_args, 0);
 
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	out->tqo_hae	= MIN(out->tqo_hae, pack_args.xcq_hae);
 	out->tqo_rc	= (rc == 0 ? 0 : 1);
 
-	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
-		DP_CONT(NULL, NULL), rpc, out->tqo_rc, rc);
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d "DF_RC"\n",
+		DP_CONT(NULL, NULL), rpc, out->tqo_rc, DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -1262,9 +1263,9 @@ cont_epoch_discard_one(void *vin)
 	if (rc > 0)	/* Aborted */
 		rc = -DER_CANCELED;
 
-	D_DEBUG(DB_EPC, DF_CONT": Discard epoch "DF_U64", hdl="DF_UUID": %d\n",
+	D_DEBUG(DB_EPC, DF_CONT": Discard epoch "DF_U64", hdl="DF_UUID": "DF_RC"\n",
 		DP_CONT(hdl->sch_pool->spc_uuid, hdl->sch_cont->sc_uuid),
-		in->tii_epoch, DP_UUID(in->tii_hdl), rc);
+		in->tii_epoch, DP_UUID(in->tii_hdl), DP_RC(rc));
 
 	cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
 	return rc;
@@ -1290,8 +1291,8 @@ ds_cont_tgt_epoch_discard_handler(crt_rpc_t *rpc)
 
 out:
 	out->tio_rc = (rc == 0 ? 0 : 1);
-	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
-		DP_CONT(NULL, NULL), rpc, out->tio_rc, rc);
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d "DF_RC"\n",
+		DP_CONT(NULL, NULL), rpc, out->tio_rc, DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -1389,9 +1390,9 @@ cont_snapshots_refresh_ult(void *data)
 	ds_pool_put(pool);
 out:
 	if (rc != 0)
-		D_WARN(DF_UUID": failed to refresh snapshots IV: rc %d;"
+		D_WARN(DF_UUID": failed to refresh snapshots IV: rc "DF_RC";"
 			" Aggregation may not work correctly\n",
-			DP_UUID(args->cont_uuid), rc);
+			DP_UUID(args->cont_uuid), DP_RC(rc));
 	D_FREE(args);
 }
 
@@ -1559,8 +1560,8 @@ ds_cont_aggregate_ult(void *arg)
 		if (rc > 0 || rc == -DER_SHUTDOWN) {
 			break;	/* aggregation aborted */
 		} else if (rc) {
-			D_ERROR(DF_UUID": VOS aggregate failed. %d\n",
-				DP_UUID(cont->sc_uuid), rc);
+			D_ERROR(DF_UUID": VOS aggregate failed. "DF_RC"\n",
+				DP_UUID(cont->sc_uuid), DP_RC(rc));
 		}
 
 		if (dss_xstream_exiting(dmi->dmi_xstream))
@@ -1608,9 +1609,9 @@ ds_cont_tgt_snapshot_notify_handler(crt_rpc_t *rpc)
 	uuid_copy(args.cont_uuid, in->tsi_cont_uuid);
 	out->tso_rc = dss_thread_collective(cont_snap_notify_one, &args, 0);
 	if (out->tso_rc != 0)
-		D_ERROR(DF_CONT": Snapshot notify failed: %d\n",
+		D_ERROR(DF_CONT": Snapshot notify failed: "DF_RC"\n",
 			DP_CONT(in->tsi_pool_uuid, in->tsi_cont_uuid),
-			out->tso_rc);
+			DP_RC(out->tso_rc));
 	crt_reply_send(rpc);
 }
 
@@ -1645,17 +1646,18 @@ ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc)
 		in->tai_epr_list.ca_arrays, in->tai_epr_list.ca_count);
 	/* Reply without waiting for the aggregation ULTs to finish. */
 	out->tao_rc = 0;
-	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: "DF_RC"\n",
 		DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rpc,
-		out->tao_rc);
+		DP_RC(out->tao_rc));
 	crt_reply_send(rpc);
 	if (out->tao_rc != 0)
 		return;
 
 	rc = dss_thread_collective(cont_epoch_aggregate_one, NULL, 0);
 	if (rc != 0)
-		D_ERROR(DF_CONT": Aggregation failed: %d\n",
-			DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rc);
+		D_ERROR(DF_CONT": Aggregation failed: "DF_RC"\n",
+			DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
+				DP_RC(rc));
 }
 
 int
@@ -1683,8 +1685,8 @@ ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, ds_iter_cb_t callback,
 
 	rc = vos_cont_open(ph, co_uuid, &coh);
 	if (rc != 0) {
-		D_ERROR("Open container "DF_UUID" failed: rc = %d\n",
-			DP_UUID(co_uuid), rc);
+		D_ERROR("Open container "DF_UUID" failed: rc = "DF_RC"\n",
+			DP_UUID(co_uuid), DP_RC(rc));
 		return rc;
 	}
 
@@ -1696,7 +1698,7 @@ ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, ds_iter_cb_t callback,
 
 	rc = vos_iter_prepare(type, &param, &iter_h);
 	if (rc != 0) {
-		D_ERROR("prepare obj iterator failed %d\n", rc);
+		D_ERROR("prepare obj iterator failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(close, rc);
 	}
 
@@ -1705,7 +1707,8 @@ ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, ds_iter_cb_t callback,
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 		else
-			D_ERROR("set iterator cursor failed: %d\n", rc);
+			D_ERROR("set iterator cursor failed: "DF_RC"\n",
+				DP_RC(rc));
 		D_GOTO(iter_fini, rc);
 	}
 
@@ -1718,7 +1721,7 @@ ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, ds_iter_cb_t callback,
 			if (rc == -DER_NONEXIST)
 				rc = 0;
 			else
-				D_ERROR("Fetch obj failed: %d\n", rc);
+				D_ERROR("Fetch obj failed: "DF_RC"\n", DP_RC(rc));
 			break;
 		}
 
@@ -1727,8 +1730,8 @@ ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, ds_iter_cb_t callback,
 
 		rc = callback(co_uuid, &ent, arg);
 		if (rc) {
-			D_DEBUG(DB_ANY, "iter "DF_UOID" rc %d\n",
-				DP_UOID(ent.ie_oid), rc);
+			D_DEBUG(DB_ANY, "iter "DF_UOID" rc "DF_RC"\n",
+				DP_UOID(ent.ie_oid), DP_RC(rc));
 			if (rc > 0)
 				rc = 0;
 			break;
@@ -1740,7 +1743,7 @@ ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, ds_iter_cb_t callback,
 			if (rc == -DER_NONEXIST)
 				rc = 0;
 			else
-				D_ERROR("Fetch obj failed: %d\n", rc);
+				D_ERROR("Fetch obj failed: "DF_RC"\n", DP_RC(rc));
 			break;
 		}
 	}
@@ -1785,9 +1788,9 @@ cont_oid_alloc(struct ds_pool_hdl *pool_hdl, crt_rpc_t *rpc)
 
 out:
 	out->coao_op.co_rc = rc;
-	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: "DF_RC"\n",
 		 DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid),
-		 rpc, rc);
+		 rpc, DP_RC(rc));
 
 	return rc;
 }
@@ -1814,9 +1817,9 @@ ds_cont_oid_alloc_handler(crt_rpc_t *rpc)
 	rc = cont_oid_alloc(pool_hdl, rpc);
 
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: hdl="DF_UUID
-		" opc=%u rc=%d\n",
+		" opc=%u rc="DF_RC"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc,
-		DP_UUID(in->ci_hdl), opc, rc);
+		DP_UUID(in->ci_hdl), opc, DP_RC(rc));
 
 	ds_pool_hdl_put(pool_hdl);
 out:

@@ -50,7 +50,7 @@ cp(tse_task_t *task, void *data)
 	int		 rc = task->dt_result;
 
 	if (rc)
-		D_ERROR("RPC error: %d\n", rc);
+		D_ERROR("RPC error: "DF_RC"\n", DP_RC(rc));
 
 	dc_mgmt_sys_detach(arg->sys);
 	crt_req_decref(arg->rpc);
@@ -71,7 +71,8 @@ dc_mgmt_svc_rip(tse_task_t *task)
 	args = dc_task_get_args(task);
 	rc = dc_mgmt_sys_attach(args->grp, &cp_arg.sys);
 	if (rc != 0) {
-		D_ERROR("failed to attach to grp %s, rc %d.\n", args->grp, rc);
+		D_ERROR("failed to attach to grp %s, rc "DF_RC".\n",
+			args->grp, DP_RC(rc));
 		rc = DER_INVAL;
 		goto out_task;
 	}
@@ -83,8 +84,8 @@ dc_mgmt_svc_rip(tse_task_t *task)
 			      DAOS_MGMT_VERSION);
 	rc = crt_req_create(daos_task2ctx(task), &svr_ep, opc, &rpc);
 	if (rc != 0) {
-		D_ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: %d.\n",
-			rc);
+		D_ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: "DF_RC".\n",
+			DP_RC(rc));
 		D_GOTO(err_grp, rc);
 	}
 
@@ -130,7 +131,8 @@ dc_mgmt_set_params(tse_task_t *task)
 	args = dc_task_get_args(task);
 	rc = dc_mgmt_sys_attach(args->grp, &cp_arg.sys);
 	if (rc != 0) {
-		D_ERROR("failed to attach to grp %s, rc %d.\n", args->grp, rc);
+		D_ERROR("failed to attach to grp %s, rc "DF_RC".\n", args->grp,
+			DP_RC(rc));
 		rc = -DER_INVAL;
 		goto out_task;
 	}
@@ -145,8 +147,8 @@ dc_mgmt_set_params(tse_task_t *task)
 			      DAOS_MGMT_VERSION);
 	rc = crt_req_create(daos_task2ctx(task), &ep, opc, &rpc);
 	if (rc != 0) {
-		D_ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: %d.\n",
-			rc);
+		D_ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: "DF_RC".\n",
+			DP_RC(rc));
 		D_GOTO(err_grp, rc);
 	}
 
@@ -194,7 +196,7 @@ dc_mgmt_profile(uint64_t modules, char *path, bool start)
 
 	rc = dc_mgmt_sys_attach(NULL, &sys);
 	if (rc != 0) {
-		D_ERROR("failed to attach to grp rc %d.\n", rc);
+		D_ERROR("failed to attach to grp rc "DF_RC"\n", DP_RC(rc));
 		return -DER_INVAL;
 	}
 
@@ -205,7 +207,7 @@ dc_mgmt_profile(uint64_t modules, char *path, bool start)
 			      DAOS_MGMT_VERSION);
 	rc = crt_req_create(daos_get_crt_ctx(), &ep, opc, &rpc);
 	if (rc != 0) {
-		D_ERROR("crt_req_create failed, rc: %d.\n", rc);
+		D_ERROR("crt_req_create failed, rc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_grp, rc);
 	}
 
@@ -217,7 +219,7 @@ dc_mgmt_profile(uint64_t modules, char *path, bool start)
 	/** send the request */
 	rc = daos_rpc_send_wait(rpc);
 err_grp:
-	D_DEBUG(DB_MGMT, "mgmt profile: rc %d\n", rc);
+	D_DEBUG(DB_MGMT, "mgmt profile: rc "DF_RC"\n", DP_RC(rc));
 	dc_mgmt_sys_detach(sys);
 	return rc;
 }
@@ -234,7 +236,7 @@ dc_mgmt_add_mark(const char *mark)
 
 	rc = dc_mgmt_sys_attach(NULL, &sys);
 	if (rc != 0) {
-		D_ERROR("failed to attach to grp rc %d.\n", rc);
+		D_ERROR("failed to attach to grp rc "DF_RC"\n", DP_RC(rc));
 		return -DER_INVAL;
 	}
 
@@ -245,7 +247,7 @@ dc_mgmt_add_mark(const char *mark)
 			      DAOS_MGMT_VERSION);
 	rc = crt_req_create(daos_get_crt_ctx(), &ep, opc, &rpc);
 	if (rc != 0) {
-		D_ERROR("crt_req_create failed, rc: %d.\n", rc);
+		D_ERROR("crt_req_create failed, rc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_grp, rc);
 	}
 
@@ -255,7 +257,7 @@ dc_mgmt_add_mark(const char *mark)
 	/** send the request */
 	rc = daos_rpc_send_wait(rpc);
 err_grp:
-	D_DEBUG(DB_MGMT, "mgmt mark: rc %d\n", rc);
+	D_DEBUG(DB_MGMT, "mgmt mark: rc "DF_RC"\n", DP_RC(rc));
 	dc_mgmt_sys_detach(sys);
 	return rc;
 
@@ -318,7 +320,7 @@ get_attach_info(const char *name, int *npsrs, struct dc_mgmt_psr **psrs)
 	/* Make the GetAttachInfo call and get the response. */
 	rc = drpc_call(ctx, R_SYNC, dreq, &dresp);
 	if (rc != 0) {
-		D_ERROR("GetAttachInfo call failed: %d\n", rc);
+		D_ERROR("GetAttachInfo call failed: "DF_RC"\n", DP_RC(rc));
 		goto out_dreq;
 	}
 	if (dresp->status != DRPC__STATUS__SUCCESS) {
@@ -447,7 +449,8 @@ attach_group(const char *name, bool pmixless, int npsrs,
 	if (!pmixless) {
 		rc = crt_group_attach((char *)name, &group);
 		if (rc != 0) {
-			D_ERROR("failed to attach to group %s: %d\n", name, rc);
+			D_ERROR("failed to attach to group %s: "DF_RC"\n", name,
+				DP_RC(rc));
 			goto err;
 		}
 		goto out;
@@ -455,7 +458,7 @@ attach_group(const char *name, bool pmixless, int npsrs,
 
 	rc = crt_group_view_create((char *)name, &group);
 	if (rc != 0) {
-		D_ERROR("failed to create group %s: %d\n", name, rc);
+		D_ERROR("failed to create group %s: "DF_RC"\n", name, DP_RC(rc));
 		goto err;
 	}
 
@@ -497,7 +500,7 @@ detach_group(bool server, bool pmixless, crt_group_t *group)
 		else
 			rc = crt_group_view_destroy(group);
 	}
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 }
 
 static int
@@ -518,7 +521,7 @@ attach(const char *name, int npsrbs, struct psr_buf *psrbs,
 	}
 	D_INIT_LIST_HEAD(&sys->sy_link);
 	rc = snprintf(sys->sy_name, sizeof(sys->sy_name), "%s", name);
-	D_ASSERTF(rc >= 0, "%d\n", rc);
+	D_ASSERTF(rc >= 0, ""DF_RC"\n", DP_RC(rc));
 	if (rc >= sizeof(sys->sy_name)) {
 		D_ERROR("system name %s longer than %zu bytes\n", sys->sy_name,
 			sizeof(sys->sy_name) - 1);
@@ -761,7 +764,7 @@ dc_mgmt_init()
 	rc = daos_rpc_register(&mgmt_proto_fmt, MGMT_PROTO_CLI_COUNT,
 				NULL, DAOS_MGMT_MODULE);
 	if (rc != 0)
-		D_ERROR("failed to register mgmt RPCs: %d\n", rc);
+		D_ERROR("failed to register mgmt RPCs: "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }

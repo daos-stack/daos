@@ -47,14 +47,15 @@ pool_create_cp(tse_task_t *task, void *data)
 	int				 rc = task->dt_result;
 
 	if (rc) {
-		D_ERROR("RPC error while creating pool: %d\n", rc);
+		D_ERROR("RPC error while creating pool: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
 	pc_out = crt_reply_get(arg->rpc);
 	rc = pc_out->pc_rc;
 	if (rc) {
-		D_ERROR("MGMT_POOL_CREATE replied failed, rc: %d\n", rc);
+		D_ERROR("MGMT_POOL_CREATE replied failed, rc: "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -270,14 +271,15 @@ pool_destroy_cp(tse_task_t *task, void *data)
 	int				 rc = task->dt_result;
 
 	if (rc) {
-		D_ERROR("RPC error while destroying pool: %d\n", rc);
+		D_ERROR("RPC error while destroying pool: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
 	pd_out = crt_reply_get(arg->rpc);
 	rc = pd_out->pd_rc;
 	if (rc) {
-		D_ERROR("MGMT_POOL_DESTROY replied failed, rc: %d\n", rc);
+		D_ERROR("MGMT_POOL_DESTROY replied failed, rc: "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -374,7 +376,7 @@ mgmt_list_pools_cp(tse_task_t *task, void *data)
 	arg = (struct mgmt_list_pools_arg *)data;
 
 	if (rc) {
-		D_ERROR("RPC error while listing pools: %d\n", rc);
+		D_ERROR("RPC error while listing pools: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -382,7 +384,8 @@ mgmt_list_pools_cp(tse_task_t *task, void *data)
 	D_ASSERT(pc_out != NULL);
 	rc = pc_out->lp_rc;
 	if (rc) {
-		D_ERROR("MGMT_POOL_CREATE replied failed, rc: %d\n", rc);
+		D_ERROR("MGMT_POOL_CREATE replied failed, rc: "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 

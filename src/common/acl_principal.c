@@ -24,7 +24,7 @@
  * daos_acl: This file contains functions related to working with the principals
  * from Access Control Lists.
  */
-
+#include <daos/common.h>
 #include <daos_security.h>
 #include <gurt/common.h>
 #include <pwd.h>
@@ -158,7 +158,7 @@ daos_acl_uid_to_principal(uid_t uid, char **name)
 	if (rc == -DER_NOMEM)
 		D_GOTO(out, rc);
 	if (rc != 0) {
-		D_ERROR("Error from getpwuid_r: %d\n", rc);
+		D_ERROR("Error from getpwuid_r: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc = d_errno2der(rc));
 	}
 
@@ -191,7 +191,7 @@ daos_acl_gid_to_principal(gid_t gid, char **name)
 	if (rc == -DER_NOMEM)
 		D_GOTO(out, rc);
 	if (rc != 0) {
-		D_ERROR("Error from getgrgid_r: %d\n", rc);
+		D_ERROR("Error from getgrgid_r: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc = d_errno2der(rc));
 	}
 
@@ -256,7 +256,7 @@ daos_acl_principal_to_uid(const char *principal, uid_t *uid)
 	if (rc == -DER_NOMEM)
 		D_GOTO(out, rc);
 	if (rc != 0) {
-		D_ERROR("Error from getpwnam_r: %d\n", rc);
+		D_ERROR("Error from getpwnam_r: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc = d_errno2der(rc));
 	}
 
@@ -294,7 +294,7 @@ daos_acl_principal_to_gid(const char *principal, gid_t *gid)
 	if (rc == -DER_NOMEM)
 		D_GOTO(out, rc);
 	if (rc != 0) {
-		D_ERROR("Error from getgrnam_r: %d\n", rc);
+		D_ERROR("Error from getgrnam_r: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc = d_errno2der(rc));
 	}
 

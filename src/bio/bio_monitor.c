@@ -172,7 +172,8 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 					   get_spdk_err_log_page_completion,
 					   dev_health);
 	if (rc) {
-		D_ERROR("NVMe admin passthru (error log), rc:%d\n", rc);
+		D_ERROR("NVMe admin passthru (error log), "DF_RC"\n",
+			DP_RC(rc));
 		dev_health->bdh_inflights--;
 	}
 
@@ -244,7 +245,8 @@ get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 					   get_spdk_identify_ctrlr_completion,
 					   dev_health);
 	if (rc) {
-		D_ERROR("NVMe admin passthru (identify ctrlr), rc:%d\n", rc);
+		D_ERROR("NVMe admin passthru (identify ctrlr), "DF_RC"\n",
+			DP_RC(rc));
 		dev_health->bdh_inflights--;
 	}
 
@@ -327,7 +329,8 @@ collect_raw_health_data(struct bio_dev_health *dev_health)
 					   get_spdk_log_page_completion,
 					   dev_health);
 	if (rc) {
-		D_ERROR("NVMe admin passthru (health log), rc:%d\n", rc);
+		D_ERROR("NVMe admin passthru (health log), "DF_RC"\n",
+			DP_RC(rc));
 		dev_health->bdh_inflights--;
 	}
 }

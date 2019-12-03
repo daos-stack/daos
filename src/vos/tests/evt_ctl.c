@@ -170,7 +170,8 @@ ts_open_create(void **state)
 	}
 
 	if (rc != 0) {
-		D_PRINT("Tree %s failed: %d\n", create ? "create" : "open", rc);
+		D_PRINT("Tree %s failed: "DF_RC"\n", create ? "create" : "open",
+			DP_RC(rc));
 		fail();
 	}
 }
@@ -198,8 +199,8 @@ ts_close_destroy(void **state)
 
 	ts_toh = DAOS_HDL_INVAL;
 	if (rc != 0) {
-		D_PRINT("Tree %s failed: %d\n",
-			destroy ? "destroy" : "close", rc);
+		D_PRINT("Tree %s failed: "DF_RC"\n",
+			destroy ? "destroy" : "close", DP_RC(rc));
 		fail();
 	}
 }
@@ -343,7 +344,7 @@ ts_add_rect(void **state)
 
 	rc = ts_parse_rect(arg, &entry.ei_rect, NULL, &val, &should_pass);
 	if (rc != 0) {
-		D_PRINT("Parsing tree failure %d\n", rc);
+		D_PRINT("Parsing tree failure "DF_RC"\n", DP_RC(rc));
 		fail();
 	}
 	D_PRINT("Insert "DF_RECT": val=%s expect_pass=%s (total in tree=%d)\n",
@@ -365,7 +366,7 @@ ts_add_rect(void **state)
 		total_added++;
 	if (should_pass) {
 		if (rc != 0)
-			D_FATAL("Add rect failed %d\n", rc);
+			D_FATAL("Add rect failed "DF_RC"\n", DP_RC(rc));
 	} else {
 		if (rc == 0) {
 			D_FATAL("Add rect should have failed\n");
@@ -406,7 +407,7 @@ ts_delete_rect(void **state)
 
 	if (should_pass) {
 		if (rc != 0) {
-			D_FATAL("Delete rect failed %d\n", rc);
+			D_FATAL("Delete rect failed "DF_RC"\n", DP_RC(rc));
 		} else if (evt_rect_width(&rect) !=
 			   evt_extent_width(&ent.en_sel_ext)) {
 			rc = 1;
@@ -450,7 +451,7 @@ ts_find_rect(void **state)
 	evt_ent_array_init(&ent_array);
 	rc = evt_find(ts_toh, &epr, &rect.rc_ex, &ent_array);
 	if (rc != 0)
-		D_FATAL("Add rect failed %d\n", rc);
+		D_FATAL("Add rect failed "DF_RC"\n", DP_RC(rc));
 
 	evt_ent_array_for_each(ent, &ent_array) {
 		bool punched;
@@ -542,7 +543,7 @@ ts_list_rect(void **state)
 start:
 	rc = evt_iter_prepare(ts_toh, options, &filter, &ih);
 	if (rc != 0) {
-		D_PRINT("Failed to prepare iterator: %d\n", rc);
+		D_PRINT("Failed to prepare iterator: "DF_RC"\n", DP_RC(rc));
 		fail();
 	}
 
@@ -551,7 +552,7 @@ start:
 		D_GOTO(out, rc = 0);
 
 	if (rc != 0) {
-		D_PRINT("Failed to probe: %d\n", rc);
+		D_PRINT("Failed to probe: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -704,7 +705,7 @@ ts_many_add(void **state)
 
 		rc = evt_insert(ts_toh, &entry);
 		if (rc != 0) {
-			D_FATAL("Add rect %d failed %d\n", i, rc);
+			D_FATAL("Add rect %d failed "DF_RC"\n", i, DP_RC(rc));
 			fail();
 		}
 	}
@@ -1150,7 +1151,7 @@ test_evt_iter_flags(void **state)
 				sizeof(int));
 
 		}
-		print_message("RC: %d\n", rc);
+		print_message("RC: "DF_RC"\n", DP_RC(rc));
 		if (rc != 0)
 			goto finish;
 		rc = evt_iter_finish(ih);
@@ -1378,7 +1379,7 @@ test_evt_find_internal(void **state)
 		evt_ent_array_init(&ent_array);
 		rc = evt_find(toh, &epr, &extent, &ent_array);
 		if (rc != 0)
-			D_FATAL("Find rect failed %d\n", rc);
+			D_FATAL("Find rect failed "DF_RC"\n", DP_RC(rc));
 		evt_ent_array_for_each(ent, &ent_array) {
 			bool punched;
 			static char buf[10];
@@ -1625,7 +1626,8 @@ test_evt_various_data_size_internal(void **state)
 				epr.epr_hi = epoch;
 				rc = evt_find(toh, &epr, &extent, &ent_array);
 				if (rc != 0)
-					D_FATAL("Find rect failed %d\n", rc);
+					D_FATAL("Find rect failed "DF_RC"\n",
+						DP_RC(rc));
 				evt_ent_array_for_each(ent, &ent_array) {
 					static char *actual;
 
@@ -2394,7 +2396,7 @@ ts_cmd_run(char opc, char *args)
 		break;
 	}
 	if (rc != 0)
-		D_PRINT("opc=%d failed with rc=%d\n", opc, rc);
+		D_PRINT("opc=%d failed with rc="DF_RC"\n", opc, DP_RC(rc));
 
 	return rc;
 }

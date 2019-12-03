@@ -463,7 +463,7 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent)
 			      &ent->ie_key, 0, vos_iter_intent(&oiter->it_iter),
 			      NULL, &toh);
 	if (rc != 0) {
-		D_DEBUG(DB_IO, "can't load the akey tree: %d\n", rc);
+		D_DEBUG(DB_IO, "can't load the akey tree: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -499,7 +499,7 @@ key_iter_match_probe(struct vos_obj_iter *oiter)
 		switch (rc) {
 		default:
 			D_ASSERT(rc < 0);
-			D_ERROR("match failed, rc=%d\n", rc);
+			D_ERROR("match failed, rc="DF_RC"\n", DP_RC(rc));
 			goto out;
 
 		case IT_OPC_NOOP:
@@ -916,7 +916,8 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 	rc = evt_iter_prepare(rx_toh, options, &filter,
 			      &oiter->it_hdl);
 	if (rc != 0) {
-		D_DEBUG(DB_IO, "Cannot prepare recx iterator : %d\n", rc);
+		D_DEBUG(DB_IO, "Cannot prepare recx iterator : "DF_RC"\n",
+			DP_RC(rc));
 	}
 	key_tree_release(rx_toh, true);
  failed:
@@ -1130,7 +1131,7 @@ vos_obj_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
 
 	if (rc != 0) {
 		D_DEBUG(DB_TRACE, "Failed to fetch and initialize cursor "
-			"subtree: rc=%d\n", rc);
+			"subtree: rc="DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -1230,7 +1231,7 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 					vos_obj2pool(obj), &toh);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to open tree for iterator:"
-				" rc = %d\n", rc);
+				" rc = "DF_RC"\n", DP_RC(rc));
 			goto failed;
 		}
 		rc = dbtree_iter_prepare(toh, BTR_ITER_EMBEDDED,
@@ -1243,7 +1244,7 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		rc = evt_open(info->ii_evt, info->ii_uma, &cbs, &toh);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to open tree for iterator:"
-				" rc = %d\n", rc);
+				" rc = "DF_RC"\n", DP_RC(rc));
 			goto failed;
 		}
 		filter.fr_ex.ex_lo = 0;
@@ -1257,7 +1258,8 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 	key_tree_release(toh, type == VOS_ITER_RECX);
 
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "Failed to prepare iterator: rc = %d\n", rc);
+		D_DEBUG(DB_TRACE, "Failed to prepare iterator: rc = "DF_RC"\n",
+			DP_RC(rc));
 		goto failed;
 	}
 
@@ -1413,7 +1415,7 @@ obj_iter_delete(struct vos_obj_iter *oiter, void *args)
 	rc = vos_tx_end(umm, rc);
 exit:
 	if (rc != 0)
-		D_ERROR("Failed to delete iter entry: %d\n", rc);
+		D_ERROR("Failed to delete iter entry: "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
 

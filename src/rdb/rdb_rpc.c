@@ -397,7 +397,7 @@ rdb_raft_rpc_cb(const struct crt_cb_info *cb_info)
 	int			rc;
 
 	rc = crt_req_dst_rank_get(rrpc->drc_rpc, &dstrank);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 
 	rc = cb_info->cci_rc;
 	D_DEBUG(DB_MD, DF_DB": opc=%u rank=%u rtt=%f\n", DP_DB(db), opc,
@@ -405,9 +405,9 @@ rdb_raft_rpc_cb(const struct crt_cb_info *cb_info)
 	ABT_mutex_lock(db->d_mutex);
 	if (rc != 0 || db->d_stop) {
 		if (rc != -DER_CANCELED)
-			D_ERROR(DF_DB": RPC %x to rank %u failed: %d\n",
+			D_ERROR(DF_DB": RPC %x to rank %u failed: "DF_RC"\n",
 				DP_DB(rrpc->drc_db), opc,
-				dstrank, rc);
+				dstrank, DP_RC(rc));
 		/*
 		 * Drop this RPC, assuming that raft will make a new one. If we
 		 * are stopping, rdb_recvd() might have already stopped. Hence,
@@ -451,12 +451,12 @@ rdb_send_raft_rpc(crt_rpc_t *rpc, struct rdb *db)
 		timeout = timeout_min;
 #if 0
 	rc = crt_req_set_timeout(rpc, timeout);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 #endif
 	rrpc->drc_sent = ABT_get_wtime();
 
 	rc = crt_req_send(rpc, rdb_raft_rpc_cb, rrpc);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 	return 0;
 }
 
@@ -476,10 +476,10 @@ rdb_abort_raft_rpcs(struct rdb *db)
 			int		rc2;
 
 			rc2 = crt_req_dst_rank_get(rrpc->drc_rpc, &dstrank);
-			D_ASSERTF(rc2 == 0, "%d\n", rc2);
-			D_ERROR(DF_DB": failed to abort %x to rank %u: %d\n",
+			D_ASSERTF(rc2 == 0, ""DF_RC"\n", DP_RC(rc2));
+			D_ERROR(DF_DB": failed to abort %x to rank %u: "DF_RC"\n",
 				DP_DB(rrpc->drc_db), rrpc->drc_rpc->cr_opc,
-				dstrank, rc);
+				dstrank, DP_RC(rc));
 			return rc;
 		}
 	}

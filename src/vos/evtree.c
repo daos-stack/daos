@@ -876,7 +876,8 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 
 	rc = umem_class_init(uma, &tcx->tc_umm);
 	if (rc != 0) {
-		D_ERROR("Failed to setup mem class %d: %d\n", uma->uma_id, rc);
+		D_ERROR("Failed to setup mem class %d: "DF_RC"\n", uma->uma_id,
+			DP_RC(rc));
 		D_GOTO(failed, rc);
 	}
 
@@ -926,7 +927,7 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 	return 0;
 
  failed:
-	V_TRACE(DB_TRACE, "Failed to create tree context: %d\n", rc);
+	V_TRACE(DB_TRACE, "Failed to create tree context: "DF_RC"\n", DP_RC(rc));
 	evt_tcx_decref(tcx);
 	return rc;
 }
@@ -1609,7 +1610,8 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
 
 		rc = evt_node_split(tcx, leaf, nd_cur, nd_new);
 		if (rc != 0) {
-			V_TRACE(DB_TRACE, "Failed to split node: %d\n", rc);
+			V_TRACE(DB_TRACE, "Failed to split node: "DF_RC"\n",
+				DP_RC(rc));
 			D_GOTO(failed, rc);
 		}
 
@@ -1675,7 +1677,8 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new)
  out:
 	return 0;
  failed:
-	D_ERROR("Failed to insert entry to level %d: %d\n", level, rc);
+	D_ERROR("Failed to insert entry to level %d: "DF_RC"\n", level,
+		DP_RC(rc));
 	return rc;
 }
 

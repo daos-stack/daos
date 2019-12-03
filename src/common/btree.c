@@ -300,7 +300,8 @@ btr_context_create(umem_off_t root_off, struct btr_root *root,
 	rc = btr_class_init(root_off, root, tree_class, &tree_feats, uma,
 			    coh, priv, &tcx->tc_tins);
 	if (rc != 0) {
-		D_ERROR("Failed to setup mem class %d: %d\n", uma->uma_id, rc);
+		D_ERROR("Failed to setup mem class %d: "DF_RC"\n", uma->uma_id,
+			DP_RC(rc));
 		D_GOTO(failed, rc);
 	}
 
@@ -326,7 +327,7 @@ btr_context_create(umem_off_t root_off, struct btr_root *root,
 	return 0;
 
  failed:
-	D_DEBUG(DB_TRACE, "Failed to create tree context: %d\n", rc);
+	D_DEBUG(DB_TRACE, "Failed to create tree context: "DF_RC"\n", DP_RC(rc));
 	btr_context_decref(tcx);
 	return rc;
 }
@@ -1800,7 +1801,8 @@ btr_update(struct btr_context *tcx, d_iov_t *key, d_iov_t *val)
 	}
 
 	if (rc != 0) { /* failed */
-		D_DEBUG(DB_TRACE, "Failed to update record: %d\n", rc);
+		D_DEBUG(DB_TRACE, "Failed to update record: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 	return 0;
@@ -1823,7 +1825,8 @@ btr_insert(struct btr_context *tcx, d_iov_t *key, d_iov_t *val)
 
 	rc = btr_rec_alloc(tcx, key, val, rec);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "Failed to create new record: %d\n", rc);
+		D_DEBUG(DB_TRACE, "Failed to create new record: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 
@@ -1840,7 +1843,8 @@ btr_insert(struct btr_context *tcx, d_iov_t *key, d_iov_t *val)
 		rc = btr_node_insert_rec(tcx, trace, rec);
 		if (rc != 0) {
 			D_DEBUG(DB_TRACE,
-				"Failed to insert record to leaf: %d\n", rc);
+				"Failed to insert record to leaf: "DF_RC"\n",
+					DP_RC(rc));
 			return rc;
 		}
 
@@ -1850,7 +1854,8 @@ btr_insert(struct btr_context *tcx, d_iov_t *key, d_iov_t *val)
 
 		rc = btr_root_start(tcx, rec);
 		if (rc != 0) {
-			D_DEBUG(DB_TRACE, "Failed to start the tree: %d\n", rc);
+			D_DEBUG(DB_TRACE, "Failed to start the tree: "DF_RC"\n",
+				DP_RC(rc));
 			return rc;
 		}
 	}
@@ -1870,7 +1875,7 @@ btr_upsert(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 
 	switch (rc) {
 	default:
-		D_ASSERTF(false, "unknown returned value: %d\n", rc);
+		D_ASSERTF(false, "unknown returned value: "DF_RC"\n", DP_RC(rc));
 		break;
 
 	case PROBE_RC_OK:
@@ -2854,7 +2859,7 @@ btr_tree_alloc(struct btr_context *tcx)
 	int	rc;
 
 	rc = btr_root_alloc(tcx);
-	D_DEBUG(DB_TRACE, "Allocate tree root: %d\n", rc);
+	D_DEBUG(DB_TRACE, "Allocate tree root: "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -3632,7 +3637,7 @@ dbtree_iterate(daos_handle_t toh, uint32_t intent, bool backward,
 
 	rc = dbtree_iter_prepare(toh, 0 /* options */, &ih);
 	if (rc != 0) {
-		D_ERROR("failed to prepare tree iterator: %d\n", rc);
+		D_ERROR("failed to prepare tree iterator: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -3641,7 +3646,7 @@ dbtree_iterate(daos_handle_t toh, uint32_t intent, bool backward,
 	if (rc == -DER_NONEXIST) {
 		D_GOTO(out_iter, rc = 0);
 	} else if (rc != 0) {
-		D_ERROR("failed to initialize iterator: %d\n", rc);
+		D_ERROR("failed to initialize iterator: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_iter, rc);
 	}
 
@@ -3654,7 +3659,8 @@ dbtree_iterate(daos_handle_t toh, uint32_t intent, bool backward,
 
 		rc = dbtree_iter_fetch(ih, &key, &val, NULL /* anchor */);
 		if (rc != 0) {
-			D_ERROR("failed to fetch iterator: %d\n", rc);
+			D_ERROR("failed to fetch iterator: "DF_RC"\n",
+				DP_RC(rc));
 			break;
 		}
 
@@ -3679,7 +3685,7 @@ dbtree_iterate(daos_handle_t toh, uint32_t intent, bool backward,
 			rc = 0;
 			break;
 		} else if (rc != 0) {
-			D_ERROR("failed to move iterator: %d\n", rc);
+			D_ERROR("failed to move iterator: "DF_RC"\n", DP_RC(rc));
 			break;
 		}
 	}
@@ -3687,7 +3693,7 @@ dbtree_iterate(daos_handle_t toh, uint32_t intent, bool backward,
 out_iter:
 	dbtree_iter_finish(ih);
 out:
-	D_DEBUG(DB_TRACE, "iterated %d records: %d\n", niterated, rc);
+	D_DEBUG(DB_TRACE, "iterated %d records: "DF_RC"\n", niterated, DP_RC(rc));
 	return rc;
 }
 

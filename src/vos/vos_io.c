@@ -581,7 +581,8 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 		rc = akey_fetch_recx(toh, &val_epr, &iod->iod_recxs[i],
 				     daos_iod_csum(iod, i), &rsize, ioc);
 		if (rc != 0) {
-			D_DEBUG(DB_IO, "Failed to fetch index %d: %d\n", i, rc);
+			D_DEBUG(DB_IO, "Failed to fetch index %d: "DF_RC"\n", i,
+				DP_RC(rc));
 			goto out;
 		}
 
@@ -800,7 +801,7 @@ akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
 
 	rc = dbtree_update(toh, &kiov, &riov);
 	if (rc != 0)
-		D_ERROR("Failed to update subtree: %d\n", rc);
+		D_ERROR("Failed to update subtree: "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -1060,7 +1061,7 @@ vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
 
 	rc = vos_reserve(ioc, DAOS_MEDIA_SCM, scm_size, &off);
 	if (rc) {
-		D_ERROR("Reserve SCM for SV failed. %d\n", rc);
+		D_ERROR("Reserve SCM for SV failed. "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -1085,7 +1086,8 @@ vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
 	} else {
 		rc = vos_reserve(ioc, DAOS_MEDIA_NVME, size, &off);
 		if (rc) {
-			D_ERROR("Reserve NVMe for SV failed. %d\n", rc);
+			D_ERROR("Reserve NVMe for SV failed. "DF_RC"\n",
+				DP_RC(rc));
 			return rc;
 		}
 	}
@@ -1121,7 +1123,7 @@ vos_reserve_recx(struct vos_io_context *ioc, uint16_t media, daos_size_t size)
 	 */
 	rc = vos_reserve(ioc, media, size, &off);
 	if (rc) {
-		D_ERROR("Reserve recx failed. %d\n", rc);
+		D_ERROR("Reserve recx failed. "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 done:
@@ -1213,8 +1215,8 @@ vos_publish_blocks(struct vos_container *cont, d_list_t *blk_list, bool publish,
 	rc = publish ? vea_tx_publish(vsi, hint_ctxt, blk_list) :
 		       vea_cancel(vsi, hint_ctxt, blk_list);
 	if (rc)
-		D_ERROR("Error on %s NVMe reservations. %d\n",
-			publish ? "publish" : "cancel", rc);
+		D_ERROR("Error on %s NVMe reservations. "DF_RC"\n",
+			publish ? "publish" : "cancel", DP_RC(rc));
 
 	return rc;
 }
@@ -1403,14 +1405,16 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	rc = vos_update_begin(coh, oid, epoch, dkey, iod_nr, iods, &ioh, NULL);
 	if (rc) {
-		D_ERROR("Update "DF_UOID" failed %d\n", DP_UOID(oid), rc);
+		D_ERROR("Update "DF_UOID" failed "DF_RC"\n", DP_UOID(oid),
+			DP_RC(rc));
 		return rc;
 	}
 
 	if (sgls) {
 		rc = vos_obj_copy(vos_ioh2ioc(ioh), sgls, iod_nr);
 		if (rc)
-			D_ERROR("Copy "DF_UOID" failed %d\n", DP_UOID(oid), rc);
+			D_ERROR("Copy "DF_UOID" failed "DF_RC"\n", DP_UOID(oid),
+				DP_RC(rc));
 	}
 
 	rc = vos_update_end(ioh, pm_ver, dkey, rc, NULL);
@@ -1431,11 +1435,11 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (rc) {
 		if (rc == -DER_INPROGRESS)
 			D_DEBUG(DB_TRACE, "Cannot fetch "DF_UOID" because of "
-				"conflict modification: %d\n",
-				DP_UOID(oid), rc);
+				"conflict modification: "DF_RC"\n",
+				DP_UOID(oid), DP_RC(rc));
 		else
-			D_ERROR("Fetch "DF_UOID" failed %d\n",
-				DP_UOID(oid), rc);
+			D_ERROR("Fetch "DF_UOID" failed "DF_RC"\n",
+				DP_UOID(oid), DP_RC(rc));
 		return rc;
 	}
 
@@ -1456,8 +1460,8 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 		rc = vos_obj_copy(ioc, sgls, iod_nr);
 		if (rc)
-			D_ERROR("Copy "DF_UOID" failed %d\n",
-				DP_UOID(oid), rc);
+			D_ERROR("Copy "DF_UOID" failed "DF_RC"\n",
+				DP_UOID(oid), DP_RC(rc));
 	}
 
 	rc = vos_fetch_end(ioh, rc);

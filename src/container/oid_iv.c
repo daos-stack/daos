@@ -159,7 +159,8 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, struct ds_iv_key *iv_key,
 					   key->coh_uuid, num_oids,
 					   &avail->oid);
 		if (rc) {
-			D_ERROR("failed to fetch and update max_oid %d\n", rc);
+			D_ERROR("failed to fetch and update max_oid "DF_RC"\n",
+				DP_RC(rc));
 			D_GOTO(err_lock, rc);
 		}
 		oids->oid = avail->oid;
@@ -341,7 +342,7 @@ oid_iv_reserve(void *ns, uuid_t poh_uuid, uuid_t co_uuid,
 	rc = ds_iv_update(ns, &key, value, 0, CRT_IV_SYNC_NONE,
 			  CRT_IV_SYNC_BIDIRECTIONAL);
 	if (rc)
-		D_ERROR("iv update failed %d\n", rc);
+		D_ERROR("iv update failed "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
