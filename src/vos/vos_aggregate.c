@@ -959,8 +959,9 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 
 		rc = evt_delete(oiter->it_hdl, &rect, NULL);
 		if (rc) {
-			D_ERROR("Delete "DF_RECT" pe_off:"DF_U64" error: "DF_RC"\n",
-				DP_RECT(&rect), phy_ent->pe_off, DP_RC(rc));
+			D_ERROR("Delete "DF_RECT" pe_off:"DF_U64" error: "
+				""DF_RC"\n", DP_RECT(&rect), phy_ent->pe_off,
+				DP_RC(rc));
 			goto abort;
 		}
 
@@ -1479,8 +1480,8 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 
 			rc = evt_delete(oiter->it_hdl, &rect, NULL);
 			if (rc)
-				D_ERROR("Delete EV entry "DF_RECT" error: "DF_RC"\n",
-					DP_RECT(&rect), DP_RC(rc));
+				D_ERROR("Delete EV entry "DF_RECT" error: "
+					""DF_RC"\n", DP_RECT(&rect), DP_RC(rc));
 		}
 
 		/*

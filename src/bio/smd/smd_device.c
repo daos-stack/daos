@@ -102,7 +102,8 @@ smd_dev_assign(uuid_t dev_id, int tgt_id)
 	d_iov_set(&val, &key_dev, sizeof(key_dev));
 	rc = dbtree_update(smd_store.ss_tgt_hdl, &key, &val);
 	if (rc) {
-		D_ERROR("Update target %d failed. "DF_RC"\n", tgt_id, DP_RC(rc));
+		D_ERROR("Update target %d failed. "DF_RC"\n", tgt_id,
+			DP_RC(rc));
 		goto tx_end;
 	}
 tx_end:
@@ -239,7 +240,8 @@ smd_dev_get_by_tgt(int tgt_id, struct smd_dev_info **dev_info)
 			  DAOS_INTENT_DEFAULT, &key, NULL, &val);
 	if (rc) {
 		D_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MGMT,
-			 "Fetch target %d failed. "DF_RC"\n", tgt_id, DP_RC(rc));
+			 "Fetch target %d failed. "DF_RC"\n", tgt_id,
+			 DP_RC(rc));
 		goto out;
 	}
 

@@ -180,7 +180,8 @@ dtx_iter_delete(struct vos_iterator *iter, void *args)
 	rc = dbtree_iter_delete(oiter->oit_hdl, args);
 	if (rc != 0) {
 		umem_tx_abort(umm, rc);
-		D_ERROR("Failed to delete DTX entry: rc = "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Failed to delete DTX entry: rc = "DF_RC"\n",
+			DP_RC(rc));
 	} else {
 		umem_tx_commit(umm);
 	}

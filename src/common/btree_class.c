@@ -993,7 +993,8 @@ dbtree_ec_update(daos_handle_t tree, uint64_t epoch, const uint64_t *count)
 
 	rc = dbtree_update(tree, &key, &val);
 	if (rc != 0)
-		D_ERROR("failed to update "DF_U64": "DF_RC"\n", epoch, DP_RC(rc));
+		D_ERROR("failed to update "DF_U64": "DF_RC"\n", epoch,
+			DP_RC(rc));
 
 	return rc;
 }
@@ -1056,7 +1057,8 @@ dbtree_ec_delete(daos_handle_t tree, uint64_t epoch)
 	if (rc == -DER_NONEXIST)
 		D_DEBUG(DB_TRACE, "cannot find "DF_U64"\n", epoch);
 	else if (rc != 0)
-		D_ERROR("failed to delete "DF_U64": "DF_RC"\n", epoch, DP_RC(rc));
+		D_ERROR("failed to delete "DF_U64": "DF_RC"\n", epoch,
+			DP_RC(rc));
 
 	return rc;
 }

@@ -271,7 +271,8 @@ pool_destroy_cp(tse_task_t *task, void *data)
 	int				 rc = task->dt_result;
 
 	if (rc) {
-		D_ERROR("RPC error while destroying pool: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("RPC error while destroying pool: "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 

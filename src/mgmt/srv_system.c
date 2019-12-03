@@ -402,8 +402,8 @@ map_update_bcast(crt_context_t ctx, struct mgmt_svc *svc, uint32_t map_version,
 out_rpc:
 	crt_req_decref(rpc);
 out:
-	D_DEBUG(DB_MGMT, "leave: version=%u nservers=%d: "DF_RC"\n", map_version,
-		nservers, DP_RC(rc));
+	D_DEBUG(DB_MGMT, "leave: version=%u nservers=%d: "DF_RC"\n",
+		map_version, nservers, DP_RC(rc));
 	return rc;
 }
 

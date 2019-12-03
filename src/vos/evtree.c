@@ -927,7 +927,8 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 	return 0;
 
  failed:
-	V_TRACE(DB_TRACE, "Failed to create tree context: "DF_RC"\n", DP_RC(rc));
+	V_TRACE(DB_TRACE, "Failed to create tree context: "DF_RC"\n",
+		DP_RC(rc));
 	evt_tcx_decref(tcx);
 	return rc;
 }

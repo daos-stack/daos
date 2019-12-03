@@ -327,7 +327,8 @@ btr_context_create(umem_off_t root_off, struct btr_root *root,
 	return 0;
 
  failed:
-	D_DEBUG(DB_TRACE, "Failed to create tree context: "DF_RC"\n", DP_RC(rc));
+	D_DEBUG(DB_TRACE, "Failed to create tree context: "DF_RC"\n",
+		DP_RC(rc));
 	btr_context_decref(tcx);
 	return rc;
 }
@@ -1875,7 +1876,8 @@ btr_upsert(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 
 	switch (rc) {
 	default:
-		D_ASSERTF(false, "unknown returned value: "DF_RC"\n", DP_RC(rc));
+		D_ASSERTF(false, "unknown returned value: "DF_RC"\n",
+			DP_RC(rc));
 		break;
 
 	case PROBE_RC_OK:
@@ -3637,7 +3639,8 @@ dbtree_iterate(daos_handle_t toh, uint32_t intent, bool backward,
 
 	rc = dbtree_iter_prepare(toh, 0 /* options */, &ih);
 	if (rc != 0) {
-		D_ERROR("failed to prepare tree iterator: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("failed to prepare tree iterator: "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -3685,7 +3688,8 @@ dbtree_iterate(daos_handle_t toh, uint32_t intent, bool backward,
 			rc = 0;
 			break;
 		} else if (rc != 0) {
-			D_ERROR("failed to move iterator: "DF_RC"\n", DP_RC(rc));
+			D_ERROR("failed to move iterator: "DF_RC"\n",
+				DP_RC(rc));
 			break;
 		}
 	}
@@ -3693,7 +3697,8 @@ dbtree_iterate(daos_handle_t toh, uint32_t intent, bool backward,
 out_iter:
 	dbtree_iter_finish(ih);
 out:
-	D_DEBUG(DB_TRACE, "iterated %d records: "DF_RC"\n", niterated, DP_RC(rc));
+	D_DEBUG(DB_TRACE, "iterated %d records: "DF_RC"\n", niterated,
+		DP_RC(rc));
 	return rc;
 }
 

@@ -458,7 +458,8 @@ attach_group(const char *name, bool pmixless, int npsrs,
 
 	rc = crt_group_view_create((char *)name, &group);
 	if (rc != 0) {
-		D_ERROR("failed to create group %s: "DF_RC"\n", name, DP_RC(rc));
+		D_ERROR("failed to create group %s: "DF_RC"\n", name,
+			DP_RC(rc));
 		goto err;
 	}
 

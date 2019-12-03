@@ -1116,7 +1116,8 @@ ring_obj_place(struct pl_map *map, struct daos_obj_md *md,
 
 	rc = ring_obj_placement_get(rimap, md, shard_md, &rop);
 	if (rc) {
-		D_ERROR("ring_obj_placement_get failed, rc "DF_RC"\n", DP_RC(rc));
+		D_ERROR("ring_obj_placement_get failed, rc "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 

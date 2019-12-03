@@ -776,8 +776,8 @@ ds_pool_svc_destroy(const uuid_t pool_uuid)
 			DP_UUID(pool_uuid));
 		rc = dss_group_destroy(group);
 		if (rc != 0) {
-			D_ERROR(DF_UUID": failed to destroy pool group: "DF_RC"\n",
-				DP_UUID(pool_uuid), DP_RC(rc));
+			D_ERROR(DF_UUID": failed to destroy pool group: "
+				""DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
 			return rc;
 		}
 	}
@@ -1046,15 +1046,15 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 				DP_UUID(svc->ps_uuid));
 			rc = +DER_UNINIT;
 		} else {
-			D_ERROR(DF_UUID": failed to read pool map buffer: "DF_RC"\n",
-				DP_UUID(svc->ps_uuid), DP_RC(rc));
+			D_ERROR(DF_UUID": failed to read pool map buffer: "
+				""DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
 		}
 		goto out_lock;
 	}
 	rc = rdb_get_ranks(rsvc->s_db, &replicas);
 	if (rc != 0)
-		D_ERROR(DF_UUID": failed to get pool service replica: "DF_RC"\n",
-			DP_UUID(svc->ps_uuid), DP_RC(rc));
+		D_ERROR(DF_UUID": failed to get pool service replica: "
+			""DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
@@ -1247,7 +1247,8 @@ pool_svc_start_all(void *arg)
 	/* Scan the storage and start all pool services. */
 	rc = ds_mgmt_tgt_pool_iterate(start_one, NULL /* arg */);
 	if (rc != 0)
-		D_ERROR("failed to scan all pool services: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("failed to scan all pool services: "DF_RC"\n",
+			DP_RC(rc));
 }
 
 /* Note that this function is currently called from the main xstream. */
@@ -1526,8 +1527,8 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 			D_DEBUG(DF_DSMS, DF_UUID": db already initialized\n",
 				DP_UUID(svc->ps_uuid));
 		else
-			D_ERROR(DF_UUID": failed to look up pool map: "DF_RC"\n",
-				DP_UUID(svc->ps_uuid), DP_RC(rc));
+			D_ERROR(DF_UUID": failed to look up pool map: "
+				""DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
 		D_GOTO(out_tx, rc);
 	}
 
@@ -1850,8 +1851,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	prop_bits = DAOS_PO_QUERY_PROP_ALL;
 	rc = pool_prop_read(&tx, svc, prop_bits, &prop);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": cannot get access data for pool, rc="DF_RC"\n",
-			DP_UUID(in->pci_op.pi_uuid), DP_RC(rc));
+		D_ERROR(DF_UUID": cannot get access data for pool, "
+			"rc="DF_RC"\n", DP_UUID(in->pci_op.pi_uuid), DP_RC(rc));
 		D_GOTO(out_map_version, rc);
 	}
 	D_ASSERT(prop != NULL);
@@ -2244,7 +2245,8 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 
 		rc = pool_iv_prop_fetch(svc->ps_pool, iv_prop);
 		if (rc) {
-			D_ERROR("pool_iv_prop_fetch failed "DF_RC"\n", DP_RC(rc));
+			D_ERROR("pool_iv_prop_fetch failed "DF_RC"\n",
+				DP_RC(rc));
 			daos_prop_free(iv_prop);
 			D_GOTO(out_map_version, rc);
 		}
@@ -2582,8 +2584,8 @@ replace_failed_replicas(struct pool_svc *svc, struct pool_map *map)
 	rc = ds_pool_check_failed_replicas(map, replicas, &failed_ranks,
 					   &replace_ranks);
 	if (rc != 0) {
-		D_DEBUG(DB_MD, DF_UUID": cannot replace failed replicas: "DF_RC"\n",
-			DP_UUID(svc->ps_uuid), DP_RC(rc));
+		D_DEBUG(DB_MD, DF_UUID": cannot replace failed replicas: "
+			""DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 	if (replace_ranks.rl_nr > 0)

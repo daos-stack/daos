@@ -205,8 +205,8 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	rc = obj_reply_get_status(rw_args->rpc);
 	if (rc != 0) {
 		if (rc == -DER_INPROGRESS)
-			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: "DF_RC"\n",
-				rw_args->rpc, opc, DP_RC(rc));
+			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: "
+				""DF_RC"\n", rw_args->rpc, opc, DP_RC(rc));
 		else
 			D_ERROR("rpc %p RPC %d failed: "DF_RC"\n",
 				rw_args->rpc, opc, DP_RC(rc));
@@ -636,8 +636,8 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 				oeo->oeo_size);
 			enum_args->eaa_kds[0].kd_key_len = oeo->oeo_size;
 		} else if (rc == -DER_INPROGRESS) {
-			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: "DF_RC"\n",
-				enum_args->rpc, opc, DP_RC(rc));
+			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: "
+				""DF_RC"\n", enum_args->rpc, opc, DP_RC(rc));
 		} else {
 			D_ERROR("rpc %p RPC %d failed: "DF_RC"\n",
 				enum_args->rpc, opc, DP_RC(rc));

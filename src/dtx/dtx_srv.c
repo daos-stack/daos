@@ -45,8 +45,9 @@ dtx_handler(crt_rpc_t *rpc)
 	rc = ds_cont_child_lookup(din->di_po_uuid, din->di_co_uuid, &cont);
 	if (rc != 0) {
 		D_ERROR("Failed to locate pool="DF_UUID" cont="DF_UUID
-			" for DTX rpc %u: rc = "DF_RC"\n", DP_UUID(din->di_po_uuid),
-			DP_UUID(din->di_co_uuid), opc, DP_RC(rc));
+			" for DTX rpc %u: rc = "DF_RC"\n",
+			DP_UUID(din->di_po_uuid), DP_UUID(din->di_co_uuid),
+			opc, DP_RC(rc));
 		goto out;
 	}
 

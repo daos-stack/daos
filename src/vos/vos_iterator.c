@@ -548,8 +548,8 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 			daos_anchor_set_eof(anchor);
 			rc = 0;
 		} else {
-			D_ERROR("failed to prepare iterator (type=%d): "DF_RC"\n",
-				type, DP_RC(rc));
+			D_ERROR("failed to prepare iterator (type=%d): "
+				""DF_RC"\n", type, DP_RC(rc));
 		}
 		return rc;
 	}

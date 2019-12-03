@@ -336,7 +336,8 @@ smd_init(const char *path)
 
 	rc = smd_store_check(fname, &existing);
 	if (rc) {
-		D_ERROR("Check SMD store %s failed. "DF_RC"\n", fname, DP_RC(rc));
+		D_ERROR("Check SMD store %s failed. "DF_RC"\n", fname,
+			DP_RC(rc));
 		goto out;
 	}
 
@@ -344,7 +345,8 @@ smd_init(const char *path)
 	if (!existing) {
 		rc = smd_store_create(fname);
 		if (rc) {
-			D_ERROR("Create SMD store failed. "DF_RC"\n", DP_RC(rc));
+			D_ERROR("Create SMD store failed. "DF_RC"\n",
+				DP_RC(rc));
 			goto out;
 		}
 	}

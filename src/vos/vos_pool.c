@@ -354,8 +354,8 @@ end:
 		xs_ctxt, DP_UUID(uuid));
 	rc = bio_blob_create(uuid, xs_ctxt, nvme_sz);
 	if (rc != 0) {
-		D_ERROR("Error creating blob for xs:%p pool:"DF_UUID" "DF_RC"\n",
-			xs_ctxt, DP_UUID(uuid), DP_RC(rc));
+		D_ERROR("Error creating blob for xs:%p pool:"DF_UUID" "
+			""DF_RC"\n", xs_ctxt, DP_UUID(uuid), DP_RC(rc));
 		goto close;
 	}
 

@@ -825,7 +825,8 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 		rc = evt_create(&krec->kr_evt, vos_evt_feats, VOS_EVT_ORDER,
 				uma, &cbs, sub_toh);
 		if (rc != 0) {
-			D_ERROR("Failed to create evtree: "DF_RC"\n", DP_RC(rc));
+			D_ERROR("Failed to create evtree: "DF_RC"\n",
+				DP_RC(rc));
 			goto out;
 		}
 	} else {

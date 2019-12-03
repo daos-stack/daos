@@ -254,7 +254,8 @@ pool_map_update(struct dc_pool *pool, struct pool_map *map,
 
 	rc = pl_map_update(pool->dp_pool, map, connect, DEFAULT_PL_TYPE);
 	if (rc != 0) {
-		D_ERROR("Failed to refresh placement map: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Failed to refresh placement map: "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -284,7 +285,8 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 
 	rc = pool_map_create(map_buf, map_version, &map);
 	if (rc != 0) {
-		D_ERROR("failed to create local pool map: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("failed to create local pool map: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 
@@ -421,7 +423,8 @@ pool_connect_cp(tse_task_t *task, void *data)
 				 NULL /* tgts */, info, NULL, NULL, true);
 	if (rc != 0) {
 		/* TODO: What do we do about the remote connection state? */
-		D_ERROR("failed to create local pool map: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("failed to create local pool map: "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -992,7 +995,8 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 	rc = pool_map_create(map_buf, pool_glob->dpg_map_version,
 			     &pool->dp_map);
 	if (rc != 0) {
-		D_ERROR("failed to create local pool map: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("failed to create local pool map: "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1794,7 +1798,8 @@ dc_pool_list_attr(tse_task_t *task)
 	return rc;
 out:
 	tse_task_complete(task, rc);
-	D_DEBUG(DF_DSMC, "Failed to list pool attributes: "DF_RC"\n", DP_RC(rc));
+	D_DEBUG(DF_DSMC, "Failed to list pool attributes: "DF_RC"\n",
+		DP_RC(rc));
 	return rc;
 }
 

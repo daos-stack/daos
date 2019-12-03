@@ -300,8 +300,8 @@ pool_rec_delete(struct mgmt_svc *svc, uuid_t uuid)
 	d_iov_set(&key, uuid, sizeof(uuid_t));
 	rc = rdb_tx_delete(&tx, &svc->ms_pools, &key);
 	if (rc != 0) {
-		D_ERROR("failed to delete pool "DF_UUID" from directory: "DF_RC"\n",
-			DP_UUID(uuid), DP_RC(rc));
+		D_ERROR("failed to delete pool "DF_UUID" from directory: "
+			""DF_RC"\n", DP_UUID(uuid), DP_RC(rc));
 		goto out_lock;
 	}
 
@@ -561,8 +561,8 @@ ds_mgmt_destroy_pool(uuid_t pool_uuid, const char *group, uint32_t force)
 
 	rc = pool_rec_delete(svc, pool_uuid);
 	if (rc != 0) {
-		D_ERROR("Failed to delete pool "DF_UUID" from directory: "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
+		D_ERROR("Failed to delete pool "DF_UUID" from directory: "
+			""DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
 		goto out_svc;
 	}
 

@@ -112,7 +112,8 @@ cont_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 
 	rc = vos_dtx_table_create(pool, &cont_df->cd_dtx_table_df);
 	if (rc) {
-		D_ERROR("Failed to create DTX table: rc = "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Failed to create DTX table: rc = "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(failed, rc);
 	}
 

@@ -477,9 +477,9 @@ rdb_abort_raft_rpcs(struct rdb *db)
 
 			rc2 = crt_req_dst_rank_get(rrpc->drc_rpc, &dstrank);
 			D_ASSERTF(rc2 == 0, ""DF_RC"\n", DP_RC(rc2));
-			D_ERROR(DF_DB": failed to abort %x to rank %u: "DF_RC"\n",
-				DP_DB(rrpc->drc_db), rrpc->drc_rpc->cr_opc,
-				dstrank, DP_RC(rc));
+			D_ERROR(DF_DB": failed to abort %x to rank %u: "
+				""DF_RC"\n", DP_DB(rrpc->drc_db),
+				rrpc->drc_rpc->cr_opc, dstrank, DP_RC(rc));
 			return rc;
 		}
 	}

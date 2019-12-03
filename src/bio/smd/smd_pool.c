@@ -297,7 +297,8 @@ smd_pool_list(d_list_t *pool_list, int *pools)
 			       NULL, NULL);
 	if (rc) {
 		if (rc != -DER_NONEXIST)
-			D_ERROR("Probe first pool failed. "DF_RC"\n", DP_RC(rc));
+			D_ERROR("Probe first pool failed. "DF_RC"\n",
+				DP_RC(rc));
 		else
 			rc = 0;
 		goto done;
@@ -316,7 +317,8 @@ smd_pool_list(d_list_t *pool_list, int *pools)
 		info = create_pool_info(key_pool.uuid, &entry);
 		if (info == NULL) {
 			rc = -DER_NOMEM;
-			D_ERROR("Create pool info failed. "DF_RC"\n", DP_RC(rc));
+			D_ERROR("Create pool info failed. "DF_RC"\n",
+				DP_RC(rc));
 			break;
 		}
 		d_list_add_tail(&info->spi_link, pool_list);
