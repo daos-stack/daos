@@ -523,7 +523,6 @@ pipeline {
                             */
                         }
                         unsuccessful {
-                            sh 'ls install/include/spdk/ install/include/hwloc.h || true'
                             sh """if [ -f config${arch}.log ]; then
                                       mv config${arch}.log config.log-centos7-gcc
                                   fi"""
@@ -1062,7 +1061,7 @@ pipeline {
                                        snapshot: true,
                                        inst_repos: el7_daos_repos + ' ' + ior_repos,
                                        inst_rpms: 'cart-' + env.CART_COMMIT + ' ' +
-                                                  'ior-hpc mpich-autoload ndctl'
+                                                  'ior-hpc mpich-autoload ndctl spdk-tools'
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
@@ -1133,14 +1132,14 @@ pipeline {
                                        snapshot: true,
                                        inst_repos: el7_daos_repos + ' ' + ior_repos,
                                        inst_rpms: 'cart-' + env.CART_COMMIT + ' ' +
-                                                  'ior-hpc mpich-autoload ndctl'
+                                                  'ior-hpc mpich-autoload ndctl spdk-tools'
                         // Then just reboot the physical nodes
                         provisionNodes NODELIST: env.NODELIST,
                                        node_count: 9,
                                        power_only: true,
                                        inst_repos: el7_daos_repos + ' ' + ior_repos,
                                        inst_rpms: 'cart-' + env.CART_COMMIT + ' ' +
-                                                  'ior-hpc mpich-autoload ndctl'
+                                                  'ior-hpc mpich-autoload ndctl spdk-tools'
                         runTest stashes: [ 'CentOS-install', 'CentOS-build-vars' ],
                                 script: '''test_tag=$(git show -s --format=%B | sed -ne "/^Test-tag-hw:/s/^.*: *//p")
                                            if [ -z "$test_tag" ]; then
