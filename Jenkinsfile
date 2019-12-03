@@ -124,12 +124,6 @@ pipeline {
     }
 
     stages {
-        stage('Cancel Previous Builds') {
-            when { changeRequest() }
-            steps {
-                cancelPreviousBuilds()
-            }
-        }
         stage('Build') {
             /* Don't use failFast here as whilst it avoids using extra resources
              * and gives faster results for PRs it's also on for master where we
