@@ -68,7 +68,6 @@ extern struct crt_proto_format rebuild_proto_fmt;
 	((uuid_t)		(rsi_pool_hdl_uuid)	CRT_VAR) \
 	((uuid_t)		(rsi_cont_hdl_uuid)	CRT_VAR) \
 	((d_rank_list_t)	(rsi_svc_list)		CRT_PTR) \
-	((d_iov_t)		(rsi_ns_iov)		CRT_VAR) \
 	((uint64_t)		(rsi_leader_term)	CRT_VAR) \
 	((uint32_t)		(rsi_tgts_num)		CRT_VAR) \
 	((uint32_t)		(rsi_ns_id)		CRT_VAR) \

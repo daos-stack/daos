@@ -278,14 +278,20 @@ daos_pool_remove_replicas(const uuid_t uuid, const char *group,
 }
 
 int
-daos_mgmt_list_pools(const char *group, daos_mgmt_pool_info_t *pools,
-		     daos_size_t *npools, daos_event_t *ev)
+daos_mgmt_list_pools(const char *group, daos_size_t *npools,
+		     daos_mgmt_pool_info_t *pools, daos_event_t *ev)
 {
 	daos_mgmt_list_pools_t	*args;
 	tse_task_t		*task;
 	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, MGMT_LIST_POOLS);
+
+	if (npools == NULL) {
+		D_ERROR("npools must be non-NULL\n");
+		return -DER_INVAL;
+	}
+
 	rc = dc_task_create(dc_mgmt_list_pools, NULL, ev, &task);
 	if (rc)
 		return rc;
