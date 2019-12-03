@@ -387,6 +387,49 @@ list_pools_test(void **state)
 	print_message("success\n");
 }
 
+static void
+pool_create_and_destroy_retry(void **state)
+{
+	test_arg_t	*arg = *state;
+	uuid_t		 uuid;
+	int		 rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	print_message("setting DAOS_POOL_CREATE_FAIL_CORPC ... ");
+	rc = daos_mgmt_set_params(arg->group, 0, DSS_KEY_FAIL_LOC,
+				  DAOS_POOL_CREATE_FAIL_CORPC | DAOS_FAIL_ONCE,
+				  0, NULL);
+	assert_int_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("creating pool synchronously ... ");
+	rc = daos_pool_create(0700 /* mode */, 0 /* uid */, 0 /* gid */,
+			      arg->group, NULL /* tgts */, "pmem" /* dev */,
+			      0 /* minimal size */, 0 /* nvme size */,
+			      NULL /* properties */, &arg->pool.svc /* svc */,
+			      uuid, NULL /* ev */);
+	assert_int_equal(rc, 0);
+	print_message("success uuid = "DF_UUIDF"\n", DP_UUID(uuid));
+
+	print_message("setting DAOS_POOL_DESTROY_FAIL_CORPC ... ");
+	rc = daos_mgmt_set_params(arg->group, 0, DSS_KEY_FAIL_LOC,
+				  DAOS_POOL_DESTROY_FAIL_CORPC | DAOS_FAIL_ONCE,
+				  0, NULL);
+	assert_int_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("destroying pool synchronously ... ");
+	rc = daos_pool_destroy(uuid, arg->group, 1, NULL);
+#if 0 /* see pool_create_cp */
+	assert_int_equal(rc, 0);
+#else
+	assert_int_equal(rc, -DER_TIMEDOUT);
+#endif
+	print_message("success\n");
+}
+
 static const struct CMUnitTest tests[] = {
 	{ "MGMT1: create/destroy pool on all tgts",
 	  pool_create_all, async_disable, test_case_teardown},
@@ -396,6 +439,8 @@ static const struct CMUnitTest tests[] = {
 	  list_pools_test, setup_zeropools, teardown_pools},
 	{ "MGMT4: list-pools with multiple pools in sys",
 	  list_pools_test, setup_manypools, teardown_pools},
+	{ "MGMT5: retry MGMT_POOL_{CREATE,DESETROY} upon errors",
+	  pool_create_and_destroy_retry, async_disable, test_case_teardown}
 };
 
 static int

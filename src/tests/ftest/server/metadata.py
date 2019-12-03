@@ -252,7 +252,7 @@ class ObjectMetadata(TestWithServers):
 
                 # Start the agents
                 self.agent_sessions = run_agent(
-                    self.basepath, self.hostlist_clients,
+                    self, self.hostlist_clients,
                     self.hostlist_servers)
 
                 # Start the servers
