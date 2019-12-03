@@ -85,15 +85,15 @@ query_cb(struct crt_proto_query_cb_info *cb_info)
 static void
 test_run()
 {
-	crt_group_t	*grp = NULL;
-	d_rank_list_t	*rank_list = NULL;
-	crt_rpc_t	*rpc_req = NULL;
-	struct ping_in	*rpc_req_input;
-	crt_endpoint_t	 server_ep = {0};
-	crt_opcode_t	 my_opc;
-	uint32_t	 my_ver_array[] = {0, 2, 5, 1, 4, 3, 7};
-	uint32_t	 high_ver = 0xFFFFFFFF;
-	int		 rc;
+	crt_group_t		*grp = NULL;
+	d_rank_list_t		*rank_list = NULL;
+	crt_rpc_t		*rpc_req = NULL;
+	struct ping_in		*rpc_req_input;
+	crt_endpoint_t		 server_ep = {0};
+	crt_opcode_t		 my_opc;
+	uint32_t		 my_ver_array[] = {0, 2, 5, 1, 4, 3, 7};
+	uint32_t		 high_ver = 0xFFFFFFFF;
+	int			 rc;
 
 	fprintf(stderr, "local group: %s remote group: %s\n",
 		test.tg_local_group_name, test.tg_remote_group_name);
@@ -107,7 +107,7 @@ test_run()
 			   test.tg_remote_group_name,
 			   &grp, &rank_list, &test.tg_crt_ctx,
 			   &test.tg_tid, 1,
-			   test.tg_save_cfg);
+			   test.tg_save_cfg, NULL);
 
 	rc = sem_init(&test.tg_token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");

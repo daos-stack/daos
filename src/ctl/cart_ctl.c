@@ -122,7 +122,7 @@ struct ctl_g {
 	crt_context_t			 cg_crt_ctx;
 	pthread_t			 cg_tid;
 	int				 cg_complete;
-	int				 cg_save_cfg;
+	bool				 cg_save_cfg;
 	char				*cg_cfg_path;
 	sem_t				 cg_num_reply;
 	struct crt_ctl_fi_attr_set_in	 cg_fi_attr;
@@ -334,7 +334,7 @@ parse_args(int argc, char **argv)
 			ctl_gdata.cg_fi_attr_inited = 1;
 			break;
 		case 's':
-			ctl_gdata.cg_save_cfg = 1;
+			ctl_gdata.cg_save_cfg = true;
 			ctl_gdata.cg_cfg_path = optarg;
 			break;
 		default:
@@ -495,13 +495,13 @@ ctl_fill_rpc_args(crt_rpc_t *rpc_req, int index)
 static int
 ctl_init()
 {
-	int		 i;
-	crt_rpc_t	*rpc_req;
-	crt_endpoint_t	 ep;
-	struct cb_info	 info;
-	crt_group_t	*grp = NULL;
-	d_rank_list_t	*rank_list = NULL;
-	int		 rc = 0;
+	int			 i;
+	crt_rpc_t		*rpc_req;
+	crt_endpoint_t		 ep;
+	struct cb_info		 info;
+	crt_group_t		*grp = NULL;
+	d_rank_list_t		*rank_list = NULL;
+	int			 rc = 0;
 
 	if (ctl_gdata.cg_save_cfg) {
 		rc = crt_group_config_path_set(ctl_gdata.cg_cfg_path);
@@ -510,7 +510,7 @@ ctl_init()
 
 	tc_cli_start_basic("crt_ctl", ctl_gdata.cg_group_name, &grp,
 			    &rank_list, &ctl_gdata.cg_crt_ctx,
-			    &ctl_gdata.cg_tid, 1, ctl_gdata.cg_save_cfg);
+			    &ctl_gdata.cg_tid, 1, ctl_gdata.cg_save_cfg, NULL);
 
 	rc = sem_init(&ctl_gdata.cg_num_reply, 0, 0);
 	D_ASSERTF(rc == 0, "Could not initialize semaphore. rc %d\n", rc);

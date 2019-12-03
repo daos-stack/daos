@@ -58,7 +58,7 @@ struct test_global_t {
 	pthread_t		 tg_tid;
 	int			 tg_thread_id;
 	sem_t			 tg_token_to_proceed;
-	int			 tg_save_cfg;
+	bool			 tg_save_cfg;
 	char			*tg_cfg_path;
 };
 
@@ -231,7 +231,7 @@ test_parse_args(int argc, char **argv)
 			test.tg_hold = 1;
 			break;
 		case 's':
-			test.tg_save_cfg = 1;
+			test.tg_save_cfg = true;
 			test.tg_cfg_path = optarg;
 			break;
 		case '?':

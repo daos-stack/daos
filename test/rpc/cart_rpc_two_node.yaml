@@ -47,13 +47,73 @@ tests: !mux
     cli_ppn: "1"
   test_group:
     name: test_group_basic
-    srv_bin: tests/test_group
-    srv_arg: "--name service_group --is_service"
+    srv_bin: ../bin/crt_launch
+    srv_arg: "-e tests/test_group_np_srv --name tg_srv_grp --cfg_path=."
     srv_env: "-x D_FI_CONFIG=../etc/fault-inject-cart.yaml"
     srv_ppn: "1"
-    cli_bin: tests/test_group
-    cli_arg: "--name client_group --attach_to service_group"
+    cli_bin: tests/test_group_np_cli
+    cli_arg: "--name client_group --attach_to tg_srv_grp --cfg_path=."
     cli_env: "-x D_FI_CONFIG=../etc/fault-inject-cart.yaml"
+    cli_ppn: "1"
+  ep_credits_1:
+    name: ep_credits_1
+    srv_bin: ../bin/crt_launch
+    srv_arg: "-e tests/test_ep_cred_server -n epc1_srv_grp -s --cfg_path=."
+    srv_env: ""
+    srv_ppn: "1"
+    cli_bin: tests/test_ep_cred_client
+    cli_arg: "-a epc1_srv_grp -c 1 -b 20 -f -q --cfg_path=."
+    cli_env: ""
+    cli_ppn: "1"
+  ep_credits_2:
+    name: ep_credits_2
+    srv_bin: ../bin/crt_launch
+    srv_arg: "-e tests/test_ep_cred_server -n cred_group -s --cfg_path=."
+    srv_env: ""
+    srv_ppn: "1"
+    cli_bin: tests/test_ep_cred_client
+    cli_arg: "-a cred_group -c 5 -b 20 -q --cfg_path=."
+    cli_env: ""
+    cli_ppn: "1"
+  ep_credits_3:
+    name: ep_credits_3
+    srv_bin: ../bin/crt_launch
+    srv_arg: "-e tests/test_ep_cred_server -n cred_group -s --cfg_path=."
+    srv_env: ""
+    srv_ppn: "1"
+    cli_bin: tests/test_ep_cred_client
+    cli_arg: "-a cred_group -c 10 -b 20 -q --cfg_path=."
+    cli_env: ""
+    cli_ppn: "1"
+  ep_credits_4:
+    name: ep_credits_4
+    srv_bin: ../bin/crt_launch
+    srv_arg: "-e tests/test_ep_cred_server -n cred_group -s --cfg_path=."
+    srv_env: ""
+    srv_ppn: "1"
+    cli_bin: tests/test_ep_cred_client
+    cli_arg: "-a cred_group -c 20 -b 20 -q --cfg_path=."
+    cli_env: ""
+    cli_ppn: "1"
+  ep_credits_5:
+    name: ep_credits_5
+    srv_bin: ../bin/crt_launch
+    srv_arg: "-e tests/test_ep_cred_server -n cred_group -s --cfg_path=."
+    srv_env: ""
+    srv_ppn: "1"
+    cli_bin: tests/test_ep_cred_client
+    cli_arg: "-a cred_group -c 255 -b 20 -q --cfg_path=."
+    cli_env: ""
+    cli_ppn: "1"
+  ep_credits_6:
+    name: ep_credits_6
+    srv_bin: ../bin/crt_launch
+    srv_arg: "-e tests/test_ep_cred_server -n cred_group -s --cfg_path=."
+    srv_env: ""
+    srv_ppn: "1"
+    cli_bin: tests/test_ep_cred_client
+    cli_arg: "-a cred_group -c 0 -b 20 -q --cfg_path=."
+    cli_env: ""
     cli_ppn: "1"
   no_timeout:
     name: no_timeout_basic

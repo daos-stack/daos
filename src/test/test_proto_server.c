@@ -43,15 +43,15 @@
 static void
 test_run(d_rank_t my_rank)
 {
-	crt_group_t	*grp = NULL;
-	uint32_t	 grp_size;
-	int		 rc;
+	crt_group_t		*grp = NULL;
+	uint32_t		 grp_size;
+	int			 rc;
 
 	fprintf(stderr, "local group: %s remote group: %s\n",
 		test.tg_local_group_name, test.tg_remote_group_name);
 
 	tc_srv_start_basic(test.tg_local_group_name, &test.tg_crt_ctx,
-			   &test.tg_tid, grp, &grp_size);
+			   &test.tg_tid, grp, &grp_size, NULL);
 
 	rc = sem_init(&test.tg_token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");

@@ -194,15 +194,15 @@ ping_delay_reply(crt_group_t *remote_group, int rank, int tag, uint32_t delay)
 void
 test_run(void)
 {
-	crt_group_t	*grp = NULL;
-	d_rank_list_t	*rank_list = NULL;
-	d_rank_t	 rank;
-	int		 tag;
-	crt_endpoint_t	 server_ep = {0};
-	crt_rpc_t	*rpc_req = NULL;
-	uint32_t	 delay = 22;
-	int		 i;
-	int		 rc = 0;
+	crt_group_t		*grp = NULL;
+	d_rank_list_t		*rank_list = NULL;
+	d_rank_t		 rank;
+	int			 tag;
+	crt_endpoint_t		 server_ep = {0};
+	crt_rpc_t		*rpc_req = NULL;
+	uint32_t		 delay = 22;
+	int			 i;
+	int			 rc = 0;
 
 	fprintf(stderr, "local group: %s remote group: %s\n",
 		test_g.t_local_group_name, test_g.t_remote_group_name);
@@ -216,7 +216,7 @@ test_run(void)
 			   test_g.t_remote_group_name,
 			   &grp, &rank_list, &test_g.t_crt_ctx[0],
 			   &test_g.t_tid[0], test_g.t_srv_ctx_num,
-			   test_g.t_save_cfg);
+			   test_g.t_save_cfg, NULL);
 
 	rc = sem_init(&test_g.t_token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");

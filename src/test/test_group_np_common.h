@@ -51,7 +51,7 @@ struct test_t {
 	char			*t_remote_group_name;
 	int			 t_hold;
 	int			 t_shut_only;
-	int			 t_save_cfg;
+	bool			 t_save_cfg;
 	char			*t_cfg_path;
 	uint32_t		 t_hold_time;
 	unsigned int		 t_srv_ctx_num;
@@ -353,7 +353,7 @@ test_parse_args(int argc, char **argv)
 			test_g.t_hold_time = atoi(optarg);
 			break;
 		case 's':
-			test_g.t_save_cfg = 1;
+			test_g.t_save_cfg = true;
 			test_g.t_cfg_path = optarg;
 			break;
 		case '?':
