@@ -190,16 +190,16 @@ See `daos_server storage scan --help` for usage.
 
 ## Management Tool (client) Usage
 
-[`daos_shell`](../cmd/dmg/README.md) is a management tool which exercises the client api and can be run on login nodes by an unprivileged user.
+[`dmg`](../cmd/dmg/README.md) is a management tool which exercises the client api and can be run on login nodes by an unprivileged user.
 The tool is lightweight and doesn't depend on storage libraries.
 Implemented as a gRPC client application it connects and interacts with multiple gRPC servers concurrently, connecting to specified ports.
 
 In order to run the tool to perform administrative tasks from non-storage nodes (e.g. login nodes) over an out-of-band management network;
 
  1. build and run the `daos_server` as per the [quickstart guide](https://github.com/daos-stack/daos/blob/master/doc/quickstart.md) on the storage nodes
- 2. run `daos_shell` from a login node
+ 2. run `dmg` from a login node
 
-See `daos_shell --help` for usage and [here](../cmd/dmg) for package details.
+See `dmg --help` for usage and [here](../cmd/dmg) for package details.
 
 ## Storage management
 
@@ -225,7 +225,7 @@ The DAOS control plane will provide SCM storage management capabilities enabling
 
 #### SCM module discovery
 
-Device details for any discovered (Intel) data-centre persistent memory modules (DCPM modules) on the storage server will be returned when running `storage scan` subcommand on [`daos_shell`](../cmd/dmg/README.md#-subcommands) or [`daos_server`](#storage-list) executables.
+Device details for any discovered (Intel) data-centre persistent memory modules (DCPM modules) on the storage server will be returned when running `storage scan` subcommand on [`dmg`](../cmd/dmg/README.md#-subcommands) or [`daos_server`](#storage-list) executables.
 
 TODO: return details of AppDirect memory regions
 
@@ -382,10 +382,6 @@ DAOS I/O server (v0.4.0) process 135863 started on rank 0 (out of 1) with 1 targ
 </p>
 </details>
 
-#### SCM Firmware Update
-
-#### SCM Burn-in Validation
-
 #### SCM Provisioning
 
 Provisioning SCM occurs by configuring DCPM modules in AppDirect memory regions (interleaved mode) in groups of modules local to a specific socket (NUMA) and resultant nvdimm namespaces are defined a device identifier (e.g. /dev/pmem0). This can be performed through the [ipmctl](https://github.com/intel/ipmctl) tool.
@@ -402,7 +398,7 @@ The DAOS control plane will provide NVMe storage management capabilities enablin
 
 #### NVMe Controller and Namespace Discovery
 
-Device details for any discovered NVMe SSDs accessible through SPDK on the storage server will be returned when running `storage scan` subcommand on [`daos_shell`](../cmd/dmg/README.md#subcommands) or [`daos_server`](#storage-list) executables.
+Device details for any discovered NVMe SSDs accessible through SPDK on the storage server will be returned when running `storage scan` subcommand on [`dmg`](../cmd/dmg/README.md#subcommands) or [`daos_server`](#storage-list) executables.
 
 The following animation illustrates starting the control server and using the management shell to view the NVMe Namespaces discovered on a locally available NVMe Controller (assuming the quickstart guide instructions have already been performed):
 
@@ -421,16 +417,6 @@ Formatting will be performed on devices identified by PCI addresses specified in
 The SPDK "[blobcli](https://github.com/spdk/spdk/tree/master/examples/blob/cli)" can be used to initiate and manipulate blobstores for testing and verification purposes.
 
 In order to designate NVMe devices to be used by DAOS data plane instances, the control plane will generate an `nvme.conf` file to be consumed by SPDK which will be written to the `scm_mount` (persistent) mounted location as a final stage of formatting before the superblock is written, signifying the server has been formatted.
-
-#### NVMe Controller Firmware Update
-
-The following animation illustrates starting the control server and using the management shell to update the firmware on a locally available NVMe Controller (assuming the quickstart guide instructions have already been performed):
-
-![Demo: Updating NVMe Controller Firmware](/doc/graph/daosshellfwupdate.svg)
-
-#### NVMe Controller Burn-in Validation
-
-Burn-in validation is performed using the [fio tool](https://github.com/axboe/fio) which executes workloads over the SPDK framework using the [fio plugin](https://github.com/spdk/spdk/tree/v18.04.1/examples/nvme/fio_plugin).
 
 ## Bootstrapping and DAOS system membership
 

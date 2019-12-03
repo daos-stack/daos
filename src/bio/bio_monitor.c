@@ -28,27 +28,22 @@
 #include "bio_internal.h"
 #include <daos_srv/smd.h>
 
-/* Period to query SPDK device health stats (1 min period) */
-#define DAOS_SPDK_STATS_PERIOD	(60 * (NSEC_PER_SEC / NSEC_PER_USEC))
+/*
+ * Period to query raw device health stats, auto detect faulty and transition
+ * device state. 60 seconds by default.
+ */
+#define NVME_MONITOR_PERIOD	(60ULL * (NSEC_PER_SEC / NSEC_PER_USEC))
 /* Used to preallocate buffer to query error log pages from SPDK health info */
-#define DAOS_MAX_ERROR_LOG_PAGES 256
+#define NVME_MAX_ERROR_LOG_PAGES	256
 
 /* See DAOS-3319 on this.  We should generally try to avoid reading unaligned
  * variables directly as it results in more than one instruction for each such
  * access.  The instances of these possible unaligned accesses happen with
  * default gcc on Fedora 30.
  */
-#if !defined(__has_warning)  /* gcc */
-#if __GNUC__ >= 9
+#if D_HAS_WARNING(9, "-Waddress-of-packed-member")
 	#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
-#endif /* warning only defined in version 9 or later */
-#else /* __has_warning is defined */
-#if __has_warning("-Waddress-of-packed-member") /* valid clang warning */
-	#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
-#endif /* Warning is defined in clang */
-#endif /* __has_warning not defined */
-
-
+#endif
 
 /*
  * Used for getting bio device state, which requires exclusive access from
@@ -158,7 +153,7 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 	cmd.cdw10 = numdl << 16;
 	cmd.cdw10 |= SPDK_NVME_LOG_ERROR;
 	cmd.cdw11 = numdu;
-	if (cdata->elpe >= DAOS_MAX_ERROR_LOG_PAGES) {
+	if (cdata->elpe >= NVME_MAX_ERROR_LOG_PAGES) {
 		D_ERROR("Device error log page size exceeds buffer size\n");
 		dev_health->bdh_inflights--;
 		goto out;
@@ -258,30 +253,36 @@ out:
 	spdk_bdev_free_io(bdev_io);
 }
 
-/* Get the SPDK device health state log and print all useful stats */
-void
-bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now)
+static int
+auto_detect_faulty(struct bio_blobstore *bbs)
 {
-	struct bio_dev_health	*dev_health;
+	if (bbs->bb_state != BIO_BS_STATE_NORMAL &&
+	    bbs->bb_state != BIO_BS_STATE_REPLACED &&
+	    bbs->bb_state != BIO_BS_STATE_REINT)
+		return 0;
+	/*
+	 * TODO: Check the health data stored in @bbs, and mark the bbs as
+	 *	 faulty when certain faulty criteria are satisfied.
+	 */
+	if (DAOS_FAIL_CHECK(DAOS_NVME_FAULTY))
+		return bio_bs_state_set(bbs, BIO_BS_STATE_FAULTY);
+
+	return 0;
+}
+
+/* Collect the raw device health state through SPDK admin APIs */
+static void
+collect_raw_health_data(struct bio_dev_health *dev_health)
+{
 	struct spdk_bdev	*bdev;
 	struct spdk_nvme_cmd	 cmd;
-	int			 rc;
 	uint32_t		 numd, numdl, numdu;
 	uint32_t		 health_page_sz;
+	int			 rc;
 
-	D_ASSERT(ctxt != NULL);
-	D_ASSERT(ctxt->bxc_blobstore != NULL);
-	dev_health = &ctxt->bxc_blobstore->bb_dev_health;
+	D_ASSERT(dev_health != NULL);
 	D_ASSERT(dev_health->bdh_io_channel != NULL);
 	D_ASSERT(dev_health->bdh_desc != NULL);
-
-	/*
-	 * TODO Decide on an appropriate period to query device health
-	 * stats. Currently set at 1 min.
-	 */
-	if (dev_health->bdh_stat_age + DAOS_SPDK_STATS_PERIOD >= now)
-		return;
-	dev_health->bdh_stat_age = now;
 
 	bdev = spdk_bdev_desc_get_bdev(dev_health->bdh_desc);
 	if (bdev == NULL) {
@@ -289,24 +290,8 @@ bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now)
 		return;
 	}
 
-	/* Return if non-NVMe device */
 	if (get_bdev_type(bdev) != BDEV_CLASS_NVME)
 		return;
-
-	/*
-	 * TODO:
-	 * Faulty device criteria check (Check current in-memory device health
-	 * state).
-	 * Mechanism to notify admin of if any BIO errors exist. Given I/O
-	 * error, checksum error and health monitoring information, admin can
-	 * determine if device should be marked as FAULTY (SMD device state
-	 * updated).
-	 */
-
-
-	/*
-	 * Continue querying current SPDK device health stats.
-	 */
 
 	if (!spdk_bdev_io_type_supported(bdev, SPDK_BDEV_IO_TYPE_NVME_ADMIN)) {
 		D_ERROR("Bdev NVMe admin passthru not supported!\n");
@@ -345,6 +330,33 @@ bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now)
 		D_ERROR("NVMe admin passthru (health log), rc:%d\n", rc);
 		dev_health->bdh_inflights--;
 	}
+}
+
+void
+bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now)
+{
+	struct bio_dev_health	*dev_health;
+	int			 rc;
+
+	D_ASSERT(ctxt != NULL);
+	D_ASSERT(ctxt->bxc_blobstore != NULL);
+	dev_health = &ctxt->bxc_blobstore->bb_dev_health;
+
+	if (dev_health->bdh_stat_age + NVME_MONITOR_PERIOD >= now)
+		return;
+	dev_health->bdh_stat_age = now;
+
+	rc = auto_detect_faulty(ctxt->bxc_blobstore);
+	if (rc)
+		D_ERROR("Auto faulty detect on target %d failed. %d\n",
+			ctxt->bxc_tgt_id, rc);
+
+	rc = bio_bs_state_transit(ctxt->bxc_blobstore);
+	if (rc)
+		D_ERROR("State transition on target %d failed. %d\n",
+			ctxt->bxc_tgt_id, rc);
+
+	collect_raw_health_data(dev_health);
 }
 
 /* Print the io stat every few seconds, for debug only */
@@ -389,16 +401,33 @@ bio_xs_io_stat(struct bio_xs_context *ctxt, uint64_t now)
 void
 bio_fini_health_monitoring(struct bio_blobstore *bb)
 {
+	struct bio_dev_health	*bdh = &bb->bb_dev_health;
+
 	/* Free NVMe admin passthru DMA buffers */
-	spdk_dma_free(bb->bb_dev_health.bdh_health_buf);
-	spdk_dma_free(bb->bb_dev_health.bdh_ctrlr_buf);
-	spdk_dma_free(bb->bb_dev_health.bdh_error_buf);
+	if (bdh->bdh_health_buf) {
+		spdk_dma_free(bdh->bdh_health_buf);
+		bdh->bdh_health_buf = NULL;
+	}
+	if (bdh->bdh_ctrlr_buf) {
+		spdk_dma_free(bdh->bdh_ctrlr_buf);
+		bdh->bdh_ctrlr_buf = NULL;
+	}
+	if (bdh->bdh_error_buf) {
+		spdk_dma_free(bdh->bdh_error_buf);
+		bdh->bdh_error_buf = NULL;
+	}
 
 	/* Release I/O channel reference */
-	spdk_put_io_channel(bb->bb_dev_health.bdh_io_channel);
+	if (bdh->bdh_io_channel) {
+		spdk_put_io_channel(bdh->bdh_io_channel);
+		bdh->bdh_io_channel = NULL;
+	}
 
 	/* Close device health monitoring descriptor */
-	spdk_bdev_close(bb->bb_dev_health.bdh_desc);
+	if (bdh->bdh_desc) {
+		spdk_bdev_close(bdh->bdh_desc);
+		bdh->bdh_desc = NULL;
+	}
 }
 
 /*
@@ -432,7 +461,7 @@ bio_init_health_monitoring(struct bio_blobstore *bb,
 	}
 
 	ep_sz = sizeof(struct spdk_nvme_error_information_entry);
-	ep_buf_sz = ep_sz * DAOS_MAX_ERROR_LOG_PAGES;
+	ep_buf_sz = ep_sz * NVME_MAX_ERROR_LOG_PAGES;
 	bb->bb_dev_health.bdh_error_buf = spdk_dma_zmalloc(ep_buf_sz, 0, NULL);
 	if (bb->bb_dev_health.bdh_error_buf == NULL) {
 		spdk_dma_free(bb->bb_dev_health.bdh_health_buf);

@@ -1977,19 +1977,16 @@ obj_list_dkey_cb(tse_task_t *task, struct obj_list_arg *arg, unsigned int opc)
 
 static void
 obj_update_csum_destroy(const struct dc_object *obj,
-			     const daos_obj_update_t *args) {
-	int i;
-	struct daos_csummer *csummer = dc_cont_hdl2csummer(obj->cob_coh);
+			     const daos_obj_update_t *args)
+{
+	struct daos_csummer	*csummer = dc_cont_hdl2csummer(obj->cob_coh);
+	int			 i;
 
 	if (!daos_csummer_initialized(csummer))
 		return;
 
-	for (i = 0; i < args->nr; i++) {
-		daos_iod_t *iod = &args->iods[i];
-
-		daos_csummer_destroy_csum_buf(csummer, iod->iod_nr,
-					      &iod->iod_csums);
-	}
+	for (i = 0; i < args->nr; i++)
+		daos_csummer_free_dcbs(csummer, &(&args->iods[i])->iod_csums);
 }
 
 static int
@@ -2037,12 +2034,9 @@ obj_comp_cb(tse_task_t *task, void *data)
 	case DAOS_OBJ_RPC_QUERY_KEY:
 	case DAOS_OBJ_RPC_SYNC:
 		obj = *((struct dc_object **)data);
-		if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE) {
+		if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE)
 			/** checksums sent, need to destroy now */
-			daos_obj_update_t *args = dc_task_get_args(task);
-
-			obj_update_csum_destroy(obj, args);
-		}
+			obj_update_csum_destroy(obj, dc_task_get_args(task));
 		if (task->dt_result != 0)
 			break;
 		if (d_list_empty(&obj_auxi->shard_task_head)) {
@@ -2084,14 +2078,12 @@ obj_comp_cb(tse_task_t *task, void *data)
 	if (obj_retry_error(task->dt_result)) {
 		/* If the RPC sponsor set the @spec_shard, then means it wants
 		 * to fetch data from the specified shard. If such shard isn't
-		 * ready for read, we should let the caller know that, instead
-		 * of re-direct the fetch RPC to other replica. But there are
-		 * some other cases we need to retry the RPC with current shard,
-		 * such as -DER_TIMEDOUT or daos_crt_network_error().
+		 * ready for read, we should let the caller know that, But there
+		 * are some other cases we need to retry the RPC with current
+		 * shard, such as -DER_TIMEDOUT or daos_crt_network_error().
 		 */
 		if (!obj_auxi->spec_shard ||
-		    (task->dt_result != -DER_STALE &&
-		     task->dt_result != -DER_INPROGRESS))
+		    task->dt_result != -DER_INPROGRESS)
 			obj_auxi->io_retry = 1;
 
 		if (!obj_auxi->spec_shard && task->dt_result == -DER_INPROGRESS)
@@ -2168,30 +2160,34 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 	return 0;
 }
 
+/** Ensures that checksum structures are NULL. If not will log a warning and
+ *  set to NULL. This is needed because the checksum structures are visible
+ *  in the public APIs but should not be used.
+ */
+static void
+obj_null_csum(const daos_obj_update_t *args) {
+	int i;
+
+	for (i = 0; i < args->nr; i++) {
+		if (args->iods[i].iod_csums != NULL) {
+			D_WARN("iod csums should be NULL\n");
+			args->iods[i].iod_csums = NULL;
+		}
+	}
+}
+
 static void
 obj_update_csums(const struct dc_object *obj, const daos_obj_update_t *args) {
 	struct daos_csummer	*csummer = dc_cont_hdl2csummer(obj->cob_coh);
-	int			i;
+	int			 i;
 
+	obj_null_csum(args);
 	if (!daos_csummer_initialized(csummer)) /** Not configured */
 		return;
 
 	for (i = 0; i < args->nr; i++) {
-		/**
-		 * TODO: Turn this into an assert after csums are
-		 * removed from public interface. csums should always be
-		 * cleaned up/freed internally, so might be a memory leak if
-		 * not NULL. But user can pass in right now so don't assert.
-		 * (D_ASSERT(args->iods[i].iod_csums == NULL)
-		 */
-		if (args->iods[i].iod_csums != NULL)
-			D_WARN("args->iods[i].iod_csums not NULL\n");
-		daos_csummer_calc_csum(csummer,
-				       &args->sgls[i],
-				       args->iods[i].iod_size,
-				       args->iods[i].iod_recxs,
-				       args->iods[i].iod_nr,
-				       &args->iods[i].iod_csums);
+		daos_csummer_calc(csummer, &args->sgls[i],
+				  &args->iods[i], &args->iods[i].iod_csums);
 		if (DAOS_FAIL_CHECK(DAOS_CHECKSUM_UPDATE_FAIL))
 			((char *)args->iods[i].iod_csums->cs_csum)[0]++;
 	}
@@ -2227,6 +2223,7 @@ do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
 
 	is_ec = daos_oclass_is_ec(obj->cob_md.omd_id, &oca);
 	if (is_ec) {
+		ec_split_recxs(task, oca);
 		ec_get_tgt_set(args->iods, args->nr, oca, false, &tgt_set);
 		D_ASSERT(tgt_set != 0);
 	}
@@ -2257,6 +2254,7 @@ do_dc_obj_fetch(tse_task_t *task, daos_obj_fetch_t *args,
 			DP_OID(obj->cob_md.omd_id), rc);
 		goto out_task;
 	}
+	obj_null_csum(args);
 
 	rc = obj_req_fanout(obj, obj_auxi, dkey_hash, map_ver, epoch,
 			    shard_rw_prep, dc_obj_shard_rw, task);

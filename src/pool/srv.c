@@ -31,6 +31,7 @@
 #include <daos_srv/pool.h>
 #include <daos/rpc.h>
 #include <daos_srv/daos_server.h>
+#include <daos_srv/bio.h>
 #include "rpc.h"
 #include "srv_internal.h"
 #include "srv_layout.h"
@@ -58,6 +59,7 @@ init(void)
 
 	ds_pool_rsvc_class_register();
 
+	bio_register_ract_ops(&nvme_reaction_ops);
 	return 0;
 
 err_pool_iv:

@@ -94,12 +94,16 @@ void ds_pool_connect_handler(crt_rpc_t *rpc);
 void ds_pool_disconnect_handler(crt_rpc_t *rpc);
 void ds_pool_query_handler(crt_rpc_t *rpc);
 void ds_pool_get_acl_handler(crt_rpc_t *rpc);
+void ds_pool_prop_set_handler(crt_rpc_t *rpc);
+void ds_pool_acl_update_handler(crt_rpc_t *rpc);
+void ds_pool_acl_delete_handler(crt_rpc_t *rpc);
 void ds_pool_update_handler(crt_rpc_t *rpc);
 void ds_pool_evict_handler(crt_rpc_t *rpc);
 void ds_pool_svc_stop_handler(crt_rpc_t *rpc);
 void ds_pool_attr_list_handler(crt_rpc_t *rpc);
 void ds_pool_attr_get_handler(crt_rpc_t *rpc);
 void ds_pool_attr_set_handler(crt_rpc_t *rpc);
+void ds_pool_list_cont_handler(crt_rpc_t *rpc);
 
 /*
  * srv_target.c
@@ -133,6 +137,7 @@ int ds_pool_map_tgts_update(struct pool_map *map,
 			    struct pool_target_id_list *tgts, int opc);
 int ds_pool_check_failed_replicas(struct pool_map *map, d_rank_list_t *replicas,
 				  d_rank_list_t *failed, d_rank_list_t *alt);
+extern struct bio_reaction_ops nvme_reaction_ops;
 
 /*
  * srv_iv.c

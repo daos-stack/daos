@@ -1319,8 +1319,6 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 		}
 		/** create an sgl from the user sgl for the current IOD */
 		else {
-			daos_size_t s;
-
 			/* set sgl for current dkey */
 			rc = create_sgl(user_sgl, array->cell_size,
 					dkey_records, &cur_off, &cur_i, sgl);
@@ -1328,15 +1326,6 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 				D_ERROR("Failed to create sgl\n");
 				D_GOTO(err_task, rc);
 			}
-
-			D_DEBUG(DB_IO, "DKEY SGL -----------------------\n");
-			D_DEBUG(DB_IO, "sg_nr = %u\n", sgl->sg_nr);
-			for (s = 0; s < sgl->sg_nr; s++) {
-				D_DEBUG(DB_IO, "%zu: length %zu, Buf %p\n",
-					s, sgl->sg_iovs[s].iov_len,
-					sgl->sg_iovs[s].iov_buf);
-			}
-			D_DEBUG(DB_IO, "--------------------------------\n");
 		}
 
 		/* issue IO to DAOS */

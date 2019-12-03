@@ -795,6 +795,25 @@ ds_mgmt_tgt_profile_hdlr(crt_rpc_t *rpc)
 	crt_reply_send(rpc);
 }
 
+/**
+ * Do Mark on a single target.
+ */
+void
+ds_mgmt_tgt_mark_hdlr(crt_rpc_t *rpc)
+{
+	struct mgmt_mark_in	*in;
+	struct mgmt_mark_out	*out;
+
+	in = crt_req_get(rpc);
+	D_ASSERT(in != NULL);
+
+	D_DEBUG(DB_TRACE, "Mark trace %s.\n", in->m_mark);
+
+	out = crt_reply_get(rpc);
+	out->m_rc = 0;
+	crt_reply_send(rpc);
+}
+
 /* State of the local system map (i.e., the CaRT PG membership) */
 static uint32_t sys_map_version;
 

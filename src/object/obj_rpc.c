@@ -169,7 +169,7 @@ crt_proc_daos_csum_buf_t(crt_proc_t proc, daos_csum_buf_t *csum)
 	if (rc != 0)
 		return -DER_HG;
 
-	if (csum->cs_buf_len < csum->cs_len) {
+	if (csum->cs_buf_len < csum->cs_len * csum->cs_nr) {
 		D_ERROR("invalid csum buf len %iu < csum len %hu\n",
 			csum->cs_buf_len, csum->cs_len);
 		return -DER_HG;
@@ -183,8 +183,8 @@ crt_proc_daos_csum_buf_t(crt_proc_t proc, daos_csum_buf_t *csum)
 		D_FREE(csum->cs_csum);
 	}
 
-	if (csum->cs_len > 0 && proc_op != CRT_PROC_FREE) {
-		rc = crt_proc_memcpy(proc, csum->cs_csum, csum->cs_len);
+	if (csum->cs_buf_len > 0 && proc_op != CRT_PROC_FREE) {
+		rc = crt_proc_memcpy(proc, csum->cs_csum, csum->cs_buf_len);
 		if (rc != 0) {
 			if (proc_op == CRT_PROC_DECODE)
 				D_FREE(csum->cs_csum);

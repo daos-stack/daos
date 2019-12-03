@@ -26,7 +26,6 @@ package main
 import (
 	"os"
 	"path"
-	"strings"
 
 	flags "github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
@@ -90,14 +89,17 @@ func appSetup(log logging.Logger, opts *cliOptions, conns client.Connect) error 
 	}
 
 	if opts.HostList != "" {
-		config.HostList = strings.Split(opts.HostList, ",")
+		config.HostList, err = flattenHostAddrs(opts.HostList)
+		if err != nil {
+			return err
+		}
 	}
 
 	if opts.HostFile != "" {
 		return errors.New("hostfile option not implemented")
 	}
 
-	if opts.Insecure == true {
+	if opts.Insecure {
 		config.TransportConfig.AllowInsecure = true
 	}
 
@@ -107,12 +109,16 @@ func appSetup(log logging.Logger, opts *cliOptions, conns client.Connect) error 
 	}
 	conns.SetTransportConfig(config.TransportConfig)
 
-	ok, out := hasConns(conns.ConnectClients(config.HostList))
-	if !ok {
-		return errors.New(out) // no active connections
+	connStates, err := checkConns(conns.ConnectClients(config.HostList))
+	if err != nil {
+		return err
+	}
+	if _, exists := connStates["connected"]; !exists {
+		log.Error(connStates.String())
+		return errors.New("no active connections")
 	}
 
-	log.Info(out)
+	log.Info(connStates.String())
 
 	return nil
 }

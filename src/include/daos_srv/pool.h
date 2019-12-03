@@ -36,6 +36,7 @@
 #include <daos/rpc.h>
 #include <daos/placement.h>
 #include <daos_srv/vos_types.h>
+#include <daos_security.h>
 
 /*
  * Pool object
@@ -144,6 +145,13 @@ int ds_pool_svc_destroy(const uuid_t pool_uuid);
 
 int ds_pool_svc_get_acl_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
 			     daos_prop_t **prop);
+int ds_pool_svc_set_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
+			 daos_prop_t *prop);
+int ds_pool_svc_update_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
+			   struct daos_acl *acl);
+int ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
+			   enum daos_acl_principal_type principal_type,
+			   const char *principal_name);
 
 /*
  * Called by dmg on the pool service leader to list all pool handles of a pool.
@@ -170,7 +178,7 @@ int ds_pool_cont_svc_lookup_leader(uuid_t pool_uuid, struct cont_svc **svc,
 				   struct rsvc_hint *hint);
 
 int ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank,
-			 d_iov_t *iv_iov, unsigned int iv_ns_id);
+			 unsigned int iv_ns_id);
 
 int ds_pool_svc_term_get(uuid_t uuid, uint64_t *term);
 

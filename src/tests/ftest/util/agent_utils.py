@@ -26,33 +26,120 @@ from __future__ import print_function
 import os
 import time
 import subprocess
-import json
 import getpass
 import socket
 import errno
 import fcntl
 import re
+import yaml
 
 from general_utils import pcmd, check_file_exists
-
+from command_utils import ObjectWithParameters, BasicParameter
 
 class AgentFailed(Exception):
     """Agent didn't start/stop properly."""
 
+class DaosAgentConfig(ObjectWithParameters):
+    """Defines the daos_agent configuration yaml parameters."""
 
-def run_agent(basepath, server_list, client_list=None):
+    class AgentSecurityConfig(ObjectWithParameters):
+        """Defines the configuration yaml parameters for agent security."""
+
+        def __init__(self):
+            """Create a AgentSecurityConfig object."""
+            super(DaosAgentConfig.AgentSecurityConfig, self).__init__(
+                "/run/agent_config/transport_config/*")
+            #transport_config:
+            #  allow_insecure: true
+            #  ca_cert:        .daos/daosCA.crt
+            #  cert:           .daos/daos_agent.crt
+            #  key:            .daos/daos_agent.key
+            #  server_name:    server
+            self.allow_insecure = BasicParameter(None, True)
+            self.ca_cert = BasicParameter(None, ".daos/daosCA.crt")
+            self.cert = BasicParameter(None, ".daos/daos_agent.crt")
+            self.key = BasicParameter(None, ".daos/daos_agent.key")
+            self.server_name = BasicParameter(None, "server")
+
+    def __init__(self):
+        """Create a DaosAgentConfig object."""
+        super(DaosAgentConfig, self).__init__("/run/agent_config/*")
+
+        # DaosAgentConfig Parameters
+        #   name: daos
+        #   access_points: ['server[0]:10001']
+        #   port: 10001
+        #   hostlist: ['host1', 'host2']
+        #   runtime_dir: /var/run/daos_agent
+        #   log_file: /tmp/daos_agent.log
+        self.name = BasicParameter(None, "daos")
+        self.access_points = BasicParameter(None)
+        self.port = BasicParameter(None, 10001)
+        self.hostlist = BasicParameter(None)
+        self.runtime_dir = BasicParameter(None, "/var/run/daos_agent")
+        self.log_file = BasicParameter(None, "/tmp/daos_agent.log")
+
+        # Agent transport_config parameters
+        self.transport_params = self.AgentSecurityConfig()
+
+    def get_params(self, test):
+        """Get values for all of the command params from the yaml file.
+
+        If no key matches are found in the yaml file the BasicParameter object
+        will be set to its default value.
+
+        Args:
+            test (Test): avocado Test object
+        """
+        super(DaosAgentConfig, self).get_params(test)
+        self.transport_params.get_params(test)
+
+    def create_yaml(self, filename):
+        """Create a yaml file from the parameter values.
+
+        Args:
+            filename (str): the yaml file to create
+        """
+        # Convert the parameters into a dictionary to write a yaml file
+        yaml_data = {"transport_config": []}
+        for name in self.get_param_names():
+            value = getattr(self, name).value
+            if value is not None and value is not False:
+                yaml_data[name] = getattr(self, name).value
+
+        # transport_config
+        yaml_data["transport_config"] = {}
+        for name in self.transport_params.get_param_names():
+            value = getattr(self.transport_params, name).value
+            if value is not None:
+                yaml_data["transport_config"][name] = value
+
+        # Write default_value_set dictionary in to self.tmp
+        # This will be used to start with daos_agent -o option.
+        print("<AGENT> Agent yaml_data= ", yaml_data)
+        try:
+            with open(filename, 'w') as write_file:
+                yaml.dump(yaml_data, write_file, default_flow_style=False)
+        except Exception as error:
+            print("<AGENT> Exception occurred: {0}".format(error))
+            raise AgentFailed(
+                "Error writing daos_agent command yaml file {}: {}".format(
+                    filename, error))
+
+def run_agent(test, server_list, client_list=None):
     """Start daos agents on the specified hosts.
 
-    Make sure the environment is setup for the security agent and then launches
-    it on the compute nodes.
+    Make sure the environment is setup for the security agent and then
+    launches it on the compute nodes.
 
     This is temporary; presuming the agent will deamonize at somepoint and
     can be started killed more appropriately.
 
     Args:
-        basepath (str): root directory for DAOS repo or installation
+        test (Test): provides tmp directory for DAOS repo or installation
         server_list (list): nodes acting as server nodes in the test
-        client_list (list, optional): nodes acting as client nodes in the test.
+        client_list (list, optional): nodes acting as client nodes in the
+                    test.
             Defaults to None.
 
     Raises:
@@ -65,8 +152,20 @@ def run_agent(basepath, server_list, client_list=None):
     sessions = {}
     user = getpass.getuser()
 
-    # if empty client list, 'self' is effectively client
+    # if empty client list, 'test' is effectively client
     client_list = include_local_host(client_list)
+
+    # Create the DAOS Agent configuration yaml file to pass
+    # with daos_agent -o <FILE_NAME>
+    agent_yaml = os.path.join(test.tmp, "daos_agent.yml")
+    agent_config = DaosAgentConfig()
+    agent_config.get_params(test)
+    agent_config.hostlist.value = client_list
+
+    access_point = ":".join((server_list[0], str(agent_config.port)))
+    agent_config.access_points.value = access_point.split()
+
+    agent_config.create_yaml(agent_yaml)
 
     # Verify the domain socket directory is present and owned by this user
     file_checks = (
@@ -81,9 +180,9 @@ def run_agent(basepath, server_list, client_list=None):
                     nodeset, host_type, directory, user))
 
     # launch the agent
-    with open(os.path.join(basepath, ".build_vars.json")) as json_vars:
-        build_vars = json.load(json_vars)
-    daos_agent_bin = os.path.join(build_vars["PREFIX"], "bin", "daos_agent")
+    daos_agent_bin = os.path.join(test.prefix, "bin", "daos_agent")
+    daos_agent_cmd = " ".join((daos_agent_bin, "-o", agent_yaml))
+    print("<AGENT> Agent command: ", daos_agent_cmd)
 
     for client in client_list:
         sessions[client] = subprocess.Popen(
@@ -97,6 +196,7 @@ def run_agent(basepath, server_list, client_list=None):
     timeout = 15
     started_clients = []
     for client in client_list:
+        print("<AGENT> Starting agent on {}".format(client))
         file_desc = sessions[client].stdout.fileno()
         flags = fcntl.fcntl(file_desc, fcntl.F_GETFL)
         fcntl.fcntl(file_desc, fcntl.F_SETFL, flags | os.O_NONBLOCK)
@@ -106,7 +206,7 @@ def run_agent(basepath, server_list, client_list=None):
         while not sessions[client].poll():
             if time.time() - start_time > timeout:
                 print("<AGENT>: {}".format(expected_data))
-                raise AgentFailed("DAOS Agent didn't start!  Agent reported:\n"
+                raise AgentFailed("DAOS Agent didn't start! Agent reported:\n"
                                   "{}before we gave up waiting for it to "
                                   "start".format(expected_data))
             output = ""

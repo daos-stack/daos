@@ -23,306 +23,6 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
-// Server state in the system map.
-type JoinResp_State int32
-
-const (
-	// Server in the system.
-	JoinResp_IN JoinResp_State = 0
-	// Server excluded from the system.
-	JoinResp_OUT JoinResp_State = 1
-)
-
-var JoinResp_State_name = map[int32]string{
-	0: "IN",
-	1: "OUT",
-}
-var JoinResp_State_value = map[string]int32{
-	"IN":  0,
-	"OUT": 1,
-}
-
-func (x JoinResp_State) String() string {
-	return proto.EnumName(JoinResp_State_name, int32(x))
-}
-func (JoinResp_State) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_mgmt_a404ff484af13629, []int{1, 0}
-}
-
-type JoinReq struct {
-	// Server UUID.
-	Uuid string `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
-	// Server rank desired, if not -1.
-	Rank uint32 `protobuf:"varint,2,opt,name=rank,proto3" json:"rank,omitempty"`
-	// Server CaRT base URI (i.e., for context 0).
-	Uri string `protobuf:"bytes,3,opt,name=uri,proto3" json:"uri,omitempty"`
-	// Server CaRT context count.
-	Nctxs uint32 `protobuf:"varint,4,opt,name=nctxs,proto3" json:"nctxs,omitempty"`
-	// Server management address.
-	Addr                 string   `protobuf:"bytes,5,opt,name=addr,proto3" json:"addr,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
-}
-
-func (m *JoinReq) Reset()         { *m = JoinReq{} }
-func (m *JoinReq) String() string { return proto.CompactTextString(m) }
-func (*JoinReq) ProtoMessage()    {}
-func (*JoinReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_mgmt_a404ff484af13629, []int{0}
-}
-func (m *JoinReq) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_JoinReq.Unmarshal(m, b)
-}
-func (m *JoinReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_JoinReq.Marshal(b, m, deterministic)
-}
-func (dst *JoinReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_JoinReq.Merge(dst, src)
-}
-func (m *JoinReq) XXX_Size() int {
-	return xxx_messageInfo_JoinReq.Size(m)
-}
-func (m *JoinReq) XXX_DiscardUnknown() {
-	xxx_messageInfo_JoinReq.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_JoinReq proto.InternalMessageInfo
-
-func (m *JoinReq) GetUuid() string {
-	if m != nil {
-		return m.Uuid
-	}
-	return ""
-}
-
-func (m *JoinReq) GetRank() uint32 {
-	if m != nil {
-		return m.Rank
-	}
-	return 0
-}
-
-func (m *JoinReq) GetUri() string {
-	if m != nil {
-		return m.Uri
-	}
-	return ""
-}
-
-func (m *JoinReq) GetNctxs() uint32 {
-	if m != nil {
-		return m.Nctxs
-	}
-	return 0
-}
-
-func (m *JoinReq) GetAddr() string {
-	if m != nil {
-		return m.Addr
-	}
-	return ""
-}
-
-type JoinResp struct {
-	// DAOS error code
-	Status int32 `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`
-	// Server rank assigned.
-	Rank                 uint32         `protobuf:"varint,2,opt,name=rank,proto3" json:"rank,omitempty"`
-	State                JoinResp_State `protobuf:"varint,3,opt,name=state,proto3,enum=mgmt.JoinResp_State" json:"state,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
-	XXX_unrecognized     []byte         `json:"-"`
-	XXX_sizecache        int32          `json:"-"`
-}
-
-func (m *JoinResp) Reset()         { *m = JoinResp{} }
-func (m *JoinResp) String() string { return proto.CompactTextString(m) }
-func (*JoinResp) ProtoMessage()    {}
-func (*JoinResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_mgmt_a404ff484af13629, []int{1}
-}
-func (m *JoinResp) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_JoinResp.Unmarshal(m, b)
-}
-func (m *JoinResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_JoinResp.Marshal(b, m, deterministic)
-}
-func (dst *JoinResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_JoinResp.Merge(dst, src)
-}
-func (m *JoinResp) XXX_Size() int {
-	return xxx_messageInfo_JoinResp.Size(m)
-}
-func (m *JoinResp) XXX_DiscardUnknown() {
-	xxx_messageInfo_JoinResp.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_JoinResp proto.InternalMessageInfo
-
-func (m *JoinResp) GetStatus() int32 {
-	if m != nil {
-		return m.Status
-	}
-	return 0
-}
-
-func (m *JoinResp) GetRank() uint32 {
-	if m != nil {
-		return m.Rank
-	}
-	return 0
-}
-
-func (m *JoinResp) GetState() JoinResp_State {
-	if m != nil {
-		return m.State
-	}
-	return JoinResp_IN
-}
-
-type GetAttachInfoReq struct {
-	// System name. For daos_agent only.
-	Sys                  string   `protobuf:"bytes,1,opt,name=sys,proto3" json:"sys,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
-}
-
-func (m *GetAttachInfoReq) Reset()         { *m = GetAttachInfoReq{} }
-func (m *GetAttachInfoReq) String() string { return proto.CompactTextString(m) }
-func (*GetAttachInfoReq) ProtoMessage()    {}
-func (*GetAttachInfoReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_mgmt_a404ff484af13629, []int{2}
-}
-func (m *GetAttachInfoReq) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_GetAttachInfoReq.Unmarshal(m, b)
-}
-func (m *GetAttachInfoReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_GetAttachInfoReq.Marshal(b, m, deterministic)
-}
-func (dst *GetAttachInfoReq) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_GetAttachInfoReq.Merge(dst, src)
-}
-func (m *GetAttachInfoReq) XXX_Size() int {
-	return xxx_messageInfo_GetAttachInfoReq.Size(m)
-}
-func (m *GetAttachInfoReq) XXX_DiscardUnknown() {
-	xxx_messageInfo_GetAttachInfoReq.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_GetAttachInfoReq proto.InternalMessageInfo
-
-func (m *GetAttachInfoReq) GetSys() string {
-	if m != nil {
-		return m.Sys
-	}
-	return ""
-}
-
-type GetAttachInfoResp struct {
-	// DAOS error code
-	Status int32 `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`
-	// CaRT PSRs of the system group.
-	Psrs                 []*GetAttachInfoResp_Psr `protobuf:"bytes,2,rep,name=psrs,proto3" json:"psrs,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}                 `json:"-"`
-	XXX_unrecognized     []byte                   `json:"-"`
-	XXX_sizecache        int32                    `json:"-"`
-}
-
-func (m *GetAttachInfoResp) Reset()         { *m = GetAttachInfoResp{} }
-func (m *GetAttachInfoResp) String() string { return proto.CompactTextString(m) }
-func (*GetAttachInfoResp) ProtoMessage()    {}
-func (*GetAttachInfoResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_mgmt_a404ff484af13629, []int{3}
-}
-func (m *GetAttachInfoResp) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_GetAttachInfoResp.Unmarshal(m, b)
-}
-func (m *GetAttachInfoResp) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_GetAttachInfoResp.Marshal(b, m, deterministic)
-}
-func (dst *GetAttachInfoResp) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_GetAttachInfoResp.Merge(dst, src)
-}
-func (m *GetAttachInfoResp) XXX_Size() int {
-	return xxx_messageInfo_GetAttachInfoResp.Size(m)
-}
-func (m *GetAttachInfoResp) XXX_DiscardUnknown() {
-	xxx_messageInfo_GetAttachInfoResp.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_GetAttachInfoResp proto.InternalMessageInfo
-
-func (m *GetAttachInfoResp) GetStatus() int32 {
-	if m != nil {
-		return m.Status
-	}
-	return 0
-}
-
-func (m *GetAttachInfoResp) GetPsrs() []*GetAttachInfoResp_Psr {
-	if m != nil {
-		return m.Psrs
-	}
-	return nil
-}
-
-// CaRT PSR.
-type GetAttachInfoResp_Psr struct {
-	Rank                 uint32   `protobuf:"varint,1,opt,name=rank,proto3" json:"rank,omitempty"`
-	Uri                  string   `protobuf:"bytes,2,opt,name=uri,proto3" json:"uri,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
-}
-
-func (m *GetAttachInfoResp_Psr) Reset()         { *m = GetAttachInfoResp_Psr{} }
-func (m *GetAttachInfoResp_Psr) String() string { return proto.CompactTextString(m) }
-func (*GetAttachInfoResp_Psr) ProtoMessage()    {}
-func (*GetAttachInfoResp_Psr) Descriptor() ([]byte, []int) {
-	return fileDescriptor_mgmt_a404ff484af13629, []int{3, 0}
-}
-func (m *GetAttachInfoResp_Psr) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_GetAttachInfoResp_Psr.Unmarshal(m, b)
-}
-func (m *GetAttachInfoResp_Psr) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_GetAttachInfoResp_Psr.Marshal(b, m, deterministic)
-}
-func (dst *GetAttachInfoResp_Psr) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_GetAttachInfoResp_Psr.Merge(dst, src)
-}
-func (m *GetAttachInfoResp_Psr) XXX_Size() int {
-	return xxx_messageInfo_GetAttachInfoResp_Psr.Size(m)
-}
-func (m *GetAttachInfoResp_Psr) XXX_DiscardUnknown() {
-	xxx_messageInfo_GetAttachInfoResp_Psr.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_GetAttachInfoResp_Psr proto.InternalMessageInfo
-
-func (m *GetAttachInfoResp_Psr) GetRank() uint32 {
-	if m != nil {
-		return m.Rank
-	}
-	return 0
-}
-
-func (m *GetAttachInfoResp_Psr) GetUri() string {
-	if m != nil {
-		return m.Uri
-	}
-	return ""
-}
-
-func init() {
-	proto.RegisterType((*JoinReq)(nil), "mgmt.JoinReq")
-	proto.RegisterType((*JoinResp)(nil), "mgmt.JoinResp")
-	proto.RegisterType((*GetAttachInfoReq)(nil), "mgmt.GetAttachInfoReq")
-	proto.RegisterType((*GetAttachInfoResp)(nil), "mgmt.GetAttachInfoResp")
-	proto.RegisterType((*GetAttachInfoResp_Psr)(nil), "mgmt.GetAttachInfoResp.Psr")
-	proto.RegisterEnum("mgmt.JoinResp_State", JoinResp_State_name, JoinResp_State_value)
-}
-
 // Reference imports to suppress errors if they are not otherwise used.
 var _ context.Context
 var _ grpc.ClientConn
@@ -342,7 +42,13 @@ type MgmtSvcClient interface {
 	// Destroy a DAOS pool allocated across a number of ranks
 	PoolDestroy(ctx context.Context, in *PoolDestroyReq, opts ...grpc.CallOption) (*PoolDestroyResp, error)
 	// Fetch the Access Control List for a DAOS pool
-	PoolGetACL(ctx context.Context, in *GetACLReq, opts ...grpc.CallOption) (*GetACLResp, error)
+	PoolGetACL(ctx context.Context, in *GetACLReq, opts ...grpc.CallOption) (*ACLResp, error)
+	// Overwrite the Access Control List for a DAOS pool with a new one.
+	PoolOverwriteACL(ctx context.Context, in *ModifyACLReq, opts ...grpc.CallOption) (*ACLResp, error)
+	// Update existing the Access Control List for a DAOS pool with new entries.
+	PoolUpdateACL(ctx context.Context, in *ModifyACLReq, opts ...grpc.CallOption) (*ACLResp, error)
+	// Delete an entry from a DAOS pool's Access Control List
+	PoolDeleteACL(ctx context.Context, in *DeleteACLReq, opts ...grpc.CallOption) (*ACLResp, error)
 	// Get the information required by libdaos to attach to the system.
 	GetAttachInfo(ctx context.Context, in *GetAttachInfoReq, opts ...grpc.CallOption) (*GetAttachInfoResp, error)
 	// Get BIO device health information
@@ -351,8 +57,10 @@ type MgmtSvcClient interface {
 	SmdListDevs(ctx context.Context, in *SmdDevReq, opts ...grpc.CallOption) (*SmdDevResp, error)
 	// Get SMD pool list
 	SmdListPools(ctx context.Context, in *SmdPoolReq, opts ...grpc.CallOption) (*SmdPoolResp, error)
-	// Kill a given rank associated with a given pool
-	KillRank(ctx context.Context, in *DaosRank, opts ...grpc.CallOption) (*DaosResp, error)
+	// Kill DAOS IO server identified by rank.
+	KillRank(ctx context.Context, in *KillRankReq, opts ...grpc.CallOption) (*DaosResp, error)
+	// List all pools in a DAOS system: basic info: UUIDs, service ranks
+	ListPools(ctx context.Context, in *ListPoolsReq, opts ...grpc.CallOption) (*ListPoolsResp, error)
 }
 
 type mgmtSvcClient struct {
@@ -390,9 +98,36 @@ func (c *mgmtSvcClient) PoolDestroy(ctx context.Context, in *PoolDestroyReq, opt
 	return out, nil
 }
 
-func (c *mgmtSvcClient) PoolGetACL(ctx context.Context, in *GetACLReq, opts ...grpc.CallOption) (*GetACLResp, error) {
-	out := new(GetACLResp)
+func (c *mgmtSvcClient) PoolGetACL(ctx context.Context, in *GetACLReq, opts ...grpc.CallOption) (*ACLResp, error) {
+	out := new(ACLResp)
 	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/PoolGetACL", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) PoolOverwriteACL(ctx context.Context, in *ModifyACLReq, opts ...grpc.CallOption) (*ACLResp, error) {
+	out := new(ACLResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/PoolOverwriteACL", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) PoolUpdateACL(ctx context.Context, in *ModifyACLReq, opts ...grpc.CallOption) (*ACLResp, error) {
+	out := new(ACLResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/PoolUpdateACL", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) PoolDeleteACL(ctx context.Context, in *DeleteACLReq, opts ...grpc.CallOption) (*ACLResp, error) {
+	out := new(ACLResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/PoolDeleteACL", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -435,9 +170,18 @@ func (c *mgmtSvcClient) SmdListPools(ctx context.Context, in *SmdPoolReq, opts .
 	return out, nil
 }
 
-func (c *mgmtSvcClient) KillRank(ctx context.Context, in *DaosRank, opts ...grpc.CallOption) (*DaosResp, error) {
+func (c *mgmtSvcClient) KillRank(ctx context.Context, in *KillRankReq, opts ...grpc.CallOption) (*DaosResp, error) {
 	out := new(DaosResp)
 	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/KillRank", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) ListPools(ctx context.Context, in *ListPoolsReq, opts ...grpc.CallOption) (*ListPoolsResp, error) {
+	out := new(ListPoolsResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/ListPools", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -453,7 +197,13 @@ type MgmtSvcServer interface {
 	// Destroy a DAOS pool allocated across a number of ranks
 	PoolDestroy(context.Context, *PoolDestroyReq) (*PoolDestroyResp, error)
 	// Fetch the Access Control List for a DAOS pool
-	PoolGetACL(context.Context, *GetACLReq) (*GetACLResp, error)
+	PoolGetACL(context.Context, *GetACLReq) (*ACLResp, error)
+	// Overwrite the Access Control List for a DAOS pool with a new one.
+	PoolOverwriteACL(context.Context, *ModifyACLReq) (*ACLResp, error)
+	// Update existing the Access Control List for a DAOS pool with new entries.
+	PoolUpdateACL(context.Context, *ModifyACLReq) (*ACLResp, error)
+	// Delete an entry from a DAOS pool's Access Control List
+	PoolDeleteACL(context.Context, *DeleteACLReq) (*ACLResp, error)
 	// Get the information required by libdaos to attach to the system.
 	GetAttachInfo(context.Context, *GetAttachInfoReq) (*GetAttachInfoResp, error)
 	// Get BIO device health information
@@ -462,8 +212,10 @@ type MgmtSvcServer interface {
 	SmdListDevs(context.Context, *SmdDevReq) (*SmdDevResp, error)
 	// Get SMD pool list
 	SmdListPools(context.Context, *SmdPoolReq) (*SmdPoolResp, error)
-	// Kill a given rank associated with a given pool
-	KillRank(context.Context, *DaosRank) (*DaosResp, error)
+	// Kill DAOS IO server identified by rank.
+	KillRank(context.Context, *KillRankReq) (*DaosResp, error)
+	// List all pools in a DAOS system: basic info: UUIDs, service ranks
+	ListPools(context.Context, *ListPoolsReq) (*ListPoolsResp, error)
 }
 
 func RegisterMgmtSvcServer(s *grpc.Server, srv MgmtSvcServer) {
@@ -542,6 +294,60 @@ func _MgmtSvc_PoolGetACL_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MgmtSvc_PoolOverwriteACL_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ModifyACLReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).PoolOverwriteACL(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/PoolOverwriteACL",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).PoolOverwriteACL(ctx, req.(*ModifyACLReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_PoolUpdateACL_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ModifyACLReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).PoolUpdateACL(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/PoolUpdateACL",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).PoolUpdateACL(ctx, req.(*ModifyACLReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_PoolDeleteACL_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteACLReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).PoolDeleteACL(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/PoolDeleteACL",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).PoolDeleteACL(ctx, req.(*DeleteACLReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _MgmtSvc_GetAttachInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetAttachInfoReq)
 	if err := dec(in); err != nil {
@@ -615,7 +421,7 @@ func _MgmtSvc_SmdListPools_Handler(srv interface{}, ctx context.Context, dec fun
 }
 
 func _MgmtSvc_KillRank_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DaosRank)
+	in := new(KillRankReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -627,7 +433,25 @@ func _MgmtSvc_KillRank_Handler(srv interface{}, ctx context.Context, dec func(in
 		FullMethod: "/mgmt.MgmtSvc/KillRank",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MgmtSvcServer).KillRank(ctx, req.(*DaosRank))
+		return srv.(MgmtSvcServer).KillRank(ctx, req.(*KillRankReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_ListPools_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPoolsReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).ListPools(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/ListPools",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).ListPools(ctx, req.(*ListPoolsReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -653,6 +477,18 @@ var _MgmtSvc_serviceDesc = grpc.ServiceDesc{
 			Handler:    _MgmtSvc_PoolGetACL_Handler,
 		},
 		{
+			MethodName: "PoolOverwriteACL",
+			Handler:    _MgmtSvc_PoolOverwriteACL_Handler,
+		},
+		{
+			MethodName: "PoolUpdateACL",
+			Handler:    _MgmtSvc_PoolUpdateACL_Handler,
+		},
+		{
+			MethodName: "PoolDeleteACL",
+			Handler:    _MgmtSvc_PoolDeleteACL_Handler,
+		},
+		{
 			MethodName: "GetAttachInfo",
 			Handler:    _MgmtSvc_GetAttachInfo_Handler,
 		},
@@ -672,44 +508,40 @@ var _MgmtSvc_serviceDesc = grpc.ServiceDesc{
 			MethodName: "KillRank",
 			Handler:    _MgmtSvc_KillRank_Handler,
 		},
+		{
+			MethodName: "ListPools",
+			Handler:    _MgmtSvc_ListPools_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "mgmt.proto",
 }
 
-func init() { proto.RegisterFile("mgmt.proto", fileDescriptor_mgmt_a404ff484af13629) }
+func init() { proto.RegisterFile("mgmt.proto", fileDescriptor_mgmt_1cc9d18a2569430d) }
 
-var fileDescriptor_mgmt_a404ff484af13629 = []byte{
-	// 493 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x7c, 0x53, 0x5d, 0x8f, 0xd2, 0x50,
-	0x10, 0xa5, 0xb4, 0x85, 0xdd, 0x41, 0xb0, 0x3b, 0xe0, 0xda, 0xd4, 0x17, 0xd2, 0x98, 0x48, 0xd4,
-	0x60, 0xc4, 0xf8, 0x60, 0xf4, 0xc5, 0x85, 0x44, 0x57, 0x51, 0xb1, 0xe8, 0xb3, 0xa9, 0xf4, 0xca,
-	0x36, 0xb6, 0x5c, 0xb8, 0xf7, 0x96, 0x48, 0xe2, 0x1f, 0xf0, 0x1f, 0xfb, 0x68, 0xe6, 0xb6, 0x7c,
-	0x2d, 0xb8, 0x6f, 0x33, 0x67, 0xce, 0xb9, 0x33, 0xe7, 0x14, 0x00, 0xd2, 0x69, 0xaa, 0xba, 0x73,
-	0xc1, 0x15, 0x47, 0x8b, 0x6a, 0x0f, 0xe6, 0x9c, 0x27, 0x39, 0xe2, 0x9d, 0x4a, 0xb1, 0x2c, 0xca,
-	0xa6, 0x54, 0x5c, 0x84, 0x53, 0xf6, 0x6d, 0x91, 0x31, 0xb1, 0x5a, 0xcf, 0xc3, 0x49, 0x41, 0xf5,
-	0x53, 0xa8, 0xbe, 0xe3, 0xf1, 0x2c, 0x60, 0x0b, 0x44, 0xb0, 0xb2, 0x2c, 0x8e, 0x5c, 0xa3, 0x6d,
-	0x74, 0x4e, 0x03, 0x5d, 0x13, 0x26, 0xc2, 0xd9, 0x4f, 0xb7, 0xdc, 0x36, 0x3a, 0xf5, 0x40, 0xd7,
-	0xe8, 0x80, 0x99, 0x89, 0xd8, 0x35, 0x35, 0x8d, 0x4a, 0x6c, 0x81, 0x3d, 0x9b, 0xa8, 0x5f, 0xd2,
-	0xb5, 0x34, 0x2d, 0x6f, 0x48, 0x1b, 0x46, 0x91, 0x70, 0xed, 0xfc, 0x3d, 0xaa, 0xfd, 0xdf, 0x70,
-	0x92, 0xaf, 0x93, 0x73, 0x3c, 0x87, 0x8a, 0x54, 0xa1, 0xca, 0xa4, 0xde, 0x68, 0x07, 0x45, 0x77,
-	0x74, 0xe7, 0x43, 0xb0, 0x69, 0xca, 0xf4, 0xd6, 0x46, 0xaf, 0xd5, 0xd5, 0xfe, 0xd7, 0x4f, 0x75,
-	0xc7, 0x34, 0x0b, 0x72, 0x8a, 0xef, 0x82, 0xad, 0x7b, 0xac, 0x40, 0xf9, 0xf2, 0xa3, 0x53, 0xc2,
-	0x2a, 0x98, 0x9f, 0xbe, 0x7e, 0x71, 0x0c, 0xff, 0x3e, 0x38, 0x6f, 0x98, 0x7a, 0xad, 0x54, 0x38,
-	0xb9, 0xba, 0x9c, 0xfd, 0xe0, 0xe4, 0xda, 0x01, 0x53, 0xae, 0x64, 0x61, 0x9a, 0x4a, 0xff, 0x8f,
-	0x01, 0x67, 0xd7, 0x68, 0x37, 0x5c, 0xfb, 0x04, 0xac, 0xb9, 0x14, 0xd2, 0x2d, 0xb7, 0xcd, 0x4e,
-	0xad, 0x77, 0x2f, 0x3f, 0xec, 0x40, 0xde, 0x1d, 0x49, 0x11, 0x68, 0xa2, 0xf7, 0x08, 0xcc, 0x91,
-	0x14, 0x1b, 0x97, 0xc6, 0x61, 0xb2, 0xe5, 0x4d, 0xb2, 0xbd, 0xbf, 0x26, 0x54, 0x3f, 0x4c, 0x53,
-	0x35, 0x5e, 0x4e, 0xf0, 0x01, 0x58, 0x64, 0x18, 0xeb, 0xbb, 0xe6, 0x17, 0x5e, 0x63, 0x3f, 0x0b,
-	0xbf, 0x84, 0x2f, 0x00, 0x46, 0x9c, 0x27, 0x7d, 0xc1, 0x28, 0x85, 0x66, 0x3e, 0xdf, 0x22, 0x24,
-	0x6a, 0x1d, 0x82, 0x5a, 0xfa, 0x0a, 0x6a, 0x84, 0x0d, 0x98, 0x54, 0x82, 0xaf, 0x70, 0x87, 0x56,
-	0x40, 0x24, 0xbe, 0x73, 0x04, 0xd5, 0xea, 0xa7, 0xf9, 0x62, 0x72, 0xdf, 0x1f, 0xe2, 0xed, 0x6d,
-	0x16, 0xfd, 0x21, 0xe9, 0x9c, 0x7d, 0x40, 0x4b, 0x2e, 0xa0, 0xbe, 0x17, 0x16, 0x9e, 0x1f, 0x4d,
-	0x70, 0xe1, 0xdd, 0xfd, 0x4f, 0xb2, 0x7e, 0x09, 0x5f, 0x42, 0xe3, 0x22, 0xe6, 0x6f, 0x59, 0x98,
-	0xa8, 0xab, 0xcf, 0xf4, 0x33, 0x47, 0xcc, 0xc9, 0x1b, 0x94, 0x1e, 0x68, 0x1e, 0x60, 0x5a, 0xdc,
-	0x83, 0xda, 0x38, 0x8d, 0x86, 0xb1, 0x54, 0x03, 0xb6, 0x94, 0xeb, 0xa3, 0xc7, 0x69, 0x34, 0x60,
-	0xcb, 0x9d, 0xa3, 0xd7, 0x80, 0xd6, 0x3c, 0x87, 0x5b, 0x85, 0x86, 0xec, 0x4a, 0xdc, 0x72, 0xa8,
-	0x27, 0xd5, 0xd9, 0x35, 0x44, 0xcb, 0x1e, 0xc3, 0xc9, 0xfb, 0x38, 0x49, 0x02, 0xfa, 0xd4, 0xc5,
-	0x57, 0x1b, 0x84, 0x5c, 0x52, 0xef, 0xed, 0xf6, 0x9a, 0xfd, 0xbd, 0xa2, 0xff, 0xa0, 0xcf, 0xfe,
-	0x05, 0x00, 0x00, 0xff, 0xff, 0x7a, 0x29, 0x43, 0x65, 0xeb, 0x03, 0x00, 0x00,
+var fileDescriptor_mgmt_1cc9d18a2569430d = []byte{
+	// 359 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x92, 0xcb, 0x4f, 0xfa, 0x40,
+	0x10, 0xc7, 0x7f, 0x07, 0x7e, 0x2a, 0x83, 0x20, 0x2e, 0x3e, 0x12, 0x8e, 0x5e, 0xbc, 0x61, 0x82,
+	0xaf, 0x18, 0xbd, 0x08, 0x4d, 0x7c, 0x41, 0x54, 0x88, 0x67, 0xb3, 0xd2, 0x01, 0x1a, 0x5b, 0xb6,
+	0xec, 0xae, 0x35, 0xfc, 0xa1, 0xfe, 0x3f, 0x66, 0xb6, 0xdb, 0x07, 0x52, 0x0f, 0xde, 0x76, 0x3e,
+	0xfb, 0xfd, 0xcc, 0x30, 0x74, 0x01, 0x82, 0x49, 0xa0, 0x5b, 0xa1, 0x14, 0x5a, 0xb0, 0x12, 0x9d,
+	0x9b, 0x10, 0x0a, 0xe1, 0xc7, 0xa4, 0x59, 0x56, 0x32, 0xb2, 0xc7, 0x86, 0xd2, 0x42, 0xf2, 0x09,
+	0xbe, 0xce, 0x3f, 0x50, 0x2e, 0x92, 0x7b, 0x3e, 0xb2, 0xd1, 0xf6, 0xd7, 0x7f, 0x58, 0xef, 0x4f,
+	0x02, 0x3d, 0x8c, 0x46, 0xec, 0x10, 0x4a, 0xf7, 0xc2, 0x9b, 0xb1, 0x6a, 0xcb, 0x74, 0xa7, 0xf3,
+	0x00, 0xe7, 0xcd, 0x5a, 0xbe, 0x54, 0xe1, 0xc1, 0x3f, 0x76, 0x01, 0xf0, 0x24, 0x84, 0xdf, 0x95,
+	0xc8, 0x35, 0xb2, 0x46, 0x7c, 0x9f, 0x11, 0x92, 0x76, 0x56, 0xa1, 0x51, 0xaf, 0xa0, 0x42, 0xcc,
+	0x41, 0xa5, 0xa5, 0x58, 0xb0, 0x5c, 0xcc, 0x22, 0x92, 0x77, 0x0b, 0xa8, 0xb1, 0x5b, 0xf1, 0xe0,
+	0x1b, 0xd4, 0xd7, 0xdd, 0x1e, 0xdb, 0x8a, 0x63, 0x71, 0x45, 0x9e, 0xfd, 0xe1, 0xa6, 0x32, 0xf9,
+	0x73, 0xa8, 0x53, 0xfe, 0x31, 0x42, 0xf9, 0x29, 0x3d, 0x8d, 0x64, 0xb1, 0x38, 0xd4, 0x17, 0xae,
+	0x37, 0x5e, 0xfc, 0x26, 0x9e, 0x40, 0x95, 0xc4, 0x97, 0xd0, 0xe5, 0x7f, 0xb7, 0x1c, 0xf4, 0x71,
+	0xc9, 0x4a, 0x41, 0xa1, 0xd5, 0x81, 0x2a, 0xad, 0xa0, 0x35, 0x1f, 0x4d, 0xef, 0x66, 0x63, 0xc1,
+	0xf6, 0xb2, 0xbd, 0x52, 0x48, 0xe6, 0x7e, 0x21, 0x37, 0x3d, 0x2e, 0xa1, 0xd6, 0xf1, 0xc4, 0x2d,
+	0x72, 0x5f, 0x4f, 0x9f, 0xe9, 0x4b, 0x27, 0xa3, 0x53, 0x4a, 0x0d, 0x1a, 0x2b, 0xcc, 0xc8, 0x6d,
+	0xa8, 0x0c, 0x03, 0xb7, 0xe7, 0x29, 0xed, 0x60, 0xa4, 0x92, 0xbf, 0x75, 0x18, 0xb8, 0x0e, 0x46,
+	0xa4, 0xd5, 0x97, 0x81, 0x71, 0x4e, 0x61, 0xd3, 0x3a, 0xb4, 0xb1, 0x62, 0x59, 0x86, 0x6a, 0xb2,
+	0xb6, 0x7f, 0x10, 0xa3, 0x1d, 0xc1, 0xc6, 0x83, 0xe7, 0xfb, 0x03, 0x3e, 0x7b, 0x67, 0x36, 0x90,
+	0xd4, 0xb9, 0xa7, 0xe6, 0x70, 0xa1, 0xac, 0x70, 0x06, 0xe5, 0x6c, 0x88, 0xdd, 0x29, 0x05, 0xb9,
+	0x9d, 0x72, 0x8c, 0xbc, 0xb7, 0x35, 0xf3, 0xbc, 0x8f, 0xbf, 0x03, 0x00, 0x00, 0xff, 0xff, 0x30,
+	0xfc, 0x3e, 0xf8, 0x29, 0x03, 0x00, 0x00,
 }

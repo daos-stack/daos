@@ -36,12 +36,9 @@ import (
 type mgmtModule struct{}
 
 // HandleCall is the handler for calls to the mgmtModule
-func (m *mgmtModule) HandleCall(client *drpc.Client, method int32, body []byte) ([]byte, error) {
+func (m *mgmtModule) HandleCall(session *drpc.Session, method int32, body []byte) ([]byte, error) {
 	return nil, errors.New("mgmt module handler is not implemented")
 }
-
-// InitModule is empty for this module
-func (m *mgmtModule) InitModule(state drpc.ModuleState) {}
 
 // ID will return Mgmt module ID
 func (m *mgmtModule) ID() int32 {
@@ -55,7 +52,7 @@ type srvModule struct {
 }
 
 // HandleCall is the handler for calls to the srvModule.
-func (mod *srvModule) HandleCall(cli *drpc.Client, method int32, req []byte) ([]byte, error) {
+func (mod *srvModule) HandleCall(session *drpc.Session, method int32, req []byte) ([]byte, error) {
 	switch method {
 	case drpc.MethodNotifyReady:
 		return nil, mod.handleNotifyReady(req)
@@ -63,8 +60,6 @@ func (mod *srvModule) HandleCall(cli *drpc.Client, method int32, req []byte) ([]
 		return nil, errors.Errorf("unknown dRPC %d", method)
 	}
 }
-
-func (mod *srvModule) InitModule(state drpc.ModuleState) {}
 
 func (mod *srvModule) ID() int32 {
 	return drpc.ModuleSrv

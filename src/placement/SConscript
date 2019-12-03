@@ -15,11 +15,12 @@ def scons():
 
     # Common placement code
     common_tgts = denv.SharedObject(['pl_map.c', 'ring_map.c',
-                                     'jump_map.c', 'pl_map_common.c'])
+                                     'jump_map.c', 'pl_map_common.c',
+				     'tests/place_obj_common.c'])
 
     # generate server module
     srv = daos_build.library(denv, 'placement', common_tgts)
-    denv.Install('$PREFIX/lib/daos_srv', srv)
+    denv.Install('$PREFIX/lib64/daos_srv', srv)
 
     # placement client library
     dc_placement_tgts = common_tgts

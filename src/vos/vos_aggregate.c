@@ -29,7 +29,6 @@
 #include <daos/object.h>	/* for daos_unit_oid_compare() */
 #include "vos_internal.h"
 
-#define AGG_CREDITS_MAX		256
 /*
  * EV tree sorted iterator returns logical entry in extent start order, and
  * the information like: physical entry it belongs to, visibility, is it the
@@ -147,6 +146,18 @@ struct vos_agg_param {
 static inline void
 mark_yield(bio_addr_t *addr, unsigned int *acts)
 {
+	/*
+	 * When read/write or reserve/delete a NVMe record, the BIO or VEA
+	 * call might yield (BIO read/write yield and wait for NVMe DMA done,
+	 * VEA reserve/free may trigger free extents reclaiming then yield
+	 * and wait on blob unmap done).
+	 *
+	 * But we can't tell if it really yield or not (BIO read/write could
+	 * skip DMA transfer on certain cases, free extents reclaiming isn't
+	 * necessarily being triggered on every VEA call), to ensure the
+	 * correctness, we always inform vos_iterate() yield, which may result
+	 * in some unnecessary re-probe.
+	 */
 	if (addr->ba_type == DAOS_MEDIA_NVME)
 		*acts |= VOS_ITER_CB_YIELD;
 }
@@ -181,17 +192,78 @@ agg_del_entry(daos_handle_t ih, struct umem_instance *umm,
 	return rc;
 }
 
+static bool
+subtree_empty(vos_iter_type_t child_type, struct vos_agg_param *agg_param)
+{
+	vos_iter_param_t	iter_param = { 0 };
+	daos_handle_t		sub_ih;
+	bool			empty = false;
+	int			rc;
+
+	switch (child_type) {
+	case VOS_ITER_NONE:
+		return true;
+	case VOS_ITER_SINGLE:
+	case VOS_ITER_RECX:
+	      iter_param.ip_akey = agg_param->ap_akey;
+	case VOS_ITER_AKEY:
+	      iter_param.ip_dkey = agg_param->ap_dkey;
+	case VOS_ITER_DKEY:
+	      iter_param.ip_oid = agg_param->ap_oid;
+	      break;
+	default:
+	      D_ASSERTF(0, "Invalid child type %d\n", child_type);
+	      break;
+	}
+
+	iter_param.ip_hdl = agg_param->ap_coh;
+	iter_param.ip_ih = DAOS_HDL_INVAL;
+	iter_param.ip_epr.epr_lo = 0;
+	iter_param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	iter_param.ip_epc_expr = VOS_IT_EPC_GE;
+	iter_param.ip_flags = VOS_IT_PUNCHED | VOS_IT_RECX_ALL;
+
+	rc = vos_iter_prepare(child_type, &iter_param, &sub_ih);
+	if (rc == 0) {
+		empty = vos_iter_empty(sub_ih);
+		vos_iter_finish(sub_ih);
+	} else if (rc == -DER_NONEXIST) {
+		empty = true;
+	} else {
+		D_ERROR("Failed to prepare %d iterator: %d\n", child_type, rc);
+	}
+
+	return empty;
+}
+
 static int
 agg_discard_parent(daos_handle_t ih, vos_iter_entry_t *entry,
 		   struct vos_agg_param *agg_param, unsigned int *acts)
 {
-	int	rc;
+	vos_iter_type_t	child_type;
+	int		rc;
 
 	D_ASSERT(agg_param && agg_param->ap_discard);
 	D_ASSERT(acts != NULL);
 
 	if (!agg_param->ap_sub_tree_empty)
 		return 0;
+
+	agg_param->ap_sub_tree_empty = 0;
+	child_type = entry->ie_child_type;
+
+	/* Re-check to see if subtree changed while yielding */
+	if (!subtree_empty(child_type, agg_param))
+		return 0;
+
+	/* Evict object cache before deleting the OI entry */
+	if (child_type == VOS_ITER_DKEY) {
+		rc = vos_obj_evict_by_oid(vos_obj_cache_current(),
+					  vos_hdl2cont(agg_param->ap_coh),
+					  entry->ie_oid);
+		if (rc != 0)
+			return rc;
+	}
 
 	/*
 	 * All entries in sub-tree were deleted during the nested sub-tree
@@ -203,11 +275,14 @@ agg_discard_parent(daos_handle_t ih, vos_iter_entry_t *entry,
 	 * if current ULT yield in sub-tree iteration, and re-probe will find
 	 * the exact matched key.
 	 */
-	agg_param->ap_sub_tree_empty = 0;
 	rc = agg_del_entry(ih, agg_param->ap_umm, entry, acts);
 	if (rc) {
 		D_ERROR("Failed to delete key entry: %d\n", rc);
-	} else if (vos_iter_empty(ih) == 1) {
+	} else if (child_type != VOS_ITER_DKEY && vos_iter_empty(ih) == 1) {
+		/*
+		 * When subtree is empty, inform upper level tree to delete the
+		 * root entry (akey, dkey or oi).
+		 */
 		agg_param->ap_sub_tree_empty = 1;
 		/* Trigger re-probe in outer iteration */
 		*acts |= VOS_ITER_CB_YIELD;
@@ -216,41 +291,48 @@ agg_discard_parent(daos_handle_t ih, vos_iter_entry_t *entry,
 	return rc;
 }
 
+static inline void
+reset_agg_pos(vos_iter_type_t type, struct vos_agg_param *agg_param)
+{
+	switch (type) {
+	case VOS_ITER_OBJ:
+		memset(&agg_param->ap_oid, 0, sizeof(agg_param->ap_oid));
+		break;
+	case VOS_ITER_DKEY:
+		memset(&agg_param->ap_dkey, 0, sizeof(agg_param->ap_dkey));
+		break;
+	case VOS_ITER_AKEY:
+		memset(&agg_param->ap_akey, 0, sizeof(agg_param->ap_akey));
+		break;
+	default:
+		break;
+	}
+}
+
 static int
 vos_agg_obj(daos_handle_t ih, vos_iter_entry_t *entry,
 	    struct vos_agg_param *agg_param, unsigned int *acts)
 {
-	int	rc;
-
 	D_ASSERT(agg_param != NULL);
 	if (daos_unit_oid_compare(agg_param->ap_oid, entry->ie_oid)) {
 		agg_param->ap_oid = entry->ie_oid;
-		memset(&agg_param->ap_dkey, 0, sizeof(agg_param->ap_dkey));
-		memset(&agg_param->ap_akey, 0, sizeof(agg_param->ap_akey));
-	} else if (!agg_param->ap_discard) {
+		reset_agg_pos(VOS_ITER_DKEY, agg_param);
+		reset_agg_pos(VOS_ITER_AKEY, agg_param);
+	} else {
 		/*
-		 * The aggregation ULT may yield while aggregating SV/EV tree,
-		 * that can trigger re-probe on the parent akey, dkey, object
-		 * trees, skip the dup aggregation on re-probe.
+		 * When recursive vos_iterate() yield in sub tree, re-probe
+		 * is required when it returns back to upper level tree, if
+		 * the just processed object is found on re-probe, we need
+		 * to notify vos_iterate() to not iterate into to sub tree
+		 * again.
 		 */
 		D_DEBUG(DB_EPC, "Skip oid:"DF_UOID" aggregation on re-probe\n",
 			DP_UOID(agg_param->ap_oid));
 		*acts |= VOS_ITER_CB_SKIP;
 	}
 
-	if (agg_param->ap_discard) {
-		if (agg_param->ap_sub_tree_empty) {
-			rc = vos_obj_evict_by_oid(vos_obj_cache_current(),
-						vos_hdl2cont(agg_param->ap_coh),
-						entry->ie_oid);
-			if (rc != 0)
-				return rc;
-		}
-
-		rc = agg_discard_parent(ih, entry, agg_param, acts);
-		agg_param->ap_sub_tree_empty = 0;
-		return rc;
-	}
+	if (agg_param->ap_discard)
+		return agg_discard_parent(ih, entry, agg_param, acts);
 
 	return 0;
 }
@@ -271,8 +353,8 @@ vos_agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 	D_ASSERT(agg_param != NULL);
 	if (vos_agg_key_compare(agg_param->ap_dkey, entry->ie_key)) {
 		agg_param->ap_dkey = entry->ie_key;
-		memset(&agg_param->ap_akey, 0, sizeof(agg_param->ap_akey));
-	} else if (!agg_param->ap_discard) {
+		reset_agg_pos(VOS_ITER_AKEY, agg_param);
+	} else {
 		D_DEBUG(DB_EPC, "Skip dkey: "DF_KEY" aggregation on re-probe\n",
 			DP_KEY(&entry->ie_key));
 		*acts |= VOS_ITER_CB_SKIP;
@@ -344,47 +426,6 @@ merge_window_status(struct agg_merge_window *mw)
 	return MW_CLOSED;
 }
 
-static bool
-akey_empty(struct vos_agg_param *agg_param)
-{
-	vos_iter_param_t	iter_param = { 0 };
-	daos_handle_t		sub_ih;
-	bool			sv_empty = false, ev_empty = false;
-	int			rc;
-
-	iter_param.ip_hdl = agg_param->ap_coh;
-	iter_param.ip_ih = DAOS_HDL_INVAL;
-	iter_param.ip_oid = agg_param->ap_oid;
-	iter_param.ip_dkey = agg_param->ap_dkey;
-	iter_param.ip_akey = agg_param->ap_akey;
-	iter_param.ip_epr.epr_lo = 0;
-	iter_param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
-	iter_param.ip_epc_expr = VOS_IT_EPC_GE;
-	iter_param.ip_flags = VOS_IT_PUNCHED | VOS_IT_RECX_ALL;
-
-	rc = vos_iter_prepare(VOS_ITER_SINGLE, &iter_param, &sub_ih);
-	if (rc == 0) {
-		sv_empty = vos_iter_empty(sub_ih);
-		vos_iter_finish(sub_ih);
-	} else if (rc == -DER_NONEXIST) {
-		sv_empty = true;
-	} else {
-		D_ERROR("Failed to prepare SV iterator: %d\n", rc);
-	}
-
-	rc = vos_iter_prepare(VOS_ITER_RECX, &iter_param, &sub_ih);
-	if (rc == 0) {
-		ev_empty = vos_iter_empty(sub_ih);
-		vos_iter_finish(sub_ih);
-	} else if (rc == -DER_NONEXIST) {
-		ev_empty = true;
-	} else {
-		D_ERROR("Failed to prepare EV iterator: %d\n", rc);
-	}
-
-	return (sv_empty && ev_empty);
-}
-
 static int
 vos_agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 	     struct vos_agg_param *agg_param, unsigned int *acts)
@@ -392,22 +433,14 @@ vos_agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 	D_ASSERT(agg_param != NULL);
 	if (vos_agg_key_compare(agg_param->ap_akey, entry->ie_key)) {
 		agg_param->ap_akey = entry->ie_key;
-	} else if (!agg_param->ap_discard) {
+	} else {
 		D_DEBUG(DB_EPC, "Skip akey: "DF_KEY" aggregation on re-probe\n",
 			DP_KEY(&entry->ie_key));
 		*acts |= VOS_ITER_CB_SKIP;
 	}
 
-	if (agg_param->ap_discard) {
-		/*
-		 * SV or EV tree is emptied during discard, we need to
-		 * verify again if the akey is empty, because new entries
-		 * could be inserted while the dicard ULT yielding.
-		 */
-		if (agg_param->ap_sub_tree_empty)
-			agg_param->ap_sub_tree_empty = akey_empty(agg_param);
+	if (agg_param->ap_discard)
 		return agg_discard_parent(ih, entry, agg_param, acts);
-	}
 
 	/* Reset the max epoch for low-level SV tree iteration */
 	agg_param->ap_max_epoch = 0;
@@ -1428,12 +1461,29 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	/* Discard */
 	if (agg_param->ap_discard) {
-		D_ASSERT(phy_ext.ex_lo == lgc_ext.ex_lo);
-		rc = agg_del_entry(ih, agg_param->ap_umm, entry, acts);
-		if (rc) {
-			D_ERROR("Delete EV entry "DF_EXT" error: %d\n",
-				DP_EXT(&phy_ext), rc);
-		} else if (vos_iter_empty(ih) == 1) {
+		struct vos_obj_iter	*oiter = vos_hdl2oiter(ih);
+		struct evt_rect		 rect;
+
+		/*
+		 * Delete the physical entry when iterating to the first
+		 * logical entry
+		 */
+		if (phy_ext.ex_lo == lgc_ext.ex_lo) {
+			rect.rc_ex = phy_ext;
+			rect.rc_epc = entry->ie_epoch;
+			mark_yield(&entry->ie_biov.bi_addr, acts);
+
+			rc = evt_delete(oiter->it_hdl, &rect, NULL);
+			if (rc)
+				D_ERROR("Delete EV entry "DF_RECT" error: %d\n",
+					DP_RECT(&rect), rc);
+		}
+
+		/*
+		 * Sorted iteration doesn't support tree empty check, so we
+		 * always inform vos_iterate() to check if subtree is empty.
+		 */
+		if (entry->ie_vis_flags & VOS_VIS_FLAG_LAST) {
 			agg_param->ap_sub_tree_empty = 1;
 			/* Trigger re-probe in akey iteration */
 			*acts |= VOS_ITER_CB_YIELD;
@@ -1510,23 +1560,18 @@ vos_aggregate_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	agg_param->ap_credits++;
-	/*
-	 * TODO: Aggregation can't yield in object, dkey, akey tree
-	 * iteration so far, see comment in vos_agg_obj().
-	 */
-	if (!agg_param->ap_discard && type != VOS_ITER_SINGLE &&
-	    type != VOS_ITER_RECX) {
-		D_ASSERT(!(*acts & VOS_ITER_CB_YIELD));
-		return 0;
-	}
-
-	if (*acts & VOS_ITER_CB_YIELD)
-		agg_param->ap_credits = 0;
 
 	if (agg_param->ap_credits > agg_param->ap_credits_max ||
 	    (DAOS_FAIL_CHECK(DAOS_VOS_AGG_RANDOM_YIELD) && (rand() % 2))) {
 		agg_param->ap_credits = 0;
 		*acts |= VOS_ITER_CB_YIELD;
+
+		/*
+		 * Reset position if we yield while iterating in object, dkey
+		 * or akey level, so that subtree won't be skipped mistakenly,
+		 * see the comment in vos_agg_obj().
+		 */
+		reset_agg_pos(type, agg_param);
 		bio_yield();
 	}
 
@@ -1597,7 +1642,7 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr)
 	/* Set aggregation parameters */
 	agg_param.ap_umm = &cont->vc_pool->vp_umm;
 	agg_param.ap_coh = coh;
-	agg_param.ap_credits_max = AGG_CREDITS_MAX;
+	agg_param.ap_credits_max = VOS_AGG_CREDITS_MAX;
 	agg_param.ap_credits = 0;
 	agg_param.ap_discard = false;
 	merge_window_init(&agg_param.ap_window);
@@ -1611,8 +1656,8 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr)
 	}
 
 	/*
-	 * Update LAE, when aggregating for snapshot deletion, the
-	 * @epr->epr_hi could be smaller than the LAE
+	 * Update HAE, when aggregating for snapshot deletion, the
+	 * @epr->epr_hi could be smaller than the HAE
 	 */
 	if (cont->vc_cont_df->cd_hae < epr->epr_hi)
 		cont->vc_cont_df->cd_hae = epr->epr_hi;
@@ -1655,13 +1700,14 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr)
 		iter_param.ip_epc_expr = VOS_IT_EPC_RR;
 	else
 		iter_param.ip_epc_expr = VOS_IT_EPC_GE;
-	/* EV tree iterator returns all unsorted physical rectangles */
-	iter_param.ip_flags = VOS_IT_PUNCHED | VOS_IT_RECX_ALL;
+	/* EV tree iterator returns all sorted logical rectangles */
+	iter_param.ip_flags = VOS_IT_PUNCHED | VOS_IT_RECX_VISIBLE |
+		VOS_IT_RECX_COVERED;
 
 	/* Set aggregation parameters */
 	agg_param.ap_umm = &cont->vc_pool->vp_umm;
 	agg_param.ap_coh = coh;
-	agg_param.ap_credits_max = AGG_CREDITS_MAX;
+	agg_param.ap_credits_max = VOS_AGG_CREDITS_MAX;
 	agg_param.ap_credits = 0;
 	agg_param.ap_discard = true;
 

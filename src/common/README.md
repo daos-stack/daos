@@ -209,7 +209,7 @@ A "Checksummer" is used to create checksums from a scatter gather list. The
  algorithm.
  Currently the isa-l and isa-l_crypto libraries are used to support crc16,
  crc32, crc64, and sha1. All of the function tables to support these
- algorithms are in [src/common/daos_checksum.c](src/common/daos_checksum.c).
+ algorithms are in [src/common/checksum.c](src/common/checksum.c).
  These function tables
  are not made public, but there is a helper function (daos_csum_type2algo) that
  will return the appropriate function table given a DAOS_CSUM_TYPE. There is
@@ -228,10 +228,11 @@ A "Checksummer" is used to create checksums from a scatter gather list. The
  need the chunk size. When done with a checksummer, daos_csummer_destroy should
  be called to free allocated resources.
  Most checksummer functions are simple passthroughs to the function table if
- implemented. The main exception is daos_csummer_calc_csum which, using the
+ implemented. The main exception is daos_csummer_calc which, using the
  other checksummer functions, creates a checksum from the appropriate memory
  represented by the scatter gather list (d_sg_list_t) and the extents
- (daos_recx_t). The checksums are put into a collection of checksum buffers
+ (daos_recx_t) of an I/O descriptor (daos_iod_t).
+ The checksums are put into a collection of checksum buffers
  (daos_csum_buf_t), each containing multiple checksums. The memory for the
  daos_csum_buf_t's and the checksums will be allocated. Therefore, when done
  with the checksums, daos_csummer_destroy_csum_buf should be called to free

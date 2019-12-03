@@ -31,14 +31,16 @@ import (
 	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
 // StorageControlService encapsulates the storage part of the control service
 type StorageControlService struct {
 	log             logging.Logger
+	ext             External
 	nvme            *nvmeStorage
-	scm             *scmStorage
+	scm             *scm.Provider
 	instanceStorage []ioserver.StorageConfig
 }
 
@@ -56,15 +58,13 @@ func DefaultStorageControlService(log logging.Logger, cfg *Configuration) (*Stor
 		nrHugePages: cfg.NrHugepages,
 	}
 
-	return NewStorageControlService(log,
+	return NewStorageControlService(log, cfg.ext,
 		newNvmeStorage(log, cfg.NvmeShmID, spdkScript, cfg.ext),
-		newScmStorage(log, cfg.ext), cfg.Servers), nil
+		scm.DefaultProvider(log), cfg.Servers), nil
 }
 
 // NewStorageControlService returns an initialized *StorageControlService
-func NewStorageControlService(log logging.Logger, nvme *nvmeStorage, scm *scmStorage,
-	srvCfgs []*ioserver.Config) *StorageControlService {
-
+func NewStorageControlService(log logging.Logger, ext External, nvme *nvmeStorage, scm *scm.Provider, srvCfgs []*ioserver.Config) *StorageControlService {
 	instanceStorage := []ioserver.StorageConfig{}
 	for _, srvCfg := range srvCfgs {
 		instanceStorage = append(instanceStorage, srvCfg.Storage)
@@ -72,6 +72,7 @@ func NewStorageControlService(log logging.Logger, nvme *nvmeStorage, scm *scmSto
 
 	return &StorageControlService{
 		log:             log,
+		ext:             ext,
 		nvme:            nvme,
 		scm:             scm,
 		instanceStorage: instanceStorage,
@@ -102,8 +103,8 @@ func (c *StorageControlService) Setup() error {
 		return errors.Errorf("%s: missing %v", msgBdevNotFound, missing)
 	}
 
-	if err := c.scm.Setup(); err != nil {
-		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, SCM Setup"))
+	if _, err := c.scm.Scan(scm.ScanRequest{}); err != nil {
+		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, SCM Scan"))
 	}
 
 	return nil
@@ -115,25 +116,25 @@ func (c *StorageControlService) Teardown() {
 		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, NVMe Teardown"))
 	}
 
-	if err := c.scm.Teardown(); err != nil {
-		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, SCM Teardown"))
-	}
+	// TODO: implement provider Reset()
+	//c.scm.scanCompleted = false
 }
 
-type PrepareNvmeRequest struct {
+// NvmePrepareRequest encapsulates request parameters for operation.
+type NvmePrepareRequest struct {
 	HugePageCount int
 	TargetUser    string
 	PCIWhitelist  string
 	ResetOnly     bool
 }
 
-// PrepareNvme preps locally attached SSDs and returns error.
+// NvmePrepare preps locally attached SSDs and returns error.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
-func (c *StorageControlService) PrepareNvme(req PrepareNvmeRequest) error {
+func (c *StorageControlService) NvmePrepare(req NvmePrepareRequest) error {
 	ok, usr := c.nvme.ext.checkSudo()
 	if !ok {
-		return errors.Errorf("%s must be run as root or sudo", os.Args[0])
+		return errors.Errorf("%s must be run as root or sudo in order to prepare NVMe in this release", os.Args[0])
 	}
 
 	// falls back to sudoer or root if TargetUser is unspecified
@@ -158,54 +159,25 @@ func (c *StorageControlService) PrepareNvme(req PrepareNvmeRequest) error {
 	)
 }
 
-type PrepareScmRequest struct {
-	Reset bool
-}
-
 // GetScmState performs required initialisation and returns current state
 // of SCM module preparation.
-func (c *StorageControlService) GetScmState() (types.ScmState, error) {
-	state := types.ScmStateUnknown
-
-	ok, _ := c.scm.ext.checkSudo()
-	if !ok {
-		return state, errors.Errorf("%s must be run as root or sudo", os.Args[0])
-	}
-
-	if err := c.scm.Setup(); err != nil {
-		return state, errors.WithMessage(err, "SCM setup")
-	}
-
-	if !c.scm.initialized {
-		return state, errors.New(msgScmNotInited)
-	}
-
-	if len(c.scm.modules) == 0 {
-		return state, errors.New(msgScmNoModules)
-	}
-
-	return c.scm.provider.GetState()
+func (c *StorageControlService) GetScmState() (storage.ScmState, error) {
+	return c.scm.GetState()
 }
 
-// PrepareScm preps locally attached modules and returns need to reboot message,
+// ScmPrepare preps locally attached modules and returns need to reboot message,
 // list of pmem device files and error directly.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
-func (c *StorageControlService) PrepareScm(req PrepareScmRequest) (needsReboot bool, pmemDevs []scm.Namespace, err error) {
-	if req.Reset {
-		// run reset to remove namespaces and clear regions
-		needsReboot, err = c.scm.PrepReset()
-		return
-	}
-
+func (c *StorageControlService) ScmPrepare(req scm.PrepareRequest) (*scm.PrepareResponse, error) {
 	// transition to the next state in SCM preparation
-	return c.scm.Prep()
+	return c.scm.Prepare(req)
 }
 
-// ScanNvme scans locally attached SSDs and returns list directly.
+// NvmeScan scans locally attached SSDs and returns list directly.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
-func (c *StorageControlService) ScanNvme() (types.NvmeControllers, error) {
+func (c *StorageControlService) NvmeScan() (types.NvmeControllers, error) {
 	if err := c.nvme.Discover(); err != nil {
 		return nil, errors.Wrap(err, "NVMe storage scan")
 	}
@@ -213,13 +185,9 @@ func (c *StorageControlService) ScanNvme() (types.NvmeControllers, error) {
 	return c.nvme.controllers, nil
 }
 
-// ScanScm scans locally attached modules and returns list directly.
+// ScmScan scans locally attached modules, namespaces and state of DCPM config.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
-func (c *StorageControlService) ScanScm() (types.ScmModules, types.PmemDevices, error) {
-	if err := c.scm.Discover(); err != nil {
-		return nil, nil, errors.Wrap(err, "SCM storage scan")
-	}
-
-	return c.scm.modules, c.scm.pmemDevs, nil
+func (c *StorageControlService) ScmScan() (*scm.ScanResponse, error) {
+	return c.scm.Scan(scm.ScanRequest{})
 }

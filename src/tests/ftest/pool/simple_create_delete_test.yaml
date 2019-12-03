@@ -6,27 +6,11 @@ hosts:
 server_config:
  name: daos_server
 tests:
- modes: !mux
+ modes:
   modeall:
    mode:
     - 511
     - PASS
-  readonly:
-   mode:
-    - 73
-    - FAIL
-  writeonly:
-   mode:
-    - 146
-    - PASS
-  execonly:
-   mode:
-    - 292
-    - PASS
-  modebogus:
-   mode:
-    - 111093499399299949949949949
-    - FAIL
  uids: !mux
   validuid:
    uid:
@@ -54,3 +38,4 @@ tests:
    setname:
     - complete_rubbish
     - FAIL
+

@@ -11,9 +11,9 @@ The management tool has no storage library dependencies and as such is suitable 
 <p>
 
 ```bash
-[tanabarr@ssh-1 ~]$ projects/daos_m/install/bin/daos_shell --help
+[tanabarr@ssh-1 ~]$ projects/daos_m/install/bin/dmg --help
 Usage:
-  daos_shell [OPTIONS] [command]
+  dmg [OPTIONS] [command]
 
 Application Options:
   -l, --hostlist=    comma separated list of addresses <ipv4addr/hostname:port> (default: localhost:10001)
@@ -29,9 +29,9 @@ Available commands:
   service  Perform distributed tasks related to DAOS system (aliases: sv)
   storage  Perform tasks related to locally-attached storage (aliases: st)
 
-[tanabarr@ssh-1 ~]$ projects/daos_m/install/bin/daos_shell storage --help
+[tanabarr@ssh-1 ~]$ projects/daos_m/install/bin/dmg storage --help
 Usage:
-  daos_shell [OPTIONS] storage <list>
+  dmg [OPTIONS] storage <list>
 
 Application Options:
   -l, --hostlist=    comma separated list of addresses <ipv4addr/hostname:port> (default: localhost:10001)
@@ -44,9 +44,9 @@ Help Options:
 Available commands:
   list  List locally-attached SCM and NVMe storage (aliases: l)
 
-[tanabarr@ssh-1 ~]$ projects/daos_m/install/bin/daos_shell service --help
+[tanabarr@ssh-1 ~]$ projects/daos_m/install/bin/dmg service --help
 Usage:
-  daos_shell [OPTIONS] service <kill-rank>
+  dmg [OPTIONS] service <kill-rank>
 
 Application Options:
   -l, --hostlist=    comma separated list of addresses <ipv4addr/hostname:port> (default: localhost:10001)
@@ -59,9 +59,9 @@ Help Options:
 Available commands:
   kill-rank  Terminate server running as specific rank on a DAOS pool (aliases: kr)
 
-[tanabarr@ssh-1 ~]$ projects/daos_m/install/bin/daos_shell service kill-rank --help
+[tanabarr@ssh-1 ~]$ projects/daos_m/install/bin/dmg service kill-rank --help
 Usage:
-  daos_shell [OPTIONS] service kill-rank [kill-rank-OPTIONS]
+  dmg [OPTIONS] service kill-rank [kill-rank-OPTIONS]
 
 Application Options:
   -l, --hostlist=      comma separated list of addresses <ipv4addr/hostname:port> (default: localhost:10001)
@@ -88,7 +88,7 @@ Help Options:
 <p>
 
 ```bash
-[root@wolf-72 ~]# /root/daos_m/install/bin/daos_shell storage scan
+[root@wolf-72 ~]# /root/daos_m/install/bin/dmg storage scan
 Active connections: [localhost:10001]
 
 Listing NVMe SSD controller and constituent namespaces on connected storage servers:
@@ -155,7 +155,7 @@ localhost:10001:
 <p>
 
 ```bash
-[tanabarr@ssh-1 ~]$ projects/daos_m/install/bin/daos_shell -l boro-44:10001,boro-45:10001 storage scan
+[tanabarr@ssh-1 ~]$ projects/daos_m/install/bin/dmg -l boro-44:10001,boro-45:10001 storage scan
 Active connections: [boro-45:10001 boro-44:10001]
 
 
@@ -195,7 +195,7 @@ boro-45:10001: []
 <p>
 
 ```bash
-[tanabarr@ssh-1 ~]$ daos_shell storage format -f
+[tanabarr@ssh-1 ~]$ dmg storage format -f
 2019/06/19 15:51:44 config.go:122: debug: DAOS Client config read from /home/tanabarr/projects/daos_m/install/etc/daos.yml
 Active connections: [boro-45:10001]
 
@@ -218,7 +218,7 @@ boro-45:10001:
   state:
     status: 0
     error: ""
-    info: status=CTRL_SUCCESS
+    info: status=CTL_SUCCESS
 ```
 
 </p>
@@ -231,7 +231,7 @@ boro-45:10001:
 <p>
 
 ```bash
-[tanabarr@ssh-1 ~]$ projects/daos_m/install/bin/daos_shell
+[tanabarr@ssh-1 ~]$ projects/daos_m/install/bin/dmg
 Active connections: [localhost:10001]
 
 DAOS Management Shell

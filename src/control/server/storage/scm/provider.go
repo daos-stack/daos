@@ -26,14 +26,16 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
 
-	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/provider/system"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 const (
@@ -52,41 +54,40 @@ const (
 	dcpmMountOpts = "dax"
 
 	ramFsType = fsTypeTmpfs
-)
 
-type (
-	// Module represents a SCM DIMM.
-	//
-	// This is a simplified representation of the raw struct used in the ipmctl package.
-	Module struct {
-		ChannelID       uint32
-		ChannelPosition uint32
-		ControllerID    uint32
-		SocketID        uint32
-		PhysicalID      uint32
-		Capacity        uint64
-	}
-
-	// Namespace represents a mapping between AppDirect regions and block device files.
-	Namespace struct {
-		UUID        string `json:"uuid"`
-		BlockDevice string `json:"blockdev"`
-		Name        string `json:"dev"`
-		NumaNode    uint32 `json:"numa_node"`
-	}
+	MsgScmRebootRequired    = "A reboot is required to process new memory allocation goals."
+	MsgScmNoModules         = "no scm modules to prepare"
+	MsgScmNotInited         = "scm storage could not be accessed"
+	MsgScmClassNotSupported = "operation unsupported on scm class"
+	MsgIpmctlDiscoverFail   = "ipmctl module discovery"
 )
 
 type (
 	// PrepareRequest defines the parameters for a Prepare opration.
 	PrepareRequest struct {
+		Forwarded bool
 		// Reset indicates that the operation should reset (clear) DCPM namespaces.
 		Reset bool
 	}
+
 	// PrepareResponse contains the results of a successful Prepare operation.
 	PrepareResponse struct {
-		State          types.ScmState
+		State          storage.ScmState
 		RebootRequired bool
-		Namespaces     []Namespace
+		Namespaces     storage.ScmNamespaces
+	}
+
+	// ScanRequest defines the parameters for a Scan operation.
+	ScanRequest struct {
+		Forwarded bool
+		Rescan    bool
+	}
+
+	// ScanResponse contains information gleaned during a successful Scan operation.
+	ScanResponse struct {
+		State      storage.ScmState
+		Modules    storage.ScmModules
+		Namespaces storage.ScmNamespaces
 	}
 
 	// DcpmParams defines the sub-parameters of a Format operation that
@@ -94,62 +95,61 @@ type (
 	DcpmParams struct {
 		Device string
 	}
+
 	// RamdiskParams defines the sub-parameters of a Format operation that
 	// will use tmpfs-based ramdisk storage.
 	RamdiskParams struct {
 		Size uint
 	}
+
 	// FormatRequest defines the parameters for a Format operation or query.
 	FormatRequest struct {
+		Forwarded  bool
 		Reformat   bool
 		Mountpoint string
+		OwnerUID   int
+		OwnerGID   int
 		Ramdisk    *RamdiskParams
 		Dcpm       *DcpmParams
 	}
+
 	// FormatResponse contains the results of a successful Format operation or query.
 	FormatResponse struct {
 		Mountpoint string
 		Formatted  bool
+		Mounted    bool
+		Mountable  bool
 	}
 
-	// MountReqeust defines the parameters for a Mount operation.
+	// MountRequest defines the parameters for a Mount operation.
 	MountRequest struct {
-		Source string
-		Target string
-		FsType string
-		Flags  uintptr
-		Data   string
+		Forwarded bool
+		Source    string
+		Target    string
+		FsType    string
+		Flags     uintptr
+		Data      string
 	}
+
 	// MountResponse contains the results of a successful Mount operation.
 	MountResponse struct {
 		Target  string
 		Mounted bool
 	}
 
-	// UpdateRequest defines the parameters for an Update operation.
-	UpdateRequest struct{}
-	// UpdateResponse contains the results of a successful Update operation.
-	UpdateResponse struct{}
-
-	// ScanRequest defines the parameters for a Scan operation.
-	ScanRequest struct {
-		Rescan bool
-	}
-	// ScanResponse contains information gleaned during
-	// a successful Scan operation.
-	ScanResponse struct {
-		State      types.ScmState
-		Modules    []Module
-		Namespaces []Namespace
+	// forwardableRequest defines an interface for any request that
+	// could have been forwarded.
+	forwardableRequest interface {
+		isForwarded() bool
 	}
 
 	// Backend defines a set of methods to be implemented by a SCM backend.
 	Backend interface {
-		Discover() ([]Module, error)
-		Prep(types.ScmState) (bool, []Namespace, error)
-		PrepReset(types.ScmState) (bool, error)
-		GetState() (types.ScmState, error)
-		GetNamespaces() ([]Namespace, error)
+		Discover() (storage.ScmModules, error)
+		Prep(storage.ScmState) (bool, storage.ScmNamespaces, error)
+		PrepReset(storage.ScmState) (bool, error)
+		GetState() (storage.ScmState, error)
+		GetNamespaces() (storage.ScmNamespaces, error)
 	}
 
 	// SystemProvider defines a set of methods to be implemented by a provider
@@ -171,15 +171,45 @@ type (
 	Provider struct {
 		sync.RWMutex
 		scanCompleted bool
-		lastState     types.ScmState
-		modules       []Module
-		namespaces    []Namespace
+		lastState     storage.ScmState
+		modules       storage.ScmModules
+		namespaces    storage.ScmNamespaces
 
-		log     logging.Logger
-		backend Backend
-		sys     SystemProvider
+		log               logging.Logger
+		backend           Backend
+		sys               SystemProvider
+		fwd               *Forwarder
+		disableForwarding bool
 	}
 )
+
+func CreateFormatRequest(scmCfg storage.ScmConfig, reformat bool) (*FormatRequest, error) {
+	req := FormatRequest{
+		Mountpoint: scmCfg.MountPoint,
+		Reformat:   reformat,
+		OwnerUID:   os.Geteuid(),
+		OwnerGID:   os.Getegid(),
+	}
+
+	switch scmCfg.Class {
+	case storage.ScmClassRAM:
+		req.Ramdisk = &RamdiskParams{
+			Size: uint(scmCfg.RamdiskSize),
+		}
+	case storage.ScmClassDCPM:
+		// FIXME (DAOS-3291): Clean up SCM configuration
+		if len(scmCfg.DeviceList) != 1 {
+			return nil, FaultFormatInvalidDeviceCount
+		}
+		req.Dcpm = &DcpmParams{
+			Device: scmCfg.DeviceList[0],
+		}
+	default:
+		return nil, errors.New(MsgScmClassNotSupported)
+	}
+
+	return &req, nil
+}
 
 // Validate checks the request for validity.
 func (fr FormatRequest) Validate() error {
@@ -208,6 +238,22 @@ func (fr FormatRequest) Validate() error {
 	}
 
 	return nil
+}
+
+func (fr FormatRequest) isForwarded() bool {
+	return fr.Forwarded
+}
+
+func (sr ScanRequest) isForwarded() bool {
+	return sr.Forwarded
+}
+
+func (pr PrepareRequest) isForwarded() bool {
+	return pr.Forwarded
+}
+
+func (mr MountRequest) isForwarded() bool {
+	return mr.Forwarded
 }
 
 func checkDevice(device string) error {
@@ -253,7 +299,7 @@ func (ssp *defaultSystemProvider) Mkfs(fsType, device string, force bool) error 
 	return nil
 }
 
-// GetFs probes the specified device in an attempt to determine the
+// Getfs probes the specified device in an attempt to determine the
 // formatted filesystem type, if any.
 func (ssp *defaultSystemProvider) Getfs(device string) (string, error) {
 	cmdPath, err := exec.LookPath("file")
@@ -302,11 +348,33 @@ func DefaultProvider(log logging.Logger) *Provider {
 
 // NewProvider returns an initialized *Provider.
 func NewProvider(log logging.Logger, backend Backend, sys SystemProvider) *Provider {
-	return &Provider{
+	p := &Provider{
 		log:     log,
 		backend: backend,
 		sys:     sys,
+		fwd:     &Forwarder{log: log},
 	}
+
+	if val, set := os.LookupEnv(pbin.DisableReqFwdEnvVar); set {
+		disabled, err := strconv.ParseBool(val)
+		if err != nil {
+			log.Errorf("%s was set to non-boolean value (%q); not disabling",
+				pbin.DisableReqFwdEnvVar, val)
+			return p
+		}
+		p.disableForwarding = disabled
+	}
+
+	return p
+}
+
+func (p *Provider) WithForwardingDisabled() *Provider {
+	p.disableForwarding = true
+	return p
+}
+
+func (p *Provider) shouldForward(req forwardableRequest) bool {
+	return !p.disableForwarding && !req.isForwarded()
 }
 
 func (p *Provider) isInitialized() bool {
@@ -315,13 +383,13 @@ func (p *Provider) isInitialized() bool {
 	return p.scanCompleted
 }
 
-func (p *Provider) currentState() types.ScmState {
+func (p *Provider) currentState() storage.ScmState {
 	p.RLock()
 	defer p.RUnlock()
 	return p.lastState
 }
 
-func (p *Provider) updateState() (state types.ScmState, err error) {
+func (p *Provider) updateState() (state storage.ScmState, err error) {
 	state, err = p.backend.GetState()
 	if err != nil {
 		return
@@ -335,7 +403,7 @@ func (p *Provider) updateState() (state types.ScmState, err error) {
 }
 
 // GetState returns the current state of DCPM namespaces, if available.
-func (p *Provider) GetState() (types.ScmState, error) {
+func (p *Provider) GetState() (storage.ScmState, error) {
 	if !p.isInitialized() {
 		if _, err := p.Scan(ScanRequest{}); err != nil {
 			return p.lastState, err
@@ -360,6 +428,21 @@ func (p *Provider) createScanResponse() *ScanResponse {
 func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 	if p.isInitialized() && !req.Rescan {
 		return p.createScanResponse(), nil
+	}
+
+	if p.shouldForward(req) {
+		res, err := p.fwd.Scan(req)
+		if err != nil {
+			return nil, err
+		}
+		p.Lock()
+		p.scanCompleted = true
+		p.lastState = res.State
+		p.modules = res.Modules
+		p.namespaces = res.Namespaces
+		p.Unlock()
+
+		return res, nil
 	}
 
 	modules, err := p.backend.Discover()
@@ -404,7 +487,39 @@ func (p *Provider) Prepare(req PrepareRequest) (res *PrepareResponse, err error)
 	}
 
 	res = &PrepareResponse{}
+	if sr := p.createScanResponse(); len(sr.Modules) == 0 {
+		p.log.Info("skipping SCM prepare; no modules detected")
+		res.State = sr.State
+
+		return res, nil
+	}
+
+	if p.shouldForward(req) {
+		return p.fwd.Prepare(req)
+	}
+
 	if req.Reset {
+		// Ensure that namespace block devices are unmounted first.
+		if sr := p.createScanResponse(); len(sr.Namespaces) > 0 {
+			for _, ns := range sr.Namespaces {
+				nsDev := "/dev/" + ns.BlockDevice
+				isMounted, err := p.sys.IsMounted(nsDev)
+				if err != nil {
+					if os.IsNotExist(errors.Cause(err)) {
+						continue
+					}
+					return nil, err
+				}
+				if isMounted {
+					p.log.Debugf("Unmounting %s", nsDev)
+					if err := p.sys.Unmount(nsDev, 0); err != nil {
+						p.log.Errorf("Unmount error: %s", err)
+						return nil, err
+					}
+				}
+			}
+		}
+
 		res.RebootRequired, err = p.backend.PrepReset(p.currentState())
 		if err != nil {
 			res = nil
@@ -444,6 +559,10 @@ func (p *Provider) CheckFormat(req FormatRequest) (*FormatResponse, error) {
 		return nil, err
 	}
 
+	if p.shouldForward(req) {
+		return p.fwd.CheckFormat(req)
+	}
+
 	res := &FormatResponse{
 		Mountpoint: req.Mountpoint,
 		Formatted:  true,
@@ -454,22 +573,33 @@ func (p *Provider) CheckFormat(req FormatRequest) (*FormatResponse, error) {
 		return nil, errors.Wrapf(err, "failed to check if %s is mounted", req.Mountpoint)
 	}
 	if isMounted {
+		res.Mounted = true
 		return res, nil
 	}
 
-	if req.Dcpm != nil {
-		fsType, err := p.sys.Getfs(req.Dcpm.Device)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to check if %s is formatted", req.Dcpm.Device)
-		}
-
-		p.log.Debugf("device %s filesystem: %s", req.Dcpm.Device, fsType)
-		if fsType != fsTypeNone {
-			return res, nil
-		}
+	if req.Dcpm == nil {
+		// ramdisk
+		res.Formatted = false
+		return res, nil
 	}
 
-	res.Formatted = false
+	fsType, err := p.sys.Getfs(req.Dcpm.Device)
+	if err != nil {
+		if os.IsNotExist(errors.Cause(err)) {
+			return nil, errors.Wrap(FaultFormatMissingDevice, req.Dcpm.Device)
+		}
+		return nil, errors.Wrapf(err, "failed to check if %s is formatted", req.Dcpm.Device)
+	}
+
+	p.log.Debugf("device %s filesystem: %s", req.Dcpm.Device, fsType)
+
+	switch fsType {
+	case fsTypeExt4:
+		res.Mountable = true
+	case fsTypeNone:
+		res.Formatted = false
+	}
+
 	return res, nil
 }
 
@@ -507,6 +637,10 @@ func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
 		}
 	}
 
+	if p.shouldForward(req) {
+		return p.fwd.Format(req)
+	}
+
 	if err := p.clearMount(req); err != nil {
 		return nil, errors.Wrap(err, "failed to clear existing mount")
 	}
@@ -530,9 +664,21 @@ func (p *Provider) formatRamdisk(req FormatRequest) (*FormatResponse, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if !res.Mounted {
+		return nil, errors.Errorf("%s was not mounted", req.Mountpoint)
+	}
+
+	if err := os.Chown(req.Mountpoint, req.OwnerUID, req.OwnerGID); err != nil {
+		return nil, errors.Wrapf(err, "failed to set ownership of %s to %d.%d",
+			req.Mountpoint, req.OwnerUID, req.OwnerGID)
+	}
+
 	return &FormatResponse{
 		Mountpoint: res.Target,
-		Formatted:  res.Mounted,
+		Formatted:  true,
+		Mounted:    true,
+		Mountable:  false,
 	}, nil
 }
 
@@ -558,9 +704,21 @@ func (p *Provider) formatDcpm(req FormatRequest) (*FormatResponse, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if !res.Mounted {
+		return nil, errors.Errorf("%s was not mounted", req.Mountpoint)
+	}
+
+	if err := os.Chown(req.Mountpoint, req.OwnerUID, req.OwnerGID); err != nil {
+		return nil, errors.Wrapf(err, "failed to set ownership of %s to %d.%d",
+			req.Mountpoint, req.OwnerUID, req.OwnerGID)
+	}
+
 	return &FormatResponse{
 		Mountpoint: res.Target,
-		Formatted:  res.Mounted,
+		Formatted:  true,
+		Mounted:    true,
+		Mountable:  false,
 	}, nil
 }
 
@@ -574,8 +732,15 @@ func (p *Provider) MountDcpm(device, target string) (*MountResponse, error) {
 	if devMounted {
 		return nil, errors.Wrap(FaultDeviceAlreadyMounted, device)
 	}
+	req := MountRequest{
+		Source: device,
+		Target: target,
+		FsType: dcpmFsType,
+		Flags:  defaultMountFlags,
+		Data:   dcpmMountOpts,
+	}
 
-	return p.mount(device, target, dcpmFsType, defaultMountFlags, dcpmMountOpts)
+	return p.Mount(req)
 }
 
 // MountRamdisk attempts to mount a tmpfs-based ramdisk of the specified size at
@@ -585,12 +750,22 @@ func (p *Provider) MountRamdisk(target string, size uint) (*MountResponse, error
 	if size > 0 {
 		opts = fmt.Sprintf("size=%dg", size)
 	}
+	req := MountRequest{
+		Source: ramFsType,
+		Target: target,
+		FsType: ramFsType,
+		Flags:  defaultMountFlags,
+		Data:   opts,
+	}
 
-	return p.mount(ramFsType, target, ramFsType, defaultMountFlags, opts)
+	return p.Mount(req)
 }
 
 // Mount attempts to mount the target specified in the supplied request.
 func (p *Provider) Mount(req MountRequest) (*MountResponse, error) {
+	if p.shouldForward(req) {
+		return p.fwd.Mount(req)
+	}
 	return p.mount(req.Source, req.Target, req.FsType, req.Flags, req.Data)
 }
 
@@ -621,6 +796,9 @@ func (p *Provider) mount(src, target, fsType string, flags uintptr, opts string)
 
 // Unmount attempts to unmount the target specified in the supplied request.
 func (p *Provider) Unmount(req MountRequest) (*MountResponse, error) {
+	if p.shouldForward(req) {
+		return p.fwd.Unmount(req)
+	}
 	return p.unmount(req.Target, int(req.Flags))
 }
 
@@ -639,9 +817,4 @@ func (p *Provider) unmount(target string, flags int) (*MountResponse, error) {
 // is mounted.
 func (p *Provider) IsMounted(target string) (bool, error) {
 	return p.sys.IsMounted(target)
-}
-
-// Update attempts to update the DCPM firmware, if supported.
-func (p *Provider) Update(req UpdateRequest) (*UpdateResponse, error) {
-	return nil, nil
 }

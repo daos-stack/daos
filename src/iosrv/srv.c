@@ -1,4 +1,4 @@
-/**
+/*
  * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,12 +21,15 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
+ * \file
+ *
  * This file is part of the DAOS server. It implements the DAOS service
  * including:
  * - network setup
  * - start/stop execution streams
  * - bind execution streams to core/NUMA node
  */
+
 #define D_LOGFAC       DD_FAC(server)
 
 #include <abt.h>
@@ -214,14 +217,14 @@ dss_sched_unit_pop(ABT_pool *pools, ABT_pool *pool)
 	int		rc;
 
 	/* pop highest priority pool first */
-	rc = ABT_pool_get_total_size(pools[DSS_POOL_URGENT], &cnt);
+	rc = ABT_pool_get_size(pools[DSS_POOL_URGENT], &cnt);
 	if (rc != ABT_SUCCESS)
 		return ABT_UNIT_NULL;
 	if (cnt != 0 && rand() % 100 <= dss_first_res_percentage)
 		return unit_pop(pools, DSS_POOL_URGENT, pool);
 
 	/* then pop other pools */
-	rc = ABT_pool_get_total_size(pools[DSS_POOL_REBUILD], &cnt);
+	rc = ABT_pool_get_size(pools[DSS_POOL_REBUILD], &cnt);
 	if (rc != ABT_SUCCESS)
 		return ABT_UNIT_NULL;
 
@@ -231,6 +234,116 @@ dss_sched_unit_pop(ABT_pool *pools, ABT_pool *pool)
 		return unit_pop(pools, DSS_POOL_REBUILD, pool);
 
 	return ABT_UNIT_NULL;
+}
+
+static struct dss_xstream *
+dss_xstream_get(int stream_id)
+{
+	if (stream_id == DSS_XS_SELF)
+		return dss_get_module_info()->dmi_xstream;
+
+	D_ASSERTF(stream_id >= 0 && stream_id < xstream_data.xd_xs_nr,
+		  "invalid stream id %d (xstream_data.xd_xs_nr %d).\n",
+		  stream_id, xstream_data.xd_xs_nr);
+
+	return xstream_data.xd_xs_ptrs[stream_id];
+}
+
+/* Add to the sorted(by expire time) list */
+static void
+add_sleep_list(struct dss_xstream *dx, struct dss_sleep_ult *new)
+{
+	struct dss_sleep_ult	*dsu;
+
+	d_list_for_each_entry(dsu, &dx->dx_sleep_ult_list, dsu_list) {
+		if (dsu->dsu_expire_time > new->dsu_expire_time) {
+			d_list_add_tail(&new->dsu_list, &dsu->dsu_list);
+			return;
+		}
+	}
+
+	d_list_add_tail(&new->dsu_list, &dx->dx_sleep_ult_list);
+}
+
+struct dss_sleep_ult
+*dss_sleep_ult_create(void)
+{
+	struct dss_sleep_ult *dsu;
+	ABT_thread	     self;
+
+	D_ALLOC_PTR(dsu);
+	if (dsu == NULL)
+		return NULL;
+
+	ABT_thread_self(&self);
+	dsu->dsu_expire_time = 0;
+	dsu->dsu_thread = self;
+	D_INIT_LIST_HEAD(&dsu->dsu_list);
+
+	return dsu;
+}
+
+void
+dss_sleep_ult_destroy(struct dss_sleep_ult *dsu)
+{
+	D_ASSERT(d_list_empty(&dsu->dsu_list));
+	D_FREE_PTR(dsu);
+}
+
+/* Reset the expire to force the ult to exit now */
+void
+dss_ult_wakeup(struct dss_sleep_ult *dsu)
+{
+	ABT_thread thread;
+
+	ABT_thread_self(&thread);
+	/* Only others can force the ULT to exit */
+	D_ASSERT(thread != dsu->dsu_thread);
+	d_list_del_init(&dsu->dsu_list);
+	dsu->dsu_expire_time = 0;
+	ABT_thread_resume(dsu->dsu_thread);
+}
+
+/* Schedule the ULT(dtu->ult) and reschedule in @expire_secs seconds */
+void
+dss_ult_sleep(struct dss_sleep_ult *dsu, uint64_t expire_secs)
+{
+	struct dss_xstream	*dx = dss_xstream_get(DSS_XS_SELF);
+	ABT_thread		thread;
+	uint64_t		now = 0;
+
+	ABT_thread_self(&thread);
+	D_ASSERT(thread == dsu->dsu_thread);
+
+	D_ASSERT(d_list_empty(&dsu->dsu_list));
+	daos_gettime_coarse(&now);
+	dsu->dsu_expire_time = now + expire_secs;
+	D_DEBUG(DB_TRACE, "dsu %p expire in "DF_U64" secs\n", dsu, expire_secs);
+	add_sleep_list(dx, dsu);
+	ABT_self_suspend();
+}
+
+static void
+check_sleep_list()
+{
+	struct dss_xstream	*dx;
+	uint64_t		now = 0;
+	bool			shutdown = false;
+	struct dss_sleep_ult	*dsu;
+	struct dss_sleep_ult	*tmp;
+
+	dx = dss_xstream_get(DSS_XS_SELF);
+	if (dss_xstream_exiting(dx))
+		shutdown = true;
+
+	daos_gettime_coarse(&now);
+	d_list_for_each_entry_safe(dsu, tmp, &dx->dx_sleep_ult_list,
+				   dsu_list) {
+		if (dsu->dsu_expire_time <= now || shutdown)
+			dss_ult_wakeup(dsu);
+		else
+			break;
+	}
 }
 
 static void
@@ -482,12 +595,16 @@ dss_srv_handler(void *arg)
 		if (dx->dx_main_xs)
 			bio_nvme_poll(dmi->dmi_nvme_ctxt);
 
-		if (dss_xstream_exiting(dx))
+		if (dss_xstream_exiting(dx)) {
+			check_sleep_list();
 			break;
+		}
 
+		check_sleep_list();
 		ABT_thread_yield();
 	}
 
+	D_ASSERT(d_list_empty(&dx->dx_sleep_ult_list));
 	/* Let's wait until all of queue ULTs has been executed, in case dmi_ctx
 	 * might be used by some other ULTs.
 	 */
@@ -640,6 +757,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	dx->dx_comm	= comm;
 	dx->dx_main_xs	= xs_id >= dss_sys_xs_nr && xs_offset == 0;
 	dx->dx_dsc_started = false;
+	D_INIT_LIST_HEAD(&dx->dx_sleep_ult_list);
 
 	rc = dss_sched_create(dx->dx_pools, DSS_POOL_CNT, &dx->dx_sched);
 	if (rc != 0) {
@@ -770,7 +888,7 @@ dss_xstreams_fini(bool force)
 	D_DEBUG(DB_TRACE, "Execution streams stopped\n");
 }
 
-static void
+void
 dss_xstreams_open_barrier(void)
 {
 	ABT_mutex_lock(xstream_data.xd_mutex);
@@ -843,7 +961,7 @@ dss_start_xs_id(int xs_id)
 }
 
 static int
-dss_xstreams_init()
+dss_xstreams_init(void)
 {
 	int	rc;
 	int	i, xs_id;
@@ -905,7 +1023,6 @@ dss_xstreams_init()
 	D_DEBUG(DB_TRACE, "%d execution streams successfully started "
 		"(first core %d)\n", dss_tgt_nr, dss_core_offset);
 out:
-	dss_xstreams_open_barrier();
 	if (dss_xstreams_empty()) /* started nothing */
 		pthread_key_delete(dss_tls_key);
 
@@ -942,19 +1059,6 @@ struct dss_module_key daos_srv_modkey = {
 	.dmk_init = dss_srv_tls_init,
 	.dmk_fini = dss_srv_tls_fini,
 };
-
-static struct dss_xstream *
-dss_xstream_get(int stream_id)
-{
-	if (stream_id == DSS_XS_SELF)
-		return dss_get_module_info()->dmi_xstream;
-
-	D_ASSERTF(stream_id >= 0 && stream_id < xstream_data.xd_xs_nr,
-		  "invalid stream id %d (xstream_data.xd_xs_nr %d).\n",
-		  stream_id, xstream_data.xd_xs_nr);
-
-	return xstream_data.xd_xs_ptrs[stream_id];
-}
 
 /**
  * Create a ULT to execute \a func(\a arg). If \a ult is not NULL, the caller
@@ -1611,8 +1715,7 @@ dss_srv_init()
 	dss_register_key(&daos_srv_modkey);
 	xstream_data.xd_init_step = XD_INIT_REG_KEY;
 
-	rc = bio_nvme_init(dss_storage_path, dss_nvme_conf, dss_nvme_shm_id,
-			   NULL);
+	rc = bio_nvme_init(dss_storage_path, dss_nvme_conf, dss_nvme_shm_id);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_NVME;
@@ -1744,7 +1847,7 @@ dss_dump_ABT_state()
 }
 
 void
-dss_gc_run(int credits)
+dss_gc_run(daos_handle_t poh, int credits)
 {
 	struct dss_xstream *dxs	 = dss_get_xstream();
 	int		    total = 0;
@@ -1757,18 +1860,21 @@ dss_gc_run(int credits)
 			creds = credits - total;
 
 		total += creds;
-		rc = vos_gc_run(&creds);
+		if (daos_handle_is_inval(poh))
+			rc = vos_gc_run(&creds);
+		else
+			rc = vos_gc_pool(poh, &creds);
+
 		if (rc) {
 			D_ERROR("GC run failed: %s\n", d_errstr(rc));
 			break;
 		}
 		total -= creds; /* subtract the remainded credits */
-		if (creds != 0) {
-			break;
-		}
+		if (creds != 0)
+			break; /* reclaimed everything */
 
 		if (credits > 0 && total >= credits)
-			break;
+			break; /* consumed all credits */
 
 		if (dss_xstream_exiting(dxs))
 			break;
@@ -1776,9 +1882,8 @@ dss_gc_run(int credits)
 		ABT_thread_yield();
 	}
 
-	if (total != 0) {
+	if (total != 0) /* did something */
 		D_DEBUG(DB_TRACE, "GC consumed %d credits\n", total);
-	}
 }
 
 static void
@@ -1788,7 +1893,7 @@ dss_gc_ult(void *args)
 
 	 while (!dss_xstream_exiting(dxs)) {
 		/* -1 means GC will run until there is nothing to do */
-		dss_gc_run(-1);
+		dss_gc_run(DAOS_HDL_INVAL, -1);
 		ABT_thread_yield();
 	 }
 }

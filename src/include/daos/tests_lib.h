@@ -27,6 +27,13 @@
 #include <getopt.h>
 #include <daos_types.h>
 #include <daos/object.h>
+#ifdef DAOS_HAS_VALGRIND
+#include <valgrind/valgrind.h>
+#define DAOS_ON_VALGRIND RUNNING_ON_VALGRIND
+#else
+#define DAOS_ON_VALGRIND 0
+#endif
+
 
 /** Read a command line from stdin. */
 char *dts_readline(const char *prompt);
@@ -153,15 +160,34 @@ struct dts_context {
 	int			 tsc_init;
 	/** OUTPUT END */
 };
-/** Initialize and SGL with a variable number of IOVs and set the IOV buffers
- *  to the value of the strings passed
+
+/** Initialize an SGL with a variable number of IOVs and set the IOV buffers
+ *  to the value of the strings passed. This will allocate memory for the iov
+ *  structures as well as the iov buffers, so d_sgl_fini(sgl, true) must be
+ *  called when sgl is no longer needed.
  *
  * @param sgl		Scatter gather list to initialize
  * @param count		Number of IO Vectors that will be created in the SGL
- * @param str		First string that will be used
+ * @param d		First string that will be used
  * @param ...		Rest of strings, up to count
  */
 void
-daos_sgl_init_with_strings(d_sg_list_t *sgl, uint32_t count, char *str, ...);
+dts_sgl_init_with_strings(d_sg_list_t *sgl, uint32_t count, char *d, ...);
+
+/** Initialize and SGL with a variable number of IOVs and set the IOV buffers
+ *  to the value of the strings passed, repeating the string. This is an
+ *  easy way to get larger data in the sgl. This will allocate memory for the
+ *  iov structures as well as the iov buffers, so d_sgl_fini(sgl, true) must be
+ *  called when sgl is no longer needed.
+ *
+ * @param sgl		Scatter gather list to initialize
+ * @param count		Number of IO Vectors that will be created in the SGL
+ * @param repeat	Number of tiems to repeat the string
+ * @param d		First string that will be used
+ * @param ...		Rest of strings, up to count
+ */
+void
+dts_sgl_init_with_strings_repeat(d_sg_list_t *sgl, uint32_t repeat,
+	uint32_t count, char *d, ...);
 
 #endif /* __DAOS_TESTS_LIB_H__ */

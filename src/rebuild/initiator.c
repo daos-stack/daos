@@ -354,6 +354,7 @@ rebuild_dkey(struct rebuild_tgt_pool_tracker *rpt,
 	}
 
 	tls->rebuild_pool_rec_count += rdone->ro_rec_num;
+	tls->rebuild_pool_size += rdone->ro_size;
 cont_put:
 	ds_cont_child_put(rebuild_cont);
 obj_close:
@@ -504,6 +505,7 @@ rw_iod_pack(struct rebuild_one *rdone, daos_iod_t *iod, d_sg_list_t *sgls)
 {
 	int idx = rdone->ro_iod_num;
 	int rec_cnt = 0;
+	uint64_t total_size = 0;
 	int i;
 	int rc;
 
@@ -515,6 +517,7 @@ rw_iod_pack(struct rebuild_one *rdone, daos_iod_t *iod, d_sg_list_t *sgls)
 
 	for (i = 0; i < iod->iod_nr; i++) {
 		rec_cnt += iod->iod_recxs[i].rx_nr;
+		total_size += iod->iod_recxs[i].rx_nr * iod->iod_size;
 		if (rdone->ro_epoch == 0 ||
 		    iod->iod_eprs[i].epr_lo > rdone->ro_epoch)
 			rdone->ro_epoch = iod->iod_eprs[i].epr_lo;
@@ -542,6 +545,7 @@ rw_iod_pack(struct rebuild_one *rdone, daos_iod_t *iod, d_sg_list_t *sgls)
 
 	rdone->ro_iod_num++;
 	rdone->ro_rec_num += rec_cnt;
+	rdone->ro_size += total_size;
 	iod->iod_recxs = NULL;
 	iod->iod_csums = NULL;
 	iod->iod_eprs = NULL;
@@ -702,7 +706,7 @@ rebuild_one_queue_cb(struct dss_enum_unpack_io *io, void *arg)
 {
 	return rebuild_one_queue(arg, &io->ui_oid, &io->ui_dkey,
 				 io->ui_dkey_punch_eph, io->ui_iods,
-				 io->ui_akey_punch_ephs, io->ui_iods_size,
+				 io->ui_akey_punch_ephs, io->ui_iods_top + 1,
 				 io->ui_sgls, io->ui_version);
 }
 

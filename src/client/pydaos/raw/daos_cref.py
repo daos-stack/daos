@@ -59,12 +59,15 @@ class TargetInfo(ctypes.Structure):
 class RebuildStatus(ctypes.Structure):
     """ Structure to represent rebuild status info """
     _fields_ = [("rs_version", ctypes.c_uint32),
-                ("rs_pad_32", ctypes.c_uint32),
+                ("rs_seconds", ctypes.c_uint32),
                 ("rs_errno", ctypes.c_uint32),
                 ("rs_done", ctypes.c_uint32),
+                ("rs_padding32", ctypes.c_uint32),
+                ("rs_fail_rank", ctypes.c_uint32),
                 ("rs_toberb_obj_nr", ctypes.c_uint64),
                 ("rs_obj_nr", ctypes.c_uint64),
-                ("rs_rec_nr", ctypes.c_uint64)]
+                ("rs_rec_nr", ctypes.c_uint64),
+                ("rs_size", ctypes.c_uint64)]
 
 class Daos_handle_t(ctypes.Structure):
     """ Structure to represent rebuild status info """

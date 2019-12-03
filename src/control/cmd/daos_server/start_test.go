@@ -52,13 +52,6 @@ func testExpectedError(t *testing.T, expected, actual error) {
 	}
 }
 
-func showBufOnFailure(t *testing.T, logBuf bytes.Buffer) {
-	if !t.Failed() || logBuf.Len() == 0 {
-		return
-	}
-	t.Logf("logged output: %s", logBuf.String())
-}
-
 func genMinimalConfig() *server.Configuration {
 	cfg := server.NewConfiguration().
 		WithFabricProvider("foo").

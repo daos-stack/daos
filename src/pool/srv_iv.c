@@ -218,7 +218,10 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	struct ds_pool		*pool;
 	int			rc;
 
-	D_ASSERT(src_iv != NULL);
+	if (src == NULL) /* invalidate */
+		return 0;
+
+	src_iv = src->sg_iovs[0].iov_buf;
 	D_ASSERT(dst_iv != NULL);
 	rc = pool_iv_ent_copy(entry->iv_class->iv_class_id,
 			      &entry->iv_value, src);
@@ -284,7 +287,8 @@ pool_iv_map_fetch(void *ns, struct pool_iv_entry *pool_iv)
 
 	memset(&key, 0, sizeof(key));
 	key.class_id = IV_POOL_MAP;
-	rc = ds_iv_fetch(ns, &key, pool_iv == NULL ? NULL : &sgl);
+	rc = ds_iv_fetch(ns, &key, pool_iv == NULL ? NULL : &sgl,
+			 false /* retry */);
 	if (rc)
 		D_ERROR("iv fetch failed %d\n", rc);
 
@@ -310,7 +314,8 @@ pool_iv_update(void *ns, int class_id, struct pool_iv_entry *pool_iv,
 
 	memset(&key, 0, sizeof(key));
 	key.class_id = class_id;
-	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0);
+	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0,
+			  false /* retry */);
 	if (rc)
 		D_ERROR("iv update failed %d\n", rc);
 
@@ -359,7 +364,8 @@ pool_iv_map_invalidate(void *ns, unsigned int shortcut, unsigned int sync_mode)
 	int			rc;
 
 	key.class_id = IV_POOL_MAP;
-	rc = ds_iv_invalidate(ns, &key, shortcut, sync_mode, 0);
+	rc = ds_iv_invalidate(ns, &key, shortcut, sync_mode, 0,
+			      false /* retry */);
 	if (rc)
 		D_ERROR("iv invalidate failed %d\n", rc);
 
@@ -617,7 +623,7 @@ pool_iv_prop_fetch(struct ds_pool *pool, daos_prop_t *prop)
 
 	memset(&key, 0, sizeof(key));
 	key.class_id = IV_POOL_PROP;
-	rc = ds_iv_fetch(pool->sp_iv_ns, &key, &sgl);
+	rc = ds_iv_fetch(pool->sp_iv_ns, &key, &sgl, false /* retry */);
 	if (rc) {
 		D_ERROR("iv fetch failed %d\n", rc);
 		D_GOTO(out, rc);

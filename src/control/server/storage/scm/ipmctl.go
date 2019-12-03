@@ -30,9 +30,9 @@ import (
 
 	"github.com/pkg/errors"
 
-	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/lib/ipmctl"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 const (
@@ -94,16 +94,16 @@ func (r *cmdRunner) checkNdctl() error {
 	return nil
 }
 
-func (r *cmdRunner) Discover() ([]Module, error) {
+func (r *cmdRunner) Discover() (storage.ScmModules, error) {
 	discovery, err := r.binding.Discover()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to discover SCM modules")
 	}
 	r.log.Debugf("discovered %d DCPM modules", len(discovery))
 
-	modules := make([]Module, 0, len(discovery))
+	modules := make(storage.ScmModules, 0, len(discovery))
 	for _, d := range discovery {
-		modules = append(modules, Module{
+		modules = append(modules, storage.ScmModule{
 			ChannelID:       uint32(d.Channel_id),
 			ChannelPosition: uint32(d.Channel_pos),
 			ControllerID:    uint32(d.Memory_controller_id),
@@ -117,32 +117,32 @@ func (r *cmdRunner) Discover() ([]Module, error) {
 }
 
 // getState establishes state of SCM regions and namespaces on local server.
-func (r *cmdRunner) GetState() (types.ScmState, error) {
+func (r *cmdRunner) GetState() (storage.ScmState, error) {
 	if err := r.checkNdctl(); err != nil {
-		return types.ScmStateUnknown, err
+		return storage.ScmStateUnknown, err
 	}
 
 	// TODO: discovery should provide SCM region details
 	out, err := r.runCmd(cmdScmShowRegions)
 	if err != nil {
-		return types.ScmStateUnknown, err
+		return storage.ScmStateUnknown, err
 	}
 
 	r.log.Debugf("show region output: %s\n", out)
 
 	if out == outScmNoRegions {
-		return types.ScmStateNoRegions, nil
+		return storage.ScmStateNoRegions, nil
 	}
 
 	ok, err := hasFreeCapacity(out)
 	if err != nil {
-		return types.ScmStateUnknown, err
+		return storage.ScmStateUnknown, err
 	}
 	if ok {
-		return types.ScmStateFreeCapacity, nil
+		return storage.ScmStateFreeCapacity, nil
 	}
 
-	return types.ScmStateNoCapacity, nil
+	return storage.ScmStateNoCapacity, nil
 }
 
 // Prep executes commands to configure SCM modules into AppDirect interleaved
@@ -157,7 +157,7 @@ func (r *cmdRunner) GetState() (types.ScmState, error) {
 // * regions exist but no free capacity -> no-op, return namespaces
 //
 // Command output from external tools will be returned. State will be passed in.
-func (r *cmdRunner) Prep(state types.ScmState) (needsReboot bool, pmemDevs []Namespace, err error) {
+func (r *cmdRunner) Prep(state storage.ScmState) (needsReboot bool, pmemDevs storage.ScmNamespaces, err error) {
 	if err = r.checkNdctl(); err != nil {
 		return
 	}
@@ -165,7 +165,7 @@ func (r *cmdRunner) Prep(state types.ScmState) (needsReboot bool, pmemDevs []Nam
 	r.log.Debugf("scm in state %s\n", state)
 
 	switch state {
-	case types.ScmStateNoRegions:
+	case storage.ScmStateNoRegions:
 		// clear any pre-existing goals first
 		if _, err = r.runCmd(cmdScmDeleteGoal); err != nil {
 			err = errors.WithMessage(err, "clear goal")
@@ -175,11 +175,11 @@ func (r *cmdRunner) Prep(state types.ScmState) (needsReboot bool, pmemDevs []Nam
 		if _, err = r.runCmd(cmdScmCreateRegions); err == nil {
 			needsReboot = true
 		}
-	case types.ScmStateFreeCapacity:
+	case storage.ScmStateFreeCapacity:
 		pmemDevs, err = r.createNamespaces()
-	case types.ScmStateNoCapacity:
+	case storage.ScmStateNoCapacity:
 		pmemDevs, err = r.GetNamespaces()
-	case types.ScmStateUnknown:
+	case storage.ScmStateUnknown:
 		err = errors.New("unknown scm state")
 	default:
 		err = errors.Errorf("unhandled scm state %q", state)
@@ -192,7 +192,7 @@ func (r *cmdRunner) Prep(state types.ScmState) (needsReboot bool, pmemDevs []Nam
 //
 // Returns indication of whether a reboot is required alongside error.
 // Command output from external tools will be returned. State will be passed in.
-func (r *cmdRunner) PrepReset(state types.ScmState) (bool, error) {
+func (r *cmdRunner) PrepReset(state storage.ScmState) (bool, error) {
 	if err := r.checkNdctl(); err != nil {
 		return false, nil
 	}
@@ -200,11 +200,11 @@ func (r *cmdRunner) PrepReset(state types.ScmState) (bool, error) {
 	r.log.Debugf("scm in state %s\n", state)
 
 	switch state {
-	case types.ScmStateNoRegions:
+	case storage.ScmStateNoRegions:
 		r.log.Info("SCM is already reset\n")
 		return false, nil
-	case types.ScmStateFreeCapacity, types.ScmStateNoCapacity:
-	case types.ScmStateUnknown:
+	case storage.ScmStateFreeCapacity, storage.ScmStateNoCapacity:
+	case storage.ScmStateUnknown:
 		return false, errors.New("unknown scm state")
 	default:
 		return false, errors.Errorf("unhandled scm state %q", state)
@@ -297,9 +297,9 @@ func hasFreeCapacity(text string) (hasCapacity bool, err error) {
 	return
 }
 
-// createNamespaces runs create until no free capacity.
-func (r *cmdRunner) createNamespaces() ([]Namespace, error) {
-	devs := make([]Namespace, 0)
+// createstorage.ScmNamespaces runs create until no free capacity.
+func (r *cmdRunner) createNamespaces() (storage.ScmNamespaces, error) {
+	devs := make(storage.ScmNamespaces, 0)
 
 	for {
 		r.log.Infof("creating SCM namespace, may take a few minutes...\n")
@@ -321,17 +321,17 @@ func (r *cmdRunner) createNamespaces() ([]Namespace, error) {
 		}
 
 		switch state {
-		case types.ScmStateNoCapacity:
+		case storage.ScmStateNoCapacity:
 			return devs, nil
-		case types.ScmStateFreeCapacity:
+		case storage.ScmStateFreeCapacity:
 		default:
 			return nil, errors.Errorf("unexpected state: want %s, got %s",
-				types.ScmStateFreeCapacity.String(), state.String())
+				storage.ScmStateFreeCapacity.String(), state.String())
 		}
 	}
 }
 
-func (r *cmdRunner) GetNamespaces() ([]Namespace, error) {
+func (r *cmdRunner) GetNamespaces() (storage.ScmNamespaces, error) {
 	if err := r.checkNdctl(); err != nil {
 		return nil, err
 	}
@@ -350,7 +350,7 @@ func (r *cmdRunner) GetNamespaces() ([]Namespace, error) {
 	return nss, nil
 }
 
-func parseNamespaces(jsonData string) (nss []Namespace, err error) {
+func parseNamespaces(jsonData string) (nss storage.ScmNamespaces, err error) {
 	// turn single entries into arrays
 	if !strings.HasPrefix(jsonData, "[") {
 		jsonData = "[" + jsonData + "]"

@@ -801,7 +801,6 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 			/* Update master rank */
 			rc = ds_pool_iv_ns_update(rpt->rt_pool,
 						  rsi->rsi_master_rank,
-						  &rsi->rsi_ns_iov,
 						  rsi->rsi_ns_id);
 			if (rc)
 				D_GOTO(out, rc);
@@ -899,7 +898,10 @@ out:
 	}
 
 	dss_rpc_reply(rpc, DAOS_REBUILD_DROP_SCAN);
-	d_rank_list_free(fail_list);
+	/* will fix cart to call co_post_reply() for this case, freeing
+	 * it immediately at here is potentially unsafe.
+	 */
+	/* d_rank_list_free(fail_list); */
 }
 
 int
@@ -935,3 +937,13 @@ rebuild_tgt_scan_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 	return 0;
 }
 
+int
+rebuild_tgt_scan_post_reply(crt_rpc_t *rpc, void *arg)
+{
+	struct rebuild_scan_out *out = crt_reply_get(rpc);
+
+	if (out->rso_ranks_list != NULL)
+		d_rank_list_free(out->rso_ranks_list);
+
+	return 0;
+}

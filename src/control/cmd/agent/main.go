@@ -24,6 +24,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/signal"
 	"path"
@@ -110,6 +111,9 @@ func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
 		log.Debug("debug output enabled")
 	}
 
+	ctx, shutdown := context.WithCancel(context.Background())
+	defer shutdown()
+
 	// Load the configuration file using the supplied path or the
 	// default path if none provided.
 	config, err := client.GetConfig(log, opts.ConfigPath)
@@ -156,7 +160,7 @@ func agentMain(log *logging.LeveledLogger, opts *cliOptions) error {
 	finish := make(chan bool, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
-	drpcServer, err := drpc.NewDomainSocketServer(log, sockPath)
+	drpcServer, err := drpc.NewDomainSocketServer(ctx, log, sockPath)
 	if err != nil {
 		log.Errorf("Unable to create socket server: %v", err)
 		return err

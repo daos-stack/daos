@@ -9,34 +9,36 @@ def scons():
 
     """If Lustre installed use its headers instead of our local defines"""
     try:
-        import os
         with open('/etc/os-release') as f:
             for line in f:
                 if 'ID' in line:
                     line = line.strip()
-                    id, distro = line.strip().split('=')
+                    _, distro = line.strip().split('=')
+                    distro = distro.strip('"')
                     break
-        if distro in ['"centos"', '"rhel"', '"fedora"']:
+        if distro in ['centos', 'rhel', 'fedora', 'opensuse']:
             import rpm
+            from pkg_resources import parse_version
+
             ts = rpm.TransactionSet()
             headers = ts.dbMatch('name', 'lustre')
             if not headers:
-                print("No package lustre found.")
+                headers = ts.dbMatch('name', 'lustre-client')
+            if headers and parse_version(headers['version']) >= parse_version('2.12.57'):
+                denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
             else:
-                from pkg_resources import parse_version
-                for h in headers:
-                    if parse_version(h['version']) >= parse_version('2.12.57'):
-                        denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
-        elif distro in ('"debian"', '"ubuntu"'):
+                print("Found no package lustre nor lustre-client.")
+        elif distro in ('debian', 'ubuntu'):
             import apt
             cache = apt.Cache()
             cache.open()
             instver = cache["lustre"].installed
-            if instver:
-                if parse_version(instver.version) >= parse_version('2.12.57'):
-                    denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
+            if not instver:
+                instver = cache["lustre-client"].installed
+            if instver and parse_version(instver.version) >= parse_version('2.12.57'):
+                denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
             else:
-                print("No package lustre found.")
+                print("Found no package lustre nor lustre-client.")
         else:
             print("Unable to identify distro.")
     except ImportError:
@@ -48,7 +50,7 @@ def scons():
 
     dfs_src = ['dfs.c']
     dfs = daos_build.library(denv, 'dfs', dfs_src, LIBS=libraries)
-    denv.Install('$PREFIX/lib/', dfs)
+    denv.Install('$PREFIX/lib64/', dfs)
 
     libraries = libraries + ['dfs']
 
@@ -62,7 +64,7 @@ def scons():
     fenv.Install('$PREFIX/bin/', dfuse_hl)
 
     duns = daos_build.library(denv, 'duns', 'duns.c', LIBS=libraries)
-    denv.Install('$PREFIX/lib/', duns)
+    denv.Install('$PREFIX/lib64/', duns)
 
 if __name__ == "SCons.Script":
     scons()

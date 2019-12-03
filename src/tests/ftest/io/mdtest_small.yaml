@@ -7,7 +7,7 @@ hosts:
     test_clients:
         - boro-E
         - boro-F
-timeout: 600
+timeout: 800
 server_config:
     name: daos_server
 pool:
@@ -17,14 +17,18 @@ pool:
     createset:
         group: daos_server
     createsize:
-        scm_size: 300000000
+        scm_size: 1600000000
     createsvc:
         svcn: 1
 mdtest:
     client_processes:
         np_8:
             np: 8
-    api: 'DFS'
+    mdtest_api: !mux
+      dfs:
+        api: 'DFS'
+      posix:
+        api: 'POSIX'
     test_dir: "/"
     iteration: 1
     dfs_destroy: True
@@ -55,3 +59,5 @@ mdtest:
             flags: " "
             depth: 5
     manager: "MPICH"
+dfuse:
+  mount_dir: "/tmp/daos_dfuse"

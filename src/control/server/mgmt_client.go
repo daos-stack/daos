@@ -163,7 +163,7 @@ func (msc *mgmtSvcClient) Join(ctx context.Context, req *mgmtpb.JoinReq) (resp *
 	return
 }
 
-func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb.DaosRank) (resp *mgmtpb.DaosResp, stopErr error) {
+func (msc *mgmtSvcClient) Stop(ctx context.Context, destAddr string, req *mgmtpb.KillRankReq) (resp *mgmtpb.DaosResp, stopErr error) {
 	stopErr = msc.withConnection(ctx, destAddr,
 		func(ctx context.Context, pbClient mgmtpb.MgmtSvcClient) error {
 

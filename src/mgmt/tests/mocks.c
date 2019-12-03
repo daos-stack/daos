@@ -25,7 +25,7 @@
  * Mocks for DAOS mgmt unit tests
  */
 
-#include "../mgmt.pb-c.h"
+#include "../srv.pb-c.h"
 #include "../srv_internal.h"
 #include "mocks.h"
 
@@ -63,6 +63,109 @@ mock_ds_mgmt_pool_get_acl_teardown(void)
 {
 	daos_acl_free(ds_mgmt_pool_get_acl_return_acl);
 	ds_mgmt_pool_get_acl_return_acl = NULL;
+}
+
+int		ds_mgmt_pool_overwrite_acl_return;
+uuid_t		ds_mgmt_pool_overwrite_acl_uuid;
+struct daos_acl	*ds_mgmt_pool_overwrite_acl_acl;
+struct daos_acl	*ds_mgmt_pool_overwrite_acl_result;
+void		*ds_mgmt_pool_overwrite_acl_result_ptr;
+int
+ds_mgmt_pool_overwrite_acl(uuid_t pool_uuid, struct daos_acl *acl,
+			   struct daos_acl **result)
+{
+	uuid_copy(ds_mgmt_pool_overwrite_acl_uuid, pool_uuid);
+	if (acl != NULL)
+		ds_mgmt_pool_overwrite_acl_acl = daos_acl_dup(acl);
+	ds_mgmt_pool_overwrite_acl_result_ptr = (void *)result;
+	if (result != NULL)
+		*result = daos_acl_dup(ds_mgmt_pool_overwrite_acl_result);
+	return ds_mgmt_pool_overwrite_acl_return;
+}
+
+void
+mock_ds_mgmt_pool_overwrite_acl_setup(void)
+{
+	ds_mgmt_pool_overwrite_acl_return = 0;
+	uuid_clear(ds_mgmt_pool_overwrite_acl_uuid);
+	ds_mgmt_pool_overwrite_acl_acl = NULL;
+	ds_mgmt_pool_overwrite_acl_result = NULL;
+	ds_mgmt_pool_overwrite_acl_result_ptr = NULL;
+}
+
+void
+mock_ds_mgmt_pool_overwrite_acl_teardown(void)
+{
+	daos_acl_free(ds_mgmt_pool_overwrite_acl_acl);
+	daos_acl_free(ds_mgmt_pool_overwrite_acl_result);
+}
+
+int		ds_mgmt_pool_update_acl_return;
+uuid_t		ds_mgmt_pool_update_acl_uuid;
+struct daos_acl	*ds_mgmt_pool_update_acl_acl;
+struct daos_acl	*ds_mgmt_pool_update_acl_result;
+void		*ds_mgmt_pool_update_acl_result_ptr;
+int
+ds_mgmt_pool_update_acl(uuid_t pool_uuid, struct daos_acl *acl,
+			struct daos_acl **result)
+{
+	uuid_copy(ds_mgmt_pool_update_acl_uuid, pool_uuid);
+	if (acl != NULL)
+		ds_mgmt_pool_update_acl_acl = daos_acl_dup(acl);
+	ds_mgmt_pool_update_acl_result_ptr = (void *)result;
+	if (result != NULL)
+		*result = daos_acl_dup(ds_mgmt_pool_update_acl_result);
+	return ds_mgmt_pool_update_acl_return;
+}
+
+void
+mock_ds_mgmt_pool_update_acl_setup(void)
+{
+	ds_mgmt_pool_update_acl_return = 0;
+	uuid_clear(ds_mgmt_pool_update_acl_uuid);
+	ds_mgmt_pool_update_acl_acl = NULL;
+	ds_mgmt_pool_update_acl_result = NULL;
+	ds_mgmt_pool_update_acl_result_ptr = NULL;
+}
+
+void
+mock_ds_mgmt_pool_update_acl_teardown(void)
+{
+	daos_acl_free(ds_mgmt_pool_update_acl_acl);
+	daos_acl_free(ds_mgmt_pool_update_acl_result);
+}
+
+int		ds_mgmt_pool_delete_acl_return;
+uuid_t		ds_mgmt_pool_delete_acl_uuid;
+const char	*ds_mgmt_pool_delete_acl_principal;
+struct daos_acl	*ds_mgmt_pool_delete_acl_result;
+void		*ds_mgmt_pool_delete_acl_result_ptr;
+int
+ds_mgmt_pool_delete_acl(uuid_t pool_uuid, const char *principal,
+			struct daos_acl **result)
+{
+	uuid_copy(ds_mgmt_pool_delete_acl_uuid, pool_uuid);
+	ds_mgmt_pool_delete_acl_principal = principal;
+	ds_mgmt_pool_delete_acl_result_ptr = (void *)result;
+	if (result != NULL)
+		*result = daos_acl_dup(ds_mgmt_pool_delete_acl_result);
+	return ds_mgmt_pool_delete_acl_return;
+}
+
+void
+mock_ds_mgmt_pool_delete_acl_setup(void)
+{
+	ds_mgmt_pool_delete_acl_return = 0;
+	uuid_clear(ds_mgmt_pool_delete_acl_uuid);
+	ds_mgmt_pool_delete_acl_principal = NULL;
+	ds_mgmt_pool_delete_acl_result = NULL;
+	ds_mgmt_pool_delete_acl_result_ptr = NULL;
+}
+
+void
+mock_ds_mgmt_pool_delete_acl_teardown(void)
+{
+	daos_acl_free(ds_mgmt_pool_delete_acl_result);
 }
 
 /*
@@ -137,4 +240,14 @@ int
 ds_mgmt_smd_list_pools(Mgmt__SmdPoolResp *resp)
 {
 	return 0;
+}
+
+int ds_mgmt_list_pools(const char *group, uint64_t *npools,
+		       struct mgmt_list_pools_one **poolsp, size_t *pools_len)
+{
+	return 0;
+}
+
+void
+ds_mgmt_free_pool_list(struct mgmt_list_pools_one **poolsp, uint64_t len) {
 }

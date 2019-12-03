@@ -492,11 +492,11 @@ the process to act as a primary in multi-process mode. From there,
 the main process can respond to requests over the client API for
 information through the SPDK interface.
 
-The daos_shell is a transitory tool used to exercise the management api
-and can be used to verify that the DAOS servers are up and running. It
-is to be run as a standard, unprivileged user as follows:
+dmg is a tool built on top of the management api and can be used
+to verify that the DAOS servers are up and running. It is to be run
+as a standard, unprivileged user as follows:
 ```
-$ daos_shell -l storagenode1:10001,storagenode2:10001 storage scan
+$ dmg -l storagenode1:10001,storagenode2:10001 storage scan
 ```
 "storagenode" should be replaced with the actual hostname of each
 storage node. This command will show whether the DAOS server is properly
@@ -507,12 +507,12 @@ first version will be available for DAOS v1.0.
 ## Storage Formatting
 
 When 'daos_server' is started for the first time (and no SCM directory exists),
-it enters "maintenance mode" and waits for a `daos_shell storage format` call to
+it enters "maintenance mode" and waits for a `dmg storage format` call to
 be issued from the management tool.
 This remote call will trigger the formatting of the locally attached storage on
 the host for use with DAOS using the parameters defined in the server config file.
 
-`daos_shell -i -l <host:port>[,...] storage format` will normally be run on a login
+`dmg -i -l <host:port>[,...] storage format` will normally be run on a login
 node specifying a hostlist (`-l <host:port>[,...]`) of storage nodes with SCM/DCPM
 modules and NVMe SSDs installed and prepared.
 
@@ -564,16 +564,15 @@ IO services if the `superblock` is found in `scm_mount`.
 ## Basic Workflow
 
 Control plane server ([daos_server](/src/control/server)) instances will
-listen for requests from the management tool ([daos_shell](/src/control/cmd/dmg)),
+listen for requests from the management tool ([dmg](/src/control/cmd/dmg)),
 enabling users to perform provisioning operations on network and storage
 hardware remotely on storage nodes (from for example a login node).
 
 When `daos_server` instances have been started on each storage node
-for the first time, calling
-`daos_shell -l <host:port>,... storage format -f` formats persistent
-storage on the server node (skipping confirmation) on devices specified
-in the server configuration file, then writes the superblock and
-starts the data plane.
+for the first time, calling `dmg -l <host:port>,... storage format`
+formats persistent storage on the server node on devices specified in
+the server configuration file, then writes the superblock and starts
+the data plane.
 
 ![../graph/server_format_flow.png](../graph/server_format_flow.png "Server Format Diagram")
 
@@ -609,8 +608,9 @@ requires a subsequent restart of `daos_server`)
 
 7. Format Storage (from any node)
     - When `daos_server` is started for the first time (and no SCM directory exists),
-`daos_server` enters "maintenance mode" and waits for a `daos_shell storage format` call to be issued from the management tool. This remote call will trigger the formatting of the locally attached storage on the host for use with DAOS using the parameters defined in the server config file.
-    - `daos_shell -i -l <host:port>,... storage format -f`
+`daos_server` enters "maintenance mode" and waits for a `dmg storage format` call to be
+issued from the management tool.
+    - `dmg -i -l <host:port>,... storage format`
 [management tool details](/src/control/cmd/dmg/README.md#storage-format)
     - [SCM specific details](/src/control/server/README.md#scm-format)
     - [NVMe specific details](/src/control/server/README.md#nvme-format)
@@ -621,7 +621,7 @@ requires a subsequent restart of `daos_server`)
 <p>
 
 ```bash
-$ daos_shell -i -l <hostname>:10001 -i storage format -f
+$ dmg -i -l <hostname>:10001 -i storage format
 Active connections: [<hostname):10001]
 This is a destructive operation and storage devices specified in the server config file will be erased.
 Please be patient as it may take several minutes.

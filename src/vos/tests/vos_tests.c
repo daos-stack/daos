@@ -55,6 +55,7 @@ print_usage()
 	print_message("vos_tests -A|--all_tests\n");
 	print_message("vos_tests -f|--filter <filter>\n");
 	print_message("vos_tests -e|--exclude <filter>\n");
+	print_message("vos_tests -m|--punch-model-tests\n");
 	print_message("vos_tests -h|--help\n");
 	print_message("Default <vos_tests> runs all tests\n");
 }
@@ -81,6 +82,7 @@ run_all_tests(int keys, bool nest_iterators)
 	int	i;
 	int	j;
 
+	failed += run_pm_tests();
 	failed += run_pool_test();
 	failed += run_co_test();
 	for (i = 0; dkey_feats[i] >= 0; i++) {
@@ -107,7 +109,7 @@ main(int argc, char **argv)
 	int	ofeats;
 	int	keys;
 	bool	nest_iterators = false;
-	const char *short_options = "apcdglni:XA:hf:e:";
+	const char *short_options = "apcdglni:mXA:hf:e:";
 	static struct option long_options[] = {
 		{"all_tests",		required_argument, 0, 'A'},
 		{"pool_tests",		no_argument, 0, 'p'},
@@ -117,6 +119,7 @@ main(int argc, char **argv)
 		{"nest_iterators",	no_argument, 0, 'n'},
 		{"aggregate_tests",	no_argument, 0, 'a'},
 		{"dtx_tests",		no_argument, 0, 'X'},
+		{"punch_model_tests",	no_argument, 0, 'm'},
 		{"garbage_collector",	no_argument, 0, 'g'},
 		{"ilog_tests",		no_argument, 0, 'l'},
 		{"help",		no_argument, 0, 'h'},
@@ -197,9 +200,14 @@ main(int argc, char **argv)
 			break;
 		case 'g':
 			nr_failed += run_gc_tests();
+			test_run = true;
 			break;
 		case 'X':
 			nr_failed += run_dtx_tests();
+			test_run = true;
+			break;
+		case 'm':
+			nr_failed += run_pm_tests();
 			test_run = true;
 			break;
 		case 'A':
@@ -236,13 +244,6 @@ main(int argc, char **argv)
 		print_message("\nSUCCESS! NO TEST FAILURES\n");
 
 exit_1:
-	/* There is no ULT/thread calls vos_gc_run() in this utility, it is
-	 * possible VOS GC might still take refcount on already closed pools.
-	 * These in-mem pools will be freed by calling gc_wait().
-	 *
-	 * NB: this function is only defined for standalone mode.
-	 */
-	gc_wait();
 	vos_fini();
 exit_0:
 	daos_debug_fini();

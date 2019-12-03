@@ -1,3 +1,5 @@
+server_manager:
+    srv_timeout: 500
 hosts:
    test_machines:
         test_servers:
@@ -10,12 +12,12 @@ hosts:
             - boro-F
             - boro-G
             - boro-H
-timeout: 500
+timeout: 1800
 server_config:
     name: daos_server
-    server:
+    servers:
         bdev_class: nvme
-        bdev_list: ["0000:81:00.0","0000:da:00.0"]
+        bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
 pool:
     createmode:
         mode_RW:
@@ -24,6 +26,7 @@ pool:
         group: daos_server
     createsize:
         scm_size: 3000000000
+        nvme_size: 9000000000
     createsvc:
         svcn: 1
 ior:
@@ -42,6 +45,8 @@ ior:
               api: DAOS
             mpiio:
               api: MPIIO
+            posix:
+              api: POSIX
           transfersize_blocksize: !mux
             256B:
               transfer_size: '256B'
@@ -69,3 +74,5 @@ ior:
 #          transfer_size: '1M'
 #          block_size: '32M'
 #          daos_oclass: "RP_2GX"
+dfuse:
+    mount_dir: "/tmp/daos_dfuse"

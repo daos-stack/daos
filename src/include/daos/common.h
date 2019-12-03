@@ -47,6 +47,7 @@
 #include <cart/api.h>
 #include <daos_types.h>
 #include <daos_prop.h>
+#include <daos_security.h>
 
 #ifndef DF_RC
 #define DF_RC "%s(%d)"
@@ -104,6 +105,7 @@ char *DP_UUID(const void *uuid);
 /* For prefixes of error messages about a container */
 #define DF_CONT			DF_UUID"/"DF_UUID
 #define DP_CONT(puuid, cuuid)	DP_UUID(puuid), DP_UUID(cuuid)
+#define DF_CONTF		DF_UUIDF"/"DF_UUIDF
 
 char *daos_key2str(daos_key_t *key);
 
@@ -532,6 +534,17 @@ enum {
 #define DAOS_VC_LOST_DATA		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x42)
 #define DAOS_VC_LOST_REPLICA		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x43)
 
+#define DAOS_NVME_FAULTY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x50)
+
+#define DAOS_POOL_CREATE_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x60)
+#define DAOS_POOL_DESTROY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x61)
+#define DAOS_POOL_CONNECT_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x62)
+#define DAOS_POOL_DISCONNECT_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x63)
+#define DAOS_POOL_QUERY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x64)
+#define DAOS_CONT_DESTROY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x65)
+#define DAOS_CONT_CLOSE_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x66)
+#define DAOS_CONT_QUERY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x67)
+
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
 
 static inline int __is_po2(unsigned long long val)
@@ -576,6 +589,7 @@ bool daos_hhash_link_delete(struct d_hlink *hlink);
 crt_init_options_t *daos_crt_init_opt_get(bool server, int crt_nr);
 
 int crt_proc_daos_prop_t(crt_proc_t proc, daos_prop_t **data);
+int crt_proc_struct_daos_acl(crt_proc_t proc, struct daos_acl **data);
 
 bool daos_prop_valid(daos_prop_t *prop, bool pool, bool input);
 daos_prop_t *daos_prop_dup(daos_prop_t *prop, bool pool);

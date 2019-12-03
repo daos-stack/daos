@@ -176,23 +176,18 @@ bio_iod_sgl(struct bio_desc *biod, unsigned int idx)
 struct bio_desc *
 bio_iod_alloc(struct bio_io_context *ctxt, unsigned int sgl_cnt, bool update)
 {
-	struct bio_desc *biod;
+	struct bio_desc	*biod;
+
 	D_ASSERT(ctxt != NULL && ctxt->bic_umem != NULL);
 	D_ASSERT(sgl_cnt != 0);
 
-	D_ALLOC_PTR(biod);
+	D_ALLOC(biod, offsetof(struct bio_desc, bd_sgls[sgl_cnt]));
 	if (biod == NULL)
 		return NULL;
 
 	biod->bd_ctxt = ctxt;
 	biod->bd_update = update;
 	biod->bd_sgl_cnt = sgl_cnt;
-
-	D_ALLOC_ARRAY(biod->bd_sgls, sgl_cnt);
-	if (biod->bd_sgls == NULL) {
-		D_FREE(biod);
-		return NULL;
-	}
 
 	biod->bd_dma_done = ABT_EVENTUAL_NULL;
 	return biod;
@@ -210,7 +205,6 @@ bio_iod_free(struct bio_desc *biod)
 
 	for (i = 0; i < biod->bd_sgl_cnt; i++)
 		bio_sgl_fini(&biod->bd_sgls[i]);
-	D_FREE(biod->bd_sgls);
 	D_FREE(biod);
 }
 
@@ -712,12 +706,14 @@ dma_rw(struct bio_desc *biod, bool prep)
 
 			if (biod->bd_update)
 				spdk_blob_io_write(blob, channel, payload,
-						   pg_idx, pg_cnt,
-						   rw_completion, biod);
+					page2io_unit(biod->bd_ctxt, pg_idx),
+					page2io_unit(biod->bd_ctxt, pg_cnt),
+					rw_completion, biod);
 			else
 				spdk_blob_io_read(blob, channel, payload,
-						  pg_idx, pg_cnt,
-						  rw_completion, biod);
+					page2io_unit(biod->bd_ctxt, pg_idx),
+					page2io_unit(biod->bd_ctxt, pg_cnt),
+					rw_completion, biod);
 			continue;
 		}
 

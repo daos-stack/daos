@@ -24,70 +24,32 @@
 package server
 
 import (
-	"encoding/json"
-	"io/ioutil"
-
 	"github.com/daos-stack/daos/src/control/common"
-	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
-var jsonDBRelPath = "share/daos/control/mgmtinit_db.json"
-
 // ControlService implements the control plane control service, satisfying
+
 // ctlpb.MgmtCtlServer, and is the data container for the service.
 type ControlService struct {
 	StorageControlService
-	harness           *IOServerHarness
-	membership        *common.Membership
-	supportedFeatures FeatureMap
+	harness    *IOServerHarness
+	membership *common.Membership
 }
 
-func NewControlService(l logging.Logger, h *IOServerHarness, sp *scm.Provider, cfg *Configuration,
-	m *common.Membership) (*ControlService, error) {
-
+// NewControlService returns ControlService to be used as gRPC control service
+// datastore. Initialised with sensible defaults and provided components.
+func NewControlService(l logging.Logger, h *IOServerHarness, sp *scm.Provider, cfg *Configuration, m *common.Membership) (*ControlService, error) {
 	scs, err := DefaultStorageControlService(l, cfg)
 	if err != nil {
 		return nil, err
 	}
-	scs.scm.provider = sp
-
-	fMap, err := loadInitData(jsonDBRelPath)
-	if err != nil {
-		return nil, err
-	}
+	scs.scm = sp
 
 	return &ControlService{
 		StorageControlService: *scs,
 		harness:               h,
 		membership:            m,
-		supportedFeatures:     fMap,
 	}, nil
-}
-
-// loadInitData retrieves initial data from relative file path.
-func loadInitData(relPath string) (m FeatureMap, err error) {
-	absPath, err := common.GetAbsInstallPath(relPath)
-	if err != nil {
-		return
-	}
-
-	m = make(FeatureMap)
-
-	file, err := ioutil.ReadFile(absPath)
-	if err != nil {
-		return
-	}
-
-	var features []*ctlpb.Feature
-	if err = json.Unmarshal(file, &features); err != nil {
-		return
-	}
-
-	for _, f := range features {
-		m[f.Fname.Name] = f
-	}
-
-	return
 }

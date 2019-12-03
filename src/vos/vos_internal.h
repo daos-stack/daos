@@ -38,8 +38,8 @@
 #include <daos_srv/daos_server.h>
 #include <daos_srv/bio.h>
 #include <vos_layout.h>
+#include <vos_ilog.h>
 #include <vos_obj.h>
-#include <ilog.h>
 
 #define VOS_CONT_ORDER		20	/* Order of container tree */
 #define VOS_OBJ_ORDER		20	/* Order of object tree */
@@ -66,6 +66,9 @@ extern struct dss_module_key vos_module_key;
  * growing and trigger window flush immediately.
  */
 #define VOS_MW_FLUSH_THRESH	(1UL << 23)	/* 8MB */
+
+/* Force aggregation/discard ULT yield on certain amount of tight loops */
+#define VOS_AGG_CREDITS_MAX	256
 
 static inline uint32_t vos_byte2blkcnt(uint64_t bytes)
 {
@@ -357,28 +360,16 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
  *
  * \param umm		[IN]	Instance of an unified memory class.
  * \param record	[IN]	Address (offset) of the record (in SCM)
- *				to be modified.
+ *				to associate witht the transaction.
  * \param type		[IN]	The record type, see vos_dtx_record_types.
- * \param flags		[IN]	The record flags, see vos_dtx_record_flags.
+ * \param dtx		[OUT]	tx_id is returned.  Caller is responsible
+ *				to save it in the record.
  *
  * \return		0 on success and negative on failure.
  */
 int
 vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
-			uint32_t type, uint32_t flags);
-
-/**
- * Register an incarnation log entry
- *
- * \param umm		[IN]	Instance of an unified memory class.
- * \param ilog_off	[IN]	The offset of incarnation log
- * \param dtx		[OUT]	dtx offset is returned
- *
- * \return		0 on success and negative on failure.
- */
-int
-vos_dtx_register_ilog(struct umem_instance *umm, umem_off_t ilog_off,
-		      umem_off_t *dtx);
+			uint32_t type, umem_off_t *tx_id);
 
 /** Return the already active dtx id, if any */
 umem_off_t
@@ -410,6 +401,7 @@ vos_dtx_prepared(struct dtx_handle *dth);
 void
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
 			int count);
+
 
 /**
  * Register dbtree class for DTX CoS, it is called within vos_init().
@@ -835,7 +827,7 @@ struct vos_obj_iter {
 	/* public part of the iterator */
 	struct vos_iterator	 it_iter;
 	/** Incarnation log entries for current iterator */
-	struct ilog_entries	 it_ilog_entries;
+	struct vos_ilog_info	 it_ilog_info;
 	/** handle of iterator */
 	daos_handle_t		 it_hdl;
 	/** condition of the iterator: epoch logic expression */
@@ -912,67 +904,12 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	       d_iov_t *key_iov, d_iov_t *val_iov, int flags);
 
 /* vos_io.c */
-int
-key_ilog_fetch(struct vos_object *obj, uint32_t intent,
-	       const daos_epoch_range_t *epr, struct vos_krec_df *krec,
-	       struct ilog_entries *entries);
 uint16_t
 vos_media_select(struct vos_container *cont, daos_iod_type_t type,
 		 daos_size_t size);
 int
 vos_publish_blocks(struct vos_container *cont, d_list_t *blk_list, bool publish,
 		   enum vos_io_stream ios);
-
-/* Update the timestamp in a key or object.  The latest and earliest must be
- * contiguous in the struct being updated.  This is ensured at present by
- * the static assertions on vos_obj_df and vos_krec_df structures
- */
-static inline int
-vos_df_ts_update(struct vos_object *obj, daos_epoch_t *latest_df,
-		 const daos_epoch_range_t *epr)
-{
-	struct umem_instance	*umm;
-	daos_epoch_t		*earliest_df;
-	daos_epoch_t		*start = NULL;
-	int			 size = 0;
-	int			 rc = 0;
-
-	D_ASSERT(latest_df != NULL && obj != NULL && epr != NULL);
-
-	earliest_df = latest_df + 1;
-
-	if (*latest_df >= epr->epr_hi &&
-	    *earliest_df <= epr->epr_lo)
-		goto out;
-
-	if (*latest_df < epr->epr_hi) {
-		start = latest_df;
-		size = sizeof(*latest_df);
-
-		if (*earliest_df > epr->epr_lo)
-			size += sizeof(*earliest_df);
-		else
-			earliest_df = NULL;
-	} else {
-		latest_df = NULL;
-		start = earliest_df;
-		size = sizeof(*earliest_df);
-
-		D_ASSERT(*earliest_df > epr->epr_lo);
-	}
-
-	umm = vos_obj2umm(obj);
-	rc = umem_tx_add_ptr(umm, start, size);
-	if (rc != 0)
-		goto out;
-
-	if (latest_df)
-		*latest_df = epr->epr_hi;
-	if (earliest_df)
-		*earliest_df = epr->epr_lo;
-out:
-	return rc;
-}
 
 static inline struct umem_instance *
 vos_pool2umm(struct vos_pool *pool)
@@ -1014,8 +951,6 @@ vos_iter_intent(struct vos_iterator *iter)
 
 void
 gc_wait(void);
-void
-gc_wait_pool(struct vos_pool *pool);
 int
 gc_add_pool(struct vos_pool *pool);
 void
@@ -1027,11 +962,5 @@ gc_init_pool(struct umem_instance *umm, struct vos_pool_df *pd);
 int
 gc_add_item(struct vos_pool *pool, enum vos_gc_type type, umem_off_t item_off,
 	    uint64_t args);
-/** Initialize the incarnation log globals */
-int
-vos_ilog_init(void);
-/** Initialize callbacks for vos incarnation log */
-void
-vos_ilog_desc_cbs_init(struct ilog_desc_cbs *cbs, daos_handle_t coh);
 
 #endif /* __VOS_INTERNAL_H__ */
