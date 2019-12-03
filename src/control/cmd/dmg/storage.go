@@ -120,7 +120,7 @@ func genScanDisplay(result *client.StorageScanResp, summary bool) (string, error
 		fmt.Fprintf(w, "\n %s\t%s\t%s\t", "-----", "---", "----")
 
 		for _, res := range groups.Keys() {
-			fmt.Fprintf(w, "\n %s\t%s", groups[res].DerangedString(), res)
+			fmt.Fprintf(w, "\n %s\t%s", groups[res].RangedString(), res)
 		}
 
 		w.Flush()

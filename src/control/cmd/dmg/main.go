@@ -118,6 +118,8 @@ func appSetup(log logging.Logger, opts *cliOptions, conns client.Connect) error 
 		return errors.New("no active connections")
 	}
 
+	// don't need to print connected as we will subsequently display results
+	delete(connStates, "connected")
 	log.Info(connStates.String())
 
 	return nil
