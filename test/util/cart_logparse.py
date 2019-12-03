@@ -307,7 +307,7 @@ class StateIter():
         self._l = iter(self.li)
         return self
 
-    def next(self):
+    def __next__(self):
         line = next(self._l)
 
         if not line.trace:
@@ -355,6 +355,10 @@ class StateIter():
                 del self.active_desc[line.descriptor]
 
         return line
+
+    def next(self):
+        return self.__next__()
+
 # pylint: disable=too-many-branches
 
 # pylint: disable=too-few-public-methods
@@ -450,7 +454,7 @@ class LogIter():
             self._offset = 0
         return self
 
-    def __lnext__(self):
+    def __lnext(self):
         """Helper function for __next__"""
 
         if self.__from_file:
@@ -471,10 +475,10 @@ class LogIter():
         self._offset += 1
         return line
 
-    def next(self):
+    def __next__(self):
 
         while True:
-            line = self.__lnext__()
+            line = self.__lnext()
 
             if not self._raw and isinstance(line, LogRaw):
                 continue
@@ -489,6 +493,9 @@ class LogIter():
                 continue
 
             return line
+
+    def next(self):
+        return self.__next__()
 
     def get_pids(self):
         """Return an array of pids appearing in the file"""

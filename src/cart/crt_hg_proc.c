@@ -207,8 +207,17 @@ int
 crt_proc_d_string_t(crt_proc_t proc, d_string_t *data)
 {
 	hg_return_t	hg_ret;
+	hg_proc_op_t	 proc_op;
+
+	proc_op = hg_proc_get_op(proc);
+
+	if (proc_op == HG_FREE)
+		D_DEBUG(DB_MEM, "free '*data' at %p.\n", (*data));
 
 	hg_ret = hg_proc_hg_string_t(proc, data);
+
+	if (proc_op == HG_DECODE)
+		D_CHECK_ALLOC(hg_str, true, *data, "*data", -1, 1, "", 0);
 
 	return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
 }
@@ -217,8 +226,19 @@ int
 crt_proc_d_const_string_t(crt_proc_t proc, d_const_string_t *data)
 {
 	hg_return_t	hg_ret;
+	hg_proc_op_t	 proc_op;
+
+	proc_op = hg_proc_get_op(proc);
+
+	char **d2 = (char **)data;
+
+	if (proc_op == HG_FREE)
+		D_DEBUG(DB_MEM, "free '*data' at %p.\n", (*d2));
 
 	hg_ret = hg_proc_hg_const_string_t(proc, data);
+
+	if (proc_op == HG_DECODE)
+		D_CHECK_ALLOC(hg_str, true, *d2, "*data", -1, 1, "", 0);
 
 	return (hg_ret == HG_SUCCESS) ? 0 : -DER_HG;
 }

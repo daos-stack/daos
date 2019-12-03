@@ -306,7 +306,10 @@ debug_mask_load(const char *mask_name)
 	struct d_debug_bit	*d;
 	struct d_debug_grp	*g;
 
-	D_STRNDUP(mask_str, mask_name, DBG_ENV_MAX_LEN);
+	/** Must not use D_ macros internally to avoid caching log mask
+	 *  during mask resync
+	 */
+	mask_str = strndup(mask_name, DBG_ENV_MAX_LEN);
 	if (mask_str == NULL) {
 		D_PRINT_ERR("D_STRNDUP of debug mask failed");
 		return;
@@ -342,7 +345,10 @@ debug_mask_load(const char *mask_name)
 		}
 		cur = strtok(NULL, DD_SEP);
 	}
-	D_FREE(mask_str);
+	/** Must not use D_ macros internally to avoid caching log mask
+	 *  during mask resync
+	 */
+	free(mask_str);
 }
 
 /**
@@ -589,7 +595,7 @@ d_log_init(void)
 	if (log_file != NULL && log_file_pid_append != NULL) {
 		if (strcmp(log_file_pid_append, "0") != 0) {
 			/* Append pid to log file. */
-			D_ASPRINTF(buffer, "%s%d", log_file, getpid());
+			asprintf(&buffer, "%s%d", log_file, getpid());
 			if (buffer == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 			log_file = buffer;
@@ -604,7 +610,7 @@ d_log_init(void)
 
 	d_log_sync_mask();
 out:
-	D_FREE(buffer);
+	free(buffer);
 	return rc;
 }
 

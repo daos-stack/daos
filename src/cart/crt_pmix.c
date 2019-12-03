@@ -513,13 +513,13 @@ crt_pmix_uri_lookup(crt_group_id_t srv_grpid, d_rank_t rank, char **uri)
 			pdata[0].key, rc, pdata[0].value.type);
 		D_GOTO(out, rc = -DER_PMIX);
 	}
-	*uri = strndup(pdata[0].value.data.string, CRT_ADDR_STR_MAX_LEN);
+	D_STRNDUP(*uri, pdata[0].value.data.string, CRT_ADDR_STR_MAX_LEN);
 	if (!*uri)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	if (strlen(*uri) > CRT_ADDR_STR_MAX_LEN) {
 		D_ERROR("got bad uri %s (len %zu).\n", *uri, strlen(*uri));
-		free(*uri);
+		D_FREE(*uri);
 		rc = -DER_INVAL;
 	}
 
@@ -545,7 +545,7 @@ crt_pmix_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank)
 				 psr_rank, &uri);
 	if (rc == 0) {
 		crt_grp_psr_set(grp_priv, psr_rank, uri);
-		free(uri);
+		D_FREE(uri);
 	} else
 		D_ERROR("crt_pmix_uri_lookup(grpid: %s, rank %d) failed, "
 			"rc: %d.\n", grp_priv->gp_pub.cg_grpid, psr_rank, rc);

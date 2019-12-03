@@ -912,8 +912,7 @@ lm_uri_lookup_psr_cb(const struct crt_cb_info *cb_info)
 		D_GOTO(out, rc);
 	}
 out:
-	if (psr_phy_addr != NULL)
-		free(psr_phy_addr);
+	D_FREE(psr_phy_addr);
 
 	D_RWLOCK_WRLOCK(&lookup_cb_info->lul_rwlock);
 	lookup_cb_info->lul_count++;

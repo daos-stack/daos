@@ -254,7 +254,7 @@ crt_corpc_free_chained_bulk(crt_bulk_t bulk_hdl)
 	}
 
 	for (i = 0; i < seg_num; i++)
-		free(iovs[i].iov_buf);
+		D_FREE(iovs[i].iov_buf);
 
 	rc = crt_bulk_free(bulk_hdl);
 	if (rc != 0)
@@ -312,7 +312,7 @@ crt_corpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 		if (rc != 0) {
 			D_ERROR("crt_bulk_create failed, rc: %d, opc: %#x.\n",
 				rc, rpc_priv->crp_pub.cr_opc);
-			free(bulk_iov.iov_buf);
+			D_FREE(bulk_iov.iov_buf);
 			D_GOTO(out, rc);
 		}
 

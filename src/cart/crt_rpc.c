@@ -957,7 +957,6 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 	char			*uri = NULL;
 	crt_group_id_t		 grp_id;
 	struct crt_context	*crt_ctx;
-	bool			 naked_free = false;
 	int			 rc = 0;
 
 	tgt_ep = &rpc_priv->crp_pub.cr_ep;
@@ -1017,7 +1016,6 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 			D_ERROR("crt_pmix_uri_lookup() failed, rc %d.\n", rc);
 			D_GOTO(out, rc);
 		}
-		naked_free = true;
 	} else {
 		RPC_TRACE(DB_NET, rpc_priv,
 			  "Querying rank %d tag 0 for target NA address\n",
@@ -1052,12 +1050,7 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 		D_GOTO(out, rc);
 	}
 out:
-	if (naked_free) {
-		if (uri)
-			free(uri);
-	} else {
-		D_FREE(uri);
-	}
+	D_FREE(uri);
 
 	return rc;
 }

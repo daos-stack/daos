@@ -3219,10 +3219,7 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 
 		rc = fprintf(fp, "%d %s\n", rank, uri);
 
-		if (CRT_PMIX_ENABLED())
-			free(uri);
-		else
-			D_FREE(uri);
+		D_FREE(uri);
 
 		if (rc < 0) {
 			D_ERROR("write to file %s failed (%s).\n",
@@ -3447,8 +3444,7 @@ crt_grp_config_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank)
 out:
 	if (fp)
 		fclose(fp);
-	if (filename != NULL)
-		free(filename);
+	D_FREE(filename);
 	D_FREE(grpname);
 	D_FREE(addr_str);
 
