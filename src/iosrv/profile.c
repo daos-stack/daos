@@ -199,7 +199,8 @@ srv_profile_dump(void *arg)
 		D_ALLOC(path, strlen(sp->sp_dir_path) + 64);
 		if (path == NULL) {
 			rc = -DER_NOMEM;
-			D_ERROR("start dump ult failed: rc "DF_RC"\n", DP_RC(rc));
+			D_ERROR("start dump ult failed: rc "DF_RC"\n",
+				DP_RC(rc));
 			return;
 		}
 

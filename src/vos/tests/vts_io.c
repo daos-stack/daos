@@ -280,13 +280,15 @@ io_recx_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 		memset(&ent, 0, sizeof(ent));
 		rc = vos_iter_fetch(ih, &ent, NULL);
 		if (rc != 0) {
-			print_error("Failed to fetch recx: "DF_RC"\n", DP_RC(rc));
+			print_error("Failed to fetch recx: "DF_RC"\n",
+				    DP_RC(rc));
 			goto out;
 		}
 
 		rc = vos_iter_copy(ih, &ent, &iov_out);
 		if (rc != 0) {
-			print_error("Failed to copy recx: "DF_RC"\n", DP_RC(rc));
+			print_error("Failed to copy recx: "DF_RC"\n",
+				    DP_RC(rc));
 			goto out;
 		}
 
@@ -356,7 +358,8 @@ io_akey_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 
 		rc = vos_iter_fetch(ih, &ent, NULL);
 		if (rc != 0) {
-			print_error("Failed to fetch akey: "DF_RC"\n", DP_RC(rc));
+			print_error("Failed to fetch akey: "DF_RC"\n",
+				    DP_RC(rc));
 			goto out;
 		}
 
@@ -443,7 +446,8 @@ io_obj_iter_test(struct io_test_args *arg, daos_epoch_range_t *epr,
 		}
 
 		if (rc != 0) {
-			print_error("Failed to fetch dkey: "DF_RC"\n", DP_RC(rc));
+			print_error("Failed to fetch dkey: "DF_RC"\n",
+				    DP_RC(rc));
 			goto out;
 		}
 
@@ -1529,7 +1533,8 @@ io_simple_one_key_cross_container(void **state)
 	uuid_generate_time_safe(arg->addn_co_uuid);
 	rc = vos_cont_create(arg->ctx.tc_po_hdl, arg->addn_co_uuid);
 	if (rc) {
-		print_error("vos container creation error: "DF_RC"\n", DP_RC(rc));
+		print_error("vos container creation error: "DF_RC"\n",
+			    DP_RC(rc));
 		return;
 	}
 

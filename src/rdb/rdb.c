@@ -112,8 +112,8 @@ rdb_destroy(const char *path, const uuid_t uuid)
 
 	rc = vos_pool_destroy(path, (unsigned char *)uuid);
 	if (rc != 0)
-		D_ERROR(DF_UUID": failed to destroy %s: "DF_RC"\n", DP_UUID(uuid),
-			path, DP_RC(rc));
+		D_ERROR(DF_UUID": failed to destroy %s: "DF_RC"\n",
+			DP_UUID(uuid), path, DP_RC(rc));
 	return rc;
 }
 

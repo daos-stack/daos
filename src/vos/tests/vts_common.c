@@ -140,7 +140,8 @@ vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
 
 	rc = vos_cont_create(tcx->tc_po_hdl, tcx->tc_co_uuid);
 	if (rc) {
-		print_error("vos container creation error: "DF_RC"\n", DP_RC(rc));
+		print_error("vos container creation error: "DF_RC"\n",
+			    DP_RC(rc));
 		goto failed;
 	}
 	tcx->tc_step = TCX_CO_CREATE;

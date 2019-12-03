@@ -463,7 +463,8 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent)
 			      &ent->ie_key, 0, vos_iter_intent(&oiter->it_iter),
 			      NULL, &toh);
 	if (rc != 0) {
-		D_DEBUG(DB_IO, "can't load the akey tree: "DF_RC"\n", DP_RC(rc));
+		D_DEBUG(DB_IO, "can't load the akey tree: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 

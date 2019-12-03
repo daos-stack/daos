@@ -121,8 +121,8 @@ cont_start_agg_ult(struct ds_cont_child *cont)
 	rc = dss_ult_create(ds_cont_aggregate_ult, cont,
 			    DSS_ULT_AGGREGATE, DSS_TGT_SELF, 0, NULL);
 	if (rc) {
-		D_ERROR(DF_UUID": Failed to create aggregation ULT; rc "DF_RC"\n",
-			DP_UUID(cont->sc_uuid), DP_RC(rc));
+		D_ERROR(DF_UUID": Failed to create aggregation ULT; "
+			"rc "DF_RC"\n", DP_UUID(cont->sc_uuid), DP_RC(rc));
 		cont->sc_vos_aggregating = 0;
 		ds_cont_child_put(cont);
 	}
@@ -220,8 +220,8 @@ cont_child_lookup(struct daos_lru_cache *cache, const uuid_t uuid,
 				"container: "DF_RC"\n", DP_CONT(NULL, uuid),
 				pool == NULL ? "" : "/create", DP_RC(rc));
 		else
-			D_ERROR(DF_CONT": failed to lookup%s container: "DF_RC"\n",
-				DP_CONT(NULL, uuid),
+			D_ERROR(DF_CONT": failed to lookup%s container: "
+				""DF_RC"\n", DP_CONT(NULL, uuid),
 				pool == NULL ? "" : "/create", DP_RC(rc));
 		return rc;
 	}
@@ -484,8 +484,8 @@ ds_cont_lookup_create(const uuid_t uuid, void *arg, struct ds_cont **cont_p)
 	ABT_mutex_unlock(cont_cache_lock);
 	if (rc != 0) {
 		if (arg == NULL && rc == -DER_NONEXIST)
-			D_DEBUG(DF_DSMS, DF_UUID": pure lookup failed: "DF_RC"\n",
-				DP_UUID(uuid), DP_RC(rc));
+			D_DEBUG(DF_DSMS, DF_UUID": pure lookup failed: "
+				""DF_RC"\n", DP_UUID(uuid), DP_RC(rc));
 		else
 			D_ERROR(DF_UUID": failed to lookup%s: "DF_RC"\n",
 				DP_UUID(uuid), arg == NULL ? "" : "/create",
@@ -857,8 +857,9 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		rc = dtx_batched_commit_register(hdl);
 		if (rc != 0) {
 			D_ERROR("Failed to register the container "DF_UUID
-				" to the DTX batched commit list: rc = "DF_RC"\n",
-				DP_UUID(cont_uuid), DP_RC(rc));
+				" to the DTX batched commit list: "
+				"rc = "DF_RC"\n", DP_UUID(cont_uuid),
+				DP_RC(rc));
 			D_GOTO(err_cont, rc);
 		}
 
@@ -1263,9 +1264,10 @@ cont_epoch_discard_one(void *vin)
 	if (rc > 0)	/* Aborted */
 		rc = -DER_CANCELED;
 
-	D_DEBUG(DB_EPC, DF_CONT": Discard epoch "DF_U64", hdl="DF_UUID": "DF_RC"\n",
-		DP_CONT(hdl->sch_pool->spc_uuid, hdl->sch_cont->sc_uuid),
-		in->tii_epoch, DP_UUID(in->tii_hdl), DP_RC(rc));
+	D_DEBUG(DB_EPC, DF_CONT": Discard epoch "DF_U64", hdl="DF_UUID": "
+		""DF_RC"\n", DP_CONT(hdl->sch_pool->spc_uuid,
+		hdl->sch_cont->sc_uuid), in->tii_epoch, DP_UUID(in->tii_hdl),
+		DP_RC(rc));
 
 	cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
 	return rc;
@@ -1721,7 +1723,8 @@ ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, ds_iter_cb_t callback,
 			if (rc == -DER_NONEXIST)
 				rc = 0;
 			else
-				D_ERROR("Fetch obj failed: "DF_RC"\n", DP_RC(rc));
+				D_ERROR("Fetch obj failed: "DF_RC"\n",
+					DP_RC(rc));
 			break;
 		}
 
@@ -1743,7 +1746,8 @@ ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, ds_iter_cb_t callback,
 			if (rc == -DER_NONEXIST)
 				rc = 0;
 			else
-				D_ERROR("Fetch obj failed: "DF_RC"\n", DP_RC(rc));
+				D_ERROR("Fetch obj failed: "DF_RC"\n",
+					DP_RC(rc));
 			break;
 		}
 	}

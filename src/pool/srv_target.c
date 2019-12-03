@@ -360,8 +360,8 @@ ds_pool_lookup_create(const uuid_t uuid, struct ds_pool_create_arg *arg,
 	ABT_mutex_unlock(pool_cache_lock);
 	if (rc != 0) {
 		if (arg == NULL && rc == -DER_NONEXIST)
-			D_DEBUG(DF_DSMS, DF_UUID": pure lookup failed: "DF_RC"\n",
-				DP_UUID(uuid), DP_RC(rc));
+			D_DEBUG(DF_DSMS, DF_UUID": pure lookup failed: "
+				""DF_RC"\n", DP_UUID(uuid), DP_RC(rc));
 		else
 			D_ERROR(DF_UUID": failed to lookup%s pool: "DF_RC"\n",
 				DP_UUID(uuid), arg == NULL ? "" : "/create",
@@ -589,8 +589,9 @@ pool_query_one(void *vin)
 
 	rc = vos_pool_query(pool_child->spc_hdl, &vos_pool_info);
 	if (rc != 0) {
-		D_ERROR("Failed to query pool "DF_UUID", tgt_id: %d, rc: "DF_RC"\n",
-			DP_UUID(pool->sp_uuid), tid, DP_RC(rc));
+		D_ERROR("Failed to query pool "DF_UUID", tgt_id: %d, "
+			"rc: "DF_RC"\n", DP_UUID(pool->sp_uuid), tid,
+			DP_RC(rc));
 		goto out;
 	}
 
@@ -841,8 +842,9 @@ ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 					   DEFAULT_PL_TYPE);
 			if (rc != 0) {
 				ABT_rwlock_unlock(pool->sp_lock);
-				D_ERROR(DF_UUID": failed update pl_map: "DF_RC"\n",
-					DP_UUID(pool->sp_uuid), DP_RC(rc));
+				D_ERROR(DF_UUID": failed update pl_map: "
+					""DF_RC"\n", DP_UUID(pool->sp_uuid),
+					DP_RC(rc));
 				D_GOTO(out, rc);
 			}
 
@@ -1021,7 +1023,8 @@ ds_pool_cont_iter(daos_handle_t ph, pool_iter_cb_t callback, void *arg)
 			if (rc == -DER_NONEXIST)
 				rc = 0;
 			else
-				D_ERROR("Fetch co failed: "DF_RC"\n", DP_RC(rc));
+				D_ERROR("Fetch co failed: "DF_RC"\n",
+					DP_RC(rc));
 			break;
 		}
 
@@ -1100,7 +1103,8 @@ pool_iter_cb(daos_handle_t ph, uuid_t co_uuid, void *data)
 					    DSS_ULT_DTX_RESYNC, DSS_TGT_SELF,
 					    0);
 		if (rc != 0) {
-			D_ERROR("dtx_resync_ult failed, rc "DF_RC"\n", DP_RC(rc));
+			D_ERROR("dtx_resync_ult failed, rc "DF_RC"\n",
+				DP_RC(rc));
 			return rc;
 		}
 

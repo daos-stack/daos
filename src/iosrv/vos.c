@@ -968,7 +968,8 @@ dss_enum_unpack(vos_iter_type_t vos_type, struct dss_enum_arg *arg,
 		}
 
 		if (rc) {
-			D_ERROR("unpack %dth failed: rc"DF_RC"\n", i, DP_RC(rc));
+			D_ERROR("unpack %dth failed: rc"DF_RC"\n", i,
+				DP_RC(rc));
 			goto out;
 		}
 

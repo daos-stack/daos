@@ -975,7 +975,8 @@ retry:
 					pool_map_get_version(pool->sp_map),
 					&list, svc_list);
 			if (rc != 0) {
-				D_ERROR("rebuild fails rc "DF_RC"\n", DP_RC(rc));
+				D_ERROR("rebuild fails rc "DF_RC"\n",
+					DP_RC(rc));
 				break;
 			}
 		}
@@ -1188,7 +1189,8 @@ rebuild_task_ult(void *arg)
 	pc_arg.pca_map_version = task->dst_map_ver;
 	rc = ds_pool_lookup_create(task->dst_pool_uuid, &pc_arg, &pool);
 	if (rc) {
-		D_ERROR("pool lookup and create failed: rc "DF_RC"\n", DP_RC(rc));
+		D_ERROR("pool lookup and create failed: rc "DF_RC"\n",
+			DP_RC(rc));
 		return;
 	}
 

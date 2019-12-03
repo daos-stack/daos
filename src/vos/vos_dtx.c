@@ -867,9 +867,9 @@ vos_dtx_prepared(struct dtx_handle *dth)
 		if (rc == 0)
 			dth->dth_ent = UMOFF_NULL;
 		else
-			D_ERROR(DF_UOID" fail to commit for "DF_DTI" rc = "DF_RC"\n",
-				DP_UOID(dtx->te_oid), DP_DTI(&dtx->te_xid),
-				DP_RC(rc));
+			D_ERROR(DF_UOID" fail to commit for "DF_DTI" "
+				"rc = "DF_RC"\n", DP_UOID(dtx->te_oid),
+				DP_DTI(&dtx->te_xid), DP_RC(rc));
 	} else if (dtx->te_flags & DTX_EF_SHARES || dtx->te_dkey_hash == 0) {
 		/* If some DTXs share something (object/key) with others,
 		 * or punch object that is quite possible affect subsequent
