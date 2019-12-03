@@ -795,7 +795,7 @@ help_hdlr(struct cmd_args_s *ap)
 
 	stream = (ap->ostream != NULL) ? ap->ostream : stdout;
 
-	fprintf(stream, "daos admin command (v%s)\n", DAOS_VERSION);
+	fprintf(stream, "daos command (v%s)\n", DAOS_VERSION);
 
 	fprintf(stream,
 "usage: daos RESOURCE COMMAND [OPTIONS]\n"
