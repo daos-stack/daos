@@ -1,3 +1,11 @@
+cart (3.2.0-2) unstable; urgency=medium
+
+  [ Alexander Oganezov ]
+  * 3.2.0-2 version of CaRT
+  * Restrict mercury to be < 1.0.1-21
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Tue, 3 Dec 2019 19:27:01 +0000
+
 cart (3.2.0-1) unstable; urgency=medium
 
   [ Alexander Oganezov ]

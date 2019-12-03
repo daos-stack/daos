@@ -11,7 +11,7 @@ Build-Depends: debhelper (>= 10),
                libpmix-dev,
                libssl-dev,
                libyaml-dev,
-               libmercury-dev (>= 1.0.1-19),
+               libmercury-dev (< 1.0.1-21),
                scons,
                uuid-dev
 Standards-Version: 4.1.2
