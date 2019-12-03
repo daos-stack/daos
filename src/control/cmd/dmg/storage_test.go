@@ -28,7 +28,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/client"
+	"github.com/google/go-cmp/cmp"
+
+	. "github.com/daos-stack/daos/src/control/client"
+	. "github.com/daos-stack/daos/src/control/common"
 )
 
 func TestStorageCommands(t *testing.T) {
@@ -50,7 +53,7 @@ func TestStorageCommands(t *testing.T) {
 			"storage scan",
 			strings.Join([]string{
 				"ConnectClients",
-				fmt.Sprintf("StorageScan-%+v", &client.StorageScanReq{}),
+				fmt.Sprintf("StorageScan-%+v", &StorageScanReq{}),
 			}, " "),
 			nil,
 		},
@@ -103,4 +106,26 @@ func TestStorageCommands(t *testing.T) {
 			fmt.Errorf("Unknown command"),
 		},
 	})
+}
+
+func TestGenScanDisplay(t *testing.T) {
+	for name, tc := range map[string]struct {
+		scanResp  *StorageScanResp
+		summary   bool
+		expOut    string
+		expErrMsg string
+	}{
+		"coalesced summary output": {
+			scanResp: MockScanResp(MockCtrlrs, MockScmModules, MockScmNamespaces, MockServers, true),
+			summary:  true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			out, err := genScanDisplay(tc.scanResp, tc.summary)
+			ExpectError(t, err, tc.expErrMsg, name)
+			if diff := cmp.Diff(tc.expOut, out); diff != "" {
+				t.Fatalf("unexpected output (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
 }

@@ -104,7 +104,7 @@ func (ms ScmModules) Summary() string {
 		tCap += bytesize.New(float64(m.Capacity))
 	}
 
-	return fmt.Sprintf("%s total capacity over %d %s (unprepared)",
+	return fmt.Sprintf("%s (%d %s)",
 		tCap, len(ms), common.Pluralise("module", len(ms)))
 }
 
@@ -134,6 +134,6 @@ func (ns ScmNamespaces) Summary() string {
 		tCap += bytesize.New(float64(n.Size))
 	}
 
-	return fmt.Sprintf("%s total capacity over %d %s",
+	return fmt.Sprintf("%s (%d %s)",
 		tCap, len(ns), common.Pluralise("namespace", len(ns)))
 }

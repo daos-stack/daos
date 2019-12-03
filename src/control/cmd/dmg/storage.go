@@ -24,9 +24,14 @@
 package main
 
 import (
+	"bytes"
+	"fmt"
+	"text/tabwriter"
+
 	"github.com/daos-stack/daos/src/control/client"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	types "github.com/daos-stack/daos/src/control/common/storage"
+	"github.com/daos-stack/daos/src/control/lib/hostlist"
 )
 
 // storageCmd is the struct representing the top-level storage subcommand.
@@ -84,11 +89,57 @@ type storageScanCmd struct {
 	Summary bool `short:"m" long:"summary" description:"List total capacity and number of devices only"`
 }
 
+func genScanDisplay(result *client.StorageScanResp, summary bool) (string, error) {
+	var out bytes.Buffer
+	groups := make(hostlist.HostGroups)
+
+	// group identical output identified by hostlist
+	for _, srv := range result.Servers {
+		var buf bytes.Buffer
+
+		if summary {
+			fmt.Fprintf(&buf, "%s\t%s\t",
+				result.Scm[srv].Summary(), result.Nvme[srv].Summary())
+		} else {
+			fmt.Fprintf(&buf, "\t%s", result.Scm[srv].String())
+			fmt.Fprintf(&buf, "\t%s", result.Nvme[srv].String())
+		}
+
+		if err := groups.AddHost(buf.String(), srv); err != nil {
+			return "", err
+		}
+	}
+
+	if summary {
+		w := new(tabwriter.Writer)
+
+		// minwidth, tabwidth, padding, padchar, flags
+		w.Init(&out, 8, 8, 0, '\t', 0)
+
+		fmt.Fprintf(w, "\n %s\t%s\t%s\t", "HOSTS", "SCM", "NVME")
+		fmt.Fprintf(w, "\n %s\t%s\t%s\t", "-----", "---", "----")
+
+		for _, res := range groups.Keys() {
+			fmt.Fprintf(w, "\n %s\t%s", groups[res].DerangedString(), res)
+		}
+
+		w.Flush()
+
+		return out.String(), nil
+	}
+
+	return groups.String(), nil
+}
+
 // Execute is run when storageScanCmd activates.
 // Runs NVMe and SCM storage scan on all connected servers.
 func (cmd *storageScanCmd) Execute(args []string) error {
 	req := client.StorageScanReq{Summary: cmd.Summary}
-	cmd.log.Info(cmd.conns.StorageScan(&req).String())
+	out, err := genScanDisplay(cmd.conns.StorageScan(&req), cmd.Summary)
+	if err != nil {
+		return err
+	}
+	cmd.log.Info(out)
 
 	return nil
 }

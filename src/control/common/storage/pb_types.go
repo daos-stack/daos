@@ -151,7 +151,7 @@ func (ncs NvmeControllers) Summary() string {
 		}
 	}
 
-	return fmt.Sprintf("%s total capacity over %d %s",
+	return fmt.Sprintf("%s (%d %s)",
 		tCap, len(ncs), common.Pluralise("controller", len(ncs)))
 }
 
