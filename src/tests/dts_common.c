@@ -272,7 +272,8 @@ pool_fini(struct dts_context *tsc)
 			rc = daos_pool_destroy(tsc->tsc_pool_uuid, NULL, true,
 					       NULL);
 			D_ASSERTF(rc == 0 || rc == -DER_NONEXIST ||
-				  rc == -DER_TIMEDOUT, "rc="DF_RC"\n", DP_RC(rc));
+				  rc == -DER_TIMEDOUT, "rc="DF_RC"\n",
+				  DP_RC(rc));
 		}
 	}
 }

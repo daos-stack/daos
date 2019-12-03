@@ -121,8 +121,8 @@ alloc_init(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 
 	rc = ABT_cond_create(&svc->s_leader_ref_cv);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("%s: failed to create leader_ref_cv: "DF_RC"\n", svc->s_name,
-			DP_RC(rc));
+		D_ERROR("%s: failed to create leader_ref_cv: "DF_RC"\n",
+			svc->s_name, DP_RC(rc));
 		rc = dss_abterr2der(rc);
 		goto err_state_cv;
 	}
