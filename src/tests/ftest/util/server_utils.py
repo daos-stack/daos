@@ -23,7 +23,6 @@
 """
 from logging import getLogger
 import os
-import socket
 
 from command_utils import BasicParameter, YamlParameters, CommandWithParameters
 from command_utils import DaosYamlCommand, SubprocessManager, FormattedParameter

@@ -35,7 +35,6 @@ from agent_utils import AgentManager, AgentCommand, AgentYamlParameters
 from agent_utils import stop_agent_processes
 from command_utils import ObjectWithParameters, BasicParameter, YamlParameters
 from command_utils import CommandFailure, EnvironmentVariables
-from general_utils import check_file_exists
 from logger_utils import TestLogger
 from server_utils import ServerManager, ServerCommand, ServerYamlParameters
 from server_utils import stop_server_processes
@@ -60,8 +59,8 @@ def get_partition_hosts(partition):
             result = process.run(cmd, shell=True, timeout=10)
         except process.CmdError as error:
             log.warning(
-                "Unable to obtain hosts from the {} slurm "
-                "partition: {}".format(partition, error))
+                "Unable to obtain hosts from the %s slurm "
+                "partition: %s", partition, error)
             result = None
 
         if result:
@@ -71,8 +70,8 @@ def get_partition_hosts(partition):
                 hosts = list(NodeSet(findall(r"\s+Nodes=(.*)", output)[0]))
             except (NodeSetParseError, IndexError):
                 log.warning(
-                    "Unable to obtain hosts from the {} slurm partition "
-                    "output: {}".format(partition, output))
+                    "Unable to obtain hosts from the %s slurm partition "
+                    "output: %s", partition, output)
     return hosts
 
 
@@ -148,6 +147,7 @@ class TransportCredentials(YamlParameters):
 
 
 class AccessPoints(object):
+    # pylint: disable=too-few-public-methods
     """Defines an object for storing access point data."""
 
     def __init__(self, port=10001):

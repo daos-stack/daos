@@ -21,11 +21,6 @@
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
 '''
-
-# Some useful test classes inherited from avocado.Test
-
-from logging import Logger
-
 import os
 import json
 import re
@@ -35,7 +30,6 @@ from avocado import skip, TestFail
 from avocado.utils import process
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
 
-from command_utils import CommandFailure
 from configuration_utils import Configuration
 from fault_config_utils import write_fault_file
 from host_utils import HostManager

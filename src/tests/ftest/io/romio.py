@@ -70,10 +70,11 @@ class Romio(TestWithServers):
                              "failed to destroy pool"]
 
             for line in searchfile:
-                for i, _ in enumerate(error_message):
-                    if error_message[i] in line:
-                        self.fail("Romio Test Failed with error_message: "
-                                  "{}".format(error_message[i]))
+                for error_msg in error_message:
+                    if error_msg in line:
+                        self.fail(
+                            "Romio Test Failed with error_message: {}".format(
+                                error_msg))
 
         except (MpioFailed) as excep:
             self.fail("<Romio Test Failed> \n{}".format(excep))

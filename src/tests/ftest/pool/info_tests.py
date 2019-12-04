@@ -51,7 +51,7 @@ class InfoTests(TestWithServers):
         self.pool.get_params(self)
         permissions = self.params.get("permissions", "/run/test/*")
         targets = self.params.get("targets", "/run/server_config/*")
-        pool_targets = len(self.manager.hostlist_servers) * targets
+        # pool_targets = len(self.manager.hostlist_servers) * targets
 
         # Create a pool
         self.pool.create()
