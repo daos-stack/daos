@@ -920,11 +920,11 @@ retry:
 	crt_group_rank(pool->sp_group,  &rsi->rsi_master_rank);
 	rc = dss_rpc_send(rpc);
 	if (rc != 0) {
-		/* If it is network failure or timedout, let's refresh
-		 * failure list and retry
+		/* If it is network failure, timedout, or group version
+		 * mismatch, let's refresh failure list and retry
 		 */
-		if ((rc == -DER_TIMEDOUT || daos_crt_network_error(rc)) &&
-		    !rebuild_gst.rg_abort) {
+		if ((rc == -DER_TIMEDOUT || daos_crt_network_error(rc) ||
+		     rc == -DER_GRPVER) && !rebuild_gst.rg_abort) {
 			crt_req_decref(rpc);
 			D_GOTO(retry, rc);
 		}

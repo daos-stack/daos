@@ -20,7 +20,6 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
-
 package common_storage
 
 import (
@@ -47,49 +46,49 @@ func (ncs NvmeControllers) healthDetail(buf *bytes.Buffer, c *ctlpb.NvmeControll
 
 	fmt.Fprintf(buf, "\t\tHealth Stats:\n\t\t\tTemperature:%dK(%dC)\n", stat.Temp, stat.Temp-273)
 
-	if stat.Tempwarn > 0 {
+	if stat.Tempwarntime > 0 {
 		fmt.Fprintf(buf, "\t\t\t\tTemperature Warning Duration:%s\n",
-			time.Duration(stat.Tempwarn)*time.Minute)
+			time.Duration(stat.Tempwarntime)*time.Minute)
 	}
-	if stat.Tempcrit > 0 {
+	if stat.Tempcrittime > 0 {
 		fmt.Fprintf(buf, "\t\t\t\tTemperature Critical Duration:%s\n",
-			time.Duration(stat.Tempcrit)*time.Minute)
+			time.Duration(stat.Tempcrittime)*time.Minute)
 	}
 
-	fmt.Fprintf(buf, "\t\t\tController Busy Time:%s\n", time.Duration(stat.Ctrlbusy)*time.Minute)
+	fmt.Fprintf(buf, "\t\t\tController Busy Time:%s\n", time.Duration(stat.Ctrlbusytime)*time.Minute)
 	fmt.Fprintf(buf, "\t\t\tPower Cycles:%d\n", uint64(stat.Powercycles))
 	fmt.Fprintf(buf, "\t\t\tPower On Duration:%s\n", time.Duration(stat.Poweronhours)*time.Hour)
 	fmt.Fprintf(buf, "\t\t\tUnsafe Shutdowns:%d\n", uint64(stat.Unsafeshutdowns))
 	fmt.Fprintf(buf, "\t\t\tMedia Errors:%d\n", uint64(stat.Mediaerrors))
-	fmt.Fprintf(buf, "\t\t\tError Log Entries:%d\n", uint64(stat.Errorlogs))
+	fmt.Fprintf(buf, "\t\t\tError Log Entries:%d\n", uint64(stat.Errorlogentries))
 
 	fmt.Fprintf(buf, "\t\t\tCritical Warnings:\n")
 	fmt.Fprintf(buf, "\t\t\t\tTemperature: ")
-	if stat.Tempwarning {
+	if stat.Tempwarn {
 		fmt.Fprintf(buf, "WARNING\n")
 	} else {
 		fmt.Fprintf(buf, "OK\n")
 	}
 	fmt.Fprintf(buf, "\t\t\t\tAvailable Spare: ")
-	if stat.Availspare {
+	if stat.Availsparewarn {
 		fmt.Fprintf(buf, "WARNING\n")
 	} else {
 		fmt.Fprintf(buf, "OK\n")
 	}
 	fmt.Fprintf(buf, "\t\t\t\tDevice Reliability: ")
-	if stat.Reliability {
+	if stat.Reliabilitywarn {
 		fmt.Fprintf(buf, "WARNING\n")
 	} else {
 		fmt.Fprintf(buf, "OK\n")
 	}
 	fmt.Fprintf(buf, "\t\t\t\tRead Only: ")
-	if stat.Readonly {
+	if stat.Readonlywarn {
 		fmt.Fprintf(buf, "WARNING\n")
 	} else {
 		fmt.Fprintf(buf, "OK\n")
 	}
 	fmt.Fprintf(buf, "\t\t\t\tVolatile Memory Backup: ")
-	if stat.Volatilemem {
+	if stat.Volatilewarn {
 		fmt.Fprintf(buf, "WARNING\n")
 	} else {
 		fmt.Fprintf(buf, "OK\n")
@@ -104,7 +103,7 @@ func (ncs NvmeControllers) ctrlrDetail(buf *bytes.Buffer, c *ctlpb.NvmeControlle
 
 	for _, ns := range c.Namespaces {
 		fmt.Fprintf(buf, "\t\t\tNamespace: id:%d capacity:%s\n", ns.Id,
-			bytesize.GB*bytesize.New(float64(ns.Capacity)))
+			bytesize.GB*bytesize.New(float64(ns.Size)))
 	}
 }
 
@@ -147,7 +146,7 @@ func (ncs NvmeControllers) Summary() string {
 	tCap := bytesize.New(0)
 	for _, c := range ncs {
 		for _, n := range c.Namespaces {
-			tCap += bytesize.GB * bytesize.New(float64(n.Capacity))
+			tCap += bytesize.GB * bytesize.New(float64(n.Size))
 		}
 	}
 
