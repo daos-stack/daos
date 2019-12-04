@@ -159,7 +159,8 @@ class IorTestBase(TestWithServers):
             self.ior_cmd.test_file.update(self.dfuse.mount_dir.value
                                           + "/testfile")
 
-        out = self.run_ior(self.get_job_manager_command(), self.processes, intercept)
+        out = self.run_ior(self.get_job_manager_command(), self.processes,
+                           intercept)
 
         return out
 

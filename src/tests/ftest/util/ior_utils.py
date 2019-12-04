@@ -229,7 +229,6 @@ class IorCommand(ExecutableCommand):
         env["MPI_LIB"] = "\"\""
         env["DAOS_SINGLETON_CLI"] = 1
         env["FI_PSM2_DISCONNECT"] = 1
-        #env["LD_PRELOAD"] = "/home/puspalog/source/daos/install/lib64/libioil.so"
         if log_file:
             env["D_LOG_FILE"] = log_file
 
@@ -269,9 +268,10 @@ class IorMetrics(IntEnum):
     """
     Index Name and Number of each column in IOR result summary.
     """
-    #Operation   Max(MiB)   Min(MiB)  Mean(MiB)     StdDev   Max(OPs)   Min(OPs)  Mean(OPs)
-    #StdDev    Mean(s) Stonewall(s) Stonewall(MiB) Test# #Tasks tPN reps fPP reord
-    #reordoff reordrand seed segcnt   blksiz    xsize aggs(MiB)   API RefNum
+    # Operation   Max(MiB)   Min(MiB)  Mean(MiB)     StdDev   Max(OPs)
+    # Min(OPs)  Mean(OPs) StdDev    Mean(s) Stonewall(s) Stonewall(MiB)
+    # Test# #Tasks tPN reps fPP reord reordoff reordrand seed segcnt
+    # blksiz    xsize aggs(MiB)   API RefNum
     Operation = 0
     Max_MiB = 1
     Min_MiB = 2
