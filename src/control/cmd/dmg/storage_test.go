@@ -160,7 +160,7 @@ func TestScanDisplay(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			out, err := scanDisplay(tc.scanResp, tc.summary)
+			out, err := scanCmdDisplay(tc.scanResp, tc.summary)
 			ExpectError(t, err, tc.expErrMsg, name)
 			if diff := cmp.Diff(tc.expOut, out); diff != "" {
 				t.Fatalf("unexpected output (-want, +got):\n%s\n", diff)

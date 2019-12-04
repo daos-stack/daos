@@ -89,7 +89,7 @@ type storageScanCmd struct {
 	Summary bool `short:"m" long:"summary" description:"List total capacity and number of devices only"`
 }
 
-func scanDisplay(result *client.StorageScanResp, summary bool) (string, error) {
+func scanCmdDisplay(result *client.StorageScanResp, summary bool) (string, error) {
 	var out bytes.Buffer
 	groups := make(hostlist.HostGroups)
 
@@ -131,7 +131,7 @@ func scanDisplay(result *client.StorageScanResp, summary bool) (string, error) {
 		w.Flush()
 	} else {
 		for _, res := range groups.Keys() {
-			fmt.Fprintf(&out, "%s\n%s", groups[res].RangedString(), res)
+			fmt.Fprintf(&out, "\n %s\n%s", groups[res].RangedString(), res)
 		}
 	}
 
@@ -141,7 +141,7 @@ func scanDisplay(result *client.StorageScanResp, summary bool) (string, error) {
 // Execute is run when storageScanCmd activates.
 // Runs NVMe and SCM storage scan on all connected servers.
 func (cmd *storageScanCmd) Execute(args []string) error {
-	out, err := scanDisplay(cmd.conns.StorageScan(nil), cmd.Summary)
+	out, err := scanCmdDisplay(cmd.conns.StorageScan(nil), cmd.Summary)
 	if err != nil {
 		return err
 	}
