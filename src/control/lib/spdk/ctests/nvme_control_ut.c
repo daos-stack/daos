@@ -106,7 +106,7 @@ mock_spdk_nvme_ctrlr_get_data(struct spdk_nvme_ctrlr *ctrlr)
 {
 	struct spdk_nvme_ctrlr_data *data;
 
-	data = malloc(sizeof(struct spdk_nvme_ctrlr_data));
+	data = calloc(1, sizeof(struct spdk_nvme_ctrlr_data));
 
 	(void)ctrlr;
 	return (const struct spdk_nvme_ctrlr_data *)data;
@@ -117,7 +117,7 @@ mock_spdk_nvme_ctrlr_get_pci_device(struct spdk_nvme_ctrlr *ctrlr)
 {
 	struct spdk_pci_device *dev;
 
-	dev = malloc(sizeof(struct spdk_pci_device));
+	dev = calloc(1, sizeof(struct spdk_pci_device));
 
 	(void)ctrlr;
 	return dev;
