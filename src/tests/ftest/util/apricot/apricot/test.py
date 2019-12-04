@@ -29,7 +29,6 @@ from logging import Logger
 import os
 import json
 import re
-import stat
 
 from avocado import Test as avocadoTest
 from avocado import skip, TestFail

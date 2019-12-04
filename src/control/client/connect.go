@@ -66,8 +66,10 @@ type Connect interface {
 	NetworkScanDevices(searchProvider string) NetworkScanResultMap
 	PoolCreate(*PoolCreateReq) (*PoolCreateResp, error)
 	PoolDestroy(*PoolDestroyReq) error
-	PoolGetACL(*PoolGetACLReq) (*PoolGetACLResp, error)
-	PoolOverwriteACL(*PoolOverwriteACLReq) (*PoolOverwriteACLResp, error)
+	PoolGetACL(PoolGetACLReq) (*PoolGetACLResp, error)
+	PoolOverwriteACL(PoolOverwriteACLReq) (*PoolOverwriteACLResp, error)
+	PoolUpdateACL(PoolUpdateACLReq) (*PoolUpdateACLResp, error)
+	PoolDeleteACL(PoolDeleteACLReq) (*PoolDeleteACLResp, error)
 	SetTransportConfig(*security.TransportConfig)
 	SmdListDevs(*mgmtpb.SmdDevReq) ResultSmdMap
 	SmdListPools(*mgmtpb.SmdPoolReq) ResultSmdMap

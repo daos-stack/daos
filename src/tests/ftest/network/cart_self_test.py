@@ -60,6 +60,7 @@ class CartSelfTest(TestWithServers):
     Ensures network is in a stable state prior to testing.
 
     :avocado: recursive
+
     """
 
     def __init__(self, *args, **kwargs):

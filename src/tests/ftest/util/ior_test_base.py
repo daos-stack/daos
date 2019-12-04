@@ -216,7 +216,6 @@ class IorTestBase(TestWithServers):
             self.log.info(
                 "Size is < 4K,Size verification will be done with SCM size")
             storage_index = 0
-
         actual_pool_size = \
             original_pool_info.pi_space.ps_space.s_free[storage_index] - \
             current_pool_info.pi_space.ps_space.s_free[storage_index]
