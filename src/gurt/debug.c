@@ -595,8 +595,8 @@ d_log_init(void)
 	if (log_file != NULL && log_file_pid_append != NULL) {
 		if (strcmp(log_file_pid_append, "0") != 0) {
 			/* Append pid to log file. */
-			asprintf(&buffer, "%s%d", log_file, getpid());
-			if (buffer == NULL)
+			rc = asprintf(&buffer, "%s%d", log_file, getpid());
+			if (buffer == NULL || rc == -1)
 				D_GOTO(out, rc = -DER_NOMEM);
 			log_file = buffer;
 		}
