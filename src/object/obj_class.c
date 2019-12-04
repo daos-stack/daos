@@ -374,6 +374,7 @@ daos_oclass_id2name(daos_oclass_id_t oc_id, char *str)
 	return -1;
 }
 
+/** Return the list of registered oclass names */
 size_t
 daos_oclass_names_list(size_t size, char *str)
 {
@@ -387,7 +388,7 @@ daos_oclass_names_list(size_t size, char *str)
 	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
 		if (oc->oc_name == NULL)
 			break;
-		if (len + strlen(oc_name) + 2 < size) {
+		if (len + strlen(oc->oc_name) + 2 < size) {
 			strcat(str, oc->oc_name);
 			strcat(str, ", ");
 		}
