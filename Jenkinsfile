@@ -196,7 +196,7 @@ pipeline {
             when {
                 beforeAgent true
                 // expression { skipTest != true }
-                expression { commitPragma pragma: 'Skip-build' == 'true' }
+                expression { commitPragma(pragma: 'Skip-build') != 'true' }
             }
             parallel {
                 stage('Build RPM on CentOS 7') {
@@ -815,14 +815,14 @@ pipeline {
                 beforeAgent true
                 // expression { skipTest != true }
                 expression { env.NO_CI_TESTING != 'true' }
-                expression { commitPragma pragma: 'Skip-test' == 'true' }
+                expression { commitPragma(pragma: 'Skip-test') != 'true' }
             }
             parallel {
                 stage('run_test.sh') {
                     when {
                       beforeAgent true
                       expression {
-                        commitPragma pragma: 'Skip-run_test' == 'true'
+                        commitPragma(pragma: 'Skip-run_test') != 'true'
                       }
                     }
                     agent {
@@ -940,7 +940,7 @@ pipeline {
                 allOf {
                     // expression { skipTest != true }
                     expression { env.NO_CI_TESTING != 'true' }
-                    expression { commitPragma pragma: 'Skip-test' == 'true' }
+                    expression { commitPragma(pragma: 'Skip-test') != 'true' }
                 }
             }
             parallel {
@@ -1011,7 +1011,7 @@ pipeline {
                     when {
                         beforeAgent true
                         expression {
-                            commitPragma pragma: 'Skip-func-test' == 'true'
+                            commitPragma(pragma: 'Skip-func-test') != 'true'
                         }
                     }
                     agent {
@@ -1085,7 +1085,7 @@ pipeline {
                         allOf {
                             expression { env.DAOS_STACK_CI_HARDWARE_SKIP != 'true' }
                             expression {
-                              commitPragma pragma: 'Skip-func-hw-test' == 'true'
+                              commitPragma(pragma: 'Skip-func-hw-test') != 'true'
                             }
                         }
                     }
