@@ -55,4 +55,16 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	else
 		DFUSE_REPLY_ERR_RAW(oh, req, rc);
 	D_FREE(buff);
+
+	if (fc->pid != 0)
+		return;
+
+	position += len;
+	len = 1024 * 128;
+
+	if (len + position - 1 > oh->doh_ie->ie_stat.st_size)
+		return;
+
+	DFUSE_TRA_INFO(oh, "Will try readahead");
+
 }
