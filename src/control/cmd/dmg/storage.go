@@ -150,6 +150,55 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 	return nil
 }
 
+func formatCmdDisplay(result *client.StorageScanResp, summary bool) (string, error) {
+	var out bytes.Buffer
+	groups := make(hostlist.HostGroups)
+
+	// group identical output identified by hostlist
+	for _, srv := range result.Servers {
+		var buf bytes.Buffer
+
+		if summary {
+			fmt.Fprintf(&buf, "%s\t%s\t",
+				result.Scm[srv].Summary(), result.Nvme[srv].Summary())
+		} else {
+			fmt.Fprintf(&buf, "\t%s", result.Scm[srv].String())
+			fmt.Fprintf(&buf, "\t%s", result.Nvme[srv].String())
+		}
+
+		// disregard connection port when grouping scan output
+		srvHost, _, err := splitPort(srv, 0)
+		if err != nil {
+			return "", err
+		}
+		if err := groups.AddHost(buf.String(), srvHost); err != nil {
+			return "", err
+		}
+	}
+
+	if summary {
+		w := new(tabwriter.Writer)
+
+		// minwidth, tabwidth, padding, padchar, flags
+		w.Init(&out, 8, 8, 0, '\t', 0)
+
+		fmt.Fprintf(w, "\n %s\t%s\t%s\t", "HOSTS", "SCM", "NVME")
+		fmt.Fprintf(w, "\n %s\t%s\t%s\t", "-----", "---", "----")
+
+		for _, res := range groups.Keys() {
+			fmt.Fprintf(w, "\n %s\t%s", groups[res].RangedString(), res)
+		}
+
+		w.Flush()
+	} else {
+		for _, res := range groups.Keys() {
+			fmt.Fprintf(&out, "\n %s\n%s", groups[res].RangedString(), res)
+		}
+	}
+
+	return out.String(), nil
+}
+
 // storageFormatCmd is the struct representing the format storage subcommand.
 type storageFormatCmd struct {
 	logCmd
@@ -160,13 +209,13 @@ type storageFormatCmd struct {
 // Execute is run when storageFormatCmd activates
 // run NVMe and SCM storage format on all connected servers
 func (s *storageFormatCmd) Execute(args []string) error {
-	s.log.Info(
-		"This is a destructive operation and storage devices " +
-			"specified in the server config file will be erased.\n" +
-			"Please be patient as it may take several minutes.\n")
-
-	cCtrlrResults, cMountResults := s.conns.StorageFormat(s.Reformat)
-	s.log.Infof("NVMe storage format results:\n%s", cCtrlrResults)
+	out, err := formatDisplay(cmd.conns.StorageFormat(s.Reformat))
+	if err != nil {
+		return err
+	}
+	cmd.log.Info(out)
+	cCtrlrResults, cMountResults :=
+		s.log.Infof("NVMe storage format results:\n%s", cCtrlrResults)
 	s.log.Infof("SCM storage format results:\n%s", cMountResults)
 	return nil
 }
