@@ -78,9 +78,7 @@ extern "C" {
 	/** Not a service replica */					\
 	ACTION(DER_NOTREPLICA,		(DER_ERR_DAOS_BASE + 20))	\
 	/** Checksum error */						\
-	ACTION(DER_CSUM,		(DER_ERR_DAOS_BASE + 21))	\
-	/** Pool is being killed */					\
-	ACTION(DER_POOL_KILLED,		(DER_ERR_DAOS_BASE + 22))
+	ACTION(DER_CSUM,		(DER_ERR_DAOS_BASE + 21))
 
 /** Define the DAOS error numbers */
 D_DEFINE_RANGE_ERRNO(DAOS, 2000)
