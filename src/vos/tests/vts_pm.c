@@ -1004,8 +1004,7 @@ static const struct CMUnitTest punch_model_tests[] = {
 	  array_size_write, pm_setup, pm_teardown },
 	{ "VOS808: Object punch and fetch",
 	  object_punch_and_fetch, NULL, NULL },
-	{ "VOS809: SGL test",
-	  sgl_test, NULL, NULL },
+	{ "VOS809: SGL test", sgl_test, NULL, NULL },
 };
 
 int
