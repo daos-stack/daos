@@ -786,6 +786,30 @@ out:
 	return rc;
 }
 
+#define OCLASS_NAMES_LIST_SIZE 512
+
+static void
+print_oclass_names_list()
+{
+	char *str;
+	size_t size = OCLASS_NAMES_LIST_SIZE, len;
+
+again:
+	str = malloc(size);
+	if (str == NULL)
+		return;
+	len = daos_oclass_names_list(size, str);
+	if (len <= 0)
+		return;
+	if (len < size)
+		fprintf(stream, "%s", str);
+	else {
+		size = len + 1;
+		goto again;
+	}
+	return;
+}
+
 static int
 help_hdlr(struct cmd_args_s *ap)
 {
@@ -870,11 +894,7 @@ help_hdlr(struct cmd_args_s *ap)
 "	--oclass=OCLSSTR   container object class\n"
 "			   (");
 	/* vs hardcoded list like "tiny, small, large, R2, R2S, repl_max" */
-	{	int i;
-
-		while (daos_obj_classes[i].oc_name != NULL)
-			fprintf(stream, "%s, ", daos_obj_classes[i++].oc_name);
-	}
+	print_oclass_names_list();
 	fprintf(stream, ")\n"
 "	--chunk_size=BYTES chunk size of files created. Supports suffixes:\n"
 "			   K (KB), M (MB), G (GB), T (TB), P (PB), E (EB)\n"

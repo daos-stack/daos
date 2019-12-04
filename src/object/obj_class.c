@@ -374,6 +374,28 @@ daos_oclass_id2name(daos_oclass_id_t oc_id, char *str)
 	return -1;
 }
 
+size_t
+daos_oclass_names_list(size_t size, char *str)
+{
+	struct daos_obj_class   *oc;
+	size_t len = 0;
+
+	if (size <= 0 || str == NULL)
+		return -1;
+
+	*str = '\0';
+	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
+		if (oc->oc_name == NULL)
+			break;
+		if (len + strlen(oc_name) + 2 < size) {
+			strcat(str, oc->oc_name);
+			strcat(str, ", ");
+		}
+		len += strlen(oc_name) + 2;
+	}
+	return len;
+}
+
 /** Return the redundancy group size of @oc_attr */
 unsigned int
 daos_oclass_grp_size(struct daos_oclass_attr *oc_attr)
