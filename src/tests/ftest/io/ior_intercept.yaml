@@ -12,9 +12,9 @@ hosts:
 timeout: 1200
 server_config:
     name: daos_server
-#    server:
-#        bdev_class: nvme
-#        bdev_list: ["0000:81:00.0","0000:da:00.0"]
+    server:
+        bdev_class: nvme
+        bdev_list: ["0000:81:00.0","0000:da:00.0"]
 pool:
     createmode:
         mode_RW:
@@ -22,7 +22,7 @@ pool:
     createset:
         group: daos_server
     createsize:
-        scm_size: 64000000000
+        scm_size: 60000000000
     createsvc:
         svcn: 1
 ior:
@@ -42,7 +42,7 @@ ior:
           transfersize_blocksize: !mux
             1M:
               transfer_size: '1M'
-              block_size: '512M'
+              block_size: '1G'
 
           objectclass: !mux
             oclass_SX:
