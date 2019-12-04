@@ -37,6 +37,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
@@ -57,7 +58,7 @@ type IOServerStarter interface {
 type IOServerInstance struct {
 	log           logging.Logger
 	runner        IOServerStarter
-	bdevProvider  *storage.BdevProvider
+	bdevProvider  *bdev.ClassProvider
 	scmProvider   *scm.Provider
 	msClient      *mgmtSvcClient
 	instanceReady chan *srvpb.NotifyReadyReq
@@ -75,7 +76,7 @@ type IOServerInstance struct {
 // NewIOServerInstance returns an *IOServerInstance initialized with
 // its dependencies.
 func NewIOServerInstance(log logging.Logger,
-	bp *storage.BdevProvider, sp *scm.Provider,
+	bp *bdev.ClassProvider, sp *scm.Provider,
 	msc *mgmtSvcClient, r IOServerStarter) *IOServerInstance {
 
 	return &IOServerInstance{
@@ -190,8 +191,9 @@ func (srv *IOServerInstance) NeedsScmFormat() (bool, error) {
 		return false, err
 	}
 
-	srv.log.Debugf("%s (%s) needs format: %t", scmCfg.MountPoint, scmCfg.Class, !res.Formatted)
-	return !res.Formatted, nil
+	needsFormat := !res.Mounted && !res.Mountable
+	srv.log.Debugf("%s (%s) needs format: %t", scmCfg.MountPoint, scmCfg.Class, needsFormat)
+	return needsFormat, nil
 }
 
 // Start checks to make sure that the instance has a valid superblock before
