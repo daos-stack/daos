@@ -20,7 +20,6 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
-
 package server
 
 import (
@@ -67,7 +66,7 @@ func MockNamespace(ctrlr *Controller) Namespace {
 	n := common.MockNamespacePB()
 	return Namespace{
 		ID:           n.Id,
-		Size:         n.Capacity,
+		Size:         n.Size,
 		CtrlrPciAddr: ctrlr.PCIAddr,
 	}
 }
@@ -77,19 +76,19 @@ func MockDeviceHealth(ctrlr *Controller) DeviceHealth {
 	h := common.MockDeviceHealthPB()
 	return DeviceHealth{
 		Temp:            h.Temp,
-		TempWarnTime:    h.Tempwarn,
-		TempCritTime:    h.Tempcrit,
-		CtrlBusyTime:    h.Ctrlbusy,
+		TempWarnTime:    h.Tempwarntime,
+		TempCritTime:    h.Tempcrittime,
+		CtrlBusyTime:    h.Ctrlbusytime,
 		PowerCycles:     h.Powercycles,
 		PowerOnHours:    h.Poweronhours,
 		UnsafeShutdowns: h.Unsafeshutdowns,
 		MediaErrors:     h.Mediaerrors,
-		ErrorLogEntries: h.Errorlogs,
-		TempWarn:        h.Tempwarning,
-		AvailSpareWarn:  h.Availspare,
-		ReliabilityWarn: h.Reliability,
-		ReadOnlyWarn:    h.Readonly,
-		VolatileWarn:    h.Volatilemem,
+		ErrorLogEntries: h.Errorlogentries,
+		TempWarn:        h.Tempwarn,
+		AvailSpareWarn:  h.Availsparewarn,
+		ReliabilityWarn: h.Reliabilitywarn,
+		ReadOnlyWarn:    h.Readonlywarn,
+		VolatileWarn:    h.Volatilewarn,
 		CtrlrPciAddr:    ctrlr.PCIAddr,
 	}
 }
@@ -268,7 +267,7 @@ func TestDiscoverNvmeMulti(t *testing.T) {
 			NvmeControllers{
 				&NvmeController{
 					Pciaddr: mCs[0].PCIAddr, Fwrev: mCs[0].FWRev,
-					Namespaces: NvmeNamespaces{{Id: ns0.ID, Capacity: ns0.Size}},
+					Namespaces: NvmeNamespaces{{Id: ns0.ID, Size: ns0.Size}},
 					Healthstats: &NvmeController_Health{
 						Temp: dh0.Temp, Poweronhours: dh0.PowerOnHours,
 						Unsafeshutdowns: dh0.UnsafeShutdowns,
@@ -276,7 +275,7 @@ func TestDiscoverNvmeMulti(t *testing.T) {
 				},
 				&NvmeController{
 					Pciaddr: mCs[1].PCIAddr, Fwrev: mCs[1].FWRev,
-					Namespaces: NvmeNamespaces{{Id: ns1.ID, Capacity: ns1.Size}},
+					Namespaces: NvmeNamespaces{{Id: ns1.ID, Size: ns1.Size}},
 					Healthstats: &NvmeController_Health{
 						Temp: dh1.Temp, Poweronhours: dh1.PowerOnHours,
 						Unsafeshutdowns: dh1.UnsafeShutdowns,
@@ -291,15 +290,15 @@ func TestDiscoverNvmeMulti(t *testing.T) {
 				&NvmeController{
 					Pciaddr: mCs[0].PCIAddr, Fwrev: mCs[0].FWRev,
 					Namespaces: NvmeNamespaces{
-						{Id: ns0.ID, Capacity: ns0.Size},
-						{Id: ns2.ID, Capacity: ns2.Size},
+						{Id: ns0.ID, Size: ns0.Size},
+						{Id: ns2.ID, Size: ns2.Size},
 					},
 				},
 				&NvmeController{
 					Pciaddr: mCs[1].PCIAddr, Fwrev: mCs[1].FWRev,
 					Namespaces: NvmeNamespaces{
-						{Id: ns1.ID, Capacity: ns1.Size},
-						{Id: ns3.ID, Capacity: ns3.Size},
+						{Id: ns1.ID, Size: ns1.Size},
+						{Id: ns3.ID, Size: ns3.Size},
 					},
 				},
 			},
