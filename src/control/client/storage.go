@@ -201,8 +201,8 @@ func StorageFormatRequest(mc Control, parms interface{}, ch chan ClientResult) {
 			return // recv err
 		}
 
-		sRes.nvmeCtrlr.Responses = resp.Crets
-		sRes.scmMount.Responses = resp.Mrets
+		sRes.Nvme = resp.Crets
+		sRes.Scm = resp.Mrets
 
 		ch <- ClientResult{mc.getAddress(), sRes, nil}
 	}
