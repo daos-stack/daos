@@ -102,24 +102,14 @@ func (tc *testConn) StoragePrepare(req *ctlpb.StoragePrepareReq) client.ResultMa
 	return nil
 }
 
-func (tc *testConn) StorageScan() (client.ClientCtrlrMap, client.ClientModuleMap, client.ClientPmemMap) {
-	tc.appendInvocation("StorageScan")
-	return nil, nil, nil
+func (tc *testConn) StorageScan(req *client.StorageScanReq) *client.StorageScanResp {
+	tc.appendInvocation(fmt.Sprintf("StorageScan-%+v", req))
+	return &client.StorageScanResp{}
 }
 
 func (tc *testConn) StorageFormat(reformat bool) (client.ClientCtrlrMap, client.ClientMountMap) {
 	tc.appendInvocation(fmt.Sprintf("StorageFormat-%t", reformat))
 	return nil, nil
-}
-
-func (tc *testConn) StorageUpdate(req *ctlpb.StorageUpdateReq) (client.ClientCtrlrMap, client.ClientModuleMap) {
-	tc.appendInvocation(fmt.Sprintf("StorageUpdate-%s", req))
-	return nil, nil
-}
-
-func (tc *testConn) ListFeatures() client.ClientFeatureMap {
-	tc.appendInvocation("ListFeatures")
-	return nil
 }
 
 func (tc *testConn) KillRank(rank uint32) client.ResultMap {
@@ -137,9 +127,24 @@ func (tc *testConn) PoolDestroy(req *client.PoolDestroyReq) error {
 	return nil
 }
 
-func (tc *testConn) PoolGetACL(req *client.PoolGetACLReq) (*client.PoolGetACLResp, error) {
+func (tc *testConn) PoolGetACL(req client.PoolGetACLReq) (*client.PoolGetACLResp, error) {
 	tc.appendInvocation(fmt.Sprintf("PoolGetACL-%+v", req))
 	return &client.PoolGetACLResp{}, nil
+}
+
+func (tc *testConn) PoolOverwriteACL(req client.PoolOverwriteACLReq) (*client.PoolOverwriteACLResp, error) {
+	tc.appendInvocation(fmt.Sprintf("PoolOverwriteACL-%+v", req))
+	return &client.PoolOverwriteACLResp{ACL: req.ACL}, nil
+}
+
+func (tc *testConn) PoolUpdateACL(req client.PoolUpdateACLReq) (*client.PoolUpdateACLResp, error) {
+	tc.appendInvocation(fmt.Sprintf("PoolUpdateACL-%+v", req))
+	return &client.PoolUpdateACLResp{ACL: req.ACL}, nil
+}
+
+func (tc *testConn) PoolDeleteACL(req client.PoolDeleteACLReq) (*client.PoolDeleteACLResp, error) {
+	tc.appendInvocation(fmt.Sprintf("PoolDeleteACL-%+v", req))
+	return &client.PoolDeleteACLResp{}, nil
 }
 
 func (tc *testConn) BioHealthQuery(req *mgmtpb.BioHealthReq) client.ResultQueryMap {

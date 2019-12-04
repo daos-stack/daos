@@ -382,10 +382,6 @@ DAOS I/O server (v0.4.0) process 135863 started on rank 0 (out of 1) with 1 targ
 </p>
 </details>
 
-#### SCM Firmware Update
-
-#### SCM Burn-in Validation
-
 #### SCM Provisioning
 
 Provisioning SCM occurs by configuring DCPM modules in AppDirect memory regions (interleaved mode) in groups of modules local to a specific socket (NUMA) and resultant nvdimm namespaces are defined a device identifier (e.g. /dev/pmem0). This can be performed through the [ipmctl](https://github.com/intel/ipmctl) tool.
@@ -421,16 +417,6 @@ Formatting will be performed on devices identified by PCI addresses specified in
 The SPDK "[blobcli](https://github.com/spdk/spdk/tree/master/examples/blob/cli)" can be used to initiate and manipulate blobstores for testing and verification purposes.
 
 In order to designate NVMe devices to be used by DAOS data plane instances, the control plane will generate an `nvme.conf` file to be consumed by SPDK which will be written to the `scm_mount` (persistent) mounted location as a final stage of formatting before the superblock is written, signifying the server has been formatted.
-
-#### NVMe Controller Firmware Update
-
-The following animation illustrates starting the control server and using the management shell to update the firmware on a locally available NVMe Controller (assuming the quickstart guide instructions have already been performed):
-
-![Demo: Updating NVMe Controller Firmware](/doc/graph/daosshellfwupdate.svg)
-
-#### NVMe Controller Burn-in Validation
-
-Burn-in validation is performed using the [fio tool](https://github.com/axboe/fio) which executes workloads over the SPDK framework using the [fio plugin](https://github.com/spdk/spdk/tree/v18.04.1/examples/nvme/fio_plugin).
 
 ## Bootstrapping and DAOS system membership
 

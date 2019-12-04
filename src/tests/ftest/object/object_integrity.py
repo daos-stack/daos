@@ -23,8 +23,6 @@
 """
 
 import os
-import sys
-import json
 import ctypes
 import time
 import avocado
@@ -33,19 +31,22 @@ import agent_utils
 import server_utils
 import write_host_file
 
-from pydaos.raw import (DaosContext, DaosPool, DaosContainer, IORequest, DaosObj,
-                        DaosApiError, DaosLog)
-from apricot import skipForTicket
+from pydaos.raw import (DaosPool, DaosContainer, IORequest,
+                        DaosObj, DaosApiError)
+from apricot import skipForTicket, TestWithoutServers
 
-class ObjectDataValidation(avocado.Test):
+class ObjectDataValidation(TestWithoutServers):
     """
     Test Class Description:
         Tests that create Different length records,
         Disconnect the pool/container and reconnect,
         validate the data after reconnect.
+
+    :avocado: recursive
     """
     # pylint: disable=too-many-instance-attributes
     def setUp(self):
+        super(ObjectDataValidation, self).setUp()
         self.agent_sessions = None
         self.pool = None
         self.container = None
@@ -57,15 +58,9 @@ class ObjectDataValidation(avocado.Test):
         self.no_of_akeys = None
         self.array_size = None
         self.record_length = None
-
-        with open('../../../.build_vars.json') as json_f:
-            build_paths = json.load(json_f)
-        self.basepath = os.path.normpath(build_paths['PREFIX']  + "/../")
         server_group = self.params.get("name",
                                        '/server_config/',
                                        'daos_server')
-        self.context = DaosContext(build_paths['PREFIX'] + '/lib/')
-        self.d_log = DaosLog(self.context)
         self.hostlist = self.params.get("test_machines", '/run/hosts/*')
         self.hostfile = write_host_file.write_host_file(self.hostlist,
                                                         self.workdir)
@@ -73,9 +68,8 @@ class ObjectDataValidation(avocado.Test):
         self.no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')[0]
         self.array_size = self.params.get("size", '/array_size/')
         self.record_length = self.params.get("length", '/run/record/*')
-
         self.agent_sessions = agent_utils.run_agent(
-            self.basepath, self.hostlist)
+            self, self.hostlist)
         server_utils.run_server(self, self.hostfile, server_group)
 
         self.pool = DaosPool(self.context)

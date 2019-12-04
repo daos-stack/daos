@@ -1669,6 +1669,9 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 
 	D_FREE(buf);
 	D_FREE(data_buf);
+	for (i = 0; i < PUNCH_NUM_KEYS; i++) {
+		D_FREE(dkeys[i]);
+	}
 	ioreq_fini(&req);
 	MPI_Barrier(MPI_COMM_WORLD);
 }
@@ -3303,7 +3306,7 @@ punch_then_lookup(void **state)
 			    NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(sgl.sg_nr_out, 10);
-	for (i = 0; i < 9; i++) {
+	for (i = 0; i < 10; i++) {
 		if (i == 2)
 			assert_memory_equal(&fetch_buf[i], "b", 1);
 		else
@@ -3395,6 +3398,9 @@ split_sgl_internal(void **state, int size)
 	/** close object */
 	rc = daos_obj_close(oh, NULL);
 	assert_int_equal(rc, 0);
+
+	D_FREE(sbuf1);
+	D_FREE(sbuf2);
 }
 
 static void

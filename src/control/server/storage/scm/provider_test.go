@@ -102,14 +102,14 @@ func TestProviderScan(t *testing.T) {
 			if tc.getNamespaceRes == nil {
 				tc.getNamespaceRes = storage.ScmNamespaces{defaultNamespace}
 			}
-			mb := NewMockBackend(&MockBackendConfig{
+			mbc := &MockBackendConfig{
 				DiscoverRes:     tc.discoverRes,
 				DiscoverErr:     tc.discoverErr,
 				GetNamespaceRes: tc.getNamespaceRes,
 				GetNamespaceErr: tc.getNamespaceErr,
 				GetStateErr:     tc.getStateErr,
-			})
-			p := NewProvider(log, mb, NewMockSysProvider(nil))
+			}
+			p := NewMockProvider(log, mbc, nil)
 			cmpRes := func(t *testing.T, want, got *ScanResponse) {
 				t.Helper()
 				if diff := cmp.Diff(want, got); diff != "" {
@@ -224,7 +224,7 @@ func TestProviderPrepare(t *testing.T) {
 			if tc.getNamespaceRes == nil {
 				tc.getNamespaceRes = storage.ScmNamespaces{defaultNamespace}
 			}
-			mb := NewMockBackend(&MockBackendConfig{
+			mbc := &MockBackendConfig{
 				DiscoverErr:     tc.discoverErr,
 				DiscoverRes:     storage.ScmModules{MockModule(nil)},
 				GetNamespaceRes: tc.getNamespaceRes,
@@ -234,9 +234,14 @@ func TestProviderPrepare(t *testing.T) {
 				NextState:       tc.expEndState,
 				PrepNeedsReboot: tc.shouldReboot,
 				PrepErr:         tc.prepErr,
-			})
-			p := NewProvider(log, mb, NewMockSysProvider(nil))
-			p.scanCompleted = tc.startInitialized
+			}
+			p := NewMockProvider(log, mbc, nil)
+
+			if tc.startInitialized {
+				p.scanCompleted = true
+				p.modules = mbc.DiscoverRes
+				p.namespaces = tc.getNamespaceRes
+			}
 			cmpRes := func(t *testing.T, want, got *PrepareResponse) {
 				t.Helper()
 				if diff := cmp.Diff(want, got); diff != "" {
@@ -284,14 +289,14 @@ func TestProviderGetState(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			mb := NewMockBackend(&MockBackendConfig{
+			mbc := &MockBackendConfig{
 				DiscoverErr:     tc.discoverErr,
 				DiscoverRes:     storage.ScmModules{MockModule(nil)},
 				GetNamespaceErr: tc.getNamespaceErr,
 				StartingState:   tc.startState,
 				NextState:       tc.expEndState,
-			})
-			p := NewProvider(log, mb, NewMockSysProvider(nil))
+			}
+			p := NewMockProvider(log, mbc, nil)
 			p.scanCompleted = tc.startInitialized
 			cmpRes := func(t *testing.T, want, got storage.ScmState) {
 				t.Helper()
@@ -385,6 +390,7 @@ func TestProviderCheckFormat(t *testing.T) {
 			expResponse: &FormatResponse{
 				Mountpoint: goodMountPoint,
 				Formatted:  true,
+				Mounted:    true,
 			},
 		},
 		"getFs fails": {
@@ -396,7 +402,7 @@ func TestProviderCheckFormat(t *testing.T) {
 			},
 			getFsErr: errors.New("getfs failed"),
 		},
-		"already formatted": {
+		"already formatted; not mountable": {
 			request: &FormatRequest{
 				Mountpoint: goodMountPoint,
 				Dcpm: &DcpmParams{
@@ -406,6 +412,20 @@ func TestProviderCheckFormat(t *testing.T) {
 			getFsStr: "reiserfs",
 			expResponse: &FormatResponse{
 				Mountpoint: goodMountPoint,
+				Formatted:  true,
+			},
+		},
+		"already formatted; mountable": {
+			request: &FormatRequest{
+				Mountpoint: goodMountPoint,
+				Dcpm: &DcpmParams{
+					Device: goodDevice,
+				},
+			},
+			getFsStr: fsTypeExt4,
+			expResponse: &FormatResponse{
+				Mountpoint: goodMountPoint,
+				Mountable:  true,
 				Formatted:  true,
 			},
 		},
@@ -427,18 +447,18 @@ func TestProviderCheckFormat(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			mb := NewMockBackend(&MockBackendConfig{
+			mbc := &MockBackendConfig{
 				DiscoverErr:     tc.discoverErr,
 				DiscoverRes:     storage.ScmModules{MockModule(nil)},
 				GetNamespaceErr: tc.getNamespaceErr,
-			})
-			msp := NewMockSysProvider(&MockSysConfig{
+			}
+			msc := &MockSysConfig{
 				IsMountedBool: tc.alreadyMounted,
 				IsMountedErr:  tc.isMountedErr,
 				GetfsStr:      tc.getFsStr,
 				GetfsErr:      tc.getFsErr,
-			})
-			p := NewProvider(log, mb, msp)
+			}
+			p := NewMockProvider(log, mbc, msc)
 			cmpRes := func(t *testing.T, want, got *FormatResponse) {
 				t.Helper()
 				if diff := cmp.Diff(want, got); diff != "" {
@@ -539,6 +559,7 @@ func TestProviderFormat(t *testing.T) {
 			expResponse: &FormatResponse{
 				Mountpoint: goodMountPoint,
 				Formatted:  true,
+				Mounted:    true,
 			},
 		},
 		"ramdisk: already mounted, no reformat": {
@@ -556,6 +577,7 @@ func TestProviderFormat(t *testing.T) {
 			expResponse: &FormatResponse{
 				Mountpoint: goodMountPoint,
 				Formatted:  true,
+				Mounted:    true,
 			},
 		},
 		"ramdisk: not mounted; mkdir fails": {
@@ -580,6 +602,7 @@ func TestProviderFormat(t *testing.T) {
 			expResponse: &FormatResponse{
 				Mountpoint: goodMountPoint,
 				Formatted:  true,
+				Mounted:    true,
 			},
 		},
 		"ramdisk: already mounted; reformat; unmount fails": {
@@ -647,6 +670,7 @@ func TestProviderFormat(t *testing.T) {
 			expResponse: &FormatResponse{
 				Mountpoint: goodMountPoint,
 				Formatted:  true,
+				Mounted:    true,
 			},
 		},
 		"dcpm: not mounted; already formatted; reformat": {
@@ -661,6 +685,7 @@ func TestProviderFormat(t *testing.T) {
 			expResponse: &FormatResponse{
 				Mountpoint: goodMountPoint,
 				Formatted:  true,
+				Mounted:    true,
 			},
 		},
 		"dcpm: mounted; already formatted; reformat": {
@@ -675,6 +700,7 @@ func TestProviderFormat(t *testing.T) {
 			expResponse: &FormatResponse{
 				Mountpoint: goodMountPoint,
 				Formatted:  true,
+				Mounted:    true,
 			},
 		},
 		"dcpm: mountpoint doesn't exist; not formatted": {
@@ -689,6 +715,7 @@ func TestProviderFormat(t *testing.T) {
 			expResponse: &FormatResponse{
 				Mountpoint: goodMountPoint,
 				Formatted:  true,
+				Mounted:    true,
 			},
 		},
 		"dcpm: not mounted; not formatted": {
@@ -702,6 +729,7 @@ func TestProviderFormat(t *testing.T) {
 			expResponse: &FormatResponse{
 				Mountpoint: goodMountPoint,
 				Formatted:  true,
+				Mounted:    true,
 			},
 		},
 		"dcpm: not mounted; not formatted; mkfs fails": {
@@ -724,17 +752,31 @@ func TestProviderFormat(t *testing.T) {
 			getFsStr: fsTypeNone,
 			mountErr: errors.New("mount failed"),
 		},
+		"dcpm: missing device": {
+			request: &FormatRequest{
+				Mountpoint: goodMountPoint,
+				Dcpm: &DcpmParams{
+					Device: "/bad/device",
+				},
+			},
+			getFsErr: &os.PathError{
+				Op:   "stat",
+				Path: "/bad/device",
+				Err:  os.ErrNotExist,
+			},
+			expErr: FaultFormatMissingDevice,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			mb := NewMockBackend(&MockBackendConfig{
+			mbc := &MockBackendConfig{
 				DiscoverErr:     tc.discoverErr,
 				DiscoverRes:     storage.ScmModules{MockModule(nil)},
 				GetNamespaceErr: tc.getNamespaceErr,
-			})
-			msp := NewMockSysProvider(&MockSysConfig{
+			}
+			msc := &MockSysConfig{
 				IsMountedBool: tc.alreadyMounted,
 				IsMountedErr:  tc.isMountedErr,
 				GetfsStr:      tc.getFsStr,
@@ -742,8 +784,8 @@ func TestProviderFormat(t *testing.T) {
 				MkfsErr:       tc.mkfsErr,
 				MountErr:      tc.mountErr,
 				UnmountErr:    tc.unmountErr,
-			})
-			p := NewProvider(log, mb, msp)
+			}
+			p := NewMockProvider(log, mbc, msc)
 			cmpRes := func(t *testing.T, want, got *FormatResponse) {
 				t.Helper()
 				if diff := cmp.Diff(want, got); diff != "" {
@@ -765,6 +807,12 @@ func TestProviderFormat(t *testing.T) {
 						Size: 1,
 					},
 				}
+			}
+			if req.OwnerUID == 0 {
+				req.OwnerUID = os.Getuid()
+			}
+			if req.OwnerGID == 0 {
+				req.OwnerGID = os.Getgid()
 			}
 			if req.Mountpoint != "" && req.Mountpoint != badMountPoint {
 				req.Mountpoint = filepath.Join(testDir, req.Mountpoint)

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2019 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,40 +20,51 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
-
-package server
+package hostlist
 
 import (
-	"context"
-	"testing"
-
-	. "github.com/daos-stack/daos/src/control/common"
-	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	"github.com/daos-stack/daos/src/control/logging"
+	"bytes"
+	"fmt"
+	"sort"
 )
 
-// TODO: add server side streaming test for list features
+type HostGroups map[string]*HostSet
 
-func TestGetFeature(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer ShowBufferOnFailure(t, buf)
+func (hg HostGroups) Keys() []string {
+	keys := make([]string, 0, len(hg))
 
-	cs := defaultMockControlService(t, log)
-
-	mockFeature := MockFeaturePB()
-	fMap := make(FeatureMap)
-	fMap[mockFeature.Fname.Name] = mockFeature
-	cs.supportedFeatures = fMap
-
-	feature, err := cs.GetFeature(context.TODO(), mockFeature.Fname)
-	if err != nil {
-		t.Fatal(err)
+	for key := range hg {
+		keys = append(keys, key)
 	}
 
-	AssertEqual(t, feature, mockFeature, "")
+	sort.Strings(keys)
+	return keys
+}
 
-	_, err = cs.GetFeature(context.TODO(), &ctlpb.FeatureName{Name: "non-existent"})
-	if err == nil {
-		t.Fatal(err)
+func (hg HostGroups) AddHost(key, host string) error {
+	if _, exists := hg[key]; !exists {
+		hg[key] = new(HostSet)
 	}
+
+	_, err := hg[key].Insert(host)
+	return err
+}
+
+func (hg HostGroups) String() string {
+	var buf bytes.Buffer
+
+	padding := 0
+	keys := hg.Keys()
+	for _, key := range keys {
+		valStr := hg[key].String()
+		if len(valStr) > padding {
+			padding = len(valStr)
+		}
+	}
+
+	for _, key := range hg.Keys() {
+		fmt.Fprintf(&buf, "%*s: %s\n", padding, hg[key], key)
+	}
+
+	return buf.String()
 }

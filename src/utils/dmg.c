@@ -268,6 +268,78 @@ destroy_hdlr(int argc, char *argv[])
 	return 0;
 }
 
+
+static int
+list_pools_hdlr(int argc, char *argv[])
+{
+	/* See above note about --group to -sys-name transition */
+	struct option		options[] = {
+		{"sys-name",	required_argument,	NULL,	'G'},
+		{"group",	required_argument,	NULL,	'G'},
+		{NULL,		0,			NULL,	0}
+	};
+	const char		*sysname = default_sysname;
+	daos_size_t		 npools;
+	const daos_size_t	 extra_npools_margin = 16;
+	daos_mgmt_pool_info_t	*pools;
+	daos_size_t		 pc;
+	daos_size_t		 sc;
+	int			 rc;
+
+	/* TODOs:
+	 * verbose option, return full pool query results
+	 * accept npools option, exercise subset responses
+	 */
+	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
+		switch (rc) {
+		case 'G':
+			sysname = optarg;
+			break;
+		default:
+			return 2;
+		}
+	}
+
+	/* First: request number of pools (to size our buffer) */
+	rc = daos_mgmt_list_pools(sysname, &npools, NULL /* pools */,
+				  NULL /* ev */);
+	if (rc != 0) {
+		fprintf(stderr, "failed to get number of pools in %s: %d\n",
+				sysname, rc);
+		return rc;
+	}
+
+	/* If no pools, no need for a second call */
+	if (npools == 0)
+		return rc;
+
+	/* Allocate pools[]. Note: svc ranks per pool allocated by API */
+	npools += extra_npools_margin;
+	D_ALLOC_ARRAY(pools, npools);
+	D_ASSERT(pools != NULL);
+
+	/* Second: request list of pools */
+	rc = daos_mgmt_list_pools(sysname, &npools, pools, NULL /* ev */);
+	if (rc != 0) {
+		fprintf(stderr, "failed to list pools: %d\n", rc);
+		D_FREE(pools);
+		return rc;
+	}
+
+	for (pc = 0; pc < npools; pc++) {
+		daos_mgmt_pool_info_t	*pool = &pools[pc];
+
+		printf(DF_UUIDF" ", DP_UUID(pool->mgpi_uuid));
+
+		for (sc = 0; sc < pool->mgpi_svc->rl_nr - 1; sc++)
+			printf("%u:", pool->mgpi_svc->rl_ranks[sc]);
+		printf("%u\n", pool->mgpi_svc->rl_ranks[sc]);
+	}
+
+	D_FREE(pools);
+	return 0;
+}
+
 enum pool_op {
 	POOL_EVICT,
 	POOL_EXCLUDE,
@@ -943,6 +1015,8 @@ main(int argc, char *argv[])
 		hdlr = create_hdlr;
 	else if (strcmp(argv[1], "destroy") == 0)
 		hdlr = destroy_hdlr;
+	else if (strcmp(argv[1], "list-pools") == 0)
+		hdlr = list_pools_hdlr;
 	else if (strcmp(argv[1], "evict") == 0)
 		hdlr = pool_op_hdlr;
 	else if (strcmp(argv[1], "exclude") == 0)

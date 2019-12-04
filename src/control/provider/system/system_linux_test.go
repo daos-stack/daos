@@ -23,10 +23,13 @@
 package system
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+
+	"github.com/daos-stack/daos/src/control/common"
 )
 
 func TestScanMountInfo(t *testing.T) {
@@ -77,6 +80,50 @@ func TestScanMountInfo(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expMounted, gotMounted); diff != "" {
 				t.Fatalf("unexpected mount status (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestIsMounted(t *testing.T) {
+	provider := LinuxProvider{}
+
+	for name, tc := range map[string]struct {
+		target     string
+		expMounted bool
+		expErr     error
+	}{
+		"/ is mounted": {
+			target:     "/",
+			expMounted: true,
+		},
+		"/root exists but isn't mounted": {
+			target:     "/root",
+			expMounted: false,
+		},
+		"unmounted device": {
+			target:     "/dev/null",
+			expMounted: false,
+		},
+		"empty target": {
+			expErr: errors.New("no such file or directory"),
+		},
+		"nonexistent directory": {
+			target: "/fooooooooooooooooo",
+			expErr: errors.New("no such file or directory"),
+		},
+		"neither dir nor device": {
+			target: "/dev/log",
+			expErr: errors.New("not a valid mount target"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotMounted, gotErr := provider.IsMounted(tc.target)
+
+			common.CmpErr(t, tc.expErr, gotErr)
+			if gotMounted != tc.expMounted {
+				t.Fatalf("expected %q mounted result to be %t, got %t",
+					tc.target, tc.expMounted, gotMounted)
 			}
 		})
 	}

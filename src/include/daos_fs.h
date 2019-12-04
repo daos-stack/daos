@@ -105,6 +105,21 @@ int
 dfs_umount(dfs_t *dfs);
 
 /**
+ * Optionally set a prefix on the dfs mount where all paths passed to dfs_lookup
+ * are trimmed of that prefix. This is helpful when using DFS API with a dfuse
+ * mount and the user would like to reference files in the dfuse mount instead
+ * of the absolute path from the root of the DFS container.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	prefix	absolute prefix to trim off path to dfs_lookup.
+ *			Passing NULL unsets the prefix.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_set_prefix(dfs_t *dfs, const char *prefix);
+
+/**
  * Convert from a dfs_obj_t to a daos_obj_id_t.
  *
  * \param[in]	obj	Object to convert

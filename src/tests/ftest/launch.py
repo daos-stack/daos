@@ -25,7 +25,6 @@ from __future__ import print_function
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 import json
-from multiprocessing import Process
 import os
 import re
 import socket
@@ -33,6 +32,9 @@ import subprocess
 from sys import version_info
 import time
 import yaml
+
+from ClusterShell.NodeSet import NodeSet
+from ClusterShell.Task import task_self
 
 try:
     # For python versions >= 3.2
@@ -59,8 +61,7 @@ except ImportError:
             """Destroy a TemporaryDirectory object."""
             rmtree(self.name)
 
-
-TEST_LOG_FILE_YAML = "./data/daos_avocado_test.yaml"
+TEST_DAOS_SERVER_YAML = "daos_avocado_test.yaml"
 BASE_LOG_FILE_YAML = "./data/daos_server_baseline.yaml"
 SERVER_KEYS = (
     "test_machines",
@@ -81,9 +82,34 @@ def get_build_environment():
     """
     build_vars_file = os.path.join(
         os.path.dirname(os.path.realpath(__file__)),
-        "../../../.build_vars.json")
+        "../../.build_vars.json")
     with open(build_vars_file) as vars_file:
         return json.load(vars_file)
+
+
+def get_temporary_directory(base_dir=None):
+    """Get the temporary directory used by functional tests.
+
+    Args:
+        base_dir (str, optional): base installation directory. Defaults to None.
+
+    Returns:
+        str: the full path of the temporary directory
+
+    """
+    if base_dir is None:
+        base_dir = get_build_environment()["PREFIX"]
+    if base_dir == "/usr":
+        tmp_dir = os.getenv(
+            "DAOS_TEST_SHARED_DIR", os.path.expanduser("~/daos_test"))
+    else:
+        tmp_dir = os.path.join(base_dir, "tmp")
+
+    # Make sure the temporary directory exists to prevent pydaos import errors
+    if not os.path.exists(tmp_dir):
+        os.makedirs(tmp_dir)
+
+    return tmp_dir
 
 
 def set_test_environment():
@@ -102,7 +128,8 @@ def set_test_environment():
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, path])
     os.environ["DAOS_SINGLETON_CLI"] = "1"
     os.environ["CRT_CTX_SHARE_ADDR"] = "1"
-    os.environ["CRT_ATTACH_INFO_PATH"] = os.path.join(base_dir, "tmp")
+    os.environ["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", "eth0")
+    os.environ["CRT_ATTACH_INFO_PATH"] = get_temporary_directory(base_dir)
 
     # Python paths required for functional testing
     python_version = "python{}{}".format(
@@ -111,7 +138,7 @@ def set_test_environment():
     required_python_paths = [
         os.path.abspath("util/apricot"),
         os.path.abspath("util"),
-        os.path.join(base_dir, "lib", python_version, "site-packages"),
+        os.path.join(base_dir, "lib64", python_version, "site-packages"),
     ]
 
     # Check the PYTHONPATH env definition
@@ -176,40 +203,48 @@ def spawn_commands(host_list, command, timeout=120):
         command (str): command to run on each host
         timeout (int): number of seconds to wait for all jobs to complete
 
+    Returns:
+        bool: True if the command completed successfully (rc=0) on each
+            specified host; False otherwise
+
     """
-    # Create a job to run the command on each host
-    jobs = []
-    for host in host_list:
-        host_command = command.format(host=host)
-        jobs.append(Process(target=get_output, args=(host_command,)))
+    # Create a ClusterShell Task to run the command in parallel on the hosts
+    nodes = NodeSet.fromlist(host_list)
+    task = task_self()
+    # task.set_info('debug', True)
+    # Enable forwarding of the ssh authentication agent connection
+    task.set_info("ssh_options", "-oForwardAgent=yes")
+    print("Running on {}: {}".format(nodes, command))
+    task.run(command=command, nodes=nodes, timeout=timeout)
 
-    # Start the background jobs
-    for job in jobs:
-        job.start()
+    # Create a dictionary of hosts for each unique return code
+    results = {code: hosts for code, hosts in task.iter_retcodes()}
 
-    # Block until each job is complete or the overall timeout is reached
-    elapsed = 0
-    for job in jobs:
-        # Update the join timeout to account for previously joined jobs
-        join_timeout = timeout - elapsed if elapsed <= timeout else 0
+    # Determine if the command completed successfully across all the hosts
+    status = len(results) == 1 and 0 in results
+    if not status:
+        print("  Errors detected running \"{}\":".format(command))
 
-        # Block until this job completes or the overall timeout is reached
-        start_time = int(time.time())
-        job.join(join_timeout)
+    # Display the command output
+    for code in sorted(results):
+        output_data = list(task.iter_buffers(results[code]))
+        if len(output_data) == 0:
+            err_nodes = NodeSet.fromlist(results[code])
+            print("    {}: rc={}, output: <NONE>".format(err_nodes, code))
+        else:
+            for output, o_hosts in output_data:
+                n_set = NodeSet.fromlist(o_hosts)
+                lines = str(output).splitlines()
+                if len(lines) > 1:
+                    output = "\n      {}".format("\n      ".join(lines))
+                print("    {}: rc={}, output: {}".format(n_set, code, output))
 
-        # Update the amount of time that has elapsed since waiting for jobs
-        elapsed += int(time.time()) - start_time
+    # List any hosts that timed out
+    timed_out = [str(hosts) for hosts in task.iter_keys_timeout()]
+    if timed_out:
+        print("    {}: timeout detected".format(NodeSet.fromlist(timed_out)))
 
-    # Terminate any processes that may still be running after timeout
-    return_value = True
-    for job in jobs:
-        if job.is_alive():
-            print("Terminating job {}".format(job.pid))
-            job.terminate()
-        if job.exitcode != 0:
-            return_value = False
-
-    return return_value
+    return status
 
 
 def find_values(obj, keys, key=None, val_type=list):
@@ -482,6 +517,8 @@ def get_log_files(config_yaml, daos_files=None):
             os.getenv("D_LOG_FILE", "/tmp/server.log"))[0]
         daos_files = {
             "log_file": "/tmp/server.log",
+            "admin_log_file": "/tmp/daos_admin.log",
+            "server_log_file": "/tmp/server.log",
             "agent_log_file": "/tmp/daos_agent.log",
             "control_log_file": "/tmp/daos_control.log",
             "socket_dir": "/tmp/daos_sockets",
@@ -563,7 +600,7 @@ def clean_logs(test_yaml, args):
     # log files it will use when it is run.
     log_files = get_log_files(test_yaml, get_log_files(BASE_LOG_FILE_YAML))
     host_list = get_hosts_from_yaml(test_yaml, args)
-    command = "ssh {{host}} \"rm -fr {}\"".format(" ".join(log_files.values()))
+    command = "sudo rm -fr {}".format(" ".join(log_files.values()))
     print("Cleaning logs on {}".format(host_list))
     if not spawn_commands(host_list, command):
         print("Error cleaning logs, aborting")
@@ -581,7 +618,8 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
         args (argparse.Namespace): command line arguments for this program
     """
     this_host = socket.gethostname().split(".")[0]
-    log_files = get_log_files(TEST_LOG_FILE_YAML)
+    log_files = get_log_files(
+        os.path.join(get_temporary_directory(), TEST_DAOS_SERVER_YAML))
     host_list = get_hosts_from_yaml(test_yaml, args)
     doas_logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs")
 
@@ -595,12 +633,31 @@ def archive_logs(avocado_logs_dir, test_yaml, args):
         if os.path.splitext(os.path.basename(log_file))[1] != ""]
 
     # Copy any log files that exist on the test hosts and remove them from the
-    # test host if the copy is successful
-    command = "ssh {{host}} 'set -e; {}'".format(
-        "for file in {}; do if [ -e $file ]; then "
-        "scp $file {}:{}/${{{{file##*/}}}}-{{host}} && rm -fr $file; fi; "
-        "done".format(" ".join(non_dir_files), this_host, doas_logs_dir))
-    spawn_commands(host_list, command)
+    # test host if the copy is successful.  Attempt all of the commands and
+    # report status at the end of the loop.  Include a listing of the file
+    # related to any failed command.
+    commands = [
+        "set -eu",
+        "rc=0",
+        "copied=()",
+        "for file in {}".format(" ".join(non_dir_files)),
+        "do if [ -e $file ]",
+        "then if scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(
+            this_host, doas_logs_dir),
+        "then copied+=($file)",
+        "if ! sudo rm -fr $file",
+        "then ((rc++))",
+        "ls -al $file",
+        "fi",
+        "else ((rc++))",
+        "ls -al $file",
+        "fi",
+        "fi",
+        "done",
+        "echo Copied ${copied[@]:-no files}",
+        "exit $rc",
+    ]
+    spawn_commands(host_list, "; ".join(commands))
 
 
 def rename_logs(avocado_logs_dir, test_file):

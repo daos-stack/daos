@@ -175,6 +175,8 @@ int  pool_buf_extract(struct pool_map *map, struct pool_buf **buf_pp);
 int  pool_buf_attach(struct pool_buf *buf, struct pool_component *comps,
 		     unsigned int comp_nr);
 
+int pool_map_comp_cnt(struct pool_map *map);
+
 int  pool_map_create(struct pool_buf *buf, uint32_t version,
 		     struct pool_map **mapp);
 void pool_map_addref(struct pool_map *map);

@@ -41,17 +41,9 @@ type DomainSocketClient interface {
 	SendMsg(call *Call) (*Response, error)
 }
 
-// domainSocketConn is an interface representing a connection to a Unix Domain
-// Socket. Should play nicely with net.UnixConn
-type domainSocketConn interface {
-	ReadMsgUnix(b, oob []byte) (n, oobn, flags int, addr *net.UnixAddr, err error)
-	WriteMsgUnix(b, oob []byte, addr *net.UnixAddr) (n, oobn int, err error)
-	Close() error
-}
-
 // domainSocketDialer is an interface that connects to a Unix Domain Socket
 type domainSocketDialer interface {
-	dial(socketPath string) (domainSocketConn, error)
+	dial(socketPath string) (net.Conn, error)
 }
 
 // ClientConnection represents a client connection to a dRPC server
@@ -59,7 +51,7 @@ type ClientConnection struct {
 	sync.Mutex
 	socketPath string             // Filesystem location of dRPC socket
 	dialer     domainSocketDialer // Interface to connect to the socket
-	conn       domainSocketConn   // UDS connection
+	conn       net.Conn           // Connection to socket
 	sequence   int64              // Increment each time we send
 }
 
@@ -111,8 +103,7 @@ func (c *ClientConnection) sendCall(msg *Call) error {
 		return errors.Wrap(err, "failed to marshal dRPC request")
 	}
 
-	_, _, err = c.conn.WriteMsgUnix(callBytes, nil, nil)
-	if err != nil {
+	if _, err := c.conn.Write(callBytes); err != nil {
 		return errors.Wrap(err, "dRPC send")
 	}
 
@@ -120,8 +111,8 @@ func (c *ClientConnection) sendCall(msg *Call) error {
 }
 
 func (c *ClientConnection) recvResponse() (*Response, error) {
-	respBytes := make([]byte, MAXMSGSIZE)
-	numBytes, _, _, _, err := c.conn.ReadMsgUnix(respBytes, nil)
+	respBytes := make([]byte, MaxMsgSize)
+	numBytes, err := c.conn.Read(respBytes)
 	if err != nil {
 		return nil, errors.Wrap(err, "dRPC recv")
 	}
@@ -168,7 +159,7 @@ type clientDialer struct {
 }
 
 // dial connects to the real unix domain socket located at socketPath
-func (c *clientDialer) dial(socketPath string) (domainSocketConn, error) {
+func (c *clientDialer) dial(socketPath string) (net.Conn, error) {
 	addr := &net.UnixAddr{
 		Net:  "unixpacket",
 		Name: socketPath,

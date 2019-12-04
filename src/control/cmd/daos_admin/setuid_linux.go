@@ -20,22 +20,39 @@
 // Any reproduction of computer software, computer software documentation, or
 // portions thereof marked with this legend must also reproduce the markings.
 //
+// +build linux
 
-syntax = "proto3";
-package ctl;
+package main
 
-message FeatureName {
-	string name = 1;
+import "syscall"
+
+// Hack alert! https://github.com/golang/go/issues/1435
+//
+// The setuid(2) implementation provided by Linux only affects the
+// current thread, not the whole process. The implementation provided
+// in glibc correctly sets it for all threads, but the Go maintainers
+// didn't want to deal with cross-platform compatibility stuff, so
+// they punted and made syscall.Setuid() return ENOTSUPP on Linux.
+//
+// This simple cgo wrapper around glibc's setuid should do the trick.
+
+/*
+#define _GNU_SOURCE
+#include <unistd.h>
+#include <errno.h>
+
+static int
+glibc_setuid(uid_t uid) {
+	int rc = setuid(uid);
+	return (rc < 0) ? errno : 0;
 }
+*/
+import "C"
 
-message Category {
-	string category = 1;
+func setuid(uid int) error {
+	rc := C.glibc_setuid(C.uid_t(uid))
+	if rc != 0 {
+		return syscall.Errno(rc)
+	}
+	return nil
 }
-
-// Feature represents a management task that can be performed by server.
-message Feature {
-	Category category = 1;	// The category of capabilities this feature belongs to.
-	FeatureName fname = 2;	// The name of the feature.
-	string description = 3;	// The description of the feature.
-}
-

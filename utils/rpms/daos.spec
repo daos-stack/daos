@@ -3,9 +3,12 @@
 
 %define daoshome %{_exec_prefix}/lib/%{name}
 
+# Unlimited maximum version
+%global spdk_max_version 1000
+
 Name:          daos
 Version:       0.6.0
-Release:       11%{?relval}%{?dist}
+Release:       15%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       Apache
@@ -20,6 +23,9 @@ BuildRequires: cart-devel-%{cart_sha1}
 %else
 BuildRequires: cart-devel
 %endif
+# temporarliy until we can land ompi@PR-10 and
+# scons_local@bmurrell/ompi-env-module
+BuildRequires: ompi-devel
 %if (0%{?rhel} >= 7)
 BuildRequires: argobots-devel >= 1.0rc1
 %else
@@ -28,7 +34,7 @@ BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libpmem-devel, libpmemobj-devel
 BuildRequires: fuse-devel >= 3.4.2
 BuildRequires: protobuf-c-devel
-BuildRequires: spdk-devel, spdk-tools
+BuildRequires: spdk-devel <= %{spdk_max_version}, spdk-tools <= %{spdk_max_version}
 BuildRequires: fio < 3.4
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
@@ -82,7 +88,7 @@ Requires: libpmem1, libpmemobj1
 %endif
 Requires: fuse >= 3.4.2
 Requires: protobuf-c
-Requires: spdk
+Requires: spdk <= %{spdk_max_version}
 Requires: fio < 3.4
 Requires: openssl
 # ensure we get exactly the right cart RPM
@@ -105,7 +111,7 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name} = %{version}-%{release}
-Requires: spdk-tools
+Requires: spdk-tools <= %{spdk_max_version}
 Requires: ndctl
 Requires: ipmctl
 Requires(post): /sbin/ldconfig
@@ -187,22 +193,15 @@ scons %{?no_smp_mflags}              \
       PREFIX=%{?buildroot}%{_prefix}
 BUILDROOT="%{?buildroot}"
 PREFIX="%{?_prefix}"
-sed -i -e s/${BUILDROOT//\//\\/}[^\"]\*/${PREFIX//\//\\/}/g %{?buildroot}%{_prefix}/TESTING/.build_vars.*
-mv %{?buildroot}%{_prefix}/lib{,64}
-#mv %{?buildroot}/{usr/,}etc
-mkdir -p %{?buildroot}/%{_exec_prefix}/lib/%{name}
-mv %{?buildroot}%{_prefix}/lib64/daos %{?buildroot}/%{_exec_prefix}/lib/
-mv %{?buildroot}%{_prefix}/{TESTING,lib/%{name}/}
-cp -al ftest.sh src/tests/ftest %{?buildroot}%{daoshome}/TESTING
-find %{?buildroot}%{daoshome}/TESTING/ftest -name \*.py[co] -print0 | xargs -r0 rm -f
-#ln %{?buildroot}%{daoshome}/{TESTING/.build_vars,.build_vars-Linux}.sh
-mkdir -p %{?buildroot}%{daoshome}/utils
+sed -i -e s/${BUILDROOT//\//\\/}[^\"]\*/${PREFIX//\//\\/}/g %{?buildroot}%{_prefix}/lib/daos/.build_vars.*
 mkdir -p %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{?buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/daos-server.service %{?buildroot}/%{_unitdir}
 install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 
+%pre server
+getent group daos_admins >/dev/null || groupadd -r daos_admins
 %post server -p /sbin/ldconfig
 %postun server -p /sbin/ldconfig
 
@@ -229,15 +228,18 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 # TODO: this should move to %{_libdir}/daos/libplacement.so
 %{_libdir}/daos_srv/libplacement.so
 # Certificate generation files
-%dir %{daoshome}
-%{daoshome}/certgen/
-%{daoshome}/VERSION
+%dir %{_libdir}/%{name}
+%{_libdir}/%{name}/certgen/
+%{_libdir}/%{name}/VERSION
 %doc
 
 %files server
 %{_prefix}%{_sysconfdir}/daos_server.yml
 %{_sysconfdir}/ld.so.conf.d/daos.conf
-%{_bindir}/daos_server
+# set daos_admin to be setuid root in order to perform privileged tasks
+%attr(4750,root,daos_admins) %{_bindir}/daos_admin
+# set daos_server to be setgid daos_admins in order to invoke daos_admin
+%attr(2755,root,daos_admins) %{_bindir}/daos_server
 %{_bindir}/daos_io_server
 %dir %{_libdir}/daos_srv
 %{_libdir}/daos_srv/libcont.so
@@ -268,7 +270,7 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/*.so.*
 %{_libdir}/libdfs.so
 %if (0%{?suse_version} >= 1500)
-/lib/libdfs.so
+/lib64/libdfs.so
 %endif
 %{_libdir}/libduns.so
 %{_libdir}/libdfuse.so
@@ -279,11 +281,7 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/python2.7/site-packages/pydaos/*.pyc
 %{_libdir}/python2.7/site-packages/pydaos/*.pyo
 %endif
-%if (0%{?rhel} >= 7)
 %{_libdir}/python2.7/site-packages/pydaos/pydaos_shim_27.so
-%else
-%{_libdir}/python2.7/site-packages/pydaos/pydaos_shim_27.cpython-36m-x86_64-linux-gnu.so
-%endif
 %dir  %{_libdir}/python2.7/site-packages/pydaos/raw
 %{_libdir}/python2.7/site-packages/pydaos/raw/*.py
 %if (0%{?rhel} >= 7)
@@ -298,11 +296,7 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/python3/site-packages/pydaos/*.pyc
 %{_libdir}/python3/site-packages/pydaos/*.pyo
 %endif
-%if (0%{?rhel} >= 7)
 %{_libdir}/python3/site-packages/pydaos/pydaos_shim_3.so
-%else
-%{_libdir}/python3/site-packages/pydaos/pydaos_shim_3.cpython-36m-x86_64-linux-gnu.so
-%endif
 %dir %{_libdir}/python3/site-packages/pydaos/raw
 %{_libdir}/python3/site-packages/pydaos/raw/*.py
 %if (0%{?rhel} >= 7)
@@ -315,8 +309,8 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_unitdir}/daos-agent.service
 
 %files tests
-%dir %{daoshome}/utils
-%{daoshome}/TESTING
+%dir %{_prefix}/lib/daos
+%{_prefix}/lib/daos/TESTING
 %{_bindir}/hello_drpc
 %{_bindir}/*_test*
 %{_bindir}/smd_ut
@@ -328,6 +322,9 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_bindir}/obj_ctl
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
+# For avocado tests
+%{_prefix}/lib/daos/.build_vars.json
+%{_prefix}/lib/daos/.build_vars.sh
 
 %files devel
 %{_includedir}/*
@@ -335,6 +332,18 @@ install -m 644 utils/systemd/daos-agent.service %{?buildroot}/%{_unitdir}
 %{_libdir}/*.a
 
 %changelog
+* Tue Nov 19 2019 Tom Nabarro <tom.nabarro@intel.com> 0.6.0-15
+- Temporarily unconstrain max. version of spdk
+
+* Wed Nov 06 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-14
+- Constrain max. version of spdk
+
+* Wed Nov 06 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-13
+- Use new cart with R: mercury to < 1.0.1-20 due to incompatibility
+
+* Wed Nov 06 2019 Michael MacDonald <mjmac.macdonald@intel.com> 0.6.0-12
+- Add daos_admin privileged helper for daos_server
+
 * Fri Oct 25 2019 Brian J. Murrell <brian.murrell@intel.com> 0.6.0-11
 - Handle differences in Leap 15 Python packaging
 

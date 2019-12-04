@@ -22,7 +22,7 @@ The DAOS admin guide is available [online](https://daos-stack.github.io).
 * [Overview of the DAOS storage model](doc/storage_model.md)
 * DAOS API
   * C [native API](src/include/) and [man pages](doc/man/man3)
-  * Python [bindings](src/utils/py/)
+  * Python [bindings](src/client/pydaos/)
   * Go language [bindings](https://github.com/daos-stack/go-daos) and [documentation](https://godoc.org/github.com/daos-stack/go-daos/pkg/daos)
 * I/O middleware integration
   * [DAOS VOL plugin](https://bitbucket.hdfgroup.org/projects/HDFFV/repos/hdf5/browse?at=refs%2Fheads%2Fhdf5_daosm) for HDF5

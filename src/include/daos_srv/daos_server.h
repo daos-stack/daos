@@ -176,8 +176,8 @@ bool dss_xstream_exiting(struct dss_xstream *dxs);
 
 struct dss_module_info {
 	crt_context_t		dmi_ctx;
-	struct bio_xs_context	*dmi_nvme_ctxt;
-	struct dss_xstream	*dmi_xstream;
+	struct bio_xs_context  *dmi_nvme_ctxt;
+	struct dss_xstream     *dmi_xstream;
 	/* the xstream id */
 	int			dmi_xs_id;
 	/* the VOS target id */
@@ -357,6 +357,17 @@ int dss_ult_create_execute(int (*func)(void *), void *arg,
 			   void (*user_cb)(void *), void *cb_args,
 			   int ult_type, int tgt_id, size_t stack_size);
 
+struct dss_sleep_ult {
+	ABT_thread	dsu_thread;
+	uint64_t	dsu_expire_time;
+	d_list_t	dsu_list;
+};
+
+struct dss_sleep_ult *dss_sleep_ult_create(void);
+void dss_sleep_ult_destroy(struct dss_sleep_ult *dsu);
+void dss_ult_sleep(struct dss_sleep_ult *dsu, uint64_t expire_secs);
+void dss_ult_wakeup(struct dss_sleep_ult *dsu);
+
 /* Pack return codes with additional argument to reduce */
 struct dss_stream_arg_type {
 	/** return value */
@@ -521,6 +532,7 @@ int dsc_pool_tgt_exclude(const uuid_t uuid, const char *grp,
 struct dss_enum_arg {
 	bool			fill_recxs;	/* type == S||R */
 	bool			chk_key2big;
+	bool			need_punch;	/* need to pack punch epoch */
 	daos_epoch_range_t     *eprs;
 	int			eprs_cap;
 	int			eprs_len;

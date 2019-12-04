@@ -43,22 +43,10 @@ dtx_is_aborted(umem_off_t umoff)
 	return umem_off2flags(umoff) == DTX_UMOFF_ABORTED;
 }
 
-static inline bool
-dtx_is_unknown(umem_off_t umoff)
-{
-	return umem_off2flags(umoff) == DTX_UMOFF_UNKNOWN;
-}
-
 static void
 dtx_set_aborted(umem_off_t *umoff)
 {
 	umem_off_set_null_flags(umoff, DTX_UMOFF_ABORTED);
-}
-
-static void
-dtx_set_unknown(umem_off_t *umoff)
-{
-	umem_off_set_null_flags(umoff, DTX_UMOFF_UNKNOWN);
 }
 
 static inline int
@@ -283,100 +271,6 @@ vos_dtx_table_destroy(struct vos_pool *pool, struct vos_dtx_table_df *dtab_df)
 	return rc;
 }
 
-static void
-dtx_obj_rec_exchange(struct umem_instance *umm, struct vos_obj_df *obj,
-		     struct vos_dtx_entry_df *dtx,
-		     struct vos_dtx_record_df *rec, bool abort)
-{
-	struct vos_dtx_record_df	*tgt_rec;
-	struct vos_obj_df		*tgt_obj;
-
-	if (rec->tr_flags == DTX_RF_EXCHANGE_TGT) {
-		/* For commit case, should already have been handled
-		 * during handling the source.
-		 *
-		 * For abort case, set its vo_dtx as aborted. The tgt
-		 * record will be removed via VOS aggregation or other
-		 * tools some time later.
-		 */
-		D_ASSERT(abort);
-
-		dtx_set_aborted(&obj->vo_dtx);
-		return;
-	}
-
-	if (rec->tr_flags != DTX_RF_EXCHANGE_SRC) {
-		D_ERROR(DF_UOID" with OBJ DTX ("DF_DTI") missed SRC flag\n",
-			DP_UOID(dtx->te_oid), DP_DTI(&dtx->te_xid));
-		return;
-	}
-
-	if (!(obj->vo_oi_attr & VOS_OI_REMOVED)) {
-		D_ERROR(DF_UOID" with OBJ DTX ("DF_DTI") missed REMOVED flag\n",
-			DP_UOID(dtx->te_oid), DP_DTI(&dtx->te_xid));
-		return;
-	}
-
-	if (abort) { /* abort case */
-		/* Recover the availability of the exchange source. */
-		obj->vo_oi_attr &= ~VOS_OI_REMOVED;
-		obj->vo_dtx = UMOFF_NULL;
-		return;
-	}
-
-	/* XXX: If the exchange target still exist, it will be the next
-	 *	record. If it does not exist, then either it is crashed
-	 *	or it has already deregistered from the DTX records list.
-	 *	We cannot commit the DTX under any the two cases. Fail
-	 *	the DTX commit is meaningless, then some warnings.
-	 */
-	if (dtx_is_null(rec->tr_next)) {
-		D_ERROR(DF_UOID" miss OBJ DTX ("DF_DTI") exchange pairs (1)\n",
-			DP_UOID(dtx->te_oid), DP_DTI(&dtx->te_xid));
-		return;
-	}
-
-	tgt_rec = umem_off2ptr(umm, rec->tr_next);
-	if (tgt_rec->tr_flags != DTX_RF_EXCHANGE_TGT) {
-		D_ERROR(DF_UOID" miss OBJ DTX ("DF_DTI") exchange pairs (2)\n",
-			DP_UOID(dtx->te_oid), DP_DTI(&dtx->te_xid));
-		return;
-	}
-
-	/* Exchange the sub-tree between max epoch record and the given
-	 * epoch record. The record with max epoch will be removed when
-	 * aggregation or some special cleanup.
-	 */
-	tgt_obj = umem_off2ptr(umm, tgt_rec->tr_record);
-	if (!(tgt_obj->vo_oi_attr & VOS_OI_PUNCHED)) {
-		D_ERROR(DF_UOID" with OBJ DTX ("DF_DTI") missed PUNCHED flag\n",
-			DP_UOID(dtx->te_oid), DP_DTI(&dtx->te_xid));
-		return;
-	}
-
-	umem_tx_add_ptr(umm, tgt_obj, sizeof(*tgt_obj));
-
-	/* The @tgt_obj which epoch is current DTX's epoch will be
-	 * available to outside of VOS. Set its vo_earliest as @obj
-	 * vo_earliest.
-	 */
-	tgt_obj->vo_tree = obj->vo_tree;
-	tgt_obj->vo_earliest = obj->vo_earliest;
-	tgt_obj->vo_latest = dtx->te_epoch;
-	tgt_obj->vo_incarnation = obj->vo_incarnation;
-	tgt_obj->vo_dtx = UMOFF_NULL;
-
-	/* The @obj which epoch is MAX will be removed later. */
-	memset(&obj->vo_tree, 0, sizeof(obj->vo_tree));
-	obj->vo_latest = 0;
-	obj->vo_earliest = DAOS_EPOCH_MAX;
-	obj->vo_incarnation++; /* cache should be revalidated */
-	obj->vo_dtx = UMOFF_NULL;
-
-	D_DEBUG(DB_TRACE, "Exchanged OBJ DTX records for "DF_DTI"\n",
-		DP_DTI(&dtx->te_xid));
-}
-
 static int
 dtx_ilog_rec_release(struct umem_instance *umm,
 		     struct vos_dtx_entry_df *dtx,
@@ -409,88 +303,6 @@ dtx_ilog_rec_release(struct umem_instance *umm,
 }
 
 static void
-dtx_obj_rec_release(struct umem_instance *umm, struct vos_obj_df *obj,
-		    struct vos_dtx_record_df *rec, umem_off_t umoff, bool abort)
-{
-	struct vos_dtx_entry_df		*dtx;
-
-	dtx = umem_off2ptr(umm, umoff);
-	if (dtx->te_intent == DAOS_INTENT_PUNCH) {
-		if (dtx_is_null(obj->vo_dtx)) {
-			/* Two possible cases:
-			 *
-			 * 1. It is the punch exchange target (with the
-			 *    flag DTX_RF_EXCHANGE_TGT) that should has
-			 *    been processed when handling the exchange
-			 *    source.
-			 *
-			 * 2. It is the DTX record for creating the obj
-			 *    that will be punched in the modification.
-			 *    The flag is zero under such case.
-			 */
-			if (rec->tr_flags == 0 && abort)
-				dtx_set_aborted(&obj->vo_dtx);
-		} else if (obj->vo_dtx != umoff) {
-			/* Because PUNCH cannot share with others, the vo_dtx
-			 * should reference current DTX.
-			 */
-			D_ERROR("The OBJ "DF_UOID" should referece DTX "
-				DF_DTI", but referenced "UMOFF_PF" by wrong.\n",
-				DP_UOID(dtx->te_oid), DP_DTI(&dtx->te_xid),
-				UMOFF_P(obj->vo_dtx));
-		} else {
-			dtx_obj_rec_exchange(umm, obj, dtx, rec, abort);
-		}
-
-		return;
-	}
-
-	/* Because PUNCH and UPDATE cannot share, both current DTX
-	 * and the obj former referenced DTX should be for UPDATE.
-	 */
-
-	obj->vo_dtx_shares--;
-
-	/* If current DTX references the object with VOS_OI_REMOVED,
-	 * then means that at least one of the former shared update
-	 * DTXs has been committed before current update DTX commit
-	 * or abort. Then in spite of whether the punch DTX will be
-	 * or has been committed or not, current update DTX (in sipte
-	 * of commit or abort) needs to do nothing.
-	 *
-	 * If the punch DTX is aborted, then the VOS_OI_REMOVED will
-	 * be removed, and the obj::vo_dtx will be set as NULL.
-	 */
-	if (obj->vo_oi_attr & VOS_OI_REMOVED)
-		return;
-
-	/* Other DTX that shares the obj has been committed firstly.
-	 * It must be for sharing of update. Subsequent modification
-	 * may have seen the modification before current DTX commit
-	 * or abort.
-	 *
-	 * Please NOTE that the obj::vo_latest and obj::vo_earliest
-	 * have already been handled during vos_update_end().
-	 */
-	if (dtx_is_null(obj->vo_dtx))
-		return;
-
-	if (abort) {
-		if (obj->vo_dtx_shares == 0)
-			/* The last shared UPDATE DTX is aborted. */
-			dtx_set_aborted(&obj->vo_dtx);
-		else if (obj->vo_dtx == umoff)
-			/* I am the original DTX that create the object that
-			 * is still shared by others. Now, I will be aborted,
-			 * set the reference as UNKNOWN for other left shares.
-			 */
-			dtx_set_unknown(&obj->vo_dtx);
-	} else {
-		obj->vo_dtx = UMOFF_NULL;
-	}
-}
-
-static void
 dtx_rec_release(struct umem_instance *umm, umem_off_t umoff,
 		bool abort, bool destroy, bool logged)
 {
@@ -506,14 +318,6 @@ dtx_rec_release(struct umem_instance *umm, umem_off_t umoff,
 
 		rec = umem_off2ptr(umm, rec_umoff);
 		switch (rec->tr_type) {
-		case DTX_RT_OBJ: {
-			struct vos_obj_df	*obj;
-
-			obj = umem_off2ptr(umm, rec->tr_record);
-			umem_tx_add_ptr(umm, obj, sizeof(*obj));
-			dtx_obj_rec_release(umm, obj, rec, umoff, abort);
-			break;
-		}
 		case DTX_RT_ILOG: {
 			dtx_ilog_rec_release(umm, dtx, rec, umoff, abort);
 			break;
@@ -558,7 +362,7 @@ dtx_rec_release(struct umem_instance *umm, umem_off_t umoff,
 	if (destroy)
 		umem_free(umm, umoff);
 	else
-		dtx->te_flags &= ~(DTX_EF_EXCHANGE_PENDING | DTX_EF_SHARES);
+		dtx->te_flags &= ~DTX_EF_SHARES;
 }
 
 static void
@@ -712,8 +516,7 @@ out:
 static bool
 vos_dtx_is_normal_entry(struct umem_instance *umm, umem_off_t entry)
 {
-	if (dtx_is_null(entry) || dtx_is_aborted(entry) ||
-	    dtx_is_unknown(entry))
+	if (dtx_is_null(entry) || dtx_is_aborted(entry))
 		return false;
 
 	return true;
@@ -768,11 +571,10 @@ vos_dtx_alloc(struct umem_instance *umm, struct dtx_handle *dth,
 static void
 vos_dtx_append(struct umem_instance *umm, struct dtx_handle *dth,
 	       umem_off_t rec_umoff, umem_off_t record, uint32_t type,
-	       uint32_t flags, struct vos_dtx_entry_df **dtxp)
+	       struct vos_dtx_entry_df **dtxp)
 {
 	struct vos_dtx_entry_df		*dtx;
 	struct vos_dtx_record_df	*rec;
-	struct vos_dtx_record_df	*tgt;
 
 	/* The @dtx must be new created via former
 	 * vos_dtx_register_record(), no need umem_tx_add_ptr().
@@ -783,126 +585,6 @@ vos_dtx_append(struct umem_instance *umm, struct dtx_handle *dth,
 	rec->tr_next = dtx->te_records;
 	dtx->te_records = rec_umoff;
 	*dtxp = dtx;
-
-	if (flags == 0)
-		return;
-
-	/*
-	 * XXX: Currently, we only support DTX_RF_EXCHANGE_SRC when register
-	 *	the target for punch {a,d}key. It is implemented as exchange
-	 *	related {a,d}key. The exchange target has registered its record
-	 *	to the DTX just before the exchange source.
-	 */
-	D_ASSERT(flags == DTX_RF_EXCHANGE_SRC);
-	D_ASSERT(type == DTX_RT_OBJ);
-
-	/* The @tgt must be new created via former
-	 * vos_dtx_register_record(), no need umem_tx_add_ptr().
-	 */
-	tgt = umem_off2ptr(umm, rec->tr_next);
-	D_ASSERT(tgt->tr_flags == 0);
-
-	tgt->tr_flags = DTX_RF_EXCHANGE_TGT;
-	dtx->te_flags |= DTX_EF_EXCHANGE_PENDING;
-
-	if (type == DTX_RT_OBJ) {
-		struct vos_obj_df	*obj;
-
-		obj = umem_off2ptr(umm, record);
-		obj->vo_oi_attr |= VOS_OI_REMOVED;
-	}
-
-	D_DEBUG(DB_TRACE, "Register exchange source for %s DTX "DF_DTI"\n",
-		type == DTX_RT_OBJ ? "OBJ" : "KEY", DP_DTI(&dtx->te_xid));
-}
-
-static int
-vos_dtx_append_share(struct umem_instance *umm, struct vos_dtx_entry_df *dtx,
-		     struct dtx_share *dts)
-{
-	struct vos_dtx_record_df	*rec;
-	umem_off_t			 rec_umoff;
-
-	rec_umoff = umem_zalloc(umm, sizeof(struct vos_dtx_record_df));
-	if (dtx_is_null(rec_umoff))
-		return -DER_NOSPACE;
-
-	rec = umem_off2ptr(umm, rec_umoff);
-	rec->tr_type = dts->dts_type;
-	rec->tr_flags = 0;
-	rec->tr_record = dts->dts_record;
-
-	rec->tr_next = dtx->te_records;
-	dtx->te_records = rec_umoff;
-
-	return 0;
-}
-
-static int
-vos_dtx_share_obj(struct umem_instance *umm, struct dtx_handle *dth,
-		  struct vos_dtx_entry_df *dtx, struct dtx_share *dts,
-		  bool *shared)
-{
-	struct vos_obj_df	*obj;
-	struct vos_dtx_entry_df	*sh_dtx;
-	int			 rc;
-
-	obj = umem_off2ptr(umm, dts->dts_record);
-	dth->dth_obj = dts->dts_record;
-	/* The to be shared obj has been committed. */
-	if (dtx_is_null(obj->vo_dtx))
-		return 0;
-
-	rc = vos_dtx_append_share(umm, dtx, dts);
-	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "The DTX "DF_DTI" failed to shares obj "
-			"with others:: rc = %d\n",
-			DP_DTI(&dth->dth_xid), rc);
-		return rc;
-	}
-
-	umem_tx_add_ptr(umm, obj, sizeof(*obj));
-
-	/* The to be shared obj has been aborted, reuse it. */
-	if (dtx_is_aborted(obj->vo_dtx)) {
-		D_ASSERTF(obj->vo_dtx_shares == 0,
-			  "Invalid shared obj DTX shares %d\n",
-			  obj->vo_dtx_shares);
-		obj->vo_dtx_shares = 1;
-		return 0;
-	}
-
-	obj->vo_dtx_shares++;
-	*shared = true;
-
-	/* The original obj DTX has been aborted, but some others
-	 * still share the obj. Then set the vo_dtx to current DTX.
-	 */
-	if (dtx_is_unknown(obj->vo_dtx)) {
-		D_DEBUG(DB_TRACE, "The DTX "DF_DTI" shares obj "
-			"with unknown DTXs, shares count %u.\n",
-			DP_DTI(&dth->dth_xid), obj->vo_dtx_shares);
-		obj->vo_dtx = dth->dth_ent;
-		return 0;
-	}
-
-	D_ASSERT(vos_dtx_is_normal_entry(umm, obj->vo_dtx));
-
-	sh_dtx = umem_off2ptr(umm, obj->vo_dtx);
-	D_ASSERT(dtx != sh_dtx);
-	D_ASSERTF(sh_dtx->te_state == DTX_ST_PREPARED,
-		  "Invalid shared obj DTX state: %u\n",
-		  sh_dtx->te_state);
-
-	umem_tx_add_ptr(umm, sh_dtx, sizeof(*sh_dtx));
-	sh_dtx->te_flags |= DTX_EF_SHARES;
-
-	D_DEBUG(DB_TRACE, "The DTX "DF_DTI" try to shares obj "DF_X64
-		" with other DTX "DF_DTI", the shares count %u\n",
-		DP_DTI(&dth->dth_xid), dts->dts_record,
-		DP_DTI(&sh_dtx->te_xid), obj->vo_dtx_shares);
-
-	return 0;
 }
 
 static int
@@ -911,8 +593,6 @@ vos_dtx_check_shares(struct umem_instance *umm, daos_handle_t coh,
 		     umem_off_t record, uint32_t intent, uint32_t type,
 		     umem_off_t *addr)
 {
-	struct dtx_share	*dts;
-
 	if (dtx != NULL)
 		D_ASSERT(dtx->te_intent == DAOS_INTENT_UPDATE);
 
@@ -932,47 +612,9 @@ vos_dtx_check_shares(struct umem_instance *umm, daos_handle_t coh,
 
 	D_ASSERT(intent == DAOS_INTENT_UPDATE);
 
-	/* Only OBJ record can be shared by new update. */
-	if (type != DTX_RT_OBJ) {
-		dtx_record_conflict(dth, dtx);
+	dtx_record_conflict(dth, dtx);
 
-		return dtx_inprogress(dtx, 5);
-	}
-
-	/* Here, if the obj/key has 'prepared' DTX, but current @dth is NULL,
-	 * then it is the race case between normal IO and rebuild: the normal
-	 * IO creates the obj/key before the rebuild request being handled.
-	 *
-	 * Under such case, we should (partially) commit the normal DTX with
-	 * the shared target (obj/key) to guarantee the rebuild can go ahead.
-	 */
-	if (dth == NULL) {
-		struct vos_container	*cont = vos_hdl2cont(coh);
-		int			 rc;
-
-		D_ASSERT(addr != NULL);
-
-		rc = vos_tx_begin(vos_cont2umm(cont));
-		if (rc == 0) {
-			umem_tx_add_ptr(umm, addr, sizeof(*addr));
-			*addr = UMOFF_NULL;
-			rc = vos_tx_end(vos_cont2umm(cont), 0);
-		}
-		if (rc != 0)
-			return rc;
-
-		return ALB_AVAILABLE_CLEAN;
-	}
-
-	D_ALLOC_PTR(dts);
-	if (dts == NULL)
-		return -DER_NOMEM;
-
-	dts->dts_type = type;
-	dts->dts_record = record;
-	d_list_add_tail(&dts->dts_link, &dth->dth_shares);
-
-	return ALB_AVAILABLE_CLEAN;
+	return dtx_inprogress(dtx, 5);
 }
 
 int
@@ -983,32 +625,8 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 	struct dtx_handle		*dth = vos_dth_get();
 	struct vos_dtx_entry_df		*dtx = NULL;
 	umem_off_t			*addr = NULL;
-	bool				 hidden = false;
 
 	switch (type) {
-	case DTX_RT_OBJ: {
-		struct vos_obj_df	*obj;
-
-		obj = umem_off2ptr(umm, record);
-
-		/* I just created (or shared) the object,
-		 * so should be available unless aborted.
-		 */
-		if (dth != NULL && dth->dth_obj == record) {
-			if (!dtx_is_aborted(obj->vo_dtx))
-				return ALB_AVAILABLE_CLEAN;
-
-			if (intent == DAOS_INTENT_PURGE)
-				return ALB_AVAILABLE_DIRTY;
-
-			return ALB_UNAVAILABLE;
-		}
-
-		addr = &obj->vo_dtx;
-		if (obj->vo_oi_attr & VOS_OI_REMOVED)
-			hidden = true;
-	}
-	break;
 	case DTX_RT_SVT:
 	case DTX_RT_EVT:
 	case DTX_RT_ILOG:
@@ -1028,44 +646,19 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 		if (dtx_is_aborted(entry))
 			return ALB_UNAVAILABLE;
 
-		if (dtx_is_null(entry) && hidden)
-			return ALB_UNAVAILABLE;
-
 		return ALB_AVAILABLE_CLEAN;
 	}
 
 	/* Committed */
-	if (dtx_is_null(entry)) {
-		if (!hidden)
-			return ALB_AVAILABLE_CLEAN;
-
-		if (intent == DAOS_INTENT_PURGE)
-			return ALB_AVAILABLE_DIRTY;
-
-		return ALB_UNAVAILABLE;
-	}
+	if (dtx_is_null(entry))
+		return ALB_AVAILABLE_CLEAN;
 
 	if (intent == DAOS_INTENT_PURGE)
-		return hidden ? ALB_AVAILABLE_CLEAN : ALB_AVAILABLE_DIRTY;
+		return ALB_AVAILABLE_DIRTY;
 
 	/* Aborted */
 	if (dtx_is_aborted(entry))
-		return hidden ? ALB_AVAILABLE_CLEAN : ALB_UNAVAILABLE;
-
-	if (dtx_is_unknown(entry)) {
-		/* The original DTX must be with DAOS_INTENT_UPDATE, then
-		 * it has been shared by other UPDATE DTXs. And then the
-		 * original DTX was aborted, but other DTXs still are not
-		 * 'committable' yet.
-		 */
-
-		if (intent == DAOS_INTENT_DEFAULT ||
-		    intent == DAOS_INTENT_REBUILD)
-			return hidden ? ALB_AVAILABLE_CLEAN : ALB_UNAVAILABLE;
-
-		return vos_dtx_check_shares(umm, coh, dth, NULL, record, intent,
-					    type, addr);
-	}
+		return ALB_UNAVAILABLE;
 
 	/* The DTX owner can always see the DTX. */
 	if (dth != NULL && entry == dth->dth_ent)
@@ -1074,7 +667,7 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 	dtx = umem_off2ptr(umm, entry);
 	switch (dtx->te_state) {
 	case DTX_ST_COMMITTED:
-		return hidden ? ALB_UNAVAILABLE : ALB_AVAILABLE_CLEAN;
+		return ALB_AVAILABLE_CLEAN;
 	case DTX_ST_PREPARED: {
 		struct vos_container	*cont = vos_hdl2cont(coh);
 		int			 rc;
@@ -1085,27 +678,8 @@ vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
 		rc = vos_dtx_lookup_cos(coh, &dtx->te_oid, &dtx->te_xid,
 			dtx->te_dkey_hash,
 			dtx->te_intent == DAOS_INTENT_PUNCH ? true : false);
-		if (rc == 0) {
-			/* XXX: For the committable punch DTX, if there is
-			 *	pending exchange (of sub-trees) operation,
-			 *	then do it, otherwise the subsequent fetch
-			 *	cannot get the proper sub-trees.
-			 */
-			if (dtx->te_flags & DTX_EF_EXCHANGE_PENDING) {
-				rc = vos_tx_begin(vos_cont2umm(cont));
-				if (rc == 0) {
-					dtx_rec_release(vos_cont2umm(cont),
-							entry, false, false,
-							false);
-					rc = vos_tx_end(vos_cont2umm(cont), 0);
-				}
-
-				if (rc != 0)
-					return rc;
-			}
-
-			return hidden ? ALB_UNAVAILABLE : ALB_AVAILABLE_CLEAN;
-		}
+		if (rc == 0)
+			return ALB_AVAILABLE_CLEAN;
 
 		if (rc != -DER_NONEXIST)
 			return rc;
@@ -1119,8 +693,7 @@ skip_cos:
 			    DAOS_FAIL_CHECK(DAOS_VOS_NON_LEADER)) {
 				/* Inavailable for rebuild case. */
 				if (intent == DAOS_INTENT_REBUILD)
-					return hidden ? ALB_AVAILABLE_CLEAN :
-						ALB_UNAVAILABLE;
+					return ALB_UNAVAILABLE;
 
 				D_DEBUG(DB_TRACE, "Let's ask leader "DF_DTI
 					"\n", DP_DTI(&dtx->te_xid));
@@ -1133,7 +706,7 @@ skip_cos:
 			}
 
 			/* For leader, non-committed DTX is unavailable. */
-			return hidden ? ALB_AVAILABLE_CLEAN : ALB_UNAVAILABLE;
+			return ALB_UNAVAILABLE;
 		}
 
 		/* PUNCH DTX cannot be shared by others. */
@@ -1185,110 +758,7 @@ vos_dtx_get(void)
 /* The caller has started PMDK transaction. */
 int
 vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
-			uint32_t type, uint32_t flags)
-{
-	struct dtx_handle		*dth = vos_dth_get();
-	struct vos_dtx_entry_df		*dtx;
-	struct vos_dtx_record_df	*rec;
-	struct dtx_share		*dts;
-	struct dtx_share		*next;
-	umem_off_t			 rec_umoff = UMOFF_NULL;
-	umem_off_t			*entry = NULL;
-	uint32_t			*shares = NULL;
-	int				 rc = 0;
-	bool				 shared = false;
-
-	switch (type) {
-	case DTX_RT_OBJ: {
-		struct vos_obj_df	*obj;
-
-		obj = umem_off2ptr(umm, record);
-		entry = &obj->vo_dtx;
-		if (dth == NULL || dth->dth_intent == DAOS_INTENT_UPDATE)
-			shares = &obj->vo_dtx_shares;
-
-		/* "flags == 0" means new created object. It is unnecessary
-		 * to umem_tx_add_ptr() for new created object.
-		 */
-		if (flags != 0)
-			umem_tx_add_ptr(umm, obj, sizeof(*obj));
-		else if (dth != NULL)
-			dth->dth_obj = record;
-		break;
-	}
-	case DTX_RT_SVT: {
-		struct vos_irec_df	*svt;
-
-		svt = umem_off2ptr(umm, record);
-		entry = &svt->ir_dtx;
-		break;
-	}
-	case DTX_RT_EVT: {
-		struct evt_desc		*evt;
-
-		evt = umem_off2ptr(umm, record);
-		entry = &evt->dc_dtx;
-		break;
-	}
-	default:
-		D_ERROR("Unknown DTX type %u\n", type);
-		return -DER_INVAL;
-	}
-
-	if (dth == NULL) {
-		*entry = UMOFF_NULL;
-		if (shares != NULL)
-			*shares = 0;
-
-		return 0;
-	}
-
-	rec_umoff = umem_zalloc(umm, sizeof(struct vos_dtx_record_df));
-	if (dtx_is_null(rec_umoff))
-		return -DER_NOSPACE;
-
-	rec = umem_off2ptr(umm, rec_umoff);
-	rec->tr_type = type;
-	rec->tr_flags = flags;
-	rec->tr_record = record;
-	rec->tr_next = UMOFF_NULL;
-
-	if (dtx_is_null(dth->dth_ent)) {
-		D_ASSERT(flags == 0);
-
-		rc = vos_dtx_alloc(umm, dth, rec_umoff, &dtx);
-		if (rc != 0)
-			return rc;
-	} else {
-		vos_dtx_append(umm, dth, rec_umoff, record, type, flags, &dtx);
-	}
-
-	*entry = dth->dth_ent;
-	if (shares != NULL)
-		*shares = 1;
-
-	if (d_list_empty(&dth->dth_shares))
-		return 0;
-
-	d_list_for_each_entry_safe(dts, next, &dth->dth_shares, dts_link) {
-		if (dts->dts_type == DTX_RT_OBJ)
-			rc = vos_dtx_share_obj(umm, dth, dtx, dts, &shared);
-		if (rc != 0)
-			return rc;
-
-		d_list_del(&dts->dts_link);
-		D_FREE_PTR(dts);
-	}
-
-	if (rc == 0 && shared)
-		dtx->te_flags |= DTX_EF_SHARES;
-
-	return rc;
-}
-
-int
-vos_dtx_register_ilog(struct umem_instance *umm, umem_off_t record,
-		      umem_off_t *tx_id)
+			uint32_t type, umem_off_t *tx_id)
 {
 	struct dtx_handle		*dth = vos_dth_get();
 	struct vos_dtx_entry_df		*dtx;
@@ -1306,8 +776,7 @@ vos_dtx_register_ilog(struct umem_instance *umm, umem_off_t record,
 		return -DER_NOSPACE;
 
 	rec = umem_off2ptr(umm, rec_umoff);
-	rec->tr_type = DTX_RT_ILOG;
-	rec->tr_flags = 0;
+	rec->tr_type = type;
 	rec->tr_record = record;
 	rec->tr_next = UMOFF_NULL;
 
@@ -1316,8 +785,7 @@ vos_dtx_register_ilog(struct umem_instance *umm, umem_off_t record,
 		if (rc != 0)
 			return rc;
 	} else {
-		vos_dtx_append(umm, dth, rec_umoff, record, DTX_RT_ILOG, 0,
-			       &dtx);
+		vos_dtx_append(umm, dth, rec_umoff, record, type, &dtx);
 	}
 
 	/* Incarnation log entry implies a share */
@@ -1335,8 +803,6 @@ vos_dtx_deregister_record(struct umem_instance *umm,
 	struct vos_dtx_record_df	*rec;
 	struct vos_dtx_record_df	*prev = NULL;
 	umem_off_t			 rec_umoff;
-
-	D_ASSERT(type != DTX_RT_KEY);
 
 	if (!vos_dtx_is_normal_entry(umm, entry))
 		return;
@@ -1365,23 +831,10 @@ vos_dtx_deregister_record(struct umem_instance *umm,
 	if (dtx_is_null(rec_umoff))
 		return;
 
-	/* The caller will destroy related OBJ/KEY/SVT/EVT record after
+	/* The caller will destroy related ILOG/SVT/EVT record after
 	 * deregistered the DTX record. So not reset DTX reference inside
-	 * related OBJ/KEY/SVT/EVT record unless necessary.
+	 * related ILOG/SVT/EVT record unless necessary.
 	 */
-	if (type == DTX_RT_OBJ) {
-		struct vos_obj_df	*obj;
-
-		obj = umem_off2ptr(umm, record);
-		D_ASSERT(obj->vo_dtx == entry);
-
-		umem_tx_add_ptr(umm, obj, sizeof(*obj));
-		if (dtx->te_intent == DAOS_INTENT_UPDATE) {
-			obj->vo_dtx_shares--;
-			if (obj->vo_dtx_shares > 0)
-				dtx_set_unknown(&obj->vo_dtx);
-		}
-	}
 }
 
 int
@@ -1391,7 +844,8 @@ vos_dtx_prepared(struct dtx_handle *dth)
 	struct vos_dtx_entry_df	*dtx;
 	int			 rc = 0;
 
-	D_ASSERT(!dtx_is_null(dth->dth_ent));
+	if (dtx_is_null(dth->dth_ent))
+		return 0;
 
 	cont = vos_hdl2cont(dth->dth_coh);
 	D_ASSERT(cont != NULL);
@@ -1610,12 +1064,13 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
 	struct vos_container	*cont;
 	struct daos_lru_cache	*occ;
 	struct vos_object	*obj;
+	daos_epoch_range_t	 epr = {0, epoch};
 	int	rc;
 
 	cont = vos_hdl2cont(coh);
 	occ = vos_obj_cache_current();
-	rc = vos_obj_hold(occ, cont, oid, epoch, true,
-			  DAOS_INTENT_DEFAULT, &obj);
+	rc = vos_obj_hold(occ, cont, oid, &epr, true,
+			  DAOS_INTENT_DEFAULT, true, &obj);
 	if (rc != 0) {
 		D_ERROR(DF_UOID" fail to mark sync(1): rc = %d\n",
 			DP_UOID(oid), rc);
@@ -1643,6 +1098,6 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
 		}
 	}
 
-	vos_obj_release(occ, obj);
+	vos_obj_release(occ, obj, false);
 	return rc;
 }

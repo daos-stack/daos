@@ -121,8 +121,9 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint32_t map_version,
 			orwo->orw_nrs.ca_count = 0;
 		}
 
-		daos_csummer_free_dcbs(cont_hdl->sch_csummer,
-				       &orwo->orw_csum.ca_arrays);
+		if (cont_hdl)
+			daos_csummer_free_dcbs(cont_hdl->sch_csummer,
+					       &orwo->orw_csum.ca_arrays);
 		orwo->orw_csum.ca_count = 0;
 	}
 }
@@ -509,15 +510,15 @@ obj_verify_cont_hdl(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 				  cont_hdl_uuid)) {
 		D_ERROR("Empty container "DF_UUID" (ref=%d) handle?\n",
 			DP_UUID(cont_uuid), cont_hdl->sch_ref);
-		D_GOTO(failed, rc = -DER_NO_HDL);
+		D_GOTO(out, rc = -DER_NO_HDL);
 	}
 
 	/* rebuild handle is a dummy and never attached by a real container */
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_NO_HDL))
-		D_GOTO(failed, rc = -DER_NO_HDL);
+		D_GOTO(out, rc = -DER_NO_HDL);
 
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_STALE_POOL))
-		D_GOTO(failed, rc = -DER_STALE);
+		D_GOTO(out, rc = -DER_STALE);
 
 	D_DEBUG(DB_TRACE, DF_UUID"/%p is rebuild cont hdl\n",
 		DP_UUID(cont_hdl_uuid), cont_hdl);
@@ -526,12 +527,14 @@ obj_verify_cont_hdl(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	rc = ds_cont_child_lookup(cont_hdl->sch_pool->spc_uuid, cont_uuid,
 				  contp);
 	if (rc)
-		D_GOTO(failed, rc);
+		D_GOTO(out, rc);
 out:
-	*hdlp = cont_hdl;
-failed:
-	if (cont_hdl != NULL && rc != 0)
+	if (cont_hdl != NULL && rc != 0) {
 		ds_cont_hdl_put(cont_hdl);
+		cont_hdl = NULL;
+	}
+
+	*hdlp = cont_hdl;
 
 	return rc;
 }
@@ -636,13 +639,13 @@ out:
 
 
 static int
-obj_ec_update_bulk_transfer(crt_rpc_t *rpc, bool bulk_bind,
-			    crt_bulk_t *remote_bulks, daos_handle_t ioh,
-			    struct ec_bulk_spec **skip_list, int sgl_nr)
+ec_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
+		 crt_bulk_t *remote_bulks, daos_handle_t ioh,
+		 struct ec_bulk_spec **skip_list,
+		 int sgl_nr)
 {
 	struct obj_bulk_args	arg = { 0 };
 	crt_bulk_opid_t		bulk_opid;
-	crt_bulk_op_t		bulk_op = CRT_BULK_GET;
 	crt_bulk_perm_t		bulk_perm = CRT_BULK_RW;
 	int			i, rc, *status, ret;
 
@@ -837,6 +840,7 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	int			i, err, rc = 0;
 
 	D_TIME_START(tls->ot_sp, time_start, OBJ_PF_UPDATE_LOCAL);
+
 	if (daos_is_zero_dti(&orw->orw_dti)) {
 		D_DEBUG(DB_TRACE, "disable dtx\n");
 		dth = NULL;
@@ -953,10 +957,9 @@ obj_local_rw(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl,
 	if (rma) {
 		bulk_bind = orw->orw_flags & ORF_BULK_BIND;
 		if (oca->ca_resil == DAOS_RES_EC) {
-			rc = obj_ec_update_bulk_transfer(rpc, bulk_bind,
-						     orw->orw_bulks.ca_arrays,
-						     ioh, skip_list,
-						     orw->orw_nr);
+			rc = ec_bulk_transfer(rpc, bulk_op, bulk_bind,
+					      orw->orw_bulks.ca_arrays, ioh,
+					      skip_list, orw->orw_nr);
 			for (i = 0; i < orw->orw_nr; i++)
 				D_FREE(skip_list[i]);
 			D_FREE(skip_list);
@@ -1441,6 +1444,7 @@ obj_iter_vos(crt_rpc_t *rpc, struct vos_iter_anchors *anchors,
 		param.ip_epr.epr_lo = 0;
 		recursive = true;
 		enum_arg->chk_key2big = true;
+		enum_arg->need_punch = true;
 	}
 
 	/*
@@ -2066,7 +2070,7 @@ ds_obj_abt_pool_choose_cb(crt_rpc_t *rpc, ABT_pool *pools)
 	return pool;
 }
 
-static bool
+static int
 cont_prop_srv_verify(struct ds_iv_ns *ns, uuid_t co_hdl)
 {
 	int			rc;

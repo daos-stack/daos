@@ -26,94 +26,134 @@ package common_storage
 import (
 	"bytes"
 	"fmt"
+	"time"
 
+	bytesize "github.com/inhies/go-bytesize"
+
+	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 )
+
+// NvmeNamespaces is an alias for protobuf NvmeController_Namespace message slice
+// representing namespaces existing on a NVMe SSD.
+type NvmeNamespaces []*ctlpb.NvmeController_Namespace
 
 // NvmeControllers is an alias for protobuf NvmeController message slice
 // representing a number of NVMe SSD controllers installed on a storage node.
 type NvmeControllers []*ctlpb.NvmeController
 
-func (nc NvmeControllers) String() string {
-	var buf bytes.Buffer
+func (ncs NvmeControllers) healthDetail(buf *bytes.Buffer, c *ctlpb.NvmeController) {
+	stat := c.Healthstats
 
-	for _, ctrlr := range nc {
-		fmt.Fprintf(&buf,
-			"\tPCI Addr:%s Serial:%s Model:%s Fwrev:%s Socket:%d\n",
-			ctrlr.Pciaddr, ctrlr.Serial, ctrlr.Model, ctrlr.Fwrev,
-			ctrlr.Socketid)
+	fmt.Fprintf(buf, "\t\tHealth Stats:\n\t\t\tTemperature:%dK(%dC)\n", stat.Temp, stat.Temp-273)
 
-		for _, ns := range ctrlr.Namespaces {
-			fmt.Fprintf(&buf, "\t\tNamespace: %+v\n", ns)
-		}
+	if stat.Tempwarn > 0 {
+		fmt.Fprintf(buf, "\t\t\t\tTemperature Warning Duration:%s\n",
+			time.Duration(stat.Tempwarn)*time.Minute)
+	}
+	if stat.Tempcrit > 0 {
+		fmt.Fprintf(buf, "\t\t\t\tTemperature Critical Duration:%s\n",
+			time.Duration(stat.Tempcrit)*time.Minute)
+	}
 
-		hs := ctrlr.Healthstats
+	fmt.Fprintf(buf, "\t\t\tController Busy Time:%s\n", time.Duration(stat.Ctrlbusy)*time.Minute)
+	fmt.Fprintf(buf, "\t\t\tPower Cycles:%d\n", uint64(stat.Powercycles))
+	fmt.Fprintf(buf, "\t\t\tPower On Duration:%s\n", time.Duration(stat.Poweronhours)*time.Hour)
+	fmt.Fprintf(buf, "\t\t\tUnsafe Shutdowns:%d\n", uint64(stat.Unsafeshutdowns))
+	fmt.Fprintf(buf, "\t\t\tMedia Errors:%d\n", uint64(stat.Mediaerrors))
+	fmt.Fprintf(buf, "\t\t\tError Log Entries:%d\n", uint64(stat.Errorlogs))
 
-		fmt.Fprintf(
-			&buf, "\tHealth Stats:\n\t\tTemperature:%dK(%dC)\n",
-			hs.Temp, hs.Temp-273)
+	fmt.Fprintf(buf, "\t\t\tCritical Warnings:\n")
+	fmt.Fprintf(buf, "\t\t\t\tTemperature: ")
+	if stat.Tempwarning {
+		fmt.Fprintf(buf, "WARNING\n")
+	} else {
+		fmt.Fprintf(buf, "OK\n")
+	}
+	fmt.Fprintf(buf, "\t\t\t\tAvailable Spare: ")
+	if stat.Availspare {
+		fmt.Fprintf(buf, "WARNING\n")
+	} else {
+		fmt.Fprintf(buf, "OK\n")
+	}
+	fmt.Fprintf(buf, "\t\t\t\tDevice Reliability: ")
+	if stat.Reliability {
+		fmt.Fprintf(buf, "WARNING\n")
+	} else {
+		fmt.Fprintf(buf, "OK\n")
+	}
+	fmt.Fprintf(buf, "\t\t\t\tRead Only: ")
+	if stat.Readonly {
+		fmt.Fprintf(buf, "WARNING\n")
+	} else {
+		fmt.Fprintf(buf, "OK\n")
+	}
+	fmt.Fprintf(buf, "\t\t\t\tVolatile Memory Backup: ")
+	if stat.Volatilemem {
+		fmt.Fprintf(buf, "WARNING\n")
+	} else {
+		fmt.Fprintf(buf, "OK\n")
+	}
+}
 
-		if hs.Tempwarn > 0 {
-			fmt.Fprintf(&buf, "\t\t\tWarning Time:%d\n",
-				uint64(hs.Tempwarn))
-		}
-		if hs.Tempcrit > 0 {
-			fmt.Fprintf(&buf, "\t\t\tCritical Time:%d\n",
-				uint64(hs.Tempcrit))
-		}
+// ctrlrDetail provides custom string representation for Controller type
+// defined outside this package.
+func (ncs NvmeControllers) ctrlrDetail(buf *bytes.Buffer, c *ctlpb.NvmeController) {
+	fmt.Fprintf(buf, "\t\tPCI Addr:%s Serial:%s Model:%s Fwrev:%s Socket:%d\n",
+		c.Pciaddr, c.Serial, c.Model, c.Fwrev, c.Socketid)
 
-		fmt.Fprintf(&buf, "\t\tController Busy Time:%d minutes\n",
-			uint64(hs.Ctrlbusy))
-		fmt.Fprintf(&buf, "\t\tPower Cycles:%d\n",
-			uint64(hs.Powercycles))
-		fmt.Fprintf(&buf, "\t\tPower On Hours:%d hours\n",
-			uint64(hs.Poweronhours))
-		fmt.Fprintf(&buf, "\t\tUnsafe Shutdowns:%d\n",
-			uint64(hs.Unsafeshutdowns))
-		fmt.Fprintf(&buf, "\t\tMedia Errors:%d\n",
-			uint64(hs.Mediaerrors))
-		fmt.Fprintf(&buf, "\t\tError Log Entries:%d\n",
-			uint64(hs.Errorlogs))
+	for _, ns := range c.Namespaces {
+		fmt.Fprintf(buf, "\t\t\tNamespace: id:%d capacity:%s\n", ns.Id,
+			bytesize.GB*bytesize.New(float64(ns.Capacity)))
+	}
+}
 
-		fmt.Fprintf(&buf, "\t\tCritical Warnings:\n")
-		fmt.Fprintf(&buf, "\t\t\tTemperature: ")
-		if hs.Tempwarning {
-			fmt.Fprintf(&buf, "WARNING\n")
-		} else {
-			fmt.Fprintf(&buf, "OK\n")
-		}
-		fmt.Fprintf(&buf, "\t\t\tAvailable Spare: ")
-		if hs.Availspare {
-			fmt.Fprintf(&buf, "WARNING\n")
-		} else {
-			fmt.Fprintf(&buf, "OK\n")
-		}
-		fmt.Fprintf(&buf, "\t\t\tDevice Reliability: ")
-		if hs.Reliability {
-			fmt.Fprintf(&buf, "WARNING\n")
-		} else {
-			fmt.Fprintf(&buf, "OK\n")
-		}
-		fmt.Fprintf(&buf, "\t\t\tRead Only: ")
-		if hs.Readonly {
-			fmt.Fprintf(&buf, "WARNING\n")
-		} else {
-			fmt.Fprintf(&buf, "OK\n")
-		}
-		fmt.Fprintf(&buf, "\t\t\tVolatile Memory Backup: ")
-		if hs.Volatilemem {
-			fmt.Fprintf(&buf, "WARNING\n")
-		} else {
-			fmt.Fprintf(&buf, "OK\n")
-		}
+func (ncs NvmeControllers) String() string {
+	buf := bytes.NewBufferString("NVMe controllers and namespaces:\n")
+
+	if len(ncs) == 0 {
+		fmt.Fprint(buf, "\t\tnone\n")
+		return buf.String()
+	}
+
+	for _, ctrlr := range ncs {
+		ncs.ctrlrDetail(buf, ctrlr)
 	}
 
 	return buf.String()
 }
 
-// NvmeNamespaces is an alias for protobuf NvmeController_Namespace message slice
-// representing namespaces existing on a NVMe SSD.
-type NvmeNamespaces []*ctlpb.NvmeController_Namespace
+// StringHealthStats returns full string representation including NVMe health
+// statistics as well as controller and namespace details.
+func (ncs NvmeControllers) StringHealthStats() string {
+	buf := bytes.NewBufferString(
+		"NVMe controllers and namespaces detail with health statistics:\n")
+
+	if len(ncs) == 0 {
+		fmt.Fprint(buf, "\t\tnone\n")
+		return buf.String()
+	}
+
+	for _, ctrlr := range ncs {
+		ncs.ctrlrDetail(buf, ctrlr)
+		ncs.healthDetail(buf, ctrlr)
+	}
+
+	return buf.String()
+}
+
+// Summary reports accumulated storage space and the number of controllers.
+func (ncs NvmeControllers) Summary() string {
+	tCap := bytesize.New(0)
+	for _, c := range ncs {
+		for _, n := range c.Namespaces {
+			tCap += bytesize.GB * bytesize.New(float64(n.Capacity))
+		}
+	}
+
+	return fmt.Sprintf("%s total capacity over %d %s",
+		tCap, len(ncs), common.Pluralise("controller", len(ncs)))
+}
 
 // NvmeControllerResults is an alias for protobuf NvmeControllerResult messages
 // representing operation results on a number of NVMe controllers.
@@ -132,8 +172,7 @@ func (ncr NvmeControllerResults) String() string {
 	var buf bytes.Buffer
 
 	for _, resp := range ncr {
-		fmt.Fprintf(
-			&buf, "\tPCI Addr:%s Status:%s", resp.Pciaddr, resp.State.Status)
+		fmt.Fprintf(&buf, "\tPCI Addr:%s Status:%s", resp.Pciaddr, resp.State.Status)
 
 		if resp.State.Error != "" {
 			fmt.Fprintf(&buf, " Error:%s", resp.State.Error)
@@ -170,11 +209,11 @@ func (cr CtrlrResults) String() string {
 	return "no controllers found"
 }
 
-// PmemDevices is an alias for protobuf PmemDeviceice message slice representing
-// a number of mounted SCM regions on a storage node.
-type PmemDevices []*ctlpb.PmemDevice
+// ScmNamespaces is an alias for protobuf PmemDevice message slice representing
+// a number of PMEM device files created on SCM namespaces on a storage node.
+type ScmNamespaces []*ctlpb.PmemDevice
 
-func (pds PmemDevices) String() string {
+func (pds ScmNamespaces) String() string {
 	var buf bytes.Buffer
 
 	for _, pd := range pds {
@@ -184,15 +223,8 @@ func (pds PmemDevices) String() string {
 	return buf.String()
 }
 
-// PmemResults contains PMEM device file details created on SCM regions.
-type PmemResults struct {
-	Devices PmemDevices
-	Err     error
-}
-
-// ScmMountResults is an alias for protobuf ScmMountResult message slice
-// ScmMounts is an alias for protobuf ScmMount message slice representing
-// a number of mounted SCM regions on a storage node.
+// ScmMounts are protobuf representations of mounted SCM namespaces identified
+// by mount points
 type ScmMounts []*ctlpb.ScmMount
 
 func (sm ScmMounts) String() string {
@@ -264,20 +296,6 @@ func (mr MountResults) String() string {
 // a number of SCM modules installed on a storage node.
 type ScmModules []*ctlpb.ScmModule
 
-func (sm ScmModules) String() string {
-	var buf bytes.Buffer
-
-	for _, module := range sm {
-		fmt.Fprintf(&buf,
-			"\tPhysicalID:%d Capacity:%d Location:(socket:%d "+
-				"memctrlr:%d chan:%d pos:%d)\n",
-			module.Physicalid, module.Capacity, module.Loc.Socket,
-			module.Loc.Memctrlr, module.Loc.Channel, module.Loc.Channelpos)
-	}
-
-	return buf.String()
-}
-
 // ScmModuleResults is an alias for protobuf ScmModuleResult message slice
 // representing operation results on a number of SCM modules.
 type ScmModuleResults []*ctlpb.ScmModuleResult
@@ -303,26 +321,4 @@ func (smr ScmModuleResults) String() string {
 	}
 
 	return buf.String()
-}
-
-// ModuleResults contains scm modules and/or results of operations on modules
-// and an error signifying a problem in making the request.
-type ModuleResults struct {
-	Modules   ScmModules
-	Responses ScmModuleResults
-	Err       error
-}
-
-func (mr ModuleResults) String() string {
-	if mr.Err != nil {
-		return mr.Err.Error()
-	}
-	if len(mr.Modules) > 0 {
-		return mr.Modules.String()
-	}
-	if len(mr.Responses) > 0 {
-		return mr.Responses.String()
-	}
-
-	return "no scm modules found"
 }

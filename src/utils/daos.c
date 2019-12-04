@@ -80,6 +80,8 @@ cont_op_parse(const char *str)
 		return CONT_DESTROY_SNAP;
 	else if (strcmp(str, "rollback") == 0)
 		return CONT_ROLLBACK;
+	else if (strcmp(str, "uns-insert") == 0)
+		return CONT_UNS_INSERT;
 	return -1;
 }
 
@@ -119,7 +121,7 @@ obj_op_parse(const char *str)
 static void
 cmd_args_print(struct cmd_args_s *ap)
 {
-	char	oclass[10], type[10];
+	char	oclass[10] = {}, type[10] = {};
 
 	if (ap == NULL)
 		return;
@@ -138,6 +140,7 @@ cmd_args_print(struct cmd_args_s *ap)
 	D_INFO("\tattr: name=%s, value=%s\n",
 		ap->attrname_str ? ap->attrname_str : "NULL",
 		ap->value_str ? ap->value_str : "NULL");
+
 	D_INFO("\tpath=%s, type=%s, oclass=%s, chunk_size="DF_U64"\n",
 		ap->path ? ap->path : "NULL",
 		type, oclass, ap->chunk_size);
@@ -463,8 +466,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 
 	/* Check for any unimplemented commands, print help */
 	if (ap->p_op != -1 &&
-	    (ap->p_op == POOL_LIST_CONTAINERS ||
-	     ap->p_op == POOL_STAT ||
+	    (ap->p_op == POOL_STAT ||
 	     ap->p_op == POOL_GET_PROP ||
 	     ap->p_op == POOL_GET_ATTR ||
 	     ap->p_op == POOL_LIST_ATTRS)) {
@@ -543,11 +545,11 @@ pool_op_hdlr(struct cmd_args_s *ap)
 	case POOL_QUERY:
 		rc = pool_query_hdlr(ap);
 		break;
+	case POOL_LIST_CONTAINERS:
+		rc = pool_list_containers_hdlr(ap);
+		break;
 
 	/* TODO: implement the following ops */
-	case POOL_LIST_CONTAINERS:
-		/* rc = pool_list_containers_hdlr() */
-		break;
 	case POOL_STAT:
 		/* rc = pool_stat_hdlr(ap); */
 		break;
@@ -583,7 +585,8 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	/* All container operations require a pool handle, connect here.
 	 * Take specified pool UUID or look up through unified namespace.
 	 */
-	if ((op != CONT_CREATE) && (ap->path != NULL)) {
+	if ((op != CONT_CREATE) && (op != CONT_UNS_INSERT) &&
+	    (ap->path != NULL)) {
 		struct duns_attr_t dattr = {0};
 
 		ARGS_VERIFY_PATH_NON_CREATE(ap, out, rc = RC_PRINT_HELP);
@@ -688,6 +691,9 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		break;
 	case CONT_ROLLBACK:
 		/* rc = cont_rollback_hdlr(ap); */
+		break;
+	case CONT_UNS_INSERT:
+		rc = cont_uns_insert_hdlr(ap);
 		break;
 	default:
 		break;
@@ -831,7 +837,8 @@ help_hdlr(struct cmd_args_s *ap)
 "	  list-snaps       list container snapshots taken\n"
 "	  destroy-snap     destroy container snapshots\n"
 "			   by name, epoch or range\n"
-"	  rollback         roll back container to specified snapshot\n");
+"	  rollback         roll back container to specified snapshot\n"
+"	  uns-insert       insert container into UNS\n");
 
 #if 0
 	fprintf(stream,
