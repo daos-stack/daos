@@ -24,9 +24,13 @@
 from logging import getLogger
 import time
 import os
+import re
 import signal
+import yaml
 
 from avocado.utils import process
+from general_utils import pcmd, check_file_exists
+from write_host_file import write_host_file
 
 
 class CommandFailure(Exception):
@@ -195,6 +199,16 @@ class CommandWithParameters(ObjectWithParameters):
         self._command = command
         self._path = path
         self._pre_command = None
+
+    @property
+    def command(self):
+        """Get the command without its parameters."""
+        return self._command
+
+    @property
+    def description(self):
+        """Get the command description."""
+        return self._command
 
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
@@ -383,7 +397,7 @@ class ExecutableCommand(CommandWithParameters):
 class DaosCommand(ExecutableCommand):
     """A class for similar daos command line tools."""
 
-    def __init__(self, namespace, command, path=""):
+    def __init__(self, namespace, command, path="", timeout=60):
         """Create DaosCommand object.
 
         Specific type of command object built so command str returns:
@@ -392,12 +406,21 @@ class DaosCommand(ExecutableCommand):
         Args:
             namespace (str): yaml namespace (path to parameters)
             command (str): string of the command to be executed.
-            path (str): path to location of daos command binary.
+            path (str, optional): path to location of daos command binary.
+                Defaults to ""
+            timeout (int, optional): number of seconds to wait for patterns to
+                appear in the subprocess output. Defaults to 60 seconds.
         """
         super(DaosCommand, self).__init__(namespace, command, path)
         self.request = BasicParameter(None)
         self.action = BasicParameter(None)
         self.action_command = None
+
+        # Attributes used to determine command success when run as a subprocess
+        # See self.check_subprocess_status() for details.
+        self.timeout = timeout
+        self.pattern = None
+        self.pattern_count = 1
 
     def get_action_command(self):
         """Assign a command object for the specified request and action."""
@@ -406,7 +429,9 @@ class DaosCommand(ExecutableCommand):
     def get_param_names(self):
         """Get a sorted list of DaosCommand parameter names."""
         names = self.get_attribute_names(FormattedParameter)
-        names.extend(["request", "action"])
+        for attribute_name in ("request", "action"):
+            if isinstance(getattr(self, attribute_name), BasicParameter):
+                names.append(attribute_name)
         return names
 
     def get_params(self, test):
@@ -432,6 +457,60 @@ class DaosCommand(ExecutableCommand):
         if self.action_command is not None:
             names[-1] = "action_command"
         return names
+
+    def check_subprocess_status(self, sub_process):
+        """Verify the status of the doas command started as a subprocess.
+
+        Continually search the subprocess output for a pattern (self.pattern)
+        until the expected number of patterns (self.pattern_count) have been
+        found (typically one per host) or the timeout (self.timeout) is reached
+        or the process has stopped.
+
+        Args:
+            sub_process (process.SubProcess): subprocess used to run the command
+
+        Returns:
+            bool: whether or not the command progress has been detected
+
+        """
+        status = True
+        self.log.info(
+            "Checking status of the %s command in %s with a %s second timeout",
+            self._command, sub_process, self.timeout)
+
+        if self.pattern is not None:
+            pattern_matches = 0
+            timed_out = False
+            status = False
+            start_time = time.time()
+
+            # Search for patterns in the subprocess output until:
+            #   - the expected number of pattern matches are detected (success)
+            #   - the time out is reached (failure)
+            #   - the subprocess is no longer running (failure)
+            while not status and not timed_out and sub_process.poll() is None:
+                output = sub_process.get_stdout()
+                pattern_matches = len(re.findall(self.pattern, output))
+                status = pattern_matches == self.pattern_count
+                timed_out = time.time() - start_time > self.timeout
+
+            if not status:
+                # Report the error / timeout
+                err_msg = "{} detected. Only {}/{} messages received".format(
+                    "Time out" if timed_out else "Error",
+                    pattern_matches, self.pattern_count)
+                self.log.info("%s:\n%s", err_msg, sub_process.get_stdout())
+
+                # Stop the timed out process
+                if timed_out:
+                    self.stop()
+            else:
+                # Report the successful start
+                self.log.info(
+                    "%s subprocess started in %f seconds",
+                    self._command, time.time() - start_time)
+
+        return status
 
 
 class EnvironmentVariables(dict):
@@ -486,10 +565,10 @@ class JobManager(ExecutableCommand):
             str: the command with all the defined parameters
 
         """
+        # Join the job manager command with the command to manage
         commands = [super(JobManager, self).__str__(), str(self.job)]
         if self.job.sudo:
             commands.insert(-1, "sudo -n")
-
         return " ".join(commands)
 
     def check_subprocess_status(self, subprocess):
@@ -539,8 +618,31 @@ class Orterun(JobManager):
         self.export = FormattedParameter("-x {}", None)
         self.enable_recovery = FormattedParameter("--enable-recovery", True)
         self.report_uri = FormattedParameter("--report-uri {}", None)
-        self.allow_run_as_root = FormattedParameter("--allow-run-as-root", None)
+        self.allow_run_as_root = FormattedParameter(
+            "--allow-run-as-root", False)
         self.mca = FormattedParameter("--mca {}", None)
+        self.tag_output = FormattedParameter("--tag-output", True)
+        self.ompi_server = FormattedParameter("--ompi-server {}", None)
+
+    def add_environment_list(self, env_list):
+        """Add a list of environment variables to the launch command.
+
+        Args:
+            env_vars (list): a list of environment variable names or assignments
+                to use with the launch command
+        """
+        if self.export.value is None:
+            self.export.value = []
+        self.export.value.extend(env_list)
+
+    def add_environment_variables(self, env_vars):
+        """Add EnvironmentVariables to the launch command.
+
+        Args:
+            env_vars (EnvironmentVariables): the environment variables to use
+                with the launch command
+        """
+        self.add_environment_list(env_vars.get_list())
 
     def setup_command(self, env, hostfile, processes):
         """Set up the orterun command with common inputs.
@@ -552,9 +654,7 @@ class Orterun(JobManager):
             processes (int): number of host processes
         """
         # Setup the env for the job to export with the orterun command
-        if self.export.value is None:
-            self.export.value = []
-        self.export.value.extend(env.get_list())
+        self.add_environment_variables(env)
 
         # Setup the orterun command
         self.hostfile.value = hostfile
@@ -639,3 +739,263 @@ class Srun(JobManager):
             self.distribution.value = "cyclic"
         if hostfile is not None:
             self.nodefile.value = hostfile
+
+
+class YamlParameters(ObjectWithParameters):
+    """A class of parameters used to create a yaml file."""
+
+    def __init__(self, namespace, filename=None, title=None, other_params=None):
+        """Create a YamlParameters object.
+
+        Args:
+            namespace (str): yaml namespace (path to parameters)
+            filename (str): the yaml file to generate with the parameters
+            title (str, optional): namespace under which to place the
+                parameters when creating the yaml file. Defaults to None.
+            other_params (YamlParameters, optional): yaml parameters to
+                include with these yaml parameters. Defaults to None.
+        """
+        super(YamlParameters, self).__init__(namespace)
+        self.filename = filename
+        self.title = title
+        self.other_params = other_params
+
+    def get_yaml_data(self):
+        """Convert the parameters into a dictionary to use to write a yaml file.
+
+        Returns:
+            dict: a dictionary of parameter name keys and values
+
+        """
+        if isinstance(self.other_params, YamlParameters):
+            yaml_data = self.other_params.get_yaml_data()
+        else:
+            yaml_data = {}
+        for name in self.get_param_names():
+            value = getattr(self, name).value
+            if value is not None and value is not False:
+                yaml_data[name] = getattr(self, name).value
+
+        return yaml_data if self.title is None else {self.title: yaml_data}
+
+    def create_yaml(self):
+        """Create a yaml file from the parameter values.
+
+        Raises:
+            CommandFailure: if there is an error creating the yaml file
+
+        """
+        yaml_data = self.get_yaml_data()
+        self.log.info("Writing yaml configuration file %s", self.filename)
+        try:
+            with open(self.filename, 'w') as write_file:
+                yaml.dump(yaml_data, write_file, default_flow_style=False)
+        except Exception as error:
+            raise CommandFailure(
+                "Error writing the yaml file {}: {}".format(
+                    self.filename, error))
+
+    def get_value(self, name):
+        """Get the value of the specified attribute name.
+
+        Args:
+            name (str): name of the attribute from which to get the value
+
+        Returns:
+            object: the object's value referenced by the attribute name
+
+        """
+        setting = getattr(self, name, None)
+        if setting is not None and isinstance(setting, BasicParameter):
+            value = setting.value
+        elif setting is not None:
+            value = setting
+        elif self.other_params is not None:
+            value = self.other_params.get_value(name)
+        else:
+            value = None
+        return value
+
+
+class DaosYamlCommand(DaosCommand):
+    """Defines a daos command that makes use of a yaml configuration file."""
+
+    def __init__(self, namespace, command, yaml_config, path="", timeout=60):
+        """Create a daos_server command object.
+
+        Args:
+            namespace (str): yaml namespace (path to parameters)
+            command (str): string of the command to be executed.
+            yaml_config (YamlParameters): yaml configuration parameters
+            path (str, optional): path to location of daos command binary.
+                Defaults to ""
+            timeout (int, optional): number of seconds to wait for patterns to
+                appear in the subprocess output. Defaults to 60 seconds.
+        """
+        super(DaosYamlCommand, self).__init__(namespace, command, path)
+
+        # Command configuration yaml file
+        self.yaml = yaml_config
+
+        # Command line parameters:
+        # -d, --debug        Enable debug output
+        # -j, --json         Enable JSON output
+        # -o, --config-path= Path to agent configuration file
+        self.debug = FormattedParameter("-d", False)
+        self.json = FormattedParameter("-j", False)
+        self.config = FormattedParameter("-o {}", self.yaml.filename)
+
+    def get_params(self, test):
+        """Get values for the daos command and its yaml config file.
+
+        Args:
+            test (Test): avocado Test object
+        """
+        super(DaosYamlCommand, self).get_params(test)
+        self.yaml.get_params(test)
+        self.yaml.create_yaml()
+
+    # def update_log_file(self, name, index=0):
+    #     """Update the logfile parameter for the daos server.
+
+    #     Args:
+    #         name (str): new log file name and path
+    #         index (int, optional): server index to update. Defaults to 0.
+    #     """
+    #     self.yaml.update_log_file(name, index)
+
+    def get_config_value(self, name):
+        """Get the value of the yaml configuration parameter name.
+
+        Args:
+            name (str): name of the yaml configuration parameter from which to
+                get the value
+
+        Returns:
+            object: the yaml configuration parameter value or None
+
+        """
+        return self.yaml.get_value(name)
+
+
+class SubprocessManager(Orterun):
+    """Defines an object that manages a sub process launched with orterun."""
+
+    def __init__(self, namespace, command, path=""):
+        """Create a SubprocessManager object.
+
+        Args:
+            namespace (str): yaml namespace (path to parameters)
+            command (DaosCommand): command to manage
+            path (str): Path to orterun binary
+        """
+        super(SubprocessManager, self).__init__(command, path, True)
+        self.namespace = namespace
+
+        # Define the list of hosts that will execute the daos command
+        self._hosts = []
+
+        # Define the list of executable names to terminate in the kill() method
+        self._exe_names = [self.job.command]
+
+    @property
+    def hosts(self):
+        """Get the hosts used to execute the daos command."""
+        return self._hosts
+
+    @hosts.setter
+    def hosts(self, value):
+        """Set the hosts used to execute the daos command.
+
+        Args:
+            value (tuple): a tuple of a list of hosts, a path in which to create
+                the hostfile, and a number of slots to specify per host in the
+                hostfile (can be None)
+        """
+        self._hosts, path, slots = value
+        self.processes.value = len(self._hosts)
+        self.hostfile.value = self.create_hostfile(path, slots)
+        if hasattr(self.job, "pattern_count"):
+            self.job.pattern_count = len(self._hosts)
+
+    def create_hostfile(self, path, slots):
+        """Create a new hostfile for the hosts."""
+        return write_host_file(self._hosts, path, slots)
+
+    def get_params(self, test):
+        """Get values for all of the command params from the yaml file.
+
+        Use the yaml file paramter values to assign the server command and
+        orterun command parameters.
+
+        Args:
+            test (Test): avocado Test object
+        """
+        # Get the parameters for the Orterun command
+        super(SubprocessManager, self).get_params(test)
+
+        # Get the values for the job parameters
+        self.job.get_params(test)
+
+    def start(self):
+        """Start the daos command with orterun.
+
+        Raises:
+            CommandFailure: if the daos command fails to start
+
+        """
+        try:
+            self.run()
+        except CommandFailure:
+            # Kill the subprocess, anything that might have started
+            self.kill()
+            raise CommandFailure(
+                "Failed to start {}.".format(self.job.description))
+
+    def kill(self):
+        """Forcably terminate any sub process running on hosts."""
+        kill_cmds = [
+            "sudo pkill '({})' --signal INT".format("|".join(self._exe_names)),
+            "if pgrep -l '({})'".format("|".join(self._exe_names)),
+            "then sleep 5",
+            "pkill '({})' --signal KILL".format("|".join(self._exe_names)),
+            "pgrep -l '({})'".format("|".join(self._exe_names)),
+            "fi"
+        ]
+        self.log.info("Killing any %s processes", "|".join(self._exe_names))
+        pcmd(self._hosts, "; ".join(kill_cmds), False, None, None)
+
+    def verify_socket_directory(self, user):
+        """Verify the domain socket directory is present and owned by this user.
+
+        Args:
+            user (str): user to verify has ownership of the directory
+
+        Raises:
+            CommandFailure: if the socket directory does not exist or is not
+                owned by the user
+
+        """
+        if self._hosts and hasattr(self._command, "yaml"):
+            directory = self._command.yaml.socket_dir.value
+            status, nodes = check_file_exists(self._hosts, directory, user)
+            if not status:
+                raise CommandFailure(
+                    "{}: Server missing socket directory {} for user {}".format(
+                        nodes, directory, user))
+
+    def get_config_value(self, name):
+        """Get the value of the yaml configuration parameter name.
+
+        Args:
+            name (str): name of the yaml configuration parameter from which to
+                get the value
+
+        Returns:
+            object: the yaml configuration parameter value or None
+
+        """
+        value = None
+        if self.job is not None and hasattr(self.job, "get_config_value"):
+            value = self.job.get_config_value(name)
+        return value

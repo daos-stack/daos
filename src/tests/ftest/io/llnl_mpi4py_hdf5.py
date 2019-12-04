@@ -22,13 +22,14 @@
     portions thereof marked with this legend must also reproduce the markings.
     '''
 
-from __future__    import print_function
+from __future__ import print_function
 import os
 from apricot import TestWithServers, skipForTicket
 
 import write_host_file
 from mpio_utils import MpioUtils, MpioFailed
 from pydaos.raw import DaosPool, DaosApiError
+
 
 class LlnlMpi4pyHdf5(TestWithServers):
     """
@@ -44,7 +45,7 @@ class LlnlMpi4pyHdf5(TestWithServers):
 
         # setting client variables
         self.hostfile_clients = write_host_file.write_host_file(
-            self.hostlist_clients, self.workdir, None)
+            self.manager.hostlist_clients, self.workdir, None)
         try:
             # parameters used in pool create
             createmode = self.params.get("mode", '/run/pool/createmode/*/')
@@ -71,7 +72,7 @@ class LlnlMpi4pyHdf5(TestWithServers):
         """
         # initialize MpioUtils
         self.mpio = MpioUtils()
-        if not self.mpio.mpich_installed(self.hostlist_clients):
+        if not self.mpio.mpich_installed(self.manager.hostlist_clients):
             self.fail("Exiting Test: Mpich not installed")
 
         try:

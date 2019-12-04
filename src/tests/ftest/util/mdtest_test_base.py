@@ -35,6 +35,7 @@ from command_utils import Mpirun, Orterun, CommandFailure
 from dfuse_utils import Dfuse
 import write_host_file
 
+
 class MdtestBase(TestWithServers):
     """Base mdtest class.
 
@@ -132,15 +133,14 @@ class MdtestBase(TestWithServers):
                            exc_info=error)
             self.fail("Unable to launch Dfuse.\n")
 
-
     def execute_mdtest(self):
         """Runner method for Mdtest."""
-
         # Create a pool if one does not already exist
         if self.pool is None:
             self._create_pool()
         # set Mdtest params
-        self.mdtest_cmd.set_daos_params(self.server_group, self.pool)
+        self.mdtest_cmd.set_daos_params(
+            self.manager.get_server_config_value("name"), self.pool)
 
         # start dfuse if api is POSIX
         if self.mdtest_cmd.api.value == "POSIX":
@@ -151,7 +151,7 @@ class MdtestBase(TestWithServers):
             self._start_dfuse()
             self.mdtest_cmd.test_dir.update(self.dfuse.mount_dir.value)
 
-       # Run Mdtest
+        # Run Mdtest
         self.run_mdtest(self.get_job_manager_command(self.manager),
                         self.processes)
 

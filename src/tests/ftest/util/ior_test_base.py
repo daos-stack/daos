@@ -33,6 +33,7 @@ from test_utils import TestPool
 from dfuse_utils import Dfuse
 import write_host_file
 
+
 class IorTestBase(TestWithServers):
     """Base IOR test class.
 
@@ -143,7 +144,8 @@ class IorTestBase(TestWithServers):
         if self.pool is None:
             self.create_pool()
         # Update IOR params with the pool
-        self.ior_cmd.set_daos_params(self.server_group, self.pool)
+        self.ior_cmd.set_daos_params(
+            self.manager.get_server_config_value("name"), self.pool)
 
         # start dfuse if api is POSIX
         if self.ior_cmd.api.value == "POSIX":

@@ -28,6 +28,8 @@ import os
 from dmg_utils import DmgCommand
 from apricot import TestWithServers
 from avocado.utils import process
+from host_utils import AccessPoints
+
 
 class DmgNvmeScanTest(TestWithServers):
     """Test Class Description:
@@ -53,9 +55,9 @@ class DmgNvmeScanTest(TestWithServers):
 
         # Update hostlist value for dmg command
         port = self.params.get("port", "/run/server_config/*")
-        servers_with_ports = [
-            "{}:{}".format(host, port) for host in self.hostlist_servers]
-        dmg.hostlist.update(",".join(servers_with_ports), "dmg.hostlist")
+        access_points = AccessPoints(port)
+        access_points.hosts = self.manager.hostlist_servers
+        dmg.hostlist.update(str(access_points), "dmg.hostlist")
 
         try:
             dmg.run()

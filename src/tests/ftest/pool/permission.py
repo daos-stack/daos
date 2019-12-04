@@ -75,14 +75,14 @@ class Permission(TestWithServers):
             # initialize a python pool object then create the underlying
             # daos storage
             self.pool = DaosPool(self.context)
-            self.multi_log("Pool initialisation successful", "debug")
+            self.test_log.debug("Pool initialisation successful")
 
             self.pool.create(createmode, createuid, creategid,
                              createsize, createsetid, None)
-            self.multi_log("Pool Creation successful", "debug")
+            self.test_log.debug("Pool Creation successful")
 
             self.pool.connect(1 << permissions)
-            self.multi_log("Pool Connect successful", "debug")
+            self.test_log.debug("Pool Connect successful")
 
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
@@ -121,27 +121,27 @@ class Permission(TestWithServers):
             # initialize a python pool object then create the underlying
             # daos storage
             self.pool = DaosPool(self.context)
-            self.multi_log("Pool initialisation successful", "debug")
+            self.test_log.debug("Pool initialisation successful")
             self.pool.create(createmode,
                              createuid,
                              creategid,
                              createsize,
                              createsetid,
                              None)
-            self.multi_log("Pool Creation successful", "debug")
+            self.test_log.debug("Pool Creation successful")
 
             self.pool.connect(1 << permissions)
-            self.multi_log("Pool Connect successful", "debug")
+            self.test_log.debug("Pool Connect successful")
 
             self.container = DaosContainer(self.context)
-            self.multi_log("Contianer initialisation successful", "debug")
+            self.test_log.debug("Contianer initialisation successful")
 
             self.container.create(self.pool.handle)
-            self.multi_log("Container create successful", "debug")
+            self.test_log.debug("Container create successful")
 
             # now open it
             self.container.open()
-            self.multi_log("Container open successful", "debug")
+            self.test_log.debug("Container open successful")
 
             thedata = "a string that I want to stuff into an object"
             size = 45
@@ -149,7 +149,7 @@ class Permission(TestWithServers):
             akey = "this is the akey"
 
             self.container.write_an_obj(thedata, size, dkey, akey)
-            self.multi_log("Container write successful", "debug")
+            self.test_log.debug("Container write successful")
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
 

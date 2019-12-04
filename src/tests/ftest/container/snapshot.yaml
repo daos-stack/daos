@@ -1,8 +1,7 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
 hosts:
-    test_machines1:
-      test_machines:
+    test_servers:
         - boro-A
         - boro-B
 timeout: 600

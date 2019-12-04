@@ -58,7 +58,9 @@ class FullPoolContainerCreate(TestWithServers):
         size = 16777216
 
         self.d_log.debug("creating pool")
-        self.pool.create(mode, uid, gid, size, self.server_group, None)
+        self.pool.create(
+            mode, uid, gid, size, self.manager.get_server_config_value("name"),
+            None)
         self.d_log.debug("created pool")
 
         # connect to the pool

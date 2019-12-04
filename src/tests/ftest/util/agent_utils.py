@@ -1,5 +1,5 @@
 #!/usr/bin/python
-'''
+"""
   (C) Copyright 2019 Intel Corporation.
 
   Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,123 +20,13 @@
   provided in Contract No. B609815.
   Any reproduction of computer software, computer software documentation, or
   portions thereof marked with this legend must also reproduce the markings.
-'''
-from __future__ import print_function
-
-import os
-import time
-import subprocess
-import json
-import getpass
+"""
+from logging import getLogger
 import socket
-import errno
-import fcntl
-import re
 
-from general_utils import pcmd, check_file_exists
-
-
-class AgentFailed(Exception):
-    """Agent didn't start/stop properly."""
-
-
-def run_agent(basepath, server_list, client_list=None):
-    """Start daos agents on the specified hosts.
-
-    Make sure the environment is setup for the security agent and then launches
-    it on the compute nodes.
-
-    This is temporary; presuming the agent will deamonize at somepoint and
-    can be started killed more appropriately.
-
-    Args:
-        basepath (str): root directory for DAOS repo or installation
-        server_list (list): nodes acting as server nodes in the test
-        client_list (list, optional): nodes acting as client nodes in the test.
-            Defaults to None.
-
-    Raises:
-        AgentFailed: if there is an error starting the daos agents
-
-    Returns:
-        dict: set of subprocess sessions
-
-    """
-    sessions = {}
-    user = getpass.getuser()
-
-    # if empty client list, 'self' is effectively client
-    client_list = include_local_host(client_list)
-
-    # Verify the domain socket directory is present and owned by this user
-    file_checks = (
-        ("Server", server_list, "/var/run/daos_server"),
-        ("Client", client_list, "/var/run/daos_agent"),
-    )
-    for host_type, host_list, directory in file_checks:
-        status, nodeset = check_file_exists(host_list, directory, user)
-        if not status:
-            raise AgentFailed(
-                "{}: {} missing directory {} for user {}.".format(
-                    nodeset, host_type, directory, user))
-
-    # launch the agent
-    with open("../../.build_vars.json") as json_vars:
-        build_vars = json.load(json_vars)
-    daos_agent_bin = os.path.join(build_vars["PREFIX"], "bin", "daos_agent")
-
-    for client in client_list:
-        sessions[client] = subprocess.Popen(
-            ["ssh", client, "-o ConnectTimeout=10",
-             "{} -i".format(daos_agent_bin)],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT
-        )
-
-    # double check agent launched successfully
-    timeout = 15
-    started_clients = []
-    for client in client_list:
-        file_desc = sessions[client].stdout.fileno()
-        flags = fcntl.fcntl(file_desc, fcntl.F_GETFL)
-        fcntl.fcntl(file_desc, fcntl.F_SETFL, flags | os.O_NONBLOCK)
-        start_time = time.time()
-        pattern = "Using logfile"
-        expected_data = ""
-        while not sessions[client].poll():
-            if time.time() - start_time > timeout:
-                print("<AGENT>: {}".format(expected_data))
-                raise AgentFailed("DAOS Agent didn't start!  Agent reported:\n"
-                                  "{}before we gave up waiting for it to "
-                                  "start".format(expected_data))
-            output = ""
-            try:
-                output = sessions[client].stdout.read()
-            except IOError as excpn:
-                if excpn.errno != errno.EAGAIN:
-                    raise AgentFailed(
-                        "Error in starting daos_agent: {0}".format(str(excpn)))
-                time.sleep(1)
-                continue
-            expected_data += output
-
-            match = re.findall(pattern, output)
-            if match:
-                print(
-                    "<AGENT> agent started on node {} in {} seconds".format(
-                        client, time.time() - start_time))
-                break
-
-        if sessions[client].returncode is not None:
-            print("<AGENT> uh-oh, in agent startup, the ssh that started the "
-                  "agent on {} has exited with {}.\nStopping agents on "
-                  "{}".format(client, sessions[client].returncode,
-                              started_clients))
-            # kill the ones we started
-            stop_agent(sessions, started_clients)
-            raise AgentFailed("Failed to start agent on {}".format(client))
-
-    return sessions
+from command_utils import BasicParameter, FormattedParameter, YamlParameters
+from command_utils import DaosYamlCommand, SubprocessManager
+from general_utils import pcmd
 
 
 def include_local_host(hosts):
@@ -157,42 +47,97 @@ def include_local_host(hosts):
     return hosts
 
 
-def stop_agent(sessions, client_list=None):
-    """Kill ssh and the agent.
-
-    This is temporary; presuming the agent will deamonize at somepoint and can
-    be started and killed more appropriately.
+def stop_agent_processes(hosts):
+    """Stop the daos agent processes on the specified list of hosts.
 
     Args:
-        sessions (dict): set of subprocess sessions returned by run_agent()
-        client_list (list, optional): lists of hosts running the daos agent.
-            Defaults to None.
-
-    Raises:
-        AgentFailed: if the daos agents failed to stop
-
+        hosts (list): hosts on which to stop the daos agent processes
     """
-    # if empty client list, 'self' is effectively client
-    client_list = include_local_host(client_list)
+    log = getLogger()
+    log.info("Killing any agent processes on %s", hosts)
+    if hosts is not None:
+        pattern = "'(daos_agent)'"
+        commands = [
+            "if pgrep --list-name {}".format(pattern),
+            "then sudo pkill {}".format(pattern),
+            "if pgrep --list-name {}".format(pattern),
+            "then sleep 5",
+            "pkill --signal KILL {}".format(pattern),
+            "fi",
+            "fi",
+            "exit 0",
+        ]
+        pcmd(hosts, "; ".join(commands), False, None, None)
 
-    # Kill the agents processes
-    pcmd(client_list, "pkill daos_agent", False)
 
-    # Kill any processes running in the sessions
-    for client in sessions:
-        if sessions[client].poll() is None:
-            sessions[client].kill()
-        sessions[client].wait()
+class AgentYamlParameters(YamlParameters):
+    """Defines the daos_agent configuration yaml parameters."""
 
-    # Check to make sure all the daos agents are dead
-    # pgrep exit status:
-    #   0 - One or more processes matched the criteria.
-    #   1 - No processes matched.
-    #   2 - Syntax error in the command line.
-    #   3 - Fatal error: out of memory etc.
-    time.sleep(5)
-    result = pcmd(client_list, "pgrep 'daos_agent'", False, expect_rc=1)
-    if len(result) > 1 or 1 not in result:
-        raise AgentFailed(
-            "DAOS agent processes detected after attempted stop on {}".format(
-                ", ".join([str(result[key]) for key in result if key != 1])))
+    def __init__(self, filename, common_yaml):
+        """Initialize an AgentYamlParameters object.
+
+        Args:
+            filename (str): yaml configuration file name
+            common_yaml (YamlParameters): [description]
+        """
+        super(AgentYamlParameters, self).__init__(
+            "/run/agent_config/*", filename, None, common_yaml)
+
+        # daos_agent parameters:
+        #   - runtime_dir: <str>, e.g. /var/run/daos_agent
+        #       Use the given directory for creating unix domain sockets
+        #   - log_file: <str>, e.g. /tmp/daos_agent.log
+        #       Full path and name of the DAOS agent logfile.
+        self.runtime_dir = BasicParameter(None, "/var/run/daos_agent")
+        self.log_file = BasicParameter(None, "/tmp/daos_agent.log")
+
+    def get_params(self, test):
+        """Get values for the daos agent yaml config file.
+
+        Args:
+            test (Test): avocado Test object
+        """
+        super(AgentYamlParameters, self).get_params(test)
+
+        # Override the log file file name with the test log file name
+        if hasattr(test, "client_log") and test.client_log is not None:
+            self.log_file.value = test.client_log
+
+
+class AgentCommand(DaosYamlCommand):
+    """Defines an object representing a daso_agent command."""
+
+    def __init__(self, agent_config, path="", timeout=30):
+        """Create a daos_agent command object.
+
+        Args:
+            agent_config (AgentYamlParameters): agent yaml configuration
+            path (str): path to location of daos_agent binary
+            timeout (int, optional): number of seconds to wait for patterns to
+                appear in the subprocess output. Defaults to 60 seconds.
+        """
+        super(AgentCommand, self).__init__(
+            "/run/agent_config/*", "daos_agent", agent_config, path, timeout)
+        self.pattern = "Listening on "
+
+        # Additional daos_agent command line parameters:
+        # -i, --insecure     have agent attempt to connect without certificates
+        # -s, --runtime_dir= Path to agent communications socket
+        # -l, --logfile=     Full path and filename for daos agent log file
+        self.insecure = FormattedParameter("--insecure", False)
+        self.runtime_dir = FormattedParameter("--runtime_dir=={}")
+        self.logfile = FormattedParameter("--logfile={}")
+
+
+class AgentManager(SubprocessManager):
+    """Manages the daos_agent execution on one or more hosts using orterun."""
+
+    def __init__(self, ompi_path, agent_command):
+        """Initialize an AgentManager object.
+
+        Args:
+            ompi_path (str): path to location of orterun binary.
+            agent_command (AgentCommand): server command object
+        """
+        super(AgentManager, self).__init__(
+            "/run/agent_config", agent_command, ompi_path)

@@ -51,7 +51,7 @@ class InfoTests(TestWithServers):
         self.pool.get_params(self)
         permissions = self.params.get("permissions", "/run/test/*")
         targets = self.params.get("targets", "/run/server_config/*")
-        pool_targets = len(self.hostlist_servers) * targets
+        pool_targets = len(self.manager.hostlist_servers) * targets
 
         # Create a pool
         self.pool.create()
@@ -62,8 +62,8 @@ class InfoTests(TestWithServers):
         # Verify the pool information
         checks = {
             "pi_uuid": self.pool.uuid,
-            "pi_ntargets": len(self.hostlist_servers) * targets,
-            "pi_nnodes": len(self.hostlist_servers),
+            "pi_ntargets": len(self.manager.hostlist_servers) * targets,
+            "pi_nnodes": len(self.manager.hostlist_servers),
             "pi_ndisabled": 0,
             "pi_map_ver": 1,
             "pi_leader": 0,

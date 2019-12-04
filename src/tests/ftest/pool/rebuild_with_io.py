@@ -57,7 +57,7 @@ class RebuildWithIO(TestWithServers):
         # data = self.params.get("datasize", "/run/testparams/*")
         rank = self.params.get("rank", "/run/testparams/*")
         obj_class = self.params.get("object_class", "/run/testparams/*")
-        server_count = len(self.hostlist_servers)
+        server_count = len(self.manager.hostlist_servers)
 
         # Create a pool and verify the pool info before rebuild (also connects)
         pool.create()

@@ -76,7 +76,7 @@ class EvictTests(TestWithServers):
 
         """
         # setup pool and connect
-        self.pool = self.connected_pool(self.hostlist_servers)
+        self.pool = self.connected_pool(self.manager.hostlist_servers)
 
         self.log.info(
             "Pool UUID: %s\n Pool handle: %s\n Server group: %s\n",
@@ -119,7 +119,7 @@ class EvictTests(TestWithServers):
             # pool still exists and the handle is still valid.
             if "BAD_SERVER_NAME" in test_param:
                 self.pool.pool.group = ctypes.create_string_buffer(
-                    self.server_group)
+                    self.manager.get_server_config_value("name"))
             else:
                 self.pool.pool.set_uuid_str(self.pool.uuid)
 
@@ -140,14 +140,14 @@ class EvictTests(TestWithServers):
         # restore the valid group name and UUID,
         if "BAD_SERVER_NAME" in test_param:
             self.pool.pool.group = ctypes.create_string_buffer(
-                self.server_group)
+                self.manager.get_server_config_value("name"))
         else:
             self.pool.pool.set_uuid_str(self.pool.uuid)
         # check if pool handle still exists
         if int(self.pool.pool.handle.value) == 0:
             self.log.error(
                 "Pool handle was removed when doing an evict with bad param")
-        if self.pool.check_files(self.hostlist_servers):
+        if self.pool.check_files(self.manager.hostlist_servers):
             self.log.error("Valid pool files were not detected on server after"
                            " a pool evict with %s failed to raise an "
                            "exception", test_param)
@@ -173,11 +173,14 @@ class EvictTests(TestWithServers):
         non_pool_servers = []
         # Target list is configured so that the pools are across all servers
         # except the pool under test is created on half of the servers
-        pool_tgt = [num for num in range(len(self.hostlist_servers))]
-        pool_tgt_ut = [num for num in range(int(len(self.hostlist_servers)/2))]
+        pool_tgt = [num for num in range(len(self.manager.hostlist_servers))]
+        pool_tgt_ut = [
+            num for num in range(int(len(self.manager.hostlist_servers)/2))]
         tlist = [pool_tgt, pool_tgt, pool_tgt_ut]
-        pool_servers = [self.hostlist_servers[:len(tgt)] for tgt in tlist]
-        non_pool_servers = [self.hostlist_servers[len(tgt):] for tgt in tlist]
+        pool_servers = [
+            self.manager.hostlist_servers[:len(tgt)] for tgt in tlist]
+        non_pool_servers = [
+            self.manager.hostlist_servers[len(tgt):] for tgt in tlist]
         # Create Connected TestPool
         for count, target_list in enumerate(tlist):
             pool.append(self.connected_pool(pool_servers[count], target_list))

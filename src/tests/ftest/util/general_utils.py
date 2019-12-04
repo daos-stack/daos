@@ -55,6 +55,8 @@ def run_task(hosts, command, timeout=None):
 
     """
     task = task_self()
+    # Enable forwarding of the ssh authentication agent connection
+    task.set_info("ssh_options", "-oForwardAgent=yes")
     kwargs = {"command": command, "nodes": NodeSet.fromlist(hosts)}
     if timeout is not None:
         kwargs["timeout"] = timeout

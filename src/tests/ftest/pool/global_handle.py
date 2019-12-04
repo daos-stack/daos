@@ -31,8 +31,8 @@ from apricot import TestWithServers
 import check_for_pool
 from pydaos.raw import DaosContext, DaosPool, DaosContainer, DaosApiError
 
-class GlobalHandle(TestWithServers):
 
+class GlobalHandle(TestWithServers):
     """
     This class contains tests to verify the ability to share pool
     handles amoung processes.
@@ -44,7 +44,7 @@ class GlobalHandle(TestWithServers):
             super(GlobalHandle, self).tearDown()
         finally:
             # really make sure everything is gone
-            check_for_pool.cleanup_pools(self.hostlist_servers)
+            check_for_pool.cleanup_pools(self.manager.hostlist_servers)
 
     def check_handle(self, buf_len, iov_len, buf, uuidstr, rank):
         """
@@ -91,8 +91,8 @@ class GlobalHandle(TestWithServers):
             # initialize a python pool object then create the underlying
             # daos storage
             self.pool = DaosPool(self.context)
-            self.pool.create(createmode, createuid, creategid,
-                        createsize, createsetid, None)
+            self.pool.create(
+                createmode, createuid, creategid, createsize, createsetid, None)
             self.pool.connect(1 << 1)
 
             # create a container just to make sure handle is good

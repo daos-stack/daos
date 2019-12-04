@@ -31,12 +31,9 @@ import Queue
 import avocado
 
 from apricot import TestWithServers, skipForTicket
-from agent_utils import run_agent, stop_agent
 from pydaos.raw import DaosContainer, DaosApiError
 from ior_utils import IorCommand
 from command_utils import Orterun, CommandFailure
-from server_utils import run_server, stop_server
-from write_host_file import write_host_file
 from test_utils import TestPool
 
 NO_OF_MAX_CONTAINER = 13180
@@ -82,10 +79,6 @@ class ObjectMetadata(TestWithServers):
         """Set up each test case."""
         # Start the servers and agents
         super(ObjectMetadata, self).setUp()
-
-        # Recreate the client hostfile without slots defined
-        self.hostfile_clients = write_host_file(
-            self.hostlist_clients, self.workdir, None)
 
         # Create a pool
         self.pool = TestPool(self.context, self.log)
@@ -209,7 +202,8 @@ class ObjectMetadata(TestWithServers):
                 # Define the arguments for the ior_runner_thread method
                 ior_cmd = IorCommand()
                 ior_cmd.get_params(self)
-                ior_cmd.set_daos_params(self.server_group, self.pool)
+                ior_cmd.set_daos_params(
+                    self.manager.get_server_config_value("name"), self.pool)
                 ior_cmd.flags.value = self.params.get(
                     "F", "/run/ior/ior{}flags/".format(operation))
 
@@ -217,7 +211,9 @@ class ObjectMetadata(TestWithServers):
                 path = os.path.join(self.ompi_prefix, "bin")
                 manager = Orterun(ior_cmd, path)
                 env = ior_cmd.get_default_env(str(manager), self.tmp)
-                manager.setup_command(env, self.hostfile_clients, processes)
+                hostfile = self.manager.agent_managers[0].create_hostfile(
+                    self.workdir, None)
+                manager.setup_command(env, hostfile, processes)
 
                 # Add a thread for these IOR arguments
                 threads.append(
@@ -239,17 +235,20 @@ class ObjectMetadata(TestWithServers):
 
             # Restart the agents and servers after the write / before the read
             if operation == "write":
-                # Stop the agents and servers
-                if self.agent_sessions:
-                    stop_agent(self.agent_sessions, self.hostlist_clients)
-                stop_server(hosts=self.hostlist_servers)
+                # Stop the agents
+                errors = self.manager.stop_agents()
+                self.assertEqual(
+                    len(errors), 0,
+                    "Error stopping agents:\n  {}".format("\n  ".join(errors)))
+
+                # Stop the servers
+                errors = self.manager.stop_servers()
+                self.assertEqual(
+                    len(errors), 0,
+                    "Error stopping servers:\n  {}".format("\n  ".join(errors)))
 
                 # Start the agents
-                self.agent_sessions = run_agent(
-                    self.basepath, self.hostlist_clients,
-                    self.hostlist_servers)
+                self.manager.start_agent_managers()
 
                 # Start the servers
-                run_server(
-                    self, self.hostfile_servers, self.server_group,
-                    clean=False)
+                self.manager.start_server_managers()

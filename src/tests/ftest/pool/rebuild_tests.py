@@ -53,7 +53,7 @@ class RebuildTests(TestWithServers):
         obj_class = self.params.get("object_class", "/run/testparams/*")
 
         # Create the pools and confirm their status
-        server_count = len(self.hostlist_servers)
+        server_count = len(self.manager.hostlist_servers)
         status = True
         for index in range(pool_quantity):
             pools[index].create()
