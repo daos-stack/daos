@@ -414,11 +414,19 @@ func (ssr *StorageScanResp) StringHealthStats() string {
 	return buf.String()
 }
 
-// StorageFormatResult stores results of format operations on NVMe controllers
+// StorageFormatReq encapsulated subsystem format parameters.
+type StorageFormatReq struct {
+	Reformat bool
+}
+
+// StorageFormatResults stores results of format operations on NVMe controllers
 // and SCM mountpoints.
+type StorageFormatResults map[string]StorageFormatResult
+
 type StorageFormatResult struct {
-	nvmeCtrlr proto.CtrlrResults
-	scmMount  proto.MountResults
+	Nvme proto.NvmeControllerResults
+	Scm  proto.ScmMountResults
+	Err  error
 }
 
 // AccessControlList is a structure for the access control list.

@@ -26,13 +26,21 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"text/tabwriter"
+	"sort"
+	"strings"
+
+	bytesize "github.com/inhies/go-bytesize"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/client"
+	"github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
+
+const summarySep = "/"
 
 // storageCmd is the struct representing the top-level storage subcommand.
 type storageCmd struct {
@@ -89,59 +97,212 @@ type storageScanCmd struct {
 	Summary bool `short:"m" long:"summary" description:"List total capacity and number of devices only"`
 }
 
-func scanCmdDisplay(result *client.StorageScanResp, summary bool) (string, error) {
-	var out bytes.Buffer
+func scmModuleTable(ms storage.ScmModules) string {
+	buf := &bytes.Buffer{}
+
+	if len(ms) == 0 {
+		fmt.Fprint(buf, "\tnone\n")
+		return buf.String()
+	}
+
+	physicalIdTitle := "SCM Module ID"
+	socketTitle := "Socket ID"
+	memCtrlrTitle := "Memory Ctrlr ID"
+	channelTitle := "Channel ID"
+	slotTitle := "Channel Slot"
+	capacityTitle := "Capacity"
+
+	formatter := NewTableFormatter([]string{
+		physicalIdTitle, socketTitle, memCtrlrTitle, channelTitle, slotTitle, capacityTitle,
+	})
+	var table []TableRow
+
+	sort.Slice(ms, func(i, j int) bool { return ms[i].PhysicalID < ms[j].PhysicalID })
+
+	for _, m := range ms {
+		row := TableRow{physicalIdTitle: fmt.Sprint(m.PhysicalID)}
+		row[socketTitle] = fmt.Sprint(m.SocketID)
+		row[memCtrlrTitle] = fmt.Sprint(m.ControllerID)
+		row[channelTitle] = fmt.Sprint(m.ChannelID)
+		row[slotTitle] = fmt.Sprint(m.ChannelPosition)
+		row[capacityTitle] = bytesize.New(float64(m.Capacity)).String()
+
+		table = append(table, row)
+	}
+
+	fmt.Fprint(buf, formatter.Format(table))
+
+	return buf.String()
+}
+
+func scmNsTable(nss storage.ScmNamespaces) string {
+	buf := &bytes.Buffer{}
+
+	if len(nss) == 0 {
+		fmt.Fprint(buf, "\tnone\n")
+		return buf.String()
+	}
+
+	deviceTitle := "SCM Namespace"
+	socketTitle := "Socket ID"
+	capacityTitle := "Capacity"
+
+	formatter := NewTableFormatter([]string{deviceTitle, socketTitle, capacityTitle})
+	var table []TableRow
+
+	sort.Slice(nss, func(i, j int) bool { return nss[i].BlockDevice < nss[j].BlockDevice })
+
+	for _, ns := range nss {
+		row := TableRow{deviceTitle: ns.BlockDevice}
+		row[socketTitle] = fmt.Sprint(ns.NumaNode)
+		row[capacityTitle] = bytesize.New(float64(ns.Size)).String()
+
+		table = append(table, row)
+	}
+
+	fmt.Fprint(buf, formatter.Format(table))
+
+	return buf.String()
+}
+
+func nvmeTable(ncs proto.NvmeControllers) string {
+	buf := &bytes.Buffer{}
+
+	if len(ncs) == 0 {
+		fmt.Fprint(buf, "\tnone\n")
+		return buf.String()
+	}
+
+	pciTitle := "NVMe PCI"
+	modelTitle := "Model"
+	fwTitle := "FW Revision"
+	socketTitle := "Socket ID"
+	capacityTitle := "Capacity"
+
+	formatter := NewTableFormatter([]string{
+		pciTitle, modelTitle, fwTitle, socketTitle, capacityTitle,
+	})
+	var table []TableRow
+
+	sort.Slice(ncs, func(i, j int) bool { return ncs[i].Pciaddr < ncs[j].Pciaddr })
+
+	for _, ctrlr := range ncs {
+		tCap := bytesize.New(0)
+		for _, ns := range ctrlr.Namespaces {
+			tCap += bytesize.GB * bytesize.New(float64(ns.Size))
+		}
+
+		row := TableRow{pciTitle: ctrlr.Pciaddr}
+		row[modelTitle] = ctrlr.Model
+		row[fwTitle] = ctrlr.Fwrev
+		row[socketTitle] = fmt.Sprint(ctrlr.Socketid)
+		row[capacityTitle] = tCap.String()
+
+		table = append(table, row)
+	}
+
+	fmt.Fprint(buf, formatter.Format(table))
+
+	return buf.String()
+}
+
+func groupScanResults(result *client.StorageScanResp, summary bool) (hostlist.HostGroups, error) {
 	groups := make(hostlist.HostGroups)
 
-	// group identical output identified by hostlist
+	// group identical output identified by hostset
 	for _, srv := range result.Servers {
-		var buf bytes.Buffer
+		buf := &bytes.Buffer{}
 
 		if summary {
-			fmt.Fprintf(&buf, "%s\t%s\t",
-				result.Scm[srv].Summary(), result.Nvme[srv].Summary())
+			fmt.Fprintf(buf, "%s%s%s", result.Scm[srv].Summary(),
+				summarySep, result.Nvme[srv].Summary())
 		} else {
-			fmt.Fprintf(&buf, "\t%s", result.Scm[srv].String())
-			fmt.Fprintf(&buf, "\t%s", result.Nvme[srv].String())
+			sres := result.Scm[srv]
+			switch {
+			case sres.Err != nil:
+				fmt.Fprintf(buf, "SCM Error: %s\n", sres.Err)
+			case len(sres.Namespaces) > 0:
+				fmt.Fprintf(buf, "%s\n", scmNsTable(sres.Namespaces))
+			default:
+				fmt.Fprintf(buf, "%s\n", scmModuleTable(sres.Modules))
+			}
+
+			if result.Nvme[srv].Err != nil {
+				fmt.Fprintf(buf, "NVMe Error: %s\n", result.Nvme[srv].Err)
+			} else {
+				fmt.Fprintf(buf, "%s", nvmeTable(result.Nvme[srv].Ctrlrs))
+			}
 		}
 
 		// disregard connection port when grouping scan output
 		srvHost, _, err := splitPort(srv, 0)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		if err := groups.AddHost(buf.String(), srvHost); err != nil {
-			return "", err
+			return nil, err
 		}
 	}
 
-	if summary {
-		w := new(tabwriter.Writer)
+	return groups, nil
+}
 
-		// minwidth, tabwidth, padding, padchar, flags
-		w.Init(&out, 8, 8, 0, '\t', 0)
+func scanCmdDisplay(result *client.StorageScanResp) (string, error) {
+	out := &bytes.Buffer{}
+	groups, err := groupScanResults(result, false)
+	if err != nil {
+		return "", err
+	}
 
-		fmt.Fprintf(w, "\n %s\t%s\t%s\t", "HOSTS", "SCM", "NVME")
-		fmt.Fprintf(w, "\n %s\t%s\t%s\t", "-----", "---", "----")
-
-		for _, res := range groups.Keys() {
-			fmt.Fprintf(w, "\n %s\t%s", groups[res].RangedString(), res)
-		}
-
-		w.Flush()
-	} else {
-		for _, res := range groups.Keys() {
-			fmt.Fprintf(&out, "\n %s\n%s", groups[res].RangedString(), res)
-		}
+	for _, res := range groups.Keys() {
+		hostset := groups[res].RangedString()
+		lineBreak := strings.Repeat("-", len(hostset))
+		fmt.Fprintf(out, "%s\n%s\n%s\n%s", lineBreak, hostset, lineBreak, res)
 	}
 
 	return out.String(), nil
 }
 
+func scanCmdDisplaySummary(result *client.StorageScanResp) (string, error) {
+	groups, err := groupScanResults(result, true)
+	if err != nil {
+		return "", err
+	}
+
+	hostsetTitle := "Hosts"
+	scmTitle := "SCM Total"
+	nvmeTitle := "NVMe Total"
+
+	formatter := NewTableFormatter([]string{hostsetTitle, scmTitle, nvmeTitle})
+	var table []TableRow
+
+	for _, result := range groups.Keys() {
+		row := TableRow{hostsetTitle: groups[result].RangedString()}
+
+		summary := strings.Split(result, summarySep)
+		if len(summary) != 2 {
+			return "", errors.New("unexpected summary format")
+		}
+		row[scmTitle] = summary[0]
+		row[nvmeTitle] = summary[1]
+
+		table = append(table, row)
+	}
+
+	return formatter.Format(table), nil
+}
+
 // Execute is run when storageScanCmd activates.
 // Runs NVMe and SCM storage scan on all connected servers.
-func (cmd *storageScanCmd) Execute(args []string) error {
-	out, err := scanCmdDisplay(cmd.conns.StorageScan(nil), cmd.Summary)
+func (cmd *storageScanCmd) Execute(args []string) (err error) {
+	var out string
+
+	if cmd.Summary {
+		out, err = scanCmdDisplaySummary(cmd.conns.StorageScan(nil))
+	} else {
+		out, err = scanCmdDisplay(cmd.conns.StorageScan(nil))
+	}
+
 	if err != nil {
 		return err
 	}
@@ -159,14 +320,8 @@ type storageFormatCmd struct {
 
 // Execute is run when storageFormatCmd activates
 // run NVMe and SCM storage format on all connected servers
-func (s *storageFormatCmd) Execute(args []string) error {
-	s.log.Info(
-		"This is a destructive operation and storage devices " +
-			"specified in the server config file will be erased.\n" +
-			"Please be patient as it may take several minutes.\n")
+func (cmd *storageFormatCmd) Execute(args []string) error {
+	cmd.log.Infof("Format Results: %v", cmd.conns.StorageFormat(cmd.Reformat))
 
-	cCtrlrResults, cMountResults := s.conns.StorageFormat(s.Reformat)
-	s.log.Infof("NVMe storage format results:\n%s", cCtrlrResults)
-	s.log.Infof("SCM storage format results:\n%s", cMountResults)
 	return nil
 }
