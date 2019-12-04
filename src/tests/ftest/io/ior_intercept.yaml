@@ -35,17 +35,14 @@ ior:
     daos_destroy: False
     iorflags: !mux
         ssf:
-          flags: "-F -e -i 1 -C -Q 1 -D 120 -v -W -w -r -R"
+          flags: "-v -w -W -r -R"
           ior_api: !mux
             posix:
               api: POSIX
           transfersize_blocksize: !mux
-            256B:
-              transfer_size: '256B'
-              block_size: '4M'
             1M:
               transfer_size: '1M'
-              block_size: '1G'
+              block_size: '512M'
 
           objectclass: !mux
             oclass_SX:

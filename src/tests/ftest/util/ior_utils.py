@@ -28,6 +28,7 @@ import uuid
 
 from command_utils import FormattedParameter, ExecutableCommand
 from command_utils import EnvironmentVariables, CommandFailure
+from enum import IntEnum
 
 
 class IorCommand(ExecutableCommand):
@@ -228,6 +229,7 @@ class IorCommand(ExecutableCommand):
         env["MPI_LIB"] = "\"\""
         env["DAOS_SINGLETON_CLI"] = 1
         env["FI_PSM2_DISCONNECT"] = 1
+        #env["LD_PRELOAD"] = "/home/puspalog/source/daos/install/lib64/libioil.so"
         if log_file:
             env["D_LOG_FILE"] = log_file
 
@@ -239,7 +241,8 @@ class IorCommand(ExecutableCommand):
 
         return env
 
-    def get_ior_metrics(self, cmdresult):
+    @staticmethod
+    def get_ior_metrics(cmdresult):
         """Parse the CmdResult (output of the test) and look for
            the ior stdout and get the read and write metrics.
 
@@ -259,9 +262,41 @@ class IorCommand(ExecutableCommand):
         # idx +1 and idx + 2 will give the write and read metrics.
         write_metrics = (" ".join(messages[idx+1].split())).split()
         read_metrics = (" ".join(messages[idx+2].split())).split()
-        # For Debug purpose
+        # For Debug
         # for i in range(len(header)):
         #    print("{0},{1},{2}".format(header[i], write_metrics[i], read_metrics[i]))
         return (write_metrics, read_metrics)
 		
 
+class IorMetrics(IntEnum):
+
+     #Operation   Max(MiB)   Min(MiB)  Mean(MiB)     StdDev   Max(OPs)   Min(OPs)  Mean(OPs)
+     #StdDev    Mean(s) Stonewall(s) Stonewall(MiB) Test# #Tasks tPN reps fPP reord
+     #reordoff reordrand seed segcnt   blksiz    xsize aggs(MiB)   API RefNum
+     Operation=0
+     Max_MiB=1
+     Min_MiB=2
+     Mean_MiB=3
+     StdDev=4
+     Max_OPs=5
+     Min_OPs=6
+     Mean_OPs=7
+     StdDev=8
+     Mean_seconds=9
+     Stonewall_seconds=10
+     Stonewall_MiB=11
+     Test_No=12
+     Num_Tasks=13
+     tPN=14
+     reps=15
+     fPP=16
+     reord=17
+     reordoff=18
+     reordrand=19
+     seed=20
+     segcnt=21
+     blksiz=22
+     xsize=23
+     aggs_MiB=24
+     API=25
+     RefNum=26

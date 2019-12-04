@@ -129,13 +129,15 @@ class IorTestBase(TestWithServers):
                            exc_info=error)
             self.fail("Test was expected to pass but it failed.\n")
 
-    def run_ior_with_pool(self):
+    def run_ior_with_pool(self, intercept = None):
         """Execute ior with optional overrides for ior flags and object_class.
 
         If specified the ior flags and ior daos object class parameters will
         override the values read from the yaml file.
 
         Args:
+            intercept (str): path for the interception library. Shall be used
+                             only for POSIX through DFUSE.
             ior_flags (str, optional): ior flags. Defaults to None.
             object_class (str, optional): daos object class. Defaults to None.
         """
@@ -156,9 +158,14 @@ class IorTestBase(TestWithServers):
             self.start_dfuse()
             self.ior_cmd.test_file.update(self.dfuse.mount_dir.value
                                           + "/testfile")
+            # Run IOR with intercept flag. Only applicable to POSIX.
+            out = self.run_ior(self.get_job_manager_command(), 
+                         self.processes, intercept)
+        else:
+            # Run IOR
+            out = self.run_ior(self.get_job_manager_command(), self.processes)
 
-        # Run IOR
-        self.run_ior(self.get_job_manager_command(), self.processes)
+        return out
 
     def get_job_manager_command(self):
         """Get the MPI job manager command for IOR.
@@ -178,18 +185,22 @@ class IorTestBase(TestWithServers):
         mpirun_path = os.path.join(mpio_util.mpichinstall, "bin")
         return Mpirun(self.ior_cmd, mpirun_path)
 
-    def run_ior(self, manager, processes):
+    def run_ior(self, manager, processes, intercept):
         """Run the IOR command.
 
         Args:
             manager (str): mpi job manager command
             processes (int): number of host processes
+            intercept (str): path for interception library.
         """
         env = self.ior_cmd.get_default_env(
             str(manager), self.tmp, self.client_log)
+        if intercept:
+            env["LD_PRELOAD"] = intercept
         manager.setup_command(env, self.hostfile_clients, processes)
         try:
-            manager.run()
+            out = manager.run()
+            return out
         except CommandFailure as error:
             self.log.error("IOR Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")

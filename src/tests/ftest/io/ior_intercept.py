@@ -23,6 +23,7 @@
 """
 
 from ior_test_base import IorTestBase
+from ior_utils import IorCommand, IorMetrics
 
 
 class IorIntercept(IorTestBase):
@@ -54,13 +55,33 @@ class IorIntercept(IorTestBase):
 
         :avocado: tags=all,daosio,hw,iorintercept
         """
+        
         out = self.run_ior_with_pool()
-        print("*****************************"
-        print("*****************************"
-        print("*****************************"
-        print(self.prefix)
-        print(out)
-        print("*****************************"
-        print("*****************************"
-        print("*****************************"
+        without_intercept = IorCommand.get_ior_metrics(out)
+        intercept = self.prefix + "/lib64/libioil.so"
+        out = self.run_ior_with_pool(intercept)
+        with_intercept = IorCommand.get_ior_metrics(out)
+           
+        MAX_MIB = int(IorMetrics.Max_MiB)
+        MIN_MIB = int(IorMetrics.Min_MiB)
+        MEAN_MIB = int(IorMetrics.Mean_MiB) 
+        X_IMPROVEMENT = 2
 
+        # Verifying write performance 
+        self.assertTrue(float(with_intercept[0][MAX_MIB]) > 
+              X_IMPROVEMENT * float(without_intercept[0][MAX_MIB]))
+        self.assertTrue(float(with_intercept[0][MIN_MIB]) > 
+              X_IMPROVEMENT * float(without_intercept[0][MIN_MIB]))
+        self.assertTrue(float(with_intercept[0][MEAN_MIB]) > 
+              X_IMPROVEMENT * float(without_intercept[0][MEAN_MIB]))
+
+        # Verifying read performance 
+        self.assertTrue(float(with_intercept[1][MAX_MIB]) > 
+              X_IMPROVEMENT * float(without_intercept[1][MAX_MIB]))
+        self.assertTrue(float(with_intercept[1][MIN_MIB]) > 
+              X_IMPROVEMENT * float(without_intercept[1][MIN_MIB]))
+        self.assertTrue(float(with_intercept[1][MEAN_MIB] )> 
+              X_IMPROVEMENT * float(without_intercept[1][MEAN_MIB]))
+
+
+        
