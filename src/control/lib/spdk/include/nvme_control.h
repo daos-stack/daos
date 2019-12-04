@@ -33,6 +33,7 @@ struct ctrlr_t {
 	char		     pci_addr[1024];
 	char		     fw_rev[1024];
 	int		     socket_id;
+	struct ns_t	    *nss;
 	struct dev_health_t *dev_health;
 	struct ctrlr_t	    *next;
 };
@@ -43,7 +44,6 @@ struct ctrlr_t {
 struct ns_t {
 	int		id;
 	int		size;
-	char		ctrlr_pci_addr[1024];
 	struct ns_t    *next;
 };
 
@@ -75,23 +75,21 @@ struct dev_health_t {
 struct ret_t {
 	int		rc;
 	struct ctrlr_t *ctrlrs;
-	struct ns_t    *nss;
 	char		err[1024];
 };
 
 struct ctrlr_entry {
 	struct spdk_nvme_ctrlr	*ctrlr;
 	struct spdk_pci_addr	 pci_addr;
+	struct ns_entry		*nss;
 	struct dev_health_entry	*dev_health;
 	int			 socket_id;
 	struct ctrlr_entry	*next;
 };
 
 struct ns_entry {
-	struct spdk_nvme_ctrlr	*ctrlr;
 	struct spdk_nvme_ns	*ns;
 	struct ns_entry		*next;
-	struct spdk_nvme_qpair	*qpair;
 };
 
 struct dev_health_entry {
@@ -100,8 +98,7 @@ struct dev_health_entry {
 	int					 inflight;
 };
 
-extern struct ctrlr_entry	*g_controllers;
-extern struct ns_entry		*g_namespaces;
+struct ctrlr_entry	*g_controllers;
 
 /**
  * Provide ability to pass function pointers to nvme_discover for mocking

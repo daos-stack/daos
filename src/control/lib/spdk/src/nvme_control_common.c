@@ -28,40 +28,6 @@
 #include "nvme_control.h"
 #include "nvme_control_common.h"
 
-void
-register_ns(struct spdk_nvme_ctrlr *ctrlr, struct spdk_nvme_ns *ns)
-{
-	struct ns_entry				*entry;
-	const struct spdk_nvme_ctrlr_data	*cdata;
-
-	/*
-	 * spdk_nvme_ctrlr is the logical abstraction in SPDK for an NVMe
-	 *  controller.  During initialization, the IDENTIFY data for the
-	 *  controller is read using an NVMe admin command, and that data
-	 *  can be retrieved using spdk_nvme_ctrlr_get_data() to get
-	 *  detailed information on the controller.  Refer to the NVMe
-	 *  specification for more details on IDENTIFY for NVMe controllers.
-	 */
-	cdata = spdk_nvme_ctrlr_get_data(ctrlr);
-
-	if (!spdk_nvme_ns_is_active(ns)) {
-		printf("Controller %-20.20s (%-20.20s): Skip inactive NS %u\n",
-			cdata->mn, cdata->sn, spdk_nvme_ns_get_id(ns));
-		return;
-	}
-
-	entry = malloc(sizeof(struct ns_entry));
-	if (entry == NULL) {
-		perror("ns_entry malloc");
-		exit(1);
-	}
-
-	entry->ctrlr = ctrlr;
-	entry->ns = ns;
-	entry->next = g_namespaces;
-	g_namespaces = entry;
-}
-
 bool
 probe_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
 	 struct spdk_nvme_ctrlr_opts *opts)
@@ -90,6 +56,7 @@ attach_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
 	}
 	entry->ctrlr = ctrlr;
 	entry->dev_health = NULL;
+	entry->nss = NULL;
 	entry->next = g_controllers;
 	g_controllers = entry;
 
@@ -106,8 +73,41 @@ attach_cb(void *cb_ctx, const struct spdk_nvme_transport_id *trid,
 		ns = spdk_nvme_ctrlr_get_ns(ctrlr, nsid);
 		if (ns == NULL)
 			continue;
-		register_ns(ctrlr, ns);
+		register_ns(entry, ns);
 	}
+}
+
+static void
+register_ns(struct ctrlr_entry *centry, struct spdk_nvme_ns *ns)
+{
+	struct ns_entry				*nentry;
+	const struct spdk_nvme_ctrlr_data	*cdata;
+
+	/*
+	 * spdk_nvme_ctrlr is the logical abstraction in SPDK for an NVMe
+	 *  controller.  During initialization, the IDENTIFY data for the
+	 *  controller is read using an NVMe admin command, and that data
+	 *  can be retrieved using spdk_nvme_ctrlr_get_data() to get
+	 *  detailed information on the controller.  Refer to the NVMe
+	 *  specification for more details on IDENTIFY for NVMe controllers.
+	 */
+	cdata = spdk_nvme_ctrlr_get_data(centry->ctrlr);
+
+	if (!spdk_nvme_ns_is_active(ns)) {
+		printf("Controller %-20.20s (%-20.20s): Skip inactive NS %u\n",
+			cdata->mn, cdata->sn, spdk_nvme_ns_get_id(ns));
+		return;
+	}
+
+	nentry = malloc(sizeof(struct ns_entry));
+	if (nentry == NULL) {
+		perror("ns_entry malloc");
+		exit(1);
+	}
+
+	nentry->ns = ns;
+	nentry->next = centry->nss;
+	centry->nss = nentry;
 }
 
 struct ret_t *
@@ -118,7 +118,6 @@ init_ret(void)
 	ret = malloc(sizeof(struct ret_t));
 	ret->rc = 0;
 	ret->ctrlrs = NULL;
-	ret->nss = NULL;
 	snprintf(ret->err, sizeof(ret->err), "none");
 
 	return ret;
@@ -140,9 +139,7 @@ struct ctrlr_entry *
 get_controller(char *addr, struct ret_t *ret)
 {
 	struct spdk_pci_addr	pci_addr;
-	struct ctrlr_entry     *entry = NULL;
-
-	entry = g_controllers;
+	struct ctrlr_entry     *entry = g_controllers;
 
 	if (spdk_pci_addr_parse(&pci_addr, addr) != 0) {
 		snprintf(ret->err, sizeof(ret->err),
@@ -171,58 +168,13 @@ void
 _collect(struct ret_t *ret, data_getter get_data, pci_getter get_pci,
 	 socket_id_getter get_socket_id)
 {
-	struct ns_entry			       *ns_entry;
-	struct ctrlr_entry		       *ctrlr_entry;
+	struct ctrlr_entry		       *ctrlr_entry = g_controllers;
 	const struct spdk_nvme_ctrlr_data      *cdata;
 	struct spdk_pci_device		       *pci_dev;
 	struct spdk_pci_addr			pci_addr;
 	struct ctrlr_t			       *ctrlr_tmp;
-	struct ns_t			       *ns_tmp;
 	int					written;
 	int					rc;
-
-	ns_entry = g_namespaces;
-	ctrlr_entry = g_controllers;
-
-	while (ns_entry) {
-		ns_tmp = malloc(sizeof(struct ns_t));
-
-		if (ns_tmp == NULL) {
-			snprintf(ret->err, sizeof(ret->err), "ns_t malloc");
-			ret->rc = -ENOMEM;
-			return;
-		}
-
-		ns_tmp->id = spdk_nvme_ns_get_id(ns_entry->ns);
-		/* capacity in GBytes */
-		ns_tmp->size = spdk_nvme_ns_get_size(ns_entry->ns) /
-			       NVMECONTROL_GBYTE_BYTES;
-
-		pci_dev = spdk_nvme_ctrlr_get_pci_device(ns_entry->ctrlr);
-		if (!pci_dev) {
-			snprintf(ret->err, sizeof(ret->err),
-				 "%s: get_pci_device", __func__);
-
-			ret->rc = -NVMEC_ERR_GET_PCI_DEV;
-			return;
-		}
-
-		pci_addr = spdk_pci_device_get_addr(pci_dev);
-		rc = spdk_pci_addr_fmt(ns_tmp->ctrlr_pci_addr,
-				       sizeof(ns_tmp->ctrlr_pci_addr),
-				       &pci_addr);
-		if (rc != 0) {
-			snprintf(ret->err, sizeof(ret->err),
-				 "spdk_pci_addr_fmt: rc %d", rc);
-			ret->rc = -NVMEC_ERR_PCI_ADDR_FMT;
-			return;
-		}
-
-		ns_tmp->next = ret->nss;
-		ret->nss = ns_tmp;
-
-		ns_entry = ns_entry->next;
-	}
 
 	while (ctrlr_entry) {
 		ctrlr_tmp = malloc(sizeof(struct ctrlr_t));
@@ -232,6 +184,8 @@ _collect(struct ret_t *ret, data_getter get_data, pci_getter get_pci,
 			ret->rc = -ENOMEM;
 			return;
 		}
+
+		ctrlr_tmp->next = NULL;
 
 		cdata = get_data(ctrlr_entry->ctrlr);
 
@@ -282,15 +236,16 @@ _collect(struct ret_t *ret, data_getter get_data, pci_getter get_pci,
 		ctrlr_tmp->socket_id = get_socket_id(pci_dev);
 		free(pci_dev);
 
-		/*
-		 * Alloc device health stats per controller only if device
-		 * health stats are queried, not by default for discovery.
-		 */
+		/* Alloc linked list of namespaces per controller */
+		if (ctrlr_entry->nss != NULL)
+			ret->rc = collect_namespaces(ctrlr_entry->nss,
+						     ctrlr_tmp);
+
+		/* Alloc device health stats per controller */
 		if (ctrlr_entry->dev_health != NULL)
 			ret->rc = collect_health_stats(ctrlr_entry->dev_health,
 						       ctrlr_tmp);
 
-		/* cdata->cntlid is not unique per host, only per subsystem */
 		ctrlr_tmp->next = ret->ctrlrs;
 		ret->ctrlrs = ctrlr_tmp;
 
@@ -308,7 +263,29 @@ collect(struct ret_t *ret)
 		 &spdk_pci_device_get_socket_id);
 }
 
-int
+static int
+collect_namespaces(struct ns_entry *ns_entry, struct ctrlr_t *ctrlr)
+{
+	struct ns_t	*ns_tmp;
+
+	while (ns_entry) {
+		ns_tmp = malloc(sizeof(struct ns_t));
+		if (ns_tmp == NULL) {
+			return = -ENOMEM;
+		}
+
+		ns_tmp->id = spdk_nvme_ns_get_id(ns_entry->ns);
+		ns_tmp->size = spdk_nvme_ns_get_size(ns_entry->ns);
+		ns_tmp->next = ctrlr_tmp->nss;
+		ctrlr_tmp->nss = ns_tmp;
+
+		ns_entry = ns_entry->next;
+	}
+
+	return 0;
+}
+
+static int
 collect_health_stats(struct dev_health_entry *entry, struct ctrlr_t *ctrlr)
 {
 	struct dev_health_t			 *h_tmp;

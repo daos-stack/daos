@@ -28,9 +28,6 @@
 #include "nvme_control.h"
 #include "nvme_control_common.h"
 
-struct ctrlr_entry	*g_controllers;
-struct ns_entry		*g_namespaces;
-
 static void
 get_spdk_log_page_completion(void *cb_arg, const struct spdk_nvme_cpl *cpl)
 {
@@ -100,6 +97,7 @@ _nvme_discover(prober probe, detacher detach, health_getter get_health)
 
 	/*
 	 * Collect NVMe SSD health stats for each probed controller.
+	 * TODO: move to attach_cb?
 	 */
 	ctrlr_entry = g_controllers;
 
@@ -234,7 +232,6 @@ nvme_format(char *ctrlr_pci_addr)
 		return ret;
 
 	cdata = spdk_nvme_ctrlr_get_data(ctrlr_entry->ctrlr);
-
 	if (!cdata->oacs.format) {
 		snprintf(ret->err, sizeof(ret->err),
 			"Controller does not support Format NVM command\n");
@@ -264,7 +261,6 @@ nvme_format(char *ctrlr_pci_addr)
 	format.ses	= 1; /* secure erase operation set user data erase */
 
 	ret->rc = spdk_nvme_ctrlr_format(ctrlr_entry->ctrlr, ns_id, &format);
-
 	if (ret->rc != 0) {
 		snprintf(ret->err, sizeof(ret->err), "format failed");
 		return ret;
@@ -290,28 +286,26 @@ nvme_format(char *ctrlr_pci_addr)
 void
 _cleanup(detacher detach)
 {
-	struct ns_entry		*ns_entry;
-	struct ctrlr_entry	*ctrlr_entry;
+	struct ns_entry		*nentry;
+	struct ctrlr_entry	*centry;
 
-	ns_entry = g_namespaces;
-	ctrlr_entry = g_controllers;
+	centry = g_controllers;
 
-	while (ns_entry != NULL) {
-		struct ns_entry *next = ns_entry->next;
+	printf("Cleanup NVMe");
 
-		free(ns_entry);
-		ns_entry = next;
-	}
+	while (centry) {
+		struct ctrlr_entry *cnext = centry->next;
 
-	g_namespaces = NULL;
+		if (centry->dev_health)
+			free(centry->dev_health);
+		if (centry->ctrlr)
+			detach(centry->ctrlr);
+		while (centry->nss) {
+			nentry = centry->nss->next;
+			free(centry->nss);
+			centry->nss = nentry;
+		}
 
-	while (ctrlr_entry != NULL) {
-		struct ctrlr_entry *next = ctrlr_entry->next;
-
-		if (ctrlr_entry->dev_health != NULL)
-			free(ctrlr_entry->dev_health);
-		if (ctrlr_entry->ctrlr != NULL)
-			detach(ctrlr_entry->ctrlr);
 		free(ctrlr_entry);
 		ctrlr_entry = next;
 	}

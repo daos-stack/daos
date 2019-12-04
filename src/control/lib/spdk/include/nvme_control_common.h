@@ -45,18 +45,6 @@ enum NvmeControlStatusCode {
 };
 
 /**
- * Register the namespace by obtaining the NVMe controller data,
- * verifying the namespace is active and allocating memory for
- * the namespace.
- *
- * \param pointer to spdk_nvme_ctrlr struct
- * \param pointer to spdk_nvme_ns struct
- *
- */
-void
-register_ns(struct spdk_nvme_ctrlr *ctrlr, struct spdk_nvme_ns *ns);
-
-/**
  * Probe call back function.
  *
  * \param cb_ctx
@@ -131,15 +119,5 @@ _collect(struct ret_t *ret, data_getter, pci_getter, socket_id_getter);
  */
 void
 collect(struct ret_t *ret);
-
-/**
- * Collect health statistics for the NVMe device.
- *
- * \param entry to read health stats from
- * \param ctrlr to populate health stats to
- * \return int
- **/
-int
-collect_health_stats(struct dev_health_entry *entry, struct ctrlr_t *ctrlr);
 
 #endif

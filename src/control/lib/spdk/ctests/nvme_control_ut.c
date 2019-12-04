@@ -265,6 +265,16 @@ test_nvme_collect(void **state)
 }
 
 int
+setup(void **state)
+{
+	g_controllers = NULL;
+	g_namespaces = NULL;
+
+	return 0;
+}
+
+
+int
 teardown(void **state)
 {
 	_cleanup(&mock_spdk_nvme_detach_ok);
@@ -282,5 +292,5 @@ main(void)
 		cmocka_unit_test(test_nvme_collect),
 	};
 
-	return cmocka_run_group_tests(tests, NULL, teardown);
+	return cmocka_run_group_tests(tests, setup, teardown);
 }
