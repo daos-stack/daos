@@ -29,11 +29,15 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 	      struct fuse_file_info *fi)
 {
 	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
+	const struct fuse_ctx		*fc = fuse_req_ctx(req);
 	d_iov_t				iov = {};
 	d_sg_list_t			sgl = {};
 	daos_size_t			size;
 	void				*buff;
 	int				rc;
+
+	DFUSE_TRA_INFO(oh, "%#zx-%#zx pid=%d",
+		       position, position + len - 1, fc->pid);
 
 	D_ALLOC(buff, len);
 	if (!buff) {
