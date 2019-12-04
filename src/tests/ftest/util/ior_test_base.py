@@ -136,7 +136,7 @@ class IorTestBase(TestWithServers):
         override the values read from the yaml file.
 
         Args:
-            intercept (str): path for the interception library. Shall be used
+            intercept (str): path to the interception library. Shall be used
                              only for POSIX through DFUSE.
             ior_flags (str, optional): ior flags. Defaults to None.
             object_class (str, optional): daos object class. Defaults to None.
@@ -182,13 +182,13 @@ class IorTestBase(TestWithServers):
         mpirun_path = os.path.join(mpio_util.mpichinstall, "bin")
         return Mpirun(self.ior_cmd, mpirun_path)
 
-    def run_ior(self, manager, processes, intercept):
+    def run_ior(self, manager, processes, intercept=None):
         """Run the IOR command.
 
         Args:
             manager (str): mpi job manager command
             processes (int): number of host processes
-            intercept (str): path for interception library.
+            intercept (str): path to interception library.
         """
         env = self.ior_cmd.get_default_env(
             str(manager), self.tmp, self.client_log)
