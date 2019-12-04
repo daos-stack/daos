@@ -55,33 +55,28 @@ class IorIntercept(IorTestBase):
 
         :avocado: tags=all,daosio,hw,iorintercept
         """
-        
         out = self.run_ior_with_pool()
         without_intercept = IorCommand.get_ior_metrics(out)
         intercept = self.prefix + "/lib64/libioil.so"
         out = self.run_ior_with_pool(intercept)
         with_intercept = IorCommand.get_ior_metrics(out)
-           
-        MAX_MIB = int(IorMetrics.Max_MiB)
-        MIN_MIB = int(IorMetrics.Min_MiB)
-        MEAN_MIB = int(IorMetrics.Mean_MiB) 
-        X_IMPROVEMENT = 2
+        max_mib = int(IorMetrics.Max_MiB)
+        min_mib = int(IorMetrics.Min_MiB)
+        mean_mib = int(IorMetrics.Mean_MiB)
+        x_improvement = 2
 
-        # Verifying write performance 
-        self.assertTrue(float(with_intercept[0][MAX_MIB]) > 
-              X_IMPROVEMENT * float(without_intercept[0][MAX_MIB]))
-        self.assertTrue(float(with_intercept[0][MIN_MIB]) > 
-              X_IMPROVEMENT * float(without_intercept[0][MIN_MIB]))
-        self.assertTrue(float(with_intercept[0][MEAN_MIB]) > 
-              X_IMPROVEMENT * float(without_intercept[0][MEAN_MIB]))
+        # Verifying write performance
+        self.assertTrue(float(with_intercept[0][max_mib]) >
+                        x_improvement * float(without_intercept[0][max_mib]))
+        self.assertTrue(float(with_intercept[0][min_mib]) >
+                        x_improvement * float(without_intercept[0][min_mib]))
+        self.assertTrue(float(with_intercept[0][mean_mib]) >
+                        x_improvement * float(without_intercept[0][mean_mib]))
 
-        # Verifying read performance 
-        self.assertTrue(float(with_intercept[1][MAX_MIB]) > 
-              X_IMPROVEMENT * float(without_intercept[1][MAX_MIB]))
-        self.assertTrue(float(with_intercept[1][MIN_MIB]) > 
-              X_IMPROVEMENT * float(without_intercept[1][MIN_MIB]))
-        self.assertTrue(float(with_intercept[1][MEAN_MIB] )> 
-              X_IMPROVEMENT * float(without_intercept[1][MEAN_MIB]))
-
-
-        
+        # Verifying read performance
+        self.assertTrue(float(with_intercept[1][max_mib]) >
+                        x_improvement * float(without_intercept[1][max_mib]))
+        self.assertTrue(float(with_intercept[1][min_mib]) >
+                        x_improvement * float(without_intercept[1][min_mib]))
+        self.assertTrue(float(with_intercept[1][mean_mib]) >
+                        x_improvement * float(without_intercept[1][mean_mib]))
