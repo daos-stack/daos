@@ -159,7 +159,17 @@ extern "C" {
 		/* Compiler check to ensure type match */		\
 		__typeof__(newptr) optr = oldptr;			\
 		D_ASSERT((void *)&(newptr) != &(oldptr));		\
-		(newptr) =  realloc(optr, (_sz));			\
+		/*							\
+		 * On Linux, realloc(p, 0) may return NULL after	\
+		 * freeing p. This behavior has proved tricky, as it is	\
+		 * easy to mistake the NULL return value for an error	\
+		 * and keep using the dangling p. We therefore allocate	\
+		 * a 1-byte object in this case, simulating the BSD	\
+		 * behavior.						\
+		 */							\
+		if (_sz == 0)						\
+			_sz = 1;					\
+		(newptr) = realloc(optr, _sz);				\
 		if ((newptr) != NULL) {					\
 			if ((_cnt) <= 1)				\
 				D_DEBUG(DB_MEM,				\
