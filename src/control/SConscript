@@ -68,13 +68,13 @@ def install_go_bin(denv, gosrc, gopath, libs, name, install_name):
         src.extend(libs)
     denv.Command(bin_path, src,
                  cmd_build(path, gosrc,
-                           "go install %s" % install_src))
+                           'go install -ldflags "-X main.daosVersion=%s" %s' % (DAOS_VERSION, install_src)))
     denv.InstallAs(install_bin, bin_path)
 #pylint: enable=too-many-arguments
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env', 'prereqs', 'DAOS_VERSION')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
