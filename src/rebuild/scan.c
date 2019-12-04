@@ -802,7 +802,6 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 			/* Update master rank */
 			rc = ds_pool_iv_ns_update(rpt->rt_pool,
 						  rsi->rsi_master_rank,
-						  &rsi->rsi_ns_iov,
 						  rsi->rsi_ns_id);
 			if (rc)
 				D_GOTO(out, rc);

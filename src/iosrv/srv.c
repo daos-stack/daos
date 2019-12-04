@@ -1,4 +1,4 @@
-/**
+/*
  * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,12 +21,15 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
+ * \file
+ *
  * This file is part of the DAOS server. It implements the DAOS service
  * including:
  * - network setup
  * - start/stop execution streams
  * - bind execution streams to core/NUMA node
  */
+
 #define D_LOGFAC       DD_FAC(server)
 
 #include <abt.h>
@@ -889,7 +892,7 @@ dss_xstreams_fini(bool force)
 	D_DEBUG(DB_TRACE, "Execution streams stopped\n");
 }
 
-static void
+void
 dss_xstreams_open_barrier(void)
 {
 	ABT_mutex_lock(xstream_data.xd_mutex);
@@ -962,7 +965,7 @@ dss_start_xs_id(int xs_id)
 }
 
 static int
-dss_xstreams_init()
+dss_xstreams_init(void)
 {
 	int	rc;
 	int	i, xs_id;
@@ -1024,7 +1027,6 @@ dss_xstreams_init()
 	D_DEBUG(DB_TRACE, "%d execution streams successfully started "
 		"(first core %d)\n", dss_tgt_nr, dss_core_offset);
 out:
-	dss_xstreams_open_barrier();
 	if (dss_xstreams_empty()) /* started nothing */
 		pthread_key_delete(dss_tls_key);
 

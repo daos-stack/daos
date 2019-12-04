@@ -693,8 +693,7 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	arg.pca_map_version = in->tci_map_version;
-	arg.pca_need_group = 0;
-
+	arg.pca_need_group = 1;
 	rc = ds_pool_lookup_create(in->tci_uuid, &arg, &pool);
 	if (rc != 0) {
 		D_FREE(hdl);
@@ -711,8 +710,7 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 
-	rc = ds_pool_iv_ns_update(pool, in->tci_master_rank, &in->tci_iv_ctxt,
-				  in->tci_iv_ns_id);
+	rc = ds_pool_iv_ns_update(pool, in->tci_master_rank, in->tci_iv_ns_id);
 	if (rc) {
 		D_ERROR("attach iv ns failed rc "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);

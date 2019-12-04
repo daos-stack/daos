@@ -470,7 +470,7 @@ struct ds_iv_class_ops cont_iv_ops = {
 
 static int
 cont_iv_fetch(void *ns, int class_id, uuid_t key_uuid,
-	      struct cont_iv_entry *cont_iv, int cont_iv_len)
+	      struct cont_iv_entry *cont_iv, int cont_iv_len, bool retry)
 {
 	d_sg_list_t		sgl;
 	d_iov_t			iov;
@@ -489,7 +489,7 @@ cont_iv_fetch(void *ns, int class_id, uuid_t key_uuid,
 	civ_key = key2priv(&key);
 	uuid_copy(civ_key->cont_uuid, key_uuid);
 	civ_key->class_id = class_id;
-	rc = ds_iv_fetch(ns, &key, cont_iv ? &sgl : NULL);
+	rc = ds_iv_fetch(ns, &key, cont_iv ? &sgl : NULL, retry);
 	if (rc)
 		D_ERROR(DF_UUID" iv fetch failed "DF_RC"\n",
 			DP_UUID(key_uuid), DP_RC(rc));
@@ -497,10 +497,10 @@ cont_iv_fetch(void *ns, int class_id, uuid_t key_uuid,
 	return rc;
 }
 
-int
+static int
 cont_iv_update(void *ns, int class_id, uuid_t key_uuid,
 	       struct cont_iv_entry *cont_iv, int cont_iv_len,
-	       unsigned int shortcut, unsigned int sync_mode)
+	       unsigned int shortcut, unsigned int sync_mode, bool retry)
 {
 	d_sg_list_t		sgl;
 	d_iov_t			iov;
@@ -520,7 +520,7 @@ cont_iv_update(void *ns, int class_id, uuid_t key_uuid,
 	civ_key = key2priv(&key);
 	uuid_copy(civ_key->cont_uuid, key_uuid);
 	civ_key->class_id = class_id;
-	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0);
+	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0, retry);
 	if (rc)
 		D_ERROR(DF_UUID" iv update failed "DF_RC"\n", DP_UUID(key_uuid),
 			DP_RC(rc));
@@ -550,7 +550,8 @@ cont_iv_snapshots_update(void *ns, uuid_t cont_uuid, uint64_t *snapshots,
 	       sizeof(*snapshots) * snap_count);
 
 	rc = cont_iv_update(ns, IV_CONT_SNAP, cont_uuid, iv_entry, entry_size,
-			    CRT_IV_SHORTCUT_TO_ROOT, CRT_IV_SYNC_EAGER);
+			    CRT_IV_SHORTCUT_TO_ROOT, CRT_IV_SYNC_EAGER,
+			    false /* retry */);
 	D_FREE(iv_entry);
 
 out:
@@ -573,7 +574,8 @@ cont_iv_snapshots_refresh(void *ns, uuid_t cont_uuid)
 		rc = -DER_NOMEM;
 		goto out;
 	}
-	rc = cont_iv_fetch(ns, IV_CONT_SNAP, cont_uuid, iv_entry, entry_size);
+	rc = cont_iv_fetch(ns, IV_CONT_SNAP, cont_uuid, iv_entry, entry_size,
+			   true /* retry */);
 	if (rc == 0)
 		D_ASSERT(iv_entry->iv_snap.snap_cnt <= MAX_SNAP_CNT);
 
@@ -604,7 +606,8 @@ cont_iv_capa_refresh_ult(void *data)
 		D_GOTO(out, rc = -DER_NONEXIST);
 
 	rc = cont_iv_fetch(pool->sp_iv_ns, IV_CONT_CAPA,
-			   arg->cont_hdl_uuid, &entry, sizeof(entry));
+			   arg->cont_hdl_uuid, &entry, sizeof(entry),
+			   false /* retry */);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -689,7 +692,8 @@ cont_iv_capability_update(void *ns, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 
 	rc = cont_iv_update(ns, IV_CONT_CAPA, cont_hdl_uuid, &iv_entry,
 			    sizeof(struct cont_iv_entry),
-			    CRT_IV_SHORTCUT_TO_ROOT, CRT_IV_SYNC_EAGER);
+			    CRT_IV_SHORTCUT_TO_ROOT, CRT_IV_SYNC_EAGER,
+			    false /* retry */);
 	return rc;
 }
 
@@ -705,7 +709,8 @@ cont_iv_capability_invalidate(void *ns, uuid_t cont_hdl_uuid)
 	civ_key->class_id = IV_CONT_CAPA;
 
 	key.class_id = IV_CONT_CAPA;
-	rc = ds_iv_invalidate(ns, &key, 0, CRT_IV_SYNC_NONE, 0);
+	rc = ds_iv_invalidate(ns, &key, 0, CRT_IV_SYNC_NONE, 0,
+			      false /* retry */);
 	if (rc)
 		D_ERROR("iv invalidate failed "DF_RC"\n", DP_RC(rc));
 
@@ -875,7 +880,7 @@ cont_iv_prop_update(void *ns, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 
 	rc = cont_iv_update(ns, IV_CONT_PROP, cont_hdl_uuid, iv_entry,
 			    entry_size, CRT_IV_SHORTCUT_TO_ROOT,
-			    CRT_IV_SYNC_EAGER);
+			    CRT_IV_SYNC_EAGER, false /* retry */);
 	D_FREE(iv_entry);
 
 out:
@@ -911,7 +916,7 @@ cont_iv_prop_fetch_ult(void *data)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	rc = cont_iv_fetch(arg->iv_ns, IV_CONT_PROP, arg->cont_hdl_uuid,
-			   iv_entry, iv_entry_size);
+			   iv_entry, iv_entry_size, false /* retry */);
 	if (rc) {
 		D_ERROR("cont_iv_fetch failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);

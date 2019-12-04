@@ -301,6 +301,13 @@ typedef struct {
 	d_rank_list_t			*mgpi_svc;
 } daos_mgmt_pool_info_t;
 
+/* DAOS pool container information
+ *
+ */
+struct daos_pool_cont_info {
+	uuid_t		pci_uuid;
+};
+
 /**
  * DAOS_PC_RO connects to the pool for reading only.
  *

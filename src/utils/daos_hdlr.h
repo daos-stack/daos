@@ -167,6 +167,7 @@ typedef int (*command_hdlr_t)(struct cmd_args_s *ap);
 
 /* Pool operations */
 int pool_query_hdlr(struct cmd_args_s *ap);
+int pool_list_containers_hdlr(struct cmd_args_s *ap);
 
 /* TODO: implement these pool op functions
  * int pool_list_cont_hdlr(struct cmd_args_s *ap);

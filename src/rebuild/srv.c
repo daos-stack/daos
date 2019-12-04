@@ -807,7 +807,7 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 
 	/* Create pool iv ns for the pool */
 	crt_group_rank(pool->sp_group, &master_rank);
-	rc = ds_pool_iv_ns_update(pool, master_rank, NULL, -1);
+	rc = ds_pool_iv_ns_update(pool, master_rank, -1);
 	if (rc)
 		return rc;
 
@@ -912,7 +912,6 @@ retry:
 	uuid_copy(rsi->rsi_pool_uuid, pool->sp_uuid);
 	uuid_copy(rsi->rsi_pool_hdl_uuid, rgt->rgt_poh_uuid);
 	uuid_copy(rsi->rsi_cont_hdl_uuid, rgt->rgt_coh_uuid);
-	ds_iv_global_ns_get(pool->sp_iv_ns, &rsi->rsi_ns_iov);
 	rsi->rsi_ns_id = pool->sp_iv_ns->iv_ns_id;
 	rsi->rsi_pool_map_ver = map_ver;
 	rsi->rsi_leader_term = rgt->rgt_leader_term;
@@ -1981,8 +1980,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	D_DEBUG(DB_REBUILD, "rebuild coh/poh "DF_UUID"/"DF_UUID"\n",
 		DP_UUID(rpt->rt_coh_uuid), DP_UUID(rpt->rt_poh_uuid));
 
-	rc = ds_pool_iv_ns_update(pool, rsi->rsi_master_rank,
-				  &rsi->rsi_ns_iov, rsi->rsi_ns_id);
+	rc = ds_pool_iv_ns_update(pool, rsi->rsi_master_rank, rsi->rsi_ns_id);
 	if (rc)
 		D_GOTO(out, rc);
 

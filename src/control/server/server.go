@@ -38,6 +38,7 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/ioserver"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
@@ -68,6 +69,12 @@ func Start(log *logging.LeveledLogger, cfg *Configuration) error {
 
 	// Backup active config.
 	saveActiveConfig(log, cfg)
+
+	if cfg.HelperLogFile != "" {
+		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cfg.HelperLogFile); err != nil {
+			return errors.Wrap(err, "unable to configure privileged helper logging")
+		}
+	}
 
 	// Create the root context here. All contexts should
 	// inherit from this one so that they can be shut down

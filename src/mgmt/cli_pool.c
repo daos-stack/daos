@@ -1,4 +1,4 @@
-/**
+/*
  * (C) Copyright 2016-2019 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,43 +20,72 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-/*
+/**
+ * \file
+ *
  * Pool create/destroy methods
  */
+
 #define D_LOGFAC	DD_FAC(mgmt)
 
 #include <daos/mgmt.h>
 #include <daos/event.h>
+#include <daos/rsvc.h>
 #include <daos_api.h>
 #include <daos_security.h>
 #include "rpc.h"
 
-struct pool_create_arg {
-	struct dc_mgmt_sys	*sys;
-	crt_rpc_t		*rpc;
-	d_rank_list_t		*svc;
+static int
+mgmt_rsvc_client_complete_rpc(struct rsvc_client *client, crt_endpoint_t *ep,
+			      int rc_crt, int rc_svc, struct rsvc_hint *hint,
+			      tse_task_t *task)
+{
+	int rc;
+
+	rc = rsvc_client_complete_rpc(client, ep, rc_crt, rc_svc, hint);
+	if (rc == RSVC_CLIENT_RECHOOSE ||
+	    (rc == RSVC_CLIENT_PROCEED && daos_rpc_retryable_rc(rc_svc))) {
+		rc = tse_task_reinit(task);
+		if (rc != 0)
+			return rc;
+		return RSVC_CLIENT_RECHOOSE;
+	}
+	return RSVC_CLIENT_PROCEED;
+}
+
+struct pool_create_state {
+	struct rsvc_client	client;
+	daos_prop_t	       *prop;
+	struct dc_mgmt_sys     *sys;
+	crt_rpc_t	       *rpc;
 };
 
 static int
 pool_create_cp(tse_task_t *task, void *data)
 {
-	struct pool_create_arg		*arg = (struct pool_create_arg *)data;
-	d_rank_list_t			*svc = arg->svc;
-	struct mgmt_pool_create_out	*pc_out;
-	struct mgmt_pool_create_in	*pc_in;
-	int				 rc = task->dt_result;
+	daos_pool_create_t		*args = dc_task_get_args(task);
+	struct pool_create_state	*state = dc_task_get_priv(task);
+	d_rank_list_t			*svc = args->svc;
+	struct mgmt_pool_create_out	*pc_out = crt_reply_get(state->rpc);
+	bool				 free_state = true;
+	int				 rc;
 
-	if (rc) {
-		D_ERROR("RPC error while creating pool: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc);
+	rc = mgmt_rsvc_client_complete_rpc(&state->client, &state->rpc->cr_ep,
+					   task->dt_result, pc_out->pc_rc,
+					   NULL /* hint */, task);
+	if (rc < 0) {
+		goto out;
+	} else if (rc == RSVC_CLIENT_RECHOOSE) {
+		free_state = false;
+		rc = 0;
+		goto out;
 	}
 
-	pc_out = crt_reply_get(arg->rpc);
 	rc = pc_out->pc_rc;
 	if (rc) {
 		D_ERROR("MGMT_POOL_CREATE replied failed, rc: "DF_RC"\n",
 			DP_RC(rc));
-		D_GOTO(out, rc);
+		goto out;
 	}
 
 	/*
@@ -75,15 +104,14 @@ pool_create_cp(tse_task_t *task, void *data)
 	       sizeof(*svc->rl_ranks) * svc->rl_nr);
 
 out:
-	/*
-	 * Need to free the pool prop input we allocated in dc_pool_create
-	 */
-	pc_in = crt_req_get(arg->rpc);
-	D_ASSERT(pc_in != NULL);
-	daos_prop_free(pc_in->pc_prop);
-
-	dc_mgmt_sys_detach(arg->sys);
-	crt_req_decref(arg->rpc);
+	crt_req_decref(state->rpc);
+	state->rpc = NULL;
+	if (free_state) {
+		rsvc_client_fini(&state->client);
+		dc_mgmt_sys_detach(state->sys);
+		daos_prop_free(state->prop);
+		D_FREE(state);
+	}
 	return rc;
 }
 
@@ -182,41 +210,65 @@ err_out:
 int
 dc_pool_create(tse_task_t *task)
 {
-	daos_pool_create_t		*args;
+	daos_pool_create_t	       *args = dc_task_get_args(task);
+	struct pool_create_state       *state = dc_task_get_priv(task);
 	crt_endpoint_t			svr_ep;
 	crt_rpc_t		       *rpc_req = NULL;
 	crt_opcode_t			opc;
 	struct mgmt_pool_create_in     *pc_in;
-	struct pool_create_arg		create_args;
-	int				rc = 0;
-	daos_prop_t		       *final_prop = NULL;
+	int				rc;
 
-	args = dc_task_get_args(task);
-	if (!args->uuid || args->dev == NULL || strlen(args->dev) == 0) {
-		D_ERROR("Invalid parameter of dev (NULL or empty string).\n");
-		D_GOTO(out, rc = -DER_INVAL);
+	if (state == NULL) {
+		d_rank_list_t	ranks;
+		d_rank_t	rank;
+
+		if (args->uuid == NULL || args->dev == NULL ||
+		    strlen(args->dev) == 0) {
+			D_ERROR("Invalid parameter of dev (NULL or empty "
+				"string)\n");
+			rc = -DER_INVAL;
+			goto out;
+		}
+
+		uuid_generate(args->uuid);
+
+		D_ALLOC_PTR(state);
+		if (state == NULL) {
+			D_ERROR("failed to allocate state\n");
+			rc = -DER_NOMEM;
+			goto out;
+		}
+
+		rc = add_ownership_props(&state->prop, args->prop, args->uid,
+					 args->gid);
+		if (rc != 0)
+			goto out_state;
+
+		rc = dc_mgmt_sys_attach(args->grp, &state->sys);
+		if (rc != 0)
+			goto out_prop;
+
+		rank = 0;
+		ranks.rl_ranks = &rank;
+		ranks.rl_nr = 1;
+		rc = rsvc_client_init(&state->client, &ranks);
+		if (rc != 0) {
+			D_ERROR("failed to initialize rsvc_client %d\n", rc);
+			goto out_grp;
+		}
+
+		daos_task_set_priv(task, state);
 	}
 
-	uuid_generate(args->uuid);
-
-	rc = add_ownership_props(&final_prop, args->prop, args->uid, args->gid);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	rc = dc_mgmt_sys_attach(args->grp, &create_args.sys);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	svr_ep.ep_grp = create_args.sys->sy_group;
-	svr_ep.ep_rank = 0;
-	svr_ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
+	svr_ep.ep_grp = state->sys->sy_group;
+	rsvc_client_choose(&state->client, &svr_ep);
 	opc = DAOS_RPC_OPCODE(MGMT_POOL_CREATE, DAOS_MGMT_MODULE,
 			      DAOS_MGMT_VERSION);
 	rc = crt_req_create(daos_task2ctx(task), &svr_ep, opc, &rpc_req);
 	if (rc != 0) {
 		D_ERROR("crt_req_create(MGMT_POOL_CREATE) failed, rc: %d.\n",
 			rc);
-		D_GOTO(out_grp, rc);
+		D_GOTO(out_client, rc);
 	}
 
 	D_ASSERT(rpc_req != NULL);
@@ -230,15 +282,13 @@ dc_pool_create(tse_task_t *task)
 	pc_in->pc_tgts = (d_rank_list_t *)args->tgts;
 	pc_in->pc_scm_size = args->scm_size;
 	pc_in->pc_nvme_size = args->nvme_size;
-	pc_in->pc_prop = final_prop;
+	pc_in->pc_prop = state->prop;
 	pc_in->pc_svc_nr = args->svc->rl_nr;
 
 	crt_req_addref(rpc_req);
-	create_args.rpc = rpc_req;
-	create_args.svc = args->svc;
+	state->rpc = rpc_req;
 
-	rc = tse_task_register_comp_cb(task, pool_create_cp, &create_args,
-				       sizeof(create_args));
+	rc = tse_task_register_comp_cb(task, pool_create_cp, NULL, 0);
 	if (rc != 0)
 		D_GOTO(out_put_req, rc);
 
@@ -248,79 +298,127 @@ dc_pool_create(tse_task_t *task)
 	return daos_rpc_send(rpc_req, task);
 
 out_put_req:
+	crt_req_decref(state->rpc);
 	crt_req_decref(rpc_req);
-	crt_req_decref(rpc_req);
+out_client:
+	rsvc_client_fini(&state->client);
 out_grp:
-	dc_mgmt_sys_detach(create_args.sys);
+	dc_mgmt_sys_detach(state->sys);
+out_prop:
+	daos_prop_free(state->prop);
+out_state:
+	D_FREE(state);
 out:
-	daos_prop_free(final_prop);
 	tse_task_complete(task, rc);
 	return rc;
 }
 
-struct pool_destroy_arg {
-	struct dc_mgmt_sys	*sys;
-	crt_rpc_t		*rpc;
+struct pool_destroy_state {
+	struct rsvc_client	client;
+	struct dc_mgmt_sys     *sys;
+	crt_rpc_t	       *rpc;
 };
 
 static int
 pool_destroy_cp(tse_task_t *task, void *data)
 {
-	struct pool_destroy_arg		*arg = data;
-	struct mgmt_pool_destroy_out	*pd_out;
-	int				 rc = task->dt_result;
+	struct pool_destroy_state	*state = dc_task_get_priv(task);
+	struct mgmt_pool_destroy_out	*pd_out = crt_reply_get(state->rpc);
+	bool				 free_state = true;
+	int				 rc;
 
-	if (rc) {
-		D_ERROR("RPC error while destroying pool: "DF_RC"\n",
-			DP_RC(rc));
-		D_GOTO(out, rc);
+	/*
+	 * Work around pool destroy issues after killing servers by not
+	 * retrying for now.
+	 */
+	if (task->dt_result == 0 &&
+	    (daos_crt_network_error(pd_out->pd_rc) ||
+	     pd_out->pd_rc == -DER_TIMEDOUT))
+		goto proceed;
+
+	rc = mgmt_rsvc_client_complete_rpc(&state->client, &state->rpc->cr_ep,
+					   task->dt_result, pd_out->pd_rc,
+					   NULL /* hint */, task);
+	if (rc < 0) {
+		goto out;
+	} else if (rc == RSVC_CLIENT_RECHOOSE) {
+		free_state = false;
+		rc = 0;
+		goto out;
 	}
 
-	pd_out = crt_reply_get(arg->rpc);
+proceed:
 	rc = pd_out->pd_rc;
 	if (rc) {
 		D_ERROR("MGMT_POOL_DESTROY replied failed, rc: "DF_RC"\n",
 			DP_RC(rc));
-		D_GOTO(out, rc);
+		goto out;
 	}
 
 out:
-	dc_mgmt_sys_detach(arg->sys);
-	crt_req_decref(arg->rpc);
+	crt_req_decref(state->rpc);
+	state->rpc = NULL;
+	if (free_state) {
+		rsvc_client_fini(&state->client);
+		dc_mgmt_sys_detach(state->sys);
+		D_FREE(state);
+	}
 	return rc;
 }
 
 int
 dc_pool_destroy(tse_task_t *task)
 {
-	daos_pool_destroy_t		*args;
+	daos_pool_destroy_t		*args = dc_task_get_args(task);
+	struct pool_destroy_state	*state = dc_task_get_priv(task);
 	crt_endpoint_t			 svr_ep;
-	crt_rpc_t			*rpc_req = NULL;
+	crt_rpc_t			*rpc_req;
 	crt_opcode_t			 opc;
-	struct pool_destroy_arg		 destroy_arg;
 	struct mgmt_pool_destroy_in	*pd_in;
-	int				 rc = 0;
+	int				 rc;
 
-	args = dc_task_get_args(task);
-	if (!daos_uuid_valid(args->uuid)) {
-		D_ERROR("Invalid parameter of uuid (NULL).\n");
-		D_GOTO(out, rc = -DER_INVAL);
+	if (state == NULL) {
+		d_rank_list_t	ranks;
+		d_rank_t	rank;
+
+		if (!daos_uuid_valid(args->uuid)) {
+			D_ERROR("Invalid parameter of uuid (NULL).\n");
+			rc = -DER_INVAL;
+			goto out;
+		}
+
+		D_ALLOC_PTR(state);
+		if (state == NULL) {
+			D_ERROR("failed to allocate state\n");
+			rc = -DER_NOMEM;
+			goto out;
+		}
+
+		rc = dc_mgmt_sys_attach(args->grp, &state->sys);
+		if (rc != 0)
+			goto out_state;
+
+		rank = 0;
+		ranks.rl_ranks = &rank;
+		ranks.rl_nr = 1;
+		rc = rsvc_client_init(&state->client, &ranks);
+		if (rc != 0) {
+			D_ERROR("failed to initialize rsvc_client %d\n", rc);
+			goto out_group;
+		}
+
+		daos_task_set_priv(task, state);
 	}
 
-	rc = dc_mgmt_sys_attach(args->grp, &destroy_arg.sys);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	svr_ep.ep_grp = destroy_arg.sys->sy_group;
-	svr_ep.ep_rank = 0;
-	svr_ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
+	svr_ep.ep_grp = state->sys->sy_group;
+	rsvc_client_choose(&state->client, &svr_ep);
 	opc = DAOS_RPC_OPCODE(MGMT_POOL_DESTROY, DAOS_MGMT_MODULE,
 			      DAOS_MGMT_VERSION);
 	rc = crt_req_create(daos_task2ctx(task), &svr_ep, opc, &rpc_req);
 	if (rc != 0) {
 		D_ERROR("crt_req_create(MGMT_POOL_DESTROY) failed, rc: %d.\n",
 			rc);
-		D_GOTO(out_group, rc);
+		D_GOTO(out_client, rc);
 	}
 
 	D_ASSERT(rpc_req != NULL);
@@ -333,10 +431,9 @@ dc_pool_destroy(tse_task_t *task)
 	pd_in->pd_force = (args->force == 0) ? false : true;
 
 	crt_req_addref(rpc_req);
-	destroy_arg.rpc = rpc_req;
+	state->rpc = rpc_req;
 
-	rc = tse_task_register_comp_cb(task, pool_destroy_cp, &destroy_arg,
-				       sizeof(destroy_arg));
+	rc = tse_task_register_comp_cb(task, pool_destroy_cp, NULL, 0);
 	if (rc != 0)
 		D_GOTO(out_put_req, rc);
 
@@ -346,12 +443,14 @@ dc_pool_destroy(tse_task_t *task)
 	return daos_rpc_send(rpc_req, task);
 
 out_put_req:
-	/** dec ref taken for task args */
+	crt_req_decref(state->rpc);
 	crt_req_decref(rpc_req);
-	/** dec ref taken for crt_req_create */
-	crt_req_decref(rpc_req);
+out_client:
+	rsvc_client_fini(&state->client);
 out_group:
-	dc_mgmt_sys_detach(destroy_arg.sys);
+	dc_mgmt_sys_detach(state->sys);
+out_state:
+	D_FREE(state);
 out:
 	tse_task_complete(task, rc);
 	return rc;
@@ -384,6 +483,7 @@ mgmt_list_pools_cp(tse_task_t *task, void *data)
 	pc_out = crt_reply_get(arg->rpc);
 	D_ASSERT(pc_out != NULL);
 	rc = pc_out->lp_rc;
+	*arg->npools = pc_out->lp_npools;
 	if (rc) {
 		D_ERROR("MGMT_POOL_CREATE replied failed, rc: "DF_RC"\n",
 			DP_RC(rc));
@@ -392,8 +492,6 @@ mgmt_list_pools_cp(tse_task_t *task, void *data)
 
 	pc_in = crt_req_get(arg->rpc);
 	D_ASSERT(pc_in != NULL);
-
-	*arg->npools = pc_out->lp_npools;
 
 	/* copy RPC response pools info to client buffer, if provided */
 	if (arg->pools) {
@@ -414,12 +512,6 @@ mgmt_list_pools_cp(tse_task_t *task, void *data)
 				D_GOTO(out_free_svcranks, rc = -DER_NOMEM);
 			}
 		}
-	}
-
-	if (arg->pools && (*arg->npools > arg->req_npools)) {
-		D_WARN("pool list contains only client-requested npools=%lu, "
-			"less than npools=%lu in system\n", arg->req_npools,
-			*arg->npools);
 	}
 
 out_free_svcranks:
@@ -452,11 +544,6 @@ dc_mgmt_list_pools(tse_task_t *task)
 
 	args = dc_task_get_args(task);
 
-	if (args->npools == NULL) {
-		D_ERROR("npools must be non-NULL\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
 	rc = dc_mgmt_sys_attach(args->grp, &cb_args.sys);
 	if (rc != 0) {
 		D_ERROR("cannot attach to DAOS system: %s\n", args->grp);
@@ -482,18 +569,32 @@ dc_mgmt_list_pools(tse_task_t *task)
 
 	/** fill in request buffer */
 	pc_in->lp_grp = (d_string_t)args->grp;
-	pc_in->lp_npools = *args->npools;
+	/* If provided pools is NULL, caller needs the number of pools
+	 * to be returned in npools. Set npools=0 in the request in this case
+	 * (caller value may be uninitialized).
+	 */
+	if (args->pools == NULL)
+		pc_in->lp_npools = 0;
+	else
+		pc_in->lp_npools = *args->npools;
+
+	D_DEBUG(DF_DSMC, "req_npools="DF_U64" (pools=%p, *npools="DF_U64"\n",
+			 pc_in->lp_npools, args->pools,
+			 *args->npools);
 
 	crt_req_addref(rpc_req);
 	cb_args.rpc = rpc_req;
-	cb_args.req_npools = *args->npools;
 	cb_args.npools = args->npools;
 	cb_args.pools = args->pools;
+	cb_args.req_npools = pc_in->lp_npools;
 
 	rc = tse_task_register_comp_cb(task, mgmt_list_pools_cp, &cb_args,
 				       sizeof(cb_args));
 	if (rc != 0)
 		D_GOTO(out_put_req, rc);
+
+	D_DEBUG(DB_MGMT, "retrieving list of pools in DAOS system: %s\n",
+		args->grp);
 
 	/** send the request */
 	return daos_rpc_send(rpc_req, task);
@@ -505,5 +606,6 @@ out_put_req:
 out_grp:
 	dc_mgmt_sys_detach(cb_args.sys);
 out:
+	tse_task_complete(task, rc);
 	return rc;
 }

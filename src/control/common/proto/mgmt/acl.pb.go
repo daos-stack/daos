@@ -31,7 +31,7 @@ func (m *ACLResp) Reset()         { *m = ACLResp{} }
 func (m *ACLResp) String() string { return proto.CompactTextString(m) }
 func (*ACLResp) ProtoMessage()    {}
 func (*ACLResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_acl_69bff8234a0efaee, []int{0}
+	return fileDescriptor_acl_5b84caf77c919565, []int{0}
 }
 func (m *ACLResp) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ACLResp.Unmarshal(m, b)
@@ -77,7 +77,7 @@ func (m *GetACLReq) Reset()         { *m = GetACLReq{} }
 func (m *GetACLReq) String() string { return proto.CompactTextString(m) }
 func (*GetACLReq) ProtoMessage()    {}
 func (*GetACLReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_acl_69bff8234a0efaee, []int{1}
+	return fileDescriptor_acl_5b84caf77c919565, []int{1}
 }
 func (m *GetACLReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetACLReq.Unmarshal(m, b)
@@ -118,7 +118,7 @@ func (m *ModifyACLReq) Reset()         { *m = ModifyACLReq{} }
 func (m *ModifyACLReq) String() string { return proto.CompactTextString(m) }
 func (*ModifyACLReq) ProtoMessage()    {}
 func (*ModifyACLReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_acl_69bff8234a0efaee, []int{2}
+	return fileDescriptor_acl_5b84caf77c919565, []int{2}
 }
 func (m *ModifyACLReq) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ModifyACLReq.Unmarshal(m, b)
@@ -152,23 +152,72 @@ func (m *ModifyACLReq) GetACL() []string {
 	return nil
 }
 
+// Delete a principal's entry from the ACL
+type DeleteACLReq struct {
+	Uuid                 string   `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	Principal            string   `protobuf:"bytes,2,opt,name=principal,proto3" json:"principal,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *DeleteACLReq) Reset()         { *m = DeleteACLReq{} }
+func (m *DeleteACLReq) String() string { return proto.CompactTextString(m) }
+func (*DeleteACLReq) ProtoMessage()    {}
+func (*DeleteACLReq) Descriptor() ([]byte, []int) {
+	return fileDescriptor_acl_5b84caf77c919565, []int{3}
+}
+func (m *DeleteACLReq) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_DeleteACLReq.Unmarshal(m, b)
+}
+func (m *DeleteACLReq) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_DeleteACLReq.Marshal(b, m, deterministic)
+}
+func (dst *DeleteACLReq) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DeleteACLReq.Merge(dst, src)
+}
+func (m *DeleteACLReq) XXX_Size() int {
+	return xxx_messageInfo_DeleteACLReq.Size(m)
+}
+func (m *DeleteACLReq) XXX_DiscardUnknown() {
+	xxx_messageInfo_DeleteACLReq.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_DeleteACLReq proto.InternalMessageInfo
+
+func (m *DeleteACLReq) GetUuid() string {
+	if m != nil {
+		return m.Uuid
+	}
+	return ""
+}
+
+func (m *DeleteACLReq) GetPrincipal() string {
+	if m != nil {
+		return m.Principal
+	}
+	return ""
+}
+
 func init() {
 	proto.RegisterType((*ACLResp)(nil), "mgmt.ACLResp")
 	proto.RegisterType((*GetACLReq)(nil), "mgmt.GetACLReq")
 	proto.RegisterType((*ModifyACLReq)(nil), "mgmt.ModifyACLReq")
+	proto.RegisterType((*DeleteACLReq)(nil), "mgmt.DeleteACLReq")
 }
 
-func init() { proto.RegisterFile("acl.proto", fileDescriptor_acl_69bff8234a0efaee) }
+func init() { proto.RegisterFile("acl.proto", fileDescriptor_acl_5b84caf77c919565) }
 
-var fileDescriptor_acl_69bff8234a0efaee = []byte{
-	// 130 bytes of a gzipped FileDescriptorProto
+var fileDescriptor_acl_5b84caf77c919565 = []byte{
+	// 159 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x4c, 0x4c, 0xce, 0xd1,
 	0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0xc9, 0x4d, 0xcf, 0x2d, 0x51, 0x32, 0xe6, 0x62, 0x77,
 	0x74, 0xf6, 0x09, 0x4a, 0x2d, 0x2e, 0x10, 0x12, 0xe3, 0x62, 0x2b, 0x2e, 0x49, 0x2c, 0x29, 0x2d,
 	0x96, 0x60, 0x54, 0x60, 0xd4, 0x60, 0x0d, 0x82, 0xf2, 0x84, 0x04, 0xb8, 0x98, 0x1d, 0x9d, 0x7d,
 	0x24, 0x98, 0x14, 0x98, 0x35, 0x38, 0x83, 0x40, 0x4c, 0x25, 0x79, 0x2e, 0x4e, 0xf7, 0xd4, 0x12,
 	0xb0, 0xbe, 0x42, 0x21, 0x21, 0x2e, 0x96, 0xd2, 0xd2, 0xcc, 0x14, 0xb0, 0x26, 0xce, 0x20, 0x30,
-	0x5b, 0xc9, 0x84, 0x8b, 0xc7, 0x37, 0x3f, 0x25, 0x33, 0xad, 0x12, 0xb7, 0x1a, 0x4c, 0x63, 0x93,
-	0xd8, 0xc0, 0x0e, 0x33, 0x06, 0x04, 0x00, 0x00, 0xff, 0xff, 0x2b, 0x99, 0xcc, 0xbc, 0xa5, 0x00,
-	0x00, 0x00,
+	0x5b, 0xc9, 0x84, 0x8b, 0xc7, 0x37, 0x3f, 0x25, 0x33, 0xad, 0x12, 0xb7, 0x1a, 0x2c, 0xc6, 0x3a,
+	0x70, 0xf1, 0xb8, 0xa4, 0xe6, 0xa4, 0x96, 0xa4, 0xe2, 0xd1, 0x25, 0xc3, 0xc5, 0x59, 0x50, 0x94,
+	0x99, 0x97, 0x9c, 0x59, 0x90, 0x98, 0x23, 0xc1, 0x04, 0x96, 0x40, 0x08, 0x24, 0xb1, 0x81, 0xbd,
+	0x66, 0x0c, 0x08, 0x00, 0x00, 0xff, 0xff, 0x5f, 0xbf, 0x98, 0x26, 0xe7, 0x00, 0x00, 0x00,
 }

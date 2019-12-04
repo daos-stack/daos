@@ -38,8 +38,6 @@
 #ifdef LUSTRE_INCLUDE
 #include <lustre/lustreapi.h>
 #include <linux/lustre/lustre_idl.h>
-#else
-#include "daos_uns_lustre.h"
 #endif
 #include <daos/common.h>
 #include <daos/object.h>
@@ -52,19 +50,15 @@
 #define DUNS_MAX_XATTR_LEN	170
 #define DUNS_MIN_XATTR_LEN	90
 #define DUNS_XATTR_FMT		"DAOS.%s://%36s/%36s/%s/%zu"
+#ifdef LUSTRE_INCLUDE
 #define LIBLUSTRE		"liblustreapi.so"
-
-/* XXX may need to use ioctl() direct method instead of Lustre
- * API if moving from Lustre build/install dependency to pure
- * dynamic/run-time discovery+binding of/with liblustreapi.so
- */
 
 static bool liblustre_notfound = false;
 /* need to protect against concurent/multi-threaded attempts to bind ? */
 static bool liblustre_binded = false;
 static int (*dir_create_foreign)(const char *, mode_t, __u32, __u32,
 				 const char *) = NULL;
-int (*unlink_foreign)(char *) = NULL;
+static int (*unlink_foreign)(char *) = NULL;
 
 static int
 bind_liblustre()
@@ -275,6 +269,7 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 
 	return 0;
 }
+#endif
 
 int
 duns_resolve_path(const char *path, struct duns_attr_t *attr)
@@ -306,6 +301,7 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 		return -DER_INVAL;
 	}
 
+#ifdef LUSTRE_INCLUDE
 	if (fs.f_type == LL_SUPER_MAGIC) {
 		rc = duns_resolve_lustre_path(path, attr);
 		if (rc == 0)
@@ -314,6 +310,7 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 		 * the normal way...
 		 */
 	}
+#endif
 
 	s = lgetxattr(path, DUNS_XATTR_NAME, &str, DUNS_MAX_XATTR_LEN);
 	if (s < 0 || s > DUNS_MAX_XATTR_LEN) {
@@ -368,6 +365,7 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	return 0;
 }
 
+#ifdef LUSTRE_INCLUDE
 static int
 duns_create_lustre_path(daos_handle_t poh, const char *path,
 			struct duns_attr_t *attrp)
@@ -466,6 +464,7 @@ err_cont:
 err:
 	return rc;
 }
+#endif
 
 int
 duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
@@ -521,6 +520,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			return -DER_INVAL;
 		}
 
+#ifdef LUSTRE_INCLUDE
 		if (fs.f_type == LL_SUPER_MAGIC) {
 			rc = duns_create_lustre_path(poh, path, attrp);
 			if (rc == 0)
@@ -529,6 +529,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			 * the normal way...
 			 */
 		}
+#endif
 
 		/** create a new directory if POSIX/MPI-IO container */
 		rc = mkdir(path, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
@@ -641,9 +642,11 @@ duns_destroy_path(daos_handle_t poh, const char *path)
 	}
 
 	if (dattr.da_type == DAOS_PROP_CO_LAYOUT_HDF5) {
+#ifdef LUSTRE_INCLUDE
 		if (dattr.da_on_lustre)
 			rc = (*unlink_foreign)((char *)path);
 		else
+#endif
 			rc = unlink(path);
 		if (rc) {
 			D_ERROR("Failed to unlink %sfile %s: %s\n",
@@ -652,9 +655,11 @@ duns_destroy_path(daos_handle_t poh, const char *path)
 			return -DER_INVAL;
 		}
 	} else if (dattr.da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
+#ifdef LUSTRE_INCLUDE
 		if (dattr.da_on_lustre)
 			rc = (*unlink_foreign)((char *)path);
 		else
+#endif
 			rc = rmdir(path);
 		if (rc) {
 			D_ERROR("Failed to remove %sdir %s: %s\n",

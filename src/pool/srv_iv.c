@@ -287,7 +287,8 @@ pool_iv_map_fetch(void *ns, struct pool_iv_entry *pool_iv)
 
 	memset(&key, 0, sizeof(key));
 	key.class_id = IV_POOL_MAP;
-	rc = ds_iv_fetch(ns, &key, pool_iv == NULL ? NULL : &sgl);
+	rc = ds_iv_fetch(ns, &key, pool_iv == NULL ? NULL : &sgl,
+			 false /* retry */);
 	if (rc)
 		D_ERROR("iv fetch failed "DF_RC"\n", DP_RC(rc));
 
@@ -313,7 +314,8 @@ pool_iv_update(void *ns, int class_id, struct pool_iv_entry *pool_iv,
 
 	memset(&key, 0, sizeof(key));
 	key.class_id = class_id;
-	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0);
+	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0,
+			  false /* retry */);
 	if (rc)
 		D_ERROR("iv update failed "DF_RC"\n", DP_RC(rc));
 
@@ -362,7 +364,8 @@ pool_iv_map_invalidate(void *ns, unsigned int shortcut, unsigned int sync_mode)
 	int			rc;
 
 	key.class_id = IV_POOL_MAP;
-	rc = ds_iv_invalidate(ns, &key, shortcut, sync_mode, 0);
+	rc = ds_iv_invalidate(ns, &key, shortcut, sync_mode, 0,
+			      false /* retry */);
 	if (rc)
 		D_ERROR("iv invalidate failed "DF_RC"\n", DP_RC(rc));
 
@@ -620,7 +623,7 @@ pool_iv_prop_fetch(struct ds_pool *pool, daos_prop_t *prop)
 
 	memset(&key, 0, sizeof(key));
 	key.class_id = IV_POOL_PROP;
-	rc = ds_iv_fetch(pool->sp_iv_ns, &key, &sgl);
+	rc = ds_iv_fetch(pool->sp_iv_ns, &key, &sgl, false /* retry */);
 	if (rc) {
 		D_ERROR("iv fetch failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);

@@ -119,6 +119,17 @@ smd_dev_unassign(uuid_t dev_id, int tgt_id)
 	return -DER_NOSYS;
 }
 
+static char *
+smd_state_enum_to_str(enum smd_dev_state state)
+{
+	switch (state) {
+	case SMD_DEV_NORMAL: return "NORMAL";
+	case SMD_DEV_FAULTY: return "FAULTY";
+	}
+
+	return "Undefined state";
+}
+
 int
 smd_dev_set_state(uuid_t dev_id, enum smd_dev_state state)
 {
@@ -146,10 +157,13 @@ smd_dev_set_state(uuid_t dev_id, enum smd_dev_state state)
 	entry.sde_state = state;
 	rc = dbtree_update(smd_store.ss_dev_hdl, &key, &val);
 	if (rc) {
-		D_ERROR("Update dev "DF_UUID" failed. "DF_RC"\n",
+		D_ERROR("SMD dev "DF_UUID" state set failed. "DF_RC"\n",
 			DP_UUID(&key_dev.uuid), DP_RC(rc));
 		goto out;
-	}
+	} else
+		D_DEBUG(DB_MGMT, "SMD dev "DF_UUID" state set to %s\n",
+			DP_UUID(&key_dev.uuid),
+			smd_state_enum_to_str(state));
 out:
 	smd_unlock(&smd_store);
 	return rc;
