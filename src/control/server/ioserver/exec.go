@@ -108,7 +108,6 @@ func (r *Runner) run(ctx context.Context, args, env []string) error {
 		},
 	}
 
-	r.log.Debugf("%s:%d config: %#v", ioServerBin, r.Config.Index, r.Config)
 	r.log.Debugf("%s:%d args: %s", ioServerBin, r.Config.Index, args)
 	r.log.Debugf("%s:%d env: %s", ioServerBin, r.Config.Index, env)
 	r.log.Infof("Starting I/O server instance %d: %s", r.Config.Index, binPath)

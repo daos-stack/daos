@@ -149,7 +149,7 @@ func (h *IOServerHarness) AwaitStorageReady(ctx context.Context, skipMissingSupe
 		return errors.New("can't wait for storage: harness already started")
 	}
 
-	h.log.Info("Waiting for I/O server instance storage to be ready...")
+	h.log.Infof("Waiting for %s instance storage to be ready...", DataPlaneName)
 	for _, instance := range h.instances {
 		needsScmFormat, err := instance.NeedsScmFormat()
 		if err != nil {

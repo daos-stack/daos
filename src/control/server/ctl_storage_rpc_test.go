@@ -372,7 +372,7 @@ func TestStoragePrepare(t *testing.T) {
 				Nvme: &PrepareNvmeResp{
 					State: &ResponseState{
 						Status: ResponseStatus_CTL_ERR_NVME,
-						Error:  "SPDK setup: nvme prep error",
+						Error:  "SPDK prepare: nvme prep error",
 					},
 				},
 				Scm: &PrepareScmResp{

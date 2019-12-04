@@ -451,7 +451,7 @@ class ServerManager(ExecutableCommand):
                 cmd_touch_log = "touch {}".format(lfile)
                 pcmd(self._hosts, cmd_touch_log, False)
         if storage_prep_flag != "ram":
-            storage_prepare(self._hosts, "root", storage_prep_flag)
+            storage_prepare(self._hosts, getpass.getuser(), storage_prep_flag)
             self.runner.mca.value = {"plm_rsh_args": "-l root"}
 
         try:
@@ -569,7 +569,7 @@ def storage_prepare(hosts, user, device_type):
         device_args = " --hugepages=4096"
     else:
         raise ServerFailed("Invalid device type")
-    cmd = ("sudo {} storage prepare {} -u \"{}\" {} -f"
+    cmd = ("{} storage prepare {} -u \"{}\" {} -f"
            .format(daos_srv_bin[0], dev_param, user, device_args))
     result = pcmd(hosts, cmd, timeout=120)
     if len(result) > 1 or 0 not in result:
