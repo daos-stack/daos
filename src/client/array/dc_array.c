@@ -1143,8 +1143,8 @@ set_short_read_cb(tse_task_t *task, void *data)
 			len += current->sgl.sg_iovs[i].iov_buf_len;
 
 		D_ASSERT(len);
+		/** calculate number of records (not bytes) short-fetched */
 		recs = len / current->cell_size;
-		/** calculate number of records short-fetched */
 		num_records += recs;
 
 		/*
@@ -1156,6 +1156,7 @@ set_short_read_cb(tse_task_t *task, void *data)
 
 		D_DEBUG(DB_IO, "DKEY "DF_U64": shortfetch %zu B, %zu recs\n",
 			current->dkey_val, len, num_records);
+
 next:
 		current = current->next;
 	}
@@ -1179,7 +1180,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	daos_size_t	num_records;
 	daos_off_t	record_i;
 	daos_csum_buf_t	null_csum;
-	struct io_params *head;
+	struct io_params *head = NULL;
 	daos_size_t	num_ios;
 	d_list_t	io_task_list;
 	int		rc;
@@ -1226,6 +1227,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 		daos_iod_t	*iod;
 		d_sg_list_t	*sgl;
 		daos_key_t	*dkey;
+		uint64_t	dkey_val;
 		daos_size_t	dkey_records;
 		tse_task_t	*io_task = NULL;
 		struct io_params *params;
@@ -1241,28 +1243,29 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			continue;
 		}
 
+		rc = compute_dkey(array, array_idx, &num_records, &record_i,
+				  &dkey_val);
+		if (rc != 0) {
+			D_ERROR("Failed to compute dkey\n");
+			D_GOTO(err_task, rc);
+		}
+
+		D_DEBUG(DB_IO, "DKEY IOD "DF_U64" ---------------\n", dkey_val);
+		D_DEBUG(DB_IO, "idx = %d\t num_records = %zu\t record_i = %d\n",
+			(int)array_idx, num_records, (int)record_i);
+
 		/** allocate params for this dkey io */
 		D_ALLOC_PTR(params);
 		if (params == NULL) {
 			D_ERROR("Failed memory allocation\n");
 			D_GOTO(err_task, rc = -DER_NOMEM);
 		}
-
-		rc = compute_dkey(array, array_idx, &num_records, &record_i,
-				  &params->dkey_val);
-		if (rc != 0) {
-			D_ERROR("Failed to compute dkey\n");
-			D_GOTO(err_task, rc);
-		}
-
-		D_DEBUG(DB_IO, "DKEY IOD "DF_U64" -------------------------\n",
-			params->dkey_val);
-		D_DEBUG(DB_IO, "idx = %d\t num_records = %zu\t record_i = %d\n",
-			(int)array_idx, num_records, (int)record_i);
+		params->dkey_val = dkey_val;
 
 		/*
 		 * since we probably have multiple dkey ios, put them in linked
-		 * list to free later.
+		 * list to free later. Insert in decreasind order for easier
+		 * short fetch detection.
 		 */
 		if (num_ios == 0) {
 			head = params;
@@ -1384,8 +1387,6 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			if (array_idx < old_array_idx + num_records &&
 			    array_idx >= ((old_array_idx + num_records) -
 					  array->chunk_size)) {
-				uint64_t dkey_val_tmp;
-
 				/*
 				 * verify that the dkey is the same as the one
 				 * we are working on given the array index, and
@@ -1394,20 +1395,19 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 				 */
 				rc = compute_dkey(array, array_idx,
 						  &num_records, &record_i,
-						  &dkey_val_tmp);
+						  &dkey_val);
 				if (rc != 0) {
 					D_ERROR("Failed to compute dkey\n");
 					D_GOTO(err_task, rc);
 				}
 
-				D_ASSERT(dkey_val_tmp == params->dkey_val);
+				D_ASSERT(dkey_val == params->dkey_val);
 			} else {
 				break;
 			}
 		} while (1);
 
-		D_DEBUG(DB_IO, "END DKEY IOD "DF_U64" ---------------------\n",
-			params->dkey_val);
+		D_DEBUG(DB_IO, "DKEY IOD "DF_U64" ---------------\n", dkey_val);
 
 		/*
 		 * if the user sgl maps directly to the array range, no need to
@@ -1490,6 +1490,9 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	return 0;
 
 err_task:
+	if (head)
+		tse_task_register_comp_cb(task, free_io_params_cb, &head,
+					  sizeof(head));
 	if (array)
 		array_decref(array);
 	tse_task_complete(task, rc);

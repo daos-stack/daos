@@ -360,7 +360,7 @@ dfs_setup(void **state)
 	test_arg_t		*arg;
 	int			rc = 0;
 
-	rc = test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE,
+	rc = test_setup(state, SETUP_POOL_CONNECT, false, DEFAULT_POOL_SIZE,
 			NULL);
 	assert_int_equal(rc, 0);
 

@@ -2192,6 +2192,7 @@ get_size_cb(tse_task_t *task, void *data)
 	params = daos_task_get_priv(task);
 	D_ASSERT(params != NULL);
 
+	/** determine short read size */
 	if (params->off >= params->array_size)
 		*params->read_size = 0;
 	else if (params->off + params->buf_size <= params->array_size)
@@ -2218,11 +2219,13 @@ read_cb(tse_task_t *task, void *data)
 	params = daos_task_get_priv(task);
 	D_ASSERT(params != NULL);
 
+	/** if no short fetch detected, return all the read size */
 	if (params->iod.arr_nr_short_read == 0) {
 		*params->read_size = params->buf_size;
 		return 0;
 	}
 
+	/** get the file size to determine how much data was short-read */
 	rc = daos_task_create(DAOS_OPC_ARRAY_GET_SIZE,
 			      tse_task2sched(task), 0, NULL, &size_task);
 	if (rc)
@@ -2270,12 +2273,12 @@ dfs_read_int(tse_task_t *task)
 	params->ptask = task;
 
 	/** set array location */
-	params->iod.arr_nr = 1;
-	params->rg.rg_len = params->buf_size;
-	params->rg.rg_idx = params->off;
-	params->iod.arr_rgs = &params->rg;
+	params->iod.arr_nr	= 1;
+	params->rg.rg_len	= params->buf_size;
+	params->rg.rg_idx	= params->off;
+	params->iod.arr_rgs	= &params->rg;
 
-	read_args = daos_task_get_args(read_task);
+	read_args		= daos_task_get_args(read_task);
 	read_args->oh		= params->obj->oh;
 	read_args->th		= DAOS_TX_NONE;
 	read_args->iod		= &params->iod;
@@ -2336,7 +2339,7 @@ dfs_read(dfs_t *dfs, dfs_obj_t *obj, d_sg_list_t *sgl, daos_off_t off,
 	if (rc)
 		return rc;
 
-	args = dc_task_get_args(task);
+	args		= dc_task_get_args(task);
 	args->dfs	= dfs;
 	args->obj	= obj;
 	args->sgl	= sgl;
