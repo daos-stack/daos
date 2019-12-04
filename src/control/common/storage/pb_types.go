@@ -26,6 +26,7 @@ package common_storage
 import (
 	"bytes"
 	"fmt"
+	"sort"
 	"time"
 
 	bytesize "github.com/inhies/go-bytesize"
@@ -115,6 +116,8 @@ func (ncs NvmeControllers) String() string {
 		fmt.Fprint(buf, "\t\tnone\n")
 		return buf.String()
 	}
+
+	sort.Slice(ncs, func(i, j int) bool { return ncs[i].Pciaddr < ncs[j].Pciaddr })
 
 	for _, ctrlr := range ncs {
 		ncs.ctrlrDetail(buf, ctrlr)
