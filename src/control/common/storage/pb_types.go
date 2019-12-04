@@ -43,7 +43,7 @@ type NvmeNamespaces []*ctlpb.NvmeController_Namespace
 // representing a number of NVMe SSD controllers installed on a storage node.
 type NvmeControllers []*ctlpb.NvmeController
 
-func (ncs NvmeControllers) healthDetail(buf *bytes.Buffer, c *ctlpb.NvmeController) {
+func healthDetail(buf *bytes.Buffer, c *ctlpb.NvmeController) {
 	stat := c.Healthstats
 
 	fmt.Fprintf(buf, "\t\tHealth Stats:\n\t\t\tTemperature:%dK(%dC)\n", stat.Temp, stat.Temp-273)
@@ -99,14 +99,14 @@ func (ncs NvmeControllers) healthDetail(buf *bytes.Buffer, c *ctlpb.NvmeControll
 
 // ctrlrDetail provides custom string representation for Controller type
 // defined outside this package.
-func (ncs NvmeControllers) ctrlrDetail(buf *bytes.Buffer, c *ctlpb.NvmeController) {
-	fmt.Fprintf(buf, "\t\tPCI Addr:%s Serial:%s Model:%s Fwrev:%s Socket:%d\n",
-		c.Pciaddr, c.Serial, c.Model, c.Fwrev, c.Socketid)
-
-	for _, ns := range c.Namespaces {
-		fmt.Fprintf(buf, "\t\t\tNamespace: id:%d capacity:%s\n", ns.Id,
-			bytesize.GB*bytesize.New(float64(ns.Capacity)))
+func ctrlrDetail(buf *bytes.Buffer, c *ctlpb.NvmeController) {
+	tCap := bytesize.New(0)
+	for _, n := range c.Namespaces {
+		tCap += bytesize.GB * bytesize.New(float64(n.Capacity))
 	}
+
+	fmt.Fprintf(buf, "\t\tPCI:%s Model:%s FW:%s Socket:%d Capacity:%s\n",
+		c.Pciaddr, c.Model, c.Fwrev, c.Socketid, tCap)
 }
 
 func (ncs NvmeControllers) String() string {
@@ -120,7 +120,7 @@ func (ncs NvmeControllers) String() string {
 	sort.Slice(ncs, func(i, j int) bool { return ncs[i].Pciaddr < ncs[j].Pciaddr })
 
 	for _, ctrlr := range ncs {
-		ncs.ctrlrDetail(buf, ctrlr)
+		ctrlrDetail(buf, ctrlr)
 	}
 
 	return buf.String()
@@ -138,8 +138,8 @@ func (ncs NvmeControllers) StringHealthStats() string {
 	}
 
 	for _, ctrlr := range ncs {
-		ncs.ctrlrDetail(buf, ctrlr)
-		ncs.healthDetail(buf, ctrlr)
+		ctrlrDetail(buf, ctrlr)
+		healthDetail(buf, ctrlr)
 	}
 
 	return buf.String()

@@ -157,7 +157,20 @@ func TestCheckSprint(t *testing.T) {
 	}{
 		"nvme scan with health": {
 			fmt.Sprint(MockScanResp(MockCtrlrs, nil, nil, MockServers).StringHealthStats()),
-			"1.2.3.4:10000\n\tNVMe controllers and namespaces detail with health statistics:\n\t\tPCI Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:1.0.0 Socket:0\n\t\t\tNamespace: id:12345 capacity:97.66TB\n\t\tHealth Stats:\n\t\t\tTemperature:300K(27C)\n\t\t\tController Busy Time:0s\n\t\t\tPower Cycles:99\n\t\t\tPower On Duration:9999h0m0s\n\t\t\tUnsafe Shutdowns:1\n\t\t\tMedia Errors:0\n\t\t\tError Log Entries:0\n\t\t\tCritical Warnings:\n\t\t\t\tTemperature: OK\n\t\t\t\tAvailable Spare: OK\n\t\t\t\tDevice Reliability: OK\n\t\t\t\tRead Only: OK\n\t\t\t\tVolatile Memory Backup: OK\n1.2.3.5:10001\n\tNVMe controllers and namespaces detail with health statistics:\n\t\tPCI Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:1.0.0 Socket:0\n\t\t\tNamespace: id:12345 capacity:97.66TB\n\t\tHealth Stats:\n\t\t\tTemperature:300K(27C)\n\t\t\tController Busy Time:0s\n\t\t\tPower Cycles:99\n\t\t\tPower On Duration:9999h0m0s\n\t\t\tUnsafe Shutdowns:1\n\t\t\tMedia Errors:0\n\t\t\tError Log Entries:0\n\t\t\tCritical Warnings:\n\t\t\t\tTemperature: OK\n\t\t\t\tAvailable Spare: OK\n\t\t\t\tDevice Reliability: OK\n\t\t\t\tRead Only: OK\n\t\t\t\tVolatile Memory Backup: OK\n",
+			"1.2.3.4:10000\n\tNVMe controllers and namespaces detail with health statistics:\n\t\t" +
+				"PCI:0000:81:00.0 Model:ABC FW:1.0.0 Socket:0 Capacity:97.66TB\n\t\t" +
+				"Health Stats:\n\t\t\tTemperature:300K(27C)\n\t\t\tController Busy Time:0s\n\t\t\t" +
+				"Power Cycles:99\n\t\t\tPower On Duration:9999h0m0s\n\t\t\tUnsafe Shutdowns:1\n\t\t\t" +
+				"Media Errors:0\n\t\t\tError Log Entries:0\n\t\t\tCritical Warnings:\n\t\t\t\t" +
+				"Temperature: OK\n\t\t\t\tAvailable Spare: OK\n\t\t\t\tDevice Reliability: OK\n\t\t\t\t" +
+				"Read Only: OK\n\t\t\t\tVolatile Memory Backup: OK\n" +
+				"1.2.3.5:10001\n\tNVMe controllers and namespaces detail with health statistics:\n\t\t" +
+				"PCI:0000:81:00.0 Model:ABC FW:1.0.0 Socket:0 Capacity:97.66TB\n\t\t" +
+				"Health Stats:\n\t\t\tTemperature:300K(27C)\n\t\t\tController Busy Time:0s\n\t\t\t" +
+				"Power Cycles:99\n\t\t\tPower On Duration:9999h0m0s\n\t\t\tUnsafe Shutdowns:1\n\t\t\t" +
+				"Media Errors:0\n\t\t\tError Log Entries:0\n\t\t\tCritical Warnings:\n\t\t\t\t" +
+				"Temperature: OK\n\t\t\t\tAvailable Spare: OK\n\t\t\t\tDevice Reliability: OK\n\t\t\t\t" +
+				"Read Only: OK\n\t\t\t\tVolatile Memory Backup: OK\n",
 		},
 		"scm mount scan": {
 			NewClientScmMount(MockMounts, MockServers).String(),

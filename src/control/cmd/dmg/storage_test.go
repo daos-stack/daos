@@ -114,9 +114,8 @@ func TestScanDisplay(t *testing.T) {
 		"typical scan": {
 			scanResp: MockScanResp(MockCtrlrs, MockScmModules, MockScmNamespaces, MockServers),
 			expOut: "1.2.3.[4-5]\n\tSCM Namespaces:\n\t\tDevice:pmem1 Socket:1 " +
-				"Capacity:2.90TB\n\tNVMe controllers and namespaces:\n\t\tPCI " +
-				"Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:1.0.0 Socket:" +
-				"0\n\t\t\tNamespace: id:12345 capacity:97.66TB\n",
+				"Capacity:2.90TB\n\tNVMe controllers and namespaces:\n\t\t" +
+				"PCI:0000:81:00.0 Model:ABC FW:1.0.0 Socket:0 Capacity:97.66TB\n",
 		},
 		"summary scan": {
 			scanResp: MockScanResp(MockCtrlrs, MockScmModules, MockScmNamespaces, MockServers),
@@ -150,9 +149,8 @@ func TestScanDisplay(t *testing.T) {
 		"nvme scan": {
 			scanResp: MockScanResp(MockCtrlrs, nil, nil, MockServers),
 			expOut: "1.2.3.[4-5]\n\tSCM Modules:\n\t\tnone\n\t" +
-				"NVMe controllers and namespaces:\n\t\tPCI " +
-				"Addr:0000:81:00.0 Serial:123ABC Model:ABC Fwrev:1.0.0 Socket:" +
-				"0\n\t\t\tNamespace: id:12345 capacity:97.66TB\n",
+				"NVMe controllers and namespaces:\n\t\t" +
+				"PCI:0000:81:00.0 Model:ABC FW:1.0.0 Socket:0 Capacity:97.66TB\n",
 		},
 		"summary nvme scan": {
 			scanResp: MockScanResp(MockCtrlrs, nil, nil, MockServers),
