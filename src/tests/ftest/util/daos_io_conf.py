@@ -101,7 +101,8 @@ class IoConfTestBase(TestWithServers):
         Execute the rebuild test steps.
         """
         self.setup_test_pool()
-        io_conf = IoConfGen(os.path.join(self.prefix, "bin"))
+        pool_env = {"POOL_SCM_SIZE": "{}".format(self.pool.scm_size)}
+        io_conf = IoConfGen(os.path.join(self.prefix, "bin"), env=pool_env)
         io_conf.get_params(self)
         io_conf.run()
         #Run test file using daos_run_io_conf
