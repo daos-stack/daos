@@ -128,14 +128,15 @@ struct agg_merge_window {
 };
 
 struct vos_agg_param {
-	uint32_t	ap_credits_max; /* # of tight loops to yield */
-	uint32_t	ap_credits;	/* # of tight loops */
-	daos_handle_t	ap_coh;		/* container handle */
-	daos_unit_oid_t	ap_oid;		/* current object ID */
-	daos_key_t	ap_dkey;	/* current dkey */
-	daos_key_t	ap_akey;	/* current akey */
-	unsigned int	ap_sub_tree_empty:1,
-			ap_discard:1;
+	uint32_t		ap_credits_max; /* # of tight loops to yield */
+	uint32_t		ap_credits;	/* # of tight loops */
+	daos_handle_t		ap_coh;		/* container handle */
+	daos_unit_oid_t		ap_oid;		/* current object ID */
+	daos_key_t		ap_dkey;	/* current dkey */
+	daos_key_t		ap_akey;	/* current akey */
+	unsigned int		ap_sub_tree_empty:1,
+				ap_sub_tree_done:1,
+				ap_discard:1;
 	struct umem_instance	*ap_umm;
 	/* SV tree: Max epoch in specified iterate epoch range */
 	daos_epoch_t		 ap_max_epoch;
@@ -247,20 +248,20 @@ agg_discard_parent(daos_handle_t ih, vos_iter_entry_t *entry,
 	D_ASSERT(acts != NULL);
 
 	if (!agg_param->ap_sub_tree_empty)
-		return 0;
+		goto ilog_cleanup;
 
 	agg_param->ap_sub_tree_empty = 0;
 	child_type = entry->ie_child_type;
 
 	/* Re-check to see if subtree changed while yielding */
 	if (!subtree_empty(child_type, agg_param))
-		return 0;
+		goto ilog_cleanup;
 
 	/* Evict object cache before deleting the OI entry */
 	if (child_type == VOS_ITER_DKEY) {
 		rc = vos_obj_evict_by_oid(vos_obj_cache_current(),
-					  vos_hdl2cont(agg_param->ap_coh),
-					  entry->ie_oid);
+		vos_hdl2cont(agg_param->ap_coh),
+		entry->ie_oid);
 		if (rc != 0)
 			return rc;
 	}
@@ -289,6 +290,11 @@ agg_discard_parent(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	return rc;
+
+ilog_cleanup:
+	*acts |= VOS_ITER_CB_DISCARD;
+
+	return 0;
 }
 
 static inline void
@@ -334,6 +340,7 @@ vos_agg_obj(daos_handle_t ih, vos_iter_entry_t *entry,
 	if (agg_param->ap_discard)
 		return agg_discard_parent(ih, entry, agg_param, acts);
 
+	*acts |= VOS_ITER_CB_AGGREGATE;
 	return 0;
 }
 
@@ -363,6 +370,7 @@ vos_agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 	if (agg_param->ap_discard)
 		return agg_discard_parent(ih, entry, agg_param, acts);
 
+	*acts |= VOS_ITER_CB_AGGREGATE;
 	return 0;
 }
 
@@ -447,6 +455,8 @@ vos_agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 	/* The merge window for EV tree aggregation should have been closed */
 	if (merge_window_status(&agg_param->ap_window) != MW_CLOSED)
 		D_ASSERTF(false, "Merge window isn't closed.\n");
+
+	*acts |= VOS_ITER_CB_AGGREGATE;
 
 	return 0;
 }

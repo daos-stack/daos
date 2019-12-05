@@ -232,22 +232,24 @@ typedef struct {
 		/** Returned entry for container UUID iterator */
 		uuid_t				ie_couuid;
 		struct {
-			/** dkey or akey */
-			daos_key_t		ie_key;
 			/** Non-zero if punched */
-			daos_epoch_t		ie_key_punch;
-		};
-		struct {
-			/** The DTX identifier. */
-			struct dtx_id		ie_xid;
-			/** oid */
-			daos_unit_oid_t		ie_oid;
-			/** Non-zero if punched */
-			daos_epoch_t		ie_obj_punch;
-			/* The DTX dkey hash for DTX iteration. */
-			uint64_t		ie_dtx_hash;
-			/* The DTX intent for DTX iteration. */
-			uint32_t		ie_dtx_intent;
+			daos_epoch_t		ie_punch;
+			union {
+				struct {
+					/** dkey or akey */
+					daos_key_t		ie_key;
+				};
+				struct {
+					/** The DTX identifier. */
+					struct dtx_id		ie_xid;
+					/** oid */
+					daos_unit_oid_t		ie_oid;
+					/* The dkey hash for DTX iteration. */
+					uint64_t		ie_dtx_hash;
+					/* The DTX intent for DTX iteration. */
+					uint32_t		ie_dtx_intent;
+				};
+			};
 		};
 		struct {
 			/** record size */
@@ -283,6 +285,8 @@ enum {
 	VOS_ITER_CB_YIELD	= (1UL << 0),	/* Yield */
 	VOS_ITER_CB_DELETE	= (1UL << 1),	/* Delete entry */
 	VOS_ITER_CB_SKIP	= (1UL << 2),	/* Skip entry */
+	VOS_ITER_CB_AGGREGATE	= (1UL << 3),	/* Aggregate entry */
+	VOS_ITER_CB_DISCARD	= (1UL << 4),	/* Discard entry */
 };
 
 /**

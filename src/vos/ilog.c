@@ -1068,166 +1068,6 @@ ilog_abort(daos_handle_t loh, const struct ilog_id *id)
 	return ilog_modify(loh, id, false, &range, ILOG_OP_ABORT);
 }
 
-int
-ilog_aggregate(daos_handle_t loh, const daos_epoch_range_t *epr)
-{
-	struct ilog_context	*lctx;
-	struct ilog_root	*root;
-	struct ilog_root	 tmp = {0};
-	struct ilog_id		 old_id = {0};
-	struct ilog_id		 id = {0};
-	int			 rc = 0;
-	int			 empty = 0;
-	bool			 punch_found = false;
-	daos_epoch_t		 epoch;
-	int			 visibility;
-	bool			*punchp;
-	struct ilog_id		*keyp;
-	daos_handle_t		 toh = DAOS_HDL_INVAL;
-	daos_handle_t		 ih = DAOS_HDL_INVAL;
-	d_iov_t			 key_iov;
-	d_iov_t			 val_iov;
-	struct umem_attr	 uma;
-
-	if (epr == NULL)
-		return -DER_INVAL;
-
-	lctx = ilog_hdl2lctx(loh);
-	if (lctx == NULL) {
-		D_ERROR("Invalid log handle\n");
-		return -DER_INVAL;
-	}
-
-	D_DEBUG(DB_IO, "aggregate incarnation log: epr: "DF_U64"-"DF_U64"\n",
-		epr->epr_lo, epr->epr_hi);
-
-	D_ASSERT(!lctx->ic_in_txn);
-
-	root = lctx->ic_root;
-
-	if (ilog_empty(root))
-		return 1; /* indicate empty tree */
-
-	if (root->lr_tree.it_embedded) {
-		visibility = ilog_status_get(lctx, root->lr_id.id_tx_id,
-					     DAOS_INTENT_PURGE);
-		if (visibility == ILOG_COMMITTED) {
-			if (!root->lr_punch)
-				return 0;
-			epoch = root->lr_id.id_epoch;
-			if (epoch < epr->epr_lo || epoch > epr->epr_hi)
-				return 0;
-		}
-
-		old_id = root->lr_id;
-		tmp.lr_magic = ilog_ver_inc(lctx);
-		rc = ilog_ptr_set(lctx, root, &tmp);
-		if (rc != 0)
-			goto done;
-
-		empty = 1;
-
-		rc = ilog_log_del(lctx, &old_id);
-
-		goto done;
-	}
-
-	umem_attr_get(&lctx->ic_umm, &uma);
-	rc = dbtree_open(root->lr_tree.it_root, &uma, &toh);
-	if (rc != 0) {
-		D_ERROR("Failed to open incarnation log tree: rc = %s\n",
-			d_errstr(rc));
-		goto done;
-	}
-
-	rc = dbtree_iter_prepare(toh, BTR_ITER_EMBEDDED, &ih);
-	if (rc != 0) {
-		D_ERROR("Could not prepare iterator: rc = %s\n", d_errstr(rc));
-		return rc;
-	}
-
-	id.id_epoch = epr->epr_hi;
-reprobe:
-	d_iov_set(&key_iov, (struct ilog_id *)&id, sizeof(id));
-
-	rc = dbtree_iter_probe(ih, BTR_PROBE_LE, DAOS_INTENT_DEFAULT,
-			       &key_iov, NULL);
-	if (rc == -DER_NONEXIST) {
-		rc = 0;
-		goto collapse;
-	}
-
-	if (rc != 0) {
-		D_ERROR("Could not probe iterator: rc = %s\n",
-			d_errstr(rc));
-		goto done;
-	}
-
-	for (;;) {
-		d_iov_set(&key_iov, NULL, 0);
-		d_iov_set(&val_iov, NULL, 0);
-
-		rc = dbtree_iter_fetch(ih, &key_iov, &val_iov, NULL);
-		if (rc != 0) {
-			D_ERROR("Could not fetch from iterator: rc = %s\n",
-				d_errstr(rc));
-			goto done;
-		}
-
-		punchp = (bool *)val_iov.iov_buf;
-		keyp = (struct ilog_id *)key_iov.iov_buf;
-
-		if (keyp->id_epoch < epr->epr_lo)
-			break;
-
-		if (!punch_found) {
-			visibility = ilog_status_get(lctx, keyp->id_tx_id,
-						     DAOS_INTENT_PURGE);
-			if (visibility == ILOG_COMMITTED) {
-				punch_found = *punchp;
-				if (!punch_found)
-					goto next;
-			}
-		}
-
-		id.id_epoch = keyp->id_epoch - 1;
-
-		rc = dbtree_iter_delete(ih, lctx);
-		if (rc != 0)
-			goto done;
-
-		if (id.id_epoch < epr->epr_lo)
-			break;
-		goto reprobe;
-next:
-		rc = dbtree_iter_prev(ih);
-		if (rc == -DER_NONEXIST) {
-			rc = 0;
-			break;
-		}
-		if (rc != 0)
-			goto done;
-	}
-
-collapse:
-	rc = collapse_tree(lctx, &toh);
-
-	empty = ilog_empty(root);
-done:
-	if (!daos_handle_is_inval(ih))
-		dbtree_iter_finish(ih);
-	if (!daos_handle_is_inval(toh))
-		dbtree_close(toh);
-
-	rc = ilog_tx_end(lctx, rc);
-	D_DEBUG(DB_IO, "Aggregation in incarnation log epr:"DF_U64"-"DF_U64
-		" status: "DF_RC"\n", epr->epr_lo, epr->epr_hi, DP_RC(rc));
-	if (rc)
-		return rc;
-
-	return empty;
-}
-
 #define NUM_EMBEDDED 3
 
 struct ilog_priv {
@@ -1552,3 +1392,203 @@ ilog_fetch_finish(struct ilog_entries *entries)
 	if (!daos_handle_is_inval(priv->ip_ih))
 		dbtree_iter_finish(priv->ip_ih);
 }
+
+static int
+remove_ilog_entry(struct ilog_context *lctx, daos_handle_t *toh,
+		  struct ilog_entry *entry, int *removed)
+{
+	d_iov_t	iov;
+	int	rc;
+
+	rc = ilog_tx_begin(lctx);
+	if (rc != 0)
+		return rc;
+	D_DEBUG(DB_IO, "Removing ilog entry at "DF_U64"\n",
+		entry->ie_id.id_epoch);
+	d_iov_set(&iov, &entry->ie_id, sizeof(entry->ie_id));
+	rc = dbtree_delete(*toh, BTR_PROBE_EQ, &iov, lctx);
+	if (rc != 0) {
+		D_ERROR("Could not remove entry from tree: "DF_RC"\n",
+			DP_RC(rc));
+		return rc;
+	}
+	D_DEBUG(DB_IO, "Removed ilog entry at "DF_U64"\n",
+		entry->ie_id.id_epoch);
+
+	(*removed)++;
+
+	return 0;
+}
+
+int
+ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
+	       const struct ilog_desc_cbs *cbs, const daos_epoch_range_t *epr,
+	       bool discard, daos_epoch_t punched, struct ilog_entries *entries)
+{
+	struct ilog_priv	*priv = ilog_ent2priv(entries);
+	struct ilog_context	*lctx;
+	struct ilog_entry	*entry;
+	struct ilog_entry	*prev;
+	struct ilog_entry	*prior_punch;
+	struct ilog_root	*root;
+	struct ilog_root	 tmp = {0};
+	struct ilog_id		 old_id;
+	struct umem_attr	 uma;
+	bool			 empty = false;
+	int			 rc = 0;
+	int			 removed = 0;
+	daos_handle_t		 toh = DAOS_HDL_INVAL;
+
+	D_ASSERT(epr != NULL);
+
+	D_DEBUG(DB_IO, "%s incarnation log: epr: "DF_U64"-"DF_U64" punched="
+		DF_U64"\n", discard ? "Discard" : "Aggregate", epr->epr_lo,
+		epr->epr_hi, punched);
+
+	/* This can potentially be optimized but using ilog_fetch gets some code
+	 * reuse.
+	 */
+	rc = ilog_fetch(umm, ilog, cbs, DAOS_INTENT_PURGE, entries);
+	if (rc == -DER_NONEXIST) {
+		D_DEBUG(DB_IO, "log is empty\n");
+		/* Log is empty */
+		return 1;
+	}
+
+	lctx = &priv->ip_lctx;
+
+	root = lctx->ic_root;
+
+	ILOG_ASSERT_VALID(root);
+
+	D_ASSERT(!ilog_empty(root)); /* ilog_fetch should have failed */
+
+	if (root->lr_tree.it_embedded) {
+		entry = &entries->ie_entries[0];
+		switch (entry->ie_status) {
+		case ILOG_COMMITTED:
+			if (entry->ie_id.id_epoch < epr->epr_lo ||
+			    entry->ie_id.id_epoch > epr->epr_hi) {
+				rc = 0;
+				goto done;
+			}
+			if (!discard && !entry->ie_punch) {
+				rc = 0;
+				return 0;
+			}
+			/* fallthrough */
+		case ILOG_REMOVED:
+			old_id = root->lr_id;
+			tmp.lr_magic = ilog_ver_inc(lctx);
+			rc = ilog_ptr_set(lctx, root, &tmp);
+			if (rc != 0)
+				break;
+
+			empty = true;
+			rc = ilog_log_del(lctx, &old_id);
+			D_DEBUG(DB_IO, "Removed ilog entry at "DF_U64"\n",
+				entry->ie_id.id_epoch);
+			removed++;
+			break;
+		default:
+			/* Should never be UNCOMMITTED with purge set */
+			D_ASSERT(0);
+		}
+		goto done;
+	}
+
+	umem_attr_get(&lctx->ic_umm, &uma);
+	rc = dbtree_open(root->lr_tree.it_root, &uma, &toh);
+	if (rc != 0) {
+		D_ERROR("Failed to open incarnation log tree: "DF_RC
+			"\n", DP_RC(rc));
+		return rc;
+	}
+	prev = NULL;
+	prior_punch = NULL;
+	ilog_foreach_entry(entries, entry) {
+		D_DEBUG(DB_TRACE, "Entry "DF_U64" punch=%s prev="DF_U64
+			" prior_punch="DF_U64"\n", entry->ie_id.id_epoch,
+			entry->ie_punch ? "yes" : "no",
+			prev ? prev->ie_id.id_epoch : 0,
+			prior_punch ? prior_punch->ie_id.id_epoch : 0);
+		if (entry->ie_id.id_epoch > epr->epr_hi)
+			break; /* Done */
+		if (entry->ie_id.id_epoch < epr->epr_lo) {
+			if (entry->ie_id.id_epoch <= punched) {
+				/* Skip entries outside of the range and
+				 * punched by the parent
+				 */
+				continue;
+			}
+			if (entry->ie_punch) {
+				/* Just save the prior punch entry */
+				prior_punch = entry;
+			} else {
+				/* A create covers the prior punch */
+				prior_punch = NULL;
+			}
+			goto next; /* skip to next entry */
+		}
+		if (discard || entry->ie_status == ILOG_REMOVED ||
+		    punched >= entry->ie_id.id_epoch) {
+			/* Remove stale entry or punched entry */
+			goto remove_entry;
+		}
+
+		if (prev != NULL && prev->ie_punch == entry->ie_punch) {
+			/* Remove redundant entry */
+			goto remove_entry;
+		}
+
+		if (!entry->ie_punch) {
+			/* Create is needed for now */
+			goto next;
+		}
+
+		if (prev == NULL)
+			goto remove_entry;
+
+		if (prev->ie_id.id_epoch < epr->epr_lo) {
+			/** Data punched is not in range */
+			prior_punch = entry;
+			goto next;
+		}
+
+		/* remove the punched create entry */
+		D_ASSERT(!prev->ie_punch);
+		rc = remove_ilog_entry(lctx, &toh, prev,
+				       &removed);
+		if (rc != 0)
+			goto done;
+
+		/* Punch is redundant or covers nothing.  Remove it. */
+		prev = prior_punch;
+		goto remove_entry;
+next:
+		prev = entry;
+		continue;
+remove_entry:
+		rc = remove_ilog_entry(lctx, &toh, entry, &removed);
+		if (rc != 0)
+			goto done;
+	}
+
+	rc = collapse_tree(lctx, &toh);
+
+	empty = ilog_empty(root);
+done:
+	if (!daos_handle_is_inval(toh))
+		dbtree_close(toh);
+
+	rc = ilog_tx_end(lctx, rc);
+	D_DEBUG(DB_IO, "%s in incarnation log epr:"DF_U64"-"DF_U64
+		" status: "DF_RC", removed %d entries\n",
+		discard ? "Discard" : "Aggregation", epr->epr_lo,
+		epr->epr_hi, DP_RC(rc), removed);
+	if (rc)
+		return rc;
+
+	return empty;
+}
+

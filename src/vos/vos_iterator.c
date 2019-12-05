@@ -532,6 +532,28 @@ need_reprobe(vos_iter_type_t type, struct vos_iter_anchors *anchors)
 	return reprobe;
 }
 
+static int
+iter_aggregate(daos_handle_t ih, int acts)
+{
+	struct vos_iterator *iter = vos_hdl2iter(ih);
+	bool discard = (acts & VOS_ITER_CB_DISCARD) != 0;
+	bool aggregate = (acts & VOS_ITER_CB_AGGREGATE) != 0;
+	int rc;
+
+	if (!discard && !aggregate)
+		return 0;
+
+	rc = iter_verify_state(iter);
+	if (rc)
+		return rc;
+
+	D_ASSERT(iter->it_ops != NULL);
+	if (iter->it_ops->iop_aggregate == NULL)
+		return -DER_NOSYS;
+
+	return iter->it_ops->iop_aggregate(iter, discard);
+}
+
 /**
  * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a
  * cb(\a arg) for each entry.
@@ -544,6 +566,7 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	vos_iter_entry_t	iter_ent;
 	daos_handle_t		ih;
 	unsigned int		acts = 0;
+	unsigned int		agg_flags;
 	bool			skipped;
 	int			rc;
 
@@ -604,6 +627,7 @@ probe:
 
 		set_reprobe(type, acts, anchors, param->ip_flags);
 		skipped = (acts & VOS_ITER_CB_SKIP);
+		agg_flags = acts;
 		acts = 0;
 
 		if (need_reprobe(type, anchors)) {
@@ -648,6 +672,15 @@ probe:
 				goto probe;
 			}
 		}
+
+		rc = iter_aggregate(ih, agg_flags);
+		if (rc == -DER_NONEXIST) {
+			/* aggregation removed the key/object so reprobe */
+			goto probe;
+		}
+
+		if (rc != 0)
+			break;
 
 		rc = vos_iter_next(ih);
 		if (rc) {
