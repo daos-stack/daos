@@ -291,7 +291,7 @@ func (n *nvmeStorage) Format(cfg storage.BdevConfig, results *(types.NvmeControl
 				continue
 			}
 
-			.log.Debugf("controller format successful (%s)\n", pciAddr)
+			n.log.Debugf("controller format successful (%s)\n", pciAddr)
 
 			addCretFormat(ctlpb.ResponseStatus_CTL_SUCCESS, "", "")
 			n.controllers = loadControllers(cs)
@@ -336,8 +336,8 @@ func nvmeNamespacesToPB(nss []*spdk.Namespace) (_nss types.NvmeNamespaces) {
 		_nss = append(
 			_nss,
 			&ctlpb.NvmeController_Namespace{
-				Id:       ns.ID,
-				Capacity: ns.Size,
+				Id:   ns.ID,
+				Size: ns.Size,
 			})
 	}
 	return
@@ -351,19 +351,19 @@ func nvmeHealthToPB(dh *spdk.DeviceHealth) *ctlpb.NvmeController_Health {
 
 	return &ctlpb.NvmeController_Health{
 		Temp:            dh.Temp,
-		Tempwarntime:        dh.TempWarnTime,
-		Tempcrittime:        dh.TempCritTime,
-		Ctrlbusytime:        dh.CtrlBusyTime,
+		Tempwarntime:    dh.TempWarnTime,
+		Tempcrittime:    dh.TempCritTime,
+		Ctrlbusytime:    dh.CtrlBusyTime,
 		Powercycles:     dh.PowerCycles,
 		Poweronhours:    dh.PowerOnHours,
 		Unsafeshutdowns: dh.UnsafeShutdowns,
 		Mediaerrors:     dh.MediaErrors,
-		Errorlogentries:       dh.ErrorLogEntries,
-		Tempwarn:     dh.TempWarn,
-		Availsparewarn:      dh.AvailSpareWarn,
-		Reliabilitywarn:     dh.ReliabilityWarn,
-		Readonlywarn:        dh.ReadOnlyWarn,
-		Volatilewarn:     dh.VolatileWarn,
+		Errorlogentries: dh.ErrorLogEntries,
+		Tempwarn:        dh.TempWarn,
+		Availsparewarn:  dh.AvailSpareWarn,
+		Reliabilitywarn: dh.ReliabilityWarn,
+		Readonlywarn:    dh.ReadOnlyWarn,
+		Volatilewarn:    dh.VolatileWarn,
 	}
 }
 
